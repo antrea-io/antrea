@@ -2751,31 +2751,75 @@ func (data *TestData) GetMulticastInterfaces(antreaNamespace string) ([]string, 
 	return agentConf.Multicast.MulticastInterfaces, nil
 }
 
-func (data *TestData) GetTransportInterface() (string, error) {
+// GetTransportInterfaceName returns the transport interface name for cluster Nodes, assuming all Nodes have the same one.
+func (data *TestData) GetTransportInterfaceName() (string, error) {
 	// It assumes all Nodes have the same transport interface name.
-	nodeName := nodeName(0)
-	nodeIP := nodeIP(0)
+	name, _, err := data.GetTransportInterfaceForNode(0)
+	return name, err
+}
+
+func (data *TestData) GetTransportInterfaceForNode(nodeIdx int) (string, []*net.IPNet, error) {
+	nodeName := nodeName(nodeIdx)
+	nodeIPv4 := nodeIPv4(nodeIdx)
+	nodeIPv6 := nodeIPv6(nodeIdx)
+	var nodeIPs []string
+	if nodeIPv4 != "" {
+		nodeIPs = append(nodeIPs, nodeIPv4)
+	}
+	if nodeIPv6 != "" {
+		nodeIPs = append(nodeIPs, nodeIPv6)
+	}
+
 	antreaPod, err := data.getAntreaPodOnNode(nodeName)
 	if err != nil {
-		return "", fmt.Errorf("failed to get Antrea Pod on Node %s: %v", nodeName, err)
+		return "", nil, fmt.Errorf("failed to get Antrea Pod on Node %s: %v", nodeName, err)
 	}
 	cmd := []string{"ip", "-br", "addr", "show"}
 	stdout, stderr, err := data.RunCommandFromPod(antreaNamespace, antreaPod, agentContainerName, cmd)
 	if stdout == "" || stderr != "" || err != nil {
-		return "", fmt.Errorf("failed to show ip address, stdout: %s, stderr: %s, err: %v", stdout, stderr, err)
+		return "", nil, fmt.Errorf("failed to show ip address, stdout: %s, stderr: %s, err: %v", stdout, stderr, err)
 	}
+	var interfaceName string
+	var interfaceIPNets []*net.IPNet
 	// Example stdout:
 	// eth0@if461       UP             172.18.0.2/16 fc00:f853:ccd:e793::2/64 fe80::42:acff:fe12:2/64
 	// eno1             UP             10.176.3.138/22 fe80::e643:4bff:fe43:a30e/64
 	lines := strings.Split(strings.TrimSpace(stdout), "\n")
 	for _, line := range lines {
-		if strings.Contains(line, nodeIP+"/") {
-			fields := strings.Fields(line)
-			name, _, _ := strings.Cut(fields[0], "@")
-			return name, nil
+		// Check if line contains any of the Node IPs.
+		matched := false
+		for _, ip := range nodeIPs {
+			if strings.Contains(line, ip) {
+				matched = true
+				break
+			}
+		}
+		if !matched {
+			continue
+		}
+
+		fields := strings.Fields(line)
+		// Extract interface name
+		interfaceName, _, _ = strings.Cut(fields[0], "@")
+
+		// Collect all Node IPNets
+		for _, field := range fields[2:] {
+			for _, ip := range nodeIPs {
+				if strings.Contains(field, ip) {
+					_, interfaceIPNet, err := net.ParseCIDR(field)
+					if err != nil {
+						log.Errorf("failed to parse CIDR %q in line %q: %v", field, line, err)
+						continue
+					}
+					interfaceIPNets = append(interfaceIPNets, interfaceIPNet)
+				}
+			}
+		}
+		if len(interfaceIPNets) > 0 {
+			return interfaceName, interfaceIPNets, nil
 		}
 	}
-	return "", fmt.Errorf("no interface was assigned with Node IP %s", nodeIP)
+	return "", nil, fmt.Errorf("no interface found for Node %s (IPv4=%q, IPv6=%q)", nodeName, nodeIPv4, nodeIPv6)
 }
 
 func (data *TestData) GetPodInterfaceMTU(namespace string, podName string, containerName string) (int, error) {

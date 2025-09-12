@@ -31,6 +31,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
+	utilnet "k8s.io/utils/net"
 
 	"antrea.io/antrea/pkg/agent/apis"
 	"antrea.io/antrea/pkg/agent/config"
@@ -365,13 +366,44 @@ func testReconcileGatewayRoutesOnStartup(t *testing.T, data *TestData, isIPv6 bo
 		t.Fatalf("Failed to detect gateway interface name from ConfigMap: %v", err)
 	}
 
-	expectedRtNumMin, expectedRtNumMax := clusterInfo.numNodes-1, clusterInfo.numNodes-1
+	nodeNums := clusterInfo.numNodes
+	var expectedRtNum int
 	switch encapMode {
+	case config.TrafficEncapModeEncap:
+		expectedRtNum = nodeNums - 1
+		t.Logf("Encap mode: expecting %d gateway routes (one per peer Node)", expectedRtNum)
+
 	case config.TrafficEncapModeNoEncap:
-		expectedRtNumMin, expectedRtNumMax = 0, 0
+		expectedRtNum = 0
+		t.Log("NoEncap mode: expecting 0 gateway route")
 
 	case config.TrafficEncapModeHybrid:
-		expectedRtNumMin = 1
+		// Get the IPNet with the Node IP.
+		_, nodeIPNets, err := data.GetTransportInterfaceForNode(0)
+		require.NoError(t, err)
+		var nodeIPNet *net.IPNet
+		for _, ipNet := range nodeIPNets {
+			if isIPv6 && utilnet.IsIPv6CIDR(ipNet) ||
+				!isIPv6 && !utilnet.IsIPv6CIDR(ipNet) {
+				nodeIPNet = ipNet
+				break
+			}
+		}
+
+		// Find all the Node IPs that are not in the IPNet, which means gateway routes should be installed for the Nodes.
+		for i := 1; i < nodeNums; i++ {
+			targetNodeIP := nodeIPv4(i)
+			if isIPv6 {
+				targetNodeIP = nodeIPv6(i)
+			}
+			targetIP := net.ParseIP(targetNodeIP)
+			require.NotNil(t, targetIP)
+
+			if !nodeIPNet.Contains(targetIP) {
+				expectedRtNum++
+			}
+		}
+		t.Logf("Hybrid mode: expecting %d gateway routes (Nodes in different CIDRs)", expectedRtNum)
 	}
 
 	t.Logf("Retrieving gateway routes on Node '%s'", nodeName)
@@ -383,14 +415,17 @@ func testReconcileGatewayRoutesOnStartup(t *testing.T, data *TestData, isIPv6 bo
 			return false, err
 		}
 
-		if len(routes) < expectedRtNumMin {
+		if len(routes) < expectedRtNum {
 			// Not enough routes, keep trying
 			return false, nil
-		} else if len(routes) > expectedRtNumMax {
-			return false, fmt.Errorf("found too many gateway routes, expected %d but got %d", expectedRtNumMax, len(routes))
+		} else if len(routes) > expectedRtNum {
+			return false, fmt.Errorf("found too many gateway routes, expected %d but got %d", expectedRtNum, len(routes))
 		}
 		if isIPv6 && llRoute == nil {
 			return false, fmt.Errorf("IPv6 link-local route not found")
+		}
+		if len(routes) != expectedRtNum {
+			return false, nil
 		}
 		return true, nil
 	}); wait.Interrupted(err) {
@@ -402,7 +437,7 @@ func testReconcileGatewayRoutesOnStartup(t *testing.T, data *TestData, isIPv6 bo
 	}
 
 	var routeToDelete *Route
-	if encapMode.SupportsEncap() {
+	if expectedRtNum > 0 {
 		routeToDelete = &routes[0]
 	}
 	// A dummy route
