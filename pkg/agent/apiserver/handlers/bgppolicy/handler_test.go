@@ -23,6 +23,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
+	"k8s.io/apimachinery/pkg/util/sets"
 
 	"antrea.io/antrea/pkg/agent/apis"
 	queriertest "antrea.io/antrea/pkg/querier/testing"
@@ -33,6 +34,7 @@ func TestBGPPolicyQuery(t *testing.T) {
 		name             string
 		expectedStatus   int
 		expectedResponse apis.BGPPolicyResponse
+		memberASNs       sets.Set[uint32]
 	}{
 		{
 			name:           "bgpPolicyState exists",
@@ -53,7 +55,9 @@ func TestBGPPolicyQuery(t *testing.T) {
 				LocalASN:                64512,
 				ListenPort:              179,
 				ConfederationIdentifier: 65000,
+				MemberASNs:              []uint32{64513, 64514},
 			},
+			memberASNs: sets.New(uint32(64514), uint32(64513)),
 		},
 		{
 			name:           "bgpPolicyState does not exist",
@@ -66,7 +70,8 @@ func TestBGPPolicyQuery(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			q := queriertest.NewMockAgentBGPPolicyInfoQuerier(ctrl)
 			q.EXPECT().GetBGPPolicyInfo().Return(tt.expectedResponse.BGPPolicyName, tt.expectedResponse.RouterID,
-				tt.expectedResponse.LocalASN, tt.expectedResponse.ListenPort, tt.expectedResponse.ConfederationIdentifier)
+				tt.expectedResponse.LocalASN, tt.expectedResponse.ListenPort, tt.expectedResponse.ConfederationIdentifier,
+				tt.memberASNs)
 			handler := HandleFunc(q)
 
 			req, err := http.NewRequest(http.MethodGet, "", nil)

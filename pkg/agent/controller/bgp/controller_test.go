@@ -2439,6 +2439,7 @@ func TestGetBGPPolicyInfo(t *testing.T) {
 		expectedRouterID                string
 		expectedListenPort              int32
 		expectedConfederationIdentifier int32
+		expectedMemberASNs              sets.Set[uint32]
 	}{
 		{
 			name: "bgpPolicyState exists",
@@ -2463,13 +2464,17 @@ func TestGetBGPPolicyInfo(t *testing.T) {
 				nodeAnnotations1[types.NodeBGPRouterIDAnnotationKey],
 				nil,
 				nil,
-				&confederationConfig{identifier: int32(65000)},
+				&confederationConfig{
+					identifier: int32(65000),
+					memberASNs: sets.New(uint32(64513)),
+				},
 			),
 			expectedBgpPolicyName:           bgpPolicyName1,
 			expectedASN:                     int32(64512),
 			expectedRouterID:                nodeAnnotations1[types.NodeBGPRouterIDAnnotationKey],
 			expectedListenPort:              int32(179),
 			expectedConfederationIdentifier: int32(65000),
+			expectedMemberASNs:              sets.New(uint32(64513)),
 		},
 		{
 			name:          "bgpPolicyState does not exist",
@@ -2483,12 +2488,13 @@ func TestGetBGPPolicyInfo(t *testing.T) {
 			// Fake the BGPPolicy state.
 			c.bgpPolicyState = tt.existingState
 
-			actualBgpPolicyName, actualRouterID, actualASN, actualListenPort, actualConfederationIdentifier := c.GetBGPPolicyInfo()
+			actualBgpPolicyName, actualRouterID, actualASN, actualListenPort, actualConfederationIdentifier, actualMemberASNs := c.GetBGPPolicyInfo()
 			assert.Equal(t, tt.expectedBgpPolicyName, actualBgpPolicyName)
 			assert.Equal(t, tt.expectedRouterID, actualRouterID)
 			assert.Equal(t, tt.expectedASN, actualASN)
 			assert.Equal(t, tt.expectedListenPort, actualListenPort)
 			assert.Equal(t, tt.expectedConfederationIdentifier, actualConfederationIdentifier)
+			assert.Equal(t, tt.expectedMemberASNs, actualMemberASNs)
 		})
 	}
 }
