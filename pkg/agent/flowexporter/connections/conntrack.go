@@ -23,8 +23,17 @@ import (
 	"antrea.io/antrea/pkg/agent/config"
 	"antrea.io/antrea/pkg/agent/flowexporter/connection"
 	"antrea.io/antrea/pkg/agent/flowexporter/filter"
+	"antrea.io/antrea/pkg/agent/openflow"
+	binding "antrea.io/antrea/pkg/ovs/openflow"
 	"antrea.io/antrea/pkg/ovs/ovsconfig"
 )
+
+// Some connections (e.g., Service connections) are committed to conntrack before policy
+// enforcement, but are later denied by a policy. We want to ignore these connections to avoid
+// duplicates between the conntrack connection store and the deny connection store. These
+// connections can be reliably identified by checking if the ConnSourceCTMarkField in the CT mark is
+// unset.
+var connAllowedCTMarkMask = binding.NewCTMark(openflow.ConnSourceCTMarkField, 0xf).GetValue()
 
 // InitializeConnTrackDumper initializes the ConnTrackDumper interface for different OS and datapath types.
 func InitializeConnTrackDumper(nodeConfig *config.NodeConfig, serviceCIDRv4 *net.IPNet, serviceCIDRv6 *net.IPNet, ovsDatapathType ovsconfig.OVSDatapathType, isAntreaProxyEnabled bool, protocolFilter filter.ProtocolFilter) ConnTrackDumper {
@@ -44,7 +53,6 @@ func InitializeConnTrackDumper(nodeConfig *config.NodeConfig, serviceCIDRv4 *net
 }
 
 func filterAntreaConns(conns []*connection.Connection, nodeConfig *config.NodeConfig, serviceCIDR netip.Prefix, zoneFilter uint16, isAntreaProxyEnabled bool, protocolFilter filter.ProtocolFilter) []*connection.Connection {
-
 	filteredConns := conns[:0]
 	gwIPv4, _ := netip.AddrFromSlice(nodeConfig.GatewayConfig.IPv4)
 	gwIPv6, _ := netip.AddrFromSlice(nodeConfig.GatewayConfig.IPv6)
@@ -53,6 +61,7 @@ func filterAntreaConns(conns []*connection.Connection, nodeConfig *config.NodeCo
 		if conn.Zone != zoneFilter {
 			continue
 		}
+
 		srcIP := conn.FlowKey.SourceAddress
 		dstIP := conn.FlowKey.DestinationAddress
 
@@ -80,6 +89,14 @@ func filterAntreaConns(conns []*connection.Connection, nodeConfig *config.NodeCo
 		}
 
 		if !protocolFilter.Allow(conn.FlowKey.Protocol) {
+			continue
+		}
+
+		policyAllowed := conn.Mark&connAllowedCTMarkMask != 0
+		if !policyAllowed {
+			if klog.V(5).Enabled() {
+				klog.InfoS("Ignoring connection as it may have been denied by a policy rule", "conn", conn)
+			}
 			continue
 		}
 

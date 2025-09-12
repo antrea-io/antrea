@@ -234,8 +234,13 @@ usability, we assign friendly names to the bits we use.
 | bit 4       |                       | 0b1           | ServiceCTMark      | Connection is for Service.                                      |
 |             |                       | 0b0           | NotServiceCTMark   | Connection is not for Service.                                  |
 | bit 5       |                       | 0b1           | ConnSNATCTMark     | SNAT'd connection for Service.                                  |
+|             |                       | 0b0           | NotConnSNATCTMark  | Non-SNAT'd connection.                                          |
 | bit 6       |                       | 0b1           | HairpinCTMark      | Hair-pin connection.                                            |
 | bit 7       |                       | 0b1           | L7NPRedirectCTMark | Connection should be redirected to an application-aware engine. |
+
+A non-zero `ConnSourceCTMarkField` is also used to indicate that the connection has been allowed by NetworkPolicy
+enforcement. Some connections need to be committed to `CtZone` prior to ingress NetworkPolicy enforcement, but this
+field will be set to 0 in the Ct mark until it is guaranteed to be allowed.
 
 ### OVS Ct Label
 
@@ -257,6 +262,8 @@ the ct zones.
 |---------|--------------|----------------------------------------------------|
 | 65520   | CtZone       | Tracking IPv4 connections that don't require SNAT. |
 | 65521   | SNATCtZone   | Tracking IPv4 connections that require SNAT.       |
+| 65510   | CtZoneV6     | Tracking IPv6 connections that don't require SNAT. |
+| 65511   | SNATCtZoneV6 | Tracking IPv6 connections that require SNAT.       |
 
 ## Antrea Features
 
@@ -1130,8 +1137,8 @@ If you dump the flows of this table, you may see the following::
 
 ```text
 1. table=EndpointDNAT, priority=200,reg0=0x4000/0x4000 actions=controller(reason=no_match,id=62373,userdata=04)
-2. table=EndpointDNAT, priority=200,tcp,reg3=0xa0a0018,reg4=0x20050/0x7ffff actions=ct(commit,table=AntreaPolicyEgressRule,zone=65520,nat(dst=10.10.0.24:80),exec(set_field:0x10/0x10->ct_mark,move:NXM_NX_REG0[0..3]->NXM_NX_CT_MARK[0..3]))
-3. table=EndpointDNAT, priority=200,tcp,reg3=0xa0a0106,reg4=0x20050/0x7ffff actions=ct(commit,table=AntreaPolicyEgressRule,zone=65520,nat(dst=10.10.1.6:80),exec(set_field:0x10/0x10->ct_mark,move:NXM_NX_REG0[0..3]->NXM_NX_CT_MARK[0..3]))
+2. table=EndpointDNAT, priority=200,tcp,reg3=0xa0a0018,reg4=0x20050/0x7ffff actions=ct(commit,table=AntreaPolicyEgressRule,zone=65520,nat(dst=10.10.0.24:80),exec(set_field:0x10/0x10->ct_mark))
+3. table=EndpointDNAT, priority=200,tcp,reg3=0xa0a0106,reg4=0x20050/0x7ffff actions=ct(commit,table=AntreaPolicyEgressRule,zone=65520,nat(dst=10.10.1.6:80),exec(set_field:0x10/0x10->ct_mark))
 4. table=EndpointDNAT, priority=190,reg4=0x20000/0x70000 actions=set_field:0x10000/0x70000->reg4,resubmit(,ServiceLB)
 5. table=EndpointDNAT, priority=0 actions=goto_table:AntreaPolicyEgressRule
 ```
@@ -1145,12 +1152,8 @@ Flows 2-3 are designed for Services that have selected an Endpoint. These flows 
 destined for such Services by matching `EndpointPortField`, which stores the Endpoint IP, and `EpUnionField` (a combination
 of `EndpointPortField` storing the Endpoint port and `EpSelectedRegMark`). Then `ct` action is invoked on the packet,
 performing DNAT'd and forwarding it to table [ConntrackState] with the "tracked" state associated with `CtZone`.
-Some bits of ct mark are persisted:
-
-- `ServiceCTMark`, to be consumed in tables [L3Forwarding] and [ConntrackCommit], indicating that the current packet and
-  subsequent packets of the connection are for a Service.
-- The value of `PktSourceField` is persisted to `ConnSourceCTMarkField`, storing the source of the connection for the
-  current packet and subsequent packets of the connection.
+We set `ServiceCTMark`, which will be consumed in tables [L3Forwarding] and [ConntrackCommit], and which indicates that
+the current packet and subsequent packets of the connection are for a Service.
 
 Flow 4 is to resubmit the packets which are not matched by flows 1-3 back to table [ServiceLB] to select Endpoint again.
 
@@ -1500,10 +1503,10 @@ This table marks connections requiring SNAT within the OVS pipeline, distinct fr
 If you dump the flows of this table, you may see the following:
 
 ```text
-1. table=SNATMark, priority=200,ct_state=+new+trk,ip,reg0=0x22/0xff actions=ct(commit,table=SNAT,zone=65520,exec(set_field:0x20/0x20->ct_mark,set_field:0x40/0x40->ct_mark))
-2. table=SNATMark, priority=200,ct_state=+new+trk,ip,reg0=0x12/0xff,reg4=0x200000/0x2200000 actions=ct(commit,table=SNAT,zone=65520,exec(set_field:0x20/0x20->ct_mark))
-3. table=SNATMark, priority=190,ct_state=+new+trk,ip,nw_src=10.10.0.23,nw_dst=10.10.0.23 actions=ct(commit,table=SNAT,zone=65520,exec(set_field:0x20/0x20->ct_mark,set_field:0x40/0x40->ct_mark))
-4. table=SNATMark, priority=190,ct_state=+new+trk,ip,nw_src=10.10.0.24,nw_dst=10.10.0.24 actions=ct(commit,table=SNAT,zone=65520,exec(set_field:0x20/0x20->ct_mark,set_field:0x40/0x40->ct_mark))
+1. table=SNATMark, priority=200,ct_state=+new+trk,ip,reg0=0x22/0xff actions=ct(commit,table=SNAT,zone=65520,exec(set_field:0x20/0x20->ct_mark,set_field:0x40/0x40->ct_mark,move:NXM_NX_REG0[0..3]->NXM_NX_CT_MARK[0..3]))
+2. table=SNATMark, priority=200,ct_state=+new+trk,ip,reg0=0x12/0xff,reg4=0x200000/0x2200000 actions=ct(commit,table=SNAT,zone=65520,exec(set_field:0x20/0x20->ct_mark,move:NXM_NX_REG0[0..3]->NXM_NX_CT_MARK[0..3]))
+3. table=SNATMark, priority=190,ct_state=+new+trk,ip,nw_src=10.10.0.23,nw_dst=10.10.0.23 actions=ct(commit,table=SNAT,zone=65520,exec(set_field:0x20/0x20->ct_mark,set_field:0x40/0x40->ct_mark,move:NXM_NX_REG0[0..3]->NXM_NX_CT_MARK[0..3]))
+4. table=SNATMark, priority=190,ct_state=+new+trk,ip,nw_src=10.10.0.24,nw_dst=10.10.0.24 actions=ct(commit,table=SNAT,zone=65520,exec(set_field:0x20/0x20->ct_mark,set_field:0x40/0x40->ct_mark,move:NXM_NX_REG0[0..3]->NXM_NX_CT_MARK[0..3]))
 5. table=SNATMark, priority=0 actions=goto_table:SNAT
 ```
 
@@ -1527,6 +1530,9 @@ Flow 3-4 match the first packet of hairpin Service connections, identified by th
 addresses. Such hairpin connections will undergo SNAT with the IP address of the local Antrea gateway in table [SNAT].
 Similar to flow 1, `ConnSNATCTMark` and `HairpinCTMark` are persisted to mark the connections.
 
+Whenever we commit a connection in this table, we also persist the value of `PktSourceField` to `ConnSourceCTMarkField`,
+storing the source of the connection for the current packet and subsequent packets of the connection.
+
 Flow 5 is the table-miss flow.
 
 ### SNAT
@@ -1536,33 +1542,34 @@ This table performs SNAT for connections requiring SNAT within the pipeline.
 If you dump the flows of this table, you may see the following:
 
 ```text
-1. table=SNAT, priority=200,ct_state=+new+trk,ct_mark=0x40/0x40,ip,reg0=0x2/0xf actions=ct(commit,table=L2ForwardingCalc,zone=65521,nat(src=169.254.0.253),exec(set_field:0x10/0x10->ct_mark,set_field:0x40/0x40->ct_mark))
-2. table=SNAT, priority=200,ct_state=+new+trk,ct_mark=0x40/0x40,ip,reg0=0x3/0xf actions=ct(commit,table=L2ForwardingCalc,zone=65521,nat(src=10.10.0.1),exec(set_field:0x10/0x10->ct_mark,set_field:0x40/0x40->ct_mark))
+1. table=SNAT, priority=200,ct_state=+new+trk,ct_mark=0x40/0x40,ip,reg0=0x2/0xf actions=ct(commit,table=L2ForwardingCalc,zone=65521,nat(src=169.254.0.253),exec(set_field:0x10/0x10->ct_mark,set_field:0x20/0x20->ct_mark,set_field:0x40/0x40->ct_mark))
+2. table=SNAT, priority=200,ct_state=+new+trk,ct_mark=0x40/0x40,ip,reg0=0x3/0xf actions=ct(commit,table=L2ForwardingCalc,zone=65521,nat(src=10.10.0.1),exec(set_field:0x10/0x10->ct_mark,set_field:0x20/0x20->ct_mark,set_field:0x40/0x40->ct_mark))
 3. table=SNAT, priority=200,ct_state=-new-rpl+trk,ct_mark=0x20/0x20,ip actions=ct(table=L2ForwardingCalc,zone=65521,nat)
-4. table=SNAT, priority=190,ct_state=+new+trk,ct_mark=0x20/0x20,ip,reg0=0x2/0xf actions=ct(commit,table=L2ForwardingCalc,zone=65521,nat(src=10.10.0.1),exec(set_field:0x10/0x10->ct_mark))
+4. table=SNAT, priority=190,ct_state=+new+trk,ct_mark=0x20/0x20,ip,reg0=0x2/0xf actions=ct(commit,table=L2ForwardingCalc,zone=65521,nat(src=10.10.0.1),exec(set_field:0x10/0x10->ct_mark,set_field:0x20/0x20->ct_mark))
 5. table=SNAT, priority=0 actions=goto_table:L2ForwardingCalc
 ```
 
 Flow 1 matches the first packet of hairpin Service connections through the local Antrea gateway, identified by
 `HairpinCTMark` and `FromGatewayRegMark`. It performs SNAT with the *Virtual Service IP* `169.254.0.253` and forwards
 the SNAT'd packets to table [L2ForwardingCalc]. Before SNAT, the "tracked" state of packets is associated with `CtZone`.
-After SNAT, their "track" state is associated with `SNATCtZone`, and then `ServiceCTMark` and `HairpinCTMark` persisted
-in `CtZone` are not accessible anymore. As a result, `ServiceCTMark` and `HairpinCTMark` need to be persisted once
+After SNAT, their "track" state is associated with `SNATCtZone`, and `ServiceCTMark`, `ConnSNATCTMark` and
+`HairpinCTMark` persisted in `CtZone` are not accessible anymore. As a result, these marks need to be persisted once
 again, but this time they are persisted in `SNATCtZone` for subsequent tables to consume.
 
 Flow 2 matches the first packet of hairpin Service connection originating from local Pods, identified by `HairpinCTMark`
 and `FromPodRegMark`. It performs SNAT with the IP address of the local Antrea gateway and forwards the SNAT'd packets
-to table [L2ForwardingCalc]. Similar to flow 1, `ServiceCTMark` and `HairpinCTMark` are persisted in `SNATCtZone`.
+to table [L2ForwardingCalc]. Similar to flow 1, `ServiceCTMark`, `ConnSNATCTMark` and `HairpinCTMark` are persisted in
+`SNATCtZone`.
 
 Flow 3 matches the subsequent request packets of connections for which SNAT was performed for the first packet, and then
 invokes `ct` action on the packets again to restore the "tracked" state in `SNATCtZone`. The packets with the appropriate
 "tracked" state are forwarded to table [L2ForwardingCalc].
 
 Flow 4 matches the first packet of Service connections requiring SNAT, identified by `ConnSNATCTMark` and
-`FromGatewayRegMark`, indicating the connection is destined for an external Service IP initiated through the
-Antrea gateway and the Endpoint is a remote Pod. It performs SNAT with the IP address of the local Antrea gateway and
-forwards the SNAT'd packets to table [L2ForwardingCalc]. Similar to other flow 1 or 2, `ServiceCTMark` is persisted in
-`SNATCtZone`.
+`FromGatewayRegMark`, indicating the connection is destined for an external Service IP initiated through the Antrea
+gateway and the Endpoint is a remote Pod. It performs SNAT with the IP address of the local Antrea gateway and forwards
+the SNAT'd packets to table [L2ForwardingCalc]. Similar to other flow 1 or 2, `ServiceCTMark` and `ConnSNATCTMark` are
+persisted in `SNATCtZone`.
 
 Flow 5 is the table-miss flow.
 
@@ -1846,14 +1853,15 @@ This table is in charge of committing non-Service connections in `CtZone`.
 If you dump the flows of this table, you may see the following:
 
 ```text
-1. table=ConntrackCommit, priority=200,ct_state=+new+trk-snat,ct_mark=0/0x10,ip actions=ct(commit,table=Output,zone=65520,exec(move:NXM_NX_REG0[0..3]->NXM_NX_CT_MARK[0..3]))
+1. table=ConntrackCommit, priority=200,ct_state=+new+trk,ct_mark=0x0/0x20,ip actions=ct(commit,table=Output,zone=65520,exec(move:NXM_NX_REG0[0..3]->NXM_NX_CT_MARK[0..3]))
 2. table=ConntrackCommit, priority=0 actions=goto_table:Output
 ```
 
-Flow 1 is designed to match the first packet of non-Service connections with the "tracked" state and `NotServiceCTMark`.
+Flow 1 is designed to match the first packet of non-SNAT connections with the "tracked" state and `NotConnSNATCTMark`.
 Then it commits the relevant connections in `CtZone`, persisting the value of `PktSourceField` to
-`ConnSourceCTMarkField`, and forwards the packets to table [Output].
-
+`ConnSourceCTMarkField`. Note that SNAT connections were already committed to `CtZone` in the [SNATMark] table (also
+with the value of `PktSourceField` to `ConnSourceCTMarkField`), as such connections cannot be dropped by ingress policy
+rules.
 Flow 2 is the table-miss flow.
 
 ### Output
