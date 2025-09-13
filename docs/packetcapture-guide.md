@@ -35,6 +35,7 @@ the target traffic flow:
 * TCP Flags
 * ICMP Messages
 * Direction (SourceToDestination/DestinationToSource/Both)
+* CapturePoint (Source/Destination)
 
 You can start a new packet capture by creating a `PacketCapture` CR. An optional `fileServer`
 field can be specified to store the generated packets file. Before that,
@@ -80,6 +81,9 @@ spec:
       name: backend
   # Available options for direction: `SourceToDestination` (default), `DestinationToSource` or `Both`.
   direction: SourceToDestination # optional to specify
+  # capturePoint specifies where the packet capture should be performed: 'Source' or 'Destination'.
+  # Defaults to 'Source' if a Source Pod is available; otherwise, defaults to 'Destination'.
+  capturePoint: Destination # optional to specify
   packet:
     ipFamily: IPv4
     protocol: TCP # support arbitrary number values and string values in [TCP,UDP,ICMP] (case insensitive)
