@@ -79,6 +79,80 @@ jobs:
           echo "Pull Request Number - ${{ steps.cpr.outputs.pull-request-number }}"
           echo "Pull Request URL - ${{ steps.cpr.outputs.pull-request-url }}"
 
+  # Updates the VERSION file to ensure it's always greater than the released version.
+  # If the current VERSION (e.g., v2.5.0-dev) is <= the released tag (e.g., v2.5.0),
+  # it increments the minor version from the released tag (e.g., v2.6.0-dev).
+  pr-update-version:
+    runs-on: [ubuntu-latest]
+    needs: check-version
+    if: ${{ needs.check-version.outputs.version != '' }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+          ref: main
+      - name: Update VERSION file
+        env:
+          RELEASED_VERSION: ${{ needs.check-version.outputs.version }}
+        shell: bash
+        run: |
+          git config user.name github-actions
+          git config user.email github-actions@github.com
+
+          current_version=$(head -n1 VERSION)
+          echo "Released version: $RELEASED_VERSION"
+          echo "Current VERSION file: $current_version"
+
+          # Validate current VERSION format: vMAJOR.MINOR.0-dev
+          if [[ ! "$current_version" =~ ^v[0-9]+\.[0-9]+\.0-dev$ ]]; then
+            echo "ERROR: Invalid VERSION format. Expected: vMAJOR.MINOR.0-dev"
+            exit 1
+          fi
+
+          # Validate released version format
+          if [[ ! "$RELEASED_VERSION" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "ERROR: Invalid released version format. Expected: vMAJOR.MINOR.PATCH"
+            exit 1
+          fi
+
+          # Extract major.minor from released version (patch not needed)
+          released_without_v=${RELEASED_VERSION#v}
+          IFS="." read -r released_major released_minor _ <<< "$released_without_v"
+
+          # Extract major.minor from current VERSION
+          current_without_prefix=${current_version#v}
+          current_without_suffix=${current_without_prefix%-dev}
+          IFS="." read -r current_major current_minor _ <<< "$current_without_suffix"
+
+          # Compare versions: VERSION should be > released version
+          if [ "$current_major" -gt "$released_major" ] ||
+             ([ "$current_major" -eq "$released_major" ] && [ "$current_minor" -gt "$released_minor" ]); then
+            echo "VERSION ($current_version) is already greater than released version ($RELEASED_VERSION). No update needed."
+            exit 0
+          fi
+
+          # Calculate new version: increment minor from released version
+          new_major=$released_major
+          new_minor=$((released_minor + 1))
+
+          new_version="v${new_major}.${new_minor}.0-dev"
+          echo "Updating VERSION to: $new_version"
+          echo "$new_version" > VERSION
+
+          cd build/charts; make helm-docs; cd -
+
+          git add .
+          git commit --signoff -m "Bump VERSION to $new_version"
+      - name: Create Pull Request
+        uses: peter-evans/create-pull-request@v7
+        with:
+          token: ${{ secrets.ANTREA_BOT_WRITE_PAT }}
+          delete-branch: true
+          title: "Bump VERSION to next minor version"
+          body: |
+            Automatically increment minor version in VERSION file after release.
+            PR was opened automatically from Github Actions
+
   pr-update-renovate:
     runs-on: [ubuntu-latest]
     needs: get-latest-monitored-versions

@@ -1142,9 +1142,9 @@ func Test_client_InstallEndpointFlows(t *testing.T) {
 				proxy.NewBaseEndpointInfo(ep2IPv4, "", "", 80, true, true, false, false, nil),
 			},
 			expectedFlows: []string{
-				"cookie=0x1030000000000, table=EndpointDNAT, priority=200,tcp,reg3=0xa0a0064,reg4=0x20050/0x7ffff actions=ct(commit,table=AntreaPolicyEgressRule,zone=65520,nat(dst=10.10.0.100:80),exec(set_field:0x10/0x10->ct_mark,move:NXM_NX_REG0[0..3]->NXM_NX_CT_MARK[0..3]))",
-				"cookie=0x1030000000000, table=EndpointDNAT, priority=200,tcp,reg3=0xa0a0065,reg4=0x20050/0x7ffff actions=ct(commit,table=AntreaPolicyEgressRule,zone=65520,nat(dst=10.10.0.101:80),exec(set_field:0x10/0x10->ct_mark,move:NXM_NX_REG0[0..3]->NXM_NX_CT_MARK[0..3]))",
-				"cookie=0x1030000000000, table=SNATMark, priority=190,ct_state=+new+trk,ip,nw_src=10.10.0.101,nw_dst=10.10.0.101 actions=ct(commit,table=SNAT,zone=65520,exec(set_field:0x20/0x20->ct_mark,set_field:0x40/0x40->ct_mark))",
+				"cookie=0x1030000000000, table=EndpointDNAT, priority=200,tcp,reg3=0xa0a0064,reg4=0x20050/0x7ffff actions=ct(commit,table=AntreaPolicyEgressRule,zone=65520,nat(dst=10.10.0.100:80),exec(set_field:0x10/0x10->ct_mark))",
+				"cookie=0x1030000000000, table=EndpointDNAT, priority=200,tcp,reg3=0xa0a0065,reg4=0x20050/0x7ffff actions=ct(commit,table=AntreaPolicyEgressRule,zone=65520,nat(dst=10.10.0.101:80),exec(set_field:0x10/0x10->ct_mark))",
+				"cookie=0x1030000000000, table=SNATMark, priority=190,ct_state=+new+trk,ip,nw_src=10.10.0.101,nw_dst=10.10.0.101 actions=ct(commit,table=SNAT,zone=65520,exec(set_field:0x20/0x20->ct_mark,set_field:0x40/0x40->ct_mark,move:NXM_NX_REG0[0..3]->NXM_NX_CT_MARK[0..3]))",
 			},
 		},
 		{
@@ -1155,9 +1155,9 @@ func Test_client_InstallEndpointFlows(t *testing.T) {
 				proxy.NewBaseEndpointInfo(ep2IPv6, "", "", 80, true, true, false, false, nil),
 			},
 			expectedFlows: []string{
-				"cookie=0x1030000000000, table=EndpointDNAT, priority=200,tcp6,reg4=0x20050/0x7ffff,xxreg3=0xfec00010001000000000000000000100 actions=ct(commit,table=AntreaPolicyEgressRule,zone=65510,nat(dst=[fec0:10:10::100]:80),exec(set_field:0x10/0x10->ct_mark,move:NXM_NX_REG0[0..3]->NXM_NX_CT_MARK[0..3]))",
-				"cookie=0x1030000000000, table=EndpointDNAT, priority=200,tcp6,reg4=0x20050/0x7ffff,xxreg3=0xfec00010001000000000000000000101 actions=ct(commit,table=AntreaPolicyEgressRule,zone=65510,nat(dst=[fec0:10:10::101]:80),exec(set_field:0x10/0x10->ct_mark,move:NXM_NX_REG0[0..3]->NXM_NX_CT_MARK[0..3]))",
-				"cookie=0x1030000000000, table=SNATMark, priority=190,ct_state=+new+trk,ipv6,ipv6_src=fec0:10:10::101,ipv6_dst=fec0:10:10::101 actions=ct(commit,table=SNAT,zone=65510,exec(set_field:0x20/0x20->ct_mark,set_field:0x40/0x40->ct_mark))",
+				"cookie=0x1030000000000, table=EndpointDNAT, priority=200,tcp6,reg4=0x20050/0x7ffff,xxreg3=0xfec00010001000000000000000000100 actions=ct(commit,table=AntreaPolicyEgressRule,zone=65510,nat(dst=[fec0:10:10::100]:80),exec(set_field:0x10/0x10->ct_mark))",
+				"cookie=0x1030000000000, table=EndpointDNAT, priority=200,tcp6,reg4=0x20050/0x7ffff,xxreg3=0xfec00010001000000000000000000101 actions=ct(commit,table=AntreaPolicyEgressRule,zone=65510,nat(dst=[fec0:10:10::101]:80),exec(set_field:0x10/0x10->ct_mark))",
+				"cookie=0x1030000000000, table=SNATMark, priority=190,ct_state=+new+trk,ipv6,ipv6_src=fec0:10:10::101,ipv6_dst=fec0:10:10::101 actions=ct(commit,table=SNAT,zone=65510,exec(set_field:0x20/0x20->ct_mark,set_field:0x40/0x40->ct_mark,move:NXM_NX_REG0[0..3]->NXM_NX_CT_MARK[0..3]))",
 			},
 		},
 		{
@@ -1168,9 +1168,9 @@ func Test_client_InstallEndpointFlows(t *testing.T) {
 				proxy.NewBaseEndpointInfo(ep2IPv4, "", "", 80, true, true, false, false, nil),
 			},
 			expectedFlows: []string{
-				"cookie=0x1030000000000, table=EndpointDNAT, priority=200,udp,reg3=0xa0a0064,reg4=0x20050/0x7ffff actions=ct(commit,table=AntreaPolicyEgressRule,zone=65520,nat(dst=10.10.0.100:80),exec(set_field:0x10/0x10->ct_mark,move:NXM_NX_REG0[0..3]->NXM_NX_CT_MARK[0..3]))",
-				"cookie=0x1030000000000, table=EndpointDNAT, priority=200,udp,reg3=0xa0a0065,reg4=0x20050/0x7ffff actions=ct(commit,table=AntreaPolicyEgressRule,zone=65520,nat(dst=10.10.0.101:80),exec(set_field:0x10/0x10->ct_mark,move:NXM_NX_REG0[0..3]->NXM_NX_CT_MARK[0..3]))",
-				"cookie=0x1030000000000, table=SNATMark, priority=190,ct_state=+new+trk,ip,nw_src=10.10.0.101,nw_dst=10.10.0.101 actions=ct(commit,table=SNAT,zone=65520,exec(set_field:0x20/0x20->ct_mark,set_field:0x40/0x40->ct_mark))",
+				"cookie=0x1030000000000, table=EndpointDNAT, priority=200,udp,reg3=0xa0a0064,reg4=0x20050/0x7ffff actions=ct(commit,table=AntreaPolicyEgressRule,zone=65520,nat(dst=10.10.0.100:80),exec(set_field:0x10/0x10->ct_mark))",
+				"cookie=0x1030000000000, table=EndpointDNAT, priority=200,udp,reg3=0xa0a0065,reg4=0x20050/0x7ffff actions=ct(commit,table=AntreaPolicyEgressRule,zone=65520,nat(dst=10.10.0.101:80),exec(set_field:0x10/0x10->ct_mark))",
+				"cookie=0x1030000000000, table=SNATMark, priority=190,ct_state=+new+trk,ip,nw_src=10.10.0.101,nw_dst=10.10.0.101 actions=ct(commit,table=SNAT,zone=65520,exec(set_field:0x20/0x20->ct_mark,set_field:0x40/0x40->ct_mark,move:NXM_NX_REG0[0..3]->NXM_NX_CT_MARK[0..3]))",
 			},
 		},
 		{
@@ -1181,9 +1181,9 @@ func Test_client_InstallEndpointFlows(t *testing.T) {
 				proxy.NewBaseEndpointInfo(ep2IPv6, "", "", 80, true, true, false, false, nil),
 			},
 			expectedFlows: []string{
-				"cookie=0x1030000000000, table=EndpointDNAT, priority=200,udp6,reg4=0x20050/0x7ffff,xxreg3=0xfec00010001000000000000000000100 actions=ct(commit,table=AntreaPolicyEgressRule,zone=65510,nat(dst=[fec0:10:10::100]:80),exec(set_field:0x10/0x10->ct_mark,move:NXM_NX_REG0[0..3]->NXM_NX_CT_MARK[0..3]))",
-				"cookie=0x1030000000000, table=EndpointDNAT, priority=200,udp6,reg4=0x20050/0x7ffff,xxreg3=0xfec00010001000000000000000000101 actions=ct(commit,table=AntreaPolicyEgressRule,zone=65510,nat(dst=[fec0:10:10::101]:80),exec(set_field:0x10/0x10->ct_mark,move:NXM_NX_REG0[0..3]->NXM_NX_CT_MARK[0..3]))",
-				"cookie=0x1030000000000, table=SNATMark, priority=190,ct_state=+new+trk,ipv6,ipv6_src=fec0:10:10::101,ipv6_dst=fec0:10:10::101 actions=ct(commit,table=SNAT,zone=65510,exec(set_field:0x20/0x20->ct_mark,set_field:0x40/0x40->ct_mark))",
+				"cookie=0x1030000000000, table=EndpointDNAT, priority=200,udp6,reg4=0x20050/0x7ffff,xxreg3=0xfec00010001000000000000000000100 actions=ct(commit,table=AntreaPolicyEgressRule,zone=65510,nat(dst=[fec0:10:10::100]:80),exec(set_field:0x10/0x10->ct_mark))",
+				"cookie=0x1030000000000, table=EndpointDNAT, priority=200,udp6,reg4=0x20050/0x7ffff,xxreg3=0xfec00010001000000000000000000101 actions=ct(commit,table=AntreaPolicyEgressRule,zone=65510,nat(dst=[fec0:10:10::101]:80),exec(set_field:0x10/0x10->ct_mark))",
+				"cookie=0x1030000000000, table=SNATMark, priority=190,ct_state=+new+trk,ipv6,ipv6_src=fec0:10:10::101,ipv6_dst=fec0:10:10::101 actions=ct(commit,table=SNAT,zone=65510,exec(set_field:0x20/0x20->ct_mark,set_field:0x40/0x40->ct_mark,move:NXM_NX_REG0[0..3]->NXM_NX_CT_MARK[0..3]))",
 			},
 		},
 		{
@@ -1194,9 +1194,9 @@ func Test_client_InstallEndpointFlows(t *testing.T) {
 				proxy.NewBaseEndpointInfo(ep2IPv4, "", "", 80, true, true, false, false, nil),
 			},
 			expectedFlows: []string{
-				"cookie=0x1030000000000, table=EndpointDNAT, priority=200,sctp,reg3=0xa0a0064,reg4=0x20050/0x7ffff actions=ct(commit,table=AntreaPolicyEgressRule,zone=65520,nat(dst=10.10.0.100:80),exec(set_field:0x10/0x10->ct_mark,move:NXM_NX_REG0[0..3]->NXM_NX_CT_MARK[0..3]))",
-				"cookie=0x1030000000000, table=EndpointDNAT, priority=200,sctp,reg3=0xa0a0065,reg4=0x20050/0x7ffff actions=ct(commit,table=AntreaPolicyEgressRule,zone=65520,nat(dst=10.10.0.101:80),exec(set_field:0x10/0x10->ct_mark,move:NXM_NX_REG0[0..3]->NXM_NX_CT_MARK[0..3]))",
-				"cookie=0x1030000000000, table=SNATMark, priority=190,ct_state=+new+trk,ip,nw_src=10.10.0.101,nw_dst=10.10.0.101 actions=ct(commit,table=SNAT,zone=65520,exec(set_field:0x20/0x20->ct_mark,set_field:0x40/0x40->ct_mark))",
+				"cookie=0x1030000000000, table=EndpointDNAT, priority=200,sctp,reg3=0xa0a0064,reg4=0x20050/0x7ffff actions=ct(commit,table=AntreaPolicyEgressRule,zone=65520,nat(dst=10.10.0.100:80),exec(set_field:0x10/0x10->ct_mark))",
+				"cookie=0x1030000000000, table=EndpointDNAT, priority=200,sctp,reg3=0xa0a0065,reg4=0x20050/0x7ffff actions=ct(commit,table=AntreaPolicyEgressRule,zone=65520,nat(dst=10.10.0.101:80),exec(set_field:0x10/0x10->ct_mark))",
+				"cookie=0x1030000000000, table=SNATMark, priority=190,ct_state=+new+trk,ip,nw_src=10.10.0.101,nw_dst=10.10.0.101 actions=ct(commit,table=SNAT,zone=65520,exec(set_field:0x20/0x20->ct_mark,set_field:0x40/0x40->ct_mark,move:NXM_NX_REG0[0..3]->NXM_NX_CT_MARK[0..3]))",
 			},
 		},
 		{
@@ -1207,9 +1207,9 @@ func Test_client_InstallEndpointFlows(t *testing.T) {
 				proxy.NewBaseEndpointInfo(ep2IPv6, "", "", 80, true, true, false, false, nil),
 			},
 			expectedFlows: []string{
-				"cookie=0x1030000000000, table=EndpointDNAT, priority=200,sctp6,reg4=0x20050/0x7ffff,xxreg3=0xfec00010001000000000000000000100 actions=ct(commit,table=AntreaPolicyEgressRule,zone=65510,nat(dst=[fec0:10:10::100]:80),exec(set_field:0x10/0x10->ct_mark,move:NXM_NX_REG0[0..3]->NXM_NX_CT_MARK[0..3]))",
-				"cookie=0x1030000000000, table=EndpointDNAT, priority=200,sctp6,reg4=0x20050/0x7ffff,xxreg3=0xfec00010001000000000000000000101 actions=ct(commit,table=AntreaPolicyEgressRule,zone=65510,nat(dst=[fec0:10:10::101]:80),exec(set_field:0x10/0x10->ct_mark,move:NXM_NX_REG0[0..3]->NXM_NX_CT_MARK[0..3]))",
-				"cookie=0x1030000000000, table=SNATMark, priority=190,ct_state=+new+trk,ipv6,ipv6_src=fec0:10:10::101,ipv6_dst=fec0:10:10::101 actions=ct(commit,table=SNAT,zone=65510,exec(set_field:0x20/0x20->ct_mark,set_field:0x40/0x40->ct_mark))",
+				"cookie=0x1030000000000, table=EndpointDNAT, priority=200,sctp6,reg4=0x20050/0x7ffff,xxreg3=0xfec00010001000000000000000000100 actions=ct(commit,table=AntreaPolicyEgressRule,zone=65510,nat(dst=[fec0:10:10::100]:80),exec(set_field:0x10/0x10->ct_mark))",
+				"cookie=0x1030000000000, table=EndpointDNAT, priority=200,sctp6,reg4=0x20050/0x7ffff,xxreg3=0xfec00010001000000000000000000101 actions=ct(commit,table=AntreaPolicyEgressRule,zone=65510,nat(dst=[fec0:10:10::101]:80),exec(set_field:0x10/0x10->ct_mark))",
+				"cookie=0x1030000000000, table=SNATMark, priority=190,ct_state=+new+trk,ipv6,ipv6_src=fec0:10:10::101,ipv6_dst=fec0:10:10::101 actions=ct(commit,table=SNAT,zone=65510,exec(set_field:0x20/0x20->ct_mark,set_field:0x40/0x40->ct_mark,move:NXM_NX_REG0[0..3]->NXM_NX_CT_MARK[0..3]))",
 			},
 		},
 	}
@@ -2645,8 +2645,8 @@ func Test_client_InstallMulticlusterGatewayFlows(t *testing.T) {
 				"cookie=0x1060000000000, table=L3Forwarding, priority=200,ip,nw_dst=10.97.0.0/16 actions=set_field:0a:00:00:00:00:01->eth_src,set_field:aa:bb:cc:dd:ee:f0->eth_dst,set_field:192.168.78.101->tun_dst,set_field:0x10/0xf0->reg0,goto_table:L3DecTTL",
 				"cookie=0x1060000000000, table=L3Forwarding, priority=200,ct_state=+rpl+trk,ip,nw_dst=192.168.78.101 actions=set_field:0a:00:00:00:00:01->eth_src,set_field:aa:bb:cc:dd:ee:f0->eth_dst,set_field:192.168.78.101->tun_dst,set_field:0x10/0xf0->reg0,goto_table:L3DecTTL",
 				"cookie=0x1060000000000, table=L3Forwarding, priority=199,ip,reg0=0x2000/0x2000,nw_dst=192.168.78.101 actions=set_field:0a:00:00:00:00:01->eth_src,set_field:aa:bb:cc:dd:ee:f0->eth_dst,set_field:192.168.78.101->tun_dst,set_field:0x10/0xf0->reg0,goto_table:L3DecTTL",
-				"cookie=0x1060000000000, table=SNATMark, priority=210,ct_state=+new+trk,ip,nw_dst=10.97.0.0/16 actions=ct(commit,table=SNAT,zone=65520,exec(set_field:0x20/0x20->ct_mark))",
-				"cookie=0x1060000000000, table=SNAT, priority=200,ct_state=+new+trk,ip,nw_dst=10.97.0.0/16 actions=ct(commit,table=L2ForwardingCalc,zone=65521,nat(src=192.168.77.100))",
+				"cookie=0x1060000000000, table=SNATMark, priority=210,ct_state=+new+trk,ip,nw_dst=10.97.0.0/16 actions=ct(commit,table=SNAT,zone=65520,exec(set_field:0x20/0x20->ct_mark,move:NXM_NX_REG0[0..3]->NXM_NX_CT_MARK[0..3]))",
+				"cookie=0x1060000000000, table=SNAT, priority=200,ct_state=+new+trk,ip,nw_dst=10.97.0.0/16 actions=ct(commit,table=L2ForwardingCalc,zone=65521,nat(src=192.168.77.100),exec(set_field:0x20/0x20->ct_mark))",
 			},
 		},
 		//TODO: IPv6
@@ -2813,7 +2813,7 @@ func Test_client_ReplayFlows(t *testing.T) {
 	// Feature Service replays flows.
 	addFlowInCache(fc.featureService.cachedFlows, "endpointFlow", []binding.Flow{fc.featureService.endpointDNATFlow(podIP, uint16(80), binding.ProtocolTCP)})
 	replayedFlows = append(replayedFlows,
-		"cookie=0x1030000000000, table=EndpointDNAT, priority=200,tcp,reg3=0xa0a0042,reg4=0x20050/0x7ffff actions=ct(commit,table=AntreaPolicyEgressRule,zone=65520,nat(dst=10.10.0.66:80),exec(set_field:0x10/0x10->ct_mark,move:NXM_NX_REG0[0..3]->NXM_NX_CT_MARK[0..3]))",
+		"cookie=0x1030000000000, table=EndpointDNAT, priority=200,tcp,reg3=0xa0a0042,reg4=0x20050/0x7ffff actions=ct(commit,table=AntreaPolicyEgressRule,zone=65520,nat(dst=10.10.0.66:80),exec(set_field:0x10/0x10->ct_mark))",
 	)
 
 	expectedFlows = append(expectedFlows, replayedFlows...)

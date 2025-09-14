@@ -252,18 +252,15 @@ func flowStringToAntreaConnection(flow string, zoneFilter uint16) (*connection.C
 			conn.Timeout = uint32(val)
 		case strings.Contains(fs, "labels"):
 			fields := strings.Split(fs, "=")
-			labelStr := strings.ReplaceAll(fields[len(fields)-1], "0x", "")
-			// Add leading zeros since DecodeString() expects the input string has even length
-			if len(labelStr) < 16 {
-				labelStr = strings.Repeat("0", 16-len(labelStr)) + labelStr
+			labelStr, _ := strings.CutPrefix(fields[len(fields)-1], "0x")
+			// Add leading zeros since DecodeString() expects the input string to have
+			// even length and we expect conn.Labels to be a []byte of length 16.
+			if len(labelStr) < 32 {
+				labelStr = strings.Repeat("0", 32-len(labelStr)) + labelStr
 			}
 			hexval, err := hex.DecodeString(labelStr)
 			if err != nil {
 				return nil, fmt.Errorf("conversion of label string %s to []byte failed: %v", labelStr, err)
-			}
-			// Reverse the []byte slice to align with kernel side's result which is little endian
-			for i := 0; i < len(hexval)/2; i++ {
-				hexval[i], hexval[len(hexval)-i-1] = hexval[len(hexval)-i-1], hexval[i]
 			}
 			conn.Labels = hexval
 		case strings.Contains(fs, "id"):

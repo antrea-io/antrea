@@ -49,10 +49,12 @@ type Connection struct {
 	// IsPresent flag helps in cleaning up connections when they are not in conntrack table anymore.
 	IsPresent bool
 	// ReadyToDelete marks whether we can safely delete the connection from the connection map.
-	ReadyToDelete      bool
-	Zone               uint16
-	Mark               uint32
-	StatusFlag         uint32
+	ReadyToDelete bool
+	Zone          uint16
+	Mark          uint32
+	StatusFlag    uint32
+	// Labels and LabelsMask use a big-endian representation: the first byte
+	// of the slice (at index 0) is the most-significant byte.
 	Labels, LabelsMask []byte
 	// TODO: Have a separate field for protocol. No need to keep it in Tuple.
 	FlowKey                        Tuple

@@ -3,7 +3,6 @@
   extends: [
     "config:base",
     ":gitSignOff", // Add commit Sign-Off for renovate commits
-    "helpers:pinGitHubActionDigests", // Pins GitHub Actions to exact commit SHAs for security
   ],
 
   // Allow only certain package managers and implicitly disable all others
