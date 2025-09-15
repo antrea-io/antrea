@@ -20,6 +20,7 @@ import (
 	"context"
 
 	corev1 "k8s.io/api/core/v1"
+	networkingv1 "k8s.io/api/networking/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
@@ -109,4 +110,5 @@ func init() {
 	utilruntime.Must(k8smcsapi.AddToScheme(TestScheme))
 	utilruntime.Must(k8sscheme.AddToScheme(TestScheme))
 	utilruntime.Must(crdv1beta1.AddToScheme(TestScheme))
+	utilruntime.Must(networkingv1.AddToScheme(TestScheme))
 }
