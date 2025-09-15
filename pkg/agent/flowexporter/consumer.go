@@ -9,6 +9,7 @@ import (
 	"antrea.io/antrea/pkg/agent/flowexporter/connection"
 	"antrea.io/antrea/pkg/agent/flowexporter/connections"
 	"antrea.io/antrea/pkg/agent/flowexporter/exporter"
+	"antrea.io/antrea/pkg/agent/flowexporter/filter"
 	"antrea.io/antrea/pkg/agent/flowexporter/priorityqueue"
 	"antrea.io/antrea/pkg/agent/flowexporter/utils"
 	api "antrea.io/antrea/pkg/apis/crd/v1beta1"
@@ -33,6 +34,9 @@ type ConsumerConfig struct {
 
 	activeFlowTimeout time.Duration
 	idleFlowTimeout   time.Duration
+
+	// allowProtocolFilter specifies whether the incoming connections will be accepted
+	allowProtocolFilter []string
 }
 
 type prevState struct {
@@ -54,7 +58,8 @@ type Consumer struct {
 
 	prevStates map[connection.ConnectionKey]prevState
 
-	exportConns []*connection.Connection
+	protocolFilter filter.ProtocolFilter
+	exportConns    []*connection.Connection
 }
 
 func CreateConsumer(k8sClient kubernetes.Interface, store connections.CTStore, denyStore *connections.DenyConnectionStore, config ConsumerConfig) *Consumer {
@@ -66,6 +71,7 @@ func CreateConsumer(k8sClient kubernetes.Interface, store connections.CTStore, d
 		denyStore:           denyStore,
 		prevStates:          make(map[connection.ConnectionKey]prevState),
 		exportConns:         make([]*connection.Connection, 0, maxConnsToExport),
+		protocolFilter:      filter.NewProtocolFilter(config.allowProtocolFilter),
 	}
 
 	return c
@@ -272,7 +278,7 @@ func (c *Consumer) getExpiredConns(expiredConns []*connection.Connection, currTi
 		}
 
 		if utils.IsConnectionDying(pqItem.Conn) || !conn.IsActive {
-			c.expirePriorityQueue.RemoveItemFromMap(pqItem.Conn)
+			c.expirePriorityQueue.RemoveItemFromMap(pqItem.Conn) // TODO Andrew: Why can't we just use `Remove`?
 		} else {
 			// For active connections, we update their "prev" stats fields,
 			// reset active expire time and push back into the PQ.
@@ -291,9 +297,12 @@ func (c *Consumer) getExpiredConns(expiredConns []*connection.Connection, currTi
 
 func (c *Consumer) handleUpdatedConns(conns []*connection.Connection) {
 	for _, conn := range conns {
-		key := connection.NewConnectionKey(conn)
+		filter := c.protocolFilter
+		if !filter.Allow(conn.FlowKey.Protocol) {
+			continue
+		}
 
-		klog.V(5).InfoS("DEBUG A1: Received connection", "conn", conn)
+		key := connection.NewConnectionKey(conn)
 		oldState, ok := c.prevStates[key]
 		// Check if there is any activity on this conn.
 		// If there is no activity since the last time we sent it then no point in
