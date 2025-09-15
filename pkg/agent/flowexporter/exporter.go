@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"hash/fnv"
 	"net"
+	"reflect"
 	"time"
 
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -202,6 +203,7 @@ func NewFlowExporterWithInformer(podStore objectstore.PodStore, proxier proxy.Pr
 
 	targetInformer.Informer().AddEventHandlerWithResyncPeriod(cache.ResourceEventHandlerFuncs{
 		AddFunc:    fe.onNewTarget,
+		UpdateFunc: fe.OnUpdateTarget,
 		DeleteFunc: fe.onTargetDelete,
 	}, 0)
 
@@ -258,14 +260,20 @@ func (exp *FlowExporter) Run(stopCh <-chan struct{}) {
 			}
 			return
 		case res := <-exp.addConsumerCh:
-			klog.V(5).InfoS("DEBUG A3: Adding consumer", "name", res.Name)
+			oldConsumerCh, ok := exp.consumerStopChs[res.Name]
+			if ok {
+				klog.V(5).InfoS("Consumer was updated, removing old instance", "name", res.Name)
+				close(oldConsumerCh)
+				delete(exp.consumerStopChs, res.Name)
+			}
 
+			klog.V(5).InfoS("Adding consumer", "name", res.Name)
 			consumer := exp.createConsumerFromFlowExporterTarget(res)
 			stopCh := make(chan struct{})
 			go consumer.Run(stopCh)
 			exp.consumerStopChs[res.Name] = stopCh
 		case name := <-exp.rmConsumerCh:
-			klog.V(5).InfoS("DEBUG A3: Adding consumer", "name", name)
+			klog.V(5).InfoS("Removing consumer", "name", name)
 			ch, ok := exp.consumerStopChs[name]
 			if ok {
 				close(ch)
@@ -515,8 +523,21 @@ func (fe *FlowExporter) createConsumerFromFlowExporterTarget(target *api.FlowExp
 
 func (fe *FlowExporter) onNewTarget(obj any) {
 	targetRes := obj.(*api.FlowExporterTarget)
-	klog.V(5).InfoS("DEBUG: Received new FlowExporterTarget", "resource", klog.KObj(targetRes))
+	klog.V(5).InfoS("Received new FlowExporterTarget", "resource", klog.KObj(targetRes))
 	fe.queue.Add(targetRes.Name)
+}
+
+func (fe *FlowExporter) OnUpdateTarget(old any, new any) {
+	oldRes := old.(*api.FlowExporterTarget)
+	newRes := new.(*api.FlowExporterTarget)
+
+	klog.V(5).InfoS("Received updated FlowExporterTarget", "resource", klog.KObj(newRes))
+
+	if reflect.DeepEqual(oldRes.Spec, newRes.Spec) {
+		return
+	}
+
+	fe.queue.Add(newRes.Name)
 }
 
 func (fe *FlowExporter) onTargetDelete(obj any) {
@@ -534,6 +555,6 @@ func (fe *FlowExporter) onTargetDelete(obj any) {
 		}
 	}
 
-	klog.V(5).InfoS("DEBUG: FlowExporterTarget deleted", "resource", klog.KObj(targetRes))
+	klog.V(5).InfoS("FlowExporterTarget deleted", "resource", klog.KObj(targetRes))
 	fe.queue.Add(targetRes.Name)
 }
