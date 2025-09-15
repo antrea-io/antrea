@@ -33,7 +33,7 @@ require (
 	github.com/gopacket/gopacket v1.3.2-0.20241202175635-b43272ae1eb8
 	github.com/hashicorp/memberlist v0.5.3
 	github.com/k8snetworkplumbingwg/network-attachment-definition-client v1.7.7
-	github.com/kevinburke/ssh_config v1.2.0
+	github.com/kevinburke/ssh_config v1.4.0
 	github.com/lithammer/dedent v1.1.0
 	github.com/mdlayher/arp v0.0.0-20220221190821-c37aaafac7f9
 	github.com/mdlayher/ethernet v0.0.0-20220221185849-529eae5b6118
