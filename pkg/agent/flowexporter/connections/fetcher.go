@@ -91,12 +91,10 @@ func (f *ConntrackFetcher) Run(stopCh <-chan struct{}, store CTStore) {
 }
 
 func (f *ConntrackFetcher) PollAndStore(store CTStore) error {
-	// var l7EventMap map[connection.ConnectionKey]L7ProtocolFields
-	// if f.l7EventMapGetter != nil {
-	// 	l7EventMap = f.l7EventMapGetter.ConsumeL7EventMap()
-	// }
-	// TODO Andrew: Re-add L7 support. This should probably send the L7 info to the store and let it
-	// broadcast to the subscribers.
+	var l7EventMap map[connection.ConnectionKey]L7ProtocolFields
+	if f.l7EventMapGetter != nil {
+		l7EventMap = f.l7EventMapGetter.ConsumeL7EventMap()
+	}
 
 	var filteredConnsList []*connection.Connection
 	for _, zone := range f.zones {
@@ -132,6 +130,6 @@ func (f *ConntrackFetcher) PollAndStore(store CTStore) error {
 		batch = append(batch, conn)
 	}
 
-	store.SubmitConnections(batch)
+	store.SubmitConnections(batch, l7EventMap)
 	return nil
 }

@@ -70,6 +70,11 @@ const (
 	defaultWorkers = 4
 )
 
+type consumerStore struct {
+	consumer *Consumer
+	stopCh   chan struct{}
+}
+
 type FlowExporter struct {
 	collectorProto         string
 	collectorAddr          string
@@ -97,7 +102,7 @@ type FlowExporter struct {
 	fetLister      crdlisters.FlowExporterTargetLister
 	queue          workqueue.TypedRateLimitingInterface[string]
 
-	consumerStopChs map[string]chan struct{}
+	consumerStopChs map[string]consumerStore
 	addConsumerCh   chan *api.FlowExporterTarget
 	rmConsumerCh    chan string
 
@@ -198,7 +203,7 @@ func NewFlowExporterWithInformer(podStore objectstore.PodStore, proxier proxy.Pr
 		),
 		addConsumerCh:   make(chan *api.FlowExporterTarget),
 		rmConsumerCh:    make(chan string),
-		consumerStopChs: make(map[string]chan struct{}),
+		consumerStopChs: make(map[string]consumerStore),
 	}
 
 	targetInformer.Informer().AddEventHandlerWithResyncPeriod(cache.ResourceEventHandlerFuncs{
@@ -255,7 +260,7 @@ func (exp *FlowExporter) Run(stopCh <-chan struct{}) {
 		select {
 		case <-stopCh:
 			for k, ch := range exp.consumerStopChs {
-				close(ch)
+				close(ch.stopCh)
 				delete(exp.consumerStopChs, k)
 			}
 			return
@@ -263,7 +268,7 @@ func (exp *FlowExporter) Run(stopCh <-chan struct{}) {
 			oldConsumerCh, ok := exp.consumerStopChs[res.Name]
 			if ok {
 				klog.V(5).InfoS("Consumer was updated, removing old instance", "name", res.Name)
-				close(oldConsumerCh)
+				close(oldConsumerCh.stopCh)
 				delete(exp.consumerStopChs, res.Name)
 			}
 
@@ -271,12 +276,15 @@ func (exp *FlowExporter) Run(stopCh <-chan struct{}) {
 			consumer := exp.createConsumerFromFlowExporterTarget(res)
 			stopCh := make(chan struct{})
 			go consumer.Run(stopCh)
-			exp.consumerStopChs[res.Name] = stopCh
+			exp.consumerStopChs[res.Name] = consumerStore{
+				consumer: consumer,
+				stopCh:   stopCh,
+			}
 		case name := <-exp.rmConsumerCh:
 			klog.V(5).InfoS("Removing consumer", "name", name)
 			ch, ok := exp.consumerStopChs[name]
 			if ok {
-				close(ch)
+				close(ch.stopCh)
 				delete(exp.consumerStopChs, name)
 			}
 		}

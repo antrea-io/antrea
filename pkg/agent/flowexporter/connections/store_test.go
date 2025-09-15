@@ -2,6 +2,7 @@ package connections
 
 import (
 	"container/heap"
+	"fmt"
 	"maps"
 	"net/netip"
 	"sync/atomic"
@@ -21,6 +22,7 @@ func TestConnStore_updateConnections(t *testing.T) {
 		numExistingConns        int
 		numIncomingUpdatedConns int
 		numNewConns             int
+		hasL7Event              bool
 
 		subs            []subscriber
 		expectedUpdates int
@@ -51,6 +53,14 @@ func TestConnStore_updateConnections(t *testing.T) {
 				ch: make(chan UpdateMsg, 1),
 			}},
 			expectedUpdates: 2,
+		}, {
+			name:            "new connections - with l7Events",
+			numNewConns:     3,
+			hasL7Event:      true,
+			expectedUpdates: 3,
+			subs: []subscriber{{
+				ch: make(chan UpdateMsg, 1),
+			}},
 		},
 		// TODO Andrew: Add test case for multiple existing entries
 	}
@@ -67,10 +77,25 @@ func TestConnStore_updateConnections(t *testing.T) {
 			expectedEntries := maps.Clone(existingConns)
 
 			newConns := make([]*connection.Connection, 0, tt.numNewConns)
+			l7Events := make(map[connection.ConnectionKey]L7ProtocolFields)
 			for i := 0; i < tt.numNewConns; i++ {
 				conn := getNewConn()
 				newConns = append(newConns, conn)
 				expectedEntries[conn.FlowKey] = conn
+				if tt.hasL7Event {
+					l7Events[conn.FlowKey] = L7ProtocolFields{
+						Http: map[int32]*Http{
+							1: {
+								Hostname:    "example.com",
+								URL:         fmt.Sprintf("example.com/foo/%d", i),
+								UserAgent:   "gecko",
+								ContentType: "application/json",
+								Method:      "PATCH",
+								Protocol:    "tcp",
+							},
+						},
+					}
+				}
 			}
 
 			incomingConns := make([]*connection.Connection, 0, tt.numIncomingUpdatedConns)
@@ -100,7 +125,7 @@ func TestConnStore_updateConnections(t *testing.T) {
 			}
 
 			now := time.Now()
-			cs.updateConnections(incomingConns)
+			cs.updateConnections(incomingConns, l7Events)
 
 			for _, want := range expectedEntries {
 				want.LastUpdateTime = now
@@ -128,6 +153,9 @@ func TestConnStore_updateConnections(t *testing.T) {
 				case msg := <-sub.ch:
 					assert.Len(t, msg.Conns, tt.expectedUpdates)
 					assert.False(t, msg.Deleted)
+					if len(l7Events) > 0 {
+						assert.Equal(t, msg.L7Events, l7Events)
+					}
 					// TODO: Check the actual returned item.
 				}
 			}

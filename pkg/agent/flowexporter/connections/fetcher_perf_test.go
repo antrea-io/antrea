@@ -112,7 +112,7 @@ func BenchmarkStore(b *testing.B) {
 		// footprint of the connection store and all connections accurately.
 		conns := generateConns()
 		// add connections
-		store.SubmitConnections(conns)
+		store.SubmitConnections(conns, nil)
 	}
 	b.StopTimer()
 	b.Logf("\nSummary:\nNumber of initial connections: %d\nNumber of new connections/poll: %d\nNumber of deleted connections/poll: %d\n", testNumOfConns, testNumOfNewConns, testNumOfDeletedConns)

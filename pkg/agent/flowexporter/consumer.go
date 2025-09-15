@@ -2,7 +2,9 @@ package flowexporter
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"maps"
 	"net"
 	"time"
 
@@ -56,6 +58,7 @@ type Consumer struct {
 	exp       exporter.Interface
 	connected bool
 
+	l7Events   map[connection.ConnectionKey]connections.L7ProtocolFields
 	prevStates map[connection.ConnectionKey]prevState
 
 	protocolFilter filter.ProtocolFilter
@@ -72,6 +75,7 @@ func CreateConsumer(k8sClient kubernetes.Interface, store connections.CTStore, d
 		prevStates:          make(map[connection.ConnectionKey]prevState),
 		exportConns:         make([]*connection.Connection, 0, maxConnsToExport),
 		protocolFilter:      filter.NewProtocolFilter(config.allowProtocolFilter),
+		l7Events:            make(map[connection.ConnectionKey]connections.L7ProtocolFields),
 	}
 
 	return c
@@ -195,7 +199,11 @@ func (c *Consumer) Run(stopCh <-chan struct{}) {
 			if msg.Deleted {
 				c.handleDeletedConns(msg.Conns)
 			} else {
-				c.handleUpdatedConns(msg.Conns)
+				if len(msg.L7Events) > 0 {
+					c.handleUpdatedL7Events(msg.Conns, msg.L7Events)
+				} else {
+					c.handleUpdatedConns(msg.Conns)
+				}
 			}
 		case <-exportTicker.C:
 			if !c.connected {
@@ -227,6 +235,20 @@ func (c *Consumer) Run(stopCh <-chan struct{}) {
 	}
 }
 
+func (c *Consumer) handleUpdatedL7Events(conns []*connection.Connection, l7Events map[connection.ConnectionKey]connections.L7ProtocolFields) {
+	for _, conn := range conns {
+		connKey := connection.NewConnectionKey(conn)
+		// In case L7 event is received after the last planned export of the TCP connection, add
+		// the event back to the queue to be exported in next export cycle
+		_, ok := c.expirePriorityQueue.KeyToItem[connKey]
+		if !ok {
+			c.expirePriorityQueue.WriteItemToQueue(connKey, conn)
+		}
+	}
+
+	maps.Copy(c.l7Events, l7Events)
+}
+
 func (c *Consumer) sendFlowRecords() (time.Duration, error) {
 	currTime := time.Now()
 	var expireTime1, expireTime2 time.Duration
@@ -243,15 +265,35 @@ func (c *Consumer) sendFlowRecords() (time.Duration, error) {
 	nextExpireTime := getMinTime(expireTime1, expireTime2)
 	for i := range c.exportConns {
 		conn := c.exportConns[i]
+		c.fillL7Info(conn)
+
 		klog.InfoS("DEBUG: Sending flow records", "Connection", conn)
 		if err := c.Export(conn); err != nil {
 			klog.ErrorS(err, "Error when sending expired flow record")
 			return nextExpireTime, err
 		}
+
+		connKey := connection.NewConnectionKey(conn)
+		delete(c.l7Events, connKey)
 	}
 	// Clear exportConns slice after exporting. Allocated memory is kept.
 	c.exportConns = c.exportConns[:0]
 	return nextExpireTime, nil
+}
+
+func (c *Consumer) fillL7Info(conn *connection.Connection) {
+	connKey := connection.NewConnectionKey(conn)
+	l7Event, ok := c.l7Events[connKey]
+	if !ok || len(l7Event.Http) == 0 {
+		return
+	}
+
+	jsonBytes, err := json.Marshal(l7Event.Http)
+	if err != nil {
+		klog.ErrorS(err, "Converting l7Event http failed")
+	}
+	conn.HttpVals += string(jsonBytes)
+	conn.AppProtocolName = "http"
 }
 
 func (c *Consumer) getExpiredConns(expiredConns []*connection.Connection, currTime time.Time, maxSize int) ([]*connection.Connection, time.Duration) {

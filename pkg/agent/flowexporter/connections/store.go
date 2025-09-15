@@ -12,7 +12,7 @@ import (
 
 type CTStore interface {
 	Run(stopCh <-chan struct{})
-	SubmitConnections(batch []*connection.Connection)
+	SubmitConnections(batch []*connection.Connection, l7EventMap map[connection.ConnectionKey]L7ProtocolFields)
 
 	HasConn(*connection.Connection) bool
 
@@ -21,8 +21,14 @@ type CTStore interface {
 }
 
 type UpdateMsg struct {
-	Conns   []*connection.Connection
-	Deleted bool
+	Conns    []*connection.Connection
+	L7Events map[connection.ConnectionKey]L7ProtocolFields
+	Deleted  bool
+}
+
+type submitMsg struct {
+	conns      []*connection.Connection
+	l7EventMap map[connection.ConnectionKey]L7ProtocolFields
 }
 
 type subscriber struct {
@@ -36,7 +42,7 @@ func (s *subscriber) C() <-chan UpdateMsg {
 var _ CTStore = (*connStore)(nil)
 
 type connStore struct {
-	updateCh chan []*connection.Connection // Used to receive new connections
+	updateCh chan submitMsg // Used to receive new connections
 	addSubCh chan *subscriber
 	delSubCh chan *subscriber
 	subs     map[*subscriber]struct{}
@@ -51,7 +57,7 @@ type connStore struct {
 
 func NewConnStore(staleConnTimeout time.Duration) *connStore {
 	store := &connStore{
-		updateCh: make(chan []*connection.Connection, 10),
+		updateCh: make(chan submitMsg, 10),
 		addSubCh: make(chan *subscriber, 10),
 		delSubCh: make(chan *subscriber, 10),
 		subs:     make(map[*subscriber]struct{}),
@@ -74,7 +80,8 @@ func (cs *connStore) Run(stopCh <-chan struct{}) {
 		case <-stopCh:
 			return
 		case batch := <-cs.updateCh:
-			cs.updateConnections(batch)
+			cs.updateConnections(batch.conns)
+			cs.updateL7Events(batch.l7EventMap)
 		case sub := <-cs.addSubCh:
 			cs.subs[sub] = struct{}{}
 			// TODO Andrew: Notify current state to subscriber or should we just wait until next update?
@@ -85,6 +92,25 @@ func (cs *connStore) Run(stopCh <-chan struct{}) {
 			cs.removeStaleConnections()
 		}
 	}
+}
+
+func (cs *connStore) updateL7Events(l7EventMap map[connection.ConnectionKey]L7ProtocolFields) {
+	if len(l7EventMap) == 0 {
+		return
+	}
+
+	l7Conns := make([]*connection.Connection, 0, len(l7EventMap))
+
+	for key := range l7EventMap {
+		conn, ok := cs.entries[key]
+		if !ok {
+			continue
+		}
+
+		l7Conns = append(l7Conns, conn)
+	}
+
+	cs.notify(l7Conns, l7EventMap, false)
 }
 
 func (cs *connStore) removeStaleConnections() {
@@ -113,7 +139,7 @@ func (cs *connStore) removeStaleConnections() {
 		conns = append(conns, conn)
 	}
 
-	cs.notify(conns, true)
+	cs.notify(conns, nil, true)
 }
 
 func (cs *connStore) updateConnections(batch []*connection.Connection) {
@@ -164,7 +190,7 @@ func (cs *connStore) updateConnections(batch []*connection.Connection) {
 		})
 	}
 
-	cs.notify(updatedConns, false)
+	cs.notify(updatedConns, nil, false)
 }
 
 func (s *connStore) HasConn(conn *connection.Connection) bool {
@@ -188,22 +214,26 @@ func (s *connStore) Unsubscribe(sub *subscriber) {
 	}
 }
 
-func (s *connStore) SubmitConnections(conns []*connection.Connection) {
+func (s *connStore) SubmitConnections(conns []*connection.Connection, l7EventMap map[connection.ConnectionKey]L7ProtocolFields) {
 	if len(conns) == 0 {
 		return
 	}
 
-	s.updateCh <- conns
+	s.updateCh <- submitMsg{
+		conns:      conns,
+		l7EventMap: l7EventMap,
+	}
 }
 
-func (cs *connStore) notify(conns []*connection.Connection, deleted bool) {
+func (cs *connStore) notify(conns []*connection.Connection, l7Events map[connection.ConnectionKey]L7ProtocolFields, deleted bool) {
 	if len(conns) == 0 {
 		return
 	}
 
 	msg := UpdateMsg{
-		Conns:   conns,
-		Deleted: deleted,
+		Conns:    conns,
+		Deleted:  deleted,
+		L7Events: l7Events,
 	}
 
 	for sub := range cs.subs {
