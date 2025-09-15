@@ -502,6 +502,8 @@ func (fe *FlowExporter) createConsumerFromFlowExporterTarget(target *api.FlowExp
 
 		activeFlowTimeout: activeFlowExportTimeout,
 		idleFlowTimeout:   idleFlowExportTimeout,
+
+		allowProtocolFilter: target.Spec.Filter,
 	}
 
 	if target.Spec.Protocol == api.ProtoIPFix {
