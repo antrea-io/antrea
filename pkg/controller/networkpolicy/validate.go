@@ -104,7 +104,7 @@ type priorityReservation struct {
 func newTierPriorityTracker() *tierPriorityTracker {
 	return &tierPriorityTracker{
 		pendingPriorities: make(map[int32]*priorityReservation),
-		validationTimeout: 30 * time.Second, // timeout for waiting for other validations
+		validationTimeout: 5 * time.Second,  // timeout for waiting for other validations
 		creationTimeout:   60 * time.Second, // timeout for waiting for actual K8s creation
 	}
 }
@@ -120,7 +120,7 @@ func (t *tierPriorityTracker) reservePriorityForValidation(priority int32, tierN
 	if existing, exists := t.pendingPriorities[priority]; exists {
 		// Check if the existing reservation has timed out
 		if time.Since(existing.createdAt) > t.creationTimeout {
-			klog.Warningf("Tier priority %d reservation for %s has timed out, allowing new reservation", priority, existing.tierName)
+			klog.V(2).InfoS("Tier priority reservation for has timed out, allowing new reservation", "priority", priority, "tier", existing.tierName)
 			close(existing.waitChan)
 			delete(t.pendingPriorities, priority)
 		} else {
@@ -159,7 +159,7 @@ func (t *tierPriorityTracker) waitForPriorityAvailable(priority int32) bool {
 	case <-waitChan:
 		return true
 	case <-time.After(t.validationTimeout):
-		klog.Warningf("Timeout waiting for Tier priority %d to become available", priority)
+		klog.InfoS("Timeout waiting for Tier priority to become available", "priority", priority)
 		return false
 	}
 }
@@ -176,7 +176,7 @@ func (t *tierPriorityTracker) releasePriorityReservation(priority int32, tierNam
 			delete(t.pendingPriorities, priority)
 			klog.V(4).InfoS("Released priority reservation for Tier", "priority", priority, "tier", tierName)
 		} else {
-			klog.Warningf("Attempted to release priority %d for Tier %s, but it's reserved by %s", priority, tierName, existing.tierName)
+			klog.InfoS("Attempted to release priority for a different Tier", "priority", priority, "tier", tierName, "existingTier", existing.tierName)
 		}
 	}
 }
@@ -190,7 +190,8 @@ func (t *tierPriorityTracker) cleanupExpiredReservations() {
 	now := time.Now()
 	for priority, reservation := range t.pendingPriorities {
 		if now.Sub(reservation.createdAt) > t.creationTimeout {
-			klog.Warningf("Cleaning up expired priority %d reservation for Tier %s (age: %v)", priority, reservation.tierName, now.Sub(reservation.createdAt))
+			klog.V(4).InfoS("Cleaning up expired priority reservation for Tier",
+				"priority", priority, "tier", reservation.tierName, "age", now.Sub(reservation.createdAt))
 			close(reservation.waitChan)
 			delete(t.pendingPriorities, priority)
 		}
@@ -281,10 +282,20 @@ func NewNetworkPolicyValidator(networkPolicyController *NetworkPolicyController)
 	vr.RegisterGroupValidator(&gv)
 	vr.RegisterAdminNetworkPolicyValidator(&av)
 
-	// Start cleanup routine for expired reservations from the tierValidator
-	go tv.startCleanupRoutine()
-
+	// Set up Tier event handlers to notify validator when Tiers are actually created/deleted
+	networkPolicyController.SetupTierEventHandlersForValidator(&vr)
 	return &vr
+}
+
+// Run starts the background routines for the NetworkPolicyValidator.
+func (v *NetworkPolicyValidator) Run(stopCh <-chan struct{}) {
+	// Start cleanup routine for expired reservations from the tierValidator
+	for _, val := range v.tierValidators {
+		if tv, ok := val.(*tierValidator); ok {
+			go tv.startCleanupRoutine(stopCh)
+			break
+		}
+	}
 }
 
 // Validate function validates a Group, ClusterGroup, Tier or Antrea Policy object
@@ -627,7 +638,7 @@ func (v *NetworkPolicyValidator) validateTier(curTier, oldTier *crdv1beta1.Tier,
 }
 
 // startCleanupRoutine starts a background routine to clean up expired priority reservations
-func (t *tierValidator) startCleanupRoutine() {
+func (t *tierValidator) startCleanupRoutine(stopCh <-chan struct{}) {
 	if t.priorityTracker == nil {
 		klog.ErrorS(nil, "Priority tracker is nil, cannot start cleanup routine")
 		return
@@ -636,8 +647,14 @@ func (t *tierValidator) startCleanupRoutine() {
 	ticker := time.NewTicker(30 * time.Second) // Check every 30 seconds
 	defer ticker.Stop()
 
-	for range ticker.C {
-		t.priorityTracker.cleanupExpiredReservations()
+	for {
+		select {
+		case <-ticker.C:
+			t.priorityTracker.cleanupExpiredReservations()
+		case <-stopCh:
+			klog.InfoS("Stopping Tier priority tracker cleanup routine")
+			return
+		}
 	}
 }
 
