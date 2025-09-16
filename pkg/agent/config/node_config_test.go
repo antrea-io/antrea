@@ -352,6 +352,11 @@ func TestCalculateMTUDeduction(t *testing.T) {
 			nc:                   &NetworkConfig{TunnelType: ovsconfig.GRETunnel, TrafficEncryptionMode: TrafficEncryptionModeIPSec},
 			expectedMTUDeduction: 80,
 		},
+		{
+			name:                 "WireGuard enabled",
+			nc:                   &NetworkConfig{TunnelType: ovsconfig.GeneveTunnel, TrafficEncryptionMode: TrafficEncryptionModeWireGuard},
+			expectedMTUDeduction: 110,
+		},
 	}
 
 	for _, tt := range tests {
