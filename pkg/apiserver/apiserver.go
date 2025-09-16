@@ -310,8 +310,6 @@ func installHandlers(c *ExtraConfig, s *genericapiserver.GenericAPIServer) {
 
 		// Get new NetworkPolicyValidator
 		v := controllernetworkpolicy.NewNetworkPolicyValidator(c.networkPolicyController)
-		// Set up Tier event handlers to notify validator when Tiers are actually created/deleted
-		c.networkPolicyController.SetupTierEventHandlersForValidator(v)
 		// Install handlers for NetworkPolicy related validation
 		s.Handler.NonGoRestfulMux.HandleFunc("/validate/tier", webhook.HandlerForValidateFunc(v.Validate))
 		s.Handler.NonGoRestfulMux.HandleFunc("/validate/acnp", webhook.HandlerForValidateFunc(v.Validate))
@@ -329,6 +327,12 @@ func installHandlers(c *ExtraConfig, s *genericapiserver.GenericAPIServer) {
 					klog.ErrorS(err, "Failed to initialize system Tiers")
 				}
 			}()
+			return nil
+		})
+
+		// Start the NetworkPolicyValidator background routines
+		s.AddPostStartHook("start-validator-routines", func(context genericapiserver.PostStartHookContext) error {
+			go v.Run(context.Done())
 			return nil
 		})
 	}
