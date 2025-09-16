@@ -128,6 +128,15 @@ for values in $VALUES_FILES; do
           "$ANTREA_CHART" \
           > "$OUTPUT_DIR/$values" \
           2> >(grep -v 'This is insecure' >&2)
+  if [ "$values" = "antrea-aks.yml" ]; then
+    cat - "$OUTPUT_DIR/$values" <<EOF >"$OUTPUT_DIR/${values}-disclaimer"
+# ====== Disclaimer of Azure Support ======
+# Due to resource constaint, Azure support is not tested since Antrea 2.4.1 (including 2.4.1).
+# Azure related code and features are offered as-is without verificaion. Azure issues are
+# supported in a best-effort priority.
+EOF
+  mv "$OUTPUT_DIR/${values}-disclaimer" "$OUTPUT_DIR/$values"
+  fi
 done
 
 # We also generate a manifest which only includes CRD resources (all of them).

@@ -1259,7 +1259,7 @@ func (i *Initializer) patchNodeAnnotations(nodeName, key string, value interface
 
 // getNodeInterfaceFromIP returns the IPv4/IPv6 configuration, and the associated interface according the give nodeIPs.
 // When searching the Node interface, antrea-gw0 is ignored because it is configured with the same address as Node IP
-// with NetworkPolicyOnly mode on public cloud setup, e.g., AKS.
+// with NetworkPolicyOnly mode on public cloud setup, e.g., EKS.
 func (i *Initializer) getNodeInterfaceFromIP(nodeIPs *utilip.DualStackIPs) (v4IPNet *net.IPNet, v6IPNet *net.IPNet, iface *net.Interface, err error) {
 	return getIPNetDeviceFromIP(nodeIPs, sets.New[string](i.hostGateway))
 }
