@@ -1,6 +1,8 @@
 # AI Agents Development Guidelines
 
-This document provides guidelines and best practices for AI agents contributing to the Antrea project. Antrea is a Kubernetes networking solution that leverages Open vSwitch as the networking data plane to provide networking and security services for Kubernetes clusters.
+This document provides guidelines and best practices for AI agents contributing to the Antrea
+project. Antrea is a Kubernetes networking solution that leverages Open vSwitch as the networking
+data plane to provide networking and security services for Kubernetes clusters.
 
 ## Table of Contents
 
@@ -29,11 +31,13 @@ This document provides guidelines and best practices for AI agents contributing 
 - **No trailing whitespaces**: Never introduce trailing whitespaces in any files, whether it is code or documentation
 - **File endings**: Always end files with a newline character
 - **Consistent indentation**: Match the existing code style in the file/package
-- **Line length**: Keep lines reasonably short (typically under 120 characters)
+- **Line length**: Keep lines reasonably short (typically under 120 characters for code and under
+  100 characters for documentation)
 
 ## Go Coding Conventions
 
-Follow the Go coding conventions as outlined in the [Go Code Review Comments](https://go.dev/wiki/CodeReviewComments) and additional project-specific guidelines:
+Follow the Go coding conventions as outlined in the [Go Code Review Comments](https://go.dev/wiki/CodeReviewComments)
+and additional project-specific guidelines:
 
 ### Key Conventions
 
@@ -60,7 +64,7 @@ Follow the Go coding conventions as outlined in the [Go Code Review Comments](ht
 
 ## Bash Coding Conventions
 
-### Shell Script Guidelines
+### Bash Script Guidelines
 
 - **Shebang**: For all Bash scripts, prefer `#!/usr/bin/env bash` over alternatives like `#!/bin/bash` for better portability
 - **Error handling**: Use `set -o errexit` and `set -o pipefail` to catch errors early
@@ -164,7 +168,7 @@ All new Go source files must include the Apache 2.0 license header:
 // limitations under the License.
 ```
 
-### Bash/Shell Files
+### Shell Files
 
 All new shell scripts must include the license header:
 
@@ -222,7 +226,7 @@ All new shell scripts must include the license header:
 
 ### Markdown Files
 
-- **Linting**: All markdown files should be checked with markdownlint
+- **Linting**: All markdown files should be checked with `markdownlint`
 - **Exceptions**: Files listed in `hack/.markdownlint-ignore` are exempt from linting
 - **Validation**: Use `make markdownlint` to check all markdown files in the project
 - **Auto-fix**: Basic issues can be fixed with `make markdownlint-fix`
