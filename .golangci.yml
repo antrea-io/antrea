@@ -13,6 +13,7 @@ linters:
     - revive
     - staticcheck
     - unused
+    - tagliatelle
   settings:
     gosec:
       excludes:
@@ -37,6 +38,87 @@ linters:
         - name: superfluous-else
         - name: var-declaration
         - name: duplicated-imports
+    tagliatelle:
+      case:
+          rules:
+            json: goCamel
+            yaml: goCamel
+          ignored-fields:
+            - APICABundle
+            - AppliedPolicies
+            - AppProtocol
+            - BGPPolicyName
+            - BrName
+            - ContentLength
+            - ClientCAFile
+            - ClusterCIDRs
+            - ClusterIDs
+            - ClusterInfo
+            - ClusterNetworkPolicy
+            - ContentType
+            - AppliedPolicies
+            - ClusterMembershipPort
+            - DatapathType
+            - DestIP
+            - DestPort
+            - DefaultMTU
+            - DisableTXChecksumOffload
+            - DstMAC
+            - EgressDstRules
+            - EnableNodeIPAM
+            - EventType
+            - ExceptCIDRs
+            - ExtensionID
+            - Extensions
+            - ExternalEntity
+            - ExternalEntitySpec
+            - ExternalIds
+            - ExternalIDs
+            - FlowID
+            - FQDNs
+            - IngressSrcRules
+            - InInterface
+            - IPPools
+            - IPs
+            - IPsec 
+            - IPsecCSRSignerConfig
+            - IPv6Header
+            - LastMeasuredRTTNanoseconds
+            - ListMeta
+            - LocalASN
+            - MaxIPFIXMsgSize
+            - McastSnoopingEnable
+            - MemberASNs
+            - Method
+            - Nameservers
+            - NodeCIDRMaskSizeIPv4 
+            - NodeCIDRMaskSizeIPv6
+            - NodeIPAM
+            - NodeResults
+            - NoSNAT
+            - ObjectMeta
+            - OFPortRequest
+            - PacketBytes
+            - PodCIDRs
+            - PodName
+            - PolicyRef
+            - Port
+            - Protocol
+            - RawPrevResult
+            - RuleIndex
+            - Search
+            - SelfSignedCA
+            - ServiceCIDR
+            - ServiceCIDRv6
+            - SrcIP
+            - SrcPort
+            - TransportInterfaceCIDRs
+            - TransportHeader
+            - TxID
+            - UserAgent
+            - WithIPFIXExporter
+            
+          use-field-name: true
   exclusions:
     presets:
       - legacy
