@@ -45,7 +45,7 @@ edit the Agent configuration in the
 | `NodePortLocal`               | Agent              | `true`  | GA    | v0.13         | v1.4         | v1.14      | Yes                | Important user-facing change in v1.2.0        |
 | `Egress`                      | Agent + Controller | `true`  | Beta  | v1.0          | v1.6         | N/A        | Yes                |                                               |
 | `NodeIPAM`                    | Controller         | `true`  | Beta  | v1.4          | v1.12        | N/A        | Yes                |                                               |
-| `AntreaIPAM`                  | Agent + Controller | `false` | Alpha | v1.4          | N/A          | N/A        | Yes                |                                               |
+| `AntreaIPAM`                  | Agent + Controller | `true`  | Beta  | v1.4          | v2.4         | N/A        | Yes                |                                               |
 | `Multicast`                   | Agent + Controller | `true`  | Beta  | v1.5          | v1.12        | N/A        | Yes                |                                               |
 | `SecondaryNetwork`            | Agent              | `false` | Alpha | v1.5          | N/A          | N/A        | Yes                |                                               |
 | `ServiceExternalIP`           | Agent + Controller | `false` | Beta  | v1.5          | v2.3         | N/A        | Yes                |                                               |
