@@ -363,46 +363,36 @@ func testCreateValidationTwoTierOfSamePrioritySimultaneous(t *testing.T) {
 	tier1Name := "concurrent-tier-1"
 	tier2Name := "concurrent-tier-2"
 
-	// Use channels to coordinate simultaneous creation attempts
-	startCh := make(chan struct{})
-	result1Ch := make(chan error, 1)
-	result2Ch := make(chan error, 1)
-
-	// Start first Tier creation in a goroutine
+	var err1, err2 error
+	var wg sync.WaitGroup
+	wg.Add(2)
 	go func() {
-		<-startCh // Wait for signal to start
-		_, err := k8sUtils.CreateTier(tier1Name, testPriority)
-		result1Ch <- err
+		defer wg.Done()
+		_, err1 = k8sUtils.CreateTier(tier1Name, testPriority)
 	}()
-	// Start second Tier creation in another goroutine
 	go func() {
-		<-startCh // Wait for signal to start
-		_, err := k8sUtils.CreateTier(tier2Name, testPriority)
-		result2Ch <- err
+		defer wg.Done()
+		_, err2 = k8sUtils.CreateTier(tier2Name, testPriority)
 	}()
-
-	// Signal both goroutines to start simultaneously and collect results
-	close(startCh)
-	err1 := <-result1Ch
-	err2 := <-result2Ch
+	wg.Wait()
 
 	// Exactly one should succeed and one should fail
 	if err1 == nil && err2 == nil {
-		k8sUtils.DeleteTier(tier1Name)
-		k8sUtils.DeleteTier(tier2Name)
-		failOnError(fmt.Errorf("Tiers were both created with the same priority when applied simultaneously"), t)
-	} else if err1 != nil && err2 != nil {
-		// Both failed - this is unexpected
-		failOnError(fmt.Errorf("Both Tier creations failed: tier1 error: %v, tier2 error:%v", err1, err2), t)
+		require.NoError(t, k8sUtils.DeleteTier(tier1Name), "cleanup tier1 after unexpected double create")
+		require.NoError(t, k8sUtils.DeleteTier(tier2Name), "cleanup tier2 after unexpected double create")
+		t.Errorf("both Tiers were created with the same priority when applied simultaneously")
+		return
+	}
+	if err1 != nil && err2 != nil {
+		t.Errorf("both Tier creations failed: tier1: %v, tier2: %v", err1, err2)
+		return
+	}
+	// One succeeded, one failed - expected behavior. Clean up the successfully created tier.
+	t.Logf("Tier creation results: tier1 error: %v, tier2 error: %v", err1, err2)
+	if err1 == nil {
+		require.NoError(t, k8sUtils.DeleteTier(tier1Name))
 	} else {
-		// One succeeded, one failed - this is the expected behavior
-		t.Logf("Tier creation results: tier1 error: %v, tier2 error: %v", err1, err2)
-		// Clean up the successfully created tier
-		if err1 == nil {
-			failOnError(k8sUtils.DeleteTier(tier1Name), t)
-		} else {
-			failOnError(k8sUtils.DeleteTier(tier2Name), t)
-		}
+		require.NoError(t, k8sUtils.DeleteTier(tier2Name))
 	}
 }
 
