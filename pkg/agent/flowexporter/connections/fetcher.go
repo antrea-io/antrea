@@ -108,8 +108,6 @@ func (f *ConntrackFetcher) PollAndStore(store CTStore) error {
 	// Augment the connections
 	batch := make([]*connection.Connection, 0, len(filteredConnsList))
 	for _, conn := range filteredConnsList {
-		// key := connection.NewConnectionKey(conn)
-		// if _, ok := store.GetSnapshot()[key]; ok { // Already augmented
 		if store.HasConn(conn) {
 			batch = append(batch, conn)
 			continue
@@ -120,7 +118,7 @@ func (f *ConntrackFetcher) PollAndStore(store CTStore) error {
 		if conn.SourcePodName == "" && conn.DestinationPodName == "" {
 			// We don't add connections to connection map if we can't find the pod information for both srcPod and dstPod
 			klog.V(5).InfoS("Skip this connection as we cannot map any of the connection IPs to a local Pod", "srcIP", conn.FlowKey.SourceAddress.String(), "dstIP", conn.FlowKey.DestinationAddress.String())
-			return nil
+			continue
 		}
 
 		f.serviceInfoAug.Augment(conn)
