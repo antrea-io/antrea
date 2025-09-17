@@ -10,16 +10,6 @@ import (
 	"k8s.io/klog/v2"
 )
 
-type CTStore interface {
-	Run(stopCh <-chan struct{})
-	SubmitConnections(batch []*connection.Connection, l7EventMap map[connection.ConnectionKey]L7ProtocolFields)
-
-	HasConn(*connection.Connection) bool // TODO Andrew: Use connectionKey instead of connection.
-
-	Subscribe() *subscriber
-	Unsubscribe(*subscriber)
-}
-
 type UpdateMsg struct {
 	Conns    []*connection.Connection
 	L7Events map[connection.ConnectionKey]L7ProtocolFields

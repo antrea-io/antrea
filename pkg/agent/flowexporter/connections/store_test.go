@@ -125,7 +125,7 @@ func TestConnStore_updateConnections(t *testing.T) {
 			}
 
 			now := time.Now()
-			cs.updateConnections(incomingConns, l7Events)
+			cs.updateConnections(incomingConns)
 
 			for _, want := range expectedEntries {
 				want.LastUpdateTime = now
