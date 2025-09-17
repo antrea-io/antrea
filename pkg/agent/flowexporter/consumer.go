@@ -51,9 +51,10 @@ type Consumer struct {
 
 	k8sClient kubernetes.Interface
 	store     connections.CTStore
-	denyStore *connections.DenyConnectionStore
+	denyStore connections.CTStore
 
-	expirePriorityQueue *priorityqueue.ExpirePriorityQueue
+	expirePriorityQueue     *priorityqueue.ExpirePriorityQueue
+	expireDenyPriorityQueue *priorityqueue.ExpirePriorityQueue
 
 	exp       exporter.Interface
 	connected bool
@@ -65,17 +66,18 @@ type Consumer struct {
 	exportConns    []*connection.Connection
 }
 
-func CreateConsumer(k8sClient kubernetes.Interface, store connections.CTStore, denyStore *connections.DenyConnectionStore, config ConsumerConfig) *Consumer {
+func CreateConsumer(k8sClient kubernetes.Interface, store connections.CTStore, denyStore connections.CTStore, config ConsumerConfig) *Consumer {
 	c := &Consumer{
-		ConsumerConfig:      &config,
-		k8sClient:           k8sClient,
-		expirePriorityQueue: priorityqueue.NewExpirePriorityQueue(config.activeFlowTimeout, config.idleFlowTimeout),
-		store:               store,
-		denyStore:           denyStore,
-		prevStates:          make(map[connection.ConnectionKey]prevState),
-		exportConns:         make([]*connection.Connection, 0, maxConnsToExport),
-		protocolFilter:      filter.NewProtocolFilter(config.allowProtocolFilter),
-		l7Events:            make(map[connection.ConnectionKey]connections.L7ProtocolFields),
+		ConsumerConfig:          &config,
+		k8sClient:               k8sClient,
+		expirePriorityQueue:     priorityqueue.NewExpirePriorityQueue(config.activeFlowTimeout, config.idleFlowTimeout),
+		expireDenyPriorityQueue: priorityqueue.NewExpirePriorityQueue(config.activeFlowTimeout, config.idleFlowTimeout),
+		store:                   store,
+		denyStore:               denyStore,
+		prevStates:              make(map[connection.ConnectionKey]prevState),
+		exportConns:             make([]*connection.Connection, 0, maxConnsToExport),
+		protocolFilter:          filter.NewProtocolFilter(config.allowProtocolFilter),
+		l7Events:                make(map[connection.ConnectionKey]connections.L7ProtocolFields),
 	}
 
 	return c
@@ -185,8 +187,11 @@ func (fe *Consumer) createExporter() exporter.Interface {
 }
 
 func (c *Consumer) Run(stopCh <-chan struct{}) {
-	sub := c.store.Subscribe()
-	defer c.store.Unsubscribe(sub)
+	ctFlowSub := c.store.Subscribe()
+	defer c.store.Unsubscribe(ctFlowSub)
+
+	denyFlowSub := c.denyStore.Subscribe()
+	defer c.denyStore.Unsubscribe(denyFlowSub)
 
 	exportTicker := time.NewTicker(c.activeFlowTimeout)
 	defer exportTicker.Stop()
@@ -195,7 +200,7 @@ func (c *Consumer) Run(stopCh <-chan struct{}) {
 		select {
 		case <-stopCh:
 			return
-		case msg := <-sub.C():
+		case msg := <-ctFlowSub.C():
 			if msg.Deleted {
 				c.handleDeletedConns(msg.Conns)
 			} else {
@@ -204,6 +209,12 @@ func (c *Consumer) Run(stopCh <-chan struct{}) {
 				} else {
 					c.handleUpdatedConns(msg.Conns)
 				}
+			}
+		case msg := <-denyFlowSub.C():
+			if msg.Deleted {
+				c.handleDeletedConns(msg.Conns)
+			} else {
+				c.handleUpdatedConns(msg.Conns)
 			}
 		case <-exportTicker.C:
 			if !c.connected {
@@ -259,8 +270,8 @@ func (c *Consumer) sendFlowRecords() (time.Duration, error) {
 	// for a record from destination Node to finish flow correlation until timeout. Later on we probably should
 	// consider doing a record deduplication between conntrackConnStore and denyConnStore before exporting records.
 	// c.exportConns, expireTime1 = c.denyStore.GetExpiredConns(c.exportConns, currTime, maxConnsToExport)
-	expireTime1 = c.denyStore.GetPriorityQueue().GetExpiryFromExpirePriorityQueue()
-	c.exportConns, expireTime2 = c.getExpiredConns(c.exportConns, currTime, maxConnsToExport)
+	c.exportConns, expireTime1 = c.getExpiredDenyConns(c.exportConns, currTime, maxConnsToExport)
+	c.exportConns, expireTime2 = c.getExpiredCTConns(c.exportConns, currTime, maxConnsToExport)
 	// Select the shorter time out among two connection stores to do the next round of export.
 	nextExpireTime := getMinTime(expireTime1, expireTime2)
 	for i := range c.exportConns {
@@ -281,6 +292,47 @@ func (c *Consumer) sendFlowRecords() (time.Duration, error) {
 	return nextExpireTime, nil
 }
 
+func (c *Consumer) getExpiredDenyConns(expiredConns []*connection.Connection, currTime time.Time, maxSize int) ([]*connection.Connection, time.Duration) {
+	for i := 0; i < maxSize; i++ {
+		pqItem := c.expireDenyPriorityQueue.GetTopExpiredItem(currTime)
+		if pqItem == nil {
+			break
+		}
+		conn := *pqItem.Conn // Copy the item. We want to ensure we don't modify the existing one.
+
+		key := connection.NewConnectionKey(pqItem.Conn)
+
+		oldState := c.prevStates[key]
+		conn.PreviousStats = oldState.stats
+		conn.PrevTCPState = oldState.tcpState
+
+		conn.IsActive = utils.CheckConntrackConnActive(&conn)
+
+		// TODO Andrew: Fill in L7 info then remove from L7 map.
+
+		isIdle := pqItem.IdleExpireTime.Before(currTime)
+		if isIdle {
+			conn.IsActive = false
+		}
+
+		if !conn.IsActive {
+			c.expireDenyPriorityQueue.RemoveItemFromMap(pqItem.Conn) // TODO Andrew: Why can't we just use `Remove`?
+		} else {
+			// For active connections, we update their "prev" stats fields,
+			// reset active expire time and push back into the PQ.
+			c.prevStates[key] = prevState{
+				stats:    conn.OriginalStats,
+				tcpState: conn.TCPState,
+			}
+			c.expireDenyPriorityQueue.ResetActiveExpireTimeAndPush(pqItem, currTime)
+		}
+
+		expiredConns = append(expiredConns, &conn)
+	}
+
+	return expiredConns, c.expireDenyPriorityQueue.GetExpiryFromExpirePriorityQueue()
+}
+
 func (c *Consumer) fillL7Info(conn *connection.Connection) {
 	connKey := connection.NewConnectionKey(conn)
 	l7Event, ok := c.l7Events[connKey]
@@ -296,7 +348,7 @@ func (c *Consumer) fillL7Info(conn *connection.Connection) {
 	conn.AppProtocolName = "http"
 }
 
-func (c *Consumer) getExpiredConns(expiredConns []*connection.Connection, currTime time.Time, maxSize int) ([]*connection.Connection, time.Duration) {
+func (c *Consumer) getExpiredCTConns(expiredConns []*connection.Connection, currTime time.Time, maxSize int) ([]*connection.Connection, time.Duration) {
 	for i := 0; i < maxSize; i++ {
 		pqItem := c.expirePriorityQueue.GetTopExpiredItem(currTime)
 		if pqItem == nil {
