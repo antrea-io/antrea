@@ -676,6 +676,7 @@ func run(o *Options) error {
 			ofClient,
 			networkPolicyController,
 			egressController,
+			nodeRouteController,
 			ifaceStore,
 			networkConfig,
 			nodeConfig,
