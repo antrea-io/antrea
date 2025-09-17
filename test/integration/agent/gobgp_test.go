@@ -34,19 +34,21 @@ import (
 func TestGoBGPLifecycle(t *testing.T) {
 	asn1 := int32(61179)
 	asn2 := int32(62179)
-	routerID1 := "192.168.1.1"
-	routerID2 := "192.168.1.2"
+	routerID1 := "127.0.0.1"
+	routerID2 := "127.0.0.2"
 	listenPort1 := int32(1179)
 	listenPort2 := int32(2179)
 	server1GlobalConfig := &bgp.GlobalConfig{
-		ASN:        uint32(asn1),
-		RouterID:   routerID1,
-		ListenPort: listenPort1,
+		ASN:             uint32(asn1),
+		RouterID:        routerID1,
+		ListenPort:      listenPort1,
+		ListenAddresses: []string{"127.0.0.1"},
 	}
 	server2GlobalConfig := &bgp.GlobalConfig{
-		ASN:        uint32(asn2),
-		RouterID:   routerID2,
-		ListenPort: listenPort2,
+		ASN:             uint32(asn2),
+		RouterID:        routerID2,
+		ListenPort:      listenPort2,
+		ListenAddresses: []string{"127.0.0.2"},
 	}
 
 	var l klog.Level
@@ -63,7 +65,7 @@ func TestGoBGPLifecycle(t *testing.T) {
 	require.NoError(t, server2.Start(ctx))
 	t.Log("Started all BGP servers")
 
-	server1Config := bgp.PeerConfig{
+	server1PeerConfigForServer2 := bgp.PeerConfig{
 		BGPPeer: &v1alpha1.BGPPeer{
 			Address:                    "127.0.0.1",
 			Port:                       &listenPort1,
@@ -71,23 +73,27 @@ func TestGoBGPLifecycle(t *testing.T) {
 			MultihopTTL:                ptr.To[int32](2),
 			GracefulRestartTimeSeconds: ptr.To[int32](120),
 		},
+		LocalAddress:   "127.0.0.2",
+		ConnectionMode: bgp.ConnectionModeActive,
 	}
-	server2Config := bgp.PeerConfig{
+	server2PeerConfigForServer1 := bgp.PeerConfig{
 		BGPPeer: &v1alpha1.BGPPeer{
-			Address:                    "127.0.0.1",
+			Address:                    "127.0.0.2",
 			Port:                       &listenPort2,
 			ASN:                        asn2,
 			MultihopTTL:                ptr.To[int32](3),
 			GracefulRestartTimeSeconds: ptr.To[int32](130),
 		},
+		LocalAddress:   "127.0.0.1",
+		ConnectionMode: bgp.ConnectionModePassive,
 	}
 
 	t.Log("Adding BGP peers for BGP server1")
-	require.NoError(t, server1.AddPeer(ctx, server2Config))
+	require.NoError(t, server1.AddPeer(ctx, server2PeerConfigForServer1))
 	t.Log("Added BGP peers for BGP server1")
 
 	t.Log("Adding BGP peers for BGP server2")
-	require.NoError(t, server2.AddPeer(ctx, server1Config))
+	require.NoError(t, server2.AddPeer(ctx, server1PeerConfigForServer2))
 	t.Log("Added BGP peers for BGP server2")
 
 	getPeersFn := func(server bgp.Interface) sets.Set[string] {
@@ -107,7 +113,7 @@ func TestGoBGPLifecycle(t *testing.T) {
 
 	t.Log("Getting peers of BGP server1 and verifying them")
 	assert.EventuallyWithT(t, func(t *assert.CollectT) {
-		expected := sets.New[string]("127.0.0.1-62179")
+		expected := sets.New[string]("127.0.0.2-62179")
 		got := getPeersFn(server1)
 		assert.Equal(t, expected, got)
 	}, 30*time.Second, time.Second)
@@ -151,7 +157,7 @@ func TestGoBGPLifecycle(t *testing.T) {
 	t.Log("Getting received routes of BGP server1 and verifying them")
 	assert.EventuallyWithT(t, func(t *assert.CollectT) {
 		// Get the routes advertised by server2 and verify them.
-		gotServer2Routes := getReceivedRoutesFn(server1, "127.0.0.1")
+		gotServer2Routes := getReceivedRoutesFn(server1, "127.0.0.2")
 		assert.ElementsMatch(t, server2Routes, gotServer2Routes)
 	}, 30*time.Second, time.Second)
 	t.Log("Got received routes of BGP server1 and verified them")
@@ -190,7 +196,7 @@ func TestGoBGPLifecycle(t *testing.T) {
 	t.Log("Getting received routes of BGP server1 and verifying them")
 	assert.EventuallyWithT(t, func(t *assert.CollectT) {
 		// Get the routes advertised by server2 and verify them.
-		gotServer2Routes := getReceivedRoutesFn(server1, "127.0.0.1")
+		gotServer2Routes := getReceivedRoutesFn(server1, "127.0.0.2")
 		assert.ElementsMatch(t, updatedServer2Routes, gotServer2Routes)
 	}, 30*time.Second, time.Second)
 
@@ -202,29 +208,31 @@ func TestGoBGPLifecycle(t *testing.T) {
 	}, 30*time.Second, time.Second)
 	t.Log("Got received routes of BGP server2 and verified them")
 
-	updatedServer2Config := bgp.PeerConfig{
+	updatedServer2PeerConfigForServer1 := bgp.PeerConfig{
 		BGPPeer: &v1alpha1.BGPPeer{
-			Address:                    "127.0.0.1",
+			Address:                    "127.0.0.2",
 			Port:                       &listenPort2,
 			ASN:                        asn2,
 			MultihopTTL:                ptr.To[int32](1),
 			GracefulRestartTimeSeconds: ptr.To[int32](180),
 		},
+		LocalAddress:   "127.0.0.1",
+		ConnectionMode: bgp.ConnectionModePassive,
 	}
 	t.Log("Updating peers of BGP server1")
-	require.NoError(t, server1.UpdatePeer(ctx, updatedServer2Config))
+	require.NoError(t, server1.UpdatePeer(ctx, updatedServer2PeerConfigForServer1))
 	t.Log("Updated peers of server1")
 
 	t.Log("Getting peers of BGP server1 and verifying them")
 	assert.EventuallyWithT(t, func(t *assert.CollectT) {
-		expected := sets.New[string]("127.0.0.1-62179")
+		expected := sets.New[string]("127.0.0.2-62179")
 		got := getPeersFn(server1)
 		assert.Equal(t, expected, got)
 	}, 30*time.Second, time.Second)
 	t.Log("Got peers of BGP server1 and verified them")
 
 	t.Log("Deleting peers of BGP server1")
-	require.NoError(t, server1.RemovePeer(ctx, updatedServer2Config))
+	require.NoError(t, server1.RemovePeer(ctx, updatedServer2PeerConfigForServer1))
 	t.Log("Deleted peers of BGP server1")
 
 	t.Log("Getting peers of BGP server1 and verifying them")
