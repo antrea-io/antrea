@@ -2893,26 +2893,6 @@ func TestTierPriorityTracker(t *testing.T) {
 		assert.True(t, success, "Should successfully reserve different priority 200")
 	})
 
-	t.Run("WaitForPriorityAvailable", func(t *testing.T) {
-		tracker := newTierPriorityTracker()
-		tracker.validationTimeout = 100 * time.Millisecond // Short timeout for testing
-
-		// Test available priority
-		available := tracker.waitForPriorityAvailable(100)
-		assert.True(t, available, "Should return true for available priority")
-
-		// Reserve a priority
-		tracker.reservePriorityForValidation(200, "tier1")
-
-		// Test waiting for reserved priority (should timeout)
-		start := time.Now()
-		available = tracker.waitForPriorityAvailable(200)
-		elapsed := time.Since(start)
-
-		assert.False(t, available, "Should return false when waiting times out")
-		assert.GreaterOrEqual(t, elapsed, 100*time.Millisecond, "Should wait for at least the timeout duration")
-	})
-
 	t.Run("ReleasePriorityReservation", func(t *testing.T) {
 		tracker := newTierPriorityTracker()
 
@@ -2954,7 +2934,6 @@ func TestTierPriorityTracker(t *testing.T) {
 
 	t.Run("ConcurrentReservations", func(t *testing.T) {
 		tracker := newTierPriorityTracker()
-		tracker.validationTimeout = 200 * time.Millisecond
 
 		var wg sync.WaitGroup
 		var results sync.Map
@@ -2982,40 +2961,6 @@ func TestTierPriorityTracker(t *testing.T) {
 		})
 
 		assert.Equal(t, 1, successCount, "Only one goroutine should successfully reserve the priority")
-	})
-
-	t.Run("ConcurrentWaitAndRelease", func(t *testing.T) {
-		tracker := newTierPriorityTracker()
-		tracker.validationTimeout = 500 * time.Millisecond
-
-		// Reserve a priority
-		success := tracker.reservePriorityForValidation(100, "tier1")
-		require.True(t, success)
-
-		var wg sync.WaitGroup
-		waitResult := make(chan bool, 1)
-
-		// Start waiting in another goroutine
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			available := tracker.waitForPriorityAvailable(100)
-			waitResult <- available
-		}()
-		// Release after a short delay
-		go func() {
-			time.Sleep(100 * time.Millisecond)
-			tracker.releasePriorityReservation(100, "tier1")
-		}()
-		wg.Wait()
-
-		// The waiting should succeed after release
-		select {
-		case result := <-waitResult:
-			assert.True(t, result, "Wait should succeed after priority is released")
-		case <-time.After(1 * time.Second):
-			t.Fatal("Wait operation timed out")
-		}
 	})
 
 	t.Run("TimeoutExpiredReservation", func(t *testing.T) {

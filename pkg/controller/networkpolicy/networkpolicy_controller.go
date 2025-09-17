@@ -588,26 +588,24 @@ func NewNetworkPolicyController(kubeClient clientset.Interface,
 // SetupTierEventHandlersForValidator sets up event handlers for Tier changes to notify the validator.
 // This enables the validator to track when Tiers are actually created/deleted and release priority reservations.
 func (n *NetworkPolicyController) SetupTierEventHandlersForValidator(validator *NetworkPolicyValidator) {
-	for _, tierVal := range validator.tierValidators {
-		if tv, ok := tierVal.(*tierValidator); ok {
-			// Add event handler for Tier changes.
-			// We don't need UpdateFunc for priority tracking since priority updates are not allowed.
-			n.tierInformer.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
-				AddFunc: func(obj interface{}) {
-					if tier, ok := obj.(*secv1beta1.Tier); ok {
-						klog.V(4).InfoS("Tier created, notifying validator", "tier", tier.Name, "priority", tier.Spec.Priority)
-						tv.OnTierCreate(tier)
-					}
-				},
-				DeleteFunc: func(obj interface{}) {
-					if tier, ok := obj.(*secv1beta1.Tier); ok {
-						klog.V(4).InfoS("Tier deleted, notifying validator", "tier", tier.Name, "priority", tier.Spec.Priority)
-						tv.OnTierDelete(tier)
-					}
-				},
-			})
-			klog.V(2).InfoS("Tier event handlers set up for validator")
-		}
+	for _, tv := range validator.tierValidators {
+		// Add event handler for Tier changes.
+		// We don't need UpdateFunc for priority tracking since priority updates are not allowed.
+		n.tierInformer.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
+			AddFunc: func(obj interface{}) {
+				if tier, ok := obj.(*secv1beta1.Tier); ok {
+					klog.V(4).InfoS("Tier created, notifying validator", "tier", tier.Name, "priority", tier.Spec.Priority)
+					tv.OnTierCreate(tier)
+				}
+			},
+			DeleteFunc: func(obj interface{}) {
+				if tier, ok := obj.(*secv1beta1.Tier); ok {
+					klog.V(4).InfoS("Tier deleted, notifying validator", "tier", tier.Name, "priority", tier.Spec.Priority)
+					tv.OnTierDelete(tier)
+				}
+			},
+		})
+		klog.V(2).InfoS("Tier event handlers set up for validator")
 	}
 }
 
