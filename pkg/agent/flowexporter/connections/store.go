@@ -14,7 +14,7 @@ type CTStore interface {
 	Run(stopCh <-chan struct{})
 	SubmitConnections(batch []*connection.Connection, l7EventMap map[connection.ConnectionKey]L7ProtocolFields)
 
-	HasConn(*connection.Connection) bool
+	HasConn(*connection.Connection) bool // TODO Andrew: Use connectionKey instead of connection.
 
 	Subscribe() *subscriber
 	Unsubscribe(*subscriber)

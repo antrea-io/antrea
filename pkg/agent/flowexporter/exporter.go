@@ -135,6 +135,7 @@ func NewFlowExporterWithInformer(podStore objectstore.PodStore, proxier proxy.Pr
 		l7Listener = connections.NewL7Listener(podL7FlowExporterAttrGetter, podStore)
 		eventMapGetter = l7Listener
 	}
+	// TODO Andrew: Remove
 	conntrackConnStore := connections.NewConntrackConnectionStore(connTrackDumper, v4Enabled, v6Enabled, npQuerier, podStore, proxier, eventMapGetter, o)
 
 	if nodeRouteController == nil {
