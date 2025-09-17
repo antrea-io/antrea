@@ -80,7 +80,7 @@ type FlowExporter struct {
 	collectorAddr          string
 	exporter               exporter.Interface
 	exporterConnected      bool
-	conntrackConnStore     *connections.ConntrackConnectionStore
+	conntrackConnStore     *connections.ConntrackConnectionStore // TODO Andrew: Remove
 	denyConnStore          *connections.DenyConnectionStore
 	numConnsExported       uint64 // used for unit tests.
 	v4Enabled              bool
@@ -88,7 +88,7 @@ type FlowExporter struct {
 	k8sClient              kubernetes.Interface
 	nodeRouteController    *noderoute.Controller
 	isNetworkPolicyOnly    bool
-	conntrackPriorityQueue *priorityqueue.ExpirePriorityQueue
+	conntrackPriorityQueue *priorityqueue.ExpirePriorityQueue // TODO Andrew: Remove
 	denyPriorityQueue      *priorityqueue.ExpirePriorityQueue
 	expiredConns           []connection.Connection
 	egressQuerier          querier.EgressQuerier
