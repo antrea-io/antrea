@@ -35,6 +35,7 @@ func Command() *cobra.Command {
 	command := &cobra.Command{
 		Use:   "cluster",
 		Short: "Runs pre installation checks",
+		Args:  cobra.NoArgs, // Disables positional arguments
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return Run(o)
 		},
