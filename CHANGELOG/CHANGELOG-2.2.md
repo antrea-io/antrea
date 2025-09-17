@@ -1,5 +1,19 @@
 # Changelog 2.2
 
+## 2.2.2 - 2025-09-17
+
+### Fixed
+
+- Fix ACNP applied to NodePort failing to reject traffic in noEncap/hybrid mode. ([#7265](https://github.com/antrea-io/antrea/pull/7265), [@hongliangl])
+- Use a more robust way to extract the source Node IP from encapsulated IGMP messages for Multicast. ([#7282](https://github.com/antrea-io/antrea/pull/7282), [@hongliangl])
+- Fix agent crash issue which is caused by unexpected interface store initialization for FlexibleIPAM uplink internal port. ([#7389](https://github.com/antrea-io/antrea/pull/7389), @gran-vmv)
+- Periodically sync permanent neighbors to ensure route correctness for Antrea host gateway interface. ([#7238](https://github.com/antrea-io/antrea/pull/7238), [@hongliangl])
+- Enhance OVS commands for Antrea Windows to accelerate container recovery and improve robustness. ([#7228](https://github.com/antrea-io/antrea/pull/7228), [@XinShuYang])
+- Sync affected groups in the Antrea Controller when a Pod goes into `Terminated` state, to ensure that the Pod is excluded from NetworkPolicy source and destination immediately. ([#7217](https://github.com/antrea-io/antrea/pull/7217), [@Dyanngg])
+- Fix race condition when getting metrics via `antctl` for FlowAggregator. ([#7230](https://github.com/antrea-io/antrea/pull/7230), [@antoninbas])
+- Fix rollback when `configureContainerLinkVeth` fails, to ensure subsequent retries can succeed. ([#7210](https://github.com/antrea-io/antrea/pull/7210) [#7213](https://github.com/antrea-io/antrea/pull/7213), [@tnqn])
+- Remove stale local members in the group cache for Multicast, which resolves an issue that the same receiver may fail to receive multicast packets after it rejoins the group. ([#7154](https://github.com/antrea-io/antrea/pull/7154), [@wenyingd])
+
 ## 2.2.1 - 2025-03-13
 
 ### Changed
