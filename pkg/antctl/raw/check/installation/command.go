@@ -38,6 +38,7 @@ func Command() *cobra.Command {
 	command := &cobra.Command{
 		Use:   "installation",
 		Short: "Runs post installation checks",
+		Args:  cobra.NoArgs, // Disables positional arguments
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return Run(o)
 		},
@@ -222,6 +223,7 @@ func NewTestContext(
 
 func (t *testContext) setup(ctx context.Context) error {
 	t.Log("Test starting....")
+	t.Log("Checking for existence of %q DaemonSet in %q Namespace", agentDaemonSetName, t.antreaNamespace)
 	_, err := t.client.AppsV1().DaemonSets(t.antreaNamespace).Get(ctx, agentDaemonSetName, metav1.GetOptions{})
 	if err != nil {
 		return fmt.Errorf("unable to determine status of Antrea DaemonSet: %w", err)

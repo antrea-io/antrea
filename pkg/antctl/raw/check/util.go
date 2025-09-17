@@ -192,7 +192,9 @@ func Teardown(ctx context.Context, logger Logger, client kubernetes.Interface, n
 	logger.Log("Deleting installation tests setup...")
 	err := client.CoreV1().Namespaces().Delete(ctx, namespace, metav1.DeleteOptions{})
 	if err != nil {
-		logger.Fail("Namespace %s deletion failed: %v", namespace, err)
+		if !errors.IsNotFound(err) {
+			logger.Fail("Namespace %s deletion failed: %v", namespace, err)
+		}
 		return
 	}
 	logger.Log("Waiting for Namespace %s to be deleted", namespace)

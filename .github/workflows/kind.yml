@@ -933,7 +933,7 @@ jobs:
         # due to a slow runner / oversubscribed infra.
         # To avoid flakes, we choose a long realization timeout.
         run: |
-          ./bin/antctl-linux check installation -network-policy-delay 5s
+          ./bin/antctl-linux check installation --network-policy-delay 5s
 
   validate-prometheus-metrics-doc:
     name: Validate metrics in Prometheus document match running deployment's
