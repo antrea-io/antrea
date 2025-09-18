@@ -15,6 +15,7 @@
 package proxy
 
 import (
+	"context"
 	"fmt"
 	"math"
 	"net"
@@ -82,12 +83,18 @@ type Proxier interface {
 	GetServiceByIP(serviceStr string) (k8sproxy.ServicePortName, bool)
 }
 
-type proxier struct {
-	once                sync.Once
+type ProxyServer struct {
 	endpointSliceConfig *config.EndpointSliceConfig
 	endpointsConfig     *config.EndpointsConfig
 	serviceConfig       *config.ServiceConfig
 	nodeConfig          *config.NodeConfig
+
+	ofClient openflow.Client
+
+	proxier Proxier
+}
+
+type proxier struct {
 	// endpointsChanges and serviceChanges contains all changes to endpoints and
 	// services that happened since last syncProxyRules call. For a single object,
 	// changes are accumulated. Once both endpointsChanges and serviceChanges
@@ -1217,20 +1224,23 @@ func (p *proxier) deleteServiceByIP(serviceStr string) {
 }
 
 func (p *proxier) Run(stopCh <-chan struct{}) {
-	p.once.Do(func() {
-		p.ofClient.RegisterPacketInHandler(uint8(openflow.PacketInCategorySvcReject), p)
-		go p.serviceConfig.Run(stopCh)
-		if p.endpointSliceEnabled {
-			go p.endpointSliceConfig.Run(stopCh)
-			if p.topologyAwareHintsEnabled || p.serviceTrafficDistributionEnabled {
-				go p.nodeConfig.Run(stopCh)
-			}
-		} else {
-			go p.endpointsConfig.Run(stopCh)
-		}
-		p.stopChan = stopCh
-		p.SyncLoop()
-	})
+	p.stopChan = stopCh
+	p.SyncLoop()
+}
+
+func (p *ProxyServer) Run(ctx context.Context) {
+	p.ofClient.RegisterPacketInHandler(uint8(openflow.PacketInCategorySvcReject), p)
+	go p.serviceConfig.Run(ctx.Done())
+	if p.endpointSliceConfig != nil {
+		go p.endpointSliceConfig.Run(ctx.Done())
+	}
+	if p.endpointsConfig != nil {
+		go p.endpointsConfig.Run(ctx.Done())
+	}
+	if p.nodeConfig != nil {
+		go p.nodeConfig.Run(ctx.Done())
+	}
+	p.proxier.GetProxyProvider().Run(ctx.Done())
 }
 
 func (p *proxier) GetProxyProvider() k8sproxy.Provider {
@@ -1282,7 +1292,7 @@ func (p *proxier) GetServiceFlowKeys(serviceName, namespace string) ([]string, [
 	return flows, groups, found
 }
 
-func (p *proxier) HandlePacketIn(pktIn *ofctrl.PacketIn) error {
+func (p *ProxyServer) HandlePacketIn(pktIn *ofctrl.PacketIn) error {
 	if pktIn == nil {
 		return fmt.Errorf("empty packetin for Antrea Proxy")
 	}
@@ -1335,14 +1345,9 @@ func (p *proxier) HandlePacketIn(pktIn *ofctrl.PacketIn) error {
 		nil)
 }
 
+// newProxier returns a new single-stack proxier.
 func newProxier(
 	hostname string,
-	serviceProxyName string,
-	k8sClient clientset.Interface,
-	serviceInformer coreinformers.ServiceInformer,
-	endpointsInformer coreinformers.EndpointsInformer,
-	endpointSliceInformer discoveryinformers.EndpointSliceInformer,
-	nodeInformer coreinformers.NodeInformer,
 	ofClient openflow.Client,
 	isIPv6 bool,
 	routeClient route.Interface,
@@ -1355,27 +1360,14 @@ func newProxier(
 	groupCounter types.GroupCounter,
 	supportNestedService bool,
 	serviceHealthServerDisabled bool,
+	endpointSliceEnabled bool,
+	topologyAwareHintsEnabled bool,
+	serviceTrafficDistributionEnabled bool,
+	recorder record.EventRecorder,
+	serviceLabelSelector labels.Selector,
 ) (*proxier, error) {
-	recorder := record.NewBroadcaster().NewRecorder(
-		runtime.NewScheme(),
-		corev1.EventSource{Component: componentName, Host: hostname},
-	)
-	metrics.Register()
 	klog.V(2).Infof("Creating proxier with IPv6 enabled=%t", isIPv6)
 
-	endpointSliceEnabled := features.DefaultFeatureGate.Enabled(features.EndpointSlice)
-	if endpointSliceEnabled {
-		apiAvailable, err := k8sutil.EndpointSliceAPIAvailable(k8sClient)
-		if err != nil {
-			return nil, fmt.Errorf("error checking if EndpointSlice v1 API is available")
-		}
-		if !apiAvailable {
-			klog.InfoS("The EndpointSlice feature gate is enabled, but the EndpointSlice v1 API is not available, falling back to the Endpoints API")
-			endpointSliceEnabled = false
-		}
-	}
-	topologyAwareHintsEnabled := endpointSliceEnabled && features.DefaultFeatureGate.Enabled(features.TopologyAwareHints)
-	serviceTrafficDistributionEnabled := endpointSliceEnabled && features.DefaultFeatureGate.Enabled(features.ServiceTrafficDistribution)
 	ipFamily := corev1.IPv4Protocol
 	if isIPv6 {
 		ipFamily = corev1.IPv6Protocol
@@ -1394,23 +1386,8 @@ func newProxier(
 		}
 	}
 
-	// TODO: The label selector nonHeadlessServiceSelector was added to pass the Kubernetes e2e test
-	//  'Services should implement service.kubernetes.io/headless'. You can find the test case at:
-	//  https://github.com/kubernetes/kubernetes/blob/027ac5a426a261ba6b66a40e79e123e75e9baf5b/test/e2e/network/service.go#L2281
-	//  However, in AntreaProxy, headless Services are skipped by checking the ClusterIP.
-	nonHeadlessServiceSelector, _ := labels.NewRequirement(corev1.IsHeadlessService, selection.DoesNotExist, nil)
-	var serviceProxyNameSelector *labels.Requirement
-	if serviceProxyName == "" {
-		serviceProxyNameSelector, _ = labels.NewRequirement(labelServiceProxyName, selection.DoesNotExist, nil)
-	} else {
-		serviceProxyNameSelector, _ = labels.NewRequirement(labelServiceProxyName, selection.DoubleEquals, []string{serviceProxyName})
-	}
-	serviceLabelSelector := labels.NewSelector()
-	serviceLabelSelector = serviceLabelSelector.Add(*serviceProxyNameSelector, *nonHeadlessServiceSelector)
-
 	p := &proxier{
 		nodeIPChecker:                     nodeIPChecker,
-		serviceConfig:                     config.NewServiceConfig(serviceInformer, resyncPeriod),
 		endpointsChanges:                  newEndpointsChangesTracker(hostname, endpointSliceEnabled, isIPv6),
 		serviceChanges:                    newServiceChangesTracker(recorder, ipFamily, serviceLabelSelector, skipServices),
 		serviceMap:                        k8sproxy.ServiceMap{},
@@ -1437,20 +1414,7 @@ func newProxier(
 		supportNestedService:              supportNestedService,
 		defaultLoadBalancerMode:           defaultLoadBalancerMode,
 	}
-
-	p.serviceConfig.RegisterEventHandler(p)
 	p.runner = k8sproxy.NewBoundedFrequencyRunner(componentName, p.syncProxyRules, time.Second, 30*time.Second, 2)
-	if endpointSliceEnabled {
-		p.endpointSliceConfig = config.NewEndpointSliceConfig(endpointSliceInformer, resyncPeriod)
-		p.endpointSliceConfig.RegisterEventHandler(p)
-		if p.topologyAwareHintsEnabled || p.serviceTrafficDistributionEnabled {
-			p.nodeConfig = config.NewNodeConfig(nodeInformer, resyncPeriod)
-			p.nodeConfig.RegisterEventHandler(p)
-		}
-	} else {
-		p.endpointsConfig = config.NewEndpointsConfig(endpointsInformer, resyncPeriod)
-		p.endpointsConfig.RegisterEventHandler(p)
-	}
 	return p, nil
 }
 
@@ -1485,12 +1449,6 @@ func (p *metaProxierWrapper) GetServiceByIP(serviceStr string) (k8sproxy.Service
 
 func newDualStackProxier(
 	hostname string,
-	serviceProxyName string,
-	k8sClient clientset.Interface,
-	servicesInformer coreinformers.ServiceInformer,
-	endpointInformer coreinformers.EndpointsInformer,
-	endpointSliceInformer discoveryinformers.EndpointSliceInformer,
-	nodeInformer coreinformers.NodeInformer,
 	ofClient openflow.Client,
 	routeClient route.Interface,
 	nodeIPChecker nodeip.Checker,
@@ -1504,15 +1462,14 @@ func newDualStackProxier(
 	v6groupCounter types.GroupCounter,
 	nestedServiceSupport bool,
 	serviceHealthServerDisabled bool,
-) (*metaProxierWrapper, error) {
+	endpointSliceEnabled bool,
+	topologyAwareHintsEnabled bool,
+	serviceTrafficDistributionEnabled bool,
+	recorder record.EventRecorder,
+	serviceLabelSelector labels.Selector,
+) (Proxier, error) {
 	// Create an IPv4 instance of the single-stack proxier.
 	ipv4Proxier, err := newProxier(hostname,
-		serviceProxyName,
-		k8sClient,
-		servicesInformer,
-		endpointInformer,
-		endpointSliceInformer,
-		nodeInformer,
 		ofClient,
 		false,
 		routeClient,
@@ -1525,18 +1482,17 @@ func newDualStackProxier(
 		v4groupCounter,
 		nestedServiceSupport,
 		serviceHealthServerDisabled,
+		endpointSliceEnabled,
+		topologyAwareHintsEnabled,
+		serviceTrafficDistributionEnabled,
+		recorder,
+		serviceLabelSelector,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("error when creating IPv4 proxier: %v", err)
 	}
 	// Create an IPv6 instance of the single-stack proxier.
 	ipv6Proxier, err := newProxier(hostname,
-		serviceProxyName,
-		k8sClient,
-		servicesInformer,
-		endpointInformer,
-		endpointSliceInformer,
-		nodeInformer,
 		ofClient,
 		true,
 		routeClient,
@@ -1549,6 +1505,11 @@ func newDualStackProxier(
 		v6groupCounter,
 		nestedServiceSupport,
 		serviceHealthServerDisabled,
+		endpointSliceEnabled,
+		topologyAwareHintsEnabled,
+		serviceTrafficDistributionEnabled,
+		recorder,
+		serviceLabelSelector,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("error when creating IPv6 proxier: %v", err)
@@ -1560,7 +1521,24 @@ func newDualStackProxier(
 	return &metaProxierWrapper{ipv4Proxier, ipv6Proxier, metaProxier}, nil
 }
 
-func NewProxier(hostname string,
+func generateServiceLabelSelector(serviceProxyName string) labels.Selector {
+	// TODO: The label selector nonHeadlessServiceSelector was added to pass the Kubernetes e2e test
+	//  'Services should implement service.kubernetes.io/headless'. You can find the test case at:
+	//  https://github.com/kubernetes/kubernetes/blob/027ac5a426a261ba6b66a40e79e123e75e9baf5b/test/e2e/network/service.go#L2281
+	//  However, in AntreaProxy, headless Services are skipped by checking the ClusterIP.
+	nonHeadlessServiceSelector, _ := labels.NewRequirement(corev1.IsHeadlessService, selection.DoesNotExist, nil)
+	var serviceProxyNameSelector *labels.Requirement
+	if serviceProxyName == "" {
+		serviceProxyNameSelector, _ = labels.NewRequirement(labelServiceProxyName, selection.DoesNotExist, nil)
+	} else {
+		serviceProxyNameSelector, _ = labels.NewRequirement(labelServiceProxyName, selection.DoubleEquals, []string{serviceProxyName})
+	}
+	serviceLabelSelector := labels.NewSelector()
+	serviceLabelSelector = serviceLabelSelector.Add(*serviceProxyNameSelector, *nonHeadlessServiceSelector)
+	return serviceLabelSelector
+}
+
+func NewProxyServer(hostname string,
 	k8sClient clientset.Interface,
 	serviceInformer coreinformers.ServiceInformer,
 	endpointsInformer coreinformers.EndpointsInformer,
@@ -1577,24 +1555,39 @@ func NewProxier(hostname string,
 	defaultLoadBalancerMode agentconfig.LoadBalancerMode,
 	v4GroupCounter types.GroupCounter,
 	v6GroupCounter types.GroupCounter,
-	nestedServiceSupport bool) (Proxier, error) {
+	nestedServiceSupport bool) (*ProxyServer, error) {
 	proxyAllEnabled := proxyConfig.ProxyAll
 	skipServices := proxyConfig.SkipServices
 	proxyLoadBalancerIPs := *proxyConfig.ProxyLoadBalancerIPs
 	serviceProxyName := proxyConfig.ServiceProxyName
 	serviceHealthServerDisabled := proxyConfig.DisableServiceHealthCheckServer
 
+	recorder := record.NewBroadcaster().NewRecorder(
+		runtime.NewScheme(),
+		corev1.EventSource{Component: componentName, Host: hostname},
+	)
+	metrics.Register()
+
+	endpointSliceEnabled := features.DefaultFeatureGate.Enabled(features.EndpointSlice)
+	if endpointSliceEnabled {
+		apiAvailable, err := k8sutil.EndpointSliceAPIAvailable(k8sClient)
+		if err != nil {
+			return nil, fmt.Errorf("error checking if EndpointSlice v1 API is available")
+		}
+		if !apiAvailable {
+			klog.InfoS("The EndpointSlice feature gate is enabled, but the EndpointSlice v1 API is not available, falling back to the Endpoints API")
+			endpointSliceEnabled = false
+		}
+	}
+	topologyAwareHintsEnabled := endpointSliceEnabled && features.DefaultFeatureGate.Enabled(features.TopologyAwareHints)
+	serviceTrafficDistributionEnabled := endpointSliceEnabled && features.DefaultFeatureGate.Enabled(features.ServiceTrafficDistribution)
+	serviceLabelSelector := generateServiceLabelSelector(serviceProxyName)
+
 	var proxier Proxier
 	var err error
 	switch {
 	case v4Enabled && v6Enabled:
 		proxier, err = newDualStackProxier(hostname,
-			serviceProxyName,
-			k8sClient,
-			serviceInformer,
-			endpointsInformer,
-			endpointSliceInformer,
-			nodeInformer,
 			ofClient,
 			routeClient,
 			nodeIPChecker,
@@ -1608,18 +1601,17 @@ func NewProxier(hostname string,
 			v6GroupCounter,
 			nestedServiceSupport,
 			serviceHealthServerDisabled,
+			endpointSliceEnabled,
+			topologyAwareHintsEnabled,
+			serviceTrafficDistributionEnabled,
+			recorder,
+			serviceLabelSelector,
 		)
 		if err != nil {
 			return nil, fmt.Errorf("error when creating dual-stack proxier: %v", err)
 		}
 	case v4Enabled:
 		proxier, err = newProxier(hostname,
-			serviceProxyName,
-			k8sClient,
-			serviceInformer,
-			endpointsInformer,
-			endpointSliceInformer,
-			nodeInformer,
 			ofClient,
 			false,
 			routeClient,
@@ -1632,18 +1624,17 @@ func NewProxier(hostname string,
 			v4GroupCounter,
 			nestedServiceSupport,
 			serviceHealthServerDisabled,
+			endpointSliceEnabled,
+			topologyAwareHintsEnabled,
+			serviceTrafficDistributionEnabled,
+			recorder,
+			serviceLabelSelector,
 		)
 		if err != nil {
 			return nil, fmt.Errorf("error when creating IPv4 proxier: %v", err)
 		}
 	case v6Enabled:
 		proxier, err = newProxier(hostname,
-			serviceProxyName,
-			k8sClient,
-			serviceInformer,
-			endpointsInformer,
-			endpointSliceInformer,
-			nodeInformer,
 			ofClient,
 			true,
 			routeClient,
@@ -1656,6 +1647,11 @@ func NewProxier(hostname string,
 			v6GroupCounter,
 			nestedServiceSupport,
 			serviceHealthServerDisabled,
+			endpointSliceEnabled,
+			topologyAwareHintsEnabled,
+			serviceTrafficDistributionEnabled,
+			recorder,
+			serviceLabelSelector,
 		)
 		if err != nil {
 			return nil, fmt.Errorf("error when creating IPv6 proxier: %v", err)
@@ -1664,9 +1660,38 @@ func NewProxier(hostname string,
 		return nil, fmt.Errorf("either IPv4 or IPv6 proxier, or both proxiers should be created")
 	}
 
-	return proxier, nil
+	serviceConfig := config.NewServiceConfig(serviceInformer, resyncPeriod)
+	serviceConfig.RegisterEventHandler(proxier.GetProxyProvider())
+	var endpointSliceConfig *config.EndpointSliceConfig
+	var endpointsConfig *config.EndpointsConfig
+	var nodeConfig *config.NodeConfig
+	if endpointSliceEnabled {
+		endpointSliceConfig = config.NewEndpointSliceConfig(endpointSliceInformer, resyncPeriod)
+		endpointSliceConfig.RegisterEventHandler(proxier.GetProxyProvider())
+		if topologyAwareHintsEnabled || serviceTrafficDistributionEnabled {
+			nodeConfig = config.NewNodeConfig(nodeInformer, resyncPeriod)
+		}
+	} else {
+		endpointsConfig = config.NewEndpointsConfig(endpointsInformer, resyncPeriod)
+		endpointsConfig.RegisterEventHandler(proxier.GetProxyProvider())
+	}
+
+	proxyServer := &ProxyServer{
+		serviceConfig:       serviceConfig,
+		endpointSliceConfig: endpointSliceConfig,
+		endpointsConfig:     endpointsConfig,
+		nodeConfig:          nodeConfig,
+		ofClient:            ofClient,
+		proxier:             proxier,
+	}
+
+	return proxyServer, nil
 }
 
 func needClearConntrackEntries(protocol binding.Protocol) bool {
 	return protocol == binding.ProtocolUDP || protocol == binding.ProtocolUDPv6
+}
+
+func (p *ProxyServer) GetProxier() Proxier {
+	return p.proxier
 }
