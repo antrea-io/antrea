@@ -34,17 +34,18 @@ func HandleFunc(bq querier.AgentBGPPolicyInfoQuerier) http.HandlerFunc {
 			return
 		}
 
-		bgpPolicyName, routerID, localASN, listenPort, confederationIdentifier := bq.GetBGPPolicyInfo()
-		bgpPolicyResp := apis.BGPPolicyResponse{
-			BGPPolicyName:           bgpPolicyName,
-			RouterID:                routerID,
-			LocalASN:                localASN,
-			ListenPort:              listenPort,
-			ConfederationIdentifier: confederationIdentifier,
-		}
-		if bgpPolicyName == "" {
+		bgpPolicyInfo := bq.GetBGPPolicyInfo()
+		if bgpPolicyInfo == nil {
 			http.Error(w, "there is no effective bgp policy applied to the Node", http.StatusNotFound)
 			return
+		}
+		bgpPolicyResp := apis.BGPPolicyResponse{
+			BGPPolicyName:           bgpPolicyInfo.BGPPolicyName,
+			RouterID:                bgpPolicyInfo.RouterID,
+			LocalASN:                bgpPolicyInfo.LocalASN,
+			ListenPort:              bgpPolicyInfo.ListenPort,
+			ConfederationIdentifier: bgpPolicyInfo.ConfederationIdentifier,
+			MemberASNs:              bgpPolicyInfo.MemberASNs,
 		}
 
 		if err := json.NewEncoder(w).Encode(bgpPolicyResp); err != nil {

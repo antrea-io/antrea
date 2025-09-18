@@ -829,13 +829,13 @@ worker3 172.18.0.2 Dead
 ### BGP commands
 
 `antctl` agent command `get bgppolicy` prints the effective BGP policy applied on the local Node.
-It includes the name, local ASN, router ID, listen port and confederation identifier of the effective BGP policy.
+It includes the name, router ID, local ASN, listen port, confederation identifier and member ASNs of the effective BGP policy.
 
 ```bash
 $ antctl get bgppolicy
 
-NAME               ROUTER-ID  LOCAL-ASN LISTEN-PORT CONFEDERATION-IDENTIFIER
-example-bgp-policy 172.18.0.2 64512     179         65000
+NAME               ROUTER-ID  LOCAL-ASN LISTEN-PORT CONFEDERATION-IDENTIFIER MEMBER-ASNs
+example-bgp-policy 172.18.0.2 64512     179         65000                    64513,64514
 ```
 
 `antctl` agent command `get bgppeers` print the current status of all BGP peers

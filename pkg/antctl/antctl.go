@@ -643,7 +643,7 @@ $ antctl get podmulticaststats pod -n namespace`,
 		{
 			use:   "bgppolicy",
 			short: "Print effective bgppolicy information",
-			long:  "Print effective bgppolicy information including name, local ASN, router ID, listen port and confederation identifier",
+			long:  "Print effective bgppolicy information including name, local ASN, router ID, listen port, confederation identifier and member ASNs",
 			agentEndpoint: &endpoint{
 				nonResourceEndpoint: &nonResourceEndpoint{
 					path:       "/bgppolicy",
