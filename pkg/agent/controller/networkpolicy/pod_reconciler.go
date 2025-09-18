@@ -295,7 +295,7 @@ func (r *podReconciler) RunIDAllocatorWorker(stopCh <-chan struct{}) {
 // Reconcile checks whether the provided rule has been enforced or not, and
 // invoke the add or update method accordingly.
 func (r *podReconciler) Reconcile(rule *CompletedRule) error {
-	klog.InfoS("Reconciling Pod NetworkPolicy rule", "rule", rule.ID, "policy", rule.SourceRef.ToString())
+	klog.V(1).InfoS("Reconciling Pod NetworkPolicy rule", "rule", rule.ID, "policy", rule.SourceRef.ToString())
 	var err error
 	var ofPriority *uint16
 
@@ -1005,15 +1005,17 @@ func (r *podReconciler) uninstallOFRule(ofID uint32, table uint8) error {
 // Forget invokes UninstallPolicyRuleFlows to uninstall Openflow entries
 // associated with the provided ruleID if it was enforced before.
 func (r *podReconciler) Forget(ruleID string) error {
-	klog.InfoS("Forgetting rule", "rule", ruleID)
-
 	value, exists := r.lastRealizeds.Load(ruleID)
 	if !exists {
 		// No-op if the rule was not realized before.
+		klog.V(4).InfoS("Trying to forget unrealized Pod NetworkPolicy rule, no action needed", "rule", ruleID)
 		return nil
 	}
 
 	lastRealized := value.(*podPolicyLastRealized)
+
+	klog.V(1).InfoS("Forgetting Pod NetworkPolicy rule", "rule", ruleID, "policy", lastRealized.CompletedRule.SourceRef.ToString())
+
 	table := r.getOFRuleTable(lastRealized.CompletedRule)
 	priorityAssigner, exists := r.priorityAssigners[table]
 	if exists {
