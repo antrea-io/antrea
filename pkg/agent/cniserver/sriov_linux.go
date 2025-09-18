@@ -22,7 +22,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/Mellanox/sriovnet"
+	"github.com/k8snetworkplumbingwg/sriovnet"
 )
 
 var (

@@ -7,7 +7,6 @@ require (
 	antrea.io/ofnet v0.15.0
 	github.com/ClickHouse/clickhouse-go/v2 v2.35.0
 	github.com/DATA-DOG/go-sqlmock v1.5.2
-	github.com/Mellanox/sriovnet v1.1.0
 	github.com/Microsoft/go-winio v0.6.2
 	github.com/Microsoft/hcsshim v0.13.0
 	github.com/TomCodeLV/OVSDB-golang-lib v0.0.0-20200116135253-9bbdfadcd881
@@ -33,6 +32,7 @@ require (
 	github.com/gopacket/gopacket v1.4.0
 	github.com/hashicorp/memberlist v0.5.3
 	github.com/k8snetworkplumbingwg/network-attachment-definition-client v1.7.7
+	github.com/k8snetworkplumbingwg/sriovnet v1.2.0
 	github.com/kevinburke/ssh_config v1.4.0
 	github.com/lithammer/dedent v1.1.0
 	github.com/mdlayher/arp v0.0.0-20220221190821-c37aaafac7f9
