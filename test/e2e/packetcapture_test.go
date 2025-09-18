@@ -23,7 +23,6 @@ import (
 	"os"
 	"path"
 	"path/filepath"
-	"sort"
 	"strings"
 	"testing"
 	"time"
@@ -35,7 +34,6 @@ import (
 	"github.com/stretchr/testify/require"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/conversion"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/utils/ptr"
@@ -168,6 +166,12 @@ func packetCaptureDestinationPod(namespace, name string) packetCaptureOption {
 			Namespace: namespace,
 			Name:      name,
 		}
+	}
+}
+
+func packetCaptureCapturePoint(point crdv1alpha1.CapturePoint) packetCaptureOption {
+	return func(pc *crdv1alpha1.PacketCapture) {
+		pc.Spec.CapturePoint = point
 	}
 }
 
@@ -360,6 +364,7 @@ func testPacketCaptureBasic(t *testing.T, data *TestData, sftpServerIP string, p
 				packetCaptureSourcePod(data.testNamespace, clientPodName),
 				packetCaptureDestinationPod(data.testNamespace, udpServerPodName),
 				packetCaptureHostPublicKey(pubKey2),
+				packetCaptureCapturePoint(crdv1alpha1.CapturePointDestination),
 			),
 			expectedStatus: crdv1alpha1.PacketCaptureStatus{
 				NumberCaptured: 5,
@@ -479,6 +484,7 @@ func testPacketCaptureBasic(t *testing.T, data *TestData, sftpServerIP string, p
 				packetCaptureSourcePod(data.testNamespace, clientPodName),
 				packetCaptureDestinationPod(data.testNamespace, udpServerPodName),
 				packetCaptureHostPublicKey(pubKey2),
+				packetCaptureCapturePoint(crdv1alpha1.CapturePointDestination),
 			),
 			expectedStatus: crdv1alpha1.PacketCaptureStatus{
 				NumberCaptured: 5,
@@ -521,6 +527,7 @@ func testPacketCaptureBasic(t *testing.T, data *TestData, sftpServerIP string, p
 				packetCaptureSourcePod(data.testNamespace, clientPodName),
 				packetCaptureDestinationPod(data.testNamespace, tcpServerPodName),
 				packetCaptureHostPublicKey(pubKey1),
+				packetCaptureCapturePoint(crdv1alpha1.CapturePointDestination),
 			),
 			expectedStatus: crdv1alpha1.PacketCaptureStatus{
 				NumberCaptured: 5,
@@ -736,6 +743,7 @@ func testPacketCaptureL4Filters(t *testing.T, data *TestData, sftpServerIP strin
 				packetCaptureDestinationPod(data.testNamespace, tcpServerPodName),
 				packetCaptureHostPublicKey(pubKey1),
 				packetCaptureFirstN(1),
+				packetCaptureCapturePoint(crdv1alpha1.CapturePointDestination),
 			),
 			expectedStatus: crdv1alpha1.PacketCaptureStatus{
 				NumberCaptured: 1,
@@ -770,6 +778,33 @@ func testPacketCaptureL4Filters(t *testing.T, data *TestData, sftpServerIP strin
 			})
 		}
 	})
+}
+
+// determineExpectedCaptureNode determines which Node is expected to perform a packet
+// capture based on the source/destination Pods and the CapturePoint specified in
+// the test case.
+func determineExpectedCaptureNode(t *testing.T, data *TestData, tc pcTestCase) string {
+	getNodeName := func(targetPodRef *crdv1alpha1.PodReference) string {
+		targetPod, err := data.clientset.CoreV1().Pods(targetPodRef.Namespace).Get(context.TODO(), targetPodRef.Name, metav1.GetOptions{})
+		require.NoError(t, err, "Failed to get the target Pod for the packet capture")
+		return targetPod.Spec.NodeName
+	}
+
+	if tc.pc.Spec.CapturePoint == "" {
+		if tc.pc.Spec.Source.Pod != nil {
+			tc.pc.Spec.CapturePoint = crdv1alpha1.CapturePointSource
+		} else {
+			tc.pc.Spec.CapturePoint = crdv1alpha1.CapturePointDestination
+		}
+	}
+
+	var node string
+	if tc.pc.Spec.Source.Pod != nil && tc.pc.Spec.CapturePoint == crdv1alpha1.CapturePointSource {
+		node = getNodeName(tc.pc.Spec.Source.Pod)
+	} else if tc.pc.Spec.Destination.Pod != nil && tc.pc.Spec.CapturePoint == crdv1alpha1.CapturePointDestination {
+		node = getNodeName(tc.pc.Spec.Destination.Pod)
+	}
+	return node
 }
 
 func getOSString() string {
@@ -912,7 +947,7 @@ func runPacketCaptureTest(t *testing.T, data *TestData, tc pcTestCase) {
 	if err != nil {
 		t.Fatalf("Error: Get PacketCapture failed: %v", err)
 	}
-	if !packetCaptureStatusEqual(pc.Status, tc.expectedStatus) {
+	if !crdv1alpha1.PacketCaptureStatusEqual(pc.Status, tc.expectedStatus) {
 		t.Errorf("CR status not match, actual: %+v, expected: %+v", pc.Status, tc.expectedStatus)
 	}
 
@@ -920,18 +955,8 @@ func runPacketCaptureTest(t *testing.T, data *TestData, tc pcTestCase) {
 		return
 	}
 
-	// Determine the target Pod where the packet capture will run. This mirrors the
-	// behavior of the PacketCapture controller, which defaults to the source Pod if
-	// available, to decide on which Node the capture agent should run.
-	var targetPodRef *crdv1alpha1.PodReference
-	if tc.pc.Spec.Source.Pod == nil {
-		targetPodRef = tc.pc.Spec.Destination.Pod
-	} else {
-		targetPodRef = tc.pc.Spec.Source.Pod
-	}
-	targetPod, err := data.clientset.CoreV1().Pods(targetPodRef.Namespace).Get(context.TODO(), targetPodRef.Name, metav1.GetOptions{})
-	require.NoError(t, err, "Failed to get the target Pod for the packet capture")
-	captureNodeName := targetPod.Spec.NodeName
+	captureNodeName := determineExpectedCaptureNode(t, data, tc)
+	require.NotEmpty(t, captureNodeName, "Could not determine any node for packet capture")
 
 	// verify packets.
 	antreaPodName, err := data.getAntreaPodOnNode(captureNodeName)
@@ -999,41 +1024,6 @@ func isPacketCaptureRunning(pc *crdv1alpha1.PacketCapture) bool {
 	}
 	return false
 
-}
-
-func packetCaptureConditionEqual(c1, c2 crdv1alpha1.PacketCaptureCondition) bool {
-	c1.LastTransitionTime = metav1.Date(2018, 1, 1, 0, 0, 0, 0, time.UTC)
-	c2.LastTransitionTime = metav1.Date(2018, 1, 1, 0, 0, 0, 0, time.UTC)
-	return c1 == c2
-}
-
-var packetCaptureStatusSemanticEquality = conversion.EqualitiesOrDie(
-	packetCaptureConditionSliceEqual,
-)
-
-func packetCaptureStatusEqual(status1, status2 crdv1alpha1.PacketCaptureStatus) bool {
-	return packetCaptureStatusSemanticEquality.DeepEqual(status1, status2)
-}
-
-func packetCaptureConditionSliceEqual(s1, s2 []crdv1alpha1.PacketCaptureCondition) bool {
-	sort.Slice(s1, func(i, j int) bool {
-		return s1[i].Type < s1[j].Type
-	})
-	sort.Slice(s2, func(i, j int) bool {
-		return s2[i].Type < s2[j].Type
-	})
-
-	if len(s1) != len(s2) {
-		return false
-	}
-	for i := range s1 {
-		a := s1[i]
-		b := s2[i]
-		if !packetCaptureConditionEqual(a, b) {
-			return false
-		}
-	}
-	return true
 }
 
 // verifyPacketFile will read the packets file and check if packet count and packet data match with CR.

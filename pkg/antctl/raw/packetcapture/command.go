@@ -52,14 +52,15 @@ var (
 )
 
 type packetCaptureOptions struct {
-	source    string
-	dest      string
-	nowait    bool
-	timeout   time.Duration
-	number    int32
-	flow      string
-	outputDir string
-	direction string
+	source       string
+	dest         string
+	nowait       bool
+	timeout      time.Duration
+	number       int32
+	flow         string
+	outputDir    string
+	capturePoint string
+	direction    string
 }
 
 var options = &packetCaptureOptions{}
@@ -68,6 +69,8 @@ var packetCaptureExample = `  Start capturing packets from pod1 to pod2, both Po
   $ antctl packetcapture -S pod1 -D pod2
   Start capturing packets from pod1 in Namespace ns1 to a destination IP
   $ antctl packetcapture -S ns1/pod1 -D 192.168.123.123
+  Start capturing packets from pod1 to pod2, captures at dst pod
+  $ antctl packetcapture -S pod1 -D pod2 -p Destination
   Start capturing TCP FIN packets from pod1 to pod2, with destination port 80
   $ antctl packetcapture -S pod1 -D pod2 -f tcp,tcp_dst=80,tcp_flags=+fin
   Start capturing TCP SYNs that are not ACKs from pod1 to pod2, with destination port 80
@@ -98,6 +101,7 @@ func init() {
 	Command.Flags().StringVarP(&options.dest, "destination", "D", "", "destination of the PacketCapture: Namespace/Pod, Pod, or IP")
 	Command.Flags().Int32VarP(&options.number, "number", "n", 1, "target number of packets to capture, the capture will stop when it is reached")
 	Command.Flags().StringVarP(&options.flow, "flow", "f", "", "specify the flow (packet headers) of the PacketCapture, including tcp_src, tcp_dst, tcp_flags, udp_src, udp_dst, icmp_type, icmp_code")
+	Command.Flags().StringVarP(&options.capturePoint, "capture-point", "p", "", "specify where the packet capture should be performed: Source or Destination")
 	Command.Flags().BoolVarP(&options.nowait, "nowait", "", false, "if set, command returns without retrieving results")
 	Command.Flags().StringVarP(&options.outputDir, "output-dir", "o", ".", "save the packets file to the target directory")
 	Command.Flags().StringVarP(&options.direction, "direction", "d", "SourceToDestination", "direction of the traffic to capture: SourceToDestination, DestinationToSource, or Both")
@@ -207,7 +211,7 @@ func packetCaptureRun(ctx context.Context, out io.Writer, restConfig *rest.Confi
 		for _, cond := range res.Status.Conditions {
 			if cond.Type == v1alpha1.PacketCaptureComplete && cond.Status == metav1.ConditionTrue {
 				latestPC = res
-				if cond.Reason == "Failed" {
+				if cond.Reason == "Failed" || cond.Reason == "Timeout" {
 					return false, errors.New(cond.Message)
 				}
 				return true, nil
@@ -435,6 +439,19 @@ func parseDirection(direction string) (v1alpha1.CaptureDirection, error) {
 	}
 }
 
+func parseCapturePoint(captPointStr string) (v1alpha1.CapturePoint, error) {
+	if captPointStr == "" {
+		return "", nil
+	}
+
+	switch v1alpha1.CapturePoint(captPointStr) {
+	case v1alpha1.CapturePointSource, v1alpha1.CapturePointDestination:
+		return v1alpha1.CapturePoint(captPointStr), nil
+	default:
+		return "", fmt.Errorf("invalid capture point: %q, must be either Source or Destination", captPointStr)
+	}
+}
+
 func newPacketCapture(options *packetCaptureOptions) (*v1alpha1.PacketCapture, error) {
 	if options.source == "" && options.dest == "" {
 		return nil, errors.New("must specify at least one of --source or --destination")
@@ -469,6 +486,17 @@ func newPacketCapture(options *packetCaptureOptions) (*v1alpha1.PacketCapture, e
 		return nil, err
 	}
 
+	capturePoint, err := parseCapturePoint(options.capturePoint)
+	if err != nil {
+		return nil, err
+	}
+	switch {
+	case capturePoint == v1alpha1.CapturePointSource && src.Pod == nil:
+		return nil, fmt.Errorf("a source Pod must be specified when capture-point is 'Source'")
+	case capturePoint == v1alpha1.CapturePointDestination && dst.Pod == nil:
+		return nil, fmt.Errorf("a destination Pod must be specified when capture-point is 'Destination'")
+	}
+
 	name := getPCName(options)
 	timeout := int32(options.timeout.Seconds())
 	pc := &v1alpha1.PacketCapture{
@@ -476,11 +504,12 @@ func newPacketCapture(options *packetCaptureOptions) (*v1alpha1.PacketCapture, e
 			Name: name,
 		},
 		Spec: v1alpha1.PacketCaptureSpec{
-			Source:      src,
-			Destination: dst,
-			Direction:   direction,
-			Timeout:     &timeout,
-			Packet:      pkt,
+			Source:       src,
+			Destination:  dst,
+			Direction:    direction,
+			Timeout:      &timeout,
+			Packet:       pkt,
+			CapturePoint: capturePoint,
 			CaptureConfig: v1alpha1.CaptureConfig{
 				FirstN: &v1alpha1.PacketCaptureFirstNConfig{
 					Number: options.number,
