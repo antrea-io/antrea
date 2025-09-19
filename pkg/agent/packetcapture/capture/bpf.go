@@ -20,6 +20,7 @@ import (
 	"strings"
 
 	"golang.org/x/net/bpf"
+	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/utils/ptr"
 
@@ -32,12 +33,25 @@ const (
 	lengthWord    int    = 4
 	bitsPerWord   int    = 32
 	etherTypeIPv4 uint32 = 0x0800
+	etherTypeIPv6 uint32 = 0x86DD
 
 	jumpMask           uint32 = 0x1fff
 	ip4SourcePort      uint32 = 14
 	ip4DestinationPort uint32 = 16
 	ip4HeaderSize      uint32 = 14
 	ip4HeaderFlags     uint32 = 20
+
+	ip6HeaderOffset          uint32 = 14
+	ip6HeaderSize            uint32 = 40
+	ip6NextHeaderOffset      uint32 = ip6HeaderOffset + 6             // 20
+	ip6SourceAddrOffset      uint32 = ip6HeaderOffset + 8             // 22
+	ip6DestinationAddrOffset uint32 = ip6HeaderOffset + 24            // 38
+	ip6L4HeaderOffset        uint32 = ip6HeaderOffset + ip6HeaderSize // 54
+	ip6SourcePort            uint32 = 0
+	ip6DestinationPort       uint32 = 2
+	ip6TCPFlags              uint32 = 13
+	ip6ICMPv6Type            uint32 = 0
+	ip6ICMPv6Code            uint32 = 1
 )
 
 var (
@@ -52,12 +66,22 @@ var (
 	loadIPv4TCPFlags           = bpf.LoadIndirect{Off: 27, Size: lengthByte}
 	loadIPv4ICMPType           = bpf.LoadIndirect{Off: 14, Size: lengthByte}
 	loadIPv4ICMPCode           = bpf.LoadIndirect{Off: 15, Size: lengthByte}
+
+	loadIPv6NextHeader      = bpf.LoadAbsolute{Off: ip6NextHeaderOffset, Size: lengthByte}
+	loadIPv6SourcePort      = bpf.LoadAbsolute{Off: ip6L4HeaderOffset + ip6SourcePort, Size: lengthHalf}
+	loadIPv6DestinationPort = bpf.LoadAbsolute{Off: ip6L4HeaderOffset + ip6DestinationPort, Size: lengthHalf}
+	loadIPv6TCPFlags        = bpf.LoadAbsolute{Off: ip6L4HeaderOffset + ip6TCPFlags, Size: lengthByte}
+	loadIPv6ICMPv6Type      = bpf.LoadAbsolute{Off: ip6L4HeaderOffset + ip6ICMPv6Type, Size: lengthByte}
+	loadIPv6ICMPv6Code      = bpf.LoadAbsolute{Off: ip6L4HeaderOffset + ip6ICMPv6Code, Size: lengthByte}
 )
 
+// Supported protocol strings (must be uppercase, since validation uses strings.ToUpper()).
+// These values are matched against user input in the controller.
 var ProtocolMap = map[string]uint32{
-	"UDP":  17,
-	"TCP":  6,
-	"ICMP": 1,
+	"UDP":    17,
+	"TCP":    6,
+	"ICMP":   1,
+	"ICMPV6": 58,
 }
 
 var ICMPMsgTypeMap = map[crdv1alpha1.ICMPMsgType]uint32{
@@ -65,6 +89,15 @@ var ICMPMsgTypeMap = map[crdv1alpha1.ICMPMsgType]uint32{
 	crdv1alpha1.ICMPMsgTypeEchoReply:  0,
 	crdv1alpha1.ICMPMsgTypeDstUnreach: 3,
 	crdv1alpha1.ICMPMsgTypeTimexceed:  11,
+}
+
+var ICMPv6MsgTypeMap = map[crdv1alpha1.ICMPv6MsgType]uint32{
+	crdv1alpha1.ICMPv6MsgTypeEcho:         128,
+	crdv1alpha1.ICMPv6MsgTypeEchoReply:    129,
+	crdv1alpha1.ICMPv6MsgTypeDstUnreach:   1,
+	crdv1alpha1.ICMPv6MsgTypeTimexceed:    3,
+	crdv1alpha1.ICMPv6MsgTypePacketTooBig: 2,
+	crdv1alpha1.ICMPv6MsgTypeParamProblem: 4,
 }
 
 type tcpFlagsFilter struct {
@@ -76,12 +109,17 @@ type icmpFilter struct {
 	icmpType uint32
 	icmpCode *uint32
 }
+type icmpv6Filter struct {
+	icmpv6Type uint32
+	icmpv6Code *uint32
+}
 
 type transportFilters struct {
 	srcPort  uint16
 	dstPort  uint16
 	tcpFlags []tcpFlagsFilter
 	icmp     []icmpFilter
+	icmpv6   []icmpv6Filter
 }
 
 func loadIPv4HeaderOffset(skipTrue uint8) []bpf.Instruction {
@@ -92,15 +130,19 @@ func loadIPv4HeaderOffset(skipTrue uint8) []bpf.Instruction {
 	}
 }
 
-func compareProtocolIP4(skipTrue, skipFalse uint8) bpf.Instruction {
+func compareProtocolIPv4(skipTrue, skipFalse uint8) bpf.Instruction {
 	return bpf.JumpIf{Cond: bpf.JumpEqual, Val: etherTypeIPv4, SkipTrue: skipTrue, SkipFalse: skipFalse}
+}
+
+func compareProtocolIPv6(skipTrue, skipFalse uint8) bpf.Instruction {
+	return bpf.JumpIf{Cond: bpf.JumpEqual, Val: etherTypeIPv6, SkipTrue: skipTrue, SkipFalse: skipFalse}
 }
 
 func compareProtocol(protocol uint32, skipTrue, skipFalse uint8) bpf.Instruction {
 	return bpf.JumpIf{Cond: bpf.JumpEqual, Val: protocol, SkipTrue: skipTrue, SkipFalse: skipFalse}
 }
 
-func calculateSkipFalse(srcIP, dstIP net.IP, transport *transportFilters) uint8 {
+func calculateIPv4SkipFalse(srcIP, dstIP net.IP, transport *transportFilters) uint8 {
 	var count uint8
 	if srcIP != nil && dstIP != nil {
 		// load dstIP and compare
@@ -135,8 +177,46 @@ func calculateSkipFalse(srcIP, dstIP net.IP, transport *transportFilters) uint8 
 	return count
 }
 
-// Generates IP address and port matching instructions
-func compileIPFilters(srcIP, dstIP net.IP, size, curLen, skipFalse uint8, needsOtherTrafficDirectionCheck bool) []bpf.Instruction {
+func calculateIPv6SkipFalse(srcIP, dstIP net.IP, transport *transportFilters) uint8 {
+	var count uint8
+	// We keep track of this count so we can correctly calculate the
+	// relative jump offsets (SkipFalse) that decrease by 2 per chunk
+	// for the srcIP and dstIP cases.
+	if srcIP != nil {
+		// load srcIP and compare
+		count += 8
+	}
+	if dstIP != nil {
+		// load dstIP and compare
+		count += 8
+	}
+
+	if transport.srcPort > 0 {
+		count += 2
+	}
+	if transport.dstPort > 0 {
+		count += 2
+	}
+	if len(transport.tcpFlags) > 0 {
+		count += uint8(len(transport.tcpFlags) * 3)
+	}
+	if len(transport.icmpv6) > 0 {
+		count += 1
+		for _, m := range transport.icmpv6 {
+			count += 1
+			if m.icmpv6Code != nil {
+				count += 2
+			}
+		}
+	}
+	// ret keep
+	count += 1
+
+	return count
+}
+
+// Generates IPv4 address and port matching instructions
+func compileIPv4Filters(srcIP, dstIP net.IP, size, curLen, skipFalse uint8, needsOtherTrafficDirectionCheck bool) []bpf.Instruction {
 	inst := []bpf.Instruction{}
 
 	// from here we need to check the inst length to calculate skipFalse. If no protocol is set, there will be no related bpf instructions.
@@ -188,7 +268,7 @@ func compileIPFilters(srcIP, dstIP net.IP, size, curLen, skipFalse uint8, needsO
 
 // Generates BPF instructions for filtering transport-layer traffic based on ports, TCP flags,
 // and ICMP messages.
-func compileTransportFilters(size, curLen uint8, transport *transportFilters) []bpf.Instruction {
+func compileIPv4TransportFilters(size, curLen uint8, transport *transportFilters) []bpf.Instruction {
 	inst := []bpf.Instruction{}
 
 	// calculate skip size to jump to the final instruction (NO MATCH)
@@ -254,11 +334,138 @@ func compileTransportFilters(size, curLen uint8, transport *transportFilters) []
 	return inst
 }
 
-// compilePacketFilter compiles the CRD spec to bpf instructions. For now, we only focus on
-// ipv4 traffic. Compared to the raw BPF filter supported by libpcap, we only need to support
-// limited use cases, so an expression parser is not needed.
+// Generates IPv6 address and port matching instructions
+func compileIPv6Filters(srcIP, dstIP net.IP, size, curLen, skipFalse uint8, needsOtherTrafficDirectionCheck bool) []bpf.Instruction {
+	inst := []bpf.Instruction{}
+
+	// calculate skip size to jump to the final instruction (NO MATCH)
+	skipToEnd := func() uint8 {
+		return size - curLen - uint8(len(inst)) - 2
+	}
+
+	if srcIP != nil {
+		// An IPv6 address is 16 bytes, so we load and compare it in four 4-byte (32-bit) chunks.
+		for i := range 4 {
+			offset := uint32(i * 4)
+			addrVal := binary.BigEndian.Uint32(srcIP[i*4 : (i+1)*4])
+			inst = append(inst, bpf.LoadAbsolute{Off: ip6SourceAddrOffset + offset, Size: lengthWord})
+
+			// Determine the correct jump offset on mismatch for the current chunk.
+			var currentSkipFalse uint8
+			if needsOtherTrafficDirectionCheck {
+				// The relative jump offset decreases by 2 for each chunk we check,
+				// as we have added one 'load' and one 'jump' instruction (2 total).
+				currentSkipFalse = skipFalse - uint8((i+1)*2)
+			} else {
+				// If not checking both directions, any mismatch jumps to the final drop instruction.
+				currentSkipFalse = skipToEnd()
+			}
+			inst = append(inst, bpf.JumpIf{Cond: bpf.JumpEqual, Val: addrVal, SkipTrue: 0, SkipFalse: currentSkipFalse})
+		}
+	}
+
+	if dstIP != nil {
+		// An IPv6 address is 16 bytes, so we load and compare it in four 4-byte (32-bit) chunks.
+		for i := range 4 {
+			offset := uint32(i * 4)
+			addrVal := binary.BigEndian.Uint32(dstIP[i*4 : (i+1)*4])
+			inst = append(inst, bpf.LoadAbsolute{Off: ip6DestinationAddrOffset + offset, Size: lengthWord})
+
+			// Determine the correct jump offset on mismatch for the current chunk.
+			var currentSkipFalse uint8
+			if srcIP == nil && needsOtherTrafficDirectionCheck {
+				// Apply the same decreasing offset logic as the source IP check.
+				currentSkipFalse = skipFalse - uint8((i+1)*2)
+			} else {
+				// For all other cases, a dstIP mismatch jumps to the final drop.
+				currentSkipFalse = skipToEnd()
+			}
+			inst = append(inst, bpf.JumpIf{Cond: bpf.JumpEqual, Val: addrVal, SkipTrue: 0, SkipFalse: currentSkipFalse})
+		}
+	}
+	return inst
+}
+
+// Generates BPF instructions for filtering transport-layer traffic based on ports, TCP flags,
+// and ICMPv6 messages.
+func compileIPv6TransportFilters(size, curLen uint8, transport *transportFilters) []bpf.Instruction {
+	inst := []bpf.Instruction{}
+
+	// calculate skip size to jump to the final instruction (NO MATCH)
+	skipToEnd := func() uint8 {
+		return size - curLen - uint8(len(inst)) - 2
+	}
+
+	// Unlike IPv4, we assume no extension headers for simplicity, so we can use absolute loads
+	// for transport layer fields. The IPv6 header has a fixed size of 40 bytes.
+	if transport.srcPort > 0 {
+		inst = append(inst, loadIPv6SourcePort)
+		inst = append(inst, bpf.JumpIf{Cond: bpf.JumpEqual, Val: uint32(transport.srcPort), SkipTrue: 0, SkipFalse: skipToEnd()})
+	}
+	if transport.dstPort > 0 {
+		inst = append(inst, loadIPv6DestinationPort)
+		inst = append(inst, bpf.JumpIf{Cond: bpf.JumpEqual, Val: uint32(transport.dstPort), SkipTrue: 0, SkipFalse: skipToEnd()})
+	}
+
+	// tcp flags
+	if len(transport.tcpFlags) > 0 {
+		for i, f := range transport.tcpFlags {
+			inst = append(inst, loadIPv6TCPFlags)
+			inst = append(inst, bpf.ALUOpConstant{Op: bpf.ALUOpAnd, Val: f.mask})
+			if i == len(transport.tcpFlags)-1 { // last flag match condition
+				inst = append(inst, bpf.JumpIf{Cond: bpf.JumpEqual, Val: f.flag, SkipTrue: 0, SkipFalse: skipToEnd()})
+			} else {
+				inst = append(inst, bpf.JumpIf{Cond: bpf.JumpEqual, Val: f.flag, SkipTrue: skipToEnd() - 1, SkipFalse: 0})
+			}
+		}
+	}
+
+	// icmpv6 messages
+	if len(transport.icmpv6) > 0 {
+		inst = append(inst, loadIPv6ICMPv6Type)
+		for i, f := range transport.icmpv6 {
+			var skipTrue, skipFalse uint8
+			if f.icmpv6Code != nil {
+				if i != len(transport.icmpv6)-1 {
+					skipFalse = 2
+				} else {
+					skipFalse = skipToEnd()
+				}
+			} else {
+				if i != len(transport.icmpv6)-1 {
+					skipTrue, skipFalse = skipToEnd()-1, 0
+				} else {
+					skipTrue, skipFalse = 0, skipToEnd()
+				}
+			}
+			inst = append(inst, bpf.JumpIf{Cond: bpf.JumpEqual, Val: f.icmpv6Type, SkipTrue: skipTrue, SkipFalse: skipFalse})
+			if f.icmpv6Code != nil {
+				inst = append(inst, loadIPv6ICMPv6Code)
+				inst = append(inst, bpf.JumpIf{Cond: bpf.JumpEqual, Val: *f.icmpv6Code, SkipTrue: skipToEnd() - 1, SkipFalse: skipToEnd()})
+			}
+		}
+	}
+
+	// return (accept)
+	inst = append(inst, returnKeep)
+
+	return inst
+}
+
+// compilePacketFilter dispatches the CRD spec to the appropriate BPF compiler
+// based on the IP family (IPv4 or IPv6).Compared to the
+// raw BPF filter supported by libpcap, we only need to support limited use cases,
+// so an expression parser is not needed.
 func compilePacketFilter(packetSpec *crdv1alpha1.Packet, srcIP, dstIP net.IP, direction crdv1alpha1.CaptureDirection) []bpf.Instruction {
-	size := uint8(calculateInstructionsSize(packetSpec, srcIP, dstIP, direction))
+	if packetSpec != nil && packetSpec.IPFamily == v1.IPv6Protocol {
+		return compileIPv6PacketFilter(packetSpec, srcIP, dstIP, direction)
+	}
+	return compileIPv4PacketFilter(packetSpec, srcIP, dstIP, direction)
+}
+
+// compileIPv4PacketFilter compiles the CRD spec to bpf instructions.
+func compileIPv4PacketFilter(packetSpec *crdv1alpha1.Packet, srcIP, dstIP net.IP, direction crdv1alpha1.CaptureDirection) []bpf.Instruction {
+	size := uint8(calculateIPv4InstructionsSize(packetSpec, srcIP, dstIP, direction))
 
 	// ipv4 check
 	inst := []bpf.Instruction{loadEtherKind}
@@ -267,7 +474,7 @@ func compilePacketFilter(packetSpec *crdv1alpha1.Packet, srcIP, dstIP net.IP, di
 	// check failed, we need to jump to the end (ret #0), skip 17-3=14 instructions.
 	// if check succeed, skipTrue means we jump to the next instruction. Here 3 means we
 	// have 3 instructions so far.
-	inst = append(inst, compareProtocolIP4(0, size-3))
+	inst = append(inst, compareProtocolIPv4(0, size-3))
 
 	if packetSpec != nil {
 		if packetSpec.Protocol != nil {
@@ -333,18 +540,114 @@ func compilePacketFilter(packetSpec *crdv1alpha1.Packet, srcIP, dstIP net.IP, di
 
 	switch direction {
 	case crdv1alpha1.CaptureDirectionSourceToDestination:
-		inst = append(inst, compileIPFilters(srcIP, dstIP, size, uint8(len(inst)), 0, false)...)
+		inst = append(inst, compileIPv4Filters(srcIP, dstIP, size, uint8(len(inst)), 0, false)...)
 	case crdv1alpha1.CaptureDirectionDestinationToSource:
 		transport.srcPort, transport.dstPort = transport.dstPort, transport.srcPort
-		inst = append(inst, compileIPFilters(dstIP, srcIP, size, uint8(len(inst)), 0, false)...)
+		inst = append(inst, compileIPv4Filters(dstIP, srcIP, size, uint8(len(inst)), 0, false)...)
 	default:
-		skipFalse := calculateSkipFalse(srcIP, dstIP, &transport)
-		inst = append(inst, compileIPFilters(srcIP, dstIP, size, uint8(len(inst)), skipFalse, true)...)
-		inst = append(inst, compileTransportFilters(size, uint8(len(inst)), &transport)...)
+		skipFalse := calculateIPv4SkipFalse(srcIP, dstIP, &transport)
+		inst = append(inst, compileIPv4Filters(srcIP, dstIP, size, uint8(len(inst)), skipFalse, true)...)
+		inst = append(inst, compileIPv4TransportFilters(size, uint8(len(inst)), &transport)...)
 		transport.srcPort, transport.dstPort = transport.dstPort, transport.srcPort
-		inst = append(inst, compileIPFilters(dstIP, srcIP, size, uint8(len(inst)), 0, false)...)
+		inst = append(inst, compileIPv4Filters(dstIP, srcIP, size, uint8(len(inst)), 0, false)...)
 	}
-	inst = append(inst, compileTransportFilters(size, uint8(len(inst)), &transport)...)
+	inst = append(inst, compileIPv4TransportFilters(size, uint8(len(inst)), &transport)...)
+
+	// return (drop)
+	inst = append(inst, returnDrop)
+
+	return inst
+}
+
+// compileIPv6PacketFilter compiles the CRD spec to bpf instructions.
+func compileIPv6PacketFilter(packetSpec *crdv1alpha1.Packet, srcIP, dstIP net.IP, direction crdv1alpha1.CaptureDirection) []bpf.Instruction {
+	size := uint8(calculateIPv6InstructionsSize(packetSpec, srcIP, dstIP, direction))
+
+	// ipv6 check
+	inst := []bpf.Instruction{loadEtherKind}
+	// skip means how many instructions we need to skip if the compare fails.
+	// for example, for now we have 2 instructions, and the total size is 17, if ipv6
+	// check failed, we need to jump to the end (ret #0), skip 17-3=14 instructions.
+	// if check succeed, skipTrue means we jump to the next instruction. Here 3 means we
+	// have 3 instructions so far.
+	inst = append(inst, compareProtocolIPv6(0, size-3))
+
+	if packetSpec != nil {
+		if packetSpec.Protocol != nil {
+			var proto uint32
+			if packetSpec.Protocol.Type == intstr.Int {
+				proto = uint32(packetSpec.Protocol.IntVal)
+			} else {
+				proto = ProtocolMap[strings.ToUpper(packetSpec.Protocol.StrVal)]
+			}
+			// For IPv6, the protocol is in the "Next Header" field.
+			inst = append(inst, loadIPv6NextHeader)
+			inst = append(inst, compareProtocol(proto, 0, size-5))
+		}
+	}
+
+	// ports, TCP flags and ICMPv6 messages
+	var transport transportFilters
+	if packetSpec.TransportHeader.TCP != nil {
+		if packetSpec.TransportHeader.TCP.SrcPort != nil {
+			transport.srcPort = uint16(*packetSpec.TransportHeader.TCP.SrcPort)
+		}
+		if packetSpec.TransportHeader.TCP.DstPort != nil {
+			transport.dstPort = uint16(*packetSpec.TransportHeader.TCP.DstPort)
+		}
+		if packetSpec.TransportHeader.TCP.Flags != nil {
+			for _, f := range packetSpec.TransportHeader.TCP.Flags {
+				m := f.Value // default to flag if not specified
+				if f.Mask != nil {
+					m = *f.Mask
+				}
+				transport.tcpFlags = append(transport.tcpFlags, tcpFlagsFilter{
+					flag: uint32(f.Value),
+					mask: uint32(m),
+				})
+			}
+		}
+	} else if packetSpec.TransportHeader.UDP != nil {
+		if packetSpec.TransportHeader.UDP.SrcPort != nil {
+			transport.srcPort = uint16(*packetSpec.TransportHeader.UDP.SrcPort)
+		}
+		if packetSpec.TransportHeader.UDP.DstPort != nil {
+			transport.dstPort = uint16(*packetSpec.TransportHeader.UDP.DstPort)
+		}
+	} else if packetSpec.TransportHeader.ICMPv6 != nil {
+		for _, f := range packetSpec.TransportHeader.ICMPv6.Messages {
+			var typeValue uint32
+			var codeValue *uint32
+			if f.Type.Type == intstr.Int {
+				typeValue = uint32(f.Type.IntVal)
+			} else {
+				typeValue = ICMPv6MsgTypeMap[crdv1alpha1.ICMPv6MsgType(strings.ToLower(f.Type.StrVal))]
+			}
+			if f.Code != nil {
+				codeValue = ptr.To(uint32(*f.Code))
+			}
+
+			transport.icmpv6 = append(transport.icmpv6, icmpv6Filter{
+				icmpv6Type: typeValue,
+				icmpv6Code: codeValue,
+			})
+		}
+	}
+
+	switch direction {
+	case crdv1alpha1.CaptureDirectionSourceToDestination:
+		inst = append(inst, compileIPv6Filters(srcIP, dstIP, size, uint8(len(inst)), 0, false)...)
+	case crdv1alpha1.CaptureDirectionDestinationToSource:
+		transport.srcPort, transport.dstPort = transport.dstPort, transport.srcPort
+		inst = append(inst, compileIPv6Filters(dstIP, srcIP, size, uint8(len(inst)), 0, false)...)
+	default:
+		skipFalse := calculateIPv6SkipFalse(srcIP, dstIP, &transport)
+		inst = append(inst, compileIPv6Filters(srcIP, dstIP, size, uint8(len(inst)), skipFalse, true)...)
+		inst = append(inst, compileIPv6TransportFilters(size, uint8(len(inst)), &transport)...)
+		transport.srcPort, transport.dstPort = transport.dstPort, transport.srcPort
+		inst = append(inst, compileIPv6Filters(dstIP, srcIP, size, uint8(len(inst)), 0, false)...)
+	}
+	inst = append(inst, compileIPv6TransportFilters(size, uint8(len(inst)), &transport)...)
 
 	// return (drop)
 	inst = append(inst, returnDrop)
@@ -435,7 +738,7 @@ func compilePacketFilter(packetSpec *crdv1alpha1.Packet, srcIP, dstIP net.IP, di
 // (015) ret      #262144								   # MATCH
 // (016) ret      #0									   # NOMATCH
 
-func calculateInstructionsSize(packet *crdv1alpha1.Packet, srcIP, dstIP net.IP, direction crdv1alpha1.CaptureDirection) int {
+func calculateIPv4InstructionsSize(packet *crdv1alpha1.Packet, srcIP, dstIP net.IP, direction crdv1alpha1.CaptureDirection) int {
 	count := 0
 	// load ethertype
 	count++
@@ -506,6 +809,84 @@ func calculateInstructionsSize(packet *crdv1alpha1.Packet, srcIP, dstIP net.IP, 
 			}
 			if dstIP != nil {
 				count += 2 // load + compare ip
+			}
+
+			count += portFiltersSize
+		}
+	}
+
+	// ret command
+	count += 2
+	return count
+}
+
+func calculateIPv6InstructionsSize(packet *crdv1alpha1.Packet, srcIP, dstIP net.IP, direction crdv1alpha1.CaptureDirection) int {
+	count := 0
+	// load ethertype
+	count++
+	// ip check
+	count++
+
+	// count 8 instructions for each non-nil IP (4 load + 4 compare)
+	if srcIP != nil {
+		count += 8
+	}
+	if dstIP != nil {
+		count += 8
+	}
+
+	if packet != nil {
+		// protocol check
+		if packet.Protocol != nil {
+			count += 2
+		}
+		transport := packet.TransportHeader
+		portFiltersSize := func() int {
+			count := 0
+			if transport.TCP != nil {
+				if transport.TCP.SrcPort != nil {
+					count += 2
+				}
+				if transport.TCP.DstPort != nil {
+					count += 2
+				}
+				if transport.TCP.Flags != nil {
+					// every TCP Flag match condition will have 3 instructions - load, bitwise AND, compare
+					count += len(transport.TCP.Flags) * 3
+				}
+
+			} else if transport.UDP != nil {
+				if transport.UDP.SrcPort != nil {
+					count += 2
+				}
+				if transport.UDP.DstPort != nil {
+					count += 2
+				}
+			} else if transport.ICMPv6 != nil {
+				count += 1 // load icmp type
+				for _, m := range transport.ICMPv6.Messages {
+					count += 1 // compare icmp type
+					if m.Code != nil {
+						count += 2 // load + compare icmp code
+					}
+				}
+			}
+			return count
+		}()
+
+		count += portFiltersSize
+
+		if direction == crdv1alpha1.CaptureDirectionBoth {
+
+			// extra returnKeep
+			count++
+
+			// src and dst ip (return traffic)
+			if srcIP != nil {
+				count += 8 // load + compare ip
+			}
+			if dstIP != nil {
+				count += 8 // load + compare ip
 			}
 
 			count += portFiltersSize
