@@ -40,11 +40,12 @@ type Server struct {
 
 func NewGoBGPServer(globalConfig *bgp.GlobalConfig) *Server {
 	s := &Server{
-		server: server.NewBgpServer(server.LoggerOption(newGoBGPLogger())),
+		server: server.NewBgpServer(server.LoggerOption(newGoBGPLogger(globalConfig.RouterID))),
 		globalConfig: &gobgpapi.Global{
-			Asn:        globalConfig.ASN,
-			RouterId:   globalConfig.RouterID,
-			ListenPort: globalConfig.ListenPort,
+			Asn:             globalConfig.ASN,
+			RouterId:        globalConfig.RouterID,
+			ListenPort:      globalConfig.ListenPort,
+			ListenAddresses: globalConfig.ListenAddresses,
 		},
 	}
 	if globalConfig.Confederation != nil {
@@ -282,13 +283,17 @@ func convertPeerConfigToGoBGPPeer(peerConfig bgp.PeerConfig) (*gobgpapi.Peer, er
 				},
 			},
 		},
+		Transport: &gobgpapi.Transport{
+			LocalAddress: peerConfig.LocalAddress,
+		},
+	}
+	if peerConfig.ConnectionMode == bgp.ConnectionModePassive {
+		peer.Transport.PassiveMode = true
 	}
 	// The following pointer fields are set to default values when the corresponding BGPPolicy is created, so they
 	// should not be nil. However, it is safe and harmless to include nil checks.
 	if peerConfig.Port != nil {
-		peer.Transport = &gobgpapi.Transport{
-			RemotePort: uint32(*peerConfig.Port),
-		}
+		peer.Transport.RemotePort = uint32(*peerConfig.Port)
 	}
 	if peerConfig.MultihopTTL != nil {
 		peer.EbgpMultihop = &gobgpapi.EbgpMultihop{

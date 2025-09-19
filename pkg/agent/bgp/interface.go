@@ -59,10 +59,13 @@ type Confederation struct {
 
 // GlobalConfig contains the global configuration to start a BGP server. More attributes might be added later.
 type GlobalConfig struct {
-	ASN           uint32
-	RouterID      string
-	ListenPort    int32
-	Confederation *Confederation
+	ASN        uint32
+	RouterID   string
+	ListenPort int32
+	// ListenAddresses is the list of addresses that the BGP server binds to. If omitted, the
+	// server will bind to all addresses (INADDR_ANY).
+	ListenAddresses []string
+	Confederation   *Confederation
 }
 
 type SessionState string
@@ -87,9 +90,23 @@ const (
 	RouteReceived
 )
 
+type ConnectionModeType int
+
+const (
+	ConnectionModeActive ConnectionModeType = iota // default
+	ConnectionModePassive
+)
+
 // PeerConfig contains the configuration for a BGP peer. More attributes might be added later.
 type PeerConfig struct {
 	*v1alpha1.BGPPeer
+	// These 2 fields are not currently exposed in the BGPPeer API but are used in integration tests.
+	// LocalAddress is the address used by the BGP server to connect to the peer. If omitted, it
+	// will be determined automatically based on the routing decision.
+	LocalAddress string
+	// ConnectionMode determines the connection mode (active / passive): this provides direct
+	// control over the direction of the BGP session. The default mode is active.
+	ConnectionMode ConnectionModeType
 	// Password is used to authenticate the BGP session with a BGP peer. This field holds the authentication password
 	// required to establish a secure BGP connection. If the peer requires password-based authentication, this value
 	// must be set to the appropriate password. Leaving this field empty will disable password authentication.
