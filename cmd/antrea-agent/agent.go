@@ -243,6 +243,7 @@ func run(o *Options) error {
 		nodeNetworkPolicyEnabled,
 		nodeLatencyMonitorEnabled,
 		multicastEnabled,
+		o.enableEgress,
 		o.config.SNATFullyRandomPorts,
 		*o.config.Egress.SNATFullyRandomPorts,
 		serviceCIDRProvider,
