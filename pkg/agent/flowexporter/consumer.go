@@ -53,8 +53,7 @@ type Consumer struct {
 	store     connections.CTStore
 	denyStore connections.CTStore
 
-	expirePriorityQueue     *priorityqueue.ExpirePriorityQueue
-	expireDenyPriorityQueue *priorityqueue.ExpirePriorityQueue
+	expirePriorityQueue *priorityqueue.ExpirePriorityQueue
 
 	exp       exporter.Interface
 	connected bool
@@ -68,16 +67,15 @@ type Consumer struct {
 
 func CreateConsumer(k8sClient kubernetes.Interface, store connections.CTStore, denyStore connections.CTStore, config ConsumerConfig) *Consumer {
 	c := &Consumer{
-		ConsumerConfig:          &config,
-		k8sClient:               k8sClient,
-		expirePriorityQueue:     priorityqueue.NewExpirePriorityQueue(config.activeFlowTimeout, config.idleFlowTimeout),
-		expireDenyPriorityQueue: priorityqueue.NewExpirePriorityQueue(config.activeFlowTimeout, config.idleFlowTimeout),
-		store:                   store,
-		denyStore:               denyStore,
-		prevStates:              make(map[connection.ConnectionKey]prevState),
-		exportConns:             make([]*connection.Connection, 0, maxConnsToExport),
-		protocolFilter:          filter.NewProtocolFilter(config.allowProtocolFilter),
-		l7Events:                make(map[connection.ConnectionKey]connections.L7ProtocolFields),
+		ConsumerConfig:      &config,
+		k8sClient:           k8sClient,
+		expirePriorityQueue: priorityqueue.NewExpirePriorityQueue(config.activeFlowTimeout, config.idleFlowTimeout),
+		store:               store,
+		denyStore:           denyStore,
+		prevStates:          make(map[connection.ConnectionKey]prevState),
+		exportConns:         make([]*connection.Connection, 0, maxConnsToExport),
+		protocolFilter:      filter.NewProtocolFilter(config.allowProtocolFilter),
+		l7Events:            make(map[connection.ConnectionKey]connections.L7ProtocolFields),
 	}
 
 	return c
@@ -262,18 +260,15 @@ func (c *Consumer) handleUpdatedL7Events(conns []*connection.Connection, l7Event
 
 func (c *Consumer) sendFlowRecords() (time.Duration, error) {
 	currTime := time.Now()
-	var expireTime1, expireTime2 time.Duration
+	var nextExpireTime time.Duration
 	// We export records from denyConnStore first, then conntrackConnStore. We enforce the ordering to handle a
 	// special case: for an inter-node connection with egress drop network policy, both conntrackConnStore and
 	// denyConnStore from the same Node will send out records to Flow Aggregator. If the record from conntrackConnStore
 	// arrives FA first, FA will not be able to capture the deny network policy metadata, and it will keep waiting
 	// for a record from destination Node to finish flow correlation until timeout. Later on we probably should
 	// consider doing a record deduplication between conntrackConnStore and denyConnStore before exporting records.
-	// c.exportConns, expireTime1 = c.denyStore.GetExpiredConns(c.exportConns, currTime, maxConnsToExport)
-	c.exportConns, expireTime1 = c.getExpiredDenyConns(c.exportConns, currTime, maxConnsToExport)
-	c.exportConns, expireTime2 = c.getExpiredCTConns(c.exportConns, currTime, maxConnsToExport)
+	c.exportConns, nextExpireTime = c.getExpiredConns(c.exportConns, currTime, maxConnsToExport)
 	// Select the shorter time out among two connection stores to do the next round of export.
-	nextExpireTime := getMinTime(expireTime1, expireTime2)
 	for i := range c.exportConns {
 		conn := c.exportConns[i]
 		c.fillL7Info(conn)
@@ -292,47 +287,6 @@ func (c *Consumer) sendFlowRecords() (time.Duration, error) {
 	return nextExpireTime, nil
 }
 
-func (c *Consumer) getExpiredDenyConns(expiredConns []*connection.Connection, currTime time.Time, maxSize int) ([]*connection.Connection, time.Duration) {
-	for i := 0; i < maxSize; i++ {
-		pqItem := c.expireDenyPriorityQueue.GetTopExpiredItem(currTime)
-		if pqItem == nil {
-			break
-		}
-		conn := *pqItem.Conn // Copy the item. We want to ensure we don't modify the existing one.
-
-		key := connection.NewConnectionKey(pqItem.Conn)
-
-		oldState := c.prevStates[key]
-		conn.PreviousStats = oldState.stats
-		conn.PrevTCPState = oldState.tcpState
-
-		conn.IsActive = utils.CheckConntrackConnActive(&conn)
-
-		// TODO Andrew: Fill in L7 info then remove from L7 map.
-
-		isIdle := pqItem.IdleExpireTime.Before(currTime)
-		if isIdle {
-			conn.IsActive = false
-		}
-
-		if !conn.IsActive {
-			c.expireDenyPriorityQueue.RemoveItemFromMap(pqItem.Conn) // TODO Andrew: Why can't we just use `Remove`?
-		} else {
-			// For active connections, we update their "prev" stats fields,
-			// reset active expire time and push back into the PQ.
-			c.prevStates[key] = prevState{
-				stats:    conn.OriginalStats,
-				tcpState: conn.TCPState,
-			}
-			c.expireDenyPriorityQueue.ResetActiveExpireTimeAndPush(pqItem, currTime)
-		}
-
-		expiredConns = append(expiredConns, &conn)
-	}
-
-	return expiredConns, c.expireDenyPriorityQueue.GetExpiryFromExpirePriorityQueue()
-}
-
 func (c *Consumer) fillL7Info(conn *connection.Connection) {
 	connKey := connection.NewConnectionKey(conn)
 	l7Event, ok := c.l7Events[connKey]
@@ -348,7 +302,7 @@ func (c *Consumer) fillL7Info(conn *connection.Connection) {
 	conn.AppProtocolName = "http"
 }
 
-func (c *Consumer) getExpiredCTConns(expiredConns []*connection.Connection, currTime time.Time, maxSize int) ([]*connection.Connection, time.Duration) {
+func (c *Consumer) getExpiredConns(expiredConns []*connection.Connection, currTime time.Time, maxSize int) ([]*connection.Connection, time.Duration) {
 	for i := 0; i < maxSize; i++ {
 		pqItem := c.expirePriorityQueue.GetTopExpiredItem(currTime)
 		if pqItem == nil {
@@ -363,8 +317,6 @@ func (c *Consumer) getExpiredCTConns(expiredConns []*connection.Connection, curr
 		conn.PrevTCPState = oldState.tcpState
 
 		conn.IsActive = utils.CheckConntrackConnActive(&conn)
-
-		// TODO Andrew: Fill in L7 info then remove from L7 map.
 
 		isIdle := pqItem.IdleExpireTime.Before(currTime)
 		if isIdle {
@@ -391,8 +343,7 @@ func (c *Consumer) getExpiredCTConns(expiredConns []*connection.Connection, curr
 
 func (c *Consumer) handleUpdatedConns(conns []*connection.Connection) {
 	for _, conn := range conns {
-		filter := c.protocolFilter
-		if !filter.Allow(conn.FlowKey.Protocol) {
+		if !c.protocolFilter.Allow(conn.FlowKey.Protocol) {
 			continue
 		}
 

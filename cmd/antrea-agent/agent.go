@@ -738,7 +738,7 @@ func run(o *Options) error {
 		if err != nil {
 			return fmt.Errorf("error when creating IPFIX flow exporter: %v", err)
 		}
-		networkPolicyController.SetDenyConnStore(flowExporter.GetDenyConnStore())
+		networkPolicyController.SetDenyConnStore(flowExporter.GetDenyStore())
 	}
 
 	log.StartLogFileNumberMonitor(stopCh)

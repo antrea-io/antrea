@@ -95,6 +95,8 @@ type Connection struct {
 	// Stats
 	OriginalStats Stats
 	PreviousStats Stats
+
+	IsDenyNetworkPolicy bool
 }
 
 type Stats struct {

@@ -66,6 +66,7 @@ func (ds *DenyStore) updateConnection(in *connection.Connection) {
 		conn.StopTime = in.StopTime
 		conn.LastUpdateTime = in.LastUpdateTime
 	} else {
+		conn = in
 		ds.entries[connKey] = in
 	}
 
