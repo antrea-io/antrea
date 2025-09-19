@@ -61,7 +61,7 @@ func TestMulticast(t *testing.T) {
 
 func runMulticastTestCases(t *testing.T, data *TestData, testNamespace string) {
 	var err error
-	transportInterface, err := data.GetTransportInterface()
+	transportInterface, err := data.GetTransportInterfaceName()
 	if err != nil {
 		t.Fatalf("Error getting transport interfaces: %v", err)
 	}
