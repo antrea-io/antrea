@@ -348,6 +348,17 @@ func (c *Consumer) handleUpdatedConns(conns []*connection.Connection) {
 		}
 
 		key := connection.NewConnectionKey(conn)
+		existingItem, ok := c.expirePriorityQueue.KeyToItem[key]
+		if ok {
+			if existingItem.Conn.IsDenyNetworkPolicy && !conn.IsDenyNetworkPolicy {
+				// Drop flows that are denied
+				continue
+			}
+			if conn.IsDenyNetworkPolicy && !existingItem.Conn.IsDenyNetworkPolicy {
+				c.expirePriorityQueue.RemoveItemFromMap(conn)
+				delete(c.prevStates, key)
+			}
+		}
 		oldState, ok := c.prevStates[key]
 		// Check if there is any activity on this conn.
 		// If there is no activity since the last time we sent it then no point in

@@ -123,7 +123,9 @@ func (f *ConntrackFetcher) PollAndStore(store CTStore) error {
 
 		f.serviceInfoAug.Augment(conn)
 		f.networkPolicyAug.Augment(conn)
-		f.egressInfoAug.Augment(conn) // Double check this. The previous implementation only update this on export.
+		// Double check this. The previous implementation only update this on export.
+		// TODO Andrew: I suppose this is because egress rules MAY be added later??
+		f.egressInfoAug.Augment(conn)
 
 		batch = append(batch, conn)
 	}
