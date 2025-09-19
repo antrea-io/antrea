@@ -107,6 +107,7 @@ type FlowExporter struct {
 	rmConsumerCh    chan string
 
 	store     connections.CTStore
+	denyStore connections.CTStore
 	ctFetcher *connections.ConntrackFetcher
 }
 
@@ -144,6 +145,7 @@ func NewFlowExporterWithInformer(podStore objectstore.PodStore, proxier proxy.Pr
 	ctFetcher := connections.NewConntrackFetcher(connTrackDumper, v4Enabled, v6Enabled, npQuerier, podStore, proxier, eventMapGetter, egressQuerier, nodeRouteController, trafficEncapMode.IsNetworkPolicyOnly(), o)
 
 	ctStore := connections.NewConnStore(o.StaleConnectionTimeout)
+	denyStore := connections.NewDenyStore(o.StaleConnectionTimeout)
 
 	nodeName, err := env.GetNodeName()
 	if err != nil {
@@ -195,6 +197,7 @@ func NewFlowExporterWithInformer(podStore objectstore.PodStore, proxier proxy.Pr
 		targetInformer:         targetInformer,
 		fetLister:              targetInformer.Lister(),
 		store:                  ctStore,
+		denyStore:              denyStore,
 		ctFetcher:              ctFetcher,
 		queue: workqueue.NewTypedRateLimitingQueueWithConfig(
 			workqueue.NewTypedItemExponentialFailureRateLimiter[string](minRetryDelay, maxRetryDelay),
@@ -226,6 +229,10 @@ func (exp *FlowExporter) GetDenyConnStore() *connections.DenyConnectionStore {
 	return exp.denyConnStore
 }
 
+func (exp *FlowExporter) GetDenyStore() connections.CTStore {
+	return exp.denyStore
+}
+
 func (exp *FlowExporter) Run(stopCh <-chan struct{}) {
 	// Start L7 connection flow socket
 	if features.DefaultFeatureGate.Enabled(features.L7FlowExporter) {
@@ -249,6 +256,7 @@ func (exp *FlowExporter) Run(stopCh <-chan struct{}) {
 	}
 	klog.V(5).Info("DEBUG A3: FlowExporterTarget informer cache synced")
 
+	go exp.denyStore.Run(stopCh)
 	go exp.store.Run(stopCh)
 
 	go exp.ctFetcher.Run(stopCh, exp.store)
@@ -521,7 +529,7 @@ func (fe *FlowExporter) createConsumerFromFlowExporterTarget(target *api.FlowExp
 		consumerConfig.transportProtocol = target.Spec.IPFixConfig.Transport
 	}
 
-	return CreateConsumer(fe.k8sClient, fe.store, fe.denyConnStore, consumerConfig)
+	return CreateConsumer(fe.k8sClient, fe.store, fe.denyStore, consumerConfig)
 }
 
 func (fe *FlowExporter) onNewTarget(obj any) {
