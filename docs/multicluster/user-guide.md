@@ -543,10 +543,12 @@ Multi-cluster Controller in a member cluster needs to export the cluster's
 Service CIDR to other member clusters. when the member cluster is running a K8s
 version earlier than v.1.33.0, Multi-cluster Controller will try to discover
 the cluster's Service CIDR automatically; while you can also manually specify
-the `serviceCIDR` option in ConfigMap `antrea-mc-controller-config`. For
-clusters with K8s v1.33.0 or later, the `serviceCIDR` option is currently
-required and must be explicitly specified, until support for Service CIDR
-auto-discovery with newer K8s versions is added.
+the `serviceCIDR` option in ConfigMap `antrea-mc-controller-config`. Before
+Antrea 2.5.0, for clusters with K8s v1.33.0 or later, the `serviceCIDR` option
+is required and must be explicitly specified. Since Antrea v2.5.0, Multi-cluster
+Controller will discover the cluster's Service CIDR based on the default `kubernetes`
+`ServiceCIDR` CR, you can skip specifying `serviceCIDR` if the default one meets your
+requirements.
 
 ## Multi-cluster Pod-to-Pod Connectivity
 
