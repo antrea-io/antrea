@@ -76,7 +76,7 @@ func NewConntrackConnectionStore(
 
 // Run enables the periodical polling of conntrack connections at a given flowPollInterval.
 func (cs *ConntrackConnectionStore) Run(stopCh <-chan struct{}) {
-	klog.Infof("Starting conntrack polling")
+	klog.Info("Starting conntrack polling")
 
 	pollTicker := time.NewTicker(cs.pollInterval)
 	defer pollTicker.Stop()
@@ -84,13 +84,12 @@ func (cs *ConntrackConnectionStore) Run(stopCh <-chan struct{}) {
 	for {
 		select {
 		case <-stopCh:
-			break
+			return
 		case <-pollTicker.C:
-			_, err := cs.Poll()
-			if err != nil {
+			if _, err := cs.Poll(); err != nil {
 				// Not failing here as errors can be transient and could be resolved in future poll cycles.
 				// TODO: Come up with a backoff/retry mechanism by increasing poll interval and adding retry timeout
-				klog.Errorf("Error during conntrack poll cycle: %v", err)
+				klog.ErrorS(err, "Error during conntrack poll cycle")
 			}
 		}
 	}
@@ -101,7 +100,14 @@ func (cs *ConntrackConnectionStore) Run(stopCh <-chan struct{}) {
 // then number of IPv6 connections).
 // TODO: As optimization, only poll invalid/closed connections during every poll, and poll the established connections right before the export.
 func (cs *ConntrackConnectionStore) Poll() ([]int, error) {
-	klog.V(2).Infof("Polling conntrack")
+	klog.V(2).Info("Polling conntrack and updating connection store")
+	startTime := time.Now()
+	defer func() {
+		duration := time.Since(startTime)
+		metrics.ConntrackPollCycleDuration.Observe(duration.Seconds())
+		klog.V(2).InfoS("Polled conntrack and updated connection store", "duration", duration)
+	}()
+
 	// DeepCopy the L7EventMap before polling the conntrack table to match corresponding L4 connection with L7 events
 	// and avoid missing the L7 events for corresponding L4 connection
 	var l7EventMap map[connection.ConnectionKey]L7ProtocolFields
