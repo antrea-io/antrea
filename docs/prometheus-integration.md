@@ -148,6 +148,9 @@ the Agent.
 - **antrea_agent_conntrack_max_connection_count:** Size of the conntrack
 table. This metric gets updated at an interval specified by flowPollInterval,
 a configuration parameter for the Agent.
+- **antrea_agent_conntrack_poll_cycle_duration_seconds:** Duration of
+conntrack poll cycles, which includes reading all connections from conntrack
+and processing them.
 - **antrea_agent_conntrack_total_connection_count:** Number of connections
 in the conntrack table. This metric gets updated at an interval specified
 by flowPollInterval, a configuration parameter for the Agent.
