@@ -2751,31 +2751,72 @@ func (data *TestData) GetMulticastInterfaces(antreaNamespace string) ([]string, 
 	return agentConf.Multicast.MulticastInterfaces, nil
 }
 
-func (data *TestData) GetTransportInterface() (string, error) {
+// GetTransportInterfaceName returns the transport interface name for cluster Nodes, assuming all Nodes have the same one.
+func (data *TestData) GetTransportInterfaceName() (string, error) {
 	// It assumes all Nodes have the same transport interface name.
-	nodeName := nodeName(0)
-	nodeIP := nodeIP(0)
+	name, _, _, err := data.GetTransportInterfaceForNode(0)
+	return name, err
+}
+
+func (data *TestData) GetTransportInterfaceForNode(nodeIdx int) (string, *net.IPNet, *net.IPNet, error) {
+	nodeName := nodeName(nodeIdx)
 	antreaPod, err := data.getAntreaPodOnNode(nodeName)
 	if err != nil {
-		return "", fmt.Errorf("failed to get Antrea Pod on Node %s: %v", nodeName, err)
+		return "", nil, nil, fmt.Errorf("failed to get Antrea Pod on Node %s: %v", nodeName, err)
 	}
 	cmd := []string{"ip", "-br", "addr", "show"}
 	stdout, stderr, err := data.RunCommandFromPod(antreaNamespace, antreaPod, agentContainerName, cmd)
 	if stdout == "" || stderr != "" || err != nil {
-		return "", fmt.Errorf("failed to show ip address, stdout: %s, stderr: %s, err: %v", stdout, stderr, err)
+		return "", nil, nil, fmt.Errorf("failed to show ip address, stdout: %s, stderr: %s, err: %v", stdout, stderr, err)
 	}
 	// Example stdout:
 	// eth0@if461       UP             172.18.0.2/16 fc00:f853:ccd:e793::2/64 fe80::42:acff:fe12:2/64
 	// eno1             UP             10.176.3.138/22 fe80::e643:4bff:fe43:a30e/64
 	lines := strings.Split(strings.TrimSpace(stdout), "\n")
-	for _, line := range lines {
-		if strings.Contains(line, nodeIP+"/") {
-			fields := strings.Fields(line)
-			name, _, _ := strings.Cut(fields[0], "@")
-			return name, nil
+
+	// findInterfaceForIP finds the interface name and IPNet for a given node IP.
+	findInterfaceForIP := func(nodeIP string) (string, *net.IPNet, error) {
+		if nodeIP == "" {
+			return "", nil, nil // no IP set, not an error
 		}
+		for _, line := range lines {
+			if !strings.Contains(line, nodeIP+"/") {
+				continue
+			}
+			fields := strings.Fields(line)
+
+			// Extract interface name.
+			iface, _, _ := strings.Cut(fields[0], "@")
+
+			// Find matching CIDR.
+			for _, field := range fields[2:] {
+				if strings.HasPrefix(field, nodeIP+"/") {
+					_, ipNet, err := net.ParseCIDR(field)
+					if err != nil {
+						return "", nil, fmt.Errorf("failed to parse CIDR %s: %w", field, err)
+					}
+					return iface, ipNet, nil
+				}
+			}
+		}
+		return "", nil, fmt.Errorf("no interface was assigned with Node IP %s", nodeIP)
 	}
-	return "", fmt.Errorf("no interface was assigned with Node IP %s", nodeIP)
+
+	iface, nodeIPv4CIDR, err := findInterfaceForIP(nodeIPv4(nodeIdx))
+	if err != nil {
+		return "", nil, nil, err
+	}
+	iface6, nodeIPv6CIDR, err := findInterfaceForIP(nodeIPv6(nodeIdx))
+	if err != nil {
+		return "", nil, nil, err
+	}
+	if iface != "" && iface6 != "" && iface != iface6 {
+		return "", nil, nil, fmt.Errorf("failed precondition: transport interface should be the same regardless of IP family")
+	}
+	if iface == "" {
+		iface = iface6
+	}
+	return iface, nodeIPv4CIDR, nodeIPv6CIDR, nil
 }
 
 func (data *TestData) GetPodInterfaceMTU(namespace string, podName string, containerName string) (int, error) {
