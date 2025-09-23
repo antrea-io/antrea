@@ -52,6 +52,16 @@
 
     {
       matchManagers: ["gomod"],
+      matchPackageNames: ["go.uber.org/mock"],
+      assignees: ["antoninbas", "luolanzone"],
+      prBodyNotes: [
+        ":warning: The mockgen version in the [codegen image](https://github.com/antrea-io/antrea/blob/main/build/images/codegen/Dockerfile) should also be updated so that both versions stay synchronized. Either add a commit to this PR or open a replacement PR."
+      ],
+      matchBaseBranches: ["main"],
+    },
+
+    {
+      matchManagers: ["gomod"],
       matchPackagePrefixes: ["golang.org/x/"],
       groupName: "golang.org/x",
       groupSlug: "golang.org/x",
