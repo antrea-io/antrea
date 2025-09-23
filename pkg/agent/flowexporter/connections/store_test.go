@@ -115,7 +115,7 @@ func TestConnStore_updateConnections(t *testing.T) {
 			}
 			incomingConns = append(incomingConns, newConns...)
 
-			cs := &connStore{
+			cs := &store{
 				subs:    make(map[*subscriber]struct{}),
 				entries: existingConns,
 			}
@@ -125,7 +125,7 @@ func TestConnStore_updateConnections(t *testing.T) {
 			}
 
 			now := time.Now()
-			cs.updateConnections(incomingConns)
+			cs.updateConnections(incomingConns, l7Events)
 
 			for _, want := range expectedEntries {
 				want.LastUpdateTime = now
@@ -154,7 +154,7 @@ func TestConnStore_updateConnections(t *testing.T) {
 					assert.Len(t, msg.Conns, tt.expectedUpdates)
 					assert.False(t, msg.Deleted)
 					if len(l7Events) > 0 {
-						assert.Equal(t, msg.L7Events, l7Events)
+						assert.Equal(t, l7Events, msg.L7Events)
 					}
 					// TODO: Check the actual returned item.
 				}
@@ -163,7 +163,7 @@ func TestConnStore_updateConnections(t *testing.T) {
 	}
 }
 
-func TestConnStore_removeStaleConnections(t *testing.T) {
+func TestStore_removeStaleConnections(t *testing.T) {
 	conn1 := connection.Connection{
 		FlowKey: tuple1,
 		OriginalStats: connection.Stats{
@@ -223,7 +223,7 @@ func TestConnStore_removeStaleConnections(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			cs := &connStore{
+			cs := &store{
 				subs:    make(map[*subscriber]struct{}),
 				entries: make(map[connection.ConnectionKey]*connection.Connection, 1000),
 			}
@@ -234,8 +234,8 @@ func TestConnStore_removeStaleConnections(t *testing.T) {
 			for _, entry := range tt.existingEntries {
 				cs.entries[entry.FlowKey] = &entry
 				heap.Push(&cs.gc, &gcItem{
-					conn:     &entry,
-					expiryMs: now.UnixNano() + entry.LastUsedTime.Load(),
+					conn:       &entry,
+					expiryNano: now.UnixNano() + entry.LastUsedTime.Load(),
 				})
 			}
 			cs.removeStaleConnections()

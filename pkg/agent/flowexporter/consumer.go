@@ -50,8 +50,8 @@ type Consumer struct {
 	*ConsumerConfig
 
 	k8sClient kubernetes.Interface
-	store     connections.CTStore
-	denyStore connections.CTStore
+	store     connections.Store
+	denyStore connections.Store
 
 	expirePriorityQueue *priorityqueue.ExpirePriorityQueue
 
@@ -65,7 +65,7 @@ type Consumer struct {
 	exportConns    []*connection.Connection
 }
 
-func CreateConsumer(k8sClient kubernetes.Interface, store connections.CTStore, denyStore connections.CTStore, config ConsumerConfig) *Consumer {
+func CreateConsumer(k8sClient kubernetes.Interface, store connections.Store, denyStore connections.Store, config ConsumerConfig) *Consumer {
 	c := &Consumer{
 		ConsumerConfig:      &config,
 		k8sClient:           k8sClient,
@@ -202,17 +202,14 @@ func (c *Consumer) Run(stopCh <-chan struct{}) {
 			if msg.Deleted {
 				c.handleDeletedConns(msg.Conns)
 			} else {
-				if len(msg.L7Events) > 0 {
-					c.handleUpdatedL7Events(msg.Conns, msg.L7Events)
-				} else {
-					c.handleUpdatedConns(msg.Conns)
-				}
+				maps.Copy(c.l7Events, msg.L7Events)
+				c.handleUpdatedConns(msg.Conns, msg.L7Events)
 			}
 		case msg := <-denyFlowSub.C():
 			if msg.Deleted {
 				c.handleDeletedConns(msg.Conns)
 			} else {
-				c.handleUpdatedConns(msg.Conns)
+				c.handleUpdatedConns(msg.Conns, nil)
 			}
 		case <-exportTicker.C:
 			if !c.connected {
@@ -255,7 +252,6 @@ func (c *Consumer) handleUpdatedL7Events(conns []*connection.Connection, l7Event
 		}
 	}
 
-	maps.Copy(c.l7Events, l7Events)
 }
 
 func (c *Consumer) sendFlowRecords() (time.Duration, error) {
@@ -341,7 +337,7 @@ func (c *Consumer) getExpiredConns(expiredConns []*connection.Connection, currTi
 	return expiredConns, c.expirePriorityQueue.GetExpiryFromExpirePriorityQueue()
 }
 
-func (c *Consumer) handleUpdatedConns(conns []*connection.Connection) {
+func (c *Consumer) handleUpdatedConns(conns []*connection.Connection, l7Events map[connection.ConnectionKey]connections.L7ProtocolFields) {
 	for _, conn := range conns {
 		if !c.protocolFilter.Allow(conn.FlowKey.Protocol) {
 			continue
@@ -355,15 +351,18 @@ func (c *Consumer) handleUpdatedConns(conns []*connection.Connection) {
 				continue
 			}
 			if conn.IsDenyNetworkPolicy && !existingItem.Conn.IsDenyNetworkPolicy {
+				// Could be replaced with `Remove`, but we'll abuse the fact that `WriteItemToQueue`
+				// will do that for us.
 				c.expirePriorityQueue.RemoveItemFromMap(conn)
 				delete(c.prevStates, key)
 			}
 		}
+		_, isL7Conn := l7Events[key]
 		oldState, ok := c.prevStates[key]
 		// Check if there is any activity on this conn.
 		// If there is no activity since the last time we sent it then no point in
 		// updating it's spot in the queue.
-		if ok && !((conn.OriginalStats.Packets > oldState.stats.Packets) ||
+		if !isL7Conn && ok && !((conn.OriginalStats.Packets > oldState.stats.Packets) ||
 			(conn.OriginalStats.ReversePackets > oldState.stats.ReversePackets) ||
 			(conn.TCPState != oldState.tcpState)) {
 			continue

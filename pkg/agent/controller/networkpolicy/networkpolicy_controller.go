@@ -153,7 +153,7 @@ type Controller struct {
 	fullSyncGroup         sync.WaitGroup
 	ifaceStore            interfacestore.InterfaceStore
 	// denyConnStore is for storing deny connections for flow exporter.
-	denyConnStore  connections.CTStore
+	denyConnStore  connections.Store
 	gwPort         uint32
 	tunPort        uint32
 	nodeConfig     *config.NodeConfig
@@ -608,7 +608,7 @@ func (c *Controller) GetControllerConnectionStatus() bool {
 	return c.addressGroupWatcher.isConnected() && c.appliedToGroupWatcher.isConnected() && c.networkPolicyWatcher.isConnected()
 }
 
-func (c *Controller) SetDenyConnStore(denyConnStore connections.CTStore) {
+func (c *Controller) SetDenyConnStore(denyConnStore connections.Store) {
 	c.denyConnStore = denyConnStore
 }
 

@@ -71,7 +71,7 @@ func NewConntrackFetcher(
 	}
 }
 
-func (f *ConntrackFetcher) Run(stopCh <-chan struct{}, store CTStore) {
+func (f *ConntrackFetcher) Run(stopCh <-chan struct{}, store Store) {
 	pollTicker := time.NewTicker(f.pollInterval)
 	defer pollTicker.Stop()
 
@@ -90,7 +90,7 @@ func (f *ConntrackFetcher) Run(stopCh <-chan struct{}, store CTStore) {
 	}
 }
 
-func (f *ConntrackFetcher) PollAndStore(store CTStore) error {
+func (f *ConntrackFetcher) PollAndStore(store Store) error {
 	var l7EventMap map[connection.ConnectionKey]L7ProtocolFields
 	if f.l7EventMapGetter != nil {
 		l7EventMap = f.l7EventMapGetter.ConsumeL7EventMap()

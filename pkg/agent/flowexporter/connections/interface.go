@@ -45,7 +45,7 @@ type Augmenter interface {
 	// Augment(conn *connection.Connection, opts ...AugmentOpt) *connection.Connection
 }
 
-type CTStore interface {
+type Store interface {
 	Run(stopCh <-chan struct{})
 	SubmitConnections(batch []*connection.Connection, l7EventMap map[connection.ConnectionKey]L7ProtocolFields)
 

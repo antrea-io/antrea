@@ -101,7 +101,7 @@ ok  	antrea.io/antrea/pkg/agent/flowexporter/connections	13.111s
 */
 func BenchmarkStore(b *testing.B) {
 	disableLogToStderr()
-	store := NewConnStore(1 * time.Hour)
+	store := NewStore(1 * time.Hour)
 	stopCh := make(chan struct{})
 	go store.Run(stopCh)
 	defer close(stopCh)
@@ -118,7 +118,7 @@ func BenchmarkStore(b *testing.B) {
 	b.Logf("\nSummary:\nNumber of initial connections: %d\nNumber of new connections/poll: %d\nNumber of deleted connections/poll: %d\n", testNumOfConns, testNumOfNewConns, testNumOfDeletedConns)
 }
 
-func setupFetcher(b *testing.B) (*ConntrackFetcher, CTStore, *connectionstest.MockConnTrackDumper) {
+func setupFetcher(b *testing.B) (*ConntrackFetcher, Store, *connectionstest.MockConnTrackDumper) {
 	ctrl := gomock.NewController(b)
 	defer ctrl.Finish()
 	mockPodStore := objectstoretest.NewMockPodStore(ctrl)
@@ -158,7 +158,7 @@ func setupFetcher(b *testing.B) (*ConntrackFetcher, CTStore, *connectionstest.Mo
 
 	egressQuerier := queriertest.NewMockEgressQuerier(ctrl)
 
-	return NewConntrackFetcher(mockConnDumper, true, false, npQuerier, mockPodStore, nil, l7Listener, egressQuerier, nil, false, testFlowExporterOptions), NewConnStore(10 * time.Hour), mockConnDumper
+	return NewConntrackFetcher(mockConnDumper, true, false, npQuerier, mockPodStore, nil, l7Listener, egressQuerier, nil, false, testFlowExporterOptions), NewStore(10 * time.Hour), mockConnDumper
 }
 
 func generateConns() []*connection.Connection {

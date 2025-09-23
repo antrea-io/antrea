@@ -106,8 +106,8 @@ type FlowExporter struct {
 	addConsumerCh   chan *api.FlowExporterTarget
 	rmConsumerCh    chan string
 
-	store     connections.CTStore
-	denyStore connections.CTStore
+	store     connections.Store
+	denyStore connections.Store
 	ctFetcher *connections.ConntrackFetcher
 }
 
@@ -144,8 +144,8 @@ func NewFlowExporterWithInformer(podStore objectstore.PodStore, proxier proxy.Pr
 	}
 	ctFetcher := connections.NewConntrackFetcher(connTrackDumper, v4Enabled, v6Enabled, npQuerier, podStore, proxier, eventMapGetter, egressQuerier, nodeRouteController, trafficEncapMode.IsNetworkPolicyOnly(), o)
 
-	ctStore := connections.NewConnStore(o.StaleConnectionTimeout)
-	denyStore := connections.NewDenyStore(o.StaleConnectionTimeout)
+	ctStore := connections.NewStore(o.StaleConnectionTimeout)
+	denyStore := ctStore
 
 	nodeName, err := env.GetNodeName()
 	if err != nil {
@@ -229,7 +229,7 @@ func (exp *FlowExporter) GetDenyConnStore() *connections.DenyConnectionStore {
 	return exp.denyConnStore
 }
 
-func (exp *FlowExporter) GetDenyStore() connections.CTStore {
+func (exp *FlowExporter) GetDenyStore() connections.Store {
 	return exp.denyStore
 }
 

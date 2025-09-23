@@ -7,7 +7,7 @@ import (
 	"antrea.io/antrea/pkg/agent/flowexporter/connection"
 )
 
-var _ CTStore = (*DenyStore)(nil)
+var _ Store = (*DenyStore)(nil)
 
 type DenyStore struct {
 	updateCh chan submitMsg // Used to receive new connections
@@ -21,7 +21,7 @@ type DenyStore struct {
 	staleConnectionTimeout time.Duration
 }
 
-func NewDenyStore(staleConnectionTimeout time.Duration) CTStore {
+func NewDenyStore(staleConnectionTimeout time.Duration) Store {
 	return &DenyStore{
 		updateCh:               make(chan submitMsg),
 		addSubCh:               make(chan *subscriber),
