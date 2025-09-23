@@ -160,35 +160,49 @@ func (cs *connectionStore) addNetworkPolicyMetadata(conn *connection.Connection)
 		ingressOfID := binary.BigEndian.Uint32(conn.Labels[12:16])
 		egressOfID := binary.BigEndian.Uint32(conn.Labels[8:12])
 		if ingressOfID != 0 {
-			policy := cs.networkPolicyQuerier.GetNetworkPolicyByRuleFlowID(ingressOfID)
 			rule := cs.networkPolicyQuerier.GetRuleByFlowID(ingressOfID)
-			if policy == nil || rule == nil {
-				// This should not happen because the rule flow ID to rule mapping is
-				// preserved for max(5s, flowPollInterval) even after the rule deletion.
-				klog.InfoS("Cannot find NetworkPolicy or rule", "ingressOfID", ingressOfID)
+			if rule == nil {
+				// This should not happen because the rule flow ID to rule mapping
+				// is meant to be preserved for long enough (based on the poll
+				// interval), even after the rule deletion.
+				klog.InfoS("Cannot find ingress NetworkPolicy rule", "flowID", ingressOfID)
+			} else if rule.PolicyRef == nil {
+				// This should never be possible.
+				klog.ErrorS(nil, "Found ingress NetworkPolicy rule with nil PolicyRef", "flowID", ingressOfID)
 			} else {
+				policy := rule.PolicyRef
 				conn.IngressNetworkPolicyName = policy.Name
 				conn.IngressNetworkPolicyNamespace = policy.Namespace
 				conn.IngressNetworkPolicyUID = string(policy.UID)
 				conn.IngressNetworkPolicyType = utils.PolicyTypeToUint8(policy.Type)
 				conn.IngressNetworkPolicyRuleName = rule.Name
 				conn.IngressNetworkPolicyRuleAction = registry.NetworkPolicyRuleActionAllow
+				if klog.V(4).Enabled() {
+					klog.InfoS("Found ingress NetworkPolicy rule", "flowID", ingressOfID, "policy", klog.KRef(policy.Namespace, policy.Name), "ruleName", rule.Name)
+				}
 			}
 		}
 		if egressOfID != 0 {
-			policy := cs.networkPolicyQuerier.GetNetworkPolicyByRuleFlowID(egressOfID)
 			rule := cs.networkPolicyQuerier.GetRuleByFlowID(egressOfID)
-			if policy == nil || rule == nil {
-				// This should not happen because the rule flow ID to rule mapping is
-				// preserved for max(5s, flowPollInterval) even after the rule deletion.
-				klog.InfoS("Cannot find NetworkPolicy or rule", "egressOfID", egressOfID)
+			if rule == nil {
+				// This should not happen because the rule flow ID to rule mapping
+				// is meant to be preserved for long enough (based on the poll
+				// interval), even after the rule deletion.
+				klog.InfoS("Cannot find egress NetworkPolicy rule", "flowID", egressOfID)
+			} else if rule.PolicyRef == nil {
+				// This should never be possible.
+				klog.ErrorS(nil, "Found egress NetworkPolicy rule with nil PolicyRef", "flowID", egressOfID)
 			} else {
+				policy := rule.PolicyRef
 				conn.EgressNetworkPolicyName = policy.Name
 				conn.EgressNetworkPolicyNamespace = policy.Namespace
 				conn.EgressNetworkPolicyUID = string(policy.UID)
 				conn.EgressNetworkPolicyType = utils.PolicyTypeToUint8(policy.Type)
 				conn.EgressNetworkPolicyRuleName = rule.Name
 				conn.EgressNetworkPolicyRuleAction = registry.NetworkPolicyRuleActionAllow
+				if klog.V(4).Enabled() {
+					klog.InfoS("Found egress NetworkPolicy rule", "flowID", egressOfID, "policy", klog.KRef(policy.Namespace, policy.Name), "ruleName", rule.Name)
+				}
 			}
 		}
 	}

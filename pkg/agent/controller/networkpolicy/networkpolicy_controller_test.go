@@ -97,7 +97,7 @@ func newTestController() (*Controller, *fake.Clientset, *mockReconciler) {
 		true,
 		false,
 		nil,
-		testAsyncDeleteInterval,
+		MinAllocatorAsyncDeleteInterval,
 		"8.8.8.8:53",
 		config.K8sNode,
 		true,
