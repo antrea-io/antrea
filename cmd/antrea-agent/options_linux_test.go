@@ -135,6 +135,7 @@ func TestValidateK8sNodeOptions(t *testing.T) {
 		clusterPort           int
 		wireGuardPort         int
 		tunnelPort            int32
+		trafficEncapMode      string
 		dnsServerOverride     string
 		kubeAPIServerOverride string
 		expectedErr           string
@@ -147,6 +148,16 @@ func TestValidateK8sNodeOptions(t *testing.T) {
 			dnsServerOverride:     "localhost:53",
 			kubeAPIServerOverride: "localhost:443",
 			expectedErr:           "",
+		},
+		{
+			name:                  "invalid encap mode with WireGuard",
+			clusterPort:           10351,
+			wireGuardPort:         51821,
+			tunnelPort:            10000,
+			dnsServerOverride:     "localhost:53",
+			kubeAPIServerOverride: "localhost:443",
+			trafficEncapMode:      "hybrid",
+			expectedErr:           "WireGuard is not applicable to the hybrid mode",
 		},
 		{
 			name:                  "invalid wireGuardPort",
@@ -216,7 +227,10 @@ func TestValidateK8sNodeOptions(t *testing.T) {
 				KubeAPIServerOverride: tt.kubeAPIServerOverride,
 				ClusterMembershipPort: tt.clusterPort,
 			}
-
+			config.TrafficEncapMode = "encap"
+			if tt.trafficEncapMode != "" {
+				config.TrafficEncapMode = tt.trafficEncapMode
+			}
 			o := &Options{config: config, enableAntreaProxy: true}
 			err := o.validateK8sNodeOptions()
 			if tt.expectedErr == "" {
