@@ -276,10 +276,7 @@ func run(o *Options) error {
 	// exits, we will force exit.
 	stopCh := signals.RegisterSignalHandlers()
 	// Generate a context for functions which require one (instead of stopCh).
-	// We cancel the context when the function returns, which in the normal case will be when
-	// stopCh is closed.
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := wait.ContextForChannel(stopCh)
 
 	if o.nodeType == config.K8sNode {
 		// Must start after registering all event handlers.
@@ -328,9 +325,8 @@ func run(o *Options) error {
 		l7NetworkPolicyEnabled,
 		l7FlowExporterEnabled,
 		o.config.DisableTXChecksumOffload)
-	err = agentInitializer.Initialize()
-	if err != nil {
-		return fmt.Errorf("error initializing agent: %v", err)
+	if err := agentInitializer.Initialize(ctx); err != nil {
+		return fmt.Errorf("error initializing agent: %w", err)
 	}
 	nodeConfig := agentInitializer.GetNodeConfig()
 

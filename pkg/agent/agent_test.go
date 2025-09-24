@@ -176,7 +176,6 @@ func TestInitK8sNodeLocalConfig(t *testing.T) {
 	}
 	podCIDRStr := "172.16.10.0/24"
 	transportCIDRs := []string{"172.16.100.7/24", "2002:1a23:fb46::11:3/32"}
-	_, podCIDR, _ := net.ParseCIDR(podCIDRStr)
 	transportIfaceMAC, _ := net.ParseMAC("00:0c:29:f5:e2:ce")
 	type testTransInterface struct {
 		iface   *net.Interface
@@ -373,13 +372,25 @@ func TestInitK8sNodeLocalConfig(t *testing.T) {
 			},
 			trafficEncapMode: config.TrafficEncapModeEncap,
 			tunnelType:       ovsconfig.GeneveTunnel,
-			expectedErr:      "failed to get Node with name node1 from K8s: connection error",
+			expectedErr:      "failed to get Node with name \"node1\" from K8s: connection error",
 		},
 		{
 			name:             "empty node podCIDR",
 			trafficEncapMode: config.TrafficEncapModeEncap,
 			tunnelType:       ovsconfig.GeneveTunnel,
-			expectedErr:      "Spec.PodCIDR is empty for Node node1",
+			expectedErr:      "Spec.PodCIDR is empty for Node \"node1\"",
+		},
+		{
+			name:                      "networkPolicyOnly mode",
+			trafficEncapMode:          config.TrafficEncapModeNetworkPolicyOnly,
+			transportIfCIDRs:          transportCIDRs,
+			transportInterface:        testTransportIface,
+			expectedNodeLocalIfaceMTU: 1500,
+			expectedMTU:               1500,
+			expectedNodeAnnotation: map[string]string{
+				types.NodeMACAddressAnnotationKey:       transportIfaceMAC.String(),
+				types.NodeTransportAddressAnnotationKey: transportAddresses,
+			},
 		},
 	}
 	for _, tt := range tests {
@@ -406,6 +417,7 @@ func TestInitK8sNodeLocalConfig(t *testing.T) {
 			}
 
 			ifaceStore := interfacestore.NewInterfaceStore()
+			_, podCIDR, _ := net.ParseCIDR(tt.podCIDR)
 			expectedNodeConfig := config.NodeConfig{
 				Name:                       nodeName,
 				Type:                       config.K8sNode,
@@ -447,7 +459,7 @@ func TestInitK8sNodeLocalConfig(t *testing.T) {
 			mockGetIPNetDeviceFromIP(t, nodeIPNet, ipDevice)
 			mockGetNodeTimeout(t, 100*time.Millisecond)
 
-			err := initializer.initK8sNodeLocalConfig(nodeName)
+			err := initializer.initK8sNodeLocalConfig(context.Background(), nodeName)
 			if tt.expectedErr == "" {
 				require.NoError(t, err)
 				assert.Equal(t, expectedNodeConfig, *initializer.nodeConfig)
