@@ -147,12 +147,11 @@ func (c *Controller) storeDenyConnectionParsed(pktIn *ofctrl.PacketIn, packet *b
 	denyConn.OriginalStats.Packets = 1
 	// The size of this conn is the length of the packet
 	denyConn.OriginalStats.Bytes = uint64(packet.IPLength)
-	denyConn.IsDenyNetworkPolicy = true
 	// denyConn.StopTime = time.Now()
 
 	// No need to obtain connection info again if it already exists in denyConnectionStore.
-	if exist := c.denyConnStore.HasConn(&denyConn); exist {
-		c.denyConnStore.SubmitConnections([]*connection.Connection{&denyConn}, nil)
+	if exist := c.denyConnStore.HasDenyConn(connection.NewConnectionKey(&denyConn)); exist {
+		c.denyConnStore.SubmitDenyConn(&denyConn)
 		return nil
 	}
 
@@ -211,7 +210,7 @@ func (c *Controller) storeDenyConnectionParsed(pktIn *ofctrl.PacketIn, packet *b
 			denyConn.EgressNetworkPolicyRuleAction = flowexporterutils.RuleActionToUint8(disposition)
 		}
 	}
-	c.denyConnStore.SubmitConnections([]*connection.Connection{&denyConn}, nil)
+	c.denyConnStore.SubmitDenyConn(&denyConn)
 	return nil
 }
 

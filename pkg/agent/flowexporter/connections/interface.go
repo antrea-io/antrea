@@ -42,15 +42,21 @@ type DenyConnectionStoreUpdater interface {
 type AugmentOpt func(*connection.Connection)
 type Augmenter interface {
 	Augment(conn *connection.Connection, opts ...AugmentOpt)
-	// Augment(conn *connection.Connection, opts ...AugmentOpt) *connection.Connection
+}
+
+type DenyStore interface {
+	HasDenyConn(key connection.ConnectionKey) bool
+	SubmitDenyConn(conn *connection.Connection)
+}
+
+type StoreSubscriber interface {
+	Subscribe() *subscription
+	Unsubscribe(sub *subscription)
 }
 
 type Store interface {
+	DenyStore
+	StoreSubscriber
+
 	Run(stopCh <-chan struct{})
-	SubmitConnections(batch []*connection.Connection, l7EventMap map[connection.ConnectionKey]L7ProtocolFields)
-
-	HasConn(*connection.Connection) bool // TODO Andrew: Use connectionKey instead of connection.
-
-	Subscribe() *subscriber
-	Unsubscribe(*subscriber)
 }

@@ -106,9 +106,7 @@ type FlowExporter struct {
 	addConsumerCh   chan *api.FlowExporterTarget
 	rmConsumerCh    chan string
 
-	store     connections.Store
-	denyStore connections.Store
-	ctFetcher *connections.ConntrackFetcher
+	store connections.Store
 }
 
 func NewFlowExporter(podStore objectstore.PodStore, proxier proxy.Proxier, k8sClient kubernetes.Interface, nodeRouteController *noderoute.Controller,
@@ -142,10 +140,8 @@ func NewFlowExporterWithInformer(podStore objectstore.PodStore, proxier proxy.Pr
 	if nodeRouteController == nil {
 		klog.InfoS("NodeRouteController is nil, will not be able to determine flow type for connections")
 	}
-	ctFetcher := connections.NewConntrackFetcher(connTrackDumper, v4Enabled, v6Enabled, npQuerier, podStore, proxier, eventMapGetter, egressQuerier, nodeRouteController, trafficEncapMode.IsNetworkPolicyOnly(), o)
-
-	ctStore := connections.NewStore(o.StaleConnectionTimeout)
-	denyStore := ctStore
+	ctFetcher := connections.NewConntrackFetcher(connTrackDumper, v4Enabled, v6Enabled, eventMapGetter, o)
+	ctStore := connections.NewConnStore(o.StaleConnectionTimeout, ctFetcher, podStore, proxier, npQuerier, egressQuerier, nodeRouteController, trafficEncapMode.IsNetworkPolicyOnly())
 
 	nodeName, err := env.GetNodeName()
 	if err != nil {
@@ -197,8 +193,6 @@ func NewFlowExporterWithInformer(podStore objectstore.PodStore, proxier proxy.Pr
 		targetInformer:         targetInformer,
 		fetLister:              targetInformer.Lister(),
 		store:                  ctStore,
-		denyStore:              denyStore,
-		ctFetcher:              ctFetcher,
 		queue: workqueue.NewTypedRateLimitingQueueWithConfig(
 			workqueue.NewTypedItemExponentialFailureRateLimiter[string](minRetryDelay, maxRetryDelay),
 			workqueue.TypedRateLimitingQueueConfig[string]{
@@ -229,8 +223,8 @@ func (exp *FlowExporter) GetDenyConnStore() *connections.DenyConnectionStore {
 	return exp.denyConnStore
 }
 
-func (exp *FlowExporter) GetDenyStore() connections.Store {
-	return exp.denyStore
+func (exp *FlowExporter) GetDenyStore() connections.DenyStore {
+	return exp.store
 }
 
 func (exp *FlowExporter) Run(stopCh <-chan struct{}) {
@@ -256,10 +250,7 @@ func (exp *FlowExporter) Run(stopCh <-chan struct{}) {
 	}
 	klog.V(5).Info("DEBUG A3: FlowExporterTarget informer cache synced")
 
-	go exp.denyStore.Run(stopCh)
 	go exp.store.Run(stopCh)
-
-	go exp.ctFetcher.Run(stopCh, exp.store)
 
 	for range defaultWorkers {
 		go wait.Until(exp.worker, time.Second, stopCh)
@@ -529,7 +520,7 @@ func (fe *FlowExporter) createConsumerFromFlowExporterTarget(target *api.FlowExp
 		consumerConfig.transportProtocol = target.Spec.IPFixConfig.Transport
 	}
 
-	return CreateConsumer(fe.k8sClient, fe.store, fe.denyStore, consumerConfig)
+	return CreateConsumer(fe.k8sClient, fe.store, consumerConfig)
 }
 
 func (fe *FlowExporter) onNewTarget(obj any) {

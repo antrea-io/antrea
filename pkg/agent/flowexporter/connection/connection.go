@@ -98,7 +98,7 @@ type Connection struct {
 	OriginalStats Stats
 	PreviousStats Stats
 
-	IsDenyNetworkPolicy bool
+	IsDenyFlow bool
 }
 
 type Stats struct {

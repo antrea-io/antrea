@@ -153,7 +153,7 @@ type Controller struct {
 	fullSyncGroup         sync.WaitGroup
 	ifaceStore            interfacestore.InterfaceStore
 	// denyConnStore is for storing deny connections for flow exporter.
-	denyConnStore  connections.Store
+	denyConnStore  connections.DenyStore
 	gwPort         uint32
 	tunPort        uint32
 	nodeConfig     *config.NodeConfig

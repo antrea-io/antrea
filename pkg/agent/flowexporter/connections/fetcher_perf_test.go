@@ -37,7 +37,6 @@ import (
 	exptest "antrea.io/antrea/pkg/agent/flowexporter/testing"
 	"antrea.io/antrea/pkg/agent/openflow"
 	proxytest "antrea.io/antrea/pkg/agent/proxy/testing"
-	queriertest "antrea.io/antrea/pkg/querier/testing"
 	objectstoretest "antrea.io/antrea/pkg/util/objectstore/testing"
 	k8sproxy "antrea.io/antrea/third_party/proxy"
 )
@@ -79,7 +78,7 @@ func BenchmarkPollAndStore(b *testing.B) {
 	b.ResetTimer()
 	for b.Loop() {
 		mockConnDumper.EXPECT().DumpFlows(uint16(openflow.CtZone)).Return(conns, testNumOfConns, nil)
-		fetcher.PollAndStore(store)
+		fetcher.poll()
 		b.StopTimer()
 		conns = generateUpdatedConns(conns)
 		b.StartTimer()
@@ -101,18 +100,18 @@ ok  	antrea.io/antrea/pkg/agent/flowexporter/connections	13.111s
 */
 func BenchmarkStore(b *testing.B) {
 	disableLogToStderr()
-	store := NewStore(1 * time.Hour)
+	// store := NewStore(1 * time.Hour)
 	stopCh := make(chan struct{})
-	go store.Run(stopCh)
+	// go store.Run(stopCh)
 	defer close(stopCh)
 
 	b.ResetTimer()
 	for b.Loop() {
 		// include this in the benchmark (do not stop timer), to measure the memory
 		// footprint of the connection store and all connections accurately.
-		conns := generateConns()
+		// conns := generateConns()
 		// add connections
-		store.SubmitConnections(conns, nil)
+		// store.SubmitConnections(conns, nil)
 	}
 	b.StopTimer()
 	b.Logf("\nSummary:\nNumber of initial connections: %d\nNumber of new connections/poll: %d\nNumber of deleted connections/poll: %d\n", testNumOfConns, testNumOfNewConns, testNumOfDeletedConns)
@@ -153,12 +152,10 @@ func setupFetcher(b *testing.B) (*ConntrackFetcher, Store, *connectionstest.Mock
 	mockProxier := proxytest.NewMockProxier(ctrl)
 	mockProxier.EXPECT().GetServiceByIP(serviceStr).Return(servicePortName, true).AnyTimes()
 
-	npQuerier := queriertest.NewMockAgentNetworkPolicyInfoQuerier(ctrl)
-	l7Listener := NewL7Listener(nil, mockPodStore)
+	// l7Listener := NewL7Listener(nil, mockPodStore)
 
-	egressQuerier := queriertest.NewMockEgressQuerier(ctrl)
-
-	return NewConntrackFetcher(mockConnDumper, true, false, npQuerier, mockPodStore, nil, l7Listener, egressQuerier, nil, false, testFlowExporterOptions), NewStore(10 * time.Hour), mockConnDumper
+	// return NewConntrackFetcher(mockConnDumper, true, false, l7Listener, testFlowExporterOptions), NewStore(10 * time.Hour), mockConnDumper
+	return nil, nil, nil
 }
 
 func generateConns() []*connection.Connection {

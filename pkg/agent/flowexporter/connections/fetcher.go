@@ -3,14 +3,15 @@ package connections
 import (
 	"time"
 
-	"antrea.io/antrea/pkg/agent/controller/noderoute"
 	"antrea.io/antrea/pkg/agent/flowexporter/connection"
 	"antrea.io/antrea/pkg/agent/flowexporter/options"
-	"antrea.io/antrea/pkg/agent/proxy"
-	"antrea.io/antrea/pkg/querier"
-	"antrea.io/antrea/pkg/util/objectstore"
 	"k8s.io/klog/v2"
 )
+
+type CTResult struct {
+	conns    []*connection.Connection
+	l7Events map[connection.ConnectionKey]L7ProtocolFields
+}
 
 type ConntrackFetcher struct {
 	connDumper       ConnTrackDumper
@@ -23,35 +24,16 @@ type ConntrackFetcher struct {
 	serviceInfoAug   Augmenter
 	networkPolicyAug Augmenter
 	egressInfoAug    Augmenter
+
+	outCh chan CTResult
 }
 
 func NewConntrackFetcher(
 	connTrackDumper ConnTrackDumper,
 	v4Enabled bool,
 	v6Enabled bool,
-	npQuerier querier.AgentNetworkPolicyInfoQuerier,
-	podStore objectstore.PodStore,
-	proxier proxy.Proxier,
 	l7EventMapGetterFunc L7EventMapGetter,
-	egressQuerier querier.EgressQuerier,
-	nodeRouteController *noderoute.Controller,
-	isNetworkPolicyOnly bool,
 	o *options.FlowExporterOptions) *ConntrackFetcher {
-
-	podInfoAug := &podInfoAugmenter{
-		podStore: podStore,
-	}
-	serviceInfoAug := &serviceInfoAugmenter{
-		antreaProxier: proxier,
-	}
-	networkPolicyAug := &networkPolicyMetadataAugmenter{
-		networkPolicyQuerier: npQuerier,
-	}
-	egressInfoAug := &egressInfoAugmenter{
-		nodeRouteController: nodeRouteController,
-		egressQuerier:       egressQuerier,
-		isNetworkPolicyOnly: isNetworkPolicyOnly,
-	}
 
 	return &ConntrackFetcher{
 		zones: ZoneGetter{
@@ -63,15 +45,18 @@ func NewConntrackFetcher(
 
 		connDumper:       connTrackDumper,
 		l7EventMapGetter: l7EventMapGetterFunc,
-
-		podInfoAug:       podInfoAug,
-		serviceInfoAug:   serviceInfoAug,
-		networkPolicyAug: networkPolicyAug,
-		egressInfoAug:    egressInfoAug,
 	}
 }
 
-func (f *ConntrackFetcher) Run(stopCh <-chan struct{}, store Store) {
+func (f *ConntrackFetcher) Start(stopCh <-chan struct{}) <-chan CTResult {
+	if f.outCh == nil {
+		f.outCh = make(chan CTResult, 10)
+		go f.run(stopCh)
+	}
+	return f.outCh
+}
+
+func (f *ConntrackFetcher) run(stopCh <-chan struct{}) {
 	pollTicker := time.NewTicker(f.pollInterval)
 	defer pollTicker.Stop()
 
@@ -80,7 +65,7 @@ func (f *ConntrackFetcher) Run(stopCh <-chan struct{}, store Store) {
 		case <-stopCh:
 			return
 		case <-pollTicker.C:
-			err := f.PollAndStore(store)
+			err := f.poll()
 			if err != nil {
 				// Not failing here as errors can be transient and could be resolved in future poll cycles.
 				// TODO: Come up with a backoff/retry mechanism by increasing poll interval and adding retry timeout
@@ -90,7 +75,7 @@ func (f *ConntrackFetcher) Run(stopCh <-chan struct{}, store Store) {
 	}
 }
 
-func (f *ConntrackFetcher) PollAndStore(store Store) error {
+func (f *ConntrackFetcher) poll() error {
 	var l7EventMap map[connection.ConnectionKey]L7ProtocolFields
 	if f.l7EventMapGetter != nil {
 		l7EventMap = f.l7EventMapGetter.ConsumeL7EventMap()
@@ -105,31 +90,15 @@ func (f *ConntrackFetcher) PollAndStore(store Store) error {
 		filteredConnsList = append(filteredConnsList, filteredConnsListPerZone...)
 	}
 
-	// Augment the connections
-	batch := make([]*connection.Connection, 0, len(filteredConnsList))
-	for _, conn := range filteredConnsList {
-		if store.HasConn(conn) {
-			batch = append(batch, conn)
-			continue
-		}
-
-		f.podInfoAug.Augment(conn)
-
-		if conn.SourcePodName == "" && conn.DestinationPodName == "" {
-			// We don't add connections to connection map if we can't find the pod information for both srcPod and dstPod
-			klog.V(5).InfoS("Skip this connection as we cannot map any of the connection IPs to a local Pod", "srcIP", conn.FlowKey.SourceAddress.String(), "dstIP", conn.FlowKey.DestinationAddress.String())
-			continue
-		}
-
-		f.serviceInfoAug.Augment(conn)
-		f.networkPolicyAug.Augment(conn)
-		// Double check this. The previous implementation only update this on export.
-		// TODO Andrew: I suppose this is because egress rules MAY be added later??
-		f.egressInfoAug.Augment(conn)
-
-		batch = append(batch, conn)
-	}
-
-	store.SubmitConnections(batch, l7EventMap)
+	f.send(filteredConnsList, l7EventMap)
 	return nil
+}
+
+func (f *ConntrackFetcher) send(conns []*connection.Connection, l7EventMap map[connection.ConnectionKey]L7ProtocolFields) {
+	if f.outCh != nil {
+		f.outCh <- CTResult{
+			conns:    conns,
+			l7Events: l7EventMap,
+		}
+	}
 }

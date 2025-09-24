@@ -16,6 +16,42 @@ import (
 	"k8s.io/klog/v2"
 )
 
+func DenyConnAugments(podStore objectstore.PodStore, proxier proxy.Proxier) []Augmenter {
+	podInfoAug := &podInfoAugmenter{
+		podStore: podStore,
+	}
+	serviceInfoAug := &serviceInfoAugmenter{
+		antreaProxier: proxier,
+	}
+
+	return []Augmenter{podInfoAug, serviceInfoAug}
+}
+
+func CTConnAugments(
+	podStore objectstore.PodStore,
+	proxier proxy.Proxier,
+	npQuerier querier.AgentNetworkPolicyInfoQuerier,
+	egressQuerier querier.EgressQuerier,
+	nodeRouteController *noderoute.Controller,
+	isNetworkPolicyOnly bool,
+) []Augmenter {
+	podInfoAug := &podInfoAugmenter{
+		podStore: podStore,
+	}
+	serviceInfoAug := &serviceInfoAugmenter{
+		antreaProxier: proxier,
+	}
+	networkPolicyAug := &networkPolicyMetadataAugmenter{
+		networkPolicyQuerier: npQuerier,
+	}
+	egressInfoAug := &egressInfoAugmenter{
+		egressQuerier:       egressQuerier,
+		nodeRouteController: nodeRouteController,
+		isNetworkPolicyOnly: isNetworkPolicyOnly,
+	}
+	return []Augmenter{podInfoAug, serviceInfoAug, networkPolicyAug, egressInfoAug}
+}
+
 type podInfoAugmenter struct {
 	podStore objectstore.PodStore
 }

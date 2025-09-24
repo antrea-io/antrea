@@ -50,8 +50,7 @@ type Consumer struct {
 	*ConsumerConfig
 
 	k8sClient kubernetes.Interface
-	store     connections.Store
-	denyStore connections.Store
+	store     connections.StoreSubscriber
 
 	expirePriorityQueue *priorityqueue.ExpirePriorityQueue
 
@@ -65,13 +64,12 @@ type Consumer struct {
 	exportConns    []*connection.Connection
 }
 
-func CreateConsumer(k8sClient kubernetes.Interface, store connections.Store, denyStore connections.Store, config ConsumerConfig) *Consumer {
+func CreateConsumer(k8sClient kubernetes.Interface, store connections.StoreSubscriber, config ConsumerConfig) *Consumer {
 	c := &Consumer{
 		ConsumerConfig:      &config,
 		k8sClient:           k8sClient,
 		expirePriorityQueue: priorityqueue.NewExpirePriorityQueue(config.activeFlowTimeout, config.idleFlowTimeout),
 		store:               store,
-		denyStore:           denyStore,
 		prevStates:          make(map[connection.ConnectionKey]prevState),
 		exportConns:         make([]*connection.Connection, 0, maxConnsToExport),
 		protocolFilter:      filter.NewProtocolFilter(config.allowProtocolFilter),
@@ -185,11 +183,8 @@ func (fe *Consumer) createExporter() exporter.Interface {
 }
 
 func (c *Consumer) Run(stopCh <-chan struct{}) {
-	ctFlowSub := c.store.Subscribe()
-	defer c.store.Unsubscribe(ctFlowSub)
-
-	denyFlowSub := c.denyStore.Subscribe()
-	defer c.denyStore.Unsubscribe(denyFlowSub)
+	sub := c.store.Subscribe()
+	defer c.store.Unsubscribe(sub)
 
 	exportTicker := time.NewTicker(c.activeFlowTimeout)
 	defer exportTicker.Stop()
@@ -198,18 +193,12 @@ func (c *Consumer) Run(stopCh <-chan struct{}) {
 		select {
 		case <-stopCh:
 			return
-		case msg := <-ctFlowSub.C():
+		case msg := <-sub.C():
 			if msg.Deleted {
 				c.handleDeletedConns(msg.Conns)
 			} else {
 				maps.Copy(c.l7Events, msg.L7Events)
 				c.handleUpdatedConns(msg.Conns, msg.L7Events)
-			}
-		case msg := <-denyFlowSub.C():
-			if msg.Deleted {
-				c.handleDeletedConns(msg.Conns)
-			} else {
-				c.handleUpdatedConns(msg.Conns, nil)
 			}
 		case <-exportTicker.C:
 			if !c.connected {
@@ -242,8 +231,10 @@ func (c *Consumer) Run(stopCh <-chan struct{}) {
 }
 
 func (c *Consumer) handleUpdatedL7Events(conns []*connection.Connection, l7Events map[connection.ConnectionKey]connections.L7ProtocolFields) {
+
 	for _, conn := range conns {
 		connKey := connection.NewConnectionKey(conn)
+
 		// In case L7 event is received after the last planned export of the TCP connection, add
 		// the event back to the queue to be exported in next export cycle
 		_, ok := c.expirePriorityQueue.KeyToItem[connKey]
@@ -346,11 +337,11 @@ func (c *Consumer) handleUpdatedConns(conns []*connection.Connection, l7Events m
 		key := connection.NewConnectionKey(conn)
 		existingItem, ok := c.expirePriorityQueue.KeyToItem[key]
 		if ok {
-			if existingItem.Conn.IsDenyNetworkPolicy && !conn.IsDenyNetworkPolicy {
+			if existingItem.Conn.IsDenyFlow && !conn.IsDenyFlow {
 				// Drop flows that are denied
 				continue
 			}
-			if conn.IsDenyNetworkPolicy && !existingItem.Conn.IsDenyNetworkPolicy {
+			if conn.IsDenyFlow && !existingItem.Conn.IsDenyFlow {
 				// Could be replaced with `Remove`, but we'll abuse the fact that `WriteItemToQueue`
 				// will do that for us.
 				c.expirePriorityQueue.RemoveItemFromMap(conn)
