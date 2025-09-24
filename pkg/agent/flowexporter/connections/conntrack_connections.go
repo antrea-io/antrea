@@ -330,6 +330,14 @@ func (cs *ConntrackConnectionStore) deleteConnWithoutLock(connKey connection.Con
 	return nil
 }
 
+func (cs *ConntrackConnectionStore) DeleteAllConnections() int {
+	cs.AcquireConnStoreLock()
+	defer cs.ReleaseConnStoreLock()
+	num := len(cs.connections)
+	clear(cs.connections)
+	return num
+}
+
 func (cs *ConntrackConnectionStore) GetPriorityQueue() *priorityqueue.ExpirePriorityQueue {
 	return cs.connectionStore.expirePriorityQueue
 }

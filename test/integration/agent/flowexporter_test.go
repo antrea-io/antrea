@@ -19,24 +19,34 @@ package agent
 
 import (
 	"fmt"
+	"net"
 	"net/netip"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/ti-mo/conntrack"
 	mock "go.uber.org/mock/gomock"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 	types "k8s.io/apimachinery/pkg/types"
+	coreinformers "k8s.io/client-go/informers/core/v1"
+	"k8s.io/client-go/kubernetes/fake"
+	"k8s.io/client-go/tools/cache"
 
+	"antrea.io/antrea/pkg/agent/config"
 	"antrea.io/antrea/pkg/agent/flowexporter/connection"
 	"antrea.io/antrea/pkg/agent/flowexporter/connections"
 	connectionstest "antrea.io/antrea/pkg/agent/flowexporter/connections/testing"
+	"antrea.io/antrea/pkg/agent/flowexporter/filter"
 	"antrea.io/antrea/pkg/agent/flowexporter/options"
 	"antrea.io/antrea/pkg/agent/openflow"
 	"antrea.io/antrea/pkg/agent/util/sysctl"
 	queriertest "antrea.io/antrea/pkg/querier/testing"
+	"antrea.io/antrea/pkg/util/k8s"
+	"antrea.io/antrea/pkg/util/objectstore"
 	objectstoretest "antrea.io/antrea/pkg/util/objectstore/testing"
 )
 
@@ -176,4 +186,184 @@ func TestSetupConnTrackParameters(t *testing.T) {
 	conntrackTimestamping, err := sysctl.GetSysctlNet("netfilter/nf_conntrack_timestamp")
 	require.NoError(t, err, "Cannot read nf_conntrack_timestamp")
 	assert.Equal(t, 1, conntrackTimestamping, "net.netfilter.nf_conntrack_timestamp value should be 1")
+}
+
+// BenchmarkConntrackConnectionStorePoll is a benchmark for the poll function of the
+// ConntrackConnectionStore, which periodically dumps all connections from conntrack and updates its
+// internal store. This benchmark only evaluates connection "add", and not connection "update",
+// which is achieved by clearing the connection store after each benchmark loop iteration. Note that
+// connection "add" is more expensive that connection "update". However, it seems that dumping the
+// connections from conntrack is what is using the most CPU time.
+func BenchmarkConntrackConnectionStorePoll(b *testing.B) {
+	// 32K is not such a high number (we could go to 128K or even more), but it seems reasonable
+	// for the purpose of the benchmark. The polling operation should be O(N) for time, and the
+	// connection store should use O(N) memory, where N is the number of connections in
+	// conntrack, so we can extrapolate easily.
+	const numConnections = 32768
+	const ctZone = openflow.CtZone
+	// Set the ConnSourceCTMarkField to localVal (3) to mark as from local Pods
+	// This ensures the connection passes the policyAllowed check
+	const ctMark = 0x3
+	const baseSrcPort = 20000
+	const baseDstIPOctet = 100
+	const numDstIPs = 100
+	require.Less(b, baseDstIPOctet+numDstIPs-1, 255, "numDstIPs is too large")
+
+	// Create a conntrack connection to manage entries
+	conn, err := conntrack.Dial(nil)
+	require.NoError(b, err, "Failed to create conntrack connection")
+	defer conn.Close()
+
+	// We want to ensure that there are no conntrack entries in the Antrea zone
+	// before we start the benchmark, as that would skew the results.
+	flows, err := conn.Dump(nil)
+	require.NoError(b, err, "Failed to dump conntrack entries")
+	for _, flow := range flows {
+		require.NotEqualValues(b, ctZone, flow.Zone, "Expected no conntrack entries in Antrea zone")
+	}
+
+	// Create conntrack entries spread across multiple destination addresses
+	createdFlows := make([]conntrack.Flow, 0, numConnections)
+	srcAddr := netip.MustParseAddr("10.0.0.2")
+
+	b.Logf("Creating %d conntrack entries across multiple destination addresses...", numConnections)
+	for i := range numConnections {
+		// Calculate destination address: cycle through 10.0.0.100 through 10.0.0.199
+		// For 100 destinations (100-199), we cycle through them first
+		dstOctet := baseDstIPOctet + (i % numDstIPs)
+		dstAddr := netip.MustParseAddr(fmt.Sprintf("10.0.0.%d", dstOctet))
+
+		// Calculate source port: increment after cycling through all destinations
+		srcPort := uint16(baseSrcPort + (i / numDstIPs))
+		if srcPort < baseSrcPort { // Overflow check
+			require.Fail(b, "Too many connections created")
+		}
+
+		// Create TCP connection
+		flow := conntrack.NewFlow(
+			6, // TCP protocol
+			0,
+			srcAddr,
+			dstAddr,
+			srcPort, // varying source port
+			80,      // destination port
+			3600,    // timeout
+			ctMark,  // mark - ConnSourceCTMarkField set to localVal
+		)
+		flow.Zone = ctZone
+
+		err := conn.Create(flow)
+		require.NoError(b, err, "Failed to create conntrack entry %d", i)
+		createdFlows = append(createdFlows, flow)
+	}
+
+	// Cleanup function to delete all created entries
+	cleanup := func() {
+		b.Logf("Cleaning up %d conntrack entries...", len(createdFlows))
+		for i, flow := range createdFlows {
+			if err := conn.Delete(flow); err != nil {
+				b.Logf("Warning: Failed to delete conntrack entry %d: %v", i, err)
+			}
+		}
+	}
+	defer cleanup()
+
+	// Create fake Kubernetes client and PodStore
+	var fakePods []runtime.Object
+
+	// Create source pod
+	srcPod := &v1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace:         "default",
+			Name:              "src-pod",
+			UID:               types.UID("src-pod-uid"),
+			CreationTimestamp: metav1.Time{Time: time.Now().Add(-time.Hour)},
+		},
+		Status: v1.PodStatus{
+			PodIPs: []v1.PodIP{
+				{IP: "10.0.0.2"},
+			},
+			Phase: v1.PodRunning,
+		},
+	}
+	fakePods = append(fakePods, srcPod)
+
+	// Create destination pods
+	for offset := range numDstIPs {
+		dstOctet := baseDstIPOctet + offset
+		dstIP := fmt.Sprintf("10.0.0.%d", dstOctet)
+		podName := fmt.Sprintf("dst-pod-%d", dstOctet)
+		podUID := fmt.Sprintf("dst-pod-%d-uid", dstOctet)
+
+		dstPod := &v1.Pod{
+			ObjectMeta: metav1.ObjectMeta{
+				Namespace:         "default",
+				Name:              podName,
+				UID:               types.UID(podUID),
+				CreationTimestamp: metav1.Time{Time: time.Now().Add(-time.Hour)},
+			},
+			Status: v1.PodStatus{
+				PodIPs: []v1.PodIP{
+					{IP: dstIP},
+				},
+				Phase: v1.PodRunning,
+			},
+		}
+		fakePods = append(fakePods, dstPod)
+	}
+
+	// Create fake client with all pods provided upfront
+	k8sClient := fake.NewSimpleClientset(fakePods...)
+
+	// Create PodStore with the fake client
+	stopCh := make(chan struct{})
+	defer close(stopCh)
+
+	podInformer := coreinformers.NewPodInformer(k8sClient, metav1.NamespaceAll, 0, cache.Indexers{})
+	podInformer.SetTransform(k8s.NewTrimmer(k8s.TrimPod))
+	podStore := objectstore.NewPodStore(podInformer)
+
+	go podInformer.Run(stopCh)
+	cache.WaitForCacheSync(stopCh, podInformer.HasSynced, podStore.HasSynced)
+
+	// Create a real conntrack dumper that will read from the actual conntrack table
+	nodeConfig := &config.NodeConfig{
+		GatewayConfig: &config.GatewayConfig{
+			IPv4: net.ParseIP("10.0.0.1"),
+		},
+	}
+	serviceCIDRv4 := netip.MustParsePrefix("10.96.0.0/12")
+	connDumper := connections.NewConnTrackSystem(nodeConfig, serviceCIDRv4, netip.Prefix{}, false, filter.NewProtocolFilter(nil))
+
+	ctrl := mock.NewController(b)
+	npQuerier := queriertest.NewMockAgentNetworkPolicyInfoQuerier(ctrl)
+
+	o := &options.FlowExporterOptions{
+		ActiveFlowTimeout:      testActiveFlowTimeout,
+		IdleFlowTimeout:        testIdleFlowTimeout,
+		StaleConnectionTimeout: testStaleConnectionTimeout,
+		PollInterval:           testPollInterval,
+	}
+
+	conntrackConnStore := connections.NewConntrackConnectionStore(
+		connDumper,
+		true,  // v4Enabled
+		false, // v6Enabled
+		npQuerier,
+		podStore,
+		nil,
+		nil,
+		nil,
+		o,
+	)
+
+	for b.Loop() {
+		connsLens, err := conntrackConnStore.Poll()
+		require.NoError(b, err, "Poll() should not return error")
+		require.Len(b, connsLens, 1, "Poll() should return slice of length 1")
+		assert.Equal(b, numConnections, connsLens[0], "Poll() should return %d connections", numConnections)
+		assert.Equal(b, numConnections, conntrackConnStore.NumConnections(), "NumConnections() should return %d connections", numConnections)
+		// Delete all connections, so that we only benchmark the performance of adding new connections.
+		assert.Equal(b, numConnections, conntrackConnStore.DeleteAllConnections(), "DeleteAllConnections() should return %d connections", numConnections)
+	}
 }
