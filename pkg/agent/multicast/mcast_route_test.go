@@ -41,9 +41,8 @@ var (
 )
 
 func TestParseIGMPMsg(t *testing.T) {
-	mRoute := newMockMulticastRouteClient(t)
-	err := mRoute.initialize(t)
-	require.NoError(t, err)
+	mRoute := newTestMulticastRouteClient(t)
+	mRoute.initialize(t)
 
 	for _, m := range []struct {
 		name                  string
@@ -95,9 +94,8 @@ func TestParseIGMPMsg(t *testing.T) {
 }
 
 func TestDeleteInboundMrouteEntryByGroup(t *testing.T) {
-	mRoute := newMockMulticastRouteClient(t)
-	err := mRoute.initialize(t)
-	require.NoError(t, err)
+	mRoute := newTestMulticastRouteClient(t)
+	mRoute.initialize(t)
 
 	for _, m := range []struct {
 		name                string
@@ -132,7 +130,7 @@ func TestDeleteInboundMrouteEntryByGroup(t *testing.T) {
 				mRoute.inboundRouteCache.Add(&m.currRouteEntries[i])
 			}
 			for _, entry := range m.deletedRouteEntries {
-				mockMulticastSocket.EXPECT().DelMrouteEntry(net.ParseIP(entry.src), net.ParseIP(entry.group), entry.vif).Times(1)
+				mRoute.mockMulticastSocket.EXPECT().DelMrouteEntry(net.ParseIP(entry.src), net.ParseIP(entry.group), entry.vif).Times(1)
 			}
 			mRoute.deleteInboundMrouteEntryByGroup(m.group)
 		})
@@ -140,9 +138,8 @@ func TestDeleteInboundMrouteEntryByGroup(t *testing.T) {
 }
 
 func TestUpdateOutboundMrouteStats(t *testing.T) {
-	mRoute := newMockMulticastRouteClient(t)
-	err := mRoute.initialize(t)
-	require.NoError(t, err)
+	mRoute := newTestMulticastRouteClient(t)
+	mRoute.initialize(t)
 	now := time.Now()
 	for _, m := range []struct {
 		isStale     bool
@@ -185,9 +182,9 @@ func TestUpdateOutboundMrouteStats(t *testing.T) {
 			},
 		}
 		mRoute.outboundRouteCache.Add(outboundMrouteEntry)
-		mockMulticastSocket.EXPECT().GetMroutePacketCount(net.ParseIP(m.source), net.ParseIP(m.group)).Times(1).Return(m.currStats, nil)
+		mRoute.mockMulticastSocket.EXPECT().GetMroutePacketCount(net.ParseIP(m.source), net.ParseIP(m.group)).Times(1).Return(m.currStats, nil)
 		if m.isStale {
-			mockMulticastSocket.EXPECT().DelMrouteEntry(net.ParseIP(m.source), net.ParseIP(m.group), uint16(0)).Times(1)
+			mRoute.mockMulticastSocket.EXPECT().DelMrouteEntry(net.ParseIP(m.source), net.ParseIP(m.group), uint16(0)).Times(1)
 		}
 		isStale := m.isStale
 		defer func() {
@@ -199,9 +196,8 @@ func TestUpdateOutboundMrouteStats(t *testing.T) {
 }
 
 func TestUpdateInboundMrouteStats(t *testing.T) {
-	mRoute := newMockMulticastRouteClient(t)
-	err := mRoute.initialize(t)
-	require.NoError(t, err)
+	mRoute := newTestMulticastRouteClient(t)
+	mRoute.initialize(t)
 	now := time.Now()
 	for _, m := range []struct {
 		isStale         bool
@@ -251,9 +247,9 @@ func TestUpdateInboundMrouteStats(t *testing.T) {
 		mRoute.inboundRouteCache.Add(inboundMrouteEntry)
 		_, exist, _ := mRoute.inboundRouteCache.Get(inboundMrouteEntry)
 		require.True(t, exist)
-		mockMulticastSocket.EXPECT().GetMroutePacketCount(net.ParseIP(m.source), net.ParseIP(m.group)).Times(1).Return(m.currPacketCount, nil)
+		mRoute.mockMulticastSocket.EXPECT().GetMroutePacketCount(net.ParseIP(m.source), net.ParseIP(m.group)).Times(1).Return(m.currPacketCount, nil)
 		if m.isStale {
-			mockMulticastSocket.EXPECT().DelMrouteEntry(net.ParseIP(m.source), net.ParseIP(m.group), m.vif).Times(1)
+			mRoute.mockMulticastSocket.EXPECT().DelMrouteEntry(net.ParseIP(m.source), net.ParseIP(m.group), m.vif).Times(1)
 		}
 		isStale := m.isStale
 		defer func() {
@@ -265,9 +261,8 @@ func TestUpdateInboundMrouteStats(t *testing.T) {
 }
 
 func TestProcessIGMPNocacheMsg(t *testing.T) {
-	mRoute := newMockMulticastRouteClient(t)
-	err := mRoute.initialize(t)
-	require.NoError(t, err)
+	mRoute := newTestMulticastRouteClient(t)
+	mRoute.initialize(t)
 	mRoute.multicastInterfaceConfigs = []multicastInterfaceConfig{
 		{Name: "if1", IPv4Addr: addrIf1},
 		{Name: "if2", IPv4Addr: addrIf2},
@@ -349,23 +344,34 @@ func TestProcessIGMPNocacheMsg(t *testing.T) {
 		},
 	} {
 		t.Run(m.name, func(t *testing.T) {
-			mockMulticastSocket.EXPECT().AddMrouteEntry(m.expectedSrc, m.expectedGroup, m.expectedIif, m.expectedOifVIFs).Times(m.expectedNumOfCalls)
+			mRoute.mockMulticastSocket.EXPECT().AddMrouteEntry(m.expectedSrc, m.expectedGroup, m.expectedIif, m.expectedOifVIFs).Times(m.expectedNumOfCalls)
 			mRoute.processIGMPNocacheMsg(m.igmpMsg)
 		})
 	}
 }
 
-func newMockMulticastRouteClient(t *testing.T) *MRouteClient {
-	controller := gomock.NewController(t)
-	mockMulticastSocket = multicasttest.NewMockRouteInterface(controller)
+type testMulticastRouteClient struct {
+	*MRouteClient
+	mockCtrl            *gomock.Controller
+	mockMulticastSocket *multicasttest.MockRouteInterface
+}
+
+func newTestMulticastRouteClient(t *testing.T) *testMulticastRouteClient {
+	ctrl := gomock.NewController(t)
+	mockMulticastSocket := multicasttest.NewMockRouteInterface(ctrl)
 	groupCache := cache.NewIndexer(getGroupEventKey, cache.Indexers{
 		podInterfaceIndex: podInterfaceIndexFunc,
 	})
-	return newRouteClient(nodeConfig, groupCache, mockMulticastSocket, sets.New[string](if1.InterfaceName), false)
+	return &testMulticastRouteClient{
+		MRouteClient:        newRouteClient(nodeConfig, groupCache, mockMulticastSocket, sets.New[string](if1.InterfaceName), false),
+		mockCtrl:            ctrl,
+		mockMulticastSocket: mockMulticastSocket,
+	}
 }
 
-func (c *MRouteClient) initialize(t *testing.T) error {
-	mockMulticastSocket.EXPECT().AllocateVIFs(gomock.Any(), uint16(0)).Times(1).Return([]uint16{0}, nil)
-	mockMulticastSocket.EXPECT().AllocateVIFs(gomock.Any(), uint16(1)).Times(1).Return([]uint16{1, 2}, nil)
-	return c.Initialize()
+func (c *testMulticastRouteClient) initialize(t *testing.T) {
+	c.mockMulticastSocket.EXPECT().AllocateVIFs(gomock.Any(), uint16(0)).Times(1).Return([]uint16{0}, nil)
+	c.mockMulticastSocket.EXPECT().AllocateVIFs(gomock.Any(), uint16(1)).Times(1).Return([]uint16{1, 2}, nil)
+	require.NoError(t, c.Initialize())
+	require.True(t, c.mockCtrl.Satisfied())
 }
