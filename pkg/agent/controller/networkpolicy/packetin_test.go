@@ -184,6 +184,7 @@ func TestStoreDenyConnection(t *testing.T) {
 				IngressNetworkPolicyType:       flowexporterutils.PolicyTypeAntreaClusterNetworkPolicy,
 				IngressNetworkPolicyRuleName:   "my-rule",
 				IngressNetworkPolicyRuleAction: flowexporterutils.NetworkPolicyRuleActionDrop,
+				OriginalStats:                  connection.Stats{Packets: 1},
 			},
 		},
 		{
@@ -198,6 +199,7 @@ func TestStoreDenyConnection(t *testing.T) {
 				EgressNetworkPolicyType:       flowexporterutils.PolicyTypeAntreaClusterNetworkPolicy,
 				EgressNetworkPolicyRuleName:   "my-rule",
 				EgressNetworkPolicyRuleAction: flowexporterutils.NetworkPolicyRuleActionDrop,
+				OriginalStats:                 connection.Stats{Packets: 1},
 			},
 		},
 	}
@@ -221,7 +223,7 @@ func TestStoreDenyConnection(t *testing.T) {
 				SourceIP:      sourceAddr.AsSlice(),
 				DestinationIP: destinationAddr.AsSlice(),
 			}
-			mockStore.EXPECT().HasDenyConn(key).Return(nil, false)
+			mockStore.EXPECT().HasDenyConn(key).Return(false)
 
 			mockStore.EXPECT().SubmitDenyConn(tc.expectedConn)
 			require.NoError(t, controller.storeDenyConnectionParsed(pktIn, packet))
