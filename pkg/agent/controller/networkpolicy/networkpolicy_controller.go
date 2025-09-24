@@ -608,7 +608,7 @@ func (c *Controller) GetControllerConnectionStatus() bool {
 	return c.addressGroupWatcher.isConnected() && c.appliedToGroupWatcher.isConnected() && c.networkPolicyWatcher.isConnected()
 }
 
-func (c *Controller) SetDenyConnStore(denyConnStore connections.Store) {
+func (c *Controller) SetDenyConnStore(denyConnStore connections.DenyStore) {
 	c.denyConnStore = denyConnStore
 }
 
