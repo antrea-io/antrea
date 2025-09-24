@@ -51,7 +51,6 @@ type featurePodConnectivity struct {
 	ipCtZoneTypeRegMarks  map[binding.Protocol]*binding.RegMark
 	enableMulticast       bool
 	proxyAll              bool
-	enableDSR             bool
 	enableTrafficControl  bool
 	enableL7FlowExporter  bool
 
@@ -70,7 +69,6 @@ func newFeaturePodConnectivity(
 	connectUplinkToBridge bool,
 	enableMulticast bool,
 	proxyAll bool,
-	enableDSR bool,
 	enableTrafficControl bool,
 	enableL7FlowExporter bool) *featurePodConnectivity {
 	ctZones := make(map[binding.Protocol]int)
@@ -135,7 +133,6 @@ func newFeaturePodConnectivity(
 		ctZoneSrcField:        getZoneSrcField(connectUplinkToBridge),
 		enableMulticast:       enableMulticast,
 		proxyAll:              proxyAll,
-		enableDSR:             enableDSR,
 		category:              cookie.PodConnectivity,
 	}
 }

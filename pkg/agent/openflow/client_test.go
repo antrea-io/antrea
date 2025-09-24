@@ -683,6 +683,23 @@ func Test_client_InstallNodeFlows(t *testing.T) {
 				"cookie=0x1040000000000, table=EgressMark, priority=210,ip,nw_dst=192.168.77.101 actions=set_field:0x20/0xf0->reg0,goto_table:L2ForwardingCalc",
 			},
 		},
+		{
+			name:             "IPv4 Hybrid DSR",
+			enableIPv4:       true,
+			clientOptions:    []clientOptionsFn{enableDSR},
+			skipWindows:      true,
+			peerConfigs:      map[*net.IPNet]net.IP{peerPodCIDRv4: peerGwIPv4},
+			tunnelPeerIPs:    &utilip.DualStackIPs{IPv4: tunnelPeerIPv4},
+			ipsecTunOFPort:   uint32(100),
+			trafficEncapMode: config.TrafficEncapModeHybrid,
+			expectedFlows: []string{
+				"cookie=0x1010000000000, table=ARPResponder, priority=200,arp,arp_tpa=10.10.1.1,arp_op=1 actions=move:NXM_OF_ETH_SRC[]->NXM_OF_ETH_DST[],set_field:aa:bb:cc:dd:ee:ff->eth_src,set_field:2->arp_op,move:NXM_NX_ARP_SHA[]->NXM_NX_ARP_THA[],set_field:aa:bb:cc:dd:ee:ff->arp_sha,move:NXM_OF_ARP_SPA[]->NXM_OF_ARP_TPA[],set_field:10.10.1.1->arp_spa,IN_PORT",
+				"cookie=0x1010000000000, table=Classifier, priority=200,in_port=100 actions=set_field:0x1/0xf->reg0,set_field:0x200/0x200->reg0,goto_table:UnSNAT",
+				"cookie=0x1010000000000, table=L3Forwarding, priority=200,ip,nw_dst=10.10.1.0/24 actions=set_field:0a:00:00:00:00:01->eth_dst,set_field:0x20/0xf0->reg0,goto_table:L3DecTTL",
+				"cookie=0x1010000000000, table=L3Forwarding, priority=200,ip,reg3=0xa0a0100/0xffffff00,reg4=0x2000000/0x2000000 actions=set_field:0a:00:00:00:00:01->eth_src,set_field:aa:bb:cc:dd:ee:ff->eth_dst,set_field:192.168.77.101->tun_dst,set_field:0x10/0xf0->reg0,goto_table:L3DecTTL",
+				"cookie=0x1040000000000, table=EgressMark, priority=210,ip,nw_dst=192.168.77.101 actions=set_field:0x20/0xf0->reg0,goto_table:L2ForwardingCalc",
+			},
+		},
 	}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -2799,7 +2816,7 @@ func Test_client_ReplayFlows(t *testing.T) {
 		"cookie=0x1010000000000, table=L3Forwarding, priority=200,ip,reg0=0x200/0x200,nw_dst=10.10.0.66 actions=set_field:0a:00:00:00:00:01->eth_src,set_field:00:00:10:10:00:66->eth_dst,goto_table:L3DecTTL",
 	)
 	_, peerPodCIDR, _ := net.ParseCIDR("10.10.1.0/24")
-	addFlowInCache(fc.featurePodConnectivity.nodeCachedFlows, "nodeFlows", fc.featurePodConnectivity.l3FwdFlowsToRemoteViaTun(localGatewayMAC, *peerPodCIDR, tunnelPeerIP))
+	addFlowInCache(fc.featurePodConnectivity.nodeCachedFlows, "nodeFlows", []binding.Flow{fc.featurePodConnectivity.l3FwdFlowsToRemoteViaTun(localGatewayMAC, *peerPodCIDR, tunnelPeerIP)})
 	replayedFlows = append(replayedFlows,
 		"cookie=0x1010000000000, table=L3Forwarding, priority=200,ip,nw_dst=10.10.1.0/24 actions=set_field:0a:00:00:00:00:01->eth_src,set_field:aa:bb:cc:dd:ee:ff->eth_dst,set_field:192.168.78.101->tun_dst,set_field:0x10/0xf0->reg0,goto_table:L3DecTTL",
 	)

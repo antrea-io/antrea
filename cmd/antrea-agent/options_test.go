@@ -125,7 +125,7 @@ func TestOptionsValidateAntreaProxyConfig(t *testing.T) {
 				DefaultLoadBalancerMode: config.LoadBalancerModeDSR.String(),
 			},
 			trafficEncapMode: config.TrafficEncapModeNoEncap,
-			expectedErr:      "LoadBalancerMode DSR requires encap mode",
+			expectedErr:      "LoadBalancerMode DSR requires encap or hybrid mode",
 		},
 		{
 			name:             "invalid LoadBalancerMode",
