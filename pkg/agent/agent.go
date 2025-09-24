@@ -18,6 +18,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net"
 	"os"
@@ -104,7 +105,9 @@ var (
 	defaultFs                       = afero.NewOsFs()
 	clock     clockutils.WithTicker = &clockutils.RealClock{}
 
-	getNodeTimeout = 30 * time.Second
+	// Maximum time to wait when retrieving the Node object from the K8s API and checking the
+	// presence of PodCIDR(s).
+	getNodeTimeout = 60 * time.Second
 )
 
 // Initializer knows how to setup host networking, OpenVSwitch, and Openflow.
@@ -388,9 +391,9 @@ func (i *Initializer) restorePortConfigs() error {
 }
 
 // Initialize sets up agent initial configurations.
-func (i *Initializer) Initialize() error {
+func (i *Initializer) Initialize(ctx context.Context) error {
 	klog.Info("Setting up node network")
-	if err := i.initNodeLocalConfig(); err != nil {
+	if err := i.initNodeLocalConfig(ctx); err != nil {
 		return err
 	}
 
@@ -891,34 +894,68 @@ func (i *Initializer) setTunnelCsum(tunnelPortName string, enable bool) error {
 	return i.ovsBridgeClient.SetInterfaceOptions(tunnelPortName, updatedOptions)
 }
 
-// initK8sNodeLocalConfig retrieves node's subnet CIDR from node.spec.PodCIDR, which is used for IPAM and setup
-// host gateway interface.
-func (i *Initializer) initK8sNodeLocalConfig(nodeName string) error {
+func (i *Initializer) waitForK8sNode(ctx context.Context, nodeName string) (*v1.Node, error) {
+	ctx, cancel := context.WithTimeout(ctx, getNodeTimeout)
+	defer cancel()
 	var node *v1.Node
-	if err := wait.PollUntilContextTimeout(context.TODO(), 5*time.Second, getNodeTimeout, true,
-		func(ctx context.Context) (bool, error) {
-			var err error
-			node, err = i.client.CoreV1().Nodes().Get(context.TODO(), nodeName, metav1.GetOptions{})
-			if err != nil {
-				return false, fmt.Errorf("failed to get Node with name %s from K8s: %w", nodeName, err)
-			}
-
-			// Except in networkPolicyOnly mode, we need a PodCIDR for the Node.
-			if !i.networkConfig.TrafficEncapMode.IsNetworkPolicyOnly() {
-				// Validate that PodCIDR has been configured.
-				if node.Spec.PodCIDRs == nil && node.Spec.PodCIDR == "" {
-					klog.InfoS("Waiting for Node PodCIDR configuration to complete", "nodeName", nodeName)
-					return false, nil
-				}
-			}
-			return true, nil
-		}); err != nil {
+	if err := wait.PollUntilContextCancel(ctx, 5*time.Second, true, func(ctx context.Context) (bool, error) {
+		var err error
+		// Use a 10s timeout instead of relying on the default dial timeout of 30s. This way we can avoid long
+		// TCP retry intervals when using the ClusterIP to access the K8s API and when kube-proxy has not
+		// installed the rules for the kubernetes Service yet.
+		// If we exceed the deadline, we will have the opportunity to retry several times before the deadline
+		// for the parent context is exceeded.
+		// Note that because 10s is greated than the poll interval (5s), the condition function will be called
+		// again immediately.
+		clientCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+		defer cancel()
+		node, err = i.client.CoreV1().Nodes().Get(clientCtx, nodeName, metav1.GetOptions{})
+		if errors.Is(err, context.DeadlineExceeded) {
+			klog.InfoS("Waiting for K8s API to become available")
+			return false, nil
+		}
+		if err != nil {
+			return false, fmt.Errorf("failed to get Node with name %q from K8s: %w", nodeName, err)
+		}
+		return true, nil
+	}); err != nil {
+		if wait.Interrupted(err) {
+			return nil, fmt.Errorf("K8s API did not become available: %w", err)
+		}
+		return nil, err
+	}
+	if i.networkConfig.TrafficEncapMode.IsNetworkPolicyOnly() {
+		return node, nil
+	}
+	hasPodCIDR := func(node *v1.Node) bool {
+		return len(node.Spec.PodCIDRs) > 0 || len(node.Spec.PodCIDR) > 0
+	}
+	if hasPodCIDR(node) {
+		return node, nil
+	}
+	if err := wait.PollUntilContextCancel(ctx, 5*time.Second, true, func(ctx context.Context) (bool, error) {
+		var err error
+		node, err = i.client.CoreV1().Nodes().Get(ctx, nodeName, metav1.GetOptions{})
+		if err != nil {
+			return false, fmt.Errorf("failed to get Node with name %q from K8s: %w", nodeName, err)
+		}
+		return hasPodCIDR(node), nil
+	}); err != nil {
 		if wait.Interrupted(err) {
 			klog.ErrorS(err, "Spec.PodCIDR is empty for Node. Please make sure --allocate-node-cidrs is enabled "+
 				"for kube-controller-manager and --cluster-cidr specifies a sufficient CIDR range, or nodeIPAM is "+
 				"enabled for antrea-controller", "nodeName", nodeName)
-			return fmt.Errorf("Spec.PodCIDR is empty for Node %s", nodeName)
+			return nil, fmt.Errorf("Spec.PodCIDR is empty for Node %q", nodeName)
 		}
+	}
+	return node, nil
+}
+
+// initK8sNodeLocalConfig retrieves node's subnet CIDR from node.spec.PodCIDR, which is used for IPAM and setup
+// host gateway interface.
+func (i *Initializer) initK8sNodeLocalConfig(ctx context.Context, nodeName string) error {
+	node, err := i.waitForK8sNode(ctx, nodeName)
+	if err != nil {
 		return err
 	}
 
@@ -1264,13 +1301,13 @@ func (i *Initializer) getNodeInterfaceFromIP(nodeIPs *utilip.DualStackIPs) (v4IP
 	return getIPNetDeviceFromIP(nodeIPs, sets.New[string](i.hostGateway))
 }
 
-func (i *Initializer) initNodeLocalConfig() error {
+func (i *Initializer) initNodeLocalConfig(ctx context.Context) error {
 	nodeName, err := env.GetNodeName()
 	if err != nil {
 		return err
 	}
 	if i.nodeType == config.K8sNode {
-		if err := i.initK8sNodeLocalConfig(nodeName); err != nil {
+		if err := i.initK8sNodeLocalConfig(ctx, nodeName); err != nil {
 			return err
 		}
 
