@@ -947,7 +947,7 @@ func TestPreventDefunctRuleReuse(t *testing.T) {
 		if !assert.NoError(t, err) {
 			return
 		}
-		assert.EventuallyWithT(t, func(c *assert.CollectT) {
+		assert.EventuallyWithT(t, func(t *assert.CollectT) {
 			obj, exists, err := testData.svcInformer.GetIndexer().GetByKey(testSvc.Namespace + "/" + testSvc.Name)
 			if !assert.NoError(t, err) || !assert.True(t, exists) {
 				return
