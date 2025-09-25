@@ -87,17 +87,18 @@ func NewConntrackConnectionStore(
 
 // Run enables the periodical polling of conntrack connections at a given flowPollInterval.
 func (cs *ConntrackConnectionStore) Run(stopCh <-chan struct{}) {
-	klog.Info("Starting conntrack polling")
-
 	if cs.networkPolicyWait != nil {
+		klog.Info("Waiting for NetworkPolicies to become ready")
 		if err := cs.networkPolicyWait.WaitUntil(stopCh); err != nil {
 			klog.ErrorS(err, "Error while waiting for NetworkPolicies to become ready")
 			return
 		}
 	} else {
-		klog.InfoS("Skip waiting for NetworkPolicies to become ready")
+		klog.Info("Skip waiting for NetworkPolicies to become ready")
 	}
 	cs.networkPolicyReadyTime = time.Now()
+
+	klog.Info("Starting conntrack polling")
 
 	pollTicker := time.NewTicker(cs.pollInterval)
 	defer pollTicker.Stop()
