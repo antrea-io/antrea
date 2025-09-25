@@ -1411,7 +1411,16 @@ func (n *NetworkPolicyController) getAppliedToWorkloads(g *antreatypes.AppliedTo
 		if found {
 			grp := group.(*antreatypes.Group)
 			pods, ees, err := n.getInternalGroupWorkloads(grp)
-			return pods, ees, nil, err
+			var nodes []*v1.Node
+			if grp.Selector != nil {
+				if grp.Selector.NodeSelector != nil {
+					nodes, err = n.nodeLister.List(grp.Selector.NodeSelector)
+					if err != nil {
+						nodes = nil
+					}
+				}
+			}
+			return pods, ees, nodes, err
 		}
 		// The internal Group doesn't exist yet or has been deleted. The AppliedToGroup selects nothing at the moment.
 		// Once the internalGroup is created, the AppliedToGroup will be resynced.

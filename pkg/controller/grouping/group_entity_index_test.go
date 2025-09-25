@@ -22,6 +22,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/labels"
+	"k8s.io/apimachinery/pkg/util/sets"
 
 	"antrea.io/antrea/pkg/apis/crd/v1alpha2"
 	"antrea.io/antrea/pkg/controller/types"
@@ -35,6 +37,8 @@ const (
 var (
 	// Fake Pods
 	podFoo1                 = newPod("default", "podFoo1", map[string]string{"app": "foo"})
+	podFoo1OnNode           = newPodOnNode("default", "podFoo1", "nodeFoo", map[string]string{"app": "foo"})
+	podFoo2OnNode           = newPodOnNode("default", "podFoo2", "nodeFoo", map[string]string{"app": "foo"})
 	podFoo2                 = newPod("default", "podFoo2", map[string]string{"app": "foo"})
 	podBar1                 = newPod("default", "podBar1", map[string]string{"app": "bar"})
 	podFoo1InOtherNamespace = newPod("other", "podFoo1", map[string]string{"app": "foo"})
@@ -46,6 +50,9 @@ var (
 	// Fake Namespaces
 	nsDefault = newNamespace("default", map[string]string{"company": "default"})
 	nsOther   = newNamespace("other", map[string]string{"company": "other"})
+	// Fake Node
+	nodeFoo         = newNode("nodeFoo", map[string]string{"node": "foo"})
+	nodeFooModified = newNode("nodeFoo", map[string]string{"node": "foo-modified"})
 	// Fake groups
 	groupPodFooType1             = &group{groupType: groupType1, groupName: "groupPodFooType1", groupSelector: types.NewGroupSelector("default", &metav1.LabelSelector{MatchLabels: map[string]string{"app": "foo"}}, nil, nil, nil)}
 	groupPodFooType2             = &group{groupType: groupType2, groupName: "groupPodFooType2", groupSelector: types.NewGroupSelector("default", &metav1.LabelSelector{MatchLabels: map[string]string{"app": "foo"}}, nil, nil, nil)}
@@ -100,6 +107,24 @@ func newPod(namespace, name string, labels map[string]string) *v1.Pod {
 	}
 }
 
+func newPodOnNode(namespace, name, nodeName string, labels map[string]string) *v1.Pod {
+	pod := newPod(namespace, name, labels)
+	pod.Spec = v1.PodSpec{
+		NodeName: nodeName,
+	}
+
+	return pod
+}
+
+func newNode(name string, labels map[string]string) *v1.Node {
+	return &v1.Node{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:   name,
+			Labels: labels,
+		},
+	}
+}
+
 func newExternalEntity(namespace, name string, labels map[string]string) *v1alpha2.ExternalEntity {
 	return &v1alpha2.ExternalEntity{
 		ObjectMeta: metav1.ObjectMeta{
@@ -116,10 +141,19 @@ func TestGroupEntityIndexGetEntities(t *testing.T) {
 		existingPods             []*v1.Pod
 		existingExternalEntities []*v1alpha2.ExternalEntity
 		existingNamespaces       []*v1.Namespace
+		existingNodes            []*v1.Node
 		inputGroupSelector       *types.GroupSelector
 		expectedPods             []*v1.Pod
 		expectedExternalEntities []*v1alpha2.ExternalEntity
 	}{
+		{
+			name:                     "nodeSelector",
+			existingPods:             []*v1.Pod{podFoo1OnNode, podFoo2OnNode, podBar1, podFoo1InOtherNamespace},
+			existingExternalEntities: []*v1alpha2.ExternalEntity{eeFoo1, eeFoo2, eeBar1, eeFoo1InOtherNamespace},
+			existingNodes:            []*v1.Node{nodeFoo},
+			inputGroupSelector:       types.NewGroupSelector("", nil, nil, nil, &metav1.LabelSelector{MatchLabels: map[string]string{"node": "foo"}}),
+			expectedPods:             []*v1.Pod{podFoo1OnNode, podFoo2OnNode},
+		},
 		{
 			name:                     "namespace scoped pod selector",
 			existingPods:             []*v1.Pod{podFoo1, podFoo2, podBar1, podFoo1InOtherNamespace},
@@ -168,6 +202,11 @@ func TestGroupEntityIndexGetEntities(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			index := NewGroupEntityIndex()
 
+			if tt.existingNodes != nil {
+				for _, node := range tt.existingNodes {
+					index.AddNode(node)
+				}
+			}
 			for _, pod := range tt.existingPods {
 				index.AddPod(pod)
 			}
@@ -596,4 +635,257 @@ func TestGroupEntityIndexEventHandlers(t *testing.T) {
 			}, 1*time.Second, 50*time.Millisecond)
 		})
 	}
+}
+
+func TestDeleteGroup(t *testing.T) {
+	t.Run("Group with nodeSelector", func(t *testing.T) {
+		index := NewGroupEntityIndex()
+		index.AddNode(nodeFoo)
+		index.AddPod(podFoo1OnNode)
+		nodeSelectorGroup := types.NewGroupSelector("", nil, nil, nil, &metav1.LabelSelector{MatchLabels: map[string]string{"node": "foo"}})
+		index.AddGroup(groupType1, "group1", nodeSelectorGroup)
+		index.DeleteGroup(groupType1, "group1")
+		assert.Equal(t, 0, len(index.nodeLabelItems["node/node=foo"].selectorItemKeys))
+	})
+}
+
+func TestCreateNodeLabelItems(t *testing.T) {
+	t.Run("nodeLabelItem is added to the Index", func(t *testing.T) {
+		groupEntityIndex := NewGroupEntityIndex()
+		testLabels := labels.Set{"some-node": "red"}
+		labelItemKey := getNodeLabelItemKey(testLabels)
+		testEntityItem := &entityItem{
+			entity: podFoo1,
+		}
+
+		nodeLabelItem := groupEntityIndex.createNodeLabelItem(testEntityItem, testLabels)
+		assert.Equal(t, groupEntityIndex.nodeLabelItems[labelItemKey], nodeLabelItem)
+	})
+	t.Run("when label item exists", func(t *testing.T) {
+		t.Run("nodeLabelItem is not duplicated on the index", func(t *testing.T) {
+			groupEntityIndex := NewGroupEntityIndex()
+			testLabels := labels.Set{"some-node": "red"}
+			testEntityItem := &entityItem{
+				entity: podFoo1,
+			}
+			testEntityItem2 := &entityItem{
+				entity: podFoo2,
+			}
+
+			groupEntityIndex.createNodeLabelItem(testEntityItem, testLabels)
+			groupEntityIndex.createNodeLabelItem(testEntityItem2, testLabels)
+			assert.Equal(t, len(groupEntityIndex.nodeLabelItems), 1)
+		})
+		t.Run("nodeLabelItem is updated with multiple links to pods", func(t *testing.T) {
+			groupEntityIndex := NewGroupEntityIndex()
+			testLabels := labels.Set{"some-node": "red"}
+			testEntityItem := &entityItem{
+				entity: podFoo1,
+			}
+			testEntityItem2 := &entityItem{
+				entity: podFoo2,
+			}
+
+			groupEntityIndex.createNodeLabelItem(testEntityItem, testLabels)
+			updatedNodeLabelItem := groupEntityIndex.createNodeLabelItem(testEntityItem2, testLabels)
+			assert.Equal(t, len(updatedNodeLabelItem.entityItemKeys), 2)
+		})
+	})
+	t.Run("nodeLabelItem links back to pod", func(t *testing.T) {
+		groupEntityIndex := NewGroupEntityIndex()
+		nodeLabels := labels.Set{"node": "foo"}
+		testEntityItem := &entityItem{
+			entity: podFoo1OnNode,
+		}
+		entityItemKey := getEntityItemKey(podEntityType, podFoo1)
+
+		nodeLabelItem := groupEntityIndex.createNodeLabelItem(testEntityItem, nodeLabels)
+		assert.Contains(t, nodeLabelItem.entityItemKeys, entityItemKey)
+	})
+	t.Run("nodeLabelItem links to matching selector item", func(t *testing.T) {
+		groupEntityIndex := NewGroupEntityIndex()
+		testLabels := map[string]string{"some-node": "red"}
+		testEntityItem := &entityItem{
+			entity: podFoo1,
+		}
+		labelSelector := metav1.LabelSelector{
+			MatchLabels: testLabels,
+		}
+		selector, _ := metav1.LabelSelectorAsSelector(&labelSelector)
+		selectorNormalizedName := "selector-normalized-name"
+		groupSelector := &types.GroupSelector{
+			NormalizedName: selectorNormalizedName,
+			NodeSelector:   selector,
+		}
+		groupItem := &groupItem{
+			groupType:       groupType1,
+			name:            "group-node-label",
+			selector:        groupSelector,
+			selectorItemKey: getSelectorItemKey(groupSelector),
+		}
+		groupEntityIndex.createSelectorItem(groupItem)
+		groupEntityIndex.selectorItemIndex[podEntityType][emptyNamespace] = sets.New[string](selectorNormalizedName)
+
+		nodeLabelItem := groupEntityIndex.createNodeLabelItem(testEntityItem, testLabels)
+		assert.Contains(t, nodeLabelItem.selectorItemKeys, selectorNormalizedName)
+	})
+}
+
+func TestCreateSelectorItem(t *testing.T) {
+	t.Run("when NodeSelector is set", func(t *testing.T) {
+		t.Run("when matching labelItems exists", func(t *testing.T) {
+			t.Run("selectorItem links to matching label item and vice versa", func(t *testing.T) {
+				groupEntityIndex := NewGroupEntityIndex()
+				testLabels := map[string]string{"some-node": "red"}
+				labelItemKey := getNodeLabelItemKey(testLabels)
+				testEntityItem := &entityItem{
+					entity:       podFoo1,
+					labelItemKey: labelItemKey,
+				}
+				nodeLabelItem := groupEntityIndex.createNodeLabelItem(testEntityItem, testLabels)
+
+				labelSelector := metav1.LabelSelector{
+					MatchLabels: testLabels,
+				}
+				selector, _ := metav1.LabelSelectorAsSelector(&labelSelector)
+				selectorNormalizedName := "selector-normalized-name"
+				groupSelector := &types.GroupSelector{
+					NormalizedName: selectorNormalizedName,
+					NodeSelector:   selector,
+				}
+				groupItem := &groupItem{
+					groupType:       groupType1,
+					name:            "group-node-label",
+					selector:        groupSelector,
+					selectorItemKey: getSelectorItemKey(groupSelector),
+				}
+				selectorItem := groupEntityIndex.createSelectorItem(groupItem)
+				assert.Contains(t, selectorItem.labelItemKeys, labelItemKey)
+				assert.Contains(t, nodeLabelItem.selectorItemKeys, selectorNormalizedName)
+			})
+		})
+	})
+}
+
+func TestAddNode(t *testing.T) {
+	t.Run("nodeLabels contains new node", func(t *testing.T) {
+		index := NewGroupEntityIndex()
+		index.AddNode(nodeFoo)
+		assert.Contains(t, index.nodeLabels, "nodeFoo")
+		assert.Equal(t, index.nodeLabels["nodeFoo"], labels.Set(labels.Set{"node": "foo"}))
+	})
+	t.Run("nodeLabels is unchanged when node is readded", func(t *testing.T) {
+		index := NewGroupEntityIndex()
+		index.AddNode(nodeFoo)
+		index.AddNode(nodeFoo)
+		assert.Contains(t, index.nodeLabels, "nodeFoo")
+		assert.Equal(t, len(index.nodeLabels), 1)
+		assert.Equal(t, index.nodeLabels["nodeFoo"], labels.Set(labels.Set{"node": "foo"}))
+	})
+	t.Run("nodeLabels is updated when node is readded with new labels", func(t *testing.T) {
+		index := NewGroupEntityIndex()
+		index.AddNode(nodeFoo)
+		index.AddNode(nodeFooModified)
+		assert.Contains(t, index.nodeLabels, "nodeFoo")
+		assert.Equal(t, len(index.nodeLabels), 1)
+		assert.Equal(t, index.nodeLabels["nodeFoo"], labels.Set(labels.Set{"node": "foo-modified"}))
+	})
+}
+
+func TestDeleteNode(t *testing.T) {
+	t.Run("node is removed from index", func(t *testing.T) {
+		index := NewGroupEntityIndex()
+		index.AddNode(nodeFoo)
+		index.DeleteNode(nodeFoo)
+		assert.NotContains(t, index.nodeLabels, "nodeFoo")
+	})
+}
+
+func TestAddPod(t *testing.T) {
+	t.Run("nodeLabelItemKey is on the entity", func(t *testing.T) {
+		index := NewGroupEntityIndex()
+		nodeLabel := map[string]string{"node": "foo"}
+		nodeLabelItemKey := getNodeLabelItemKey(nodeLabel)
+		entityItemKey := getEntityItemKey(podEntityType, podFoo1OnNode)
+		index.AddNode(nodeFoo)
+
+		index.AddPod(podFoo1OnNode)
+		assert.Equal(t, index.entityItems[entityItemKey].nodeLabelItemKey, nodeLabelItemKey)
+	})
+	t.Run("existing group is synced with Pod", func(t *testing.T) {
+		index := NewGroupEntityIndex()
+		nodeLabel := map[string]string{"node": "foo"}
+
+		labelSelector := metav1.LabelSelector{
+			MatchLabels: nodeLabel,
+		}
+		selector, _ := metav1.LabelSelectorAsSelector(&labelSelector)
+		selectorNormalizedName := "selector-normalized-name"
+		groupSelector := &types.GroupSelector{
+			NormalizedName: selectorNormalizedName,
+			NodeSelector:   selector,
+		}
+		groupItem := &groupItem{
+			groupType:       groupType1,
+			name:            "group-node-label",
+			selector:        groupSelector,
+			selectorItemKey: getSelectorItemKey(groupSelector),
+		}
+		selectorItem := index.createSelectorItem(groupItem)
+
+		index.AddNode(nodeFoo)
+		index.AddPod(podFoo1OnNode)
+
+		assert.Equal(t, len(selectorItem.labelItemKeys), 1)
+	})
+}
+
+func TestDeletePod(t *testing.T) {
+	t.Run("when a single pod is linked to a nodeLabelItem", func(t *testing.T) {
+		t.Run("the nodeLabelItem is removed from nodeLabelItems", func(t *testing.T) {
+			index := NewGroupEntityIndex()
+			testLabels := labels.Set{"node": "foo"}
+			labelItemKey := getNodeLabelItemKey(testLabels)
+			index.AddPod(podFoo1OnNode)
+
+			index.DeletePod(podFoo1)
+			assert.NotContains(t, index.nodeLabelItems, labelItemKey)
+		})
+		t.Run("matched selector items remove their link to the nodeLabelItem", func(t *testing.T) {
+			index := NewGroupEntityIndex()
+			index.AddNode(nodeFoo)
+			index.AddPod(podFoo1OnNode)
+			nodeFooLabel := map[string]string{"node": "foo"}
+			nodeSelectorGroup := types.NewGroupSelector("", nil, nil, nil, &metav1.LabelSelector{MatchLabels: nodeFooLabel})
+			index.AddGroup(groupType1, "group1", nodeSelectorGroup)
+
+			index.DeletePod(podFoo1OnNode)
+			assert.NotContains(t, index.selectorItems[nodeSelectorGroup.NormalizedName].labelItemKeys, getNodeLabelItemKey(nodeFooLabel))
+		})
+	})
+	t.Run("when multiple pods are linked to a nodeLabelItem", func(t *testing.T) {
+		t.Run("the nodeLabelItem is not removed from nodeLabelItems", func(t *testing.T) {
+			index := NewGroupEntityIndex()
+			testLabels := labels.Set{"node": "foo"}
+			labelItemKey := getNodeLabelItemKey(testLabels)
+			index.AddNode(nodeFoo)
+			index.AddPod(podFoo1OnNode)
+			index.AddPod(podFoo2OnNode)
+
+			index.DeletePod(podFoo1)
+			assert.Contains(t, index.nodeLabelItems, labelItemKey)
+		})
+		t.Run("nodeLabelItem's link to the entity is removed", func(t *testing.T) {
+			index := NewGroupEntityIndex()
+			testLabels := labels.Set{"node": "foo"}
+			labelItemKey := getNodeLabelItemKey(testLabels)
+			index.AddNode(nodeFoo)
+			index.AddPod(podFoo1OnNode)
+			index.AddPod(podFoo2OnNode)
+			nodeLabelItem := index.nodeLabelItems[labelItemKey]
+
+			index.DeletePod(podFoo1OnNode)
+			assert.Equal(t, len(nodeLabelItem.entityItemKeys), 1)
+		})
+	})
 }
