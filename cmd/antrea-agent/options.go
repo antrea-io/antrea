@@ -583,7 +583,9 @@ func (o *Options) validateK8sNodeOptions() error {
 	if ipsecAuthMode == config.IPsecAuthenticationModeCert && !features.DefaultFeatureGate.Enabled(features.IPsecCertAuth) {
 		return fmt.Errorf("IPsec AuthenticationMode %s requires feature gate %s to be enabled", o.config.TrafficEncapMode, features.IPsecCertAuth)
 	}
-
+	if encapMode != config.TrafficEncapModeEncap && encryptionMode == config.TrafficEncryptionModeWireGuard {
+		return fmt.Errorf("WireGuard is not applicable to the %s mode", o.config.TrafficEncapMode)
+	}
 	// Check if the enabled features are supported on the OS.
 	if err := o.checkUnsupportedFeatures(); err != nil {
 		return err

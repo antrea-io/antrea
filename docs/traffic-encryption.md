@@ -77,7 +77,8 @@ one if your cluster supports IPv6.
 Antrea can leverage [WireGuard](https://www.wireguard.com) to encrypt Pod traffic
 between Nodes. WireGuard encryption works like another tunnel type, and when it
 is enabled the `tunnelType` parameter in the `antrea-agent` configuration file
-will be ignored.
+will be ignored. It is not applicable with `hybrid`, `noEncap` or `networkPolicyOnly`
+traffic modes.
 
 ### Prerequisites
 
