@@ -323,13 +323,23 @@ func TestCluster_RunClusterEvents(t *testing.T) {
 	require.NoError(t, createExternalIPPool(fakeCluster.crdClient, fakeEIP2))
 
 	assertEgressSelectResult := func(egress *crdv1b1.Egress, expectedRes bool, hasSyncedErr bool) {
-		assert.Eventuallyf(t, func() bool {
+		cond := func() bool {
 			res, err := fakeCluster.cluster.ShouldSelectIP(egress.Spec.EgressIP, egress.Spec.ExternalIPPool)
 			if hasSyncedErr {
 				return err != nil
 			}
 			return err == nil && res == expectedRes
-		}, 1*time.Second, 100*time.Millisecond, "select Node result for Egress '%s' does not match", egress.Name)
+		}
+		// If the condition is already satisfied, make sure it doesn't change for a
+		// reasonable amount of time (100ms). If the condition is not already satisified,
+		// wait for it to become satisfied (for at most 1s).
+		// TODO: This test case can be greatly improved when we upgrade to Go 1.25 and can
+		// start using https://pkg.go.dev/testing/synctest.
+		if cond() {
+			assert.Neverf(t, func() bool { return !cond() }, 100*time.Millisecond, 25*time.Millisecond, "select Node result for Egress '%s' does not match", egress.Name)
+		} else {
+			assert.Eventuallyf(t, cond, 1*time.Second, 25*time.Millisecond, "select Node result for Egress '%s' does not match", egress.Name)
+		}
 	}
 	assertEgressSelectResult(fakeEgress2, true, false)
 	assertEgressSelectResult(fakeEgress1, false, false)
@@ -381,13 +391,22 @@ func TestCluster_RunClusterEvents(t *testing.T) {
 	assertEgressSelectResult(fakeEgress2, false, true)
 	assertEgressSelectResult(fakeEgress1, false, false)
 
-	mockMemberlist.EXPECT().Join([]string{"1.1.1.1"})
+	hasJoinedCh := make(chan struct{})
+	mockMemberlist.EXPECT().Join([]string{"1.1.1.1"}).Do(func(_ []string) {
+		close(hasJoinedCh)
+	})
 	// Test creating Node with valid IP.
 	fakeNode1 := &v1.Node{
 		ObjectMeta: metav1.ObjectMeta{Name: "fakeNode1", Labels: labelsLinuxOS},
 		Status:     v1.NodeStatus{Addresses: []v1.NodeAddress{{Type: v1.NodeInternalIP, Address: "1.1.1.1"}}},
 	}
 	require.NoError(t, createNode(fakeCluster.clientSet, fakeNode1))
+	select {
+	case <-hasJoinedCh:
+		break
+	case <-time.After(1 * time.Second):
+		require.Fail(t, "Timeout while waiting for memberlist Join")
+	}
 	assertEgressSelectResult(fakeEgress2, false, true)
 	assertEgressSelectResult(fakeEgress1, false, false)
 

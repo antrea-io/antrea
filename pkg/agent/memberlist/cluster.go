@@ -540,7 +540,7 @@ func (c *Cluster) AliveNodes() sets.Set[string] {
 	return nodes
 }
 
-// ShouldSelectIP returns true if the local Node selected as the owner Node of the IP in the specific
+// ShouldSelectIP returns true if the local Node is selected as the owner Node of the IP in the specific
 // ExternalIPPool. The local Node in the cluster holds the same consistent hash ring for each ExternalIPPool,
 // consistentHash.Get gets the closest item (Node name) in the hash to the provided key (IP), if the name of
 // the local Node is equal to the name of the selected Node, returns true.
