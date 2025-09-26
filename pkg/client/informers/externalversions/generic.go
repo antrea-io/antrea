@@ -85,6 +85,8 @@ func (f *sharedInformerFactory) ForResource(resource schema.GroupVersionResource
 		return &genericInformer{resource: resource.GroupResource(), informer: f.Crd().V1beta1().Egresses().Informer()}, nil
 	case v1beta1.SchemeGroupVersion.WithResource("externalippools"):
 		return &genericInformer{resource: resource.GroupResource(), informer: f.Crd().V1beta1().ExternalIPPools().Informer()}, nil
+	case v1beta1.SchemeGroupVersion.WithResource("flowexportertargets"):
+		return &genericInformer{resource: resource.GroupResource(), informer: f.Crd().V1beta1().FlowExporterTargets().Informer()}, nil
 	case v1beta1.SchemeGroupVersion.WithResource("groups"):
 		return &genericInformer{resource: resource.GroupResource(), informer: f.Crd().V1beta1().Groups().Informer()}, nil
 	case v1beta1.SchemeGroupVersion.WithResource("ippools"):

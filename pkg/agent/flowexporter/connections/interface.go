@@ -38,3 +38,25 @@ type DenyConnectionStoreUpdater interface {
 	ConnectionStoreGetter
 	AddOrUpdateConn(conn *connection.Connection, timeSeen time.Time, bytes uint64)
 }
+
+type AugmentOpt func(*connection.Connection)
+type Augmenter interface {
+	Augment(conn *connection.Connection, opts ...AugmentOpt)
+}
+
+type DenyStore interface {
+	HasDenyConn(key connection.ConnectionKey) bool
+	SubmitDenyConn(conn *connection.Connection)
+}
+
+type StoreSubscriber interface {
+	Subscribe() *subscription
+	Unsubscribe(sub *subscription)
+}
+
+type Store interface {
+	DenyStore
+	StoreSubscriber
+
+	Run(stopCh <-chan struct{})
+}

@@ -1,0 +1,126 @@
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: flowexportertargets.crd.antrea.io
+  labels:
+    app: antrea
+spec:
+  group: crd.antrea.io
+  versions:
+    - name: v1beta1
+      served: true
+      storage: true
+      additionalPrinterColumns:
+        - name: Address:Port
+          type: string
+          description: Address of flow collector.
+          jsonPath: .spec.address
+        - name: Protocol
+          type: string
+          description: Protocol used to send network flows.
+          jsonPath: .spec.protocol
+        - name: Filter
+          type: string
+          description: Filter for network flows, nil means no filter.
+          jsonPath: .spec.filter
+          priority: 10
+        - name: Connected
+          type: boolean
+          description: Status of last connection to flow collector.
+          jsonPath: .status.conditions[?(@.type=="Connected")].status
+      schema:
+        openAPIV3Schema:
+          type: object
+          properties:
+            spec:
+              type: object
+              required:
+                - address
+                - protocol
+              properties:
+                address:
+                  type: string
+                  description: The flow collector address as a string.
+                port:
+                  type: integer
+                  description: The flow collector port.
+                  minimum: 0
+                  maximum: 65535
+                protocol:
+                  type: string
+                  description: The protocol used to send flow details.
+                  enum:
+                  - grpc
+                  - ipfix
+                ipfixConfig:
+                  type: object
+                  description: Additional configuration for ipfix protocol.
+                  required:
+                  - transport
+                  properties:
+                    transport:
+                      type: string
+                      enum:
+                      - tcp
+                      - udp
+                      - tls
+                filter:
+                  type: array
+                  description: >
+                    Filter for only flows whose protocol which match this filter.
+                    This defaults to all protocols if unset or nil.
+
+                    Supported values are [tcp, udp, icmp, sctp].
+                  items:
+                    type: string
+                    enum:
+                    - tcp
+                    - udp
+                    - icmp
+                    - sctp
+                activeFlowExportTimeout:
+                  type: string
+                  description: >
+                    Provide the active flow export timeout, which is the timeout after which a flow
+                    record is sent to the collector for active flows. Thus, for flows with a continuous
+                    stream of packets, a flow record will be exported to the collector once the elapsed
+                    time since the last export event is equal to the value of this timeout.
+
+                    Valid time units are "ns", "us" (or "µs"), "ms", "s", "m", "h".
+                  pattern: ^([0-9]+(ns|us|µs|ms|s|m|h|d))+$
+                idleFlowExportTimeout:
+                  type: string
+                  description: >
+                    Provide the idle flow export timeout, which is the timeout after which a flow
+                    record is sent to the collector for idle flows. A flow is considered idle if no
+                    packet matching this flow has been observed since the last export event.
+
+                    Valid time units are "ns", "us" (or "µs"), "ms", "s", "m", "h".
+                  pattern: ^([0-9]+(ns|us|µs|ms|s|m|h|d))+$
+            status:
+              type: object
+              properties:
+                observedGeneration:
+                  type: integer
+                conditions:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      type:
+                        type: string
+                      status:
+                        type: string
+                      lastTransitionTime:
+                        type: string
+                      reason:
+                        type: string
+                      message:
+                        type: string
+  scope: Cluster
+  names:
+    plural: flowexportertargets
+    singular: flowexportertarget
+    kind: FlowExporterTarget
+    shortNames:
+      - fet

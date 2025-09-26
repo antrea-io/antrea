@@ -52,6 +52,8 @@ func addKnownTypes(scheme *runtime.Scheme) error {
 		&ExternalIPPoolList{},
 		&ClusterGroup{},
 		&ClusterGroupList{},
+		&FlowExporterTarget{},
+		&FlowExporterTargetList{},
 		&Group{},
 		&GroupList{},
 		&NetworkPolicy{},

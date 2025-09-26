@@ -18,20 +18,40 @@
 package connections
 
 import (
+	"crypto/rand"
+	"flag"
 	"fmt"
+	"math/big"
+	"net/netip"
 	"testing"
+	"time"
 
 	"go.uber.org/mock/gomock"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/klog/v2"
 
+	"antrea.io/antrea/pkg/agent/flowexporter/connection"
 	connectionstest "antrea.io/antrea/pkg/agent/flowexporter/connections/testing"
+	exptest "antrea.io/antrea/pkg/agent/flowexporter/testing"
 	"antrea.io/antrea/pkg/agent/openflow"
 	proxytest "antrea.io/antrea/pkg/agent/proxy/testing"
-	queriertest "antrea.io/antrea/pkg/querier/testing"
 	objectstoretest "antrea.io/antrea/pkg/util/objectstore/testing"
 	k8sproxy "antrea.io/antrea/third_party/proxy"
+)
+
+const (
+	testNumOfConns        = 10000
+	testNumOfNewConns     = 1000
+	testNumOfDeletedConns = 1000
+
+	testWithIPv6 = false
+)
+
+var (
+	svcIPv4 = netip.MustParseAddr("10.0.0.1")
+	svcIPv6 = netip.MustParseAddr("2001:0:3238:dfe1:63::fefc")
 )
 
 /*
@@ -46,14 +66,19 @@ BenchmarkPoll-2   	     116	   9068998 ns/op	  889713 B/op	   54458 allocs/op
 PASS
 ok  	antrea.io/antrea/pkg/agent/flowexporter/connections	3.618s
 */
-func BenchmarkPoll(b *testing.B) {
+func BenchmarkPollAndStore(b *testing.B) {
 	disableLogToStderr()
-	connStore, mockConnDumper := setupConntrackConnStore(b)
+
+	fetcher, store, mockConnDumper := setupFetcher(b)
+	stopCh := make(chan struct{})
+	go store.Run(stopCh)
+	defer close(stopCh)
+
 	conns := generateConns()
 	b.ResetTimer()
-	for n := 0; n < b.N; n++ {
+	for b.Loop() {
 		mockConnDumper.EXPECT().DumpFlows(uint16(openflow.CtZone)).Return(conns, testNumOfConns, nil)
-		connStore.Poll()
+		fetcher.poll()
 		b.StopTimer()
 		conns = generateUpdatedConns(conns)
 		b.StartTimer()
@@ -70,27 +95,29 @@ goarch: amd64
 pkg: antrea.io/antrea/pkg/agent/flowexporter/connections
 cpu: Intel(R) Core(TM) i7-9750H CPU @ 2.60GHz
 BenchmarkConnStore-12    	     100	 119354325 ns/op	20490802 B/op	  272626 allocs/op
-PASS
+
 ok  	antrea.io/antrea/pkg/agent/flowexporter/connections	13.111s
 */
-func BenchmarkConnStore(b *testing.B) {
+func BenchmarkStore(b *testing.B) {
 	disableLogToStderr()
-	connStore, _ := setupConntrackConnStore(b)
+	// store := NewStore(1 * time.Hour)
+	stopCh := make(chan struct{})
+	// go store.Run(stopCh)
+	defer close(stopCh)
+
 	b.ResetTimer()
-	for n := 0; n < b.N; n++ {
+	for b.Loop() {
 		// include this in the benchmark (do not stop timer), to measure the memory
 		// footprint of the connection store and all connections accurately.
-		conns := generateConns()
+		// conns := generateConns()
 		// add connections
-		for _, conn := range conns {
-			connStore.AddOrUpdateConn(conn)
-		}
+		// store.SubmitConnections(conns, nil)
 	}
 	b.StopTimer()
 	b.Logf("\nSummary:\nNumber of initial connections: %d\nNumber of new connections/poll: %d\nNumber of deleted connections/poll: %d\n", testNumOfConns, testNumOfNewConns, testNumOfDeletedConns)
 }
 
-func setupConntrackConnStore(b *testing.B) (*ConntrackConnectionStore, *connectionstest.MockConnTrackDumper) {
+func setupFetcher(b *testing.B) (*ConntrackFetcher, Store, *connectionstest.MockConnTrackDumper) {
 	ctrl := gomock.NewController(b)
 	defer ctrl.Finish()
 	mockPodStore := objectstoretest.NewMockPodStore(ctrl)
@@ -125,7 +152,86 @@ func setupConntrackConnStore(b *testing.B) (*ConntrackConnectionStore, *connecti
 	mockProxier := proxytest.NewMockProxier(ctrl)
 	mockProxier.EXPECT().GetServiceByIP(serviceStr).Return(servicePortName, true).AnyTimes()
 
-	npQuerier := queriertest.NewMockAgentNetworkPolicyInfoQuerier(ctrl)
-	l7Listener := NewL7Listener(nil, mockPodStore)
-	return NewConntrackConnectionStore(mockConnDumper, true, false, npQuerier, mockPodStore, nil, l7Listener, testFlowExporterOptions), mockConnDumper
+	// l7Listener := NewL7Listener(nil, mockPodStore)
+
+	// return NewConntrackFetcher(mockConnDumper, true, false, l7Listener, testFlowExporterOptions), NewStore(10 * time.Hour), mockConnDumper
+	return nil, nil, nil
+}
+
+func generateConns() []*connection.Connection {
+	conns := make([]*connection.Connection, testNumOfConns)
+	for i := 0; i < testNumOfConns; i++ {
+		conns[i] = getNewConn()
+	}
+	return conns
+}
+
+func generateUpdatedConns(conns []*connection.Connection) []*connection.Connection {
+	length := len(conns) - testNumOfDeletedConns + testNumOfNewConns
+	updatedConns := make([]*connection.Connection, length)
+	for i := 0; i < len(conns); i++ {
+		// replace deleted connection with new connection
+		if conns[i].ReadyToDelete == true {
+			conns[i] = getNewConn()
+		} else { // update rest of connections
+			conns[i].OriginalStats.Packets += 5
+			conns[i].OriginalStats.Bytes += 20
+			conns[i].OriginalStats.ReversePackets += 2
+			conns[i].OriginalStats.ReverseBytes += 10
+		}
+		updatedConns[i] = conns[i]
+	}
+	for i := len(conns); i < length; i++ {
+		updatedConns[i] = getNewConn()
+	}
+	randomNum := getRandomNum(int64(length - testNumOfDeletedConns))
+	for i := randomNum; i < testNumOfDeletedConns+randomNum; i++ {
+		// hardcode DyingAndDoneExport here for testing deletion of connections
+		// not valid for testing update and export of records
+		updatedConns[i].ReadyToDelete = true
+	}
+	return updatedConns
+}
+
+func getNewConn() *connection.Connection {
+	randomNum1 := getRandomNum(255)
+	randomNum2 := getRandomNum(255)
+	var src, dst, svc netip.Addr
+	if testWithIPv6 {
+		src = exptest.RandIPv6()
+		dst = exptest.RandIPv6()
+		svc = svcIPv6
+	} else {
+		src = exptest.RandIPv4()
+		dst = exptest.RandIPv4()
+		svc = svcIPv4
+	}
+	flowKey := connection.Tuple{SourceAddress: src, DestinationAddress: dst, Protocol: 6, SourcePort: uint16(randomNum1), DestinationPort: uint16(randomNum2)}
+	return &connection.Connection{
+		StartTime:     time.Now().Add(-time.Duration(randomNum1) * time.Second),
+		StopTime:      time.Now(),
+		IsPresent:     true,
+		ReadyToDelete: false,
+		FlowKey:       flowKey,
+		OriginalStats: connection.Stats{
+			Packets:        10,
+			Bytes:          100,
+			ReversePackets: 5,
+			ReverseBytes:   50,
+		},
+		OriginalDestinationAddress: svc,
+		OriginalDestinationPort:    30000,
+		TCPState:                   "SYN_SENT",
+	}
+}
+
+func getRandomNum(value int64) uint64 {
+	number, _ := rand.Int(rand.Reader, big.NewInt(value))
+	return number.Uint64()
+}
+
+func disableLogToStderr() {
+	klogFlagSet := flag.NewFlagSet("klog", flag.ContinueOnError)
+	klog.InitFlags(klogFlagSet)
+	klogFlagSet.Parse([]string{"-logtostderr=false"})
 }

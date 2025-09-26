@@ -63,10 +63,12 @@ func TestDenyConnectionStore_AddOrUpdateConn(t *testing.T) {
 				FlowKey:                    tuple,
 				OriginalDestinationAddress: tuple.DestinationAddress,
 				OriginalDestinationPort:    tuple.DestinationPort,
-				OriginalBytes:              uint64(60),
-				OriginalPackets:            uint64(1),
-				IsActive:                   true,
-				Mark:                       0,
+				OriginalStats: connection.Stats{
+					Bytes:   uint64(60),
+					Packets: uint64(1),
+				},
+				IsActive: true,
+				Mark:     0,
 			},
 			isSvc: false,
 		}, {
@@ -77,10 +79,12 @@ func TestDenyConnectionStore_AddOrUpdateConn(t *testing.T) {
 				FlowKey:                    tuple,
 				OriginalDestinationAddress: tuple.DestinationAddress,
 				OriginalDestinationPort:    tuple.DestinationPort,
-				OriginalBytes:              uint64(60),
-				OriginalPackets:            uint64(1),
-				IsActive:                   true,
-				Mark:                       openflow.ServiceCTMark.GetValue(),
+				OriginalStats: connection.Stats{
+					Bytes:   uint64(60),
+					Packets: uint64(1),
+				},
+				IsActive: true,
+				Mark:     openflow.ServiceCTMark.GetValue(),
 			},
 			isSvc: true,
 		}, {
@@ -91,10 +95,12 @@ func TestDenyConnectionStore_AddOrUpdateConn(t *testing.T) {
 				FlowKey:                    tuple,
 				OriginalDestinationAddress: tuple.DestinationAddress,
 				OriginalDestinationPort:    tuple.DestinationPort,
-				OriginalBytes:              uint64(60),
-				OriginalPackets:            uint64(1),
-				IsActive:                   true,
-				Mark:                       openflow.ServiceCTMark.GetValue(),
+				OriginalStats: connection.Stats{
+					Bytes:   uint64(60),
+					Packets: uint64(1),
+				},
+				IsActive: true,
+				Mark:     openflow.ServiceCTMark.GetValue(),
 			},
 			isSvc:                    true,
 			protocolFilter:           []string{"SCTP"},
@@ -107,10 +113,12 @@ func TestDenyConnectionStore_AddOrUpdateConn(t *testing.T) {
 				FlowKey:                    tuple,
 				OriginalDestinationAddress: tuple.DestinationAddress,
 				OriginalDestinationPort:    tuple.DestinationPort,
-				OriginalBytes:              uint64(60),
-				OriginalPackets:            uint64(1),
-				IsActive:                   true,
-				Mark:                       openflow.ServiceCTMark.GetValue(),
+				OriginalStats: connection.Stats{
+					Bytes:   uint64(60),
+					Packets: uint64(1),
+				},
+				IsActive: true,
+				Mark:     openflow.ServiceCTMark.GetValue(),
 			},
 			isSvc:          true,
 			protocolFilter: []string{"TCP"},
@@ -152,8 +160,10 @@ func TestDenyConnectionStore_AddOrUpdateConn(t *testing.T) {
 			checkDenyConnectionMetrics(t, len(denyConnStore.connections))
 
 			denyConnStore.AddOrUpdateConn(&c.testFlow, refTime.Add(-(time.Second * 10)), uint64(60))
-			expConn.OriginalBytes = uint64(120)
-			expConn.OriginalPackets = uint64(2)
+			expConn.OriginalStats = connection.Stats{
+				Bytes:   uint64(120),
+				Packets: uint64(2),
+			}
 			expConn.StopTime = refTime.Add(-(time.Second * 10))
 			actualConn, ok = denyConnStore.GetConnByKey(connection.NewConnectionKey(&c.testFlow))
 			assert.Equal(t, ok, true, "deny connection should be there in deny connection store")

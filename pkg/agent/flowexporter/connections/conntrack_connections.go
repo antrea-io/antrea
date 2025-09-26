@@ -213,10 +213,7 @@ func (cs *ConntrackConnectionStore) AddOrUpdateConn(conn *connection.Connection)
 		// Update the necessary fields that are used in generating flow records.
 		// Can same 5-tuple flow get deleted and added to conntrack table? If so use ID.
 		existingConn.StopTime = conn.StopTime
-		existingConn.OriginalBytes = conn.OriginalBytes
-		existingConn.OriginalPackets = conn.OriginalPackets
-		existingConn.ReverseBytes = conn.ReverseBytes
-		existingConn.ReversePackets = conn.ReversePackets
+		existingConn.OriginalStats = conn.OriginalStats
 		existingConn.TCPState = conn.TCPState
 		existingConn.IsActive = utils.CheckConntrackConnActive(existingConn)
 		if existingConn.IsActive {
@@ -313,8 +310,8 @@ func (cs *ConntrackConnectionStore) fillL7EventInfo(l7EventMap map[connection.Tu
 	for connKey, conn := range cs.connections {
 		l7event, ok := l7EventMap[connKey]
 		if ok {
-			if len(l7event.http) > 0 {
-				jsonBytes, err := json.Marshal(l7event.http)
+			if len(l7event.Http) > 0 {
+				jsonBytes, err := json.Marshal(l7event.Http)
 				if err != nil {
 					klog.ErrorS(err, "Converting l7Event http failed")
 				}
