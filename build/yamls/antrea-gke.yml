@@ -4477,6 +4477,11 @@ data:
       # physical interface "eth1":
       # [{bridgeName: "br1", physicalInterfaces: ["eth1"], enableMulticastSnooping: false}]
       ovsBridges:
+
+    hostNetworkAcceleration:
+      # Enable to accelerate traffic on Node host networking when traffic mode is noEncap or hybrid. Currently only
+      # Pod-to-Pod traffic is supported. External-to-Service and Pod-to-external traffic will be supported in the future.
+      enable: true
   antrea-cni.conflist: |
     {
         "cniVersion":"0.3.0",
@@ -5499,7 +5504,7 @@ spec:
         kubectl.kubernetes.io/default-container: antrea-agent
         # Automatically restart Pods with a RollingUpdate if the ConfigMap changes
         # See https://helm.sh/docs/howto/charts_tips_and_tricks/#automatically-roll-deployments
-        checksum/config: 9517c513519edba80e567621e47957d49dde18393756d62ff46edaca13fc7ace
+        checksum/config: 49a86dacff2385b595ae1c35b6ba0a6eab72f93bcab5ed308b9200901e905de9
       labels:
         app: antrea
         component: antrea-agent
@@ -5745,7 +5750,7 @@ spec:
       annotations:
         # Automatically restart Pod if the ConfigMap changes
         # See https://helm.sh/docs/howto/charts_tips_and_tricks/#automatically-roll-deployments
-        checksum/config: 9517c513519edba80e567621e47957d49dde18393756d62ff46edaca13fc7ace
+        checksum/config: 49a86dacff2385b595ae1c35b6ba0a6eab72f93bcab5ed308b9200901e905de9
       labels:
         app: antrea
         component: antrea-controller

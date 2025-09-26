@@ -47,12 +47,12 @@ LABEL description="A Docker image based on Ubuntu 24.04 which includes Open vSwi
 COPY --from=ovs-debs /tmp/ovs-debs/* /tmp/ovs-debs/
 COPY charon-logging.conf /tmp
 
-# Install OVS debs, iptables, logrotate, and strongSwan; update the OVS
+# Install OVS debs, iptables, nftables, logrotate, and strongSwan; update the OVS
 # logrotate config file; update the strongSwan logging config.
 # We clean-up apt cache after installing packages to reduce the size of the
 # final image.
 RUN apt-get update && \
-    apt-get install -y --no-install-recommends iptables logrotate libstrongswan-standard-plugins && \
+    apt-get install -y --no-install-recommends iptables nftables logrotate libstrongswan-standard-plugins && \
     # -f / --fix-broken will take care of installing all missing dependencies
     apt-get -f -y --no-install-recommends install /tmp/ovs-debs/*.deb && \
     # make sure that openvswitch packages will not be upgraded by mistake
