@@ -16,7 +16,6 @@ package connection
 
 import (
 	"net/netip"
-	"sync/atomic"
 	"time"
 )
 
@@ -47,9 +46,7 @@ type Connection struct {
 	// LastExportTime is used to decide whether a connection is stale.
 	LastExportTime time.Time
 	LastUpdateTime time.Time
-	// TODO Andrew: govet doesn't like that this value is copied even though I don't expect it to be used by the copies
-	LastUsedTime atomic.Int64
-	IsActive     bool
+	IsActive       bool
 	// IsPresent flag helps in cleaning up connections when they are not in conntrack table anymore.
 	IsPresent bool
 	// ReadyToDelete marks whether we can safely delete the connection from the connection map.
@@ -108,10 +105,59 @@ type Stats struct {
 	ReverseBytes   uint64
 }
 
-func (c *Connection) UpdateLastUsedTime() int64 {
-	now := time.Now()
-	c.LastUsedTime.Store(now.UnixNano())
-	return now.UnixNano()
+func (c *Connection) Clone() *Connection {
+	conn := &Connection{
+		ID:                             c.ID,
+		Timeout:                        c.Timeout,
+		StartTime:                      c.StartTime,
+		StopTime:                       c.StopTime,
+		LastExportTime:                 c.LastExportTime,
+		LastUpdateTime:                 c.LastUpdateTime,
+		IsActive:                       c.IsActive,
+		IsPresent:                      c.IsPresent,
+		ReadyToDelete:                  c.ReadyToDelete,
+		Zone:                           c.Zone,
+		Mark:                           c.Mark,
+		StatusFlag:                     c.StatusFlag,
+		Labels:                         c.Labels,
+		LabelsMask:                     c.LabelsMask,
+		FlowKey:                        c.FlowKey,
+		SourcePodNamespace:             c.SourcePodNamespace,
+		SourcePodName:                  c.SourcePodName,
+		SourcePodUID:                   c.SourcePodUID,
+		DestinationPodNamespace:        c.DestinationPodNamespace,
+		DestinationPodName:             c.DestinationPodName,
+		DestinationPodUID:              c.DestinationPodUID,
+		DestinationServicePortName:     c.DestinationServicePortName,
+		OriginalDestinationAddress:     c.OriginalDestinationAddress,
+		OriginalDestinationPort:        c.OriginalDestinationPort,
+		IngressNetworkPolicyName:       c.IngressNetworkPolicyName,
+		IngressNetworkPolicyNamespace:  c.IngressNetworkPolicyNamespace,
+		IngressNetworkPolicyUID:        c.IngressNetworkPolicyUID,
+		IngressNetworkPolicyType:       c.IngressNetworkPolicyType,
+		IngressNetworkPolicyRuleName:   c.IngressNetworkPolicyRuleName,
+		IngressNetworkPolicyRuleAction: c.IngressNetworkPolicyRuleAction,
+		EgressNetworkPolicyName:        c.EgressNetworkPolicyName,
+		EgressNetworkPolicyNamespace:   c.EgressNetworkPolicyNamespace,
+		EgressNetworkPolicyUID:         c.EgressNetworkPolicyUID,
+		EgressNetworkPolicyType:        c.EgressNetworkPolicyType,
+		EgressNetworkPolicyRuleName:    c.EgressNetworkPolicyRuleName,
+		EgressNetworkPolicyRuleAction:  c.EgressNetworkPolicyRuleAction,
+		TCPState:                       c.TCPState,
+		PrevTCPState:                   c.PrevTCPState,
+		FlowType:                       c.FlowType,
+		EgressName:                     c.EgressName,
+		EgressUID:                      c.EgressUID,
+		EgressIP:                       c.EgressIP,
+		EgressNodeName:                 c.EgressNodeName,
+		AppProtocolName:                c.AppProtocolName,
+		HttpVals:                       c.HttpVals,
+		OriginalStats:                  c.OriginalStats,
+		PreviousStats:                  c.PreviousStats,
+		IsDenyFlow:                     c.IsDenyFlow,
+	}
+
+	return conn
 }
 
 // NewConnectionKey creates 5-tuple of flow as connection key

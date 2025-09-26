@@ -20,11 +20,6 @@ type ConntrackFetcher struct {
 
 	zones []uint16
 
-	podInfoAug       Augmenter
-	serviceInfoAug   Augmenter
-	networkPolicyAug Augmenter
-	egressInfoAug    Augmenter
-
 	outCh chan CTResult
 }
 

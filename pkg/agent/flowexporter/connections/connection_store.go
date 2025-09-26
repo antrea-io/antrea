@@ -1,6 +1,7 @@
 package connections
 
 import (
+	"container/heap"
 	"sync"
 	"time"
 
@@ -40,6 +41,7 @@ func NewConnStore(
 	isNetworkPolicyOnly bool,
 ) *ConnStore {
 	store := &ConnStore{
+		staleConnectionTimeout: staleConnTimeout,
 		subs:                   make(map[*subscription]struct{}, 5),
 		entries:                make(map[connection.ConnectionKey]*connection.Connection, 100),
 		ctFetcher:              ctFetcher,
@@ -55,11 +57,13 @@ var _ (DenyStore) = (*ConnStore)(nil)
 var _ (StoreSubscriber) = (*ConnStore)(nil)
 
 type ConnStore struct {
-	subs     map[*subscription]struct{}
-	subMutex sync.Mutex
+	staleConnectionTimeout time.Duration
+	subs                   map[*subscription]struct{}
+	subMutex               sync.Mutex
 
 	entries      map[connection.ConnectionKey]*connection.Connection
 	entriesMutex sync.RWMutex
+	gc           gcHeap
 
 	ctFetcher       *ConntrackFetcher
 	denyConnUpdates chan *connection.Connection
@@ -95,16 +99,24 @@ func (s *ConnStore) Run(stopCh <-chan struct{}) {
 		ctUpdates = s.ctFetcher.Start(stopCh)
 	}
 
-	// Add stale connection cleanup
+	gcStaleTicker := time.NewTicker(s.staleConnectionTimeout)
+	defer gcStaleTicker.Stop()
+
 	for {
 		select {
 		case <-stopCh:
+			klog.V(5).Info("DEBUG Q1: stop received")
 			return
 		case update := <-ctUpdates:
+			klog.V(5).Info("DEBUG Q1: update received")
 			s.updateConns(update.conns, update.l7Events, s.ctConnectionAugments, ctConnMerge)
 		case denyConn := <-s.denyConnUpdates:
+			klog.V(5).Info("DEBUG Q1: deny connection received")
 			denyConn.IsDenyFlow = true
 			s.updateConns([]*connection.Connection{denyConn}, nil, s.denyConnectionAugments, denyConnMerge)
+		case <-gcStaleTicker.C:
+			s.removeStaleConnections()
+			klog.V(5).Info("DEBUG Q1: finished removing stale connections")
 		}
 	}
 }
@@ -145,6 +157,11 @@ func (s *ConnStore) updateConns(conns []*connection.Connection, l7Events map[con
 		if _, ok := l7Events[key]; !ok {
 			updatedConns = append(updatedConns, updatedConn)
 		}
+
+		heap.Push(&s.gc, &gcItem{
+			conn:       conn,
+			expiryNano: updatedConn.LastUpdateTime.UnixNano() + s.staleConnectionTimeout.Nanoseconds(),
+		})
 	}
 
 	s.notify(updatedConns, l7Events, false)
@@ -167,12 +184,33 @@ func (s *ConnStore) getL7Conns(conns []*connection.Connection, l7EventMap map[co
 	return conns
 }
 
+func (s *ConnStore) removeStaleConnections() {
+	klog.V(5).InfoS("DEBUG Q1: triggered stale connection cleanup")
+	now := time.Now().UnixNano()
+	conns := []*connection.Connection{}
+	for s.gc.Len() > 0 {
+		top := s.gc.items[0]
+		if top.expiryNano > now {
+			// The top connection is not ready to be deleted, since the connections are sorted
+			// by expiry time we can exit here.
+			break
+		}
+		heap.Pop(&s.gc)
+
+		key := connection.NewConnectionKey(top.conn)
+		delete(s.entries, key)
+		conns = append(conns, top.conn)
+	}
+
+	s.notify(conns, nil, true)
+}
+
 func (s *ConnStore) Subscribe() *subscription {
 	s.subMutex.Lock()
 	defer s.subMutex.Unlock()
 
 	sub := &subscription{
-		ch: make(chan UpdateMsg, 100),
+		ch: make(chan UpdateMsg),
 	}
 	s.subs[sub] = struct{}{}
 	return sub
@@ -212,10 +250,16 @@ func acceptConnection(conn *connection.Connection) bool {
 		klog.V(5).InfoS("Skip this connection as we cannot map any of the connection IPs to a local Pod", "srcIP", conn.FlowKey.SourceAddress.String(), "dstIP", conn.FlowKey.DestinationAddress.String())
 		return false
 	}
+
+	if conn.FlowType == utils.FlowTypeUnsupported {
+		klog.V(5).InfoS("Skip this connection flow type unsupported", "flowType", conn.FlowType)
+		return false
+	}
 	return true
 }
 
 func ctConnMerge(existing, incoming *connection.Connection) *connection.Connection {
+	incoming.IsPresent = true
 	if existing == nil {
 		return incoming
 	}
@@ -250,3 +294,49 @@ func denyConnMerge(existing, incoming *connection.Connection) *connection.Connec
 
 	return existing
 }
+
+type gcItem struct {
+	conn       *connection.Connection
+	expiryNano int64
+	index      int
+}
+type gcHeap struct {
+	items     []*gcItem
+	keyToItem map[connection.ConnectionKey]*gcItem
+}
+
+func (h gcHeap) Len() int           { return len(h.items) }
+func (h gcHeap) Less(i, j int) bool { return h.items[i].expiryNano < h.items[j].expiryNano }
+func (h gcHeap) Swap(i, j int) {
+	h.items[i], h.items[j] = h.items[j], h.items[i]
+	h.items[i].index = i
+	h.items[j].index = j
+}
+func (h *gcHeap) Push(x any) {
+	item := x.(*gcItem)
+	key := connection.NewConnectionKey(item.conn)
+	if item, ok := h.keyToItem[key]; ok {
+		heap.Remove(h, item.index)
+	}
+	h.items = append(h.items, item)
+}
+func (h *gcHeap) Pop() any {
+	old := h.items
+	n := len(old)
+	it := old[n-1]
+	h.items = old[:n-1]
+
+	key := connection.NewConnectionKey(it.conn)
+	delete(h.keyToItem, key)
+	return it
+}
+
+// func (h *gcHeap) Replace(item *gcItem) {
+// 	key := connection.NewConnectionKey(item.conn)
+// 	if item, ok := h.keyToItem[key]; ok {
+// 		heap.Remove(h, item.index)
+// 	}
+
+// 	heap.Push(h, item)
+// 	h.keyToItem[key] = item
+// }

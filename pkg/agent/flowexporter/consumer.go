@@ -297,13 +297,13 @@ func (c *Consumer) getExpiredConns(expiredConns []*connection.Connection, currTi
 		}
 		key := connection.NewConnectionKey(pqItem.Conn)
 
-		conn := *pqItem.Conn // Copy the item. We want to ensure we don't modify the existing one.
+		conn := pqItem.Conn.Clone()
 
 		oldState := c.prevStates[key]
 		conn.PreviousStats = oldState.stats
 		conn.PrevTCPState = oldState.tcpState
 
-		conn.IsActive = utils.CheckConntrackConnActive(&conn)
+		conn.IsActive = utils.CheckConntrackConnActive(conn)
 
 		isIdle := pqItem.IdleExpireTime.Before(currTime)
 		if isIdle {
@@ -322,7 +322,7 @@ func (c *Consumer) getExpiredConns(expiredConns []*connection.Connection, currTi
 			c.expirePriorityQueue.ResetActiveExpireTimeAndPush(pqItem, currTime)
 		}
 
-		expiredConns = append(expiredConns, &conn)
+		expiredConns = append(expiredConns, conn)
 	}
 
 	return expiredConns, c.expirePriorityQueue.GetExpiryFromExpirePriorityQueue()
@@ -342,8 +342,7 @@ func (c *Consumer) handleUpdatedConns(conns []*connection.Connection, l7Events m
 				continue
 			}
 			if conn.IsDenyFlow && !existingItem.Conn.IsDenyFlow {
-				// Could be replaced with `Remove`, but we'll abuse the fact that `WriteItemToQueue`
-				// will do that for us.
+				// Deny flows take priority when exporting.
 				c.expirePriorityQueue.RemoveItemFromMap(conn)
 				delete(c.prevStates, key)
 			}
