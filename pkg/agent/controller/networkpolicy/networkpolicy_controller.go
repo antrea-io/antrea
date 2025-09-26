@@ -594,7 +594,7 @@ func (c *Controller) GetNetworkPolicyByRuleFlowID(ruleFlowID uint32) *v1beta2.Ne
 func (c *Controller) GetRuleByFlowID(ruleFlowID uint32) *types.PolicyRule {
 	rule, exists, err := c.podReconciler.GetRuleByFlowID(ruleFlowID)
 	if err != nil {
-		klog.Errorf("Error when getting network policy by rule flow ID: %v", err)
+		klog.ErrorS(err, "Error when getting network policy by rule flow ID")
 		return nil
 	}
 	if !exists {

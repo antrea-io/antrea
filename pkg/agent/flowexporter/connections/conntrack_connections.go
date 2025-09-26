@@ -31,6 +31,7 @@ import (
 	"antrea.io/antrea/pkg/agent/proxy"
 	"antrea.io/antrea/pkg/querier"
 	"antrea.io/antrea/pkg/util/objectstore"
+	utilwait "antrea.io/antrea/pkg/util/wait"
 )
 
 var serviceProtocolMap = map[uint8]corev1.Protocol{
@@ -46,6 +47,14 @@ type ConntrackConnectionStore struct {
 	pollInterval          time.Duration
 	connectUplinkToBridge bool
 	l7EventMapGetter      L7EventMapGetter
+	// networkPolicyWait is used to determine when NetworkPolicy flows have been installed and
+	// when the mapping from flow ID to NetworkPolicy rule is available. We will ignore
+	// connections which started prior to that time to avoid reporting invalid NetworkPolicy
+	// metadata in flow records. This is because the mapping is not "stable" and is expected to
+	// change when the Agent restarts.
+	networkPolicyWait *utilwait.Group
+	// networkPolicyReadyTime is set to the current time when we are done waiting on networkPolicyWait.
+	networkPolicyReadyTime time.Time
 	connectionStore
 }
 
@@ -61,6 +70,7 @@ func NewConntrackConnectionStore(
 	podStore objectstore.PodStore,
 	proxier proxy.Proxier,
 	l7EventMapGetterFunc L7EventMapGetter,
+	networkPolicyWait *utilwait.Group,
 	o *options.FlowExporterOptions,
 ) *ConntrackConnectionStore {
 	return &ConntrackConnectionStore{
@@ -71,11 +81,23 @@ func NewConntrackConnectionStore(
 		connectionStore:       NewConnectionStore(npQuerier, podStore, proxier, o),
 		connectUplinkToBridge: o.ConnectUplinkToBridge,
 		l7EventMapGetter:      l7EventMapGetterFunc,
+		networkPolicyWait:     networkPolicyWait,
 	}
 }
 
 // Run enables the periodical polling of conntrack connections at a given flowPollInterval.
 func (cs *ConntrackConnectionStore) Run(stopCh <-chan struct{}) {
+	if cs.networkPolicyWait != nil {
+		klog.Info("Waiting for NetworkPolicies to become ready")
+		if err := cs.networkPolicyWait.WaitUntil(stopCh); err != nil {
+			klog.ErrorS(err, "Error while waiting for NetworkPolicies to become ready")
+			return
+		}
+	} else {
+		klog.Info("Skip waiting for NetworkPolicies to become ready")
+	}
+	cs.networkPolicyReadyTime = time.Now()
+
 	klog.Info("Starting conntrack polling")
 
 	pollTicker := time.NewTicker(cs.pollInterval)
@@ -251,10 +273,15 @@ func (cs *ConntrackConnectionStore) AddOrUpdateConn(conn *connection.Connection)
 				cs.fillServiceInfo(conn, serviceStr)
 			}
 		}
-		cs.addNetworkPolicyMetadata(conn)
+		// This should only happen if we failed to set net.netfilter.nf_conntrack_timestamp
 		if conn.StartTime.IsZero() {
 			conn.StartTime = time.Now()
 			conn.StopTime = time.Now()
+		}
+		if conn.StartTime.Before(cs.networkPolicyReadyTime) {
+			klog.V(1).InfoS("Skip adding NetworkPolicy metadata to connection to avoid reporting invalid information")
+		} else {
+			cs.addNetworkPolicyMetadata(conn)
 		}
 		conn.LastExportTime = conn.StartTime
 		metrics.TotalAntreaConnectionsInConnTrackTable.Inc()

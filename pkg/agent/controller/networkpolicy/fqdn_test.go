@@ -47,7 +47,7 @@ func newMockFQDNController(t *testing.T, controller *gomock.Controller, dnsServe
 	}
 	f, err := newFQDNController(
 		mockOFClient,
-		newIDAllocator(testAsyncDeleteInterval),
+		newIDAllocator(MinAllocatorAsyncDeleteInterval),
 		dnsServerAddr,
 		dirtyRuleHandler,
 		true,

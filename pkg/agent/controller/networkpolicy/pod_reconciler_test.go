@@ -112,7 +112,7 @@ func newTestReconciler(t *testing.T, controller *gomock.Controller, ifaceStore i
 	ch := make(chan string, 100)
 	groupIDAllocator := openflow.NewGroupAllocator()
 	groupCounters := []proxytypes.GroupCounter{proxytypes.NewGroupCounter(groupIDAllocator, ch)}
-	r := newPodReconciler(ofClient, ifaceStore, newIDAllocator(testAsyncDeleteInterval), f, groupCounters, v4Enabled, v6Enabled, true, false)
+	r := newPodReconciler(ofClient, ifaceStore, newIDAllocator(MinAllocatorAsyncDeleteInterval), f, groupCounters, v4Enabled, v6Enabled, true, false)
 	return r
 }
 

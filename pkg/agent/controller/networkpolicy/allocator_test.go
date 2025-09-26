@@ -16,6 +16,7 @@ package networkpolicy
 
 import (
 	"fmt"
+	"math"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -28,11 +29,6 @@ import (
 
 	"antrea.io/antrea/pkg/agent/types"
 	"antrea.io/antrea/pkg/apis/controlplane/v1beta2"
-)
-
-var (
-	testAsyncDeleteInterval    = 50 * time.Millisecond
-	testMinAsyncDeleteInterval = 100 * time.Millisecond
 )
 
 func TestNewIDAllocator(t *testing.T) {
@@ -67,8 +63,7 @@ func TestNewIDAllocator(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			minAsyncDeleteInterval = testMinAsyncDeleteInterval
-			got := newIDAllocator(testAsyncDeleteInterval, tt.args...)
+			got := newIDAllocator(MinAllocatorAsyncDeleteInterval, tt.args...)
 			assert.Equalf(t, tt.expectedLastAllocatedID, got.lastAllocatedID, "Got lastAllocatedID %v, expected %v", got.lastAllocatedID, tt.expectedLastAllocatedID)
 			assert.Equalf(t, tt.expectedAvailableSets, got.availableSet, "Got availableSet %v, expected %v", got.availableSet, tt.expectedAvailableSets)
 			assert.Equalf(t, tt.expectedAvailableSlice, got.availableSlice, "Got availableSlice %v, expected %v", got.availableSlice, tt.expectedAvailableSlice)
@@ -84,42 +79,35 @@ func TestAllocateForRule(t *testing.T) {
 		Service:   nil,
 	}
 	tests := []struct {
-		name        string
-		args        []uint32
-		rule        *types.PolicyRule
-		expectedID  uint32
-		expectedErr error
+		name       string
+		args       []uint32
+		rule       *types.PolicyRule
+		expectedID uint32
 	}{
 		{
 			"zero-allocated-ids",
 			nil,
 			rule,
 			1,
-			nil,
 		},
 		{
 			"consecutive-allocated-ids",
 			[]uint32{1, 2},
 			rule,
 			3,
-			nil,
 		},
 		{
 			"inconsecutive-allocated-ids",
 			[]uint32{1, 7, 5},
 			rule,
 			2,
-			nil,
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			minAsyncDeleteInterval = testMinAsyncDeleteInterval
-			a := newIDAllocator(testAsyncDeleteInterval, tt.args...)
-			actualErr := a.allocateForRule(tt.rule)
-			if actualErr != tt.expectedErr {
-				t.Fatalf("Got error %v, expected %v", actualErr, tt.expectedErr)
-			}
+			a := newIDAllocator(MinAllocatorAsyncDeleteInterval, tt.args...)
+			err := a.allocateForRule(tt.rule)
+			require.NoError(t, err)
 			assert.Equalf(t, tt.expectedID, tt.rule.FlowID, "Got id %v, expected %v", tt.rule.FlowID, tt.expectedID)
 			ruleFromCache, exists, err := a.getRuleFromAsyncCache(tt.expectedID)
 			assert.Truef(t, exists, "Rule with id %d should present in the async rule cache", tt.expectedID)
@@ -127,6 +115,13 @@ func TestAllocateForRule(t *testing.T) {
 			assert.Equalf(t, tt.rule, ruleFromCache, "getRuleFromAsyncCache should return expected rule")
 		})
 	}
+}
+
+func TestAllocateForRuleOutOfIDs(t *testing.T) {
+	a := newIDAllocator(MinAllocatorAsyncDeleteInterval)
+	// Overwrite lastAllocatedID to trigger the error in allocateForRule
+	a.lastAllocatedID = math.MaxUint32
+	require.EqualError(t, a.allocateForRule(&types.PolicyRule{}), "no ID available")
 }
 
 func TestRelease(t *testing.T) {
@@ -165,8 +160,7 @@ func TestRelease(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			minAsyncDeleteInterval = testMinAsyncDeleteInterval
-			a := newIDAllocator(testAsyncDeleteInterval, tt.newArgs...)
+			a := newIDAllocator(MinAllocatorAsyncDeleteInterval, tt.newArgs...)
 			actualErr := a.release(tt.releaseArgs)
 			assert.Equalf(t, tt.expectedErr, actualErr, "Got error %v, expected %v", actualErr, tt.expectedErr)
 			assert.Equalf(t, tt.expectedAvailableSets, a.availableSet, "Got availableSet %v, expected %v", a.availableSet, tt.expectedAvailableSets)
@@ -213,22 +207,22 @@ func TestIdAllocatorWorker(t *testing.T) {
 		expectedID              uint32
 	}{
 		{
-			// testMinAsyncDeleteInterval(100ms) is larger than testAsyncDeleteInterval(50ms),
-			// so rule should take at least 100ms to be deleted.
+			// Provided interval is less than MinAllocatorAsyncDeleteInterval, so the
+			// rule should take MinAllocatorAsyncDeleteInterval to be deleted.
 			"delete-rule-with-test-min-async-delete-interval",
 			nil,
-			50 * time.Millisecond,
-			100 * time.Millisecond,
+			MinAllocatorAsyncDeleteInterval / 2,
+			MinAllocatorAsyncDeleteInterval,
 			rule,
 			1,
 		},
 		{
-			// testAsyncDeleteInterval(200ms) is larger than testMinAsyncDeleteInterval(100ms),
-			// so rule should take at least 200ms to be deleted.
+			// Provided interval is more than MinAllocatorAsyncDeleteInterval, so the
+			// rule should be deleted after the provided interval.
 			"delete-rule-with-test-async-delete-interval",
 			nil,
-			200 * time.Millisecond,
-			200 * time.Millisecond,
+			2 * MinAllocatorAsyncDeleteInterval,
+			2 * MinAllocatorAsyncDeleteInterval,
 			rule,
 			1,
 		},
@@ -238,9 +232,7 @@ func TestIdAllocatorWorker(t *testing.T) {
 			startTime := time.Now()
 			expectedDeleteTime := startTime.Add(tt.expectedDeleteInterval)
 			fakeClock := newFakeClock(startTime)
-			minAsyncDeleteInterval = testMinAsyncDeleteInterval
-			testAsyncDeleteInterval = tt.testAsyncDeleteInterval
-			a := newIDAllocatorWithClock(testAsyncDeleteInterval, fakeClock, tt.args...)
+			a := newIDAllocatorWithClock(tt.testAsyncDeleteInterval, fakeClock, tt.args...)
 			require.NoError(t, a.allocateForRule(tt.rule), "Error allocating ID for rule")
 			stopCh := make(chan struct{})
 			defer close(stopCh)

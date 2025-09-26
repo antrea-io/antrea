@@ -472,11 +472,14 @@ func run(o *Options) error {
 		}
 	}
 
-	// We set flow poll interval as the time interval for rule deletion in the async
-	// rule cache, which is implemented as part of the idAllocator. This is to preserve
-	// the rule info for populating NetworkPolicy fields in the Flow Exporter even
-	// after rule deletion.
-	asyncRuleDeleteInterval := o.pollInterval
+	// We pick a time interval for rule deletion in the async rule cache (part of the
+	// idAllocator) based on the configured flow poll interval for the Flow Exporter. This is to
+	// preserve the rule info for populating NetworkPolicy fields in the Flow Exporter even
+	// after rule deletion, and avoid missing or even incorrect information in the flow records.
+	// In theory, anything slightly longer than the poll interval should work, but to
+	// accommodate for longer than usual poll cycles we choose to play it safe.
+	// o.pollInterval will be 0 when the Flow Exporter is not enabled.
+	asyncRuleDeleteInterval := 3*o.pollInterval + networkpolicy.MinAllocatorAsyncDeleteInterval
 	antreaPolicyEnabled := features.DefaultFeatureGate.Enabled(features.AntreaPolicy)
 	// In Antrea agent, status manager will automatically be enabled if
 	// AntreaPolicy feature is enabled.
@@ -731,6 +734,7 @@ func run(o *Options) error {
 			networkPolicyController,
 			flowExporterOptions,
 			egressController,
+			podNetworkWait,
 			l7FlowExporterController,
 			l7FlowExporterEnabled)
 		if err != nil {

@@ -31,11 +31,9 @@ import (
 )
 
 const (
-	deleteQueueName = "async_delete_networkpolicyrule"
-)
+	MinAllocatorAsyncDeleteInterval = 5 * time.Second
 
-var (
-	minAsyncDeleteInterval = time.Second * 5
+	deleteQueueName = "async_delete_networkpolicyrule"
 )
 
 // idAllocator provides interfaces to allocate and release uint32 IDs. It's thread-safe.
@@ -80,13 +78,7 @@ func newIDAllocatorWithClock(asyncRuleDeleteInterval time.Duration, clock clock.
 			Name:  deleteQueueName,
 			Clock: clock,
 		}),
-	}
-
-	// Set the deleteInterval.
-	if minAsyncDeleteInterval > asyncRuleDeleteInterval {
-		allocator.deleteInterval = minAsyncDeleteInterval
-	} else {
-		allocator.deleteInterval = asyncRuleDeleteInterval
+		deleteInterval: max(asyncRuleDeleteInterval, MinAllocatorAsyncDeleteInterval),
 	}
 
 	var maxID uint32
