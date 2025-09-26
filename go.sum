@@ -1,5 +1,5 @@
-antrea.io/libOpenflow v0.16.0 h1:8YDpJQsg6SyCAURQOaGL2UVvNdSyjGiTPfrgB7bo/88=
-antrea.io/libOpenflow v0.16.0/go.mod h1:NSO1euB06IQBcK+cxGI5z6nrB2Uz9lQ153iSUe4PRYg=
+antrea.io/libOpenflow v0.17.0 h1:w2Rs9lZLfgs+L+893fu33sIk5Fab2YiqQEAOKwM2q6M=
+antrea.io/libOpenflow v0.17.0/go.mod h1:8xGveJuRt13TzvHhXmCPcDoGtdWSOV6U0Xv6L8ZY8QI=
 antrea.io/ofnet v0.15.0 h1:VQqw77JXj7k+zSQ+jSp4qBz+H0iun+I+JNfaGVKH/DA=
 antrea.io/ofnet v0.15.0/go.mod h1:bBQvoJMUDrrWSOSC/sqBHooffSAJpjkR5f0JiXsaVbA=
 cel.dev/expr v0.24.0 h1:56OvJKSH3hDGL0ml5uSxZmz3/3Pq4tJ+fb1unVLAFcY=
