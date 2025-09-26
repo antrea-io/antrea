@@ -4288,10 +4288,10 @@ data:
       # <HOST> to <Service namespace>/<Service name>. For example,
       # "flow-aggregator/flow-aggregator" can be provided to connect to the Antrea
       # Flow Aggregator Service.
-      # If PORT is empty, we default to 4739, the standard IPFIX port.
-      # If no PROTO is given, we consider "tls" as default. We support "tls", "tcp" and
-      # "udp" protocols. "tls" is used for securing communication between flow exporter and
-      # flow aggregator.
+      # If PORT is empty, we default to 4739. If no PROTO is given, we consider "tls" as default.
+      # We support "grpc", "tls", "tcp" and "udp" protocols. "tls" is used for securing
+      # communication between flow exporter and flow aggregator. When "grpc" is configured,
+      # mTLS will always be used.
       flowCollectorAddr: "flow-aggregator/flow-aggregator:14739:grpc"
 
       # Provide flow poll interval as a duration string. This determines how often the
@@ -5512,7 +5512,7 @@ spec:
         kubectl.kubernetes.io/default-container: antrea-agent
         # Automatically restart Pods with a RollingUpdate if the ConfigMap changes
         # See https://helm.sh/docs/howto/charts_tips_and_tricks/#automatically-roll-deployments
-        checksum/config: b1759a7185fce7308723e0f322796b8d22e55847448b94fc47085e08c36504ae
+        checksum/config: a8c0d73daac4c8b82f2e730af22918085cdc3745ad0afd5b969ec346d71218f7
         checksum/ipsec-secret: d0eb9c52d0cd4311b6d252a951126bf9bea27ec05590bed8a394f0f792dcb2a4
       labels:
         app: antrea
@@ -5804,7 +5804,7 @@ spec:
       annotations:
         # Automatically restart Pod if the ConfigMap changes
         # See https://helm.sh/docs/howto/charts_tips_and_tricks/#automatically-roll-deployments
-        checksum/config: b1759a7185fce7308723e0f322796b8d22e55847448b94fc47085e08c36504ae
+        checksum/config: a8c0d73daac4c8b82f2e730af22918085cdc3745ad0afd5b969ec346d71218f7
       labels:
         app: antrea
         component: antrea-controller

@@ -307,6 +307,7 @@ var (
 		EgressTrafficShaping:        {},
 		EgressSeparateSubnet:        {},
 		NodeNetworkPolicy:           {},
+		FlowExporter:                {},
 		L7FlowExporter:              {},
 		NodeLatencyMonitor:          {},
 		PacketCapture:               {},

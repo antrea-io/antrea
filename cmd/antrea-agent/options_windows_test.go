@@ -45,7 +45,6 @@ func TestCheckUnsupportedFeatures(t *testing.T) {
 					"AntreaProxy":        false,
 					"AntreaPolicy":       true,
 					"Traceflow":          false,
-					"FlowExporter":       true,
 					"NetworkPolicyStats": true,
 				},
 			},

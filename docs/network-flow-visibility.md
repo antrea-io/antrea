@@ -98,10 +98,10 @@ your `antrea-agent` ConfigMap should look like this:
       # <HOST> to <Service namespace>/<Service name>. For example,
       # "flow-aggregator/flow-aggregator" can be provided to connect to the Antrea
       # Flow Aggregator Service.
-      # If PORT is empty, we default to 4739, the standard IPFIX port.
-      # If no PROTO is given, we consider "tls" as default. We support "tls", "tcp" and
-      # "udp" protocols. "tls" is used for securing communication between flow exporter and
-      # flow aggregator.
+      # If PORT is empty, we default to 4739. If no PROTO is given, we consider "tls" as default.
+      # We support "grpc", "tls", "tcp" and "udp" protocols. "tls" is used for securing
+      # communication between flow exporter and flow aggregator. When "grpc" is configured,
+      # mTLS will always be used.
       flowCollectorAddr: "flow-aggregator/flow-aggregator:4739:tls"
 
       # Provide flow poll interval as a duration string. This determines how often the

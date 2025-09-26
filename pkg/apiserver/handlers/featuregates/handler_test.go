@@ -112,7 +112,6 @@ func Test_getGatesWindowsResponse(t *testing.T) {
 				{Component: "agent-windows", Name: "AntreaProxy", Status: "Enabled", Version: "GA"},
 				{Component: "agent-windows", Name: "EndpointSlice", Status: "Enabled", Version: "GA"},
 				{Component: "agent-windows", Name: "ExternalNode", Status: "Disabled", Version: "ALPHA"},
-				{Component: "agent-windows", Name: "FlowExporter", Status: "Disabled", Version: "ALPHA"},
 				{Component: "agent-windows", Name: "NetworkPolicyStats", Status: "Enabled", Version: "BETA"},
 				{Component: "agent-windows", Name: "NodePortLocal", Status: "Enabled", Version: "GA"},
 				{Component: "agent-windows", Name: "ServiceTrafficDistribution", Status: "Enabled", Version: "BETA"},
@@ -126,7 +125,7 @@ func Test_getGatesWindowsResponse(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			got := getFeatureGatesResponse(tt.cfg, AgentWindowsMode)
-			assert.Equal(t, got, tt.want, "The feature gates for Antrea agent windows are not correct")
+			assert.Equal(t, tt.want, got, "The feature gates for Antrea agent windows are not correct")
 		})
 	}
 }
@@ -218,7 +217,7 @@ func Test_getControllerGatesResponse(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			got := getFeatureGatesResponse(&Config{}, ControllerMode)
-			assert.Equal(t, got, tt.want, "The feature gates for Antrea Controller are not correct")
+			assert.Equal(t, tt.want, got, "The feature gates for Antrea Controller are not correct")
 		})
 	}
 }
