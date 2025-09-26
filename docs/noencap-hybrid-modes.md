@@ -57,9 +57,6 @@ the Kubernetes Nodes, as described in the
 * On Google Compute Engine, IP forwarding must be enabled on the VM instances as
 described in the [Google Cloud documentation](https://cloud.google.com/vpc/docs/using-routes#canipforward).
 
-* On Azure, there is no way to let VNet forward unknown IPs, hence Antrea
-`Hybrid` mode cannot work on Azure.
-
 If the Node network does allow Pod IPs sent out from the Nodes, you can
 configure Antrea to run in the `Hybrid` mode by setting the `trafficEncapMode`
 config parameter of `antrea-agent` to `hybrid`. The `trafficEncapMode` config
@@ -93,7 +90,6 @@ to the cloud network routers for the Pod CIDRs of Nodes, and then the cloud
 network is able to route Pod traffic between Nodes. This Route Controller
 functionality is supported by the Cloud Provider implementations of the major
 clouds, including: [AWS](https://github.com/kubernetes/cloud-provider-aws),
-[Azure](https://github.com/kubernetes-sigs/cloud-provider-azure),
 [GCP](https://github.com/kubernetes/cloud-provider-gcp),
 and [vSphere (with NSX-T)](https://github.com/kubernetes/cloud-provider-vsphere).
 

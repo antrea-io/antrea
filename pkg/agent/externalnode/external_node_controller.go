@@ -561,7 +561,7 @@ func (c *ExternalNodeController) removeOVSPortsAndFlows(interfaceConfig *interfa
 	// when moving the configuration back from host internal interface to uplink. This logic is run in the second
 	// try after the error is returned, at this time the host internal interface is already deleted, and the uplink's
 	// name is recovered. So the ips and routes in "adapterConfig" are actually read from the uplink and no need to
-	// move the configurations back. The issue was seen on VM with RHEL 8.4 on azure cloud.
+	// move the configurations back. The issue was seen on VM with RHEL 8.4.
 	if !hostInterfaceExists(uplinkIfName) {
 		klog.InfoS("The interface with uplink name did not exist on the host, skipping its recovery", "uplinkIfName", uplinkIfName)
 		return nil

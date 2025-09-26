@@ -141,7 +141,7 @@ we guarantee that 0.10 supports at least 1.19, 1.18 and 1.17 (in practice it
 also supports K8s 1.16).
 
 In addition, we strive to support the K8s versions used by default in
-cloud-managed K8s services ([EKS], [AKS] and [GKE] regular channel).
+cloud-managed K8s services ([EKS] and [GKE] regular channel).
 
 ## Deprecation policies
 
@@ -453,7 +453,6 @@ ignored by Antrea, and the behavior may not be what you expect.
 [Semantic Versioning]: https://semver.org/
 [CHANGELOG]: ../CHANGELOG.md
 [EKS]: https://docs.aws.amazon.com/eks/latest/userguide/kubernetes-versions.html
-[AKS]: https://docs.microsoft.com/en-us/azure/aks/supported-kubernetes-versions
 [GKE]: https://cloud.google.com/kubernetes-engine/docs/release-notes
 [`deprecated` field]: https://kubernetes.io/docs/tasks/extend-kubernetes/custom-resources/custom-resource-definition-versioning/#version-deprecation
 [conversion webhook]: https://kubernetes.io/docs/tasks/extend-kubernetes/custom-resources/custom-resource-definition-versioning/#webhook-conversion
