@@ -53,7 +53,7 @@
           - ${{sha1}}
           builders:
             - builder-e2e
-          trigger_phrase: ^(?!Thanks for your PR).*/test-(e2e|all).*
+          trigger_phrase: ^(?!Thanks for your PR).*/test-(e2e|all$).*
           white_list_target_branches: []
           allow_whitelist_orgs_as_admins: true
           admin_list: '{antrea_admin_list}'
@@ -126,7 +126,7 @@
           white_list: '{antrea_white_list}'
           only_trigger_phrase: true
           trigger_permit_all: false
-          trigger_phrase: ^(?!Thanks for your PR).*/skip-(e2e|all).*
+          trigger_phrase: ^(?!Thanks for your PR).*/skip-(e2e|all$).*
           white_list_target_branches: []
           status_context: jenkins-e2e
           status_url: --none--
@@ -171,7 +171,7 @@
           builders:
             - builder-conformance:
                 conformance_type: 'conformance'
-          trigger_phrase: ^(?!Thanks for your PR).*/test-(conformance|all).*
+          trigger_phrase: ^(?!Thanks for your PR).*/test-(conformance|all$).*
           white_list_target_branches: []
           allow_whitelist_orgs_as_admins: true
           admin_list: '{antrea_admin_list}'
@@ -244,7 +244,7 @@
           white_list: '{antrea_white_list}'
           only_trigger_phrase: true
           trigger_permit_all: false
-          trigger_phrase: ^(?!Thanks for your PR).*/skip-(conformance|all).*
+          trigger_phrase: ^(?!Thanks for your PR).*/skip-(conformance|all$).*
           white_list_target_branches: []
           status_context: jenkins-conformance
           status_url: --none--
@@ -291,7 +291,7 @@
           builders:
             - builder-conformance:
                 conformance_type: 'all-features-conformance'
-          trigger_phrase: ^(?!Thanks for your PR).*/test-(all-features-conformance|all).*
+          trigger_phrase: ^(?!Thanks for your PR).*/test-(all-features-conformance|all$).*
           white_list_target_branches: []
           allow_whitelist_orgs_as_admins: true
           admin_list: '{antrea_admin_list}'
@@ -349,7 +349,7 @@
           white_list: '{antrea_white_list}'
           only_trigger_phrase: true
           trigger_permit_all: false
-          trigger_phrase: ^(?!Thanks for your PR).*/skip-(all-features-conformance|all).*
+          trigger_phrase: ^(?!Thanks for your PR).*/skip-(all-features-conformance|all$).*
           white_list_target_branches: []
           status_context: jenkins-all-features-conformance
           status_url: --none--
@@ -487,7 +487,7 @@
           builders:
             - builder-conformance:
                 conformance_type: 'networkpolicy'
-          trigger_phrase: ^(?!Thanks for your PR).*/test-(networkpolicy|all).*
+          trigger_phrase: ^(?!Thanks for your PR).*/test-(networkpolicy|all$).*
           white_list_target_branches: []
           allow_whitelist_orgs_as_admins: true
           admin_list: '{antrea_admin_list}'
@@ -560,7 +560,7 @@
           white_list: '{antrea_white_list}'
           only_trigger_phrase: true
           trigger_permit_all: false
-          trigger_phrase: ^(?!Thanks for your PR).*/skip-(networkpolicy|all).*
+          trigger_phrase: ^(?!Thanks for your PR).*/skip-(networkpolicy|all$).*
           white_list_target_branches: []
           status_context: jenkins-networkpolicy
           status_url: --none--
@@ -1083,7 +1083,7 @@
             - builder-e2e-kind:
                ip_version: 'ipv4'
                kind_cluster_name: '{test_name}'
-          trigger_phrase: ^(?!Thanks for your PR).*/test-(kind-e2e|kind-all|all).*
+          trigger_phrase: ^(?!Thanks for your PR).*/test-(e2e|all$).*
           white_list_target_branches: []
           allow_whitelist_orgs_as_admins: true
           admin_list: '{antrea_admin_list}'
@@ -1123,7 +1123,7 @@
                conformance_type: 'conformance'
                ip_version: 'ipv4'
                kind_cluster_name: '{test_name}'
-          trigger_phrase: ^(?!Thanks for your PR).*/test-(kind-conformance|kind-all|all).*
+          trigger_phrase: ^(?!Thanks for your PR).*/test-(conformance|all$).*
           white_list_target_branches: []
           allow_whitelist_orgs_as_admins: true
           admin_list: '{antrea_admin_list}'
@@ -1163,7 +1163,7 @@
                conformance_type: 'networkpolicy'
                ip_version: 'ipv4'
                kind_cluster_name: '{test_name}'
-          trigger_phrase: ^(?!Thanks for your PR).*/test-(kind-networkpolicy|kind-all|all).*
+          trigger_phrase: ^(?!Thanks for your PR).*/test-(networkpolicy|all$).*
           white_list_target_branches: []
           allow_whitelist_orgs_as_admins: true
           admin_list: '{antrea_admin_list}'
@@ -1435,7 +1435,7 @@
                conformance_type: 'all-features-conformance'
                ip_version: 'ipv4'
                kind_cluster_name: '{test_name}'
-          trigger_phrase: ^(?!Thanks for your PR).*/test-(kind-all-features-conformance|kind-all|all-features-conformance|all).*
+          trigger_phrase: ^(?!Thanks for your PR).*/test-(all-features-conformance|all$).*
           white_list_target_branches: []
           allow_whitelist_orgs_as_admins: true
           admin_list: '{antrea_admin_list}'
@@ -1485,7 +1485,7 @@
                conformance_type: 'whole-conformance'
                ip_version: 'ipv4'
                kind_cluster_name: '{test_name}'
-          trigger_phrase: ^(?!Thanks for your PR).*/test-(kind-whole-conformance|kind-all|whole-conformance|all).*
+          trigger_phrase: ^(?!Thanks for your PR).*/test-(whole-conformance|all$).*
           white_list_target_branches: []
           allow_whitelist_orgs_as_admins: true
           admin_list: '{antrea_admin_list}'
