@@ -71,6 +71,12 @@ func (cs *connectionStore) GetConnByKey(connKey connection.ConnectionKey) (*conn
 	return conn, found
 }
 
+func (cs *connectionStore) NumConnections() int {
+	cs.mutex.Lock()
+	defer cs.mutex.Unlock()
+	return len(cs.connections)
+}
+
 // ForAllConnectionsDo execute the callback for each connection in connection map.
 func (cs *connectionStore) ForAllConnectionsDo(callback connection.ConnectionMapCallBack) error {
 	cs.mutex.Lock()
