@@ -44,7 +44,7 @@ func NewConnStore(
 		entries:                make(map[connection.ConnectionKey]*connection.Connection, 100),
 		ctFetcher:              ctFetcher,
 		denyConnUpdates:        make(chan *connection.Connection),
-		denyConnectionAugments: DenyConnAugments(podStore, proxier),
+		denyConnectionAugments: DenyConnAugments(podStore, proxier, npQuerier),
 		ctConnectionAugments:   CTConnAugments(podStore, proxier, npQuerier, egressQuerier, nodeRouteController, isNetworkPolicyOnly),
 	}
 

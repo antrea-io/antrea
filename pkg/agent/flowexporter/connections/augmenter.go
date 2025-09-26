@@ -2,6 +2,7 @@ package connections
 
 import (
 	"encoding/binary"
+	"encoding/hex"
 	"fmt"
 
 	"antrea.io/antrea/pkg/agent/controller/noderoute"
@@ -16,15 +17,22 @@ import (
 	"k8s.io/klog/v2"
 )
 
-func DenyConnAugments(podStore objectstore.PodStore, proxier proxy.Proxier) []Augmenter {
+func DenyConnAugments(
+	podStore objectstore.PodStore,
+	proxier proxy.Proxier,
+	npQuerier querier.AgentNetworkPolicyInfoQuerier,
+) []Augmenter {
 	podInfoAug := &podInfoAugmenter{
 		podStore: podStore,
 	}
 	serviceInfoAug := &serviceInfoAugmenter{
 		antreaProxier: proxier,
 	}
+	networkPolicyAug := &networkPolicyMetadataAugmenter{
+		networkPolicyQuerier: npQuerier,
+	}
 
-	return []Augmenter{podInfoAug, serviceInfoAug}
+	return []Augmenter{podInfoAug, serviceInfoAug, networkPolicyAug}
 }
 
 func CTConnAugments(
@@ -121,18 +129,20 @@ func (cs *networkPolicyMetadataAugmenter) Augment(conn *connection.Connection, o
 	if len(conn.Labels) == 0 {
 		return
 	}
-	klog.V(4).Infof("connection label: %x; label masks: %x", conn.Labels, conn.LabelsMask)
 
 	// Retrieve NetworkPolicy Name and Namespace by using the ingress and egress
 	// IDs stored in the connection label.
-	ingressOfID := binary.LittleEndian.Uint32(conn.Labels[:4])
+	if klog.V(4).Enabled() {
+		klog.InfoS("Setting NetworkPolicy metadata from connection labels", "labels", hex.EncodeToString(conn.Labels))
+	}
+	ingressOfID := binary.BigEndian.Uint32(conn.Labels[12:16])
 	if ingressOfID != 0 {
 		policy := cs.networkPolicyQuerier.GetNetworkPolicyByRuleFlowID(ingressOfID)
 		rule := cs.networkPolicyQuerier.GetRuleByFlowID(ingressOfID)
 		if policy == nil || rule == nil {
 			// This should not happen because the rule flow ID to rule mapping is
 			// preserved for max(5s, flowPollInterval) even after the rule deletion.
-			klog.Warningf("Cannot find NetworkPolicy or rule with ingressOfID %v", ingressOfID)
+			klog.InfoS("Cannot find NetworkPolicy or rule", "ingressOfID", ingressOfID)
 		} else {
 			conn.IngressNetworkPolicyName = policy.Name
 			conn.IngressNetworkPolicyNamespace = policy.Namespace
@@ -143,14 +153,14 @@ func (cs *networkPolicyMetadataAugmenter) Augment(conn *connection.Connection, o
 		}
 	}
 
-	egressOfID := binary.LittleEndian.Uint32(conn.Labels[4:8])
+	egressOfID := binary.BigEndian.Uint32(conn.Labels[8:12])
 	if egressOfID != 0 {
 		policy := cs.networkPolicyQuerier.GetNetworkPolicyByRuleFlowID(egressOfID)
 		rule := cs.networkPolicyQuerier.GetRuleByFlowID(egressOfID)
 		if policy == nil || rule == nil {
 			// This should not happen because the rule flow ID to rule mapping is
 			// preserved for max(5s, flowPollInterval) even after the rule deletion.
-			klog.Warningf("Cannot find NetworkPolicy or rule with egressOfID %v", egressOfID)
+			klog.InfoS("Cannot find NetworkPolicy or rule", "egressOfID", egressOfID)
 		} else {
 			conn.EgressNetworkPolicyName = policy.Name
 			conn.EgressNetworkPolicyNamespace = policy.Namespace
