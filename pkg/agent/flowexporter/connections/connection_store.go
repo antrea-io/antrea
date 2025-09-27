@@ -15,9 +15,12 @@ import (
 )
 
 type UpdateMsg struct {
+	// Conns is the list of connections that were updated or has an associated L7 event
 	Conns    []*connection.Connection
 	L7Events map[connection.ConnectionKey]L7ProtocolFields
-	Deleted  bool
+
+	// Deleted marks whether connections in Conns is deleted from the store.
+	Deleted bool
 }
 
 type subscription struct {
@@ -48,6 +51,9 @@ func NewConnStore(
 		denyConnUpdates:        make(chan *connection.Connection),
 		denyConnectionAugments: DenyConnAugments(podStore, proxier, npQuerier),
 		ctConnectionAugments:   CTConnAugments(podStore, proxier, npQuerier, egressQuerier, nodeRouteController, isNetworkPolicyOnly),
+		gc: gcHeap{
+			keyToItem: make(map[connection.ConnectionKey]*gcItem),
+		},
 	}
 
 	return store
@@ -89,6 +95,7 @@ func (s *ConnStore) SubmitDenyConn(conn *connection.Connection) {
 	if conn == nil {
 		return
 	}
+	conn.IsDenyFlow = true
 
 	s.denyConnUpdates <- conn
 }
@@ -105,18 +112,13 @@ func (s *ConnStore) Run(stopCh <-chan struct{}) {
 	for {
 		select {
 		case <-stopCh:
-			klog.V(5).Info("DEBUG Q1: stop received")
 			return
 		case update := <-ctUpdates:
-			klog.V(5).Info("DEBUG Q1: update received")
 			s.updateConns(update.conns, update.l7Events, s.ctConnectionAugments, ctConnMerge)
 		case denyConn := <-s.denyConnUpdates:
-			klog.V(5).Info("DEBUG Q1: deny connection received")
-			denyConn.IsDenyFlow = true
 			s.updateConns([]*connection.Connection{denyConn}, nil, s.denyConnectionAugments, denyConnMerge)
 		case <-gcStaleTicker.C:
 			s.removeStaleConnections()
-			klog.V(5).Info("DEBUG Q1: finished removing stale connections")
 		}
 	}
 }
@@ -137,6 +139,19 @@ func (s *ConnStore) updateConns(conns []*connection.Connection, l7Events map[con
 
 		key := connection.NewConnectionKey(conn)
 		existing, ok := s.entries[key]
+
+		// Handle a special case where the keys are the same (same src/dst address, port and protocol)
+		// however the connection itself is new. This can happen for example when doing the following:
+		// curl --local-port 55555 <target>
+		// When this case applies, we want to re-populate the connection again since a network policy
+		// or target service has changed but end up with the same resulting pod.
+		// This applies only to CT flows; denied connections will increment the stats until it has
+		// been removed (stale).
+		// Should we consider whether the new connection is started after the existing connection?
+		if ok && conn.ID != existing.ID {
+			existing = nil
+			ok = false
+		}
 
 		if !ok {
 			for _, augmenter := range augments {
@@ -168,10 +183,6 @@ func (s *ConnStore) updateConns(conns []*connection.Connection, l7Events map[con
 }
 
 func (s *ConnStore) getL7Conns(conns []*connection.Connection, l7EventMap map[connection.ConnectionKey]L7ProtocolFields) []*connection.Connection {
-	if len(l7EventMap) == 0 {
-		return nil
-	}
-
 	for key := range l7EventMap {
 		conn, ok := s.entries[key]
 		if !ok {
@@ -185,7 +196,7 @@ func (s *ConnStore) getL7Conns(conns []*connection.Connection, l7EventMap map[co
 }
 
 func (s *ConnStore) removeStaleConnections() {
-	klog.V(5).InfoS("DEBUG Q1: triggered stale connection cleanup")
+	klog.V(5).InfoS("Removing stale connections from store")
 	now := time.Now().UnixNano()
 	conns := []*connection.Connection{}
 	for s.gc.Len() > 0 {
@@ -252,7 +263,7 @@ func acceptConnection(conn *connection.Connection) bool {
 	}
 
 	if conn.FlowType == utils.FlowTypeUnsupported {
-		klog.V(5).InfoS("Skip this connection flow type unsupported", "flowType", conn.FlowType)
+		klog.V(6).InfoS("Skip this connection flow type unsupported", "flowType", conn.FlowType)
 		return false
 	}
 	return true
@@ -269,9 +280,8 @@ func ctConnMerge(existing, incoming *connection.Connection) *connection.Connecti
 		return existing
 	}
 
-	if (incoming.OriginalStats.Packets > existing.OriginalStats.Packets) ||
-		(incoming.OriginalStats.ReversePackets > existing.OriginalStats.ReversePackets) ||
-		(incoming.TCPState != existing.TCPState) {
+	if utils.HasActivity(existing.OriginalStats, incoming.OriginalStats) ||
+		incoming.TCPState != existing.TCPState {
 		existing.LastUpdateTime = incoming.LastUpdateTime
 	}
 
@@ -319,6 +329,7 @@ func (h *gcHeap) Push(x any) {
 		heap.Remove(h, item.index)
 	}
 	h.items = append(h.items, item)
+	h.keyToItem[key] = item
 }
 func (h *gcHeap) Pop() any {
 	old := h.items
@@ -330,13 +341,3 @@ func (h *gcHeap) Pop() any {
 	delete(h.keyToItem, key)
 	return it
 }
-
-// func (h *gcHeap) Replace(item *gcItem) {
-// 	key := connection.NewConnectionKey(item.conn)
-// 	if item, ok := h.keyToItem[key]; ok {
-// 		heap.Remove(h, item.index)
-// 	}
-
-// 	heap.Push(h, item)
-// 	h.keyToItem[key] = item
-// }

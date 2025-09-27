@@ -136,7 +136,6 @@ func (c *Consumer) Export(conn *connection.Connection) error {
 	if c.exp == nil {
 		return nil // TODO: Return an error??
 	}
-	klog.V(5).InfoS("DEBUG A2: Exporting connection", "Consumer", c.address, "conn", conn)
 	return c.exp.Export(conn)
 }
 
@@ -197,7 +196,6 @@ func (c *Consumer) Run(stopCh <-chan struct{}) {
 			if msg.Deleted {
 				c.handleDeletedConns(msg.Conns)
 			} else {
-				maps.Copy(c.l7Events, msg.L7Events)
 				c.handleUpdatedConns(msg.Conns, msg.L7Events)
 			}
 		case <-exportTicker.C:
@@ -230,21 +228,6 @@ func (c *Consumer) Run(stopCh <-chan struct{}) {
 	}
 }
 
-func (c *Consumer) handleUpdatedL7Events(conns []*connection.Connection, l7Events map[connection.ConnectionKey]connections.L7ProtocolFields) {
-
-	for _, conn := range conns {
-		connKey := connection.NewConnectionKey(conn)
-
-		// In case L7 event is received after the last planned export of the TCP connection, add
-		// the event back to the queue to be exported in next export cycle
-		_, ok := c.expirePriorityQueue.KeyToItem[connKey]
-		if !ok {
-			c.expirePriorityQueue.WriteItemToQueue(connKey, conn)
-		}
-	}
-
-}
-
 func (c *Consumer) sendFlowRecords() (time.Duration, error) {
 	currTime := time.Now()
 	var nextExpireTime time.Duration
@@ -260,7 +243,6 @@ func (c *Consumer) sendFlowRecords() (time.Duration, error) {
 		conn := c.exportConns[i]
 		c.fillL7Info(conn)
 
-		klog.InfoS("DEBUG: Sending flow records", "Connection", conn)
 		if err := c.Export(conn); err != nil {
 			klog.ErrorS(err, "Error when sending expired flow record")
 			return nextExpireTime, err
@@ -290,7 +272,7 @@ func (c *Consumer) fillL7Info(conn *connection.Connection) {
 }
 
 func (c *Consumer) getExpiredConns(expiredConns []*connection.Connection, currTime time.Time, maxSize int) ([]*connection.Connection, time.Duration) {
-	for i := 0; i < maxSize; i++ {
+	for range maxSize {
 		pqItem := c.expirePriorityQueue.GetTopExpiredItem(currTime)
 		if pqItem == nil {
 			break
@@ -329,36 +311,36 @@ func (c *Consumer) getExpiredConns(expiredConns []*connection.Connection, currTi
 }
 
 func (c *Consumer) handleUpdatedConns(conns []*connection.Connection, l7Events map[connection.ConnectionKey]connections.L7ProtocolFields) {
+	// cache l7Events to use during export
+	maps.Copy(c.l7Events, l7Events)
+
 	for _, conn := range conns {
 		if !c.protocolFilter.Allow(conn.FlowKey.Protocol) {
 			continue
 		}
 
 		key := connection.NewConnectionKey(conn)
-		existingItem, ok := c.expirePriorityQueue.KeyToItem[key]
-		if ok {
-			if existingItem.Conn.IsDenyFlow && !conn.IsDenyFlow {
-				// Drop flows that are denied
-				continue
-			}
-			if conn.IsDenyFlow && !existingItem.Conn.IsDenyFlow {
-				// Deny flows take priority when exporting.
-				c.expirePriorityQueue.RemoveItemFromMap(conn)
-				delete(c.prevStates, key)
-			}
-		}
-		_, isL7Conn := l7Events[key]
-		oldState, ok := c.prevStates[key]
-		// Check if there is any activity on this conn.
-		// If there is no activity since the last time we sent it then no point in
-		// updating it's spot in the queue.
-		if !isL7Conn && ok && !((conn.OriginalStats.Packets > oldState.stats.Packets) ||
-			(conn.OriginalStats.ReversePackets > oldState.stats.ReversePackets) ||
-			(conn.TCPState != oldState.tcpState)) {
-			continue
+		item, ok := c.expirePriorityQueue.KeyToItem[key]
+
+		// Incoming connection is a new connection with same key
+		if ok && conn.ID != item.Conn.ID {
+			delete(c.prevStates, key)
+			ok = false // If we don't set this to false, we can keep the position in the queue.
 		}
 
-		if item, ok := c.expirePriorityQueue.KeyToItem[key]; !ok {
+		_, isL7Conn := l7Events[key]
+		if !isL7Conn {
+			oldState, ok := c.prevStates[key]
+			// Check if there is any activity on this conn.
+			// If there is no activity since the last time we sent it then no point in
+			// updating it's spot in the queue.
+			if ok && !(utils.HasActivity(oldState.stats, conn.OriginalStats) ||
+				conn.TCPState != oldState.tcpState) {
+				continue
+			}
+		}
+
+		if !ok {
 			c.expirePriorityQueue.WriteItemToQueue(key, conn)
 		} else {
 			c.expirePriorityQueue.Update(item, item.ActiveExpireTime, time.Now().Add(c.idleFlowTimeout))
@@ -373,7 +355,7 @@ func (c *Consumer) handleDeletedConns(conns []*connection.Connection) {
 		delete(c.prevStates, key)
 		item := c.expirePriorityQueue.Remove(key)
 		if item != nil {
-			klog.V(4).InfoS("Conn removed from cs pq due to stale timeout", "key", key, "conn", item.Conn)
+			klog.V(4).InfoS("Conn removed from pq due to stale timeout", "key", key)
 		}
 	}
 }

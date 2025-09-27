@@ -160,7 +160,7 @@ func setupFetcher(b *testing.B) (*ConntrackFetcher, Store, *connectionstest.Mock
 
 func generateConns() []*connection.Connection {
 	conns := make([]*connection.Connection, testNumOfConns)
-	for i := 0; i < testNumOfConns; i++ {
+	for i := range testNumOfConns {
 		conns[i] = getNewConn()
 	}
 	return conns
@@ -169,7 +169,7 @@ func generateConns() []*connection.Connection {
 func generateUpdatedConns(conns []*connection.Connection) []*connection.Connection {
 	length := len(conns) - testNumOfDeletedConns + testNumOfNewConns
 	updatedConns := make([]*connection.Connection, length)
-	for i := 0; i < len(conns); i++ {
+	for i := range conns {
 		// replace deleted connection with new connection
 		if conns[i].ReadyToDelete == true {
 			conns[i] = getNewConn()

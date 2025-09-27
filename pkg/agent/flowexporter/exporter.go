@@ -243,12 +243,10 @@ func (exp *FlowExporter) Run(stopCh <-chan struct{}) {
 		}
 	}
 
-	klog.V(5).Info("DEBUG A3: waiting for FlowExporterTarget informer cache")
 	cacheSyncs := []cache.InformerSynced{exp.targetInformer.Informer().HasSynced}
 	if !cache.WaitForNamedCacheSync("FlowExporter", stopCh, cacheSyncs...) {
 		return
 	}
-	klog.V(5).Info("DEBUG A3: FlowExporterTarget informer cache synced")
 
 	go exp.store.Run(stopCh)
 

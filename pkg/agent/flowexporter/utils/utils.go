@@ -128,3 +128,7 @@ func LookupProtocolMap(name string) (uint8, error) {
 	}
 	return proto, nil
 }
+
+func HasActivity(oldStats, newStats connection.Stats) bool {
+	return newStats.Packets > oldStats.Packets || newStats.ReversePackets > oldStats.ReversePackets
+}
