@@ -1,5 +1,12 @@
 # Changelog 2.4
 
+## 2.4.3 - 2025-10-01
+
+### Fixed
+
+- Unify validation logic for IPPool and ExternalIPPool to ensure consistency in checks and failures. ([#7319](https://github.com/antrea-io/antrea/pull/7319), [@wenqiq])
+- Handle Traceflow external destination IP correctly in NoEncap mode to fix timeout issue. ([#7266](https://github.com/antrea-io/antrea/pull/7266), [@gran-vmv])
+
 ## 2.4.2 - 2025-09-15
 
 ### Fixed
