@@ -1,5 +1,14 @@
 # Changelog 2.3
 
+## 2.3.2 - 2025-10-14
+
+### Fixed
+
+- Fix overflow issue in network policy priority assigner. ([#7496](https://github.com/antrea-io/antrea/pull/7496), [@Dyanngg])
+- Use a more robust way to extract the source Node IP from encapsulated IGMP messages for Multicast. ([#7282](https://github.com/antrea-io/antrea/pull/7282), [@hongliangl])
+- Fix agent crash issue which is caused by unexpected interface store initialization for FlexibleIPAM uplink internal port. ([#7389](https://github.com/antrea-io/antrea/pull/7389), [@gran-vmv])
+- Fix ACNP applied to NodePort failing to reject traffic in noEncap/hybrid mode. ([#7265](https://github.com/antrea-io/antrea/pull/7265), [@hongliangl])
+
 ## 2.3.1 - 2025-07-03
 
 ### Changed
