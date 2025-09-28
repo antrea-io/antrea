@@ -18,6 +18,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"regexp"
 	"strconv"
 	"strings"
 	"sync"
@@ -1265,4 +1266,19 @@ func (k *KubernetesUtils) Cleanup(namespaces map[string]TestNamespaceMeta) {
 			log.Errorf("Error when deleting Namespace '%s': %v", ns, err)
 		}
 	}
+}
+
+func (k *KubernetesUtils) GetClusterSearchDomain() (string, error) {
+	cm, err := k.clientset.CoreV1().ConfigMaps(kubeNamespace).Get(context.TODO(), "kubelet-config", metav1.GetOptions{})
+	if err != nil {
+		return "", err
+	}
+	clusterDomain := "cluster.local"
+	if kubeletConf, ok := cm.Data["kubelet"]; ok {
+		re := regexp.MustCompile(`clusterDomain:\s+([^\s]+)`)
+		if match := re.FindStringSubmatch(kubeletConf); len(match) == 2 {
+			clusterDomain = strings.TrimSpace(match[1])
+		}
+	}
+	return clusterDomain, nil
 }
