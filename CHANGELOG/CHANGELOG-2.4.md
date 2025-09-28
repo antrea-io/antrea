@@ -1,5 +1,13 @@
 # Changelog 2.4
 
+## 2.4.3 - 2025-10-14
+
+### Fixed
+
+- Fix overflow issue in network policy priority assigner. ([#7496](https://github.com/antrea-io/antrea/pull/7496), [@Dyanngg])
+- Unify validation logic for IPPool and ExternalIPPool for more consistent checks and failures. ([#7319](https://github.com/antrea-io/antrea/pull/7319), [@wenqiq])
+- Handle Traceflow external destination IP correctly in NoEncap mode to fix timeout issue. ([#7266](https://github.com/antrea-io/antrea/pull/7266), [@gran-vmv])
+
 ## 2.4.2 - 2025-09-15
 
 ### Fixed
