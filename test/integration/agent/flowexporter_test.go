@@ -192,7 +192,7 @@ func TestSetupConnTrackParameters(t *testing.T) {
 // ConntrackConnectionStore, which periodically dumps all connections from conntrack and updates its
 // internal store. This benchmark only evaluates connection "add", and not connection "update",
 // which is achieved by clearing the connection store after each benchmark loop iteration. Note that
-// connection "add" is more expensive that connection "update". However, it seems that dumping the
+// connection "add" is more expensive than connection "update". However, it seems that dumping the
 // connections from conntrack is what is using the most CPU time.
 func BenchmarkConntrackConnectionStorePoll(b *testing.B) {
 	// 32K is not such a high number (we could go to 128K or even more), but it seems reasonable
