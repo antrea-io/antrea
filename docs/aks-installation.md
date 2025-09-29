@@ -1,5 +1,10 @@
 # Deploying Antrea on AKS and AKS Engine
 
+> [!NOTE]
+> Due to limited resources, Azure support is no longer tested starting with Antrea 2.5.
+> Azure-related code and features are provided as-is and are not verified.
+> Any issues related to Azure will be addressed on a best-effort basis.
+
 This document describes steps to deploy Antrea to an AKS cluster or an AKS
 Engine cluster.
 

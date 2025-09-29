@@ -14,6 +14,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+# ====== Azure Support Disclaimer ======
+# Due to limited resources, Azure support is no longer tested starting with Antrea 2.5.
+# Azure-related code and features are provided as-is and are not verified.
+# Any issues related to Azure will be addressed on a best-effort basis.
+
 set -exu
 
 function echoerr {
@@ -32,7 +37,12 @@ TEST_SCRIPT_RC=0
 MODE="report"
 KUBE_CONFORMANCE_IMAGE_VERSION=auto
 
-_usage="Usage: $0 [--cluster-name <AKSClusterNameToUse>] [--kubeconfig <KubeconfigSavePath>] [--k8s-version <ClusterVersion>]\
+_usage="====== Azure Support Disclaimer ======
+Due to limited resources, Azure support is no longer tested starting with Antrea 2.5.
+Azure-related code and features are provided as-is and are not verified.
+Any issues related to Azure will be addressed on a best-effort basis.
+
+Usage: $0 [--cluster-name <AKSClusterNameToUse>] [--kubeconfig <KubeconfigSavePath>] [--k8s-version <ClusterVersion>]\
                   [--azure-app-id <AppID>] [--azure-tenant-id <TenantID>] [--azure-password <Password>] \
                   [--aks-region <Region>] [--log-mode <SonobuoyResultLogLevel>] [--setup-only] [--cleanup-only]
 
