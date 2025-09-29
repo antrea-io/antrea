@@ -15,15 +15,26 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"net"
 	"strconv"
 	"strings"
 
+	"gopkg.in/yaml.v3"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	clientset "k8s.io/client-go/kubernetes"
+	"k8s.io/klog/v2"
+
 	"antrea.io/antrea/pkg/agent/util"
 )
 
 var getAllNodeAddresses = util.GetAllNodeAddresses
+
+const (
+	configMapKubeProxy = "kube-proxy"
+	configMapKubeadm   = "kubeadm-config"
+)
 
 func getAvailableNodePortAddresses(nodePortAddressesFromConfig []string, excludeDevices []string) ([]net.IP, []net.IP, error) {
 	// Get all IP addresses of Node
@@ -78,4 +89,101 @@ func parsePortRange(portRangeStr string) (start, end int, err error) {
 	}
 
 	return start, end, nil
+}
+
+func parseCIDRs(s string) []*net.IPNet {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return nil
+	}
+
+	var cidrs []*net.IPNet
+	for _, cidrStr := range strings.Split(s, ",") {
+		cidrStr = strings.TrimSpace(cidrStr)
+		if cidrStr == "" {
+			continue
+		}
+		_, cidr, err := net.ParseCIDR(cidrStr)
+		if err != nil {
+			klog.ErrorS(err, "Failed to parse CIDR", "cidrStr", cidrStr)
+			continue
+		}
+		cidrs = append(cidrs, cidr)
+	}
+	return cidrs
+}
+
+// getPodCIDRs gets the cluster-wide Pod CIDRs (IPv4 and IPv6) by attempting the following sources in order:
+// 1. Agent configuration.
+// 2. kube-proxy ConfigMap.
+// 3. kubeadm-config ConfigMap.
+func getPodCIDRStr(o *Options, k8sClient clientset.Interface) string {
+	// Get Pod CIDR from agent config
+	podCIDRStr := o.config.PodCIDR
+	if podCIDRStr != "" {
+		return podCIDRStr
+	}
+
+	// Try kube-proxy ConfigMap
+	klog.V(2).InfoS("Trying to find Pod CIDRs in ConfigMap kube-proxy")
+	podCIDRStr = extractPodCIDRFromConfigMap(k8sClient, configMapKubeProxy, "config.conf", "clusterCIDR")
+	if podCIDRStr != "" {
+		return podCIDRStr
+	}
+
+	// Try kubeadm-config ConfigMap
+	klog.V(2).InfoS("Trying to find Pod CIDRs in ConfigMap kubeadm-config")
+	podCIDRStr = extractPodCIDRFromConfigMap(k8sClient, configMapKubeadm, "ClusterConfiguration", "networking.podSubnet")
+	if podCIDRStr != "" {
+		return podCIDRStr
+	}
+
+	klog.V(2).InfoS("No Pod CIDRs found")
+	return ""
+}
+
+func extractPodCIDRFromConfigMap(client clientset.Interface, name, key, path string) string {
+	cm, err := client.CoreV1().ConfigMaps(metav1.NamespaceSystem).Get(context.TODO(), name, metav1.GetOptions{})
+	if err != nil {
+		klog.ErrorS(err, "Failed to get ConfigMap", "ConfigMap", name)
+		return ""
+	}
+	data, ok := cm.Data[key]
+	if !ok {
+		klog.InfoS("Key is not found from ConfigMap", "ConfigMap", name, "key", key)
+		return ""
+	}
+
+	var m map[string]interface{}
+	if err := yaml.Unmarshal([]byte(data), &m); err != nil {
+		klog.ErrorS(err, "Failed to unmarshal ConfigMap data as YAML", "ConfigMap", name)
+		return ""
+	}
+
+	podCIDRStr, ok := getNestedValue(m, path)
+	if !ok {
+		klog.InfoS("Path is not found in ConfigMap", "ConfigMap", name, "path", path)
+		return ""
+	}
+
+	return podCIDRStr
+}
+
+func getNestedValue(m map[string]any, path string) (string, bool) {
+	cur := any(m)
+	for _, k := range strings.Split(path, ".") {
+		next, ok := cur.(map[string]interface{})
+		if !ok {
+			return "", false
+		}
+		cur, ok = next[k]
+		if !ok {
+			return "", false
+		}
+	}
+	s, ok := cur.(string)
+	if !ok {
+		return "", false
+	}
+	return s, true
 }

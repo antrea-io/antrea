@@ -15,13 +15,18 @@
 package main
 
 import (
+	"context"
 	"net"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/kubernetes/fake"
 
 	"antrea.io/antrea/pkg/agent/util"
+	agentconfig "antrea.io/antrea/pkg/config/agent"
 )
 
 func TestGetAvailableNodePortAddresses(t *testing.T) {
@@ -121,4 +126,224 @@ func TestParsePortRange(t *testing.T) {
 
 		})
 	}
+}
+
+func TestParseCIDRs(t *testing.T) {
+	testCases := []struct {
+		name          string
+		input         string
+		expectedCIDRs []string
+	}{
+		{
+			name:          "empty string",
+			input:         "",
+			expectedCIDRs: nil,
+		},
+		{
+			name:          "only spaces",
+			input:         "   ",
+			expectedCIDRs: nil,
+		},
+		{
+			name:          "single valid IPv4 CIDR",
+			input:         "10.244.0.0/16",
+			expectedCIDRs: []string{"10.244.0.0/16"},
+		},
+		{
+			name:          "multiple valid CIDRs with spaces",
+			input:         "10.0.0.0/8, 192.168.0.0/24 ,fd00::/64",
+			expectedCIDRs: []string{"10.0.0.0/8", "192.168.0.0/24", "fd00::/64"},
+		},
+		{
+			name:          "contains invalid CIDR, should skip it",
+			input:         "10.1.0.0/16,invalid,fd00::/64",
+			expectedCIDRs: []string{"10.1.0.0/16", "fd00::/64"},
+		},
+		{
+			name:          "all invalid CIDRs, should return empty slice",
+			input:         "bad1,bad2",
+			expectedCIDRs: []string{},
+		},
+		{
+			name:          "trailing and leading commas",
+			input:         ",10.244.0.0/16,",
+			expectedCIDRs: []string{"10.244.0.0/16"},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := parseCIDRs(tc.input)
+			var gotStrs []string
+			for _, cidr := range got {
+				gotStrs = append(gotStrs, cidr.String())
+			}
+			assert.ElementsMatch(t, tc.expectedCIDRs, gotStrs)
+		})
+	}
+}
+
+func TestExtractPodCIDRFromConfigMap(t *testing.T) {
+	tests := []struct {
+		name         string
+		cmData       map[string]string
+		key          string
+		path         string
+		expectedCIDR string
+	}{
+		{
+			name: "found Pod CIDR in ConfigMap kube-proxy",
+			cmData: map[string]string{
+				"config.conf": `
+apiVersion: kubeproxy.config.k8s.io/v1alpha1
+clusterCIDR : 10.244.0.0/16, fd00:10:244::/56 
+mode: iptables
+`,
+			},
+			key:          "config.conf",
+			path:         "clusterCIDR",
+			expectedCIDR: "10.244.0.0/16, fd00:10:244::/56",
+		},
+		{
+			name: "found Pod CIDR in ConfigMap kubeadm-config",
+			cmData: map[string]string{
+				"ClusterConfiguration": `
+networking:
+  dnsDomain: cluster.local
+  podSubnet: 10.244.0.0/16,fd00:10:244::/56
+  serviceSubnet: 10.96.0.0/16,fd00:10:96::/112
+`,
+			},
+			key:          "ClusterConfiguration",
+			path:         "networking.podSubnet",
+			expectedCIDR: "10.244.0.0/16,fd00:10:244::/56",
+		},
+		{
+			name: "missing key",
+			cmData: map[string]string{
+				"wrong.conf": "",
+			},
+			key:          "config.conf",
+			path:         "clusterCIDR",
+			expectedCIDR: "",
+		},
+		{
+			name: "no CIDR match",
+			cmData: map[string]string{
+				"config.conf": `mode: iptables`,
+			},
+			key:          "config.conf",
+			path:         "clusterCIDR",
+			expectedCIDR: "",
+		},
+		{
+			name: "wrong path",
+			cmData: map[string]string{
+				"config.conf": `
+apiVersion: kubeproxy.config.k8s.io/v1alpha1
+clusterCIDR: 10.244.0.0/16,fd00:10:244::/56
+mode: iptables
+`,
+			},
+			key:          "config.conf",
+			path:         "clusterCIDRs",
+			expectedCIDR: "",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			client := fake.NewClientset(&corev1.ConfigMap{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      configMapKubeProxy,
+					Namespace: metav1.NamespaceSystem,
+				},
+				Data: tt.cmData,
+			})
+
+			cidr := extractPodCIDRFromConfigMap(client, configMapKubeProxy, tt.key, tt.path)
+			require.Equal(t, tt.expectedCIDR, cidr)
+		})
+	}
+}
+
+func TestGetPodCIDRs(t *testing.T) {
+	tests := []struct {
+		name          string
+		optionsCIDR   string
+		configMaps    []*corev1.ConfigMap
+		expectedCIDRs []*net.IPNet
+	}{
+		{
+			name:          "CIDR from options config",
+			optionsCIDR:   "10.244.0.0/16,  fd00:10:244::/56",
+			expectedCIDRs: []*net.IPNet{mustParseCIDR("10.244.0.0/16"), mustParseCIDR("fd00:10:244::/56")},
+		},
+		{
+			name: "CIDR from kube-proxy ConfigMap fallback",
+			configMaps: []*corev1.ConfigMap{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      configMapKubeProxy,
+						Namespace: metav1.NamespaceSystem,
+					},
+					Data: map[string]string{
+						"config.conf": `
+apiVersion: kubeproxy.config.k8s.io/v1alpha1
+clusterCIDR: 10.244.0.0/16
+mode: iptables
+`,
+					},
+				},
+			},
+			expectedCIDRs: []*net.IPNet{mustParseCIDR("10.244.0.0/16")},
+		},
+		{
+			name: "CIDR from kubeadm-config fallback",
+			configMaps: []*corev1.ConfigMap{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      configMapKubeadm,
+						Namespace: metav1.NamespaceSystem,
+					},
+					Data: map[string]string{
+						"ClusterConfiguration": `
+networking:
+      dnsDomain: cluster.local
+      podSubnet: fd00:10:244::/56
+      serviceSubnet: fd00:10:96::/112
+`,
+					},
+				},
+			},
+			expectedCIDRs: []*net.IPNet{mustParseCIDR("fd00:10:244::/56")},
+		},
+		{
+			name: "No CIDR found",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			client := fake.NewClientset()
+			for _, cm := range tt.configMaps {
+				_, err := client.CoreV1().ConfigMaps(cm.Namespace).Create(context.TODO(), cm, metav1.CreateOptions{})
+				require.NoError(t, err)
+			}
+
+			o := &Options{
+				config: &agentconfig.AgentConfig{
+					PodCIDR: tt.optionsCIDR,
+				},
+			}
+			podCIDRStr := getPodCIDRStr(o, client)
+			gotCIDRs := parseCIDRs(podCIDRStr)
+			require.Equal(t, tt.expectedCIDRs, gotCIDRs)
+		})
+	}
+}
+
+func mustParseCIDR(s string) *net.IPNet {
+	_, ipnet, _ := net.ParseCIDR(s)
+	return ipnet
 }

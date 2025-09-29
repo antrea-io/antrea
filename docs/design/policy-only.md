@@ -52,3 +52,11 @@ resolve its neighbors, and the Pod therefore can generate traffic to these neigh
 1. A L3 flow that routes all other IP packets to host network via `antrea-gw0` interface.
 
 These flows together handle all Pod traffic patterns.
+
+It is recommended to specify the correct Pod CIDR (the aggregated cluster-wide Pod CIDR, not the
+per-Node Pod CIDRs) in `podCIDR` field of `antrea-agent.conf`. This ensures that Traceflow functions
+correctly for inter-Node Pod-to-Pod traffic. For example:
+
+```text
+podCIDR: "10.10.0.0/16,fd00::/12"
+```

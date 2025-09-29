@@ -974,43 +974,22 @@ func (f *featurePodConnectivity) flowsToTrace(dataplaneTag uint8,
 		}
 		return fb
 	}
+	// Output the packets if traffic mode is noEncap or hybrid.
+	ifSupportsNoEncap := func(fb binding.FlowBuilder) binding.FlowBuilder {
+		if f.networkConfig.TrafficEncapMode.SupportsNoEncap() {
+			fb = fb.Action().OutputToRegField(TargetOFPortField)
+		}
+		return fb
+	}
 
 	// This generates Traceflow specific flows that outputs traceflow non-hairpin packets to OVS port and Antrea Agent after
 	// L2 forwarding calculation.
 	for _, ipProtocol := range f.ipProtocols {
-		if f.networkConfig.TrafficEncapMode.SupportsEncap() {
-			if f.tunnelPort != 0 {
-				// SendToController and Output if output port is tunnel port.
-				fb := OutputTable.ofTable.BuildFlow(priorityNormal+3).
-					Cookie(cookieID).
-					MatchRegFieldWithValue(TargetOFPortField, f.tunnelPort).
-					MatchProtocol(ipProtocol).
-					MatchRegMark(OutputToOFPortRegMark).
-					MatchIPDSCP(dataplaneTag).
-					SetHardTimeout(timeout).
-					Action().OutputToRegField(TargetOFPortField)
-				fb = ifDroppedOnly(fb)
-				flows = append(flows, fb.Done())
-			}
-			// For injected packets, only SendToController if output port is local gateway. In encapMode, a Traceflow
-			// packet going out of the gateway port (i.e. exiting the overlay) essentially means that the Traceflow
-			// request is complete.
-			fb := OutputTable.ofTable.BuildFlow(priorityNormal+2).
+		if f.tunnelPort != 0 {
+			// SendToController and Output if output port is tunnel port.
+			fb := OutputTable.ofTable.BuildFlow(priorityNormal+3).
 				Cookie(cookieID).
-				MatchRegFieldWithValue(TargetOFPortField, f.gatewayPort).
-				MatchProtocol(ipProtocol).
-				MatchRegMark(OutputToOFPortRegMark).
-				MatchIPDSCP(dataplaneTag).
-				SetHardTimeout(timeout)
-			fb = ifDroppedOnly(fb)
-			fb = ifLiveTraffic(fb)
-			flows = append(flows, fb.Done())
-		} else {
-			// SendToController and Output if output port is local gateway. Unlike in encapMode, inter-Node Pod-to-Pod
-			// traffic is expected to go out of the gateway port on the way to its destination.
-			fb := OutputTable.ofTable.BuildFlow(priorityNormal+2).
-				Cookie(cookieID).
-				MatchRegFieldWithValue(TargetOFPortField, f.gatewayPort).
+				MatchRegFieldWithValue(TargetOFPortField, f.tunnelPort).
 				MatchProtocol(ipProtocol).
 				MatchRegMark(OutputToOFPortRegMark).
 				MatchIPDSCP(dataplaneTag).
@@ -1019,6 +998,23 @@ func (f *featurePodConnectivity) flowsToTrace(dataplaneTag uint8,
 			fb = ifDroppedOnly(fb)
 			flows = append(flows, fb.Done())
 		}
+		// For injected packets, SendToController and Output depending on traffic mode if output port is local gateway.
+		// - In encap mode, a Traceflow packet going out of the gateway port (i.e. exiting the overlay) essentially means
+		//   that the Traceflow request is complete. only SendToController if output port is local gateway.
+		// - In noEncap or hybrid mode, inter-Node Pod-to-Pod traffic is expected to go out of the gateway port on the
+		//   way to its destination.
+		fb := OutputTable.ofTable.BuildFlow(priorityNormal+2).
+			Cookie(cookieID).
+			MatchRegFieldWithValue(TargetOFPortField, f.gatewayPort).
+			MatchProtocol(ipProtocol).
+			MatchRegMark(OutputToOFPortRegMark).
+			MatchIPDSCP(dataplaneTag).
+			SetHardTimeout(timeout)
+		fb = ifSupportsNoEncap(fb)
+		fb = ifDroppedOnly(fb)
+		fb = ifLiveTraffic(fb)
+		flows = append(flows, fb.Done())
+
 		// Only SendToController if output port is local gateway and destination IP is gateway.
 		gatewayIP := f.gatewayIPs[ipProtocol]
 		if gatewayIP != nil {
@@ -1035,7 +1031,7 @@ func (f *featurePodConnectivity) flowsToTrace(dataplaneTag uint8,
 			flows = append(flows, fb.Done())
 		}
 		// Only SendToController if output port is Pod port.
-		fb := OutputTable.ofTable.BuildFlow(priorityNormal + 2).
+		fb = OutputTable.ofTable.BuildFlow(priorityNormal + 2).
 			Cookie(cookieID).
 			MatchProtocol(ipProtocol).
 			MatchRegMark(OutputToOFPortRegMark).
