@@ -4004,9 +4004,13 @@ func testFQDNPolicyInClusterService(t *testing.T) {
 		k8sUtils.CreateOrUpdateService(service)
 		failOnError(waitForResourceReady(t, timeout, service), t)
 	}
+	searchDomain, err := k8sUtils.GetClusterSearchDomain()
+	if err != nil {
+		t.Fatalf("Failed to get search domain: %v", err)
+	}
 
 	svcDNSName := func(service *v1.Service) string {
-		return fmt.Sprintf("%s.%s.svc.cluster.local", service.Name, service.Namespace)
+		return fmt.Sprintf("%s.%s.svc.%s", service.Name, service.Namespace, searchDomain)
 	}
 
 	builder := &ClusterNetworkPolicySpecBuilder{}
