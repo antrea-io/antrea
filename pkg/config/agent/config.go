@@ -281,9 +281,9 @@ type FlowExporterConfig struct {
 	// "flow-aggregator/flow-aggregator" can be provided to connect to the Antrea
 	// Flow Aggregator Service.
 	// If PORT is empty, we default to 4739, the standard IPFIX port.
-	// If no PROTO is given, we consider "tcp" as default. We support "tcp" and
-	// "udp" L4 transport protocols.
-	// Defaults to "flow-aggregator/flow-aggregator:4739:tcp".
+	// If no PROTO is given, we consider "tls" as default. We support "grpc", "tls", "tcp"
+	// and "udp" protocols.
+	// Defaults to "flow-aggregator/flow-aggregator:4739:tls".
 	FlowCollectorAddr string `yaml:"flowCollectorAddr,omitempty"`
 	// Provide flow poll interval in format "0s". This determines how often flow
 	// exporter dumps connections in conntrack module. Flow poll interval should
