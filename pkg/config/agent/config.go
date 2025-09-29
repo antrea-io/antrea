@@ -55,6 +55,13 @@ type AgentConfig struct {
 	// networkPolicyOnly: Antrea enforces NetworkPolicy only, and utilizes CNI chaining and delegates Pod
 	//                    IPAM and connectivity to the primary CNI.
 	TrafficEncapMode string `yaml:"trafficEncapMode,omitempty"`
+
+	// The aggregated cluster-wide Pod CIDRs (not the per-Node Pod CIDR).
+	// This field is applicable only in networkPolicyOnly mode and ignored in other traffic modes. It can be left empty,
+	// but it is recommended to specify the correct Pod CIDR, as some features may not function properly otherwise.
+	// Example: "10.10.0.0/16" for IPv4-only, or "10.10.0.0/16,fd00::/12" for dual-stack.
+	PodCIDRs string `yaml:"podCIDRs,omitempty"`
+
 	// Whether or not to SNAT (using the Node IP) the egress traffic from a Pod to the external network.
 	// This option is for the noEncap traffic mode only, and the default value is false. In the noEncap
 	// mode, if the cluster's Pod CIDR is reachable from the external network, then the Pod traffic to

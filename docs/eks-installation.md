@@ -40,6 +40,29 @@ kubectl apply -f https://raw.githubusercontent.com/antrea-io/antrea/main/build/y
 
 Now Antrea should be plugged into the EKS CNI and is ready to enforce NetworkPolicy.
 
+When traffic mode is `networkPolicyOnly`, it is recommended to configure `podCIDRs` field in the `antrea-agent.conf`
+section of the ConfigMap `antrea-config` with the cluster-wide aggregated Pod CIDR (not the per-Node Pod CIDRs).
+This configuration ensures that Antrea Traceflow functions correctly for all scenarios.
+
+For example, if the cluster uses Pod CIDR `10.10.0.0/16` and IPv6 Pod CIDR `fd00::/12`, edit the ConfigMap as follows:
+
+```bash
+kubectl edit configmap -n kube-system antrea-config
+```
+
+Update the field `podCIDRs` like below and save.
+
+```yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: antrea-config
+  namespace: kube-system
+data:
+  antrea-agent.conf: |
+    podCIDRs: "10.10.0.0/16,fd00::/12"
+```
+
 ## Deploying Antrea in `encap` mode
 
 In `encap` mode, Antrea acts as the primary CNI of an EKS cluster, and

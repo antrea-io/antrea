@@ -31,6 +31,7 @@ import (
 	"k8s.io/klog/v2"
 	"k8s.io/utils/ptr"
 
+	"antrea.io/antrea/pkg/agent/config"
 	"antrea.io/antrea/pkg/agent/openflow"
 	crdv1beta1 "antrea.io/antrea/pkg/apis/crd/v1beta1"
 	binding "antrea.io/antrea/pkg/ovs/openflow"
@@ -319,7 +320,7 @@ func (c *Controller) parsePacketIn(pktIn *ofctrl.PacketIn) (*crdv1beta1.Traceflo
 			ob.Action = crdv1beta1.ActionForwarded
 		} else if ipDst == gatewayIP.String() && outputPort == gwPort {
 			ob.Action = crdv1beta1.ActionDelivered
-		} else if c.networkConfig.TrafficEncapMode.SupportsEncap() && outputPort == gwPort {
+		} else if c.networkConfig.TrafficEncapMode.SupportsEncap() && outputPort == gwPort { // encap or hybrid
 			var pktMark uint32
 			if match := getMatchPktMarkField(matchers); match != nil {
 				pktMark, err = getMarkValue(match)
@@ -346,9 +347,30 @@ func (c *Controller) parsePacketIn(pktIn *ofctrl.PacketIn) (*crdv1beta1.Traceflo
 				obEgress := getEgressObservation(true, egressIP, egressName, egressNode)
 				obs = append(obs, *obEgress)
 			}
-			ob.Action = crdv1beta1.ActionForwardedOutOfOverlay
-		} else if outputPort == gwPort { // noEncap
-			// TODO: merge this and above case if noEncap mode supports Egress feature
+
+			ob.Action = crdv1beta1.ActionForwardedOutOfNetwork
+			if c.networkConfig.TrafficEncapMode == config.TrafficEncapModeHybrid && c.podSubnetChecker != nil {
+				netAddrDst, _ := netip.AddrFromSlice(netIPDst)
+				isPodIP, _ := c.podSubnetChecker.LookupIPInPodSubnets(netAddrDst)
+				if isPodIP {
+					ob.Action = crdv1beta1.ActionForwarded
+				}
+			}
+		} else if c.networkConfig.TrafficEncapMode == config.TrafficEncapModeNetworkPolicyOnly && outputPort == gwPort { // networkPolicyOnly
+			isPodIP := false
+			for _, podCIDR := range c.podCIDRs {
+				if podCIDR.Contains(netIPDst) {
+					isPodIP = true
+					break
+				}
+			}
+			if isPodIP {
+				ob.Action = crdv1beta1.ActionForwarded
+			} else {
+				ob.Action = crdv1beta1.ActionForwardedOutOfNetwork
+			}
+		} else if c.networkConfig.TrafficEncapMode == config.TrafficEncapModeNoEncap && outputPort == gwPort { // noEncap
+			// TODO: update this and above case if noEncap mode supports Egress feature
 			isPodIP := false
 			if c.podSubnetChecker != nil {
 				netAddrDst, _ := netip.AddrFromSlice(netIPDst)

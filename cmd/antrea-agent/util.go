@@ -20,10 +20,21 @@ import (
 	"strconv"
 	"strings"
 
+	clientset "k8s.io/client-go/kubernetes"
+	"k8s.io/klog/v2"
+
 	"antrea.io/antrea/pkg/agent/util"
+	k8sutil "antrea.io/antrea/pkg/util/k8s"
 )
 
-var getAllNodeAddresses = util.GetAllNodeAddresses
+var (
+	// Declared variables which are meant to be overridden for testing.
+	getAllNodeAddresses = util.GetAllNodeAddresses
+
+	getPodCIDRsFromConfig    = k8sutil.GetPodCIDRsFromConfig
+	getPodCIDRsFromKubeProxy = k8sutil.GetPodCIDRsFromKubeProxy
+	getPodCIDRsFromKubeadm   = k8sutil.GetPodCIDRsFromKubeadm
+)
 
 func getAvailableNodePortAddresses(nodePortAddressesFromConfig []string, excludeDevices []string) ([]net.IP, []net.IP, error) {
 	// Get all IP addresses of Node
@@ -78,4 +89,28 @@ func parsePortRange(portRangeStr string) (start, end int, err error) {
 	}
 
 	return start, end, nil
+}
+
+// getPodCIDRs gets the cluster-wide Pod CIDRs (IPv4 and IPv6) by attempting the following sources in order:
+// 1. Agent configuration.
+// 2. kube-proxy ConfigMap.
+// 3. kubeadm-config ConfigMap.
+func getPodCIDRs(o *Options, k8sClient clientset.Interface) []*net.IPNet {
+	klog.V(2).InfoS("Trying to find Pod CIDRs from antrea-agent configuration")
+	if cidrs := getPodCIDRsFromConfig(o.config.PodCIDRs); len(cidrs) != 0 {
+		return cidrs
+	}
+
+	klog.V(2).InfoS("Trying to find Pod CIDRs from ConfigMap kube-proxy")
+	if cidrs := getPodCIDRsFromKubeProxy(k8sClient); len(cidrs) != 0 {
+		return cidrs
+	}
+
+	klog.V(2).InfoS("Trying to find Pod CIDRs from ConfigMap kubeadm-config")
+	if cidrs := getPodCIDRsFromKubeadm(k8sClient); len(cidrs) != 0 {
+		return cidrs
+	}
+
+	klog.V(2).InfoS("No Pod CIDR found")
+	return nil
 }

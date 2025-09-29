@@ -33,6 +33,23 @@ The Traceflow feature is enabled by default since Antrea version v0.11. In order
 to use a Service as the destination in traces, Antrea Proxy (also enabled by
 default since v0.11) is required.
 
+When traffic mode is `networkPolicyOnly`, it is recommended to configure `podCIDRs` field in the `antrea-agent.conf`
+section of the ConfigMap `antrea-config` with the cluster-wide aggregated Pod CIDR (not the per-Node Pod CIDRs).
+This configuration ensures that Traceflow functions correctly for inter-Node Pod-to-Pod traffic.
+
+For example, if the cluster uses Pod CIDR `10.10.0.0/16` and IPv6 Pod CIDR `fd00::/12`, edit the ConfigMap as follows:
+
+```yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: antrea-config
+  namespace: kube-system
+data:
+  antrea-agent.conf: |
+    podCIDRs: "10.10.0.0/16,fd00::/12"
+```
+
 ## Start a New Traceflow
 
 You can choose to use `kubectl` together with a YAML file, the `antctl traceflow`

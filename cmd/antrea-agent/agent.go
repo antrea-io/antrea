@@ -669,6 +669,14 @@ func run(o *Options) error {
 		}
 	}
 
+	var podCIDRs []*net.IPNet
+	if networkConfig.TrafficEncapMode.IsNetworkPolicyOnly() {
+		podCIDRs = getPodCIDRs(o, k8sClient)
+		if len(podCIDRs) == 0 {
+			klog.InfoS("No Pod CIDR found, Traceflow may not work correctly for inter-Node Pod-to-Pod traffic")
+		}
+	}
+
 	var traceflowController *traceflow.Controller
 	if features.DefaultFeatureGate.Enabled(features.Traceflow) {
 		traceflowController = traceflow.NewTraceflowController(
@@ -684,6 +692,7 @@ func run(o *Options) error {
 			networkConfig,
 			nodeConfig,
 			serviceCIDRNet,
+			podCIDRs,
 			o.enableAntreaProxy)
 	}
 
