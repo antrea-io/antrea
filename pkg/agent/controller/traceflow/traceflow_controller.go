@@ -102,7 +102,8 @@ type Controller struct {
 	interfaceStore         interfacestore.InterfaceStore
 	networkConfig          *config.NetworkConfig
 	nodeConfig             *config.NodeConfig
-	serviceCIDR            *net.IPNet // K8s Service ClusterIP CIDR
+	serviceCIDR            *net.IPNet   // K8s Service ClusterIP CIDR
+	podCIDRs               []*net.IPNet // Only used in networkPolicyOnly mode
 	queue                  workqueue.TypedRateLimitingInterface[string]
 	runningTraceflowsMutex sync.RWMutex
 	// runningTraceflows is a map for storing the running Traceflow state
@@ -126,6 +127,7 @@ func NewTraceflowController(
 	networkConfig *config.NetworkConfig,
 	nodeConfig *config.NodeConfig,
 	serviceCIDR *net.IPNet,
+	podCIDRs []*net.IPNet,
 	enableAntreaProxy bool) *Controller {
 	c := &Controller{
 		kubeClient:            kubeClient,
@@ -141,6 +143,7 @@ func NewTraceflowController(
 		networkConfig:         networkConfig,
 		nodeConfig:            nodeConfig,
 		serviceCIDR:           serviceCIDR,
+		podCIDRs:              podCIDRs,
 		queue: workqueue.NewTypedRateLimitingQueueWithConfig(
 			workqueue.NewTypedItemExponentialFailureRateLimiter[string](minRetryDelay, maxRetryDelay),
 			workqueue.TypedRateLimitingQueueConfig[string]{

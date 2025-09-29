@@ -4,3 +4,4 @@ CODE_OF_CONDUCT.md
 # auto-generated file
 build/charts/antrea/README.md
 build/charts/flow-aggregator/README.md
+vendor

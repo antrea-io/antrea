@@ -352,7 +352,7 @@ func TestParsePacketIn(t *testing.T) {
 					{
 						Component:     crdv1beta1.ComponentForwarding,
 						ComponentInfo: openflow.OutputTable.GetName(),
-						Action:        crdv1beta1.ActionForwardedOutOfOverlay,
+						Action:        crdv1beta1.ActionForwardedOutOfNetwork,
 					},
 				},
 			},
@@ -491,7 +491,7 @@ func TestParsePacketIn(t *testing.T) {
 					{
 						Component:     crdv1beta1.ComponentForwarding,
 						ComponentInfo: openflow.OutputTable.GetName(),
-						Action:        crdv1beta1.ActionForwardedOutOfOverlay,
+						Action:        crdv1beta1.ActionForwardedOutOfNetwork,
 					},
 				},
 			},

@@ -15,6 +15,12 @@ controllerImage:
 # -- Determines how traffic is encapsulated. It must be one of "encap",
 # "noEncap", "hybrid", or "networkPolicyOnly".
 trafficEncapMode: "encap"
+# -- The aggregated cluster-wide Pod CIDRs (not the per-Node Pod CIDRs).
+# This field is applicable only in networkPolicyOnly mode and ignored in other traffic modes. It can be left empty,
+# but it is recommended to specify the correct Pod CIDRs string, as Traceflow may not work correctly for inter-Node
+# Pod-to-Pod traffic otherwise.
+# Example: "10.10.0.0/16" for IPv4-only, or "10.10.0.0/16,fd00::/12" for dual-stack.
+podCIDRs: ""
 # -- Tunnel protocol used for encapsulating traffic across Nodes. It must be one
 # of "geneve", "vxlan", "gre", "stt".
 tunnelType: "geneve"
