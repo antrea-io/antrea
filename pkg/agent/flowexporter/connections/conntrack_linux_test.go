@@ -161,6 +161,7 @@ func TestConnTrackSystem_DumpFlows(t *testing.T) {
 			// Set expects for mocks
 			mockNetlinkCT.EXPECT().Dial().Return(nil)
 			mockNetlinkCT.EXPECT().DumpFlowsInCtZone(uint16(openflow.CtZone)).Return(slices.Clone(tc.testFlows), nil)
+			mockNetlinkCT.EXPECT().Close().Return(nil)
 
 			conns, totalConns, err := connDumperDPSystem.DumpFlows(openflow.CtZone)
 			require.NoError(t, err, "Dump flows function returned error")
@@ -271,7 +272,7 @@ func TestNetLinkFlowToAntreaConnection(t *testing.T) {
 	// Create new conntrack flow with status set to assured.
 	netlinkFlow := &conntrack.Flow{
 		TupleOrig: conntrackFlowTuple, TupleReply: conntrackFlowTupleReply, TupleMaster: conntrackFlowTuple,
-		Timeout: 123, Status: conntrack.Status{Value: conntrack.StatusAssured}, Mark: 0x1234, Zone: 2,
+		Timeout: 123, Status: conntrack.StatusAssured, Mark: 0x1234, Zone: 2,
 		Timestamp: conntrack.Timestamp{Start: time.Date(2020, 7, 25, 8, 40, 8, 959000000, time.UTC)},
 	}
 
@@ -312,7 +313,7 @@ func TestNetLinkFlowToAntreaConnection(t *testing.T) {
 	// Create new conntrack flow with status set to dying connection.
 	netlinkFlow = &conntrack.Flow{
 		TupleOrig: conntrackFlowTuple, TupleReply: conntrackFlowTupleReply, TupleMaster: conntrackFlowTuple,
-		Timeout: 123, Status: conntrack.Status{Value: conntrack.StatusAssured | conntrack.StatusDying}, Mark: 0x1234, Zone: 2,
+		Timeout: 123, Status: conntrack.StatusAssured | conntrack.StatusDying, Mark: 0x1234, Zone: 2,
 		Timestamp: conntrack.Timestamp{
 			Start: time.Date(2020, 7, 25, 8, 40, 8, 959000000, time.UTC),
 			Stop:  time.Date(2020, 7, 25, 8, 45, 10, 959683808, time.UTC),

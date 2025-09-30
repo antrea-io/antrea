@@ -242,6 +242,9 @@ func flowStringToAntreaConnection(flow string, zoneFilter uint16) (*connection.C
 			if err != nil {
 				return nil, fmt.Errorf("conversion of mark '%s' to int failed: %v", fields[len(fields)-1], err)
 			}
+			if uint32(val)&connAllowedCTMarkMask == 0 {
+				break
+			}
 			conn.Mark = uint32(val)
 		case strings.Contains(fs, "timeout"):
 			fields := strings.Split(fs, "=")
