@@ -41,102 +41,82 @@ linters:
     tagliatelle:
       case:
           rules:
-            # json: goCamel
-            #yaml: goCamel
-          extended-rules:
-            json:
-              case: goCamel
-              extra-initialisms: true
-              initialism-overrides:
-                CIDR: true
-                IPAM: true
-                MTU: true
-                SNAT: true
-            yaml:
-              case: goCamel
-              extra-initialisms: true
-              initialism-overrides:
-                CIDR: true
-                IPAM: true
-                MTU: true
-                SNAT: true
-
-
-
-          ignored-fields: # Current: Expected
-            - APICABundle # apiCABundle : apicaBundle
-            - AppliedPolicies # policies : appliedPolicies
-            - AppProtocol # app_proto : appProtocol
-            - BGPPolicyName # name' want 'bgpPolicyName
-            - BrName #ovsBinding : brName
-            - ClientCAFile # clientCAFile : clientCaFile
-            - ClusterCIDRs # clusterCIDRs : clusterCidRs
-            - ClusterIDs # clusterID : clusterIDs
-            - ClusterInfo # clusterinfo : clusterInfo
-            - ClusterNetworkPolicy # clusternetworkpolicy : clusterNetworkPolicy
-            - ContentLength # length : contentLength
-            - ContentType # http_content_type : contentType
-            # - AppliedPolicies
-            - ClusterMembershipPort # clusterPort : clusterMembershipPort
-            - DatapathType # datapath_type : datapathType
-            - DestIP # dest_ip : destIP
-            - DestPort # dest_port : destPort
-            - DefaultMTU # defaultMTU : defaultMtu
-            - DisableTXChecksumOffload # disableTXChecksumOffload : disableTxChecksumOffload
-            - DstMAC # dstMAC : dstMac
-            - EgressDstRules # gressdstrules : egressDstRules
-            - EnableNodeIPAM # enableNodeIPAM : enableNodeIpam
-            - EventType # event_type : eventType
-            - ExceptCIDRs # exceptCIDRs : exceptCidRs
-            - ExtensionID # Id : extensionID
-            - Extensions # Extensions : extensions
-            - ExternalEntity # externalentity : externalEntity
-            - ExternalEntitySpec # externalentityspec : externalEntitySpec
-            - ExternalIds # external_ids : externalIds
-            - ExternalIDs # external_ids : externalIDs
-            - FlowID # flow_id : flowID
-            - FQDNs # fqdns : fqdNs
-            - IngressSrcRules # ingresssrcrules : ingressSrcRules
-            - InInterface # in_iface : inInterface
-            - IPPools # ippools : ipPools
-            - IPs # ips : iPs
-            - IPsec # ipsec : iPsec
-            - IPsecCSRSignerConfig # ipsecCSRSigner : iPsecCsrSignerConfig
-            - IPv6Header # 'ipv6Header : iPv6Header'
-            - LastMeasuredRTTNanoseconds # lastMeasuredRTTNanoseconds : lastMeasuredRttNanoseconds
-            - ListMeta # metadata : listMeta
-            - LocalASN # localASN : localAsn
-            - MaxIPFIXMsgSize # maxIPFIXMsgSize : maxIpfixMsgSize
-            - McastSnoopingEnable # mcast_snooping_enable : mcastSnoopingEnable
-            - MemberASNs # memberASNs : memberAsNs
-            - Method # http_method : method
-            - Nameservers # servers : nameservers
-            - NodeCIDRMaskSizeIPv4 # nodeCIDRMaskSizeIPv4 : nodeCidrMaskSizeIPv4
-            - NodeCIDRMaskSizeIPv6 # nodeCIDRMaskSizeIPv6 : nodeCidrMaskSizeIPv6
-            - NodeIPAM # nodeIPAM : nodeIpam
-            - NodeResults # results : nodeResults
-            - NoSNAT # noSNAT : noSnat
-            - ObjectMeta # metadata : objectMeta
-            - OFPortRequest # ofport_request : ofPortRequest
-            - PacketBytes # packet : packetBytes
-            - PodCIDRs # podCIDRs : podCidRs
-            - PodName # name' want 'podName
-            - PolicyRef # policyref' want 'policyRef
-            - Port # http_port : port
-            - Protocol # proto : protocol
-            - RawPrevResult # prevResult : rawPrevResult
-            - RuleIndex # ruleindex : ruleIndex
-            - Search # searches : search
-            - SelfSignedCA # selfSignedCA : selfSignedCa
-            - ServiceCIDR # serviceCIDR : serviceCidr
-            - ServiceCIDRv6 # serviceCIDRv6 : serviceCidRv6
-            - SrcIP # src_ip : srcIP
-            - SrcPort # src_port : srcPort
-            - TransportInterfaceCIDRs # transportInterfaceCIDRs : transportInterfaceCidR
-            - TransportHeader # tranportHeader : transportHeader
-            - TxID # tx_id : txID
-            - UserAgent # http_user_agent : userAgent
-            - WithIPFIXExporter # withIPFIXExporter : withIpfixExporter
+            json: goCamel
+            yaml: goCamel
+          ignored-fields:
+            - APICABundle
+            - AppliedPolicies
+            - AppProtocol
+            - BGPPolicyName
+            - BrName
+            - ContentLength
+            - ClientCAFile
+            - ClusterCIDRs
+            - ClusterIDs
+            - ClusterInfo
+            - ClusterNetworkPolicy
+            - ContentType
+            - AppliedPolicies
+            - ClusterMembershipPort
+            - DatapathType
+            - DestIP
+            - DestPort
+            - DefaultMTU
+            - DisableTXChecksumOffload
+            - DstMAC
+            - EgressDstRules
+            - EnableNodeIPAM
+            - EventType
+            - ExceptCIDRs
+            - ExtensionID
+            - Extensions
+            - ExternalEntity
+            - ExternalEntitySpec
+            - ExternalIds
+            - ExternalIDs
+            - FlowID
+            - FQDNs
+            - IngressSrcRules
+            - InInterface
+            - IPPools
+            - IPs
+            - IPsec 
+            - IPsecCSRSignerConfig
+            - IPv6Header
+            - LastMeasuredRTTNanoseconds
+            - ListMeta
+            - LocalASN
+            - MaxIPFIXMsgSize
+            - McastSnoopingEnable
+            - MemberASNs
+            - Method
+            - Nameservers
+            - NodeCIDRMaskSizeIPv4 
+            - NodeCIDRMaskSizeIPv6
+            - NodeIPAM
+            - NodeResults
+            - NoSNAT
+            - ObjectMeta
+            - OFPortRequest
+            - PacketBytes
+            - PodCIDRs
+            - PodName
+            - PolicyRef
+            - Port
+            - Protocol
+            - RawPrevResult
+            - RuleIndex
+            - Search
+            - SelfSignedCA
+            - ServiceCIDR
+            - ServiceCIDRv6
+            - SrcIP
+            - SrcPort
+            - TransportInterfaceCIDRs
+            - TransportHeader
+            - TxID
+            - UserAgent
+            - WithIPFIXExporter
             
           use-field-name: true
   exclusions:
