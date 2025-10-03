@@ -257,15 +257,10 @@ func (cs *ConntrackConnectionStore) AddOrUpdateConn(conn *connection.Connection)
 					time.Now().Add(cs.connectionStore.expirePriorityQueue.IdleFlowTimeout))
 			}
 		}
-		klog.V(4).InfoS("Antrea flow updated", "connection", existingConn)
+		klog.InfoS("Antrea flow updated", "connection", existingConn)
 	} else {
+		klog.InfoS("addorupdateconn received - conn is new", "conn", conn)
 		cs.fillPodInfo(conn)
-		if conn.SourcePodName == "" && conn.DestinationPodName == "" {
-			// We don't add connections to connection map or expirePriorityQueue if we can't find the pod
-			// information for both srcPod and dstPod
-			klog.V(5).InfoS("Skip this connection as we cannot map any of the connection IPs to a local Pod", "srcIP", conn.FlowKey.SourceAddress.String(), "dstIP", conn.FlowKey.DestinationAddress.String())
-			return
-		}
 		if conn.Mark&openflow.ServiceCTMark.GetRange().ToNXRange().ToUint32Mask() == openflow.ServiceCTMark.GetValue() {
 			clusterIP := conn.OriginalDestinationAddress.String()
 			svcPort := conn.OriginalDestinationPort
