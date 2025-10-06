@@ -21,12 +21,14 @@ import (
 
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/klog/v2"
 
 	"antrea.io/antrea/pkg/apis/controlplane"
 	crdv1beta1 "antrea.io/antrea/pkg/apis/crd/v1beta1"
+	"antrea.io/antrea/pkg/controller/grouping"
 	"antrea.io/antrea/pkg/controller/networkpolicy/store"
 	antreatypes "antrea.io/antrea/pkg/controller/types"
 )
@@ -143,7 +145,7 @@ func (c *NetworkPolicyController) processClusterGroup(cg *crdv1beta1.ClusterGrou
 			Name:      svcSelector.Name,
 		}
 	} else {
-		groupSelector := antreatypes.NewGroupSelector("", cg.Spec.PodSelector, cg.Spec.NamespaceSelector, cg.Spec.ExternalEntitySelector, nil)
+		groupSelector := antreatypes.NewGroupSelector("", cg.Spec.PodSelector, cg.Spec.NamespaceSelector, cg.Spec.ExternalEntitySelector, cg.Spec.NodeSelector)
 		internalGroup.Selector = groupSelector
 	}
 	return &internalGroup
@@ -361,15 +363,48 @@ func (c *NetworkPolicyController) serviceToGroupSelector(service *v1.Service) *a
 	return groupSelector
 }
 
+// getGroupsForNode returns the set of groups associated with the given node or false
+// if there aren't any
+func (c *NetworkPolicyController) getGroupsForNode(name string) (map[grouping.GroupType][]string, bool) {
+	node, err := c.nodeLister.Get(name)
+	if err != nil {
+		return nil, false
+	}
+	groups := map[grouping.GroupType][]string{
+		internalGroupType: {},
+	}
+	nodeLabels := labels.Set(node.ObjectMeta.Labels)
+	internalGroupObjects, err := c.internalGroupStore.GetByIndex(store.HasNodeSelector, name)
+	if err != nil {
+		return nil, false
+	}
+	for _, internalGroupObject := range internalGroupObjects {
+		internalGroup := internalGroupObject.(*antreatypes.Group)
+		if internalGroup.Selector == nil || internalGroup.Selector.NodeSelector == nil || internalGroup.SourceReference == nil {
+			continue
+		}
+		if internalGroup.Selector.NodeSelector.Matches(nodeLabels) {
+			groups[internalGroupType] = append(groups[internalGroupType], internalGroup.SourceReference.Name)
+		}
+	}
+	if len(groups[internalGroupType]) == 0 {
+		return nil, false
+	}
+	return groups, true
+}
+
 // GetAssociatedGroups retrieves the internal Groups associated with the entity being
-// queried (Pod or ExternalEntity identified by name and namespace).
+// queried (Pod, Node or ExternalEntity identified by name and namespace).
 func (c *NetworkPolicyController) GetAssociatedGroups(name, namespace string) []antreatypes.Group {
-	// Try Pod first, then ExternalEntity.
+	// Try Pod first, ExternalEntity, then Node.
 	groups, exists := c.groupingInterface.GetGroupsForPod(namespace, name)
 	if !exists {
 		groups, exists = c.groupingInterface.GetGroupsForExternalEntity(namespace, name)
 		if !exists {
-			return nil
+			groups, exists = c.getGroupsForNode(name)
+			if !exists {
+				return nil
+			}
 		}
 	}
 	clusterGroups, exists := groups[internalGroupType]

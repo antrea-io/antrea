@@ -18,9 +18,11 @@
 package networkpolicy
 
 import (
+	"bytes"
 	"fmt"
 	"net"
 	"reflect"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -1175,6 +1177,8 @@ func (n *NetworkPolicyController) getAddressGroupMemberSet(g *antreatypes.Addres
 func (n *NetworkPolicyController) getInternalGroupMembers(group *antreatypes.Group) (controlplane.GroupMemberSet, []controlplane.IPBlock) {
 	if len(group.IPBlocks) > 0 {
 		return nil, group.IPBlocks
+	} else if group.Selector != nil && group.Selector.NodeSelector != nil {
+		return n.getNodeMemberSet(group.Selector.NodeSelector), nil
 	} else if len(group.ChildGroups) == 0 {
 		return n.getMemberSetForGroupType(internalGroupType, group.SourceReference.ToGroupName()), nil
 	}
@@ -1251,10 +1255,15 @@ func nodeToGroupMember(node *v1.Node, includeIP bool) (member *controlplane.Grou
 		klog.ErrorS(err, "Error getting Node IP addresses", "Node", node.Name)
 	}
 	if includeIP {
-		for ip := range ips {
+		// Sort the IPs to ensure the GroupMemberKey is deterministic.
+		sort.Slice(member.IPs, func(i, j int) bool {
+			return bytes.Compare(member.IPs[i], member.IPs[j]) < 0
+		})
+		for _, ip := range sets.List(ips) {
 			member.IPs = append(member.IPs, ipStrToIPAddress(ip))
 		}
 	}
+
 	return
 }
 
@@ -1410,6 +1419,10 @@ func (n *NetworkPolicyController) getAppliedToWorkloads(g *antreatypes.AppliedTo
 		group, found, _ := n.internalGroupStore.Get(g.SourceGroup)
 		if found {
 			grp := group.(*antreatypes.Group)
+			if grp.Selector != nil && grp.Selector.NodeSelector != nil {
+				nodes, err := n.nodeLister.List(grp.Selector.NodeSelector)
+				return nil, nil, nodes, err
+			}
 			pods, ees, err := n.getInternalGroupWorkloads(grp)
 			return pods, ees, nil, err
 		}
