@@ -111,6 +111,7 @@ type ExtraConfig struct {
 	egressGroupStore              storage.Interface
 	bundleCollectionStore         storage.Interface
 	podInformer                   coreinformers.PodInformer
+	nodeInformer                  coreinformers.NodeInformer
 	eeInformer                    crdv1a2informers.ExternalEntityInformer
 	controllerQuerier             querier.ControllerQuerier
 	endpointQuerier               controllernetworkpolicy.EndpointQuerier
@@ -157,6 +158,7 @@ func NewConfig(
 	k8sClient kubernetes.Interface,
 	addressGroupStore, appliedToGroupStore, networkPolicyStore, egressGroupStore, supportBundleCollectionStore storage.Interface,
 	podInformer coreinformers.PodInformer,
+	nodeInformer coreinformers.NodeInformer,
 	eeInformer crdv1a2informers.ExternalEntityInformer,
 	caCertController *certificate.CACertController,
 	statsAggregator *stats.Aggregator,
@@ -179,6 +181,7 @@ func NewConfig(
 			egressGroupStore:              egressGroupStore,
 			bundleCollectionStore:         supportBundleCollectionStore,
 			podInformer:                   podInformer,
+			nodeInformer:                  nodeInformer,
 			eeInformer:                    eeInformer,
 			caCertController:              caCertController,
 			statsAggregator:               statsAggregator,
@@ -208,7 +211,7 @@ func installAPIGroup(s *APIServer, c completedConfig) error {
 	clusterGroupMembershipStorage := clustergroupmember.NewREST(c.extraConfig.networkPolicyController)
 	groupMembershipStorage := groupmember.NewREST(c.extraConfig.networkPolicyController)
 	groupAssociationStorage := groupassociation.NewREST(c.extraConfig.networkPolicyController)
-	ipGroupAssociationStorage := ipgroupassociation.NewREST(c.extraConfig.podInformer, c.extraConfig.eeInformer, c.extraConfig.networkPolicyController, c.extraConfig.networkPolicyController)
+	ipGroupAssociationStorage := ipgroupassociation.NewREST(c.extraConfig.podInformer, c.extraConfig.nodeInformer, c.extraConfig.eeInformer, c.extraConfig.networkPolicyController, c.extraConfig.networkPolicyController)
 	nodeStatsSummaryStorage := nodestatssummary.NewREST(c.extraConfig.statsAggregator)
 	egressGroupStorage := egressgroup.NewREST(c.extraConfig.egressGroupStore)
 	bundleCollectionStorage := supportbundlecollection.NewREST(c.extraConfig.bundleCollectionStore)

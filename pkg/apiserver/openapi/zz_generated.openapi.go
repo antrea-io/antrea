@@ -4154,6 +4154,12 @@ func schema_pkg_apis_crd_v1beta1_GroupSpec(ref common.ReferenceCallback) common.
 							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.LabelSelector"),
 						},
 					},
+					"nodeSelector": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Select Nodes matched by this selector as workloads in AppliedTo/To/From fields. Cannot be set with any other selector or ServiceReference",
+							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.LabelSelector"),
+						},
+					},
 					"ipBlocks": {
 						SchemaProps: spec.SchemaProps{
 							Description: "IPBlocks describe the IPAddresses/IPBlocks that are matched in to/from. IPBlocks cannot be set as part of the AppliedTo field. Cannot be set with any other selector or ServiceReference.",

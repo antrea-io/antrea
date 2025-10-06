@@ -68,6 +68,17 @@ func (b *ClusterGroupSpecBuilder) SetNamespaceSelector(nsSelector map[string]str
 	return b
 }
 
+func (b *ClusterGroupSpecBuilder) SetNodeSelector(matchLabels map[string]string) *ClusterGroupSpecBuilder {
+	var nodeSelector *metav1.LabelSelector
+	if matchLabels != nil {
+		nodeSelector = &metav1.LabelSelector{
+			MatchLabels: matchLabels,
+		}
+	}
+	b.Spec.NodeSelector = nodeSelector
+	return b
+}
+
 func (b *ClusterGroupSpecBuilder) SetIPBlocks(ipBlocks []crdv1beta1.IPBlock) *ClusterGroupSpecBuilder {
 	b.Spec.IPBlocks = ipBlocks
 	return b

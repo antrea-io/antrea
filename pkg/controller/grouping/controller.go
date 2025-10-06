@@ -39,6 +39,8 @@ const (
 	ExternalEntityIPsIndex = "eeIPs"
 	// PodIP index name for Pod cache.
 	PodIPsIndex = "podIPs"
+	// NodeIP index name for Node cache.
+	NodeIPsIndex = "nodeIPs"
 )
 
 func PodIPsIndexFunc(obj interface{}) ([]string, error) {
@@ -50,6 +52,28 @@ func PodIPsIndexFunc(obj interface{}) ([]string, error) {
 		indexes := make([]string, len(pod.Status.PodIPs))
 		for i := range pod.Status.PodIPs {
 			indexes[i] = pod.Status.PodIPs[i].IP
+		}
+		return indexes, nil
+	}
+	return nil, nil
+}
+
+// NodeIPsIndexFunc returns the external an internal IP addresses of the given object if it is a Node
+func NodeIPsIndexFunc(obj interface{}) ([]string, error) {
+	node, ok := obj.(*v1.Node)
+	if !ok {
+		return nil, fmt.Errorf("obj is not node: %+v", obj)
+	}
+	addresses := node.Status.Addresses
+	addressLength := len(addresses)
+	if addressLength > 0 {
+		indexes := []string{}
+		for _, address := range addresses {
+			if address.Type != v1.NodeInternalIP && address.Type != v1.NodeExternalIP {
+				continue
+			}
+
+			indexes = append(indexes, address.Address)
 		}
 		return indexes, nil
 	}
