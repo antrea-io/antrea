@@ -29,6 +29,7 @@ import (
 	"antrea.io/antrea/pkg/apis/crd/v1alpha2"
 	crdv1a2informers "antrea.io/antrea/pkg/client/informers/externalversions/crd/v1alpha2"
 	"antrea.io/antrea/pkg/features"
+	"antrea.io/antrea/pkg/util/k8s"
 )
 
 const (
@@ -39,6 +40,8 @@ const (
 	ExternalEntityIPsIndex = "eeIPs"
 	// PodIP index name for Pod cache.
 	PodIPsIndex = "podIPs"
+	// NodeIP index name for Node cache.
+	NodeIPsIndex = "nodeIPs"
 )
 
 func PodIPsIndexFunc(obj interface{}) ([]string, error) {
@@ -54,6 +57,23 @@ func PodIPsIndexFunc(obj interface{}) ([]string, error) {
 		return indexes, nil
 	}
 	return nil, nil
+}
+
+// NodeIPsIndexFunc returns the external and internal IP addresses of the given object if it is a Node
+func NodeIPsIndexFunc(obj interface{}) ([]string, error) {
+	node, ok := obj.(*v1.Node)
+	if !ok {
+		return nil, fmt.Errorf("obj is not node: %+v", obj)
+	}
+	if node.Spec.PodCIDR == "" {
+		return nil, nil
+	}
+
+	ips, err := k8s.GetNodeAllAddrs(node)
+	if err != nil {
+		return nil, err
+	}
+	return ips.UnsortedList(), nil
 }
 
 func ExternalEntityIPsIndexFunc(obj interface{}) ([]string, error) {

@@ -117,6 +117,7 @@ func TestAntreaNodeNetworkPolicy(t *testing.T) {
 	t.Run("Case=ACNPCustomTiers", func(t *testing.T) { testNodeACNPCustomTiers(t) })
 	t.Run("Case=ACNPPriorityConflictingRule", func(t *testing.T) { testNodeACNPPriorityConflictingRule(t) })
 	t.Run("Case=ACNPAuditLogging", func(t *testing.T) { testNodeACNPAuditLogging(t, data) })
+	t.Run("Case=ACNPAppliedToClusterGroupWithNodeSelector", func(t *testing.T) { testNodeACNPAppliedToClusterGroupWithNodeSelector(t) })
 
 	k8sUtils.Cleanup(namespaces)
 
@@ -917,6 +918,47 @@ func testNodeACNPClusterGroupRefRuleIPBlocks(t *testing.T) {
 	}
 	testCase := []*TestCase{
 		{"ACNP Drop Egress From Node x to Pod y/a and z/a to ClusterGroup with ipBlocks", testStep},
+	}
+	executeTests(t, testCase)
+}
+
+// testNodeACNPAppliedToClusterGroupWithNodeSelector validates an ACNP with a ClusterGroup
+// in AppliedTo that has a NodeSelector
+func testNodeACNPAppliedToClusterGroupWithNodeSelector(t *testing.T) {
+	// Create cluster group with node selector
+	cgName := "cg-with-nodeselector"
+	cgBuilder := &ClusterGroupSpecBuilder{}
+	cgBuilder = cgBuilder.SetName(cgName).
+		SetNodeSelector(map[string]string{labelNodeHostname: nodes["x"]})
+	_, err := k8sUtils.CreateOrUpdateCG(cgBuilder.Get())
+	failOnError(err, t)
+
+	// Create an ACNP that drops connections from cluster group to Y/A
+	builder := &ClusterNetworkPolicySpecBuilder{}
+	builder = builder.SetName("acnp-drop-x-to-y-egress").
+		SetPriority(1.0).
+		SetAppliedToGroup([]ACNPAppliedToSpec{{Group: cgName}}).
+		AddEgress(ACNPRuleBuilder{
+			NodeSelector: map[string]string{labelNodeHostname: nodes["y"]},
+			BaseRuleBuilder: BaseRuleBuilder{
+				Protoc: ProtocolTCP,
+				Port:   &p80,
+				Action: crdv1beta1.RuleActionDrop,
+			}})
+
+	reachability := NewReachability(allPods, Connected)
+	reachability.Expect(getPod("x", "a"), getPod("y", "a"), Dropped)
+	testStep := []*TestStep{
+		{
+			Name:          "Port 80",
+			Reachability:  reachability,
+			TestResources: []metav1.Object{builder.Get()},
+			Ports:         []int32{80},
+			Protocol:      ProtocolTCP,
+		},
+	}
+	testCase := []*TestCase{
+		{"ACNP Drop Egress From Cluster Group Containing Node:x to Node:y", testStep},
 	}
 	executeTests(t, testCase)
 }

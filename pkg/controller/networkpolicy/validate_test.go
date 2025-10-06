@@ -2130,7 +2130,7 @@ func TestValidateAntreaClusterGroup(t *testing.T) {
 				},
 			},
 			operation:      admv1.Create,
-			expectedReason: "At most one of podSelector, externalEntitySelector, serviceReference, ipBlock, ipBlocks or childGroups can be set for a ClusterGroup",
+			expectedReason: "At most one of podSelector, nodeSelector, externalEntitySelector, serviceReference, ipBlock, ipBlocks or childGroups can be set for a ClusterGroup",
 		},
 		{
 			name: "cg-set-with-psel-and-nssel",
@@ -2182,7 +2182,7 @@ func TestValidateAntreaClusterGroup(t *testing.T) {
 				},
 			},
 			operation:      admv1.Create,
-			expectedReason: "At most one of podSelector, externalEntitySelector, serviceReference, ipBlock, ipBlocks or childGroups can be set for a ClusterGroup",
+			expectedReason: "At most one of podSelector, nodeSelector, externalEntitySelector, serviceReference, ipBlock, ipBlocks or childGroups can be set for a ClusterGroup",
 		},
 		{
 			name: "cg-set-with-podselector-and-ipblock",
@@ -2200,7 +2200,7 @@ func TestValidateAntreaClusterGroup(t *testing.T) {
 				},
 			},
 			operation:      admv1.Create,
-			expectedReason: "At most one of podSelector, externalEntitySelector, serviceReference, ipBlock, ipBlocks or childGroups can be set for a ClusterGroup",
+			expectedReason: "At most one of podSelector, nodeSelector, externalEntitySelector, serviceReference, ipBlock, ipBlocks or childGroups can be set for a ClusterGroup",
 		},
 		{
 			name: "cg-set-with-ipblock",
@@ -2264,6 +2264,24 @@ func TestValidateAntreaClusterGroup(t *testing.T) {
 			},
 			operation:      admv1.Create,
 			expectedReason: "can not set multicast groupAddress together with unicast ip address",
+		},
+		{
+			name: "cg-set-with-nsel-and-psel",
+			curCG: &crdv1beta1.ClusterGroup{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "cg-set-with-nsel-and-psel",
+				},
+				Spec: crdv1beta1.GroupSpec{
+					PodSelector: &metav1.LabelSelector{
+						MatchLabels: map[string]string{"foo": "bar"},
+					},
+					NodeSelector: &metav1.LabelSelector{
+						MatchLabels: map[string]string{"foo": "bar"},
+					},
+				},
+			},
+			operation:      admv1.Create,
+			expectedReason: "At most one of podSelector, nodeSelector, externalEntitySelector, serviceReference, ipBlock, ipBlocks or childGroups can be set for a ClusterGroup",
 		},
 		{
 			name: "cg-with-childGroup",
