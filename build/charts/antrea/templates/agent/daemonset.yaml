@@ -36,6 +36,7 @@ spec:
         {{- toYaml . | nindent 8 }}
         {{- end }}
     spec:
+      restartPolicy: OnFailure   # Pod-level restart policy
       hostNetwork: true
       {{- if .Values.agent.dnsPolicy }}
       dnsPolicy: {{ .Values.agent.dnsPolicy }}
@@ -73,6 +74,7 @@ spec:
         - name: install-cni
           image: {{ include "antreaAgentImage" . | quote }}
           imagePullPolicy: {{ include "antreaAgentImagePullPolicy" . }}
+          restartPolicy: Never
           resources: {{- .Values.agent.installCNI.resources | toYaml | nindent 12 }}
           {{- if eq .Values.trafficEncapMode "networkPolicyOnly" }}
           command: ["install_cni_chaining"]
@@ -132,6 +134,13 @@ spec:
       {{- end }}
         - name: antrea-agent
           image: {{ include "antreaAgentImage" . | quote }}
+          # Fine-grained restart based on exit codes
+          restartPolicy: OnFailure
+          restartPolicyRules:
+            - exitCodes: [137, 143]  # OOMKilled or SIGTERM
+              restartPolicy: Always
+            - exitCodes: [1]          # Misconfiguration or startup errors
+              restartPolicy: Never
           imagePullPolicy: {{ include "antreaAgentImagePullPolicy" . }}
           {{- if ((.Values.testing).coverage) }}
           args:
@@ -274,6 +283,12 @@ spec:
         - name: antrea-ovs
           image: {{ include "antreaAgentImage" . | quote }}
           imagePullPolicy: {{ include "antreaAgentImagePullPolicy" . }}
+          restartPolicy: Always
+          restartPolicyRules:
+            - exitCodes: [137, 143]  # OOMKilled or SIGTERM
+              restartPolicy: Always
+            - exitCodes: [1, 2]      # Setup/configuration errors
+              restartPolicy: Never
           resources: {{- .Values.agent.antreaOVS.resources | toYaml | nindent 12 }}
           command: ["start_ovs"]
           args:
@@ -327,6 +342,12 @@ spec:
         - name: antrea-ipsec
           image: {{ include "antreaAgentImage" . | quote }}
           imagePullPolicy: {{ include "antreaAgentImagePullPolicy" . }}
+          restartPolicy: Always
+          restartPolicyRules:
+            - exitCodes: [137, 143]
+              restartPolicy: Always
+            - exitCodes: [1, 2]
+              restartPolicy: Never
           resources: {{- .Values.agent.antreaIPsec.resources | toYaml | nindent 12 }}
           command: ["start_ovs_ipsec"]
           livenessProbe:

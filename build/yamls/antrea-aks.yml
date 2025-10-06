@@ -5508,6 +5508,7 @@ spec:
         app: antrea
         component: antrea-agent
     spec:
+      restartPolicy: OnFailure   # Pod-level restart policy
       hostNetwork: true
       dnsPolicy: ClusterFirst
       priorityClassName: system-node-critical
@@ -5526,6 +5527,7 @@ spec:
         - name: install-cni
           image: "antrea/antrea-agent-ubuntu:latest"
           imagePullPolicy: IfNotPresent
+          restartPolicy: Never
           resources:
             requests:
               cpu: 100m
@@ -5562,6 +5564,13 @@ spec:
             mountPath: /var/run/antrea
         - name: antrea-agent
           image: "antrea/antrea-agent-ubuntu:latest"
+          # Fine-grained restart based on exit codes
+          restartPolicy: OnFailure
+          restartPolicyRules:
+            - exitCodes: [137, 143]  # OOMKilled or SIGTERM
+              restartPolicy: Always
+            - exitCodes: [1]          # Misconfiguration or startup errors
+              restartPolicy: Never
           imagePullPolicy: IfNotPresent
           command: ["antrea-agent"]
           # Log to both "/var/log/antrea/" and stderr (so "kubectl logs" can work).-
@@ -5656,6 +5665,12 @@ spec:
         - name: antrea-ovs
           image: "antrea/antrea-agent-ubuntu:latest"
           imagePullPolicy: IfNotPresent
+          restartPolicy: Always
+          restartPolicyRules:
+            - exitCodes: [137, 143]  # OOMKilled or SIGTERM
+              restartPolicy: Always
+            - exitCodes: [1, 2]      # Setup/configuration errors
+              restartPolicy: Never
           resources:
             requests:
               cpu: 200m
@@ -5759,6 +5774,7 @@ spec:
       nodeSelector:
         kubernetes.io/os: linux
       hostNetwork: true
+      restartPolicy: Always   # Pod-level restart policy for Deployment
       priorityClassName: system-cluster-critical
       tolerations:
         - key: CriticalAddonsOnly

@@ -36,6 +36,7 @@ spec:
         {{- toYaml . | nindent 8 }}
       {{- end }}
       hostNetwork: true
+      restartPolicy: Always   # Pod-level restart policy for Deployment
       priorityClassName: {{ .Values.controller.priorityClassName }}
       {{- with .Values.controller.tolerations }}
       tolerations:
@@ -64,6 +65,12 @@ spec:
           imagePullPolicy: {{ include "antreaControllerImagePullPolicy" . }}
           resources: {{- .Values.controller.antreaController.resources | toYaml | nindent 12 }}
           {{- if ((.Values.testing).coverage) }}
+          restartPolicy: Always
+          restartPolicyRules:
+            - exitCodes: [137, 143]  # OOMKilled or SIGTERM
+              restartPolicy: Always
+            - exitCodes: [1]         # Misconfiguration or startup errors
+              restartPolicy: Never
           args:
             - "antrea-controller"
             - "--config=/etc/antrea/antrea-controller.conf"
