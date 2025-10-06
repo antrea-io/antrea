@@ -195,6 +195,23 @@ func TestProcessClusterGroup(t *testing.T) {
 				IPNets: []*net.IPNet{controlplaneIPNetDiff},
 			},
 		},
+		{
+			name: "cg-with-node-selector",
+			inputGroup: &crdv1beta1.ClusterGroup{
+				ObjectMeta: metav1.ObjectMeta{Name: "cgH", UID: "uidH"},
+				Spec: crdv1beta1.GroupSpec{
+					NodeSelector: &selectorA,
+				},
+			},
+			expectedGroup: &antreatypes.Group{
+				UID: "uidH",
+				SourceReference: &controlplane.GroupReference{
+					Name: "cgH",
+					UID:  "uidH",
+				},
+				Selector: antreatypes.NewGroupSelector("", nil, nil, nil, &selectorA),
+			},
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -326,6 +343,23 @@ func TestAddClusterGroup(t *testing.T) {
 					},
 				},
 				IPNets: []*net.IPNet{controlplaneIPNetDiff},
+			},
+		},
+		{
+			name: "cg-with-node-selector",
+			inputGroup: &crdv1beta1.ClusterGroup{
+				ObjectMeta: metav1.ObjectMeta{Name: "cgF", UID: "uidF"},
+				Spec: crdv1beta1.GroupSpec{
+					NodeSelector: &selectorA,
+				},
+			},
+			expectedGroup: &antreatypes.Group{
+				UID: "uidF",
+				SourceReference: &controlplane.GroupReference{
+					Name: "cgF",
+					UID:  "uidF",
+				},
+				Selector: antreatypes.NewGroupSelector("", nil, nil, nil, &selectorA),
 			},
 		},
 	}
@@ -476,6 +510,23 @@ func TestUpdateClusterGroup(t *testing.T) {
 					UID:  "uidA",
 				},
 				ChildGroups: []string{"cgB", "cgC"},
+			},
+		},
+		{
+			name: "cg-update-node-selector",
+			updatedGroup: &crdv1beta1.ClusterGroup{
+				ObjectMeta: metav1.ObjectMeta{Name: "cgA", UID: "uidA"},
+				Spec: crdv1beta1.GroupSpec{
+					NodeSelector: &selectorA,
+				},
+			},
+			expectedGroup: &antreatypes.Group{
+				UID: "uidA",
+				SourceReference: &controlplane.GroupReference{
+					Name: "cgA",
+					UID:  "uidA",
+				},
+				Selector: antreatypes.NewGroupSelector("", nil, nil, nil, &selectorA),
 			},
 		},
 	}
