@@ -38,87 +38,141 @@ linters:
         - name: superfluous-else
         - name: var-declaration
         - name: duplicated-imports
+
     tagliatelle:
       case:
           rules:
             json: goCamel
             yaml: goCamel
-          ignored-fields: # Current: Expected
-            - APICABundle # apiCABundle : apicaBundle
-            - AppliedPolicies # policies : appliedPolicies
-            - AppProtocol # app_proto : appProtocol
-            - BGPPolicyName # name' want 'bgpPolicyName
-            - BrName #ovsBinding : brName
-            - ClientCAFile # clientCAFile : clientCaFile
-            - ClusterCIDRs # clusterCIDRs : clusterCidRs
-            - ClusterIDs # clusterID : clusterIDs
-            - ClusterInfo # clusterinfo : clusterInfo
-            - ClusterNetworkPolicy # clusternetworkpolicy : clusterNetworkPolicy
-            - ContentLength # length : contentLength
-            - ContentType # http_content_type : contentType
-            # - AppliedPolicies
-            - ClusterMembershipPort # clusterPort : clusterMembershipPort
-            - DatapathType # datapath_type : datapathType
-            - DestIP # dest_ip : destIP
-            - DestPort # dest_port : destPort
-            - DefaultMTU # defaultMTU : defaultMtu
-            - DisableTXChecksumOffload # disableTXChecksumOffload : disableTxChecksumOffload
-            - DstMAC # dstMAC : dstMac
-            - EgressDstRules # gressdstrules : egressDstRules
-            - EnableNodeIPAM # enableNodeIPAM : enableNodeIpam
-            - EventType # event_type : eventType
-            - ExceptCIDRs # exceptCIDRs : exceptCidRs
-            - ExtensionID # Id : extensionID
-            - Extensions # Extensions : extensions
-            - ExternalEntity # externalentity : externalEntity
-            - ExternalEntitySpec # externalentityspec : externalEntitySpec
-            - ExternalIds # external_ids : externalIds
-            - ExternalIDs # external_ids : externalIDs
-            - FlowID # flow_id : flowID
-            - FQDNs # fqdns : fqdNs
-            - IngressSrcRules # ingresssrcrules : ingressSrcRules
-            - InInterface # in_iface : inInterface
-            - IPPools # ippools : ipPools
-            - IPs # ips : iPs
-            - IPsec # ipsec : iPsec
-            - IPsecCSRSignerConfig # ipsecCSRSigner : iPsecCsrSignerConfig
-            - IPv6Header # 'ipv6Header : iPv6Header'
-            - LastMeasuredRTTNanoseconds # lastMeasuredRTTNanoseconds : lastMeasuredRttNanoseconds
-            - ListMeta # metadata : listMeta
-            - LocalASN # localASN : localAsn
-            - MaxIPFIXMsgSize # maxIPFIXMsgSize : maxIpfixMsgSize
-            - McastSnoopingEnable # mcast_snooping_enable : mcastSnoopingEnable
-            - MemberASNs # memberASNs : memberAsNs
-            - Method # http_method : method
-            - Nameservers # servers : nameservers
-            - NodeCIDRMaskSizeIPv4 # nodeCIDRMaskSizeIPv4 : nodeCidrMaskSizeIPv4
-            - NodeCIDRMaskSizeIPv6 # nodeCIDRMaskSizeIPv6 : nodeCidrMaskSizeIPv6
-            - NodeIPAM # nodeIPAM : nodeIpam
-            - NodeResults # results : nodeResults
-            - NoSNAT # noSNAT : noSnat
-            - ObjectMeta # metadata : objectMeta
-            - OFPortRequest # ofport_request : ofPortRequest
-            - PacketBytes # packet : packetBytes
-            - PodCIDRs # podCIDRs : podCidRs
-            - PodName # name' want 'podName
-            - PolicyRef # policyref' want 'policyRef
-            - Port # http_port : port
-            - Protocol # proto : protocol
-            - RawPrevResult # prevResult : rawPrevResult
-            - RuleIndex # ruleindex : ruleIndex
-            - Search # searches : search
-            - SelfSignedCA # selfSignedCA : selfSignedCa
-            - ServiceCIDR # serviceCIDR : serviceCidr
-            - ServiceCIDRv6 # serviceCIDRv6 : serviceCidRv6
-            - SrcIP # src_ip : srcIP
-            - SrcPort # src_port : srcPort
-            - TransportInterfaceCIDRs # transportInterfaceCIDRs : transportInterfaceCidR
-            - TransportHeader # tranportHeader : transportHeader
-            - TxID # tx_id : txID
-            - UserAgent # http_user_agent : userAgent
-            - WithIPFIXExporter # withIPFIXExporter : withIpfixExporter
+          overrides:  
+
+            - pkg: test
+              ignore: true
+            #Format for ignored-fields comments - current : expected
+            - pkg: pkg/ovs/ovsconfig
+              ignored-fields:
+                - DatapathType # datapath_type : datapathType
+                - ExternalIDs # external_ids : externalIDs
+                - McastSnoopingEnable # mcast_snooping_enable : mcastSnoopingEnable
+                - OFPortRequest # ofport_request : ofPortRequest
+                
+            - pkg: pkg/flowaggregator/apis
+              ignored-fields:
+                - WithIPFIXExporter # withIPFIXExporter : withIpfixExporter
+
+            - pkg: pkg/config/flowaggregator
+              ignored-fields:
+                - MaxIPFIXMsgSize # maxIPFIXMsgSize : maxIpfixMsgSize
             
+            - pkg: pkg/config/controller
+              ignored-fields:
+                - ClientCAFile # clientCAFile : clientCaFile
+                - ClusterCIDRs # clusterCIDRs : clusterCidRs
+                - EnableNodeIPAM # enableNodeIPAM : enableNodeIpam
+                - IPsecCSRSignerConfig # ipsecCSRSigner : iPsecCsrSignerConfig
+                - NodeCIDRMaskSizeIPv4 # nodeCIDRMaskSizeIPv4 : nodeCidrMaskSizeIPv4
+                - NodeCIDRMaskSizeIPv6 # nodeCIDRMaskSizeIPv6 : nodeCidrMaskSizeIPv6
+                - NodeIPAM # nodeIPAM : nodeIpam
+                - SelfSignedCA # selfSignedCA : selfSignedCa
+                - ServiceCIDR # serviceCIDR : serviceCidr
+                - ServiceCIDRv6 # serviceCIDRv6 : serviceCidRv6
+            
+            - pkg: pkg/config/agent
+              ignored-fields:
+                - ClusterMembershipPort # clusterPort : clusterMembershipPort
+                - DefaultMTU # defaultMTU : defaultMtu
+                - DisableTXChecksumOffload # disableTXChecksumOffload : disableTxChecksumOffload
+                - ExceptCIDRs # exceptCIDRs : exceptCidRs
+                - IPsec # ipsec : iPsec
+                - NoSNAT # noSNAT : noSnat
+                - ServiceCIDR # serviceCIDR : serviceCidr
+                - ServiceCIDRv6 # serviceCIDRv6 : serviceCidRv6
+                - TransportInterfaceCIDRs # transportInterfaceCIDRs : transportInterfaceCidR
+
+            - pkg: pkg/apiserver/apis
+              ignored-fields:
+                - AppliedPolicies # policies : appliedPolicies
+                - EgressDstRules # gressdstrules : egressDstRules
+                - IngressSrcRules # ingresssrcrules : ingressSrcRules
+                - PolicyRef # policyref' want 'policyRef
+                - RuleIndex # ruleindex : ruleIndex
+            
+            - pkg: pkg/apis/system
+              ignored-fields:
+                - ObjectMeta # metadata : objectMeta
+            
+            - pkg: pkg/apis/stats
+              ignored-fields:
+                - LastMeasuredRTTNanoseconds # lastMeasuredRTTNanoseconds : lastMeasuredRttNanoseconds
+                - ListMeta # metadata : listMeta
+                - ObjectMeta # metadata : objectMeta
+
+            - pkg: pkg/apis/crd
+              ignored-fields:
+                - APICABundle # apiCABundle : apicaBundle
+                - DstMAC # dstMAC : dstMac
+                - IPv6Header # 'ipv6Header : iPv6Header'
+                - ListMeta # metadata : listMeta
+                - LocalASN # localASN : localAsn
+                - MemberASNs # memberASNs : memberAsNs
+                - ObjectMeta # metadata : objectMeta
+            
+            - pkg: pkg/apis/controlplane
+              ignored-fields:
+                - ListMeta # metadata : listMeta
+                - ObjectMeta # metadata : objectMeta
+            
+            - pkg: pkg/antctl/raw
+              ignored-fields:
+                - IPv6Header # 'ipv6Header : iPv6Header'
+                - NodeResults # results : nodeResults
+                - TransportHeader # tranportHeader : transportHeader
+            
+            - pkg: pkg/agent/flowexporter
+              ignored-fields:
+                - ContentLength # length : contentLength
+                - ContentType # http_content_type : contentType
+                - DestIP # dest_ip : destIP
+                - DestPort # dest_port : destPort
+                - EventType # event_type : eventType
+                - FlowID # flow_id : flowID
+                - InInterface # in_iface : inInterface
+                - Method # http_method : method
+                - SrcIP # src_ip : srcIP
+                - SrcPort # src_port : srcPort
+                - TxID # tx_id : txID
+                - UserAgent # http_user_agent : userAgent
+            
+            - pkg: pkg/agent/cniserver
+              ignored-fields:
+                - IPPools # ippools : ipPools
+                - Nameservers # servers : nameservers
+                - RawPrevResult # prevResult : rawPrevResult
+                - Search # searches : search
+            
+            - pkg: pkg/agent/apis
+              ignored-fields:
+                - BGPPolicyName # name' want 'bgpPolicyName
+                - IPs # ips : iPs
+                - LocalASN # localASN : localAsn
+                - MemberASNs # memberASNs : memberAsNs
+                - Nameservers # servers : nameservers
+                - PodName # name' want 'podName
+            
+            - pkg: multicluster/apis/multicluster
+              ignored-fields:
+                - ListMeta # metadata : listMeta
+                - ObjectMeta # metadata : objectMeta
+                - PodCIDRs # podCIDRs : podCidRs
+                - ServiceCIDR # serviceCIDR : serviceCidr
+            
+            - pkg: pkg/agent/util
+              ignored-fields:
+                - Extensions # Extensions : extensions
+                - ExtensionID # Id : extensionID
+
           use-field-name: true
+
   exclusions:
     presets:
       - legacy
