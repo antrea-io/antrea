@@ -18,6 +18,7 @@ import (
 	"context"
 	"fmt"
 	"net"
+	"regexp"
 	"strings"
 	"testing"
 	"time"
@@ -610,5 +611,81 @@ func testPingLargeMTU(t *testing.T, data *TestData) {
 	t.Logf("Running ping with size %d between Pods %s and %s", pingSize, podInfos[0].Name, podInfos[1].Name)
 	if err := data.RunPingCommandFromTestPod(podInfos[0], data.testNamespace, podIPs[podInfos[1].Name], toolboxContainerName, pingCount, pingSize, false); err != nil {
 		t.Error(err)
+	}
+}
+
+func TestConnectivityAcceleration(t *testing.T) {
+	skipIfNumNodesLessThan(t, 2)
+	data, err := setupTest(t)
+	if err != nil {
+		t.Fatalf("Error when setting up test: %v", err)
+	}
+	defer teardownTest(t, data)
+	skipIfEncapModeIsNot(t, data, config.TrafficEncapModeNoEncap)
+
+	// Create iperf3 client Pod.
+	if err := NewPodBuilder("perftest-client", data.testNamespace, ToolboxImage).
+		OnNode(nodeName(1)).
+		Create(data); err != nil {
+		t.Fatalf("Error when creating the perftest client Pod: %v", err)
+	}
+	if err := data.podWaitForRunning(defaultTimeout, "perftest-client", data.testNamespace); err != nil {
+		t.Fatalf("Error when waiting for the perftest client Pod: %v", err)
+	}
+
+	// Create iperf3 server Pod.
+	if err := NewPodBuilder("perftest-server", data.testNamespace, ToolboxImage).
+		WithCommand([]string{"iperf3", "-s"}).
+		OnNode(nodeName(2)).
+		Create(data); err != nil {
+		t.Fatalf("Error when creating the perftest server Pod: %v", err)
+	}
+	podIPs, err := data.podWaitForIPs(defaultTimeout, "perftest-server", data.testNamespace)
+	if err != nil {
+		t.Fatalf("Error when getting the perftest server Pod's IPs: %v", err)
+	}
+
+	nodes := []string{nodeName(1), nodeName(2)}
+	verifyNFTFlowtable := func(dstIP string) {
+		re := regexp.MustCompile(fmt.Sprintf(`dst=%s.*\[OFFLOAD\]`, dstIP))
+
+		go func() {
+			for _, node := range nodes {
+				pollErr := wait.PollUntilContextTimeout(context.Background(), 200*time.Millisecond, 6*time.Second, true, func(ctx context.Context) (bool, error) {
+					// Find the accelerated by nft flowtable connections in conntrack.
+					// The output example:
+					// tcp      6 src=10.244.2.96 dst=10.244.1.20 sport=57683 dport=30002 src=10.244.1.20 dst=10.244.2.96 sport=30002 dport=57683 [OFFLOAD] mark=0 use=2
+					_, stdout, stderr, err := data.RunCommandOnNode(node, "conntrack -L")
+					if err != nil {
+						t.Logf("Error when checking conntrack on Node %s: %v, stderr: %s", node, err, stderr)
+						return false, nil
+					}
+					// Found the target conntrack item.
+					for _, line := range strings.Split(stdout, "\n") {
+						if re.MatchString(line) {
+							t.Logf("Flound nft flwotable offload item on Node %s: '%s'", node, line)
+							return true, nil
+						}
+					}
+					return false, nil
+				})
+				assert.NoError(t, pollErr)
+			}
+		}()
+
+		_, stderr, err := data.RunCommandFromPod(data.testNamespace,
+			"perftest-client",
+			"toolbox",
+			[]string{"bash", "-c", fmt.Sprintf("iperf3 -c %s -t 5", dstIP)})
+		if err != nil {
+			t.Fatalf("Error when running iperf3 client: %v, stderr: %s", err, stderr)
+		}
+	}
+
+	if ipv4 := podIPs.IPv4; ipv4 != nil {
+		verifyNFTFlowtable(ipv4.String())
+	}
+	if ipv6 := podIPs.IPv6; ipv6 != nil {
+		verifyNFTFlowtable(ipv6.String())
 	}
 }
