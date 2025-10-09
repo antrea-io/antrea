@@ -322,6 +322,7 @@ func TestFlowAggregator(t *testing.T) {
 		t.Run("L7FlowExporterController_IPv4", func(t *testing.T) {
 			testL7FlowExporterController(t, data, false)
 		})
+		t.Run("testExternalToPodFlows", func(t *testing.T) { testExternalToPodFlows(t, data) })
 	}
 
 	if v6Enabled {
@@ -2075,6 +2076,61 @@ func getAndCheckFlowAggregatorMetrics(t *testing.T, data *TestData, withClickHou
 	return nil
 }
 
+func testExternalToPodFlows(t *testing.T, data *TestData) {
+	t.Log("testExternalToPodFlowsOnly")
+	t.Errorf("asdffdsa")
+	//skipIfFeatureDisabled(t, features.L7FlowExporter, true, false)
+	//nodeName := nodeName(1)
+	//_, serverIPs, cleanupFunc := createAndWaitForPod(t, data, data.createNginxPodOnNode, "l7flowexportertestpodserver", nodeName, data.testNamespace, false)
+	//defer cleanupFunc()
+
+	//clientPodName := "l7flowexportertestpodclient"
+	//clientPodLabels := map[string]string{"flowexportertest": "l7"}
+	//clientPodAnnotations := map[string]string{antreaagenttypes.L7FlowExporterAnnotationKey: "both"}
+	//require.NoError(t, NewPodBuilder(clientPodName, data.testNamespace, ToolboxImage).OnNode(nodeName).WithContainerName("l7flowexporter").WithLabels(clientPodLabels).WithAnnotations(clientPodAnnotations).Create(data))
+	//clientPodIPs, err := data.podWaitForIPs(defaultTimeout, clientPodName, data.testNamespace)
+	//require.NoErrorf(t, err, "Error when waiting for IP for Pod '%s': %v", clientPodName, err)
+	//defer deletePodWrapper(t, data, data.testNamespace, clientPodName)
+
+	//// Wait for the Suricata to start.
+	//time.Sleep(3 * time.Second)
+
+	//testFlow1 := testFlow{
+	//	srcPodName: clientPodName,
+	//}
+	//if !isIPv6 {
+	//	testFlow1.srcIP = clientPodIPs.IPv4.String()
+	//	testFlow1.dstIP = serverIPs.IPv4.String()
+	//} else {
+	//	testFlow1.srcIP = clientPodIPs.IPv6.String()
+	//	testFlow1.dstIP = serverIPs.IPv6.String()
+	//}
+	//cmd := []string{"curl", getHTTPURLFromIPPort(testFlow1.dstIP, serverPodPort)}
+	//stdout, stderr, err := data.RunCommandFromPod(data.testNamespace, testFlow1.srcPodName, "l7flowexporter", cmd)
+	//require.NoErrorf(t, err, "Error when running curl command, stdout: %s, stderr: %s", stdout, stderr)
+	//records := getCollectorOutput(t, testFlow1.srcIP, testFlow1.dstIP, "", false, true, isIPv6, data, "", getCollectorOutputDefaultTimeout)
+	//for _, record := range records {
+	//	assert := assert.New(t)
+	//	assert.Contains(record, testFlow1.srcPodName, "Record with srcIP does not have Pod name: %s", testFlow1.srcPodName)
+	//	assert.Contains(record, fmt.Sprintf("sourcePodNamespace: %s", data.testNamespace), "Record does not have correct sourcePodNamespace: %s", data.testNamespace)
+	//	assert.Contains(record, fmt.Sprintf("sourceNodeName: %s", nodeName), "Record does not have correct sourceNodeName: %s", nodeName)
+	//	assert.Contains(record, "\"flowexportertest\":\"l7\"", "Record does not have correct label for source Pod")
+
+	//	checkL7FlowExporterData(t, record, "http")
+	//}
+
+	//clickHouseRecords := getClickHouseOutput(t, data, testFlow1.srcIP, testFlow1.dstIP, "", false, true, "")
+	//for _, record := range clickHouseRecords {
+	//	assert := assert.New(t)
+	//	assert.Equal(record.SourcePodName, testFlow1.srcPodName, "Record with srcIP does not have Pod name: %s", testFlow1.srcPodName)
+	//	assert.Equal(record.SourcePodNamespace, data.testNamespace, "Record does not have correct sourcePodNamespace: %s", data.testNamespace)
+	//	assert.Equal(record.SourceNodeName, nodeName, "Record does not have correct sourceNodeName: %s", nodeName)
+	//	assert.Contains(record.SourcePodLabels, "\"flowexportertest\":\"l7\"", "Record does not have correct label for source Pod")
+
+	//	checkL7FlowExporterDataClickHouse(t, record, "http")
+	//}
+}
+
 func testL7FlowExporterController(t *testing.T, data *TestData, isIPv6 bool) {
 	skipIfFeatureDisabled(t, features.L7FlowExporter, true, false)
 	nodeName := nodeName(1)
@@ -2126,7 +2182,6 @@ func testL7FlowExporterController(t *testing.T, data *TestData, isIPv6 bool) {
 
 		checkL7FlowExporterDataClickHouse(t, record, "http")
 	}
-
 }
 
 type ClickHouseFullRow struct {
