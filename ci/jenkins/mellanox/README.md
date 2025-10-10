@@ -56,8 +56,8 @@ The following table shows what variables can be configured:
 |  SRIOV_NETWORK_DEVICE_PLUGIN_HARBOR_IMAGE<br />(${HARBOR_REGISTRY}/${HARBOR_PROJECT}/sriov-device-plugin) | The SRIOV network device plugin image to pull in case the project was not built |
 |  GOPATH<br />(${WORKSPACE}) ||
 |  PATH<br />(/usr/local/go/bin/:<br />$GOPATH/src/k8s.io/kubernetes/third_party/etcd:<br />$PATH) ||
-|  CNI_BIN_DIR<br />(/opt/cni/bin/) | This is used to configure Kubernetes $local_cluser_up.sh CNI_BIN_DIR |
-|  CNI_CONF_DIR<br />(/etc/cni/net.d/) | This is used to configure Kubernetes local_cluser_up.sh CNI_CONF_DIR |
+|  CNI_BIN_DIR<br />(/opt/cni/bin/) | This is used to configure Kubernetes $local_cluster_up.sh CNI_BIN_DIR |
+|  CNI_CONF_DIR<br />(/etc/cni/net.d/) | This is used to configure Kubernetes local_cluster_up.sh CNI_CONF_DIR |
 |  API_HOST<br />($(hostname)) | The Node name to use |
 |  API_HOST_IP<br />($(hostname -I \| awk '{print $1}')) | The API server IP |
 |  POD_CIDR<br />(192.168.0.0/16) | The Pods network subnet |

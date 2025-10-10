@@ -89,6 +89,9 @@
         "antrea.io/libOpenflow",
         "github.com/ClickHouse/clickhouse-go/v2", // auto-upgrade involves dependency conflicts
         "github.com/aws/", // Updates are too frequent
+         // Update requires using netip.Addr instead of net.IP in Antrea, we may have it
+         // updated in a mentorship project in the future.
+        "github.com/mdlayher/arp",
       ],
       enabled: false,
     },
