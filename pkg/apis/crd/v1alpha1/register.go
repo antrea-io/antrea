@@ -51,6 +51,8 @@ func addKnownTypes(scheme *runtime.Scheme) error {
 		SchemeGroupVersion,
 		&ExternalNode{},
 		&ExternalNodeList{},
+		&FlowExporterTarget{},
+		&FlowExporterTargetList{},
 		&SupportBundleCollection{},
 		&SupportBundleCollectionList{},
 		&NodeLatencyMonitor{},

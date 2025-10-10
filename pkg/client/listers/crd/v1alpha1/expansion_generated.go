@@ -1,4 +1,4 @@
-// Copyright 2024 Antrea Authors
+// Copyright 2025 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -27,6 +27,10 @@ type ExternalNodeListerExpansion interface{}
 // ExternalNodeNamespaceListerExpansion allows custom methods to be added to
 // ExternalNodeNamespaceLister.
 type ExternalNodeNamespaceListerExpansion interface{}
+
+// FlowExporterTargetListerExpansion allows custom methods to be added to
+// FlowExporterTargetLister.
+type FlowExporterTargetListerExpansion interface{}
 
 // NodeLatencyMonitorListerExpansion allows custom methods to be added to
 // NodeLatencyMonitorLister.
