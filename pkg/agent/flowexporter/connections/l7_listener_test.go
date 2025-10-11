@@ -151,7 +151,7 @@ func TestFlowExporterL7ListenerHttp(t *testing.T) {
 			},
 			eventPresent: true,
 			expectedEvents: L7ProtocolFields{
-				http: map[int32]*Http{
+				Http: map[int32]*Http{
 					0: {
 						Hostname:      "10.10.0.1",
 						URL:           "/public/1",
@@ -215,7 +215,7 @@ func TestFlowExporterL7ListenerHttp(t *testing.T) {
 			},
 			eventPresent: true,
 			expectedEvents: L7ProtocolFields{
-				http: map[int32]*Http{
+				Http: map[int32]*Http{
 					0: {
 						Hostname:      "10.10.0.1",
 						URL:           "/public/2",
@@ -301,7 +301,7 @@ func TestFlowExporterL7ListenerHttp(t *testing.T) {
 				existingEvent, exists := allL7Events[connKey]
 				assert.Equal(t, tc.eventPresent, exists)
 				if exists {
-					assert.Equal(t, tc.expectedEvents.http, existingEvent.http)
+					assert.Equal(t, tc.expectedEvents.Http, existingEvent.Http)
 				}
 			}, 1*time.Second, 100*time.Millisecond, "L7 event map does not match")
 		})

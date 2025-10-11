@@ -1,0 +1,596 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  labels:
+    app: flow-aggregator
+  name: flow-aggregator
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  labels:
+    app: flow-aggregator
+  name: flow-aggregator
+  namespace: flow-aggregator
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  labels:
+    app: flow-aggregator
+  name: flow-aggregator-role
+  namespace: flow-aggregator
+rules:
+- apiGroups:
+  - ""
+  resources:
+  - configmaps
+  verbs:
+  - create
+- apiGroups:
+  - ""
+  resourceNames:
+  - flow-aggregator-ca
+  resources:
+  - configmaps
+  verbs:
+  - get
+  - update
+- apiGroups:
+  - ""
+  resources:
+  - secrets
+  verbs:
+  - create
+- apiGroups:
+  - ""
+  resourceNames:
+  - flow-aggregator-client-tls
+  resources:
+  - secrets
+  verbs:
+  - get
+  - update
+- apiGroups:
+  - ""
+  resourceNames:
+  - flow-aggregator-configmap
+  resources:
+  - configmaps
+  verbs:
+  - get
+  - update
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  labels:
+    app: flow-aggregator
+  name: flow-exporter-role
+  namespace: flow-aggregator
+rules:
+- apiGroups:
+  - ""
+  resourceNames:
+  - flow-aggregator-ca
+  resources:
+  - configmaps
+  verbs:
+  - get
+- apiGroups:
+  - ""
+  resourceNames:
+  - flow-aggregator-client-tls
+  resources:
+  - secrets
+  verbs:
+  - get
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  labels:
+    app: flow-aggregator
+  name: flow-aggregator-role
+rules:
+- apiGroups:
+  - ""
+  resources:
+  - pods
+  - nodes
+  - services
+  verbs:
+  - get
+  - list
+  - watch
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  labels:
+    app: flow-aggregator
+  name: flow-aggregator-role-binding
+  namespace: flow-aggregator
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: flow-aggregator-role
+subjects:
+- kind: ServiceAccount
+  name: flow-aggregator
+  namespace: flow-aggregator
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  labels:
+    app: flow-aggregator
+  name: flow-exporter-role-binding
+  namespace: flow-aggregator
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: flow-exporter-role
+subjects:
+- kind: ServiceAccount
+  name: antrea-agent
+  namespace: kube-system
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  labels:
+    app: flow-aggregator
+  name: flow-aggregator-extension-apiserver-authentication-reader-role-binding
+  namespace: kube-system
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: extension-apiserver-authentication-reader
+subjects:
+- kind: ServiceAccount
+  name: flow-aggregator
+  namespace: flow-aggregator
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  labels:
+    app: flow-aggregator
+  name: flow-aggregator-auth-delegator-cluster-role-binding
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: system:auth-delegator
+subjects:
+- kind: ServiceAccount
+  name: flow-aggregator
+  namespace: flow-aggregator
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  labels:
+    app: flow-aggregator
+  name: flow-aggregator-cluster-id-reader
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: antrea-cluster-identity-reader
+subjects:
+- kind: ServiceAccount
+  name: flow-aggregator
+  namespace: flow-aggregator
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  labels:
+    app: flow-aggregator
+  name: flow-aggregator-cluster-role-binding
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: flow-aggregator-role
+subjects:
+- kind: ServiceAccount
+  name: flow-aggregator
+  namespace: flow-aggregator
+---
+apiVersion: v1
+data:
+  flow-aggregator.conf: |
+    # Mode in which to run the flow aggregator. Must be one of "Aggregate" or "Proxy". In Aggregate
+    # mode, flow records received from source and destination are aggregated and sent as one flow
+    # record. In Proxy mode, flow records are enhanced with some additional information, then sent
+    # directly without buffering or aggregation.
+    mode: Aggregate
+
+    # Provide the active flow record timeout as a duration string. This determines
+    # how often the flow aggregator exports the active flow records to the flow
+    # collector. Thus, for flows with a continuous stream of packets, a flow record
+    # will be exported to the collector once the elapsed time since the last export
+    # event in the flow aggregator is equal to the value of this timeout.
+    # Valid time units are "ns", "us" (or "µs"), "ms", "s", "m", "h".
+    activeFlowRecordTimeout: 60s
+
+    # Provide the inactive flow record timeout as a duration string. This determines
+    # how often the flow aggregator exports the inactive flow records to the flow
+    # collector. A flow record is considered to be inactive if no matching record
+    # has been received by the flow aggregator in the specified interval.
+    # Valid time units are "ns", "us" (or "µs"), "ms", "s", "m", "h".
+    inactiveFlowRecordTimeout: 90s
+
+    # Provide the transport protocol for the flow aggregator collecting process, which must be one of
+    # "tls", "tcp", "udp" or "none". Note that this only applies to the IPFIX collector. The gRPC
+    # collector will always run (and always use mTLS), regardless of this configuration. When using
+    # "none", the IPFIX collector will be disabled.
+    aggregatorTransportProtocol: "tls"
+
+    # Provide an extra DNS name or IP address of flow aggregator for generating TLS certificate.
+    flowAggregatorAddress: ""
+
+    # recordContents enables configuring some fields in the flow records. Fields can
+    # be excluded to reduce record size, but some features or external tooling may
+    # depend on these fields.
+    recordContents:
+      # Determine whether source and destination Pod labels will be included in the flow records.
+      podLabels: false
+
+    # apiServer contains APIServer related configuration options.
+    apiServer:
+      # The port for the flow-aggregator APIServer to serve on.
+      apiPort: 10348
+
+      # Comma-separated list of Cipher Suites. If omitted, the default Go Cipher Suites will be used.
+      # https://golang.org/pkg/crypto/tls/#pkg-constants
+      # Note that TLS1.3 Cipher Suites cannot be added to the list. But the apiserver will always
+      # prefer TLS1.3 Cipher Suites whenever possible.
+      tlsCipherSuites: ""
+
+      # TLS min version from: VersionTLS12, VersionTLS13.
+      # The current default is VersionTLS12.
+      tlsMinVersion: ""
+
+    # flowCollector contains external IPFIX or JSON collector related configuration options.
+    flowCollector:
+      # Enable is the switch to enable exporting flow records to external flow collector.
+      enable: false
+
+      # Provide the flow collector address as string with format <IP>:<port>[:<proto>], where proto is tcp or udp.
+      # If no L4 transport proto is given, we consider tcp as default.
+      address: ""
+
+      # Provide the 32-bit Observation Domain ID which will uniquely identify this instance of the flow
+      # aggregator to an external flow collector. If omitted, an Observation Domain ID will be generated
+      # from the persistent cluster UUID generated by Antrea. Failing that (e.g. because the cluster UUID
+      # is not available), a value will be randomly generated, which may vary across restarts of the flow
+      # aggregator.
+      #observationDomainID:
+
+      # Provide format for records sent to the configured flow collector.
+      # Supported formats are IPFIX and JSON.
+      recordFormat: "IPFIX"
+
+      # Template retransmission interval when using the udp protocol to export records.
+      # The value must be provided as a duration string.
+      # Valid time units are "ns", "us" (or "µs"), "ms", "s", "m", "h".
+      templateRefreshTimeout: "600s"
+
+      # Maximum message size to use for IPFIX records. If set to 0 (recommended), a reasonable default
+      # value will be used based on the protocol (tcp or udp) used to connect to the collector.
+      # Min valid value is 512 and max valid value is 65535.
+      maxIPFIXMsgSize: 0
+
+      # TLS / mTLS configuration when exporting to the flowCollector.
+      tls:
+        # Enable TLS.
+        enable: false
+        # Name of the Secret containing the CA certificate used to authenticate the
+        # flowCollector. Default root CAs will be used if this field is empty. The Secret must be
+        # created in the Namespace in which the Flow Aggregator is deployed, and it must contain the
+        # ca.crt key.
+        caSecretName: ""
+        # ServerName is used to verify the hostname on the returned certificates. It is also included in
+        # the client's handshake (SNI) to support virtual hosting unless it is an IP address. If this
+        # field is omitted, the hostname used for certificate verification will default to the provided
+        # server address (flowCollector.address).
+        serverName: ""
+        # Name of the Secret containing the client's certificate and private key for mTLS. If omitted,
+        # client authentication will be disabled. The Secret must be created in Namespace in which the
+        # Flow Aggregator is deployed, and it must be of type kubernetes.io/tls and contain the tls.crt
+        # and tls.key keys.
+        clientSecretName: ""
+        # Minimum TLS version from: VersionTLS12, VersionTLS13.
+        # The current default is VersionTLS12.
+        minVersion: ""
+
+      # Include the names of K8s objects (Pods, Nodes, ...) as information elements in exported records.
+      # Defaults to true.
+      includeK8sNames: true
+
+      # Include the UIDs of K8s objects (Pods, Nodes, ...) as information elements in exported records.
+      # Defaults to false.
+      includeK8sUIDs: false
+
+    # clickHouse contains ClickHouse related configuration options.
+    clickHouse:
+      # Enable is the switch to enable exporting flow records to ClickHouse.
+      enable: false
+
+      # Database is the name of database where Antrea "flows" table is created.
+      database: "default"
+
+      # DatabaseURL is the url to the database. Provide the database URL as a string with format
+      # <Protocol>://<ClickHouse server FQDN or IP>:<ClickHouse port>. The protocol has to be
+      # one of the following: "tcp", "tls", "http", "https". When "tls" or "https" is used, tls
+      # will be enabled.
+      databaseURL: "tcp://clickhouse-clickhouse.flow-visibility.svc:9000"
+
+      # TLS configuration options, when using TLS to connect to the ClickHouse service.
+      tls:
+        # InsecureSkipVerify determines whether to skip the verification of the server's certificate chain and host name.
+        # Default is false.
+        insecureSkipVerify: false
+
+        # CACert indicates whether to use custom CA certificate. Default root CAs will be used if this field is false.
+        # If true, a Secret named "clickhouse-ca" must be provided with the following keys:
+        # ca.crt: <CA certificate>
+        caCert: false
+
+      # Debug enables debug logs from ClickHouse sql driver.
+      debug: false
+
+      # Compress enables lz4 compression when committing flow records.
+      compress: true
+
+      # CommitInterval is the periodical interval between batch commit of flow records to DB.
+      # Valid time units are "ns", "us" (or "µs"), "ms", "s", "m", "h".
+      # The minimum interval is 1s based on ClickHouse documentation for best performance.
+      commitInterval: "8s"
+
+    # s3Uploader contains configuration options for uploading flow records to AWS S3.
+    s3Uploader:
+      # Enable is the switch to enable exporting flow records to AWS S3.
+      # At the moment, the flow aggregator will look for the "standard" environment variables to
+      # authenticate to AWS. These can be static credentials (AWS_ACCESS_KEY_ID,
+      # AWS_SECRET_ACCESS_KEY, AWS_SESSION_TOKEN) or a Web Identity Token
+      # (AWS_WEB_IDENTITY_TOKEN_FILE).
+      enable: false
+
+      # BucketName is the name of the S3 bucket to which flow records will be uploaded. If this
+      # field is empty, initialization will fail.
+      bucketName: ""
+
+      # BucketPrefix is the prefix ("folder") under which flow records will be uploaded. If this
+      # is omitted, flow records will be uploaded to the root of the bucket.
+      bucketPrefix: ""
+
+      # Region is used as a "hint" to get the region in which the provided bucket is located.
+      # An error will occur if the bucket does not exist in the AWS partition the region hint
+      # belongs to. If region is omitted, the value of the AWS_REGION environment variable will
+      # be used, and if it is missing, we will default to "us-west-2".
+      region: "us-west-2"
+
+      # RecordFormat defines the format of the flow records uploaded to S3. Only "CSV" is
+      # supported at the moment.
+      recordFormat: "CSV"
+
+      # Compress enables gzip compression when uploading files to S3. Defaults to true.
+      compress: true
+
+      # MaxRecordsPerFile is the maximum number of records per file uploaded. It is not recommended
+      # to change this value.
+      maxRecordsPerFile: 1e+06
+
+      # UploadInterval is the duration between each file upload to S3.
+      uploadInterval: "60s"
+
+    # FlowLogger contains configuration options for writing flow records to a local log file.
+    flowLogger:
+      # Enable is the switch to enable writing flow records to a local log file.
+      enable: false
+
+      # Path is the path to the local log file.
+      path: "/tmp/antrea-flows.log"
+
+      # MaxSize is the maximum size in MB of a log file before it gets rotated.
+      maxSize: 100
+
+      # MaxBackups is the maximum number of old log files to retain. If set to 0, all log files will be
+      # retained (unless MaxAge causes them to be deleted).
+      maxBackups: 3
+
+      # MaxAge is the maximum number of days to retain old log files based on the timestamp encoded in
+      # their filename. The default (0) is not to remove old log files based on age.
+      maxAge: 0
+
+      # Compress enables gzip compression on rotated files.
+      compress: true
+
+      # RecordFormat defines the format of the flow records logged to file. Only "CSV" is supported at
+      # the moment.
+      recordFormat: "CSV"
+
+      # Filters can be used to select which flow records to log to file. The provided filters are OR-ed
+      # to determine whether a specific flow should be logged.
+      filters:
+        []
+
+      # PrettyPrint enables conversion of some numeric fields to a more meaningful string
+      # representation.
+      prettyPrint: true
+
+    # Provide a clusterID to be added to records. By default this ID is an auto-generated UUID which
+    # can be found in the antrea-cluster-identity ConfigMap. Currently this is only consumed by the
+    # flowCollector (IPFIX) exporter.
+    clusterID: ""
+kind: ConfigMap
+metadata:
+  labels:
+    app: flow-aggregator
+  name: flow-aggregator-configmap
+  namespace: flow-aggregator
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  labels:
+    app: flow-aggregator
+  name: clickhouse-secret
+  namespace: flow-aggregator
+stringData:
+  password: clickhouse_operator_password
+  username: clickhouse_operator
+type: Opaque
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  labels:
+    app: flow-aggregator
+  name: flow-aggregator-aws-credentials
+  namespace: flow-aggregator
+stringData:
+  aws_access_key_id: changeme
+  aws_secret_access_key: changeme
+  aws_session_token: ""
+type: Opaque
+---
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    app: flow-aggregator
+  name: flow-aggregator
+  namespace: flow-aggregator
+spec:
+  ports:
+  - name: ipfix-udp
+    port: 4739
+    protocol: UDP
+    targetPort: ipfix-udp
+  - name: ipfix-tcp
+    port: 4739
+    protocol: TCP
+    targetPort: ipfix-tcp
+  - name: grpc
+    port: 14739
+    protocol: TCP
+    targetPort: grpc
+  selector:
+    app: flow-aggregator
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: flow-aggregator
+  name: flow-aggregator
+  namespace: flow-aggregator
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: flow-aggregator
+  template:
+    metadata:
+      annotations:
+        checksum/config: 90ac254e5326185b3bdb2ae70568457015f7505606d73b3f27d948872479a279
+      labels:
+        app: flow-aggregator
+    spec:
+      containers:
+      - args:
+        - --config=/etc/flow-aggregator/flow-aggregator.conf
+        - --logtostderr=false
+        - --log_dir=/var/log/antrea/flow-aggregator
+        - --alsologtostderr
+        - --log_file_max_size=100
+        - --log_file_max_num=4
+        env:
+        - name: POD_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        - name: POD_NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
+        - name: CH_USERNAME
+          valueFrom:
+            secretKeyRef:
+              key: username
+              name: clickhouse-secret
+        - name: CH_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              key: password
+              name: clickhouse-secret
+        - name: FA_CONFIG_MAP_NAME
+          value: flow-aggregator-configmap
+        - name: AWS_ACCESS_KEY_ID
+          valueFrom:
+            secretKeyRef:
+              key: aws_access_key_id
+              name: flow-aggregator-aws-credentials
+        - name: AWS_SECRET_ACCESS_KEY
+          valueFrom:
+            secretKeyRef:
+              key: aws_secret_access_key
+              name: flow-aggregator-aws-credentials
+        - name: AWS_SESSION_TOKEN
+          valueFrom:
+            secretKeyRef:
+              key: aws_session_token
+              name: flow-aggregator-aws-credentials
+        image: antrea/flow-aggregator:latest
+        imagePullPolicy: IfNotPresent
+        name: flow-aggregator
+        ports:
+        - containerPort: 4739
+          name: ipfix-udp
+          protocol: UDP
+        - containerPort: 4739
+          name: ipfix-tcp
+          protocol: TCP
+        - containerPort: 14739
+          name: grpc
+          protocol: TCP
+        resources:
+          requests:
+            cpu: 500m
+            memory: 256Mi
+        volumeMounts:
+        - mountPath: /etc/flow-aggregator
+          name: flow-aggregator-config
+          readOnly: true
+        - mountPath: /var/log/antrea/flow-aggregator
+          name: host-var-log-antrea-flow-aggregator
+        - mountPath: /etc/flow-aggregator/certs
+          name: certs
+          readOnly: true
+      hostNetwork: false
+      nodeSelector:
+        kubernetes.io/arch: amd64
+        kubernetes.io/os: linux
+      priorityClassName: system-cluster-critical
+      serviceAccountName: flow-aggregator
+      volumes:
+      - name: certs
+        projected:
+          defaultMode: 256
+          sources:
+          - secret:
+              items:
+              - key: ca.crt
+                path: clickhouse/ca.crt
+              name: clickhouse-ca
+              optional: true
+      - configMap:
+          name: flow-aggregator-configmap
+        name: flow-aggregator-config
+      - hostPath:
+          path: /var/log/antrea/flow-aggregator
+          type: DirectoryOrCreate
+        name: host-var-log-antrea-flow-aggregator
