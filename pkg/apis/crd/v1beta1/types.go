@@ -1051,12 +1051,8 @@ const (
 	ActionForwarded TraceflowAction = "Forwarded"
 	ActionDropped   TraceflowAction = "Dropped"
 	ActionRejected  TraceflowAction = "Rejected"
-	// ActionForwardedOutOfOverlay indicates that the packet has been forwarded out of the network
-	// managed by Antrea. This indicates that the Traceflow request can be considered complete.
-	ActionForwardedOutOfOverlay TraceflowAction = "ForwardedOutOfOverlay"
 	// ActionForwardedOutOfNetwork indicates that the packet has been forwarded out of the network
-	// managed by Antrea, but it's not a full end-to-end observation.
-	// TODO: unify "ForwardedOutOfOverlay" and "ForwardedOutOfNetwork" in a future API version
+	// managed by Antrea OVS pipeline, but it's not a full end-to-end observation.
 	ActionForwardedOutOfNetwork TraceflowAction = "ForwardedOutOfNetwork"
 	ActionMarkedForSNAT         TraceflowAction = "MarkedForSNAT"
 	ActionForwardedToEgressNode TraceflowAction = "ForwardedToEgressNode"

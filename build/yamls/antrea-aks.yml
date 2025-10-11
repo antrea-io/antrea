@@ -4152,6 +4152,13 @@ data:
     #
     trafficEncapMode: "networkPolicyOnly"
 
+    # The aggregated cluster-wide Pod CIDR (not the per-Node Pod CIDRs).
+    # This field is applicable only in networkPolicyOnly mode and ignored in other traffic modes. It can be left empty,
+    # but it is recommended to specify the correct Pod CIDR string, as Traceflow may not work correctly for inter-Node
+    # Pod-to-Pod traffic otherwise.
+    # Example: "10.10.0.0/16" for IPv4-only, or "10.10.0.0/16,fd00::/12" for dual-stack.
+    podCIDR: ""
+
     # Whether or not to SNAT (using the Node IP) the egress traffic from a Pod to the external network.
     # This option is for the noEncap traffic mode only, and the default value is false. In the noEncap
     # mode, if the cluster's Pod CIDR is reachable from the external network, then the Pod traffic to
@@ -4782,6 +4789,15 @@ rules:
       - get
       - watch
       - list
+  - apiGroups:
+      - ""
+    resources:
+      - configmaps
+    resourceNames:
+      - kube-proxy
+      - kubeadm-config
+    verbs:
+      - get
   - apiGroups:
       - crd.antrea.io
     resources:
@@ -5503,7 +5519,7 @@ spec:
         kubectl.kubernetes.io/default-container: antrea-agent
         # Automatically restart Pods with a RollingUpdate if the ConfigMap changes
         # See https://helm.sh/docs/howto/charts_tips_and_tricks/#automatically-roll-deployments
-        checksum/config: 2441fe179e3af67c3110171f3328dd57dfd7b9b23bef0ea016bb79d99b47de6e
+        checksum/config: bdb17df01562eb3bb0889645bf4b48d495fb6b44a47113b2c572de770138d705
       labels:
         app: antrea
         component: antrea-agent
@@ -5751,7 +5767,7 @@ spec:
       annotations:
         # Automatically restart Pod if the ConfigMap changes
         # See https://helm.sh/docs/howto/charts_tips_and_tricks/#automatically-roll-deployments
-        checksum/config: 2441fe179e3af67c3110171f3328dd57dfd7b9b23bef0ea016bb79d99b47de6e
+        checksum/config: bdb17df01562eb3bb0889645bf4b48d495fb6b44a47113b2c572de770138d705
       labels:
         app: antrea
         component: antrea-controller
