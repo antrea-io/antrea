@@ -83,9 +83,11 @@ const (
 	antreaNamespace             = "kube-system"
 	kubeNamespace               = "kube-system"
 	flowAggregatorNamespace     = "flow-aggregator"
+	flowAggregatorNamespace2    = "flow-aggregator2"
 	antreaConfigVolume          = "antrea-config"
 	antreaWindowsConfigVolume   = "antrea-windows-config"
 	flowAggregatorConfigVolume  = "flow-aggregator-config"
+	flowAggregatorConfigVolume2 = "flow-aggregator2-config"
 	antreaDaemonSet             = "antrea-agent"
 	antreaWindowsDaemonSet      = "antrea-agent-windows"
 	antreaDeployment            = "antrea-controller"
@@ -104,19 +106,22 @@ const (
 	agentContainerName          = "antrea-agent"
 	flowAggregatorContainerName = "flow-aggregator"
 
-	antreaYML               = "antrea.yml"
-	antreaIPSecYML          = "antrea-ipsec.yml"
-	antreaCovYML            = "antrea-coverage.yml"
-	antreaIPSecCovYML       = "antrea-ipsec-coverage.yml"
-	flowAggregatorYML       = "flow-aggregator.yml"
-	flowAggregatorCovYML    = "flow-aggregator-coverage.yml"
-	flowVisibilityYML       = "flow-visibility.yml"
-	flowVisibilityTLSYML    = "flow-visibility-tls.yml"
-	chOperatorYML           = "clickhouse-operator-install-bundle.yml"
-	flowVisibilityCHPodName = "chi-clickhouse-clickhouse-0-0-0"
-	flowVisibilityNamespace = "flow-visibility"
-	defaultBridgeName       = "br-int"
-	monitoringNamespace     = "monitoring"
+	antreaYML                  = "antrea.yml"
+	antreaIPSecYML             = "antrea-ipsec.yml"
+	antreaCovYML               = "antrea-coverage.yml"
+	antreaIPSecCovYML          = "antrea-ipsec-coverage.yml"
+	flowAggregatorYML          = "flow-aggregator.yml"
+	flowAggregatorCovYML       = "flow-aggregator-coverage.yml"
+	flowAggregator2YML         = "flow-aggregator-2.yml"
+	flowAggregatorCov2YML      = "flow-aggregator-coverage-2.yml"
+	flowVisibilityYML          = "flow-visibility.yml"
+	flowVisibilityTLSYML       = "flow-visibility-tls.yml"
+	flowVisibilityProtocolFile = "test-flow-visibility-protocol.txt"
+	chOperatorYML              = "clickhouse-operator-install-bundle.yml"
+	flowVisibilityCHPodName    = "chi-clickhouse-clickhouse-0-0-0"
+	flowVisibilityNamespace    = "flow-visibility"
+	defaultBridgeName          = "br-int"
+	monitoringNamespace        = "monitoring"
 	// #nosec G101: not credentials
 	flowAggregatorIPFIXClientTLSSecretName = "ipfix-client-cert"
 	// #nosec G101: not credentials
@@ -240,10 +245,15 @@ type TestOptions struct {
 }
 
 type flowVisibilityIPFIXTestOptions struct {
+	name            string
 	tls             bool
 	clientAuth      bool
 	includeK8sNames *bool
 	includeK8sUIDs  *bool
+}
+
+type flowAggregatorTestOptions struct {
+	disableTLS bool
 }
 
 type flowVisibilityTestOptions struct {
@@ -252,6 +262,8 @@ type flowVisibilityTestOptions struct {
 	databaseSecureConnection bool
 	clusterID                string
 	ipfixCollector           flowVisibilityIPFIXTestOptions
+	flowAggregator           flowAggregatorTestOptions
+	useSecondFlowAggregator  bool
 }
 
 var testOptions TestOptions
@@ -1055,7 +1067,12 @@ func (data *TestData) deleteClickHouseOperator() error {
 }
 
 func (data *TestData) deployIPFIXCollector(serverCert []byte, serverKey []byte, clientCA []byte) (string, error) {
-	args := []string{"--ipfix.port", ipfixCollectorPort}
+	return data.deployIPFIXCollectorWithName("ipfix-collector", serverCert, serverKey, clientCA, "")
+}
+
+func (data *TestData) deployIPFIXCollectorWithName(name string, serverCert []byte, serverKey []byte, clientCA []byte, node string) (string, error) {
+	port := strconv.Itoa(rand.Int()%1000 + 40000)
+	args := []string{fmt.Sprintf("--ipfix.port=%s", port)}
 	if serverCert != nil {
 		args = append(args, "--server-cert", "/certs/server/tls.crt", "--server-key", "/certs/server/tls.key")
 		if clientCA != nil {
@@ -1063,12 +1080,12 @@ func (data *TestData) deployIPFIXCollector(serverCert []byte, serverKey []byte, 
 		}
 	}
 
-	pb := NewPodBuilder("ipfix-collector", data.testNamespace, ipfixCollectorImage).WithArgs(args).InHostNetwork()
+	pb := NewPodBuilder(name, data.testNamespace, ipfixCollectorImage).WithArgs(args).InHostNetwork().OnNode(node)
 
 	if serverCert != nil {
 		serverCertSecret := &corev1.Secret{
 			ObjectMeta: metav1.ObjectMeta{
-				Name: "ipfix-collector-server-cert",
+				Name: name + "-server-cert",
 			},
 			Immutable: ptr.To(true),
 			Data: map[string][]byte{
@@ -1084,7 +1101,7 @@ func (data *TestData) deployIPFIXCollector(serverCert []byte, serverKey []byte, 
 		if clientCA != nil {
 			clientCASecret := &corev1.Secret{
 				ObjectMeta: metav1.ObjectMeta{
-					Name: "ipfix-collector-client-ca",
+					Name: name + "-client-ca",
 				},
 				Immutable: ptr.To(true),
 				Data: map[string][]byte{
@@ -1101,7 +1118,7 @@ func (data *TestData) deployIPFIXCollector(serverCert []byte, serverKey []byte, 
 	if err := pb.Create(data); err != nil {
 		return "", fmt.Errorf("error when creating the ipfix collector Pod: %w", err)
 	}
-	ipfixCollectorIP, err := data.podWaitForIPs(defaultTimeout, "ipfix-collector", data.testNamespace)
+	ipfixCollectorIP, err := data.podWaitForIPs(defaultTimeout, name, data.testNamespace)
 	if err != nil || len(ipfixCollectorIP.IPStrings) == 0 {
 		return "", fmt.Errorf("error when waiting to get ipfix collector Pod IP: %w", err)
 	}
@@ -1111,7 +1128,7 @@ func (data *TestData) deployIPFIXCollector(serverCert []byte, serverKey []byte, 
 	} else {
 		ipStr = ipfixCollectorIP.IPv4.String()
 	}
-	ipfixCollectorAddr := fmt.Sprintf("%s:tcp", net.JoinHostPort(ipStr, ipfixCollectorPort))
+	ipfixCollectorAddr := fmt.Sprintf("%s:tcp", net.JoinHostPort(ipStr, port))
 	return ipfixCollectorAddr, nil
 }
 
@@ -1121,9 +1138,17 @@ func (data *TestData) deployFlowAggregator(
 	ipfixClientCert, ipfixClientKey, ipfixServerCA []byte,
 	o flowVisibilityTestOptions,
 ) error {
-	flowAggYaml := flowAggregatorYML
-	if testOptions.enableCoverage {
+	var flowAggYaml string
+
+	switch {
+	case o.useSecondFlowAggregator && testOptions.enableCoverage:
+		flowAggYaml = flowAggregatorCov2YML
+	case !o.useSecondFlowAggregator && testOptions.enableCoverage:
 		flowAggYaml = flowAggregatorCovYML
+	case o.useSecondFlowAggregator && !testOptions.enableCoverage:
+		flowAggYaml = flowAggregator2YML
+	default: // !o.useSecondFlowAggregator && !testOptions.enableCoverage:
+		flowAggYaml = flowAggregatorYML
 	}
 
 	// Create flow-aggregator Namespace first, so that we can create the necessary Secrets prior
@@ -1199,7 +1224,7 @@ func (data *TestData) deployFlowAggregator(
 		return fmt.Errorf("error when waiting for the Flow Aggregator rollout to complete. kubectl describe output: %s, logs: %s", stdout, logStdout)
 	}
 	// Check for flow-aggregator Pod running again for db connection establishment
-	flowAggPod, err := data.getFlowAggregator()
+	flowAggPod, err := data.getFlowAggregator(flowAggregatorNamespace)
 	if err != nil {
 		return fmt.Errorf("error when getting flow-aggregator Pod: %v", err)
 	}
@@ -1214,7 +1239,7 @@ func (data *TestData) mutateFlowAggregatorConfigMap(ipfixCollectorAddr string, o
 		return fmt.Errorf("cannot use Proxy mode with ClickHouse")
 	}
 
-	configMap, err := data.GetFlowAggregatorConfigMap()
+	configMap, err := data.GetFlowAggregatorConfigMap(o)
 	if err != nil {
 		return err
 	}
@@ -1222,6 +1247,11 @@ func (data *TestData) mutateFlowAggregatorConfigMap(ipfixCollectorAddr string, o
 	var flowAggregatorConf flowaggregatorconfig.FlowAggregatorConfig
 	if err := yaml.Unmarshal([]byte(configMap.Data[flowAggregatorConfName]), &flowAggregatorConf); err != nil {
 		return fmt.Errorf("failed to unmarshal FlowAggregator config from ConfigMap: %v", err)
+	}
+
+	serverName := o.ipfixCollector.name
+	if serverName == "" {
+		serverName = "ipfix-collector"
 	}
 
 	flowAggregatorConf.Mode = o.mode
@@ -1234,7 +1264,7 @@ func (data *TestData) mutateFlowAggregatorConfigMap(ipfixCollectorAddr string, o
 	if o.ipfixCollector.tls {
 		tls := &flowAggregatorConf.FlowCollector.TLS
 		tls.Enable = true
-		tls.ServerName = "ipfix-collector"
+		tls.ServerName = serverName
 		// By default, the YAML manifest used for testing already has CASecretName and
 		// ClientSecretName set (which is a no-op unless TLS is enabled). However, when
 		// client auth is disabled by the test, we have to make sure that ClientSecretName
@@ -1255,7 +1285,6 @@ func (data *TestData) mutateFlowAggregatorConfigMap(ipfixCollectorAddr string, o
 				CACert: o.databaseSecureConnection,
 			},
 		}
-
 	} else {
 		flowAggregatorConf.ClickHouse = flowaggregatorconfig.ClickHouseConfig{
 			Enable: false,
@@ -1265,6 +1294,10 @@ func (data *TestData) mutateFlowAggregatorConfigMap(ipfixCollectorAddr string, o
 	flowAggregatorConf.InactiveFlowRecordTimeout = aggregatorInactiveFlowRecordTimeout.String()
 	flowAggregatorConf.RecordContents.PodLabels = true
 	flowAggregatorConf.ClusterID = o.clusterID
+
+	if o.flowAggregator.disableTLS {
+		flowAggregatorConf.AggregatorTransportProtocol = "tcp"
+	}
 
 	b, err := yaml.Marshal(&flowAggregatorConf)
 	if err != nil {
@@ -1277,20 +1310,20 @@ func (data *TestData) mutateFlowAggregatorConfigMap(ipfixCollectorAddr string, o
 	return nil
 }
 
-func (data *TestData) GetFlowAggregatorConfigMap() (*corev1.ConfigMap, error) {
+func (data *TestData) GetFlowAggregatorConfigMap(o flowVisibilityTestOptions) (*corev1.ConfigMap, error) {
 	deployment, err := data.clientset.AppsV1().Deployments(flowAggregatorNamespace).Get(context.TODO(), flowAggregatorDeployment, metav1.GetOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("failed to retrieve Flow aggregator deployment: %v", err)
 	}
 	var configMapName string
 	for _, volume := range deployment.Spec.Template.Spec.Volumes {
-		if volume.ConfigMap != nil && volume.Name == flowAggregatorConfigVolume {
+		if volume.ConfigMap != nil && (volume.Name == flowAggregatorConfigVolume || volume.Name == flowAggregatorConfigVolume2) {
 			configMapName = volume.ConfigMap.Name
 			break
 		}
 	}
 	if len(configMapName) == 0 {
-		return nil, fmt.Errorf("failed to locate %s ConfigMap volume", flowAggregatorConfigVolume)
+		return nil, fmt.Errorf("failed to locate %s or %s ConfigMap volume", flowAggregatorConfigVolume, flowAggregatorConfigVolume2)
 	}
 	configMap, err := data.clientset.CoreV1().ConfigMaps(flowAggregatorNamespace).Get(context.TODO(), configMapName, metav1.GetOptions{})
 	if err != nil {
@@ -2083,11 +2116,11 @@ func (data *TestData) RunCommandFromAntreaPodOnNode(nodeName string, cmd []strin
 }
 
 // getFlowAggregator retrieves the name of the Flow-Aggregator Pod (flow-aggregator-*) running on a specific Node.
-func (data *TestData) getFlowAggregator() (*corev1.Pod, error) {
+func (data *TestData) getFlowAggregator(namespace string) (*corev1.Pod, error) {
 	listOptions := metav1.ListOptions{
 		LabelSelector: "app=flow-aggregator",
 	}
-	pods, err := data.clientset.CoreV1().Pods(flowAggregatorNamespace).List(context.TODO(), listOptions)
+	pods, err := data.clientset.CoreV1().Pods(namespace).List(context.TODO(), listOptions)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list Flow Aggregator Pod: %v", err)
 	}
@@ -3034,7 +3067,7 @@ func (data *TestData) gracefulExitAntreaAgent(covDir string, nodeName string) er
 
 // gracefulExitFlowAggregator copies the Flow Aggregator binary coverage data file out before terminating the Pod.
 func (data *TestData) gracefulExitFlowAggregator(covDir string) error {
-	flowAggPod, err := data.getFlowAggregator()
+	flowAggPod, err := data.getFlowAggregator(flowAggregatorNamespace)
 	if err != nil {
 		return fmt.Errorf("error when getting flow-aggregator Pod: %v", err)
 	}

@@ -1,0 +1,15 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: extra-flow-aggregator
+  name: not-used
+spec:
+  # update selector to match the new label
+  selector:
+    matchLabels:
+      app: extra-flow-aggregator
+  template:
+    metadata:
+      labels:
+        app: extra-flow-aggregator

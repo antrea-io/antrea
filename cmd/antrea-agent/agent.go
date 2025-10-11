@@ -129,6 +129,7 @@ func run(o *Options) error {
 	endpointSliceInformer := informerFactory.Discovery().V1().EndpointSlices()
 	namespaceInformer := informerFactory.Core().V1().Namespaces()
 	nodeLatencyMonitorInformer := crdInformerFactory.Crd().V1alpha1().NodeLatencyMonitors()
+	flowExporterTargetInformer := crdInformerFactory.Crd().V1alpha1().FlowExporterTargets()
 
 	// Create Antrea Clientset for the given config.
 	antreaClientProvider, err := client.NewAntreaClientProvider(o.config.AntreaClientConnection, k8sClient)
@@ -718,7 +719,7 @@ func run(o *Options) error {
 			ConnectUplinkToBridge:  connectUplinkToBridge,
 			ProtocolFilter:         o.config.FlowExporter.ProtocolFilter,
 		}
-		flowExporter, err = flowexporter.NewFlowExporter(
+		flowExporter, err = flowexporter.NewFlowExporterWithInformer(
 			podStore,
 			proxier,
 			k8sClient,
@@ -736,11 +737,12 @@ func run(o *Options) error {
 			egressController,
 			podNetworkWait,
 			l7FlowExporterController,
-			l7FlowExporterEnabled)
+			l7FlowExporterEnabled,
+			flowExporterTargetInformer)
 		if err != nil {
 			return fmt.Errorf("error when creating IPFIX flow exporter: %v", err)
 		}
-		networkPolicyController.SetDenyConnStore(flowExporter.GetDenyConnStore())
+		networkPolicyController.SetDenyConnStore(flowExporter.GetDenyStore())
 	}
 
 	log.StartLogFileNumberMonitor(stopCh)

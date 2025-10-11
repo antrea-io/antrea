@@ -184,6 +184,7 @@ func TestStoreDenyConnection(t *testing.T) {
 				IngressNetworkPolicyType:       flowexporterutils.PolicyTypeAntreaClusterNetworkPolicy,
 				IngressNetworkPolicyRuleName:   "my-rule",
 				IngressNetworkPolicyRuleAction: flowexporterutils.NetworkPolicyRuleActionDrop,
+				OriginalStats:                  connection.Stats{Packets: 1},
 			},
 		},
 		{
@@ -198,6 +199,7 @@ func TestStoreDenyConnection(t *testing.T) {
 				EgressNetworkPolicyType:       flowexporterutils.PolicyTypeAntreaClusterNetworkPolicy,
 				EgressNetworkPolicyRuleName:   "my-rule",
 				EgressNetworkPolicyRuleAction: flowexporterutils.NetworkPolicyRuleActionDrop,
+				OriginalStats:                 connection.Stats{Packets: 1},
 			},
 		},
 	}
@@ -206,7 +208,7 @@ func TestStoreDenyConnection(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			controller, _, _ := newTestController()
-			mockStore := connectionstesting.NewMockDenyConnectionStoreUpdater(ctrl)
+			mockStore := connectionstesting.NewMockDenyStore(ctrl)
 			controller.denyConnStore = mockStore
 			controller.podReconciler = ruleCache
 			pktIn := &ofctrl.PacketIn{
@@ -221,9 +223,9 @@ func TestStoreDenyConnection(t *testing.T) {
 				SourceIP:      sourceAddr.AsSlice(),
 				DestinationIP: destinationAddr.AsSlice(),
 			}
-			mockStore.EXPECT().GetConnByKey(key).Return(nil, false)
+			mockStore.EXPECT().HasConn(key).Return(false)
 
-			mockStore.EXPECT().AddOrUpdateConn(tc.expectedConn, gomock.Any(), gomock.Any())
+			mockStore.EXPECT().SubmitDenyConn(tc.expectedConn)
 			require.NoError(t, controller.storeDenyConnectionParsed(pktIn, packet))
 		})
 	}

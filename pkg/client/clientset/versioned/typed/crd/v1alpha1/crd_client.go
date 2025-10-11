@@ -28,6 +28,7 @@ type CrdV1alpha1Interface interface {
 	RESTClient() rest.Interface
 	BGPPoliciesGetter
 	ExternalNodesGetter
+	FlowExporterTargetsGetter
 	NodeLatencyMonitorsGetter
 	PacketCapturesGetter
 	SupportBundleCollectionsGetter
@@ -44,6 +45,10 @@ func (c *CrdV1alpha1Client) BGPPolicies() BGPPolicyInterface {
 
 func (c *CrdV1alpha1Client) ExternalNodes(namespace string) ExternalNodeInterface {
 	return newExternalNodes(c, namespace)
+}
+
+func (c *CrdV1alpha1Client) FlowExporterTargets() FlowExporterTargetInterface {
+	return newFlowExporterTargets(c)
 }
 
 func (c *CrdV1alpha1Client) NodeLatencyMonitors() NodeLatencyMonitorInterface {
