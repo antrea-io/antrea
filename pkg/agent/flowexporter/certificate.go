@@ -31,8 +31,8 @@ const (
 	ClientSecretName = "flow-aggregator-client-tls"
 )
 
-func getCACert(ctx context.Context, k8sClient kubernetes.Interface) ([]byte, error) {
-	caConfigMap, err := k8sClient.CoreV1().ConfigMaps(CAConfigMapNamespace).Get(ctx, CAConfigMapName, metav1.GetOptions{})
+func getCACert(ctx context.Context, k8sClient kubernetes.Interface, namespace string) ([]byte, error) {
+	caConfigMap, err := k8sClient.CoreV1().ConfigMaps(namespace).Get(ctx, CAConfigMapName, metav1.GetOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("error getting ConfigMap %s: %v", CAConfigMapName, err)
 	}
@@ -42,8 +42,8 @@ func getCACert(ctx context.Context, k8sClient kubernetes.Interface) ([]byte, err
 	return []byte(caConfigMap.Data[CAConfigMapKey]), nil
 }
 
-func getClientCertKey(ctx context.Context, k8sClient kubernetes.Interface) ([]byte, []byte, error) {
-	clientSecret, err := k8sClient.CoreV1().Secrets(ClientSecretNamespace).Get(ctx, ClientSecretName, metav1.GetOptions{})
+func getClientCertKey(ctx context.Context, k8sClient kubernetes.Interface, namespace string) ([]byte, []byte, error) {
+	clientSecret, err := k8sClient.CoreV1().Secrets(namespace).Get(ctx, ClientSecretName, metav1.GetOptions{})
 	if err != nil {
 		return nil, nil, fmt.Errorf("error getting Secret %s: %v", ClientSecretName, err)
 	}

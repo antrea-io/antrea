@@ -1,0 +1,9 @@
+source:
+  kind: ConfigMap
+  fieldPath: metadata.name
+targets:
+  - select:
+      kind: Deployment
+    fieldPaths:
+    - spec.template.spec.volumes.[name=flow-aggregator-config].configMap.name
+    

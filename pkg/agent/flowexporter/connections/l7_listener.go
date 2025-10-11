@@ -42,7 +42,7 @@ type PodL7FlowExporterAttrGetter interface {
 
 // L7ProtocolFields holds layer 7 protocols supported
 type L7ProtocolFields struct {
-	http map[int32]*Http
+	Http map[int32]*Http
 }
 
 // Http holds the L7 HTTP flow JSON values.
@@ -218,10 +218,10 @@ func (l *L7Listener) addOrUpdateL7EventMap(event *JsonToEvent) error {
 			_, ok := l.l7Events[connKey]
 			if !ok {
 				l.l7Events[connKey] = L7ProtocolFields{
-					http: make(map[int32]*Http),
+					Http: make(map[int32]*Http),
 				}
 			}
-			l.l7Events[connKey].http[event.TxID] = event.HTTP
+			l.l7Events[connKey].Http[event.TxID] = event.HTTP
 		}
 	}
 	return nil

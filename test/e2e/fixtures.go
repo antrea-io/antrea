@@ -222,12 +222,28 @@ func skipIfProxyAllDisabled(t *testing.T, data *TestData) {
 }
 
 func skipIfFlowExportProtocolIsNotGRPC(t *testing.T, data *TestData) {
-	agentConf, err := data.GetAntreaAgentConf()
+	cmd := fmt.Sprintf("cat %s", flowVisibilityProtocolFile)
+	_, stdout, _, err := data.RunCommandOnNode(controlPlaneNodeName(), cmd)
 	if err != nil {
-		t.Fatalf("Error getting Antrea Agent config: %v", err)
+		t.Fatalf("Error getting flow visibility protocol file from control plane node: %v", err)
 	}
-	if !strings.HasSuffix(agentConf.FlowExporter.FlowCollectorAddr, ":grpc") {
+
+	// gRPC is default. If the file doesn't exist assume gRPC
+	if stdout != "" && !strings.EqualFold(stdout, "grpc") {
 		t.Skip("Skipping test because Flow Exporter does not use gRPC")
+	}
+}
+
+func skipIfFlowExportProtocolIsGRPC(t *testing.T, data *TestData) {
+	cmd := fmt.Sprintf("cat %s", flowVisibilityProtocolFile)
+	_, stdout, _, err := data.RunCommandOnNode(controlPlaneNodeName(), cmd)
+	if err != nil {
+		t.Fatalf("Error getting flow visibility protocol file from control plane node: %v", err)
+	}
+
+	// gRPC is default. If the file doesn't exist assume gRPC
+	if stdout != "" && strings.EqualFold(stdout, "grpc") {
+		t.Skip("Skipping test because Flow Exporter uses gRPC")
 	}
 }
 
@@ -328,7 +344,6 @@ func setupFlowAggregator(tb testing.TB, testData *TestData, o flowVisibilityTest
 	}
 	tb.Logf("ClickHouse Service created with ClusterIP: %v", chSvcIP)
 	tb.Logf("Deploying FlowAggregator with ipfix collector: %s and options: %+v", ipfixCollectorAddr, o)
-
 	if err := testData.deployFlowAggregator(ipfixCollectorAddr, ipfixClientCert, ipfixClientKey, ipfixServerCert, o); err != nil {
 		return err
 	}
@@ -348,6 +363,7 @@ func exportLogs(tb testing.TB, data *TestData, logsSubDir string, writeNodeLogs 
 	if tb.Skipped() {
 		return
 	}
+
 	// if test was successful and --logs-export-on-success was not provided, we do not export
 	// any logs.
 	if !tb.Failed() && !testOptions.logsExportOnSuccess {
@@ -505,7 +521,7 @@ func exportLogs(tb testing.TB, data *TestData, logsSubDir string, writeNodeLogs 
 
 func teardownFlowAggregator(tb testing.TB, data *TestData) {
 	if testOptions.enableCoverage {
-		if err := testData.gracefulExitFlowAggregator(testOptions.coverageDir); err != nil {
+		if err := testData.gracefulExitFlowAggregators(testOptions.coverageDir); err != nil {
 			tb.Fatalf("Error when gracefully exiting Flow Aggregator: %v", err)
 		}
 	}

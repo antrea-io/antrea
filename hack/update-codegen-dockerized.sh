@@ -65,7 +65,7 @@ MOCKGEN_TARGETS=(
   "pkg/agent/bgp Interface testing"
   "pkg/agent/cniserver SriovNet testing"
   "pkg/agent/cniserver/ipam IPAMDriver testing"
-  "pkg/agent/flowexporter/connections ConnTrackDumper,NetFilterConnTrack,DenyConnectionStoreUpdater testing"
+  "pkg/agent/flowexporter/connections ConnTrackDumper,NetFilterConnTrack,DenyStore testing"
   "pkg/agent/flowexporter/exporter Interface testing"
   "pkg/agent/interfacestore InterfaceStore testing"
   "pkg/agent/memberlist Interface testing"
