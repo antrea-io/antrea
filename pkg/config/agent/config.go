@@ -228,7 +228,7 @@ type AntreaProxyConfig struct {
 	// capabilities (e.g. TLS termination) and it is desirable for Pod-to-ExternalIP traffic to be sent to the
 	// external LoadBalancer instead of being load-balanced to an Endpoint directly by AntreaProxy.
 	// Note that setting ProxyLoadBalancerIPs to false usually only makes sense when ProxyAll is set to true and
-	// kube-proxy is removed from the cluser, otherwise kube-proxy will still load-balance this traffic.
+	// kube-proxy is removed from the cluster, otherwise kube-proxy will still load-balance this traffic.
 	// Defaults to true.
 	ProxyLoadBalancerIPs *bool `yaml:"proxyLoadBalancerIPs,omitempty"`
 	// The value of service.kubernetes.io/service-proxy-name label for AntreaProxy to match. If it is set, then
