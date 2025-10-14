@@ -15,9 +15,12 @@
 package networkpolicy
 
 import (
+	"slices"
+	"sort"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"antrea.io/antrea/pkg/agent/types"
 )
@@ -315,6 +318,85 @@ func TestRegisterDuplicatePriorities(t *testing.T) {
 	assert.Equal(t, ofPriority1131, ofPriority1131Dup)
 }
 
+func TestRegister500PrioritiesNoOverflow(t *testing.T) {
+	tests := []struct {
+		name         string
+		generateFunc func() []types.Priority
+	}{
+		{
+			"500-default-tier-priorities",
+			func() []types.Priority {
+				var priorities []types.Priority
+				for i := 1; i <= 500; i++ {
+					priority := types.Priority{
+						TierPriority:   defaultTierPriority, // 250
+						PolicyPriority: float64(i),
+						RulePriority:   0,
+					}
+					priorities = append(priorities, priority)
+				}
+				return priorities
+			},
+		},
+		{
+			"500-tier1-small-policy-priorities",
+			func() []types.Priority {
+				var priorities []types.Priority
+				for i := 1; i <= 500; i++ {
+					priority := types.Priority{
+						TierPriority:   1,
+						PolicyPriority: float64(i) * 0.01,
+						RulePriority:   0,
+					}
+					priorities = append(priorities, priority)
+				}
+				return priorities
+			},
+		},
+		{
+			"500-tier20-with-rule-priorities",
+			func() []types.Priority {
+				var priorities []types.Priority
+				for i := 1; i <= 500; i++ {
+					priority := types.Priority{
+						TierPriority:   20,
+						PolicyPriority: float64(i) * 5,
+						RulePriority:   int32(i),
+					}
+					priorities = append(priorities, priority)
+				}
+				return priorities
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			pa := newPriorityAssigner(false)
+
+			// Generate priorities for this test case
+			priorities := tt.generateFunc()
+			// Make a copy since registerPriorities modifies the slice order
+			originalPriorities := make([]types.Priority, len(priorities))
+			copy(originalPriorities, priorities)
+			sort.Sort(types.ByPriority(originalPriorities))
+
+			_, _, err := pa.registerPriorities(priorities)
+			require.NoError(t, err)
+
+			var sortedOFPriorities []uint16
+			for _, priority := range originalPriorities {
+				ofPriority, exists := pa.getOFPriority(priority)
+				require.True(t, exists, "Priority %v should be registered", priority)
+				sortedOFPriorities = append(sortedOFPriorities, ofPriority)
+			}
+
+			// Verify that OpenFlow priorities are sorted in ascending order (higher precedence gets lower OpenFlow priority)
+			require.True(t, slices.IsSorted(sortedOFPriorities), "OpenFlow priorities should be sorted in ascending order (higher precedence gets lower OpenFlow priority)")
+		})
+	}
+}
+
 func generatePriorities(tierPriority, start, end int32, policyPriority float64) []types.Priority {
 	priorities := make([]types.Priority, end-start+1)
 	for i := start; i <= end; i++ {
@@ -328,6 +410,20 @@ func TestRegisterAllOFPriorities(t *testing.T) {
 	maxPriorities := generatePriorities(253, int32(baselinePolicyBottomPriority), int32(baselinePolicyTopPriority), 5)
 	_, _, err := pa.registerPriorities(maxPriorities)
 	assert.NoError(t, err, "Error occurred in registering max number of allowed priorities in baseline tier")
+
+	// Check that all priorities registered in baseline tier are sorted in ofPriorities space
+	sortedMaxPriorities := make([]types.Priority, len(maxPriorities))
+	copy(sortedMaxPriorities, maxPriorities)
+	sort.Sort(types.ByPriority(sortedMaxPriorities))
+
+	var baselineOFPriorities []uint16
+	for _, priority := range sortedMaxPriorities {
+		ofPriority, exists := pa.getOFPriority(priority)
+		require.True(t, exists, "Priority %v should be registered", priority)
+		baselineOFPriorities = append(baselineOFPriorities, ofPriority)
+	}
+	// Verify that OpenFlow priorities are sorted in ascending order (higher precedence gets lower OpenFlow priority)
+	require.True(t, slices.IsSorted(baselineOFPriorities), "Baseline tier OpenFlow priorities should be sorted in ascending order")
 
 	extraPriority := types.Priority{
 		TierPriority:   253,
@@ -345,6 +441,22 @@ func TestRegisterAllOFPriorities(t *testing.T) {
 	consecPriorities2 := generatePriorities(10, 10001, int32(policyTopPriority), 5)
 	_, _, err = pa.registerPriorities(consecPriorities2)
 	assert.NoError(t, err, "Error occurred in registering max number of allowed priorities")
+
+	// Create a combined sorted copy of all registered priorities
+	allRegisteredPriorities := make([]types.Priority, 0, len(consecPriorities1)+len(consecPriorities2))
+	allRegisteredPriorities = append(allRegisteredPriorities, consecPriorities1...)
+	allRegisteredPriorities = append(allRegisteredPriorities, consecPriorities2...)
+	sort.Sort(types.ByPriority(allRegisteredPriorities))
+
+	// Get OpenFlow priorities for all registered priorities in sorted order
+	var allOFPriorities []uint16
+	for _, priority := range allRegisteredPriorities {
+		ofPriority, exists := pa.getOFPriority(priority)
+		require.True(t, exists, "Priority %v should be registered", priority)
+		allOFPriorities = append(allOFPriorities, ofPriority)
+	}
+	// Verify that OpenFlow priorities are sorted in ascending order (higher precedence gets lower OpenFlow priority)
+	require.True(t, slices.IsSorted(allOFPriorities), "All registered OpenFlow priorities should be sorted in ascending order")
 
 	_, _, err = pa.registerPriorities([]types.Priority{extraPriority})
 	assert.Errorf(t, err, "Error should be raised after max number of priorities are registered")
