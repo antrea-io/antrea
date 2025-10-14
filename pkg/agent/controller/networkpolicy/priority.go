@@ -116,14 +116,28 @@ func (pa *priorityAssigner) initialOFPriority(p types.Priority) uint16 {
 		tierOffsetBase = tierOffsetBaselineTier
 		priorityOffsetBase = priorityOffsetBaselineTier
 	}
-	tierOffset := tierOffsetBase * uint16(p.TierPriority)
-	priorityOffset := uint16(p.PolicyPriority * priorityOffsetBase)
-	offSet := tierOffset + priorityOffset + uint16(p.RulePriority)
-	// Cannot return a negative OF priority.
-	if pa.policyTopPriority-pa.policyBottomPriority < offSet {
+	// Use uint32 to prevent arithmetic overflow during calculation
+	tierOffset := uint32(tierOffsetBase) * uint32(p.TierPriority)
+	priorityOffset := uint32(p.PolicyPriority * priorityOffsetBase)
+	offSet := tierOffset + priorityOffset + uint32(p.RulePriority)
+
+	// Check if the calculated offset exceeds the available priority range
+	availableRange := uint32(pa.policyTopPriority) - uint32(pa.policyBottomPriority)
+	if availableRange < offSet {
 		return pa.policyBottomPriority
 	}
-	return pa.policyTopPriority - offSet
+	// Safe to cast offSet to uint16: the preceding if statement guarantees that
+	// offSet <= availableRange <= (policyTopPriority - policyBottomPriority) <= math.MaxUint16
+	return pa.policyTopPriority - uint16(offSet)
+}
+
+// findGap calculates the gap between upperBound and lowerBound with uint16 underflow protection.
+// Returns the gap and whether there is any space available.
+func findGap(upperBound, lowerBound uint16) (gap uint16, hasSpace bool) {
+	if upperBound <= lowerBound {
+		return 0, false
+	}
+	return upperBound - lowerBound - 1, true
 }
 
 // updatePriorityAssignment updates all the local maps to correlate input ofPriority and Priority.
@@ -154,12 +168,26 @@ func (pa *priorityAssigner) findReassignBoundaries(lowerBound, upperBound uint16
 	costMap := map[int]*reassignCost{}
 	reassignBoundLow, reassignBoundHigh := lowerBound, upperBound
 	costSiftDown, costSiftUp, emptiedSlotsLow, emptiedSlotsHigh := 0, 0, 0, 0
+	// Search for empty slots below lowerBound, but don't go below policyBottomPriority
 	for reassignBoundLow >= pa.policyBottomPriority && emptiedSlotsLow < target {
 		if _, exists := pa.ofPriorityMap[reassignBoundLow]; exists {
 			costSiftDown++
 		} else {
 			emptiedSlotsLow++
-			costMap[emptiedSlotsLow] = &reassignCost{reassignBoundLow, upperBound - 1, costSiftDown}
+			// When upperBound == lowerBound, use upperBound directly to create a valid single-slot range
+			// When upperBound > lowerBound, use upperBound - 1 to avoid overlapping with the gap
+			upperBoundForCost := upperBound
+			if upperBound > lowerBound {
+				upperBoundForCost = upperBound - 1
+			}
+			// Special case: when we're at the boundary itself, include it in the range
+			if reassignBoundLow == lowerBound && upperBound == lowerBound {
+				upperBoundForCost = upperBound // Include the boundary slot
+			}
+			// Only create cost map entry if it results in a valid range
+			if reassignBoundLow <= upperBoundForCost {
+				costMap[emptiedSlotsLow] = &reassignCost{reassignBoundLow, upperBoundForCost, costSiftDown}
+			}
 		}
 		reassignBoundLow--
 	}
@@ -178,7 +206,12 @@ func (pa *priorityAssigner) findReassignBoundaries(lowerBound, upperBound uint16
 				c.cost = costSiftDown + costSiftUp
 				c.upperBound = reassignBoundHigh
 			} else if mapIndex == 0 {
-				costMap[mapIndex] = &reassignCost{lowerBound + 1, reassignBoundHigh, costSiftUp}
+				// When upperBound == lowerBound, start from lowerBound itself, not lowerBound + 1
+				startBound := lowerBound + 1
+				if upperBound == lowerBound {
+					startBound = lowerBound // Include the boundary slot in the reassignment range
+				}
+				costMap[mapIndex] = &reassignCost{startBound, reassignBoundHigh, costSiftUp}
 			}
 		}
 		reassignBoundHigh++
@@ -187,7 +220,9 @@ func (pa *priorityAssigner) findReassignBoundaries(lowerBound, upperBound uint16
 	for i := target; i >= 0; i-- {
 		if cost, exists := costMap[i]; exists && cost.cost < minCost {
 			// make sure that the reassign range adds up to the number of all Priorities to be registered.
-			if int(cost.upperBound-cost.lowerBound)+1 == numNewPriorities+cost.cost {
+			rangeSize := int(cost.upperBound-cost.lowerBound) + 1
+			requiredSize := numNewPriorities + cost.cost
+			if rangeSize == requiredSize {
 				minCost = cost.cost
 				minCostIndex = i
 			}
@@ -205,20 +240,29 @@ func (pa *priorityAssigner) findReassignBoundaries(lowerBound, upperBound uint16
 // map of updates, which is passed to it as parameter.
 func (pa *priorityAssigner) reassignBoundaryPriorities(lowerBound, upperBound uint16, prioritiesToRegister types.ByPriority,
 	updates map[types.Priority]*priorityUpdate) error {
-	numNewPriorities, gap := len(prioritiesToRegister), int(upperBound-lowerBound-1)
+	numNewPriorities := len(prioritiesToRegister)
+	gapUint16, hasSpace := findGap(upperBound, lowerBound)
+	var gap int
+	if hasSpace {
+		gap = int(gapUint16)
+	} else {
+		gap = 0 // No available slots when upperBound <= lowerBound
+	}
 	low, high, err := pa.findReassignBoundaries(lowerBound, upperBound, numNewPriorities, gap)
 	if err != nil {
 		return err
 	}
 	// siftedPrioritiesLow and siftedPrioritiesHigh keep track of Priorities that need to be reassigned,
-	// below the lowerBound and above the upperBound respectively.
+	// below the lowerBound and above the upperBound respectively. Note that we do not include the priority
+	// currently assigned to policyBottomPriority since it cannot be sifted down further, and vice versa
+	// for policyTopPriority.
 	var siftedPrioritiesLow, siftedPrioritiesHigh types.ByPriority
-	for i := low; i <= lowerBound; i++ {
+	for i := low; i <= lowerBound && i != pa.policyBottomPriority; i++ {
 		if p, exists := pa.ofPriorityMap[i]; exists {
 			siftedPrioritiesLow = append(siftedPrioritiesLow, p)
 		}
 	}
-	for i := upperBound; i <= high; i++ {
+	for i := upperBound; i <= high && i != pa.policyTopPriority; i++ {
 		if p, exists := pa.ofPriorityMap[i]; exists {
 			siftedPrioritiesHigh = append(siftedPrioritiesHigh, p)
 		}
@@ -236,7 +280,12 @@ func (pa *priorityAssigner) reassignBoundaryPriorities(lowerBound, upperBound ui
 	}
 	// assign ofPriorities by the order of siftedPrioritiesLow, prioritiesToRegister and siftedPrioritiesHigh.
 	for i, p := range allPriorities {
-		pa.updatePriorityAssignment(low+uint16(i), p)
+		// Protect against overflow when low + i > 65535
+		ofPriority := uint64(low) + uint64(i)
+		if ofPriority > math.MaxUint16 {
+			return fmt.Errorf("priority assignment overflow: low=%d + i=%d exceeds uint16 range", low, i)
+		}
+		pa.updatePriorityAssignment(uint16(ofPriority), p)
 	}
 	// record the ofPriorities of the reassigned Priorities after the reassignment.
 	for _, p := range reassignedPriorities {
@@ -273,8 +322,13 @@ func (pa *priorityAssigner) registerPriorities(priorities []types.Priority) (map
 	klog.V(2).Infof("%v new priorities need to be registered", numPriorityToRegister)
 	if numPriorityToRegister == 0 {
 		return nil, nil, nil
-	} else if uint16(numPriorityToRegister+len(pa.sortedPriorities)) > pa.policyTopPriority-pa.policyBottomPriority+1 {
-		return nil, nil, fmt.Errorf("number of priorities to be registered is greater than available openflow priorities")
+	} else {
+		// Check for overflow before casting to uint16
+		totalPriorities := numPriorityToRegister + len(pa.sortedPriorities)
+		availableRange := uint32(pa.policyTopPriority) - uint32(pa.policyBottomPriority) + 1
+		if uint32(totalPriorities) > availableRange {
+			return nil, nil, fmt.Errorf("number of priorities to be registered (%d) is greater than available openflow priorities (%d)", totalPriorities, availableRange)
+		}
 	}
 	sort.Sort(types.ByPriority(prioritiesToRegister))
 	var consecutivePriorities [][]types.Priority
@@ -340,32 +394,51 @@ func (pa *priorityAssigner) insertConsecutivePriorities(priorities types.ByPrior
 		// set upperBound to the ofPriority of the registered Priority that is immediately higher than the inserting Priorities.
 		upperBound = pa.priorityMap[pa.sortedPriorities[insertionIdx]]
 	}
-	// not enough space to insert Priorities.
-	if upperBound-lowerBound-1 < uint16(numPriorities) {
+	gap, hasSpace := findGap(upperBound, lowerBound)
+	// not enough space currently to insert Priorities.
+	if !hasSpace || gap < uint16(numPriorities) {
 		return pa.reassignBoundaryPriorities(lowerBound, upperBound, priorities, updates)
 	}
 	switch {
 	// ofPriorities provided by the heuristic function are good.
 	case insertionPointLow > lowerBound && insertionPointHigh < upperBound:
 		break
-	// ofPriorities returned by the heuristic function overlap with existing Priorities/are out of place.
+	// ofPriorities returned by the heuristic function are out of place/overlap with existing Priorities.
 	// If the Priorities to be registered overlap with lower Priorities/are lower than the lower Priorities,
 	// and the gap between lowerBound and upperBound for insertion is large, then we insert these Priorities
-	// above the lowerBound, offsetted by a constant zoneOffset. Vice versa for the other way around.
+	// above the lowerBound, offsetted by a constant zoneOffset, and vice versa.
 	// 5 is chosen as the zoneOffset here since it gives some buffer in case Priorities are again created
 	// in between those zones, while in the meantime keeps priority assignments compact.
-	case upperBound-lowerBound-1 >= uint16(numPriorities)+2*zoneOffset:
+	case gap >= uint16(numPriorities)+2*zoneOffset:
 		if insertionPointLow <= lowerBound {
-			insertionPointLow = lowerBound + zoneOffset + 1
+			// Protect against overflow: lowerBound + zoneOffset + 1
+			if uint32(lowerBound)+uint32(zoneOffset)+1 > math.MaxUint16 {
+				insertionPointLow = math.MaxUint16 - uint16(numPriorities) + 1
+			} else {
+				insertionPointLow = lowerBound + zoneOffset + 1
+			}
 		} else {
-			insertionPointLow = upperBound - zoneOffset - uint16(len(priorities))
+			// Protect against underflow: upperBound - zoneOffset - uint16(len(priorities))
+			requiredSpace := uint32(zoneOffset) + uint32(len(priorities))
+			if uint32(upperBound) < requiredSpace {
+				insertionPointLow = pa.policyBottomPriority
+			} else {
+				insertionPointLow = upperBound - zoneOffset - uint16(len(priorities))
+			}
 		}
 	// when the window between upper/lowerBound is small, simply put the Priorities in the middle of the window.
 	default:
-		insertionPointLow = lowerBound + (upperBound-lowerBound-uint16(numPriorities))/2 + 1
+		// gap is guaranteed >= numPriorities by the condition check above
+		// So gap - uint16(numPriorities) will not underflow
+		insertionPointLow = lowerBound + (gap-uint16(numPriorities))/2 + 1
 	}
 	for i := 0; i < len(priorities); i++ {
-		pa.updatePriorityAssignment(insertionPointLow+uint16(i), priorities[i])
+		// Protect against overflow: insertionPointLow + uint16(i)
+		ofPriority := uint32(insertionPointLow) + uint32(i)
+		if ofPriority > math.MaxUint16 {
+			return fmt.Errorf("priority assignment overflow: insertionPoint=%d + i=%d exceeds uint16 range", insertionPointLow, i)
+		}
+		pa.updatePriorityAssignment(uint16(ofPriority), priorities[i])
 	}
 	return nil
 }
