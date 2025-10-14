@@ -222,12 +222,28 @@ func skipIfProxyAllDisabled(t *testing.T, data *TestData) {
 }
 
 func skipIfFlowExportProtocolIsNotGRPC(t *testing.T, data *TestData) {
-	agentConf, err := data.GetAntreaAgentConf()
+	cmd := fmt.Sprintf("cat %s", flowVisibilityProtocolFile)
+	_, stdout, _, err := data.RunCommandOnNode(controlPlaneNodeName(), cmd)
 	if err != nil {
-		t.Fatalf("Error getting Antrea Agent config: %v", err)
+		t.Fatalf("Error getting flow visibility protocol file from control plane node: %v", err)
 	}
-	if !strings.HasSuffix(agentConf.FlowExporter.FlowCollectorAddr, ":grpc") {
+
+	// gRPC is default. If the file doesn't exist assume gRPC
+	if stdout != "" && !strings.EqualFold(stdout, "grpc") {
 		t.Skip("Skipping test because Flow Exporter does not use gRPC")
+	}
+}
+
+func skipIfFlowExportProtocolIsGRPC(t *testing.T, data *TestData) {
+	cmd := fmt.Sprintf("cat %s", flowVisibilityProtocolFile)
+	_, stdout, _, err := data.RunCommandOnNode(controlPlaneNodeName(), cmd)
+	if err != nil {
+		t.Fatalf("Error getting flow visibility protocol file from control plane node: %v", err)
+	}
+
+	// gRPC is default. If the file doesn't exist assume gRPC
+	if stdout != "" && strings.EqualFold(stdout, "grpc") {
+		t.Skip("Skipping test because Flow Exporter uses gRPC")
 	}
 }
 
@@ -328,7 +344,6 @@ func setupFlowAggregator(tb testing.TB, testData *TestData, o flowVisibilityTest
 	}
 	tb.Logf("ClickHouse Service created with ClusterIP: %v", chSvcIP)
 	tb.Logf("Deploying FlowAggregator with ipfix collector: %s and options: %+v", ipfixCollectorAddr, o)
-
 	if err := testData.deployFlowAggregator(ipfixCollectorAddr, ipfixClientCert, ipfixClientKey, ipfixServerCert, o); err != nil {
 		return err
 	}
@@ -413,6 +428,9 @@ func exportLogs(tb testing.TB, data *TestData, logsSubDir string, writeNodeLogs 
 
 	// dump the logs for flow-aggregator Pods to disk.
 	data.forAllMatchingPodsInNamespace("", flowAggregatorNamespace, writePodLogs)
+
+	// dump the logs for flow-aggregator2 Pods to disk.
+	data.forAllMatchingPodsInNamespace("", flowAggregatorNamespace2, writePodLogs)
 
 	// dump the logs for flow-visibility Pods to disk.
 	data.forAllMatchingPodsInNamespace("", flowVisibilityNamespace, writePodLogs)
@@ -511,6 +529,10 @@ func teardownFlowAggregator(tb testing.TB, data *TestData) {
 	}
 	tb.Logf("Deleting '%s' K8s Namespace", flowAggregatorNamespace)
 	if err := data.DeleteNamespace(flowAggregatorNamespace, defaultTimeout); err != nil {
+		tb.Logf("Error when tearing down flow aggregator: %v", err)
+	}
+	tb.Logf("Deleting '%s' K8s Namespace", flowAggregatorNamespace2)
+	if err := data.DeleteNamespace(flowAggregatorNamespace2, defaultTimeout); err != nil {
 		tb.Logf("Error when tearing down flow aggregator: %v", err)
 	}
 	tb.Logf("Deleting K8s resources created by flow visibility YAML")

@@ -97,6 +97,10 @@ func runAntctl(podName string, cmds []string, data *TestData) (string, string, e
 		containerName = "antrea-controller"
 		namespace = antreaNamespace
 	}
+	return runAntctlWithNamespace(namespace, podName, containerName, cmds, data)
+}
+
+func runAntctlWithNamespace(namespace, podName, containerName string, cmds []string, data *TestData) (string, string, error) {
 	stdout, stderr, err := data.RunCommandFromPod(namespace, podName, containerName, cmds)
 	// remove Bincover metadata if needed
 	if err == nil {

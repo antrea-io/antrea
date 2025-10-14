@@ -56,34 +56,6 @@ var (
 )
 
 /*
-Sample output (10000 init connections, 1000 new connections, 1000 deleted connections):
-go test -test.v -run=BenchmarkPoll -test.benchmem -bench=. -memprofile memprofile.out -cpuprofile profile.out
-goos: linux
-goarch: amd64
-pkg: antrea.io/antrea/pkg/agent/flowexporter/connections
-cpu: Intel(R) Core(TM) i7-8750H CPU @ 2.20GHz
-BenchmarkPoll
-BenchmarkPoll-2   	     116	   9068998 ns/op	  889713 B/op	   54458 allocs/op
-PASS
-ok  	antrea.io/antrea/pkg/agent/flowexporter/connections	3.618s
-*/
-func BenchmarkPoll(b *testing.B) {
-	disableLogToStderr()
-	connStore, mockConnDumper := setupConntrackConnStore(b)
-	conns := generateConns()
-	b.ResetTimer()
-	for n := 0; n < b.N; n++ {
-		mockConnDumper.EXPECT().DumpFlows(uint16(openflow.CtZone)).Return(conns, testNumOfConns, nil)
-		connStore.Poll()
-		b.StopTimer()
-		conns = generateUpdatedConns(conns)
-		b.StartTimer()
-	}
-	b.StopTimer()
-	b.Logf("\nSummary:\nNumber of initial connections: %d\nNumber of new connections/poll: %d\nNumber of deleted connections/poll: %d\n", testNumOfConns, testNumOfNewConns, testNumOfDeletedConns)
-}
-
-/*
 Sample output:
 $ go test -run=XXX -bench=BenchmarkConnStore -benchtime=100x -test.benchmem -memprofile memprofile.out
 goos: darwin
@@ -97,21 +69,48 @@ ok  	antrea.io/antrea/pkg/agent/flowexporter/connections	13.111s
 func BenchmarkConnStore(b *testing.B) {
 	disableLogToStderr()
 	connStore, _ := setupConntrackConnStore(b)
-	b.ResetTimer()
-	for n := 0; n < b.N; n++ {
+
+	for b.Loop() {
 		// include this in the benchmark (do not stop timer), to measure the memory
 		// footprint of the connection store and all connections accurately.
 		conns := generateConns()
 		// add connections
-		for _, conn := range conns {
-			connStore.AddOrUpdateConn(conn)
-		}
+		connStore.updateConns(conns, nil, connStore.ctConnectionAugment, ctConnMerge)
 	}
 	b.StopTimer()
 	b.Logf("\nSummary:\nNumber of initial connections: %d\nNumber of new connections/poll: %d\nNumber of deleted connections/poll: %d\n", testNumOfConns, testNumOfNewConns, testNumOfDeletedConns)
 }
 
-func setupConntrackConnStore(b *testing.B) (*ConntrackConnectionStore, *connectionstest.MockConnTrackDumper) {
+/*
+Sample output (10000 init connections, 1000 new connections, 1000 deleted connections):
+go test -test.v -run=BenchmarkPoll -test.benchmem -bench=. -memprofile memprofile.out -cpuprofile profile.out
+goos: linux
+goarch: amd64
+pkg: antrea.io/antrea/pkg/agent/flowexporter/connections
+cpu: Intel(R) Core(TM) i7-8750H CPU @ 2.20GHz
+BenchmarkPoll
+BenchmarkPoll-2   										     116	   9068998 ns/op	  889713 B/op	   54458 allocs/op
+PASS
+ok  	antrea.io/antrea/pkg/agent/flowexporter/connections	3.618s
+*/
+func BenchmarkPollConntrackAndStore(b *testing.B) {
+	disableLogToStderr()
+	connStore, mockConnDumper := setupConntrackConnStore(b)
+
+	conns := generateConns()
+
+	for b.Loop() {
+		mockConnDumper.EXPECT().DumpFlows(uint16(openflow.CtZone)).Return(conns, testNumOfConns, nil)
+		connStore.PollConntrackAndStore()
+		b.StopTimer()
+		conns = generateUpdatedConns(conns)
+		b.StartTimer()
+	}
+	b.StopTimer()
+	b.Logf("\nSummary:\nNumber of initial connections: %d\nNumber of new connections/poll: %d\nNumber of deleted connections/poll: %d\n", testNumOfConns, testNumOfNewConns, testNumOfDeletedConns)
+}
+
+func setupConntrackConnStore(b *testing.B) (*ConnStore, *connectionstest.MockConnTrackDumper) {
 	ctrl := gomock.NewController(b)
 	defer ctrl.Finish()
 	mockPodStore := objectstoretest.NewMockPodStore(ctrl)
@@ -148,12 +147,12 @@ func setupConntrackConnStore(b *testing.B) (*ConntrackConnectionStore, *connecti
 
 	npQuerier := queriertest.NewMockAgentNetworkPolicyInfoQuerier(ctrl)
 	l7Listener := NewL7Listener(nil, mockPodStore)
-	return NewConntrackConnectionStore(mockConnDumper, true, false, npQuerier, mockPodStore, nil, l7Listener, nil, testFlowExporterOptions), mockConnDumper
+	return NewConnStore(mockConnDumper, true, false, mockPodStore, mockProxier, npQuerier, nil, nil, nil, l7Listener, true, testFlowExporterOptions), mockConnDumper
 }
 
 func generateConns() []*connection.Connection {
 	conns := make([]*connection.Connection, testNumOfConns)
-	for i := 0; i < testNumOfConns; i++ {
+	for i := range testNumOfConns {
 		conns[i] = getNewConn()
 	}
 	return conns
@@ -162,15 +161,15 @@ func generateConns() []*connection.Connection {
 func generateUpdatedConns(conns []*connection.Connection) []*connection.Connection {
 	length := len(conns) - testNumOfDeletedConns + testNumOfNewConns
 	updatedConns := make([]*connection.Connection, length)
-	for i := 0; i < len(conns); i++ {
+	for i := range conns {
 		// replace deleted connection with new connection
 		if conns[i].ReadyToDelete == true {
 			conns[i] = getNewConn()
 		} else { // update rest of connections
-			conns[i].OriginalPackets += 5
-			conns[i].OriginalBytes += 20
-			conns[i].ReversePackets += 2
-			conns[i].ReverseBytes += 10
+			conns[i].OriginalStats.Packets += 5
+			conns[i].OriginalStats.Bytes += 20
+			conns[i].OriginalStats.ReversePackets += 2
+			conns[i].OriginalStats.ReverseBytes += 10
 		}
 		updatedConns[i] = conns[i]
 	}
@@ -201,15 +200,17 @@ func getNewConn() *connection.Connection {
 	}
 	flowKey := connection.Tuple{SourceAddress: src, DestinationAddress: dst, Protocol: 6, SourcePort: uint16(randomNum1), DestinationPort: uint16(randomNum2)}
 	return &connection.Connection{
-		StartTime:                  time.Now().Add(-time.Duration(randomNum1) * time.Second),
-		StopTime:                   time.Now(),
-		IsPresent:                  true,
-		ReadyToDelete:              false,
-		FlowKey:                    flowKey,
-		OriginalPackets:            10,
-		OriginalBytes:              100,
-		ReversePackets:             5,
-		ReverseBytes:               50,
+		StartTime:     time.Now().Add(-time.Duration(randomNum1) * time.Second),
+		StopTime:      time.Now(),
+		IsPresent:     true,
+		ReadyToDelete: false,
+		FlowKey:       flowKey,
+		OriginalStats: connection.Stats{
+			Packets:        10,
+			Bytes:          100,
+			ReversePackets: 5,
+			ReverseBytes:   50,
+		},
 		OriginalDestinationAddress: svc,
 		OriginalDestinationPort:    30000,
 		TCPState:                   "SYN_SENT",

@@ -139,12 +139,12 @@ func (e *grpcExporter) createMessage(conn *connection.Connection) *flowpb.Flow {
 			EgressUid:                      conn.EgressUID,
 		},
 		Stats: &flowpb.Stats{
-			PacketTotalCount: conn.OriginalPackets,
-			OctetTotalCount:  conn.OriginalBytes,
+			PacketTotalCount: conn.OriginalStats.Packets,
+			OctetTotalCount:  conn.OriginalStats.Bytes,
 		},
 		ReverseStats: &flowpb.Stats{
-			PacketTotalCount: conn.ReversePackets,
-			OctetTotalCount:  conn.ReverseBytes,
+			PacketTotalCount: conn.OriginalStats.ReversePackets,
+			OctetTotalCount:  conn.OriginalStats.ReverseBytes,
 		},
 		App: &flowpb.App{
 			ProtocolName: conn.AppProtocolName,
@@ -172,25 +172,25 @@ func (e *grpcExporter) createMessage(conn *connection.Connection) *flowpb.Flow {
 		flow.K8S.DestinationServicePort = uint32(conn.OriginalDestinationPort)
 		flow.K8S.DestinationServicePortName = conn.DestinationServicePortName
 	}
-	if conn.OriginalPackets < conn.PrevPackets {
+	if conn.OriginalStats.Packets < conn.PreviousStats.Packets {
 		klog.InfoS("Packet delta count for connection should not be negative")
 	} else {
-		flow.Stats.PacketDeltaCount = conn.OriginalPackets - conn.PrevPackets
+		flow.Stats.PacketDeltaCount = conn.OriginalStats.Packets - conn.PreviousStats.Packets
 	}
-	if conn.OriginalBytes < conn.PrevBytes {
+	if conn.OriginalStats.Bytes < conn.PreviousStats.Bytes {
 		klog.InfoS("Byte delta count for connection should not be negative")
 	} else {
-		flow.Stats.OctetDeltaCount = conn.OriginalBytes - conn.PrevBytes
+		flow.Stats.OctetDeltaCount = conn.OriginalStats.Bytes - conn.PreviousStats.Bytes
 	}
-	if conn.ReversePackets < conn.PrevReversePackets {
+	if conn.OriginalStats.ReversePackets < conn.PreviousStats.ReversePackets {
 		klog.InfoS("Reverse packet delta count for connection should not be negative")
 	} else {
-		flow.ReverseStats.PacketDeltaCount = conn.ReversePackets - conn.PrevReversePackets
+		flow.ReverseStats.PacketDeltaCount = conn.OriginalStats.ReversePackets - conn.PreviousStats.ReversePackets
 	}
-	if conn.ReverseBytes < conn.PrevReverseBytes {
+	if conn.OriginalStats.ReverseBytes < conn.PreviousStats.ReverseBytes {
 		klog.InfoS("Reverse byte delta count for connection should not be negative")
 	} else {
-		flow.ReverseStats.OctetDeltaCount = conn.ReverseBytes - conn.PrevReverseBytes
+		flow.ReverseStats.OctetDeltaCount = conn.OriginalStats.ReverseBytes - conn.PreviousStats.ReverseBytes
 	}
 	if conn.TCPState != "" {
 		flow.Transport.Protocol = &flowpb.Transport_TCP{
