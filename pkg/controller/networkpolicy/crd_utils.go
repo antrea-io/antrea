@@ -218,11 +218,16 @@ func (n *NetworkPolicyController) toAntreaPeerForCRD(peers []crdv1beta1.NetworkP
 			}
 			ipBlocks = append(ipBlocks, *ipBlock)
 		} else if peer.Group != "" {
-			addressGroup, groupIPBlocks := n.processRefGroupOrClusterGroup(peer.Group, np.GetNamespace())
-			if addressGroup != nil {
+			if groupNodeSelector := n.getNodeSelector(peer.Group); groupNodeSelector != nil {
+				addressGroup := n.createAddressGroup("", nil, nil, nil, groupNodeSelector)
 				addressGroups = append(addressGroups, addressGroup)
+			} else {
+				addressGroup, groupIPBlocks := n.processRefGroupOrClusterGroup(peer.Group, np.GetNamespace())
+				if addressGroup != nil {
+					addressGroups = append(addressGroups, addressGroup)
+				}
+				ipBlocks = append(ipBlocks, groupIPBlocks...)
 			}
-			ipBlocks = append(ipBlocks, groupIPBlocks...)
 		} else if peer.FQDN != "" {
 			fqdns = append(fqdns, peer.FQDN)
 		} else if peer.ServiceAccount != nil {
