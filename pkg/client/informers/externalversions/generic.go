@@ -57,8 +57,8 @@ func (f *sharedInformerFactory) ForResource(resource schema.GroupVersionResource
 		return &genericInformer{resource: resource.GroupResource(), informer: f.Crd().V1alpha1().BGPPolicies().Informer()}, nil
 	case v1alpha1.SchemeGroupVersion.WithResource("externalnodes"):
 		return &genericInformer{resource: resource.GroupResource(), informer: f.Crd().V1alpha1().ExternalNodes().Informer()}, nil
-	case v1alpha1.SchemeGroupVersion.WithResource("flowexportertargets"):
-		return &genericInformer{resource: resource.GroupResource(), informer: f.Crd().V1alpha1().FlowExporterTargets().Informer()}, nil
+	case v1alpha1.SchemeGroupVersion.WithResource("flowexporterdestinations"):
+		return &genericInformer{resource: resource.GroupResource(), informer: f.Crd().V1alpha1().FlowExporterDestinations().Informer()}, nil
 	case v1alpha1.SchemeGroupVersion.WithResource("nodelatencymonitors"):
 		return &genericInformer{resource: resource.GroupResource(), informer: f.Crd().V1alpha1().NodeLatencyMonitors().Informer()}, nil
 	case v1alpha1.SchemeGroupVersion.WithResource("packetcaptures"):

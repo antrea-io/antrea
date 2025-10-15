@@ -210,16 +210,11 @@ rules:
   - apiGroups:
       - crd.antrea.io
     resources:
-      - flowexportertargets
-      - flowexportertargets/status
+      - flowexporterdestinations
     verbs:
       - get
       - watch
       - list
-      - update
-      - patch
-      - create
-      - delete
   - apiGroups:
       - k8s.cni.cncf.io
     resources:
