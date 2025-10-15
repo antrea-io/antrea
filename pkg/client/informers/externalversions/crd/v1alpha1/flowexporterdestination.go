@@ -30,70 +30,70 @@ import (
 	cache "k8s.io/client-go/tools/cache"
 )
 
-// FlowExporterTargetInformer provides access to a shared informer and lister for
-// FlowExporterTargets.
-type FlowExporterTargetInformer interface {
+// FlowExporterDestinationInformer provides access to a shared informer and lister for
+// FlowExporterDestinations.
+type FlowExporterDestinationInformer interface {
 	Informer() cache.SharedIndexInformer
-	Lister() crdv1alpha1.FlowExporterTargetLister
+	Lister() crdv1alpha1.FlowExporterDestinationLister
 }
 
-type flowExporterTargetInformer struct {
+type flowExporterDestinationInformer struct {
 	factory          internalinterfaces.SharedInformerFactory
 	tweakListOptions internalinterfaces.TweakListOptionsFunc
 }
 
-// NewFlowExporterTargetInformer constructs a new informer for FlowExporterTarget type.
+// NewFlowExporterDestinationInformer constructs a new informer for FlowExporterDestination type.
 // Always prefer using an informer factory to get a shared informer instead of getting an independent
 // one. This reduces memory footprint and number of connections to the server.
-func NewFlowExporterTargetInformer(client versioned.Interface, resyncPeriod time.Duration, indexers cache.Indexers) cache.SharedIndexInformer {
-	return NewFilteredFlowExporterTargetInformer(client, resyncPeriod, indexers, nil)
+func NewFlowExporterDestinationInformer(client versioned.Interface, resyncPeriod time.Duration, indexers cache.Indexers) cache.SharedIndexInformer {
+	return NewFilteredFlowExporterDestinationInformer(client, resyncPeriod, indexers, nil)
 }
 
-// NewFilteredFlowExporterTargetInformer constructs a new informer for FlowExporterTarget type.
+// NewFilteredFlowExporterDestinationInformer constructs a new informer for FlowExporterDestination type.
 // Always prefer using an informer factory to get a shared informer instead of getting an independent
 // one. This reduces memory footprint and number of connections to the server.
-func NewFilteredFlowExporterTargetInformer(client versioned.Interface, resyncPeriod time.Duration, indexers cache.Indexers, tweakListOptions internalinterfaces.TweakListOptionsFunc) cache.SharedIndexInformer {
+func NewFilteredFlowExporterDestinationInformer(client versioned.Interface, resyncPeriod time.Duration, indexers cache.Indexers, tweakListOptions internalinterfaces.TweakListOptionsFunc) cache.SharedIndexInformer {
 	return cache.NewSharedIndexInformer(
 		&cache.ListWatch{
 			ListFunc: func(options v1.ListOptions) (runtime.Object, error) {
 				if tweakListOptions != nil {
 					tweakListOptions(&options)
 				}
-				return client.CrdV1alpha1().FlowExporterTargets().List(context.Background(), options)
+				return client.CrdV1alpha1().FlowExporterDestinations().List(context.Background(), options)
 			},
 			WatchFunc: func(options v1.ListOptions) (watch.Interface, error) {
 				if tweakListOptions != nil {
 					tweakListOptions(&options)
 				}
-				return client.CrdV1alpha1().FlowExporterTargets().Watch(context.Background(), options)
+				return client.CrdV1alpha1().FlowExporterDestinations().Watch(context.Background(), options)
 			},
 			ListWithContextFunc: func(ctx context.Context, options v1.ListOptions) (runtime.Object, error) {
 				if tweakListOptions != nil {
 					tweakListOptions(&options)
 				}
-				return client.CrdV1alpha1().FlowExporterTargets().List(ctx, options)
+				return client.CrdV1alpha1().FlowExporterDestinations().List(ctx, options)
 			},
 			WatchFuncWithContext: func(ctx context.Context, options v1.ListOptions) (watch.Interface, error) {
 				if tweakListOptions != nil {
 					tweakListOptions(&options)
 				}
-				return client.CrdV1alpha1().FlowExporterTargets().Watch(ctx, options)
+				return client.CrdV1alpha1().FlowExporterDestinations().Watch(ctx, options)
 			},
 		},
-		&apiscrdv1alpha1.FlowExporterTarget{},
+		&apiscrdv1alpha1.FlowExporterDestination{},
 		resyncPeriod,
 		indexers,
 	)
 }
 
-func (f *flowExporterTargetInformer) defaultInformer(client versioned.Interface, resyncPeriod time.Duration) cache.SharedIndexInformer {
-	return NewFilteredFlowExporterTargetInformer(client, resyncPeriod, cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc}, f.tweakListOptions)
+func (f *flowExporterDestinationInformer) defaultInformer(client versioned.Interface, resyncPeriod time.Duration) cache.SharedIndexInformer {
+	return NewFilteredFlowExporterDestinationInformer(client, resyncPeriod, cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc}, f.tweakListOptions)
 }
 
-func (f *flowExporterTargetInformer) Informer() cache.SharedIndexInformer {
-	return f.factory.InformerFor(&apiscrdv1alpha1.FlowExporterTarget{}, f.defaultInformer)
+func (f *flowExporterDestinationInformer) Informer() cache.SharedIndexInformer {
+	return f.factory.InformerFor(&apiscrdv1alpha1.FlowExporterDestination{}, f.defaultInformer)
 }
 
-func (f *flowExporterTargetInformer) Lister() crdv1alpha1.FlowExporterTargetLister {
-	return crdv1alpha1.NewFlowExporterTargetLister(f.Informer().GetIndexer())
+func (f *flowExporterDestinationInformer) Lister() crdv1alpha1.FlowExporterDestinationLister {
+	return crdv1alpha1.NewFlowExporterDestinationLister(f.Informer().GetIndexer())
 }

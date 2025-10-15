@@ -26,8 +26,8 @@ type Interface interface {
 	BGPPolicies() BGPPolicyInformer
 	// ExternalNodes returns a ExternalNodeInformer.
 	ExternalNodes() ExternalNodeInformer
-	// FlowExporterTargets returns a FlowExporterTargetInformer.
-	FlowExporterTargets() FlowExporterTargetInformer
+	// FlowExporterDestinations returns a FlowExporterDestinationInformer.
+	FlowExporterDestinations() FlowExporterDestinationInformer
 	// NodeLatencyMonitors returns a NodeLatencyMonitorInformer.
 	NodeLatencyMonitors() NodeLatencyMonitorInformer
 	// PacketCaptures returns a PacketCaptureInformer.
@@ -57,9 +57,9 @@ func (v *version) ExternalNodes() ExternalNodeInformer {
 	return &externalNodeInformer{factory: v.factory, namespace: v.namespace, tweakListOptions: v.tweakListOptions}
 }
 
-// FlowExporterTargets returns a FlowExporterTargetInformer.
-func (v *version) FlowExporterTargets() FlowExporterTargetInformer {
-	return &flowExporterTargetInformer{factory: v.factory, tweakListOptions: v.tweakListOptions}
+// FlowExporterDestinations returns a FlowExporterDestinationInformer.
+func (v *version) FlowExporterDestinations() FlowExporterDestinationInformer {
+	return &flowExporterDestinationInformer{factory: v.factory, tweakListOptions: v.tweakListOptions}
 }
 
 // NodeLatencyMonitors returns a NodeLatencyMonitorInformer.

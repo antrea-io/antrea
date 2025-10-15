@@ -28,9 +28,9 @@ type ExternalNodeListerExpansion interface{}
 // ExternalNodeNamespaceLister.
 type ExternalNodeNamespaceListerExpansion interface{}
 
-// FlowExporterTargetListerExpansion allows custom methods to be added to
-// FlowExporterTargetLister.
-type FlowExporterTargetListerExpansion interface{}
+// FlowExporterDestinationListerExpansion allows custom methods to be added to
+// FlowExporterDestinationLister.
+type FlowExporterDestinationListerExpansion interface{}
 
 // NodeLatencyMonitorListerExpansion allows custom methods to be added to
 // NodeLatencyMonitorLister.

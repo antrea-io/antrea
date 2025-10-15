@@ -23,24 +23,24 @@ import (
 	cache "k8s.io/client-go/tools/cache"
 )
 
-// FlowExporterTargetLister helps list FlowExporterTargets.
+// FlowExporterDestinationLister helps list FlowExporterDestinations.
 // All objects returned here must be treated as read-only.
-type FlowExporterTargetLister interface {
-	// List lists all FlowExporterTargets in the indexer.
+type FlowExporterDestinationLister interface {
+	// List lists all FlowExporterDestinations in the indexer.
 	// Objects returned here must be treated as read-only.
-	List(selector labels.Selector) (ret []*crdv1alpha1.FlowExporterTarget, err error)
-	// Get retrieves the FlowExporterTarget from the index for a given name.
+	List(selector labels.Selector) (ret []*crdv1alpha1.FlowExporterDestination, err error)
+	// Get retrieves the FlowExporterDestination from the index for a given name.
 	// Objects returned here must be treated as read-only.
-	Get(name string) (*crdv1alpha1.FlowExporterTarget, error)
-	FlowExporterTargetListerExpansion
+	Get(name string) (*crdv1alpha1.FlowExporterDestination, error)
+	FlowExporterDestinationListerExpansion
 }
 
-// flowExporterTargetLister implements the FlowExporterTargetLister interface.
-type flowExporterTargetLister struct {
-	listers.ResourceIndexer[*crdv1alpha1.FlowExporterTarget]
+// flowExporterDestinationLister implements the FlowExporterDestinationLister interface.
+type flowExporterDestinationLister struct {
+	listers.ResourceIndexer[*crdv1alpha1.FlowExporterDestination]
 }
 
-// NewFlowExporterTargetLister returns a new FlowExporterTargetLister.
-func NewFlowExporterTargetLister(indexer cache.Indexer) FlowExporterTargetLister {
-	return &flowExporterTargetLister{listers.New[*crdv1alpha1.FlowExporterTarget](indexer, crdv1alpha1.Resource("flowexportertarget"))}
+// NewFlowExporterDestinationLister returns a new FlowExporterDestinationLister.
+func NewFlowExporterDestinationLister(indexer cache.Indexer) FlowExporterDestinationLister {
+	return &flowExporterDestinationLister{listers.New[*crdv1alpha1.FlowExporterDestination](indexer, crdv1alpha1.Resource("flowexporterdestination"))}
 }

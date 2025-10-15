@@ -20,7 +20,7 @@ type BGPPolicyExpansion interface{}
 
 type ExternalNodeExpansion interface{}
 
-type FlowExporterTargetExpansion interface{}
+type FlowExporterDestinationExpansion interface{}
 
 type NodeLatencyMonitorExpansion interface{}
 
