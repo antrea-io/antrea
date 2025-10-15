@@ -447,7 +447,7 @@ webhooks:
     enable: false
 
 # -- Global log verbosity switch for all Antrea components.
-logVerbosity: 0
+logVerbosity: 5
 
 # Configure Multicluster defaults for both Antrea Controller and Agent.
 multicluster:
