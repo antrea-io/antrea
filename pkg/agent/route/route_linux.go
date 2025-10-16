@@ -280,10 +280,33 @@ func (c *Client) Initialize(nodeConfig *config.NodeConfig, done func()) error {
 		}
 	}
 
+	// In hybrid mode, traffic originating from remote Pod CIDRs is forwarded like this:
+	//     remote Pods -> tunnel (remote Node OVS) -> tunnel (local Node OVS) -> antrea-gw0 (local Node) -> external network.
+	//
+	// To ensure reply packets follow a symmetric path, Antrea uses policy routing on the local Node. However, the
+	// kernel's strict RPF check only validates source paths against the main routing table. Since the transport
+	// interface (not antrea‑gw0) is listed as the next-hop for these routes, strict RPF drops the reply packets
+	// (because policy routing is ignored by rp_filter). As a result, we set its rp_filter to loose mode (2).
+	if c.networkConfig.TrafficEncapMode == config.TrafficEncapModeHybrid {
+		if err := sysctl.EnsureSysctlNetValue(fmt.Sprintf("ipv4/conf/%s/rp_filter", c.nodeConfig.GatewayConfig.Name), 2); err != nil {
+			return fmt.Errorf("failed to set %s rp_filter to 2 (loose mode): %w", c.nodeConfig.GatewayConfig.Name, err)
+		}
+	} else {
+		if err := sysctl.EnsureSysctlNetValue(fmt.Sprintf("ipv4/conf/%s/rp_filter", c.nodeConfig.GatewayConfig.Name), 1); err != nil {
+			return fmt.Errorf("failed to set %s rp_filter to 1 (strict mode): %w", c.nodeConfig.GatewayConfig.Name, err)
+		}
+	}
+
 	// Set up the IP routes and sysctl parameters to support all Services in AntreaProxy.
 	if c.proxyAll {
 		if err := c.initServiceIPRoutes(); err != nil {
 			return fmt.Errorf("failed to initialize Service IP routes: %v", err)
+		}
+	}
+	// Set up the policy routing ip rule to support some features in hybrid mode.
+	if c.networkConfig.TrafficEncapMode == config.TrafficEncapModeHybrid {
+		if err := c.initEgressPolicyIPRules(); err != nil {
+			return fmt.Errorf("failed to initialize ip rule in hybrid mode: %v", err)
 		}
 	}
 	// Build static iptables rules for NodeNetworkPolicy.
@@ -1088,6 +1111,27 @@ func (c *Client) restoreIptablesData(podCIDR *net.IPNet,
 		c.writeEKSMangleRules(iptablesData)
 	}
 
+	if c.networkConfig.TrafficEncapMode == config.TrafficEncapModeHybrid {
+		writeLine(iptablesData, []string{
+			"-A", antreaPreRoutingChain,
+			"-m", "comment", "--comment", `"Antrea: restore fwmark from connmark for reply packets sourced from remote Pods"`,
+			"!", "-i", c.nodeConfig.GatewayConfig.Name,
+			"-m", "conntrack", "--ctstate", "ESTABLISHED",
+			"-m", "conntrack", "--ctdir", "REPLY",
+			"-m", "connmark", "--mark", fmt.Sprintf("%#08x/%#08x", types.RemotePodSourceMark, types.RemotePodSourceMark),
+			"-j", "CONNMARK", "--restore-mark", "--nfmask", fmt.Sprintf("%#08x", types.RemotePodSourceMark), "--ctmask", fmt.Sprintf("%#08x", types.RemotePodSourceMark),
+		}...)
+		writeLine(iptablesData, []string{
+			"-A", antreaPreRoutingChain,
+			"-m", "comment", "--comment", `"Antrea: set connmark for the first Egress request packet"`,
+			"-i", c.nodeConfig.GatewayConfig.Name,
+			"!", "-s", podCIDR.String(),
+			"-m", "conntrack", "--ctstate", "NEW",
+			"-m", "mark", "!", "--mark", fmt.Sprintf("%#08x/%#08x", 0, types.SNATIPMarkMask),
+			"-j", "CONNMARK", "--set-mark", fmt.Sprintf("%#08x/%#08x", types.RemotePodSourceMark, types.RemotePodSourceMark),
+		}...)
+	}
+
 	// To make liveness/readiness probe traffic bypass ingress rules of Network Policies, mark locally generated packets
 	// that will be sent to OVS so we can identify them later in the OVS pipeline.
 	// It must match source address because kube-proxy ipvs mode will redirect ingress packets to output chain, and they
@@ -1495,6 +1539,39 @@ func (c *Client) initNodeLatencyRules() {
 	}
 }
 
+func (c *Client) initEgressPolicyIPRules() error {
+	rules, err := c.netlink.RuleList(netlink.FAMILY_ALL)
+	if err != nil {
+		return err
+	}
+	for i := range rules {
+		rule := rules[i]
+		if rule.Table != types.EgressPolicyRouteTable {
+			continue
+		}
+		c.netlink.RuleDel(&rule)
+	}
+
+	if c.networkConfig.IPv6Enabled {
+		rule := generateRule(types.EgressPolicyRouteTable, types.RemotePodSourceMark, &types.RemotePodSourceMark, netlink.FAMILY_V6)
+		if err := c.netlink.RuleAdd(rule); err != nil {
+			return fmt.Errorf("error adding ip rule %v: %w", rule, err)
+		}
+	}
+	if c.networkConfig.IPv4Enabled {
+		rule := generateRule(types.EgressPolicyRouteTable, types.RemotePodSourceMark, &types.RemotePodSourceMark, netlink.FAMILY_V4)
+		if err := c.netlink.RuleAdd(rule); err != nil {
+			return fmt.Errorf("error adding ip rule %v: %w", rule, err)
+		}
+
+		rule = generateRule(types.EgressPolicyRouteTable, types.ToRemoteViaTunnelMark, &types.ToRemoteViaTunnelMark, netlink.FAMILY_V4)
+		if err := c.netlink.RuleAdd(rule); err != nil {
+			return fmt.Errorf("error adding ip rule %v: %w", rule, err)
+		}
+	}
+	return nil
+}
+
 // Reconcile removes orphaned podCIDRs from ipset and removes routes to orphaned podCIDRs
 // based on the desired podCIDRs.
 func (c *Client) Reconcile(podCIDRs []string) error {
@@ -1523,6 +1600,13 @@ func (c *Client) Reconcile(podCIDRs []string) error {
 			route := &netlink.Route{Dst: cidr}
 			if err := c.netlink.RouteDel(route); err != nil && err != unix.ESRCH {
 				return err
+			}
+			// In hybrid mode, a policy route might be installed, remove it.
+			if c.networkConfig.TrafficEncapMode == config.TrafficEncapModeHybrid {
+				route = &netlink.Route{Dst: cidr, Table: types.EgressPolicyRouteTable}
+				if err := c.netlink.RouteDel(route); err != nil && err != unix.ESRCH {
+					return err
+				}
 			}
 		}
 	}
@@ -1704,6 +1788,38 @@ func (c *Client) AddRoutes(podCIDR *net.IPNet, nodeName string, nodeIP, nodeGwIP
 			podCIDRRoute.Src = c.nodeConfig.GatewayConfig.IPv6
 		}
 		routes = append(routes, podCIDRRoute)
+
+		if c.networkConfig.TrafficEncapMode == config.TrafficEncapModeHybrid {
+			policyRoute := &netlink.Route{
+				Dst:       podCIDR,
+				LinkIndex: c.nodeConfig.GatewayConfig.LinkIndex,
+				Gw:        nodeGwIP,
+				Table:     types.EgressPolicyRouteTable,
+			}
+			if podCIDR.IP.To4() == nil {
+				requireNodeGwIPv6RouteAndNeigh = true
+				// "on-link" is not identified in IPv6 route entries, so split the configuration into 2 entries.
+				// TODO: Kernel >= 4.16 supports adding IPv6 route with onlink flag. Delete this route after Kernel version
+				//       requirement bump in future.
+				routes = append(routes, &netlink.Route{
+					Dst:       &net.IPNet{IP: nodeGwIP, Mask: net.CIDRMask(128, 128)},
+					LinkIndex: c.nodeConfig.GatewayConfig.LinkIndex,
+					Table:     types.EgressPolicyRouteTable,
+				})
+			} else {
+				policyRoute.Flags = int(netlink.FLAG_ONLINK)
+			}
+			routes = append(routes, policyRoute)
+
+			policyRoute = &netlink.Route{
+				Dst:       &net.IPNet{IP: nodeIP, Mask: net.CIDRMask(32, 32)},
+				LinkIndex: c.nodeConfig.WireGuardConfig.LinkIndex,
+				Src:       c.nodeConfig.GatewayConfig.IPv4,
+				Scope:     netlink.SCOPE_LINK,
+				Table:     types.EgressPolicyRouteTable,
+			}
+			routes = append(routes, policyRoute)
+		}
 	} else if c.networkConfig.NeedsTunnelToPeer(nodeIP, nodeTransportIPAddr) {
 		if podCIDR.IP.To4() == nil {
 			requireNodeGwIPv6RouteAndNeigh = true
@@ -1725,6 +1841,30 @@ func (c *Client) AddRoutes(podCIDR *net.IPNet, nodeName string, nodeIP, nodeGwIP
 		// Set the peerNodeIP as next hop.
 		podCIDRRoute.Gw = nodeIP
 		routes = append(routes, podCIDRRoute)
+
+		// In hybrid, install a policy route destined for remote Pod CIDR via antrea-gw0.
+		if c.networkConfig.TrafficEncapMode == config.TrafficEncapModeHybrid {
+			policyRoute := &netlink.Route{
+				Dst:       podCIDR,
+				LinkIndex: c.nodeConfig.GatewayConfig.LinkIndex,
+				Gw:        nodeGwIP,
+				Table:     types.EgressPolicyRouteTable,
+			}
+			if podCIDR.IP.To4() == nil {
+				requireNodeGwIPv6RouteAndNeigh = true
+				// "on-link" is not identified in IPv6 route entries, so split the configuration into 2 entries.
+				// TODO: Kernel >= 4.16 supports adding IPv6 route with onlink flag. Delete this route after Kernel version
+				//       requirement bump in future.
+				routes = append(routes, &netlink.Route{
+					Dst:       &net.IPNet{IP: nodeGwIP, Mask: net.CIDRMask(128, 128)},
+					LinkIndex: c.nodeConfig.GatewayConfig.LinkIndex,
+					Table:     types.EgressPolicyRouteTable,
+				})
+			} else {
+				policyRoute.Flags = int(netlink.FLAG_ONLINK)
+			}
+			routes = append(routes, policyRoute)
+		}
 	} else {
 		// NetworkPolicyOnly mode or NoEncap traffic to a Node on a different subnet.
 		// Routing should be handled by a route which is already present on the host.
@@ -2457,6 +2597,15 @@ func isIPv6Protocol(protocol binding.Protocol) bool {
 		return true
 	}
 	return false
+}
+
+func generateRule(table int, mark uint32, mask *uint32, family int) *netlink.Rule {
+	rule := netlink.NewRule()
+	rule.Table = table
+	rule.Mark = mark
+	rule.Mask = mask
+	rule.Family = family
+	return rule
 }
 
 func generateRoute(ip net.IP, mask int, gw net.IP, linkIndex int, scope netlink.Scope) *netlink.Route {
