@@ -4046,14 +4046,6 @@ data:
     # promoted to GA in v1.14.
     #  AntreaProxy: true
 
-    # Enable TopologyAwareHints in AntreaProxy. This requires AntreaProxy and EndpointSlice to be
-    # enabled, otherwise this flag will not take effect.
-    #  TopologyAwareHints: true
-
-    # Enable ServiceTrafficDistribution in AntreaProxy. This requires AntreaProxy and EndpointSlice to be
-    # enabled, otherwise this flag will not take effect.
-    #  ServiceTrafficDistribution: true
-
     # Enable support for cleaning up stale UDP Service conntrack connections in AntreaProxy. This requires AntreaProxy to
     # be enabled, otherwise this flag will not take effect.
     #  CleanupStaleUDPSvcConntrack: true
@@ -5512,7 +5504,7 @@ spec:
         kubectl.kubernetes.io/default-container: antrea-agent
         # Automatically restart Pods with a RollingUpdate if the ConfigMap changes
         # See https://helm.sh/docs/howto/charts_tips_and_tricks/#automatically-roll-deployments
-        checksum/config: a8c0d73daac4c8b82f2e730af22918085cdc3745ad0afd5b969ec346d71218f7
+        checksum/config: 83aa4707cd382645a17ca0f06ef16deb3aba856c8e2c4ef9826324898c57eab3
         checksum/ipsec-secret: d0eb9c52d0cd4311b6d252a951126bf9bea27ec05590bed8a394f0f792dcb2a4
       labels:
         app: antrea
@@ -5804,7 +5796,7 @@ spec:
       annotations:
         # Automatically restart Pod if the ConfigMap changes
         # See https://helm.sh/docs/howto/charts_tips_and_tricks/#automatically-roll-deployments
-        checksum/config: a8c0d73daac4c8b82f2e730af22918085cdc3745ad0afd5b969ec346d71218f7
+        checksum/config: 83aa4707cd382645a17ca0f06ef16deb3aba856c8e2c4ef9826324898c57eab3
       labels:
         app: antrea
         component: antrea-controller
