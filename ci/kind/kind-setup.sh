@@ -434,6 +434,8 @@ function delete_vlan_subnets {
     docker_run_with_host_net iptables -t nat -D POSTROUTING ! -o $bridge_interface -s 192.168.240.0/24 -m set --match-set excluded_subnets dst -j RETURN || true
     docker_run_with_host_net iptables -t nat -D POSTROUTING ! -o $bridge_interface -s 10.244.0.0/16 -m set ! --match-set excluded_subnets dst -j MASQUERADE || true
     docker_run_with_host_net ipset destroy excluded_subnets || true  
+  else
+    echo "Non-flexible IPAM test detected. Skipping subnet deletion."
   fi
 }
 

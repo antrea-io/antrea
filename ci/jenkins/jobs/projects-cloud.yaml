@@ -683,6 +683,44 @@
           included_regions:
           - ci/jenkins/jobs/.*
       - 'cloud-{name}-{test_name}':
+          test_name: auto-scaling-agents
+          node: antrea-cloud
+          description: 'This is a cloud job of auto scaling agents for antrea.'
+          branches:
+          - '${{ANTREA_GIT_REVISION}}'
+          repo_url: '${{ANTREA_REPO}}'
+          only_trigger_phrase: false
+          trigger_permit_all: false
+          builders:
+          - shell: |-
+              #!/bin/bash
+              sudo gcloud auth login --cred-file=${{CREDENTIAL_PATH}}
+              sudo gcloud config set project ${GKE_PROJECT}
+              sudo ./ci/jenkins/scale-agent.sh --jenkins-user ${{JENKINS_USER}} --jenkins-token ${{JENKINS_TOKEN}} --gke-project ${GKE_PROJECT} \
+                --gke-network ${{GKE_NETWORK}} --gke-subnet ${{GKE_SUBNET}}
+          concurrent: false
+          trigger_phrase: ^(?!Thanks for your PR).*/scale-agent.*  
+          triggers:
+          - timed: "*/15 * * * *"
+          publishers: []
+          wrappers:
+          - credentials-binding:
+            - text:
+                credential-id: JENKINS_USER
+                variable: JENKINS_USER
+            - text:
+                credential-id: JENKINS_TOKEN
+                variable: JENKINS_TOKEN
+            - text:
+                credential-id: CREDENTIAL_PATH
+                variable: CREDENTIAL_PATH
+            - text:
+                credential-id: GKE_NETWORK
+                variable: GKE_NETWORK
+            - text:
+                credential-id: GKE_SUBNET
+                variable: GKE_SUBNET
+      - 'cloud-{name}-{test_name}':
           test_name: eks-conformance-net-policy
           node: antrea-cloud
           description: 'This is EKS conformance and network policy test for antrea.'
@@ -754,7 +792,7 @@
               # Prevent exposing credentials in the console output by adding set +x
               # This is to avoid other developers removing this set+x by accident
               set +x
-              sudo gcloud auth login --cred-file=${CREDENTIAL_PATH}
+              sudo gcloud auth login --cred-file=${{CREDENTIAL_PATH}}
               sudo ./ci/test-conformance-gke.sh --cluster-name antrea-gke-${{BUILD_NUMBER}} \
                 --svc-account ${{SERVICE_ACCOUNT}} --gcloud-sdk-path ${{GCLOUD_PATH}} \
                 --log-mode detail --setup-only --gke-project ${GKE_PROJECT} --shared-network \
