@@ -632,7 +632,7 @@ func TestCorrelateRecordsForFromExternalFlow(t *testing.T) {
 
 		ap.addOrUpdateRecordInMap(sourceNodeRecordFlowKey, sourceNodeRecord, false)
 
-		assert.Equal(t, 1, len(ap.FromExternalIPPortMap))
+		assert.Equal(t, 1, len(ap.FromExternalFlowMap))
 		assertPriorityQueueRecordInitialized(t, ap)
 		assert.False(t, ap.expirePriorityQueue.Pop().(*ItemToExpire).flowRecord.ReadyToSend)
 
@@ -652,7 +652,7 @@ func TestCorrelateRecordsForFromExternalFlow(t *testing.T) {
 		ap.addOrUpdateRecordInMap(destinationNodeRecordFlowKey, destinationNodeRecord, false)
 		assert.Nil(t, sourceNodeRecord.Aggregation)
 		assertPriorityQueueRecordInitialized(t, ap)
-		assert.Equal(t, 1, len(ap.FromExternalIPPortMap))
+		assert.Equal(t, 1, len(ap.FromExternalFlowMap))
 		recordForExport := ap.expirePriorityQueue.Pop().(*ItemToExpire).flowRecord
 
 		ap.addOrUpdateRecordInMap(sourceNodeRecordFlowKey, sourceNodeRecord, false)
@@ -984,7 +984,7 @@ func TestForAllExpiredFlowRecordsDo(t *testing.T) {
 					assert.NoError(t, err)
 				}
 
-				assert.Equal(t, 0, len(ap.FromExternalIPPortMap),
+				assert.Equal(t, 0, len(ap.FromExternalFlowMap),
 					"Expected record to be cleared from IP Port map after reaching max retries")
 			default:
 				break

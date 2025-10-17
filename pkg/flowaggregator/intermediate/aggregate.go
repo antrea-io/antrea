@@ -63,9 +63,9 @@ type aggregationProcess struct {
 	// stopChan is the channel to receive stop message
 	stopChan chan bool
 	clock    clock.Clock
-	// FromExternalIPPortMap stores records with FlowType "FromExternal" with key
+	// FromExternalFlowMap stores records with FlowType "FromExternal" with key
 	// being the destination ip and port
-	FromExternalIPPortMap map[string]*FromExternalFlowStash
+	FromExternalFlowMap map[string]*FromExternalFlowStash
 }
 
 type AggregationInput struct {
@@ -154,11 +154,11 @@ func (a *aggregationProcess) deleteKeyFromMap(pqItem *ItemToExpire) error {
 
 func (a *aggregationProcess) deleteFromIPPortMap(record *flowpb.Flow) error {
 	key := generateIPPortMapKey(record)
-	_, exists := a.FromExternalIPPortMap[key]
+	_, exists := a.FromExternalFlowMap[key]
 	if !exists {
 		return fmt.Errorf("key %v is not present in the IPPortMap", key)
 	}
-	delete(a.FromExternalIPPortMap, key)
+	delete(a.FromExternalFlowMap, key)
 	return nil
 }
 
@@ -365,7 +365,7 @@ func (a *aggregationProcess) IsAggregatedRecordIPv4(record AggregationFlowRecord
 // if the record is from the original source by means of inspecting the
 // destination pod information which cannot be populated for such records
 func isSourceNodeRecord(record *flowpb.Flow) bool {
-	return record.K8S.DestinationPodName == ""
+	return record.Zone == 0
 }
 
 // isSourceInternal turns true if the source IP address is on the
@@ -397,11 +397,24 @@ func fromExternalCorrelationRequired(record *flowpb.Flow) bool {
 		record.K8S.DestinationPodName == ""
 }
 
-// Return a key unique to the given record composed of it's IP and destination port
-// to be used in FromExternalIPPortMap to correlate the sourceNode and destinationNode
-// records that make up a FromExternal flow
-func generateIPPortMapKey(record *flowpb.Flow) string {
-	return flowrecord.IpAddressAsString(record.Ip.Destination) + strconv.FormatUint(uint64(record.Transport.DestinationPort), 10)
+// Return a key unique to the given record composed of the ReplyDestinationAddress,
+// ReplyDestinationPort, destination IP and destination port to be used in FromExternalFlowMap
+// to correlate the sourceNode and destinationNode records that make up a FromExternal flow
+func generateIPPortMapKey(record *flowpb.Flow) string { //TODO rename function call
+	var gateway string
+	var gatewayPort string
+	if isSourceNodeRecord(record) {
+		gateway = flowrecord.IpAddressAsString(record.ReplyDestinationAddress)
+		gatewayPort = strconv.FormatUint(uint64(record.ReplyDestinationPort), 10)
+	} else {
+		gateway = flowrecord.IpAddressAsString(record.Ip.Source)
+		gatewayPort = strconv.FormatUint(uint64(record.Transport.SourcePort), 10)
+	}
+	return fmt.Sprintf("%s-%s-%s-%s",
+		gateway,
+		gatewayPort,
+		flowrecord.IpAddressAsString(record.Ip.Destination),
+		strconv.FormatUint(uint64(record.Transport.DestinationPort), 10))
 }
 
 // Given a record with flowtype FromExternal, adds it to the prioirty queue with corresponding stats filled.
@@ -445,7 +458,7 @@ func (a *aggregationProcess) addOrUpdateFromExternalRecord(flowKey *FlowKey, rec
 	//}
 
 	key := generateIPPortMapKey(record)
-	stash, exists := a.FromExternalIPPortMap[key]
+	stash, exists := a.FromExternalFlowMap[key]
 
 	stashSourceNodeRecord := func() {
 		record.Aggregation = &flowpb.Aggregation{}
@@ -454,7 +467,7 @@ func (a *aggregationProcess) addOrUpdateFromExternalRecord(flowKey *FlowKey, rec
 		if strings.Contains(record.K8S.DestinationServicePortName, "my-app") {
 			klog.InfoS("qqq - stashing source record", "record", record)
 		}
-		a.FromExternalIPPortMap[key] = &FromExternalFlowStash{SourceNodeFlow: aggregationRecord}
+		a.FromExternalFlowMap[key] = &FromExternalFlowStash{SourceNodeFlow: aggregationRecord}
 	}
 	stashDestinationNodeRecordWithStats := func() {
 		record.Aggregation = &flowpb.Aggregation{}
@@ -464,7 +477,7 @@ func (a *aggregationProcess) addOrUpdateFromExternalRecord(flowKey *FlowKey, rec
 			klog.InfoS("qqq - stashing destination record", "record", record)
 		}
 		aggregationRecord := addToQueue(false)
-		a.FromExternalIPPortMap[key] = &FromExternalFlowStash{DestinationNodeFlow: aggregationRecord}
+		a.FromExternalFlowMap[key] = &FromExternalFlowStash{DestinationNodeFlow: aggregationRecord}
 	}
 	correlateDestinationNodeRecord := func() {
 		if stash.DestinationNodeFlow != nil {
