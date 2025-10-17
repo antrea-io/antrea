@@ -20,8 +20,10 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	clientset "k8s.io/client-go/kubernetes"
 
 	"antrea.io/antrea/pkg/agent/util"
+	agentconfig "antrea.io/antrea/pkg/config/agent"
 )
 
 func TestGetAvailableNodePortAddresses(t *testing.T) {
@@ -121,4 +123,99 @@ func TestParsePortRange(t *testing.T) {
 
 		})
 	}
+}
+
+func TestGetPodCIDRs(t *testing.T) {
+	type mockFns struct {
+		fromConfig    func(string) []*net.IPNet
+		fromKubeProxy func(clientset.Interface) []*net.IPNet
+		fromKubeadm   func(clientset.Interface) []*net.IPNet
+	}
+
+	tests := []struct {
+		name          string
+		optionsCIDR   string
+		mocks         mockFns
+		expectedCIDRs []string
+	}{
+		{
+			name:          "CIDR from options config",
+			optionsCIDR:   "10.244.0.0/16,  fd00:10:244::/56",
+			expectedCIDRs: []string{"10.244.0.0/16", "fd00:10:244::/56"},
+			mocks: mockFns{
+				fromConfig: func(_ string) []*net.IPNet {
+					return []*net.IPNet{mustParseCIDR("10.244.0.0/16"), mustParseCIDR("fd00:10:244::/56")}
+				},
+			},
+		},
+		{
+			name: "CIDR from kube-proxy ConfigMap fallback",
+			mocks: mockFns{
+				fromConfig: func(_ string) []*net.IPNet { return nil },
+				fromKubeProxy: func(_ clientset.Interface) []*net.IPNet {
+					return []*net.IPNet{mustParseCIDR("10.244.0.0/16")}
+				},
+			},
+			expectedCIDRs: []string{"10.244.0.0/16"},
+		},
+		{
+			name: "CIDR from kubeadm-config fallback",
+			mocks: mockFns{
+				fromConfig:    func(_ string) []*net.IPNet { return nil },
+				fromKubeProxy: func(_ clientset.Interface) []*net.IPNet { return nil },
+				fromKubeadm: func(_ clientset.Interface) []*net.IPNet {
+					return []*net.IPNet{mustParseCIDR("fd00:10:244::/56")}
+				},
+			},
+			expectedCIDRs: []string{"fd00:10:244::/56"},
+		},
+		{
+			name: "No CIDR found",
+			mocks: mockFns{
+				fromConfig:    func(_ string) []*net.IPNet { return nil },
+				fromKubeProxy: func(_ clientset.Interface) []*net.IPNet { return nil },
+				fromKubeadm:   func(_ clientset.Interface) []*net.IPNet { return nil },
+			},
+			expectedCIDRs: nil,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			originFromConfig := getPodCIDRsFromConfig
+			originFromKubeProxy := getPodCIDRsFromKubeProxy
+			originFromKubeadm := getPodCIDRsFromKubeadm
+			t.Cleanup(func() {
+				getPodCIDRsFromConfig = originFromConfig
+				getPodCIDRsFromKubeProxy = originFromKubeProxy
+				getPodCIDRsFromKubeadm = originFromKubeadm
+			})
+			if tt.mocks.fromConfig != nil {
+				getPodCIDRsFromConfig = tt.mocks.fromConfig
+			}
+			if tt.mocks.fromKubeProxy != nil {
+				getPodCIDRsFromKubeProxy = tt.mocks.fromKubeProxy
+			}
+			if tt.mocks.fromKubeadm != nil {
+				getPodCIDRsFromKubeadm = tt.mocks.fromKubeadm
+			}
+
+			o := &Options{
+				config: &agentconfig.AgentConfig{
+					PodCIDRs: tt.optionsCIDR,
+				},
+			}
+			got := getPodCIDRs(o, nil)
+			var gotCIDRs []string
+			for _, cidr := range got {
+				gotCIDRs = append(gotCIDRs, cidr.String())
+			}
+			assert.ElementsMatch(t, tt.expectedCIDRs, gotCIDRs)
+		})
+	}
+}
+
+func mustParseCIDR(s string) *net.IPNet {
+	_, cidr, _ := net.ParseCIDR(s)
+	return cidr
 }
