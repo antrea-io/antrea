@@ -143,6 +143,8 @@ func NetlinkFlowToAntreaConnection(conn *conntrack.Flow) *connection.Connection 
 			SourcePort:         conn.TupleOrig.Proto.SourcePort,
 			DestinationPort:    conn.TupleReply.Proto.SourcePort,
 		},
+		ReplyDestinationAddress:    conn.TupleReply.IP.DestinationAddress,
+		ReplyDestinationPort:       conn.TupleReply.Proto.DestinationPort,
 		OriginalDestinationAddress: conn.TupleOrig.IP.DestinationAddress,
 		OriginalDestinationPort:    conn.TupleOrig.Proto.DestinationPort,
 		OriginalPackets:            conn.CountersOrig.Packets,

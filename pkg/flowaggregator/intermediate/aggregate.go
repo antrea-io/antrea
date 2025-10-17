@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"net"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -406,6 +407,9 @@ func generateIPPortMapKey(record *flowpb.Flow) string {
 // Given a record with flowtype FromExternal, adds it to the prioirty queue with corresponding stats filled.
 // If correlation is required the record is populated with the right stats and the external source IP.
 func (a *aggregationProcess) addOrUpdateFromExternalRecord(flowKey *FlowKey, record *flowpb.Flow, isIPv4 bool) {
+	if strings.Contains(record.K8S.DestinationServicePortName, "my-app") {
+		klog.InfoS("qqq - received fromExternal record", "record", record)
+	}
 	currTime := a.clock.Now()
 	addToQueue := func(readyToSend bool) *AggregationFlowRecord {
 		aggregationRecord := &AggregationFlowRecord{
@@ -426,16 +430,19 @@ func (a *aggregationProcess) addOrUpdateFromExternalRecord(flowKey *FlowKey, rec
 		return aggregationRecord
 	}
 
-	fillStatsAndPushToQueue := func() {
-		record.Aggregation = &flowpb.Aggregation{}
-		addFieldsForStatsAggregation(record, true, true)
-		a.addFieldsForThroughputCalculation(record, record, true, true)
-		addToQueue(true)
-	}
-	if !fromExternalCorrelationRequired(record) {
-		fillStatsAndPushToQueue()
-		return
-	}
+	//fillStatsAndPushToQueue := func() {
+	//	record.Aggregation = &flowpb.Aggregation{}
+	//	addFieldsForStatsAggregation(record, true, true)
+	//	a.addFieldsForThroughputCalculation(record, record, true, true)
+	//	if strings.Contains(record.K8S.DestinationServicePortName, "my-app") {
+	//		klog.InfoS("qqq - aggregation was not required, pushing to queue for export", "record", record)
+	//	}
+	//	addToQueue(true)
+	//}
+	//if !fromExternalCorrelationRequired(record) {
+	//	fillStatsAndPushToQueue()
+	//	return
+	//}
 
 	key := generateIPPortMapKey(record)
 	stash, exists := a.FromExternalIPPortMap[key]
@@ -444,12 +451,18 @@ func (a *aggregationProcess) addOrUpdateFromExternalRecord(flowKey *FlowKey, rec
 		record.Aggregation = &flowpb.Aggregation{}
 		aggregationRecord := addToQueue(false)
 
+		if strings.Contains(record.K8S.DestinationServicePortName, "my-app") {
+			klog.InfoS("qqq - stashing source record", "record", record)
+		}
 		a.FromExternalIPPortMap[key] = &FromExternalFlowStash{SourceNodeFlow: aggregationRecord}
 	}
 	stashDestinationNodeRecordWithStats := func() {
 		record.Aggregation = &flowpb.Aggregation{}
 		addFieldsForStatsAggregation(record, false, true)
 		a.addFieldsForThroughputCalculation(record, record, false, true)
+		if strings.Contains(record.K8S.DestinationServicePortName, "my-app") {
+			klog.InfoS("qqq - stashing destination record", "record", record)
+		}
 		aggregationRecord := addToQueue(false)
 		a.FromExternalIPPortMap[key] = &FromExternalFlowStash{DestinationNodeFlow: aggregationRecord}
 	}
@@ -457,9 +470,13 @@ func (a *aggregationProcess) addOrUpdateFromExternalRecord(flowKey *FlowKey, rec
 		if stash.DestinationNodeFlow != nil {
 			aggregationRecord := stash.DestinationNodeFlow
 			aggregationRecord.Record.Ip.Source = record.Ip.Source
-			aggregationRecord.ReadyToSend = true
+
 			copyStats(record.Stats, aggregationRecord.Record.Aggregation.StatsFromSource)
 			a.addFieldsForThroughputCalculation(record, aggregationRecord.Record, true, false)
+			if strings.Contains(record.K8S.DestinationServicePortName, "my-app") {
+				klog.InfoS("qqq - compelted correlation of record (source node came second). adding to queue for export", "aggrecord", aggregationRecord)
+			}
+			aggregationRecord.ReadyToSend = true // maybe this hsould be the last step? yes probably but it isnt the crux of hte problem. the source ip is not overwritten in the e2es
 		}
 	}
 	correlateRecordWithStats := func() {
@@ -471,6 +488,9 @@ func (a *aggregationProcess) addOrUpdateFromExternalRecord(flowKey *FlowKey, rec
 			copyStats(record.Stats, record.Aggregation.StatsFromDestination)
 			a.addFieldsForThroughputCalculation(stashedRecord, record, true, false)
 			a.addFieldsForThroughputCalculation(record, record, false, true)
+			if strings.Contains(record.K8S.DestinationServicePortName, "my-app") {
+				klog.InfoS("qqq - completed correlation of record (destination record came second). adding to queue for export", "record", record)
+			}
 			addToQueue(true)
 		}
 	}
