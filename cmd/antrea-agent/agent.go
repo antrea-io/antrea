@@ -221,8 +221,9 @@ func run(o *Options) error {
 		IPsecConfig: config.IPsecConfig{
 			AuthenticationMode: ipsecAuthenticationMode,
 		},
-		EnableMulticlusterGW:       enableMulticlusterGW,
-		MulticlusterEncryptionMode: multiclusterEncryptionMode,
+		EnableMulticlusterGW:          enableMulticlusterGW,
+		MulticlusterEncryptionMode:    multiclusterEncryptionMode,
+		EnableHostNetworkAcceleration: o.config.HostNetworkAcceleration.Enable,
 	}
 
 	wireguardConfig := &config.WireGuardConfig{
