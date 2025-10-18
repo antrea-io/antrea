@@ -208,6 +208,21 @@ rules:
     verbs:
       - update
   - apiGroups:
+      - crd.antrea.io
+    resources:
+      - flowexporterdestinations
+    verbs:
+      - get
+      - watch
+      - list
+  - apiGroups:
+      - crd.antrea.io
+    resources:
+      - flowexporterdestinations/status
+    verbs:
+      - update
+      - patch
+  - apiGroups:
       - k8s.cni.cncf.io
     resources:
       - network-attachment-definitions

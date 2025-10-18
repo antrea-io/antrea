@@ -549,3 +549,158 @@ type PacketCaptureCondition struct {
 	Reason             string                     `json:"reason"`
 	Message            string                     `json:"message"`
 }
+
+type FlowExporterTransportProtocol string
+
+const (
+	FlowExporterTransportTCP FlowExporterTransportProtocol = "tcp"
+	FlowExporterTransportUDP FlowExporterTransportProtocol = "udp"
+	FlowExporterTransportTLS FlowExporterTransportProtocol = "tls"
+)
+
+// +genclient
+// +genclient:nonNamespaced
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+
+// FlowExporterDestination is the Schema for the FlowExporterDestination API.
+type FlowExporterDestination struct {
+	metav1.TypeMeta `json:",inline"`
+	// +optional
+	metav1.ObjectMeta `json:"metadata,omitempty"`
+
+	// +required
+	Spec FlowExporterDestinationSpec `json:"spec,omitempty"`
+	// +optional
+	Status FlowExporterDestinationStatus `json:"status,omitempty"`
+}
+
+// FlowExporterDestinationSpec defines the desired state of a FlowExporterDestination.
+type FlowExporterDestinationSpec struct {
+	// The flow collector address including port as a string.
+	//
+	// Example:
+	// - flow-aggregator/flow-aggregator:14739
+	// - 10.244.10.10:4739
+	// +required
+	Address string `json:"address"`
+
+	// The protocol used to send flow details.
+	//
+	// Exactly one must be defined and non-nil.
+	// +required
+	Protocol FlowExporterProtocol `json:"protocol"`
+
+	// Filter criteria to select which flows to export.
+	// +optional
+	Filter *FlowExporterFilter `json:"filter,omitempty"`
+
+	// Provide the active flow export timeout, which is the timeout after which
+	// a flow record is sent to the collector for active flows.
+	//
+	// Valid time units are "ns", "us" (or "µs"), "ms", "s", "m", "h".
+	// +optional
+	ActiveFlowExportTimeout string `json:"activeFlowExportTimeout,omitempty"`
+
+	// Provide the idle flow export timeout, which is the timeout after which
+	// a flow record is sent to the collector for idle flows.
+	//
+	// Valid time units are "ns", "us" (or "µs"), "ms", "s", "m", "h".
+	// +optional
+	IdleFlowExportTimeout string `json:"idleFlowExportTimeout,omitempty"`
+}
+
+// FlowExporterProtocol defines the protocol used to send flow details.
+//
+// Exactly one of IPFIX or GRPC must be specified.
+type FlowExporterProtocol struct {
+	// Configuration for using IPFIX protocol.
+	// +optional
+	IPFIX *FlowExporterIPFIXConfig `json:"ipfix,omitempty"`
+
+	// Configuration for using gRPC protocol.
+	// +optional
+	GRPC *FlowExporterGRPCConfig `json:"grpc,omitempty"`
+}
+
+// FlowExporterIPFIXConfig defines configuration for exporting using the IPFIX protocol.
+type FlowExporterIPFIXConfig struct {
+	// Transport protocol to use for IPFIX.
+	//
+	// Supported values are "tcp", "udp", and "tls".
+	// +required
+	Transport FlowExporterTransportProtocol `json:"transport"`
+}
+
+// FlowExporterGRPCConfig defines configuration for exporting using the gRPC protocol.
+type FlowExporterGRPCConfig struct{}
+
+// FlowExporterFilter defines filtering criteria for exported flows.
+type FlowExporterFilter struct {
+	// Filter for only flows whose protocol matches this filter.
+	//
+	// The default is to accept all protocols if unset or nil.
+	//
+	// Supported values are [tcp, udp, icmp, sctp].
+	// +optional
+	Protocols []string `json:"protocols,omitempty"`
+}
+
+// FlowExporterDestinationStatus defines the observed state of a FlowExporterDestination.
+type FlowExporterDestinationStatus struct {
+	// The most recent generation observed by the controller.
+	// +optional
+	ObservedGeneration int64 `json:"observedGeneration,omitempty"`
+
+	// The protocol that was selected by the controller.
+	// +optional
+	SelectedProtocol string `json:"selectedProtocol,omitempty"`
+
+	// The total number of flow records exported.
+	// +optional
+	RecordsExported int64 `json:"recordsExported,omitempty"`
+
+	// Current conditions of the FlowExporterDestination.
+	// +optional
+	Conditions []FlowExporterDestinationCondition `json:"conditions,omitempty"`
+}
+
+type FlowExporterConditionType string
+
+const (
+	// FlowExporterConnected reports whether the exporter has connected successfully
+	FlowExporterConnected FlowExporterConditionType = "Connected"
+)
+
+// FlowExporterDestinationCondition describes the state of a FlowExporterDestination at a certain point.
+type FlowExporterDestinationCondition struct {
+	// Type of the condition.
+	// +optional
+	Type FlowExporterConditionType `json:"type,omitempty"`
+
+	// Status of the condition.
+	// +optional
+	Status string `json:"status,omitempty"`
+
+	// Last time the condition transitioned from one status to another.
+	// +optional
+	LastTransitionTime metav1.Time `json:"lastTransitionTime,omitempty"`
+
+	// The reason for the condition's last transition.
+	// +optional
+	Reason string `json:"reason,omitempty"`
+
+	// A human-readable message indicating details about the transition.
+	// +optional
+	Message string `json:"message,omitempty"`
+}
+
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+
+// FlowExporterDestinationList contains a list of FlowExporterDestination resources.
+type FlowExporterDestinationList struct {
+	metav1.TypeMeta `json:",inline"`
+	// +optional
+	metav1.ListMeta `json:"metadata,omitempty"`
+
+	Items []FlowExporterDestination `json:"items"`
+}
