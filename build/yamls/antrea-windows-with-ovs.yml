@@ -131,15 +131,6 @@ data:
   antrea-agent.conf: |
     # FeatureGates is a map of feature names to bools that enable or disable experimental features.
     featureGates:
-    # Enable antrea proxy which provides ServiceLB for in-cluster services in antrea agent.
-    # It should be enabled on Windows, otherwise NetworkPolicy will not take effect on
-    # Service traffic. Note that this feature gate is deprecated since this feature was
-    # promoted to GA in v1.14.
-    #  AntreaProxy: true
-
-    # Enable NodePortLocal feature to make the Pods reachable externally through NodePort
-    #  NodePortLocal: true
-
     # Enable flowexporter which exports polled conntrack connections as IPFIX flow records from each agent to a configured collector.
     #  FlowExporter: false
 
@@ -275,7 +266,7 @@ spec:
     metadata:
       annotations:
         checksum/agent-windows: 4a8b62e6d8076e1792f4a0a880a806016eb6991994c7cc63ac71bcf5bb2f9432
-        checksum/windows-config: 985f1ad21792b310a890e71b57dc258d8a1f5241260989b814c3b93910607afd
+        checksum/windows-config: 8de6c7d02c73254e5a28d09aa0e3708cb7800b390222db422cac63a562146999
         microsoft.com/hostprocess-inherit-user: "true"
       labels:
         app: antrea

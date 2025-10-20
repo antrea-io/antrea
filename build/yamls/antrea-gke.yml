@@ -4027,12 +4027,6 @@ data:
     # AllBeta is a global toggle for beta features. Per-feature key values override the default set by AllBeta.
     #  AllBeta: false
 
-    # Enable AntreaProxy which provides ServiceLB for in-cluster Services in antrea-agent.
-    # It should be enabled on Windows, otherwise NetworkPolicy will not take effect on
-    # Service traffic. Note that this feature gate is deprecated since this feature was
-    # promoted to GA in v1.14.
-    #  AntreaProxy: true
-
     # Enable support for cleaning up stale UDP Service conntrack connections in AntreaProxy. This requires AntreaProxy to
     # be enabled, otherwise this flag will not take effect.
     #  CleanupStaleUDPSvcConntrack: true
@@ -4042,9 +4036,6 @@ data:
 
     # Enable PacketCapture feature which supports capturing packets to diagnose network issues.
     #  PacketCapture: false
-
-    # Enable NodePortLocal feature to make the Pods reachable externally through NodePort
-    #  NodePortLocal: true
 
     # Enable Antrea ClusterNetworkPolicy feature to complement K8s NetworkPolicy for cluster admins
     # to define security policies which apply to the entire cluster, and Antrea NetworkPolicy
@@ -5498,7 +5489,7 @@ spec:
         kubectl.kubernetes.io/default-container: antrea-agent
         # Automatically restart Pods with a RollingUpdate if the ConfigMap changes
         # See https://helm.sh/docs/howto/charts_tips_and_tricks/#automatically-roll-deployments
-        checksum/config: baf8ba7d5877b2dc0c9e0c6215026c8364d9ecdca686fc1aa8fd3a32982b7fb0
+        checksum/config: 0fc81a765939ed017c8de4544840a42979866447edb87d126498653f4dc5d8af
       labels:
         app: antrea
         component: antrea-agent
@@ -5744,7 +5735,7 @@ spec:
       annotations:
         # Automatically restart Pod if the ConfigMap changes
         # See https://helm.sh/docs/howto/charts_tips_and_tricks/#automatically-roll-deployments
-        checksum/config: baf8ba7d5877b2dc0c9e0c6215026c8364d9ecdca686fc1aa8fd3a32982b7fb0
+        checksum/config: 0fc81a765939ed017c8de4544840a42979866447edb87d126498653f4dc5d8af
       labels:
         app: antrea
         component: antrea-controller

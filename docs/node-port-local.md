@@ -28,15 +28,13 @@ directly to backend Pods.
 ## Prerequisites
 
 NodePortLocal was introduced in v0.13 as an alpha feature, and was graduated to
-beta in v1.4, at which time it was enabled by default. Prior to v1.4, a feature
-gate, `NodePortLocal`, must be enabled on the antrea-agent for the feature to
-work. Starting from Antrea v1.7, NPL is supported on the Windows antrea-agent.
-From Antrea v1.14, NPL is GA.
+beta in v1.4, at which time it was enabled by default. Starting from Antrea v1.7,
+NPL is supported on the Windows antrea-agent. From Antrea v1.14, NPL is GA.
 
 ## Usage
 
-In addition to enabling the NodePortLocal feature gate (if needed), you need to
-ensure that the `nodePortLocal.enable` flag is set to true in the Antrea Agent
+To enable the NodePortLocal, you need to ensure that the `nodePortLocal.enable`
+flag is set to true in the Antrea Agent
 configuration. The `nodePortLocal.portRange` parameter can also be set to change
 the range from which Node ports will be allocated. Otherwise, the range
 of `61000-62000` will be used by default on Linux, and the range `40000-41000` will
@@ -51,9 +49,6 @@ metadata:
   namespace: kube-system
 data:
   antrea-agent.conf: |
-    featureGates:
-      # True by default starting with Antrea v1.4
-      # NodePortLocal: true
     nodePortLocal:
       enable: true
       # Uncomment if you need to change the port range.
@@ -104,7 +99,7 @@ spec:
         image: nginx
 ```
 
-If the NodePortLocal feature gate is enabled, then all the Pods in the
+If the `nodePortLocal.enable` flag is set to true, then all the Pods in the
 Deployment will be annotated with the `nodeportlocal.antrea.io` annotation. The
 value of this annotation is a serialized JSON array. In our example, a given Pod
 in the `nginx` Deployment may look like this:
