@@ -147,13 +147,13 @@ func (a *aggregationProcess) aggregateRecordByFlowKey(record *flowpb.Flow) error
 // the corresponding map used for correlation
 func (a *aggregationProcess) deleteKeyFromMap(pqItem *ItemToExpire) error {
 	if pqItem.isFromExternal {
-		return a.deleteFromIPPortMap(pqItem.flowRecord.Record)
+		return a.deleteFromFromExternalMap(pqItem.flowRecord.Record)
 	}
 	return a.deleteFlowKeyFromMapWithoutLock(*pqItem.flowKey)
 }
 
-func (a *aggregationProcess) deleteFromIPPortMap(record *flowpb.Flow) error {
-	key := generateIPPortMapKey(record)
+func (a *aggregationProcess) deleteFromFromExternalMap(record *flowpb.Flow) error {
+	key := generateFromExternalMapKey(record)
 	_, exists := a.FromExternalFlowMap[key]
 	if !exists {
 		return fmt.Errorf("key %v is not present in the IPPortMap", key)
@@ -400,7 +400,7 @@ func fromExternalCorrelationRequired(record *flowpb.Flow) bool {
 // Return a key unique to the given record composed of the ReplyDestinationAddress,
 // ReplyDestinationPort, destination IP and destination port to be used in FromExternalFlowMap
 // to correlate the sourceNode and destinationNode records that make up a FromExternal flow
-func generateIPPortMapKey(record *flowpb.Flow) string { //TODO rename function call
+func generateFromExternalMapKey(record *flowpb.Flow) string {
 	var gateway string
 	var gatewayPort string
 	if isSourceNodeRecord(record) {
@@ -457,7 +457,7 @@ func (a *aggregationProcess) addOrUpdateFromExternalRecord(flowKey *FlowKey, rec
 	//	return
 	//}
 
-	key := generateIPPortMapKey(record)
+	key := generateFromExternalMapKey(record)
 	stash, exists := a.FromExternalFlowMap[key]
 
 	stashSourceNodeRecord := func() {
