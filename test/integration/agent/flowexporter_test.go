@@ -201,6 +201,8 @@ func BenchmarkConntrackConnectionStorePoll(b *testing.B) {
 	// conntrack, so we can extrapolate easily.
 	const numConnections = 32768
 	const ctZone = openflow.CtZone
+	const otherCtZone = 100
+	require.NotEqual(b, ctZone, otherCtZone)
 	// Set the ConnSourceCTMarkField to localVal (3) to mark as from local Pods
 	// This ensures the connection passes the policyAllowed check
 	const ctMark = 0x3
@@ -222,40 +224,22 @@ func BenchmarkConntrackConnectionStorePoll(b *testing.B) {
 		require.NotEqualValues(b, ctZone, flow.Zone, "Expected no conntrack entries in Antrea zone")
 	}
 
-	// Create conntrack entries spread across multiple destination addresses
-	createdFlows := make([]conntrack.Flow, 0, numConnections)
-	srcAddr := netip.MustParseAddr("10.0.0.2")
-
-	b.Logf("Creating %d conntrack entries across multiple destination addresses...", numConnections)
-	for i := range numConnections {
-		// Calculate destination address: cycle through 10.0.0.100 through 10.0.0.199
-		// For 100 destinations (100-199), we cycle through them first
-		dstOctet := baseDstIPOctet + (i % numDstIPs)
-		dstAddr := netip.MustParseAddr(fmt.Sprintf("10.0.0.%d", dstOctet))
-
-		// Calculate source port: increment after cycling through all destinations
-		srcPort := uint16(baseSrcPort + (i / numDstIPs))
-		if srcPort < baseSrcPort { // Overflow check
-			require.Fail(b, "Too many connections created")
-		}
-
-		// Create TCP connection
+	getConnection := func(srcAddr, dstAddr netip.Addr, srcPort uint16, zone uint16, mark uint32) conntrack.Flow {
 		flow := conntrack.NewFlow(
 			6, // TCP protocol
 			0,
 			srcAddr,
 			dstAddr,
-			srcPort, // varying source port
-			80,      // destination port
-			3600,    // timeout
-			ctMark,  // mark - ConnSourceCTMarkField set to localVal
+			srcPort,
+			80,   // destination port
+			3600, // timeout
+			mark,
 		)
-		flow.Zone = ctZone
-
-		err := conn.Create(flow)
-		require.NoError(b, err, "Failed to create conntrack entry %d", i)
-		createdFlows = append(createdFlows, flow)
+		flow.Zone = zone
+		return flow
 	}
+
+	createdFlows := make([]conntrack.Flow, 0, 2*numConnections)
 
 	// Cleanup function to delete all created entries
 	cleanup := func() {
@@ -267,6 +251,41 @@ func BenchmarkConntrackConnectionStorePoll(b *testing.B) {
 		}
 	}
 	defer cleanup()
+
+	srcAddr := netip.MustParseAddr("10.0.0.2")
+	// Create conntrack entries spread across multiple destination addresses and ports
+	createConnections := func(num int, zone uint16, mark uint32) {
+		b.Logf("Creating %d conntrack entries across multiple destination addresses in zone %d with mark %x...", num, zone, mark)
+		for i := range num {
+			// Calculate destination address: cycle through 10.0.0.100 through 10.0.0.199
+			// For 100 destinations (100-199), we cycle through them first
+			dstOctet := baseDstIPOctet + (i % numDstIPs)
+			dstAddr := netip.MustParseAddr(fmt.Sprintf("10.0.0.%d", dstOctet))
+
+			// Calculate source port: increment after cycling through all destinations
+			srcPort := uint16(baseSrcPort + (i / numDstIPs))
+			if srcPort < baseSrcPort { // Overflow check
+				require.Fail(b, "Too many connections created")
+			}
+
+			flow := getConnection(
+				srcAddr,
+				dstAddr,
+				srcPort, // varying source port
+				zone,
+				mark,
+			)
+			require.NoError(b, conn.Create(flow), "Failed to create conntrack entry %d")
+			createdFlows = append(createdFlows, flow)
+		}
+	}
+
+	b.Logf("Creating target conntrack entries")
+	createConnections(numConnections, ctZone, ctMark) // mark - ConnSourceCTMarkField set to localVal
+	b.Logf("Creating other conntrack entries")
+	// These connections are not relevant to the FlowExporter, but are created to check how
+	// efficient we are at filtering out other connections.
+	createConnections(numConnections, otherCtZone, 0)
 
 	// Create fake Kubernetes client and PodStore
 	var fakePods []runtime.Object
