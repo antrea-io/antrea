@@ -433,6 +433,7 @@ func generateSourceNodeFlowAndFlowKey() (*flowpb.Flow, *FlowKey) {
 		ReverseStats: &flowpb.Stats{},
 		StartTs:      sourceNodeStart,
 		EndTs:        sourceNodeEnd,
+		Zone:         0,
 	}
 	sourceNodeFlowKey, _ := getFlowKeyFromRecord(sourceNodeRecord)
 	return sourceNodeRecord, sourceNodeFlowKey
@@ -458,6 +459,7 @@ func generateDestinationNodeFlowAndFlowKey() (*flowpb.Flow, *FlowKey) {
 		ReverseStats: &flowpb.Stats{},
 		StartTs:      destinationNodeStart,
 		EndTs:        destinationNodeEnd,
+		Zone:         65520,
 	}
 	destinationNodeFlowKey, _ := getFlowKeyFromRecord(destinationNodeRecord)
 	return destinationNodeRecord, destinationNodeFlowKey

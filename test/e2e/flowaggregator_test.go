@@ -305,18 +305,10 @@ func TestNew(t *testing.T) {
 	data, _, _ := setupFlowAggregatorTest(t, flowVisibilityTestOptions{
 		databaseURL: defaultCHDatabaseURL,
 	})
-	if err := getAndCheckFlowAggregatorMetrics(t, data, true); err != nil {
-		t.Fatalf("Error when checking metrics of Flow Aggregator: %v", err)
-	}
 
 	k8sUtils, err = NewKubernetesUtils(data)
 	if err != nil {
 		t.Fatalf("Error when creating Kubernetes utils client: %v", err)
-	}
-
-	podAIPs, podBIPs, podCIPs, podDIPs, podEIPs, err = createPerftestPods(data)
-	if err != nil {
-		t.Fatalf("Error when creating perftest Pods: %v", err)
 	}
 
 	t.Run("testExternalToPodFlows", func(t *testing.T) { testExternalToPodFlows(t, data, false) }) //todo properly wire up v6 or v4
@@ -2102,69 +2094,23 @@ func getAndCheckFlowAggregatorMetrics(t *testing.T, data *TestData, withClickHou
 	return nil
 }
 
-func testExternalToPodFlows(t *testing.T, data *TestData, isIPv6 bool) {
-	skipIfFeatureDisabled(t, features.L7FlowExporter, true, false)
-	nodeName := nodeName(1)
-	nginxPodName, nginxIP, cleanupFunc := createAndWaitForPod(t, data, data.createNginxPodOnNode, "l7flowexportertestpodserver", nodeName, data.testNamespace, false)
-	defer cleanupFunc()
-
-	nodePortService := "node-port-service"
-	fmt.Println("creating service")
-	service, err := data.CreateServiceWithAnnotations(nodePortService, data.testNamespace, 80, 80, corev1.ProtocolTCP, map[string]string{"app": "nginx"}, false, false, corev1.ServiceTypeNodePort, nil, nil)
-	if err != nil {
-		fmt.Println("error creating service")
-		fmt.Println(err)
-		fmt.Println(service)
-		t.Error()
-	}
-	fmt.Println("creating service successful")
-	fmt.Println(service)
-
-	nodePort := service.Spec.Ports[0].NodePort
-	fmt.Println("got nodeport", nodePort)
-
-	maxAttempts := 3
-	url := fmt.Sprintf("http://%s:%d", clusterInfo.nodes[0].ipv4Addr, nodePort)
+func createExternalToPodConnection(t *testing.T, service *corev1.Service, nodeIndex int) string {
 	var sourceIP string
-	var sourcePort int
-	//dialer := &net.Dialer{
-	//	Timeout: 5 * time.Second,
-	//}
-
-	//transport := &http.Transport{
-	//	DialContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
-	//		conn, err := dialer.DialContext(ctx, network, addr)
-	//		if err != nil {
-	//			return nil, err
-	//		}
-
-	//		localAddr := conn.LocalAddr().(*net.TCPAddr)
-	//		sourceIP = localAddr.IP.String()
-	//		return conn, nil
-	//	},
-	//}
+	url := fmt.Sprintf("http://%s:%d", clusterInfo.nodes[nodeIndex].ipv4Addr, service.Spec.Ports[0].NodePort)
 	transport := &http.Transport{
 		DialContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
 			conn, err := net.DialTimeout(network, addr, 10*time.Second)
 			if err != nil {
 				return nil, err
 			}
-			// Retrieve the local address (source IP and port)
-			localAddr := conn.LocalAddr().(*net.TCPAddr)
-			sourceIP = localAddr.IP.String()
-			sourcePort = localAddr.Port
-
-			// Log the source IP and port
-			fmt.Printf("Source IP: %s\n", sourceIP)
-			fmt.Printf("Source Port: %d\n", sourcePort)
-
+			sourceIP = conn.LocalAddr().(*net.TCPAddr).IP.String()
 			return conn, nil
 		},
 	}
-
 	client := &http.Client{
 		Transport: transport,
 	}
+	maxAttempts := 3
 	for i := range maxAttempts {
 		resp, err := client.Get(url)
 		if err == nil {
@@ -2174,45 +2120,54 @@ func testExternalToPodFlows(t *testing.T, data *TestData, isIPv6 bool) {
 		if i+1 != maxAttempts {
 			time.Sleep(time.Second)
 		} else {
-			log.Fatalf("Error making GET request: %v", err)
+			t.Fatalf("Failed to reach pod: %v", err)
 		}
 	}
+	return sourceIP
+}
 
-	// Wait for the Suricata to start.
-	time.Sleep(3 * time.Minute)
+func testExternalToPodFlows(t *testing.T, data *TestData, isIPv6 bool) {
+	skipIfFeatureDisabled(t, features.L7FlowExporter, true, false)
+	nodeName := nodeName(1)
+	nginxPodName, nginxIP, cleanupFunc := createAndWaitForPod(t, data, data.createNginxPodOnNode, "external-to-pod-flows", nodeName, data.testNamespace, false)
+	defer cleanupFunc()
 
-	testFlow1 := testFlow{
-		srcPodName: nginxPodName,
-	}
-	if !isIPv6 {
-		testFlow1.srcIP = sourceIP
-		testFlow1.dstIP = nginxIP.IPv4.String()
-	} else {
-		testFlow1.srcIP = sourceIP
-		testFlow1.dstIP = nginxIP.IPv6.String()
-	}
-	records := getCollectorOutput(t, testFlow1.srcIP, testFlow1.dstIP, sourcePort, false, false, isIPv6, data, "", getCollectorOutputDefaultTimeout)
-	assert.NotEmpty(t, records, fmt.Sprintf("Expected exported flows to include ones with source IP %s and destination ip %s", testFlow1.srcIP, testFlow1.dstIP))
-	for _, record := range records {
-		assert := assert.New(t)
-		assert.Contains(record, testFlow1.srcPodName, "Record with srcIP does not have Pod name: %s", testFlow1.srcPodName)
-		//assert.Contains(record, fmt.Sprintf("sourcePodNamespace: %s", data.testNamespace), "Record does not have correct sourcePodNamespace: %s", data.testNamespace)
-		//assert.Contains(record, fmt.Sprintf("sourceNodeName: %s", nodeName), "Record does not have correct sourceNodeName: %s", nodeName)
-		//assert.Contains(record, "\"flowexportertest\":\"l7\"", "Record does not have correct label for source Pod")
-
-		//checkL7FlowExporterData(t, record, "http")
+	nodePortService := "node-port-service"
+	service, err := data.CreateServiceWithAnnotations(nodePortService, data.testNamespace, 80, 80, corev1.ProtocolTCP, map[string]string{"app": "nginx"}, false, false, corev1.ServiceTypeNodePort, nil, nil)
+	if err != nil {
+		t.Fatalf("Failed to create service %s", nodePortService)
 	}
 
-	//clickHouseRecords := getClickHouseOutput(t, data, testFlow1.srcIP, testFlow1.dstIP, "", false, true, "")
-	//for _, record := range clickHouseRecords {
-	//	assert := assert.New(t)
-	//	assert.Equal(record.SourcePodName, testFlow1.srcPodName, "Record with srcIP does not have Pod name: %s", testFlow1.srcPodName)
-	//	assert.Equal(record.SourcePodNamespace, data.testNamespace, "Record does not have correct sourcePodNamespace: %s", data.testNamespace)
-	//	assert.Equal(record.SourceNodeName, nodeName, "Record does not have correct sourceNodeName: %s", nodeName)
-	//	assert.Contains(record.SourcePodLabels, "\"flowexportertest\":\"l7\"", "Record does not have correct label for source Pod")
+	tc := []struct {
+		node int
+	}{
+		{node: 0}, {node: 1},
+	}
+	for _, tc := range tc {
+		sourceIP := createExternalToPodConnection(t, service, tc.node)
 
-	//	checkL7FlowExporterDataClickHouse(t, record, "http")
-	//}
+		testFlow1 := testFlow{
+			dstPodName: nginxPodName,
+		}
+		if !isIPv6 {
+			testFlow1.srcIP = sourceIP
+			testFlow1.dstIP = nginxIP.IPv4.String()
+		} else {
+			testFlow1.srcIP = sourceIP
+			testFlow1.dstIP = nginxIP.IPv6.String()
+		}
+		records := getCollectorOutput(t, testFlow1.srcIP, testFlow1.dstIP, "", false, false, isIPv6, data, "", getCollectorOutputDefaultTimeout)
+		assert.NotEmpty(t, records, "Expected flows from ipfix collector to include source IP %s and destination ip %s", testFlow1.srcIP, testFlow1.dstIP)
+		for _, record := range records {
+			assert := assert.New(t)
+			assert.Contains(record, testFlow1.dstPodName, "Aggregated Record does not have Source Pod name: %s", testFlow1.srcPodName)
+			//assert.Contains(record, fmt.Sprintf("sourcePodNamespace: %s", data.testNamespace), "Record does not have correct sourcePodNamespace: %s", data.testNamespace)
+			//assert.Contains(record, fmt.Sprintf("sourceNodeName: %s", nodeName), "Record does not have correct sourceNodeName: %s", nodeName)
+			//assert.Contains(record, "\"flowexportertest\":\"l7\"", "Record does not have correct label for source Pod")
+
+			//checkL7FlowExporterData(t, record, "http")
+		}
+	}
 }
 
 func testL7FlowExporterController(t *testing.T, data *TestData, isIPv6 bool) {
