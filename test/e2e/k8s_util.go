@@ -210,22 +210,50 @@ func (k *KubernetesUtils) probe(
 		utils.ProtocolUDP:  "udp",
 		utils.ProtocolSCTP: "sctp",
 	}
-	cmd := ProbeCommand(fmt.Sprintf("%s:%d", dstAddr, port), protocolStr[protocol], "")
-	log.Tracef("Running: kubectl exec %s -c %s -n %s -- %s", pod.Name, containerName, pod.Namespace, strings.Join(cmd, " "))
-	stdout, stderr, err := k.RunCommandFromPod(pod.Namespace, pod.Name, containerName, cmd)
-	// It needs to check both err and stderr because:
-	// 1. The probe tried 3 times. If it checks err only, failure+failure+success would be considered connected.
-	// 2. There might be an issue in Pod exec API that it sometimes doesn't return error when the probe fails. See #2394.
-	var actualResult PodConnectivityMark
-	if err != nil || stderr != "" {
-		// If err != nil and stderr == "", then it means this probe failed because of
-		// the command instead of connectivity. For example, container name doesn't exist.
-		if stderr == "" {
-			actualResult = Error
+	// Helper function to perform a set of 3 probe attempts
+	performProbeSet := func() (PodConnectivityMark, string, string, error) {
+		cmd := ProbeCommand(fmt.Sprintf("%s:%d", dstAddr, port), protocolStr[protocol], "")
+		log.Tracef("Running: kubectl exec %s -c %s -n %s -- %s", pod.Name, containerName, pod.Namespace, strings.Join(cmd, " "))
+		stdout, stderr, err := k.RunCommandFromPod(pod.Namespace, pod.Name, containerName, cmd)
+
+		// It needs to check both err and stderr because:
+		// 1. The probe tried 3 times. If it checks err only, failure+failure+success would be considered connected.
+		// 2. There might be an issue in Pod exec API that it sometimes doesn't return error when the probe fails. See #2394.
+		var result PodConnectivityMark
+		if err != nil || stderr != "" {
+			// If err != nil and stderr == "", then it means this probe failed because of
+			// the command instead of connectivity. For example, container name doesn't exist.
+			if stderr == "" {
+				result = Error
+			} else {
+				result = DecideProbeResult(stderr, 3)
+			}
+		} else {
+			result = Connected
 		}
-		actualResult = DecideProbeResult(stderr, 3)
-	} else {
-		actualResult = Connected
+		return result, stdout, stderr, err
+	}
+
+	// First set of 3 probe attempts
+	actualResult, stdout, stderr, err := performProbeSet()
+
+	// If the first set resulted in Error (inconsistent results), perform a second set of 3 attempts
+	if actualResult == Error {
+		log.Tracef("%s -> %s: First probe set was inconsistent (Error), retrying...", podName, dstName)
+		retryResult, retryStdout, retryStderr, retryErr := performProbeSet()
+
+		// Use the second set result if it's not Error (consistent), otherwise log all results and return Error
+		if retryResult != Error {
+			actualResult, stdout, stderr, err = retryResult, retryStdout, retryStderr, retryErr
+			log.Tracef("%s -> %s: Second probe set was consistent, using result: %s", podName, dstName, actualResult)
+		} else {
+			// Both probe sets were inconsistent - log all 6 probe results and return Error
+			combinedStderr := "First set:\n" + stderr + "\nSecond set:\n" + retryStderr
+			log.Tracef("%s -> %s: Both probe sets were inconsistent: %s", podName, dstName, combinedStderr)
+			actualResult = Error
+			stderr = combinedStderr
+			err = retryErr
+		}
 	}
 	if expectedResult != nil && *expectedResult != actualResult {
 		log.Infof("%s -> %s: expected %s but got %s: err - %v /// stdout - %s /// stderr - %s", podName, dstName, *expectedResult, actualResult, err, stdout, stderr)
