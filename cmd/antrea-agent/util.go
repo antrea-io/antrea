@@ -20,10 +20,20 @@ import (
 	"strconv"
 	"strings"
 
+	clientset "k8s.io/client-go/kubernetes"
+	"k8s.io/klog/v2"
+
 	"antrea.io/antrea/pkg/agent/util"
+	k8sutil "antrea.io/antrea/pkg/util/k8s"
 )
 
-var getAllNodeAddresses = util.GetAllNodeAddresses
+var (
+	// Declared variables which are meant to be overridden for testing.
+	getAllNodeAddresses = util.GetAllNodeAddresses
+
+	getPodCIDRsFromKubeProxy = k8sutil.GetPodCIDRsFromKubeProxy
+	getPodCIDRsFromKubeadm   = k8sutil.GetPodCIDRsFromKubeadm
+)
 
 func getAvailableNodePortAddresses(nodePortAddressesFromConfig []string, excludeDevices []string) ([]net.IP, []net.IP, error) {
 	// Get all IP addresses of Node
@@ -78,4 +88,56 @@ func parsePortRange(portRangeStr string) (start, end int, err error) {
 	}
 
 	return start, end, nil
+}
+
+// getPodCIDRs gets the cluster-wide Pod CIDRs (IPv4 and IPv6) by attempting the following sources in order:
+// 1. Agent configuration if field `podCIDRs` is not empty.
+// 2. kube-proxy ConfigMap.
+// 3. kubeadm-config ConfigMap.
+func getPodCIDRs(o *Options, k8sClient clientset.Interface) ([]*net.IPNet, error) {
+	klog.V(2).InfoS("Trying to find Pod CIDRs from antrea-agent configuration")
+	podCIDRsStr := strings.TrimSpace(o.config.PodCIDRs)
+	if podCIDRsStr != "" {
+		return parseCIDRs(podCIDRsStr)
+	}
+	klog.V(2).InfoS("Field 'PodCIDRs' is not configured in antrea-agent configuration")
+
+	klog.V(2).InfoS("Trying to find Pod CIDRs from ConfigMap kube-proxy")
+	podCIDRsStr = getPodCIDRsFromKubeProxy(k8sClient)
+	cidrs, err := parseCIDRs(podCIDRsStr)
+	if err == nil {
+		return cidrs, nil
+	}
+	klog.V(2).InfoS("Failed to find ConfigMap Pod CIDRs from ConfigMap kube-proxy")
+
+	klog.V(2).InfoS("Trying to find Pod CIDRs from ConfigMap kubeadm-config")
+	podCIDRsStr = getPodCIDRsFromKubeadm(k8sClient)
+	cidrs, err = parseCIDRs(podCIDRsStr)
+	if err == nil {
+		return cidrs, nil
+	}
+	klog.V(2).InfoS("Failed to find ConfigMap Pod CIDRs from ConfigMap kubeadm-config")
+
+	return nil, nil
+}
+
+func parseCIDRs(s string) ([]*net.IPNet, error) {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return nil, fmt.Errorf("empty CIDR string")
+	}
+
+	var cidrs []*net.IPNet
+	for _, cidrStr := range strings.Split(s, ",") {
+		cidrStr = strings.TrimSpace(cidrStr)
+		if cidrStr == "" {
+			continue
+		}
+		_, cidr, err := net.ParseCIDR(cidrStr)
+		if err != nil {
+			return nil, fmt.Errorf("invalid CIDR %s: %w", cidrStr, err)
+		}
+		cidrs = append(cidrs, cidr)
+	}
+	return cidrs, nil
 }

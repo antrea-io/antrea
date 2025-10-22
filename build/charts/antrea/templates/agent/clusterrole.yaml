@@ -148,6 +148,17 @@ rules:
       - get
       - watch
       - list
+  {{- if eq .Values.trafficEncapMode "networkPolicyOnly" }}
+  - apiGroups:
+      - ""
+    resources:
+      - configmaps
+    resourceNames:
+      - kube-proxy
+      - kubeadm-config
+    verbs:
+      - get
+  {{- end }}
   - apiGroups:
       - crd.antrea.io
     resources:

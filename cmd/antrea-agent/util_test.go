@@ -20,8 +20,10 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	clientset "k8s.io/client-go/kubernetes"
 
 	"antrea.io/antrea/pkg/agent/util"
+	agentconfig "antrea.io/antrea/pkg/config/agent"
 )
 
 func TestGetAvailableNodePortAddresses(t *testing.T) {
@@ -119,6 +121,160 @@ func TestParsePortRange(t *testing.T) {
 			assert.Equal(t, tc.expectedStart, start)
 			assert.Equal(t, tc.expectedEnd, end)
 
+		})
+	}
+}
+
+func TestGetPodCIDRs(t *testing.T) {
+	type mockFns struct {
+		fromKubeProxy func(clientset.Interface) string
+		fromKubeadm   func(clientset.Interface) string
+	}
+
+	tests := []struct {
+		name          string
+		optionsCIDR   string
+		mocks         mockFns
+		expectedCIDRs []string
+		expectedErr   string
+	}{
+		{
+			name:          "CIDR from options config",
+			optionsCIDR:   "10.244.0.0/16,  fd00:10:244::/56",
+			expectedCIDRs: []string{"10.244.0.0/16", "fd00:10:244::/56"},
+		},
+		{
+			name:          "invalid CIDR from options config",
+			optionsCIDR:   "10.244.0.0/160",
+			expectedCIDRs: nil,
+			expectedErr:   "invalid CIDR 10.244.0.0/160",
+		},
+		{
+			name: "CIDR from kube-proxy ConfigMap fallback",
+			mocks: mockFns{
+				fromKubeProxy: func(_ clientset.Interface) string {
+					return "10.244.0.0/16"
+				},
+			},
+			expectedCIDRs: []string{"10.244.0.0/16"},
+		},
+		{
+			name: "CIDR from kubeadm-config fallback",
+			mocks: mockFns{
+				fromKubeProxy: func(_ clientset.Interface) string { return "" },
+				fromKubeadm: func(_ clientset.Interface) string {
+					return "fd00:10:244::/56"
+				},
+			},
+			expectedCIDRs: []string{"fd00:10:244::/56"},
+		},
+		{
+			name: "No CIDR found",
+			mocks: mockFns{
+				fromKubeProxy: func(_ clientset.Interface) string { return "" },
+				fromKubeadm:   func(_ clientset.Interface) string { return "" },
+			},
+			expectedCIDRs: nil,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			originFromKubeProxy := getPodCIDRsFromKubeProxy
+			originFromKubeadm := getPodCIDRsFromKubeadm
+			t.Cleanup(func() {
+				getPodCIDRsFromKubeProxy = originFromKubeProxy
+				getPodCIDRsFromKubeadm = originFromKubeadm
+			})
+			if tt.mocks.fromKubeProxy != nil {
+				getPodCIDRsFromKubeProxy = tt.mocks.fromKubeProxy
+			}
+			if tt.mocks.fromKubeadm != nil {
+				getPodCIDRsFromKubeadm = tt.mocks.fromKubeadm
+			}
+
+			o := &Options{
+				config: &agentconfig.AgentConfig{
+					PodCIDRs: tt.optionsCIDR,
+				},
+			}
+			got, err := getPodCIDRs(o, nil)
+			if tt.expectedErr != "" {
+				assert.ErrorContains(t, err, tt.expectedErr)
+			} else {
+				var gotCIDRs []string
+				for _, cidr := range got {
+					gotCIDRs = append(gotCIDRs, cidr.String())
+				}
+				assert.ElementsMatch(t, tt.expectedCIDRs, gotCIDRs)
+			}
+		})
+	}
+}
+
+func TestParseCIDRs(t *testing.T) {
+	testCases := []struct {
+		name          string
+		input         string
+		expectedCIDRs []string
+		expectedError string
+	}{
+		{
+			name:          "empty string",
+			input:         "",
+			expectedCIDRs: nil,
+			expectedError: "empty CIDR string",
+		},
+		{
+			name:          "only spaces",
+			input:         "   ",
+			expectedCIDRs: nil,
+			expectedError: "empty CIDR string",
+		},
+		{
+			name:          "single valid IPv4 CIDR",
+			input:         "10.244.0.0/16",
+			expectedCIDRs: []string{"10.244.0.0/16"},
+			expectedError: "",
+		},
+		{
+			name:          "multiple valid CIDRs with spaces",
+			input:         "10.0.0.0/8, 192.168.0.0/24 ,fd00::/64",
+			expectedCIDRs: []string{"10.0.0.0/8", "192.168.0.0/24", "fd00::/64"},
+			expectedError: "",
+		},
+		{
+			name:          "contains invalid CIDR",
+			input:         "10.1.0.0/16,invalid,fd00::/64",
+			expectedCIDRs: nil,
+			expectedError: "invalid CIDR",
+		},
+		{
+			name:          "all invalid CIDRs",
+			input:         "bad1,bad2",
+			expectedCIDRs: []string{},
+			expectedError: "invalid CIDR",
+		},
+		{
+			name:          "trailing and leading commas",
+			input:         ",10.244.0.0/16,",
+			expectedCIDRs: []string{"10.244.0.0/16"},
+			expectedError: "",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := parseCIDRs(tc.input)
+			if tc.expectedError != "" {
+				assert.ErrorContains(t, err, tc.expectedError)
+			} else {
+				var gotStrs []string
+				for _, cidr := range got {
+					gotStrs = append(gotStrs, cidr.String())
+				}
+				assert.ElementsMatch(t, tc.expectedCIDRs, gotStrs)
+			}
 		})
 	}
 }

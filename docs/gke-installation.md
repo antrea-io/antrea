@@ -27,6 +27,23 @@ on both VPC-native Enable/Disable modes.
     gcloud projects create $GKE_PROJECT
     ```
 
+Starting with Antrea v2.5.0, it is recommended to configure `podCIDRs` field in the `antrea-agent.conf` section of the
+ConfigMap `antrea-config` with the **cluster-wide aggregated Pod CIDR** (not the per-Node Pod CIDRs). This configuration
+ensures that `Antrea Traceflow` functions correctly for all scenarios.
+
+For example, if the cluster uses Pod CIDR `10.10.0.0/16` and IPv6 Pod CIDR `fd00::/12`, edit the ConfigMap as follows:
+
+```yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: antrea-config
+  namespace: kube-system
+data:
+  antrea-agent.conf: |
+    podCIDRs: "10.10.0.0/16,fd00::/12"
+```
+
 ## Creating the cluster
 
 You can use any method to create a GKE cluster (gcloud SDK, gcloud Console, etc). The example

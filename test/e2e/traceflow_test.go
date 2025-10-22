@@ -382,6 +382,12 @@ func testTraceflowIntraNode(t *testing.T, data *TestData) {
 	// default Ubuntu ping packet properties.
 	expectedLength := int32(84)
 	expectedTTL := int32(64)
+	currentEncapMode, _ := data.GetEncapMode()
+	if currentEncapMode.IsNetworkPolicyOnly() {
+		// In networkPolicyOnly mode, intra-Node Pod-to-Pod traffic must be forwarded via antrea-gw0, which acts as an
+		// additional hop.
+		expectedTTL = int32(63)
+	}
 	expectedFlags := int32(2)
 	if len(clusterInfo.windowsNodes) != 0 {
 		// default Windows ping packet properties.
@@ -1011,7 +1017,9 @@ func testTraceflowIntraNode(t *testing.T, data *TestData) {
 		},
 	}
 
-	if gwIPv4Str != "" {
+	// When traffic mode is networkPolicyOnly, only the cluster Pod CIDR can be known to Antrea, the antrea-gw0 IP of every
+	// Node is unknown to Antrea. As a result, skip the test.
+	if gwIPv4Str != "" && !currentEncapMode.IsNetworkPolicyOnly() {
 		testcases = append(testcases, testcase{
 			name:      "localGatewayDestinationIPv4",
 			ipVersion: 4,
@@ -1061,7 +1069,9 @@ func testTraceflowIntraNode(t *testing.T, data *TestData) {
 		})
 	}
 
-	if gwIPv6Str != "" {
+	// When traffic mode is networkPolicyOnly, only the cluster Pod CIDR can be known to Antrea, the antrea-gw0 IP of every
+	// Node is unknown to Antrea. As a result, skip the test.
+	if gwIPv6Str != "" && !currentEncapMode.IsNetworkPolicyOnly() {
 		testcases = append(testcases, testcase{
 			name:      "localGatewayDestinationIPv6",
 			ipVersion: 6,
@@ -2046,12 +2056,18 @@ func testTraceflowInterNode(t *testing.T, data *TestData) {
 }
 
 func testTraceflowExternalIP(t *testing.T, data *TestData) {
+	skipIfNumNodesLessThan(t, 2)
+
 	nodeIdx := 0
+	targetNodeIdx := 1
 	if len(clusterInfo.windowsNodes) != 0 {
+		skipIfEncapModeIs(t, data, config.TrafficEncapModeNetworkPolicyOnly)
 		nodeIdx = clusterInfo.windowsNodes[0]
+		targetNodeIdx = nodeIdx
 	}
+
 	node := nodeName(nodeIdx)
-	nodeIP := nodeIP(nodeIdx)
+	targetIP := nodeIP(targetNodeIdx)
 	podNames, podIPs, cleanupFn := createTestAgnhostPods(t, data, 1, data.testNamespace, node)
 	defer cleanupFn()
 	// Give a little time for Windows containerd Nodes to setup OVS.
@@ -2063,18 +2079,12 @@ func testTraceflowExternalIP(t *testing.T, data *TestData) {
 	} else {
 		srcPodIP = podIPs[0].IPv6.String()
 	}
-	expectOutputAction := v1beta1.ActionForwardedOutOfOverlay
-	currentEncapMode, err := data.GetEncapMode()
-	require.NoError(t, err, "Failed to get encap mode")
-	if currentEncapMode == config.TrafficEncapModeNoEncap {
-		expectOutputAction = v1beta1.ActionForwardedOutOfNetwork
-	}
 	testcase := testcase{
 		name:      "nodeIPDestination",
 		ipVersion: 4,
 		tf: &v1beta1.Traceflow{
 			ObjectMeta: metav1.ObjectMeta{
-				Name: randName(fmt.Sprintf("%s-%s-to-%s-%s-", data.testNamespace, podNames[0], data.testNamespace, strings.ReplaceAll(nodeIP, ":", "--"))),
+				Name: randName(fmt.Sprintf("%s-%s-to-%s-%s-", data.testNamespace, podNames[0], data.testNamespace, strings.ReplaceAll(targetIP, ":", "--"))),
 			},
 			Spec: v1beta1.TraceflowSpec{
 				Source: v1beta1.Source{
@@ -2082,7 +2092,7 @@ func testTraceflowExternalIP(t *testing.T, data *TestData) {
 					Pod:       podNames[0],
 				},
 				Destination: v1beta1.Destination{
-					IP: nodeIP,
+					IP: targetIP,
 				},
 				Packet: v1beta1.Packet{
 					IPHeader: &v1beta1.IPHeader{
@@ -2104,7 +2114,7 @@ func testTraceflowExternalIP(t *testing.T, data *TestData) {
 					{
 						Component:     v1beta1.ComponentForwarding,
 						ComponentInfo: "Output",
-						Action:        expectOutputAction,
+						Action:        v1beta1.ActionForwardedOutOfNetwork,
 					},
 				},
 			},
@@ -2181,7 +2191,7 @@ func testTraceflowEgress(t *testing.T, data *TestData) {
 					{
 						Component:     v1beta1.ComponentForwarding,
 						ComponentInfo: "Output",
-						Action:        v1beta1.ActionForwardedOutOfOverlay,
+						Action:        v1beta1.ActionForwardedOutOfNetwork,
 					},
 				},
 			},
@@ -2278,7 +2288,7 @@ func testTraceflowEgress(t *testing.T, data *TestData) {
 					{
 						Component:     v1beta1.ComponentForwarding,
 						ComponentInfo: "Output",
-						Action:        v1beta1.ActionForwardedOutOfOverlay,
+						Action:        v1beta1.ActionForwardedOutOfNetwork,
 					},
 				},
 			},
