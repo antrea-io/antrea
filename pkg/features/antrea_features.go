@@ -46,11 +46,13 @@ const (
 
 	// alpha: v1.8
 	// beta: v1.12
+	// GA: v2.5
 	// Enable TopologyAwareHints in AntreaProxy. If EndpointSlice is not enabled, this
 	// flag will not take effect.
 	TopologyAwareHints featuregate.Feature = "TopologyAwareHints"
 
 	// beta: v2.2
+	// GA: v2.5
 	// Enables trafficDistribution in AntreaProxy. If EndpointSlice is not enabled, this
 	// flag will not take effect.
 	ServiceTrafficDistribution featuregate.Feature = "ServiceTrafficDistribution"
@@ -198,8 +200,8 @@ var (
 		BGPPolicy:                   {Default: false, PreRelease: featuregate.Alpha},
 		Egress:                      {Default: true, PreRelease: featuregate.Beta},
 		EndpointSlice:               {Default: true, PreRelease: featuregate.GA},
-		TopologyAwareHints:          {Default: true, PreRelease: featuregate.Beta},
-		ServiceTrafficDistribution:  {Default: true, PreRelease: featuregate.Beta},
+		TopologyAwareHints:          {Default: true, PreRelease: featuregate.GA},
+		ServiceTrafficDistribution:  {Default: true, PreRelease: featuregate.GA},
 		CleanupStaleUDPSvcConntrack: {Default: true, PreRelease: featuregate.Beta},
 		Traceflow:                   {Default: true, PreRelease: featuregate.Beta},
 		PacketCapture:               {Default: false, PreRelease: featuregate.Alpha},
