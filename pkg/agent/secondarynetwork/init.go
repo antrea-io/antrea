@@ -27,6 +27,7 @@ import (
 	"antrea.io/antrea/pkg/agent/config"
 	"antrea.io/antrea/pkg/agent/interfacestore"
 	"antrea.io/antrea/pkg/agent/secondarynetwork/podwatch"
+	crdlisters "antrea.io/antrea/pkg/client/listers/crd/v1beta1"
 	agentconfig "antrea.io/antrea/pkg/config/agent"
 	"antrea.io/antrea/pkg/ovs/ovsconfig"
 	"antrea.io/antrea/pkg/util/channel"
@@ -52,6 +53,7 @@ func NewController(
 	primaryInterfaceStore interfacestore.InterfaceStore,
 	nodeConfig *config.NodeConfig,
 	secNetConfig *agentconfig.SecondaryNetworkConfig, ovsdb *ovsdb.OVSDB,
+	ipPoolLister crdlisters.IPPoolLister,
 ) (*Controller, error) {
 	ovsBridgeClient, err := createOVSBridge(secNetConfig.OVSBridges, ovsdb)
 	if err != nil {
@@ -69,7 +71,7 @@ func NewController(
 	// k8s.v1.cni.cncf.io/networks Annotation defined.
 	podWatchController, err := podwatch.NewPodController(
 		k8sClient, netAttachDefClient, podInformer,
-		podUpdateSubscriber, primaryInterfaceStore, nodeConfig, ovsBridgeClient)
+		podUpdateSubscriber, primaryInterfaceStore, nodeConfig, ovsBridgeClient, ipPoolLister)
 	if err != nil {
 		return nil, err
 	}
