@@ -29,6 +29,7 @@ import (
 	netdefutils "github.com/k8snetworkplumbingwg/network-attachment-definition-client/pkg/utils"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/util/wait"
 	clientset "k8s.io/client-go/kubernetes"
@@ -45,6 +46,7 @@ import (
 	"antrea.io/antrea/pkg/agent/interfacestore"
 	"antrea.io/antrea/pkg/agent/types"
 	crdv1b1 "antrea.io/antrea/pkg/apis/crd/v1beta1"
+	crdlisters "antrea.io/antrea/pkg/client/listers/crd/v1beta1"
 	"antrea.io/antrea/pkg/ovs/ovsconfig"
 	"antrea.io/antrea/pkg/util/channel"
 )
@@ -90,6 +92,7 @@ type PodController struct {
 	queue                 workqueue.TypedRateLimitingInterface[string]
 	podInformer           cache.SharedIndexInformer
 	podLister             corelisters.PodLister
+	ipPoolLister          crdlisters.IPPoolLister
 	podUpdateSubscriber   channel.Subscriber
 	ovsBridgeClient       ovsconfig.OVSBridgeClient
 	interfaceStore        interfacestore.InterfaceStore
@@ -110,6 +113,7 @@ func NewPodController(
 	primaryInterfaceStore interfacestore.InterfaceStore,
 	nodeConfig *config.NodeConfig,
 	ovsBridgeClient ovsconfig.OVSBridgeClient,
+	ipPoolLister crdlisters.IPPoolLister,
 ) (*PodController, error) {
 	ifaceStore := interfacestore.NewInterfaceStore()
 	interfaceConfigurator, err := cniserver.NewSecondaryInterfaceConfigurator(ovsBridgeClient, ifaceStore)
@@ -128,6 +132,7 @@ func NewPodController(
 		),
 		podInformer:           podInformer,
 		podLister:             podLister,
+		ipPoolLister:          ipPoolLister,
 		podUpdateSubscriber:   podUpdateSubscriber,
 		ovsBridgeClient:       ovsBridgeClient,
 		interfaceStore:        ifaceStore,
@@ -669,11 +674,14 @@ func (pc *PodController) Run(stopCh <-chan struct{}) {
 		klog.ErrorS(err, "Failed to initialize secondary interface store for SR-IOV devices")
 		return
 	}
+
+	pc.cleanupStaleAddresses()
 	pc.reconcileSecondaryInterfaces()
 
 	for i := 0; i < numWorkers; i++ {
 		go wait.Until(pc.Worker, time.Second, stopCh)
 	}
+
 	<-stopCh
 }
 
@@ -684,6 +692,39 @@ func checkForPodSecondaryNetworkAttachment(pod *corev1.Pod) (string, bool) {
 	}
 	netObj, netObjExists := annotations[netdefv1.NetworkAttachmentAnnot]
 	return netObj, netObjExists && netObj != ""
+}
+
+func (pc *PodController) isLocalPod(namespace, name string) bool {
+	_, err := pc.podLister.Pods(namespace).Get(name)
+	return err == nil
+}
+
+func (pc *PodController) localContainerIDs() sets.Set[string] {
+	validContainerIDs := sets.Set[string]{}
+	storedSecondaryInterfaces := pc.interfaceStore.GetInterfacesByType(interfacestore.ContainerInterface)
+	for _, interfaceConfig := range storedSecondaryInterfaces {
+		validContainerIDs.Insert(interfaceConfig.ContainerID)
+	}
+	return validContainerIDs
+}
+
+func (pc *PodController) cleanupStaleAddresses() {
+	pools, _ := pc.ipPoolLister.List(labels.Everything())
+	localContainerIDs := pc.localContainerIDs()
+	for _, ipPool := range pools {
+		for _, address := range ipPool.Status.IPAddresses {
+			if pc.isLocalPod(address.Owner.Pod.Namespace, address.Owner.Pod.Name) {
+				if !localContainerIDs.Has(address.Owner.Pod.ContainerID) {
+					stalePodOwner := address.Owner.Pod
+					klog.V(2).InfoS("Releasing stale IPAM allocation", "Pod", klog.KRef(stalePodOwner.Namespace, stalePodOwner.Name), "containerID", stalePodOwner.ContainerID, "interface", stalePodOwner.IFName)
+					if err := pc.ipamAllocator.SecondaryNetworkRelease(stalePodOwner); err != nil {
+						klog.ErrorS(err, "Error when releasing IPAM allocation",
+							"Pod", klog.KRef(stalePodOwner.Namespace, stalePodOwner.Name), "interface", stalePodOwner.IFName)
+					}
+				}
+			}
+		}
+	}
 }
 
 func (pc *PodController) initializeCNICache() {
