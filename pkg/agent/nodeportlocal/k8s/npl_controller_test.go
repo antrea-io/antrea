@@ -15,7 +15,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package nodeportlocal
+package k8s
 
 import (
 	"context"
@@ -39,7 +39,6 @@ import (
 	k8sfake "k8s.io/client-go/kubernetes/fake"
 	"k8s.io/client-go/tools/cache"
 
-	"antrea.io/antrea/pkg/agent/nodeportlocal/k8s"
 	"antrea.io/antrea/pkg/agent/nodeportlocal/portcache"
 	portcachetesting "antrea.io/antrea/pkg/agent/nodeportlocal/portcache/testing"
 	"antrea.io/antrea/pkg/agent/nodeportlocal/rules"
@@ -176,19 +175,20 @@ func getTestSvcWithPortName(portName string) *corev1.Service {
 
 type testData struct {
 	*testing.T
-	stopCh      chan struct{}
-	ctrl        *gomock.Controller
-	k8sClient   *k8sfake.Clientset
-	portTable   *portcache.PortTable
-	svcInformer cache.SharedIndexInformer
-	wg          sync.WaitGroup
+	stopCh        chan struct{}
+	ctrl          *gomock.Controller
+	k8sClient     *k8sfake.Clientset
+	portTable     *portcache.PortTable
+	svcInformer   cache.SharedIndexInformer
+	nplController *NPLController
+	wg            sync.WaitGroup
 }
 
-func (t *testData) runWrapper(c *k8s.NPLController) {
+func (t *testData) runWrapper() {
 	t.wg.Add(1)
 	go func() {
 		defer t.wg.Done()
-		c.Run(t.stopCh)
+		t.nplController.Run(t.stopCh)
 	}()
 }
 
@@ -196,6 +196,7 @@ type customizePortOpenerExpectations func(*portcachetesting.MockLocalPortOpener)
 type customizePodPortRulesExpectations func(*rulestesting.MockPodPortRules)
 
 type testConfig struct {
+	skipRun                        bool
 	customPortOpenerExpectations   customizePortOpenerExpectations
 	customPodPortRulesExpectations customizePodPortRulesExpectations
 }
@@ -214,6 +215,11 @@ func (tc *testConfig) withCustomPodPortRulesExpectations(fn customizePodPortRule
 	return tc
 }
 
+func (tc *testConfig) withoutRun() *testConfig {
+	tc.skipRun = true
+	return tc
+}
+
 func setUp(t *testing.T, tc *testConfig, objects ...runtime.Object) *testData {
 	t.Setenv("NODE_NAME", defaultNodeName)
 
@@ -223,9 +229,25 @@ func setUp(t *testing.T, tc *testConfig, objects ...runtime.Object) *testData {
 	if tc.customPodPortRulesExpectations != nil {
 		tc.customPodPortRulesExpectations(mockIPTables)
 	} else {
-		mockIPTables.EXPECT().AddRule(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
+		mockIPTables.EXPECT().AddRule(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes().DoAndReturn(
+			func(nodePort int, podIP string, podPort int, protocol string) error {
+				if nodePort == 0 || podIP == "" || podPort == 0 || protocol == "" {
+					return fmt.Errorf("invalid argument to AddRule")
+				}
+				return nil
+			},
+		)
 		mockIPTables.EXPECT().DeleteRule(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
-		mockIPTables.EXPECT().AddAllRules(gomock.Any()).AnyTimes()
+		mockIPTables.EXPECT().AddAllRules(gomock.Any()).AnyTimes().DoAndReturn(
+			func(nplList []rules.PodNodePort) error {
+				for _, nplData := range nplList {
+					if nplData.NodePort == 0 || nplData.PodIP == "" || nplData.PodPort == 0 || nplData.Protocol == "" {
+						return fmt.Errorf("invalid entry in nplList argument to AddAllRules: %+v", nplData)
+					}
+				}
+				return nil
+			},
+		)
 	}
 
 	mockPortOpener := portcachetesting.NewMockLocalPortOpener(mockCtrl)
@@ -254,18 +276,21 @@ func setUp(t *testing.T, tc *testConfig, objects ...runtime.Object) *testData {
 	)
 	svcInformer := informerFactory.Core().V1().Services().Informer()
 
-	c := k8s.NewNPLController(k8sClient, localPodInformer, svcInformer, portTable, defaultNodeName)
+	c := NewNPLController(k8sClient, localPodInformer, svcInformer, portTable, defaultNodeName)
 
 	data := &testData{
-		T:           t,
-		stopCh:      make(chan struct{}),
-		ctrl:        mockCtrl,
-		k8sClient:   k8sClient,
-		portTable:   portTable,
-		svcInformer: svcInformer,
+		T:             t,
+		stopCh:        make(chan struct{}),
+		ctrl:          mockCtrl,
+		k8sClient:     k8sClient,
+		portTable:     portTable,
+		svcInformer:   svcInformer,
+		nplController: c,
 	}
 
-	data.runWrapper(c)
+	if !tc.skipRun {
+		data.runWrapper()
+	}
 	informerFactory.Start(data.stopCh)
 	go localPodInformer.Run(data.stopCh)
 
@@ -828,18 +853,131 @@ func TestMultipleServicesSameBackendPod(t *testing.T) {
 	assert.True(t, testData.portTable.RuleExists(defaultPodKey, 9090, protocolTCP))
 }
 
-// TestInitInvalidPod simulates an agent reboot case. A Pod with an invalid NPL annotation is
-// added, this invalid annotation should get cleaned up. And a proper NPL annotation should get
-// added.
-func TestInitInvalidPod(t *testing.T) {
+// TestInitInvalidAnnotation simulates the case where the agent reboots and for some reason an NPL
+// annotation is invalid. The annotation should eventually be replaced by a valid one.
+func TestInitInvalidAnnotation(t *testing.T) {
 	testSvc := getTestSvc()
 	testPod := getTestPod()
-	// assign an invalid annotation
-	annotations := map[string]string{
-		types.NPLAnnotationKey: "[{\"podPort\":53,\"nodeIP\":\"10.10.10.10\", \"nodePort\": 30000}]",
+	testPod.Annotations = map[string]string{
+		types.NPLAnnotationKey: "",
 	}
-	testPod.SetAnnotations(annotations)
-	testData := setUp(t, newTestConfig(), testSvc, testPod)
+	testConfig := newTestConfig().withCustomPodPortRulesExpectations(func(mockIPTables *rulestesting.MockPodPortRules) {
+		// No initial rule should be synced.
+		mockIPTables.EXPECT().AddAllRules(gomock.Len(0)).Return(nil)
+		mockIPTables.EXPECT().AddRule(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any())
+	})
+	testData := setUp(t, testConfig, testSvc, testPod)
+	defer testData.tearDown()
+
+	value, err := testData.pollForPodAnnotation(testPod.Name, true)
+	require.NoError(t, err, "Poll for annotation check failed")
+	expectedAnnotations := newExpectedNPLAnnotations().Add(nil, defaultPort, protocolTCP)
+	expectedAnnotations.Check(t, value)
+	assert.True(t, testData.portTable.RuleExists(defaultPodKey, defaultPort, protocolTCP))
+}
+
+// TestInitNodePortOutOfRange simulates the case where the agent reboots and the NPL port range has
+// changed. The existing NPL annotation should be replaced by one with a valid NodePort (i.e., with
+// a value in the new range) and the correct rule should be installed.
+func TestInitNodePortOutOfRange(t *testing.T) {
+	testSvc := getTestSvc()
+	testPod := getTestPod()
+	nplAnnotation := []types.NPLAnnotation{
+		{
+			PodPort:  defaultPort,
+			NodeIP:   defaultHostIP,
+			NodePort: 30000,
+			Protocol: protocolTCP,
+		},
+	}
+	nplAnnotationBytes, err := json.Marshal(nplAnnotation)
+	require.NoError(t, err)
+	testPod.Annotations = map[string]string{
+		types.NPLAnnotationKey: string(nplAnnotationBytes),
+	}
+	testConfig := newTestConfig().withCustomPodPortRulesExpectations(func(mockIPTables *rulestesting.MockPodPortRules) {
+		// No initial rule should be synced.
+		mockIPTables.EXPECT().AddAllRules(gomock.Len(0)).Return(nil)
+		mockIPTables.EXPECT().AddRule(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any())
+	})
+	testData := setUp(t, testConfig, testSvc, testPod)
+	defer testData.tearDown()
+
+	value, err := testData.pollForPodAnnotation(testPod.Name, true)
+	require.NoError(t, err, "Poll for annotation check failed")
+	expectedAnnotations := newExpectedNPLAnnotations().Add(nil, defaultPort, protocolTCP)
+	expectedAnnotations.Check(t, value)
+	assert.True(t, testData.portTable.RuleExists(defaultPodKey, defaultPort, protocolTCP))
+}
+
+// TestInitMissingPodIP simulates the case where the agent reboots and one Pod has an existing NPL
+// annotation but is mising its Pod IP. We expect the annotation to be removed until the Pod IP
+// becomes available, at which point a new NPL annotation should be added.
+func TestInitMissingPodIP(t *testing.T) {
+	testSvc := getTestSvc()
+	testPod := getTestPod()
+	testPod.Status.PodIP = ""
+	nplAnnotation := []types.NPLAnnotation{
+		{
+			PodPort:  defaultPort,
+			NodeIP:   defaultHostIP,
+			NodePort: defaultStartPort,
+			Protocol: protocolTCP,
+		},
+	}
+	nplAnnotationBytes, err := json.Marshal(nplAnnotation)
+	require.NoError(t, err)
+	testPod.Annotations = map[string]string{
+		types.NPLAnnotationKey: string(nplAnnotationBytes),
+	}
+	testConfig := newTestConfig().withCustomPodPortRulesExpectations(func(mockIPTables *rulestesting.MockPodPortRules) {
+		// No initial rule should be synced.
+		mockIPTables.EXPECT().AddAllRules(gomock.Len(0)).Return(nil)
+		mockIPTables.EXPECT().AddRule(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any())
+	})
+	testData := setUp(t, testConfig, testSvc, testPod)
+	defer testData.tearDown()
+
+	_, err = testData.pollForPodAnnotation(testPod.Name, false)
+	require.NoError(t, err, "Poll for annotation check failed: annotation should have been removed")
+	assert.False(t, testData.portTable.RuleExists(defaultPodKey, defaultPort, protocolTCP))
+
+	testPod.Status.PodIP = defaultPodIP
+	testData.updatePodOrFail(testPod)
+
+	value, err := testData.pollForPodAnnotation(testPod.Name, true)
+	require.NoError(t, err, "Poll for annotation check failed")
+	expectedAnnotations := newExpectedNPLAnnotations().Add(nil, defaultPort, protocolTCP)
+	expectedAnnotations.Check(t, value)
+	assert.True(t, testData.portTable.RuleExists(defaultPodKey, defaultPort, protocolTCP))
+}
+
+// TestInitIncompleteRuleInAnnotation simulates the case where the agent reboots and one Pod has an
+// existing NPL annotation with an incomplete rule (e.g., missing podPort). The annotation should
+// eventually be replaced by a valid one.
+func TestInitIncompleteRuleInAnnotation(t *testing.T) {
+	testSvc := getTestSvc()
+	testPod := getTestPod()
+	nplAnnotation := []types.NPLAnnotation{
+		{
+			// Omit intentionally.
+			// PodPort:  defaultPort,
+			NodeIP:   defaultHostIP,
+			NodePort: defaultStartPort,
+			Protocol: protocolTCP,
+		},
+	}
+	nplAnnotationBytes, err := json.Marshal(nplAnnotation)
+	require.NoError(t, err)
+	testPod.Annotations = map[string]string{
+		types.NPLAnnotationKey: string(nplAnnotationBytes),
+	}
+	testConfig := newTestConfig().withCustomPodPortRulesExpectations(func(mockIPTables *rulestesting.MockPodPortRules) {
+		// No initial rule should be synced.
+		mockIPTables.EXPECT().AddAllRules(gomock.Len(0)).Return(nil)
+		mockIPTables.EXPECT().AddRule(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any())
+	})
+	testData := setUp(t, testConfig, testSvc, testPod)
 	defer testData.tearDown()
 
 	value, err := testData.pollForPodAnnotation(testPod.Name, true)
@@ -984,4 +1122,50 @@ func TestPreventDefunctRuleReuse(t *testing.T) {
 	testData.updateServiceOrFail(testSvc)
 
 	assert.Eventually(t, testData.ctrl.Satisfied, 2*time.Second, 50*time.Millisecond)
+}
+
+// TestPodRecreateNewIP simulates the case where a Pod is deleted and recreated with the same name
+// and a different IP. Because the NPLController uses a workqueue, the DELETE and CREATE events can
+// theoretically be merged and processed as a single UPDATE event. The controller needs to update
+// this case correctly and update NPL rules as needed.
+func TestPodRecreateNewIP(t *testing.T) {
+	ctx := context.Background()
+
+	testSvc := getTestSvc()
+	testPod := getTestPod()
+	testPod.UID = "old-uid"
+	testConfig := newTestConfig().withoutRun()
+	testData := setUp(t, testConfig, testSvc, testPod)
+	defer testData.tearDown()
+	c := testData.nplController
+
+	c.processNextWorkItem()
+	nplData := testData.portTable.GetEntry(defaultPodKey, defaultPort, protocolTCP)
+	require.NotNil(t, nplData)
+	require.Equal(t, defaultPodIP, nplData.PodIP)
+
+	newPodIP := "192.168.32.11"
+	require.NotEqual(t, defaultPodIP, newPodIP)
+	newPod := testPod.DeepCopy()
+	newPod.UID = "new-uid"
+	newPod.Status.PodIP = newPodIP
+
+	// Pod is deleted, then shortly after is "recreated" (same name) with a different IP.
+	testData.k8sClient.CoreV1().Pods(defaultNS).Delete(ctx, testPod.Name, metav1.DeleteOptions{})
+	// The sleep is for illustration purposes. The duration does not really matter. What matters
+	// is that by the time we call processNextWorkItem below, the informer store has been
+	// updated with the new Pod.
+	time.Sleep(10 * time.Millisecond)
+	_, err := testData.k8sClient.CoreV1().Pods(defaultNS).Create(ctx, newPod, metav1.CreateOptions{})
+	require.NoError(t, err)
+
+	require.Eventually(t, func() bool {
+		pod, err := c.podLister.Pods(defaultNS).Get(testPod.Name)
+		return err == nil && pod.UID == newPod.UID
+	}, 1*time.Second, 10*time.Millisecond)
+
+	c.processNextWorkItem()
+	nplData = testData.portTable.GetEntry(defaultPodKey, defaultPort, protocolTCP)
+	require.NotNil(t, nplData)
+	assert.Equal(t, newPodIP, nplData.PodIP)
 }
