@@ -29,6 +29,7 @@ import (
 	netdefutils "github.com/k8snetworkplumbingwg/network-attachment-definition-client/pkg/utils"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/util/wait"
 	clientset "k8s.io/client-go/kubernetes"
@@ -45,6 +46,7 @@ import (
 	"antrea.io/antrea/pkg/agent/interfacestore"
 	"antrea.io/antrea/pkg/agent/types"
 	crdv1b1 "antrea.io/antrea/pkg/apis/crd/v1beta1"
+	crdlisters "antrea.io/antrea/pkg/client/listers/crd/v1beta1"
 	"antrea.io/antrea/pkg/ovs/ovsconfig"
 	"antrea.io/antrea/pkg/util/channel"
 )
@@ -90,6 +92,7 @@ type PodController struct {
 	queue                 workqueue.TypedRateLimitingInterface[string]
 	podInformer           cache.SharedIndexInformer
 	podLister             corelisters.PodLister
+	ipPoolLister          crdlisters.IPPoolLister
 	podUpdateSubscriber   channel.Subscriber
 	ovsBridgeClient       ovsconfig.OVSBridgeClient
 	interfaceStore        interfacestore.InterfaceStore
@@ -110,6 +113,7 @@ func NewPodController(
 	primaryInterfaceStore interfacestore.InterfaceStore,
 	nodeConfig *config.NodeConfig,
 	ovsBridgeClient ovsconfig.OVSBridgeClient,
+	ipPoolLister crdlisters.IPPoolLister,
 ) (*PodController, error) {
 	ifaceStore := interfacestore.NewInterfaceStore()
 	interfaceConfigurator, err := cniserver.NewSecondaryInterfaceConfigurator(ovsBridgeClient, ifaceStore)
@@ -128,6 +132,7 @@ func NewPodController(
 		),
 		podInformer:           podInformer,
 		podLister:             podLister,
+		ipPoolLister:          ipPoolLister,
 		podUpdateSubscriber:   podUpdateSubscriber,
 		ovsBridgeClient:       ovsBridgeClient,
 		interfaceStore:        ifaceStore,
@@ -669,11 +674,15 @@ func (pc *PodController) Run(stopCh <-chan struct{}) {
 		klog.ErrorS(err, "Failed to initialize secondary interface store for SR-IOV devices")
 		return
 	}
+
+	go wait.NonSlidingUntil(pc.cleanUpStaleIPAddresses, 5*time.Minute, stopCh)
+
 	pc.reconcileSecondaryInterfaces()
 
 	for i := 0; i < numWorkers; i++ {
 		go wait.Until(pc.Worker, time.Second, stopCh)
 	}
+
 	<-stopCh
 }
 
@@ -684,6 +693,44 @@ func checkForPodSecondaryNetworkAttachment(pod *corev1.Pod) (string, bool) {
 	}
 	netObj, netObjExists := annotations[netdefv1.NetworkAttachmentAnnot]
 	return netObj, netObjExists && netObj != ""
+}
+
+// When a Kubernetes Node reboots and the OVSDB file is not properly restored,
+// the primary and secondary OVS ports in OVSDB are lost. Pods may temporarily
+// appear as "unknown" and later get recreated on the same Node with new container IDs.
+// The cleanup of secondary interfaces during agent restart depends on the InterfaceStores
+// being initialized with existing OVS ports. If the OVSDB file is missing, the
+// primary InterfaceStore is empty, preventing the secondary InterfaceStore from
+// initializing correctly. Consequently, secondary IPs assigned to old Pods (with
+// previous container IDs) are not deleted. To resolve this, all IPPool allocations
+// must be checked, and any IPs associated with non-existing container IDs should be
+// released. Otherwise, stale secondary IPs remain in the IPPool and cannot be reused.
+// We run it periodically to cover the case where a Pod is recreated with
+// the same name on another Node and has any secondary IP as well.
+func (pc *PodController) cleanUpStaleIPAddresses() {
+	pools, _ := pc.ipPoolLister.List(labels.Everything())
+	for _, ipPool := range pools {
+		for _, address := range ipPool.Status.IPAddresses {
+			if address.Owner.Pod == nil {
+				klog.InfoS("IPAM allocation found with no Pod owner", "IPPool", ipPool.Name)
+				continue
+			}
+			if _, err := pc.podLister.Pods(address.Owner.Pod.Namespace).Get(address.Owner.Pod.Name); err == nil {
+				if _, found := pc.interfaceStore.GetContainerInterface(address.Owner.Pod.ContainerID); !found {
+					stalePodOwner := address.Owner.Pod
+					// Only consider SecondaryNetwork interfaces
+					if stalePodOwner.IFName == "" {
+						continue
+					}
+					klog.V(2).InfoS("Releasing stale IPAM allocation", "Pod", klog.KRef(stalePodOwner.Namespace, stalePodOwner.Name), "containerID", stalePodOwner.ContainerID, "interface", stalePodOwner.IFName)
+					if err := pc.ipamAllocator.SecondaryNetworkRelease(stalePodOwner); err != nil {
+						klog.ErrorS(err, "Error when releasing IPAM allocation",
+							"Pod", klog.KRef(stalePodOwner.Namespace, stalePodOwner.Name), "interface", stalePodOwner.IFName)
+					}
+				}
+			}
+		}
+	}
 }
 
 func (pc *PodController) initializeCNICache() {

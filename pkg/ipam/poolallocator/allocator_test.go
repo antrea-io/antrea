@@ -186,7 +186,7 @@ func TestAllocateNextMultiRange(t *testing.T) {
 	validateAllocationSequence(t, allocator, subnetInfo, []string{"10.2.2.100", "10.2.2.101", "10.2.2.2", "10.2.2.3"})
 }
 
-func TestAllocateNextMultiRangeExausted(t *testing.T) {
+func TestAllocateNextMultiRangeExhausted(t *testing.T) {
 	stopCh := make(chan struct{})
 	defer close(stopCh)
 
