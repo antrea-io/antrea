@@ -245,6 +245,8 @@ func (lpo *localPortOpener) OpenLocalPort(port int, protocol string) (io.Closer,
 			return nil, err
 		}
 		socket = conn
+	default:
+		return nil, fmt.Errorf("unknown or missing protocol: %q", protocol)
 	}
 	klog.V(2).InfoS("Opened local port", "port", port)
 	return socket, nil

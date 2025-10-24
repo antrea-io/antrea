@@ -15,6 +15,7 @@
 package k8s
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"reflect"
@@ -132,7 +133,9 @@ func (c *NPLController) Run(stopCh <-chan struct{}) {
 		return
 	}
 
-	c.waitForRulesInitialization()
+	if err := c.waitForRulesInitialization(wait.ContextForChannel(stopCh)); err != nil {
+		klog.ErrorS(err, "Failed to initialize NodePortLocal rules")
+	}
 
 	for i := 0; i < numWorkers; i++ {
 		go wait.Until(c.Worker, time.Second, stopCh)
@@ -396,45 +399,61 @@ func (c *NPLController) handleAddUpdatePod(key string, obj interface{}) error {
 	pod := obj.(*corev1.Pod)
 	klog.V(2).InfoS("Got add/update event for Pod", "pod", klog.KObj(pod))
 
-	podIP := pod.Status.PodIP
-	if podIP == "" {
-		klog.V(2).InfoS("IP address not set for Pod", "pod", klog.KObj(pod))
-		return nil
-	}
-
-	targetPortsInt, targetPortsStr := c.getTargetPortsForServicesOfPod(pod)
-	klog.V(2).InfoS("Pod is selected by a Service for which NodePortLocal is enabled", "pod", klog.KObj(pod))
-
-	var nodePort int
-	podPorts := sets.New[string]()
-	podContainers := pod.Spec.Containers
 	nplAnnotations := []types.NPLAnnotation{}
-
 	podAnnotation, nplExists := pod.GetAnnotations()[types.NPLAnnotationKey]
 	if nplExists {
+		// TODO: should the annotation be removed by us in this case?
 		if err := json.Unmarshal([]byte(podAnnotation), &nplAnnotations); err != nil {
 			klog.ErrorS(err, "Unable to unmarshal NodePortLocal annotation for Pod, skipping", "pod", klog.KObj(pod))
 			return nil
 		}
 	}
 
+	podIP := pod.Status.PodIP
+	if podIP == "" {
+		klog.V(2).InfoS("IP address not set for Pod", "pod", klog.KObj(pod))
+		// We want to delete NPL rules and remove the annotation in this case, as a Pod can
+		// theoretically lose its IP address if there is an issue with the Sandbox.
+		if err := c.cleanupPodRules(key, nil); err != nil { // it is valid to pass a nil Set to cleanupPodRules
+			return err
+		}
+		if nplExists {
+			if err := c.cleanupNPLAnnotationForPod(context.TODO(), pod); err != nil {
+				return err
+			}
+		}
+		return nil
+	}
+
+	targetPortsInt, targetPortsStr := c.getTargetPortsForServicesOfPod(pod)
+	nplEnabled := targetPortsInt.Len() > 0 || targetPortsStr.Len() > 0
+	if nplEnabled {
+		klog.V(2).InfoS("Pod is selected by a Service for which NodePortLocal is enabled", "pod", klog.KObj(pod))
+	}
+
+	var nodePort int
+	podPorts := sets.New[string]()
+	podContainers := pod.Spec.Containers
+
 	nplAnnotationsRequiredMap := map[string]types.NPLAnnotation{}
 	nplAnnotationsRequired := []types.NPLAnnotation{}
 
 	hostPorts := make(map[string]int)
-	for _, container := range podContainers {
-		for _, cport := range container.Ports {
-			portProtoInt := util.BuildPortProto(fmt.Sprint(cport.ContainerPort), string(cport.Protocol))
-			if int(cport.HostPort) > 0 {
-				klog.V(4).InfoS("Host Port is defined for container, thus extra NPL port is not allocated", "pod", klog.KObj(pod), "container", container.Name)
-				hostPorts[portProtoInt] = int(cport.HostPort)
-			}
-			if cport.Name == "" {
-				continue
-			}
-			portProtoStr := util.BuildPortProto(cport.Name, string(cport.Protocol))
-			if targetPortsStr.Has(portProtoStr) {
-				targetPortsInt.Insert(portProtoInt)
+	if nplEnabled { // no need for this calculation if NPL is not enabled for the Pod
+		for _, container := range podContainers {
+			for _, cport := range container.Ports {
+				portProtoInt := util.BuildPortProto(fmt.Sprint(cport.ContainerPort), string(cport.Protocol))
+				if int(cport.HostPort) > 0 {
+					klog.V(4).InfoS("Host Port is defined for container, thus extra NPL port is not allocated", "pod", klog.KObj(pod), "container", container.Name)
+					hostPorts[portProtoInt] = int(cport.HostPort)
+				}
+				if cport.Name == "" {
+					continue
+				}
+				portProtoStr := util.BuildPortProto(cport.Name, string(cport.Protocol))
+				if targetPortsStr.Has(portProtoStr) {
+					targetPortsInt.Insert(portProtoInt)
+				}
 			}
 		}
 	}
@@ -455,6 +474,20 @@ func (c *NPLController) handleAddUpdatePod(key string, obj interface{}) error {
 			klog.InfoS("Deleting defunct NodePortLocal rule for Pod to prevent re-use", "pod", klog.KObj(pod), "podIP", podIP, "port", port, "protocol", protocol)
 			if err := c.portTable.DeleteRule(key, port, protocol); err != nil {
 				return fmt.Errorf("failed to delete defunct rule for Pod %s, Pod Port %d, Protocol %s: %w", key, port, protocol, err)
+			}
+			portData = nil
+		}
+		// There are a few edge cases which can cause us to observe a different IP for the
+		// same Pod name:
+		//  * a new Sandbox can be created for the same Pod (e.g., after a Node restart)
+		//  * because we use a workqueue, when a Pod is recreated with the same name but a
+		//    different IP, both events (DELETE and CREATE) can be "merged" in the workqueue
+		//    and treated as a single UPDATE event.
+		// If we detect a Pod IP change, delete existing rules and recreate them with the new IP.
+		if portData != nil && portData.PodIP != podIP {
+			klog.InfoS("Deleting NodePortLocal rule for Pod because of IP change", "pod", klog.KObj(pod), "podIP", podIP, "prevPodIP", portData.PodIP)
+			if err := c.portTable.DeleteRule(key, port, protocol); err != nil {
+				return fmt.Errorf("failed to delete rule for Pod %s, Pod Port %d, Protocol %s: %w", key, port, protocol, err)
 			}
 			portData = nil
 		}
@@ -494,7 +527,7 @@ func (c *NPLController) handleAddUpdatePod(key string, obj interface{}) error {
 	// in the first step). If not, the Pod needed to be patched.
 	updatePodAnnotation := !compareNPLAnnotationLists(nplAnnotations, nplAnnotationsRequired)
 	if updatePodAnnotation {
-		return c.updatePodNPLAnnotation(pod, nplAnnotationsRequired)
+		return c.updatePodNPLAnnotation(context.TODO(), pod, nplAnnotationsRequired)
 	}
 	return nil
 }
@@ -516,20 +549,24 @@ func (c *NPLController) cleanupPodRules(key string, podPortsToKeep sets.Set[stri
 // waitForRulesInitialization fetches all the Pods on this Node and looks for valid NodePortLocal
 // annotations. If they exist, with a valid Node port, it adds the Node port to the port table and
 // rules. If the NodePortLocal annotation is invalid (cannot be unmarshalled), the annotation is
-// cleared. If the Node port is invalid (maybe the port range was changed and the Agent was
-// restarted), the annotation is ignored and will be removed by the Pod event handlers. The Pod
-// event handlers will also take care of allocating a new Node port if required.
-// The function is meant to be called during Controller initialization, after the caches have
-// synced. It will block until iptables rules have been synced successfully based on the listed
-// Pods. After it returns, the Controller should start handling events. In case of an unexpected
-// error, the function can return early or may not complete initialization. The Controller's event
-// handlers are able to recover from these errors.
-func (c *NPLController) waitForRulesInitialization() {
+// cleared. If the Pod's IP address is not available (yet), the annotation is also cleared. If the
+// Node port is invalid (maybe the port range was changed and the Agent was restarted), the
+// annotation is ignored and will be removed by the Pod event handlers. The Pod event handlers will
+// also take care of allocating a new Node port if required. The function is meant to be called
+// during Controller initialization, after the caches have synced. It will block until iptables
+// rules have been synced successfully based on the listed Pods, or until the context is
+// canceled. It only returns an error if the Pods cannot be listed successfully or if syncing the
+// rules fails. After it returns, the Controller should start handling events. The Controller's
+// event handlers are able to recover from any error occurring during initialization.
+// Unlike the event handler (handleAddUpdatePod), this function tries to reuse existing NPL mappings
+// (from Pod annotations), and that's its main value add. It also avoids datapath disruption by
+// syncing all rules (including removing stale ones) with a single "operation".
+func (c *NPLController) waitForRulesInitialization(ctx context.Context) error {
 	klog.InfoS("Will fetch Pods and generate NodePortLocal rules for these Pods")
 
 	podList, err := c.podLister.List(labels.Everything())
 	if err != nil {
-		klog.ErrorS(err, "Error when listing Pods for Node")
+		return fmt.Errorf("error when listing Pods for Node: %w", err)
 	}
 
 	// in case of an error when listing Pods above, allNPLPorts will be
@@ -551,16 +588,33 @@ func (c *NPLController) waitForRulesInitialization() {
 		if err := json.Unmarshal([]byte(nplAnnotation), &nplData); err != nil {
 			klog.InfoS("Found invalid NodePortLocal annotation for Pod that cannot be parsed, cleaning it up", "pod", klog.KObj(pod))
 			// if there's an error in this NodePortLocal annotation, clean it up
-			if err := c.cleanupNPLAnnotationForPod(pod); err != nil {
+			if err := c.cleanupNPLAnnotationForPod(ctx, pod); err != nil {
+				klog.ErrorS(err, "Error when cleaning up NodePortLocal annotation for Pod", "pod", klog.KObj(pod))
+			}
+			continue
+		}
+
+		if pod.Status.PodIP == "" {
+			klog.InfoS("Found Pod with NodePortLocal annotation but no IP address, removing annotation", "pod", klog.KObj(pod))
+			// While we could just skip the Pod without removing the annotation, and let
+			// the controller update the annotation later, the advantage of removing the
+			// annotation is that we let consumers of the feature know right away that
+			// something is wrong (missing precondition).
+			if err := c.cleanupNPLAnnotationForPod(ctx, pod); err != nil {
 				klog.ErrorS(err, "Error when cleaning up NodePortLocal annotation for Pod", "pod", klog.KObj(pod))
 			}
 			continue
 		}
 
 		for _, npl := range nplData {
+			if npl.NodePort == 0 || npl.PodPort == 0 || npl.Protocol == "" {
+				klog.InfoS("Found NodePortLocal annotation with an incomplete rule, ignoring it", "pod", klog.KObj(pod), "rule", npl)
+				continue
+			}
 			if npl.NodePort > c.portTable.EndPort || npl.NodePort < c.portTable.StartPort {
-				// ignoring annotation for now, it will be removed by the first call
-				// to handleAddUpdatePod
+				// Ignoring annotation for now, it will be removed by the first call
+				// to handleAddUpdatePod. Note that we could also remove the annotation
+				// here, but it is not as useful as in the missing PodIP case.
 				klog.V(2).InfoS("Found NodePortLocal annotation for which the allocated port doesn't fall into the configured range", "pod", klog.KObj(pod))
 				continue
 			}
@@ -576,13 +630,18 @@ func (c *NPLController) waitForRulesInitialization() {
 
 	rulesInitialized := make(chan struct{})
 	if err := c.addRulesForNPLPorts(allNPLPorts, rulesInitialized); err != nil {
-		klog.ErrorS(err, "Cannot install NodePortLocal rules")
-		return
+		return fmt.Errorf("error when installing rules: %w", err)
 	}
 
 	klog.InfoS("Waiting for initialization of NodePortLocal rules to complete")
-	<-rulesInitialized
+	select {
+	case <-rulesInitialized:
+		break
+	case <-ctx.Done():
+		return ctx.Err()
+	}
 	klog.InfoS("Initialization of NodePortLocal rules successful")
+	return nil
 }
 
 func (c *NPLController) addRulesForNPLPorts(allNPLPorts []rules.PodNodePort, synced chan<- struct{}) error {
@@ -590,10 +649,10 @@ func (c *NPLController) addRulesForNPLPorts(allNPLPorts []rules.PodNodePort, syn
 }
 
 // cleanupNPLAnnotationForPod removes the NodePortLocal annotation from the Pod's annotations map entirely.
-func (c *NPLController) cleanupNPLAnnotationForPod(pod *corev1.Pod) error {
+func (c *NPLController) cleanupNPLAnnotationForPod(ctx context.Context, pod *corev1.Pod) error {
 	_, ok := pod.Annotations[types.NPLAnnotationKey]
 	if !ok {
 		return nil
 	}
-	return patchPod(nil, pod, c.kubeClient)
+	return patchPod(ctx, nil, pod, c.kubeClient)
 }
