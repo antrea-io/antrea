@@ -53,6 +53,8 @@ import (
 	podwatchtesting "antrea.io/antrea/pkg/agent/secondarynetwork/podwatch/testing"
 	"antrea.io/antrea/pkg/agent/types"
 	crdv1beta1 "antrea.io/antrea/pkg/apis/crd/v1beta1"
+	fakecrd "antrea.io/antrea/pkg/client/clientset/versioned/fake"
+	crdinformers "antrea.io/antrea/pkg/client/informers/externalversions"
 	"antrea.io/antrea/pkg/ovs/ovsconfig"
 	ovsconfigtest "antrea.io/antrea/pkg/ovs/ovsconfig/testing"
 )
@@ -233,8 +235,54 @@ func init() {
 }
 
 func TestPodControllerRun(t *testing.T) {
+	pod := &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "pod-a",
+			Namespace: testNamespace,
+		},
+		Spec: corev1.PodSpec{NodeName: "fakeNode"},
+	}
+
+	stalePodOwner := &crdv1beta1.PodOwner{
+		Name:        pod.Name,
+		Namespace:   pod.Namespace,
+		ContainerID: "staleContainerID",
+		IFName:      interfaceName,
+	}
+
+	pool := &crdv1beta1.IPPool{
+		ObjectMeta: metav1.ObjectMeta{Name: uuid.New().String()},
+		Spec: crdv1beta1.IPPoolSpec{
+			IPRanges: []crdv1beta1.IPRange{
+				{
+					Start: "10.2.2.100",
+					End:   "10.2.2.110",
+				},
+			},
+			SubnetInfo: crdv1beta1.SubnetInfo{
+				Gateway:      "10.2.2.1",
+				PrefixLength: 24,
+			},
+		},
+		Status: crdv1beta1.IPPoolStatus{
+			IPAddresses: []crdv1beta1.IPAddressState{
+				{
+					IPAddress: "10.2.2.12",
+					Phase:     crdv1beta1.IPAddressPhaseAllocated,
+					Owner: crdv1beta1.IPAddressOwner{
+						Pod: stalePodOwner,
+					},
+				},
+			},
+		},
+	}
+
 	ctrl := gomock.NewController(t)
-	client := fake.NewSimpleClientset()
+	client := fake.NewSimpleClientset(pod)
+	crdClient := fakecrd.NewSimpleClientset(pool)
+	crdInformerFactory := crdinformers.NewSharedInformerFactory(crdClient, 0)
+	poolInformer := crdInformerFactory.Crd().V1beta1().IPPools()
+	poolLister := poolInformer.Lister()
 	netdefclient := netdefclientfake.NewSimpleClientset().K8sCniCncfIoV1()
 	mockOVSBridgeClient := ovsconfigtest.NewMockOVSBridgeClient(ctrl)
 	mockOVSBridgeClient.EXPECT().GetPortList().Return(nil, nil).AnyTimes()
@@ -248,7 +296,7 @@ func TestPodControllerRun(t *testing.T) {
 		client,
 		netdefclient,
 		informerFactory.Core().V1().Pods().Informer(),
-		nil, primaryInterfaceStore, nodeConfig, mockOVSBridgeClient)
+		nil, primaryInterfaceStore, nodeConfig, mockOVSBridgeClient, poolLister)
 	podController.interfaceConfigurator = interfaceConfigurator
 	podController.ipamAllocator = mockIPAM
 	cniCache := &podController.cniCache
@@ -257,6 +305,8 @@ func TestPodControllerRun(t *testing.T) {
 	stopCh := make(chan struct{})
 	informerFactory.Start(stopCh)
 	informerFactory.WaitForCacheSync(stopCh)
+	crdInformerFactory.Start(stopCh)
+	crdInformerFactory.WaitForCacheSync(stopCh)
 
 	var wg sync.WaitGroup
 	wg.Add(1)
@@ -265,6 +315,7 @@ func TestPodControllerRun(t *testing.T) {
 		podController.Run(stopCh)
 	}()
 
+	mockIPAM.EXPECT().SecondaryNetworkRelease(stalePodOwner)
 	pod, cniInfo := testPod(podName, containerID, podIP, netdefv1.NetworkSelectionElement{
 		Name:             networkName,
 		InterfaceRequest: interfaceName,
