@@ -1,4 +1,4 @@
-// Copyright 2024 Antrea Authors
+// Copyright 2025 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -26,6 +26,8 @@ type Interface interface {
 	BGPPolicies() BGPPolicyInformer
 	// ExternalNodes returns a ExternalNodeInformer.
 	ExternalNodes() ExternalNodeInformer
+	// FlowExporterDestinations returns a FlowExporterDestinationInformer.
+	FlowExporterDestinations() FlowExporterDestinationInformer
 	// NodeLatencyMonitors returns a NodeLatencyMonitorInformer.
 	NodeLatencyMonitors() NodeLatencyMonitorInformer
 	// PacketCaptures returns a PacketCaptureInformer.
@@ -53,6 +55,11 @@ func (v *version) BGPPolicies() BGPPolicyInformer {
 // ExternalNodes returns a ExternalNodeInformer.
 func (v *version) ExternalNodes() ExternalNodeInformer {
 	return &externalNodeInformer{factory: v.factory, namespace: v.namespace, tweakListOptions: v.tweakListOptions}
+}
+
+// FlowExporterDestinations returns a FlowExporterDestinationInformer.
+func (v *version) FlowExporterDestinations() FlowExporterDestinationInformer {
+	return &flowExporterDestinationInformer{factory: v.factory, tweakListOptions: v.tweakListOptions}
 }
 
 // NodeLatencyMonitors returns a NodeLatencyMonitorInformer.

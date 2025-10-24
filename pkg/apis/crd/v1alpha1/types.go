@@ -549,3 +549,103 @@ type PacketCaptureCondition struct {
 	Reason             string                     `json:"reason"`
 	Message            string                     `json:"message"`
 }
+
+type FlowExporterTransportProtocol string
+
+const (
+	FlowExporterTransportTCP FlowExporterTransportProtocol = "tcp"
+	FlowExporterTransportUDP FlowExporterTransportProtocol = "udp"
+	FlowExporterTransportTLS FlowExporterTransportProtocol = "tls"
+)
+
+// +genclient
+// +genclient:nonNamespaced
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+
+// FlowExporterDestination is the Schema for the FlowExporterDestination API.
+type FlowExporterDestination struct {
+	metav1.TypeMeta `json:",inline"`
+	// +optional
+	metav1.ObjectMeta `json:"metadata,omitempty"`
+
+	// +required
+	Spec FlowExporterDestinationSpec `json:"spec,omitempty"`
+}
+
+// FlowExporterDestinationSpec defines the desired state of a FlowExporterDestination.
+type FlowExporterDestinationSpec struct {
+	// The flow collector address including port as a string.
+	//
+	// Example:
+	// - flow-aggregator/flow-aggregator:14739
+	// - 10.244.10.10:4739
+	// +required
+	Address string `json:"address"`
+
+	// The protocol used to send flow details.
+	//
+	// Exactly one must be defined and non-nil.
+	// +required
+	Protocol FlowExporterProtocol `json:"protocol"`
+
+	// Filter criteria to select which flows to export.
+	// +optional
+	Filter *FlowExporterFilter `json:"filter,omitempty"`
+
+	// Provide the active flow export timeout in seconds, which is the timeout after which
+	// a flow record is sent to the collector for active flows.
+	// +optional
+	ActiveFlowExportTimeoutSeconds int32 `json:"activeFlowExportTimeoutSeconds,omitempty"`
+
+	// Provide the idle flow export timeout in seconds, which is the timeout after which
+	// a flow record is sent to the collector for idle flows.
+	// +optional
+	IdleFlowExportTimeoutSeconds int32 `json:"idleFlowExportTimeoutSeconds,omitempty"`
+}
+
+// FlowExporterProtocol defines the protocol used to send flow details.
+//
+// Exactly one of IPFIX or GRPC must be specified.
+type FlowExporterProtocol struct {
+	// Configuration for using IPFIX protocol.
+	// +optional
+	IPFIX *FlowExporterIPFIXConfig `json:"ipfix,omitempty"`
+
+	// Configuration for using gRPC protocol.
+	// +optional
+	GRPC *FlowExporterGRPCConfig `json:"grpc,omitempty"`
+}
+
+// FlowExporterIPFIXConfig defines configuration for exporting using the IPFIX protocol.
+type FlowExporterIPFIXConfig struct {
+	// Transport protocol to use for IPFIX.
+	//
+	// Supported values are "tcp", "udp", and "tls".
+	// +required
+	Transport FlowExporterTransportProtocol `json:"transport"`
+}
+
+// FlowExporterGRPCConfig defines configuration for exporting using the gRPC protocol.
+type FlowExporterGRPCConfig struct{}
+
+// FlowExporterFilter defines filtering criteria for exported flows.
+type FlowExporterFilter struct {
+	// Filter for only flows whose protocol matches this filter.
+	//
+	// The default is to accept all protocols if unset or nil.
+	//
+	// Supported values are [tcp, udp, icmp, sctp].
+	// +optional
+	Protocols []string `json:"protocols,omitempty"`
+}
+
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+
+// FlowExporterDestinationList contains a list of FlowExporterDestination resources.
+type FlowExporterDestinationList struct {
+	metav1.TypeMeta `json:",inline"`
+	// +optional
+	metav1.ListMeta `json:"metadata,omitempty"`
+
+	Items []FlowExporterDestination `json:"items"`
+}

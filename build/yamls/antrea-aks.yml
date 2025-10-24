@@ -1796,6 +1796,114 @@ spec:
       - en
 
 ---
+# Source: antrea/crds/flowexporterdestination.yaml
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: flowexporterdestinations.crd.antrea.io
+  labels:
+    app: antrea
+spec:
+  group: crd.antrea.io
+  versions:
+    - name: v1alpha1
+      served: true
+      storage: true
+      additionalPrinterColumns:
+      - name: Address:Port
+        type: string
+        description: Address of flow collector.
+        jsonPath: .spec.address
+      schema:
+        openAPIV3Schema:
+          type: object
+          required:
+            - spec
+          properties:
+            spec:
+              type: object
+              required:
+                - address
+                - protocol
+              properties:
+                address:
+                  type: string
+                  description: >
+                    The flow collector address including port as a string.
+
+                    Example:
+                    - flow-aggregator/flow-aggregator:14739
+                    - 10.244.10.10:4739
+                  pattern: ^.+:[0-9]+$
+                protocol:
+                  type: object
+                  description: >
+                    The protocol used to send flow details.
+
+                    Exactly one must be defined and non-nil.
+                  oneOf:
+                  - required: [ipfix]
+                  - required: [grpc]
+                  properties:
+                    ipfix:
+                      type: object
+                      description: Configuration for using IPFIX protocol.
+                      required:
+                      - transport
+                      properties:
+                        transport:
+                          type: string
+                          enum:
+                          - tcp
+                          - udp
+                          - tls
+                    grpc:
+                      type: object
+                      description: Configuration for using gRPC protocol.
+                filter:
+                  type: object
+                  properties:
+                    protocols:
+                      type: array
+                      description: >
+                        Filter for only flows whose protocol which match this filter.
+                        The default is accept all protocols if unset or nil.
+
+                        Supported values are [tcp, udp, sctp].
+                      items:
+                        type: string
+                        enum:
+                        - tcp
+                        - udp
+                        - sctp
+                activeFlowExportTimeoutSeconds:
+                  type: integer
+                  format: int32
+                  description: >
+                    Provide the active flow export timeout in seconds, which is the timeout after which a flow
+                    record is sent to the collector for active flows. Thus, for flows with a continuous
+                    stream of packets, a flow record will be exported to the collector once the elapsed
+                    time since the last export event is equal to the value of this timeout.
+                  minimum: 1
+                  default: 5
+                idleFlowExportTimeoutSeconds:
+                  type: integer
+                  format: int32
+                  description: >
+                    Provide the idle flow export timeout in seconds, which is the timeout after which a flow
+                    record is sent to the collector for idle flows. A flow is considered idle if no
+                    packet matching this flow has been observed since the last export event.
+                  minimum: 1
+                  default: 15
+  scope: Cluster
+  names:
+    plural: flowexporterdestinations
+    singular: flowexporterdestination
+    kind: FlowExporterDestination
+    shortNames:
+      - flowexporterdest
+
+---
 # Source: antrea/crds/group.yaml
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
@@ -4840,6 +4948,14 @@ rules:
       - ippools/status
     verbs:
       - update
+  - apiGroups:
+      - crd.antrea.io
+    resources:
+      - flowexporterdestinations
+    verbs:
+      - get
+      - watch
+      - list
   - apiGroups:
       - k8s.cni.cncf.io
     resources:
