@@ -399,9 +399,29 @@ func (c *NPLController) handleAddUpdatePod(key string, obj interface{}) error {
 	pod := obj.(*corev1.Pod)
 	klog.V(2).InfoS("Got add/update event for Pod", "pod", klog.KObj(pod))
 
+	nplAnnotations := []types.NPLAnnotation{}
+	podAnnotation, nplExists := pod.GetAnnotations()[types.NPLAnnotationKey]
+	if nplExists {
+		// TODO: should the annotation be removed by us in this case?
+		if err := json.Unmarshal([]byte(podAnnotation), &nplAnnotations); err != nil {
+			klog.ErrorS(err, "Unable to unmarshal NodePortLocal annotation for Pod, skipping", "pod", klog.KObj(pod))
+			return nil
+		}
+	}
+
 	podIP := pod.Status.PodIP
 	if podIP == "" {
 		klog.V(2).InfoS("IP address not set for Pod", "pod", klog.KObj(pod))
+		// We want to delete NPL rules and remove the annotation in this case, as a Pod can
+		// theoretically lose its IP address if there is an issue with the Sandbox.
+		if err := c.cleanupPodRules(key, nil); err != nil { // it is valid to pass a nil Set to cleanupPodRules
+			return err
+		}
+		if nplExists {
+			if err := c.cleanupNPLAnnotationForPod(context.TODO(), pod); err != nil {
+				return err
+			}
+		}
 		return nil
 	}
 
@@ -414,16 +434,6 @@ func (c *NPLController) handleAddUpdatePod(key string, obj interface{}) error {
 	var nodePort int
 	podPorts := sets.New[string]()
 	podContainers := pod.Spec.Containers
-	nplAnnotations := []types.NPLAnnotation{}
-
-	podAnnotation, nplExists := pod.GetAnnotations()[types.NPLAnnotationKey]
-	if nplExists {
-		// TODO: should the annotation be removed by us in this case?
-		if err := json.Unmarshal([]byte(podAnnotation), &nplAnnotations); err != nil {
-			klog.ErrorS(err, "Unable to unmarshal NodePortLocal annotation for Pod, skipping", "pod", klog.KObj(pod))
-			return nil
-		}
-	}
 
 	nplAnnotationsRequiredMap := map[string]types.NPLAnnotation{}
 	nplAnnotationsRequired := []types.NPLAnnotation{}
@@ -467,11 +477,13 @@ func (c *NPLController) handleAddUpdatePod(key string, obj interface{}) error {
 			}
 			portData = nil
 		}
-		// While a Pod's IP is immutable, controllers using a workqueue have to be careful
-		// as a Pod with the same name can be recreated with a different IP and both events
-		// (DELETE and CREATE) can be "merged" in the workqueue and treated as a single
-		// UPDATE event. If we detect a Pod IP change, delete existing rules and recreate
-		// them with the new IP.
+		// There are a few edge cases which can cause us to observe a different IP for the
+		// same Pod name:
+		//  * a new Sandbox can be created for the same Pod (e.g., after a Node restart)
+		//  * because we use a workqueue, when a Pod is recreated with the same name but a
+		//    different IP, both events (DELETE and CREATE) can be "merged" in the workqueue
+		//    and treated as a single UPDATE event.
+		// If we detect a Pod IP change, delete existing rules and recreate them with the new IP.
 		if portData != nil && portData.PodIP != podIP {
 			klog.InfoS("Deleting NodePortLocal rule for Pod because of IP change", "pod", klog.KObj(pod), "podIP", podIP, "prevPodIP", portData.PodIP)
 			if err := c.portTable.DeleteRule(key, port, protocol); err != nil {

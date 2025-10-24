@@ -196,7 +196,6 @@ type customizePortOpenerExpectations func(*portcachetesting.MockLocalPortOpener)
 type customizePodPortRulesExpectations func(*rulestesting.MockPodPortRules)
 
 type testConfig struct {
-	skipRun                        bool
 	customPortOpenerExpectations   customizePortOpenerExpectations
 	customPodPortRulesExpectations customizePodPortRulesExpectations
 }
@@ -212,11 +211,6 @@ func (tc *testConfig) withCustomPortOpenerExpectations(fn customizePortOpenerExp
 
 func (tc *testConfig) withCustomPodPortRulesExpectations(fn customizePodPortRulesExpectations) *testConfig {
 	tc.customPodPortRulesExpectations = fn
-	return tc
-}
-
-func (tc *testConfig) withoutRun() *testConfig {
-	tc.skipRun = true
 	return tc
 }
 
@@ -288,9 +282,7 @@ func setUp(t *testing.T, tc *testConfig, objects ...runtime.Object) *testData {
 		nplController: c,
 	}
 
-	if !tc.skipRun {
-		data.runWrapper()
-	}
+	data.runWrapper()
 	informerFactory.Start(data.stopCh)
 	go localPodInformer.Run(data.stopCh)
 
@@ -1124,48 +1116,53 @@ func TestPreventDefunctRuleReuse(t *testing.T) {
 	assert.Eventually(t, testData.ctrl.Satisfied, 2*time.Second, 50*time.Millisecond)
 }
 
-// TestPodRecreateNewIP simulates the case where a Pod is deleted and recreated with the same name
-// and a different IP. Because the NPLController uses a workqueue, the DELETE and CREATE events can
-// theoretically be merged and processed as a single UPDATE event. The controller needs to update
-// this case correctly and update NPL rules as needed.
-func TestPodRecreateNewIP(t *testing.T) {
-	ctx := context.Background()
-
+// TestPodIPReset tests the case where a Pod "loses" its IP address. This can theoretically happen
+// when there is an issue with the Pod Sandbox. For example, after a Node restart, a Pod's status
+// may change to Unknown and its IP may be reset. After a while, the Sandbox is recreated, and the
+// Pod goes back to Running with a new IP.
+func TestPodIPReset(t *testing.T) {
 	testSvc := getTestSvc()
 	testPod := getTestPod()
-	testPod.UID = "old-uid"
-	testConfig := newTestConfig().withoutRun()
-	testData := setUp(t, testConfig, testSvc, testPod)
+	testData := setUp(t, newTestConfig(), testSvc, testPod)
 	defer testData.tearDown()
-	c := testData.nplController
 
-	c.processNextWorkItem()
+	_, err := testData.pollForPodAnnotation(testPod.Name, true)
+	require.NoError(t, err, "Poll for annotation check failed")
+	nplData := testData.portTable.GetEntry(defaultPodKey, defaultPort, protocolTCP)
+	require.NotNil(t, nplData)
+	require.Equal(t, defaultPodIP, nplData.PodIP)
+
+	testPod.Status.PodIP = ""
+	testData.updatePodOrFail(testPod)
+
+	_, err = testData.pollForPodAnnotation(testPod.Name, false)
+	require.NoError(t, err, "Poll for annotation check failed")
+	assert.False(t, testData.portTable.RuleExists(defaultPodKey, defaultPort, protocolTCP))
+}
+
+// TestPodIPChange tests the case where a Pod's IP address changes. This can happen when a Sandbox
+// is recreated (see TestPodIPReset above). This can also happen when a Pod is deleted and recreated
+// with the same name and a different IP: because the NPLController uses a workqueue, the DELETE and
+// CREATE events can theoretically be merged and processed as a single UPDATE event.
+func TestPodIPChange(t *testing.T) {
+	testSvc := getTestSvc()
+	testPod := getTestPod()
+	testData := setUp(t, newTestConfig(), testSvc, testPod)
+	defer testData.tearDown()
+
+	_, err := testData.pollForPodAnnotation(testPod.Name, true)
+	require.NoError(t, err, "Poll for annotation check failed")
 	nplData := testData.portTable.GetEntry(defaultPodKey, defaultPort, protocolTCP)
 	require.NotNil(t, nplData)
 	require.Equal(t, defaultPodIP, nplData.PodIP)
 
 	newPodIP := "192.168.32.11"
-	require.NotEqual(t, defaultPodIP, newPodIP)
-	newPod := testPod.DeepCopy()
-	newPod.UID = "new-uid"
-	newPod.Status.PodIP = newPodIP
+	testPod.Status.PodIP = newPodIP
+	testData.updatePodOrFail(testPod)
 
-	// Pod is deleted, then shortly after is "recreated" (same name) with a different IP.
-	testData.k8sClient.CoreV1().Pods(defaultNS).Delete(ctx, testPod.Name, metav1.DeleteOptions{})
-	// The sleep is for illustration purposes. The duration does not really matter. What matters
-	// is that by the time we call processNextWorkItem below, the informer store has been
-	// updated with the new Pod.
-	time.Sleep(10 * time.Millisecond)
-	_, err := testData.k8sClient.CoreV1().Pods(defaultNS).Create(ctx, newPod, metav1.CreateOptions{})
-	require.NoError(t, err)
-
-	require.Eventually(t, func() bool {
-		pod, err := c.podLister.Pods(defaultNS).Get(testPod.Name)
-		return err == nil && pod.UID == newPod.UID
+	assert.EventuallyWithT(t, func(t *assert.CollectT) {
+		nplData := testData.portTable.GetEntry(defaultPodKey, defaultPort, protocolTCP)
+		require.NotNil(t, nplData)
+		assert.Equal(t, newPodIP, nplData.PodIP)
 	}, 1*time.Second, 10*time.Millisecond)
-
-	c.processNextWorkItem()
-	nplData = testData.portTable.GetEntry(defaultPodKey, defaultPort, protocolTCP)
-	require.NotNil(t, nplData)
-	assert.Equal(t, newPodIP, nplData.PodIP)
 }
