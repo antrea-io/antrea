@@ -151,15 +151,17 @@ func NetlinkFlowToAntreaConnection(conn *conntrack.Flow) *connection.Connection 
 		},
 		OriginalDestinationAddress: conn.TupleOrig.IP.DestinationAddress,
 		OriginalDestinationPort:    conn.TupleOrig.Proto.DestinationPort,
-		OriginalPackets:            conn.CountersOrig.Packets,
-		OriginalBytes:              conn.CountersOrig.Bytes,
-		ReversePackets:             conn.CountersReply.Packets,
-		ReverseBytes:               conn.CountersReply.Bytes,
-		SourcePodNamespace:         "",
-		SourcePodName:              "",
-		DestinationPodNamespace:    "",
-		DestinationPodName:         "",
-		TCPState:                   "",
+		OriginalStats: connection.Stats{
+			Packets:        conn.CountersOrig.Packets,
+			Bytes:          conn.CountersOrig.Bytes,
+			ReversePackets: conn.CountersReply.Packets,
+			ReverseBytes:   conn.CountersReply.Bytes,
+		},
+		SourcePodNamespace:      "",
+		SourcePodName:           "",
+		DestinationPodNamespace: "",
+		DestinationPodName:      "",
+		TCPState:                "",
 	}
 	// github.com/ti-mo/conntrack uses native endianness (binary.NativeEndian), but we require a
 	// big-endian representation for the Labels / LabelsMask fields in connection.Connection.

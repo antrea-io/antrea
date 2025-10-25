@@ -83,6 +83,7 @@ const (
 	antreaNamespace             = "kube-system"
 	kubeNamespace               = "kube-system"
 	flowAggregatorNamespace     = "flow-aggregator"
+	flowAggregatorNamespace2    = "flow-aggregator2"
 	antreaConfigVolume          = "antrea-config"
 	antreaWindowsConfigVolume   = "antrea-windows-config"
 	flowAggregatorConfigVolume  = "flow-aggregator-config"
@@ -104,19 +105,21 @@ const (
 	agentContainerName          = "antrea-agent"
 	flowAggregatorContainerName = "flow-aggregator"
 
-	antreaYML               = "antrea.yml"
-	antreaIPSecYML          = "antrea-ipsec.yml"
-	antreaCovYML            = "antrea-coverage.yml"
-	antreaIPSecCovYML       = "antrea-ipsec-coverage.yml"
-	flowAggregatorYML       = "flow-aggregator.yml"
-	flowAggregatorCovYML    = "flow-aggregator-coverage.yml"
-	flowVisibilityYML       = "flow-visibility.yml"
-	flowVisibilityTLSYML    = "flow-visibility-tls.yml"
-	chOperatorYML           = "clickhouse-operator-install-bundle.yml"
-	flowVisibilityCHPodName = "chi-clickhouse-clickhouse-0-0-0"
-	flowVisibilityNamespace = "flow-visibility"
-	defaultBridgeName       = "br-int"
-	monitoringNamespace     = "monitoring"
+	antreaYML                  = "antrea.yml"
+	antreaIPSecYML             = "antrea-ipsec.yml"
+	antreaCovYML               = "antrea-coverage.yml"
+	antreaIPSecCovYML          = "antrea-ipsec-coverage.yml"
+	flowAggregatorYML          = "flow-aggregator.yml"
+	flowAggregator1YML         = "flow-aggregator-1.yml"
+	flowAggregator2YML         = "flow-aggregator-2.yml"
+	flowVisibilityYML          = "flow-visibility.yml"
+	flowVisibilityTLSYML       = "flow-visibility-tls.yml"
+	flowVisibilityProtocolFile = "test-flow-visibility-protocol.txt"
+	chOperatorYML              = "clickhouse-operator-install-bundle.yml"
+	flowVisibilityCHPodName    = "chi-clickhouse-clickhouse-0-0-0"
+	flowVisibilityNamespace    = "flow-visibility"
+	defaultBridgeName          = "br-int"
+	monitoringNamespace        = "monitoring"
 	// #nosec G101: not credentials
 	flowAggregatorIPFIXClientTLSSecretName = "ipfix-client-cert"
 	// #nosec G101: not credentials
@@ -246,12 +249,19 @@ type flowVisibilityIPFIXTestOptions struct {
 	includeK8sUIDs  *bool
 }
 
+type flowAggregatorTestOptions struct {
+	disableTLS         bool
+	selectedAggregator int
+	collectorAddr      string
+}
+
 type flowVisibilityTestOptions struct {
 	mode                     flowaggregatorconfig.AggregatorMode
 	databaseURL              string
 	databaseSecureConnection bool
 	clusterID                string
 	ipfixCollector           flowVisibilityIPFIXTestOptions
+	flowAggregator           flowAggregatorTestOptions
 }
 
 var testOptions TestOptions
@@ -314,6 +324,11 @@ var (
 		antreaIPSecYML,
 		antreaCovYML,
 		antreaIPSecCovYML,
+	}
+	flowAggYamls = [...]string{
+		flowAggregatorYML,
+		flowAggregator1YML,
+		flowAggregator2YML,
 	}
 )
 
@@ -1055,7 +1070,13 @@ func (data *TestData) deleteClickHouseOperator() error {
 }
 
 func (data *TestData) deployIPFIXCollector(serverCert []byte, serverKey []byte, clientCA []byte) (string, error) {
-	args := []string{"--ipfix.port", ipfixCollectorPort}
+	return data.deployIPFIXCollectorWithName("ipfix-collector", serverCert, serverKey, clientCA, "")
+}
+
+func (data *TestData) deployIPFIXCollectorWithName(name string, serverCert []byte, serverKey []byte, clientCA []byte, node string) (string, error) {
+	// #nosec G404: random number generator not used for security purposes
+	port := strconv.Itoa(rand.Int()%1000 + 40000)
+	args := []string{fmt.Sprintf("--ipfix.port=%s", port)}
 	if serverCert != nil {
 		args = append(args, "--server-cert", "/certs/server/tls.crt", "--server-key", "/certs/server/tls.key")
 		if clientCA != nil {
@@ -1063,12 +1084,12 @@ func (data *TestData) deployIPFIXCollector(serverCert []byte, serverKey []byte, 
 		}
 	}
 
-	pb := NewPodBuilder("ipfix-collector", data.testNamespace, ipfixCollectorImage).WithArgs(args).InHostNetwork()
+	pb := NewPodBuilder(name, data.testNamespace, ipfixCollectorImage).WithArgs(args).InHostNetwork().OnNode(node)
 
 	if serverCert != nil {
 		serverCertSecret := &corev1.Secret{
 			ObjectMeta: metav1.ObjectMeta{
-				Name: "ipfix-collector-server-cert",
+				Name: name + "-server-cert",
 			},
 			Immutable: ptr.To(true),
 			Data: map[string][]byte{
@@ -1084,7 +1105,7 @@ func (data *TestData) deployIPFIXCollector(serverCert []byte, serverKey []byte, 
 		if clientCA != nil {
 			clientCASecret := &corev1.Secret{
 				ObjectMeta: metav1.ObjectMeta{
-					Name: "ipfix-collector-client-ca",
+					Name: name + "-client-ca",
 				},
 				Immutable: ptr.To(true),
 				Data: map[string][]byte{
@@ -1101,7 +1122,7 @@ func (data *TestData) deployIPFIXCollector(serverCert []byte, serverKey []byte, 
 	if err := pb.Create(data); err != nil {
 		return "", fmt.Errorf("error when creating the ipfix collector Pod: %w", err)
 	}
-	ipfixCollectorIP, err := data.podWaitForIPs(defaultTimeout, "ipfix-collector", data.testNamespace)
+	ipfixCollectorIP, err := data.podWaitForIPs(defaultTimeout, name, data.testNamespace)
 	if err != nil || len(ipfixCollectorIP.IPStrings) == 0 {
 		return "", fmt.Errorf("error when waiting to get ipfix collector Pod IP: %w", err)
 	}
@@ -1111,20 +1132,17 @@ func (data *TestData) deployIPFIXCollector(serverCert []byte, serverKey []byte, 
 	} else {
 		ipStr = ipfixCollectorIP.IPv4.String()
 	}
-	ipfixCollectorAddr := fmt.Sprintf("%s:tcp", net.JoinHostPort(ipStr, ipfixCollectorPort))
+	ipfixCollectorAddr := fmt.Sprintf("%s:tcp", net.JoinHostPort(ipStr, port))
 	return ipfixCollectorAddr, nil
 }
 
 // deployFlowAggregator deploys the Flow Aggregator.
 func (data *TestData) deployFlowAggregator(
-	ipfixCollector string,
+	ipfixCollectorAddr string,
 	ipfixClientCert, ipfixClientKey, ipfixServerCA []byte,
 	o flowVisibilityTestOptions,
 ) error {
-	flowAggYaml := flowAggregatorYML
-	if testOptions.enableCoverage {
-		flowAggYaml = flowAggregatorCovYML
-	}
+	flowAggYaml := flowAggYamls[o.flowAggregator.selectedAggregator]
 
 	// Create flow-aggregator Namespace first, so that we can create the necessary Secrets prior
 	// to applying the Flow Aggregator manifest.
@@ -1190,16 +1208,21 @@ func (data *TestData) deployFlowAggregator(
 		}
 	}
 
-	if err = data.mutateFlowAggregatorConfigMap(ipfixCollector, o); err != nil {
+	if err = data.mutateFlowAggregatorConfigMap(ipfixCollectorAddr, o); err != nil {
 		return err
 	}
-	if rc, _, _, err = data.provider.RunCommandOnNode(controlPlaneNodeName(), fmt.Sprintf("kubectl -n %s rollout status deployment/%s --timeout=%v", flowAggregatorNamespace, flowAggregatorDeployment, 2*defaultTimeout)); err != nil || rc != 0 {
+
+	deploymentName := flowAggregatorDeployment
+	if o.flowAggregator.selectedAggregator > 0 {
+		deploymentName = fmt.Sprintf("%s-%d", deploymentName, o.flowAggregator.selectedAggregator)
+	}
+	if rc, _, _, err = data.provider.RunCommandOnNode(controlPlaneNodeName(), fmt.Sprintf("kubectl -n %s rollout status deployment/%s --timeout=%v", flowAggregatorNamespace, deploymentName, 2*defaultTimeout)); err != nil || rc != 0 {
 		_, stdout, _, _ := data.provider.RunCommandOnNode(controlPlaneNodeName(), fmt.Sprintf("kubectl -n %s describe pod", flowAggregatorNamespace))
 		_, logStdout, _, _ := data.provider.RunCommandOnNode(controlPlaneNodeName(), fmt.Sprintf("kubectl -n %s logs -l app=flow-aggregator", flowAggregatorNamespace))
 		return fmt.Errorf("error when waiting for the Flow Aggregator rollout to complete. kubectl describe output: %s, logs: %s", stdout, logStdout)
 	}
 	// Check for flow-aggregator Pod running again for db connection establishment
-	flowAggPod, err := data.getFlowAggregator()
+	flowAggPod, err := data.getFlowAggregator(o.flowAggregator.selectedAggregator)
 	if err != nil {
 		return fmt.Errorf("error when getting flow-aggregator Pod: %v", err)
 	}
@@ -1214,7 +1237,7 @@ func (data *TestData) mutateFlowAggregatorConfigMap(ipfixCollectorAddr string, o
 		return fmt.Errorf("cannot use Proxy mode with ClickHouse")
 	}
 
-	configMap, err := data.GetFlowAggregatorConfigMap()
+	configMap, err := data.GetFlowAggregatorConfigMap(o)
 	if err != nil {
 		return err
 	}
@@ -1225,8 +1248,9 @@ func (data *TestData) mutateFlowAggregatorConfigMap(ipfixCollectorAddr string, o
 	}
 
 	flowAggregatorConf.Mode = o.mode
+
 	flowAggregatorConf.FlowCollector = flowaggregatorconfig.FlowCollectorConfig{
-		Enable:          true,
+		Enable:          ipfixCollectorAddr != "",
 		Address:         ipfixCollectorAddr,
 		IncludeK8sNames: o.ipfixCollector.includeK8sNames,
 		IncludeK8sUIDs:  o.ipfixCollector.includeK8sUIDs,
@@ -1235,6 +1259,7 @@ func (data *TestData) mutateFlowAggregatorConfigMap(ipfixCollectorAddr string, o
 		tls := &flowAggregatorConf.FlowCollector.TLS
 		tls.Enable = true
 		tls.ServerName = "ipfix-collector"
+
 		// By default, the YAML manifest used for testing already has CASecretName and
 		// ClientSecretName set (which is a no-op unless TLS is enabled). However, when
 		// client auth is disabled by the test, we have to make sure that ClientSecretName
@@ -1255,7 +1280,6 @@ func (data *TestData) mutateFlowAggregatorConfigMap(ipfixCollectorAddr string, o
 				CACert: o.databaseSecureConnection,
 			},
 		}
-
 	} else {
 		flowAggregatorConf.ClickHouse = flowaggregatorconfig.ClickHouseConfig{
 			Enable: false,
@@ -1265,6 +1289,10 @@ func (data *TestData) mutateFlowAggregatorConfigMap(ipfixCollectorAddr string, o
 	flowAggregatorConf.InactiveFlowRecordTimeout = aggregatorInactiveFlowRecordTimeout.String()
 	flowAggregatorConf.RecordContents.PodLabels = true
 	flowAggregatorConf.ClusterID = o.clusterID
+
+	if o.flowAggregator.disableTLS {
+		flowAggregatorConf.AggregatorTransportProtocol = "tcp"
+	}
 
 	b, err := yaml.Marshal(&flowAggregatorConf)
 	if err != nil {
@@ -1277,14 +1305,19 @@ func (data *TestData) mutateFlowAggregatorConfigMap(ipfixCollectorAddr string, o
 	return nil
 }
 
-func (data *TestData) GetFlowAggregatorConfigMap() (*corev1.ConfigMap, error) {
-	deployment, err := data.clientset.AppsV1().Deployments(flowAggregatorNamespace).Get(context.TODO(), flowAggregatorDeployment, metav1.GetOptions{})
+func (data *TestData) GetFlowAggregatorConfigMap(o flowVisibilityTestOptions) (*corev1.ConfigMap, error) {
+	deploymentName := flowAggregatorDeployment
+	if o.flowAggregator.selectedAggregator > 0 {
+		deploymentName = fmt.Sprintf("%s-%d", deploymentName, o.flowAggregator.selectedAggregator)
+	}
+
+	deployment, err := data.clientset.AppsV1().Deployments(flowAggregatorNamespace).Get(context.TODO(), deploymentName, metav1.GetOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("failed to retrieve Flow aggregator deployment: %v", err)
 	}
 	var configMapName string
 	for _, volume := range deployment.Spec.Template.Spec.Volumes {
-		if volume.ConfigMap != nil && volume.Name == flowAggregatorConfigVolume {
+		if volume.ConfigMap != nil && (volume.Name == flowAggregatorConfigVolume) {
 			configMapName = volume.ConfigMap.Name
 			break
 		}
@@ -2083,13 +2116,18 @@ func (data *TestData) RunCommandFromAntreaPodOnNode(nodeName string, cmd []strin
 }
 
 // getFlowAggregator retrieves the name of the Flow-Aggregator Pod (flow-aggregator-*) running on a specific Node.
-func (data *TestData) getFlowAggregator() (*corev1.Pod, error) {
+func (data *TestData) getFlowAggregator(aggregatorIndex int) (*corev1.Pod, error) {
+	match := flowAggregatorDeployment
+	if aggregatorIndex > 0 {
+		match = fmt.Sprintf("%s-%d", match, aggregatorIndex)
+	}
+
 	listOptions := metav1.ListOptions{
-		LabelSelector: "app=flow-aggregator",
+		LabelSelector: fmt.Sprintf("app=%s", match),
 	}
 	pods, err := data.clientset.CoreV1().Pods(flowAggregatorNamespace).List(context.TODO(), listOptions)
 	if err != nil {
-		return nil, fmt.Errorf("failed to list Flow Aggregator Pod: %v", err)
+		return nil, fmt.Errorf("failed to list Flow Aggregator Pod: %w", err)
 	}
 	if len(pods.Items) != 1 {
 		return nil, fmt.Errorf("expected *exactly* one Pod")
@@ -3032,18 +3070,22 @@ func (data *TestData) gracefulExitAntreaAgent(covDir string, nodeName string) er
 	return nil
 }
 
-// gracefulExitFlowAggregator copies the Flow Aggregator binary coverage data file out before terminating the Pod.
-func (data *TestData) gracefulExitFlowAggregator(covDir string) error {
-	flowAggPod, err := data.getFlowAggregator()
-	if err != nil {
-		return fmt.Errorf("error when getting flow-aggregator Pod: %v", err)
-	}
-	podName := flowAggPod.Name
+// gracefulExitFlowAggregators copies the Flow Aggregator binary coverage data file out before terminating the Pod.
+func (data *TestData) gracefulExitFlowAggregators(covDir string) error {
+	for i := range flowAggYamls {
+		flowAggPod, err := data.getFlowAggregator(i)
+		if err != nil {
+			if errors.IsNotFound(err) {
+				continue
+			}
+			return fmt.Errorf("error when getting flow-aggregator Pod: %w", err)
+		}
+		podName := flowAggPod.Name
 
-	if err := data.killProcessAndCollectCovFiles(flowAggregatorNamespace, podName, "flow-aggregator", "flow-aggregator", covDir); err != nil {
-		return fmt.Errorf("error when gracefully exiting Flow Aggregator: %w", err)
+		if err := data.killProcessAndCollectCovFiles(flowAggregatorNamespace, podName, "flow-aggregator", "flow-aggregator", covDir); err != nil {
+			return fmt.Errorf("error when gracefully exiting Flow Aggregator: %w", err)
+		}
 	}
-
 	return nil
 }
 

@@ -1,0 +1,15 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: flow-aggregator-1
+  name: not-used
+spec:
+  # update selector to match the new label
+  selector:
+    matchLabels:
+      app: flow-aggregator-1
+  template:
+    metadata:
+      labels:
+        app: flow-aggregator-1

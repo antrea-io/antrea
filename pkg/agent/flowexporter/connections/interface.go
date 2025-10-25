@@ -15,8 +15,6 @@
 package connections
 
 import (
-	"time"
-
 	"antrea.io/antrea/pkg/agent/flowexporter/connection"
 )
 
@@ -30,11 +28,23 @@ type ConnTrackDumper interface {
 	GetMaxConnections() (int, error)
 }
 
-type ConnectionStoreGetter interface {
-	GetConnByKey(connKey connection.ConnectionKey) (*connection.Connection, bool)
+type DenyStore interface {
+	HasConn(key connection.ConnectionKey) bool
+	SubmitDenyConn(conn *connection.Connection)
 }
 
-type DenyConnectionStoreUpdater interface {
-	ConnectionStoreGetter
-	AddOrUpdateConn(conn *connection.Connection, timeSeen time.Time, bytes uint64)
+type StoreSubscriber interface {
+	Subscribe() *subscription
+	Unsubscribe(sub *subscription)
+}
+
+type Store interface {
+	DenyStore
+	StoreSubscriber
+
+	Run(stopCh <-chan struct{})
+}
+
+type L7EventMapGetter interface {
+	ConsumeL7EventMap() map[connection.ConnectionKey]L7ProtocolFields
 }

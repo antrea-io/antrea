@@ -42,9 +42,8 @@ type Connection struct {
 	// For invalid and closed connections or deny connections: StopTime is the time when connection
 	// was updated last.
 	// For established connections: StopTime is latest time when it was polled.
-	StopTime time.Time
-	// LastExportTime is used to decide whether a connection is stale.
-	LastExportTime time.Time
+	StopTime       time.Time
+	LastUpdateTime time.Time
 	IsActive       bool
 	// IsPresent flag helps in cleaning up connections when they are not in conntrack table anymore.
 	IsPresent bool
@@ -57,8 +56,7 @@ type Connection struct {
 	// of the slice (at index 0) is the most-significant byte.
 	Labels, LabelsMask []byte
 	// TODO: Have a separate field for protocol. No need to keep it in Tuple.
-	FlowKey                        Tuple
-	OriginalPackets, OriginalBytes uint64
+	FlowKey Tuple
 	// Fields specific to Antrea
 	SourcePodNamespace             string
 	SourcePodName                  string
@@ -81,19 +79,28 @@ type Connection struct {
 	EgressNetworkPolicyType        uint8
 	EgressNetworkPolicyRuleName    string
 	EgressNetworkPolicyRuleAction  uint8
-	PrevPackets, PrevBytes         uint64
 	// Fields specific to conntrack connections
-	ReversePackets, ReverseBytes         uint64
-	PrevReversePackets, PrevReverseBytes uint64
-	TCPState                             string
-	PrevTCPState                         string
-	FlowType                             uint8
-	EgressName                           string
-	EgressUID                            string
-	EgressIP                             string
-	AppProtocolName                      string
-	HttpVals                             string
-	EgressNodeName                       string
+	TCPState        string
+	PrevTCPState    string
+	FlowType        uint8
+	EgressName      string
+	EgressUID       string
+	EgressIP        string
+	EgressNodeName  string
+	AppProtocolName string
+	HttpVals        string
+	// Stats
+	OriginalStats Stats
+	PreviousStats Stats
+
+	IsDenyFlow bool
+}
+
+type Stats struct {
+	Packets        uint64
+	Bytes          uint64
+	ReversePackets uint64
+	ReverseBytes   uint64
 }
 
 // NewConnectionKey creates 5-tuple of flow as connection key

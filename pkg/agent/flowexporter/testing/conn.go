@@ -34,13 +34,15 @@ func GetConnection(isIPv6 bool, isPresent bool, statusFlag uint32, protoID uint8
 		tuple = connection.Tuple{SourceAddress: srcIP, DestinationAddress: dstIP, Protocol: protoID, SourcePort: 65280, DestinationPort: 255}
 	}
 	conn := &connection.Connection{
-		StartTime:                      time.Time{},
-		StopTime:                       time.Time{},
-		StatusFlag:                     statusFlag,
-		OriginalPackets:                0xab,
-		OriginalBytes:                  0xabcd,
-		ReversePackets:                 0xa,
-		ReverseBytes:                   0xab,
+		StartTime:  time.Time{},
+		StopTime:   time.Time{},
+		StatusFlag: statusFlag,
+		OriginalStats: connection.Stats{
+			Packets:        0xab,
+			Bytes:          0xabcd,
+			ReversePackets: 0xa,
+			ReverseBytes:   0xab,
+		},
 		FlowKey:                        tuple,
 		IsPresent:                      isPresent,
 		SourcePodNamespace:             "ns",
@@ -81,6 +83,7 @@ func GetDenyConnection(isIPv6 bool, protoID uint8) *connection.Connection {
 	conn := &connection.Connection{
 		FlowKey:       tuple,
 		SourcePodName: "pod",
+		IsDenyFlow:    true,
 	}
 	return conn
 }

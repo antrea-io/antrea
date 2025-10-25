@@ -58,12 +58,17 @@ func TestConntrackConnActive(t *testing.T) {
 		{0, 0, 0, 0, "ESTABLISHED", "ESTABLISHED", false},
 	} {
 		conn := &connection.Connection{
-			OriginalPackets:    tc.originalPackets,
-			PrevPackets:        tc.prevPackets,
-			ReversePackets:     tc.reversePackets,
-			PrevReversePackets: tc.prevReversePackets,
-			TCPState:           tc.tcpState,
-			PrevTCPState:       tc.prevTCPState,
+			OriginalStats: connection.Stats{
+				Packets:        tc.originalPackets,
+				ReversePackets: tc.reversePackets,
+			},
+			PreviousStats: connection.Stats{
+				Packets:        tc.prevPackets,
+				ReversePackets: tc.prevReversePackets,
+			},
+
+			TCPState:     tc.tcpState,
+			PrevTCPState: tc.prevTCPState,
 		}
 		result := CheckConntrackConnActive(conn)
 		assert.Equal(t, tc.expectedResult, result)

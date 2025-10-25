@@ -37,9 +37,7 @@ import (
 	"k8s.io/client-go/tools/cache"
 
 	"antrea.io/antrea/pkg/agent/config"
-	"antrea.io/antrea/pkg/agent/flowexporter/connection"
 	"antrea.io/antrea/pkg/agent/flowexporter/connections"
-	connectionstest "antrea.io/antrea/pkg/agent/flowexporter/connections/testing"
 	"antrea.io/antrea/pkg/agent/flowexporter/filter"
 	"antrea.io/antrea/pkg/agent/flowexporter/options"
 	"antrea.io/antrea/pkg/agent/openflow"
@@ -47,7 +45,6 @@ import (
 	queriertest "antrea.io/antrea/pkg/querier/testing"
 	"antrea.io/antrea/pkg/util/k8s"
 	"antrea.io/antrea/pkg/util/objectstore"
-	objectstoretest "antrea.io/antrea/pkg/util/objectstore/testing"
 )
 
 const (
@@ -56,126 +53,6 @@ const (
 	testIdleFlowTimeout        = 1 * time.Second
 	testStaleConnectionTimeout = 5 * time.Minute
 )
-
-type fakel7EventMapGetter struct{}
-
-func (fll *fakel7EventMapGetter) ConsumeL7EventMap() map[connection.ConnectionKey]connections.L7ProtocolFields {
-	l7EventsMap := make(map[connection.ConnectionKey]connections.L7ProtocolFields)
-	return l7EventsMap
-}
-
-func createConnsForTest() ([]*connection.Connection, []*connection.ConnectionKey) {
-	// Reference for flow timestamp
-	refTime := time.Now()
-
-	testConns := make([]*connection.Connection, 2)
-	testConnKeys := make([]*connection.ConnectionKey, 2)
-	// Flow-1
-	tuple1 := connection.Tuple{SourceAddress: netip.MustParseAddr("1.2.3.4"), DestinationAddress: netip.MustParseAddr("4.3.2.1"), Protocol: 6, SourcePort: 65280, DestinationPort: 255}
-	testConn1 := &connection.Connection{
-		StartTime:       refTime.Add(-(time.Second * 50)),
-		StopTime:        refTime,
-		OriginalPackets: 0xffff,
-		OriginalBytes:   0xbaaaaa0000000000,
-		ReversePackets:  0xff,
-		ReverseBytes:    0xbaaa,
-		FlowKey:         tuple1,
-	}
-	testConnKey1 := connection.NewConnectionKey(testConn1)
-	testConns[0] = testConn1
-	testConnKeys[0] = &testConnKey1
-	// Flow-2
-	tuple2 := connection.Tuple{SourceAddress: netip.MustParseAddr("5.6.7.8"), DestinationAddress: netip.MustParseAddr("8.7.6.5"), Protocol: 6, SourcePort: 60001, DestinationPort: 200}
-	testConn2 := &connection.Connection{
-		StartTime:       refTime.Add(-(time.Second * 20)),
-		StopTime:        refTime,
-		OriginalPackets: 0xbb,
-		OriginalBytes:   0xcbbb,
-		ReversePackets:  0xbbbb,
-		ReverseBytes:    0xcbbbb0000000000,
-		FlowKey:         tuple2,
-	}
-	testConnKey2 := connection.NewConnectionKey(testConn2)
-	testConns[1] = testConn2
-	testConnKeys[1] = &testConnKey2
-
-	return testConns, testConnKeys
-}
-
-func preparePodInformation(podName string, podNS string, ip netip.Addr) *v1.Pod {
-	pod := &v1.Pod{
-		ObjectMeta: metav1.ObjectMeta{
-			Namespace: podNS,
-			Name:      podName,
-			UID:       types.UID(podName),
-		},
-		Status: v1.PodStatus{
-			Phase: v1.PodPending,
-			PodIPs: []v1.PodIP{
-				{
-					IP: ip.String(),
-				},
-			},
-		},
-	}
-	return pod
-}
-
-// TestConnectionStoreAndFlowRecords covers two scenarios: (i.) Add connections to connection store through connectionStore.Poll
-// execution and build flow records. (ii.) Flush the connections and check records are sti:w
-func TestConnectionStoreAndFlowRecords(t *testing.T) {
-	// Test setup
-	ctrl := mock.NewController(t)
-
-	// Prepare connections and pod store for test
-	testConns, testConnKeys := createConnsForTest()
-	testPods := make([]*v1.Pod, 2)
-	testPods[0] = preparePodInformation("pod1", "ns1", testConns[0].FlowKey.SourceAddress)
-	testPods[1] = preparePodInformation("pod2", "ns2", testConns[1].FlowKey.DestinationAddress)
-
-	// Create connectionStore, FlowRecords and associated mocks
-	connDumperMock := connectionstest.NewMockConnTrackDumper(ctrl)
-	mockPodStore := objectstoretest.NewMockPodStore(ctrl)
-	npQuerier := queriertest.NewMockAgentNetworkPolicyInfoQuerier(ctrl)
-	// TODO: Enhance the integration test by testing service.
-	o := &options.FlowExporterOptions{
-		ActiveFlowTimeout:      testActiveFlowTimeout,
-		IdleFlowTimeout:        testIdleFlowTimeout,
-		StaleConnectionTimeout: testStaleConnectionTimeout,
-		PollInterval:           testPollInterval}
-	conntrackConnStore := connections.NewConntrackConnectionStore(connDumperMock, true, false, npQuerier, mockPodStore, nil, &fakel7EventMapGetter{}, nil, o)
-	// Expect calls for connStore.poll and other callees
-	connDumperMock.EXPECT().DumpFlows(uint16(openflow.CtZone)).Return(testConns, 0, nil)
-	connDumperMock.EXPECT().GetMaxConnections().Return(0, nil)
-	for i, testConn := range testConns {
-		if i == 0 {
-			mockPodStore.EXPECT().GetPodByIPAndTime(testConn.FlowKey.SourceAddress.String(), mock.Any()).Return(testPods[i], true)
-			mockPodStore.EXPECT().GetPodByIPAndTime(testConn.FlowKey.DestinationAddress.String(), mock.Any()).Return(nil, false)
-		} else {
-			mockPodStore.EXPECT().GetPodByIPAndTime(testConn.FlowKey.SourceAddress.String(), mock.Any()).Return(nil, false)
-			mockPodStore.EXPECT().GetPodByIPAndTime(testConn.FlowKey.DestinationAddress.String(), mock.Any()).Return(testPods[i], true)
-		}
-	}
-	// Execute connStore.Poll
-	connsLens, err := conntrackConnStore.Poll()
-	require.Nil(t, err, fmt.Sprintf("Failed to add connections to connection store: %v", err))
-	assert.Len(t, connsLens, 1, "length of connsLens is expected to be 1")
-	assert.Len(t, testConns, connsLens[0], "expected connections should be equal to number of testConns")
-
-	// Check if connections in connectionStore are same as testConns or not
-	for i, expConn := range testConns {
-		if i == 0 {
-			expConn.SourcePodName = testPods[i].ObjectMeta.Name
-			expConn.SourcePodNamespace = testPods[i].ObjectMeta.Namespace
-		} else {
-			expConn.DestinationPodName = testPods[i].ObjectMeta.Name
-			expConn.DestinationPodNamespace = testPods[i].ObjectMeta.Name
-		}
-		actualConn, found := conntrackConnStore.GetConnByKey(*testConnKeys[i])
-		assert.Equal(t, found, true, "testConn should be present in connection store")
-		assert.Equal(t, expConn, actualConn, "testConn and connection in connection store should be equal")
-	}
-}
 
 func TestSetupConnTrackParameters(t *testing.T) {
 	err := connections.SetupConntrackParameters()
@@ -364,25 +241,15 @@ func BenchmarkConntrackConnectionStorePoll(b *testing.B) {
 		PollInterval:           testPollInterval,
 	}
 
-	conntrackConnStore := connections.NewConntrackConnectionStore(
-		connDumper,
-		true,  // v4Enabled
-		false, // v6Enabled
-		npQuerier,
-		podStore,
-		nil,
-		nil,
-		nil,
-		o,
-	)
+	store := connections.NewConnStore(connDumper, true, false, podStore, nil, npQuerier, nil, nil, nil, nil, false, o)
 
 	for b.Loop() {
-		connsLens, err := conntrackConnStore.Poll()
+		connsLens, err := store.PollConntrackAndStore()
 		require.NoError(b, err, "Poll() should not return error")
 		require.Len(b, connsLens, 1, "Poll() should return slice of length 1")
 		assert.Equal(b, numConnections, connsLens[0], "Poll() should return %d connections", numConnections)
-		assert.Equal(b, numConnections, conntrackConnStore.NumConnections(), "NumConnections() should return %d connections", numConnections)
+		assert.Equal(b, numConnections, store.NumConnections(), "NumConnections() should return %d connections", numConnections)
 		// Delete all connections, so that we only benchmark the performance of adding new connections.
-		assert.Equal(b, numConnections, conntrackConnStore.DeleteAllConnections(), "DeleteAllConnections() should return %d connections", numConnections)
+		assert.Equal(b, numConnections, store.DeleteAllConnections(), "DeleteAllConnections() should return %d connections", numConnections)
 	}
 }
