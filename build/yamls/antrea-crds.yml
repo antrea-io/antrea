@@ -3092,7 +3092,9 @@ spec:
                           type: string
                     ip:
                       type: string
-                      format: ipv4
+                      oneOf:
+                        - format: ipv4
+                        - format: ipv6
                 destination:
                   type: object
                   x-kubernetes-validations:
@@ -3111,13 +3113,15 @@ spec:
                           type: string
                     ip:
                       type: string
-                      format: ipv4
+                      oneOf:
+                        - format: ipv4
+                        - format: ipv6
                 packet:
                   type: object
                   properties:
                     ipFamily:
                       type: string
-                      enum: [IPv4]
+                      enum: [IPv4, IPv6]
                       default: IPv4
                     protocol:
                       x-kubernetes-int-or-string: true
@@ -3177,9 +3181,25 @@ spec:
                                     type: integer
                                     minimum: 0
                                     maximum: 255
+                        icmpv6:
+                          type: object
+                          properties:
+                            messages:
+                              type: array
+                              items:
+                                type: object
+                                required:
+                                  - type
+                                properties:
+                                  type:
+                                    x-kubernetes-int-or-string: true
+                                  code:
+                                    type: integer
+                                    minimum: 0
+                                    maximum: 255
                       x-kubernetes-validations:
-                        - rule: "(has(self.icmp) ? 1 : 0) + (has(self.udp) ? 1 : 0) + (has(self.tcp) ? 1: 0) <= 1"
-                          message: "At most one of 'icmp', 'udp', or 'tcp' may be set"
+                        - rule: "(has(self.icmp) ? 1 : 0) + (has(self.icmpv6) ? 1 : 0) + (has(self.udp) ? 1 : 0) + (has(self.tcp) ? 1: 0) <= 1"
+                          message: "At most one of 'ICMP', 'ICMPv6', 'UDP', or 'TCP' may be set"
                 direction:
                   type: string
                   enum: ["SourceToDestination", "DestinationToSource", "Both"]
