@@ -484,3 +484,8 @@ testing:
   coverage: false
   simulator:
     enable: false
+
+hostNetworkAcceleration:
+  # -- Enable to accelerate Pod-to-Pod traffic in the Node's host network using nftables flowtable when traffic mode is
+  # noEncap or hybrid.
+  enable: true
