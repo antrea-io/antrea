@@ -38,15 +38,15 @@ func toJSON(serialize interface{}) string {
 	return string(jsonMarshalled)
 }
 
-func (c *NPLController) updatePodNPLAnnotation(pod *corev1.Pod, annotations []npltypes.NPLAnnotation) error {
-	if err := patchPod(annotations, pod, c.kubeClient); err != nil {
-		klog.Warningf("Unable to patch NodePortLocal annotation for Pod %s/%s: %v", pod.Namespace, pod.Name, err)
+func (c *NPLController) updatePodNPLAnnotation(ctx context.Context, pod *corev1.Pod, annotations []npltypes.NPLAnnotation) error {
+	if err := patchPod(ctx, annotations, pod, c.kubeClient); err != nil {
+		return fmt.Errorf("failed to patch NodePortLocal annotation for Pod %s/%s: %w", pod.Namespace, pod.Name, err)
 	}
-	klog.V(2).Infof("Successfully updated NodePortLocal annotation for Pod %s/%s", pod.Namespace, pod.Name)
+	klog.V(2).InfoS("Successfully updated NodePortLocal annotation", "pod", klog.KObj(pod))
 	return nil
 }
 
-func patchPod(value []npltypes.NPLAnnotation, pod *corev1.Pod, kubeClient clientset.Interface) error {
+func patchPod(ctx context.Context, value []npltypes.NPLAnnotation, pod *corev1.Pod, kubeClient clientset.Interface) error {
 	payloadValue := make(map[string]*string)
 	if len(value) > 0 {
 		valueStr := string(toJSON(value))
@@ -62,7 +62,7 @@ func patchPod(value []npltypes.NPLAnnotation, pod *corev1.Pod, kubeClient client
 	}
 
 	payloadBytes, _ := json.Marshal(newPayload)
-	if _, err := kubeClient.CoreV1().Pods(pod.Namespace).Patch(context.TODO(), pod.Name, types.MergePatchType,
+	if _, err := kubeClient.CoreV1().Pods(pod.Namespace).Patch(ctx, pod.Name, types.MergePatchType,
 		payloadBytes, metav1.PatchOptions{}, "status"); err != nil && !errors.IsNotFound(err) {
 		return fmt.Errorf("unable to update NodePortLocal annotation for Pod %s/%s: %v", pod.Namespace,
 			pod.Name, err)
