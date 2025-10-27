@@ -283,7 +283,7 @@ func (nc *NetworkConfig) NeedsTunnelInterface() bool {
 	// cross-cluster traffic from a regular Node to the gateway Node for the source cluster
 	// always goes through antrea-tun0, regardless of the actual "traffic mode" for the source
 	// cluster.
-	return (nc.TrafficEncapMode.SupportsEncap() && nc.TrafficEncryptionMode != TrafficEncryptionModeWireGuard) || nc.EnableMulticlusterGW
+	return (nc.TrafficEncapMode.SupportsEncap()) || nc.EnableMulticlusterGW
 }
 
 // NeedsDirectRoutingToPeer returns true if Pod traffic to peer Node needs a direct route installed to the routing table.
@@ -330,7 +330,7 @@ func (nc *NetworkConfig) CalculateMTUDeduction(isIPv6 bool) int {
 	switch nc.TrafficEncryptionMode {
 	case TrafficEncryptionModeWireGuard:
 		// When WireGuard is enabled, cross-node traffic will only be encrypted, just reduce MTU for encryption.
-		nc.MTUDeduction = nc.WireGuardMTUDeduction
+		nc.MTUDeduction += nc.WireGuardMTUDeduction
 	case TrafficEncryptionModeIPSec:
 		// When IPsec is enabled, cross-node traffic will be encapsulated and encrypted, we need to reduce MTU for both
 		// encapsulation and encryption.
