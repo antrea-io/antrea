@@ -343,7 +343,7 @@ func longestCommonPrefixLen(a, b net.IP) (cpl int) {
 }
 
 // GetAllNodeAddresses gets all Node IP addresses (not including IPv6 link local address).
-func GetAllNodeAddresses(excludeDevices []string) ([]net.IP, []net.IP, error) {
+func GetAllNodeAddresses(excludeDeviceMatchers []func(string) bool) ([]net.IP, []net.IP, error) {
 	var nodeAddressesIPv4, nodeAddressesIPv6 []net.IP
 	_, ipv6LinkLocalNet, _ := net.ParseCIDR("fe80::/64")
 
@@ -353,12 +353,17 @@ func GetAllNodeAddresses(excludeDevices []string) ([]net.IP, []net.IP, error) {
 		return nil, nil, err
 	}
 
-	// Transform excludeDevices to a set
-	excludeDevicesSet := sets.New[string](excludeDevices...)
+	isDeviceExcluded := func(name string) bool {
+		for _, matcher := range excludeDeviceMatchers {
+			if matcher(name) {
+				return true
+			}
+		}
+		return false
+	}
 
 	for i := range interfaces {
-		// If the device is in excludeDevicesSet, skip it.
-		if excludeDevicesSet.Has(interfaces[i].Name) {
+		if isDeviceExcluded(interfaces[i].Name) {
 			continue
 		}
 

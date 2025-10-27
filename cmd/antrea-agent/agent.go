@@ -101,7 +101,10 @@ const informerDefaultResync = 12 * time.Hour
 const resyncPeriodDisabled = 0 * time.Minute
 
 // The devices that should be excluded from NodePort.
-var excludeNodePortDevices = []string{"antrea-egress0", "antrea-ingress0", "kube-ipvs0"}
+var (
+	excludeNodePortDevices        = []string{"antrea-egress0", "antrea-ingress0", "kube-ipvs0"}
+	excludeNodePortDevicePrefixes = []string{"antrea-ext."}
+)
 
 var ipv4Localhost = net.ParseIP("127.0.0.1")
 
@@ -285,7 +288,8 @@ func run(o *Options) error {
 	// Get all available NodePort addresses.
 	var nodePortAddressesIPv4, nodePortAddressesIPv6 []net.IP
 	if o.config.AntreaProxy.ProxyAll {
-		nodePortAddressesIPv4, nodePortAddressesIPv6, err = getAvailableNodePortAddresses(o.config.AntreaProxy.NodePortAddresses, append(excludeNodePortDevices, o.config.HostGateway))
+		excludeNodePortDevices := append(excludeNodePortDevices, o.config.HostGateway)
+		nodePortAddressesIPv4, nodePortAddressesIPv6, err = getAvailableNodePortAddresses(o.config.AntreaProxy.NodePortAddresses, excludeNodePortDevices, excludeNodePortDevicePrefixes)
 		if err != nil {
 			return fmt.Errorf("getting available NodePort IP addresses failed: %v", err)
 		}
