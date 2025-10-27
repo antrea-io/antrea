@@ -301,3 +301,122 @@ func getGroupModLen(g *openflow15.GroupMod) uint32 {
 	}
 	return n
 }
+
+// setupPipelineForTest initializes a minimal pipeline for testing table lookup functions.
+func setupPipelineForTest() {
+	features := []feature{
+		newTestFeaturePodConnectivity([]binding.Protocol{binding.ProtocolIP}),
+		newTestFeatureNetworkPolicy(config.K8sNode),
+	}
+
+	// Build pipeline required tables map
+	pipelineRequiredTablesMap := make(map[binding.PipelineID]map[*Table]struct{})
+	for pipelineID := firstPipeline; pipelineID <= lastPipeline; pipelineID++ {
+		pipelineRequiredTablesMap[pipelineID] = make(map[*Table]struct{})
+	}
+	pipelineRequiredTablesMap[pipelineRoot][PipelineRootClassifierTable] = struct{}{}
+	for _, f := range features {
+		for _, table := range f.getRequiredTables() {
+			if _, ok := pipelineRequiredTablesMap[table.pipeline]; ok {
+				pipelineRequiredTablesMap[table.pipeline][table] = struct{}{}
+			}
+		}
+	}
+
+	// Generate pipelines
+	for pipelineID := firstPipeline; pipelineID <= lastPipeline; pipelineID++ {
+		if _, ok := pipelineRequiredTablesMap[pipelineID]; !ok {
+			continue
+		}
+		var requiredTables []*Table
+		for _, table := range tableOrderCache[pipelineID] {
+			if _, ok := pipelineRequiredTablesMap[pipelineID][table]; ok {
+				requiredTables = append(requiredTables, table)
+			}
+		}
+		if len(requiredTables) > 0 {
+			generatePipeline(pipelineID, requiredTables)
+		}
+	}
+}
+
+func TestGetFlowTableID(t *testing.T) {
+	defer resetPipelines()
+	setupPipelineForTest()
+
+	testCases := []struct {
+		name       string
+		tableName  string
+		expectedID uint8
+	}{
+		{
+			name:       "Valid table name - Classifier",
+			tableName:  "Classifier",
+			expectedID: ClassifierTable.GetID(),
+		},
+		{
+			name:       "Valid table name - AntreaPolicyEgressRule",
+			tableName:  "AntreaPolicyEgressRule",
+			expectedID: AntreaPolicyEgressRuleTable.GetID(),
+		},
+		{
+			name:       "Invalid table name",
+			tableName:  "NonExistentTable",
+			expectedID: binding.TableIDAll,
+		},
+		{
+			name:       "Empty table name",
+			tableName:  "",
+			expectedID: binding.TableIDAll,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			tableID := GetFlowTableID(tc.tableName)
+			assert.Equal(t, tc.expectedID, tableID, "Table ID mismatch for table %s", tc.tableName)
+		})
+	}
+}
+
+func TestGetFlowTableName(t *testing.T) {
+	defer resetPipelines()
+	setupPipelineForTest()
+
+	testCases := []struct {
+		name         string
+		tableID      uint8
+		expectedName string
+	}{
+		{
+			name:         "Valid table ID - Classifier",
+			tableID:      ClassifierTable.GetID(),
+			expectedName: "Classifier",
+		},
+		{
+			name:         "Valid table ID - AntreaPolicyEgressRule",
+			tableID:      AntreaPolicyEgressRuleTable.GetID(),
+			expectedName: "AntreaPolicyEgressRule",
+		},
+		{
+			name:         "Invalid table ID - 255",
+			tableID:      255,
+			expectedName: "",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			tableName := GetFlowTableName(tc.tableID)
+			assert.Equal(t, tc.expectedName, tableName, "Table name mismatch for table ID %d", tc.tableID)
+		})
+	}
+}
+
+func TestGetTableList(t *testing.T) {
+	defer resetPipelines()
+	setupPipelineForTest()
+
+	tables := GetTableList()
+	assert.NotEmpty(t, tables, "GetTableList should return at least one table")
+}
