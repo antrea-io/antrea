@@ -19,7 +19,7 @@ import (
 	"fmt"
 	"net"
 	"reflect"
-	"slices"
+	"sync"
 	"testing"
 	"time"
 
@@ -33,7 +33,6 @@ import (
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes/fake"
-	k8sv1 "k8s.io/client-go/kubernetes/typed/core/v1"
 	k8stesting "k8s.io/client-go/testing"
 	"k8s.io/client-go/util/workqueue"
 
@@ -51,7 +50,6 @@ import (
 	crdv1b1 "antrea.io/antrea/pkg/apis/crd/v1beta1"
 	"antrea.io/antrea/pkg/client/clientset/versioned"
 	fakeversioned "antrea.io/antrea/pkg/client/clientset/versioned/fake"
-	"antrea.io/antrea/pkg/client/clientset/versioned/scheme"
 	crdinformers "antrea.io/antrea/pkg/client/informers/externalversions"
 	"antrea.io/antrea/pkg/util/channel"
 	"antrea.io/antrea/pkg/util/ip"
@@ -915,6 +913,8 @@ func TestSyncEgress(t *testing.T) {
 			},
 			expectedEvents: []string{
 				"Assigned Egress egressA with IP 1.1.1.1 on Node node1",
+				// Expect a second Event after adding the SubnetInfo to the EIP.
+				"Assigned Egress egressA with IP 1.1.1.1 on Node node1",
 			},
 		},
 		{
@@ -977,6 +977,8 @@ func TestSyncEgress(t *testing.T) {
 				mockIPAssigner.EXPECT().AssignIP(fakeLocalEgressIP1, &crdv1b1.SubnetInfo{Gateway: fakeGatewayIP2, PrefixLength: 16}, gomock.Any()).Return(false, nil)
 			},
 			expectedEvents: []string{
+				"Assigned Egress egressA with IP 1.1.1.1 on Node node1",
+				// Expect a second Event after updating the SubnetInfo of the EIP.
 				"Assigned Egress egressA with IP 1.1.1.1 on Node node1",
 			},
 		},
@@ -1113,9 +1115,22 @@ func TestSyncEgress(t *testing.T) {
 			if tt.maxEgressIPsPerNode > 0 {
 				c.egressIPScheduler.maxEgressIPsPerNode = tt.maxEgressIPsPerNode
 			}
-			c.eventBroadcaster.StartRecordingToSink(&k8sv1.EventSinkImpl{
-				Interface: c.k8sClient.CoreV1().Events(""),
+			events := make([]*v1.Event, 0)
+			var eventsMutex sync.Mutex
+			c.eventBroadcaster.StartEventWatcher(func(e *v1.Event) {
+				eventsMutex.Lock()
+				defer eventsMutex.Unlock()
+				events = append(events, e)
 			})
+			getEventMessages := func() []string {
+				eventsMutex.Lock()
+				defer eventsMutex.Unlock()
+				messages := make([]string, len(events))
+				for idx := range events {
+					messages[idx] = events[idx].Message
+				}
+				return messages
+			}
 
 			stopCh := make(chan struct{})
 			defer close(stopCh)
@@ -1172,33 +1187,12 @@ func TestSyncEgress(t *testing.T) {
 				assert.True(t, k8s.SemanticIgnoringTime.DeepEqual(expectedEgress, gotEgress))
 			}
 			assert.EventuallyWithT(t, func(t *assert.CollectT) {
-				events, err := c.k8sClient.CoreV1().Events("").SearchWithContext(context.TODO(), scheme.Scheme, tt.existingEgress)
-				if !assert.NoError(t, err) || !assert.Len(t, events.Items, len(tt.expectedEvents)) {
-					return
-				}
-				// If tt.expectedEvents is empty, we can stop here as we already
-				// know events.Items is also empty (we asserted that the lengths are
-				// the same).
+				messages := getEventMessages()
 				if len(tt.expectedEvents) == 0 {
-					return
+					assert.Empty(t, messages, "Expected no events")
+				} else {
+					assert.Equal(t, tt.expectedEvents, messages)
 				}
-				// SearchWithContext is not guaranteed to return the Events in any
-				// specific order. We sort them by timestamp before matching the
-				// list against our expectations.
-				slices.SortFunc(events.Items, func(e1, e2 v1.Event) int {
-					if e1.LastTimestamp.Before(&e2.LastTimestamp) {
-						return -1
-					}
-					if e2.LastTimestamp.Before(&e1.LastTimestamp) {
-						return 1
-					}
-					return 0
-				})
-				messages := make([]string, len(events.Items))
-				for idx := range events.Items {
-					messages[idx] = events.Items[idx].Message
-				}
-				assert.Equal(t, tt.expectedEvents, messages)
 			}, 2*time.Second, 200*time.Millisecond)
 		})
 	}
