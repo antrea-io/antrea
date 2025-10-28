@@ -72,7 +72,7 @@ case $key in
         echo "Error: Invalid value for --scale-op. Expected one of: auto, up, down."
         exit 1
     fi
-    shift
+    shift 2
     ;;
     --jenkins-url)
     JENKINS_URL="$2"
@@ -281,7 +281,6 @@ function remove_idle_agents {
                     baseAgentName=${AGENT_NAME%-*}
                     sudo gcloud compute instances delete "$baseAgentName" --zone="$ZONE" --quiet
                     echo "Agent $AGENT_NAME has been deleted."
-                    break
                 else
                     echo "Agent $AGENT_NAME still has jobs running, cannot be deleted."
                 fi
