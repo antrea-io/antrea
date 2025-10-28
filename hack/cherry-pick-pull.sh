@@ -17,7 +17,8 @@
 
 # This files is a copy of
 # https://github.com/kubernetes/kubernetes/blob/6c3654db1b30020150ec3ff51926454be9675519/hack/cherry_pick_pull.sh
-# with some changes: remove REGENERATE_DOCS, add 'kind/cherry-pick' label when
+# with some changes: remove REGENERATE_DOCS, add 'kind/cherry-pick' label and
+# either 'kind/cherry-pick-clean' or 'kind/cherry-pick-conflicts' label when
 # creating PR
 
 # Usage Instructions: https://github.com/antrea-io/antrea/blob/main/docs/contributors/cherry-picks.md
@@ -152,13 +153,22 @@ For details on the cherry pick process, see the [cherry pick requests](https://g
 EOF
 )
 
-  gh pr create --label="kind/cherry-pick" --title="Automated cherry pick of ${numandtitle}" --body="${prtext}" --head "${GITHUB_USER}:${NEWBRANCH}" --base "${rel}" --repo="${MAIN_REPO_ORG}/${MAIN_REPO_NAME}"
+  # Determine which label to apply based on whether conflicts occurred
+  local cherry_pick_label
+  if [[ "${had_conflicts}" == "true" ]]; then
+    cherry_pick_label="kind/cherry-pick-conflicts"
+  else
+    cherry_pick_label="kind/cherry-pick-clean"
+  fi
+
+  gh pr create --label="kind/cherry-pick" --label="${cherry_pick_label}" --title="Automated cherry pick of ${numandtitle}" --body="${prtext}" --head "${GITHUB_USER}:${NEWBRANCH}" --base "${rel}" --repo="${MAIN_REPO_ORG}/${MAIN_REPO_NAME}"
 }
 
 git checkout -b "${NEWBRANCHUNIQ}" "${BRANCH}"
 cleanbranch="${NEWBRANCHUNIQ}"
 
 gitamcleanup=true
+had_conflicts=false
 for pull in "${PULLS[@]}"; do
   echo "+++ Downloading patch to /tmp/${pull}.patch (in case you need to do this again)"
 
@@ -173,6 +183,7 @@ for pull in "${PULLS[@]}"; do
     while unmerged=$(git status --porcelain | grep ^U) && [[ -n ${unmerged} ]] \
       || [[ -e "${REBASEMAGIC}" ]]; do
       conflicts=true # <-- We should have detected conflicts once
+      had_conflicts=true # Track that conflicts occurred for labeling
       echo
       echo "+++ Conflicts detected:"
       echo
