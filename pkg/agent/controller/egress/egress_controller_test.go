@@ -20,6 +20,7 @@ import (
 	"net"
 	"reflect"
 	"slices"
+	"strings"
 	"testing"
 	"time"
 
@@ -1185,14 +1186,15 @@ func TestSyncEgress(t *testing.T) {
 				// SearchWithContext is not guaranteed to return the Events in any
 				// specific order. We sort them by timestamp before matching the
 				// list against our expectations.
-				slices.SortFunc(events.Items, func(e1, e2 v1.Event) int {
+				slices.SortStableFunc(events.Items, func(e1, e2 v1.Event) int {
 					if e1.LastTimestamp.Before(&e2.LastTimestamp) {
 						return -1
 					}
 					if e2.LastTimestamp.Before(&e1.LastTimestamp) {
 						return 1
 					}
-					return 0
+					// fallback for equal timestamps
+					return strings.Compare(e1.Message, e2.Message)
 				})
 				messages := make([]string, len(events.Items))
 				for idx := range events.Items {
