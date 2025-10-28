@@ -25,9 +25,20 @@ import (
 
 var getAllNodeAddresses = util.GetAllNodeAddresses
 
-func getAvailableNodePortAddresses(nodePortAddressesFromConfig []string, excludeDevices []string) ([]net.IP, []net.IP, error) {
+func getAvailableNodePortAddresses(nodePortAddressesFromConfig []string, excludeDevices []string, excludeDevicePrefixes []string) ([]net.IP, []net.IP, error) {
+	excludeDeviceMatchers := make([]func(string) bool, 0)
+	for _, device := range excludeDevices {
+		excludeDeviceMatchers = append(excludeDeviceMatchers, func(name string) bool {
+			return name == device
+		})
+	}
+	for _, devicePrefix := range excludeDevicePrefixes {
+		excludeDeviceMatchers = append(excludeDeviceMatchers, func(name string) bool {
+			return strings.HasPrefix(name, devicePrefix)
+		})
+	}
 	// Get all IP addresses of Node
-	nodeAddressesIPv4, nodeAddressesIPv6, err := getAllNodeAddresses(excludeDevices)
+	nodeAddressesIPv4, nodeAddressesIPv6, err := getAllNodeAddresses(excludeDeviceMatchers)
 	if err != nil {
 		return nil, nil, err
 	}
