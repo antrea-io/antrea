@@ -266,7 +266,7 @@ func GetFlowTableID(tableName string) uint8 {
 	if len(objs) == 0 {
 		return binding.TableIDAll
 	}
-	return objs[0].(binding.Table).GetID()
+	return objs[0].(*Table).ofTable.GetID()
 }
 
 func GetTableList() []binding.Table {
