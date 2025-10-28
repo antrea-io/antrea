@@ -50,10 +50,10 @@ var (
 	externalIPv6Addr1 = "fd00:1234:5678:dead:beaf::1"
 	externalIPv6Addr2 = "fd00:1234:5678:dead:beaf::a"
 
-	ipv4Route1 = generateRoute(net.ParseIP(externalIPv4Addr1), 32, config.VirtualServiceIPv4, 10, netlink.SCOPE_UNIVERSE)
-	ipv4Route2 = generateRoute(net.ParseIP(externalIPv4Addr2), 32, config.VirtualServiceIPv4, 10, netlink.SCOPE_UNIVERSE)
-	ipv6Route1 = generateRoute(net.ParseIP(externalIPv6Addr1), 128, config.VirtualServiceIPv6, 10, netlink.SCOPE_UNIVERSE)
-	ipv6Route2 = generateRoute(net.ParseIP(externalIPv6Addr2), 128, config.VirtualServiceIPv6, 10, netlink.SCOPE_UNIVERSE)
+	ipv4Route1 = generateRoute(net.ParseIP(externalIPv4Addr1), 32, config.VirtualServiceIPv4, 10, netlink.SCOPE_UNIVERSE, nil, nil)
+	ipv4Route2 = generateRoute(net.ParseIP(externalIPv4Addr2), 32, config.VirtualServiceIPv4, 10, netlink.SCOPE_UNIVERSE, nil, nil)
+	ipv6Route1 = generateRoute(net.ParseIP(externalIPv6Addr1), 128, config.VirtualServiceIPv6, 10, netlink.SCOPE_UNIVERSE, nil, nil)
+	ipv6Route2 = generateRoute(net.ParseIP(externalIPv6Addr2), 128, config.VirtualServiceIPv6, 10, netlink.SCOPE_UNIVERSE, nil, nil)
 
 	serviceIPSets = map[string]*sync.Map{
 		antreaNodePortIPSet:    {},
@@ -737,6 +737,8 @@ COMMIT
 				mockIPTables.AppendRule(iptables.ProtocolDual, iptables.MangleTable, iptables.PreRoutingChain, []string{"-j", antreaPreRoutingChain, "-m", "comment", "--comment", "Antrea: jump to Antrea prerouting rules"})
 				mockIPTables.EnsureChain(iptables.ProtocolDual, iptables.MangleTable, antreaOutputChain)
 				mockIPTables.AppendRule(iptables.ProtocolDual, iptables.MangleTable, iptables.OutputChain, []string{"-j", antreaOutputChain, "-m", "comment", "--comment", "Antrea: jump to Antrea output rules"})
+				mockIPTables.EnsureChain(iptables.ProtocolDual, iptables.MangleTable, antreaPostRoutingChain)
+				mockIPTables.AppendRule(iptables.ProtocolDual, iptables.MangleTable, iptables.PostRoutingChain, []string{"-j", antreaPostRoutingChain, "-m", "comment", "--comment", "Antrea: jump to Antrea postrouting rules"})
 				mockIPTables.ListRules(iptables.ProtocolDual, iptables.NATTable, iptables.PreRoutingChain).Return(
 					map[iptables.Protocol][]string{
 						iptables.ProtocolIPv4: {
@@ -782,8 +784,10 @@ COMMIT
 *mangle
 :ANTREA-PREROUTING - [0:0]
 :ANTREA-OUTPUT - [0:0]
--A ANTREA-PREROUTING -m comment --comment "Antrea: restore fwmark from connmark for reply Egress packets from remote Pods" ! -i antrea-gw0 -m conntrack --ctstate ESTABLISHED -m conntrack --ctdir REPLY -m connmark --mark 0x40000000/0x40000000 -j CONNMARK --restore-mark --nfmask 0x40000000 --ctmask 0x40000000
--A ANTREA-PREROUTING -m comment --comment "Antrea: persist connmark for the first Egress request packet from remote Pods" -i antrea-gw0 ! -s 172.16.10.0/24 -m conntrack --ctstate NEW -m mark ! --mark 0x00000000/0x000000ff -j CONNMARK --set-mark 0x40000000/0x40000000
+:ANTREA-POSTROUTING - [0:0]
+-A ANTREA-PREROUTING -m comment --comment "Antrea: restore fwmark from connmark for reply Egress packets to remote Pods" -m conntrack --ctstate ESTABLISHED -m conntrack --ctdir REPLY -m connmark --mark 0x40000000/0x40000000 -j CONNMARK --restore-mark --nfmask 0x40000000 --ctmask 0x40000000
+-A ANTREA-PREROUTING -m comment --comment "Antrea: persist connmark for the first request Egress packet from remote Pods" -i antrea-gw0 ! -s 172.16.10.0/24 -m conntrack --ctstate NEW -m mark ! --mark 0x00000000/0x000000ff -j CONNMARK --set-mark 0x40000000/0x40000000
+-A ANTREA-POSTROUTING -m comment --comment "Antrea: clear fwmark from reply Egress packets to remote Pods" -m conntrack --ctstate ESTABLISHED -m conntrack --ctdir REPLY -j MARK --set-xmark 0x0/0x40000000
 -A ANTREA-OUTPUT -m comment --comment "Antrea: mark LOCAL output packets" -m addrtype --src-type LOCAL -o antrea-gw0 -j MARK --or-mark 0x80000000
 COMMIT
 *filter
@@ -835,8 +839,10 @@ COMMIT
 *mangle
 :ANTREA-PREROUTING - [0:0]
 :ANTREA-OUTPUT - [0:0]
--A ANTREA-PREROUTING -m comment --comment "Antrea: restore fwmark from connmark for reply Egress packets from remote Pods" ! -i antrea-gw0 -m conntrack --ctstate ESTABLISHED -m conntrack --ctdir REPLY -m connmark --mark 0x40000000/0x40000000 -j CONNMARK --restore-mark --nfmask 0x40000000 --ctmask 0x40000000
--A ANTREA-PREROUTING -m comment --comment "Antrea: persist connmark for the first Egress request packet from remote Pods" -i antrea-gw0 ! -s 2001:ab03:cd04:55ef::/64 -m conntrack --ctstate NEW -m mark ! --mark 0x00000000/0x000000ff -j CONNMARK --set-mark 0x40000000/0x40000000
+:ANTREA-POSTROUTING - [0:0]
+-A ANTREA-PREROUTING -m comment --comment "Antrea: restore fwmark from connmark for reply Egress packets to remote Pods" -m conntrack --ctstate ESTABLISHED -m conntrack --ctdir REPLY -m connmark --mark 0x40000000/0x40000000 -j CONNMARK --restore-mark --nfmask 0x40000000 --ctmask 0x40000000
+-A ANTREA-PREROUTING -m comment --comment "Antrea: persist connmark for the first request Egress packet from remote Pods" -i antrea-gw0 ! -s 2001:ab03:cd04:55ef::/64 -m conntrack --ctstate NEW -m mark ! --mark 0x00000000/0x000000ff -j CONNMARK --set-mark 0x40000000/0x40000000
+-A ANTREA-POSTROUTING -m comment --comment "Antrea: clear fwmark from reply Egress packets to remote Pods" -m conntrack --ctstate ESTABLISHED -m conntrack --ctdir REPLY -j MARK --set-xmark 0x0/0x40000000
 -A ANTREA-OUTPUT -m comment --comment "Antrea: mark LOCAL output packets" -m addrtype --src-type LOCAL -o antrea-gw0 -j MARK --or-mark 0x80000000
 COMMIT
 *filter
@@ -921,6 +927,8 @@ COMMIT
 				mockIPTables.AppendRule(iptables.ProtocolDual, iptables.MangleTable, iptables.PreRoutingChain, []string{"-j", antreaPreRoutingChain, "-m", "comment", "--comment", "Antrea: jump to Antrea prerouting rules"})
 				mockIPTables.EnsureChain(iptables.ProtocolDual, iptables.MangleTable, antreaOutputChain)
 				mockIPTables.AppendRule(iptables.ProtocolDual, iptables.MangleTable, iptables.OutputChain, []string{"-j", antreaOutputChain, "-m", "comment", "--comment", "Antrea: jump to Antrea output rules"})
+				mockIPTables.EnsureChain(iptables.ProtocolDual, iptables.MangleTable, antreaPostRoutingChain)
+				mockIPTables.AppendRule(iptables.ProtocolDual, iptables.MangleTable, iptables.PostRoutingChain, []string{"-j", antreaPostRoutingChain, "-m", "comment", "--comment", "Antrea: jump to Antrea postrouting rules"})
 				mockIPTables.Restore(`*raw
 :ANTREA-PREROUTING - [0:0]
 :ANTREA-OUTPUT - [0:0]
@@ -930,8 +938,10 @@ COMMIT
 *mangle
 :ANTREA-PREROUTING - [0:0]
 :ANTREA-OUTPUT - [0:0]
--A ANTREA-PREROUTING -m comment --comment "Antrea: restore fwmark from connmark for reply Egress packets from remote Pods" ! -i antrea-gw0 -m conntrack --ctstate ESTABLISHED -m conntrack --ctdir REPLY -m connmark --mark 0x40000000/0x40000000 -j CONNMARK --restore-mark --nfmask 0x40000000 --ctmask 0x40000000
--A ANTREA-PREROUTING -m comment --comment "Antrea: persist connmark for the first Egress request packet from remote Pods" -i antrea-gw0 ! -s 172.16.10.0/24 -m conntrack --ctstate NEW -m mark ! --mark 0x00000000/0x000000ff -j CONNMARK --set-mark 0x40000000/0x40000000
+:ANTREA-POSTROUTING - [0:0]
+-A ANTREA-PREROUTING -m comment --comment "Antrea: restore fwmark from connmark for reply Egress packets to remote Pods" -m conntrack --ctstate ESTABLISHED -m conntrack --ctdir REPLY -m connmark --mark 0x40000000/0x40000000 -j CONNMARK --restore-mark --nfmask 0x40000000 --ctmask 0x40000000
+-A ANTREA-PREROUTING -m comment --comment "Antrea: persist connmark for the first request Egress packet from remote Pods" -i antrea-gw0 ! -s 172.16.10.0/24 -m conntrack --ctstate NEW -m mark ! --mark 0x00000000/0x000000ff -j CONNMARK --set-mark 0x40000000/0x40000000
+-A ANTREA-POSTROUTING -m comment --comment "Antrea: clear fwmark from reply Egress packets to remote Pods" -m conntrack --ctstate ESTABLISHED -m conntrack --ctdir REPLY -j MARK --set-xmark 0x0/0x40000000
 -A ANTREA-OUTPUT -m comment --comment "Antrea: mark LOCAL output packets" -m addrtype --src-type LOCAL -o antrea-gw0 -j MARK --or-mark 0x80000000
 COMMIT
 *filter
@@ -955,8 +965,10 @@ COMMIT
 *mangle
 :ANTREA-PREROUTING - [0:0]
 :ANTREA-OUTPUT - [0:0]
--A ANTREA-PREROUTING -m comment --comment "Antrea: restore fwmark from connmark for reply Egress packets from remote Pods" ! -i antrea-gw0 -m conntrack --ctstate ESTABLISHED -m conntrack --ctdir REPLY -m connmark --mark 0x40000000/0x40000000 -j CONNMARK --restore-mark --nfmask 0x40000000 --ctmask 0x40000000
--A ANTREA-PREROUTING -m comment --comment "Antrea: persist connmark for the first Egress request packet from remote Pods" -i antrea-gw0 ! -s 2001:ab03:cd04:55ef::/64 -m conntrack --ctstate NEW -m mark ! --mark 0x00000000/0x000000ff -j CONNMARK --set-mark 0x40000000/0x40000000
+:ANTREA-POSTROUTING - [0:0]
+-A ANTREA-PREROUTING -m comment --comment "Antrea: restore fwmark from connmark for reply Egress packets to remote Pods" -m conntrack --ctstate ESTABLISHED -m conntrack --ctdir REPLY -m connmark --mark 0x40000000/0x40000000 -j CONNMARK --restore-mark --nfmask 0x40000000 --ctmask 0x40000000
+-A ANTREA-PREROUTING -m comment --comment "Antrea: persist connmark for the first request Egress packet from remote Pods" -i antrea-gw0 ! -s 2001:ab03:cd04:55ef::/64 -m conntrack --ctstate NEW -m mark ! --mark 0x00000000/0x000000ff -j CONNMARK --set-mark 0x40000000/0x40000000
+-A ANTREA-POSTROUTING -m comment --comment "Antrea: clear fwmark from reply Egress packets to remote Pods" -m conntrack --ctstate ESTABLISHED -m conntrack --ctdir REPLY -j MARK --set-xmark 0x0/0x40000000
 -A ANTREA-OUTPUT -m comment --comment "Antrea: mark LOCAL output packets" -m addrtype --src-type LOCAL -o antrea-gw0 -j MARK --or-mark 0x80000000
 COMMIT
 *filter
