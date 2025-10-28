@@ -38,11 +38,11 @@ var (
 
 // IP Route tables
 const (
-	// MinEgressRouteTable to MaxEgressRouteTable are the route table IDs that can be configured on a Node for Egress traffic.
+	// MinRequestEgressRouteTable to MaxRequestEgressRouteTable are the route table IDs that can be configured on a Node for Egress traffic.
 	// Each distinct subnet uses one route table. 20 subnets should be enough.
-	MinEgressRouteTable = 101
-	MaxEgressRouteTable = 120
+	MinRequestEgressRouteTable = 101
+	MaxRequestEgressRouteTable = 120
 
-	// EgressNoEncapReturnRouteTable is the route table ID which is used to add policy routing rules in hybrid mode.
-	EgressNoEncapReturnRouteTable = 141
+	// ReplyEgressRouteTable is the route table ID which is used to add policy routing rules in hybrid mode.
+	ReplyEgressRouteTable = 141
 )

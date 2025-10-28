@@ -82,7 +82,7 @@ const (
 	egressDummyDevice = "antrea-egress0"
 )
 
-var maxSubnetsPerNodes = types.MaxEgressRouteTable - types.MinEgressRouteTable + 1
+var maxSubnetsPerNodes = types.MaxRequestEgressRouteTable - types.MinRequestEgressRouteTable + 1
 
 var emptyWatch = watch.NewEmptyWatch()
 
@@ -281,7 +281,7 @@ func NewEgressController(
 	}
 	if supportSeparateSubnet {
 		c.egressRouteTables = map[crdv1b1.SubnetInfo]*egressRouteTable{}
-		c.tableAllocator = newIDAllocator(types.MinEgressRouteTable, types.MaxEgressRouteTable)
+		c.tableAllocator = newIDAllocator(types.MinRequestEgressRouteTable, types.MaxRequestEgressRouteTable)
 		externalIPPoolInformer.Informer().AddEventHandlerWithResyncPeriod(
 			cache.ResourceEventHandlerFuncs{
 				AddFunc:    c.addExternalIPPool,
@@ -517,7 +517,7 @@ func (c *EgressController) Run(stopCh <-chan struct{}) {
 	if err := c.replaceEgressIPs(); err != nil {
 		klog.ErrorS(err, "Failed to replace Egress IPs")
 	}
-	if err := c.routeClient.RestoreEgressRoutesAndRules(types.MinEgressRouteTable, types.MaxEgressRouteTable); err != nil {
+	if err := c.routeClient.RestoreEgressRoutesAndRules(types.MinRequestEgressRouteTable, types.MaxRequestEgressRouteTable); err != nil {
 		klog.ErrorS(err, "Failed to restore Egress routes and rules")
 	}
 

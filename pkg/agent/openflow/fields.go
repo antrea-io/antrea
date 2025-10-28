@@ -202,6 +202,7 @@ var (
 	// for persisting the value from reg0 to CTMark when committing the first packet of the connection with CT action.
 	// This CT mark is only used in CtZone / CtZoneV6.
 	ConnSourceCTMarkField = binding.NewCTMarkField(0, 3)
+	FromTunnelCTMark      = binding.NewCTMark(ConnSourceCTMarkField, tunnelVal)
 	FromGatewayCTMark     = binding.NewCTMark(ConnSourceCTMarkField, gatewayVal)
 	FromBridgeCTMark      = binding.NewCTMark(ConnSourceCTMarkField, bridgeVal)
 
