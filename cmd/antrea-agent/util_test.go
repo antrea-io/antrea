@@ -46,7 +46,7 @@ func TestGetAvailableNodePortAddresses(t *testing.T) {
 			expectedIPv6:                nil,
 		},
 	}
-	getAllNodeAddresses = func(excludeDevices []string) ([]net.IP, []net.IP, error) {
+	getAllNodeAddresses = func(excludeDeviceMatchers []func(string) bool) ([]net.IP, []net.IP, error) {
 		ipv4 := []net.IP{net.ParseIP("127.0.0.1"), net.ParseIP("192.168.225.234"), net.ParseIP("10.104.73.43")}
 		ipv6 := []net.IP{net.ParseIP("::1"), net.ParseIP("2409:4071:4d11:f5d2:71:e53f:7d28:668e"), net.ParseIP("2409:4071:4d11:f5d2:75ab:a5b6:ff05:b31e")}
 		return ipv4, ipv6, nil
@@ -57,7 +57,7 @@ func TestGetAvailableNodePortAddresses(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			gotIPv4, gotIPv6, err := getAvailableNodePortAddresses(tc.nodePortAddressesFromConfig, []string{"antrea-egress0", "antrea-ingress0", "kube-ipvs0", "antrea-gw0"})
+			gotIPv4, gotIPv6, err := getAvailableNodePortAddresses(tc.nodePortAddressesFromConfig, []string{"antrea-egress0", "antrea-ingress0", "kube-ipvs0", "antrea-gw0"}, []string{"antrea-ext."})
 			require.NoError(t, err)
 			assert.Equal(t, tc.expectedIPv4, gotIPv4)
 			assert.Equal(t, tc.expectedIPv6, gotIPv6)
