@@ -215,7 +215,8 @@ type AgentConfig struct {
 	// second(pps) and the burst size will be automatically set to twice the rate.
 	// When the rate and burst size are exceeded, new packets will be dropped.
 	PacketInRate int `yaml:"packetInRate,omitempty"`
-	// HostNetworkAcceleration configures acceleration of traffic in Node host network using nftables flowtable.
+	// HostNetworkAcceleration configures acceleration of Pod-to-Pod traffic in the Node's host network using nftables
+	// flowtable when traffic mode is hybrid or noEncap.
 	HostNetworkAcceleration HostNetworkAccelerationConfig `yaml:"hostNetworkAcceleration,omitempty"`
 }
 
@@ -435,7 +436,7 @@ type OVSBridgeConfig struct {
 }
 
 type HostNetworkAccelerationConfig struct {
-	// Enable to accelerate traffic on Node host networking. Currently only Pod-to-Pod traffic is supported, and more cases
-	// will be supported in the future.
-	Enable bool `yaml:"enable,omitempty"`
+	// Enable to accelerate Pod-to-Pod traffic in the Node's host network using nftables flowtable when traffic mode is
+	// noEncap or hybrid.
+	Enable *bool `yaml:"enable,omitempty"`
 }

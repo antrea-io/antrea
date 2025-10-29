@@ -223,7 +223,7 @@ func run(o *Options) error {
 		},
 		EnableMulticlusterGW:          enableMulticlusterGW,
 		MulticlusterEncryptionMode:    multiclusterEncryptionMode,
-		EnableHostNetworkAcceleration: o.config.HostNetworkAcceleration.Enable,
+		EnableHostNetworkAcceleration: *o.config.HostNetworkAcceleration.Enable,
 	}
 
 	wireguardConfig := &config.WireGuardConfig{

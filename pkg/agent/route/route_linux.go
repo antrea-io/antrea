@@ -334,7 +334,7 @@ func (c *Client) Initialize(nodeConfig *config.NodeConfig, done func()) error {
 // policy rules. It will not return until ctx is cancelled.
 func (c *Client) Run(ctx context.Context) {
 	<-c.iptablesInitialized
-	klog.InfoS("Starting network configuration sync", "interval", SyncInterval)
+	klog.InfoS("Starting host network configuration sync", "interval", SyncInterval)
 	wait.UntilWithContext(ctx, c.syncNetworkConfig, SyncInterval)
 }
 
