@@ -90,13 +90,14 @@ func filterAntreaConns(conns []*connection.Connection, nodeConfig *config.NodeCo
 			continue
 		}
 
-		policyAllowed := conn.Mark&connAllowedCTMarkMask != 0
-		if !policyAllowed {
-			if klog.V(5).Enabled() {
-				klog.InfoS("Ignoring connection as it may have been denied by a policy rule", "conn", conn)
-			}
-			continue
-		}
+		//policyAllowed := conn.Mark&connAllowedCTMarkMask != 0
+		//if !policyAllowed {
+		//	if klog.V(5).Enabled() {
+		//		klog.InfoS("Ignoring connection as it may have been denied by a policy rule", "conn", conn)
+		//	}
+		//	klog.InfoS("qqq - dropping because denied by policy?", "conn", conn)
+		//	continue
+		//}
 
 		filteredConns = append(filteredConns, conn)
 	}

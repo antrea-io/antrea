@@ -821,6 +821,8 @@ func (c *Controller) findPodSubnetForIP(ip netip.Addr) (netip.Prefix, bool, erro
 
 	if ip.Is4() {
 		maskSize = c.maskSizeV4
+	} else {
+		maskSize = c.maskSizeV6
 	}
 	if maskSize == 0 {
 		return netip.Prefix{}, false, errors.New("Cannot find pod subnet for IP, maskSize is 0")
