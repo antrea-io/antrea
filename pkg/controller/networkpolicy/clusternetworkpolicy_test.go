@@ -15,6 +15,7 @@
 package networkpolicy
 
 import (
+	"errors"
 	"fmt"
 	"net"
 	"testing"
@@ -28,9 +29,12 @@ import (
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/utils/ptr"
 
+	corelisters "k8s.io/client-go/listers/core/v1"
+
 	"antrea.io/antrea/multicluster/controllers/multicluster/common"
 	"antrea.io/antrea/pkg/apis/controlplane"
 	crdv1beta1 "antrea.io/antrea/pkg/apis/crd/v1beta1"
+	crdv1b1listers "antrea.io/antrea/pkg/client/listers/crd/v1beta1"
 	antreatypes "antrea.io/antrea/pkg/controller/types"
 	"antrea.io/antrea/pkg/util/k8s"
 )
@@ -103,6 +107,12 @@ func TestProcessClusterNetworkPolicy(t *testing.T) {
 		ObjectMeta: metav1.ObjectMeta{Name: "cgA", UID: "uidA"},
 		Spec: crdv1beta1.GroupSpec{
 			NamespaceSelector: &selectorA,
+		},
+	}
+	cgB := crdv1beta1.ClusterGroup{
+		ObjectMeta: metav1.ObjectMeta{Name: "cgB", UID: "uidB"},
+		Spec: crdv1beta1.GroupSpec{
+			NodeSelector: &selectorA,
 		},
 	}
 	tests := []struct {
@@ -1798,6 +1808,128 @@ func TestProcessClusterNetworkPolicy(t *testing.T) {
 			expectedAddressGroups:   1,
 		},
 		{
+			name: "egress-rule-on-clustergroup-with-nodeselector",
+			inputPolicy: &crdv1beta1.ClusterNetworkPolicy{
+				ObjectMeta: metav1.ObjectMeta{Name: "cnpO", UID: "uidO"},
+				Spec: crdv1beta1.ClusterNetworkPolicySpec{
+					AppliedTo: []crdv1beta1.AppliedTo{
+						{PodSelector: &selectorA},
+					},
+					Priority: p10,
+					Egress: []crdv1beta1.Rule{
+						{
+							Ports: []crdv1beta1.NetworkPolicyPort{
+								{
+									Port: &int80,
+								},
+							},
+							To: []crdv1beta1.NetworkPolicyPeer{
+								{
+									Group: cgB.Name,
+								},
+							},
+							Action:        &dropAction,
+							EnableLogging: true,
+							LogLabel:      "test-log-label",
+						},
+					},
+				},
+			},
+			expectedPolicy: &antreatypes.NetworkPolicy{
+				UID:  "uidO",
+				Name: "uidO",
+				SourceRef: &controlplane.NetworkPolicyReference{
+					Type: controlplane.AntreaClusterNetworkPolicy,
+					Name: "cnpO",
+					UID:  "uidO",
+				},
+				Priority:     &p10,
+				TierPriority: ptr.To(crdv1beta1.DefaultTierPriority),
+				Rules: []controlplane.NetworkPolicyRule{
+					{
+						Direction: controlplane.DirectionOut,
+						To: controlplane.NetworkPolicyPeer{
+							AddressGroups: []string{getNormalizedUID(antreatypes.NewGroupSelector("", nil, nil, nil, &selectorA).NormalizedName)},
+						},
+						Services: []controlplane.Service{
+							{
+								Protocol: &protocolTCP,
+								Port:     &int80,
+							},
+						},
+						Priority:      0,
+						Action:        &dropAction,
+						EnableLogging: true,
+						LogLabel:      "test-log-label",
+					},
+				},
+				AppliedToGroups: []string{getNormalizedUID(antreatypes.NewGroupSelector("", &selectorA, nil, nil, nil).NormalizedName)},
+			},
+			expectedAppliedToGroups: 1,
+			expectedAddressGroups:   1,
+		},
+		{
+			name: "egress-rule-with-applied-to-clustergroup-with-nodeselector",
+			inputPolicy: &crdv1beta1.ClusterNetworkPolicy{
+				ObjectMeta: metav1.ObjectMeta{Name: "cnpS", UID: "uidS"},
+				Spec: crdv1beta1.ClusterNetworkPolicySpec{
+					AppliedTo: []crdv1beta1.AppliedTo{
+						{Group: cgB.Name},
+					},
+					Priority: p10,
+					Egress: []crdv1beta1.Rule{
+						{
+							Ports: []crdv1beta1.NetworkPolicyPort{
+								{
+									Port: &int80,
+								},
+							},
+							To: []crdv1beta1.NetworkPolicyPeer{
+								{
+									PodSelector: &selectorA,
+								},
+							},
+							Action:        &dropAction,
+							EnableLogging: true,
+							LogLabel:      "test-log-label",
+						},
+					},
+				},
+			},
+			expectedPolicy: &antreatypes.NetworkPolicy{
+				UID:  "uidS",
+				Name: "uidS",
+				SourceRef: &controlplane.NetworkPolicyReference{
+					Type: controlplane.AntreaClusterNetworkPolicy,
+					Name: "cnpS",
+					UID:  "uidS",
+				},
+				Priority:     &p10,
+				TierPriority: ptr.To(crdv1beta1.DefaultTierPriority),
+				Rules: []controlplane.NetworkPolicyRule{
+					{
+						Direction: controlplane.DirectionOut,
+						To: controlplane.NetworkPolicyPeer{
+							AddressGroups: []string{getNormalizedUID(antreatypes.NewGroupSelector("", &selectorA, nil, nil, nil).NormalizedName)},
+						},
+						Services: []controlplane.Service{
+							{
+								Protocol: &protocolTCP,
+								Port:     &int80,
+							},
+						},
+						Priority:      0,
+						Action:        &dropAction,
+						EnableLogging: true,
+						LogLabel:      "test-log-label",
+					},
+				},
+				AppliedToGroups: []string{getNormalizedUID(antreatypes.NewGroupSelector("", nil, nil, nil, &selectorA).NormalizedName)},
+			},
+			expectedAppliedToGroups: 1,
+			expectedAddressGroups:   1,
+		},
+		{
 			name: "appliedTo-Node",
 			inputPolicy: &crdv1beta1.ClusterNetworkPolicy{
 				ObjectMeta: metav1.ObjectMeta{Name: "cnpZ", UID: "uidZ"},
@@ -1891,6 +2023,8 @@ func TestProcessClusterNetworkPolicy(t *testing.T) {
 			_, c := newController(nil, nil)
 			c.addClusterGroup(&cgA)
 			c.cgStore.Add(&cgA)
+			c.addClusterGroup(&cgB)
+			c.cgStore.Add(&cgB)
 			c.namespaceStore.Add(&nsA)
 			c.namespaceStore.Add(&nsB)
 			c.namespaceStore.Add(&nsC)
@@ -2442,6 +2576,203 @@ func TestGetACNPsWithRulesMatchingLabelKeysAcrossNSUpdate(t *testing.T) {
 			c.acnpStore.Add(acnp1)
 			c.acnpStore.Add(acnp2)
 			assert.Equal(t, tt.want, c.getACNPsWithRulesMatchingAnyUpdatedLabels(tt.oldNSLabels, tt.newNSLabels))
+		})
+	}
+}
+
+func TestGetNodeSelector(t *testing.T) {
+	var nilLabelSelector *metav1.LabelSelector
+	t.Run("invalid group", func(t *testing.T) {
+		_, c := newController(nil, nil)
+		labelSelector := c.getNodeSelector("")
+		assert.Equal(t, nilLabelSelector, labelSelector)
+	})
+	t.Run("group is not in group store", func(t *testing.T) {
+		_, c := newController(nil, nil)
+		labelSelector := c.getNodeSelector("missing-cgA")
+		assert.Equal(t, nilLabelSelector, labelSelector)
+	})
+	t.Run("group does not have a selector", func(t *testing.T) {
+		cgE := crdv1beta1.ClusterGroup{
+			ObjectMeta: metav1.ObjectMeta{Name: "cgE", UID: "uidE"},
+			Spec:       crdv1beta1.GroupSpec{ServiceReference: &crdv1beta1.NamespacedName{}},
+		}
+		_, c := newController(nil, nil)
+		c.addClusterGroup(&cgE)
+		labelSelector := c.getNodeSelector(cgE.Name)
+		assert.Equal(t, nilLabelSelector, labelSelector)
+	})
+	t.Run("group does not have a nodeselector", func(t *testing.T) {
+		cgF := crdv1beta1.ClusterGroup{
+			ObjectMeta: metav1.ObjectMeta{Name: "cgF", UID: "uidF"},
+			Spec:       crdv1beta1.GroupSpec{},
+		}
+		_, c := newController(nil, nil)
+		c.addClusterGroup(&cgF)
+		labelSelector := c.getNodeSelector(cgF.Name)
+		assert.Equal(t, nilLabelSelector, labelSelector)
+	})
+	t.Run("group has a nodeselector", func(t *testing.T) {
+		matchLabels := map[string]string{"node": "F"}
+		cgF := crdv1beta1.ClusterGroup{
+			ObjectMeta: metav1.ObjectMeta{Name: "cgF", UID: "uidF"},
+			Spec: crdv1beta1.GroupSpec{
+				NodeSelector: &metav1.LabelSelector{
+					MatchLabels: matchLabels,
+				},
+			},
+		}
+		_, c := newController(nil, nil)
+		c.addClusterGroup(&cgF)
+		actualNodeSelector := c.getNodeSelector(cgF.Name)
+		expectedNodeSelector := &metav1.LabelSelector{MatchLabels: matchLabels, MatchExpressions: []metav1.LabelSelectorRequirement{}}
+		assert.Equal(t, expectedNodeSelector, actualNodeSelector)
+	})
+}
+
+type mockCGLister struct {
+}
+
+func (m mockCGLister) List(selector labels.Selector) (ret []*crdv1beta1.ClusterGroup, err error) {
+	return []*crdv1beta1.ClusterGroup{{}}, errors.New("always-errors")
+}
+
+func (m mockCGLister) Get(name string) (*crdv1beta1.ClusterGroup, error) {
+	return &crdv1beta1.ClusterGroup{}, errors.New("always-errors")
+}
+
+type mockCGListerA struct {
+}
+
+var labelA = map[string]string{"a": "a"}
+var labelB = map[string]string{"b": "b"}
+var namespaceA = &v1.Namespace{
+	ObjectMeta: metav1.ObjectMeta{
+		Name:   "namespace-a",
+		Labels: labelA,
+	},
+}
+var namespaceB = &v1.Namespace{
+	ObjectMeta: metav1.ObjectMeta{
+		Name:   "namespace-b",
+		Labels: labelB,
+	},
+}
+
+func (m mockCGListerA) List(selector labels.Selector) (ret []*crdv1beta1.ClusterGroup, err error) {
+	return []*crdv1beta1.ClusterGroup{
+		{
+			Spec: crdv1beta1.GroupSpec{
+				NamespaceSelector: &metav1.LabelSelector{
+					MatchLabels: labelA,
+				},
+			},
+		}}, nil
+}
+
+func (m mockCGListerA) Get(name string) (*crdv1beta1.ClusterGroup, error) {
+	if name == "has-pod-selector" {
+		return &crdv1beta1.ClusterGroup{
+			Spec: crdv1beta1.GroupSpec{
+				PodSelector: &metav1.LabelSelector{
+					MatchLabels: map[string]string{"c": "c"},
+				},
+			},
+		}, nil
+	}
+	return &crdv1beta1.ClusterGroup{
+		Spec: crdv1beta1.GroupSpec{
+			NamespaceSelector: &metav1.LabelSelector{
+				MatchLabels: labelA,
+			},
+		},
+	}, nil
+}
+
+type mockNamespaceListerA struct {
+}
+
+func (m mockNamespaceListerA) List(selector labels.Selector) (ret []*v1.Namespace, err error) {
+	return []*v1.Namespace{namespaceA}, nil
+}
+
+func (m mockNamespaceListerA) Get(name string) (*v1.Namespace, error) {
+	return namespaceA, nil
+}
+
+type mockNamespaceListerB struct {
+}
+
+func (m mockNamespaceListerB) List(selector labels.Selector) (ret []*v1.Namespace, err error) {
+	return []*v1.Namespace{namespaceA, namespaceB}, nil
+}
+
+func (m mockNamespaceListerB) Get(name string) (*v1.Namespace, error) {
+	return namespaceA, nil
+}
+
+func TestGetAffectedNamespacesForAppliedTo(t *testing.T) {
+	tests := []struct {
+		name            string
+		appliedTo       crdv1beta1.AppliedTo
+		cgLister        crdv1b1listers.ClusterGroupLister
+		namespaceLister corelisters.NamespaceLister
+		want            map[string]labels.Set
+	}{
+		{
+			"empty appliedTo",
+			crdv1beta1.AppliedTo{},
+			nil,
+			nil,
+			map[string]labels.Set{},
+		},
+		{
+			"match on appliedTo namespaceSelector",
+			crdv1beta1.AppliedTo{NamespaceSelector: &metav1.LabelSelector{MatchLabels: map[string]string{"a": "a"}}},
+			nil,
+			mockNamespaceListerA{},
+			map[string]labels.Set{"namespace-a": labelA},
+		},
+		{
+			"cluster group lister errors",
+			crdv1beta1.AppliedTo{Group: "non-empty"},
+			mockCGLister{},
+			nil,
+			map[string]labels.Set{},
+		},
+		{
+			"matching namespace for group's namespaceSelector",
+			crdv1beta1.AppliedTo{Group: "non-empty"},
+			mockCGListerA{},
+			mockNamespaceListerA{},
+			map[string]labels.Set{"namespace-a": labelA},
+		},
+		{
+			"match all namespace for empty namespaceSelector",
+			crdv1beta1.AppliedTo{},
+			mockCGListerA{},
+			mockNamespaceListerB{},
+			map[string]labels.Set{"namespace-a": labelA, "namespace-b": labelB},
+		},
+		{
+			"match all namespace when namespaceSeletor is nil but podSelector is not",
+			crdv1beta1.AppliedTo{Group: "has-pod-selector"},
+			mockCGListerA{},
+			mockNamespaceListerB{},
+			map[string]labels.Set{"namespace-a": labelA, "namespace-b": labelB},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, npc := newController(nil, nil)
+			if tt.cgLister != nil {
+				npc.cgLister = tt.cgLister
+			}
+			if tt.namespaceLister != nil {
+				npc.namespaceLister = tt.namespaceLister
+			}
+			got := npc.getAffectedNamespacesForAppliedTo(tt.appliedTo)
+			assert.Equal(t, tt.want, got)
 		})
 	}
 }

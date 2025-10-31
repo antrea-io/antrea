@@ -302,6 +302,12 @@ func TestToAntreaPeerForCRD(t *testing.T) {
 			NamespaceSelector: &selectorA,
 		},
 	}
+	cgB := crdv1beta1.ClusterGroup{
+		ObjectMeta: metav1.ObjectMeta{Name: "cgB", UID: "uidB"},
+		Spec: crdv1beta1.GroupSpec{
+			NodeSelector: &selectorA,
+		},
+	}
 	tests := []struct {
 		name            string
 		inPeers         []crdv1beta1.NetworkPolicyPeer
@@ -453,6 +459,34 @@ func TestToAntreaPeerForCRD(t *testing.T) {
 			direction: controlplane.DirectionOut,
 		},
 		{
+			name: "node-selector-in-clustergroup-peer-ingress",
+			inPeers: []crdv1beta1.NetworkPolicyPeer{
+				{
+					Group: cgB.Name,
+				},
+			},
+			outPeer: controlplane.NetworkPolicyPeer{
+				AddressGroups: []string{
+					getNormalizedUID(antreatypes.NewGroupSelector("", nil, nil, nil, &selectorA).NormalizedName),
+				},
+			},
+			direction: controlplane.DirectionIn,
+		},
+		{
+			name: "node-selector-in-clustergroup-peer-egress",
+			inPeers: []crdv1beta1.NetworkPolicyPeer{
+				{
+					Group: cgB.Name,
+				},
+			},
+			outPeer: controlplane.NetworkPolicyPeer{
+				AddressGroups: []string{
+					getNormalizedUID(antreatypes.NewGroupSelector("", nil, nil, nil, &selectorA).NormalizedName),
+				},
+			},
+			direction: controlplane.DirectionOut,
+		},
+		{
 			name: "stretched-policy-peer",
 			inPeers: []crdv1beta1.NetworkPolicyPeer{
 				{
@@ -475,6 +509,8 @@ func TestToAntreaPeerForCRD(t *testing.T) {
 			_, npc := newController(nil, nil)
 			npc.addClusterGroup(&cgA)
 			npc.cgStore.Add(&cgA)
+			npc.addClusterGroup(&cgB)
+			npc.cgStore.Add(&cgB)
 			if tt.clusterSetScope {
 				featuregatetesting.SetFeatureGateDuringTest(t, features.DefaultFeatureGate, features.Multicluster, true)
 				labelIdentityA := "ns:kubernetes.io/metadata.name=testing,purpose=test&pod:foo1=bar1"
