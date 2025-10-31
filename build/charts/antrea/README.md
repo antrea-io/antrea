@@ -104,6 +104,7 @@ Kubernetes: `>= 1.19.0-0`
 | flowExporter.protocolFilter | list | `nil` | Filter which flows are exported based on protocol. A nil protocolFilter allows all flows. Supported protocols are "tcp", "udp" and "sctp". |
 | fqdnCacheMinTTL | int | `0` | fqdnCacheMinTTL helps address the issue of applications caching DNS response IPs beyond the TTL value for the DNS record. It is used to enforce FQDN policy rules, ensuring that resolved IPs are included in datapath rules for as long as the application caches them. Ideally, this value should be set to the maximum caching duration across all applications. |
 | hostGateway | string | `"antrea-gw0"` | Name of the interface antrea-agent will create and use for host <-> Pod communication. |
+| hostNetworkAcceleration.enable | bool | `true` | Enable to accelerate Pod-to-Pod traffic in the Node's host network using nftables flowtable when traffic mode is noEncap or hybrid. |
 | image | object | `{}` | Container image to use for Antrea components. DEPRECATED: use agentImage and controllerImage instead. |
 | ipsec.authenticationMode | string | `"psk"` | The authentication mode to use for IPsec. Must be one of "psk" or "cert". |
 | ipsec.csrSigner.autoApprove | bool | `true` | Enable auto approval of Antrea signer for IPsec certificates. |

@@ -15,6 +15,7 @@
 package route
 
 import (
+	"context"
 	"net"
 	"time"
 
@@ -91,7 +92,7 @@ type Interface interface {
 	DeleteExternalIPConfigs(svcInfoStr string, externalIP net.IP) error
 
 	// Run starts the sync loop.
-	Run(stopCh <-chan struct{})
+	Run(ctx context.Context)
 
 	// AddLocalAntreaFlexibleIPAMPodRule is used to add IP to target ip set when an AntreaFlexibleIPAM Pod is added. An entry is added
 	// for every Pod IP.

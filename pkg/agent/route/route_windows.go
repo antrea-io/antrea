@@ -18,6 +18,7 @@
 package route
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"net"
@@ -384,14 +385,14 @@ func (c *Client) UnMigrateRoutesFromGw(route *net.IPNet, linkName string) error 
 	return errors.New("UnMigrateRoutesFromGw is unsupported on Windows")
 }
 
-// Run periodically syncs netNatStaticMapping and route. It will not return until stopCh is closed.
-func (c *Client) Run(stopCh <-chan struct{}) {
+// Run periodically syncs netNatStaticMapping and route. It will not return until ctx is cancelled.
+func (c *Client) Run(ctx context.Context) {
 	klog.InfoS("Starting netNatStaticMapping and route sync", "interval", SyncInterval)
-	wait.Until(c.syncIPInfra, SyncInterval, stopCh)
+	wait.UntilWithContext(ctx, c.syncNetworkConfig, SyncInterval)
 }
 
-// syncIPInfra is idempotent and can be safely called on every sync operation.
-func (c *Client) syncIPInfra() {
+// syncNetworkConfig is idempotent and can be safely called on every sync operation.
+func (c *Client) syncNetworkConfig(ctx context.Context) {
 	if err := c.syncRoute(); err != nil {
 		klog.ErrorS(err, "Failed to sync route")
 	}
@@ -401,7 +402,7 @@ func (c *Client) syncIPInfra() {
 			klog.ErrorS(err, "Failed to sync netNatStaticMapping")
 		}
 	}
-	klog.V(3).Info("Successfully synced netNatStaticMapping and route")
+	klog.V(3).Info("Successfully synced network infrastructures")
 }
 
 func (c *Client) syncRoute() error {

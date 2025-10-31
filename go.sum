@@ -1189,8 +1189,8 @@ sigs.k8s.io/controller-tools v0.3.0/go.mod h1:enhtKGfxZD1GFEoMgP8Fdbu+uKQ/cq1/WG
 sigs.k8s.io/json v0.0.0-20241010143419-9aa6b5e7a4b3 h1:/Rv+M11QRah1itp8VhT6HoVx1Ray9eB4DBr+K+/sCJ8=
 sigs.k8s.io/json v0.0.0-20241010143419-9aa6b5e7a4b3/go.mod h1:18nIHnGi6636UCz6m8i4DhaJ65T6EruyzmoQqI2BVDo=
 sigs.k8s.io/kind v0.8.1/go.mod h1:oNKTxUVPYkV9lWzY6CVMNluVq8cBsyq+UgPJdvA3uu4=
-sigs.k8s.io/knftables v0.0.18 h1:6Duvmu0s/HwGifKrtl6G3AyAPYlWiZqTgS8bkVMiyaE=
-sigs.k8s.io/knftables v0.0.18/go.mod h1:f/5ZLKYEUPUhVjUCg6l80ACdL7CIIyeL0DxfgojGRTk=
+sigs.k8s.io/knftables v0.0.19-0.20250918210213-152a9262585d h1:pv10tPaLT1wPeTHlDVMxpl6ugxvyUWX/E2s2bMkV7Ew=
+sigs.k8s.io/knftables v0.0.19-0.20250918210213-152a9262585d/go.mod h1:f/5ZLKYEUPUhVjUCg6l80ACdL7CIIyeL0DxfgojGRTk=
 sigs.k8s.io/kustomize/api v0.19.0 h1:F+2HB2mU1MSiR9Hp1NEgoU2q9ItNOaBJl0I4Dlus5SQ=
 sigs.k8s.io/kustomize/api v0.19.0/go.mod h1:/BbwnivGVcBh1r+8m3tH1VNxJmHSk1PzP5fkP6lbL1o=
 sigs.k8s.io/kustomize/kyaml v0.19.0 h1:RFge5qsO1uHhwJsu3ipV7RNolC7Uozc0jUBC/61XSlA=

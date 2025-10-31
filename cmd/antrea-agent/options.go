@@ -519,6 +519,9 @@ func (o *Options) setK8sNodeDefaultOptions() {
 	if o.config.Egress.SNATFullyRandomPorts == nil {
 		o.config.Egress.SNATFullyRandomPorts = ptr.To(o.config.SNATFullyRandomPorts)
 	}
+	if o.config.HostNetworkAcceleration.Enable == nil {
+		o.config.HostNetworkAcceleration.Enable = ptr.To(true)
+	}
 }
 
 func (o *Options) validateEgressConfig(encapMode config.TrafficEncapModeType) error {

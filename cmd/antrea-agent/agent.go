@@ -224,8 +224,9 @@ func run(o *Options) error {
 		IPsecConfig: config.IPsecConfig{
 			AuthenticationMode: ipsecAuthenticationMode,
 		},
-		EnableMulticlusterGW:       enableMulticlusterGW,
-		MulticlusterEncryptionMode: multiclusterEncryptionMode,
+		EnableMulticlusterGW:          enableMulticlusterGW,
+		MulticlusterEncryptionMode:    multiclusterEncryptionMode,
+		EnableHostNetworkAcceleration: *o.config.HostNetworkAcceleration.Enable,
 	}
 
 	wireguardConfig := &config.WireGuardConfig{
@@ -762,7 +763,7 @@ func run(o *Options) error {
 	log.StartLogFileNumberMonitor(stopCh)
 
 	if o.nodeType == config.K8sNode {
-		go routeClient.Run(stopCh)
+		go routeClient.Run(ctx)
 		go podUpdateChannel.Run(stopCh)
 		go cniServer.Run(stopCh)
 		go nodeRouteController.Run(stopCh)
