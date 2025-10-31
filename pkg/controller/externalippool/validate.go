@@ -72,9 +72,14 @@ func (c *ExternalIPPoolController) ValidateExternalIPPool(review *admv1.Admissio
 		newIPRangeSet := validation.GetIPRangeSet(newObj.Spec.IPRanges)
 		deletedIPRanges := oldIPRangeSet.Difference(newIPRangeSet)
 		if deletedIPRanges.Len() > 0 {
-			allowed = false
-			// Fixed error message to be consistent with IPPool controller
-			msg = fmt.Sprintf("existing IPRanges %v cannot be updated or deleted", sets.List(deletedIPRanges))
+			// Check if the deleted IP ranges are in use.
+			// If they are, we cannot allow the deletion.
+			iPPoolName := newObj.Name
+			if c.AllocatedIPs(iPPoolName, deletedIPRanges) {
+				allowed = false
+				// Fixed error message to be consistent with IPPool controller
+				msg = fmt.Sprintf("existing IPRanges %v are in use, cannot be deleted", sets.List(deletedIPRanges))
+			}
 		}
 	case admv1.Delete:
 		// This shouldn't happen with the webhook configuration we include in the Antrea YAML manifests.
