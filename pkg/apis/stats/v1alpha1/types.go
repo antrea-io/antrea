@@ -175,9 +175,9 @@ type TargetIPLatencyStats struct {
 	// The target IP address.
 	TargetIP string `json:"targetIP,omitempty" protobuf:"bytes,1,opt,name=targetIP"`
 	// The timestamp of the last sent packet.
-	LastSendTime metav1.Time `json:"lastSendTime,omitempty" protobuf:"bytes,2,opt,name=lastSendTime"`
+	LastSendTime metav1.MicroTime `json:"lastSendTime,omitempty" protobuf:"bytes,2,opt,name=lastSendTime"`
 	// The timestamp of the last received packet.
-	LastRecvTime metav1.Time `json:"lastRecvTime,omitempty" protobuf:"bytes,3,opt,name=lastRecvTime"`
+	LastRecvTime metav1.MicroTime `json:"lastRecvTime,omitempty" protobuf:"bytes,3,opt,name=lastRecvTime"`
 	// The last measured RTT for this target IP, in nanoseconds.
 	LastMeasuredRTTNanoseconds int64 `json:"lastMeasuredRTTNanoseconds,omitempty" protobuf:"varint,4,opt,name=lastMeasuredRTTNanoseconds"`
 }
