@@ -62,6 +62,19 @@ FLOWAGGREGATOR_YML_CMD="$THIS_DIR/../../hack/generate-manifest-flow-aggregator.s
 FLOW_VISIBILITY_HELM_VALUES="$THIS_DIR/values-flow-exporter.yml"
 CH_OPERATOR_YML="$THIS_DIR/../../build/yamls/clickhouse-operator-install-bundle.yml"
 FLOW_VISIBILITY_CHART="$THIS_DIR/../../test/e2e/charts/flow-visibility"
+KUSTOMIZATION_DIR="$THIS_DIR/../../test/e2e/kustomize"
+
+
+if [ -z "$KUSTOMIZE" ]; then
+    KUSTOMIZE=$(
+      source $THIS_DIR/../../hack/verify-kustomize.sh
+      verify_kustomize
+    )
+elif ! $KUSTOMIZE version > /dev/null 2>&1; then
+    echoerr "$KUSTOMIZE does not appear to be a valid kustomize binary"
+    print_help
+    exit 1
+fi
 
 function quit {
   result=$?
@@ -247,33 +260,33 @@ fi
 
 trap "quit" INT EXIT
 
-manifest_args="$manifest_args --verbose-log"
+manifest_args=("--verbose-log")
 if [ -n "$feature_gates" ]; then
-  manifest_args="$manifest_args --feature-gates $feature_gates"
+  manifest_args+=("--feature-gates" "$feature_gates")
 fi
 if $proxy_all; then
-    manifest_args="$manifest_args --proxy-all"
+    manifest_args+=("--proxy-all")
 fi
 if [ -n "$load_balancer_mode" ]; then
-    manifest_args="$manifest_args --extra-helm-values antreaProxy.defaultLoadBalancerMode=$load_balancer_mode"
+    manifest_args+=("--extra-helm-values" "antreaProxy.defaultLoadBalancerMode=$load_balancer_mode")
 fi
 if $node_ipam; then
-    manifest_args="$manifest_args --extra-helm-values nodeIPAM.enable=true,nodeIPAM.clusterCIDRs={10.244.0.0/16}"
+    manifest_args+=("--extra-helm-values" "nodeIPAM.enable=true,nodeIPAM.clusterCIDRs={10.244.0.0/16}")
 fi
 if $multicast; then
-    manifest_args="$manifest_args --multicast"
+    manifest_args+=("--multicast")
 fi
 if $bgp_policy; then
-    manifest_args="$manifest_args --feature-gates BGPPolicy=true"
+    manifest_args+=("--feature-gates" "BGPPolicy=true")
 fi
 if $flow_visibility; then
-    manifest_args="$manifest_args --feature-gates FlowExporter=true,L7FlowExporter=true --extra-helm-values-file $FLOW_VISIBILITY_HELM_VALUES"
+    manifest_args+=("--feature-gates" "FlowExporter=true,L7FlowExporter=true" "--extra-helm-values-file" "$FLOW_VISIBILITY_HELM_VALUES")
 fi
 if [[ "$flow_visibility_protocol" == "ipfix" ]]; then
-    manifest_args="$manifest_args --extra-helm-values flowExporter.flowCollectorAddr=flow-aggregator/flow-aggregator:4739:tls"
+    manifest_args+=("--extra-helm-values" "flowExporter.flowCollectorAddr=flow-aggregator/flow-aggregator:4739:tls")
 fi
 if $flexible_ipam; then
-    manifest_args="$manifest_args --flexible-ipam"
+    manifest_args+=("--flexible-ipam")
 fi
 
 COMMON_IMAGES_LIST=("registry.k8s.io/e2e-test-images/agnhost:2.40" \
@@ -301,7 +314,7 @@ done
 
 # The Antrea images should not be pulled, as we want to use the local build.
 if $coverage; then
-    manifest_args="$manifest_args --coverage"
+    manifest_args+=("--coverage")
     COMMON_IMAGES_LIST+=("${antrea_controller_image}-coverage:${antrea_image_tag}" \
                          "${antrea_agent_image}-coverage:${antrea_image_tag}")
 else
@@ -385,35 +398,42 @@ function run_test {
     export CONTROLLER_IMG_NAME=${antrea_controller_image}
   fi
   if $coverage; then
-      $YML_CMD --encap-mode $current_mode $manifest_args | docker exec -i kind-control-plane dd of=/root/antrea-coverage.yml
-      $YML_CMD --ipsec $manifest_args | docker exec -i kind-control-plane dd of=/root/antrea-ipsec-coverage.yml
+      $YML_CMD --encap-mode "$current_mode" "${manifest_args[@]}" | docker exec -i kind-control-plane dd of=/root/antrea-coverage.yml
+      $YML_CMD --ipsec "${manifest_args[@]}" | docker exec -i kind-control-plane dd of=/root/antrea-ipsec-coverage.yml
       timeout="80m"
       coverage_args="--coverage --coverage-dir $ANTREA_COV_DIR"
   else
-      $YML_CMD --encap-mode $current_mode $manifest_args | docker exec -i kind-control-plane dd of=/root/antrea.yml
-      $YML_CMD --ipsec $manifest_args | docker exec -i kind-control-plane dd of=/root/antrea-ipsec.yml
+      $YML_CMD --encap-mode "$current_mode" "${manifest_args[@]}" | docker exec -i kind-control-plane dd of=/root/antrea.yml
+      $YML_CMD --ipsec "${manifest_args[@]}" | docker exec -i kind-control-plane dd of=/root/antrea-ipsec.yml
       timeout="75m"
   fi
 
   if $flow_visibility; then
       timeout="45m"
-      flow_visibility_args="-run=TestFlowAggregator --flow-visibility"
+      flow_visibility_args="-run=^(TestFlowExporter|TestFlowAggregator) --flow-visibility"
       # This is needed so that the FlowAggregator is already configured to mount the Secrets
       # necessary for (m)TLS testing. The Secret names must match the ones expected by the e2e tests.
-      flow_visibility_manifest_args="--extra-helm-values flowCollector.tls.clientSecretName=ipfix-client-cert,flowCollector.tls.caSecretName=ipfix-server-ca"
+      coverage_flag=""
       if $coverage; then
-          $FLOWAGGREGATOR_YML_CMD --coverage $flow_visibility_manifest_args | docker exec -i kind-control-plane dd of=/root/flow-aggregator-coverage.yml
-      else
-          $FLOWAGGREGATOR_YML_CMD $flow_visibility_manifest_args | docker exec -i kind-control-plane dd of=/root/flow-aggregator.yml
+        coverage_flag="--coverage"
       fi
+      flow_visibility_manifest_default_args=("--extra-helm-values" "flowCollector.tls.clientSecretName=ipfix-client-cert,flowCollector.tls.caSecretName=ipfix-server-ca")
+      $FLOWAGGREGATOR_YML_CMD "${flow_visibility_manifest_default_args[@]}" "${coverage_flag}" | docker exec -i kind-control-plane dd of=/root/flow-aggregator.yml
+      $FLOWAGGREGATOR_YML_CMD --extra-helm-values "aggregatorTransportProtocol=tcp" "${coverage_flag}" > "$KUSTOMIZATION_DIR"/multi-flow-aggregator/base/manifest.yaml
+      $KUSTOMIZE build "$KUSTOMIZATION_DIR"/multi-flow-aggregator/overlays/flow-aggregator-1 | docker exec -i kind-control-plane dd of=/root/flow-aggregator-1.yml
+      $KUSTOMIZE build "$KUSTOMIZATION_DIR"/multi-flow-aggregator/overlays/flow-aggregator-2 | docker exec -i kind-control-plane dd of=/root/flow-aggregator-2.yml
+      rm "$KUSTOMIZATION_DIR"/multi-flow-aggregator/base/manifest.yaml
+
       $HELM template "$FLOW_VISIBILITY_CHART"  | docker exec -i kind-control-plane dd of=/root/flow-visibility.yml
       $HELM template "$FLOW_VISIBILITY_CHART" --set "secureConnection.enable=true" | docker exec -i kind-control-plane dd of=/root/flow-visibility-tls.yml
 
-      curl -o $CH_OPERATOR_YML https://raw.githubusercontent.com/Altinity/clickhouse-operator/release-0.21.0/deploy/operator/clickhouse-operator-install-bundle.yaml
-      sed -i -e "s|\"image\": \"clickhouse/clickhouse-server:22.3\"|\"image\": \"antrea/clickhouse-server:23.4\"|g" $CH_OPERATOR_YML
-      sed -i -e "s|image: altinity/clickhouse-operator:0.21.0|image: antrea/clickhouse-operator:0.21.0|g" $CH_OPERATOR_YML
-      sed -i -e "s|image: altinity/metrics-exporter:0.21.0|image: antrea/metrics-exporter:0.21.0|g" $CH_OPERATOR_YML
-      cat $CH_OPERATOR_YML | docker exec -i kind-control-plane dd of=/root/clickhouse-operator-install-bundle.yml
+      curl -o "$CH_OPERATOR_YML" https://raw.githubusercontent.com/Altinity/clickhouse-operator/release-0.21.0/deploy/operator/clickhouse-operator-install-bundle.yaml
+      sed -i -e "s|\"image\": \"clickhouse/clickhouse-server:22.3\"|\"image\": \"antrea/clickhouse-server:23.4\"|g" "$CH_OPERATOR_YML"
+      sed -i -e "s|image: altinity/clickhouse-operator:0.21.0|image: antrea/clickhouse-operator:0.21.0|g" "$CH_OPERATOR_YML"
+      sed -i -e "s|image: altinity/metrics-exporter:0.21.0|image: antrea/metrics-exporter:0.21.0|g" "$CH_OPERATOR_YML"
+      cat "$CH_OPERATOR_YML" | docker exec -i kind-control-plane dd of=/root/clickhouse-operator-install-bundle.yml
+
+      printf '%s' "$flow_visibility_protocol" | docker exec -i kind-control-plane dd of=/root/test-flow-visibility-protocol.txt
   fi
 
   if $no_kube_proxy; then
@@ -485,4 +505,3 @@ if [[ "$mode" == "" ]] || [[ "$mode" == "hybrid" ]]; then
   run_test hybrid
 fi
 exit 0
-

@@ -414,7 +414,9 @@ controller:
         memory: "100Mi"
 
 flowExporter:
-  # -- Enable the flow exporter feature.
+  # -- Enable the static flow exporter. This remains for backwards
+  # compatibility. Users should migrate to `FlowExporterDestination` resource
+  # for collector configuration.
   enable: false
   # -- IPFIX collector address as a string with format <HOST>:[<PORT>][:<PROTO>].
   # If the collector is running in-cluster as a Service, set <HOST> to

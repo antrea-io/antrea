@@ -18,12 +18,21 @@ import (
 	"fmt"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/prometheus/client_golang/prometheus/testutil"
 	"github.com/stretchr/testify/assert"
+	"go.uber.org/mock/gomock"
 	"k8s.io/component-base/metrics/legacyregistry"
+	clocktesting "k8s.io/utils/clock/testing"
 
+	"antrea.io/antrea/pkg/agent/flowexporter/connection"
+	connectionstest "antrea.io/antrea/pkg/agent/flowexporter/connections/testing"
 	"antrea.io/antrea/pkg/agent/metrics"
+	"antrea.io/antrea/pkg/agent/openflow"
+	objectstoretest "antrea.io/antrea/pkg/util/objectstore/testing"
+
+	. "antrea.io/antrea/pkg/agent/flowexporter/testing"
 )
 
 func init() {
@@ -68,4 +77,38 @@ func checkDenyConnectionMetrics(t *testing.T, numConns int) {
 	expectedDenyConnectionCount = expectedDenyConnectionCount + fmt.Sprintf("antrea_agent_denied_connection_count %d\n", numConns)
 	err := testutil.GatherAndCompare(legacyregistry.DefaultGatherer, strings.NewReader(expectedDenyConnectionCount), "antrea_agent_denied_connection_count")
 	assert.NoError(t, err)
+}
+
+func TestConnStore_CheckMetrics(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	mockPodStore := objectstoretest.NewMockPodStore(ctrl)
+
+	conns := []*connection.Connection{GenerateConnectionFn(WithPodInfo("ns", "pod", "ns", "pod"))()}
+	maxConns := 20000
+	totalConns := 10000
+
+	mockPodStore.EXPECT().GetPodByIPAndTime(gomock.Any(), gomock.Any()).Return(pod1, true).Times(2 * len(conns))
+	mockConnDumper := connectionstest.NewMockConnTrackDumper(ctrl)
+	mockConnDumper.EXPECT().GetMaxConnections().Return(maxConns, nil)
+	mockConnDumper.EXPECT().DumpFlows(uint16(openflow.CtZone)).Return(conns, totalConns, nil)
+
+	store := &ConnStore{
+		connDumper: mockConnDumper,
+		zones:      []uint16{uint16(openflow.CtZone)},
+		clock:      clocktesting.NewFakeClock(time.Now()),
+		podStore:   mockPodStore,
+		entries:    map[connection.ConnectionKey]*connection.Connection{},
+		gc:         gcHeap{keyToItem: map[connection.ConnectionKey]*gcItem{}},
+	}
+
+	// Metrics are global. Need to reset it because of test pollution
+	metrics.TotalAntreaConnectionsInConnTrackTable.Set(0)
+	metrics.TotalConnectionsInConnTrackTable.Set(0)
+	metrics.MaxConnectionsInConnTrackTable.Set(0)
+
+	store.PollConntrackAndStore()
+
+	checkAntreaConnectionMetrics(t, len(conns))
+	checkTotalConnectionsMetric(t, totalConns)
+	checkMaxConnectionsMetric(t, maxConns)
 }

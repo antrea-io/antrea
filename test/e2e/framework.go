@@ -18,6 +18,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"math/rand/v2"
@@ -40,7 +41,7 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
-	"k8s.io/apimachinery/pkg/api/errors"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/types"
@@ -73,6 +74,7 @@ var AntreaConfigMap *corev1.ConfigMap
 
 var (
 	errConnectionLost = fmt.Errorf("http2: client connection lost")
+	errNoAggregators  = fmt.Errorf("No flow aggregators found")
 )
 
 const (
@@ -83,6 +85,7 @@ const (
 	antreaNamespace             = "kube-system"
 	kubeNamespace               = "kube-system"
 	flowAggregatorNamespace     = "flow-aggregator"
+	flowAggregatorNamespace2    = "flow-aggregator2"
 	antreaConfigVolume          = "antrea-config"
 	antreaWindowsConfigVolume   = "antrea-windows-config"
 	flowAggregatorConfigVolume  = "flow-aggregator-config"
@@ -104,19 +107,21 @@ const (
 	agentContainerName          = "antrea-agent"
 	flowAggregatorContainerName = "flow-aggregator"
 
-	antreaYML               = "antrea.yml"
-	antreaIPSecYML          = "antrea-ipsec.yml"
-	antreaCovYML            = "antrea-coverage.yml"
-	antreaIPSecCovYML       = "antrea-ipsec-coverage.yml"
-	flowAggregatorYML       = "flow-aggregator.yml"
-	flowAggregatorCovYML    = "flow-aggregator-coverage.yml"
-	flowVisibilityYML       = "flow-visibility.yml"
-	flowVisibilityTLSYML    = "flow-visibility-tls.yml"
-	chOperatorYML           = "clickhouse-operator-install-bundle.yml"
-	flowVisibilityCHPodName = "chi-clickhouse-clickhouse-0-0-0"
-	flowVisibilityNamespace = "flow-visibility"
-	defaultBridgeName       = "br-int"
-	monitoringNamespace     = "monitoring"
+	antreaYML                  = "antrea.yml"
+	antreaIPSecYML             = "antrea-ipsec.yml"
+	antreaCovYML               = "antrea-coverage.yml"
+	antreaIPSecCovYML          = "antrea-ipsec-coverage.yml"
+	flowAggregatorYML          = "flow-aggregator.yml"
+	flowAggregator1YML         = "flow-aggregator-1.yml"
+	flowAggregator2YML         = "flow-aggregator-2.yml"
+	flowVisibilityYML          = "flow-visibility.yml"
+	flowVisibilityTLSYML       = "flow-visibility-tls.yml"
+	flowVisibilityProtocolFile = "test-flow-visibility-protocol.txt"
+	chOperatorYML              = "clickhouse-operator-install-bundle.yml"
+	flowVisibilityCHPodName    = "chi-clickhouse-clickhouse-0-0-0"
+	flowVisibilityNamespace    = "flow-visibility"
+	defaultBridgeName          = "br-int"
+	monitoringNamespace        = "monitoring"
 	// #nosec G101: not credentials
 	flowAggregatorIPFIXClientTLSSecretName = "ipfix-client-cert"
 	// #nosec G101: not credentials
@@ -246,12 +251,19 @@ type flowVisibilityIPFIXTestOptions struct {
 	includeK8sUIDs  *bool
 }
 
+type flowAggregatorTestOptions struct {
+	disableTLS         bool
+	selectedAggregator int
+	collectorAddr      string
+}
+
 type flowVisibilityTestOptions struct {
 	mode                     flowaggregatorconfig.AggregatorMode
 	databaseURL              string
 	databaseSecureConnection bool
 	clusterID                string
 	ipfixCollector           flowVisibilityIPFIXTestOptions
+	flowAggregator           flowAggregatorTestOptions
 }
 
 var testOptions TestOptions
@@ -314,6 +326,11 @@ var (
 		antreaIPSecYML,
 		antreaCovYML,
 		antreaIPSecCovYML,
+	}
+	flowAggYamls = [...]string{
+		flowAggregatorYML,
+		flowAggregator1YML,
+		flowAggregator2YML,
 	}
 )
 
@@ -829,7 +846,7 @@ func (data *TestData) CreateNamespace(namespace string, mutateFunc func(*corev1.
 	}
 	if ns, err := data.clientset.CoreV1().Namespaces().Create(context.TODO(), ns, metav1.CreateOptions{}); err != nil {
 		// Ignore error if the Namespace already exists
-		if !errors.IsAlreadyExists(err) {
+		if !apierrors.IsAlreadyExists(err) {
 			return fmt.Errorf("error when creating '%s' Namespace: %v", namespace, err)
 		}
 		// When Namespace already exists, check phase
@@ -899,7 +916,7 @@ func (data *TestData) DeleteNamespace(namespace string, timeout time.Duration) e
 	}()
 
 	if err := data.clientset.CoreV1().Namespaces().Delete(context.TODO(), namespace, deleteOptions); err != nil {
-		if errors.IsNotFound(err) {
+		if apierrors.IsNotFound(err) {
 			// namespace does not exist, we return right away
 			return nil
 		}
@@ -908,7 +925,7 @@ func (data *TestData) DeleteNamespace(namespace string, timeout time.Duration) e
 	if timeout >= 0 {
 		return wait.PollUntilContextTimeout(context.TODO(), defaultInterval, timeout, false, func(ctx context.Context) (bool, error) {
 			if ns, err := data.clientset.CoreV1().Namespaces().Get(context.TODO(), namespace, metav1.GetOptions{}); err != nil {
-				if errors.IsNotFound(err) {
+				if apierrors.IsNotFound(err) {
 					// Success
 					return true, nil
 				}
@@ -1055,7 +1072,13 @@ func (data *TestData) deleteClickHouseOperator() error {
 }
 
 func (data *TestData) deployIPFIXCollector(serverCert []byte, serverKey []byte, clientCA []byte) (string, error) {
-	args := []string{"--ipfix.port", ipfixCollectorPort}
+	return data.deployIPFIXCollectorWithName("ipfix-collector", serverCert, serverKey, clientCA, "")
+}
+
+func (data *TestData) deployIPFIXCollectorWithName(name string, serverCert []byte, serverKey []byte, clientCA []byte, node string) (string, error) {
+	// #nosec G404: random number generator not used for security purposes
+	port := strconv.Itoa(rand.Int()%1000 + 40000)
+	args := []string{fmt.Sprintf("--ipfix.port=%s", port)}
 	if serverCert != nil {
 		args = append(args, "--server-cert", "/certs/server/tls.crt", "--server-key", "/certs/server/tls.key")
 		if clientCA != nil {
@@ -1063,12 +1086,12 @@ func (data *TestData) deployIPFIXCollector(serverCert []byte, serverKey []byte, 
 		}
 	}
 
-	pb := NewPodBuilder("ipfix-collector", data.testNamespace, ipfixCollectorImage).WithArgs(args).InHostNetwork()
+	pb := NewPodBuilder(name, data.testNamespace, ipfixCollectorImage).WithArgs(args).InHostNetwork().OnNode(node)
 
 	if serverCert != nil {
 		serverCertSecret := &corev1.Secret{
 			ObjectMeta: metav1.ObjectMeta{
-				Name: "ipfix-collector-server-cert",
+				Name: name + "-server-cert",
 			},
 			Immutable: ptr.To(true),
 			Data: map[string][]byte{
@@ -1084,7 +1107,7 @@ func (data *TestData) deployIPFIXCollector(serverCert []byte, serverKey []byte, 
 		if clientCA != nil {
 			clientCASecret := &corev1.Secret{
 				ObjectMeta: metav1.ObjectMeta{
-					Name: "ipfix-collector-client-ca",
+					Name: name + "-client-ca",
 				},
 				Immutable: ptr.To(true),
 				Data: map[string][]byte{
@@ -1101,7 +1124,7 @@ func (data *TestData) deployIPFIXCollector(serverCert []byte, serverKey []byte, 
 	if err := pb.Create(data); err != nil {
 		return "", fmt.Errorf("error when creating the ipfix collector Pod: %w", err)
 	}
-	ipfixCollectorIP, err := data.podWaitForIPs(defaultTimeout, "ipfix-collector", data.testNamespace)
+	ipfixCollectorIP, err := data.podWaitForIPs(defaultTimeout, name, data.testNamespace)
 	if err != nil || len(ipfixCollectorIP.IPStrings) == 0 {
 		return "", fmt.Errorf("error when waiting to get ipfix collector Pod IP: %w", err)
 	}
@@ -1111,20 +1134,17 @@ func (data *TestData) deployIPFIXCollector(serverCert []byte, serverKey []byte, 
 	} else {
 		ipStr = ipfixCollectorIP.IPv4.String()
 	}
-	ipfixCollectorAddr := fmt.Sprintf("%s:tcp", net.JoinHostPort(ipStr, ipfixCollectorPort))
+	ipfixCollectorAddr := fmt.Sprintf("%s:tcp", net.JoinHostPort(ipStr, port))
 	return ipfixCollectorAddr, nil
 }
 
 // deployFlowAggregator deploys the Flow Aggregator.
 func (data *TestData) deployFlowAggregator(
-	ipfixCollector string,
+	ipfixCollectorAddr string,
 	ipfixClientCert, ipfixClientKey, ipfixServerCA []byte,
 	o flowVisibilityTestOptions,
 ) error {
-	flowAggYaml := flowAggregatorYML
-	if testOptions.enableCoverage {
-		flowAggYaml = flowAggregatorCovYML
-	}
+	flowAggYaml := flowAggYamls[o.flowAggregator.selectedAggregator]
 
 	// Create flow-aggregator Namespace first, so that we can create the necessary Secrets prior
 	// to applying the Flow Aggregator manifest.
@@ -1182,7 +1202,7 @@ func (data *TestData) deployFlowAggregator(
 			Data: secret.Data,
 		}
 		_, err = data.clientset.CoreV1().Secrets(flowAggregatorNamespace).Create(context.TODO(), newSecret, metav1.CreateOptions{})
-		if errors.IsAlreadyExists(err) {
+		if apierrors.IsAlreadyExists(err) {
 			_, err = data.clientset.CoreV1().Secrets(flowAggregatorNamespace).Update(context.TODO(), newSecret, metav1.UpdateOptions{})
 		}
 		if err != nil {
@@ -1190,16 +1210,21 @@ func (data *TestData) deployFlowAggregator(
 		}
 	}
 
-	if err = data.mutateFlowAggregatorConfigMap(ipfixCollector, o); err != nil {
+	if err = data.mutateFlowAggregatorConfigMap(ipfixCollectorAddr, o); err != nil {
 		return err
 	}
-	if rc, _, _, err = data.provider.RunCommandOnNode(controlPlaneNodeName(), fmt.Sprintf("kubectl -n %s rollout status deployment/%s --timeout=%v", flowAggregatorNamespace, flowAggregatorDeployment, 2*defaultTimeout)); err != nil || rc != 0 {
+
+	deploymentName := flowAggregatorDeployment
+	if o.flowAggregator.selectedAggregator > 0 {
+		deploymentName = fmt.Sprintf("%s-%d", deploymentName, o.flowAggregator.selectedAggregator)
+	}
+	if rc, _, _, err = data.provider.RunCommandOnNode(controlPlaneNodeName(), fmt.Sprintf("kubectl -n %s rollout status deployment/%s --timeout=%v", flowAggregatorNamespace, deploymentName, 2*defaultTimeout)); err != nil || rc != 0 {
 		_, stdout, _, _ := data.provider.RunCommandOnNode(controlPlaneNodeName(), fmt.Sprintf("kubectl -n %s describe pod", flowAggregatorNamespace))
 		_, logStdout, _, _ := data.provider.RunCommandOnNode(controlPlaneNodeName(), fmt.Sprintf("kubectl -n %s logs -l app=flow-aggregator", flowAggregatorNamespace))
 		return fmt.Errorf("error when waiting for the Flow Aggregator rollout to complete. kubectl describe output: %s, logs: %s", stdout, logStdout)
 	}
 	// Check for flow-aggregator Pod running again for db connection establishment
-	flowAggPod, err := data.getFlowAggregator()
+	flowAggPod, err := data.getFlowAggregator(o.flowAggregator.selectedAggregator)
 	if err != nil {
 		return fmt.Errorf("error when getting flow-aggregator Pod: %v", err)
 	}
@@ -1214,7 +1239,7 @@ func (data *TestData) mutateFlowAggregatorConfigMap(ipfixCollectorAddr string, o
 		return fmt.Errorf("cannot use Proxy mode with ClickHouse")
 	}
 
-	configMap, err := data.GetFlowAggregatorConfigMap()
+	configMap, err := data.GetFlowAggregatorConfigMap(o)
 	if err != nil {
 		return err
 	}
@@ -1225,8 +1250,9 @@ func (data *TestData) mutateFlowAggregatorConfigMap(ipfixCollectorAddr string, o
 	}
 
 	flowAggregatorConf.Mode = o.mode
+
 	flowAggregatorConf.FlowCollector = flowaggregatorconfig.FlowCollectorConfig{
-		Enable:          true,
+		Enable:          ipfixCollectorAddr != "",
 		Address:         ipfixCollectorAddr,
 		IncludeK8sNames: o.ipfixCollector.includeK8sNames,
 		IncludeK8sUIDs:  o.ipfixCollector.includeK8sUIDs,
@@ -1235,6 +1261,7 @@ func (data *TestData) mutateFlowAggregatorConfigMap(ipfixCollectorAddr string, o
 		tls := &flowAggregatorConf.FlowCollector.TLS
 		tls.Enable = true
 		tls.ServerName = "ipfix-collector"
+
 		// By default, the YAML manifest used for testing already has CASecretName and
 		// ClientSecretName set (which is a no-op unless TLS is enabled). However, when
 		// client auth is disabled by the test, we have to make sure that ClientSecretName
@@ -1255,7 +1282,6 @@ func (data *TestData) mutateFlowAggregatorConfigMap(ipfixCollectorAddr string, o
 				CACert: o.databaseSecureConnection,
 			},
 		}
-
 	} else {
 		flowAggregatorConf.ClickHouse = flowaggregatorconfig.ClickHouseConfig{
 			Enable: false,
@@ -1265,6 +1291,10 @@ func (data *TestData) mutateFlowAggregatorConfigMap(ipfixCollectorAddr string, o
 	flowAggregatorConf.InactiveFlowRecordTimeout = aggregatorInactiveFlowRecordTimeout.String()
 	flowAggregatorConf.RecordContents.PodLabels = true
 	flowAggregatorConf.ClusterID = o.clusterID
+
+	if o.flowAggregator.disableTLS {
+		flowAggregatorConf.AggregatorTransportProtocol = "tcp"
+	}
 
 	b, err := yaml.Marshal(&flowAggregatorConf)
 	if err != nil {
@@ -1277,14 +1307,19 @@ func (data *TestData) mutateFlowAggregatorConfigMap(ipfixCollectorAddr string, o
 	return nil
 }
 
-func (data *TestData) GetFlowAggregatorConfigMap() (*corev1.ConfigMap, error) {
-	deployment, err := data.clientset.AppsV1().Deployments(flowAggregatorNamespace).Get(context.TODO(), flowAggregatorDeployment, metav1.GetOptions{})
+func (data *TestData) GetFlowAggregatorConfigMap(o flowVisibilityTestOptions) (*corev1.ConfigMap, error) {
+	deploymentName := flowAggregatorDeployment
+	if o.flowAggregator.selectedAggregator > 0 {
+		deploymentName = fmt.Sprintf("%s-%d", deploymentName, o.flowAggregator.selectedAggregator)
+	}
+
+	deployment, err := data.clientset.AppsV1().Deployments(flowAggregatorNamespace).Get(context.TODO(), deploymentName, metav1.GetOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("failed to retrieve Flow aggregator deployment: %v", err)
 	}
 	var configMapName string
 	for _, volume := range deployment.Spec.Template.Spec.Volumes {
-		if volume.ConfigMap != nil && volume.Name == flowAggregatorConfigVolume {
+		if volume.ConfigMap != nil && (volume.Name == flowAggregatorConfigVolume) {
 			configMapName = volume.ConfigMap.Name
 			break
 		}
@@ -1480,7 +1515,7 @@ func (data *TestData) deleteAntrea(timeout time.Duration) error {
 
 	deleteDS := func(ds string) error {
 		if err := data.clientset.AppsV1().DaemonSets(antreaNamespace).Delete(context.TODO(), ds, deleteOptions); err != nil {
-			if errors.IsNotFound(err) {
+			if apierrors.IsNotFound(err) {
 				// no Antrea DaemonSet running, we return right away
 				return nil
 			}
@@ -1488,7 +1523,7 @@ func (data *TestData) deleteAntrea(timeout time.Duration) error {
 		}
 		err := wait.PollUntilContextTimeout(context.TODO(), defaultInterval, timeout, false, func(ctx context.Context) (bool, error) {
 			if _, err := data.clientset.AppsV1().DaemonSets(antreaNamespace).Get(context.TODO(), ds, metav1.GetOptions{}); err != nil {
-				if errors.IsNotFound(err) {
+				if apierrors.IsNotFound(err) {
 					// Antrea DaemonSet does not exist any more, success
 					return true, nil
 				}
@@ -1840,7 +1875,7 @@ func (data *TestData) DeletePod(namespace, name string) error {
 		GracePeriodSeconds: &gracePeriodSeconds,
 	}
 	if err := data.clientset.CoreV1().Pods(namespace).Delete(context.TODO(), name, deleteOptions); err != nil {
-		if !errors.IsNotFound(err) {
+		if !apierrors.IsNotFound(err) {
 			return err
 		}
 	}
@@ -1855,7 +1890,7 @@ func (data *TestData) DeletePodAndWait(timeout time.Duration, name string, ns st
 	}
 	err := wait.PollUntilContextTimeout(context.TODO(), defaultInterval, timeout, false, func(ctx context.Context) (bool, error) {
 		if _, err := data.clientset.CoreV1().Pods(ns).Get(context.TODO(), name, metav1.GetOptions{}); err != nil {
-			if errors.IsNotFound(err) {
+			if apierrors.IsNotFound(err) {
 				return true, nil
 			}
 			return false, fmt.Errorf("error when getting Pod: %v", err)
@@ -1879,7 +1914,7 @@ func (data *TestData) PodWaitFor(timeout time.Duration, name, namespace string, 
 		var err error
 		pod, err = data.clientset.CoreV1().Pods(namespace).Get(context.TODO(), name, metav1.GetOptions{})
 		if err != nil {
-			if errors.IsNotFound(err) {
+			if apierrors.IsNotFound(err) {
 				return false, nil
 			}
 			return false, fmt.Errorf("error when getting Pod '%s': %v", name, err)
@@ -2020,7 +2055,7 @@ func (data *TestData) deleteAntreaAgentOnNode(nodeName string, gracePeriodSecond
 	if err := wait.PollUntilContextTimeout(context.TODO(), defaultInterval, timeout, false, func(ctx context.Context) (bool, error) {
 		for _, pod := range pods.Items {
 			if _, err := data.clientset.CoreV1().Pods(antreaNamespace).Get(context.TODO(), pod.Name, metav1.GetOptions{}); err != nil {
-				if errors.IsNotFound(err) {
+				if apierrors.IsNotFound(err) {
 					continue
 				}
 				return false, fmt.Errorf("error when getting Pod: %v", err)
@@ -2082,17 +2117,26 @@ func (data *TestData) RunCommandFromAntreaPodOnNode(nodeName string, cmd []strin
 	return data.RunCommandFromPod(antreaNamespace, antreaPodName, agentContainerName, cmd)
 }
 
-// getFlowAggregator retrieves the name of the Flow-Aggregator Pod (flow-aggregator-*) running on a specific Node.
-func (data *TestData) getFlowAggregator() (*corev1.Pod, error) {
+// getFlowAggregator retrieves the name of the Flow-Aggregator Pod (flow-aggregator-*) with a specific label.
+func (data *TestData) getFlowAggregator(aggregatorIndex int) (*corev1.Pod, error) {
+	match := flowAggregatorDeployment
+	if aggregatorIndex > 0 {
+		match = fmt.Sprintf("%s-%d", match, aggregatorIndex)
+	}
+
 	listOptions := metav1.ListOptions{
-		LabelSelector: "app=flow-aggregator",
+		LabelSelector: fmt.Sprintf("app=%s", match),
 	}
 	pods, err := data.clientset.CoreV1().Pods(flowAggregatorNamespace).List(context.TODO(), listOptions)
 	if err != nil {
-		return nil, fmt.Errorf("failed to list Flow Aggregator Pod: %v", err)
+		return nil, fmt.Errorf("failed to list Flow Aggregator Pod: %w", err)
 	}
-	if len(pods.Items) != 1 {
-		return nil, fmt.Errorf("expected *exactly* one Pod")
+	if len(pods.Items) > 1 {
+		return nil, fmt.Errorf("expected *exactly* one Pod with label 'app=%s' but got %d Pods", match, len(pods.Items))
+	}
+
+	if len(pods.Items) == 0 {
+		return nil, errNoAggregators
 	}
 	return &pods.Items[0], nil
 }
@@ -2368,7 +2412,7 @@ func (data *TestData) deleteServiceAndWait(timeout time.Duration, name, namespac
 	}
 	err := wait.PollUntilContextTimeout(context.TODO(), defaultInterval, timeout, false, func(ctx context.Context) (bool, error) {
 		if _, err := data.clientset.CoreV1().Services(namespace).Get(context.TODO(), name, metav1.GetOptions{}); err != nil {
-			if errors.IsNotFound(err) {
+			if apierrors.IsNotFound(err) {
 				return true, nil
 			}
 			return false, fmt.Errorf("error when getting Service: %v", err)
@@ -3032,18 +3076,22 @@ func (data *TestData) gracefulExitAntreaAgent(covDir string, nodeName string) er
 	return nil
 }
 
-// gracefulExitFlowAggregator copies the Flow Aggregator binary coverage data file out before terminating the Pod.
-func (data *TestData) gracefulExitFlowAggregator(covDir string) error {
-	flowAggPod, err := data.getFlowAggregator()
-	if err != nil {
-		return fmt.Errorf("error when getting flow-aggregator Pod: %v", err)
-	}
-	podName := flowAggPod.Name
+// gracefulExitFlowAggregators copies the Flow Aggregator binary coverage data file out before terminating the Pod.
+func (data *TestData) gracefulExitFlowAggregators(covDir string) error {
+	for i := range flowAggYamls {
+		flowAggPod, err := data.getFlowAggregator(i)
+		if err != nil {
+			if errors.Is(err, errNoAggregators) {
+				continue
+			}
+			return fmt.Errorf("error when getting flow-aggregator Pod: %w", err)
+		}
+		podName := flowAggPod.Name
 
-	if err := data.killProcessAndCollectCovFiles(flowAggregatorNamespace, podName, "flow-aggregator", "flow-aggregator", covDir); err != nil {
-		return fmt.Errorf("error when gracefully exiting Flow Aggregator: %w", err)
+		if err := data.killProcessAndCollectCovFiles(flowAggregatorNamespace, podName, "flow-aggregator", "flow-aggregator", covDir); err != nil {
+			return fmt.Errorf("error when gracefully exiting Flow Aggregator: %w", err)
+		}
 	}
-
 	return nil
 }
 
@@ -3380,7 +3428,7 @@ func (data *TestData) checkAntreaAgentInfo(interval time.Duration, timeout time.
 	err := wait.PollUntilContextTimeout(context.TODO(), interval, timeout, true, func(ctx context.Context) (bool, error) {
 		aai, err := data.CRDClient.CrdV1beta1().AntreaAgentInfos().Get(context.TODO(), name, metav1.GetOptions{})
 		if err != nil {
-			if errors.IsNotFound(err) {
+			if apierrors.IsNotFound(err) {
 				return false, nil
 			}
 			return false, fmt.Errorf("failed to get AntreaAgentInfo %s: %v", name, err)
@@ -3393,7 +3441,7 @@ func (data *TestData) checkAntreaAgentInfo(interval time.Duration, timeout time.
 		pod, err := data.clientset.CoreV1().Pods(aai.PodRef.Namespace).Get(context.TODO(), aai.PodRef.Name, metav1.GetOptions{})
 		if err != nil {
 			// If err is NotFound, we should keep trying
-			if errors.IsNotFound(err) {
+			if apierrors.IsNotFound(err) {
 				return false, nil
 			}
 			return false, err

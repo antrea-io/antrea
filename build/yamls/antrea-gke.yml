@@ -4380,12 +4380,16 @@ data:
     # Enable metrics exposure via Prometheus. Initializes Prometheus metrics listener.
     enablePrometheusMetrics: true
 
+    # Options for FlowExporter. This feature exports polled conntrack connections from each agent
+    # and sends them to a configured collector. Use the `FlowExporterDestination` resource to configure
+    # the collectors. To enable this feature, you need to ensure the FlowExporter feature gate is enabled.
     flowExporter:
-      # Enable FlowExporter, a feature used to export polled conntrack connections as
-      # IPFIX flow records from each agent to a configured collector. To enable this
-      # feature, you need to set "enable" to true, and ensure that the FlowExporter
-      # feature gate is also enabled.
+      # Enable the static FlowExporter, this remains here for compatibility reasons. A static FlowExporter
+      # is configured using the fields from `.flowCollectorAddr`, `.activeFlowExportTimeout`, `idleFlowExportTimeout`
+      # and `protocolFilter`. The fields mentioned are only considered for the static collector.
+      # This is deprecated, and should configure collectors using the `FlowExporterDestination` resource.
       enable: false
+
       # Provide the IPFIX collector address as a string with format <HOST>:[<PORT>][:<PROTO>].
       # HOST can either be the DNS name, IP, or Service name of the Flow Collector. If
       # using an IP, it can be either IPv4 or IPv6. However, IPv6 address should be
@@ -4398,12 +4402,6 @@ data:
       # communication between flow exporter and flow aggregator. When "grpc" is configured,
       # mTLS will always be used.
       flowCollectorAddr: "flow-aggregator/flow-aggregator:14739:grpc"
-
-      # Provide flow poll interval as a duration string. This determines how often the
-      # flow exporter dumps connections from the conntrack module. Flow poll interval
-      # should be greater than or equal to 1s (one second).
-      # Valid time units are "ns", "us" (or "µs"), "ms", "s", "m", "h".
-      flowPollInterval: "5s"
 
       # Provide the active flow export timeout, which is the timeout after which a flow
       # record is sent to the collector for active flows. Thus, for flows with a continuous
@@ -4424,6 +4422,12 @@ data:
       # protocols are exported which are:
       # "tcp", "udp", "sctp"
       protocolFilter:
+
+      # Provide flow poll interval as a duration string. This determines how often the
+      # flow exporter dumps connections from the conntrack module. Flow poll interval
+      # should be greater than or equal to 1s (one second).
+      # Valid time units are "ns", "us" (or "µs"), "ms", "s", "m", "h".
+      flowPollInterval: "5s"
 
     nodePortLocal:
     # Enable NodePortLocal, a feature used to make Pods reachable using port forwarding on the host. To
@@ -5630,7 +5634,7 @@ spec:
         kubectl.kubernetes.io/default-container: antrea-agent
         # Automatically restart Pods with a RollingUpdate if the ConfigMap changes
         # See https://helm.sh/docs/howto/charts_tips_and_tricks/#automatically-roll-deployments
-        checksum/config: da05c6a135078734144b39bec8201adac80e58264879d2787f22c4c850d0400a
+        checksum/config: 5713e5c31d6cd6bf66f9062e838b3118f087b13db67ff84c8e3a4282ab10f29c
       labels:
         app: antrea
         component: antrea-agent
@@ -5876,7 +5880,7 @@ spec:
       annotations:
         # Automatically restart Pod if the ConfigMap changes
         # See https://helm.sh/docs/howto/charts_tips_and_tricks/#automatically-roll-deployments
-        checksum/config: da05c6a135078734144b39bec8201adac80e58264879d2787f22c4c850d0400a
+        checksum/config: 5713e5c31d6cd6bf66f9062e838b3118f087b13db67ff84c8e3a4282ab10f29c
       labels:
         app: antrea
         component: antrea-controller

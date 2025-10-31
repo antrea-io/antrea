@@ -19,7 +19,6 @@ import (
 	"fmt"
 	"net"
 	"net/netip"
-	"time"
 
 	"antrea.io/libOpenflow/openflow15"
 	"antrea.io/ofnet/ofctrl"
@@ -144,9 +143,15 @@ func (c *Controller) storeDenyConnectionParsed(pktIn *ofctrl.PacketIn, packet *b
 		denyConn.OriginalDestinationPort = dstPortValue
 	}
 
+	// A single packet was received
+	denyConn.OriginalStats.Packets = 1
+	// The size of this conn is the length of the packet
+	denyConn.OriginalStats.Bytes = uint64(packet.IPLength)
+	// denyConn.StopTime = time.Now()
+
 	// No need to obtain connection info again if it already exists in denyConnectionStore.
-	if conn, exist := c.denyConnStore.GetConnByKey(connection.NewConnectionKey(&denyConn)); exist {
-		c.denyConnStore.AddOrUpdateConn(conn, time.Now(), uint64(packet.IPLength))
+	if exist := c.denyConnStore.HasConn(connection.NewConnectionKey(&denyConn)); exist {
+		c.denyConnStore.SubmitDenyConn(&denyConn)
 		return nil
 	}
 
@@ -205,7 +210,7 @@ func (c *Controller) storeDenyConnectionParsed(pktIn *ofctrl.PacketIn, packet *b
 			denyConn.EgressNetworkPolicyRuleAction = flowexporterutils.RuleActionToUint8(disposition)
 		}
 	}
-	c.denyConnStore.AddOrUpdateConn(&denyConn, time.Now(), uint64(packet.IPLength))
+	c.denyConnStore.SubmitDenyConn(&denyConn)
 	return nil
 }
 

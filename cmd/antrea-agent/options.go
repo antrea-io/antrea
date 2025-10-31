@@ -279,59 +279,61 @@ func (o *Options) validateAntreaProxyConfig(encapMode config.TrafficEncapModeTyp
 }
 
 func (o *Options) validateFlowExporterConfig() error {
-	if features.DefaultFeatureGate.Enabled(features.FlowExporter) && o.config.FlowExporter.Enable {
-		if features.DefaultFeatureGate.Enabled(features.AntreaIPAM) {
-			klog.InfoS("The FlowExporter feature does not support AntreaIPAM Pods")
-		}
-		host, port, proto, err := flowexport.ParseFlowCollectorAddr(o.config.FlowExporter.FlowCollectorAddr, defaultFlowCollectorPort, defaultFlowCollectorTransport)
+	if !features.DefaultFeatureGate.Enabled(features.FlowExporter) {
+		klog.InfoS("Feature gate `FlowExporter` is disabled")
+		return nil
+	}
+
+	if features.DefaultFeatureGate.Enabled(features.AntreaIPAM) {
+		klog.InfoS("The FlowExporter feature does not support AntreaIPAM Pods")
+	}
+	host, port, proto, err := flowexport.ParseFlowCollectorAddr(o.config.FlowExporter.FlowCollectorAddr, defaultFlowCollectorPort, defaultFlowCollectorTransport)
+	if err != nil {
+		return err
+	}
+	o.flowCollectorAddr = net.JoinHostPort(host, port)
+	o.flowCollectorProto = proto
+
+	// Parse the given flowPollInterval config
+	if o.config.FlowExporter.FlowPollInterval != "" {
+		flowPollInterval, err := flowexport.ParseFlowIntervalString(o.config.FlowExporter.FlowPollInterval)
 		if err != nil {
 			return err
 		}
-		o.flowCollectorAddr = net.JoinHostPort(host, port)
-		o.flowCollectorProto = proto
-
-		// Parse the given flowPollInterval config
-		if o.config.FlowExporter.FlowPollInterval != "" {
-			flowPollInterval, err := flowexport.ParseFlowIntervalString(o.config.FlowExporter.FlowPollInterval)
-			if err != nil {
-				return err
-			}
-			o.pollInterval = flowPollInterval
-		}
-		// Parse the given activeFlowExportTimeout config
-		if o.config.FlowExporter.ActiveFlowExportTimeout != "" {
-			o.activeFlowTimeout, err = time.ParseDuration(o.config.FlowExporter.ActiveFlowExportTimeout)
-			if err != nil {
-				return fmt.Errorf("ActiveFlowExportTimeout is not provided in right format")
-			}
-			if o.activeFlowTimeout < o.pollInterval {
-				o.activeFlowTimeout = o.pollInterval
-				klog.Warningf("ActiveFlowExportTimeout must be greater than or equal to FlowPollInterval")
-			}
-		}
-		// Parse the given inactiveFlowExportTimeout config
-		if o.config.FlowExporter.IdleFlowExportTimeout != "" {
-			o.idleFlowTimeout, err = time.ParseDuration(o.config.FlowExporter.IdleFlowExportTimeout)
-			if err != nil {
-				return fmt.Errorf("IdleFlowExportTimeout is not provided in right format")
-			}
-			if o.idleFlowTimeout < o.pollInterval {
-				o.idleFlowTimeout = o.pollInterval
-				klog.Warningf("IdleFlowExportTimeout must be greater than or equal to FlowPollInterval")
-			}
-		}
-		if (o.activeFlowTimeout > defaultStaleConnectionTimeout) || (o.idleFlowTimeout > defaultStaleConnectionTimeout) {
-			if o.activeFlowTimeout > o.idleFlowTimeout {
-				o.staleConnectionTimeout = 2 * o.activeFlowTimeout
-			} else {
-				o.staleConnectionTimeout = 2 * o.idleFlowTimeout
-			}
-		} else {
-			o.staleConnectionTimeout = defaultStaleConnectionTimeout
-		}
-	} else if o.config.FlowExporter.Enable {
-		klog.InfoS("The FlowExporter.enable config option is set to true, but it will be ignored because the FlowExporter feature gate is disabled")
+		o.pollInterval = flowPollInterval
 	}
+	// Parse the given activeFlowExportTimeout config
+	if o.config.FlowExporter.ActiveFlowExportTimeout != "" {
+		o.activeFlowTimeout, err = time.ParseDuration(o.config.FlowExporter.ActiveFlowExportTimeout)
+		if err != nil {
+			return fmt.Errorf("ActiveFlowExportTimeout is not provided in right format")
+		}
+		if o.activeFlowTimeout < o.pollInterval {
+			o.activeFlowTimeout = o.pollInterval
+			klog.Warningf("ActiveFlowExportTimeout must be greater than or equal to FlowPollInterval")
+		}
+	}
+	// Parse the given inactiveFlowExportTimeout config
+	if o.config.FlowExporter.IdleFlowExportTimeout != "" {
+		o.idleFlowTimeout, err = time.ParseDuration(o.config.FlowExporter.IdleFlowExportTimeout)
+		if err != nil {
+			return fmt.Errorf("IdleFlowExportTimeout is not provided in right format")
+		}
+		if o.idleFlowTimeout < o.pollInterval {
+			o.idleFlowTimeout = o.pollInterval
+			klog.Warningf("IdleFlowExportTimeout must be greater than or equal to FlowPollInterval")
+		}
+	}
+	if (o.activeFlowTimeout > defaultStaleConnectionTimeout) || (o.idleFlowTimeout > defaultStaleConnectionTimeout) {
+		if o.activeFlowTimeout > o.idleFlowTimeout {
+			o.staleConnectionTimeout = 2 * o.activeFlowTimeout
+		} else {
+			o.staleConnectionTimeout = 2 * o.idleFlowTimeout
+		}
+	} else {
+		o.staleConnectionTimeout = defaultStaleConnectionTimeout
+	}
+
 	return nil
 }
 

@@ -85,12 +85,8 @@ func IsConnectionDying(conn *connection.Connection) bool {
 // checkConntrackConnActive returns true if there are changes in connection's stats or
 // TCP state, indicating that the connection is active.
 func CheckConntrackConnActive(conn *connection.Connection) bool {
-	if (conn.OriginalPackets > conn.PrevPackets) ||
-		(conn.ReversePackets > conn.PrevReversePackets) ||
-		(conn.TCPState != conn.PrevTCPState) {
-		return true
-	}
-	return false
+	return HasActivity(conn.PreviousStats, conn.OriginalStats) ||
+		conn.TCPState != conn.PrevTCPState
 }
 
 // RuleActionToUint8 converts network policy rule action to uint8.
@@ -130,4 +126,8 @@ func LookupProtocolMap(name string) (uint8, error) {
 		return 0, fmt.Errorf("unknown IP protocol specified: %s", name)
 	}
 	return proto, nil
+}
+
+func HasActivity(oldStats, newStats connection.Stats) bool {
+	return newStats.Packets > oldStats.Packets || newStats.ReversePackets > oldStats.ReversePackets
 }
