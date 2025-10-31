@@ -297,24 +297,24 @@ func (c *Controller) Run(ctx context.Context) {
 		return
 	}
 
-	go wait.UntilWithContext(ctx, c.worker, time.Second)
+	go wait.Until(c.worker, time.Second, ctx.Done())
 
 	<-ctx.Done()
 }
 
-func (c *Controller) worker(ctx context.Context) {
-	for c.processNextWorkItem(ctx) {
+func (c *Controller) worker() {
+	for c.processNextWorkItem() {
 	}
 }
 
-func (c *Controller) processNextWorkItem(ctx context.Context) bool {
+func (c *Controller) processNextWorkItem() bool {
 	_, quit := c.queue.Get()
 	if quit {
 		return false
 	}
 	defer c.queue.Done(dummyKey)
 
-	if err := c.syncBGPPolicy(ctx); err == nil {
+	if err := c.syncBGPPolicy(context.TODO()); err == nil {
 		// If no error occurs we Forget this item, so it does not get queued again until another change happens.
 		c.queue.Forget(dummyKey)
 	} else {

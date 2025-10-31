@@ -1674,8 +1674,14 @@ func TestServiceLifecycle(t *testing.T) {
 	_, err := c.client.CoreV1().Services(namespaceDefault).Create(context.TODO(), loadBalancer, metav1.CreateOptions{})
 	require.NoError(t, err)
 
-	// Add an EndpointSlice without Endpoint IP for the Service. This could be happened at the moment after a Service is
-	// just created.
+	// Wait for event to be generated for Service before creating the EndpointSlice. This is to
+	// avoid undeterministic behavior of the test: without this barrier, the Service event and
+	// the EndpointSlice event would either be processed as a single queue item or as two queue items.
+	waitAndGetDummyEvent(t, c)
+	require.NoError(t, c.syncBGPPolicy(ctx))
+	doneDummyEvent(t, c)
+
+	// Add an EndpointSlice without Endpoint IP for the Service.
 	endpointSlice := generateEndpointSlice(ipv4LoadBalancerName, endpointSliceSuffix, true, false, "")
 	_, err = c.client.DiscoveryV1().EndpointSlices(namespaceDefault).Create(context.TODO(), endpointSlice, metav1.CreateOptions{})
 	require.NoError(t, err)
