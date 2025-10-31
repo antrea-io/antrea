@@ -30,7 +30,7 @@ the target traffic flow:
 
 * Source Pod, or IP address
 * Destination Pod, or IP address
-* Transport protocol (TCP/UDP/ICMP)
+* Transport protocol (TCP/UDP/ICMP/ICMPv6)
 * Transport ports
 * TCP Flags
 * ICMP Messages
@@ -85,8 +85,8 @@ spec:
   # Defaults to 'Source' if a Source Pod is available; otherwise, defaults to 'Destination'.
   capturePoint: Destination # optional to specify
   packet:
-    ipFamily: IPv4
-    protocol: TCP # support arbitrary number values and string values in [TCP,UDP,ICMP] (case insensitive)
+    ipFamily: IPv4 # Default is IPv4; you can also specify IPv6
+    protocol: TCP # support arbitrary number values and string values in [TCP,UDP,ICMP,ICMPv6] (case insensitive)
     transportHeader:
       tcp:
         dstPort: 8080 # Destination port needs to be set when the protocol is TCP/UDP.
@@ -141,5 +141,44 @@ spec:
 The CR above starts a new packet capture of ICMP flows from a Pod named `frontend`
 to a Pod named `backend` using ICMP protocol and targeting at either echo reply or destination (host) unreachable packets.
 It will capture the first 5 packets in the reverse direction (destination to source).
+
+Example of PacketCapture CR for capturing packets based on ICMPv6 messages:
+
+```yaml
+apiVersion: crd.antrea.io/v1alpha1
+kind: PacketCapture
+metadata:
+  name: pc-icmpv6-test
+spec:
+  timeout: 60
+  captureConfig:
+    firstN:
+      number: 5
+  source:
+    pod:
+      namespace: default
+      name: frontend-v6
+  destination:
+    pod:
+      namespace: default
+      name: backend-v6
+  direction: Both
+  capturePoint: Destination
+  packet:
+    ipFamily: IPv6
+    protocol: ICMPv6
+    transportHeader:
+      icmpv6:
+        # List of ICMPv6 Message Matchers. Each specifies a type and optional code to match against ICMPv6 messages in packets.
+        # type value can be provided either as a string or number. Available string options are 'icmpv6-echo', 'icmpv6-echoreply', 'icmpv6-dstunreach', 'icmpv6-timxceed', 'icmpv6-pkttoobig', and 'icmpv6-paramprob'.
+        # code value can only be provided as a number.
+        messages:
+          - type: icmpv6-echo # echo request, or 128
+          - type: icmpv6-echoreply # echo reply, or 129
+```
+
+The CR above starts a new packet capture of ICMPv6 flows between a Pod named `frontend-v6`
+and a Pod named `backend-v6`. It targets ICMPv6 echo request and echo reply packets and
+will capture the first 5 matching packets found in either direction.
 
 Note: This feature is not supported on Windows for now.

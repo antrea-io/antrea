@@ -591,11 +591,16 @@ Note: one of `--source` and `--destination` must be a Pod.
 
 The `--flow` (or `-f`) argument can be used to specify the PacketCapture packet
 headers with the [ovs-ofctl](http://www.openvswitch.org//support/dist-docs/ovs-ofctl.8.txt)
-flow syntax. This argument works the same way as the one for `antctl traceflow`. The supported flow fields
-include: IP protocol (`icmp`, `tcp`, `udp`), source and destination ports
-(`tcp_src`, `tcp_dst`, `udp_src`, `udp_dst`), TCP flags (`tcp_flags`) and ICMP messages (`icmp_type`, `icmp_code`).
-The `icmp_type` value can be provided in either numeric or string type (`icmp-echo`, `icmp-echoreply`, `icmp-unreach`, `icmp-timxceed`),
-and the `icmp_code` value can be provided in only numeric type.
+flow syntax. This argument works the same way as the one for `antctl traceflow`.
+The supported flow fields include: IP family (`ipv6` to indicate an IPv6 packet),
+IP protocol (`icmp`, `icmpv6`, `tcp`, `udp`), source and destination ports
+(`tcp_src`, `tcp_dst`, `udp_src`, `udp_dst`), TCP flags (`tcp_flags`), ICMP
+messages (`icmp_type`, `icmp_code`) and ICMPv6 messages (`icmpv6_type`, `icmpv6_code`).
+The `icmp_type` value can be provided in either numeric or string type (`icmp-echo`,
+`icmp-echoreply`, `icmp-unreach`, `icmp-timxceed`), and the `icmp_code` value can be
+provided in only numeric type. Similarly, for ICMPv6, the `icmpv6_type` can be specified as a
+string: (`icmpv6-echo`, `icmpv6-echoreply`, `icmpv6-dstunreach`, `icmpv6-timxceed`,
+`icmpv6-pkttoobig`, and `icmpv6-paramprob`).
 
 The `--direction` (or `-d`) argument can be used to specify the capture direction. Valid values are:
 
@@ -627,6 +632,8 @@ $ antctl packetcapture -S pod1 -D pod2 -p Destination
 $ antctl packetcapture -S pod1 -D pod2 -f tcp,tcp_dst=80,tcp_flags=+fin
 # Start capturing TCP SYNs that are not ACKs from pod1 to pod2, with destination port 80
 $ antctl packetcapture -S pod1 -D pod2 -f tcp,tcp_dst=80,tcp_flags=+syn-ack
+# Start capturing IPv6 TCP SYNs packets from pod1 to pod2, with destination port 80
+$ antctl packetcapture -S pod1 -D pod2 -f ipv6,tcp,tcp_dst=80,tcp_flags=+syn
 # Start capturing UDP packets from pod1 to pod2, with destination port 1234
 $ antctl packetcapture -S pod1 -D pod2 -f udp,udp_dst=1234
 # Start capturing ICMP destination unreachable (host unreachable) packets from pod1 to pod2
@@ -635,6 +642,10 @@ $ antctl packetcapture -S pod1 -D pod2 -f icmp,icmp_type=icmp-unreach,icmp_code=
 $ antctl packetcapture -S pod1 -D pod2 -f icmp,icmp_type=8
 # Start capturing packets in both directions between pod1 and pod2
 $ antctl packetcapture -S pod1 -D pod2 -d Both
+# Start capturing ICMPv6 destination unreachable (host unreachable) packets from pod1 to pod2
+$ antctl packetcapture -S pod1 -D pod2 -f icmpv6,icmpv6_type=icmpv6-unreach,icmpv6_code=1
+# Start capturing ICMPv6 echo reply packets from pod1 to pod2
+$ antctl packetcapture -S pod1 -D pod2 -f icmpv6,icmpv6_type=129
 # Save the packets file to a specified directory
 $ antctl packetcapture -S 192.168.123.123 -D pod2 -f tcp,tcp_dst=80 -o /tmp
 ```
