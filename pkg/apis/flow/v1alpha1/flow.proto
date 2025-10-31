@@ -196,4 +196,8 @@ message Flow {
   FlowDirection flow_direction = 12;
 
   Aggregation aggregation = 13;
+
+  uint32 zone = 14;
+  bytes ReplyDestinationAddress = 15;
+  uint32 ReplyDestinationPort = 16;
 }
