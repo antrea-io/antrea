@@ -82,6 +82,11 @@ var (
 	// - The IP is used as destination IP in host routing entry to forward DNATed NodePort packets to Antrea gateway
 	VirtualNodePortDNATIPv4 = net.ParseIP("169.254.0.252")
 	VirtualNodePortDNATIPv6 = net.ParseIP("fc01::aabb:ccdd:eefe")
+
+	// VirtualReplyEgressRouteNextHopIPv4 or VirtualReplyEgressRouteNextHopIPv6 is used as the next hop IP of the
+	// default route in the policy-routing table ReplyEgressRouteTable defined in pkg/agent/types/net.go.
+	VirtualReplyEgressRouteNextHopIPv4 = net.ParseIP("169.254.0.251")
+	VirtualReplyEgressRouteNextHopIPv6 = net.ParseIP("fc01::aabb:ccdd:eefd")
 )
 
 type NodeType uint8
