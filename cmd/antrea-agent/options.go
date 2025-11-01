@@ -18,6 +18,7 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -258,6 +259,20 @@ func (o *Options) validateAntreaProxyConfig(encapMode config.TrafficEncapModeTyp
 		for _, nodePortAddress := range o.config.AntreaProxy.NodePortAddresses {
 			if _, _, err := net.ParseCIDR(nodePortAddress); err != nil {
 				return fmt.Errorf("invalid NodePort IP address `%s`: %w", nodePortAddress, err)
+			}
+		}
+
+		if addr := o.config.AntreaProxy.ServiceHealthCheckServerBindAddress; addr != "" {
+			hostStr, portStr, err := net.SplitHostPort(addr)
+			if err != nil {
+				return fmt.Errorf("invalid health server bind address %q: %v", addr, err)
+			}
+			if net.ParseIP(hostStr) == nil {
+				return fmt.Errorf("invalid IP address in health server bind address: %q", hostStr)
+			}
+			port, err := strconv.Atoi(portStr)
+			if err != nil || port < 0 || port > 65535 {
+				return fmt.Errorf("invalid port in health server bind address: %q", portStr)
 			}
 		}
 	}

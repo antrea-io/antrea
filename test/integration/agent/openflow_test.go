@@ -36,7 +36,6 @@ import (
 	nodeiptest "antrea.io/antrea/pkg/agent/nodeip/testing"
 	ofClient "antrea.io/antrea/pkg/agent/openflow"
 	"antrea.io/antrea/pkg/agent/openflow/cookie"
-	k8stypes "antrea.io/antrea/pkg/agent/proxy/types"
 	"antrea.io/antrea/pkg/agent/types"
 	"antrea.io/antrea/pkg/agent/util"
 	"antrea.io/antrea/pkg/apis/controlplane/v1beta2"
@@ -639,15 +638,8 @@ func TestProxyServiceFlowsAntreaPolicyDisabled(t *testing.T) {
 	}()
 
 	endpoints := []k8sproxy.Endpoint{
-		k8stypes.NewEndpointInfo(&k8sproxy.BaseEndpointInfo{
-			Endpoint: net.JoinHostPort("192.168.1.2", "8081"),
-			IsLocal:  true,
-		}),
-		k8stypes.NewEndpointInfo(&k8sproxy.BaseEndpointInfo{
-			Endpoint: net.JoinHostPort("10.20.1.11", "8081"),
-			IsLocal:  false,
-			NodeName: "node1",
-		}),
+		k8sproxy.NewBaseEndpointInfo("192.168.1.2", 8081, true, true, false, false, nil, nil),
+		k8sproxy.NewBaseEndpointInfo("10.20.1.11", 8081, false, true, false, false, nil, nil),
 	}
 
 	stickyMaxAgeSeconds := uint16(30)
@@ -729,15 +721,8 @@ func TestProxyServiceFlowsAntreaPolicyEnabled(t *testing.T) {
 	}()
 
 	endpoints := []k8sproxy.Endpoint{
-		k8stypes.NewEndpointInfo(&k8sproxy.BaseEndpointInfo{
-			Endpoint: net.JoinHostPort("192.168.1.2", "8081"),
-			IsLocal:  true,
-		}),
-		k8stypes.NewEndpointInfo(&k8sproxy.BaseEndpointInfo{
-			Endpoint: net.JoinHostPort("10.20.1.11", "8081"),
-			IsLocal:  false,
-			NodeName: "node1",
-		}),
+		k8sproxy.NewBaseEndpointInfo("192.168.1.2", 8081, true, true, false, false, nil, nil),
+		k8sproxy.NewBaseEndpointInfo("10.20.1.11", 8081, false, true, false, false, nil, nil),
 	}
 
 	stickyMaxAgeSeconds := uint16(30)
@@ -832,9 +817,9 @@ func expectedProxyServiceGroupAndFlows(svc *types.ServiceConfig, endpointList []
 	groupBuckets = make([]string, 0)
 	for _, ep := range endpointList {
 		epIP := ipToHexString(net.ParseIP(ep.IP()))
-		epPort, _ := ep.Port()
+		epPort := ep.Port()
 		var bucket string
-		if ep.GetIsLocal() {
+		if ep.IsLocal() {
 			bucket = fmt.Sprintf("weight:100,actions=set_field:%s->reg3,set_field:0x%x/0xffff->reg4,resubmit(,%d)", epIP, epPort, ofClient.ServiceLBTable.GetID())
 		} else {
 			bucket = fmt.Sprintf("weight:100,actions=set_field:0x4000000/0x4000000->reg4,set_field:%s->reg3,set_field:0x%x/0xffff->reg4,resubmit(,%d)", epIP, epPort, ofClient.ServiceLBTable.GetID())
@@ -847,7 +832,7 @@ func expectedProxyServiceGroupAndFlows(svc *types.ServiceConfig, endpointList []
 			ActStr:   fmt.Sprintf("ct(commit,table=%s,zone=65520,nat(dst=%s:%d),exec(set_field:0x10/0x10->ct_mark)", ctTable, ep.IP(), epPort),
 		})
 
-		if ep.GetIsLocal() {
+		if ep.IsLocal() {
 			hairpinFlows.flows = append(hairpinFlows.flows, &ofTestUtils.ExpectFlow{
 				MatchStr: fmt.Sprintf("priority=190,ct_state=+new+trk,ip,nw_src=%s,nw_dst=%s", ep.IP(), ep.IP()),
 				ActStr:   "ct(commit,table=SNAT,zone=65520,exec(set_field:0x20/0x20->ct_mark,set_field:0x40/0x40->ct_mark,move:NXM_NX_REG0[0..3]->NXM_NX_CT_MARK[0..3]))",
