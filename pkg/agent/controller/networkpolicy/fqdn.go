@@ -350,6 +350,10 @@ func (f *fqdnController) deleteFQDNRule(ruleID string, fqdns []string) error {
 }
 
 func (f *fqdnController) deleteFQDNSelector(ruleID string, fqdns []string) {
+	// No need to lock the mutex if fqdns is empty.
+	if len(fqdns) == 0 {
+		return
+	}
 	f.fqdnSelectorMutex.Lock()
 	defer f.fqdnSelectorMutex.Unlock()
 	for _, fqdn := range fqdns {
