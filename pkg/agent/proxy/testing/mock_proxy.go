@@ -1,4 +1,4 @@
-// Copyright 2024 Antrea Authors
+// Copyright 2025 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -54,20 +54,6 @@ func NewMockProxier(ctrl *gomock.Controller) *MockProxier {
 // EXPECT returns an object that allows the caller to indicate expected use.
 func (m *MockProxier) EXPECT() *MockProxierMockRecorder {
 	return m.recorder
-}
-
-// GetProxyProvider mocks base method.
-func (m *MockProxier) GetProxyProvider() proxy.Provider {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetProxyProvider")
-	ret0, _ := ret[0].(proxy.Provider)
-	return ret0
-}
-
-// GetProxyProvider indicates an expected call of GetProxyProvider.
-func (mr *MockProxierMockRecorder) GetProxyProvider() *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetProxyProvider", reflect.TypeOf((*MockProxier)(nil).GetProxyProvider))
 }
 
 // GetServiceByIP mocks base method.

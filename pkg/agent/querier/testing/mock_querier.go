@@ -217,10 +217,10 @@ func (mr *MockAgentQuerierMockRecorder) GetOpenflowClient() *gomock.Call {
 }
 
 // GetProxier mocks base method.
-func (m *MockAgentQuerier) GetProxier() proxy.Proxier {
+func (m *MockAgentQuerier) GetProxier() proxy.ProxyQuerier {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetProxier")
-	ret0, _ := ret[0].(proxy.Proxier)
+	ret0, _ := ret[0].(proxy.ProxyQuerier)
 	return ret0
 }
 

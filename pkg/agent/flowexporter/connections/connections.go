@@ -42,7 +42,7 @@ type connectionStore struct {
 	connections            map[connection.ConnectionKey]*connection.Connection
 	networkPolicyQuerier   querier.AgentNetworkPolicyInfoQuerier
 	podStore               objectstore.PodStore
-	antreaProxier          proxy.Proxier
+	antreaProxier          proxy.ProxyQuerier
 	expirePriorityQueue    *priorityqueue.ExpirePriorityQueue
 	staleConnectionTimeout time.Duration
 	mutex                  sync.Mutex
@@ -51,7 +51,7 @@ type connectionStore struct {
 func NewConnectionStore(
 	npQuerier querier.AgentNetworkPolicyInfoQuerier,
 	podStore objectstore.PodStore,
-	proxier proxy.Proxier,
+	proxier proxy.ProxyQuerier,
 	o *options.FlowExporterOptions) connectionStore {
 	return connectionStore{
 		connections:            make(map[connection.ConnectionKey]*connection.Connection),

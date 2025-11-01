@@ -452,9 +452,9 @@ func run(o *Options) error {
 		groupCounters = append(groupCounters, v6GroupCounter)
 	}
 
-	var proxier proxy.Proxier
+	var proxyServer *proxy.ProxyServer
 	if o.enableAntreaProxy {
-		proxier, err = proxy.NewProxier(nodeConfig.Name,
+		proxyServer, err = proxy.NewProxyServer(nodeConfig.Name,
 			k8sClient,
 			serviceInformer,
 			endpointsInformer,
@@ -473,7 +473,7 @@ func run(o *Options) error {
 			v6GroupCounter,
 			enableMulticlusterGW)
 		if err != nil {
-			return fmt.Errorf("error when creating proxier: %v", err)
+			return fmt.Errorf("error when creating proxyServer: %v", err)
 		}
 	}
 
@@ -737,7 +737,7 @@ func run(o *Options) error {
 		}
 		flowExporter, err = flowexporter.NewFlowExporter(
 			podStore,
-			proxier,
+			proxyServer.GetProxyQuerier(),
 			k8sClient,
 			nodeRouteController,
 			networkConfig.TrafficEncapMode,
@@ -872,7 +872,7 @@ func run(o *Options) error {
 	}
 
 	if o.enableAntreaProxy {
-		go proxier.GetProxyProvider().Run(stopCh)
+		go proxyServer.Run(ctx)
 
 		// If AntreaProxy is configured to proxy all Service traffic, we need to wait for it to sync at least once
 		// before moving forward. Components that rely on Service availability should run after it, otherwise accessing
@@ -881,7 +881,7 @@ func run(o *Options) error {
 			klog.InfoS("Waiting for AntreaProxy to be ready")
 			if err := wait.PollUntilContextCancel(wait.ContextForChannel(stopCh), time.Second, false, func(ctx context.Context) (bool, error) {
 				klog.V(2).InfoS("Checking if AntreaProxy is ready")
-				return proxier.GetProxyProvider().SyncedOnce(), nil
+				return proxyServer.GetProxyProvider().SyncedOnce(), nil
 			}); err != nil {
 				return fmt.Errorf("error when waiting for AntreaProxy to be ready: %v", err)
 			}
@@ -984,7 +984,7 @@ func run(o *Options) error {
 		k8sClient,
 		ofClient,
 		ovsBridgeClient,
-		proxier,
+		proxyServer.GetProxyQuerier(),
 		networkPolicyController,
 		o.config.APIPort,
 		o.config.NodePortLocal.PortRange,
