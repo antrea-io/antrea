@@ -14,12 +14,14 @@
 package main
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/spf13/cobra"
 	"k8s.io/klog/v2"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 
@@ -116,14 +118,20 @@ func runLeader(o *Options) error {
 		return fmt.Errorf("error creating ResourceExport webhook: %v", err)
 	}
 
-	staleController := leader.NewStaleResCleanupController(
-		mgr.GetClient(),
-		mgr.GetScheme(),
-	)
+	waitForCacheSync := func() bool {
+		return mgr.GetCache().WaitForCacheSync(context.Background())
+	}
+	staleController := leader.NewStaleResCleanupController(mgr.GetClient(), mgr.GetScheme(), waitForCacheSync)
 	if err = staleController.SetupWithManager(mgr); err != nil {
 		return fmt.Errorf("error creating StaleResCleanupController: %v", err)
 	}
-	go staleController.Run(stopCh)
+	// Delay Run until Manager has started
+	if err := mgr.Add(manager.RunnableFunc(func(ctx context.Context) error {
+		staleController.Run(ctx.Done())
+		return nil
+	})); err != nil {
+		return fmt.Errorf("error adding StaleResCleanupController as runnable: %v", err)
+	}
 
 	klog.InfoS("Leader MC Controller Starting Manager")
 	if err := mgr.Start(ctrl.SetupSignalHandler()); err != nil {
