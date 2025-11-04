@@ -26,6 +26,10 @@ type FakeCrdV1alpha2 struct {
 	*testing.Fake
 }
 
+func (c *FakeCrdV1alpha2) BGPPolicies() v1alpha2.BGPPolicyInterface {
+	return newFakeBGPPolicies(c)
+}
+
 func (c *FakeCrdV1alpha2) ExternalEntities(namespace string) v1alpha2.ExternalEntityInterface {
 	return newFakeExternalEntities(c, namespace)
 }
