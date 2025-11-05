@@ -28,7 +28,9 @@ _usage="Usage: $0 [--encap-mode <mode>] [--ip-family <v4|v6|dual>] [--coverage] 
         --feature-gates               A comma-separated list of key=value pairs that describe feature gates, e.g. AntreaProxy=true,Egress=false.
         --run                         Run only tests matching the regexp.
         --proxy-all                   Enable Antrea proxy with all Service support.
-        --no-kube-proxy               Don't deploy kube-proxy.
+        --no-kube-proxy               Deprecated. This option is still supported for compatibility, but will be removed. Use '--kube-proxy-mode none' going forward.
+        --kube-proxy-mode             Kube-proxy mode. Supported values are 'iptables', 'nftables', 'ipvs' and 'none' (to disable kube-proxy).
+        --host-network-mode           Antrea host network mode. Supported values are 'iptables' and 'nftables.
         --load-balancer-mode          LoadBalancer mode.
         --node-ipam                   Enable Antrea NodeIPAM.
         --flexible-ipam               Enable Antrea AntreaIPAM.
@@ -76,7 +78,8 @@ mode=""
 ipfamily="v4"
 feature_gates=""
 proxy_all=false
-no_kube_proxy=false
+kube_proxy_mode=""
+host_network_mode=""
 load_balancer_mode=""
 node_ipam=false
 multicast=false
@@ -119,8 +122,17 @@ case $key in
     shift
     ;;
     --no-kube-proxy)
-    no_kube_proxy=true
+    echo "WARNING: '--no-kube-proxy' is deprecated. Use '--kube-proxy-mode none' instead."
+    kube_proxy_mode="none"
     shift
+    ;;
+    --kube-proxy-mode)
+    kube_proxy_mode="$2"
+    shift 2
+    ;;
+    --host-network-mode)
+    host_network_mode="$2"
+    shift 2
     ;;
     --load-balancer-mode)
     load_balancer_mode="$2"
@@ -257,9 +269,12 @@ if $proxy_all; then
     # Services of type LoadBalancer with externalTrafficPolicy set to Local, when proxyAll is
     # enabled. This avoids race conditions between kube-proxy and Antrea Proxy, with both trying to
     # bind to the same address, when proxyAll is enabled while kube-proxy has not been removed.
-    if ! $no_kube_proxy; then
+    if [[ "$kube_proxy_mode" != "none" ]]; then
       manifest_args="$manifest_args --extra-helm-values antreaProxy.disableServiceHealthCheckServer=true"
     fi
+fi
+if [ -n "$host_network_mode" ]; then
+    manifest_args="$manifest_args --extra-helm-values hostNetworkMode=$host_network_mode"
 fi
 if [ -n "$load_balancer_mode" ]; then
     manifest_args="$manifest_args --extra-helm-values antreaProxy.defaultLoadBalancerMode=$load_balancer_mode"
@@ -351,8 +366,8 @@ function setup_cluster {
     echoerr "invalid value for --ip-family \"$ipfamily\", expected \"v4\" or \"v6\""
     exit 1
   fi
-  if $no_kube_proxy; then
-    args="$args --no-kube-proxy"
+  if [ -n "$kube_proxy_mode" ]; then
+    args="$args --kube-proxy-mode $kube_proxy_mode"
   fi
   if $node_ipam; then
     args="$args --no-kube-node-ipam"
@@ -423,7 +438,7 @@ function run_test {
       cat $CH_OPERATOR_YML | docker exec -i kind-control-plane dd of=/root/clickhouse-operator-install-bundle.yml
   fi
 
-  if $no_kube_proxy; then
+  if [[ "$kube_proxy_mode" == "none" ]]; then
       apiserver=$(docker exec -i kind-control-plane kubectl get endpoints kubernetes --no-headers | awk '{print $2}')
       if $coverage; then
         docker exec -i kind-control-plane sed -i.bak -E "s/^[[:space:]]*[#]?kubeAPIServerOverride[[:space:]]*:[[:space:]]*[a-z\"]+[[:space:]]*$/    kubeAPIServerOverride: \"$apiserver\"/" /root/antrea-coverage.yml /root/antrea-ipsec-coverage.yml

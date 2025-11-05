@@ -37,6 +37,7 @@ import (
 
 	"antrea.io/antrea/pkg/agent/config"
 	"antrea.io/antrea/pkg/agent/route"
+	"antrea.io/antrea/pkg/agent/servicecidr"
 	"antrea.io/antrea/pkg/agent/util"
 	"antrea.io/antrea/pkg/agent/util/ipset"
 	"antrea.io/antrea/pkg/agent/util/iptables"
@@ -99,10 +100,22 @@ func skipIfNotInContainer(t *testing.T) {
 type routeClientOptions struct {
 	noSNAT              bool
 	nodeSNATRandomFully bool
+	proxyAll            bool
 }
 
 func newTestRouteClient(networkConfig *config.NetworkConfig, options routeClientOptions) (*route.Client, error) {
-	return route.NewClient(networkConfig, options.noSNAT, false, false, false, false, false, true, options.nodeSNATRandomFully, false, nil, apis.WireGuardListenPort)
+	return route.NewClient(networkConfig,
+		options.noSNAT,
+		options.proxyAll,
+		false,
+		false,
+		false,
+		false,
+		true,
+		options.nodeSNATRandomFully,
+		false,
+		&servicecidr.Discoverer{},
+		apis.WireGuardListenPort)
 }
 
 func TestInitialize(t *testing.T) {
@@ -119,6 +132,7 @@ func TestInitialize(t *testing.T) {
 		xtablesHoldDuration  time.Duration
 		expectNoTrackRules   bool
 		expectUDPPortInRules int
+		proxyAll             bool
 	}{
 		{
 			name: "noEncap",
@@ -172,12 +186,25 @@ func TestInitialize(t *testing.T) {
 			expectNoTrackRules:   true,
 			expectUDPPortInRules: 6081,
 		},
+		{
+			name: "noEncap with proxyAll nftables supporting",
+			networkConfig: &config.NetworkConfig{
+				TrafficEncapMode:              config.TrafficEncapModeNoEncap,
+				IPv4Enabled:                   true,
+				EnableHostNetworkAcceleration: true,
+				HostNetworkMode:               config.HostNetworkModeNFTables,
+			},
+			proxyAll: true,
+		},
 	}
 
 	for _, tc := range tcs {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Logf("Running Initialize test with mode %s node config %s", tc.networkConfig.TrafficEncapMode, nodeConfig)
-			routeClient, err := newTestRouteClient(tc.networkConfig, routeClientOptions{noSNAT: tc.noSNAT, nodeSNATRandomFully: tc.nodeSNATRandomFully})
+			routeClient, err := newTestRouteClient(tc.networkConfig, routeClientOptions{
+				noSNAT:              tc.noSNAT,
+				nodeSNATRandomFully: tc.nodeSNATRandomFully,
+				proxyAll:            tc.proxyAll})
 			require.NoError(t, err)
 
 			var xtablesReleasedTime, initializedTime time.Time
@@ -302,20 +329,26 @@ func TestInitialize(t *testing.T) {
 				assert.Equal(t, expectedData, string(actualData), "mismatch iptables data in table %s", table)
 			}
 
+			expectedNFTablesSets := make(map[string]string)
+			expectedNFTablesFlowtables := make(map[string]string)
+			expectedNFTablesChains := make(map[string]string)
 			if tc.networkConfig.EnableHostNetworkAcceleration {
-				expectedNFTables := `table ip antrea {
-	comment "Rules for Antrea"
+				expectedNFTablesSets["peer-pod-cidr"] = `table ip antrea {
 	set peer-pod-cidr {
 		type ipv4_addr
 		flags interval
 		comment "Set containing IPv4 peer Pods CIDRs"
 	}
-
+}
+`
+				expectedNFTablesFlowtables["fastpath"] = `table ip antrea {
 	flowtable fastpath {
 		hook ingress priority filter
 		devices = { antrea-gw0, eth0 }
 	}
-
+}
+`
+				expectedNFTablesChains["forward-offload"] = `table ip antrea {
 	chain forward-offload {
 		comment "Forward chain containing rules to match connections eligible for flowtable acceleration"
 		type filter hook forward priority filter; policy accept;
@@ -324,10 +357,85 @@ func TestInitialize(t *testing.T) {
 	}
 }
 `
-				output, err := exec.Command("nft", "list", "table", "ip", "antrea").Output()
+			}
+			if tc.proxyAll && tc.networkConfig.HostNetworkMode == config.HostNetworkModeNFTables {
+				expectedNFTablesSets["nodeport"] = `table ip antrea {
+	set nodeport {
+		type ipv4_addr . inet_proto . inet_service
+		comment "Set containing NodePort tuples (ip, protocol, port)"
+	}
+}
+`
+				expectedNFTablesSets["externalip"] = `table ip antrea {
+	set externalip {
+		type ipv4_addr
+		comment "Set containing external IPs"
+	}
+}
+`
+				expectedNFTablesChains["raw-prerouting-proxy-all"] = `table ip antrea {
+	chain raw-prerouting-proxy-all {
+		comment "Raw prerouting for proxyAll"
+		type filter hook prerouting priority raw; policy accept;
+		ip daddr @externalip counter packets 0 bytes 0 notrack comment "Do not track request packets destined to external IPs"
+		ip saddr @externalip counter packets 0 bytes 0 notrack comment "Do not track reply packets sourced from external IPs"
+	}
+}
+`
+				expectedNFTablesChains["raw-output-proxy-all"] = `table ip antrea {
+	chain raw-output-proxy-all {
+		comment "Raw output for proxyAll"
+		type filter hook output priority raw; policy accept;
+		ip daddr @externalip counter packets 0 bytes 0 notrack comment "Do not track request packets destined to external IPs"
+	}
+}
+`
+				expectedNFTablesChains["nat-prerouting-proxy-all"] = `table ip antrea {
+	chain nat-prerouting-proxy-all {
+		comment "NAT prerouting for proxyAll"
+		type nat hook prerouting priority dstnat - 1; policy accept;
+		ip daddr . ip protocol . th dport @nodeport counter packets 0 bytes 0 dnat to 169.254.0.252 comment "DNAT external to NodePort packets"
+	}
+}
+`
+				expectedNFTablesChains["nat-output-proxy-all"] = `table ip antrea {
+	chain nat-output-proxy-all {
+		comment "NAT output for proxyAll"
+		type nat hook output priority dstnat - 1; policy accept;
+		ip daddr . ip protocol . th dport @nodeport counter packets 0 bytes 0 dnat to 169.254.0.252 comment "DNAT local to NodePort packets"
+	}
+}
+`
+				expectedNFTablesChains["nat-postrouting-proxy-all"] = `table ip antrea {
+	chain nat-postrouting-proxy-all {
+		comment "NAT postrouting for proxyAll"
+		type nat hook postrouting priority srcnat; policy accept;
+		ip saddr 169.254.0.253 counter packets 0 bytes 0 masquerade comment "Masquerade OVS virtual source IP"
+	}
+}
+`
+			}
+
+			for set, expected := range expectedNFTablesSets {
+				output, err := exec.Command("nft", "list", "set", "antrea", set).Output()
 				require.NoError(t, err, "error executing nft")
-				assert.Equal(t, expectedNFTables, string(output))
-				// Cleanup the nftables.
+				assert.Equal(t, expected, string(output))
+			}
+			for flowtable, expected := range expectedNFTablesFlowtables {
+				output, err := exec.Command("nft", "list", "flowtable", "antrea", flowtable).Output()
+				require.NoError(t, err, "error executing nft")
+				assert.Equal(t, expected, string(output))
+			}
+			for chain, expected := range expectedNFTablesChains {
+				output, err := exec.Command("nft", "list", "chain", "antrea", chain).Output()
+				require.NoError(t, err, "error executing nft")
+				assert.Equal(t, expected, string(output))
+			}
+
+			// Cleanup the nftables.
+			if len(expectedNFTablesSets) > 0 ||
+				len(expectedNFTablesFlowtables) > 0 ||
+				len(expectedNFTablesChains) > 0 {
 				err = exec.Command("nft", "delete", "table", "ip", "antrea").Run()
 				assert.NoError(t, err, "error deleting nft table")
 			}

@@ -212,6 +212,7 @@ func run(o *Options) error {
 	_, encapMode := config.GetTrafficEncapModeFromStr(o.config.TrafficEncapMode)
 	_, encryptionMode := config.GetTrafficEncryptionModeFromStr(o.config.TrafficEncryptionMode)
 	_, ipsecAuthenticationMode := config.GetIPsecAuthenticationModeFromStr(o.config.IPsec.AuthenticationMode)
+	_, hostNetworkMode := config.GetHostNetworkModeFromStr(o.config.HostNetworkMode)
 
 	networkConfig := &config.NetworkConfig{
 		TunnelType:            ovsconfig.TunnelType(o.config.TunnelType),
@@ -227,6 +228,7 @@ func run(o *Options) error {
 		EnableMulticlusterGW:          enableMulticlusterGW,
 		MulticlusterEncryptionMode:    multiclusterEncryptionMode,
 		EnableHostNetworkAcceleration: *o.config.HostNetworkAcceleration.Enable,
+		HostNetworkMode:               hostNetworkMode,
 	}
 
 	wireguardConfig := &config.WireGuardConfig{

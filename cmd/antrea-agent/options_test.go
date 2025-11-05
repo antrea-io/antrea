@@ -365,3 +365,51 @@ func TestOptionsValidateSecondaryNetworkConfig(t *testing.T) {
 		})
 	}
 }
+
+func TestOptionsValidateHostNetworkMode(t *testing.T) {
+	tests := []struct {
+		name                          string
+		value                         string
+		enableNFTablesHostNetworkMode bool
+		expectedErr                   string
+	}{
+		{
+			name:        "iptables",
+			value:       "iptables",
+			expectedErr: "",
+		},
+		{
+			name:                          "nftables, feature gate enabled",
+			value:                         "nftables",
+			enableNFTablesHostNetworkMode: true,
+			expectedErr:                   "",
+		},
+		{
+			name:                          "nftables, feature gate disabled",
+			value:                         "NFTABLES",
+			enableNFTablesHostNetworkMode: false,
+			expectedErr:                   "HostNetworkMode nftables requires feature gate `NFTablesHostNetworkMode` to be enabled",
+		},
+		{
+			name:        "invalid",
+			value:       "iptable",
+			expectedErr: "HostNetworkMode \"iptable\" is unknown",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			featuregatetesting.SetFeatureGateDuringTest(t, features.DefaultFeatureGate, features.NFTablesHostNetworkMode, tt.enableNFTablesHostNetworkMode)
+			o := &Options{config: &agentconfig.AgentConfig{
+				HostNetworkMode: tt.value,
+			}}
+
+			err := o.validateHostNetworkModeOptions()
+			if tt.expectedErr == "" {
+				require.NoError(t, err)
+			} else {
+				require.ErrorContains(t, err, tt.expectedErr)
+			}
+		})
+	}
+}

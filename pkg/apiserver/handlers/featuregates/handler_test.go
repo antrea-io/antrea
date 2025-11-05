@@ -71,6 +71,7 @@ func Test_getGatesResponse(t *testing.T) {
 				{Component: "agent", Name: "LoadBalancerModeDSR", Status: "Disabled", Version: "ALPHA"},
 				{Component: "agent", Name: "Multicast", Status: multicastStatus, Version: "BETA"},
 				{Component: "agent", Name: "Multicluster", Status: "Disabled", Version: "ALPHA"},
+				{Component: "agent", Name: "NFTablesHostNetworkMode", Status: "Disabled", Version: "ALPHA"},
 				{Component: "agent", Name: "NetworkPolicyStats", Status: "Enabled", Version: "BETA"},
 				{Component: "agent", Name: "NodeLatencyMonitor", Status: "Disabled", Version: "ALPHA"},
 				{Component: "agent", Name: "NodeNetworkPolicy", Status: "Disabled", Version: "ALPHA"},

@@ -226,6 +226,7 @@ func TestValidateK8sNodeOptions(t *testing.T) {
 				DNSServerOverride:     tt.dnsServerOverride,
 				KubeAPIServerOverride: tt.kubeAPIServerOverride,
 				ClusterMembershipPort: tt.clusterPort,
+				HostNetworkMode:       "iptables",
 			}
 			config.TrafficEncapMode = "encap"
 			if tt.trafficEncapMode != "" {
