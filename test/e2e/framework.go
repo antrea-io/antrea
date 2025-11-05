@@ -22,6 +22,7 @@ import (
 	"io"
 	"math/rand/v2"
 	"net"
+	"net/url"
 	"os"
 	"path"
 	"path/filepath"
@@ -3573,4 +3574,11 @@ func (data *TestData) getAntreaClusterUUID(timeout time.Duration) (uuid.UUID, er
 		return true, nil
 	})
 	return clusterUUID, err
+}
+
+func getHttpURL(ip string, port string) string {
+	return (&url.URL{
+		Scheme: "http",
+		Host:   net.JoinHostPort(ip, port),
+	}).String()
 }
