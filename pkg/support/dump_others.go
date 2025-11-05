@@ -19,12 +19,14 @@ package support
 
 import (
 	"fmt"
+	"net"
 	"path"
 	"path/filepath"
 	"strings"
 
 	"antrea.io/antrea/pkg/agent/util/iptables"
 	"antrea.io/antrea/pkg/util/logdir"
+	"github.com/spf13/afero"
 )
 
 func (d *agentDumper) DumpLog(basedir string) error {
@@ -60,16 +62,49 @@ func (d *agentDumper) dumpIPTables(basedir string) error {
 }
 
 func (d *agentDumper) dumpIPToolInfo(basedir string) error {
-	dump := func(name string) error {
-		output, err := d.executor.Command("ip", name).CombinedOutput()
+	dump := func(name string, args ...string) error {
+		cmdArgs := append([]string{name}, args...)
+		output, err := d.executor.Command("ip", cmdArgs...).CombinedOutput()
 		if err != nil {
 			return fmt.Errorf("error when dumping %s: %w", name, err)
 		}
 		return writeFile(d.fs, filepath.Join(basedir, name), name, output)
 	}
-	for _, item := range []string{"route", "link", "address"} {
+	for _, item := range []string{"link", "address"} {
 		if err := dump(item); err != nil {
 			return err
+		}
+	}
+	if err := dump("rule", "show"); err != nil {
+		return err
+	}
+	if err := dump("route", "show", "table", "all"); err != nil {
+		return err
+	}
+	
+	if err := d.dumpInterfaceConfigs(basedir); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (d *agentDumper) dumpInterfaceConfigs(basedir string) error {
+	interfaces, err := net.Interfaces()
+	if err != nil {
+		return fmt.Errorf("error getting network interfaces: %w", err)
+	}
+	params := []string{"rp_filter", "arp_ignore", "arp_announce"}
+	for _, iface := range interfaces {
+		for _, param := range params {
+			path := fmt.Sprintf("/proc/sys/net/ipv4/conf/%s/%s", iface.Name, param)
+			value, err := afero.ReadFile(d.fs, path)
+			if err != nil {
+				continue
+			}
+			filename := filepath.Join(basedir, fmt.Sprintf("%s-%s", iface.Name, param))
+			if err := writeFile(d.fs, filename, fmt.Sprintf("%s-%s", iface.Name, param), value); err != nil {
+				return err
+			}
 		}
 	}
 	return nil
