@@ -4307,7 +4307,7 @@ data:
     #                    the PSK value must be passed to Antrea Agent through an environment
     #                    variable: ANTREA_IPSEC_PSK.
     # - wireGuard:       Enable WireGuard for tunnel traffic encryption.
-    trafficEncryptionMode: "none"
+    trafficEncryptionMode: "wireguard"
 
     # Enable bridging mode of Pod network on Nodes, in which the Node's transport interface is connected
     # to the OVS bridge, and cross-Node/VLAN traffic of AntreaIPAM Pods (Pods whose IP addresses are
@@ -5630,7 +5630,7 @@ spec:
         kubectl.kubernetes.io/default-container: antrea-agent
         # Automatically restart Pods with a RollingUpdate if the ConfigMap changes
         # See https://helm.sh/docs/howto/charts_tips_and_tricks/#automatically-roll-deployments
-        checksum/config: da05c6a135078734144b39bec8201adac80e58264879d2787f22c4c850d0400a
+        checksum/config: 9c5fd8e1869da4cfc18aa7868f20bf366ac6c4b794904e2f320892f3fcaea612
       labels:
         app: antrea
         component: antrea-agent
@@ -5876,7 +5876,7 @@ spec:
       annotations:
         # Automatically restart Pod if the ConfigMap changes
         # See https://helm.sh/docs/howto/charts_tips_and_tricks/#automatically-roll-deployments
-        checksum/config: da05c6a135078734144b39bec8201adac80e58264879d2787f22c4c850d0400a
+        checksum/config: 9c5fd8e1869da4cfc18aa7868f20bf366ac6c4b794904e2f320892f3fcaea612
       labels:
         app: antrea
         component: antrea-controller

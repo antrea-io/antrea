@@ -245,7 +245,6 @@ jobs:
             --proxy-all \
             --node-ipam \
             --extra-vlan \
-            --multicast \
             --bgp-policy \
             --networkpolicy-evaluation
       - name: Tar coverage files
