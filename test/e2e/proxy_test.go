@@ -191,7 +191,7 @@ func testProxyLoadBalancerService(t *testing.T, isIPv6 bool) {
 	nodeIPs := []string{controlPlaneNodeIPv4(), workerNodeIPv4(1)}
 	var healthUrls []string
 	for _, nodeIP := range nodeIPs {
-		healthUrls = append(healthUrls, net.JoinHostPort(nodeIP, healthPort))
+		healthUrls = append(healthUrls, getHttpURL(nodeIP, healthPort))
 	}
 	healthOutputTmpl := `{
 	"service": {
@@ -203,8 +203,8 @@ func testProxyLoadBalancerService(t *testing.T, isIPv6 bool) {
 	healthExpected := fmt.Sprintf(healthOutputTmpl, data.testNamespace)
 
 	port := "8080"
-	clusterUrl := net.JoinHostPort(clusterIngressIP[0], port)
-	localUrl := net.JoinHostPort(localIngressIP[0], port)
+	clusterUrl := getHttpURL(clusterIngressIP[0], port)
+	localUrl := getHttpURL(localIngressIP[0], port)
 
 	// Create agnhost Pods which are not on host network.
 	agnhosts := []string{"agnhost-0", "agnhost-1"}
@@ -356,8 +356,8 @@ func testProxyNodePortService(t *testing.T, isIPv6 bool) {
 func nodePortTestCases(t *testing.T, data *TestData, portStrCluster, portStrLocal string, nodes, nodeIPs, pods, hostnames []string, hostNetwork bool) {
 	var clusterUrls, localUrls []string
 	for _, nodeIP := range nodeIPs {
-		clusterUrls = append(clusterUrls, net.JoinHostPort(nodeIP, portStrCluster))
-		localUrls = append(localUrls, net.JoinHostPort(nodeIP, portStrLocal))
+		clusterUrls = append(clusterUrls, getHttpURL(nodeIP, portStrCluster))
+		localUrls = append(localUrls, getHttpURL(nodeIP, portStrLocal))
 	}
 
 	t.Run("ExternalTrafficPolicy:Cluster/Client:Remote", func(t *testing.T) {
@@ -411,7 +411,7 @@ func TestNodePortAndEgressWithTheSameBackendPod(t *testing.T) {
 			break
 		}
 	}
-	testNodePortURL := net.JoinHostPort(nodePortIP, portStr)
+	testNodePortURL := getHttpURL(nodePortIP, portStr)
 
 	// Create an Egress whose external IP is on worker Node.
 	egressNodeIP := workerNodeIPv4(1)
@@ -581,7 +581,7 @@ func testProxyExternalTrafficPolicy(t *testing.T, isIPv6 bool) {
 	// Get test NodePort URLs.
 	var urls []string
 	for _, nodeIP := range nodeIPs {
-		urls = append(urls, net.JoinHostPort(nodeIP, portStr))
+		urls = append(urls, getHttpURL(nodeIP, portStr))
 	}
 
 	// Hold on to make sure that the Service is realized, then test the NodePort on each Node.
@@ -726,12 +726,12 @@ func testProxyHairpin(t *testing.T, isIPv6 bool) {
 
 	// These are test urls.
 	port := "8080"
-	clusterIPUrl := net.JoinHostPort(clusterIPSvc.Spec.ClusterIP, port)
-	workerNodePortClusterUrl := net.JoinHostPort(workerNodeIP, nodePortCluster)
-	workerNodePortLocalUrl := net.JoinHostPort(workerNodeIP, nodePortLocal)
-	worker2NodePortClusterUrl := net.JoinHostPort(worker2NodeIP, nodePortCluster)
-	lbClusterUrl := net.JoinHostPort(lbClusterIngressIP[0], port)
-	lbLocalUrl := net.JoinHostPort(lbLocalIngressIP[0], port)
+	clusterIPUrl := getHttpURL(clusterIPSvc.Spec.ClusterIP, port)
+	workerNodePortClusterUrl := getHttpURL(workerNodeIP, nodePortCluster)
+	workerNodePortLocalUrl := getHttpURL(workerNodeIP, nodePortLocal)
+	worker2NodePortClusterUrl := getHttpURL(worker2NodeIP, nodePortCluster)
+	lbClusterUrl := getHttpURL(lbClusterIngressIP[0], port)
+	lbLocalUrl := getHttpURL(lbLocalIngressIP[0], port)
 
 	// These are expected client IP.
 	expectedGatewayIP, _ := nodeGatewayIPs(1)
