@@ -295,14 +295,15 @@ func NewControllerDumper(fs afero.Fs, executor exec.Interface, since string) Con
 }
 
 type agentDumper struct {
-	fs           afero.Fs
-	executor     exec.Interface
-	ovsCtlClient ovsctl.OVSCtlClient
-	aq           agentquerier.AgentQuerier
-	npq          querier.AgentNetworkPolicyInfoQuerier
-	since        string
-	v4Enabled    bool
-	v6Enabled    bool
+	fs                afero.Fs
+	executor          exec.Interface
+	ovsCtlClient      ovsctl.OVSCtlClient
+	aq                agentquerier.AgentQuerier
+	npq               querier.AgentNetworkPolicyInfoQuerier
+	since             string
+	v4Enabled         bool
+	v6Enabled         bool
+	nftablesSupported bool
 }
 
 func (d *agentDumper) DumpAgentInfo(basedir string) error {
@@ -360,15 +361,16 @@ func (d *agentDumper) DumpOVSPorts(basedir string) error {
 	return writeFile(d.fs, filepath.Join(basedir, "ovsports"), "ports", []byte(strings.Join(portData, "\n")))
 }
 
-func NewAgentDumper(fs afero.Fs, executor exec.Interface, ovsCtlClient ovsctl.OVSCtlClient, aq agentquerier.AgentQuerier, npq querier.AgentNetworkPolicyInfoQuerier, since string, v4Enabled, v6Enabled bool) AgentDumper {
+func NewAgentDumper(fs afero.Fs, executor exec.Interface, ovsCtlClient ovsctl.OVSCtlClient, aq agentquerier.AgentQuerier, npq querier.AgentNetworkPolicyInfoQuerier, since string, v4Enabled, v6Enabled bool, nftablesSupported bool) AgentDumper {
 	return &agentDumper{
-		fs:           fs,
-		executor:     executor,
-		ovsCtlClient: ovsCtlClient,
-		aq:           aq,
-		npq:          npq,
-		since:        since,
-		v4Enabled:    v4Enabled,
-		v6Enabled:    v6Enabled,
+		fs:                fs,
+		executor:          executor,
+		ovsCtlClient:      ovsCtlClient,
+		aq:                aq,
+		npq:               npq,
+		since:             since,
+		v4Enabled:         v4Enabled,
+		v6Enabled:         v6Enabled,
+		nftablesSupported: nftablesSupported,
 	}
 }

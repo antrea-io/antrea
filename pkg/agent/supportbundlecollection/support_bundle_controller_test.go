@@ -60,7 +60,7 @@ func newFakeController(t *testing.T) (*fakeController, *fakeversioned.Clientset)
 	controller := gomock.NewController(t)
 	clientset := &fakeversioned.Clientset{}
 	supportBundleController := NewSupportBundleController("vm1", controlplane.SupportBundleCollectionNodeTypeExternalNode, "vm-ns", &antreaClientGetter{clientset}, nil,
-		nil, nil, true, true)
+		nil, nil, true, true, false)
 	return &fakeController{
 		SupportBundleController: supportBundleController,
 		mockController:          controller,
@@ -207,7 +207,7 @@ func TestSupportBundleCollectionAdd(t *testing.T) {
 
 	for _, tt := range testcases {
 		t.Run(tt.name, func(t *testing.T) {
-			newAgentDumper = func(fs afero.Fs, executor exec.Interface, ovsCtlClient ovsctl.OVSCtlClient, aq agentquerier.AgentQuerier, npq querier.AgentNetworkPolicyInfoQuerier, since string, v4Enabled, v6Enabled bool) support.AgentDumper {
+			newAgentDumper = func(fs afero.Fs, executor exec.Interface, ovsCtlClient ovsctl.OVSCtlClient, aq agentquerier.AgentQuerier, npq querier.AgentNetworkPolicyInfoQuerier, since string, v4Enabled, v6Enabled bool, nftablesSupported bool) support.AgentDumper {
 				return tt.agentDumper
 			}
 			defer func() {

@@ -18,6 +18,7 @@
 package support
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
@@ -27,6 +28,8 @@ import (
 	"github.com/spf13/afero"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"k8s.io/utils/exec"
+	testingexec "k8s.io/utils/exec/testing"
 )
 
 func TestDumpLog(t *testing.T) {
@@ -38,7 +41,7 @@ func TestDumpLog(t *testing.T) {
 	fs.Create(filepath.Join(logDir, "ovs.log"))
 	fs.Create(filepath.Join(logDir, "kubelet.log"))
 
-	dumper := NewAgentDumper(fs, nil, nil, nil, nil, "7s", true, true)
+	dumper := NewAgentDumper(fs, nil, nil, nil, nil, "7s", true, true, false)
 	err := dumper.DumpLog(baseDir)
 	require.NoError(t, err)
 
@@ -48,4 +51,163 @@ func TestDumpLog(t *testing.T) {
 	ok, err = afero.Exists(fs, filepath.Join(baseDir, "logs", "ovs", "ovs.log"))
 	require.NoError(t, err)
 	assert.True(t, ok)
+}
+
+func TestDumpNFTables(t *testing.T) {
+	const nftV4Output = "table ip antrea { chain antrea-chain { type filter hook input priority 0; } }"
+	const nftV6Output = "table ip6 antrea { chain antrea-chain6 { type filter hook input priority 0; } }"
+
+	v4ErrorAction := func() ([]byte, []byte, error) {
+		return nil, nil, fmt.Errorf("v4 error")
+	}
+	v4SuccessAction := func() ([]byte, []byte, error) {
+		return []byte(nftV4Output), nil, nil
+	}
+	v6SuccessAction := func() ([]byte, []byte, error) {
+		return []byte(nftV6Output), nil, nil
+	}
+	emptySuccessAction := func() ([]byte, []byte, error) {
+		return []byte(""), nil, nil
+	}
+
+	tests := []struct {
+		name              string
+		v4Enabled         bool
+		v6Enabled         bool
+		nftablesSupported bool
+		commandActions    []testingexec.FakeCommandAction
+		expectedContent   string
+		expectFile        bool
+		expectErr         bool
+	}{
+		{
+			name:              "nft command not found",
+			v4Enabled:         true,
+			v6Enabled:         true,
+			nftablesSupported: false,
+			expectFile:        false,
+			expectErr:         false,
+		},
+		{
+			name:              "v4 enabled only",
+			v4Enabled:         true,
+			v6Enabled:         false,
+			nftablesSupported: true,
+			commandActions: []testingexec.FakeCommandAction{
+				func(cmd string, args ...string) exec.Cmd {
+					return &testingexec.FakeCmd{
+						CombinedOutputScript: []testingexec.FakeAction{v4SuccessAction},
+					}
+				},
+			},
+			expectedContent: nftV4Output + "\n",
+			expectFile:      true,
+		},
+		{
+			name:              "v6 enabled only",
+			v4Enabled:         false,
+			v6Enabled:         true,
+			nftablesSupported: true,
+			commandActions: []testingexec.FakeCommandAction{
+				func(cmd string, args ...string) exec.Cmd {
+					return &testingexec.FakeCmd{
+						CombinedOutputScript: []testingexec.FakeAction{v6SuccessAction},
+					}
+				},
+			},
+			expectedContent: nftV6Output + "\n",
+			expectFile:      true,
+		},
+		{
+			name:              "v4 and v6 enabled",
+			v4Enabled:         true,
+			v6Enabled:         true,
+			nftablesSupported: true,
+			commandActions: []testingexec.FakeCommandAction{
+				func(cmd string, args ...string) exec.Cmd {
+					return &testingexec.FakeCmd{
+						CombinedOutputScript: []testingexec.FakeAction{v4SuccessAction},
+					}
+				},
+				func(cmd string, args ...string) exec.Cmd {
+					return &testingexec.FakeCmd{
+						CombinedOutputScript: []testingexec.FakeAction{v6SuccessAction},
+					}
+				},
+			},
+			expectedContent: nftV4Output + "\n" + nftV6Output + "\n",
+			expectFile:      true,
+		},
+		{
+			name:              "v4 command error",
+			v4Enabled:         true,
+			v6Enabled:         true,
+			nftablesSupported: true,
+			commandActions: []testingexec.FakeCommandAction{
+				func(cmd string, args ...string) exec.Cmd {
+					return &testingexec.FakeCmd{
+						CombinedOutputScript: []testingexec.FakeAction{v4ErrorAction},
+					}
+				},
+			},
+			expectFile: false,
+			expectErr:  true,
+		},
+		{
+			name:              "no rules found (empty output)",
+			v4Enabled:         true,
+			v6Enabled:         true,
+			nftablesSupported: true,
+			commandActions: []testingexec.FakeCommandAction{
+				func(cmd string, args ...string) exec.Cmd {
+					return &testingexec.FakeCmd{CombinedOutputScript: []testingexec.FakeAction{emptySuccessAction}}
+				},
+				func(cmd string, args ...string) exec.Cmd {
+					return &testingexec.FakeCmd{CombinedOutputScript: []testingexec.FakeAction{emptySuccessAction}}
+				},
+			},
+			expectFile: false,
+			expectErr:  false,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			fs := afero.NewMemMapFs()
+			fs.MkdirAll(baseDir, os.ModePerm)
+
+			fakeExecutor := &testingexec.FakeExec{}
+
+			fakeExecutor.CommandScript = tc.commandActions
+
+			dumper := &agentDumper{
+				fs:                fs,
+				executor:          fakeExecutor,
+				v4Enabled:         tc.v4Enabled,
+				v6Enabled:         tc.v6Enabled,
+				nftablesSupported: tc.nftablesSupported,
+			}
+
+			err := dumper.dumpNFTables(baseDir)
+
+			if tc.expectErr {
+				require.Error(t, err)
+				return
+			}
+
+			require.NoError(t, err)
+
+			filePath := filepath.Join(baseDir, "nftables")
+
+			ok, err := afero.Exists(fs, filePath)
+			require.NoError(t, err)
+			assert.Equal(t, tc.expectFile, ok, "Expected nftables file existence to be %t", tc.expectFile)
+
+			if tc.expectFile {
+				content, err := afero.ReadFile(fs, filePath)
+				require.NoError(t, err)
+				assert.Equal(t, tc.expectedContent, string(content), "File content does not match")
+			}
+		})
+	}
 }

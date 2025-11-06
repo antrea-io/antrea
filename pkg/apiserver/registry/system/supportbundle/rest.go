@@ -71,7 +71,7 @@ func NewControllerStorage() Storage {
 }
 
 // NewAgentStorage creates a support bundle storage for working on antrea agent.
-func NewAgentStorage(client ovsctl.OVSCtlClient, aq agentquerier.AgentQuerier, npq querier.AgentNetworkPolicyInfoQuerier, v4Enabled, v6Enabled bool) Storage {
+func NewAgentStorage(client ovsctl.OVSCtlClient, aq agentquerier.AgentQuerier, npq querier.AgentNetworkPolicyInfoQuerier, v4Enabled, v6Enabled bool, nftablesSupported bool) Storage {
 	bundle := &supportBundleREST{
 		mode:         modeAgent,
 		ovsCtlClient: client,
@@ -81,8 +81,9 @@ func NewAgentStorage(client ovsctl.OVSCtlClient, aq agentquerier.AgentQuerier, n
 			ObjectMeta: metav1.ObjectMeta{Name: modeAgent},
 			Status:     systemv1beta1.SupportBundleStatusNone,
 		},
-		v4Enabled: v4Enabled,
-		v6Enabled: v6Enabled,
+		v4Enabled:         v4Enabled,
+		v6Enabled:         v6Enabled,
+		nftablesSupported: nftablesSupported,
 	}
 	return Storage{
 		Mode:          modeAgent,
@@ -117,11 +118,12 @@ type supportBundleREST struct {
 	// ensure thread-safety. Otherwise, we would have a race with Get callers.
 	cache *systemv1beta1.SupportBundle
 
-	ovsCtlClient ovsctl.OVSCtlClient
-	aq           agentquerier.AgentQuerier
-	npq          querier.AgentNetworkPolicyInfoQuerier
-	v4Enabled    bool
-	v6Enabled    bool
+	ovsCtlClient      ovsctl.OVSCtlClient
+	aq                agentquerier.AgentQuerier
+	npq               querier.AgentNetworkPolicyInfoQuerier
+	v4Enabled         bool
+	v6Enabled         bool
+	nftablesSupported bool
 }
 
 // Create triggers a bundle generation. It only allows resource creation when
@@ -268,7 +270,7 @@ func (r *supportBundleREST) collect(ctx context.Context, dumpers ...func(string)
 }
 
 func (r *supportBundleREST) collectAgent(ctx context.Context, since string) (*systemv1beta1.SupportBundle, error) {
-	dumper := newAgentDumper(defaultFS, defaultExecutor, r.ovsCtlClient, r.aq, r.npq, since, r.v4Enabled, r.v6Enabled)
+	dumper := newAgentDumper(defaultFS, defaultExecutor, r.ovsCtlClient, r.aq, r.npq, since, r.v4Enabled, r.v6Enabled, r.nftablesSupported)
 	return r.collect(
 		ctx,
 		dumper.DumpLog,

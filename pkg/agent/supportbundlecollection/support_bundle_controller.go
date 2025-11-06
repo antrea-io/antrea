@@ -72,6 +72,7 @@ type SupportBundleController struct {
 	v4Enabled                    bool
 	v6Enabled                    bool
 	sftpUploader                 sftp.Uploader
+	nftablesSupported            bool
 }
 
 func NewSupportBundleController(nodeName string,
@@ -82,7 +83,8 @@ func NewSupportBundleController(nodeName string,
 	aq agentquerier.AgentQuerier,
 	npq querier.AgentNetworkPolicyInfoQuerier,
 	v4Enabled,
-	v6Enabled bool) *SupportBundleController {
+	v6Enabled bool,
+	nftablesSupported bool) *SupportBundleController {
 	c := &SupportBundleController{
 		nodeName:              nodeName,
 		supportBundleNodeType: supportBundleNodeType,
@@ -91,12 +93,13 @@ func NewSupportBundleController(nodeName string,
 		queue: workqueue.NewTypedWithConfig(workqueue.TypedQueueConfig[string]{
 			Name: "supportbundle",
 		}),
-		ovsCtlClient: ovsCtlClient,
-		aq:           aq,
-		npq:          npq,
-		v4Enabled:    v4Enabled,
-		v6Enabled:    v6Enabled,
-		sftpUploader: sftp.NewUploader(),
+		ovsCtlClient:      ovsCtlClient,
+		aq:                aq,
+		npq:               npq,
+		v4Enabled:         v4Enabled,
+		v6Enabled:         v6Enabled,
+		sftpUploader:      sftp.NewUploader(),
+		nftablesSupported: nftablesSupported,
 	}
 	return c
 }
@@ -236,7 +239,7 @@ func (c *SupportBundleController) generateSupportBundle(supportBundle *cpv1b2.Su
 	}
 	defer defaultFS.RemoveAll(basedir)
 
-	agentDumper := newAgentDumper(defaultFS, defaultExecutor, c.ovsCtlClient, c.aq, c.npq, supportBundle.SinceTime, c.v4Enabled, c.v6Enabled)
+	agentDumper := newAgentDumper(defaultFS, defaultExecutor, c.ovsCtlClient, c.aq, c.npq, supportBundle.SinceTime, c.v4Enabled, c.v6Enabled, c.nftablesSupported)
 	if err = agentDumper.DumpLog(basedir); err != nil {
 		return err
 	}
