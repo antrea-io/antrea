@@ -10,3 +10,5 @@ helm-docs:
 	sed -i.bak "s/-dev-informational/--dev-informational/g" antrea/README.md # fix img.shields.io badge URLs
 	sed -i.bak "s/0\.0\.0/$(VERSION)/g" flow-aggregator/README.md # replace version placeholder
 	sed -i.bak "s/-dev-informational/--dev-informational/g" flow-aggregator/README.md # fix img.shields.io badge URLs
+	sed -i.bak "s/0\.0\.0/$(VERSION)/g" antrea-windows/README.md # replace version placeholder
+	sed -i.bak "s/-dev-informational/--dev-informational/g" antrea-windows/README.md # fix img.shields.io badge URLs
