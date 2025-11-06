@@ -933,7 +933,10 @@ func (i *Initializer) waitForK8sNode(ctx context.Context, nodeName string) (*v1.
 	if hasPodCIDR(node) {
 		return node, nil
 	}
-	if err := wait.PollUntilContextCancel(ctx, 5*time.Second, true, func(ctx context.Context) (bool, error) {
+	// Immediate is false because we just checked the condition by calling hasPodCIDR on a
+	// "fresh" Node object, and there is no point in getting the Node again until we wait for
+	// one interval.
+	if err := wait.PollUntilContextCancel(ctx, 5*time.Second, false, func(ctx context.Context) (bool, error) {
 		var err error
 		node, err = i.client.CoreV1().Nodes().Get(ctx, nodeName, metav1.GetOptions{})
 		if err != nil {
