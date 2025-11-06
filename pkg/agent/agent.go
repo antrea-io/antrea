@@ -905,7 +905,7 @@ func (i *Initializer) waitForK8sNode(ctx context.Context, nodeName string) (*v1.
 		// installed the rules for the kubernetes Service yet.
 		// If we exceed the deadline, we will have the opportunity to retry several times before the deadline
 		// for the parent context is exceeded.
-		// Note that because 10s is greated than the poll interval (5s), the condition function will be called
+		// Note that because 10s is greater than the poll interval (5s), the condition function will be called
 		// again immediately.
 		clientCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
 		defer cancel()
