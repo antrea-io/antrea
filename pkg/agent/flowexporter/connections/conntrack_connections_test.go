@@ -253,7 +253,7 @@ func TestConntrackConnectionStore_AddOrUpdateConn(t *testing.T) {
 		t.Run(c.name, func(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			mockPodStore := objectstoretest.NewMockPodStore(ctrl)
-			mockProxier := proxytest.NewMockProxier(ctrl)
+			mockProxier := proxytest.NewMockProxyQuerier(ctrl)
 			mockConnDumper := connectionstest.NewMockConnTrackDumper(ctrl)
 			npQuerier := queriertest.NewMockAgentNetworkPolicyInfoQuerier(ctrl)
 
@@ -278,7 +278,7 @@ func TestConntrackConnectionStore_AddOrUpdateConn(t *testing.T) {
 }
 
 // testAddNewConn tests podInfo, Services, network policy mapping.
-func testAddNewConn(mockPodStore *objectstoretest.MockPodStore, mockProxier *proxytest.MockProxier, npQuerier *queriertest.MockAgentNetworkPolicyInfoQuerier, conn connection.Connection, expectNetworkPolicyMetadataAdded bool) {
+func testAddNewConn(mockPodStore *objectstoretest.MockPodStore, mockProxier *proxytest.MockProxyQuerier, npQuerier *queriertest.MockAgentNetworkPolicyInfoQuerier, conn connection.Connection, expectNetworkPolicyMetadataAdded bool) {
 	mockPodStore.EXPECT().GetPodByIPAndTime(conn.FlowKey.SourceAddress.String(), gomock.Any()).Return(nil, false)
 	mockPodStore.EXPECT().GetPodByIPAndTime(conn.FlowKey.DestinationAddress.String(), gomock.Any()).Return(pod1, true)
 

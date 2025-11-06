@@ -68,7 +68,7 @@ func NewConntrackConnectionStore(
 	v6Enabled bool,
 	npQuerier querier.AgentNetworkPolicyInfoQuerier,
 	podStore objectstore.PodStore,
-	proxier proxy.Proxier,
+	proxier proxy.ProxyQuerier,
 	l7EventMapGetterFunc L7EventMapGetter,
 	networkPolicyWait *utilwait.Group,
 	o *options.FlowExporterOptions,

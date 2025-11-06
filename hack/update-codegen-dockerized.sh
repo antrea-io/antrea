@@ -77,7 +77,7 @@ MOCKGEN_TARGETS=(
   "pkg/agent/nodeportlocal/rules PodPortRules testing"
   "pkg/agent/openflow Client testing"
   "pkg/agent/openflow/operations OFEntryOperations testing"
-  "pkg/agent/proxy Proxier testing"
+  "pkg/agent/proxy ProxyQuerier testing"
   "pkg/agent/querier AgentQuerier testing"
   "pkg/agent/route Interface testing"
   "pkg/agent/ipassigner IPAssigner testing"

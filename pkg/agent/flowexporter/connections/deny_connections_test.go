@@ -121,7 +121,7 @@ func TestDenyConnectionStore_AddOrUpdateConn(t *testing.T) {
 			// Reset the metrics.
 			metrics.TotalDenyConnections.Set(0)
 			mockPodStore := objectstoretest.NewMockPodStore(ctrl)
-			mockProxier := proxytest.NewMockProxier(ctrl)
+			mockProxier := proxytest.NewMockProxyQuerier(ctrl)
 			protocol, _ := lookupServiceProtocol(tuple.Protocol)
 			serviceStr := fmt.Sprintf("%s:%d/%s", tuple.DestinationAddress.String(), tuple.DestinationPort, protocol)
 			if !c.expectConnectionNotFound {

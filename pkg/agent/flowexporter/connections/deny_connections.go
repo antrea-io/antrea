@@ -40,7 +40,7 @@ type DenyConnectionStore struct {
 func NewDenyConnectionStore(
 	npQuerier querier.AgentNetworkPolicyInfoQuerier,
 	podStore objectstore.PodStore,
-	proxier proxy.Proxier,
+	proxier proxy.ProxyQuerier,
 	o *options.FlowExporterOptions,
 	protocolFilter filter.ProtocolFilter,
 ) *DenyConnectionStore {
