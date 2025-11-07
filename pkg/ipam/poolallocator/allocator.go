@@ -324,7 +324,7 @@ func (a *IPPoolAllocator) AllocateIP(ip net.IP, state v1beta1.IPAddressPhase, ow
 	return subnetInfo, err
 }
 
-// AllocateNext allocates the next available IP. It returns error if pool is exausted,
+// AllocateNext allocates the next available IP. It returns error if pool is exhausted,
 // or in case CRD failed to update its state.
 // In case of success, IPPool CRD status is updated with allocated IP/state/resource/container.
 // AllocateIP returns subnet details for the requested IP, as defined in IP pool spec.
@@ -363,7 +363,7 @@ func (a *IPPoolAllocator) AllocateNext(state v1beta1.IPAddressPhase, owner v1bet
 
 		if index == len(allocators) {
 			// Failed to find matching range
-			return fmt.Errorf("failed to allocate IP: Pool %s is exausted", a.ipPoolName)
+			return fmt.Errorf("failed to allocate IP: Pool %s is exhausted", a.ipPoolName)
 		}
 
 		subnetInfo = &ipPool.Spec.SubnetInfo
