@@ -1891,6 +1891,66 @@ spec:
                     packet matching this flow has been observed since the last export event.
                   minimum: 1
                   default: 15
+                tlsConfig:
+                  type: object
+                  required:
+                  - caConfigMap
+                  properties:
+                    minTLSVersion:
+                      type: string
+                      description: >
+                        minTLSVersion specifies which version of TLS the client should accept from the server.
+                        This defaults to VersionTLS12 if unspecified.
+                      enum:
+                        - VersionTLS12
+                        - VersionTLS13
+                      default: VersionTLS12
+                    serverName:
+                      type: string
+                      description: >
+                        serverName is used to verify the hostname on the returned certificate. If specified
+                        it will be included in the client's handshake (SNI) to support virtual hosting unless
+                        it is an IP address. If this field is omitted, the hostname used for certificate 
+                        verification will default to the provided server address (spec.address).
+                      minLength: 1
+                    caConfigMap:
+                      type: object
+                      description: >
+                        Specify the location of the ConfigMap containing the CA certificate used to authenticate
+                        the collector service. The ConfigMap must store the certificate under the key 'ca.crt'.
+                        To ensure flow exporter will have access to this resource it must be granted the proper
+                        RBAC permissions.
+                      required:
+                      - namespace
+                      - name
+                      properties:
+                        namespace:
+                          type: string
+                          description: Namespace of the ConfigMap containing the CA certificate.
+                          minLength: 1
+                        name:
+                          type: string
+                          description: Name of the ConfigMap containing the CA certificate.
+                          minLength: 1
+                    clientSecret:
+                      type: object
+                      description: >
+                        Specify the location of the Secret containing the client certificate and private
+                        key for mTLS. The Secret must contain the keys 'tls.crt' and 'tls.key'.
+                        If omitted, client authentication will be disabled. To ensure flow exporter will
+                        have access to this resource it must be granted the proper RBAC permissions.
+                      required:
+                      - namespace
+                      - name
+                      properties:
+                        namespace:
+                          type: string
+                          description: Namespace of the Secret containing the client certificate/key.
+                          minLength: 1
+                        name:
+                          type: string
+                          description: Name of the Secret containing the client certificate/key.
+                          minLength: 1
   scope: Cluster
   names:
     plural: flowexporterdestinations
