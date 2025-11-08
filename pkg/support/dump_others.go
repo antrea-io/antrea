@@ -25,8 +25,8 @@ import (
 	"strings"
 
 	"antrea.io/antrea/pkg/agent/util/iptables"
+	"antrea.io/antrea/pkg/agent/util/sysctl"
 	"antrea.io/antrea/pkg/util/logdir"
-	"github.com/spf13/afero"
 )
 
 func (d *agentDumper) DumpLog(basedir string) error {
@@ -46,6 +46,9 @@ func (d *agentDumper) DumpHostNetworkInfo(basedir string) error {
 	if err := d.dumpIPToolInfo(basedir); err != nil {
 		return err
 	}
+	if err := d.dumpInterfaceConfigs(basedir); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -62,28 +65,23 @@ func (d *agentDumper) dumpIPTables(basedir string) error {
 }
 
 func (d *agentDumper) dumpIPToolInfo(basedir string) error {
-	dump := func(name string, args ...string) error {
-		cmdArgs := append([]string{name}, args...)
-		output, err := d.executor.Command("ip", cmdArgs...).CombinedOutput()
+	dump := func(args ...string) error {
+		output, err := d.executor.Command("ip", args...).CombinedOutput()
 		if err != nil {
-			return fmt.Errorf("error when dumping %s: %w", name, err)
+			return fmt.Errorf("error when dumping %s: %w", strings.Join(args, " "), err)
 		}
-		return writeFile(d.fs, filepath.Join(basedir, name), name, output)
+		return writeFile(d.fs, filepath.Join(basedir, args[0]), args[0], output)
 	}
-	for _, item := range []string{"link", "address"} {
-		if err := dump(item); err != nil {
+	commands := [][]string{
+		{"link"},
+		{"address"},
+		{"rule", "show"},
+		{"route", "show", "table", "all"},
+	}
+	for _, cmd := range commands {
+		if err := dump(cmd...); err != nil {
 			return err
 		}
-	}
-	if err := dump("rule", "show"); err != nil {
-		return err
-	}
-	if err := dump("route", "show", "table", "all"); err != nil {
-		return err
-	}
-	
-	if err := d.dumpInterfaceConfigs(basedir); err != nil {
-		return err
 	}
 	return nil
 }
@@ -93,21 +91,30 @@ func (d *agentDumper) dumpInterfaceConfigs(basedir string) error {
 	if err != nil {
 		return fmt.Errorf("error getting network interfaces: %w", err)
 	}
-	params := []string{"rp_filter", "arp_ignore", "arp_announce"}
+	hostGateway := d.aq.GetNodeConfig().GatewayConfig.Name
+	var relevantIfaces []net.Interface
 	for _, iface := range interfaces {
+		if iface.Name == hostGateway ||
+			iface.Name == "antrea-egress0" ||
+			iface.Name == "antrea-ingress0" ||
+			strings.HasPrefix(iface.Name, "antrea-ext.") {
+			relevantIfaces = append(relevantIfaces, iface)
+		}
+	}
+	params := []string{"rp_filter", "arp_ignore", "arp_announce"}
+	var output strings.Builder
+	for _, iface := range relevantIfaces {
+		output.WriteString(fmt.Sprintf("%s\n", iface.Name))
 		for _, param := range params {
-			path := fmt.Sprintf("/proc/sys/net/ipv4/conf/%s/%s", iface.Name, param)
-			value, err := afero.ReadFile(d.fs, path)
+			value, err := sysctl.GetSysctlNet(fmt.Sprintf("ipv4/conf/%s/%s", iface.Name, param))
 			if err != nil {
 				continue
 			}
-			filename := filepath.Join(basedir, fmt.Sprintf("%s-%s", iface.Name, param))
-			if err := writeFile(d.fs, filename, fmt.Sprintf("%s-%s", iface.Name, param), value); err != nil {
-				return err
-			}
+			output.WriteString(fmt.Sprintf("%s=%d\n", param, value))
 		}
+		output.WriteString("\n")
 	}
-	return nil
+	return writeFile(d.fs, filepath.Join(basedir, "interface-config"), "interface-config", []byte(output.String()))
 }
 
 func (d *agentDumper) DumpMemberlist(basedir string) error {
