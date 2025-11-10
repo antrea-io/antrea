@@ -4541,8 +4541,8 @@ data:
       defaultLoadBalancerMode: "nat"
       # Disables the health check server run by Antrea Proxy, which provides health information about
       # Services of type LoadBalancer with externalTrafficPolicy set to Local, when proxyAll is
-      # enabled. This avoids race conditions between kube-proxy and Antrea proxy, with both trying to
-      # bind to the same addresses, when proxyAll is enabled while kube-proxy has not been removed.
+      # enabled. This avoids race conditions between kube-proxy and Antrea Proxy, with both trying to
+      # bind to the same address, when proxyAll is enabled while kube-proxy has not been removed.
       disableServiceHealthCheckServer: false
 
     # IPsec tunnel related configurations.
@@ -5643,7 +5643,7 @@ spec:
         kubectl.kubernetes.io/default-container: antrea-agent
         # Automatically restart Pods with a RollingUpdate if the ConfigMap changes
         # See https://helm.sh/docs/howto/charts_tips_and_tricks/#automatically-roll-deployments
-        checksum/config: 57f02660c27175cf8cec0d665db7e91883d3d241ade3ed77d710ee98f5e3fe40
+        checksum/config: 23e14d3441d1d935b8499d78c5273dd1126c41c5b62b2b9403b739faa199d653
       labels:
         app: antrea
         component: antrea-agent
@@ -5891,7 +5891,7 @@ spec:
       annotations:
         # Automatically restart Pod if the ConfigMap changes
         # See https://helm.sh/docs/howto/charts_tips_and_tricks/#automatically-roll-deployments
-        checksum/config: 57f02660c27175cf8cec0d665db7e91883d3d241ade3ed77d710ee98f5e3fe40
+        checksum/config: 23e14d3441d1d935b8499d78c5273dd1126c41c5b62b2b9403b739faa199d653
       labels:
         app: antrea
         component: antrea-controller

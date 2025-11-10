@@ -162,7 +162,7 @@ antreaProxy:
   # -- Disables the health check server run by Antrea Proxy, which provides health
   # information about Services of type LoadBalancer with externalTrafficPolicy set to
   # Local, when proxyAll is enabled. This avoids race conditions between kube-proxy
-  # and Antrea proxy, with both trying to bind to the same addresses, when proxyAll
+  # and Antrea Proxy, with both trying to bind to the same address, when proxyAll
   # is enabled while kube-proxy has not been removed.
   disableServiceHealthCheckServer: false
 

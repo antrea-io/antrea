@@ -185,21 +185,39 @@ func testProxyLoadBalancerService(t *testing.T, isIPv6 bool) {
 	svc, err := data.createAgnhostLoadBalancerService("agnhost-local", true, true, localIngressIP, &ipProtocol, nil)
 	require.NoError(t, err)
 
-	// For the 'Local' externalTrafficPolicy, setup the health checks.
+	// For the 'Local' externalTrafficPolicy, set up the health checks.
 	healthPort := fmt.Sprint(svc.Spec.HealthCheckNodePort)
 	require.NotEqual(t, "", healthPort, "HealthCheckNodePort port number should not be empty")
 	nodeIPs := []string{controlPlaneNodeIPv4(), workerNodeIPv4(1)}
+	if isIPv6 {
+		nodeIPs = []string{controlPlaneNodeIPv6(), workerNodeIPv6(1)}
+	}
 	var healthUrls []string
 	for _, nodeIP := range nodeIPs {
 		healthUrls = append(healthUrls, getHttpURL(nodeIP, healthPort))
 	}
-	healthOutputTmpl := `{
+	var healthOutputTmpl string
+	// If kube-proxy presents, use the following template.
+	if _, err = data.clientset.AppsV1().DaemonSets(kubeNamespace).Get(context.TODO(), "kube-proxy", metav1.GetOptions{}); err == nil {
+		healthOutputTmpl = `{
+	"service": {
+		"namespace": "%s",
+		"name": "agnhost-local"
+	},
+	"localEndpoints": 1,
+	"serviceProxyHealthy": true
+}`
+	} else {
+		// AntreaProxy has not implemented serviceProxyHealthy server yet.
+		// TODO: remove this after https://github.com/antrea-io/antrea/pull/7553 is merged.
+		healthOutputTmpl = `{
 	"service": {
 		"namespace": "%s",
 		"name": "agnhost-local"
 	},
 	"localEndpoints": 1
 }`
+	}
 	healthExpected := fmt.Sprintf(healthOutputTmpl, data.testNamespace)
 
 	port := "8080"
@@ -242,7 +260,6 @@ func loadBalancerTestCases(t *testing.T, data *TestData, clusterUrl, localUrl, h
 }
 
 func testLoadBalancerClusterFromNode(t *testing.T, data *TestData, nodes []string, url string) {
-	skipIfKubeProxyEnabled(t, data)
 	for _, node := range nodes {
 		require.NoError(t, probeFromNode(node, url, data), "Service LoadBalancer whose externalTrafficPolicy is Cluster should be able to be connected from Node")
 	}
@@ -255,7 +272,6 @@ func testLoadBalancerClusterFromPod(t *testing.T, data *TestData, pods []string,
 }
 
 func testLoadBalancerLocalFromNode(t *testing.T, data *TestData, nodes, healthUrls []string, healthExpected, url string) {
-	skipIfKubeProxyEnabled(t, data)
 	for _, node := range nodes {
 		require.NoError(t, probeFromNode(node, url, data), "Service LoadBalancer whose externalTrafficPolicy is Local should be able to be connected from Node")
 
@@ -459,14 +475,12 @@ func createAgnhostPod(t *testing.T, data *TestData, podName string, node string,
 }
 
 func testNodePortClusterFromRemote(t *testing.T, data *TestData, nodes, urls []string) {
-	skipIfKubeProxyEnabled(t, data)
 	for idx, node := range nodes {
 		require.NoError(t, probeFromNode(node, urls[idx], data), "Service NodePort whose externalTrafficPolicy is Cluster should be able to be connected from remote Node")
 	}
 }
 
 func testNodePortClusterFromNode(t *testing.T, data *TestData, nodes, urls []string) {
-	skipIfKubeProxyEnabled(t, data)
 	for idx, node := range nodes {
 		require.NoError(t, probeFromNode(node, urls[idx], data), "Service NodePort whose externalTrafficPolicy is Cluster should be able to be connected from Node")
 	}
@@ -481,8 +495,10 @@ func testNodePortClusterFromPod(t *testing.T, data *TestData, pods, urls []strin
 }
 
 func testNodePortLocalFromRemote(t *testing.T, data *TestData, nodes, urls, expectedClientIPs, expectedHostnames []string) {
-	skipIfKubeProxyEnabled(t, data)
 	errMsg := "Service NodePort whose externalTrafficPolicy is Local should be able to be connected from remote Node"
+	encapMode, err := data.GetEncapMode()
+	require.NoError(t, err)
+
 	for idx, node := range nodes {
 		hostname, err := probeHostnameFromNode(node, urls[idx], data)
 		require.NoError(t, err, errMsg)
@@ -490,12 +506,17 @@ func testNodePortLocalFromRemote(t *testing.T, data *TestData, nodes, urls, expe
 
 		clientIP, err := probeClientIPFromNode(node, urls[idx], data)
 		require.NoError(t, err, errMsg)
-		require.Equal(t, expectedClientIPs[idx], clientIP)
+		if encapMode != config.TrafficEncapModeHybrid {
+			// For Kind cluster in hybrid mode e2e tests, control plane Node resides in one subnet while worker Nodes
+			// reside in another subnet. The subnets are implemented by separate Docker bridges and are reachable to
+			// each other through SNAT. Consequently, connections between Nodes across subnets are SNATed, and their
+			// client IPs do not reflect the original sources. As a result, skip client IP verification.
+			require.Equal(t, expectedClientIPs[idx], clientIP)
+		}
 	}
 }
 
 func testNodePortLocalFromNode(t *testing.T, data *TestData, nodes, urls []string) {
-	skipIfKubeProxyEnabled(t, data)
 	for idx, node := range nodes {
 		require.NoError(t, probeFromNode(node, urls[idx], data), "Service NodePort whose externalTrafficPolicy is Local should be able to be connected from Node")
 	}
