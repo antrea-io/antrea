@@ -424,7 +424,7 @@ kind: NetworkAttachmentDefinition
 metadata:
   name: ipv4-net-1
 spec:
-  {
+  config: '{
       "cniVersion": "0.3.0",
       "type": "macvlan",
       "master": "eth0",
@@ -433,7 +433,7 @@ spec:
           "type": "antrea",
           "ippools": [ "ipv4-pool-1" ]
       }
-  }
+  }'
 ```
 
 ## `IPPool` CRD
@@ -502,7 +502,7 @@ kind: NetworkAttachmentDefinition
 metadata:
   name: ipv4-net-1
 spec:
-  {
+  config: '{
       "cniVersion": "0.3.0",
       "type": "antrea",
       "networkType": "vlan",
@@ -510,7 +510,7 @@ spec:
           "type": "antrea",
           "ippools": [ "ipv4-pool-1" ]
       }
-  }
+  }'
 ```
 
 You can refer to the [Antrea secondary network document](secondary-network.md)
