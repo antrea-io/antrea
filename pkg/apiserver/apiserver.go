@@ -63,6 +63,7 @@ import (
 	"antrea.io/antrea/pkg/apiserver/registry/system/supportbundle"
 	"antrea.io/antrea/pkg/apiserver/storage"
 	crdv1a2informers "antrea.io/antrea/pkg/client/informers/externalversions/crd/v1alpha2"
+	"antrea.io/antrea/pkg/controller/bgp"
 	"antrea.io/antrea/pkg/controller/egress"
 	"antrea.io/antrea/pkg/controller/externalippool"
 	"antrea.io/antrea/pkg/controller/ipam"
@@ -302,6 +303,7 @@ func installHandlers(c *ExtraConfig, s *genericapiserver.GenericAPIServer) {
 	s.Handler.NonGoRestfulMux.HandleFunc("/endpoint", endpoint.HandleFunc(c.endpointQuerier))
 	// Webhook to mutate Namespace labels and add its metadata.name as a label
 	s.Handler.NonGoRestfulMux.HandleFunc("/mutate/namespace", webhook.HandleMutationLabels())
+	s.Handler.NonGoRestfulMux.HandleFunc("/convert/bgppolicy", webhook.HandleCRDConversion(bgp.ConvertBGPPolicy))
 
 	if features.DefaultFeatureGate.Enabled(features.AntreaPolicy) {
 		// Get new NetworkPolicyMutator

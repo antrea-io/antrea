@@ -803,7 +803,7 @@ func run(o *Options) error {
 
 	var bgpController *bgp.Controller
 	if features.DefaultFeatureGate.Enabled(features.BGPPolicy) {
-		bgpPolicyInformer := crdInformerFactory.Crd().V1alpha1().BGPPolicies()
+		bgpPolicyInformer := crdInformerFactory.Crd().V1alpha2().BGPPolicies()
 		bgpController, err = bgp.NewBGPPolicyController(nodeInformer,
 			serviceInformer,
 			egressInformer,

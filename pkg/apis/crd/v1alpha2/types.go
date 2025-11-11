@@ -335,3 +335,116 @@ type TrafficControlList struct {
 
 	Items []TrafficControl `json:"items"`
 }
+
+// +genclient
+// +genclient:nonNamespaced
+// +genclient:noStatus
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+
+// BGPPolicy defines BGP configuration applied to Nodes.
+type BGPPolicy struct {
+	metav1.TypeMeta `json:",inline"`
+	// Standard metadata of the object.
+	metav1.ObjectMeta `json:"metadata,omitempty"`
+
+	Spec BGPPolicySpec `json:"spec"`
+}
+
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+
+type BGPPolicyList struct {
+	metav1.TypeMeta `json:",inline"`
+	// +optional
+	metav1.ListMeta `json:"metadata,omitempty"`
+
+	Items []BGPPolicy `json:"items"`
+}
+
+// BGPPolicySpec defines the specification for a BGPPolicy.
+type BGPPolicySpec struct {
+	// NodeSelector selects Nodes to which the BGPPolicy is applied. If multiple BGPPolicies select a Node, only one
+	// will be effective and enforced; others serve as alternatives.
+	NodeSelector metav1.LabelSelector `json:"nodeSelector"`
+
+	// LocalASN is the AS number used by the BGP process. It accepts values in the range of 1-65535.
+	LocalASN int64 `json:"localASN"`
+
+	// ListenPort is the port on which the BGP process listens, and the default value is 179.
+	ListenPort *int32 `json:"listenPort,omitempty"`
+
+	// Confederation specifies BGP confederation configuration.
+	Confederation *Confederation `json:"confederation,omitempty"`
+
+	// Advertisements configures IPs or CIDRs to be advertised to BGP peers.
+	Advertisements Advertisements `json:"advertisements,omitempty"`
+
+	// BGPPeers is the list of BGP peers.
+	BGPPeers []BGPPeer `json:"bgpPeers,omitempty"`
+}
+
+type Advertisements struct {
+	// Service specifies how to advertise Service IPs.
+	Service *ServiceAdvertisement `json:"service,omitempty"`
+
+	// Pod specifies how to advertise Pod IPs. Currently, if this is set, NodeIPAM Pod CIDR instead of specific Pods IPs
+	// will be advertised since pod selector is not added yet.
+	Pod *PodAdvertisement `json:"pod,omitempty"`
+
+	// Egress specifies how to advertise Egress IPs. Currently, if this is set, all Egress IPs will be advertised since
+	// Egress selector is not added yet.
+	Egress *EgressAdvertisement `json:"egress,omitempty"`
+}
+
+type Confederation struct {
+	// Identifier specifies the confederation's ASN.
+	Identifier int64 `json:"identifier,omitempty"`
+
+	// MemberASNs lists the ASNs of other members in the confederation.
+	MemberASNs []int64 `json:"memberASNs,omitempty"`
+}
+
+type ServiceIPType string
+
+const (
+	ServiceIPTypeClusterIP      ServiceIPType = "ClusterIP"
+	ServiceIPTypeLoadBalancerIP ServiceIPType = "LoadBalancerIP"
+	ServiceIPTypeExternalIP     ServiceIPType = "ExternalIP"
+)
+
+type ServiceAdvertisement struct {
+	// IPTypes specifies the types of Service IPs from the selected Services to be advertised. Currently, all Services
+	// will be selected since Service selector is not added yet.
+	IPTypes []ServiceIPType `json:"ipTypes,omitempty"`
+
+	// Empty now, selectors to be added later, which are used to select specific Services.
+	// Selectors []Selector `json:"selectors,omitempty"`
+}
+
+type PodAdvertisement struct {
+	// Empty now, selectors to be added later, which are used to select specific Pods.
+	// Selectors []Selector `json:"selectors,omitempty"`
+}
+
+type EgressAdvertisement struct {
+	// Empty now, selectors to be added later, which are used to select specific Egresses.
+	// Selectors []Selector `json:"selectors,omitempty"`
+}
+
+type BGPPeer struct {
+	// The IP address on which the BGP peer listens.
+	Address string `json:"address"`
+
+	// The port number on which the BGP peer listens. The default value is 179, the well-known port of BGP protocol.
+	Port *int32 `json:"port,omitempty"`
+
+	// The AS number of the BGP peer.
+	ASN int64 `json:"asn"`
+
+	// The Time To Live (TTL) value used in BGP packets sent to the BGP peer. The range of the value is from 1 to 255,
+	// and the default value is 1.
+	MultihopTTL *int32 `json:"multihopTTL,omitempty"`
+
+	// GracefulRestartTimeSeconds specifies how long the BGP peer would wait for the BGP session to re-establish after
+	// a restart before deleting stale routes. The range of the value is from 1 to 3600, and the default value is 120.
+	GracefulRestartTimeSeconds *int32 `json:"gracefulRestartTimeSeconds,omitempty"`
+}
