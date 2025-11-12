@@ -54,10 +54,10 @@ var (
 	externalIPv6Addr1 = "fd00:1234:5678:dead:beaf::1"
 	externalIPv6Addr2 = "fd00:1234:5678:dead:beaf::a"
 
-	ipv4Route1 = generateRoute(net.ParseIP(externalIPv4Addr1), 32, config.VirtualServiceIPv4, 10, netlink.SCOPE_UNIVERSE)
-	ipv4Route2 = generateRoute(net.ParseIP(externalIPv4Addr2), 32, config.VirtualServiceIPv4, 10, netlink.SCOPE_UNIVERSE)
-	ipv6Route1 = generateRoute(net.ParseIP(externalIPv6Addr1), 128, config.VirtualServiceIPv6, 10, netlink.SCOPE_UNIVERSE)
-	ipv6Route2 = generateRoute(net.ParseIP(externalIPv6Addr2), 128, config.VirtualServiceIPv6, 10, netlink.SCOPE_UNIVERSE)
+	ipv4Route1 = generateRoute(net.ParseIP(externalIPv4Addr1), 32, config.VirtualServiceIPv4, 10, netlink.SCOPE_UNIVERSE, nil, nil)
+	ipv4Route2 = generateRoute(net.ParseIP(externalIPv4Addr2), 32, config.VirtualServiceIPv4, 10, netlink.SCOPE_UNIVERSE, nil, nil)
+	ipv6Route1 = generateRoute(net.ParseIP(externalIPv6Addr1), 128, config.VirtualServiceIPv6, 10, netlink.SCOPE_UNIVERSE, nil, nil)
+	ipv6Route2 = generateRoute(net.ParseIP(externalIPv6Addr2), 128, config.VirtualServiceIPv6, 10, netlink.SCOPE_UNIVERSE, nil, nil)
 
 	serviceIPSets = map[string]*sync.Map{
 		antreaNodePortIPSet:    {},
@@ -159,8 +159,8 @@ func TestSyncIPRules(t *testing.T) {
 	mockNetlink := netlinktest.NewMockInterface(ctrl)
 
 	c := &Client{
-		netlink: mockNetlink,
-		ipRules: sync.Map{},
+		netlink:     mockNetlink,
+		egressRules: sync.Map{},
 	}
 
 	rule1 := &netlink.Rule{Family: netlink.FAMILY_V4, Table: 100, Mark: uint32(0xf), Mask: ptr.To(uint32(0xf))}
@@ -168,8 +168,8 @@ func TestSyncIPRules(t *testing.T) {
 	mockNetlink.EXPECT().RuleList(netlink.FAMILY_ALL).Return([]netlink.Rule{*rule1}, nil)
 	mockNetlink.EXPECT().RuleAdd(rule2)
 
-	c.ipRules.Store(100, rule1)
-	c.ipRules.Store(101, rule2)
+	c.egressRules.Store(100, rule1)
+	c.egressRules.Store(101, rule2)
 
 	assert.NoError(t, c.syncIPRule())
 }
@@ -378,6 +378,15 @@ func TestSyncIPSet(t *testing.T) {
 }
 
 func TestSyncIPTables(t *testing.T) {
+	mockIPTablesListRulesOfChains := func(mockIPTables *iptablestest.MockInterfaceMockRecorder,
+		protocol iptables.Protocol,
+		allChains map[string][]string) {
+		for table, chains := range allChains {
+			for _, chain := range chains {
+				mockIPTables.ListRules(protocol, table, chain).Return(nil, nil)
+			}
+		}
+	}
 	tests := []struct {
 		name                      string
 		isCloudEKS                bool
@@ -569,8 +578,14 @@ COMMIT
 -A ANTREA-POSTROUTING -m comment --comment "Antrea: masquerade OVS virtual source IP" -s fc01::aabb:ccdd:eeff -j MASQUERADE
 COMMIT
 `, false, true)
-				mockIPTables.ListRules(iptables.ProtocolDual, iptables.RawTable, iptables.PreRoutingChain).Return(nil, nil)
-				mockIPTables.ListRules(iptables.ProtocolDual, iptables.RawTable, iptables.OutputChain).Return(nil, nil)
+				mockIPTablesListRulesOfChains(mockIPTables,
+					iptables.ProtocolDual,
+					map[string][]string{
+						iptables.RawTable:    {iptables.PreRoutingChain, iptables.OutputChain},
+						iptables.MangleTable: {iptables.InputChain, iptables.ForwardChain, iptables.OutputChain, iptables.PostRoutingChain},
+						iptables.NATTable:    {iptables.PreRoutingChain, iptables.InputChain, iptables.OutputChain, iptables.PostRoutingChain},
+						iptables.FilterTable: {iptables.InputChain, iptables.ForwardChain, iptables.OutputChain},
+					})
 				mockIPTables.ListRules(iptables.ProtocolDual, iptables.MangleTable, iptables.PreRoutingChain).Return(map[iptables.Protocol][]string{
 					iptables.ProtocolIPv4: {
 						`-A PREROUTING -m comment --comment "Antrea: jump to Antrea mangle rules" -j ANTREA-MANGLE`,
@@ -579,17 +594,6 @@ COMMIT
 						`-A PREROUTING -m comment --comment "Antrea: jump to Antrea mangle rules" -j ANTREA-MANGLE`,
 					},
 				}, nil)
-				mockIPTables.ListRules(iptables.ProtocolDual, iptables.MangleTable, iptables.InputChain).Return(nil, nil)
-				mockIPTables.ListRules(iptables.ProtocolDual, iptables.MangleTable, iptables.ForwardChain).Return(nil, nil)
-				mockIPTables.ListRules(iptables.ProtocolDual, iptables.MangleTable, iptables.OutputChain).Return(nil, nil)
-				mockIPTables.ListRules(iptables.ProtocolDual, iptables.MangleTable, iptables.PostRoutingChain).Return(nil, nil)
-				mockIPTables.ListRules(iptables.ProtocolDual, iptables.NATTable, iptables.PreRoutingChain).Return(nil, nil)
-				mockIPTables.ListRules(iptables.ProtocolDual, iptables.NATTable, iptables.InputChain).Return(nil, nil)
-				mockIPTables.ListRules(iptables.ProtocolDual, iptables.NATTable, iptables.OutputChain).Return(nil, nil)
-				mockIPTables.ListRules(iptables.ProtocolDual, iptables.NATTable, iptables.PostRoutingChain).Return(nil, nil)
-				mockIPTables.ListRules(iptables.ProtocolDual, iptables.FilterTable, iptables.InputChain).Return(nil, nil)
-				mockIPTables.ListRules(iptables.ProtocolDual, iptables.FilterTable, iptables.ForwardChain).Return(nil, nil)
-				mockIPTables.ListRules(iptables.ProtocolDual, iptables.FilterTable, iptables.OutputChain).Return(nil, nil)
 				mockIPTables.DeleteRule(iptables.ProtocolDual, iptables.MangleTable, iptables.PreRoutingChain, []string{"-j", "ANTREA-MANGLE", "-m", "comment", "--comment", "Antrea: jump to Antrea mangle rules"})
 				mockIPTables.DeleteChain(iptables.ProtocolDual, iptables.MangleTable, "ANTREA-MANGLE")
 			},
@@ -690,20 +694,307 @@ COMMIT
 -A ANTREA-POSTROUTING -m comment --comment "Antrea: masquerade LOCAL traffic" -o antrea-gw0 -m addrtype ! --src-type LOCAL --limit-iface-out -m addrtype --src-type LOCAL -j MASQUERADE --random-fully
 COMMIT
 `, false, true)
-				mockIPTables.ListRules(iptables.ProtocolDual, iptables.RawTable, iptables.PreRoutingChain).Return(nil, nil)
-				mockIPTables.ListRules(iptables.ProtocolDual, iptables.RawTable, iptables.OutputChain).Return(nil, nil)
-				mockIPTables.ListRules(iptables.ProtocolDual, iptables.MangleTable, iptables.PreRoutingChain).Return(nil, nil)
-				mockIPTables.ListRules(iptables.ProtocolDual, iptables.MangleTable, iptables.InputChain).Return(nil, nil)
-				mockIPTables.ListRules(iptables.ProtocolDual, iptables.MangleTable, iptables.ForwardChain).Return(nil, nil)
-				mockIPTables.ListRules(iptables.ProtocolDual, iptables.MangleTable, iptables.OutputChain).Return(nil, nil)
-				mockIPTables.ListRules(iptables.ProtocolDual, iptables.MangleTable, iptables.PostRoutingChain).Return(nil, nil)
-				mockIPTables.ListRules(iptables.ProtocolDual, iptables.NATTable, iptables.PreRoutingChain).Return(nil, nil)
-				mockIPTables.ListRules(iptables.ProtocolDual, iptables.NATTable, iptables.InputChain).Return(nil, nil)
-				mockIPTables.ListRules(iptables.ProtocolDual, iptables.NATTable, iptables.OutputChain).Return(nil, nil)
-				mockIPTables.ListRules(iptables.ProtocolDual, iptables.NATTable, iptables.PostRoutingChain).Return(nil, nil)
-				mockIPTables.ListRules(iptables.ProtocolDual, iptables.FilterTable, iptables.InputChain).Return(nil, nil)
-				mockIPTables.ListRules(iptables.ProtocolDual, iptables.FilterTable, iptables.ForwardChain).Return(nil, nil)
-				mockIPTables.ListRules(iptables.ProtocolDual, iptables.FilterTable, iptables.OutputChain).Return(nil, nil)
+				mockIPTablesListRulesOfChains(mockIPTables,
+					iptables.ProtocolDual,
+					map[string][]string{
+						iptables.RawTable:    {iptables.PreRoutingChain, iptables.OutputChain},
+						iptables.MangleTable: {iptables.PreRoutingChain, iptables.InputChain, iptables.ForwardChain, iptables.OutputChain, iptables.PostRoutingChain},
+						iptables.NATTable:    {iptables.PreRoutingChain, iptables.InputChain, iptables.OutputChain, iptables.PostRoutingChain},
+						iptables.FilterTable: {iptables.InputChain, iptables.ForwardChain, iptables.OutputChain},
+					})
+			},
+		},
+		{
+			name:                      "hybrid,egress=true,multicastEnabled=true,proxyAll=true,nodeNetworkPolicy=true,nodeLatencyMonitor=true,nodeSNATRandomFully=true",
+			proxyAll:                  true,
+			multicastEnabled:          true,
+			nodeNetworkPolicyEnabled:  true,
+			nodeLatencyMonitorEnabled: true,
+			networkConfig: &config.NetworkConfig{
+				TrafficEncapMode: config.TrafficEncapModeHybrid,
+				TunnelType:       ovsconfig.GeneveTunnel,
+				IPv4Enabled:      true,
+				IPv6Enabled:      true,
+			},
+			nodeConfig: &config.NodeConfig{
+				PodIPv4CIDR: ip.MustParseCIDR("172.16.10.0/24"),
+				PodIPv6CIDR: ip.MustParseCIDR("2001:ab03:cd04:55ef::/64"),
+				GatewayConfig: &config.GatewayConfig{
+					Name: "antrea-gw0",
+				},
+			},
+			nodeSNATRandomFully: true,
+			markToSNATIP: map[uint32]string{
+				1: "1.1.1.1",
+				2: "fe80::e643:4bff:fe02",
+			},
+			expectedCalls: func(mockIPTables *iptablestest.MockInterfaceMockRecorder) {
+				mockIPTables.EnsureChain(iptables.ProtocolDual, iptables.RawTable, antreaPreRoutingChain)
+				mockIPTables.AppendRule(iptables.ProtocolDual, iptables.RawTable, iptables.PreRoutingChain, []string{"-j", antreaPreRoutingChain, "-m", "comment", "--comment", "Antrea: jump to Antrea prerouting rules"})
+				mockIPTables.EnsureChain(iptables.ProtocolDual, iptables.RawTable, antreaOutputChain)
+				mockIPTables.AppendRule(iptables.ProtocolDual, iptables.RawTable, iptables.OutputChain, []string{"-j", antreaOutputChain, "-m", "comment", "--comment", "Antrea: jump to Antrea output rules"})
+				mockIPTables.EnsureChain(iptables.ProtocolDual, iptables.FilterTable, antreaForwardChain)
+				mockIPTables.AppendRule(iptables.ProtocolDual, iptables.FilterTable, iptables.ForwardChain, []string{"-j", antreaForwardChain, "-m", "comment", "--comment", "Antrea: jump to Antrea forwarding rules"})
+				mockIPTables.EnsureChain(iptables.ProtocolDual, iptables.NATTable, antreaPostRoutingChain)
+				mockIPTables.AppendRule(iptables.ProtocolDual, iptables.NATTable, iptables.PostRoutingChain, []string{"-j", antreaPostRoutingChain, "-m", "comment", "--comment", "Antrea: jump to Antrea postrouting rules"})
+				mockIPTables.EnsureChain(iptables.ProtocolDual, iptables.MangleTable, antreaPreRoutingChain)
+				mockIPTables.AppendRule(iptables.ProtocolDual, iptables.MangleTable, iptables.PreRoutingChain, []string{"-j", antreaPreRoutingChain, "-m", "comment", "--comment", "Antrea: jump to Antrea prerouting rules"})
+				mockIPTables.EnsureChain(iptables.ProtocolDual, iptables.MangleTable, antreaOutputChain)
+				mockIPTables.AppendRule(iptables.ProtocolDual, iptables.MangleTable, iptables.OutputChain, []string{"-j", antreaOutputChain, "-m", "comment", "--comment", "Antrea: jump to Antrea output rules"})
+				mockIPTables.EnsureChain(iptables.ProtocolDual, iptables.MangleTable, antreaPostRoutingChain)
+				mockIPTables.AppendRule(iptables.ProtocolDual, iptables.MangleTable, iptables.PostRoutingChain, []string{"-j", antreaPostRoutingChain, "-m", "comment", "--comment", "Antrea: jump to Antrea postrouting rules"})
+				mockIPTables.ListRules(iptables.ProtocolDual, iptables.NATTable, iptables.PreRoutingChain).Return(
+					map[iptables.Protocol][]string{
+						iptables.ProtocolIPv4: {
+							"-A " + iptables.PreRoutingChain + " -j " + kubeProxyServiceChain,
+							"-A " + iptables.PreRoutingChain + " -j " + antreaPreRoutingChain,
+						},
+						iptables.ProtocolIPv6: {
+							"-A " + iptables.PreRoutingChain + " -j " + antreaPreRoutingChain,
+							"-A " + iptables.PreRoutingChain + " -j " + kubeProxyServiceChain,
+						},
+					}, nil)
+				mockIPTables.DeleteRule(iptables.ProtocolIPv4, iptables.NATTable, iptables.PreRoutingChain, []string{"-j", antreaPreRoutingChain, "-m", "comment", "--comment", "Antrea: jump to Antrea prerouting rules"})
+				mockIPTables.ListRules(iptables.ProtocolDual, iptables.NATTable, iptables.OutputChain).Return(
+					map[iptables.Protocol][]string{
+						iptables.ProtocolIPv4: {
+							"-A " + iptables.OutputChain + " -j " + antreaOutputChain,
+							"-A " + iptables.OutputChain + " -j " + kubeProxyServiceChain,
+						},
+						iptables.ProtocolIPv6: {
+							"-A " + iptables.OutputChain + " -j " + kubeProxyServiceChain,
+							"-A " + iptables.OutputChain + " -j " + antreaOutputChain,
+						},
+					}, nil)
+				mockIPTables.DeleteRule(iptables.ProtocolIPv6, iptables.NATTable, iptables.OutputChain, []string{"-j", antreaOutputChain, "-m", "comment", "--comment", "Antrea: jump to Antrea output rules"})
+				mockIPTables.EnsureChain(iptables.ProtocolDual, iptables.NATTable, antreaPreRoutingChain)
+				mockIPTables.InsertRule(iptables.ProtocolDual, iptables.NATTable, iptables.PreRoutingChain, []string{"-j", antreaPreRoutingChain, "-m", "comment", "--comment", "Antrea: jump to Antrea prerouting rules"})
+				mockIPTables.EnsureChain(iptables.ProtocolDual, iptables.NATTable, antreaOutputChain)
+				mockIPTables.InsertRule(iptables.ProtocolDual, iptables.NATTable, iptables.OutputChain, []string{"-j", antreaOutputChain, "-m", "comment", "--comment", "Antrea: jump to Antrea output rules"})
+				mockIPTables.EnsureChain(iptables.ProtocolDual, iptables.FilterTable, antreaInputChain)
+				mockIPTables.AppendRule(iptables.ProtocolDual, iptables.FilterTable, iptables.InputChain, []string{"-j", antreaInputChain, "-m", "comment", "--comment", "Antrea: jump to Antrea input rules"})
+				mockIPTables.EnsureChain(iptables.ProtocolDual, iptables.FilterTable, antreaOutputChain)
+				mockIPTables.AppendRule(iptables.ProtocolDual, iptables.FilterTable, iptables.OutputChain, []string{"-j", antreaOutputChain, "-m", "comment", "--comment", "Antrea: jump to Antrea output rules"})
+				mockIPTables.Restore(`*raw
+:ANTREA-PREROUTING - [0:0]
+:ANTREA-OUTPUT - [0:0]
+-A ANTREA-PREROUTING -m comment --comment "Antrea: do not track incoming encapsulation packets" -m udp -p udp --dport 6081 -m addrtype --dst-type LOCAL -j NOTRACK
+-A ANTREA-OUTPUT -m comment --comment "Antrea: do not track outgoing encapsulation packets" -m udp -p udp --dport 6081 -m addrtype --src-type LOCAL -j NOTRACK
+-A ANTREA-PREROUTING -m comment --comment "Antrea: drop Pod multicast traffic forwarded via underlay network" -m set --match-set CLUSTER-NODE-IP src -d 224.0.0.0/4 -j DROP
+-A ANTREA-PREROUTING -m comment --comment "Antrea: do not track request packets destined to external IPs" -m set --match-set ANTREA-EXTERNAL-IP dst -j NOTRACK
+-A ANTREA-PREROUTING -m comment --comment "Antrea: do not track reply packets sourced from external IPs" -m set --match-set ANTREA-EXTERNAL-IP src -j NOTRACK
+-A ANTREA-OUTPUT -m comment --comment "Antrea: do not track request packets destined to external IPs" -m set --match-set ANTREA-EXTERNAL-IP dst -j NOTRACK
+COMMIT
+*mangle
+:ANTREA-PREROUTING - [0:0]
+:ANTREA-OUTPUT - [0:0]
+:ANTREA-POSTROUTING - [0:0]
+-A ANTREA-PREROUTING -m comment --comment "Antrea: restore fwmark from connmark for reply Egress packets to remote Pods" -m conntrack --ctstate ESTABLISHED -m conntrack --ctdir REPLY -m connmark --mark 0x40000000/0x40000000 -j CONNMARK --restore-mark --nfmask 0x40000000 --ctmask 0x40000000
+-A ANTREA-PREROUTING -m comment --comment "Antrea: persist connmark for the first request Egress packet from remote Pods" -i antrea-gw0 ! -s 172.16.10.0/24 -m conntrack --ctstate NEW -m mark ! --mark 0x00000000/0x000000ff -j CONNMARK --set-mark 0x40000000/0x40000000
+-A ANTREA-POSTROUTING -m comment --comment "Antrea: clear fwmark from reply Egress packets to remote Pods" -m conntrack --ctstate ESTABLISHED -m conntrack --ctdir REPLY -j MARK --set-xmark 0x0/0x40000000
+-A ANTREA-OUTPUT -m comment --comment "Antrea: mark LOCAL output packets" -m addrtype --src-type LOCAL -o antrea-gw0 -j MARK --or-mark 0x80000000
+COMMIT
+*filter
+:ANTREA-FORWARD - [0:0]
+:ANTREA-INPUT - [0:0]
+:ANTREA-OUTPUT - [0:0]
+:ANTREA-POL-EGRESS-RULES - [0:0]
+:ANTREA-POL-INGRESS-RULES - [0:0]
+:ANTREA-POL-PRE-EGRESS-RULES - [0:0]
+:ANTREA-POL-PRE-INGRESS-RULES - [0:0]
+-A ANTREA-FORWARD -m comment --comment "Antrea: accept packets from local Pods" -i antrea-gw0 -j ACCEPT
+-A ANTREA-FORWARD -m comment --comment "Antrea: accept packets to local Pods" -o antrea-gw0 -j ACCEPT
+-A ANTREA-INPUT -i antrea-gw0 -p icmp --icmp-type 8 -m comment --comment "Antrea: allow ICMP probes from NodeLatencyMonitor" -j ACCEPT
+-A ANTREA-INPUT -i antrea-gw0 -p icmp --icmp-type 0 -m comment --comment "Antrea: allow ICMP probes from NodeLatencyMonitor" -j ACCEPT
+-A ANTREA-INPUT -m comment --comment "Antrea: jump to static ingress NodeNetworkPolicy rules" -j ANTREA-POL-PRE-INGRESS-RULES
+-A ANTREA-INPUT -m comment --comment "Antrea: jump to ingress NodeNetworkPolicy rules" -j ANTREA-POL-INGRESS-RULES
+-A ANTREA-OUTPUT -o antrea-gw0 -p icmp --icmp-type 8 -m comment --comment "Antrea: allow ICMP probes from NodeLatencyMonitor" -j ACCEPT
+-A ANTREA-OUTPUT -o antrea-gw0 -p icmp --icmp-type 0 -m comment --comment "Antrea: allow ICMP probes from NodeLatencyMonitor" -j ACCEPT
+-A ANTREA-OUTPUT -m comment --comment "Antrea: jump to static egress NodeNetworkPolicy rules" -j ANTREA-POL-PRE-EGRESS-RULES
+-A ANTREA-OUTPUT -m comment --comment "Antrea: jump to egress NodeNetworkPolicy rules" -j ANTREA-POL-EGRESS-RULES
+-A ANTREA-POL-INGRESS-RULES -j ACCEPT -m comment --comment "mock rule"
+-A ANTREA-POL-PRE-EGRESS-RULES -m conntrack --ctstate ESTABLISHED,RELATED -m comment --comment "Antrea: allow egress established or related packets" -j ACCEPT
+-A ANTREA-POL-PRE-EGRESS-RULES -o lo -m comment --comment "Antrea: allow egress packets to loopback" -j ACCEPT
+-A ANTREA-POL-PRE-INGRESS-RULES -m conntrack --ctstate ESTABLISHED,RELATED -m comment --comment "Antrea: allow ingress established or related packets" -j ACCEPT
+-A ANTREA-POL-PRE-INGRESS-RULES -i lo -m comment --comment "Antrea: allow ingress packets from loopback" -j ACCEPT
+COMMIT
+*nat
+:ANTREA-PREROUTING - [0:0]
+-A ANTREA-PREROUTING -m comment --comment "Antrea: DNAT external to NodePort packets" -m set --match-set ANTREA-NODEPORT-IP dst,dst -j DNAT --to-destination 169.254.0.252
+:ANTREA-OUTPUT - [0:0]
+-A ANTREA-OUTPUT -m comment --comment "Antrea: DNAT local to NodePort packets" -m set --match-set ANTREA-NODEPORT-IP dst,dst -j DNAT --to-destination 169.254.0.252
+:ANTREA-POSTROUTING - [0:0]
+-A ANTREA-POSTROUTING -m comment --comment "Antrea: skip masquerade for multicast traffic" -s 172.16.10.0/24 -d 224.0.0.0/4 -j RETURN
+-A ANTREA-POSTROUTING -m comment --comment "Antrea: SNAT Pod to external packets" ! -o antrea-gw0 -m mark --mark 0x00000001/0x000000ff -j SNAT --to 1.1.1.1
+-A ANTREA-POSTROUTING -m comment --comment "Antrea: masquerade Pod to external packets" -s 172.16.10.0/24 -m set ! --match-set ANTREA-POD-IP dst ! -o antrea-gw0 -j MASQUERADE --random-fully
+-A ANTREA-POSTROUTING -m comment --comment "Antrea: masquerade LOCAL traffic" -o antrea-gw0 -m addrtype ! --src-type LOCAL --limit-iface-out -m addrtype --src-type LOCAL -j MASQUERADE --random-fully
+-A ANTREA-POSTROUTING -m comment --comment "Antrea: masquerade OVS virtual source IP" -s 169.254.0.253 -j MASQUERADE
+COMMIT
+`, false, false)
+				mockIPTables.Restore(`*raw
+:ANTREA-PREROUTING - [0:0]
+:ANTREA-OUTPUT - [0:0]
+-A ANTREA-PREROUTING -m comment --comment "Antrea: do not track incoming encapsulation packets" -m udp -p udp --dport 6081 -m addrtype --dst-type LOCAL -j NOTRACK
+-A ANTREA-OUTPUT -m comment --comment "Antrea: do not track outgoing encapsulation packets" -m udp -p udp --dport 6081 -m addrtype --src-type LOCAL -j NOTRACK
+-A ANTREA-PREROUTING -m comment --comment "Antrea: do not track request packets destined to external IPs" -m set --match-set ANTREA-EXTERNAL-IP6 dst -j NOTRACK
+-A ANTREA-PREROUTING -m comment --comment "Antrea: do not track reply packets sourced from external IPs" -m set --match-set ANTREA-EXTERNAL-IP6 src -j NOTRACK
+-A ANTREA-OUTPUT -m comment --comment "Antrea: do not track request packets destined to external IPs" -m set --match-set ANTREA-EXTERNAL-IP6 dst -j NOTRACK
+COMMIT
+*mangle
+:ANTREA-PREROUTING - [0:0]
+:ANTREA-OUTPUT - [0:0]
+:ANTREA-POSTROUTING - [0:0]
+-A ANTREA-PREROUTING -m comment --comment "Antrea: restore fwmark from connmark for reply Egress packets to remote Pods" -m conntrack --ctstate ESTABLISHED -m conntrack --ctdir REPLY -m connmark --mark 0x40000000/0x40000000 -j CONNMARK --restore-mark --nfmask 0x40000000 --ctmask 0x40000000
+-A ANTREA-PREROUTING -m comment --comment "Antrea: persist connmark for the first request Egress packet from remote Pods" -i antrea-gw0 ! -s 2001:ab03:cd04:55ef::/64 -m conntrack --ctstate NEW -m mark ! --mark 0x00000000/0x000000ff -j CONNMARK --set-mark 0x40000000/0x40000000
+-A ANTREA-POSTROUTING -m comment --comment "Antrea: clear fwmark from reply Egress packets to remote Pods" -m conntrack --ctstate ESTABLISHED -m conntrack --ctdir REPLY -j MARK --set-xmark 0x0/0x40000000
+-A ANTREA-OUTPUT -m comment --comment "Antrea: mark LOCAL output packets" -m addrtype --src-type LOCAL -o antrea-gw0 -j MARK --or-mark 0x80000000
+COMMIT
+*filter
+:ANTREA-FORWARD - [0:0]
+:ANTREA-INPUT - [0:0]
+:ANTREA-OUTPUT - [0:0]
+:ANTREA-POL-EGRESS-RULES - [0:0]
+:ANTREA-POL-INGRESS-RULES - [0:0]
+:ANTREA-POL-PRE-EGRESS-RULES - [0:0]
+:ANTREA-POL-PRE-INGRESS-RULES - [0:0]
+-A ANTREA-FORWARD -m comment --comment "Antrea: accept packets from local Pods" -i antrea-gw0 -j ACCEPT
+-A ANTREA-FORWARD -m comment --comment "Antrea: accept packets to local Pods" -o antrea-gw0 -j ACCEPT
+-A ANTREA-INPUT -i antrea-gw0 -p icmpv6 --icmpv6-type 128 -m comment --comment "Antrea: allow ICMP probes from NodeLatencyMonitor" -j ACCEPT
+-A ANTREA-INPUT -i antrea-gw0 -p icmpv6 --icmpv6-type 129 -m comment --comment "Antrea: allow ICMP probes from NodeLatencyMonitor" -j ACCEPT
+-A ANTREA-INPUT -m comment --comment "Antrea: jump to static ingress NodeNetworkPolicy rules" -j ANTREA-POL-PRE-INGRESS-RULES
+-A ANTREA-INPUT -m comment --comment "Antrea: jump to ingress NodeNetworkPolicy rules" -j ANTREA-POL-INGRESS-RULES
+-A ANTREA-OUTPUT -o antrea-gw0 -p icmpv6 --icmpv6-type 128 -m comment --comment "Antrea: allow ICMP probes from NodeLatencyMonitor" -j ACCEPT
+-A ANTREA-OUTPUT -o antrea-gw0 -p icmpv6 --icmpv6-type 129 -m comment --comment "Antrea: allow ICMP probes from NodeLatencyMonitor" -j ACCEPT
+-A ANTREA-OUTPUT -m comment --comment "Antrea: jump to static egress NodeNetworkPolicy rules" -j ANTREA-POL-PRE-EGRESS-RULES
+-A ANTREA-OUTPUT -m comment --comment "Antrea: jump to egress NodeNetworkPolicy rules" -j ANTREA-POL-EGRESS-RULES
+-A ANTREA-POL-INGRESS-RULES -j ACCEPT -m comment --comment "mock rule"
+-A ANTREA-POL-PRE-EGRESS-RULES -m conntrack --ctstate ESTABLISHED,RELATED -m comment --comment "Antrea: allow egress established or related packets" -j ACCEPT
+-A ANTREA-POL-PRE-EGRESS-RULES -o lo -m comment --comment "Antrea: allow egress packets to loopback" -j ACCEPT
+-A ANTREA-POL-PRE-INGRESS-RULES -m conntrack --ctstate ESTABLISHED,RELATED -m comment --comment "Antrea: allow ingress established or related packets" -j ACCEPT
+-A ANTREA-POL-PRE-INGRESS-RULES -i lo -m comment --comment "Antrea: allow ingress packets from loopback" -j ACCEPT
+COMMIT
+*nat
+:ANTREA-PREROUTING - [0:0]
+-A ANTREA-PREROUTING -m comment --comment "Antrea: DNAT external to NodePort packets" -m set --match-set ANTREA-NODEPORT-IP6 dst,dst -j DNAT --to-destination fc01::aabb:ccdd:eefe
+:ANTREA-OUTPUT - [0:0]
+-A ANTREA-OUTPUT -m comment --comment "Antrea: DNAT local to NodePort packets" -m set --match-set ANTREA-NODEPORT-IP6 dst,dst -j DNAT --to-destination fc01::aabb:ccdd:eefe
+:ANTREA-POSTROUTING - [0:0]
+-A ANTREA-POSTROUTING -m comment --comment "Antrea: SNAT Pod to external packets" ! -o antrea-gw0 -m mark --mark 0x00000002/0x000000ff -j SNAT --to fe80::e643:4bff:fe02
+-A ANTREA-POSTROUTING -m comment --comment "Antrea: masquerade Pod to external packets" -s 2001:ab03:cd04:55ef::/64 -m set ! --match-set ANTREA-POD-IP6 dst ! -o antrea-gw0 -j MASQUERADE --random-fully
+-A ANTREA-POSTROUTING -m comment --comment "Antrea: masquerade LOCAL traffic" -o antrea-gw0 -m addrtype ! --src-type LOCAL --limit-iface-out -m addrtype --src-type LOCAL -j MASQUERADE --random-fully
+-A ANTREA-POSTROUTING -m comment --comment "Antrea: masquerade OVS virtual source IP" -s fc01::aabb:ccdd:eeff -j MASQUERADE
+COMMIT
+`, false, true)
+				mockIPTablesListRulesOfChains(mockIPTables,
+					iptables.ProtocolDual,
+					map[string][]string{
+						iptables.RawTable:    {iptables.PreRoutingChain, iptables.OutputChain},
+						iptables.MangleTable: {iptables.PreRoutingChain, iptables.InputChain, iptables.ForwardChain, iptables.OutputChain, iptables.PostRoutingChain},
+						iptables.NATTable:    {iptables.PreRoutingChain, iptables.InputChain, iptables.OutputChain, iptables.PostRoutingChain},
+						iptables.FilterTable: {iptables.InputChain, iptables.ForwardChain, iptables.OutputChain},
+					})
+			},
+		},
+		{
+			name:                     "hybrid,egress=true,multicastEnabled=false,proxyAll=false,nodeNetworkPolicy=false,nodeSNATRandomFully=true",
+			proxyAll:                 false,
+			multicastEnabled:         false,
+			nodeNetworkPolicyEnabled: false,
+			networkConfig: &config.NetworkConfig{
+				TrafficEncapMode: config.TrafficEncapModeHybrid,
+				TunnelType:       ovsconfig.GeneveTunnel,
+				IPv4Enabled:      true,
+				IPv6Enabled:      true,
+			},
+			nodeConfig: &config.NodeConfig{
+				PodIPv4CIDR: ip.MustParseCIDR("172.16.10.0/24"),
+				PodIPv6CIDR: ip.MustParseCIDR("2001:ab03:cd04:55ef::/64"),
+				GatewayConfig: &config.GatewayConfig{
+					Name: "antrea-gw0",
+				},
+			},
+			nodeSNATRandomFully: true,
+			markToSNATIP: map[uint32]string{
+				1: "1.1.1.1",
+				2: "fe80::e643:4bff:fe02",
+			},
+			expectedCalls: func(mockIPTables *iptablestest.MockInterfaceMockRecorder) {
+				mockIPTables.EnsureChain(iptables.ProtocolDual, iptables.RawTable, antreaPreRoutingChain)
+				mockIPTables.AppendRule(iptables.ProtocolDual, iptables.RawTable, iptables.PreRoutingChain, []string{"-j", antreaPreRoutingChain, "-m", "comment", "--comment", "Antrea: jump to Antrea prerouting rules"})
+				mockIPTables.EnsureChain(iptables.ProtocolDual, iptables.RawTable, antreaOutputChain)
+				mockIPTables.AppendRule(iptables.ProtocolDual, iptables.RawTable, iptables.OutputChain, []string{"-j", antreaOutputChain, "-m", "comment", "--comment", "Antrea: jump to Antrea output rules"})
+				mockIPTables.EnsureChain(iptables.ProtocolDual, iptables.FilterTable, antreaForwardChain)
+				mockIPTables.AppendRule(iptables.ProtocolDual, iptables.FilterTable, iptables.ForwardChain, []string{"-j", antreaForwardChain, "-m", "comment", "--comment", "Antrea: jump to Antrea forwarding rules"})
+				mockIPTables.EnsureChain(iptables.ProtocolDual, iptables.NATTable, antreaPostRoutingChain)
+				mockIPTables.AppendRule(iptables.ProtocolDual, iptables.NATTable, iptables.PostRoutingChain, []string{"-j", antreaPostRoutingChain, "-m", "comment", "--comment", "Antrea: jump to Antrea postrouting rules"})
+				mockIPTables.EnsureChain(iptables.ProtocolDual, iptables.MangleTable, antreaPreRoutingChain)
+				mockIPTables.AppendRule(iptables.ProtocolDual, iptables.MangleTable, iptables.PreRoutingChain, []string{"-j", antreaPreRoutingChain, "-m", "comment", "--comment", "Antrea: jump to Antrea prerouting rules"})
+				mockIPTables.EnsureChain(iptables.ProtocolDual, iptables.MangleTable, antreaOutputChain)
+				mockIPTables.AppendRule(iptables.ProtocolDual, iptables.MangleTable, iptables.OutputChain, []string{"-j", antreaOutputChain, "-m", "comment", "--comment", "Antrea: jump to Antrea output rules"})
+				mockIPTables.EnsureChain(iptables.ProtocolDual, iptables.MangleTable, antreaPostRoutingChain)
+				mockIPTables.AppendRule(iptables.ProtocolDual, iptables.MangleTable, iptables.PostRoutingChain, []string{"-j", antreaPostRoutingChain, "-m", "comment", "--comment", "Antrea: jump to Antrea postrouting rules"})
+				mockIPTables.Restore(`*raw
+:ANTREA-PREROUTING - [0:0]
+:ANTREA-OUTPUT - [0:0]
+-A ANTREA-PREROUTING -m comment --comment "Antrea: do not track incoming encapsulation packets" -m udp -p udp --dport 6081 -m addrtype --dst-type LOCAL -j NOTRACK
+-A ANTREA-OUTPUT -m comment --comment "Antrea: do not track outgoing encapsulation packets" -m udp -p udp --dport 6081 -m addrtype --src-type LOCAL -j NOTRACK
+COMMIT
+*mangle
+:ANTREA-PREROUTING - [0:0]
+:ANTREA-OUTPUT - [0:0]
+:ANTREA-POSTROUTING - [0:0]
+-A ANTREA-PREROUTING -m comment --comment "Antrea: restore fwmark from connmark for reply Egress packets to remote Pods" -m conntrack --ctstate ESTABLISHED -m conntrack --ctdir REPLY -m connmark --mark 0x40000000/0x40000000 -j CONNMARK --restore-mark --nfmask 0x40000000 --ctmask 0x40000000
+-A ANTREA-PREROUTING -m comment --comment "Antrea: persist connmark for the first request Egress packet from remote Pods" -i antrea-gw0 ! -s 172.16.10.0/24 -m conntrack --ctstate NEW -m mark ! --mark 0x00000000/0x000000ff -j CONNMARK --set-mark 0x40000000/0x40000000
+-A ANTREA-POSTROUTING -m comment --comment "Antrea: clear fwmark from reply Egress packets to remote Pods" -m conntrack --ctstate ESTABLISHED -m conntrack --ctdir REPLY -j MARK --set-xmark 0x0/0x40000000
+-A ANTREA-OUTPUT -m comment --comment "Antrea: mark LOCAL output packets" -m addrtype --src-type LOCAL -o antrea-gw0 -j MARK --or-mark 0x80000000
+COMMIT
+*filter
+:ANTREA-FORWARD - [0:0]
+-A ANTREA-FORWARD -m comment --comment "Antrea: accept packets from local Pods" -i antrea-gw0 -j ACCEPT
+-A ANTREA-FORWARD -m comment --comment "Antrea: accept packets to local Pods" -o antrea-gw0 -j ACCEPT
+COMMIT
+*nat
+:ANTREA-POSTROUTING - [0:0]
+-A ANTREA-POSTROUTING -m comment --comment "Antrea: SNAT Pod to external packets" ! -o antrea-gw0 -m mark --mark 0x00000001/0x000000ff -j SNAT --to 1.1.1.1
+-A ANTREA-POSTROUTING -m comment --comment "Antrea: masquerade Pod to external packets" -s 172.16.10.0/24 -m set ! --match-set ANTREA-POD-IP dst ! -o antrea-gw0 -j MASQUERADE --random-fully
+-A ANTREA-POSTROUTING -m comment --comment "Antrea: masquerade LOCAL traffic" -o antrea-gw0 -m addrtype ! --src-type LOCAL --limit-iface-out -m addrtype --src-type LOCAL -j MASQUERADE --random-fully
+COMMIT
+`, false, false)
+				mockIPTables.Restore(`*raw
+:ANTREA-PREROUTING - [0:0]
+:ANTREA-OUTPUT - [0:0]
+-A ANTREA-PREROUTING -m comment --comment "Antrea: do not track incoming encapsulation packets" -m udp -p udp --dport 6081 -m addrtype --dst-type LOCAL -j NOTRACK
+-A ANTREA-OUTPUT -m comment --comment "Antrea: do not track outgoing encapsulation packets" -m udp -p udp --dport 6081 -m addrtype --src-type LOCAL -j NOTRACK
+COMMIT
+*mangle
+:ANTREA-PREROUTING - [0:0]
+:ANTREA-OUTPUT - [0:0]
+:ANTREA-POSTROUTING - [0:0]
+-A ANTREA-PREROUTING -m comment --comment "Antrea: restore fwmark from connmark for reply Egress packets to remote Pods" -m conntrack --ctstate ESTABLISHED -m conntrack --ctdir REPLY -m connmark --mark 0x40000000/0x40000000 -j CONNMARK --restore-mark --nfmask 0x40000000 --ctmask 0x40000000
+-A ANTREA-PREROUTING -m comment --comment "Antrea: persist connmark for the first request Egress packet from remote Pods" -i antrea-gw0 ! -s 2001:ab03:cd04:55ef::/64 -m conntrack --ctstate NEW -m mark ! --mark 0x00000000/0x000000ff -j CONNMARK --set-mark 0x40000000/0x40000000
+-A ANTREA-POSTROUTING -m comment --comment "Antrea: clear fwmark from reply Egress packets to remote Pods" -m conntrack --ctstate ESTABLISHED -m conntrack --ctdir REPLY -j MARK --set-xmark 0x0/0x40000000
+-A ANTREA-OUTPUT -m comment --comment "Antrea: mark LOCAL output packets" -m addrtype --src-type LOCAL -o antrea-gw0 -j MARK --or-mark 0x80000000
+COMMIT
+*filter
+:ANTREA-FORWARD - [0:0]
+-A ANTREA-FORWARD -m comment --comment "Antrea: accept packets from local Pods" -i antrea-gw0 -j ACCEPT
+-A ANTREA-FORWARD -m comment --comment "Antrea: accept packets to local Pods" -o antrea-gw0 -j ACCEPT
+COMMIT
+*nat
+:ANTREA-POSTROUTING - [0:0]
+-A ANTREA-POSTROUTING -m comment --comment "Antrea: SNAT Pod to external packets" ! -o antrea-gw0 -m mark --mark 0x00000002/0x000000ff -j SNAT --to fe80::e643:4bff:fe02
+-A ANTREA-POSTROUTING -m comment --comment "Antrea: masquerade Pod to external packets" -s 2001:ab03:cd04:55ef::/64 -m set ! --match-set ANTREA-POD-IP6 dst ! -o antrea-gw0 -j MASQUERADE --random-fully
+-A ANTREA-POSTROUTING -m comment --comment "Antrea: masquerade LOCAL traffic" -o antrea-gw0 -m addrtype ! --src-type LOCAL --limit-iface-out -m addrtype --src-type LOCAL -j MASQUERADE --random-fully
+COMMIT
+`, false, true)
+				mockIPTablesListRulesOfChains(mockIPTables,
+					iptables.ProtocolDual,
+					map[string][]string{
+						iptables.RawTable:    {iptables.PreRoutingChain, iptables.OutputChain},
+						iptables.MangleTable: {iptables.PreRoutingChain, iptables.InputChain, iptables.ForwardChain, iptables.OutputChain, iptables.PostRoutingChain},
+						iptables.NATTable:    {iptables.PreRoutingChain, iptables.InputChain, iptables.OutputChain, iptables.PostRoutingChain},
+						iptables.FilterTable: {iptables.InputChain, iptables.ForwardChain, iptables.OutputChain},
+					})
 			},
 		},
 		{
@@ -786,17 +1077,14 @@ COMMIT
 -A ANTREA-POSTROUTING -m comment --comment "Antrea: masquerade LOCAL traffic" -o antrea-gw0 -m addrtype ! --src-type LOCAL --limit-iface-out -m addrtype --src-type LOCAL -j MASQUERADE --random-fully
 COMMIT
 `, false, true)
-				mockIPTables.ListRules(iptables.ProtocolDual, iptables.RawTable, iptables.PreRoutingChain).Return(nil, nil)
-				mockIPTables.ListRules(iptables.ProtocolDual, iptables.RawTable, iptables.OutputChain).Return(nil, nil)
-				mockIPTables.ListRules(iptables.ProtocolDual, iptables.MangleTable, iptables.PreRoutingChain).Return(nil, nil)
-				mockIPTables.ListRules(iptables.ProtocolDual, iptables.MangleTable, iptables.InputChain).Return(nil, nil)
-				mockIPTables.ListRules(iptables.ProtocolDual, iptables.MangleTable, iptables.ForwardChain).Return(nil, nil)
-				mockIPTables.ListRules(iptables.ProtocolDual, iptables.MangleTable, iptables.OutputChain).Return(nil, nil)
-				mockIPTables.ListRules(iptables.ProtocolDual, iptables.MangleTable, iptables.PostRoutingChain).Return(nil, nil)
-				mockIPTables.ListRules(iptables.ProtocolDual, iptables.NATTable, iptables.PreRoutingChain).Return(nil, nil)
-				mockIPTables.ListRules(iptables.ProtocolDual, iptables.NATTable, iptables.InputChain).Return(nil, nil)
-				mockIPTables.ListRules(iptables.ProtocolDual, iptables.NATTable, iptables.OutputChain).Return(nil, nil)
-				mockIPTables.ListRules(iptables.ProtocolDual, iptables.NATTable, iptables.PostRoutingChain).Return(nil, nil)
+				mockIPTablesListRulesOfChains(mockIPTables,
+					iptables.ProtocolDual,
+					map[string][]string{
+						iptables.RawTable:    {iptables.PreRoutingChain, iptables.OutputChain},
+						iptables.MangleTable: {iptables.PreRoutingChain, iptables.InputChain, iptables.ForwardChain, iptables.OutputChain, iptables.PostRoutingChain},
+						iptables.NATTable:    {iptables.PreRoutingChain, iptables.InputChain, iptables.OutputChain, iptables.PostRoutingChain},
+						iptables.FilterTable: {iptables.ForwardChain},
+					})
 				mockIPTables.ListRules(iptables.ProtocolDual, iptables.FilterTable, iptables.InputChain).Return(map[iptables.Protocol][]string{
 					iptables.ProtocolIPv4: {
 						fmt.Sprintf(`-A INPUT -m comment --comment "Antrea: jump to Antrea input rules" -j %s`, antreaInputChain),
@@ -805,7 +1093,6 @@ COMMIT
 						fmt.Sprintf(`-A INPUT -m comment --comment "Antrea: jump to Antrea input rules" -j %s`, antreaInputChain),
 					},
 				}, nil)
-				mockIPTables.ListRules(iptables.ProtocolDual, iptables.FilterTable, iptables.ForwardChain).Return(nil, nil)
 				mockIPTables.ListRules(iptables.ProtocolDual, iptables.FilterTable, iptables.OutputChain).Return(map[iptables.Protocol][]string{
 					iptables.ProtocolIPv4: {
 						fmt.Sprintf(`-A OUTPUT -m comment --comment "Antrea: jump to Antrea output rules" -j %s`, antreaOutputChain),
@@ -870,20 +1157,14 @@ COMMIT
 -A ANTREA-POSTROUTING -m comment --comment "Antrea: masquerade traffic to local AntreaIPAM hostPort Pod" ! -s 172.16.10.0/24 -m set --match-set LOCAL-FLEXIBLE-IPAM-POD-IP dst -j MASQUERADE
 COMMIT
 `, false, false)
-				mockIPTables.ListRules(iptables.ProtocolIPv4, iptables.RawTable, iptables.PreRoutingChain).Return(nil, nil)
-				mockIPTables.ListRules(iptables.ProtocolIPv4, iptables.RawTable, iptables.OutputChain).Return(nil, nil)
-				mockIPTables.ListRules(iptables.ProtocolIPv4, iptables.MangleTable, iptables.PreRoutingChain).Return(nil, nil)
-				mockIPTables.ListRules(iptables.ProtocolIPv4, iptables.MangleTable, iptables.InputChain).Return(nil, nil)
-				mockIPTables.ListRules(iptables.ProtocolIPv4, iptables.MangleTable, iptables.ForwardChain).Return(nil, nil)
-				mockIPTables.ListRules(iptables.ProtocolIPv4, iptables.MangleTable, iptables.OutputChain).Return(nil, nil)
-				mockIPTables.ListRules(iptables.ProtocolIPv4, iptables.MangleTable, iptables.PostRoutingChain).Return(nil, nil)
-				mockIPTables.ListRules(iptables.ProtocolIPv4, iptables.NATTable, iptables.PreRoutingChain).Return(nil, nil)
-				mockIPTables.ListRules(iptables.ProtocolIPv4, iptables.NATTable, iptables.InputChain).Return(nil, nil)
-				mockIPTables.ListRules(iptables.ProtocolIPv4, iptables.NATTable, iptables.OutputChain).Return(nil, nil)
-				mockIPTables.ListRules(iptables.ProtocolIPv4, iptables.NATTable, iptables.PostRoutingChain).Return(nil, nil)
-				mockIPTables.ListRules(iptables.ProtocolIPv4, iptables.FilterTable, iptables.InputChain).Return(nil, nil)
-				mockIPTables.ListRules(iptables.ProtocolIPv4, iptables.FilterTable, iptables.ForwardChain).Return(nil, nil)
-				mockIPTables.ListRules(iptables.ProtocolIPv4, iptables.FilterTable, iptables.OutputChain).Return(nil, nil)
+				mockIPTablesListRulesOfChains(mockIPTables,
+					iptables.ProtocolIPv4,
+					map[string][]string{
+						iptables.RawTable:    {iptables.PreRoutingChain, iptables.OutputChain},
+						iptables.MangleTable: {iptables.PreRoutingChain, iptables.InputChain, iptables.ForwardChain, iptables.OutputChain, iptables.PostRoutingChain},
+						iptables.NATTable:    {iptables.PreRoutingChain, iptables.InputChain, iptables.OutputChain, iptables.PostRoutingChain},
+						iptables.FilterTable: {iptables.InputChain, iptables.ForwardChain, iptables.OutputChain},
+					})
 			},
 		},
 	}
@@ -899,6 +1180,7 @@ COMMIT
 				multicastEnabled:         tt.multicastEnabled,
 				connectUplinkToBridge:    tt.connectUplinkToBridge,
 				nodeNetworkPolicyEnabled: tt.nodeNetworkPolicyEnabled,
+				egressEnabled:            true,
 				nodeSNATRandomFully:      tt.nodeSNATRandomFully,
 				iptablesHasRandomFully:   true,
 				deterministic:            true,
@@ -2392,6 +2674,7 @@ func TestEgressRule(t *testing.T) {
 				rule.Table = 101
 				rule.Mark = 1
 				rule.Mask = ptr.To(types.SNATIPMarkMask)
+				rule.Family = netlink.FAMILY_V4
 				mockNetlink.RuleAdd(rule)
 				mockNetlink.RuleDel(rule)
 			},
@@ -2405,6 +2688,7 @@ func TestEgressRule(t *testing.T) {
 				rule.Table = 101
 				rule.Mark = 1
 				rule.Mask = ptr.To(types.SNATIPMarkMask)
+				rule.Family = netlink.FAMILY_V4
 				mockNetlink.RuleAdd(rule)
 				mockNetlink.RuleDel(rule).Return(fmt.Errorf("no such process"))
 			},
@@ -2420,8 +2704,8 @@ func TestEgressRule(t *testing.T) {
 			}
 			tt.expectedCalls(mockNetlink.EXPECT())
 
-			assert.NoError(t, c.AddEgressRule(tt.tableID, tt.mark))
-			assert.NoError(t, c.DeleteEgressRule(tt.tableID, tt.mark))
+			assert.NoError(t, c.AddEgressRule(tt.tableID, tt.mark, false))
+			assert.NoError(t, c.DeleteEgressRule(tt.tableID, tt.mark, false))
 		})
 	}
 }

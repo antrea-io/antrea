@@ -273,7 +273,7 @@ this [document](egress.md) for more information.
 
 #### Requirements for this Feature
 
-This feature is currently only supported for Nodes running Linux and "encap"
+This feature is currently only supported for Nodes running Linux and "encap" / "hybrid"
 mode. The support for Windows and other traffic modes will be added in the future.
 
 ### NodeIPAM

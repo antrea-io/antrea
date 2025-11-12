@@ -906,7 +906,7 @@ func TestSyncEgress(t *testing.T) {
 				mockIPAssigner.EXPECT().AssignIP(fakeLocalEgressIP1, &crdv1b1.SubnetInfo{Gateway: fakeGatewayIP, PrefixLength: 16, VLAN: 10}, true).Return(true, nil)
 				mockIPAssigner.EXPECT().GetInterfaceID(&crdv1b1.SubnetInfo{Gateway: fakeGatewayIP, PrefixLength: 16, VLAN: 10}).Return(20, true)
 				mockRouteClient.EXPECT().AddEgressRoutes(uint32(101), 20, net.ParseIP(fakeGatewayIP), 16)
-				mockRouteClient.EXPECT().AddEgressRule(uint32(101), uint32(1))
+				mockRouteClient.EXPECT().AddEgressRule(uint32(101), uint32(1), false)
 
 				// forceAdvertise depends on how fast the Egress status update is reflected in the informer cache, which doesn't really matter.
 				mockIPAssigner.EXPECT().AssignIP(fakeLocalEgressIP1, &crdv1b1.SubnetInfo{Gateway: fakeGatewayIP, PrefixLength: 16, VLAN: 10}, gomock.Any()).Return(false, nil)
@@ -964,14 +964,14 @@ func TestSyncEgress(t *testing.T) {
 				mockRouteClient.EXPECT().AddSNATRule(net.ParseIP(fakeLocalEgressIP1), uint32(1))
 				mockIPAssigner.EXPECT().GetInterfaceID(&crdv1b1.SubnetInfo{Gateway: fakeGatewayIP, PrefixLength: 16, VLAN: 10}).Return(20, true)
 				mockRouteClient.EXPECT().AddEgressRoutes(uint32(101), 20, net.ParseIP(fakeGatewayIP), 16)
-				mockRouteClient.EXPECT().AddEgressRule(uint32(101), uint32(1))
+				mockRouteClient.EXPECT().AddEgressRule(uint32(101), uint32(1), false)
 
 				mockIPAssigner.EXPECT().AssignIP(fakeLocalEgressIP1, &crdv1b1.SubnetInfo{Gateway: fakeGatewayIP2, PrefixLength: 16}, true).Return(true, nil)
-				mockRouteClient.EXPECT().DeleteEgressRule(uint32(101), uint32(1))
+				mockRouteClient.EXPECT().DeleteEgressRule(uint32(101), uint32(1), false)
 				mockRouteClient.EXPECT().DeleteEgressRoutes(uint32(101))
 				mockIPAssigner.EXPECT().GetInterfaceID(&crdv1b1.SubnetInfo{Gateway: fakeGatewayIP2, PrefixLength: 16}).Return(30, true)
 				mockRouteClient.EXPECT().AddEgressRoutes(uint32(101), 30, net.ParseIP(fakeGatewayIP2), 16)
-				mockRouteClient.EXPECT().AddEgressRule(uint32(101), uint32(1))
+				mockRouteClient.EXPECT().AddEgressRule(uint32(101), uint32(1), false)
 
 				// forceAdvertise depends on how fast the Egress status update is reflected in the informer cache, which doesn't really matter.
 				mockIPAssigner.EXPECT().AssignIP(fakeLocalEgressIP1, &crdv1b1.SubnetInfo{Gateway: fakeGatewayIP2, PrefixLength: 16}, gomock.Any()).Return(false, nil)
@@ -1035,13 +1035,13 @@ func TestSyncEgress(t *testing.T) {
 				mockRouteClient.EXPECT().AddSNATRule(net.ParseIP(fakeLocalEgressIP1), uint32(1))
 				mockIPAssigner.EXPECT().GetInterfaceID(&crdv1b1.SubnetInfo{Gateway: fakeGatewayIP, PrefixLength: 16, VLAN: 10}).Return(20, true)
 				mockRouteClient.EXPECT().AddEgressRoutes(uint32(101), 20, net.ParseIP(fakeGatewayIP), 16)
-				mockRouteClient.EXPECT().AddEgressRule(uint32(101), uint32(1))
+				mockRouteClient.EXPECT().AddEgressRule(uint32(101), uint32(1), false)
 
 				mockIPAssigner.EXPECT().AssignIP(fakeLocalEgressIP2, &crdv1b1.SubnetInfo{Gateway: fakeGatewayIP, PrefixLength: 16, VLAN: 10}, true).Return(true, nil)
 				mockOFClient.EXPECT().InstallSNATMarkFlows(net.ParseIP(fakeLocalEgressIP2), uint32(2))
 				mockOFClient.EXPECT().InstallPodSNATFlows(uint32(2), net.ParseIP(fakeLocalEgressIP2), uint32(2))
 				mockRouteClient.EXPECT().AddSNATRule(net.ParseIP(fakeLocalEgressIP2), uint32(2))
-				mockRouteClient.EXPECT().AddEgressRule(uint32(101), uint32(2))
+				mockRouteClient.EXPECT().AddEgressRule(uint32(101), uint32(2), false)
 
 				// forceAdvertise depends on how fast the Egress status update is reflected in the informer cache, which doesn't really matter.
 				mockIPAssigner.EXPECT().AssignIP(fakeLocalEgressIP2, &crdv1b1.SubnetInfo{Gateway: fakeGatewayIP, PrefixLength: 16, VLAN: 10}, gomock.Any()).Return(false, nil)
@@ -1088,10 +1088,10 @@ func TestSyncEgress(t *testing.T) {
 				mockRouteClient.EXPECT().AddSNATRule(net.ParseIP(fakeLocalEgressIP1), uint32(1))
 				mockIPAssigner.EXPECT().GetInterfaceID(&crdv1b1.SubnetInfo{Gateway: fakeGatewayIP, PrefixLength: 16, VLAN: 10}).Return(20, true)
 				mockRouteClient.EXPECT().AddEgressRoutes(uint32(101), 20, net.ParseIP(fakeGatewayIP), 16)
-				mockRouteClient.EXPECT().AddEgressRule(uint32(101), uint32(1))
+				mockRouteClient.EXPECT().AddEgressRule(uint32(101), uint32(1), false)
 
 				mockIPAssigner.EXPECT().UnassignIP(fakeLocalEgressIP1).Return(true, nil)
-				mockRouteClient.EXPECT().DeleteEgressRule(uint32(101), uint32(1))
+				mockRouteClient.EXPECT().DeleteEgressRule(uint32(101), uint32(1), false)
 				mockRouteClient.EXPECT().DeleteEgressRoutes(uint32(101))
 				mockOFClient.EXPECT().UninstallSNATMarkFlows(uint32(1))
 				mockOFClient.EXPECT().UninstallPodSNATFlows(uint32(1))

@@ -72,10 +72,10 @@ type Interface interface {
 	DeleteEgressRoutes(tableID uint32) error
 
 	// AddEgressRule creates an IP rule which makes Egress traffic with the provided mark look up the specified table.
-	AddEgressRule(tableID uint32, mark uint32) error
+	AddEgressRule(tableID uint32, mark uint32, isIPv6 bool) error
 
 	// DeleteEgressRule deletes the IP rule installed by AddEgressRule.
-	DeleteEgressRule(tableID uint32, mark uint32) error
+	DeleteEgressRule(tableID uint32, mark uint32, isIPv6 bool) error
 
 	// AddNodePortConfigs adds routing configurations for redirecting traffic to OVS when a NodePort Service is created.
 	AddNodePortConfigs(nodePortAddresses []net.IP, port uint16, protocol binding.Protocol) error
