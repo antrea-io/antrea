@@ -778,6 +778,10 @@ func (o *Options) validateSecondaryNetworkConfig() error {
 		return nil
 	}
 
+	if !features.DefaultFeatureGate.Enabled(features.AntreaIPAM) {
+		return fmt.Errorf("SecondaryNetwork feature requires the AntreaIPAM feature gate to be enabled")
+	}
+
 	if len(o.config.SecondaryNetwork.OVSBridges) == 0 {
 		return nil
 	}
