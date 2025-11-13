@@ -35,27 +35,54 @@ var (
 
 // Initialize sets up OVS bridges.
 func (c *Controller) Initialize() error {
+	klog.InfoS("Configuring physical interface for node", "node", c.nodeConfig.Name)
 	// We only support moving and restoring of interface configuration to OVS Bridge for the single physical interface case.
 	if len(c.secNetConfig.OVSBridges) != 0 {
 		phyInterfaces := make([]string, len(c.secNetConfig.OVSBridges[0].PhysicalInterfaces))
 		copy(phyInterfaces, c.secNetConfig.OVSBridges[0].PhysicalInterfaces)
-		if len(phyInterfaces) == 1 {
-			bridgedName, _, err := util.PrepareHostInterfaceConnection(
-				c.ovsBridgeClient,
-				phyInterfaces[0],
-				0,
-				map[string]interface{}{
-					interfacestore.AntreaInterfaceTypeKey: interfacestore.AntreaHost,
-				},
-				0, // do not request a specific MTU
-			)
-			if err != nil {
-				return err
+
+		nodePoolSize := len(c.secNetConfig.OVSBridges[0].NodePools)
+		if nodePoolSize == 0 {
+			if len(phyInterfaces) == 1 {
+				bridgedName, _, err := util.PrepareHostInterfaceConnection(
+					c.ovsBridgeClient,
+					phyInterfaces[0],
+					0,
+					map[string]interface{}{
+						interfacestore.AntreaInterfaceTypeKey: interfacestore.AntreaHost,
+					},
+					0, // do not request a specific MTU
+				)
+				if err != nil {
+					return err
+				}
+				phyInterfaces[0] = bridgedName
 			}
-			phyInterfaces[0] = bridgedName
-		}
-		if err := connectPhyInterfacesToOVSBridge(c.ovsBridgeClient, phyInterfaces); err != nil {
-			return err
+		} else {
+			nodePools := make([]string, nodePoolSize)
+			copy(nodePools, c.secNetConfig.OVSBridges[0].NodePools)
+			for i, np := range nodePools {
+				if c.nodeConfig.Name == np {
+					klog.InfoS("Configuring physical interface for node pool", "nodePool", np, "interface", phyInterfaces[i])
+					phyInterfaces[i] = c.secNetConfig.OVSBridges[0].PhysicalInterfaces[i]
+					bridgedName, _, err := util.PrepareHostInterfaceConnection(
+						c.ovsBridgeClient,
+						phyInterfaces[i],
+						0,
+						map[string]interface{}{
+							interfacestore.AntreaInterfaceTypeKey: interfacestore.AntreaHost,
+						},
+						0, // do not request a specific MTU
+					)
+					if err != nil {
+						return err
+					}
+					phyInterfaceToBridge := []string{bridgedName}
+					if err := connectPhyInterfacesToOVSBridge(c.ovsBridgeClient, phyInterfaceToBridge); err != nil {
+						return err
+					}
+				}
+			}
 		}
 	}
 	return nil
@@ -63,9 +90,25 @@ func (c *Controller) Initialize() error {
 
 // Restore restores interface configuration from secondary-bridge back to host-interface.
 func (c *Controller) Restore() {
-	if len(c.secNetConfig.OVSBridges) != 0 && len(c.secNetConfig.OVSBridges[0].PhysicalInterfaces) == 1 {
-		util.RestoreHostInterfaceConfiguration(c.secNetConfig.OVSBridges[0].BridgeName, c.secNetConfig.OVSBridges[0].PhysicalInterfaces[0])
+	klog.InfoS("restoring bridge", "node", c.nodeConfig.Name)
+	if len(c.secNetConfig.OVSBridges) != 0 {
+		phyInterfaceSize := len(c.secNetConfig.OVSBridges[0].PhysicalInterfaces)
+		if phyInterfaceSize == 0 {
+			return
+		}
+		if phyInterfaceSize == 1 {
+			util.RestoreHostInterfaceConfiguration(c.secNetConfig.OVSBridges[0].BridgeName, c.secNetConfig.OVSBridges[0].PhysicalInterfaces[0])
+		} else {
+			for i := range c.secNetConfig.OVSBridges[0].PhysicalInterfaces {
+				klog.InfoS("restore bridge", "node", c.nodeConfig.Name, "nodePool", c.secNetConfig.OVSBridges[0].NodePools[i], "interface", c.secNetConfig.OVSBridges[0].PhysicalInterfaces[i])
+				if c.nodeConfig.Name == c.secNetConfig.OVSBridges[0].NodePools[i] {
+					bridgedName := util.GenerateUplinkInterfaceName(c.secNetConfig.OVSBridges[0].PhysicalInterfaces[i])
+					util.RestoreHostInterfaceConfiguration(c.secNetConfig.OVSBridges[0].BridgeName, bridgedName)
+				}
+			}
+		}
 	}
+
 }
 
 func connectPhyInterfacesToOVSBridge(ovsBridgeClient ovsconfig.OVSBridgeClient, phyInterfaces []string) error {
