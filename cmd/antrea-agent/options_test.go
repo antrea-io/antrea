@@ -294,6 +294,7 @@ func TestOptionsValidateSecondaryNetworkConfig(t *testing.T) {
 	tests := []struct {
 		name               string
 		featureGateValue   bool
+		antreaIPAMDisabled bool
 		ovsBridges         []string
 		physicalInterfaces []string
 		expectedErr        string
@@ -310,6 +311,12 @@ func TestOptionsValidateSecondaryNetworkConfig(t *testing.T) {
 			name:             "one bridge",
 			featureGateValue: true,
 			ovsBridges:       []string{"br1"},
+		},
+		{
+			name:               "AntreaIPAM featureGate off",
+			featureGateValue:   true,
+			antreaIPAMDisabled: true,
+			expectedErr:        "SecondaryNetwork feature requires the AntreaIPAM feature gate to be enabled",
 		},
 		{
 			name:               "one interface",
@@ -340,6 +347,7 @@ func TestOptionsValidateSecondaryNetworkConfig(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			featuregatetesting.SetFeatureGateDuringTest(t, features.DefaultFeatureGate, features.SecondaryNetwork, tc.featureGateValue)
+			featuregatetesting.SetFeatureGateDuringTest(t, features.DefaultFeatureGate, features.AntreaIPAM, !tc.antreaIPAMDisabled)
 
 			o := &Options{config: &agentconfig.AgentConfig{}}
 			for _, brName := range tc.ovsBridges {
@@ -352,7 +360,7 @@ func TestOptionsValidateSecondaryNetworkConfig(t *testing.T) {
 			if tc.expectedErr == "" {
 				require.NoError(t, err)
 			} else {
-				require.Error(t, err, tc.expectedErr)
+				assert.ErrorContains(t, err, tc.expectedErr)
 			}
 		})
 	}
