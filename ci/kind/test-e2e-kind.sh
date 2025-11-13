@@ -253,6 +253,13 @@ if [ -n "$feature_gates" ]; then
 fi
 if $proxy_all; then
     manifest_args="$manifest_args --proxy-all"
+    # Disables the health check server run by Antrea Proxy, which provides health information about
+    # Services of type LoadBalancer with externalTrafficPolicy set to Local, when proxyAll is
+    # enabled. This avoids race conditions between kube-proxy and Antrea Proxy, with both trying to
+    # bind to the same address, when proxyAll is enabled while kube-proxy has not been removed.
+    if ! $no_kube_proxy; then
+      manifest_args="$manifest_args --extra-helm-values antreaProxy.disableServiceHealthCheckServer=true"
+    fi
 fi
 if [ -n "$load_balancer_mode" ]; then
     manifest_args="$manifest_args --extra-helm-values antreaProxy.defaultLoadBalancerMode=$load_balancer_mode"
