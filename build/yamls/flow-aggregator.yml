@@ -27,6 +27,8 @@ rules:
   - configmaps
   verbs:
   - create
+  - list
+  - watch
 - apiGroups:
   - ""
   resourceNames:
@@ -42,10 +44,21 @@ rules:
   - secrets
   verbs:
   - create
+  - list
+  - watch
 - apiGroups:
   - ""
   resourceNames:
   - flow-aggregator-client-tls
+  resources:
+  - secrets
+  verbs:
+  - get
+  - update
+- apiGroups:
+  - ""
+  resourceNames:
+  - flow-aggregator-ca
   resources:
   - secrets
   verbs:
