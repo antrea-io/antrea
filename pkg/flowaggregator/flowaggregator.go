@@ -31,10 +31,12 @@ import (
 	"github.com/google/uuid"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/tools/cache"
 	"k8s.io/klog/v2"
 
 	flowpb "antrea.io/antrea/pkg/apis/flow/v1alpha1"
 	flowaggregatorconfig "antrea.io/antrea/pkg/config/flowaggregator"
+	"antrea.io/antrea/pkg/flowaggregator/certificate"
 	"antrea.io/antrea/pkg/flowaggregator/collector"
 	"antrea.io/antrea/pkg/flowaggregator/exporter"
 	"antrea.io/antrea/pkg/flowaggregator/intermediate"
@@ -60,6 +62,10 @@ var (
 	newLogExporter = func(opt *options.Options) (exporter.Interface, error) {
 		return exporter.NewLogExporter(opt)
 	}
+
+	newCertificateProvider = func(k8sClient kubernetes.Interface, addr string) *certificate.Provider {
+		return certificate.NewProvider(k8sClient, addr)
+	}
 )
 
 type flowAggregator struct {
@@ -67,6 +73,8 @@ type flowAggregator struct {
 	clusterUUID                 uuid.UUID
 	clusterID                   string
 	aggregatorTransportProtocol flowaggregatorconfig.AggregatorTransportProtocol
+	collectorMutex              sync.Mutex
+	collectorStopCh             chan struct{}
 	ipfixCollector              collector.Interface
 	grpcCollector               collector.Interface
 	aggregationProcess          intermediate.AggregationProcess
@@ -94,6 +102,17 @@ type flowAggregator struct {
 	logTickerDuration           time.Duration
 	recordCh                    chan *flowpb.Flow
 	exportersMutex              sync.Mutex
+
+	certificateProvider *certificate.Provider
+}
+
+func (fa *flowAggregator) CertificateUpdated() {
+	fa.collectorMutex.Lock()
+	defer fa.collectorMutex.Unlock()
+	if fa.collectorStopCh != nil {
+		close(fa.collectorStopCh)
+	}
+	fa.InitCollectors()
 }
 
 func NewFlowAggregator(
@@ -158,10 +177,8 @@ func NewFlowAggregator(
 		APIServer:                   opt.Config.APIServer,
 		logTickerDuration:           time.Minute,
 		// We support buffering a small amount of flow records.
-		recordCh: make(chan *flowpb.Flow, 128),
-	}
-	if err := fa.InitCollectors(); err != nil {
-		return nil, fmt.Errorf("error when creating collectors: %w", err)
+		recordCh:            make(chan *flowpb.Flow, 128),
+		certificateProvider: newCertificateProvider(k8sClient, opt.Config.FlowAggregatorAddress),
 	}
 	if opt.AggregatorMode == flowaggregatorconfig.AggregatorModeAggregate {
 		if err := fa.InitAggregationProcess(); err != nil {
@@ -192,15 +209,13 @@ func NewFlowAggregator(
 	if opt.Config.FlowCollector.Enable {
 		fa.ipfixExporter = newIPFIXExporter(clusterUUID, clusterID, opt, registry)
 	}
+
 	klog.InfoS("FlowAggregator initialized", "mode", opt.AggregatorMode, "clusterID", fa.clusterID)
 	return fa, nil
 }
 
 func (fa *flowAggregator) InitCollectors() error {
-	caCert, serverKey, serverCert, err := generateCerts(fa.flowAggregatorAddress, fa.k8sClient)
-	if err != nil {
-		return fmt.Errorf("failed to generate certificates: %w", err)
-	}
+	caCert, serverCert, serverKey := fa.certificateProvider.GetTLSConfig()
 	grpcCollector, err := collector.NewGRPCCollector(fa.recordCh, caCert, serverKey, serverCert)
 	if err != nil {
 		return fmt.Errorf("failed to create gRPC collector: %w", err)
@@ -219,6 +234,7 @@ func (fa *flowAggregator) InitCollectors() error {
 		}
 		fa.ipfixCollector = ipfixCollector
 	}
+	fa.collectorStopCh = make(chan struct{})
 	return nil
 }
 
@@ -252,19 +268,62 @@ func (fa *flowAggregator) Run(stopCh <-chan struct{}) {
 		klog.InfoS("Object stores synced")
 	}()
 
+	if fa.certificateProvider != nil {
+		fa.certificateProvider.AddListener(fa)
+
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			fa.certificateProvider.Run(stopCh)
+		}()
+
+		if !cache.WaitForNamedCacheSync("flowAggregator", stopCh, fa.certificateProvider.HasSynced) {
+			return
+		}
+
+		if err := fa.InitCollectors(); err != nil {
+			klog.ErrorS(err, "unable to create collectors")
+			return
+		}
+	}
+
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		// Waiting for this function to return on stop makes it easier to set expectations
-		// when testing. Without this, there is no guarantee that
-		// fa.grpcCollector.Run() was called by the time Run() returns.
-		fa.grpcCollector.Run(stopCh)
+		for {
+			select {
+			case <-stopCh:
+				return
+			default:
+			}
+
+			fa.collectorMutex.Lock()
+			grpcCollector := fa.grpcCollector
+			fa.collectorMutex.Unlock()
+
+			// Waiting for this function to return on stop makes it easier to set expectations
+			// when testing. Without this, there is no guarantee that
+			// grpcCollector.Run() was called by the time Run() returns.
+			grpcCollector.Run(fa.collectorStopCh)
+		}
 	}()
 	if fa.ipfixCollector != nil {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			fa.ipfixCollector.Run(stopCh)
+			for {
+				select {
+				case <-stopCh:
+					return
+				default:
+				}
+
+				fa.collectorMutex.Lock()
+				ipfixCollector := fa.ipfixCollector
+				fa.collectorMutex.Unlock()
+
+				ipfixCollector.Run(fa.collectorStopCh)
+			}
 		}()
 	}
 	if fa.aggregationProcess != nil {
@@ -313,6 +372,9 @@ func (fa *flowAggregator) Run(stopCh <-chan struct{}) {
 	<-stopCh
 	if fa.aggregationProcess != nil {
 		fa.aggregationProcess.Stop()
+	}
+	if fa.collectorStopCh != nil {
+		close(fa.collectorStopCh)
 	}
 	wg.Wait()
 }
@@ -660,6 +722,8 @@ func (fa *flowAggregator) getNumFlows() int64 {
 }
 
 func (fa *flowAggregator) getNumRecordsReceived() int64 {
+	fa.collectorMutex.Lock()
+	defer fa.collectorMutex.Unlock()
 	num := fa.grpcCollector.GetNumRecordsReceived()
 	if fa.ipfixCollector != nil {
 		num += fa.ipfixCollector.GetNumRecordsReceived()
@@ -668,6 +732,8 @@ func (fa *flowAggregator) getNumRecordsReceived() int64 {
 }
 
 func (fa *flowAggregator) getNumConnsToCollector() int64 {
+	fa.collectorMutex.Lock()
+	defer fa.collectorMutex.Unlock()
 	num := fa.grpcCollector.GetNumConnsToCollector()
 	if fa.ipfixCollector != nil {
 		num += fa.ipfixCollector.GetNumConnsToCollector()
