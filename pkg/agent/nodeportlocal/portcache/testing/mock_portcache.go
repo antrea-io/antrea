@@ -56,16 +56,16 @@ func (m *MockLocalPortOpener) EXPECT() *MockLocalPortOpenerMockRecorder {
 }
 
 // OpenLocalPort mocks base method.
-func (m *MockLocalPortOpener) OpenLocalPort(port int, protocol string) (io.Closer, error) {
+func (m *MockLocalPortOpener) OpenLocalPort(port int, protocol string, isIPv6 bool) (io.Closer, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "OpenLocalPort", port, protocol)
+	ret := m.ctrl.Call(m, "OpenLocalPort", port, protocol, isIPv6)
 	ret0, _ := ret[0].(io.Closer)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // OpenLocalPort indicates an expected call of OpenLocalPort.
-func (mr *MockLocalPortOpenerMockRecorder) OpenLocalPort(port, protocol any) *gomock.Call {
+func (mr *MockLocalPortOpenerMockRecorder) OpenLocalPort(port, protocol, isIPv6 any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "OpenLocalPort", reflect.TypeOf((*MockLocalPortOpener)(nil).OpenLocalPort), port, protocol)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "OpenLocalPort", reflect.TypeOf((*MockLocalPortOpener)(nil).OpenLocalPort), port, protocol, isIPv6)
 }

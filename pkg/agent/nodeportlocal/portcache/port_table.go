@@ -54,7 +54,7 @@ func (d *NodePortData) Defunct() bool {
 }
 
 type LocalPortOpener interface {
-	OpenLocalPort(port int, protocol string) (io.Closer, error)
+	OpenLocalPort(port int, protocol string, isIPv6 bool) (io.Closer, error)
 }
 
 type localPortOpener struct{}
@@ -66,6 +66,7 @@ type PortTable struct {
 	PortSearchStart int
 	PodPortRules    rules.PodPortRules
 	LocalPortOpener LocalPortOpener
+	IsIPv6          bool
 	tableLock       sync.RWMutex
 }
 
@@ -144,7 +145,7 @@ func PodKeyIndexFunc(obj interface{}) ([]string, error) {
 	return []string{npData.PodKey}, nil
 }
 
-func NewPortTable(start, end int) (*PortTable, error) {
+func NewPortTable(start, end int, isIPv6 bool) (*PortTable, error) {
 	ptable := PortTable{
 		PortTableCache: cache.NewIndexer(GetPortTableKey, cache.Indexers{
 			NodePortIndex:    NodePortIndexFunc,
@@ -154,8 +155,9 @@ func NewPortTable(start, end int) (*PortTable, error) {
 		StartPort:       start,
 		EndPort:         end,
 		PortSearchStart: start,
-		PodPortRules:    rules.InitRules(),
+		PodPortRules:    rules.InitRules(isIPv6),
 		LocalPortOpener: &localPortOpener{},
+		IsIPv6:          isIPv6,
 	}
 	if err := ptable.PodPortRules.Init(); err != nil {
 		return nil, err
@@ -222,20 +224,27 @@ func NodePortProtoFormat(nodeport int, protocol string) string {
 // openLocalPort binds to the provided port.
 // This is inspired by the openLocalPort function in kube-proxy:
 // https://github.com/kubernetes/kubernetes/blob/86f8c3ee91b6faec437f97e3991107747d7fc5e8/pkg/proxy/iptables/proxier.go#L1664
-func (lpo *localPortOpener) OpenLocalPort(port int, protocol string) (io.Closer, error) {
-	// For now, NodePortLocal only supports IPv4 and TCP/UDP.
+func (lpo *localPortOpener) OpenLocalPort(port int, protocol string, isIPv6 bool) (io.Closer, error) {
 	var network string
 	var socket io.Closer
 	switch protocol {
 	case "tcp":
-		network = "tcp4"
+		if isIPv6 {
+			network = "tcp6"
+		} else {
+			network = "tcp4"
+		}
 		listener, err := net.Listen(network, fmt.Sprintf(":%d", port))
 		if err != nil {
 			return nil, err
 		}
 		socket = listener
 	case "udp":
-		network = "udp4"
+		if isIPv6 {
+			network = "udp6"
+		} else {
+			network = "udp4"
+		}
 		addr, err := net.ResolveUDPAddr(network, fmt.Sprintf(":%d", port))
 		if err != nil {
 			return nil, err
@@ -248,6 +257,6 @@ func (lpo *localPortOpener) OpenLocalPort(port int, protocol string) (io.Closer,
 	default:
 		return nil, fmt.Errorf("unknown or missing protocol: %q", protocol)
 	}
-	klog.V(2).InfoS("Opened local port", "port", port)
+	klog.V(2).InfoS("Opened local port", "port", port, "protocol", protocol, "ipv6", isIPv6)
 	return socket, nil
 }
