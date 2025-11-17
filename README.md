@@ -27,7 +27,7 @@ Network Policies in a very efficient manner.
 
 ## Prerequisites
 
-Antrea has been tested with Kubernetes clusters running version 1.19 or later.
+Antrea has been tested with Kubernetes clusters running version 1.23 or later.
 
 * `NodeIPAMController` must be enabled in the Kubernetes cluster.\
   When deploying a cluster with kubeadm the `--pod-network-cidr <cidr>`

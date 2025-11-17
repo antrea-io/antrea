@@ -356,12 +356,6 @@ func (r *LabelIdentityReconciler) getLabelIdentityResourceExport(name, normalize
 }
 
 func GetNormalizedLabel(nsLabels, podLabels map[string]string, ns string) string {
-	if _, ok := nsLabels[v1.LabelMetadataName]; !ok {
-		// NamespaceDefaultLabelName is supported from K8s v1.21. For K8s versions before v1.21,
-		// we append the Namespace name label to the Namespace label set, so that the exported
-		// label is guaranteed to have Namespace name information.
-		nsLabels[v1.LabelMetadataName] = ns
-	}
 	return "ns:" + labels.Set(nsLabels).String() + "&pod:" + labels.Set(podLabels).String()
 }
 

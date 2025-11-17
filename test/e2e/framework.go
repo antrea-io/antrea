@@ -36,7 +36,6 @@ import (
 	"github.com/containernetworking/plugins/pkg/ip"
 	"github.com/google/uuid"
 	log "github.com/sirupsen/logrus"
-	"golang.org/x/mod/semver"
 	"gopkg.in/yaml.v2"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -484,19 +483,12 @@ func isIPv6Enabled() bool {
 }
 
 func labelNodeRoleControlPlane() string {
-	// TODO: return labelNodeRoleControlPlane unconditionally when the min K8s version
-	// requirement to run Antrea becomes K8s v1.20
-	const labelNodeRoleControlPlane = "node-role.kubernetes.io/control-plane"
-	const labelNodeRoleOldControlPlane = "node-role.kubernetes.io/master"
-	// If clusterInfo.k8sServerVersion < "v1.20.0"
-	if semver.Compare(clusterInfo.k8sServerVersion, "v1.20.0") < 0 {
-		return labelNodeRoleOldControlPlane
-	}
-	return labelNodeRoleControlPlane
+	return "node-role.kubernetes.io/control-plane"
 }
 
 func controlPlaneNoScheduleTolerations() []corev1.Toleration {
-	// the Node taint still uses "master" in K8s v1.20
+	// "node-role.kubernetes.io/control-plane" was added in K8s 1.20
+	// "node-role.kubernetes.io/master" was removed in K8s 1.24
 	return []corev1.Toleration{
 		{
 			Key:      "node-role.kubernetes.io/master",

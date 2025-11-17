@@ -36,8 +36,6 @@
   - [Rule enforcement based on priorities](#rule-enforcement-based-on-priorities)
 - [Advanced peer selection mechanisms of Antrea-native Policies](#advanced-peer-selection-mechanisms-of-antrea-native-policies)
   - [Selecting Namespace by Name](#selecting-namespace-by-name)
-    - [K8s clusters with version 1.21 and above](#k8s-clusters-with-version-121-and-above)
-    - [K8s clusters with version 1.20 and below](#k8s-clusters-with-version-120-and-below)
   - [Selecting Pods in the same Namespace with Self](#selecting-pods-in-the-same-namespace-with-self)
   - [Selecting Namespaces with the same label values using SameLabels](#selecting-namespaces-with-the-same-label-values-using-samelabels)
   - [FQDN based filtering](#fqdn-based-filtering)
@@ -1171,11 +1169,8 @@ workloads from Namespaces with the use of a label selector (i.e. `namespaceSelec
 However, it is often desirable to be able to select Namespaces directly by their `name`
 as opposed to using the `labels` associated with the Namespaces.
 
-#### K8s clusters with version 1.21 and above
-
-Starting with K8s v1.21, all Namespaces are labeled with the `kubernetes.io/metadata.name: <namespaceName>`
-[label](https://kubernetes.io/docs/concepts/overview/working-with-objects/namespaces/#automatic-labelling)
-provided that the `NamespaceDefaultLabelName` feature gate (enabled by default) is not disabled in K8s.
+Namespaces are labeled with the `kubernetes.io/metadata.name: <namespaceName>`
+[label](https://kubernetes.io/docs/concepts/overview/working-with-objects/namespaces/#automatic-labelling).
 K8s NetworkPolicy and Antrea-native policy users can take advantage of this reserved label
 to select Namespaces directly by their `name` in `namespaceSelectors` as follows:
 
@@ -1207,83 +1202,8 @@ spec:
       name: AllowToCoreDNS
 ```
 
-**Note**: `NamespaceDefaultLabelName` feature gate is scheduled to be removed in K8s v1.24, thereby
-ensuring that labeling Namespaces by their name cannot be disabled.
-
-#### K8s clusters with version 1.20 and below
-
-In order to select Namespaces by name, Antrea labels Namespaces with a reserved label `antrea.io/metadata.name`,
-whose value is set to the Namespace's name. Users can then use this label in the
-`namespaceSelector` field, in both K8s NetworkPolicies and Antrea-native policies to
-select Namespaces by name. By default, Namespaces are not labeled with the reserved name label.
-In order for the Antrea controller to label the Namespaces, the `labelsmutator.antrea.io`
-`MutatingWebhookConfiguration` must be enabled. This can be done by applying the following
-webhook configuration YAML:
-
-```yaml
-apiVersion: admissionregistration.k8s.io/v1
-kind: MutatingWebhookConfiguration
-metadata:
-  # Do not edit this name.
-  name: "labelsmutator.antrea.io"
-  # Do not remove these labels.
-  labels:
-    app: antrea
-    served-by: antrea-controller
-webhooks:
-  - name: "namelabelmutator.antrea.io"
-    clientConfig:
-      service:
-        name: "antrea"
-        namespace: "kube-system"
-        path: "/mutate/namespace"
-    rules:
-      - operations: ["CREATE", "UPDATE"]
-        apiGroups: [""]
-        apiVersions: ["v1"]
-        resources: ["namespaces"]
-        scope: "Cluster"
-    admissionReviewVersions: ["v1", "v1beta1"]
-    sideEffects: None
-    timeoutSeconds: 5
-```
-
-**Note**: `antrea-controller` Pod must be restarted after applying this YAML.
-
-Once the webhook is configured, Antrea will start labeling all new and updated
-Namespaces with the `antrea.io/metadata.name: <namespaceName>` label. Users may now
-use this reserved label to select Namespaces by name as follows:
-
-```yaml
-apiVersion: crd.antrea.io/v1beta1
-kind: NetworkPolicy
-metadata:
-  name: test-annp-by-name
-  namespace: default
-spec:
-  priority: 5
-  tier: application
-  appliedTo:
-    - podSelector: {}
-  egress:
-    - action: Allow
-      to:
-        - podSelector:
-            matchLabels:
-              k8s-app: kube-dns
-          namespaceSelector:
-            matchLabels:
-              antrea.io/metadata.name: kube-system
-      ports:
-        - protocol: TCP
-          port: 53
-        - protocol: UDP
-          port: 53
-      name: AllowToCoreDNS
-```
-
 The above example allows all Pods from Namespace "default" to connect to all "kube-dns"
-Pods from Namespace "kube-system" on TCP port 53.
+Pods from Namespace "kube-system" on TCP port 53 and UDP port 53.
 
 ### Selecting Pods in the same Namespace with Self
 
