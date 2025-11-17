@@ -628,6 +628,10 @@ type FlowExporterDestinationSpec struct {
 	// a flow record is sent to the collector for idle flows.
 	// +optional
 	IdleFlowExportTimeoutSeconds int32 `json:"idleFlowExportTimeoutSeconds,omitempty"`
+
+	// TLSConfig is used to configure TLS when using gRPC protocol or IPFIX protocol with TLS transport.
+	// +optional
+	TLSConfig *FlowExporterTLSConfig `json:"tlsConfig,omitempty"`
 }
 
 // FlowExporterProtocol defines the protocol used to send flow details.
@@ -664,6 +668,34 @@ type FlowExporterFilter struct {
 	// Supported values are [tcp, udp, icmp, sctp].
 	// +optional
 	Protocols []string `json:"protocols,omitempty"`
+}
+
+// FlowExporterTLSConfig stores the TLS configuration used by the gRPC exporter and IPFIX
+// exporter with TLS transport.
+type FlowExporterTLSConfig struct {
+	// ServerName is used to verify the hostname on the returned certificate. If specified
+	// it will be included in the client's handshake (SNI) to support virtual hosting unless
+	// it is an IP address. If this field is omitted, the hostname used for certificate
+	// verification will default to the provided server address (spec.address)
+	// +optional
+	ServerName string `json:"serverName,omitempty"`
+
+	// MinTLSVersion is the minimum TLS version the exporter will accept.
+	// +optional
+	MinTLSVersion string `json:"minTLSVersion,omitempty"`
+
+	// CAConfigMap captures the location of the ConfigMap containing the CA certificate used to authenticate
+	// the collector service. The ConfigMap must store the certificate under the key 'ca.crt'. To ensure flow
+	// exporter will have access to this resource it must be granted the proper RBAC permissions.
+	// +required
+	CAConfigMap NamespacedName `json:"caConfigMap"`
+
+	// ClientSecret specifies the location of the Secret containing the client certificate and
+	// private key for mTLS. The Secret must contain the keys 'tls.crt' and 'tls.key'.
+	// If omitted, client authentication will be disabled. To ensure flow exporter will
+	// have access to this resource it must be granted the proper RBAC permissions.
+	// +optional
+	ClientSecret *NamespacedName `json:"clientSecret,omitempty"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
