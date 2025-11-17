@@ -4166,7 +4166,7 @@ func schema_pkg_apis_crd_v1beta1_GroupSpec(ref common.ReferenceCallback) common.
 					"nodeSelector": {
 						SchemaProps: spec.SchemaProps{
 							Description: "Select Nodes matched by this selector as workloads in AppliedTo/To/From fields. Cannot be set with any other selector or ServiceReference",
-							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.LabelSelector"),
+							Ref:         ref(metav1.LabelSelector{}.OpenAPIModelName()),
 						},
 					},
 					"ipBlocks": {
