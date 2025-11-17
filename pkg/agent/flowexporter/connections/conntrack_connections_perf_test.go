@@ -32,10 +32,10 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/klog/v2"
 
+	"antrea.io/antrea/pkg/agent/flowexporter/broadcaster"
 	"antrea.io/antrea/pkg/agent/flowexporter/connection"
 	connectionstest "antrea.io/antrea/pkg/agent/flowexporter/connections/testing"
 	exptest "antrea.io/antrea/pkg/agent/flowexporter/testing"
-	"antrea.io/antrea/pkg/agent/openflow"
 	proxytest "antrea.io/antrea/pkg/agent/proxy/testing"
 	queriertest "antrea.io/antrea/pkg/querier/testing"
 	objectstoretest "antrea.io/antrea/pkg/util/objectstore/testing"
@@ -57,29 +57,30 @@ var (
 
 /*
 Sample output (10000 init connections, 1000 new connections, 1000 deleted connections):
-go test -test.v -run=BenchmarkPoll -test.benchmem -bench=. -memprofile memprofile.out -cpuprofile profile.out
+go test -test.v -run=BenchmarkHandlePayload -test.benchmem -bench=. -memprofile memprofile.out -cpuprofile profile.out
 goos: linux
 goarch: amd64
 pkg: antrea.io/antrea/pkg/agent/flowexporter/connections
 cpu: Intel(R) Core(TM) i7-8750H CPU @ 2.20GHz
-BenchmarkPoll
-BenchmarkPoll-2   	     116	   9068998 ns/op	  889713 B/op	   54458 allocs/op
+BenchmarkHandlePayload
+BenchmarkHandlePayload-2   	     116	   9068998 ns/op	  889713 B/op	   54458 allocs/op
 PASS
 ok  	antrea.io/antrea/pkg/agent/flowexporter/connections	3.618s
 */
-func BenchmarkPoll(b *testing.B) {
+func BenchmarkHandlePayload(b *testing.B) {
 	disableLogToStderr()
-	connStore, mockConnDumper := setupConntrackConnStore(b)
+	connStore := setupConntrackConnStore(b)
 	conns := generateConns()
-	b.ResetTimer()
-	for n := 0; n < b.N; n++ {
-		mockConnDumper.EXPECT().DumpFlows(uint16(openflow.CtZone)).Return(conns, testNumOfConns, nil)
-		connStore.Poll()
+
+	payload := broadcaster.Payload{}
+
+	for b.Loop() {
+		payload.Conns = conns
+		connStore.handlePayload(payload)
 		b.StopTimer()
 		conns = generateUpdatedConns(conns)
 		b.StartTimer()
 	}
-	b.StopTimer()
 	b.Logf("\nSummary:\nNumber of initial connections: %d\nNumber of new connections/poll: %d\nNumber of deleted connections/poll: %d\n", testNumOfConns, testNumOfNewConns, testNumOfDeletedConns)
 }
 
@@ -96,9 +97,9 @@ ok  	antrea.io/antrea/pkg/agent/flowexporter/connections	13.111s
 */
 func BenchmarkConnStore(b *testing.B) {
 	disableLogToStderr()
-	connStore, _ := setupConntrackConnStore(b)
-	b.ResetTimer()
-	for n := 0; n < b.N; n++ {
+	connStore := setupConntrackConnStore(b)
+
+	for b.Loop() {
 		// include this in the benchmark (do not stop timer), to measure the memory
 		// footprint of the connection store and all connections accurately.
 		conns := generateConns()
@@ -107,11 +108,10 @@ func BenchmarkConnStore(b *testing.B) {
 			connStore.AddOrUpdateConn(conn)
 		}
 	}
-	b.StopTimer()
 	b.Logf("\nSummary:\nNumber of initial connections: %d\nNumber of new connections/poll: %d\nNumber of deleted connections/poll: %d\n", testNumOfConns, testNumOfNewConns, testNumOfDeletedConns)
 }
 
-func setupConntrackConnStore(b *testing.B) (*ConntrackConnectionStore, *connectionstest.MockConnTrackDumper) {
+func setupConntrackConnStore(b *testing.B) *ConntrackConnectionStore {
 	ctrl := gomock.NewController(b)
 	defer ctrl.Finish()
 	mockPodStore := objectstoretest.NewMockPodStore(ctrl)
@@ -147,13 +147,12 @@ func setupConntrackConnStore(b *testing.B) (*ConntrackConnectionStore, *connecti
 	mockProxier.EXPECT().GetServiceByIP(serviceStr).Return(servicePortName, true).AnyTimes()
 
 	npQuerier := queriertest.NewMockAgentNetworkPolicyInfoQuerier(ctrl)
-	l7Listener := NewL7Listener(nil, mockPodStore)
-	return NewConntrackConnectionStore(mockConnDumper, true, false, npQuerier, mockPodStore, nil, l7Listener, nil, testFlowExporterOptions), mockConnDumper
+	return NewConntrackConnectionStore(nil, npQuerier, mockPodStore, nil, nil, testFlowExporterOptions)
 }
 
 func generateConns() []*connection.Connection {
 	conns := make([]*connection.Connection, testNumOfConns)
-	for i := 0; i < testNumOfConns; i++ {
+	for i := range testNumOfConns {
 		conns[i] = getNewConn()
 	}
 	return conns
@@ -162,7 +161,7 @@ func generateConns() []*connection.Connection {
 func generateUpdatedConns(conns []*connection.Connection) []*connection.Connection {
 	length := len(conns) - testNumOfDeletedConns + testNumOfNewConns
 	updatedConns := make([]*connection.Connection, length)
-	for i := 0; i < len(conns); i++ {
+	for i := range conns {
 		// replace deleted connection with new connection
 		if conns[i].ReadyToDelete == true {
 			conns[i] = getNewConn()

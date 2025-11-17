@@ -299,9 +299,6 @@ func TestFlowAggregator(t *testing.T) {
 	data, v4Enabled, v6Enabled := setupFlowAggregatorTest(t, flowVisibilityTestOptions{
 		databaseURL: defaultCHDatabaseURL,
 	})
-	if err := getAndCheckFlowAggregatorMetrics(t, data, true); err != nil {
-		t.Fatalf("Error when checking metrics of Flow Aggregator: %v", err)
-	}
 
 	k8sUtils, err = NewKubernetesUtils(data)
 	if err != nil {
@@ -350,7 +347,7 @@ func TestFlowAggregatorProxyMode(t *testing.T) {
 				includeK8sNames: includeK8sNames,
 			},
 		})
-		require.NoError(t, getAndCheckFlowAggregatorMetrics(t, data, false), "Error when checking metrics of Flow Aggregator")
+		require.NoError(t, getAndCheckFlowAggregatorMetrics(t, data, false, 0), "Error when checking metrics of Flow Aggregator")
 
 		// UIDs are only supported when using gRPC between FE and FA.
 		if k8sUIDsInsteadOfNames {
@@ -897,7 +894,7 @@ func testHelper(t *testing.T, data *TestData, isIPv6 bool) {
 	// and check the output of antctl commands.
 	t.Run("Antctl", func(t *testing.T) {
 		skipIfNotRequired(t, "mode-irrelevant")
-		flowAggPod, err := data.getFlowAggregator()
+		flowAggPod, err := data.getFlowAggregator(0)
 		if err != nil {
 			t.Fatalf("Error when getting flow-aggregator Pod: %v", err)
 		}
@@ -1427,7 +1424,7 @@ func checkL7FlowExporterData(t *testing.T, record, appProtocolName string) {
 }
 
 func checkL7FlowExporterDataClickHouse(t *testing.T, record *ClickHouseFullRow, appProtocolName string) {
-	assert.Equal(t, record.AppProtocolName, appProtocolName, "Record does not have correct Layer 7 protocol Name")
+	assert.Equal(t, appProtocolName, record.AppProtocolName, "Record does not have correct Layer 7 protocol Name")
 	assert.NotEmpty(t, record.HttpVals, "Record does not have httpVals")
 }
 
@@ -1449,12 +1446,16 @@ func getUint64FieldFromRecord(t require.TestingT, record string, field string) u
 // and source port. We send source port to ignore the control flows during the
 // iperf test.
 func getCollectorOutput(t require.TestingT, srcIP, dstIP, srcPort string, isDstService bool, lookForFlowEnd bool, isIPv6 bool, data *TestData, labelFilter string, timeout time.Duration) []string {
+	return getCollectorOutputWithName(t, "ipfix-collector", srcIP, dstIP, srcPort, isDstService, lookForFlowEnd, isIPv6, data, labelFilter, timeout)
+}
+
+func getCollectorOutputWithName(t require.TestingT, name, srcIP, dstIP, srcPort string, isDstService bool, lookForFlowEnd bool, isIPv6 bool, data *TestData, labelFilter string, timeout time.Duration) []string {
 	var allRecords, records []string
 	err := wait.PollUntilContextTimeout(context.Background(), 500*time.Millisecond, timeout, true, func(ctx context.Context) (bool, error) {
 		var rc int
 		var err error
 		var cmd string
-		ipfixCollectorIP, err := testData.podWaitForIPs(defaultTimeout, "ipfix-collector", testData.testNamespace)
+		ipfixCollectorIP, err := testData.podWaitForIPs(defaultTimeout, name, testData.testNamespace)
 		if err != nil || len(ipfixCollectorIP.IPStrings) == 0 {
 			require.NoErrorf(t, err, "Should be able to get IP from IPFIX collector Pod")
 		}
@@ -1498,6 +1499,7 @@ func getCollectorOutput(t require.TestingT, srcIP, dstIP, srcPort string, isDstS
 			fmt.Println(allRecords[i])
 		}
 	}
+
 	require.NoErrorf(t, err, "IPFIX collector did not receive the expected records, source IP: %s, dest IP: %s, source port: %s, total records count: %d, filtered records count: %d", srcIP, dstIP, srcPort, len(allRecords), len(records))
 	return records
 }
@@ -1916,11 +1918,14 @@ func createToExternalTestServer(t *testing.T, data *TestData) *PodIPs {
 	return serverIPs
 }
 
-func getAndCheckFlowAggregatorMetrics(t *testing.T, data *TestData, withClickHouseExporter bool) error {
-	flowAggPod, err := data.getFlowAggregator()
+func getAndCheckFlowAggregatorMetrics(t *testing.T, data *TestData, withClickHouseExporter bool, aggregatorIndex int) error {
+	flowAggPod, err := data.getFlowAggregator(aggregatorIndex)
 	if err != nil {
 		return fmt.Errorf("error when getting flow-aggregator Pod: %w", err)
 	}
+
+	t.Logf("Checking aggregator (%d) for readiness metrics", aggregatorIndex)
+
 	podName := flowAggPod.Name
 	command := []string{"antctl", "get", "recordmetrics", "-o", "json"}
 	if err := wait.PollUntilContextTimeout(context.Background(), defaultInterval, 2*defaultTimeout, false, func(ctx context.Context) (bool, error) {
@@ -1929,6 +1934,7 @@ func getAndCheckFlowAggregatorMetrics(t *testing.T, data *TestData, withClickHou
 			t.Logf("Error when requesting recordmetrics, %v", err)
 			return false, nil
 		}
+
 		metrics := &apis.RecordMetricsResponse{}
 		if err := json.Unmarshal([]byte(stdout), metrics); err != nil {
 			return false, fmt.Errorf("error when decoding recordmetrics: %w", err)
@@ -1974,7 +1980,7 @@ func testL7FlowExporterController(t *testing.T, data *TestData, isIPv6 bool) {
 	cmd := []string{"curl", getHTTPURLFromIPPort(testFlow1.dstIP, serverPodPort)}
 	stdout, stderr, err := data.RunCommandFromPod(data.testNamespace, testFlow1.srcPodName, "l7flowexporter", cmd)
 	require.NoErrorf(t, err, "Error when running curl command, stdout: %s, stderr: %s", stdout, stderr)
-	records := getCollectorOutput(t, testFlow1.srcIP, testFlow1.dstIP, "", false, true, isIPv6, data, "", getCollectorOutputDefaultTimeout)
+	records := getCollectorOutput(t, testFlow1.srcIP, testFlow1.dstIP, "", false, true, isIPv6, data, "l7", getCollectorOutputDefaultTimeout)
 	for _, record := range records {
 		assert := assert.New(t)
 		assert.Contains(record, testFlow1.srcPodName, "Record with srcIP does not have Pod name: %s", testFlow1.srcPodName)
@@ -1985,7 +1991,7 @@ func testL7FlowExporterController(t *testing.T, data *TestData, isIPv6 bool) {
 		checkL7FlowExporterData(t, record, "http")
 	}
 
-	clickHouseRecords := getClickHouseOutput(t, data, testFlow1.srcIP, testFlow1.dstIP, "", false, true, "")
+	clickHouseRecords := getClickHouseOutput(t, data, testFlow1.srcIP, testFlow1.dstIP, "", false, true, "l7")
 	for _, record := range clickHouseRecords {
 		assert := assert.New(t)
 		assert.Equal(record.SourcePodName, testFlow1.srcPodName, "Record with srcIP does not have Pod name: %s", testFlow1.srcPodName)

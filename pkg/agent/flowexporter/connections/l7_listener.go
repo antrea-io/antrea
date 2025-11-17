@@ -40,42 +40,25 @@ type PodL7FlowExporterAttrGetter interface {
 	IsL7FlowExporterRequested(podNN string, ingress bool) bool
 }
 
-// L7ProtocolFields holds layer 7 protocols supported
-type L7ProtocolFields struct {
-	http map[int32]*Http
-}
-
-// Http holds the L7 HTTP flow JSON values.
-type Http struct {
-	Hostname      string `json:"hostname"`
-	URL           string `json:"url"`
-	UserAgent     string `json:"http_user_agent"`
-	ContentType   string `json:"http_content_type"`
-	Method        string `json:"http_method"`
-	Protocol      string `json:"protocol"`
-	Status        int32  `json:"status"`
-	ContentLength int32  `json:"length"`
-}
-
 // JsonToEvent holds Suricata event JSON values.
 // See https://docs.suricata.io/en/latest/output/eve/eve-json-format.html?highlight=HTTP%20event#event-types
 type JsonToEvent struct {
-	Timestamp   string     `json:"timestamp"`
-	FlowID      int64      `json:"flow_id"`
-	InInterface string     `json:"in_iface"`
-	EventType   string     `json:"event_type"`
-	VLAN        []int32    `json:"vlan"`
-	SrcIP       netip.Addr `json:"src_ip"`
-	SrcPort     int32      `json:"src_port"`
-	DestIP      netip.Addr `json:"dest_ip"`
-	DestPort    int32      `json:"dest_port"`
-	Proto       string     `json:"proto"`
-	TxID        int32      `json:"tx_id"`
-	HTTP        *Http      `json:"http"`
+	Timestamp   string           `json:"timestamp"`
+	FlowID      int64            `json:"flow_id"`
+	InInterface string           `json:"in_iface"`
+	EventType   string           `json:"event_type"`
+	VLAN        []int32          `json:"vlan"`
+	SrcIP       netip.Addr       `json:"src_ip"`
+	SrcPort     int32            `json:"src_port"`
+	DestIP      netip.Addr       `json:"dest_ip"`
+	DestPort    int32            `json:"dest_port"`
+	Proto       string           `json:"proto"`
+	TxID        int32            `json:"tx_id"`
+	HTTP        *connection.Http `json:"http"`
 }
 
 type L7Listener struct {
-	l7Events                    map[connection.ConnectionKey]L7ProtocolFields
+	l7Events                    map[connection.ConnectionKey]connection.L7ProtocolFields
 	l7mut                       sync.Mutex
 	suricataEventSocketPath     string
 	podL7FlowExporterAttrGetter PodL7FlowExporterAttrGetter
@@ -86,7 +69,7 @@ func NewL7Listener(
 	podL7FlowExporterAttrGetter PodL7FlowExporterAttrGetter,
 	podStore objectstore.PodStore) *L7Listener {
 	return &L7Listener{
-		l7Events:                    make(map[connection.ConnectionKey]L7ProtocolFields),
+		l7Events:                    make(map[connection.ConnectionKey]connection.L7ProtocolFields),
 		suricataEventSocketPath:     config.L7SuricataSocketPath,
 		podL7FlowExporterAttrGetter: podL7FlowExporterAttrGetter,
 		podStore:                    podStore,
@@ -217,20 +200,20 @@ func (l *L7Listener) addOrUpdateL7EventMap(event *JsonToEvent) error {
 		if l.podL7FlowExporterAttrGetter.IsL7FlowExporterRequested(sourcePodNN, false) || l.podL7FlowExporterAttrGetter.IsL7FlowExporterRequested(destinationPodNN, true) {
 			_, ok := l.l7Events[connKey]
 			if !ok {
-				l.l7Events[connKey] = L7ProtocolFields{
-					http: make(map[int32]*Http),
+				l.l7Events[connKey] = connection.L7ProtocolFields{
+					Http: make(map[int32]*connection.Http),
 				}
 			}
-			l.l7Events[connKey].http[event.TxID] = event.HTTP
+			l.l7Events[connKey].Http[event.TxID] = event.HTTP
 		}
 	}
 	return nil
 }
 
-func (l *L7Listener) ConsumeL7EventMap() map[connection.ConnectionKey]L7ProtocolFields {
+func (l *L7Listener) ConsumeL7EventMap() map[connection.ConnectionKey]connection.L7ProtocolFields {
 	l.l7mut.Lock()
 	defer l.l7mut.Unlock()
 	l7EventsMap := l.l7Events
-	l.l7Events = make(map[connection.ConnectionKey]L7ProtocolFields)
+	l.l7Events = make(map[connection.ConnectionKey]connection.L7ProtocolFields)
 	return l7EventsMap
 }

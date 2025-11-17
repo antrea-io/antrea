@@ -35,7 +35,6 @@ import (
 	"antrea.io/antrea/pkg/agent/flowexporter/connection"
 	"antrea.io/antrea/pkg/agent/flowexporter/connections"
 	"antrea.io/antrea/pkg/agent/flowexporter/exporter"
-	"antrea.io/antrea/pkg/agent/flowexporter/filter"
 	"antrea.io/antrea/pkg/agent/flowexporter/options"
 	"antrea.io/antrea/pkg/agent/flowexporter/priorityqueue"
 	exptest "antrea.io/antrea/pkg/agent/flowexporter/testing"
@@ -91,18 +90,17 @@ func BenchmarkExportConntrackConns(b *testing.B) {
 	stopCh := make(chan struct{})
 	defer close(stopCh)
 	recordsReceived = 0
-	exp, err := setupExporter(b, true, stopCh)
+	dest, err := setupDestination(b, true, stopCh)
 	if err != nil {
 		b.Fatalf("error when setting up exporter: %v", err)
 	}
-	b.ResetTimer()
-	for n := 0; n < b.N; n++ {
-		exp.initFlowExporter(context.Background())
+
+	for b.Loop() {
+		dest.Connect(context.Background())
 		for i := 0; i < int(math.Ceil(testNumOfConns/maxConnsToExport)); i++ {
-			exp.sendFlowRecords()
+			dest.sendFlowRecords()
 		}
 	}
-	b.StopTimer()
 	b.Logf("\nSummary:\nNumber of conntrack connections: %d\nNumber of dying conntrack connections: %d\nTotal connections received: %d\n", testNumOfConns, testNumOfDyingConns, recordsReceived)
 }
 
@@ -143,22 +141,21 @@ func BenchmarkExportDenyConns(b *testing.B) {
 	stopCh := make(chan struct{})
 	defer close(stopCh)
 	recordsReceived = 0
-	exp, err := setupExporter(b, false, stopCh)
+	dest, err := setupDestination(b, false, stopCh)
 	if err != nil {
 		b.Fatalf("error when setting up exporter: %v", err)
 	}
-	b.ResetTimer()
-	for n := 0; n < b.N; n++ {
-		exp.initFlowExporter(context.Background())
+
+	for b.Loop() {
+		dest.Connect(context.Background())
 		for i := 0; i < int(math.Ceil(testNumOfDenyConns/maxConnsToExport)); i++ {
-			exp.sendFlowRecords()
+			dest.sendFlowRecords()
 		}
 	}
-	b.StopTimer()
 	b.Logf("\nSummary:\nNumber of deny connections: %d\nNumber of idle deny connections: %d\nTotal connections received: %d\n", testNumOfDenyConns, testNumOfIdleDenyConns, recordsReceived)
 }
 
-func NewFlowExporterForTest(tb testing.TB, o *options.FlowExporterOptions) *FlowExporter {
+func NewDestinationForTest(tb testing.TB, o *options.FlowExporterOptions) *Destination {
 	const (
 		nodeName    = "test-node"
 		obsDomainID = 0xabcd
@@ -167,29 +164,37 @@ func NewFlowExporterForTest(tb testing.TB, o *options.FlowExporterOptions) *Flow
 	v4Enabled := !testWithIPv6
 	v6Enabled := testWithIPv6
 
-	l7Listener := connections.NewL7Listener(nil, nil)
-	denyConnStore := connections.NewDenyConnectionStore(nil, nil, nil, o, filter.NewProtocolFilter(nil))
-	conntrackConnStore := connections.NewConntrackConnectionStore(nil, v4Enabled, v6Enabled, nil, nil, nil, l7Listener, nil, o)
+	config := connections.ConnectionStoreConfig{
+		ActiveFlowTimeout:      o.ActiveFlowTimeout,
+		IdleFlowTimeout:        o.IdleFlowTimeout,
+		StaleConnectionTimeout: o.StaleConnectionTimeout,
+		AllowedProtocols:       o.ProtocolFilter,
+	}
+	denyConnStore := connections.NewDenyConnectionStore(nil, nil, nil, config)
+	conntrackConnStore := connections.NewConntrackConnectionStore(nil, nil, nil, nil, nil, config)
 
-	return &FlowExporter{
-		collectorProto:         o.FlowCollectorProto,
-		collectorAddr:          o.FlowCollectorAddr,
-		exporter:               exporter.NewIPFIXExporter(o.FlowCollectorProto, nodeName, obsDomainID, v4Enabled, v6Enabled),
+	return &Destination{
+		DestinationConfig: DestinationConfig{
+			name:                   "test",
+			address:                o.FlowCollectorAddr,
+			activeFlowTimeout:      o.ActiveFlowTimeout,
+			idleFlowTimeout:        o.IdleFlowTimeout,
+			staleConnectionTimeout: 0,
+			isNetworkPolicyOnly:    false,
+			allowProtocolFilter:    []string{},
+		},
+		exp:                    exporter.NewIPFIXExporter(o.FlowCollectorProto, nodeName, obsDomainID, v4Enabled, v6Enabled),
 		conntrackConnStore:     conntrackConnStore,
 		denyConnStore:          denyConnStore,
-		v4Enabled:              v4Enabled,
-		v6Enabled:              v6Enabled,
 		k8sClient:              nil,
 		nodeRouteController:    nil,
-		isNetworkPolicyOnly:    false,
 		conntrackPriorityQueue: conntrackConnStore.GetPriorityQueue(),
 		denyPriorityQueue:      denyConnStore.GetPriorityQueue(),
-		expiredConns:           make([]connection.Connection, 0, maxConnsToExport*2),
-		l7Listener:             l7Listener,
+		exportConns:            make([]connection.Connection, 0, maxConnsToExport*2),
 	}
 }
 
-func setupExporter(tb testing.TB, isConntrackConn bool, stopCh <-chan struct{}) (*FlowExporter, error) {
+func setupDestination(tb testing.TB, isConntrackConn bool, stopCh <-chan struct{}) (*Destination, error) {
 	var err error
 	collectorAddr, err := startLocalServer(stopCh)
 	if err != nil {
@@ -205,13 +210,13 @@ func setupExporter(tb testing.TB, isConntrackConn bool, stopCh <-chan struct{}) 
 		StaleConnectionTimeout: 1,
 		PollInterval:           1,
 	}
-	exp := NewFlowExporterForTest(tb, o)
+	dest := NewDestinationForTest(tb, o)
 	if isConntrackConn {
-		addConns(exp.conntrackConnStore, exp.conntrackConnStore.GetPriorityQueue())
+		addConns(dest.conntrackConnStore, dest.conntrackConnStore.GetPriorityQueue())
 	} else {
-		addDenyConns(exp.denyConnStore, exp.denyConnStore.GetPriorityQueue())
+		addDenyConns(dest.denyConnStore, dest.denyConnStore.GetPriorityQueue())
 	}
-	return exp, err
+	return dest, err
 }
 
 func startLocalServer(stopCh <-chan struct{}) (net.Addr, error) {
@@ -314,6 +319,7 @@ func addDenyConns(connStore *connections.DenyConnectionStore, expirePriorityQueu
 			EgressNetworkPolicyType:       utils.PolicyTypeAntreaNetworkPolicy,
 			EgressNetworkPolicyNamespace:  "egress-ns",
 			EgressNetworkPolicyRuleAction: utils.NetworkPolicyRuleActionReject,
+			IsDenyFlow:                    true,
 		}
 		connKey := connection.NewConnectionKey(conn)
 		connStore.AddConnToMap(&connKey, conn)
