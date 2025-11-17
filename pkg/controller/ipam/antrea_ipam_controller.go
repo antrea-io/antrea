@@ -54,7 +54,7 @@ const (
 	minRetryDelay = 5 * time.Second
 	maxRetryDelay = 300 * time.Second
 
-	garbageCollectionInterval = 10 * time.Minute
+	garbageCollectionInterval = 1 * time.Minute
 
 	// Default number of workers processing an IPPool change.
 	defaultWorkers = 4
@@ -171,32 +171,37 @@ func (c *AntreaIPAMController) enqueueStatefulSetDeleteEvent(obj interface{}) {
 }
 
 // Inspect all IPPools for stale IP Address entries.
-// This may happen if controller was down during StatefulSet delete event.
-// If such entry is found, enqueue cleanup event for this StatefulSet.
-func (c *AntreaIPAMController) cleanupStaleAddresses() {
-	pools, _ := c.ipPoolLister.List(labels.Everything())
-	lister := c.statefulSetInformer.Lister()
-	statefulSets, _ := lister.List(labels.Everything())
-	statefulSetMap := make(map[string]bool)
-
+// This may happen if controller was down during StatefulSet/Pod delete event.
+// If such entry is found, enqueue cleanup event for this StatefulSet/Pod.
+func (c *AntreaIPAMController) cleanUpStaleIPAddresses() {
 	klog.InfoS("Cleanup job for IP Pools started")
+
+	pools, _ := c.ipPoolLister.List(labels.Everything())
+	statefulSets, _ := c.statefulSetInformer.Lister().List(labels.Everything())
+	statefulSetMap := make(map[string]struct{}, len(statefulSets))
 
 	for _, ss := range statefulSets {
 		// Prepare map of existing StatefulSets for quick reference below
-		statefulSetMap[k8s.NamespacedName(ss.Namespace, ss.Name)] = true
+		statefulSetMap[k8s.NamespacedName(ss.Namespace, ss.Name)] = struct{}{}
+	}
+
+	pods, _ := c.podLister.List(labels.Everything())
+	podsMap := make(map[string]struct{}, len(pods))
+	for _, p := range pods {
+		podsMap[k8s.NamespacedName(p.Namespace, p.Name)] = struct{}{}
 	}
 
 	poolsUpdated := 0
 	for _, ipPool := range pools {
 		updateNeeded := false
-		ipPoolCopy := ipPool.DeepCopy()
-		var newList []crdv1b1.IPAddressState
-		for _, address := range ipPoolCopy.Status.IPAddresses {
+		ipAddrs := ipPool.Status.IPAddresses
+		newList := make([]crdv1b1.IPAddressState, 0, len(ipAddrs))
+
+		for _, address := range ipAddrs {
 			// Cleanup reserved addresses
 			if address.Owner.Pod != nil {
-				_, err := c.podLister.Pods(address.Owner.Pod.Namespace).Get(address.Owner.Pod.Name)
-				if err != nil && errors.IsNotFound(err) {
-					klog.InfoS("IPPool contains stale IPAddress for Pod that no longer exists", "IPPool", ipPool.Name, "Namespace", address.Owner.Pod.Namespace, "Pod", address.Owner.Pod.Name)
+				if _, ok := podsMap[k8s.NamespacedName(address.Owner.Pod.Namespace, address.Owner.Pod.Name)]; !ok {
+					klog.V(2).InfoS("IPPool contains stale IP address for Pod that no longer exists", "IPPool", ipPool.Name, "Namespace", address.Owner.Pod.Namespace, "Pod", address.Owner.Pod.Name)
 					address.Owner.Pod = nil
 					if address.Owner.StatefulSet != nil {
 						address.Phase = crdv1b1.IPAddressPhaseReserved
@@ -208,10 +213,9 @@ func (c *AntreaIPAMController) cleanupStaleAddresses() {
 				key := k8s.NamespacedName(address.Owner.StatefulSet.Namespace, address.Owner.StatefulSet.Name)
 				if _, ok := statefulSetMap[key]; !ok {
 					// This entry refers to StatefulSet that no longer exists
-					klog.InfoS("IPPool contains stale IPAddress for StatefulSet that no longer exists", "IPPool", ipPool.Name, "Namespace", address.Owner.StatefulSet.Namespace, "StatefulSet", address.Owner.StatefulSet.Name)
+					klog.V(2).InfoS("IPPool contains stale IP address for StatefulSet that no longer exists", "IPPool", ipPool.Name, "Namespace", address.Owner.StatefulSet.Namespace, "StatefulSet", address.Owner.StatefulSet.Name)
 					address.Owner.StatefulSet = nil
 					updateNeeded = true
-
 				}
 			}
 
@@ -221,6 +225,7 @@ func (c *AntreaIPAMController) cleanupStaleAddresses() {
 		}
 
 		if updateNeeded {
+			ipPoolCopy := ipPool.DeepCopy()
 			ipPoolCopy.Status.IPAddresses = newList
 			_, err := c.crdClient.CrdV1beta1().IPPools().UpdateStatus(context.TODO(), ipPoolCopy, metav1.UpdateOptions{})
 			if err != nil {
@@ -229,7 +234,6 @@ func (c *AntreaIPAMController) cleanupStaleAddresses() {
 			} else {
 				poolsUpdated += 1
 			}
-
 		}
 	}
 
@@ -242,6 +246,8 @@ func (c *AntreaIPAMController) cleanIPPoolForStatefulSet(namespacedName string) 
 	klog.InfoS("Processing delete notification", "StatefulSet", namespacedName)
 	ipPools, _ := c.ipPoolInformer.Informer().GetIndexer().ByIndex(statefulSetIndex, namespacedName)
 
+	var retry bool
+	namespace, name := k8s.SplitNamespacedName(namespacedName)
 	for _, item := range ipPools {
 		ipPool := item.(*crdv1b1.IPPool)
 		allocator, err := poolallocator.NewIPPoolAllocator(ipPool.Name, c.crdClient, c.ipPoolLister)
@@ -251,15 +257,18 @@ func (c *AntreaIPAMController) cleanIPPoolForStatefulSet(namespacedName string) 
 			continue
 		}
 
-		namespace, name := k8s.SplitNamespacedName(namespacedName)
 		err = allocator.ReleaseStatefulSet(namespace, name)
 		if err != nil {
 			// This can be a transient error - worker will retry
 			klog.ErrorS(err, "Failed to clean IP allocations", "StatefulSet", namespacedName, "IPPool", ipPool.Name)
+			retry = true
 			continue
 		}
 	}
 
+	if retry {
+		return fmt.Errorf("stale IP allocations cleanup failed for at least one IPPool")
+	}
 	return nil
 }
 
@@ -491,7 +500,7 @@ func (c *AntreaIPAMController) Run(stopCh <-chan struct{}) {
 	}
 
 	// Periodic cleanup IP Pools of stale IP addresses
-	go wait.NonSlidingUntil(c.cleanupStaleAddresses, garbageCollectionInterval, stopCh)
+	go wait.NonSlidingUntil(c.cleanUpStaleIPAddresses, garbageCollectionInterval, stopCh)
 
 	go wait.Until(c.statefulSetWorker, time.Second, stopCh)
 

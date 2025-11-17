@@ -28,8 +28,11 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
+	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes/fake"
+	k8stesting "k8s.io/client-go/testing"
+	"k8s.io/client-go/tools/cache"
 
 	crdv1b1 "antrea.io/antrea/pkg/apis/crd/v1beta1"
 	fakecrd "antrea.io/antrea/pkg/client/clientset/versioned/fake"
@@ -331,6 +334,87 @@ func TestAntreaIPAMController_getIPPoolsForStatefulSet(t *testing.T) {
 			}
 			assert.Equalf(t, want, got, "Unexpected IPPool result")
 			assert.Equalf(t, tt.expectedIPs, got1, "Unexpected IP result")
+		})
+	}
+}
+
+// Creates fake IPPools with N addresses each
+func makeFakeIPPools(poolCount, ipsPerPool int) []*crdv1b1.IPPool {
+	var pools []*crdv1b1.IPPool
+	for i := 0; i < poolCount; i++ {
+		pool := &crdv1b1.IPPool{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: fmt.Sprintf("pool-%d", i),
+			},
+			Status: crdv1b1.IPPoolStatus{
+				IPAddresses: []crdv1b1.IPAddressState{},
+			},
+		}
+
+		for j := 0; j < ipsPerPool; j++ {
+			ip := crdv1b1.IPAddressState{
+				IPAddress: fmt.Sprintf("10.0.%d.%d", i, j),
+				Phase:     crdv1b1.IPAddressPhaseAllocated,
+			}
+			// Randomly assign Pod/StatefulSet owner
+			ip.Owner.Pod = &crdv1b1.PodOwner{
+				Namespace:   "default",
+				Name:        fmt.Sprintf("pod-%d-%d", i, j),
+				ContainerID: fmt.Sprintf("container-%d-%d", i, j),
+			}
+			ip.Owner.StatefulSet = &crdv1b1.StatefulSetOwner{
+				Namespace: "default",
+				Name:      fmt.Sprintf("ss-%d", i),
+				Index:     1,
+			}
+			pool.Status.IPAddresses = append(pool.Status.IPAddresses, ip)
+		}
+		pools = append(pools, pool)
+	}
+	return pools
+}
+
+func BenchmarkCleanUpStaleIPAddresses(b *testing.B) {
+	benchmarks := []struct {
+		name       string
+		poolCount  int
+		ipsPerPool int
+	}{
+		// Sample result for small:
+		//   1515	    764513 ns/op	  292771 B/op	    5255 allocs/op
+		{"Small", 10, 50},
+		// Sample result for medium:
+		// 39	  27798675 ns/op	10321643 B/op	  202300 allocs/op
+		{"Medium", 100, 200},
+		// Sample result for large:
+		// 5	 205046442 ns/op	126322694 B/op	 2510655 allocs/op
+		{"Large", 500, 500},
+	}
+
+	for _, bm := range benchmarks {
+		b.Run(bm.name, func(b *testing.B) {
+			stopCh := make(chan struct{})
+			defer close(stopCh)
+
+			c := newFakeAntreaIPAMController(&crdv1b1.IPPool{}, &corev1.Namespace{}, &appsv1.StatefulSet{})
+			watcher := watch.NewFake()
+			c.fakeCRDClient.PrependWatchReactor("ippools", k8stesting.DefaultWatchReactor(watcher, nil))
+			c.informerFactory.Start(stopCh)
+			c.crdInformerFactory.Start(stopCh)
+			c.informerFactory.WaitForCacheSync(stopCh)
+			c.crdInformerFactory.WaitForCacheSync(stopCh)
+
+			pools := makeFakeIPPools(bm.poolCount, bm.ipsPerPool)
+			for _, p := range pools {
+				_, _ = c.fakeCRDClient.CrdV1beta1().IPPools().Create(context.TODO(), p, metav1.CreateOptions{})
+				watcher.Add(p)
+			}
+			cache.WaitForCacheSync(stopCh, c.ipPoolInformer.Informer().HasSynced)
+
+			b.ResetTimer()
+			for i := 0; i < b.N; i++ {
+				c.cleanUpStaleIPAddresses()
+			}
 		})
 	}
 }
