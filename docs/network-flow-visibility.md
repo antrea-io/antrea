@@ -76,7 +76,7 @@ In addition to enabling the Flow Exporter feature gate (if needed), you need to
 ensure that the `flowExporter.enable` flag is set to true in the Antrea Agent
 configuration.
 
-your `antrea-agent` ConfigMap should look like this:
+Your `antrea-agent` ConfigMap should look like this:
 
 ```yaml
   antrea-agent.conf: |
@@ -349,8 +349,8 @@ data:
   ca.crt: <BASE64 ENCODED CA CERTIFICATE>
 ```
 
-You can use `kubectl apply -f <PATH TO SECRET YAML>` to create the above secret
-, or use `kubectl create secret`:
+You can use `kubectl apply -f <PATH TO SECRET YAML>` to create the above Secret,
+or use `kubectl create secret`:
 
 ```bash
 kubectl create secret generic clickhouse-ca -n flow-aggregator --from-file=ca.crt=<PATH TO CA CERTIFICATE>

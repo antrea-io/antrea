@@ -385,7 +385,7 @@ egress-prod          10.10.0.104    1m    node-4
 egress-staging       10.10.0.105    1m    node-5
 ```
 
-Now, the packets from the Pods with in the `prod` Namespace to the external
+Now, the packets from the Pods in the `prod` Namespace to the external
 network will be redirected to the `node-4` Node and SNATed to `10.10.0.104`
 while the packets from the Pods in the `staging` Namespace to the external
 network will be redirected to the `node-5` Node and SNATed to `10.10.0.105`.

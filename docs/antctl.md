@@ -163,8 +163,8 @@ the command as follows:
 antctl check installation
 ```
 
-In case Antrea is installed in a custom namespace, You
-can specify the namespace by adding the flag:
+In the case that Antrea is installed in a custom Namespace, you can specify the
+Namespace using the `--namespace` flag:
 
 ```bash
 antctl check installation --namespace [NAMESPACE]
