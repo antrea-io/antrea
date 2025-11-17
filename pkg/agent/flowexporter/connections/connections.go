@@ -26,7 +26,6 @@ import (
 	"k8s.io/klog/v2"
 
 	"antrea.io/antrea/pkg/agent/flowexporter/connection"
-	"antrea.io/antrea/pkg/agent/flowexporter/options"
 	"antrea.io/antrea/pkg/agent/flowexporter/priorityqueue"
 	"antrea.io/antrea/pkg/agent/flowexporter/utils"
 	"antrea.io/antrea/pkg/agent/proxy"
@@ -37,6 +36,14 @@ import (
 const (
 	periodicDeleteInterval = time.Minute
 )
+
+type ConnectionStoreConfig struct {
+	ActiveFlowTimeout      time.Duration
+	IdleFlowTimeout        time.Duration
+	StaleConnectionTimeout time.Duration
+
+	AllowedProtocols []string
+}
 
 type connectionStore struct {
 	connections            map[connection.ConnectionKey]*connection.Connection
@@ -52,14 +59,14 @@ func NewConnectionStore(
 	npQuerier querier.AgentNetworkPolicyInfoQuerier,
 	podStore objectstore.PodStore,
 	proxier proxy.ProxyQuerier,
-	o *options.FlowExporterOptions) connectionStore {
+	cfg ConnectionStoreConfig) connectionStore {
 	return connectionStore{
 		connections:            make(map[connection.ConnectionKey]*connection.Connection),
 		networkPolicyQuerier:   npQuerier,
 		podStore:               podStore,
 		antreaProxier:          proxier,
-		expirePriorityQueue:    priorityqueue.NewExpirePriorityQueue(o.ActiveFlowTimeout, o.IdleFlowTimeout),
-		staleConnectionTimeout: o.StaleConnectionTimeout,
+		expirePriorityQueue:    priorityqueue.NewExpirePriorityQueue(cfg.ActiveFlowTimeout, cfg.IdleFlowTimeout),
+		staleConnectionTimeout: cfg.StaleConnectionTimeout,
 	}
 }
 

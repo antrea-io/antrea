@@ -26,7 +26,6 @@ package testing
 
 import (
 	reflect "reflect"
-	time "time"
 
 	connection "antrea.io/antrea/pkg/agent/flowexporter/connection"
 	gomock "go.uber.org/mock/gomock"
@@ -179,15 +178,15 @@ func (m *MockDenyConnectionStoreUpdater) EXPECT() *MockDenyConnectionStoreUpdate
 }
 
 // AddOrUpdateConn mocks base method.
-func (m *MockDenyConnectionStoreUpdater) AddOrUpdateConn(conn *connection.Connection, timeSeen time.Time, bytes uint64) {
+func (m *MockDenyConnectionStoreUpdater) AddOrUpdateConn(conn *connection.Connection) {
 	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "AddOrUpdateConn", conn, timeSeen, bytes)
+	m.ctrl.Call(m, "AddOrUpdateConn", conn)
 }
 
 // AddOrUpdateConn indicates an expected call of AddOrUpdateConn.
-func (mr *MockDenyConnectionStoreUpdaterMockRecorder) AddOrUpdateConn(conn, timeSeen, bytes any) *gomock.Call {
+func (mr *MockDenyConnectionStoreUpdaterMockRecorder) AddOrUpdateConn(conn any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddOrUpdateConn", reflect.TypeOf((*MockDenyConnectionStoreUpdater)(nil).AddOrUpdateConn), conn, timeSeen, bytes)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddOrUpdateConn", reflect.TypeOf((*MockDenyConnectionStoreUpdater)(nil).AddOrUpdateConn), conn)
 }
 
 // GetConnByKey mocks base method.

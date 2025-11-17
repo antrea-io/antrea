@@ -37,11 +37,10 @@ import (
 	"k8s.io/client-go/tools/cache"
 
 	"antrea.io/antrea/pkg/agent/config"
+	"antrea.io/antrea/pkg/agent/flowexporter/broadcaster"
 	"antrea.io/antrea/pkg/agent/flowexporter/connection"
 	"antrea.io/antrea/pkg/agent/flowexporter/connections"
-	connectionstest "antrea.io/antrea/pkg/agent/flowexporter/connections/testing"
 	"antrea.io/antrea/pkg/agent/flowexporter/filter"
-	"antrea.io/antrea/pkg/agent/flowexporter/options"
 	"antrea.io/antrea/pkg/agent/openflow"
 	"antrea.io/antrea/pkg/agent/util/sysctl"
 	queriertest "antrea.io/antrea/pkg/querier/testing"
@@ -127,19 +126,16 @@ func TestConnectionStoreAndFlowRecords(t *testing.T) {
 	testPods[1] = preparePodInformation("pod2", "ns2", testConns[1].FlowKey.DestinationAddress)
 
 	// Create connectionStore, FlowRecords and associated mocks
-	connDumperMock := connectionstest.NewMockConnTrackDumper(ctrl)
 	mockPodStore := objectstoretest.NewMockPodStore(ctrl)
 	npQuerier := queriertest.NewMockAgentNetworkPolicyInfoQuerier(ctrl)
 	// TODO: Enhance the integration test by testing service.
-	o := &options.FlowExporterOptions{
+
+	o := connections.ConnectionStoreConfig{
 		ActiveFlowTimeout:      testActiveFlowTimeout,
 		IdleFlowTimeout:        testIdleFlowTimeout,
 		StaleConnectionTimeout: testStaleConnectionTimeout,
-		PollInterval:           testPollInterval}
-	conntrackConnStore := connections.NewConntrackConnectionStore(connDumperMock, true, false, npQuerier, mockPodStore, nil, nil, o)
-	// Expect calls for connStore.poll and other callees
-	connDumperMock.EXPECT().DumpFlows(uint16(openflow.CtZone)).Return(testConns, 0, nil)
-	connDumperMock.EXPECT().GetMaxConnections().Return(0, nil)
+	}
+	conntrackConnStore := connections.NewConntrackConnectionStore(nil, npQuerier, mockPodStore, nil, nil, o)
 	for i, testConn := range testConns {
 		if i == 0 {
 			mockPodStore.EXPECT().GetPodByIPAndTime(testConn.FlowKey.SourceAddress.String(), mock.Any()).Return(testPods[i], true)
@@ -150,10 +146,10 @@ func TestConnectionStoreAndFlowRecords(t *testing.T) {
 		}
 	}
 	// Execute connStore.Poll
-	connsLens, err := conntrackConnStore.Poll()
+	err := conntrackConnStore.HandlePayload(broadcaster.Payload{
+		Conns: testConns,
+	})
 	require.Nil(t, err, fmt.Sprintf("Failed to add connections to connection store: %v", err))
-	assert.Len(t, connsLens, 1, "length of connsLens is expected to be 1")
-	assert.Len(t, testConns, connsLens[0], "expected connections should be equal to number of testConns")
 
 	// Check if connections in connectionStore are same as testConns or not
 	for i, expConn := range testConns {
@@ -346,33 +342,36 @@ func BenchmarkConntrackConnectionStorePoll(b *testing.B) {
 	}
 	serviceCIDRv4 := netip.MustParsePrefix("10.96.0.0/12")
 	connDumper := connections.NewConnTrackSystem(nodeConfig, serviceCIDRv4, netip.Prefix{}, false, filter.NewProtocolFilter(nil))
+	poller := connections.NewPoller(connDumper, nil, connections.PollerConfig{
+		PollInterval: testPollInterval,
+		V4Enabled:    true,
+		V6Enabled:    false,
+	})
 
 	ctrl := mock.NewController(b)
 	npQuerier := queriertest.NewMockAgentNetworkPolicyInfoQuerier(ctrl)
 
-	o := &options.FlowExporterOptions{
+	storeCfg := connections.ConnectionStoreConfig{
 		ActiveFlowTimeout:      testActiveFlowTimeout,
 		IdleFlowTimeout:        testIdleFlowTimeout,
 		StaleConnectionTimeout: testStaleConnectionTimeout,
-		PollInterval:           testPollInterval,
 	}
 
 	conntrackConnStore := connections.NewConntrackConnectionStore(
-		connDumper,
-		true,  // v4Enabled
-		false, // v6Enabled
+		nil,
 		npQuerier,
 		podStore,
 		nil,
 		nil,
-		o,
+		storeCfg,
 	)
 
 	for b.Loop() {
-		connsLens, err := conntrackConnStore.Poll()
+		conns, connsLens, err := poller.Poll()
 		require.NoError(b, err, "Poll() should not return error")
 		require.Len(b, connsLens, 1, "Poll() should return slice of length 1")
 		assert.Equal(b, numConnections, connsLens[0], "Poll() should return %d connections", numConnections)
+		require.NoError(b, conntrackConnStore.HandlePayload(broadcaster.Payload{Conns: conns}))
 		assert.Equal(b, numConnections, conntrackConnStore.NumConnections(), "NumConnections() should return %d connections", numConnections)
 		// Delete all connections, so that we only benchmark the performance of adding new connections.
 		assert.Equal(b, numConnections, conntrackConnStore.DeleteAllConnections(), "DeleteAllConnections() should return %d connections", numConnections)

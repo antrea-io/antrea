@@ -15,8 +15,6 @@
 package connections
 
 import (
-	"time"
-
 	"antrea.io/antrea/pkg/agent/flowexporter/connection"
 )
 
@@ -36,5 +34,5 @@ type ConnectionStoreGetter interface {
 
 type DenyConnectionStoreUpdater interface {
 	ConnectionStoreGetter
-	AddOrUpdateConn(conn *connection.Connection, timeSeen time.Time, bytes uint64)
+	AddOrUpdateConn(conn *connection.Connection)
 }

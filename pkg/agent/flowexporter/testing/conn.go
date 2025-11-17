@@ -78,9 +78,14 @@ func GetDenyConnection(isIPv6 bool, protoID uint8) *connection.Connection {
 		dstIP := netip.MustParseAddr("2001:0:3238:dfe1:63::fefc")
 		tuple = connection.Tuple{SourceAddress: srcIP, DestinationAddress: dstIP, Protocol: protoID, SourcePort: 65280, DestinationPort: 255}
 	}
+	now := time.Now()
 	conn := &connection.Connection{
-		FlowKey:       tuple,
-		SourcePodName: "pod",
+		FlowKey:         tuple,
+		SourcePodName:   "pod",
+		IsDenyFlow:      true,
+		StartTime:       now,
+		StopTime:        now,
+		OriginalPackets: 1,
 	}
 	return conn
 }

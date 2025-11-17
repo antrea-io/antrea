@@ -1,0 +1,9 @@
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    app: flow-aggregator-2
+  name: flow-aggregator-2
+spec:
+  selector:
+    app: flow-aggregator-2

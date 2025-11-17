@@ -35,6 +35,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/util/retry"
 
+	crdv1alpha1 "antrea.io/antrea/pkg/apis/crd/v1alpha1"
 	crdv1beta1 "antrea.io/antrea/pkg/apis/crd/v1beta1"
 	"antrea.io/antrea/test/e2e/utils"
 )
@@ -763,6 +764,67 @@ func (data *TestData) CreateOrUpdateNetworkPolicy(netpol *v1net.NetworkPolicy) (
 		log.Debugf("Unable to create network policy: %s", err)
 	}
 	return np, err
+}
+
+func (data *TestData) BuildFlowExporterDestination(name, namespace, faServiceAddr string, protocol crdv1alpha1.FlowExporterProtocol,
+	activeFlowTimeout, idleFlowTimeout int32) *crdv1alpha1.FlowExporterDestination {
+
+	flowAggregatorAddr := faServiceAddr + ":14739"
+	if protocol.IPFIX != nil {
+		flowAggregatorAddr = faServiceAddr + ":4739"
+	}
+
+	target := &crdv1alpha1.FlowExporterDestination{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      name,
+			Namespace: namespace,
+		},
+		Spec: crdv1alpha1.FlowExporterDestinationSpec{
+			Address:  flowAggregatorAddr,
+			Protocol: protocol,
+
+			ActiveFlowExportTimeoutSeconds: activeFlowTimeout,
+			IdleFlowExportTimeoutSeconds:   idleFlowTimeout,
+		},
+	}
+
+	return target
+}
+
+// CreateOrUpdateFlowExporterDestination is a convenience function for updating/creating FlowExporterDestinations.
+func (data *TestData) CreateOrUpdateFlowExporterDestination(res *crdv1alpha1.FlowExporterDestination) (*crdv1alpha1.FlowExporterDestination, error) {
+	log.Infof("Creating/updating FlowExporterDestination %s", res.Name)
+	fetReturned, err := data.CRDClient.CrdV1alpha1().FlowExporterDestinations().Get(context.TODO(), res.Name, metav1.GetOptions{})
+	if err != nil {
+		log.Debugf("Creating FlowExporterDestination %s", res.Name)
+		res, err = data.CRDClient.CrdV1alpha1().FlowExporterDestinations().Create(context.TODO(), res, metav1.CreateOptions{})
+		if err != nil {
+			log.Debugf("Unable to create FlowExporterDestination: %s", err)
+		}
+		return res, err
+	} else if fetReturned.Name != "" {
+		log.Debugf("FlowExporterDestination with name %s already exists, updating", res.Name)
+		fetReturned.Spec = res.Spec
+		res, err = data.CRDClient.CrdV1alpha1().FlowExporterDestinations().Update(context.TODO(), fetReturned, metav1.UpdateOptions{})
+		return res, err
+	}
+	return nil, fmt.Errorf("error occurred in creating/updating FlowExporterDestination %s", res.Name)
+}
+
+// GetFlowExporterDestination is a convenience function for getting FlowExporterDestination.
+func (data *TestData) GetFlowExporterDestination(name string) (*crdv1alpha1.FlowExporterDestination, error) {
+	return data.CRDClient.CrdV1alpha1().FlowExporterDestinations().Get(context.TODO(), name, metav1.GetOptions{})
+}
+
+// DeleteFlowExporterDestination is a convenience function for deleting FET by name.
+func (data *TestData) DeleteFlowExporterDestination(name string) error {
+	log.Infof("Deleting FlowExporterDestination %s", name)
+	return data.CRDClient.CrdV1alpha1().FlowExporterDestinations().Delete(context.TODO(), name, metav1.DeleteOptions{})
+}
+
+// CleanFlowExporterDestinations is a convenience function for deleting all FlowExporterDestinations in the cluster.
+func (data *TestData) CleanFlowExporterDestinations() error {
+	return data.CRDClient.CrdV1alpha1().FlowExporterDestinations().DeleteCollection(context.TODO(), metav1.DeleteOptions{}, metav1.ListOptions{})
 }
 
 // GetNetworkPolicy is a convenience function for getting k8s NetworkPolicies.

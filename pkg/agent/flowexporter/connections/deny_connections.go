@@ -22,7 +22,6 @@ import (
 
 	"antrea.io/antrea/pkg/agent/flowexporter/connection"
 	"antrea.io/antrea/pkg/agent/flowexporter/filter"
-	"antrea.io/antrea/pkg/agent/flowexporter/options"
 	"antrea.io/antrea/pkg/agent/flowexporter/priorityqueue"
 	"antrea.io/antrea/pkg/agent/metrics"
 	"antrea.io/antrea/pkg/agent/openflow"
@@ -41,12 +40,11 @@ func NewDenyConnectionStore(
 	npQuerier querier.AgentNetworkPolicyInfoQuerier,
 	podStore objectstore.PodStore,
 	proxier proxy.ProxyQuerier,
-	o *options.FlowExporterOptions,
-	protocolFilter filter.ProtocolFilter,
+	cfg ConnectionStoreConfig,
 ) *DenyConnectionStore {
 	return &DenyConnectionStore{
-		connectionStore: NewConnectionStore(npQuerier, podStore, proxier, o),
-		protocolFilter:  protocolFilter,
+		connectionStore: NewConnectionStore(npQuerier, podStore, proxier, cfg),
+		protocolFilter:  filter.NewProtocolFilter(cfg.AllowedProtocols),
 	}
 }
 
@@ -57,7 +55,7 @@ func (ds *DenyConnectionStore) RunPeriodicDeletion(stopCh <-chan struct{}) {
 	for {
 		select {
 		case <-stopCh:
-			break
+			return
 		case <-pollTicker.C:
 			deleteIfStaleConn := func(key connection.ConnectionKey, conn *connection.Connection) error {
 				if conn.ReadyToDelete || time.Since(conn.LastExportTime) >= ds.staleConnectionTimeout {
@@ -80,37 +78,33 @@ func (ds *DenyConnectionStore) RunPeriodicDeletion(stopCh <-chan struct{}) {
 
 // AddOrUpdateConn updates the connection if it is already present, i.e., update timestamp, counters etc.,
 // or adds a new connection with the resolved K8s metadata.
-func (ds *DenyConnectionStore) AddOrUpdateConn(conn *connection.Connection, timeSeen time.Time, bytes uint64) {
+func (ds *DenyConnectionStore) AddOrUpdateConn(conn *connection.Connection) {
+	if !ds.protocolFilter.Allow(conn.FlowKey.Protocol) {
+		return
+	}
+
 	connKey := connection.NewConnectionKey(conn)
 	ds.mutex.Lock()
 	defer ds.mutex.Unlock()
 
-	if _, exist := ds.connections[connKey]; exist {
+	if existingConn, exist := ds.connections[connKey]; exist {
 		if conn.ReadyToDelete {
 			return
 		}
-		conn.OriginalBytes += bytes
-		conn.OriginalPackets += 1
-		conn.StopTime = timeSeen
-		conn.IsActive = true
+		existingConn.OriginalBytes += conn.OriginalBytes
+		existingConn.OriginalPackets += conn.OriginalPackets
+		existingConn.StopTime = conn.StopTime
+		existingConn.IsActive = true
 		existingItem, exists := ds.expirePriorityQueue.KeyToItem[connKey]
 		if !exists {
-			ds.expirePriorityQueue.WriteItemToQueue(connKey, conn)
+			ds.expirePriorityQueue.WriteItemToQueue(connKey, existingConn)
 		} else {
 			ds.connectionStore.expirePriorityQueue.Update(existingItem, existingItem.ActiveExpireTime,
 				time.Now().Add(ds.connectionStore.expirePriorityQueue.IdleFlowTimeout))
 		}
-		klog.V(4).InfoS("Deny connection has been updated", "connection", conn)
+		klog.V(4).InfoS("Deny connection has been updated", "connection", existingConn)
 	} else {
-		if !ds.protocolFilter.Allow(conn.FlowKey.Protocol) {
-			return
-		}
-
-		conn.StartTime = timeSeen
-		conn.StopTime = timeSeen
-		conn.LastExportTime = timeSeen
-		conn.OriginalBytes = bytes
-		conn.OriginalPackets = uint64(1)
+		conn.LastExportTime = conn.StopTime
 		ds.fillPodInfo(conn)
 		if conn.SourcePodName == "" && conn.DestinationPodName == "" {
 			// We don't add connections to connection map or expirePriorityQueue if we can't find the pod
