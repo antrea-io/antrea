@@ -56,6 +56,15 @@ linters:
       - linters:
           - staticcheck
         text: "SA1019: (v1|corev1).EndpointSubset is deprecated"
+      - linters:
+          - staticcheck
+        # NewSimpleClientset is marked as deprecated, with the documentation
+        # suggesting NewClientset as a direct replacement. However, NewClientset
+        # is only available when apply configurations are generated (e.g. via
+        # --with-applyconfig), which is not the case for the clientsets
+        # generated for Antrea CRDs.
+        # SA1019
+        text: "NewSimpleClientset is deprecated"
 formatters:
   enable:
     - gofmt
