@@ -64,6 +64,18 @@ FLOWAGGREGATOR_YML_CMD="$THIS_DIR/../../hack/generate-manifest-flow-aggregator.s
 FLOW_VISIBILITY_HELM_VALUES="$THIS_DIR/values-flow-exporter.yml"
 CH_OPERATOR_YML="$THIS_DIR/../../build/yamls/clickhouse-operator-install-bundle.yml"
 FLOW_VISIBILITY_CHART="$THIS_DIR/../../test/e2e/charts/flow-visibility"
+KUSTOMIZATION_DIR="$THIS_DIR/../../test/e2e/kustomize"
+
+if [ -z "$KUSTOMIZE" ]; then
+    KUSTOMIZE=$(
+      source $THIS_DIR/../../hack/verify-kustomize.sh
+      verify_kustomize
+    )
+elif ! $KUSTOMIZE version > /dev/null 2>&1; then
+    echoerr "$KUSTOMIZE does not appear to be a valid kustomize binary"
+    print_help
+    exit 1
+fi
 
 function quit {
   result=$?
@@ -419,23 +431,30 @@ function run_test {
 
   if $flow_visibility; then
       timeout="45m"
-      flow_visibility_args="-run=TestFlowAggregator --flow-visibility"
+      flow_visibility_args="-run=^(TestFlowExporter|TestFlowAggregator) --flow-visibility"
       # This is needed so that the FlowAggregator is already configured to mount the Secrets
       # necessary for (m)TLS testing. The Secret names must match the ones expected by the e2e tests.
-      flow_visibility_manifest_args="--extra-helm-values flowCollector.tls.clientSecretName=ipfix-client-cert,flowCollector.tls.caSecretName=ipfix-server-ca"
+      coverage_flag=""
       if $coverage; then
-          $FLOWAGGREGATOR_YML_CMD --coverage $flow_visibility_manifest_args | docker exec -i kind-control-plane dd of=/root/flow-aggregator-coverage.yml
-      else
-          $FLOWAGGREGATOR_YML_CMD $flow_visibility_manifest_args | docker exec -i kind-control-plane dd of=/root/flow-aggregator.yml
+        coverage_flag="--coverage"
       fi
+      flow_visibility_manifest_default_args=("--extra-helm-values" "flowCollector.tls.clientSecretName=ipfix-client-cert,flowCollector.tls.caSecretName=ipfix-server-ca")
+      $FLOWAGGREGATOR_YML_CMD "${flow_visibility_manifest_default_args[@]}" ${coverage_flag} | docker exec -i kind-control-plane dd of=/root/flow-aggregator.yml
+      $FLOWAGGREGATOR_YML_CMD --extra-helm-values "aggregatorTransportProtocol=tcp" ${coverage_flag} > "$KUSTOMIZATION_DIR"/multi-flow-aggregator/base/manifest.yaml
+      $KUSTOMIZE build "$KUSTOMIZATION_DIR"/multi-flow-aggregator/overlays/flow-aggregator-1 | docker exec -i kind-control-plane dd of=/root/flow-aggregator-1.yml
+      $KUSTOMIZE build "$KUSTOMIZATION_DIR"/multi-flow-aggregator/overlays/flow-aggregator-2 | docker exec -i kind-control-plane dd of=/root/flow-aggregator-2.yml
+      rm "$KUSTOMIZATION_DIR"/multi-flow-aggregator/base/manifest.yaml
+
       $HELM template "$FLOW_VISIBILITY_CHART"  | docker exec -i kind-control-plane dd of=/root/flow-visibility.yml
       $HELM template "$FLOW_VISIBILITY_CHART" --set "secureConnection.enable=true" | docker exec -i kind-control-plane dd of=/root/flow-visibility-tls.yml
 
-      curl -o $CH_OPERATOR_YML https://raw.githubusercontent.com/Altinity/clickhouse-operator/release-0.21.0/deploy/operator/clickhouse-operator-install-bundle.yaml
-      sed -i -e "s|\"image\": \"clickhouse/clickhouse-server:22.3\"|\"image\": \"antrea/clickhouse-server:23.4\"|g" $CH_OPERATOR_YML
-      sed -i -e "s|image: altinity/clickhouse-operator:0.21.0|image: antrea/clickhouse-operator:0.21.0|g" $CH_OPERATOR_YML
-      sed -i -e "s|image: altinity/metrics-exporter:0.21.0|image: antrea/metrics-exporter:0.21.0|g" $CH_OPERATOR_YML
-      cat $CH_OPERATOR_YML | docker exec -i kind-control-plane dd of=/root/clickhouse-operator-install-bundle.yml
+      curl -o "$CH_OPERATOR_YML" https://raw.githubusercontent.com/Altinity/clickhouse-operator/release-0.21.0/deploy/operator/clickhouse-operator-install-bundle.yaml
+      sed -i -e "s|\"image\": \"clickhouse/clickhouse-server:22.3\"|\"image\": \"antrea/clickhouse-server:23.4\"|g" "$CH_OPERATOR_YML"
+      sed -i -e "s|image: altinity/clickhouse-operator:0.21.0|image: antrea/clickhouse-operator:0.21.0|g" "$CH_OPERATOR_YML"
+      sed -i -e "s|image: altinity/metrics-exporter:0.21.0|image: antrea/metrics-exporter:0.21.0|g" "$CH_OPERATOR_YML"
+      cat "$CH_OPERATOR_YML" | docker exec -i kind-control-plane dd of=/root/clickhouse-operator-install-bundle.yml
+
+      printf '%s' "$flow_visibility_protocol" | docker exec -i kind-control-plane dd of=/root/test-flow-visibility-protocol.txt
   fi
 
   if [[ "$kube_proxy_mode" == "none" ]]; then
