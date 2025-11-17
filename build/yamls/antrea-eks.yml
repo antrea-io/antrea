@@ -4497,10 +4497,10 @@ data:
     enablePrometheusMetrics: true
 
     flowExporter:
-      # Enable FlowExporter, a feature used to export polled conntrack connections as
-      # IPFIX flow records from each agent to a configured collector. To enable this
-      # feature, you need to set "enable" to true, and ensure that the FlowExporter
-      # feature gate is also enabled.
+      # Enable a flow exporter destination with the configuration specified here.
+      # This can be disabled which means only `FlowExporterDestination` resources
+      # will be considered for exporting. The FlowExporter FeatureGate determines
+      # whether FlowExporter is enabled.
       enable: false
       # Provide the IPFIX collector address as a string with format <HOST>:[<PORT>][:<PROTO>].
       # HOST can either be the DNS name, IP, or Service name of the Flow Collector. If
@@ -5767,7 +5767,7 @@ spec:
         kubectl.kubernetes.io/default-container: antrea-agent
         # Automatically restart Pods with a RollingUpdate if the ConfigMap changes
         # See https://helm.sh/docs/howto/charts_tips_and_tricks/#automatically-roll-deployments
-        checksum/config: 19cea71ebb0d852621308d71c5ee31a965d1fd7c0bc6a4c04bd09aa7ac2c1687
+        checksum/config: 8210b1e66f6269e7d5a9c85f070a2b1e76459aefa850d7a5066b7b824f00c292
       labels:
         app: antrea
         component: antrea-agent
@@ -6016,7 +6016,7 @@ spec:
       annotations:
         # Automatically restart Pod if the ConfigMap changes
         # See https://helm.sh/docs/howto/charts_tips_and_tricks/#automatically-roll-deployments
-        checksum/config: 19cea71ebb0d852621308d71c5ee31a965d1fd7c0bc6a4c04bd09aa7ac2c1687
+        checksum/config: 8210b1e66f6269e7d5a9c85f070a2b1e76459aefa850d7a5066b7b824f00c292
       labels:
         app: antrea
         component: antrea-controller

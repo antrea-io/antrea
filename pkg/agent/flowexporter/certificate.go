@@ -23,32 +23,32 @@ import (
 )
 
 const (
-	CAConfigMapName       = "flow-aggregator-ca"
-	CAConfigMapKey        = "ca.crt"
-	CAConfigMapNamespace  = "flow-aggregator"
-	ClientSecretNamespace = "flow-aggregator"
+	caConfigMapNamespace  = "flow-aggregator"
+	caConfigMapName       = "flow-aggregator-ca"
+	caAConfigMapKey       = "ca.crt"
+	clientSecretNamespace = "flow-aggregator"
 	// #nosec G101: false positive triggered by variable name which includes "Secret"
-	ClientSecretName = "flow-aggregator-client-tls"
+	clientSecretName = "flow-aggregator-client-tls"
 )
 
-func getCACert(ctx context.Context, k8sClient kubernetes.Interface) ([]byte, error) {
-	caConfigMap, err := k8sClient.CoreV1().ConfigMaps(CAConfigMapNamespace).Get(ctx, CAConfigMapName, metav1.GetOptions{})
+func getCACert(ctx context.Context, k8sClient kubernetes.Interface, namespace, name string) ([]byte, error) {
+	caConfigMap, err := k8sClient.CoreV1().ConfigMaps(namespace).Get(ctx, name, metav1.GetOptions{})
 	if err != nil {
-		return nil, fmt.Errorf("error getting ConfigMap %s: %v", CAConfigMapName, err)
+		return nil, fmt.Errorf("error getting ConfigMap %s: %w", name, err)
 	}
-	if caConfigMap.Data == nil || caConfigMap.Data[CAConfigMapKey] == "" {
-		return nil, fmt.Errorf("no data in %s ConfigMap", CAConfigMapName)
+	if caConfigMap.Data == nil || caConfigMap.Data[caAConfigMapKey] == "" {
+		return nil, fmt.Errorf("no data in %s ConfigMap", name)
 	}
-	return []byte(caConfigMap.Data[CAConfigMapKey]), nil
+	return []byte(caConfigMap.Data[caAConfigMapKey]), nil
 }
 
-func getClientCertKey(ctx context.Context, k8sClient kubernetes.Interface) ([]byte, []byte, error) {
-	clientSecret, err := k8sClient.CoreV1().Secrets(ClientSecretNamespace).Get(ctx, ClientSecretName, metav1.GetOptions{})
+func getClientCertKey(ctx context.Context, k8sClient kubernetes.Interface, namespace, name string) ([]byte, []byte, error) {
+	clientSecret, err := k8sClient.CoreV1().Secrets(namespace).Get(ctx, name, metav1.GetOptions{})
 	if err != nil {
-		return nil, nil, fmt.Errorf("error getting Secret %s: %v", ClientSecretName, err)
+		return nil, nil, fmt.Errorf("error getting Secret %s: %w", name, err)
 	}
 	if clientSecret.Data == nil || clientSecret.Data["tls.crt"] == nil || clientSecret.Data["tls.key"] == nil {
-		return nil, nil, fmt.Errorf("error getting data from Secret %s: %v", ClientSecretName, err)
+		return nil, nil, fmt.Errorf("error getting data from Secret %s: %w", name, err)
 	}
 	return clientSecret.Data["tls.crt"], clientSecret.Data["tls.key"], nil
 }
