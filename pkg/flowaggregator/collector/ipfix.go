@@ -19,6 +19,7 @@ import (
 	"sync"
 
 	ipfixcollector "github.com/vmware/go-ipfix/pkg/collector"
+	"k8s.io/klog/v2"
 
 	flowpb "antrea.io/antrea/pkg/apis/flow/v1alpha1"
 	flowaggregatorconfig "antrea.io/antrea/pkg/config/flowaggregator"
@@ -31,6 +32,10 @@ const (
 )
 
 type ipfixCollector struct {
+	recordCh                    chan *flowpb.Flow
+	aggregatorTransportProtocol flowaggregatorconfig.AggregatorTransportProtocol
+	serverCertProvider          ServerCertProvider
+
 	collectingProcess *ipfixcollector.CollectingProcess
 	preprocessor      *preprocessor
 }
@@ -38,10 +43,19 @@ type ipfixCollector struct {
 func NewIPFIXCollector(
 	recordCh chan *flowpb.Flow,
 	aggregatorTransportProtocol flowaggregatorconfig.AggregatorTransportProtocol,
-	caCert, serverKey, serverCert []byte,
+	serverCertProvider ServerCertProvider,
 ) (*ipfixCollector, error) {
+	return &ipfixCollector{
+		recordCh:                    recordCh,
+		aggregatorTransportProtocol: aggregatorTransportProtocol,
+		serverCertProvider:          serverCertProvider,
+	}, nil
+}
+
+func (c *ipfixCollector) initialize() error {
+	caCert, serverCert, serverKey := c.serverCertProvider.GetServerCertKey()
 	var cpInput ipfixcollector.CollectorInput
-	switch aggregatorTransportProtocol {
+	switch c.aggregatorTransportProtocol {
 	case flowaggregatorconfig.AggregatorTransportProtocolTLS:
 		cpInput = ipfixcollector.CollectorInput{
 			Address:       ipfixCollectorAddress,
@@ -70,28 +84,34 @@ func NewIPFIXCollector(
 			IsEncrypted:   false,
 		}
 	default:
-		return nil, fmt.Errorf("unsupported protocol: %s", aggregatorTransportProtocol)
+		return fmt.Errorf("unsupported protocol: %s", c.aggregatorTransportProtocol)
 	}
 	// Tell the collector to accept IEs which are not part of the IPFIX registry (hardcoded in
 	// the go-ipfix library). The preprocessor will take care of removing these elements.
 	cpInput.DecodingMode = ipfixcollector.DecodingModeLenientKeepUnknown
 	collectingProcess, err := ipfixcollector.InitCollectingProcess(cpInput)
 	if err != nil {
-		return nil, fmt.Errorf("failed to initialize IPFIX collector: %w", err)
+		return fmt.Errorf("failed to initialize IPFIX collector: %w", err)
 	}
 
-	preprocessor, err := newPreprocessor(collectingProcess.GetMsgChan(), recordCh)
+	preprocessor, err := newPreprocessor(collectingProcess.GetMsgChan(), c.recordCh)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create IPFIX preprocessor: %w", err)
+		return fmt.Errorf("failed to create IPFIX preprocessor: %w", err)
 	}
 
-	return &ipfixCollector{
-		collectingProcess: collectingProcess,
-		preprocessor:      preprocessor,
-	}, nil
+	c.collectingProcess = collectingProcess
+	c.preprocessor = preprocessor
+
+	return nil
 }
 
 func (c *ipfixCollector) Run(stopCh <-chan struct{}) {
+	err := c.initialize()
+	if err != nil {
+		klog.ErrorS(err, "unable to initialize ipfix collector")
+		return
+	}
+
 	var wg sync.WaitGroup
 	wg.Add(1)
 	go func() {
@@ -110,9 +130,15 @@ func (c *ipfixCollector) Run(stopCh <-chan struct{}) {
 }
 
 func (c *ipfixCollector) GetNumRecordsReceived() int64 {
+	if c.collectingProcess == nil {
+		return 0
+	}
 	return c.collectingProcess.GetNumRecordsReceived()
 }
 
 func (c *ipfixCollector) GetNumConnsToCollector() int64 {
+	if c.collectingProcess == nil {
+		return 0
+	}
 	return c.collectingProcess.GetNumConnToCollector()
 }

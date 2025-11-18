@@ -23,6 +23,9 @@ metadata:
   name: flow-aggregator-role
   namespace: {{ .Release.Namespace }}
 rules:
+  - apiGroups: ["coordination.k8s.io"]
+    resources: ["leases"]
+    verbs: ["get", "create", "update",]
   # RBAC to create / update / get flow-aggregator-ca ConfigMap
   - apiGroups: [""]
     resources: ["configmaps"]
@@ -39,6 +42,14 @@ rules:
     resources: ["secrets"]
     resourceNames: ["flow-aggregator-client-tls"]
     verbs: ["get", "update"]
+  - apiGroups: [""]
+    resources: ["secrets"]
+    resourceNames: ["flow-aggregator-server-tls"]
+    verbs: ["get", "update"]
+  - apiGroups: [""]
+    resources: ["secrets"]
+    resourceNames: ["flow-aggregator-ca"]
+    verbs: ["get", "list", "watch", "update"]
   # RBAC to get / update flow-aggregator-configmap ConfigMap (required by antctl)
   - apiGroups: [""]
     resources: ["configmaps"]

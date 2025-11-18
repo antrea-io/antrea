@@ -31,10 +31,12 @@ import (
 	"github.com/google/uuid"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/tools/cache"
 	"k8s.io/klog/v2"
 
 	flowpb "antrea.io/antrea/pkg/apis/flow/v1alpha1"
 	flowaggregatorconfig "antrea.io/antrea/pkg/config/flowaggregator"
+	"antrea.io/antrea/pkg/flowaggregator/certificate"
 	"antrea.io/antrea/pkg/flowaggregator/collector"
 	"antrea.io/antrea/pkg/flowaggregator/exporter"
 	"antrea.io/antrea/pkg/flowaggregator/intermediate"
@@ -59,6 +61,10 @@ var (
 	}
 	newLogExporter = func(opt *options.Options) (exporter.Interface, error) {
 		return exporter.NewLogExporter(opt)
+	}
+
+	newCertificateProvider = func(k8sClient kubernetes.Interface, addr string) certificate.Provider {
+		return certificate.NewProvider(k8sClient, addr)
 	}
 )
 
@@ -94,6 +100,8 @@ type flowAggregator struct {
 	logTickerDuration           time.Duration
 	recordCh                    chan *flowpb.Flow
 	exportersMutex              sync.Mutex
+
+	certificateProvider certificate.Provider
 }
 
 func NewFlowAggregator(
@@ -158,11 +166,14 @@ func NewFlowAggregator(
 		APIServer:                   opt.Config.APIServer,
 		logTickerDuration:           time.Minute,
 		// We support buffering a small amount of flow records.
-		recordCh: make(chan *flowpb.Flow, 128),
+		recordCh:            make(chan *flowpb.Flow, 128),
+		certificateProvider: newCertificateProvider(k8sClient, opt.Config.FlowAggregatorAddress),
 	}
+
 	if err := fa.InitCollectors(); err != nil {
 		return nil, fmt.Errorf("error when creating collectors: %w", err)
 	}
+
 	if opt.AggregatorMode == flowaggregatorconfig.AggregatorModeAggregate {
 		if err := fa.InitAggregationProcess(); err != nil {
 			return nil, fmt.Errorf("error when creating aggregation process: %w", err)
@@ -192,16 +203,13 @@ func NewFlowAggregator(
 	if opt.Config.FlowCollector.Enable {
 		fa.ipfixExporter = newIPFIXExporter(clusterUUID, clusterID, opt, registry)
 	}
+
 	klog.InfoS("FlowAggregator initialized", "mode", opt.AggregatorMode, "clusterID", fa.clusterID)
 	return fa, nil
 }
 
 func (fa *flowAggregator) InitCollectors() error {
-	caCert, serverKey, serverCert, err := generateCerts(fa.flowAggregatorAddress, fa.k8sClient)
-	if err != nil {
-		return fmt.Errorf("failed to generate certificates: %w", err)
-	}
-	grpcCollector, err := collector.NewGRPCCollector(fa.recordCh, caCert, serverKey, serverCert)
+	grpcCollector, err := collector.NewGRPCCollector(fa.recordCh, fa.certificateProvider)
 	if err != nil {
 		return fmt.Errorf("failed to create gRPC collector: %w", err)
 	}
@@ -210,9 +218,7 @@ func (fa *flowAggregator) InitCollectors() error {
 		ipfixCollector, err := collector.NewIPFIXCollector(
 			fa.recordCh,
 			fa.aggregatorTransportProtocol,
-			caCert,
-			serverKey,
-			serverCert,
+			fa.certificateProvider,
 		)
 		if err != nil {
 			return fmt.Errorf("failed to create IPFIX collector: %w", err)
@@ -251,6 +257,16 @@ func (fa *flowAggregator) Run(stopCh <-chan struct{}) {
 		}
 		klog.InfoS("Object stores synced")
 	}()
+
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		fa.certificateProvider.Run(stopCh)
+	}()
+
+	if !cache.WaitForCacheSync(stopCh, fa.certificateProvider.HasSynced) {
+		return
+	}
 
 	wg.Add(1)
 	go func() {

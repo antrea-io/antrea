@@ -16,6 +16,8 @@ package flowaggregator
 
 import (
 	"bytes"
+	"crypto/x509"
+	"encoding/pem"
 	"net/netip"
 	"os"
 	"path/filepath"
@@ -41,6 +43,8 @@ import (
 
 	flowpb "antrea.io/antrea/pkg/apis/flow/v1alpha1"
 	flowaggregatorconfig "antrea.io/antrea/pkg/config/flowaggregator"
+	"antrea.io/antrea/pkg/flowaggregator/certificate"
+	certificatetesting "antrea.io/antrea/pkg/flowaggregator/certificate/testing"
 	collectortesting "antrea.io/antrea/pkg/flowaggregator/collector/testing"
 	"antrea.io/antrea/pkg/flowaggregator/exporter"
 	exportertesting "antrea.io/antrea/pkg/flowaggregator/exporter/testing"
@@ -645,6 +649,7 @@ func TestFlowAggregator_Run(t *testing.T) {
 	mockIPFIXExporter, mockClickHouseExporter, mockS3Exporter, mockLogExporter := mockExporters(t, ctrl, nil, nil)
 	mockCollector := collectortesting.NewMockInterface(ctrl)
 	mockAggregationProcess := intermediatetesting.NewMockAggregationProcess(ctrl)
+	mockCertificateProvider := certificatetesting.NewMockProvider(ctrl)
 
 	// create dummy watcher: we will not add any files or directory to it.
 	configWatcher, err := fsnotify.NewWatcher()
@@ -675,8 +680,11 @@ func TestFlowAggregator_Run(t *testing.T) {
 		podStore:                mockPodStore,
 		nodeStore:               mockNodeStore,
 		serviceStore:            mockServiceStore,
+		certificateProvider:     mockCertificateProvider,
 	}
 
+	mockCertificateProvider.EXPECT().Run(gomock.Any())
+	mockCertificateProvider.EXPECT().HasSynced().Return(true)
 	mockCollector.EXPECT().Run(gomock.Any())
 	mockAggregationProcess.EXPECT().Start()
 	mockAggregationProcess.EXPECT().Stop()
@@ -976,10 +984,16 @@ func TestFlowAggregator_InitCollectors(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			mockCertificateProvider := certificatetesting.NewMockProvider(ctrl)
+			caCert, serverCert, serverKey := generateServerCerts(t)
+			mockCertificateProvider.EXPECT().GetServerCertKey().Return(caCert, serverCert, serverKey)
+
 			fa := &flowAggregator{
 				aggregatorTransportProtocol: tt.aggregatorTransportProtocol,
 				flowAggregatorAddress:       tt.flowAggregatorAddress,
 				k8sClient:                   tt.k8sClient,
+				certificateProvider:         mockCertificateProvider,
 			}
 			err := fa.InitCollectors()
 			require.NoError(t, err)
@@ -996,6 +1010,10 @@ func TestFlowAggregator_InitCollectors(t *testing.T) {
 }
 
 func TestFlowAggregator_InitAggregationProcess(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	mockCertificateProvider := certificatetesting.NewMockProvider(ctrl)
+	caCert, serverCert, serverKey := generateServerCerts(t)
+	mockCertificateProvider.EXPECT().GetServerCertKey().Return(caCert, serverCert, serverKey)
 	fa := &flowAggregator{
 		activeFlowRecordTimeout:     testActiveTimeout,
 		inactiveFlowRecordTimeout:   testInactiveTimeout,
@@ -1003,6 +1021,7 @@ func TestFlowAggregator_InitAggregationProcess(t *testing.T) {
 		registry:                    ipfix.NewIPFIXRegistry(),
 		recordCh:                    make(chan *flowpb.Flow),
 		k8sClient:                   fake.NewSimpleClientset(),
+		certificateProvider:         mockCertificateProvider,
 	}
 	require.NoError(t, fa.InitCollectors())
 	require.NoError(t, fa.InitAggregationProcess())
@@ -1121,6 +1140,19 @@ func TestNewFlowAggregator(t *testing.T) {
 			mockPodStore := objectstoretest.NewMockPodStore(ctrl)
 			mockNodeStore := objectstoretest.NewMockNodeStore(ctrl)
 			mockServiceStore := objectstoretest.NewMockServiceStore(ctrl)
+			mockCertificateProvider := certificatetesting.NewMockProvider(ctrl)
+
+			caCert, serverCert, serverKey := generateServerCerts(t)
+			mockCertificateProvider.EXPECT().GetServerCertKey().Return(caCert, serverCert, serverKey)
+
+			oldCertProviderFn := newCertificateProvider
+			newCertificateProvider = func(_ kubernetes.Interface, _ string) certificate.Provider {
+				return mockCertificateProvider
+			}
+			t.Cleanup(func() {
+				newCertificateProvider = oldCertProviderFn
+			})
+
 			clusterUUID := uuid.New()
 			clusterID := tc.config.ClusterID
 			if clusterID == "" {
@@ -1139,4 +1171,24 @@ func TestNewFlowAggregator(t *testing.T) {
 			assert.Equal(t, clusterID, fa.clusterID)
 		})
 	}
+}
+
+func generateServerCerts(t *testing.T) ([]byte, []byte, []byte) {
+	validFrom := time.Now().Add(-time.Hour)
+	caCertPEM, caKeyPEM, err := certificate.GenerateCACertKey(validFrom)
+	require.NoError(t, err)
+
+	caCertBlock, _ := pem.Decode(caCertPEM)
+	caKeyBlock, _ := pem.Decode(caKeyPEM)
+
+	caCert, err := x509.ParseCertificate(caCertBlock.Bytes)
+	require.NoError(t, err)
+
+	caKey, err := x509.ParsePKCS1PrivateKey(caKeyBlock.Bytes)
+	require.NoError(t, err)
+
+	serverCertPEM, serverKeyPEM, err := certificate.GenerateCertKey(caCert, caKey, validFrom, true, "myaddr")
+	require.NoError(t, err)
+
+	return caCertPEM, serverCertPEM, serverKeyPEM
 }

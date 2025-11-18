@@ -91,6 +91,7 @@ MOCKGEN_TARGETS=(
   "pkg/antctl AntctlClient ."
   "pkg/controller/networkpolicy EndpointQuerier,PolicyRuleQuerier testing"
   "pkg/controller/querier ControllerQuerier testing"
+  "pkg/flowaggregator/certificate Provider testing"
   "pkg/flowaggregator/collector Interface testing"
   "pkg/flowaggregator/exporter Interface testing"
   "pkg/ipfix IPFIXExportingProcess,IPFIXBufferedExporter,IPFIXRegistry testing"

@@ -19,3 +19,7 @@ type Interface interface {
 	GetNumRecordsReceived() int64
 	GetNumConnsToCollector() int64
 }
+
+type ServerCertProvider interface {
+	GetServerCertKey() (caCertPEM []byte, serverCertPEM []byte, serverKeyPEM []byte)
+}
