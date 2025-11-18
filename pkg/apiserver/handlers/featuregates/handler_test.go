@@ -66,7 +66,7 @@ func Test_getGatesResponse(t *testing.T) {
 				{Component: "agent", Name: "ExternalNode", Status: "Disabled", Version: "ALPHA"},
 				{Component: "agent", Name: "FlowExporter", Status: "Disabled", Version: "ALPHA"},
 				{Component: "agent", Name: "IPsecCertAuth", Status: "Disabled", Version: "ALPHA"},
-				{Component: "agent", Name: "L7FlowExporter", Status: "Disabled", Version: "ALPHA"},
+				{Component: "agent", Name: "L7FlowExporter", Status: "Disabled", Version: "DEPRECATED"},
 				{Component: "agent", Name: "L7NetworkPolicy", Status: "Disabled", Version: "ALPHA"},
 				{Component: "agent", Name: "LoadBalancerModeDSR", Status: "Disabled", Version: "ALPHA"},
 				{Component: "agent", Name: "Multicast", Status: multicastStatus, Version: "BETA"},
