@@ -47,7 +47,7 @@ WINDOWS_NETWORKPOLICY_FOCUS="\[Feature:NetworkPolicy\]"
 WINDOWS_NETWORKPOLICY_SKIP="SCTP"
 WINDOWS_NETWORKPOLICY_CONTAINERD_SKIP="\[sig-storage\]|SCTP"
 CONFORMANCE_SKIP="\[Slow\]|\[Serial\]|\[Disruptive\]|\[Flaky\]|\[Feature:.+\]|\[sig-cli\]|\[sig-storage\]|\[sig-auth\]|\[sig-api-machinery\]|\[sig-apps\]|\[sig-node\]"
-NETWORKPOLICY_SKIP="NetworkPolicyLegacy|should allow egress access to server in CIDR block|should enforce except clause while egress access to server in CIDR block"
+NETWORKPOLICY_SKIP="NetworkPolicyLegacy"
 
 CONTROL_PLANE_NODE_ROLE="master|control-plane"
 
