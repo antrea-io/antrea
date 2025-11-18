@@ -39,9 +39,12 @@ var (
 )
 
 type Controller struct {
+	client          clientset.Interface
 	ovsBridgeClient ovsconfig.OVSBridgeClient
 	secNetConfig    *agentconfig.SecondaryNetworkConfig
 	podController   *podwatch.PodController
+
+	nodeConfig *config.NodeConfig
 }
 
 func NewController(
@@ -78,7 +81,8 @@ func NewController(
 	return &Controller{
 		ovsBridgeClient: ovsBridgeClient,
 		secNetConfig:    secNetConfig,
-		podController:   podWatchController}, nil
+		podController:   podWatchController,
+		nodeConfig:      nodeConfig}, nil
 }
 
 // Run starts the Pod controller for secondary networks.

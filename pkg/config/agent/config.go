@@ -428,6 +428,7 @@ type OVSBridgeConfig struct {
 	BridgeName string `yaml:"bridgeName"`
 	// Names of physical interfaces to be connected to the bridge.
 	PhysicalInterfaces []string `yaml:"physicalInterfaces,omitempty"`
+	NodePools          []string `yaml:"nodePools,omitempty"`
 	// Enable multicast snooping on the bridge, allowing the bridge to learn about multicast group memberships and
 	// forward multicast traffic only to ports that have interested receivers. When disabled, multicast traffic is
 	// flooded to all ports in the bridge.
