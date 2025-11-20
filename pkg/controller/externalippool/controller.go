@@ -424,3 +424,25 @@ func (c *ExternalIPPoolController) deleteExternalIPPool(obj interface{}) {
 		h(pool.Name)
 	}
 }
+
+// AllocatedIPs checks if any IP from the specified range (CIDR or start-end) in a given pool is currently allocated.
+// Returns true if IPs are in use; false otherwise.
+func (c *ExternalIPPoolController) AllocatedIPs(iPPoolName string, deletedIPRanges sets.Set[string]) bool {
+	c.ipAllocatorMutex.RLock()
+	defer c.ipAllocatorMutex.RUnlock()
+	// Check if the pool exists.
+	allocator, exists := c.getIPAllocator(iPPoolName)
+	if !exists {
+		return true
+	}
+
+	for _, ipRange := range allocator {
+		name := ipRange.Name() // IP range string (e.g., "10.10.0.0/24" or "192.168.1.10-192.168.1.20")
+		if deletedIPRanges.Has(name) {
+			if ipRange.Used() > 0 {
+				return true
+			}
+		}
+	}
+	return false
+}
