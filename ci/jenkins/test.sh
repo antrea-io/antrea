@@ -942,9 +942,6 @@ function redeploy_k8s_if_ip_mode_changes() {
         POD_SUBNET_STRING="${POD_SUBNET_IPV4},${POD_SUBNET_IPV6}"
         SERVICE_SUBNET_STRING="${SERVICE_SUBNET_IPV4},${SERVICE_SUBNET_IPV6}"
         ADVERTISE_ADDRESS_STRING=${CONTROL_PLANE_IPV4}
-        if [[ ${K8S_VERSION} =~ 1.19. ]] || [[ ${K8S_VERSION} =~ 1.20. ]]; then
-          FEATURE_GATES_STRING=`echo -e "featureGates:\n  IPv6DualStack: true"`
-        fi
         APISERVER_IP_STRING=${ADVERTISE_ADDRESS_STRING}
     fi
     cat <<EOF | tee ${WORKDIR}/kubeadm.conf

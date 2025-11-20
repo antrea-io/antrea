@@ -267,17 +267,10 @@ func TestGetNormalizedLabel(t *testing.T) {
 			"ns:kubernetes.io/metadata.name=test-ns&pod:purpose=test",
 		},
 		{
-			"no Namespace default name label",
-			"test-ns",
-			map[string]string{"purpose": "test"},
-			map[string]string{"region": "west"},
-			"ns:kubernetes.io/metadata.name=test-ns,region=west&pod:purpose=test",
-		},
-		{
 			"no Pod label",
 			"test-ns",
 			map[string]string{},
-			map[string]string{"region": "west"},
+			map[string]string{v1.LabelMetadataName: "test-ns", "region": "west"},
 			"ns:kubernetes.io/metadata.name=test-ns,region=west&pod:",
 		},
 	}

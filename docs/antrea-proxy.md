@@ -102,9 +102,7 @@ To remove kube-proxy from an existing cluster, you can use the following steps:
 # Delete the kube-proxy DaemonSet
 kubectl -n kube-system delete ds/kube-proxy
 # Delete the kube-proxy ConfigMap to prevent kube-proxy from being re-deployed
-# by kubeadm during "upgrade apply". This workaround will not take effect for
-# kubeadm versions older than v1.19 as the following patch is required:
-# https://github.com/kubernetes/kubernetes/pull/89593
+# by kubeadm during "upgrade apply".
 kubectl -n kube-system delete cm/kube-proxy
 # Delete existing kube-proxy rules; there are several options for doing that
 # Option 1 (if using kube-proxy in iptables mode), run the following on each Node:

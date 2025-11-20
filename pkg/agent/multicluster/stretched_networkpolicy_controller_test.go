@@ -121,7 +121,8 @@ func TestEnqueueAllPods(t *testing.T) {
 		ObjectMeta: metav1.ObjectMeta{
 			Name: "ns",
 			Labels: map[string]string{
-				"env": "test",
+				"kubernetes.io/metadata.name": "ns",
+				"env":                         "test",
 			},
 		},
 	}
@@ -188,7 +189,8 @@ func TestStretchedNetworkPolicyControllerPodEvent(t *testing.T) {
 		ObjectMeta: metav1.ObjectMeta{
 			Name: "ns",
 			Labels: map[string]string{
-				"env": "test",
+				"kubernetes.io/metadata.name": "ns",
+				"env":                         "test",
 			},
 		},
 	}
@@ -304,7 +306,8 @@ func TestStretchedNetworkPolicyControllerNSEvent(t *testing.T) {
 		ObjectMeta: metav1.ObjectMeta{
 			Name: "ns",
 			Labels: map[string]string{
-				"env": "test",
+				"kubernetes.io/metadata.name": "ns",
+				"env":                         "test",
 			},
 		},
 	}
@@ -456,7 +459,8 @@ func TestStretchedNetworkPolicyControllerLabelIdentityEvent(t *testing.T) {
 		ObjectMeta: metav1.ObjectMeta{
 			Name: "ns",
 			Labels: map[string]string{
-				"env": "test",
+				"kubernetes.io/metadata.name": "ns",
+				"env":                         "test",
 			},
 		},
 	}

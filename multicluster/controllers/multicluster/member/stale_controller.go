@@ -318,11 +318,6 @@ func (c *StaleResCleanupController) cleanUpLabelIdentityResourceExports(ctx cont
 	}
 	nsLabelMap := map[string]string{}
 	for _, ns := range nsList.Items {
-		if _, ok := ns.Labels[corev1.LabelMetadataName]; !ok {
-			// NamespaceDefaultLabelName is supported from K8s v1.21. For K8s versions before v1.21,
-			// we append the Namespace name label to the Namespace label set.
-			ns.Labels[corev1.LabelMetadataName] = ns.Name
-		}
 		nsLabelMap[ns.Name] = "ns:" + labels.FormatLabels(ns.Labels)
 	}
 	for _, p := range podList.Items {

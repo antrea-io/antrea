@@ -303,7 +303,8 @@ func TestStaleController_CleanUpResourceExports(t *testing.T) {
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "test-ns",
 					Labels: map[string]string{
-						"purpose": "test",
+						"kubernetes.io/metadata.name": "test-ns",
+						"purpose":                     "test",
 					},
 				},
 			},
@@ -448,7 +449,7 @@ func TestStaleController_CleanUpResourceExports(t *testing.T) {
 			resExpLen := len(resExpList.Items)
 			if err == nil {
 				if resExpLen != 4 {
-					t.Errorf("Should only FOUR valid ResourceExports left but got %v", resExpLen)
+					t.Errorf("Should only have FOUR valid ResourceExports left but got %v", resExpLen)
 				}
 			} else {
 				t.Errorf("Should list ResourceExport successfully but got err = %v", err)
