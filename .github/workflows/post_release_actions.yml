@@ -49,7 +49,7 @@ jobs:
     needs: check-version
     if: ${{ needs.check-version.outputs.version != '' }}
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
         with:
           fetch-depth: 0
           ref: main
@@ -87,7 +87,7 @@ jobs:
     needs: check-version
     if: ${{ needs.check-version.outputs.version != '' }}
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
         with:
           fetch-depth: 0
           ref: main
@@ -158,7 +158,7 @@ jobs:
     needs: get-latest-monitored-versions
     if: ${{ needs.get-latest-monitored-versions.outputs.versions != '' }}
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
         with:
           fetch-depth: 0
           ref: main
