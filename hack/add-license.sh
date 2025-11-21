@@ -19,15 +19,6 @@ set -eo pipefail
 # if Go environment variable is set, use it as it is, otherwise default to "go"
 : "${GO:=go}"
 
-GO_VERSION="$(${GO} version | awk '{print $3}')"
-function version_lt() { test "$(printf '%s\n' "$@" | sort -rV | head -n 1)" != "$1"; }
-
-if version_lt "${GO_VERSION}" "go1.16"; then
-    # See https://golang.org/doc/go-get-install-deprecation
-    echo "Running this script requires Go >= 1.16, please upgrade"
-    exit 1
-fi
-
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)"
 cd "${ROOT}"
 

@@ -23,15 +23,6 @@ set -o pipefail
 
 TOOL_VERSION=$(head hack/mdtoc-version)
 
-GO_VERSION="$(${GO} version | awk '{print $3}')"
-function version_lt() { test "$(printf '%s\n' "$@" | sort -rV | head -n 1)" != "$1"; }
-
-if version_lt "${GO_VERSION}" "go1.16"; then
-    # See https://golang.org/doc/go-get-install-deprecation
-    echo "Running this script requires Go >= 1.16, please upgrade"
-    exit 1
-fi
-
 # cd to the root path
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)"
 cd "${ROOT}"
