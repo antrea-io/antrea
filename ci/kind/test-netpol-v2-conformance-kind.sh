@@ -141,8 +141,8 @@ function run_test {
   export KUBE_CONTAINER_RUNTIME_ENDPOINT=unix:///run/containerd/containerd.sock
   export KUBE_CONTAINER_RUNTIME_NAME=containerd
 
-  # TODO: use https://github.com/kubernetes-sigs/network-policy-api when conformance test config timeout and go dependency is fixed
-  git clone https://github.com/Dyanngg/network-policy-api.git
+  # Clone the network-policy-api repo at the specified tag version
+  git clone --branch "$api_version" --depth 1 https://github.com/kubernetes-sigs/network-policy-api.git
   pushd network-policy-api/conformance
   go mod download
   go test -v --debug=true -timeout=15m
