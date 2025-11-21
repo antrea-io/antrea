@@ -250,13 +250,38 @@ func (monitor *controllerMonitor) deleteStaleAgentCRDs() {
 }
 
 func (monitor *controllerMonitor) enqueueNode(obj interface{}) {
-	node := obj.(*corev1.Node)
+	node, isNode := obj.(*corev1.Node)
+	if !isNode {
+		deletedState, ok := obj.(cache.DeletedFinalStateUnknown)
+		if !ok {
+			klog.Errorf("Received unexpected object: %v", obj)
+			return
+		}
+		node, ok = deletedState.Obj.(*corev1.Node)
+		if !ok {
+			klog.Errorf("DeletedFinalStateUnknown contains non-Node object: %v", deletedState.Obj)
+			return
+		}
+	}
+
 	key, _ := keyFunc(node)
 	monitor.nodeQueue.Add(key)
 }
 
 func (monitor *controllerMonitor) enqueueExternalNode(obj interface{}) {
-	en := obj.(*v1alpha1.ExternalNode)
+	en, isExternalNode := obj.(*v1alpha1.ExternalNode)
+	if !isExternalNode {
+		deletedState, ok := obj.(cache.DeletedFinalStateUnknown)
+		if !ok {
+			klog.Errorf("Received unexpected object: %v", obj)
+			return
+		}
+		en, ok = deletedState.Obj.(*v1alpha1.ExternalNode)
+		if !ok {
+			klog.Errorf("DeletedFinalStateUnknown contains non-ExternalNode object: %v", deletedState.Obj)
+			return
+		}
+	}
 	key, _ := keyFunc(en)
 	monitor.externalNodeQueue.Add(key)
 }
