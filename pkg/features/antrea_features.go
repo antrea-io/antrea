@@ -181,6 +181,12 @@ const (
 	// Allow users to initiate BGP process on selected Kubernetes Nodes and advertise Service IPs, Pod IPs and Egress
 	// IPs to remote BGP peers.
 	BGPPolicy featuregate.Feature = "BGPPolicy"
+
+	// alpha: v2.5
+	// Use nftables instead of iptables to enforce netfilter rules in the Node's host network for the functionalities and
+	// features that rely on netfilter. Currently, nftables is supported by the following features:
+	// - AntreaProxy (proxyAll)
+	NFTablesHostNetworkMode featuregate.Feature = "NFTablesHostNetworkMode"
 )
 
 var (
@@ -207,6 +213,7 @@ var (
 		PacketCapture:               {Default: false, PreRelease: featuregate.Alpha},
 		AntreaIPAM:                  {Default: false, PreRelease: featuregate.Alpha},
 		FlowExporter:                {Default: false, PreRelease: featuregate.Alpha},
+		NFTablesHostNetworkMode:     {Default: false, PreRelease: featuregate.Alpha},
 		NetworkPolicyStats:          {Default: true, PreRelease: featuregate.Beta},
 		NodePortLocal:               {Default: true, PreRelease: featuregate.GA},
 		NodeIPAM:                    {Default: true, PreRelease: featuregate.Beta},
@@ -246,6 +253,7 @@ var (
 		Multicast,
 		Multicluster,
 		NetworkPolicyStats,
+		NFTablesHostNetworkMode,
 		NodePortLocal,
 		SecondaryNetwork,
 		ServiceExternalIP,
@@ -313,6 +321,7 @@ var (
 		L7FlowExporter:              {},
 		NodeLatencyMonitor:          {},
 		PacketCapture:               {},
+		NFTablesHostNetworkMode:     {},
 	}
 	// supportedFeaturesOnExternalNode records the features supported on an external
 	// Node. Antrea Agent checks the enabled features if it is running on an

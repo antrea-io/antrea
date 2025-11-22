@@ -522,6 +522,9 @@ func (o *Options) setK8sNodeDefaultOptions() {
 	if o.config.HostNetworkAcceleration.Enable == nil {
 		o.config.HostNetworkAcceleration.Enable = ptr.To(true)
 	}
+	if o.config.HostNetworkMode == "" {
+		o.config.HostNetworkMode = config.HostNetworkModeIPTables.String()
+	}
 }
 
 func (o *Options) validateEgressConfig(encapMode config.TrafficEncapModeType) error {
@@ -662,6 +665,10 @@ func (o *Options) validateK8sNodeOptions() error {
 	// after all fields in the Options struct have been initialized (e.g., enableProxy).
 	if err := o.validateConfigForPlatform(); err != nil {
 		return err
+	}
+
+	if err := o.validateHostNetworkModeOptions(); err != nil {
+		return fmt.Errorf("failed to validate host network mode options: %w", err)
 	}
 
 	return nil
@@ -811,6 +818,19 @@ func (o *Options) validateNodePortLocalConfig() error {
 		}
 		o.nplStartPort = startPort
 		o.nplEndPort = endPort
+	}
+	return nil
+}
+
+func (o *Options) validateHostNetworkModeOptions() error {
+	ok, networkMode := config.GetHostNetworkModeFromStr(o.config.HostNetworkMode)
+	if !ok {
+		return fmt.Errorf("HostNetworkMode %q is unknown", o.config.HostNetworkMode)
+	}
+	if networkMode == config.HostNetworkModeNFTables {
+		if !features.DefaultFeatureGate.Enabled(features.NFTablesHostNetworkMode) {
+			return fmt.Errorf("HostNetworkMode nftables requires feature gate `NFTablesHostNetworkMode` to be enabled")
+		}
 	}
 	return nil
 }

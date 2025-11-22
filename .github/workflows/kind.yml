@@ -468,7 +468,7 @@ jobs:
         retention-days: 30
 
   test-e2e-hybrid-non-default:
-    name: E2e tests on a Kind cluster on Linux (hybrid) with non default values (proxyAll=true)
+    name: E2e tests on a Kind cluster on Linux (hybrid) with non default values (proxyAll=true, kube-proxy-mode=nftables)
     needs: [ build-antrea-coverage-image ]
     runs-on: [ ubuntu-latest ]
     steps:
@@ -504,6 +504,9 @@ jobs:
             --encap-mode hybrid \
             --coverage \
             --proxy-all \
+            --host-network-mode nftables \
+            --kube-proxy-mode nftables \
+            --feature-gates NFTablesHostNetworkMode=true \
             --skip mode-irrelevant
       - name: Tar coverage files
         run: tar -czf test-e2e-hybrid-non-default-coverage.tar.gz test-e2e-hybrid-non-default-coverage
