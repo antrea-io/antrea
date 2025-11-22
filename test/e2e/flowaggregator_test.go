@@ -20,6 +20,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net"
+	"net/http"
 	"slices"
 	"strconv"
 	"strings"
@@ -291,6 +292,23 @@ func TestFlowAggregatorSecureConnection(t *testing.T) {
 	}
 }
 
+func TestNew(t *testing.T) {
+	skipIfNotFlowVisibilityTest(t)
+	skipIfHasWindowsNodes(t)
+
+	var err error
+	data, _, _ := setupFlowAggregatorTest(t, flowVisibilityTestOptions{
+		databaseURL: defaultCHDatabaseURL,
+	})
+
+	k8sUtils, err = NewKubernetesUtils(data)
+	if err != nil {
+		t.Fatalf("Error when creating Kubernetes utils client: %v", err)
+	}
+
+	t.Run("testExternalToPodFlows", func(t *testing.T) { testExternalToPodFlows(t, data, false) }) //todo properly wire up v6 or v4
+}
+
 func TestFlowAggregator(t *testing.T) {
 	skipIfNotFlowVisibilityTest(t)
 	skipIfHasWindowsNodes(t)
@@ -318,6 +336,7 @@ func TestFlowAggregator(t *testing.T) {
 		t.Run("L7FlowExporterController_IPv4", func(t *testing.T) {
 			testL7FlowExporterController(t, data, false)
 		})
+		t.Run("testExternalToPodFlows", func(t *testing.T) { testExternalToPodFlows(t, data, false) })
 	}
 
 	if v6Enabled {
@@ -326,7 +345,6 @@ func TestFlowAggregator(t *testing.T) {
 			testL7FlowExporterController(t, data, true)
 		})
 	}
-
 }
 
 func TestFlowAggregatorProxyMode(t *testing.T) {
@@ -1944,6 +1962,112 @@ func getAndCheckFlowAggregatorMetrics(t *testing.T, data *TestData, withClickHou
 	return nil
 }
 
+// Create a connection to the given service via the given nodeIndex's IP and return the source IP and source Port.
+// If the connection fails, retry 2 more times with a 1 second wait in between.
+func createExternalToPodConnection(t *testing.T, service *corev1.Service, nodeIndex int) (string, string) {
+	var sourceIP string
+	var sourcePort string
+	url := fmt.Sprintf("http://%s:%d", clusterInfo.nodes[nodeIndex].ipv4Addr, service.Spec.Ports[0].NodePort)
+	transport := &http.Transport{
+		DialContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
+			conn, err := net.DialTimeout(network, addr, 10*time.Second)
+			if err != nil {
+				return nil, err
+			}
+			localAddr := conn.LocalAddr().(*net.TCPAddr)
+			sourceIP = localAddr.IP.String()
+			sourcePort = strconv.Itoa(localAddr.Port)
+
+			return conn, nil
+		},
+	}
+	client := &http.Client{
+		Transport: transport,
+	}
+	maxAttempts := 3
+	for i := range maxAttempts {
+		resp, err := client.Get(url)
+		if err == nil {
+			defer resp.Body.Close()
+			break
+		}
+		if i+1 != maxAttempts {
+			time.Sleep(time.Second)
+		} else {
+			t.Fatalf("Failed to reach pod: %v", err)
+		}
+	}
+	return sourceIP, sourcePort
+}
+
+func testExternalToPodFlows(t *testing.T, data *TestData, isIPv6 bool) {
+	skipIfFeatureDisabled(t, features.L7FlowExporter, true, false)
+	nodeName := nodeName(1)
+	nginxPodName, nginxIP, cleanupFunc := createAndWaitForPod(t, data, data.createNginxPodOnNode, "external-to-pod-flows", nodeName, data.testNamespace, false)
+	defer cleanupFunc()
+
+	nodePortService := "node-port-service"
+	service, err := data.CreateServiceWithAnnotations(nodePortService, data.testNamespace, 80, 80, corev1.ProtocolTCP, map[string]string{"app": "nginx"}, false, false, corev1.ServiceTypeNodePort, nil, nil)
+	if err != nil {
+		t.Fatalf("Failed to create service %s", nodePortService)
+	}
+
+	tc := []struct {
+		node int
+	}{
+		{node: 0}, {node: 1},
+	}
+	for _, tc := range tc {
+		t.Run(fmt.Sprintf("Testing on node %v", tc.node), func(t *testing.T) {
+			sourceIP, _ := createExternalToPodConnection(t, service, tc.node)
+			fmt.Println("Waiting for ipfix to process templates")
+			time.Sleep(time.Minute)
+			sourceIP, _ = createExternalToPodConnection(t, service, tc.node)
+
+			testFlow1 := testFlow{
+				dstPodName: nginxPodName,
+			}
+			if !isIPv6 {
+				testFlow1.srcIP = sourceIP
+				testFlow1.dstIP = nginxIP.IPv4.String()
+			} else {
+				testFlow1.srcIP = sourceIP
+				testFlow1.dstIP = nginxIP.IPv6.String()
+			}
+			records := getCollectorOutput(t, testFlow1.srcIP, testFlow1.dstIP, "", false, false, isIPv6, data, "", getCollectorOutputDefaultTimeout)
+			//records := getCollectorOutput(t, testFlow1.srcIP, testFlow1.dstIP, sourcePort, false, false, isIPv6, data, "", getCollectorOutputDefaultTimeout)
+			assert.NotEmpty(t, records, "Expected flows from ipfix collector to include source IP %s and destination ip %s", testFlow1.srcIP, testFlow1.dstIP)
+			for _, record := range records {
+				assert := assert.New(t)
+				assert.Contains(record, testFlow1.dstPodName, "Aggregated Record does not have Source Pod name: %s", testFlow1.srcPodName)
+				//assert.Contains(record, fmt.Sprintf("sourcePodNamespace: %s", data.testNamespace), "Record does not have correct sourcePodNamespace: %s", data.testNamespace)
+				//assert.Contains(record, fmt.Sprintf("sourceNodeName: %s", nodeName), "Record does not have correct sourceNodeName: %s", nodeName)
+				//assert.Contains(record, "\"flowexportertest\":\"l7\"", "Record does not have correct label for source Pod")
+
+				//checkL7FlowExporterData(t, record, "http")
+			}
+			flushFlowsFromCollector(t, data, isIPv6)
+		})
+	}
+}
+
+func flushFlowsFromCollector(t *testing.T, data *TestData, isIPv6 bool) {
+	var cmd string
+	ipfixCollectorIP, err := testData.podWaitForIPs(defaultTimeout, "ipfix-collector", testData.testNamespace)
+	if err != nil || len(ipfixCollectorIP.IPStrings) == 0 {
+		require.NoErrorf(t, err, "Should be able to get IP from IPFIX collector Pod")
+	}
+	if !isIPv6 {
+		cmd = fmt.Sprintf("curl http://%s:8080/reset", ipfixCollectorIP.IPv4.String())
+	} else {
+		cmd = fmt.Sprintf("curl http://[%s]:8080/reset", ipfixCollectorIP.IPv6.String())
+	}
+	_, _, _, err = data.RunCommandOnNode(controlPlaneNodeName(), cmd)
+	if err != nil {
+		require.NoErrorf(t, err, "failed to reach the ipfix collector's '/reset' endpoint to flush it's cache of flows")
+	}
+}
+
 func testL7FlowExporterController(t *testing.T, data *TestData, isIPv6 bool) {
 	skipIfFeatureDisabled(t, features.L7FlowExporter, true, false)
 	nodeName := nodeName(1)
@@ -1995,7 +2119,6 @@ func testL7FlowExporterController(t *testing.T, data *TestData, isIPv6 bool) {
 
 		checkL7FlowExporterDataClickHouse(t, record, "http")
 	}
-
 }
 
 type ClickHouseFullRow struct {

@@ -137,24 +137,10 @@ func (cs *ConntrackConnectionStore) Poll() ([]int, error) {
 		l7EventMap = cs.l7EventMapGetter.ConsumeL7EventMap()
 	}
 
-	var zones []uint16
 	var connsLens []int
-	if cs.v4Enabled {
-		if cs.connectUplinkToBridge {
-			zones = append(zones, uint16(openflow.IPCtZoneTypeRegMark.GetValue()<<12))
-		} else {
-			zones = append(zones, openflow.CtZone)
-		}
-	}
-	if cs.v6Enabled {
-		if cs.connectUplinkToBridge {
-			zones = append(zones, uint16(openflow.IPv6CtZoneTypeRegMark.GetValue()<<12))
-		} else {
-			zones = append(zones, openflow.CtZoneV6)
-		}
-	}
 	var totalConns int
 	var filteredConnsList []*connection.Connection
+	zones := cs.getZones()
 	for _, zone := range zones {
 		filteredConnsListPerZone, totalConnsPerZone, err := cs.connDumper.DumpFlows(zone)
 		if err != nil {
@@ -253,15 +239,10 @@ func (cs *ConntrackConnectionStore) AddOrUpdateConn(conn *connection.Connection)
 					time.Now().Add(cs.connectionStore.expirePriorityQueue.IdleFlowTimeout))
 			}
 		}
-		klog.V(4).InfoS("Antrea flow updated", "connection", existingConn)
+		klog.InfoS("Antrea flow updated", "connection", existingConn)
 	} else {
+		klog.InfoS("addorupdateconn received - conn is new", "conn", conn)
 		cs.fillPodInfo(conn)
-		if conn.SourcePodName == "" && conn.DestinationPodName == "" {
-			// We don't add connections to connection map or expirePriorityQueue if we can't find the pod
-			// information for both srcPod and dstPod
-			klog.V(5).InfoS("Skip this connection as we cannot map any of the connection IPs to a local Pod", "srcIP", conn.FlowKey.SourceAddress.String(), "dstIP", conn.FlowKey.DestinationAddress.String())
-			return
-		}
 		if conn.Mark&openflow.ServiceCTMark.GetRange().ToNXRange().ToUint32Mask() == openflow.ServiceCTMark.GetValue() {
 			clusterIP := conn.OriginalDestinationAddress.String()
 			svcPort := conn.OriginalDestinationPort
@@ -364,4 +345,24 @@ func (cs *ConntrackConnectionStore) fillL7EventInfo(l7EventMap map[connection.Tu
 			}
 		}
 	}
+}
+
+func (cs *ConntrackConnectionStore) getZones() []uint16 {
+	var zones []uint16
+	zones = append(zones, 0)
+	if cs.v4Enabled {
+		if cs.connectUplinkToBridge {
+			zones = append(zones, uint16(openflow.IPCtZoneTypeRegMark.GetValue()<<12))
+		} else {
+			zones = append(zones, openflow.CtZone)
+		}
+	}
+	if cs.v6Enabled {
+		if cs.connectUplinkToBridge {
+			zones = append(zones, uint16(openflow.IPv6CtZoneTypeRegMark.GetValue()<<12))
+		} else {
+			zones = append(zones, openflow.CtZoneV6)
+		}
+	}
+	return zones
 }
