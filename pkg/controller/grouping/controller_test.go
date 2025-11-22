@@ -175,3 +175,61 @@ func TestPodIPsIndexFunc(t *testing.T) {
 		})
 	}
 }
+
+func TestNodeIPsIndexFunc(t *testing.T) {
+	type args struct {
+		obj interface{}
+	}
+	tests := []struct {
+		name    string
+		args    args
+		want    []string
+		wantErr bool
+	}{
+		{
+			name:    "invalid input",
+			args:    args{obj: &struct{}{}},
+			want:    nil,
+			wantErr: true,
+		},
+		{
+			name:    "nil IPs",
+			args:    args{obj: &v1.Node{}},
+			want:    nil,
+			wantErr: false,
+		},
+		{
+			name:    "zero IPs",
+			args:    args{obj: &v1.Node{Status: v1.NodeStatus{Addresses: []v1.NodeAddress{}}}},
+			want:    nil,
+			wantErr: false,
+		},
+		{
+			name: "Node with IPs",
+			args: args{obj: &v1.Node{Status: v1.NodeStatus{Addresses: []v1.NodeAddress{
+				{
+					Type:    v1.NodeExternalIP,
+					Address: "1.2.3.4",
+				},
+				{
+					Type:    v1.NodeExternalIP,
+					Address: "aaaa::bbbb",
+				},
+			}}}},
+			want:    []string{"1.2.3.4", "aaaa::bbbb"},
+			wantErr: false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := NodeIPsIndexFunc(tt.args.obj)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("NodeIPsIndexFunc() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("NodeIPsIndexFunc() got = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}

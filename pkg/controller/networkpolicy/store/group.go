@@ -31,6 +31,7 @@ const (
 	ChildGroupIndex   = "childGroup"
 	IPBlockGroupIndex = "hasIPBlocks"
 	HasIPBlocks       = "true"
+	HasNodeSelector   = "hasNodeSelector"
 )
 
 // GroupKeyFunc knows how to get the key of a Group.
@@ -79,6 +80,13 @@ func NewGroupStore() storage.Interface {
 				return []string{}, nil
 			}
 			return []string{HasIPBlocks}, nil
+		},
+		HasNodeSelector: func(obj interface{}) ([]string, error) {
+			g, ok := obj.(*antreatypes.Group)
+			if !ok || g.Selector == nil || g.Selector.NodeSelector == nil {
+				return []string{}, nil
+			}
+			return []string{k8s.NamespacedName("", g.SourceReference.Name)}, nil
 		},
 	}
 	// genEventFunc is set to nil, thus watchers of this store will not be created.
