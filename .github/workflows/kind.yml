@@ -17,7 +17,7 @@ jobs:
     name: Check whether tests need to be run based on diff
     runs-on: [ubuntu-latest]
     steps:
-    - uses: actions/checkout@v5
+    - uses: actions/checkout@v6
       with:
         fetch-depth: 0
         show-progress: false
@@ -34,7 +34,7 @@ jobs:
     if: ${{ needs.check-changes.outputs.has_changes == 'yes' }}
     runs-on: [ubuntu-latest]
     steps:
-    - uses: actions/checkout@v5
+    - uses: actions/checkout@v6
       with:
         show-progress: false
     - name: Set up Docker Buildx
@@ -59,7 +59,7 @@ jobs:
     if: ${{ needs.check-changes.outputs.has_changes == 'yes' }}
     runs-on: [ ubuntu-latest ]
     steps:
-    - uses: actions/checkout@v5
+    - uses: actions/checkout@v6
       with:
         show-progress: false
     - run: make flow-aggregator-ubuntu-coverage
@@ -82,7 +82,7 @@ jobs:
       run: |
         sudo apt-get clean
         df -h
-    - uses: actions/checkout@v5
+    - uses: actions/checkout@v6
       with:
         show-progress: false
     - uses: actions/setup-go@v6
@@ -145,7 +145,7 @@ jobs:
       run: |
         sudo apt-get clean
         df -h
-    - uses: actions/checkout@v5
+    - uses: actions/checkout@v6
       with:
         show-progress: false
     - uses: actions/setup-go@v6
@@ -215,7 +215,7 @@ jobs:
         run: |
           sudo apt-get clean
           df -h
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
         with:
           show-progress: false
       - uses: actions/setup-go@v6
@@ -282,7 +282,7 @@ jobs:
     needs: [build-antrea-coverage-image]
     runs-on: [oracle-vm-4cpu-16gb-x86-64]
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
         with:
           show-progress: false
       - uses: actions/setup-go@v6
@@ -351,7 +351,7 @@ jobs:
       run: |
         sudo apt-get clean
         df -h
-    - uses: actions/checkout@v5
+    - uses: actions/checkout@v6
       with:
         show-progress: false
     - uses: actions/setup-go@v6
@@ -414,7 +414,7 @@ jobs:
       run: |
         sudo apt-get clean
         df -h
-    - uses: actions/checkout@v5
+    - uses: actions/checkout@v6
       with:
         show-progress: false
     - uses: actions/setup-go@v6
@@ -477,7 +477,7 @@ jobs:
         run: |
           sudo apt-get clean
           df -h
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
         with:
           show-progress: false
       - uses: actions/setup-go@v6
@@ -552,7 +552,7 @@ jobs:
           sudo rm -rf "$AGENT_TOOLSDIRECTORY"
           sudo rm -rf "/usr/local/lib/android"
           df -h
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
         with:
           show-progress: false
       - uses: actions/setup-go@v6
@@ -622,7 +622,7 @@ jobs:
       run: |
         sudo apt-get clean
         df -h
-    - uses: actions/checkout@v5
+    - uses: actions/checkout@v6
       with:
         show-progress: false
     - uses: actions/setup-go@v6
@@ -668,7 +668,7 @@ jobs:
       run: |
         sudo apt-get clean
         df -h
-    - uses: actions/checkout@v5
+    - uses: actions/checkout@v6
       with:
         show-progress: false
     - uses: actions/setup-go@v6
@@ -714,7 +714,7 @@ jobs:
         run: |
           sudo apt-get clean
           df -h
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
         with:
           show-progress: false
       - uses: actions/setup-go@v6
@@ -760,7 +760,7 @@ jobs:
         run: |
           sudo apt-get clean
           df -h
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
         with:
           show-progress: false
       - uses: actions/setup-go@v6
@@ -806,7 +806,7 @@ jobs:
         run: |
           sudo apt-get clean
           df -h
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
         with:
           show-progress: false
       - uses: actions/setup-go@v6
@@ -852,7 +852,7 @@ jobs:
         run: |
           sudo apt-get clean
           df -h
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
         with:
           show-progress: false
       - uses: actions/setup-go@v6
@@ -897,7 +897,7 @@ jobs:
         run: |
           sudo apt-get clean
           df -h
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
         with:
           show-progress: false
       - uses: actions/setup-go@v6
@@ -945,7 +945,7 @@ jobs:
         run: |
           sudo apt-get clean
           df -h
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
         with:
           show-progress: false
       - name: Download Antrea image from previous job
