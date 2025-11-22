@@ -25,28 +25,63 @@ import (
 	"antrea.io/antrea/pkg/features"
 )
 
+// Config is a struct that contains feature gates configuration
+type Config struct {
+	FeatureGates map[string]bool `yaml:"featureGates,omitempty"`
+}
+
+// Constants for component types
+const (
+	AgentMode        = "agent"
+	AgentWindowsMode = "agent-windows"
+)
+
 // HandleFunc returns the function which can handle queries issued by 'antctl get featuregates' command.
 // The handler function populates Antrea Agent feature gates information to the response.
 func HandleFunc() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		var featureGates []apis.FeatureGateResponse
-		for df := range features.DefaultAntreaFeatureGates {
-			if features.AgentGates.Has(df) {
-				featureGates = append(featureGates, apis.FeatureGateResponse{
-					Component: "agent",
-					Name:      string(df),
-					Status:    features.GetStatus(features.DefaultFeatureGate.Enabled(df)),
-					Version:   features.GetVersion(string(features.DefaultAntreaFeatureGates[df].PreRelease)),
-				})
-			}
-		}
-		sort.Slice(featureGates, func(i, j int) bool {
-			return featureGates[i].Name < featureGates[j].Name
-		})
+		featureGates := getFeatureGatesResponse(nil, AgentMode)
 		err := json.NewEncoder(w).Encode(featureGates)
 		if err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
 			klog.ErrorS(err, "Error when encoding FeatureGates to json")
 		}
 	}
+}
+
+func getFeatureGatesResponse(cfg *Config, component string) []apis.FeatureGateResponse {
+	gatesResp := []apis.FeatureGateResponse{}
+	for df := range features.DefaultAntreaFeatureGates {
+		if component == AgentMode && features.AgentGates.Has(df) ||
+			component == AgentWindowsMode && features.AgentGates.Has(df) && features.SupportedOnWindows(df) {
+
+			var status bool
+			if cfg != nil {
+				var ok bool
+				status, ok = cfg.FeatureGates[string(df)]
+				if !ok {
+					status = features.DefaultFeatureGate.Enabled(df)
+				}
+			} else {
+				status = features.DefaultFeatureGate.Enabled(df)
+			}
+			featureStatus := features.GetStatus(status)
+
+			// Get prerequisites for this feature gate
+			prerequisites := features.GetFeaturePrerequisites(df)
+			klog.V(2).InfoS("Agent: Feature gate prerequisites", "featureGate", string(df), "prerequisites", prerequisites)
+
+			gatesResp = append(gatesResp, apis.FeatureGateResponse{
+				Component:     component,
+				Name:          string(df),
+				Status:        featureStatus,
+				Version:       features.GetVersion(string(features.DefaultAntreaFeatureGates[df].PreRelease)),
+				Prerequisites: prerequisites,
+			})
+		}
+	}
+	sort.Slice(gatesResp, func(i, j int) bool {
+		return gatesResp[i].Name < gatesResp[j].Name
+	})
+	return gatesResp
 }
