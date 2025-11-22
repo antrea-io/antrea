@@ -174,8 +174,6 @@ func (c *AntreaIPAMController) enqueueStatefulSetDeleteEvent(obj interface{}) {
 // This may happen if controller was down during StatefulSet/Pod delete event.
 // If such entry is found, enqueue cleanup event for this StatefulSet/Pod.
 func (c *AntreaIPAMController) cleanUpStaleIPAddresses() {
-	klog.InfoS("Cleanup job for IP Pools started")
-
 	pools, _ := c.ipPoolLister.List(labels.Everything())
 	statefulSets, _ := c.statefulSetInformer.Lister().List(labels.Everything())
 	statefulSetMap := make(map[string]struct{}, len(statefulSets))
@@ -186,9 +184,13 @@ func (c *AntreaIPAMController) cleanUpStaleIPAddresses() {
 	}
 
 	pods, _ := c.podLister.List(labels.Everything())
-	podsMap := make(map[string]struct{}, len(pods))
+	activePodsMap := make(map[string]struct{}, len(pods))
 	for _, p := range pods {
-		podsMap[k8s.NamespacedName(p.Namespace, p.Name)] = struct{}{}
+		// When the Pod is terminated, we should recycle the IPs.
+		if k8s.IsPodTerminated(p) {
+			continue
+		}
+		activePodsMap[k8s.NamespacedName(p.Namespace, p.Name)] = struct{}{}
 	}
 
 	poolsUpdated := 0
@@ -200,7 +202,7 @@ func (c *AntreaIPAMController) cleanUpStaleIPAddresses() {
 		for _, address := range ipAddrs {
 			// Cleanup reserved addresses
 			if address.Owner.Pod != nil {
-				if _, ok := podsMap[k8s.NamespacedName(address.Owner.Pod.Namespace, address.Owner.Pod.Name)]; !ok {
+				if _, ok := activePodsMap[k8s.NamespacedName(address.Owner.Pod.Namespace, address.Owner.Pod.Name)]; !ok {
 					klog.V(2).InfoS("IPPool contains stale IP address for Pod that no longer exists", "IPPool", ipPool.Name, "Namespace", address.Owner.Pod.Namespace, "Pod", address.Owner.Pod.Name)
 					address.Owner.Pod = nil
 					if address.Owner.StatefulSet != nil {
@@ -236,8 +238,9 @@ func (c *AntreaIPAMController) cleanUpStaleIPAddresses() {
 			}
 		}
 	}
-
-	klog.InfoS("Cleanup job for IP Pools finished", "updated", poolsUpdated)
+	if poolsUpdated != 0 {
+		klog.InfoS("Cleanup job for IP Pools finished", "updated", poolsUpdated)
+	}
 }
 
 // Look for an IP Pool associated with this StatefulSet.
