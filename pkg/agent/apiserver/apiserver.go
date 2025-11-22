@@ -108,10 +108,10 @@ func installHandlers(aq agentquerier.AgentQuerier, npq querier.AgentNetworkPolic
 	s.Handler.NonGoRestfulMux.HandleFunc("/fqdncache", fqdncache.HandleFunc(npq))
 }
 
-func installAPIGroup(s *genericapiserver.GenericAPIServer, aq agentquerier.AgentQuerier, npq querier.AgentNetworkPolicyInfoQuerier, v4Enabled, v6Enabled bool) error {
+func installAPIGroup(s *genericapiserver.GenericAPIServer, aq agentquerier.AgentQuerier, npq querier.AgentNetworkPolicyInfoQuerier, v4Enabled, v6Enabled bool, nftablesSupported bool) error {
 	systemGroup := genericapiserver.NewDefaultAPIGroupInfo(systemv1beta1.GroupName, scheme, metav1.ParameterCodec, codecs)
 	systemStorage := map[string]rest.Storage{}
-	supportBundleStorage := supportbundle.NewAgentStorage(ovsctl.NewClient(aq.GetNodeConfig().OVSBridge), aq, npq, v4Enabled, v6Enabled)
+	supportBundleStorage := supportbundle.NewAgentStorage(ovsctl.NewClient(aq.GetNodeConfig().OVSBridge), aq, npq, v4Enabled, v6Enabled, nftablesSupported)
 	systemStorage["supportbundles"] = supportBundleStorage.SupportBundle
 	systemStorage["supportbundles/download"] = supportBundleStorage.Download
 	systemGroup.VersionedResourcesStorageMap["v1beta1"] = systemStorage
@@ -132,6 +132,7 @@ func New(aq agentquerier.AgentQuerier,
 	loopbackClientTokenPath string,
 	v4Enabled,
 	v6Enabled bool,
+	nftablesSupported bool,
 ) (*agentAPIServer, error) {
 	cfg, err := newConfig(aq, npq, secureServing, authentication, authorization, enableMetrics, kubeconfig, loopbackClientTokenPath)
 	if err != nil {
@@ -141,7 +142,7 @@ func New(aq agentquerier.AgentQuerier,
 	if err != nil {
 		return nil, err
 	}
-	if err := installAPIGroup(s, aq, npq, v4Enabled, v6Enabled); err != nil {
+	if err := installAPIGroup(s, aq, npq, v4Enabled, v6Enabled, nftablesSupported); err != nil {
 		return nil, err
 	}
 	installHandlers(aq, npq, mq, seipq, s, bgpq)

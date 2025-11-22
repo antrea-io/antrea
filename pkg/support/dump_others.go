@@ -18,6 +18,7 @@
 package support
 
 import (
+	"bytes"
 	"fmt"
 	"path"
 	"path/filepath"
@@ -41,6 +42,9 @@ func (d *agentDumper) DumpHostNetworkInfo(basedir string) error {
 	if err := d.dumpIPTables(basedir); err != nil {
 		return err
 	}
+	if err := d.dumpNFTables(basedir); err != nil {
+		return err
+	}
 	if err := d.dumpIPToolInfo(basedir); err != nil {
 		return err
 	}
@@ -57,6 +61,48 @@ func (d *agentDumper) dumpIPTables(basedir string) error {
 		return err
 	}
 	return writeFile(d.fs, filepath.Join(basedir, "iptables"), "iptables", data)
+}
+
+func (d *agentDumper) dumpNFTables(basedir string) error {
+
+	if !d.nftablesSupported {
+		return nil
+	}
+
+	var data bytes.Buffer
+
+	if d.v4Enabled {
+		output, err := d.executor.Command("nft", "list", "table", "ip", "antrea").CombinedOutput()
+		if err != nil {
+			return fmt.Errorf("failed to dump nftables table 'ip antrea': %w", err)
+		}
+		if len(output) > 0 {
+			data.Write(output)
+			data.WriteString("\n")
+		}
+	}
+
+	if d.v6Enabled {
+		output, err := d.executor.Command("nft", "list", "table", "ip6", "antrea").CombinedOutput()
+		if err != nil {
+			return fmt.Errorf("failed to dump nftables table 'ip6 antrea': %w", err)
+		}
+		if len(output) > 0 {
+			data.Write(output)
+			data.WriteString("\n")
+		}
+	}
+
+	if data.Len() == 0 {
+		return nil
+	}
+
+	fileName := "nftables"
+	if err := writeFile(d.fs, filepath.Join(basedir, fileName), fileName, data.Bytes()); err != nil {
+		return fmt.Errorf("failed to write nftables file: %w", err)
+	}
+
+	return nil
 }
 
 func (d *agentDumper) dumpIPToolInfo(basedir string) error {

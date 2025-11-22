@@ -46,7 +46,7 @@ func TestDumpLog(t *testing.T) {
 	fs.Create(filepath.Join(antreaWindowsOVSLogDir, "ovs.log"))
 	fs.Create(filepath.Join(antreaWindowsKubeletLogDir, "kubelet.log"))
 
-	dumper := NewAgentDumper(fs, nil, nil, nil, nil, "7s", true, true)
+	dumper := NewAgentDumper(fs, nil, nil, nil, nil, "7s", true, true, false)
 	err := dumper.DumpLog(baseDir)
 	require.NoError(t, err)
 

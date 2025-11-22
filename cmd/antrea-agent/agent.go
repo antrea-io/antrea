@@ -71,6 +71,7 @@ import (
 	"antrea.io/antrea/pkg/agent/stats"
 	support "antrea.io/antrea/pkg/agent/supportbundlecollection"
 	agenttypes "antrea.io/antrea/pkg/agent/types"
+	nftclient "antrea.io/antrea/pkg/agent/util/nftables"
 	"antrea.io/antrea/pkg/apis"
 	"antrea.io/antrea/pkg/apis/controlplane"
 	crdinformers "antrea.io/antrea/pkg/client/informers/externalversions"
@@ -330,6 +331,15 @@ func run(o *Options) error {
 		return fmt.Errorf("error initializing agent: %w", err)
 	}
 	nodeConfig := agentInitializer.GetNodeConfig()
+
+	var nftablesSupported bool
+	if _, err := nftclient.New(networkConfig.IPv4Enabled, networkConfig.IPv6Enabled); err != nil {
+		klog.InfoS("nftables is not supported on this Node, skipping nftables-related features", "err", err)
+		nftablesSupported = false
+	} else {
+		klog.InfoS("nftables is supported on this Node")
+		nftablesSupported = true
+	}
 
 	var ipsecCertController *ipseccertificate.Controller
 
@@ -998,7 +1008,7 @@ func run(o *Options) error {
 			nodeType = controlplane.SupportBundleCollectionNodeTypeExternalNode
 		}
 		supportBundleController := support.NewSupportBundleController(nodeConfig.Name, nodeType, nodeNamespace, antreaClientProvider,
-			ovsctl.NewClient(o.config.OVSBridge), agentQuerier, networkPolicyController, v4Enabled, v6Enabled)
+			ovsctl.NewClient(o.config.OVSBridge), agentQuerier, networkPolicyController, v4Enabled, v6Enabled, nftablesSupported)
 		go supportBundleController.Run(stopCh)
 	}
 
@@ -1026,7 +1036,8 @@ func run(o *Options) error {
 		o.config.ClientConnection.Kubeconfig,
 		apis.APIServerLoopbackTokenPath,
 		v4Enabled,
-		v6Enabled)
+		v6Enabled,
+		nftablesSupported)
 	if err != nil {
 		return fmt.Errorf("error when creating agent API server: %v", err)
 	}

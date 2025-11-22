@@ -252,7 +252,7 @@ func (f *fakeAgentDumper) DumpMemberlist(basedir string) error {
 func TestAgentStorage(t *testing.T) {
 	defaultFS = afero.NewMemMapFs()
 	defaultExecutor = new(testExec)
-	newAgentDumper = func(fs afero.Fs, executor exec.Interface, ovsCtlClient ovsctl.OVSCtlClient, aq agentquerier.AgentQuerier, npq querier.AgentNetworkPolicyInfoQuerier, since string, v4Enabled, v6Enabled bool) support.AgentDumper {
+	newAgentDumper = func(fs afero.Fs, executor exec.Interface, ovsCtlClient ovsctl.OVSCtlClient, aq agentquerier.AgentQuerier, npq querier.AgentNetworkPolicyInfoQuerier, since string, v4Enabled, v6Enabled bool, nftablesSupported bool) support.AgentDumper {
 		return &fakeAgentDumper{}
 	}
 	defer func() {
@@ -266,7 +266,7 @@ func TestAgentStorage(t *testing.T) {
 	fakeOVSCtl := ovsctltest.NewMockOVSCtlClient(ctrl)
 	fakeAgentQuerier := agentqueriertest.NewMockAgentQuerier(ctrl)
 	fakeNetworkPolicyQuerier := queriertest.NewMockAgentNetworkPolicyInfoQuerier(ctrl)
-	storage := NewAgentStorage(fakeOVSCtl, fakeAgentQuerier, fakeNetworkPolicyQuerier, true, true)
+	storage := NewAgentStorage(fakeOVSCtl, fakeAgentQuerier, fakeNetworkPolicyQuerier, true, true, false)
 	_, err := storage.SupportBundle.Create(ctx, &system.SupportBundle{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: modeAgent,
@@ -311,7 +311,7 @@ func TestAgentStorage(t *testing.T) {
 func TestAgentStorageFailure(t *testing.T) {
 	defaultFS = afero.NewMemMapFs()
 	defaultExecutor = new(testExec)
-	newAgentDumper = func(fs afero.Fs, executor exec.Interface, ovsCtlClient ovsctl.OVSCtlClient, aq agentquerier.AgentQuerier, npq querier.AgentNetworkPolicyInfoQuerier, since string, v4Enabled, v6Enabled bool) support.AgentDumper {
+	newAgentDumper = func(fs afero.Fs, executor exec.Interface, ovsCtlClient ovsctl.OVSCtlClient, aq agentquerier.AgentQuerier, npq querier.AgentNetworkPolicyInfoQuerier, since string, v4Enabled, v6Enabled bool, nftablesSupported bool) support.AgentDumper {
 		return &fakeAgentDumper{returnErr: fmt.Errorf("iptables not found")}
 	}
 	defer func() {
@@ -326,7 +326,7 @@ func TestAgentStorageFailure(t *testing.T) {
 	fakeAgentQuerier := agentqueriertest.NewMockAgentQuerier(ctrl)
 	fakeNetworkPolicyQuerier := queriertest.NewMockAgentNetworkPolicyInfoQuerier(ctrl)
 
-	storage := NewAgentStorage(fakeOVSCtl, fakeAgentQuerier, fakeNetworkPolicyQuerier, true, true)
+	storage := NewAgentStorage(fakeOVSCtl, fakeAgentQuerier, fakeNetworkPolicyQuerier, true, true, false)
 	_, err := storage.SupportBundle.Create(ctx, &system.SupportBundle{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: modeAgent,
