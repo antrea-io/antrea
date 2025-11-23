@@ -144,11 +144,12 @@ func (c *Controller) storeDenyConnectionParsed(pktIn *ofctrl.PacketIn, packet *b
 		denyConn.OriginalDestinationPort = dstPortValue
 	}
 
-	// No need to obtain connection info again if it already exists in denyConnectionStore.
-	if conn, exist := c.denyConnStore.GetConnByKey(connection.NewConnectionKey(&denyConn)); exist {
-		c.denyConnStore.AddOrUpdateConn(conn, time.Now(), uint64(packet.IPLength))
-		return nil
-	}
+	// This is used to update the existing connection if required.
+	denyConn.IsDenyFlow = true
+	denyConn.OriginalBytes = uint64(packet.IPLength)
+	denyConn.OriginalPackets = 1
+	denyConn.StartTime = time.Now()
+	denyConn.StopTime = denyConn.StartTime
 
 	var match *ofctrl.MatchField
 	// Get table ID
@@ -205,7 +206,7 @@ func (c *Controller) storeDenyConnectionParsed(pktIn *ofctrl.PacketIn, packet *b
 			denyConn.EgressNetworkPolicyRuleAction = flowexporterutils.RuleActionToUint8(disposition)
 		}
 	}
-	c.denyConnStore.AddOrUpdateConn(&denyConn, time.Now(), uint64(packet.IPLength))
+	c.denyConnPublisher.PublishDeniedConnection(&denyConn)
 	return nil
 }
 

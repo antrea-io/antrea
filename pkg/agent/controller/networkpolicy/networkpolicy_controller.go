@@ -38,7 +38,7 @@ import (
 	"antrea.io/antrea/pkg/agent/client"
 	"antrea.io/antrea/pkg/agent/config"
 	"antrea.io/antrea/pkg/agent/controller/networkpolicy/l7engine"
-	"antrea.io/antrea/pkg/agent/flowexporter/connections"
+	"antrea.io/antrea/pkg/agent/flowexporter/broadcaster"
 	"antrea.io/antrea/pkg/agent/interfacestore"
 	"antrea.io/antrea/pkg/agent/openflow"
 	proxytypes "antrea.io/antrea/pkg/agent/proxy/types"
@@ -152,12 +152,12 @@ type Controller struct {
 	addressGroupWatcher   *watcher
 	fullSyncGroup         sync.WaitGroup
 	ifaceStore            interfacestore.InterfaceStore
-	// denyConnStore is for storing deny connections for flow exporter.
-	denyConnStore  connections.DenyConnectionStoreUpdater
-	gwPort         uint32
-	tunPort        uint32
-	nodeConfig     *config.NodeConfig
-	podNetworkWait *utilwait.Group
+	// denyConnPublisher is for storing deny connections for flow exporter.
+	denyConnPublisher broadcaster.Publisher
+	gwPort            uint32
+	tunPort           uint32
+	nodeConfig        *config.NodeConfig
+	podNetworkWait    *utilwait.Group
 
 	// The fileStores store runtime.Objects in files and use them as the fallback data source when agent can't connect
 	// to antrea-controller on startup.
@@ -608,8 +608,8 @@ func (c *Controller) GetControllerConnectionStatus() bool {
 	return c.addressGroupWatcher.isConnected() && c.appliedToGroupWatcher.isConnected() && c.networkPolicyWatcher.isConnected()
 }
 
-func (c *Controller) SetDenyConnStore(denyConnStore connections.DenyConnectionStoreUpdater) {
-	c.denyConnStore = denyConnStore
+func (c *Controller) SetPublisher(publisher broadcaster.Publisher) {
+	c.denyConnPublisher = publisher
 }
 
 // Run begins watching and processing Antrea AddressGroups, AppliedToGroups
