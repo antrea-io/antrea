@@ -224,6 +224,13 @@ func TestReleaseStaleAddresses(t *testing.T) {
 		Namespace: namespace.Name,
 	}
 
+	activePod := &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "active-pod",
+			Namespace: namespace.Name,
+		},
+	}
+
 	addresses := []crdv1b1.IPAddressState{
 		{IPAddress: "10.2.2.12",
 			Phase: crdv1b1.IPAddressPhaseReserved,
@@ -251,10 +258,24 @@ func TestReleaseStaleAddresses(t *testing.T) {
 	controller.informerFactory.WaitForCacheSync(stopCh)
 	controller.crdInformerFactory.WaitForCacheSync(stopCh)
 
+	terminatedPod := &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      uuid.New().String(),
+			Namespace: namespace.Name,
+		},
+		Status: corev1.PodStatus{
+			Phase: corev1.PodFailed,
+		},
+	}
+	_, err := controller.fakeK8sClient.CoreV1().Pods(namespace.Name).Create(context.Background(), terminatedPod, metav1.CreateOptions{})
+	require.NoError(t, err)
+	_, err = controller.fakeK8sClient.CoreV1().Pods(namespace.Name).Create(context.Background(), activePod, metav1.CreateOptions{})
+	require.NoError(t, err)
+
 	go controller.Run(stopCh)
 
 	// verify two stale entries were deleted, one updated to Reserved status
-	err := wait.PollUntilContextTimeout(context.Background(), 100*time.Millisecond, 2*time.Second, true, func(ctx context.Context) (bool, error) {
+	err = wait.PollUntilContextTimeout(context.Background(), 100*time.Millisecond, 2*time.Second, true, func(ctx context.Context) (bool, error) {
 		pool, err := controller.poolLister.Get(pool.Name)
 		if err != nil {
 			return false, nil
