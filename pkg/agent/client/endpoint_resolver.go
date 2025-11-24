@@ -23,9 +23,8 @@ import (
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
+	discoveryv1 "k8s.io/api/discovery/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/apiserver/pkg/util/proxy"
 	"k8s.io/client-go/informers"
@@ -69,10 +68,10 @@ type EndpointResolver struct {
 	// serviceLister is used to retrieve the Service when selecting an Endpoint.
 	serviceLister       corev1listers.ServiceLister
 	serviceListerSynced cache.InformerSynced
-	// endpointLister is used to retrieve the Endpoints for the Service during Endpoint selection.
-	endpointsLister       corev1listers.EndpointsLister
-	endpointsListerSynced cache.InformerSynced
-	queue                 workqueue.TypedRateLimitingInterface[string]
+	// endpointSliceGetter is used to retrieve the EndpointSlices for the Service during Endpoint selection.
+	endpointSliceGetter         proxy.EndpointSliceGetter
+	endpointSliceInformerSynced cache.InformerSynced
+	queue                       workqueue.TypedRateLimitingInterface[string]
 	// listeners need to implement the Listerner interface and will get notified when the
 	// current Endpoint URL changes.
 	listeners   []Listener
@@ -83,24 +82,25 @@ func NewEndpointResolver(kubeClient kubernetes.Interface, namespace, serviceName
 	key := namespace + "/" + serviceName
 	controllerName := fmt.Sprintf("ServiceEndpointResolver:%s", key)
 
-	// We only need a specific Service and corresponding Endpoints resource, so we create our
-	// own informer factory, and we filter by namespace and name.
-	informerFactory := informers.NewSharedInformerFactoryWithOptions(kubeClient, informerDefaultResync, informers.WithNamespace(namespace), informers.WithTweakListOptions(func(listOptions *metav1.ListOptions) {
-		listOptions.FieldSelector = fields.OneTermEqualSelector("metadata.name", serviceName).String()
-	}))
+	// We only need a specific Service and corresponding EndpointSlices, so we create our
+	// own informer factory. We filter by namespace and use a label selector to get
+	// EndpointSlices for the specific Service.
+	informerFactory := informers.NewSharedInformerFactoryWithOptions(kubeClient, informerDefaultResync, informers.WithNamespace(namespace))
 	serviceInformer := informerFactory.Core().V1().Services()
-	endpointsInformer := informerFactory.Core().V1().Endpoints()
+	endpointSliceInformer := informerFactory.Discovery().V1().EndpointSlices()
+	// Create an EndpointSliceListerGetter from the lister for use with proxy.ResolveEndpoint
+	endpointSliceListerGetter, _ := proxy.NewEndpointSliceListerGetter(endpointSliceInformer.Lister())
 
 	resolver := &EndpointResolver{
-		name:                  controllerName,
-		namespace:             namespace,
-		serviceName:           serviceName,
-		servicePort:           servicePort,
-		informerFactory:       informerFactory,
-		serviceLister:         serviceInformer.Lister(),
-		serviceListerSynced:   serviceInformer.Informer().HasSynced,
-		endpointsLister:       endpointsInformer.Lister(),
-		endpointsListerSynced: endpointsInformer.Informer().HasSynced,
+		name:                        controllerName,
+		namespace:                   namespace,
+		serviceName:                 serviceName,
+		servicePort:                 servicePort,
+		informerFactory:             informerFactory,
+		serviceLister:               serviceInformer.Lister(),
+		serviceListerSynced:         serviceInformer.Informer().HasSynced,
+		endpointSliceGetter:         endpointSliceListerGetter,
+		endpointSliceInformerSynced: endpointSliceInformer.Informer().HasSynced,
 		queue: workqueue.NewTypedRateLimitingQueueWithConfig(
 			workqueue.NewTypedItemExponentialFailureRateLimiter[string](minRetryDelay, maxRetryDelay),
 			workqueue.TypedRateLimitingQueueConfig[string]{
@@ -149,17 +149,18 @@ func NewEndpointResolver(kubeClient kubernetes.Interface, namespace, serviceName
 			},
 		},
 	})
-	endpointsInformer.Informer().AddEventHandler(cache.FilteringResourceEventHandler{
-		// FilterFunc ignores all Endpoints events which do not relate to the named Service.
-		// It should be redundant given the filtering that we already do at the informer level.
+	endpointSliceInformer.Informer().AddEventHandler(cache.FilteringResourceEventHandler{
+		// FilterFunc ignores all EndpointSlice events which do not relate to the named Service.
 		FilterFunc: func(obj interface{}) bool {
-			// The Endpoints resource for a Service has the same name as the Service.
-			if endpoints, ok := obj.(*corev1.Endpoints); ok {
-				return endpoints.Namespace == namespace && endpoints.Name == serviceName
+			// EndpointSlices are labeled with the Service name using kubernetes.io/service-name label.
+			if endpointSlice, ok := obj.(*discoveryv1.EndpointSlice); ok {
+				svcName, ok := endpointSlice.Labels[discoveryv1.LabelServiceName]
+				return ok && svcName == serviceName
 			}
 			if tombstone, ok := obj.(cache.DeletedFinalStateUnknown); ok {
-				if endpoints, ok := tombstone.Obj.(*corev1.Endpoints); ok {
-					return endpoints.Namespace == namespace && endpoints.Name == serviceName
+				if endpointSlice, ok := tombstone.Obj.(*discoveryv1.EndpointSlice); ok {
+					svcName, ok := endpointSlice.Labels[discoveryv1.LabelServiceName]
+					return ok && svcName == serviceName
 				}
 			}
 			return false
@@ -169,18 +170,19 @@ func NewEndpointResolver(kubeClient kubernetes.Interface, namespace, serviceName
 				resolver.queue.Add(key)
 			},
 			UpdateFunc: func(oldObj, newObj interface{}) {
-				// This should not happen: both objects should be Endpoints in the
+				// This should not happen: both objects should be EndpointSlices in the
 				// update event handler.
-				oldEndpoints, ok := oldObj.(*corev1.Endpoints)
+				oldEndpointSlice, ok := oldObj.(*discoveryv1.EndpointSlice)
 				if !ok {
 					return
 				}
-				newEndpoints, ok := newObj.(*corev1.Endpoints)
+				newEndpointSlice, ok := newObj.(*discoveryv1.EndpointSlice)
 				if !ok {
 					return
 				}
-				// Ignore changes to metadata.
-				if reflect.DeepEqual(newEndpoints.Subsets, oldEndpoints.Subsets) {
+				// Ignore changes to metadata, only look at changes to endpoints or ports.
+				if reflect.DeepEqual(newEndpointSlice.Endpoints, oldEndpointSlice.Endpoints) &&
+					reflect.DeepEqual(newEndpointSlice.Ports, oldEndpointSlice.Ports) {
 					return
 				}
 				resolver.queue.Add(key)
@@ -202,7 +204,7 @@ func (r *EndpointResolver) Run(ctx context.Context) {
 	r.informerFactory.Start(ctx.Done())
 	defer r.informerFactory.Shutdown()
 
-	if !cache.WaitForNamedCacheSync(r.name, ctx.Done(), r.serviceListerSynced, r.endpointsListerSynced) {
+	if !cache.WaitForNamedCacheSync(r.name, ctx.Done(), r.serviceListerSynced, r.endpointSliceInformerSynced) {
 		return
 	}
 
@@ -236,7 +238,7 @@ func (r *EndpointResolver) processNextWorkItem() bool {
 
 func (r *EndpointResolver) resolveEndpoint() error {
 	klog.V(2).InfoS("Resolving Endpoint", "service", klog.KRef(r.namespace, r.serviceName))
-	endpointURL, err := proxy.ResolveEndpoint(r.serviceLister, r.endpointsLister, r.namespace, r.serviceName, r.servicePort)
+	endpointURL, err := proxy.ResolveEndpoint(r.serviceLister, r.endpointSliceGetter, r.namespace, r.serviceName, r.servicePort)
 	// Typically we will get one of these 2 errors (unavailable or not found).
 	// In this case, it makes sense to reset the Endpoint URL to nil and notify listeners.
 	// There is also no need to retry, as we won't find a suitable Endpoint until the Service or

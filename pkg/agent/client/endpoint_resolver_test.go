@@ -25,11 +25,13 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
+	discoveryv1 "k8s.io/api/discovery/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/client-go/kubernetes/fake"
 	"k8s.io/client-go/tools/cache"
+	"k8s.io/utils/ptr"
 )
 
 const (
@@ -41,7 +43,7 @@ const (
 	testEndpointIP2 = "172.18.0.4"
 )
 
-func getTestObjects() (*corev1.Service, *corev1.Endpoints) {
+func getTestObjects() (*corev1.Service, *discoveryv1.EndpointSlice) {
 	svc := &corev1.Service{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: testNamespace,
@@ -52,9 +54,11 @@ func getTestObjects() (*corev1.Service, *corev1.Endpoints) {
 				"app":       "antrea",
 				"component": "antrea=controller",
 			},
-			Type: corev1.ServiceTypeClusterIP,
+			Type:      corev1.ServiceTypeClusterIP,
+			ClusterIP: "10.96.0.1",
 			Ports: []corev1.ServicePort{
 				{
+					Name:       "https",
 					Port:       443,
 					Protocol:   corev1.ProtocolTCP,
 					TargetPort: intstr.FromInt32(testTargetPort),
@@ -62,28 +66,32 @@ func getTestObjects() (*corev1.Service, *corev1.Endpoints) {
 			},
 		},
 	}
-	endpoints := &corev1.Endpoints{
+	endpointSlice := &discoveryv1.EndpointSlice{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: testNamespace,
-			Name:      testServiceName,
+			Name:      testServiceName + "-7vzhx",
+			Labels: map[string]string{
+				discoveryv1.LabelServiceName: testServiceName,
+			},
 		},
-		Subsets: []corev1.EndpointSubset{
+		AddressType: discoveryv1.AddressTypeIPv4,
+		Endpoints: []discoveryv1.Endpoint{
 			{
-				Addresses: []corev1.EndpointAddress{
-					{
-						IP: testEndpointIP1,
-					},
-				},
-				Ports: []corev1.EndpointPort{
-					{
-						Port:     testTargetPort,
-						Protocol: corev1.ProtocolTCP,
-					},
+				Addresses: []string{testEndpointIP1},
+				Conditions: discoveryv1.EndpointConditions{
+					Ready: ptr.To(true),
 				},
 			},
 		},
+		Ports: []discoveryv1.EndpointPort{
+			{
+				Name:     ptr.To("https"),
+				Port:     ptr.To(int32(testTargetPort)),
+				Protocol: ptr.To(corev1.ProtocolTCP),
+			},
+		},
 	}
-	return svc, endpoints
+	return svc, endpointSlice
 }
 
 func getEndpointURL(ip string) *url.URL {
@@ -103,19 +111,19 @@ func runTestEndpointResolver(ctx context.Context, t *testing.T, objects ...runti
 	// resolver.informerFactory.Start may not have been called yet.
 	// We also check the return value of cache.WaitForCacheSync even though it should only be
 	// true if the context was cancelled. which should not happen in our test cases.
-	require.True(t, cache.WaitForCacheSync(ctx.Done(), resolver.serviceListerSynced, resolver.endpointsListerSynced))
+	require.True(t, cache.WaitForCacheSync(ctx.Done(), resolver.serviceListerSynced, resolver.endpointSliceInformerSynced))
 	return k8sClient, resolver
 }
 
 func TestEndpointResolver(t *testing.T) {
-	t.Run("add Service and Endpoints", func(t *testing.T) {
+	t.Run("add Service and EndpointSlice", func(t *testing.T) {
 		ctx, cancelFn := context.WithCancel(context.Background())
 		defer cancelFn()
 		k8sClient, resolver := runTestEndpointResolver(ctx, t)
 		require.Nil(t, resolver.CurrentEndpointURL())
-		svc, endpoints := getTestObjects()
+		svc, endpointSlice := getTestObjects()
 		k8sClient.CoreV1().Services(testNamespace).Create(ctx, svc, metav1.CreateOptions{})
-		k8sClient.CoreV1().Endpoints(testNamespace).Create(ctx, endpoints, metav1.CreateOptions{})
+		k8sClient.DiscoveryV1().EndpointSlices(testNamespace).Create(ctx, endpointSlice, metav1.CreateOptions{})
 		assert.EventuallyWithT(t, func(t *assert.CollectT) {
 			assert.Equal(t, getEndpointURL(testEndpointIP1), resolver.CurrentEndpointURL())
 		}, 2*time.Second, 50*time.Millisecond)
@@ -124,13 +132,13 @@ func TestEndpointResolver(t *testing.T) {
 	t.Run("update Endpoint address", func(t *testing.T) {
 		ctx, cancelFn := context.WithCancel(context.Background())
 		defer cancelFn()
-		svc, endpoints := getTestObjects()
-		k8sClient, resolver := runTestEndpointResolver(ctx, t, svc, endpoints)
+		svc, endpointSlice := getTestObjects()
+		k8sClient, resolver := runTestEndpointResolver(ctx, t, svc, endpointSlice)
 		assert.EventuallyWithT(t, func(t *assert.CollectT) {
 			assert.Equal(t, getEndpointURL(testEndpointIP1), resolver.CurrentEndpointURL())
 		}, 2*time.Second, 50*time.Millisecond)
-		endpoints.Subsets[0].Addresses[0].IP = testEndpointIP2
-		k8sClient.CoreV1().Endpoints(testNamespace).Update(ctx, endpoints, metav1.UpdateOptions{})
+		endpointSlice.Endpoints[0].Addresses[0] = testEndpointIP2
+		k8sClient.DiscoveryV1().EndpointSlices(testNamespace).Update(ctx, endpointSlice, metav1.UpdateOptions{})
 		assert.EventuallyWithT(t, func(t *assert.CollectT) {
 			assert.Equal(t, getEndpointURL(testEndpointIP2), resolver.CurrentEndpointURL())
 		}, 2*time.Second, 50*time.Millisecond)
@@ -139,13 +147,13 @@ func TestEndpointResolver(t *testing.T) {
 	t.Run("remove Endpoint address", func(t *testing.T) {
 		ctx, cancelFn := context.WithCancel(context.Background())
 		defer cancelFn()
-		svc, endpoints := getTestObjects()
-		k8sClient, resolver := runTestEndpointResolver(ctx, t, svc, endpoints)
+		svc, endpointSlice := getTestObjects()
+		k8sClient, resolver := runTestEndpointResolver(ctx, t, svc, endpointSlice)
 		assert.EventuallyWithT(t, func(t *assert.CollectT) {
 			assert.Equal(t, getEndpointURL(testEndpointIP1), resolver.CurrentEndpointURL())
 		}, 2*time.Second, 50*time.Millisecond)
-		endpoints.Subsets = nil
-		k8sClient.CoreV1().Endpoints(testNamespace).Update(ctx, endpoints, metav1.UpdateOptions{})
+		endpointSlice.Endpoints = nil
+		k8sClient.DiscoveryV1().EndpointSlices(testNamespace).Update(ctx, endpointSlice, metav1.UpdateOptions{})
 		assert.EventuallyWithT(t, func(t *assert.CollectT) {
 			assert.Nil(t, resolver.CurrentEndpointURL())
 		}, 2*time.Second, 50*time.Millisecond)
@@ -154,8 +162,8 @@ func TestEndpointResolver(t *testing.T) {
 	t.Run("delete Service", func(t *testing.T) {
 		ctx, cancelFn := context.WithCancel(context.Background())
 		defer cancelFn()
-		svc, endpoints := getTestObjects()
-		k8sClient, resolver := runTestEndpointResolver(ctx, t, svc, endpoints)
+		svc, endpointSlice := getTestObjects()
+		k8sClient, resolver := runTestEndpointResolver(ctx, t, svc, endpointSlice)
 		assert.EventuallyWithT(t, func(t *assert.CollectT) {
 			assert.Equal(t, getEndpointURL(testEndpointIP1), resolver.CurrentEndpointURL())
 		}, 2*time.Second, 50*time.Millisecond)
