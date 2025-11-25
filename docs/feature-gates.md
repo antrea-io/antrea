@@ -59,7 +59,7 @@ edit the Agent configuration in the
 | `EgressTrafficShaping`        | Agent              | `false` | Alpha | v1.14         | N/A          | N/A        | Yes                | OVS meters should be supported                |
 | `EgressSeparateSubnet`        | Agent              | `true`  | Beta  | v1.15         | v2.3         | N/A        | No                 |                                               |
 | `NodeNetworkPolicy`           | Agent              | `false` | Alpha | v1.15         | N/A          | N/A        | Yes                |                                               |
-| `L7FlowExporter`              | Agent              | `false` | Alpha | v1.15         | N/A          | N/A        | Yes                |                                               |
+| `L7FlowExporter`              | Agent              | `false` | Deprecated | v1.15         | N/A          | N/A        | Yes                | Deprecated in v2.5.0. Scheduled for removal in v2.6.0.                                        |
 | `BGPPolicy`                   | Agent              | `false` | Alpha | v2.1          | N/A          | N/A        | No                 |                                               |
 | `NodeLatencyMonitor`          | Agent              | `false` | Alpha | v2.1          | N/A          | N/A        | No                 |                                               |
 | `PacketCapture`               | Agent              | `false` | Alpha | v2.2          | N/A          | N/A        | No                 |                                               |
@@ -445,6 +445,8 @@ Refer to this [document](egress.md#subnetinfo) for more information.
 
 `L7FlowExporter` enables users to export application-layer flow data using Pod or Namespace annotations.
 Refer to this [document](network-flow-visibility.md#l7-visibility) for more information.
+
+Note: `L7FlowExporter` is deprecated in Antrea v2.5.0, and will be removed in v2.6.0.
 
 #### Requirements for this Feature
 
