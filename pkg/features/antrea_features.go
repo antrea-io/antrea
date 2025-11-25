@@ -169,11 +169,6 @@ const (
 	// Allows users to apply ClusterNetworkPolicy to Kubernetes Nodes.
 	NodeNetworkPolicy featuregate.Feature = "NodeNetworkPolicy"
 
-	// alpha: v1.15
-	// deprecated: v2.5
-	// Enable layer 7 flow export on Pods and Namespaces
-	L7FlowExporter featuregate.Feature = "L7FlowExporter"
-
 	// alpha: v2.1
 	// Enable the NodeLatencyMonitor feature.
 	NodeLatencyMonitor featuregate.Feature = "NodeLatencyMonitor"
@@ -225,7 +220,6 @@ var (
 		EgressTrafficShaping:        {Default: false, PreRelease: featuregate.Alpha},
 		EgressSeparateSubnet:        {Default: true, PreRelease: featuregate.Beta},
 		NodeNetworkPolicy:           {Default: false, PreRelease: featuregate.Alpha},
-		L7FlowExporter:              {Default: false, PreRelease: featuregate.Deprecated},
 		NodeLatencyMonitor:          {Default: false, PreRelease: featuregate.Alpha},
 	}
 
@@ -259,7 +253,6 @@ var (
 		EgressTrafficShaping,
 		EgressSeparateSubnet,
 		NodeNetworkPolicy,
-		L7FlowExporter,
 		NodeLatencyMonitor,
 	)
 
@@ -311,7 +304,6 @@ var (
 		EgressSeparateSubnet:        {},
 		NodeNetworkPolicy:           {},
 		FlowExporter:                {},
-		L7FlowExporter:              {},
 		NodeLatencyMonitor:          {},
 		PacketCapture:               {},
 	}
