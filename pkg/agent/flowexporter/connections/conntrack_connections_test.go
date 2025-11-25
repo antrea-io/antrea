@@ -92,13 +92,6 @@ var (
 	}
 )
 
-type fakeL7Listener struct{}
-
-func (fll *fakeL7Listener) ConsumeL7EventMap() map[connection.ConnectionKey]L7ProtocolFields {
-	l7EventsMap := make(map[connection.ConnectionKey]L7ProtocolFields)
-	return l7EventsMap
-}
-
 func TestConntrackConnectionStore_AddOrUpdateConn(t *testing.T) {
 	refTime := time.Now()
 	networkPolicyReadyTime := refTime.Add(-time.Hour)
@@ -257,7 +250,7 @@ func TestConntrackConnectionStore_AddOrUpdateConn(t *testing.T) {
 			mockConnDumper := connectionstest.NewMockConnTrackDumper(ctrl)
 			npQuerier := queriertest.NewMockAgentNetworkPolicyInfoQuerier(ctrl)
 
-			conntrackConnStore := NewConntrackConnectionStore(mockConnDumper, true, false, npQuerier, mockPodStore, mockProxier, nil, nil, testFlowExporterOptions)
+			conntrackConnStore := NewConntrackConnectionStore(mockConnDumper, true, false, npQuerier, mockPodStore, mockProxier, nil, testFlowExporterOptions)
 			// Set the networkPolicyReadyTime to simulate that NetworkPolicies are ready
 			conntrackConnStore.networkPolicyReadyTime = networkPolicyReadyTime
 
@@ -339,7 +332,7 @@ func TestConnectionStore_DeleteConnectionByKey(t *testing.T) {
 	metrics.TotalAntreaConnectionsInConnTrackTable.Set(float64(len(testFlows)))
 	// Create connectionStore
 	mockPodStore := objectstoretest.NewMockPodStore(ctrl)
-	connStore := NewConntrackConnectionStore(nil, true, false, nil, mockPodStore, nil, nil, nil, testFlowExporterOptions)
+	connStore := NewConntrackConnectionStore(nil, true, false, nil, mockPodStore, nil, nil, testFlowExporterOptions)
 	// Add flows to the connection store.
 	for i, flow := range testFlows {
 		connStore.connections[*testFlowKeys[i]] = flow
@@ -361,7 +354,7 @@ func TestConnectionStore_MetricSettingInPoll(t *testing.T) {
 	// Create connectionStore
 	mockPodStore := objectstoretest.NewMockPodStore(ctrl)
 	mockConnDumper := connectionstest.NewMockConnTrackDumper(ctrl)
-	conntrackConnStore := NewConntrackConnectionStore(mockConnDumper, true, false, nil, mockPodStore, nil, &fakeL7Listener{}, nil, testFlowExporterOptions)
+	conntrackConnStore := NewConntrackConnectionStore(mockConnDumper, true, false, nil, mockPodStore, nil, nil, testFlowExporterOptions)
 	// Hard-coded conntrack occupancy metrics for test
 	TotalConnections := 0
 	MaxConnections := 300000
@@ -389,7 +382,7 @@ func TestConntrackConnectionStore_Run_NetworkPolicyWait(t *testing.T) {
 		StaleConnectionTimeout: testStaleConnectionTimeout,
 		PollInterval:           100 * time.Millisecond, // Valid but small poll interval
 	}
-	conntrackConnStore := NewConntrackConnectionStore(mockConnDumper, true, false, nil, nil, nil, nil, networkPolicyWait, testOptions)
+	conntrackConnStore := NewConntrackConnectionStore(mockConnDumper, true, false, nil, nil, nil, networkPolicyWait, testOptions)
 
 	// Create a signal channel that will be closed on the first DumpFlows call
 	firstPollDoneCh := make(chan struct{})

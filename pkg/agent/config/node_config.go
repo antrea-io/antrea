@@ -55,7 +55,6 @@ const (
 const (
 	L7RedirectTargetPortName = "antrea-l7-tap0"
 	L7RedirectReturnPortName = "antrea-l7-tap1"
-	L7SuricataSocketPath     = "/var/run/suricata/suricata_eve.socket"
 )
 
 const (

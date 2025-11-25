@@ -41,7 +41,6 @@ import (
 	"antrea.io/antrea/pkg/agent/controller/bgp"
 	"antrea.io/antrea/pkg/agent/controller/egress"
 	"antrea.io/antrea/pkg/agent/controller/ipseccertificate"
-	"antrea.io/antrea/pkg/agent/controller/l7flowexporter"
 	"antrea.io/antrea/pkg/agent/controller/networkpolicy"
 	"antrea.io/antrea/pkg/agent/controller/networkpolicy/l7engine"
 	"antrea.io/antrea/pkg/agent/controller/noderoute"
@@ -158,7 +157,6 @@ func run(o *Options) error {
 	l7NetworkPolicyEnabled := features.DefaultFeatureGate.Enabled(features.L7NetworkPolicy)
 	nodeNetworkPolicyEnabled := features.DefaultFeatureGate.Enabled(features.NodeNetworkPolicy)
 	nodeLatencyMonitorEnabled := features.DefaultFeatureGate.Enabled(features.NodeLatencyMonitor)
-	l7FlowExporterEnabled := features.DefaultFeatureGate.Enabled(features.L7FlowExporter)
 	enableMulticlusterGW := features.DefaultFeatureGate.Enabled(features.Multicluster) && o.config.Multicluster.EnableGateway
 	_, multiclusterEncryptionMode := config.GetTrafficEncryptionModeFromStr(o.config.Multicluster.TrafficEncryptionMode)
 	enableMulticlusterNP := features.DefaultFeatureGate.Enabled(features.Multicluster) && o.config.Multicluster.EnableStretchedNetworkPolicy
@@ -192,7 +190,6 @@ func run(o *Options) error {
 		connectUplinkToBridge,
 		multicastEnabled,
 		features.DefaultFeatureGate.Enabled(features.TrafficControl),
-		l7FlowExporterEnabled,
 		enableMulticlusterGW,
 		groupIDAllocator,
 		*o.config.EnablePrometheusMetrics,
@@ -327,7 +324,6 @@ func run(o *Options) error {
 		connectUplinkToBridge,
 		o.enableAntreaProxy,
 		l7NetworkPolicyEnabled,
-		l7FlowExporterEnabled,
 		o.config.DisableTXChecksumOffload)
 	if err := agentInitializer.Initialize(ctx); err != nil {
 		return fmt.Errorf("error initializing agent: %w", err)
@@ -509,7 +505,7 @@ func run(o *Options) error {
 		nodeKey = k8s.NamespacedName(o.config.ExternalNode.ExternalNodeNamespace, nodeKey)
 	}
 	var l7Reconciler *l7engine.Reconciler
-	if l7NetworkPolicyEnabled || l7FlowExporterEnabled {
+	if l7NetworkPolicyEnabled {
 		l7Reconciler = l7engine.NewReconciler(ofClient)
 	}
 	networkPolicyController, err := networkpolicy.NewNetworkPolicyController(
@@ -545,20 +541,8 @@ func run(o *Options) error {
 	if err != nil {
 		return fmt.Errorf("error creating new NetworkPolicy controller: %v", err)
 	}
-	var l7FlowExporterController *l7flowexporter.L7FlowExporterController
-	if l7FlowExporterEnabled {
-		l7FlowExporterController = l7flowexporter.NewL7FlowExporterController(
-			ofClient,
-			ifaceStore,
-			localPodInformer.Get(),
-			namespaceInformer,
-			l7Reconciler.StartSuricataOnce,
-		)
-		go l7FlowExporterController.Run(stopCh)
-	}
 
 	var egressController *egress.EgressController
-
 	var externalIPPoolController *externalippool.ExternalIPPoolController
 	var externalIPController *serviceexternalip.ServiceExternalIPController
 	var memberlistCluster *memberlist.Cluster
@@ -754,8 +738,7 @@ func run(o *Options) error {
 			flowExporterOptions,
 			egressController,
 			podNetworkWait,
-			l7FlowExporterController,
-			l7FlowExporterEnabled)
+		)
 		if err != nil {
 			return fmt.Errorf("error when creating IPFIX flow exporter: %v", err)
 		}

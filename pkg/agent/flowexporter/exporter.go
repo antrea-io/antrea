@@ -37,7 +37,6 @@ import (
 	"antrea.io/antrea/pkg/agent/flowexporter/utils"
 	"antrea.io/antrea/pkg/agent/metrics"
 	"antrea.io/antrea/pkg/agent/proxy"
-	"antrea.io/antrea/pkg/features"
 	"antrea.io/antrea/pkg/ovs/ovsconfig"
 	"antrea.io/antrea/pkg/querier"
 	"antrea.io/antrea/pkg/util/env"
@@ -76,7 +75,6 @@ type FlowExporter struct {
 	expiredConns           []connection.Connection
 	egressQuerier          querier.EgressQuerier
 	podStore               objectstore.PodStore
-	l7Listener             *connections.L7Listener
 	nodeName               string
 	obsDomainID            uint32
 }
@@ -85,18 +83,11 @@ func NewFlowExporter(podStore objectstore.PodStore, proxier proxy.ProxyQuerier, 
 	trafficEncapMode config.TrafficEncapModeType, nodeConfig *config.NodeConfig, v4Enabled, v6Enabled bool, serviceCIDRNet, serviceCIDRNetv6 *net.IPNet,
 	ovsDatapathType ovsconfig.OVSDatapathType, proxyEnabled bool, npQuerier querier.AgentNetworkPolicyInfoQuerier, o *options.FlowExporterOptions,
 	egressQuerier querier.EgressQuerier, podNetworkWait *utilwait.Group,
-	podL7FlowExporterAttrGetter connections.PodL7FlowExporterAttrGetter, l7FlowExporterEnabled bool,
 ) (*FlowExporter, error) {
 	protocolFilter := filter.NewProtocolFilter(o.ProtocolFilter)
 	connTrackDumper := connections.InitializeConnTrackDumper(nodeConfig, serviceCIDRNet, serviceCIDRNetv6, ovsDatapathType, proxyEnabled, protocolFilter)
 	denyConnStore := connections.NewDenyConnectionStore(npQuerier, podStore, proxier, o, protocolFilter)
-	var l7Listener *connections.L7Listener
-	var eventMapGetter connections.L7EventMapGetter
-	if l7FlowExporterEnabled {
-		l7Listener = connections.NewL7Listener(podL7FlowExporterAttrGetter, podStore)
-		eventMapGetter = l7Listener
-	}
-	conntrackConnStore := connections.NewConntrackConnectionStore(connTrackDumper, v4Enabled, v6Enabled, npQuerier, podStore, proxier, eventMapGetter, podNetworkWait, o)
+	conntrackConnStore := connections.NewConntrackConnectionStore(connTrackDumper, v4Enabled, v6Enabled, npQuerier, podStore, proxier, podNetworkWait, o)
 	if nodeRouteController == nil {
 		klog.InfoS("NodeRouteController is nil, will not be able to determine flow type for connections")
 	}
@@ -144,7 +135,6 @@ func NewFlowExporter(podStore objectstore.PodStore, proxier proxy.ProxyQuerier, 
 		expiredConns:           make([]connection.Connection, 0, maxConnsToExport*2),
 		egressQuerier:          egressQuerier,
 		podStore:               podStore,
-		l7Listener:             l7Listener,
 		nodeName:               nodeName,
 		obsDomainID:            obsDomainID,
 	}, nil
@@ -161,10 +151,6 @@ func (exp *FlowExporter) GetDenyConnStore() *connections.DenyConnectionStore {
 }
 
 func (exp *FlowExporter) Run(stopCh <-chan struct{}) {
-	// Start L7 connection flow socket
-	if features.DefaultFeatureGate.Enabled(features.L7FlowExporter) {
-		go exp.l7Listener.Run(stopCh)
-	}
 	// Start the goroutine to periodically delete stale deny connections.
 	go exp.denyConnStore.RunPeriodicDeletion(stopCh)
 

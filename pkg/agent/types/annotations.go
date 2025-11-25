@@ -38,7 +38,4 @@ const (
 
 	// ServiceLoadBalancerModeAnnotationKey is the key of the Service annotation that specifies the Service's load balancer mode.
 	ServiceLoadBalancerModeAnnotationKey string = "service.antrea.io/load-balancer-mode"
-
-	// L7FlowExporterAnnotationKey is the key of the L7 network flow export annotation that enables L7 network flow export for annotated Pod or Namespace based on the value of annotation which is direction of traffic.
-	L7FlowExporterAnnotationKey string = "visibility.antrea.io/l7-export"
 )
