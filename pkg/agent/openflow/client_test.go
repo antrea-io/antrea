@@ -93,7 +93,6 @@ type clientOptions struct {
 	enableTrafficControl       bool
 	enableMulticluster         bool
 	enableL7NetworkPolicy      bool
-	enableL7FlowExporter       bool
 	trafficEncryptionMode      config.TrafficEncryptionModeType
 }
 
@@ -415,7 +414,6 @@ func newFakeClientWithBridge(
 		o.connectUplinkToBridge,
 		o.enableMulticast,
 		o.enableTrafficControl,
-		o.enableL7FlowExporter,
 		o.enableMulticluster,
 		NewGroupAllocator(),
 		false,
@@ -2062,7 +2060,7 @@ func Test_client_setBasePacketOutBuilder(t *testing.T) {
 }
 
 func prepareSetBasePacketOutBuilder(ctrl *gomock.Controller, success bool) *client {
-	ofClient := NewClient(bridgeName, bridgeMgmtAddr, nodeiptest.NewFakeNodeIPChecker(), true, true, false, false, false, false, false, false, false, false, false, false, false, nil, false, defaultPacketInRate)
+	ofClient := NewClient(bridgeName, bridgeMgmtAddr, nodeiptest.NewFakeNodeIPChecker(), true, true, false, false, false, false, false, false, false, false, false, false, nil, false, defaultPacketInRate)
 	m := ovsoftest.NewMockBridge(ctrl)
 	ofClient.bridge = m
 	bridge := binding.OFBridge{}

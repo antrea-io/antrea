@@ -53,7 +53,6 @@ type featurePodConnectivity struct {
 	proxyAll              bool
 	enableDSR             bool
 	enableTrafficControl  bool
-	enableL7FlowExporter  bool
 
 	category cookie.Category
 }
@@ -72,7 +71,7 @@ func newFeaturePodConnectivity(
 	proxyAll bool,
 	enableDSR bool,
 	enableTrafficControl bool,
-	enableL7FlowExporter bool) *featurePodConnectivity {
+) *featurePodConnectivity {
 	ctZones := make(map[binding.Protocol]int)
 	snatCtZones := make(map[binding.Protocol]int)
 	gatewayIPs := make(map[binding.Protocol]net.IP)
@@ -130,7 +129,6 @@ func newFeaturePodConnectivity(
 		networkConfig:         networkConfig,
 		connectUplinkToBridge: connectUplinkToBridge,
 		enableTrafficControl:  enableTrafficControl,
-		enableL7FlowExporter:  enableL7FlowExporter,
 		ipCtZoneTypeRegMarks:  ipCtZoneTypeRegMarks,
 		ctZoneSrcField:        getZoneSrcField(connectUplinkToBridge),
 		enableMulticast:       enableMulticast,
@@ -192,7 +190,7 @@ func (f *featurePodConnectivity) initFlows() []*openflow15.FlowMod {
 		// Pod IP will take care of routing the traffic to destination Pod.
 		flows = append(flows, f.l3FwdFlowToLocalPodCIDR()...)
 	}
-	if f.enableTrafficControl || f.enableL7FlowExporter {
+	if f.enableTrafficControl {
 		flows = append(flows, f.trafficControlCommonFlows()...)
 	}
 	return GetFlowModMessages(flows, binding.AddMessage)
