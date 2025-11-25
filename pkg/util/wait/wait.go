@@ -15,11 +15,10 @@
 package wait
 
 import (
+	"context"
 	"fmt"
 	"sync"
 	"time"
-
-	"k8s.io/utils/clock"
 )
 
 // Group allows to wait for a collection of goroutines to finish with a timeout or a stop channel.
@@ -27,18 +26,12 @@ type Group struct {
 	wg     *sync.WaitGroup
 	doneCh chan struct{}
 	once   sync.Once
-	clock  clock.Clock
 }
 
 func NewGroup() *Group {
-	return newGroupWithClock(clock.RealClock{})
-}
-
-func newGroupWithClock(clock clock.Clock) *Group {
 	return &Group{
 		wg:     &sync.WaitGroup{},
 		doneCh: make(chan struct{}),
-		clock:  clock,
 	}
 }
 
@@ -49,6 +42,10 @@ func (g *Group) Increment() *Group {
 
 func (g *Group) Done() {
 	g.wg.Done()
+}
+
+func (g *Group) Go(f func()) {
+	g.wg.Go(f)
 }
 
 func (g *Group) wait() {
@@ -65,7 +62,7 @@ func (g *Group) WaitWithTimeout(timeout time.Duration) error {
 	select {
 	case <-g.doneCh:
 		return nil
-	case <-g.clock.After(timeout):
+	case <-time.After(timeout):
 		return fmt.Errorf("timeout waiting for group")
 	}
 }
@@ -77,6 +74,16 @@ func (g *Group) WaitUntil(stopCh <-chan struct{}) error {
 		return nil
 	case <-stopCh:
 		return fmt.Errorf("stopCh closed, stop waiting")
+	}
+}
+
+func (g *Group) WaitUntilWithContext(ctx context.Context) error {
+	g.wait()
+	select {
+	case <-g.doneCh:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
 	}
 }
 
