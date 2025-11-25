@@ -601,9 +601,11 @@ EOF
 
 function delete {
   local cluster_name="$1"
+  set +e
   delete_vlan_subnets $cluster_name
   kind delete cluster --name $cluster_name
   delete_networks $cluster_name
+  set -e
 }
 
 function destroy {

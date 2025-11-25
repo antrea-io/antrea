@@ -204,6 +204,7 @@ function clean_antrea {
     docker images --format "{{.Repository}}:{{.Tag}}" | grep ${BUILD_TAG} | xargs -r docker rmi || true
     docker images | grep '<none>' | awk '{print $3}' | xargs -r docker rmi || true
     check_and_cleanup_docker_build_cache
+    rm -f antrea-ubuntu.tar antrea-windows.tar.gz flow-aggregator.tar
 }
 
 function clean_for_windows_install_cni {

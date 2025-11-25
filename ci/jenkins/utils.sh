@@ -32,6 +32,12 @@ function check_and_cleanup_docker_build_cache() {
 }
 
 function check_and_upgrade_golang() {
+    echo "====== Clean up Golang cache ======"
+    free_space=$(df -h -B 1G / | awk 'NR==2 {print $4}')
+    free_space_threshold=40
+    if [[ $free_space -lt $free_space_threshold ]]; then
+      go clean -cache -modcache -testcache || true
+    fi
     if [ -z "${GOLANG_RELEASE_DIR}" ]; then
         GOLANG_RELEASE_DIR="/var/lib/jenkins/golang-releases"
     fi
