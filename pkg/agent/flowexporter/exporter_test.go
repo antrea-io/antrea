@@ -300,7 +300,7 @@ func runSendFlowRecordTests(t *testing.T, flowExp *FlowExporter, isIPv6 bool) {
 				StaleConnectionTimeout: 1,
 				PollInterval:           1,
 			}
-			flowExp.conntrackConnStore = connections.NewConntrackConnectionStore(mockConnDumper, !isIPv6, isIPv6, nil, nil, nil, nil, nil, o)
+			flowExp.conntrackConnStore = connections.NewConntrackConnectionStore(mockConnDumper, !isIPv6, isIPv6, nil, nil, nil, nil, o)
 			flowExp.denyConnStore = connections.NewDenyConnectionStore(nil, nil, nil, o, filter.NewProtocolFilter(nil))
 			flowExp.conntrackPriorityQueue = flowExp.conntrackConnStore.GetPriorityQueue()
 			flowExp.denyPriorityQueue = flowExp.denyConnStore.GetPriorityQueue()

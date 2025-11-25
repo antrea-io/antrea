@@ -57,13 +57,6 @@ const (
 	testStaleConnectionTimeout = 5 * time.Minute
 )
 
-type fakel7EventMapGetter struct{}
-
-func (fll *fakel7EventMapGetter) ConsumeL7EventMap() map[connection.ConnectionKey]connections.L7ProtocolFields {
-	l7EventsMap := make(map[connection.ConnectionKey]connections.L7ProtocolFields)
-	return l7EventsMap
-}
-
 func createConnsForTest() ([]*connection.Connection, []*connection.ConnectionKey) {
 	// Reference for flow timestamp
 	refTime := time.Now()
@@ -143,7 +136,7 @@ func TestConnectionStoreAndFlowRecords(t *testing.T) {
 		IdleFlowTimeout:        testIdleFlowTimeout,
 		StaleConnectionTimeout: testStaleConnectionTimeout,
 		PollInterval:           testPollInterval}
-	conntrackConnStore := connections.NewConntrackConnectionStore(connDumperMock, true, false, npQuerier, mockPodStore, nil, &fakel7EventMapGetter{}, nil, o)
+	conntrackConnStore := connections.NewConntrackConnectionStore(connDumperMock, true, false, npQuerier, mockPodStore, nil, nil, o)
 	// Expect calls for connStore.poll and other callees
 	connDumperMock.EXPECT().DumpFlows(uint16(openflow.CtZone)).Return(testConns, 0, nil)
 	connDumperMock.EXPECT().GetMaxConnections().Return(0, nil)
@@ -370,7 +363,6 @@ func BenchmarkConntrackConnectionStorePoll(b *testing.B) {
 		false, // v6Enabled
 		npQuerier,
 		podStore,
-		nil,
 		nil,
 		nil,
 		o,
