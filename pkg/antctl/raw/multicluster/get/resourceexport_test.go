@@ -57,14 +57,14 @@ func TestGetResourceExport(t *testing.T) {
 			existingResourceExports: resourceExportList,
 			args:                    []string{"re-cluster-id-1"},
 			flags:                   map[string]string{"output": "json"},
-			expectedOutput:          "{\n  \"kind\": \"ResourceExport\",\n  \"apiVersion\": \"multicluster.crd.antrea.io/v1alpha1\",\n  \"metadata\": {\n    \"name\": \"re-cluster-id-1\",\n    \"namespace\": \"default\",\n    \"resourceVersion\": \"999\",\n    \"creationTimestamp\": null\n  },\n  \"spec\": {},\n  \"status\": {}\n}\n",
+			expectedOutput:          "{\n  \"kind\": \"ResourceExport\",\n  \"apiVersion\": \"multicluster.crd.antrea.io/v1alpha1\",\n  \"metadata\": {\n    \"name\": \"re-cluster-id-1\",\n    \"namespace\": \"default\",\n    \"resourceVersion\": \"999\"\n  },\n  \"spec\": {},\n  \"status\": {}\n}\n",
 		},
 		{
 			name:                    "get single ResourceExport with yaml output",
 			existingResourceExports: resourceExportList,
 			args:                    []string{"re-cluster-id-1"},
 			flags:                   map[string]string{"output": "yaml"},
-			expectedOutput:          "apiVersion: multicluster.crd.antrea.io/v1alpha1\nkind: ResourceExport\nmetadata:\n  creationTimestamp: null\n  name: re-cluster-id-1\n  namespace: default\n  resourceVersion: \"999\"\nspec: {}\nstatus: {}\n",
+			expectedOutput:          "apiVersion: multicluster.crd.antrea.io/v1alpha1\nkind: ResourceExport\nmetadata:\n  name: re-cluster-id-1\n  namespace: default\n  resourceVersion: \"999\"\nspec: {}\nstatus: {}\n",
 		},
 		{
 			name:           "get non-existing ResourceExport",

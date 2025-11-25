@@ -76,7 +76,7 @@ func TestGetAccessToken(t *testing.T) {
 			args:            []string{"default-member-token"},
 			namespace:       "default",
 			output:          "json",
-			expectedOutput:  "[\n  {\n    \"kind\": \"Secret\",\n    \"apiVersion\": \"v1\",\n    \"metadata\": {\n      \"name\": \"default-member-token\",\n      \"creationTimestamp\": null\n    },\n    \"data\": {\n      \"token\": \"MTIzNDU=\"\n    },\n    \"type\": \"Opaque\"\n  }\n]\n",
+			expectedOutput:  "[\n  {\n    \"kind\": \"Secret\",\n    \"apiVersion\": \"v1\",\n    \"metadata\": {\n      \"name\": \"default-member-token\"\n    },\n    \"data\": {\n      \"token\": \"MTIzNDU=\"\n    },\n    \"type\": \"Opaque\"\n  }\n]\n",
 		},
 		{
 			name:            "get single Secret with yaml output",
@@ -84,7 +84,7 @@ func TestGetAccessToken(t *testing.T) {
 			args:            []string{"default-member-token"},
 			namespace:       "default",
 			output:          "yaml",
-			expectedOutput:  "- apiVersion: v1\n  data:\n    token: MTIzNDU=\n  kind: Secret\n  metadata:\n    creationTimestamp: null\n    name: default-member-token\n  type: Opaque\n",
+			expectedOutput:  "- apiVersion: v1\n  data:\n    token: MTIzNDU=\n  kind: Secret\n  metadata:\n    name: default-member-token\n  type: Opaque\n",
 		},
 		{
 			name:           "get non-existing Secret",

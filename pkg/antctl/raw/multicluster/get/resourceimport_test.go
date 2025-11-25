@@ -60,14 +60,14 @@ func TestGetResourceImport(t *testing.T) {
 			existingResourceImports: resourceImportList,
 			args:                    []string{"ri-cluster-id-1"},
 			output:                  "json",
-			expectedOutput:          "{\n  \"kind\": \"ResourceImport\",\n  \"apiVersion\": \"multicluster.crd.antrea.io/v1alpha1\",\n  \"metadata\": {\n    \"name\": \"ri-cluster-id-1\",\n    \"namespace\": \"default\",\n    \"resourceVersion\": \"999\",\n    \"creationTimestamp\": null\n  },\n  \"spec\": {\n    \"kind\": \"ServiceImport\"\n  },\n  \"status\": {}\n}\n",
+			expectedOutput:          "{\n  \"kind\": \"ResourceImport\",\n  \"apiVersion\": \"multicluster.crd.antrea.io/v1alpha1\",\n  \"metadata\": {\n    \"name\": \"ri-cluster-id-1\",\n    \"namespace\": \"default\",\n    \"resourceVersion\": \"999\"\n  },\n  \"spec\": {\n    \"kind\": \"ServiceImport\"\n  },\n  \"status\": {}\n}\n",
 		},
 		{
 			name:                    "get single ResourceImport with yaml output",
 			existingResourceImports: resourceImportList,
 			args:                    []string{"ri-cluster-id-1"},
 			output:                  "yaml",
-			expectedOutput:          "apiVersion: multicluster.crd.antrea.io/v1alpha1\nkind: ResourceImport\nmetadata:\n  creationTimestamp: null\n  name: ri-cluster-id-1\n  namespace: default\n  resourceVersion: \"999\"\nspec:\n  kind: ServiceImport\nstatus: {}\n",
+			expectedOutput:          "apiVersion: multicluster.crd.antrea.io/v1alpha1\nkind: ResourceImport\nmetadata:\n  name: ri-cluster-id-1\n  namespace: default\n  resourceVersion: \"999\"\nspec:\n  kind: ServiceImport\nstatus: {}\n",
 		},
 		{
 			name:           "get non-existing ResourceImport",

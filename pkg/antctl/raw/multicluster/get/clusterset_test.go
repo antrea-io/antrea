@@ -59,14 +59,14 @@ func TestGetClusterSet(t *testing.T) {
 			existingClusterSets: clusterSetList,
 			args:                []string{"clusterset-name"},
 			output:              "json",
-			expectedOutput:      "[\n  {\n    \"kind\": \"ClusterSet\",\n    \"apiVersion\": \"multicluster.crd.antrea.io/v1alpha2\",\n    \"metadata\": {\n      \"name\": \"clusterset-name\",\n      \"namespace\": \"default\",\n      \"resourceVersion\": \"999\",\n      \"creationTimestamp\": null\n    },\n    \"spec\": {\n      \"clusterID\": \"\",\n      \"leaders\": null\n    },\n    \"status\": {}\n  }\n]\n",
+			expectedOutput:      "[\n  {\n    \"kind\": \"ClusterSet\",\n    \"apiVersion\": \"multicluster.crd.antrea.io/v1alpha2\",\n    \"metadata\": {\n      \"name\": \"clusterset-name\",\n      \"namespace\": \"default\",\n      \"resourceVersion\": \"999\"\n    },\n    \"spec\": {\n      \"clusterID\": \"\",\n      \"leaders\": null\n    },\n    \"status\": {}\n  }\n]\n",
 		},
 		{
 			name:                "get single ClusterSet with yaml output",
 			existingClusterSets: clusterSetList,
 			args:                []string{"clusterset-name"},
 			output:              "yaml",
-			expectedOutput:      "- apiVersion: multicluster.crd.antrea.io/v1alpha2\n  kind: ClusterSet\n  metadata:\n    creationTimestamp: null\n    name: clusterset-name\n    namespace: default\n    resourceVersion: \"999\"\n  spec:\n    clusterID: \"\"\n    leaders: null\n  status: {}\n",
+			expectedOutput:      "- apiVersion: multicluster.crd.antrea.io/v1alpha2\n  kind: ClusterSet\n  metadata:\n    name: clusterset-name\n    namespace: default\n    resourceVersion: \"999\"\n  spec:\n    clusterID: \"\"\n    leaders: null\n  status: {}\n",
 		},
 		{
 			name:           "get non-existing ClusterSet",

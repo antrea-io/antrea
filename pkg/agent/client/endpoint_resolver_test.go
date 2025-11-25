@@ -111,7 +111,7 @@ func runTestEndpointResolver(ctx context.Context, t *testing.T, objects ...runti
 	// resolver.informerFactory.Start may not have been called yet.
 	// We also check the return value of cache.WaitForCacheSync even though it should only be
 	// true if the context was cancelled. which should not happen in our test cases.
-	require.True(t, cache.WaitForCacheSync(ctx.Done(), resolver.serviceListerSynced, resolver.endpointSliceInformerSynced))
+	require.True(t, cache.WaitForCacheSync(ctx.Done(), resolver.serviceListerSynced, resolver.endpointSliceListerSynced))
 	return k8sClient, resolver
 }
 
