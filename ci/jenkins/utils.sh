@@ -32,6 +32,8 @@ function check_and_cleanup_docker_build_cache() {
 }
 
 function check_and_upgrade_golang() {
+    echo "====== Clean up Golang cache ======"
+    go clean -cache -modcache -testcache || true
     if [ -z "${GOLANG_RELEASE_DIR}" ]; then
         GOLANG_RELEASE_DIR="/var/lib/jenkins/golang-releases"
     fi
