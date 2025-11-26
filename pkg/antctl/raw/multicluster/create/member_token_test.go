@@ -44,7 +44,6 @@ data:
   token: MTIzNDU=
 kind: Secret
 metadata:
-  creationTimestamp: null
   name: default-member-token
 type: Opaque
 `)
