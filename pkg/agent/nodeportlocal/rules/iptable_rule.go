@@ -20,6 +20,7 @@ package rules
 import (
 	"bytes"
 	"fmt"
+	"net"
 
 	"k8s.io/klog/v2"
 
@@ -95,7 +96,7 @@ func buildRuleForPod(port int, podIP, protocol string) []string {
 
 // AddRule appends a DNAT rule in NodePortLocalChain chain of NAT table.
 func (ipt *iptablesRules) AddRule(nodePort int, podIP string, podPort int, protocol string) error {
-	podAddr := fmt.Sprintf("%s:%d", podIP, podPort)
+	podAddr := net.JoinHostPort(podIP, fmt.Sprint(podPort))
 	rule := buildRuleForPod(nodePort, podAddr, protocol)
 	if err := ipt.table.AppendRule(ipt.protocol, iptables.NATTable, NodePortLocalChain, rule); err != nil {
 		return err

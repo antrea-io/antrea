@@ -19,6 +19,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net"
 	"regexp"
 	"strconv"
 	"strings"
@@ -202,7 +203,7 @@ func checkNPLRulesForWindowsPod(t *testing.T, data *TestData, r *require.Asserti
 func buildRuleForPod(rule nplRuleData) []string {
 	return []string{
 		"-p", rule.protocol, "-m", rule.protocol, "--dport", fmt.Sprint(rule.nodePort),
-		"-j", "DNAT", "--to-destination", fmt.Sprintf("%s:%d", rule.podIP, rule.podPort),
+		"-j", "DNAT", "--to-destination", net.JoinHostPort(rule.podIP, fmt.Sprint(rule.podPort)),
 	}
 }
 
