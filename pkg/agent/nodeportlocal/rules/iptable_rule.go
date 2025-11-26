@@ -20,6 +20,7 @@ package rules
 import (
 	"bytes"
 	"fmt"
+	"net"
 
 	"k8s.io/klog/v2"
 
@@ -86,21 +87,21 @@ func (ipt *iptablesRules) initRules() error {
 	return nil
 }
 
-func buildRuleForPod(port int, podIP, protocol string) []string {
+func buildRuleForPod(nodePort int, podIP string, podPort int, protocol string) []string {
+	podAddr := net.JoinHostPort(podIP, fmt.Sprint(podPort))
 	return []string{
-		"-p", protocol, "-m", protocol, "--dport", fmt.Sprint(port),
-		"-j", "DNAT", "--to-destination", podIP,
+		"-p", protocol, "-m", protocol, "--dport", fmt.Sprint(nodePort),
+		"-j", "DNAT", "--to-destination", podAddr,
 	}
 }
 
 // AddRule appends a DNAT rule in NodePortLocalChain chain of NAT table.
 func (ipt *iptablesRules) AddRule(nodePort int, podIP string, podPort int, protocol string) error {
-	podAddr := fmt.Sprintf("%s:%d", podIP, podPort)
-	rule := buildRuleForPod(nodePort, podAddr, protocol)
+	rule := buildRuleForPod(nodePort, podIP, podPort, protocol)
 	if err := ipt.table.AppendRule(ipt.protocol, iptables.NATTable, NodePortLocalChain, rule); err != nil {
 		return err
 	}
-	klog.InfoS("Successfully added DNAT rule", "podAddr", podAddr, "nodePort", nodePort, "protocol", protocol, "ipFamily", ipt.protocol)
+	klog.InfoS("Successfully added DNAT rule", "podIP", podIP, "podPort", podPort, "nodePort", nodePort, "protocol", protocol, "ipFamily", ipt.protocol)
 	return nil
 }
 
@@ -112,8 +113,7 @@ func (ipt *iptablesRules) AddAllRules(nplList []PodNodePort) error {
 	writeLine(iptablesData, iptables.MakeChainLine(NodePortLocalChain))
 
 	for _, nplData := range nplList {
-		destination := nplData.PodIP + ":" + fmt.Sprint(nplData.PodPort)
-		rule := buildRuleForPod(nplData.NodePort, destination, nplData.Protocol)
+		rule := buildRuleForPod(nplData.NodePort, nplData.PodIP, nplData.PodPort, nplData.Protocol)
 		ruleWithChain := append([]string{"-A", NodePortLocalChain}, rule...)
 		writeLine(iptablesData, ruleWithChain...)
 	}
@@ -124,12 +124,11 @@ func (ipt *iptablesRules) AddAllRules(nplList []PodNodePort) error {
 
 // DeleteRule deletes a specific NPL rule from NodePortLocalChain chain
 func (ipt *iptablesRules) DeleteRule(nodePort int, podIP string, podPort int, protocol string) error {
-	podAddr := fmt.Sprintf("%s:%d", podIP, podPort)
-	rule := buildRuleForPod(nodePort, podAddr, protocol)
+	rule := buildRuleForPod(nodePort, podIP, podPort, protocol)
 	if err := ipt.table.DeleteRule(ipt.protocol, iptables.NATTable, NodePortLocalChain, rule); err != nil {
 		return err
 	}
-	klog.InfoS("Successfully deleted DNAT rule", "podAddr", podAddr, "nodePort", nodePort, "protocol", protocol, "ipFamily", ipt.protocol)
+	klog.InfoS("Successfully deleted DNAT rule", "podIP", podIP, "podPort", podPort, "nodePort", nodePort, "protocol", protocol, "ipFamily", ipt.protocol)
 	return nil
 }
 
