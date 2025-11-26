@@ -159,8 +159,7 @@ func getPodIPForFamily(podIPs *PodIPs, ipFamily types.IPFamilyType) string {
 	return ""
 }
 
-func checkNPLRulesForPod(t *testing.T, data *TestData, r *require.Assertions, nplAnnotations []types.NPLAnnotation, antreaPod string, podIPs *PodIPs, present bool) {
-	var rules []nplRuleData
+func nplAnnotationsToRules(nplAnnotations []types.NPLAnnotation, podIPs *PodIPs) (rulesIPv4, rulesIPv6 []nplRuleData) {
 	for _, ann := range nplAnnotations {
 		podIP := getPodIPForFamily(podIPs, ann.IPFamily)
 		if podIP == "" {
@@ -173,29 +172,31 @@ func checkNPLRulesForPod(t *testing.T, data *TestData, r *require.Assertions, np
 			podPort:  ann.PodPort,
 			protocol: ann.Protocol,
 		}
-		rules = append(rules, rule)
+		if ann.IPFamily == types.IPFamilyIPv4 {
+			rulesIPv4 = append(rulesIPv4, rule)
+		} else {
+			rulesIPv6 = append(rulesIPv6, rule)
+		}
 	}
-	checkForNPLRuleInIPTables(t, data, r, antreaPod, rules, present)
-	checkForNPLListeningSockets(t, data, r, antreaPod, rules, present)
+	return
+}
+
+func checkNPLRulesForPod(t *testing.T, data *TestData, r *require.Assertions, nplAnnotations []types.NPLAnnotation, antreaPod string, podIPs *PodIPs, present bool) {
+	rulesIPv4, rulesIPv6 := nplAnnotationsToRules(nplAnnotations, podIPs)
+	if len(rulesIPv4) > 0 {
+		checkForNPLRuleInIPTables(t, data, r, antreaPod, rulesIPv4, false, present)
+		checkForNPLListeningSockets(t, data, r, antreaPod, rulesIPv4, false, present)
+	}
+	if len(rulesIPv6) > 0 {
+		checkForNPLRuleInIPTables(t, data, r, antreaPod, rulesIPv6, true, present)
+		checkForNPLListeningSockets(t, data, r, antreaPod, rulesIPv6, true, present)
+	}
 }
 
 func checkNPLRulesForWindowsPod(t *testing.T, data *TestData, r *require.Assertions, nplAnnotations []types.NPLAnnotation, antreaPod string, podIPs *PodIPs, nodeName string, present bool) {
-	var rules []nplRuleData
-	for _, ann := range nplAnnotations {
-		podIP := getPodIPForFamily(podIPs, ann.IPFamily)
-		if podIP == "" {
-			continue
-		}
-		rule := nplRuleData{
-			nodeIP:   ann.NodeIP,
-			nodePort: ann.NodePort,
-			podIP:    podIP,
-			podPort:  ann.PodPort,
-			protocol: ann.Protocol,
-		}
-		rules = append(rules, rule)
-	}
-	checkForNPLRuleInNetNat(t, data, r, antreaPod, nodeName, rules, present)
+	rulesIPv4, rulesIPv6 := nplAnnotationsToRules(nplAnnotations, podIPs)
+	r.Empty(rulesIPv6, "We only support IPv4 for Windows Nodes")
+	checkForNPLRuleInNetNat(t, data, r, antreaPod, nodeName, rulesIPv4, present)
 }
 
 func buildRuleForPod(rule nplRuleData) []string {
@@ -209,8 +210,12 @@ func protocolToString(p corev1.Protocol) string {
 	return strings.ToLower(string(p))
 }
 
-func checkForNPLRuleInIPTables(t *testing.T, data *TestData, r *require.Assertions, antreaPod string, rules []nplRuleData, present bool) {
-	cmd := []string{"iptables", "-t", "nat", "-S"}
+func checkForNPLRuleInIPTables(t *testing.T, data *TestData, r *require.Assertions, antreaPod string, rules []nplRuleData, isIPv6 bool, present bool) {
+	cmd := []string{"iptables"}
+	if isIPv6 {
+		cmd = []string{"ip6tables"}
+	}
+	cmd = append(cmd, "-t", "nat", "-S")
 	t.Logf("Verifying iptables rules %v, present: %v", rules, present)
 	const timeout = 60 * time.Second
 	err := wait.PollUntilContextTimeout(context.Background(), time.Second, timeout, false, func(ctx context.Context) (bool, error) {
@@ -297,23 +302,32 @@ func checkForNPLRuleInNetNat(t *testing.T, data *TestData, r *require.Assertions
 	r.NoError(err, "Poll for NetNat rules check failed")
 }
 
-func checkForNPLListeningSockets(t *testing.T, data *TestData, r *require.Assertions, antreaPod string, rules []nplRuleData, present bool) {
+func checkForNPLListeningSockets(t *testing.T, data *TestData, r *require.Assertions, antreaPod string, rules []nplRuleData, isIPv6 bool, present bool) {
 	t.Logf("Verifying NPL listening sockets")
 	const timeout = 30 * time.Second
+	bindIP := "0.0.0.0"
+	if isIPv6 {
+		bindIP = "[::]"
+	}
 	err := wait.PollUntilContextTimeout(context.Background(), time.Second, timeout, false, func(ctx context.Context) (bool, error) {
 		for _, rule := range rules {
 			protocolOption := "--" + rule.protocol
 			cmd := []string{"ss", "--listening", protocolOption, "-H", "-n"}
+			if isIPv6 {
+				cmd = append(cmd, "-6")
+			} else {
+				cmd = append(cmd, "-4")
+			}
 			stdout, _, err := data.RunCommandFromPod(antreaNamespace, antreaPod, agentContainerName, cmd)
 			if err != nil {
 				return false, fmt.Errorf("error when running 'ss': %v", err)
 			}
 
 			t.Logf("Checking if NPL is listening on %s:%d", rule.protocol, rule.nodePort)
-			regexString := fmt.Sprintf(`(?m)^LISTEN.*0\.0\.0\.0:%d`, rule.nodePort)
+			regexString := fmt.Sprintf(`(?m)^LISTEN.*%s:%d`, regexp.QuoteMeta(bindIP), rule.nodePort)
 			// UDP is a connectionless protocol and hence, lacks states similar to those of TCP (LISTEN).
 			if rule.protocol == "udp" {
-				regexString = fmt.Sprintf(`(?m)^UNCONN.*0\.0\.0\.0:%d`, rule.nodePort)
+				regexString = fmt.Sprintf(`(?m)^UNCONN.*%s:%d`, regexp.QuoteMeta(bindIP), rule.nodePort)
 			}
 			found, err := regexp.MatchString(regexString, stdout)
 			if err != nil {
@@ -332,8 +346,13 @@ func checkForNPLListeningSockets(t *testing.T, data *TestData, r *require.Assert
 	r.NoError(err, "Check for NPL listening sockets failed")
 }
 
-func deleteNPLRuleFromIPTables(t *testing.T, data *TestData, r *require.Assertions, antreaPod string, rule nplRuleData) {
-	cmd := append([]string{"iptables", "-w", "10", "-t", "nat", "-D", "ANTREA-NODE-PORT-LOCAL"}, buildRuleForPod(rule)...)
+func deleteNPLRuleFromIPTables(t *testing.T, data *TestData, r *require.Assertions, antreaPod string, rule nplRuleData, isIPv6 bool) {
+	cmd := []string{"iptables"}
+	if isIPv6 {
+		cmd = []string{"ip6tables"}
+	}
+	cmd = append(cmd, "-w", "10", "-t", "nat", "-D", "ANTREA-NODE-PORT-LOCAL")
+	cmd = append(cmd, buildRuleForPod(rule)...)
 	t.Logf("Deleting iptables rule for %v", rule)
 	_, _, err := data.RunCommandFromPod(antreaNamespace, antreaPod, agentContainerName, cmd)
 	r.NoError(err, "Error when deleting iptables rule")
@@ -654,7 +673,7 @@ func testNPLMultiplePodsAgentRestart(t *testing.T, data *TestData) {
 	if len(clusterInfo.windowsNodes) > 1 {
 		deleteNPLRuleFromNetNat(t, data, r, antreaPod, ruleToDelete)
 	} else {
-		deleteNPLRuleFromIPTables(t, data, r, antreaPod, ruleToDelete)
+		deleteNPLRuleFromIPTables(t, data, r, antreaPod, ruleToDelete, nplAnnotations[0].IPFamily == types.IPFamilyIPv6)
 	}
 
 	err = data.RestartAntreaAgentPods(defaultTimeout)
@@ -710,28 +729,12 @@ func testNPLChangePortRangeAgentRestart(t *testing.T, data *TestData) {
 	err = data.podWaitForRunning(defaultTimeout, clientName, data.testNamespace)
 	r.NoError(err, "Error when waiting for Pod %s to be running", clientName)
 
-	var rules []nplRuleData
+	var allRulesIPv4, allRulesIPv6 []nplRuleData
 	for _, testPodName := range testPods {
 		nplAnnotations, testPodIPs := getNPLAnnotations(t, data, r, testPodName, nil)
-		for i := range nplAnnotations {
-			// Determine which Pod IP to use based on the annotation's IP family
-			var podIP string
-			if nplAnnotations[i].IPFamily == "IPv6" && testPodIPs.IPv6 != nil {
-				podIP = testPodIPs.IPv6.String()
-			} else if testPodIPs.IPv4 != nil {
-				podIP = testPodIPs.IPv4.String()
-			}
-			if podIP == "" {
-				continue
-			}
-			rule := nplRuleData{
-				nodePort: nplAnnotations[i].NodePort,
-				podIP:    podIP,
-				podPort:  nplAnnotations[i].PodPort,
-				protocol: nplAnnotations[i].Protocol,
-			}
-			rules = append(rules, rule)
-		}
+		rulesIPv4, rulesIPv6 := nplAnnotationsToRules(nplAnnotations, testPodIPs)
+		allRulesIPv4 = append(allRulesIPv4, rulesIPv4...)
+		allRulesIPv6 = append(allRulesIPv6, rulesIPv6...)
 	}
 	configureNPLForAgent(t, data, updatedStartPort, updatedEndPort)
 
@@ -739,11 +742,18 @@ func testNPLChangePortRangeAgentRestart(t *testing.T, data *TestData) {
 	r.NoError(err, "Error when getting Antrea Agent Pod on Node '%s'", serverNode)
 
 	if clusterInfo.nodesOS[serverNode] == "windows" {
+		r.Empty(allRulesIPv6, "We only support IPv4 for Windows Nodes")
 		time.Sleep(10 * time.Second)
-		checkForNPLRuleInNetNat(t, data, r, antreaPod, serverNode, rules, false)
+		checkForNPLRuleInNetNat(t, data, r, antreaPod, serverNode, allRulesIPv4, false)
 	} else {
-		checkForNPLRuleInIPTables(t, data, r, antreaPod, rules, false)
-		checkForNPLListeningSockets(t, data, r, antreaPod, rules, false)
+		if len(allRulesIPv4) > 0 {
+			checkForNPLRuleInIPTables(t, data, r, antreaPod, allRulesIPv4, false, false)
+			checkForNPLListeningSockets(t, data, r, antreaPod, allRulesIPv4, false, false)
+		}
+		if len(allRulesIPv6) > 0 {
+			checkForNPLRuleInIPTables(t, data, r, antreaPod, allRulesIPv6, true, false)
+			checkForNPLListeningSockets(t, data, r, antreaPod, allRulesIPv6, true, false)
+		}
 	}
 
 	for _, testPodName := range testPods {
