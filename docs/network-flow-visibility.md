@@ -715,6 +715,8 @@ instead, which is actively maintained.
 
 ## Layer 7 Network Flow Exporter
 
+**This feature is deprecated in Antrea v2.5.0, and will be removed in v2.6.0.**
+
 In addition to layer 4 network visibility, Antrea adds layer 7 network flow
 export.
 

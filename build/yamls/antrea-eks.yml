@@ -4285,9 +4285,6 @@ data:
     # Allow users to apply ClusterNetworkPolicy to Kubernetes Nodes.
     #  NodeNetworkPolicy: false
 
-    # Enable L7FlowExporter on Pods and Namespaces to export the application layer flows such as HTTP flows.
-    #  L7FlowExporter: false
-
     # Enable NodeLatencyMonitor to monitor the latency between Nodes.
     #  NodeLatencyMonitor: false
 
@@ -5699,7 +5696,7 @@ spec:
         kubectl.kubernetes.io/default-container: antrea-agent
         # Automatically restart Pods with a RollingUpdate if the ConfigMap changes
         # See https://helm.sh/docs/howto/charts_tips_and_tricks/#automatically-roll-deployments
-        checksum/config: 23e14d3441d1d935b8499d78c5273dd1126c41c5b62b2b9403b739faa199d653
+        checksum/config: 3102c632b42c98e161207364e65fa751a0b0831e87d878a3242c013c1b7d3c2b
       labels:
         app: antrea
         component: antrea-agent
@@ -5948,7 +5945,7 @@ spec:
       annotations:
         # Automatically restart Pod if the ConfigMap changes
         # See https://helm.sh/docs/howto/charts_tips_and_tricks/#automatically-roll-deployments
-        checksum/config: 23e14d3441d1d935b8499d78c5273dd1126c41c5b62b2b9403b739faa199d653
+        checksum/config: 3102c632b42c98e161207364e65fa751a0b0831e87d878a3242c013c1b7d3c2b
       labels:
         app: antrea
         component: antrea-controller
