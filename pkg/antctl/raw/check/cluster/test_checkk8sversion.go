@@ -38,7 +38,7 @@ func (t *checkK8sVersion) Run(ctx context.Context, testContext *testContext) err
 	if err != nil {
 		return fmt.Errorf("error parsing server version: %w", err)
 	}
-	minVersion := semver.MustParse("1.23")
+	minVersion := semver.MustParse("1.23.0")
 	if currentVersion.GTE(minVersion) {
 		testContext.Log("Kubernetes server version is compatible with Antrea. Kubernetes version: %s", serverVersion.GitVersion)
 	} else {
