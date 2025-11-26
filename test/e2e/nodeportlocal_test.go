@@ -19,6 +19,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net"
 	"regexp"
 	"strconv"
 	"strings"
@@ -202,7 +203,7 @@ func checkNPLRulesForWindowsPod(t *testing.T, data *TestData, r *require.Asserti
 func buildRuleForPod(rule nplRuleData) []string {
 	return []string{
 		"-p", rule.protocol, "-m", rule.protocol, "--dport", fmt.Sprint(rule.nodePort),
-		"-j", "DNAT", "--to-destination", fmt.Sprintf("%s:%d", rule.podIP, rule.podPort),
+		"-j", "DNAT", "--to-destination", net.JoinHostPort(rule.podIP, fmt.Sprint(rule.podPort)),
 	}
 }
 
@@ -651,7 +652,14 @@ func testNPLMultiplePodsAgentRestart(t *testing.T, data *TestData) {
 
 	// Delete one iptables rule to ensure it gets re-installed correctly on restart.
 	nplAnnotations, testPodIPs := getNPLAnnotations(t, testData, r, testPods[0], nil)
-	r.Len(nplAnnotations, 1)
+	expectedAnnotationsLen := 0
+	if clusterInfo.podV4NetworkCIDR != "" {
+		expectedAnnotationsLen += 1
+	}
+	if clusterInfo.podV6NetworkCIDR != "" {
+		expectedAnnotationsLen += 1
+	}
+	r.Len(nplAnnotations, expectedAnnotationsLen)
 	// Make sure the rule is present first. It should always be the case if the Pod was already
 	// annotated.
 
