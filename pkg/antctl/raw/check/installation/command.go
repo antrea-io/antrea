@@ -74,8 +74,11 @@ const (
 	kindEchoName                = "echo"
 	kindClientName              = "client"
 	agentDaemonSetName          = "antrea-agent"
+	controllerDeploymentName    = "antrea-controller"
 	podReadyTimeout             = 1 * time.Minute
 	minNetworkPolicyDelay       = 1 * time.Second
+	controllerAvailableTimeout  = 1 * time.Minute
+	agentAvailableTimeout       = 5 * time.Minute
 )
 
 type notRunnableError struct {
@@ -223,13 +226,14 @@ func NewTestContext(
 
 func (t *testContext) setup(ctx context.Context) error {
 	t.Log("Test starting....")
-	t.Log("Checking for existence of %q DaemonSet in %q Namespace", agentDaemonSetName, t.antreaNamespace)
-	_, err := t.client.AppsV1().DaemonSets(t.antreaNamespace).Get(ctx, agentDaemonSetName, metav1.GetOptions{})
-	if err != nil {
-		return fmt.Errorf("unable to determine status of Antrea DaemonSet: %w", err)
+	if err := check.WaitForDeploymentsReady(ctx, time.Second, agentAvailableTimeout, true, t.client, t.clusterName, t.antreaNamespace, controllerDeploymentName); err != nil {
+		return fmt.Errorf("error when checking Antrea Controller status: %w", err)
+	}
+	if err := check.WaitForDaemonSetReady(ctx, time.Second, agentAvailableTimeout, true, t.client, t.clusterName, t.antreaNamespace, agentDaemonSetName); err != nil {
+		return fmt.Errorf("error when checking Antrea Agent status: %w", err)
 	}
 	t.Log("Creating Namespace %s for post installation tests...", t.namespace)
-	_, err = t.client.CoreV1().Namespaces().Create(ctx, &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: t.namespace, Labels: map[string]string{"app": "antrea", "component": "installation-checker"}}}, metav1.CreateOptions{})
+	_, err := t.client.CoreV1().Namespaces().Create(ctx, &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: t.namespace, Labels: map[string]string{"app": "antrea", "component": "installation-checker"}}}, metav1.CreateOptions{})
 	if err != nil {
 		return fmt.Errorf("unable to create Namespace %s: %s", t.namespace, err)
 	}
@@ -328,7 +332,7 @@ func (t *testContext) setup(ctx context.Context) error {
 		if err != nil {
 			return fmt.Errorf("unable to create Deployment %s: %s", echoOtherNodeDeploymentName, err)
 		}
-		if err := check.WaitForDeploymentsReady(ctx, time.Second, podReadyTimeout, t.client, t.clusterName, t.namespace, clientDeploymentName, echoSameNodeDeploymentName, echoOtherNodeDeploymentName); err != nil {
+		if err := check.WaitForDeploymentsReady(ctx, time.Second, podReadyTimeout, false, t.client, t.clusterName, t.namespace, clientDeploymentName, echoSameNodeDeploymentName, echoOtherNodeDeploymentName); err != nil {
 			return err
 		}
 		podList, err := t.client.CoreV1().Pods(t.namespace).List(ctx, metav1.ListOptions{LabelSelector: "name=" + echoOtherNodeDeploymentName})
@@ -340,7 +344,7 @@ func (t *testContext) setup(ctx context.Context) error {
 		}
 	} else {
 		t.Log("skipping other Node Deployments as multiple Nodes are not available")
-		if err := check.WaitForDeploymentsReady(ctx, time.Second, podReadyTimeout, t.client, t.clusterName, t.namespace, clientDeploymentName, echoSameNodeDeploymentName); err != nil {
+		if err := check.WaitForDeploymentsReady(ctx, time.Second, podReadyTimeout, false, t.client, t.clusterName, t.namespace, clientDeploymentName, echoSameNodeDeploymentName); err != nil {
 			return err
 		}
 	}
