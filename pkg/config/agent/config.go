@@ -218,6 +218,13 @@ type AgentConfig struct {
 	// HostNetworkAcceleration configures acceleration of Pod-to-Pod traffic in the Node's host network using nftables
 	// flowtable when traffic mode is hybrid or noEncap.
 	HostNetworkAcceleration HostNetworkAccelerationConfig `yaml:"hostNetworkAcceleration,omitempty"`
+	// HostNetworkMode determines how antrea-agent implements netfilter rules required by Antrea functionalities and
+	// features in the Node's host network. The default value is "iptables". If "nftables" is specified, the
+	// NFTablesHostNetworkMode feature gate must be enabled; otherwise, this option has no effect. If the above condition
+	// is met but nftables is not supported or unavailable on the Node, antrea-agent will fail to start. Currently,
+	// nftables support is limited to the following features:
+	//   - AntreaProxy (proxyAll)
+	HostNetworkMode string `yaml:"hostNetworkMode,omitempty"`
 }
 
 type AntreaProxyConfig struct {

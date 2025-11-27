@@ -489,3 +489,10 @@ hostNetworkAcceleration:
   # -- Enable to accelerate Pod-to-Pod traffic in the Node's host network using nftables flowtable when traffic mode is
   # noEncap or hybrid.
   enable: true
+
+# -- Determines how antrea-agent implements Node host network netfilter rules required by functionalities and features,
+# using either "iptables" or "nftables". The default value is "iptables". If "nftables" is specified, the
+# NFTablesHostNetworkMode feature gate must be enabled; otherwise, antrea-agent will fail to start. Currently, nftables
+# support is limited to the following features:
+#   - AntreaProxy (proxyAll)
+hostNetworkMode: "iptables"

@@ -63,6 +63,7 @@ edit the Agent configuration in the
 | `BGPPolicy`                   | Agent              | `false` | Alpha | v2.1          | N/A          | N/A        | No                 |                                               |
 | `NodeLatencyMonitor`          | Agent              | `false` | Alpha | v2.1          | N/A          | N/A        | No                 |                                               |
 | `PacketCapture`               | Agent              | `false` | Alpha | v2.2          | N/A          | N/A        | No                 |                                               |
+| `NFTablesHostNetworkMode`     | Agent              | `false` | Alpha | v2.5          | N/A          | N/A        | Yes                |                                               |
 
 ## Description and Requirements of Features
 
@@ -540,3 +541,14 @@ Refer to this [document](packetcapture-guide.md) for more information.
 #### Requirements for this Feature
 
 This feature is only supported on Linux for now.
+
+### NFTablesHostNetworkMode
+
+This feature enables Antrea to use nftables instead of iptables to implement Node host network netfilter rules required
+by functionalities and features that rely on netfilter. Currently, nftables support is limited to the following features:
+
+- AntreaProxy (proxyAll)
+
+#### Requirements for this Feature
+
+This feature is only supported on Linux.

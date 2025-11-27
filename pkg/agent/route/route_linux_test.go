@@ -18,6 +18,7 @@ import (
 	"context"
 	"fmt"
 	"net"
+	"strconv"
 	"sync"
 	"testing"
 
@@ -1620,14 +1621,18 @@ func TestAddRoutes(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			mockNetlink := netlinktest.NewMockInterface(ctrl)
 			mockIPSet := ipsettest.NewMockInterface(ctrl)
-			mockNFTables := newMockNFTables(tt.networkConfig.IPv4Enabled, tt.networkConfig.IPv6Enabled)
+			mockNFTables, err := newMockNFTables(tt.networkConfig.IPv4Enabled, tt.networkConfig.IPv6Enabled)
+			require.NoError(t, err)
 			c := &Client{netlink: mockNetlink,
 				ipset:         mockIPSet,
 				networkConfig: tt.networkConfig,
 				nodeConfig:    tt.nodeConfig,
 				nftables:      mockNFTables,
+				hostNetworkAccelerationEnabled: tt.networkConfig.EnableHostNetworkAcceleration &&
+					(tt.networkConfig.TrafficEncapMode == config.TrafficEncapModeNoEncap ||
+						tt.networkConfig.TrafficEncapMode == config.TrafficEncapModeHybrid),
 			}
-			if c.networkConfig.EnableHostNetworkAcceleration {
+			if c.hostNetworkAccelerationEnabled {
 				require.NoError(t, c.syncNFTables(context.TODO()))
 			}
 
@@ -1635,7 +1640,7 @@ func TestAddRoutes(t *testing.T) {
 			tt.expectedNetlinkCalls(mockNetlink.EXPECT())
 			assert.NoError(t, c.AddRoutes(tt.podCIDR, tt.nodeName, tt.nodeIP, tt.nodeGwIP))
 
-			if c.networkConfig.EnableHostNetworkAcceleration {
+			if c.hostNetworkAccelerationEnabled {
 				expectedElements := []*knftables.Element{{
 					Set: antreaNFTablesSetPeerPodCIDR,
 					Key: []string{tt.podCIDR.String()},
@@ -1711,7 +1716,8 @@ func TestDeleteRoutes(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			mockNetlink := netlinktest.NewMockInterface(ctrl)
 			mockIPSet := ipsettest.NewMockInterface(ctrl)
-			mockNFTables := newMockNFTables(tt.ipv4Enabled, tt.ipv6Enabled)
+			mockNFTables, err := newMockNFTables(tt.ipv4Enabled, tt.ipv6Enabled)
+			require.NoError(t, err)
 			c := &Client{netlink: mockNetlink,
 				ipset:         mockIPSet,
 				nodeRoutes:    sync.Map{},
@@ -1728,7 +1734,8 @@ func TestDeleteRoutes(t *testing.T) {
 					},
 					NodeTransportInterfaceName: "eth0",
 				},
-				nftables: mockNFTables,
+				nftables:                       mockNFTables,
+				hostNetworkAccelerationEnabled: true,
 			}
 			for podCIDR, nodeRoute := range tt.existingNodeRoutes {
 				c.nodeRoutes.Store(podCIDR, nodeRoute)
@@ -2122,6 +2129,172 @@ func TestDeleteNodePortConfigs(t *testing.T) {
 	}
 }
 
+func TestAddNodePortConfigsNFTablesMode(t *testing.T) {
+	tests := []struct {
+		name              string
+		nodePortAddresses []net.IP
+		port              uint16
+		enableIPv4        bool
+		enableIPv6        bool
+		protocol          binding.Protocol
+		expectedElements  []*knftables.Element
+	}{
+		{
+			name: "ipv4 tcp",
+			nodePortAddresses: []net.IP{
+				net.ParseIP("1.1.1.1"),
+				net.ParseIP("1.1.2.2"),
+			},
+			port:       30000,
+			enableIPv4: true,
+			protocol:   binding.ProtocolTCP,
+			expectedElements: []*knftables.Element{
+				{
+					Set: antreaNFTablesSetNodePort,
+					Key: []string{"1.1.1.1 . tcp . 30000"},
+				},
+				{
+					Set: antreaNFTablesSetNodePort,
+					Key: []string{"1.1.2.2 . tcp . 30000"},
+				},
+			},
+		},
+		{
+			name: "ipv6 udp",
+			nodePortAddresses: []net.IP{
+				net.ParseIP("fd00:1234:5678:dead:beaf::1"),
+				net.ParseIP("fd00:1234:5678:dead:beaf::2"),
+			},
+			port:       30001,
+			enableIPv6: true,
+			protocol:   binding.ProtocolUDPv6,
+			expectedElements: []*knftables.Element{
+				{
+					Set: antreaNFTablesSetNodePort6,
+					Key: []string{"fd00:1234:5678:dead:beaf::1 . udp . 30001"},
+				},
+				{
+					Set: antreaNFTablesSetNodePort6,
+					Key: []string{"fd00:1234:5678:dead:beaf::2 . udp . 30001"},
+				},
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			nftables, err := newMockNFTables(tt.enableIPv4, tt.enableIPv6)
+			require.NoError(t, err)
+			c := &Client{
+				nftables: nftables,
+				serviceNFTablesSets: map[string]*sync.Map{
+					antreaNFTablesSetExternalIP:  {},
+					antreaNFTablesSetExternalIP6: {},
+					antreaNFTablesSetNodePort:    {},
+					antreaNFTablesSetNodePort6:   {},
+				},
+				hostNetworkNFTables: true,
+				proxyAll:            true,
+			}
+			require.NoError(t, c.syncNFTables(context.TODO()))
+			require.NoError(t, c.AddNodePortConfigs(tt.nodePortAddresses, tt.port, tt.protocol))
+			for _, nft := range c.nftables.All() {
+				nftablesSet := getNodePortNFTablesSet(tt.enableIPv6)
+
+				gotElements, err := nft.ListElements(context.TODO(), "set", nftablesSet)
+				require.NoError(t, err)
+				assert.ElementsMatch(t, tt.expectedElements, gotElements)
+
+				_, ok := c.serviceNFTablesSets[nftablesSet].Load(fmt.Sprintf("%s-%d", tt.protocol, tt.port))
+				assert.True(t, ok)
+			}
+		})
+	}
+}
+
+func TestDeleteNodePortConfigsNFTablesMode(t *testing.T) {
+	tests := []struct {
+		name              string
+		nodePortAddresses []net.IP
+		port              uint16
+		enableIPv4        bool
+		enableIPv6        bool
+		protocol          binding.Protocol
+		existingElements  []*knftables.Element
+	}{
+		{
+			name: "ipv4 tcp",
+			nodePortAddresses: []net.IP{
+				net.ParseIP("1.1.1.1"),
+				net.ParseIP("1.1.2.2"),
+			},
+			port:       30000,
+			enableIPv4: true,
+			protocol:   binding.ProtocolTCP,
+			existingElements: []*knftables.Element{
+				{
+					Set: antreaNFTablesSetNodePort,
+					Key: []string{"1.1.1.1 . tcp . 30000"},
+				},
+				{
+					Set: antreaNFTablesSetNodePort,
+					Key: []string{"1.1.2.2 . tcp . 30000"},
+				},
+			},
+		},
+		{
+			name: "ipv6 udp",
+			nodePortAddresses: []net.IP{
+				net.ParseIP("fd00:1234:5678:dead:beaf::1"),
+				net.ParseIP("fd00:1234:5678:dead:beaf::2"),
+			},
+			port:       30001,
+			enableIPv6: true,
+			protocol:   binding.ProtocolUDPv6,
+			existingElements: []*knftables.Element{
+				{
+					Set: antreaNFTablesSetNodePort6,
+					Key: []string{"fd00:1234:5678:dead:beaf::1 . udp . 30001"},
+				},
+				{
+					Set: antreaNFTablesSetNodePort6,
+					Key: []string{"fd00:1234:5678:dead:beaf::2 . udp . 30001"},
+				},
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			nftables, err := newMockNFTables(tt.enableIPv4, tt.enableIPv6)
+			require.NoError(t, err)
+			c := &Client{
+				nftables: nftables,
+				serviceNFTablesSets: map[string]*sync.Map{
+					antreaNFTablesSetExternalIP:  {},
+					antreaNFTablesSetExternalIP6: {},
+					antreaNFTablesSetNodePort:    {},
+					antreaNFTablesSetNodePort6:   {},
+				},
+				hostNetworkNFTables: true,
+				proxyAll:            true,
+			}
+			c.serviceNFTablesSets[getNodePortNFTablesSet(tt.enableIPv6)].Store(strconv.Itoa(int(tt.port)), tt.existingElements)
+
+			require.NoError(t, c.syncNFTables(context.TODO()))
+			require.NoError(t, c.DeleteNodePortConfigs(tt.nodePortAddresses, tt.port, tt.protocol))
+			for _, nft := range c.nftables.All() {
+				nftablesSet := getNodePortNFTablesSet(tt.enableIPv6)
+
+				gotElements, err := nft.ListElements(context.TODO(), "set", getNodePortNFTablesSet(tt.enableIPv6))
+				require.NoError(t, err)
+				assert.ElementsMatch(t, []*knftables.Element{}, gotElements)
+
+				_, ok := c.serviceNFTablesSets[nftablesSet].Load(fmt.Sprintf("%s-%d", tt.protocol, tt.port))
+				require.False(t, ok)
+			}
+		})
+	}
+}
+
 func TestAddServiceCIDRRoute(t *testing.T) {
 	_, serviceIPv4CIDR1, _ := net.ParseCIDR("10.96.0.1/32")
 	_, serviceIPv4CIDR2, _ := net.ParseCIDR("10.96.0.0/28")
@@ -2434,6 +2607,217 @@ func TestDeleteExternalIPRoute(t *testing.T) {
 				}
 			}
 			assert.Equal(t, make(map[string]sets.Set[string]), c.serviceExternalIPReferences)
+		})
+	}
+}
+
+func TestAddExternalIPConfigsNFTablesMode(t *testing.T) {
+	tests := []struct {
+		name                                string
+		enableIPv4                          bool
+		enableIPv6                          bool
+		svcToExternalIPs                    map[string][]string
+		expectedCalls                       func(mockNetlink *netlinktest.MockInterfaceMockRecorder)
+		expectedServiceExternalIPReferences map[string]sets.Set[string]
+		expectedElements                    []*knftables.Element
+	}{
+		{
+			name:       "IPv4",
+			enableIPv4: true,
+			svcToExternalIPs: map[string][]string{
+				"svc1": {externalIPv4Addr1},
+				"svc2": {externalIPv4Addr2},
+				"svc3": {externalIPv4Addr1, externalIPv4Addr2},
+			},
+			expectedCalls: func(mockNetlink *netlinktest.MockInterfaceMockRecorder) {
+				mockNetlink.RouteReplace(ipv4Route1)
+				mockNetlink.RouteReplace(ipv4Route2)
+			},
+			expectedServiceExternalIPReferences: map[string]sets.Set[string]{
+				externalIPv4Addr1: sets.New[string]("svc1", "svc3"),
+				externalIPv4Addr2: sets.New[string]("svc2", "svc3"),
+			},
+			expectedElements: []*knftables.Element{
+				{
+					Set: antreaNFTablesSetExternalIP,
+					Key: []string{externalIPv4Addr1},
+				},
+				{
+					Set: antreaNFTablesSetExternalIP,
+					Key: []string{externalIPv4Addr2},
+				},
+			},
+		},
+		{
+			name:       "IPv6",
+			enableIPv6: true,
+			svcToExternalIPs: map[string][]string{
+				"svc1": {externalIPv6Addr1},
+				"svc2": {externalIPv6Addr2},
+				"svc3": {externalIPv6Addr1, externalIPv6Addr2},
+			},
+			expectedCalls: func(mockNetlink *netlinktest.MockInterfaceMockRecorder) {
+				mockNetlink.RouteReplace(ipv6Route1)
+				mockNetlink.RouteReplace(ipv6Route2)
+			},
+			expectedServiceExternalIPReferences: map[string]sets.Set[string]{
+				externalIPv6Addr1: sets.New[string]("svc1", "svc3"),
+				externalIPv6Addr2: sets.New[string]("svc2", "svc3"),
+			},
+			expectedElements: []*knftables.Element{
+				{
+					Set: antreaNFTablesSetExternalIP6,
+					Key: []string{externalIPv6Addr1},
+				},
+				{
+					Set: antreaNFTablesSetExternalIP6,
+					Key: []string{externalIPv6Addr2},
+				},
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			mockNetlink := netlinktest.NewMockInterface(ctrl)
+			nftables, err := newMockNFTables(tt.enableIPv4, tt.enableIPv6)
+			require.NoError(t, err)
+			c := &Client{
+				nftables:                    nftables,
+				netlink:                     mockNetlink,
+				nodeConfig:                  nodeConfig,
+				serviceExternalIPReferences: make(map[string]sets.Set[string]),
+				serviceNFTablesSets: map[string]*sync.Map{
+					antreaNFTablesSetExternalIP:  {},
+					antreaNFTablesSetExternalIP6: {},
+					antreaNFTablesSetNodePort:    {},
+					antreaNFTablesSetNodePort6:   {},
+				},
+				hostNetworkNFTables: true,
+				proxyAll:            true,
+			}
+			require.NoError(t, c.syncNFTables(context.TODO()))
+			tt.expectedCalls(mockNetlink.EXPECT())
+
+			for svcInfo, externalIPs := range tt.svcToExternalIPs {
+				for _, externalIP := range externalIPs {
+					assert.NoError(t, c.AddExternalIPConfigs(svcInfo, net.ParseIP(externalIP)))
+				}
+			}
+			assert.Equal(t, tt.expectedServiceExternalIPReferences, c.serviceExternalIPReferences)
+			for _, nft := range c.nftables.All() {
+				gotElements, err := nft.ListElements(context.TODO(), "set", getExternalIPNFTablesSet(tt.enableIPv6))
+				require.NoError(t, err)
+				assert.ElementsMatch(t, tt.expectedElements, gotElements)
+			}
+		})
+	}
+}
+
+func TestDeleteExternalIPRouteNFTablesMode(t *testing.T) {
+	tests := []struct {
+		name                        string
+		enableIPv4                  bool
+		enableIPv6                  bool
+		svcToExternalIPs            map[string][]string
+		serviceRoutes               map[string]*netlink.Route
+		serviceExternalIPReferences map[string]sets.Set[string]
+		externalIPs                 []string
+		expectedCalls               func(mockNetlink *netlinktest.MockInterfaceMockRecorder)
+	}{
+		{
+			name:       "IPv4",
+			enableIPv4: true,
+			svcToExternalIPs: map[string][]string{
+				"svc1": {externalIPv4Addr1},
+				"svc2": {externalIPv4Addr2},
+				"svc3": {externalIPv4Addr1, externalIPv4Addr2},
+			},
+			serviceRoutes: map[string]*netlink.Route{
+				externalIPv4Addr1: ipv4Route1,
+				externalIPv4Addr2: ipv4Route2,
+			},
+			serviceExternalIPReferences: map[string]sets.Set[string]{
+				externalIPv4Addr1: sets.New[string]("svc1", "svc3"),
+				externalIPv4Addr2: sets.New[string]("svc2", "svc3"),
+			},
+			externalIPs: []string{externalIPv4Addr1, externalIPv4Addr2},
+			expectedCalls: func(mockNetlink *netlinktest.MockInterfaceMockRecorder) {
+				mockNetlink.RouteDel(ipv4Route1)
+				mockNetlink.RouteDel(ipv4Route2)
+			},
+		},
+		{
+			name:       "IPv6",
+			enableIPv6: true,
+			svcToExternalIPs: map[string][]string{
+				"svc1": {externalIPv6Addr1},
+				"svc2": {externalIPv6Addr2},
+				"svc3": {externalIPv6Addr1, externalIPv6Addr2},
+			},
+			serviceRoutes: map[string]*netlink.Route{
+				externalIPv6Addr1: ipv6Route1,
+				externalIPv6Addr2: ipv6Route2,
+			},
+			serviceExternalIPReferences: map[string]sets.Set[string]{
+				externalIPv6Addr1: sets.New[string]("svc1", "svc3"),
+				externalIPv6Addr2: sets.New[string]("svc2", "svc3"),
+			},
+			externalIPs: []string{externalIPv6Addr1, externalIPv6Addr2},
+			expectedCalls: func(mockNetlink *netlinktest.MockInterfaceMockRecorder) {
+				mockNetlink.RouteDel(ipv6Route1)
+				mockNetlink.RouteDel(ipv6Route2)
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			mockNetlink := netlinktest.NewMockInterface(ctrl)
+			nftables, err := newMockNFTables(tt.enableIPv4, tt.enableIPv6)
+			require.NoError(t, err)
+			c := &Client{
+				nftables:                    nftables,
+				netlink:                     mockNetlink,
+				nodeConfig:                  nodeConfig,
+				serviceExternalIPReferences: tt.serviceExternalIPReferences,
+				serviceNFTablesSets: map[string]*sync.Map{
+					antreaNFTablesSetExternalIP:  {},
+					antreaNFTablesSetExternalIP6: {},
+					antreaNFTablesSetNodePort:    {},
+					antreaNFTablesSetNodePort6:   {},
+				},
+				hostNetworkNFTables: true,
+				proxyAll:            true,
+			}
+			for ipStr, route := range tt.serviceRoutes {
+				c.serviceRoutes.Store(ipStr, route)
+				if utilnet.IsIPv6String(ipStr) {
+					c.serviceNFTablesSets[antreaNFTablesSetExternalIP6].Store(ipStr, []*knftables.Element{{
+						Set: antreaNFTablesSetExternalIP6,
+						Key: []string{ipStr},
+					}})
+				} else {
+					c.serviceNFTablesSets[antreaNFTablesSetExternalIP].Store(ipStr, []*knftables.Element{{
+						Set: antreaNFTablesSetExternalIP,
+						Key: []string{ipStr},
+					}})
+				}
+			}
+			require.NoError(t, c.syncNFTables(context.TODO()))
+			tt.expectedCalls(mockNetlink.EXPECT())
+
+			for svcInfo, externalIPs := range tt.svcToExternalIPs {
+				for _, externalIP := range externalIPs {
+					assert.NoError(t, c.DeleteExternalIPConfigs(svcInfo, net.ParseIP(externalIP)))
+				}
+			}
+			assert.Equal(t, make(map[string]sets.Set[string]), c.serviceExternalIPReferences)
+			for _, nft := range c.nftables.All() {
+				gotElements, err := nft.ListElements(context.TODO(), "set", getExternalIPNFTablesSet(tt.enableIPv6))
+				require.NoError(t, err)
+				assert.ElementsMatch(t, []*knftables.Element{}, gotElements)
+			}
 		})
 	}
 }
@@ -3001,7 +3385,7 @@ func TestClearConntrackEntryForService(t *testing.T) {
 	}
 }
 
-func newMockNFTables(enableIPv4, enableIPv6 bool) *nftables.Client {
+func newMockNFTables(enableIPv4, enableIPv6 bool) (*nftables.Client, error) {
 	mockNFTables := &nftables.Client{}
 	if enableIPv4 {
 		mockNFTables.IPv4 = knftables.NewFake(knftables.IPv4Family, "antrea-test")
@@ -3009,5 +3393,15 @@ func newMockNFTables(enableIPv4, enableIPv6 bool) *nftables.Client {
 	if enableIPv6 {
 		mockNFTables.IPv6 = knftables.NewFake(knftables.IPv6Family, "antrea-test")
 	}
-	return mockNFTables
+	for _, nft := range mockNFTables.All() {
+		tx := nft.NewTransaction()
+		tx.Add(&knftables.Table{
+			Comment: ptr.To("Rules for Antrea"),
+		})
+		if err := nft.Run(context.TODO(), tx); err != nil {
+			return nil, err
+		}
+	}
+
+	return mockNFTables, nil
 }

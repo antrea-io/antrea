@@ -4292,6 +4292,11 @@ data:
     # remote BGP peers.
     #  BGPPolicy: false
 
+    # Enable Antrea to use nftables instead of iptables to enforce netfilter rules in the Node's host network for the
+    # functionalities and features that rely on netfilter. Currently, nftables support is limited to the following features:
+    # - AntreaProxy (proxyAll)
+    #  NFTablesHostNetworkMode: false
+
     # Name of the OpenVSwitch bridge antrea-agent will create and use.
     # Make sure it doesn't conflict with your existing OpenVSwitch bridges.
     ovsBridge: "br-int"
@@ -4657,6 +4662,14 @@ data:
       # Enable to accelerate Pod-to-Pod traffic in the Node's host network using nftables flowtable when traffic mode is
       # noEncap or hybrid.
       enable: true
+
+    # HostNetworkMode determines how antrea-agent implements Node host network netfilter rules required by Antrea
+    # functionalities and features, using either "iptables" or "nftables". The default value is "iptables". If "nftables"
+    # is specified, the NFTablesHostNetworkMode feature gate must be enabled; otherwise, antrea-agent will fail to start.
+    # If the above condition is met but nftables is not supported or unavailable on the Node, antrea-agent will also fail
+    # to start. Currently, nftables support is limited to the following features:
+    #   - AntreaProxy (proxyAll)
+    hostNetworkMode: "iptables"
   antrea-cni.conflist: |
     {
         "cniVersion":"0.3.0",
@@ -5687,7 +5700,7 @@ spec:
         kubectl.kubernetes.io/default-container: antrea-agent
         # Automatically restart Pods with a RollingUpdate if the ConfigMap changes
         # See https://helm.sh/docs/howto/charts_tips_and_tricks/#automatically-roll-deployments
-        checksum/config: 5e83f654fbb48b39b21ceeeb20d4d60ca1cf3de258acc258a2cc961eda9ac2a2
+        checksum/config: 4cddc6760e67614e8a0fd94cb2f88148342bff967dcaf74a4053ea424ea0d853
       labels:
         app: antrea
         component: antrea-agent
@@ -5933,7 +5946,7 @@ spec:
       annotations:
         # Automatically restart Pod if the ConfigMap changes
         # See https://helm.sh/docs/howto/charts_tips_and_tricks/#automatically-roll-deployments
-        checksum/config: 5e83f654fbb48b39b21ceeeb20d4d60ca1cf3de258acc258a2cc961eda9ac2a2
+        checksum/config: 4cddc6760e67614e8a0fd94cb2f88148342bff967dcaf74a4053ea424ea0d853
       labels:
         app: antrea
         component: antrea-controller
