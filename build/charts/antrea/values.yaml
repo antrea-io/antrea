@@ -39,7 +39,7 @@ tunnelPort: 0
 tunnelCsum: false
 # -- Determines how tunnel traffic is encrypted. Currently encryption only works
 # with encap mode. It must be one of "none", "ipsec", "wireGuard".
-trafficEncryptionMode: "none"
+trafficEncryptionMode: "wireguard"
 # -- Enable bridging mode of Pod network on Nodes, in which the Node's transport
 # interface is connected to the OVS bridge.
 enableBridgingMode: false
