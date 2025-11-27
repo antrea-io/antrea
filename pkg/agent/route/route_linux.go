@@ -316,14 +316,14 @@ func (c *Client) Initialize(nodeConfig *config.NodeConfig, done func()) error {
 		}
 	}
 
-	// In hybrid mode, traffic originating from remote Pod CIDRs is forwarded like this:
+	// In hybrid mode, or encap mode with WireGuard enabled, traffic originating from remote Pod CIDRs is forwarded like this:
 	//     remote Pods -> tunnel (remote Node OVS) -> tunnel (local Node OVS) -> antrea-gw0 (local Node) -> external network.
 	//
 	// To ensure reply packets follow a symmetric path, Antrea uses policy routing on the local Node. However, the
 	// kernel's strict RPF check only validates source paths against the main routing table. Since the transport
 	// interface (not antrea‑gw0) is listed as the next-hop for these routes, strict RPF drops the reply packets
 	// (because policy routing is ignored by rp_filter). As a result, we set its rp_filter to loose mode (2).
-	if c.egressEnabled && c.networkConfig.TrafficEncapMode == config.TrafficEncapModeHybrid {
+	if c.egressEnabled && (c.networkConfig.TrafficEncapMode == config.TrafficEncapModeHybrid || c.networkConfig.TrafficEncryptionMode == config.TrafficEncryptionModeWireGuard) {
 		if err := util.EnsureRPFilterOnInterface(c.nodeConfig.GatewayConfig.Name, 2); err != nil {
 			return fmt.Errorf("failed to set %s rp_filter to 2 (loose mode): %w", c.nodeConfig.GatewayConfig.Name, err)
 		}
@@ -337,7 +337,7 @@ func (c *Client) Initialize(nodeConfig *config.NodeConfig, done func()) error {
 		}
 	}
 	// Set up the policy routing ip rule to support Egress in hybrid mode.
-	if c.egressEnabled && c.networkConfig.TrafficEncapMode == config.TrafficEncapModeHybrid {
+	if c.egressEnabled && (c.networkConfig.TrafficEncapMode == config.TrafficEncapModeHybrid || c.networkConfig.TrafficEncryptionMode == config.TrafficEncryptionModeWireGuard) {
 		if err := c.initEgressIPRules(); err != nil {
 			return fmt.Errorf("failed to initialize ip rules for Egress in hybrid mode: %w", err)
 		}
@@ -540,7 +540,7 @@ func (c *Client) syncNeighbor() error {
 			return restoreNeighbor(v.(*netlink.Neigh))
 		})
 	}
-	if c.egressEnabled && c.networkConfig.TrafficEncapMode == config.TrafficEncapModeHybrid {
+	if c.egressEnabled && c.networkConfig.TrafficEncapMode == config.TrafficEncapModeHybrid || c.networkConfig.TrafficEncryptionMode == config.TrafficEncryptionModeWireGuard {
 		c.egressNeighbors.Range(func(_, v interface{}) bool {
 			return restoreNeighbor(v.(*netlink.Neigh))
 		})
@@ -902,7 +902,7 @@ func (c *Client) syncIPTables(cleanupStaleJumpRules bool) error {
 		jumpRules = append(jumpRules, jumpRule{iptables.FilterTable, iptables.InputChain, antreaInputChain, "Antrea: jump to Antrea input rules", false})
 		jumpRules = append(jumpRules, jumpRule{iptables.FilterTable, iptables.OutputChain, antreaOutputChain, "Antrea: jump to Antrea output rules", false})
 	}
-	if c.egressEnabled && c.networkConfig.TrafficEncapMode == config.TrafficEncapModeHybrid {
+	if c.egressEnabled && c.networkConfig.TrafficEncapMode == config.TrafficEncapModeHybrid || c.networkConfig.TrafficEncryptionMode == config.TrafficEncryptionModeWireGuard {
 		jumpRules = append(jumpRules, jumpRule{iptables.MangleTable, iptables.PostRoutingChain, antreaPostRoutingChain, "Antrea: jump to Antrea postrouting rules", false})
 	}
 
@@ -1152,7 +1152,7 @@ func (c *Client) restoreIptablesData(podCIDR *net.IPNet,
 	writeLine(iptablesData, "*mangle")
 	writeLine(iptablesData, iptables.MakeChainLine(antreaPreRoutingChain))
 	writeLine(iptablesData, iptables.MakeChainLine(antreaOutputChain))
-	if c.egressEnabled && c.networkConfig.TrafficEncapMode == config.TrafficEncapModeHybrid {
+	if c.egressEnabled && (c.networkConfig.TrafficEncapMode == config.TrafficEncapModeHybrid || c.networkConfig.TrafficEncryptionMode == config.TrafficEncryptionModeWireGuard) {
 		writeLine(iptablesData, iptables.MakeChainLine(antreaPostRoutingChain))
 	}
 
@@ -1163,7 +1163,7 @@ func (c *Client) restoreIptablesData(podCIDR *net.IPNet,
 		c.writeEKSMangleRules(iptablesData)
 	}
 
-	if c.egressEnabled && c.networkConfig.TrafficEncapMode == config.TrafficEncapModeHybrid {
+	if c.egressEnabled && (c.networkConfig.TrafficEncapMode == config.TrafficEncapModeHybrid || c.networkConfig.TrafficEncryptionMode == config.TrafficEncryptionModeWireGuard) {
 		writeLine(iptablesData, []string{
 			"-A", antreaPreRoutingChain,
 			"-m", "comment", "--comment", `"Antrea: restore fwmark from connmark for reply Egress packets to remote Pods"`,
