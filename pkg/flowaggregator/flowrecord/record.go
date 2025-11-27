@@ -78,6 +78,9 @@ type FlowRecord struct {
 	EgressNodeName                       string
 }
 
+// IpAddressAsString converts a raw byte slice representation of an IP address
+// (IPv4 or IPv6) into its canonical string form. It returns an empty string if
+// the input slice is nil or empty.
 func IpAddressAsString(bytes []byte) string {
 	if len(bytes) == 0 {
 		return ""
