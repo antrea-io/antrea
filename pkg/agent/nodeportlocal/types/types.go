@@ -19,10 +19,20 @@ const (
 	NPLEnabledAnnotationKey = "nodeportlocal.antrea.io/enabled"
 )
 
+// IPFamilyType is the type for IP family values used in NPL annotations.
+type IPFamilyType string
+
+const (
+	IPFamilyIPv4    IPFamilyType = "IPv4"
+	IPFamilyIPv6    IPFamilyType = "IPv6"
+	IPFamilyUnknown IPFamilyType = ""
+)
+
 // NPLAnnotation is the structure used for setting NodePortLocal annotation on the Pods.
 type NPLAnnotation struct {
-	PodPort  int    `json:"podPort"`
-	NodeIP   string `json:"nodeIP"`
-	NodePort int    `json:"nodePort"`
-	Protocol string `json:"protocol"`
+	PodPort  int          `json:"podPort"`
+	NodeIP   string       `json:"nodeIP"`
+	NodePort int          `json:"nodePort"`
+	Protocol string       `json:"protocol"`
+	IPFamily IPFamilyType `json:"ipFamily"`
 }
