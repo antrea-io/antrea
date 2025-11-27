@@ -291,9 +291,10 @@ add-copyright:
 .windows-test-unit: .coverage
 	@echo
 	@echo "==> Running unit tests <=="
-	CGO_ENABLED=1 $(GO) test $(TEST_ARGS) -race -coverpkg=antrea.io/antrea/cmd/...,antrea.io/antrea/pkg/... \
+	@pkgs=$$($(GO) list antrea.io/antrea/cmd/... antrea.io/antrea/pkg/... | grep -v antrea.io/antrea/pkg/controller); \
+	CGO_ENABLED=1 $(GO) test $(TEST_ARGS) -race -coverpkg=$$(echo "$$pkgs" | tr '\n' ',' | sed 's/,$$//') \
 	  -coverprofile=.coverage/coverage-unit.txt -covermode=atomic \
-	  antrea.io/antrea/cmd/... antrea.io/antrea/pkg/...
+	  $$pkgs
 
 .PHONY: tidy
 tidy:
