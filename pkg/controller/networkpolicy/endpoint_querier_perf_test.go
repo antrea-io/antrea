@@ -1,5 +1,4 @@
-//go:build !race
-// +build !race
+//go:build !race && !windows
 
 // Copyright 2020 Antrea Authors
 //
