@@ -595,7 +595,7 @@ func (c *client) InstallNodeFlows(hostname string,
 			// Flow to forward the reply packets of Egress connections, whose request packets came from remote Pods
 			// via tunnel, back to those Pods via tunnel, ensuring symmetric paths of the connections. This flow is
 			// only needed when traffic mode is hybrid and remote Nodes are reachable through routing.
-			if c.enableEgress && c.networkConfig.TrafficEncapMode == config.TrafficEncapModeHybrid {
+			if c.enableEgress && (c.networkConfig.TrafficEncapMode == config.TrafficEncapModeHybrid || c.networkConfig.TrafficEncryptionMode == config.TrafficEncryptionModeWireGuard) {
 				flows = append(flows, c.featurePodConnectivity.l3FwdFlowEgressReturnViaTun(localGatewayMAC, *peerPodCIDR, tunnelPeerIP))
 			}
 		}
