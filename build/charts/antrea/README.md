@@ -61,6 +61,7 @@ Kubernetes: `>= 1.23.0-0`
 | antreaProxy.nodePortAddresses | list | `[]` | String array of values which specifies the host IPv4/IPv6 addresses for NodePort. By default, all host addresses are used. |
 | antreaProxy.proxyAll | bool | `false` | Proxy all Service traffic, for all Service types, regardless of where it comes from. |
 | antreaProxy.proxyLoadBalancerIPs | bool | `true` | When set to false, AntreaProxy no longer load-balances traffic destined to the External IPs of LoadBalancer Services. |
+| antreaProxy.serviceHealthCheckServerBindAddress | string | `""` | The value of the IP address and the port on which AntreaProxy health server listens when proxyAll is enabled. This server is functionally equivalent to the one of kube-proxy. If it is not specified, it will be automatically set to "0.0.0.0:10256". |
 | antreaProxy.serviceProxyName | string | `""` | The value of the "service.kubernetes.io/service-proxy-name" label for AntreaProxy to match. If it is set, then AntreaProxy will only handle Services with the label that equals the provided value. If it is not set, then AntreaProxy will only handle Services without the "service.kubernetes.io/service-proxy-name" label, but ignore Services with the label no matter what is the value. |
 | antreaProxy.skipServices | list | `[]` | List of Services which should be ignored by AntreaProxy. |
 | auditLogging.compress | bool | `true` | Compress enables gzip compression on rotated files. |

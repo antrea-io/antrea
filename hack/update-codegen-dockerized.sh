@@ -103,7 +103,6 @@ MOCKGEN_TARGETS=(
   "pkg/flowaggregator/querier FlowAggregatorQuerier testing"
   "pkg/flowaggregator/s3uploader S3UploaderAPI testing"
   "pkg/util/objectstore NodeStore,PodStore,ServiceStore testing"
-  "third_party/proxy Provider testing"
 )
 
 if [[ "$#" -eq 1 && $1 == "mockgen" ]]; then
