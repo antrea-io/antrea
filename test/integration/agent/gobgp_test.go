@@ -113,7 +113,7 @@ func TestGoBGPLifecycle(t *testing.T) {
 
 	t.Log("Getting peers of BGP server1 and verifying them")
 	assert.EventuallyWithT(t, func(t *assert.CollectT) {
-		expected := sets.New[string]("127.0.0.2-62179")
+		expected := sets.New("127.0.0.2-62179")
 		got := getPeersFn(server1)
 		assert.Equal(t, expected, got)
 	}, 30*time.Second, time.Second)
@@ -121,7 +121,7 @@ func TestGoBGPLifecycle(t *testing.T) {
 
 	t.Log("Getting peers of BGP server2 and verifying them")
 	assert.EventuallyWithT(t, func(t *assert.CollectT) {
-		expected := sets.New[string]("127.0.0.1-61179")
+		expected := sets.New("127.0.0.1-61179")
 		got := getPeersFn(server2)
 		assert.Equal(t, expected, got)
 	}, 30*time.Second, time.Second)
@@ -225,7 +225,7 @@ func TestGoBGPLifecycle(t *testing.T) {
 
 	t.Log("Getting peers of BGP server1 and verifying them")
 	assert.EventuallyWithT(t, func(t *assert.CollectT) {
-		expected := sets.New[string]("127.0.0.2-62179")
+		expected := sets.New("127.0.0.2-62179")
 		got := getPeersFn(server1)
 		assert.Equal(t, expected, got)
 	}, 30*time.Second, time.Second)

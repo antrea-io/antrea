@@ -132,13 +132,13 @@ func TestIPAssigner(t *testing.T) {
 
 	actualIPs, err := listIPAddresses(dummyDevice)
 	require.NoError(t, err, "Failed to list IP addresses")
-	assert.Equal(t, sets.New[string](fmt.Sprintf("%s/32", ip1), fmt.Sprintf("%s/32", ip2), fmt.Sprintf("%s/128", ip3)), actualIPs, "Actual IPs don't match")
+	assert.Equal(t, sets.New(fmt.Sprintf("%s/32", ip1), fmt.Sprintf("%s/32", ip2), fmt.Sprintf("%s/128", ip3)), actualIPs, "Actual IPs don't match")
 	actualIPs, err = listIPAddresses(vlan20Device)
 	require.NoError(t, err, "Failed to list IP addresses")
-	assert.Equal(t, sets.New[string](fmt.Sprintf("%s/%d", ip1VLAN20, subnet20.PrefixLength), fmt.Sprintf("%s/%d", ip2VLAN20, subnet20.PrefixLength)), actualIPs, "Actual IPs don't match")
+	assert.Equal(t, sets.New(fmt.Sprintf("%s/%d", ip1VLAN20, subnet20.PrefixLength), fmt.Sprintf("%s/%d", ip2VLAN20, subnet20.PrefixLength)), actualIPs, "Actual IPs don't match")
 	actualIPs, err = listIPAddresses(vlan30Device)
 	require.NoError(t, err, "Failed to list IP addresses")
-	assert.Equal(t, sets.New[string](fmt.Sprintf("%s/%d", ip1VLAN30, subnet30.PrefixLength)), actualIPs, "Actual IPs don't match")
+	assert.Equal(t, sets.New(fmt.Sprintf("%s/%d", ip1VLAN30, subnet30.PrefixLength)), actualIPs, "Actual IPs don't match")
 
 	newIPAssigner, err := ipassigner.NewIPAssigner(nodeLinkName, dummyDeviceName, nil)
 	require.NoError(t, err, "Initializing new IP assigner failed")
@@ -159,10 +159,10 @@ func TestIPAssigner(t *testing.T) {
 
 	actualIPs, err = listIPAddresses(dummyDevice)
 	require.NoError(t, err, "Failed to list IP addresses")
-	assert.Equal(t, sets.New[string](fmt.Sprintf("%s/32", ip1), fmt.Sprintf("%s/32", ip2), fmt.Sprintf("%s/128", ip4)), actualIPs, "Actual IPs don't match")
+	assert.Equal(t, sets.New(fmt.Sprintf("%s/32", ip1), fmt.Sprintf("%s/32", ip2), fmt.Sprintf("%s/128", ip4)), actualIPs, "Actual IPs don't match")
 	actualIPs, err = listIPAddresses(vlan20Device)
 	require.NoError(t, err, "Failed to list IP addresses")
-	assert.Equal(t, sets.New[string](fmt.Sprintf("%s/%d", ip2VLAN20, subnet20.PrefixLength)), actualIPs, "Actual IPs don't match")
+	assert.Equal(t, sets.New(fmt.Sprintf("%s/%d", ip2VLAN20, subnet20.PrefixLength)), actualIPs, "Actual IPs don't match")
 	_, err = netlink.LinkByName("antrea-ext.30")
 	require.Error(t, err, "VLAN 30 device should be deleted but was not")
 

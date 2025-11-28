@@ -270,7 +270,7 @@ func (tc testCase) createCmdArgs(targetNS ns.NetNS, dataDir string) *cnimsg.CniC
 	}
 }
 
-func (tc testCase) createCheckCmdArgs(targetNS ns.NetNS, config *Net, dataDir string) *cnimsg.CniCmdRequest {
+func (tc testCase) createCheckCmdArgs(targetNS ns.NetNS, config *Net) *cnimsg.CniCmdRequest {
 	conf, err := json.Marshal(config)
 	require.Nil(tc.t, err)
 
@@ -493,12 +493,12 @@ func buildOneConfig(name, cniVersion string, orig *Net, prevResult types.Result)
 
 }
 
-func (tester *cmdAddDelTester) cmdCheckTest(tc testCase, conf *Net, dataDir string) {
+func (tester *cmdAddDelTester) cmdCheckTest(tc testCase, conf *Net) {
 	testRequire := require.New(tc.t)
 	var err error
 
 	// Generate network config and command arguments.
-	tester.request = tc.createCheckCmdArgs(tester.targetNS, conf, dataDir)
+	tester.request = tc.createCheckCmdArgs(tester.targetNS, conf)
 
 	// Execute cmdCHECK on the plugin.
 	err = tester.testNS.Do(func(ns.NetNS) error {
@@ -642,7 +642,7 @@ func cmdAddDelCheckTest(testNS ns.NetNS, tc testCase, dataDir string) {
 	testRequire.Nil(err)
 
 	// Test CHECK
-	tester.cmdCheckTest(tc, newConf, dataDir)
+	tester.cmdCheckTest(tc, newConf)
 
 	// Test delete
 	ovsServiceMock.EXPECT().DeletePort(ovsPortUUID).Return(nil).AnyTimes()

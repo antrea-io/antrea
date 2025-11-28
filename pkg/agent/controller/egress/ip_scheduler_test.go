@@ -68,7 +68,7 @@ func (f *fakeMemberlistCluster) AddClusterEventHandler(h memberlist.ClusterNodeE
 }
 
 func (f *fakeMemberlistCluster) AliveNodes() sets.Set[string] {
-	return sets.New[string](f.nodes...)
+	return sets.New(f.nodes...)
 }
 
 func (f *fakeMemberlistCluster) SelectNodeForIP(ip, externalIPPool string, filters ...func(string) bool) (string, error) {
@@ -297,7 +297,7 @@ func TestRun(t *testing.T) {
 	go s.Run(stopCh)
 
 	// The original distribution when the total capacity is sufficient.
-	assertReceivedItems(t, egressUpdates, sets.New[string]("egressA", "egressB", "egressC"))
+	assertReceivedItems(t, egressUpdates, sets.New("egressA", "egressB", "egressC"))
 	assertScheduleResult(t, s, "egressA", "1.1.1.1", "node1", true)
 	assertScheduleResult(t, s, "egressB", "1.1.1.11", "node2", true)
 	assertScheduleResult(t, s, "egressC", "1.1.1.21", "node1", true)
@@ -310,7 +310,7 @@ func TestRun(t *testing.T) {
 	}
 	patchBytes, _ := json.Marshal(patch)
 	crdClient.CrdV1beta1().Egresses().Patch(context.TODO(), "egressA", types.MergePatchType, patchBytes, metav1.PatchOptions{})
-	assertReceivedItems(t, egressUpdates, sets.New[string]("egressA"))
+	assertReceivedItems(t, egressUpdates, sets.New("egressA"))
 	assertScheduleResult(t, s, "egressA", "1.1.1.5", "node2", true)
 	assertScheduleResult(t, s, "egressB", "1.1.1.11", "node2", true)
 	assertScheduleResult(t, s, "egressC", "1.1.1.21", "node1", true)
@@ -318,14 +318,14 @@ func TestRun(t *testing.T) {
 	// After node2 leaves, egress A and egressB should be moved to node1 as they were created earlier than egressC.
 	// egressC should be left unassigned.
 	fakeCluster.updateNodes([]string{"node1"})
-	assertReceivedItems(t, egressUpdates, sets.New[string]("egressA", "egressB", "egressC"))
+	assertReceivedItems(t, egressUpdates, sets.New("egressA", "egressB", "egressC"))
 	assertScheduleResult(t, s, "egressA", "1.1.1.5", "node1", true)
 	assertScheduleResult(t, s, "egressB", "1.1.1.11", "node1", true)
 	assertScheduleResult(t, s, "egressC", "", "", false)
 
 	// After egressA is deleted, egressC should be assigned to node1.
 	crdClient.CrdV1beta1().Egresses().Delete(ctx, "egressA", metav1.DeleteOptions{})
-	assertReceivedItems(t, egressUpdates, sets.New[string]("egressA", "egressC"))
+	assertReceivedItems(t, egressUpdates, sets.New("egressA", "egressC"))
 	assertScheduleResult(t, s, "egressA", "", "", false)
 	assertScheduleResult(t, s, "egressB", "1.1.1.11", "node1", true)
 	assertScheduleResult(t, s, "egressC", "1.1.1.21", "node1", true)
@@ -335,12 +335,12 @@ func TestRun(t *testing.T) {
 		ObjectMeta: metav1.ObjectMeta{Name: "egressD", UID: "uidD", CreationTimestamp: metav1.NewTime(time.Unix(4, 0))},
 		Spec:       crdv1b1.EgressSpec{EgressIP: "1.1.1.1", ExternalIPPool: "pool1"},
 	}, metav1.CreateOptions{})
-	assertReceivedItems(t, egressUpdates, sets.New[string]("egressD"))
+	assertReceivedItems(t, egressUpdates, sets.New("egressD"))
 	assertScheduleResult(t, s, "egressD", "", "", false)
 
 	// After node2 joins, egressB should be moved to node2 determined by its consistent hash result, and egressD should be assigned to node1.
 	fakeCluster.updateNodes([]string{"node1", "node2"})
-	assertReceivedItems(t, egressUpdates, sets.New[string]("egressB", "egressD"))
+	assertReceivedItems(t, egressUpdates, sets.New("egressB", "egressD"))
 	assertScheduleResult(t, s, "egressB", "1.1.1.11", "node2", true)
 	assertScheduleResult(t, s, "egressC", "1.1.1.21", "node1", true)
 	assertScheduleResult(t, s, "egressD", "1.1.1.1", "node1", true)
@@ -354,11 +354,11 @@ func TestRun(t *testing.T) {
 	updatedNode1 = node1.DeepCopy()
 	updatedNode1.Annotations[agenttypes.NodeMaxEgressIPsAnnotationKey] = "1"
 	clientset.CoreV1().Nodes().Update(ctx, updatedNode1, metav1.UpdateOptions{})
-	assertReceivedItems(t, egressUpdates, sets.New[string]("egressD"))
+	assertReceivedItems(t, egressUpdates, sets.New("egressD"))
 	assertScheduleResult(t, s, "egressD", "1.1.1.1", "node2", true)
 	// Unset node1's max-egress-ips annotation, egressD should be moved to node1.
 	clientset.CoreV1().Nodes().Update(ctx, node1, metav1.UpdateOptions{})
-	assertReceivedItems(t, egressUpdates, sets.New[string]("egressD"))
+	assertReceivedItems(t, egressUpdates, sets.New("egressD"))
 	assertScheduleResult(t, s, "egressD", "1.1.1.1", "node1", true)
 }
 

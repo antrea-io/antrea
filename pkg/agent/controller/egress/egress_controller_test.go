@@ -129,7 +129,7 @@ func (c *fakeSingleNodeCluster) SelectNodeForIP(ip, externalIPPool string, filte
 }
 
 func (c *fakeSingleNodeCluster) AliveNodes() sets.Set[string] {
-	return sets.New[string](c.node)
+	return sets.New(c.node)
 }
 
 func (c *fakeSingleNodeCluster) AddClusterEventHandler(handler memberlist.ClusterNodeEventHandler) {}
@@ -174,7 +174,7 @@ func newFakeController(t *testing.T, initObjects []runtime.Object) *fakeControll
 	k8sClient := fake.NewSimpleClientset()
 	informerFactory := informers.NewSharedInformerFactory(k8sClient, 0)
 	nodeInformer := informerFactory.Core().V1().Nodes()
-	localIPDetector := &fakeLocalIPDetector{localIPs: sets.New[string](fakeLocalEgressIP1, fakeLocalEgressIP2)}
+	localIPDetector := &fakeLocalIPDetector{localIPs: sets.New(fakeLocalEgressIP1, fakeLocalEgressIP2)}
 
 	ifaceStore := interfacestore.NewInterfaceStore()
 	addPodInterface(ifaceStore, "ns1", "pod1", 1)
@@ -310,7 +310,7 @@ func TestSyncEgress(t *testing.T) {
 					{Pod: &cpv1b2.PodReference{Name: "pod3", Namespace: "ns3"}},
 				},
 			},
-			newLocalIPs: sets.New[string](fakeRemoteEgressIP1),
+			newLocalIPs: sets.New(fakeRemoteEgressIP1),
 			expectedEgresses: []*crdv1b1.Egress{
 				{
 					ObjectMeta: metav1.ObjectMeta{Name: "egressA", UID: "uidA"},
@@ -1274,7 +1274,7 @@ func TestExternalIPPoolUpdateShouldSyncEgress(t *testing.T) {
 		require.Eventually(t, func() bool {
 			return c.queue.Len() == len(items)
 		}, time.Second, 10*time.Millisecond)
-		expectedItems := sets.New[string](items...)
+		expectedItems := sets.New(items...)
 		for i := 0; i < len(items); i++ {
 			item, _ := c.queue.Get()
 			c.queue.Done(item)
@@ -1652,7 +1652,7 @@ func TestUpdateEgressStatus(t *testing.T) {
 				return false, nil, nil
 			})
 
-			localIPDetector := &fakeLocalIPDetector{localIPs: sets.New[string](fakeLocalEgressIP1)}
+			localIPDetector := &fakeLocalIPDetector{localIPs: sets.New(fakeLocalEgressIP1)}
 			cluster := newFakeMemberlistCluster([]string{tt.selectedNodeForIP})
 			c := &EgressController{crdClient: fakeClient, nodeName: fakeNode, localIPDetector: localIPDetector, cluster: cluster}
 			err := c.updateEgressStatus(tt.egress, tt.egressIP, tt.scheduleErr)
@@ -1842,7 +1842,7 @@ func checkQueueItemExistence[T comparable](t *testing.T, queue workqueue.TypedRa
 	require.Eventually(t, func() bool {
 		return len(items) == queue.Len()
 	}, time.Second, 10*time.Millisecond, "Didn't find enough items in the queue")
-	expectedItems := sets.New[T](items...)
+	expectedItems := sets.New(items...)
 	actualItems := sets.New[T]()
 	for i := 0; i < len(expectedItems); i++ {
 		key, _ := queue.Get()

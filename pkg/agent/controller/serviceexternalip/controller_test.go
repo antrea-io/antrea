@@ -77,7 +77,7 @@ func (f *fakeMemberlistCluster) AddClusterEventHandler(h memberlist.ClusterNodeE
 }
 
 func (f *fakeMemberlistCluster) AliveNodes() sets.Set[string] {
-	return sets.New[string](f.nodes...)
+	return sets.New(f.nodes...)
 }
 
 func (f *fakeMemberlistCluster) SelectNodeForIP(ip, externalIPPool string, filters ...func(string) bool) (string, error) {
@@ -652,7 +652,7 @@ func TestServiceExternalIPController_nodesHasHealthyServiceEndpoint(t *testing.T
 				),
 			},
 			serviceToTest:        servicePolicyLocal.DeepCopy(),
-			expectedHealthyNodes: sets.New[string](fakeNode1, fakeNode2),
+			expectedHealthyNodes: sets.New(fakeNode1, fakeNode2),
 		},
 		{
 			name: "one Node does not have any healthy Endpoints",
@@ -667,7 +667,7 @@ func TestServiceExternalIPController_nodesHasHealthyServiceEndpoint(t *testing.T
 				),
 			},
 			serviceToTest:        servicePolicyLocal.DeepCopy(),
-			expectedHealthyNodes: sets.New[string](fakeNode1),
+			expectedHealthyNodes: sets.New(fakeNode1),
 		},
 		{
 			name: "Node have both healthy Endpoints and unhealthy Endpoints",
@@ -684,7 +684,7 @@ func TestServiceExternalIPController_nodesHasHealthyServiceEndpoint(t *testing.T
 				),
 			},
 			serviceToTest:        servicePolicyLocal.DeepCopy(),
-			expectedHealthyNodes: sets.New[string](fakeNode1, fakeNode2),
+			expectedHealthyNodes: sets.New(fakeNode1, fakeNode2),
 		},
 	}
 	for _, tt := range tests {
