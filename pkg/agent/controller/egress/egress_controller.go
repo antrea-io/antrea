@@ -677,7 +677,7 @@ func (c *EgressController) realizeEgressIP(egressName, egressIP string, subnetIn
 	if !exists {
 		ipState = &egressIPState{
 			egressIP:    net.ParseIP(egressIP),
-			egressNames: sets.New[string](egressName),
+			egressNames: sets.New(egressName),
 		}
 		c.egressIPStates[egressIP] = ipState
 	} else if !ipState.egressNames.Has(egressName) {
