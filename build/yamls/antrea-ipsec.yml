@@ -4425,6 +4425,10 @@ data:
       # rules enforced by each Node for local Pod traffic. By default, we use the same value as for the
       # top-level snatFullyRandomPorts configuration, but this field can be used as an override.
       snatFullyRandomPorts:
+      # Enable Egress VLAN sub-interfaces to use randomized MAC addresses instead of
+      # inheriting the parent interface’s MAC. Useful in cloud environments that require
+      # unique MAC addresses per interface.
+      randomMacAddress: true
 
     # ClusterIP CIDR range for Services. It's required when AntreaProxy is not enabled, and should be
     # set to the same value as the one specified by --service-cluster-ip-range for kube-apiserver. When
@@ -5700,7 +5704,7 @@ spec:
         kubectl.kubernetes.io/default-container: antrea-agent
         # Automatically restart Pods with a RollingUpdate if the ConfigMap changes
         # See https://helm.sh/docs/howto/charts_tips_and_tricks/#automatically-roll-deployments
-        checksum/config: 5ff1f5f4019866e71c486257fd6ad4fb867855ba3c7bd603bfce7c4d77f16116
+        checksum/config: 4ecdd052ac8c74a49b136d86b34c747482dd3a870f9fd83033ec64a92594235f
         checksum/ipsec-secret: d0eb9c52d0cd4311b6d252a951126bf9bea27ec05590bed8a394f0f792dcb2a4
       labels:
         app: antrea
@@ -5992,7 +5996,7 @@ spec:
       annotations:
         # Automatically restart Pod if the ConfigMap changes
         # See https://helm.sh/docs/howto/charts_tips_and_tricks/#automatically-roll-deployments
-        checksum/config: 5ff1f5f4019866e71c486257fd6ad4fb867855ba3c7bd603bfce7c4d77f16116
+        checksum/config: 4ecdd052ac8c74a49b136d86b34c747482dd3a870f9fd83033ec64a92594235f
       labels:
         app: antrea
         component: antrea-controller

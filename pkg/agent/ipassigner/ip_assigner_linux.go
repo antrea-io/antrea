@@ -215,10 +215,12 @@ type ipAssigner struct {
 	// IPs are removed by users accidentally.
 	assignedIPs map[string]*crdv1b1.SubnetInfo
 	mutex       sync.RWMutex
+	// randomMacAddress indicates whether to assign a random MAC address to VLAN sub-interfaces.
+	randomMacAddress bool
 }
 
 // NewIPAssigner returns an *ipAssigner.
-func NewIPAssigner(nodeTransportInterface string, dummyDeviceName string, linkMonitor linkmonitor.Interface) (IPAssigner, error) {
+func NewIPAssigner(nodeTransportInterface string, dummyDeviceName string, linkMonitor linkmonitor.Interface, randomMacAddress bool) (IPAssigner, error) {
 	ipv4, ipv6, externalInterface, err := util.GetIPNetDeviceByName(nodeTransportInterface)
 	if err != nil {
 		return nil, fmt.Errorf("get IPNetDevice from name %s error: %+v", nodeTransportInterface, err)
@@ -230,7 +232,8 @@ func NewIPAssigner(nodeTransportInterface string, dummyDeviceName string, linkMo
 			logicalInterface: externalInterface,
 			ips:              sets.New[string](),
 		},
-		vlanAssignees: map[int32]*assignee{},
+		vlanAssignees:    map[int32]*assignee{},
+		randomMacAddress: randomMacAddress,
 	}
 	if ipv4 != nil {
 		// For the Egress scenario, the external IPs should always be present on the dummy
@@ -497,6 +500,9 @@ func (a *ipAssigner) getAssignee(subnetInfo *crdv1b1.SubnetInfo, createIfNotExis
 			ParentIndex: a.externalInterface.Index,
 		},
 		VlanId: int(subnetInfo.VLAN),
+	}
+	if a.randomMacAddress {
+		vlan.LinkAttrs.PermHWAddr = util.GenerateRandomMAC()
 	}
 	if err := netlink.LinkAdd(vlan); err != nil {
 		if !errors.Is(err, unix.EEXIST) {
