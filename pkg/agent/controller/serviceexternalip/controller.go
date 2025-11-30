@@ -111,7 +111,7 @@ func NewServiceExternalIPController(
 		assignedIPs:           make(map[string]sets.Set[string]),
 		linkMonitor:           linkMonitor,
 	}
-	ipAssigner, err := ipassigner.NewIPAssigner(nodeTransportInterface, "", linkMonitor)
+	ipAssigner, err := ipassigner.NewIPAssigner(nodeTransportInterface, "", linkMonitor, false)
 	if err != nil {
 		return nil, fmt.Errorf("initializing service external IP assigner failed: %v", err)
 	}
