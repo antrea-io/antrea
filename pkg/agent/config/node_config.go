@@ -236,6 +236,7 @@ type NetworkConfig struct {
 	MulticlusterEncryptionMode TrafficEncryptionModeType
 
 	EnableHostNetworkAcceleration bool
+	HostNetworkMode               HostNetworkMode
 }
 
 // IsIPv4Enabled returns true if the cluster network supports IPv4. Legal cases are:

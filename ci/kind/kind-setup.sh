@@ -61,7 +61,8 @@ where:
   --service-cidr: specify service clusterip cidr used in kind cluster, kind's default value will be used if empty.
   --encap-mode: inter-node pod traffic encap mode, default is encap.
   --no-proxy: disable Antrea proxy.
-  --no-kube-proxy: disable Kube proxy.
+  --no-kube-proxy: deprecated. This option is still supported for compatibility, but will be removed. Use '--kube-proxy-mode none' going forward to disable kube-proxy.
+  --kube-proxy-mode: specify the kube-proxy mode. Supported values are 'iptables', 'nftables', 'ipvs' and 'none' (to disable kube-proxy).
   --no-kube-node-ipam: disable NodeIPAM in kube-controller-manager.
   --antrea-cni: install Antrea CNI in Kind cluster; by default the cluster is created without a CNI installed.
   --prometheus: create RBAC resources for Prometheus, default is false.
@@ -719,9 +720,15 @@ while [[ $# -gt 0 ]]
       shift
       ;;
     --no-kube-proxy)
+      echo "WARNING: '--no-kube-proxy' is deprecated. Use '--kube-proxy-mode none' instead."
       add_option "--no-kube-proxy" "create"
       KUBE_PROXY_MODE="none"
       shift
+      ;;
+    --kube-proxy-mode)
+      add_option "--kube-proxy-mode" "create"
+      KUBE_PROXY_MODE="$2"
+      shift 2
       ;;
     --no-kube-node-ipam)
       add_option "--no-kube-node-ipam" "create"
