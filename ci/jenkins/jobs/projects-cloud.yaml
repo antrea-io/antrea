@@ -1241,7 +1241,7 @@
                 conformance_type: 'networkpolicy'
                 ip_version: 'ipv6'
                 kind_cluster_name: '{test_name}'
-          trigger_phrase: ^(?!Thanks for your PR).*/test-(kind-ipv6-only-networkpolicy|kind-ipv6-only-all|ipv6-only-all).*
+          trigger_phrase: ^(?!Thanks for your PR).*/test-(ipv6-only-networkpolicy|kind-ipv6-only-networkpolicy|kind-ipv6-only-all|ipv6-only-all).*
           white_list_target_branches: []
           allow_whitelist_orgs_as_admins: true
           admin_list: '{antrea_admin_list}'
@@ -1280,7 +1280,7 @@
                 conformance_type: 'conformance'
                 ip_version: 'ipv6'
                 kind_cluster_name: '{test_name}'
-          trigger_phrase: ^(?!Thanks for your PR).*/test-(kind-ipv6-only-conformance|kind-ipv6-only-all|ipv6-only-all).*
+          trigger_phrase: ^(?!Thanks for your PR).*/test-(ipv6-only-conformance|kind-ipv6-only-conformance|kind-ipv6-only-all|ipv6-only-all).*
           white_list_target_branches: []
           allow_whitelist_orgs_as_admins: true
           admin_list: '{antrea_admin_list}'
@@ -1318,7 +1318,7 @@
             - builder-e2e-kind:
                 ip_version: 'ipv6'
                 kind_cluster_name: '{test_name}'
-          trigger_phrase: ^(?!Thanks for your PR).*/test-(kind-ipv6-only-e2e|kind-ipv6-only-all|ipv6-only-all).*
+          trigger_phrase: ^(?!Thanks for your PR).*/test-(ipv6-only-e2e|kind-ipv6-only-e2e|kind-ipv6-only-all|ipv6-only-all).*
           white_list_target_branches: []
           allow_whitelist_orgs_as_admins: true
           admin_list: '{antrea_admin_list}'
@@ -1357,7 +1357,7 @@
                 conformance_type: 'networkpolicy'
                 ip_version: 'dual'
                 kind_cluster_name: '{test_name}'
-          trigger_phrase: ^(?!Thanks for your PR).*/test-(kind-ipv6-networkpolicy|kind-ipv6-all|ipv6-all).*
+          trigger_phrase: ^(?!Thanks for your PR).*/test-(ipv6-networkpolicy|kind-ipv6-networkpolicy|kind-ipv6-all|ipv6-all).*
           white_list_target_branches: []
           allow_whitelist_orgs_as_admins: true
           admin_list: '{antrea_admin_list}'
@@ -1396,7 +1396,7 @@
                 conformance_type: 'conformance'
                 ip_version: 'dual'
                 kind_cluster_name: '{test_name}'
-          trigger_phrase: ^(?!Thanks for your PR).*/test-(kind-ipv6-conformance|kind-ipv6-all|ipv6-all).*
+          trigger_phrase: ^(?!Thanks for your PR).*/test-(ipv6-conformance|kind-ipv6-conformance|kind-ipv6-all|ipv6-all).*
           white_list_target_branches: []
           allow_whitelist_orgs_as_admins: true
           admin_list: '{antrea_admin_list}'
@@ -1434,7 +1434,7 @@
             - builder-e2e-kind:
                  ip_version: 'dual'
                  kind_cluster_name: '{test_name}'
-          trigger_phrase: ^(?!Thanks for your PR).*/test-(kind-ipv6-e2e|kind-ipv6-all|ipv6-all).*
+          trigger_phrase: ^(?!Thanks for your PR).*/test-(ipv6-e2e|kind-ipv6-e2e|kind-ipv6-all|ipv6-all).*
           white_list_target_branches: []
           allow_whitelist_orgs_as_admins: true
           admin_list: '{antrea_admin_list}'
