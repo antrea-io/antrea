@@ -226,7 +226,7 @@ func NewTestContext(
 
 func (t *testContext) setup(ctx context.Context) error {
 	t.Log("Test starting....")
-	if err := check.WaitForDeploymentsReady(ctx, time.Second, agentAvailableTimeout, true, t.client, t.clusterName, t.antreaNamespace, controllerDeploymentName); err != nil {
+	if err := check.WaitForDeploymentsReady(ctx, time.Second, controllerAvailableTimeout, true, t.client, t.clusterName, t.antreaNamespace, controllerDeploymentName); err != nil {
 		return fmt.Errorf("error when checking Antrea Controller status: %w", err)
 	}
 	if err := check.WaitForDaemonSetReady(ctx, time.Second, agentAvailableTimeout, true, t.client, t.clusterName, t.antreaNamespace, agentDaemonSetName); err != nil {

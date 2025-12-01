@@ -67,7 +67,7 @@ func getDeploymentCondition(status appsv1.DeploymentStatus, condType appsv1.Depl
 
 // DeploymentIsReady and DaemonSetIsReady are inspired by the implementation of "kubectl rollout status".
 
-// DeploymentIsReady returns a message describing deployment status, and a bool value indicating if the status is considered ready.
+// DeploymentIsReady returns a message describing Deployment status, and a bool value indicating if the status is considered ready.
 func DeploymentIsReady(deployment *appsv1.Deployment) (string, bool, error) {
 	if deployment.Generation <= deployment.Status.ObservedGeneration {
 		cond := getDeploymentCondition(deployment.Status, appsv1.DeploymentProgressing)
