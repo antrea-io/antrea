@@ -398,7 +398,7 @@ func (c *ServiceExternalIPController) assignIP(ip string, service apimachineryty
 		if _, err := c.ipAssigner.AssignIP(ip, nil, true); err != nil {
 			return err
 		}
-		c.assignedIPs[ip] = sets.New[string](service.String())
+		c.assignedIPs[ip] = sets.New(service.String())
 	} else {
 		c.assignedIPs[ip].Insert(service.String())
 	}
