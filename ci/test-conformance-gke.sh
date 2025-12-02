@@ -346,23 +346,59 @@ function run_conformance() {
     kubectl delete -f ${GIT_CHECKOUT_DIR}/build/yamls/antrea-gke-node-init.yml --ignore-not-found=true || true
 }
 
+delete_gke_cluster_with_retry() {
+    local cluster_name=$1
+    local zone_name=$2
+    local retry=$3
+
+    echo "Attempting to delete GKE cluster: ${cluster_name}..."
+
+    while [[ "${retry}" -gt 0 ]]; do
+       gcloud container clusters delete "${cluster_name}" --zone "${zone_name}" --quiet
+       if [[ $? -eq 0 ]]; then
+         echo "Successfully deleted GKE cluster ${cluster_name}."
+         return 0
+       fi
+       sleep 10
+       retry=$((retry-1))
+    done
+
+    echo "Cluster deletion failed after ${retries} attempts."
+    return 1
+}
+
 function cleanup_cluster() {
     echo '=== Cleaning up GKE cluster ${cluster} ==='
     # Do not exit automatically on error (to enable retries below)
     set +e
     retry=5
-    while [[ "${retry}" -gt 0 ]]; do
-       gcloud container clusters delete ${CLUSTER} --zone ${GKE_ZONE}
-       if [[ $? -eq 0 ]]; then
-         break
-       fi
-       sleep 10
-       retry=$((retry-1))
-    done
-    if [[ "${retry}" -eq 0 ]]; then
-       echo "=== Failed to delete GKE cluster ${CLUSTER}! ==="
-       exit 1
+    delete_gke_cluster_with_retry "${CLUSTER}" "${GKE_ZONE}" "${retry}"
+    initial_delete_success=$?
+
+    if [[ "${initial_delete_success}" -ne 0 ]]; then
+    echo "Initial cluster deletion failed. Attempting Node Pool cleanup..."
+
+    NODE_POOLS=$(gcloud container node-pools list --cluster "${CLUSTER}" --zone "${GKE_ZONE}" --format="value(name)" 2>/dev/null || true)
+
+    if [[ -n "${NODE_POOLS}" ]]; then
+        echo "Found Node Pools to delete: ${NODE_POOLS}"
+        for node_pool in ${NODE_POOLS}; do
+            echo "Deleting Node Pool: ${node_pool}..."
+            gcloud container node-pools delete "${node_pool}" --cluster "${CLUSTER}" --zone "${GKE_ZONE}" --quiet || echo "Warning: Failed to initiate deletion for node pool ${node_pool}. Continuing..."
+        done
+
+    else
+        echo "No separate Node Pools found or failed to list them. Moving to final cluster delete."
     fi
+
+    echo "Final attempt to delete GKE cluster ${CLUSTER} after Node Pool cleanup."
+    delete_gke_cluster_with_retry "${CLUSTER}" "${GKE_ZONE}" 1
+
+    if [[ $? -ne 0 ]]; then
+        echo "=== Failed to delete GKE cluster ${CLUSTER} even after Node Pool cleanup. ==="
+        exit 1
+    fi
+
     rm -f ${KUBECONFIG_PATH}/kubeconfig
     set -e
     echo "=== Cleanup cluster ${CLUSTER} succeeded ==="
