@@ -827,7 +827,7 @@ func (a *aggregationProcess) isGateway(ip []byte) bool {
 // Returns true if record is FromExternal and represents the flow created from
 // an external connection where the sourceNode and destinationNode are the same.
 // When a flow goes through two distinct nodes, the sourceNode flow has empty destinationNode
-// and the destinationNode has the gatewayIP as the sourceAddress. If flow is invaldate, false
+// and the destinationNode has the gatewayIP as the sourceAddress. If flow is invalid, false
 // is returned
 func (a *aggregationProcess) FromExternalCorrelationRequired(flow *flowpb.Flow) bool {
 	if flow.K8S == nil || flow.K8S.FlowType != flowpb.FlowType_FLOW_TYPE_FROM_EXTERNAL {
