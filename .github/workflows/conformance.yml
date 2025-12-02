@@ -112,7 +112,7 @@ jobs:
             git clone --depth 1 --branch ${{ inputs.k8s-version }} https://github.com/kubernetes/kubernetes.git /tmp/kubernetes
             echo "Building Kind Node image with Kubernetes version ${{ inputs.k8s-version }}"
             kind build node-image --image kindest/node:${{ inputs.k8s-version }} /tmp/kubernetes
-            rm -rf /tmp/kubernetes
+            sudo rm -rf /tmp/kubernetes
           fi
       - name: Create K8s cluster
         run: |
