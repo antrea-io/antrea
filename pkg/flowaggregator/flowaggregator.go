@@ -169,8 +169,8 @@ func NewFlowAggregator(
 		APIServer:                   opt.Config.APIServer,
 		logTickerDuration:           time.Minute,
 		// We support buffering a small amount of flow records.
-		recordCh:              make(chan *flowpb.Flow, 128),
-		nodeLister: nodeLister,
+		recordCh:            make(chan *flowpb.Flow, 128),
+		nodeLister:          nodeLister,
 		certificateProvider: newCertificateProvider(k8sClient, opt.Config.FlowAggregatorAddress),
 		certificateUpdateCh: make(chan struct{}, 1),
 	}
