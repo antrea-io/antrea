@@ -33,7 +33,7 @@ edit the Agent configuration in the
 | Feature Name                    | Component          | Default | Stage      | Alpha Release | Beta Release | GA Release | Extra Requirements | Notes                                                  |
 |---------------------------------|--------------------|---------|------------|---------------|--------------|------------|--------------------|--------------------------------------------------------|
 | `AntreaProxy`                   | Agent              | `true`  | GA         | v0.8          | v0.11        | v1.14      | Yes                | Must be enabled for Windows.                           |
-| `EndpointSlice`                 | Agent              | `true`  | GA         | v0.13.0       | v1.11        | v1.14      | Yes                |                                                        |
+| `EndpointSlice`                 | Agent              | `true`  | GA         | v0.13.0       | v1.11        | v1.14      | Yes                | Locked to `true` (cannot be disabled).                 |
 | `TopologyAwareHints`            | Agent              | `true`  | GA         | v1.8          | v1.12        | v2.5       | Yes                |                                                        |
 | `ServiceTrafficDistribution`    | Agent              | `true`  | GA         | N/A           | v2.2         | v2.5       | Yes                |                                                        |
 | `PreferSameTrafficDistribution` | Agent              | `false` | Alpha      | v2.5          | N/A          | N/A        | Yes                |                                                        |
@@ -89,6 +89,8 @@ opposed to >= 4.4 without this feature).
 `EndpointSlice` enables Service EndpointSlice support in Antrea Proxy. The EndpointSlice API was introduced in Kubernetes
 1.16 (alpha) and it is enabled by default in Kubernetes 1.17 (beta), promoted to GA in Kubernetes 1.21.
 
+Starting from Antrea v2.5.0, the feature is locked to `true` and cannot be disabled.
+
 #### Requirements for this Feature
 
 - Option `antreaProxy.enable` is set to true.
@@ -117,9 +119,11 @@ refer to this [link](https://github.com/kubernetes/enhancements/tree/master/keps
 
 ### PreferSameTrafficDistribution
 
-`PreferSameTrafficDistribution` allows usage of the values `PreferSameZone` and `PreferSameNode` in the Service
-trafficDistribution field in Antrea Proxy. For more details, refer to this
-[link](https://github.com/kubernetes/enhancements/tree/master/keps/sig-network/3015-prefer-same-node).
+`PreferSameTrafficDistribution` enables AntreaProxy to honor the Service's trafficDistribution settings
+(PreferSameZone / PreferSameNode) when selecting backend Pods.
+
+For additional background, see the upstream enhancement proposal:
+[KEP 3015 – Prefer Same Node](https://github.com/kubernetes/enhancements/tree/master/keps/sig-network/3015-prefer-same-node).
 
 #### Requirements for this Feature
 

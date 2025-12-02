@@ -28,4 +28,5 @@ number from the output of `kubectl get svc kubernetes -o yaml`._
 
 [4] _The default value is 10256, but it can be overridden in the antrea-agent
 configuration `antreaProxy.serviceHealthCheckServerBindAddress`. It is used only
-for external load balancer health checks._
+for external load balancer health checks. If `antreaProxy.disableServiceHealthCheckServer`
+is set `true`, the health check server listening on the port will be disabled._

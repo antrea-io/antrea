@@ -28,7 +28,7 @@ limitations under the License.
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// Original file https://raw.githubusercontent.com/kubernetes/kubernetes/refs/tags/v1.34.2/pkg/proxy/endpoint.go
+Original file https://raw.githubusercontent.com/kubernetes/kubernetes/refs/tags/v1.34.2/pkg/proxy/endpoint.go
 
 Modifies:
 

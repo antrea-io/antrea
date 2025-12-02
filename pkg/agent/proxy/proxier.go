@@ -19,7 +19,6 @@ import (
 	"fmt"
 	"math"
 	"net"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -40,13 +39,11 @@ import (
 
 	agentconfig "antrea.io/antrea/pkg/agent/config"
 	"antrea.io/antrea/pkg/agent/nodeip"
-	"antrea.io/antrea/pkg/agent/nodemanager"
 	"antrea.io/antrea/pkg/agent/openflow"
 	"antrea.io/antrea/pkg/agent/proxy/metrics"
 	"antrea.io/antrea/pkg/agent/proxy/types"
 	"antrea.io/antrea/pkg/agent/route"
 	agenttypes "antrea.io/antrea/pkg/agent/types"
-	"antrea.io/antrea/pkg/apis"
 	antreaconfig "antrea.io/antrea/pkg/config/agent"
 	"antrea.io/antrea/pkg/features"
 	binding "antrea.io/antrea/pkg/ovs/openflow"
@@ -93,8 +90,7 @@ type ProxyServer struct {
 	serviceConfig       *config.ServiceConfig
 	nodeConfig          *config.NodeConfig
 
-	nodeManager *nodemanager.NodeManager
-
+	nodeManager   *k8sproxy.NodeManager
 	healthzServer *healthcheck.ProxyHealthServer
 	ofClient      openflow.Client
 	proxier       Proxier
@@ -1057,7 +1053,7 @@ func (p *proxier) OnEndpointSliceAdd(endpointSlice *discovery.EndpointSlice) {
 	if !p.matchAddressFamily(endpointSlice) {
 		return
 	}
-	klog.InfoS("Processing EndpointSlice ADD event", "EndpointSlice", klog.KObj(endpointSlice))
+	klog.V(2).InfoS("Processing EndpointSlice ADD event", "EndpointSlice", klog.KObj(endpointSlice))
 	p.OnEndpointSliceUpdate(nil, endpointSlice)
 }
 
@@ -1066,7 +1062,7 @@ func (p *proxier) OnEndpointSliceUpdate(oldEndpointSlice, newEndpointSlice *disc
 		return
 	}
 	if oldEndpointSlice != nil && newEndpointSlice != nil {
-		klog.InfoS("Processing EndpointSlice UPDATE event", "EndpointSlice", klog.KObj(newEndpointSlice))
+		klog.V(2).InfoS("Processing EndpointSlice UPDATE event", "EndpointSlice", klog.KObj(newEndpointSlice))
 	}
 	if p.isIPv6() {
 		metrics.EndpointsUpdatesTotalV6.Inc()
@@ -1082,7 +1078,7 @@ func (p *proxier) OnEndpointSliceDelete(endpointSlice *discovery.EndpointSlice) 
 	if !p.matchAddressFamily(endpointSlice) {
 		return
 	}
-	klog.InfoS("Processing EndpointSlice DELETE event", "EndpointSlice", klog.KObj(endpointSlice))
+	klog.V(2).InfoS("Processing EndpointSlice DELETE event", "EndpointSlice", klog.KObj(endpointSlice))
 	if p.endpointsChanges.OnEndpointSliceUpdate(endpointSlice, true) && p.isInitialized() {
 		p.Sync()
 	}
@@ -1375,9 +1371,9 @@ func newProxier(
 // metaProxierWrapper wraps metaProxier, and implements the extra methods added
 // in interface ProxyQuerier.
 type metaProxierWrapper struct {
+	k8sproxy.Provider
 	ipv4Proxier *proxier
 	ipv6Proxier *proxier
-	k8sproxy.Provider
 }
 
 func (p *metaProxierWrapper) GetServiceFlowKeys(serviceName, namespace string) ([]string, []binding.GroupIDType, bool) {
@@ -1487,6 +1483,7 @@ func generateServiceLabelSelector(serviceProxyName string) labels.Selector {
 }
 
 func NewProxyServer(hostname string,
+	nodeManager *k8sproxy.NodeManager,
 	ofClient openflow.Client,
 	routeClient route.Interface,
 	nodeIPChecker nodeip.Checker,
@@ -1508,13 +1505,8 @@ func NewProxyServer(hostname string,
 	serviceHealthServerDisabled := proxyConfig.DisableServiceHealthCheckServer
 	serviceHealthCheckServerBindAddress := proxyConfig.ServiceHealthCheckServerBindAddress
 
-	var nodeManager *nodemanager.NodeManager
 	var healthzServer *healthcheck.ProxyHealthServer
 	if proxyAllEnabled && !serviceHealthServerDisabled {
-		if serviceHealthCheckServerBindAddress == "" {
-			serviceHealthCheckServerBindAddress = net.JoinHostPort(net.IPv4zero.String(), strconv.Itoa(apis.AntreaProxyHealthServerPort))
-		}
-		nodeManager = nodemanager.NewNodeManager(hostname)
 		healthzServer = healthcheck.NewProxyHealthServer(serviceHealthCheckServerBindAddress, 2*resyncPeriod, nodeManager)
 	}
 	serviceLabelSelector := generateServiceLabelSelector(serviceProxyName)
@@ -1593,8 +1585,8 @@ func NewProxyServer(hostname string,
 
 	proxyServer := &ProxyServer{
 		healthzServer: healthzServer,
-		ofClient:      ofClient,
 		nodeManager:   nodeManager,
+		ofClient:      ofClient,
 		proxier:       proxier,
 	}
 
@@ -1603,8 +1595,7 @@ func NewProxyServer(hostname string,
 
 func (p *ProxyServer) Initialize(ctx context.Context,
 	serviceInformer coreinformers.ServiceInformer,
-	endpointSliceInformer discoveryinformers.EndpointSliceInformer,
-	nodeInformer coreinformers.NodeInformer) {
+	endpointSliceInformer discoveryinformers.EndpointSliceInformer) {
 	serviceConfig := config.NewServiceConfig(ctx, serviceInformer, resyncPeriod)
 	serviceConfig.RegisterEventHandler(p.proxier)
 	p.serviceConfig = serviceConfig
@@ -1613,13 +1604,13 @@ func (p *ProxyServer) Initialize(ctx context.Context,
 	endpointSliceConfig.RegisterEventHandler(p.proxier)
 	p.endpointSliceConfig = endpointSliceConfig
 
-	nodeConfig := config.NewNodeConfig(ctx, nodeInformer, resyncPeriod)
+	nodeConfig := config.NewNodeConfig(ctx, p.nodeManager.NodeInformer(), resyncPeriod)
 	if p.healthzServer != nil {
 		nodeConfig.RegisterEventHandler(p.nodeManager)
 	}
 	p.nodeConfig = nodeConfig
 
-	nodeTopologyConfig := config.NewNodeTopologyConfig(ctx, nodeInformer, resyncPeriod)
+	nodeTopologyConfig := config.NewNodeTopologyConfig(ctx, p.nodeManager.NodeInformer(), resyncPeriod)
 	nodeTopologyConfig.RegisterEventHandler(p.proxier)
 }
 

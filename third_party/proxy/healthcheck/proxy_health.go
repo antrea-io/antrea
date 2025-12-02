@@ -33,7 +33,7 @@ Original file https://raw.githubusercontent.com/kubernetes/kubernetes/refs/tags/
 Modifies:
 
 - Remove import "k8s.io/kubernetes/pkg/proxy/metrics" and its usages.
-- Replace import "k8s.io/kubernetes/pkg/proxy" with "antrea.io/antrea/pkg/agent/nodemanager".
+- Replace import "k8s.io/kubernetes/pkg/proxy" with "antrea.io/antrea/third_party/proxy".
 
 */
 
@@ -52,7 +52,7 @@ import (
 	"k8s.io/utils/clock"
 	"k8s.io/utils/ptr"
 
-	"antrea.io/antrea/pkg/agent/nodemanager"
+	"antrea.io/antrea/third_party/proxy"
 )
 
 const (
@@ -94,7 +94,7 @@ type ProxyHealthServer struct {
 	httpFactory httpServerFactory
 	clock       clock.Clock
 
-	nodeManager *nodemanager.NodeManager
+	nodeManager *proxy.NodeManager
 
 	addr          string
 	healthTimeout time.Duration
@@ -105,11 +105,11 @@ type ProxyHealthServer struct {
 }
 
 // NewProxyHealthServer returns a proxy health http server.
-func NewProxyHealthServer(addr string, healthTimeout time.Duration, nodeManager *nodemanager.NodeManager) *ProxyHealthServer {
+func NewProxyHealthServer(addr string, healthTimeout time.Duration, nodeManager *proxy.NodeManager) *ProxyHealthServer {
 	return newProxyHealthServer(stdNetListener{}, stdHTTPServerFactory{}, clock.RealClock{}, addr, healthTimeout, nodeManager)
 }
 
-func newProxyHealthServer(listener listener, httpServerFactory httpServerFactory, c clock.Clock, addr string, healthTimeout time.Duration, nodeManager *nodemanager.NodeManager) *ProxyHealthServer {
+func newProxyHealthServer(listener listener, httpServerFactory httpServerFactory, c clock.Clock, addr string, healthTimeout time.Duration, nodeManager *proxy.NodeManager) *ProxyHealthServer {
 	return &ProxyHealthServer{
 		listener:      listener,
 		httpFactory:   httpServerFactory,

@@ -34,8 +34,8 @@ Original file https://raw.githubusercontent.com/kubernetes/kubernetes/refs/tags/
 Modifies:
 
 - Remove `defer close(bfr.run)` from `BoundedFrequencyRunner.Loop()`. AntreaProxy may still call `BoundedFrequencyRunner.Run()`
-  from informer event handlers after Loop() has exited, which causes a data race when `Run()` attempts to send on a
-  channel that is being closed. The  previous Kubernetes implementation of BoundedFrequencyRunner did not close the
+  from informer event handlers after `Loop()` has exited, which causes a data race when `Run()` attempts to send on a
+  channel that is being closed. The previous Kubernetes implementation of BoundedFrequencyRunner did not close the
   trigger channel, and its concurrency semantics allowed `Run()` to be invoked independently of `Loop()`’s lifetime.
 
 */

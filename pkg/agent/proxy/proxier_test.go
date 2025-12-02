@@ -3524,11 +3524,32 @@ func generateUpdatedSvcAndEps(enableIPv4, enableIPv6 bool) (*corev1.Service, []*
 	return svc, eps
 }
 
+func generateNode(hostname string) runtime.Object {
+	return &corev1.Node{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: hostname,
+		},
+		Status: corev1.NodeStatus{
+			Addresses: []corev1.NodeAddress{{
+				Type: corev1.NodeInternalIP, Address: "192.168.0.1",
+			}},
+		},
+	}
+}
+
 func TestMetrics(t *testing.T) {
 	proxyConfig := antreaconfig.AntreaProxyConfig{
 		ProxyAll:             true,
 		ProxyLoadBalancerIPs: ptr.To(true),
 		ServiceProxyName:     testServiceProxyName,
+		// Set this to true to avoid calling nodeConfig.RegisterEventHandler(p.nodeManager).
+		// The NodeManager starts its informerFactory inside NewNodeManager(), which means the NodeInformer is
+		// already running by the time NodeConfig is created. Registering additional handlers at this point would
+		// race with informer callbacks: the handler registration appends to nodeConfig.eventHandlers while informer
+		// goroutines may concurrently read from the same slice.
+		// Although this race is unlikely to occur in real clusters (Node events are infrequent), it is consistently
+		// reproducible in unit tests with fake clients, where initial Node “Add” events are delivered immediately.
+		DisableServiceHealthCheckServer: true,
 	}
 	testCases := []struct {
 		name                   string
@@ -3794,14 +3815,14 @@ func TestMetrics(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			mockOFClient, mockRouteClient := getMockClients(ctrl)
 
-			fakeClient := fake.NewClientset(generateSvcAndEps(tt.svcIPv4Enabled, tt.svcIPv6Enabled)...)
+			initObjects := generateSvcAndEps(tt.svcIPv4Enabled, tt.svcIPv6Enabled)
+			initObjects = append(initObjects, generateNode(hostname))
+			fakeClient := fake.NewClientset(initObjects...)
 			fakeNodeIPChecker := nodeipmock.NewFakeNodeIPChecker()
 			informerFactory := informers.NewSharedInformerFactory(fakeClient, 0)
 			groupIDAllocator := openflow.NewGroupAllocator()
-
-			serviceInformer := informerFactory.Core().V1().Services()
-			endpointSliceInformer := informerFactory.Discovery().V1().EndpointSlices()
-			nodeInformer := informerFactory.Core().V1().Nodes()
+			nodeManager, err := k8sproxy.NewNodeManager(ctx, fakeClient, 0, hostname, false)
+			require.NoError(t, err)
 
 			mockOFClient.EXPECT().RegisterPacketInHandler(gomock.Any(), gomock.Any()).AnyTimes()
 			mockOFClient.EXPECT().InstallServiceGroup(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
@@ -3811,6 +3832,7 @@ func TestMetrics(t *testing.T) {
 			mockOFClient.EXPECT().UninstallEndpointFlows(gomock.Any(), gomock.Any()).AnyTimes()
 
 			proxyServer, err := NewProxyServer(hostname,
+				nodeManager,
 				mockOFClient,
 				mockRouteClient,
 				fakeNodeIPChecker,
@@ -3825,14 +3847,9 @@ func TestMetrics(t *testing.T) {
 				false,
 			)
 			require.NoError(t, err)
-			proxyServer.Initialize(ctx,
-				serviceInformer,
-				endpointSliceInformer,
-				nodeInformer)
-
+			proxyServer.Initialize(ctx, informerFactory.Core().V1().Services(), informerFactory.Discovery().V1().EndpointSlices())
 			informerFactory.Start(ctx.Done())
 			informerFactory.WaitForCacheSync(ctx.Done())
-
 			go proxyServer.Run(ctx)
 
 			assert.EventuallyWithT(t, func(t *assert.CollectT) {

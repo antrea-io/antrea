@@ -264,10 +264,9 @@ type AntreaProxyConfig struct {
 	// conditions between kube-proxy and Antrea proxy, with both trying to bind to the same addresses, when proxyAll
 	// is enabled while kube-proxy has not been removed.
 	DisableServiceHealthCheckServer bool `yaml:"disableServiceHealthCheckServer,omitempty"`
-	// The value of the IP address and the port that the AntreaProxy health server binds to. If it is not specified,
-	// it will be automatically set to "0.0.0.0:10256" for IPv4-only clusters, or "[::]10256" for IPv6-only and dual-stack
-	// clusters. Note that "[::]10256" may act as either IPv6-only or dual-stack depending on the system setting of
-	// IPV6_V6ONLY (sysctl: net.ipv6.bindv6only).
+	// The value of the IP address and the port on which AntreaProxy health server listens when proxyAll is enabled. This
+	// server is functionally equivalent to the one of kube-proxy. If it is not specified, it will be automatically set
+	// to "0.0.0.0:10256".
 	ServiceHealthCheckServerBindAddress string `yaml:"serviceHealthCheckServerBindAddress,omitempty"`
 }
 

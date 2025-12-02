@@ -4228,8 +4228,8 @@ data:
     # AllBeta is a global toggle for beta features. Per-feature key values override the default set by AllBeta.
     #  AllBeta: false
 
-    # Enable PreferSameTrafficDistribution in AntreaProxy, allowing usage of the values PreferSameZone and PreferSameNode in
-    # the Service trafficDistribution field.
+    # Enable PreferSameTrafficDistribution so that AntreaProxy can honor the Service's trafficDistribution settings
+    # (PreferSameZone / PreferSameNode) when selecting backend Pods.
     #  PreferSameTrafficDistribution: false
 
     # Enable support for cleaning up stale UDP Service conntrack connections in AntreaProxy. This requires AntreaProxy to
@@ -5721,7 +5721,7 @@ spec:
         kubectl.kubernetes.io/default-container: antrea-agent
         # Automatically restart Pods with a RollingUpdate if the ConfigMap changes
         # See https://helm.sh/docs/howto/charts_tips_and_tricks/#automatically-roll-deployments
-        checksum/config: a97393291137add4c34e6b6f840bdab5584837131bcac0e8fcd15be684e6d85d
+        checksum/config: df497006c72465290efa91e3abc8ce6169b087a6a7ddc2bacda4aecab200a774
         checksum/ipsec-secret: d0eb9c52d0cd4311b6d252a951126bf9bea27ec05590bed8a394f0f792dcb2a4
       labels:
         app: antrea
@@ -6013,7 +6013,7 @@ spec:
       annotations:
         # Automatically restart Pod if the ConfigMap changes
         # See https://helm.sh/docs/howto/charts_tips_and_tricks/#automatically-roll-deployments
-        checksum/config: a97393291137add4c34e6b6f840bdab5584837131bcac0e8fcd15be684e6d85d
+        checksum/config: df497006c72465290efa91e3abc8ce6169b087a6a7ddc2bacda4aecab200a774
       labels:
         app: antrea
         component: antrea-controller
