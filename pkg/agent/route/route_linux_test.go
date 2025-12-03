@@ -400,11 +400,12 @@ func TestSyncIPTables(t *testing.T) {
 		nodeConfig                *config.NodeConfig
 		nodeSNATRandomFully       bool
 		markToSNATIP              map[uint32]string
-		wireguardPort             int
+		wireguardPort             int32
+		proxyHealthCheckPort      int32
 		expectedCalls             func(iptables *iptablestest.MockInterfaceMockRecorder)
 	}{
 		{
-			name:                      "encap,wireguard,egress=true,multicastEnabled=true,proxyAll=true,nodeNetworkPolicy=true,nodeLatencyMonitor=true,nodeSNATRandomFully=true",
+			name:                      "encap,wireguard,egress=true,multicastEnabled=true,proxyAll=true,nodeNetworkPolicy=true,nodeLatencyMonitor=true,nodeSNATRandomFully=true,proxyHealthCheck",
 			proxyAll:                  true,
 			multicastEnabled:          true,
 			nodeNetworkPolicyEnabled:  true,
@@ -428,7 +429,8 @@ func TestSyncIPTables(t *testing.T) {
 				1: "1.1.1.1",
 				2: "fe80::e643:4bff:fe02",
 			},
-			wireguardPort: 51820,
+			wireguardPort:        51820,
+			proxyHealthCheckPort: 10256,
 			expectedCalls: func(mockIPTables *iptablestest.MockInterfaceMockRecorder) {
 				mockIPTables.EnsureChain(iptables.ProtocolDual, iptables.RawTable, antreaPreRoutingChain)
 				mockIPTables.AppendRule(iptables.ProtocolDual, iptables.RawTable, iptables.PreRoutingChain, []string{"-j", antreaPreRoutingChain, "-m", "comment", "--comment", "Antrea: jump to Antrea prerouting rules"})
@@ -504,11 +506,13 @@ COMMIT
 -A ANTREA-INPUT -m comment --comment "Antrea: allow WireGuard input packets" -p udp --dport 51820 -j ACCEPT
 -A ANTREA-INPUT -m comment --comment "Antrea: jump to static ingress NodeNetworkPolicy rules" -j ANTREA-POL-PRE-INGRESS-RULES
 -A ANTREA-INPUT -m comment --comment "Antrea: jump to ingress NodeNetworkPolicy rules" -j ANTREA-POL-INGRESS-RULES
+-A ANTREA-INPUT -m comment --comment "Antrea: allow proxy health check input packets" -p tcp --dport 10256 -j ACCEPT
 -A ANTREA-OUTPUT -o antrea-gw0 -p icmp --icmp-type 8 -m comment --comment "Antrea: allow ICMP probes from NodeLatencyMonitor" -j ACCEPT
 -A ANTREA-OUTPUT -o antrea-gw0 -p icmp --icmp-type 0 -m comment --comment "Antrea: allow ICMP probes from NodeLatencyMonitor" -j ACCEPT
 -A ANTREA-OUTPUT -m comment --comment "Antrea: allow WireGuard output packets" -p udp --dport 51820 -j ACCEPT
 -A ANTREA-OUTPUT -m comment --comment "Antrea: jump to static egress NodeNetworkPolicy rules" -j ANTREA-POL-PRE-EGRESS-RULES
 -A ANTREA-OUTPUT -m comment --comment "Antrea: jump to egress NodeNetworkPolicy rules" -j ANTREA-POL-EGRESS-RULES
+-A ANTREA-OUTPUT -m comment --comment "Antrea: allow proxy health check reply packets" -p tcp --sport 10256 -j ACCEPT
 -A ANTREA-POL-INGRESS-RULES -j ACCEPT -m comment --comment "mock rule"
 -A ANTREA-POL-PRE-EGRESS-RULES -m conntrack --ctstate ESTABLISHED,RELATED -m comment --comment "Antrea: allow egress established or related packets" -j ACCEPT
 -A ANTREA-POL-PRE-EGRESS-RULES -o lo -m comment --comment "Antrea: allow egress packets to loopback" -j ACCEPT
@@ -556,11 +560,13 @@ COMMIT
 -A ANTREA-INPUT -m comment --comment "Antrea: allow WireGuard input packets" -p udp --dport 51820 -j ACCEPT
 -A ANTREA-INPUT -m comment --comment "Antrea: jump to static ingress NodeNetworkPolicy rules" -j ANTREA-POL-PRE-INGRESS-RULES
 -A ANTREA-INPUT -m comment --comment "Antrea: jump to ingress NodeNetworkPolicy rules" -j ANTREA-POL-INGRESS-RULES
+-A ANTREA-INPUT -m comment --comment "Antrea: allow proxy health check input packets" -p tcp --dport 10256 -j ACCEPT
 -A ANTREA-OUTPUT -o antrea-gw0 -p icmpv6 --icmpv6-type 128 -m comment --comment "Antrea: allow ICMP probes from NodeLatencyMonitor" -j ACCEPT
 -A ANTREA-OUTPUT -o antrea-gw0 -p icmpv6 --icmpv6-type 129 -m comment --comment "Antrea: allow ICMP probes from NodeLatencyMonitor" -j ACCEPT
 -A ANTREA-OUTPUT -m comment --comment "Antrea: allow WireGuard output packets" -p udp --dport 51820 -j ACCEPT
 -A ANTREA-OUTPUT -m comment --comment "Antrea: jump to static egress NodeNetworkPolicy rules" -j ANTREA-POL-PRE-EGRESS-RULES
 -A ANTREA-OUTPUT -m comment --comment "Antrea: jump to egress NodeNetworkPolicy rules" -j ANTREA-POL-EGRESS-RULES
+-A ANTREA-OUTPUT -m comment --comment "Antrea: allow proxy health check reply packets" -p tcp --sport 10256 -j ACCEPT
 -A ANTREA-POL-INGRESS-RULES -j ACCEPT -m comment --comment "mock rule"
 -A ANTREA-POL-PRE-EGRESS-RULES -m conntrack --ctstate ESTABLISHED,RELATED -m comment --comment "Antrea: allow egress established or related packets" -j ACCEPT
 -A ANTREA-POL-PRE-EGRESS-RULES -o lo -m comment --comment "Antrea: allow egress packets to loopback" -j ACCEPT
@@ -1190,15 +1196,17 @@ COMMIT
 				iptablesHasRandomFully:   true,
 				deterministic:            true,
 				wireguardPort:            tt.wireguardPort,
+				proxyHealthCheckPort:     tt.proxyHealthCheckPort,
+				iptablesCache:            newIPTablesCache(),
 			}
 			for mark, snatIP := range tt.markToSNATIP {
 				c.markToSNATIP.Store(mark, net.ParseIP(snatIP))
 			}
 			if tt.nodeNetworkPolicyEnabled {
 				c.initNodeNetworkPolicy()
-				c.nodeNetworkPolicyIPTablesIPv4.Store(config.NodeNetworkPolicyIngressRulesChain, []string{
+				c.iptablesCache.ipv4[featureNodeNetworkPolicy].Store(config.NodeNetworkPolicyIngressRulesChain, []string{
 					`-A ANTREA-POL-INGRESS-RULES -j ACCEPT -m comment --comment "mock rule"`})
-				c.nodeNetworkPolicyIPTablesIPv6.Store(config.NodeNetworkPolicyIngressRulesChain, []string{
+				c.iptablesCache.ipv6[featureNodeNetworkPolicy].Store(config.NodeNetworkPolicyIngressRulesChain, []string{
 					`-A ANTREA-POL-INGRESS-RULES -j ACCEPT -m comment --comment "mock rule"`})
 			}
 			if tt.networkConfig.TrafficEncryptionMode == config.TrafficEncryptionModeWireGuard {
@@ -1206,6 +1214,9 @@ COMMIT
 			}
 			if tt.nodeLatencyMonitorEnabled {
 				c.initNodeLatencyRules()
+			}
+			if c.proxyAll && tt.proxyHealthCheckPort != 0 {
+				c.initProxyHealthCheck()
 			}
 			tt.expectedCalls(mockIPTables.EXPECT())
 			assert.NoError(t, c.syncIPTables(true))
@@ -3275,6 +3286,7 @@ COMMIT
 					IPv4Enabled: true,
 					IPv6Enabled: true,
 				},
+				iptablesCache: newIPTablesCache(),
 			}
 			c.initNodeNetworkPolicy()
 
@@ -3284,35 +3296,35 @@ COMMIT
 			var gotRules any
 			var exists bool
 			if tt.isIPv6 {
-				gotRules, exists = c.nodeNetworkPolicyIPTablesIPv6.Load(ingressChain)
+				gotRules, exists = c.iptablesCache.ipv6[featureNodeNetworkPolicy].Load(ingressChain)
 			} else {
-				gotRules, exists = c.nodeNetworkPolicyIPTablesIPv4.Load(ingressChain)
+				gotRules, exists = c.iptablesCache.ipv4[featureNodeNetworkPolicy].Load(ingressChain)
 			}
 			assert.True(t, exists)
 			assert.EqualValues(t, ingressRules, gotRules)
 
 			assert.NoError(t, c.AddOrUpdateNodeNetworkPolicyIPTables([]string{svcChain}, [][]string{svcRules}, tt.isIPv6))
 			if tt.isIPv6 {
-				gotRules, exists = c.nodeNetworkPolicyIPTablesIPv6.Load(svcChain)
+				gotRules, exists = c.iptablesCache.ipv6[featureNodeNetworkPolicy].Load(svcChain)
 			} else {
-				gotRules, exists = c.nodeNetworkPolicyIPTablesIPv4.Load(svcChain)
+				gotRules, exists = c.iptablesCache.ipv4[featureNodeNetworkPolicy].Load(svcChain)
 			}
 			assert.True(t, exists)
 			assert.EqualValues(t, svcRules, gotRules)
 
 			assert.NoError(t, c.DeleteNodeNetworkPolicyIPTables([]string{svcChain}, tt.isIPv6))
 			if tt.isIPv6 {
-				_, exists = c.nodeNetworkPolicyIPTablesIPv6.Load(svcChain)
+				_, exists = c.iptablesCache.ipv6[featureNodeNetworkPolicy].Load(svcChain)
 			} else {
-				_, exists = c.nodeNetworkPolicyIPTablesIPv4.Load(svcChain)
+				_, exists = c.iptablesCache.ipv4[featureNodeNetworkPolicy].Load(svcChain)
 			}
 			assert.False(t, exists)
 
 			assert.NoError(t, c.AddOrUpdateNodeNetworkPolicyIPTables([]string{ingressChain}, [][]string{nil}, tt.isIPv6))
 			if tt.isIPv6 {
-				gotRules, exists = c.nodeNetworkPolicyIPTablesIPv6.Load(ingressChain)
+				gotRules, exists = c.iptablesCache.ipv6[featureNodeNetworkPolicy].Load(ingressChain)
 			} else {
-				gotRules, exists = c.nodeNetworkPolicyIPTablesIPv4.Load(ingressChain)
+				gotRules, exists = c.iptablesCache.ipv4[featureNodeNetworkPolicy].Load(ingressChain)
 			}
 			assert.True(t, exists)
 			assert.EqualValues(t, []string(nil), gotRules)
