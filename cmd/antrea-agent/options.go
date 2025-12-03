@@ -260,6 +260,19 @@ func (o *Options) validateAntreaProxyConfig(encapMode config.TrafficEncapModeTyp
 				return fmt.Errorf("invalid NodePort IP address `%s`: %w", nodePortAddress, err)
 			}
 		}
+
+		if addr := o.config.AntreaProxy.ServiceHealthCheckServerBindAddress; addr != "" {
+			hostStr, portStr, err := net.SplitHostPort(addr)
+			if err != nil {
+				return fmt.Errorf("invalid health server bind address %q: %w", addr, err)
+			}
+			if net.ParseIP(hostStr) == nil {
+				return fmt.Errorf("invalid IP address in health server bind address: %q", hostStr)
+			}
+			if err := validation.ValidatePortString(portStr); err != nil {
+				return fmt.Errorf("invalid port in health server bind address: %q: %w", portStr, err)
+			}
+		}
 	}
 
 	ok, defaultLoadBalancerMode := config.GetLoadBalancerModeFromStr(o.config.AntreaProxy.DefaultLoadBalancerMode)
@@ -435,6 +448,9 @@ func (o *Options) setK8sNodeDefaultOptions() {
 	}
 	if o.config.AntreaProxy.ProxyLoadBalancerIPs == nil {
 		o.config.AntreaProxy.ProxyLoadBalancerIPs = ptr.To(true)
+	}
+	if o.config.AntreaProxy.ServiceHealthCheckServerBindAddress == "" {
+		o.config.AntreaProxy.ServiceHealthCheckServerBindAddress = net.JoinHostPort(net.IPv4zero.String(), fmt.Sprint(apis.AntreaProxyHealthServerPort))
 	}
 	if o.config.ServiceCIDR == "" {
 		//It's okay to set the default value of this field even when AntreaProxy is enabled and the field is not used.

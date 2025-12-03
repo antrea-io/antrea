@@ -89,6 +89,7 @@ import (
 	"antrea.io/antrea/pkg/util/objectstore"
 	utilwait "antrea.io/antrea/pkg/util/wait"
 	"antrea.io/antrea/pkg/version"
+	k8sproxy "antrea.io/antrea/third_party/proxy"
 )
 
 // informerDefaultResync is the default resync period if a handler doesn't specify one.
@@ -451,14 +452,14 @@ func run(o *Options) error {
 		groupCounters = append(groupCounters, v6GroupCounter)
 	}
 
+	nodeManager, err := k8sproxy.NewNodeManager(ctx, k8sClient, resyncPeriodDisabled, nodeConfig.Name, false)
+	if err != nil {
+		return fmt.Errorf("failed to create node manager: %w", err)
+	}
 	var proxyServer *proxy.ProxyServer
 	if o.enableAntreaProxy {
 		proxyServer, err = proxy.NewProxyServer(nodeConfig.Name,
-			k8sClient,
-			serviceInformer,
-			endpointsInformer,
-			endpointSliceInformer,
-			nodeInformer,
+			nodeManager,
 			ofClient,
 			routeClient,
 			nodeIPTracker,
@@ -472,8 +473,9 @@ func run(o *Options) error {
 			v6GroupCounter,
 			enableMulticlusterGW)
 		if err != nil {
-			return fmt.Errorf("error when creating proxyServer: %v", err)
+			return fmt.Errorf("error when creating proxyServer: %w", err)
 		}
+		proxyServer.Initialize(ctx, serviceInformer, endpointSliceInformer)
 	}
 
 	// We pick a time interval for rule deletion in the async rule cache (part of the

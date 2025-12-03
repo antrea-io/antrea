@@ -4215,6 +4215,10 @@ data:
     # AllBeta is a global toggle for beta features. Per-feature key values override the default set by AllBeta.
     #  AllBeta: false
 
+    # Enable PreferSameTrafficDistribution so that AntreaProxy can honor the Service's trafficDistribution settings
+    # (PreferSameZone / PreferSameNode) when selecting backend Pods.
+    #  PreferSameTrafficDistribution: false
+
     # Enable support for cleaning up stale UDP Service conntrack connections in AntreaProxy. This requires AntreaProxy to
     # be enabled, otherwise this flag will not take effect.
     #  CleanupStaleUDPSvcConntrack: true
@@ -4602,6 +4606,10 @@ data:
       # enabled. This avoids race conditions between kube-proxy and Antrea Proxy, with both trying to
       # bind to the same address, when proxyAll is enabled while kube-proxy has not been removed.
       disableServiceHealthCheckServer: false
+      # The value of the IP address and the port on which AntreaProxy health server listens when proxyAll is enabled. This
+      # server is functionally equivalent to the one of kube-proxy. If it is not specified, it will be automatically set
+      # to "0.0.0.0:10256".
+      serviceHealthCheckServerBindAddress: ""
 
     # IPsec tunnel related configurations.
     ipsec:
@@ -5709,7 +5717,7 @@ spec:
         kubectl.kubernetes.io/default-container: antrea-agent
         # Automatically restart Pods with a RollingUpdate if the ConfigMap changes
         # See https://helm.sh/docs/howto/charts_tips_and_tricks/#automatically-roll-deployments
-        checksum/config: 288c5f3c4ff78c08520f7ddd0ba8547774d0fe9724ed649e32fa6e4f5ab6830c
+        checksum/config: 7164c2236357aab9edb1267ae3a6d8abdf7a4be1f60c444101f4012376d98172
       labels:
         app: antrea
         component: antrea-agent
@@ -5958,7 +5966,7 @@ spec:
       annotations:
         # Automatically restart Pod if the ConfigMap changes
         # See https://helm.sh/docs/howto/charts_tips_and_tricks/#automatically-roll-deployments
-        checksum/config: 288c5f3c4ff78c08520f7ddd0ba8547774d0fe9724ed649e32fa6e4f5ab6830c
+        checksum/config: 7164c2236357aab9edb1267ae3a6d8abdf7a4be1f60c444101f4012376d98172
       labels:
         app: antrea
         component: antrea-controller

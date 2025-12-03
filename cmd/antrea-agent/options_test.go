@@ -136,6 +136,28 @@ func TestOptionsValidateAntreaProxyConfig(t *testing.T) {
 			},
 			expectedErr: "LoadBalancerMode drs is unknown",
 		},
+		{
+			name:             "invalid IP in ServiceHealthCheckServerBindAddress",
+			trafficEncapMode: config.TrafficEncapModeEncap,
+			antreaProxyConfig: agentconfig.AntreaProxyConfig{
+				Enable:                              ptr.To(true),
+				DefaultLoadBalancerMode:             config.LoadBalancerModeNAT.String(),
+				ProxyAll:                            true,
+				ServiceHealthCheckServerBindAddress: "1.1.1.1.1:10256",
+			},
+			expectedErr: "invalid IP address in health server bind address: \"1.1.1.1.1\"",
+		},
+		{
+			name:             "invalid port in ServiceHealthCheckServerBindAddress",
+			trafficEncapMode: config.TrafficEncapModeEncap,
+			antreaProxyConfig: agentconfig.AntreaProxyConfig{
+				Enable:                              ptr.To(true),
+				DefaultLoadBalancerMode:             config.LoadBalancerModeNAT.String(),
+				ProxyAll:                            true,
+				ServiceHealthCheckServerBindAddress: "1.1.1.1:102561",
+			},
+			expectedErr: "invalid port in health server bind address: \"102561\": port 102561 is out of range, valid range is 1-65535",
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

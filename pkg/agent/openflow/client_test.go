@@ -1067,8 +1067,8 @@ func Test_client_InstallServiceGroup(t *testing.T) {
 		{
 			name: "IPv4 Endpoints",
 			endpoints: []proxy.Endpoint{
-				proxy.NewBaseEndpointInfo("10.10.0.100", "node1", "", 80, false, true, false, false, nil),
-				proxy.NewBaseEndpointInfo("10.10.0.101", "node2", "", 80, true, true, false, false, nil),
+				proxy.NewBaseEndpointInfo("10.10.0.100", 80, false, true, false, false, nil, nil),
+				proxy.NewBaseEndpointInfo("10.10.0.101", 80, true, true, false, false, nil, nil),
 			},
 			expectedGroup: "group_id=100,type=select," +
 				"bucket=bucket_id:0,weight:100,actions=set_field:0x4000000/0x4000000->reg4,set_field:0xa0a0064->reg3,set_field:0x50/0xffff->reg4,resubmit:EndpointDNAT," +
@@ -1077,8 +1077,8 @@ func Test_client_InstallServiceGroup(t *testing.T) {
 		{
 			name: "IPv6 Endpoints",
 			endpoints: []proxy.Endpoint{
-				proxy.NewBaseEndpointInfo("fec0:10:10::100", "node1", "", 80, false, true, false, false, nil),
-				proxy.NewBaseEndpointInfo("fec0:10:10::101", "node2", "", 80, true, true, false, false, nil),
+				proxy.NewBaseEndpointInfo("fec0:10:10::100", 80, false, true, false, false, nil, nil),
+				proxy.NewBaseEndpointInfo("fec0:10:10::101", 80, true, true, false, false, nil, nil),
 			},
 			expectedGroup: "group_id=100,type=select," +
 				"bucket=bucket_id:0,weight:100,actions=set_field:0x4000000/0x4000000->reg4,set_field:0xfec00010001000000000000000000100->xxreg3,set_field:0x50/0xffff->reg4,resubmit:EndpointDNAT," +
@@ -1088,8 +1088,8 @@ func Test_client_InstallServiceGroup(t *testing.T) {
 			name:                "IPv4 Endpoints,SessionAffinity",
 			withSessionAffinity: true,
 			endpoints: []proxy.Endpoint{
-				proxy.NewBaseEndpointInfo("10.10.0.100", "node1", "", 80, false, true, false, false, nil),
-				proxy.NewBaseEndpointInfo("10.10.0.101", "node2", "", 80, true, true, false, false, nil),
+				proxy.NewBaseEndpointInfo("10.10.0.100", 80, false, true, false, false, nil, nil),
+				proxy.NewBaseEndpointInfo("10.10.0.101", 80, true, true, false, false, nil, nil),
 			},
 			expectedGroup: "group_id=100,type=select," +
 				"bucket=bucket_id:0,weight:100,actions=set_field:0x4000000/0x4000000->reg4,set_field:0xa0a0064->reg3,set_field:0x50/0xffff->reg4,resubmit:ServiceLB," +
@@ -1099,8 +1099,8 @@ func Test_client_InstallServiceGroup(t *testing.T) {
 			name:                "IPv6 Endpoints,SessionAffinity",
 			withSessionAffinity: true,
 			endpoints: []proxy.Endpoint{
-				proxy.NewBaseEndpointInfo("fec0:10:10::100", "node1", "", 80, false, true, false, false, nil),
-				proxy.NewBaseEndpointInfo("fec0:10:10::101", "node2", "", 80, true, true, false, false, nil),
+				proxy.NewBaseEndpointInfo("fec0:10:10::100", 80, false, true, false, false, nil, nil),
+				proxy.NewBaseEndpointInfo("fec0:10:10::101", 80, true, true, false, false, nil, nil),
 			},
 			expectedGroup: "group_id=100,type=select," +
 				"bucket=bucket_id:0,weight:100,actions=set_field:0x4000000/0x4000000->reg4,set_field:0xfec00010001000000000000000000100->xxreg3,set_field:0x50/0xffff->reg4,resubmit:ServiceLB," +
@@ -1109,8 +1109,8 @@ func Test_client_InstallServiceGroup(t *testing.T) {
 		{
 			name: "delete group failed for IPv4 Endpoints",
 			endpoints: []proxy.Endpoint{
-				proxy.NewBaseEndpointInfo("10.10.0.100", "node1", "", 80, false, true, false, false, nil),
-				proxy.NewBaseEndpointInfo("10.10.0.101", "node2", "", 80, true, true, false, false, nil),
+				proxy.NewBaseEndpointInfo("10.10.0.100", 80, false, true, false, false, nil, nil),
+				proxy.NewBaseEndpointInfo("10.10.0.101", 80, true, true, false, false, nil, nil),
 			},
 			expectedGroup: "group_id=100,type=select," +
 				"bucket=bucket_id:0,weight:100,actions=set_field:0x4000000/0x4000000->reg4,set_field:0xa0a0064->reg3,set_field:0x50/0xffff->reg4,resubmit:EndpointDNAT," +
@@ -1169,8 +1169,8 @@ func Test_client_InstallEndpointFlows(t *testing.T) {
 			name:     "TCPv4 Endpoints",
 			protocol: binding.ProtocolTCP,
 			endpoints: []proxy.Endpoint{
-				proxy.NewBaseEndpointInfo(ep1IPv4, "", "", 80, false, true, false, false, nil),
-				proxy.NewBaseEndpointInfo(ep2IPv4, "", "", 80, true, true, false, false, nil),
+				proxy.NewBaseEndpointInfo(ep1IPv4, 80, false, true, false, false, nil, nil),
+				proxy.NewBaseEndpointInfo(ep2IPv4, 80, true, true, false, false, nil, nil),
 			},
 			expectedFlows: []string{
 				"cookie=0x1030000000000, table=EndpointDNAT, priority=200,tcp,reg3=0xa0a0064,reg4=0x20050/0x7ffff actions=ct(commit,table=AntreaPolicyEgressRule,zone=65520,nat(dst=10.10.0.100:80),exec(set_field:0x10/0x10->ct_mark))",
@@ -1182,8 +1182,8 @@ func Test_client_InstallEndpointFlows(t *testing.T) {
 			name:     "TCPv6 Endpoints",
 			protocol: binding.ProtocolTCPv6,
 			endpoints: []proxy.Endpoint{
-				proxy.NewBaseEndpointInfo(ep1IPv6, "", "", 80, false, true, false, false, nil),
-				proxy.NewBaseEndpointInfo(ep2IPv6, "", "", 80, true, true, false, false, nil),
+				proxy.NewBaseEndpointInfo(ep1IPv6, 80, false, true, false, false, nil, nil),
+				proxy.NewBaseEndpointInfo(ep2IPv6, 80, true, true, false, false, nil, nil),
 			},
 			expectedFlows: []string{
 				"cookie=0x1030000000000, table=EndpointDNAT, priority=200,tcp6,reg4=0x20050/0x7ffff,xxreg3=0xfec00010001000000000000000000100 actions=ct(commit,table=AntreaPolicyEgressRule,zone=65510,nat(dst=[fec0:10:10::100]:80),exec(set_field:0x10/0x10->ct_mark))",
@@ -1195,8 +1195,8 @@ func Test_client_InstallEndpointFlows(t *testing.T) {
 			name:     "UDPv4 Endpoints",
 			protocol: binding.ProtocolUDP,
 			endpoints: []proxy.Endpoint{
-				proxy.NewBaseEndpointInfo(ep1IPv4, "", "", 80, false, true, false, false, nil),
-				proxy.NewBaseEndpointInfo(ep2IPv4, "", "", 80, true, true, false, false, nil),
+				proxy.NewBaseEndpointInfo(ep1IPv4, 80, false, true, false, false, nil, nil),
+				proxy.NewBaseEndpointInfo(ep2IPv4, 80, true, true, false, false, nil, nil),
 			},
 			expectedFlows: []string{
 				"cookie=0x1030000000000, table=EndpointDNAT, priority=200,udp,reg3=0xa0a0064,reg4=0x20050/0x7ffff actions=ct(commit,table=AntreaPolicyEgressRule,zone=65520,nat(dst=10.10.0.100:80),exec(set_field:0x10/0x10->ct_mark))",
@@ -1208,8 +1208,8 @@ func Test_client_InstallEndpointFlows(t *testing.T) {
 			name:     "UDPv6 Endpoints",
 			protocol: binding.ProtocolUDPv6,
 			endpoints: []proxy.Endpoint{
-				proxy.NewBaseEndpointInfo(ep1IPv6, "", "", 80, false, true, false, false, nil),
-				proxy.NewBaseEndpointInfo(ep2IPv6, "", "", 80, true, true, false, false, nil),
+				proxy.NewBaseEndpointInfo(ep1IPv6, 80, false, true, false, false, nil, nil),
+				proxy.NewBaseEndpointInfo(ep2IPv6, 80, true, true, false, false, nil, nil),
 			},
 			expectedFlows: []string{
 				"cookie=0x1030000000000, table=EndpointDNAT, priority=200,udp6,reg4=0x20050/0x7ffff,xxreg3=0xfec00010001000000000000000000100 actions=ct(commit,table=AntreaPolicyEgressRule,zone=65510,nat(dst=[fec0:10:10::100]:80),exec(set_field:0x10/0x10->ct_mark))",
@@ -1221,8 +1221,8 @@ func Test_client_InstallEndpointFlows(t *testing.T) {
 			name:     "SCTPv4 Endpoints",
 			protocol: binding.ProtocolSCTP,
 			endpoints: []proxy.Endpoint{
-				proxy.NewBaseEndpointInfo(ep1IPv4, "", "", 80, false, true, false, false, nil),
-				proxy.NewBaseEndpointInfo(ep2IPv4, "", "", 80, true, true, false, false, nil),
+				proxy.NewBaseEndpointInfo(ep1IPv4, 80, false, true, false, false, nil, nil),
+				proxy.NewBaseEndpointInfo(ep2IPv4, 80, true, true, false, false, nil, nil),
 			},
 			expectedFlows: []string{
 				"cookie=0x1030000000000, table=EndpointDNAT, priority=200,sctp,reg3=0xa0a0064,reg4=0x20050/0x7ffff actions=ct(commit,table=AntreaPolicyEgressRule,zone=65520,nat(dst=10.10.0.100:80),exec(set_field:0x10/0x10->ct_mark))",
@@ -1234,8 +1234,8 @@ func Test_client_InstallEndpointFlows(t *testing.T) {
 			name:     "SCTPv6 Endpoints",
 			protocol: binding.ProtocolSCTPv6,
 			endpoints: []proxy.Endpoint{
-				proxy.NewBaseEndpointInfo(ep1IPv6, "", "", 80, false, true, false, false, nil),
-				proxy.NewBaseEndpointInfo(ep2IPv6, "", "", 80, true, true, false, false, nil),
+				proxy.NewBaseEndpointInfo(ep1IPv6, 80, false, true, false, false, nil, nil),
+				proxy.NewBaseEndpointInfo(ep2IPv6, 80, true, true, false, false, nil, nil),
 			},
 			expectedFlows: []string{
 				"cookie=0x1030000000000, table=EndpointDNAT, priority=200,sctp6,reg4=0x20050/0x7ffff,xxreg3=0xfec00010001000000000000000000100 actions=ct(commit,table=AntreaPolicyEgressRule,zone=65510,nat(dst=[fec0:10:10::100]:80),exec(set_field:0x10/0x10->ct_mark))",
@@ -1258,7 +1258,7 @@ func Test_client_InstallEndpointFlows(t *testing.T) {
 			assert.NoError(t, fc.InstallEndpointFlows(tc.protocol, tc.endpoints))
 			var flows []string
 			for _, ep := range tc.endpoints {
-				endpointPort, _ := ep.Port()
+				endpointPort := ep.Port()
 				cacheKey := generateEndpointFlowCacheKey(ep.IP(), endpointPort, tc.protocol)
 				fCacheI, ok := fc.featureService.cachedFlows.Load(cacheKey)
 				require.True(t, ok)
@@ -1268,7 +1268,7 @@ func Test_client_InstallEndpointFlows(t *testing.T) {
 
 			assert.NoError(t, fc.UninstallEndpointFlows(tc.protocol, tc.endpoints))
 			for _, ep := range tc.endpoints {
-				endpointPort, _ := ep.Port()
+				endpointPort := ep.Port()
 				cacheKey := generateEndpointFlowCacheKey(ep.IP(), endpointPort, tc.protocol)
 				_, ok := fc.featureService.cachedFlows.Load(cacheKey)
 				require.False(t, ok)
@@ -1538,8 +1538,8 @@ func Test_client_GetServiceFlowKeys(t *testing.T) {
 	svcPort := uint16(80)
 	bindingProtocol := binding.ProtocolTCP
 	endpoints := []proxy.Endpoint{
-		proxy.NewBaseEndpointInfo("10.10.0.11", "", "", 80, false, true, false, false, nil),
-		proxy.NewBaseEndpointInfo("10.10.0.12", "", "", 80, true, true, false, false, nil),
+		proxy.NewBaseEndpointInfo("10.10.0.11", 80, false, true, false, false, nil, nil),
+		proxy.NewBaseEndpointInfo("10.10.0.12", 80, true, true, false, false, nil, nil),
 	}
 
 	assert.NoError(t, fc.InstallServiceFlows(&types.ServiceConfig{

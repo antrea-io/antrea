@@ -2586,13 +2586,13 @@ func (f *featureService) serviceEndpointGroup(groupID binding.GroupIDType, withS
 		resubmitTableID = ServiceLBTable.GetNext() // It will be EndpointDNATTable if DSR is not enabled, otherwise DSRServiceMarkTable.
 	}
 	for _, endpoint := range endpoints {
-		endpointPort, _ := endpoint.Port()
+		endpointPort := endpoint.Port()
 		endpointIP := net.ParseIP(endpoint.IP())
 		portVal := util.PortToUint16(endpointPort)
 		ipProtocol := getIPProtocol(endpointIP)
 		bucketBuilder := group.Bucket().Weight(100)
 		// Load RemoteEndpointRegMark for remote non-hostNetwork Endpoints.
-		if !endpoint.GetIsLocal() && endpoint.GetNodeName() != "" && !f.nodeIPChecker.IsNodeIP(endpoint.IP()) {
+		if !endpoint.IsLocal() && !f.nodeIPChecker.IsNodeIP(endpoint.IP()) {
 			bucketBuilder = bucketBuilder.LoadRegMark(RemoteEndpointRegMark)
 		}
 		switch ipProtocol {

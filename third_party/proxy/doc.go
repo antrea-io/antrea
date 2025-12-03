@@ -13,7 +13,7 @@
 // limitations under the License.
 
 // Package proxy is copied from
-// k8s.io/kubernetes@/v1.21.0(https://github.com/kubernetes/kubernetes/tree/v1.21.0)
+// k8s.io/kubernetes@/v1.34.2(https://github.com/kubernetes/kubernetes/tree/v1.34.2)
 // to avoid importing the whole kubernetes repo. Some unneeded functions are removed.
 
 package proxy
