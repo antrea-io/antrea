@@ -20,6 +20,6 @@ import (
 	"antrea.io/antrea/pkg/agent/ipassigner/linkmonitor"
 )
 
-func NewIPAssigner(nodeTransportInterface string, dummyDeviceName string, linkMonitor linkmonitor.Interface) (IPAssigner, error) {
+func NewIPAssigner(nodeTransportInterface string, dummyDeviceName string, linkMonitor linkmonitor.Interface, uniqueMACForSubInterfaces bool) (IPAssigner, error) {
 	return nil, errors.New("IPAssigner is not implemented on Windows")
 }

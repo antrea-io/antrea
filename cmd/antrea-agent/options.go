@@ -535,6 +535,9 @@ func (o *Options) setK8sNodeDefaultOptions() {
 	if o.config.Egress.SNATFullyRandomPorts == nil {
 		o.config.Egress.SNATFullyRandomPorts = ptr.To(o.config.SNATFullyRandomPorts)
 	}
+	if o.config.Egress.UniqueMACForSubInterfaces == nil {
+		o.config.Egress.UniqueMACForSubInterfaces = ptr.To(true)
+	}
 	if o.config.HostNetworkAcceleration.Enable == nil {
 		o.config.HostNetworkAcceleration.Enable = ptr.To(true)
 	}

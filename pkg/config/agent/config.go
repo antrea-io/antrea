@@ -361,6 +361,10 @@ type EgressConfig struct {
 	// same value as for the top-level snatFullyRandomPorts configuration, but this field can be
 	// used as an override.
 	SNATFullyRandomPorts *bool `yaml:"snatFullyRandomPorts,omitempty"`
+	// Enable Egress VLAN sub-interfaces to use unique MAC addresses instead of
+	// inheriting the parent interface’s MAC. Useful in cloud environments that require
+	// unique MAC addresses per interface.
+	UniqueMACForSubInterfaces *bool `yaml:"uniqueMACForSubInterfaces,omitempty"`
 }
 
 type IPsecConfig struct {
