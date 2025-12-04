@@ -9,7 +9,7 @@
   enabledManagers: ["gomod", "github-actions"],
 
   // Active release branches
-  baseBranches: ["main", "release-2.4", "release-2.3", "release-2.2"],
+  baseBranches: ["main", "release-2.5", "release-2.4", "release-2.3"],
   prConcurrentLimit: 9,
   prHourlyLimit: 0,
 
@@ -31,7 +31,7 @@
     // Disable all regular updates for active release branches
     // Don't write any rules before this rule
     {
-      matchBaseBranches: ["release-2.4", "release-2.3", "release-2.2"],
+      matchBaseBranches: ["release-2.5", "release-2.4", "release-2.3"],
       groupName: "all dependencies active release branches",
       groupSlug: "all-deps-active-release-branches",
       enabled: false,
