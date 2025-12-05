@@ -130,6 +130,10 @@ type proxier struct {
 	serviceStringMap map[string]k8sproxy.ServicePortName
 	// serviceStringMapMutex protects serviceStringMap object.
 	serviceStringMapMutex sync.Mutex
+	// externalIPServiceStringMap provides map from externalIP to serviceStrings
+	externalIPServiceStringMap map[string]string
+	// serviceStringMapMutex protects serviceStringMap object.
+	externalIPServiceStringMapMutex sync.Mutex
 
 	serviceHealthServer healthcheck.ServiceHealthServer
 	numLocalEndpoints   map[apimachinerytypes.NamespacedName]int
@@ -227,7 +231,7 @@ func (p *proxier) removeStaleServices() {
 		}
 
 		delete(p.serviceInstalledMap, svcPortName)
-		p.deleteServiceByIP(svcInfoStr)
+		p.deleteServiceByIP(svcInfo)
 	}
 }
 
@@ -704,7 +708,6 @@ func (p *proxier) uninstallLoadBalancerService(svcInfoStr string, loadBalancerIP
 func (p *proxier) installServices() {
 	for svcPortName, svcPort := range p.serviceMap {
 		svcInfo := svcPort.(*types.ServiceInfo)
-		svcInfoStr := svcInfo.String()
 		endpointsInstalled, ok := p.endpointsInstalledMap[svcPortName]
 		if !ok {
 			endpointsInstalled = map[string]k8sproxy.Endpoint{}
@@ -826,7 +829,7 @@ func (p *proxier) installServices() {
 		}
 
 		p.serviceInstalledMap[svcPortName] = svcPort
-		p.addServiceByIP(svcInfoStr, svcPortName)
+		p.addServiceByIP(svcInfo, svcPortName)
 	}
 }
 
@@ -1260,25 +1263,79 @@ func (p *proxier) OnNodeDelete(node *corev1.Node) {
 func (p *proxier) OnNodeSynced() {
 }
 
+func (p *proxier) getServiceByExternalIP(serviceStr string) (k8sproxy.ServicePortName, bool) {
+	var serviceInfo k8sproxy.ServicePortName
+	index := strings.Index(serviceStr, ":")
+	if index != -1 {
+		externalIP := serviceStr[0:index]
+
+		serviceStringFromExternalIP, exists := p.externalIPServiceStringMap[externalIP]
+		if exists {
+			serviceInfo, exists := p.serviceStringMap[serviceStringFromExternalIP]
+			return serviceInfo, exists
+		}
+	}
+	return serviceInfo, false
+}
+
+// GetCanonicalServiceIP checks if the provided serviceStr is LoadBalancer IP based.
+// If so, it returns the corresponding ClusterIP based serviceString.
+//
+// If the provided serviceStr is already based on a ClusterIP or if a ClusterIP cannot be found,
+// the original string is returned unchanged.
+func (p *proxier) GetCanonicalServiceIP(serviceStr string) string {
+	p.externalIPServiceStringMapMutex.Lock()
+	defer p.externalIPServiceStringMapMutex.Unlock()
+
+	index := strings.Index(serviceStr, ":")
+	if index != -1 {
+		externalIP := serviceStr[0:index]
+		if clusterIPServiceString, exists := p.externalIPServiceStringMap[externalIP]; exists {
+			return clusterIPServiceString
+		}
+	}
+	return serviceStr
+}
+
 func (p *proxier) GetServiceByIP(serviceStr string) (k8sproxy.ServicePortName, bool) {
 	p.serviceStringMapMutex.Lock()
 	defer p.serviceStringMapMutex.Unlock()
+
+	serviceStr = p.GetCanonicalServiceIP(serviceStr)
 
 	serviceInfo, exists := p.serviceStringMap[serviceStr]
 	return serviceInfo, exists
 }
 
-func (p *proxier) addServiceByIP(serviceStr string, servicePortName k8sproxy.ServicePortName) {
+func (p *proxier) addServiceByIP(serviceInfo *types.ServiceInfo, servicePortName k8sproxy.ServicePortName) {
 	p.serviceStringMapMutex.Lock()
 	defer p.serviceStringMapMutex.Unlock()
+	p.externalIPServiceStringMapMutex.Lock()
+	defer p.externalIPServiceStringMapMutex.Unlock()
+
+	serviceStr := serviceInfo.String()
+	externalIPs := serviceInfo.LoadBalancerIPStrings()
+	if strings.Contains(serviceStr, "10.96.228.225") {
+		klog.InfoS("adding the nginx service", "externalips", externalIPs)
+	}
+	for _, ipString := range externalIPs {
+		p.externalIPServiceStringMap[ipString] = serviceStr
+	}
 
 	p.serviceStringMap[serviceStr] = servicePortName
 }
 
-func (p *proxier) deleteServiceByIP(serviceStr string) {
+func (p *proxier) deleteServiceByIP(serviceInfo *types.ServiceInfo) {
 	p.serviceStringMapMutex.Lock()
 	defer p.serviceStringMapMutex.Unlock()
+	p.externalIPServiceStringMapMutex.Lock()
+	defer p.externalIPServiceStringMapMutex.Unlock()
 
+	externalIPs := serviceInfo.ExternalIPStrings()
+	for _, ipString := range externalIPs {
+		delete(p.externalIPServiceStringMap, ipString)
+	}
+	serviceStr := serviceInfo.String()
 	delete(p.serviceStringMap, serviceStr)
 }
 
@@ -1451,6 +1508,7 @@ func newProxier(
 		endpointReferenceCounter:          map[string]int{},
 		nodeLabels:                        map[string]string{},
 		serviceStringMap:                  map[string]k8sproxy.ServicePortName{},
+		externalIPServiceStringMap:        map[string]string{},
 		groupCounter:                      groupCounter,
 		ofClient:                          ofClient,
 		routeClient:                       routeClient,
