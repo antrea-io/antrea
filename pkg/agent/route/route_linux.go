@@ -137,6 +137,46 @@ var (
 // Antrea-managed chains.
 var jumpToAntreaChainPattern = regexp.MustCompile(`--comment\s+"(Antrea:[^"]+)"\s+-j\s+(ANTREA-[A-Z0-9-]+)`)
 
+// iptablesTag identifies a feature that relies on iptables rules. Each component maintains an independent rule
+// cache for IPv4 and IPv6.
+type iptablesTag int
+
+const (
+	iptablesTagNodeNetworkPolicy iptablesTag = iota
+	iptablesTagOwnerWireguard
+	iptablesTagNodeLatencyMonitor
+	iptablesTagProxyHealthCheck
+)
+
+// iptablesCache stores per-feature iptables state for IPv4 and IPv6. Each feature maintains an independent sync.Map
+// for rules/chains.
+type iptablesCache struct {
+	ipv4 map[iptablesTag]*sync.Map
+	ipv6 map[iptablesTag]*sync.Map
+}
+
+// newIPTablesCache initializes an iptablesCache with a sync.Map for each feature and IP family.
+func newIPTablesCache() *iptablesCache {
+	allFeatures := []iptablesTag{
+		iptablesTagNodeNetworkPolicy,
+		iptablesTagOwnerWireguard,
+		iptablesTagNodeLatencyMonitor,
+		iptablesTagProxyHealthCheck,
+	}
+	initFamily := func() map[iptablesTag]*sync.Map {
+		m := make(map[iptablesTag]*sync.Map, len(allFeatures))
+		for _, f := range allFeatures {
+			m[f] = &sync.Map{}
+		}
+		return m
+	}
+	cache := &iptablesCache{
+		ipv4: initFamily(),
+		ipv6: initFamily(),
+	}
+	return cache
+}
+
 // Client takes care of routing container packets in host network, coordinating ip route, ip rule, iptables and ipset.
 type Client struct {
 	nodeConfig             *config.NodeConfig
@@ -199,18 +239,8 @@ type Client struct {
 	nodeNetworkPolicyIPSetsIPv4 sync.Map
 	// nodeNetworkPolicyIPSetsIPv6 caches all existing IPv6 ipsets for NodeNetworkPolicy.
 	nodeNetworkPolicyIPSetsIPv6 sync.Map
-	// nodeNetworkPolicyIPTablesIPv4 caches all existing IPv4 iptables chains and rules for NodeNetworkPolicy.
-	nodeNetworkPolicyIPTablesIPv4 sync.Map
-	// nodeNetworkPolicyIPTablesIPv6 caches all existing IPv6 iptables chains and rules for NodeNetworkPolicy.
-	nodeNetworkPolicyIPTablesIPv6 sync.Map
-	// wireguardIPTablesIPv4 caches all existing IPv4 iptables chains and rules for WireGuard.
-	wireguardIPTablesIPv4 sync.Map
-	// wireguardIPTablesIPv6 caches all existing IPv6 iptables chains and rules for WireGuard.
-	wireguardIPTablesIPv6 sync.Map
-	// nodeLatencyMonitorIPTablesIPv4 caches all existing IPv4 iptables chains and rules for NodeLatencyMonitor.
-	nodeLatencyMonitorIPTablesIPv4 sync.Map
-	// nodeLatencyMonitorIPTablesIPv6 caches all existing IPv6 iptables chains and rules for NodeLatencyMonitor.
-	nodeLatencyMonitorIPTablesIPv6 sync.Map
+	// iptablesCache caches all existing iptables chains and rules for the features relying on it.
+	iptablesCache *iptablesCache
 	// podCIDRNFTablesSetIPv4 caches all existing IPv4 Pod CIDRs stored in antreaNFTablesSetPeerPodCIDR.
 	podCIDRNFTablesSetIPv4 sync.Map
 	// podCIDRNFTablesSetIPv6 caches all existing IPv6 Pod CIDRs stored in antreaNFTablesSetPeerPodCIDR.
@@ -221,7 +251,9 @@ type Client struct {
 	deterministic bool
 	// wireguardPort is the port used for the WireGuard UDP tunnels. When WireGuard is enabled (used as the encryption
 	// mode), we add iptables rules to the filter table to accept input and output UDP traffic destined to this port.
-	wireguardPort int
+	wireguardPort int32
+	// proxyHealthCheckPort is the port on which AntreaProxy health check server listens when proxyAll is enabled.
+	proxyHealthCheckPort int32
 }
 
 // NewClient returns a route client.
@@ -236,7 +268,8 @@ func NewClient(networkConfig *config.NetworkConfig,
 	nodeSNATRandomFully bool,
 	egressSNATRandomFully bool,
 	serviceCIDRProvider servicecidr.Interface,
-	wireguardPort int) (*Client, error) {
+	wireguardPort int32,
+	proxyHealthCheckPort int32) (*Client, error) {
 	return &Client{
 		networkConfig:               networkConfig,
 		noSNAT:                      noSNAT,
@@ -254,6 +287,7 @@ func NewClient(networkConfig *config.NetworkConfig,
 		serviceCIDRProvider:         serviceCIDRProvider,
 		serviceExternalIPReferences: make(map[string]sets.Set[string]),
 		wireguardPort:               wireguardPort,
+		proxyHealthCheckPort:        proxyHealthCheckPort,
 	}, nil
 }
 
@@ -302,6 +336,7 @@ func (c *Client) Initialize(nodeConfig *config.NodeConfig, done func()) error {
 		return fmt.Errorf("iptables does not support --random-fully for SNAT / MASQUERADE rules")
 	}
 
+	c.iptablesCache = newIPTablesCache()
 	// Sets up the iptables infrastructure required to route packets in host network.
 	// It's called in a goroutine because xtables lock may not be acquired immediately.
 	go func() {
@@ -396,6 +431,9 @@ func (c *Client) Initialize(nodeConfig *config.NodeConfig, done func()) error {
 	}
 	if c.nodeLatencyMonitorEnabled {
 		c.initNodeLatencyRules()
+	}
+	if c.proxyHealthCheckPort != 0 {
+		c.initProxyHealthCheck()
 	}
 
 	return nil
@@ -956,7 +994,9 @@ func (c *Client) syncIPTables(cleanupStaleJumpRules bool) error {
 	if c.proxyAll && !c.hostNetworkNFTables {
 		jumpRules = append(jumpRules, jumpRule{iptables.NATTable, iptables.OutputChain, antreaOutputChain, "Antrea: jump to Antrea output rules", true})
 	}
-	if c.nodeNetworkPolicyEnabled || c.networkConfig.TrafficEncryptionMode == config.TrafficEncryptionModeWireGuard {
+	if c.nodeNetworkPolicyEnabled ||
+		c.networkConfig.TrafficEncryptionMode == config.TrafficEncryptionModeWireGuard ||
+		c.proxyAll {
 		jumpRules = append(jumpRules, jumpRule{iptables.FilterTable, iptables.InputChain, antreaInputChain, "Antrea: jump to Antrea input rules", false})
 		jumpRules = append(jumpRules, jumpRule{iptables.FilterTable, iptables.OutputChain, antreaOutputChain, "Antrea: jump to Antrea output rules", false})
 	}
@@ -1028,14 +1068,16 @@ func (c *Client) syncIPTables(cleanupStaleJumpRules bool) error {
 	iptablesFilterRulesByChainV4 := make(map[string][]string)
 	// Install the static rules (WireGuard + NodeLatencyMonitor) before the dynamic rules (e.g., NodeNetworkPolicy)
 	// for performance reasons.
-	addFilterRulesToChain(iptablesFilterRulesByChainV4, &c.nodeLatencyMonitorIPTablesIPv4)
-	addFilterRulesToChain(iptablesFilterRulesByChainV4, &c.wireguardIPTablesIPv4)
-	addFilterRulesToChain(iptablesFilterRulesByChainV4, &c.nodeNetworkPolicyIPTablesIPv4)
+	addFilterRulesToChain(iptablesFilterRulesByChainV4, c.iptablesCache.ipv4[iptablesTagNodeLatencyMonitor])
+	addFilterRulesToChain(iptablesFilterRulesByChainV4, c.iptablesCache.ipv4[iptablesTagOwnerWireguard])
+	addFilterRulesToChain(iptablesFilterRulesByChainV4, c.iptablesCache.ipv4[iptablesTagNodeNetworkPolicy])
+	addFilterRulesToChain(iptablesFilterRulesByChainV4, c.iptablesCache.ipv4[iptablesTagProxyHealthCheck])
 
 	iptablesFilterRulesByChainV6 := make(map[string][]string)
-	addFilterRulesToChain(iptablesFilterRulesByChainV6, &c.nodeLatencyMonitorIPTablesIPv6)
-	addFilterRulesToChain(iptablesFilterRulesByChainV6, &c.wireguardIPTablesIPv6)
-	addFilterRulesToChain(iptablesFilterRulesByChainV6, &c.nodeNetworkPolicyIPTablesIPv6)
+	addFilterRulesToChain(iptablesFilterRulesByChainV6, c.iptablesCache.ipv6[iptablesTagNodeLatencyMonitor])
+	addFilterRulesToChain(iptablesFilterRulesByChainV6, c.iptablesCache.ipv6[iptablesTagOwnerWireguard])
+	addFilterRulesToChain(iptablesFilterRulesByChainV6, c.iptablesCache.ipv6[iptablesTagNodeNetworkPolicy])
+	addFilterRulesToChain(iptablesFilterRulesByChainV6, c.iptablesCache.ipv6[iptablesTagProxyHealthCheck])
 
 	// Use iptables-restore to configure IPv4 settings.
 	if c.networkConfig.IPv4Enabled {
@@ -1564,25 +1606,55 @@ func (c *Client) initNodeNetworkPolicy() {
 	}
 
 	if c.networkConfig.IPv6Enabled {
-		c.nodeNetworkPolicyIPTablesIPv6.Store(antreaInputChain, antreaInputChainRules)
-		c.nodeNetworkPolicyIPTablesIPv6.Store(antreaOutputChain, antreaOutputChainRules)
-		c.nodeNetworkPolicyIPTablesIPv6.Store(preNodeNetworkPolicyIngressRulesChain, preIngressChainRules)
-		c.nodeNetworkPolicyIPTablesIPv6.Store(preNodeNetworkPolicyEgressRulesChain, preEgressChainRules)
-		c.nodeNetworkPolicyIPTablesIPv6.Store(config.NodeNetworkPolicyIngressRulesChain, []string{})
-		c.nodeNetworkPolicyIPTablesIPv6.Store(config.NodeNetworkPolicyEgressRulesChain, []string{})
+		c.iptablesCache.ipv6[iptablesTagNodeNetworkPolicy].Store(antreaInputChain, antreaInputChainRules)
+		c.iptablesCache.ipv6[iptablesTagNodeNetworkPolicy].Store(antreaOutputChain, antreaOutputChainRules)
+		c.iptablesCache.ipv6[iptablesTagNodeNetworkPolicy].Store(preNodeNetworkPolicyIngressRulesChain, preIngressChainRules)
+		c.iptablesCache.ipv6[iptablesTagNodeNetworkPolicy].Store(preNodeNetworkPolicyEgressRulesChain, preEgressChainRules)
+		c.iptablesCache.ipv6[iptablesTagNodeNetworkPolicy].Store(config.NodeNetworkPolicyIngressRulesChain, []string{})
+		c.iptablesCache.ipv6[iptablesTagNodeNetworkPolicy].Store(config.NodeNetworkPolicyEgressRulesChain, []string{})
 	}
 	if c.networkConfig.IPv4Enabled {
-		c.nodeNetworkPolicyIPTablesIPv4.Store(antreaInputChain, antreaInputChainRules)
-		c.nodeNetworkPolicyIPTablesIPv4.Store(antreaOutputChain, antreaOutputChainRules)
-		c.nodeNetworkPolicyIPTablesIPv4.Store(preNodeNetworkPolicyIngressRulesChain, preIngressChainRules)
-		c.nodeNetworkPolicyIPTablesIPv4.Store(preNodeNetworkPolicyEgressRulesChain, preEgressChainRules)
-		c.nodeNetworkPolicyIPTablesIPv4.Store(config.NodeNetworkPolicyIngressRulesChain, []string{})
-		c.nodeNetworkPolicyIPTablesIPv4.Store(config.NodeNetworkPolicyEgressRulesChain, []string{})
+		c.iptablesCache.ipv4[iptablesTagNodeNetworkPolicy].Store(antreaInputChain, antreaInputChainRules)
+		c.iptablesCache.ipv4[iptablesTagNodeNetworkPolicy].Store(antreaOutputChain, antreaOutputChainRules)
+		c.iptablesCache.ipv4[iptablesTagNodeNetworkPolicy].Store(preNodeNetworkPolicyIngressRulesChain, preIngressChainRules)
+		c.iptablesCache.ipv4[iptablesTagNodeNetworkPolicy].Store(preNodeNetworkPolicyEgressRulesChain, preEgressChainRules)
+		c.iptablesCache.ipv4[iptablesTagNodeNetworkPolicy].Store(config.NodeNetworkPolicyIngressRulesChain, []string{})
+		c.iptablesCache.ipv4[iptablesTagNodeNetworkPolicy].Store(config.NodeNetworkPolicyEgressRulesChain, []string{})
+	}
+}
+
+func (c *Client) initProxyHealthCheck() {
+	proxyHealthCheckPort := intstr.FromInt32(c.proxyHealthCheckPort)
+	antreaInputChainRules := []string{
+		iptables.NewRuleBuilder(antreaInputChain).
+			SetComment("Antrea: allow proxy health check input packets").
+			MatchTransProtocol(iptables.ProtocolTCP).
+			MatchPortDst(&proxyHealthCheckPort, nil).
+			SetTarget(iptables.AcceptTarget).
+			Done().
+			GetRule(),
+	}
+	antreaOutputChainRules := []string{
+		iptables.NewRuleBuilder(antreaOutputChain).
+			SetComment("Antrea: allow proxy health check output packets").
+			MatchTransProtocol(iptables.ProtocolTCP).
+			MatchPortSrc(&c.proxyHealthCheckPort, nil).
+			SetTarget(iptables.AcceptTarget).
+			Done().
+			GetRule(),
+	}
+	if c.networkConfig.IPv6Enabled {
+		c.iptablesCache.ipv6[iptablesTagProxyHealthCheck].Store(antreaInputChain, antreaInputChainRules)
+		c.iptablesCache.ipv6[iptablesTagProxyHealthCheck].Store(antreaOutputChain, antreaOutputChainRules)
+	}
+	if c.networkConfig.IPv4Enabled {
+		c.iptablesCache.ipv4[iptablesTagProxyHealthCheck].Store(antreaInputChain, antreaInputChainRules)
+		c.iptablesCache.ipv4[iptablesTagProxyHealthCheck].Store(antreaOutputChain, antreaOutputChainRules)
 	}
 }
 
 func (c *Client) initWireguard() {
-	wireguardPort := intstr.FromInt(c.wireguardPort)
+	wireguardPort := intstr.FromInt32(c.wireguardPort)
 	antreaInputChainRules := []string{
 		iptables.NewRuleBuilder(antreaInputChain).
 			SetComment("Antrea: allow WireGuard input packets").
@@ -1603,12 +1675,12 @@ func (c *Client) initWireguard() {
 	}
 
 	if c.networkConfig.IPv6Enabled {
-		c.wireguardIPTablesIPv6.Store(antreaInputChain, antreaInputChainRules)
-		c.wireguardIPTablesIPv6.Store(antreaOutputChain, antreaOutputChainRules)
+		c.iptablesCache.ipv6[iptablesTagOwnerWireguard].Store(antreaInputChain, antreaInputChainRules)
+		c.iptablesCache.ipv6[iptablesTagOwnerWireguard].Store(antreaOutputChain, antreaOutputChainRules)
 	}
 	if c.networkConfig.IPv4Enabled {
-		c.wireguardIPTablesIPv4.Store(antreaInputChain, antreaInputChainRules)
-		c.wireguardIPTablesIPv4.Store(antreaOutputChain, antreaOutputChainRules)
+		c.iptablesCache.ipv4[iptablesTagOwnerWireguard].Store(antreaInputChain, antreaInputChainRules)
+		c.iptablesCache.ipv4[iptablesTagOwnerWireguard].Store(antreaOutputChain, antreaOutputChainRules)
 	}
 }
 
@@ -1640,21 +1712,21 @@ func (c *Client) initNodeLatencyRules() {
 	}
 
 	if c.networkConfig.IPv6Enabled {
-		c.nodeLatencyMonitorIPTablesIPv6.Store(antreaInputChain, []string{
+		c.iptablesCache.ipv6[iptablesTagNodeLatencyMonitor].Store(antreaInputChain, []string{
 			buildInputRule(iptables.ProtocolIPv6, int32(ipv6.ICMPTypeEchoRequest)),
 			buildInputRule(iptables.ProtocolIPv6, int32(ipv6.ICMPTypeEchoReply)),
 		})
-		c.nodeLatencyMonitorIPTablesIPv6.Store(antreaOutputChain, []string{
+		c.iptablesCache.ipv6[iptablesTagNodeLatencyMonitor].Store(antreaOutputChain, []string{
 			buildOutputRule(iptables.ProtocolIPv6, int32(ipv6.ICMPTypeEchoRequest)),
 			buildOutputRule(iptables.ProtocolIPv6, int32(ipv6.ICMPTypeEchoReply)),
 		})
 	}
 	if c.networkConfig.IPv4Enabled {
-		c.nodeLatencyMonitorIPTablesIPv4.Store(antreaInputChain, []string{
+		c.iptablesCache.ipv4[iptablesTagNodeLatencyMonitor].Store(antreaInputChain, []string{
 			buildInputRule(iptables.ProtocolIPv4, int32(ipv4.ICMPTypeEcho)),
 			buildInputRule(iptables.ProtocolIPv4, int32(ipv4.ICMPTypeEchoReply)),
 		})
-		c.nodeLatencyMonitorIPTablesIPv4.Store(antreaOutputChain, []string{
+		c.iptablesCache.ipv4[iptablesTagNodeLatencyMonitor].Store(antreaOutputChain, []string{
 			buildOutputRule(iptables.ProtocolIPv4, int32(ipv4.ICMPTypeEcho)),
 			buildOutputRule(iptables.ProtocolIPv4, int32(ipv4.ICMPTypeEchoReply)),
 		})
@@ -2800,9 +2872,9 @@ func (c *Client) AddOrUpdateNodeNetworkPolicyIPTables(iptablesChains []string, i
 
 	for index, iptablesChain := range iptablesChains {
 		if isIPv6 {
-			c.nodeNetworkPolicyIPTablesIPv6.Store(iptablesChain, iptablesRules[index])
+			c.iptablesCache.ipv6[iptablesTagNodeNetworkPolicy].Store(iptablesChain, iptablesRules[index])
 		} else {
-			c.nodeNetworkPolicyIPTablesIPv4.Store(iptablesChain, iptablesRules[index])
+			c.iptablesCache.ipv4[iptablesTagNodeNetworkPolicy].Store(iptablesChain, iptablesRules[index])
 		}
 	}
 	return nil
@@ -2822,9 +2894,9 @@ func (c *Client) DeleteNodeNetworkPolicyIPTables(iptablesChains []string, isIPv6
 
 	for _, iptablesChain := range iptablesChains {
 		if isIPv6 {
-			c.nodeNetworkPolicyIPTablesIPv6.Delete(iptablesChain)
+			c.iptablesCache.ipv6[iptablesTagNodeNetworkPolicy].Delete(iptablesChain)
 		} else {
-			c.nodeNetworkPolicyIPTablesIPv4.Delete(iptablesChain)
+			c.iptablesCache.ipv4[iptablesTagNodeNetworkPolicy].Delete(iptablesChain)
 		}
 	}
 
