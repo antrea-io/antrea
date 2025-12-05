@@ -757,6 +757,10 @@ func testLoadBalancerAdd(t *testing.T,
 	fp.syncProxyRules()
 	assert.Contains(t, fp.serviceInstalledMap, svcPortName)
 	assert.Contains(t, fp.endpointsInstalledMap, svcPortName)
+	if proxyLoadBalancerIPs {
+		alternativeSvcInfoStr := fmt.Sprintf("%s:%d/%s", loadBalancerIP, svcPort, corev1.ProtocolTCP)
+		assert.Contains(t, fp.serviceStringMap, alternativeSvcInfoStr)
+	}
 }
 
 func testNodePortAdd(t *testing.T,
@@ -2979,6 +2983,14 @@ func testServiceExternalIPsUpdate(t *testing.T, protocol binding.Protocol, isIPv
 	fp.syncProxyRules()
 	assert.Contains(t, fp.serviceInstalledMap, svcPortName)
 	assert.Contains(t, fp.endpointsInstalledMap, svcPortName)
+	for _, removedIP := range toDeleteLoadBalancerIPs {
+		serviceStr := fmt.Sprintf("%s:%d/%s", removedIP, int32(svcPort), apiProtocol)
+		assert.NotContains(t, fp.serviceStringMap, serviceStr, "Expected old loadbalancer IP to be removed from serviceStringMap")
+	}
+	for _, updatedLoadBalancerIP := range updatedLoadBalancerIPs {
+		serviceStr := fmt.Sprintf("%s:%d/%s", updatedLoadBalancerIP, int32(svcPort), apiProtocol)
+		assert.Contains(t, fp.serviceStringMap, serviceStr)
+	}
 }
 
 func TestServiceIngressIPsUpdate(t *testing.T) {

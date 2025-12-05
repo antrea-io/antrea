@@ -219,7 +219,7 @@ func (p *proxier) removeStaleServices() {
 		}
 
 		delete(p.serviceInstalledMap, svcPortName)
-		p.deleteServiceByIP(svcInfoStr)
+		p.deleteServiceByIP(svcInfo)
 	}
 }
 
@@ -684,7 +684,6 @@ func (p *proxier) uninstallLoadBalancerService(svcInfoStr string, loadBalancerIP
 func (p *proxier) installServices() {
 	for svcPortName, svcPort := range p.serviceMap {
 		svcInfo := svcPort.(*types.ServiceInfo)
-		svcInfoStr := svcInfo.String()
 		endpointsInstalled, ok := p.endpointsInstalledMap[svcPortName]
 		if !ok {
 			endpointsInstalled = map[string]k8sproxy.Endpoint{}
@@ -806,7 +805,7 @@ func (p *proxier) installServices() {
 		}
 
 		p.serviceInstalledMap[svcPortName] = svcPort
-		p.addServiceByIP(svcInfoStr, svcPortName)
+		p.addServiceByIP(svcInfo, svcPortName)
 	}
 }
 
@@ -933,6 +932,9 @@ func (p *proxier) updateServiceExternalAddresses(pSvcInfo, svcInfo *types.Servic
 	if p.proxyLoadBalancerIPs {
 		deletedLoadBalancerIPs := smallSliceDifference(pSvcInfo.LoadBalancerVIPs(), svcInfo.LoadBalancerVIPs())
 		addedLoadBalancerIPs := smallSliceDifference(svcInfo.LoadBalancerVIPs(), pSvcInfo.LoadBalancerVIPs())
+
+		p.DeleteServiceIPs(pSvcInfo.GenerateServiceStrings(deletedLoadBalancerIPs))
+
 		if err := p.uninstallLoadBalancerService(pSvcInfoStr, deletedLoadBalancerIPs, pSvcPort, pSvcProto); err != nil {
 			klog.ErrorS(err, "Error when uninstalling LoadBalancer flows and configurations for Service", "ServiceInfo", pSvcInfoStr)
 			return false
@@ -1179,18 +1181,35 @@ func (p *proxier) GetServiceByIP(serviceStr string) (k8sproxy.ServicePortName, b
 	return serviceInfo, exists
 }
 
-func (p *proxier) addServiceByIP(serviceStr string, servicePortName k8sproxy.ServicePortName) {
+// addServiceByIP adds ServicePortName entries to the proxier's serviceStringMap.
+//
+// The ServicePortName can be looked up by either the ClusterIP or the External
+// LoadBalancer IP.
+func (p *proxier) addServiceByIP(serviceInfo *types.ServiceInfo, servicePortName k8sproxy.ServicePortName) {
 	p.serviceStringMapMutex.Lock()
 	defer p.serviceStringMapMutex.Unlock()
 
+	serviceStr := serviceInfo.String()
 	p.serviceStringMap[serviceStr] = servicePortName
+
+	for _, serviceStr := range serviceInfo.GetLoadBalancerVIPStrings() {
+		p.serviceStringMap[serviceStr] = servicePortName
+	}
 }
 
-func (p *proxier) deleteServiceByIP(serviceStr string) {
+func (p *proxier) deleteServiceByIP(serviceInfo *types.ServiceInfo) {
 	p.serviceStringMapMutex.Lock()
 	defer p.serviceStringMapMutex.Unlock()
 
-	delete(p.serviceStringMap, serviceStr)
+	p.DeleteServiceIPs(
+		append([]string{serviceInfo.String()}, serviceInfo.GetLoadBalancerVIPStrings()...),
+	)
+}
+
+func (p *proxier) DeleteServiceIPs(serviceStrings []string) {
+	for _, serviceStr := range serviceStrings {
+		delete(p.serviceStringMap, serviceStr)
+	}
 }
 
 func (p *proxier) Run(stopCh <-chan struct{}) {
