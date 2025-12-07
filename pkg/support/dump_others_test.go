@@ -22,12 +22,16 @@ import (
 	"path/filepath"
 	"testing"
 
-	"antrea.io/antrea/pkg/util/logdir"
-
 	"github.com/spf13/afero"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/mock/gomock"
+
+	"antrea.io/antrea/pkg/agent/config"
+	aqtest "antrea.io/antrea/pkg/agent/querier/testing"
+	"antrea.io/antrea/pkg/util/logdir"
 )
+
 
 func TestDumpLog(t *testing.T) {
 	fs := afero.NewMemMapFs()
@@ -49,3 +53,49 @@ func TestDumpLog(t *testing.T) {
 	require.NoError(t, err)
 	assert.True(t, ok)
 }
+
+func TestDumpIPToolInfo(t *testing.T) {
+	fs := afero.NewMemMapFs()
+	exe := new(testExec)
+
+	dumper := NewAgentDumper(fs, exe, nil, nil, nil, "7s", true, true)
+	err := dumper.(*agentDumper).dumpIPToolInfo(baseDir)
+	require.NoError(t, err)
+
+	ok, err := afero.Exists(fs, filepath.Join(baseDir, "link"))
+	require.NoError(t, err)
+	assert.True(t, ok)
+
+	ok, err = afero.Exists(fs, filepath.Join(baseDir, "address"))
+	require.NoError(t, err)
+	assert.True(t, ok)
+
+	ok, err = afero.Exists(fs, filepath.Join(baseDir, "rule"))
+	require.NoError(t, err)
+	assert.True(t, ok)
+
+	ok, err = afero.Exists(fs, filepath.Join(baseDir, "route"))
+	require.NoError(t, err)
+	assert.True(t, ok)
+}
+
+func TestDumpInterfaceConfigs(t *testing.T) {
+	ctrl := gomock.NewController(t)
+
+	fs := afero.NewMemMapFs()
+	q := aqtest.NewMockAgentQuerier(ctrl)
+	q.EXPECT().GetNodeConfig().Return(&config.NodeConfig{
+		GatewayConfig: &config.GatewayConfig{
+			Name: "antrea-gw0",
+		},
+	}).AnyTimes()
+
+	dumper := NewAgentDumper(fs, nil, nil, q, nil, "7s", true, true)
+	err := dumper.(*agentDumper).dumpInterfaceConfigs(baseDir)
+	require.NoError(t, err)
+
+	ok, err := afero.Exists(fs, filepath.Join(baseDir, "interface-config"))
+	require.NoError(t, err)
+	assert.True(t, ok)
+}
+

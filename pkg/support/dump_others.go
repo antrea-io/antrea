@@ -18,6 +18,7 @@
 package support
 
 import (
+	"bytes"
 	"fmt"
 	"net"
 	"path"
@@ -27,6 +28,7 @@ import (
 	"antrea.io/antrea/pkg/agent/util/iptables"
 	"antrea.io/antrea/pkg/agent/util/sysctl"
 	"antrea.io/antrea/pkg/util/logdir"
+	"k8s.io/klog/v2"
 )
 
 func (d *agentDumper) DumpLog(basedir string) error {
@@ -92,29 +94,32 @@ func (d *agentDumper) dumpInterfaceConfigs(basedir string) error {
 		return fmt.Errorf("error getting network interfaces: %w", err)
 	}
 	hostGateway := d.aq.GetNodeConfig().GatewayConfig.Name
-	var relevantIfaces []net.Interface
-	for _, iface := range interfaces {
-		if iface.Name == hostGateway ||
-			iface.Name == "antrea-egress0" ||
-			iface.Name == "antrea-ingress0" ||
-			strings.HasPrefix(iface.Name, "antrea-ext.") {
-			relevantIfaces = append(relevantIfaces, iface)
-		}
-	}
+    isRelevantIface := func(ifaceName string) bool {
+        return ifaceName == hostGateway ||
+            ifaceName == "antrea-egress0" ||
+            ifaceName == "antrea-ingress0" ||
+            strings.HasPrefix(ifaceName, "antrea-ext.")
+    }
+
 	params := []string{"rp_filter", "arp_ignore", "arp_announce"}
-	var output strings.Builder
-	for _, iface := range relevantIfaces {
-		output.WriteString(fmt.Sprintf("%s\n", iface.Name))
+	var output bytes.Buffer
+	for _, iface := range interfaces {
+		if !isRelevantIface(iface.Name) {
+            continue
+        }
+        output.WriteString(iface.Name)
+        output.WriteString("\n")
 		for _, param := range params {
 			value, err := sysctl.GetSysctlNet(fmt.Sprintf("ipv4/conf/%s/%s", iface.Name, param))
 			if err != nil {
+				klog.ErrorS(err, "Failed to get sysctl value", "interface", iface.Name, "param", param)
 				continue
 			}
 			output.WriteString(fmt.Sprintf("%s=%d\n", param, value))
 		}
 		output.WriteString("\n")
 	}
-	return writeFile(d.fs, filepath.Join(basedir, "interface-config"), "interface-config", []byte(output.String()))
+	return writeFile(d.fs, filepath.Join(basedir, "interface-config"), "interface-config", output.Bytes())
 }
 
 func (d *agentDumper) DumpMemberlist(basedir string) error {
