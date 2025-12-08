@@ -23,7 +23,6 @@ import (
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
-	coreinformers "k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/kubernetes/fake"
 	"k8s.io/client-go/tools/cache"
@@ -109,7 +108,7 @@ func TestProvider_getSecret(t *testing.T) {
 
 			p := createTestProvider(t, client)
 
-			certBytes, certKeyBytes, secret, err := p.getSecret(secretName)
+			certBytes, certKeyBytes, secret, err := p.getSecret(t.Context(), secretName)
 			if tt.expectError {
 				require.Error(t, err)
 				return
@@ -329,22 +328,13 @@ func createTestProvider(t *testing.T, client kubernetes.Interface) *Provider {
 }
 
 func createTestProviderWithClock(t *testing.T, client kubernetes.Interface, clock clock.Clock) *Provider {
-	informerFactory := coreinformers.NewSharedInformerFactory(client, 0)
-	secretLister := informerFactory.Core().V1().Secrets().Lister()
-	configMapLister := informerFactory.Core().V1().ConfigMaps().Lister()
-
 	stopCh := make(chan struct{})
 	t.Cleanup(func() { close(stopCh) })
 
-	informerFactory.Start(stopCh)
-	informerFactory.WaitForCacheSync(stopCh)
-
 	p := &Provider{
-		namespace:       defaultNamespace,
-		k8sClient:       client,
-		clock:           clock,
-		secretLister:    secretLister,
-		configMapLister: configMapLister,
+		namespace: defaultNamespace,
+		k8sClient: client,
+		clock:     clock,
 	}
 
 	return p

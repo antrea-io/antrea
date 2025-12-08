@@ -27,8 +27,6 @@ rules:
   - configmaps
   verbs:
   - create
-  - list
-  - watch
 - apiGroups:
   - ""
   resourceNames:
@@ -37,6 +35,8 @@ rules:
   - configmaps
   verbs:
   - get
+  - list
+  - watch
   - update
 - apiGroups:
   - ""
@@ -44,8 +44,6 @@ rules:
   - secrets
   verbs:
   - create
-  - list
-  - watch
 - apiGroups:
   - ""
   resourceNames:
@@ -54,6 +52,8 @@ rules:
   - secrets
   verbs:
   - get
+  - list
+  - watch
   - update
 - apiGroups:
   - ""
@@ -63,6 +63,8 @@ rules:
   - secrets
   verbs:
   - get
+  - list
+  - watch
   - update
 - apiGroups:
   - ""

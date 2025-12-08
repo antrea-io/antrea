@@ -26,7 +26,6 @@ import (
 	"fmt"
 	"math/big"
 	"net"
-	"slices"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -34,10 +33,10 @@ import (
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/util/wait"
-	coreinformers "k8s.io/client-go/informers"
+	coreinformers "k8s.io/client-go/informers/core/v1"
 	"k8s.io/client-go/kubernetes"
-	corelisters "k8s.io/client-go/listers/core/v1"
 	"k8s.io/client-go/tools/cache"
 	certutil "k8s.io/client-go/util/cert"
 	"k8s.io/client-go/util/keyutil"
@@ -69,13 +68,13 @@ const (
 type Provider struct {
 	namespace string
 
-	k8sClient         kubernetes.Interface
-	clock             clock.Clock
-	queue             workqueue.TypedRateLimitingInterface[string]
-	secretInformer    cache.SharedIndexInformer
-	secretLister      corelisters.SecretLister
-	configMapInformer cache.SharedIndexInformer
-	configMapLister   corelisters.ConfigMapLister
+	k8sClient kubernetes.Interface
+	clock     clock.Clock
+	queue     workqueue.TypedRateLimitingInterface[string]
+
+	caConfigMapInformer  cache.SharedIndexInformer
+	caSecretInformer     cache.SharedIndexInformer
+	clientSecretInformer cache.SharedIndexInformer
 
 	serverTLSConfigSynced atomic.Bool
 	serverTLSConfigMutex  sync.Mutex
@@ -86,20 +85,6 @@ type Provider struct {
 	flowAggregatorAddress string
 
 	listeners []CertificateUpdateListener
-}
-
-func resourceFilter[T metav1.Object](namespace string, names ...string) func(obj any) bool {
-	return func(obj any) bool {
-		if kobj, ok := obj.(T); ok {
-			return kobj.GetNamespace() == namespace && slices.Contains(names, kobj.GetName())
-		}
-		if tombstone, ok := obj.(cache.DeletedFinalStateUnknown); ok {
-			if kobj, ok := tombstone.Obj.(T); ok {
-				return kobj.GetNamespace() == namespace && slices.Contains(names, kobj.GetName())
-			}
-		}
-		return false
-	}
 }
 
 func NewProvider(k8sClient kubernetes.Interface, flowAggregatorAddress string) *Provider {
@@ -123,21 +108,29 @@ func NewProvider(k8sClient kubernetes.Interface, flowAggregatorAddress string) *
 		DeleteFunc: func(_ any) { provider.queue.Add("key") },
 	}
 
-	informerFactory := coreinformers.NewSharedInformerFactoryWithOptions(k8sClient, 12*time.Hour, coreinformers.WithNamespace(namespace))
-	provider.secretInformer = informerFactory.Core().V1().Secrets().Informer()
-	provider.secretLister = informerFactory.Core().V1().Secrets().Lister()
-	provider.configMapInformer = informerFactory.Core().V1().ConfigMaps().Informer()
-	provider.configMapLister = informerFactory.Core().V1().ConfigMaps().Lister()
+	provider.caSecretInformer = coreinformers.NewFilteredSecretInformer(k8sClient, namespace, 12*time.Hour,
+		cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc},
+		func(options *metav1.ListOptions) {
+			options.FieldSelector = fields.OneTermEqualSelector("metadata.name", caSecretName).String()
+		},
+	)
+	provider.caSecretInformer.AddEventHandler(informerHandler)
 
-	provider.configMapInformer.AddEventHandler(cache.FilteringResourceEventHandler{
-		FilterFunc: resourceFilter[*v1.ConfigMap](namespace, caConfigMapName),
-		Handler:    informerHandler,
-	})
+	provider.clientSecretInformer = coreinformers.NewFilteredSecretInformer(k8sClient, namespace, 12*time.Hour,
+		cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc},
+		func(options *metav1.ListOptions) {
+			options.FieldSelector = fields.OneTermEqualSelector("metadata.name", clientSecretName).String()
+		},
+	)
+	provider.clientSecretInformer.AddEventHandler(informerHandler)
 
-	provider.secretInformer.AddEventHandler(cache.FilteringResourceEventHandler{
-		FilterFunc: resourceFilter[*v1.Secret](namespace, caSecretName, clientSecretName),
-		Handler:    informerHandler,
-	})
+	provider.caConfigMapInformer = coreinformers.NewFilteredConfigMapInformer(k8sClient, namespace, 12*time.Hour,
+		cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc},
+		func(options *metav1.ListOptions) {
+			options.FieldSelector = fields.OneTermEqualSelector("metadata.name", caConfigMapName).String()
+		},
+	)
+	provider.caConfigMapInformer.AddEventHandler(informerHandler)
 
 	return provider
 }
@@ -231,10 +224,11 @@ func (p *Provider) GetTLSConfig() (caCertPEM []byte, serverCertPEM []byte, serve
 }
 
 func (p *Provider) Run(stopCh <-chan struct{}) {
-	go p.secretInformer.Run(stopCh)
-	go p.configMapInformer.Run(stopCh)
+	go p.caSecretInformer.Run(stopCh)
+	go p.caConfigMapInformer.Run(stopCh)
+	go p.clientSecretInformer.Run(stopCh)
 
-	if !cache.WaitForNamedCacheSync(controllerName, stopCh, p.secretInformer.HasSynced) {
+	if !cache.WaitForNamedCacheSync(controllerName, stopCh, p.caSecretInformer.HasSynced, p.clientSecretInformer.HasSynced, p.caConfigMapInformer.HasSynced) {
 		return
 	}
 
@@ -248,7 +242,7 @@ func (p *Provider) HasSynced() bool {
 }
 
 func (p *Provider) rotateCACertificate(ctx context.Context) ([]byte, []byte, error) {
-	caCertPEM, caKeyPEM, caSecret, err := p.getSecret(caSecretName)
+	caCertPEM, caKeyPEM, caSecret, err := p.getSecret(ctx, caSecretName)
 	if err != nil {
 		if !errors.IsNotFound(err) {
 			return nil, nil, fmt.Errorf("failed to get CA secret: %w", err)
@@ -275,7 +269,7 @@ func (p *Provider) rotateCACertificate(ctx context.Context) ([]byte, []byte, err
 }
 
 func (p *Provider) rotateClientCertificate(ctx context.Context, caCertPEM []byte, caKeyPEM []byte) error {
-	clientCertPEM, _, clientSecret, err := p.getSecret(clientSecretName)
+	clientCertPEM, _, clientSecret, err := p.getSecret(ctx, clientSecretName)
 	if err != nil {
 		if !errors.IsNotFound(err) {
 			return fmt.Errorf("failed to get client secret: %w", err)
@@ -328,8 +322,8 @@ func (p *Provider) shouldRotateCertificate(certPEM []byte, keyPEM []byte) bool {
 	return false
 }
 
-func (p *Provider) getSecret(name string) ([]byte, []byte, *v1.Secret, error) {
-	secret, err := p.secretLister.Secrets(p.namespace).Get(name)
+func (p *Provider) getSecret(ctx context.Context, name string) ([]byte, []byte, *v1.Secret, error) {
+	secret, err := p.k8sClient.CoreV1().Secrets(p.namespace).Get(ctx, name, metav1.GetOptions{})
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("error getting Secret %q: %w", name, err)
 	}
@@ -371,7 +365,7 @@ func (p *Provider) syncCertificateSecrets(ctx context.Context, name string, cert
 
 func (p *Provider) syncCAConfigMap(ctx context.Context, name string, cert []byte) error {
 	var desiredConfigMap *v1.ConfigMap
-	currentConfigMap, err := p.configMapLister.ConfigMaps(p.namespace).Get(caConfigMapName)
+	currentConfigMap, err := p.k8sClient.CoreV1().ConfigMaps(p.namespace).Get(ctx, caConfigMapName, metav1.GetOptions{})
 	exists := true
 	if err != nil {
 		if !errors.IsNotFound(err) {
@@ -389,7 +383,7 @@ func (p *Provider) syncCAConfigMap(ctx context.Context, name string, cert []byte
 			Data: make(map[string]string),
 		}
 	} else {
-		desiredConfigMap = currentConfigMap.DeepCopy()
+		desiredConfigMap = currentConfigMap
 	}
 
 	if desiredConfigMap.Data[caConfigMapKey] == string(cert) {
