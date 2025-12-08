@@ -2635,6 +2635,19 @@ func (data *TestData) GetEncapMode() (config.TrafficEncapModeType, error) {
 	return encapMode, nil
 }
 
+func (data *TestData) GetEncryptionnMode() (config.TrafficEncryptionModeType, error) {
+	agentConf, err := data.GetAntreaAgentConf()
+	if err != nil {
+		return config.TrafficEncapModeInvalid, fmt.Errorf("failed to get Antrea Agent config: %w", err)
+	}
+	if agentConf.TrafficEncryptionMode == "" {
+		// default encryption mode
+		return config.TrafficEncryptionModeNone, nil
+	}
+	_, encryptionMode := config.GetTrafficEncryptionModeFromStr(agentConf.TrafficEncryptionMode)
+	return encryptionMode, nil
+}
+
 func (data *TestData) isProxyAll() (bool, error) {
 	agentConf, err := data.GetAntreaAgentConf()
 	if err != nil {

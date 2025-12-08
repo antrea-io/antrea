@@ -357,6 +357,10 @@ func testReconcileGatewayRoutesOnStartup(t *testing.T, data *TestData, isIPv6 bo
 	if err != nil {
 		t.Fatalf(" failed to get encap mode, err %v", err)
 	}
+	encryptionMode, err := data.GetEncryptionnMode()
+	if err != nil {
+		t.Fatalf(" failed to get encryption mode, err %v", err)
+	}
 
 	nodeName := nodeName(0)
 	podName := getAntreaPodName(t, data, nodeName)
@@ -369,9 +373,16 @@ func testReconcileGatewayRoutesOnStartup(t *testing.T, data *TestData, isIPv6 bo
 	var expectedRtNum int
 	switch encapMode {
 	case config.TrafficEncapModeEncap:
-		expectedRtNum = nodeNums - 1
-		t.Logf("Encap mode: expecting %d gateway routes (one per peer Node)", expectedRtNum)
-
+		// When WireGuard is enabled, gateway routes are not needed because WireGuard handles
+		// routing through its own interface, unlike regular encap mode which requires gateway
+		// routes for each peer Node.
+		if encryptionMode == config.TrafficEncryptionModeWireGuard {
+			expectedRtNum = 0
+			t.Logf("Encap mode (encryption mode: %s): expecting 0 gateway routes", encryptionMode)
+		} else {
+			expectedRtNum = nodeNums - 1
+			t.Logf("Encap mode (encryption mode: %s): expecting %d gateway routes (one per peer Node)", encryptionMode, expectedRtNum)
+		}
 	case config.TrafficEncapModeNoEncap:
 		expectedRtNum = 0
 		t.Log("NoEncap mode: expecting 0 gateway route")
@@ -701,7 +712,6 @@ func getGatewayRoutes(t *testing.T, data *TestData, antreaGWName, nodeName strin
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("error when running ip command in Pod '%s': %v - stdout: %s - stderr: %s", podName, err, stdout, stderr)
 	}
-
 	var nodeRoutes, serviceRoutes []Route
 	var llRoute *Route
 	re := regexp.MustCompile(`([^\s]+) via ([^\s]+)`)
