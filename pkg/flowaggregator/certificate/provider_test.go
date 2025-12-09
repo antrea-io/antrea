@@ -15,19 +15,24 @@
 package certificate
 
 import (
+	"fmt"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	v1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/runtime"
+	coreinformers "k8s.io/client-go/informers/core/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/kubernetes/fake"
+	corelisters "k8s.io/client-go/listers/core/v1"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/utils/clock"
 	clocktesting "k8s.io/utils/clock/testing"
+
+	"antrea.io/antrea/pkg/util/wait"
 )
 
 func TestProvider_shouldRotateCertificate(t *testing.T) {
@@ -77,55 +82,49 @@ func TestProvider_shouldRotateCertificate(t *testing.T) {
 }
 
 func TestProvider_getSecret(t *testing.T) {
-	secretName := "tls-secret"
+	t.Run("ca secret does not exist", func(t *testing.T) {
+		client := fake.NewClientset()
+		p := createTestProvider(t, client)
+		_, _, _, err := p.getSecret(caSecretName)
+		assert.True(t, errors.IsNotFound(err))
+	})
 
-	tests := []struct {
-		name         string
-		createSecret bool
+	t.Run("client secret does not exist", func(t *testing.T) {
+		client := fake.NewClientset()
+		p := createTestProvider(t, client)
+		_, _, _, err := p.getSecret(clientSecretName)
+		assert.True(t, errors.IsNotFound(err))
+	})
 
-		expectedCert []byte
-		expectedKey  []byte
-		expectError  bool
-	}{
-		{
-			name:        "secret does not exist",
-			expectError: true,
-		}, {
-			name:         "has content",
-			createSecret: true,
-			expectedCert: []byte("cert"),
-			expectedKey:  []byte("key"),
-		},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			existingObjects := []runtime.Object{}
-			if tt.createSecret {
-				existingObjects = append(existingObjects, createSecret(secretName, []byte("cert"), []byte("key")))
-			}
+	t.Run("secret name not supported", func(t *testing.T) {
+		client := fake.NewClientset()
+		p := createTestProvider(t, client)
+		_, _, _, err := p.getSecret("unknown")
+		assert.ErrorContains(t, err, "secret \"unknown\" not managed by flow aggregator")
+	})
 
-			client := fake.NewClientset(existingObjects...)
-
-			p := createTestProvider(t, client)
-
-			certBytes, certKeyBytes, secret, err := p.getSecret(t.Context(), secretName)
-			if tt.expectError {
-				require.Error(t, err)
-				return
-			}
-
-			require.NoError(t, err)
-			assert.Equal(t, existingObjects[0], secret)
-			assert.Equal(t, tt.expectedCert, certBytes)
-			assert.Equal(t, tt.expectedKey, certKeyBytes)
-		})
-	}
+	t.Run("secret exists", func(t *testing.T) {
+		existingSecret := createSecret(caSecretName, []byte("cert"), []byte("key"))
+		client := fake.NewClientset(existingSecret)
+		p := createTestProvider(t, client)
+		certBytes, certKeyBytes, secret, err := p.getSecret(caSecretName)
+		require.NoError(t, err)
+		assert.Equal(t, existingSecret, secret)
+		assert.Equal(t, []byte("cert"), certBytes)
+		assert.Equal(t, []byte("key"), certKeyBytes)
+	})
 }
 
 func TestProvider_rotateCertificates(t *testing.T) {
-	client := fake.NewClientset()
-	clock := clocktesting.NewFakeClock(time.Now())
-	provider := createTestProviderWithClock(t, client, clock)
+	var client *fake.Clientset
+	var clock *clocktesting.FakeClock
+	var provider *Provider
+
+	initialize := func() {
+		client = fake.NewClientset()
+		clock = clocktesting.NewFakeClock(time.Now())
+		provider = createTestProviderWithClock(t, client, clock)
+	}
 
 	verifySecret := func(t *testing.T, name string) *v1.Secret {
 		secret, err := client.CoreV1().Secrets(defaultNamespace).Get(t.Context(), name, metav1.GetOptions{})
@@ -152,10 +151,34 @@ func TestProvider_rotateCertificates(t *testing.T) {
 		return caSecret, clientSecret
 	}
 
+	checkCASecretInformerSynced := func(t require.TestingT, shouldExist bool) {
+		_, exist, err := provider.caSecretInformer.GetIndexer().GetByKey(fmt.Sprintf("%s/%s", defaultNamespace, caSecretName))
+		require.NoError(t, err)
+		require.Equal(t, shouldExist, exist)
+	}
+
+	checkClientSecretInformerSynced := func(t require.TestingT, shouldExist bool) {
+		_, exist, err := provider.clientSecretInformer.GetIndexer().GetByKey(fmt.Sprintf("%s/%s", defaultNamespace, clientSecretName))
+		require.NoError(t, err)
+		require.Equal(t, shouldExist, exist)
+	}
+
+	checkCAConfigMapInformerSynced := func(t require.TestingT, shouldExist bool) {
+		_, exist, err := provider.caConfigMapInformer.GetIndexer().GetByKey(fmt.Sprintf("%s/%s", defaultNamespace, caConfigMapName))
+		require.NoError(t, err)
+		require.Equal(t, shouldExist, exist)
+	}
+
 	t.Run("rotate is idempotent if certs are valid", func(t *testing.T) {
+		initialize()
 		prevCASecret, prevClientSecret := rotateAndCheck(t)
 		prevProviderCACert, prevServerCert, prevServerKey := provider.caCertPEM, provider.serverCertPEM, provider.serverKeyPEM
-		time.Sleep(200 * time.Millisecond) // Wait for lister to update
+		assert.EventuallyWithT(t, func(c *assert.CollectT) { // Wait for indexer to update.
+			checkCASecretInformerSynced(c, true)
+			checkClientSecretInformerSynced(c, true)
+			checkCAConfigMapInformerSynced(c, true)
+		}, 5*time.Second, 100*time.Millisecond)
+
 		newCASecret, newClientSecret := rotateAndCheck(t)
 		assert.Equal(t, prevCASecret.Data, newCASecret.Data)
 		assert.Equal(t, prevClientSecret.Data, newClientSecret.Data)
@@ -165,10 +188,16 @@ func TestProvider_rotateCertificates(t *testing.T) {
 	})
 
 	t.Run("recreate deleted client certs - nothing else changes", func(t *testing.T) {
+		initialize()
 		prevCASecret, prevClientSecret := rotateAndCheck(t)
 		prevProviderCACert, prevServerCert, prevServerKey := provider.caCertPEM, provider.serverCertPEM, provider.serverKeyPEM
 		require.NoError(t, client.CoreV1().Secrets(defaultNamespace).Delete(t.Context(), clientSecretName, metav1.DeleteOptions{}))
-		time.Sleep(200 * time.Millisecond) // Wait for lister to update
+		assert.EventuallyWithT(t, func(c *assert.CollectT) {
+			checkCASecretInformerSynced(c, true)
+			checkClientSecretInformerSynced(c, false)
+			checkCAConfigMapInformerSynced(c, true)
+		}, 5*time.Second, 100*time.Millisecond)
+
 		newCASecret, newClientSecret := rotateAndCheck(t)
 		assert.Equal(t, prevCASecret.Data, newCASecret.Data)
 		assert.NotEqual(t, prevClientSecret.Data, newClientSecret.Data)
@@ -182,10 +211,16 @@ func TestProvider_rotateCertificates(t *testing.T) {
 	})
 
 	t.Run("recreate deleted ca configmap - nothing else changes", func(t *testing.T) {
+		initialize()
 		prevCASecret, prevClientSecret := rotateAndCheck(t)
 		prevProviderCACert, prevServerCert, prevServerKey := provider.caCertPEM, provider.serverCertPEM, provider.serverKeyPEM
 		require.NoError(t, client.CoreV1().ConfigMaps(defaultNamespace).Delete(t.Context(), caConfigMapName, metav1.DeleteOptions{}))
-		time.Sleep(200 * time.Millisecond) // Wait for lister to update
+		assert.EventuallyWithT(t, func(c *assert.CollectT) {
+			checkCASecretInformerSynced(c, true)
+			checkClientSecretInformerSynced(c, true)
+			checkCAConfigMapInformerSynced(c, false)
+		}, 5*time.Second, 100*time.Millisecond)
+
 		newCASecret, newClientSecret := rotateAndCheck(t)
 		assert.Equal(t, prevCASecret.Data, newCASecret.Data)
 		assert.Equal(t, prevClientSecret.Data, newClientSecret.Data)
@@ -199,10 +234,16 @@ func TestProvider_rotateCertificates(t *testing.T) {
 	})
 
 	t.Run("recreate all resources - ca secret deleted", func(t *testing.T) {
+		initialize()
 		prevCASecret, prevClientSecret := rotateAndCheck(t)
 		prevProviderCACert, prevServerCert, prevServerKey := provider.caCertPEM, provider.serverCertPEM, provider.serverKeyPEM
 		require.NoError(t, client.CoreV1().Secrets(defaultNamespace).Delete(t.Context(), caSecretName, metav1.DeleteOptions{}))
-		time.Sleep(200 * time.Millisecond) // Wait for lister to update
+		assert.EventuallyWithT(t, func(c *assert.CollectT) {
+			checkCASecretInformerSynced(c, false)
+			checkClientSecretInformerSynced(c, true)
+			checkCAConfigMapInformerSynced(c, true)
+		}, 5*time.Second, 100*time.Millisecond)
+
 		newCASecret, newClientSecret := rotateAndCheck(t)
 		assert.NotEqual(t, prevCASecret.Data, newCASecret.Data)
 		assert.NotEqual(t, prevClientSecret.Data, newClientSecret.Data)
@@ -216,9 +257,15 @@ func TestProvider_rotateCertificates(t *testing.T) {
 	})
 
 	t.Run("expired certs get rotated", func(t *testing.T) {
+		initialize()
 		prevCASecret, prevClientSecret := rotateAndCheck(t)
 		prevProviderCACert, prevServerCert, prevServerKey := provider.caCertPEM, provider.serverCertPEM, provider.serverKeyPEM
-		time.Sleep(200 * time.Millisecond) // Wait for lister to update
+		assert.EventuallyWithT(t, func(c *assert.CollectT) {
+			checkCASecretInformerSynced(c, true)
+			checkClientSecretInformerSynced(c, true)
+			checkCAConfigMapInformerSynced(c, true)
+		}, 5*time.Second, 100*time.Millisecond)
+
 		clock.Step(2 * maxAge)
 		newCASecret, newClientSecret := rotateAndCheck(t)
 		assert.NotEqual(t, prevCASecret.Data, newCASecret.Data)
@@ -244,15 +291,13 @@ func TestProvider_GetServerCertKey(t *testing.T) {
 	assert.Equal(t, []byte("serverKey"), serverKey)
 }
 
-func startProviderWithClient(client kubernetes.Interface, stopCh chan struct{}) (*Provider, chan struct{}) {
+func startProviderWithClient(client kubernetes.Interface, wg *wait.Group, stopCh chan struct{}) *Provider {
 	p := NewProvider(client, "flow-aggregator.svc")
-	exitCh := make(chan struct{})
-	go func() {
+	wg.Go(func() {
 		p.Run(stopCh)
-		close(exitCh)
-	}()
+	})
 
-	return p, exitCh
+	return p
 }
 
 func TestProvider_Run(t *testing.T) {
@@ -261,26 +306,17 @@ func TestProvider_Run(t *testing.T) {
 
 	client := fake.NewClientset()
 
+	wg := wait.NewGroup()
 	stopCh := make(chan struct{})
-	provider1, provider1ExitCh := startProviderWithClient(client, stopCh)
-	provider2, provider2ExitCh := startProviderWithClient(client, stopCh)
+	provider1 := startProviderWithClient(client, wg, stopCh)
+	provider2 := startProviderWithClient(client, wg, stopCh)
 
 	require.True(t, cache.WaitForCacheSync(stopCh, provider1.HasSynced, provider2.HasSynced))
 
-	// Both providers ran at least once.
+	// Both providers ran at least once, as guaranteed by the cache.WaitForCacheSync call above.
 	close(stopCh)
 
-	select {
-	case <-provider1ExitCh:
-	case <-time.After(1 * time.Second):
-		require.Fail(t, "provider1 did not shutdown in time")
-	}
-
-	select {
-	case <-provider2ExitCh:
-	case <-time.After(1 * time.Second):
-		require.Fail(t, "provider2 did not shutdown in time")
-	}
+	require.NoError(t, wg.WaitWithTimeout(time.Second))
 
 	require.NotEmpty(t, provider1.caCertPEM)
 	require.NotEmpty(t, provider1.serverCertPEM)
@@ -306,7 +342,7 @@ func TestProvider_Run(t *testing.T) {
 	assert.NoError(t, verifyCertificate(caSecret.Data[v1.TLSCertKey], clientSecret.Data[v1.TLSCertKey], time.Now()))
 }
 
-func Test_verifyCertificate(t *testing.T) {
+func TestVerifyCertificate(t *testing.T) {
 	validFrom := time.Now().Add(-time.Hour)
 	caCertPEM, caKeyPEM, err := GenerateCACertKey(validFrom)
 	require.NoError(t, err)
@@ -316,11 +352,45 @@ func Test_verifyCertificate(t *testing.T) {
 
 	clientCertPEM, _, err := GenerateCertKey(caCert, caKey, validFrom, false, "")
 	require.NoError(t, err)
-	assert.NoError(t, verifyCertificate(caCertPEM, clientCertPEM, time.Now()))
-
 	serverCertPEM, _, err := GenerateCertKey(caCert, caKey, validFrom, true, "foo.bar.xyz")
 	require.NoError(t, err)
-	assert.NoError(t, verifyCertificate(caCertPEM, serverCertPEM, time.Now()))
+
+	t.Run("generated client cert can be validated by CA", func(t *testing.T) {
+		assert.NoError(t, verifyCertificate(caCertPEM, clientCertPEM, time.Now()), "client cert should be verifiable by CA")
+	})
+
+	t.Run("generated server cert can be validated by CA", func(t *testing.T) {
+		assert.NoError(t, verifyCertificate(caCertPEM, serverCertPEM, time.Now()), "server cert should be verifiable by CA")
+	})
+
+	t.Run("certificate not past time to rotate", func(t *testing.T) {
+		assert.NoError(t, verifyCertificate(caCertPEM, clientCertPEM, validFrom.Add(maxAge-minValidDuration-time.Minute)), "one minute before certificate should be rotated")
+	})
+
+	t.Run("certificate past time to rotate but not invalid yet", func(t *testing.T) {
+		assert.ErrorContains(t, verifyCertificate(caCertPEM, clientCertPEM, validFrom.Add(maxAge-minValidDuration+time.Minute)), "certificates will expire soon")
+	})
+
+	t.Run("certificates are valid only in the future", func(t *testing.T) {
+		// We add 1 hour to time.Time{} because a "zero" time will verify certs using time.Now()
+		assert.ErrorContains(t, verifyCertificate(caCertPEM, clientCertPEM, time.Time{}.Add(1*time.Hour)), "certificate has expired or is not yet valid")
+	})
+
+	t.Run("missing ca cert", func(t *testing.T) {
+		assert.ErrorContains(t, verifyCertificate(nil, clientCertPEM, time.Time{}), "caCertPEM or certPEM is empty")
+	})
+
+	t.Run("missing cert", func(t *testing.T) {
+		assert.ErrorContains(t, verifyCertificate(caCertPEM, nil, time.Time{}), "caCertPEM or certPEM is empty")
+	})
+
+	t.Run("ca cert is invalid", func(t *testing.T) {
+		assert.ErrorContains(t, verifyCertificate([]byte("ca cert"), clientCertPEM, time.Time{}), "failed to append CA cert to pool")
+	})
+
+	t.Run("cert is invalid", func(t *testing.T) {
+		assert.ErrorContains(t, verifyCertificate(caCertPEM, []byte("other cert"), time.Time{}), "no certificates found")
+	})
 }
 
 func createTestProvider(t *testing.T, client kubernetes.Interface) *Provider {
@@ -328,13 +398,26 @@ func createTestProvider(t *testing.T, client kubernetes.Interface) *Provider {
 }
 
 func createTestProviderWithClock(t *testing.T, client kubernetes.Interface, clock clock.Clock) *Provider {
-	stopCh := make(chan struct{})
-	t.Cleanup(func() { close(stopCh) })
+	secretInformer := coreinformers.NewSecretInformer(client, defaultNamespace, resyncPeriod, cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc})
+	configMapInformer := coreinformers.NewConfigMapInformer(client, defaultNamespace, resyncPeriod, cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc})
+	go secretInformer.Run(t.Context().Done())
+	go configMapInformer.Run(t.Context().Done())
+	secretLister := corelisters.NewSecretLister(secretInformer.GetIndexer())
+	configMapLister := corelisters.NewConfigMapLister(configMapInformer.GetIndexer())
+
+	cache.WaitForCacheSync(t.Context().Done(), secretInformer.HasSynced, configMapInformer.HasSynced)
 
 	p := &Provider{
-		namespace: defaultNamespace,
-		k8sClient: client,
-		clock:     clock,
+		namespace:            defaultNamespace,
+		k8sClient:            client,
+		clock:                clock,
+		caSecretInformer:     secretInformer,
+		clientSecretInformer: secretInformer,
+		caConfigMapInformer:  configMapInformer,
+
+		caSecretLister:     secretLister,
+		clientSecretLister: secretLister,
+		caConfigMapLister:  configMapLister,
 	}
 
 	return p

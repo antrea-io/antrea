@@ -37,11 +37,7 @@ rules:
     verbs: ["create"]
   - apiGroups: [""]
     resources: ["secrets"]
-    resourceNames: ["flow-aggregator-client-tls"]
-    verbs: ["get", "list", "watch", "update"]
-  - apiGroups: [""]
-    resources: ["secrets"]
-    resourceNames: ["flow-aggregator-ca"]
+    resourceNames: ["flow-aggregator-ca-tls", "flow-aggregator-client-tls"]
     verbs: ["get", "list", "watch", "update"]
   # RBAC to get / update flow-aggregator-configmap ConfigMap (required by antctl)
   - apiGroups: [""]

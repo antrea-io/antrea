@@ -1005,7 +1005,6 @@ func TestFlowAggregator_InitCollectors(t *testing.T) {
 }
 
 func TestFlowAggregator_InitAggregationProcess(t *testing.T) {
-
 	fa := &flowAggregator{
 		activeFlowRecordTimeout:     testActiveTimeout,
 		inactiveFlowRecordTimeout:   testInactiveTimeout,
@@ -1131,7 +1130,6 @@ func TestNewFlowAggregator(t *testing.T) {
 			mockPodStore := objectstoretest.NewMockPodStore(ctrl)
 			mockNodeStore := objectstoretest.NewMockNodeStore(ctrl)
 			mockServiceStore := objectstoretest.NewMockServiceStore(ctrl)
-
 			clusterUUID := uuid.New()
 			clusterID := tc.config.ClusterID
 			if clusterID == "" {

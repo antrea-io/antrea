@@ -37,6 +37,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/wait"
 	coreinformers "k8s.io/client-go/informers/core/v1"
 	"k8s.io/client-go/kubernetes"
+	corelisters "k8s.io/client-go/listers/core/v1"
 	"k8s.io/client-go/tools/cache"
 	certutil "k8s.io/client-go/util/cert"
 	"k8s.io/client-go/util/keyutil"
@@ -52,6 +53,7 @@ const (
 	defaultNamespace = "flow-aggregator"
 	serviceName      = "flow-aggregator"
 
+	resyncPeriod     = time.Hour * 12
 	maxAge           = time.Hour * 24 * 365 // one year self-signed certs
 	minValidDuration = time.Hour * 24 * 90
 
@@ -59,7 +61,7 @@ const (
 	caConfigMapKey  = "ca.crt"
 
 	// #nosec G101: false positive triggered by variable name which includes "Secret"
-	caSecretName = "flow-aggregator-ca"
+	caSecretName = "flow-aggregator-ca-tls"
 
 	// #nosec G101: false positive triggered by variable name which includes "Secret"
 	clientSecretName = "flow-aggregator-client-tls"
@@ -72,9 +74,12 @@ type Provider struct {
 	clock     clock.Clock
 	queue     workqueue.TypedRateLimitingInterface[string]
 
-	caConfigMapInformer  cache.SharedIndexInformer
 	caSecretInformer     cache.SharedIndexInformer
 	clientSecretInformer cache.SharedIndexInformer
+	caConfigMapInformer  cache.SharedIndexInformer
+	caSecretLister       corelisters.SecretLister
+	clientSecretLister   corelisters.SecretLister
+	caConfigMapLister    corelisters.ConfigMapLister
 
 	serverTLSConfigSynced atomic.Bool
 	serverTLSConfigMutex  sync.Mutex
@@ -108,29 +113,32 @@ func NewProvider(k8sClient kubernetes.Interface, flowAggregatorAddress string) *
 		DeleteFunc: func(_ any) { provider.queue.Add("key") },
 	}
 
-	provider.caSecretInformer = coreinformers.NewFilteredSecretInformer(k8sClient, namespace, 12*time.Hour,
+	provider.caSecretInformer = coreinformers.NewFilteredSecretInformer(k8sClient, namespace, resyncPeriod,
 		cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc},
 		func(options *metav1.ListOptions) {
 			options.FieldSelector = fields.OneTermEqualSelector("metadata.name", caSecretName).String()
 		},
 	)
 	provider.caSecretInformer.AddEventHandler(informerHandler)
+	provider.caSecretLister = corelisters.NewSecretLister(provider.caSecretInformer.GetIndexer())
 
-	provider.clientSecretInformer = coreinformers.NewFilteredSecretInformer(k8sClient, namespace, 12*time.Hour,
+	provider.clientSecretInformer = coreinformers.NewFilteredSecretInformer(k8sClient, namespace, resyncPeriod,
 		cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc},
 		func(options *metav1.ListOptions) {
 			options.FieldSelector = fields.OneTermEqualSelector("metadata.name", clientSecretName).String()
 		},
 	)
 	provider.clientSecretInformer.AddEventHandler(informerHandler)
+	provider.clientSecretLister = corelisters.NewSecretLister(provider.clientSecretInformer.GetIndexer())
 
-	provider.caConfigMapInformer = coreinformers.NewFilteredConfigMapInformer(k8sClient, namespace, 12*time.Hour,
+	provider.caConfigMapInformer = coreinformers.NewFilteredConfigMapInformer(k8sClient, namespace, resyncPeriod,
 		cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc},
 		func(options *metav1.ListOptions) {
 			options.FieldSelector = fields.OneTermEqualSelector("metadata.name", caConfigMapName).String()
 		},
 	)
 	provider.caConfigMapInformer.AddEventHandler(informerHandler)
+	provider.caConfigMapLister = corelisters.NewConfigMapLister(provider.caConfigMapInformer.GetIndexer())
 
 	return provider
 }
@@ -242,7 +250,7 @@ func (p *Provider) HasSynced() bool {
 }
 
 func (p *Provider) rotateCACertificate(ctx context.Context) ([]byte, []byte, error) {
-	caCertPEM, caKeyPEM, caSecret, err := p.getSecret(ctx, caSecretName)
+	caCertPEM, caKeyPEM, caSecret, err := p.getSecret(caSecretName)
 	if err != nil {
 		if !errors.IsNotFound(err) {
 			return nil, nil, fmt.Errorf("failed to get CA secret: %w", err)
@@ -269,7 +277,7 @@ func (p *Provider) rotateCACertificate(ctx context.Context) ([]byte, []byte, err
 }
 
 func (p *Provider) rotateClientCertificate(ctx context.Context, caCertPEM []byte, caKeyPEM []byte) error {
-	clientCertPEM, _, clientSecret, err := p.getSecret(ctx, clientSecretName)
+	clientCertPEM, _, clientSecret, err := p.getSecret(clientSecretName)
 	if err != nil {
 		if !errors.IsNotFound(err) {
 			return fmt.Errorf("failed to get client secret: %w", err)
@@ -322,8 +330,18 @@ func (p *Provider) shouldRotateCertificate(certPEM []byte, keyPEM []byte) bool {
 	return false
 }
 
-func (p *Provider) getSecret(ctx context.Context, name string) ([]byte, []byte, *v1.Secret, error) {
-	secret, err := p.k8sClient.CoreV1().Secrets(p.namespace).Get(ctx, name, metav1.GetOptions{})
+func (p *Provider) getSecret(name string) ([]byte, []byte, *v1.Secret, error) {
+	var secret *v1.Secret
+	var err error
+	switch name {
+	case caSecretName:
+		secret, err = p.caSecretLister.Secrets(p.namespace).Get(caSecretName)
+	case clientSecretName:
+		secret, err = p.clientSecretLister.Secrets(p.namespace).Get(clientSecretName)
+	default:
+		return nil, nil, nil, fmt.Errorf("secret %q not managed by flow aggregator", name)
+	}
+
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("error getting Secret %q: %w", name, err)
 	}
@@ -348,8 +366,8 @@ func (p *Provider) syncCertificateSecrets(ctx context.Context, name string, cert
 	}
 
 	desiredSecret.Data = map[string][]byte{
-		"tls.crt": cert,
-		"tls.key": key,
+		v1.TLSCertKey:       cert,
+		v1.TLSPrivateKeyKey: key,
 	}
 	if currentSecret != nil {
 		if _, err := p.k8sClient.CoreV1().Secrets(p.namespace).Update(ctx, desiredSecret, metav1.UpdateOptions{}); err != nil {
@@ -365,7 +383,7 @@ func (p *Provider) syncCertificateSecrets(ctx context.Context, name string, cert
 
 func (p *Provider) syncCAConfigMap(ctx context.Context, name string, cert []byte) error {
 	var desiredConfigMap *v1.ConfigMap
-	currentConfigMap, err := p.k8sClient.CoreV1().ConfigMaps(p.namespace).Get(ctx, caConfigMapName, metav1.GetOptions{})
+	currentConfigMap, err := p.caConfigMapLister.ConfigMaps(p.namespace).Get(caConfigMapName)
 	exists := true
 	if err != nil {
 		if !errors.IsNotFound(err) {
@@ -383,7 +401,7 @@ func (p *Provider) syncCAConfigMap(ctx context.Context, name string, cert []byte
 			Data: make(map[string]string),
 		}
 	} else {
-		desiredConfigMap = currentConfigMap
+		desiredConfigMap = currentConfigMap.DeepCopy()
 	}
 
 	if desiredConfigMap.Data[caConfigMapKey] == string(cert) {
@@ -408,6 +426,16 @@ func (p *Provider) syncCAConfigMap(ctx context.Context, name string, cert []byte
 	return nil
 }
 
+func generateSerial() (*big.Int, error) {
+	serialNumberLimit := new(big.Int).Lsh(big.NewInt(1), 128)
+	serialNumber, err := rand.Int(rand.Reader, serialNumberLimit)
+	if err != nil {
+		return nil, err
+	}
+
+	return serialNumber, nil
+}
+
 // GenerateCACertKey creates a self-signed CA and private key pair
 // encoded in PEM format. The self-signed CA can be used to generate
 // leaf certificates, authenticate server and clients.
@@ -418,9 +446,14 @@ func GenerateCACertKey(validFrom time.Time) ([]byte, []byte, error) {
 		return nil, nil, fmt.Errorf("failed to generate key for CA: %w", err)
 	}
 
+	serial, err := generateSerial()
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to generate new serial number for CA certificate: %w", err)
+	}
+
 	// generate rootCA
 	cert := &x509.Certificate{
-		SerialNumber: big.NewInt(1),
+		SerialNumber: serial,
 		Subject: pkix.Name{
 			CommonName: fmt.Sprintf("flow-aggregator-ca@%d", time.Now().Unix()),
 		},
@@ -471,9 +504,15 @@ func getFlowAggregatorServerNames() []string {
 
 func GenerateCertKey(caCert *x509.Certificate, caKey *rsa.PrivateKey, validFrom time.Time, isServer bool, flowAggregatorAddress string) ([]byte, []byte, error) {
 	var cert *x509.Certificate
+
+	serial, err := generateSerial()
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to generate new serial number for certificate: %w", err)
+	}
+
 	if isServer {
 		cert = &x509.Certificate{
-			SerialNumber: big.NewInt(2),
+			SerialNumber: serial,
 			Subject: pkix.Name{
 				CommonName: fmt.Sprintf("flow-aggregator-server-certificate@%d", time.Now().Unix()),
 			},
@@ -492,7 +531,7 @@ func GenerateCertKey(caCert *x509.Certificate, caKey *rsa.PrivateKey, validFrom 
 		}
 	} else {
 		cert = &x509.Certificate{
-			SerialNumber: big.NewInt(3),
+			SerialNumber: serial,
 			Subject: pkix.Name{
 				CommonName: fmt.Sprintf("flow-aggregator-client-certificate@%d", time.Now().Unix()),
 			},
@@ -530,7 +569,7 @@ func GenerateCertKey(caCert *x509.Certificate, caKey *rsa.PrivateKey, validFrom 
 
 func verifyCertificate(caCertPEM []byte, certPEM []byte, currentTime time.Time) error {
 	if len(caCertPEM) == 0 || len(certPEM) == 0 {
-		return fmt.Errorf("caCertPEM or certPEM missing data")
+		return fmt.Errorf("caCertPEM or certPEM is empty")
 	}
 
 	caCertPool := x509.NewCertPool()
@@ -557,7 +596,7 @@ func verifyCertificate(caCertPEM []byte, certPEM []byte, currentTime time.Time) 
 		return err
 	}
 
-	remainingValidity := time.Until(cert.NotAfter)
+	remainingValidity := cert.NotAfter.Sub(currentTime)
 	if remainingValidity < minValidDuration {
 		return fmt.Errorf("certificates will expire soon (%s)", remainingValidity.String())
 	}
