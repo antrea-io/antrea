@@ -35,12 +35,6 @@ var (
 		"reverseOctetDeltaCount",
 	}
 
-	NonStatsElementList = []string{
-		"flowEndSeconds",
-		"flowEndReason",
-		"tcpState",
-		"httpVals",
-	}
 	StatsElementList = []string{
 		"octetDeltaCount",
 		"octetTotalCount",
@@ -175,7 +169,6 @@ func AntreaInfoElements(includeK8sNames, includeK8sUIDs, isIPv6 bool) []string {
 		ies = append(ies, "egressUUID")
 	}
 	ies = append(ies, "egressIP")
-	ies = append(ies, "appProtocolName", "httpVals")
 	if includeK8sNames {
 		ies = append(ies, "egressNodeName")
 	}

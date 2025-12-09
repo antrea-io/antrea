@@ -77,8 +77,6 @@ data:
             trusted UInt8 DEFAULT 0,
             egressName String,
             egressIP String,
-            appProtocolName String,
-            httpVals String,
             egressNodeName String
         ) engine=MergeTree
         ORDER BY (timeInserted, flowEndSeconds)

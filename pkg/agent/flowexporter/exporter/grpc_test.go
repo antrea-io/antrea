@@ -88,7 +88,6 @@ func TestGRPCExporterCreateMessage(t *testing.T) {
 			OctetTotalCount:  0xab,
 			OctetDeltaCount:  0xab,
 		},
-		App: &flowpb.App{},
 	}
 	msg.Ipfix.ExportTime = nil // need to reset this field as createMessage will use the current time from the system clock
 	assert.Empty(t, cmp.Diff(expectedMsg, msg, protocmp.Transform()))

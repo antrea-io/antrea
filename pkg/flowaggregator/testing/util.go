@@ -109,10 +109,6 @@ func PrepareTestFlowRecord(isIPv4 bool) *flowpb.Flow {
 			PacketDeltaCount: 136211,
 			OctetDeltaCount:  7083284,
 		},
-		App: &flowpb.App{
-			ProtocolName: "http",
-			HttpVals:     []byte("mockHttpString"),
-		},
 		Aggregation: &flowpb.Aggregation{
 			EndTsFromSource: &timestamppb.Timestamp{
 				Seconds: 1637706974,

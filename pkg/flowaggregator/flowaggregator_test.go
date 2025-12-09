@@ -160,7 +160,6 @@ func TestFlowAggregator_sendAggregatedRecord(t *testing.T) {
 				},
 				Stats:        &flowpb.Stats{},
 				ReverseStats: &flowpb.Stats{},
-				App:          &flowpb.App{},
 			}
 			flowRecord := &intermediate.AggregationFlowRecord{
 				Record:      record,
@@ -277,7 +276,6 @@ func TestFlowAggregator_proxyRecord(t *testing.T) {
 				},
 				Stats:        &flowpb.Stats{},
 				ReverseStats: &flowpb.Stats{},
-				App:          &flowpb.App{},
 			}
 
 			mockIPFIXExporter.EXPECT().AddRecord(record, tc.isIPv6)

@@ -91,8 +91,6 @@ DATA SET:
     flowType: 1
     egressName: test-egressbkclk
     egressIP: 172.18.0.2
-    appProtocolName: http
-    httpVals: mockHttpString
     egressNodeName: k8s-node-worker
     destinationClusterIPv4: 0.0.0.0
     octetDeltaCountFromSourceNode: 8982624938
@@ -1980,7 +1978,5 @@ type ClickHouseFullRow struct {
 	Trusted                              uint8     `json:"trusted"`
 	EgressName                           string    `json:"egressName"`
 	EgressIP                             string    `json:"egressIP"`
-	AppProtocolName                      string    `json:"appProtocolName"`
-	HttpVals                             string    `json:"httpVals"`
 	EgressNodeName                       string    `json:"egressNodeName"`
 }
