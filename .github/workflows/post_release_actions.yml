@@ -67,7 +67,7 @@ jobs:
           fi
           git cherry-pick "$commit_hash"
       - name: Create Pull Request
-        uses: peter-evans/create-pull-request@v7
+        uses: peter-evans/create-pull-request@v8
         with:
           token: ${{ secrets.ANTREA_BOT_WRITE_PAT }}
           delete-branch: true
@@ -144,7 +144,7 @@ jobs:
           git add .
           git commit --signoff -m "Bump VERSION to $new_version"
       - name: Create Pull Request
-        uses: peter-evans/create-pull-request@v7
+        uses: peter-evans/create-pull-request@v8
         with:
           token: ${{ secrets.ANTREA_BOT_WRITE_PAT }}
           delete-branch: true
@@ -176,7 +176,7 @@ jobs:
             git commit --signoff -m "chore(renovate): update baseBranches configuration"
           fi
       - name: Create Pull Request
-        uses: peter-evans/create-pull-request@v7
+        uses: peter-evans/create-pull-request@v8
         with:
           token: ${{ secrets.ANTREA_BOT_WRITE_PAT }}
           delete-branch: true
