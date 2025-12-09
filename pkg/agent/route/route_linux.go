@@ -1274,6 +1274,18 @@ func (c *Client) restoreIptablesData(podCIDR *net.IPNet,
 			"-j", iptables.MarkTarget, "--or-mark", fmt.Sprintf("%#08x", types.HostLocalSourceMark),
 		}...)
 	}
+	if c.egressEnabled && c.networkConfig.TrafficEncapMode == config.TrafficEncapModeHybrid {
+		writeLine(iptablesData, []string{
+			"-A", antreaOutputChain,
+			"-m", "comment", "--comment", `"Antrea: restore fwmark from connmark for reply Egress packets to remote Pods"`,
+			"-m", "conntrack", "--ctstate", "ESTABLISHED", // Match packets from established connections.
+			"-m", "conntrack", "--ctdir", "REPLY", // Match reply packets.
+			// Match packets with conntrack mark.
+			"-m", "connmark", "--mark", fmt.Sprintf("%#08x/%#08x", types.EgressNoEncapReturnToRemoteMark, types.EgressNoEncapReturnToRemoteMark),
+			// Restore fwmark from the conntrack mark.
+			"-j", "CONNMARK", "--restore-mark", "--nfmask", fmt.Sprintf("%#08x", types.EgressNoEncapReturnToRemoteMark), "--ctmask", fmt.Sprintf("%#08x", types.EgressNoEncapReturnToRemoteMark),
+		}...)
+	}
 	writeLine(iptablesData, "COMMIT")
 
 	writeLine(iptablesData, "*filter")
