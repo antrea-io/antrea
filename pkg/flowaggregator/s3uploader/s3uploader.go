@@ -485,9 +485,5 @@ func writeRecord(w io.Writer, r *flowrecord.FlowRecord, clusterUUID string) {
 	io.WriteString(w, ",")
 	io.WriteString(w, r.EgressIP)
 	io.WriteString(w, ",")
-	io.WriteString(w, r.AppProtocolName)
-	io.WriteString(w, ",")
-	io.WriteString(w, r.HttpVals)
-	io.WriteString(w, ",")
 	io.WriteString(w, r.EgressNodeName)
 }

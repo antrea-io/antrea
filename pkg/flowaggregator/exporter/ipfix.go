@@ -383,8 +383,6 @@ func (e *IPFIXExporter) makeIPFIXRecord(flow *flowpb.Flow, isIPv6 bool) ipfixent
 	} else {
 		next().SetStringValue(net.IP(flow.K8S.EgressIp).String())
 	}
-	next().SetStringValue(flow.App.ProtocolName)
-	next().SetStringValue(string(flow.App.HttpVals))
 	if e.includeK8sNames {
 		next().SetStringValue(flow.K8S.EgressNodeName)
 	}

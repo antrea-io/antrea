@@ -121,8 +121,6 @@ func TestBatchCommitAll(t *testing.T) {
 			fakeClusterUUID,
 			"test-egress",
 			"172.18.0.1",
-			"http",
-			"mockHttpString",
 			"test-egress-node").
 		WillReturnResult(sqlmock.NewResult(0, 1))
 	mock.ExpectCommit()

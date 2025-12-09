@@ -230,8 +230,6 @@ func (cs *connectionStore) ReleaseConnStoreLock() {
 func (cs *connectionStore) UpdateConnAndQueue(pqItem *priorityqueue.ItemToExpire, currTime time.Time) {
 	conn := pqItem.Conn
 	conn.LastExportTime = currTime
-	conn.AppProtocolName = ""
-	conn.HttpVals = ""
 	if conn.ReadyToDelete || !conn.IsActive {
 		cs.expirePriorityQueue.RemoveItemFromMap(conn)
 	} else {
