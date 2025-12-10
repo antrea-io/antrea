@@ -115,7 +115,8 @@ func newTestRouteClient(networkConfig *config.NetworkConfig, options routeClient
 		options.nodeSNATRandomFully,
 		false,
 		&servicecidr.Discoverer{},
-		apis.WireGuardListenPort)
+		apis.WireGuardListenPort,
+		0)
 }
 
 func TestInitialize(t *testing.T) {
