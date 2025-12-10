@@ -247,11 +247,12 @@ type flowVisibilityIPFIXTestOptions struct {
 }
 
 type flowVisibilityTestOptions struct {
-	mode                     flowaggregatorconfig.AggregatorMode
-	databaseURL              string
-	databaseSecureConnection bool
-	clusterID                string
-	ipfixCollector           flowVisibilityIPFIXTestOptions
+	mode                      flowaggregatorconfig.AggregatorMode
+	numFlowAggregatorReplicas int
+	databaseURL               string
+	databaseSecureConnection  bool
+	clusterID                 string
+	ipfixCollector            flowVisibilityIPFIXTestOptions
 }
 
 var testOptions TestOptions
@@ -1186,19 +1187,19 @@ func (data *TestData) deployFlowAggregator(
 	if err = data.mutateFlowAggregatorConfigMap(ipfixCollector, o); err != nil {
 		return err
 	}
+
+	if o.numFlowAggregatorReplicas > 0 {
+		if rc, _, _, err = data.provider.RunCommandOnNode(controlPlaneNodeName(), fmt.Sprintf("kubectl -n %s scale deployment/%s --replicas=%d", flowAggregatorNamespace, flowAggregatorDeployment, o.numFlowAggregatorReplicas)); err != nil || rc != 0 {
+			return fmt.Errorf("failed to scale number of flow aggregator replicas: %w", err)
+		}
+	}
+
 	if rc, _, _, err = data.provider.RunCommandOnNode(controlPlaneNodeName(), fmt.Sprintf("kubectl -n %s rollout status deployment/%s --timeout=%v", flowAggregatorNamespace, flowAggregatorDeployment, 2*defaultTimeout)); err != nil || rc != 0 {
 		_, stdout, _, _ := data.provider.RunCommandOnNode(controlPlaneNodeName(), fmt.Sprintf("kubectl -n %s describe pod", flowAggregatorNamespace))
 		_, logStdout, _, _ := data.provider.RunCommandOnNode(controlPlaneNodeName(), fmt.Sprintf("kubectl -n %s logs -l app=flow-aggregator", flowAggregatorNamespace))
 		return fmt.Errorf("error when waiting for the Flow Aggregator rollout to complete. kubectl describe output: %s, logs: %s", stdout, logStdout)
 	}
-	// Check for flow-aggregator Pod running again for db connection establishment
-	flowAggPod, err := data.getFlowAggregator()
-	if err != nil {
-		return fmt.Errorf("error when getting flow-aggregator Pod: %v", err)
-	}
-	if err = data.podWaitForReady(2*defaultTimeout, flowAggPod.Name, flowAggregatorNamespace); err != nil {
-		return err
-	}
+
 	return nil
 }
 
@@ -2075,8 +2076,8 @@ func (data *TestData) RunCommandFromAntreaPodOnNode(nodeName string, cmd []strin
 	return data.RunCommandFromPod(antreaNamespace, antreaPodName, agentContainerName, cmd)
 }
 
-// getFlowAggregator retrieves the name of the Flow-Aggregator Pod (flow-aggregator-*) running on a specific Node.
-func (data *TestData) getFlowAggregator() (*corev1.Pod, error) {
+// getFlowAggregators retrieves all Flow-Aggregator Pods (flow-aggregator-*).
+func (data *TestData) getFlowAggregators() ([]corev1.Pod, error) {
 	listOptions := metav1.ListOptions{
 		LabelSelector: "app=flow-aggregator",
 	}
@@ -2084,10 +2085,10 @@ func (data *TestData) getFlowAggregator() (*corev1.Pod, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to list Flow Aggregator Pod: %v", err)
 	}
-	if len(pods.Items) != 1 {
-		return nil, fmt.Errorf("expected *exactly* one Pod")
+	if len(pods.Items) == 0 {
+		return nil, fmt.Errorf("expected at least one Pod")
 	}
-	return &pods.Items[0], nil
+	return pods.Items, nil
 }
 
 // getAntreaController retrieves the name of the Antrea Controller (antrea-controller-*) running in the k8s cluster.
@@ -3027,14 +3028,17 @@ func (data *TestData) gracefulExitAntreaAgent(covDir string, nodeName string) er
 
 // gracefulExitFlowAggregator copies the Flow Aggregator binary coverage data file out before terminating the Pod.
 func (data *TestData) gracefulExitFlowAggregator(covDir string) error {
-	flowAggPod, err := data.getFlowAggregator()
+	flowAggPods, err := data.getFlowAggregators()
 	if err != nil {
 		return fmt.Errorf("error when getting flow-aggregator Pod: %v", err)
 	}
-	podName := flowAggPod.Name
 
-	if err := data.killProcessAndCollectCovFiles(flowAggregatorNamespace, podName, "flow-aggregator", "flow-aggregator", covDir); err != nil {
-		return fmt.Errorf("error when gracefully exiting Flow Aggregator: %w", err)
+	for idx := range flowAggPods {
+		podName := flowAggPods[idx].Name
+
+		if err := data.killProcessAndCollectCovFiles(flowAggregatorNamespace, podName, "flow-aggregator", "flow-aggregator", covDir); err != nil {
+			return fmt.Errorf("error when gracefully exiting Flow Aggregator %q: %w", podName, err)
+		}
 	}
 
 	return nil
