@@ -349,7 +349,7 @@ func (c *Controller) parsePacketIn(pktIn *ofctrl.PacketIn) (*crdv1beta1.Traceflo
 			}
 
 			ob.Action = crdv1beta1.ActionForwardedOutOfNetwork
-			if c.networkConfig.TrafficEncapMode == config.TrafficEncapModeHybrid && c.podSubnetChecker != nil {
+			if (c.networkConfig.TrafficEncapMode == config.TrafficEncapModeHybrid || c.networkConfig.TrafficEncryptionMode == config.TrafficEncryptionModeWireGuard) && c.podSubnetChecker != nil {
 				netAddrDst, _ := netip.AddrFromSlice(netIPDst)
 				isPodIP, _ := c.podSubnetChecker.LookupIPInPodSubnets(netAddrDst)
 				if isPodIP {
