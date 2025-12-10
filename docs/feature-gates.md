@@ -34,8 +34,8 @@ edit the Agent configuration in the
 |---------------------------------|--------------------|---------|------------|---------------|--------------|------------|--------------------|--------------------------------------------------------|
 | `AntreaProxy`                   | Agent              | `true`  | GA         | v0.8          | v0.11        | v1.14      | Yes                | Must be enabled for Windows.                           |
 | `EndpointSlice`                 | Agent              | `true`  | GA         | v0.13.0       | v1.11        | v1.14      | Yes                | Locked to `true` (cannot be disabled).                 |
-| `TopologyAwareHints`            | Agent              | `true`  | GA         | v1.8          | v1.12        | v2.5       | Yes                |                                                        |
-| `ServiceTrafficDistribution`    | Agent              | `true`  | GA         | N/A           | v2.2         | v2.5       | Yes                |                                                        |
+| `TopologyAwareHints`            | Agent              | `true`  | GA         | v1.8          | v1.12        | v2.5       | Yes                | Locked to `true` (cannot be disabled).                 |
+| `ServiceTrafficDistribution`    | Agent              | `true`  | GA         | N/A           | v2.2         | v2.5       | Yes                | Locked to `true` (cannot be disabled).                 |
 | `PreferSameTrafficDistribution` | Agent              | `false` | Alpha      | v2.5          | N/A          | N/A        | Yes                |                                                        |
 | `CleanupStaleUDPSvcConntrack`   | Agent              | `true`  | Beta       | v1.13         | v2.1         | N/A        | Yes                |                                                        |
 | `LoadBalancerModeDSR`           | Agent              | `false` | Alpha      | v1.13         | N/A          | N/A        | Yes                |                                                        |
@@ -101,6 +101,8 @@ Starting from Antrea v2.5.0, the feature is locked to `true` and cannot be disab
 Endpoint which is closer to where it originated when this feature is enabled. Prior to Kubernetes 1.27, this feature was known as Topology Aware Hints.
 Refer to this [link](https://kubernetes.io/docs/concepts/services-networking/topology-aware-routing/) for more information about Topology Aware Routing.
 
+Starting from Antrea v2.5.1, the feature is locked to `true` and cannot be disabled.
+
 #### Requirements for this Feature
 
 - Option `antreaProxy.enable` is set to true.
@@ -110,6 +112,8 @@ Refer to this [link](https://kubernetes.io/docs/concepts/services-networking/top
 `ServiceTrafficDistribution` enables Traffic Distribution for Services in Antrea Proxy. This feature allows for more
 flexible and intelligent routing decisions by considering both topology and non-topology factors. For more details,
 refer to this [link](https://github.com/kubernetes/enhancements/tree/master/keps/sig-network/4444-service-traffic-distribution).
+
+Starting from Antrea v2.5.1, the feature is locked to `true` and cannot be disabled.
 
 #### Requirements for this Feature
 
