@@ -349,7 +349,7 @@ func NewNetworkPolicyController(antreaClientGetter client.AntreaClientProvider,
 				return nil
 			}
 			c.ruleCache.DeleteNetworkPolicy(policy)
-			klog.InfoS("NetworkPolicy no longer applied to Pods on this Node", "policyName", policy.SourceRef.ToString())
+			klog.InfoS("NetworkPolicy no longer applied to Pods on this Node or the Node itself", "policyName", policy.SourceRef.ToString())
 			if err := c.networkPolicyStore.save(policy); err != nil {
 				klog.ErrorS(err, "Failed to delete the NetworkPolicy from file", "policyName", policy.SourceRef.ToString())
 			}
@@ -368,7 +368,7 @@ func NewNetworkPolicyController(antreaClientGetter client.AntreaClientProvider,
 						"policyName", policies[i].SourceRef.ToString())
 					return nil
 				}
-				klog.InfoS("NetworkPolicy applied to Pods on this Node", "policyName", policies[i].SourceRef.ToString())
+				klog.InfoS("NetworkPolicy applied to Pods on this Node or the Node itself", "policyName", policies[i].SourceRef.ToString())
 				// When ReplaceFunc is called, either the controller restarted or this was a regular reconnection.
 				// For the former case, agent must resync the statuses as the controller lost the previous statuses.
 				// For the latter case, agent doesn't need to do anything. However, we are not able to differentiate the
