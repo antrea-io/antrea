@@ -92,15 +92,13 @@ func NewEndpointInfo(baseInfo *k8sproxy.BaseEndpointInfo, _ *k8sproxy.ServicePor
 // GetLoadBalancerVIPInfos returns a slice of serviceStrings with the format
 // "ExternalIP:Port/Protocol" for LoadBalancer IPs
 func (s *ServiceInfo) GetLoadBalancerVIPStrings() []string {
-	return s.GenerateServiceStrings(s.LoadBalancerVIPs())
+	return GenerateServiceInfoStrings(s.Protocol(), s.Port(), s.LoadBalancerVIPs())
 }
 
 // GenerateServiceStrings generates service strings for the given ips in the format
 // "ExternalIP:Port/Protocol".
-func (s *ServiceInfo) GenerateServiceStrings(ips []net.IP) []string {
+func GenerateServiceInfoStrings(protocol corev1.Protocol, port int, ips []net.IP) []string {
 	var serviceStrs []string
-	protocol := s.Protocol()
-	port := s.Port()
 	for _, ip := range ips {
 		serviceStr := fmt.Sprintf("%s:%d/%s", ip, port, protocol)
 		serviceStrs = append(serviceStrs, serviceStr)
