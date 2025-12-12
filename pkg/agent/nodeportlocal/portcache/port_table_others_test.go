@@ -20,7 +20,7 @@ package portcache
 import (
 	"fmt"
 	"testing"
-	"time"
+	"testing/synctest"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -32,10 +32,6 @@ import (
 )
 
 func TestRestoreRules(t *testing.T) {
-	mockCtrl := gomock.NewController(t)
-	mockIPTables := rulestesting.NewMockPodPortRules(mockCtrl)
-	mockPortOpener := portcachetesting.NewMockLocalPortOpener(mockCtrl)
-	portTable := newPortTable(mockIPTables, mockPortOpener)
 	allNPLPorts := []rules.PodNodePort{
 		{
 			NodePort: nodePort1,
@@ -57,23 +53,28 @@ func TestRestoreRules(t *testing.T) {
 		},
 	}
 
-	mockIPTables.EXPECT().AddAllRules(gomock.InAnyOrder(allNPLPorts))
-	gomock.InOrder(
-		mockPortOpener.EXPECT().OpenLocalPort(nodePort1, "tcp"),
-		mockPortOpener.EXPECT().OpenLocalPort(nodePort1, "udp"),
-		mockPortOpener.EXPECT().OpenLocalPort(nodePort2, "udp"),
-	)
+	for _, failedRuleSyncs := range []int{0, 1, 10} {
+		t.Run(fmt.Sprintf("with %d failed rule syncs", failedRuleSyncs), func(t *testing.T) {
+			synctest.Test(t, func(t *testing.T) {
+				mockCtrl := gomock.NewController(t)
+				mockIPTables := rulestesting.NewMockPodPortRules(mockCtrl)
+				mockPortOpener := portcachetesting.NewMockLocalPortOpener(mockCtrl)
+				portTable := newPortTable(mockIPTables, mockPortOpener)
 
-	syncedCh := make(chan struct{})
-	const timeout = 1 * time.Second
-	portTable.RestoreRules(allNPLPorts, syncedCh)
-	select {
-	case <-syncedCh:
-		break
-	case <-time.After(timeout):
-		// this will not kill the goroutine created by RestoreRules,
-		// which should be acceptable.
-		t.Fatalf("Rule restoration not complete after %v", timeout)
+				gomock.InOrder(
+					mockIPTables.EXPECT().AddAllRules(gomock.InAnyOrder(allNPLPorts)).Times(failedRuleSyncs).Return(fmt.Errorf("iptables error")),
+					mockIPTables.EXPECT().AddAllRules(gomock.InAnyOrder(allNPLPorts)).Return(nil),
+				)
+				gomock.InOrder(
+					mockPortOpener.EXPECT().OpenLocalPort(nodePort1, "tcp", false),
+					mockPortOpener.EXPECT().OpenLocalPort(nodePort1, "udp", false),
+					mockPortOpener.EXPECT().OpenLocalPort(nodePort2, "udp", false),
+				)
+
+				// Bubble time will automatically advance when goroutines are blocked.
+				portTable.RestoreRules(t.Context(), allNPLPorts)
+			})
+		})
 	}
 }
 
