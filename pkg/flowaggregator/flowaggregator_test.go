@@ -36,11 +36,13 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/kubernetes/fake"
+	"k8s.io/client-go/tools/cache"
 	"k8s.io/klog/v2"
 	"k8s.io/utils/ptr"
 
 	flowpb "antrea.io/antrea/pkg/apis/flow/v1alpha1"
 	flowaggregatorconfig "antrea.io/antrea/pkg/config/flowaggregator"
+	"antrea.io/antrea/pkg/flowaggregator/certificate"
 	collectortesting "antrea.io/antrea/pkg/flowaggregator/collector/testing"
 	"antrea.io/antrea/pkg/flowaggregator/exporter"
 	exportertesting "antrea.io/antrea/pkg/flowaggregator/exporter/testing"
@@ -677,7 +679,6 @@ func TestFlowAggregator_Run(t *testing.T) {
 		serviceStore:            mockServiceStore,
 	}
 
-	mockCollector.EXPECT().Run(gomock.Any())
 	mockAggregationProcess.EXPECT().Start()
 	mockAggregationProcess.EXPECT().Stop()
 
@@ -980,9 +981,17 @@ func TestFlowAggregator_InitCollectors(t *testing.T) {
 				aggregatorTransportProtocol: tt.aggregatorTransportProtocol,
 				flowAggregatorAddress:       tt.flowAggregatorAddress,
 				k8sClient:                   tt.k8sClient,
+				certificateProvider:         certificate.NewProvider(tt.k8sClient, ""),
 			}
-			err := fa.InitCollectors()
-			require.NoError(t, err)
+			stopCh := make(chan struct{})
+			go func() {
+				fa.certificateProvider.Run(stopCh)
+			}()
+
+			require.True(t, cache.WaitForCacheSync(stopCh, fa.certificateProvider.HasSynced))
+			close(stopCh)
+
+			require.NoError(t, fa.initCollectors())
 			assert.NotNil(t, fa.grpcCollector)
 			if tt.aggregatorTransportProtocol == flowaggregatorconfig.AggregatorTransportProtocolNone {
 				assert.Nil(t, fa.ipfixCollector)
@@ -1003,8 +1012,8 @@ func TestFlowAggregator_InitAggregationProcess(t *testing.T) {
 		registry:                    ipfix.NewIPFIXRegistry(),
 		recordCh:                    make(chan *flowpb.Flow),
 		k8sClient:                   fake.NewSimpleClientset(),
+		certificateProvider:         nil,
 	}
-	require.NoError(t, fa.InitCollectors())
 	require.NoError(t, fa.InitAggregationProcess())
 }
 

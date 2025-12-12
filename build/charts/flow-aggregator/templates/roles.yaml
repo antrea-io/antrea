@@ -30,15 +30,15 @@ rules:
   - apiGroups: [""]
     resources: ["configmaps"]
     resourceNames: ["flow-aggregator-ca"]
-    verbs: ["get", "update"]
+    verbs: ["get", "list", "watch", "update"]
   # RBAC to create / update / get flow-aggregator-client-tls Secret
   - apiGroups: [""]
     resources: ["secrets"]
     verbs: ["create"]
   - apiGroups: [""]
     resources: ["secrets"]
-    resourceNames: ["flow-aggregator-client-tls"]
-    verbs: ["get", "update"]
+    resourceNames: ["flow-aggregator-ca-tls", "flow-aggregator-client-tls"]
+    verbs: ["get", "list", "watch", "update"]
   # RBAC to get / update flow-aggregator-configmap ConfigMap (required by antctl)
   - apiGroups: [""]
     resources: ["configmaps"]

@@ -35,6 +35,8 @@ rules:
   - configmaps
   verbs:
   - get
+  - list
+  - watch
   - update
 - apiGroups:
   - ""
@@ -45,11 +47,14 @@ rules:
 - apiGroups:
   - ""
   resourceNames:
+  - flow-aggregator-ca-tls
   - flow-aggregator-client-tls
   resources:
   - secrets
   verbs:
   - get
+  - list
+  - watch
   - update
 - apiGroups:
   - ""
