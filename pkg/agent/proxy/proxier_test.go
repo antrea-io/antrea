@@ -757,6 +757,11 @@ func testLoadBalancerAdd(t *testing.T,
 	fp.syncProxyRules()
 	assert.Contains(t, fp.serviceInstalledMap, svcPortName)
 	assert.Contains(t, fp.endpointsInstalledMap, svcPortName)
+	if proxyLoadBalancerIPs {
+		svcInfoStr := fmt.Sprintf("%s:%d/%s", loadBalancerIP, svcPort, corev1.ProtocolTCP)
+		_, exists := fp.ipToServiceMap.Get(svcInfoStr)
+		assert.True(t, exists)
+	}
 }
 
 func testNodePortAdd(t *testing.T,
@@ -2979,6 +2984,16 @@ func testServiceExternalIPsUpdate(t *testing.T, protocol binding.Protocol, isIPv
 	fp.syncProxyRules()
 	assert.Contains(t, fp.serviceInstalledMap, svcPortName)
 	assert.Contains(t, fp.endpointsInstalledMap, svcPortName)
+	for _, removedIP := range toDeleteLoadBalancerIPs {
+		serviceStr := fmt.Sprintf("%s:%d/%s", removedIP, int32(svcPort), apiProtocol)
+		_, exists := fp.ipToServiceMap.Get(serviceStr)
+		assert.False(t, exists, "Expected old loadbalancer IP to be removed from serviceStringMap")
+	}
+	for _, updatedLoadBalancerIP := range updatedLoadBalancerIPs {
+		serviceStr := fmt.Sprintf("%s:%d/%s", updatedLoadBalancerIP, int32(svcPort), apiProtocol)
+		_, exists := fp.ipToServiceMap.Get(serviceStr)
+		assert.True(t, exists)
+	}
 }
 
 func TestServiceIngressIPsUpdate(t *testing.T) {
@@ -4046,5 +4061,62 @@ func TestServiceHealthServer(t *testing.T) {
 	t.Run("force disabled", func(t *testing.T) {
 		fp := newFakeProxier(nil, nil, nil, nil, false, withProxyAll, withoutServiceHealthServer)
 		assert.Nil(t, fp.serviceHealthServer)
+	})
+}
+
+func TestIPToServiceMap(t *testing.T) {
+	family := corev1.IPv4Protocol
+	port := &corev1.ServicePort{
+		Protocol: corev1.ProtocolTCP,
+		Port:     int32(80),
+	}
+	service := &corev1.Service{
+		Spec: corev1.ServiceSpec{
+			ClusterIP: "1.1.1.1",
+		},
+		Status: corev1.ServiceStatus{
+			LoadBalancer: corev1.LoadBalancerStatus{
+				Ingress: []corev1.LoadBalancerIngress{
+					{IP: "2.2.2.2"},
+				},
+			},
+		},
+	}
+	baseServicePortInfo := k8sproxy.NewBaseServiceInfo(service, family, port)
+	serviceInfo := &types.ServiceInfo{
+		BaseServicePortInfo: baseServicePortInfo,
+	}
+	servicePortName := k8sproxy.ServicePortName{
+		Port:     "80",
+		Protocol: corev1.ProtocolTCP,
+	}
+	t.Run("Add and Delete", func(t *testing.T) {
+		m := NewIPToServiceMap()
+		m.Add(serviceInfo, servicePortName)
+		assert.Len(t, m.serviceStringMap, 2)
+
+		m.Delete(serviceInfo)
+		assert.Len(t, m.serviceStringMap, 0)
+	})
+	t.Run("Get", func(t *testing.T) {
+		t.Run("invalid serviceStr", func(t *testing.T) {
+			m := NewIPToServiceMap()
+			_, exists := m.Get("something")
+			assert.False(t, exists)
+		})
+		t.Run("valid serviceStr", func(t *testing.T) {
+			m := NewIPToServiceMap()
+			m.Add(serviceInfo, servicePortName)
+			got, exists := m.Get(
+				types.GenerateServiceInfoStrings(corev1.ProtocolTCP, 80, []net.IP{net.IP([]byte{2, 2, 2, 2})})[0],
+			)
+			assert.True(t, exists)
+			assert.Equal(t, servicePortName, got)
+			got, exists = m.Get(
+				types.GenerateServiceInfoStrings(corev1.ProtocolTCP, 80, []net.IP{net.IP([]byte{1, 1, 1, 1})})[0],
+			)
+			assert.True(t, exists)
+			assert.Equal(t, servicePortName, got)
+		})
 	})
 }

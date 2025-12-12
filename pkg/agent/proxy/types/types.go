@@ -15,6 +15,9 @@
 package types
 
 import (
+	"fmt"
+	"net"
+
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/klog/v2"
 	utilnet "k8s.io/utils/net"
@@ -84,4 +87,21 @@ func NewServiceInfo(port *corev1.ServicePort, service *corev1.Service, baseInfo 
 func NewEndpointInfo(baseInfo *k8sproxy.BaseEndpointInfo, _ *k8sproxy.ServicePortName) k8sproxy.Endpoint {
 	info := &EndpointInfo{BaseEndpointInfo: baseInfo}
 	return info
+}
+
+// GetLoadBalancerVIPInfos returns a slice of serviceStrings with the format
+// "ExternalIP:Port/Protocol" for LoadBalancer IPs
+func (s *ServiceInfo) GetLoadBalancerVIPStrings() []string {
+	return GenerateServiceInfoStrings(s.Protocol(), s.Port(), s.LoadBalancerVIPs())
+}
+
+// GenerateServiceStrings generates service strings for the given IPs in the format
+// "ExternalIP:Port/Protocol".
+func GenerateServiceInfoStrings(protocol corev1.Protocol, port int, ips []net.IP) []string {
+	var serviceStrs []string
+	for _, ip := range ips {
+		serviceStr := fmt.Sprintf("%s:%d/%s", ip, port, protocol)
+		serviceStrs = append(serviceStrs, serviceStr)
+	}
+	return serviceStrs
 }
