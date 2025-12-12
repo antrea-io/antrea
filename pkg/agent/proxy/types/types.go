@@ -95,7 +95,7 @@ func (s *ServiceInfo) GetLoadBalancerVIPStrings() []string {
 	return GenerateServiceInfoStrings(s.Protocol(), s.Port(), s.LoadBalancerVIPs())
 }
 
-// GenerateServiceStrings generates service strings for the given ips in the format
+// GenerateServiceStrings generates service strings for the given IPs in the format
 // "ExternalIP:Port/Protocol".
 func GenerateServiceInfoStrings(protocol corev1.Protocol, port int, ips []net.IP) []string {
 	var serviceStrs []string

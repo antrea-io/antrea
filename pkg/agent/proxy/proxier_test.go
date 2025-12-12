@@ -758,8 +758,8 @@ func testLoadBalancerAdd(t *testing.T,
 	assert.Contains(t, fp.serviceInstalledMap, svcPortName)
 	assert.Contains(t, fp.endpointsInstalledMap, svcPortName)
 	if proxyLoadBalancerIPs {
-		alternativeSvcInfoStr := fmt.Sprintf("%s:%d/%s", loadBalancerIP, svcPort, corev1.ProtocolTCP)
-		assert.Contains(t, fp.serviceStringMap, alternativeSvcInfoStr)
+		svcInfoStr := fmt.Sprintf("%s:%d/%s", loadBalancerIP, svcPort, corev1.ProtocolTCP)
+		assert.Contains(t, fp.serviceStringMap, svcInfoStr)
 	}
 }
 
