@@ -16,7 +16,6 @@ package intermediate
 
 import (
 	"container/heap"
-	"encoding/json"
 	"fmt"
 	"net"
 	"sync"
@@ -541,15 +540,6 @@ func (a *aggregationProcess) aggregateRecords(incomingRecord, existingRecord *fl
 		// This code will need to change if more fields are added to Transport.Protocol.
 		existingRecord.Transport.Protocol = incomingRecord.Transport.Protocol
 	}
-	if incomingRecord.App.HttpVals != nil {
-		updatedHttpVals, err := fillHttpVals(incomingRecord.App.HttpVals, existingRecord.App.HttpVals)
-		if err != nil {
-			klog.ErrorS(err, "httpVals could not be updated")
-			existingRecord.App.HttpVals = incomingRecord.App.HttpVals
-		} else {
-			existingRecord.App.HttpVals = updatedHttpVals
-		}
-	}
 
 	aggregateStats := func(incoming, existing *flowpb.Stats) {
 		existing.PacketTotalCount = incoming.PacketTotalCount
@@ -768,28 +758,4 @@ func isCorrelationRequired(flowType flowpb.FlowType, record *flowpb.Flow) bool {
 		record.K8S.EgressNetworkPolicyRuleAction != flowpb.NetworkPolicyRuleAction_NETWORK_POLICY_RULE_ACTION_DROP &&
 		record.K8S.EgressNetworkPolicyRuleAction != flowpb.NetworkPolicyRuleAction_NETWORK_POLICY_RULE_ACTION_REJECT &&
 		record.K8S.IngressNetworkPolicyRuleAction != flowpb.NetworkPolicyRuleAction_NETWORK_POLICY_RULE_ACTION_REJECT
-}
-
-func fillHttpVals(incomingHttpVals, existingHttpVals []byte) ([]byte, error) {
-	incomingHttpValsJson := make(map[int32]string)
-	existingHttpValsJson := make(map[int32]string)
-
-	if len(incomingHttpVals) > 0 {
-		if err := json.Unmarshal(incomingHttpVals, &incomingHttpValsJson); err != nil {
-			return nil, fmt.Errorf("error parsing JSON: %w", err)
-		}
-	}
-	if len(existingHttpVals) > 0 {
-		if err := json.Unmarshal(existingHttpVals, &existingHttpValsJson); err != nil {
-			return nil, fmt.Errorf("error parsing JSON: %w", err)
-		}
-	}
-	for key, value := range existingHttpValsJson {
-		incomingHttpValsJson[key] = value
-	}
-	updatedHttpVals, err := json.Marshal(incomingHttpValsJson)
-	if err != nil {
-		return nil, fmt.Errorf("error converting JSON to string: %w", err)
-	}
-	return updatedHttpVals, nil
 }

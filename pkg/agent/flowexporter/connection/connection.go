@@ -91,8 +91,6 @@ type Connection struct {
 	EgressName                           string
 	EgressUID                            string
 	EgressIP                             string
-	AppProtocolName                      string
-	HttpVals                             string
 	EgressNodeName                       string
 }
 

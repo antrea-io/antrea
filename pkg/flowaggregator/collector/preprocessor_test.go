@@ -183,14 +183,6 @@ func createTestElements(isIPv4 bool) []ipfixentities.InfoElementWithValue {
 	egressNameElem.SetStringValue("test-egress")
 	elements = append(elements, egressNameElem)
 
-	appProtocolNameElem := createTestElement("appProtocolName", ipfixregistry.AntreaEnterpriseID)
-	appProtocolNameElem.SetStringValue("http")
-	elements = append(elements, appProtocolNameElem)
-
-	httpValsElem := createTestElement("httpVals", ipfixregistry.AntreaEnterpriseID)
-	httpValsElem.SetStringValue("mockHttpString")
-	elements = append(elements, httpValsElem)
-
 	egressNodeNameElem := createTestElement("egressNodeName", ipfixregistry.AntreaEnterpriseID)
 	egressNodeNameElem.SetStringValue("test-egress-node")
 	elements = append(elements, egressNodeNameElem)
@@ -306,10 +298,6 @@ func createExpectedFlowRecord(isIPv4 bool) *flowpb.Flow {
 			OctetTotalCount:  24500996,
 			PacketDeltaCount: 136211,
 			OctetDeltaCount:  7083284,
-		},
-		App: &flowpb.App{
-			ProtocolName: "http",
-			HttpVals:     []byte("mockHttpString"),
 		},
 	}
 }

@@ -933,8 +933,7 @@ func (c *client) generatePipelines() {
 			c.enableMulticast,
 			c.proxyAll,
 			c.enableDSR,
-			c.enableTrafficControl,
-			c.enableL7FlowExporter)
+			c.enableTrafficControl)
 		c.activatedFeatures = append(c.activatedFeatures, c.featurePodConnectivity)
 		c.traceableFeatures = append(c.traceableFeatures, c.featurePodConnectivity)
 

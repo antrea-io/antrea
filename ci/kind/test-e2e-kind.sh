@@ -289,7 +289,7 @@ if $bgp_policy; then
     manifest_args="$manifest_args --feature-gates BGPPolicy=true"
 fi
 if $flow_visibility; then
-    manifest_args="$manifest_args --feature-gates FlowExporter=true,L7FlowExporter=true --extra-helm-values-file $FLOW_VISIBILITY_HELM_VALUES"
+    manifest_args="$manifest_args --feature-gates FlowExporter=true --extra-helm-values-file $FLOW_VISIBILITY_HELM_VALUES"
 fi
 if [[ "$flow_visibility_protocol" == "ipfix" ]]; then
     manifest_args="$manifest_args --extra-helm-values flowExporter.flowCollectorAddr=flow-aggregator/flow-aggregator:4739:tls"

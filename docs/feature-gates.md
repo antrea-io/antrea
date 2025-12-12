@@ -60,7 +60,6 @@ edit the Agent configuration in the
 | `EgressTrafficShaping`          | Agent              | `false` | Alpha      | v1.14         | N/A          | N/A        | Yes                | OVS meters should be supported                         |
 | `EgressSeparateSubnet`          | Agent              | `true`  | Beta       | v1.15         | v2.3         | N/A        | No                 |                                                        |
 | `NodeNetworkPolicy`             | Agent              | `false` | Alpha      | v1.15         | N/A          | N/A        | Yes                |                                                        |
-| `L7FlowExporter`                | Agent              | `false` | Deprecated | v1.15         | N/A          | N/A        | Yes                | Deprecated in v2.5.0. Scheduled for removal in v2.6.0. |
 | `BGPPolicy`                     | Agent              | `false` | Alpha      | v2.1          | N/A          | N/A        | No                 |                                                        |
 | `NodeLatencyMonitor`            | Agent              | `false` | Alpha      | v2.1          | N/A          | N/A        | No                 |                                                        |
 | `PacketCapture`                 | Agent              | `false` | Alpha      | v2.2          | N/A          | N/A        | No                 |                                                        |
@@ -457,17 +456,6 @@ to be supported in the datapath.
 `EgressSeparateSubnet` allows users to allocate Egress IPs from a different subnet from the default Node subnet.
 Refer to this [document](egress.md#subnetinfo) for more information.
 
-### L7FlowExporter
-
-`L7FlowExporter` enables users to export application-layer flow data using Pod or Namespace annotations.
-Refer to this [document](network-flow-visibility.md#l7-visibility) for more information.
-
-Note: `L7FlowExporter` is deprecated in Antrea v2.5.0, and will be removed in v2.6.0.
-
-#### Requirements for this Feature
-
-- Linux Nodes only.
-
 ### BGPPolicy
 
 `BGPPolicy` allows users to initiate BGP process on selected Kubernetes Nodes and advertise Service IPs (e.g.,
@@ -567,3 +555,9 @@ by functionalities and features that rely on netfilter. Currently, nftables supp
 #### Requirements for this Feature
 
 This feature is only supported on Linux.
+
+## Removed Features
+
+| Feature Name                    | Component          | Alpha Release | Beta Release | GA Release | Deprecated Release | Removed Release |
+| ------------------------------- | ------------------ | ------------- | ------------ | ---------- | ------------------ | --------------- |
+| `L7FlowExporter`                | Agent              | v1.15         | N/A          | N/A        | v2.5               | v2.6            |

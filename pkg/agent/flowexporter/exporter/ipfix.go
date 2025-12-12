@@ -73,8 +73,6 @@ var (
 		"flowType",
 		"egressName",
 		"egressIP",
-		"appProtocolName",
-		"httpVals",
 		"egressNodeName",
 	}
 	AntreaInfoElementsIPv4 = append(antreaInfoElementsCommon, []string{"destinationClusterIPv4"}...)
@@ -393,10 +391,6 @@ func (e *ipfixExporter) addConnToSet(conn *connection.Connection) error {
 			ie.SetStringValue(conn.EgressName)
 		case "egressIP":
 			ie.SetStringValue(conn.EgressIP)
-		case "appProtocolName":
-			ie.SetStringValue(conn.AppProtocolName)
-		case "httpVals":
-			ie.SetStringValue(conn.HttpVals)
 		case "egressNodeName":
 			ie.SetStringValue(conn.EgressNodeName)
 		}

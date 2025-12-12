@@ -51,7 +51,6 @@ func getEmptyFlowRecord() *flowpb.Flow {
 		K8S:          &flowpb.Kubernetes{},
 		Stats:        &flowpb.Stats{},
 		ReverseStats: &flowpb.Stats{},
-		App:          &flowpb.App{},
 	}
 }
 
@@ -79,7 +78,6 @@ func getBaseFlowRecord(isIPv6 bool, flowType flowpb.FlowType, isUpdatedRecord bo
 				StateName: "ESTABLISHED",
 			},
 		}
-		record.App.HttpVals = []byte("{\"0\":\"{hostname:10.10.0.1,url:/public/,http_user_agent:curl/7.74.0,http_content_type:text/html,http_method:GET,protocol:HTTP/1.1,status:200,length:153}\"}")
 	} else {
 		record.EndTs.Seconds = 10
 		record.EndReason = flowpb.FlowEndReason_FLOW_END_REASON_END_OF_FLOW
@@ -88,7 +86,6 @@ func getBaseFlowRecord(isIPv6 bool, flowType flowpb.FlowType, isUpdatedRecord bo
 				StateName: "TIME_WAIT",
 			},
 		}
-		record.App.HttpVals = []byte("{\"0\":\"{hostname:10.10.0.1,url:/public/,http_user_agent:curl/7.74.0,http_content_type:text/html,http_method:GET,protocol:HTTP/1.1,status:200,length:153}\"}")
 	}
 	record.K8S.FlowType = flowType
 	return record
@@ -765,7 +762,6 @@ func runAggregationAndCheckResult(t *testing.T, ap *aggregationProcess, clock *c
 	assert.Equal(t, dstRecordLatest.EndTs, aggRecord.Record.EndTs)
 	assert.Equal(t, dstRecordLatest.EndReason, aggRecord.Record.EndReason)
 	assert.Equal(t, dstRecordLatest.Transport, aggRecord.Record.Transport)
-	assert.Equal(t, dstRecordLatest.App, aggRecord.Record.App)
 
 	assert.Equal(t, dstRecordLatest.Stats, aggRecord.Record.Stats)
 	assert.Equal(t, dstRecordLatest.ReverseStats, aggRecord.Record.ReverseStats)

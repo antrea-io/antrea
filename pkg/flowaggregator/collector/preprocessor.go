@@ -86,7 +86,6 @@ func (p *preprocessor) processMsg(msg *entities.Message) {
 			K8S:          &flowpb.Kubernetes{},
 			Stats:        &flowpb.Stats{},
 			ReverseStats: &flowpb.Stats{},
-			App:          &flowpb.App{},
 		}
 		sequenceNum++
 		for _, ie := range elementList {
@@ -203,10 +202,6 @@ func (p *preprocessor) processMsg(msg *entities.Message) {
 						flow.K8S.EgressIp = addr.AsSlice()
 					}
 				}
-			case "appProtocolName":
-				flow.App.ProtocolName = ie.GetStringValue()
-			case "httpVals":
-				flow.App.HttpVals = []byte(ie.GetStringValue())
 			case "egressNodeName":
 				flow.K8S.EgressNodeName = ie.GetStringValue()
 			}

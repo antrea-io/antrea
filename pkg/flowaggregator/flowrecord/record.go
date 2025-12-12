@@ -73,8 +73,6 @@ type FlowRecord struct {
 	ReverseThroughputFromDestinationNode uint64
 	EgressName                           string
 	EgressIP                             string
-	AppProtocolName                      string
-	HttpVals                             string
 	EgressNodeName                       string
 }
 
@@ -171,8 +169,6 @@ func GetFlowRecord(record *flowpb.Flow) (*FlowRecord, error) {
 		ReverseThroughputFromDestinationNode: record.Aggregation.ReverseThroughputFromDestination,
 		EgressName:                           record.K8S.EgressName,
 		EgressIP:                             ipAddressAsString(record.K8S.EgressIp),
-		AppProtocolName:                      record.App.ProtocolName,
-		HttpVals:                             string(record.App.HttpVals),
 		EgressNodeName:                       record.K8S.EgressNodeName,
 	}, nil
 }

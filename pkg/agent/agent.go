@@ -130,7 +130,6 @@ type Initializer struct {
 	serviceConfig            *config.ServiceConfig
 	l7NetworkPolicyConfig    *config.L7NetworkPolicyConfig
 	enableL7NetworkPolicy    bool
-	enableL7FlowExporter     bool
 	connectUplinkToBridge    bool
 	enableAntreaProxy        bool
 	disableTXChecksumOffload bool
@@ -169,7 +168,6 @@ func NewInitializer(
 	connectUplinkToBridge bool,
 	enableAntreaProxy bool,
 	enableL7NetworkPolicy bool,
-	enableL7FlowExporter bool,
 	disableTXChecksumOffload bool,
 ) *Initializer {
 	return &Initializer{
@@ -196,7 +194,6 @@ func NewInitializer(
 		connectUplinkToBridge:    connectUplinkToBridge,
 		enableAntreaProxy:        enableAntreaProxy,
 		enableL7NetworkPolicy:    enableL7NetworkPolicy,
-		enableL7FlowExporter:     enableL7FlowExporter,
 		disableTXChecksumOffload: disableTXChecksumOffload,
 	}
 }
@@ -409,7 +406,7 @@ func (i *Initializer) Initialize(ctx context.Context) error {
 		return err
 	}
 
-	if i.enableL7NetworkPolicy || i.enableL7FlowExporter {
+	if i.enableL7NetworkPolicy {
 		// prepareL7EngineInterfaces must be executed after setupOVSBridge since it requires interfaceStore.
 		if err := i.prepareL7EngineInterfaces(); err != nil {
 			return err

@@ -167,9 +167,8 @@ func NewFlowExporterForTest(tb testing.TB, o *options.FlowExporterOptions) *Flow
 	v4Enabled := !testWithIPv6
 	v6Enabled := testWithIPv6
 
-	l7Listener := connections.NewL7Listener(nil, nil)
 	denyConnStore := connections.NewDenyConnectionStore(nil, nil, nil, o, filter.NewProtocolFilter(nil))
-	conntrackConnStore := connections.NewConntrackConnectionStore(nil, v4Enabled, v6Enabled, nil, nil, nil, l7Listener, nil, o)
+	conntrackConnStore := connections.NewConntrackConnectionStore(nil, v4Enabled, v6Enabled, nil, nil, nil, nil, o)
 
 	return &FlowExporter{
 		collectorProto:         o.FlowCollectorProto,
@@ -185,7 +184,6 @@ func NewFlowExporterForTest(tb testing.TB, o *options.FlowExporterOptions) *Flow
 		conntrackPriorityQueue: conntrackConnStore.GetPriorityQueue(),
 		denyPriorityQueue:      denyConnStore.GetPriorityQueue(),
 		expiredConns:           make([]connection.Connection, 0, maxConnsToExport*2),
-		l7Listener:             l7Listener,
 	}
 }
 

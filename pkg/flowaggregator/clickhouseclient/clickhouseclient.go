@@ -88,8 +88,6 @@ const (
                    clusterUUID,
                    egressName,
                    egressIP,
-                   appProtocolName,
-                   httpVals,
                    egressNodeName)
                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 
                            ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
@@ -333,8 +331,6 @@ func (ch *ClickHouseExportProcess) batchCommitAll(ctx context.Context) (int, err
 			ch.clusterUUID,
 			record.EgressName,
 			record.EgressIP,
-			record.AppProtocolName,
-			record.HttpVals,
 			record.EgressNodeName,
 		)
 

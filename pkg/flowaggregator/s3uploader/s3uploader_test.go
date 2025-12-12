@@ -27,6 +27,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 
 	s3uploadertesting "antrea.io/antrea/pkg/flowaggregator/s3uploader/testing"
@@ -34,9 +35,10 @@ import (
 )
 
 var (
+	timestampStr    = fmt.Sprint(time.Now().Unix())
 	fakeClusterUUID = uuid.New().String()
-	recordStrIPv4   = "1637706961,1637706973,1637706974,1637706975,3,10.10.0.79,10.10.0.80,44752,5201,6,823188,30472817041,241333,8982624938,471111,24500996,136211,7083284,perftest-a,antrea-test,k8s-node-control-plane,perftest-b,antrea-test-b,k8s-node-control-plane-b,10.10.1.10,5202,perftest,test-flow-aggregator-networkpolicy-ingress-allow,antrea-test-ns,test-flow-aggregator-networkpolicy-rule,2,1,test-flow-aggregator-networkpolicy-egress-allow,antrea-test-ns-e,test-flow-aggregator-networkpolicy-rule-e,1,3,TIME_WAIT,2,'{\"antrea-e2e\":\"perftest-a\",\"app\":\"iperf\"}','{\"antrea-e2e\":\"perftest-b\",\"app\":\"iperf\"}',15902813472,12381344,15902813473,15902813474,12381345,12381346," + fakeClusterUUID + "," + fmt.Sprintf("%d", time.Now().Unix()) + ",test-egress,172.18.0.1,http,mockHttpString,test-egress-node"
-	recordStrIPv6   = "1637706961,1637706973,1637706974,1637706975,3,2001:0:3238:dfe1:63::fefb,2001:0:3238:dfe1:63::fefc,44752,5201,6,823188,30472817041,241333,8982624938,471111,24500996,136211,7083284,perftest-a,antrea-test,k8s-node-control-plane,perftest-b,antrea-test-b,k8s-node-control-plane-b,2001:0:3238:dfe1:64::a,5202,perftest,test-flow-aggregator-networkpolicy-ingress-allow,antrea-test-ns,test-flow-aggregator-networkpolicy-rule,2,1,test-flow-aggregator-networkpolicy-egress-allow,antrea-test-ns-e,test-flow-aggregator-networkpolicy-rule-e,1,3,TIME_WAIT,2,'{\"antrea-e2e\":\"perftest-a\",\"app\":\"iperf\"}','{\"antrea-e2e\":\"perftest-b\",\"app\":\"iperf\"}',15902813472,12381344,15902813473,15902813474,12381345,12381346," + fakeClusterUUID + "," + fmt.Sprintf("%d", time.Now().Unix()) + ",test-egress,2001:0:3238:dfe1::ac12:1,http,mockHttpString,test-egress-node"
+	recordStrIPv4   = "1637706961,1637706973,1637706974,1637706975,3,10.10.0.79,10.10.0.80,44752,5201,6,823188,30472817041,241333,8982624938,471111,24500996,136211,7083284,perftest-a,antrea-test,k8s-node-control-plane,perftest-b,antrea-test-b,k8s-node-control-plane-b,10.10.1.10,5202,perftest,test-flow-aggregator-networkpolicy-ingress-allow,antrea-test-ns,test-flow-aggregator-networkpolicy-rule,2,1,test-flow-aggregator-networkpolicy-egress-allow,antrea-test-ns-e,test-flow-aggregator-networkpolicy-rule-e,1,3,TIME_WAIT,2,'{\"antrea-e2e\":\"perftest-a\",\"app\":\"iperf\"}','{\"antrea-e2e\":\"perftest-b\",\"app\":\"iperf\"}',15902813472,12381344,15902813473,15902813474,12381345,12381346," + fakeClusterUUID + "," + timestampStr + ",test-egress,172.18.0.1,test-egress-node"
+	recordStrIPv6   = "1637706961,1637706973,1637706974,1637706975,3,2001:0:3238:dfe1:63::fefb,2001:0:3238:dfe1:63::fefc,44752,5201,6,823188,30472817041,241333,8982624938,471111,24500996,136211,7083284,perftest-a,antrea-test,k8s-node-control-plane,perftest-b,antrea-test-b,k8s-node-control-plane-b,2001:0:3238:dfe1:64::a,5202,perftest,test-flow-aggregator-networkpolicy-ingress-allow,antrea-test-ns,test-flow-aggregator-networkpolicy-rule,2,1,test-flow-aggregator-networkpolicy-egress-allow,antrea-test-ns-e,test-flow-aggregator-networkpolicy-rule-e,1,3,TIME_WAIT,2,'{\"antrea-e2e\":\"perftest-a\",\"app\":\"iperf\"}','{\"antrea-e2e\":\"perftest-b\",\"app\":\"iperf\"}',15902813472,12381344,15902813473,15902813474,12381345,12381346," + fakeClusterUUID + "," + timestampStr + ",test-egress,2001:0:3238:dfe1::ac12:1,test-egress-node"
 )
 
 func TestUpdateS3Uploader(t *testing.T) {
@@ -66,24 +68,31 @@ func TestCacheRecord(t *testing.T) {
 		clusterUUID:      fakeClusterUUID,
 	}
 
+	getFields := func(str string) []string {
+		return strings.Split(strings.TrimSpace(str), ",")
+	}
+
 	// First call, cache the record in currentBuffer.
 	record := flowaggregatortesting.PrepareTestFlowRecord(true)
 	s3UploadProc.CacheRecord(record)
-	assert.Equal(t, int32(1), s3UploadProc.cachedRecordCount)
-	currentBuffer := strings.TrimRight(s3UploadProc.currentBuffer.String(), "\n")
-	assert.Equal(t, strings.Split(currentBuffer, ",")[:50], strings.Split(recordStrIPv4, ",")[:50])
-	assert.Equal(t, strings.Split(currentBuffer, ",")[51:], strings.Split(recordStrIPv4, ",")[51:])
+	require.Equal(t, int32(1), s3UploadProc.cachedRecordCount)
+	currentBuffer := s3UploadProc.currentBuffer.String()
+	fields := getFields(currentBuffer)
+	fields[50] = timestampStr // Overwrite timestamp with fixed value used for test flow record.
+	assert.Equal(t, getFields(recordStrIPv4), fields)
 
 	// Second call, reach currentBuffer max size, add the currentBuffer to bufferQueue.
 	record = flowaggregatortesting.PrepareTestFlowRecord(false)
 	s3UploadProc.CacheRecord(record)
-	assert.Equal(t, 1, len(s3UploadProc.bufferQueue))
+	require.Len(t, s3UploadProc.bufferQueue, 1)
 	buf := s3UploadProc.bufferQueue[0]
-	currentBuf := strings.TrimRight(strings.Split(buf.String(), "\n")[1], "\n")
-	assert.Equal(t, strings.Split(currentBuf, ",")[:50], strings.Split(recordStrIPv6, ",")[:50])
-	assert.Equal(t, strings.Split(currentBuf, ",")[51:], strings.Split(recordStrIPv6, ",")[51:])
+	records := strings.Fields(buf.String())
+	require.Len(t, records, 2)
+	fields = getFields(records[1])
+	fields[50] = timestampStr
+	assert.Equal(t, getFields(recordStrIPv6), fields)
 	assert.EqualValues(t, 0, s3UploadProc.cachedRecordCount)
-	assert.Equal(t, "", s3UploadProc.currentBuffer.String())
+	assert.Equal(t, 0, s3UploadProc.currentBuffer.Len())
 }
 
 func TestBatchUploadAll(t *testing.T) {

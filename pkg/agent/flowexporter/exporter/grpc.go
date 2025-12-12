@@ -146,10 +146,6 @@ func (e *grpcExporter) createMessage(conn *connection.Connection) *flowpb.Flow {
 			PacketTotalCount: conn.ReversePackets,
 			OctetTotalCount:  conn.ReverseBytes,
 		},
-		App: &flowpb.App{
-			ProtocolName: conn.AppProtocolName,
-			HttpVals:     []byte(conn.HttpVals),
-		},
 	}
 	if utils.IsConnectionDying(conn) {
 		flow.EndReason = flowpb.FlowEndReason_FLOW_END_REASON_END_OF_FLOW

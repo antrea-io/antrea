@@ -85,20 +85,8 @@ outputs:
             extended: yes
         - tls:
             extended: yes
-  - eve-log:
-      enabled: yes
-      filetype: unix_stream
-      filename: %[1]s
-      pcap-file: false
-      community-id: false
-      community-id-seed: 0
-      xff:
-        enabled: no
-      types:
-        - http:
-            extended: yes
 af-packet:
-  - interface: %[2]s
+  - interface: %[1]s
     threads: auto
     cluster-id: 80
     cluster-type: cluster_flow
@@ -107,8 +95,8 @@ af-packet:
     tpacket-v2: yes
     checksum-checks: no
     copy-mode: ips
-    copy-iface: %[3]s
-  - interface:  %[3]s
+    copy-iface: %[2]s
+  - interface:  %[2]s
     threads: auto
     cluster-id: 81
     cluster-type: cluster_flow
@@ -117,11 +105,11 @@ af-packet:
     tpacket-v2: yes
     checksum-checks: no
     copy-mode: ips
-    copy-iface: %[2]s
+    copy-iface: %[1]s
 multi-detect:
   enabled: yes
   selector: vlan
-`, config.L7SuricataSocketPath, config.L7RedirectTargetPortName, config.L7RedirectReturnPortName)
+`, config.L7RedirectTargetPortName, config.L7RedirectReturnPortName)
 )
 
 type threadSafeSet[T comparable] struct {

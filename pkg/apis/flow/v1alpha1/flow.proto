@@ -191,7 +191,9 @@ message Flow {
   Stats stats = 9;
   Stats reverse_stats = 10;
 
-  App app = 11;
+  // The app field is deprecated now that the L7FlowExporter feature has been rempved.
+  // We are not removing the field altogether because we may re-introduce L7 support in the future.
+  App app = 11 [deprecated = true];
 
   FlowDirection flow_direction = 12;
 

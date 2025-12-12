@@ -15,7 +15,6 @@
 package connections
 
 import (
-	"encoding/json"
 	"fmt"
 	"time"
 
@@ -46,7 +45,6 @@ type ConntrackConnectionStore struct {
 	v6Enabled             bool
 	pollInterval          time.Duration
 	connectUplinkToBridge bool
-	l7EventMapGetter      L7EventMapGetter
 	// networkPolicyWait is used to determine when NetworkPolicy flows have been installed and
 	// when the mapping from flow ID to NetworkPolicy rule is available. We will ignore
 	// connections which started prior to that time to avoid reporting invalid NetworkPolicy
@@ -58,10 +56,6 @@ type ConntrackConnectionStore struct {
 	connectionStore
 }
 
-type L7EventMapGetter interface {
-	ConsumeL7EventMap() map[connection.ConnectionKey]L7ProtocolFields
-}
-
 func NewConntrackConnectionStore(
 	connTrackDumper ConnTrackDumper,
 	v4Enabled bool,
@@ -69,7 +63,6 @@ func NewConntrackConnectionStore(
 	npQuerier querier.AgentNetworkPolicyInfoQuerier,
 	podStore objectstore.PodStore,
 	proxier proxy.ProxyQuerier,
-	l7EventMapGetterFunc L7EventMapGetter,
 	networkPolicyWait *utilwait.Group,
 	o *options.FlowExporterOptions,
 ) *ConntrackConnectionStore {
@@ -80,7 +73,6 @@ func NewConntrackConnectionStore(
 		pollInterval:          o.PollInterval,
 		connectionStore:       NewConnectionStore(npQuerier, podStore, proxier, o),
 		connectUplinkToBridge: o.ConnectUplinkToBridge,
-		l7EventMapGetter:      l7EventMapGetterFunc,
 		networkPolicyWait:     networkPolicyWait,
 	}
 }
@@ -129,13 +121,6 @@ func (cs *ConntrackConnectionStore) Poll() ([]int, error) {
 		metrics.ConntrackPollCycleDuration.Observe(duration.Seconds())
 		klog.V(2).InfoS("Polled conntrack and updated connection store", "duration", duration)
 	}()
-
-	// DeepCopy the L7EventMap before polling the conntrack table to match corresponding L4 connection with L7 events
-	// and avoid missing the L7 events for corresponding L4 connection
-	var l7EventMap map[connection.ConnectionKey]L7ProtocolFields
-	if cs.l7EventMapGetter != nil {
-		l7EventMap = cs.l7EventMapGetter.ConsumeL7EventMap()
-	}
 
 	var zones []uint16
 	var connsLens []int
@@ -202,9 +187,6 @@ func (cs *ConntrackConnectionStore) Poll() ([]int, error) {
 	// Update only the Connection store. IPFIX records are generated based on Connection store.
 	for _, conn := range filteredConnsList {
 		cs.AddOrUpdateConn(conn)
-	}
-	if len(l7EventMap) != 0 {
-		cs.fillL7EventInfo(l7EventMap)
 	}
 
 	cs.ReleaseConnStoreLock()
@@ -340,28 +322,4 @@ func (cs *ConntrackConnectionStore) DeleteAllConnections() int {
 
 func (cs *ConntrackConnectionStore) GetPriorityQueue() *priorityqueue.ExpirePriorityQueue {
 	return cs.connectionStore.expirePriorityQueue
-}
-
-func (cs *ConntrackConnectionStore) fillL7EventInfo(l7EventMap map[connection.Tuple]L7ProtocolFields) {
-	// In case the L7 event is received after the connection is removed from the cs.connections store
-	// we will discard such event
-	for connKey, conn := range cs.connections {
-		l7event, ok := l7EventMap[connKey]
-		if ok {
-			if len(l7event.http) > 0 {
-				jsonBytes, err := json.Marshal(l7event.http)
-				if err != nil {
-					klog.ErrorS(err, "Converting l7Event http failed")
-				}
-				conn.HttpVals += string(jsonBytes)
-				conn.AppProtocolName = "http"
-			}
-			// In case L7 event is received after the last planned export of the TCP connection, add
-			// the event back to the queue to be exported in next export cycle
-			_, exists := cs.expirePriorityQueue.KeyToItem[connKey]
-			if !exists {
-				cs.expirePriorityQueue.WriteItemToQueue(connKey, conn)
-			}
-		}
-	}
 }

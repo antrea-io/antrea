@@ -75,8 +75,6 @@ func TestGetFlowRecord(t *testing.T) {
 		assert.Equal(t, uint64(12381345), flowRecord.ReverseThroughputFromSourceNode)
 		assert.Equal(t, uint64(12381346), flowRecord.ReverseThroughputFromDestinationNode)
 		assert.Equal(t, "test-egress", flowRecord.EgressName)
-		assert.Equal(t, "http", flowRecord.AppProtocolName)
-		assert.Equal(t, "mockHttpString", flowRecord.HttpVals)
 
 		if isIPv4 {
 			assert.Equal(t, "10.10.0.79", flowRecord.SourceIP)

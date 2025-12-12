@@ -44,8 +44,6 @@ func TestAntreaInfoElements(t *testing.T) {
 		"flowType",
 		"egressName",
 		"egressIP",
-		"appProtocolName",
-		"httpVals",
 		"egressNodeName",
 	}
 
@@ -68,8 +66,6 @@ func TestAntreaInfoElements(t *testing.T) {
 		"flowType",
 		"egressUUID",
 		"egressIP",
-		"appProtocolName",
-		"httpVals",
 		"egressNodeUUID",
 	}
 
@@ -82,8 +78,6 @@ func TestAntreaInfoElements(t *testing.T) {
 		"tcpState",
 		"flowType",
 		"egressIP",
-		"appProtocolName",
-		"httpVals",
 	}
 
 	infoElementsK8sNamesAndUIDs := []string{
@@ -117,8 +111,6 @@ func TestAntreaInfoElements(t *testing.T) {
 		"egressName",
 		"egressUUID",
 		"egressIP",
-		"appProtocolName",
-		"httpVals",
 		"egressNodeName",
 		"egressNodeUUID",
 	}
