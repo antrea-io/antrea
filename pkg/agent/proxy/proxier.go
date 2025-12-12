@@ -120,11 +120,7 @@ type proxier struct {
 	// groupCounter is used to allocate groupID.
 	groupCounter types.GroupCounter
 
-	// serviceStringMapMutex protects serviceStringMap object.
-	serviceStringMapMutex sync.RWMutex
-	// serviceStringMap provides map from serviceString(ClusterIP:Port/Proto) to ServicePortName.
-	serviceStringMap map[string]k8sproxy.ServicePortName
-
+	ipToServiceMap      *ipToServiceMap
 	serviceHealthServer healthcheck.ServiceHealthServer
 	healthzServer       *healthcheck.ProxyHealthServer
 
@@ -1174,11 +1170,7 @@ func (p *proxier) OnTopologyChange(topologyLabels map[string]string) {
 func (p *proxier) OnServiceCIDRsChanged(_ []string) {}
 
 func (p *proxier) GetServiceByIP(serviceStr string) (k8sproxy.ServicePortName, bool) {
-	p.serviceStringMapMutex.RLock()
-	defer p.serviceStringMapMutex.RUnlock()
-
-	serviceInfo, exists := p.serviceStringMap[serviceStr]
-	return serviceInfo, exists
+	return p.ipToServiceMap.Get(serviceStr)
 }
 
 // addServiceByIP adds ServicePortName entries to the proxier's serviceStringMap.
@@ -1186,29 +1178,15 @@ func (p *proxier) GetServiceByIP(serviceStr string) (k8sproxy.ServicePortName, b
 // The ServicePortName can be looked up by either the ClusterIP or the External
 // LoadBalancer IP.
 func (p *proxier) addServiceByIP(serviceInfo *types.ServiceInfo, servicePortName k8sproxy.ServicePortName) {
-	p.serviceStringMapMutex.Lock()
-	defer p.serviceStringMapMutex.Unlock()
-
-	serviceStr := serviceInfo.String()
-	p.serviceStringMap[serviceStr] = servicePortName
-
-	for _, serviceStr := range serviceInfo.GetLoadBalancerVIPStrings() {
-		p.serviceStringMap[serviceStr] = servicePortName
-	}
+	p.ipToServiceMap.Add(serviceInfo, servicePortName)
 }
 
 func (p *proxier) deleteServiceByIP(serviceInfo *types.ServiceInfo) {
-	p.deleteServiceIPs(
-		append([]string{serviceInfo.String()}, serviceInfo.GetLoadBalancerVIPStrings()...),
-	)
+	p.ipToServiceMap.Delete(serviceInfo)
 }
 
 func (p *proxier) deleteServiceIPs(serviceStrings []string) {
-	p.serviceStringMapMutex.Lock()
-	defer p.serviceStringMapMutex.Unlock()
-	for _, serviceStr := range serviceStrings {
-		delete(p.serviceStringMap, serviceStr)
-	}
+	p.ipToServiceMap.deleteServiceIPs(serviceStrings)
 }
 
 func (p *proxier) Run(stopCh <-chan struct{}) {
@@ -1366,7 +1344,7 @@ func newProxier(
 		endpointsMap:                         k8sproxy.EndpointsMap{},
 		endpointReferenceCounter:             map[string]int{},
 		topologyLabels:                       map[string]string{},
-		serviceStringMap:                     map[string]k8sproxy.ServicePortName{},
+		ipToServiceMap:                       NewIPToServiceMap(),
 		groupCounter:                         groupCounter,
 		ofClient:                             ofClient,
 		routeClient:                          routeClient,
@@ -1689,11 +1667,15 @@ func (m *ipToServiceMap) Add(serviceInfo *types.ServiceInfo, servicePortName k8s
 	}
 }
 func (m *ipToServiceMap) Delete(serviceInfo *types.ServiceInfo) {
+	m.deleteServiceIPs(
+		append([]string{serviceInfo.String()}, serviceInfo.GetLoadBalancerVIPStrings()...))
+}
+
+func (m *ipToServiceMap) deleteServiceIPs(serviceStrings []string) {
 	m.serviceStringMapMutex.Lock()
 	defer m.serviceStringMapMutex.Unlock()
 
-	toDelete := append([]string{serviceInfo.String()}, serviceInfo.GetLoadBalancerVIPStrings()...)
-	for _, serviceStr := range toDelete {
+	for _, serviceStr := range serviceStrings {
 		delete(m.serviceStringMap, serviceStr)
 	}
 }
