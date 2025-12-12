@@ -1663,3 +1663,49 @@ func (p *ProxyServer) GetProxyQuerier() ProxyQuerier {
 func (p *ProxyServer) GetProxyProvider() Proxier {
 	return p.proxier
 }
+
+func NewIPToServiceMap() *ipToServiceMap {
+	return &ipToServiceMap{
+		serviceStringMap: map[string]*k8sproxy.ServicePortName{},
+	}
+}
+
+type ipToServiceMap struct {
+	// serviceStringMapMutex protects serviceStringMap object.
+	serviceStringMapMutex sync.RWMutex
+	// serviceStringMap provides map from serviceString(ClusterIP:Port/Proto) to ServicePortName.
+	serviceStringMap map[string]*k8sproxy.ServicePortName
+}
+
+func (m *ipToServiceMap) Add(serviceInfo *types.ServiceInfo, servicePortName k8sproxy.ServicePortName) {
+	m.serviceStringMapMutex.Lock()
+	defer m.serviceStringMapMutex.Unlock()
+
+	serviceStr := serviceInfo.String()
+	m.serviceStringMap[serviceStr] = &servicePortName
+
+	for _, serviceStr := range serviceInfo.GetLoadBalancerVIPStrings() {
+		m.serviceStringMap[serviceStr] = &servicePortName
+	}
+}
+func (m *ipToServiceMap) Delete(serviceInfo *types.ServiceInfo) {
+	m.serviceStringMapMutex.Lock()
+	defer m.serviceStringMapMutex.Unlock()
+
+	toDelete := append([]string{serviceInfo.String()}, serviceInfo.GetLoadBalancerVIPStrings()...)
+	for _, serviceStr := range toDelete {
+		delete(m.serviceStringMap, serviceStr)
+	}
+}
+
+func (m *ipToServiceMap) Get(serviceStr string) (k8sproxy.ServicePortName, bool) {
+	m.serviceStringMapMutex.RLock()
+	defer m.serviceStringMapMutex.RUnlock()
+
+	servicePortName, exists := m.serviceStringMap[serviceStr]
+	if exists {
+		return *servicePortName, exists
+	}
+
+	return k8sproxy.ServicePortName{}, false
+}
