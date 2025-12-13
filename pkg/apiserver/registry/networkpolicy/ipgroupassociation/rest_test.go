@@ -64,7 +64,7 @@ func (q fakeQuerier) GetAssociatedGroups(name, namespace string) []types.Group {
 }
 
 func TestREST(t *testing.T) {
-	r := NewREST(nil, nil, nil, nil)
+	r := NewREST(nil, nil, nil, nil, nil)
 	assert.Equal(t, &controlplane.IPGroupAssociation{}, r.New())
 	assert.False(t, r.NamespaceScoped())
 }
@@ -114,6 +114,21 @@ func TestRESTGet(t *testing.T) {
 			},
 		},
 	}
+	nodeA := &corev1.Node{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:   "nodeA",
+			Labels: map[string]string{"node": "a"},
+		},
+		Status: corev1.NodeStatus{
+			Addresses: []corev1.NodeAddress{
+				{
+					Type:    corev1.NodeExternalIP,
+					Address: "172.0.0.1",
+				},
+			},
+		},
+		Spec: corev1.NodeSpec{PodCIDR: "10.0.0.0/8"},
+	}
 	groups := map[string][]types.Group{
 		"default/podA": {
 			{
@@ -155,6 +170,15 @@ func TestRESTGet(t *testing.T) {
 				SourceReference: &controlplane.GroupReference{
 					Name: "cg5",
 					UID:  "groupUID5",
+				},
+			},
+		},
+		"nodeA": {
+			{
+				UID: "groupUID7",
+				SourceReference: &controlplane.GroupReference{
+					Name: "cg7",
+					UID:  "groupUID7",
 				},
 			},
 		},
@@ -285,17 +309,33 @@ func TestRESTGet(t *testing.T) {
 			},
 			expectErr: false,
 		},
+		{
+			name:     "node-ip",
+			ipString: "172.0.0.1",
+			expectedObj: &controlplane.IPGroupAssociation{
+				AssociatedGroups: []controlplane.GroupReference{
+					{
+						Namespace: "",
+						Name:      "cg7",
+						UID:       "groupUID7",
+					},
+				},
+			},
+			expectErr: false,
+		},
 	}
 
-	podObjs := []runtime.Object{podA, podB}
-	client := fake.NewSimpleClientset(podObjs...)
+	objects := []runtime.Object{podA, podB, nodeA}
+	client := fake.NewSimpleClientset(objects...)
 	informerFactory := informers.NewSharedInformerFactory(client, informerDefaultResync)
 	crdObjs := []runtime.Object{eeA, eeB}
 	crdClient := fakeversioned.NewSimpleClientset(crdObjs...)
 	crdInformerFactory := crdinformers.NewSharedInformerFactory(crdClient, informerDefaultResync)
 	podInformer := informerFactory.Core().V1().Pods()
+	nodeInformer := informerFactory.Core().V1().Nodes()
 	eeInformer := crdInformerFactory.Crd().V1alpha2().ExternalEntities()
 	podInformer.Informer().AddIndexers(cache.Indexers{grouping.PodIPsIndex: grouping.PodIPsIndexFunc})
+	nodeInformer.Informer().AddIndexers(cache.Indexers{grouping.NodeIPsIndex: grouping.NodeIPsIndexFunc})
 	eeInformer.Informer().AddIndexers(cache.Indexers{grouping.ExternalEntityIPsIndex: grouping.ExternalEntityIPsIndexFunc})
 
 	stopCh := make(chan struct{})
@@ -305,7 +345,7 @@ func TestRESTGet(t *testing.T) {
 	informerFactory.WaitForCacheSync(stopCh)
 	crdInformerFactory.WaitForCacheSync(stopCh)
 
-	rest := NewREST(podInformer, eeInformer, fakeIPBQuerier{ipGroupMap: ipGroups}, fakeQuerier{groups: groups})
+	rest := NewREST(podInformer, nodeInformer, eeInformer, fakeIPBQuerier{ipGroupMap: ipGroups}, fakeQuerier{groups: groups})
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			actualGroupListObj, err := rest.Get(request.NewDefaultContext(), tt.ipString, &metav1.GetOptions{})
