@@ -47,7 +47,7 @@ jobs:
     - name: Save Antrea image to tarball
       run:  docker save -o antrea-ubuntu.tar antrea/antrea-agent-ubuntu-coverage:latest antrea/antrea-controller-ubuntu-coverage:latest
     - name: Upload Antrea image for subsequent jobs
-      uses: actions/upload-artifact@v5
+      uses: actions/upload-artifact@v6
       with:
         name: antrea-ubuntu-cov
         path: antrea-ubuntu.tar
@@ -66,7 +66,7 @@ jobs:
     - name: Save Flow Aggregator image to tarball
       run: docker save -o flow-aggregator.tar antrea/flow-aggregator-coverage:latest
     - name: Upload Flow Aggregator image for subsequent jobs
-      uses: actions/upload-artifact@v5
+      uses: actions/upload-artifact@v6
       with:
         name: flow-aggregator-cov
         path: flow-aggregator.tar
@@ -89,7 +89,7 @@ jobs:
       with:
         go-version-file: 'go.mod'
     - name: Download Antrea image from previous job
-      uses: actions/download-artifact@v6
+      uses: actions/download-artifact@v7
       with:
         name: antrea-ubuntu-cov
     - name: Load Antrea image
@@ -109,7 +109,7 @@ jobs:
     - name: Tar coverage files
       run: tar -czf test-e2e-encap-coverage.tar.gz test-e2e-encap-coverage
     - name: Upload coverage for test-e2e-encap-coverage
-      uses: actions/upload-artifact@v5
+      uses: actions/upload-artifact@v6
       with:
         name: test-e2e-encap-coverage
         path: test-e2e-encap-coverage.tar.gz
@@ -128,7 +128,7 @@ jobs:
       if: ${{ failure() }}
       run: tar -czf log.tar.gz log
     - name: Upload test log
-      uses: actions/upload-artifact@v5
+      uses: actions/upload-artifact@v6
       if: ${{ failure() }}
       with:
         name: e2e-kind-encap.tar.gz
@@ -152,7 +152,7 @@ jobs:
       with:
         go-version-file: 'go.mod'
     - name: Download Antrea image from previous job
-      uses: actions/download-artifact@v6
+      uses: actions/download-artifact@v7
       with:
         name: antrea-ubuntu-cov
     - name: Load Antrea image
@@ -179,7 +179,7 @@ jobs:
     - name: Tar coverage files
       run: tar -czf test-e2e-encap-non-default-coverage.tar.gz test-e2e-encap-non-default-coverage
     - name: Upload coverage for test-e2e-encap-non-default-coverage
-      uses: actions/upload-artifact@v5
+      uses: actions/upload-artifact@v6
       with:
         name: test-e2e-encap-non-default-coverage
         path: test-e2e-encap-non-default-coverage.tar.gz
@@ -198,7 +198,7 @@ jobs:
       if: ${{ failure() }}
       run: tar -czf log.tar.gz log
     - name: Upload test log
-      uses: actions/upload-artifact@v5
+      uses: actions/upload-artifact@v6
       if: ${{ failure() }}
       with:
         name: e2e-kind-encap-non-default.tar.gz
@@ -222,7 +222,7 @@ jobs:
         with:
           go-version-file: 'go.mod'
       - name: Download Antrea image from previous job
-        uses: actions/download-artifact@v6
+        uses: actions/download-artifact@v7
         with:
           name: antrea-ubuntu-cov
       - name: Load Antrea image
@@ -251,7 +251,7 @@ jobs:
       - name: Tar coverage files
         run: tar -czf test-e2e-encap-all-features-enabled-coverage.tar.gz test-e2e-encap-all-features-enabled-coverage
       - name: Upload coverage for test-e2e-encap-all-features-enabled-coverage
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v6
         with:
           name: test-e2e-encap-all-features-enabled-coverage
           path: test-e2e-encap-all-features-enabled-coverage.tar.gz
@@ -270,7 +270,7 @@ jobs:
         if: ${{ failure() }}
         run: tar -czf log.tar.gz log
       - name: Upload test log
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v6
         if: ${{ failure() }}
         with:
           name: e2e-kind-encap-all-features-enabled.tar.gz
@@ -289,7 +289,7 @@ jobs:
         with:
           go-version-file: 'go.mod'
       - name: Download Antrea image from previous job
-        uses: actions/download-artifact@v6
+        uses: actions/download-artifact@v7
         with:
           name: antrea-ubuntu-cov
       - name: Load Antrea image
@@ -315,7 +315,7 @@ jobs:
       - name: Tar coverage files
         run: tar -czf test-ipam-e2e-coverage.tar.gz test-ipam-e2e-coverage
       - name: Upload coverage for test-ipam-e2e-coverage
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v6
         with:
           name: test-ipam-e2e-coverage
           path: test-ipam-e2e-coverage.tar.gz
@@ -334,7 +334,7 @@ jobs:
         if: ${{ failure() }}
         run: tar -czf log.tar.gz log
       - name: Upload test log
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v6
         if: ${{ failure() }}
         with:
           name: e2e-kind-ipam-features-enabled.tar.gz
@@ -358,7 +358,7 @@ jobs:
       with:
         go-version-file: 'go.mod'
     - name: Download Antrea image from previous job
-      uses: actions/download-artifact@v6
+      uses: actions/download-artifact@v7
       with:
         name: antrea-ubuntu-cov
     - name: Load Antrea image
@@ -378,7 +378,7 @@ jobs:
     - name: Tar coverage files
       run: tar -czf test-e2e-noencap-coverage.tar.gz test-e2e-noencap-coverage
     - name: Upload coverage for test-e2e-noencap-coverage
-      uses: actions/upload-artifact@v5
+      uses: actions/upload-artifact@v6
       with:
         name: test-e2e-noencap-coverage
         path: test-e2e-noencap-coverage.tar.gz
@@ -397,7 +397,7 @@ jobs:
       if: ${{ failure() }}
       run: tar -czf log.tar.gz log
     - name: Upload test log
-      uses: actions/upload-artifact@v5
+      uses: actions/upload-artifact@v6
       if: ${{ failure() }}
       with:
         name: e2e-kind-noencap.tar.gz
@@ -421,7 +421,7 @@ jobs:
       with:
         go-version-file: 'go.mod'
     - name: Download Antrea image from previous job
-      uses: actions/download-artifact@v6
+      uses: actions/download-artifact@v7
       with:
         name: antrea-ubuntu-cov
     - name: Load Antrea image
@@ -441,7 +441,7 @@ jobs:
     - name: Tar coverage files
       run: tar -czf test-e2e-hybrid-coverage.tar.gz test-e2e-hybrid-coverage
     - name: Upload coverage for test-e2e-hybrid-coverage
-      uses: actions/upload-artifact@v5
+      uses: actions/upload-artifact@v6
       with:
         name: test-e2e-hybrid-coverage
         path: test-e2e-hybrid-coverage.tar.gz
@@ -460,7 +460,7 @@ jobs:
       if: ${{ failure() }}
       run: tar -czf log.tar.gz log
     - name: Upload test log
-      uses: actions/upload-artifact@v5
+      uses: actions/upload-artifact@v6
       if: ${{ failure() }}
       with:
         name: e2e-kind-hybrid.tar.gz
@@ -484,7 +484,7 @@ jobs:
         with:
           go-version-file: 'go.mod'
       - name: Download Antrea image from previous job
-        uses: actions/download-artifact@v6
+        uses: actions/download-artifact@v7
         with:
           name: antrea-ubuntu-cov
       - name: Load Antrea image
@@ -511,7 +511,7 @@ jobs:
       - name: Tar coverage files
         run: tar -czf test-e2e-hybrid-non-default-coverage.tar.gz test-e2e-hybrid-non-default-coverage
       - name: Upload coverage for test-e2e-hybrid-non-default-coverage
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v6
         with:
           name: test-e2e-hybrid-non-default-coverage
           path: test-e2e-hybrid-non-default-coverage.tar.gz
@@ -530,7 +530,7 @@ jobs:
         if: ${{ failure() }}
         run: tar -czf log.tar.gz log
       - name: Upload test log
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v6
         if: ${{ failure() }}
         with:
           name: e2e-kind-hybrid-non-default.tar.gz
@@ -562,14 +562,14 @@ jobs:
         with:
           go-version-file: 'go.mod'
       - name: Download Antrea image from previous job
-        uses: actions/download-artifact@v6
+        uses: actions/download-artifact@v7
         with:
           name: antrea-ubuntu-cov
       - name: Load Antrea image
         run: |
           docker load -i antrea-ubuntu.tar
       - name: Download Flow Aggregator image from previous job
-        uses: actions/download-artifact@v6
+        uses: actions/download-artifact@v7
         with:
           name: flow-aggregator-cov
       - name: Load Flow Aggregator image
@@ -589,7 +589,7 @@ jobs:
       - name: Tar coverage files
         run: tar -czf test-e2e-fa-${{ matrix.protocol }}-coverage.tar.gz test-e2e-fa-${{ matrix.protocol }}-coverage
       - name: Upload coverage for test-e2e-fa-${{ matrix.protocol }}-coverage
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v6
         with:
           name: test-e2e-fa-${{ matrix.protocol }}-coverage
           path: test-e2e-fa-${{ matrix.protocol }}-coverage.tar.gz
@@ -608,7 +608,7 @@ jobs:
         if: ${{ failure() }}
         run: tar -czf log.tar.gz log
       - name: Upload test log
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v6
         if: ${{ failure() }}
         with:
           name: e2e-kind-fa-${{ matrix.protocol }}.tar.gz
@@ -632,7 +632,7 @@ jobs:
       with:
         go-version-file: 'go.mod'
     - name: Download Antrea image from previous job
-      uses: actions/download-artifact@v6
+      uses: actions/download-artifact@v7
       with:
         name: antrea-ubuntu-cov
     - name: Load Antrea image
@@ -654,7 +654,7 @@ jobs:
       if: ${{ failure() }}
       run: tar -czf log.tar.gz log
     - name: Upload test log
-      uses: actions/upload-artifact@v5
+      uses: actions/upload-artifact@v6
       if: ${{ failure() }}
       with:
         name: networkpolicy-conformance-kind-encap.tar.gz
@@ -678,7 +678,7 @@ jobs:
       with:
         go-version-file: 'go.mod'
     - name: Download Antrea image from previous job
-      uses: actions/download-artifact@v6
+      uses: actions/download-artifact@v7
       with:
         name: antrea-ubuntu-cov
     - name: Load Antrea image
@@ -700,7 +700,7 @@ jobs:
       if: ${{ failure() }}
       run: tar -czf log.tar.gz log
     - name: Upload test log
-      uses: actions/upload-artifact@v5
+      uses: actions/upload-artifact@v6
       if: ${{ failure() }}
       with:
         name: secondary-network.tar.gz
@@ -724,7 +724,7 @@ jobs:
         with:
           go-version-file: 'go.mod'
       - name: Download Antrea image from previous job
-        uses: actions/download-artifact@v6
+        uses: actions/download-artifact@v7
         with:
           name: antrea-ubuntu-cov
       - name: Load Antrea image
@@ -746,7 +746,7 @@ jobs:
         if: ${{ failure() }}
         run: tar -czf log.tar.gz log
       - name: Upload test log
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v6
         if: ${{ failure() }}
         with:
           name: upgrade-from-antrea-version-n-1.tar.gz
@@ -770,7 +770,7 @@ jobs:
         with:
           go-version-file: 'go.mod'
       - name: Download Antrea image from previous job
-        uses: actions/download-artifact@v6
+        uses: actions/download-artifact@v7
         with:
           name: antrea-ubuntu-cov
       - name: Load Antrea image
@@ -792,7 +792,7 @@ jobs:
         if: ${{ failure() }}
         run: tar -czf log.tar.gz log
       - name: Upload test log
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v6
         if: ${{ failure() }}
         with:
           name: upgrade-from-antrea-version-n-2.tar.gz
@@ -816,7 +816,7 @@ jobs:
         with:
           go-version-file: 'go.mod'
       - name: Download Antrea image from previous job
-        uses: actions/download-artifact@v6
+        uses: actions/download-artifact@v7
         with:
           name: antrea-ubuntu-cov
       - name: Load Antrea image
@@ -838,7 +838,7 @@ jobs:
         if: ${{ failure() }}
         run: tar -czf log.tar.gz log
       - name: Upload test log
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v6
         if: ${{ failure() }}
         with:
           name: api-compatible-with-client-version-n-1.tar.gz
@@ -862,7 +862,7 @@ jobs:
         with:
           go-version-file: 'go.mod'
       - name: Download Antrea image from previous job
-        uses: actions/download-artifact@v6
+        uses: actions/download-artifact@v7
         with:
           name: antrea-ubuntu-cov
       - name: Load Antrea image
@@ -884,7 +884,7 @@ jobs:
         if: ${{ failure() }}
         run: tar -czf log.tar.gz log
       - name: Upload test log
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v6
         if: ${{ failure() }}
         with:
           name: api-compatible-with-client-version-n-2.tar.gz
@@ -907,7 +907,7 @@ jobs:
         with:
           go-version-file: 'go.mod'
       - name: Download Antrea image from previous job
-        uses: actions/download-artifact@v6
+        uses: actions/download-artifact@v7
         with:
           name: antrea-ubuntu-cov
       - name: Load Antrea image
@@ -951,7 +951,7 @@ jobs:
         with:
           show-progress: false
       - name: Download Antrea image from previous job
-        uses: actions/download-artifact@v6
+        uses: actions/download-artifact@v7
         with:
           name: antrea-ubuntu-cov
       - name: Load Antrea image
@@ -999,7 +999,7 @@ jobs:
         touch empty-artifact
     - name: Delete antrea-ubuntu-cov
       if: ${{ needs.build-antrea-coverage-image.result == 'success' }}
-      uses: actions/upload-artifact@v5
+      uses: actions/upload-artifact@v6
       with:
         name: antrea-ubuntu-cov
         path: empty-artifact
@@ -1007,7 +1007,7 @@ jobs:
         overwrite: true
     - name: Delete flow-aggregator
       if: ${{ needs.build-flow-aggregator-coverage-image.result == 'success' }}
-      uses: actions/upload-artifact@v5
+      uses: actions/upload-artifact@v6
       with:
         name: flow-aggregator-cov
         path: empty-artifact
