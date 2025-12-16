@@ -331,8 +331,9 @@ func TestFlowAggregatorProxyMode(t *testing.T) {
 			includeK8sNames = ptr.To(false)
 		}
 		data, v4Enabled, v6Enabled := setupFlowAggregatorTest(t, flowVisibilityTestOptions{
-			mode:      flowaggregatorconfig.AggregatorModeProxy,
-			clusterID: customClusterID,
+			mode:                      flowaggregatorconfig.AggregatorModeProxy,
+			numFlowAggregatorReplicas: 2,
+			clusterID:                 customClusterID,
 			ipfixCollector: flowVisibilityIPFIXTestOptions{
 				tls:             tls,
 				clientAuth:      clientAuth,
@@ -887,11 +888,11 @@ func testHelper(t *testing.T, data *TestData, isIPv6 bool) {
 	// and check the output of antctl commands.
 	t.Run("Antctl", func(t *testing.T) {
 		skipIfNotRequired(t, "mode-irrelevant")
-		flowAggPod, err := data.getFlowAggregator()
+		flowAggPods, err := data.getFlowAggregators()
 		if err != nil {
 			t.Fatalf("Error when getting flow-aggregator Pod: %v", err)
 		}
-		podName := flowAggPod.Name
+		podName := flowAggPods[0].Name
 		for _, args := range antctl.CommandList.GetDebugCommands(runtime.ModeFlowAggregator) {
 			command := append([]string{"antctl"}, args...)
 			t.Logf("Run command: %s", command)
@@ -1898,24 +1899,42 @@ func createToExternalTestServer(t *testing.T, data *TestData) *PodIPs {
 }
 
 func getAndCheckFlowAggregatorMetrics(t *testing.T, data *TestData, withClickHouseExporter bool) error {
-	flowAggPod, err := data.getFlowAggregator()
+	flowAggPods, err := data.getFlowAggregators()
 	if err != nil {
 		return fmt.Errorf("error when getting flow-aggregator Pod: %w", err)
 	}
-	podName := flowAggPod.Name
+
 	command := []string{"antctl", "get", "recordmetrics", "-o", "json"}
 	if err := wait.PollUntilContextTimeout(context.Background(), defaultInterval, 2*defaultTimeout, false, func(ctx context.Context) (bool, error) {
-		stdout, _, err := runAntctl(podName, command, data)
-		if err != nil {
-			t.Logf("Error when requesting recordmetrics, %v", err)
-			return false, nil
+		var numConnToCollector, numRecordsExported int64
+		var hasExpectedClickHouseExporter bool
+		hasAnyClickHouseExporter := false
+		hasAllClickHouseExporter := true
+
+		hasExpectedIPFIXExporter := true
+
+		for idx := range flowAggPods {
+			podName := flowAggPods[idx].Name
+			stdout, _, err := runAntctl(podName, command, data)
+			if err != nil {
+				t.Logf("Error when requesting recordmetrics, %v", err)
+				return false, nil
+			}
+			metrics := &apis.RecordMetricsResponse{}
+			if err := json.Unmarshal([]byte(stdout), metrics); err != nil {
+				return false, fmt.Errorf("error when decoding recordmetrics: %w", err)
+			}
+			numConnToCollector += metrics.NumConnToCollector
+			numRecordsExported += metrics.NumRecordsExported
+			hasAllClickHouseExporter = hasAllClickHouseExporter && metrics.WithClickHouseExporter
+			hasAnyClickHouseExporter = hasAnyClickHouseExporter || metrics.WithClickHouseExporter
+			hasExpectedIPFIXExporter = hasExpectedIPFIXExporter && metrics.WithIPFIXExporter
 		}
-		metrics := &apis.RecordMetricsResponse{}
-		if err := json.Unmarshal([]byte(stdout), metrics); err != nil {
-			return false, fmt.Errorf("error when decoding recordmetrics: %w", err)
-		}
-		if metrics.NumConnToCollector != int64(clusterInfo.numNodes) || (withClickHouseExporter != metrics.WithClickHouseExporter) || !metrics.WithIPFIXExporter || metrics.NumRecordsExported == 0 {
-			t.Logf("Metrics are not correct. Current metrics: NumConnToCollector=%d, ClickHouseExporter=%v, IPFIXExporter=%v, NumRecordsExported=%d", metrics.NumConnToCollector, metrics.WithClickHouseExporter, metrics.WithIPFIXExporter, metrics.NumRecordsExported)
+
+		hasExpectedClickHouseExporter = (withClickHouseExporter && hasAllClickHouseExporter) || (!withClickHouseExporter && !hasAnyClickHouseExporter)
+
+		if numConnToCollector != int64(clusterInfo.numNodes) || !hasExpectedClickHouseExporter || !hasExpectedIPFIXExporter || numRecordsExported == 0 {
+			t.Logf("Metrics are not correct. Current metrics: NumConnToCollector=%d, NumRecordsExported=%d, HasExpectedClickHouseExporter=%v, HasExpectedIPFIXExporter=%v. Expecting ClickHouseExporter=%v, IPFIXExporter=true", numConnToCollector, numRecordsExported, hasExpectedClickHouseExporter, hasExpectedIPFIXExporter, withClickHouseExporter)
 			return false, nil
 		}
 		return true, nil
