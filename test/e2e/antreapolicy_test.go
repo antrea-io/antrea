@@ -920,6 +920,70 @@ func testACNPAppliedToDenyXBtoCGWithYA(t *testing.T) {
 	executeTests(t, testCase)
 }
 
+// testACNPClusterGroupRuleWithNodeSelector validates an ACNP with a rule containing a ClusterGroup that has a NodeSelector
+func testACNPClusterGroupRuleWithNodeSelector(t *testing.T) {
+	// Setup namespace for test
+	ns := randName("cg-with-nodeselector-test" + "-")
+	err := testData.CreateNamespace(ns, nil)
+	failOnError(err, t)
+	testNSMeta := TestNamespaceMeta{
+		Name: ns,
+	}
+	testNSMetaMap := map[string]TestNamespaceMeta{
+		ns: testNSMeta,
+	}
+	defer k8sUtils.Cleanup(testNSMetaMap)
+
+	// Create pods on separate nodes
+	_, err = k8sUtils.CreateOrUpdateDeployment(ns, "pod-a-on-kind-worker", 1, map[string]string{"pod": "a"}, "kind-worker", false)
+	failOnError(err, t)
+	_, err = k8sUtils.waitForPodInNamespace(ns, "a")
+	failOnError(err, t)
+	// Set HostNetwork mode for pod b
+	_, err = k8sUtils.CreateOrUpdateDeployment(ns, "pod-b-on-kind-worker2", 1, map[string]string{"pod": "b"}, "kind-worker2", true)
+	failOnError(err, t)
+	_, err = k8sUtils.waitForPodInNamespace(ns, "b")
+	failOnError(err, t)
+
+	// Create a Cluster Group for kind-worker2
+	cgName := "kind-worker2"
+	cgBuilder := &ClusterGroupSpecBuilder{}
+	cgBuilder = cgBuilder.SetName(cgName).
+		SetNodeSelector(map[string]string{"kubernetes.io/hostname": "kind-worker2"})
+	_, err = k8sUtils.CreateOrUpdateCG(cgBuilder.Get())
+	failOnError(err, t)
+
+	// Create an ACNP that drops connections from X/A to cluster group
+	builder := &ClusterNetworkPolicySpecBuilder{}
+	builder = builder.SetName("deny-egress-xa-to-cg").
+		SetPriority(1.0)
+	builder.SetAppliedToGroup([]ACNPAppliedToSpec{{PodSelector: map[string]string{"pod": "a"}}})
+	builder.AddEgress(ACNPRuleBuilder{
+		BaseRuleBuilder: BaseRuleBuilder{
+			Protoc: ProtocolTCP,
+			Port:   &p8080,
+			Action: crdv1beta1.RuleActionDrop,
+			Name:   "egress-to-control-plane-drop",
+		},
+		RuleClusterGroup: cgName,
+	})
+	_, err = k8sUtils.CreateOrUpdateACNP(builder.Get())
+	failOnError(err, t)
+
+	podA := getPod(ns, "a")
+	podOnNode2 := getPod(ns, "b")
+	reachability := NewReachability([]Pod{podA, podOnNode2}, Connected)
+	reachability.Expect(podA, podOnNode2, Dropped)
+	k8sUtils.Validate([]Pod{podA, podOnNode2}, reachability, []int32{8080}, ProtocolTCP)
+
+	_, wrong, _ := reachability.Summary()
+	if wrong != 0 {
+		t.Errorf("Failure -- %d wrong results", wrong)
+		reachability.PrintSummary(true, true, true)
+	}
+	failOnError(k8sUtils.DeleteACNP(builder.Name), t)
+}
+
 // testACNPIngressRuleDenyCGWithXBtoYA tests traffic from ClusterGroup with X/B to Y/A on named port 81 is dropped.
 func testACNPIngressRuleDenyCGWithXBtoYA(t *testing.T) {
 	cgName := "cg-pods-xb"
@@ -5184,6 +5248,7 @@ func TestAntreaPolicy(t *testing.T) {
 		t.Run("Case=ACNPClusterGroupUpdate", func(t *testing.T) { testACNPClusterGroupUpdate(t) })
 		t.Run("Case=ACNPClusterGroupAppliedToDenyXBToCGWithYA", func(t *testing.T) { testACNPAppliedToDenyXBtoCGWithYA(t) })
 		t.Run("Case=ACNPClusterGroupAppliedToRuleCGWithPodsAToNsZ", func(t *testing.T) { testACNPAppliedToRuleCGWithPodsAToNsZ(t) })
+		t.Run("Case=ACNPClusterGroupRuleWithNodeSelector", func(t *testing.T) { testACNPClusterGroupRuleWithNodeSelector(t) })
 		t.Run("Case=ACNPClusterGroupUpdateAppliedTo", func(t *testing.T) { testACNPClusterGroupUpdateAppliedTo(t) })
 		t.Run("Case=ACNPClusterGroupAppliedToPodAdd", func(t *testing.T) { testACNPClusterGroupAppliedToPodAdd(t, data) })
 		t.Run("Case=ACNPClusterGroupRefRulePodAdd", func(t *testing.T) { testACNPClusterGroupRefRulePodAdd(t, data) })
