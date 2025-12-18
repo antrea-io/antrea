@@ -229,6 +229,10 @@ type ExternalIPPoolSpec struct {
 	SubnetInfo *SubnetInfo `json:"subnetInfo,omitempty"`
 	// The Nodes that the external IPs can be assigned to. If empty, it means all Nodes.
 	NodeSelector metav1.LabelSelector `json:"nodeSelector"`
+	// IncludeBorderIPs field gives users the flexibility to include the border IPs from the CIDR specified
+	// in the IPRange iff the border IPs are not x.x.x.0 and x.x.x.255. Default value is false.
+	// +optional
+	IncludeBorderIPs bool `json:"includeBorderIPs,omitempty"`
 }
 
 // IPRange is a set of contiguous IP addresses, represented by a CIDR or a pair of start and end IPs.
