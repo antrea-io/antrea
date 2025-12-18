@@ -3981,6 +3981,13 @@ func schema_pkg_apis_crd_v1beta1_ExternalIPPoolSpec(ref common.ReferenceCallback
 							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.LabelSelector"),
 						},
 					},
+					"filterReservedIPs": {
+						SchemaProps: spec.SchemaProps{
+							Description: "FilterReservedIPs prevents allocation of IPs ending in .0 or .255. Only applicable to IP ranges defined with start and end. Ignored for CIDRs.",
+							Type:        []string{"boolean"},
+							Format:      "",
+						},
+					},
 				},
 				Required: []string{"ipRanges", "nodeSelector"},
 			},
