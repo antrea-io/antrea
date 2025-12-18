@@ -974,8 +974,10 @@ func (f *featurePodConnectivity) flowsToTrace(dataplaneTag uint8,
 		return fb
 	}
 	// Output the packets if traffic mode is noEncap or hybrid.
+	// Also include WireGuard mode since it uses direct routing (no encapsulation) for same-subnet
+	// traffic, similar to noEncap/hybrid modes.
 	ifSupportsNoEncap := func(fb binding.FlowBuilder) binding.FlowBuilder {
-		if f.networkConfig.TrafficEncapMode.SupportsNoEncap() {
+		if f.networkConfig.TrafficEncapMode.SupportsNoEncap() || f.networkConfig.TrafficEncryptionMode == config.TrafficEncryptionModeWireGuard {
 			fb = fb.Action().OutputToRegField(TargetOFPortField)
 		}
 		return fb
