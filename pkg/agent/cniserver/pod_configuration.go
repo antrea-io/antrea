@@ -31,6 +31,7 @@ import (
 	clientset "k8s.io/client-go/kubernetes"
 	v1 "k8s.io/client-go/listers/core/v1"
 	"k8s.io/client-go/tools/cache"
+	"k8s.io/client-go/tools/events"
 	"k8s.io/client-go/tools/record"
 	"k8s.io/client-go/util/workqueue"
 	"k8s.io/klog/v2"
@@ -91,8 +92,8 @@ type podConfigurator struct {
 	isSecondaryNetwork bool
 
 	containerAccess  *containerAccessArbitrator
-	eventBroadcaster record.EventBroadcaster
-	recorder         record.EventRecorder
+	eventBroadcaster events.EventBroadcaster
+	recorder         events.EventRecorder
 	podListerSynced  cache.InformerSynced
 	podLister        v1.PodLister
 	kubeClient       clientset.Interface
