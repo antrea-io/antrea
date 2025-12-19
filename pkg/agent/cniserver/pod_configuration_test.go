@@ -75,7 +75,7 @@ type mockClients struct {
 	podLister        corelisters.PodLister
 	podListerSynced  cache.InformerSynced
 	ofClient         *openflowtest.MockClient
-	recorder         *record.FakeRecorder
+	recorder         *events.FakeRecorder
 }
 
 func newMockClients(ctrl *gomock.Controller, nodeName string, objects ...runtime.Object) *mockClients {
@@ -92,8 +92,7 @@ func newMockClients(ctrl *gomock.Controller, nodeName string, objects ...runtime
 	)
 	podLister := corelisters.NewPodLister(localPodInformer.GetIndexer())
 	ofClient := openflowtest.NewMockClient(ctrl)
-	recorder := record.NewFakeRecorder(100)
-	recorder.IncludeObject = false
+	recorder := events.NewFakeRecorder(100)
 
 	return &mockClients{
 		kubeClient:       kubeClient,

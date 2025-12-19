@@ -199,8 +199,8 @@ type EgressController struct {
 
 	trafficShapingEnabled bool
 
-	eventBroadcaster record.EventBroadcaster
-	record           record.EventRecorder
+	eventBroadcaster events.EventBroadcaster
+	record           events.EventRecorder
 	// Whether to support non-default subnets.
 	supportSeparateSubnet bool
 	// Used to allocate route table ID.
@@ -501,8 +501,8 @@ func (c *EgressController) Run(stopCh <-chan struct{}) {
 	defer klog.Infof("Shutting down %s", controllerName)
 
 	c.eventBroadcaster.StartStructuredLogging(0)
-	c.eventBroadcaster.StartRecordingToSink(&v1.EventSinkImpl{
-		Interface: c.k8sClient.CoreV1().Events(""),
+	c.eventBroadcaster.StartRecordingToSink(&eventsv1.EventSinkImpl{
+		Interface: c.k8sClient.EventsV1().Events(""),
 	})
 	defer c.eventBroadcaster.Shutdown()
 

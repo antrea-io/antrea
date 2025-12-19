@@ -177,8 +177,8 @@ func (pc *podConfigurator) Run(stopCh <-chan struct{}) {
 		return
 	}
 	pc.eventBroadcaster.StartStructuredLogging(0)
-	pc.eventBroadcaster.StartRecordingToSink(&typedv1.EventSinkImpl{
-		Interface: pc.kubeClient.CoreV1().Events(""),
+	pc.eventBroadcaster.StartRecordingToSink(&eventsv1.EventSinkImpl{
+		Interface: pc.kubeClient.EventsV1().Events(""),
 	})
 	defer pc.eventBroadcaster.Shutdown()
 
