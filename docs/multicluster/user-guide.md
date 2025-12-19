@@ -474,7 +474,7 @@ routed to the backend `nginx` Pods in `test-cluster-west`. You can check the
 imported Service and ServiceImport with commands:
 
 ```bash
-$ kubectl get serviceimport antrea-mc-nginx -n default
+$ kubectl get service antrea-mc-nginx -n default
 NAME            TYPE        CLUSTER-IP   EXTERNAL-IP   PORT(S)   AGE
 antrea-mc-nginx ClusterIP   10.107.57.62 <none>        443/TCP   10s
 
