@@ -29,7 +29,7 @@ import (
 	typedv1 "k8s.io/client-go/kubernetes/typed/core/v1"
 	v1 "k8s.io/client-go/listers/core/v1"
 	"k8s.io/client-go/tools/cache"
-	"k8s.io/client-go/tools/record"
+	"k8s.io/client-go/tools/events"
 	"k8s.io/client-go/util/workqueue"
 	"k8s.io/klog/v2"
 
@@ -157,7 +157,7 @@ func (pc *podConfigurator) initPortStatusMonitor(podInformer cache.SharedIndexIn
 			Name: workerName,
 		},
 	)
-	eventBroadcaster := record.NewBroadcaster()
+	eventBroadcaster := events.NewBroadcaster(nil)
 	pc.eventBroadcaster = eventBroadcaster
 	pc.recorder = eventBroadcaster.NewRecorder(
 		scheme.Scheme,

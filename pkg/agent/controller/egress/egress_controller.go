@@ -36,6 +36,7 @@ import (
 	"k8s.io/client-go/kubernetes"
 	v1 "k8s.io/client-go/kubernetes/typed/core/v1"
 	"k8s.io/client-go/tools/cache"
+	"k8s.io/client-go/tools/events"
 	"k8s.io/client-go/tools/record"
 	"k8s.io/client-go/util/retry"
 	"k8s.io/client-go/util/workqueue"
@@ -235,11 +236,8 @@ func NewEgressController(
 		klog.Info("EgressTrafficShaping feature gate is enabled, but it is ignored because OVS meters are not supported.")
 	}
 
-	eventBroadcaster := record.NewBroadcaster()
-	recorder := eventBroadcaster.NewRecorder(
-		scheme.Scheme,
-		corev1.EventSource{Component: controllerName},
-	)
+	eventBroadcaster := events.NewBroadcaster(nil)
+	recorder := eventBroadcaster.NewRecorder(scheme.Scheme, controllerName)
 
 	c := &EgressController{
 		ofClient:             ofClient,
@@ -1069,7 +1067,7 @@ func (c *EgressController) syncEgress(egressName string) error {
 			return err
 		}
 		if assigned {
-			c.record.Eventf(egress, corev1.EventTypeNormal, "IPAssigned", "Assigned Egress %s with IP %s on Node %s", egress.Name, desiredEgressIP, desiredNode)
+			c.record.Eventf(egress, "", corev1.EventTypeNormal, "IPAssigned", "NodeAssignment", "Assigned Egress %s with IP %s on Node %s", egress.Name, desiredEgressIP, desiredNode)
 		}
 	} else {
 		// Unassign the Egress IP from the local Node if it was assigned by the agent.
@@ -1078,7 +1076,7 @@ func (c *EgressController) syncEgress(egressName string) error {
 			return err
 		}
 		if unassigned {
-			c.record.Eventf(egress, corev1.EventTypeNormal, "IPUnassigned", "Unassigned Egress %s with IP %s from Node %s", egress.Name, desiredEgressIP, c.nodeName)
+			c.record.Eventf(egress, "", corev1.EventTypeNormal, "IPUnassigned", "NodeAssignment", "Unassigned Egress %s with IP %s from Node %s", egress.Name, desiredEgressIP, c.nodeName)
 		}
 	}
 
@@ -1180,7 +1178,7 @@ func (c *EgressController) uninstallEgress(egressName string, eState *egressStat
 		return err
 	}
 	if unassigned && egress != nil {
-		c.record.Eventf(egress, corev1.EventTypeNormal, "IPUnassigned", "Unassigned Egress %s with IP %s from Node %s", egressName, eState.egressIP, c.nodeName)
+		c.record.Eventf(egress, "", corev1.EventTypeNormal, "IPUnassigned", "NodeAssignment", "Unassigned Egress %s with IP %s from Node %s", egressName, eState.egressIP, c.nodeName)
 	}
 	// Remove the Egress's state.
 	c.deleteEgressState(egressName)

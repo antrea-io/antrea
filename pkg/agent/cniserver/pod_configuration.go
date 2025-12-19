@@ -679,11 +679,11 @@ func (pc *podConfigurator) recordPodEvent(ifConfig *interfacestore.InterfaceConf
 
 	if installed {
 		// Add normal event to record Pod network is ready.
-		pc.recorder.Eventf(pod, corev1.EventTypeNormal, "NetworkReady", "Installed Pod network forwarding rules")
+		pc.recorder.Eventf(pod, corev1.EventTypeNormal, "NetworkReady", "NetworkConfiguration", "Installed Pod network forwarding rules")
 		return
 	}
 
-	pc.recorder.Eventf(pod, corev1.EventTypeWarning, "NetworkNotReady", "Pod network forwarding rules not installed")
+	pc.recorder.Eventf(pod, corev1.EventTypeWarning, "NetworkNotReady", "NetworkConfiguration", "Pod network forwarding rules not installed")
 }
 
 func (pc *podConfigurator) processPortStatusMessage(status *openflow15.PortStatus) {

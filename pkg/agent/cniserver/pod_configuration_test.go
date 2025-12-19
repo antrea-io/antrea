@@ -32,6 +32,7 @@ import (
 	fakeclientset "k8s.io/client-go/kubernetes/fake"
 	corelisters "k8s.io/client-go/listers/core/v1"
 	"k8s.io/client-go/tools/cache"
+	"k8s.io/client-go/tools/events"
 	"k8s.io/client-go/tools/record"
 	"k8s.io/client-go/util/workqueue"
 
@@ -154,7 +155,7 @@ func mockRetryInterval(t *testing.T) {
 
 func newTestPodConfigurator(testClients *mockClients, waiter *asyncWaiter) *podConfigurator {
 	interfaceStore := interfacestore.NewInterfaceStore()
-	eventBroadcaster := record.NewBroadcaster()
+	eventBroadcaster := events.NewBroadcaster(nil)
 	queue := workqueue.NewTypedDelayingQueueWithConfig[string](
 		workqueue.TypedDelayingQueueConfig[string]{
 			Name: "podConfigurator",
