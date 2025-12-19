@@ -29,9 +29,8 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 
+	"antrea.io/antrea/pkg/agent/flowexporter/broadcaster"
 	"antrea.io/antrea/pkg/agent/flowexporter/connection"
-	connectionstest "antrea.io/antrea/pkg/agent/flowexporter/connections/testing"
-	"antrea.io/antrea/pkg/agent/flowexporter/options"
 	"antrea.io/antrea/pkg/agent/flowexporter/utils"
 	"antrea.io/antrea/pkg/agent/metrics"
 	"antrea.io/antrea/pkg/agent/openflow"
@@ -247,10 +246,9 @@ func TestConntrackConnectionStore_AddOrUpdateConn(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			mockPodStore := objectstoretest.NewMockPodStore(ctrl)
 			mockProxier := proxytest.NewMockProxyQuerier(ctrl)
-			mockConnDumper := connectionstest.NewMockConnTrackDumper(ctrl)
 			npQuerier := queriertest.NewMockAgentNetworkPolicyInfoQuerier(ctrl)
 
-			conntrackConnStore := NewConntrackConnectionStore(mockConnDumper, true, false, npQuerier, mockPodStore, mockProxier, nil, testFlowExporterOptions)
+			conntrackConnStore := NewConntrackConnectionStore(nil, npQuerier, mockPodStore, mockProxier, nil, testFlowExporterOptions)
 			// Set the networkPolicyReadyTime to simulate that NetworkPolicies are ready
 			conntrackConnStore.networkPolicyReadyTime = networkPolicyReadyTime
 
@@ -332,7 +330,7 @@ func TestConnectionStore_DeleteConnectionByKey(t *testing.T) {
 	metrics.TotalAntreaConnectionsInConnTrackTable.Set(float64(len(testFlows)))
 	// Create connectionStore
 	mockPodStore := objectstoretest.NewMockPodStore(ctrl)
-	connStore := NewConntrackConnectionStore(nil, true, false, nil, mockPodStore, nil, nil, testFlowExporterOptions)
+	connStore := NewConntrackConnectionStore(nil, nil, mockPodStore, nil, nil, testFlowExporterOptions)
 	// Add flows to the connection store.
 	for i, flow := range testFlows {
 		connStore.connections[*testFlowKeys[i]] = flow
@@ -347,53 +345,13 @@ func TestConnectionStore_DeleteConnectionByKey(t *testing.T) {
 	}
 }
 
-func TestConnectionStore_MetricSettingInPoll(t *testing.T) {
-	ctrl := gomock.NewController(t)
-
-	testFlows := make([]*connection.Connection, 0)
-	// Create connectionStore
-	mockPodStore := objectstoretest.NewMockPodStore(ctrl)
-	mockConnDumper := connectionstest.NewMockConnTrackDumper(ctrl)
-	conntrackConnStore := NewConntrackConnectionStore(mockConnDumper, true, false, nil, mockPodStore, nil, nil, testFlowExporterOptions)
-	// Hard-coded conntrack occupancy metrics for test
-	TotalConnections := 0
-	MaxConnections := 300000
-	mockConnDumper.EXPECT().DumpFlows(uint16(openflow.CtZone)).Return(testFlows, TotalConnections, nil)
-	mockConnDumper.EXPECT().GetMaxConnections().Return(MaxConnections, nil)
-	connsLens, err := conntrackConnStore.Poll()
-	require.Nil(t, err, fmt.Sprintf("Failed to add connections to connection store: %v", err))
-	assert.Equal(t, len(connsLens), 1, "length of connsLens is expected to be 1")
-	assert.Equal(t, connsLens[0], len(testFlows), "expected connections should be equal to number of testFlows")
-	checkTotalConnectionsMetric(t, TotalConnections)
-	checkMaxConnectionsMetric(t, MaxConnections)
-}
-
 func TestConntrackConnectionStore_Run_NetworkPolicyWait(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	mockConnDumper := connectionstest.NewMockConnTrackDumper(ctrl)
-
 	// Create a utilwait.Group and increment it to simulate waiting for NetworkPolicies
 	networkPolicyWait := utilwait.NewGroup()
 	networkPolicyWait.Increment()
 
-	testOptions := &options.FlowExporterOptions{
-		ActiveFlowTimeout:      testActiveFlowTimeout,
-		IdleFlowTimeout:        testIdleFlowTimeout,
-		StaleConnectionTimeout: testStaleConnectionTimeout,
-		PollInterval:           100 * time.Millisecond, // Valid but small poll interval
-	}
-	conntrackConnStore := NewConntrackConnectionStore(mockConnDumper, true, false, nil, nil, nil, networkPolicyWait, testOptions)
-
-	// Create a signal channel that will be closed on the first DumpFlows call
-	firstPollDoneCh := make(chan struct{})
-
-	// Set up mock expectations - close signal channel on first DumpFlows call, then return normally
-	mockConnDumper.EXPECT().DumpFlows(uint16(openflow.CtZone)).DoAndReturn(func(uint16) ([]*connection.Connection, int, error) {
-		defer close(firstPollDoneCh)
-		return []*connection.Connection{}, 0, nil
-	}).Times(1)
-	mockConnDumper.EXPECT().DumpFlows(uint16(openflow.CtZone)).Return([]*connection.Connection{}, 0, nil).AnyTimes()
-	mockConnDumper.EXPECT().GetMaxConnections().Return(0, nil).AnyTimes()
+	connectionsCh := make(chan broadcaster.Payload)
+	conntrackConnStore := NewConntrackConnectionStore(connectionsCh, nil, nil, nil, networkPolicyWait, testFlowExporterOptions)
 
 	// Record the time before starting Run
 	beforeRunTime := time.Now()
@@ -416,10 +374,10 @@ func TestConntrackConnectionStore_Run_NetworkPolicyWait(t *testing.T) {
 
 	// Wait for the first poll to happen (which means Run has proceeded past the wait)
 	select {
-	case <-firstPollDoneCh:
-		// Expected: Run has started polling
+	case connectionsCh <- broadcaster.Payload{}:
+		// Expected: Run is ready for processing connection
 	case <-time.After(1 * time.Second):
-		require.Fail(t, "Run should have started polling within 1 second")
+		require.Fail(t, "Run should be ready for processing within 1 second")
 	}
 
 	// Stop the connection store

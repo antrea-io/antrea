@@ -1,10 +1,10 @@
-// Copyright 2025 Antrea Authors
+// Copyright 2025 Antrea Authors.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
 //
-//      http://www.apache.org/licenses/LICENSE-2.0
+//     http://www.apache.org/licenses/LICENSE-2.0
 //
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
@@ -12,18 +12,21 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package options
+package broadcaster
 
-import "time"
+import "antrea.io/antrea/pkg/agent/flowexporter/connection"
 
-type FlowExporterOptions struct {
-	EnableStaticDestination bool
-	FlowCollectorAddr       string
-	FlowCollectorProto      string
-	ActiveFlowTimeout       time.Duration
-	IdleFlowTimeout         time.Duration
-	StaleConnectionTimeout  time.Duration
-	PollInterval            time.Duration
-	ConnectUplinkToBridge   bool
-	ProtocolFilter          []string
+type Subscriber interface {
+	Subscribe() *subscription
+	Unsubscribe(*subscription)
+}
+
+type Publisher interface {
+	Publish(conns []*connection.Connection)
+}
+
+type Broadcaster interface {
+	Subscriber
+	Publisher
+	Start(stopCh <-chan struct{})
 }

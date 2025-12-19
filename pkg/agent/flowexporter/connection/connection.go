@@ -92,6 +92,8 @@ type Connection struct {
 	EgressUID                            string
 	EgressIP                             string
 	EgressNodeName                       string
+
+	IsDenyFlow bool
 }
 
 // NewConnectionKey creates 5-tuple of flow as connection key
