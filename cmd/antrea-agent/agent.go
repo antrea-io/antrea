@@ -453,6 +453,7 @@ func run(o *Options) error {
 		return fmt.Errorf("failed to create node manager: %w", err)
 	}
 	var proxyServer *proxy.ProxyServer
+	var proxyQuerier proxy.ProxyQuerier
 	if o.enableAntreaProxy {
 		proxyServer, err = proxy.NewProxyServer(nodeConfig.Name,
 			nodeManager,
@@ -472,6 +473,7 @@ func run(o *Options) error {
 			return fmt.Errorf("error when creating proxyServer: %w", err)
 		}
 		proxyServer.Initialize(ctx, serviceInformer, endpointSliceInformer)
+		proxyQuerier = proxyServer.GetProxyQuerier()
 	}
 
 	// We pick a time interval for rule deletion in the async rule cache (part of the
@@ -723,7 +725,7 @@ func run(o *Options) error {
 		}
 		flowExporter, err = flowexporter.NewFlowExporter(
 			podStore,
-			proxyServer.GetProxyQuerier(),
+			proxyQuerier,
 			k8sClient,
 			nodeRouteController,
 			networkConfig.TrafficEncapMode,
@@ -969,7 +971,7 @@ func run(o *Options) error {
 		k8sClient,
 		ofClient,
 		ovsBridgeClient,
-		proxyServer.GetProxyQuerier(),
+		proxyQuerier,
 		networkPolicyController,
 		o.config.APIPort,
 		o.config.NodePortLocal.PortRange,
