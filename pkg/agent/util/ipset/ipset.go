@@ -45,6 +45,8 @@ type Interface interface {
 	DelEntry(name string, entry string) error
 
 	ListEntries(name string) ([]string, error)
+
+	Save() ([]byte, error)
 }
 
 type Client struct {
@@ -120,4 +122,13 @@ func (c *Client) ListEntries(name string) ([]string, error) {
 		}
 	}
 	return entries, nil
+}
+
+func (c *Client) Save() ([]byte, error) {
+	cmd := c.exec.Command("ipset", "save")
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return nil, fmt.Errorf("error saving ipset: %w, output: %s", err, string(output))
+	}
+	return output, nil
 }
