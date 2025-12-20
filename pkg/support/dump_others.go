@@ -25,10 +25,11 @@ import (
 	"path/filepath"
 	"strings"
 
+	"k8s.io/klog/v2"
+
 	"antrea.io/antrea/pkg/agent/util/iptables"
 	"antrea.io/antrea/pkg/agent/util/sysctl"
 	"antrea.io/antrea/pkg/util/logdir"
-	"k8s.io/klog/v2"
 )
 
 func (d *agentDumper) DumpLog(basedir string) error {
@@ -94,21 +95,21 @@ func (d *agentDumper) dumpInterfaceConfigs(basedir string) error {
 		return fmt.Errorf("error getting network interfaces: %w", err)
 	}
 	hostGateway := d.aq.GetNodeConfig().GatewayConfig.Name
-    isRelevantIface := func(ifaceName string) bool {
-        return ifaceName == hostGateway ||
-            ifaceName == "antrea-egress0" ||
-            ifaceName == "antrea-ingress0" ||
-            strings.HasPrefix(ifaceName, "antrea-ext.")
-    }
+	isRelevantIface := func(ifaceName string) bool {
+		return ifaceName == hostGateway ||
+			ifaceName == "antrea-egress0" ||
+			ifaceName == "antrea-ingress0" ||
+			strings.HasPrefix(ifaceName, "antrea-ext.")
+	}
 
 	params := []string{"rp_filter", "arp_ignore", "arp_announce"}
 	var output bytes.Buffer
 	for _, iface := range interfaces {
 		if !isRelevantIface(iface.Name) {
-            continue
-        }
-        output.WriteString(iface.Name)
-        output.WriteString("\n")
+			continue
+		}
+		output.WriteString(iface.Name)
+		output.WriteString("\n")
 		for _, param := range params {
 			value, err := sysctl.GetSysctlNet(fmt.Sprintf("ipv4/conf/%s/%s", iface.Name, param))
 			if err != nil {

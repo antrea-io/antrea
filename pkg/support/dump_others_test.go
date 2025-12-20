@@ -32,7 +32,6 @@ import (
 	"antrea.io/antrea/pkg/util/logdir"
 )
 
-
 func TestDumpLog(t *testing.T) {
 	fs := afero.NewMemMapFs()
 	logDir := logdir.GetLogDir()
@@ -62,21 +61,27 @@ func TestDumpIPToolInfo(t *testing.T) {
 	err := dumper.(*agentDumper).dumpIPToolInfo(baseDir)
 	require.NoError(t, err)
 
-	ok, err := afero.Exists(fs, filepath.Join(baseDir, "link"))
-	require.NoError(t, err)
-	assert.True(t, ok)
+	testCases := []struct {
+		file           string
+		expectedOutput string
+	}{
+		{"link", "ip link"},
+		{"address", "ip address"},
+		{"rule", "ip rule show"},
+		{"route", "ip route show table all"},
+	}
 
-	ok, err = afero.Exists(fs, filepath.Join(baseDir, "address"))
-	require.NoError(t, err)
-	assert.True(t, ok)
+	for _, tc := range testCases {
+		filePath := filepath.Join(baseDir, tc.file)
+		ok, err := afero.Exists(fs, filePath)
+		require.NoError(t, err)
+		assert.True(t, ok)
 
-	ok, err = afero.Exists(fs, filepath.Join(baseDir, "rule"))
-	require.NoError(t, err)
-	assert.True(t, ok)
-
-	ok, err = afero.Exists(fs, filepath.Join(baseDir, "route"))
-	require.NoError(t, err)
-	assert.True(t, ok)
+		content, err := afero.ReadFile(fs, filePath)
+		require.NoError(t, err)
+		t.Logf("File: %s, Content: %s", tc.file, string(content))
+		assert.Equal(t, tc.expectedOutput, string(content))
+	}
 }
 
 func TestDumpInterfaceConfigs(t *testing.T) {
@@ -98,4 +103,3 @@ func TestDumpInterfaceConfigs(t *testing.T) {
 	require.NoError(t, err)
 	assert.True(t, ok)
 }
-
