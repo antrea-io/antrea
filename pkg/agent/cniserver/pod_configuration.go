@@ -32,7 +32,6 @@ import (
 	v1 "k8s.io/client-go/listers/core/v1"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/tools/events"
-	"k8s.io/client-go/tools/record"
 	"k8s.io/client-go/util/workqueue"
 	"k8s.io/klog/v2"
 
@@ -680,11 +679,11 @@ func (pc *podConfigurator) recordPodEvent(ifConfig *interfacestore.InterfaceConf
 
 	if installed {
 		// Add normal event to record Pod network is ready.
-		pc.recorder.Eventf(pod, corev1.EventTypeNormal, "NetworkReady", "NetworkConfiguration", "Installed Pod network forwarding rules")
+		pc.recorder.Eventf(pod, nil, corev1.EventTypeNormal, "NetworkReady", "NetworkConfiguration", "Installed Pod network forwarding rules")
 		return
 	}
 
-	pc.recorder.Eventf(pod, corev1.EventTypeWarning, "NetworkNotReady", "NetworkConfiguration", "Pod network forwarding rules not installed")
+	pc.recorder.Eventf(pod, nil, corev1.EventTypeWarning, "NetworkNotReady", "NetworkConfiguration", "Pod network forwarding rules not installed")
 }
 
 func (pc *podConfigurator) processPortStatusMessage(status *openflow15.PortStatus) {
