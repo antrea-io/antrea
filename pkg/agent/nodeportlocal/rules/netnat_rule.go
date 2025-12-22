@@ -35,7 +35,7 @@ var (
 )
 
 // InitRules initializes rules based on the netnatstaticmapping implementation on windows
-func InitRules() PodPortRules {
+func InitRules(_ bool) PodPortRules {
 	return NewNetNatRules()
 }
 

@@ -77,8 +77,11 @@ func compareNPLAnnotationLists(annotations1, annotations2 []npltypes.NPLAnnotati
 		return false
 	}
 	nplAnnotationLess := func(a1, a2 *npltypes.NPLAnnotation) bool {
-		return a1.NodePort < a2.NodePort
-
+		if a1.NodePort != a2.NodePort {
+			return a1.NodePort < a2.NodePort
+		}
+		// Use IPFamily for tie-breaking to ensure consistent ordering
+		return a1.IPFamily < a2.IPFamily
 	}
 	sort.Slice(annotations1, func(i, j int) bool {
 		return nplAnnotationLess(&annotations1[i], &annotations1[j])
