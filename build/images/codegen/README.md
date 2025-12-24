@@ -22,6 +22,7 @@ Here is the table of codegen images that have been uploaded:
 
 | Tag                       | Change                                                                        |
 | :------------------------ | ----------------------------------------------------------------------------- |
+| kubernetes-1.31.1-build.3 | Build image with a more recent patch release of Go v1.24                      |
 | kubernetes-1.31.1-build.2 | Upgraded Go to v1.24                                                          |
 | kubernetes-1.31.1-build.1 | Upgraded controller-gen to v0.16.3                                            |
 | kubernetes-1.31.1-build.0 | Upgraded go.uber.org/mock/mockgen to v0.5.0                                   |
