@@ -155,7 +155,9 @@ func (pc *podConfigurator) initPortStatusMonitor(podInformer cache.SharedIndexIn
 			Name: workerName,
 		},
 	)
-	eventBroadcaster := events.NewBroadcaster(nil)
+	eventBroadcaster := events.NewBroadcaster(&events.EventSinkImpl{
+		Interface: pc.kubeClient.EventsV1(),
+	})
 	pc.eventBroadcaster = eventBroadcaster
 	pc.recorder = eventBroadcaster.NewRecorder(
 		scheme.Scheme,

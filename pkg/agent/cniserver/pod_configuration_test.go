@@ -153,7 +153,9 @@ func mockRetryInterval(t *testing.T) {
 
 func newTestPodConfigurator(testClients *mockClients, waiter *asyncWaiter) *podConfigurator {
 	interfaceStore := interfacestore.NewInterfaceStore()
-	eventBroadcaster := events.NewBroadcaster(nil)
+	eventBroadcaster := events.NewBroadcaster(&events.EventSinkImpl{
+		Interface: testClients.kubeClient.EventsV1(),
+	})
 	queue := workqueue.NewTypedDelayingQueueWithConfig[string](
 		workqueue.TypedDelayingQueueConfig[string]{
 			Name: "podConfigurator",
