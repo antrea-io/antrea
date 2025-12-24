@@ -84,7 +84,7 @@ func connectPhyInterfacesToOVSBridge(ovsBridgeClient ovsconfig.OVSBridgeClient, 
 			continue
 		}
 
-		if _, err := ovsBridgeClient.CreateUplinkPort(phyInterface, int32(i), externalIDs); err != nil {
+		if _, err := ovsBridgeClient.CreateUplinkPort(phyInterface, ovsconfig.FirstControllerOFPort+int32(i), externalIDs); err != nil {
 			return fmt.Errorf("failed to create OVS uplink port %s: %v", phyInterface, err)
 		}
 		klog.InfoS("Physical interface added to secondary OVS bridge", "device", phyInterface)
