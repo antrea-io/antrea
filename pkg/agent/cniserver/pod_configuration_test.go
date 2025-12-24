@@ -32,7 +32,7 @@ import (
 	fakeclientset "k8s.io/client-go/kubernetes/fake"
 	corelisters "k8s.io/client-go/listers/core/v1"
 	"k8s.io/client-go/tools/cache"
-	"k8s.io/client-go/tools/record"
+	"k8s.io/client-go/tools/events"
 	"k8s.io/client-go/util/workqueue"
 
 	"antrea.io/antrea/pkg/agent/interfacestore"
@@ -74,7 +74,7 @@ type mockClients struct {
 	podLister        corelisters.PodLister
 	podListerSynced  cache.InformerSynced
 	ofClient         *openflowtest.MockClient
-	recorder         *record.FakeRecorder
+	recorder         *events.FakeRecorder
 }
 
 func newMockClients(ctrl *gomock.Controller, nodeName string, objects ...runtime.Object) *mockClients {
@@ -91,8 +91,7 @@ func newMockClients(ctrl *gomock.Controller, nodeName string, objects ...runtime
 	)
 	podLister := corelisters.NewPodLister(localPodInformer.GetIndexer())
 	ofClient := openflowtest.NewMockClient(ctrl)
-	recorder := record.NewFakeRecorder(100)
-	recorder.IncludeObject = false
+	recorder := events.NewFakeRecorder(100)
 
 	return &mockClients{
 		kubeClient:       kubeClient,
@@ -154,7 +153,9 @@ func mockRetryInterval(t *testing.T) {
 
 func newTestPodConfigurator(testClients *mockClients, waiter *asyncWaiter) *podConfigurator {
 	interfaceStore := interfacestore.NewInterfaceStore()
-	eventBroadcaster := record.NewBroadcaster()
+	eventBroadcaster := events.NewBroadcaster(&events.EventSinkImpl{
+		Interface: testClients.kubeClient.EventsV1(),
+	})
 	queue := workqueue.NewTypedDelayingQueueWithConfig[string](
 		workqueue.TypedDelayingQueueConfig[string]{
 			Name: "podConfigurator",
