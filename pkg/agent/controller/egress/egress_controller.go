@@ -234,7 +234,9 @@ func NewEgressController(
 		klog.Info("EgressTrafficShaping feature gate is enabled, but it is ignored because OVS meters are not supported.")
 	}
 
-	eventBroadcaster := events.NewBroadcaster(nil)
+	eventBroadcaster := events.NewBroadcaster(&events.EventSinkImpl{
+		Interface: k8sClient.EventsV1(),
+	})
 	recorder := eventBroadcaster.NewRecorder(scheme.Scheme, controllerName)
 
 	c := &EgressController{
