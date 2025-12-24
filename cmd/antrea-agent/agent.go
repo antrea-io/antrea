@@ -18,6 +18,7 @@ import (
 	"context"
 	"fmt"
 	"net"
+	"strconv"
 	"time"
 
 	"github.com/spf13/afero"
@@ -240,6 +241,13 @@ func run(o *Options) error {
 	egressConfig := &config.EgressConfig{
 		ExceptCIDRs: exceptCIDRs,
 	}
+
+	var proxyHealthCheckPort int
+	if !o.config.AntreaProxy.DisableServiceHealthCheckServer {
+		_, proxyHealthCheckPortStr, _ := net.SplitHostPort(o.config.AntreaProxy.ServiceHealthCheckServerBindAddress)
+		proxyHealthCheckPort, _ = strconv.Atoi(proxyHealthCheckPortStr)
+	}
+
 	routeClient, err := route.NewClient(networkConfig,
 		o.config.NoSNAT,
 		o.config.AntreaProxy.ProxyAll,
@@ -251,7 +259,8 @@ func run(o *Options) error {
 		o.config.SNATFullyRandomPorts,
 		*o.config.Egress.SNATFullyRandomPorts,
 		serviceCIDRProvider,
-		wireguardConfig.Port,
+		int32(wireguardConfig.Port), // nolint: gosec
+		int32(proxyHealthCheckPort), // nolint: gosec
 	)
 	if err != nil {
 		return fmt.Errorf("error creating route client: %v", err)
