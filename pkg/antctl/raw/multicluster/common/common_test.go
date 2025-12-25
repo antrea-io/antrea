@@ -69,6 +69,37 @@ func TestCreateClusterSet(t *testing.T) {
 		})
 	}
 }
+func TestCreateClusterSetRollbackIntegration(t *testing.T) {
+	cmd := &cobra.Command{}
+	buf := new(bytes.Buffer)
+	cmd.SetOut(buf)
+	cmd.SetErr(buf)
+
+	createdRes := []map[string]interface{}{}
+	fakeClient := fake.NewClientBuilder().WithScheme(multiclusterscheme.Scheme).Build()
+
+	err := CreateClusterSet(cmd, fakeClient, "default", "test-clusterset", "http://localhost", "token",
+		"member-id", "leader-id", "leader-ns", &createdRes)
+	assert.NoError(t, err)
+	assert.Equal(t, 1, len(createdRes))
+
+	resource := createdRes[0]
+	apiVersion, ok := resource["apiVersion"].(string)
+	assert.True(t, ok, "apiVersion should be a string")
+	assert.NotEmpty(t, apiVersion, "apiVersion should not be empty (was the bug)")
+	assert.Equal(t, "multicluster.crd.antrea.io/v1alpha1", apiVersion,
+		"apiVersion should be set correctly for rollback to work")
+
+	kind, ok := resource["kind"].(string)
+	assert.True(t, ok, "kind should be a string")
+	assert.NotEmpty(t, kind, "kind should not be empty (was the bug)")
+	assert.Equal(t, "ClusterSet", kind,
+		"kind should be set correctly for rollback to work")
+
+	err = Rollback(cmd, fakeClient, createdRes)
+	assert.NoError(t, err)
+	assert.Contains(t, buf.String(), "ClusterSet \"default/test-clusterset\" deleted")
+}
 
 func TestDeleteClusterSet(t *testing.T) {
 	existingClusterSet := &mcv1alpha2.ClusterSet{
@@ -460,6 +491,141 @@ type: Opaque`)
 			remainServiceAccount := &corev1.ServiceAccountList{}
 			fakeClient.List(context.Background(), remainServiceAccount, &client.ListOptions{})
 			assert.Equal(t, tt.numsOfServiceAccount, len(remainServiceAccount.Items))
+		})
+	}
+}
+
+func TestRollback(t *testing.T) {
+	tests := []struct {
+		name            string
+		createdRes      []map[string]interface{}
+		existingObjects []client.Object
+		expectedOutput  string
+		expectError     bool
+	}{
+		{
+			name: "rollback ClusterSet successfully",
+			createdRes: []map[string]interface{}{
+				{
+					"apiVersion": "multicluster.crd.antrea.io/v1alpha1",
+					"kind":       "ClusterSet",
+					"metadata": map[string]interface{}{
+						"name":      "test-clusterset",
+						"namespace": "default",
+					},
+				},
+			},
+			existingObjects: []client.Object{
+				&mcv1alpha2.ClusterSet{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "test-clusterset",
+						Namespace: "default",
+					},
+				},
+			},
+			expectedOutput: "ClusterSet \"default/test-clusterset\" deleted\n",
+			expectError:    false,
+		},
+		{
+			name: "rollback Secret successfully",
+			createdRes: []map[string]interface{}{
+				{
+					"apiVersion": "v1",
+					"kind":       "Secret",
+					"metadata": map[string]interface{}{
+						"name":      "test-secret",
+						"namespace": "default",
+					},
+				},
+			},
+			existingObjects: []client.Object{
+				&corev1.Secret{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "test-secret",
+						Namespace: "default",
+					},
+				},
+			},
+			expectedOutput: "Secret \"default/test-secret\" deleted\n",
+			expectError:    false,
+		},
+		{
+			name: "rollback multiple resources",
+			createdRes: []map[string]interface{}{
+				{
+					"apiVersion": "v1",
+					"kind":       "Secret",
+					"metadata": map[string]interface{}{
+						"name":      "test-secret",
+						"namespace": "default",
+					},
+				},
+				{
+					"apiVersion": "multicluster.crd.antrea.io/v1alpha1",
+					"kind":       "ClusterSet",
+					"metadata": map[string]interface{}{
+						"name":      "test-clusterset",
+						"namespace": "default",
+					},
+				},
+			},
+			existingObjects: []client.Object{
+				&corev1.Secret{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "test-secret",
+						Namespace: "default",
+					},
+				},
+				&mcv1alpha2.ClusterSet{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "test-clusterset",
+						Namespace: "default",
+					},
+				},
+			},
+			expectedOutput: "ClusterSet \"default/test-clusterset\" deleted\n",
+			expectError:    false,
+		},
+		{
+			name: "rollback fails with missing Kind - verify bug fix for issue #7639",
+			createdRes: []map[string]interface{}{
+				{
+					"apiVersion": "multicluster.crd.antrea.io/v1alpha1",
+					"metadata": map[string]interface{}{
+						"name":      "test-clusterset",
+						"namespace": "default",
+					},
+				},
+			},
+			existingObjects: []client.Object{
+				&mcv1alpha2.ClusterSet{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "test-clusterset",
+						Namespace: "default",
+					},
+				},
+			},
+			expectedOutput: "Failed to delete",
+			expectError:    true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cmd := &cobra.Command{}
+			buf := new(bytes.Buffer)
+			cmd.SetOut(buf)
+			cmd.SetErr(buf)
+
+			fakeClient := fake.NewClientBuilder().WithScheme(multiclusterscheme.Scheme).WithObjects(tt.existingObjects...).Build()
+			err := Rollback(cmd, fakeClient, tt.createdRes)
+
+			assert.Contains(t, buf.String(), tt.expectedOutput)
+			if tt.expectError {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+			}
 		})
 	}
 }
