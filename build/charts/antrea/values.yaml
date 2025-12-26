@@ -294,6 +294,26 @@ agent:
   # resources socket is mounted into antrea-agent Pods. Setting it to an empty
   # value disables the mounting.
   kubeletRootDir: "/var/lib/kubelet"
+  antreaSysctlInit:
+    # -- Enable the sysctl override. When enabled, the init container will do the process.
+    enable: false
+    # -- Path to the sysctl configuration directory on the host.
+    hostSysctlDir: "/etc/sysctl.d"
+    # -- Mount path inside the init container for the host sysctl configuration directory.
+    # The init container writes sysctl files to this directory.
+    mountSysctlDir: "/host/etc/sysctl.d"
+    # -- Name of the sysctl configuration file created or overwritten by the init container.
+    # The filename is chosen to sort last in lexicographic order within the sysctl
+    # configuration directory, so that the settings in this file are applied after other
+    # distribution- or administrator- provided sysctl configuration files.
+    overwriteFile: "99-zzzz-antrea.conf"
+    # -- Resource requests and limits for the antrea-sysctl-init init container.
+    resources:
+      requests:
+        cpu: "100m"
+    securityContext:
+      # -- Whether to run the antrea-sysctl-init container as privileged.
+      privileged: true
   installCNI:
     # -- Extra environment variables to be injected into install-cni.
     extraEnv: {}
@@ -302,7 +322,7 @@ agent:
       requests:
         cpu: "100m"
     securityContext:
-      # -- Run the install-cni container as privileged.
+      # -- Whether to run the install-cni container as privileged.
       privileged: false
       # -- Capabilities for the install-cni initContainer.
       capabilities:
@@ -324,7 +344,7 @@ agent:
       requests:
         cpu: "200m"
     securityContext:
-      # -- Run the antrea-agent container as privileged. Currently we require
+      # -- Whether to run the antrea-agent container as privileged. Currently we require
       # this to be true (for sysctl configurations), but we may support running
       # as non-privileged in the future.
       privileged: true
@@ -344,7 +364,7 @@ agent:
       requests:
         cpu: "200m"
     securityContext:
-      # -- Run the antrea-ovs container as privileged.
+      # -- Whether to run the antrea-ovs container as privileged.
       privileged: false
       # -- Capabilities for the antrea-ovs container.
       capabilities:
@@ -360,7 +380,7 @@ agent:
       requests:
         cpu: "50m"
     securityContext:
-      # -- Run the antrea-ipsec container as privileged.
+      # -- Whether to run the antrea-ipsec container as privileged.
       privileged: false
       # -- Capabilities for the antrea-ipsec container.
       capabilities:
