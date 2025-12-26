@@ -26,17 +26,21 @@ Kubernetes: `>= 1.23.0-0`
 | agent.antreaAgent.logFileMaxSize | int | `100` | Max size in MBs of any single log file. |
 | agent.antreaAgent.resources | object | `{"requests":{"cpu":"200m"}}` | Resource requests and limits for the antrea-agent container. |
 | agent.antreaAgent.securityContext.capabilities | list | `[]` | Capabilities for the antrea-agent container. |
-| agent.antreaAgent.securityContext.privileged | bool | `true` | Run the antrea-agent container as privileged. Currently we require this to be true (for sysctl configurations), but we may support running as non-privileged in the future. |
+| agent.antreaAgent.securityContext.privileged | bool | `true` | Whether to run the antrea-agent container as privileged. Currently we require this to be true (for sysctl configurations), but we may support running as non-privileged in the future. |
 | agent.antreaIPsec.resources | object | `{"requests":{"cpu":"50m"}}` | Resource requests and limits for the antrea-ipsec container (when IPsec is enabled). |
 | agent.antreaIPsec.securityContext.capabilities | list | `["NET_ADMIN"]` | Capabilities for the antrea-ipsec container. |
-| agent.antreaIPsec.securityContext.privileged | bool | `false` | Run the antrea-ipsec container as privileged. |
+| agent.antreaIPsec.securityContext.privileged | bool | `false` | Whether to run the antrea-ipsec container as privileged. |
 | agent.antreaOVS.extraArgs | list | `[]` | Extra command-line arguments for antrea-ovs. |
 | agent.antreaOVS.extraEnv | object | `{}` | Extra environment variables to be injected into antrea-ovs. |
 | agent.antreaOVS.logFileMaxNum | int | `4` | Max number of log files. |
 | agent.antreaOVS.logFileMaxSize | int | `100` | Max size in MBs of any single log file. |
 | agent.antreaOVS.resources | object | `{"requests":{"cpu":"200m"}}` | Resource requests and limits for the antrea-ovs container. |
 | agent.antreaOVS.securityContext.capabilities | list | `["SYS_NICE","NET_ADMIN","SYS_ADMIN","IPC_LOCK"]` | Capabilities for the antrea-ovs container. |
-| agent.antreaOVS.securityContext.privileged | bool | `false` | Run the antrea-ovs container as privileged. |
+| agent.antreaOVS.securityContext.privileged | bool | `false` | Whether to run the antrea-ovs container as privileged. |
+| agent.antreaSysctlInit.enable | bool | `false` | Enable the sysctl override. When enabled, the init container will do the process. |
+| agent.antreaSysctlInit.hostSysctlDir | string | `"/etc/sysctl.d"` | Path to the sysctl configuration directory on the host. |
+| agent.antreaSysctlInit.resources | object | `{"requests":{"cpu":"50m"}}` | Resource requests and limits for the antrea-sysctl-init init container. |
+| agent.antreaSysctlInit.securityContext.privileged | bool | `true` | Whether to run the antrea-sysctl-init container as privileged. |
 | agent.apiPort | int | `10350` | Port for the antrea-agent APIServer to serve on. |
 | agent.clusterPort | int | `10351` | clusterPort is the server port used by the antrea-agent to run a gossip-based cluster membership protocol. Currently it's used only when the Egress feature is enabled. Defaults to 10351 |
 | agent.dnsPolicy | string | `""` | DNS Policy for the antrea-agent Pods. If empty, the Kubernetes default will be used. |
@@ -46,7 +50,7 @@ Kubernetes: `>= 1.23.0-0`
 | agent.installCNI.extraEnv | object | `{}` | Extra environment variables to be injected into install-cni. |
 | agent.installCNI.resources | object | `{"requests":{"cpu":"100m"}}` | Resource requests and limits for the install-cni initContainer. |
 | agent.installCNI.securityContext.capabilities | list | `["SYS_MODULE"]` | Capabilities for the install-cni initContainer. |
-| agent.installCNI.securityContext.privileged | bool | `false` | Run the install-cni container as privileged. |
+| agent.installCNI.securityContext.privileged | bool | `false` | Whether to run the install-cni container as privileged. |
 | agent.kubeletRootDir | string | `"/var/lib/kubelet"` | The root directory where kubelet stores its files. This is required to access the pod resources API, which is used to retrieve SR-IOV device allocation details for Pods. By default, the subdirectory containing the pod resources socket is mounted into antrea-agent Pods. Setting it to an empty value disables the mounting. |
 | agent.nodeSelector | object | `{"kubernetes.io/os":"linux"}` | Node selector for the antrea-agent Pods. |
 | agent.podAnnotations | object | `{}` | Annotations to be added to antrea-agent Pods. |
