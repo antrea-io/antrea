@@ -82,6 +82,18 @@ func NewCIDRAllocator(cidr *net.IPNet, reservedIPs []net.IP) (*SingleIPAllocator
 	return allocator, nil
 }
 
+func ValidateAllocatorforBorderIPs(ipAllocator *SingleIPAllocator, cidr *net.IPNet, includeBorderIPs bool) (*SingleIPAllocator, error) {
+	base := utilnet.BigForIP(cidr.IP)
+	ip := cidr.IP.To4()
+	if includeBorderIPs == false || (ip != nil && (ip[3] == 0 || ip[3] == 255)) {
+		return ipAllocator, nil
+	}
+
+	ipAllocator.base = base.Sub(base, big.NewInt(1))
+	ipAllocator.max = ipAllocator.max + 1
+	return ipAllocator, nil
+}
+
 // NewIPRangeAllocator creates an IPAllocator based on the provided start IP and end IP.
 // The start IP and end IP are inclusive.
 func NewIPRangeAllocator(startIP, endIP net.IP) (*SingleIPAllocator, error) {

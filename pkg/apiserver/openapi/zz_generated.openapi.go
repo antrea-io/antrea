@@ -3981,6 +3981,13 @@ func schema_pkg_apis_crd_v1beta1_ExternalIPPoolSpec(ref common.ReferenceCallback
 							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.LabelSelector"),
 						},
 					},
+					"includeBorderIPs": {
+						SchemaProps: spec.SchemaProps{
+							Description: "IncludeBorderIPs field gives users the flexibility to include the border IPs from the CIDR specified in the IPRange iff the border IPs are not x.x.x.0 and x.x.x.255. Default value is false.",
+							Type:        []string{"boolean"},
+							Format:      "",
+						},
+					},
 				},
 				Required: []string{"ipRanges", "nodeSelector"},
 			},
