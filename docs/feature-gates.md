@@ -338,7 +338,7 @@ This feature is only supported:
 
 * on Linux Nodes
 * for IPv4 traffic
-* in `noEncap` and `encap` traffic modes
+* in `hybrid`, `noEncap` and `encap` traffic modes
 
 ### SecondaryNetwork
 
