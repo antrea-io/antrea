@@ -32,7 +32,10 @@ import (
 	ovsconfigtest "antrea.io/antrea/pkg/ovs/ovsconfig/testing"
 )
 
-const nonExistingInterface = "non-existing"
+const (
+	nonExistingInterface = "non-existing"
+	firstUplinkOFPort    = 32768
+)
 
 func TestCreateOVSBridge(t *testing.T) {
 	tests := []struct {
@@ -108,25 +111,25 @@ func TestConnectPhyInterfacesToOVSBridge(t *testing.T) {
 			name:               "one interface",
 			physicalInterfaces: []string{"eth0~"},
 			expectedCalls: func(m *ovsconfigtest.MockOVSBridgeClient) {
-				m.EXPECT().GetOFPort("eth0~", false).Return(int32(0), ovsconfig.InvalidArgumentsError("port not found"))
-				m.EXPECT().CreateUplinkPort("eth0~", int32(0), map[string]interface{}{"antrea-type": "uplink"}).Return("", nil)
+				m.EXPECT().GetOFPort("eth0~", false).Return(int32(firstUplinkOFPort), ovsconfig.InvalidArgumentsError("port not found"))
+				m.EXPECT().CreateUplinkPort("eth0~", int32(firstUplinkOFPort), map[string]interface{}{"antrea-type": "uplink"}).Return("", nil)
 			},
 		},
 		{
 			name:               "two interfaces",
 			physicalInterfaces: []string{"eth1", "eth2"},
 			expectedCalls: func(m *ovsconfigtest.MockOVSBridgeClient) {
-				m.EXPECT().GetOFPort("eth1", false).Return(int32(0), ovsconfig.InvalidArgumentsError("port not found"))
-				m.EXPECT().CreateUplinkPort("eth1", int32(0), map[string]interface{}{"antrea-type": "uplink"}).Return("", nil)
-				m.EXPECT().GetOFPort("eth2", false).Return(int32(1), ovsconfig.InvalidArgumentsError("port not found"))
-				m.EXPECT().CreateUplinkPort("eth2", int32(1), map[string]interface{}{"antrea-type": "uplink"}).Return("", nil)
+				m.EXPECT().GetOFPort("eth1", false).Return(int32(firstUplinkOFPort), ovsconfig.InvalidArgumentsError("port not found"))
+				m.EXPECT().CreateUplinkPort("eth1", int32(firstUplinkOFPort), map[string]interface{}{"antrea-type": "uplink"}).Return("", nil)
+				m.EXPECT().GetOFPort("eth2", false).Return(int32(firstUplinkOFPort+1), ovsconfig.InvalidArgumentsError("port not found"))
+				m.EXPECT().CreateUplinkPort("eth2", int32(firstUplinkOFPort+1), map[string]interface{}{"antrea-type": "uplink"}).Return("", nil)
 			},
 		},
 		{
 			name:               "interface already attached",
 			physicalInterfaces: []string{"eth1"},
 			expectedCalls: func(m *ovsconfigtest.MockOVSBridgeClient) {
-				m.EXPECT().GetOFPort("eth1", false).Return(int32(0), nil)
+				m.EXPECT().GetOFPort("eth1", false).Return(int32(firstUplinkOFPort), nil)
 			},
 		},
 		{
@@ -139,8 +142,8 @@ func TestConnectPhyInterfacesToOVSBridge(t *testing.T) {
 			physicalInterfaces: []string{"eth1"},
 			expectedErr:        "create error",
 			expectedCalls: func(m *ovsconfigtest.MockOVSBridgeClient) {
-				m.EXPECT().GetOFPort("eth1", false).Return(int32(0), ovsconfig.InvalidArgumentsError("port not found"))
-				m.EXPECT().CreateUplinkPort("eth1", int32(0), map[string]interface{}{"antrea-type": "uplink"}).Return("", ovsconfig.InvalidArgumentsError("create error"))
+				m.EXPECT().GetOFPort("eth1", false).Return(int32(firstUplinkOFPort), ovsconfig.InvalidArgumentsError("port not found"))
+				m.EXPECT().CreateUplinkPort("eth1", int32(firstUplinkOFPort), map[string]interface{}{"antrea-type": "uplink"}).Return("", ovsconfig.InvalidArgumentsError("create error"))
 			},
 		},
 	}
