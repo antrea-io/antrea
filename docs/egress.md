@@ -18,6 +18,10 @@
   - [Configuring High-Availability Egress](#configuring-high-availability-egress)
   - [Configuring static Egress](#configuring-static-egress)
 - [Configuration options](#configuration-options)
+- [Reverse Path Filtering (rp_filter) Requirements](#reverse-path-filtering-rp_filter-requirements)
+  - [Why loose rp_filter is required](#why-loose-rp_filter-is-required)
+  - [How Antrea configures rp_filter](#how-antrea-configures-rp_filter)
+  - [Platform-specific considerations](#platform-specific-considerations)
 - [Egress on Cloud](#egress-on-cloud)
   - [AWS](#aws)
 - [Limitations](#limitations)
@@ -413,6 +417,63 @@ case.
   specify different values for different Nodes, taking priority over the value
   configured in the config file. The option and the annotation were added in
   Antrea v1.11.0.
+
+## Reverse Path Filtering (rp_filter) Requirements
+
+Antrea Egress relies on Linux reverse path filtering (`rp_filter`) being configured
+to `2 (loose mode)` on the VLAN sub-interfaces created by Antrea when using
+`EgressSeparateSubnet` feature, as well as the Antrea gateway interface (default:
+`antrea-gw0`) when traffic mode is hybrid.
+
+### Why loose rp_filter is required
+
+Linux reverse path filtering validates whether the source address of an incoming
+packet is reachable via the same interface according to the routing table.
+
+When `rp_filter` is set to:
+
+- `0` (disabled): no source validation is performed.
+- `1` (strict): packets are dropped if the return path does not use the same interface.
+- `2` (loose): packets are accepted as long as the source is reachable via any interface.
+
+Egress traffic can legitimately violate strict reverse path checks when using
+`EgressSeparateSubnet` feature or when traffic mode is hybrid.
+
+### How Antrea configures rp_filter
+
+Antrea uses two complementary mechanisms to ensure correct `rp_filter` settings:
+
+1. **Dynamic configuration by Antrea Agent**
+  The Antrea Agent attempts to set `rp_filter=2` on relevant interfaces at runtime
+  when Egress-related interfaces (such as VLAN sub-interfaces) are created or updated.
+
+2. **Persistent configuration via optional init container**
+  On some Linux distributions used as Kubernetes Nodes, updates to `rp_filter` performed
+  by Antrea Agent may not take effect as expected. This can occur when default distribution-
+  or administrator-provided sysctl configuration files are automatically re-applied to network
+  interfaces when new interfaces are added. In such environments, the `rp_filter` values
+  configured by Antrea may be overridden when Antrea-managed interfaces are created.
+
+  To ensure that the required `rp_filter` settings are consistently applied for Antrea
+  Egress, an optional init container can be enabled to install an Antrea-specific sysctl
+  configuration file and explicitly apply it during startup. This can be done by installing
+  Antrea with the following option enabled:
+
+  ```bash
+  helm upgrade --install antrea antrea/antrea \
+    --namespace kube-system \
+    --set antreaSysctlInit.enable=true
+  ```
+
+  This approach adds an Antrea-specific sysctl configuration file under `/etc/sysctl.d/`,
+  overriding distribution-specific sysctl configurations when Antrea-managed interfaces
+  are created.
+
+### Platform-specific considerations
+
+If the `rp_filter` update by Antrea Agent does not take effect on an OpenShift cluster, even
+when setting `antreaSysctlInit.enable=true`, please refer to [Known issues](#known-issues)
+for a workaround.
 
 ## Egress on Cloud
 
