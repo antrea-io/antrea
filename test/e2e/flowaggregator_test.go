@@ -2016,8 +2016,7 @@ func testExternalToPodFlows(t *testing.T, data *TestData, isIPv6 bool) {
 			records := getCollectorOutput(t, testFlow1.srcIP, testFlow1.dstIP, "", false, false, isIPv6, data, "", getCollectorOutputDefaultTimeout)
 			assert.NotEmpty(t, records, "Expected flows from ipfix collector to include source IP %s and destination ip %s", testFlow1.srcIP, testFlow1.dstIP)
 			for _, record := range records {
-				assert := assert.New(t)
-				assert.Contains(record, testFlow1.dstPodName, "Aggregated Record does not have Source Pod name: %s", testFlow1.srcPodName)
+				assert.Contains(t, record, testFlow1.dstPodName, "Aggregated Record missing Destination Pod name: %s", testFlow1.dstPodName)
 			}
 			flushFlowsFromCollector(t, data, isIPv6)
 		})
