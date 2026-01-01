@@ -67,6 +67,24 @@ spec:
       {{- end }}
       serviceAccountName: antrea-agent
       initContainers:
+      {{- if .Values.agent.antreaSysctlInit.enable }}
+        - name: antrea-sysctl-init
+          image: {{ include "antreaAgentImage" . | quote }}
+          imagePullPolicy: {{ include "antreaAgentImagePullPolicy" . }}
+          resources: {{- .Values.agent.antreaSysctlInit.resources | toYaml | nindent 12 }}
+          command: ["antrea-sysctl-init"]
+          args:
+            - "--host-gateway-name={{ .Values.hostGateway }}"
+          {{- with .Values.agent.antreaSysctlInit.securityContext }}
+          securityContext:
+            {{- if .privileged }}
+            privileged: true
+            {{- end }}
+          {{- end }}
+          volumeMounts:
+            - name: host-sysctl-dir
+              mountPath: /host/etc/sysctl.d
+      {{- end }}
       {{- if eq .Values.trafficEncapMode "networkPolicyOnly" }}
       containers:
       {{- end }}
@@ -409,6 +427,12 @@ spec:
         - name: host-pod-resources
           hostPath:
             path: {{ .Values.agent.kubeletRootDir }}/pod-resources
+            type: Directory
+        {{- end }}
+        {{- if .Values.agent.antreaSysctlInit.enable }}
+        - name: host-sysctl-dir
+          hostPath:
+            path: {{ .Values.agent.antreaSysctlInit.hostSysctlDir }}
             type: Directory
         {{- end }}
         {{- with .Values.agent.extraVolumes }}

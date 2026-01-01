@@ -31,7 +31,7 @@ RUN --mount=type=cache,target=/go/pkg/mod/ \
 
 RUN --mount=type=cache,target=/go/pkg/mod/ \
     --mount=type=cache,target=/root/.cache/go-build/ \
-    make antrea-agent antrea-cni
+    make antrea-agent antrea-cni antrea-sysctl-init
 
 FROM antrea/base-ubi-${TARGETARCH}:${BUILD_TAG}
 
@@ -44,3 +44,4 @@ COPY build/images/scripts/* /usr/local/bin/
 COPY --from=antrea-build /antrea/bin/antrea-agent /usr/local/bin/
 COPY --from=antrea-build /antrea/bin/antrea-cni /usr/local/bin/
 COPY --from=antrea-build /antrea/bin/antctl /usr/local/bin/
+COPY --from=antrea-build /antrea/bin/antrea-sysctl-init /usr/local/bin/
