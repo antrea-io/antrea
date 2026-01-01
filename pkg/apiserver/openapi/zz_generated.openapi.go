@@ -3795,8 +3795,15 @@ func schema_pkg_apis_crd_v1beta1_EgressSpec(ref common.ReferenceCallback) common
 							Ref:         ref("antrea.io/antrea/pkg/apis/crd/v1beta1.Bandwidth"),
 						},
 					},
+					"failurePolicy": {
+						SchemaProps: spec.SchemaProps{
+							Default: "",
+							Type:    []string{"string"},
+							Format:  "",
+						},
+					},
 				},
-				Required: []string{"appliedTo"},
+				Required: []string{"appliedTo", "failurePolicy"},
 			},
 		},
 		Dependencies: []string{
