@@ -401,26 +401,21 @@ func getServiceName(port uint16, services []*corev1.Service) (string, string) {
 // the service whos port matches the destination port. An error is returned if no match
 // is found or errors occurred retrieving services
 func (exp *FlowExporter) FillServiceInfo(conn *connection.Connection) error {
-	errorString := "Failed to fill serviceInfo for connection"
 	if exp.serviceInformer == nil {
-		return fmt.Errorf("%s: serviceInformer is nil", errorString)
+		return fmt.Errorf("service informer not initialized")
 	}
 	serviceLister := exp.serviceInformer.Lister()
 	if serviceLister == nil {
-		return fmt.Errorf("%s: serviceLister is nil", errorString)
+		return fmt.Errorf("failed to get service lister from informer")
 	}
-	serviceNamespaceLister := serviceLister.Services(conn.DestinationPodNamespace)
-	if serviceNamespaceLister == nil {
-		return fmt.Errorf("%s: serviceNamespaceLister is nil", errorString)
-	}
-	services, err := serviceNamespaceLister.List(labels.NewSelector())
+	services, err := serviceLister.Services(conn.DestinationPodNamespace).List(labels.NewSelector())
 	if err != nil {
-		return fmt.Errorf("%s: serviceNamespaceLister failed to List: %w", errorString, err)
+		return fmt.Errorf("failed to list services: %w", err)
 	}
 
 	matchingServiceName, portName := getServiceName(conn.FlowKey.DestinationPort, services)
 	if matchingServiceName == "" {
-		return fmt.Errorf("%s: No service with matching port found", errorString)
+		return fmt.Errorf("failed to find service with NodePort %q", conn.FlowKey.DestinationPort)
 	}
 	conn.DestinationServicePortName = fmt.Sprintf("%s/%s:%s", conn.DestinationPodNamespace, matchingServiceName, portName)
 	return nil
@@ -446,7 +441,7 @@ func (exp *FlowExporter) exportConn(conn *connection.Connection) error {
 		err := exp.FillServiceInfo(conn)
 		if err != nil {
 			// Not returning error because zone zero flows will not have service info but still need to be exported
-			klog.Error(err)
+			klog.ErrorS(err, "Error when filling service info for external to pod connection")
 		}
 	}
 
