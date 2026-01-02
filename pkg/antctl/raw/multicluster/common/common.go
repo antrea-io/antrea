@@ -90,8 +90,8 @@ func CreateClusterSet(cmd *cobra.Command, k8sClient client.Client, namespace str
 	} else {
 		fmt.Fprintf(cmd.OutOrStdout(), "ClusterSet \"%s\" created in Namespace %s\n", clusterSet.Name, clusterSet.Namespace)
 		unstructuredClusterSet, _ := runtime.DefaultUnstructuredConverter.ToUnstructured(clusterSet)
-		unstructuredClusterSet["apiVersion"] = clusterSet.APIVersion
-		unstructuredClusterSet["kind"] = clusterSet.Kind
+		unstructuredClusterSet["apiVersion"] = "multicluster.crd.antrea.io/v1alpha1"
+		unstructuredClusterSet["kind"] = "ClusterSet"
 		*createdRes = append(*createdRes, unstructuredClusterSet)
 	}
 
@@ -205,8 +205,8 @@ func CreateMemberToken(cmd *cobra.Command, k8sClient client.Client, name string,
 	} else {
 		fmt.Fprintf(cmd.OutOrStdout(), "ServiceAccount \"%s\" created\n", serviceAccount.Name)
 		unstructuredSA, _ := runtime.DefaultUnstructuredConverter.ToUnstructured(serviceAccount)
-		unstructuredSA["apiVersion"] = serviceAccount.APIVersion
-		unstructuredSA["kind"] = serviceAccount.Kind
+		unstructuredSA["apiVersion"] = "v1"
+		unstructuredSA["kind"] = "ServiceAccount"
 		*createdRes = append(*createdRes, unstructuredSA)
 	}
 
@@ -222,8 +222,8 @@ func CreateMemberToken(cmd *cobra.Command, k8sClient client.Client, name string,
 	} else {
 		fmt.Fprintf(cmd.OutOrStdout(), "RoleBinding \"%s\" created\n", roleBinding.Name)
 		unstructuredRoleBinding, _ := runtime.DefaultUnstructuredConverter.ToUnstructured(roleBinding)
-		unstructuredRoleBinding["apiVersion"] = roleBinding.APIVersion
-		unstructuredRoleBinding["kind"] = roleBinding.Kind
+		unstructuredRoleBinding["apiVersion"] = "rbac.authorization.k8s.io/v1"
+		unstructuredRoleBinding["kind"] = "RoleBinding"
 		*createdRes = append(*createdRes, unstructuredRoleBinding)
 	}
 
@@ -238,8 +238,8 @@ func CreateMemberToken(cmd *cobra.Command, k8sClient client.Client, name string,
 	} else {
 		fmt.Fprintf(cmd.OutOrStdout(), "Secret \"%s\" created\n", secret.Name)
 		unstructuredSecret, _ := runtime.DefaultUnstructuredConverter.ToUnstructured(secret)
-		unstructuredSecret["apiVersion"] = secret.APIVersion
-		unstructuredSecret["kind"] = secret.Kind
+		unstructuredSecret["apiVersion"] = "v1"
+		unstructuredSecret["kind"] = "Secret"
 		*createdRes = append(*createdRes, unstructuredSecret)
 	}
 	// It will take one or two seconds to wait for the Data.token to be created.
