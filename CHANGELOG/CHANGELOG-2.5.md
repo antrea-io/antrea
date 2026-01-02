@@ -1,5 +1,16 @@
 # Changelog 2.5
 
+## 2.5.1 - 2026-01-06
+
+### Fixed
+
+- Add init container to apply Antrea-specific sysctl configuration. ([#7651](https://github.com/antrea-io/antrea/pull/7651), [@hongliangl])
+- Fix antrea-agent crashing due to a nil pointer when AntreaProxy is not enabled. ([#7636](https://github.com/antrea-io/antrea/pull/7636), [@hongliangl])
+- Generate self-signed certificates only when required to prevent conflicts in multi-replica flow-aggregator deployments. ([#7559](https://github.com/antrea-io/antrea/pull/7559), [@andrew-su])
+- Update module github.com/containernetworking/plugins to v1.9.0 to address CVEs. ([#7624](https://github.com/antrea-io/antrea/pull/7624), [@renovatebot])
+- Lock feature gates `TopologyAwareHints` and `ServiceTrafficDistribution` to true. ([#7620](https://github.com/antrea-io/antrea/pull/7620), [@hongliangl])
+- Fix handling of self-connections on Egress Nodes in hybrid mode. ([#7611](https://github.com/antrea-io/antrea/pull/7611), [@hongliangl])
+
 ## 2.5.0 - 2025-12-03
 
 ### Added
@@ -72,6 +83,7 @@
 [@hongliangl]: https://github.com/hongliangl
 [@jianjuns]: https://github.com/jianjuns
 [@luolanzone]: https://github.com/luolanzone
+[@renovatebot](https://github.com/renovatebot)
 [@sratslla]: https://github.com/sratslla
 [@wenqiq]: https://github.com/wenqiq
 [@wenyingd]: https://github.com/wenyingd
