@@ -1,5 +1,18 @@
 # Changelog 2.4
 
+## 2.4.4 - 2026-01-04
+
+### Fixed
+
+- Add init container to apply Antrea-specific sysctl configuration. ([#7651](https://github.com/antrea-io/antrea/pull/7651), [@hongliangl])
+- Improve stale IP recycling in AntreaIPAM controller. ([#7538](https://github.com/antrea-io/antrea/pull/7538) [#7571](https://github.com/antrea-io/antrea/pull/7571), [@luolanzone])
+- Clean up stale secondary IPs in IPPool when Node restarts with invalid OVSDB. ([#7511](https://github.com/antrea-io/antrea/pull/7511), [@luolanzone])
+- Fix panic in Antrea monitor controller caused by unexpected delete event type. ([#7568](https://github.com/antrea-io/antrea/pull/7568), [@luolanzone])
+- Exclude Egress VLAN sub-interfaces (`antrea-ext.VLAN`) from NodePort addresses for consistency. ([#7519](https://github.com/antrea-io/antrea/pull/7519), [@antoninbas])
+- Fix a type assertion panic in `GetFlowTableID` function, which affected the `/ovsflows` HTTP handler. ([#7515](https://github.com/antrea-io/antrea/pull/7515), [@antoninbas])
+- Handle missing Pod IP and Pod IP changes in NodePortLocal to prevent incorrect datapath rules. ([#7512](https://github.com/antrea-io/antrea/pull/7512), [@antoninbas])
+- Update CNI plugins to 1.9.0 with CVE fix. ([#7644](https://github.com/antrea-io/antrea/pull/7644), [@luolanzone])
+
 ## 2.4.3 - 2025-10-14
 
 ### Fixed
