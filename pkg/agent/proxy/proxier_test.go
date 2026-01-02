@@ -757,6 +757,11 @@ func testLoadBalancerAdd(t *testing.T,
 	fp.syncProxyRules()
 	assert.Contains(t, fp.serviceInstalledMap, svcPortName)
 	assert.Contains(t, fp.endpointsInstalledMap, svcPortName)
+	if proxyLoadBalancerIPs {
+		svcInfoStr := fmt.Sprintf("%s:%d/%s", loadBalancerIP, svcPort, corev1.ProtocolTCP)
+		_, exists := fp.ipToServiceMap.get(svcInfoStr)
+		assert.True(t, exists)
+	}
 }
 
 func testNodePortAdd(t *testing.T,
@@ -2953,7 +2958,7 @@ func testServiceExternalIPsUpdate(t *testing.T, protocol binding.Protocol, isIPv
 		mockRouteClient.EXPECT().AddExternalIPConfigs(svcInfoStr, ip)
 	}
 	toDeleteExternalIPs := smallSliceDifference(externalIPs, updatedExternalIPs)
-	toAddLoadExternalIPs := smallSliceDifference(updatedExternalIPs, externalIPs)
+	toAddExternalIPs := smallSliceDifference(updatedExternalIPs, externalIPs)
 	for _, ip := range toDeleteExternalIPs {
 		mockOFClient.EXPECT().UninstallServiceFlows(ip, uint16(svcPort), protocol)
 		mockRouteClient.EXPECT().DeleteExternalIPConfigs(svcInfoStr, ip)
@@ -2961,7 +2966,7 @@ func testServiceExternalIPsUpdate(t *testing.T, protocol binding.Protocol, isIPv
 			mockRouteClient.EXPECT().ClearConntrackEntryForService(ip, uint16(svcPort), nil, protocol)
 		}
 	}
-	for _, ip := range toAddLoadExternalIPs {
+	for _, ip := range toAddExternalIPs {
 		mockOFClient.EXPECT().InstallServiceFlows(&antreatypes.ServiceConfig{
 			ServiceIP:      ip,
 			ServicePort:    uint16(svcPort),
@@ -2979,6 +2984,48 @@ func testServiceExternalIPsUpdate(t *testing.T, protocol binding.Protocol, isIPv
 	fp.syncProxyRules()
 	assert.Contains(t, fp.serviceInstalledMap, svcPortName)
 	assert.Contains(t, fp.endpointsInstalledMap, svcPortName)
+
+	var testCases = []struct {
+		name     string
+		ipList   []net.IP
+		expected bool
+	}{
+		{
+			name:     "deleted loadbalancer IPs",
+			ipList:   toDeleteLoadBalancerIPs,
+			expected: false,
+		},
+		{
+			name:     "deleted external IPs",
+			ipList:   toDeleteExternalIPs,
+			expected: false,
+		},
+		{
+			name:     "added loadbalancer IPs",
+			ipList:   updatedLoadBalancerIPs,
+			expected: true,
+		},
+		{
+			name:     "added external IPs",
+			ipList:   updatedExternalIPs,
+			expected: true,
+		},
+	}
+
+	for _, tt := range testCases {
+		t.Run(tt.name, func(t *testing.T) {
+			for _, ip := range tt.ipList {
+				serviceStr := fmt.Sprintf("%s:%d/%s", ip, int32(svcPort), apiProtocol)
+				_, exists := fp.ipToServiceMap.get(serviceStr)
+
+				if tt.expected {
+					assert.True(t, exists, fmt.Sprintf("Expected %s to exist but it was missing: %s", tt.name, serviceStr))
+				} else {
+					assert.False(t, exists, fmt.Sprintf("Expected %s to be deleted but it was found: %s", tt.name, serviceStr))
+				}
+			}
+		})
+	}
 }
 
 func TestServiceIngressIPsUpdate(t *testing.T) {
@@ -4046,5 +4093,70 @@ func TestServiceHealthServer(t *testing.T) {
 	t.Run("force disabled", func(t *testing.T) {
 		fp := newFakeProxier(nil, nil, nil, nil, false, withProxyAll, withoutServiceHealthServer)
 		assert.Nil(t, fp.serviceHealthServer)
+	})
+}
+
+func TestIPToServiceMap(t *testing.T) {
+	family := corev1.IPv4Protocol
+	port := &corev1.ServicePort{
+		Protocol: corev1.ProtocolTCP,
+		Port:     int32(80),
+	}
+	service := &corev1.Service{
+		Spec: corev1.ServiceSpec{
+			ClusterIP:   "1.1.1.1",
+			ExternalIPs: []string{"3.3.3.3"},
+		},
+		Status: corev1.ServiceStatus{
+			LoadBalancer: corev1.LoadBalancerStatus{
+				Ingress: []corev1.LoadBalancerIngress{
+					{IP: "2.2.2.2"},
+				},
+			},
+		},
+	}
+	baseServicePortInfo := k8sproxy.NewBaseServiceInfo(service, family, port)
+	serviceInfo := &types.ServiceInfo{
+		BaseServicePortInfo: baseServicePortInfo,
+	}
+	servicePortName := k8sproxy.ServicePortName{
+		Port:     "80",
+		Protocol: corev1.ProtocolTCP,
+	}
+	t.Run("Add and Delete", func(t *testing.T) {
+		m := newIPToServiceMap()
+		m.add(serviceInfo, servicePortName)
+		assert.Len(t, m.serviceStringMap, 3)
+
+		m.delete(serviceInfo)
+		assert.Len(t, m.serviceStringMap, 0)
+	})
+	t.Run("Get", func(t *testing.T) {
+		t.Run("invalid serviceStr", func(t *testing.T) {
+			m := newIPToServiceMap()
+			_, exists := m.get("something")
+			assert.False(t, exists)
+		})
+		t.Run("valid serviceStr", func(t *testing.T) {
+			m := newIPToServiceMap()
+			m.add(serviceInfo, servicePortName)
+			got, exists := m.get(
+				generateServiceInfoStrings(corev1.ProtocolTCP, 80, []net.IP{net.IP([]byte{2, 2, 2, 2})})[0],
+			)
+			assert.True(t, exists, "Expected service accessible by loadbalancer IP")
+			assert.Equal(t, servicePortName, got)
+
+			got, exists = m.get(
+				generateServiceInfoStrings(corev1.ProtocolTCP, 80, []net.IP{net.IP([]byte{1, 1, 1, 1})})[0],
+			)
+			assert.True(t, exists, "Expected service accessible by cluster IP")
+			assert.Equal(t, servicePortName, got)
+
+			got, exists = m.get(
+				generateServiceInfoStrings(corev1.ProtocolTCP, 80, []net.IP{net.IP([]byte{3, 3, 3, 3})})[0],
+			)
+			assert.True(t, exists, "Expected service accessible by external IP")
+			assert.Equal(t, servicePortName, got)
+		})
 	})
 }
