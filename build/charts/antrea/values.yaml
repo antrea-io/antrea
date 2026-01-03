@@ -294,6 +294,18 @@ agent:
   # resources socket is mounted into antrea-agent Pods. Setting it to an empty
   # value disables the mounting.
   kubeletRootDir: "/var/lib/kubelet"
+  antreaSysctlInit:
+    # -- Enable the sysctl override. When enabled, the init container will do the process.
+    enable: false
+    # -- Path to the sysctl configuration directory on the host.
+    hostSysctlDir: "/etc/sysctl.d"
+    # -- Resource requests and limits for the antrea-sysctl-init init container.
+    resources:
+      requests:
+        cpu: "50m"
+    securityContext:
+      # -- Whether to run the antrea-sysctl-init container as privileged.
+      privileged: true
   installCNI:
     # -- Extra environment variables to be injected into install-cni.
     extraEnv: {}
@@ -302,7 +314,7 @@ agent:
       requests:
         cpu: "100m"
     securityContext:
-      # -- Run the install-cni container as privileged.
+      # -- Whether to run the install-cni container as privileged.
       privileged: false
       # -- Capabilities for the install-cni initContainer.
       capabilities:
@@ -324,7 +336,7 @@ agent:
       requests:
         cpu: "200m"
     securityContext:
-      # -- Run the antrea-agent container as privileged. Currently we require
+      # -- Whether to run the antrea-agent container as privileged. Currently we require
       # this to be true (for sysctl configurations), but we may support running
       # as non-privileged in the future.
       privileged: true
@@ -344,7 +356,7 @@ agent:
       requests:
         cpu: "200m"
     securityContext:
-      # -- Run the antrea-ovs container as privileged.
+      # -- Whether to run the antrea-ovs container as privileged.
       privileged: false
       # -- Capabilities for the antrea-ovs container.
       capabilities:
@@ -360,7 +372,7 @@ agent:
       requests:
         cpu: "50m"
     securityContext:
-      # -- Run the antrea-ipsec container as privileged.
+      # -- Whether to run the antrea-ipsec container as privileged.
       privileged: false
       # -- Capabilities for the antrea-ipsec container.
       capabilities:
