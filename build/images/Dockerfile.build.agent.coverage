@@ -26,7 +26,7 @@ COPY . /antrea
 
 RUN make antctl-instr-binary
 
-RUN make antrea-cni antrea-agent-instr-binary
+RUN make antrea-cni antrea-agent-instr-binary antrea-sysctl-init
 
 FROM antrea/base-ubuntu-${TARGETARCH}:${BUILD_TAG}
 
@@ -38,6 +38,7 @@ USER root
 COPY build/images/scripts/* /usr/local/bin/
 COPY --from=antrea-build /antrea/bin/antrea-agent-coverage /usr/local/bin/antrea-agent
 COPY --from=antrea-build /antrea/bin/antrea-cni /usr/local/bin/
+COPY --from=antrea-build /antrea/bin/antrea-sysctl-init /usr/local/bin/
 COPY --from=antrea-build /antrea/bin/antctl-coverage /usr/local/bin/antctl
 COPY --from=antrea-build /antrea/test/e2e/utils/run_cov_binary.sh /
 
