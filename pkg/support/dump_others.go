@@ -88,30 +88,16 @@ func (d *agentDumper) dumpIPTables(basedir string) error {
 func (d *agentDumper) dumpNFTables(basedir string) error {
 	var data bytes.Buffer
 
-	if d.v4Enabled && nftablesIPv4Supported() {
-		output, err := d.executor.Command("nft", "list", "table", "ip", "antrea").CombinedOutput()
+	if d.v4Enabled && nftablesIPv4Supported() || d.v6Enabled && nftablesIPv6Supported() {
+		output, err := d.executor.Command("nft", "list", "ruleset").CombinedOutput()
 		if err != nil {
-			return fmt.Errorf("failed to dump nftables table 'ip antrea': %w", err)
+			return fmt.Errorf("failed to dump nftables: %w", err)
 		}
-		if len(output) > 0 {
-			data.Write(output)
-			data.WriteByte('\n')
+		if len(output) == 0 {
+			return nil
 		}
-	}
-
-	if d.v6Enabled && nftablesIPv6Supported() {
-		output, err := d.executor.Command("nft", "list", "table", "ip6", "antrea").CombinedOutput()
-		if err != nil {
-			return fmt.Errorf("failed to dump nftables table 'ip6 antrea': %w", err)
-		}
-		if len(output) > 0 {
-			data.Write(output)
-			data.WriteByte('\n')
-		}
-	}
-
-	if data.Len() == 0 {
-		return nil
+		data.Write(output)
+		data.WriteByte('\n')
 	}
 
 	fileName := "nftables"

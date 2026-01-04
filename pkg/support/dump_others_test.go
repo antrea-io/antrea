@@ -54,17 +54,17 @@ func TestDumpLog(t *testing.T) {
 }
 
 func TestDumpNFTables(t *testing.T) {
-	const nftV4Output = "table ip antrea { chain antrea-chain { type filter hook input priority 0; } }"
-	const nftV6Output = "table ip6 antrea { chain antrea-chain6 { type filter hook input priority 0; } }"
+	const nftOutput = `table ip antrea { 
+	chain antrea-chain { 
+		type filter hook input priority 0; 
+	} 
+}`
 
-	v4ErrorAction := func() ([]byte, []byte, error) {
-		return nil, nil, fmt.Errorf("v4 error")
+	errorAction := func() ([]byte, []byte, error) {
+		return nil, nil, fmt.Errorf("error")
 	}
-	v4SuccessAction := func() ([]byte, []byte, error) {
-		return []byte(nftV4Output), nil, nil
-	}
-	v6SuccessAction := func() ([]byte, []byte, error) {
-		return []byte(nftV6Output), nil, nil
+	successAction := func() ([]byte, []byte, error) {
+		return []byte(nftOutput), nil, nil
 	}
 	emptySuccessAction := func() ([]byte, []byte, error) {
 		return []byte(""), nil, nil
@@ -72,94 +72,51 @@ func TestDumpNFTables(t *testing.T) {
 
 	originalV4Check := nftablesIPv4Supported
 	originalV6Check := nftablesIPv6Supported
+	nftablesIPv4Supported = func() bool { return true }
+	nftablesIPv6Supported = func() bool { return true }
 	t.Cleanup(func() {
 		nftablesIPv4Supported = originalV4Check
 		nftablesIPv6Supported = originalV6Check
 	})
 
-	nftablesIPv4Supported = func() bool { return true }
-	nftablesIPv6Supported = func() bool { return true }
-
 	tests := []struct {
 		name            string
-		v4Enabled       bool
-		v6Enabled       bool
 		commandActions  []testingexec.FakeCommandAction
 		expectedContent string
 		expectFile      bool
 		expectedErr     string
 	}{
 		{
-			name:      "v4 enabled only",
-			v4Enabled: true,
-			v6Enabled: false,
+			name: "dump succeeds and writes nftables file",
 			commandActions: []testingexec.FakeCommandAction{
 				func(cmd string, args ...string) exec.Cmd {
 					return &testingexec.FakeCmd{
-						CombinedOutputScript: []testingexec.FakeAction{v4SuccessAction},
+						CombinedOutputScript: []testingexec.FakeAction{successAction},
 					}
 				},
 			},
-			expectedContent: nftV4Output + "\n",
+			expectedContent: nftOutput + "\n",
 			expectFile:      true,
 		},
 		{
-			name:      "v6 enabled only",
-			v4Enabled: false,
-			v6Enabled: true,
+			name: "command failure returns error and no file is written",
 			commandActions: []testingexec.FakeCommandAction{
 				func(cmd string, args ...string) exec.Cmd {
 					return &testingexec.FakeCmd{
-						CombinedOutputScript: []testingexec.FakeAction{v6SuccessAction},
-					}
-				},
-			},
-			expectedContent: nftV6Output + "\n",
-			expectFile:      true,
-		},
-		{
-			name:      "v4 and v6 enabled",
-			v4Enabled: true,
-			v6Enabled: true,
-			commandActions: []testingexec.FakeCommandAction{
-				func(cmd string, args ...string) exec.Cmd {
-					return &testingexec.FakeCmd{
-						CombinedOutputScript: []testingexec.FakeAction{v4SuccessAction},
-					}
-				},
-				func(cmd string, args ...string) exec.Cmd {
-					return &testingexec.FakeCmd{
-						CombinedOutputScript: []testingexec.FakeAction{v6SuccessAction},
-					}
-				},
-			},
-			expectedContent: nftV4Output + "\n" + nftV6Output + "\n",
-			expectFile:      true,
-		},
-		{
-			name:      "v4 command error",
-			v4Enabled: true,
-			v6Enabled: true,
-			commandActions: []testingexec.FakeCommandAction{
-				func(cmd string, args ...string) exec.Cmd {
-					return &testingexec.FakeCmd{
-						CombinedOutputScript: []testingexec.FakeAction{v4ErrorAction},
+						CombinedOutputScript: []testingexec.FakeAction{errorAction},
 					}
 				},
 			},
 			expectFile:  false,
-			expectedErr: "failed to dump nftables table 'ip antrea': v4 error",
+			expectedErr: "failed to dump nftables: error",
 		},
 		{
-			name:      "no rules found (empty output)",
-			v4Enabled: true,
-			v6Enabled: true,
+			name: "empty nft output does not create file",
 			commandActions: []testingexec.FakeCommandAction{
 				func(cmd string, args ...string) exec.Cmd {
-					return &testingexec.FakeCmd{CombinedOutputScript: []testingexec.FakeAction{emptySuccessAction}}
-				},
-				func(cmd string, args ...string) exec.Cmd {
-					return &testingexec.FakeCmd{CombinedOutputScript: []testingexec.FakeAction{emptySuccessAction}}
+					return &testingexec.FakeCmd{
+						CombinedOutputScript: []testingexec.FakeAction{emptySuccessAction},
+					}
 				},
 			},
 			expectFile: false,
@@ -177,8 +134,8 @@ func TestDumpNFTables(t *testing.T) {
 			dumper := &agentDumper{
 				fs:        fs,
 				executor:  fakeExecutor,
-				v4Enabled: tc.v4Enabled,
-				v6Enabled: tc.v6Enabled,
+				v4Enabled: true,
+				v6Enabled: true,
 			}
 
 			err := dumper.dumpNFTables(baseDir)
@@ -190,7 +147,6 @@ func TestDumpNFTables(t *testing.T) {
 			}
 
 			filePath := filepath.Join(baseDir, "nftables")
-
 			ok, err := afero.Exists(fs, filePath)
 			require.NoError(t, err)
 			assert.Equal(t, tc.expectFile, ok, "Expected nftables file existence to be %t", tc.expectFile)
