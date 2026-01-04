@@ -133,6 +133,11 @@ antrea-controller:
 	@mkdir -p $(BINDIR)
 	GOOS=linux $(GO) build -o $(BINDIR) $(GOFLAGS) -ldflags '$(LDFLAGS)' antrea.io/antrea/cmd/antrea-controller
 
+.PHONY: antrea-sysctl-init
+antrea-sysctl-init:
+	@mkdir -p $(BINDIR)
+	GOOS=linux $(GO) build -o $(BINDIR) $(GOFLAGS) -ldflags '$(LDFLAGS)' antrea.io/antrea/cmd/antrea-sysctl-init
+
 .PHONY: .coverage
 .coverage:
 	mkdir -p $(CURDIR)/.coverage
