@@ -24,3 +24,4 @@ COPY build/images/scripts/* /usr/local/bin/
 COPY bin/antrea-agent /usr/local/bin/
 COPY bin/antrea-cni /usr/local/bin/
 COPY bin/antctl /usr/local/bin/
+COPY bin/antrea-sysctl-init /usr/local/bin/
