@@ -4,6 +4,12 @@ on:
   push:
     branches:
       - main
+  workflow_dispatch:
+    inputs:
+      branch:
+        description: 'Git branch to run benchmarks on'
+        required: false
+        default: main
 
 jobs:
   go-benchmark-checks:
@@ -13,6 +19,7 @@ jobs:
       - name: Check out code into the Go module directory
         uses: actions/checkout@v6
         with:
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.branch || 'main' }}
           fetch-depth: 0
           show-progress: false
 
