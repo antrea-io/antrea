@@ -74,8 +74,9 @@ function docker_build_and_push_windows() {
         local_file=$(echo "${image}" | awk -F'/' '{print $NF}')
         output="type=docker,dest=./${local_file}.tar"
     fi
-
+    set -x
     docker buildx build --platform windows/amd64 -o ${output} -t ${image}:${build_tag} ${pull_option} ${build_args} -f $dockerfile .
+    set +x
 }
 
 function get_target_arch() {
