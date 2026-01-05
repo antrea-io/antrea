@@ -283,7 +283,7 @@ func (p *Provider) syncCACertificate(ctx context.Context) ([]byte, []byte, error
 		klog.V(2).InfoS("CA Secret not found")
 	}
 
-	needsUpdate := (caSecret == nil) || shouldUpdateCACertificate(caCertPEM, caKeyPEM, p.clock.Now())
+	needsUpdate := caSecret == nil || shouldUpdateCACertificate(caCertPEM, caKeyPEM, p.clock.Now())
 	if !needsUpdate {
 		klog.V(2).InfoS("CA certificate does not need to be updated")
 		return caCertPEM, caKeyPEM, nil
