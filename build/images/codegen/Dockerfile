@@ -30,8 +30,7 @@ FROM golang:${GO_VERSION}
 LABEL maintainer="Antrea <projectantrea-dev@googlegroups.com>"
 LABEL description="A Docker image based on the golang image, which includes codegen tools."
 
-# TODO: update to 1.35.0 when it is released
-ARG K8S_VERSION=1.35.0-alpha.1
+ARG K8S_VERSION=1.35.0
 # The k8s.io/kube-openapi repo does not have tag, using a workable commit hash.
 # We use the version that is referenced in the Kubernetes go.mod (for the
 # correct K8s version).

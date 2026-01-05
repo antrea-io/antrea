@@ -22,7 +22,8 @@ Here is the table of codegen images that have been uploaded:
 
 | Tag                       | Change                                                                        |
 | :------------------------ | ----------------------------------------------------------------------------- |
-| kubernetes-1.35.0-alpha.1 | Upgraded Go to v1.25, K8s libs to v1.35.0-alpha.1, mockgen to v0.6.0
+| kubernetes-1.35.0         | Upgraded K8s libs to v1.35.0                                                  |
+| kubernetes-1.35.0-alpha.1 | Upgraded Go to v1.25, K8s libs to v1.35.0-alpha.1, mockgen to v0.6.0          |
 | kubernetes-1.33.1         | Upgraded K8s libs to v1.33.1, mockgen to v0.5.2, controller-gen to v0.18.0    |
 | kubernetes-1.31.1-build.2 | Upgraded Go to v1.24                                                          |
 | kubernetes-1.31.1-build.1 | Upgraded controller-gen to v0.16.3                                            |

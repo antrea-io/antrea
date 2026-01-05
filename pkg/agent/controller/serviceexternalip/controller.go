@@ -212,7 +212,7 @@ func (c *ServiceExternalIPController) enqueueServiceForEndpoints(obj interface{}
 		return
 	}
 	// we only care services with ServiceExternalTrafficPolicy setting to local.
-	if service.Spec.ExternalTrafficPolicy != corev1.ServiceExternalTrafficPolicyTypeLocal || service.Spec.Type != corev1.ServiceTypeLoadBalancer {
+	if service.Spec.ExternalTrafficPolicy != corev1.ServiceExternalTrafficPolicyLocal || service.Spec.Type != corev1.ServiceTypeLoadBalancer {
 		return
 	}
 	c.queue.Add(apimachinerytypes.NamespacedName{
@@ -362,7 +362,7 @@ func (c *ServiceExternalIPController) syncService(key apimachinerytypes.Namespac
 	}
 
 	var filters []func(string) bool
-	if service.Spec.ExternalTrafficPolicy == corev1.ServiceExternalTrafficPolicyTypeLocal {
+	if service.Spec.ExternalTrafficPolicy == corev1.ServiceExternalTrafficPolicyLocal {
 		nodes, err := c.nodesHasHealthyServiceEndpoint(service)
 		if err != nil {
 			return err

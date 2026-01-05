@@ -1,4 +1,4 @@
-// Copyright 2025 Antrea Authors
+// Copyright 2026 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -54,7 +54,7 @@ func NewClusterGroupInformer(client versioned.Interface, resyncPeriod time.Durat
 // one. This reduces memory footprint and number of connections to the server.
 func NewFilteredClusterGroupInformer(client versioned.Interface, resyncPeriod time.Duration, indexers cache.Indexers, tweakListOptions internalinterfaces.TweakListOptionsFunc) cache.SharedIndexInformer {
 	return cache.NewSharedIndexInformer(
-		&cache.ListWatch{
+		cache.ToListWatcherWithWatchListSemantics(&cache.ListWatch{
 			ListFunc: func(options v1.ListOptions) (runtime.Object, error) {
 				if tweakListOptions != nil {
 					tweakListOptions(&options)
@@ -79,7 +79,7 @@ func NewFilteredClusterGroupInformer(client versioned.Interface, resyncPeriod ti
 				}
 				return client.CrdV1beta1().ClusterGroups().Watch(ctx, options)
 			},
-		},
+		}, client),
 		&apiscrdv1beta1.ClusterGroup{},
 		resyncPeriod,
 		indexers,

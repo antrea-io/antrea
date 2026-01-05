@@ -286,6 +286,8 @@ times declarative validation results differed from handwritten validation
 results for core types.
 - **apiserver_validation_declarative_validation_panic_total:** Number of
 times declarative validation has panicked during validation.
+- **apiserver_validation_duplicate_validation_error_total:** Number of
+duplicate validation errors during validation.
 - **apiserver_watch_events_sizes:** Watch event size distribution in bytes
 - **apiserver_watch_events_total:** Number of events sent in watch clients
 - **apiserver_webhooks_x509_insecure_sha1_total:** Counts the number of
