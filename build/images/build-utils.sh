@@ -66,6 +66,13 @@ function docker_build_and_push_windows() {
     local build_tag="$4"
     local push=$5
     local pull_option="$6"
+    local build_context=""
+
+    if [[ ${DOCKER_REGISTRY} != "" ]]; then
+        build_context+=" --build-context ubuntu-lts=docker-image://$DOCKER_REGISTRY/ubuntu:24.04"
+    else
+        build_context+=" --build-context ubuntu-lts=docker-image://ubuntu:24.04"
+    fi
 
     switch_windows_buildx
     if $push; then

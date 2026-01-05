@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-FROM --platform=linux/amd64 ubuntu:24.04 AS antrea-windows-builder
+FROM --platform=linux/amd64 ubuntu-lts AS antrea-windows-builder
 ARG OVS_VERSION
 
 RUN apt-get update && \
