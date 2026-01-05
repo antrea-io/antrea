@@ -3,7 +3,7 @@ apiVersion: rbac.authorization.k8s.io/v1
 metadata:
   labels:
     app: flow-aggregator
-  name: flow-exporter-role-binding
+  name: {{ include "flow-aggregator.fullname" . }}-exporter-reader
   namespace: {{ .Release.Namespace }}
 subjects:
 - kind: ServiceAccount
@@ -11,7 +11,7 @@ subjects:
   namespace: {{ .Values.antreaNamespace }}
 roleRef:
   kind: Role
-  name: flow-exporter-role
+  name: {{ include "flow-aggregator.fullname" . }}-exporter-reader
   apiGroup: rbac.authorization.k8s.io
 ---
 kind: RoleBinding
@@ -19,15 +19,15 @@ apiVersion: rbac.authorization.k8s.io/v1
 metadata:
   labels:
     app: flow-aggregator
-  name: flow-aggregator-role-binding
+  name: {{ include "flow-aggregator.fullname" . }}-manager
   namespace: {{ .Release.Namespace }}
 subjects:
   - kind: ServiceAccount
-    name: flow-aggregator
+    name: {{ include "flow-aggregator.fullname" . }}
     namespace: {{ .Release.Namespace }}
 roleRef:
   kind: Role
-  name: flow-aggregator-role
+  name: {{ include "flow-aggregator.fullname" . }}-manager
   apiGroup: rbac.authorization.k8s.io
 ---
 # For auth delegation to apiserver
@@ -36,11 +36,11 @@ apiVersion: rbac.authorization.k8s.io/v1
 metadata:
   labels:
     app: flow-aggregator
-  name: flow-aggregator-extension-apiserver-authentication-reader-role-binding
+  name: {{ include "flow-aggregator.fullname" . }}-extension-apiserver-authentication-reader
   namespace: kube-system
 subjects:
   - kind: ServiceAccount
-    name: flow-aggregator
+    name: {{ include "flow-aggregator.fullname" . }}
     namespace: {{ .Release.Namespace }}
 roleRef:
   kind: Role
