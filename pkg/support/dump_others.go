@@ -23,6 +23,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"antrea.io/antrea/pkg/agent/util/ipset"
 	"antrea.io/antrea/pkg/agent/util/iptables"
 	"antrea.io/antrea/pkg/util/logdir"
 )
@@ -41,6 +42,9 @@ func (d *agentDumper) DumpHostNetworkInfo(basedir string) error {
 	if err := d.dumpIPTables(basedir); err != nil {
 		return err
 	}
+	if err := d.dumpIPSets(basedir); err != nil {
+		return err
+	}
 	if err := d.dumpIPToolInfo(basedir); err != nil {
 		return err
 	}
@@ -57,6 +61,15 @@ func (d *agentDumper) dumpIPTables(basedir string) error {
 		return err
 	}
 	return writeFile(d.fs, filepath.Join(basedir, "iptables"), "iptables", data)
+}
+
+func (d *agentDumper) dumpIPSets(basedir string) error {
+	c := ipset.NewClient()
+	data, err := c.Save()
+	if err != nil {
+		return err
+	}
+	return writeFile(d.fs, filepath.Join(basedir, "ipsets"), "ipsets", data)
 }
 
 func (d *agentDumper) dumpIPToolInfo(basedir string) error {
