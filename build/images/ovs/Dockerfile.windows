@@ -12,7 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-FROM --platform=linux/amd64 ubuntu:24.04 AS antrea-windows-builder
+ARG DOCKER_REGISTRY="docker.io"
+FROM --platform=linux/amd64 ${DOCKER_REGISTRY}/ubuntu:24.04 AS antrea-windows-builder
 ARG OVS_VERSION
 
 RUN apt-get update && \

@@ -16,7 +16,7 @@ ARG GO_VERSION
 ARG OVS_VERSION
 ARG DOCKER_REGISTRY="docker.io"
 
-FROM --platform=linux/amd64 golang:${GO_VERSION} AS antrea-build-windows
+FROM --platform=linux/amd64 ${DOCKER_REGISTRY}/golang:${GO_VERSION} AS antrea-build-windows
 ARG CNI_BINARIES_VERSION
 ENV CNI_PLUGINS="./host-local.exe"
 

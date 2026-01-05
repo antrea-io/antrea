@@ -12,7 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-FROM ubuntu:24.04 AS ovs-debs
+ARG DOCKER_REGISTRY="docker.io"
+FROM ${DOCKER_REGISTRY}/ubuntu:24.04 AS ovs-debs
 
 # Some patches may not apply cleanly if a non-default version is provided.
 # See build/images/deps/ovs-version for the default version.
@@ -39,7 +40,7 @@ RUN wget -q -O - https://www.openvswitch.org/releases/openvswitch-$OVS_VERSION.t
     cd / && rm -rf /tmp/openvswitch*
 
 
-FROM ubuntu:24.04
+FROM ${DOCKER_REGISTRY}/ubuntu:24.04
 
 LABEL maintainer="Antrea <projectantrea-dev@googlegroups.com>"
 LABEL description="A Docker image based on Ubuntu 24.04 which includes Open vSwitch built from source."
