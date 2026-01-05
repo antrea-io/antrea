@@ -75,6 +75,12 @@ benchmarks:
     package: "./pkg/apis/controlplane"
   - name: "BenchmarkSymmetricDifferenceString"
     package: "./pkg/util/sets"
-  - name: "BenchmarkCleanUpStaleIPAddresses"
+  - name: "BenchmarkCleanUpStaleIPAddresses/Small"
+    package: "./pkg/controller/ipam"
+    threshold: 0.2
+  - name: "BenchmarkCleanUpStaleIPAddresses/Medium"
+    package: "./pkg/controller/ipam"
+    threshold: 0.3
+  - name: "BenchmarkCleanUpStaleIPAddresses/Large"
     package: "./pkg/controller/ipam"
     threshold: 0.3
