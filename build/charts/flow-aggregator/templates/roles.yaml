@@ -3,7 +3,7 @@ apiVersion: rbac.authorization.k8s.io/v1
 metadata:
   labels:
     app: flow-aggregator
-  name: flow-exporter-role
+  name: {{ include "flow-aggregator.fullname" . }}-exporter-reader
   namespace: {{ .Release.Namespace }}
 rules:
   - apiGroups: [""]
@@ -20,7 +20,7 @@ apiVersion: rbac.authorization.k8s.io/v1
 metadata:
   labels:
     app: flow-aggregator
-  name: flow-aggregator-role
+  name: {{ include "flow-aggregator.fullname" . }}-manager
   namespace: {{ .Release.Namespace }}
 rules:
   # RBAC to create / update / get flow-aggregator-ca ConfigMap
@@ -42,5 +42,5 @@ rules:
   # RBAC to get / update flow-aggregator-configmap ConfigMap (required by antctl)
   - apiGroups: [""]
     resources: ["configmaps"]
-    resourceNames: ["flow-aggregator-configmap"]
+    resourceNames: ["{{ include "flow-aggregator.fullname" . }}-configmap"]
     verbs: ["get", "update"]

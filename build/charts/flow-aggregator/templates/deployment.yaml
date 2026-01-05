@@ -4,7 +4,7 @@ kind: Deployment
 metadata:
   labels:
     app: flow-aggregator
-  name: flow-aggregator
+  name: {{ include "flow-aggregator.fullname" . }}
   namespace: {{ .Release.Namespace }}
 spec:
   replicas: {{ .Values.replicas }}
@@ -72,29 +72,29 @@ spec:
           - name: CH_USERNAME
             valueFrom:
               secretKeyRef:
-                name: clickhouse-secret
+                name: {{ include "flow-aggregator.fullname" . }}-clickhouse-secret
                 key: username
           - name: CH_PASSWORD
             valueFrom:
               secretKeyRef:
-                name: clickhouse-secret
+                name: {{ include "flow-aggregator.fullname" . }}-clickhouse-secret
                 key: password
           - name: FA_CONFIG_MAP_NAME
             value: flow-aggregator-configmap
           - name: AWS_ACCESS_KEY_ID
             valueFrom:
               secretKeyRef:
-                name: flow-aggregator-aws-credentials
+                name: {{ include "flow-aggregator.fullname" . }}-aws-credentials
                 key: aws_access_key_id
           - name: AWS_SECRET_ACCESS_KEY
             valueFrom:
               secretKeyRef:
-                name: flow-aggregator-aws-credentials
+                name: {{ include "flow-aggregator.fullname" . }}-aws-credentials
                 key: aws_secret_access_key
           - name: AWS_SESSION_TOKEN
             valueFrom:
               secretKeyRef:
-                name: flow-aggregator-aws-credentials
+                name: {{ include "flow-aggregator.fullname" . }}-aws-credentials
                 key: aws_session_token
         ports:
           - name: ipfix-udp
@@ -127,7 +127,7 @@ spec:
         kubernetes.io/os: linux
         kubernetes.io/arch: amd64
       priorityClassName: {{ .Values.priorityClassName }}
-      serviceAccountName: flow-aggregator
+      serviceAccountName: {{ include "flow-aggregator.fullname" . }}
       volumes:
       - name: certs
         projected:
@@ -163,7 +163,7 @@ spec:
               optional: true
       - name: flow-aggregator-config
         configMap:
-          name: flow-aggregator-configmap
+          name: {{ include "flow-aggregator.fullname" . }}-configmap
       - name: host-var-log-antrea-flow-aggregator
         hostPath:
           path: /var/log/antrea/flow-aggregator
