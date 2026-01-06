@@ -15,6 +15,8 @@
 package certificate
 
 import (
+	"crypto/x509"
+	"encoding/pem"
 	"fmt"
 	"testing"
 	"time"
@@ -35,10 +37,11 @@ import (
 	"antrea.io/antrea/pkg/util/wait"
 )
 
-func TestProvider_shouldRotateCertificate(t *testing.T) {
-	validCert, validCertKey, err := GenerateCACertKey(time.Now().Add(-time.Hour))
+func TestProvider_shouldUpdateCACertificate(t *testing.T) {
+	now := time.Now()
+	validCert, validCertKey, err := generateCACertKey(now.Add(-time.Hour))
 	require.NoError(t, err)
-	invalidCert, invalidCertKey, err := GenerateCACertKey(time.Time{})
+	invalidCert, invalidCertKey, err := generateCACertKey(now.Add(-maxAge))
 	require.NoError(t, err)
 
 	tests := []struct {
@@ -74,11 +77,42 @@ func TestProvider_shouldRotateCertificate(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			p := NewProvider(nil, "")
-			got := p.shouldRotateCertificate(tt.cert, tt.key)
+			got := shouldUpdateCACertificate(tt.cert, tt.key, now)
 			assert.Equal(t, tt.want, got)
 		})
 	}
+}
+
+func Test_generateCertKey(t *testing.T) {
+	now := time.Now()
+	validFrom := now.Add(-time.Hour)
+	caCertPEM, caKeyPEM, err := generateCACertKey(validFrom)
+	require.NoError(t, err)
+
+	ca, err := parseKeyPair(caCertPEM, caKeyPEM)
+	require.NoError(t, err)
+	caCert := ca.Leaf
+	caKey := ca.PrivateKey
+
+	t.Run("server", func(t *testing.T) {
+		serverCertPEM, serverKeyPEM, err := generateCertKey(caCert, caKey, validFrom, true, "foo.bar.xyz")
+		require.NoError(t, err)
+
+		serverTLS, err := parseKeyPair(serverCertPEM, serverKeyPEM)
+		require.NoError(t, err)
+
+		assert.NoError(t, verifyServerCertificate(caCert, serverTLS.Leaf, now))
+	})
+
+	t.Run("client", func(t *testing.T) {
+		clientCertPEM, clientKeyPEM, err := generateCertKey(caCert, caKey, validFrom, false, "")
+		require.NoError(t, err)
+
+		clientTLS, err := parseKeyPair(clientCertPEM, clientKeyPEM)
+		require.NoError(t, err)
+
+		assert.NoError(t, verifyClientCertificate(caCert, clientTLS.Leaf, now))
+	})
 }
 
 func TestProvider_getSecret(t *testing.T) {
@@ -115,7 +149,7 @@ func TestProvider_getSecret(t *testing.T) {
 	})
 }
 
-func TestProvider_rotateCertificates(t *testing.T) {
+func TestProvider_syncCertificates(t *testing.T) {
 	var client *fake.Clientset
 	var clock *clocktesting.FakeClock
 	var provider *Provider
@@ -129,15 +163,16 @@ func TestProvider_rotateCertificates(t *testing.T) {
 	verifySecret := func(t *testing.T, name string) *v1.Secret {
 		secret, err := client.CoreV1().Secrets(defaultNamespace).Get(t.Context(), name, metav1.GetOptions{})
 		require.NoError(t, err)
-		cert, _, err := pemToCertKey(secret.Data[v1.TLSCertKey], secret.Data[v1.TLSPrivateKeyKey])
+		tlsCert, err := parseKeyPair(secret.Data[v1.TLSCertKey], secret.Data[v1.TLSPrivateKeyKey])
 		require.NoError(t, err)
+		cert := tlsCert.Leaf
 		assert.True(t, cert.NotAfter.After(clock.Now()))
 		assert.True(t, cert.NotBefore.Before(clock.Now()))
 		return secret
 	}
 
-	rotateAndCheck := func(t *testing.T) (*v1.Secret, *v1.Secret) {
-		retry, err := provider.rotateCertificates(t.Context())
+	syncAndCheck := func(t *testing.T) (*v1.Secret, *v1.Secret) {
+		retry, err := provider.syncCertificates(t.Context())
 		require.NoError(t, err)
 		assert.False(t, retry)
 
@@ -169,9 +204,9 @@ func TestProvider_rotateCertificates(t *testing.T) {
 		require.Equal(t, shouldExist, exist)
 	}
 
-	t.Run("rotate is idempotent if certs are valid", func(t *testing.T) {
+	t.Run("sync is idempotent if certs are valid", func(t *testing.T) {
 		initialize()
-		prevCASecret, prevClientSecret := rotateAndCheck(t)
+		prevCASecret, prevClientSecret := syncAndCheck(t)
 		prevProviderCACert, prevServerCert, prevServerKey := provider.caCertPEM, provider.serverCertPEM, provider.serverKeyPEM
 		assert.EventuallyWithT(t, func(c *assert.CollectT) { // Wait for indexer to update.
 			checkCASecretInformerSynced(c, true)
@@ -179,7 +214,7 @@ func TestProvider_rotateCertificates(t *testing.T) {
 			checkCAConfigMapInformerSynced(c, true)
 		}, 5*time.Second, 100*time.Millisecond)
 
-		newCASecret, newClientSecret := rotateAndCheck(t)
+		newCASecret, newClientSecret := syncAndCheck(t)
 		assert.Equal(t, prevCASecret.Data, newCASecret.Data)
 		assert.Equal(t, prevClientSecret.Data, newClientSecret.Data)
 		assert.Equal(t, prevProviderCACert, provider.caCertPEM)
@@ -189,7 +224,7 @@ func TestProvider_rotateCertificates(t *testing.T) {
 
 	t.Run("recreate deleted client certs - nothing else changes", func(t *testing.T) {
 		initialize()
-		prevCASecret, prevClientSecret := rotateAndCheck(t)
+		prevCASecret, prevClientSecret := syncAndCheck(t)
 		prevProviderCACert, prevServerCert, prevServerKey := provider.caCertPEM, provider.serverCertPEM, provider.serverKeyPEM
 		require.NoError(t, client.CoreV1().Secrets(defaultNamespace).Delete(t.Context(), clientSecretName, metav1.DeleteOptions{}))
 		assert.EventuallyWithT(t, func(c *assert.CollectT) {
@@ -198,7 +233,7 @@ func TestProvider_rotateCertificates(t *testing.T) {
 			checkCAConfigMapInformerSynced(c, true)
 		}, 5*time.Second, 100*time.Millisecond)
 
-		newCASecret, newClientSecret := rotateAndCheck(t)
+		newCASecret, newClientSecret := syncAndCheck(t)
 		assert.Equal(t, prevCASecret.Data, newCASecret.Data)
 		assert.NotEqual(t, prevClientSecret.Data, newClientSecret.Data)
 		assert.Equal(t, prevProviderCACert, provider.caCertPEM)
@@ -212,7 +247,7 @@ func TestProvider_rotateCertificates(t *testing.T) {
 
 	t.Run("recreate deleted ca configmap - nothing else changes", func(t *testing.T) {
 		initialize()
-		prevCASecret, prevClientSecret := rotateAndCheck(t)
+		prevCASecret, prevClientSecret := syncAndCheck(t)
 		prevProviderCACert, prevServerCert, prevServerKey := provider.caCertPEM, provider.serverCertPEM, provider.serverKeyPEM
 		require.NoError(t, client.CoreV1().ConfigMaps(defaultNamespace).Delete(t.Context(), caConfigMapName, metav1.DeleteOptions{}))
 		assert.EventuallyWithT(t, func(c *assert.CollectT) {
@@ -221,7 +256,7 @@ func TestProvider_rotateCertificates(t *testing.T) {
 			checkCAConfigMapInformerSynced(c, false)
 		}, 5*time.Second, 100*time.Millisecond)
 
-		newCASecret, newClientSecret := rotateAndCheck(t)
+		newCASecret, newClientSecret := syncAndCheck(t)
 		assert.Equal(t, prevCASecret.Data, newCASecret.Data)
 		assert.Equal(t, prevClientSecret.Data, newClientSecret.Data)
 		assert.Equal(t, prevProviderCACert, provider.caCertPEM)
@@ -235,7 +270,7 @@ func TestProvider_rotateCertificates(t *testing.T) {
 
 	t.Run("recreate all resources - ca secret deleted", func(t *testing.T) {
 		initialize()
-		prevCASecret, prevClientSecret := rotateAndCheck(t)
+		prevCASecret, prevClientSecret := syncAndCheck(t)
 		prevProviderCACert, prevServerCert, prevServerKey := provider.caCertPEM, provider.serverCertPEM, provider.serverKeyPEM
 		require.NoError(t, client.CoreV1().Secrets(defaultNamespace).Delete(t.Context(), caSecretName, metav1.DeleteOptions{}))
 		assert.EventuallyWithT(t, func(c *assert.CollectT) {
@@ -244,7 +279,7 @@ func TestProvider_rotateCertificates(t *testing.T) {
 			checkCAConfigMapInformerSynced(c, true)
 		}, 5*time.Second, 100*time.Millisecond)
 
-		newCASecret, newClientSecret := rotateAndCheck(t)
+		newCASecret, newClientSecret := syncAndCheck(t)
 		assert.NotEqual(t, prevCASecret.Data, newCASecret.Data)
 		assert.NotEqual(t, prevClientSecret.Data, newClientSecret.Data)
 		assert.NotEqual(t, prevProviderCACert, provider.caCertPEM)
@@ -258,7 +293,7 @@ func TestProvider_rotateCertificates(t *testing.T) {
 
 	t.Run("expired certs get rotated", func(t *testing.T) {
 		initialize()
-		prevCASecret, prevClientSecret := rotateAndCheck(t)
+		prevCASecret, prevClientSecret := syncAndCheck(t)
 		prevProviderCACert, prevServerCert, prevServerKey := provider.caCertPEM, provider.serverCertPEM, provider.serverKeyPEM
 		assert.EventuallyWithT(t, func(c *assert.CollectT) {
 			checkCASecretInformerSynced(c, true)
@@ -267,7 +302,7 @@ func TestProvider_rotateCertificates(t *testing.T) {
 		}, 5*time.Second, 100*time.Millisecond)
 
 		clock.Step(2 * maxAge)
-		newCASecret, newClientSecret := rotateAndCheck(t)
+		newCASecret, newClientSecret := syncAndCheck(t)
 		assert.NotEqual(t, prevCASecret.Data, newCASecret.Data)
 		assert.NotEqual(t, prevClientSecret.Data, newClientSecret.Data)
 		assert.NotEqual(t, prevProviderCACert, provider.caCertPEM)
@@ -300,6 +335,22 @@ func startProviderWithClient(client kubernetes.Interface, wg *wait.Group, stopCh
 	return p
 }
 
+func verifyServerCertificate(caCert, cert *x509.Certificate, now time.Time) error {
+	return verifyCertificate(caCert, cert, x509.ExtKeyUsageServerAuth, now)
+}
+
+func pemToCert(certPEM []byte) (*x509.Certificate, error) {
+	block, _ := pem.Decode(certPEM)
+	if block == nil || len(block.Bytes) == 0 {
+		return nil, fmt.Errorf("no certificates found")
+	}
+	cert, err := x509.ParseCertificate(block.Bytes)
+	if err != nil {
+		return nil, fmt.Errorf("parsing certificate failed: %w", err)
+	}
+	return cert, nil
+}
+
 func TestProvider_Run(t *testing.T) {
 	namespace := "flow-aggregator"
 	t.Setenv("POD_NAMESPACE", namespace)
@@ -329,68 +380,107 @@ func TestProvider_Run(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, provider1.caCertPEM, caSecret.Data[v1.TLSCertKey])
 	assert.Equal(t, provider2.caCertPEM, caSecret.Data[v1.TLSCertKey])
+	caCert, err := pemToCert(caSecret.Data[v1.TLSCertKey])
+	require.NoError(t, err)
 
 	caConfigMap, err := client.CoreV1().ConfigMaps(namespace).Get(t.Context(), caConfigMapName, metav1.GetOptions{})
 	require.NoError(t, err)
 	assert.Equal(t, caConfigMap.Data[caConfigMapKey], string(caSecret.Data[v1.TLSCertKey]))
 
-	assert.NoError(t, verifyCertificate(caSecret.Data[v1.TLSCertKey], provider1.serverCertPEM, time.Now()))
-	assert.NoError(t, verifyCertificate(caSecret.Data[v1.TLSCertKey], provider2.serverCertPEM, time.Now()))
+	serverCert1, err := pemToCert(provider1.serverCertPEM)
+	require.NoError(t, err)
+	assert.NoError(t, verifyServerCertificate(caCert, serverCert1, time.Now()))
+	serverCert2, err := pemToCert(provider2.serverCertPEM)
+	require.NoError(t, err)
+	assert.NoError(t, verifyServerCertificate(caCert, serverCert2, time.Now()))
 
 	clientSecret, err := client.CoreV1().Secrets(namespace).Get(t.Context(), clientSecretName, metav1.GetOptions{})
 	require.NoError(t, err)
-	assert.NoError(t, verifyCertificate(caSecret.Data[v1.TLSCertKey], clientSecret.Data[v1.TLSCertKey], time.Now()))
+	clientCert, err := pemToCert(clientSecret.Data[v1.TLSCertKey])
+	require.NoError(t, err)
+	assert.NoError(t, verifyClientCertificate(caCert, clientCert, time.Now()))
 }
 
-func TestVerifyCertificate(t *testing.T) {
-	validFrom := time.Now().Add(-time.Hour)
-	caCertPEM, caKeyPEM, err := GenerateCACertKey(validFrom)
+func TestProvider_shouldUpdateClientCertificate(t *testing.T) {
+	now := time.Now()
+	validFrom := now.Add(-time.Hour)
+	caCertPEM, caKeyPEM, err := generateCACertKey(validFrom)
 	require.NoError(t, err)
 
-	caCert, caKey, err := pemToCertKey(caCertPEM, caKeyPEM)
+	ca, err := parseKeyPair(caCertPEM, caKeyPEM)
+	require.NoError(t, err)
+	caCert := ca.Leaf
+	caKey := ca.PrivateKey
+
+	validClientCertPEM, validClientKeyPEM, err := generateCertKey(caCert, caKey, validFrom, false, "")
 	require.NoError(t, err)
 
-	clientCertPEM, _, err := GenerateCertKey(caCert, caKey, validFrom, false, "")
-	require.NoError(t, err)
-	serverCertPEM, _, err := GenerateCertKey(caCert, caKey, validFrom, true, "foo.bar.xyz")
+	expiredClientCertPEM, expiredClientKeyPEM, err := generateCertKey(caCert, caKey, now.Add(-maxAge), false, "")
 	require.NoError(t, err)
 
-	t.Run("generated client cert can be validated by CA", func(t *testing.T) {
-		assert.NoError(t, verifyCertificate(caCertPEM, clientCertPEM, time.Now()), "client cert should be verifiable by CA")
-	})
-
-	t.Run("generated server cert can be validated by CA", func(t *testing.T) {
-		assert.NoError(t, verifyCertificate(caCertPEM, serverCertPEM, time.Now()), "server cert should be verifiable by CA")
-	})
-
-	t.Run("certificate not past time to rotate", func(t *testing.T) {
-		assert.NoError(t, verifyCertificate(caCertPEM, clientCertPEM, validFrom.Add(maxAge-minValidDuration-time.Minute)), "one minute before certificate should be rotated")
-	})
-
-	t.Run("certificate past time to rotate but not invalid yet", func(t *testing.T) {
-		assert.ErrorContains(t, verifyCertificate(caCertPEM, clientCertPEM, validFrom.Add(maxAge-minValidDuration+time.Minute)), "certificates will expire soon")
-	})
-
-	t.Run("certificates are valid only in the future", func(t *testing.T) {
-		// We add 1 hour to time.Time{} because a "zero" time will verify certs using time.Now()
-		assert.ErrorContains(t, verifyCertificate(caCertPEM, clientCertPEM, time.Time{}.Add(1*time.Hour)), "certificate has expired or is not yet valid")
-	})
-
-	t.Run("missing ca cert", func(t *testing.T) {
-		assert.ErrorContains(t, verifyCertificate(nil, clientCertPEM, time.Time{}), "caCertPEM or certPEM is empty")
-	})
-
-	t.Run("missing cert", func(t *testing.T) {
-		assert.ErrorContains(t, verifyCertificate(caCertPEM, nil, time.Time{}), "caCertPEM or certPEM is empty")
-	})
-
-	t.Run("ca cert is invalid", func(t *testing.T) {
-		assert.ErrorContains(t, verifyCertificate([]byte("ca cert"), clientCertPEM, time.Time{}), "failed to append CA cert to pool")
-	})
-
-	t.Run("cert is invalid", func(t *testing.T) {
-		assert.ErrorContains(t, verifyCertificate(caCertPEM, []byte("other cert"), time.Time{}), "no certificates found")
-	})
+	tests := []struct {
+		name          string
+		clientCertPEM []byte
+		clientKeyPEM  []byte
+		caCert        *x509.Certificate
+		now           time.Time
+		want          bool
+	}{
+		{
+			name:          "no certificate - empty",
+			clientCertPEM: []byte{},
+			clientKeyPEM:  []byte{},
+			caCert:        caCert,
+			now:           now,
+			want:          true,
+		},
+		{
+			name:          "no certificate - nil",
+			clientCertPEM: nil,
+			clientKeyPEM:  nil,
+			caCert:        caCert,
+			now:           now,
+			want:          true,
+		},
+		{
+			name:          "expired certificate",
+			clientCertPEM: expiredClientCertPEM,
+			clientKeyPEM:  expiredClientKeyPEM,
+			caCert:        caCert,
+			now:           now,
+			want:          true,
+		},
+		{
+			name:          "valid certificate",
+			clientCertPEM: validClientCertPEM,
+			clientKeyPEM:  validClientKeyPEM,
+			caCert:        caCert,
+			now:           now,
+			want:          false,
+		},
+		{
+			name:          "valid certificate - non-matching key",
+			clientCertPEM: validClientCertPEM,
+			clientKeyPEM:  expiredClientKeyPEM,
+			caCert:        caCert,
+			now:           now,
+			want:          true,
+		},
+		{
+			name:          "certificate past time to rotate",
+			clientCertPEM: validClientCertPEM,
+			clientKeyPEM:  validClientKeyPEM,
+			caCert:        caCert,
+			now:           validFrom.Add(maxAge - minValidDuration + time.Minute),
+			want:          true,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := shouldUpdateClientCertificate(tt.clientCertPEM, tt.clientKeyPEM, tt.caCert, tt.now)
+			assert.Equal(t, tt.want, got)
+		})
+	}
 }
 
 func createTestProvider(t *testing.T, client kubernetes.Interface) *Provider {
