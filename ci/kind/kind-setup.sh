@@ -519,11 +519,12 @@ EOF
   if [[ $KUBE_NODE_IPAM == false ]]; then
     cat <<EOF >> $config_file
   kubeadmConfigPatches:
-  - |
     kind: ClusterConfiguration
+    apiVersion: kubeadm.k8s.io/v1beta4
     controllerManager:
       extraArgs:
-        controllers: "*,bootstrapsigner,tokencleaner,-nodeipam"
+        - name: controllers
+        - value: "*,bootstrapsigner,tokencleaner,-nodeipam"
 EOF
   fi
   for (( i=0; i<$NUM_WORKERS; i++ )); do

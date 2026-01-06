@@ -945,7 +945,7 @@ function redeploy_k8s_if_ip_mode_changes() {
         APISERVER_IP_STRING=${ADVERTISE_ADDRESS_STRING}
     fi
     cat <<EOF | tee ${WORKDIR}/kubeadm.conf
-apiVersion: kubeadm.k8s.io/v1beta3
+apiVersion: kubeadm.k8s.io/v1beta4
 kind: InitConfiguration
 bootstrapTokens:
 - groups:
@@ -955,7 +955,7 @@ nodeRegistration:
 localAPIEndpoint:
   advertiseAddress: "${ADVERTISE_ADDRESS_STRING}"
 ---
-apiVersion: kubeadm.k8s.io/v1beta3
+apiVersion: kubeadm.k8s.io/v1beta4
 kind: ClusterConfiguration
 ${FEATURE_GATES_STRING}
 networking:
