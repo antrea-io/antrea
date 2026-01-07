@@ -53,29 +53,34 @@ func TestRestoreRules(t *testing.T) {
 		},
 	}
 
-	for _, failedRuleSyncs := range []int{0, 1, 10} {
-		t.Run(fmt.Sprintf("with %d failed rule syncs", failedRuleSyncs), func(t *testing.T) {
-			synctest.Test(t, func(t *testing.T) {
-				mockCtrl := gomock.NewController(t)
-				mockIPTables := rulestesting.NewMockPodPortRules(mockCtrl)
-				mockPortOpener := portcachetesting.NewMockLocalPortOpener(mockCtrl)
-				portTable := newPortTable(mockIPTables, mockPortOpener)
+	runTest := func(t *testing.T, isIPv6 bool) {
+		for _, failedRuleSyncs := range []int{0, 1, 10} {
+			t.Run(fmt.Sprintf("with %d failed rule syncs", failedRuleSyncs), func(t *testing.T) {
+				synctest.Test(t, func(t *testing.T) {
+					mockCtrl := gomock.NewController(t)
+					mockIPTables := rulestesting.NewMockPodPortRules(mockCtrl)
+					mockPortOpener := portcachetesting.NewMockLocalPortOpener(mockCtrl)
+					portTable := newPortTable(mockIPTables, mockPortOpener, isIPv6)
 
-				gomock.InOrder(
-					mockIPTables.EXPECT().AddAllRules(gomock.InAnyOrder(allNPLPorts)).Times(failedRuleSyncs).Return(fmt.Errorf("iptables error")),
-					mockIPTables.EXPECT().AddAllRules(gomock.InAnyOrder(allNPLPorts)).Return(nil),
-				)
-				gomock.InOrder(
-					mockPortOpener.EXPECT().OpenLocalPort(nodePort1, "tcp", false),
-					mockPortOpener.EXPECT().OpenLocalPort(nodePort1, "udp", false),
-					mockPortOpener.EXPECT().OpenLocalPort(nodePort2, "udp", false),
-				)
+					gomock.InOrder(
+						mockIPTables.EXPECT().AddAllRules(gomock.InAnyOrder(allNPLPorts)).Times(failedRuleSyncs).Return(fmt.Errorf("iptables error")),
+						mockIPTables.EXPECT().AddAllRules(gomock.InAnyOrder(allNPLPorts)).Return(nil),
+					)
+					gomock.InOrder(
+						mockPortOpener.EXPECT().OpenLocalPort(nodePort1, "tcp", isIPv6),
+						mockPortOpener.EXPECT().OpenLocalPort(nodePort1, "udp", isIPv6),
+						mockPortOpener.EXPECT().OpenLocalPort(nodePort2, "udp", isIPv6),
+					)
 
-				// Bubble time will automatically advance when goroutines are blocked.
-				portTable.RestoreRules(t.Context(), allNPLPorts)
+					// Bubble time will automatically advance when goroutines are blocked.
+					portTable.RestoreRules(t.Context(), allNPLPorts)
+				})
 			})
-		})
+		}
 	}
+
+	t.Run("IPv4", func(t *testing.T) { runTest(t, false) })
+	t.Run("IPv6", func(t *testing.T) { runTest(t, true) })
 }
 
 type mockCloser struct {
@@ -87,47 +92,52 @@ func (m *mockCloser) Close() error {
 }
 
 func TestDeleteRule(t *testing.T) {
-	mockCtrl := gomock.NewController(t)
-	mockIPTables := rulestesting.NewMockPodPortRules(mockCtrl)
-	mockPortOpener := portcachetesting.NewMockLocalPortOpener(mockCtrl)
-	portTable := newPortTable(mockIPTables, mockPortOpener)
+	runTest := func(t *testing.T, isIPv6 bool) {
+		mockCtrl := gomock.NewController(t)
+		mockIPTables := rulestesting.NewMockPodPortRules(mockCtrl)
+		mockPortOpener := portcachetesting.NewMockLocalPortOpener(mockCtrl)
+		portTable := newPortTable(mockIPTables, mockPortOpener, isIPv6)
 
-	const (
-		podPort  = 1001
-		protocol = "tcp"
-	)
+		const (
+			podPort  = 1001
+			protocol = "tcp"
+		)
 
-	closer := &mockCloser{}
+		closer := &mockCloser{}
 
-	data := &NodePortData{
-		PodKey:   podKey,
-		NodePort: nodePort1,
-		PodPort:  podPort,
-		PodIP:    podIP,
-		Protocol: ProtocolSocketData{
-			Protocol: protocol,
-			socket:   closer,
-		},
+		data := &NodePortData{
+			PodKey:   podKey,
+			NodePort: nodePort1,
+			PodPort:  podPort,
+			PodIP:    podIP,
+			Protocol: ProtocolSocketData{
+				Protocol: protocol,
+				socket:   closer,
+			},
+		}
+
+		require.NoError(t, portTable.addPortTableCache(data))
+		assert.False(t, data.Defunct())
+
+		mockIPTables.EXPECT().DeleteRule(nodePort1, podIP, podPort, protocol).Return(fmt.Errorf("iptables error"))
+		require.ErrorContains(t, portTable.DeleteRule(podKey, podPort, protocol), "iptables error")
+
+		mockIPTables.EXPECT().DeleteRule(nodePort1, podIP, podPort, protocol)
+		closer.closeErr = fmt.Errorf("close error")
+		require.ErrorContains(t, portTable.DeleteRule(podKey, podPort, protocol), "close error")
+		assert.True(t, data.Defunct())
+
+		closer.closeErr = nil
+
+		// First successful call to DeleteRule.
+		mockIPTables.EXPECT().DeleteRule(nodePort1, podIP, podPort, protocol)
+		assert.NoError(t, portTable.DeleteRule(podKey, podPort, protocol))
+
+		// Calling DeleteRule again will return immediately as the NodePortData entry has been
+		// removed from the cache.
+		assert.NoError(t, portTable.DeleteRule(podKey, podPort, protocol))
 	}
 
-	require.NoError(t, portTable.addPortTableCache(data))
-	assert.False(t, data.Defunct())
-
-	mockIPTables.EXPECT().DeleteRule(nodePort1, podIP, podPort, protocol).Return(fmt.Errorf("iptables error"))
-	require.ErrorContains(t, portTable.DeleteRule(podKey, podPort, protocol), "iptables error")
-
-	mockIPTables.EXPECT().DeleteRule(nodePort1, podIP, podPort, protocol)
-	closer.closeErr = fmt.Errorf("close error")
-	require.ErrorContains(t, portTable.DeleteRule(podKey, podPort, protocol), "close error")
-	assert.True(t, data.Defunct())
-
-	closer.closeErr = nil
-
-	// First successful call to DeleteRule.
-	mockIPTables.EXPECT().DeleteRule(nodePort1, podIP, podPort, protocol)
-	assert.NoError(t, portTable.DeleteRule(podKey, podPort, protocol))
-
-	// Calling DeleteRule again will return immediately as the NodePortData entry has been
-	// removed from the cache.
-	assert.NoError(t, portTable.DeleteRule(podKey, podPort, protocol))
+	t.Run("IPv4", func(t *testing.T) { runTest(t, false) })
+	t.Run("IPv6", func(t *testing.T) { runTest(t, true) })
 }

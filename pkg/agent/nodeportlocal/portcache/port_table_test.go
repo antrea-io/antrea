@@ -29,7 +29,7 @@ const (
 	nodePort2 = startPort + 1
 )
 
-func newPortTable(mockIPTables rules.PodPortRules, mockPortOpener LocalPortOpener) *PortTable {
+func newPortTable(mockIPTables rules.PodPortRules, mockPortOpener LocalPortOpener, isIPv6 bool) *PortTable {
 	return &PortTable{
 		PortTableCache: cache.NewIndexer(GetPortTableKey, cache.Indexers{
 			NodePortIndex:    NodePortIndexFunc,
@@ -41,5 +41,6 @@ func newPortTable(mockIPTables rules.PodPortRules, mockPortOpener LocalPortOpene
 		PortSearchStart: startPort,
 		PodPortRules:    mockIPTables,
 		LocalPortOpener: mockPortOpener,
+		IsIPv6:          isIPv6,
 	}
 }

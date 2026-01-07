@@ -23,9 +23,8 @@ const (
 type IPFamilyType string
 
 const (
-	IPFamilyIPv4    IPFamilyType = "IPv4"
-	IPFamilyIPv6    IPFamilyType = "IPv6"
-	IPFamilyUnknown IPFamilyType = ""
+	IPFamilyIPv4 IPFamilyType = "IPv4"
+	IPFamilyIPv6 IPFamilyType = "IPv6"
 )
 
 // NPLAnnotation is the structure used for setting NodePortLocal annotation on the Pods.
