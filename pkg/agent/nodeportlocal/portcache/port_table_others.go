@@ -60,7 +60,7 @@ func (pt *PortTable) getFreePort(podIP string, podPort int, protocol string) (in
 
 		protocolData, err := openSocketsForPort(pt.LocalPortOpener, port, protocol, pt.IsIPv6)
 		if err != nil {
-			klog.V(4).InfoS("Port cannot be reserved, moving on to the next one", "port", port)
+			klog.V(4).InfoS("Port cannot be reserved, moving on to the next one", "port", port, "ipv6", pt.IsIPv6)
 			continue
 		}
 
@@ -174,7 +174,7 @@ func (pt *PortTable) RestoreRules(ctx context.Context, allNPLPorts []rules.PodNo
 				// This will be handled gracefully by the NPL controller: if there is an
 				// annotation using this port, it will be removed and replaced with a new
 				// one with a valid port mapping.
-				klog.ErrorS(err, "Cannot bind to local port, skipping it", "port", nplPort.NodePort)
+				klog.ErrorS(err, "Cannot bind to local port, skipping it", "port", nplPort.NodePort, "ipv6", pt.IsIPv6)
 				continue
 			}
 

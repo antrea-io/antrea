@@ -33,7 +33,7 @@ func TestRestoreRules(t *testing.T) {
 	mockCtrl := gomock.NewController(t)
 	mockPortRules := rulestesting.NewMockPodPortRules(mockCtrl)
 	mockPortOpener := portcachetesting.NewMockLocalPortOpener(mockCtrl)
-	portTable := newPortTable(mockPortRules, mockPortOpener)
+	portTable := newPortTable(mockPortRules, mockPortOpener, false)
 	allNPLPorts := []rules.PodNodePort{
 		{
 			PodKey:   podKey,
@@ -69,7 +69,7 @@ func TestDeleteRule(t *testing.T) {
 	mockCtrl := gomock.NewController(t)
 	mockPortRules := rulestesting.NewMockPodPortRules(mockCtrl)
 	mockPortOpener := portcachetesting.NewMockLocalPortOpener(mockCtrl)
-	portTable := newPortTable(mockPortRules, mockPortOpener)
+	portTable := newPortTable(mockPortRules, mockPortOpener, false)
 	npData := &NodePortData{
 		PodKey:   podKey,
 		NodePort: startPort,
@@ -90,7 +90,7 @@ func TestAddRule(t *testing.T) {
 	mockCtrl := gomock.NewController(t)
 	mockPortRules := rulestesting.NewMockPodPortRules(mockCtrl)
 	mockPortOpener := portcachetesting.NewMockLocalPortOpener(mockCtrl)
-	portTable := newPortTable(mockPortRules, mockPortOpener)
+	portTable := newPortTable(mockPortRules, mockPortOpener, false)
 	podPort := 1001
 
 	// Adding the rule the first time should succeed.

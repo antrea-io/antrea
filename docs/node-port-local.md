@@ -112,11 +112,14 @@ metadata:
   labels:
     app: nginx
   annotations:
-    nodeportlocal.antrea.io: '[{"podPort":8080,"nodeIP":"10.10.10.10","nodePort":61002,"protocol":"tcp"}]'
+    nodeportlocal.antrea.io: '[{"podPort":8080,"nodeIP":"10.10.10.10","nodePort":61002,"protocol":"tcp","ipFamily":"IPv4"}]'
 ```
 
 This annotation indicates that port 8080 of the Pod can be reached through port
 61002 of the Node with IP Address 10.10.10.10 for TCP traffic.
+
+The `ipFamily` field was added to the annotation in Antrea v2.6. Prior to that,
+only IPv4 was supported for the NodePortLocal feature.
 
 For dual-stack Services, separate NPL mappings are created for each IP family.
 For example, if the Service above was dual-stack, the annotation might look like:

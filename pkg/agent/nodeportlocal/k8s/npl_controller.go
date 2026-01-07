@@ -143,16 +143,17 @@ func podKeyFunc(pod *corev1.Pod) string {
 
 // updateNodeIPs updates the cached Node IPs from the Node object.
 // It returns true if the IPs have changed, false otherwise.
-func (c *NPLController) updateNodeIPs(node *corev1.Node) bool {
+// It also returns the up-to-date Node IPs, for convenience.
+func (c *NPLController) updateNodeIPs(node *corev1.Node) (bool, string, string) {
+	c.nodeIPMutex.Lock()
+	defer c.nodeIPMutex.Unlock()
+
 	// Use GetNodeAddrsWithType to prioritize external IPs over internal IPs
 	nodeAddrs, err := k8s.GetNodeAddrsWithType(node, []corev1.NodeAddressType{corev1.NodeExternalIP, corev1.NodeInternalIP})
 	if err != nil {
 		klog.ErrorS(err, "Failed to get Node addresses", "node", klog.KObj(node))
-		return false
+		return false, c.nodeIPv4, c.nodeIPv6
 	}
-
-	c.nodeIPMutex.Lock()
-	defer c.nodeIPMutex.Unlock()
 
 	oldIPv4 := c.nodeIPv4
 	oldIPv6 := c.nodeIPv6
@@ -169,7 +170,7 @@ func (c *NPLController) updateNodeIPs(node *corev1.Node) bool {
 		c.nodeIPv6 = ""
 	}
 
-	return oldIPv4 != c.nodeIPv4 || oldIPv6 != c.nodeIPv6
+	return oldIPv4 != c.nodeIPv4 || oldIPv6 != c.nodeIPv6, c.nodeIPv4, c.nodeIPv6
 }
 
 // getNodeIPForFamily returns the cached Node IP for the given IP family.
@@ -205,8 +206,8 @@ func (c *NPLController) handleNodeAdd(obj interface{}) {
 		return
 	}
 
-	if c.updateNodeIPs(node) {
-		klog.InfoS("Node IPs initialized", "node", klog.KObj(node), "IPv4", c.nodeIPv4, "IPv6", c.nodeIPv6)
+	if updated, nodeIPv4, nodeIPv6 := c.updateNodeIPs(node); updated {
+		klog.InfoS("Node IPs initialized", "node", klog.KObj(node), "IPv4", nodeIPv4, "IPv6", nodeIPv6)
 	}
 }
 
@@ -223,8 +224,8 @@ func (c *NPLController) handleNodeUpdate(oldObj, newObj interface{}) {
 		return
 	}
 
-	if c.updateNodeIPs(newNode) {
-		klog.InfoS("Node IPs changed, reconciling all Pods", "node", klog.KObj(newNode), "IPv4", c.nodeIPv4, "IPv6", c.nodeIPv6)
+	if updated, nodeIPv4, nodeIPv6 := c.updateNodeIPs(newNode); updated {
+		klog.InfoS("Node IPs changed, reconciling all Pods", "node", klog.KObj(newNode), "IPv4", nodeIPv4, "IPv6", nodeIPv6)
 		// Reconcile all local Pods when Node IPs change
 		c.reconcileAllPods()
 	}
@@ -625,13 +626,20 @@ func (c *NPLController) handleAddUpdatePod(key string, obj interface{}) error {
 			}
 
 			portTable := c.getPortTableForFamily(ipFamily)
+			if portTable == nil {
+				// defensive check: should never happen in practice, especially
+				// considering the fact that at this point we are guaranteed that
+				// both the Node and the Pod have an IP of this family.
+				klog.ErrorS(nil, "No port table was initialized for IP family", "ipFamily", ipFamily)
+				continue
+			}
 			portData := portTable.GetEntry(key, port, protocol)
 			// Special handling for a rule that was previously marked for deletion but could not
 			// be deleted properly: we have to retry now.
 			if portData != nil && portData.Defunct() {
 				klog.InfoS("Deleting defunct NodePortLocal rule for Pod to prevent re-use", "pod", klog.KObj(pod), "podIP", podIP, "port", port, "protocol", protocol)
 				if err := portTable.DeleteRule(key, port, protocol); err != nil {
-					return fmt.Errorf("failed to delete defunct rule for Pod %s, Pod Port %d, Protocol %s: %w", key, port, protocol, err)
+					return fmt.Errorf("failed to delete defunct rule for Pod %s, Pod port %d, Protocol %s: %w", key, port, protocol, err)
 				}
 				portData = nil
 			}
@@ -645,7 +653,7 @@ func (c *NPLController) handleAddUpdatePod(key string, obj interface{}) error {
 			if portData != nil && portData.PodIP != podIP {
 				klog.InfoS("Deleting NodePortLocal rule for Pod because of IP change", "pod", klog.KObj(pod), "podIP", podIP, "prevPodIP", portData.PodIP)
 				if err := portTable.DeleteRule(key, port, protocol); err != nil {
-					return fmt.Errorf("failed to delete rule for Pod %s, Pod Port %d, Protocol %s: %w", key, port, protocol, err)
+					return fmt.Errorf("failed to delete rule for Pod %s, Pod port %d, Protocol %s: %w", key, port, protocol, err)
 				}
 				portData = nil
 			}
