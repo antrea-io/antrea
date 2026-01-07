@@ -156,6 +156,8 @@ func newCoreIPTChain() *coreIPTChain {
 // nodePolicyLastRealized is the struct cached by nodeReconciler. It's used to track the actual state of iptables rules
 // and chains we have enforced, so that we can know how to reconcile a rule when it's updated/removed.
 type nodePolicyLastRealized struct {
+	// The desired state of a policy rule.
+	*CompletedRule
 	// ipsets tracks the last realized ipset names used in core iptables rules. It cannot coexist with ipnets.
 	ipsets map[iptables.Protocol]string
 	// ipnets tracks the last realized ip nets used in core iptables rules. It cannot coexist with ipsets.
@@ -166,10 +168,11 @@ type nodePolicyLastRealized struct {
 	coreIPTChain string
 }
 
-func newNodePolicyLastRealized() *nodePolicyLastRealized {
+func newNodePolicyLastRealized(rule *CompletedRule) *nodePolicyLastRealized {
 	return &nodePolicyLastRealized{
-		ipsets: make(map[iptables.Protocol]string),
-		ipnets: make(map[iptables.Protocol]string),
+		CompletedRule: rule,
+		ipsets:        make(map[iptables.Protocol]string),
+		ipnets:        make(map[iptables.Protocol]string),
 	}
 }
 
@@ -205,7 +208,7 @@ func newNodeReconciler(routeClient route.Interface, ipv4Enabled, ipv6Enabled boo
 
 // Reconcile checks whether the provided rule has been enforced or not, and invoke the add or update method accordingly.
 func (r *nodeReconciler) Reconcile(rule *CompletedRule) error {
-	klog.InfoS("Reconciling Node NetworkPolicy rule", "rule", rule.ID, "policy", rule.SourceRef.ToString())
+	klog.V(1).InfoS("Reconciling Node NetworkPolicy rule", "rule", rule.ID, "policy", rule.SourceRef.ToString())
 
 	value, exists := r.lastRealizeds.Load(rule.ID)
 	var err error
@@ -289,16 +292,18 @@ func (r *nodeReconciler) batchAdd(rules []*CompletedRule) error {
 }
 
 func (r *nodeReconciler) Forget(ruleID string) error {
-	klog.InfoS("Forgetting rule", "rule", ruleID)
-
 	value, exists := r.lastRealizeds.Load(ruleID)
 	if !exists {
+		// No-op if the rule was not realized before.
+		klog.V(4).InfoS("Trying to forget unrealized Node NetworkPolicy rule, no action needed", "rule", ruleID)
 		return nil
 	}
 
 	lastRealized := value.(*nodePolicyLastRealized)
-	coreIPTChain := lastRealized.coreIPTChain
 
+	klog.V(1).InfoS("Forgetting Node NetworkPolicy rule", "rule", ruleID, "policy", lastRealized.CompletedRule.SourceRef.ToString())
+
+	coreIPTChain := lastRealized.coreIPTChain
 	for _, ipProtocol := range r.ipProtocols {
 		isIPv6 := iptables.IsIPv6Protocol(ipProtocol)
 		if err := r.deleteCoreIPTRule(ruleID, coreIPTChain, isIPv6); err != nil {
@@ -331,7 +336,7 @@ func (r *nodeReconciler) computeIPTRules(rule *CompletedRule) (map[iptables.Prot
 	if enableLogging {
 		logLabel = generateLogLabel(rule)
 	}
-	lastRealized := newNodePolicyLastRealized()
+	lastRealized := newNodePolicyLastRealized(rule)
 	priority := &types.Priority{
 		TierPriority:   *rule.TierPriority,
 		PolicyPriority: *rule.PolicyPriority,
