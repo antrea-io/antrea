@@ -196,6 +196,27 @@ func (c *ExternalIPPoolController) Run(stopCh <-chan struct{}) {
 	<-stopCh
 }
 
+func getNextValidIP(ip net.IP) net.IP {
+	ip[len(ip)-1]++
+	if ip[len(ip)-1] == 0 {
+		ip[len(ip)-2]++
+	}
+	return ip
+}
+
+func getPreviousValidIP(ip net.IP) net.IP {
+	ip[len(ip)-1]--
+	if ip[len(ip)-1] == 255 {
+		ip[len(ip)-2]--
+	}
+	return ip
+}
+
+func isReservedIP(ip net.IP) bool {
+    lastByte := ip[len(ip)-1]
+    return lastByte == 0 || lastByte == 255
+}
+
 // createOrUpdateIPAllocator creates or updates the IP allocator based on the provided ExternalIPPool.
 // Currently it's assumed that only new ranges will be added and existing ranges should not be deleted.
 // TODO: Use validation webhook to ensure it.
@@ -216,6 +237,25 @@ func (c *ExternalIPPoolController) createOrUpdateIPAllocator(ipPool *antreacrds.
 	for idx := range ipPool.Spec.IPRanges {
 		ipRange := &ipPool.Spec.IPRanges[idx]
 		ipAllocator, err := func() (*ipallocator.SingleIPAllocator, error) {
+			if ipPool.Spec.FilterReservedIPs {
+				startIP := net.ParseIP(ipRange.Start)
+				endIP := net.ParseIP(ipRange.End)
+
+				if startIP == nil || endIP == nil {
+					return nil, fmt.Errorf("invalid start or end IP in the range")
+				}
+
+				// Adjust start and end IPs if they end in .0 or .255
+				if isReservedIP(startIP) {
+					startIP = getNextValidIP(startIP)
+				}
+				if isReservedIP(endIP) {
+					endIP = getPreviousValidIP(endIP)
+				}
+
+				ipRange.Start = startIP.String()
+				ipRange.End = endIP.String()
+			}
 			if ipRange.CIDR != "" {
 				_, ipNet, err := net.ParseCIDR(ipRange.CIDR)
 				if err != nil {
