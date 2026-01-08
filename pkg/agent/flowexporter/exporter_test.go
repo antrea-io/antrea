@@ -414,16 +414,6 @@ func (m mockNodeRouteController) IsNil() bool {
 	return false
 }
 
-type mockServiceLookUp struct{}
-
-func (m mockServiceLookUp) IsNil() bool {
-	return false
-}
-
-func (m mockServiceLookUp) FillServiceInfo(conn *connection.Connection) error {
-	return nil
-}
-
 func TestFlowExporter_findFlowType(t *testing.T) {
 	conn1 := connection.Connection{SourcePodName: "podA", DestinationPodName: "podB"}
 	conn2 := connection.Connection{SourcePodName: "podA", DestinationPodName: ""}
@@ -437,7 +427,6 @@ func TestFlowExporter_findFlowType(t *testing.T) {
 	conn9 := connection.Connection{FlowKey: connection.Tuple{SourceAddress: isNotPod, DestinationAddress: isPod}}
 	conn10 := connection.Connection{FlowKey: connection.Tuple{SourceAddress: isNotPod, DestinationAddress: isNotPod}}
 	mockController := mockNodeRouteController{}
-	mockServiceLookUp := mockServiceLookUp{}
 	for _, tc := range []struct {
 		name                              string
 		isNetworkPolicyOnly               bool
@@ -462,13 +451,7 @@ func TestFlowExporter_findFlowType(t *testing.T) {
 			flowExp := &FlowExporter{
 				isNetworkPolicyOnly: tc.isNetworkPolicyOnly,
 			}
-			var serviceLookUpImplementation serviceLookUpInterface
-			if tc.name == "source is not pod but destination is" {
-				serviceLookUpImplementation = mockServiceLookUp
-			} else {
-				serviceLookUpImplementation = flowExp
-			}
-			flowType := flowExp.findFlowType(tc.conn, tc.nodeRouteControllerImplementation, serviceLookUpImplementation)
+			flowType := flowExp.findFlowType(tc.conn, tc.nodeRouteControllerImplementation)
 			assert.Equal(t, tc.expectedFlowType, flowType)
 		})
 	}

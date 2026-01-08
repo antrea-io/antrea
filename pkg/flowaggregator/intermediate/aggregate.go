@@ -899,12 +899,18 @@ func (a *aggregationProcess) CorrelateExternal(flow *flowpb.Flow) *flowpb.Flow {
 		flow.Ip.Source = cachedFlow.Ip.Source
 		if flow.K8S != nil {
 			flow.K8S.DestinationServiceIp = cachedFlow.K8S.DestinationServiceIp
+			flow.K8S.DestinationServicePortName = cachedFlow.K8S.DestinationServicePortName
+			flow.K8S.DestinationServicePort = cachedFlow.K8S.DestinationServicePort
+			flow.K8S.DestinationClusterIp = cachedFlow.K8S.DestinationClusterIp
 		}
 		return flow
 	} else {
 		cachedFlow.Ip.Source = flow.Ip.Source
 		if cachedFlow.K8S != nil {
 			cachedFlow.K8S.DestinationServiceIp = flow.K8S.DestinationServiceIp
+			cachedFlow.K8S.DestinationServicePortName = flow.K8S.DestinationServicePortName
+			cachedFlow.K8S.DestinationServicePort = flow.K8S.DestinationServicePort
+			cachedFlow.K8S.DestinationClusterIp = flow.K8S.DestinationClusterIp
 		}
 		return cachedFlow
 	}

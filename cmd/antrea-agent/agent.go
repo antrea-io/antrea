@@ -295,12 +295,10 @@ func run(o *Options) error {
 
 	// Get all available NodePort addresses.
 	var nodePortAddressesIPv4, nodePortAddressesIPv6 []net.IP
-	if o.config.AntreaProxy.ProxyAll {
-		excludeNodePortDevices := append(excludeNodePortDevices, o.config.HostGateway)
-		nodePortAddressesIPv4, nodePortAddressesIPv6, err = getAvailableNodePortAddresses(o.config.AntreaProxy.NodePortAddresses, excludeNodePortDevices, excludeNodePortDevicePrefixes)
-		if err != nil {
-			return fmt.Errorf("getting available NodePort IP addresses failed: %v", err)
-		}
+	excludeNodePortDevices := append(excludeNodePortDevices, o.config.HostGateway)
+	nodePortAddressesIPv4, nodePortAddressesIPv6, err = getAvailableNodePortAddresses(o.config.AntreaProxy.NodePortAddresses, excludeNodePortDevices, excludeNodePortDevicePrefixes)
+	if err != nil {
+		return fmt.Errorf("getting available NodePort IP addresses failed: %v", err)
 	}
 	serviceConfig := &config.ServiceConfig{
 		ServiceCIDR:           serviceCIDRNet,
@@ -748,8 +746,7 @@ func run(o *Options) error {
 			networkPolicyController,
 			flowExporterOptions,
 			egressController,
-			podNetworkWait,
-			serviceInformer)
+			podNetworkWait)
 		if err != nil {
 			return fmt.Errorf("error when creating IPFIX flow exporter: %v", err)
 		}

@@ -215,13 +215,11 @@ func (p *preprocessor) processMsg(msg *entities.Message) {
 					flow.K8S.DestinationServiceIp = ie.GetIPAddressValue()
 				}
 			case "proxySnatIPv4":
-				klog.InfoS("q7q7  parsing proxy snat ip v4", "val", ie.GetIPAddressValue())
 				ip := ie.GetIPAddressValue()
 				if !ip.Equal(net.IPv4zero) {
 					flow.ProxySnatIp = ie.GetIPAddressValue()
 				}
 			case "proxySnatIPv6":
-				klog.InfoS("q7q7  parsing proxy snat ip v6", "val", ie.GetIPAddressValue())
 				ip := ie.GetIPAddressValue()
 				if !ip.Equal(net.IPv6zero) {
 					flow.ProxySnatIp = ie.GetIPAddressValue()
