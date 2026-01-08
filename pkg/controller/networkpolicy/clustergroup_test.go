@@ -195,6 +195,23 @@ func TestProcessClusterGroup(t *testing.T) {
 				IPNets: []*net.IPNet{controlplaneIPNetDiff},
 			},
 		},
+		{
+			name: "cg-with-node-selector",
+			inputGroup: &crdv1beta1.ClusterGroup{
+				ObjectMeta: metav1.ObjectMeta{Name: "cgH", UID: "uidH"},
+				Spec: crdv1beta1.GroupSpec{
+					NodeSelector: &selectorA,
+				},
+			},
+			expectedGroup: &antreatypes.Group{
+				UID: "uidH",
+				SourceReference: &controlplane.GroupReference{
+					Name: "cgH",
+					UID:  "uidH",
+				},
+				Selector: antreatypes.NewGroupSelector("", nil, nil, nil, &selectorA),
+			},
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -326,6 +343,23 @@ func TestAddClusterGroup(t *testing.T) {
 					},
 				},
 				IPNets: []*net.IPNet{controlplaneIPNetDiff},
+			},
+		},
+		{
+			name: "cg-with-node-selector",
+			inputGroup: &crdv1beta1.ClusterGroup{
+				ObjectMeta: metav1.ObjectMeta{Name: "cgF", UID: "uidF"},
+				Spec: crdv1beta1.GroupSpec{
+					NodeSelector: &selectorA,
+				},
+			},
+			expectedGroup: &antreatypes.Group{
+				UID: "uidF",
+				SourceReference: &controlplane.GroupReference{
+					Name: "cgF",
+					UID:  "uidF",
+				},
+				Selector: antreatypes.NewGroupSelector("", nil, nil, nil, &selectorA),
 			},
 		},
 	}
@@ -476,6 +510,23 @@ func TestUpdateClusterGroup(t *testing.T) {
 					UID:  "uidA",
 				},
 				ChildGroups: []string{"cgB", "cgC"},
+			},
+		},
+		{
+			name: "cg-update-node-selector",
+			updatedGroup: &crdv1beta1.ClusterGroup{
+				ObjectMeta: metav1.ObjectMeta{Name: "cgA", UID: "uidA"},
+				Spec: crdv1beta1.GroupSpec{
+					NodeSelector: &selectorA,
+				},
+			},
+			expectedGroup: &antreatypes.Group{
+				UID: "uidA",
+				SourceReference: &controlplane.GroupReference{
+					Name: "cgA",
+					UID:  "uidA",
+				},
+				Selector: antreatypes.NewGroupSelector("", nil, nil, nil, &selectorA),
 			},
 		},
 	}
@@ -887,9 +938,39 @@ var groups = []antreatypes.Group{
 		},
 		ChildGroups: []string{"group1", "group2"},
 	},
+	{
+		UID: "groupUID6",
+		SourceReference: &controlplane.GroupReference{
+			Name: "group6",
+			UID:  "groupUID6",
+		},
+		Selector: antreatypes.NewGroupSelector("", nil, nil, nil, &metav1.LabelSelector{MatchLabels: map[string]string{"node": "a"}}),
+	},
+	{
+		UID: "groupUID7",
+		SourceReference: &controlplane.GroupReference{
+			Name: "group7",
+			UID:  "groupUID7",
+		},
+		Selector: antreatypes.NewGroupSelector("", nil, nil, nil, &metav1.LabelSelector{MatchLabels: map[string]string{"alt": "alt"}}),
+	},
+	{
+		UID: "groupUID8",
+		SourceReference: &controlplane.GroupReference{
+			Name: "group8",
+			UID:  "groupUID8",
+		},
+		Selector: antreatypes.NewGroupSelector("", nil, nil, nil, &metav1.LabelSelector{MatchLabels: map[string]string{"node": "b"}}),
+	},
 }
 
 func TestGetAssociatedGroups(t *testing.T) {
+	nodeA := &corev1.Node{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:   "nodeA",
+			Labels: map[string]string{"node": "a"},
+		},
+	}
 	tests := []struct {
 		name           string
 		existingGroups []antreatypes.Group
@@ -918,8 +999,19 @@ func TestGetAssociatedGroups(t *testing.T) {
 			"test-ns",
 			[]antreatypes.Group{},
 		},
+		{
+			"group-with-node-selector",
+			groups,
+			"nodeA",
+			"",
+			[]antreatypes.Group{groups[6]},
+		},
 	}
-	_, npc := newController(nil, nil)
+	_, npc := newController([]runtime.Object{nodeA}, nil)
+	stopCh := make(chan struct{})
+	defer close(stopCh)
+	npc.informerFactory.Start(stopCh)
+	npc.informerFactory.WaitForCacheSync(stopCh)
 	for i := range testPods {
 		npc.groupingInterface.AddPod(testPods[i])
 	}
@@ -928,15 +1020,99 @@ func TestGetAssociatedGroups(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			for i, g := range tt.existingGroups {
-				npc.internalGroupStore.Create(&tt.existingGroups[i])
-				if g.Selector != nil {
-					npc.groupingInterface.AddGroup(internalGroupType, g.SourceReference.Name, g.Selector)
-				}
-			}
+			createGroups(npc, tt.existingGroups)
 			groups := npc.GetAssociatedGroups(tt.queryName, tt.queryNamespace)
 			assert.ElementsMatch(t, tt.expectedGroups, groups)
 		})
+	}
+}
+
+func TestGetGroupsForNode(t *testing.T) {
+	nodeA := &corev1.Node{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:   "nodeA",
+			Labels: map[string]string{"node": "a"},
+		},
+	}
+	nodeB := &corev1.Node{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:   "nodeB",
+			Labels: map[string]string{"node": "b", "alt": "alt"},
+		},
+	}
+	nodeC := &corev1.Node{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:   "nodeC",
+			Labels: map[string]string{"node": "c"},
+		},
+	}
+	tests := []struct {
+		name           string
+		exists         bool
+		queryName      string
+		expectedGroups []string
+	}{
+		{
+			"single-group-match",
+			true,
+			"nodeA",
+			[]string{groups[6].SourceReference.Name},
+		},
+		{
+			"multiple-group-match",
+			true,
+			"nodeB",
+			[]string{groups[7].SourceReference.Name, groups[8].SourceReference.Name},
+		},
+		{
+			"node cannot be found",
+			false,
+			"any",
+			[]string{},
+		},
+		{
+			"no groups exist",
+			false,
+			"nodeB",
+			[]string{},
+		},
+		{
+			"no applicable groups exist",
+			false,
+			"nodeC",
+			[]string{},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var npc *networkPolicyController
+			_, npc = newController([]runtime.Object{nodeA, nodeB, nodeC}, nil)
+			stopCh := make(chan struct{})
+			defer close(stopCh)
+			npc.informerFactory.Start(stopCh)
+			npc.informerFactory.WaitForCacheSync(stopCh)
+			if tt.name != "no groups exist" {
+				createGroups(npc, groups)
+			}
+
+			groups, exists := npc.getGroupsForNode(tt.queryName)
+			if tt.exists {
+				assert.True(t, exists)
+				assert.ElementsMatch(t, tt.expectedGroups, groups[internalGroupType])
+			} else {
+				assert.False(t, exists)
+			}
+		})
+	}
+}
+
+// Create the given groups onto the controller
+func createGroups(npc *networkPolicyController, groups []antreatypes.Group) {
+	for _, g := range groups {
+		npc.internalGroupStore.Create(&g)
+		if g.Selector != nil {
+			npc.groupingInterface.AddGroup(internalGroupType, g.SourceReference.Name, g.Selector)
+		}
 	}
 }
 
