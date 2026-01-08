@@ -21,6 +21,7 @@ import (
 
 	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -69,6 +70,35 @@ func TestCreateClusterSet(t *testing.T) {
 		})
 	}
 }
+func TestCreateClusterSetRollbackIntegration(t *testing.T) {
+	cmd := &cobra.Command{}
+	buf := &bytes.Buffer{}
+	cmd.SetOut(buf)
+	cmd.SetErr(buf)
+
+	createdRes := []map[string]interface{}{}
+	fakeClient := fake.NewClientBuilder().WithScheme(multiclusterscheme.Scheme).Build()
+
+	err := CreateClusterSet(cmd, fakeClient, "default", "test-clusterset", "http://localhost", "token",
+		"member-id", "leader-id", "leader-ns", &createdRes)
+	require.NoError(t, err)
+	require.Len(t, createdRes, 1)
+
+	resource := createdRes[0]
+	apiVersion, ok := resource["apiVersion"].(string)
+	assert.True(t, ok, "apiVersion should be a string")
+	assert.Equal(t, "multicluster.crd.antrea.io/v1alpha1", apiVersion,
+		"apiVersion should be set correctly for rollback to work")
+
+	kind, ok := resource["kind"].(string)
+	assert.True(t, ok, "kind should be a string")
+	assert.Equal(t, "ClusterSet", kind,
+		"kind should be set correctly for rollback to work")
+
+	err = Rollback(cmd, fakeClient, createdRes)
+	assert.NoError(t, err)
+	assert.Contains(t, buf.String(), "ClusterSet \"default/test-clusterset\" deleted")
+}
 
 func TestDeleteClusterSet(t *testing.T) {
 	existingClusterSet := &mcv1alpha2.ClusterSet{
@@ -99,7 +129,7 @@ func TestDeleteClusterSet(t *testing.T) {
 			if tt.existingClusterSet != nil {
 				fakeClient = fake.NewClientBuilder().WithScheme(multiclusterscheme.Scheme).WithObjects(tt.existingClusterSet).Build()
 			}
-			buf := new(bytes.Buffer)
+			buf := &bytes.Buffer{}
 			cmd.SetOut(buf)
 			cmd.SetErr(buf)
 
@@ -129,7 +159,7 @@ func TestDeleteSecrets(t *testing.T) {
 
 	cmd := &cobra.Command{}
 	fakeClient := fake.NewClientBuilder().WithScheme(multiclusterscheme.Scheme).WithObjects(secret1, secret2).Build()
-	buf := new(bytes.Buffer)
+	buf := &bytes.Buffer{}
 	cmd.SetOut(buf)
 	cmd.SetErr(buf)
 
@@ -159,7 +189,7 @@ func TestDeleteRoleBindings(t *testing.T) {
 	}
 	cmd := &cobra.Command{}
 	fakeClient := fake.NewClientBuilder().WithScheme(multiclusterscheme.Scheme).WithObjects(rb1, rb2).Build()
-	buf := new(bytes.Buffer)
+	buf := &bytes.Buffer{}
 	cmd.SetOut(buf)
 	cmd.SetErr(buf)
 
@@ -189,7 +219,7 @@ func TestDeleteServiceAccounts(t *testing.T) {
 	}
 	cmd := &cobra.Command{}
 	fakeClient := fake.NewClientBuilder().WithScheme(multiclusterscheme.Scheme).WithObjects(sa1, sa2).Build()
-	buf := new(bytes.Buffer)
+	buf := &bytes.Buffer{}
 	cmd.SetOut(buf)
 	cmd.SetErr(buf)
 
@@ -443,7 +473,7 @@ type: Opaque`)
 		t.Run(tt.name, func(t *testing.T) {
 			cmd := &cobra.Command{}
 			fakeClient := fake.NewClientBuilder().WithScheme(multiclusterscheme.Scheme).WithObjects(tt.secret, tt.rolebinding, tt.serviceAccount).Build()
-			buf := new(bytes.Buffer)
+			buf := &bytes.Buffer{}
 			cmd.SetOut(buf)
 			cmd.SetErr(buf)
 
