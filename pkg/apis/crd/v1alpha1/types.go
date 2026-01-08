@@ -344,6 +344,27 @@ type BGPPeer struct {
 	// GracefulRestartTimeSeconds specifies how long the BGP peer would wait for the BGP session to re-establish after
 	// a restart before deleting stale routes. The range of the value is from 1 to 3600, and the default value is 120.
 	GracefulRestartTimeSeconds *int32 `json:"gracefulRestartTimeSeconds,omitempty"`
+
+	// HoldTimeSeconds specifies the hold time in seconds.
+	// The range of the value is from 0 to 65535.
+	// +kubebuilder:validation:Minimum=0
+	// +kubebuilder:validation:Maximum=65535
+	// +optional
+	HoldTimeSeconds *int32 `json:"holdTimeSeconds,omitempty"`
+
+	// KeepaliveTimeSeconds specifies the keepalive time in seconds.
+	// The range of the value is from 0 to 65535.
+	// +kubebuilder:validation:Minimum=0
+	// +kubebuilder:validation:Maximum=65535
+	// +optional
+	KeepaliveTimeSeconds *int32 `json:"keepaliveTimeSeconds,omitempty"`
+
+	// ConnectRetryTimeSeconds specifies the connect retry time in seconds.
+	// The range of the value is from 0 to 65535.
+	// +kubebuilder:validation:Minimum=0
+	// +kubebuilder:validation:Maximum=65535
+	// +optional
+	ConnectRetryTimeSeconds *int32 `json:"connectRetryTimeSeconds,omitempty"`
 }
 
 type PodReference struct {

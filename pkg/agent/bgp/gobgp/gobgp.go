@@ -307,6 +307,22 @@ func convertPeerConfigToGoBGPPeer(peerConfig bgp.PeerConfig) (*gobgpapi.Peer, er
 			RestartTime: uint32(*peerConfig.GracefulRestartTimeSeconds),
 		}
 	}
+
+	if peerConfig.HoldTimeSeconds != nil || peerConfig.KeepaliveTimeSeconds != nil || peerConfig.ConnectRetryTimeSeconds != nil {
+		timers := &gobgpapi.TimersConfig{}
+		if peerConfig.HoldTimeSeconds != nil {
+			timers.HoldTime = uint64(*peerConfig.HoldTimeSeconds)
+		}
+		if peerConfig.KeepaliveTimeSeconds != nil {
+			timers.KeepaliveInterval = uint64(*peerConfig.KeepaliveTimeSeconds)
+		}
+		if peerConfig.ConnectRetryTimeSeconds != nil {
+			timers.ConnectRetry = uint64(*peerConfig.ConnectRetryTimeSeconds)
+		}
+		peer.Timers = &gobgpapi.Timers{
+			Config: timers,
+		}
+	}
 	return peer, nil
 }
 
