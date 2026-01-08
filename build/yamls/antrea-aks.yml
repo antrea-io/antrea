@@ -1418,6 +1418,7 @@ spec:
               type: object
               required:
               - appliedTo
+              - failurePolicy
               oneOf:
               - anyOf:
                 - required:
@@ -1516,6 +1517,9 @@ spec:
                       type: string
                     burst:
                       type: string
+                failurePolicy:
+                  type: string
+                  enum: ['Drop', 'NodeSNAT']
             status:
               type: object
               properties:
