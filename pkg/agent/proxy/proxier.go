@@ -1331,7 +1331,7 @@ func newProxier(
 		endpointsMap:                         k8sproxy.EndpointsMap{},
 		endpointReferenceCounter:             map[string]int{},
 		topologyLabels:                       map[string]string{},
-		ipToServiceMap:                       newIPToServiceMap(),
+		ipToServiceMap:                       newIPToServiceMap(nodePortAddresses),
 		groupCounter:                         groupCounter,
 		ofClient:                             ofClient,
 		routeClient:                          routeClient,
@@ -1629,9 +1629,10 @@ func (p *ProxyServer) GetProxyProvider() Proxier {
 	return p.proxier
 }
 
-func newIPToServiceMap() *ipToServiceMap {
+func newIPToServiceMap(nodePortAddresses []net.IP) *ipToServiceMap {
 	return &ipToServiceMap{
-		serviceStringMap: map[string]k8sproxy.ServicePortName{},
+		serviceStringMap:  map[string]k8sproxy.ServicePortName{},
+		nodePortAddresses: nodePortAddresses,
 	}
 }
 
@@ -1643,6 +1644,8 @@ type ipToServiceMap struct {
 	serviceStringMapMutex sync.RWMutex
 	// serviceStringMap provides map from serviceString(IP:Port/Protocol) to ServicePortName.
 	serviceStringMap map[string]k8sproxy.ServicePortName
+	// nodePortAddresses are the set of node IPs used for mapping to services of type NodePort
+	nodePortAddresses []net.IP
 }
 
 // add registers a new Service to the map.
@@ -1650,14 +1653,14 @@ func (m *ipToServiceMap) add(serviceInfo *types.ServiceInfo, servicePortName k8s
 	m.serviceStringMapMutex.Lock()
 	defer m.serviceStringMapMutex.Unlock()
 
-	for _, serviceStr := range getServiceIPStrings(serviceInfo) {
+	for _, serviceStr := range getServiceIPStrings(serviceInfo, m.nodePortAddresses) {
 		m.serviceStringMap[serviceStr] = servicePortName
 	}
 }
 
 // delete removes the Service from the map with thread safety.
 func (m *ipToServiceMap) delete(serviceInfo *types.ServiceInfo) {
-	m.deleteServiceIPs(getServiceIPStrings(serviceInfo))
+	m.deleteServiceIPs(getServiceIPStrings(serviceInfo, m.nodePortAddresses))
 }
 
 // deleteServiceIPs removes the associated keys from the map for the given set
@@ -1685,14 +1688,14 @@ func (m *ipToServiceMap) get(serviceStr string) (k8sproxy.ServicePortName, bool)
 
 // getServiceIPStrings returns a slice of serviceStrings with the format
 // "IP:Port/Protocol" for all Service IPs.
-func getServiceIPStrings(s *types.ServiceInfo) []string {
+func getServiceIPStrings(s *types.ServiceInfo, nodePortAddresses []net.IP) []string {
 	lbIPs := s.LoadBalancerVIPs()
 	externalIPs := s.ExternalIPs()
 
 	port := s.Port()
 	proto := s.Protocol()
 
-	svcInfos := make([]string, 0, len(lbIPs)+len(externalIPs)+1) // +1 for ClusterIP
+	svcInfos := make([]string, 0, len(lbIPs)+len(externalIPs)+len(nodePortAddresses)+1) // +1 for ClusterIP
 	addSvcInfoFromIPs := func(ips []net.IP) {
 		for _, ip := range ips {
 			svcInfos = append(svcInfos, fmt.Sprintf("%s:%d/%s", ip, port, proto))
@@ -1700,6 +1703,9 @@ func getServiceIPStrings(s *types.ServiceInfo) []string {
 	}
 	addSvcInfoFromIPs(lbIPs)
 	addSvcInfoFromIPs(externalIPs)
+	if s.NodePort() != 0 {
+		addSvcInfoFromIPs(nodePortAddresses)
+	}
 	svcInfos = append(svcInfos, s.String())
 
 	return svcInfos

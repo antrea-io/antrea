@@ -22,10 +22,7 @@ import (
 	"net/netip"
 	"time"
 
-	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	labels "k8s.io/apimachinery/pkg/labels"
-	coreinformers "k8s.io/client-go/informers/core/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/klog/v2"
@@ -81,13 +78,12 @@ type FlowExporter struct {
 	podStore               objectstore.PodStore
 	nodeName               string
 	obsDomainID            uint32
-	serviceInformer        coreinformers.ServiceInformer
 }
 
 func NewFlowExporter(podStore objectstore.PodStore, proxier proxy.ProxyQuerier, k8sClient kubernetes.Interface, nodeRouteController *noderoute.Controller,
 	trafficEncapMode config.TrafficEncapModeType, nodeConfig *config.NodeConfig, v4Enabled, v6Enabled bool, serviceCIDRNet, serviceCIDRNetv6 *net.IPNet,
 	ovsDatapathType ovsconfig.OVSDatapathType, proxyEnabled bool, npQuerier querier.AgentNetworkPolicyInfoQuerier, o *options.FlowExporterOptions,
-	egressQuerier querier.EgressQuerier, podNetworkWait *utilwait.Group, serviceInformer coreinformers.ServiceInformer) (*FlowExporter, error) {
+	egressQuerier querier.EgressQuerier, podNetworkWait *utilwait.Group) (*FlowExporter, error) {
 
 	protocolFilter := filter.NewProtocolFilter(o.ProtocolFilter)
 	connTrackDumper := connections.InitializeConnTrackDumper(nodeConfig, serviceCIDRNet, serviceCIDRNetv6, ovsDatapathType, proxyEnabled, protocolFilter)
@@ -142,7 +138,6 @@ func NewFlowExporter(podStore objectstore.PodStore, proxier proxy.ProxyQuerier, 
 		podStore:               podStore,
 		nodeName:               nodeName,
 		obsDomainID:            obsDomainID,
-		serviceInformer:        serviceInformer,
 	}, nil
 }
 
@@ -302,17 +297,11 @@ type nodeRouteControllerInterface interface {
 	IsNil() bool
 }
 
-// serviceLookUp is an abstraction for FlowExporter for dependency injection
-type serviceLookUpInterface interface {
-	IsNil() bool
-	FillServiceInfo(*connection.Connection) error
-}
-
 func (exp *FlowExporter) IsNil() bool {
 	return exp == nil
 }
 
-func (exp *FlowExporter) findFlowType(conn connection.Connection, nodeRouteController nodeRouteControllerInterface, serviceLookUp serviceLookUpInterface) uint8 {
+func (exp *FlowExporter) findFlowType(conn connection.Connection, nodeRouteController nodeRouteControllerInterface) uint8 {
 	// TODO: support Pod-To-External flows in network policy only mode.
 	if exp.isNetworkPolicyOnly {
 		if conn.SourcePodName == "" || conn.DestinationPodName == "" {
@@ -346,15 +335,11 @@ func (exp *FlowExporter) findFlowType(conn connection.Connection, nodeRouteContr
 
 	if !srcIsPod {
 		if dstIsPod {
-			if serviceLookUp == nil || serviceLookUp.IsNil() {
-				klog.V(5).InfoS("Can't find flow type without serviceLookUp")
-				return utils.FlowTypeUnspecified
-			}
-			if err := serviceLookUp.FillServiceInfo(&conn); err == nil {
-				return utils.FlowTypeFromExternal
-			}
+			return utils.FlowTypeFromExternal
+		} else {
+			return utils.FlowTypeUnsupported
 		}
-		return utils.FlowTypeUnsupported
+
 	}
 
 	if !dstIsPod {
@@ -382,52 +367,8 @@ func (exp *FlowExporter) fillEgressInfo(conn *connection.Connection) {
 	}
 }
 
-// getServiceName returns the name of the service from the set of services provided
-// which has the matching provided port and the name of the port.
-// Empty strings are returned if no service match is found.
-func getServiceName(port uint16, services []*corev1.Service) (string, string) {
-	for _, service := range services {
-		for _, servicePort := range service.Spec.Ports {
-			if servicePort.Port == int32(port) {
-				return service.Name, servicePort.Name
-			}
-		}
-	}
-
-	return "", ""
-}
-
-// FillServiceInfo updates the given conn of type FlowTypeToExternal with the name of
-// the service whos port matches the destination port. An error is returned if no match
-// is found or errors occurred retrieving services
-func (exp *FlowExporter) FillServiceInfo(conn *connection.Connection) error {
-	errorString := "Failed to fill serviceInfo for connection"
-	if exp.serviceInformer == nil {
-		return fmt.Errorf("%s: serviceInformer is nil", errorString)
-	}
-	serviceLister := exp.serviceInformer.Lister()
-	if serviceLister == nil {
-		return fmt.Errorf("%s: serviceLister is nil", errorString)
-	}
-	serviceNamespaceLister := serviceLister.Services(conn.DestinationPodNamespace)
-	if serviceNamespaceLister == nil {
-		return fmt.Errorf("%s: serviceNamespaceLister is nil", errorString)
-	}
-	services, err := serviceNamespaceLister.List(labels.NewSelector())
-	if err != nil {
-		return fmt.Errorf("%s: serviceNamespaceLister failed to List: %w", errorString, err)
-	}
-
-	matchingServiceName, portName := getServiceName(conn.FlowKey.DestinationPort, services)
-	if matchingServiceName == "" {
-		return fmt.Errorf("%s: No service with matching port found", errorString)
-	}
-	conn.DestinationServicePortName = fmt.Sprintf("%s/%s:%s", conn.DestinationPodNamespace, matchingServiceName, portName)
-	return nil
-}
-
 func (exp *FlowExporter) exportConn(conn *connection.Connection) error {
-	conn.FlowType = exp.findFlowType(*conn, exp.nodeRouteController, exp)
+	conn.FlowType = exp.findFlowType(*conn, exp.nodeRouteController)
 
 	if conn.FlowType == utils.FlowTypeUnsupported {
 		return nil
@@ -439,14 +380,6 @@ func (exp *FlowExporter) exportConn(conn *connection.Connection) error {
 		} else {
 			// Skip exporting the Pod-to-External connection at the Egress Node if it's different from the Source Node
 			return nil
-		}
-	}
-
-	if conn.FlowType == utils.FlowTypeFromExternal {
-		err := exp.FillServiceInfo(conn)
-		if err != nil {
-			// Not returning error because zone zero flows will not have service info but still need to be exported
-			klog.Error(err)
 		}
 	}
 

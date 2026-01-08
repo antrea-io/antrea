@@ -238,7 +238,7 @@ func (cs *ConntrackConnectionStore) AddOrUpdateConn(conn *connection.Connection)
 		klog.V(4).InfoS("Antrea flow updated", "connection", existingConn)
 	} else {
 		cs.fillPodInfo(conn)
-		if conn.Mark&openflow.ServiceCTMark.GetRange().ToNXRange().ToUint32Mask() == openflow.ServiceCTMark.GetValue() {
+		if conn.Mark&openflow.ServiceCTMark.GetRange().ToNXRange().ToUint32Mask() == openflow.ServiceCTMark.GetValue() || conn.Mark == 2 {
 			clusterIP := conn.OriginalDestinationAddress.String()
 			svcPort := conn.OriginalDestinationPort
 			protocol, err := lookupServiceProtocol(conn.FlowKey.Protocol)

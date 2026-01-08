@@ -393,17 +393,21 @@ var externalIP = []byte{0xac, 0x12, 0x00, 0x01} // 172.12.18.01
 var podIP = []byte{0x0e, 0xec, 0x01, 0x03}      // 10.244.1.3
 var gatewayIP = []byte{0x0a, 0xf4, 0x02, 0x01}  // 10.244.2.1
 var nodeIP = []byte{0xac, 0x12, 0x00, 0x02}     // 172.12.18.02
+var containerPort = uint32(82)
 var sourceNodeIP = &flowpb.IP{
 	Source:      externalIP,
 	Destination: podIP,
 }
+var destinationServicePortName = "namespace/service-name:serviceportname"
 
-func generateSourceNodeFlowAndFlowKey() (*flowpb.Flow, *FlowKey) {
+func generateSourceNodeFlowAndFlowKey() (*flowpb.Flow, *FlowKey) { // can this just be a variable? is it modified anywhere?
 	sourceNodeRecord := &flowpb.Flow{
 		K8S: &flowpb.Kubernetes{
 			FlowType:                   flowpb.FlowType_FLOW_TYPE_FROM_EXTERNAL,
-			DestinationServicePortName: ":serviceportname",
+			DestinationServicePortName: destinationServicePortName,
 			DestinationServiceIp:       nodeIP,
+			DestinationClusterIp:       nodeIP,
+			DestinationServicePort:     containerPort,
 		},
 		Ip: sourceNodeIP,
 		Transport: &flowpb.Transport{
@@ -424,10 +428,9 @@ func generateSourceNodeFlowAndFlowKey() (*flowpb.Flow, *FlowKey) {
 func generateDestinationNodeFlowAndFlowKey() (*flowpb.Flow, *FlowKey) {
 	destinationNodeRecord := &flowpb.Flow{
 		K8S: &flowpb.Kubernetes{
-			DestinationPodName:         "nginx-deployment-HASH",
-			DestinationPodNamespace:    "some-namespace",
-			FlowType:                   flowpb.FlowType_FLOW_TYPE_FROM_EXTERNAL,
-			DestinationServicePortName: "namespace/service-name:serviceportname",
+			DestinationPodName:      "nginx-deployment-HASH",
+			DestinationPodNamespace: "some-namespace",
+			FlowType:                flowpb.FlowType_FLOW_TYPE_FROM_EXTERNAL,
 		},
 		Ip: &flowpb.IP{
 			Source:      gatewayIP,
@@ -506,6 +509,9 @@ func TestCorrelateRecordsForFromExternalFlow(t *testing.T) {
 		assert.NotNil(t, correlatedFlow, "Expected stored flow to not be nil")
 		assert.Equal(t, externalIP, correlatedFlow.Ip.Source, "Expected correlated flow to have original source IP")
 		assert.Equal(t, nodeIP, correlatedFlow.K8S.DestinationServiceIp, "Expected correlated flow to have node IP")
+		assert.Equal(t, nodeIP, correlatedFlow.K8S.DestinationClusterIp, "Expected correlated flow to have node IP")
+		assert.Equal(t, containerPort, correlatedFlow.K8S.DestinationServicePort, "Expected correlated flow to have the container port")
+		assert.Equal(t, destinationServicePortName, correlatedFlow.K8S.DestinationServicePortName, "Expected correlated flow to have DestinationServicePortName")
 
 		// Ensure cleanup
 		flow := ap.CorrelateExternal(destinationNodeRecord)
@@ -540,6 +546,9 @@ func TestCorrelateRecordsForFromExternalFlow(t *testing.T) {
 		assert.NotNil(t, correlatedFlow, "Expected stored flow to not be nil")
 		assert.Equal(t, externalIP, correlatedFlow.Ip.Source, "Expected correlated flow to have original source IP")
 		assert.Equal(t, nodeIP, correlatedFlow.K8S.DestinationServiceIp, "Expected correlated flow to have node IP")
+		assert.Equal(t, nodeIP, correlatedFlow.K8S.DestinationClusterIp, "Expected correlated flow to have node IP")
+		assert.Equal(t, containerPort, correlatedFlow.K8S.DestinationServicePort, "Expected correlated flow to have the container port")
+		assert.Equal(t, destinationServicePortName, correlatedFlow.K8S.DestinationServicePortName, "Expected correlated flow to have DestinationServicePortName")
 
 		// Ensure cleanup
 		flow := ap.CorrelateExternal(sourceNodeRecord)
