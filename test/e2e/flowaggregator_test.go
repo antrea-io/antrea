@@ -1990,7 +1990,7 @@ func testExternalToPodFlows(t *testing.T, data *TestData, isIPv6 bool) {
 	defer cleanupFunc()
 
 	nodePortService := "node-port-service"
-	service, err := data.CreateServiceWithAnnotations(nodePortService, data.testNamespace, 80, 80, corev1.ProtocolTCP, map[string]string{"app": "nginx"}, false, false, corev1.ServiceTypeNodePort, nil, nil)
+	service, err := data.CreateServiceWithAnnotations(nodePortService, data.testNamespace, 80, containerPort, corev1.ProtocolTCP, map[string]string{"app": "nginx"}, false, false, corev1.ServiceTypeNodePort, nil, nil)
 	if err != nil {
 		t.Fatalf("Failed to create service %s", nodePortService)
 	}
@@ -2008,17 +2008,15 @@ func testExternalToPodFlows(t *testing.T, data *TestData, isIPv6 bool) {
 	for _, tc := range tc {
 		t.Run(fmt.Sprintf("Testing connection to node %v", tc.node), func(t *testing.T) {
 			sourceIP, _ := createExternalToPodConnection(t, service, tc.node)
+			dstIP := nginxIP.IPv4.String()
 
-			testFlow1 := testFlow{
-				dstPodName: nginxPodName,
-			}
-			testFlow1.srcIP = sourceIP
-			testFlow1.dstIP = nginxIP.IPv4.String()
-			records := getCollectorOutput(t, testFlow1.srcIP, testFlow1.dstIP, "", false, false, isIPv6, data, "", getCollectorOutputDefaultTimeout)
-			assert.NotEmpty(t, records, "Expected flows from ipfix collector to include source IP %s and destination ip %s", testFlow1.srcIP, testFlow1.dstIP)
+			records := getCollectorOutput(t, sourceIP, dstIP, "", false, false, isIPv6, data, "", getCollectorOutputDefaultTimeout)
+			assert.NotEmpty(t, records, "Expected flows from ipfix collector to include source IP %s and destination ip %s", sourceIP, dstIP)
 			for _, record := range records {
 				assert := assert.New(t)
-				assert.Contains(record, testFlow1.dstPodName, "Aggregated Record does not have Destination Pod name: %s", testFlow1.srcPodName)
+				assert.Contains(record, nginxPodName, "Aggregated Record does not have Destination Pod name")
+				assert.Contains(record, nodePortService, "Aggregated Record does not have service information")
+				assert.Contains(record, strconv.Itoa(int(containerPort)), "Aggregated Record does not have the service port")
 			}
 			flushFlowsFromCollector(t, data, isIPv6)
 		})
