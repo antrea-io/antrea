@@ -345,25 +345,19 @@ type BGPPeer struct {
 	// a restart before deleting stale routes. The range of the value is from 1 to 3600, and the default value is 120.
 	GracefulRestartTimeSeconds *int32 `json:"gracefulRestartTimeSeconds,omitempty"`
 
-	// HoldTimeSeconds specifies the hold time in seconds.
-	// The range of the value is from 0 to 65535.
-	// +kubebuilder:validation:Minimum=0
-	// +kubebuilder:validation:Maximum=65535
-	// +optional
+	// HoldTimeSeconds specifies the maximum time in seconds the local peer waits for a KEEPALIVE or UPDATE message
+	// from the remote peer before tearing down the BGP session. The range of the value is from 3 to 65535,
+	// and the default value is 90.
 	HoldTimeSeconds *int32 `json:"holdTimeSeconds,omitempty"`
 
-	// KeepaliveTimeSeconds specifies the keepalive time in seconds.
-	// The range of the value is from 0 to 65535.
-	// +kubebuilder:validation:Minimum=0
-	// +kubebuilder:validation:Maximum=65535
-	// +optional
+	// KeepaliveTimeSeconds specifies the interval in seconds between sending KEEPALIVE messages to the remote peer.
+	// It is typically set to one-third of the HoldTime. The range of the value is from 1 to 65535,
+	// and the default value is 30.
 	KeepaliveTimeSeconds *int32 `json:"keepaliveTimeSeconds,omitempty"`
 
-	// ConnectRetryTimeSeconds specifies the connect retry time in seconds.
-	// The range of the value is from 0 to 65535.
-	// +kubebuilder:validation:Minimum=0
-	// +kubebuilder:validation:Maximum=65535
-	// +optional
+	// ConnectRetryTimeSeconds specifies the time in seconds the local peer waits before retrying to establish a
+	// connection to the remote peer after a connection failure. The range of the value is from 1 to 65535,
+	// and the default value is 120.
 	ConnectRetryTimeSeconds *int32 `json:"connectRetryTimeSeconds,omitempty"`
 }
 
