@@ -17,7 +17,7 @@ metadata:
 spec:
   configuration:
     users:
-      clickhouse_operator/k8s_secret_password: flow-visibility/flow-aggregator-clickhouse-secret/password
+      clickhouse_operator/k8s_secret_password: flow-visibility/clickhouse-secret/password
       clickhouse_operator/networks/ip: "::/0"
     profiles:
       readonly/readonly: 1
