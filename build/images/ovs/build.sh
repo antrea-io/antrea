@@ -146,6 +146,9 @@ function docker_build_and_push() {
     local dockerfile="$2"
     local build_args="--build-arg OVS_VERSION=$OVS_VERSION"
     local cache_args=""
+    if [[ ${DOCKER_REGISTRY} != "" ]]; then
+        build_args+="--build-arg DOCKER_REGISTRY=$DOCKER_REGISTRY"
+    fi
     if $PUSH; then
         cache_args="$cache_args --cache-to type=registry,ref=$image-cache:$BUILD_CACHE_TAG,mode=max"
     fi
@@ -167,7 +170,7 @@ elif [ "$DISTRO" == "ubi" ]; then
     docker_build_and_push "antrea/openvswitch-ubi-$TARGETARCH" "Dockerfile.ubi"
 elif [ "$DISTRO" == "windows" ]; then
     image="antrea/windows-ovs"
-    build_args="--build-arg OVS_VERSION=$OVS_VERSION"
+    build_args="--build-arg OVS_VERSION=$OVS_VERSION --build-arg DOCKER_REGISTRY=$DOCKER_REGISTRY"
     if [[ ${DOCKER_REGISTRY} != "" ]]; then
         image="${DOCKER_REGISTRY}/antrea/windows-ovs"
     fi
