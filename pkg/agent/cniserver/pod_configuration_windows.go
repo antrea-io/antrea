@@ -23,13 +23,11 @@ import (
 
 	"antrea.io/libOpenflow/openflow15"
 	current "github.com/containernetworking/cni/pkg/types/100"
-	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/kubernetes/scheme"
-	typedv1 "k8s.io/client-go/kubernetes/typed/core/v1"
 	v1 "k8s.io/client-go/listers/core/v1"
 	"k8s.io/client-go/tools/cache"
-	"k8s.io/client-go/tools/record"
+	"k8s.io/client-go/tools/events"
 	"k8s.io/client-go/util/workqueue"
 	"k8s.io/klog/v2"
 
@@ -157,11 +155,13 @@ func (pc *podConfigurator) initPortStatusMonitor(podInformer cache.SharedIndexIn
 			Name: workerName,
 		},
 	)
-	eventBroadcaster := record.NewBroadcaster()
+	eventBroadcaster := events.NewBroadcaster(&events.EventSinkImpl{
+		Interface: pc.kubeClient.EventsV1(),
+	})
 	pc.eventBroadcaster = eventBroadcaster
 	pc.recorder = eventBroadcaster.NewRecorder(
 		scheme.Scheme,
-		corev1.EventSource{Component: "AntreaPodConfigurator"},
+		"AntreaPodConfigurator",
 	)
 	pc.statusCh = make(chan *openflow15.PortStatus, 100)
 	pc.ofClient.SubscribeOFPortStatusMessage(pc.statusCh)
@@ -177,9 +177,7 @@ func (pc *podConfigurator) Run(stopCh <-chan struct{}) {
 		return
 	}
 	pc.eventBroadcaster.StartStructuredLogging(0)
-	pc.eventBroadcaster.StartRecordingToSink(&typedv1.EventSinkImpl{
-		Interface: pc.kubeClient.CoreV1().Events(""),
-	})
+	pc.eventBroadcaster.StartRecordingToSink(stopCh)
 	defer pc.eventBroadcaster.Shutdown()
 
 	go wait.Until(pc.worker, time.Second, stopCh)
