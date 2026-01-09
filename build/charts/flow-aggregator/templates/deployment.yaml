@@ -72,29 +72,29 @@ spec:
           - name: CH_USERNAME
             valueFrom:
               secretKeyRef:
-                name: {{ include "flow-aggregator.fullname" . }}-clickhouse-secret
+                name: clickhouse-secret
                 key: username
           - name: CH_PASSWORD
             valueFrom:
               secretKeyRef:
-                name: {{ include "flow-aggregator.fullname" . }}-clickhouse-secret
+                name: clickhouse-secret
                 key: password
           - name: FA_CONFIG_MAP_NAME
             value: flow-aggregator-configmap
           - name: AWS_ACCESS_KEY_ID
             valueFrom:
               secretKeyRef:
-                name: {{ include "flow-aggregator.fullname" . }}-aws-credentials
+                name: flow-aggregator-aws-credentials
                 key: aws_access_key_id
           - name: AWS_SECRET_ACCESS_KEY
             valueFrom:
               secretKeyRef:
-                name: {{ include "flow-aggregator.fullname" . }}-aws-credentials
+                name: flow-aggregator-aws-credentials
                 key: aws_secret_access_key
           - name: AWS_SESSION_TOKEN
             valueFrom:
               secretKeyRef:
-                name: {{ include "flow-aggregator.fullname" . }}-aws-credentials
+                name: flow-aggregator-aws-credentials
                 key: aws_session_token
         ports:
           - name: ipfix-udp

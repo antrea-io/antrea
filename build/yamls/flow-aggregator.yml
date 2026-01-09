@@ -21,7 +21,7 @@ kind: Secret
 metadata:
   labels:
     app: flow-aggregator
-  name: flow-aggregator-clickhouse-secret
+  name: clickhouse-secret
   namespace: flow-aggregator
 type: Opaque
 stringData:
@@ -511,12 +511,12 @@ spec:
           - name: CH_USERNAME
             valueFrom:
               secretKeyRef:
-                name: flow-aggregator-clickhouse-secret
+                name: clickhouse-secret
                 key: username
           - name: CH_PASSWORD
             valueFrom:
               secretKeyRef:
-                name: flow-aggregator-clickhouse-secret
+                name: clickhouse-secret
                 key: password
           - name: FA_CONFIG_MAP_NAME
             value: flow-aggregator-configmap
