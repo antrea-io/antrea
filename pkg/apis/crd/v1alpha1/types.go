@@ -345,25 +345,16 @@ type BGPPeer struct {
 	// a restart before deleting stale routes. The range of the value is from 1 to 3600, and the default value is 120.
 	GracefulRestartTimeSeconds *int32 `json:"gracefulRestartTimeSeconds,omitempty"`
 
-	// HoldTimeSeconds specifies the hold time in seconds.
-	// The range of the value is from 0 to 65535.
-	// +kubebuilder:validation:Minimum=0
-	// +kubebuilder:validation:Maximum=65535
-	// +optional
+	// HoldTimeSeconds specifies the hold time in seconds. The range of the value is from 3 to 65535,
+	// and the default value is 90.
 	HoldTimeSeconds *int32 `json:"holdTimeSeconds,omitempty"`
 
-	// KeepaliveTimeSeconds specifies the keepalive time in seconds.
-	// The range of the value is from 0 to 65535.
-	// +kubebuilder:validation:Minimum=0
-	// +kubebuilder:validation:Maximum=65535
-	// +optional
+	// KeepaliveTimeSeconds specifies the keepalive time in seconds. The range of the value is from 1 to 65535,
+	// and the default value is 30.
 	KeepaliveTimeSeconds *int32 `json:"keepaliveTimeSeconds,omitempty"`
 
-	// ConnectRetryTimeSeconds specifies the connect retry time in seconds.
-	// The range of the value is from 0 to 65535.
-	// +kubebuilder:validation:Minimum=0
-	// +kubebuilder:validation:Maximum=65535
-	// +optional
+	// ConnectRetryTimeSeconds specifies the connect retry time in seconds. The range of the value is from 1 to 65535,
+	// and the default value is 120.
 	ConnectRetryTimeSeconds *int32 `json:"connectRetryTimeSeconds,omitempty"`
 }
 
