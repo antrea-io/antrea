@@ -1,0 +1,54 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ../../base
+patches:
+  - target:
+      version: v1
+      kind: Namespace
+      name: flow-aggregator
+    patch: |-
+      - op: replace
+        path: /metadata/name
+        value: flow-aggregator-1
+  - target:
+      namespace: flow-aggregator
+    patch: |-
+      - op: replace
+        path: /metadata/namespace
+        value: flow-aggregator-1
+  - target:
+      version: v1
+      kind: RoleBinding
+      name: flow-aggregator-extension-apiserver-authentication-reader-role-binding
+    patch: |-
+      - op: replace
+        path: /metadata/name
+        value: flow-aggregator-1-extension-apiserver-authentication-reader-role-binding
+      - op: replace
+        path: /subjects/0/namespace
+        value: flow-aggregator-1
+  - target:
+      version: v1
+      kind: ClusterRoleBinding
+      name: flow-aggregator-auth-delegator-cluster-role-binding
+    patch: |-
+      - op: replace
+        path: /metadata/name
+        value: flow-aggregator-1-auth-delegator-cluster-role-binding
+  - target:
+      version: v1
+      kind: ClusterRoleBinding
+      name: flow-aggregator-cluster-id-reader
+    patch: |-
+      - op: replace
+        path: /metadata/name
+        value: flow-aggregator-1-cluster-id-reader
+  - target:
+      version: v1
+      kind: ClusterRoleBinding
+      name: flow-aggregator-cluster-role-binding
+    patch: |-
+      - op: replace
+        path: /metadata/name
+        value: flow-aggregator-1-cluster-role-binding

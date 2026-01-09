@@ -21,6 +21,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"k8s.io/apimachinery/pkg/util/sets"
 )
 
@@ -55,14 +56,14 @@ func TestSubscribe(t *testing.T) {
 	go c.Run(stopCh)
 
 	var eventReceivers []*eventReceiver
-	for i := 0; i < 100; i++ {
+	for i := range 100 {
 		receiver := newEventReceiver()
-		c.Subscribe(receiver.receive)
+		assert.Equal(t, SubscriberID(i), c.Subscribe(receiver.receive))
 		eventReceivers = append(eventReceivers, receiver)
 	}
 
 	desiredEvents := sets.New[string]()
-	for i := 0; i < 1000; i++ {
+	for i := range 1000 {
 		e := fmt.Sprintf("event-%d", i)
 		c.Notify(e)
 		desiredEvents.Insert(e)
@@ -100,4 +101,18 @@ func TestNotify(t *testing.T) {
 	case <-time.After(notifyTimeout + time.Second):
 		t.Errorf("Notify() didn't return in time")
 	}
+}
+
+func TestUnsubscribe(t *testing.T) {
+	c := NewSubscribableChannel("foo", 100)
+	c.nextSubscriberID = 31
+	go c.Run(t.Context().Done())
+
+	receiver := newEventReceiver()
+	subID := c.Subscribe(receiver.receive)
+	require.Len(t, c.subscribers, 1)
+	assert.Equal(t, c.subscribers[0].id, subID)
+
+	c.Unsubscribe(subID)
+	require.Len(t, c.subscribers, 0)
 }
