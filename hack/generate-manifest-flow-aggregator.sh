@@ -20,9 +20,11 @@ function echoerr {
     >&2 echo "$@"
 }
 
-_usage="Usage: $0 [--mode (dev|release)] [-fc|--flow-collector <addr>] [-ch|--clickhouse] [--verbose-log] [--help|-h]
+_usage="Usage: $0 [--mode (dev|release)] [-n|--namespace <namespace>] [-fc|--flow-collector <addr>] [-ch|--clickhouse] [--verbose-log] [--help|-h]
 Generate a YAML manifest for the Flow Aggregator, using Helm and Kustomize, and print it to stdout.
         --mode (dev|release)            Choose the configuration variant that you need (default is 'dev').
+        --release-name <name>           Specify the release name for the generated resources. (default is 'flow-aggregator')
+        --namespace, -n <namespace>     Specify the namespace for the generated resources. (default is 'flow-aggregator')
         --flow-collector, -fc <addr>    Specify the flowCollector address.
                                         It should be given in format IP:port:proto. Example: 192.168.1.100:4739:udp.
         --clickhouse, -ch               Enable exporting flow records to default ClickHouse service address.
@@ -55,6 +57,8 @@ function print_help {
 }
 
 MODE="dev"
+RELEASE_NAME="flow-aggregator"
+NAMESPACE="flow-aggregator"
 FLOW_COLLECTOR=""
 CLICKHOUSE=false
 COVERAGE=false
@@ -70,6 +74,14 @@ key="$1"
 case $key in
     --mode)
     MODE="$2"
+    shift 2
+    ;;
+    --release-name)
+    RELEASE_NAME="$2"
+    shift 2
+    ;;
+    -n|--namespace)
+    NAMESPACE="$2"
     shift 2
     ;;
     -fc|--flow-collector)
@@ -156,16 +168,6 @@ elif ! $HELM version > /dev/null 2>&1; then
     exit 1
 fi
 
-source $THIS_DIR/verify-kustomize.sh
-
-if [ -z "$KUSTOMIZE" ]; then
-    KUSTOMIZE="$(verify_kustomize)"
-elif ! $KUSTOMIZE version > /dev/null 2>&1; then
-    echoerr "$KUSTOMIZE does not appear to be a valid kustomize binary"
-    print_help
-    exit 1
-fi
-
 if [[ $FLOW_COLLECTOR != "" ]]; then
     HELM_VALUES+=("flowCollector.enable=true,flowCollector.address=$FLOW_COLLECTOR")
 fi
@@ -216,21 +218,23 @@ for v in "${HELM_VALUES_FILES[@]}"; do
 done
 
 ANTREA_CHART=$THIS_DIR/../build/charts/flow-aggregator
-KUSTOMIZATION_DIR=$THIS_DIR/../build/yamls/flow-aggregator
-# intermediate manifest
-MANIFEST=$KUSTOMIZATION_DIR/base/manifest.yaml
+
+cat <<EOF
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  labels:
+    app: flow-aggregator
+  name: $NAMESPACE
+EOF
+
 # Suppress potential Helm warnings about invalid permissions for Kubeconfig file
 # by throwing away related warnings.
 $HELM template \
-      --namespace flow-aggregator \
-      $HELM_VALUES_OPTION \
-      $HELM_VALUES_FILES_OPTION \
-      "$ANTREA_CHART"\
-      2> >(grep -v 'This is insecure' >&2)\
-      > $MANIFEST
-
-# Add flow-aggregator Namespace resource with Kustomize
-cd $KUSTOMIZATION_DIR/base
-$KUSTOMIZE build
-
-rm -rf $MANIFEST
+    --release-name "$RELEASE_NAME" \
+    --namespace "$NAMESPACE" \
+    $HELM_VALUES_OPTION \
+    $HELM_VALUES_FILES_OPTION \
+    "$ANTREA_CHART"\
+    2> >(grep -v 'This is insecure' >&2)

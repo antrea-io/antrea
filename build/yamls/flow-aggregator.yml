@@ -1,3 +1,4 @@
+---
 apiVersion: v1
 kind: Namespace
 metadata:
@@ -5,6 +6,7 @@ metadata:
     app: flow-aggregator
   name: flow-aggregator
 ---
+# Source: flow-aggregator/templates/serviceaccount.yaml
 apiVersion: v1
 kind: ServiceAccount
 metadata:
@@ -13,196 +15,41 @@ metadata:
   name: flow-aggregator
   namespace: flow-aggregator
 ---
-apiVersion: rbac.authorization.k8s.io/v1
-kind: Role
-metadata:
-  labels:
-    app: flow-aggregator
-  name: flow-aggregator-role
-  namespace: flow-aggregator
-rules:
-- apiGroups:
-  - ""
-  resources:
-  - configmaps
-  verbs:
-  - create
-- apiGroups:
-  - ""
-  resourceNames:
-  - flow-aggregator-ca
-  resources:
-  - configmaps
-  verbs:
-  - get
-  - list
-  - watch
-  - update
-- apiGroups:
-  - ""
-  resources:
-  - secrets
-  verbs:
-  - create
-- apiGroups:
-  - ""
-  resourceNames:
-  - flow-aggregator-ca-tls
-  - flow-aggregator-client-tls
-  resources:
-  - secrets
-  verbs:
-  - get
-  - list
-  - watch
-  - update
-- apiGroups:
-  - ""
-  resourceNames:
-  - flow-aggregator-configmap
-  resources:
-  - configmaps
-  verbs:
-  - get
-  - update
----
-apiVersion: rbac.authorization.k8s.io/v1
-kind: Role
-metadata:
-  labels:
-    app: flow-aggregator
-  name: flow-exporter-role
-  namespace: flow-aggregator
-rules:
-- apiGroups:
-  - ""
-  resourceNames:
-  - flow-aggregator-ca
-  resources:
-  - configmaps
-  verbs:
-  - get
-- apiGroups:
-  - ""
-  resourceNames:
-  - flow-aggregator-client-tls
-  resources:
-  - secrets
-  verbs:
-  - get
----
-apiVersion: rbac.authorization.k8s.io/v1
-kind: ClusterRole
-metadata:
-  labels:
-    app: flow-aggregator
-  name: flow-aggregator-role
-rules:
-- apiGroups:
-  - ""
-  resources:
-  - pods
-  - nodes
-  - services
-  verbs:
-  - get
-  - list
-  - watch
----
-apiVersion: rbac.authorization.k8s.io/v1
-kind: RoleBinding
-metadata:
-  labels:
-    app: flow-aggregator
-  name: flow-aggregator-role-binding
-  namespace: flow-aggregator
-roleRef:
-  apiGroup: rbac.authorization.k8s.io
-  kind: Role
-  name: flow-aggregator-role
-subjects:
-- kind: ServiceAccount
-  name: flow-aggregator
-  namespace: flow-aggregator
----
-apiVersion: rbac.authorization.k8s.io/v1
-kind: RoleBinding
-metadata:
-  labels:
-    app: flow-aggregator
-  name: flow-exporter-role-binding
-  namespace: flow-aggregator
-roleRef:
-  apiGroup: rbac.authorization.k8s.io
-  kind: Role
-  name: flow-exporter-role
-subjects:
-- kind: ServiceAccount
-  name: antrea-agent
-  namespace: kube-system
----
-apiVersion: rbac.authorization.k8s.io/v1
-kind: RoleBinding
-metadata:
-  labels:
-    app: flow-aggregator
-  name: flow-aggregator-extension-apiserver-authentication-reader-role-binding
-  namespace: kube-system
-roleRef:
-  apiGroup: rbac.authorization.k8s.io
-  kind: Role
-  name: extension-apiserver-authentication-reader
-subjects:
-- kind: ServiceAccount
-  name: flow-aggregator
-  namespace: flow-aggregator
----
-apiVersion: rbac.authorization.k8s.io/v1
-kind: ClusterRoleBinding
-metadata:
-  labels:
-    app: flow-aggregator
-  name: flow-aggregator-auth-delegator-cluster-role-binding
-roleRef:
-  apiGroup: rbac.authorization.k8s.io
-  kind: ClusterRole
-  name: system:auth-delegator
-subjects:
-- kind: ServiceAccount
-  name: flow-aggregator
-  namespace: flow-aggregator
----
-apiVersion: rbac.authorization.k8s.io/v1
-kind: ClusterRoleBinding
-metadata:
-  labels:
-    app: flow-aggregator
-  name: flow-aggregator-cluster-id-reader
-roleRef:
-  apiGroup: rbac.authorization.k8s.io
-  kind: ClusterRole
-  name: antrea-cluster-identity-reader
-subjects:
-- kind: ServiceAccount
-  name: flow-aggregator
-  namespace: flow-aggregator
----
-apiVersion: rbac.authorization.k8s.io/v1
-kind: ClusterRoleBinding
-metadata:
-  labels:
-    app: flow-aggregator
-  name: flow-aggregator-cluster-role-binding
-roleRef:
-  apiGroup: rbac.authorization.k8s.io
-  kind: ClusterRole
-  name: flow-aggregator-role
-subjects:
-- kind: ServiceAccount
-  name: flow-aggregator
-  namespace: flow-aggregator
----
+# Source: flow-aggregator/templates/secrets.yaml
 apiVersion: v1
+kind: Secret
+metadata:
+  labels:
+    app: flow-aggregator
+  name: clickhouse-secret
+  namespace: flow-aggregator
+type: Opaque
+stringData:
+  username: clickhouse_operator
+  password: clickhouse_operator_password
+---
+# Source: flow-aggregator/templates/secrets.yaml
+apiVersion: v1
+kind: Secret
+metadata:
+  labels:
+    app: flow-aggregator
+  name: flow-aggregator-aws-credentials
+  namespace: flow-aggregator
+type: Opaque
+stringData:
+  aws_access_key_id: "changeme"
+  aws_secret_access_key: "changeme"
+  aws_session_token: ""
+---
+# Source: flow-aggregator/templates/configmap.yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: flow-aggregator-configmap
+  namespace: flow-aggregator
+  labels:
+    app: flow-aggregator
 data:
   flow-aggregator.conf: |
     # Mode in which to run the flow aggregator. Must be one of "Aggregate" or "Proxy". In Aggregate
@@ -430,38 +277,170 @@ data:
     # can be found in the antrea-cluster-identity ConfigMap. Currently this is only consumed by the
     # flowCollector (IPFIX) exporter.
     clusterID: ""
-kind: ConfigMap
+---
+# Source: flow-aggregator/templates/clusterrole.yaml
+kind: ClusterRole
+apiVersion: rbac.authorization.k8s.io/v1
 metadata:
   labels:
     app: flow-aggregator
-  name: flow-aggregator-configmap
-  namespace: flow-aggregator
+  name: flow-aggregator-role
+rules:
+  - apiGroups: [""]
+    resources: ["pods", "nodes", "services"]
+    verbs: ["get", "list", "watch"]
 ---
-apiVersion: v1
-kind: Secret
+# Source: flow-aggregator/templates/clusterrolebindings.yaml
+kind: ClusterRoleBinding
+apiVersion: rbac.authorization.k8s.io/v1
 metadata:
   labels:
     app: flow-aggregator
-  name: clickhouse-secret
-  namespace: flow-aggregator
-stringData:
-  password: clickhouse_operator_password
-  username: clickhouse_operator
-type: Opaque
+  name: flow-aggregator-cluster-role-binding
+subjects:
+  - kind: ServiceAccount
+    name: flow-aggregator
+    namespace: flow-aggregator
+roleRef:
+  kind: ClusterRole
+  name: flow-aggregator-role
+  apiGroup: rbac.authorization.k8s.io
 ---
-apiVersion: v1
-kind: Secret
+# Source: flow-aggregator/templates/clusterrolebindings.yaml
+# For auth delegation to apiserver
+kind: ClusterRoleBinding
+apiVersion: rbac.authorization.k8s.io/v1
 metadata:
   labels:
     app: flow-aggregator
-  name: flow-aggregator-aws-credentials
-  namespace: flow-aggregator
-stringData:
-  aws_access_key_id: changeme
-  aws_secret_access_key: changeme
-  aws_session_token: ""
-type: Opaque
+  name: flow-aggregator-auth-delegator-cluster-role-binding
+subjects:
+  - kind: ServiceAccount
+    name: flow-aggregator
+    namespace: flow-aggregator
+roleRef:
+  kind: ClusterRole
+  name: system:auth-delegator
+  apiGroup: rbac.authorization.k8s.io
 ---
+# Source: flow-aggregator/templates/id-reader-clusterrole.yaml
+kind: ClusterRoleBinding
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  labels:
+    app: flow-aggregator
+  name: flow-aggregator-cluster-id-reader
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: antrea-cluster-identity-reader
+subjects:
+  - kind: ServiceAccount
+    name: flow-aggregator
+    namespace: flow-aggregator
+---
+# Source: flow-aggregator/templates/roles.yaml
+kind: Role
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  labels:
+    app: flow-aggregator
+  name: flow-aggregator-exporter-role
+  namespace: flow-aggregator
+rules:
+  - apiGroups: [""]
+    resources: ["configmaps"]
+    resourceNames: ["flow-aggregator-ca"]
+    verbs: ["get"]
+  - apiGroups: [""]
+    resources: ["secrets"]
+    resourceNames: ["flow-aggregator-client-tls"]
+    verbs: ["get"]
+---
+# Source: flow-aggregator/templates/roles.yaml
+kind: Role
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  labels:
+    app: flow-aggregator
+  name: flow-aggregator-role
+  namespace: flow-aggregator
+rules:
+  # RBAC to create / update / get flow-aggregator-ca ConfigMap
+  - apiGroups: [""]
+    resources: ["configmaps"]
+    verbs: ["create"]
+  - apiGroups: [""]
+    resources: ["configmaps"]
+    resourceNames: ["flow-aggregator-ca"]
+    verbs: ["get", "list", "watch", "update"]
+  # RBAC to create / update / get flow-aggregator-client-tls Secret
+  - apiGroups: [""]
+    resources: ["secrets"]
+    verbs: ["create"]
+  - apiGroups: [""]
+    resources: ["secrets"]
+    resourceNames: ["flow-aggregator-ca-tls", "flow-aggregator-client-tls"]
+    verbs: ["get", "list", "watch", "update"]
+  # RBAC to get / update flow-aggregator-configmap ConfigMap (required by antctl)
+  - apiGroups: [""]
+    resources: ["configmaps"]
+    resourceNames: ["flow-aggregator-configmap"]
+    verbs: ["get", "update"]
+---
+# Source: flow-aggregator/templates/rolebindings.yaml
+kind: RoleBinding
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  labels:
+    app: flow-aggregator
+  name: flow-aggregator-exporter-role-binding
+  namespace: flow-aggregator
+subjects:
+- kind: ServiceAccount
+  name: antrea-agent
+  namespace: kube-system
+roleRef:
+  kind: Role
+  name: flow-aggregator-exporter-role
+  apiGroup: rbac.authorization.k8s.io
+---
+# Source: flow-aggregator/templates/rolebindings.yaml
+kind: RoleBinding
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  labels:
+    app: flow-aggregator
+  name: flow-aggregator-role-binding
+  namespace: flow-aggregator
+subjects:
+  - kind: ServiceAccount
+    name: flow-aggregator
+    namespace: flow-aggregator
+roleRef:
+  kind: Role
+  name: flow-aggregator-role
+  apiGroup: rbac.authorization.k8s.io
+---
+# Source: flow-aggregator/templates/rolebindings.yaml
+# For auth delegation to apiserver
+kind: RoleBinding
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  labels:
+    app: flow-aggregator
+  name: flow-aggregator-extension-apiserver-authentication-reader-role-binding
+  namespace: kube-system
+subjects:
+  - kind: ServiceAccount
+    name: flow-aggregator
+    namespace: flow-aggregator
+roleRef:
+  kind: Role
+  name: extension-apiserver-authentication-reader
+  apiGroup: rbac.authorization.k8s.io
+---
+# Source: flow-aggregator/templates/service.yaml
 apiVersion: v1
 kind: Service
 metadata:
@@ -470,6 +449,8 @@ metadata:
   name: flow-aggregator
   namespace: flow-aggregator
 spec:
+  selector:
+    app: flow-aggregator
   ports:
   - name: ipfix-udp
     port: 4739
@@ -483,9 +464,8 @@ spec:
     port: 14739
     protocol: TCP
     targetPort: grpc
-  selector:
-    app: flow-aggregator
 ---
+# Source: flow-aggregator/templates/deployment.yaml
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -501,101 +481,105 @@ spec:
   template:
     metadata:
       annotations:
+        # Automatically restart Pod if the ConfigMap changes
+        # See https://helm.sh/docs/howto/charts_tips_and_tricks/#automatically-roll-deployments
         checksum/config: 90ac254e5326185b3bdb2ae70568457015f7505606d73b3f27d948872479a279
       labels:
         app: flow-aggregator
     spec:
+      hostNetwork: false
       containers:
-      - args:
-        - --config=/etc/flow-aggregator/flow-aggregator.conf
-        - --logtostderr=false
-        - --log_dir=/var/log/antrea/flow-aggregator
-        - --alsologtostderr
-        - --log_file_max_size=100
-        - --log_file_max_num=4
-        env:
-        - name: POD_NAME
-          valueFrom:
-            fieldRef:
-              fieldPath: metadata.name
-        - name: POD_NAMESPACE
-          valueFrom:
-            fieldRef:
-              fieldPath: metadata.namespace
-        - name: CH_USERNAME
-          valueFrom:
-            secretKeyRef:
-              key: username
-              name: clickhouse-secret
-        - name: CH_PASSWORD
-          valueFrom:
-            secretKeyRef:
-              key: password
-              name: clickhouse-secret
-        - name: FA_CONFIG_MAP_NAME
-          value: flow-aggregator-configmap
-        - name: AWS_ACCESS_KEY_ID
-          valueFrom:
-            secretKeyRef:
-              key: aws_access_key_id
-              name: flow-aggregator-aws-credentials
-        - name: AWS_SECRET_ACCESS_KEY
-          valueFrom:
-            secretKeyRef:
-              key: aws_secret_access_key
-              name: flow-aggregator-aws-credentials
-        - name: AWS_SESSION_TOKEN
-          valueFrom:
-            secretKeyRef:
-              key: aws_session_token
-              name: flow-aggregator-aws-credentials
-        image: antrea/flow-aggregator:latest
+      - name: flow-aggregator
+        image: "antrea/flow-aggregator:latest"
         imagePullPolicy: IfNotPresent
-        name: flow-aggregator
+        args:
+          - --config=/etc/flow-aggregator/flow-aggregator.conf
+          - --logtostderr=false
+          - --log_dir=/var/log/antrea/flow-aggregator
+          - --alsologtostderr
+          - --log_file_max_size=100
+          - --log_file_max_num=4
+        env:
+          - name: POD_NAME
+            valueFrom:
+              fieldRef:
+                fieldPath: metadata.name
+          - name: POD_NAMESPACE
+            valueFrom:
+              fieldRef:
+                fieldPath: metadata.namespace
+          - name: CH_USERNAME
+            valueFrom:
+              secretKeyRef:
+                name: clickhouse-secret
+                key: username
+          - name: CH_PASSWORD
+            valueFrom:
+              secretKeyRef:
+                name: clickhouse-secret
+                key: password
+          - name: FA_CONFIG_MAP_NAME
+            value: flow-aggregator-configmap
+          - name: AWS_ACCESS_KEY_ID
+            valueFrom:
+              secretKeyRef:
+                name: flow-aggregator-aws-credentials
+                key: aws_access_key_id
+          - name: AWS_SECRET_ACCESS_KEY
+            valueFrom:
+              secretKeyRef:
+                name: flow-aggregator-aws-credentials
+                key: aws_secret_access_key
+          - name: AWS_SESSION_TOKEN
+            valueFrom:
+              secretKeyRef:
+                name: flow-aggregator-aws-credentials
+                key: aws_session_token
         ports:
-        - containerPort: 4739
-          name: ipfix-udp
-          protocol: UDP
-        - containerPort: 4739
-          name: ipfix-tcp
-          protocol: TCP
-        - containerPort: 14739
-          name: grpc
-          protocol: TCP
-        resources:
-          requests:
-            cpu: 500m
-            memory: 256Mi
+          - name: ipfix-udp
+            containerPort: 4739
+            protocol: UDP
+          - name: ipfix-tcp
+            containerPort: 4739
+            protocol: TCP
+          - name: grpc
+            containerPort: 14739
+            protocol: TCP
         volumeMounts:
         - mountPath: /etc/flow-aggregator
           name: flow-aggregator-config
           readOnly: true
         - mountPath: /var/log/antrea/flow-aggregator
           name: host-var-log-antrea-flow-aggregator
-        - mountPath: /etc/flow-aggregator/certs
-          name: certs
+        - name: certs
+          mountPath: /etc/flow-aggregator/certs
           readOnly: true
-      hostNetwork: false
+        resources:
+          requests:
+            cpu: 500m
+            memory: 256Mi
       nodeSelector:
-        kubernetes.io/arch: amd64
         kubernetes.io/os: linux
+        kubernetes.io/arch: amd64
       priorityClassName: system-cluster-critical
       serviceAccountName: flow-aggregator
       volumes:
       - name: certs
         projected:
-          defaultMode: 256
+          defaultMode: 0400
           sources:
+          # We add these secrets even if flowCollector.enable is false, or if flowCollector.tls.enable
+          # is false, as it is more convenient. Note that the secrets are optional.
           - secret:
+              name: clickhouse-ca
               items:
               - key: ca.crt
                 path: clickhouse/ca.crt
-              name: clickhouse-ca
               optional: true
-      - configMap:
+      - name: flow-aggregator-config
+        configMap:
           name: flow-aggregator-configmap
-        name: flow-aggregator-config
-      - hostPath:
+      - name: host-var-log-antrea-flow-aggregator
+        hostPath:
           path: /var/log/antrea/flow-aggregator
           type: DirectoryOrCreate
-        name: host-var-log-antrea-flow-aggregator

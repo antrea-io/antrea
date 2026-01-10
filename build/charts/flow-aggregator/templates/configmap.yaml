@@ -1,7 +1,7 @@
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: flow-aggregator-configmap
+  name: {{ include "flow-aggregator.fullname" . }}-configmap
   namespace: {{ .Release.Namespace }}
   labels:
     app: flow-aggregator
