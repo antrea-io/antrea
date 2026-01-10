@@ -3,7 +3,7 @@ apiVersion: rbac.authorization.k8s.io/v1
 metadata:
   labels:
     app: flow-aggregator
-  name: {{ include "flow-aggregator.fullname" . }}-cluster-id
+  name: {{ include "flow-aggregator.fullname" . }}-cluster-id-reader
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: ClusterRole

@@ -284,7 +284,7 @@ apiVersion: rbac.authorization.k8s.io/v1
 metadata:
   labels:
     app: flow-aggregator
-  name: flow-aggregator-reader
+  name: flow-aggregator-role
 rules:
   - apiGroups: [""]
     resources: ["pods", "nodes", "services"]
@@ -296,14 +296,14 @@ apiVersion: rbac.authorization.k8s.io/v1
 metadata:
   labels:
     app: flow-aggregator
-  name: flow-aggregator-reader
+  name: flow-aggregator-cluster-role-binding
 subjects:
   - kind: ServiceAccount
     name: flow-aggregator
     namespace: flow-aggregator
 roleRef:
   kind: ClusterRole
-  name: flow-aggregator-reader
+  name: flow-aggregator-role
   apiGroup: rbac.authorization.k8s.io
 ---
 # Source: flow-aggregator/templates/clusterrolebindings.yaml
@@ -313,7 +313,7 @@ apiVersion: rbac.authorization.k8s.io/v1
 metadata:
   labels:
     app: flow-aggregator
-  name: flow-aggregator-auth-delegator
+  name: flow-aggregator-auth-delegator-cluster-role-binding
 subjects:
   - kind: ServiceAccount
     name: flow-aggregator
@@ -329,7 +329,7 @@ apiVersion: rbac.authorization.k8s.io/v1
 metadata:
   labels:
     app: flow-aggregator
-  name: flow-aggregator-cluster-id
+  name: flow-aggregator-cluster-id-reader
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: ClusterRole
@@ -345,7 +345,7 @@ apiVersion: rbac.authorization.k8s.io/v1
 metadata:
   labels:
     app: flow-aggregator
-  name: flow-aggregator-exporter-reader
+  name: flow-aggregator-exporter-role
   namespace: flow-aggregator
 rules:
   - apiGroups: [""]
@@ -363,7 +363,7 @@ apiVersion: rbac.authorization.k8s.io/v1
 metadata:
   labels:
     app: flow-aggregator
-  name: flow-aggregator-manager
+  name: flow-aggregator-role
   namespace: flow-aggregator
 rules:
   # RBAC to create / update / get flow-aggregator-ca ConfigMap
@@ -394,7 +394,7 @@ apiVersion: rbac.authorization.k8s.io/v1
 metadata:
   labels:
     app: flow-aggregator
-  name: flow-aggregator-exporter-reader
+  name: flow-aggregator-exporter-role-binding
   namespace: flow-aggregator
 subjects:
 - kind: ServiceAccount
@@ -402,7 +402,7 @@ subjects:
   namespace: kube-system
 roleRef:
   kind: Role
-  name: flow-aggregator-exporter-reader
+  name: flow-aggregator-exporter-role
   apiGroup: rbac.authorization.k8s.io
 ---
 # Source: flow-aggregator/templates/rolebindings.yaml
@@ -411,7 +411,7 @@ apiVersion: rbac.authorization.k8s.io/v1
 metadata:
   labels:
     app: flow-aggregator
-  name: flow-aggregator-manager
+  name: flow-aggregator-role-binding
   namespace: flow-aggregator
 subjects:
   - kind: ServiceAccount
@@ -419,7 +419,7 @@ subjects:
     namespace: flow-aggregator
 roleRef:
   kind: Role
-  name: flow-aggregator-manager
+  name: flow-aggregator-role
   apiGroup: rbac.authorization.k8s.io
 ---
 # Source: flow-aggregator/templates/rolebindings.yaml
@@ -429,7 +429,7 @@ apiVersion: rbac.authorization.k8s.io/v1
 metadata:
   labels:
     app: flow-aggregator
-  name: flow-aggregator-extension-apiserver-authentication-reader
+  name: flow-aggregator-extension-apiserver-authentication-reader-role-binding
   namespace: kube-system
 subjects:
   - kind: ServiceAccount
