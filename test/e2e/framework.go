@@ -2226,7 +2226,7 @@ func (data *TestData) CreateServiceWithAnnotations(serviceName, namespace string
 		},
 	}
 	if (serviceType == corev1.ServiceTypeNodePort || serviceType == corev1.ServiceTypeLoadBalancer) && nodeLocalExternal {
-		service.Spec.ExternalTrafficPolicy = corev1.ServiceExternalTrafficPolicyTypeLocal
+		service.Spec.ExternalTrafficPolicy = corev1.ServiceExternalTrafficPolicyLocal
 	}
 	for _, mutator := range mutators {
 		mutator(&service)
@@ -2272,9 +2272,9 @@ func (data *TestData) updateServiceExternalTrafficPolicy(serviceName string, nod
 		return svc, err
 	}
 	if nodeLocalExternal {
-		svc.Spec.ExternalTrafficPolicy = corev1.ServiceExternalTrafficPolicyTypeLocal
+		svc.Spec.ExternalTrafficPolicy = corev1.ServiceExternalTrafficPolicyLocal
 	} else {
-		svc.Spec.ExternalTrafficPolicy = corev1.ServiceExternalTrafficPolicyTypeCluster
+		svc.Spec.ExternalTrafficPolicy = corev1.ServiceExternalTrafficPolicyCluster
 	}
 
 	return data.clientset.CoreV1().Services(data.testNamespace).Update(context.TODO(), svc, metav1.UpdateOptions{})
