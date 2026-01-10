@@ -28,6 +28,7 @@ import (
 	"testing"
 
 	"github.com/prometheus/common/expfmt"
+	"github.com/prometheus/common/model"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
@@ -188,7 +189,6 @@ func testPrometheusMetricsOnPods(t *testing.T, data *TestData, component string,
 	var hostIP = ""
 	var hostPort int32
 	var address = ""
-	var parser expfmt.TextParser
 
 	// Find Pods' API endpoints, check for metrics existence on each of them
 	for _, pod := range pods.Items {
@@ -202,6 +202,7 @@ func testPrometheusMetricsOnPods(t *testing.T, data *TestData, component string,
 				t.Logf("Found %s", address)
 				respBody := getMetricsFromAPIServer(t, fmt.Sprintf("https://%s/metrics", address), token)
 
+				parser := expfmt.NewTextParser(model.LegacyValidation)
 				parsed, err := parser.TextToMetricFamilies(strings.NewReader(respBody))
 				if err != nil {
 					t.Fatalf("Parsing Prometheus metrics failed with: %v", err)
