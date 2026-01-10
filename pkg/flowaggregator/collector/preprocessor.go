@@ -204,6 +204,30 @@ func (p *preprocessor) processMsg(msg *entities.Message) {
 				}
 			case "egressNodeName":
 				flow.K8S.EgressNodeName = ie.GetStringValue()
+			case "destinationServiceIPv4":
+				ip := ie.GetIPAddressValue()
+				if !ip.Equal(net.IPv4zero) {
+					flow.K8S.DestinationServiceIp = ie.GetIPAddressValue()
+				}
+			case "destinationServiceIPv6":
+				ip := ie.GetIPAddressValue()
+				if !ip.Equal(net.IPv6zero) {
+					flow.K8S.DestinationServiceIp = ie.GetIPAddressValue()
+				}
+			case "proxySnatIPv4":
+				klog.InfoS("q7q7  parsing proxy snat ip v4", "val", ie.GetIPAddressValue())
+				ip := ie.GetIPAddressValue()
+				if !ip.Equal(net.IPv4zero) {
+					flow.ProxySnatIp = ie.GetIPAddressValue()
+				}
+			case "proxySnatIPv6":
+				klog.InfoS("q7q7  parsing proxy snat ip v6", "val", ie.GetIPAddressValue())
+				ip := ie.GetIPAddressValue()
+				if !ip.Equal(net.IPv6zero) {
+					flow.ProxySnatIp = ie.GetIPAddressValue()
+				}
+			case "proxySnatPort":
+				flow.ProxySnatPort = uint32(ie.GetUnsigned16Value())
 			}
 		}
 
