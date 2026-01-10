@@ -3,14 +3,14 @@ apiVersion: rbac.authorization.k8s.io/v1
 metadata:
   labels:
     app: flow-aggregator
-  name: {{ include "flow-aggregator.fullname" . }}-reader
+  name: {{ include "flow-aggregator.fullname" . }}-cluster-role-binding
 subjects:
   - kind: ServiceAccount
     name: {{ include "flow-aggregator.fullname" . }}
     namespace: {{ .Release.Namespace }}
 roleRef:
   kind: ClusterRole
-  name: {{ include "flow-aggregator.fullname" . }}-reader
+  name: {{ include "flow-aggregator.fullname" . }}-role
   apiGroup: rbac.authorization.k8s.io
 ---
 # For auth delegation to apiserver
@@ -19,7 +19,7 @@ apiVersion: rbac.authorization.k8s.io/v1
 metadata:
   labels:
     app: flow-aggregator
-  name: {{ include "flow-aggregator.fullname" . }}-auth-delegator
+  name: {{ include "flow-aggregator.fullname" . }}-auth-delegator-cluster-role-binding
 subjects:
   - kind: ServiceAccount
     name: {{ include "flow-aggregator.fullname" . }}

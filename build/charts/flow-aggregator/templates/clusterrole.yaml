@@ -3,7 +3,7 @@ apiVersion: rbac.authorization.k8s.io/v1
 metadata:
   labels:
     app: flow-aggregator
-  name: {{ include "flow-aggregator.fullname" . }}-reader
+  name: {{ include "flow-aggregator.fullname" . }}-role
 rules:
   - apiGroups: [""]
     resources: ["pods", "nodes", "services"]
