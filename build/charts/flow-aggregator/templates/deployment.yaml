@@ -4,7 +4,7 @@ kind: Deployment
 metadata:
   labels:
     app: flow-aggregator
-  name: flow-aggregator
+  name: {{ include "flow-aggregator.fullname" . }}
   namespace: {{ .Release.Namespace }}
 spec:
   replicas: {{ .Values.replicas }}
@@ -127,7 +127,7 @@ spec:
         kubernetes.io/os: linux
         kubernetes.io/arch: amd64
       priorityClassName: {{ .Values.priorityClassName }}
-      serviceAccountName: flow-aggregator
+      serviceAccountName: {{ include "flow-aggregator.fullname" . }}
       volumes:
       - name: certs
         projected:
@@ -163,7 +163,7 @@ spec:
               optional: true
       - name: flow-aggregator-config
         configMap:
-          name: flow-aggregator-configmap
+          name: {{ include "flow-aggregator.fullname" . }}-configmap
       - name: host-var-log-antrea-flow-aggregator
         hostPath:
           path: /var/log/antrea/flow-aggregator
