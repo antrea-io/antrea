@@ -825,6 +825,9 @@ func testLoadBalancerAdd(t *testing.T,
 	fp.syncProxyRules()
 	assert.Contains(t, fp.serviceInstalledMap, svcPortName)
 	assert.Contains(t, fp.endpointsInstalledMap, svcPortName)
+	if proxyLoadBalancerIPs {
+		verifyIPToServiceMap(t, fp.ipToServiceMap, []net.IP{loadBalancerIP}, []net.IP{}, svcPort, corev1.ProtocolTCP, svcPortName)
+	}
 }
 
 func testNodePortAdd(t *testing.T,
@@ -3240,18 +3243,17 @@ func testServiceExternalIPsUpdate(t *testing.T, protocol binding.Protocol, isIPv
 	}
 	mockRouteClient.EXPECT().AddNodePortConfigs(nodePortAddresses, uint16(svcNodePort), protocol)
 
-	toDeleteLoadBalancerIPStrings := smallSliceDifference(loadBalancerIPStrings, updatedLoadBalancerIPStrings)
-	toAddLoadBalancerIPStrings := smallSliceDifference(updatedLoadBalancerIPStrings, loadBalancerIPStrings)
-	for _, ipStr := range toDeleteLoadBalancerIPStrings {
-		ip := net.ParseIP(ipStr)
+	toDeleteLoadBalancerIPs := stringsToIPs(smallSliceDifference(loadBalancerIPStrings, updatedLoadBalancerIPStrings))
+
+	toAddLoadBalancerIPs := stringsToIPs(smallSliceDifference(updatedLoadBalancerIPStrings, loadBalancerIPStrings))
+	for _, ip := range toDeleteLoadBalancerIPs {
 		mockOFClient.EXPECT().UninstallServiceFlows(ip, uint16(svcPort), protocol)
 		mockRouteClient.EXPECT().DeleteExternalIPConfigs(svcInfoStr, ip)
 		if needClearConntrackEntries(protocol) {
 			mockRouteClient.EXPECT().ClearConntrackEntryForService(ip, uint16(svcPort), nil, protocol)
 		}
 	}
-	for _, ipStr := range toAddLoadBalancerIPStrings {
-		ip := net.ParseIP(ipStr)
+	for _, ip := range toAddLoadBalancerIPs {
 		mockOFClient.EXPECT().InstallServiceFlows(&antreatypes.ServiceConfig{
 			ServiceIP:      ip,
 			ServicePort:    uint16(svcPort),
@@ -3261,10 +3263,9 @@ func testServiceExternalIPsUpdate(t *testing.T, protocol binding.Protocol, isIPv
 		})
 		mockRouteClient.EXPECT().AddExternalIPConfigs(svcInfoStr, ip)
 	}
-	toDeleteExternalIPStrings := smallSliceDifference(externalIPStrings, updatedExternalIPStrings)
+	toDeleteExternalIPs := stringsToIPs(smallSliceDifference(externalIPStrings, updatedExternalIPStrings))
 	toAddLoadExternalIPStrings := smallSliceDifference(updatedExternalIPStrings, externalIPStrings)
-	for _, ipStr := range toDeleteExternalIPStrings {
-		ip := net.ParseIP(ipStr)
+	for _, ip := range toDeleteExternalIPs {
 		mockOFClient.EXPECT().UninstallServiceFlows(ip, uint16(svcPort), protocol)
 		mockRouteClient.EXPECT().DeleteExternalIPConfigs(svcInfoStr, ip)
 		if needClearConntrackEntries(protocol) {
@@ -3290,6 +3291,29 @@ func testServiceExternalIPsUpdate(t *testing.T, protocol binding.Protocol, isIPv
 	fp.syncProxyRules()
 	assert.Contains(t, fp.serviceInstalledMap, svcPortName)
 	assert.Contains(t, fp.endpointsInstalledMap, svcPortName)
+
+	verifyIPToServiceMap(t, fp.ipToServiceMap, updatedLoadBalancerIPs, toDeleteLoadBalancerIPs, svcPort, apiProtocol, svcPortName)
+	verifyIPToServiceMap(t, fp.ipToServiceMap, updatedExternalIPs, toDeleteExternalIPs, svcPort, apiProtocol, svcPortName)
+}
+
+// verifyIPToServiceMap confirms the given map contains all expected IPs and does not contain any of the deleted IPs
+func verifyIPToServiceMap(t *testing.T, ipToServiceMap *ipToServiceMap, expectedSvcIPs, deletedSvcIPs []net.IP, port int, protocol corev1.Protocol, expectedServicePortName k8sproxy.ServicePortName) {
+	t.Helper()
+	assertIPsInMap := func(IPs []net.IP, expected bool) {
+		for _, ip := range IPs {
+			serviceStr := generateServiceInfoStrings(protocol, port, []net.IP{ip})[0]
+			got, exists := ipToServiceMap.get(serviceStr)
+
+			if expected {
+				assert.True(t, exists, fmt.Sprintf("Expected IP to exist but it was missing: %s", serviceStr))
+				assert.Equal(t, expectedServicePortName, got)
+			} else {
+				assert.False(t, exists, fmt.Sprintf("Expected IP to be deleted but it was found: %s", serviceStr))
+			}
+		}
+	}
+	assertIPsInMap(expectedSvcIPs, true)
+	assertIPsInMap(deletedSvcIPs, false)
 }
 
 func TestServiceIngressIPsUpdate(t *testing.T) {
@@ -3915,4 +3939,46 @@ func TestServiceHealthServer(t *testing.T) {
 		fp := newFakeProxier(nil, nil, nil, nil, false, withProxyAll, withoutServiceHealthServer)
 		assert.Nil(t, fp.serviceHealthServer)
 	})
+}
+
+func TestIPToServiceMap(t *testing.T) {
+	clusterIP := net.ParseIP("1.1.1.1")
+	externalIP := "2.2.2.2"
+	loadBalancerIP := "3.3.3.3"
+	baseServicePortInfo := k8sproxy.NewBaseServiceInfo(clusterIP,
+		80,
+		corev1.ProtocolTCP,
+		0,
+		[]string{loadBalancerIP},
+		"",
+		0,
+		[]string{externalIP},
+		nil,
+		0,
+		false,
+		false,
+		nil,
+		"")
+
+	serviceInfo := &types.ServiceInfo{
+		BaseServiceInfo: baseServicePortInfo,
+	}
+	servicePortName := k8sproxy.ServicePortName{
+		Port:     "80",
+		Protocol: corev1.ProtocolTCP,
+	}
+
+	m := newIPToServiceMap()
+
+	m.add(serviceInfo, servicePortName)
+	assert.Len(t, m.serviceStringMap, 3)
+
+	verifyIPToServiceMap(t, m, []net.IP{
+		clusterIP,
+		net.ParseIP(externalIP),
+		net.ParseIP(loadBalancerIP),
+	}, []net.IP{}, 80, corev1.ProtocolTCP, servicePortName)
+
+	m.delete(serviceInfo)
+	assert.Len(t, m.serviceStringMap, 0)
 }
