@@ -41,7 +41,7 @@ GOLANG_RELEASE_DIR=${WORKDIR}/golang-releases
 multicluster_kubeconfigs=($EAST_CLUSTER_CONFIG $LEADER_CLUSTER_CONFIG $WEST_CLUSTER_CONFIG)
 membercluster_kubeconfigs=($EAST_CLUSTER_CONFIG $WEST_CLUSTER_CONFIG)
 
-CLEAN_STALE_IMAGES="docker system prune --force --all --filter until=48h"
+CLEAN_STALE_IMAGES="docker system prune --force --all --filter until=4h"
 PRINT_DOCKER_STATUS="docker system df -v"
 
 CLEAN_STALE_IMAGES_CONTAINERD="crictl rmi --prune"
@@ -136,7 +136,7 @@ function clean_tmp() {
 function clean_images() {
     docker images --format "{{.Repository}}:{{.Tag}}" | grep -E 'mc-controller|antrea-ubuntu' | xargs -r docker rmi -f || true
     # Clean up dangling images generated in previous builds.
-    docker image prune -af --filter "until=24h" || true > /dev/null
+    docker image prune -af --filter "until=4h" || true > /dev/null
     check_and_cleanup_docker_build_cache
 }
 
@@ -183,6 +183,7 @@ function clean_multicluster {
             cleanup_multicluster_antrea $kubeconfig
         done
     fi
+    rm -f antrea-ubuntu.tar antrea-mcs.tar nginx.tar agnhost.tar
 }
 
 function wait_for_antrea_multicluster_pods_ready {
@@ -284,10 +285,6 @@ EOF
 
 function deliver_antrea_multicluster {
     echo "====== Building Antrea for the Following Commit ======"
-    export GO111MODULE=on
-    export GOPATH=${WORKDIR}/go
-    export GOROOT=${GOLANG_RELEASE_DIR}/go
-    export PATH=${GOROOT}/bin:$PATH
 
     git show --numstat
     make clean
@@ -299,8 +296,7 @@ function deliver_antrea_multicluster {
 
     DOCKER_REGISTRY="${DOCKER_REGISTRY}" ./hack/build-antrea-linux-all.sh --pull
     echo "====== Delivering Antrea to all Nodes ======"
-    docker save -o ${WORKDIR}/antrea-ubuntu.tar antrea/antrea-agent-ubuntu:latest antrea/antrea-controller-ubuntu:latest
-
+    docker save -o antrea-ubuntu.tar antrea/antrea-agent-ubuntu:latest antrea/antrea-controller-ubuntu:latest
 
     if [[ ${KIND} == "true" ]]; then
         for name in ${CLUSTER_NAMES[*]}; do
@@ -311,11 +307,11 @@ function deliver_antrea_multicluster {
         for kubeconfig in "${multicluster_kubeconfigs[@]}"
         do
             kubectl get nodes -o wide --no-headers=true ${kubeconfig}| awk '{print $6}' | while read IP; do
-                 rsync -avr --progress --inplace -e "ssh -o StrictHostKeyChecking=no" "${WORKDIR}"/antrea-ubuntu.tar jenkins@[${IP}]:${WORKDIR}/antrea-ubuntu.tar
+                 rsync -avr --progress --inplace -e "ssh -o StrictHostKeyChecking=no" "${WORKDIR}"/antrea-ubuntu.tar jenkins@[${IP}]:antrea-ubuntu.tar
                  if ${IS_CONTAINERD};then
-                   ssh -o StrictHostKeyChecking=no -n jenkins@${IP} "${CLEAN_STALE_IMAGES_CONTAINERD}; ${PRINT_CONTAINERD_STATUS}; sudo ctr -n=k8s.io images import ${WORKDIR}/antrea-ubuntu.tar" || true
+                   ssh -o StrictHostKeyChecking=no -n jenkins@${IP} "${CLEAN_STALE_IMAGES_CONTAINERD}; ${PRINT_CONTAINERD_STATUS}; sudo ctr -n=k8s.io images import antrea-ubuntu.tar" || true
                  else
-                   ssh -o StrictHostKeyChecking=no -n jenkins@${IP} "${CLEAN_STALE_IMAGES}; ${PRINT_DOCKER_STATUS}; docker load -i ${WORKDIR}/antrea-ubuntu.tar" || true
+                   ssh -o StrictHostKeyChecking=no -n jenkins@${IP} "${CLEAN_STALE_IMAGES}; ${PRINT_DOCKER_STATUS}; docker load -i antrea-ubuntu.tar" || true
                  fi
             done
         done
@@ -324,21 +320,17 @@ function deliver_antrea_multicluster {
 
 function deliver_multicluster_controller {
     echo "====== Build Antrea Multiple Cluster Controller and YAMLs ======"
-    export GO111MODULE=on
-    export GOPATH=${WORKDIR}/go
-    export GOROOT=${GOLANG_RELEASE_DIR}/go
-    export PATH=${GOROOT}/bin:$PATH
 
     DEFAULT_IMAGE=antrea/antrea-mc-controller:latest
     if $COVERAGE;then
         export NO_PULL=1;make build-antrea-mc-controller-coverage
         DEFAULT_IMAGE=antrea/antrea-mc-controller-coverage:latest
-        docker save "${DEFAULT_IMAGE}" -o "${WORKDIR}"/antrea-mcs.tar
+        docker save "${DEFAULT_IMAGE}" -o antrea-ubuntu.tar
         ./multicluster/hack/generate-manifest.sh -l antrea-multicluster -c > ./multicluster/test/yamls/leader-manifest.yml
         ./multicluster/hack/generate-manifest.sh -m -c > ./multicluster/test/yamls/member-manifest.yml
     else
         export NO_PULL=1;make build-antrea-mc-controller
-        docker save "${DEFAULT_IMAGE}" -o "${WORKDIR}"/antrea-mcs.tar
+        docker save "${DEFAULT_IMAGE}" -o antrea-ubuntu.tar
         ./multicluster/hack/generate-manifest.sh -l antrea-multicluster > ./multicluster/test/yamls/leader-manifest.yml
         ./multicluster/hack/generate-manifest.sh -m > ./multicluster/test/yamls/member-manifest.yml
     fi
@@ -351,7 +343,7 @@ function deliver_multicluster_controller {
         for kubeconfig in "${multicluster_kubeconfigs[@]}"
         do
             kubectl get nodes -o wide --no-headers=true "${kubeconfig}" | awk '{print $6}' | while read IP; do
-                rsync -avr --progress --inplace -e "ssh -o StrictHostKeyChecking=no" "${WORKDIR}"/antrea-mcs.tar jenkins@[${IP}]:${WORKDIR}/antrea-mcs.tar
+                rsync -avr --progress --inplace -e "ssh -o StrictHostKeyChecking=no" antrea-ubuntu.tar jenkins@[${IP}]:${WORKDIR}/antrea-mcs.tar
                 if ${IS_CONTAINERD};then
                   ssh -o StrictHostKeyChecking=no -n jenkins@"${IP}" "${CLEAN_STALE_IMAGES_CONTAINERD}; ${PRINT_CONTAINERD_STATUS}; sudo ctr -n=k8s.io images import ${WORKDIR}/antrea-mcs.tar" || true
                 else
@@ -388,11 +380,6 @@ function deliver_multicluster_controller {
 
 function run_multicluster_e2e {
     echo "====== Running Multicluster e2e Tests ======"
-    export GO111MODULE=on
-    export GOPATH=${WORKDIR}/go
-    export GOROOT=${GOLANG_RELEASE_DIR}/go
-    export GOCACHE=${WORKDIR}/.cache/go-build
-    export PATH=$GOROOT/bin:$PATH
 
     wait_for_antrea_multicluster_pods_ready "${LEADER_CLUSTER_CONFIG}"
     wait_for_antrea_multicluster_pods_ready "${EAST_CLUSTER_CONFIG}"
@@ -401,12 +388,12 @@ function run_multicluster_e2e {
     wait_for_multicluster_controller_ready
 
     docker pull "${DOCKER_REGISTRY}"/antrea/nginx:1.21.6-alpine
-    docker save "${DOCKER_REGISTRY}"/antrea/nginx:1.21.6-alpine -o "${WORKDIR}"/nginx.tar
+    docker save "${DOCKER_REGISTRY}"/antrea/nginx:1.21.6-alpine -o nginx.tar
 
     # Use the same agnhost image which is defined as 'agnhostImage' in antrea/test/e2e/framework.go to
     # avoid pulling the image again when running Multi-cluster e2e tests.
     docker pull "registry.k8s.io/e2e-test-images/agnhost:2.40"
-    docker save "registry.k8s.io/e2e-test-images/agnhost:2.40" -o "${WORKDIR}"/agnhost.tar
+    docker save "registry.k8s.io/e2e-test-images/agnhost:2.40" -o agnhost.tar
 
     if [[ ${KIND} == "true" ]]; then
         for name in ${CLUSTER_NAMES[*]}; do
@@ -419,14 +406,14 @@ function run_multicluster_e2e {
     else
         for kubeconfig in "${membercluster_kubeconfigs[@]}"; do
             kubectl get nodes -o wide --no-headers=true "${kubeconfig}"| awk '{print $6}' | while read IP; do
-                rsync -avr --progress --inplace -e "ssh -o StrictHostKeyChecking=no" "${WORKDIR}"/nginx.tar jenkins@["${IP}"]:"${WORKDIR}"/nginx.tar
-                rsync -avr --progress --inplace -e "ssh -o StrictHostKeyChecking=no" "${WORKDIR}"/agnhost.tar jenkins@["${IP}"]:"${WORKDIR}"/agnhost.tar
+                rsync -avr --progress --inplace -e "ssh -o StrictHostKeyChecking=no" nginx.tar jenkins@["${IP}"]:nginx.tar
+                rsync -avr --progress --inplace -e "ssh -o StrictHostKeyChecking=no" agnhost.tar jenkins@["${IP}"]:agnhost.tar
             if ${IS_CONTAINERD};then
-                ssh -o StrictHostKeyChecking=no -n jenkins@"${IP}" "${CLEAN_STALE_IMAGES_CONTAINERD}; ${PRINT_CONTAINERD_STATUS}; sudo ctr -n=k8s.io images import ${WORKDIR}/nginx.tar" || true
-                ssh -o StrictHostKeyChecking=no -n jenkins@"${IP}" "sudo ctr -n=k8s.io images import ${WORKDIR}/agnhost.tar" || true
+                ssh -o StrictHostKeyChecking=no -n jenkins@"${IP}" "${CLEAN_STALE_IMAGES_CONTAINERD}; ${PRINT_CONTAINERD_STATUS}; sudo ctr -n=k8s.io images import nginx.tar" || true
+                ssh -o StrictHostKeyChecking=no -n jenkins@"${IP}" "sudo ctr -n=k8s.io images import agnhost.tar" || true
             else
-                ssh -o StrictHostKeyChecking=no -n jenkins@"${IP}" "${CLEAN_STALE_IMAGES}; ${PRINT_DOCKER_STATUS}; docker load -i ${WORKDIR}/nginx.tar" || true
-                ssh -o StrictHostKeyChecking=no -n jenkins@"${IP}" "docker load -i ${WORKDIR}/agnhost.tar" || true
+                ssh -o StrictHostKeyChecking=no -n jenkins@"${IP}" "${CLEAN_STALE_IMAGES}; ${PRINT_DOCKER_STATUS}; docker load -i nginx.tar" || true
+                ssh -o StrictHostKeyChecking=no -n jenkins@"${IP}" "docker load -i agnhost.tar" || true
             fi
             done
         done
@@ -510,6 +497,12 @@ fi
 set -e
 
 if [[ ${TESTCASE} =~ "e2e" ]]; then
+    export GO111MODULE=on
+    export GOPATH=${WORKDIR}/go
+    export GOROOT=${GOLANG_RELEASE_DIR}/go
+    export GOCACHE=${WORKDIR}/.cache/go-build
+    export PATH=$GOROOT/bin:$PATH
+
     deliver_antrea_multicluster
     modify_config
     deliver_multicluster_controller
