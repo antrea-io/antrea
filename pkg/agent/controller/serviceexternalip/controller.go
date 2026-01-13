@@ -20,12 +20,16 @@ import (
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
+	discoveryv1 "k8s.io/api/discovery/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/labels"
 	apimachinerytypes "k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/util/wait"
 	coreinformers "k8s.io/client-go/informers/core/v1"
+	discoveryinformers "k8s.io/client-go/informers/discovery/v1"
 	corelisters "k8s.io/client-go/listers/core/v1"
+	discoverylisters "k8s.io/client-go/listers/discovery/v1"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/util/workqueue"
 	"k8s.io/klog/v2"
@@ -64,9 +68,9 @@ type ServiceExternalIPController struct {
 	serviceLister       corelisters.ServiceLister
 	serviceListerSynced cache.InformerSynced
 
-	endpointsInformer     cache.SharedIndexInformer
-	endpointsLister       corelisters.EndpointsLister
-	endpointsListerSynced cache.InformerSynced
+	endpointSliceInformer     cache.SharedIndexInformer
+	endpointSliceLister       discoverylisters.EndpointSliceLister
+	endpointSliceListerSynced cache.InformerSynced
 
 	queue workqueue.TypedRateLimitingInterface[apimachinerytypes.NamespacedName]
 
@@ -89,7 +93,7 @@ func NewServiceExternalIPController(
 	nodeTransportInterface string,
 	cluster memberlist.Interface,
 	serviceInformer coreinformers.ServiceInformer,
-	endpointsInformer coreinformers.EndpointsInformer,
+	endpointSliceInformer discoveryinformers.EndpointSliceInformer,
 	linkMonitor linkmonitor.Interface,
 ) (*ServiceExternalIPController, error) {
 	c := &ServiceExternalIPController{
@@ -101,15 +105,15 @@ func NewServiceExternalIPController(
 				Name: "AgentServiceExternalIP",
 			},
 		),
-		serviceInformer:       serviceInformer.Informer(),
-		serviceLister:         serviceInformer.Lister(),
-		serviceListerSynced:   serviceInformer.Informer().HasSynced,
-		endpointsInformer:     endpointsInformer.Informer(),
-		endpointsLister:       endpointsInformer.Lister(),
-		endpointsListerSynced: endpointsInformer.Informer().HasSynced,
-		externalIPStates:      make(map[apimachinerytypes.NamespacedName]externalIPState),
-		assignedIPs:           make(map[string]sets.Set[string]),
-		linkMonitor:           linkMonitor,
+		serviceInformer:           serviceInformer.Informer(),
+		serviceLister:             serviceInformer.Lister(),
+		serviceListerSynced:       serviceInformer.Informer().HasSynced,
+		endpointSliceInformer:     endpointSliceInformer.Informer(),
+		endpointSliceLister:       endpointSliceInformer.Lister(),
+		endpointSliceListerSynced: endpointSliceInformer.Informer().HasSynced,
+		externalIPStates:          make(map[apimachinerytypes.NamespacedName]externalIPState),
+		assignedIPs:               make(map[string]sets.Set[string]),
+		linkMonitor:               linkMonitor,
 	}
 	ipAssigner, err := ipassigner.NewIPAssigner(nodeTransportInterface, "", linkMonitor, false)
 	if err != nil {
@@ -152,13 +156,13 @@ func NewServiceExternalIPController(
 		resyncPeriod,
 	)
 
-	c.endpointsInformer.AddEventHandlerWithResyncPeriod(
+	c.endpointSliceInformer.AddEventHandlerWithResyncPeriod(
 		cache.ResourceEventHandlerFuncs{
-			AddFunc: c.enqueueServiceForEndpoints,
+			AddFunc: c.enqueueServiceForEndpointSlice,
 			UpdateFunc: func(old, cur interface{}) {
-				c.enqueueServiceForEndpoints(cur)
+				c.enqueueServiceForEndpointSlice(cur)
 			},
-			DeleteFunc: c.enqueueServiceForEndpoints,
+			DeleteFunc: c.enqueueServiceForEndpointSlice,
 		},
 		resyncPeriod,
 	)
@@ -188,27 +192,32 @@ func (c *ServiceExternalIPController) enqueueService(obj interface{}) {
 	c.queue.Add(key)
 }
 
-func (c *ServiceExternalIPController) enqueueServiceForEndpoints(obj interface{}) {
-	endpoints, ok := obj.(*corev1.Endpoints)
+func (c *ServiceExternalIPController) enqueueServiceForEndpointSlice(obj interface{}) {
+	endpointSlice, ok := obj.(*discoveryv1.EndpointSlice)
 	if !ok {
 		deletedState, ok := obj.(cache.DeletedFinalStateUnknown)
 		if !ok {
 			klog.Errorf("Received unexpected object: %v", obj)
 			return
 		}
-		endpoints, ok = deletedState.Obj.(*corev1.Endpoints)
+		endpointSlice, ok = deletedState.Obj.(*discoveryv1.EndpointSlice)
 		if !ok {
-			klog.Errorf("DeletedFinalStateUnknown contains non-Endpoint object: %v", deletedState.Obj)
+			klog.Errorf("DeletedFinalStateUnknown contains non-EndpointSlice object: %v", deletedState.Obj)
 			return
 		}
 	}
-	service, err := c.serviceLister.Services(endpoints.Namespace).Get(endpoints.Name)
+	// Get the service name from the EndpointSlice label
+	serviceName, ok := endpointSlice.Labels[discoveryv1.LabelServiceName]
+	if !ok {
+		// EndpointSlice doesn't have the service name label, skip it
+		klog.V(5).InfoS("EndpointSlice doesn't have the service name label, skip it", "EndpointSlice", klog.KObj(endpointSlice))
+		return
+	}
+	service, err := c.serviceLister.Services(endpointSlice.Namespace).Get(serviceName)
 	if err != nil {
 		// The only possible error Lister.Get can return is NotFound.
-		// It's normal that some Endpoints don't have Service. For example, kube-scheduler and kube-controller-manager
-		// may use Endpoints for leader election. Even if the Endpoints should have a Service but it's not received yet,
-		// it's fine to ignore the error as the Service's add event will enqueue it.
-		klog.V(5).InfoS("Failed to get Service for Endpoints", "Endpoints", klog.KObj(endpoints), "err", err)
+		// It's fine to ignore the error as the Service's add event will enqueue it when the Service is synced.
+		klog.V(5).InfoS("Failed to get Service for EndpointSlice", "EndpointSlice", klog.KObj(endpointSlice), "err", err)
 		return
 	}
 	// we only care services with ServiceExternalTrafficPolicy setting to local.
@@ -245,7 +254,7 @@ func (c *ServiceExternalIPController) Run(stopCh <-chan struct{}) {
 	klog.Infof("Starting %s", controllerName)
 	defer klog.Infof("Shutting down %s", controllerName)
 
-	if !cache.WaitForNamedCacheSync(controllerName, stopCh, c.serviceListerSynced, c.endpointsListerSynced, c.linkMonitor.HasSynced) {
+	if !cache.WaitForNamedCacheSync(controllerName, stopCh, c.serviceListerSynced, c.endpointSliceListerSynced, c.linkMonitor.HasSynced) {
 		return
 	}
 
@@ -375,7 +384,7 @@ func (c *ServiceExternalIPController) syncService(key apimachinerytypes.Namespac
 	nodeName, err := c.cluster.SelectNodeForIP(currentExternalIP, ipPool, filters...)
 	if err != nil {
 		if err == memberlist.ErrNoNodeAvailable {
-			// No Node is available at the moment. The Service will be requeued by Endpoints, Node, or Memberlist update events.
+			// No Node is available at the moment. The Service will be requeued by EndpointSlice, Node, or Memberlist update events.
 			klog.InfoS("No Node available", "ip", currentExternalIP, "ipPool", ipPool)
 			return nil
 		}
@@ -426,16 +435,34 @@ func (c *ServiceExternalIPController) unassignIP(ip string, service apimachinery
 // nodesHasHealthyServiceEndpoint returns the set of Nodes which has at least one healthy endpoint.
 func (c *ServiceExternalIPController) nodesHasHealthyServiceEndpoint(service *corev1.Service) (sets.Set[string], error) {
 	nodes := sets.New[string]()
-	endpoints, err := c.endpointsLister.Endpoints(service.Namespace).Get(service.Name)
+	// List all EndpointSlices for this service using the label selector
+	labelSelector := labels.SelectorFromSet(labels.Set{
+		discoveryv1.LabelServiceName: service.Name,
+	})
+	endpointSlices, err := c.endpointSliceLister.EndpointSlices(service.Namespace).List(labelSelector)
 	if err != nil {
 		return nodes, err
 	}
-	for _, subset := range endpoints.Subsets {
-		for _, ep := range subset.Addresses {
+	for _, endpointSlice := range endpointSlices {
+		for _, ep := range endpointSlice.Endpoints {
 			if ep.NodeName == nil {
 				continue
 			}
-			nodes.Insert(*ep.NodeName)
+			// Check the ready condition first to respect the Service's publishNotReadyAddresses setting.
+			// The ready condition is true when:
+			// - publishNotReadyAddresses is true (all endpoints are considered ready), OR
+			// - the endpoint is serving AND not terminating
+			// If ready is true (or nil, which means true), we can use this endpoint.
+			if ep.Conditions.Ready == nil || *ep.Conditions.Ready {
+				nodes.Insert(*ep.NodeName)
+				continue
+			}
+			// If ready is false, fall back to checking the serving condition directly.
+			// This handles cases where the endpoint might still be serving but is marked not ready
+			// (e.g., during termination but still draining connections).
+			if ep.Conditions.Serving == nil || *ep.Conditions.Serving {
+				nodes.Insert(*ep.NodeName)
+			}
 		}
 	}
 	return nodes, nil
