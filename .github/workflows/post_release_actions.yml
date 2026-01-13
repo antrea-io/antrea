@@ -70,6 +70,7 @@ jobs:
         uses: peter-evans/create-pull-request@v7
         with:
           token: ${{ secrets.ANTREA_BOT_WRITE_PAT }}
+          branch: "update-changelog-${{ needs.check-version.outputs.version }}"
           delete-branch: true
           title: "Update CHANGELOG for ${{ needs.check-version.outputs.version }} release"
           body: |
@@ -92,6 +93,7 @@ jobs:
           fetch-depth: 0
           ref: main
       - name: Update VERSION file
+        id: update_version_step
         env:
           RELEASED_VERSION: ${{ needs.check-version.outputs.version }}
         shell: bash
@@ -138,6 +140,7 @@ jobs:
           new_version="v${new_major}.${new_minor}.0-dev"
           echo "Updating VERSION to: $new_version"
           echo "$new_version" > VERSION
+          echo "new_version=$new_version" >> $GITHUB_OUTPUT
 
           cd build/charts; make helm-docs; cd -
 
@@ -147,8 +150,9 @@ jobs:
         uses: peter-evans/create-pull-request@v7
         with:
           token: ${{ secrets.ANTREA_BOT_WRITE_PAT }}
+          branch: "bump-version-${{ steps.update_version_step.outputs.new_version }}"
           delete-branch: true
-          title: "Bump VERSION to next minor version"
+          title: "Bump VERSION to ${{ steps.update_version_step.outputs.new_version }}"
           body: |
             Automatically increment minor version in VERSION file after release.
             PR was opened automatically from Github Actions
@@ -179,6 +183,7 @@ jobs:
         uses: peter-evans/create-pull-request@v7
         with:
           token: ${{ secrets.ANTREA_BOT_WRITE_PAT }}
+          branch: "renovate-config-base-branches-update"
           delete-branch: true
           title: "chore(renovate): update baseBranches configuration"
           body: |
