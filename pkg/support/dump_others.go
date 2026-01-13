@@ -18,14 +18,37 @@
 package support
 
 import (
+	"bytes"
 	"fmt"
 	"path"
 	"path/filepath"
 	"strings"
+	"sync"
+
+	"k8s.io/klog/v2"
 
 	"antrea.io/antrea/pkg/agent/util/iptables"
+	"antrea.io/antrea/pkg/agent/util/nftables"
 	"antrea.io/antrea/pkg/util/logdir"
 )
+
+// nftablesIPv4Supported and nftablesIPv6Supported check if the kernel supports nftables.
+// They initialize the client once to verify support, but the returned clients are not used.
+var nftablesIPv4Supported = sync.OnceValue(func() bool {
+	if _, err := nftables.New(true, false); err != nil {
+		klog.InfoS("NFTables IPv4 not supported on this Node", "err", err)
+		return false
+	}
+	return true
+})
+
+var nftablesIPv6Supported = sync.OnceValue(func() bool {
+	if _, err := nftables.New(false, true); err != nil {
+		klog.InfoS("NFTables IPv6 not supported on this Node", "err", err)
+		return false
+	}
+	return true
+})
 
 func (d *agentDumper) DumpLog(basedir string) error {
 	logDir := logdir.GetLogDir()
@@ -39,6 +62,9 @@ func (d *agentDumper) DumpLog(basedir string) error {
 
 func (d *agentDumper) DumpHostNetworkInfo(basedir string) error {
 	if err := d.dumpIPTables(basedir); err != nil {
+		return err
+	}
+	if err := d.dumpNFTables(basedir); err != nil {
 		return err
 	}
 	if err := d.dumpIPToolInfo(basedir); err != nil {
@@ -57,6 +83,29 @@ func (d *agentDumper) dumpIPTables(basedir string) error {
 		return err
 	}
 	return writeFile(d.fs, filepath.Join(basedir, "iptables"), "iptables", data)
+}
+
+func (d *agentDumper) dumpNFTables(basedir string) error {
+	var data bytes.Buffer
+
+	if d.v4Enabled && nftablesIPv4Supported() || d.v6Enabled && nftablesIPv6Supported() {
+		output, err := d.executor.Command("nft", "list", "ruleset").CombinedOutput()
+		if err != nil {
+			return fmt.Errorf("failed to dump nftables: %w", err)
+		}
+		if len(output) == 0 {
+			return nil
+		}
+		data.Write(output)
+		data.WriteByte('\n')
+	}
+
+	fileName := "nftables"
+	if err := writeFile(d.fs, filepath.Join(basedir, fileName), fileName, data.Bytes()); err != nil {
+		return fmt.Errorf("failed to write nftables file: %w", err)
+	}
+
+	return nil
 }
 
 func (d *agentDumper) dumpIPToolInfo(basedir string) error {
