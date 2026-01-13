@@ -501,7 +501,7 @@ function deliver_antrea_windows {
         for i in `seq 2`; do
             timeout 2m scp -o StrictHostKeyChecking=no -T antrea-windows.tar.gz Administrator@${IP}: && break
         done
-        ssh -o StrictHostKeyChecking=no -n Administrator@${IP} "gzip -d antrea-windows.tar.gz && ctr -n k8s.io images import antrea-windows.tar"
+        ssh -o StrictHostKeyChecking=no -n Administrator@${IP} "gzip -df antrea-windows.tar.gz && ctr -n k8s.io images import antrea-windows.tar"
     done
     # Add Windows interface DHCP check using CI script to obtain the original interface status.
     WINIP=$(kubectl get nodes -o wide --no-headers=true | awk '$1 ~ /win-0/ {print $6}')
