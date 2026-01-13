@@ -20,8 +20,8 @@ function echoerr {
     >&2 echo "$@"
 }
 
-_usage="Usage: $0 [--mode (dev|release)] [-n|--namespace <namespace>] [-fc|--flow-collector <addr>] [-ch|--clickhouse] [--verbose-log] [--help|-h]
-Generate a YAML manifest for the Flow Aggregator, using Helm and Kustomize, and print it to stdout.
+_usage="Usage: $0 [--mode (dev|release)] [--release-name <name>] [-n|--namespace <namespace>] [-fc|--flow-collector <addr>] [-ch|--clickhouse] [--verbose-log] [--help|-h]
+Generate a YAML manifest for the Flow Aggregator using Helm, and print it to stdout.
         --mode (dev|release)            Choose the configuration variant that you need (default is 'dev').
         --release-name <name>           Specify the release name for the generated resources. (default is 'flow-aggregator')
         --namespace, -n <namespace>     Specify the namespace for the generated resources. (default is 'flow-aggregator')

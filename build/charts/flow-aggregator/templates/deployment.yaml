@@ -80,7 +80,7 @@ spec:
                 name: clickhouse-secret
                 key: password
           - name: FA_CONFIG_MAP_NAME
-            value: flow-aggregator-configmap
+            value: {{ include "flow-aggregator.fullname" . }}-configmap
           - name: AWS_ACCESS_KEY_ID
             valueFrom:
               secretKeyRef:
