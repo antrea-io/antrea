@@ -1611,9 +1611,9 @@ and drop all packets from CIDR `1.1.1.0/24`.
 
 A ClusterGroup (CG) CRD is a specification of how workloads are grouped together.
 It allows admins to group Pods using traditional label selectors, which can then
-be referenced in ACNP in place of stand-alone `podSelector` and/or `namespaceSelector`.
-In addition to `podSelector` and `namespaceSelector`, ClusterGroup also supports the
-following ways to select endpoints:
+be referenced in ACNP in place of stand-alone `podSelector`, `nodeSelector`,  and/or
+`namespaceSelector`. In addition to `podSelector` and `namespaceSelector`,
+ClusterGroup also supports the following ways to select endpoints:
 
 - Pod grouping by `serviceReference`. ClusterGroup specified by `serviceReference` will
   contain the same Pod members that are currently selected by the Service's selector.
@@ -1678,11 +1678,13 @@ There are a few **restrictions** on how ClusterGroups can be configured:
 - ClusterGroup must exist before another ClusterGroup can select it by name as its childGroup.
   A ClusterGroup cannot be deleted if it is referred to by other ClusterGroup as childGroup.
   This restriction may be lifted in future releases.
-- At most one of `podSelector`, `serviceReference`, `ipBlock`, `ipBlocks` or `childGroups`
+- At most one of `podSelector`, `nodeSelector`, `serviceReference`, `ipBlock`, `ipBlocks` or `childGroups`
   can be set for a ClusterGroup, i.e. a single ClusterGroup can either group workloads,
   represent IP CIDRs or select other ClusterGroups. A parent ClusterGroup can select different
   types of ClusterGroups (Pod/Service/CIDRs), but as mentioned above, it cannot select a
   ClusterGroup that has childGroups itself.
+- [Node NetworkPolicy](antrea-node-network-policy.md) must be enabled to use ClusterGroups with
+  `nodeSelector` in `appliedTo`.
 
 **spec**: The ClusterGroup `spec` has all the information needed to define a
 cluster-wide group.
@@ -1695,6 +1697,9 @@ cluster-wide group.
   will be grouped.
   If set with a `podSelector`, all matching Pods from Namespaces selected by the
   `namespaceSelector` will be grouped.
+
+- **nodeSelector**: Note Pods in hostNetwork mode on these Nodes are also effectively
+  included in the ClusterGroup since they share the same network namespace as the Node.
 
 - **ipBlock**: This selects a particular IP CIDR range to allow as `ingress`
   "sources" or `egress` "destinations".
