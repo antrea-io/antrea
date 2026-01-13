@@ -52,6 +52,7 @@ import (
 	"antrea.io/antrea/pkg/flowaggregator/querier"
 	"antrea.io/antrea/pkg/ipfix"
 	ipfixtesting "antrea.io/antrea/pkg/ipfix/testing"
+	"antrea.io/antrea/pkg/util/k8s"
 	objectstoretest "antrea.io/antrea/pkg/util/objectstore/testing"
 )
 
@@ -1144,6 +1145,78 @@ func TestNewFlowAggregator(t *testing.T) {
 			require.NoError(t, err)
 			assert.Equal(t, clusterUUID, fa.clusterUUID)
 			assert.Equal(t, clusterID, fa.clusterID)
+		})
+	}
+}
+
+func TestFillServiceUID(t *testing.T) {
+	now := time.Now()
+	tests := []struct {
+		name               string
+		servicePortName    string
+		service            *v1.Service
+		exists             bool
+		expectedServiceUID string
+	}{
+		{
+			name:               "empty DestinationServicePortName",
+			servicePortName:    "",
+			expectedServiceUID: "",
+		},
+		{
+			name:            "service exists with port name",
+			servicePortName: "default/nginx:http",
+			service: &v1.Service{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "nginx",
+					Namespace: "default",
+					UID:       "svc-uid",
+				},
+			},
+			exists:             true,
+			expectedServiceUID: "svc-uid",
+		},
+		{
+			name:            "service exists without port name",
+			servicePortName: "default/nginx",
+			service: &v1.Service{
+				ObjectMeta: metav1.ObjectMeta{
+					UID:       "svc-uid",
+					Namespace: "default",
+					Name:      "nginx",
+				},
+			},
+			exists:             true,
+			expectedServiceUID: "svc-uid",
+		},
+		{
+			name:               "service not found",
+			servicePortName:    "default/nginx:http",
+			exists:             false,
+			expectedServiceUID: "",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			mockServiceStore := objectstoretest.NewMockServiceStore(ctrl)
+			newFlowAggregator := &flowAggregator{
+				serviceStore: mockServiceStore,
+			}
+
+			record := &flowpb.Flow{
+				K8S: &flowpb.Kubernetes{
+					DestinationServicePortName: tt.servicePortName,
+				},
+			}
+			if tt.exists {
+				mockServiceStore.EXPECT().GetServiceByNamespacedNameAndTime(k8s.NamespacedName(tt.service.Namespace, tt.service.Name), gomock.Any()).Return(tt.service, true)
+			} else if tt.servicePortName != "" {
+				mockServiceStore.EXPECT().GetServiceByNamespacedNameAndTime(gomock.Any(), gomock.Any()).Return(nil, false)
+			}
+			newFlowAggregator.fillServiceUID(record, now)
+			assert.Equal(t, tt.expectedServiceUID, record.K8S.DestinationServiceUid)
 		})
 	}
 }

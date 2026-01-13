@@ -676,11 +676,7 @@ func (fa *flowAggregator) fillServiceUID(record *flowpb.Flow, startTime time.Tim
 	if record.K8S.DestinationServicePortName == "" {
 		return
 	}
-	namespacedName, _, found := strings.Cut(record.K8S.DestinationServicePortName, ":")
-	if !found {
-		klog.ErrorS(nil, "Expected format for ServicePortName", "servicePortName", record.K8S.DestinationServicePortName)
-		return
-	}
+	namespacedName, _, _ := strings.Cut(record.K8S.DestinationServicePortName, ":")
 	service, exist := fa.serviceStore.GetServiceByNamespacedNameAndTime(namespacedName, startTime)
 	if !exist {
 		klog.ErrorS(nil, "Cannot find Service information", "name", namespacedName, "flowStartTime", startTime)
