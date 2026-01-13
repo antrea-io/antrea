@@ -93,7 +93,8 @@ func NewClient(networkConfig *config.NetworkConfig,
 	nodeSNATRandomFully bool, // ignored
 	egressSNATRandomFully bool, // ignored
 	serviceCIDRProvider servicecidr.Interface,
-	wireguardPort int) (*Client, error) {
+	wireguardPort int32,
+	proxyHealthCheckPort int32) (*Client, error) {
 	return &Client{
 		networkConfig:               networkConfig,
 		winnet:                      &winnet.Handle{},
