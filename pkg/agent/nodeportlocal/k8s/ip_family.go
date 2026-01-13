@@ -1,4 +1,4 @@
-// Copyright 2025 Antrea Authors
+// Copyright 2026 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -76,7 +76,6 @@ func getPodIPForFamily(pod *corev1.Pod, ipFamily corev1.IPFamily) string {
 	return ""
 }
 
-// ipFamilyToString converts corev1.IPFamily to a string for annotation.
 // ipFamilyForAnnotation converts a corev1.IPFamily to the IPFamilyType used in NPL annotations.
 func ipFamilyForAnnotation(ipFamily corev1.IPFamily) types.IPFamilyType {
 	if ipFamily == corev1.IPv6Protocol {

@@ -577,9 +577,6 @@ func (c *NPLController) handleAddUpdatePod(key string, obj interface{}) error {
 	podPorts := sets.New[string]()
 	podContainers := pod.Spec.Containers
 
-	nplAnnotationsRequiredMap := map[string]types.NPLAnnotation{}
-	nplAnnotationsRequired := []types.NPLAnnotation{}
-
 	hostPorts := make(map[string]int)
 	if nplEnabled { // no need for this calculation if NPL is not enabled for the Pod
 		for _, container := range podContainers {
@@ -600,6 +597,9 @@ func (c *NPLController) handleAddUpdatePod(key string, obj interface{}) error {
 			}
 		}
 	}
+
+	// At most 2 IP families per target port.
+	nplAnnotationsRequired := make([]types.NPLAnnotation, 0, 2*len(targetPortsInt))
 
 	// first, check which rules are needed based on the target ports of the Services selecting the Pod
 	// (ignoring NPL annotations) and make sure they are present. As we do so, we build the expected list of
@@ -670,21 +670,14 @@ func (c *NPLController) handleAddUpdatePod(key string, obj interface{}) error {
 			} else {
 				nodePort = portData.NodePort
 			}
-			// Create unique key for annotation: nodePort:protocol:ipFamily
-			annotationKey := fmt.Sprintf("%d:%s:%s", nodePort, protocol, ipFamilyForAnnotation(ipFamily))
-			if _, ok := nplAnnotationsRequiredMap[annotationKey]; !ok {
-				nplAnnotationsRequiredMap[annotationKey] = types.NPLAnnotation{
-					PodPort:  port,
-					NodeIP:   nodeIP,
-					NodePort: nodePort,
-					Protocol: protocol,
-					IPFamily: ipFamilyForAnnotation(ipFamily),
-				}
-			}
+			nplAnnotationsRequired = append(nplAnnotationsRequired, types.NPLAnnotation{
+				PodPort:  port,
+				NodeIP:   nodeIP,
+				NodePort: nodePort,
+				Protocol: protocol,
+				IPFamily: ipFamilyForAnnotation(ipFamily),
+			})
 		}
-	}
-	for _, annotation := range nplAnnotationsRequiredMap {
-		nplAnnotationsRequired = append(nplAnnotationsRequired, annotation)
 	}
 
 	// second, delete any existing rule that is not needed based on the current Pod
