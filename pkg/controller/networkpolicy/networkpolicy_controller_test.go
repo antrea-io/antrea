@@ -2671,6 +2671,17 @@ func TestGetAppliedToWorkloads(t *testing.T) {
 			PodSelector: &selectorC,
 		},
 	}
+	selectorD := metav1.LabelSelector{
+		MatchLabels: map[string]string{
+			"foo4": "bar4",
+		},
+	}
+	cgE := v1beta1.ClusterGroup{
+		ObjectMeta: metav1.ObjectMeta{Name: "cgE", UID: "uidE"},
+		Spec: v1beta1.GroupSpec{
+			NodeSelector: &selectorD,
+		},
+	}
 	nestedCG1 := v1beta1.ClusterGroup{
 		ObjectMeta: metav1.ObjectMeta{Name: "nested-cg-A-B", UID: "uidE"},
 		Spec: v1beta1.GroupSpec{
@@ -2694,11 +2705,6 @@ func TestGetAppliedToWorkloads(t *testing.T) {
 	podB := getPod("podB", "nsA", "nodeB", "10.0.0.2", false)
 	podB.Labels = map[string]string{"foo3": "bar3"}
 
-	selectorD := metav1.LabelSelector{
-		MatchLabels: map[string]string{
-			"foo4": "bar4",
-		},
-	}
 	nodeSelector, _ := metav1.LabelSelectorAsSelector(&selectorD)
 	nodeGroup := antreatypes.GroupSelector{
 		NodeSelector: nodeSelector,
@@ -2786,6 +2792,17 @@ func TestGetAppliedToWorkloads(t *testing.T) {
 			expEEs:   emptyEEs,
 			expNodes: []*corev1.Node{nodeA},
 		},
+		{
+			name: "atg-for-cg-with-node-selector",
+			inATG: &antreatypes.AppliedToGroup{
+				Name:        cgE.Name,
+				UID:         cgE.UID,
+				SourceGroup: cgE.Name,
+			},
+			expPods:  emptyPods,
+			expEEs:   emptyEEs,
+			expNodes: []*corev1.Node{nodeA},
+		},
 	}
 	_, c := newController([]runtime.Object{nodeA, nodeB}, nil)
 	stopCh := make(chan struct{})
@@ -2794,7 +2811,7 @@ func TestGetAppliedToWorkloads(t *testing.T) {
 	c.informerFactory.WaitForCacheSync(stopCh)
 	c.groupingInterface.AddPod(podA)
 	c.groupingInterface.AddPod(podB)
-	clusterGroups := []v1beta1.ClusterGroup{cgA, cgB, cgC, cgD, nestedCG1, nestedCG2}
+	clusterGroups := []v1beta1.ClusterGroup{cgA, cgB, cgC, cgD, cgE, nestedCG1, nestedCG2}
 	for i, cg := range clusterGroups {
 		c.cgStore.Add(&clusterGroups[i])
 		c.addClusterGroup(&clusterGroups[i])
@@ -2812,21 +2829,18 @@ func TestGetAppliedToWorkloads(t *testing.T) {
 }
 
 func TestGetAddressGroupMemberSet(t *testing.T) {
-	selectorA := metav1.LabelSelector{MatchLabels: map[string]string{"foo1": "bar1"}}
 	cgA := v1beta1.ClusterGroup{
 		ObjectMeta: metav1.ObjectMeta{Name: "cgA", UID: "uidA"},
 		Spec: v1beta1.GroupSpec{
 			PodSelector: &selectorA,
 		},
 	}
-	selectorB := metav1.LabelSelector{MatchLabels: map[string]string{"foo2": "bar2"}}
 	cgB := v1beta1.ClusterGroup{
 		ObjectMeta: metav1.ObjectMeta{Name: "cgB", UID: "uidB"},
 		Spec: v1beta1.GroupSpec{
 			PodSelector: &selectorB,
 		},
 	}
-	selectorC := metav1.LabelSelector{MatchLabels: map[string]string{"foo3": "bar3"}}
 	cgC := v1beta1.ClusterGroup{
 		ObjectMeta: metav1.ObjectMeta{Name: "cgC", UID: "uidC"},
 		Spec: v1beta1.GroupSpec{
@@ -2838,6 +2852,22 @@ func TestGetAddressGroupMemberSet(t *testing.T) {
 		Spec: v1beta1.GroupSpec{
 			PodSelector: &selectorC,
 		},
+	}
+	cgE := v1beta1.ClusterGroup{
+		ObjectMeta: metav1.ObjectMeta{Name: "cgE", UID: "uidE"},
+		Spec: v1beta1.GroupSpec{
+			NodeSelector: &selectorA,
+		},
+	}
+	cgF := v1beta1.ClusterGroup{
+		ObjectMeta: metav1.ObjectMeta{Name: "cgF", UID: "uidF"},
+		Spec: v1beta1.GroupSpec{
+			NodeSelector: &selectorB,
+		},
+	}
+	cgG := v1beta1.ClusterGroup{
+		ObjectMeta: metav1.ObjectMeta{Name: "cgG", UID: "uidG"},
+		Spec:       v1beta1.GroupSpec{},
 	}
 	nestedCG1 := v1beta1.ClusterGroup{
 		ObjectMeta: metav1.ObjectMeta{Name: "nested-cg-A-B", UID: "uidE"},
@@ -2857,16 +2887,63 @@ func TestGetAddressGroupMemberSet(t *testing.T) {
 			ChildGroups: []v1beta1.ClusterGroupReference{"cgA", "cgC", "cgD"},
 		},
 	}
+	nestedCG4 := v1beta1.ClusterGroup{
+		ObjectMeta: metav1.ObjectMeta{Name: "nested-cg4-E-F", UID: "uid-cg4-E-F"},
+		Spec: v1beta1.GroupSpec{
+			ChildGroups: []v1beta1.ClusterGroupReference{"cgE", "cgF"},
+		},
+	}
 	podA := getPod("podA", "nsA", "nodeA", "10.0.0.1", false)
 	podA.Labels = map[string]string{"foo1": "bar1"}
 	podB := getPod("podB", "nsA", "nodeB", "10.0.0.2", false)
 	podB.Labels = map[string]string{"foo3": "bar3"}
+	nodeA := corev1.Node{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:   "node-a",
+			Labels: map[string]string{"foo1": "bar1"},
+			UID:    "node-a",
+		},
+		Status: corev1.NodeStatus{
+			Addresses: []corev1.NodeAddress{
+				{
+					Type:    corev1.NodeInternalIP,
+					Address: "10.0.0.1",
+				},
+			},
+		},
+		Spec: corev1.NodeSpec{
+			PodCIDR: "10.0.1.0/24",
+		},
+	}
+
+	nodeB := corev1.Node{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:   "node-b",
+			Labels: map[string]string{"foo2": "bar2"},
+			UID:    "node-b",
+		},
+		Status: corev1.NodeStatus{
+			Addresses: []corev1.NodeAddress{
+				{
+					Type:    corev1.NodeInternalIP,
+					Address: "10.0.0.2",
+				},
+			},
+		},
+		Spec: corev1.NodeSpec{
+			PodCIDR: "10.0.2.0/24",
+		},
+	}
 
 	podAMemberSet := controlplane.GroupMemberSet{}
 	podAMemberSet.Insert(podToGroupMember(podA, true))
 	podABMemberSet := controlplane.GroupMemberSet{}
 	podABMemberSet.Insert(podToGroupMember(podA, true))
 	podABMemberSet.Insert(podToGroupMember(podB, true))
+	nodeAMemberSet := controlplane.GroupMemberSet{}
+	nodeAMemberSet.Insert(nodeToGroupMember(&nodeA, true))
+	nodeABMemberSet := controlplane.GroupMemberSet{}
+	nodeABMemberSet.Insert(nodeToGroupMember(&nodeA, true), nodeToGroupMember(&nodeB, true))
 	tests := []struct {
 		name         string
 		inAddrGrp    *antreatypes.AddressGroup
@@ -2917,11 +2994,42 @@ func TestGetAddressGroupMemberSet(t *testing.T) {
 			},
 			expMemberSet: podABMemberSet,
 		},
+		{
+			name: "addrgrp-for-cg-with-nodeselector",
+			inAddrGrp: &antreatypes.AddressGroup{
+				Name:        cgE.Name,
+				UID:         cgE.UID,
+				SourceGroup: cgE.Name,
+			},
+			expMemberSet: nodeAMemberSet,
+		},
+		{
+			name: "addrgrp-for-nested-cgs-with-nodeselector",
+			inAddrGrp: &antreatypes.AddressGroup{
+				Name:        nestedCG4.Name,
+				UID:         nestedCG4.UID,
+				SourceGroup: nestedCG4.Name,
+			},
+			expMemberSet: nodeABMemberSet,
+		},
+		{
+			name: "addrgrp-for-cg-with-nil-nodeselector",
+			inAddrGrp: &antreatypes.AddressGroup{
+				Name:        cgG.Name,
+				UID:         cgG.UID,
+				SourceGroup: cgG.Name,
+			},
+			expMemberSet: controlplane.GroupMemberSet{},
+		},
 	}
-	_, c := newController(nil, nil)
+	_, c := newController([]runtime.Object{&nodeA, &nodeB}, nil)
 	c.groupingInterface.AddPod(podA)
 	c.groupingInterface.AddPod(podB)
-	clusterGroups := []v1beta1.ClusterGroup{cgA, cgB, cgC, cgD, nestedCG1, nestedCG2}
+	stopCh := make(chan struct{})
+	defer close(stopCh)
+	c.informerFactory.Start(stopCh)
+	c.informerFactory.WaitForCacheSync(stopCh)
+	clusterGroups := []v1beta1.ClusterGroup{cgA, cgB, cgC, cgD, cgE, cgF, cgG, nestedCG1, nestedCG2, nestedCG4}
 	for i, cg := range clusterGroups {
 		c.cgStore.Add(&clusterGroups[i])
 		c.addClusterGroup(&clusterGroups[i])
@@ -2932,8 +3040,8 @@ func TestGetAddressGroupMemberSet(t *testing.T) {
 			actualMemberSet := c.getAddressGroupMemberSet(tt.inAddrGrp)
 			extraItems := actualMemberSet.Difference(tt.expMemberSet)
 			missingItems := tt.expMemberSet.Difference(actualMemberSet)
-			assert.Equal(t, []*controlplane.GroupMember{}, extraItems.Items())
-			assert.Equal(t, []*controlplane.GroupMember{}, missingItems.Items())
+			assert.Equal(t, []*controlplane.GroupMember{}, extraItems.Items(), "GroupMemberSet has unexpected items")
+			assert.Equal(t, []*controlplane.GroupMember{}, missingItems.Items(), "GroupMemberSet missing items")
 		})
 	}
 }
@@ -4215,8 +4323,8 @@ func TestNodeToGroupMember(t *testing.T) {
 					Name: "node1",
 				},
 				IPs: []controlplane.IPAddress{
-					ipStrToIPAddress("192.168.1.2"),
 					ipStrToIPAddress("172.16.10.1"),
+					ipStrToIPAddress("192.168.1.2"),
 				},
 			},
 		},
@@ -4245,12 +4353,40 @@ func TestNodeToGroupMember(t *testing.T) {
 				},
 			},
 		},
+		{
+			name: "node-to-group-member-with-ip-sorted",
+			node: &corev1.Node{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "node1",
+				},
+				Spec: corev1.NodeSpec{
+					PodCIDR: "172.16.10.0/24",
+				},
+				Status: corev1.NodeStatus{
+					Addresses: []corev1.NodeAddress{
+						{
+							Type:    corev1.NodeInternalIP,
+							Address: "162.168.1.2",
+						},
+					},
+				},
+			},
+			includeIP: true,
+			expectedGroupMember: &controlplane.GroupMember{
+				Node: &controlplane.NodeReference{
+					Name: "node1",
+				},
+				IPs: []controlplane.IPAddress{
+					ipStrToIPAddress("162.168.1.2"),
+					ipStrToIPAddress("172.16.10.1"),
+				},
+			},
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			gotMember := nodeToGroupMember(tt.node, tt.includeIP)
-			assert.Equal(t, tt.expectedGroupMember.Node, gotMember.Node)
-			assert.ElementsMatch(t, tt.expectedGroupMember.IPs, gotMember.IPs)
+			assert.Equal(t, tt.expectedGroupMember, gotMember)
 		})
 	}
 }

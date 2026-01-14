@@ -39,6 +39,7 @@ type REST struct {
 	eeInformer   crdv1a2informers.ExternalEntityInformer
 	ipbQuerier   ipBlockGroupAssociationQuerier
 	groupQuerier ga.GroupAssociationQuerier
+	nodeInformer coreinformers.NodeInformer
 }
 
 var (
@@ -50,10 +51,11 @@ var (
 
 // NewREST returns a REST object that will work against API services.
 func NewREST(podQuerier coreinformers.PodInformer,
+	nodeInformer coreinformers.NodeInformer,
 	eeQuerier crdv1a2informers.ExternalEntityInformer,
 	ipbQuerier ipBlockGroupAssociationQuerier,
 	groupQuerier ga.GroupAssociationQuerier) *REST {
-	return &REST{podQuerier, eeQuerier, ipbQuerier, groupQuerier}
+	return &REST{podQuerier, eeQuerier, ipbQuerier, groupQuerier, nodeInformer}
 }
 
 type ipBlockGroupAssociationQuerier interface {
@@ -97,6 +99,12 @@ func (r *REST) Get(ctx context.Context, name string, options *metav1.GetOptions)
 			addAssociatedGroups(matchedExternalEntities[i])
 		}
 	}
+
+	matchedNode := r.getAssociatedNode(parsedIP.String())
+	if matchedNode != nil {
+		addAssociatedGroups(matchedNode)
+	}
+
 	// Check for ipBlock group association no matter the Pod/EE query result is
 	ipBlockGroups := r.ipbQuerier.GetAssociatedIPBlockGroups(parsedIP)
 	addToGroupList(ipBlockGroups)
@@ -116,6 +124,16 @@ func (r *REST) getAssociatedPod(ip string) *v1.Pod {
 		pod, _ := pods[0].(*v1.Pod)
 		return pod
 	}
+	return nil
+}
+
+func (r *REST) getAssociatedNode(ip string) *v1.Node {
+	nodes, _ := r.nodeInformer.Informer().GetIndexer().ByIndex(grouping.NodeIPsIndex, ip)
+	if len(nodes) > 0 {
+		node, _ := nodes[0].(*v1.Node)
+		return node
+	}
+
 	return nil
 }
 

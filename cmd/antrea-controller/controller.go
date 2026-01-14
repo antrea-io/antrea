@@ -158,6 +158,7 @@ func run(o *Options) error {
 	// Add IP-Pod index. Each Pod has no more than 2 IPs, the extra overhead is constant and acceptable.
 	// @tnqn evaluated the performance without/with IP index is 3us vs 4us per pod, i.e. 300ms vs 400ms for 100k Pods.
 	podInformer.Informer().AddIndexers(cache.Indexers{grouping.PodIPsIndex: grouping.PodIPsIndexFunc})
+	nodeInformer.Informer().AddIndexers(cache.Indexers{grouping.NodeIPsIndex: grouping.NodeIPsIndexFunc})
 
 	if features.DefaultFeatureGate.Enabled(features.AntreaPolicy) {
 		eeInformer.Informer().AddIndexers(cache.Indexers{grouping.ExternalEntityIPsIndex: grouping.ExternalEntityIPsIndexFunc})
@@ -297,6 +298,7 @@ func run(o *Options) error {
 		egressGroupStore,
 		bundleCollectionStore,
 		podInformer,
+		nodeInformer,
 		eeInformer,
 		controllerQuerier,
 		endpointQuerier,
@@ -492,6 +494,7 @@ func createAPIServerConfig(kubeconfig string,
 	egressGroupStore storage.Interface,
 	supportBundleCollectionStore storage.Interface,
 	podInformer coreinformers.PodInformer,
+	nodeInformer coreinformers.NodeInformer,
 	eeInformer crdv1a2informers.ExternalEntityInformer,
 	controllerQuerier querier.ControllerQuerier,
 	endpointQuerier networkpolicy.EndpointQuerier,
@@ -565,6 +568,7 @@ func createAPIServerConfig(kubeconfig string,
 		egressGroupStore,
 		supportBundleCollectionStore,
 		podInformer,
+		nodeInformer,
 		eeInformer,
 		caCertController,
 		statsAggregator,

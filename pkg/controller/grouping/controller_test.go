@@ -175,3 +175,73 @@ func TestPodIPsIndexFunc(t *testing.T) {
 		})
 	}
 }
+
+func TestNodeIPsIndexFunc(t *testing.T) {
+	type args struct {
+		obj interface{}
+	}
+	tests := []struct {
+		name    string
+		args    args
+		want    []string
+		wantErr bool
+	}{
+		{
+			name:    "invalid input",
+			args:    args{obj: &struct{}{}},
+			want:    nil,
+			wantErr: true,
+		},
+		{
+			name: "nil IPs",
+			args: args{obj: &v1.Node{
+				Spec: v1.NodeSpec{PodCIDR: "10.0.0.0/8"},
+			}},
+			want:    nil,
+			wantErr: true,
+		},
+		{
+			name:    "empty PODCIDR",
+			args:    args{obj: &v1.Node{}},
+			want:    nil,
+			wantErr: false,
+		},
+		{
+			name: "zero IPs",
+			args: args{obj: &v1.Node{
+				Status: v1.NodeStatus{Addresses: []v1.NodeAddress{}},
+				Spec:   v1.NodeSpec{PodCIDR: "10.0.0.0/8"},
+			}},
+			want:    nil,
+			wantErr: true,
+		},
+		{
+			name: "Node with IPs",
+			args: args{obj: &v1.Node{
+				Status: v1.NodeStatus{Addresses: []v1.NodeAddress{
+					{
+						Type:    v1.NodeExternalIP,
+						Address: "1.2.3.4",
+					},
+					{
+						Type:    v1.NodeExternalIP,
+						Address: "aaaa::bbbb",
+					},
+				}},
+				Spec: v1.NodeSpec{PodCIDR: "10.0.0.0/8"},
+			}},
+			want:    []string{"1.2.3.4", "aaaa::bbbb", "10.0.0.1"},
+			wantErr: false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := NodeIPsIndexFunc(tt.args.obj)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("NodeIPsIndexFunc() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			assert.ElementsMatch(t, tt.want, got)
+		})
+	}
+}
