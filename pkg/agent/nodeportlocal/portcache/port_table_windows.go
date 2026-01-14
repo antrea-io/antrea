@@ -18,6 +18,7 @@
 package portcache
 
 import (
+	"context"
 	"fmt"
 
 	"k8s.io/klog/v2"
@@ -97,7 +98,7 @@ func (pt *PortTable) AddRule(podKey string, podPort int, protocol string, podIP 
 }
 
 // RestoreRules should be called at Antrea Agent startup to restore a set of NPL rules.
-func (pt *PortTable) RestoreRules(allNPLPorts []rules.PodNodePort, synced chan<- struct{}) error {
+func (pt *PortTable) RestoreRules(ctx context.Context, allNPLPorts []rules.PodNodePort) {
 	pt.tableLock.Lock()
 	defer pt.tableLock.Unlock()
 	for _, nplPort := range allNPLPorts {
@@ -119,9 +120,6 @@ func (pt *PortTable) RestoreRules(allNPLPorts []rules.PodNodePort, synced chan<-
 		}
 		pt.addPortTableCache(npData)
 	}
-	// No need to sync up again because addRuleForPort has updated all rules on Windows
-	close(synced)
-	return nil
 }
 
 func (pt *PortTable) DeleteRule(podKey string, podPort int, protocol string) error {

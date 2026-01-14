@@ -2234,15 +2234,6 @@ func (data *TestData) CreateServiceWithAnnotations(serviceName, namespace string
 	return data.clientset.CoreV1().Services(namespace).Create(context.TODO(), &service, metav1.CreateOptions{})
 }
 
-// createNginxClusterIPServiceWithAnnotations creates nginx service with Annotation
-func (data *TestData) createNginxClusterIPServiceWithAnnotations(nodeName string, affinity bool, ipFamily *corev1.IPFamily, annotation map[string]string) (*corev1.Service, error) {
-	selectorLabel := "nginx"
-	if clusterInfo.nodesOS[nodeName] == "windows" {
-		selectorLabel = "iis"
-	}
-	return data.CreateServiceWithAnnotations("nginx", data.testNamespace, 80, 80, corev1.ProtocolTCP, map[string]string{"app": selectorLabel}, affinity, false, corev1.ServiceTypeClusterIP, ipFamily, annotation)
-}
-
 // createNginxClusterIPService creates a nginx service with the given name.
 func (data *TestData) createNginxClusterIPService(name, namespace string, affinity bool, ipFamily *corev1.IPFamily) (*corev1.Service, error) {
 	if name == "" {

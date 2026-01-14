@@ -18,20 +18,23 @@
 package portcache
 
 import (
+	"context"
 	"fmt"
+	"math"
 	"time"
 
+	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/klog/v2"
 
 	"antrea.io/antrea/pkg/agent/nodeportlocal/rules"
 )
 
-func openSocketsForPort(localPortOpener LocalPortOpener, port int, protocol string) (ProtocolSocketData, error) {
+func openSocketsForPort(localPortOpener LocalPortOpener, port int, protocol string, isIPv6 bool) (ProtocolSocketData, error) {
 	// Port only needs to be available for the protocol used by the NPL rule.
 	// We don't need to allocate the same nodePort for all protocols anymore.
-	socket, err := localPortOpener.OpenLocalPort(port, protocol)
+	socket, err := localPortOpener.OpenLocalPort(port, protocol, isIPv6)
 	if err != nil {
-		klog.V(4).InfoS("Local port cannot be opened", "port", port, "protocol", protocol)
+		klog.V(4).InfoS("Local port cannot be opened", "port", port, "protocol", protocol, "ipv6", isIPv6)
 		return ProtocolSocketData{}, err
 	}
 	protocolData := ProtocolSocketData{
@@ -42,7 +45,7 @@ func openSocketsForPort(localPortOpener LocalPortOpener, port int, protocol stri
 }
 
 func (pt *PortTable) getFreePort(podIP string, podPort int, protocol string) (int, ProtocolSocketData, error) {
-	klog.V(2).InfoS("Looking for free Node port", "podIP", podIP, "podPort", podPort)
+	klog.V(2).InfoS("Looking for free Node port", "podIP", podIP, "podPort", podPort, "ipv6", pt.IsIPv6)
 	numPorts := pt.EndPort - pt.StartPort + 1
 	for i := 0; i < numPorts; i++ {
 		port := pt.PortSearchStart + i
@@ -55,9 +58,9 @@ func (pt *PortTable) getFreePort(podIP string, podPort int, protocol string) (in
 			continue
 		}
 
-		protocolData, err := openSocketsForPort(pt.LocalPortOpener, port, protocol)
+		protocolData, err := openSocketsForPort(pt.LocalPortOpener, port, protocol, pt.IsIPv6)
 		if err != nil {
-			klog.V(4).InfoS("Port cannot be reserved, moving on to the next one", "port", port)
+			klog.V(4).InfoS("Port cannot be reserved, moving on to the next one", "port", port, "ipv6", pt.IsIPv6)
 			continue
 		}
 
@@ -159,45 +162,52 @@ func (pt *PortTable) syncRules() error {
 	return nil
 }
 
-// RestoreRules should be called at Antrea Agent startup to restore a set of NPL rules. It is non-blocking but
-// takes a channel parameter - synced, which will be closed when the necessary rules have been
-// restored successfully. No other operations should be performed on the PortTable until the channel
-// is closed.
-func (pt *PortTable) RestoreRules(allNPLPorts []rules.PodNodePort, synced chan<- struct{}) error {
-	pt.tableLock.Lock()
-	defer pt.tableLock.Unlock()
-	for _, nplPort := range allNPLPorts {
-		protocolData, err := openSocketsForPort(pt.LocalPortOpener, nplPort.NodePort, nplPort.Protocol)
-		if err != nil {
-			// This will be handled gracefully by the NPL controller: if there is an
-			// annotation using this port, it will be removed and replaced with a new
-			// one with a valid port mapping.
-			klog.ErrorS(err, "Cannot bind to local port, skipping it", "port", nplPort.NodePort)
-			continue
-		}
-
-		npData := &NodePortData{
-			PodKey:   nplPort.PodKey,
-			NodePort: nplPort.NodePort,
-			PodPort:  nplPort.PodPort,
-			PodIP:    nplPort.PodIP,
-			Protocol: protocolData,
-		}
-		pt.addPortTableCache(npData)
-	}
-	// retry mechanism as iptables-restore can fail if other components (in Antrea or other
-	// software) are accessing iptables.
-	go func() {
-		defer close(synced)
-		var backoffTime = 2 * time.Second
-		for {
-			if err := pt.syncRules(); err != nil {
-				klog.ErrorS(err, "Failed to restore iptables rules", "backoff", backoffTime)
-				time.Sleep(backoffTime)
+// RestoreRules should be called at Antrea Agent startup to restore a set of NPL rules. It is
+// blocking and no other operations should be performed on the PortTable until the function returns.
+func (pt *PortTable) RestoreRules(ctx context.Context, allNPLPorts []rules.PodNodePort) {
+	func() {
+		pt.tableLock.Lock()
+		defer pt.tableLock.Unlock()
+		for _, nplPort := range allNPLPorts {
+			protocolData, err := openSocketsForPort(pt.LocalPortOpener, nplPort.NodePort, nplPort.Protocol, pt.IsIPv6)
+			if err != nil {
+				// This will be handled gracefully by the NPL controller: if there is an
+				// annotation using this port, it will be removed and replaced with a new
+				// one with a valid port mapping.
+				klog.ErrorS(err, "Cannot bind to local port, skipping it", "port", nplPort.NodePort, "ipv6", pt.IsIPv6)
 				continue
 			}
-			break
+
+			npData := &NodePortData{
+				PodKey:   nplPort.PodKey,
+				NodePort: nplPort.NodePort,
+				PodPort:  nplPort.PodPort,
+				PodIP:    nplPort.PodIP,
+				Protocol: protocolData,
+			}
+			pt.addPortTableCache(npData)
 		}
 	}()
-	return nil
+	// retry mechanism as iptables-restore can fail if other components (in Antrea or other
+	// software) are accessing iptables.
+	backoff := wait.Backoff{
+		Steps:    math.MaxInt32,
+		Jitter:   0.1,
+		Factor:   1.5,
+		Duration: 1 * time.Second,
+		Cap:      5 * time.Second,
+	}
+	for {
+		if err := pt.syncRules(); err != nil {
+			delay := backoff.Step()
+			klog.ErrorS(err, "Failed to restore iptables rules, will retry with backoff", "delay", delay)
+			select {
+			case <-time.After(delay):
+				continue
+			case <-ctx.Done():
+				return
+			}
+		}
+		break
+	}
 }

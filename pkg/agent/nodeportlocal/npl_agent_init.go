@@ -32,14 +32,26 @@ func InitializeNPLAgent(
 	kubeClient clientset.Interface,
 	serviceInformer coreinformers.ServiceInformer,
 	podInformer cache.SharedIndexInformer,
+	nodeInformer coreinformers.NodeInformer,
 	startPort int,
 	endPort int,
 	nodeName string,
+	ipv4Enabled bool,
+	ipv6Enabled bool,
 ) (*nplk8s.NPLController, error) {
-	portTable, err := portcache.NewPortTable(startPort, endPort)
-	if err != nil {
-		return nil, fmt.Errorf("error when initializing NodePortLocal port table: %v", err)
+	var portTableIPv4, portTableIPv6 *portcache.PortTable
+	var err error
+	if ipv4Enabled {
+		portTableIPv4, err = portcache.NewPortTable(startPort, endPort, false)
+		if err != nil {
+			return nil, fmt.Errorf("error when initializing NodePortLocal IPv4 port table: %w", err)
+		}
 	}
-
-	return nplk8s.NewNPLController(kubeClient, podInformer, serviceInformer.Informer(), portTable, nodeName), nil
+	if ipv6Enabled {
+		portTableIPv6, err = portcache.NewPortTable(startPort, endPort, true)
+		if err != nil {
+			return nil, fmt.Errorf("error when initializing NodePortLocal IPv6 port table: %w", err)
+		}
+	}
+	return nplk8s.NewNPLController(kubeClient, podInformer, serviceInformer.Informer(), nodeInformer.Informer(), portTableIPv4, portTableIPv6, nodeName), nil
 }

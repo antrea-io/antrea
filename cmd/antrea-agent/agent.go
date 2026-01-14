@@ -781,9 +781,12 @@ func run(o *Options) error {
 			k8sClient,
 			serviceInformer,
 			localPodInformer.Get(),
+			nodeInformer,
 			o.nplStartPort,
 			o.nplEndPort,
 			nodeConfig.Name,
+			v4Enabled,
+			v6Enabled,
 		)
 		if err != nil {
 			return fmt.Errorf("failed to start NPL agent: %v", err)

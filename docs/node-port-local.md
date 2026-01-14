@@ -112,11 +112,27 @@ metadata:
   labels:
     app: nginx
   annotations:
-    nodeportlocal.antrea.io: '[{"podPort":8080,"nodeIP":"10.10.10.10","nodePort":61002,"protocol":"tcp"}]'
+    nodeportlocal.antrea.io: '[{"podPort":8080,"nodeIP":"10.10.10.10","nodePort":61002,"protocol":"tcp","ipFamily":"IPv4"}]'
 ```
 
 This annotation indicates that port 8080 of the Pod can be reached through port
 61002 of the Node with IP Address 10.10.10.10 for TCP traffic.
+
+The `ipFamily` field was added to the annotation in Antrea v2.6. Prior to that,
+only IPv4 was supported for the NodePortLocal feature.
+
+For dual-stack Services, separate NPL mappings are created for each IP family.
+For example, if the Service above was dual-stack, the annotation might look like:
+
+```yaml
+nodeportlocal.antrea.io: '[{"podPort":8080,"nodeIP":"10.10.10.10","nodePort":61002,"protocol":"tcp","ipFamily":"IPv4"},{"podPort":8080,"nodeIP":"fd12:3456:789a:1::1","nodePort":61003,"protocol":"tcp","ipFamily":"IPv6"}]'
+```
+
+This annotation indicates that the same Pod port (8080) can be reached through
+two different Node IP addresses and Node ports: one for IPv4 traffic (port 61002
+on 10.10.10.10) and one for IPv6 traffic (port 61003 on fd12:3456:789a:1::1).
+Note that the Node ports for IPv4 and IPv6 are allocated independently and may
+be different.
 
 The `nodeportlocal.antrea.io` annotation is generated and managed by Antrea. It
 is not meant to be created or modified by users directly. A user-provided
@@ -203,8 +219,9 @@ mapped.
 
 ## Limitations
 
-This feature is currently only supported for Nodes running Linux or Windows
-with IPv4 addresses. Only TCP & UDP Service ports are supported (not SCTP).
+This feature is supported for Nodes running Linux with IPv4, IPv6, or dual-stack
+configurations, and for Nodes running Windows with IPv4 addresses only. Only TCP
+& UDP Service ports are supported (not SCTP).
 
 ## Integrations with External Load Balancers
 

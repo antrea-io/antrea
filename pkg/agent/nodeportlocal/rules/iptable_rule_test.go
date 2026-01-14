@@ -26,6 +26,13 @@ import (
 	iptablestest "antrea.io/antrea/pkg/agent/util/iptables/testing"
 )
 
+func newTestIPTableRules(mockIPTables *iptablestest.MockInterface) *iptablesRules {
+	return &iptablesRules{
+		table:    mockIPTables,
+		protocol: iptables.ProtocolIPv4,
+	}
+}
+
 func TestAddAndDeleteRule(t *testing.T) {
 	tests := []struct {
 		nodePort      int
@@ -67,10 +74,7 @@ func TestAddAndDeleteRule(t *testing.T) {
 		t.Run(tt.podIP, func(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			mockIPTables := iptablestest.NewMockInterface(ctrl)
-			rules := iptablesRules{
-				name:  "test-rules",
-				table: mockIPTables,
-			}
+			rules := newTestIPTableRules(mockIPTables)
 
 			tt.expectedCalls(mockIPTables.EXPECT())
 
@@ -172,10 +176,7 @@ COMMIT
 		t.Run(tt.name, func(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			mockIPTables := iptablestest.NewMockInterface(ctrl)
-			rules := iptablesRules{
-				name:  "test-rules",
-				table: mockIPTables,
-			}
+			rules := newTestIPTableRules(mockIPTables)
 
 			tt.expectedCalls(mockIPTables.EXPECT())
 

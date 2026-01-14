@@ -19,14 +19,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"reflect"
+	"sync"
 	"time"
-
-	"antrea.io/antrea/pkg/agent/nodeportlocal/portcache"
-	"antrea.io/antrea/pkg/agent/nodeportlocal/rules"
-	"antrea.io/antrea/pkg/agent/nodeportlocal/types"
-	"antrea.io/antrea/pkg/agent/nodeportlocal/util"
-	"antrea.io/antrea/pkg/util/k8s"
-	utilsets "antrea.io/antrea/pkg/util/sets"
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/labels"
@@ -38,6 +32,14 @@ import (
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/util/workqueue"
 	"k8s.io/klog/v2"
+
+	"antrea.io/antrea/pkg/agent/nodeportlocal/portcache"
+	"antrea.io/antrea/pkg/agent/nodeportlocal/rules"
+	"antrea.io/antrea/pkg/agent/nodeportlocal/types"
+	"antrea.io/antrea/pkg/agent/nodeportlocal/util"
+	"antrea.io/antrea/pkg/util/k8s"
+	utilsets "antrea.io/antrea/pkg/util/sets"
+	waitutil "antrea.io/antrea/pkg/util/wait"
 )
 
 const (
@@ -52,27 +54,38 @@ const (
 )
 
 type NPLController struct {
-	portTable   *portcache.PortTable
-	kubeClient  clientset.Interface
-	queue       workqueue.TypedRateLimitingInterface[string]
-	podInformer cache.SharedIndexInformer
-	podLister   corelisters.PodLister
-	svcInformer cache.SharedIndexInformer
-	nodeName    string
+	portTableIPv4 *portcache.PortTable
+	portTableIPv6 *portcache.PortTable
+	kubeClient    clientset.Interface
+	queue         workqueue.TypedRateLimitingInterface[string]
+	podInformer   cache.SharedIndexInformer
+	podLister     corelisters.PodLister
+	svcInformer   cache.SharedIndexInformer
+	nodeInformer  cache.SharedIndexInformer
+	nodeName      string
+	// nodeIPv4 and nodeIPv6 store the current Node IPs for NPL annotations.
+	// They are populated from the Node object and prioritize external IPs over internal IPs.
+	nodeIPv4    string
+	nodeIPv6    string
+	nodeIPMutex sync.RWMutex
 }
 
 func NewNPLController(kubeClient clientset.Interface,
 	podInformer cache.SharedIndexInformer,
 	svcInformer cache.SharedIndexInformer,
-	pt *portcache.PortTable,
+	nodeInformer cache.SharedIndexInformer,
+	ptIPv4 *portcache.PortTable,
+	ptIPv6 *portcache.PortTable,
 	nodeName string) *NPLController {
 	c := NPLController{
-		kubeClient:  kubeClient,
-		portTable:   pt,
-		podInformer: podInformer,
-		podLister:   corelisters.NewPodLister(podInformer.GetIndexer()),
-		svcInformer: svcInformer,
-		nodeName:    nodeName,
+		kubeClient:    kubeClient,
+		portTableIPv4: ptIPv4,
+		portTableIPv6: ptIPv6,
+		podInformer:   podInformer,
+		podLister:     corelisters.NewPodLister(podInformer.GetIndexer()),
+		svcInformer:   svcInformer,
+		nodeInformer:  nodeInformer,
+		nodeName:      nodeName,
 	}
 
 	podInformer.AddEventHandlerWithResyncPeriod(
@@ -107,6 +120,14 @@ func NewNPLController(kubeClient clientset.Interface,
 		},
 	)
 
+	nodeInformer.AddEventHandlerWithResyncPeriod(
+		cache.ResourceEventHandlerFuncs{
+			AddFunc:    c.handleNodeAdd,
+			UpdateFunc: c.handleNodeUpdate,
+		},
+		resyncPeriod,
+	)
+
 	c.queue = workqueue.NewTypedRateLimitingQueueWithConfig(
 		workqueue.NewTypedItemExponentialFailureRateLimiter[string](minRetryDelay, maxRetryDelay),
 		workqueue.TypedRateLimitingQueueConfig[string]{
@@ -120,6 +141,109 @@ func podKeyFunc(pod *corev1.Pod) string {
 	return pod.Namespace + "/" + pod.Name
 }
 
+// updateNodeIPs updates the cached Node IPs from the Node object.
+// It returns true if the IPs have changed, false otherwise.
+// It also returns the up-to-date Node IPs, for convenience.
+func (c *NPLController) updateNodeIPs(node *corev1.Node) (bool, string, string) {
+	c.nodeIPMutex.Lock()
+	defer c.nodeIPMutex.Unlock()
+
+	// Use GetNodeAddrsWithType to prioritize external IPs over internal IPs
+	nodeAddrs, err := k8s.GetNodeAddrsWithType(node, []corev1.NodeAddressType{corev1.NodeExternalIP, corev1.NodeInternalIP})
+	if err != nil {
+		klog.ErrorS(err, "Failed to get Node addresses", "node", klog.KObj(node))
+		return false, c.nodeIPv4, c.nodeIPv6
+	}
+
+	oldIPv4 := c.nodeIPv4
+	oldIPv6 := c.nodeIPv6
+
+	if nodeAddrs.IPv4 != nil {
+		c.nodeIPv4 = nodeAddrs.IPv4.String()
+	} else {
+		c.nodeIPv4 = ""
+	}
+
+	if nodeAddrs.IPv6 != nil {
+		c.nodeIPv6 = nodeAddrs.IPv6.String()
+	} else {
+		c.nodeIPv6 = ""
+	}
+
+	return oldIPv4 != c.nodeIPv4 || oldIPv6 != c.nodeIPv6, c.nodeIPv4, c.nodeIPv6
+}
+
+// getNodeIPForFamily returns the cached Node IP for the given IP family.
+func (c *NPLController) getNodeIPForFamily(ipFamily corev1.IPFamily) string {
+	c.nodeIPMutex.RLock()
+	defer c.nodeIPMutex.RUnlock()
+
+	if ipFamily == corev1.IPv6Protocol {
+		return c.nodeIPv6
+	}
+	return c.nodeIPv4
+}
+
+func (c *NPLController) getPortTableForFamily(ipFamily corev1.IPFamily) *portcache.PortTable {
+	if ipFamily == corev1.IPv6Protocol {
+		return c.portTableIPv6
+	}
+	return c.portTableIPv4
+}
+
+// nodeIPsReady returns true if the Node IPs have been determined.
+func (c *NPLController) nodeIPsReady() bool {
+	c.nodeIPMutex.RLock()
+	defer c.nodeIPMutex.RUnlock()
+	// At least one IP family must be available
+	return c.nodeIPv4 != "" || c.nodeIPv6 != ""
+}
+
+// handleNodeAdd handles Node add events.
+func (c *NPLController) handleNodeAdd(obj interface{}) {
+	node := obj.(*corev1.Node)
+	if node.Name != c.nodeName {
+		return
+	}
+
+	if updated, nodeIPv4, nodeIPv6 := c.updateNodeIPs(node); updated {
+		klog.InfoS("Node IPs initialized", "node", klog.KObj(node), "IPv4", nodeIPv4, "IPv6", nodeIPv6)
+	}
+}
+
+// handleNodeUpdate handles Node update events.
+func (c *NPLController) handleNodeUpdate(oldObj, newObj interface{}) {
+	oldNode := oldObj.(*corev1.Node)
+	newNode := newObj.(*corev1.Node)
+	if newNode.Name != c.nodeName {
+		return
+	}
+
+	// Check if Node addresses have changed
+	if reflect.DeepEqual(oldNode.Status.Addresses, newNode.Status.Addresses) {
+		return
+	}
+
+	if updated, nodeIPv4, nodeIPv6 := c.updateNodeIPs(newNode); updated {
+		klog.InfoS("Node IPs changed, reconciling all Pods", "node", klog.KObj(newNode), "IPv4", nodeIPv4, "IPv6", nodeIPv6)
+		// Reconcile all local Pods when Node IPs change
+		c.reconcileAllPods()
+	}
+}
+
+// reconcileAllPods reconciles all Pods on the local Node.
+func (c *NPLController) reconcileAllPods() {
+	pods, err := c.podLister.List(labels.Everything())
+	if err != nil {
+		klog.ErrorS(err, "Failed to list Pods for reconciliation")
+		return
+	}
+
+	for _, pod := range pods {
+		c.enqueuePod(pod)
+	}
+}
+
 // Run starts to watch and process Pod updates for the Node where Antrea Agent is running.
 // It starts a queue and a fixed number of workers to process the objects from the queue.
 func (c *NPLController) Run(stopCh <-chan struct{}) {
@@ -129,12 +253,22 @@ func (c *NPLController) Run(stopCh <-chan struct{}) {
 	}()
 
 	klog.Infof("Starting %s", controllerName)
-	if !cache.WaitForNamedCacheSync(controllerName, stopCh, c.podInformer.HasSynced, c.svcInformer.HasSynced) {
+	if !cache.WaitForNamedCacheSync(controllerName, stopCh, c.podInformer.HasSynced, c.svcInformer.HasSynced, c.nodeInformer.HasSynced) {
 		return
 	}
 
+	// Wait for Node IPs to be determined before processing Pods
+	if err := wait.PollUntilContextCancel(wait.ContextForChannel(stopCh), time.Second, true, func(ctx context.Context) (bool, error) {
+		return c.nodeIPsReady(), nil
+	}); err != nil {
+		klog.ErrorS(err, "Failed to determine Node IPs")
+		return
+	}
+	klog.InfoS("Node IPs are ready", "IPv4", c.nodeIPv4, "IPv6", c.nodeIPv6)
+
 	if err := c.waitForRulesInitialization(wait.ContextForChannel(stopCh)); err != nil {
 		klog.ErrorS(err, "Failed to initialize NodePortLocal rules")
+		return
 	}
 
 	for i := 0; i < numWorkers; i++ {
@@ -299,9 +433,12 @@ func (c *NPLController) getPodsFromService(svc *corev1.Service) []string {
 	return pods
 }
 
-func (c *NPLController) getTargetPortsForServicesOfPod(pod *corev1.Pod) (sets.Set[string], sets.Set[string]) {
-	targetPortsInt := sets.New[string]()
-	targetPortsStr := sets.New[string]()
+// getTargetPortsForServicesOfPod returns target ports and IP families needed for NPL mappings.
+// It returns two maps: one for numeric target ports and one for named target ports.
+// Both map portProto -> set of IP families that require this port.
+func (c *NPLController) getTargetPortsForServicesOfPod(pod *corev1.Pod) (map[string]ipFamilies, map[string]ipFamilies) {
+	targetPortsInt := make(map[string]ipFamilies)
+	targetPortsStr := make(map[string]ipFamilies)
 	// If the Pod is already terminated, its NodePortLocal ports should be released.
 	if k8s.IsPodTerminated(pod) {
 		return targetPortsInt, targetPortsStr
@@ -319,6 +456,7 @@ func (c *NPLController) getTargetPortsForServicesOfPod(pod *corev1.Pod) (sets.Se
 			continue
 		}
 		if pod.Namespace == svc.Namespace && matchSvcSelectorPodLabels(svc.Spec.Selector, pod.GetLabels()) {
+			svcIPFamilies := getServiceIPFamilies(svc)
 			for _, port := range svc.Spec.Ports {
 				if port.Protocol == corev1.ProtocolSCTP {
 					// Not supported yet. A message is logged when the
@@ -327,15 +465,19 @@ func (c *NPLController) getTargetPortsForServicesOfPod(pod *corev1.Pod) (sets.Se
 				}
 				switch port.TargetPort.Type {
 				case intstr.Int:
-					// An entry of format <target-port>:<protocol> (e.g. 8080:TCP) is added for a target port in the set targetPortsInt.
-					// This is done to ensure that we can match with both port and protocol fields in container port of a Pod.
+					// An entry of format <target-port>:<protocol> (e.g. 8080:TCP) is added for a target port in the map.
+					// We track which IP families need this port.
 					portProto := util.BuildPortProto(fmt.Sprint(port.TargetPort.IntVal), string(port.Protocol))
-					klog.V(4).Infof("Added target port in targetPortsInt set: %v", portProto)
-					targetPortsInt.Insert(portProto)
+					klog.V(4).InfoS("Added target port in targetPortsInt map", "portProto", portProto, "ipFamilies", svcIPFamilies)
+					for _, ipFamily := range svcIPFamilies {
+						targetPortsInt[portProto] = targetPortsInt[portProto].add(ipFamily)
+					}
 				case intstr.String:
 					portProto := util.BuildPortProto(port.TargetPort.StrVal, string(port.Protocol))
-					klog.V(4).Infof("Added target port in targetPortsStr set: %v", portProto)
-					targetPortsStr.Insert(portProto)
+					klog.V(4).InfoS("Added target port in targetPortsStr map", "portProto", portProto, "ipFamilies", svcIPFamilies)
+					for _, ipFamily := range svcIPFamilies {
+						targetPortsStr[portProto] = targetPortsStr[portProto].add(ipFamily)
+					}
 				}
 			}
 		}
@@ -409,8 +551,8 @@ func (c *NPLController) handleAddUpdatePod(key string, obj interface{}) error {
 		}
 	}
 
-	podIP := pod.Status.PodIP
-	if podIP == "" {
+	// Check if Pod has any IPs
+	if len(pod.Status.PodIPs) == 0 {
 		klog.V(2).InfoS("IP address not set for Pod", "pod", klog.KObj(pod))
 		// We want to delete NPL rules and remove the annotation in this case, as a Pod can
 		// theoretically lose its IP address if there is an issue with the Sandbox.
@@ -426,7 +568,7 @@ func (c *NPLController) handleAddUpdatePod(key string, obj interface{}) error {
 	}
 
 	targetPortsInt, targetPortsStr := c.getTargetPortsForServicesOfPod(pod)
-	nplEnabled := targetPortsInt.Len() > 0 || targetPortsStr.Len() > 0
+	nplEnabled := len(targetPortsInt) > 0 || len(targetPortsStr) > 0
 	if nplEnabled {
 		klog.V(2).InfoS("Pod is selected by a Service for which NodePortLocal is enabled", "pod", klog.KObj(pod))
 	}
@@ -434,9 +576,6 @@ func (c *NPLController) handleAddUpdatePod(key string, obj interface{}) error {
 	var nodePort int
 	podPorts := sets.New[string]()
 	podContainers := pod.Spec.Containers
-
-	nplAnnotationsRequiredMap := map[string]types.NPLAnnotation{}
-	nplAnnotationsRequired := []types.NPLAnnotation{}
 
 	hostPorts := make(map[string]int)
 	if nplEnabled { // no need for this calculation if NPL is not enabled for the Pod
@@ -451,70 +590,94 @@ func (c *NPLController) handleAddUpdatePod(key string, obj interface{}) error {
 					continue
 				}
 				portProtoStr := util.BuildPortProto(cport.Name, string(cport.Protocol))
-				if targetPortsStr.Has(portProtoStr) {
-					targetPortsInt.Insert(portProtoInt)
+				if ipFamilies, exists := targetPortsStr[portProtoStr]; exists {
+					// When resolving named ports, add them to targetPortsInt with the IP families from the named port
+					targetPortsInt[portProtoInt] = targetPortsInt[portProtoInt].union(ipFamilies)
 				}
 			}
 		}
 	}
 
+	// At most 2 IP families per target port.
+	nplAnnotationsRequired := make([]types.NPLAnnotation, 0, 2*len(targetPortsInt))
+
 	// first, check which rules are needed based on the target ports of the Services selecting the Pod
 	// (ignoring NPL annotations) and make sure they are present. As we do so, we build the expected list of
 	// NPL annotations for the Pod.
-	for _, targetPortProto := range sets.List(targetPortsInt) {
+	// We need to create separate NPL mappings for each IP family.
+	for targetPortProto, ipFamilies := range targetPortsInt {
 		port, protocol, err := util.ParsePortProto(targetPortProto)
 		if err != nil {
 			return fmt.Errorf("failed to parse port number and protocol from %s for Pod %s: %v", targetPortProto, key, err)
 		}
 		podPorts.Insert(targetPortProto)
-		portData := c.portTable.GetEntry(key, port, protocol)
-		// Special handling for a rule that was previously marked for deletion but could not
-		// be deleted properly: we have to retry now.
-		if portData != nil && portData.Defunct() {
-			klog.InfoS("Deleting defunct NodePortLocal rule for Pod to prevent re-use", "pod", klog.KObj(pod), "podIP", podIP, "port", port, "protocol", protocol)
-			if err := c.portTable.DeleteRule(key, port, protocol); err != nil {
-				return fmt.Errorf("failed to delete defunct rule for Pod %s, Pod Port %d, Protocol %s: %w", key, port, protocol, err)
+
+		// Process each IP family separately
+		for ipFamily := range ipFamilies.values() {
+			podIP := getPodIPForFamily(pod, ipFamily)
+			if podIP == "" {
+				klog.ErrorS(nil, "Pod does not have IP for family", "pod", klog.KObj(pod), "ipFamily", ipFamily)
+				continue
 			}
-			portData = nil
-		}
-		// There are a few edge cases which can cause us to observe a different IP for the
-		// same Pod name:
-		//  * a new Sandbox can be created for the same Pod (e.g., after a Node restart)
-		//  * because we use a workqueue, when a Pod is recreated with the same name but a
-		//    different IP, both events (DELETE and CREATE) can be "merged" in the workqueue
-		//    and treated as a single UPDATE event.
-		// If we detect a Pod IP change, delete existing rules and recreate them with the new IP.
-		if portData != nil && portData.PodIP != podIP {
-			klog.InfoS("Deleting NodePortLocal rule for Pod because of IP change", "pod", klog.KObj(pod), "podIP", podIP, "prevPodIP", portData.PodIP)
-			if err := c.portTable.DeleteRule(key, port, protocol); err != nil {
-				return fmt.Errorf("failed to delete rule for Pod %s, Pod Port %d, Protocol %s: %w", key, port, protocol, err)
+			nodeIP := c.getNodeIPForFamily(ipFamily)
+			if nodeIP == "" {
+				klog.ErrorS(nil, "Node does not have IP for family", "ipFamily", ipFamily)
+				continue
 			}
-			portData = nil
-		}
-		if portData == nil {
-			if hport, ok := hostPorts[targetPortProto]; ok {
-				nodePort = hport
-			} else {
-				klog.InfoS("Adding NodePortLocal rule", "pod", klog.KObj(pod), "podIP", podIP, "port", port, "protocol", protocol)
-				nodePort, err = c.portTable.AddRule(key, port, protocol, podIP)
-				if err != nil {
-					return fmt.Errorf("failed to add rule for Pod %s: %v", key, err)
+
+			portTable := c.getPortTableForFamily(ipFamily)
+			if portTable == nil {
+				// defensive check: should never happen in practice, especially
+				// considering the fact that at this point we are guaranteed that
+				// both the Node and the Pod have an IP of this family.
+				klog.ErrorS(nil, "No port table was initialized for IP family", "ipFamily", ipFamily)
+				continue
+			}
+			portData := portTable.GetEntry(key, port, protocol)
+			// Special handling for a rule that was previously marked for deletion but could not
+			// be deleted properly: we have to retry now.
+			if portData != nil && portData.Defunct() {
+				klog.InfoS("Deleting defunct NodePortLocal rule for Pod to prevent re-use", "pod", klog.KObj(pod), "podIP", podIP, "port", port, "protocol", protocol)
+				if err := portTable.DeleteRule(key, port, protocol); err != nil {
+					return fmt.Errorf("failed to delete defunct rule for Pod %s, Pod port %d, Protocol %s: %w", key, port, protocol, err)
 				}
+				portData = nil
 			}
-		} else {
-			nodePort = portData.NodePort
-		}
-		if _, ok := nplAnnotationsRequiredMap[portcache.NodePortProtoFormat(nodePort, protocol)]; !ok {
-			nplAnnotationsRequiredMap[portcache.NodePortProtoFormat(nodePort, protocol)] = types.NPLAnnotation{
+			// There are a few edge cases which can cause us to observe a different IP for the
+			// same Pod name:
+			//  * a new Sandbox can be created for the same Pod (e.g., after a Node restart)
+			//  * because we use a workqueue, when a Pod is recreated with the same name but a
+			//    different IP, both events (DELETE and CREATE) can be "merged" in the workqueue
+			//    and treated as a single UPDATE event.
+			// If we detect a Pod IP change, delete existing rules and recreate them with the new IP.
+			if portData != nil && portData.PodIP != podIP {
+				klog.InfoS("Deleting NodePortLocal rule for Pod because of IP change", "pod", klog.KObj(pod), "podIP", podIP, "prevPodIP", portData.PodIP)
+				if err := portTable.DeleteRule(key, port, protocol); err != nil {
+					return fmt.Errorf("failed to delete rule for Pod %s, Pod port %d, Protocol %s: %w", key, port, protocol, err)
+				}
+				portData = nil
+			}
+			if portData == nil {
+				if hport, ok := hostPorts[targetPortProto]; ok {
+					nodePort = hport
+				} else {
+					klog.InfoS("Adding NodePortLocal rule", "pod", klog.KObj(pod), "podIP", podIP, "port", port, "protocol", protocol, "ipFamily", ipFamily)
+					nodePort, err = portTable.AddRule(key, port, protocol, podIP)
+					if err != nil {
+						return fmt.Errorf("failed to add rule for Pod %s: %w", key, err)
+					}
+				}
+			} else {
+				nodePort = portData.NodePort
+			}
+			nplAnnotationsRequired = append(nplAnnotationsRequired, types.NPLAnnotation{
 				PodPort:  port,
-				NodeIP:   pod.Status.HostIP,
+				NodeIP:   nodeIP,
 				NodePort: nodePort,
 				Protocol: protocol,
-			}
+				IPFamily: ipFamilyForAnnotation(ipFamily),
+			})
 		}
-	}
-	for _, annotation := range nplAnnotationsRequiredMap {
-		nplAnnotationsRequired = append(nplAnnotationsRequired, annotation)
 	}
 
 	// second, delete any existing rule that is not needed based on the current Pod
@@ -533,13 +696,19 @@ func (c *NPLController) handleAddUpdatePod(key string, obj interface{}) error {
 }
 
 func (c *NPLController) cleanupPodRules(key string, podPortsToKeep sets.Set[string]) error {
-	entries := c.portTable.GetDataForPod(key)
-	for _, data := range entries {
-		proto := data.Protocol
-		if exists := podPortsToKeep.Has(util.BuildPortProto(fmt.Sprint(data.PodPort), proto.Protocol)); !exists {
-			klog.InfoS("Deleting NodePortLocal rule", "pod", key, "podIP", data.PodIP, "port", data.PodPort, "protocol", proto.Protocol)
-			if err := c.portTable.DeleteRule(key, data.PodPort, proto.Protocol); err != nil {
-				return fmt.Errorf("failed to delete rule for Pod %s, Pod Port %d, Protocol %s: %w", key, data.PodPort, proto.Protocol, err)
+	// Clean up rules from both IPv4 and IPv6 port tables
+	for _, portTable := range []*portcache.PortTable{c.portTableIPv4, c.portTableIPv6} {
+		if portTable == nil {
+			continue
+		}
+		entries := portTable.GetDataForPod(key)
+		for _, data := range entries {
+			proto := data.Protocol
+			if exists := podPortsToKeep.Has(util.BuildPortProto(fmt.Sprint(data.PodPort), proto.Protocol)); !exists {
+				klog.InfoS("Deleting NodePortLocal rule", "pod", key, "podIP", data.PodIP, "port", data.PodPort, "protocol", proto.Protocol)
+				if err := portTable.DeleteRule(key, data.PodPort, proto.Protocol); err != nil {
+					return fmt.Errorf("failed to delete rule for Pod %s, Pod Port %d, Protocol %s: %w", key, data.PodPort, proto.Protocol, err)
+				}
 			}
 		}
 	}
@@ -555,28 +724,22 @@ func (c *NPLController) cleanupPodRules(key string, podPortsToKeep sets.Set[stri
 // also take care of allocating a new Node port if required. The function is meant to be called
 // during Controller initialization, after the caches have synced. It will block until iptables
 // rules have been synced successfully based on the listed Pods, or until the context is
-// canceled. It only returns an error if the Pods cannot be listed successfully or if syncing the
-// rules fails. After it returns, the Controller should start handling events. The Controller's
-// event handlers are able to recover from any error occurring during initialization.
-// Unlike the event handler (handleAddUpdatePod), this function tries to reuse existing NPL mappings
-// (from Pod annotations), and that's its main value add. It also avoids datapath disruption by
-// syncing all rules (including removing stale ones) with a single "operation".
+// canceled. It only returns an error if the context is cancelled before rules have been
+// synced. After it returns, the Controller should start handling events. The Controller's event
+// handlers are able to recover from any error occurring during initialization.  Unlike the event
+// handler (handleAddUpdatePod), this function tries to reuse existing NPL mappings (from Pod
+// annotations), and that's its main value add. It also avoids datapath disruption by syncing all
+// rules (including removing stale ones) with a single "operation".
 func (c *NPLController) waitForRulesInitialization(ctx context.Context) error {
 	klog.InfoS("Will fetch Pods and generate NodePortLocal rules for these Pods")
 
 	podList, err := c.podLister.List(labels.Everything())
 	if err != nil {
-		return fmt.Errorf("error when listing Pods for Node: %w", err)
+		klog.ErrorS(err, "Error when listing Pods for Node, removing all NodePortLocal rules")
 	}
 
-	// in case of an error when listing Pods above, allNPLPorts will be
-	// empty and all NPL iptables rules will be deleted.
-	allNPLPorts := []rules.PodNodePort{}
+	var allNPLPortsV4, allNPLPortsV6 []rules.PodNodePort
 	for i := range podList {
-		// For each Pod:
-		// check if a valid NodePortLocal annotation exists for this Pod:
-		//   if yes, verifiy validity of the Node port, update the port table and add a rule to the
-		//   rules buffer.
 		pod := podList[i]
 		podKey := podKeyFunc(pod)
 		annotations := pod.GetAnnotations()
@@ -594,7 +757,7 @@ func (c *NPLController) waitForRulesInitialization(ctx context.Context) error {
 			continue
 		}
 
-		if pod.Status.PodIP == "" {
+		if len(pod.Status.PodIPs) == 0 {
 			klog.InfoS("Found Pod with NodePortLocal annotation but no IP address, removing annotation", "pod", klog.KObj(pod))
 			// While we could just skip the Pod without removing the annotation, and let
 			// the controller update the annotation later, the advantage of removing the
@@ -611,41 +774,65 @@ func (c *NPLController) waitForRulesInitialization(ctx context.Context) error {
 				klog.InfoS("Found NodePortLocal annotation with an incomplete rule, ignoring it", "pod", klog.KObj(pod), "rule", npl)
 				continue
 			}
-			if npl.NodePort > c.portTable.EndPort || npl.NodePort < c.portTable.StartPort {
+			var portTable *portcache.PortTable
+			var podIP string
+			if npl.IPFamily == types.IPFamilyIPv6 {
+				portTable = c.portTableIPv6
+				podIP = getPodIPForFamily(pod, corev1.IPv6Protocol)
+			} else {
+				// Default to IPv4 for backward compatibility (empty IPFamily field)
+				portTable = c.portTableIPv4
+				podIP = getPodIPForFamily(pod, corev1.IPv4Protocol)
+			}
+			if portTable == nil || podIP == "" {
+				klog.InfoS("Found NodePortLocal annotation for an unsupported IP family", "pod", klog.KObj(pod), "ipFamily", npl.IPFamily, "podIP", podIP)
+				continue
+			}
+			if npl.NodePort > portTable.EndPort || npl.NodePort < portTable.StartPort {
 				// Ignoring annotation for now, it will be removed by the first call
 				// to handleAddUpdatePod. Note that we could also remove the annotation
 				// here, but it is not as useful as in the missing PodIP case.
 				klog.V(2).InfoS("Found NodePortLocal annotation for which the allocated port doesn't fall into the configured range", "pod", klog.KObj(pod))
 				continue
 			}
-			allNPLPorts = append(allNPLPorts, rules.PodNodePort{
+
+			nplPort := rules.PodNodePort{
 				PodKey:   podKey,
 				NodePort: npl.NodePort,
 				PodPort:  npl.PodPort,
-				PodIP:    pod.Status.PodIP,
+				PodIP:    podIP,
 				Protocol: npl.Protocol,
-			})
+			}
+			if npl.IPFamily == types.IPFamilyIPv6 {
+				allNPLPortsV6 = append(allNPLPortsV6, nplPort)
+			} else {
+				allNPLPortsV4 = append(allNPLPortsV4, nplPort)
+			}
 		}
 	}
 
-	rulesInitialized := make(chan struct{})
-	if err := c.addRulesForNPLPorts(allNPLPorts, rulesInitialized); err != nil {
-		return fmt.Errorf("error when installing rules: %w", err)
-	}
-
-	klog.InfoS("Waiting for initialization of NodePortLocal rules to complete")
-	select {
-	case <-rulesInitialized:
-		break
-	case <-ctx.Done():
-		return ctx.Err()
+	klog.InfoS("Starting initialization of NodePortLocal rules and waiting for it to complete")
+	if err := c.addRulesForNPLPorts(ctx, allNPLPortsV4, allNPLPortsV6); err != nil {
+		return err
 	}
 	klog.InfoS("Initialization of NodePortLocal rules successful")
 	return nil
 }
 
-func (c *NPLController) addRulesForNPLPorts(allNPLPorts []rules.PodNodePort, synced chan<- struct{}) error {
-	return c.portTable.RestoreRules(allNPLPorts, synced)
+func (c *NPLController) addRulesForNPLPorts(ctx context.Context, allNPLPortsV4, allNPLPortsV6 []rules.PodNodePort) error {
+	wg := waitutil.NewGroup()
+	addRules := func(portTable *portcache.PortTable, nplPorts []rules.PodNodePort) {
+		wg.Go(func() {
+			portTable.RestoreRules(ctx, nplPorts)
+		})
+	}
+	if c.portTableIPv4 != nil {
+		addRules(c.portTableIPv4, allNPLPortsV4)
+	}
+	if c.portTableIPv6 != nil {
+		addRules(c.portTableIPv6, allNPLPortsV6)
+	}
+	return wg.WaitUntilWithContext(ctx)
 }
 
 // cleanupNPLAnnotationForPod removes the NodePortLocal annotation from the Pod's annotations map entirely.
