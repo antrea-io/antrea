@@ -108,9 +108,15 @@ func (c *certificateAuthority) signCSR(template *x509.Certificate, requestKey cr
 	return certs[0], nil
 }
 
-// NewIPsecCSRSigningController returns a new *IPsecCSRSigningController.
-func NewIPsecCSRSigningController(client clientset.Interface, csrInformer cache.SharedIndexInformer, csrLister csrlister.CertificateSigningRequestLister, selfSignedCA bool) *IPsecCSRSigningController {
-
+// newIPsecCSRSigningController supports setting minRetryDelay and maxRetryDelay to non-default
+// values for testing.
+func newIPsecCSRSigningController(
+	client clientset.Interface,
+	csrInformer cache.SharedIndexInformer,
+	csrLister csrlister.CertificateSigningRequestLister,
+	selfSignedCA bool,
+	minRetryDelay, maxRetryDelay time.Duration,
+) *IPsecCSRSigningController {
 	caConfigMapInformer := corev1informers.NewFilteredConfigMapInformer(client, env.GetAntreaNamespace(), resyncPeriod, cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc}, func(listOptions *metav1.ListOptions) {
 		listOptions.FieldSelector = fields.OneTermEqualSelector("metadata.name", ipsecRootCAName).String()
 	})
@@ -166,6 +172,16 @@ func NewIPsecCSRSigningController(client clientset.Interface, csrInformer cache.
 	)
 
 	return c
+}
+
+// NewIPsecCSRSigningController returns a new *IPsecCSRSigningController.
+func NewIPsecCSRSigningController(
+	client clientset.Interface,
+	csrInformer cache.SharedIndexInformer,
+	csrLister csrlister.CertificateSigningRequestLister,
+	selfSignedCA bool,
+) *IPsecCSRSigningController {
+	return newIPsecCSRSigningController(client, csrInformer, csrLister, selfSignedCA, minRetryDelay, maxRetryDelay)
 }
 
 // Run begins watching and syncing of the IPsecCSRSigningController.
