@@ -34,9 +34,8 @@ import (
 	"k8s.io/apimachinery/pkg/watch"
 	coreinformers "k8s.io/client-go/informers/core/v1"
 	"k8s.io/client-go/kubernetes"
-	v1 "k8s.io/client-go/kubernetes/typed/core/v1"
 	"k8s.io/client-go/tools/cache"
-	"k8s.io/client-go/tools/record"
+	"k8s.io/client-go/tools/events"
 	"k8s.io/client-go/util/retry"
 	"k8s.io/client-go/util/workqueue"
 	"k8s.io/klog/v2"
@@ -53,7 +52,6 @@ import (
 	cpv1b2 "antrea.io/antrea/pkg/apis/controlplane/v1beta2"
 	crdv1b1 "antrea.io/antrea/pkg/apis/crd/v1beta1"
 	clientsetversioned "antrea.io/antrea/pkg/client/clientset/versioned"
-	"antrea.io/antrea/pkg/client/clientset/versioned/scheme"
 	crdinformers "antrea.io/antrea/pkg/client/informers/externalversions/crd/v1beta1"
 	crdlisters "antrea.io/antrea/pkg/client/listers/crd/v1beta1"
 	"antrea.io/antrea/pkg/controller/metrics"
@@ -198,8 +196,7 @@ type EgressController struct {
 
 	trafficShapingEnabled bool
 
-	eventBroadcaster record.EventBroadcaster
-	record           record.EventRecorder
+	record events.EventRecorder
 	// Whether to support non-default subnets.
 	supportSeparateSubnet bool
 	// Used to allocate route table ID.
@@ -234,11 +231,6 @@ func NewEgressController(
 		klog.Info("EgressTrafficShaping feature gate is enabled, but it is ignored because OVS meters are not supported.")
 	}
 
-	eventBroadcaster := record.NewBroadcaster()
-	recorder := eventBroadcaster.NewRecorder(
-		scheme.Scheme,
-		corev1.EventSource{Component: controllerName},
-	)
 
 	c := &EgressController{
 		ofClient:             ofClient,
@@ -252,18 +244,18 @@ func NewEgressController(
 				Name: "egressgroup",
 			},
 		),
-		egressInformer:       egressInformer.Informer(),
-		egressLister:         egressInformer.Lister(),
-		egressListerSynced:   egressInformer.Informer().HasSynced,
-		nodeName:             nodeName,
-		ifaceStore:           ifaceStore,
-		egressGroups:         map[string]sets.Set[string]{},
-		egressStates:         map[string]*egressState{},
-		egressIPStates:       map[string]*egressIPState{},
-		egressBindings:       map[string]*egressBinding{},
-		localIPDetector:      ipassigner.NewLocalIPDetector(),
-		markAllocator:        newIDAllocator(minEgressMark, maxEgressMark),
-		cluster:              cluster,
+		egressInformer:     egressInformer.Informer(),
+		egressLister:       egressInformer.Lister(),
+		egressListerSynced: egressInformer.Informer().HasSynced,
+		nodeName:           nodeName,
+		ifaceStore:         ifaceStore,
+		egressGroups:       map[string]sets.Set[string]{},
+		egressStates:       map[string]*egressState{},
+		egressIPStates:     map[string]*egressIPState{},
+		egressBindings:     map[string]*egressBinding{},
+		localIPDetector:    ipassigner.NewLocalIPDetector(),
+		markAllocator:      newIDAllocator(minEgressMark, maxEgressMark),
+		cluster:            cluster,
 		serviceCIDRInterface: serviceCIDRInterface,
 		// One buffer is enough as we just use it to ensure the target handler is executed once.
 		serviceCIDRUpdateCh:         make(chan struct{}, 1),
@@ -271,8 +263,7 @@ func NewEgressController(
 
 		trafficShapingEnabled: openflow.OVSMetersAreSupported() && trafficShapingEnabled,
 
-		eventBroadcaster: eventBroadcaster,
-		record:           recorder,
+
 
 		externalIPPoolLister:       externalIPPoolInformer.Lister(),
 		externalIPPoolListerSynced: externalIPPoolInformer.Informer().HasSynced,
@@ -500,12 +491,6 @@ func (c *EgressController) Run(stopCh <-chan struct{}) {
 
 	klog.Infof("Starting %s", controllerName)
 	defer klog.Infof("Shutting down %s", controllerName)
-
-	c.eventBroadcaster.StartStructuredLogging(0)
-	c.eventBroadcaster.StartRecordingToSink(&v1.EventSinkImpl{
-		Interface: c.k8sClient.CoreV1().Events(""),
-	})
-	defer c.eventBroadcaster.Shutdown()
 
 	go c.localIPDetector.Run(stopCh)
 	go c.egressIPScheduler.Run(stopCh)
@@ -951,7 +936,7 @@ func (c *EgressController) updateEgressStatus(egress *crdv1b1.Egress, egressIP s
 			}
 		}
 	} else {
-		// The Egress IP is assigned to a Node (egressIP != "") but it's not this Node (isLocal == false), do nothing.
+		// The EgressIP is assigned to a Node (egressIP != "") but it's not this Node (isLocal == false), do nothing.
 		return nil
 	}
 
@@ -1065,7 +1050,7 @@ func (c *EgressController) syncEgress(egressName string) error {
 			return err
 		}
 		if assigned {
-			c.record.Eventf(egress, corev1.EventTypeNormal, "IPAssigned", "Assigned Egress %s with IP %s on Node %s", egress.Name, desiredEgressIP, desiredNode)
+			c.record.Eventf(egress, nil, corev1.EventTypeNormal, "IPAssigned", "Assign", "Assigned Egress %s with IP %s on Node %s", egress.Name, desiredEgressIP, desiredNode)
 		}
 	} else {
 		// Unassign the Egress IP from the local Node if it was assigned by the agent.
@@ -1074,7 +1059,7 @@ func (c *EgressController) syncEgress(egressName string) error {
 			return err
 		}
 		if unassigned {
-			c.record.Eventf(egress, corev1.EventTypeNormal, "IPUnassigned", "Unassigned Egress %s with IP %s from Node %s", egress.Name, desiredEgressIP, c.nodeName)
+			c.record.Eventf(egress, nil, corev1.EventTypeNormal, "IPUnassigned", "Unassign", "Unassigned Egress %s with IP %s from Node %s", egress.Name, desiredEgressIP, c.nodeName)
 		}
 	}
 
@@ -1176,7 +1161,7 @@ func (c *EgressController) uninstallEgress(egressName string, eState *egressStat
 		return err
 	}
 	if unassigned && egress != nil {
-		c.record.Eventf(egress, corev1.EventTypeNormal, "IPUnassigned", "Unassigned Egress %s with IP %s from Node %s", egressName, eState.egressIP, c.nodeName)
+		c.record.Eventf(egress, nil, corev1.EventTypeNormal, "IPUnassigned", "Unassign", "Unassigned Egress %s with IP %s from Node %s", egressName, eState.egressIP, c.nodeName)
 	}
 	// Remove the Egress's state.
 	c.deleteEgressState(egressName)
