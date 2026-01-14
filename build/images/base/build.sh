@@ -152,6 +152,11 @@ function docker_build_and_push() {
     local build_args="--build-arg CNI_BINARIES_VERSION=$CNI_BINARIES_VERSION --build-arg SURICATA_VERSION=$SURICATA_VERSION"
     local build_context="--build-context antrea-openvswitch=docker-image://$ANTREA_OPENVSWITCH_IMAGE"
     local cache_args=""
+    if [[ ${DOCKER_REGISTRY} != "" ]]; then
+        build_context+=" --build-context ubuntu-lts=docker-image://$DOCKER_REGISTRY/ubuntu:24.04"
+    else
+        build_context+=" --build-context ubuntu-lts=docker-image://ubuntu:24.04"
+    fi
     if $PUSH; then
         cache_args="$cache_args --cache-to type=registry,ref=$image-cache:$BUILD_CACHE_TAG,mode=max"
     fi

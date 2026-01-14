@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-FROM ubuntu:24.04 AS cni-binaries
+FROM ubuntu-lts AS cni-binaries
 
 ARG CNI_BINARIES_VERSION
 
