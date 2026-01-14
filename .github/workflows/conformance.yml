@@ -86,7 +86,7 @@ jobs:
       - name: Get Kind version
         id: get_kind_version
         run: |
-          KIND_VERSION=$(head -n1 ./ci/kind/version || echo v0.28.0)
+          KIND_VERSION=$(head -n1 ./ci/kind/version || echo v0.31.0)
           echo "kind_version=${KIND_VERSION}" >> $GITHUB_OUTPUT
       - name: Install Kind
         uses: helm/kind-action@v1
