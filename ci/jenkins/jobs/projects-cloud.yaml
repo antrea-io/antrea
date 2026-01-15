@@ -686,6 +686,11 @@
           test_name: auto-scaling-agents
           node: antrea-cloud
           description: 'This is a cloud job of auto scaling agents for antrea.'
+          parameters:
+          - string:
+              name: sha1
+              default: main
+              description: The default Antrea branch to check out for scheduled testing.
           branches:
           - '${{ANTREA_GIT_REVISION}}'
           repo_url: '${{ANTREA_REPO}}'
@@ -701,7 +706,7 @@
           concurrent: false
           trigger_phrase: ^(?!Thanks for your PR).*/scale-agent.*  
           triggers:
-          - timed: "*/15 * * * *"
+          - timed: "H */4 * * *"
           publishers: []
           wrappers:
           - credentials-binding:
