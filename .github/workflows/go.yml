@@ -11,6 +11,10 @@ on:
     - release-*
     - feature/*
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   check-changes:
     name: Check whether tests need to be run based on diff
