@@ -434,6 +434,24 @@ spec:
                         minimum: 1
                         maximum: 3600
                         default: 120
+                      holdTimeSeconds:
+                        type: integer
+                        format: int32
+                        minimum: 3
+                        maximum: 65535
+                        default: 90
+                      keepaliveTimeSeconds:
+                        type: integer
+                        format: int32
+                        minimum: 1
+                        maximum: 65535
+                        default: 30
+                      connectRetryTimeSeconds:
+                        type: integer
+                        format: int32
+                        minimum: 1
+                        maximum: 65535
+                        default: 120
       additionalPrinterColumns:
         - description: Local BGP AS number
           jsonPath: .spec.localASN
