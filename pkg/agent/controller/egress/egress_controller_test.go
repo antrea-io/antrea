@@ -29,6 +29,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 	v1 "k8s.io/api/core/v1"
+	eventsv1 "k8s.io/api/events/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -1118,19 +1119,19 @@ func TestSyncEgress(t *testing.T) {
 			if tt.maxEgressIPsPerNode > 0 {
 				c.egressIPScheduler.maxEgressIPsPerNode = tt.maxEgressIPsPerNode
 			}
-			events := make([]*v1.Event, 0)
+			events := make([]*eventsv1.Event, 0)
 			var eventsMutex sync.Mutex
-			c.eventBroadcaster.StartEventWatcher(func(e *v1.Event) {
+			c.eventBroadcaster.StartEventWatcher(func(e runtime.Object) {
 				eventsMutex.Lock()
 				defer eventsMutex.Unlock()
-				events = append(events, e)
+				events = append(events, e.(*eventsv1.Event))
 			})
 			getEventMessages := func() []string {
 				eventsMutex.Lock()
 				defer eventsMutex.Unlock()
 				messages := make([]string, len(events))
 				for idx := range events {
-					messages[idx] = events[idx].Message
+					messages[idx] = events[idx].Note
 				}
 				return messages
 			}
