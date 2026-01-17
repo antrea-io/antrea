@@ -31,11 +31,6 @@ import (
 	fakeversioned "antrea.io/antrea/pkg/client/clientset/versioned/fake"
 )
 
-// newTestClientset returns a fake Clientset for tests.
-// Note: fakeversioned.NewSimpleClientset is backed by a simple object tracker and does
-// not implement field management required for full server-side apply testing.
-// When `NewClientset` (with applyconfig support) is available from generated code,
-// it should be preferred for tests that exercise server-side apply behaviour.
 func newTestClientset(objects ...runtime.Object) versioned.Interface {
 	return fakeversioned.NewSimpleClientset(objects...)
 }
@@ -140,10 +135,8 @@ func TestSharedInformerFactory_Start(t *testing.T) {
 	stopCh := make(chan struct{})
 	defer close(stopCh)
 
-	// Create an informer to ensure there's something to start
 	_ = factory.Crd().V1beta1().ClusterNetworkPolicies().Informer()
 
-	// Start should not block
 	done := make(chan bool)
 	go func() {
 		factory.Start(stopCh)
@@ -152,7 +145,6 @@ func TestSharedInformerFactory_Start(t *testing.T) {
 
 	select {
 	case <-done:
-		// Start returned as expected
 	case <-time.After(2 * time.Second):
 		t.Fatal("Start() blocked unexpectedly")
 	}
@@ -170,7 +162,6 @@ func TestSharedInformerFactory_StartMultipleTimes(t *testing.T) {
 
 	_ = factory.Crd().V1beta1().ClusterNetworkPolicies().Informer()
 
-	// Start multiple times should be safe
 	factory.Start(stopCh)
 	factory.Start(stopCh)
 	factory.Start(stopCh)
@@ -208,7 +199,6 @@ func TestSharedInformerFactory_WaitForCacheSyncBeforeStart(t *testing.T) {
 
 	_ = factory.Crd().V1beta1().ClusterNetworkPolicies().Informer()
 
-	// Call WaitForCacheSync before Start - should return empty map
 	syncResults := factory.WaitForCacheSync(stopCh)
 	assert.Empty(t, syncResults)
 }
@@ -222,8 +212,6 @@ func TestSharedInformerFactory_Shutdown(t *testing.T) {
 	_ = factory.Crd().V1beta1().ClusterNetworkPolicies().Informer()
 
 	factory.Start(stopCh)
-
-	// Shutdown should not block indefinitely
 	done := make(chan bool)
 	go func() {
 		close(stopCh)
@@ -233,7 +221,6 @@ func TestSharedInformerFactory_Shutdown(t *testing.T) {
 
 	select {
 	case <-done:
-		// Shutdown completed
 	case <-time.After(5 * time.Second):
 		t.Fatal("Shutdown() blocked for too long")
 	}
@@ -252,7 +239,6 @@ func TestSharedInformerFactory_ShutdownMultipleTimes(t *testing.T) {
 	_ = factory.Crd().V1beta1().ClusterNetworkPolicies().Informer()
 	factory.Start(stopCh)
 
-	// Multiple Shutdown calls should be safe
 	factory.Shutdown()
 	factory.Shutdown()
 	factory.Shutdown()
@@ -272,7 +258,6 @@ func TestSharedInformerFactory_StartAfterShutdown(t *testing.T) {
 	factory.Start(stopCh)
 	factory.Shutdown()
 
-	// Start after Shutdown should not start any informers
 	newStopCh := make(chan struct{})
 	defer close(newStopCh)
 
@@ -299,7 +284,6 @@ func TestSharedInformerFactory_InformerFor(t *testing.T) {
 	informer1 := factory.InformerFor(obj, newFunc)
 	assert.NotNil(t, informer1)
 
-	// Requesting the same informer should return the same instance
 	informer2 := factory.InformerFor(obj, newFunc)
 	assert.Equal(t, informer1, informer2)
 
@@ -402,7 +386,6 @@ func TestSharedInformerFactory_Crd(t *testing.T) {
 	crdInterface := factory.Crd()
 	assert.NotNil(t, crdInterface)
 
-	// Verify we can access version interfaces
 	assert.NotNil(t, crdInterface.V1alpha1())
 	assert.NotNil(t, crdInterface.V1alpha2())
 	assert.NotNil(t, crdInterface.V1beta1())
@@ -420,11 +403,9 @@ func TestSharedInformerFactory_InformerWithTransform(t *testing.T) {
 		WithTransform(transformFunc),
 	)
 
-	// Create an informer
 	informer := factory.Crd().V1beta1().ClusterNetworkPolicies().Informer()
 	assert.NotNil(t, informer)
 
-	// The transform function should be set on the informer
 	sif := factory.(*sharedInformerFactory)
 	assert.NotNil(t, sif.transform)
 }
@@ -433,7 +414,6 @@ func TestSharedInformerFactory_InformerLifecycle(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	// Create some test objects
 	cnp := &crdv1beta1.ClusterNetworkPolicy{
 		ObjectMeta: v1.ObjectMeta{
 			Name: "test-cnp",
@@ -443,10 +423,8 @@ func TestSharedInformerFactory_InformerLifecycle(t *testing.T) {
 	client := newTestClientset(cnp)
 	factory := NewSharedInformerFactory(client, 0)
 
-	// Get informer
 	informer := factory.Crd().V1beta1().ClusterNetworkPolicies().Informer()
 
-	// Add an event handler to verify informer is working
 	eventReceived := make(chan bool, 1)
 	informer.AddEventHandler(cache.ResourceEventHandlerFuncs{
 		AddFunc: func(obj interface{}) {
@@ -454,20 +432,15 @@ func TestSharedInformerFactory_InformerLifecycle(t *testing.T) {
 		},
 	})
 
-	// Start factory
 	factory.Start(ctx.Done())
 
-	// Wait for cache sync
 	synced := factory.WaitForCacheSync(ctx.Done())
 	assert.NotEmpty(t, synced)
 
-	// Verify cache is synced
 	assert.True(t, cache.WaitForCacheSync(ctx.Done(), informer.HasSynced))
 
-	// Verify event was received
 	select {
 	case <-eventReceived:
-		// Event received as expected
 	case <-time.After(2 * time.Second):
 		t.Fatal("Did not receive expected event")
 	}
@@ -496,7 +469,6 @@ func TestSharedInformerFactory_MultipleInformerTypes(t *testing.T) {
 	stopCh := make(chan struct{})
 	defer close(stopCh)
 
-	// Create multiple informer types
 	_ = factory.Crd().V1beta1().ClusterNetworkPolicies().Informer()
 	_ = factory.Crd().V1beta1().NetworkPolicies().Informer()
 	_ = factory.Crd().V1beta1().Tiers().Informer()
@@ -519,7 +491,6 @@ func TestSharedInformerFactory_ConcurrentAccess(t *testing.T) {
 	stopCh := make(chan struct{})
 	defer close(stopCh)
 
-	// Simulate concurrent access to factory
 	done := make(chan bool, 10)
 	for i := 0; i < 10; i++ {
 		go func() {
@@ -528,12 +499,10 @@ func TestSharedInformerFactory_ConcurrentAccess(t *testing.T) {
 		}()
 	}
 
-	// Wait for all goroutines
 	for i := 0; i < 10; i++ {
 		<-done
 	}
 
-	// Should only create one informer despite concurrent access
 	sif := factory.(*sharedInformerFactory)
 	assert.Equal(t, 1, len(sif.informers))
 }
@@ -545,21 +514,17 @@ func TestSharedInformerFactory_AddInformersAfterStart(t *testing.T) {
 	stopCh := make(chan struct{})
 	defer close(stopCh)
 
-	// Start with one informer
 	_ = factory.Crd().V1beta1().ClusterNetworkPolicies().Informer()
 	factory.Start(stopCh)
 
 	sif := factory.(*sharedInformerFactory)
 	assert.Len(t, sif.startedInformers, 1)
 
-	// Add another informer after Start
 	_ = factory.Crd().V1beta1().NetworkPolicies().Informer()
 
-	// The new informer should not be started yet
 	assert.Len(t, sif.startedInformers, 1)
 	assert.Len(t, sif.informers, 2)
 
-	// Call Start again to start the new informer
 	factory.Start(stopCh)
 	assert.Len(t, sif.startedInformers, 2)
 }
