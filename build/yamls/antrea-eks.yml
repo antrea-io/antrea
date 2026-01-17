@@ -5124,14 +5124,6 @@ rules:
   - apiGroups:
       - ""
     resources:
-      - events
-    verbs:
-      - create
-      - patch
-      - update
-  - apiGroups:
-      - ""
-    resources:
       - secrets
     resourceNames:
       - antrea-bgp-passwords
