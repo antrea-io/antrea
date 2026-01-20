@@ -69,7 +69,7 @@ type FlowExporter struct {
 	v4Enabled              bool
 	v6Enabled              bool
 	k8sClient              kubernetes.Interface
-	nodeRouteController    *noderoute.Controller
+	nodeRouteController    nodeRouteControllerInterface
 	isNetworkPolicyOnly    bool
 	conntrackPriorityQueue *priorityqueue.ExpirePriorityQueue
 	denyPriorityQueue      *priorityqueue.ExpirePriorityQueue
@@ -291,14 +291,10 @@ func (exp *FlowExporter) initFlowExporter(ctx context.Context) error {
 	return nil
 }
 
-// ipLookUpInterface is an abstraction for nodeRouteController for dependency injection
+// nodeRouteControllerInterface is an abstraction for nodeRouteController for dependency injection
 type nodeRouteControllerInterface interface {
 	LookupIPInPodSubnets(ip netip.Addr) (bool, bool)
-	IsNil() bool
-}
-
-func (exp *FlowExporter) IsNil() bool {
-	return exp == nil
+	HasSynced() bool
 }
 
 func (exp *FlowExporter) findFlowType(conn connection.Connection, nodeRouteController nodeRouteControllerInterface) uint8 {
@@ -311,7 +307,7 @@ func (exp *FlowExporter) findFlowType(conn connection.Connection, nodeRouteContr
 	}
 
 	// The interface can have non nil pointer but nil value so checking both is required
-	if nodeRouteController == nil || nodeRouteController.IsNil() {
+	if nodeRouteController == nil {
 		klog.V(5).InfoS("Can't find flow type without nodeRouteController")
 		return utils.FlowTypeUnspecified
 	}
