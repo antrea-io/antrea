@@ -410,8 +410,8 @@ func (m mockNodeRouteController) LookupIPInPodSubnets(ip netip.Addr) (bool, bool
 	return false, false
 }
 
-func (m mockNodeRouteController) IsNil() bool {
-	return false
+func (m mockNodeRouteController) HasSynced() bool {
+	return true
 }
 
 func TestFlowExporter_findFlowType(t *testing.T) {
@@ -428,30 +428,34 @@ func TestFlowExporter_findFlowType(t *testing.T) {
 	conn10 := connection.Connection{FlowKey: connection.Tuple{SourceAddress: isNotPod, DestinationAddress: isNotPod}}
 	mockController := mockNodeRouteController{}
 	for _, tc := range []struct {
-		name                              string
-		isNetworkPolicyOnly               bool
-		conn                              connection.Connection
-		expectedFlowType                  uint8
-		nodeRouteControllerImplementation nodeRouteControllerInterface
+		name                string
+		isNetworkPolicyOnly bool
+		conn                connection.Connection
+		expectedFlowType    uint8
 	}{
 
-		{"isNetworkPolicy and pod names exist", true, conn1, utils.FlowTypeIntraNode, nil},
-		{"isNetworkPolicy and pod names are missing", true, conn2, utils.FlowTypeInterNode, nil},
-		{"unspecified flow type", false, conn1, utils.FlowTypeUnspecified, nil},
-		{"source is gateway and destination pod namespace is not flow aggregator", false, conn3, utils.FlowTypeFromExternal, mockController},
-		{"destination is gateway", false, conn4, utils.FlowTypeUnsupported, mockController},
-		{"source is gateway and destination pod namesapce is empty", false, conn5, utils.FlowTypeUnsupported, mockController},
-		{"source is pod, but destination is not", false, conn6, utils.FlowTypeToExternal, mockController},
-		{"pod names missing", false, conn7, utils.FlowTypeInterNode, mockController},
-		{"pod names not missing", false, conn8, utils.FlowTypeIntraNode, mockController},
-		{"source is not pod but destination is", false, conn9, utils.FlowTypeFromExternal, mockController},
-		{"source and destination are not pods", false, conn10, utils.FlowTypeUnsupported, mockController},
+		{"isNetworkPolicy and pod names exist", true, conn1, utils.FlowTypeIntraNode},
+		{"isNetworkPolicy and pod names are missing", true, conn2, utils.FlowTypeInterNode},
+		{"unspecified flow type", false, conn1, utils.FlowTypeUnspecified},
+		{"source is gateway and destination pod namespace is not flow aggregator", false, conn3, utils.FlowTypeFromExternal},
+		{"destination is gateway", false, conn4, utils.FlowTypeUnsupported},
+		{"source is gateway and destination pod namesapce is empty", false, conn5, utils.FlowTypeUnsupported},
+		{"source is pod, but destination is not", false, conn6, utils.FlowTypeToExternal},
+		{"pod names missing", false, conn7, utils.FlowTypeInterNode},
+		{"pod names not missing", false, conn8, utils.FlowTypeIntraNode},
+		{"source is not pod but destination is", false, conn9, utils.FlowTypeFromExternal},
+		{"source and destination are not pods", false, conn10, utils.FlowTypeUnsupported},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			flowExp := &FlowExporter{
 				isNetworkPolicyOnly: tc.isNetworkPolicyOnly,
 			}
-			flowType := flowExp.findFlowType(tc.conn, tc.nodeRouteControllerImplementation)
+			var flowType uint8
+			if tc.name == "unspecified flow type" {
+				flowType = flowExp.findFlowType(tc.conn, nil)
+			} else {
+				flowType = flowExp.findFlowType(tc.conn, mockController)
+			}
 			assert.Equal(t, tc.expectedFlowType, flowType)
 		})
 	}
