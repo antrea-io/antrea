@@ -5115,14 +5115,6 @@ rules:
   - apiGroups:
       - ""
     resources:
-      - events
-    verbs:
-      - create
-      - patch
-      - update
-  - apiGroups:
-      - ""
-    resources:
       - secrets
     resourceNames:
       - antrea-bgp-passwords
@@ -5131,6 +5123,14 @@ rules:
       - get
       - list
       - watch
+  - apiGroups:
+      - events.k8s.io
+    resources:
+      - events
+    verbs:
+      - create
+      - patch
+      - update
 ---
 # Source: antrea/templates/antctl/clusterrole.yaml
 kind: ClusterRole

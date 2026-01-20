@@ -36,7 +36,6 @@ import (
 
 	"antrea.io/antrea/pkg/agent/config"
 	"antrea.io/antrea/pkg/apis/crd/v1beta1"
-	"antrea.io/antrea/pkg/client/clientset/versioned/scheme"
 	"antrea.io/antrea/pkg/features"
 	"antrea.io/antrea/pkg/util/k8s"
 )
@@ -486,9 +485,11 @@ func testEgressCRUD(t *testing.T, data *TestData) {
 				// Testing the events recorded during creation of an Egress resource.
 				expectedMessage := fmt.Sprintf("Assigned Egress %s with IP %s on Node %v", egress.Name, tt.expectedEgressIP, egress.Status.EgressNode)
 				assert.EventuallyWithT(t, func(c *assert.CollectT) {
-					events, err := data.clientset.CoreV1().Events("").SearchWithContext(context.TODO(), scheme.Scheme, egress)
+					events, err := data.clientset.EventsV1().Events("").List(context.TODO(), metav1.ListOptions{
+						FieldSelector: fmt.Sprintf("regarding.name=%s", egress.Name),
+					})
 					if assert.NoError(c, err) && assert.Len(c, events.Items, 1) {
-						assert.Contains(c, events.Items[0].Message, expectedMessage)
+						assert.Contains(c, events.Items[0].Note, expectedMessage)
 					}
 				}, 2*time.Second, 200*time.Millisecond)
 			}
@@ -605,11 +606,13 @@ func testEgressUpdateEgressIP(t *testing.T, data *TestData) {
 				fmt.Sprintf("Assigned Egress %s with IP %s on Node %v", egress.Name, tt.newEgressIP, tt.newNode),
 			}
 			assert.EventuallyWithT(t, func(c *assert.CollectT) {
-				events, err := data.clientset.CoreV1().Events("").SearchWithContext(context.TODO(), scheme.Scheme, egress)
+				events, err := data.clientset.EventsV1().Events("").List(context.TODO(), metav1.ListOptions{
+					FieldSelector: fmt.Sprintf("regarding.name=%s", egress.Name),
+				})
 				if assert.NoError(c, err) && assert.Len(c, events.Items, len(expectedMessages)) {
 					recordedMessages := []string{}
 					for _, items := range events.Items {
-						recordedMessages = append(recordedMessages, items.Message)
+						recordedMessages = append(recordedMessages, items.Note)
 					}
 					assert.Equal(c, expectedMessages[0], recordedMessages[0])
 					// The order of unassigning from original Node and assigning on new Node is random.
