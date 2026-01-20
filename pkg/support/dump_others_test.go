@@ -159,3 +159,84 @@ func TestDumpNFTables(t *testing.T) {
 		})
 	}
 }
+
+func TestDumpIPSet(t *testing.T) {
+	const ipsetOutput = `create ANTREA-POD-IP hash:net family inet hashsize 1024 maxelem 65536
+add ANTREA-POD-IP 10.10.0.0/24
+create ANTREA-POD-IP6 hash:net family inet6 hashsize 1024 maxelem 65536
+add ANTREA-POD-IP6 fd00:10:10::/64`
+
+	errorAction := func() ([]byte, []byte, error) {
+		return nil, nil, fmt.Errorf("error")
+	}
+	successAction := func() ([]byte, []byte, error) {
+		return []byte(ipsetOutput), nil, nil
+	}
+
+	tests := []struct {
+		name            string
+		commandActions  []testingexec.FakeCommandAction
+		expectedContent string
+		expectFile      bool
+		expectedErr     string
+	}{
+		{
+			name: "dump succeeds and writes ipsets file",
+			commandActions: []testingexec.FakeCommandAction{
+				func(cmd string, args ...string) exec.Cmd {
+					return &testingexec.FakeCmd{
+						CombinedOutputScript: []testingexec.FakeAction{successAction},
+					}
+				},
+			},
+			expectedContent: ipsetOutput,
+			expectFile:      true,
+		},
+		{
+			name: "command failure returns error",
+			commandActions: []testingexec.FakeCommandAction{
+				func(cmd string, args ...string) exec.Cmd {
+					return &testingexec.FakeCmd{
+						CombinedOutputScript: []testingexec.FakeAction{errorAction},
+					}
+				},
+			},
+			expectFile:  false,
+			expectedErr: "error when dumping ipsets: error",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			fs := afero.NewMemMapFs()
+			fs.MkdirAll(baseDir, os.ModePerm)
+
+			fakeExecutor := &testingexec.FakeExec{}
+			fakeExecutor.CommandScript = tc.commandActions
+
+			dumper := &agentDumper{
+				fs:       fs,
+				executor: fakeExecutor,
+			}
+
+			err := dumper.dumpIPSet(baseDir)
+
+			if tc.expectedErr != "" {
+				assert.ErrorContains(t, err, tc.expectedErr)
+			} else {
+				require.NoError(t, err)
+			}
+
+			filePath := filepath.Join(baseDir, "ipsets")
+			ok, err := afero.Exists(fs, filePath)
+			require.NoError(t, err)
+			assert.Equal(t, tc.expectFile, ok, "Expected ipsets file existence to be %t", tc.expectFile)
+
+			if tc.expectFile {
+				content, err := afero.ReadFile(fs, filePath)
+				require.NoError(t, err)
+				assert.Equal(t, tc.expectedContent, string(content), "File content does not match")
+			}
+		})
+	}
+}
