@@ -367,13 +367,6 @@ func (c ZoneZeroCache) Add(conn *connection.Connection) error {
 	return nil
 }
 
-// Return true if the given connection is in the cache.
-func (c ZoneZeroCache) Contains(conn *connection.Connection) bool {
-	key := c.generateKey(conn)
-	_, ok := c.cache[key]
-	return ok
-}
-
 // Given an antrea zone connection, generate a key that will equal the corresponding zone zero connection.
 func (c ZoneZeroCache) generateKeyFromAntreaZone(conn *connection.Connection) string {
 	destinationAddress := conn.FlowKey.DestinationAddress.String()

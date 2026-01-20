@@ -871,45 +871,6 @@ func TestZoneZeroCache(t *testing.T) {
 			assert.Nil(t, match, "Expected cache to return a nil match")
 		})
 	})
-	t.Run("Contains", func(t *testing.T) {
-		t.Run("After adding connection", func(t *testing.T) {
-			cache := NewZoneZeroCache()
-			refTime := time.Now()
-			zoneZeroConn := &connection.Connection{
-				StartTime: refTime,
-				StopTime:  refTime,
-				FlowKey: connection.Tuple{
-					SourceAddress:      netip.MustParseAddr("172.18.0.1"),
-					DestinationAddress: netip.MustParseAddr("10.244.2.2"),
-					Protocol:           6,
-					SourcePort:         52142,
-					DestinationPort:    80},
-				Mark:          openflow.ServiceCTMark.GetValue(),
-				ProxySnatIP:   netip.MustParseAddr("172.18.0.2"),
-				ProxySnatPort: uint16(28392),
-			}
-			cache.Add(zoneZeroConn)
-			assert.True(t, cache.Contains(zoneZeroConn), "Expected cache to contain previously added connection")
-		})
-		t.Run("On an empty cache", func(t *testing.T) {
-			cache := NewZoneZeroCache()
-			refTime := time.Now()
-			zoneZeroConn := &connection.Connection{
-				StartTime: refTime,
-				StopTime:  refTime,
-				FlowKey: connection.Tuple{
-					SourceAddress:      netip.MustParseAddr("172.18.0.1"),
-					DestinationAddress: netip.MustParseAddr("10.244.2.2"),
-					Protocol:           6,
-					SourcePort:         52142,
-					DestinationPort:    80},
-				Mark:          openflow.ServiceCTMark.GetValue(),
-				ProxySnatIP:   netip.MustParseAddr("172.18.0.2"),
-				ProxySnatPort: uint16(28392),
-			}
-			assert.False(t, cache.Contains(zoneZeroConn), "Expected cache to not contain any connections")
-		})
-	})
 }
 
 func TestCorrelateExternal(t *testing.T) {
