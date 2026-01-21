@@ -50,4 +50,6 @@ FROM mcr.microsoft.com/oss/kubernetes/windows-host-process-containers-base-image
 COPY --from=antrea-build-windows /go/k /k
 COPY --from=antrea-ovs /openvswitch /openvswitch
 
+COPY LICENSE /LICENSE
+
 ENV PATH="C:\Windows\system32;C:\Windows;C:\WINDOWS\System32\WindowsPowerShell\v1.0\;C:\Windows\System32\wbem;"

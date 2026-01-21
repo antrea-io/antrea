@@ -34,4 +34,6 @@ RUN apt update \
 
 COPY --from=registry.k8s.io/pause:latest /pause /pause
 
+COPY LICENSE /LICENSE
+
 CMD ["/pause"]

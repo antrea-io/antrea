@@ -21,3 +21,5 @@ USER root
 
 COPY bin/antrea-controller /usr/local/bin/
 COPY bin/antctl /usr/local/bin/
+
+COPY LICENSE /LICENSE

@@ -47,4 +47,6 @@ RUN apt-get update \
 COPY --from=flow-aggregator-build /antrea/bin/flow-aggregator /
 COPY --from=flow-aggregator-build /antrea/bin/antctl /usr/local/bin/
 
+COPY LICENSE /LICENSE
+
 ENTRYPOINT ["/flow-aggregator"]

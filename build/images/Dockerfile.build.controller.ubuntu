@@ -41,3 +41,5 @@ USER root
 
 COPY --from=antrea-build /antrea/bin/antctl /usr/local/bin/
 COPY --from=antrea-build /antrea/bin/antrea-controller /usr/local/bin/
+
+COPY LICENSE /LICENSE

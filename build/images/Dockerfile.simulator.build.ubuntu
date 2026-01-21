@@ -34,4 +34,4 @@ LABEL description="The Docker image to deploy the Antrea simulator."
 USER root
 
 COPY --from=antrea-build /antrea/bin/* /usr/local/bin/
-
+COPY LICENSE /LICENSE
