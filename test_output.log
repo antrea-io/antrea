@@ -1,0 +1,105 @@
+=== RUN   TestMustParseMAC
+=== RUN   TestMustParseMAC/valid_MAC
+=== RUN   TestMustParseMAC/invalid_MAC
+--- PASS: TestMustParseMAC (0.00s)
+    --- PASS: TestMustParseMAC/valid_MAC (0.00s)
+    --- PASS: TestMustParseMAC/invalid_MAC (0.00s)
+=== RUN   TestGetLocalBroadcastIP
+=== RUN   TestGetLocalBroadcastIP/IPv4_/24
+=== RUN   TestGetLocalBroadcastIP/IPv4_/16
+=== RUN   TestGetLocalBroadcastIP/IPv4_/30
+--- PASS: TestGetLocalBroadcastIP (0.00s)
+    --- PASS: TestGetLocalBroadcastIP/IPv4_/24 (0.00s)
+    --- PASS: TestGetLocalBroadcastIP/IPv4_/16 (0.00s)
+    --- PASS: TestGetLocalBroadcastIP/IPv4_/30 (0.00s)
+=== RUN   TestDiffCIDRs
+--- PASS: TestDiffCIDRs (0.00s)
+=== RUN   TestMergeCIDRs
+--- PASS: TestMergeCIDRs (0.00s)
+=== RUN   TestIPNetToNetIPNet
+=== RUN   TestIPNetToNetIPNet/valid_IPv4_CIDR
+=== RUN   TestIPNetToNetIPNet/valid_IPv6_CIDR
+=== RUN   TestIPNetToNetIPNet/non_standard_IPv4_CIDR
+=== RUN   TestIPNetToNetIPNet/non_standard_IPv6_CIDR
+--- PASS: TestIPNetToNetIPNet (0.00s)
+    --- PASS: TestIPNetToNetIPNet/valid_IPv4_CIDR (0.00s)
+    --- PASS: TestIPNetToNetIPNet/valid_IPv6_CIDR (0.00s)
+    --- PASS: TestIPNetToNetIPNet/non_standard_IPv4_CIDR (0.00s)
+    --- PASS: TestIPNetToNetIPNet/non_standard_IPv6_CIDR (0.00s)
+=== RUN   TestIPProtocolNumberToString
+--- PASS: TestIPProtocolNumberToString (0.00s)
+=== RUN   TestMustIPv6
+=== RUN   TestMustIPv6/valid_IPv6_local
+=== RUN   TestMustIPv6/valid_IPv6
+--- PASS: TestMustIPv6 (0.00s)
+    --- PASS: TestMustIPv6/valid_IPv6_local (0.00s)
+    --- PASS: TestMustIPv6/valid_IPv6 (0.00s)
+=== RUN   TestAppendPortIfMissing
+=== RUN   TestAppendPortIfMissing/IPv4_address_without_port
+=== RUN   TestAppendPortIfMissing/IPv4_address_with_port
+=== RUN   TestAppendPortIfMissing/IPv6_address_without_port
+=== RUN   TestAppendPortIfMissing/IPv6_address_with_port
+=== RUN   TestAppendPortIfMissing/Empty_address
+=== RUN   TestAppendPortIfMissing/Invalid_address
+--- PASS: TestAppendPortIfMissing (0.00s)
+    --- PASS: TestAppendPortIfMissing/IPv4_address_without_port (0.00s)
+    --- PASS: TestAppendPortIfMissing/IPv4_address_with_port (0.00s)
+    --- PASS: TestAppendPortIfMissing/IPv6_address_without_port (0.00s)
+    --- PASS: TestAppendPortIfMissing/IPv6_address_with_port (0.00s)
+    --- PASS: TestAppendPortIfMissing/Empty_address (0.00s)
+    --- PASS: TestAppendPortIfMissing/Invalid_address (0.00s)
+=== RUN   TestIPNetEqual
+=== RUN   TestIPNetEqual/equal
+=== RUN   TestIPNetEqual/different_mask
+=== RUN   TestIPNetEqual/different_prefix
+=== RUN   TestIPNetEqual/different_family
+--- PASS: TestIPNetEqual (0.00s)
+    --- PASS: TestIPNetEqual/equal (0.00s)
+    --- PASS: TestIPNetEqual/different_mask (0.00s)
+    --- PASS: TestIPNetEqual/different_prefix (0.00s)
+    --- PASS: TestIPNetEqual/different_family (0.00s)
+=== RUN   TestIPNetContains
+=== RUN   TestIPNetContains/equal
+=== RUN   TestIPNetContains/contain_smaller_subnet
+=== RUN   TestIPNetContains/contain_smaller_subnet_with_different_prefix
+=== RUN   TestIPNetContains/not_contain_larger_subnet
+=== RUN   TestIPNetContains/not_contain_smaller_subnet_with_different_prefix
+=== RUN   TestIPNetContains/not_contain_subnet_of_different_family
+--- PASS: TestIPNetContains (0.00s)
+    --- PASS: TestIPNetContains/equal (0.00s)
+    --- PASS: TestIPNetContains/contain_smaller_subnet (0.00s)
+    --- PASS: TestIPNetContains/contain_smaller_subnet_with_different_prefix (0.00s)
+    --- PASS: TestIPNetContains/not_contain_larger_subnet (0.00s)
+    --- PASS: TestIPNetContains/not_contain_smaller_subnet_with_different_prefix (0.00s)
+    --- PASS: TestIPNetContains/not_contain_subnet_of_different_family (0.00s)
+=== RUN   TestGetStartAndEndOfPrefix
+=== RUN   TestGetStartAndEndOfPrefix/10.20.30.0/26
+=== RUN   TestGetStartAndEndOfPrefix/10.10.40.0/24
+=== RUN   TestGetStartAndEndOfPrefix/10.20.30.0/20
+=== RUN   TestGetStartAndEndOfPrefix/10.30.20.0/16
+=== RUN   TestGetStartAndEndOfPrefix/10.10.10.10/12
+=== RUN   TestGetStartAndEndOfPrefix/10.10.10.10/6
+=== RUN   TestGetStartAndEndOfPrefix/2001:0db8::/42
+=== RUN   TestGetStartAndEndOfPrefix/2001:4860:4860::8888/56
+=== RUN   TestGetStartAndEndOfPrefix/2001:0db8::/64
+=== RUN   TestGetStartAndEndOfPrefix/2001:0db8::/84
+=== RUN   TestGetStartAndEndOfPrefix/fd00:10:96::/100
+=== RUN   TestGetStartAndEndOfPrefix/fd00:10:96::/112
+=== RUN   TestGetStartAndEndOfPrefix/2001:4860:4860::8888/124
+--- PASS: TestGetStartAndEndOfPrefix (0.00s)
+    --- PASS: TestGetStartAndEndOfPrefix/10.20.30.0/26 (0.00s)
+    --- PASS: TestGetStartAndEndOfPrefix/10.10.40.0/24 (0.00s)
+    --- PASS: TestGetStartAndEndOfPrefix/10.20.30.0/20 (0.00s)
+    --- PASS: TestGetStartAndEndOfPrefix/10.30.20.0/16 (0.00s)
+    --- PASS: TestGetStartAndEndOfPrefix/10.10.10.10/12 (0.00s)
+    --- PASS: TestGetStartAndEndOfPrefix/10.10.10.10/6 (0.00s)
+    --- PASS: TestGetStartAndEndOfPrefix/2001:0db8::/42 (0.00s)
+    --- PASS: TestGetStartAndEndOfPrefix/2001:4860:4860::8888/56 (0.00s)
+    --- PASS: TestGetStartAndEndOfPrefix/2001:0db8::/64 (0.00s)
+    --- PASS: TestGetStartAndEndOfPrefix/2001:0db8::/84 (0.00s)
+    --- PASS: TestGetStartAndEndOfPrefix/fd00:10:96::/100 (0.00s)
+    --- PASS: TestGetStartAndEndOfPrefix/fd00:10:96::/112 (0.00s)
+    --- PASS: TestGetStartAndEndOfPrefix/2001:4860:4860::8888/124 (0.00s)
+PASS
+coverage: 86.3% of statements
+ok  	antrea.io/antrea/pkg/util/ip	(cached)	coverage: 86.3% of statements
