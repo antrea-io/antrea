@@ -17,6 +17,7 @@ package connections
 import (
 	"fmt"
 	"strconv"
+	"sync"
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
@@ -55,7 +56,7 @@ type ConntrackConnectionStore struct {
 	// networkPolicyReadyTime is set to the current time when we are done waiting on networkPolicyWait.
 	networkPolicyReadyTime time.Time
 	connectionStore
-	zoneZeroCache ZoneZeroCache
+	zoneZeroCache *ZoneZeroCache
 }
 
 func NewConntrackConnectionStore(
@@ -198,7 +199,16 @@ func (cs *ConntrackConnectionStore) AddOrUpdateConn(conn *connection.Connection)
 	conn.IsPresent = true
 
 	if conn.Zone == 0 {
-		cs.zoneZeroCache.Add(conn)
+		clusterIP := conn.OriginalDestinationAddress.String()
+		// Since the Proxier uses TargetPort for lookups, we use DestinationPort (the backend port)
+		// instead of OriginalDestinationPort (which is the NodePort Port)
+		svcPort := conn.FlowKey.DestinationPort
+		protocol, _ := lookupServiceProtocol(conn.FlowKey.Protocol)
+		serviceStr := fmt.Sprintf("%s:%d/%s", clusterIP, svcPort, protocol)
+		_, exists := cs.antreaProxier.GetServiceByIP(serviceStr)
+		if exists {
+			cs.zoneZeroCache.Add(conn)
+		}
 		return
 	}
 
@@ -338,49 +348,86 @@ func (cs *ConntrackConnectionStore) getZones() []uint16 {
 	return zones
 }
 
-func NewZoneZeroCache() ZoneZeroCache {
-	return ZoneZeroCache{
-		cache: map[string]*connection.Connection{},
+func NewZoneZeroCache() *ZoneZeroCache {
+	stopCh := make(chan struct{})
+	cache := ZoneZeroCache{stopCh: stopCh}
+	go cache.CleanupLoop(stopCh, 5*time.Second, time.Minute)
+	return &cache
+}
+
+func (c *ZoneZeroCache) CleanupLoop(stopCh <-chan struct{}, cleanupInterval, ttl time.Duration) {
+	ticker := time.NewTicker(cleanupInterval)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-stopCh:
+			return
+		case <-ticker.C:
+			c.cleanup(ttl)
+		}
 	}
 }
 
+func (c *ZoneZeroCache) cleanup(ttl time.Duration) {
+	now := time.Now()
+	c.cache.Range(func(key, value any) bool {
+		item := value.(zoneZeroRecord)
+		if now.Sub(item.timestamp) > ttl {
+			c.cache.Delete(key)
+		}
+		return true
+	})
+}
+
 // A cache holding zone zero connections for correlating the zone zero and antrea flows that make up an external flow.
-type ZoneZeroCache struct {
-	cache map[string]*connection.Connection
+type ZoneZeroCache struct { //TODO - make unexported?
+	cache  sync.Map
+	stopCh <-chan struct{}
+}
+
+type zoneZeroRecord struct {
+	conn      *connection.Connection
+	timestamp time.Time
 }
 
 // Given a conn, generate a key that is unique to this connection
 // but can also be derived for the matching antrea ct_zone record.
-func (c ZoneZeroCache) generateKey(conn *connection.Connection) string {
+func (c *ZoneZeroCache) generateKey(conn *connection.Connection) string {
 	destinationAddress := conn.FlowKey.DestinationAddress.String()
 	replyDestinationPort := strconv.FormatUint(uint64(conn.ProxySnatPort), 10)
 	return fmt.Sprintf("%s-%s", destinationAddress, replyDestinationPort)
 }
 
 // Add the given zone zero connection to the cache.
-func (c ZoneZeroCache) Add(conn *connection.Connection) error {
+func (c *ZoneZeroCache) Add(conn *connection.Connection) error {
 	if conn.Zone != 0 {
 		return fmt.Errorf("Cannot add connections to cache that are not zone zero. Connection has zone %v", conn.Zone)
 	}
 	key := c.generateKey(conn)
-	c.cache[key] = conn
+	klog.InfoS("q1q1 - adding", "key", key)
+	c.cache.Store(key, zoneZeroRecord{
+		conn:      conn,
+		timestamp: time.Now(),
+	})
 	return nil
 }
 
 // Given an antrea zone connection, generate a key that will equal the corresponding zone zero connection.
-func (c ZoneZeroCache) generateKeyFromAntreaZone(conn *connection.Connection) string {
+func (c *ZoneZeroCache) generateKeyFromAntreaZone(conn *connection.Connection) string {
 	destinationAddress := conn.FlowKey.DestinationAddress.String()
 	zoneZeroReplyDestinationPort := strconv.FormatUint(uint64(conn.FlowKey.SourcePort), 10)
 	return fmt.Sprintf("%s-%s", destinationAddress, zoneZeroReplyDestinationPort)
 }
 
 // Given an antrea ct zone connection, if there is a corresponding zone zero connection, return it. Otherwise return nil.
-func (c ZoneZeroCache) GetMatching(conn *connection.Connection) *connection.Connection {
+func (c *ZoneZeroCache) GetMatching(conn *connection.Connection) *connection.Connection {
 	key := c.generateKeyFromAntreaZone(conn)
-	if match, ok := c.cache[key]; ok {
-		return match
+	record, ok := c.cache.LoadAndDelete(key)
+	if !ok {
+		return nil
 	}
-	return nil
+	return record.(zoneZeroRecord).conn
 }
 
 // Given a pair of matching connections, modify the antreaZone connection by
@@ -395,13 +442,10 @@ func CorrelateExternal(zoneZero, antreaZone *connection.Connection) {
 
 // Given a connection key, delete it from the cache. Log an error
 // if it didn't exist in the cache
-func (c ZoneZeroCache) Delete(conn *connection.Connection) {
+func (c *ZoneZeroCache) Delete(conn *connection.Connection) {
 	destinationAddress := conn.FlowKey.DestinationAddress
 	zoneZeroReplyDestinationPort := strconv.FormatUint(uint64(conn.ProxySnatPort), 10)
 
 	key := fmt.Sprintf("%s-%s", destinationAddress, zoneZeroReplyDestinationPort)
-	if _, ok := c.cache[key]; !ok {
-		klog.V(5).InfoS("Delete connection from ZoneZeroCache failed. Did not exist.", "conn", conn)
-	}
-	delete(c.cache, key)
+	c.cache.Delete(key)
 }
