@@ -466,13 +466,22 @@ func TestGetLocalBroadcastIP(t *testing.T) {
 			cidr:       "10.10.10.0/30",
 			expectedIP: "10.10.10.3",
 		},
+		{
+			name:       "IPv6 (returns nil)",
+			cidr:       "fd00::/64",
+			expectedIP: "",
+		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			_, ipNet, _ := net.ParseCIDR(tt.cidr)
 			broadcastIP := GetLocalBroadcastIP(ipNet)
-			assert.Equal(t, tt.expectedIP, broadcastIP.String())
+			if tt.expectedIP == "" {
+				assert.Nil(t, broadcastIP)
+			} else {
+				assert.Equal(t, tt.expectedIP, broadcastIP.String())
+			}
 		})
 	}
 }
