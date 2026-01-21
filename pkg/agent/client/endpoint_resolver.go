@@ -18,7 +18,9 @@ import (
 	"context"
 	"fmt"
 	"net/url"
+	"os"
 	"reflect"
+	"strconv"
 	"sync/atomic"
 	"time"
 
@@ -38,6 +40,9 @@ import (
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/util/workqueue"
 	"k8s.io/klog/v2"
+
+	"antrea.io/antrea/pkg/apis"
+	"antrea.io/antrea/pkg/util/env"
 )
 
 const (
@@ -288,4 +293,17 @@ func (r *EndpointResolver) AddListener(listener Listener) {
 
 func (r *EndpointResolver) CurrentEndpointURL() *url.URL {
 	return r.endpointURL.Load()
+}
+
+func NewAntreaServiceEndpointResolver(kubeClient kubernetes.Interface) (*EndpointResolver, error) {
+	port := os.Getenv("ANTREA_SERVICE_PORT")
+	if len(port) == 0 {
+		return nil, fmt.Errorf("unable to create Endpoint resolver for Antrea Service, ANTREA_SERVICE_PORT must be defined for in-cluster config")
+	}
+	servicePort, err := strconv.ParseInt(port, 10, 32)
+	if err != nil {
+		return nil, fmt.Errorf("invalid port number stored in ANTREA_SERVICE_PORT: %w", err)
+	}
+	endpointResolver := NewEndpointResolver(kubeClient, env.GetAntreaNamespace(), apis.AntreaServiceName, int32(servicePort))
+	return endpointResolver, nil
 }

@@ -115,8 +115,13 @@ func newTestRouteClient(networkConfig *config.NetworkConfig, options routeClient
 		options.nodeSNATRandomFully,
 		false,
 		&servicecidr.Discoverer{},
-		apis.WireGuardListenPort,
-		apis.AntreaProxyHealthServerPort)
+		nil,
+		[]route.HostNetworkRulePortFn{
+			route.WithAgentAPIServerPort(apis.AntreaAgentAPIPort),
+			route.WithAgentClusterMembershipPort(apis.AntreaAgentClusterMembershipPort),
+			route.WithWireguardPort(apis.WireGuardListenPort),
+			route.WithProxyHealthCheckPort(apis.AntreaProxyHealthServerPort),
+		})
 }
 
 func TestInitialize(t *testing.T) {
@@ -321,8 +326,7 @@ func TestInitialize(t *testing.T) {
 -A ANTREA-PREROUTING -p udp -m comment --comment "Antrea: do not track incoming encapsulation packets" -m udp --dport %d -m addrtype --dst-type LOCAL -j NOTRACK
 `, tc.expectUDPPortInRules, tc.expectUDPPortInRules)
 			}
-			if tc.proxyAll {
-				expectedIPTables["filter"] = `:ANTREA-FORWARD - [0:0]
+			expectedIPTables["filter"] = `:ANTREA-FORWARD - [0:0]
 :ANTREA-INPUT - [0:0]
 :ANTREA-OUTPUT - [0:0]
 -A INPUT -m comment --comment "Antrea: jump to Antrea input rules" -j ANTREA-INPUT
@@ -330,10 +334,23 @@ func TestInitialize(t *testing.T) {
 -A OUTPUT -m comment --comment "Antrea: jump to Antrea output rules" -j ANTREA-OUTPUT
 -A ANTREA-FORWARD -i antrea-gw0 -m comment --comment "Antrea: accept packets from local Pods" -j ACCEPT
 -A ANTREA-FORWARD -o antrea-gw0 -m comment --comment "Antrea: accept packets to local Pods" -j ACCEPT
--A ANTREA-INPUT -p tcp -m comment --comment "Antrea: allow proxy health check input packets" -m tcp --dport 10256 -j ACCEPT
--A ANTREA-OUTPUT -p tcp -m comment --comment "Antrea: allow proxy health check reply packets" -m tcp --sport 10256 -j ACCEPT
+`
+			if tc.proxyAll {
+				expectedIPTables["filter"] += `-A ANTREA-INPUT -p tcp -m comment --comment "Antrea: allow proxy health check input packets" -m tcp --dport 10256 -j ACCEPT
 `
 			}
+			expectedIPTables["filter"] += `-A ANTREA-INPUT -p tcp -m comment --comment "Antrea: allow Agent APIServer input packets" -m tcp --dport 10350 -j ACCEPT
+-A ANTREA-INPUT -p tcp -m comment --comment "Antrea: allow Agent cluster memberships input packets" -m tcp --dport 10351 -j ACCEPT
+-A ANTREA-INPUT -p udp -m comment --comment "Antrea: allow Agent cluster memberships input packets" -m udp --dport 10351 -j ACCEPT
+`
+			if tc.proxyAll {
+				expectedIPTables["filter"] += `-A ANTREA-OUTPUT -p tcp -m comment --comment "Antrea: allow proxy health check reply packets" -m tcp --sport 10256 -j ACCEPT
+`
+			}
+			expectedIPTables["filter"] += `-A ANTREA-OUTPUT -p tcp -m comment --comment "Antrea: allow Agent APIServer reply packets" -m tcp --sport 10350 -j ACCEPT
+-A ANTREA-OUTPUT -p tcp -m comment --comment "Antrea: allow Agent cluster memberships output packets" -m tcp --dport 10351 -j ACCEPT
+-A ANTREA-OUTPUT -p udp -m comment --comment "Antrea: allow Agent cluster memberships output packets" -m udp --dport 10351 -j ACCEPT
+`
 
 			for table, expectedData := range expectedIPTables {
 				// #nosec G204: ignore in test code

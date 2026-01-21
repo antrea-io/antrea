@@ -28,6 +28,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/klog/v2"
 
+	"antrea.io/antrea/pkg/agent/client"
 	"antrea.io/antrea/pkg/agent/config"
 	"antrea.io/antrea/pkg/agent/openflow"
 	"antrea.io/antrea/pkg/agent/servicecidr"
@@ -47,6 +48,28 @@ const (
 
 	serviceIPv4CIDRKey = "serviceIPv4CIDRKey"
 )
+
+// feature is a placeholder type used to keep compatibility with the Linux implementation.
+type feature int
+
+// HostNetworkRulePortFn is a placeholder type used to keep compatibility with the Linux implementation.
+type HostNetworkRulePortFn func(map[feature]int32)
+
+func WithWireguardPort(port int32) HostNetworkRulePortFn {
+	return func(m map[feature]int32) {}
+}
+
+func WithProxyHealthCheckPort(port int32) HostNetworkRulePortFn {
+	return func(m map[feature]int32) {}
+}
+
+func WithAgentAPIServerPort(port int32) HostNetworkRulePortFn {
+	return func(m map[feature]int32) {}
+}
+
+func WithAgentClusterMembershipPort(port int32) HostNetworkRulePortFn {
+	return func(m map[feature]int32) {}
+}
 
 var (
 	antreaNat                  = util.AntreaNatName
@@ -93,8 +116,8 @@ func NewClient(networkConfig *config.NetworkConfig,
 	nodeSNATRandomFully bool, // ignored
 	egressSNATRandomFully bool, // ignored
 	serviceCIDRProvider servicecidr.Interface,
-	wireguardPort int32,
-	proxyHealthCheckPort int32) (*Client, error) {
+	endpointResolver *client.EndpointResolver,
+	hostNetworkRuleFns []HostNetworkRulePortFn) (*Client, error) {
 	return &Client{
 		networkConfig:               networkConfig,
 		winnet:                      &winnet.Handle{},

@@ -18,7 +18,6 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"strconv"
 	"sync"
 
 	"k8s.io/apiserver/pkg/server/dynamiccertificates"
@@ -70,7 +69,9 @@ var _ dynamiccertificates.Listener = &antreaClientProvider{}
 // for the Antrea Service.
 var _ Listener = &antreaClientProvider{}
 
-func NewAntreaClientProvider(config config.ClientConnectionConfiguration, kubeClient kubernetes.Interface) (*antreaClientProvider, error) {
+func NewAntreaClientProvider(config config.ClientConnectionConfiguration,
+	kubeClient kubernetes.Interface,
+	endpointResolver *EndpointResolver) (*antreaClientProvider, error) {
 	antreaCAProvider, err := dynamiccertificates.NewDynamicCAFromConfigMapController(
 		"antrea-ca",
 		cert.GetCAConfigMapNamespace(),
@@ -81,28 +82,19 @@ func NewAntreaClientProvider(config config.ClientConnectionConfiguration, kubeCl
 		return nil, err
 	}
 
-	var endpointResolver *EndpointResolver
-	if len(config.Kubeconfig) == 0 {
-		klog.InfoS("No Antrea kubeconfig file was specified. Falling back to in-cluster config")
-		port := os.Getenv("ANTREA_SERVICE_PORT")
-		if len(port) == 0 {
-			return nil, fmt.Errorf("unable to create Endpoint resolver for Antrea Service, ANTREA_SERVICE_PORT must be defined for in-cluster config")
-		}
-		servicePort, err := strconv.ParseInt(port, 10, 32)
-		if err != nil {
-			return nil, fmt.Errorf("invalid port number stored in ANTREA_SERVICE_PORT: %w", err)
-		}
-		endpointResolver = NewEndpointResolver(kubeClient, env.GetAntreaNamespace(), apis.AntreaServiceName, int32(servicePort))
-	}
-
 	antreaClientProvider := &antreaClientProvider{
 		config:            config,
 		caContentProvider: antreaCAProvider,
-		endpointResolver:  endpointResolver,
 	}
 
 	antreaCAProvider.AddListener(antreaClientProvider)
-	if endpointResolver != nil {
+
+	if len(config.Kubeconfig) == 0 {
+		if endpointResolver == nil {
+			return nil, fmt.Errorf("no Antrea kubeconfig file was specified, endpointResolver should not be nil")
+		}
+		klog.InfoS("No Antrea kubeconfig file was specified. Falling back to in-cluster config")
+		antreaClientProvider.endpointResolver = endpointResolver
 		endpointResolver.AddListener(antreaClientProvider)
 	}
 
@@ -118,9 +110,6 @@ func (p *antreaClientProvider) RunOnce() error {
 // by calling Enqueue.
 func (p *antreaClientProvider) Run(ctx context.Context) {
 	go p.caContentProvider.Run(ctx, 1)
-	if p.endpointResolver != nil {
-		go p.endpointResolver.Run(ctx)
-	}
 	<-ctx.Done()
 }
 
