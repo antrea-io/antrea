@@ -512,7 +512,7 @@ func TestConnectionStore_DeleteConnectionByKey(t *testing.T) {
 	}
 }
 
-func TestZoneZeroCache_Delete(t *testing.T) {
+func TestZoneZeroCache_Delete(t *testing.T) { // todo fold into other test?
 	refTime := time.Now()
 	networkPolicyReadyTime := refTime.Add(-time.Hour)
 
@@ -585,13 +585,15 @@ func TestZoneZeroCache_Delete(t *testing.T) {
 	conntrackConnStore.networkPolicyReadyTime = networkPolicyReadyTime
 
 	// Add Zone Zero
+	protocol, _ := lookupServiceProtocol(expectedConn.FlowKey.Protocol)
+	serviceStr := fmt.Sprintf("%s:%d/%s", oldConn.OriginalDestinationAddress.String(), newConn.OriginalDestinationPort, protocol)
+	mockProxier.EXPECT().GetServiceByIP(serviceStr).Return(servicePortName, true)
 	conntrackConnStore.AddOrUpdateConn(&oldConn)
 
 	// Add Antrea Zone
 	mockPodStore.EXPECT().GetPodByIPAndTime(expectedConn.FlowKey.SourceAddress.String(), gomock.Any()).Return(nil, false)
 	mockPodStore.EXPECT().GetPodByIPAndTime(expectedConn.FlowKey.DestinationAddress.String(), gomock.Any()).Return(pod1, true)
-	protocol, _ := lookupServiceProtocol(expectedConn.FlowKey.Protocol)
-	serviceStr := fmt.Sprintf("%s:%d/%s", expectedConn.OriginalDestinationAddress.String(), newConn.OriginalDestinationPort, protocol)
+	serviceStr = fmt.Sprintf("%s:%d/%s", expectedConn.OriginalDestinationAddress.String(), newConn.OriginalDestinationPort, protocol)
 	mockProxier.EXPECT().GetServiceByIP(serviceStr).Return(servicePortName, true)
 	ingressOfID := binary.BigEndian.Uint32(expectedConn.Labels[12:16])
 	npQuerier.EXPECT().GetRuleByFlowID(ingressOfID).Return(&rule1)
@@ -760,6 +762,15 @@ func TestGetZones(t *testing.T) {
 	})
 }
 
+func zoneZeroCacheLen(c *ZoneZeroCache) int {
+	count := 0
+	c.cache.Range(func(key, value interface{}) bool {
+		count++
+		return true
+	})
+	return count
+}
+
 func TestZoneZeroCache(t *testing.T) {
 	t.Run("Add", func(t *testing.T) {
 		t.Run("Adding a zone zero record", func(t *testing.T) {
@@ -780,7 +791,7 @@ func TestZoneZeroCache(t *testing.T) {
 			}
 			err := cache.Add(zoneZeroConn)
 			assert.Nil(t, err, "Expected adding zone 0 connection to not error")
-			assert.Equal(t, 1, len(cache.cache), "Expected cache to contain newly added connection")
+			assert.Equal(t, 1, zoneZeroCacheLen(cache), "Expected cache to contain newly added connection")
 		})
 		t.Run("Adding a record not from zone zero", func(t *testing.T) {
 			cache := NewZoneZeroCache()
@@ -870,6 +881,28 @@ func TestZoneZeroCache(t *testing.T) {
 			match := cache.GetMatching(antreaZeroConn)
 			assert.Nil(t, match, "Expected cache to return a nil match")
 		})
+	})
+	t.Run("Expires stale records", func(t *testing.T) {
+		cache := ZoneZeroCache{}
+		refTime := time.Now()
+		zoneZeroConn := &connection.Connection{
+			StartTime: refTime,
+			StopTime:  refTime,
+			FlowKey: connection.Tuple{
+				SourceAddress:      netip.MustParseAddr("172.18.0.1"),
+				DestinationAddress: netip.MustParseAddr("10.244.2.2"),
+				Protocol:           6,
+				SourcePort:         52142,
+				DestinationPort:    80},
+			Mark:          openflow.ServiceCTMark.GetValue(),
+			ProxySnatIP:   netip.MustParseAddr("172.18.0.2"),
+			ProxySnatPort: uint16(28392),
+		}
+		err := cache.Add(zoneZeroConn)
+		assert.Nil(t, err, "Expected adding zone 0 connection to not error")
+		time.Sleep(1 * time.Millisecond)
+		cache.cleanup(1 * time.Millisecond)
+		assert.Equal(t, 0, zoneZeroCacheLen(&cache), "Expected cache to expire old records")
 	})
 }
 
