@@ -133,8 +133,16 @@ func run(o *Options) error {
 	namespaceInformer := informerFactory.Core().V1().Namespaces()
 	nodeLatencyMonitorInformer := crdInformerFactory.Crd().V1alpha1().NodeLatencyMonitors()
 
+	var antreaServiceEndpointResolver *client.EndpointResolver
+	if len(o.config.AntreaClientConnection.Kubeconfig) == 0 {
+		antreaServiceEndpointResolver, err = client.NewAntreaServiceEndpointResolver(k8sClient)
+		if err != nil {
+			return fmt.Errorf("error creating Antrea Service Endpoint resolver: %w", err)
+		}
+	}
+
 	// Create Antrea Clientset for the given config.
-	antreaClientProvider, err := client.NewAntreaClientProvider(o.config.AntreaClientConnection, k8sClient)
+	antreaClientProvider, err := client.NewAntreaClientProvider(o.config.AntreaClientConnection, k8sClient, antreaServiceEndpointResolver)
 	if err != nil {
 		return fmt.Errorf("failed to create Antrea client provider: %w", err)
 	}
@@ -247,6 +255,15 @@ func run(o *Options) error {
 		proxyHealthCheckPort, _ = strconv.ParseInt(proxyHealthCheckPortStr, 10, 32)
 	}
 
+	hostNetworkRulePortFns := []route.HostNetworkRulePortFn{
+		route.WithAgentAPIServerPort(int32(o.config.APIPort)),
+		route.WithAgentClusterMembershipPort(int32(o.config.ClusterMembershipPort)),
+		route.WithWireguardPort(int32(o.config.WireGuard.Port)),
+	}
+	if proxyHealthCheckPort != 0 {
+		hostNetworkRulePortFns = append(hostNetworkRulePortFns, route.WithProxyHealthCheckPort(int32(proxyHealthCheckPort)))
+	}
+
 	routeClient, err := route.NewClient(networkConfig,
 		o.config.NoSNAT,
 		o.config.AntreaProxy.ProxyAll,
@@ -258,8 +275,8 @@ func run(o *Options) error {
 		o.config.SNATFullyRandomPorts,
 		*o.config.Egress.SNATFullyRandomPorts,
 		serviceCIDRProvider,
-		int32(wireguardConfig.Port),
-		int32(proxyHealthCheckPort),
+		antreaServiceEndpointResolver,
+		hostNetworkRulePortFns,
 	)
 	if err != nil {
 		return fmt.Errorf("error creating route client: %v", err)
@@ -773,6 +790,9 @@ func run(o *Options) error {
 	}
 
 	go antreaClientProvider.Run(ctx)
+	if antreaServiceEndpointResolver != nil {
+		go antreaServiceEndpointResolver.Run(ctx)
+	}
 
 	// Initialize the NPL agent.
 	if o.enableNodePortLocal {
