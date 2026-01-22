@@ -44,6 +44,7 @@ import (
 	cnitypes "antrea.io/antrea/pkg/agent/cniserver/types"
 	"antrea.io/antrea/pkg/agent/config"
 	"antrea.io/antrea/pkg/agent/interfacestore"
+	secondaryutil "antrea.io/antrea/pkg/agent/secondarynetwork/util"
 	"antrea.io/antrea/pkg/agent/types"
 	crdv1b1 "antrea.io/antrea/pkg/apis/crd/v1beta1"
 	crdlisters "antrea.io/antrea/pkg/client/listers/crd/v1beta1"
@@ -67,6 +68,11 @@ const (
 
 	interfaceDefaultMTU = 1500
 	vlanIDMax           = 4094
+)
+
+var (
+	// Funcs which will be overridden with mock funcs in tests.
+	interfaceByNameFn = net.InterfaceByName
 )
 
 type InterfaceConfigurator interface {
@@ -520,6 +526,24 @@ func (pc *PodController) configurePodSecondaryNetwork(pod *corev1.Pod, networkLi
 			continue
 		}
 
+		if networkConfig.NetworkType == vlanNetworkType && networkConfig.Master != "" {
+			if _, ovsErr := pc.ovsBridgeClient.GetOFPort(networkConfig.Master, false); ovsErr == nil {
+				klog.V(2).InfoS("Physical interface already connected to secondary OVS bridge", "device", networkConfig.Master)
+			} else {
+				// Connect a physical interface to OVS bridge.
+				err = secondaryutil.ConnectPhyInterfacesToOVSBridge(pc.ovsBridgeClient, []string{networkConfig.Master})
+				if err != nil {
+					klog.ErrorS(err, "failed to connect physical interface to OVS bridge", "interface", networkConfig.Master)
+					continue
+				}
+			}
+			err = pc.ovsBridgeClient.AddTrunksToPort(networkConfig.Master, int32(networkConfig.VLAN))
+			if err != nil {
+				klog.ErrorS(err, "failed to update port with given VLAN ID in trunks on OVS bridge", "interface", networkConfig.Master, "vlanID", networkConfig.VLAN)
+				continue
+			}
+		}
+
 		var resourceName string
 		if networkConfig.NetworkType == sriovNetworkType {
 			v, ok := netAttachDef.Annotations[resourceNameAnnotationKey]
@@ -641,6 +665,9 @@ func validateNetworkConfig(cniConfig []byte) (*SecondaryNetworkConfig, error) {
 	if networkConfig.NetworkType == vlanNetworkType {
 		if networkConfig.VLAN > vlanIDMax || networkConfig.VLAN < 0 {
 			return &networkConfig, fmt.Errorf("invalid VLAN ID %d", networkConfig.VLAN)
+		}
+		if networkConfig.Master != "" && networkConfig.VLAN == 0 {
+			return &networkConfig, fmt.Errorf("VLAN ID must be specified when master interface is set")
 		}
 	}
 	if networkConfig.MTU < 0 {

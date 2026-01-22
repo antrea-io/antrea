@@ -682,6 +682,42 @@ func (br *OVSBridge) createPort(name, ifName, ifType string, ofPortRequest int32
 	return res[1].UUID[1], nil
 }
 
+// AddTrunksToPort appends new trunk IDs to an existing port.
+// It uses the OVSDB 'mutate' operation to ensure the addition is additive and unique.
+func (br *OVSBridge) AddTrunksToPort(portName string, vlanID int32) Error {
+	tx := br.ovsdb.Transaction(openvSwitchSchema)
+
+	// Clear the 'tag' (Access VLAN) to ensure the port treats traffic as trunked,
+	// and also set 'vlan_mode' to 'trunk' to drops any packet that doesn't have a
+	// specific tag defined in the trunks set.
+	tx.Update(dbtransaction.Update{
+		Table: "Port",
+		Where: [][]interface{}{{"name", "==", portName}},
+		Row: map[string]interface{}{
+			"tag":       helpers.MakeOVSDBSet(map[string]interface{}{}),
+			"vlan_mode": "trunk",
+		},
+	})
+
+	// Use Mutate to insert the new VLAN IDs into the existing 'trunks' set.
+	// OVSDB 'insert' on a set column will append new values and ignore duplicates.
+	mutateSet := []interface{}{"set", []int32{vlanID}}
+	tx.Mutate(dbtransaction.Mutate{
+		Table: "Port",
+		Where: [][]interface{}{{"name", "==", portName}},
+		Mutations: [][]interface{}{
+			{"trunks", "insert", mutateSet},
+		},
+	})
+
+	_, err, temporary := tx.Commit()
+	if err != nil {
+		klog.Errorf("Failed to append trunks to port %s: %v", portName, err)
+		return NewTransactionError(err, temporary)
+	}
+	return nil
+}
+
 // GetOFPort retrieves the ofport value of an interface given the interface name.
 // The function will invoke OVSDB "wait" operation with 5 seconds timeout to
 // wait the ofport is set on the interface, and so could be blocked for 5
