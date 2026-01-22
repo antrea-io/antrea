@@ -470,7 +470,12 @@ func (pc *podConfigurator) reconcile(pods []corev1.Pod, containerAccess *contain
 		// the same name would have a different host interface associated to it.
 		if !desiredPods.Has(namespacedName) || pc.isInterfaceInvalid(containerConfig) {
 			klog.V(4).InfoS("Deleting interface", "Pod", klog.KRef(namespace, name), "iface", containerConfig.InterfaceName)
-			if err := pc.removeInterfaces(containerConfig.ContainerID); err != nil {
+			// Acquire the container lock to avoid race condition with CNI ADD/DEL handlers
+			// that also operate on the same container's OVS port and flows.
+			containerAccess.lockContainer(containerConfig.ContainerID)
+			err := pc.removeInterfaces(containerConfig.ContainerID)
+			containerAccess.unlockContainer(containerConfig.ContainerID)
+			if err != nil {
 				klog.ErrorS(err, "Failed to delete interface", "Pod", klog.KRef(namespace, name), "iface", containerConfig.InterfaceName)
 			}
 			continue
