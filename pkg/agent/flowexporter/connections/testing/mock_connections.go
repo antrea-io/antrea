@@ -25,6 +25,7 @@
 package testing
 
 import (
+	"net/netip"
 	reflect "reflect"
 	time "time"
 
@@ -85,6 +86,21 @@ func (m *MockConnTrackDumper) GetMaxConnections() (int, error) {
 func (mr *MockConnTrackDumperMockRecorder) GetMaxConnections() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetMaxConnections", reflect.TypeOf((*MockConnTrackDumper)(nil).GetMaxConnections))
+}
+
+// GetNodeSNATIPs mocks base method.
+func (m *MockConnTrackDumper) GetNodeSNATIPs(zoneFilter uint16) (map[connection.Tuple]netip.Addr, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetNodeSNATIPs", zoneFilter)
+	ret0, _ := ret[0].(map[connection.Tuple]netip.Addr)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetNodeSNATIPs indicates an expected call of GetNodeSNATIPs.
+func (mr *MockConnTrackDumperMockRecorder) GetNodeSNATIPs(zoneFilter any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetNodeSNATIPs", reflect.TypeOf((*MockConnTrackDumper)(nil).GetNodeSNATIPs), zoneFilter)
 }
 
 // MockNetFilterConnTrack is a mock of NetFilterConnTrack interface.
@@ -152,6 +168,21 @@ func (m *MockNetFilterConnTrack) DumpFlowsInCtZone(zoneFilter uint16) ([]*connec
 func (mr *MockNetFilterConnTrackMockRecorder) DumpFlowsInCtZone(zoneFilter any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DumpFlowsInCtZone", reflect.TypeOf((*MockNetFilterConnTrack)(nil).DumpFlowsInCtZone), zoneFilter)
+}
+
+// GetSNATIPs mocks base method.
+func (m *MockNetFilterConnTrack) GetSNATIPs(zoneFilter uint16) (map[connection.Tuple]netip.Addr, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetSNATIPs", zoneFilter)
+	ret0, _ := ret[0].(map[connection.Tuple]netip.Addr)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetSNATIPs indicates an expected call of GetSNATIPs.
+func (mr *MockNetFilterConnTrackMockRecorder) GetSNATIPs(zoneFilter any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetSNATIPs", reflect.TypeOf((*MockNetFilterConnTrack)(nil).GetSNATIPs), zoneFilter)
 }
 
 // MockDenyConnectionStoreUpdater is a mock of DenyConnectionStoreUpdater interface.

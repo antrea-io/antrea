@@ -92,6 +92,7 @@ type Connection struct {
 	EgressUID                            string
 	EgressIP                             string
 	EgressNodeName                       string
+	NodeSnatIP                           string
 }
 
 // NewConnectionKey creates 5-tuple of flow as connection key
