@@ -128,12 +128,16 @@ func TestDumpNFTables(t *testing.T) {
 			fs := afero.NewMemMapFs()
 			fs.MkdirAll(baseDir, os.ModePerm)
 
-			fakeExecutor := &testingexec.FakeExec{}
-			fakeExecutor.CommandScript = tc.commandActions
+			var executor exec.Interface
+			if tc.commandActions != nil {
+				fakeExecutor := &testingexec.FakeExec{}
+				fakeExecutor.CommandScript = tc.commandActions
+				executor = fakeExecutor
+			}
 
 			dumper := &agentDumper{
 				fs:        fs,
-				executor:  fakeExecutor,
+				executor:  executor,
 				v4Enabled: true,
 				v6Enabled: true,
 			}
@@ -150,6 +154,102 @@ func TestDumpNFTables(t *testing.T) {
 			ok, err := afero.Exists(fs, filePath)
 			require.NoError(t, err)
 			assert.Equal(t, tc.expectFile, ok, "Expected nftables file existence to be %t", tc.expectFile)
+
+			if tc.expectFile {
+				content, err := afero.ReadFile(fs, filePath)
+				require.NoError(t, err)
+				assert.Equal(t, tc.expectedContent, string(content), "File content does not match")
+			}
+		})
+	}
+}
+
+func TestDumpIPSets(t *testing.T) {
+	const ipsetSaveOutput = `create K8S-CLUSTER-IP-SET hash:ip family inet hashsize 1024 maxelem 65536
+add K8S-CLUSTER-IP-SET 10.96.0.1
+add K8S-CLUSTER-IP-SET 10.96.0.10
+`
+	errorAction := func() ([]byte, []byte, error) {
+		return nil, nil, fmt.Errorf("error")
+	}
+	successAction := func() ([]byte, []byte, error) {
+		return []byte(ipsetSaveOutput), nil, nil
+	}
+	emptySuccessAction := func() ([]byte, []byte, error) {
+		return []byte(""), nil, nil
+	}
+
+	tests := []struct {
+		name            string
+		commandActions  []testingexec.FakeCommandAction
+		expectedContent string
+		expectFile      bool
+	}{
+		{
+			name: "dump succeeds and writes ipsets file",
+			commandActions: []testingexec.FakeCommandAction{
+				func(cmd string, args ...string) exec.Cmd {
+					return &testingexec.FakeCmd{
+						CombinedOutputScript: []testingexec.FakeAction{successAction},
+					}
+				},
+			},
+			expectedContent: ipsetSaveOutput,
+			expectFile:      true,
+		},
+		{
+			name: "command failure returns no error and no file is written",
+			commandActions: []testingexec.FakeCommandAction{
+				func(cmd string, args ...string) exec.Cmd {
+					return &testingexec.FakeCmd{
+						CombinedOutputScript: []testingexec.FakeAction{errorAction},
+					}
+				},
+			},
+			expectFile: false,
+		}, {
+			name: "empty ipset output does not create file",
+			commandActions: []testingexec.FakeCommandAction{
+				func(cmd string, args ...string) exec.Cmd {
+					return &testingexec.FakeCmd{
+						CombinedOutputScript: []testingexec.FakeAction{
+							emptySuccessAction,
+						},
+					}
+				},
+			},
+			expectFile: false,
+		}, {
+			name:           "nil executor does nothing",
+			commandActions: nil,
+			expectFile:     false,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			fs := afero.NewMemMapFs()
+			fs.MkdirAll(baseDir, os.ModePerm)
+
+			var executor exec.Interface
+			if tc.commandActions != nil {
+				fakeExecutor := &testingexec.FakeExec{}
+				fakeExecutor.CommandScript = tc.commandActions
+				executor = fakeExecutor
+			}
+
+			dumper := &agentDumper{
+				fs:       fs,
+				executor: executor,
+			}
+
+			err := dumper.dumpIPSets(baseDir)
+			require.NoError(t, err)
+
+			filePath := filepath.Join(baseDir, "ipsets")
+			ok, err := afero.Exists(fs, filePath)
+			require.NoError(t, err)
+			assert.Equal(t, tc.expectFile, ok, "Expected ipsets file existence to be %t", tc.expectFile)
 
 			if tc.expectFile {
 				content, err := afero.ReadFile(fs, filePath)
