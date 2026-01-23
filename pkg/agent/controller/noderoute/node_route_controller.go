@@ -815,7 +815,7 @@ func ParseTunnelInterfaceConfig(
 func (c *Controller) findPodSubnetForIP(ip netip.Addr) (netip.Prefix, bool, error) {
 	var maskSize int
 
-	if c.IsNil() {
+	if c == nil {
 		return netip.Prefix{}, false, errors.New("Cannot find pod subnet for IP, NodeRouteController is nil")
 	}
 
@@ -845,11 +845,6 @@ func (c *Controller) LookupIPInPodSubnets(ip netip.Addr) (bool, bool) {
 		return false, false
 	}
 	return ok, ip == util.GetGatewayIPForPodPrefix(prefix)
-}
-
-// IsNil confirms if the controller is nil even if the pointer to the controller may not be
-func (c *Controller) IsNil() bool {
-	return c == nil
 }
 
 // getNodeMAC gets Node's br-int MAC from its annotation. It is only for Windows Noencap mode.
