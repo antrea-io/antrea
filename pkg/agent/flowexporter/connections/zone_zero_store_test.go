@@ -25,10 +25,10 @@ import (
 	"antrea.io/antrea/pkg/agent/openflow"
 )
 
-func TestZoneZeroCache(t *testing.T) {
-	t.Run("Add", func(t *testing.T) {
+func TestZoneZeroStore(t *testing.T) {
+	t.Run("add", func(t *testing.T) {
 		t.Run("Adding a zone zero record", func(t *testing.T) {
-			cache := newZoneZeroCache()
+			store := newZoneZeroStore()
 			refTime := time.Now()
 			zoneZeroConn := &connection.Connection{
 				StartTime: refTime,
@@ -43,12 +43,12 @@ func TestZoneZeroCache(t *testing.T) {
 				ProxySnatIP:   netip.MustParseAddr("172.18.0.2"),
 				ProxySnatPort: uint16(28392),
 			}
-			err := cache.Add(zoneZeroConn)
+			err := store.add(zoneZeroConn)
 			assert.Nil(t, err, "Expected adding zone 0 connection to not error")
-			assert.Equal(t, 1, len(cache.cache), "Expected cache to contain newly added connection")
+			assert.Equal(t, 1, len(store.connections), "Expected store to contain newly added connection")
 		})
 		t.Run("Adding a record not from zone zero", func(t *testing.T) {
-			cache := newZoneZeroCache()
+			store := newZoneZeroStore()
 			refTime := time.Now()
 			conn := &connection.Connection{
 				StartTime: refTime,
@@ -64,12 +64,12 @@ func TestZoneZeroCache(t *testing.T) {
 				ProxySnatPort: uint16(28392),
 				Zone:          123,
 			}
-			assert.Error(t, cache.Add(conn), "Expected an error adding connection with zone 123")
+			assert.Error(t, store.add(conn), "Expected an error adding connection with zone 123")
 		})
 	})
 	t.Run("GetMatching", func(t *testing.T) {
 		t.Run("Has Match", func(t *testing.T) {
-			cache := newZoneZeroCache()
+			store := newZoneZeroStore()
 			refTime := time.Now()
 			zoneZeroConn := &connection.Connection{
 				StartTime: refTime,
@@ -97,13 +97,13 @@ func TestZoneZeroCache(t *testing.T) {
 				ProxySnatIP:   netip.MustParseAddr("10.244.2.1"),
 				ProxySnatPort: uint16(28392),
 			}
-			cache.Add(zoneZeroConn)
-			match := cache.GetMatching(antreaZeroConn)
-			assert.NotNil(t, match, "Expected a matching zone zero connection to have been cached")
+			store.add(zoneZeroConn)
+			match := store.getMatching(antreaZeroConn)
+			assert.NotNil(t, match, "Expected a matching zone zero connection to have been stored")
 			assert.Equal(t, zoneZeroConn, match)
 		})
 		t.Run("Does Not Have Match", func(t *testing.T) {
-			cache := newZoneZeroCache()
+			store := newZoneZeroStore()
 			refTime := time.Now()
 			zoneZeroConn := &connection.Connection{
 				StartTime: refTime,
@@ -131,13 +131,13 @@ func TestZoneZeroCache(t *testing.T) {
 				ProxySnatIP:   netip.MustParseAddr("10.244.2.1"),
 				ProxySnatPort: uint16(28392),
 			}
-			cache.Add(zoneZeroConn)
-			match := cache.GetMatching(antreaZeroConn)
-			assert.Nil(t, match, "Expected cache to return a nil match")
+			store.add(zoneZeroConn)
+			match := store.getMatching(antreaZeroConn)
+			assert.Nil(t, match, "Expected store to return a nil match")
 		})
 	})
-	t.Run("Delete", func(t *testing.T) {
-		cache := newZoneZeroCache()
+	t.Run("remove", func(t *testing.T) {
+		store := newZoneZeroStore()
 		refTime := time.Now()
 		zoneZeroConn := &connection.Connection{
 			StartTime: refTime,
@@ -152,13 +152,13 @@ func TestZoneZeroCache(t *testing.T) {
 			ProxySnatIP:   netip.MustParseAddr("172.18.0.2"),
 			ProxySnatPort: uint16(28392),
 		}
-		err := cache.Add(zoneZeroConn)
+		err := store.add(zoneZeroConn)
 		assert.Nil(t, err, "Expected adding zone 0 connection to not error")
-		cache.Delete(zoneZeroConn)
-		assert.Empty(t, cache.cache)
+		store.remove(zoneZeroConn)
+		assert.Empty(t, store.connections)
 	})
 	t.Run("Expires stale records", func(t *testing.T) {
-		cache := newZoneZeroCache()
+		store := newZoneZeroStore()
 		refTime := time.Now()
 		zoneZeroConn := &connection.Connection{
 			StartTime: refTime,
@@ -173,10 +173,10 @@ func TestZoneZeroCache(t *testing.T) {
 			ProxySnatIP:   netip.MustParseAddr("172.18.0.2"),
 			ProxySnatPort: uint16(28392),
 		}
-		err := cache.Add(zoneZeroConn)
+		err := store.add(zoneZeroConn)
 		assert.Nil(t, err, "Expected adding zone 0 connection to not error")
 		time.Sleep(1 * time.Millisecond)
-		cache.cleanup(1 * time.Millisecond)
-		assert.Equal(t, 0, len(cache.cache), "Expected cache to expire old records")
+		store.cleanup(1 * time.Millisecond)
+		assert.Equal(t, 0, len(store.connections), "Expected store to expire old records")
 	})
 }
