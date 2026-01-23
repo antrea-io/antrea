@@ -28,32 +28,32 @@ var ttl = time.Minute
 // cleanUpInterval is the frequency in which we run the cleanup for expiring stale connections.
 var cleanUpInterval = time.Second * 5
 
-// A cache holding zone zero connections for correlating the zone zero and antrea flows that make up an external flow.
-type zoneZeroCache struct {
-	cache  map[string]zoneZeroRecord
-	stopCh <-chan struct{}
+// A store holding zone zero connections for correlating the zone zero and antrea flows that make up an external flow.
+type zoneZeroStore struct {
+	connections map[string]zoneZeroItem
+	stopCh      <-chan struct{}
 }
 
-// zoneZeroRecord wraps a zone zero connection along with it's timestamp use for expiring connections.
-type zoneZeroRecord struct {
+// zoneZeroItem wraps a zone zero connection along with it's timestamp use for expiring connections.
+type zoneZeroItem struct {
 	conn      *connection.Connection
 	timestamp time.Time
 }
 
-// newZoneZeroCache returns an instance of the zoneZeroCache with it's internal map intialized and
+// newzoneZeroStore returns an instance of the zoneZeroStore with it's internal map intialized and
 // a go routine initiated to remove stale connections based on `ttl` at `cleanUpInterval`.
-func newZoneZeroCache() *zoneZeroCache {
+func newZoneZeroStore() *zoneZeroStore {
 	stopCh := make(chan struct{})
-	cache := zoneZeroCache{
-		cache:  map[string]zoneZeroRecord{},
-		stopCh: stopCh,
+	store := zoneZeroStore{
+		connections: map[string]zoneZeroItem{},
+		stopCh:      stopCh,
 	}
-	go cache.cleanUpLoop(stopCh, cleanUpInterval, ttl)
-	return &cache
+	go store.cleanUpLoop(stopCh, cleanUpInterval, ttl)
+	return &store
 }
 
 // cleanUpLoop runs in an infinite loop and cleans up the store at the given interval.
-func (c *zoneZeroCache) cleanUpLoop(stopCh <-chan struct{}, interval, ttl time.Duration) {
+func (c *zoneZeroStore) cleanUpLoop(stopCh <-chan struct{}, interval, ttl time.Duration) {
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
 
@@ -68,30 +68,30 @@ func (c *zoneZeroCache) cleanUpLoop(stopCh <-chan struct{}, interval, ttl time.D
 }
 
 // cleanup loops through the entire store and deleting connections that exceed the ttl.
-func (c *zoneZeroCache) cleanup(ttl time.Duration) {
+func (c *zoneZeroStore) cleanup(ttl time.Duration) {
 	now := time.Now()
-	for key, record := range c.cache {
+	for key, record := range c.connections {
 		if now.Sub(record.timestamp) > ttl {
-			delete(c.cache, key)
+			delete(c.connections, key)
 		}
 	}
 }
 
 // Given a conn, generate a key that is unique to this connection
 // but can also be derived for the matching antrea ct_zone record.
-func (c *zoneZeroCache) generateKey(conn *connection.Connection) string {
+func (c *zoneZeroStore) generateKey(conn *connection.Connection) string {
 	destinationAddress := conn.FlowKey.DestinationAddress.String()
 	replyDestinationPort := strconv.FormatUint(uint64(conn.ProxySnatPort), 10)
 	return fmt.Sprintf("%s-%s", destinationAddress, replyDestinationPort)
 }
 
-// Add the given zone zero connection to the cache.
-func (c *zoneZeroCache) Add(conn *connection.Connection) error {
+// add the given zone zero connection to the store.
+func (c *zoneZeroStore) add(conn *connection.Connection) error {
 	if conn.Zone != 0 {
-		return fmt.Errorf("Cannot add connections to cache that are not zone zero. Connection has zone %v", conn.Zone)
+		return fmt.Errorf("Cannot add connections to store that are not zone zero. Connection has zone %v", conn.Zone)
 	}
 	key := c.generateKey(conn)
-	c.cache[key] = zoneZeroRecord{
+	c.connections[key] = zoneZeroItem{
 		conn:      conn,
 		timestamp: time.Now(),
 	}
@@ -99,29 +99,29 @@ func (c *zoneZeroCache) Add(conn *connection.Connection) error {
 }
 
 // Given an antrea zone connection, generate a key that will equal the corresponding zone zero connection.
-func (c *zoneZeroCache) generateKeyFromAntreaZone(conn *connection.Connection) string {
+func (c *zoneZeroStore) generateKeyFromAntreaZone(conn *connection.Connection) string {
 	destinationAddress := conn.FlowKey.DestinationAddress.String()
 	zoneZeroReplyDestinationPort := strconv.FormatUint(uint64(conn.FlowKey.SourcePort), 10)
 	return fmt.Sprintf("%s-%s", destinationAddress, zoneZeroReplyDestinationPort)
 }
 
 // Given an antrea ct zone connection, if there is a corresponding zone zero connection, return it. Otherwise return nil.
-func (c *zoneZeroCache) GetMatching(conn *connection.Connection) *connection.Connection {
+func (c *zoneZeroStore) getMatching(conn *connection.Connection) *connection.Connection {
 	key := c.generateKeyFromAntreaZone(conn)
-	record, exists := c.cache[key]
+	record, exists := c.connections[key]
 	if !exists {
 		return nil
 	}
-	delete(c.cache, key)
+	delete(c.connections, key)
 	return record.conn
 }
 
-// Given a connection key, delete it from the cache. Log an error
-// if it didn't exist in the cache
-func (c *zoneZeroCache) Delete(conn *connection.Connection) {
+// Given a connection key, remove it from the store. Log an error
+// if it didn't exist in the store.
+func (c *zoneZeroStore) remove(conn *connection.Connection) {
 	destinationAddress := conn.FlowKey.DestinationAddress
 	zoneZeroReplyDestinationPort := strconv.FormatUint(uint64(conn.ProxySnatPort), 10)
 
 	key := fmt.Sprintf("%s-%s", destinationAddress, zoneZeroReplyDestinationPort)
-	delete(c.cache, key)
+	delete(c.connections, key)
 }
