@@ -54,7 +54,7 @@ type ConntrackConnectionStore struct {
 	// networkPolicyReadyTime is set to the current time when we are done waiting on networkPolicyWait.
 	networkPolicyReadyTime time.Time
 	connectionStore
-	zoneZeroCache *zoneZeroCache
+	zoneZeroStore *zoneZeroStore
 }
 
 func NewConntrackConnectionStore(
@@ -75,7 +75,7 @@ func NewConntrackConnectionStore(
 		connectionStore:       NewConnectionStore(npQuerier, podStore, proxier, o),
 		connectUplinkToBridge: o.ConnectUplinkToBridge,
 		networkPolicyWait:     networkPolicyWait,
-		zoneZeroCache:         newZoneZeroCache(),
+		zoneZeroStore:         newZoneZeroStore(),
 	}
 }
 
@@ -156,7 +156,7 @@ func (cs *ConntrackConnectionStore) Poll() ([]int, error) {
 				if err := cs.deleteConnWithoutLock(key); err != nil {
 					return err
 				}
-				cs.zoneZeroCache.Delete(conn)
+				cs.zoneZeroStore.remove(conn)
 			}
 		} else {
 			conn.IsPresent = false
@@ -205,12 +205,12 @@ func (cs *ConntrackConnectionStore) AddOrUpdateConn(conn *connection.Connection)
 		serviceStr := fmt.Sprintf("%s:%d/%s", clusterIP, svcPort, protocol)
 		_, exists := cs.antreaProxier.GetServiceByIP(serviceStr)
 		if exists {
-			cs.zoneZeroCache.Add(conn)
+			cs.zoneZeroStore.add(conn)
 		}
 		return
 	}
 
-	if zoneZero := cs.zoneZeroCache.GetMatching(conn); zoneZero != nil {
+	if zoneZero := cs.zoneZeroStore.getMatching(conn); zoneZero != nil {
 		CorrelateExternal(zoneZero, conn)
 	}
 
