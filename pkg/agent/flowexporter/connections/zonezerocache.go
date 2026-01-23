@@ -17,7 +17,6 @@ package connections
 import (
 	"fmt"
 	"strconv"
-	"sync"
 	"time"
 
 	"antrea.io/antrea/pkg/agent/flowexporter/connection"
@@ -25,13 +24,21 @@ import (
 
 // A cache holding zone zero connections for correlating the zone zero and antrea flows that make up an external flow.
 type zoneZeroCache struct {
-	cache  sync.Map
+	cache  map[string]zoneZeroRecord
 	stopCh <-chan struct{}
+}
+
+type zoneZeroRecord struct {
+	conn      *connection.Connection
+	timestamp time.Time
 }
 
 func newZoneZeroCache() *zoneZeroCache {
 	stopCh := make(chan struct{})
-	cache := zoneZeroCache{stopCh: stopCh}
+	cache := zoneZeroCache{
+		cache:  map[string]zoneZeroRecord{},
+		stopCh: stopCh,
+	}
 	go cache.CleanupLoop(stopCh, 5*time.Second, time.Minute)
 	return &cache
 }
@@ -52,18 +59,11 @@ func (c *zoneZeroCache) CleanupLoop(stopCh <-chan struct{}, cleanupInterval, ttl
 
 func (c *zoneZeroCache) cleanup(ttl time.Duration) {
 	now := time.Now()
-	c.cache.Range(func(key, value any) bool {
-		item := value.(zoneZeroRecord)
-		if now.Sub(item.timestamp) > ttl {
-			c.cache.Delete(key)
+	for key, record := range c.cache {
+		if now.Sub(record.timestamp) > ttl {
+			delete(c.cache, key)
 		}
-		return true
-	})
-}
-
-type zoneZeroRecord struct {
-	conn      *connection.Connection
-	timestamp time.Time
+	}
 }
 
 // Given a conn, generate a key that is unique to this connection
@@ -80,10 +80,10 @@ func (c *zoneZeroCache) Add(conn *connection.Connection) error {
 		return fmt.Errorf("Cannot add connections to cache that are not zone zero. Connection has zone %v", conn.Zone)
 	}
 	key := c.generateKey(conn)
-	c.cache.Store(key, zoneZeroRecord{
+	c.cache[key] = zoneZeroRecord{
 		conn:      conn,
 		timestamp: time.Now(),
-	})
+	}
 	return nil
 }
 
@@ -97,11 +97,12 @@ func (c *zoneZeroCache) generateKeyFromAntreaZone(conn *connection.Connection) s
 // Given an antrea ct zone connection, if there is a corresponding zone zero connection, return it. Otherwise return nil.
 func (c *zoneZeroCache) GetMatching(conn *connection.Connection) *connection.Connection {
 	key := c.generateKeyFromAntreaZone(conn)
-	record, ok := c.cache.LoadAndDelete(key)
-	if !ok {
+	record, exists := c.cache[key]
+	if !exists {
 		return nil
 	}
-	return record.(zoneZeroRecord).conn
+	delete(c.cache, key)
+	return record.conn
 }
 
 // Given a connection key, delete it from the cache. Log an error
@@ -111,5 +112,5 @@ func (c *zoneZeroCache) Delete(conn *connection.Connection) {
 	zoneZeroReplyDestinationPort := strconv.FormatUint(uint64(conn.ProxySnatPort), 10)
 
 	key := fmt.Sprintf("%s-%s", destinationAddress, zoneZeroReplyDestinationPort)
-	c.cache.Delete(key)
+	delete(c.cache, key)
 }
