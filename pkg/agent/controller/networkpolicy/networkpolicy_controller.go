@@ -450,7 +450,7 @@ func NewNetworkPolicyController(antreaClientGetter client.AntreaClientProvider,
 			}
 			// Storing the object to file first because its GroupVersionKind can be updated in-place during
 			// serialization, which may incur data race if we add it to ruleCache first.
-			if c.appliedToGroupStore.replaceAll(objs); err != nil {
+			if err := c.appliedToGroupStore.replaceAll(objs); err != nil {
 				klog.ErrorS(err, "Failed to store the AppliedToGroups to files")
 			}
 			c.ruleCache.ReplaceAppliedToGroups(groups)
@@ -521,7 +521,7 @@ func NewNetworkPolicyController(antreaClientGetter client.AntreaClientProvider,
 			}
 			// Storing the object to file first because its GroupVersionKind can be updated in-place during
 			// serialization, which may incur data race if we add it to ruleCache first.
-			if c.addressGroupStore.replaceAll(objs); err != nil {
+			if err := c.addressGroupStore.replaceAll(objs); err != nil {
 				klog.ErrorS(err, "Failed to store the AddressGroups to files")
 			}
 			c.ruleCache.ReplaceAddressGroups(groups)
