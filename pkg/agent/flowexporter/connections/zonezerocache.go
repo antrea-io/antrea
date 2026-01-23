@@ -22,29 +22,39 @@ import (
 	"antrea.io/antrea/pkg/agent/flowexporter/connection"
 )
 
+// ttl threshold for expiring connections in the zoneZeroStore.
+var ttl = time.Minute
+
+// cleanUpInterval is the frequency in which we run the cleanup for expiring stale connections.
+var cleanUpInterval = time.Second * 5
+
 // A cache holding zone zero connections for correlating the zone zero and antrea flows that make up an external flow.
 type zoneZeroCache struct {
 	cache  map[string]zoneZeroRecord
 	stopCh <-chan struct{}
 }
 
+// zoneZeroRecord wraps a zone zero connection along with it's timestamp use for expiring connections.
 type zoneZeroRecord struct {
 	conn      *connection.Connection
 	timestamp time.Time
 }
 
+// newZoneZeroCache returns an instance of the zoneZeroCache with it's internal map intialized and
+// a go routine initiated to remove stale connections based on `ttl` at `cleanUpInterval`.
 func newZoneZeroCache() *zoneZeroCache {
 	stopCh := make(chan struct{})
 	cache := zoneZeroCache{
 		cache:  map[string]zoneZeroRecord{},
 		stopCh: stopCh,
 	}
-	go cache.CleanupLoop(stopCh, 5*time.Second, time.Minute)
+	go cache.cleanUpLoop(stopCh, cleanUpInterval, ttl)
 	return &cache
 }
 
-func (c *zoneZeroCache) CleanupLoop(stopCh <-chan struct{}, cleanupInterval, ttl time.Duration) {
-	ticker := time.NewTicker(cleanupInterval)
+// cleanUpLoop runs in an infinite loop and cleans up the store at the given interval.
+func (c *zoneZeroCache) cleanUpLoop(stopCh <-chan struct{}, interval, ttl time.Duration) {
+	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
 
 	for {
@@ -57,6 +67,7 @@ func (c *zoneZeroCache) CleanupLoop(stopCh <-chan struct{}, cleanupInterval, ttl
 	}
 }
 
+// cleanup loops through the entire store and deleting connections that exceed the ttl.
 func (c *zoneZeroCache) cleanup(ttl time.Duration) {
 	now := time.Now()
 	for key, record := range c.cache {
