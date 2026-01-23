@@ -54,7 +54,7 @@ type ConntrackConnectionStore struct {
 	// networkPolicyReadyTime is set to the current time when we are done waiting on networkPolicyWait.
 	networkPolicyReadyTime time.Time
 	connectionStore
-	zoneZeroCache *ZoneZeroCache
+	zoneZeroCache *zoneZeroCache
 }
 
 func NewConntrackConnectionStore(
@@ -75,7 +75,7 @@ func NewConntrackConnectionStore(
 		connectionStore:       NewConnectionStore(npQuerier, podStore, proxier, o),
 		connectUplinkToBridge: o.ConnectUplinkToBridge,
 		networkPolicyWait:     networkPolicyWait,
-		zoneZeroCache:         NewZoneZeroCache(),
+		zoneZeroCache:         newZoneZeroCache(),
 	}
 }
 

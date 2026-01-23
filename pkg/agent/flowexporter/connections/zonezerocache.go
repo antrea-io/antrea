@@ -24,19 +24,19 @@ import (
 )
 
 // A cache holding zone zero connections for correlating the zone zero and antrea flows that make up an external flow.
-type ZoneZeroCache struct { //TODO - make unexported?
+type zoneZeroCache struct {
 	cache  sync.Map
 	stopCh <-chan struct{}
 }
 
-func NewZoneZeroCache() *ZoneZeroCache {
+func newZoneZeroCache() *zoneZeroCache {
 	stopCh := make(chan struct{})
-	cache := ZoneZeroCache{stopCh: stopCh}
+	cache := zoneZeroCache{stopCh: stopCh}
 	go cache.CleanupLoop(stopCh, 5*time.Second, time.Minute)
 	return &cache
 }
 
-func (c *ZoneZeroCache) CleanupLoop(stopCh <-chan struct{}, cleanupInterval, ttl time.Duration) {
+func (c *zoneZeroCache) CleanupLoop(stopCh <-chan struct{}, cleanupInterval, ttl time.Duration) {
 	ticker := time.NewTicker(cleanupInterval)
 	defer ticker.Stop()
 
@@ -50,7 +50,7 @@ func (c *ZoneZeroCache) CleanupLoop(stopCh <-chan struct{}, cleanupInterval, ttl
 	}
 }
 
-func (c *ZoneZeroCache) cleanup(ttl time.Duration) {
+func (c *zoneZeroCache) cleanup(ttl time.Duration) {
 	now := time.Now()
 	c.cache.Range(func(key, value any) bool {
 		item := value.(zoneZeroRecord)
@@ -68,14 +68,14 @@ type zoneZeroRecord struct {
 
 // Given a conn, generate a key that is unique to this connection
 // but can also be derived for the matching antrea ct_zone record.
-func (c *ZoneZeroCache) generateKey(conn *connection.Connection) string {
+func (c *zoneZeroCache) generateKey(conn *connection.Connection) string {
 	destinationAddress := conn.FlowKey.DestinationAddress.String()
 	replyDestinationPort := strconv.FormatUint(uint64(conn.ProxySnatPort), 10)
 	return fmt.Sprintf("%s-%s", destinationAddress, replyDestinationPort)
 }
 
 // Add the given zone zero connection to the cache.
-func (c *ZoneZeroCache) Add(conn *connection.Connection) error {
+func (c *zoneZeroCache) Add(conn *connection.Connection) error {
 	if conn.Zone != 0 {
 		return fmt.Errorf("Cannot add connections to cache that are not zone zero. Connection has zone %v", conn.Zone)
 	}
@@ -88,14 +88,14 @@ func (c *ZoneZeroCache) Add(conn *connection.Connection) error {
 }
 
 // Given an antrea zone connection, generate a key that will equal the corresponding zone zero connection.
-func (c *ZoneZeroCache) generateKeyFromAntreaZone(conn *connection.Connection) string {
+func (c *zoneZeroCache) generateKeyFromAntreaZone(conn *connection.Connection) string {
 	destinationAddress := conn.FlowKey.DestinationAddress.String()
 	zoneZeroReplyDestinationPort := strconv.FormatUint(uint64(conn.FlowKey.SourcePort), 10)
 	return fmt.Sprintf("%s-%s", destinationAddress, zoneZeroReplyDestinationPort)
 }
 
 // Given an antrea ct zone connection, if there is a corresponding zone zero connection, return it. Otherwise return nil.
-func (c *ZoneZeroCache) GetMatching(conn *connection.Connection) *connection.Connection {
+func (c *zoneZeroCache) GetMatching(conn *connection.Connection) *connection.Connection {
 	key := c.generateKeyFromAntreaZone(conn)
 	record, ok := c.cache.LoadAndDelete(key)
 	if !ok {
@@ -106,7 +106,7 @@ func (c *ZoneZeroCache) GetMatching(conn *connection.Connection) *connection.Con
 
 // Given a connection key, delete it from the cache. Log an error
 // if it didn't exist in the cache
-func (c *ZoneZeroCache) Delete(conn *connection.Connection) {
+func (c *zoneZeroCache) Delete(conn *connection.Connection) {
 	destinationAddress := conn.FlowKey.DestinationAddress
 	zoneZeroReplyDestinationPort := strconv.FormatUint(uint64(conn.ProxySnatPort), 10)
 
