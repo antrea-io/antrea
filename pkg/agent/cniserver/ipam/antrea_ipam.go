@@ -358,7 +358,7 @@ func (d *AntreaIPAM) waitForControllerReady() error {
 		d.controllerMutex.RLock()
 		defer d.controllerMutex.RUnlock()
 		if d.controller == nil {
-			klog.Warningf("Antrea IPAM driver is not ready.")
+			klog.Info("Antrea IPAM driver is not ready")
 			return false, nil
 		}
 		return true, nil

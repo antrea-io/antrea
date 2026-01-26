@@ -510,7 +510,7 @@ func (ic *ifConfigurator) advertiseContainerAddr(containerNetNS string, containe
 		return fmt.Errorf("%s is not a valid network namespace: %v", containerNetNS, err)
 	}
 	if len(result.IPs) == 0 {
-		klog.Warningf("Expected at least one IP address in CNI result, skip sending Gratuitous ARP")
+		klog.Info("Expected at least one IP address in CNI result, skip sending Gratuitous ARP")
 		return nil
 	}
 	// Sending Gratuitous ARP is a best-effort action and is unlikely to fail as we have ensured the netns is valid.
@@ -540,12 +540,12 @@ func (ic *ifConfigurator) advertiseContainerAddr(containerNetNS string, containe
 			// (e.g. if a previous - deleted - Pod was using the same IP).
 			if targetIPv4 != nil {
 				if err := arpingGratuitousARPOverIface(targetIPv4, iface); err != nil {
-					klog.Warningf("Failed to send gratuitous ARP #%d: %v", count, err)
+					klog.InfoS("Failed to send gratuitous ARP", "attempt", count, "err", err)
 				}
 			}
 			if targetIPv6 != nil {
 				if err := ndpGratuitousNDPOverIface(targetIPv6, iface); err != nil {
-					klog.Warningf("Failed to send gratuitous NDP #%d: %v", count, err)
+					klog.InfoS("Failed to send gratuitous NDP", "attempt", count, "err", err)
 				}
 			}
 			count++

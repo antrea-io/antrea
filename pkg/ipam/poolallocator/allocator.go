@@ -177,7 +177,7 @@ func (a *IPPoolAllocator) updateIPAddressState(ipPool *v1beta1.IPPool, ip net.IP
 
 	_, err := a.crdClient.CrdV1beta1().IPPools().UpdateStatus(context.TODO(), newPool, metav1.UpdateOptions{})
 	if err != nil {
-		klog.Warningf("IP Pool %s update with status %+v failed: %+v", newPool.Name, newPool.Status, err)
+		klog.InfoS("IP Pool update with status failed", "pool", newPool.Name, "status", newPool.Status, "error", err)
 		return err
 	}
 	klog.InfoS("IP Pool update succeeded", "pool", newPool.Name, "allocation", newPool.Status)

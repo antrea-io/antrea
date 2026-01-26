@@ -34,7 +34,7 @@ func OVSMetersAreSupported() bool {
 	minKernelVersion := semver.MustParse("4.18.0") // patch version is required
 	kernelVersion, err := runtime.GetKernelVersion()
 	if err != nil {
-		klog.Warningf("Cannot retrieve Linux kernel version, cannot use OVS meters: %v", err)
+		klog.InfoS("Cannot retrieve Linux kernel version, cannot use OVS meters", "err", err)
 		return false
 	}
 	if kernelVersion.GTE(minKernelVersion) {
