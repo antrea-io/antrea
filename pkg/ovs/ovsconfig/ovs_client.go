@@ -145,7 +145,7 @@ func (br *OVSBridge) Create() Error {
 	}
 	br.isHardwareOffloadEnabled, err = br.getHardwareOffload()
 	if err != nil {
-		klog.Warning("Failed to get hardware offload: ", err)
+		klog.Info("Failed to get hardware offload: ", err)
 	}
 	return nil
 }
@@ -855,7 +855,7 @@ func (br *OVSBridge) GetPortList() ([]OVSPortData, Error) {
 	}
 
 	if len(res[0].Rows) == 0 {
-		klog.Warning("Could not find bridge")
+		klog.Info("Could not find bridge")
 		return []OVSPortData{}, nil
 	}
 	portUUIDList := helpers.GetIdListFromOVSDBSet(res[0].Rows[0].(map[string]interface{})["ports"].([]interface{}))
@@ -903,7 +903,7 @@ func (br *OVSBridge) GetOVSVersion() (string, Error) {
 	}
 
 	if len(res[0].Rows) == 0 {
-		klog.Warning("Could not find ovs_version in the OVS query result")
+		klog.Info("Could not find ovs_version in the OVS query result")
 		return "", NewTransactionError(fmt.Errorf("no results from OVS query"), false)
 	}
 	return parseOvsVersion(res[0].Rows[0])
@@ -960,7 +960,7 @@ func (br *OVSBridge) GetOVSOtherConfig() (map[string]string, Error) {
 		return nil, NewTransactionError(err, temporary)
 	}
 	if len(res[0].Rows) == 0 {
-		klog.Warning("Could not find other_config")
+		klog.Info("Could not find other_config")
 		return nil, nil
 	}
 	otherConfigs := res[0].Rows[0].(map[string]interface{})["other_config"].([]interface{})
