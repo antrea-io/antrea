@@ -85,7 +85,7 @@ func newCACertController(caContentProvider dynamiccertificates.CAContentProvider
 func (c *CACertController) UpdateCertificate(ctx context.Context) error {
 	if controller, ok := c.caContentProvider.(dynamiccertificates.ControllerRunner); ok {
 		if err := controller.RunOnce(ctx); err != nil {
-			klog.Warningf("Updating of CA content failed: %v", err)
+			klog.ErrorS(err, "Updating of CA content failed")
 			c.Enqueue()
 			return err
 		}
@@ -304,13 +304,13 @@ func (c *CACertController) syncConfigMap(caCert []byte) error {
 func (c *CACertController) RunOnce(ctx context.Context) error {
 	if controller, ok := c.caContentProvider.(dynamiccertificates.ControllerRunner); ok {
 		if err := controller.RunOnce(ctx); err != nil {
-			klog.Warningf("Initial population of CA content failed: %v", err)
+			klog.ErrorS(err, "Initial population of CA content failed")
 			c.Enqueue()
 			return err
 		}
 	}
 	if err := c.syncCACert(); err != nil {
-		klog.Warningf("Initial sync of CA content failed: %v", err)
+		klog.ErrorS(err, "Initial sync of CA content failed")
 		c.Enqueue()
 		return err
 	}

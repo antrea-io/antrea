@@ -2252,7 +2252,7 @@ func (c *Client) AddSNATRule(snatIP net.IP, mark uint32) error {
 func (c *Client) DeleteSNATRule(mark uint32) error {
 	value, ok := c.markToSNATIP.Load(mark)
 	if !ok {
-		klog.Warningf("Didn't find SNAT rule with mark %#x", mark)
+		klog.InfoS("Didn't find SNAT rule with mark", "mark", fmt.Sprintf("%#x", mark))
 		return nil
 	}
 	c.markToSNATIP.Delete(mark)

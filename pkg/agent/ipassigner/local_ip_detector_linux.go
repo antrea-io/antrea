@@ -136,7 +136,7 @@ func (d *localIPDetector) listAndWatchIPAddresses(stopCh <-chan struct{}) {
 			return
 		case addrUpdate, ok := <-ch:
 			if !ok {
-				klog.Warning("IP address update channel was closed")
+				klog.InfoS("IP address update channel was closed")
 				return
 			}
 			klog.V(4).Infof("Received IP address update: %v", addrUpdate)

@@ -195,7 +195,7 @@ func (h *Handle) EnableRSCOnVSwitch(vSwitch string) error {
 	// supported.
 	// https://docs.microsoft.com/en-us/windows-server/networking/technologies/hpn/rsc-in-the-vswitch
 	if len(stdout) == 0 {
-		klog.Warning("Receive Segment Coalescing (RSC) is not supported by this Windows Server version")
+		klog.ErrorS(nil, "Receive Segment Coalescing (RSC) is not supported by this Windows Server version")
 		return nil
 	}
 	if strings.EqualFold(stdout, "True") {

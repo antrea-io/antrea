@@ -319,7 +319,7 @@ func (o *Options) validateFlowExporterConfig() error {
 			}
 			if o.activeFlowTimeout < o.pollInterval {
 				o.activeFlowTimeout = o.pollInterval
-				klog.Warningf("ActiveFlowExportTimeout must be greater than or equal to FlowPollInterval")
+				klog.InfoS("ActiveFlowExportTimeout must be greater than or equal to FlowPollInterval")
 			}
 		}
 		// Parse the given inactiveFlowExportTimeout config
@@ -330,7 +330,7 @@ func (o *Options) validateFlowExporterConfig() error {
 			}
 			if o.idleFlowTimeout < o.pollInterval {
 				o.idleFlowTimeout = o.pollInterval
-				klog.Warningf("IdleFlowExportTimeout must be greater than or equal to FlowPollInterval")
+				klog.InfoS("IdleFlowExportTimeout must be greater than or equal to FlowPollInterval")
 			}
 		}
 		if (o.activeFlowTimeout > defaultStaleConnectionTimeout) || (o.idleFlowTimeout > defaultStaleConnectionTimeout) {
