@@ -286,6 +286,7 @@ func TestConntrackConnectionStore_AddOrUpdateConn_FromExternalConns(t *testing.T
 
 	zoneZeroConn := &connection.Connection{
 		OriginalDestinationAddress: netip.MustParseAddr("172.18.0.3"),
+		OriginalDestinationPort:    12345,
 		StartTime:                  refTime.Add(-(time.Second * 50)),
 		StopTime:                   refTime.Add(-(time.Second * 30)),
 		LastExportTime:             refTime.Add(-(time.Second * 50)),
@@ -301,6 +302,7 @@ func TestConntrackConnectionStore_AddOrUpdateConn_FromExternalConns(t *testing.T
 	}
 	updatedZoneZeroConn := &connection.Connection{
 		OriginalDestinationAddress: netip.MustParseAddr("172.18.0.3"),
+		OriginalDestinationPort:    12345,
 		StartTime:                  refTime.Add(-(time.Second * 50)),
 		StopTime:                   refTime,
 		FlowKey: connection.Tuple{
@@ -356,7 +358,7 @@ func TestConntrackConnectionStore_AddOrUpdateConn_FromExternalConns(t *testing.T
 	}
 	expectedConn := connection.Connection{
 		OriginalDestinationAddress: netip.MustParseAddr("172.18.0.3"),
-		OriginalDestinationPort:    80,
+		OriginalDestinationPort:    12345,
 		StartTime:                  refTime.Add(-(time.Second * 50)),
 		StopTime:                   refTime.Add(-(time.Second * 30)),
 		LastExportTime:             refTime.Add(-(time.Second * 50)),
@@ -386,7 +388,7 @@ func TestConntrackConnectionStore_AddOrUpdateConn_FromExternalConns(t *testing.T
 	}
 	updatedExpectedConn := connection.Connection{
 		OriginalDestinationAddress: netip.MustParseAddr("172.18.0.3"),
-		OriginalDestinationPort:    80,
+		OriginalDestinationPort:    12345,
 		StartTime:                  refTime.Add(-(time.Second * 50)),
 		StopTime:                   refTime,
 		LastExportTime:             refTime.Add(-(time.Second * 50)),
@@ -424,7 +426,7 @@ func TestConntrackConnectionStore_AddOrUpdateConn_FromExternalConns(t *testing.T
 
 	// Add Zone Zero
 	protocol, _ := lookupServiceProtocol(zoneZeroConn.FlowKey.Protocol)
-	serviceStr := fmt.Sprintf("%s:%d/%s", zoneZeroConn.OriginalDestinationAddress.String(), zoneZeroConn.FlowKey.DestinationPort, protocol)
+	serviceStr := fmt.Sprintf("%s:%d/%s", zoneZeroConn.OriginalDestinationAddress.String(), zoneZeroConn.OriginalDestinationPort, protocol)
 	mockProxier.EXPECT().GetServiceByIP(serviceStr).Return(servicePortName, true)
 	conntrackConnStore.AddOrUpdateConn(zoneZeroConn)
 
@@ -432,7 +434,7 @@ func TestConntrackConnectionStore_AddOrUpdateConn_FromExternalConns(t *testing.T
 	mockPodStore.EXPECT().GetPodByIPAndTime(zoneZeroConn.FlowKey.SourceAddress.String(), gomock.Any()).Return(nil, false)
 	mockPodStore.EXPECT().GetPodByIPAndTime(antreaZoneConn.FlowKey.DestinationAddress.String(), gomock.Any()).Return(nil, false)
 	protocol, _ = lookupServiceProtocol(antreaZoneConn.FlowKey.Protocol)
-	serviceStr = fmt.Sprintf("%s:%d/%s", expectedConn.OriginalDestinationAddress.String(), antreaZoneConn.OriginalDestinationPort, protocol)
+	serviceStr = fmt.Sprintf("%s:%d/%s", expectedConn.OriginalDestinationAddress.String(), expectedConn.OriginalDestinationPort, protocol)
 	mockProxier.EXPECT().GetServiceByIP(serviceStr).Return(servicePortName, true)
 	ingressOfID := binary.BigEndian.Uint32(expectedConn.Labels[12:16])
 	npQuerier.EXPECT().GetRuleByFlowID(ingressOfID).Return(&rule1)
@@ -446,7 +448,7 @@ func TestConntrackConnectionStore_AddOrUpdateConn_FromExternalConns(t *testing.T
 
 	//Add updated Zone Zero
 	protocol, _ = lookupServiceProtocol(updatedZoneZeroConn.FlowKey.Protocol)
-	serviceStr = fmt.Sprintf("%s:%d/%s", updatedZoneZeroConn.OriginalDestinationAddress.String(), updatedZoneZeroConn.FlowKey.DestinationPort, protocol)
+	serviceStr = fmt.Sprintf("%s:%d/%s", updatedZoneZeroConn.OriginalDestinationAddress.String(), updatedZoneZeroConn.OriginalDestinationPort, protocol)
 	mockProxier.EXPECT().GetServiceByIP(serviceStr).Return(servicePortName, true)
 	conntrackConnStore.AddOrUpdateConn(updatedZoneZeroConn)
 
@@ -696,9 +698,10 @@ func TestCorrelateExternal(t *testing.T) {
 			Protocol:           6,
 			SourcePort:         52142,
 			DestinationPort:    80},
-		Mark:          openflow.ServiceCTMark.GetValue(),
-		ProxySnatIP:   netip.MustParseAddr("172.18.0.2"),
-		ProxySnatPort: uint16(28392),
+		Mark:                    openflow.ServiceCTMark.GetValue(),
+		OriginalDestinationPort: 12345,
+		ProxySnatIP:             netip.MustParseAddr("172.18.0.2"),
+		ProxySnatPort:           uint16(28392),
 	}
 	antreaZone := connection.Connection{
 		StartTime: refTime,
@@ -722,9 +725,10 @@ func TestCorrelateExternal(t *testing.T) {
 			Protocol:           6,
 			SourcePort:         52142,
 			DestinationPort:    80},
-		Mark:          openflow.ServiceCTMark.GetValue(),
-		ProxySnatIP:   netip.MustParseAddr("172.18.0.2"),
-		ProxySnatPort: uint16(28392),
+		Mark:                    openflow.ServiceCTMark.GetValue(),
+		OriginalDestinationPort: 12345,
+		ProxySnatIP:             netip.MustParseAddr("172.18.0.2"),
+		ProxySnatPort:           uint16(28392),
 	}
 	CorrelateExternal(&zoneZero, &antreaZone)
 	assert.Equal(t, expected, antreaZone)
