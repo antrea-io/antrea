@@ -307,6 +307,18 @@ func convertPeerConfigToGoBGPPeer(peerConfig bgp.PeerConfig) (*gobgpapi.Peer, er
 			RestartTime: uint32(*peerConfig.GracefulRestartTimeSeconds),
 		}
 	}
+	if peerConfig.KeepaliveTimeSeconds != nil || peerConfig.HoldTimeSeconds != nil {
+		peer.Timers = &gobgpapi.Timers{
+			Config: &gobgpapi.TimersConfig{},
+		}
+		if peerConfig.KeepaliveTimeSeconds != nil {
+			peer.Timers.Config.KeepaliveInterval = uint64(*peerConfig.KeepaliveTimeSeconds)
+		}
+		if peerConfig.HoldTimeSeconds != nil {
+			peer.Timers.Config.HoldTime = uint64(*peerConfig.HoldTimeSeconds)
+		}
+	}
+	// Note: BFD is currently not supported by the GoBGP API version used in Antrea (v3.37.0).
 	return peer, nil
 }
 
