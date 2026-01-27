@@ -204,6 +204,12 @@ func TestAddFQDNRule(t *testing.T) {
 	}
 }
 
+// ruleRealizationUpdate is used in tests to represent a rule realization result.
+type ruleRealizationUpdate struct {
+	ruleId string
+	err    error
+}
+
 type fqdnRuleAddArgs struct {
 	ruleID         string
 	fqdns          []string
@@ -573,7 +579,7 @@ func TestSyncDirtyRules(t *testing.T) {
 				f.syncDirtyRules(fqdn, tc.waitChs[i], tc.addressUpdates[i])
 			}
 			for _, update := range tc.notifications {
-				f.ruleSyncTracker.updateCh <- update
+				f.notifyRuleUpdate(update.ruleId, update.err)
 			}
 			assert.ElementsMatch(t, tc.expectedDirtyRuleSyncCalls, dirtyRuleSyncCalls)
 			for _, waitCh := range tc.waitChs {
@@ -586,6 +592,27 @@ func TestSyncDirtyRules(t *testing.T) {
 			}
 			assert.Equal(t, tc.expectedDirtyRulesRemaining, f.ruleSyncTracker.getDirtyRules())
 		})
+	}
+}
+
+func TestNotifyRuleUpdateNonBlocking(t *testing.T) {
+	controller := gomock.NewController(t)
+	f, _ := newMockFQDNController(t, controller, nil, nil, 0)
+	// Shut down the workqueue to simulate agent shutdown.
+	f.ruleSyncTracker.ruleUpdateQueue.ShutDown()
+
+	done := make(chan struct{})
+	go func() {
+		for i := 0; i < 5; i++ {
+			f.notifyRuleUpdate("test-rule-"+string(rune('0'+i)), nil)
+		}
+		close(done)
+	}()
+
+	select {
+	case <-done:
+	case <-time.After(time.Second):
+		t.Fatal("notifyRuleUpdate blocked after shutdown - would cause goroutine leak")
 	}
 }
 
