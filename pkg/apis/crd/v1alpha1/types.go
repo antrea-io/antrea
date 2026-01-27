@@ -344,6 +344,41 @@ type BGPPeer struct {
 	// GracefulRestartTimeSeconds specifies how long the BGP peer would wait for the BGP session to re-establish after
 	// a restart before deleting stale routes. The range of the value is from 1 to 3600, and the default value is 120.
 	GracefulRestartTimeSeconds *int32 `json:"gracefulRestartTimeSeconds,omitempty"`
+
+	// Timers defines the BGP timers for the peer.
+	Timers *BGPTimers `json:"timers,omitempty"`
+
+	// BFDConfig configures the BFD session for the peer.
+	BFDConfig *BFDConfig `json:"bfdConfig,omitempty"`
+}
+
+type BGPTimers struct {
+	// KeepaliveTimeSeconds specifies the interval between Keepalive messages.
+	// The default value is 0.
+	KeepaliveTimeSeconds *int32 `json:"keepaliveTimeSeconds,omitempty"`
+	// HoldTimeSeconds specifies the duration that the receiver should retain the route.
+	// The default value is 0.
+	HoldTimeSeconds *int32 `json:"holdTimeSeconds,omitempty"`
+	// ConnectRetryTimeSeconds specifies the time to wait before retrying a failed connection.
+	// The default value is 0.
+	ConnectRetryTimeSeconds *int32 `json:"connectRetryTimeSeconds,omitempty"`
+}
+
+type BFDConfig struct {
+	// Enabled specifies whether BFD is enabled for the BGP peer.
+	Enabled bool `json:"enabled"`
+
+	// MinReceiveInterval specifies the minimum interval in milliseconds between BFD control packets received from the peer.
+	// The range of the value is from 10 to 60000, and the default value is 300.
+	MinReceiveInterval *int32 `json:"minReceiveInterval,omitempty"`
+
+	// MinTransmitInterval specifies the minimum interval in milliseconds between BFD control packets sent to the peer.
+	// The range of the value is from 10 to 60000, and the default value is 300.
+	MinTransmitInterval *int32 `json:"minTransmitInterval,omitempty"`
+
+	// Multiplier specifies the detection multiplier.
+	// The range of the value is from 2 to 255, and the default value is 3.
+	Multiplier *int32 `json:"multiplier,omitempty"`
 }
 
 type PodReference struct {

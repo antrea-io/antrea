@@ -307,6 +307,26 @@ func convertPeerConfigToGoBGPPeer(peerConfig bgp.PeerConfig) (*gobgpapi.Peer, er
 			RestartTime: uint32(*peerConfig.GracefulRestartTimeSeconds),
 		}
 	}
+	if peerConfig.Timers != nil {
+		peer.Timers = &gobgpapi.Timers{
+			Config: &gobgpapi.TimersConfig{},
+		}
+		if peerConfig.Timers.HoldTimeSeconds != nil {
+			peer.Timers.Config.HoldTime = uint64(*peerConfig.Timers.HoldTimeSeconds)
+		}
+		if peerConfig.Timers.KeepaliveTimeSeconds != nil {
+			peer.Timers.Config.KeepaliveInterval = uint64(*peerConfig.Timers.KeepaliveTimeSeconds)
+		}
+		if peerConfig.Timers.ConnectRetryTimeSeconds != nil {
+			peer.Timers.Config.ConnectRetry = uint64(*peerConfig.Timers.ConnectRetryTimeSeconds)
+		}
+	}
+
+	// TODO: Implement BFD configuration when available in GoBGP API.
+	// Currently, GoBGP v3 does not expose BFD configuration directly via AddPeerRequest.
+	// if peerConfig.BFDConfig != nil {
+	// }
+
 	return peer, nil
 }
 
