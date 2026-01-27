@@ -62,9 +62,8 @@ type aggregationProcess struct {
 	// record map.
 	inactiveExpiryTimeout time.Duration
 	// stopChan is the channel to receive stop message
-	stopChan            chan bool
-	clock               clock.Clock
-	FromExternalFlowMap map[string]*FromExternalFlowStash
+	stopChan chan bool
+	clock    clock.Clock
 	// FromExternalCache stores flows that need correlation
 	FromExternalCache map[string]*flowpb.Flow
 	nodeLister        listers.NodeLister
@@ -75,15 +74,6 @@ type AggregationInput struct {
 	WorkerNum             int
 	ActiveExpiryTimeout   time.Duration
 	InactiveExpiryTimeout time.Duration
-}
-
-// Holds the two records that make up the FromExternal records
-type FromExternalFlowStash struct {
-	// The record from conntrack zone 0 containing the original source IP
-	SourceNodeFlow *AggregationFlowRecord
-	// The record from the antrea conntrack zone containing the destination
-	// pod information
-	DestinationNodeFlow *AggregationFlowRecord
 }
 
 func initAggregationProcessWithClock(input AggregationInput, clock clock.Clock, nodeLister listers.NodeLister) (*aggregationProcess, error) {
@@ -104,7 +94,6 @@ func initAggregationProcessWithClock(input AggregationInput, clock clock.Clock, 
 		input.InactiveExpiryTimeout,
 		make(chan bool),
 		clock,
-		make(map[string]*FromExternalFlowStash),
 		make(map[string]*flowpb.Flow),
 		nodeLister,
 	}, nil
