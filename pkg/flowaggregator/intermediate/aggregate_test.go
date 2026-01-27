@@ -400,7 +400,7 @@ var sourceNodeIP = &flowpb.IP{
 }
 var destinationServicePortName = "namespace/service-name:serviceportname"
 
-func generateSourceNodeFlowAndFlowKey() (*flowpb.Flow, *FlowKey) { // can this just be a variable? is it modified anywhere?
+func generateSourceNodeFlowAndFlowKey() (*flowpb.Flow, *FlowKey) {
 	sourceNodeRecord := &flowpb.Flow{
 		K8S: &flowpb.Kubernetes{
 			FlowType:                   flowpb.FlowType_FLOW_TYPE_FROM_EXTERNAL,
@@ -487,9 +487,9 @@ func TestCorrelateRecordsForFromExternalFlow(t *testing.T) {
 		// Add the sourceNodeFlow
 		sourceNodeRecord, sourceNodeRecordFlowKey := generateSourceNodeFlowAndFlowKey()
 		ap.addOrUpdateRecordInMap(sourceNodeRecordFlowKey, sourceNodeRecord, false)
-		key := ap.generateFromExternalCacheKey(sourceNodeRecord)
-		_, exists := ap.FromExternalCache[key]
-		assert.True(t, exists, "Expected flow to have been cached")
+		key := ap.generateFromExternalStoreKey(sourceNodeRecord)
+		_, exists := ap.FromExternalStore[key]
+		assert.True(t, exists, "Expected flow to have been stored")
 
 		// Add the destinationNodeFlow
 		destinationNodeRecord, destinationNodeRecordFlowKey := generateDestinationNodeFlowAndFlowKey()
@@ -515,7 +515,7 @@ func TestCorrelateRecordsForFromExternalFlow(t *testing.T) {
 
 		// Ensure cleanup
 		flow := ap.CorrelateExternal(destinationNodeRecord)
-		assert.Nil(t, flow, "Expected flow to have been cleared from cache")
+		assert.Nil(t, flow, "Expected flow to have been cleared from store")
 	})
 	t.Run("destination node flow arrives first", func(t *testing.T) {
 		ap := newAggregationProcess()
@@ -523,9 +523,9 @@ func TestCorrelateRecordsForFromExternalFlow(t *testing.T) {
 		// Add the destinationNodeFlow
 		destinationNodeRecord, destinationNodeRecordFlowKey := generateDestinationNodeFlowAndFlowKey()
 		ap.addOrUpdateRecordInMap(destinationNodeRecordFlowKey, destinationNodeRecord, false)
-		key := ap.generateFromExternalCacheKey(destinationNodeRecord)
-		_, exists := ap.FromExternalCache[key]
-		assert.True(t, exists, "Expected flow to have been cached")
+		key := ap.generateFromExternalStoreKey(destinationNodeRecord)
+		_, exists := ap.FromExternalStore[key]
+		assert.True(t, exists, "Expected flow to have been stored")
 
 		// Add the sourceNodeFlow
 		sourceNodeRecord, sourceNodeRecordFlowKey := generateSourceNodeFlowAndFlowKey()
@@ -552,7 +552,7 @@ func TestCorrelateRecordsForFromExternalFlow(t *testing.T) {
 
 		// Ensure cleanup
 		flow := ap.CorrelateExternal(sourceNodeRecord)
-		assert.Nil(t, flow, "Expected flow to have been cleared from cache")
+		assert.Nil(t, flow, "Expected flow to have been cleared from store")
 	})
 }
 
@@ -1131,27 +1131,26 @@ func TestFromExternalCorrelationRequired(t *testing.T) {
 				assert.False(t, ap.FromExternalCorrelationRequired(tc.flow))
 			}
 		})
-
 	}
 }
 
-func TestCacheIfNew(t *testing.T) {
-	t.Run("cache", func(t *testing.T) {
+func TestStoreIfNew(t *testing.T) {
+	t.Run("storing first flow", func(t *testing.T) {
 		ap := newAggregationProcess()
 		sourceNodeFlow, _ := generateSourceNodeFlowAndFlowKey()
-		isCached := ap.CacheIfNew(sourceNodeFlow)
-		assert.True(t, isCached, "Expected not to find flow in an empty cache")
+		exists := ap.StoreIfNew(sourceNodeFlow)
+		assert.True(t, exists, "Expected not to find flow in an empty store")
 
-		key := ap.generateFromExternalCacheKey(sourceNodeFlow)
-		_, exists := ap.FromExternalCache[key]
-		assert.True(t, exists, "Expected flow to have been cached")
+		key := ap.generateFromExternalStoreKey(sourceNodeFlow)
+		_, exists = ap.FromExternalStore[key]
+		assert.True(t, exists, "Expected flow to have been stored")
 	})
-	t.Run("already in cache", func(t *testing.T) {
+	t.Run("flow is in store", func(t *testing.T) {
 		ap := newAggregationProcess()
 		sourceNodeFlow, _ := generateSourceNodeFlowAndFlowKey()
 		destinationNodeFlow, _ := generateDestinationNodeFlowAndFlowKey()
-		ap.CacheIfNew(sourceNodeFlow)
-		isCached := ap.CacheIfNew(destinationNodeFlow)
-		assert.False(t, isCached, "Expected other half of flow to have been cached")
+		ap.StoreIfNew(sourceNodeFlow)
+		exists := ap.StoreIfNew(destinationNodeFlow)
+		assert.False(t, exists, "Expected other half of flow to have been stored")
 	})
 }
