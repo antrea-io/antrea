@@ -1704,6 +1704,7 @@ func getServiceIPStrings(s *types.ServiceInfo, nodePortAddresses []net.IP) []str
 	addSvcInfoFromIPs(lbIPs)
 	addSvcInfoFromIPs(externalIPs)
 	if s.NodePort() != 0 {
+		port = s.NodePort()
 		addSvcInfoFromIPs(nodePortAddresses)
 	}
 	svcInfos = append(svcInfos, s.String())
