@@ -70,6 +70,9 @@ func (d *agentDumper) DumpHostNetworkInfo(basedir string) error {
 	if err := d.dumpIPToolInfo(basedir); err != nil {
 		return err
 	}
+	if err := d.dumpSysctlInfo(basedir); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -109,19 +112,55 @@ func (d *agentDumper) dumpNFTables(basedir string) error {
 }
 
 func (d *agentDumper) dumpIPToolInfo(basedir string) error {
-	dump := func(name string) error {
-		output, err := d.executor.Command("ip", name).CombinedOutput()
+	dump := func(name string, args ...string) error {
+		path := name
+		if len(args) > 0 {
+			path = strings.Join(append([]string{name}, args...), "_")
+			// "show" and "table" are common words in ip command output, removing them to shorten the file name.
+			path = strings.ReplaceAll(path, "show_", "")
+			path = strings.ReplaceAll(path, "table_", "")
+			path = strings.ReplaceAll(path, " ", "_")
+		}
+		cmdArgs := append([]string{name}, args...)
+		output, err := d.executor.Command("ip", cmdArgs...).CombinedOutput()
 		if err != nil {
 			return fmt.Errorf("error when dumping %s: %w", name, err)
 		}
-		return writeFile(d.fs, filepath.Join(basedir, name), name, output)
+		return writeFile(d.fs, filepath.Join(basedir, path), path, output)
 	}
-	for _, item := range []string{"route", "link", "address"} {
+	// "ip route show table all" gets all the routes in all the tables.
+	if err := dump("route", "show", "table", "all"); err != nil {
+		return err
+	}
+	for _, item := range []string{"link", "address", "rule"} {
 		if err := dump(item); err != nil {
 			return err
 		}
 	}
 	return nil
+}
+
+func (d *agentDumper) dumpSysctlInfo(basedir string) error {
+	// Dump the critical interface configurations.
+	// Because sysctl does not support glob patterns in 1.25+ consistently across distros or without -r,
+	// and to ensure we capture exactly what is needed without noise, we use strict patterns if possible.
+	// However, sysctl -a is standard. We will use a simple command to dump everything matching the pattern.
+	// Using "sysctl -a" and filtering might be heavy but "sysctl net.ipv4.conf" prints all of them.
+	// Let's rely on `sysctl -a` with `grep` if possible, but `d.executor` doesn't support shell pipes directly easily.
+	// Instead, we will list the specific keys we want: all interfaces.
+	// Actually, `sysctl net.ipv4.conf` works to list everything under that hierarchy on most modern systems.
+	cmd := d.executor.Command("sysctl", "net.ipv4.conf")
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		// Fallback for systems where top-level key list might fail or strict strictness:
+		// Try `sysctl -a -r "net.ipv4.conf"`.
+		cmd = d.executor.Command("sysctl", "-a", "-r", "net.ipv4.conf")
+		output, err = cmd.CombinedOutput()
+		if err != nil {
+			return fmt.Errorf("error when dumping sysctl net.ipv4.conf: %w", err)
+		}
+	}
+	return writeFile(d.fs, filepath.Join(basedir, "sysctl_net_ipv4_conf"), "sysctl_net_ipv4_conf", output)
 }
 
 func (d *agentDumper) DumpMemberlist(basedir string) error {
