@@ -198,9 +198,7 @@ func (cs *ConntrackConnectionStore) AddOrUpdateConn(conn *connection.Connection)
 
 	if conn.Zone == 0 {
 		clusterIP := conn.OriginalDestinationAddress.String()
-		// Since the Proxier uses TargetPort for lookups, we use DestinationPort (the backend port)
-		// instead of OriginalDestinationPort (which is the NodePort Port)
-		svcPort := conn.FlowKey.DestinationPort
+		svcPort := conn.OriginalDestinationPort
 		protocol, _ := lookupServiceProtocol(conn.FlowKey.Protocol)
 		serviceStr := fmt.Sprintf("%s:%d/%s", clusterIP, svcPort, protocol)
 		_, exists := cs.antreaProxier.GetServiceByIP(serviceStr)
@@ -354,4 +352,5 @@ func CorrelateExternal(zoneZero, antreaZone *connection.Connection) {
 	antreaZone.ProxySnatIP = zoneZero.ProxySnatIP
 	antreaZone.ProxySnatPort = zoneZero.ProxySnatPort
 	antreaZone.OriginalDestinationAddress = zoneZero.OriginalDestinationAddress
+	antreaZone.OriginalDestinationPort = zoneZero.OriginalDestinationPort
 }
