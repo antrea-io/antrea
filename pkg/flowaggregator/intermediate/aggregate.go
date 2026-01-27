@@ -64,8 +64,8 @@ type aggregationProcess struct {
 	// stopChan is the channel to receive stop message
 	stopChan chan bool
 	clock    clock.Clock
-	// FromExternalCache stores flows that need correlation
-	FromExternalCache map[string]*flowpb.Flow
+	// FromExternalStore stores flows that need correlation
+	FromExternalStore map[string]*flowpb.Flow
 	nodeLister        listers.NodeLister
 }
 
@@ -342,8 +342,8 @@ func (a *aggregationProcess) addOrUpdateRecordInMap(flowKey *FlowKey, record *fl
 	defer a.mutex.Unlock()
 
 	if a.FromExternalCorrelationRequired(record) {
-		// Cache the record if not yet ready for correlation and return. Otherwise, pass through the correlated record
-		if a.CacheIfNew(record) {
+		// Store the record if not yet ready for correlation and return. Otherwise, pass through the correlated record
+		if a.StoreIfNew(record) {
 			return
 		} else {
 			record = a.CorrelateExternal(record)
@@ -838,7 +838,7 @@ func (a *aggregationProcess) FromExternalCorrelationRequired(flow *flowpb.Flow) 
 }
 
 // Return a key unique to the pair of flows that make up a FromExternal flow
-func (a *aggregationProcess) generateFromExternalCacheKey(record *flowpb.Flow) string {
+func (a *aggregationProcess) generateFromExternalStoreKey(record *flowpb.Flow) string {
 	var gateway string
 	var SNATPort string
 
@@ -863,44 +863,44 @@ func (a *aggregationProcess) generateFromExternalCacheKey(record *flowpb.Flow) s
 	)
 }
 
-// If FromExternal flow is not yet in the cache, cache it and return true.
-// If the flow is in the cache, return false
-func (a *aggregationProcess) CacheIfNew(flow *flowpb.Flow) bool {
-	key := a.generateFromExternalCacheKey(flow)
-	if _, exists := a.FromExternalCache[key]; !exists {
-		a.FromExternalCache[key] = flow
+// If FromExternal flow is not yet in the store, add it and return true.
+// If the flow is in the store, return false
+func (a *aggregationProcess) StoreIfNew(flow *flowpb.Flow) bool {
+	key := a.generateFromExternalStoreKey(flow)
+	if _, exists := a.FromExternalStore[key]; !exists {
+		a.FromExternalStore[key] = flow
 		return true
 	}
 	return false
 }
 
-// Return a correlated flow from the given flow and it's matching record from the cache. Returns
-// nil if there was no matching flow in cache. Upon successful correlation, delete the flow from
-// the cache.
+// Return a correlated flow from the given flow and it's matching record from the store. Returns
+// nil if there was no matching flow in store. Upon successful correlation, delete the flow from
+// the store.
 func (a *aggregationProcess) CorrelateExternal(flow *flowpb.Flow) *flowpb.Flow {
-	key := a.generateFromExternalCacheKey(flow)
-	cachedFlow, exists := a.FromExternalCache[key]
+	key := a.generateFromExternalStoreKey(flow)
+	storedFlow, exists := a.FromExternalStore[key]
 	if !exists {
 		return nil
 	}
-	delete(a.FromExternalCache, key)
+	delete(a.FromExternalStore, key)
 	if a.isGateway(flow.Ip.Source) {
-		flow.Ip.Source = cachedFlow.Ip.Source
+		flow.Ip.Source = storedFlow.Ip.Source
 		if flow.K8S != nil {
-			flow.K8S.DestinationServiceIp = cachedFlow.K8S.DestinationServiceIp
-			flow.K8S.DestinationServicePortName = cachedFlow.K8S.DestinationServicePortName
-			flow.K8S.DestinationServicePort = cachedFlow.K8S.DestinationServicePort
-			flow.K8S.DestinationClusterIp = cachedFlow.K8S.DestinationClusterIp
+			flow.K8S.DestinationServiceIp = storedFlow.K8S.DestinationServiceIp
+			flow.K8S.DestinationServicePortName = storedFlow.K8S.DestinationServicePortName
+			flow.K8S.DestinationServicePort = storedFlow.K8S.DestinationServicePort
+			flow.K8S.DestinationClusterIp = storedFlow.K8S.DestinationClusterIp
 		}
 		return flow
 	} else {
-		cachedFlow.Ip.Source = flow.Ip.Source
-		if cachedFlow.K8S != nil {
-			cachedFlow.K8S.DestinationServiceIp = flow.K8S.DestinationServiceIp
-			cachedFlow.K8S.DestinationServicePortName = flow.K8S.DestinationServicePortName
-			cachedFlow.K8S.DestinationServicePort = flow.K8S.DestinationServicePort
-			cachedFlow.K8S.DestinationClusterIp = flow.K8S.DestinationClusterIp
+		storedFlow.Ip.Source = flow.Ip.Source
+		if storedFlow.K8S != nil {
+			storedFlow.K8S.DestinationServiceIp = flow.K8S.DestinationServiceIp
+			storedFlow.K8S.DestinationServicePortName = flow.K8S.DestinationServicePortName
+			storedFlow.K8S.DestinationServicePort = flow.K8S.DestinationServicePort
+			storedFlow.K8S.DestinationClusterIp = flow.K8S.DestinationClusterIp
 		}
-		return cachedFlow
+		return storedFlow
 	}
 }
