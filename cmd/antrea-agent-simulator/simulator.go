@@ -144,7 +144,7 @@ func (w *watchWrapper) watch() {
 	// Call the watch func which is initialized in watchWrapper
 	watcher, err := w.watchFunc()
 	if err != nil {
-		klog.InfoS("Failed to start watch", "name", w.name, "err", err)
+		klog.ErrorS(err, "Failed to start watch", "name", w.name)
 		return
 	}
 	eventCount := 0

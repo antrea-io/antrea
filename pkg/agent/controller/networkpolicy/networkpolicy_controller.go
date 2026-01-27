@@ -808,7 +808,7 @@ func (c *Controller) syncRule(key string) error {
 
 	isNodeNetworkPolicy := rule.isNodeNetworkPolicyRule()
 	if !c.nodeNetworkPolicyEnabled && isNodeNetworkPolicy {
-		klog.InfoS("Feature gate NodeNetworkPolicy is not enabled, skipping ruleID", "ruleID", key)
+		klog.InfoS("Feature gate NodeNetworkPolicy is not enabled, skipping rule", "ruleID", key)
 		return nil
 	}
 
@@ -864,7 +864,7 @@ func (c *Controller) syncRules(keys []string) error {
 		} else {
 			isNodeNetworkPolicy := rule.isNodeNetworkPolicyRule()
 			if !c.nodeNetworkPolicyEnabled && isNodeNetworkPolicy {
-				klog.InfoS("Feature gate NodeNetworkPolicy is not enabled, skipping ruleID", "ruleID", key)
+				klog.InfoS("Feature gate NodeNetworkPolicy is not enabled, skipping rule", "ruleID", key)
 				continue
 			}
 			if c.l7NetworkPolicyEnabled && len(rule.L7Protocols) != 0 {
@@ -988,14 +988,14 @@ func (w *watcher) watch() {
 	klog.Infof("Starting watch for %s", w.objectType)
 	watcher, err := w.watchFunc()
 	if err != nil {
-		klog.InfoS("Failed to start watch", "objectType", w.objectType, "err", err)
+		klog.ErrorS(err, "Failed to start watch", "objectType", w.objectType)
 		w.fallback()
 		return
 	}
 	// Watch method doesn't return error but "emptyWatch" in case of some partial data errors,
-	// e.g. timeout error. Make sure that watcher is not empty and log info otherwise.
+	// e.g. timeout error. Make sure that watcher is not empty and log error otherwise.
 	if reflect.TypeOf(watcher) == reflect.TypeOf(emptyWatch) {
-		klog.InfoS("Failed to start watch, please ensure antrea service is reachable for the agent", "objectType", w.objectType)
+		klog.ErrorS(nil, "Failed to start watch, please ensure antrea service is reachable for the agent", "objectType", w.objectType)
 		w.fallback()
 		return
 	}

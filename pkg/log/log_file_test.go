@@ -68,7 +68,6 @@ func testLogging() {
 	// Log 100 lines, ~100K bytes.
 	for i := 0; i < 100; i++ {
 		klog.Infof("%d: %s", i, string(line))
-		klog.Infof("%d: %s", i, string(line))
 	}
 	FlushLogs()
 }

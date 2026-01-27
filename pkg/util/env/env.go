@@ -123,7 +123,7 @@ func IsCloudEKS() bool {
 func GetAntreaNamespace() string {
 	namespace := GetPodNamespace()
 	if namespace == "" {
-		klog.InfoS("Failed to get Pod Namespace from environment. Using default as the Antrea Service Namespace", "defaultNamespace", defaultAntreaNamespace)
+		klog.InfoS("Failed to get Pod Namespace from environment, using default Namespace for Antrea Service", "defaultNamespace", defaultAntreaNamespace)
 		namespace = defaultAntreaNamespace
 	}
 	return namespace

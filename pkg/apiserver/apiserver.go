@@ -141,7 +141,7 @@ type APIServer struct {
 func (s *APIServer) Run(ctx context.Context) error {
 	// Make sure CACertController runs once to publish the CA cert before starting APIServer.
 	if err := caCertController.RunOnce(ctx); err != nil {
-		klog.InfoS("caCertController RunOnce failed", "error", err)
+		klog.ErrorS(err, "caCertController RunOnce failed")
 	}
 	go s.caCertController.Run(ctx, 1)
 
