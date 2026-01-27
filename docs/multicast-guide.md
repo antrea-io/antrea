@@ -162,7 +162,7 @@ interface only.
 ### Maximum number of receiver groups on one Node
 
 A Linux host limits the maximum number of multicast groups it can subscribe to;
-the default number is 20. The limit can be changed by setting [/proc/sys/net/ipv4/igmp_max_memberships](https://sysctl-explorer.net/net/ipv4/igmp_max_memberships/).
+the default number is 20. The limit can be changed by setting [/proc/sys/net/ipv4/igmp_max_memberships](https://docs.kernel.org/networking/ip-sysctl.html).
 Users are responsible for changing the limit if Pods on the Node are expected to
 join more than 20 groups.
 
