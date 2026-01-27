@@ -86,7 +86,7 @@
           org_list: '{antrea_org_list}'
           white_list: '{antrea_white_list}'
           only_trigger_phrase: true
-          trigger_permit_all: true
+          trigger_permit_all: false
           throttle_concurrent_builds_category:
             - e2e-lock-per-testbed
           throttle_concurrent_builds_enabled: 'true'
@@ -147,7 +147,7 @@
           org_list: '{antrea_org_list}'
           white_list: '{antrea_white_list}'
           only_trigger_phrase: true
-          trigger_permit_all: true
+          trigger_permit_all: false
           throttle_concurrent_builds_category:
             - e2e-lock-per-testbed
           throttle_concurrent_builds_enabled: 'true'
@@ -208,7 +208,7 @@
           org_list: '{antrea_org_list}'
           white_list: '{antrea_white_list}'
           only_trigger_phrase: true
-          trigger_permit_all: true
+          trigger_permit_all: false
           throttle_concurrent_builds_category:
             - e2e-lock-per-testbed
           throttle_concurrent_builds_enabled: 'true'
@@ -268,7 +268,7 @@
           org_list: '{antrea_org_list}'
           white_list: '{antrea_white_list}'
           only_trigger_phrase: true
-          trigger_permit_all: true
+          trigger_permit_all: false
           throttle_concurrent_builds_category:
             - e2e-lock-per-testbed
           throttle_concurrent_builds_enabled: 'true'
@@ -329,7 +329,7 @@
           org_list: '{antrea_org_list}'
           white_list: '{antrea_white_list}'
           only_trigger_phrase: true
-          trigger_permit_all: true
+          trigger_permit_all: false
           throttle_concurrent_builds_category:
             - e2e-lock-per-testbed
           throttle_concurrent_builds_enabled: 'true'
@@ -390,7 +390,7 @@
           org_list: '{antrea_org_list}'
           white_list: '{antrea_white_list}'
           only_trigger_phrase: true
-          trigger_permit_all: true
+          trigger_permit_all: false
           throttle_concurrent_builds_category:
             - e2e-lock-per-testbed
           throttle_concurrent_builds_enabled: 'true'
@@ -555,7 +555,7 @@
             org_list: '{antrea_org_list}'
             white_list: '{antrea_white_list}'
             only_trigger_phrase: true
-            trigger_permit_all: true
+            trigger_permit_all: false
             throttle_concurrent_builds_category:
                 - e2e-lock-per-testbed
             throttle_concurrent_builds_enabled: 'true'
@@ -617,7 +617,7 @@
             org_list: '{antrea_org_list}'
             white_list: '{antrea_white_list}'
             only_trigger_phrase: true
-            trigger_permit_all: true
+            trigger_permit_all: false
             throttle_concurrent_builds_category:
                 - e2e-lock-per-testbed
             throttle_concurrent_builds_enabled: 'true'
@@ -751,7 +751,7 @@
             org_list: '{antrea_org_list}'
             white_list: '{antrea_white_list}'
             only_trigger_phrase: true
-            trigger_permit_all: true
+            trigger_permit_all: false
             throttle_concurrent_builds_category:
                 - e2e-lock-per-testbed
             throttle_concurrent_builds_enabled: 'true'
@@ -861,7 +861,7 @@
           org_list: '{antrea_org_list}'
           white_list: '{antrea_white_list}'
           only_trigger_phrase: true
-          trigger_permit_all: true
+          trigger_permit_all: false
           throttle_concurrent_builds_enabled: 'true'
           status_context: jenkins-rancher-e2e
           status_url: --none--
@@ -924,7 +924,7 @@
           org_list: '{antrea_org_list}'
           white_list: '{antrea_white_list}'
           only_trigger_phrase: true
-          trigger_permit_all: true
+          trigger_permit_all: false
           throttle_concurrent_builds_enabled: 'true'
           status_context: jenkins-rancher-conformance
           status_url: --none--
@@ -987,7 +987,7 @@
           org_list: '{antrea_org_list}'
           white_list: '{antrea_white_list}'
           only_trigger_phrase: true
-          trigger_permit_all: true
+          trigger_permit_all: false
           throttle_concurrent_builds_enabled: 'true'
           status_context: jenkins-rancher-networkpolicy
           status_url: --none--
@@ -1049,7 +1049,7 @@
           org_list: '{antrea_org_list}'
           white_list: '{antrea_white_list}'
           only_trigger_phrase: true
-          trigger_permit_all: true
+          trigger_permit_all: false
           throttle_concurrent_builds_category:
             - e2e-lock-per-testbed
           throttle_concurrent_builds_enabled: 'true'
@@ -1085,7 +1085,7 @@
           org_list: '{antrea_org_list}'
           white_list: '{antrea_white_list}'
           only_trigger_phrase: true
-          trigger_permit_all: true
+          trigger_permit_all: false
           throttle_concurrent_builds_category:
             - e2e-lock-per-testbed
           throttle_concurrent_builds_enabled: 'true'
@@ -1121,7 +1121,7 @@
           org_list: '{antrea_org_list}'
           white_list: '{antrea_white_list}'
           only_trigger_phrase: true
-          trigger_permit_all: true
+          trigger_permit_all: false
           throttle_concurrent_builds_category:
             - e2e-lock-per-testbed
           throttle_concurrent_builds_enabled: 'true'
@@ -1157,7 +1157,7 @@
            org_list: '{antrea_org_list}'
            white_list: '{antrea_white_list}'
            only_trigger_phrase: true
-           trigger_permit_all: true
+           trigger_permit_all: false
            status_context: jenkins-stop-all-jobs
            status_url: --none--
            success_status: Build finished.
