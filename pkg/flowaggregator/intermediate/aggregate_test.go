@@ -27,6 +27,7 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/labels"
+	listers "k8s.io/client-go/listers/core/v1"
 	clocktesting "k8s.io/utils/clock/testing"
 
 	flowpb "antrea.io/antrea/pkg/apis/flow/v1alpha1"
@@ -1007,69 +1008,64 @@ func (m invalidMockListerB) Get(name string) (*corev1.Node, error) {
 
 func TestIsGateway(t *testing.T) {
 	testCases := []struct {
-		name     string
-		ip       []byte
-		expected bool
+		name       string
+		ip         []byte
+		expected   bool
+		nodeLister listers.NodeLister
 	}{
 		{
 			"IP is a node gateway",
 			gatewayIP,
 			true,
+			mockLister{},
 		},
 		{
 			"IP is not a gateway",
 			externalIP,
 			false,
+			mockLister{},
 		},
 		{
 			"invalid ip",
 			[]byte{},
 			false,
+			mockLister{},
 		},
 		{
 			"nodeLister is nil",
 			gatewayIP,
 			false,
+			nil,
 		},
 		{
 			"failing nodeLister",
 			gatewayIP,
 			false,
+			failingMockLister{},
 		},
 		{
 			"empty nodeLister",
 			gatewayIP,
 			false,
+			emptyMockLister{},
 		},
 		{
 			"empty podCIDR",
 			gatewayIP,
 			false,
+			invalidMockLister{},
 		},
 		{
 			"invalid podCIDR",
 			gatewayIP,
 			false,
+			invalidMockListerB{},
 		},
 	}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			ap := newAggregationProcess()
-			if tc.name == "nodeLister is nil" {
-				ap.nodeLister = nil
-			}
-			if tc.name == "failing nodeLister" {
-				ap.nodeLister = failingMockLister{}
-			}
-			if tc.name == "empty nodeLister" {
-				ap.nodeLister = emptyMockLister{}
-			}
-			if tc.name == "empty podCIDR" {
-				ap.nodeLister = invalidMockLister{}
-			}
-			if tc.name == "invalid podCIDR" {
-				ap.nodeLister = invalidMockListerB{}
-			}
+			ap.nodeLister = tc.nodeLister
 
 			if tc.expected {
 				assert.True(t, ap.isGateway(tc.ip))
