@@ -12,6 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+ARG GO_VERSION
+
 FROM ubuntu:24.04 AS cni-binaries
 
 ARG CNI_BINARIES_VERSION
@@ -34,6 +36,15 @@ RUN set -eux; \
     mkdir -p /opt/cni/bin; \
     wget -q -O - https://github.com/containernetworking/plugins/releases/download/$CNI_BINARIES_VERSION/cni-plugins-linux-${pluginsArch}-$CNI_BINARIES_VERSION.tgz | tar xz -C /opt/cni/bin $CNI_PLUGINS
 
+FROM golang:${GO_VERSION} AS iptables-wrapper
+
+ARG IPTABLES_WRAPPER_SHA=c6b9b2d4ee8701f3d476768ab8732d1b85ec7fef
+
+# Can be updated to "git clone --depth 1 --revision ${IPTABLES_WRAPPER_SHA}" when Git 2.49+ is included in the golang image.
+RUN git clone https://github.com/kubernetes-sigs/iptables-wrappers.git /iptables-wrappers && \
+    cd /iptables-wrappers && git checkout ${IPTABLES_WRAPPER_SHA} && \
+    make build
+
 FROM antrea-openvswitch
 
 ARG SURICATA_VERSION
@@ -43,16 +54,12 @@ LABEL description="An Ubuntu based Docker base image for Antrea."
 
 USER root
 
-# See https://github.com/kubernetes-sigs/iptables-wrappers
-# /iptables-wrapper-installer.sh will have permissions of 600.
-# --chmod=700 doesn't work with older versions of Docker and requires DOCKER_BUILDKIT=1, so we use
-# chmod in the RUN command below instead.
-ADD https://raw.githubusercontent.com/kubernetes-sigs/iptables-wrappers/9e6ce59c864623ea71a6f7d59c35fcb13a919b87/iptables-wrapper-installer.sh /iptables-wrapper-installer.sh
+COPY --from=iptables-wrapper /iptables-wrappers/iptables-wrapper-installer.sh /
+COPY --from=iptables-wrapper /iptables-wrappers/bin/iptables-wrapper /
 
 RUN apt-get update && apt-get install -y --no-install-recommends ipset jq inotify-tools gpg-agent software-properties-common nftables && \
     add-apt-repository ppa:oisf/suricata-${SURICATA_VERSION} && apt-get update && apt-get install -y suricata && \
     apt-get remove -y gpg-agent software-properties-common && apt-get autoremove -y && rm -rf /var/cache/apt/* /var/lib/apt/lists/* && \
-    chmod +x /iptables-wrapper-installer.sh && \
     /iptables-wrapper-installer.sh
 
 COPY --from=cni-binaries /opt/cni/bin /opt/cni/bin
