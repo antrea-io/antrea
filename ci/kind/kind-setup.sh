@@ -519,12 +519,13 @@ EOF
   if [[ $KUBE_NODE_IPAM == false ]]; then
     cat <<EOF >> $config_file
   kubeadmConfigPatches:
-    kind: ClusterConfiguration
-    apiVersion: kubeadm.k8s.io/v1beta4
-    controllerManager:
-      extraArgs:
-        - name: controllers
-        - value: "*,bootstrapsigner,tokencleaner,-nodeipam"
+    - |
+      kind: ClusterConfiguration
+      apiVersion: kubeadm.k8s.io/v1beta4
+      controllerManager:
+        extraArgs:
+          - name: controllers
+          - value: "*,bootstrapsigner,tokencleaner,-nodeipam"
 EOF
   fi
   for (( i=0; i<$NUM_WORKERS; i++ )); do
@@ -553,7 +554,12 @@ EOF
     flock -x 200
     echo "$cluster_name $(date +%s)" >> ~/.antrea/.clusters
   ) 200>>~/.antrea/.clusters.lock
-  kind create cluster --name $cluster_name --config $config_file $IMAGE_OPT
+
+  if ! kind create cluster --name $cluster_name --config $config_file $IMAGE_OPT; then
+    echoerr -e "attmped to create kind cluster with name $cluster_name, image options $IMAGE_OPT, config file:"
+    cat $config_file
+    exit 1
+  fi
 
   # force coredns to run on control-plane node because it
   # is attached to kind bridge and uses host dns.
