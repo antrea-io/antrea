@@ -107,6 +107,7 @@ fi
 
 pushd $THIS_DIR > /dev/null
 
+GO_VERSION=$(head -n 1 ../deps/go-version)
 CNI_BINARIES_VERSION=$(head -n 1 ../deps/cni-binaries-version)
 SURICATA_VERSION=$(head -n 1 ../deps/suricata-version)
 
@@ -149,7 +150,7 @@ fi
 function docker_build_and_push() {
     local image="$1"
     local dockerfile="$2"
-    local build_args="--build-arg CNI_BINARIES_VERSION=$CNI_BINARIES_VERSION --build-arg SURICATA_VERSION=$SURICATA_VERSION"
+    local build_args="--build-arg GO_VERSION=$GO_VERSION --build-arg CNI_BINARIES_VERSION=$CNI_BINARIES_VERSION --build-arg SURICATA_VERSION=$SURICATA_VERSION"
     local build_context="--build-context antrea-openvswitch=docker-image://$ANTREA_OPENVSWITCH_IMAGE"
     local cache_args=""
     if $PUSH; then
