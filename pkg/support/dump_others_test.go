@@ -23,11 +23,13 @@ import (
 	"path/filepath"
 	"testing"
 
+	ipsettest "antrea.io/antrea/pkg/agent/util/ipset/testing"
 	"antrea.io/antrea/pkg/util/logdir"
 
 	"github.com/spf13/afero"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/mock/gomock"
 	"k8s.io/utils/exec"
 	testingexec "k8s.io/utils/exec/testing"
 )
@@ -150,6 +152,74 @@ func TestDumpNFTables(t *testing.T) {
 			ok, err := afero.Exists(fs, filePath)
 			require.NoError(t, err)
 			assert.Equal(t, tc.expectFile, ok, "Expected nftables file existence to be %t", tc.expectFile)
+
+			if tc.expectFile {
+				content, err := afero.ReadFile(fs, filePath)
+				require.NoError(t, err)
+				assert.Equal(t, tc.expectedContent, string(content), "File content does not match")
+			}
+		})
+	}
+}
+
+func TestDumpIPSet(t *testing.T) {
+	const ipsetOutput = `create ANTREA-POD-IP hash:net family inet hashsize 1024 maxelem 65536 bucketsize 12 initval 0xaff5135c
+add ANTREA-POD-IP 10.244.0.0/24
+add ANTREA-POD-IP 10.244.1.0/24
+add ANTREA-POD-IP 10.244.2.0/24
+create ANTREA-POD-IP6 hash:net family inet6 hashsize 1024 maxelem 65536 bucketsize 12 initval 0xf621d31a
+add ANTREA-POD-IP6 fd00:10:244:2::/64
+add ANTREA-POD-IP6 fd00:10:244:1::/64
+add ANTREA-POD-IP6 fd00:10:244::/64
+`
+	tests := []struct {
+		name            string
+		expectedCalls   func(mockIPSet *ipsettest.MockInterfaceMockRecorder)
+		expectedContent string
+		expectFile      bool
+		expectedErr     string
+	}{
+		{
+			name: "dump succeeds",
+			expectedCalls: func(mockIPSet *ipsettest.MockInterfaceMockRecorder) {
+				mockIPSet.Save().Return([]byte(ipsetOutput), nil)
+			},
+			expectedContent: ipsetOutput,
+			expectFile:      true,
+		},
+		{
+			name: "dump fails",
+			expectedCalls: func(mockIPSet *ipsettest.MockInterfaceMockRecorder) {
+				mockIPSet.Save().Return(nil, fmt.Errorf("error saving ipset: error, output: output"))
+			},
+			expectedErr: "error saving ipset: error, output: output",
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			fs := afero.NewMemMapFs()
+			fs.MkdirAll(baseDir, os.ModePerm)
+
+			ctrl := gomock.NewController(t)
+			mockIPSet := ipsettest.NewMockInterface(ctrl)
+
+			dumper := &agentDumper{
+				fs:          fs,
+				ipsetClient: mockIPSet,
+			}
+
+			tc.expectedCalls(mockIPSet.EXPECT())
+			err := dumper.dumpIPSet(baseDir)
+			if tc.expectedErr != "" {
+				assert.ErrorContains(t, err, tc.expectedErr)
+			} else {
+				require.NoError(t, err)
+			}
+
+			filePath := filepath.Join(baseDir, "ipset")
+			ok, err := afero.Exists(fs, filePath)
+			require.NoError(t, err)
+			assert.Equal(t, tc.expectFile, ok, "Expected ipset file existence to be %t", tc.expectFile)
 
 			if tc.expectFile {
 				content, err := afero.ReadFile(fs, filePath)

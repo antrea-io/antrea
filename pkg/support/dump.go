@@ -31,6 +31,7 @@ import (
 	"k8s.io/utils/exec"
 
 	agentquerier "antrea.io/antrea/pkg/agent/querier"
+	"antrea.io/antrea/pkg/agent/util/ipset"
 	clusterinformationv1beta1 "antrea.io/antrea/pkg/apis/crd/v1beta1"
 	"antrea.io/antrea/pkg/ovs/ovsctl"
 	"antrea.io/antrea/pkg/querier"
@@ -298,6 +299,7 @@ type agentDumper struct {
 	fs           afero.Fs
 	executor     exec.Interface
 	ovsCtlClient ovsctl.OVSCtlClient
+	ipsetClient  ipset.Interface
 	aq           agentquerier.AgentQuerier
 	npq          querier.AgentNetworkPolicyInfoQuerier
 	since        string
@@ -365,6 +367,7 @@ func NewAgentDumper(fs afero.Fs, executor exec.Interface, ovsCtlClient ovsctl.OV
 		fs:           fs,
 		executor:     executor,
 		ovsCtlClient: ovsCtlClient,
+		ipsetClient:  ipset.NewClient(),
 		aq:           aq,
 		npq:          npq,
 		since:        since,
