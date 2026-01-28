@@ -74,9 +74,10 @@ var (
 		"egressName",
 		"egressIP",
 		"egressNodeName",
+		"proxySnatPort",
 	}
-	AntreaInfoElementsIPv4 = append(antreaInfoElementsCommon, []string{"destinationClusterIPv4"}...)
-	AntreaInfoElementsIPv6 = append(antreaInfoElementsCommon, []string{"destinationClusterIPv6"}...)
+	AntreaInfoElementsIPv4 = append(antreaInfoElementsCommon, []string{"destinationClusterIPv4", "proxySnatIPv4", "destinationServiceIPv6"}...)
+	AntreaInfoElementsIPv6 = append(antreaInfoElementsCommon, []string{"destinationClusterIPv6", "proxySnatIPv6", "destinationServiceIPv6"}...)
 )
 
 type ipfixExporter struct {
@@ -393,6 +394,24 @@ func (e *ipfixExporter) addConnToSet(conn *connection.Connection) error {
 			ie.SetStringValue(conn.EgressIP)
 		case "egressNodeName":
 			ie.SetStringValue(conn.EgressNodeName)
+		case "destinationServiceIPv4":
+			if conn.DestinationServicePortName != "" {
+				ie.SetIPAddressValue(conn.OriginalDestinationAddress.AsSlice())
+			} else {
+				ie.SetIPAddressValue(net.IP{0, 0, 0, 0})
+			}
+		case "destinationServiceIPv6":
+			if conn.DestinationServicePortName != "" {
+				ie.SetIPAddressValue(conn.OriginalDestinationAddress.AsSlice())
+			} else {
+				ie.SetIPAddressValue(net.ParseIP("::"))
+			}
+		case "proxySnatIPv4":
+			ie.SetIPAddressValue(conn.ProxySnatIP.AsSlice())
+		case "proxySnatIPv6":
+			ie.SetIPAddressValue(conn.ProxySnatIP.AsSlice())
+		case "proxySnatPort":
+			ie.SetUnsigned16Value(conn.ProxySnatPort)
 		}
 	}
 	err := e.ipfixSet.AddRecordV2(eL, templateID)
