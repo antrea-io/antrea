@@ -341,7 +341,7 @@ func (c *ServiceExternalIPController) releaseExternalIP(service apimachinerytype
 			if err := c.externalIPAllocator.ReleaseIP(allocation.ipPool, allocation.ip); err != nil {
 				if err == externalippool.ErrExternalIPPoolNotFound {
 					// Ignore the error since the external IP Pool could be deleted.
-					klog.Warningf("Failed to release IP %s for service %s: IP Pool %s does not exist", service, allocation.ip, allocation.ipPool)
+					klog.InfoS("Failed to release IP for service: IP Pool does not exist", "service", service, "ip", allocation.ip, "pool", allocation.ipPool)
 				} else {
 					klog.ErrorS(err, "Failed to release external IP", "service", service, "ip", allocation.ip, "pool", allocation.ipPool)
 					return false, err

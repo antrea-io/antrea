@@ -122,7 +122,7 @@ func (m *Collector) collect() *statsCollection {
 		if rule == nil {
 			// This should not happen because the rule flow ID to rule mapping is
 			// preserved for at least 5 seconds even after the rule deletion.
-			klog.Warningf("Cannot find NetworkPolicy Rule that has ofID %v", ofID)
+			klog.InfoS("Cannot find NetworkPolicy Rule by flow ID", "ofID", ofID)
 			continue
 		}
 

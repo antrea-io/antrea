@@ -1214,7 +1214,7 @@ func (c *EgressController) watchEgressGroup() {
 	klog.Info("Starting watch for EgressGroup")
 	antreaClient, err := c.antreaClientProvider.GetAntreaClient()
 	if err != nil {
-		klog.Warningf("Failed to get antrea client: %v", err)
+		klog.ErrorS(err, "Failed to get antrea client")
 		return
 	}
 	options := metav1.ListOptions{
@@ -1222,13 +1222,13 @@ func (c *EgressController) watchEgressGroup() {
 	}
 	watcher, err := antreaClient.ControlplaneV1beta2().EgressGroups().Watch(context.TODO(), options)
 	if err != nil {
-		klog.Warningf("Failed to start watch for EgressGroup: %v", err)
+		klog.ErrorS(err, "Failed to start watch for EgressGroup")
 		return
 	}
 	// Watch method doesn't return error but "emptyWatch" in case of some partial data errors,
-	// e.g. timeout error. Make sure that watcher is not empty and log warning otherwise.
+	// e.g. timeout error. Make sure that watcher is not empty and log error otherwise.
 	if reflect.TypeOf(watcher) == reflect.TypeOf(emptyWatch) {
-		klog.Warning("Failed to start watch for EgressGroup, please ensure antrea service is reachable for the agent")
+		klog.ErrorS(nil, "Failed to start watch for EgressGroup, please ensure antrea service is reachable for the agent")
 		return
 	}
 
@@ -1247,7 +1247,7 @@ loop:
 	for {
 		event, ok := <-watcher.ResultChan()
 		if !ok {
-			klog.Warningf("Result channel for EgressGroup was closed")
+			klog.InfoS("Result channel for EgressGroup was closed")
 			return
 		}
 		switch event.Type {

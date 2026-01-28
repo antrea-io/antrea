@@ -67,7 +67,7 @@ func GetNodeName() (string, error) {
 func GetPodName() string {
 	podName := os.Getenv(podNameEnvKey)
 	if podName == "" {
-		klog.Warningf("Environment variable %s not found", podNameEnvKey)
+		klog.InfoS("Environment variable not found", "variable", podNameEnvKey)
 	}
 	return podName
 }
@@ -76,7 +76,7 @@ func GetPodName() string {
 func GetAntreaConfigMapName() string {
 	configMapName := os.Getenv(antreaConfigMapEnvKey)
 	if configMapName == "" {
-		klog.Warningf("Environment variable %s not found", antreaConfigMapEnvKey)
+		klog.InfoS("Environment variable not found", "variable", antreaConfigMapEnvKey)
 	}
 	return configMapName
 }
@@ -85,7 +85,7 @@ func GetAntreaConfigMapName() string {
 func GetPodNamespace() string {
 	podNamespace := os.Getenv(PodNamespaceEnvKey)
 	if podNamespace == "" {
-		klog.Warningf("Environment variable %s not found", PodNamespaceEnvKey)
+		klog.InfoS("Environment variable not found", "variable", PodNamespaceEnvKey)
 	}
 	return podNamespace
 }
@@ -123,7 +123,7 @@ func IsCloudEKS() bool {
 func GetAntreaNamespace() string {
 	namespace := GetPodNamespace()
 	if namespace == "" {
-		klog.Warningf("Failed to get Pod Namespace from environment. Using \"%s\" as the Antrea Service Namespace", defaultAntreaNamespace)
+		klog.InfoS("Failed to get Pod Namespace from environment, using default Namespace for Antrea Service", "defaultNamespace", defaultAntreaNamespace)
 		namespace = defaultAntreaNamespace
 	}
 	return namespace

@@ -149,8 +149,7 @@ func (a *IPPoolAllocator) appendPoolUsage(ipPool *v1beta1.IPPool, ip net.IP, sta
 	a.updateUsage(newPool)
 	_, err := a.crdClient.CrdV1beta1().IPPools().UpdateStatus(context.TODO(), newPool, metav1.UpdateOptions{})
 	if err != nil {
-		klog.Warningf("IP Pool %s update with status %+v failed: %+v", newPool.Name, newPool.Status, err)
-		return err
+		return fmt.Errorf("IP Pool %s update with status %+v failed: %w", newPool.Name, newPool.Status, err)
 	}
 	klog.InfoS("IP Pool update succeeded", "pool", newPool.Name, "allocation", newPool.Status)
 	return nil
@@ -177,8 +176,7 @@ func (a *IPPoolAllocator) updateIPAddressState(ipPool *v1beta1.IPPool, ip net.IP
 
 	_, err := a.crdClient.CrdV1beta1().IPPools().UpdateStatus(context.TODO(), newPool, metav1.UpdateOptions{})
 	if err != nil {
-		klog.Warningf("IP Pool %s update with status %+v failed: %+v", newPool.Name, newPool.Status, err)
-		return err
+		return fmt.Errorf("IP Pool %s update with status %+v failed: %w", newPool.Name, newPool.Status, err)
 	}
 	klog.InfoS("IP Pool update succeeded", "pool", newPool.Name, "allocation", newPool.Status)
 	return nil
@@ -206,8 +204,7 @@ func (a *IPPoolAllocator) appendPoolUsageForStatefulSet(ipPool *v1beta1.IPPool, 
 	}
 	_, err := a.crdClient.CrdV1beta1().IPPools().UpdateStatus(context.TODO(), newPool, metav1.UpdateOptions{})
 	if err != nil {
-		klog.Warningf("IP Pool %s update with status %+v failed: %+v", newPool.Name, newPool.Status, err)
-		return err
+		return fmt.Errorf("IP Pool %s update with status %+v failed: %w", newPool.Name, newPool.Status, err)
 	}
 	klog.V(2).InfoS("IP Pool update succeeded", "pool", newPool.Name, "allocation", newPool.Status)
 	return nil
@@ -245,8 +242,7 @@ func (a *IPPoolAllocator) removeIPAddressState(ipPool *v1beta1.IPPool, ip net.IP
 
 	_, err := a.crdClient.CrdV1beta1().IPPools().UpdateStatus(context.TODO(), newPool, metav1.UpdateOptions{})
 	if err != nil {
-		klog.Warningf("IP Pool %s update failed: %+v", newPool.Name, err)
-		return err
+		return fmt.Errorf("IP Pool %s update failed: %w", newPool.Name, err)
 	}
 	klog.InfoS("IP Pool update succeeded", "pool", newPool.Name, "allocation", newPool.Status)
 	return nil
@@ -530,8 +526,7 @@ func (a *IPPoolAllocator) ReleaseStatefulSet(namespace, name string) error {
 
 		_, err = a.crdClient.CrdV1beta1().IPPools().UpdateStatus(context.TODO(), newPool, metav1.UpdateOptions{})
 		if err != nil {
-			klog.Warningf("IP Pool %s update failed: %+v", newPool.Name, err)
-			return err
+			return fmt.Errorf("IP Pool %s update failed: %w", newPool.Name, err)
 		}
 		klog.V(2).InfoS("IP Pool update successful", "pool", newPool.Name, "allocation", newPool.Status)
 		return nil
