@@ -968,6 +968,23 @@ func checkAntctlRecord(t *testing.T, record map[string]interface{}, srcIP, dstIP
 	assert.EqualValues(protocolIdentifierTCP, record["protocolIdentifier"], "The record from antctl does not have correct protocolIdentifier")
 }
 
+func flushFlowsFromCollector(t *testing.T, data *TestData, isIPv6 bool) {
+	var cmd string
+	ipfixCollectorIP, err := testData.podWaitForIPs(defaultTimeout, "ipfix-collector", testData.testNamespace)
+	if err != nil || len(ipfixCollectorIP.IPStrings) == 0 {
+		require.NoErrorf(t, err, "Should be able to get IP from IPFIX collector Pod")
+	}
+	if !isIPv6 {
+		cmd = fmt.Sprintf("curl http://%s:8080/reset", ipfixCollectorIP.IPv4.String())
+	} else {
+		cmd = fmt.Sprintf("curl http://[%s]:8080/reset", ipfixCollectorIP.IPv6.String())
+	}
+	_, _, _, err = data.RunCommandOnNode(controlPlaneNodeName(), cmd)
+	if err != nil {
+		require.NoErrorf(t, err, "failed to reach the ipfix collector's '/reset' endpoint to flush it's cache of flows")
+	}
+}
+
 func checkRecordsForFlows(t *testing.T, data *TestData, srcIP string, dstIP string, isIPv6 bool, isIntraNode bool, checkService bool, checkK8sNetworkPolicy bool, checkAntreaNetworkPolicy bool, labelFilter string) {
 	var cmdStr string
 	if !isIPv6 {
@@ -978,8 +995,17 @@ func checkRecordsForFlows(t *testing.T, data *TestData, srcIP string, dstIP stri
 	if checkService {
 		cmdStr += fmt.Sprintf(" -p %d", iperfSvcPort)
 	}
+
+	// Trigger FlowAggregator's ipfixExporter process to start
+	_, _, err := data.RunCommandFromPod(data.testNamespace, "perftest-a", "iperf", []string{"bash", "-c", cmdStr})
+	require.NoErrorf(t, err, "Error when running iperf3 client: %v", err)
+
+	time.Sleep(time.Second * 5)
+	flushFlowsFromCollector(t, data, isIPv6)
+
 	stdout, _, err := data.RunCommandFromPod(data.testNamespace, "perftest-a", "iperf", []string{"bash", "-c", cmdStr})
 	require.NoErrorf(t, err, "Error when running iperf3 client: %v", err)
+
 	bwSlice, srcPort, _ := getBandwidthAndPorts(stdout)
 	require.Equal(t, 2, len(bwSlice), "bandwidth value and / or bandwidth unit are not available")
 	// bandwidth from iperf output
