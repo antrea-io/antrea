@@ -60,7 +60,7 @@
           org_list: '{antrea_org_list}'
           white_list: '{antrea_white_list}'
           only_trigger_phrase: true
-          trigger_permit_all: true
+          trigger_permit_all: false
           status_context: jenkins-e2e
           status_url: null
           success_status: Build finished.
@@ -178,7 +178,7 @@
           org_list: '{antrea_org_list}'
           white_list: '{antrea_white_list}'
           only_trigger_phrase: true
-          trigger_permit_all: true
+          trigger_permit_all: false
           status_context: jenkins-conformance
           status_url: null
           success_status: Build finished.
@@ -298,7 +298,7 @@
           org_list: '{antrea_org_list}'
           white_list: '{antrea_white_list}'
           only_trigger_phrase: true
-          trigger_permit_all: true
+          trigger_permit_all: false
           status_context: jenkins-all-features-conformance
           status_url: null
           success_status: Build finished.
@@ -376,7 +376,7 @@
           org_list: '{antrea_org_list}'
           white_list: '{antrea_white_list}'
           only_trigger_phrase: true
-          trigger_permit_all: true
+          trigger_permit_all: false
           status_context: jenkins-whole-conformance
           status_url: null
           success_status: Build finished.
@@ -494,7 +494,7 @@
           org_list: '{antrea_org_list}'
           white_list: '{antrea_white_list}'
           only_trigger_phrase: true
-          trigger_permit_all: true
+          trigger_permit_all: false
           status_context: jenkins-networkpolicy
           status_url: null
           success_status: Build finished.
@@ -1034,7 +1034,7 @@
             org_list: '{antrea_org_list}'
             white_list: '{antrea_white_list}'
             only_trigger_phrase: true
-            trigger_permit_all: true
+            trigger_permit_all: false
             status_context: jenkins-vm-e2e
             status_url: --none--
             success_status: Build finished.
@@ -1086,7 +1086,7 @@
           org_list: '{antrea_org_list}'
           white_list: '{antrea_white_list}'
           only_trigger_phrase: true
-          trigger_permit_all: true
+          trigger_permit_all: false
           status_context: jenkins-multicluster
           status_url: null
           branches:
@@ -1133,7 +1133,7 @@
           org_list: '{antrea_org_list}'
           white_list: '{antrea_white_list}'
           only_trigger_phrase: true
-          trigger_permit_all: true
+          trigger_permit_all: false
           throttle_concurrent_builds_enabled: 'true'
           status_context: jenkins-kind-e2e
           status_url: null
@@ -1173,7 +1173,7 @@
           org_list: '{antrea_org_list}'
           white_list: '{antrea_white_list}'
           only_trigger_phrase: true
-          trigger_permit_all: true
+          trigger_permit_all: false
           throttle_concurrent_builds_enabled: 'true'
           status_context: jenkins-kind-conformance
           status_url: null
@@ -1213,7 +1213,7 @@
           org_list: '{antrea_org_list}'
           white_list: '{antrea_white_list}'
           only_trigger_phrase: true
-          trigger_permit_all: true
+          trigger_permit_all: false
           throttle_concurrent_builds_enabled: 'true'
           status_context: jenkins-kind-networkpolicy
           status_url: null
@@ -1253,7 +1253,7 @@
           org_list: '{antrea_org_list}'
           white_list: '{antrea_white_list}'
           only_trigger_phrase: true
-          trigger_permit_all: true
+          trigger_permit_all: false
           status_context: jenkins-kind-ipv6-only-networkpolicy
           status_url: null
           success_status: Build finished.
@@ -1292,7 +1292,7 @@
           org_list: '{antrea_org_list}'
           white_list: '{antrea_white_list}'
           only_trigger_phrase: true
-          trigger_permit_all: true
+          trigger_permit_all: false
           status_context: jenkins-kind-ipv6-only-conformance
           status_url: null
           success_status: Build finished.
@@ -1330,7 +1330,7 @@
           org_list: '{antrea_org_list}'
           white_list: '{antrea_white_list}'
           only_trigger_phrase: true
-          trigger_permit_all: true
+          trigger_permit_all: false
           status_context: jenkins-kind-ipv6-only-e2e
           status_url: null
           success_status: Build finished.
@@ -1369,7 +1369,7 @@
           org_list: '{antrea_org_list}'
           white_list: '{antrea_white_list}'
           only_trigger_phrase: true
-          trigger_permit_all: true
+          trigger_permit_all: false
           status_context: jenkins-kind-ipv6-ds-networkpolicy
           status_url: null
           success_status: Build finished.
@@ -1408,7 +1408,7 @@
           org_list: '{antrea_org_list}'
           white_list: '{antrea_white_list}'
           only_trigger_phrase: true
-          trigger_permit_all: true
+          trigger_permit_all: false
           status_context: jenkins-kind-ipv6-ds-conformance
           status_url: null
           success_status: Build finished.
@@ -1446,7 +1446,7 @@
           org_list: '{antrea_org_list}'
           white_list: '{antrea_white_list}'
           only_trigger_phrase: true
-          trigger_permit_all: true
+          trigger_permit_all: false
           status_context: jenkins-kind-ipv6-ds-e2e
           status_url: null
           success_status: Build finished.
@@ -1485,7 +1485,7 @@
           org_list: '{antrea_org_list}'
           white_list: '{antrea_white_list}'
           only_trigger_phrase: true
-          trigger_permit_all: true
+          trigger_permit_all: false
           status_context: jenkins-kind-all-features-conformance
           status_url: null
           success_status: Build finished.
@@ -1535,7 +1535,7 @@
           org_list: '{antrea_org_list}'
           white_list: '{antrea_white_list}'
           only_trigger_phrase: true
-          trigger_permit_all: true
+          trigger_permit_all: false
           status_context: jenkins-kind-whole-conformance
           status_url: null
           success_status: Build finished.
