@@ -97,19 +97,16 @@ type subscriber struct {
 	rulesToSyncCount int
 }
 
-// ruleRealizationUpdate is a rule realization result reported by policy
-// rule reconciler.
-type ruleRealizationUpdate struct {
-	ruleId string
-	err    error
-}
-
 // ruleSyncTracker tracks the realization status of FQDN rules that are
 // applied to workloads on this Node.
 type ruleSyncTracker struct {
 	mutex sync.RWMutex
-	// updateCh is the channel used by the rule reconciler to report rule realization status.
-	updateCh chan ruleRealizationUpdate
+	// ruleUpdateQueue is used by the rule reconciler to report rule realization status.
+	// It replaces a channel to provide non-blocking sends, deduplication, and graceful shutdown.
+	ruleUpdateQueue workqueue.TypedInterface[string]
+	// ruleUpdateErrors stores the latest realization error for each rule, keyed by ruleID.
+	// It is protected by mutex.
+	ruleUpdateErrors map[string]error
 	// ruleToSubscribers keeps track of the subscribers that are currently subscribed
 	// to each dirty rule. Once an update of the rule realization status is received,
 	// all subscribers for that rule are notified (either an error or success), after
@@ -165,7 +162,12 @@ func newFQDNController(client openflow.Client, allocator *idAllocator, dnsServer
 	controller := &fqdnController{
 		ofClient:         client,
 		dirtyRuleHandler: dirtyRuleHandler,
-		ruleSyncTracker:  &ruleSyncTracker{updateCh: make(chan ruleRealizationUpdate, 1), ruleToSubscribers: map[string][]*subscriber{}, dirtyRules: sets.New[string]()},
+		ruleSyncTracker: &ruleSyncTracker{
+			ruleUpdateQueue:   workqueue.NewTyped[string](),
+			ruleUpdateErrors:  map[string]error{},
+			ruleToSubscribers: map[string][]*subscriber{},
+			dirtyRules:        sets.New[string](),
+		},
 		idAllocator:      allocator,
 		dnsQueryQueue: workqueue.NewTypedRateLimitingQueueWithConfig(
 			workqueue.NewTypedItemExponentialFailureRateLimiter[string](minRetryDelay, maxRetryDelay),
@@ -589,50 +591,63 @@ func (rst *ruleSyncTracker) getDirtyRules() sets.Set[string] {
 	return rst.dirtyRules.Clone()
 }
 
-func (rst *ruleSyncTracker) Run(stopCh <-chan struct{}) {
+func (rst *ruleSyncTracker) Run() {
 	for {
-		select {
-		case <-stopCh:
+		ruleID, shutdown := rst.ruleUpdateQueue.Get()
+		if shutdown {
 			return
-		case update := <-rst.updateCh:
-			rst.mutex.Lock()
-			if subscribers, ok := rst.ruleToSubscribers[update.ruleId]; ok {
-				for _, s := range subscribers {
-					if update.err != nil {
-						s.waitCh <- fmt.Errorf("failed to realize rule %s in OVS", update.ruleId)
-						s.rulesToSyncCount = 0
-						continue
-					}
-					if s.rulesToSyncCount == 0 {
-						// This may happen when some other rules in the same subscriber failed to realize.
-						// An error should already been pushed to the waitCh of this subscriber.
-						continue
-					}
-					s.rulesToSyncCount--
-					if s.rulesToSyncCount == 0 {
-						// All dirty rules for that subscriber have been processed successfully.
-						s.waitCh <- nil
-					}
-				}
-				delete(rst.ruleToSubscribers, update.ruleId)
-			}
-			// Only delete the ruleId from dirtyRules if rule realization is successful.
-			if update.err == nil {
-				rst.dirtyRules.Delete(update.ruleId)
-			}
-			rst.mutex.Unlock()
 		}
+		rst.processRuleUpdate(ruleID)
+		rst.ruleUpdateQueue.Done(ruleID)
+	}
+}
+
+func (rst *ruleSyncTracker) processRuleUpdate(ruleID string) {
+	rst.mutex.Lock()
+	defer rst.mutex.Unlock()
+	err := rst.ruleUpdateErrors[ruleID]
+	delete(rst.ruleUpdateErrors, ruleID)
+	if subscribers, ok := rst.ruleToSubscribers[ruleID]; ok {
+		for _, s := range subscribers {
+			if err != nil {
+				s.waitCh <- fmt.Errorf("failed to realize rule %s in OVS", ruleID)
+				s.rulesToSyncCount = 0
+				continue
+			}
+			if s.rulesToSyncCount == 0 {
+				// This may happen when some other rules in the same subscriber failed to realize.
+				// An error should already been pushed to the waitCh of this subscriber.
+				continue
+			}
+			s.rulesToSyncCount--
+			if s.rulesToSyncCount == 0 {
+				// All dirty rules for that subscriber have been processed successfully.
+				s.waitCh <- nil
+			}
+		}
+		delete(rst.ruleToSubscribers, ruleID)
+	}
+	// Only delete the ruleId from dirtyRules if rule realization is successful.
+	if err == nil {
+		rst.dirtyRules.Delete(ruleID)
 	}
 }
 
 // notifyRuleUpdate is an interface for the reconciler to notify the ruleSyncTracker of a
 // rule realization status.
 func (f *fqdnController) notifyRuleUpdate(ruleID string, err error) {
-	f.ruleSyncTracker.updateCh <- ruleRealizationUpdate{ruleID, err}
+	f.ruleSyncTracker.mutex.Lock()
+	f.ruleSyncTracker.ruleUpdateErrors[ruleID] = err
+	f.ruleSyncTracker.mutex.Unlock()
+	f.ruleSyncTracker.ruleUpdateQueue.Add(ruleID)
 }
 
 func (f *fqdnController) runRuleSyncTracker(stopCh <-chan struct{}) {
-	f.ruleSyncTracker.Run(stopCh)
+	go func() {
+		<-stopCh
+		f.ruleSyncTracker.ruleUpdateQueue.ShutDown()
+	}()
+	f.ruleSyncTracker.Run()
 }
 
 // parseDNSResponse returns the FQDN, IP query result and lowest applicable TTL of a DNS response.
