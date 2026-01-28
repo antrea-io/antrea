@@ -64,6 +64,9 @@ func (d *agentDumper) DumpHostNetworkInfo(basedir string) error {
 	if err := d.dumpIPTables(basedir); err != nil {
 		return err
 	}
+	if err := d.dumpIPSet(basedir); err != nil {
+		return err
+	}
 	if err := d.dumpNFTables(basedir); err != nil {
 		return err
 	}
@@ -83,6 +86,14 @@ func (d *agentDumper) dumpIPTables(basedir string) error {
 		return err
 	}
 	return writeFile(d.fs, filepath.Join(basedir, "iptables"), "iptables", data)
+}
+
+func (d *agentDumper) dumpIPSet(basedir string) error {
+	output, err := d.executor.Command("ipset", "save").CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("error when dumping ipsets: %w", err)
+	}
+	return writeFile(d.fs, filepath.Join(basedir, "ipsets"), "ipsets", output)
 }
 
 func (d *agentDumper) dumpNFTables(basedir string) error {
