@@ -96,6 +96,7 @@ type NetFilterConnTrack interface {
 	Dial() error
 	Close() error
 	DumpFlowsInCtZone(zoneFilter uint16) ([]*connection.Connection, error)
+	GetSNATIPs(zoneFilter uint16) (map[connection.Tuple]netip.Addr, error)
 }
 
 type netFilterConnTrack struct {
@@ -129,6 +130,27 @@ func (nfct *netFilterConnTrack) DumpFlowsInCtZone(zoneFilter uint16) ([]*connect
 	klog.V(2).InfoS("Finished dumping from conntrack", "zone", zoneFilter, "numConns", len(antreaConns))
 
 	return antreaConns, nil
+}
+
+func (nfct *netFilterConnTrack) GetSNATIPs(zoneFilter uint16) (map[connection.Tuple]netip.Addr, error) {
+	conns, err := nfct.netlinkConn.DumpFilter(conntrack.NewFilter().Zone(zoneFilter), nil)
+	if err != nil {
+		return nil, err
+	}
+	snatMap := make(map[connection.Tuple]netip.Addr)
+	for _, conn := range conns {
+		if conn.TupleOrig.IP.SourceAddress != conn.TupleReply.IP.DestinationAddress {
+			tuple := connection.Tuple{
+				SourceAddress:      conn.TupleOrig.IP.SourceAddress,
+				DestinationAddress: conn.TupleReply.IP.SourceAddress,
+				Protocol:           conn.TupleOrig.Proto.Protocol,
+				SourcePort:         conn.TupleOrig.Proto.SourcePort,
+				DestinationPort:    conn.TupleReply.Proto.SourcePort,
+			}
+			snatMap[tuple] = conn.TupleReply.IP.DestinationAddress
+		}
+	}
+	return snatMap, nil
 }
 
 func NetlinkFlowToAntreaConnection(conn *conntrack.Flow) *connection.Connection {
@@ -198,6 +220,25 @@ func SetupConntrackParameters() error {
 func (ct *connTrackSystem) GetMaxConnections() (int, error) {
 	maxConns, err := sysctl.GetSysctlNet("netfilter/nf_conntrack_max")
 	return maxConns, err
+}
+
+// GetNodeSNATIPs returns a map of connection tuples to their SNAT IPs from zone 0.
+// This is used to correlate Pod-to-External connections with the SNAT IP used for masquerading.
+func (ct *connTrackSystem) GetNodeSNATIPs(zoneFilter uint16) (map[connection.Tuple]netip.Addr, error) {
+	// Get connection to netlink socket
+	err := ct.connTrack.Dial()
+	if err != nil {
+		return nil, fmt.Errorf("error when getting netlink socket: %w", err)
+	}
+	defer ct.connTrack.Close()
+
+	snatMap, err := ct.connTrack.GetSNATIPs(zoneFilter)
+	if err != nil {
+		return nil, fmt.Errorf("error when getting SNAT IPs from conntrack zone %d: %w", zoneFilter, err)
+	}
+
+	klog.V(4).InfoS("Retrieved Node SNAT IPs from conntrack", "zone", zoneFilter, "numEntries", len(snatMap))
+	return snatMap, nil
 }
 
 // reference: https://github.com/torvalds/linux/blob/master/net/netfilter/nf_conntrack_proto_tcp.c#L51-L62

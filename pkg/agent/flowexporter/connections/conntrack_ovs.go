@@ -321,3 +321,9 @@ func statusStringToStateFlag(status string) uint32 {
 	}
 	return statusFlag
 }
+
+// GetNodeSNATIPs returns an empty map for OVS userspace datapath.
+// Node SNAT IP lookup from zone 0 is only supported for Linux kernel datapath.
+func (ct *connTrackOvsCtl) GetNodeSNATIPs(zoneFilter uint16) (map[connection.Tuple]netip.Addr, error) {
+	return make(map[connection.Tuple]netip.Addr), nil
+}
