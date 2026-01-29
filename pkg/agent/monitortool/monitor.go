@@ -32,7 +32,6 @@ import (
 	coreinformers "k8s.io/client-go/informers/core/v1"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/klog/v2"
-	"k8s.io/utils/clock"
 
 	"antrea.io/antrea/pkg/agent/client"
 	"antrea.io/antrea/pkg/agent/config"
@@ -82,7 +81,6 @@ type NodeLatencyMonitor struct {
 	nodeInformerSynced cache.InformerSynced
 	nlmInformerSynced  cache.InformerSynced
 
-	clock    clock.WithTicker
 	listener PacketListener
 
 	icmpSeqNum atomic.Uint32
@@ -111,7 +109,6 @@ func NewNodeLatencyMonitor(
 		nodeInformerSynced:   nodeInformer.Informer().HasSynced,
 		nlmInformerSynced:    nlmInformer.Informer().HasSynced,
 		nodeName:             nodeConfig.Name,
-		clock:                clock.RealClock{},
 		listener:             &ICMPListener{},
 	}
 
@@ -226,6 +223,10 @@ func (m *NodeLatencyMonitor) onNodeLatencyMonitorDelete(obj interface{}) {
 	m.latencyConfigChanged <- latencyConfig
 }
 
+func icmpEchoData(ts time.Time) []byte {
+	return []byte(ts.Format(time.RFC3339Nano))
+}
+
 // sendPing sends an ICMP message to the target IP address.
 func (m *NodeLatencyMonitor) sendPing(socket net.PacketConn, addr net.IP) error {
 	var requestType icmp.Type
@@ -238,12 +239,12 @@ func (m *NodeLatencyMonitor) sendPing(socket net.PacketConn, addr net.IP) error 
 		requestType = ipv4.ICMPTypeEcho
 	}
 
-	timeStart := m.clock.Now()
+	timeStart := time.Now()
 	seqID := m.getICMPSeqNum()
 	body := &icmp.Echo{
 		ID:   int(icmpEchoID),
 		Seq:  int(seqID),
-		Data: []byte(timeStart.Format(time.RFC3339Nano)),
+		Data: icmpEchoData(timeStart),
 	}
 	msg := icmp.Message{
 		Type: requestType,
@@ -329,7 +330,7 @@ func (m *NodeLatencyMonitor) handlePing(buffer []byte, peerIP string, isIPv4 boo
 	}
 
 	// Calculate the round-trip time
-	end := m.clock.Now()
+	end := time.Now()
 	rtt := end.Sub(sentTime)
 	klog.V(4).InfoS("Updating latency entry for Node IP", "IP", peerIP, "lastSendTime", sentTime, "lastRecvTime", end, "RTT", rtt)
 
@@ -415,7 +416,7 @@ func (m *NodeLatencyMonitor) Run(stopCh <-chan struct{}) {
 // monitorLoop is the main loop to monitor the latency of the Node.
 func (m *NodeLatencyMonitor) monitorLoop(stopCh <-chan struct{}) {
 	klog.InfoS("NodeLatencyMonitor is running")
-	var pingTicker, reportTicker clock.Ticker
+	var pingTicker, reportTicker *time.Ticker
 	var pingTickerCh, reportTickerCh <-chan time.Time
 	var ipv4Socket, ipv6Socket net.PacketConn
 	var err error
@@ -440,8 +441,8 @@ func (m *NodeLatencyMonitor) monitorLoop(stopCh <-chan struct{}) {
 		if pingTicker != nil {
 			pingTicker.Stop() // Stop the pingTicker
 		}
-		pingTicker = m.clock.NewTicker(interval)
-		pingTickerCh = pingTicker.C()
+		pingTicker = time.NewTicker(interval)
+		pingTickerCh = pingTicker.C
 	}
 
 	// Update report ticker with minimum interval and jitter
@@ -453,8 +454,8 @@ func (m *NodeLatencyMonitor) monitorLoop(stopCh <-chan struct{}) {
 		if reportTicker != nil {
 			reportTicker.Stop() // Stop the reportTicker
 		}
-		reportTicker = m.clock.NewTicker(reportInterval)
-		reportTickerCh = reportTicker.C()
+		reportTicker = time.NewTicker(reportInterval)
+		reportTickerCh = reportTicker.C
 		klog.V(4).InfoS("Updated report interval", "requested", interval, "minimum", minReportInterval, "actualWithJitter", reportInterval)
 	}
 
@@ -482,7 +483,7 @@ func (m *NodeLatencyMonitor) monitorLoop(stopCh <-chan struct{}) {
 				updateReportTicker(latencyConfig.Interval)
 
 				// If the recvPing socket is closed,
-				// recreate it if it is closed(CRD is deleted).
+				// recreate it if it is closed (CR is deleted).
 				if ipv4Socket == nil && m.isIPv4Enabled {
 					// Create a new socket for IPv4 when it is IPv4-only
 					ipv4Socket, err = m.listener.ListenPacket(ipv4ProtocolICMPRaw, "0.0.0.0")
