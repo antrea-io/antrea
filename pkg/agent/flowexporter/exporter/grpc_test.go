@@ -24,8 +24,8 @@ import (
 	"google.golang.org/protobuf/testing/protocmp"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
-	flowexportertesting "antrea.io/antrea/pkg/agent/flowexporter/testing"
-	flowpb "antrea.io/antrea/pkg/apis/flow/v1alpha1"
+	flowexportertesting "antrea.io/antrea/v2/pkg/agent/flowexporter/testing"
+	flowpb "antrea.io/antrea/v2/pkg/apis/flow/v1alpha1"
 )
 
 // TODO: more comprehensive testing needed

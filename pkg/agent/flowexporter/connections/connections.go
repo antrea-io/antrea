@@ -25,13 +25,13 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/klog/v2"
 
-	"antrea.io/antrea/pkg/agent/flowexporter/connection"
-	"antrea.io/antrea/pkg/agent/flowexporter/options"
-	"antrea.io/antrea/pkg/agent/flowexporter/priorityqueue"
-	"antrea.io/antrea/pkg/agent/flowexporter/utils"
-	"antrea.io/antrea/pkg/agent/proxy"
-	"antrea.io/antrea/pkg/querier"
-	"antrea.io/antrea/pkg/util/objectstore"
+	"antrea.io/antrea/v2/pkg/agent/flowexporter/connection"
+	"antrea.io/antrea/v2/pkg/agent/flowexporter/options"
+	"antrea.io/antrea/v2/pkg/agent/flowexporter/priorityqueue"
+	"antrea.io/antrea/v2/pkg/agent/flowexporter/utils"
+	"antrea.io/antrea/v2/pkg/agent/proxy"
+	"antrea.io/antrea/v2/pkg/querier"
+	"antrea.io/antrea/v2/pkg/util/objectstore"
 )
 
 const (

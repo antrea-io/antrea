@@ -21,7 +21,7 @@ import (
 
 	"k8s.io/utils/ptr"
 
-	"antrea.io/antrea/pkg/apis"
+	"antrea.io/antrea/v2/pkg/apis"
 )
 
 const (

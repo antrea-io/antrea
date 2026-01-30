@@ -22,8 +22,8 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 
-	"antrea.io/antrea/pkg/agent/util/iptables"
-	iptablestest "antrea.io/antrea/pkg/agent/util/iptables/testing"
+	"antrea.io/antrea/v2/pkg/agent/util/iptables"
+	iptablestest "antrea.io/antrea/v2/pkg/agent/util/iptables/testing"
 )
 
 func newTestIPTableRules(mockIPTables *iptablestest.MockInterface) *iptablesRules {

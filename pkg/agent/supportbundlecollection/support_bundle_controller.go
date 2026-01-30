@@ -30,16 +30,16 @@ import (
 	"k8s.io/klog/v2"
 	"k8s.io/utils/exec"
 
-	"antrea.io/antrea/pkg/agent/client"
-	agentquerier "antrea.io/antrea/pkg/agent/querier"
-	"antrea.io/antrea/pkg/apis/controlplane"
-	cpv1b2 "antrea.io/antrea/pkg/apis/controlplane/v1beta2"
-	"antrea.io/antrea/pkg/ovs/ovsctl"
-	"antrea.io/antrea/pkg/querier"
-	"antrea.io/antrea/pkg/support"
-	"antrea.io/antrea/pkg/util/compress"
-	"antrea.io/antrea/pkg/util/k8s"
-	"antrea.io/antrea/pkg/util/sftp"
+	"antrea.io/antrea/v2/pkg/agent/client"
+	agentquerier "antrea.io/antrea/v2/pkg/agent/querier"
+	"antrea.io/antrea/v2/pkg/apis/controlplane"
+	cpv1b2 "antrea.io/antrea/v2/pkg/apis/controlplane/v1beta2"
+	"antrea.io/antrea/v2/pkg/ovs/ovsctl"
+	"antrea.io/antrea/v2/pkg/querier"
+	"antrea.io/antrea/v2/pkg/support"
+	"antrea.io/antrea/v2/pkg/util/compress"
+	"antrea.io/antrea/v2/pkg/util/k8s"
+	"antrea.io/antrea/v2/pkg/util/sftp"
 )
 
 type ProtocolType string

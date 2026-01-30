@@ -24,9 +24,9 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 
-	"antrea.io/antrea/pkg/agent/apis"
-	"antrea.io/antrea/pkg/agent/controller/bgp"
-	queriertest "antrea.io/antrea/pkg/querier/testing"
+	"antrea.io/antrea/v2/pkg/agent/apis"
+	"antrea.io/antrea/v2/pkg/agent/controller/bgp"
+	queriertest "antrea.io/antrea/v2/pkg/querier/testing"
 )
 
 func TestBGPPolicyQuery(t *testing.T) {

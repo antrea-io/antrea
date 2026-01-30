@@ -26,9 +26,9 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/sets"
 
-	"antrea.io/antrea/pkg/apis/controlplane"
-	crdv1alpha1 "antrea.io/antrea/pkg/apis/crd/v1alpha1"
-	sftptesting "antrea.io/antrea/pkg/util/sftp/testing"
+	"antrea.io/antrea/v2/pkg/apis/controlplane"
+	crdv1alpha1 "antrea.io/antrea/v2/pkg/apis/crd/v1alpha1"
+	sftptesting "antrea.io/antrea/v2/pkg/util/sftp/testing"
 )
 
 func TestValidateSupportBundleCollection(t *testing.T) {

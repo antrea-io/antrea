@@ -41,15 +41,15 @@ import (
 	"k8s.io/utils/clock"
 	clocktesting "k8s.io/utils/clock/testing"
 
-	"antrea.io/antrea/pkg/agent/config"
-	monitortesting "antrea.io/antrea/pkg/agent/monitortool/testing"
-	"antrea.io/antrea/pkg/agent/util/nettest"
-	crdv1alpha1 "antrea.io/antrea/pkg/apis/crd/v1alpha1"
-	statsv1alpha1 "antrea.io/antrea/pkg/apis/stats/v1alpha1"
-	"antrea.io/antrea/pkg/client/clientset/versioned"
-	fakeversioned "antrea.io/antrea/pkg/client/clientset/versioned/fake"
-	crdinformers "antrea.io/antrea/pkg/client/informers/externalversions"
-	"antrea.io/antrea/pkg/util/ip"
+	"antrea.io/antrea/v2/pkg/agent/config"
+	monitortesting "antrea.io/antrea/v2/pkg/agent/monitortool/testing"
+	"antrea.io/antrea/v2/pkg/agent/util/nettest"
+	crdv1alpha1 "antrea.io/antrea/v2/pkg/apis/crd/v1alpha1"
+	statsv1alpha1 "antrea.io/antrea/v2/pkg/apis/stats/v1alpha1"
+	"antrea.io/antrea/v2/pkg/client/clientset/versioned"
+	fakeversioned "antrea.io/antrea/v2/pkg/client/clientset/versioned/fake"
+	crdinformers "antrea.io/antrea/v2/pkg/client/informers/externalversions"
+	"antrea.io/antrea/v2/pkg/util/ip"
 )
 
 func makeNode(nodeName string, nodeIPs []string, podCIDRs []string) *corev1.Node {

@@ -35,8 +35,8 @@ import (
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/util/retry"
 
-	crdv1beta1 "antrea.io/antrea/pkg/apis/crd/v1beta1"
-	"antrea.io/antrea/test/e2e/utils"
+	crdv1beta1 "antrea.io/antrea/v2/pkg/apis/crd/v1beta1"
+	"antrea.io/antrea/v2/test/e2e/utils"
 )
 
 var ErrPodNotFound = errors.New("pod not found")
@@ -178,7 +178,7 @@ func (k *KubernetesUtils) getTCPv4SourcePortRangeFromPod(podNamespace, podNameLa
 // The executor parameter can be used to change where the prober will run. For example, it could be "ip netns exec NAME"
 // to run the prober in another namespace.
 // We try to connect 3 times. This dates back to when we were using the OVS netdev datapath for Kind clusters, as the
-// first packet sent on a tunnel was always dropped (https://github.com/antrea-io/antrea/issues/467). We may be able to
+// first packet sent on a tunnel was always dropped (https://github.com/antrea.io/antrea/v2/issues/467). We may be able to
 // revisit this now that we use the OVS kernel datapath for Kind.
 // "agnhost connect" outputs nothing when it succeeds. We output "CONNECTED" in such case and prepend a sequence
 // number for each attempt, to make the result more informative. Example output:
@@ -1243,7 +1243,7 @@ func (k *KubernetesUtils) Bootstrap(namespaces map[string]TestNamespaceMeta, pod
 	}
 
 	// Ensure that all the HTTP servers have time to start properly.
-	// See https://github.com/antrea-io/antrea/issues/472.
+	// See https://github.com/antrea.io/antrea/v2/issues/472.
 	if err := k.waitForHTTPServers(allPods); err != nil {
 		return nil, err
 	}

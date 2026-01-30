@@ -34,7 +34,7 @@ import (
 	"k8s.io/utils/clock"
 	clocktesting "k8s.io/utils/clock/testing"
 
-	"antrea.io/antrea/pkg/util/wait"
+	"antrea.io/antrea/v2/pkg/util/wait"
 )
 
 func TestProvider_shouldUpdateCACertificate(t *testing.T) {

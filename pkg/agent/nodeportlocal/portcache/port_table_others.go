@@ -26,7 +26,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/klog/v2"
 
-	"antrea.io/antrea/pkg/agent/nodeportlocal/rules"
+	"antrea.io/antrea/v2/pkg/agent/nodeportlocal/rules"
 )
 
 func openSocketsForPort(localPortOpener LocalPortOpener, port int, protocol string, isIPv6 bool) (ProtocolSocketData, error) {

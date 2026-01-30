@@ -46,22 +46,22 @@ import (
 	policyinformers "sigs.k8s.io/network-policy-api/pkg/client/informers/externalversions/apis/v1alpha1"
 	policylisters "sigs.k8s.io/network-policy-api/pkg/client/listers/apis/v1alpha1"
 
-	"antrea.io/antrea/pkg/apis/controlplane"
-	"antrea.io/antrea/pkg/apis/crd/v1alpha2"
-	secv1beta1 "antrea.io/antrea/pkg/apis/crd/v1beta1"
-	"antrea.io/antrea/pkg/apiserver/storage"
-	"antrea.io/antrea/pkg/client/clientset/versioned"
-	crdv1b1informers "antrea.io/antrea/pkg/client/informers/externalversions/crd/v1beta1"
-	crdv1b1listers "antrea.io/antrea/pkg/client/listers/crd/v1beta1"
-	"antrea.io/antrea/pkg/controller/grouping"
-	"antrea.io/antrea/pkg/controller/labelidentity"
-	"antrea.io/antrea/pkg/controller/metrics"
-	"antrea.io/antrea/pkg/controller/networkpolicy/store"
-	antreatypes "antrea.io/antrea/pkg/controller/types"
-	"antrea.io/antrea/pkg/features"
-	"antrea.io/antrea/pkg/util/externalnode"
-	"antrea.io/antrea/pkg/util/k8s"
-	utilsets "antrea.io/antrea/pkg/util/sets"
+	"antrea.io/antrea/v2/pkg/apis/controlplane"
+	"antrea.io/antrea/v2/pkg/apis/crd/v1alpha2"
+	secv1beta1 "antrea.io/antrea/v2/pkg/apis/crd/v1beta1"
+	"antrea.io/antrea/v2/pkg/apiserver/storage"
+	"antrea.io/antrea/v2/pkg/client/clientset/versioned"
+	crdv1b1informers "antrea.io/antrea/v2/pkg/client/informers/externalversions/crd/v1beta1"
+	crdv1b1listers "antrea.io/antrea/v2/pkg/client/listers/crd/v1beta1"
+	"antrea.io/antrea/v2/pkg/controller/grouping"
+	"antrea.io/antrea/v2/pkg/controller/labelidentity"
+	"antrea.io/antrea/v2/pkg/controller/metrics"
+	"antrea.io/antrea/v2/pkg/controller/networkpolicy/store"
+	antreatypes "antrea.io/antrea/v2/pkg/controller/types"
+	"antrea.io/antrea/v2/pkg/features"
+	"antrea.io/antrea/v2/pkg/util/externalnode"
+	"antrea.io/antrea/v2/pkg/util/k8s"
+	utilsets "antrea.io/antrea/v2/pkg/util/sets"
 )
 
 const (
@@ -1201,7 +1201,7 @@ func (n *NetworkPolicyController) getMemberSetForGroupType(groupType grouping.Gr
 	groupMemberSet := controlplane.GroupMemberSet{}
 	pods, externalEntities := n.groupingInterface.GetEntities(groupType, name)
 	for _, pod := range pods {
-		// HostNetwork Pods should be excluded from group members: https://github.com/antrea-io/antrea/issues/3078.
+		// HostNetwork Pods should be excluded from group members: https://github.com/antrea.io/antrea/v2/issues/3078.
 		// Terminated Pods should be excluded as their IPs can be recycled and used by other Pods.
 		if pod.Spec.HostNetwork || k8s.IsPodTerminated(pod) || len(pod.Status.PodIPs) == 0 {
 			continue

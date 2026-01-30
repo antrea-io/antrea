@@ -21,8 +21,8 @@ import (
 
 	"k8s.io/apimachinery/pkg/util/sets"
 
-	"antrea.io/antrea/pkg/agent/config"
-	binding "antrea.io/antrea/pkg/ovs/openflow"
+	"antrea.io/antrea/v2/pkg/agent/config"
+	binding "antrea.io/antrea/v2/pkg/ovs/openflow"
 )
 
 var (

@@ -26,7 +26,7 @@ import (
 	"golang.org/x/time/rate"
 	"k8s.io/klog/v2"
 
-	"antrea.io/antrea/pkg/ovs/openflow"
+	"antrea.io/antrea/v2/pkg/ovs/openflow"
 )
 
 type ofpPacketInCategory uint8

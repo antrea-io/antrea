@@ -20,10 +20,10 @@ import (
 
 	"antrea.io/libOpenflow/openflow15"
 
-	"antrea.io/antrea/pkg/agent/config"
-	"antrea.io/antrea/pkg/agent/nodeip"
-	"antrea.io/antrea/pkg/agent/openflow/cookie"
-	binding "antrea.io/antrea/pkg/ovs/openflow"
+	"antrea.io/antrea/v2/pkg/agent/config"
+	"antrea.io/antrea/v2/pkg/agent/nodeip"
+	"antrea.io/antrea/v2/pkg/agent/openflow/cookie"
+	binding "antrea.io/antrea/v2/pkg/ovs/openflow"
 )
 
 type featureService struct {

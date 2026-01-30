@@ -18,10 +18,10 @@ import (
 	"encoding/json"
 	"net/http"
 
-	"antrea.io/antrea/pkg/apis/controlplane/v1beta2"
-	"antrea.io/antrea/pkg/apiserver/apis"
-	"antrea.io/antrea/pkg/controller/networkpolicy"
-	antreatypes "antrea.io/antrea/pkg/controller/types"
+	"antrea.io/antrea/v2/pkg/apis/controlplane/v1beta2"
+	"antrea.io/antrea/v2/pkg/apiserver/apis"
+	"antrea.io/antrea/v2/pkg/controller/networkpolicy"
+	antreatypes "antrea.io/antrea/v2/pkg/controller/types"
 )
 
 // HandleFunc creates a http.HandlerFunc which uses an AgentNetworkPolicyInfoQuerier

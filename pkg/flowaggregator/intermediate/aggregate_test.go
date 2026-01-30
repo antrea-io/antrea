@@ -26,7 +26,7 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 	clocktesting "k8s.io/utils/clock/testing"
 
-	flowpb "antrea.io/antrea/pkg/apis/flow/v1alpha1"
+	flowpb "antrea.io/antrea/v2/pkg/apis/flow/v1alpha1"
 )
 
 func init() {

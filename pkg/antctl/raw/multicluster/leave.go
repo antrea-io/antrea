@@ -19,7 +19,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"antrea.io/antrea/pkg/antctl/raw/multicluster/common"
+	"antrea.io/antrea/v2/pkg/antctl/raw/multicluster/common"
 )
 
 var leaveOpts *common.CleanOptions

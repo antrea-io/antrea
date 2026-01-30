@@ -24,7 +24,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/mock/gomock"
 
-	antreaversion "antrea.io/antrea/pkg/version"
+	antreaversion "antrea.io/antrea/v2/pkg/version"
 )
 
 var (

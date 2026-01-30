@@ -22,11 +22,11 @@ import (
 
 	"k8s.io/klog/v2"
 
-	flowpb "antrea.io/antrea/pkg/apis/flow/v1alpha1"
-	flowaggregatorconfig "antrea.io/antrea/pkg/config/flowaggregator"
-	"antrea.io/antrea/pkg/flowaggregator/flowlogger"
-	"antrea.io/antrea/pkg/flowaggregator/flowrecord"
-	"antrea.io/antrea/pkg/flowaggregator/options"
+	flowpb "antrea.io/antrea/v2/pkg/apis/flow/v1alpha1"
+	flowaggregatorconfig "antrea.io/antrea/v2/pkg/config/flowaggregator"
+	"antrea.io/antrea/v2/pkg/flowaggregator/flowlogger"
+	"antrea.io/antrea/v2/pkg/flowaggregator/flowrecord"
+	"antrea.io/antrea/v2/pkg/flowaggregator/options"
 )
 
 type flowFilter struct {

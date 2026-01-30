@@ -25,9 +25,9 @@ import (
 	ipfixregistry "github.com/vmware/go-ipfix/pkg/registry"
 	"go.uber.org/mock/gomock"
 
-	"antrea.io/antrea/pkg/agent/flowexporter/connection"
-	flowexportertesting "antrea.io/antrea/pkg/agent/flowexporter/testing"
-	ipfixtest "antrea.io/antrea/pkg/ipfix/testing"
+	"antrea.io/antrea/v2/pkg/agent/flowexporter/connection"
+	flowexportertesting "antrea.io/antrea/v2/pkg/agent/flowexporter/testing"
+	ipfixtest "antrea.io/antrea/v2/pkg/ipfix/testing"
 )
 
 const (

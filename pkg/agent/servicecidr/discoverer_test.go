@@ -26,7 +26,7 @@ import (
 	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes/fake"
 
-	"antrea.io/antrea/pkg/util/ip"
+	"antrea.io/antrea/v2/pkg/util/ip"
 )
 
 func makeService(namespace, name string, clusterIP string, protocol corev1.Protocol) *corev1.Service {

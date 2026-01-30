@@ -18,8 +18,8 @@ import (
 	"fmt"
 	"net"
 
-	binding "antrea.io/antrea/pkg/ovs/openflow"
-	iputil "antrea.io/antrea/pkg/util/ip"
+	binding "antrea.io/antrea/v2/pkg/ovs/openflow"
+	iputil "antrea.io/antrea/v2/pkg/util/ip"
 )
 
 type Route struct {

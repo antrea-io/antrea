@@ -41,8 +41,8 @@ import (
 	"k8s.io/klog/v2"
 	clockutils "k8s.io/utils/clock"
 
-	"antrea.io/antrea/pkg/util/env"
-	"antrea.io/antrea/pkg/util/k8s"
+	"antrea.io/antrea/v2/pkg/util/env"
+	"antrea.io/antrea/v2/pkg/util/k8s"
 )
 
 var loopbackAddresses = []net.IP{net.ParseIP("127.0.0.1"), net.IPv6loopback}

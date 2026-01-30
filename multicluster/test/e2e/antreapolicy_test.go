@@ -19,8 +19,8 @@ import (
 	"testing"
 	"time"
 
-	antreae2e "antrea.io/antrea/test/e2e"
-	"antrea.io/antrea/test/e2e/utils"
+	antreae2e "antrea.io/antrea/v2/test/e2e"
+	"antrea.io/antrea/v2/test/e2e/utils"
 )
 
 const (

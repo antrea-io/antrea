@@ -20,9 +20,9 @@ import (
 	"reflect"
 	"strconv"
 
-	"antrea.io/antrea/pkg/agent/apis"
-	"antrea.io/antrea/pkg/agent/multicast"
-	"antrea.io/antrea/pkg/querier"
+	"antrea.io/antrea/v2/pkg/agent/apis"
+	"antrea.io/antrea/v2/pkg/agent/multicast"
+	"antrea.io/antrea/v2/pkg/querier"
 )
 
 func generateResponse(podName string, podNamespace string, trafficStats *multicast.PodTrafficStats) apis.MulticastResponse {

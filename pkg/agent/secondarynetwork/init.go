@@ -24,14 +24,14 @@ import (
 	componentbaseconfig "k8s.io/component-base/config"
 	"k8s.io/klog/v2"
 
-	"antrea.io/antrea/pkg/agent/config"
-	"antrea.io/antrea/pkg/agent/interfacestore"
-	"antrea.io/antrea/pkg/agent/secondarynetwork/podwatch"
-	crdlisters "antrea.io/antrea/pkg/client/listers/crd/v1beta1"
-	agentconfig "antrea.io/antrea/pkg/config/agent"
-	"antrea.io/antrea/pkg/ovs/ovsconfig"
-	"antrea.io/antrea/pkg/util/channel"
-	"antrea.io/antrea/pkg/util/k8s"
+	"antrea.io/antrea/v2/pkg/agent/config"
+	"antrea.io/antrea/v2/pkg/agent/interfacestore"
+	"antrea.io/antrea/v2/pkg/agent/secondarynetwork/podwatch"
+	crdlisters "antrea.io/antrea/v2/pkg/client/listers/crd/v1beta1"
+	agentconfig "antrea.io/antrea/v2/pkg/config/agent"
+	"antrea.io/antrea/v2/pkg/ovs/ovsconfig"
+	"antrea.io/antrea/v2/pkg/util/channel"
+	"antrea.io/antrea/v2/pkg/util/k8s"
 )
 
 var (

@@ -28,14 +28,14 @@ import (
 	"k8s.io/klog/v2"
 	utilnet "k8s.io/utils/net"
 
-	"antrea.io/antrea/pkg/agent/config"
-	"antrea.io/antrea/pkg/agent/route"
-	"antrea.io/antrea/pkg/agent/types"
-	"antrea.io/antrea/pkg/agent/util/ipset"
-	"antrea.io/antrea/pkg/agent/util/iptables"
-	"antrea.io/antrea/pkg/apis/controlplane/v1beta2"
-	secv1beta1 "antrea.io/antrea/pkg/apis/crd/v1beta1"
-	"antrea.io/antrea/pkg/util/ip"
+	"antrea.io/antrea/v2/pkg/agent/config"
+	"antrea.io/antrea/v2/pkg/agent/route"
+	"antrea.io/antrea/v2/pkg/agent/types"
+	"antrea.io/antrea/v2/pkg/agent/util/ipset"
+	"antrea.io/antrea/v2/pkg/agent/util/iptables"
+	"antrea.io/antrea/v2/pkg/apis/controlplane/v1beta2"
+	secv1beta1 "antrea.io/antrea/v2/pkg/apis/crd/v1beta1"
+	"antrea.io/antrea/v2/pkg/util/ip"
 )
 
 const (

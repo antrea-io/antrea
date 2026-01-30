@@ -32,7 +32,7 @@ import (
 	"k8s.io/client-go/kubernetes/fake"
 	"k8s.io/client-go/tools/cache"
 
-	"antrea.io/antrea/pkg/util/k8s"
+	"antrea.io/antrea/v2/pkg/util/k8s"
 )
 
 var (
@@ -214,7 +214,7 @@ func Test_noHostNetworkPod(t *testing.T) {
 Sample output:
 goos: darwin
 goarch: amd64
-pkg: antrea.io/antrea/pkg/util/objectstore
+pkg: antrea.io/antrea/v2/pkg/util/objectstore
 cpu: Intel(R) Core(TM) i7-9750H CPU @ 2.60GHz
 BenchmarkGetPodByIPAndTime
 BenchmarkGetPodByIPAndTime/input_size_100

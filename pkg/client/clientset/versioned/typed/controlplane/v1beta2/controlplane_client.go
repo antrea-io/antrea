@@ -19,8 +19,8 @@ package v1beta2
 import (
 	http "net/http"
 
-	controlplanev1beta2 "antrea.io/antrea/pkg/apis/controlplane/v1beta2"
-	scheme "antrea.io/antrea/pkg/client/clientset/versioned/scheme"
+	controlplanev1beta2 "antrea.io/antrea/v2/pkg/apis/controlplane/v1beta2"
+	scheme "antrea.io/antrea/v2/pkg/client/clientset/versioned/scheme"
 	rest "k8s.io/client-go/rest"
 )
 

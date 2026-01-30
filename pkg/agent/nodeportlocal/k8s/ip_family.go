@@ -20,7 +20,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	utilnet "k8s.io/utils/net"
 
-	"antrea.io/antrea/pkg/agent/nodeportlocal/types"
+	"antrea.io/antrea/v2/pkg/agent/nodeportlocal/types"
 )
 
 // ipFamilies implements a set of IP families using a bitmask.

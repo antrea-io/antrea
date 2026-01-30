@@ -24,7 +24,7 @@ import (
 
 	"gopkg.in/natefinch/lumberjack.v2"
 
-	"antrea.io/antrea/pkg/flowaggregator/flowrecord"
+	"antrea.io/antrea/v2/pkg/flowaggregator/flowrecord"
 )
 
 const MaxLatency = 5 * time.Second

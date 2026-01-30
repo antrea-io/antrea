@@ -20,8 +20,8 @@ import (
 	v1 "k8s.io/api/core/v1"
 	discovery "k8s.io/api/discovery/v1"
 
-	"antrea.io/antrea/pkg/agent/proxy/types"
-	k8sproxy "antrea.io/antrea/third_party/proxy"
+	"antrea.io/antrea/v2/pkg/agent/proxy/types"
+	k8sproxy "antrea.io/antrea/v2/third_party/proxy"
 )
 
 // endpointsChangesTracker tracks Endpoints changes.

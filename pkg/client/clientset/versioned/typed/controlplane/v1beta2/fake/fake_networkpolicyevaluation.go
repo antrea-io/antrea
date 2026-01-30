@@ -17,8 +17,8 @@
 package fake
 
 import (
-	v1beta2 "antrea.io/antrea/pkg/apis/controlplane/v1beta2"
-	controlplanev1beta2 "antrea.io/antrea/pkg/client/clientset/versioned/typed/controlplane/v1beta2"
+	v1beta2 "antrea.io/antrea/v2/pkg/apis/controlplane/v1beta2"
+	controlplanev1beta2 "antrea.io/antrea/v2/pkg/client/clientset/versioned/typed/controlplane/v1beta2"
 	gentype "k8s.io/client-go/gentype"
 )
 

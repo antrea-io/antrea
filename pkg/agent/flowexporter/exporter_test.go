@@ -31,17 +31,17 @@ import (
 	"k8s.io/client-go/kubernetes/fake"
 	"k8s.io/component-base/metrics/legacyregistry"
 
-	"antrea.io/antrea/pkg/agent/flowexporter/connection"
-	"antrea.io/antrea/pkg/agent/flowexporter/connections"
-	connectionstesting "antrea.io/antrea/pkg/agent/flowexporter/connections/testing"
-	exportertesting "antrea.io/antrea/pkg/agent/flowexporter/exporter/testing"
-	"antrea.io/antrea/pkg/agent/flowexporter/filter"
-	"antrea.io/antrea/pkg/agent/flowexporter/options"
-	"antrea.io/antrea/pkg/agent/flowexporter/priorityqueue"
-	flowexportertesting "antrea.io/antrea/pkg/agent/flowexporter/testing"
-	"antrea.io/antrea/pkg/agent/metrics"
-	agenttypes "antrea.io/antrea/pkg/agent/types"
-	queriertest "antrea.io/antrea/pkg/querier/testing"
+	"antrea.io/antrea/v2/pkg/agent/flowexporter/connection"
+	"antrea.io/antrea/v2/pkg/agent/flowexporter/connections"
+	connectionstesting "antrea.io/antrea/v2/pkg/agent/flowexporter/connections/testing"
+	exportertesting "antrea.io/antrea/v2/pkg/agent/flowexporter/exporter/testing"
+	"antrea.io/antrea/v2/pkg/agent/flowexporter/filter"
+	"antrea.io/antrea/v2/pkg/agent/flowexporter/options"
+	"antrea.io/antrea/v2/pkg/agent/flowexporter/priorityqueue"
+	flowexportertesting "antrea.io/antrea/v2/pkg/agent/flowexporter/testing"
+	"antrea.io/antrea/v2/pkg/agent/metrics"
+	agenttypes "antrea.io/antrea/v2/pkg/agent/types"
+	queriertest "antrea.io/antrea/v2/pkg/querier/testing"
 )
 
 const (

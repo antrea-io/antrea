@@ -19,7 +19,7 @@ import (
 	"fmt"
 	"strings"
 
-	"antrea.io/antrea/pkg/antctl/raw"
+	"antrea.io/antrea/v2/pkg/antctl/raw"
 )
 
 type checkOVSLoadable struct{}

@@ -33,7 +33,7 @@ Original file https://raw.githubusercontent.com/kubernetes/kubernetes/refs/tags/
 Modifies:
 
 - Remove import "k8s.io/kubernetes/pkg/proxy/metrics" and its usages.
-- Replace import "k8s.io/kubernetes/pkg/proxy" with "antrea.io/antrea/third_party/proxy".
+- Replace import "k8s.io/kubernetes/pkg/proxy" with "antrea.io/antrea/v2/third_party/proxy".
 
 */
 
@@ -52,7 +52,7 @@ import (
 	"k8s.io/utils/clock"
 	"k8s.io/utils/ptr"
 
-	"antrea.io/antrea/third_party/proxy"
+	"antrea.io/antrea/v2/third_party/proxy"
 )
 
 const (

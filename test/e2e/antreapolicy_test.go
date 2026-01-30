@@ -39,12 +39,12 @@ import (
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/utils/ptr"
 
-	"antrea.io/antrea/pkg/agent/apis"
-	crdv1beta1 "antrea.io/antrea/pkg/apis/crd/v1beta1"
-	agentconfig "antrea.io/antrea/pkg/config/agent"
-	"antrea.io/antrea/pkg/controller/networkpolicy"
-	"antrea.io/antrea/pkg/features"
-	. "antrea.io/antrea/test/e2e/utils"
+	"antrea.io/antrea/v2/pkg/agent/apis"
+	crdv1beta1 "antrea.io/antrea/v2/pkg/apis/crd/v1beta1"
+	agentconfig "antrea.io/antrea/v2/pkg/config/agent"
+	"antrea.io/antrea/v2/pkg/controller/networkpolicy"
+	"antrea.io/antrea/v2/pkg/features"
+	. "antrea.io/antrea/v2/test/e2e/utils"
 )
 
 // common for all tests.
@@ -2987,7 +2987,7 @@ func testANNPMultipleAppliedTo(t *testing.T, data *TestData, singleRule bool) {
 	builder := &AntreaNetworkPolicySpecBuilder{}
 	builder = builder.SetName(getNS("y"), "np-multiple-appliedto").SetPriority(1.0)
 	// Make it apply to an extra dummy AppliedTo to ensure it handles multiple AppliedToGroups correctly.
-	// See https://github.com/antrea-io/antrea/issues/2083.
+	// See https://github.com/antrea.io/antrea/v2/issues/2083.
 	if singleRule {
 		builder.SetAppliedToGroup([]ANNPAppliedToSpec{{PodSelector: map[string]string{"pod": "a"}}, {PodSelector: map[string]string{tempLabel: ""}}})
 		builder.AddIngress(ANNPRuleBuilder{
@@ -3982,7 +3982,7 @@ func testFQDNPolicy(t *testing.T) {
 	// application traffic will bypass FQDN NetworkPolicy.
 	// So we changed the target domain from google.com to github.com, which has a more stable DNS resolution result. The
 	// change could be reverted once we support inspecting DNS/TCP traffic.
-	// See https://github.com/antrea-io/antrea/issues/4130 for more details.
+	// See https://github.com/antrea.io/antrea/v2/issues/4130 for more details.
 	builder.AddFQDNRule("*github.com", ProtocolTCP, nil, nil, nil, "r1", nil, crdv1beta1.RuleActionReject)
 	builder.AddFQDNRule("wayfair.com", ProtocolTCP, nil, nil, nil, "r2", nil, crdv1beta1.RuleActionDrop)
 	// Test upper-case FQDN.

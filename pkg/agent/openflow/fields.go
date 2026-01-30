@@ -15,7 +15,7 @@
 package openflow
 
 import (
-	binding "antrea.io/antrea/pkg/ovs/openflow"
+	binding "antrea.io/antrea/v2/pkg/ovs/openflow"
 )
 
 // Fields using reg.

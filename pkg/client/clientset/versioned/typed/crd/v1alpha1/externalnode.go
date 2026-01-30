@@ -19,8 +19,8 @@ package v1alpha1
 import (
 	context "context"
 
-	crdv1alpha1 "antrea.io/antrea/pkg/apis/crd/v1alpha1"
-	scheme "antrea.io/antrea/pkg/client/clientset/versioned/scheme"
+	crdv1alpha1 "antrea.io/antrea/v2/pkg/apis/crd/v1alpha1"
+	scheme "antrea.io/antrea/v2/pkg/client/clientset/versioned/scheme"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	types "k8s.io/apimachinery/pkg/types"
 	watch "k8s.io/apimachinery/pkg/watch"

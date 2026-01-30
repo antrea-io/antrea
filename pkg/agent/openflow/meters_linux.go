@@ -21,7 +21,7 @@ import (
 	"github.com/blang/semver"
 	"k8s.io/klog/v2"
 
-	"antrea.io/antrea/pkg/util/runtime"
+	"antrea.io/antrea/v2/pkg/util/runtime"
 )
 
 func OVSMetersAreSupported() bool {

@@ -17,7 +17,7 @@ package priorityqueue
 import (
 	"time"
 
-	"antrea.io/antrea/pkg/agent/flowexporter/connection"
+	"antrea.io/antrea/v2/pkg/agent/flowexporter/connection"
 )
 
 type ItemToExpire struct {

@@ -33,9 +33,9 @@ import (
 	"golang.org/x/sys/windows"
 	"k8s.io/klog/v2"
 
-	ps "antrea.io/antrea/pkg/agent/util/powershell"
-	antreasyscall "antrea.io/antrea/pkg/agent/util/syscall"
-	iputil "antrea.io/antrea/pkg/util/ip"
+	ps "antrea.io/antrea/v2/pkg/agent/util/powershell"
+	antreasyscall "antrea.io/antrea/v2/pkg/agent/util/syscall"
+	iputil "antrea.io/antrea/v2/pkg/util/ip"
 )
 
 const (

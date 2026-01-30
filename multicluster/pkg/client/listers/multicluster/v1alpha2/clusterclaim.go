@@ -17,7 +17,7 @@
 package v1alpha2
 
 import (
-	multiclusterv1alpha2 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha2"
+	multiclusterv1alpha2 "antrea.io/antrea/v2/multicluster/apis/multicluster/v1alpha2"
 	labels "k8s.io/apimachinery/pkg/labels"
 	listers "k8s.io/client-go/listers"
 	cache "k8s.io/client-go/tools/cache"

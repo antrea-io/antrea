@@ -25,7 +25,7 @@ import (
 	"golang.org/x/net/bpf"
 	"k8s.io/klog/v2"
 
-	crdv1alpha1 "antrea.io/antrea/pkg/apis/crd/v1alpha1"
+	crdv1alpha1 "antrea.io/antrea/v2/pkg/apis/crd/v1alpha1"
 )
 
 type pcapCapture struct {
@@ -36,7 +36,7 @@ func NewPcapCapture() (*pcapCapture, error) {
 }
 
 // zeroFilter is a filter that will drop all packets.
-// see: https://github.com/antrea-io/antrea/issues/6815 for the user case.
+// see: https://github.com/antrea.io/antrea/v2/issues/6815 for the user case.
 func zeroFilter() []bpf.Instruction {
 	return []bpf.Instruction{returnDrop}
 }

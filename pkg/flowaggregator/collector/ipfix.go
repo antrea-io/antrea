@@ -20,8 +20,8 @@ import (
 
 	ipfixcollector "github.com/vmware/go-ipfix/pkg/collector"
 
-	flowpb "antrea.io/antrea/pkg/apis/flow/v1alpha1"
-	flowaggregatorconfig "antrea.io/antrea/pkg/config/flowaggregator"
+	flowpb "antrea.io/antrea/v2/pkg/apis/flow/v1alpha1"
+	flowaggregatorconfig "antrea.io/antrea/v2/pkg/config/flowaggregator"
 )
 
 const (

@@ -27,13 +27,13 @@ import (
 	"go.uber.org/mock/gomock"
 	k8stypes "k8s.io/apimachinery/pkg/types"
 
-	"antrea.io/antrea/pkg/agent/flowexporter/connection"
-	connectionstesting "antrea.io/antrea/pkg/agent/flowexporter/connections/testing"
-	flowexporterutils "antrea.io/antrea/pkg/agent/flowexporter/utils"
-	"antrea.io/antrea/pkg/agent/openflow"
-	"antrea.io/antrea/pkg/agent/types"
-	"antrea.io/antrea/pkg/apis/controlplane/v1beta2"
-	binding "antrea.io/antrea/pkg/ovs/openflow"
+	"antrea.io/antrea/v2/pkg/agent/flowexporter/connection"
+	connectionstesting "antrea.io/antrea/v2/pkg/agent/flowexporter/connections/testing"
+	flowexporterutils "antrea.io/antrea/v2/pkg/agent/flowexporter/utils"
+	"antrea.io/antrea/v2/pkg/agent/openflow"
+	"antrea.io/antrea/v2/pkg/agent/types"
+	"antrea.io/antrea/v2/pkg/apis/controlplane/v1beta2"
+	binding "antrea.io/antrea/v2/pkg/ovs/openflow"
 )
 
 func TestController_HandlePacketIn(t *testing.T) {
