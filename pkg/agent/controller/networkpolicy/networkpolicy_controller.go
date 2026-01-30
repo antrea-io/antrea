@@ -985,7 +985,7 @@ func (w *watcher) onFullSync() {
 }
 
 func (w *watcher) watch() {
-	klog.Infof("Starting watch for %s", w.objectType)
+	klog.InfoS("Starting watch", "objectType", w.objectType)
 	watcher, err := w.watchFunc()
 	if err != nil {
 		klog.ErrorS(err, "Failed to start watch", "objectType", w.objectType)
