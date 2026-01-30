@@ -22,8 +22,8 @@ import (
 	"path"
 	"path/filepath"
 
-	"antrea.io/antrea/pkg/agent/config"
-	"antrea.io/antrea/pkg/util/logdir"
+	"antrea.io/antrea/v2/pkg/agent/config"
+	"antrea.io/antrea/v2/pkg/util/logdir"
 )
 
 const (

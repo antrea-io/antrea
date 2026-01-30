@@ -26,8 +26,8 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	clientset "k8s.io/client-go/kubernetes"
 
-	"antrea.io/antrea/pkg/apis/crd/v1beta1"
-	system "antrea.io/antrea/pkg/apis/system/v1beta1"
+	"antrea.io/antrea/v2/pkg/apis/crd/v1beta1"
+	system "antrea.io/antrea/v2/pkg/apis/system/v1beta1"
 )
 
 type fakeControllerQuerier struct{}

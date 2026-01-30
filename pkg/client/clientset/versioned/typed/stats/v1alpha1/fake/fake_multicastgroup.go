@@ -17,8 +17,8 @@
 package fake
 
 import (
-	v1alpha1 "antrea.io/antrea/pkg/apis/stats/v1alpha1"
-	statsv1alpha1 "antrea.io/antrea/pkg/client/clientset/versioned/typed/stats/v1alpha1"
+	v1alpha1 "antrea.io/antrea/v2/pkg/apis/stats/v1alpha1"
+	statsv1alpha1 "antrea.io/antrea/v2/pkg/client/clientset/versioned/typed/stats/v1alpha1"
 	gentype "k8s.io/client-go/gentype"
 )
 

@@ -32,7 +32,7 @@ Original file https://raw.githubusercontent.com/kubernetes/kubernetes/refs/tags/
 
 Modifies:
 
-- Replace import "k8s.io/kubernetes/pkg/proxy/config" with "antrea.io/antrea/third_party/proxy/config".
+- Replace import "k8s.io/kubernetes/pkg/proxy/config" with "antrea.io/antrea/v2/third_party/proxy/config".
 
 Adds:
 
@@ -48,7 +48,7 @@ import (
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
 
-	"antrea.io/antrea/third_party/proxy/config"
+	"antrea.io/antrea/v2/third_party/proxy/config"
 )
 
 // Provider is the interface provided by proxier implementations.

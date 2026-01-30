@@ -32,14 +32,14 @@ import (
 
 	"k8s.io/klog/v2"
 
-	"antrea.io/antrea/pkg/agent/flowexporter/connection"
-	"antrea.io/antrea/pkg/agent/flowexporter/connections"
-	"antrea.io/antrea/pkg/agent/flowexporter/exporter"
-	"antrea.io/antrea/pkg/agent/flowexporter/filter"
-	"antrea.io/antrea/pkg/agent/flowexporter/options"
-	"antrea.io/antrea/pkg/agent/flowexporter/priorityqueue"
-	exptest "antrea.io/antrea/pkg/agent/flowexporter/testing"
-	"antrea.io/antrea/pkg/agent/flowexporter/utils"
+	"antrea.io/antrea/v2/pkg/agent/flowexporter/connection"
+	"antrea.io/antrea/v2/pkg/agent/flowexporter/connections"
+	"antrea.io/antrea/v2/pkg/agent/flowexporter/exporter"
+	"antrea.io/antrea/v2/pkg/agent/flowexporter/filter"
+	"antrea.io/antrea/v2/pkg/agent/flowexporter/options"
+	"antrea.io/antrea/v2/pkg/agent/flowexporter/priorityqueue"
+	exptest "antrea.io/antrea/v2/pkg/agent/flowexporter/testing"
+	"antrea.io/antrea/v2/pkg/agent/flowexporter/utils"
 )
 
 const (
@@ -59,7 +59,7 @@ Sample output:
 go test -test.v -run=BenchmarkExport -test.benchmem -bench=BenchmarkExportConntrackConns -benchtime=100x -memprofile memprofile.out -cpuprofile profile.out
 goos: linux
 goarch: amd64
-pkg: antrea.io/antrea/pkg/agent/flowexporter/exporter
+pkg: antrea.io/antrea/v2/pkg/agent/flowexporter/exporter
 cpu: Intel(R) Core(TM) i7-8750H CPU @ 2.20GHz
 BenchmarkExportConntrackConns
 
@@ -76,7 +76,7 @@ BenchmarkExportConntrackConns
 
 BenchmarkExportConntrackConns-2   	     100	   3174982 ns/op	  328104 B/op	    3262 allocs/op
 PASS
-ok  	antrea.io/antrea/pkg/agent/flowexporter/exporter	1.249s
+ok  	antrea.io/antrea/v2/pkg/agent/flowexporter/exporter	1.249s
 Reference value:
 
 	#conns
@@ -111,7 +111,7 @@ Sample output:
 go test -test.v -run=BenchmarkExport -test.benchmem -bench=BenchmarkExportDenyConns -benchtime=100x -memprofile memprofile.out -cpuprofile profile.out
 goos: linux
 goarch: amd64
-pkg: antrea.io/antrea/pkg/agent/flowexporter/exporter
+pkg: antrea.io/antrea/v2/pkg/agent/flowexporter/exporter
 cpu: Intel(R) Core(TM) i7-8750H CPU @ 2.20GHz
 BenchmarkExportDenyConns
 
@@ -128,7 +128,7 @@ BenchmarkExportDenyConns
 
 BenchmarkExportDenyConns-2   	     100	   3133778 ns/op	  322203 B/op	    3474 allocs/op
 PASS
-ok  	antrea.io/antrea/pkg/agent/flowexporter/exporter	1.238s
+ok  	antrea.io/antrea/v2/pkg/agent/flowexporter/exporter	1.238s
 Reference value:
 
 	#conns

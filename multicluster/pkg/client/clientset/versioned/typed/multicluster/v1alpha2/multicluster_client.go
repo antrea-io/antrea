@@ -19,8 +19,8 @@ package v1alpha2
 import (
 	http "net/http"
 
-	multiclusterv1alpha2 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha2"
-	scheme "antrea.io/antrea/multicluster/pkg/client/clientset/versioned/scheme"
+	multiclusterv1alpha2 "antrea.io/antrea/v2/multicluster/apis/multicluster/v1alpha2"
+	scheme "antrea.io/antrea/v2/multicluster/pkg/client/clientset/versioned/scheme"
 	rest "k8s.io/client-go/rest"
 )
 

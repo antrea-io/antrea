@@ -17,7 +17,7 @@ import (
 	"container/heap"
 	"time"
 
-	"antrea.io/antrea/pkg/agent/flowexporter/connection"
+	"antrea.io/antrea/v2/pkg/agent/flowexporter/connection"
 )
 
 // minExpiryTime provides two usages: 1. We want to avoid passing a non positive

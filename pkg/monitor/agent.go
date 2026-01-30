@@ -22,9 +22,9 @@ import (
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/klog/v2"
 
-	agentquerier "antrea.io/antrea/pkg/agent/querier"
-	"antrea.io/antrea/pkg/apis/crd/v1beta1"
-	clientset "antrea.io/antrea/pkg/client/clientset/versioned"
+	agentquerier "antrea.io/antrea/v2/pkg/agent/querier"
+	"antrea.io/antrea/v2/pkg/apis/crd/v1beta1"
+	clientset "antrea.io/antrea/v2/pkg/client/clientset/versioned"
 )
 
 type agentMonitor struct {

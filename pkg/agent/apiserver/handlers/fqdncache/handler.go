@@ -23,8 +23,8 @@ import (
 
 	"k8s.io/klog/v2"
 
-	agentapi "antrea.io/antrea/pkg/agent/apis"
-	"antrea.io/antrea/pkg/querier"
+	agentapi "antrea.io/antrea/v2/pkg/agent/apis"
+	"antrea.io/antrea/v2/pkg/querier"
 )
 
 func HandleFunc(npq querier.AgentNetworkPolicyInfoQuerier) http.HandlerFunc {

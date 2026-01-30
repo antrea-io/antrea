@@ -20,8 +20,8 @@ package main
 import (
 	"os"
 
-	"antrea.io/antrea/pkg/log"
-	"antrea.io/antrea/pkg/version"
+	"antrea.io/antrea/v2/pkg/log"
+	"antrea.io/antrea/v2/pkg/version"
 
 	"github.com/spf13/cobra"
 	"k8s.io/klog/v2"

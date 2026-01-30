@@ -32,7 +32,7 @@ Original file https://raw.githubusercontent.com/kubernetes/kubernetes/refs/tags/
 
 Modifies:
 
-- Replace import utilnode "k8s.io/kubernetes/pkg/util/node" with utilnode "antrea.io/antrea/third_party/util/node".
+- Replace import utilnode "k8s.io/kubernetes/pkg/util/node" with utilnode "antrea.io/antrea/v2/third_party/util/node".
 
 */
 
@@ -58,7 +58,7 @@ import (
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/klog/v2"
 
-	utilnode "antrea.io/antrea/third_party/util/node"
+	utilnode "antrea.io/antrea/v2/third_party/util/node"
 )
 
 // NodeManager handles the life cycle of kube-proxy based on the NodeIPs and PodCIDRs handles

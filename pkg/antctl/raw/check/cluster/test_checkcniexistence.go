@@ -20,7 +20,7 @@ import (
 	"sort"
 	"strings"
 
-	"antrea.io/antrea/pkg/antctl/raw"
+	"antrea.io/antrea/v2/pkg/antctl/raw"
 )
 
 type checkCNIExistence struct{}

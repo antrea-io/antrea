@@ -26,8 +26,8 @@ import (
 	current "github.com/containernetworking/cni/pkg/types/100"
 	"github.com/stretchr/testify/assert"
 
-	argtypes "antrea.io/antrea/pkg/agent/cniserver/types"
-	cnipb "antrea.io/antrea/pkg/apis/cni/v1beta1"
+	argtypes "antrea.io/antrea/v2/pkg/agent/cniserver/types"
+	cnipb "antrea.io/antrea/v2/pkg/apis/cni/v1beta1"
 )
 
 type networkConf struct {

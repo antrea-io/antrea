@@ -25,8 +25,8 @@ import (
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 
-	"antrea.io/antrea/pkg/apis/controlplane"
-	queriermock "antrea.io/antrea/pkg/controller/networkpolicy/testing"
+	"antrea.io/antrea/v2/pkg/apis/controlplane"
+	queriermock "antrea.io/antrea/v2/pkg/controller/networkpolicy/testing"
 )
 
 func TestREST(t *testing.T) {

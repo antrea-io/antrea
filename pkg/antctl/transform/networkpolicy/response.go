@@ -27,11 +27,11 @@ import (
 	"k8s.io/kubectl/pkg/scheme"
 	"k8s.io/utils/strings/slices"
 
-	"antrea.io/antrea/pkg/antctl/transform"
-	"antrea.io/antrea/pkg/antctl/transform/common"
-	cpv1beta "antrea.io/antrea/pkg/apis/controlplane/v1beta2"
-	"antrea.io/antrea/pkg/apis/crd/v1beta1"
-	"antrea.io/antrea/pkg/util/printers"
+	"antrea.io/antrea/v2/pkg/antctl/transform"
+	"antrea.io/antrea/v2/pkg/antctl/transform/common"
+	cpv1beta "antrea.io/antrea/v2/pkg/apis/controlplane/v1beta2"
+	"antrea.io/antrea/v2/pkg/apis/crd/v1beta1"
+	"antrea.io/antrea/v2/pkg/util/printers"
 )
 
 const sortByEffectivePriority = "effectivePriority"

@@ -1,4 +1,4 @@
-module antrea.io/antrea
+module antrea.io/antrea/v2
 
 go 1.25.0
 

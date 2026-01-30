@@ -31,16 +31,16 @@ import (
 	"k8s.io/klog/v2"
 	netutils "k8s.io/utils/net"
 
-	"antrea.io/antrea/pkg/agent/config"
-	"antrea.io/antrea/pkg/agent/nodeip"
-	"antrea.io/antrea/pkg/agent/openflow/cookie"
-	"antrea.io/antrea/pkg/agent/openflow/operations"
-	"antrea.io/antrea/pkg/agent/types"
-	"antrea.io/antrea/pkg/agent/util"
-	binding "antrea.io/antrea/pkg/ovs/openflow"
-	"antrea.io/antrea/pkg/ovs/ovsctl"
-	"antrea.io/antrea/pkg/util/runtime"
-	"antrea.io/antrea/third_party/proxy"
+	"antrea.io/antrea/v2/pkg/agent/config"
+	"antrea.io/antrea/v2/pkg/agent/nodeip"
+	"antrea.io/antrea/v2/pkg/agent/openflow/cookie"
+	"antrea.io/antrea/v2/pkg/agent/openflow/operations"
+	"antrea.io/antrea/v2/pkg/agent/types"
+	"antrea.io/antrea/v2/pkg/agent/util"
+	binding "antrea.io/antrea/v2/pkg/ovs/openflow"
+	"antrea.io/antrea/v2/pkg/ovs/ovsctl"
+	"antrea.io/antrea/v2/pkg/util/runtime"
+	"antrea.io/antrea/v2/third_party/proxy"
 )
 
 var (
@@ -2126,7 +2126,7 @@ func (f *featureNetworkPolicy) dnsPacketInFlow(conjunctionID uint32) binding.Flo
 // otherwise, the packets are identified by matching both the Antrea gateway IP and NotServiceCTMark. Note that, when
 // proxyAll is disabled, currently there is no way to distinguish kubelet generated traffic from kube-proxy proxied traffic
 // only by matching the Antrea gateway IP. There is a defect that NodePort Service access by external clients will be
-// masqueraded as the Antrea gateway IP to bypass NetworkPolicies. See https://github.com/antrea-io/antrea/issues/280.
+// masqueraded as the Antrea gateway IP to bypass NetworkPolicies. See https://github.com/antrea.io/antrea/v2/issues/280.
 func (f *featurePodConnectivity) localProbeFlows() []binding.Flow {
 	cookieID := f.cookieAllocator.Request(f.category).Raw()
 	var flows []binding.Flow

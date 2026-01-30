@@ -22,8 +22,8 @@ import (
 	"github.com/stretchr/testify/require"
 	clientset "k8s.io/client-go/kubernetes"
 
-	"antrea.io/antrea/pkg/agent/util"
-	agentconfig "antrea.io/antrea/pkg/config/agent"
+	"antrea.io/antrea/v2/pkg/agent/util"
+	agentconfig "antrea.io/antrea/v2/pkg/config/agent"
 )
 
 func TestGetAvailableNodePortAddresses(t *testing.T) {

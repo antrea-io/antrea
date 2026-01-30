@@ -29,13 +29,13 @@ import (
 	genericoptions "k8s.io/apiserver/pkg/server/options"
 	basecompatibility "k8s.io/component-base/compatibility"
 
-	"antrea.io/antrea/pkg/apis"
-	systeminstall "antrea.io/antrea/pkg/apis/system/install"
-	"antrea.io/antrea/pkg/apiserver/handlers/loglevel"
-	"antrea.io/antrea/pkg/flowaggregator/apiserver/handlers/flowrecords"
-	"antrea.io/antrea/pkg/flowaggregator/apiserver/handlers/recordmetrics"
-	"antrea.io/antrea/pkg/flowaggregator/querier"
-	"antrea.io/antrea/pkg/version"
+	"antrea.io/antrea/v2/pkg/apis"
+	systeminstall "antrea.io/antrea/v2/pkg/apis/system/install"
+	"antrea.io/antrea/v2/pkg/apiserver/handlers/loglevel"
+	"antrea.io/antrea/v2/pkg/flowaggregator/apiserver/handlers/flowrecords"
+	"antrea.io/antrea/v2/pkg/flowaggregator/apiserver/handlers/recordmetrics"
+	"antrea.io/antrea/v2/pkg/flowaggregator/querier"
+	"antrea.io/antrea/v2/pkg/version"
 )
 
 const (

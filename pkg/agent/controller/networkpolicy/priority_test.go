@@ -22,7 +22,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"antrea.io/antrea/pkg/agent/types"
+	"antrea.io/antrea/v2/pkg/agent/types"
 )
 
 var (

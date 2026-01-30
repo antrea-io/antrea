@@ -19,8 +19,8 @@ package v1alpha1
 import (
 	context "context"
 
-	statsv1alpha1 "antrea.io/antrea/pkg/apis/stats/v1alpha1"
-	scheme "antrea.io/antrea/pkg/client/clientset/versioned/scheme"
+	statsv1alpha1 "antrea.io/antrea/v2/pkg/apis/stats/v1alpha1"
+	scheme "antrea.io/antrea/v2/pkg/client/clientset/versioned/scheme"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	gentype "k8s.io/client-go/gentype"
 )

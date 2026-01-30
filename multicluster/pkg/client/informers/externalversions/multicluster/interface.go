@@ -17,9 +17,9 @@
 package multicluster
 
 import (
-	internalinterfaces "antrea.io/antrea/multicluster/pkg/client/informers/externalversions/internalinterfaces"
-	v1alpha1 "antrea.io/antrea/multicluster/pkg/client/informers/externalversions/multicluster/v1alpha1"
-	v1alpha2 "antrea.io/antrea/multicluster/pkg/client/informers/externalversions/multicluster/v1alpha2"
+	internalinterfaces "antrea.io/antrea/v2/multicluster/pkg/client/informers/externalversions/internalinterfaces"
+	v1alpha1 "antrea.io/antrea/v2/multicluster/pkg/client/informers/externalversions/multicluster/v1alpha1"
+	v1alpha2 "antrea.io/antrea/v2/multicluster/pkg/client/informers/externalversions/multicluster/v1alpha2"
 )
 
 // Interface provides access to each of this group's versions.

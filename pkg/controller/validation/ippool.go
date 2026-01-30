@@ -20,8 +20,8 @@ import (
 
 	"k8s.io/apimachinery/pkg/util/sets"
 
-	crdv1beta1 "antrea.io/antrea/pkg/apis/crd/v1beta1"
-	utilip "antrea.io/antrea/pkg/util/ip"
+	crdv1beta1 "antrea.io/antrea/v2/pkg/apis/crd/v1beta1"
+	utilip "antrea.io/antrea/v2/pkg/util/ip"
 )
 
 // GetIPRangeSet returns a set of string representations of IP ranges

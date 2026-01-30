@@ -24,12 +24,12 @@ import (
 	"k8s.io/klog/v2"
 	netutils "k8s.io/utils/net"
 
-	"antrea.io/antrea/pkg/apis"
-	controllerconfig "antrea.io/antrea/pkg/config/controller"
-	"antrea.io/antrea/pkg/features"
-	"antrea.io/antrea/pkg/util/k8s"
-	"antrea.io/antrea/pkg/util/validation"
-	"antrea.io/antrea/pkg/util/yaml"
+	"antrea.io/antrea/v2/pkg/apis"
+	controllerconfig "antrea.io/antrea/v2/pkg/config/controller"
+	"antrea.io/antrea/v2/pkg/features"
+	"antrea.io/antrea/v2/pkg/util/k8s"
+	"antrea.io/antrea/v2/pkg/util/validation"
+	"antrea.io/antrea/v2/pkg/util/yaml"
 )
 
 const (

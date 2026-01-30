@@ -396,7 +396,7 @@ func Test_ipsecCertificateApprover_recognize(t *testing.T) {
 					Name: "worker-node-1-ipsec",
 				},
 				Spec: certificatesv1.CertificateSigningRequestSpec{
-					SignerName: "antrea.io/antrea-agent-ipsec-tunnel",
+					SignerName: "antrea.io/antrea/v2-agent-ipsec-tunnel",
 					Extra: map[string]certificatesv1.ExtraValue{
 						"authentication.kubernetes.io/pod-name": {"antrea-agent-8r5f9"},
 						"authentication.kubernetes.io/pod-uid":  {"1206ba75-7d75-474c-8110-99255502178c"},

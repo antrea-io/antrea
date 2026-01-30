@@ -30,8 +30,8 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 
-	"antrea.io/antrea/pkg/antctl"
-	"antrea.io/antrea/pkg/antctl/runtime"
+	"antrea.io/antrea/v2/pkg/antctl"
+	"antrea.io/antrea/v2/pkg/antctl/runtime"
 )
 
 type cmdAndReturnCode struct {

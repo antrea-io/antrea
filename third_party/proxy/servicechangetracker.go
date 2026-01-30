@@ -33,7 +33,7 @@ Original file https://raw.githubusercontent.com/kubernetes/kubernetes/refs/tags/
 Modifies:
 
 - Remove import "k8s.io/kubernetes/pkg/proxy/metrics" and its usages.
-- Replace import from proxyutil "k8s.io/kubernetes/pkg/proxy/util" to proxyutil "antrea.io/antrea/third_party/proxy/util".
+- Replace import from proxyutil "k8s.io/kubernetes/pkg/proxy/util" to proxyutil "antrea.io/antrea/v2/third_party/proxy/util".
 
 Adds:
 
@@ -55,7 +55,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/klog/v2"
 
-	proxyutil "antrea.io/antrea/third_party/proxy/util"
+	proxyutil "antrea.io/antrea/v2/third_party/proxy/util"
 )
 
 // ServiceChangeTracker carries state about uncommitted changes to an arbitrary number of

@@ -28,11 +28,11 @@ import (
 	"k8s.io/component-base/config"
 	"k8s.io/klog/v2"
 
-	"antrea.io/antrea/pkg/apis"
-	cert "antrea.io/antrea/pkg/apiserver/certificate"
-	"antrea.io/antrea/pkg/client/clientset/versioned"
-	"antrea.io/antrea/pkg/util/env"
-	"antrea.io/antrea/pkg/util/k8s"
+	"antrea.io/antrea/v2/pkg/apis"
+	cert "antrea.io/antrea/v2/pkg/apiserver/certificate"
+	"antrea.io/antrea/v2/pkg/client/clientset/versioned"
+	"antrea.io/antrea/v2/pkg/util/env"
+	"antrea.io/antrea/v2/pkg/util/k8s"
 )
 
 // AntreaClientProvider provides a method to get Antrea client.

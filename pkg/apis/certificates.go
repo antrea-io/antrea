@@ -18,5 +18,5 @@ const (
 	// AntreaOrganizationName is the organization name of Antrea managed certificates.
 	AntreaOrganizationName = "antrea.io"
 	// AntreaIPsecCSRSignerName is the signer name for signing IPsec certificates for antrea-agents.
-	AntreaIPsecCSRSignerName = "antrea.io/antrea-agent-ipsec-tunnel"
+	AntreaIPsecCSRSignerName = "antrea.io/antrea/v2-agent-ipsec-tunnel"
 )

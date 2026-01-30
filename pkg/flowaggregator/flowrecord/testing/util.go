@@ -17,7 +17,7 @@ package testing
 import (
 	"time"
 
-	"antrea.io/antrea/pkg/flowaggregator/flowrecord"
+	"antrea.io/antrea/v2/pkg/flowaggregator/flowrecord"
 )
 
 // used for unit testing

@@ -17,7 +17,7 @@ package types
 import (
 	"k8s.io/apimachinery/pkg/types"
 
-	"antrea.io/antrea/pkg/apis/controlplane"
+	"antrea.io/antrea/v2/pkg/apis/controlplane"
 )
 
 // EgressGroup describes a set of GroupMembers to apply Egress to.
