@@ -1,6 +1,5 @@
 # Antrea
 
-
 ![Antrea Logo](docs/assets/logo/antrea_logo.svg)
 
 ![Build Status](https://github.com/antrea-io/antrea/workflows/Go/badge.svg?branch=main)

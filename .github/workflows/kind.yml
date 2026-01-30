@@ -24,7 +24,7 @@ jobs:
     - uses: antrea-io/has-changes@v2
       id: check_diff
       with:
-        paths-ignore: docs/* ci/jenkins/* *.md hack/.notableofcontents plugins/*
+        paths-ignore: docs/* ci/jenkins/* hack/.notableofcontents plugins/*
     outputs:
       has_changes: ${{ steps.check_diff.outputs.has_changes }}
 
