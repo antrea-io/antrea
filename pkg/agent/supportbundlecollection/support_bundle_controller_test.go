@@ -207,11 +207,12 @@ func TestSupportBundleCollectionAdd(t *testing.T) {
 
 	for _, tt := range testcases {
 		t.Run(tt.name, func(t *testing.T) {
+			origNewAgentDumper := newAgentDumper
 			newAgentDumper = func(fs afero.Fs, executor exec.Interface, ovsCtlClient ovsctl.OVSCtlClient, aq agentquerier.AgentQuerier, npq querier.AgentNetworkPolicyInfoQuerier, since string, v4Enabled, v6Enabled bool) support.AgentDumper {
 				return tt.agentDumper
 			}
 			defer func() {
-				newAgentDumper = support.NewAgentDumper
+				newAgentDumper = origNewAgentDumper
 			}()
 			controller, clientset := newFakeController(t)
 			controller.sftpUploader = tt.uploader

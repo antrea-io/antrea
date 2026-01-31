@@ -47,9 +47,11 @@ const (
 
 var (
 	// Declared as variables for testing.
-	defaultFS       = afero.NewOsFs()
-	defaultExecutor = exec.New()
-	newAgentDumper  = support.NewAgentDumper
+	defaultFS                                                                                                                                                                     = afero.NewOsFs()
+	defaultExecutor                                                                                                                                                               = exec.New()
+	newAgentDumper  func(afero.Fs, exec.Interface, ovsctl.OVSCtlClient, agentquerier.AgentQuerier, querier.AgentNetworkPolicyInfoQuerier, string, bool, bool) support.AgentDumper = func(fs afero.Fs, executor exec.Interface, ovsCtlClient ovsctl.OVSCtlClient, aq agentquerier.AgentQuerier, npq querier.AgentNetworkPolicyInfoQuerier, since string, v4Enabled, v6Enabled bool) support.AgentDumper {
+		return support.NewAgentDumper(fs, executor, ovsCtlClient, aq, npq, since, v4Enabled, v6Enabled)
+	}
 
 	clock clockutils.Clock = clockutils.RealClock{}
 )

@@ -250,6 +250,7 @@ func (f *fakeAgentDumper) DumpMemberlist(basedir string) error {
 }
 
 func TestAgentStorage(t *testing.T) {
+	origNewAgentDumper := newAgentDumper
 	defaultFS = afero.NewMemMapFs()
 	defaultExecutor = new(testExec)
 	newAgentDumper = func(fs afero.Fs, executor exec.Interface, ovsCtlClient ovsctl.OVSCtlClient, aq agentquerier.AgentQuerier, npq querier.AgentNetworkPolicyInfoQuerier, since string, v4Enabled, v6Enabled bool) support.AgentDumper {
@@ -258,7 +259,7 @@ func TestAgentStorage(t *testing.T) {
 	defer func() {
 		defaultFS = afero.NewOsFs()
 		defaultExecutor = exec.New()
-		newAgentDumper = support.NewAgentDumper
+		newAgentDumper = origNewAgentDumper
 	}()
 
 	ctx := context.Background()
@@ -309,6 +310,7 @@ func TestAgentStorage(t *testing.T) {
 }
 
 func TestAgentStorageFailure(t *testing.T) {
+	origNewAgentDumper := newAgentDumper
 	defaultFS = afero.NewMemMapFs()
 	defaultExecutor = new(testExec)
 	newAgentDumper = func(fs afero.Fs, executor exec.Interface, ovsCtlClient ovsctl.OVSCtlClient, aq agentquerier.AgentQuerier, npq querier.AgentNetworkPolicyInfoQuerier, since string, v4Enabled, v6Enabled bool) support.AgentDumper {
@@ -317,7 +319,7 @@ func TestAgentStorageFailure(t *testing.T) {
 	defer func() {
 		defaultFS = afero.NewOsFs()
 		defaultExecutor = exec.New()
-		newAgentDumper = support.NewAgentDumper
+		newAgentDumper = origNewAgentDumper
 	}()
 
 	ctx := context.Background()

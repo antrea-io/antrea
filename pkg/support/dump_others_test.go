@@ -58,7 +58,7 @@ func TestDumpIPToolInfo(t *testing.T) {
 	exe := new(testExec)
 
 	dumper := NewAgentDumper(fs, exe, nil, nil, nil, "7s", true, true)
-	err := dumper.(*agentDumper).dumpIPToolInfo(baseDir)
+	err := dumper.dumpIPToolInfo(baseDir)
 	require.NoError(t, err)
 
 	testCases := []struct {
@@ -96,7 +96,7 @@ func TestDumpInterfaceConfigs(t *testing.T) {
 	}).AnyTimes()
 
 	dumper := NewAgentDumper(fs, nil, nil, q, nil, "7s", true, true)
-	err := dumper.(*agentDumper).dumpInterfaceConfigs(baseDir)
+	err := dumper.dumpInterfaceConfigs(baseDir)
 	require.NoError(t, err)
 
 	ok, err := afero.Exists(fs, filepath.Join(baseDir, "interface-config"))
