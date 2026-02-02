@@ -129,7 +129,6 @@ func run(o *Options) error {
 	ipPoolInformer := crdInformerFactory.Crd().V1beta1().IPPools()
 	nodeInformer := informerFactory.Core().V1().Nodes()
 	serviceInformer := informerFactory.Core().V1().Services()
-	endpointsInformer := informerFactory.Core().V1().Endpoints()
 	endpointSliceInformer := informerFactory.Discovery().V1().EndpointSlices()
 	namespaceInformer := informerFactory.Core().V1().Namespaces()
 	nodeLatencyMonitorInformer := crdInformerFactory.Crd().V1alpha1().NodeLatencyMonitors()
@@ -598,7 +597,7 @@ func run(o *Options) error {
 			nodeConfig.NodeTransportInterfaceName,
 			memberlistCluster,
 			serviceInformer,
-			endpointsInformer,
+			endpointSliceInformer,
 			linkMonitor,
 		)
 		if err != nil {
