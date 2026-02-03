@@ -15,5 +15,5 @@
 package check
 
 const (
-	DefaultTestImage = "antrea/toolbox:1.4-0"
+	DefaultTestImage = "antrea/toolbox:1.7-0"
 )
