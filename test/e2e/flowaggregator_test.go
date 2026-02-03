@@ -209,6 +209,11 @@ func setupFlowAggregatorTest(t *testing.T, options flowVisibilityTestOptions) (*
 	if err := setupFlowAggregator(t, data, options); err != nil {
 		t.Fatalf("Error when setting up FlowAggregator: %v", err)
 	}
+
+	if err := getAndCheckFlowAggregatorMetrics(t, data, options.databaseURL != ""); err != nil {
+		t.Fatalf("Error when checking metrics of Flow Aggregator: %v", err)
+	}
+
 	// Execute teardownFlowAggregator later than teardownTest to ensure that the logs of Flow
 	// Aggregator has been exported.
 	teardownFuncs = append(teardownFuncs, func() { teardownFlowAggregator(t, data) })
@@ -295,9 +300,6 @@ func TestFlowAggregator(t *testing.T) {
 	data, v4Enabled, v6Enabled := setupFlowAggregatorTest(t, flowVisibilityTestOptions{
 		databaseURL: defaultCHDatabaseURL,
 	})
-	if err := getAndCheckFlowAggregatorMetrics(t, data, true); err != nil {
-		t.Fatalf("Error when checking metrics of Flow Aggregator: %v", err)
-	}
 
 	k8sUtils, err = NewKubernetesUtils(data)
 	if err != nil {
@@ -341,7 +343,6 @@ func TestFlowAggregatorProxyMode(t *testing.T) {
 				includeK8sNames: includeK8sNames,
 			},
 		})
-		require.NoError(t, getAndCheckFlowAggregatorMetrics(t, data, false), "Error when checking metrics of Flow Aggregator")
 
 		// UIDs are only supported when using gRPC between FE and FA.
 		if k8sUIDsInsteadOfNames {
