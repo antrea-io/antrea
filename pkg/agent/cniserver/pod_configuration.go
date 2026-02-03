@@ -470,7 +470,10 @@ func (pc *podConfigurator) reconcile(pods []corev1.Pod, containerAccess *contain
 		// the same name would have a different host interface associated to it.
 		if !desiredPods.Has(namespacedName) || pc.isInterfaceInvalid(containerConfig) {
 			klog.V(4).InfoS("Deleting interface", "Pod", klog.KRef(namespace, name), "iface", containerConfig.InterfaceName)
-			if err := pc.removeInterfaces(containerConfig.ContainerID); err != nil {
+			// This code is executed synchronously as part of cniServer.Initialize and prior to the call to cniServer.Run.
+			// As a result, concurrent calls to CNI ADD / DEL are not possible.
+			err := pc.removeInterfaces(containerConfig.ContainerID)
+			if err != nil {
 				klog.ErrorS(err, "Failed to delete interface", "Pod", klog.KRef(namespace, name), "iface", containerConfig.InterfaceName)
 			}
 			continue
