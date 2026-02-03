@@ -90,9 +90,9 @@ Follow these steps to deploy Antrea on a Talos cluster:
   ```bash
   cat << EOF > ./patch.yaml
   cluster:
-  network:
-    cni:
-      name: none
+    network:
+      cni:
+        name: none
   EOF
 
   talosctl cluster create --config-patch=@patch.yaml --wait=false --workers 2
@@ -118,12 +118,18 @@ Follow these steps to deploy Antrea on a Talos cluster:
         capabilities: []
   EOF
 
-  helm install -n kube-system antrea -f value.yml antrea/antrea
+  helm install -n kube-system antrea -f values.yaml antrea/antrea
   ```
 
   The above configuration will drop all capabilities from the `installCNI`
   container, and instruct the Antrea Agent not to try loading any Kernel module
   explicitly.
+
+For Talos versions greater than or equal to 1.7, the Antrea Agents may fail to
+start. This is caused by the switch from `iptables-legacy` to `iptables-nft` in
+Talos. See [#7755](https://github.com/antrea-io/antrea/issues/7755) for more
+information. The issue has been resolved in Antrea version 2.6, and backported
+to versions 2.5 (v2.5.2) and 2.4 (v2.4.5).
 
 ## Updating the list
 
