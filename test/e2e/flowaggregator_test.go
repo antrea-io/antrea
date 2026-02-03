@@ -209,6 +209,11 @@ func setupFlowAggregatorTest(t *testing.T, options flowVisibilityTestOptions) (*
 	if err := setupFlowAggregator(t, data, options); err != nil {
 		t.Fatalf("Error when setting up FlowAggregator: %v", err)
 	}
+
+	if err := getAndCheckFlowAggregatorMetrics(t, data, options.withClickHouseExporter); err != nil {
+		t.Fatalf("Error when checking metrics of Flow Aggregator: %v", err)
+	}
+
 	// Execute teardownFlowAggregator later than teardownTest to ensure that the logs of Flow
 	// Aggregator has been exported.
 	teardownFuncs = append(teardownFuncs, func() { teardownFlowAggregator(t, data) })
@@ -225,13 +230,15 @@ func TestFlowAggregatorSecureConnection(t *testing.T) {
 	}{
 		{
 			flowVisibilityTestOptions: flowVisibilityTestOptions{
-				databaseURL: "tcp://clickhouse-clickhouse.flow-visibility.svc:9000",
+				databaseURL:            "tcp://clickhouse-clickhouse.flow-visibility.svc:9000",
+				withClickHouseExporter: true,
 			},
 			name: "clickhouse-tcp",
 		},
 		{
 			flowVisibilityTestOptions: flowVisibilityTestOptions{
-				databaseURL: "http://clickhouse-clickhouse.flow-visibility.svc:8123",
+				databaseURL:            "http://clickhouse-clickhouse.flow-visibility.svc:8123",
+				withClickHouseExporter: true,
 			},
 			name: "clickhouse-http",
 		},
@@ -239,6 +246,7 @@ func TestFlowAggregatorSecureConnection(t *testing.T) {
 			flowVisibilityTestOptions: flowVisibilityTestOptions{
 				databaseURL:              "tls://clickhouse-clickhouse.flow-visibility.svc:9440",
 				databaseSecureConnection: true,
+				withClickHouseExporter:   true,
 			},
 			name: "clickhouse-tls",
 		},
@@ -246,6 +254,7 @@ func TestFlowAggregatorSecureConnection(t *testing.T) {
 			flowVisibilityTestOptions: flowVisibilityTestOptions{
 				databaseURL:              "https://clickhouse-clickhouse.flow-visibility.svc:8443",
 				databaseSecureConnection: true,
+				withClickHouseExporter:   true,
 			},
 			name: "clickhouse-https",
 		},
@@ -255,6 +264,7 @@ func TestFlowAggregatorSecureConnection(t *testing.T) {
 				ipfixCollector: flowVisibilityIPFIXTestOptions{
 					tls: true,
 				},
+				withClickHouseExporter: true,
 			},
 			name: "ipfix-tls",
 		},
@@ -265,6 +275,7 @@ func TestFlowAggregatorSecureConnection(t *testing.T) {
 					tls:        true,
 					clientAuth: true,
 				},
+				withClickHouseExporter: true,
 			},
 			name: "ipfix-mtls",
 		},
@@ -293,11 +304,9 @@ func TestFlowAggregator(t *testing.T) {
 
 	var err error
 	data, v4Enabled, v6Enabled := setupFlowAggregatorTest(t, flowVisibilityTestOptions{
-		databaseURL: defaultCHDatabaseURL,
+		databaseURL:            defaultCHDatabaseURL,
+		withClickHouseExporter: true,
 	})
-	if err := getAndCheckFlowAggregatorMetrics(t, data, true); err != nil {
-		t.Fatalf("Error when checking metrics of Flow Aggregator: %v", err)
-	}
 
 	k8sUtils, err = NewKubernetesUtils(data)
 	if err != nil {
@@ -341,7 +350,6 @@ func TestFlowAggregatorProxyMode(t *testing.T) {
 				includeK8sNames: includeK8sNames,
 			},
 		})
-		require.NoError(t, getAndCheckFlowAggregatorMetrics(t, data, false), "Error when checking metrics of Flow Aggregator")
 
 		// UIDs are only supported when using gRPC between FE and FA.
 		if k8sUIDsInsteadOfNames {
