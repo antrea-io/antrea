@@ -1006,7 +1006,7 @@ func (n *NetworkPolicyController) internalNetworkPolicyWorker() {
 // Processes an item in the "internalNetworkPolicy" work queue, by calling
 // syncInternalNetworkPolicy after casting the item to a string
 // (NetworkPolicy key). If syncInternalNetworkPolicy returns an error, this
-// function handles it by requeueing the item so that it can be processed again
+// function handles it by requeuing the item so that it can be processed again
 // later. If syncInternalNetworkPolicy is successful, the NetworkPolicy is
 // removed from the queue until we get notify of a new change. This function
 // return false if and only if the work queue was shutdown (no more items will
@@ -1037,7 +1037,7 @@ func (n *NetworkPolicyController) processNextInternalNetworkPolicyWorkItem() boo
 
 // Processes an item in the "addressGroup" work queue, by calling
 // syncAddressGroup after casting the item to a string (addressGroup key).
-// If syncAddressGroup returns an error, this function handles it by requeueing
+// If syncAddressGroup returns an error, this function handles it by requeuing
 // the item so that it can be processed again later. If syncAddressGroup is
 // successful, the AddressGroup is removed from the queue until we get notify
 // of a new change. This function return false if and only if the work queue
@@ -1066,7 +1066,7 @@ func (n *NetworkPolicyController) processNextAddressGroupWorkItem() bool {
 // Processes an item in the "appliedToGroup" work queue, by calling
 // syncAppliedToGroup after casting the item to a string (appliedToGroup key).
 // If syncAppliedToGroup returns an error, this function handles it by
-// requeueing the item so that it can be processed again later. If
+// requeuing the item so that it can be processed again later. If
 // syncAppliedToGroup is successful, the AppliedToGroup is removed from the
 // queue until we get notify of a new change. This function return false if
 // and only if the work queue was shutdown (no more items will be processed).

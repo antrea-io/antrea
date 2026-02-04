@@ -251,7 +251,7 @@ func (c *Controller) processPacketCaptureItem() bool {
 		c.queue.Forget(key)
 	} else {
 		c.queue.AddRateLimited(key)
-		klog.ErrorS(err, "Error syncing PacketCapture, requeueing", "key", key)
+		klog.ErrorS(err, "Error syncing PacketCapture, requeuing", "key", key)
 	}
 	return true
 }
