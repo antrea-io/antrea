@@ -22,6 +22,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/mock/gomock"
 	corev1 "k8s.io/api/core/v1"
+	discoveryv1 "k8s.io/api/discovery/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	apimachinerytypes "k8s.io/apimachinery/pkg/types"
@@ -29,6 +30,7 @@ import (
 	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes/fake"
 	"k8s.io/client-go/util/workqueue"
+	"k8s.io/utils/ptr"
 
 	"antrea.io/antrea/pkg/agent/apis"
 	ipassignertest "antrea.io/antrea/pkg/agent/ipassigner/testing"
@@ -120,20 +122,20 @@ func newFakeController(t *testing.T, objs ...runtime.Object) *fakeController {
 	informerFactory := informers.NewSharedInformerFactory(clientset, 0)
 
 	serviceInformer := informerFactory.Core().V1().Services()
-	endpointInformer := informerFactory.Core().V1().Endpoints()
+	endpointSliceInformer := informerFactory.Discovery().V1().EndpointSlices()
 
 	memberlistCluster := &fakeMemberlistCluster{
 		// default fake hash function which will return the sorted string slice in ascending order.
 		hashFn: fakeHashFn(false),
 	}
 	eipController := &ServiceExternalIPController{
-		nodeName:              fakeNode1,
-		serviceInformer:       serviceInformer.Informer(),
-		serviceListerSynced:   serviceInformer.Informer().HasSynced,
-		serviceLister:         serviceInformer.Lister(),
-		endpointsInformer:     endpointInformer.Informer(),
-		endpointsListerSynced: endpointInformer.Informer().HasSynced,
-		endpointsLister:       endpointInformer.Lister(),
+		nodeName:                  fakeNode1,
+		serviceInformer:           serviceInformer.Informer(),
+		serviceListerSynced:       serviceInformer.Informer().HasSynced,
+		serviceLister:             serviceInformer.Lister(),
+		endpointSliceInformer:     endpointSliceInformer.Informer(),
+		endpointSliceListerSynced: endpointSliceInformer.Informer().HasSynced,
+		endpointSliceLister:       endpointSliceInformer.Lister(),
 		queue: workqueue.NewTypedRateLimitingQueueWithConfig(
 			workqueue.NewTypedItemExponentialFailureRateLimiter[apimachinerytypes.NamespacedName](minRetryDelay, maxRetryDelay),
 			workqueue.TypedRateLimitingQueueConfig[apimachinerytypes.NamespacedName]{
@@ -179,43 +181,48 @@ func makeService(name, namespace string, serviceType corev1.ServiceType,
 	return service
 }
 
-func makeEndpoints(name, namespace string, addresses, notReadyAddresses map[string]string) *corev1.Endpoints {
-	var addr, notReadyAddr []corev1.EndpointAddress
-	for k, v := range addresses {
-		ip := k
-		addr = append(addr, corev1.EndpointAddress{
-			IP:       ip,
-			NodeName: stringPtr(v),
+func makeEndpointSlice(name, namespace string, addresses, notReadyAddresses map[string]string) *discoveryv1.EndpointSlice {
+	var readyEndpoints, notReadyEndpoints []discoveryv1.Endpoint
+	for ip, nodeName := range addresses {
+		readyEndpoints = append(readyEndpoints, discoveryv1.Endpoint{
+			Addresses: []string{ip},
+			NodeName:  ptr.To(nodeName),
+			Conditions: discoveryv1.EndpointConditions{
+				Ready:   ptr.To(true),
+				Serving: ptr.To(true),
+			},
 		})
 	}
-	for k, v := range notReadyAddresses {
-		ip := k
-		notReadyAddr = append(notReadyAddr, corev1.EndpointAddress{
-			IP:       ip,
-			NodeName: stringPtr(v),
+	for ip, nodeName := range notReadyAddresses {
+		notReadyEndpoints = append(notReadyEndpoints, discoveryv1.Endpoint{
+			Addresses: []string{ip},
+			NodeName:  ptr.To(nodeName),
+			Conditions: discoveryv1.EndpointConditions{
+				Ready:   ptr.To(false),
+				Serving: ptr.To(false),
+			},
 		})
 	}
-	service := &corev1.Endpoints{
+	allEndpoints := append(readyEndpoints, notReadyEndpoints...)
+	endpointSlice := &discoveryv1.EndpointSlice{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      name,
+			Name:      fmt.Sprintf("%s-%s", name, "slice"),
 			Namespace: namespace,
-		},
-
-		Subsets: []corev1.EndpointSubset{
-			{
-				Addresses:         addr,
-				NotReadyAddresses: notReadyAddr,
+			Labels: map[string]string{
+				discoveryv1.LabelServiceName: name,
 			},
 		},
+		AddressType: discoveryv1.AddressTypeIPv4,
+		Endpoints:   allEndpoints,
 	}
-	return service
+	return endpointSlice
 }
 
 func TestCreateService(t *testing.T) {
 	tests := []struct {
 		name                     string
 		previousExternalIPStates map[apimachinerytypes.NamespacedName]externalIPState
-		existingEndpoints        []*corev1.Endpoints
+		existingEndpointSlices   []*discoveryv1.EndpointSlice
 		serviceToCreate          *corev1.Service
 		healthyNodes             []string
 		overrideHashFn           func([]string) []string
@@ -226,7 +233,7 @@ func TestCreateService(t *testing.T) {
 		{
 			name:                     "new Service created and local Node selected",
 			previousExternalIPStates: map[apimachinerytypes.NamespacedName]externalIPState{},
-			existingEndpoints:        nil,
+			existingEndpointSlices:   nil,
 			serviceToCreate:          servicePolicyCluster,
 			healthyNodes:             []string{fakeNode1, fakeNode2},
 			expectedCalls: func(mockIPAssigner *ipassignertest.MockIPAssigner) {
@@ -244,7 +251,7 @@ func TestCreateService(t *testing.T) {
 		{
 			name:                     "new Service created and local Node not selected",
 			previousExternalIPStates: map[apimachinerytypes.NamespacedName]externalIPState{},
-			existingEndpoints:        nil,
+			existingEndpointSlices:   nil,
 			serviceToCreate:          servicePolicyCluster,
 			healthyNodes:             []string{fakeNode1, fakeNode2},
 			overrideHashFn:           fakeHashFn(true),
@@ -261,8 +268,8 @@ func TestCreateService(t *testing.T) {
 		{
 			name:                     "new Service created with ExternalTrafficPolicy=Local and local Node selected",
 			previousExternalIPStates: map[apimachinerytypes.NamespacedName]externalIPState{},
-			existingEndpoints: []*corev1.Endpoints{
-				makeEndpoints(servicePolicyLocal.Name, servicePolicyLocal.Namespace,
+			existingEndpointSlices: []*discoveryv1.EndpointSlice{
+				makeEndpointSlice(servicePolicyLocal.Name, servicePolicyLocal.Namespace,
 					map[string]string{
 						"2.3.4.5": fakeNode1,
 					},
@@ -285,16 +292,15 @@ func TestCreateService(t *testing.T) {
 		{
 			name:                     "new Service created with ExternalTrafficPolicy=Local and local Node not Selected",
 			previousExternalIPStates: map[apimachinerytypes.NamespacedName]externalIPState{},
-			existingEndpoints: []*corev1.Endpoints{
-				makeEndpoints(servicePolicyLocal.Name, servicePolicyLocal.Namespace,
+			existingEndpointSlices: []*discoveryv1.EndpointSlice{
+				makeEndpointSlice(servicePolicyLocal.Name, servicePolicyLocal.Namespace,
 					map[string]string{
 						"2.3.4.5": fakeNode1,
 						"2.3.4.6": fakeNode2,
 					},
 					map[string]string{
 						"2.3.4.7": fakeNode2,
-					},
-				),
+					}),
 			},
 			serviceToCreate: servicePolicyLocal,
 			healthyNodes:    []string{fakeNode1, fakeNode2},
@@ -313,8 +319,8 @@ func TestCreateService(t *testing.T) {
 		{
 			name:                     "new Service created with ExternalTrafficPolicy=Local and local Node has no healthy endpoints",
 			previousExternalIPStates: map[apimachinerytypes.NamespacedName]externalIPState{},
-			existingEndpoints: []*corev1.Endpoints{
-				makeEndpoints(servicePolicyLocal.Name, servicePolicyLocal.Namespace,
+			existingEndpointSlices: []*discoveryv1.EndpointSlice{
+				makeEndpointSlice(servicePolicyLocal.Name, servicePolicyLocal.Namespace,
 					map[string]string{
 						"2.3.4.6": fakeNode2,
 					},
@@ -337,8 +343,8 @@ func TestCreateService(t *testing.T) {
 		{
 			name:                     "new Service created with ExternalTrafficPolicy=Local and no Nodes has healthy endpoints",
 			previousExternalIPStates: map[apimachinerytypes.NamespacedName]externalIPState{},
-			existingEndpoints: []*corev1.Endpoints{
-				makeEndpoints(servicePolicyLocal.Name, servicePolicyLocal.Namespace,
+			existingEndpointSlices: []*discoveryv1.EndpointSlice{
+				makeEndpointSlice(servicePolicyLocal.Name, servicePolicyLocal.Namespace,
 					nil,
 					map[string]string{
 						"2.3.4.5": fakeNode1,
@@ -357,8 +363,8 @@ func TestCreateService(t *testing.T) {
 			expectError: true,
 		},
 		{
-			name:              "new Service created and local Node selected and IP already assigned by other Service",
-			existingEndpoints: nil,
+			name:                   "new Service created and local Node selected and IP already assigned by other Service",
+			existingEndpointSlices: nil,
 			previousExternalIPStates: map[apimachinerytypes.NamespacedName]externalIPState{
 				keyFor(servicePolicyLocal): {fakeServiceExternalIP1, fakeExternalIPPoolName, fakeNode1},
 			},
@@ -383,7 +389,7 @@ func TestCreateService(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			objs := []runtime.Object{}
-			for _, s := range tt.existingEndpoints {
+			for _, s := range tt.existingEndpointSlices {
 				objs = append(objs, s)
 			}
 			objs = append(objs, tt.serviceToCreate)
@@ -434,7 +440,7 @@ func TestUpdateService(t *testing.T) {
 
 	tests := []struct {
 		name                     string
-		endpoints                []*corev1.Endpoints
+		endpointSlices           []*discoveryv1.EndpointSlice
 		serviceToUpdate          *corev1.Service
 		previousExternalIPStates map[apimachinerytypes.NamespacedName]externalIPState
 		expectedExternalIPStates map[apimachinerytypes.NamespacedName]externalIPState
@@ -445,7 +451,7 @@ func TestUpdateService(t *testing.T) {
 	}{
 		{
 			name:            "Service updated external IP and local Node selected",
-			endpoints:       nil,
+			endpointSlices:  nil,
 			serviceToUpdate: serviceExternalTrafficPolicyClusterUpdatedExternalIP,
 			previousExternalIPStates: map[apimachinerytypes.NamespacedName]externalIPState{
 				keyFor(serviceExternalTrafficPolicyClusterUpdatedExternalIP): {fakeServiceExternalIP1, fakeExternalIPPoolName, fakeNode1},
@@ -462,7 +468,7 @@ func TestUpdateService(t *testing.T) {
 		},
 		{
 			name:            "Service updated external IP and local Node selected but other Service still owns the assigned IP",
-			endpoints:       nil,
+			endpointSlices:  nil,
 			serviceToUpdate: serviceExternalTrafficPolicyClusterUpdatedExternalIP,
 			previousExternalIPStates: map[apimachinerytypes.NamespacedName]externalIPState{
 				keyFor(serviceExternalTrafficPolicyClusterWithSameExternalIP): {fakeServiceExternalIP1, fakeExternalIPPoolName, fakeNode1},
@@ -480,7 +486,7 @@ func TestUpdateService(t *testing.T) {
 		},
 		{
 			name:            "Service updated external IP and local Node not selected",
-			endpoints:       nil,
+			endpointSlices:  nil,
 			serviceToUpdate: serviceExternalTrafficPolicyClusterUpdatedExternalIP,
 			previousExternalIPStates: map[apimachinerytypes.NamespacedName]externalIPState{
 				keyFor(serviceExternalTrafficPolicyClusterUpdatedExternalIP): {fakeServiceExternalIP1, fakeExternalIPPoolName, fakeNode1},
@@ -497,7 +503,7 @@ func TestUpdateService(t *testing.T) {
 		},
 		{
 			name:            "Service changed type to ClusterIP",
-			endpoints:       nil,
+			endpointSlices:  nil,
 			serviceToUpdate: serviceChangedType,
 			previousExternalIPStates: map[apimachinerytypes.NamespacedName]externalIPState{
 				keyFor(serviceExternalTrafficPolicyClusterUpdatedExternalIP): {fakeServiceExternalIP1, fakeExternalIPPoolName, fakeNode1},
@@ -511,7 +517,7 @@ func TestUpdateService(t *testing.T) {
 		},
 		{
 			name:            "Service external IP reclaimed",
-			endpoints:       nil,
+			endpointSlices:  nil,
 			serviceToUpdate: serviceChangedType,
 			previousExternalIPStates: map[apimachinerytypes.NamespacedName]externalIPState{
 				keyFor(serviceExternalTrafficPolicyClusterUpdatedExternalIP): {fakeServiceExternalIP1, fakeExternalIPPoolName, fakeNode1},
@@ -525,8 +531,8 @@ func TestUpdateService(t *testing.T) {
 		},
 		{
 			name: "Service changed ExternalTrafficPolicy to local and local Node have to healthy Endpoints",
-			endpoints: []*corev1.Endpoints{
-				makeEndpoints(serviceChangedExternalTrafficPolicy.Name, serviceChangedExternalTrafficPolicy.Namespace,
+			endpointSlices: []*discoveryv1.EndpointSlice{
+				makeEndpointSlice(serviceChangedExternalTrafficPolicy.Name, serviceChangedExternalTrafficPolicy.Namespace,
 					map[string]string{
 						"2.3.4.6": fakeNode2,
 					}, map[string]string{
@@ -548,7 +554,7 @@ func TestUpdateService(t *testing.T) {
 		},
 		{
 			name:            "local Node no longer selected",
-			endpoints:       nil,
+			endpointSlices:  nil,
 			serviceToUpdate: servicePolicyCluster,
 			previousExternalIPStates: map[apimachinerytypes.NamespacedName]externalIPState{
 				keyFor(servicePolicyCluster): {fakeServiceExternalIP1, fakeExternalIPPoolName, fakeNode1},
@@ -565,8 +571,8 @@ func TestUpdateService(t *testing.T) {
 		},
 		{
 			name: "local Node no longer have healthy endpoints",
-			endpoints: []*corev1.Endpoints{
-				makeEndpoints(servicePolicyLocal.Name, servicePolicyLocal.Namespace,
+			endpointSlices: []*discoveryv1.EndpointSlice{
+				makeEndpointSlice(servicePolicyLocal.Name, servicePolicyLocal.Namespace,
 					map[string]string{
 						"2.3.4.6": fakeNode2,
 					}, map[string]string{
@@ -590,7 +596,7 @@ func TestUpdateService(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			objs := []runtime.Object{}
-			for _, s := range tt.endpoints {
+			for _, s := range tt.endpointSlices {
 				objs = append(objs, s)
 			}
 			objs = append(objs, tt.serviceToUpdate)
@@ -629,21 +635,17 @@ func keyFor(svc *corev1.Service) apimachinerytypes.NamespacedName {
 	}
 }
 
-func stringPtr(s string) *string {
-	return &s
-}
-
 func TestServiceExternalIPController_nodesHasHealthyServiceEndpoint(t *testing.T) {
 	tests := []struct {
 		name                 string
-		endpoints            []*corev1.Endpoints
+		endpointSlices       []*discoveryv1.EndpointSlice
 		serviceToTest        *corev1.Service
 		expectedHealthyNodes sets.Set[string]
 	}{
 		{
 			name: "all Endpoints are healthy",
-			endpoints: []*corev1.Endpoints{
-				makeEndpoints(servicePolicyLocal.Name, servicePolicyLocal.Namespace,
+			endpointSlices: []*discoveryv1.EndpointSlice{
+				makeEndpointSlice(servicePolicyLocal.Name, servicePolicyLocal.Namespace,
 					map[string]string{
 						"2.3.4.5": fakeNode1,
 						"2.3.4.6": fakeNode2,
@@ -656,23 +658,22 @@ func TestServiceExternalIPController_nodesHasHealthyServiceEndpoint(t *testing.T
 		},
 		{
 			name: "one Node does not have any healthy Endpoints",
-			endpoints: []*corev1.Endpoints{
-				makeEndpoints(servicePolicyLocal.Name, servicePolicyLocal.Namespace,
+			endpointSlices: []*discoveryv1.EndpointSlice{
+				makeEndpointSlice(servicePolicyLocal.Name, servicePolicyLocal.Namespace,
 					map[string]string{
 						"2.3.4.5": fakeNode1,
 					},
 					map[string]string{
 						"2.3.4.6": fakeNode2,
-					},
-				),
+					}),
 			},
 			serviceToTest:        servicePolicyLocal.DeepCopy(),
 			expectedHealthyNodes: sets.New(fakeNode1),
 		},
 		{
 			name: "Node have both healthy Endpoints and unhealthy Endpoints",
-			endpoints: []*corev1.Endpoints{
-				makeEndpoints(servicePolicyLocal.Name, servicePolicyLocal.Namespace,
+			endpointSlices: []*discoveryv1.EndpointSlice{
+				makeEndpointSlice(servicePolicyLocal.Name, servicePolicyLocal.Namespace,
 					map[string]string{
 						"2.3.4.6": fakeNode1,
 						"2.3.4.8": fakeNode2,
@@ -680,8 +681,7 @@ func TestServiceExternalIPController_nodesHasHealthyServiceEndpoint(t *testing.T
 					map[string]string{
 						"2.3.4.5": fakeNode1,
 						"2.3.4.7": fakeNode2,
-					},
-				),
+					}),
 			},
 			serviceToTest:        servicePolicyLocal.DeepCopy(),
 			expectedHealthyNodes: sets.New(fakeNode1, fakeNode2),
@@ -690,7 +690,7 @@ func TestServiceExternalIPController_nodesHasHealthyServiceEndpoint(t *testing.T
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			objs := []runtime.Object{}
-			for _, s := range tt.endpoints {
+			for _, s := range tt.endpointSlices {
 				objs = append(objs, s)
 			}
 			c := newFakeController(t, objs...)
