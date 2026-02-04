@@ -17,11 +17,11 @@
 package monitortool
 
 import (
-	"context"
 	"net"
 	"sync"
 	"sync/atomic"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/stretchr/testify/assert"
@@ -37,9 +37,6 @@ import (
 	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes/fake"
 	k8stesting "k8s.io/client-go/testing"
-	"k8s.io/klog/v2"
-	"k8s.io/utils/clock"
-	clocktesting "k8s.io/utils/clock/testing"
 
 	"antrea.io/antrea/pkg/agent/config"
 	monitortesting "antrea.io/antrea/pkg/agent/monitortool/testing"
@@ -119,34 +116,6 @@ var (
 	testAddrIPv6 = &testAddr{network: ipv6ProtocolICMPRaw, address: "::"}
 )
 
-// fakeClock is a wrapper around clocktesting.FakeClock that tracks the number
-// of times NewTicker has been called, so we can write a race-free test.
-type fakeClock struct {
-	*clocktesting.FakeClock
-	tickersAdded atomic.Int32
-	t            *testing.T
-}
-
-func newFakeClock(t *testing.T, clockT time.Time) *fakeClock {
-	t.Logf("Creating fake clock, now=%v", clockT)
-	return &fakeClock{
-		FakeClock: clocktesting.NewFakeClock(clockT),
-		t:         t,
-	}
-}
-
-func (c *fakeClock) TickersAdded() int32 {
-	return c.tickersAdded.Load()
-}
-
-func (c *fakeClock) NewTicker(d time.Duration) clock.Ticker {
-	defer func() {
-		c.t.Logf("Ticker created, now=%v, tick=%v", c.Now(), d)
-	}()
-	defer c.tickersAdded.Add(1)
-	return c.FakeClock.NewTicker(d)
-}
-
 type antreaClientGetter struct {
 	clientset versioned.Interface
 }
@@ -163,14 +132,12 @@ type testMonitor struct {
 	crdInformerFactory crdinformers.SharedInformerFactory
 	ctrl               *gomock.Controller
 	mockListener       *monitortesting.MockPacketListener
-	clock              *fakeClock
 }
 
 func newTestMonitor(
 	t *testing.T,
 	nodeConfig *config.NodeConfig,
 	trafficEncapMode config.TrafficEncapModeType,
-	clockT time.Time,
 	objects []runtime.Object,
 	crdObjects []runtime.Object,
 ) *testMonitor {
@@ -204,8 +171,6 @@ func newTestMonitor(
 	nlmInformer := crdInformerFactory.Crd().V1alpha1().NodeLatencyMonitors()
 	antreaClientProvider := &antreaClientGetter{crdClientset}
 	m := NewNodeLatencyMonitor(antreaClientProvider, nodeInformer, nlmInformer, nodeConfig, trafficEncapMode)
-	fakeClock := newFakeClock(t, clockT)
-	m.clock = fakeClock
 	mockListener := monitortesting.NewMockPacketListener(ctrl)
 	m.listener = mockListener
 
@@ -217,39 +182,39 @@ func newTestMonitor(
 		crdInformerFactory: crdInformerFactory,
 		ctrl:               ctrl,
 		mockListener:       mockListener,
-		clock:              fakeClock,
 	}
 }
 
 func TestEnableMonitor(t *testing.T) {
-	ctx := context.Background()
+	synctest.Test(t, func(t *testing.T) {
+		ctx := t.Context()
+		stopCh := ctx.Done()
+		m := newTestMonitor(t, nodeConfigDualStack, config.TrafficEncapModeEncap, nil, nil)
+		m.crdInformerFactory.Start(stopCh)
+		m.informerFactory.Start(stopCh)
+		m.crdInformerFactory.WaitForCacheSync(stopCh)
+		m.informerFactory.WaitForCacheSync(stopCh)
+		go m.Run(stopCh)
 
-	stopCh := make(chan struct{})
-	defer close(stopCh)
-	m := newTestMonitor(t, nodeConfigDualStack, config.TrafficEncapModeEncap, time.Now(), nil, nil)
-	m.crdInformerFactory.Start(stopCh)
-	m.informerFactory.Start(stopCh)
-	m.crdInformerFactory.WaitForCacheSync(stopCh)
-	m.informerFactory.WaitForCacheSync(stopCh)
-	go m.Run(stopCh)
+		pConnIPv4 := nettest.NewPacketConn(testAddrIPv4, nil, nil)
+		m.mockListener.EXPECT().ListenPacket(ipv4ProtocolICMPRaw, "0.0.0.0").Return(pConnIPv4, nil)
+		pConnIPv6 := nettest.NewPacketConn(testAddrIPv6, nil, nil)
+		m.mockListener.EXPECT().ListenPacket(ipv6ProtocolICMPRaw, "::").Return(pConnIPv6, nil)
 
-	pConnIPv4 := nettest.NewPacketConn(testAddrIPv4, nil, nil)
-	m.mockListener.EXPECT().ListenPacket(ipv4ProtocolICMPRaw, "0.0.0.0").Return(pConnIPv4, nil)
-	pConnIPv6 := nettest.NewPacketConn(testAddrIPv6, nil, nil)
-	m.mockListener.EXPECT().ListenPacket(ipv6ProtocolICMPRaw, "::").Return(pConnIPv6, nil)
+		_, err := m.crdClientset.CrdV1alpha1().NodeLatencyMonitors().Create(ctx, nlm, metav1.CreateOptions{})
+		require.NoError(t, err)
 
-	_, err := m.crdClientset.CrdV1alpha1().NodeLatencyMonitors().Create(ctx, nlm, metav1.CreateOptions{})
-	require.NoError(t, err)
-
-	require.Eventually(t, m.ctrl.Satisfied, 2*time.Second, 10*time.Millisecond)
-	assert.False(t, pConnIPv4.IsClosed())
-	assert.False(t, pConnIPv6.IsClosed())
+		synctest.Wait()
+		require.True(t, m.ctrl.Satisfied())
+		assert.False(t, pConnIPv4.IsClosed())
+		assert.False(t, pConnIPv6.IsClosed())
+	})
 }
 
 // collectProbePackets takes as input a channel used to receive packets, and returns a function that
 // can be called to collect received packets. It is useful to write assertions in tests that
 // validate the list of received packets. collectProbePackets starts a goroutine in the background,
-// which exists when either the input channel or the stop channel is closed.
+// which exits when either the input channel or the stop channel is closed.
 func collectProbePackets(t *testing.T, ch <-chan *nettest.Packet, stopCh <-chan struct{}) func([]*nettest.Packet) []*nettest.Packet {
 	var m sync.Mutex
 	newPackets := make([]*nettest.Packet, 0)
@@ -292,186 +257,149 @@ func extractIPs(packets []*nettest.Packet) []string {
 }
 
 func TestDisableMonitor(t *testing.T) {
-	ctx := context.Background()
+	synctest.Test(t, func(t *testing.T) {
+		ctx := t.Context()
+		stopCh := ctx.Done()
+		m := newTestMonitor(t, nodeConfigDualStack, config.TrafficEncapModeEncap, nil, []runtime.Object{nlm})
+		m.crdInformerFactory.Start(stopCh)
+		m.informerFactory.Start(stopCh)
+		m.crdInformerFactory.WaitForCacheSync(stopCh)
+		m.informerFactory.WaitForCacheSync(stopCh)
 
-	stopCh := make(chan struct{})
-	defer close(stopCh)
-	m := newTestMonitor(t, nodeConfigDualStack, config.TrafficEncapModeEncap, time.Now(), nil, []runtime.Object{nlm})
-	m.crdInformerFactory.Start(stopCh)
-	m.informerFactory.Start(stopCh)
-	m.crdInformerFactory.WaitForCacheSync(stopCh)
-	m.informerFactory.WaitForCacheSync(stopCh)
+		pConnIPv4 := nettest.NewPacketConn(testAddrIPv4, nil, nil)
+		m.mockListener.EXPECT().ListenPacket(ipv4ProtocolICMPRaw, "0.0.0.0").Return(pConnIPv4, nil)
+		pConnIPv6 := nettest.NewPacketConn(testAddrIPv6, nil, nil)
+		m.mockListener.EXPECT().ListenPacket(ipv6ProtocolICMPRaw, "::").Return(pConnIPv6, nil)
 
-	pConnIPv4 := nettest.NewPacketConn(testAddrIPv4, nil, nil)
-	m.mockListener.EXPECT().ListenPacket(ipv4ProtocolICMPRaw, "0.0.0.0").Return(pConnIPv4, nil)
-	pConnIPv6 := nettest.NewPacketConn(testAddrIPv6, nil, nil)
-	m.mockListener.EXPECT().ListenPacket(ipv6ProtocolICMPRaw, "::").Return(pConnIPv6, nil)
+		go m.Run(stopCh)
+		synctest.Wait()
+		require.True(t, m.ctrl.Satisfied())
 
-	go m.Run(stopCh)
-	require.Eventually(t, m.ctrl.Satisfied, 2*time.Second, 10*time.Millisecond)
+		require.NoError(t, m.crdClientset.CrdV1alpha1().NodeLatencyMonitors().Delete(ctx, nlm.Name, metav1.DeleteOptions{}))
 
-	err := m.crdClientset.CrdV1alpha1().NodeLatencyMonitors().Delete(ctx, nlm.Name, metav1.DeleteOptions{})
-	require.NoError(t, err)
-
-	assert.EventuallyWithT(t, func(t *assert.CollectT) {
+		synctest.Wait()
 		assert.True(t, pConnIPv4.IsClosed())
 		assert.True(t, pConnIPv6.IsClosed())
-	}, 2*time.Second, 10*time.Millisecond)
+	})
 }
 
 func TestUpdateMonitorPingInterval(t *testing.T) {
-	ctx := context.Background()
+	synctest.Test(t, func(t *testing.T) {
+		ctx := t.Context()
+		stopCh := ctx.Done()
 
-	// While investigating test flakiness in CI, we enabled verbose logging.
-	var level klog.Level
-	level.Set("4")
-	defer level.Set("0")
+		m := newTestMonitor(t, nodeConfigIPv4, config.TrafficEncapModeEncap, []runtime.Object{node1, node2, node3}, []runtime.Object{nlm})
+		m.crdInformerFactory.Start(stopCh)
+		m.informerFactory.Start(stopCh)
+		m.crdInformerFactory.WaitForCacheSync(stopCh)
+		m.informerFactory.WaitForCacheSync(stopCh)
 
-	stopCh := make(chan struct{})
-	defer close(stopCh)
-	m := newTestMonitor(t, nodeConfigIPv4, config.TrafficEncapModeEncap, time.Now(), []runtime.Object{node1, node2, node3}, []runtime.Object{nlm})
-	m.crdInformerFactory.Start(stopCh)
-	m.informerFactory.Start(stopCh)
-	m.crdInformerFactory.WaitForCacheSync(stopCh)
-	m.informerFactory.WaitForCacheSync(stopCh)
-	fakeClock := m.clock
+		outCh := make(chan *nettest.Packet, 10)
+		collect := collectProbePackets(t, outCh, stopCh)
+		pConnIPv4 := nettest.NewPacketConn(testAddrIPv4, nil, outCh)
+		m.mockListener.EXPECT().ListenPacket(ipv4ProtocolICMPRaw, "0.0.0.0").Return(pConnIPv4, nil)
 
-	outCh := make(chan *nettest.Packet, 10)
-	collect := collectProbePackets(t, outCh, stopCh)
-	pConnIPv4 := nettest.NewPacketConn(testAddrIPv4, nil, outCh)
-	m.mockListener.EXPECT().ListenPacket(ipv4ProtocolICMPRaw, "0.0.0.0").Return(pConnIPv4, nil)
+		var reportCount atomic.Int32
+		m.crdClientset.Fake.PrependReactor("create", "nodelatencystats", func(action k8stesting.Action) (bool, runtime.Object, error) {
+			reportCount.Add(1)
+			return false, nil, nil
+		})
 
-	var reportCount atomic.Int32
-	m.crdClientset.Fake.PrependReactor("create", "nodelatencystats", func(action k8stesting.Action) (bool, runtime.Object, error) {
-		reportCount.Add(1)
-		return false, nil, nil
-	})
+		go m.Run(stopCh)
 
-	go m.Run(stopCh)
-
-	// We wait for both ping and report tickers to be created, which indicates that we can advance
-	// the clock safely. This is not ideal, because it relies on knowledge of how the implementation
-	// creates tickers.
-	require.Eventually(t, func() bool {
-		return fakeClock.TickersAdded() == 2
-	}, 2*time.Second, 10*time.Millisecond)
-
-	// After advancing the clock by 60s (ping interval), we should see the ICMP requests being sent.
-	fakeClock.Step(60 * time.Second)
-	packets := []*nettest.Packet{}
-	assert.EventuallyWithT(t, func(t *assert.CollectT) {
-		packets = collect(packets)
+		// After advancing the clock by 60s (ping interval), we should see the ICMP requests being sent.
+		time.Sleep(60 * time.Second)
+		synctest.Wait()
+		packets := collect(nil)
 		assert.ElementsMatch(t, []string{"10.0.2.1", "10.0.3.1"}, extractIPs(packets))
 		assert.Equal(t, 0, int(reportCount.Load()), "Expected no report yet (jitter still pending)")
-	}, 2*time.Second, 10*time.Millisecond)
 
-	// Advance by 1 more second (reportJitter) → total 61s: report should now occur
-	fakeClock.Step(1 * time.Second)
-	assert.EventuallyWithT(t, func(t *assert.CollectT) {
+		// Advance by 1 more second (reportJitter) → total 61s: report should now occur
+		time.Sleep(1 * time.Second)
+		synctest.Wait()
 		assert.Equal(t, 1, int(reportCount.Load()), "Expected report after jittered interval (total 61s)")
-	}, 2*time.Second, 10*time.Millisecond)
 
-	// Clear count for next phase
-	reportCount.Store(0)
+		// Clear count for next phase
+		reportCount.Store(0)
 
-	// We increase the ping interval from 60s to 90s.
-	newNLM := nlm.DeepCopy()
-	newNLM.Spec.PingIntervalSeconds = 90
-	newNLM.Generation = 1
-	_, err := m.crdClientset.CrdV1alpha1().NodeLatencyMonitors().Update(ctx, newNLM, metav1.UpdateOptions{})
-	require.NoError(t, err)
+		// We increase the ping interval from 60s to 90s.
+		newNLM := nlm.DeepCopy()
+		newNLM.Spec.PingIntervalSeconds = 90
+		newNLM.Generation = 1
+		_, err := m.crdClientset.CrdV1alpha1().NodeLatencyMonitors().Update(ctx, newNLM, metav1.UpdateOptions{})
+		require.NoError(t, err)
 
-	// Again, we have to wait for the 2 new tickers to be created before we can advance the clock.
-	require.Eventually(t, func() bool {
-		return fakeClock.TickersAdded() == 4
-	}, 2*time.Second, 10*time.Millisecond)
+		// When advancing the clock by 60s (old ping iterval), we should not observe any ICMP requests.
+		time.Sleep(60 * time.Second)
+		synctest.Wait()
+		assert.Empty(t, collect(nil))
 
-	// When advancing the clock by 60s (old ping iterval), we should not observe any ICMP requests.
-	// We only wait for 200ms.
-	fakeClock.Step(60 * time.Second)
-	assert.Never(t, func() bool {
-		return len(collect(nil)) > 0
-	}, 200*time.Millisecond, 50*time.Millisecond)
-
-	// After advancing the clock by an extra 30s, we should see the ICMP requests being sent.
-	fakeClock.Step(30 * time.Second)
-	packets = []*nettest.Packet{}
-	assert.EventuallyWithT(t, func(t *assert.CollectT) {
-		packets = collect(packets)
+		// After advancing the clock by an extra 30s, we should see the ICMP requests being sent.
+		time.Sleep(30 * time.Second)
+		synctest.Wait()
+		packets = collect(nil)
 		assert.ElementsMatch(t, []string{"10.0.2.1", "10.0.3.1"}, extractIPs(packets))
 		assert.Equal(t, 0, int(reportCount.Load()), "Expected no report yet (jitter still pending)")
-	}, 2*time.Second, 10*time.Millisecond)
 
-	// Advance by 1 more second (reportJitter) → total 91s: report should now occur
-	fakeClock.Step(1 * time.Second)
-	assert.EventuallyWithT(t, func(t *assert.CollectT) {
+		// Advance by 1 more second (reportJitter) → total 91s: report should now occur
+		time.Sleep(1 * time.Second)
+		synctest.Wait()
 		assert.Equal(t, 1, int(reportCount.Load()), "Expected report after jittered interval (total 91s)")
-	}, 2*time.Second, 10*time.Millisecond)
+	})
 }
 
 func TestPingIntervalBelowMinReportInterval(t *testing.T) {
-	stopCh := make(chan struct{})
-	defer close(stopCh)
-	// Create a NodeLatencyMonitor with 5s ping interval (below minReportInterval of 10s)
-	nlm := &crdv1alpha1.NodeLatencyMonitor{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: "default",
-		},
-		Spec: crdv1alpha1.NodeLatencyMonitorSpec{
-			PingIntervalSeconds: 5, // Below minReportInterval (10s)
-		},
-	}
+	synctest.Test(t, func(t *testing.T) {
+		ctx := t.Context()
+		stopCh := ctx.Done()
+		// Create a NodeLatencyMonitor with 5s ping interval (below minReportInterval of 10s)
+		nlm := &crdv1alpha1.NodeLatencyMonitor{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: "default",
+			},
+			Spec: crdv1alpha1.NodeLatencyMonitorSpec{
+				PingIntervalSeconds: 5, // Below minReportInterval (10s)
+			},
+		}
 
-	m := newTestMonitor(t, nodeConfigIPv4, config.TrafficEncapModeEncap, time.Now(), []runtime.Object{node1, node2, node3}, []runtime.Object{nlm})
-	m.crdInformerFactory.Start(stopCh)
-	m.informerFactory.Start(stopCh)
-	m.crdInformerFactory.WaitForCacheSync(stopCh)
-	m.informerFactory.WaitForCacheSync(stopCh)
-	fakeClock := m.clock
+		m := newTestMonitor(t, nodeConfigIPv4, config.TrafficEncapModeEncap, []runtime.Object{node1, node2, node3}, []runtime.Object{nlm})
+		m.crdInformerFactory.Start(stopCh)
+		m.informerFactory.Start(stopCh)
+		m.crdInformerFactory.WaitForCacheSync(stopCh)
+		m.informerFactory.WaitForCacheSync(stopCh)
 
-	outCh := make(chan *nettest.Packet, 10)
-	collect := collectProbePackets(t, outCh, stopCh)
-	pConnIPv4 := nettest.NewPacketConn(testAddrIPv4, nil, outCh)
-	m.mockListener.EXPECT().ListenPacket(ipv4ProtocolICMPRaw, "0.0.0.0").Return(pConnIPv4, nil)
+		outCh := make(chan *nettest.Packet, 10)
+		collect := collectProbePackets(t, outCh, stopCh)
+		pConnIPv4 := nettest.NewPacketConn(testAddrIPv4, nil, outCh)
+		m.mockListener.EXPECT().ListenPacket(ipv4ProtocolICMPRaw, "0.0.0.0").Return(pConnIPv4, nil)
 
-	var reportCount atomic.Int32
-	m.crdClientset.Fake.PrependReactor("create", "nodelatencystats", func(action k8stesting.Action) (bool, runtime.Object, error) {
-		reportCount.Add(1)
-		return false, nil, nil
-	})
+		var reportCount atomic.Int32
+		m.crdClientset.Fake.PrependReactor("create", "nodelatencystats", func(action k8stesting.Action) (bool, runtime.Object, error) {
+			reportCount.Add(1)
+			return false, nil, nil
+		})
 
-	go m.Run(stopCh)
+		go m.Run(stopCh)
 
-	// We wait for both ping and report tickers to be created, which indicates that we can advance
-	// the clock safely. This is not ideal, because it relies on knowledge of how the implementation
-	// creates tickers.
-	require.Eventually(t, func() bool {
-		return fakeClock.TickersAdded() == 2
-	}, 2*time.Second, 10*time.Millisecond)
-
-	// After advancing the clock by 5s (ping interval), we should see the ICMP requests being sent.
-	fakeClock.Step(5 * time.Second)
-	packets := []*nettest.Packet{}
-	assert.EventuallyWithT(t, func(t *assert.CollectT) {
-		packets = collect(packets)
+		// After advancing the clock by 5s (ping interval), we should see the ICMP requests being sent.
+		time.Sleep(5 * time.Second)
+		synctest.Wait()
+		packets := collect(nil)
 		assert.ElementsMatch(t, []string{"10.0.2.1", "10.0.3.1"}, extractIPs(packets))
 		assert.Equal(t, 0, int(reportCount.Load()), "Expected no report at 5s (below minReportInterval)")
-	}, 2*time.Second, 10*time.Millisecond)
 
-	// Advance by another 5s (total 10s, second ping cycle) - should send pings but still no report
-	fakeClock.Step(5 * time.Second)
-	packets = []*nettest.Packet{}
-	assert.EventuallyWithT(t, func(t *assert.CollectT) {
-		packets = collect(packets)
+		// Advance by another 5s (total 10s, second ping cycle) - should send pings but still no report
+		time.Sleep(5 * time.Second)
+		synctest.Wait()
+		packets = collect(nil)
 		assert.ElementsMatch(t, []string{"10.0.2.1", "10.0.3.1"}, extractIPs(packets))
 		assert.Equal(t, 0, int(reportCount.Load()), "Expected no report yet at 10s (jitter still pending)")
-	}, 2*time.Second, 10*time.Millisecond)
 
-	// Advance by 1 more second (reportJitter) → total 11s: report should now occur
-	fakeClock.Step(1 * time.Second)
-	assert.EventuallyWithT(t, func(t *assert.CollectT) {
+		// Advance by 1 more second (reportJitter) → total 11s: report should now occur
+		time.Sleep(1 * time.Second)
+		synctest.Wait()
 		assert.Equal(t, 1, int(reportCount.Load()), "Expected report after jittered interval (total 11s)")
-	}, 2*time.Second, 10*time.Millisecond)
+	})
 }
 
 func TestSendPing(t *testing.T) {
@@ -497,34 +425,37 @@ func TestSendPing(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			now := time.Now()
-			m := newTestMonitor(t, nodeConfigDualStack, config.TrafficEncapModeEncap, now, nil, nil)
-			const icmpSeqNum = 12
-			m.icmpSeqNum.Store(icmpSeqNum)
-			expectedMsg := icmp.Message{
-				Type: tc.requestType,
-				Code: 0,
-				Body: &icmp.Echo{
-					ID:   int(icmpEchoID),
-					Seq:  icmpSeqNum + 1,
-					Data: []byte(now.Format(time.RFC3339Nano)),
-				},
-			}
-			outCh := make(chan *nettest.Packet, 1)
-			pConn := nettest.NewPacketConn(tc.addr, nil, outCh)
-			require.NoError(t, m.sendPing(pConn, net.ParseIP(tc.targetIP)))
-			expectedBytes, err := expectedMsg.Marshal(nil)
-			require.NoError(t, err)
-			select {
-			case p := <-outCh:
-				assert.Equal(t, tc.targetIP, p.Addr.String())
-				assert.Equal(t, expectedBytes, p.Bytes)
-			case <-time.After(1 * time.Second):
-				assert.Fail(t, "ICMP message was not sent correctly")
-			}
-			entry, ok := m.latencyStore.getNodeIPLatencyEntry(tc.targetIP)
-			assert.True(t, ok)
-			assert.Equal(t, now, entry.LastSendTime)
+			synctest.Test(t, func(t *testing.T) {
+				now := time.Now()
+				m := newTestMonitor(t, nodeConfigDualStack, config.TrafficEncapModeEncap, nil, nil)
+				const icmpSeqNum = 12
+				m.icmpSeqNum.Store(icmpSeqNum)
+				expectedMsg := icmp.Message{
+					Type: tc.requestType,
+					Code: 0,
+					Body: &icmp.Echo{
+						ID:   int(icmpEchoID),
+						Seq:  icmpSeqNum + 1,
+						Data: icmpEchoData(now),
+					},
+				}
+				outCh := make(chan *nettest.Packet, 1)
+				pConn := nettest.NewPacketConn(tc.addr, nil, outCh)
+				require.NoError(t, m.sendPing(pConn, net.ParseIP(tc.targetIP)))
+				expectedBytes, err := expectedMsg.Marshal(nil)
+				require.NoError(t, err)
+				synctest.Wait()
+				select {
+				case p := <-outCh:
+					assert.Equal(t, tc.targetIP, p.Addr.String())
+					assert.Equal(t, expectedBytes, p.Bytes)
+				default:
+					assert.Fail(t, "ICMP message was not sent correctly")
+				}
+				entry, ok := m.latencyStore.getNodeIPLatencyEntry(tc.targetIP)
+				assert.True(t, ok)
+				assert.Equal(t, now, entry.LastSendTime)
+			})
 		})
 	}
 }
@@ -533,44 +464,34 @@ func TestSendPing(t *testing.T) {
 // "normal" case here. The ICMP parsing and validation logic is tested comprehensively in
 // TestHandlePing.
 func TestRecvPings(t *testing.T) {
-	now := time.Now()
-	m := newTestMonitor(t, nodeConfigDualStack, config.TrafficEncapModeEncap, now, nil, nil)
-	inCh := make(chan *nettest.Packet, 1)
-	pConn := nettest.NewPacketConn(testAddrIPv4, inCh, nil)
-	doneCh := make(chan struct{})
-	go func() {
-		defer close(doneCh)
-		// This will block until the socket is closed.
-		m.recvPings(pConn, true)
-	}()
-	msg := icmp.Message{
-		Type: ipv4.ICMPTypeEchoReply,
-		Body: &icmp.Echo{
-			ID:   int(icmpEchoID),
-			Seq:  13,
-			Data: []byte(now.Format(time.RFC3339Nano)),
-		},
-	}
-	msgBytes, err := msg.Marshal(nil)
-	require.NoError(t, err)
-	peerIP := "10.0.2.1"
-	peerAddr := &testAddr{network: ipv4ProtocolICMPRaw, address: peerIP}
-	inCh <- &nettest.Packet{
-		Addr:  peerAddr,
-		Bytes: msgBytes,
-	}
-	assert.Eventually(t, func() bool {
+	synctest.Test(t, func(t *testing.T) {
+		m := newTestMonitor(t, nodeConfigDualStack, config.TrafficEncapModeEncap, nil, nil)
+		inCh := make(chan *nettest.Packet, 1)
+		pConn := nettest.NewPacketConn(testAddrIPv4, inCh, nil)
+		// m.recvPings will block until the socket is closed.
+		go m.recvPings(pConn, true)
+		msg := icmp.Message{
+			Type: ipv4.ICMPTypeEchoReply,
+			Body: &icmp.Echo{
+				ID:   int(icmpEchoID),
+				Seq:  13,
+				Data: icmpEchoData(time.Now()),
+			},
+		}
+		msgBytes, err := msg.Marshal(nil)
+		require.NoError(t, err)
+		peerIP := "10.0.2.1"
+		peerAddr := &testAddr{network: ipv4ProtocolICMPRaw, address: peerIP}
+		inCh <- &nettest.Packet{
+			Addr:  peerAddr,
+			Bytes: msgBytes,
+		}
+		synctest.Wait()
 		_, ok := m.latencyStore.getNodeIPLatencyEntry(peerIP)
-		return ok
-	}, 2*time.Second, 10*time.Millisecond)
+		assert.True(t, ok)
 
-	pConn.Close()
-	select {
-	case <-doneCh:
-		break
-	case <-time.After(1 * time.Second):
-		assert.Fail(t, "recvPings should return when socket is closed")
-	}
+		pConn.Close()
+	})
 }
 
 func MustMarshal(msg *icmp.Message) []byte {
@@ -582,111 +503,122 @@ func MustMarshal(msg *icmp.Message) []byte {
 }
 
 func TestHandlePing(t *testing.T) {
-	now := time.Now()
-	payload := []byte(now.Format(time.RFC3339Nano))
-
 	testCases := []struct {
-		name     string
-		msgBytes []byte
-		isIPv4   bool
-		isValid  bool
+		name    string
+		msgFn   func() []byte
+		isIPv4  bool
+		isValid bool
 	}{
 		{
 			name: "valid IPv4",
-			msgBytes: MustMarshal(&icmp.Message{
-				Type: ipv4.ICMPTypeEchoReply,
-				Body: &icmp.Echo{
-					ID:   int(icmpEchoID),
-					Seq:  1,
-					Data: payload,
-				},
-			}),
+			msgFn: func() []byte {
+				return MustMarshal(&icmp.Message{
+					Type: ipv4.ICMPTypeEchoReply,
+					Body: &icmp.Echo{
+						ID:   int(icmpEchoID),
+						Seq:  1,
+						Data: icmpEchoData(time.Now()),
+					},
+				})
+			},
 			isIPv4:  true,
 			isValid: true,
 		},
 		{
 			name: "valid IPv6",
-			msgBytes: MustMarshal(&icmp.Message{
-				Type: ipv6.ICMPTypeEchoReply,
-				Body: &icmp.Echo{
-					ID:   int(icmpEchoID),
-					Seq:  1,
-					Data: payload,
-				},
-			}),
+			msgFn: func() []byte {
+				return MustMarshal(&icmp.Message{
+					Type: ipv6.ICMPTypeEchoReply,
+					Body: &icmp.Echo{
+						ID:   int(icmpEchoID),
+						Seq:  1,
+						Data: icmpEchoData(time.Now()),
+					},
+				})
+			},
 			isIPv4:  false,
 			isValid: true,
 		},
 		{
-			name:     "invalid ICMP message",
-			msgBytes: []byte("foo"), // this is too short to be a valid ICMP message
-			isIPv4:   true,
-			isValid:  false,
+			name:    "invalid ICMP message",
+			msgFn:   func() []byte { return []byte("foo") }, // this is too short to be a valid ICMP message
+			isIPv4:  true,
+			isValid: false,
 		},
 		{
 			name: "wrong IP family",
-			msgBytes: MustMarshal(&icmp.Message{
-				Type: ipv4.ICMPTypeEchoReply,
-				Body: &icmp.Echo{
-					ID:   int(icmpEchoID),
-					Seq:  1,
-					Data: payload,
-				},
-			}),
+			msgFn: func() []byte {
+				return MustMarshal(&icmp.Message{
+					Type: ipv4.ICMPTypeEchoReply,
+					Body: &icmp.Echo{
+						ID:   int(icmpEchoID),
+						Seq:  1,
+						Data: icmpEchoData(time.Now()),
+					},
+				})
+			},
 			isIPv4:  false,
 			isValid: false,
 		},
 		{
 			name: "not an ICMP echo reply IPv4",
-			msgBytes: MustMarshal(&icmp.Message{
-				Type: ipv4.ICMPTypeEcho,
-				Code: 0,
-				Body: &icmp.Echo{
-					ID:   int(icmpEchoID),
-					Seq:  1,
-					Data: payload,
-				},
-			}),
+			msgFn: func() []byte {
+				return MustMarshal(&icmp.Message{
+					Type: ipv4.ICMPTypeEcho,
+					Code: 0,
+					Body: &icmp.Echo{
+						ID:   int(icmpEchoID),
+						Seq:  1,
+						Data: icmpEchoData(time.Now()),
+					},
+				})
+			},
 			isIPv4:  true,
 			isValid: false,
 		},
 		{
 			name: "not an ICMP echo reply IPv6",
-			msgBytes: MustMarshal(&icmp.Message{
-				Type: ipv6.ICMPTypeEchoRequest,
-				Code: 0,
-				Body: &icmp.Echo{
-					ID:   int(icmpEchoID),
-					Seq:  1,
-					Data: payload,
-				},
-			}),
+			msgFn: func() []byte {
+				return MustMarshal(&icmp.Message{
+					Type: ipv6.ICMPTypeEchoRequest,
+					Code: 0,
+					Body: &icmp.Echo{
+						ID:   int(icmpEchoID),
+						Seq:  1,
+						Data: icmpEchoData(time.Now()),
+					},
+				})
+			},
 			isIPv4:  false,
 			isValid: false,
 		},
 		{
 			name: "wrong echo ID",
-			msgBytes: MustMarshal(&icmp.Message{
-				Type: ipv4.ICMPTypeEchoReply,
-				Body: &icmp.Echo{
-					ID:   int(icmpEchoID) + 1,
-					Seq:  1,
-					Data: payload,
-				},
-			}),
+			msgFn: func() []byte {
+				return MustMarshal(&icmp.Message{
+					Type: ipv4.ICMPTypeEchoReply,
+					Body: &icmp.Echo{
+						ID:   int(icmpEchoID) + 1,
+						Seq:  1,
+						Data: icmpEchoData(time.Now()),
+					},
+				})
+			},
 			isIPv4:  true,
 			isValid: false,
 		},
 		{
 			name: "invalid payload",
-			msgBytes: MustMarshal(&icmp.Message{
-				Type: ipv4.ICMPTypeEchoReply,
-				Body: &icmp.Echo{
-					ID:   int(icmpEchoID),
-					Seq:  1,
-					Data: []byte("foobar"),
-				},
-			}),
+			msgFn: func() []byte {
+				return MustMarshal(&icmp.Message{
+					Type: ipv4.ICMPTypeEchoReply,
+					Body: &icmp.Echo{
+						ID:   int(icmpEchoID),
+						Seq:  1,
+						Data: []byte("foobar"),
+					},
+				})
+			},
 			isIPv4:  true,
 			isValid: false,
 		},
@@ -694,29 +626,30 @@ func TestHandlePing(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			m := newTestMonitor(t, nodeConfigDualStack, config.TrafficEncapModeEncap, now, nil, nil)
-			peerIP := "10.0.2.1"
-			if !tc.isIPv4 {
-				peerIP = "2001:ab03:cd04:55ee:100b::1"
-			}
-			const rtt = 1 * time.Second
-			m.clock.Step(rtt)
-			m.handlePing(tc.msgBytes, peerIP, tc.isIPv4)
-			entry, ok := m.latencyStore.getNodeIPLatencyEntry(peerIP)
-			if tc.isValid {
-				require.True(t, ok)
-				assert.Equal(t, m.clock.Now(), entry.LastRecvTime)
-				assert.Equal(t, rtt, entry.LastMeasuredRTT)
-			} else {
-				assert.False(t, ok)
-			}
+			synctest.Test(t, func(t *testing.T) {
+				m := newTestMonitor(t, nodeConfigDualStack, config.TrafficEncapModeEncap, nil, nil)
+				peerIP := "10.0.2.1"
+				if !tc.isIPv4 {
+					peerIP = "2001:ab03:cd04:55ee:100b::1"
+				}
+				msgBytes := tc.msgFn()
+				const rtt = 1 * time.Second
+				time.Sleep(rtt)
+				m.handlePing(msgBytes, peerIP, tc.isIPv4)
+				entry, ok := m.latencyStore.getNodeIPLatencyEntry(peerIP)
+				if tc.isValid {
+					require.True(t, ok)
+					assert.Equal(t, time.Now(), entry.LastRecvTime)
+					assert.Equal(t, rtt, entry.LastMeasuredRTT)
+				} else {
+					assert.False(t, ok)
+				}
+			})
 		})
 	}
 }
 
 func TestNodeAddUpdateDelete(t *testing.T) {
-	ctx := context.Background()
-
 	node := makeNode("node3", []string{"192.168.77.103", "192:168:77::103"}, []string{"10.0.3.0/24", "2001:ab03:cd04:55ee:100c::/80"})
 	updatedNode := makeNode("node3", []string{"192.168.77.104", "192:168:77::104"}, []string{"10.0.4.0/24", "2001:ab03:cd04:55ee:100d::/80"})
 
@@ -754,154 +687,141 @@ func TestNodeAddUpdateDelete(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.encapMode.String(), func(t *testing.T) {
-			stopCh := make(chan struct{})
-			defer close(stopCh)
-			// We start with node1 (the current Node) only, and it should be ignored.
-			m := newTestMonitor(t, nodeConfigIPv4, tc.encapMode, time.Now(), []runtime.Object{node1}, nil)
-			m.crdInformerFactory.Start(stopCh)
-			m.informerFactory.Start(stopCh)
-			m.crdInformerFactory.WaitForCacheSync(stopCh)
-			m.informerFactory.WaitForCacheSync(stopCh)
-			go m.Run(stopCh)
+			synctest.Test(t, func(t *testing.T) {
+				ctx := t.Context()
+				stopCh := ctx.Done()
+				// We start with node1 (the current Node) only, and it should be ignored.
+				m := newTestMonitor(t, nodeConfigIPv4, tc.encapMode, []runtime.Object{node1}, nil)
+				m.crdInformerFactory.Start(stopCh)
+				m.informerFactory.Start(stopCh)
+				m.crdInformerFactory.WaitForCacheSync(stopCh)
+				m.informerFactory.WaitForCacheSync(stopCh)
+				go m.Run(stopCh)
 
-			require.Empty(t, m.latencyStore.ListNodeIPs())
+				require.Empty(t, m.latencyStore.ListNodeIPs())
 
-			_, err := m.clientset.CoreV1().Nodes().Create(ctx, node, metav1.CreateOptions{})
-			require.NoError(t, err)
+				_, err := m.clientset.CoreV1().Nodes().Create(ctx, node, metav1.CreateOptions{})
+				require.NoError(t, err)
 
-			// We convert the []net.IP slice to []string before comparing the slices,
-			// and not the reverse, because creating a net.IP with net.ParseIP for an
-			// IPv4 address will yield a 16-byte slice which may not exactly match the
-			// result of ListNodeIPs(), even though the values indeed represent the same
-			// IP address.
-			assert.EventuallyWithT(t, func(t *assert.CollectT) {
+				synctest.Wait()
+				// We convert the []net.IP slice to []string before comparing the slices,
+				// and not the reverse, because creating a net.IP with net.ParseIP for an
+				// IPv4 address will yield a 16-byte slice which may not exactly match the
+				// result of ListNodeIPs(), even though the values indeed represent the same
+				// IP address.
 				assert.ElementsMatch(t, tc.expectedNodeIPs1, convertIPsToStrs(m.latencyStore.ListNodeIPs()))
-			}, 2*time.Second, 10*time.Millisecond)
 
-			_, err = m.clientset.CoreV1().Nodes().Update(ctx, updatedNode, metav1.UpdateOptions{})
-			require.NoError(t, err)
+				_, err = m.clientset.CoreV1().Nodes().Update(ctx, updatedNode, metav1.UpdateOptions{})
+				require.NoError(t, err)
 
-			assert.EventuallyWithT(t, func(t *assert.CollectT) {
+				synctest.Wait()
 				assert.ElementsMatch(t, tc.expectedNodeIPs2, convertIPsToStrs(m.latencyStore.ListNodeIPs()))
-			}, 2*time.Second, 10*time.Millisecond)
 
-			err = m.clientset.CoreV1().Nodes().Delete(ctx, node.Name, metav1.DeleteOptions{})
-			require.NoError(t, err)
+				err = m.clientset.CoreV1().Nodes().Delete(ctx, node.Name, metav1.DeleteOptions{})
+				require.NoError(t, err)
 
-			assert.EventuallyWithT(t, func(t *assert.CollectT) {
+				synctest.Wait()
 				assert.Empty(t, m.latencyStore.ListNodeIPs())
-			}, 2*time.Second, 10*time.Millisecond)
+			})
 		})
 	}
 }
 
 func TestMonitorLoop(t *testing.T) {
-	stopCh := make(chan struct{})
-	defer close(stopCh)
-	m := newTestMonitor(t, nodeConfigDualStack, config.TrafficEncapModeEncap, time.Now(), []runtime.Object{node1, node2, node3}, []runtime.Object{nlm})
-	m.crdInformerFactory.Start(stopCh)
-	m.informerFactory.Start(stopCh)
-	m.crdInformerFactory.WaitForCacheSync(stopCh)
-	m.informerFactory.WaitForCacheSync(stopCh)
-	fakeClock := m.clock
+	synctest.Test(t, func(t *testing.T) {
+		ctx := t.Context()
+		stopCh := ctx.Done()
+		m := newTestMonitor(t, nodeConfigDualStack, config.TrafficEncapModeEncap, []runtime.Object{node1, node2, node3}, []runtime.Object{nlm})
+		m.crdInformerFactory.Start(stopCh)
+		m.informerFactory.Start(stopCh)
+		m.crdInformerFactory.WaitForCacheSync(stopCh)
+		m.informerFactory.WaitForCacheSync(stopCh)
 
-	in4Ch := make(chan *nettest.Packet, 10)
-	in6Ch := make(chan *nettest.Packet, 10)
-	outCh := make(chan *nettest.Packet, 10)
-	collect := collectProbePackets(t, outCh, stopCh)
-	pConnIPv4 := nettest.NewPacketConn(testAddrIPv4, in4Ch, outCh)
-	m.mockListener.EXPECT().ListenPacket(ipv4ProtocolICMPRaw, "0.0.0.0").Return(pConnIPv4, nil)
-	pConnIPv6 := nettest.NewPacketConn(testAddrIPv6, in6Ch, outCh)
-	m.mockListener.EXPECT().ListenPacket(ipv6ProtocolICMPRaw, "::").Return(pConnIPv6, nil)
+		in4Ch := make(chan *nettest.Packet, 10)
+		in6Ch := make(chan *nettest.Packet, 10)
+		outCh := make(chan *nettest.Packet, 10)
+		collect := collectProbePackets(t, outCh, stopCh)
+		pConnIPv4 := nettest.NewPacketConn(testAddrIPv4, in4Ch, outCh)
+		m.mockListener.EXPECT().ListenPacket(ipv4ProtocolICMPRaw, "0.0.0.0").Return(pConnIPv4, nil)
+		pConnIPv6 := nettest.NewPacketConn(testAddrIPv6, in6Ch, outCh)
+		m.mockListener.EXPECT().ListenPacket(ipv6ProtocolICMPRaw, "::").Return(pConnIPv6, nil)
 
-	var reportCount atomic.Int32
-	m.crdClientset.Fake.PrependReactor("create", "nodelatencystats", func(action k8stesting.Action) (bool, runtime.Object, error) {
-		reportCount.Add(1)
-		return false, nil, nil
-	})
+		var reportCount atomic.Int32
+		m.crdClientset.Fake.PrependReactor("create", "nodelatencystats", func(action k8stesting.Action) (bool, runtime.Object, error) {
+			reportCount.Add(1)
+			return false, nil, nil
+		})
 
-	go m.Run(stopCh)
+		go m.Run(stopCh)
+		synctest.Wait()
+		require.Empty(t, m.latencyStore.getNodeIPLatencyKeys())
 
-	// We wait for both ping and report tickers to be created, which indicates that we can advance
-	// the clock safely. This is not ideal, because it relies on knowledge of how the implementation
-	// creates tickers.
-	require.Eventually(t, func() bool {
-		return fakeClock.TickersAdded() == 2
-	}, 2*time.Second, 10*time.Millisecond)
-
-	require.Empty(t, m.latencyStore.getNodeIPLatencyKeys())
-
-	// After advancing the clock by 60s (ping interval), we should see the ICMP requests being sent.
-	fakeClock.Step(60 * time.Second)
-	packets := []*nettest.Packet{}
-	assert.EventuallyWithT(t, func(t *assert.CollectT) {
-		packets = collect(packets)
+		// After advancing the clock by 60s (ping interval), we should see the ICMP requests being sent.
+		time.Sleep(60 * time.Second)
+		synctest.Wait()
+		packets := collect(nil)
 		assert.ElementsMatch(t, []string{"10.0.2.1", "10.0.3.1", "2001:ab03:cd04:55ee:100b::1", "2001:ab03:cd04:55ee:100c::1"}, extractIPs(packets))
 		assert.Equal(t, 0, int(reportCount.Load()), "Expected no report yet (jitter still pending)")
-	}, 2*time.Second, 10*time.Millisecond)
 
-	// The store is updated when sending the ICMP requests, as we need to store the send timestamp.
-	assert.ElementsMatch(t, []string{"10.0.2.1", "10.0.3.1", "2001:ab03:cd04:55ee:100b::1", "2001:ab03:cd04:55ee:100c::1"}, m.latencyStore.getNodeIPLatencyKeys())
+		// The store is updated when sending the ICMP requests, as we need to store the send timestamp.
+		assert.ElementsMatch(t, []string{"10.0.2.1", "10.0.3.1", "2001:ab03:cd04:55ee:100b::1", "2001:ab03:cd04:55ee:100c::1"}, m.latencyStore.getNodeIPLatencyKeys())
 
-	// Advance the clock by one more second, and send replies for all ICMP requests.
-	fakeClock.Step(1 * time.Second)
-	for _, packet := range packets {
-		if packet.Addr.Network() == ipv4ProtocolICMPRaw {
-			request, err := icmp.ParseMessage(protocolICMP, packet.Bytes)
-			require.NoError(t, err)
-			replyBytes := MustMarshal(&icmp.Message{
-				Type: ipv4.ICMPTypeEchoReply,
-				Body: request.Body,
-			})
-			in4Ch <- &nettest.Packet{
-				Addr:  packet.Addr,
-				Bytes: replyBytes,
-			}
-		} else {
-			request, err := icmp.ParseMessage(protocolICMPv6, packet.Bytes)
-			require.NoError(t, err)
-			replyBytes := MustMarshal(&icmp.Message{
-				Type: ipv6.ICMPTypeEchoReply,
-				Body: request.Body,
-			})
-			in6Ch <- &nettest.Packet{
-				Addr:  packet.Addr,
-				Bytes: replyBytes,
+		// Advance the clock by one more second, and send replies for all ICMP requests.
+		time.Sleep(1 * time.Second)
+		for _, packet := range packets {
+			if packet.Addr.Network() == ipv4ProtocolICMPRaw {
+				request, err := icmp.ParseMessage(protocolICMP, packet.Bytes)
+				require.NoError(t, err)
+				replyBytes := MustMarshal(&icmp.Message{
+					Type: ipv4.ICMPTypeEchoReply,
+					Body: request.Body,
+				})
+				in4Ch <- &nettest.Packet{
+					Addr:  packet.Addr,
+					Bytes: replyBytes,
+				}
+			} else {
+				request, err := icmp.ParseMessage(protocolICMPv6, packet.Bytes)
+				require.NoError(t, err)
+				replyBytes := MustMarshal(&icmp.Message{
+					Type: ipv6.ICMPTypeEchoReply,
+					Body: request.Body,
+				})
+				in6Ch <- &nettest.Packet{
+					Addr:  packet.Addr,
+					Bytes: replyBytes,
+				}
 			}
 		}
-	}
 
-	// The store should eventually be updated with the correct RTT measurements.
-	assert.EventuallyWithT(t, func(t *assert.CollectT) {
+		// The store should eventually be updated with the correct RTT measurements.
+		synctest.Wait()
 		for _, ip := range []string{"10.0.2.1", "10.0.3.1", "2001:ab03:cd04:55ee:100b::1", "2001:ab03:cd04:55ee:100c::1"} {
 			entry, _ := m.latencyStore.getNodeIPLatencyEntry(ip)
 			assert.Equal(t, 1*time.Second, entry.LastMeasuredRTT)
 		}
 		assert.Equal(t, 1, int(reportCount.Load()), "Expected report after jittered interval (total 61s)")
-	}, 2*time.Second, 10*time.Millisecond)
 
-	// Clear count for next phase
-	reportCount.Store(0)
-	// Delete node3 synchronously, which simplifies testing.
-	m.onNodeDelete(node3)
+		// Clear count for next phase
+		reportCount.Store(0)
+		// Delete node3
+		require.NoError(t, m.clientset.CoreV1().Nodes().Delete(ctx, node3.Name, metav1.DeleteOptions{}))
 
-	// After advancing the clock by another 60s (ping interval), we should see another round of
-	// ICMP requests being sent, this time not including the Node that was deleted.
-	// The latency store should also eventually be cleaned up to remove the stale entries for
-	// that Node.
-	fakeClock.Step(60 * time.Second)
-	packets = []*nettest.Packet{}
-	assert.EventuallyWithT(t, func(t *assert.CollectT) {
-		packets = collect(packets)
+		// After advancing the clock by another 60s (ping interval), we should see another round of
+		// ICMP requests being sent, this time not including the Node that was deleted.
+		// The latency store should also eventually be cleaned up to remove the stale entries for
+		// that Node.
+		time.Sleep(60 * time.Second)
+		synctest.Wait()
+		packets = collect(nil)
 		assert.ElementsMatch(t, []string{"10.0.2.1", "2001:ab03:cd04:55ee:100b::1"}, extractIPs(packets))
 		nodeIPs := m.latencyStore.getNodeIPLatencyKeys()
 		assert.ElementsMatch(t, []string{"10.0.2.1", "2001:ab03:cd04:55ee:100b::1"}, nodeIPs)
 		assert.Equal(t, 0, int(reportCount.Load()), "Expected no report yet (jitter still pending)")
-	}, 2*time.Second, 10*time.Millisecond)
 
-	// Advance by 1 more second (reportJitter) → total 122s: report should now occur
-	fakeClock.Step(1 * time.Second)
-	assert.EventuallyWithT(t, func(t *assert.CollectT) {
+		// Advance by 1 more second (reportJitter) → total 122s: report should now occur
+		time.Sleep(1 * time.Second)
+		synctest.Wait()
 		assert.Equal(t, 1, int(reportCount.Load()), "Expected report after jittered interval (total 122s)")
-	}, 2*time.Second, 10*time.Millisecond)
+	})
 }
