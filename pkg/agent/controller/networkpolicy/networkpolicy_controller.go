@@ -808,7 +808,7 @@ func (c *Controller) syncRule(key string) error {
 
 	isNodeNetworkPolicy := rule.isNodeNetworkPolicyRule()
 	if !c.nodeNetworkPolicyEnabled && isNodeNetworkPolicy {
-		klog.Warningf("Feature gate NodeNetworkPolicy is not enabled, skipping ruleID %s", key)
+		klog.InfoS("Feature gate NodeNetworkPolicy is not enabled, skipping rule", "ruleID", key)
 		return nil
 	}
 
@@ -864,7 +864,7 @@ func (c *Controller) syncRules(keys []string) error {
 		} else {
 			isNodeNetworkPolicy := rule.isNodeNetworkPolicyRule()
 			if !c.nodeNetworkPolicyEnabled && isNodeNetworkPolicy {
-				klog.Warningf("Feature gate NodeNetworkPolicy is not enabled, skipping ruleID %s", key)
+				klog.InfoS("Feature gate NodeNetworkPolicy is not enabled, skipping rule", "ruleID", key)
 				continue
 			}
 			if c.l7NetworkPolicyEnabled && len(rule.L7Protocols) != 0 {
@@ -985,17 +985,17 @@ func (w *watcher) onFullSync() {
 }
 
 func (w *watcher) watch() {
-	klog.Infof("Starting watch for %s", w.objectType)
+	klog.InfoS("Starting watch", "objectType", w.objectType)
 	watcher, err := w.watchFunc()
 	if err != nil {
-		klog.Warningf("Failed to start watch for %s: %v", w.objectType, err)
+		klog.ErrorS(err, "Failed to start watch", "objectType", w.objectType)
 		w.fallback()
 		return
 	}
 	// Watch method doesn't return error but "emptyWatch" in case of some partial data errors,
-	// e.g. timeout error. Make sure that watcher is not empty and log warning otherwise.
+	// e.g. timeout error. Make sure that watcher is not empty and log error otherwise.
 	if reflect.TypeOf(watcher) == reflect.TypeOf(emptyWatch) {
-		klog.Warningf("Failed to start watch for %s, please ensure antrea service is reachable for the agent", w.objectType)
+		klog.ErrorS(nil, "Failed to start watch, please ensure antrea service is reachable for the agent", "objectType", w.objectType)
 		w.fallback()
 		return
 	}
@@ -1017,7 +1017,7 @@ loop:
 	for {
 		event, ok := <-watcher.ResultChan()
 		if !ok {
-			klog.Warningf("Result channel for %s was closed", w.objectType)
+			klog.InfoS("Result channel was closed", "objectType", w.objectType)
 			return
 		}
 		switch event.Type {
