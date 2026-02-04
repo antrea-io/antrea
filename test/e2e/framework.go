@@ -253,6 +253,7 @@ type flowVisibilityTestOptions struct {
 	databaseSecureConnection  bool
 	clusterID                 string
 	ipfixCollector            flowVisibilityIPFIXTestOptions
+	withClickHouseExporter    bool
 }
 
 var testOptions TestOptions
