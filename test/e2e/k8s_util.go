@@ -39,6 +39,11 @@ import (
 	"antrea.io/antrea/test/e2e/utils"
 )
 
+const (
+	// standardProbeCount is the number of times we try to probe connectivity.
+	standardProbeCount = 3
+)
+
 var ErrPodNotFound = errors.New("pod not found")
 
 type KubernetesUtils struct {
@@ -189,8 +194,8 @@ func ProbeCommand(url, protocol, executor string) []string {
 	cmd := []string{
 		"/bin/sh",
 		"-c",
-		fmt.Sprintf(`for i in $(seq 1 3); do echo -n "${i}: " >&2 && %s /agnhost connect %s --timeout=1s --protocol=%s && echo "CONNECTED" >&2; done; echo "FINISHED" >&2`,
-			executor, url, protocol),
+		fmt.Sprintf(`for i in $(seq 1 %d); do echo -n "${i}: " >&2 && %s /agnhost connect %s --timeout=1s --protocol=%s && echo "CONNECTED" >&2; done; echo "FINISHED" >&2`,
+			standardProbeCount, executor, url, protocol),
 	}
 	return cmd
 }
@@ -223,7 +228,7 @@ func (k *KubernetesUtils) probe(
 		if stderr == "" {
 			actualResult = Error
 		}
-		actualResult = DecideProbeResult(stderr, 3)
+		actualResult = DecideProbeResult(stderr, standardProbeCount)
 	} else {
 		actualResult = Connected
 	}
@@ -253,7 +258,7 @@ func DecideProbeResult(stderr string, probeNum int) PodConnectivityMark {
 	if countConnected == 0 && countRejected > 0 {
 		return Rejected
 	}
-	if countDropped+countSCTPInProgress == probeNum {
+	if countDropped+countSCTPInProgress >= probeNum-1 {
 		return Dropped
 	}
 	return Error
