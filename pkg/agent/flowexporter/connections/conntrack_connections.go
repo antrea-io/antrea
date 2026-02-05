@@ -16,6 +16,7 @@ package connections
 
 import (
 	"fmt"
+	"net/netip"
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
@@ -138,6 +139,22 @@ func (cs *ConntrackConnectionStore) Poll() ([]int, error) {
 			zones = append(zones, openflow.CtZoneV6)
 		}
 	}
+
+	// Retrieve Node SNAT IPs from the default conntrack zone (0).
+	// This map contains the SNAT IP for connections that are masqueraded by the Node.
+	// We currently only look at zone 0, which is where the Node masquerade rule (POSTROUTING) is applied.
+	// Note: this may include connections using Egress SNAT as well, so we need to filter them out later
+	// (in FlowExporter) or overwrite the NodeSnatIP field if Egress information is present.
+	var snatIPs map[connection.Tuple]netip.Addr
+	if cs.v4Enabled || cs.v6Enabled {
+		var err error
+		snatIPs, err = cs.connDumper.GetNodeSNATIPs(0)
+		if err != nil {
+			// Log error but proceed, flow records will just be missing nodeSnatIP
+			klog.V(4).ErrorS(err, "Error getting Node SNAT IPs from conntrack zone 0")
+		}
+	}
+
 	var totalConns int
 	var filteredConnsList []*connection.Connection
 	for _, zone := range zones {
@@ -148,6 +165,15 @@ func (cs *ConntrackConnectionStore) Poll() ([]int, error) {
 		totalConns += totalConnsPerZone
 		filteredConnsList = append(filteredConnsList, filteredConnsListPerZone...)
 		connsLens = append(connsLens, len(filteredConnsList))
+	}
+
+	// Update NodeSnatIP for filtered connections
+	if len(snatIPs) > 0 {
+		for _, conn := range filteredConnsList {
+			if snatIP, exists := snatIPs[conn.FlowKey]; exists {
+				conn.NodeSnatIP = snatIP.String()
+			}
+		}
 	}
 
 	// Reset IsPresent flag for all connections in connection map before updating
