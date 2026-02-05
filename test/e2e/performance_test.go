@@ -290,7 +290,7 @@ func WaitNetworkPolicyRealize(nodeName string, table *openflow.Table, policyRule
 // default flow entry which is used for default matching.
 // Since the check is done over SSH, the time measurement is not completely accurate.
 func checkRealize(nodeName string, table *openflow.Table, policyRules int, data *TestData) (bool, error) {
-	antreaPodName, err := data.getAntreaPodOnNode(nodeName)
+	antreaPodName, err := data.GetAntreaPodOnNode(nodeName)
 	if err != nil {
 		return false, err
 	}

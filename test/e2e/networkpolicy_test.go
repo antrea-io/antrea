@@ -456,7 +456,7 @@ func testDefaultDenyEgressPolicy(t *testing.T, data *TestData) {
 
 func testNetworkPolicyResyncAfterRestart(t *testing.T, data *TestData) {
 	workerNode := workerNodeName(1)
-	antreaPod, err := data.getAntreaPodOnNode(workerNode)
+	antreaPod, err := data.GetAntreaPodOnNode(workerNode)
 	if err != nil {
 		t.Fatalf("Error when getting antrea-agent pod name: %v", err)
 	}
@@ -645,7 +645,7 @@ func testNetworkPolicyAfterAgentRestart(t *testing.T, data *TestData) {
 		checkFunc(t, deniedPod, deniedPodIPs, true)
 	}
 
-	antreaPod, err := data.getAntreaPodOnNode(workerNode)
+	antreaPod, err := data.GetAntreaPodOnNode(workerNode)
 	require.NoError(t, err)
 	// Make sure the new antrea-agent disconnects from antrea-controller but connects to OVS.
 	waitForAgentCondition(t, data, antreaPod, v1beta1.ControllerConnectionUp, corev1.ConditionFalse)

@@ -2052,8 +2052,8 @@ func (data *TestData) deleteAntreaAgentOnNode(nodeName string, gracePeriodSecond
 	return delay, nil
 }
 
-// getAntreaPodOnNode retrieves the name of the Antrea Pod (antrea-agent-*) running on a specific Node.
-func (data *TestData) getAntreaPodOnNode(nodeName string) (podName string, err error) {
+// GetAntreaPodOnNode retrieves the name of the Antrea Pod (antrea-agent-*) running on a specific Node.
+func (data *TestData) GetAntreaPodOnNode(nodeName string) (podName string, err error) {
 	listOptions := metav1.ListOptions{
 		LabelSelector: "app=antrea,component=antrea-agent",
 		FieldSelector: fmt.Sprintf("spec.nodeName=%s", nodeName),
@@ -2069,7 +2069,7 @@ func (data *TestData) getAntreaPodOnNode(nodeName string) (podName string, err e
 }
 
 func (data *TestData) RunCommandFromAntreaPodOnNode(nodeName string, cmd []string) (string, string, error) {
-	antreaPodName, err := data.getAntreaPodOnNode(nodeName)
+	antreaPodName, err := data.GetAntreaPodOnNode(nodeName)
 	if err != nil {
 		return "", "", err
 	}
@@ -2758,7 +2758,7 @@ func (data *TestData) GetTransportInterfaceName() (string, error) {
 
 func (data *TestData) GetTransportInterfaceForNode(nodeIdx int) (string, *net.IPNet, *net.IPNet, error) {
 	nodeName := nodeName(nodeIdx)
-	antreaPod, err := data.getAntreaPodOnNode(nodeName)
+	antreaPod, err := data.GetAntreaPodOnNode(nodeName)
 	if err != nil {
 		return "", nil, nil, fmt.Errorf("failed to get Antrea Pod on Node %s: %v", nodeName, err)
 	}
@@ -2832,7 +2832,7 @@ func (data *TestData) GetPodInterfaceMTU(namespace string, podName string, conta
 }
 
 func (data *TestData) GetNodeMACAddress(node, device string) (string, error) {
-	antreaPod, err := data.getAntreaPodOnNode(node)
+	antreaPod, err := data.GetAntreaPodOnNode(node)
 	if err != nil {
 		return "", fmt.Errorf("failed to get Antrea Pod on Node %s: %v", node, err)
 	}

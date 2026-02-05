@@ -73,7 +73,7 @@ func testPodConnectivity(t *testing.T, data *TestData) {
 	data.runPingMesh(t, podInfos[:numPods], toolboxContainerName, true)
 
 	// Make sure that route to Pod on peer Node and route to peer gateway is targeting the WireGuard device.
-	srcPod, err := data.getAntreaPodOnNode(nodeName(0))
+	srcPod, err := data.GetAntreaPodOnNode(nodeName(0))
 	require.NoError(t, err)
 	var srcIP, peerGatewayIP, peerPodIP string
 	ipv4, ipv6 := nodeGatewayIPs(0)
