@@ -467,9 +467,9 @@ func testMulticastStatsWithSendersReceivers(t *testing.T, data *TestData, testNa
 		for _, senderConfig := range mc.senderConfigs {
 			stats := mc.antctlResults[senderConfig.name]
 			t.Logf("Checking antctl get podmulticaststats result for %s", senderConfig.name)
-			antreaPod, err := data.getAntreaPodOnNode(senderConfig.nodeName)
+			antreaPod, err := data.GetAntreaPodOnNode(senderConfig.nodeName)
 			if err != nil {
-				t.Fatalf("Error getting getAntreaPodOnNode for %s", senderConfig.name)
+				t.Fatalf("Error getting GetAntreaPodOnNode for %s", senderConfig.name)
 			}
 			matches, err := checkAntctlResult(t, data, antreaPod, senderConfig.name, testNamespace, stats.Inbound, stats.Outbound)
 			if err != nil || !matches {
@@ -481,9 +481,9 @@ func testMulticastStatsWithSendersReceivers(t *testing.T, data *TestData, testNa
 			groupAddresses.Insert(receiverConfig.IPs...)
 			stats := mc.antctlResults[receiverConfig.name]
 			t.Logf("Checking antctl get podmulticaststats result for %s", receiverConfig.name)
-			antreaPod, err := data.getAntreaPodOnNode(receiverConfig.nodeName)
+			antreaPod, err := data.GetAntreaPodOnNode(receiverConfig.nodeName)
 			if err != nil {
-				t.Fatalf("Error getting getAntreaPodOnNode for %s", receiverConfig.name)
+				t.Fatalf("Error getting GetAntreaPodOnNode for %s", receiverConfig.name)
 			}
 			matches, err := checkAntctlResult(t, data, antreaPod, receiverConfig.name, testNamespace, stats.Inbound, stats.Outbound)
 			if err != nil || !matches {

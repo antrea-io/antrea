@@ -109,7 +109,7 @@ func checkPodIP(t *testing.T, podNetworkCIDR string, podIP *net.IP) {
 func (data *TestData) testDeletePod(t *testing.T, podName string, nodeName string, namespace string, isWindowsNode bool) {
 	var antreaPodName string
 	var err error
-	if antreaPodName, err = data.getAntreaPodOnNode(nodeName); err != nil {
+	if antreaPodName, err = data.GetAntreaPodOnNode(nodeName); err != nil {
 		t.Fatalf("Error when retrieving the name of the Antrea Pod running on Node '%s': %v", nodeName, err)
 	}
 	t.Logf("The Antrea Pod for Node '%s' is '%s'", nodeName, antreaPodName)
@@ -683,7 +683,7 @@ func getRoundNumber(data *TestData, podName string) (uint64, error) {
 }
 
 func getAntreaPodName(t *testing.T, data *TestData, nodeName string) string {
-	antreaPodName, err := data.getAntreaPodOnNode(nodeName)
+	antreaPodName, err := data.GetAntreaPodOnNode(nodeName)
 	if err != nil {
 		t.Fatalf("Error when retrieving the name of the Antrea Pod running on Node '%s': %v", nodeName, err)
 	}
@@ -872,7 +872,7 @@ func testGratuitousARP(t *testing.T, data *TestData, namespace string) {
 	}
 	defer deletePodWrapper(t, data, namespace, podName)
 
-	antreaPodName, err := data.getAntreaPodOnNode(nodeName)
+	antreaPodName, err := data.GetAntreaPodOnNode(nodeName)
 	if err != nil {
 		t.Fatalf("Error when retrieving the name of the Antrea Pod running on Node '%s': %v", nodeName, err)
 	}

@@ -899,7 +899,7 @@ func (data *TestData) checkEgressState(egressName, expectedIP, expectedNode, oth
 }
 
 func hasIP(data *TestData, nodeName string, ip string) (bool, error) {
-	antreaPodName, err := data.getAntreaPodOnNode(nodeName)
+	antreaPodName, err := data.GetAntreaPodOnNode(nodeName)
 	if err != nil {
 		return false, err
 	}
@@ -921,7 +921,7 @@ func setupIPNeighborChecker(data *TestData, t *testing.T, observerNode, node1, n
 	require.NoError(t, err)
 	nodeToMACAddress := map[string]string{node1: macAddress1, node2: macAddress2}
 
-	antreaPodName, err := data.getAntreaPodOnNode(observerNode)
+	antreaPodName, err := data.GetAntreaPodOnNode(observerNode)
 	require.NoError(t, err)
 
 	// The Egress IP may not be in the same subnet as the primary IP of the transport interface.
