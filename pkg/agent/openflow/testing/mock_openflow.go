@@ -1003,17 +1003,17 @@ func (mr *MockClientMockRecorder) UninstallPodFlows(interfaceName any) *gomock.C
 }
 
 // UninstallPodSNATFlows mocks base method.
-func (m *MockClient) UninstallPodSNATFlows(ofPort uint32) error {
+func (m *MockClient) UninstallPodSNATFlows(ofPort uint32, snatIP net.IP) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "UninstallPodSNATFlows", ofPort)
+	ret := m.ctrl.Call(m, "UninstallPodSNATFlows", ofPort, snatIP)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // UninstallPodSNATFlows indicates an expected call of UninstallPodSNATFlows.
-func (mr *MockClientMockRecorder) UninstallPodSNATFlows(ofPort any) *gomock.Call {
+func (mr *MockClientMockRecorder) UninstallPodSNATFlows(ofPort, snatIP any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UninstallPodSNATFlows", reflect.TypeOf((*MockClient)(nil).UninstallPodSNATFlows), ofPort)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UninstallPodSNATFlows", reflect.TypeOf((*MockClient)(nil).UninstallPodSNATFlows), ofPort, snatIP)
 }
 
 // UninstallPolicyRuleFlows mocks base method.

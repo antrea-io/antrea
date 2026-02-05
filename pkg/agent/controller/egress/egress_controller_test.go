@@ -280,8 +280,8 @@ func TestSyncEgress(t *testing.T) {
 
 				mockOFClient.EXPECT().UninstallSNATMarkFlows(uint32(1))
 				mockRouteClient.EXPECT().DeleteSNATRule(uint32(1))
-				mockOFClient.EXPECT().UninstallPodSNATFlows(uint32(1))
-				mockOFClient.EXPECT().UninstallPodSNATFlows(uint32(2))
+				mockOFClient.EXPECT().UninstallPodSNATFlows(uint32(1), gomock.Any())
+				mockOFClient.EXPECT().UninstallPodSNATFlows(uint32(2), gomock.Any())
 				mockIPAssigner.EXPECT().UnassignIP(fakeLocalEgressIP1).Return(false, nil)
 				mockOFClient.EXPECT().UninstallEgressQoS(uint32(1))
 
@@ -327,8 +327,8 @@ func TestSyncEgress(t *testing.T) {
 				mockOFClient.EXPECT().InstallPodSNATFlows(uint32(2), net.ParseIP(fakeRemoteEgressIP1), uint32(0))
 				mockIPAssigner.EXPECT().UnassignIP(fakeRemoteEgressIP1).Return(false, nil)
 
-				mockOFClient.EXPECT().UninstallPodSNATFlows(uint32(1))
-				mockOFClient.EXPECT().UninstallPodSNATFlows(uint32(2))
+				mockOFClient.EXPECT().UninstallPodSNATFlows(uint32(1), gomock.Any())
+				mockOFClient.EXPECT().UninstallPodSNATFlows(uint32(2), gomock.Any())
 				mockIPAssigner.EXPECT().UnassignIP(fakeRemoteEgressIP1).Return(false, nil)
 
 				mockOFClient.EXPECT().InstallEgressQoS(uint32(1), uint32(500), uint32(500))
@@ -381,8 +381,8 @@ func TestSyncEgress(t *testing.T) {
 				mockOFClient.EXPECT().UninstallEgressQoS(uint32(1))
 				mockOFClient.EXPECT().UninstallSNATMarkFlows(uint32(1))
 				mockRouteClient.EXPECT().DeleteSNATRule(uint32(1))
-				mockOFClient.EXPECT().UninstallPodSNATFlows(uint32(1))
-				mockOFClient.EXPECT().UninstallPodSNATFlows(uint32(2))
+				mockOFClient.EXPECT().UninstallPodSNATFlows(uint32(1), gomock.Any())
+				mockOFClient.EXPECT().UninstallPodSNATFlows(uint32(2), gomock.Any())
 				mockIPAssigner.EXPECT().UnassignIP(fakeLocalEgressIP1).Return(false, nil)
 				mockIPAssigner.EXPECT().UnassignIP(fakeLocalEgressIP2).Return(false, nil)
 
@@ -434,8 +434,8 @@ func TestSyncEgress(t *testing.T) {
 
 				mockOFClient.EXPECT().UninstallSNATMarkFlows(uint32(1))
 				mockRouteClient.EXPECT().DeleteSNATRule(uint32(1))
-				mockOFClient.EXPECT().UninstallPodSNATFlows(uint32(1))
-				mockOFClient.EXPECT().UninstallPodSNATFlows(uint32(2))
+				mockOFClient.EXPECT().UninstallPodSNATFlows(uint32(1), gomock.Any())
+				mockOFClient.EXPECT().UninstallPodSNATFlows(uint32(2), gomock.Any())
 				mockIPAssigner.EXPECT().UnassignIP(fakeLocalEgressIP1).Return(false, nil)
 				mockIPAssigner.EXPECT().UnassignIP(fakeRemoteEgressIP1).Return(false, nil)
 				mockOFClient.EXPECT().UninstallEgressQoS(uint32(1))
@@ -481,8 +481,8 @@ func TestSyncEgress(t *testing.T) {
 				mockOFClient.EXPECT().InstallPodSNATFlows(uint32(2), net.ParseIP(fakeRemoteEgressIP1), uint32(0))
 				mockIPAssigner.EXPECT().UnassignIP(fakeRemoteEgressIP1).Return(false, nil)
 
-				mockOFClient.EXPECT().UninstallPodSNATFlows(uint32(1))
-				mockOFClient.EXPECT().UninstallPodSNATFlows(uint32(2))
+				mockOFClient.EXPECT().UninstallPodSNATFlows(uint32(1), gomock.Any())
+				mockOFClient.EXPECT().UninstallPodSNATFlows(uint32(2), gomock.Any())
 				mockIPAssigner.EXPECT().UnassignIP(fakeRemoteEgressIP1).Return(false, nil)
 				mockIPAssigner.EXPECT().UnassignIP(fakeLocalEgressIP1).Return(false, nil)
 
@@ -738,8 +738,8 @@ func TestSyncEgress(t *testing.T) {
 
 				mockIPAssigner.EXPECT().UnassignIP(fakeLocalEgressIP1).Return(true, nil)
 				mockOFClient.EXPECT().UninstallSNATMarkFlows(uint32(1))
-				mockOFClient.EXPECT().UninstallPodSNATFlows(uint32(1))
-				mockOFClient.EXPECT().UninstallPodSNATFlows(uint32(2))
+				mockOFClient.EXPECT().UninstallPodSNATFlows(uint32(1), gomock.Any())
+				mockOFClient.EXPECT().UninstallPodSNATFlows(uint32(2), gomock.Any())
 				mockRouteClient.EXPECT().DeleteSNATRule(uint32(1))
 			},
 			expectedEvents: []string{
@@ -1098,7 +1098,7 @@ func TestSyncEgress(t *testing.T) {
 				mockRouteClient.EXPECT().DeleteEgressRule(uint32(101), uint32(1), false)
 				mockRouteClient.EXPECT().DeleteEgressRoutes(uint32(101))
 				mockOFClient.EXPECT().UninstallSNATMarkFlows(uint32(1))
-				mockOFClient.EXPECT().UninstallPodSNATFlows(uint32(1))
+				mockOFClient.EXPECT().UninstallPodSNATFlows(uint32(1), gomock.Any())
 				mockRouteClient.EXPECT().DeleteSNATRule(uint32(1))
 			},
 			expectedEvents: []string{
@@ -1381,8 +1381,8 @@ func TestSyncOverlappingEgress(t *testing.T) {
 	// After deleting egress1, pod1 and pod2 no longer enforces egress1. The Egress IP shouldn't be released as egress3
 	// is still referring to it.
 	// egress2 and egress3 are expected to be triggered for resync.
-	c.mockOFClient.EXPECT().UninstallPodSNATFlows(uint32(1))
-	c.mockOFClient.EXPECT().UninstallPodSNATFlows(uint32(2))
+	c.mockOFClient.EXPECT().UninstallPodSNATFlows(uint32(1), gomock.Any())
+	c.mockOFClient.EXPECT().UninstallPodSNATFlows(uint32(2), gomock.Any())
 	c.crdClient.CrdV1beta1().Egresses().Delete(context.TODO(), egress1.Name, metav1.DeleteOptions{})
 	assert.Eventually(t, func() bool {
 		_, err := c.egressLister.Get(egress1.Name)
@@ -1407,8 +1407,8 @@ func TestSyncOverlappingEgress(t *testing.T) {
 	assert.NoError(t, err)
 
 	// After deleting egress2, pod1 and pod3 no longer enforces any Egress.
-	c.mockOFClient.EXPECT().UninstallPodSNATFlows(uint32(1))
-	c.mockOFClient.EXPECT().UninstallPodSNATFlows(uint32(3))
+	c.mockOFClient.EXPECT().UninstallPodSNATFlows(uint32(1), gomock.Any())
+	c.mockOFClient.EXPECT().UninstallPodSNATFlows(uint32(3), gomock.Any())
 	c.crdClient.CrdV1beta1().Egresses().Delete(context.TODO(), egress2.Name, metav1.DeleteOptions{})
 	c.mockIPAssigner.EXPECT().UnassignIP(fakeRemoteEgressIP1)
 	assert.Eventually(t, func() bool {
@@ -1423,8 +1423,8 @@ func TestSyncOverlappingEgress(t *testing.T) {
 	// After deleting egress3, pod2 and pod4 no longer enforces any Egress. The Egress IP should be released.
 	c.mockOFClient.EXPECT().UninstallSNATMarkFlows(uint32(1))
 	c.mockRouteClient.EXPECT().DeleteSNATRule(uint32(1))
-	c.mockOFClient.EXPECT().UninstallPodSNATFlows(uint32(2))
-	c.mockOFClient.EXPECT().UninstallPodSNATFlows(uint32(4))
+	c.mockOFClient.EXPECT().UninstallPodSNATFlows(uint32(2), gomock.Any())
+	c.mockOFClient.EXPECT().UninstallPodSNATFlows(uint32(4), gomock.Any())
 	c.crdClient.CrdV1beta1().Egresses().Delete(context.TODO(), egress3.Name, metav1.DeleteOptions{})
 	c.mockIPAssigner.EXPECT().UnassignIP(fakeLocalEgressIP1)
 	assert.Eventually(t, func() bool {
