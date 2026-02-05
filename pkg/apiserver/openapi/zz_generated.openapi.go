@@ -125,6 +125,7 @@ func GetOpenAPIDefinitions(ref common.ReferenceCallback) map[string]common.OpenA
 		"antrea.io/antrea/pkg/apis/crd/v1beta1.IPv6Header":                                 schema_pkg_apis_crd_v1beta1_IPv6Header(ref),
 		"antrea.io/antrea/pkg/apis/crd/v1beta1.L7Protocol":                                 schema_pkg_apis_crd_v1beta1_L7Protocol(ref),
 		"antrea.io/antrea/pkg/apis/crd/v1beta1.NamespacedName":                             schema_pkg_apis_crd_v1beta1_NamespacedName(ref),
+		"antrea.io/antrea/pkg/apis/crd/v1beta1.NetworkInfo":                                schema_pkg_apis_crd_v1beta1_NetworkInfo(ref),
 		"antrea.io/antrea/pkg/apis/crd/v1beta1.NetworkPolicy":                              schema_pkg_apis_crd_v1beta1_NetworkPolicy(ref),
 		"antrea.io/antrea/pkg/apis/crd/v1beta1.NetworkPolicyCondition":                     schema_pkg_apis_crd_v1beta1_NetworkPolicyCondition(ref),
 		"antrea.io/antrea/pkg/apis/crd/v1beta1.NetworkPolicyControllerInfo":                schema_pkg_apis_crd_v1beta1_NetworkPolicyControllerInfo(ref),
@@ -2944,11 +2945,18 @@ func schema_pkg_apis_crd_v1beta1_AntreaAgentInfo(ref common.ReferenceCallback) c
 							Format:      "",
 						},
 					},
+					"networkInfo": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Network information",
+							Default:     map[string]interface{}{},
+							Ref:         ref("antrea.io/antrea/pkg/apis/crd/v1beta1.NetworkInfo"),
+						},
+					},
 				},
 			},
 		},
 		Dependencies: []string{
-			"antrea.io/antrea/pkg/apis/crd/v1beta1.AgentCondition", "antrea.io/antrea/pkg/apis/crd/v1beta1.NetworkPolicyControllerInfo", "antrea.io/antrea/pkg/apis/crd/v1beta1.OVSInfo", v1.ObjectReference{}.OpenAPIModelName(), metav1.ObjectMeta{}.OpenAPIModelName()},
+			"antrea.io/antrea/pkg/apis/crd/v1beta1.AgentCondition", "antrea.io/antrea/pkg/apis/crd/v1beta1.NetworkInfo", "antrea.io/antrea/pkg/apis/crd/v1beta1.NetworkPolicyControllerInfo", "antrea.io/antrea/pkg/apis/crd/v1beta1.OVSInfo", v1.ObjectReference{}.OpenAPIModelName(), metav1.ObjectMeta{}.OpenAPIModelName()},
 	}
 }
 
@@ -4789,6 +4797,54 @@ func schema_pkg_apis_crd_v1beta1_NamespacedName(ref common.ReferenceCallback) co
 						SchemaProps: spec.SchemaProps{
 							Type:   []string{"string"},
 							Format: "",
+						},
+					},
+				},
+			},
+		},
+	}
+}
+
+func schema_pkg_apis_crd_v1beta1_NetworkInfo(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Type: []string{"object"},
+				Properties: map[string]spec.Schema{
+					"transportInterface": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Name of the transport interface",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"transportInterfaceMTU": {
+						SchemaProps: spec.SchemaProps{
+							Description: "MTU of the transport interface",
+							Type:        []string{"integer"},
+							Format:      "int32",
+						},
+					},
+					"podMTU": {
+						SchemaProps: spec.SchemaProps{
+							Description: "MTU used for the Pod network",
+							Type:        []string{"integer"},
+							Format:      "int32",
+						},
+					},
+					"transportInterfaceIPs": {
+						SchemaProps: spec.SchemaProps{
+							Description: "IP addresses (with network) of the transport interface in CIDR notation",
+							Type:        []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Default: "",
+										Type:    []string{"string"},
+										Format:  "",
+									},
+								},
+							},
 						},
 					},
 				},

@@ -42,6 +42,15 @@ func getIPNet(ip string) *net.IPNet {
 	return ipNet
 }
 
+// getIPNetWithIP parses a CIDR string and returns an IPNet with the original host IP
+// (not the network address). For example, "10.10.0.10/24" will have IP=10.10.0.10
+// instead of IP=10.10.0.0 which is what ParseCIDR normally returns.
+func getIPNetWithIP(ipStr string) *net.IPNet {
+	ip, ipNet, _ := net.ParseCIDR(ipStr)
+	ipNet.IP = ip
+	return ipNet
+}
+
 func TestAgentQuerierGetAgentInfo(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	interfaceStore := interfacestoretest.NewMockInterfaceStore(ctrl)
@@ -69,6 +78,7 @@ func TestAgentQuerierGetAgentInfo(t *testing.T) {
 	tests := []struct {
 		name              string
 		nodeConfig        *config.NodeConfig
+		networkConfig     *config.NetworkConfig
 		apiPort           int
 		partial           bool
 		expectedAgentInfo *v1beta1.AntreaAgentInfo
@@ -76,9 +86,14 @@ func TestAgentQuerierGetAgentInfo(t *testing.T) {
 		{
 			name: "networkPolicyOnly-mode non-partial",
 			nodeConfig: &config.NodeConfig{
-				Name:         "foo",
-				OVSBridge:    "br-int",
-				NodeIPv4Addr: getIPNet("10.10.0.10"),
+				Name:                       "foo",
+				OVSBridge:                  "br-int",
+				NodeTransportInterfaceName: "eth0",
+				NodeTransportInterfaceMTU:  1500,
+				NodeTransportIPv4Addr:      getIPNetWithIP("10.10.0.10/24"),
+			},
+			networkConfig: &config.NetworkConfig{
+				InterfaceMTU: 1450,
 			},
 			apiPort: 10350,
 			partial: false,
@@ -118,16 +133,28 @@ func TestAgentQuerierGetAgentInfo(t *testing.T) {
 				APIPort:                10350,
 				NodePortLocalPortRange: defaultNPLPortRange,
 				Version:                "UNKNOWN",
+				NetworkInfo: v1beta1.NetworkInfo{
+					TransportInterface:    "eth0",
+					TransportInterfaceMTU: 1500,
+					PodMTU:                1450,
+					TransportInterfaceIPs: []string{"10.10.0.10/24"},
+				},
 			},
 		},
 		{
 			name: "encap-mode non-partial",
 			nodeConfig: &config.NodeConfig{
-				Name:         "foo",
-				OVSBridge:    "br-int",
-				NodeIPv4Addr: getIPNet("10.10.0.10"),
-				PodIPv4CIDR:  getIPNet("20.20.20.0/24"),
-				PodIPv6CIDR:  getIPNet("2001:ab03:cd04:55ef::/64"),
+				Name:                       "foo",
+				OVSBridge:                  "br-int",
+				PodIPv4CIDR:                getIPNet("20.20.20.0/24"),
+				PodIPv6CIDR:                getIPNet("2001:ab03:cd04:55ef::/64"),
+				NodeTransportInterfaceName: "eth0",
+				NodeTransportInterfaceMTU:  1500,
+				NodeTransportIPv4Addr:      getIPNetWithIP("10.10.0.10/24"),
+				NodeTransportIPv6Addr:      getIPNetWithIP("2001:ab03:cd04:55ef::10/64"),
+			},
+			networkConfig: &config.NetworkConfig{
+				InterfaceMTU: 1450,
 			},
 			apiPort: 10350,
 			partial: false,
@@ -167,6 +194,12 @@ func TestAgentQuerierGetAgentInfo(t *testing.T) {
 				APIPort:                10350,
 				NodePortLocalPortRange: defaultNPLPortRange,
 				Version:                "UNKNOWN",
+				NetworkInfo: v1beta1.NetworkInfo{
+					TransportInterface:    "eth0",
+					TransportInterfaceMTU: 1500,
+					PodMTU:                1450,
+					TransportInterfaceIPs: []string{"10.10.0.10/24", "2001:ab03:cd04:55ef::10/64"},
+				},
 			},
 		},
 	}
@@ -174,6 +207,7 @@ func TestAgentQuerierGetAgentInfo(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			aq := agentQuerier{
 				nodeConfig:               tt.nodeConfig,
+				networkConfig:            tt.networkConfig,
 				interfaceStore:           interfaceStore,
 				ofClient:                 ofClient,
 				ovsBridgeClient:          ovsBridgeClient,

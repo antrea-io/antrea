@@ -250,7 +250,32 @@ func (aq agentQuerier) GetAgentInfo(agentInfo *v1beta1.AntreaAgentInfo, partial 
 		agentInfo.OVSInfo.BridgeName = aq.nodeConfig.OVSBridge
 		agentInfo.APIPort = aq.apiPort
 		agentInfo.NodePortLocalPortRange = aq.nplRange
+		agentInfo.NetworkInfo = aq.getNetworkInfo()
 	}
+}
+
+// getNetworkInfo gets network information including transport interface details and Pod MTU.
+func (aq agentQuerier) getNetworkInfo() v1beta1.NetworkInfo {
+	networkInfo := v1beta1.NetworkInfo{
+		TransportInterface:    aq.nodeConfig.NodeTransportInterfaceName,
+		TransportInterfaceMTU: int32(aq.nodeConfig.NodeTransportInterfaceMTU),
+	}
+
+	if aq.networkConfig != nil {
+		networkInfo.PodMTU = int32(aq.networkConfig.InterfaceMTU)
+	}
+
+	// Collect transport interface IPs with CIDR notation
+	transportIPs := make([]string, 0, 2)
+	if aq.nodeConfig.NodeTransportIPv4Addr != nil {
+		transportIPs = append(transportIPs, aq.nodeConfig.NodeTransportIPv4Addr.String())
+	}
+	if aq.nodeConfig.NodeTransportIPv6Addr != nil {
+		transportIPs = append(transportIPs, aq.nodeConfig.NodeTransportIPv6Addr.String())
+	}
+	networkInfo.TransportInterfaceIPs = transportIPs
+
+	return networkInfo
 }
 
 // GetBGPPolicyInfoQuerier returns AgentBGPPolicyInfoQuerier.
