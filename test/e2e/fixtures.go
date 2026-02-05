@@ -799,6 +799,22 @@ func NodeCount() int {
 	return clusterInfo.numNodes
 }
 
+func SkipIfNotIPv4Cluster(tb testing.TB) {
+	skipIfNotIPv4Cluster(tb)
+}
+
+func SkipIfNotIPv6Cluster(tb testing.TB) {
+	skipIfNotIPv6Cluster(tb)
+}
+
+func SkipIfIPv6Cluster(tb testing.TB) {
+	skipIfIPv6Cluster(tb)
+}
+
+func SkipIfNotAntreaIPAMTest(tb testing.TB) {
+	skipIfNotAntreaIPAMTest(tb)
+}
+
 func (data *TestData) GetTestNamespace() string {
 	return data.testNamespace
 }
