@@ -322,7 +322,9 @@ will get same IP after recreated.
 
 With the AntreaIPAM feature, Antrea can allocate IPs for Pod secondary networks,
 including both [secondary networks managed by Antrea](secondary-network.md) and
-secondary networks managed by [Multus](cookbooks/multus).
+secondary networks managed by [Multus](cookbooks/multus). IPv4, IPv6, and
+dual-stack (IPv4 + IPv6) configurations are all supported for secondary
+networks.
 
 ### Prerequisites
 
@@ -348,6 +350,22 @@ the secondary network.
     "ipam": {
         "type": "antrea",
         "ippools": [ "ipv4-pool-1" ]
+    }
+}
+```
+
+To allocate an IPv6 address from an IPv6 IPPool:
+
+```json
+{
+    "cniVersion": "0.3.0",
+    "name": "ipv6-net-1",
+    "type": "macvlan",
+    "master": "eth0",
+    "mode": "bridge",
+    "ipam": {
+        "type": "antrea",
+        "ippools": [ "ipv6-pool-1" ]
     }
 }
 ```
@@ -436,6 +454,46 @@ spec:
   }'
 ```
 
+For an IPv6-only secondary network:
+
+```yaml
+apiVersion: "k8s.cni.cncf.io/v1"
+kind: NetworkAttachmentDefinition
+metadata:
+  name: ipv6-net-1
+spec:
+  config: '{
+      "cniVersion": "0.3.0",
+      "type": "macvlan",
+      "master": "eth0",
+      "mode": "bridge",
+      "ipam": {
+          "type": "antrea",
+          "ippools": [ "ipv6-pool-1" ]
+      }
+  }'
+```
+
+For a dual-stack secondary network with both IPv4 and IPv6:
+
+```yaml
+apiVersion: "k8s.cni.cncf.io/v1"
+kind: NetworkAttachmentDefinition
+metadata:
+  name: dual-stack-net-1
+spec:
+  config: '{
+      "cniVersion": "0.3.0",
+      "type": "macvlan",
+      "master": "eth0",
+      "mode": "bridge",
+      "ipam": {
+          "type": "antrea",
+          "ippools": [ "ipv4-pool-1", "ipv6-pool-1" ]
+      }
+  }'
+```
+
 ## `IPPool` CRD
 
 Antrea IP pools are defined with the `IPPool` CRD. The following two examples
@@ -509,6 +567,53 @@ spec:
       "ipam": {
           "type": "antrea",
           "ippools": [ "ipv4-pool-1" ]
+      }
+  }'
+```
+
+VLAN secondary networks also support IPv6 and dual-stack. The following example
+shows a dual-stack VLAN configuration with both an IPv4 and an IPv6 IPPool:
+
+```yaml
+apiVersion: "crd.antrea.io/v1beta1"
+kind: IPPool
+metadata:
+  name: ipv4-vlan-pool
+spec:
+  ipRanges:
+  - cidr: "10.10.1.0/26"
+  subnetInfo:
+    gateway: "10.10.1.1"
+    prefixLength: 24
+    vlan: 100
+
+---
+apiVersion: "crd.antrea.io/v1beta1"
+kind: IPPool
+metadata:
+  name: ipv6-vlan-pool
+spec:
+  ipRanges:
+  - start: "3ffe:ffff:1:01ff::0100"
+    end: "3ffe:ffff:1:01ff::0200"
+  subnetInfo:
+    gateway: "3ffe:ffff:1:01ff::1"
+    prefixLength: 64
+    vlan: 100
+
+---
+apiVersion: "k8s.cni.cncf.io/v1"
+kind: NetworkAttachmentDefinition
+metadata:
+  name: dual-stack-vlan-net
+spec:
+  config: '{
+      "cniVersion": "0.3.0",
+      "type": "antrea",
+      "networkType": "vlan",
+      "ipam": {
+          "type": "antrea",
+          "ippools": [ "ipv4-vlan-pool", "ipv6-vlan-pool" ]
       }
   }'
 ```
