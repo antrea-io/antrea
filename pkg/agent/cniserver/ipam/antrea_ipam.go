@@ -16,6 +16,7 @@ package ipam
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net"
 	"sync"
@@ -26,6 +27,7 @@ import (
 	current "github.com/containernetworking/cni/pkg/types/100"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/klog/v2"
+	utilnet "k8s.io/utils/net"
 
 	"antrea.io/antrea/pkg/agent/cniserver/types"
 	crdv1b1 "antrea.io/antrea/pkg/apis/crd/v1beta1"
@@ -135,10 +137,46 @@ func (d *AntreaIPAM) setController(controller *AntreaIPAMController) {
 	d.controller = controller
 }
 
-// Add allocates the next available IP address from the associated IP Pool. The
-// allocated IP and associated resource will be stored in the IP Pool status.
+// splitIPsByFamily returns the first IPv4 and IPv6 address found in ips.
+// Additional addresses of the same family are silently ignored.
+func splitIPsByFamily(ips []net.IP) (v4, v6 net.IP) {
+	for _, ip := range ips {
+		if ip == nil {
+			continue
+		}
+		if ip.To4() != nil {
+			if v4 == nil {
+				v4 = ip
+			}
+		} else {
+			if v6 == nil {
+				v6 = ip
+			}
+		}
+	}
+	return v4, v6
+}
+
+// Add allocates IP addresses from the associated IP Pools. It supports IPv4,
+// IPv6, and dual-stack configurations. For dual-stack, at most one IP per IP
+// family will be allocated even if multiple Pools exist for the same family.
+// The allocated IPs and associated resources will be stored in the IP Pool
+// status.
+//
+// When multiple Pools of the same IP family are configured and no specific IP
+// is requested, Add will try each Pool in order. If a Pool is exhausted (no
+// free IPs), the next Pool of the same family is attempted. Other errors
+// (e.g. API failures) cause an immediate return.
+//
+// When a Pod specifies desired IPs via the AntreaIPAMPodIP annotation, at most
+// one IPv4 and one IPv6 address are used; additional addresses of the same
+// family are silently ignored. The specified IP is always allocated from the
+// first Pool of the corresponding IP family. If the allocation fails for any
+// reason (IP not in range, already allocated, etc.), the error is returned
+// immediately without trying subsequent Pools.
+// See https://antrea.io/docs/main/docs/antrea-ipam.md for more details.
 func (d *AntreaIPAM) Add(args *invoke.Args, k8sArgs *types.K8sArgs, networkConfig []byte) (bool, *IPAMResult, error) {
-	mine, allocator, ips, reservedOwner, err := d.owns(k8sArgs)
+	mine, allocators, ips, reservedOwner, err := d.owns(k8sArgs)
 	if err != nil {
 		return true, nil, err
 	}
@@ -148,29 +186,116 @@ func (d *AntreaIPAM) Add(args *invoke.Args, k8sArgs *types.K8sArgs, networkConfi
 	}
 
 	owner := *getAllocationOwner(args, k8sArgs, reservedOwner, false)
-	var ip net.IP
-	var subnetInfo *crdv1b1.SubnetInfo
-	if reservedOwner != nil {
-		ip, subnetInfo, err = allocator.AllocateReservedOrNext(crdv1b1.IPAddressPhaseAllocated, owner)
-	} else if len(ips) == 0 {
-		ip, subnetInfo, err = allocator.AllocateNext(crdv1b1.IPAddressPhaseAllocated, owner)
-	} else {
-		ip = ips[0]
-		subnetInfo, err = allocator.AllocateIP(ip, crdv1b1.IPAddressPhaseAllocated, owner)
+	result := IPAMResult{Result: current.Result{CNIVersion: current.ImplementedSpecVersion}}
+
+	var allocatedAllocators []*poolallocator.IPPoolAllocator
+	defer func() {
+		if err != nil {
+			// Release already allocated IPs on error.
+			podOwner := getAllocationPodOwner(args, k8sArgs, nil, false)
+			for _, a := range allocatedAllocators {
+				a.ReleaseContainer(podOwner.ContainerID, podOwner.IFName)
+			}
+		}
+	}()
+
+	var requestedV4, requestedV6 net.IP
+	if len(ips) > 0 {
+		requestedV4, requestedV6 = splitIPsByFamily(ips)
 	}
-	if err != nil {
+
+	var hasIPv4Pool, hasIPv6Pool bool
+	var allocatedIPv4, allocatedIPv6 bool
+	var lastIPv4ExhaustedErr, lastIPv6ExhaustedErr error
+	for _, allocator := range allocators {
+		if allocator.IPVersion == utilnet.IPv4 {
+			hasIPv4Pool = true
+			if allocatedIPv4 {
+				continue
+			}
+		} else {
+			hasIPv6Pool = true
+			if allocatedIPv6 {
+				continue
+			}
+		}
+
+		var ip net.IP
+		var subnetInfo *crdv1b1.SubnetInfo
+		requestedIP := requestedV4
+		if allocator.IPVersion == utilnet.IPv6 {
+			requestedIP = requestedV6
+		}
+		if reservedOwner != nil {
+			ip, subnetInfo, err = allocator.AllocateReservedOrNext(crdv1b1.IPAddressPhaseAllocated, owner)
+		} else if requestedIP != nil {
+			ip = requestedIP
+			subnetInfo, err = allocator.AllocateIP(ip, crdv1b1.IPAddressPhaseAllocated, owner)
+			if err != nil {
+				return true, nil, err
+			}
+		} else {
+			ip, subnetInfo, err = allocator.AllocateNext(crdv1b1.IPAddressPhaseAllocated, owner)
+		}
+		if err != nil {
+			if errors.Is(err, poolallocator.ErrPoolExhausted) {
+				klog.V(4).InfoS("IPPool exhausted, trying next pool", "IPPool", allocator.Name(), "Pod", string(k8sArgs.K8S_POD_NAME))
+				if allocator.IPVersion == utilnet.IPv4 {
+					lastIPv4ExhaustedErr = err
+				} else {
+					lastIPv6ExhaustedErr = err
+				}
+				err = nil
+				continue
+			}
+			return true, nil, err
+		}
+		allocatedAllocators = append(allocatedAllocators, allocator)
+
+		if allocator.IPVersion == utilnet.IPv4 {
+			allocatedIPv4 = true
+		} else {
+			allocatedIPv6 = true
+		}
+
+		klog.V(4).InfoS("IP allocation successful", "IP", ip.String(), "Pod", string(k8sArgs.K8S_POD_NAME))
+
+		gwIP := net.ParseIP(subnetInfo.Gateway)
+		ipConfig, defaultRoute := generateIPConfig(ip, int(subnetInfo.PrefixLength), gwIP)
+
+		result.Routes = append(result.Routes, defaultRoute)
+		result.IPs = append(result.IPs, ipConfig)
+		vlanID := uint16(subnetInfo.VLAN)
+		if result.VLANID == 0 {
+			result.VLANID = vlanID
+		} else if vlanID != 0 && result.VLANID != vlanID {
+			err = fmt.Errorf("IPPools have conflicting VLAN IDs %d and %d for dual-stack allocation", result.VLANID, vlanID)
+			return true, nil, err
+		}
+		if allocatedIPv4 && allocatedIPv6 {
+			break
+		}
+	}
+
+	if hasIPv4Pool && !allocatedIPv4 {
+		if lastIPv4ExhaustedErr != nil {
+			err = fmt.Errorf("failed to allocate IPv4 address for Pod %s/%s: %w", string(k8sArgs.K8S_POD_NAMESPACE), string(k8sArgs.K8S_POD_NAME), lastIPv4ExhaustedErr)
+		} else {
+			err = fmt.Errorf("failed to allocate IPv4 address for Pod %s/%s", string(k8sArgs.K8S_POD_NAMESPACE), string(k8sArgs.K8S_POD_NAME))
+		}
+		return true, nil, err
+	}
+	if hasIPv6Pool && !allocatedIPv6 {
+		if lastIPv6ExhaustedErr != nil {
+			err = fmt.Errorf("failed to allocate IPv6 address for Pod %s/%s: %w", string(k8sArgs.K8S_POD_NAMESPACE), string(k8sArgs.K8S_POD_NAME), lastIPv6ExhaustedErr)
+		} else {
+			err = fmt.Errorf("failed to allocate IPv6 address for Pod %s/%s", string(k8sArgs.K8S_POD_NAMESPACE), string(k8sArgs.K8S_POD_NAME))
+		}
 		return true, nil, err
 	}
 
-	klog.V(4).InfoS("IP allocation successful", "IP", ip.String(), "Pod", string(k8sArgs.K8S_POD_NAME))
-
-	result := IPAMResult{Result: current.Result{CNIVersion: current.ImplementedSpecVersion}, VLANID: uint16(subnetInfo.VLAN)}
-	gwIP := net.ParseIP(subnetInfo.Gateway)
-
-	ipConfig, defaultRoute := generateIPConfig(ip, int(subnetInfo.PrefixLength), gwIP)
-
-	result.Routes = append(result.Routes, defaultRoute)
-	result.IPs = append(result.IPs, ipConfig)
+	// All allocations successful, clear the deferred release.
+	allocatedAllocators = nil
 	return true, &result, nil
 }
 
@@ -189,7 +314,7 @@ func (d *AntreaIPAM) Del(args *invoke.Args, k8sArgs *types.K8sArgs, networkConfi
 
 // Check verifies the IP associated with the resource is tracked in the IP Pool status.
 func (d *AntreaIPAM) Check(args *invoke.Args, k8sArgs *types.K8sArgs, networkConfig []byte) (bool, error) {
-	mine, allocator, _, _, err := d.owns(k8sArgs)
+	mine, allocators, _, _, err := d.owns(k8sArgs)
 	if err != nil {
 		return true, err
 	}
@@ -198,15 +323,25 @@ func (d *AntreaIPAM) Check(args *invoke.Args, k8sArgs *types.K8sArgs, networkCon
 		return false, nil
 	}
 
-	ip, err := allocator.GetContainerIP(args.ContainerID, "")
-	if err != nil {
-		return true, err
+	found := false
+	var lastErr error
+	for _, allocator := range allocators {
+		ip, err := allocator.GetContainerIP(args.ContainerID, "")
+		if err != nil {
+			lastErr = err
+			continue
+		}
+		if ip != nil {
+			found = true
+		}
 	}
-
-	if ip == nil {
-		return true, fmt.Errorf("no IP Address association found for container %s", string(k8sArgs.K8S_POD_NAME))
+	if found {
+		return true, nil
 	}
-	return true, nil
+	if lastErr != nil {
+		return true, lastErr
+	}
+	return true, fmt.Errorf("no IP Address association found for container %s", string(k8sArgs.K8S_POD_NAME))
 }
 
 // SecondaryNetworkAllocate allocates IP addresses for a Pod secondary network interface, based on
@@ -239,6 +374,7 @@ func (d *AntreaIPAM) SecondaryNetworkAllocate(podOwner *crdv1b1.PodOwner, networ
 			}
 		}()
 
+		var lastExhaustedErr error
 		for _, p := range ipamConf.IPPools {
 			allocator, err := d.controller.getPoolAllocatorByName(p)
 			if err != nil {
@@ -250,6 +386,11 @@ func (d *AntreaIPAM) SecondaryNetworkAllocate(podOwner *crdv1b1.PodOwner, networ
 			owner := crdv1b1.IPAddressOwner{Pod: podOwner}
 			ip, subnetInfo, err = allocator.AllocateNext(crdv1b1.IPAddressPhaseAllocated, owner)
 			if err != nil {
+				if errors.Is(err, poolallocator.ErrPoolExhausted) {
+					klog.InfoS("IPPool exhausted, trying next pool", "IPPool", p)
+					lastExhaustedErr = err
+					continue
+				}
 				return nil, err
 			}
 			if numPools > 1 {
@@ -262,10 +403,18 @@ func (d *AntreaIPAM) SecondaryNetworkAllocate(podOwner *crdv1b1.PodOwner, networ
 			// assume the CNI version >= 0.3.0, and so do not check the number of
 			// addresses.
 			result.IPs = append(result.IPs, ipConfig)
+			vlanID := uint16(subnetInfo.VLAN)
 			if result.VLANID == 0 {
-				// Return the first non-zero VLAN.
-				result.VLANID = uint16(subnetInfo.VLAN)
+				result.VLANID = vlanID
+			} else if vlanID != 0 && result.VLANID != vlanID {
+				return nil, fmt.Errorf("IPPools have conflicting VLAN IDs %d and %d for dual-stack allocation", result.VLANID, vlanID)
 			}
+		}
+		if len(result.IPs) == 0 {
+			if lastExhaustedErr != nil {
+				return nil, fmt.Errorf("failed to allocate any IP for Pod %s/%s: %w", podOwner.Namespace, podOwner.Name, lastExhaustedErr)
+			}
+			return nil, fmt.Errorf("failed to allocate any IP for Pod %s/%s", podOwner.Namespace, podOwner.Name)
 		}
 		// No failed allocation, so do not release allocated IPs.
 		allocatorsToRelease = nil
@@ -340,7 +489,7 @@ func (d *AntreaIPAM) del(podOwner *crdv1b1.PodOwner) (foundAllocation bool, err 
 // mineTrue + timeout error
 // mineTrue + IPPoolNotFound error
 // mineTrue + nil error
-func (d *AntreaIPAM) owns(k8sArgs *types.K8sArgs) (mineType, *poolallocator.IPPoolAllocator, []net.IP, *crdv1b1.IPAddressOwner, error) {
+func (d *AntreaIPAM) owns(k8sArgs *types.K8sArgs) (mineType, []*poolallocator.IPPoolAllocator, []net.IP, *crdv1b1.IPAddressOwner, error) {
 	// Wait controller ready to avoid inappropriate behaviors on the CNI request.
 	if err := d.waitForControllerReady(); err != nil {
 		// Return mineTrue to make this request fail and kubelet will retry.
@@ -350,7 +499,7 @@ func (d *AntreaIPAM) owns(k8sArgs *types.K8sArgs) (mineType, *poolallocator.IPPo
 	namespace := string(k8sArgs.K8S_POD_NAMESPACE)
 	podName := string(k8sArgs.K8S_POD_NAME)
 	klog.V(2).InfoS("Inspecting IPAM annotation", "Namespace", namespace, "Pod", podName)
-	return d.controller.getPoolAllocatorByPod(namespace, podName)
+	return d.controller.getPoolAllocatorsByPod(namespace, podName)
 }
 
 func (d *AntreaIPAM) waitForControllerReady() error {
