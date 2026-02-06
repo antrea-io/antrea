@@ -56,6 +56,7 @@ CLEAN_STALE_IMAGES_CONTAINERD="crictl rmi --prune"
 PRINT_DOCKER_STATUS="docker system df -v"
 PRINT_CONTAINERD_STATUS="crictl ps --state Exited"
 BUILD_TAG="latest"
+TRAFFIC_MODE=""
 MANIFEST_ARGS=""
 
 _usage="Usage: $0 [--kubeconfig <KubeconfigSavePath>] [--workdir <HomePath>]
@@ -74,7 +75,8 @@ Run K8s e2e community tests (Conformance & Network Policy) or Antrea e2e tests o
         --proxyall               Enable proxyAll to test AntreaProxy.
         --build-tag              Custom build tag for images.
         --docker-user            Username for Docker account.
-        --docker-password        Password for Docker account."
+        --docker-password        Password for Docker account.
+        --traffic-mode           Traffic Encryption mode."
 
 function print_usage {
     echoerr "$_usage"
@@ -135,6 +137,10 @@ case $key in
     ;;
     --docker-password)
     DOCKER_PASSWORD="$2"
+    shift 2
+    ;;
+    --traffic-mode)
+    TRAFFIC_MODE="$2"
     shift 2
     ;;
     -h|--help)
@@ -538,6 +544,11 @@ function deliver_antrea {
     fi
     chmod -R g-w build/images/ovs
     chmod -R g-w build/images/base
+
+    if [[ "$TRAFFIC_MODE" == "wireGuard" ]]; then
+        MANIFEST_ARGS="$MANIFEST_ARGS --wireGuard"
+    fi
+
     if [[ "$BUILD_TAG" != "latest" ]]; then
         DOCKER_REGISTRY="${DOCKER_REGISTRY}" ./hack/build-antrea-linux-all.sh --build-tag ${BUILD_TAG} --pull
         IMG_TAG="${BUILD_TAG}" ./hack/generate-manifest.sh $MANIFEST_ARGS > build/yamls/antrea.yml
