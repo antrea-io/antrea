@@ -54,6 +54,7 @@ type ConntrackConnectionStore struct {
 	// networkPolicyReadyTime is set to the current time when we are done waiting on networkPolicyWait.
 	networkPolicyReadyTime time.Time
 	connectionStore
+	zoneZeroStore *zoneZeroStore
 }
 
 func NewConntrackConnectionStore(
@@ -74,6 +75,7 @@ func NewConntrackConnectionStore(
 		connectionStore:       NewConnectionStore(npQuerier, podStore, proxier, o),
 		connectUplinkToBridge: o.ConnectUplinkToBridge,
 		networkPolicyWait:     networkPolicyWait,
+		zoneZeroStore:         newZoneZeroStore(),
 	}
 }
 
@@ -122,24 +124,10 @@ func (cs *ConntrackConnectionStore) Poll() ([]int, error) {
 		klog.V(2).InfoS("Polled conntrack and updated connection store", "duration", duration)
 	}()
 
-	var zones []uint16
 	var connsLens []int
-	if cs.v4Enabled {
-		if cs.connectUplinkToBridge {
-			zones = append(zones, uint16(openflow.IPCtZoneTypeRegMark.GetValue()<<12))
-		} else {
-			zones = append(zones, openflow.CtZone)
-		}
-	}
-	if cs.v6Enabled {
-		if cs.connectUplinkToBridge {
-			zones = append(zones, uint16(openflow.IPv6CtZoneTypeRegMark.GetValue()<<12))
-		} else {
-			zones = append(zones, openflow.CtZoneV6)
-		}
-	}
 	var totalConns int
 	var filteredConnsList []*connection.Connection
+	zones := cs.getZones()
 	for _, zone := range zones {
 		filteredConnsListPerZone, totalConnsPerZone, err := cs.connDumper.DumpFlows(zone)
 		if err != nil {
@@ -168,6 +156,7 @@ func (cs *ConntrackConnectionStore) Poll() ([]int, error) {
 				if err := cs.deleteConnWithoutLock(key); err != nil {
 					return err
 				}
+				cs.zoneZeroStore.remove(conn)
 			}
 		} else {
 			conn.IsPresent = false
@@ -206,6 +195,23 @@ func (cs *ConntrackConnectionStore) Poll() ([]int, error) {
 // or adds a new connection with the resolved K8s metadata.
 func (cs *ConntrackConnectionStore) AddOrUpdateConn(conn *connection.Connection) {
 	conn.IsPresent = true
+
+	if conn.Zone == 0 {
+		clusterIP := conn.OriginalDestinationAddress.String()
+		svcPort := conn.OriginalDestinationPort
+		protocol, _ := lookupServiceProtocol(conn.FlowKey.Protocol)
+		serviceStr := fmt.Sprintf("%s:%d/%s", clusterIP, svcPort, protocol)
+		_, exists := cs.antreaProxier.GetServiceByIP(serviceStr)
+		if exists {
+			cs.zoneZeroStore.add(conn)
+		}
+		return
+	}
+
+	if zoneZero := cs.zoneZeroStore.getMatching(conn); zoneZero != nil {
+		CorrelateExternal(zoneZero, conn)
+	}
+
 	connKey := connection.NewConnectionKey(conn)
 
 	existingConn, exists := cs.connections[connKey]
@@ -238,13 +244,7 @@ func (cs *ConntrackConnectionStore) AddOrUpdateConn(conn *connection.Connection)
 		klog.V(4).InfoS("Antrea flow updated", "connection", existingConn)
 	} else {
 		cs.fillPodInfo(conn)
-		if conn.SourcePodName == "" && conn.DestinationPodName == "" {
-			// We don't add connections to connection map or expirePriorityQueue if we can't find the pod
-			// information for both srcPod and dstPod
-			klog.V(5).InfoS("Skip this connection as we cannot map any of the connection IPs to a local Pod", "srcIP", conn.FlowKey.SourceAddress.String(), "dstIP", conn.FlowKey.DestinationAddress.String())
-			return
-		}
-		if conn.Mark&openflow.ServiceCTMark.GetRange().ToNXRange().ToUint32Mask() == openflow.ServiceCTMark.GetValue() {
+		if conn.Mark&openflow.ServiceCTMark.GetRange().ToNXRange().ToUint32Mask() == openflow.ServiceCTMark.GetValue() || conn.Mark == 2 {
 			clusterIP := conn.OriginalDestinationAddress.String()
 			svcPort := conn.OriginalDestinationPort
 			protocol, err := lookupServiceProtocol(conn.FlowKey.Protocol)
@@ -322,4 +322,35 @@ func (cs *ConntrackConnectionStore) DeleteAllConnections() int {
 
 func (cs *ConntrackConnectionStore) GetPriorityQueue() *priorityqueue.ExpirePriorityQueue {
 	return cs.connectionStore.expirePriorityQueue
+}
+
+func (cs *ConntrackConnectionStore) getZones() []uint16 {
+	var zones []uint16
+	zones = append(zones, 0)
+	if cs.v4Enabled {
+		if cs.connectUplinkToBridge {
+			zones = append(zones, uint16(openflow.IPCtZoneTypeRegMark.GetValue()<<12))
+		} else {
+			zones = append(zones, openflow.CtZone)
+		}
+	}
+	if cs.v6Enabled {
+		if cs.connectUplinkToBridge {
+			zones = append(zones, uint16(openflow.IPv6CtZoneTypeRegMark.GetValue()<<12))
+		} else {
+			zones = append(zones, openflow.CtZoneV6)
+		}
+	}
+	return zones
+}
+
+// Given a pair of matching connections, modify the antreaZone connection by
+// filling in the fields needed from the zoneZero connection
+func CorrelateExternal(zoneZero, antreaZone *connection.Connection) {
+	antreaZone.FlowKey.SourcePort = zoneZero.FlowKey.SourcePort
+	antreaZone.FlowKey.SourceAddress = zoneZero.FlowKey.SourceAddress
+	antreaZone.ProxySnatIP = zoneZero.ProxySnatIP
+	antreaZone.ProxySnatPort = zoneZero.ProxySnatPort
+	antreaZone.OriginalDestinationAddress = zoneZero.OriginalDestinationAddress
+	antreaZone.OriginalDestinationPort = zoneZero.OriginalDestinationPort
 }
