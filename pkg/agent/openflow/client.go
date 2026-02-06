@@ -169,12 +169,11 @@ type Client interface {
 	// remote Node, snatMark should be set to 0, and the installed flow
 	// tunnels egress packets to the remote Node using the SNAT IP as the
 	// tunnel destination, and the packets should be SNAT'd on the remote
-	// Node. As of now, a Pod can be configured to use only a single SNAT
-	// IP in a single address family (IPv4 or IPv6).
+	// Node.
 	InstallPodSNATFlows(ofPort uint32, snatIP net.IP, snatMark uint32) error
 
 	// UninstallPodSNATFlows removes the SNAT flows for the local Pod.
-	UninstallPodSNATFlows(ofPort uint32) error
+	UninstallPodSNATFlows(ofPort uint32, snatIP net.IP) error
 
 	// InstallEgressQoS installs an OF meter with specific meterID, rate
 	// and burst used for QoS of Egress and a QoS flow that direct packets
@@ -1073,14 +1072,22 @@ func (c *client) UninstallSNATMarkFlows(mark uint32) error {
 
 func (c *client) InstallPodSNATFlows(ofPort uint32, snatIP net.IP, snatMark uint32) error {
 	flows := []binding.Flow{c.featureEgress.snatRuleFlow(ofPort, snatIP, snatMark, c.nodeConfig.GatewayConfig.MAC)}
-	cacheKey := fmt.Sprintf("p%x", ofPort)
+	suffix := "v4"
+	if snatIP.To4() == nil {
+		suffix = "v6"
+	}
+	cacheKey := fmt.Sprintf("p%x-%s", ofPort, suffix)
 	c.replayMutex.RLock()
 	defer c.replayMutex.RUnlock()
 	return c.addFlows(c.featureEgress.cachedFlows, cacheKey, flows)
 }
 
-func (c *client) UninstallPodSNATFlows(ofPort uint32) error {
-	cacheKey := fmt.Sprintf("p%x", ofPort)
+func (c *client) UninstallPodSNATFlows(ofPort uint32, snatIP net.IP) error {
+	suffix := "v4"
+	if snatIP.To4() == nil {
+		suffix = "v6"
+	}
+	cacheKey := fmt.Sprintf("p%x-%s", ofPort, suffix)
 	c.replayMutex.RLock()
 	defer c.replayMutex.RUnlock()
 	return c.deleteFlows(c.featureEgress.cachedFlows, cacheKey)

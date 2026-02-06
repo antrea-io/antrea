@@ -1820,10 +1820,10 @@ func testEgressMarkFlows(t *testing.T, trafficShaping bool) {
 		ofTestUtils.CheckFlowExists(t, ovsCtlClient, tableFlow.tableName, 0, true, tableFlow.flows)
 	}
 
-	c.UninstallPodSNATFlows(podOFPort)
-	c.UninstallPodSNATFlows(podOFPortRemote)
-	c.UninstallPodSNATFlows(podOFPortV6)
-	c.UninstallPodSNATFlows(podOFPortRemoteV6)
+	c.UninstallPodSNATFlows(podOFPort, snatIP)
+	c.UninstallPodSNATFlows(podOFPortRemote, snatIP)
+	c.UninstallPodSNATFlows(podOFPortV6, snatIPV6)
+	c.UninstallPodSNATFlows(podOFPortRemoteV6, snatIPV6)
 	c.UninstallSNATMarkFlows(snatMark)
 	c.UninstallSNATMarkFlows(snatMarkV6)
 	for _, tableFlow := range expectedFlows {
