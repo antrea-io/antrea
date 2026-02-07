@@ -42,7 +42,7 @@ func TestTrafficControlMarkFlows(t *testing.T) {
 			direction:     v1alpha2.DirectionIngress,
 			action:        v1alpha2.ActionRedirect,
 			expectedFlows: []string{
-				"cookie=0x1010000000000, table=TrafficControl, priority=200,reg1=0xa actions=set_field:0x64->reg9,set_field:0x800000/0xc00000->reg0,goto_table:IngressSecurityClassifier",
+				"cookie=0x1010000000000, table=TrafficControl, priority=200,reg1=0xa actions=set_field:0x64->reg9,set_field:0x800000/0xc00000->reg4,goto_table:IngressSecurityClassifier",
 			},
 		},
 		{
@@ -62,7 +62,7 @@ func TestTrafficControlMarkFlows(t *testing.T) {
 			direction:     v1alpha2.DirectionEgress,
 			action:        v1alpha2.ActionMirror,
 			expectedFlows: []string{
-				"cookie=0x1010000000000, table=PipelineIPClassifier, priority=200,in_port=10 actions=set_field:0x64->reg9,set_field:0x400000/0xc00000->reg0,output:100,goto_table:ConntrackState",
+				"cookie=0x1010000000000, table=PipelineIPClassifier, priority=200,in_port=10 actions=set_field:0x64->reg9,set_field:0x400000/0xc00000->reg4,output:100,goto_table:UnSNAT",
 			},
 		},
 		{
@@ -72,7 +72,7 @@ func TestTrafficControlMarkFlows(t *testing.T) {
 			direction:     v1alpha2.DirectionBoth,
 			action:        v1alpha2.ActionRedirect,
 			expectedFlows: []string{
-				"cookie=0x1010000000000, table=TrafficControl, priority=200,reg1=0xa actions=set_field:0x64->reg9,set_field:0x800000/0xc00000->reg0,goto_table:IngressSecurityClassifier",
+				"cookie=0x1010000000000, table=TrafficControl, priority=200,reg1=0xa actions=set_field:0x64->reg9,set_field:0x800000/0xc00000->reg4,goto_table:IngressSecurityClassifier",
 				"cookie=0x1010000000000, table=PipelineIPClassifier, priority=200,in_port=10 actions=output:100",
 			},
 		},
@@ -101,7 +101,7 @@ func TestTrafficControlReturnClassifierFlow(t *testing.T) {
 	defer resetPipelines()
 
 	flow := fc.featurePodConnectivity.trafficControlReturnClassifierFlow(100)
-	expectedFlow := "cookie=0x1010000000000, table=Classifier, priority=200,in_port=100 actions=set_field:0x3/0xf->reg0,goto_table:ConntrackState"
+	expectedFlow := "cookie=0x1010000000000, table=Classifier, priority=200,in_port=100 actions=set_field:0x6/0xf->reg0,goto_table:UnSNAT"
 
 	assert.Equal(t, expectedFlow, getFlowStrings([]binding.Flow{flow})[0])
 }
