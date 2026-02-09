@@ -27,12 +27,14 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	v1 "k8s.io/api/core/v1"
+	discoveryv1 "k8s.io/api/discovery/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/util/retry"
 	utilnet "k8s.io/utils/net"
+	"k8s.io/utils/ptr"
 
 	"antrea.io/antrea/pkg/agent/apis"
 	"antrea.io/antrea/pkg/agent/config"
@@ -147,14 +149,14 @@ func TestServiceExternalIP(t *testing.T) {
 
 func testServiceExternalTrafficPolicyLocal(t *testing.T, data *TestData) {
 	tests := []struct {
-		name                    string
-		ipRange                 v1beta1.IPRange
-		nodeSelector            metav1.LabelSelector
-		originalEndpointSubsets []v1.EndpointSubset
-		expectedExternalIP      string
-		expectedNodeOrigin      string
-		updatedEndpointSubsets  []v1.EndpointSubset
-		expectedNodeUpdated     string
+		name                string
+		ipRange             v1beta1.IPRange
+		nodeSelector        metav1.LabelSelector
+		originalEndpoints   []discoveryv1.Endpoint
+		expectedExternalIP  string
+		expectedNodeOrigin  string
+		updatedEndpoints    []discoveryv1.Endpoint
+		expectedNodeUpdated string
 	}{
 		{
 			name:    "endpoint created",
@@ -168,16 +170,15 @@ func testServiceExternalTrafficPolicyLocal(t *testing.T, data *TestData) {
 					},
 				},
 			},
-			expectedExternalIP:      ipPoolRangeV4.getFirstIP(),
-			originalEndpointSubsets: nil,
-			expectedNodeOrigin:      "",
-			updatedEndpointSubsets: []v1.EndpointSubset{
+			expectedExternalIP: ipPoolRangeV4.getFirstIP(),
+			originalEndpoints:  nil,
+			expectedNodeOrigin: "",
+			updatedEndpoints: []discoveryv1.Endpoint{
 				{
-					Addresses: []v1.EndpointAddress{
-						{
-							IP:       "192.168.200.1",
-							NodeName: stringPtr(nodeName(0)),
-						},
+					Addresses: []string{"192.168.200.1"},
+					NodeName:  ptr.To(nodeName(0)),
+					Conditions: discoveryv1.EndpointConditions{
+						Ready: ptr.To(true),
 					},
 				},
 			},
@@ -195,16 +196,15 @@ func testServiceExternalTrafficPolicyLocal(t *testing.T, data *TestData) {
 					},
 				},
 			},
-			expectedExternalIP:      ipPoolRangeV6.getFirstIP(),
-			originalEndpointSubsets: nil,
-			expectedNodeOrigin:      "",
-			updatedEndpointSubsets: []v1.EndpointSubset{
+			expectedExternalIP: ipPoolRangeV6.getFirstIP(),
+			originalEndpoints:  nil,
+			expectedNodeOrigin: "",
+			updatedEndpoints: []discoveryv1.Endpoint{
 				{
-					Addresses: []v1.EndpointAddress{
-						{
-							IP:       "2021:8::aaa1",
-							NodeName: stringPtr(nodeName(0)),
-						},
+					Addresses: []string{"2021:8::aaa1"},
+					NodeName:  ptr.To(nodeName(0)),
+					Conditions: discoveryv1.EndpointConditions{
+						Ready: ptr.To(true),
 					},
 				},
 			},
@@ -223,24 +223,22 @@ func testServiceExternalTrafficPolicyLocal(t *testing.T, data *TestData) {
 				},
 			},
 			expectedExternalIP: ipPoolRangeV4.getFirstIP(),
-			originalEndpointSubsets: []v1.EndpointSubset{
+			originalEndpoints: []discoveryv1.Endpoint{
 				{
-					Addresses: []v1.EndpointAddress{
-						{
-							IP:       "192.168.100.1",
-							NodeName: stringPtr(nodeName(0)),
-						},
+					Addresses: []string{"192.168.100.1"},
+					NodeName:  ptr.To(nodeName(0)),
+					Conditions: discoveryv1.EndpointConditions{
+						Ready: ptr.To(true),
 					},
 				},
 			},
 			expectedNodeOrigin: nodeName(0),
-			updatedEndpointSubsets: []v1.EndpointSubset{
+			updatedEndpoints: []discoveryv1.Endpoint{
 				{
-					Addresses: []v1.EndpointAddress{
-						{
-							IP:       "192.168.100.1",
-							NodeName: stringPtr(nodeName(1)),
-						},
+					Addresses: []string{"192.168.100.1"},
+					NodeName:  ptr.To(nodeName(1)),
+					Conditions: discoveryv1.EndpointConditions{
+						Ready: ptr.To(true),
 					},
 				},
 			},
@@ -259,24 +257,22 @@ func testServiceExternalTrafficPolicyLocal(t *testing.T, data *TestData) {
 				},
 			},
 			expectedExternalIP: ipPoolRangeV6.getFirstIP(),
-			originalEndpointSubsets: []v1.EndpointSubset{
+			originalEndpoints: []discoveryv1.Endpoint{
 				{
-					Addresses: []v1.EndpointAddress{
-						{
-							IP:       "2021:8::aaa1",
-							NodeName: stringPtr(nodeName(0)),
-						},
+					Addresses: []string{"2021:8::aaa1"},
+					NodeName:  ptr.To(nodeName(0)),
+					Conditions: discoveryv1.EndpointConditions{
+						Ready: ptr.To(true),
 					},
 				},
 			},
 			expectedNodeOrigin: nodeName(0),
-			updatedEndpointSubsets: []v1.EndpointSubset{
+			updatedEndpoints: []discoveryv1.Endpoint{
 				{
-					Addresses: []v1.EndpointAddress{
-						{
-							IP:       "2021:8::aaa1",
-							NodeName: stringPtr(nodeName(1)),
-						},
+					Addresses: []string{"2021:8::aaa1"},
+					NodeName:  ptr.To(nodeName(1)),
+					Conditions: discoveryv1.EndpointConditions{
+						Ready: ptr.To(true),
 					},
 				},
 			},
@@ -292,7 +288,7 @@ func testServiceExternalTrafficPolicyLocal(t *testing.T, data *TestData) {
 			}
 			var err error
 			var service *v1.Service
-			var eps *v1.Endpoints
+			var eps *discoveryv1.EndpointSlice
 			ipPool := data.createExternalIPPool(t, "test-service-pool-", tt.ipRange, nil, tt.nodeSelector.MatchExpressions, tt.nodeSelector.MatchLabels)
 			defer data.CRDClient.CrdV1beta1().ExternalIPPools().Delete(context.TODO(), ipPool.Name, metav1.DeleteOptions{})
 
@@ -304,28 +300,18 @@ func testServiceExternalTrafficPolicyLocal(t *testing.T, data *TestData) {
 			require.NoError(t, err)
 			defer data.clientset.CoreV1().Services(service.Namespace).Delete(context.TODO(), service.Name, metav1.DeleteOptions{})
 
-			eps = &v1.Endpoints{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      service.Name,
-					Namespace: service.Namespace,
-					Labels: map[string]string{
-						"antrea-e2e": service.Name,
-						"app":        service.Name,
-					},
-				},
-				Subsets: tt.originalEndpointSubsets,
-			}
-			eps, err = data.clientset.CoreV1().Endpoints(eps.Namespace).Create(context.TODO(), eps, metav1.CreateOptions{})
+			eps = createEndpointSlice(service.Name, service.Namespace, tt.originalEndpoints)
+			eps, err = data.clientset.DiscoveryV1().EndpointSlices(eps.Namespace).Create(context.TODO(), eps, metav1.CreateOptions{})
 			require.NoError(t, err)
-			defer data.clientset.CoreV1().Endpoints(eps.Namespace).Delete(context.TODO(), eps.Name, metav1.DeleteOptions{})
+			defer data.clientset.DiscoveryV1().EndpointSlices(eps.Namespace).Delete(context.TODO(), eps.Name, metav1.DeleteOptions{})
 
 			service, node, err := data.waitForServiceConfigured(service, tt.expectedExternalIP, tt.expectedNodeOrigin)
 			require.NoError(t, err)
 			assert.Equal(t, tt.expectedNodeOrigin, node)
 
 			epsToUpdate := eps.DeepCopy()
-			epsToUpdate.Subsets = tt.updatedEndpointSubsets
-			_, err = data.clientset.CoreV1().Endpoints(eps.Namespace).Update(context.TODO(), epsToUpdate, metav1.UpdateOptions{})
+			epsToUpdate.Endpoints = tt.updatedEndpoints
+			_, err = data.clientset.DiscoveryV1().EndpointSlices(eps.Namespace).Update(context.TODO(), epsToUpdate, metav1.UpdateOptions{})
 			require.NoError(t, err)
 			_, node, err = data.waitForServiceConfigured(service, tt.expectedExternalIP, tt.expectedNodeUpdated)
 			require.NoError(t, err)
@@ -335,8 +321,31 @@ func testServiceExternalTrafficPolicyLocal(t *testing.T, data *TestData) {
 	}
 }
 
-func stringPtr(s string) *string {
-	return &s
+// createEndpointSlice creates an EndpointSlice for the given service with the specified endpoints.
+func createEndpointSlice(serviceName, namespace string, endpoints []discoveryv1.Endpoint) *discoveryv1.EndpointSlice {
+	var addressType discoveryv1.AddressType
+	// Determine address type from first endpoint
+	if len(endpoints) > 0 && len(endpoints[0].Addresses) > 0 {
+		if utilnet.IsIPv6String(endpoints[0].Addresses[0]) {
+			addressType = discoveryv1.AddressTypeIPv6
+		} else {
+			addressType = discoveryv1.AddressTypeIPv4
+		}
+	} else {
+		// Default to IPv4 if no endpoints
+		addressType = discoveryv1.AddressTypeIPv4
+	}
+	return &discoveryv1.EndpointSlice{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      fmt.Sprintf("%s-%s", serviceName, "slice"),
+			Namespace: namespace,
+			Labels: map[string]string{
+				discoveryv1.LabelServiceName: serviceName,
+			},
+		},
+		AddressType: addressType,
+		Endpoints:   endpoints,
+	}
 }
 
 func testServiceWithExternalIPCRUD(t *testing.T, data *TestData) {
