@@ -69,6 +69,7 @@ type NetworkInfo struct {
 	// MTU used for the Pod network
 	PodMTU int32 `json:"podMTU,omitempty"`
 	// IP addresses (with network) of the transport interface in CIDR notation
+	// There can be at most one value for each IP family (IPv4 and IPv6)
 	TransportInterfaceIPs []string `json:"transportInterfaceIPs,omitempty"`
 }
 

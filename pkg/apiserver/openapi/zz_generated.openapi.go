@@ -4834,7 +4834,7 @@ func schema_pkg_apis_crd_v1beta1_NetworkInfo(ref common.ReferenceCallback) commo
 					},
 					"transportInterfaceIPs": {
 						SchemaProps: spec.SchemaProps{
-							Description: "IP addresses (with network) of the transport interface in CIDR notation",
+							Description: "IP addresses (with network) of the transport interface in CIDR notation There can be at most one value for each IP family (IPv4 and IPv6)",
 							Type:        []string{"array"},
 							Items: &spec.SchemaOrArray{
 								Schema: &spec.Schema{

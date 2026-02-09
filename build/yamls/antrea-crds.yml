@@ -130,6 +130,8 @@ spec:
                   type: array
                   items:
                     type: string
+                  # At most one item for each IP family
+                  maxItems: 2
       additionalPrinterColumns:
         - description: Health status of this Agent
           jsonPath: ".agentConditions[?(@.type=='AgentHealthy')].status"
