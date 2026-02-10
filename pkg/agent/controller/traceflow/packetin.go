@@ -349,7 +349,10 @@ func (c *Controller) parsePacketIn(pktIn *ofctrl.PacketIn) (*crdv1beta1.Traceflo
 			}
 
 			ob.Action = crdv1beta1.ActionForwardedOutOfNetwork
-			if c.networkConfig.TrafficEncapMode == config.TrafficEncapModeHybrid && c.podSubnetChecker != nil {
+			// In hybrid mode, packets are forwarded directly without encapsulation. In WireGuard mode,
+			// traffic is encapsulated by WireGuard. In both modes, traffic leaves OVS (outputPort == gwPort).
+			// Check if the destination is a Pod IP to determine the correct action.
+			if (c.networkConfig.TrafficEncapMode == config.TrafficEncapModeHybrid || c.networkConfig.TrafficEncryptionMode == config.TrafficEncryptionModeWireGuard) && c.podSubnetChecker != nil {
 				netAddrDst, _ := netip.AddrFromSlice(netIPDst)
 				isPodIP, _ := c.podSubnetChecker.LookupIPInPodSubnets(netAddrDst)
 				if isPodIP {
