@@ -4720,6 +4720,9 @@ data:
       # Enable to accelerate Pod-to-Pod traffic in the Node's host network using nftables flowtable when traffic mode is
       # noEncap or hybrid.
       enable: true
+      # Minimum packet count for Service connections to be accelerated (0-1000). 0 = all connections; higher = only
+      # long-lived/high-traffic connections.
+      serviceAccelerationPacketThreshold: 20
 
     # HostNetworkMode determines how antrea-agent implements Node host network netfilter rules required by Antrea
     # functionalities and features, using either "iptables" or "nftables". The default value is "iptables". If "nftables"
@@ -5758,7 +5761,7 @@ spec:
         kubectl.kubernetes.io/default-container: antrea-agent
         # Automatically restart Pods with a RollingUpdate if the ConfigMap changes
         # See https://helm.sh/docs/howto/charts_tips_and_tricks/#automatically-roll-deployments
-        checksum/config: 850a3f0b6a90ccc8380a7c5681a989b0d0204183d289c8d75fd76eab8cd1161a
+        checksum/config: 91b06987137e8cdd7b82e729c3696c01c47fdeb7ddef1df51138ff12ee6ef939
       labels:
         app: antrea
         component: antrea-agent
@@ -6004,7 +6007,7 @@ spec:
       annotations:
         # Automatically restart Pod if the ConfigMap changes
         # See https://helm.sh/docs/howto/charts_tips_and_tricks/#automatically-roll-deployments
-        checksum/config: 850a3f0b6a90ccc8380a7c5681a989b0d0204183d289c8d75fd76eab8cd1161a
+        checksum/config: 91b06987137e8cdd7b82e729c3696c01c47fdeb7ddef1df51138ff12ee6ef939
       labels:
         app: antrea
         component: antrea-controller

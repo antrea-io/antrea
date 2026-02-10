@@ -509,6 +509,11 @@ hostNetworkAcceleration:
   # -- Enable to accelerate Pod-to-Pod traffic in the Node's host network using nftables flowtable when traffic mode is
   # noEncap or hybrid.
   enable: true
+  # -- Minimum number of packets a Service (NodePort/ExternalIP/LoadBalancer) connection must have before it is
+  # accelerated. Only connections with more than this many packets are accelerated. Valid range: 0-1000. Impact:
+  # 0 accelerates all Service connections regardless of packet count; a higher value (e.g. 20 default, or up to 1000)
+  # only accelerates longer-lived or higher-traffic Service connections, reducing overhead for short-lived connections.
+  serviceAccelerationPacketThreshold: 20
 
 # -- Determines how antrea-agent implements Node host network netfilter rules required by functionalities and features,
 # using either "iptables" or "nftables". The default value is "iptables". If "nftables" is specified, the
