@@ -75,9 +75,25 @@ jobs:
         path: flow-aggregator.tar
         retention-days: 1 # minimum value, in case artifact deletion by 'artifact-cleanup' job fails
 
+  warm-go-cache:
+    name: Download go dependencies
+    runs-on: [ubuntu-latest]
+    steps:
+    - uses: actions/checkout@v6
+      with:
+        show-progress: false
+    - id: go
+      uses: actions/setup-go@v6
+      with:
+        go-version-file: 'go.mod'
+        cache: true
+    - if: steps.go.outputs.cache-hit != 'true'
+      run: |
+          go mod download -x
+          go build -v ./...
   test-e2e-encap:
     name: E2e tests on a Kind cluster on Linux
-    needs: [build-antrea-coverage-image]
+    needs: [build-antrea-coverage-image, warm-go-cache]
     runs-on: [ubuntu-latest]
     steps:
     - name: Free disk space
@@ -91,6 +107,7 @@ jobs:
     - uses: actions/setup-go@v6
       with:
         go-version-file: 'go.mod'
+        cache: true
     - name: Download Antrea image from previous job
       uses: actions/download-artifact@v7
       with:
@@ -140,7 +157,7 @@ jobs:
 
   test-e2e-encap-non-default:
     name: E2e tests on a Kind cluster on Linux with non default values (proxyAll=true, LoadBalancerMode=DSR, NodeIPAM=true)
-    needs: [build-antrea-coverage-image]
+    needs: [build-antrea-coverage-image, warm-go-cache]
     runs-on: [ubuntu-latest]
     steps:
     - name: Free disk space
@@ -154,6 +171,7 @@ jobs:
     - uses: actions/setup-go@v6
       with:
         go-version-file: 'go.mod'
+        cache: true
     - name: Download Antrea image from previous job
       uses: actions/download-artifact@v7
       with:
@@ -210,7 +228,7 @@ jobs:
 
   test-e2e-encap-all-features-enabled:
     name: E2e tests on a Kind cluster on Linux with all features enabled
-    needs: [build-antrea-coverage-image]
+    needs: [build-antrea-coverage-image, warm-go-cache]
     runs-on: [ubuntu-latest]
     steps:
       - name: Free disk space
@@ -224,6 +242,7 @@ jobs:
       - uses: actions/setup-go@v6
         with:
           go-version-file: 'go.mod'
+          cache: true
       - name: Download Antrea image from previous job
         uses: actions/download-artifact@v7
         with:
@@ -282,7 +301,7 @@ jobs:
 
   test-e2e-ipam-feature-enabled:
     name: E2e tests on a Kind cluster on Linux with FlexibleIPAM feature enabled
-    needs: [build-antrea-coverage-image]
+    needs: [build-antrea-coverage-image, warm-go-cache]
     runs-on: [oracle-vm-4cpu-16gb-x86-64]
     steps:
       - uses: actions/checkout@v6
@@ -291,6 +310,7 @@ jobs:
       - uses: actions/setup-go@v6
         with:
           go-version-file: 'go.mod'
+          cache: true
       - name: Download Antrea image from previous job
         uses: actions/download-artifact@v7
         with:
@@ -346,7 +366,7 @@ jobs:
 
   test-e2e-noencap:
     name: E2e tests on a Kind cluster on Linux (noEncap)
-    needs: [build-antrea-coverage-image]
+    needs: [build-antrea-coverage-image, warm-go-cache]
     runs-on: [ubuntu-latest]
     steps:
     - name: Free disk space
@@ -360,6 +380,7 @@ jobs:
     - uses: actions/setup-go@v6
       with:
         go-version-file: 'go.mod'
+        cache: true
     - name: Download Antrea image from previous job
       uses: actions/download-artifact@v7
       with:
@@ -409,7 +430,7 @@ jobs:
 
   test-e2e-hybrid:
     name: E2e tests on a Kind cluster on Linux (hybrid)
-    needs: [build-antrea-coverage-image]
+    needs: [build-antrea-coverage-image, warm-go-cache]
     runs-on: [ubuntu-latest]
     steps:
     - name: Free disk space
@@ -423,6 +444,7 @@ jobs:
     - uses: actions/setup-go@v6
       with:
         go-version-file: 'go.mod'
+        cache: true
     - name: Download Antrea image from previous job
       uses: actions/download-artifact@v7
       with:
@@ -472,7 +494,7 @@ jobs:
 
   test-e2e-hybrid-non-default:
     name: E2e tests on a Kind cluster on Linux (hybrid) with non default values (proxyAll=true, kube-proxy-mode=nftables)
-    needs: [ build-antrea-coverage-image ]
+    needs: [build-antrea-coverage-image, warm-go-cache]
     runs-on: [ ubuntu-latest ]
     steps:
       - name: Free disk space
@@ -486,6 +508,7 @@ jobs:
       - uses: actions/setup-go@v6
         with:
           go-version-file: 'go.mod'
+          cache: true
       - name: Download Antrea image from previous job
         uses: actions/download-artifact@v7
         with:
@@ -542,7 +565,7 @@ jobs:
 
   test-e2e-flow-visibility:
     name: E2e tests on a Kind cluster on Linux for Flow Visibility
-    needs: [build-antrea-coverage-image, build-flow-aggregator-coverage-image]
+    needs: [build-antrea-coverage-image, build-flow-aggregator-coverage-image, warm-go-cache]
     runs-on: [ubuntu-latest]
     strategy:
       matrix:
@@ -564,6 +587,7 @@ jobs:
       - uses: actions/setup-go@v6
         with:
           go-version-file: 'go.mod'
+          cache: true
       - name: Download Antrea image from previous job
         uses: actions/download-artifact@v7
         with:
@@ -620,7 +644,7 @@ jobs:
 
   test-network-policy-conformance-encap:
     name: NetworkPolicy conformance tests on a Kind cluster on Linux
-    needs: [build-antrea-coverage-image]
+    needs: [build-antrea-coverage-image, warm-go-cache]
     runs-on: [ubuntu-latest]
     steps:
     - name: Free disk space
@@ -634,6 +658,7 @@ jobs:
     - uses: actions/setup-go@v6
       with:
         go-version-file: 'go.mod'
+        cache: true
     - name: Download Antrea image from previous job
       uses: actions/download-artifact@v7
       with:
@@ -666,7 +691,7 @@ jobs:
 
   test-secondary-network:
     name: Antrea-native (VLAN) secondary network tests on a Kind cluster on Linux
-    needs: [build-antrea-coverage-image]
+    needs: [build-antrea-coverage-image, warm-go-cache]
     runs-on: [ubuntu-latest]
     steps:
     - name: Free disk space
@@ -680,6 +705,7 @@ jobs:
     - uses: actions/setup-go@v6
       with:
         go-version-file: 'go.mod'
+        cache: true
     - name: Download Antrea image from previous job
       uses: actions/download-artifact@v7
       with:
@@ -712,7 +738,7 @@ jobs:
 
   test-upgrade-from-N-1:
     name: Upgrade from Antrea version N-1
-    needs: build-antrea-coverage-image
+    needs: [build-antrea-coverage-image, warm-go-cache]
     runs-on: [ubuntu-latest]
     steps:
       - name: Free disk space
@@ -726,6 +752,7 @@ jobs:
       - uses: actions/setup-go@v6
         with:
           go-version-file: 'go.mod'
+          cache: true
       - name: Download Antrea image from previous job
         uses: actions/download-artifact@v7
         with:
@@ -758,7 +785,7 @@ jobs:
 
   test-upgrade-from-N-2:
     name: Upgrade from Antrea version N-2
-    needs: build-antrea-coverage-image
+    needs: [build-antrea-coverage-image, warm-go-cache]
     runs-on: [ubuntu-latest]
     steps:
       - name: Free disk space
@@ -772,6 +799,7 @@ jobs:
       - uses: actions/setup-go@v6
         with:
           go-version-file: 'go.mod'
+          cache: true
       - name: Download Antrea image from previous job
         uses: actions/download-artifact@v7
         with:
@@ -804,7 +832,7 @@ jobs:
 
   test-compatible-N-1:
     name: API compatible with client version N-1
-    needs: build-antrea-coverage-image
+    needs: [build-antrea-coverage-image, warm-go-cache]
     runs-on: [ubuntu-latest]
     steps:
       - name: Free disk space
@@ -818,6 +846,7 @@ jobs:
       - uses: actions/setup-go@v6
         with:
           go-version-file: 'go.mod'
+          cache: true
       - name: Download Antrea image from previous job
         uses: actions/download-artifact@v7
         with:
@@ -850,7 +879,7 @@ jobs:
 
   test-compatible-N-2:
     name: API compatible with client version N-2
-    needs: build-antrea-coverage-image
+    needs: [build-antrea-coverage-image, warm-go-cache]
     runs-on: [ubuntu-latest]
     steps:
       - name: Free disk space
@@ -864,6 +893,7 @@ jobs:
       - uses: actions/setup-go@v6
         with:
           go-version-file: 'go.mod'
+          cache: true
       - name: Download Antrea image from previous job
         uses: actions/download-artifact@v7
         with:
