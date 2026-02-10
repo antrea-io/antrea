@@ -171,6 +171,13 @@ first IP of the local Node's subnet to be the gateway IP and assigns it to the
 to allocate IPs from the subnet to all Pods. A local Pod is assigned an IP
 when the CNI ADD command is received for that Pod.
 
+> [!IMPORTANT]
+> Antrea reserves the **last 4 IP addresses** of each Node's PodCIDR for
+> internal use (e.g. `.252`–`.255` for a `/24` subnet). These addresses are
+> never allocated to Pods. When sizing Node subnets, account for this
+> reservation: a `/24` subnet provides **250 allocatable Pod IPs** per Node
+> (256 − 1 network − 1 gateway − 4 reserved).
+
 `NodeIPAMController` can run in `kube-controller-manager` context, or within
 the context of Antrea Controller.
 

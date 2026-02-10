@@ -279,8 +279,18 @@ func AppendPortIfMissing(addr, port string) string {
 	return net.JoinHostPort(addr, port)
 }
 
-// GetStartAndEndOfPrefix retrieves the start and end addresses of a netip.Prefix.
-// For example:  10.10.40.0/24 -> 10.10.40.0, 10.10.40.255
+// NthIPFromCIDREnd returns the IP at position n counting backwards from the last (broadcast) address of cidr.
+// It works for both IPv4 and IPv6.
+func NthIPFromCIDREnd(cidr *net.IPNet, n int) string {
+	addr, _ := netip.AddrFromSlice(cidr.IP)
+	ones, _ := cidr.Mask.Size()
+	_, end := GetStartAndEndOfPrefix(netip.PrefixFrom(addr.Unmap(), ones))
+	for i := 1; i < n; i++ {
+		end = end.Prev()
+	}
+	return end.String()
+}
+
 func GetStartAndEndOfPrefix(prefix netip.Prefix) (netip.Addr, netip.Addr) {
 	var start, end netip.Addr
 	var mask net.IPMask

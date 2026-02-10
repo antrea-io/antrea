@@ -46,6 +46,7 @@ import (
 	"antrea.io/antrea/pkg/cni"
 	"antrea.io/antrea/pkg/ovs/ovsconfig"
 	"antrea.io/antrea/pkg/util/channel"
+	utilip "antrea.io/antrea/pkg/util/ip"
 	"antrea.io/antrea/pkg/util/wait"
 )
 
@@ -270,16 +271,30 @@ func (s *CNIServer) validateRequestMessage(request *cnipb.CniCmdRequest) (*CNICo
 	return cniConfig, nil
 }
 
+// podCIDRReservedCount is the number of IPs at the end of each node's PodCIDR that Antrea reserves for internal use
+// and will never allocate to a Pod. It equals 4, equivalent to the last /30 block of an IPv4 subnet. Of the 4 reserved
+// IPs, 3 are practically usable for internal purposes.
+const podCIDRReservedCount = 4
+
 // updateLocalIPAMSubnet updates CNIConfig.CniCmdArgs with this Node's Pod CIDRs, which will be
-// passed to the IPAM driver.
+// passed to the IPAM driver. rangeEnd is set so that the last podCIDRReservedCount IPs are
+// never allocated to a Pod.
 func (s *CNIServer) updateLocalIPAMSubnet(cniConfig *CNIConfig) {
 	if (s.nodeConfig.GatewayConfig.IPv4 != nil) && (s.nodeConfig.PodIPv4CIDR != nil) {
 		cniConfig.NetworkConfig.IPAM.Ranges = append(cniConfig.NetworkConfig.IPAM.Ranges,
-			types.RangeSet{types.Range{Subnet: s.nodeConfig.PodIPv4CIDR.String(), Gateway: s.nodeConfig.GatewayConfig.IPv4.String()}})
+			types.RangeSet{types.Range{
+				Subnet:   s.nodeConfig.PodIPv4CIDR.String(),
+				Gateway:  s.nodeConfig.GatewayConfig.IPv4.String(),
+				RangeEnd: utilip.NthIPFromCIDREnd(s.nodeConfig.PodIPv4CIDR, podCIDRReservedCount+1),
+			}})
 	}
 	if (s.nodeConfig.GatewayConfig.IPv6 != nil) && (s.nodeConfig.PodIPv6CIDR != nil) {
 		cniConfig.NetworkConfig.IPAM.Ranges = append(cniConfig.NetworkConfig.IPAM.Ranges,
-			types.RangeSet{types.Range{Subnet: s.nodeConfig.PodIPv6CIDR.String(), Gateway: s.nodeConfig.GatewayConfig.IPv6.String()}})
+			types.RangeSet{types.Range{
+				Subnet:   s.nodeConfig.PodIPv6CIDR.String(),
+				Gateway:  s.nodeConfig.GatewayConfig.IPv6.String(),
+				RangeEnd: utilip.NthIPFromCIDREnd(s.nodeConfig.PodIPv6CIDR, podCIDRReservedCount+1),
+			}})
 	}
 	cniConfig.NetworkConfiguration, _ = json.Marshal(cniConfig.NetworkConfig)
 }

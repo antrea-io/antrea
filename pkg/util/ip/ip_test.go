@@ -412,3 +412,37 @@ func TestGetStartAndEndOfPrefix(t *testing.T) {
 		})
 	}
 }
+func TestNthIPFromCIDREnd(t *testing.T) {
+	tests := []struct {
+		name     string
+		cidr     *net.IPNet
+		n        int
+		expected string
+	}{
+		// IPv4 tests
+		{name: "IPv4 /24 n=1", cidr: newCIDR("10.244.0.0/24"), n: 1, expected: "10.244.0.255"},
+		{name: "IPv4 /24 n=5", cidr: newCIDR("10.244.0.0/24"), n: 5, expected: "10.244.0.251"},
+		{name: "IPv4 /16 n=5", cidr: newCIDR("10.0.0.0/16"), n: 5, expected: "10.0.255.251"},
+		{name: "IPv4 /26 n=5", cidr: newCIDR("10.0.0.0/26"), n: 5, expected: "10.0.0.59"},
+		// IPv6 tests
+		{name: "IPv6 /64 n=1", cidr: newCIDR("fd74:ca9b:172:18::/64"), n: 1, expected: "fd74:ca9b:172:18:ffff:ffff:ffff:ffff"},
+		{name: "IPv6 /64 n=5", cidr: newCIDR("fd74:ca9b:172:18::/64"), n: 5, expected: "fd74:ca9b:172:18:ffff:ffff:ffff:fffb"},
+		{name: "IPv6 /120 n=5", cidr: newCIDR("fd00::/120"), n: 5, expected: "fd00::fb"},
+		// IPv4-mapped IPv6 form
+		{
+			name: "IPv4-mapped IPv6 n=5",
+			cidr: &net.IPNet{
+				IP:   net.IP{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0xff, 0xff, 10, 244, 0, 0},
+				Mask: net.CIDRMask(24, 32),
+			},
+			n:        5,
+			expected: "10.244.0.251",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			assert.Equal(t, tc.expected, NthIPFromCIDREnd(tc.cidr, tc.n))
+		})
+	}
+}

@@ -37,8 +37,9 @@ type RuntimeConfig struct {
 }
 
 type Range struct {
-	Subnet  string `json:"subnet"`
-	Gateway string `json:"gateway,omitempty"`
+	Subnet   string `json:"subnet"`
+	Gateway  string `json:"gateway,omitempty"`
+	RangeEnd string `json:"rangeEnd,omitempty"`
 }
 
 type RangeSet []Range
