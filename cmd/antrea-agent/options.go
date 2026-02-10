@@ -43,26 +43,28 @@ import (
 )
 
 const (
-	defaultOVSBridge               = "br-int"
-	defaultHostGateway             = "antrea-gw0"
-	defaultHostProcPathPrefix      = "/host"
-	defaultServiceCIDR             = "10.96.0.0/12"
-	defaultTunnelType              = ovsconfig.GeneveTunnel
-	defaultFlowCollectorAddress    = "flow-aggregator/flow-aggregator:4739:tls"
-	defaultFlowCollectorTransport  = "tls"
-	defaultFlowCollectorPort       = "4739"
-	defaultFlowPollInterval        = "5s"
-	defaultActiveFlowExportTimeout = "5s"
-	defaultIdleFlowExportTimeout   = "15s"
-	defaultIGMPQueryInterval       = 125 * time.Second
-	defaultStaleConnectionTimeout  = 5 * time.Minute
-	defaultNodeType                = config.K8sNode
-	defaultMaxEgressIPsPerNode     = 255
-	defaultAuditLogsMaxSize        = 500
-	defaultAuditLogsMaxBackups     = 3
-	defaultAuditLogsMaxAge         = 28
-	defaultAuditLogsCompressed     = true
-	defaultPacketInRate            = 5000
+	defaultOVSBridge                          = "br-int"
+	defaultHostGateway                        = "antrea-gw0"
+	defaultHostProcPathPrefix                 = "/host"
+	defaultServiceCIDR                        = "10.96.0.0/12"
+	defaultTunnelType                         = ovsconfig.GeneveTunnel
+	defaultFlowCollectorAddress               = "flow-aggregator/flow-aggregator:4739:tls"
+	defaultFlowCollectorTransport             = "tls"
+	defaultFlowCollectorPort                  = "4739"
+	defaultFlowPollInterval                   = "5s"
+	defaultActiveFlowExportTimeout            = "5s"
+	defaultIdleFlowExportTimeout              = "15s"
+	defaultIGMPQueryInterval                  = 125 * time.Second
+	defaultStaleConnectionTimeout             = 5 * time.Minute
+	defaultNodeType                           = config.K8sNode
+	defaultMaxEgressIPsPerNode                = 255
+	defaultServiceAccelerationPacketThreshold = 20
+	maxServiceAccelerationPacketThreshold     = 1000
+	defaultAuditLogsMaxSize                   = 500
+	defaultAuditLogsMaxBackups                = 3
+	defaultAuditLogsMaxAge                    = 28
+	defaultAuditLogsCompressed                = true
+	defaultPacketInRate                       = 5000
 )
 
 var defaultIGMPQueryVersions = []int{1, 2, 3}
@@ -541,6 +543,9 @@ func (o *Options) setK8sNodeDefaultOptions() {
 	if o.config.HostNetworkAcceleration.Enable == nil {
 		o.config.HostNetworkAcceleration.Enable = ptr.To(true)
 	}
+	if o.config.HostNetworkAcceleration.ServiceAccelerationPacketThreshold == nil {
+		o.config.HostNetworkAcceleration.ServiceAccelerationPacketThreshold = ptr.To(defaultServiceAccelerationPacketThreshold)
+	}
 	if o.config.HostNetworkMode == "" {
 		o.config.HostNetworkMode = config.HostNetworkModeIPTables.String()
 	}
@@ -689,6 +694,9 @@ func (o *Options) validateK8sNodeOptions() error {
 	if err := o.validateHostNetworkModeOptions(); err != nil {
 		return fmt.Errorf("failed to validate host network mode options: %w", err)
 	}
+	if err := o.validateHostNetworkAccelerationOptions(); err != nil {
+		return err
+	}
 
 	return nil
 }
@@ -768,6 +776,13 @@ func (o *Options) setExternalNodeDefaultOptions() {
 	// Regardless of whether the egress feature is enabled, o.config.Egress.SNATFullyRandomPorts should not be nil to prevent a crash in NewClient().
 	if o.config.Egress.SNATFullyRandomPorts == nil {
 		o.config.Egress.SNATFullyRandomPorts = ptr.To(o.config.SNATFullyRandomPorts)
+	}
+	// Regardless of whether the HostNetworkAcceleration options are configured, they should not be nil to prevent a crash in NewClient().
+	if o.config.HostNetworkAcceleration.Enable == nil {
+		o.config.HostNetworkAcceleration.Enable = ptr.To(false)
+	}
+	if o.config.HostNetworkAcceleration.ServiceAccelerationPacketThreshold == nil {
+		o.config.HostNetworkAcceleration.ServiceAccelerationPacketThreshold = ptr.To(0)
 	}
 }
 
@@ -849,6 +864,17 @@ func (o *Options) validateHostNetworkModeOptions() error {
 	if networkMode == config.HostNetworkModeNFTables {
 		if !features.DefaultFeatureGate.Enabled(features.NFTablesHostNetworkMode) {
 			return fmt.Errorf("HostNetworkMode nftables requires feature gate `NFTablesHostNetworkMode` to be enabled")
+		}
+	}
+
+	return nil
+}
+
+func (o *Options) validateHostNetworkAccelerationOptions() error {
+	if o.config.HostNetworkAcceleration.ServiceAccelerationPacketThreshold != nil {
+		threshold := *o.config.HostNetworkAcceleration.ServiceAccelerationPacketThreshold
+		if threshold < 0 || threshold > maxServiceAccelerationPacketThreshold {
+			return fmt.Errorf("hostNetworkAcceleration.serviceAccelerationPacketThreshold must be between 0 and %d, got %d", maxServiceAccelerationPacketThreshold, threshold)
 		}
 	}
 	return nil

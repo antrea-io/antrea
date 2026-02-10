@@ -454,4 +454,11 @@ type HostNetworkAccelerationConfig struct {
 	// Enable to accelerate Pod-to-Pod traffic in the Node's host network using nftables flowtable when traffic mode is
 	// noEncap or hybrid.
 	Enable *bool `yaml:"enable,omitempty"`
+	// ServiceAccelerationPacketThreshold is the minimum number of packets a Service (NodePort/ExternalIP/LoadBalancer)
+	// connection must have before it is eligible for acceleration. Only established/related connections with more than
+	// this many packets are accelerated. Valid range is 0-1000. When 0, all Service connections are accelerated
+	// regardless of packet count. When set to the maximum (1000), only long-lived or high-traffic Service connections
+	// are accelerated, reducing overhead for short-lived connections.
+	// Defaults to 20.
+	ServiceAccelerationPacketThreshold *int `yaml:"serviceAccelerationPacketThreshold,omitempty"`
 }
