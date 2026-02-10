@@ -348,7 +348,8 @@ func TestInitialize(t *testing.T) {
 			expectedNFTablesFlowtables := make(map[string]string)
 			expectedNFTablesChains := make(map[string]string)
 			if tc.networkConfig.EnableHostNetworkAcceleration {
-				expectedNFTablesSets["peer-pod-cidr"] = `table ip antrea {
+				if tc.networkConfig.TrafficEncapMode.SupportsNoEncap() {
+					expectedNFTablesSets["peer-pod-cidr"] = `table ip antrea {
 	set peer-pod-cidr {
 		type ipv4_addr
 		flags interval
@@ -356,6 +357,16 @@ func TestInitialize(t *testing.T) {
 	}
 }
 `
+				}
+				if tc.proxyAll {
+					expectedNFTablesSets["externalip"] = `table ip antrea {
+	set externalip {
+		type ipv4_addr
+		comment "Set containing external IPs"
+	}
+}
+`
+				}
 				expectedNFTablesFlowtables["fastpath"] = `table ip antrea {
 	flowtable fastpath {
 		hook ingress priority filter
@@ -366,9 +377,18 @@ func TestInitialize(t *testing.T) {
 				expectedNFTablesChains["forward-offload"] = `table ip antrea {
 	chain forward-offload {
 		comment "Forward chain containing rules to match connections eligible for flowtable acceleration"
-		type filter hook forward priority filter; policy accept;
+		type filter hook forward priority filter; policy accept;`
+				if tc.networkConfig.TrafficEncapMode.SupportsNoEncap() {
+					expectedNFTablesChains["forward-offload"] += `
 		iif "antrea-gw0" ip saddr 10.10.10.0/24 oif "eth0" ip daddr @peer-pod-cidr flow add @fastpath counter packets 0 bytes 0 comment "Accelerate IPv4 connections: local Pod CIDR to remote Pod CIDRs"
-		iif "eth0" ip saddr @peer-pod-cidr oif "antrea-gw0" ip daddr 10.10.10.0/24 flow add @fastpath counter packets 0 bytes 0 comment "Accelerate IPv4 connections: remote Pod CIDRs to local Pod CIDR"
+		iif "eth0" ip saddr @peer-pod-cidr oif "antrea-gw0" ip daddr 10.10.10.0/24 flow add @fastpath counter packets 0 bytes 0 comment "Accelerate IPv4 connections: remote Pod CIDRs to local Pod CIDR"`
+				}
+				if tc.proxyAll {
+					expectedNFTablesChains["forward-offload"] += `
+		oif "antrea-gw0" ip daddr @externalip flow add @fastpath counter packets 0 bytes 0 comment "Accelerate IPv4 connections: to external Service IPs"
+		oif "antrea-gw0" ip daddr 169.254.0.252 flow add @fastpath counter packets 0 bytes 0 comment "Accelerate IPv4 connections: to NodePort Service"`
+				}
+				expectedNFTablesChains["forward-offload"] += `
 	}
 }
 `
@@ -516,7 +536,9 @@ func TestNFTablesSync(t *testing.T) {
 		TrafficEncapMode:              config.TrafficEncapModeNoEncap,
 		IPv4Enabled:                   true,
 		EnableHostNetworkAcceleration: true,
-	}, routeClientOptions{})
+	}, routeClientOptions{
+		proxyAll: true,
+	})
 	require.NoError(t, err)
 
 	inited := make(chan struct{})
@@ -537,6 +559,11 @@ func TestNFTablesSync(t *testing.T) {
 
 	expected := `table ip antrea {
 	comment "Rules for Antrea"
+	set externalip {
+		type ipv4_addr
+		comment "Set containing external IPs"
+	}
+
 	set peer-pod-cidr {
 		type ipv4_addr
 		flags interval
@@ -553,6 +580,8 @@ func TestNFTablesSync(t *testing.T) {
 		type filter hook forward priority filter; policy accept;
 		iif "antrea-gw0" ip saddr 10.10.10.0/24 oif "eth0" ip daddr @peer-pod-cidr flow add @fastpath counter packets 0 bytes 0 comment "Accelerate IPv4 connections: local Pod CIDR to remote Pod CIDRs"
 		iif "eth0" ip saddr @peer-pod-cidr oif "antrea-gw0" ip daddr 10.10.10.0/24 flow add @fastpath counter packets 0 bytes 0 comment "Accelerate IPv4 connections: remote Pod CIDRs to local Pod CIDR"
+		oif "antrea-gw0" ip daddr @externalip flow add @fastpath counter packets 0 bytes 0 comment "Accelerate IPv4 connections: to external Service IPs"
+		oif "antrea-gw0" ip daddr 169.254.0.252 flow add @fastpath counter packets 0 bytes 0 comment "Accelerate IPv4 connections: to NodePort Service"
 	}
 }
 `
