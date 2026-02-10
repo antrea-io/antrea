@@ -1,4 +1,4 @@
-// Copyright 2024 Antrea Authors
+// Copyright 2025 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -83,6 +83,20 @@ func (m *MockOVSBridgeClient) AddOVSOtherConfig(configs map[string]any) ovsconfi
 func (mr *MockOVSBridgeClientMockRecorder) AddOVSOtherConfig(configs any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddOVSOtherConfig", reflect.TypeOf((*MockOVSBridgeClient)(nil).AddOVSOtherConfig), configs)
+}
+
+// AddTrunksToPort mocks base method.
+func (m *MockOVSBridgeClient) AddTrunksToPort(portName string, vlanID int32) ovsconfig.Error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "AddTrunksToPort", portName, vlanID)
+	ret0, _ := ret[0].(ovsconfig.Error)
+	return ret0
+}
+
+// AddTrunksToPort indicates an expected call of AddTrunksToPort.
+func (mr *MockOVSBridgeClientMockRecorder) AddTrunksToPort(portName, vlanID any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddTrunksToPort", reflect.TypeOf((*MockOVSBridgeClient)(nil).AddTrunksToPort), portName, vlanID)
 }
 
 // Create mocks base method.
