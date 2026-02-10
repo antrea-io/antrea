@@ -1755,14 +1755,18 @@ func Test_client_InstallPodSNATFlows(t *testing.T) {
 
 			m.EXPECT().AddAll(gomock.Any()).Return(nil).Times(1)
 			m.EXPECT().DeleteAll(gomock.Any()).Return(nil).Times(1)
-			cacheKey := fmt.Sprintf("p%x", ofPort)
+			suffix := "v4"
+			if snatIP.To4() == nil {
+				suffix = "v6"
+			}
+			cacheKey := fmt.Sprintf("p%x-%s", ofPort, suffix)
 
 			assert.NoError(t, fc.InstallPodSNATFlows(ofPort, snatIP, tc.snatMark))
 			fCacheI, ok := fc.featureEgress.cachedFlows.Load(cacheKey)
 			require.True(t, ok)
 			assert.ElementsMatch(t, tc.expectedFlows, getFlowStrings(fCacheI))
 
-			assert.NoError(t, fc.UninstallPodSNATFlows(ofPort))
+			assert.NoError(t, fc.UninstallPodSNATFlows(ofPort, snatIP))
 			_, ok = fc.featureEgress.cachedFlows.Load(cacheKey)
 			require.False(t, ok)
 		})
