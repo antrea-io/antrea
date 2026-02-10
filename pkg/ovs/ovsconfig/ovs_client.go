@@ -145,7 +145,7 @@ func (br *OVSBridge) Create() Error {
 	}
 	br.isHardwareOffloadEnabled, err = br.getHardwareOffload()
 	if err != nil {
-		return fmt.Errorf("failed to get hardware offload: %w", err)
+		return err
 	}
 	return nil
 }
