@@ -165,7 +165,7 @@ func TestConnTrackSystem_DumpFlows(t *testing.T) {
 
 			conns, totalConns, err := connDumperDPSystem.DumpFlows(openflow.CtZone)
 			require.NoError(t, err, "Dump flows function returned error")
-			assert.Equal(t, tc.expectedConnections, len(conns), "number of filtered connections should be equal")
+			assert.Equal(t, tc.expectedConnections, len(conns), "Expected number of returned conns to be %v after protocolFilter %v applied", tc.expectedConnections, tc.protocols)
 			assert.Equal(t, len(tc.testFlows), totalConns, "Number of connections in conntrack table should be equal to testFlows")
 		})
 	}
@@ -291,6 +291,8 @@ func TestNetLinkFlowToAntreaConnection(t *testing.T) {
 		StatusFlag:                 0x4,
 		Mark:                       0x1234,
 		FlowKey:                    tuple,
+		ProxySnatPort:              conntrackFlowTupleReply.Proto.DestinationPort,
+		ProxySnatIP:                conntrackFlowTupleReply.IP.DestinationAddress,
 		OriginalDestinationAddress: conntrackFlowTuple.IP.DestinationAddress,
 		OriginalDestinationPort:    conntrackFlowTuple.Proto.DestinationPort,
 		OriginalPackets:            netlinkFlow.CountersOrig.Packets,
@@ -328,6 +330,8 @@ func TestNetLinkFlowToAntreaConnection(t *testing.T) {
 		StatusFlag:                 0x204,
 		Mark:                       0x1234,
 		FlowKey:                    tuple,
+		ProxySnatPort:              conntrackFlowTupleReply.Proto.DestinationPort,
+		ProxySnatIP:                conntrackFlowTupleReply.IP.DestinationAddress,
 		OriginalDestinationAddress: conntrackFlowTuple.IP.DestinationAddress,
 		OriginalDestinationPort:    conntrackFlowTuple.Proto.DestinationPort,
 		OriginalPackets:            netlinkFlow.CountersOrig.Packets,
