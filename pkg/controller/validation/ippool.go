@@ -185,3 +185,44 @@ func normalizeRange(ipRange crdv1beta1.IPRange, context string) (NormalizedIPRan
 func RangesOverlap(start1, end1, start2, end2 netip.Addr) bool {
 	return start1.Compare(end2) <= 0 && end1.Compare(start2) >= 0
 }
+
+// ValidateIPRangeIPFamily validates that all IP ranges use an IP family enabled in the cluster.
+func ValidateIPRangeIPFamily(ipRanges []crdv1beta1.IPRange, ipv4Enabled, ipv6Enabled bool) error {
+	for _, ipRange := range ipRanges {
+		isIPv4, err := isIPRangeIPv4(ipRange)
+		if err != nil {
+			return err
+		}
+		if isIPv4 && !ipv4Enabled {
+			return fmt.Errorf("IPv4 range %s is not allowed in an IPv6-only cluster", ipRangeToString(ipRange))
+		}
+		if !isIPv4 && !ipv6Enabled {
+			return fmt.Errorf("IPv6 range %s is not allowed in an IPv4-only cluster", ipRangeToString(ipRange))
+		}
+	}
+	return nil
+}
+
+// isIPRangeIPv4 returns true if the IP range uses IPv4 addresses.
+func isIPRangeIPv4(ipRange crdv1beta1.IPRange) (bool, error) {
+	if ipRange.CIDR != "" {
+		cidr, err := netip.ParsePrefix(ipRange.CIDR)
+		if err != nil {
+			return false, fmt.Errorf("invalid cidr %s", ipRange.CIDR)
+		}
+		return cidr.Addr().Is4(), nil
+	}
+	start, err := netip.ParseAddr(ipRange.Start)
+	if err != nil {
+		return false, fmt.Errorf("invalid start ip address %s", ipRange.Start)
+	}
+	return start.Is4(), nil
+}
+
+// ipRangeToString returns a string representation of an IP range.
+func ipRangeToString(ipRange crdv1beta1.IPRange) string {
+	if ipRange.CIDR != "" {
+		return ipRange.CIDR
+	}
+	return fmt.Sprintf("%s-%s", ipRange.Start, ipRange.End)
+}

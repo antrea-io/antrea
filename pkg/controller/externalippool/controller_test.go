@@ -60,7 +60,7 @@ type controller struct {
 func newController(crdObjects []runtime.Object) *controller {
 	crdClient := fakeversioned.NewSimpleClientset(crdObjects...)
 	crdInformerFactory := crdinformers.NewSharedInformerFactory(crdClient, resyncPeriod)
-	externalIPPoolController := NewExternalIPPoolController(crdClient, crdInformerFactory.Crd().V1beta1().ExternalIPPools())
+	externalIPPoolController := NewExternalIPPoolController(crdClient, crdInformerFactory.Crd().V1beta1().ExternalIPPools(), true, true)
 	return &controller{
 		externalIPPoolController,
 		crdClient,

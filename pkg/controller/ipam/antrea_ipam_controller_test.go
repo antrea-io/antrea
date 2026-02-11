@@ -62,7 +62,7 @@ func newFakeAntreaIPAMController(pool *crdv1b1.IPPool, namespace *corev1.Namespa
 	poolInformer := crdInformerFactory.Crd().V1beta1().IPPools()
 	poolLister := poolInformer.Lister()
 
-	controller := NewAntreaIPAMController(crdClient, poolInformer, namespaceInformer, podInformer, statefulSetInformer)
+	controller := NewAntreaIPAMController(crdClient, poolInformer, namespaceInformer, podInformer, statefulSetInformer, true, true)
 	return &fakeAntreaIPAMController{
 		AntreaIPAMController: controller,
 		fakeK8sClient:        k8sClient,
