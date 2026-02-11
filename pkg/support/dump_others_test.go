@@ -159,3 +159,76 @@ func TestDumpNFTables(t *testing.T) {
 		})
 	}
 }
+
+func TestDumpIPSets(t *testing.T) {
+	tests := []struct {
+		name          string
+		output        string
+		execError     error
+		fsError       bool
+		expectedError string
+	}{
+		{
+			name:   "Successful dump",
+			output: "ipset v7.11: save working",
+		},
+		{
+			name:   "Empty output",
+			output: "",
+		},
+		{
+			name:          "Command failure",
+			execError:     fmt.Errorf("ipset not found"),
+			expectedError: "error when dumping ipset: ipset not found",
+		},
+		{
+			name:          "Filesystem write failure",
+			output:        "some data",
+			fsError:       true,
+			expectedError: "error when writing ipset to file",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Setup Fake Executor
+			fakeExec := &testingexec.FakeExec{
+				CommandScript: []testingexec.FakeCommandAction{
+					func(cmd string, args ...string) exec.Cmd {
+						return &testingexec.FakeCmd{
+							CombinedOutputScript: []testingexec.FakeAction{
+								func() ([]byte, []byte, error) {
+									// Returns: stdout, stderr, error
+									return []byte(tt.output), nil, tt.execError
+								},
+							},
+						}
+					},
+				},
+			}
+
+			// Setup Filesystem
+			var fs afero.Fs = afero.NewMemMapFs()
+			if tt.fsError {
+				fs = afero.NewReadOnlyFs(fs)
+			}
+
+			d := &agentDumper{
+				executor: fakeExec,
+				fs:       fs,
+			}
+
+			err := d.dumpIPSets("testdir")
+			if tt.expectedError != "" {
+				require.Error(t, err)
+				assert.Contains(t, err.Error(), tt.expectedError)
+			} else {
+				require.NoError(t, err)
+				if len(tt.output) > 0 {
+					exists, _ := afero.Exists(fs, "testdir/ipset")
+					assert.True(t, exists)
+				}
+			}
+		})
+	}
+}
