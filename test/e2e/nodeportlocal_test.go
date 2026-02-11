@@ -427,7 +427,7 @@ func NPLTestMultiplePods(t *testing.T, data *TestData) {
 	err = testData.podWaitForRunning(defaultTimeout, clientName, data.testNamespace)
 	r.NoError(err, "Error when waiting for Pod %s to be running", clientName)
 
-	antreaPod, err := testData.getAntreaPodOnNode(serverNode)
+	antreaPod, err := testData.GetAntreaPodOnNode(serverNode)
 	r.NoError(err, "Error when getting Antrea Agent Pod on Node '%s'", serverNode)
 
 	for _, testPodName := range testPods {
@@ -501,7 +501,7 @@ func NPLTestPodAddMultiPort(t *testing.T, data *TestData) {
 	err = testData.podWaitForRunning(defaultTimeout, clientName, data.testNamespace)
 	r.NoError(err, "Error when waiting for Pod %s to be running", clientName)
 
-	antreaPod, err := testData.getAntreaPodOnNode(serverNode)
+	antreaPod, err := testData.GetAntreaPodOnNode(serverNode)
 	r.NoError(err, "Error when getting Antrea Agent Pod on Node '%s'", serverNode)
 
 	checkNPLRules(t, testData, r, nplAnnotations, antreaPod, testPodIPs, serverNode, true)
@@ -548,7 +548,7 @@ func NPLTestPodAddMultiProtocol(t *testing.T, data *TestData) {
 	err = testData.podWaitForRunning(defaultTimeout, clientName, data.testNamespace)
 	r.NoError(err, "Error when waiting for Pod %s to be running", clientName)
 
-	antreaPod, err := testData.getAntreaPodOnNode(serverNode)
+	antreaPod, err := testData.GetAntreaPodOnNode(serverNode)
 	r.NoError(err, "Error when getting Antrea Agent Pod on Node '%s'", serverNode)
 
 	checkNPLRules(t, testData, r, nplAnnotations, antreaPod, testPodIPs, serverNode, true)
@@ -606,7 +606,7 @@ func NPLTestLocalAccess(t *testing.T, data *TestData) {
 	err = testData.podWaitForRunning(defaultTimeout, clientName, data.testNamespace)
 	r.NoError(err, "Error when waiting for Pod %s to be running", clientName)
 
-	antreaPod, err := testData.getAntreaPodOnNode(serverNode)
+	antreaPod, err := testData.GetAntreaPodOnNode(serverNode)
 	r.NoError(err, "Error when getting Antrea Agent Pod on Node '%s'", serverNode)
 
 	nplAnnotations, testPodIPs := getNPLAnnotations(t, testData, r, testPodName, nil)
@@ -647,7 +647,7 @@ func testNPLMultiplePodsAgentRestart(t *testing.T, data *TestData) {
 	err = data.podWaitForRunning(defaultTimeout, clientName, data.testNamespace)
 	r.NoError(err, "Error when waiting for Pod %s to be running", clientName)
 
-	antreaPod, err := data.getAntreaPodOnNode(serverNode)
+	antreaPod, err := data.GetAntreaPodOnNode(serverNode)
 	r.NoError(err, "Error when getting Antrea Agent Pod on Node '%s'", serverNode)
 
 	// Delete one iptables rule to ensure it gets re-installed correctly on restart.
@@ -687,7 +687,7 @@ func testNPLMultiplePodsAgentRestart(t *testing.T, data *TestData) {
 	err = data.RestartAntreaAgentPods(defaultTimeout)
 	r.NoError(err, "Error when restarting Antrea Agent Pods")
 
-	antreaPod, err = data.getAntreaPodOnNode(serverNode)
+	antreaPod, err = data.GetAntreaPodOnNode(serverNode)
 	r.NoError(err, "Error when getting Antrea Agent Pod on Node '%s'", serverNode)
 
 	for _, testPodName := range testPods {
@@ -746,7 +746,7 @@ func testNPLChangePortRangeAgentRestart(t *testing.T, data *TestData) {
 	}
 	configureNPLForAgent(t, data, updatedStartPort, updatedEndPort)
 
-	antreaPod, err := data.getAntreaPodOnNode(serverNode)
+	antreaPod, err := data.GetAntreaPodOnNode(serverNode)
 	r.NoError(err, "Error when getting Antrea Agent Pod on Node '%s'", serverNode)
 
 	if clusterInfo.nodesOS[serverNode] == "windows" {
