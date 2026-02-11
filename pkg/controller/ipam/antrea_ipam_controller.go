@@ -89,6 +89,11 @@ type AntreaIPAMController struct {
 
 	// statusQueue maintains the IPPool objects that need to be synced.
 	statusQueue workqueue.TypedRateLimitingInterface[string]
+
+	// ipv4Enabled indicates whether IPv4 is enabled in the cluster.
+	ipv4Enabled bool
+	// ipv6Enabled indicates whether IPv6 is enabled in the cluster.
+	ipv6Enabled bool
 }
 
 func statefulSetIndexFunc(obj interface{}) ([]string, error) {
@@ -109,7 +114,8 @@ func NewAntreaIPAMController(crdClient versioned.Interface,
 	ipPoolInformer crdinformers.IPPoolInformer,
 	namespaceInformer coreinformers.NamespaceInformer,
 	podInformer coreinformers.PodInformer,
-	statefulSetInformer appsinformers.StatefulSetInformer) *AntreaIPAMController {
+	statefulSetInformer appsinformers.StatefulSetInformer,
+	ipv4Enabled, ipv6Enabled bool) *AntreaIPAMController {
 
 	ipPoolInformer.Informer().AddIndexers(cache.Indexers{statefulSetIndex: statefulSetIndexFunc})
 
@@ -136,6 +142,8 @@ func NewAntreaIPAMController(crdClient versioned.Interface,
 				Name: "IPPoolStatus",
 			},
 		),
+		ipv4Enabled: ipv4Enabled,
+		ipv6Enabled: ipv6Enabled,
 	}
 
 	// Add handlers for Stateful Set events.

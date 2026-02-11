@@ -331,3 +331,123 @@ func TestEgressControllerValidateExternalIPPool(t *testing.T) {
 		})
 	}
 }
+
+func TestValidateIPPoolIPFamily(t *testing.T) {
+	ipv4Pool := &crdv1beta1.IPPool{
+		ObjectMeta: metav1.ObjectMeta{Name: "ipv4-pool"},
+		Spec: crdv1beta1.IPPoolSpec{
+			IPRanges: []crdv1beta1.IPRange{
+				{CIDR: "192.168.0.0/26"},
+			},
+			SubnetInfo: crdv1beta1.SubnetInfo{
+				Gateway:      "192.168.0.1",
+				PrefixLength: 24,
+			},
+		},
+	}
+	ipv6Pool := &crdv1beta1.IPPool{
+		ObjectMeta: metav1.ObjectMeta{Name: "ipv6-pool"},
+		Spec: crdv1beta1.IPPoolSpec{
+			IPRanges: []crdv1beta1.IPRange{
+				{CIDR: "fd00:10:96::/112"},
+			},
+			SubnetInfo: crdv1beta1.SubnetInfo{
+				Gateway:      "fd00:10:96::",
+				PrefixLength: 96,
+			},
+		},
+	}
+
+	tests := []struct {
+		name             string
+		ipv4Enabled      bool
+		ipv6Enabled      bool
+		pool             *crdv1beta1.IPPool
+		operation        admv1.Operation
+		expectedResponse *admv1.AdmissionResponse
+	}{
+		{
+			name:             "CREATE IPv4 pool in IPv4-only cluster should be allowed",
+			ipv4Enabled:      true,
+			ipv6Enabled:      false,
+			pool:             ipv4Pool,
+			operation:        admv1.Create,
+			expectedResponse: &admv1.AdmissionResponse{Allowed: true},
+		},
+		{
+			name:        "CREATE IPv4 pool in IPv6-only cluster should not be allowed",
+			ipv4Enabled: false,
+			ipv6Enabled: true,
+			pool:        ipv4Pool,
+			operation:   admv1.Create,
+			expectedResponse: &admv1.AdmissionResponse{
+				Allowed: false,
+				Result: &metav1.Status{
+					Message: "IPv4 range 192.168.0.0/26 is not allowed in an IPv6-only cluster",
+				},
+			},
+		},
+		{
+			name:             "CREATE IPv6 pool in IPv6-only cluster should be allowed",
+			ipv4Enabled:      false,
+			ipv6Enabled:      true,
+			pool:             ipv6Pool,
+			operation:        admv1.Create,
+			expectedResponse: &admv1.AdmissionResponse{Allowed: true},
+		},
+		{
+			name:        "CREATE IPv6 pool in IPv4-only cluster should not be allowed",
+			ipv4Enabled: true,
+			ipv6Enabled: false,
+			pool:        ipv6Pool,
+			operation:   admv1.Create,
+			expectedResponse: &admv1.AdmissionResponse{
+				Allowed: false,
+				Result: &metav1.Status{
+					Message: "IPv6 range fd00:10:96::/112 is not allowed in an IPv4-only cluster",
+				},
+			},
+		},
+		{
+			name:             "CREATE IPv4 pool in dual-stack cluster should be allowed",
+			ipv4Enabled:      true,
+			ipv6Enabled:      true,
+			pool:             ipv4Pool,
+			operation:        admv1.Create,
+			expectedResponse: &admv1.AdmissionResponse{Allowed: true},
+		},
+		{
+			name:        "UPDATE IPv4 pool in IPv6-only cluster should not be allowed",
+			ipv4Enabled: false,
+			ipv6Enabled: true,
+			pool:        ipv4Pool,
+			operation:   admv1.Update,
+			expectedResponse: &admv1.AdmissionResponse{
+				Allowed: false,
+				Result: &metav1.Status{
+					Message: "IPv4 range 192.168.0.0/26 is not allowed in an IPv6-only cluster",
+				},
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Build a controller with the desired IP family settings.
+			controller := &AntreaIPAMController{
+				ipv4Enabled: tt.ipv4Enabled,
+				ipv6Enabled: tt.ipv6Enabled,
+			}
+			request := &admv1.AdmissionRequest{
+				Name:      tt.pool.Name,
+				Operation: tt.operation,
+				Object:    runtime.RawExtension{Raw: marshal(tt.pool)},
+			}
+			if tt.operation == admv1.Update {
+				request.OldObject = runtime.RawExtension{Raw: marshal(tt.pool)}
+			}
+			review := &admv1.AdmissionReview{Request: request}
+			gotResponse := controller.ValidateIPPool(review)
+			assert.Equal(t, tt.expectedResponse, gotResponse)
+		})
+	}
+}

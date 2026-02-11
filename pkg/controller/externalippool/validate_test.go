@@ -26,6 +26,8 @@ import (
 	"k8s.io/client-go/tools/cache"
 
 	crdv1b1 "antrea.io/antrea/pkg/apis/crd/v1beta1"
+	fakeversioned "antrea.io/antrea/pkg/client/clientset/versioned/fake"
+	crdinformers "antrea.io/antrea/pkg/client/informers/externalversions"
 )
 
 func marshal(object runtime.Object) []byte {
@@ -364,6 +366,106 @@ func TestValidateIPRangesAndSubnetInfo(t *testing.T) {
 				assert.NotNil(t, response.Result)
 				assert.Equal(t, testCase.errMsg, response.Result.Message)
 			}
+		})
+	}
+}
+
+func TestValidateExternalIPPoolIPFamily(t *testing.T) {
+	tests := []struct {
+		name             string
+		ipv4Enabled      bool
+		ipv6Enabled      bool
+		pool             *crdv1b1.ExternalIPPool
+		operation        admv1.Operation
+		expectedResponse *admv1.AdmissionResponse
+	}{
+		{
+			name:             "CREATE IPv4 pool in IPv4-only cluster should be allowed",
+			ipv4Enabled:      true,
+			ipv6Enabled:      false,
+			pool:             newExternalIPPool("foo", "10.10.10.0/24", "", ""),
+			operation:        admv1.Create,
+			expectedResponse: &admv1.AdmissionResponse{Allowed: true},
+		},
+		{
+			name:        "CREATE IPv4 pool in IPv6-only cluster should not be allowed",
+			ipv4Enabled: false,
+			ipv6Enabled: true,
+			pool:        newExternalIPPool("foo", "10.10.10.0/24", "", ""),
+			operation:   admv1.Create,
+			expectedResponse: &admv1.AdmissionResponse{
+				Allowed: false,
+				Result: &metav1.Status{
+					Message: "IPv4 range 10.10.10.0/24 is not allowed in an IPv6-only cluster",
+				},
+			},
+		},
+		{
+			name:             "CREATE IPv6 pool in IPv6-only cluster should be allowed",
+			ipv4Enabled:      false,
+			ipv6Enabled:      true,
+			pool:             newExternalIPPool("foo", "fd00:10:96::/112", "", ""),
+			operation:        admv1.Create,
+			expectedResponse: &admv1.AdmissionResponse{Allowed: true},
+		},
+		{
+			name:        "CREATE IPv6 pool in IPv4-only cluster should not be allowed",
+			ipv4Enabled: true,
+			ipv6Enabled: false,
+			pool:        newExternalIPPool("foo", "fd00:10:96::/112", "", ""),
+			operation:   admv1.Create,
+			expectedResponse: &admv1.AdmissionResponse{
+				Allowed: false,
+				Result: &metav1.Status{
+					Message: "IPv6 range fd00:10:96::/112 is not allowed in an IPv4-only cluster",
+				},
+			},
+		},
+		{
+			name:             "CREATE IPv4 pool in dual-stack cluster should be allowed",
+			ipv4Enabled:      true,
+			ipv6Enabled:      true,
+			pool:             newExternalIPPool("foo", "10.10.10.0/24", "", ""),
+			operation:        admv1.Create,
+			expectedResponse: &admv1.AdmissionResponse{Allowed: true},
+		},
+		{
+			name:        "UPDATE IPv4 pool in IPv6-only cluster should not be allowed",
+			ipv4Enabled: false,
+			ipv6Enabled: true,
+			pool:        newExternalIPPool("foo", "10.10.10.0/24", "", ""),
+			operation:   admv1.Update,
+			expectedResponse: &admv1.AdmissionResponse{
+				Allowed: false,
+				Result: &metav1.Status{
+					Message: "IPv4 range 10.10.10.0/24 is not allowed in an IPv6-only cluster",
+				},
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			crdClient := fakeversioned.NewSimpleClientset()
+			crdInformerFactory := crdinformers.NewSharedInformerFactory(crdClient, resyncPeriod)
+			c := NewExternalIPPoolController(crdClient, crdInformerFactory.Crd().V1beta1().ExternalIPPools(), tt.ipv4Enabled, tt.ipv6Enabled)
+			stopCh := make(chan struct{})
+			defer close(stopCh)
+			crdInformerFactory.Start(stopCh)
+			crdInformerFactory.WaitForCacheSync(stopCh)
+			go c.Run(stopCh)
+			require.True(t, cache.WaitForCacheSync(stopCh, c.HasSynced))
+
+			request := &admv1.AdmissionRequest{
+				Name:      tt.pool.Name,
+				Operation: tt.operation,
+				Object:    runtime.RawExtension{Raw: marshal(tt.pool)},
+			}
+			if tt.operation == admv1.Update {
+				request.OldObject = runtime.RawExtension{Raw: marshal(tt.pool)}
+			}
+			review := &admv1.AdmissionReview{Request: request}
+			gotResponse := c.ValidateExternalIPPool(review)
+			assert.Equal(t, tt.expectedResponse, gotResponse)
 		})
 	}
 }

@@ -182,7 +182,7 @@ func newController(objects, crdObjects []runtime.Object) *egressController {
 	crdClient.PrependReactor("patch", "egresses", egressPatchReactor)
 	informerFactory := informers.NewSharedInformerFactory(client, resyncPeriod)
 	crdInformerFactory := crdinformers.NewSharedInformerFactory(crdClient, resyncPeriod)
-	externalIPAllocator := externalippool.NewExternalIPPoolController(crdClient, crdInformerFactory.Crd().V1beta1().ExternalIPPools())
+	externalIPAllocator := externalippool.NewExternalIPPoolController(crdClient, crdInformerFactory.Crd().V1beta1().ExternalIPPools(), true, true)
 	egressGroupStore := store.NewEgressGroupStore()
 	egressInformer := crdInformerFactory.Crd().V1beta1().Egresses()
 	groupEntityIndex := grouping.NewGroupEntityIndex()
