@@ -1791,6 +1791,246 @@ func TestDeleteRoutes(t *testing.T) {
 	}
 }
 
+func generateNFTablesSetElement(set string, key string) *knftables.Element {
+	return &knftables.Element{
+		Set: set,
+		Key: []string{key},
+	}
+}
+
+func TestAddPeerPodCIDRToNFTablesSet(t *testing.T) {
+	tests := []struct {
+		name             string
+		podCIDRToAdd     *net.IPNet
+		ipv4Enabled      bool
+		ipv6Enabled      bool
+		existingElements []*knftables.Element
+		expectedElements []*knftables.Element
+	}{
+		{
+			name:         "IPv4",
+			ipv4Enabled:  true,
+			podCIDRToAdd: ip.MustParseCIDR("192.168.10.0/24"),
+			existingElements: []*knftables.Element{
+				generateNFTablesSetElement(antreaNFTablesSetPeerPodCIDR, "192.168.11.0/24"),
+			},
+			expectedElements: []*knftables.Element{
+				generateNFTablesSetElement(antreaNFTablesSetPeerPodCIDR, "192.168.10.0/24"),
+				generateNFTablesSetElement(antreaNFTablesSetPeerPodCIDR, "192.168.11.0/24"),
+			},
+		},
+		{
+			name:         "IPv6",
+			ipv6Enabled:  true,
+			podCIDRToAdd: ip.MustParseCIDR("2001:ab03:cd04:55ee:1001::/80"),
+			existingElements: []*knftables.Element{
+				generateNFTablesSetElement(antreaNFTablesSetPeerPodCIDR, "2001:ab03:cd04:55ee:1000::/80"),
+			},
+			expectedElements: []*knftables.Element{
+				generateNFTablesSetElement(antreaNFTablesSetPeerPodCIDR, "2001:ab03:cd04:55ee:1000::/80"),
+				generateNFTablesSetElement(antreaNFTablesSetPeerPodCIDR, "2001:ab03:cd04:55ee:1001::/80"),
+			},
+		},
+		{
+			name:         "IPv4, existing element",
+			ipv4Enabled:  true,
+			podCIDRToAdd: ip.MustParseCIDR("192.168.10.0/24"),
+			existingElements: []*knftables.Element{
+				generateNFTablesSetElement(antreaNFTablesSetPeerPodCIDR, "192.168.10.0/24"),
+				generateNFTablesSetElement(antreaNFTablesSetPeerPodCIDR, "192.168.11.0/24"),
+			},
+			expectedElements: []*knftables.Element{
+				generateNFTablesSetElement(antreaNFTablesSetPeerPodCIDR, "192.168.10.0/24"),
+				generateNFTablesSetElement(antreaNFTablesSetPeerPodCIDR, "192.168.11.0/24"),
+			},
+		},
+		{
+			name:         "IPv6, element enforced",
+			podCIDRToAdd: ip.MustParseCIDR("2001:ab03:cd04:55ee:1001::/80"),
+			ipv6Enabled:  true,
+			existingElements: []*knftables.Element{
+				generateNFTablesSetElement(antreaNFTablesSetPeerPodCIDR, "2001:ab03:cd04:55ee:1000::/80"),
+				generateNFTablesSetElement(antreaNFTablesSetPeerPodCIDR, "2001:ab03:cd04:55ee:1001::/80"),
+			},
+			expectedElements: []*knftables.Element{
+				generateNFTablesSetElement(antreaNFTablesSetPeerPodCIDR, "2001:ab03:cd04:55ee:1000::/80"),
+				generateNFTablesSetElement(antreaNFTablesSetPeerPodCIDR, "2001:ab03:cd04:55ee:1001::/80"),
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			mockNFTables, err := newMockNFTables(tt.ipv4Enabled, tt.ipv6Enabled)
+			require.NoError(t, err)
+			c := &Client{
+				nftables:                       mockNFTables,
+				hostNetworkAccelerationEnabled: true,
+				nodeConfig: &config.NodeConfig{
+					GatewayConfig: &config.GatewayConfig{
+						Name: "antrea-gw0",
+					},
+					NodeTransportInterfaceName: "eth0",
+				},
+			}
+			require.NoError(t, c.syncNFTables(context.TODO()))
+
+			// Prepare enforced nftables set and elements.
+			isIPv6 := utilnet.IsIPv6(tt.podCIDRToAdd.IP)
+			var nft knftables.Interface
+			if isIPv6 {
+				nft = mockNFTables.IPv6
+			} else {
+				nft = mockNFTables.IPv4
+			}
+			tx := nft.NewTransaction()
+			for _, element := range tt.existingElements {
+				tx.Add(element)
+			}
+			require.NoError(t, nft.Run(context.TODO(), tx))
+
+			assert.NoError(t, c.addPeerPodCIDRToNFTablesSet(tt.podCIDRToAdd))
+
+			for _, nft := range c.nftables.All() {
+				gotElements, err := nft.ListElements(context.TODO(), "set", antreaNFTablesSetPeerPodCIDR)
+				require.NoError(t, err)
+				assert.ElementsMatch(t, tt.expectedElements, gotElements)
+			}
+		})
+	}
+}
+
+func TestDeletePeerPodCIDRFromNFTablesSet(t *testing.T) {
+	tests := []struct {
+		name                  string
+		podCIDRToDelete       *net.IPNet
+		ipv4Enabled           bool
+		ipv6Enabled           bool
+		existingPodCIDRCached []string
+		existingElements      []*knftables.Element
+		expectedElements      []*knftables.Element
+	}{
+		{
+			name:                  "IPv4, Pod CIDR cached, element enforced",
+			podCIDRToDelete:       ip.MustParseCIDR("192.168.10.0/24"),
+			ipv4Enabled:           true,
+			existingPodCIDRCached: []string{"192.168.10.0/24", "192.168.11.0/24"},
+			existingElements: []*knftables.Element{
+				generateNFTablesSetElement(antreaNFTablesSetPeerPodCIDR, "192.168.10.0/24"),
+				generateNFTablesSetElement(antreaNFTablesSetPeerPodCIDR, "192.168.11.0/24"),
+			},
+			expectedElements: []*knftables.Element{
+				generateNFTablesSetElement(antreaNFTablesSetPeerPodCIDR, "192.168.11.0/24"),
+			},
+		},
+		{
+			name:                  "IPv6, Pod CIDR cached, element enforced",
+			ipv6Enabled:           true,
+			podCIDRToDelete:       ip.MustParseCIDR("2001:ab03:cd04:55ee:1001::/80"),
+			existingPodCIDRCached: []string{"2001:ab03:cd04:55ee:1000::/80", "2001:ab03:cd04:55ee:1001::/80"},
+			existingElements: []*knftables.Element{
+				generateNFTablesSetElement(antreaNFTablesSetPeerPodCIDR, "2001:ab03:cd04:55ee:1000::/80"),
+				generateNFTablesSetElement(antreaNFTablesSetPeerPodCIDR, "2001:ab03:cd04:55ee:1001::/80"),
+			},
+			expectedElements: []*knftables.Element{
+				generateNFTablesSetElement(antreaNFTablesSetPeerPodCIDR, "2001:ab03:cd04:55ee:1000::/80"),
+			},
+		},
+		{
+			name:            "IPv4, Pod CIDR not cached, element not enforced",
+			ipv4Enabled:     true,
+			podCIDRToDelete: ip.MustParseCIDR("192.168.10.0/24"),
+			existingElements: []*knftables.Element{
+				generateNFTablesSetElement(antreaNFTablesSetPeerPodCIDR, "192.168.11.0/24"),
+			},
+			expectedElements: []*knftables.Element{
+				generateNFTablesSetElement(antreaNFTablesSetPeerPodCIDR, "192.168.11.0/24"),
+			},
+		},
+		{
+			name:            "IPv6, Pod CIDR not cached, element not enforced",
+			ipv6Enabled:     true,
+			podCIDRToDelete: ip.MustParseCIDR("2001:ab03:cd04:55ee:1001::/80"),
+			existingElements: []*knftables.Element{
+				generateNFTablesSetElement(antreaNFTablesSetPeerPodCIDR, "2001:ab03:cd04:55ee:1000::/80"),
+			},
+			expectedElements: []*knftables.Element{
+				generateNFTablesSetElement(antreaNFTablesSetPeerPodCIDR, "2001:ab03:cd04:55ee:1000::/80"),
+			},
+		},
+		{
+			name:                  "IPv4, Pod CIDR cached, element not enforced",
+			ipv4Enabled:           true,
+			podCIDRToDelete:       ip.MustParseCIDR("192.168.10.0/24"),
+			existingPodCIDRCached: []string{"192.168.10.0/24", "192.168.11.0/24"},
+			existingElements: []*knftables.Element{
+				generateNFTablesSetElement(antreaNFTablesSetPeerPodCIDR, "192.168.11.0/24"),
+			},
+			expectedElements: []*knftables.Element{
+				generateNFTablesSetElement(antreaNFTablesSetPeerPodCIDR, "192.168.11.0/24"),
+			},
+		},
+		{
+			name:                  "IPv6, Pod CIDR cached, element not enforced",
+			ipv6Enabled:           true,
+			podCIDRToDelete:       ip.MustParseCIDR("2001:ab03:cd04:55ee:1001::/80"),
+			existingPodCIDRCached: []string{"2001:ab03:cd04:55ee:1000::/80", "2001:ab03:cd04:55ee:1001::/80"},
+			existingElements: []*knftables.Element{
+				generateNFTablesSetElement(antreaNFTablesSetPeerPodCIDR, "2001:ab03:cd04:55ee:1000::/80"),
+			},
+			expectedElements: []*knftables.Element{
+				generateNFTablesSetElement(antreaNFTablesSetPeerPodCIDR, "2001:ab03:cd04:55ee:1000::/80"),
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			mockNFTables, err := newMockNFTables(tt.ipv4Enabled, tt.ipv6Enabled)
+			require.NoError(t, err)
+			c := &Client{
+				nftables:                       mockNFTables,
+				hostNetworkAccelerationEnabled: true,
+				nodeConfig: &config.NodeConfig{
+					GatewayConfig: &config.GatewayConfig{
+						Name: "antrea-gw0",
+					},
+					NodeTransportInterfaceName: "eth0",
+				},
+			}
+			require.NoError(t, c.syncNFTables(context.TODO()))
+
+			// Prepare enforced nftables set and elements.
+			isIPv6 := utilnet.IsIPv6(tt.podCIDRToDelete.IP)
+			var nft knftables.Interface
+			if isIPv6 {
+				nft = mockNFTables.IPv6
+			} else {
+				nft = mockNFTables.IPv4
+			}
+			tx := nft.NewTransaction()
+			for _, element := range tt.existingElements {
+				tx.Add(element)
+			}
+			require.NoError(t, nft.Run(context.TODO(), tx))
+			// Prepare cached Pod CIDRs.
+			for _, podCIDR := range tt.existingPodCIDRCached {
+				if isIPv6 {
+					c.podCIDRNFTablesSetIPv6.Store(podCIDR, podCIDR)
+				} else {
+					c.podCIDRNFTablesSetIPv4.Store(podCIDR, podCIDR)
+				}
+			}
+
+			assert.NoError(t, c.deletePeerPodCIDRFromNFTablesSet(tt.podCIDRToDelete))
+
+			for _, nft := range c.nftables.All() {
+				gotElements, err := nft.ListElements(context.TODO(), "set", antreaNFTablesSetPeerPodCIDR)
+				require.NoError(t, err)
+				assert.ElementsMatch(t, tt.expectedElements, gotElements)
+			}
+		})
+	}
+}
+
 func TestMigrateRoutesToGw(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	mockNetlink := netlinktest.NewMockInterface(ctrl)
