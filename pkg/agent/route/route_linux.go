@@ -3140,78 +3140,57 @@ func (c *Client) syncNFTables(ctx context.Context) error {
 }
 
 func (c *Client) addPeerPodCIDRToNFTablesSet(podCIDR *net.IPNet) error {
-	podCIDRStr := podCIDR.String()
 	var nft knftables.Interface
-	var podCIDRNFTablesSet *sync.Map
 	isIPv6 := utilnet.IsIPv6(podCIDR.IP)
 	if isIPv6 {
 		nft = c.nftables.IPv6
-		podCIDRNFTablesSet = &c.podCIDRNFTablesSetIPv6
 	} else {
 		nft = c.nftables.IPv4
-		podCIDRNFTablesSet = &c.podCIDRNFTablesSetIPv4
 	}
 
 	tx := nft.NewTransaction()
 	element := &knftables.Element{
 		Set: antreaNFTablesSetPeerPodCIDR,
-		Key: []string{podCIDRStr},
+		Key: []string{podCIDR.String()},
 	}
 	tx.Add(element)
 	if err := nft.Run(context.TODO(), tx); err != nil {
 		return err
 	}
-	podCIDRNFTablesSet.Store(podCIDRStr, element)
+
+	if isIPv6 {
+		c.podCIDRNFTablesSetIPv6.Store(podCIDR.String(), element)
+	} else {
+		c.podCIDRNFTablesSetIPv4.Store(podCIDR.String(), element)
+	}
 
 	return nil
 }
 
 func (c *Client) deletePeerPodCIDRFromNFTablesSet(podCIDR *net.IPNet) error {
-	podCIDRStr := podCIDR.String()
 	var nft knftables.Interface
-	var podCIDRNFTablesSet *sync.Map
 	isIPv6 := utilnet.IsIPv6(podCIDR.IP)
 	if isIPv6 {
 		nft = c.nftables.IPv6
-		podCIDRNFTablesSet = &c.podCIDRNFTablesSetIPv6
 	} else {
 		nft = c.nftables.IPv4
-		podCIDRNFTablesSet = &c.podCIDRNFTablesSetIPv4
-	}
-
-	if _, exists := podCIDRNFTablesSet.Load(podCIDRStr); !exists {
-		return nil
 	}
 
 	tx := nft.NewTransaction()
 	element := &knftables.Element{
 		Set: antreaNFTablesSetPeerPodCIDR,
-		Key: []string{podCIDRStr},
+		Key: []string{podCIDR.String()},
 	}
 	tx.Delete(element)
-
-	isElementNotFound := func(err error) bool {
-		if err == nil {
-			return false
-		}
-		s := err.Error()
-		// NOTE: nftables error messages are not stable across versions / distros.
-		// This is a best-effort check until lib sigs.k8s.io/knftables provides a structured NotFound error for set
-		// elements.
-		return strings.Contains(s, "element does not exist") ||
-			strings.Contains(s, "no such element") ||
-			strings.Contains(s, "No such file or directory")
-	}
 	if err := nft.Run(context.TODO(), tx); err != nil {
-		if isElementNotFound(err) {
-			klog.InfoS("Failed to delete nftables element for Pod CIDR from set since it doesn't exist",
-				"Set", antreaNFTablesSetPeerPodCIDR,
-				"PodCIDR", podCIDRStr)
-		} else {
-			return err
-		}
+		return err
 	}
-	podCIDRNFTablesSet.Delete(podCIDRStr)
+
+	if isIPv6 {
+		c.podCIDRNFTablesSetIPv6.Delete(podCIDR.String())
+	} else {
+		c.podCIDRNFTablesSetIPv4.Delete(podCIDR.String())
+	}
 
 	return nil
 }
