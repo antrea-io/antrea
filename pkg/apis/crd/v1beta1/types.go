@@ -50,6 +50,8 @@ type AntreaAgentInfo struct {
 	APICABundle []byte `json:"apiCABundle,omitempty"`
 	// The port range used by NodePortLocal
 	NodePortLocalPortRange string `json:"nodePortLocalPortRange,omitempty"`
+	// Network information
+	NetworkInfo NetworkInfo `json:"networkInfo,omitempty"`
 }
 
 type OVSInfo struct {
@@ -57,6 +59,18 @@ type OVSInfo struct {
 	BridgeName string `json:"bridgeName,omitempty"`
 	// Key: flow table name, Value: flow number
 	FlowTable map[string]int32 `json:"flowTable,omitempty"`
+}
+
+type NetworkInfo struct {
+	// Name of the transport interface
+	TransportInterface string `json:"transportInterface,omitempty"`
+	// MTU of the transport interface
+	TransportInterfaceMTU int32 `json:"transportInterfaceMTU,omitempty"`
+	// MTU used for the Pod network
+	PodMTU int32 `json:"podMTU,omitempty"`
+	// IP addresses (with network) of the transport interface in CIDR notation
+	// There can be at most one value for each IP family (IPv4 and IPv6)
+	TransportInterfaceIPs []string `json:"transportInterfaceIPs,omitempty"`
 }
 
 type AgentConditionType string

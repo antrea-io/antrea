@@ -113,6 +113,25 @@ spec:
                   type: string
                 fieldPath:
                   type: string
+            networkInfo:
+              type: object
+              properties:
+                transportInterface:
+                  type: string
+                transportInterfaceMTU:
+                  type: integer
+                  format: int32
+                  minimum: 0
+                podMTU:
+                  type: integer
+                  format: int32
+                  minimum: 0
+                transportInterfaceIPs:
+                  type: array
+                  items:
+                    type: string
+                  # At most one item for each IP family
+                  maxItems: 2
       additionalPrinterColumns:
         - description: Health status of this Agent
           jsonPath: ".agentConditions[?(@.type=='AgentHealthy')].status"

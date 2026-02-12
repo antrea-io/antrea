@@ -36,6 +36,10 @@ type AntreaAgentInfoResponse struct {
 	NetworkPolicyControllerInfo v1beta1.NetworkPolicyControllerInfo `json:"networkPolicyControllerInfo,omitempty"` // Antrea Agent NetworkPolicy information
 	LocalPodNum                 int32                               `json:"localPodNum,omitempty"`                 // The number of Pods which the agent is in charge of
 	AgentConditions             []v1beta1.AgentCondition            `json:"agentConditions,omitempty"`             // Agent condition contains types like AgentHealthy
+	// The type should have been int32 in the CRD as well, unfortunately it was added as an int.
+	APIPort                int32               `json:"apiPort,omitempty"`                // The port of Antrea Agent API Server
+	NodePortLocalPortRange string              `json:"nodePortLocalPortRange,omitempty"` // The port range used by NodePortLocal
+	NetworkInfo            v1beta1.NetworkInfo `json:"networkInfo,omitempty"`            // Network information
 }
 
 func (r AntreaAgentInfoResponse) GetTableHeader() []string {

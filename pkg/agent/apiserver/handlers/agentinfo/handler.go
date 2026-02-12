@@ -35,11 +35,14 @@ func HandleFunc(aq querier.AgentQuerier) http.HandlerFunc {
 			Version:                     agentInfo.Version,
 			PodRef:                      agentInfo.PodRef,
 			NodeRef:                     agentInfo.NodeRef,
+			NodeSubnets:                 agentInfo.NodeSubnets,
 			OVSInfo:                     agentInfo.OVSInfo,
 			NetworkPolicyControllerInfo: agentInfo.NetworkPolicyControllerInfo,
 			LocalPodNum:                 agentInfo.LocalPodNum,
 			AgentConditions:             agentInfo.AgentConditions,
-			NodeSubnets:                 agentInfo.NodeSubnets,
+			APIPort:                     int32(agentInfo.APIPort),
+			NodePortLocalPortRange:      agentInfo.NodePortLocalPortRange,
+			NetworkInfo:                 agentInfo.NetworkInfo,
 		}
 		err := json.NewEncoder(w).Encode(info)
 		if err != nil {
