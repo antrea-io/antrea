@@ -1096,7 +1096,21 @@ func runPacketCaptureTest(t *testing.T, data *TestData, tc pcTestCase) {
 	tmpDir := t.TempDir()
 	dstFileName := filepath.Join(tmpDir, tc.pc.Name+".pcapng")
 	packetFile := getLocalPcapFilepath(tc.pc.Name)
-	require.NoError(t, data.copyPodFile(antreaPodName, "antrea-agent", "kube-system", packetFile, tmpDir))
+
+	// Copy the pcap file from the agent Pod, retrying for a short bounded
+	// period to handle the case where the file is still being written.
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	err = wait.PollUntilContextTimeout(ctx, 500*time.Millisecond, 5*time.Second, true, func(ctx context.Context) (bool, error) {
+		copyErr := data.copyPodFile(antreaPodName, "antrea-agent", "kube-system", packetFile, tmpDir)
+		if copyErr != nil {
+			// The file may still be in the process of being written; retry.
+			return false, nil
+		}
+		return true, nil
+	})
+	require.NoError(t, err)
+
 	defer os.Remove(dstFileName)
 	file, err := os.Open(dstFileName)
 	require.NoError(t, err)
