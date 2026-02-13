@@ -567,13 +567,14 @@ func TestSyncDirtyRules(t *testing.T) {
 			}
 			stopCh := make(chan struct{})
 			defer close(stopCh)
+			f.stopCh = stopCh
 			go f.runRuleSyncTracker(stopCh)
 
 			for i, fqdn := range tc.fqdnsToSync {
 				f.syncDirtyRules(fqdn, tc.waitChs[i], tc.addressUpdates[i])
 			}
 			for _, update := range tc.notifications {
-				f.ruleSyncTracker.updateCh <- update
+				f.notifyRuleUpdate(update.ruleId, update.err)
 			}
 			assert.ElementsMatch(t, tc.expectedDirtyRuleSyncCalls, dirtyRuleSyncCalls)
 			for _, waitCh := range tc.waitChs {
@@ -586,6 +587,31 @@ func TestSyncDirtyRules(t *testing.T) {
 			}
 			assert.Equal(t, tc.expectedDirtyRulesRemaining, f.ruleSyncTracker.getDirtyRules())
 		})
+	}
+}
+
+func TestNotifyRuleUpdateNonBlocking(t *testing.T) {
+	controller := gomock.NewController(t)
+	f, _ := newMockFQDNController(t, controller, nil, clock.RealClock{}, 0)
+
+	stopCh := make(chan struct{})
+	// Start and then stop the ruleSyncTracker to simulate agent shutdown.
+	go f.runRuleSyncTracker(stopCh)
+	close(stopCh)
+	// Give the goroutine time to exit.
+	time.Sleep(50 * time.Millisecond)
+
+	// notifyRuleUpdate should return immediately (non-blocking) after shutdown.
+	done := make(chan struct{})
+	go func() {
+		f.notifyRuleUpdate("rule-1", nil)
+		close(done)
+	}()
+	select {
+	case <-done:
+		// Success: notifyRuleUpdate returned without blocking.
+	case <-time.After(time.Second):
+		t.Fatal("notifyRuleUpdate blocked after shutdown, potential goroutine leak")
 	}
 }
 
