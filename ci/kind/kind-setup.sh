@@ -262,7 +262,7 @@ function configure_networks {
     node_ip6=$(docker inspect $node --format '{{range $i, $conf:=.NetworkSettings.Networks}}{{$conf.GlobalIPv6Address}}{{end}}')
 
     echo "Waiting for node $node to be assigned InternalIP..."
-    max_attempts=30
+    max_attempts=60
     attempt=0
     # verify the internal IPs
     while (( attempt < max_attempts )); do
@@ -282,7 +282,7 @@ function configure_networks {
       ! $ok4 && echo "Missing IPv4: $node_ip4"
       ! $ok6 && echo "Missing IPv6: $node_ip6"
 
-      sleep 2
+      sleep 20
     done
 
     if (( attempt >= max_attempts )); then
