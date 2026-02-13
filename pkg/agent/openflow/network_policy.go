@@ -1867,9 +1867,14 @@ func (f *featureNetworkPolicy) calculateFlowUpdates(updates map[uint16]uint16, t
 // ReassignFlowPriorities takes a list of priority updates, and update the actionFlows to replace
 // the old priority with the desired one, for each priority update.
 func (c *client) ReassignFlowPriorities(updates map[uint16]uint16, table uint8) error {
+	c.replayMutex.RLock()
+	defer c.replayMutex.RUnlock()
+
+	c.featureNetworkPolicy.conjMatchFlowLock.Lock()
+	defer c.featureNetworkPolicy.conjMatchFlowLock.Unlock()
+
 	addFlows, delFlows, conjFlowUpdates := c.featureNetworkPolicy.calculateFlowUpdates(updates, table)
 	add, update, del := c.featureNetworkPolicy.processFlowUpdates(addFlows, delFlows)
-	// Commit the flows updates calculated.
 	err := c.bridge.AddFlowsInBundle(add, update, del)
 	if err != nil {
 		return err
