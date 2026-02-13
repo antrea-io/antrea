@@ -18,9 +18,9 @@
 
 set -eo pipefail
 
-function echoerr {
-    >&2 echo "$@"
-}
+THIS_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
+
+source "$THIS_DIR/utils.sh"
 
 _usage="Usage: $0 [--encap-mode <mode>] [--ip-family <v4|v6|dual>] [--coverage] [--help|-h]
         --encap-mode                  Traffic encapsulation mode. (default is 'encap').
@@ -56,8 +56,6 @@ function print_usage {
     echoerr -n "$_usage"
 }
 
-
-THIS_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
 TESTBED_CMD="$THIS_DIR/kind-setup.sh"
 YML_CMD="$THIS_DIR/../../hack/generate-manifest.sh"
 FLOWAGGREGATOR_YML_CMD="$THIS_DIR/../../hack/generate-manifest-flow-aggregator.sh"
@@ -459,12 +457,12 @@ function run_test {
   fi
 
   external_agnhost_cid=$(docker ps -f name="^antrea-external-agnhost" --format '{{.ID}}')
-  external_agnhost_ips=$(docker inspect $external_agnhost_cid -f '{{.NetworkSettings.Networks.kind.IPAddress}},{{.NetworkSettings.Networks.kind.GlobalIPv6Address}}')
+  external_agnhost_ips=$(docker_get_ips "$external_agnhost_cid" kind)
   EXTRA_ARGS="$vlan_args --external-agnhost-ips $external_agnhost_ips"
 
   if $bgp_policy; then
     external_frr_cid=$(docker ps -f name="^antrea-external-frr" --format '{{.ID}}')
-    external_frr_ips=$(docker inspect $external_frr_cid -f '{{.NetworkSettings.Networks.kind.IPAddress}},{{.NetworkSettings.Networks.kind.GlobalIPv6Address}}')
+    external_frr_ips=$(docker_get_ips "$external_frr_cid" kind)
     EXTRA_ARGS="$EXTRA_ARGS --external-frr-cid $external_frr_cid --external-frr-ips $external_frr_ips"
   fi
 
