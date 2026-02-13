@@ -19,10 +19,10 @@ function echoerr {
 }
 
 function docker_get_ip {
-    cid="${1}"
-    network="${2}"
-    property="${3:-IPAddress}"
-    ip=$(docker inspect "$cid" -f "{{.NetworkSettings.Networks.$network.$property}}")
+    local cid="${1}"
+    local network="${2}"
+    local property="${3:-IPAddress}"
+    local ip=$(docker inspect "$cid" -f "{{(index .NetworkSettings.Networks \"$network\").$property}}")
     if [[ "$ip" == "invalid IP" ]]; then
         ip=""
     fi
@@ -38,14 +38,14 @@ function docker_get_ipv6 {
 }
 
 function docker_get_ips {
-    ipv4=$(docker_get_ip "$@" "IPAddress")
-    ipv6=$(docker_get_ip "$@" "GlobalIPv6Address")
+    local ipv4=$(docker_get_ip "$@" "IPAddress")
+    local ipv6=$(docker_get_ip "$@" "GlobalIPv6Address")
     echo "$ipv4,$ipv6"
 }
 
 function docker_get_ipv6_prefix_len {
-    cid="${1}"
-    network="${2}"
-    prefix_len=$(docker inspect "$cid" -f "{{.NetworkSettings.Networks.$network.GlobalIPv6PrefixLen}}")
+    local cid="${1}"
+    local network="${2}"
+    local prefix_len=$(docker inspect "$cid" -f "{{(index .NetworkSettings.Networks \"$network\").GlobalIPv6PrefixLen}}")
     echo "$prefix_len"
 }
