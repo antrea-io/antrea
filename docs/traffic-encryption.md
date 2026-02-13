@@ -128,3 +128,9 @@ After saving the yaml file change, deploy Antrea with:
 ```bash
 kubectl apply -f antrea.yml
 ```
+
+## Limitations
+
+- Traffic encryption does not apply to [Egress](egress.md) traffic between the
+source Node (where the Pod runs) and the Egress Node. Packets on this hop are
+forwarded unencrypted, regardless of `trafficEncryptionMode`.
