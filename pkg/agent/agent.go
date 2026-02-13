@@ -622,7 +622,7 @@ func (i *Initializer) FlowRestoreComplete() error {
 			if !flowRestoreWait {
 				// If the log is seen and the config becomes true later, we should look at why "ovs-vsctl set --no-wait"
 				// doesn't take effect on ovsdb immediately.
-				klog.Warning("flow-restore-wait was not true before the delete call was made, will retry")
+				klog.InfoS("flow-restore-wait was not true before the delete call was made, will retry")
 				return false, nil
 			}
 			return true, nil
@@ -652,7 +652,7 @@ func (i *Initializer) FlowRestoreComplete() error {
 		}
 		if flowRestoreWait {
 			// If it is seen, we should look at OVSDB golang lib and OVS.
-			klog.Warningf("flow-restore-wait was still true even though the delete call was considered success")
+			klog.InfoS("flow-restore-wait was still true even though the delete call was considered success")
 			continue
 		}
 		klog.Info("Cleaned up flow-restore-wait config")
