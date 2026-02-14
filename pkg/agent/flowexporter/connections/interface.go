@@ -15,6 +15,7 @@
 package connections
 
 import (
+	"net/netip"
 	"time"
 
 	"antrea.io/antrea/pkg/agent/flowexporter/connection"
@@ -28,6 +29,8 @@ type ConnTrackDumper interface {
 	DumpFlows(zoneFilter uint16) ([]*connection.Connection, int, error)
 	// GetMaxConnections returns the size of the connection tracking table.
 	GetMaxConnections() (int, error)
+	// GetNodeSNATIPs returns a map of connection tuples to their SNAT IPs from zone 0.
+	GetNodeSNATIPs(zoneFilter uint16) (map[connection.Tuple]netip.Addr, error)
 }
 
 type ConnectionStoreGetter interface {
