@@ -16,10 +16,10 @@ jobs:
           fetch-depth: 0
           show-progress: false
 
-      - name: Set up Go using version from go.mod
+      - name: Set up Go using version from .go-version
         uses: actions/setup-go@v5
         with:
-          go-version-file: 'go.mod'
+          go-version-file: '.go-version'
 
       - name: Install benchci
         run: curl -sfL https://raw.githubusercontent.com/antrea-io/benchci/main/install.sh | sudo sh -s -- -b /usr/local/bin
