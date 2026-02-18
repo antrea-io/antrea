@@ -136,8 +136,7 @@ func (ic *ipsecCSRApprover) verifyIdentity(nodeName string, csr *certificatesv1.
 	}
 	podNameValues, podUIDValues := csr.Spec.Extra[sautil.PodNameKey], csr.Spec.Extra[sautil.PodUIDKey]
 	if len(podNameValues) == 0 && len(podUIDValues) == 0 {
-		klog.InfoS("Could not determine Pod identity from CertificateSigningRequest.",
-			" Enable K8s BoundServiceAccountTokenVolume feature gate to provide maximum security.")
+		klog.Info("Could not determine Pod identity from CertificateSigningRequest. Enable K8s BoundServiceAccountTokenVolume feature gate to provide maximum security.")
 		return nil
 	}
 	if len(podNameValues) == 0 || len(podUIDValues) == 0 {
