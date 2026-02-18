@@ -176,18 +176,16 @@ jobs:
         password: ${{ secrets.GITHUB_TOKEN }}
     - name: Create and push manifest for controller image
       run: |
-        docker manifest create ${{ matrix.registry }}/${{ matrix.namespace }}/antrea-controller-ubuntu:"${DOCKER_TAG}" \
+        docker buildx imagetools create --tag ${{ matrix.registry }}/${{ matrix.namespace }}/antrea-controller-ubuntu:"${DOCKER_TAG}" \
           ${{ matrix.registry }}/${{ matrix.namespace }}/antrea-controller-ubuntu-arm64:"${DOCKER_TAG}" \
           ${{ matrix.registry }}/${{ matrix.namespace }}/antrea-controller-ubuntu-arm:"${DOCKER_TAG}" \
           ${{ matrix.registry }}/${{ matrix.namespace }}/antrea-controller-ubuntu-amd64:"${DOCKER_TAG}"
-        docker manifest push --purge ${{ matrix.registry }}/${{ matrix.namespace }}/antrea-controller-ubuntu:"${DOCKER_TAG}"
     - name: Create and push manifest for agent image
       run: |
-        docker manifest create ${{ matrix.registry }}/${{ matrix.namespace }}/antrea-agent-ubuntu:"${DOCKER_TAG}" \
+        docker buildx imagetools create --tag ${{ matrix.registry }}/${{ matrix.namespace }}/antrea-agent-ubuntu:"${DOCKER_TAG}" \
           ${{ matrix.registry }}/${{ matrix.namespace }}/antrea-agent-ubuntu-arm64:"${DOCKER_TAG}" \
           ${{ matrix.registry }}/${{ matrix.namespace }}/antrea-agent-ubuntu-arm:"${DOCKER_TAG}" \
           ${{ matrix.registry }}/${{ matrix.namespace }}/antrea-agent-ubuntu-amd64:"${DOCKER_TAG}"
-        docker manifest push --purge ${{ matrix.registry }}/${{ matrix.namespace }}/antrea-agent-ubuntu:"${DOCKER_TAG}"
 
   build-ubi:
     needs: check-env
