@@ -43,10 +43,10 @@ jobs:
       with:
         show-progress: false
 
-    - name: Set up Go using version from go.mod
+    - name: Set up Go using version from .go-version
       uses: actions/setup-go@v6
       with:
-        go-version-file: 'go.mod'
+        go-version-file: '.go-version'
 
     # Initializes the CodeQL tools for scanning.
     - name: Initialize CodeQL
@@ -87,10 +87,10 @@ jobs:
       with:
         show-progress: false
 
-    - name: Set up Go using version from go.mod
+    - name: Set up Go using version from .go-version
       uses: actions/setup-go@v6
       with:
-        go-version-file: 'go.mod'
+        go-version-file: '.go-version'
 
     - name: Initialize CodeQL
       uses: github/codeql-action/init@v4

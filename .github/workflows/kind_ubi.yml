@@ -46,7 +46,7 @@ jobs:
         driver: docker
     - uses: actions/setup-go@v6
       with:
-        go-version-file: 'go.mod'
+        go-version-file: '.go-version'
     - name: Build Antrea UBI9 Docker image
       run: |
         ./hack/build-antrea-linux-all.sh --pull --distro ubi
