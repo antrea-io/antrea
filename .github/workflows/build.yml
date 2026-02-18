@@ -210,7 +210,7 @@ jobs:
         driver: ${{ needs.check-env.outputs.docker_driver }}
     - uses: actions/setup-go@v6
       with:
-        go-version-file: 'go.mod'
+        go-version-file: '.go-version'
     - name: Build Antrea UBI9 Docker image without pushing to registry
       if: ${{ needs.check-env.outputs.push_needed == 'false' }}
       run: |
