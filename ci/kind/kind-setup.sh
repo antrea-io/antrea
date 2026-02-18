@@ -46,9 +46,8 @@ options=()
 THIS_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
 
 set -eo pipefail
-function echoerr {
-    >&2 echo "$@"
-}
+
+source "$THIS_DIR/utils.sh"
 
 _usage="
 Usage: $0 create CLUSTER_NAME [--pod-cidr POD_CIDR] [--service-cidr SERVICE_CIDR] [--antrea-cni] [--num-workers NUM_WORKERS] [--images IMAGES] [--subnets SUBNETS] [--ip-family ipv4|ipv6|dual] [--k8s-version VERSION]
@@ -193,21 +192,23 @@ function configure_networks {
     num_networks=$((num_networks+1))
   fi
 
-  control_plane_ip4=$(docker inspect $cluster_name-control-plane --format '{{range $i, $conf:=.NetworkSettings.Networks}}{{$conf.IPAddress}}{{end}}')
-  control_plane_ip6=$(docker inspect $cluster_name-control-plane --format '{{range $i, $conf:=.NetworkSettings.Networks}}{{$conf.GlobalIPv6Address}}{{end}}')
+  control_plane_ip4=$(docker_get_ipv4 "$cluster_name-control-plane" "$cluster_name")
+  control_plane_ip6=$(docker_get_ipv6 "$cluster_name-control-plane" "$cluster_name")
 
   i=0
+  declare -A node_network
   for node in $nodes; do
     network=${networks[i]}
+    node_network["$node"]="$network"
     ifname="eth1"
     # the com.docker.network.endpoint.ifname label is only supported starting with Docker Engine v28
     # prior to that, the interface should be named "eth1" by default
     # note that providing an unsupported label does not generate an error
     docker network connect --driver-opt=com.docker.network.endpoint.ifname=$ifname $network $node
     echo "connected worker $node to network $network"
-    node_ip4=$(docker inspect $node --format '{{range $i, $conf:=.NetworkSettings.Networks}}{{$conf.IPAddress}}{{end}}')
-    node_ip6=$(docker inspect $node --format '{{range $i, $conf:=.NetworkSettings.Networks}}{{$conf.GlobalIPv6Address}}{{end}}')
-    node_ip6_prefix=$(docker inspect $node --format '{{range $i, $conf:=.NetworkSettings.Networks}}{{$conf.GlobalIPv6PrefixLen}}{{end}}')
+    node_ip4=$(docker_get_ipv4 "$node" "$network")
+    node_ip6=$(docker_get_ipv6 "$node" "$network")
+    node_ip6_prefix=$(docker_get_ipv6_prefix_len "$node" "$network")
 
     # reset network
     docker exec -t $node ip link set $ifname down
@@ -256,9 +257,10 @@ function configure_networks {
   done
 
   for node in $nodes; do
-    node_ip4=$(docker inspect $node --format '{{range $i, $conf:=.NetworkSettings.Networks}}{{$conf.IPAddress}}{{end}}')
+    network=${node_network["$node"]}
+    node_ip4=$(docker_get_ipv4 "$node" "$network")
     [[ "$IP_FAMILY" == "ipv6" ]] && node_ip4=""
-    node_ip6=$(docker inspect $node --format '{{range $i, $conf:=.NetworkSettings.Networks}}{{$conf.GlobalIPv6Address}}{{end}}')
+    node_ip6=$(docker_get_ipv6 "$node" "$network")
 
     echo "Waiting for node $node to be assigned InternalIP..."
     max_attempts=30
@@ -462,7 +464,7 @@ function load_images {
       echoerr "docker image $img not found"
       continue
     fi
-    kind load docker-image $img --name $cluster_name > /dev/null 2>&1
+    kind load docker-image "$img" --name "$cluster_name"
     if [[ $? -ne 0 ]]; then
       echoerr "docker image $img failed to load"
       continue
