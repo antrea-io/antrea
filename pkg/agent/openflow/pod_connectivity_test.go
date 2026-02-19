@@ -75,11 +75,7 @@ func podConnectivityInitFlows(
 			"cookie=0x1010000000000, table=L3DecTTL, priority=200,ip actions=dec_ttl,goto_table:SNATMark",
 			"cookie=0x1010000000000, table=ConntrackCommit, priority=200,ct_state=+new+trk,ct_mark=0x0/0x20,ip actions=ct(commit,table=Output,zone=65520,exec(move:NXM_NX_REG0[0..3]->NXM_NX_CT_MARK[0..3]))",
 			"cookie=0x1010000000000, table=Output, priority=200,reg0=0x200000/0x600000 actions=output:NXM_NX_REG1[]",
-		}
-		if trafficEncryptionMode != config.TrafficEncryptionModeWireGuard {
-			flows = append(flows,
-				"cookie=0x1010000000000, table=Classifier, priority=200,in_port=32768 actions=set_field:0x1/0xf->reg0,set_field:0x200/0x200->reg0,goto_table:UnSNAT",
-			)
+			"cookie=0x1010000000000, table=Classifier, priority=200,in_port=32768 actions=set_field:0x1/0xf->reg0,set_field:0x200/0x200->reg0,goto_table:UnSNAT",
 		}
 		if !multicastEnabled {
 			flows = append(flows, "cookie=0x1010000000000, table=SpoofGuard, priority=200,ip,in_port=32769 actions=goto_table:UnSNAT")
@@ -105,15 +101,13 @@ func podConnectivityInitFlows(
 				"cookie=0x1010000000000, table=TrafficControl, priority=210,reg0=0x200006/0x60000f actions=goto_table:Output",
 				"cookie=0x1010000000000, table=Output, priority=211,reg0=0x200000/0x600000,reg4=0x400000/0xc00000 actions=output:NXM_NX_REG1[],output:NXM_NX_REG9[]",
 				"cookie=0x1010000000000, table=Output, priority=211,reg0=0x200000/0x600000,reg4=0x800000/0xc00000 actions=output:NXM_NX_REG9[]",
+				"cookie=0x1010000000000, table=L2ForwardingCalc, priority=200,dl_dst=aa:bb:cc:dd:ee:ff actions=set_field:0x8000->reg1,set_field:0x200000/0x600000->reg0,goto_table:TrafficControl",
 			)
-			if trafficEncryptionMode != config.TrafficEncryptionModeWireGuard {
-				flows = append(flows, "cookie=0x1010000000000, table=L2ForwardingCalc, priority=200,dl_dst=aa:bb:cc:dd:ee:ff actions=set_field:0x8000->reg1,set_field:0x200000/0x600000->reg0,goto_table:TrafficControl")
-			}
 		} else {
-			flows = append(flows, "cookie=0x1010000000000, table=L2ForwardingCalc, priority=200,dl_dst=0a:00:00:00:00:01 actions=set_field:0x8001->reg1,set_field:0x200000/0x600000->reg0,goto_table:IngressSecurityClassifier")
-			if trafficEncryptionMode != config.TrafficEncryptionModeWireGuard {
-				flows = append(flows, "cookie=0x1010000000000, table=L2ForwardingCalc, priority=200,dl_dst=aa:bb:cc:dd:ee:ff actions=set_field:0x8000->reg1,set_field:0x200000/0x600000->reg0,goto_table:IngressSecurityClassifier")
-			}
+			flows = append(flows,
+				"cookie=0x1010000000000, table=L2ForwardingCalc, priority=200,dl_dst=0a:00:00:00:00:01 actions=set_field:0x8001->reg1,set_field:0x200000/0x600000->reg0,goto_table:IngressSecurityClassifier",
+				"cookie=0x1010000000000, table=L2ForwardingCalc, priority=200,dl_dst=aa:bb:cc:dd:ee:ff actions=set_field:0x8000->reg1,set_field:0x200000/0x600000->reg0,goto_table:IngressSecurityClassifier",
+			)
 		}
 	case config.TrafficEncapModeNoEncap:
 		if !isIPv4 {
