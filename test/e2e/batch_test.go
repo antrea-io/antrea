@@ -39,7 +39,7 @@ func TestBatchCreatePods(t *testing.T) {
 	batchNum := 20
 
 	node1 := workerNodeName(1)
-	podName, err := data.getAntreaPodOnNode(node1)
+	podName, err := data.GetAntreaPodOnNode(node1)
 	assert.NoError(t, err)
 
 	getFDs := func() sets.Set[string] {
