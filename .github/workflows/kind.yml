@@ -88,6 +88,8 @@ jobs:
     - uses: actions/setup-go@v5
       with:
         go-version-file: '.go-version'
+    # Docker 29+ defaults to the containerd image store, which breaks kind load docker-image.
+    - uses: ./.github/actions/setup-docker-classic
     - name: Download Antrea image from previous job
       uses: actions/download-artifact@v4
       with:
@@ -151,6 +153,8 @@ jobs:
     - uses: actions/setup-go@v5
       with:
         go-version-file: '.go-version'
+    # Docker 29+ defaults to the containerd image store, which breaks kind load docker-image.
+    - uses: ./.github/actions/setup-docker-classic
     - name: Download Antrea image from previous job
       uses: actions/download-artifact@v4
       with:
@@ -221,6 +225,8 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version-file: '.go-version'
+      # Docker 29+ defaults to the containerd image store, which breaks kind load docker-image.
+      - uses: ./.github/actions/setup-docker-classic
       - name: Download Antrea image from previous job
         uses: actions/download-artifact@v4
         with:
@@ -288,6 +294,8 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version-file: '.go-version'
+      # Docker 29+ defaults to the containerd image store, which breaks kind load docker-image.
+      - uses: ./.github/actions/setup-docker-classic
       - name: Download Antrea image from previous job
         uses: actions/download-artifact@v4
         with:
@@ -357,6 +365,8 @@ jobs:
     - uses: actions/setup-go@v5
       with:
         go-version-file: '.go-version'
+    # Docker 29+ defaults to the containerd image store, which breaks kind load docker-image.
+    - uses: ./.github/actions/setup-docker-classic
     - name: Download Antrea image from previous job
       uses: actions/download-artifact@v4
       with:
@@ -420,6 +430,8 @@ jobs:
     - uses: actions/setup-go@v5
       with:
         go-version-file: '.go-version'
+    # Docker 29+ defaults to the containerd image store, which breaks kind load docker-image.
+    - uses: ./.github/actions/setup-docker-classic
     - name: Download Antrea image from previous job
       uses: actions/download-artifact@v4
       with:
@@ -483,6 +495,8 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version-file: '.go-version'
+      # Docker 29+ defaults to the containerd image store, which breaks kind load docker-image.
+      - uses: ./.github/actions/setup-docker-classic
       - name: Download Antrea image from previous job
         uses: actions/download-artifact@v4
         with:
@@ -558,6 +572,8 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version-file: '.go-version'
+      # Docker 29+ defaults to the containerd image store, which breaks kind load docker-image.
+      - uses: ./.github/actions/setup-docker-classic
       - name: Download Antrea image from previous job
         uses: actions/download-artifact@v4
         with:
@@ -628,6 +644,8 @@ jobs:
     - uses: actions/setup-go@v5
       with:
         go-version-file: '.go-version'
+    # Docker 29+ defaults to the containerd image store, which breaks kind load docker-image.
+    - uses: ./.github/actions/setup-docker-classic
     - name: Download Antrea image from previous job
       uses: actions/download-artifact@v4
       with:
@@ -674,6 +692,8 @@ jobs:
     - uses: actions/setup-go@v5
       with:
         go-version-file: '.go-version'
+    # Docker 29+ defaults to the containerd image store, which breaks kind load docker-image.
+    - uses: ./.github/actions/setup-docker-classic
     - name: Download Antrea image from previous job
       uses: actions/download-artifact@v4
       with:
@@ -720,6 +740,8 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version-file: '.go-version'
+      # Docker 29+ defaults to the containerd image store, which breaks kind load docker-image.
+      - uses: ./.github/actions/setup-docker-classic
       - name: Download Antrea image from previous job
         uses: actions/download-artifact@v4
         with:
@@ -766,6 +788,8 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version-file: '.go-version'
+      # Docker 29+ defaults to the containerd image store, which breaks kind load docker-image.
+      - uses: ./.github/actions/setup-docker-classic
       - name: Download Antrea image from previous job
         uses: actions/download-artifact@v4
         with:
@@ -812,6 +836,8 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version-file: '.go-version'
+      # Docker 29+ defaults to the containerd image store, which breaks kind load docker-image.
+      - uses: ./.github/actions/setup-docker-classic
       - name: Download Antrea image from previous job
         uses: actions/download-artifact@v4
         with:
@@ -858,6 +884,8 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version-file: '.go-version'
+      # Docker 29+ defaults to the containerd image store, which breaks kind load docker-image.
+      - uses: ./.github/actions/setup-docker-classic
       - name: Download Antrea image from previous job
         uses: actions/download-artifact@v4
         with:
@@ -903,6 +931,8 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version-file: '.go-version'
+      # Docker 29+ defaults to the containerd image store, which breaks kind load docker-image.
+      - uses: ./.github/actions/setup-docker-classic
       - name: Download Antrea image from previous job
         uses: actions/download-artifact@v4
         with:
@@ -945,6 +975,8 @@ jobs:
       - uses: actions/checkout@v4
         with:
           show-progress: false
+      # Docker 29+ defaults to the containerd image store, which breaks kind load docker-image.
+      - uses: ./.github/actions/setup-docker-classic
       - name: Download Antrea image from previous job
         uses: actions/download-artifact@v4
         with:

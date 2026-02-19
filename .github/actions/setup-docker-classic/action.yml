@@ -1,0 +1,18 @@
+name: Set up Docker (classic image store)
+description: >
+  Configure the Docker daemon to use the classic (non-containerd) image store.
+  Docker 29+ defaults to the containerd image store, which breaks kind load
+  docker-image. See https://github.com/kubernetes-sigs/kind/issues/3795.
+
+runs:
+  using: composite
+  steps:
+    - name: Set up Docker
+      uses: docker/setup-docker-action@v4
+      with:
+        daemon-config: |
+          {
+            "features": {
+              "containerd-snapshotter": false
+            }
+          }
