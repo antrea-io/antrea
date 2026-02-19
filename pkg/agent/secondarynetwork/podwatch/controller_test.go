@@ -86,6 +86,19 @@ const (
     "vlan": {{.VLAN}}
 }`
 
+	netAttachMasterTemplate = `{
+    "cniVersion": "{{.CNIVersion}}",
+    "type": "{{.CNIType}}",
+    "networkType": "{{.NetworkType}}",
+    "mtu": {{.MTU}},
+    "master": "{{.Master}}",
+    "vlan": {{.VLAN}},
+    "ipam": {
+        "type": "{{.IPAMType}}",
+        "ippools": [ "ipv4-pool-1", "ipv6-pool-1" ]
+    }
+}`
+
 	defaultCNIVersion  = "0.3.0"
 	defaultMTU         = 1500
 	sriovResourceName1 = "intel.com/intel_sriov_netdevice"
@@ -102,10 +115,10 @@ const (
 )
 
 func testNetwork(name string, networkType networkType) *netdefv1.NetworkAttachmentDefinition {
-	return testNetworkExt(name, "", "", networkType, "", "", 0, 0, false)
+	return testNetworkExt(name, "", "", networkType, "", "", 0, 0, "", false)
 }
 
-func testNetworkExt(name, cniVersion, cniType string, networkType networkType, resourceName, ipamType string, mtu, vlan int, noIPAM bool) *netdefv1.NetworkAttachmentDefinition {
+func testNetworkExt(name, cniVersion, cniType string, networkType networkType, resourceName, ipamType string, mtu, vlan int, master string, noIPAM bool) *netdefv1.NetworkAttachmentDefinition {
 	if cniVersion == "" {
 		cniVersion = defaultCNIVersion
 	}
@@ -125,10 +138,14 @@ func testNetworkExt(name, cniVersion, cniType string, networkType networkType, r
 		IPAMType    string
 		MTU         int
 		VLAN        int
-	}{cniVersion, cniType, string(networkType), ipamType, mtu, vlan}
+		Master      string
+	}{cniVersion, cniType, string(networkType), ipamType, mtu, vlan, master}
 
 	var tmpl *template.Template
-	if !noIPAM {
+	if master != "" {
+		// Use master template when master field is specified
+		tmpl = template.Must(template.New("test").Parse(netAttachMasterTemplate))
+	} else if !noIPAM {
 		tmpl = template.Must(template.New("test").Parse(netAttachTemplate))
 	} else {
 		tmpl = template.Must(template.New("test").Parse(netAttachNoIPAMTemplate))
@@ -493,18 +510,19 @@ func TestConfigurePodSecondaryNetwork(t *testing.T) {
 		ipamType                   string
 		mtu                        int
 		vlan                       int
+		master                     string
 		noIPAM                     bool
 		doNotCreateNetwork         bool
 		expectedNetworkStatusAnnot []netdefv1.NetworkStatus
 		expectedErr                string
-		expectedCalls              func(mockIPAM *podwatchtesting.MockIPAMAllocator, mockIC *podwatchtesting.MockInterfaceConfigurator)
+		expectedCalls              func(mockOVS *ovsconfigtest.MockOVSBridgeClient, mockIPAM *podwatchtesting.MockIPAMAllocator, mockIC *podwatchtesting.MockInterfaceConfigurator)
 	}{
 		{
 			name:        "VLAN network",
 			networkType: vlanNetworkType,
 			mtu:         1600,
 			vlan:        101,
-			expectedCalls: func(mockIPAM *podwatchtesting.MockIPAMAllocator, mockIC *podwatchtesting.MockInterfaceConfigurator) {
+			expectedCalls: func(mockOVS *ovsconfigtest.MockOVSBridgeClient, mockIPAM *podwatchtesting.MockIPAMAllocator, mockIC *podwatchtesting.MockInterfaceConfigurator) {
 				mockIPAM.EXPECT().SecondaryNetworkAllocate(podOwner, gomock.Any()).Return(testIPAMResult("148.14.24.100/24", 0), nil)
 				mockIC.EXPECT().ConfigureVLANSecondaryInterface(
 					podName,
@@ -527,7 +545,7 @@ func TestConfigurePodSecondaryNetwork(t *testing.T) {
 			name:        "VLAN in IPPool",
 			networkType: vlanNetworkType,
 			vlan:        0,
-			expectedCalls: func(mockIPAM *podwatchtesting.MockIPAMAllocator, mockIC *podwatchtesting.MockInterfaceConfigurator) {
+			expectedCalls: func(mockOVS *ovsconfigtest.MockOVSBridgeClient, mockIPAM *podwatchtesting.MockIPAMAllocator, mockIC *podwatchtesting.MockInterfaceConfigurator) {
 				// IPAM returns the VLAN ID in the IPPool subnet.
 				mockIPAM.EXPECT().SecondaryNetworkAllocate(podOwner, gomock.Any()).Return(testIPAMResult("148.14.24.100/24", 101), nil)
 				mockIC.EXPECT().ConfigureVLANSecondaryInterface(
@@ -551,7 +569,7 @@ func TestConfigurePodSecondaryNetwork(t *testing.T) {
 			name:        "network VLAN overrides IPPool VLAN",
 			networkType: vlanNetworkType,
 			vlan:        101,
-			expectedCalls: func(mockIPAM *podwatchtesting.MockIPAMAllocator, mockIC *podwatchtesting.MockInterfaceConfigurator) {
+			expectedCalls: func(mockOVS *ovsconfigtest.MockOVSBridgeClient, mockIPAM *podwatchtesting.MockIPAMAllocator, mockIC *podwatchtesting.MockInterfaceConfigurator) {
 				mockIPAM.EXPECT().SecondaryNetworkAllocate(podOwner, gomock.Any()).Return(testIPAMResult("148.14.24.100/24", 102), nil)
 				mockIC.EXPECT().ConfigureVLANSecondaryInterface(
 					podName,
@@ -574,7 +592,7 @@ func TestConfigurePodSecondaryNetwork(t *testing.T) {
 			name:        "no IPAM",
 			networkType: vlanNetworkType,
 			noIPAM:      true,
-			expectedCalls: func(mockIPAM *podwatchtesting.MockIPAMAllocator, mockIC *podwatchtesting.MockInterfaceConfigurator) {
+			expectedCalls: func(mockOVS *ovsconfigtest.MockOVSBridgeClient, mockIPAM *podwatchtesting.MockIPAMAllocator, mockIC *podwatchtesting.MockInterfaceConfigurator) {
 				mockIC.EXPECT().ConfigureVLANSecondaryInterface(
 					podName,
 					testNamespace,
@@ -595,7 +613,7 @@ func TestConfigurePodSecondaryNetwork(t *testing.T) {
 			name:        "SRIOV network",
 			networkType: sriovNetworkType,
 			mtu:         1500,
-			expectedCalls: func(mockIPAM *podwatchtesting.MockIPAMAllocator, mockIC *podwatchtesting.MockInterfaceConfigurator) {
+			expectedCalls: func(mockOVS *ovsconfigtest.MockOVSBridgeClient, mockIPAM *podwatchtesting.MockIPAMAllocator, mockIC *podwatchtesting.MockInterfaceConfigurator) {
 				mockIPAM.EXPECT().SecondaryNetworkAllocate(podOwner, gomock.Any()).Return(testIPAMResultWithSRIOV("148.14.24.100/24", 0, &current.Interface{PciID: "sriov-device-id-11"}), nil)
 				mockIC.EXPECT().ConfigureSriovSecondaryInterface(
 					podName,
@@ -664,7 +682,7 @@ func TestConfigurePodSecondaryNetwork(t *testing.T) {
 			name:        "IPAM failure",
 			networkType: sriovNetworkType,
 			mtu:         1500,
-			expectedCalls: func(mockIPAM *podwatchtesting.MockIPAMAllocator, mockIC *podwatchtesting.MockInterfaceConfigurator) {
+			expectedCalls: func(mockOVS *ovsconfigtest.MockOVSBridgeClient, mockIPAM *podwatchtesting.MockIPAMAllocator, mockIC *podwatchtesting.MockInterfaceConfigurator) {
 				mockIPAM.EXPECT().SecondaryNetworkAllocate(podOwner, gomock.Any()).Return(testIPAMResult("148.14.24.100/24", 0), errors.New("failure"))
 			},
 			expectedErr: "secondary network IPAM failed",
@@ -674,7 +692,7 @@ func TestConfigurePodSecondaryNetwork(t *testing.T) {
 			networkType: vlanNetworkType,
 			mtu:         1600,
 			vlan:        101,
-			expectedCalls: func(mockIPAM *podwatchtesting.MockIPAMAllocator, mockIC *podwatchtesting.MockInterfaceConfigurator) {
+			expectedCalls: func(mockOVS *ovsconfigtest.MockOVSBridgeClient, mockIPAM *podwatchtesting.MockIPAMAllocator, mockIC *podwatchtesting.MockInterfaceConfigurator) {
 				mockIPAM.EXPECT().SecondaryNetworkAllocate(podOwner, gomock.Any()).Return(testIPAMResult("148.14.24.100/24", 0), nil)
 				mockIC.EXPECT().ConfigureVLANSecondaryInterface(
 					podName,
@@ -694,7 +712,7 @@ func TestConfigurePodSecondaryNetwork(t *testing.T) {
 			name:        "interface failure with no IPAM",
 			networkType: vlanNetworkType,
 			noIPAM:      true,
-			expectedCalls: func(mockIPAM *podwatchtesting.MockIPAMAllocator, mockIC *podwatchtesting.MockInterfaceConfigurator) {
+			expectedCalls: func(mockOVS *ovsconfigtest.MockOVSBridgeClient, mockIPAM *podwatchtesting.MockIPAMAllocator, mockIC *podwatchtesting.MockInterfaceConfigurator) {
 				mockIC.EXPECT().ConfigureVLANSecondaryInterface(
 					podName,
 					testNamespace,
@@ -712,7 +730,7 @@ func TestConfigurePodSecondaryNetwork(t *testing.T) {
 			name:        "static MAC address configured",
 			element:     element2,
 			networkType: vlanNetworkType,
-			expectedCalls: func(mockIPAM *podwatchtesting.MockIPAMAllocator, mockIC *podwatchtesting.MockInterfaceConfigurator) {
+			expectedCalls: func(mockOVS *ovsconfigtest.MockOVSBridgeClient, mockIPAM *podwatchtesting.MockIPAMAllocator, mockIC *podwatchtesting.MockInterfaceConfigurator) {
 				expectedMAC, _ := net.ParseMAC("02:42:ac:11:00:02")
 				mockIPAM.EXPECT().SecondaryNetworkAllocate(podOwner, gomock.Any()).Return(testIPAMResult("148.14.24.100/24", 0), nil)
 				mockIC.EXPECT().ConfigureVLANSecondaryInterface(
@@ -736,10 +754,53 @@ func TestConfigurePodSecondaryNetwork(t *testing.T) {
 			name:        "invalid MAC address fails",
 			element:     element3,
 			networkType: vlanNetworkType,
-			expectedCalls: func(mockIPAM *podwatchtesting.MockIPAMAllocator, mockIC *podwatchtesting.MockInterfaceConfigurator) {
+			expectedCalls: func(mockOVS *ovsconfigtest.MockOVSBridgeClient, mockIPAM *podwatchtesting.MockIPAMAllocator, mockIC *podwatchtesting.MockInterfaceConfigurator) {
 				// Expect no call to interface configurator
 			},
 			expectedErr: "",
+		},
+		{
+			name:        "VLAN network with master - port already exists",
+			networkType: vlanNetworkType,
+			mtu:         1500,
+			vlan:        200,
+			master:      "eth1",
+			expectedCalls: func(mockOVS *ovsconfigtest.MockOVSBridgeClient, mockIPAM *podwatchtesting.MockIPAMAllocator, mockIC *podwatchtesting.MockInterfaceConfigurator) {
+				// OVS operations for master field
+				mockOVS.EXPECT().GetOFPort("eth1", false).Return(int32(32768), nil)
+				mockOVS.EXPECT().AddTrunksToPort("eth1", int32(200)).Return(nil)
+				// IPAM and interface configuration
+				mockIPAM.EXPECT().SecondaryNetworkAllocate(podOwner, gomock.Any()).Return(testIPAMResult("148.14.24.101/24", 0), nil)
+				mockIC.EXPECT().ConfigureVLANSecondaryInterface(
+					podName,
+					testNamespace,
+					containerID,
+					containerNetNS(containerID),
+					interfaceName,
+					1500,
+					testIPAMResult("148.14.24.101/24", 200),
+					nil,
+				)
+			},
+			expectedNetworkStatusAnnot: []netdefv1.NetworkStatus{{
+				Name: "net",
+				IPs:  []string{"148.14.24.101"},
+				DNS:  netdefv1.DNS{},
+			}, primaryNetworkStatus},
+		},
+		{
+			name:        "VLAN network with master - AddTrunksToPort fails",
+			networkType: vlanNetworkType,
+			mtu:         1500,
+			vlan:        100,
+			master:      "eth1",
+			expectedCalls: func(mockOVS *ovsconfigtest.MockOVSBridgeClient, mockIPAM *podwatchtesting.MockIPAMAllocator, mockIC *podwatchtesting.MockInterfaceConfigurator) {
+				// OVS operations - AddTrunksToPort fails
+				mockOVS.EXPECT().GetOFPort("eth1", false).Return(int32(32768), nil)
+				mockOVS.EXPECT().AddTrunksToPort("eth1", int32(100)).Return(ovsconfig.InvalidArgumentsError("failed to add trunk"))
+				// When AddTrunksToPort fails, no interface configuration happens
+			},
+			expectedNetworkStatusAnnot: []netdefv1.NetworkStatus{primaryNetworkStatus},
 		},
 	}
 
@@ -757,14 +818,21 @@ func TestConfigurePodSecondaryNetwork(t *testing.T) {
 
 			pc.primaryInterfaceStore.AddInterface(primaryInterface)
 
+			// Setup OVS mock - always create it for tests that need it (master field tests)
+			mockOVSBridgeClient := ovsconfigtest.NewMockOVSBridgeClient(ctrl)
+			if tc.master != "" {
+				// Only set the OVS bridge client if master field is used
+				pc.ovsBridgeClient = mockOVSBridgeClient
+			}
+
 			if !tc.doNotCreateNetwork {
 				network1 := testNetworkExt(networkName, tc.cniVersion, tc.cniType,
-					tc.networkType, "", tc.ipamType, tc.mtu, tc.vlan, tc.noIPAM)
+					tc.networkType, "", tc.ipamType, tc.mtu, tc.vlan, tc.master, tc.noIPAM)
 				pc.netAttachDefClient.NetworkAttachmentDefinitions(testNamespace).Create(context.Background(),
 					network1, metav1.CreateOptions{})
 			}
 			if tc.expectedCalls != nil {
-				tc.expectedCalls(mockIPAM, interfaceConfigurator)
+				tc.expectedCalls(mockOVSBridgeClient, mockIPAM, interfaceConfigurator)
 			}
 			netStatus, err := pc.configurePodSecondaryNetwork(pod, []*netdefv1.NetworkSelectionElement{element}, cniInfo)
 			if tc.expectedErr == "" {
@@ -816,9 +884,9 @@ func TestConfigurePodSecondaryNetworkMultipleSriovDevices(t *testing.T) {
 	_, err := pc.kubeClient.CoreV1().Pods(pod.Namespace).Create(context.TODO(), pod, metav1.CreateOptions{})
 	require.NoError(t, err)
 
-	network1 := testNetworkExt("net1", "", "", sriovNetworkType, sriovResourceName1, "", 1500, 0, true /* noIPAM */)
+	network1 := testNetworkExt("net1", "", "", sriovNetworkType, sriovResourceName1, "", 1500, 0, "", true /* noIPAM */)
 	pc.netAttachDefClient.NetworkAttachmentDefinitions(testNamespace).Create(ctx, network1, metav1.CreateOptions{})
-	network2 := testNetworkExt("net2", "", "", sriovNetworkType, sriovResourceName2, "", 1500, 0, true /* noIPAM */)
+	network2 := testNetworkExt("net2", "", "", sriovNetworkType, sriovResourceName2, "", 1500, 0, "", true /* noIPAM */)
 	pc.netAttachDefClient.NetworkAttachmentDefinitions(testNamespace).Create(ctx, network2, metav1.CreateOptions{})
 
 	gomock.InOrder(
@@ -923,7 +991,7 @@ func TestPodControllerAddPod(t *testing.T) {
 		)
 		network1 := testNetwork("net1", sriovNetworkType)
 		testVLAN := 100
-		network2 := testNetworkExt("net2", "", "", vlanNetworkType, "", "", defaultMTU, testVLAN, false)
+		network2 := testNetworkExt("net2", "", "", vlanNetworkType, "", "", defaultMTU, testVLAN, "", false)
 		netNS := containerNetNS(containerID)
 
 		podOwner1 := &crdv1beta1.PodOwner{Name: podName, Namespace: testNamespace,
@@ -1168,7 +1236,7 @@ func TestPodControllerAddPod(t *testing.T) {
 		createPodFn(podController, pod)
 		podController.primaryInterfaceStore.AddInterface(primaryInterface)
 		podController.cniCache.Store(podKey, cniConfig)
-		// We don't expect an error here, no requeueing.
+		// We don't expect an error here, no requeuing.
 		assert.NoError(t, podController.syncPod(podKey))
 	})
 
@@ -1187,7 +1255,7 @@ func TestPodControllerAddPod(t *testing.T) {
 		createPodFn(podController, pod)
 		podController.primaryInterfaceStore.AddInterface(primaryInterface)
 		podController.cniCache.Store(podKey, cniConfig)
-		// We don't expect an error here, no requeueing.
+		// We don't expect an error here, no requeuing.
 		assert.NoError(t, podController.syncPod(podKey))
 	})
 
@@ -1447,7 +1515,7 @@ func TestInitializeSRIOVSecondaryInterfaceStore(t *testing.T) {
 	// A Pod without a corresponding NetworkAttachmentDefinition should not be added to the store.
 	pod3, _ := testPod("Pod3", containerID, podIP)
 
-	client := fake.NewSimpleClientset(pod1, pod2, pod3)
+	client := fake.NewClientset(pod1, pod2, pod3)
 	netdefclient := netdefclientfake.NewSimpleClientset().K8sCniCncfIoV1()
 	informerFactory := informers.NewSharedInformerFactory(client, resyncPeriod)
 
@@ -1471,7 +1539,7 @@ func TestInitializeSRIOVSecondaryInterfaceStore(t *testing.T) {
 	primaryStore.AddInterface(containerConfigs[1])
 	primaryStore.AddInterface(containerConfigs[2])
 
-	network1 := testNetworkExt(networkName, "", "", sriovNetworkType, sriovResourceName1, "", 1500, 0, true)
+	network1 := testNetworkExt(networkName, "", "", sriovNetworkType, sriovResourceName1, "", 1500, 0, "", true)
 	_, err := pc.netAttachDefClient.NetworkAttachmentDefinitions(testNamespace).Create(context.Background(),
 		network1, metav1.CreateOptions{})
 	assert.NoError(t, err, "error when creating test NetworkAttachmentDefinition")
@@ -1481,4 +1549,151 @@ func TestInitializeSRIOVSecondaryInterfaceStore(t *testing.T) {
 	require.Equal(t, 1, pc.interfaceStore.Len())
 	_, ok := pc.vfDeviceIDUsageMap.Load(podKeyGet(pod1.Name, pod1.Namespace))
 	require.Equal(t, true, ok)
+}
+
+func TestValidateNetworkConfig(t *testing.T) {
+	tests := []struct {
+		name        string
+		cniConfig   string
+		expectError bool
+		errorMsg    string
+	}{
+		{
+			name: "valid VLAN network config without master",
+			cniConfig: `{
+				"cniVersion": "0.3.0",
+				"type": "antrea",
+				"networkType": "vlan",
+				"vlan": 100,
+				"mtu": 1500
+			}`,
+			expectError: false,
+		},
+		{
+			name: "valid VLAN network config with master",
+			cniConfig: `{
+				"cniVersion": "0.3.0",
+				"type": "antrea",
+				"networkType": "vlan",
+				"vlan": 100,
+				"master": "eth0",
+				"mtu": 1500
+			}`,
+			expectError: false,
+		},
+		{
+			name: "invalid VLAN network config - master without VLAN",
+			cniConfig: `{
+				"cniVersion": "0.3.0",
+				"type": "antrea",
+				"networkType": "vlan",
+				"vlan": 0,
+				"master": "eth0",
+				"mtu": 1500
+			}`,
+			expectError: true,
+			errorMsg:    "VLAN ID must be specified when master interface is set",
+		},
+		{
+			name: "invalid VLAN network config - VLAN ID too high",
+			cniConfig: `{
+				"cniVersion": "0.3.0",
+				"type": "antrea",
+				"networkType": "vlan",
+				"vlan": 5000,
+				"mtu": 1500
+			}`,
+			expectError: true,
+			errorMsg:    "invalid VLAN ID",
+		},
+		{
+			name: "invalid VLAN network config - negative VLAN ID",
+			cniConfig: `{
+				"cniVersion": "0.3.0",
+				"type": "antrea",
+				"networkType": "vlan",
+				"vlan": -1,
+				"mtu": 1500
+			}`,
+			expectError: true,
+			errorMsg:    "invalid VLAN ID",
+		},
+		{
+			name: "valid SR-IOV network config",
+			cniConfig: `{
+				"cniVersion": "0.3.0",
+				"type": "antrea",
+				"networkType": "sriov",
+				"mtu": 1500
+			}`,
+			expectError: false,
+		},
+		{
+			name: "invalid network type",
+			cniConfig: `{
+				"cniVersion": "0.3.0",
+				"type": "antrea",
+				"networkType": "unsupported",
+				"mtu": 1500
+			}`,
+			expectError: true,
+			errorMsg:    "secondary network type 'unsupported' not supported",
+		},
+		{
+			name: "invalid CNI type",
+			cniConfig: `{
+				"cniVersion": "0.3.0",
+				"type": "bridge",
+				"networkType": "vlan",
+				"vlan": 100,
+				"mtu": 1500
+			}`,
+			expectError: true,
+			errorMsg:    "not Antrea CNI type",
+		},
+		{
+			name: "invalid MTU",
+			cniConfig: `{
+				"cniVersion": "0.3.0",
+				"type": "antrea",
+				"networkType": "vlan",
+				"vlan": 100,
+				"mtu": -1
+			}`,
+			expectError: true,
+			errorMsg:    "invalid MTU",
+		},
+		{
+			name: "unsupported IPAM type",
+			cniConfig: `{
+				"cniVersion": "0.3.0",
+				"type": "antrea",
+				"networkType": "vlan",
+				"vlan": 100,
+				"mtu": 1500,
+				"ipam": {
+					"type": "host-local"
+				}
+			}`,
+			expectError: true,
+			errorMsg:    "unsupported IPAM type",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			config, err := validateNetworkConfig([]byte(tc.cniConfig))
+			if tc.expectError {
+				assert.Error(t, err)
+				if tc.errorMsg != "" {
+					assert.Contains(t, err.Error(), tc.errorMsg)
+				}
+				// Config may still be returned even with an error
+				assert.NotNil(t, config)
+			} else {
+				assert.NoError(t, err)
+				assert.NotNil(t, config)
+			}
+		})
+	}
 }

@@ -78,7 +78,8 @@ func NewController(
 	return &Controller{
 		ovsBridgeClient: ovsBridgeClient,
 		secNetConfig:    secNetConfig,
-		podController:   podWatchController}, nil
+		podController:   podWatchController,
+	}, nil
 }
 
 // Run starts the Pod controller for secondary networks.
