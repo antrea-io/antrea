@@ -306,22 +306,11 @@ func (data *MCTestData) probeFromPodInCluster(
 		corev1.ProtocolSCTP: "sctp",
 	}
 	cmd := antreae2e.ProbeCommand(fmt.Sprintf("%s:%d", dstAddr, port), protocolStr[protocol], "")
-	log.Tracef("Running: kubectl exec %s -c %s -n %s -- %s", podName, containerName, podNamespace, strings.Join(cmd, " "))
-	stdout, stderr, err := data.runCommandFromPod(cluster, podNamespace, podName, containerName, cmd)
-	// It needs to check both err and stderr because:
-	// 1. The probe tried 3 times. If it checks err only, failure+failure+success would be considered connected.
-	// 2. There might be an issue in Pod exec API that it sometimes doesn't return error when the probe fails. See #2394.
-	if err != nil || stderr != "" {
-		// log this error as trace since may be an expected failure
-		log.Tracef("%s -> %s: error when running command: err - %v /// stdout - %s /// stderr - %s", podName, dstName, err, stdout, stderr)
-		// If err != nil and stderr == "", then it means this probe failed because of
-		// the command instead of connectivity. For example, container name doesn't exist.
-		if stderr == "" {
-			return antreae2e.Error
-		}
-		return antreae2e.DecideProbeResult(stderr, 3)
+	d, ok := data.clusterTestDataMap[cluster]
+	if !ok {
+		return antreae2e.Error
 	}
-	return antreae2e.Connected
+	return d.RunProbeCommand(podNamespace, podName, containerName, podName, dstName, cmd, nil)
 }
 
 // Run the provided command in the specified Container for the given Pod and returns the contents of

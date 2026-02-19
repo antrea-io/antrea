@@ -4639,23 +4639,13 @@ func testACNPNodePortServiceSupport(t *testing.T, data *TestData, serverNamespac
 	failOnError(err, t)
 	failOnError(waitForResourceReady(t, timeout, acnp), t)
 	for idx, clientName := range clientNames {
-		log.Tracef("Probing: 1.1.1.1 -> %s:%d", nodeIP(idx), nodePort)
+		dst := fmt.Sprintf("%s:%d", nodeIP(idx), nodePort)
+		log.Tracef("Probing: 1.1.1.1 -> %s", dst)
 		// Connect to NodePort in the fake external network.
-		cmd := ProbeCommand(fmt.Sprintf("%s:%d", nodeIP(idx), nodePort), "tcp", fmt.Sprintf("ip netns exec %s", testNetns))
-		stdout, stderr, err := data.RunCommandFromPod(data.testNamespace, clientName, agnhostContainerName, cmd)
-		connectivity := Connected
-		if err != nil || stderr != "" {
-			// log this error as trace since may be an expected failure
-			log.Tracef("1.1.1.1 -> %s:%d: error when running command: err - %v /// stdout - %s /// stderr - %s", nodeIP(idx), nodePort, err, stdout, stderr)
-			// If err != nil and stderr == "", then it means this probe failed because of
-			// the command instead of connectivity. For example, container name doesn't exist.
-			if stderr == "" {
-				connectivity = Error
-			}
-			connectivity = DecideProbeResult(stderr, 3)
-		}
+		cmd := ProbeCommand(dst, "tcp", fmt.Sprintf("ip netns exec %s", testNetns))
+		connectivity := data.RunProbeCommand(data.testNamespace, clientName, agnhostContainerName, "1.1.1.1", dst, cmd, ptr.To[PodConnectivityMark](Rejected))
 		if connectivity != Rejected {
-			t.Errorf("Failure -- wrong results for probe: Source 1.1.1.1 --> Dest %s:%d connectivity: %v, expected: Rej", nodeIP(idx), nodePort, connectivity)
+			t.Errorf("Failure -- wrong results for probe: Source 1.1.1.1 --> Dest %s connectivity: %v, expected: Rej", dst, connectivity)
 		}
 	}
 	failOnError(k8sUtils.DeleteACNP(builder.Name), t)

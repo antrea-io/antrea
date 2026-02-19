@@ -114,17 +114,8 @@ func testClusterIPCases(t *testing.T, data *TestData, url string, clients, hostN
 
 func testClusterIPFromPod(t *testing.T, data *TestData, url, nodeName, podName string, hostNetwork bool, namespace string, expectedConnectivity PodConnectivityMark) {
 	cmd := ProbeCommand(url, "tcp", "")
-	stdout, stderr, err := data.RunCommandFromPod(namespace, podName, agnhostContainerName, cmd)
-	connectivity := Connected
-	if err != nil || stderr != "" {
-		// If err != nil and stderr == "", then it means this probe failed because of the command instead of connectivity.
-		// For example, container name doesn't exist.
-		if stderr == "" {
-			connectivity = Error
-		}
-		connectivity = DecideProbeResult(stderr, 3)
-	}
-	require.Equal(t, expectedConnectivity, connectivity, "Accessing ClusterIP from Pod got unexpected result", "Pod", podName, "hostNetwork", hostNetwork, "Node", nodeName, "url", url, "stdout", stdout, "stderr", stderr, "err", err)
+	connectivity := data.RunProbeCommand(namespace, podName, agnhostContainerName, "", url, cmd, &expectedConnectivity)
+	require.Equal(t, expectedConnectivity, connectivity, "Accessing ClusterIP from Pod got unexpected result")
 }
 
 // TestNodePortWindows tests NodePort Service on Windows Node. It is a temporary test to replace upstream Kubernetes one:
