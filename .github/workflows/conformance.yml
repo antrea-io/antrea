@@ -64,6 +64,8 @@ jobs:
           ref: ${{ inputs.antrea-version }}
           fetch-depth: 0
           show-progress: false
+      # Docker 29+ defaults to the containerd image store, which breaks kind load docker-image.
+      - uses: ./.github/actions/setup-docker-classic
       - name: Check if it is a released version
         id: check-release
         run: |
