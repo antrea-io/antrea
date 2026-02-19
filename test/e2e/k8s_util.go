@@ -18,6 +18,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/netip"
 	"strconv"
 	"strings"
 	"sync"
@@ -158,11 +159,7 @@ func (k *KubernetesUtils) getTCPv4SourcePortRangeFromPod(podNamespace, podNameLa
 	if err != nil {
 		return 0, 0, err
 	}
-	cmd := []string{
-		"/bin/sh",
-		"-c",
-		"cat /proc/sys/net/ipv4/ip_local_port_range",
-	}
+	cmd := []string{"cat", "/proc/sys/net/ipv4/ip_local_port_range"}
 	stdout, stderr, err := k.RunCommandFromPod(pod.Namespace, pod.Name, "c80", cmd)
 	if err != nil || stderr != "" {
 		log.Errorf("Failed to retrieve TCP source port range for Pod %s/%s", podNamespace, podNameLabel)
@@ -181,22 +178,62 @@ func (k *KubernetesUtils) getTCPv4SourcePortRangeFromPod(podNamespace, podNameLa
 // ProbeCommand generates a command to probe the provider url.
 // The executor parameter can be used to change where the prober will run. For example, it could be "ip netns exec NAME"
 // to run the prober in another namespace.
-// We try to connect 3 times. This dates back to when we were using the OVS netdev datapath for Kind clusters, as the
-// first packet sent on a tunnel was always dropped (https://github.com/antrea-io/antrea/issues/467). We may be able to
-// revisit this now that we use the OVS kernel datapath for Kind.
-// "agnhost connect" outputs nothing when it succeeds. We output "CONNECTED" in such case and prepend a sequence
-// number for each attempt, to make the result more informative. Example output:
-// 1: CONNECTED
-// 2: TIMEOUT
-// 3: TIMEOUT
 func ProbeCommand(url, protocol, executor string) []string {
-	cmd := []string{
-		"/bin/sh",
-		"-c",
-		fmt.Sprintf(`for i in $(seq 1 %d); do echo -n "${i}: " >&2 && %s /agnhost connect %s --timeout=1s --protocol=%s && echo "CONNECTED" >&2; done; echo "FINISHED" >&2`,
-			standardProbeCount, executor, url, protocol),
+	cmd := []string{}
+	if executor != "" {
+		cmd = append(cmd, strings.Fields(executor)...)
 	}
+	cmd = append(cmd, "/agnhost", "connect", url, "--timeout=1s", "--protocol="+protocol)
 	return cmd
+}
+
+func (data *TestData) RunProbeCommand(
+	podNamespace, podName, containerName string,
+	srcName string,
+	dstName string,
+	cmd []string,
+	expectedResult *PodConnectivityMark,
+) PodConnectivityMark {
+	log.Tracef("Running: kubectl exec %s -c %s -n %s -- %s", podName, containerName, podNamespace, strings.Join(cmd, " "))
+	if srcName == "" {
+		srcName = podNamespace + "/" + podName
+	}
+	var actualResult PodConnectivityMark
+	for range standardProbeCount {
+		stdout, stderr, err := data.RunCommandFromPod(podNamespace, podName, containerName, cmd)
+		// When determining probe outcome, we prioritize stderr over the error returned by RunCommandFromPod.
+		// There might be an issue in Pod exec API where it sometimes doesn't return error when the probe fails. See #2394.
+		stderr = strings.TrimSpace(stderr)
+		switch {
+		case strings.Contains(stderr, "TIMEOUT"):
+			actualResult = Dropped
+		case strings.Contains(stderr, "REFUSED") || strings.Contains(stderr, "no route to host") || strings.Contains(stderr, "permission denied"):
+			// For our UDP rejection cases, agnhost will return:
+			//   For IPv4: 'UNKNOWN: read udp [src]->[dst]: read: no route to host'
+			//   For IPv6: 'UNKNOWN: read udp [src]->[dst]: read: permission denied'
+			// To avoid incorrect identification, we use 'no route to host' and
+			// `permission denied`, instead of 'UNKNOWN' as key string.
+			// For our other protocols rejection cases, agnhost will return 'REFUSED'.
+			actualResult = Rejected
+		case strings.Contains(stderr, "OTHER: operation already in progress"):
+			actualResult = Dropped
+		case err != nil:
+			actualResult = Error
+		case stderr != "":
+			// unhandled case
+			actualResult = Error
+		default: // success
+			actualResult = Connected
+		}
+		if expectedResult == nil {
+			return actualResult
+		}
+		if actualResult == *expectedResult {
+			return actualResult
+		}
+		log.Infof("%s -> %s: expected %s but got %s: err - %v /// stdout - %s /// stderr - %s", srcName, dstName, *expectedResult, actualResult, err, stdout, stderr)
+	}
+	return actualResult
 }
 
 func (k *KubernetesUtils) probe(
@@ -215,52 +252,7 @@ func (k *KubernetesUtils) probe(
 		utils.ProtocolSCTP: "sctp",
 	}
 	cmd := ProbeCommand(fmt.Sprintf("%s:%d", dstAddr, port), protocolStr[protocol], "")
-	log.Tracef("Running: kubectl exec %s -c %s -n %s -- %s", pod.Name, containerName, pod.Namespace, strings.Join(cmd, " "))
-	stdout, stderr, err := k.RunCommandFromPod(pod.Namespace, pod.Name, containerName, cmd)
-	// It needs to check both err and stderr because:
-	// 1. The probe tried 3 times. If it checks err only, failure+failure+success would be considered connected.
-	// 2. There might be an issue in Pod exec API that it sometimes doesn't return error when the probe fails. See #2394.
-	var actualResult PodConnectivityMark
-	if err != nil || stderr != "" {
-		// If err != nil and stderr == "", then it means this probe failed because of
-		// the command instead of connectivity. For example, container name doesn't exist.
-		if stderr == "" {
-			actualResult = Error
-		}
-		actualResult = DecideProbeResult(stderr, standardProbeCount)
-	} else {
-		actualResult = Connected
-	}
-	if expectedResult != nil && *expectedResult != actualResult {
-		log.Infof("%s -> %s: expected %s but got %s: err - %v /// stdout - %s /// stderr - %s", podName, dstName, *expectedResult, actualResult, err, stdout, stderr)
-	}
-	return actualResult
-}
-
-// DecideProbeResult uses the probe stderr to decide the connectivity.
-func DecideProbeResult(stderr string, probeNum int) PodConnectivityMark {
-	countConnected := strings.Count(stderr, "CONNECTED")
-	countDropped := strings.Count(stderr, "TIMEOUT")
-	// For our UDP rejection cases, agnhost will return:
-	//   For IPv4: 'UNKNOWN: read udp [src]->[dst]: read: no route to host'
-	//   For IPv6: 'UNKNOWN: read udp [src]->[dst]: read: permission denied'
-	// To avoid incorrect identification, we use 'no route to host' and
-	// `permission denied`, instead of 'UNKNOWN' as key string.
-	// For our other protocols rejection cases, agnhost will return 'REFUSED'.
-	countRejected := strings.Count(stderr, "REFUSED") + strings.Count(stderr, "no route to host") + strings.Count(stderr, "permission denied")
-
-	countSCTPInProgress := strings.Count(stderr, "OTHER: operation already in progress")
-
-	if countRejected == 0 && countConnected > 0 {
-		return Connected
-	}
-	if countConnected == 0 && countRejected > 0 {
-		return Rejected
-	}
-	if countDropped+countSCTPInProgress >= probeNum-1 {
-		return Dropped
-	}
-	return Error
+	return k.RunProbeCommand(pod.Namespace, pod.Name, containerName, podName, dstName, cmd, expectedResult)
 }
 
 func (k *KubernetesUtils) pingProbe(
@@ -270,15 +262,15 @@ func (k *KubernetesUtils) pingProbe(
 	dstAddr string,
 	dstName string,
 ) PodConnectivityMark {
-	pingCmd := fmt.Sprintf("ping -4 -c 3 -W 1 %s", dstAddr)
+	const (
+		pingCount          = 3
+		pingTimeoutSeconds = 1
+	)
+	pingIPVersion := "-4"
 	if strings.Contains(dstAddr, ":") {
-		pingCmd = fmt.Sprintf("ping -6 -c 3 -W 1 %s", dstAddr)
+		pingIPVersion = "-6"
 	}
-	cmd := []string{
-		"/bin/sh",
-		"-c",
-		pingCmd,
-	}
+	cmd := []string{"ping", pingIPVersion, "-c", fmt.Sprint(pingCount), "-W", fmt.Sprint(pingTimeoutSeconds), dstAddr}
 	log.Tracef("Running: kubectl exec %s -c %s -n %s -- %s", pod.Name, containerName, pod.Namespace, strings.Join(cmd, " "))
 	stdout, stderr, err := k.RunCommandFromPod(pod.Namespace, pod.Name, containerName, cmd)
 	log.Tracef("%s -> %s: error when running command: err - %v /// stdout - %s /// stderr - %s", podName, dstName, err, stdout, stderr)
@@ -348,14 +340,9 @@ func (k *KubernetesUtils) digDNS(
 	if err != nil {
 		return "", fmt.Errorf("Pod %s/%s dones't exist", podNamespace, podName)
 	}
-	digCmd := fmt.Sprintf("dig %s", dstAddr)
+	cmd := []string{"dig", dstAddr}
 	if useTCP {
-		digCmd += " +tcp"
-	}
-	cmd := []string{
-		"/bin/sh",
-		"-c",
-		digCmd,
+		cmd = append(cmd, "+tcp")
 	}
 	log.Tracef("Running: kubectl exec %s -c %s -n %s -- %s", pod.Name, pod.Spec.Containers[0].Name, pod.Namespace, strings.Join(cmd, " "))
 	stdout, stderr, err := k.RunCommandFromPod(pod.Namespace, pod.Name, pod.Spec.Containers[0].Name, cmd)
@@ -390,11 +377,12 @@ func (k *KubernetesUtils) digDNS(
 		return "", fmt.Errorf("failed to parse dig response")
 	}
 	ipLine := splitResp[1]
-	lastTab := strings.LastIndex(ipLine, "\t")
-	if lastTab == -1 {
+	fields := strings.Fields(ipLine)
+	lastField := fields[len(fields)-1]
+	if _, err := netip.ParseAddr(lastField); err != nil {
 		return "", fmt.Errorf("failed to parse dig response")
 	}
-	return ipLine[lastTab:], nil
+	return lastField, nil
 }
 
 // Probe execs into a Pod and checks its connectivity to another Pod. It assumes
