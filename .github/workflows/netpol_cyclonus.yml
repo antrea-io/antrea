@@ -17,6 +17,8 @@ jobs:
           sudo apt-get clean
           df -h
       - uses: actions/checkout@v6
+      # Docker 29+ defaults to the containerd image store, which breaks kind load docker-image.
+      - uses: ./.github/actions/setup-docker-classic
       - run: make
       - name: Install Kind
         run: |

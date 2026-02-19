@@ -40,6 +40,8 @@ jobs:
     - uses: actions/checkout@v6
       with:
         show-progress: false
+    # Docker 29+ defaults to the containerd image store, which breaks kind load docker-image.
+    - uses: ./.github/actions/setup-docker-classic
     - name: Set up Docker Buildx
       uses: docker/setup-buildx-action@v3
       with:
