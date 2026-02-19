@@ -47,6 +47,7 @@ func ResolveKubeconfig(path string) (*rest.Config, error) {
 			path = clientcmd.RecommendedHomeFile
 		}
 	}
+	// #nosec G703: Path provided by local user and consumed by CLI; no privilege boundary crossed.
 	if _, err := os.Stat(path); err != nil {
 		if !os.IsNotExist(err) {
 			return nil, err

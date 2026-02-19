@@ -75,7 +75,7 @@ func TestRESTList(t *testing.T) {
 						URL: "https://1.1.1.1/bundles/upload",
 					},
 					Authentication: controlplane.BundleServerAuthConfiguration{
-						BearerToken: "acretdfee53d==",
+						BearerToken: "acretdfee53d==", // #nosec G101: not actual credentials
 					},
 					ExpiredAt: expireAt,
 				},
@@ -105,7 +105,7 @@ func TestRESTList(t *testing.T) {
 							URL: "https://1.1.1.1/bundles/upload",
 						},
 						Authentication: controlplane.BundleServerAuthConfiguration{
-							BearerToken: "acretdfee53d==",
+							BearerToken: "acretdfee53d==", // #nosec G101: not actual credentials
 						},
 					},
 				},
@@ -142,7 +142,7 @@ func TestWatch(t *testing.T) {
 			URL: "https://1.1.1.1/bundles/upload",
 		},
 		Authentication: controlplane.BundleServerAuthConfiguration{
-			APIKey: "123456789",
+			APIKey: "123456789", // #nosec G101: not actual credentials
 		},
 	}
 

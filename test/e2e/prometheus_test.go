@@ -146,6 +146,7 @@ func getMetricsFromAPIServer(t *testing.T, url string, token string) string {
 	var body []byte
 	err = wait.PollUntilContextTimeout(context.Background(), defaultInterval, defaultTimeout, true, func(ctx context.Context) (bool, error) {
 		// Query metrics via HTTPS from Pod
+		// #nosec G704: test code; URL is the metrics endpoint for an Antrea component.
 		resp, err := client.Do(req)
 		if err != nil {
 			t.Fatalf("Error fetching metrics from %s: %v", url, err)
