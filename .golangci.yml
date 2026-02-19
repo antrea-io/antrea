@@ -65,6 +65,13 @@ linters:
         # generated for Antrea CRDs.
         # SA1019
         text: "NewSimpleClientset is deprecated"
+      - linters:
+          - gosec
+        # G117 warns about potential serialization of secrets as exported struct fields.
+        # We are currently getting some false positives because of https://github.com/securego/gosec/issues/1527.
+        # We can eventually enable this rule, but we have several locations
+        # where we intentionally serialize secrets, e.g., in pkg/apis/controlplane.
+        text: "G117:"
 formatters:
   enable:
     - gofmt
