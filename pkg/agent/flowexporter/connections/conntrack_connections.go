@@ -75,7 +75,7 @@ func NewConntrackConnectionStore(
 		connectionStore:       NewConnectionStore(npQuerier, podStore, proxier, o),
 		connectUplinkToBridge: o.ConnectUplinkToBridge,
 		networkPolicyWait:     networkPolicyWait,
-		zoneZeroStore:         newZoneZeroStore(),
+		zoneZeroStore:         newFromExternalCorrelator(),
 	}
 }
 
