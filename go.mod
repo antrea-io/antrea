@@ -53,7 +53,7 @@ require (
 	github.com/stretchr/testify v1.11.1
 	github.com/ti-mo/conntrack v0.6.0
 	github.com/vishvananda/netlink v1.3.1
-	github.com/vmware/go-ipfix v0.16.0
+	github.com/vmware/go-ipfix v0.2.1-0.20260107215310-d9256ccb0ed9
 	go.uber.org/mock v0.6.0
 	golang.org/x/crypto v0.47.0
 	golang.org/x/mod v0.32.0
