@@ -25,7 +25,7 @@ import (
 	"antrea.io/antrea/pkg/agent/openflow"
 )
 
-func TestZoneZeroStore(t *testing.T) {
+func TestFromExternalCorrelator(t *testing.T) {
 	t.Run("add", func(t *testing.T) {
 		t.Run("Adding a zone zero record", func(t *testing.T) {
 			store := newFromExternalCorrelator()

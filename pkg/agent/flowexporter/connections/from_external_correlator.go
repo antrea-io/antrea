@@ -23,14 +23,14 @@ import (
 	"antrea.io/antrea/pkg/agent/flowexporter/connection"
 )
 
-// ttl threshold for expiring connections in the zoneZeroStore.
+// ttl threshold for expiring connections in the fromExternalCorrelator.
 var ttl = time.Minute
 
 // cleanUpInterval is the frequency in which we run the cleanup for expiring stale connections.
 var cleanUpInterval = time.Second * 5
 
 // FromExternalCorrelator handles correlating FromExternal connections
-type zoneZeroStore struct {
+type fromExternalCorrelator struct {
 	connections map[string]zoneZeroItem
 	stopCh      <-chan struct{}
 	lock        sync.RWMutex
@@ -44,9 +44,9 @@ type zoneZeroItem struct {
 
 // newFromExternalCorrelator returns an instance of the FromExternalCorrelator with it's internal map intialized and
 // a go routine initiated to remove stale connections based on `ttl` at `cleanUpInterval`.
-func newFromExternalCorrelator() *zoneZeroStore {
+func newFromExternalCorrelator() *fromExternalCorrelator {
 	stopCh := make(chan struct{})
-	store := zoneZeroStore{
+	store := fromExternalCorrelator{
 		connections: map[string]zoneZeroItem{},
 		stopCh:      stopCh,
 	}
@@ -55,7 +55,7 @@ func newFromExternalCorrelator() *zoneZeroStore {
 }
 
 // cleanUpLoop runs in an infinite loop and cleans up the store at the given interval.
-func (c *zoneZeroStore) cleanUpLoop(stopCh <-chan struct{}, interval, ttl time.Duration) {
+func (c *fromExternalCorrelator) cleanUpLoop(stopCh <-chan struct{}, interval, ttl time.Duration) {
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
 
@@ -70,7 +70,7 @@ func (c *zoneZeroStore) cleanUpLoop(stopCh <-chan struct{}, interval, ttl time.D
 }
 
 // cleanup loops through the entire store and deleting connections that exceed the ttl.
-func (c *zoneZeroStore) cleanup(ttl time.Duration) {
+func (c *fromExternalCorrelator) cleanup(ttl time.Duration) {
 	c.lock.Lock()
 	defer c.lock.Unlock()
 	now := time.Now()
@@ -83,14 +83,14 @@ func (c *zoneZeroStore) cleanup(ttl time.Duration) {
 
 // Given a conn, generate a key that is unique to this connection
 // but can also be derived for the matching antrea ct_zone record.
-func (c *zoneZeroStore) generateKey(conn *connection.Connection) string {
+func (c *fromExternalCorrelator) generateKey(conn *connection.Connection) string {
 	destinationAddress := conn.FlowKey.DestinationAddress.String()
 	replyDestinationPort := strconv.FormatUint(uint64(conn.ProxySnatPort), 10)
 	return fmt.Sprintf("%s-%s", destinationAddress, replyDestinationPort)
 }
 
 // add the given zone zero connection to the store.
-func (c *zoneZeroStore) add(conn *connection.Connection) error {
+func (c *fromExternalCorrelator) add(conn *connection.Connection) error {
 	c.lock.Lock()
 	defer c.lock.Unlock()
 	if conn.Zone != 0 {
@@ -105,7 +105,7 @@ func (c *zoneZeroStore) add(conn *connection.Connection) error {
 }
 
 // Given an antrea zone connection, generate a key that will equal the corresponding zone zero connection.
-func (c *zoneZeroStore) generateKeyFromAntreaZone(conn *connection.Connection) string {
+func (c *fromExternalCorrelator) generateKeyFromAntreaZone(conn *connection.Connection) string {
 	destinationAddress := conn.FlowKey.DestinationAddress.String()
 	zoneZeroReplyDestinationPort := strconv.FormatUint(uint64(conn.FlowKey.SourcePort), 10)
 	return fmt.Sprintf("%s-%s", destinationAddress, zoneZeroReplyDestinationPort)
@@ -113,7 +113,7 @@ func (c *zoneZeroStore) generateKeyFromAntreaZone(conn *connection.Connection) s
 
 // Given an antrea ct zone connection, if there is a corresponding zone zero connection remove it from the store and
 // return it. Otherwise return nil.
-func (c *zoneZeroStore) popMatching(conn *connection.Connection) *connection.Connection {
+func (c *fromExternalCorrelator) popMatching(conn *connection.Connection) *connection.Connection {
 	c.lock.Lock()
 	defer c.lock.Unlock()
 	key := c.generateKeyFromAntreaZone(conn)
@@ -127,7 +127,7 @@ func (c *zoneZeroStore) popMatching(conn *connection.Connection) *connection.Con
 
 // Given a connection key, remove it from the store. Log an error
 // if it didn't exist in the store.
-func (c *zoneZeroStore) remove(conn *connection.Connection) {
+func (c *fromExternalCorrelator) remove(conn *connection.Connection) {
 	c.lock.Lock()
 	defer c.lock.Unlock()
 	destinationAddress := conn.FlowKey.DestinationAddress

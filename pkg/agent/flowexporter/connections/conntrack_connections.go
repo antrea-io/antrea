@@ -54,7 +54,7 @@ type ConntrackConnectionStore struct {
 	// networkPolicyReadyTime is set to the current time when we are done waiting on networkPolicyWait.
 	networkPolicyReadyTime time.Time
 	connectionStore
-	fromExternalCorrelator *zoneZeroStore
+	fromExternalCorrelator *fromExternalCorrelator
 }
 
 func NewConntrackConnectionStore(
