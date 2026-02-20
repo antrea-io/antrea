@@ -54,7 +54,7 @@ type ConntrackConnectionStore struct {
 	// networkPolicyReadyTime is set to the current time when we are done waiting on networkPolicyWait.
 	networkPolicyReadyTime time.Time
 	connectionStore
-	zoneZeroStore *zoneZeroStore
+	fromExternalCorrelator *zoneZeroStore
 }
 
 func NewConntrackConnectionStore(
@@ -68,14 +68,14 @@ func NewConntrackConnectionStore(
 	o *options.FlowExporterOptions,
 ) *ConntrackConnectionStore {
 	return &ConntrackConnectionStore{
-		connDumper:            connTrackDumper,
-		v4Enabled:             v4Enabled,
-		v6Enabled:             v6Enabled,
-		pollInterval:          o.PollInterval,
-		connectionStore:       NewConnectionStore(npQuerier, podStore, proxier, o),
-		connectUplinkToBridge: o.ConnectUplinkToBridge,
-		networkPolicyWait:     networkPolicyWait,
-		zoneZeroStore:         newFromExternalCorrelator(),
+		connDumper:             connTrackDumper,
+		v4Enabled:              v4Enabled,
+		v6Enabled:              v6Enabled,
+		pollInterval:           o.PollInterval,
+		connectionStore:        NewConnectionStore(npQuerier, podStore, proxier, o),
+		connectUplinkToBridge:  o.ConnectUplinkToBridge,
+		networkPolicyWait:      networkPolicyWait,
+		fromExternalCorrelator: newFromExternalCorrelator(),
 	}
 }
 
@@ -156,7 +156,7 @@ func (cs *ConntrackConnectionStore) Poll() ([]int, error) {
 				if err := cs.deleteConnWithoutLock(key); err != nil {
 					return err
 				}
-				cs.zoneZeroStore.remove(conn)
+				cs.fromExternalCorrelator.remove(conn)
 			}
 		} else {
 			conn.IsPresent = false
@@ -213,11 +213,11 @@ func (cs *ConntrackConnectionStore) AddOrUpdateConn(conn *connection.Connection)
 				return
 			}
 		}
-		cs.zoneZeroStore.add(conn)
+		cs.fromExternalCorrelator.add(conn)
 		return
 	}
 
-	if zoneZero := cs.zoneZeroStore.popMatching(conn); zoneZero != nil {
+	if zoneZero := cs.fromExternalCorrelator.popMatching(conn); zoneZero != nil {
 		CorrelateExternal(zoneZero, conn)
 	}
 
