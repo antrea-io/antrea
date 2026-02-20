@@ -440,7 +440,7 @@ type client struct {
 	// ovsMetersAreSupported indicates whether the OVS datapath supports OpenFlow meters.
 	ovsMetersAreSupported bool
 	// ovsMeterPacketDrops tracks the number of packets dropped by each OVS meter, keyed by meter ID.
-	ovsMeterPacketDrops map[int]*atomic.Int64
+	ovsMeterPacketDrops map[int]*atomic.Uint64
 	// packetInRate defines the OVS controller packet rate limits for different
 	// features. All features will apply this rate-limit individually on packet-in
 	// messages sent to antrea-agent. The number stands for the rate as packets per
@@ -2885,7 +2885,7 @@ func NewClient(bridgeName string,
 	c.ofEntryOperations = operations.NewOFEntryOperations(bridge)
 	if c.ovsMetersAreSupported {
 		// Pre-initialize the map with all possible keys to avoid concurrent updates and potential race conditions later.
-		c.ovsMeterPacketDrops = map[int]*atomic.Int64{
+		c.ovsMeterPacketDrops = map[int]*atomic.Uint64{
 			PacketInMeterIDNP:  {},
 			PacketInMeterIDTF:  {},
 			PacketInMeterIDDNS: {},
