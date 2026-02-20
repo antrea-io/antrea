@@ -111,8 +111,9 @@ func (c *zoneZeroStore) generateKeyFromAntreaZone(conn *connection.Connection) s
 	return fmt.Sprintf("%s-%s", destinationAddress, zoneZeroReplyDestinationPort)
 }
 
-// Given an antrea ct zone connection, if there is a corresponding zone zero connection, return it. Otherwise return nil.
-func (c *zoneZeroStore) getMatching(conn *connection.Connection) *connection.Connection { // TODO update doc comment and maybe rename - we also do a delete here
+// Given an antrea ct zone connection, if there is a corresponding zone zero connection remove it from the store and
+// return it. Otherwise return nil.
+func (c *zoneZeroStore) popMatching(conn *connection.Connection) *connection.Connection {
 	c.lock.Lock()
 	defer c.lock.Unlock()
 	key := c.generateKeyFromAntreaZone(conn)
