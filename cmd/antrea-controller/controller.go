@@ -229,9 +229,28 @@ func run(o *Options) error {
 	var egressController *egress.EgressController
 	var externalIPPoolController *externalippool.ExternalIPPoolController
 	var externalIPController *serviceexternalip.ServiceExternalIPController
+
+	// Determine the cluster's IP family configuration from NodeIPAM ClusterCIDRs.
+	// If NodeIPAM is not configured, both IPv4 and IPv6 are considered enabled.
+	ipv4Enabled, ipv6Enabled := true, true
+	if features.DefaultFeatureGate.Enabled(features.NodeIPAM) && o.config.NodeIPAM.EnableNodeIPAM && len(o.config.NodeIPAM.ClusterCIDRs) > 0 {
+		ipv4Enabled, ipv6Enabled = false, false
+		for _, cidrStr := range o.config.NodeIPAM.ClusterCIDRs {
+			clusterCIDR, _, err := net.ParseCIDR(cidrStr)
+			if err != nil {
+				continue
+			}
+			if clusterCIDR.To4() != nil {
+				ipv4Enabled = true
+			} else {
+				ipv6Enabled = true
+			}
+		}
+	}
+
 	if features.DefaultFeatureGate.Enabled(features.Egress) || features.DefaultFeatureGate.Enabled(features.ServiceExternalIP) {
 		externalIPPoolController = externalippool.NewExternalIPPoolController(
-			crdClient, externalIPPoolInformer,
+			crdClient, externalIPPoolInformer, ipv4Enabled, ipv6Enabled,
 		)
 	}
 
@@ -282,7 +301,8 @@ func run(o *Options) error {
 			ipPoolInformer,
 			namespaceInformer,
 			podInformer,
-			statefulSetInformer)
+			statefulSetInformer,
+			ipv4Enabled, ipv6Enabled)
 	}
 
 	apiServerConfig, err := createAPIServerConfig(o.config.ClientConnection.Kubeconfig,

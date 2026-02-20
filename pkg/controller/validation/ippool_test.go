@@ -632,3 +632,142 @@ func TestOverlaps(t *testing.T) {
 		})
 	}
 }
+
+func TestValidateIPRangeIPFamily(t *testing.T) {
+	tests := []struct {
+		name        string
+		ipRanges    []crdv1beta1.IPRange
+		ipv4Enabled bool
+		ipv6Enabled bool
+		expectErr   bool
+		errContains string
+	}{
+		{
+			name: "IPv4 CIDR range with IPv4 enabled",
+			ipRanges: []crdv1beta1.IPRange{
+				{CIDR: "10.0.0.0/24"},
+			},
+			ipv4Enabled: true,
+			ipv6Enabled: false,
+			expectErr:   false,
+		},
+		{
+			name: "IPv6 CIDR range with IPv6 enabled",
+			ipRanges: []crdv1beta1.IPRange{
+				{CIDR: "fd00:10:96::/112"},
+			},
+			ipv4Enabled: false,
+			ipv6Enabled: true,
+			expectErr:   false,
+		},
+		{
+			name: "IPv4 CIDR range with only IPv6 enabled",
+			ipRanges: []crdv1beta1.IPRange{
+				{CIDR: "10.0.0.0/24"},
+			},
+			ipv4Enabled: false,
+			ipv6Enabled: true,
+			expectErr:   true,
+			errContains: "IPv4 range 10.0.0.0/24 is not allowed in an IPv6-only cluster",
+		},
+		{
+			name: "IPv6 CIDR range with only IPv4 enabled",
+			ipRanges: []crdv1beta1.IPRange{
+				{CIDR: "fd00:10:96::/112"},
+			},
+			ipv4Enabled: true,
+			ipv6Enabled: false,
+			expectErr:   true,
+			errContains: "IPv6 range fd00:10:96::/112 is not allowed in an IPv4-only cluster",
+		},
+		{
+			name: "IPv4 start-end range with IPv4 enabled",
+			ipRanges: []crdv1beta1.IPRange{
+				{Start: "10.0.0.1", End: "10.0.0.10"},
+			},
+			ipv4Enabled: true,
+			ipv6Enabled: false,
+			expectErr:   false,
+		},
+		{
+			name: "IPv6 start-end range with only IPv4 enabled",
+			ipRanges: []crdv1beta1.IPRange{
+				{Start: "fd00:10:96::1", End: "fd00:10:96::10"},
+			},
+			ipv4Enabled: true,
+			ipv6Enabled: false,
+			expectErr:   true,
+			errContains: "IPv6 range fd00:10:96::1-fd00:10:96::10 is not allowed in an IPv4-only cluster",
+		},
+		{
+			name: "IPv4 start-end range with only IPv6 enabled",
+			ipRanges: []crdv1beta1.IPRange{
+				{Start: "10.0.0.1", End: "10.0.0.10"},
+			},
+			ipv4Enabled: false,
+			ipv6Enabled: true,
+			expectErr:   true,
+			errContains: "IPv4 range 10.0.0.1-10.0.0.10 is not allowed in an IPv6-only cluster",
+		},
+		{
+			name: "dual-stack: both IPv4 and IPv6 ranges allowed",
+			ipRanges: []crdv1beta1.IPRange{
+				{CIDR: "10.0.0.0/24"},
+				{CIDR: "fd00:10:96::/112"},
+			},
+			ipv4Enabled: true,
+			ipv6Enabled: true,
+			expectErr:   false,
+		},
+		{
+			name: "mixed ranges with both families enabled",
+			ipRanges: []crdv1beta1.IPRange{
+				{Start: "10.0.0.1", End: "10.0.0.10"},
+				{CIDR: "fd00:10:96::/112"},
+			},
+			ipv4Enabled: true,
+			ipv6Enabled: true,
+			expectErr:   false,
+		},
+		{
+			name:        "empty ranges should be valid",
+			ipRanges:    []crdv1beta1.IPRange{},
+			ipv4Enabled: true,
+			ipv6Enabled: false,
+			expectErr:   false,
+		},
+		{
+			name: "multiple IPv4 ranges with IPv4 enabled",
+			ipRanges: []crdv1beta1.IPRange{
+				{CIDR: "10.0.0.0/24"},
+				{Start: "192.168.1.1", End: "192.168.1.10"},
+			},
+			ipv4Enabled: true,
+			ipv6Enabled: false,
+			expectErr:   false,
+		},
+		{
+			name: "mixed ranges with only IPv4 enabled should fail on IPv6",
+			ipRanges: []crdv1beta1.IPRange{
+				{CIDR: "10.0.0.0/24"},
+				{CIDR: "fd00:10:96::/112"},
+			},
+			ipv4Enabled: true,
+			ipv6Enabled: false,
+			expectErr:   true,
+			errContains: "IPv6 range fd00:10:96::/112 is not allowed in an IPv4-only cluster",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := ValidateIPRangeIPFamily(tt.ipRanges, tt.ipv4Enabled, tt.ipv6Enabled)
+			if tt.expectErr {
+				require.Error(t, err)
+				assert.Contains(t, err.Error(), tt.errContains)
+			} else {
+				assert.NoError(t, err)
+			}
+		})
+	}
+}
