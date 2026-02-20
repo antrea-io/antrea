@@ -208,7 +208,7 @@ func (cs *ConntrackConnectionStore) AddOrUpdateConn(conn *connection.Connection)
 		return
 	}
 
-	if zoneZero := cs.zoneZeroStore.getMatching(conn); zoneZero != nil {
+	if zoneZero := cs.zoneZeroStore.popMatching(conn); zoneZero != nil {
 		CorrelateExternal(zoneZero, conn)
 	}
 

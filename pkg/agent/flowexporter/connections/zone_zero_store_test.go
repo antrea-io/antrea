@@ -67,7 +67,7 @@ func TestZoneZeroStore(t *testing.T) {
 			assert.Error(t, store.add(conn), "Expected an error adding connection with zone 123")
 		})
 	})
-	t.Run("GetMatching", func(t *testing.T) {
+	t.Run("popMatching", func(t *testing.T) {
 		t.Run("Has Match", func(t *testing.T) {
 			store := newZoneZeroStore()
 			refTime := time.Now()
@@ -98,7 +98,7 @@ func TestZoneZeroStore(t *testing.T) {
 				ProxySnatPort: uint16(28392),
 			}
 			store.add(zoneZeroConn)
-			match := store.getMatching(antreaZeroConn)
+			match := store.popMatching(antreaZeroConn)
 			assert.NotNil(t, match, "Expected a matching zone zero connection to have been stored")
 			assert.Equal(t, zoneZeroConn, match)
 		})
@@ -132,7 +132,7 @@ func TestZoneZeroStore(t *testing.T) {
 				ProxySnatPort: uint16(28392),
 			}
 			store.add(zoneZeroConn)
-			match := store.getMatching(antreaZeroConn)
+			match := store.popMatching(antreaZeroConn)
 			assert.Nil(t, match, "Expected store to return a nil match")
 		})
 	})
