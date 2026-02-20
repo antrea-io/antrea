@@ -85,6 +85,10 @@ func antctlOutput(stdout, stderr string) string {
 
 // runAntctl runs antctl commands on antrea Pods, the controller, or agents.
 func runAntctl(podName string, cmds []string, data *TestData) (string, string, error) {
+	return runAntctlWithNamespace(podName, cmds, data, "")
+}
+
+func runAntctlWithNamespace(podName string, cmds []string, data *TestData, nsOverride string) (string, string, error) {
 	var containerName string
 	var namespace string
 	if strings.Contains(podName, "agent") {
@@ -97,6 +101,11 @@ func runAntctl(podName string, cmds []string, data *TestData) (string, string, e
 		containerName = "antrea-controller"
 		namespace = antreaNamespace
 	}
+
+	if nsOverride != "" {
+		namespace = nsOverride
+	}
+
 	stdout, stderr, err := data.RunCommandFromPod(namespace, podName, containerName, cmds)
 	// remove Bincover metadata if needed
 	if err == nil {
