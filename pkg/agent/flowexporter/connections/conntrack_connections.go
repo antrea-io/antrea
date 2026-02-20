@@ -197,14 +197,23 @@ func (cs *ConntrackConnectionStore) AddOrUpdateConn(conn *connection.Connection)
 	conn.IsPresent = true
 
 	if conn.Zone == 0 {
-		clusterIP := conn.OriginalDestinationAddress.String()
-		svcPort := conn.OriginalDestinationPort
-		protocol, _ := lookupServiceProtocol(conn.FlowKey.Protocol)
-		serviceStr := fmt.Sprintf("%s:%d/%s", clusterIP, svcPort, protocol)
-		_, exists := cs.antreaProxier.GetServiceByIP(serviceStr)
-		if exists {
-			cs.zoneZeroStore.add(conn)
+		// When AntreaProxy is available, the store can selectively store zone zero connections with associated services
+		// (i.e. store external to pod connections)
+		if cs.antreaProxier != nil {
+			clusterIP := conn.OriginalDestinationAddress.String()
+			svcPort := conn.OriginalDestinationPort
+			protocol, err := lookupServiceProtocol(conn.FlowKey.Protocol)
+			if err != nil {
+				klog.InfoS("Could not retrieve Service protocol", "error", err, "conn", conn)
+				return
+			}
+			serviceStr := fmt.Sprintf("%s:%d/%s", clusterIP, svcPort, protocol)
+			_, exists := cs.antreaProxier.GetServiceByIP(serviceStr)
+			if !exists {
+				return
+			}
 		}
+		cs.zoneZeroStore.add(conn)
 		return
 	}
 
