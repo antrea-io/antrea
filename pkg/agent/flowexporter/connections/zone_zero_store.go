@@ -17,6 +17,7 @@ package connections
 import (
 	"fmt"
 	"strconv"
+	"sync"
 	"time"
 
 	"antrea.io/antrea/pkg/agent/flowexporter/connection"
@@ -32,6 +33,7 @@ var cleanUpInterval = time.Second * 5
 type zoneZeroStore struct {
 	connections map[string]zoneZeroItem
 	stopCh      <-chan struct{}
+	lock        sync.RWMutex
 }
 
 // zoneZeroItem wraps a zone zero connection along with it's timestamp use for expiring connections.
@@ -69,6 +71,8 @@ func (c *zoneZeroStore) cleanUpLoop(stopCh <-chan struct{}, interval, ttl time.D
 
 // cleanup loops through the entire store and deleting connections that exceed the ttl.
 func (c *zoneZeroStore) cleanup(ttl time.Duration) {
+	c.lock.Lock()
+	defer c.lock.Unlock()
 	now := time.Now()
 	for key, record := range c.connections {
 		if now.Sub(record.timestamp) > ttl {
@@ -87,6 +91,8 @@ func (c *zoneZeroStore) generateKey(conn *connection.Connection) string {
 
 // add the given zone zero connection to the store.
 func (c *zoneZeroStore) add(conn *connection.Connection) error {
+	c.lock.Lock()
+	defer c.lock.Unlock()
 	if conn.Zone != 0 {
 		return fmt.Errorf("Cannot add connections to store that are not zone zero. Connection has zone %v", conn.Zone)
 	}
@@ -106,7 +112,9 @@ func (c *zoneZeroStore) generateKeyFromAntreaZone(conn *connection.Connection) s
 }
 
 // Given an antrea ct zone connection, if there is a corresponding zone zero connection, return it. Otherwise return nil.
-func (c *zoneZeroStore) getMatching(conn *connection.Connection) *connection.Connection {
+func (c *zoneZeroStore) getMatching(conn *connection.Connection) *connection.Connection { // TODO update doc comment and maybe rename - we also do a delete here
+	c.lock.Lock()
+	defer c.lock.Unlock()
 	key := c.generateKeyFromAntreaZone(conn)
 	record, exists := c.connections[key]
 	if !exists {
@@ -119,6 +127,8 @@ func (c *zoneZeroStore) getMatching(conn *connection.Connection) *connection.Con
 // Given a connection key, remove it from the store. Log an error
 // if it didn't exist in the store.
 func (c *zoneZeroStore) remove(conn *connection.Connection) {
+	c.lock.Lock()
+	defer c.lock.Unlock()
 	destinationAddress := conn.FlowKey.DestinationAddress
 	zoneZeroReplyDestinationPort := strconv.FormatUint(uint64(conn.ProxySnatPort), 10)
 
