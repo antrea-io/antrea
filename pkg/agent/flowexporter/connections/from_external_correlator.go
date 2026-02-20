@@ -31,13 +31,13 @@ var cleanUpInterval = time.Second * 5
 
 // FromExternalCorrelator handles correlating FromExternal connections
 type fromExternalCorrelator struct {
-	connections map[string]zoneZeroItem
+	connections map[string]connectionItem
 	stopCh      <-chan struct{}
 	lock        sync.RWMutex
 }
 
-// zoneZeroItem wraps a zone zero connection along with it's timestamp use for expiring connections.
-type zoneZeroItem struct {
+// connectionItem wraps a zone zero connection along with it's timestamp use for expiring connections.
+type connectionItem struct {
 	conn      *connection.Connection
 	timestamp time.Time
 }
@@ -47,7 +47,7 @@ type zoneZeroItem struct {
 func newFromExternalCorrelator() *fromExternalCorrelator {
 	stopCh := make(chan struct{})
 	store := fromExternalCorrelator{
-		connections: map[string]zoneZeroItem{},
+		connections: map[string]connectionItem{},
 		stopCh:      stopCh,
 	}
 	go store.cleanUpLoop(stopCh, cleanUpInterval, ttl)
@@ -97,7 +97,7 @@ func (c *fromExternalCorrelator) add(conn *connection.Connection) error {
 		return fmt.Errorf("Cannot add connections to store that are not zone zero. Connection has zone %v", conn.Zone)
 	}
 	key := c.generateKey(conn)
-	c.connections[key] = zoneZeroItem{
+	c.connections[key] = connectionItem{
 		conn:      conn,
 		timestamp: time.Now(),
 	}
