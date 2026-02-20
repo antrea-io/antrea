@@ -28,7 +28,7 @@ import (
 func TestZoneZeroStore(t *testing.T) {
 	t.Run("add", func(t *testing.T) {
 		t.Run("Adding a zone zero record", func(t *testing.T) {
-			store := newZoneZeroStore()
+			store := newFromExternalCorrelator()
 			refTime := time.Now()
 			zoneZeroConn := &connection.Connection{
 				StartTime: refTime,
@@ -48,7 +48,7 @@ func TestZoneZeroStore(t *testing.T) {
 			assert.Equal(t, 1, len(store.connections), "Expected store to contain newly added connection")
 		})
 		t.Run("Adding a record not from zone zero", func(t *testing.T) {
-			store := newZoneZeroStore()
+			store := newFromExternalCorrelator()
 			refTime := time.Now()
 			conn := &connection.Connection{
 				StartTime: refTime,
@@ -69,7 +69,7 @@ func TestZoneZeroStore(t *testing.T) {
 	})
 	t.Run("popMatching", func(t *testing.T) {
 		t.Run("Has Match", func(t *testing.T) {
-			store := newZoneZeroStore()
+			store := newFromExternalCorrelator()
 			refTime := time.Now()
 			zoneZeroConn := &connection.Connection{
 				StartTime: refTime,
@@ -103,7 +103,7 @@ func TestZoneZeroStore(t *testing.T) {
 			assert.Equal(t, zoneZeroConn, match)
 		})
 		t.Run("Does Not Have Match", func(t *testing.T) {
-			store := newZoneZeroStore()
+			store := newFromExternalCorrelator()
 			refTime := time.Now()
 			zoneZeroConn := &connection.Connection{
 				StartTime: refTime,
@@ -137,7 +137,7 @@ func TestZoneZeroStore(t *testing.T) {
 		})
 	})
 	t.Run("remove", func(t *testing.T) {
-		store := newZoneZeroStore()
+		store := newFromExternalCorrelator()
 		refTime := time.Now()
 		zoneZeroConn := &connection.Connection{
 			StartTime: refTime,
@@ -158,7 +158,7 @@ func TestZoneZeroStore(t *testing.T) {
 		assert.Empty(t, store.connections)
 	})
 	t.Run("Expires stale records", func(t *testing.T) {
-		store := newZoneZeroStore()
+		store := newFromExternalCorrelator()
 		refTime := time.Now()
 		zoneZeroConn := &connection.Connection{
 			StartTime: refTime,

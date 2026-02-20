@@ -29,7 +29,7 @@ var ttl = time.Minute
 // cleanUpInterval is the frequency in which we run the cleanup for expiring stale connections.
 var cleanUpInterval = time.Second * 5
 
-// A store holding zone zero connections for correlating the zone zero and antrea flows that make up an external flow.
+// FromExternalCorrelator handles correlating FromExternal connections
 type zoneZeroStore struct {
 	connections map[string]zoneZeroItem
 	stopCh      <-chan struct{}
@@ -42,9 +42,9 @@ type zoneZeroItem struct {
 	timestamp time.Time
 }
 
-// newzoneZeroStore returns an instance of the zoneZeroStore with it's internal map intialized and
+// newFromExternalCorrelator returns an instance of the FromExternalCorrelator with it's internal map intialized and
 // a go routine initiated to remove stale connections based on `ttl` at `cleanUpInterval`.
-func newZoneZeroStore() *zoneZeroStore {
+func newFromExternalCorrelator() *zoneZeroStore {
 	stopCh := make(chan struct{})
 	store := zoneZeroStore{
 		connections: map[string]zoneZeroItem{},
