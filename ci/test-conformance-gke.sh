@@ -29,6 +29,8 @@ MODE="report"
 RUN_ALL=true
 RUN_SETUP_ONLY=false
 RUN_CLEANUP_ONLY=false
+RUN_GARBAGE_COLLECTION=false
+GC_CLUSTER_AGE_HOURS=3
 SKIP_IAM_POLICY_BINDING=false
 TEST_SCRIPT_RC=0
 KUBE_CONFORMANCE_IMAGE_VERSION=auto
@@ -36,7 +38,8 @@ SHARED_NETWORK=false
 
 _usage="Usage: $0 [--cluster-name <GKEClusterNameToUse>]  [--kubeconfig <KubeconfigSavePath>] [--k8s-version <ClusterVersion>] \
                   [--svc-account <Name>] [--user <Name>] [--gke-project <Project>] [--gke-zone <Zone>] [--log-mode <SonobuoyResultLogLevel>] \
-                  [--svc-cidr <ServiceCIDR>] [--host-type <HostType] [--machine-type <MachineType] [--gloud-path] [--setup-only] [--cleanup-only]
+                  [--svc-cidr <ServiceCIDR>] [--host-type <HostType] [--machine-type <MachineType] [--gloud-path] [--setup-only] [--cleanup-only] \
+                  [--garbage-collection] [--gc-cluster-age-hours <Hours>]
 
 Setup a GKE cluster to run K8s e2e community tests (Conformance & Network Policy).
 Before running the script, login to gcloud with \`gcloud auth login\` or \`gcloud auth activate-service-account\`
@@ -58,7 +61,9 @@ and create the project to be used for cluster with \`gcloud projects create\`.
         --log-mode            Use the flag to set either 'report', 'detail', or 'dump' level data for sonobuoy results.
         --shared-network      Create the GKE cluster using a shared network.
         --setup-only          Only perform setting up the cluster and run test.
-        --cleanup-only        Only perform cleaning up the cluster."
+        --cleanup-only        Only perform cleaning up the cluster.
+        --gc-cluster          Cleanup old GKE clusters (for periodic maintenance).
+        --gc-cluster-age-hours Age threshold in hours for garbage collection. Defaults to 3."
 
 
 function print_usage {
@@ -143,6 +148,15 @@ case $key in
     RUN_CLEANUP_ONLY=true
     RUN_ALL=false
     shift
+    ;;
+    --gc-cluster)
+    RUN_GARBAGE_COLLECTION=true
+    RUN_ALL=false
+    shift
+    ;;
+    --gc-cluster-age-hours)
+    GC_CLUSTER_AGE_HOURS="$2"
+    shift 2
     ;;
     -h|--help)
     print_usage
@@ -368,6 +382,75 @@ function cleanup_cluster() {
     echo "=== Cleanup cluster ${CLUSTER} succeeded ==="
 }
 
+function clusters_gc() {
+    echo "=== Starting GKE garbage collection in zone ${GKE_ZONE} ==="
+    echo "Cleaning up clusters older than ${GC_CLUSTER_AGE_HOURS} hours"
+
+    GC_CLUSTER_AGE_SECONDS=$((GC_CLUSTER_AGE_HOURS * 3600))
+    CURRENT_TIME=$(date +%s)
+
+    # Get all GKE clusters in the zone
+    clusters=$(gcloud container clusters list --zone ${GKE_ZONE} --format="value(name,createTime)" 2>/dev/null)
+
+    if [ -z "$clusters" ]; then
+        echo "No GKE clusters found in zone ${GKE_ZONE}"
+        return 0
+    fi
+
+    deleted_count=0
+    skipped_count=0
+
+    while IFS=$'\t' read -r cluster_name creation_time; do
+        # Skip clusters that don't match our naming pattern
+        if [[ ! "$cluster_name" =~ ^cloud-antrea-gke- ]]; then
+            echo "Skipping cluster $cluster_name (does not match naming pattern)"
+            skipped_count=$((skipped_count + 1))
+            continue
+        fi
+
+        creation_time=$(date -d "$creation_time" +%s)
+
+        if [ -z "$creation_time" ]; then
+            echo "WARNING: Could not parse creation time for cluster $cluster_name"
+            continue
+        fi
+
+        cluster_age_seconds=$((CURRENT_TIME - creation_time))
+        cluster_age_hours=$((cluster_age_seconds / 3600))
+
+        if [ $cluster_age_seconds -gt $GC_CLUSTER_AGE_SECONDS ]; then
+            echo "Found old cluster: $cluster_name (age: ${cluster_age_hours}h, created: $creation_time)"
+            echo "Deleting cluster: $cluster_name"
+
+            set +e
+            retry=3
+            while [[ "${retry}" -gt 0 ]]; do
+                CLUSTER=$cluster_name
+                cleanup_cluster
+                if [[ $? -eq 0 ]]; then
+                    echo "Successfully deleted cluster: $cluster_name"
+                    deleted_count=$((deleted_count + 1))
+                    break
+                fi
+                echo "Failed to delete cluster $cluster_name, retrying... (${retry} attempts left)"
+                sleep 10
+                retry=$((retry - 1))
+            done
+
+            if [[ "${retry}" -eq 0 ]]; then
+                echo "ERROR: Failed to delete GKE cluster ${cluster_name} after multiple attempts"
+            fi
+            set -e
+        else
+            echo "Cluster $cluster_name is recent (age: ${cluster_age_hours}h), skipping"
+            skipped_count=$((skipped_count + 1))
+        fi
+    done <<< "$clusters"
+
+    echo "=== GKE garbage collection summary: ${deleted_count} clusters deleted, ${skipped_count} clusters skipped ==="
+    echo "=== GKE garbage collection completed ==="
+}
+
 if [[ "$RUN_ALL" == true || "$RUN_SETUP_ONLY" == true ]]; then
     setup_gke
     deliver_antrea_to_gke
@@ -376,6 +459,10 @@ fi
 
 if [[ "$RUN_ALL" == true || "$RUN_CLEANUP_ONLY" == true ]]; then
     cleanup_cluster
+fi
+
+if [[ "$RUN_GARBAGE_COLLECTION" == true ]]; then
+    clusters_gc
 fi
 
 if [[ "$RUN_CLEANUP_ONLY" == false && $TEST_SCRIPT_RC -ne 0 ]]; then

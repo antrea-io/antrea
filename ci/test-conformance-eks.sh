@@ -29,6 +29,8 @@ SSH_PRIVATE_KEY_PATH="$HOME/.ssh/id_rsa"
 RUN_ALL=true
 RUN_SETUP_ONLY=false
 RUN_CLEANUP_ONLY=false
+RUN_GARBAGE_COLLECTION=false
+GC_CLUSTER_AGE_HOURS=3
 KUBECONFIG_PATH="$HOME/jenkins/out/eks"
 MODE="report"
 TEST_SCRIPT_RC=0
@@ -40,7 +42,7 @@ AWS_DURATION_SECONDS=7200
 _usage="Usage: $0 [--cluster-name <EKSClusterNameToUse>] [--kubeconfig <KubeconfigSavePath>] [--k8s-version <ClusterVersion>]\
                   [--aws-access-key <AccessKey>] [--aws-secret-key <SecretKey>] [--aws-region <Region>]\
                   [--aws-service-user-role-arn <ServiceUserRoleARN>] [--ssh-key <SSHKey] [--ssh-private-key <SSHPrivateKey] [--log-mode <SonobuoyResultLogLevel>]\
-                  [--setup-only] [--cleanup-only]
+                  [--setup-only] [--cleanup-only] [--gc-cluster] [--gc-cluster-age-hours <Hours>]
 
 Setup a EKS cluster to run K8s e2e community tests (Conformance & Network Policy).
 
@@ -55,6 +57,8 @@ Setup a EKS cluster to run K8s e2e community tests (Conformance & Network Policy
         --log-mode                    Use the flag to set either 'report', 'detail', or 'dump' level data for sonobuoy results.
         --setup-only                  Only perform setting up the cluster and run test.
         --cleanup-only                Only perform cleaning up the cluster.
+        --gc-cluster                  Cleanup old EKS clusters and CloudFormation stacks (for periodic maintenance).
+        --gc-cluster-age-hours        Age threshold in hours for garbage collection. Defaults to 3.
         --skip-eksctl-install         Do not install the latest eksctl version. Eksctl must be installed already."
 
 function print_usage {
@@ -119,6 +123,15 @@ case $key in
     RUN_CLEANUP_ONLY=true
     RUN_ALL=false
     shift
+    ;;
+    --gc-cluster)
+    RUN_GARBAGE_COLLECTION=true
+    RUN_ALL=false
+    shift
+    ;;
+    --gc-cluster-age-hours)
+    GC_CLUSTER_AGE_HOURS="$2"
+    shift 2
     ;;
     --skip-eksctl-install)
     INSTALL_EKSCTL=false
@@ -353,6 +366,122 @@ function cleanup_cluster() {
     echo "=== Cleanup cluster ${CLUSTER} succeeded ==="
 }
 
+function clusters_gc() {
+    echo "=== Starting EKS garbage collection in region ${REGION} ==="
+    echo "Cleaning up clusters older than ${GC_CLUSTER_AGE_HOURS} hours"
+
+    GC_CLUSTER_AGE_SECONDS=$((GC_CLUSTER_AGE_HOURS * 3600))
+    CURRENT_TIME=$(date +%s)
+
+    clusters=$(aws eks list-clusters --region ${REGION} --query 'clusters' --output json | jq -r '.[]')
+
+    if [ -z "$clusters" ]; then
+        echo "No EKS clusters found in region ${REGION}"
+        return 0
+    fi
+
+    deleted_count=0
+    skipped_count=0
+    failed_count=0
+
+    for cluster in $clusters; do
+        # Skip clusters that don't match our naming pattern
+        if [[ ! "$cluster" =~ ^cloud-antrea-eks- ]]; then
+            echo "Skipping cluster $cluster (does not match naming pattern)"
+            skipped_count=$((skipped_count + 1))
+            continue
+        fi
+
+        creation_time=$(aws eks describe-cluster --region ${REGION} --name ${cluster} --query 'cluster.createdAt' --output text)
+
+        if [ -z "$creation_time" ]; then
+            echo "WARNING: Could not determine creation time for cluster $cluster"
+            failed_count=$((failed_count + 1))
+            continue
+        fi
+
+        creation_time=$(date -d "$creation_time" +%s)
+
+        if [ -z "$creation_time" ]; then
+            echo "WARNING: Could not parse creation time for cluster $cluster"
+            failed_count=$((failed_count + 1))
+            continue
+        fi
+
+        cluster_age_seconds=$((CURRENT_TIME - creation_time))
+        cluster_age_hours=$((cluster_age_seconds / 3600))
+
+        if [ $cluster_age_seconds -gt $GC_CLUSTER_AGE_SECONDS ]; then
+            echo "Found old cluster: $cluster (age: ${cluster_age_hours}h, created: $creation_time)"
+            echo "Deleting cluster: $cluster"
+
+            set +e
+            retry=3
+            while [[ "${retry}" -gt 0 ]]; do
+                CLUSTER=$cluster
+                cleanup_cluster
+                if [[ $? -eq 0 ]]; then
+                    echo "Successfully deleted cluster: $cluster"
+                    deleted_count=$((deleted_count + 1))
+                    break
+                fi
+                echo "Failed to delete cluster $cluster, retrying... (${retry} attempts left)"
+                sleep 10
+                retry=$((retry - 1))
+            done
+
+            if [[ "${retry}" -eq 0 ]]; then
+                echo "ERROR: Failed to delete EKS cluster ${cluster} after multiple attempts"
+            fi
+            set -e
+        else
+            echo "Cluster $cluster is recent (age: ${cluster_age_hours}h), skipping"
+            skipped_count=$((skipped_count + 1))
+        fi
+    done
+
+    echo "=== EKS cleanup summary: ${deleted_count} clusters deleted, ${skipped_count} clusters skipped, ${failed_count} clusters creation time parse failed ==="
+
+    # Check for residual CloudFormation stacks
+    echo "=== Checking for residual CloudFormation stacks ==="
+    stacks=$(aws cloudformation list-stacks --region ${REGION} --stack-status-filter CREATE_COMPLETE UPDATE_COMPLETE --query 'StackSummaries[*].[StackName,CreationTime]' --output json)
+
+    set +e
+    echo "$stacks" | jq -c '.[]' | while read -r stack_info; do
+        stack_name=$(echo "$stack_info" | jq -r '.[0]')
+        stack_creation_time=$(echo "$stack_info" | jq -r '.[1]')
+
+        # Only process eksctl-created stacks for antrea clusters
+        if [[ ! "$stack_name" =~ ^eksctl-cloud-antrea-eks- ]]; then
+            continue
+        fi
+
+        stack_creation_epoch=$(date -d "$stack_creation_time" +%s)
+
+        if [ -z "$stack_creation_epoch" ]; then
+            echo "WARNING: Could not parse creation time for stack $stack_name"
+            continue
+        fi
+
+        stack_age_seconds=$((CURRENT_TIME - stack_creation_epoch))
+        stack_age_hours=$((stack_age_seconds / 3600))
+
+        if [ $stack_age_seconds -gt $GC_CLUSTER_AGE_SECONDS ]; then
+            echo "Found old CloudFormation stack: $stack_name (age: ${stack_age_hours}h)"
+            echo "Deleting CloudFormation stack: $stack_name"
+            aws cloudformation delete-stack --region ${REGION} --stack-name ${stack_name}
+            if [[ $? -eq 0 ]]; then
+                echo "Successfully initiated deletion of stack: $stack_name"
+            else
+                echo "ERROR: Failed to delete CloudFormation stack: $stack_name"
+            fi
+        fi
+    done
+    set -e
+
+    echo "=== EKS garbage collection completed ==="
+}
+
 # ensures that the script can be run from anywhere
 THIS_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
 GIT_CHECKOUT_DIR=${THIS_DIR}/..
@@ -376,6 +505,12 @@ function start_timeout_watcher() {
 
 start_timeout_watcher "$AWS_DURATION_SECONDS" $$ &
 timeout_watcher_pid=$!
+
+if [[ "$RUN_GARBAGE_COLLECTION" == true ]]; then
+    trap "kill -9 $timeout_watcher_pid 2>/dev/null || true" EXIT
+    clusters_gc
+    exit 0
+fi
 
 if [[ "$RUN_SETUP_ONLY" != true ]]; then
     trap "kill -9 $timeout_watcher_pid 2>/dev/null ; cleanup_cluster" EXIT
