@@ -356,6 +356,56 @@ func testCreateValidationInvalidTier(t *testing.T) {
 	failOnError(k8sUtils.DeleteTier(tr.Name), t)
 }
 
+func testCreateValidationTwoTierOfSamePrioritySimultaneous(t *testing.T) {
+	// This test verifies that the race condition fix prevents two Tiers with the same priority
+	// from being created simultaneously. Only one should succeed.
+	const testPriority = int32(25)
+	tier1Name := "concurrent-tier-1"
+	tier2Name := "concurrent-tier-2"
+
+	// Use channels to coordinate simultaneous creation attempts
+	startCh := make(chan struct{})
+	result1Ch := make(chan error, 1)
+	result2Ch := make(chan error, 1)
+
+	// Start first Tier creation in a goroutine
+	go func() {
+		<-startCh // Wait for signal to start
+		_, err := k8sUtils.CreateTier(tier1Name, testPriority)
+		result1Ch <- err
+	}()
+	// Start second Tier creation in another goroutine
+	go func() {
+		<-startCh // Wait for signal to start
+		_, err := k8sUtils.CreateTier(tier2Name, testPriority)
+		result2Ch <- err
+	}()
+
+	// Signal both goroutines to start simultaneously and collect results
+	close(startCh)
+	err1 := <-result1Ch
+	err2 := <-result2Ch
+
+	// Exactly one should succeed and one should fail
+	if err1 == nil && err2 == nil {
+		k8sUtils.DeleteTier(tier1Name)
+		k8sUtils.DeleteTier(tier2Name)
+		failOnError(fmt.Errorf("Tiers were both created with the same priority when applied simultaneously"), t)
+	} else if err1 != nil && err2 != nil {
+		// Both failed - this is unexpected
+		failOnError(fmt.Errorf("Both Tier creations failed: tier1 error: %v, tier2 error:%v", err1, err2), t)
+	} else {
+		// One succeeded, one failed - this is the expected behavior
+		t.Logf("Tier creation results: tier1 error: %v, tier2 error: %v", err1, err2)
+		// Clean up the successfully created tier
+		if err1 == nil {
+			failOnError(k8sUtils.DeleteTier(tier1Name), t)
+		} else {
+			failOnError(k8sUtils.DeleteTier(tier2Name), t)
+		}
+	}
+}
+
 func testCreateValidationInvalidCG(t *testing.T) {
 	invalidErr := fmt.Errorf("ClusterGroup using podSelecter and serviceReference together created")
 	cgBuilder := &ClusterGroupSpecBuilder{}
@@ -5172,6 +5222,7 @@ func TestAntreaPolicy(t *testing.T) {
 		t.Run("Case=CreateInvalidACNP", func(t *testing.T) { testCreateValidationInvalidACNP(t) })
 		t.Run("Case=CreateInvalidANNP", func(t *testing.T) { testCreateValidationInvalidANNP(t) })
 		t.Run("Case=CreateInvalidTier", func(t *testing.T) { testCreateValidationInvalidTier(t) })
+		t.Run("Case=CreateTwoTierOfSamePrioritySimultaneous", func(t *testing.T) { testCreateValidationTwoTierOfSamePrioritySimultaneous(t) })
 		t.Run("Case=CreateInvalidClusterGroup", func(t *testing.T) { testCreateValidationInvalidCG(t) })
 		t.Run("Case=CreateInvalidGroup", func(t *testing.T) { testCreateValidationInvalidGroup(t) })
 
