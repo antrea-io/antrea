@@ -184,6 +184,20 @@ func TestConvertPeerConfigToGoBGPPeer(t *testing.T) {
 	assert.Equal(t, uint32(2), peer.GetEbgpMultihop().GetMultihopTtl())
 	assert.Equal(t, uint32(120), peer.GetGracefulRestart().GetRestartTime())
 
+	peerConfigWithTimers := bgp.PeerConfig{
+		BGPPeer: &v1alpha1.BGPPeer{
+			Address:                 "192.168.0.2",
+			ASN:                     65002,
+			HoldTimeSeconds:         ptr.To(int32(60)),
+			KeepaliveTimeSeconds:    ptr.To(int32(20)),
+			ConnectRetryTimeSeconds: ptr.To(int32(10)),
+		},
+	}
+	peerWithTimers, err := convertPeerConfigToGoBGPPeer(peerConfigWithTimers)
+	assert.NoError(t, err)
+	assert.Equal(t, uint64(60), peerWithTimers.GetTimers().GetConfig().GetHoldTime())
+	assert.Equal(t, uint64(20), peerWithTimers.GetTimers().GetConfig().GetKeepaliveInterval())
+	assert.Equal(t, uint64(10), peerWithTimers.GetTimers().GetConfig().GetConnectRetry())
 }
 
 func TestConvertGoBGPSessionStateToSessionState(t *testing.T) {
