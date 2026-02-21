@@ -33,9 +33,6 @@ TESTBED_TYPE="legacy"
 GO_VERSION=$(head -n1 "${WORKSPACE}/build/images/deps/go-version")
 IMAGE_PULL_POLICY="Always"
 PROXY_ALL=false
-DEFAULT_IP_MODE="ipv4"
-IP_MODE=""
-K8S_VERSION="1.28.2-00"
 WINDOWS_YAML_NAME="antrea-windows"
 WIN_IMAGE_NODE=""
 echo "" > WIN_DHCP
@@ -65,10 +62,8 @@ Run K8s e2e community tests (Conformance & Network Policy) or Antrea e2e tests o
 
         --kubeconfig             Path of cluster kubeconfig.
         --workdir                Home path for Go, vSphere information and antrea_logs during cluster setup. Default is $WORKDIR.
-        --testcase               Windows install OVS, Conformance and Network Policy or Antrea e2e testcases on a Windows or Linux cluster. It can also be flexible ipam or multicast e2e test.
+        --testcase               Windows install OVS, Conformance and Network Policy or Antrea e2e testcases on a Windows or Linux cluster. It can also be multicast e2e test.
         --registry               The docker registry to use instead of dockerhub.
-        --testbed-type           The testbed type to run tests. It can be flexible-ipam, jumper or legacy.
-        --ip-mode                IP mode for flexible-ipam e2e test. Default is $DEFAULT_IP_MODE. It can also be ipv6 or ds.
         --win-image-node         Name of the windows image node in cluster. Images are built by docker on this node.
         --kind-cluster-name      Name of the kind Cluster.
         --proxyall               Enable proxyAll to test AntreaProxy.
@@ -117,10 +112,6 @@ case $key in
     PROXY_ALL=true
     shift
     ;;
-    --ip-mode)
-    IP_MODE="$2"
-    shift 2
-    ;;
     --win-image-node)
     WIN_IMAGE_NODE="$2"
     shift 2
@@ -148,13 +139,6 @@ case $key in
 esac
 done
 
-if [[ "${IP_MODE}" == "" ]]; then
-    IP_MODE=${DEFAULT_IP_MODE}
-fi
-if [[ "${IP_MODE}" != "${DEFAULT_IP_MODE}" && "${IP_MODE}" != "ipv6" && "${IP_MODE}" != "dual" ]]; then
-    echoerr "--ip-mode must be ipv4, ipv6 or dual"
-    exit 1
-fi
 if [[ "$WORKDIR" != "$DEFAULT_WORKDIR" && "$KUBECONFIG_PATH" == "$DEFAULT_KUBECONFIG_PATH" ]]; then
     KUBECONFIG_PATH=${WORKDIR}/.kube/config
 fi
@@ -187,7 +171,6 @@ function export_govc_env_var {
 function clean_antrea {
     echo "====== Cleanup Antrea Installation ======"
     clean_ns "monitoring"
-    clean_ns "antrea-ipam-test"
     clean_ns "antrea-test"
     echo "====== Cleanup Conformance Namespaces ======"
     clean_ns "net"
@@ -518,9 +501,7 @@ function deliver_antrea {
     kubectl delete -f ${WORKDIR}/antrea-prometheus.yml || true
     kubectl delete daemonset antrea-agent -n kube-system || true
     kubectl delete -f ${WORKDIR}/antrea.yml || true
-    if [[ $TESTBED_TYPE == "flexible-ipam" ]]; then
-        redeploy_k8s_if_ip_mode_changes
-    fi
+
     echo "====== Building Antrea for the Following Commit ======"
     export GO111MODULE=on
     export GOPATH=${WORKDIR}/go
@@ -576,10 +557,7 @@ function deliver_antrea {
     echo "---" >> build/yamls/antrea.yml
     cat build/yamls/antrea-prometheus.yml >> build/yamls/antrea.yml
 
-    if [[ $TESTBED_TYPE == "flexible-ipam" ]]; then
-        control_plane_ip="$(kubectl get nodes -o wide --no-headers=true | awk -v role="$CONTROL_PLANE_NODE_ROLE" '$3 ~ role {print $6}')"
-        scp -q -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no -i "${WORKDIR}/jenkins_id_rsa" build/yamls/*.yml jenkins@[${control_plane_ip}]:~
-    elif [[ $TESTBED_TYPE == "jumper" ]]; then
+    if [[ $TESTBED_TYPE == "jumper" ]]; then
         control_plane_ip="$(kubectl get nodes -o wide --no-headers=true | awk -v role="$CONTROL_PLANE_NODE_ROLE" '$3 ~ role {print $6}')"
         scp -q -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no -i "${WORKDIR}/.ssh/id_rsa" build/yamls/*.yml jenkins@[${control_plane_ip}]:${WORKDIR}/
     else
@@ -591,13 +569,7 @@ function deliver_antrea {
     docker save -o antrea-ubuntu.tar antrea/antrea-agent-ubuntu:latest antrea/antrea-controller-ubuntu:latest
     docker save -o flow-aggregator.tar antrea/flow-aggregator:latest
 
-    if [[ $TESTBED_TYPE == "flexible-ipam" ]]; then
-        kubectl get nodes -o wide --no-headers=true | awk '{print $6}' | while read IP; do
-            scp -q -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no -i "${WORKDIR}/jenkins_id_rsa" antrea-ubuntu.tar jenkins@[${IP}]:${DEFAULT_WORKDIR}/antrea-ubuntu.tar
-            scp -q -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no -i "${WORKDIR}/jenkins_id_rsa" flow-aggregator.tar jenkins@[${IP}]:${DEFAULT_WORKDIR}/flow-aggregator.tar
-            ssh -o StrictHostKeyChecking=no -i "${WORKDIR}/jenkins_id_rsa" -n jenkins@${IP} "${CLEAN_STALE_IMAGES_CONTAINERD}; ${PRINT_CONTAINERD_STATUS}; ctr -n=k8s.io images import ${DEFAULT_WORKDIR}/antrea-ubuntu.tar; ctr -n=k8s.io images import ${DEFAULT_WORKDIR}/flow-aggregator.tar" || true
-        done
-    elif [[ $TESTBED_TYPE == "kind" || $TESTBED_TYPE == "kind-flexible-ipam" ]]; then
+    if [[ $TESTBED_TYPE == "kind" ]]; then
             kind load docker-image antrea/antrea-agent-ubuntu:$BUILD_TAG --name ${KIND_CLUSTER}
             kind load docker-image antrea/antrea-controller-ubuntu:$BUILD_TAG --name ${KIND_CLUSTER}
             kind load docker-image antrea/flow-aggregator:latest --name ${KIND_CLUSTER} 
@@ -655,7 +627,7 @@ function run_e2e {
 
     mkdir -p "${WORKDIR}/.kube"
     mkdir -p "${WORKDIR}/.ssh"
-    if [[ $TESTBED_TYPE != "kind" && $TESTBED_TYPE != "kind-flexible-ipam" ]]; then 
+    if [[ $TESTBED_TYPE != "kind" ]]; then 
         cp -f "${WORKDIR}/kube.conf" "${WORKDIR}/.kube/config"
     fi
     generate_ssh_config
@@ -664,12 +636,8 @@ function run_e2e {
     mkdir -p `pwd`/antrea-test-logs
     # HACK: see https://github.com/antrea-io/antrea/issues/2292
     go mod edit -replace github.com/moby/spdystream=github.com/antoninbas/spdystream@v0.2.1 && go mod tidy
-    if [[ $TESTBED_TYPE == "flexible-ipam" ]]; then
-        go test -v antrea.io/antrea/test/e2e --logs-export-dir `pwd`/antrea-test-logs --provider remote -timeout=100m --prometheus --antrea-ipam
-    elif [[ $TESTBED_TYPE == "kind" ]]; then
+    if [[ $TESTBED_TYPE == "kind" ]]; then
         go test -v antrea.io/antrea/test/e2e --logs-export-dir `pwd`/antrea-test-logs --provider kind --kind.kubeconfig ${KUBECONFIG_PATH} -timeout=100m --prometheus
-    elif [[ $TESTBED_TYPE == "kind-flexible-ipam" ]]; then
-        go test -v antrea.io/antrea/test/e2e --logs-export-dir `pwd`/antrea-test-logs --provider kind --kind.kubeconfig ${KUBECONFIG_PATH} -timeout=100m --prometheus --antrea-ipam
     else
         go test -v antrea.io/antrea/test/e2e --logs-export-dir `pwd`/antrea-test-logs --provider remote -timeout=100m --prometheus
     fi
@@ -998,9 +966,6 @@ EOF
 }
 
 export KUBECONFIG=${KUBECONFIG_PATH}
-if [[ $TESTBED_TYPE == "flexible-ipam" || $TESTBED_TYPE == "kind-flexible-ipam" ]]; then
-    MANIFEST_ARGS="$MANIFEST_ARGS --flexible-ipam --multicast --verbose-log"
-fi
 
 if [[ $TESTCASE =~ "multicast" ]]; then
     MANIFEST_ARGS="$MANIFEST_ARGS --encap-mode noEncap --multicast --multicast-interfaces ens224 --verbose-log"
