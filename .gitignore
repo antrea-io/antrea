@@ -21,3 +21,6 @@ bin
 vendor
 
 ci/jenkins/jobs/defaults.yml
+LFX_2026_PR_ROADMAP.md
+*.out
+*.log
