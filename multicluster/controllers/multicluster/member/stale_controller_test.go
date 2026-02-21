@@ -25,6 +25,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/sets"
+	"sigs.k8s.io/controller-runtime/pkg/cache/informertest"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 	k8smcv1alpha1 "sigs.k8s.io/mcs-api/pkg/apis/v1alpha1"
@@ -106,7 +107,7 @@ func TestStaleController_CleanUpService(t *testing.T) {
 			commonArea := commonarea.NewFakeRemoteCommonArea(fakeRemoteClient, "leader-cluster", common.LocalClusterID, "default", nil)
 			mcReconciler := NewMemberClusterSetReconciler(fakeClient, common.TestScheme, "default", false, false, make(chan struct{}))
 			mcReconciler.SetRemoteCommonArea(commonArea)
-			c := NewStaleResCleanupController(fakeClient, common.TestScheme, make(chan struct{}), "default", mcReconciler)
+			c := NewStaleResCleanupController(fakeClient, common.TestScheme, make(chan struct{}), "default", mcReconciler, &informertest.FakeInformers{})
 			if err := c.cleanUpStaleResources(ctx); err != nil {
 				t.Errorf("StaleController.cleanup() should clean up all stale Service and ServiceImport but got err = %v", err)
 			}
@@ -201,7 +202,7 @@ func TestStaleController_CleanUpACNP(t *testing.T) {
 
 			mcReconciler := NewMemberClusterSetReconciler(fakeClient, common.TestScheme, "default", false, false, make(chan struct{}))
 			mcReconciler.SetRemoteCommonArea(commonArea)
-			c := NewStaleResCleanupController(fakeClient, common.TestScheme, make(chan struct{}), "default", mcReconciler)
+			c := NewStaleResCleanupController(fakeClient, common.TestScheme, make(chan struct{}), "default", mcReconciler, &informertest.FakeInformers{})
 			if err := c.cleanUpStaleResources(ctx); err != nil {
 				t.Errorf("StaleController.cleanup() should clean up all stale ACNPs but got err = %v", err)
 			}
@@ -440,7 +441,7 @@ func TestStaleController_CleanUpResourceExports(t *testing.T) {
 
 			mcReconciler := NewMemberClusterSetReconciler(fakeClient, common.TestScheme, "default", false, false, make(chan struct{}))
 			mcReconciler.SetRemoteCommonArea(commonArea)
-			c := NewStaleResCleanupController(fakeClient, common.TestScheme, make(chan struct{}), "default", mcReconciler)
+			c := NewStaleResCleanupController(fakeClient, common.TestScheme, make(chan struct{}), "default", mcReconciler, &informertest.FakeInformers{})
 			if err := c.cleanUpStaleResources(ctx); err != nil {
 				t.Errorf("StaleController.cleanup() should clean up all stale ResourceExports but got err = %v", err)
 			}
@@ -517,7 +518,7 @@ func TestStaleController_CleanUpClusterInfoImports(t *testing.T) {
 
 			mcReconciler := NewMemberClusterSetReconciler(fakeClient, common.TestScheme, "default", false, false, make(chan struct{}))
 			mcReconciler.SetRemoteCommonArea(commonarea)
-			c := NewStaleResCleanupController(fakeClient, common.TestScheme, make(chan struct{}), "default", mcReconciler)
+			c := NewStaleResCleanupController(fakeClient, common.TestScheme, make(chan struct{}), "default", mcReconciler, &informertest.FakeInformers{})
 			if err := c.cleanUpStaleResources(ctx); err != nil {
 				t.Errorf("StaleController.cleanup() should clean up all stale ClusterInfoImport but got err = %v", err)
 			}
@@ -600,7 +601,7 @@ func TestStaleController_CleanUpLabelIdentites(t *testing.T) {
 
 			mcReconciler := NewMemberClusterSetReconciler(fakeClient, common.TestScheme, "default", false, false, make(chan struct{}))
 			mcReconciler.SetRemoteCommonArea(ca)
-			c := NewStaleResCleanupController(fakeClient, common.TestScheme, make(chan struct{}), "default", mcReconciler)
+			c := NewStaleResCleanupController(fakeClient, common.TestScheme, make(chan struct{}), "default", mcReconciler, &informertest.FakeInformers{})
 			if err := c.cleanUpStaleResources(ctx); err != nil {
 				t.Errorf("StaleController.cleanup() should clean up all stale LabelIdentities but got err = %v", err)
 			}
@@ -626,7 +627,7 @@ func TestStaleController_CleanupAllWithEmptyClusterSet(t *testing.T) {
 
 	mcReconciler := NewMemberClusterSetReconciler(fakeClient, common.TestScheme, "default", false, false, make(chan struct{}))
 	mcReconciler.SetRemoteCommonArea(commonarea)
-	c := NewStaleResCleanupController(fakeClient, common.TestScheme, make(chan struct{}), "default", mcReconciler)
+	c := NewStaleResCleanupController(fakeClient, common.TestScheme, make(chan struct{}), "default", mcReconciler, &informertest.FakeInformers{})
 	if err := c.CleanUp(ctx); err != nil {
 		t.Errorf("StaleController.cleanup() should clean up all stale resources but got err = %v", err)
 	}
