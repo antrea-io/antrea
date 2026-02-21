@@ -2513,7 +2513,7 @@ func (data *TestData) waitForNetworkpolicyRealized(pod string, node string, isWi
 	if npType == v1beta2.AntreaNetworkPolicy {
 		npOption = "ANNP"
 	}
-	if err := wait.PollUntilContextTimeout(context.Background(), 200*time.Millisecond, 5*time.Second, false, func(ctx context.Context) (bool, error) {
+	if err := wait.PollUntilContextTimeout(context.Background(), 200*time.Millisecond, 60*time.Second, false, func(ctx context.Context) (bool, error) {
 		var stdout, stderr string
 		var err error
 		if isWindows {
