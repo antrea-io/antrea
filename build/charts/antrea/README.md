@@ -75,6 +75,7 @@ Kubernetes: `>= 1.23.0-0`
 | clientCAFile | string | `""` | File path of the certificate bundle for all the signers that is recognized for incoming client certificates. |
 | cni.configFileMode | string | `"644"` | The file permission for 10-antrea.conflist when it is installed in the CNI configuration directory on the host. |
 | cni.hostBinPath | string | `"/opt/cni/bin"` | Installation path of CNI binaries on the host. |
+| cni.hostConfPath | string | `"/etc/cni/net.d"` | Path of CNI configuration on the host. |
 | cni.plugins | object | `{"bandwidth":true,"portmap":true}` | Chained plugins to use alongside antrea-cni. |
 | cni.skipBinaries | list | `[]` | CNI binaries shipped with Antrea for which installation should be skipped. |
 | controller.affinity | object | `{}` | Affinity for the antrea-controller Pod. |
