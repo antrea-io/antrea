@@ -27,14 +27,9 @@ limitations under the License.
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
-Original file https://raw.githubusercontent.com/kubernetes/kubernetes/refs/tags/v1.34.2/pkg/proxy/endpointschangetracker.go
-
-Modifies:
-- Remove import "k8s.io/kubernetes/pkg/proxy/metrics" and its usages.
-- Change type of "EndpointsMap" from "map[ServicePortName][]Endpoint" to "map[ServicePortName]map[string]Endpoint".
-
 */
+
+// Derived from Kubernetes pkg/proxy/endpointschangetracker.go (v1.34.2); Antrea customizations applied.
 
 package proxy
 
