@@ -174,7 +174,7 @@ ownerReferenceLoop:
 				statefulSetName, index, err := k8s.ParseStatefulSetName(name)
 				if err != nil {
 					// This should not occur unless user creates an invalid Pod manually
-					klog.Warningf("Invalid StatefulSet name: %s", name)
+					klog.InfoS("Invalid StatefulSet name", "name", name)
 					break ownerReferenceLoop
 				}
 				reservedOwner = &crdv1b1.IPAddressOwner{StatefulSet: &crdv1b1.StatefulSetOwner{

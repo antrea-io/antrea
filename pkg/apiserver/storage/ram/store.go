@@ -352,7 +352,7 @@ func (s *store) dispatchEvent(event antreastorage.InternalEvent) {
 	// Terminate unresponsive watchers, this must be executed without watcherMutex as
 	// watcher.Stop will require the lock itself.
 	for _, watcher := range failedWatchers {
-		klog.Warningf("Forcing stopping watcher (selectors: %v) due to unresponsiveness", watcher.selectors)
+		klog.InfoS("Force stopping watcher due to unresponsiveness", "selectors", watcher.selectors)
 		watcher.Stop()
 	}
 }
