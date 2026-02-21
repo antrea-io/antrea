@@ -251,7 +251,12 @@ func testSendDataSet(t *testing.T, v4Enabled bool, v6Enabled bool) {
 }
 
 func createElement(name string, enterpriseID uint32) ipfixentities.InfoElementWithValue {
-	element, _ := ipfixregistry.GetInfoElement(name, enterpriseID)
+	element, err := ipfixregistry.GetInfoElement(name, enterpriseID)
+	if err != nil && name == "nodeSnatIP" {
+		// nodeSnatIP is not in the global registry (go-ipfix), so create it manually.
+		e := ipfixentities.NewInfoElement("nodeSnatIP", 240, ipfixentities.String, ipfixregistry.AntreaEnterpriseID, 0)
+		element = e
+	}
 	ieWithValue, _ := ipfixentities.DecodeAndCreateInfoElementWithValue(element, nil)
 	return ieWithValue
 }

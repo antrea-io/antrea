@@ -198,3 +198,17 @@ func (mr *MockIPFIXRegistryMockRecorder) LoadRegistry() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LoadRegistry", reflect.TypeOf((*MockIPFIXRegistry)(nil).LoadRegistry))
 }
+
+// RegisterInfoElement mocks base method.
+func (m *MockIPFIXRegistry) RegisterInfoElement(element entities.InfoElement) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "RegisterInfoElement", element)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// RegisterInfoElement indicates an expected call of RegisterInfoElement.
+func (mr *MockIPFIXRegistryMockRecorder) RegisterInfoElement(element any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RegisterInfoElement", reflect.TypeOf((*MockIPFIXRegistry)(nil).RegisterInfoElement), element)
+}

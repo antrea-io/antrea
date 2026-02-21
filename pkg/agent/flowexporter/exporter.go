@@ -347,6 +347,11 @@ func (exp *FlowExporter) exportConn(conn *connection.Connection) error {
 	if conn.FlowType == utils.FlowTypeToExternal {
 		if conn.SourcePodNamespace != "" && conn.SourcePodName != "" {
 			exp.fillEgressInfo(conn)
+			// If Egress SNAT is used, the Node SNAT IP is not relevant (or it will be the Egress IP).
+			// We clear it to avoid confusion and redundant data.
+			if conn.EgressName != "" {
+				conn.NodeSnatIP = ""
+			}
 		} else {
 			// Skip exporting the Pod-to-External connection at the Egress Node if it's different from the Source Node
 			return nil
