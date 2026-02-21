@@ -159,6 +159,9 @@ type fqdnController struct {
 	gwPort                uint32
 	// clock allows injecting a custom (fake) clock in unit tests.
 	clock clock.Clock
+	// stopCh is closed when the controller is stopped, used to make
+	// notifyRuleUpdate non-blocking during shutdown.
+	stopCh <-chan struct{}
 }
 
 func newFQDNController(client openflow.Client, allocator *idAllocator, dnsServerOverride string, dirtyRuleHandler func(string), v4Enabled, v6Enabled bool, gwPort uint32, clock clock.WithTicker, fqdnCacheMinTTL uint32) (*fqdnController, error) {
@@ -626,12 +629,17 @@ func (rst *ruleSyncTracker) Run(stopCh <-chan struct{}) {
 }
 
 // notifyRuleUpdate is an interface for the reconciler to notify the ruleSyncTracker of a
-// rule realization status.
+// rule realization status. It uses a select on stopCh to avoid blocking (and leaking
+// goroutines) if the ruleSyncTracker consumer has already exited during shutdown.
 func (f *fqdnController) notifyRuleUpdate(ruleID string, err error) {
-	f.ruleSyncTracker.updateCh <- ruleRealizationUpdate{ruleID, err}
+	select {
+	case f.ruleSyncTracker.updateCh <- ruleRealizationUpdate{ruleID, err}:
+	case <-f.stopCh:
+	}
 }
 
 func (f *fqdnController) runRuleSyncTracker(stopCh <-chan struct{}) {
+	f.stopCh = stopCh
 	f.ruleSyncTracker.Run(stopCh)
 }
 
