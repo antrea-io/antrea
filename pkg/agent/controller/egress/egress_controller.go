@@ -146,8 +146,18 @@ type egressRouteTable struct {
 // egressBinding keeps the Egresses applying to a Pod.
 // There is one effective Egress for a Pod at any given time.
 type egressBinding struct {
-	effectiveEgress     string
-	alternativeEgresses sets.Set[string]
+	effectiveEgressForIPv4     string
+	effectiveEgressForIPv6     string
+	alternativeEgressesForIPv4 sets.Set[string]
+	alternativeEgressesForIPv6 sets.Set[string]
+}
+
+func isIPv6(ipStr string) bool {
+	ip := net.ParseIP(ipStr)
+	if ip == nil {
+		return false
+	}
+	return ip.To4() == nil
 }
 
 type EgressController struct {
@@ -404,7 +414,12 @@ func (c *EgressController) processPodUpdate(e interface{}) {
 	if !exists {
 		return
 	}
-	c.queue.Add(binding.effectiveEgress)
+	if binding.effectiveEgressForIPv4 != "" {
+		c.queue.Add(binding.effectiveEgressForIPv4)
+	}
+	if binding.effectiveEgressForIPv6 != "" {
+		c.queue.Add(binding.effectiveEgressForIPv6)
+	}
 }
 
 // addEgress processes Egress ADD events.
@@ -854,25 +869,47 @@ func (c *EgressController) newEgressState(egressName string, egressIP string) *e
 	return state
 }
 
+func (c *EgressController) getEgressRefs(pod, egressIP string) (*string, sets.Set[string]) {
+	binding := c.egressBindings[pod]
+	ipv6 := isIPv6(egressIP)
+	if ipv6 {
+		return &binding.effectiveEgressForIPv6, binding.alternativeEgressesForIPv6
+	}
+	return &binding.effectiveEgressForIPv4, binding.alternativeEgressesForIPv4
+}
+
 // bindPodEgress binds the Pod with the Egress and returns whether this Egress is the effective one for the Pod.
-func (c *EgressController) bindPodEgress(pod, egress string) bool {
+func (c *EgressController) bindPodEgress(pod, egress, egressIP string) bool {
 	c.egressBindingsMutex.Lock()
 	defer c.egressBindingsMutex.Unlock()
 
-	binding, exists := c.egressBindings[pod]
+	ipv6 := isIPv6(egressIP)
+	_, exists := c.egressBindings[pod]
 	if !exists {
 		// Promote itself as the effective Egress if there was not one.
-		c.egressBindings[pod] = &egressBinding{
-			effectiveEgress:     egress,
-			alternativeEgresses: sets.New[string](),
+		newBinding := &egressBinding{
+			alternativeEgressesForIPv4: sets.New[string](),
+			alternativeEgressesForIPv6: sets.New[string](),
 		}
+		if ipv6 {
+			newBinding.effectiveEgressForIPv6 = egress
+		} else {
+			newBinding.effectiveEgressForIPv4 = egress
+		}
+		c.egressBindings[pod] = newBinding
 		return true
 	}
-	if binding.effectiveEgress == egress {
+	effectiveEgress, alternativeEgresses := c.getEgressRefs(pod, egressIP)
+	if *effectiveEgress == egress {
 		return true
 	}
-	if !binding.alternativeEgresses.Has(egress) {
-		binding.alternativeEgresses.Insert(egress)
+	// Dual-stack effective egress is supported.
+	if *effectiveEgress == "" {
+		*effectiveEgress = egress
+		return true
+	}
+	if !alternativeEgresses.Has(egress) {
+		alternativeEgresses.Insert(egress)
 	}
 	return false
 }
@@ -880,23 +917,28 @@ func (c *EgressController) bindPodEgress(pod, egress string) bool {
 // unbindPodEgress unbinds the Pod with the Egress.
 // If the unbound Egress was the effective one for the Pod and there are any alternative ones, it will return the new
 // effective Egress and true. Otherwise it return empty string and false.
-func (c *EgressController) unbindPodEgress(pod, egress string) (string, bool) {
+func (c *EgressController) unbindPodEgress(pod, egress, egressIP string) (string, bool) {
 	c.egressBindingsMutex.Lock()
 	defer c.egressBindingsMutex.Unlock()
 
 	// The binding must exist.
 	binding := c.egressBindings[pod]
-	if binding.effectiveEgress == egress {
-		var popped bool
-		binding.effectiveEgress, popped = binding.alternativeEgresses.PopAny()
+
+	var popped bool
+	effectiveEgress, alternativeEgresses := c.getEgressRefs(pod, egressIP)
+	if *effectiveEgress == egress {
+		*effectiveEgress, popped = alternativeEgresses.PopAny()
 		if !popped {
-			// Remove the Pod's binding if there is no alternative.
-			delete(c.egressBindings, pod)
-			return "", false
+			*effectiveEgress = ""
+		} else {
+			return *effectiveEgress, true
 		}
-		return binding.effectiveEgress, true
+	} else {
+		alternativeEgresses.Delete(egress)
 	}
-	binding.alternativeEgresses.Delete(egress)
+	if binding.effectiveEgressForIPv4 == "" && binding.effectiveEgressForIPv6 == "" {
+		delete(c.egressBindings, pod)
+	}
 	return "", false
 }
 
@@ -1124,7 +1166,7 @@ func (c *EgressController) syncEgress(egressName string) error {
 		stalePods.Delete(pod)
 
 		// If the Egress is not the effective one for the Pod, do nothing.
-		if !c.bindPodEgress(pod, egressName) {
+		if !c.bindPodEgress(pod, egressName, eState.egressIP) {
 			continue
 		}
 
@@ -1184,8 +1226,9 @@ func (c *EgressController) uninstallEgress(egressName string, eState *egressStat
 }
 
 func (c *EgressController) uninstallPodFlows(egressName string, egressState *egressState, ofPorts sets.Set[int32], pods sets.Set[string]) error {
+	egressIP := net.ParseIP(egressState.egressIP)
 	for ofPort := range ofPorts {
-		if err := c.ofClient.UninstallPodSNATFlows(uint32(ofPort)); err != nil {
+		if err := c.ofClient.UninstallPodSNATFlows(uint32(ofPort), egressIP); err != nil {
 			return err
 		}
 		egressState.ofPorts.Delete(ofPort)
@@ -1198,7 +1241,7 @@ func (c *EgressController) uninstallPodFlows(egressName string, egressState *egr
 	newEffectiveEgresses := sets.New[string]()
 	for pod := range pods {
 		delete(egressState.pods, pod)
-		newEffectiveEgress, exists := c.unbindPodEgress(pod, egressName)
+		newEffectiveEgress, exists := c.unbindPodEgress(pod, egressName, egressState.egressIP)
 		if exists {
 			newEffectiveEgresses.Insert(newEffectiveEgress)
 		}
@@ -1376,7 +1419,13 @@ func (c *EgressController) GetEgress(ns, podName string) (types.EgressConfig, er
 		if !exists {
 			return "", false
 		}
-		return binding.effectiveEgress, true
+		if binding.effectiveEgressForIPv4 != "" {
+			return binding.effectiveEgressForIPv4, true
+		}
+		if binding.effectiveEgressForIPv6 != "" {
+			return binding.effectiveEgressForIPv6, true
+		}
+		return "", false
 	}()
 	if !exists {
 		return types.EgressConfig{}, fmt.Errorf("no Egress applied to Pod %v", pod)
