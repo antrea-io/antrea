@@ -292,3 +292,27 @@
            #!/bin/bash
            set -e
            ./ci/jenkins/stop-stale-jobs.sh --pull-request "${ghprbPullId}" --jenkins "${JENKINS_URL}"
+
+- builder:
+    name: builder-e2e-kind-wireGuard
+    builders:
+      - shell: |-
+          #!/bin/bash
+          set -ex
+          DOCKER_REGISTRY="$(head -n1 ci/docker-registry)"
+          [ "$DOCKER_REGISTRY" != "docker.io" ] || ./ci/jenkins/docker_login.sh --docker-user ${{DOCKER_USERNAME}} --docker-password ${{DOCKER_PASSWORD}}
+          KIND_TIMEOUT=135
+          FULL_CLUSTER_NAME='{kind_cluster_name}'-"${{BUILD_NUMBER}}"
+          #  Delete all Kind clusters created more than 135 mins ago. 135 minutes is the timeout 
+          #  we have configured for running conformance, NetworkPolicy and e2e tests on Kind, 
+          #  so clusters older than that can de deleted safely.
+          ./ci/kind/kind-setup.sh destroy --all --until ${{KIND_TIMEOUT}}
+          ./ci/kind/kind-install.sh 
+          ./ci/kind/kind-setup.sh --antrea-cni create "${{FULL_CLUSTER_NAME}}"
+          kind export kubeconfig -n "${{FULL_CLUSTER_NAME}}" --kubeconfig ${{PWD}}/.kube/config
+          set +e
+          ./ci/jenkins/test.sh --testcase e2e --traffic-mode "wireGuard" --registry ${{DOCKER_REGISTRY}} --kubeconfig ${{PWD}}/.kube/config --testbed-type "kind" --kind-cluster-name "${{FULL_CLUSTER_NAME}}" --build-tag "e2e-${{BUILD_NUMBER}}"
+          return_code=$?
+          set -ex
+          ./ci/kind/kind-setup.sh destroy "${{FULL_CLUSTER_NAME}}"
+          exit $return_code

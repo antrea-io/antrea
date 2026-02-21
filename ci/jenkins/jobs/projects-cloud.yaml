@@ -1706,3 +1706,48 @@
                 key-file-variable: AWS_EC2_SSH_KEY
                 username-variable: AWS_EC2_SSH_USER_NAME
                 passphrase-variable: AWS_EC2_SSH_PASSPHRASE
+      - '{name}-{test_name}-for-pull-request':
+          test_name: kind-e2e-wireguard
+          node: 'antrea-kind-testbed'
+          description: 'This is for running e2e tests on kind.'
+          branches:
+          - ${{sha1}}
+          builders:
+            - builder-e2e-kind-wireGuard:
+               kind_cluster_name: '{test_name}'
+          trigger_phrase: ^(?!Thanks for your PR).*/test-(kind-e2e-wireguard|kind-all|all).*
+          white_list_target_branches: []
+          allow_whitelist_orgs_as_admins: true
+          admin_list: '{antrea_admin_list}'
+          org_list: '{antrea_org_list}'
+          white_list: '{antrea_white_list}'
+          only_trigger_phrase: true
+          trigger_permit_all: true
+          throttle_concurrent_builds_enabled: 'true'
+          status_context: jenkins-kind-e2e-wireguard
+          status_url: null
+          success_status: Build finished.
+          failure_status: Failed. Add comment /test-kind-e2e-wireguard to re-trigger.
+          error_status: Failed. Add comment /test-kind-e2e-wireguard to re-trigger.
+          triggered_status: null
+          started_status: null
+          wrappers:
+          - credentials-binding:
+            - text:
+                credential-id: DOCKER_USERNAME
+                variable: DOCKER_USERNAME
+            - text:
+                credential-id: DOCKER_PASSWORD
+                variable: DOCKER_PASSWORD
+          - timeout:
+              fail: true
+              timeout: 135
+              type: absolute
+          publishers:
+          - archive:
+              allow-empty: true
+              artifacts: antrea-test-logs.tar.gz
+              case-sensitive: true
+              default-excludes: true
+              fingerprint: false
+              only-if-success: false
