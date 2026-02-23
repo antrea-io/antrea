@@ -236,6 +236,11 @@ func TestFromExternalCorrelator_FilterAndStoreExternalSource(t *testing.T) {
 			stored: false,
 		},
 		{
+			name:   "Nil connection",
+			conn:   nil,
+			stored: false,
+		},
+		{
 			name:   "Nil Proxier",
 			conn:   zoneZeroConn,
 			stored: true,
@@ -267,7 +272,7 @@ func TestFromExternalCorrelator_FilterAndStoreExternalSource(t *testing.T) {
 				got = correlator.filterAndStoreExternalSource(tc.conn, mockProxier)
 			}
 
-			if tc.name == "Non-Zone Zero connections" {
+			if tc.name == "Non-Zone Zero connections" || tc.name == "Nil connection" {
 				assert.False(t, got, "Expected connection to not be filtered")
 			} else {
 				assert.True(t, got, "Expected connection to be filtered")
@@ -280,4 +285,64 @@ func TestFromExternalCorrelator_FilterAndStoreExternalSource(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestCorrelateIfExternal(t *testing.T) {
+	externalIP := netip.MustParseAddr("172.18.0.1")
+	refTime := time.Now()
+	hasServiceConn := &connection.Connection{
+		OriginalDestinationAddress: netip.MustParseAddr("172.18.0.111"),
+		OriginalDestinationPort:    12345,
+		StartTime:                  refTime.Add(-(time.Second * 50)),
+		StopTime:                   refTime.Add(-(time.Second * 30)),
+		LastExportTime:             refTime.Add(-(time.Second * 50)),
+		FlowKey: connection.Tuple{
+			SourceAddress:      externalIP,
+			DestinationAddress: netip.MustParseAddr("10.244.2.2"),
+			Protocol:           6,
+			SourcePort:         52142,
+			DestinationPort:    80},
+		Mark:          openflow.ServiceCTMark.GetValue(),
+		ProxySnatIP:   netip.MustParseAddr("172.18.0.2"),
+		ProxySnatPort: uint16(28392),
+	}
+	gatewayIP := netip.MustParseAddr("10.244.2.1")
+	antreaZoneConn := connection.Connection{
+		OriginalDestinationAddress: netip.MustParseAddr("10.244.2.2"),
+		OriginalDestinationPort:    80,
+		StartTime:                  refTime.Add(-(time.Second * 50)),
+		StopTime:                   refTime.Add(-(time.Second * 30)),
+		LastExportTime:             refTime.Add(-(time.Second * 50)),
+		FlowKey: connection.Tuple{
+			SourceAddress:      gatewayIP,
+			DestinationAddress: netip.MustParseAddr("10.244.2.2"),
+			Protocol:           6,
+			SourcePort:         28392,
+			DestinationPort:    80},
+		Mark:                    openflow.ServiceCTMark.GetValue(),
+		Labels:                  []byte{0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x1},
+		ProxySnatIP:             netip.MustParseAddr("10.244.2.1"),
+		ProxySnatPort:           uint16(28392),
+		Zone:                    65520,
+		OriginalPackets:         0xfff,
+		DestinationPodName:      "pod1",
+		DestinationPodNamespace: "ns1",
+	}
+
+	correlator := newFromExternalCorrelator()
+
+	// Validates correlateIfExternal properly handles nil pointers
+	correlator.correlateIfExternal(nil)
+
+	// Confirm no correlation when no matching zone zero connections previously stored
+	correlator.correlateIfExternal(&antreaZoneConn)
+	assert.Equal(t, gatewayIP, antreaZoneConn.FlowKey.SourceAddress, "Expected connection to not have changed")
+
+	// Confirm correlation
+	correlator.filterAndStoreExternalSource(hasServiceConn, mockProxier{})
+	correlator.correlateIfExternal(&antreaZoneConn)
+
+	assert.Equal(t, externalIP, antreaZoneConn.FlowKey.SourceAddress, "Expected connection to have external source IP")
+	assert.Len(t, correlator.connections, 0, "Expected Zone 0 connection to be popped from store")
+
 }

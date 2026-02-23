@@ -199,10 +199,7 @@ func (cs *ConntrackConnectionStore) AddOrUpdateConn(conn *connection.Connection)
 	if cs.fromExternalCorrelator.filterAndStoreExternalSource(conn, cs.antreaProxier) {
 		return
 	}
-
-	if zoneZero := cs.fromExternalCorrelator.popMatching(conn); zoneZero != nil {
-		CorrelateExternal(zoneZero, conn)
-	}
+	cs.fromExternalCorrelator.correlateIfExternal(conn)
 
 	connKey := connection.NewConnectionKey(conn)
 
