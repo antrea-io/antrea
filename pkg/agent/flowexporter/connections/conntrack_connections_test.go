@@ -457,7 +457,6 @@ func TestConntrackConnectionStore_AddOrUpdateConn_FromExternalConns(t *testing.T
 	actualConn, exist = conntrackConnStore.GetConnByKey(expectedConn.FlowKey)
 	require.Equal(t, exist, true, "The connection should exist in the connection store")
 	assert.Equal(t, updatedExpectedConn, *actualConn, "Connections should be equal")
-
 }
 
 // testAddNewConn tests podInfo, Services, network policy mapping.
