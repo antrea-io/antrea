@@ -9,11 +9,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v6
-    - name: Set up Go using version from go.mod
+    - name: Set up Go using version from .go-version
       uses: actions/setup-go@v6
       with:
-        go-version-file: 'go.mod'
-        # make sure the latest patch version is used
+        go-version-file: '.go-version'
+        # make sure the latest patch version is used for building release assets, and not a version
+        # cached by the runner
         check-latest: true
     - name: Build assets
       env:
