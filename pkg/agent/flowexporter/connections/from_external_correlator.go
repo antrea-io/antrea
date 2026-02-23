@@ -60,6 +60,10 @@ func newFromExternalCorrelator() *fromExternalCorrelator {
 // filterAndStoreExternalSource filters for connections that have external source information so correlation can be
 // done on FromExternal flows. Returns true if the connection was zone zero.
 func (c *fromExternalCorrelator) filterAndStoreExternalSource(conn *connection.Connection, antreaProxier proxy.ProxyQuerier) bool {
+	if conn == nil {
+		return false
+	}
+
 	if conn.Zone != 0 {
 		return false
 	}
@@ -81,6 +85,18 @@ func (c *fromExternalCorrelator) filterAndStoreExternalSource(conn *connection.C
 	}
 	c.add(conn)
 	return true
+}
+
+// correlateIfExternal correlates the connection to it's zone zero counterpart to preserve the SNAT'd source IP
+func (c *fromExternalCorrelator) correlateIfExternal(conn *connection.Connection) {
+	if conn == nil {
+		return
+	}
+
+	zoneZero := c.popMatching(conn)
+	if zoneZero != nil {
+		CorrelateExternal(zoneZero, conn)
+	}
 }
 
 // cleanUpLoop runs in an infinite loop and cleans up the store at the given interval.
