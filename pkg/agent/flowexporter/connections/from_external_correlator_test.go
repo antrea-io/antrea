@@ -23,49 +23,29 @@ import (
 
 	"antrea.io/antrea/pkg/agent/flowexporter/connection"
 	"antrea.io/antrea/pkg/agent/openflow"
+	binding "antrea.io/antrea/pkg/ovs/openflow"
+	k8sproxy "antrea.io/antrea/third_party/proxy"
 )
 
 func TestFromExternalCorrelator(t *testing.T) {
 	t.Run("add", func(t *testing.T) {
-		t.Run("Adding a zone zero record", func(t *testing.T) {
-			store := newFromExternalCorrelator()
-			refTime := time.Now()
-			zoneZeroConn := &connection.Connection{
-				StartTime: refTime,
-				StopTime:  refTime,
-				FlowKey: connection.Tuple{
-					SourceAddress:      netip.MustParseAddr("172.18.0.1"),
-					DestinationAddress: netip.MustParseAddr("10.244.2.2"),
-					Protocol:           6,
-					SourcePort:         52142,
-					DestinationPort:    80},
-				Mark:          openflow.ServiceCTMark.GetValue(),
-				ProxySnatIP:   netip.MustParseAddr("172.18.0.2"),
-				ProxySnatPort: uint16(28392),
-			}
-			err := store.add(zoneZeroConn)
-			assert.Nil(t, err, "Expected adding zone 0 connection to not error")
-			assert.Equal(t, 1, len(store.connections), "Expected store to contain newly added connection")
-		})
-		t.Run("Adding a record not from zone zero", func(t *testing.T) {
-			store := newFromExternalCorrelator()
-			refTime := time.Now()
-			conn := &connection.Connection{
-				StartTime: refTime,
-				StopTime:  refTime,
-				FlowKey: connection.Tuple{
-					SourceAddress:      netip.MustParseAddr("172.18.0.1"),
-					DestinationAddress: netip.MustParseAddr("10.244.2.2"),
-					Protocol:           6,
-					SourcePort:         52142,
-					DestinationPort:    80},
-				Mark:          openflow.ServiceCTMark.GetValue(),
-				ProxySnatIP:   netip.MustParseAddr("172.18.0.2"),
-				ProxySnatPort: uint16(28392),
-				Zone:          123,
-			}
-			assert.Error(t, store.add(conn), "Expected an error adding connection with zone 123")
-		})
+		store := newFromExternalCorrelator()
+		refTime := time.Now()
+		zoneZeroConn := &connection.Connection{
+			StartTime: refTime,
+			StopTime:  refTime,
+			FlowKey: connection.Tuple{
+				SourceAddress:      netip.MustParseAddr("172.18.0.1"),
+				DestinationAddress: netip.MustParseAddr("10.244.2.2"),
+				Protocol:           6,
+				SourcePort:         52142,
+				DestinationPort:    80},
+			Mark:          openflow.ServiceCTMark.GetValue(),
+			ProxySnatIP:   netip.MustParseAddr("172.18.0.2"),
+			ProxySnatPort: uint16(28392),
+		}
+		store.add(zoneZeroConn)
+		assert.Equal(t, 1, len(store.connections), "Expected store to contain newly added connection")
 	})
 	t.Run("popMatching", func(t *testing.T) {
 		t.Run("Has Match", func(t *testing.T) {
@@ -152,8 +132,7 @@ func TestFromExternalCorrelator(t *testing.T) {
 			ProxySnatIP:   netip.MustParseAddr("172.18.0.2"),
 			ProxySnatPort: uint16(28392),
 		}
-		err := store.add(zoneZeroConn)
-		assert.Nil(t, err, "Expected adding zone 0 connection to not error")
+		store.add(zoneZeroConn)
 		store.remove(zoneZeroConn)
 		assert.Empty(t, store.connections)
 	})
@@ -173,10 +152,132 @@ func TestFromExternalCorrelator(t *testing.T) {
 			ProxySnatIP:   netip.MustParseAddr("172.18.0.2"),
 			ProxySnatPort: uint16(28392),
 		}
-		err := store.add(zoneZeroConn)
-		assert.Nil(t, err, "Expected adding zone 0 connection to not error")
+		store.add(zoneZeroConn)
 		time.Sleep(1 * time.Millisecond)
 		store.cleanup(1 * time.Millisecond)
 		assert.Equal(t, 0, len(store.connections), "Expected store to expire old records")
 	})
+}
+
+type mockProxier struct {
+}
+
+func (m mockProxier) GetServiceFlowKeys(serviceName, namespace string) ([]string, []binding.GroupIDType, bool) {
+	return nil, nil, false
+}
+
+func (m mockProxier) GetServiceByIP(serviceStr string) (k8sproxy.ServicePortName, bool) {
+	if serviceStr == "172.18.0.111:12345/TCP" {
+		return k8sproxy.ServicePortName{}, true
+	}
+	return k8sproxy.ServicePortName{}, false
+}
+
+func TestFromExternalCorrelator_FilterAndStoreExternalSource(t *testing.T) {
+	nonZoneZeroConn := &connection.Connection{Zone: 65220}
+	refTime := time.Now()
+	zoneZeroConn := &connection.Connection{
+		OriginalDestinationAddress: netip.MustParseAddr("172.18.0.3"),
+		OriginalDestinationPort:    12345,
+		StartTime:                  refTime.Add(-(time.Second * 50)),
+		StopTime:                   refTime.Add(-(time.Second * 30)),
+		LastExportTime:             refTime.Add(-(time.Second * 50)),
+		FlowKey: connection.Tuple{
+			SourceAddress:      netip.MustParseAddr("172.18.0.1"),
+			DestinationAddress: netip.MustParseAddr("10.244.2.2"),
+			Protocol:           6,
+			SourcePort:         52142,
+			DestinationPort:    80},
+		Mark:          openflow.ServiceCTMark.GetValue(),
+		ProxySnatIP:   netip.MustParseAddr("172.18.0.2"),
+		ProxySnatPort: uint16(28392),
+	}
+	invalidProtocolConn := &connection.Connection{
+		OriginalDestinationAddress: netip.MustParseAddr("172.18.0.3"),
+		OriginalDestinationPort:    12345,
+		StartTime:                  refTime.Add(-(time.Second * 50)),
+		StopTime:                   refTime.Add(-(time.Second * 30)),
+		LastExportTime:             refTime.Add(-(time.Second * 50)),
+		FlowKey: connection.Tuple{
+			SourceAddress:      netip.MustParseAddr("172.18.0.1"),
+			DestinationAddress: netip.MustParseAddr("10.244.2.2"),
+			Protocol:           99,
+			SourcePort:         52142,
+			DestinationPort:    80},
+		Mark:          openflow.ServiceCTMark.GetValue(),
+		ProxySnatIP:   netip.MustParseAddr("172.18.0.2"),
+		ProxySnatPort: uint16(28392),
+	}
+	hasServiceConn := &connection.Connection{
+		OriginalDestinationAddress: netip.MustParseAddr("172.18.0.111"),
+		OriginalDestinationPort:    12345,
+		StartTime:                  refTime.Add(-(time.Second * 50)),
+		StopTime:                   refTime.Add(-(time.Second * 30)),
+		LastExportTime:             refTime.Add(-(time.Second * 50)),
+		FlowKey: connection.Tuple{
+			SourceAddress:      netip.MustParseAddr("172.18.0.1"),
+			DestinationAddress: netip.MustParseAddr("10.244.2.2"),
+			Protocol:           6,
+			SourcePort:         52142,
+			DestinationPort:    80},
+		Mark:          openflow.ServiceCTMark.GetValue(),
+		ProxySnatIP:   netip.MustParseAddr("172.18.0.2"),
+		ProxySnatPort: uint16(28392),
+	}
+	mockProxier := mockProxier{}
+	testCases := []struct {
+		name   string
+		conn   *connection.Connection
+		stored bool
+	}{
+		{
+			name:   "Non-Zone Zero connections",
+			conn:   nonZoneZeroConn,
+			stored: false,
+		},
+		{
+			name:   "Nil Proxier",
+			conn:   zoneZeroConn,
+			stored: true,
+		},
+		{
+			name:   "Unknown protocol",
+			conn:   invalidProtocolConn,
+			stored: false,
+		},
+		{
+			name:   "No associated service",
+			conn:   zoneZeroConn,
+			stored: false,
+		},
+		{
+			name:   "Associated service found",
+			conn:   hasServiceConn,
+			stored: true,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			correlator := newFromExternalCorrelator()
+			var got bool
+			if tc.name == "Nil Proxier" {
+				got = correlator.filterAndStoreExternalSource(tc.conn, nil)
+			} else {
+				got = correlator.filterAndStoreExternalSource(tc.conn, mockProxier)
+			}
+
+			if tc.name == "Non-Zone Zero connections" {
+				assert.False(t, got, "Expected connection to not be filtered")
+			} else {
+				assert.True(t, got, "Expected connection to be filtered")
+			}
+
+			if tc.stored {
+				assert.Equal(t, 1, len(correlator.connections), "Expected connection to be stored in correlator")
+			} else {
+				assert.Equal(t, 0, len(correlator.connections), "Expected connection not to be stored in correlator")
+			}
+		})
+	}
 }

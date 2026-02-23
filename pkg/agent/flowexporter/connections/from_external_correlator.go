@@ -20,7 +20,10 @@ import (
 	"sync"
 	"time"
 
+	"k8s.io/klog/v2"
+
 	"antrea.io/antrea/pkg/agent/flowexporter/connection"
+	"antrea.io/antrea/pkg/agent/proxy"
 )
 
 // ttl threshold for expiring connections in the fromExternalCorrelator.
@@ -52,6 +55,32 @@ func newFromExternalCorrelator() *fromExternalCorrelator {
 	}
 	go store.cleanUpLoop(stopCh, cleanUpInterval, ttl)
 	return &store
+}
+
+// filterAndStoreExternalSource filters for connections that have external source information so correlation can be
+// done on FromExternal flows. Returns true if the connection was zone zero.
+func (c *fromExternalCorrelator) filterAndStoreExternalSource(conn *connection.Connection, antreaProxier proxy.ProxyQuerier) bool {
+	if conn.Zone != 0 {
+		return false
+	}
+
+	clusterIP := conn.OriginalDestinationAddress.String()
+	svcPort := conn.OriginalDestinationPort
+	protocol, err := lookupServiceProtocol(conn.FlowKey.Protocol)
+	if err != nil {
+		klog.InfoS("Could not retrieve Service protocol", "error", err, "conn", conn)
+		return true
+	}
+	// When AntreaProxy is available, the store can selectively store zone zero connections with associated services
+	if antreaProxier != nil {
+		serviceStr := fmt.Sprintf("%s:%d/%s", clusterIP, svcPort, protocol)
+		_, exists := antreaProxier.GetServiceByIP(serviceStr)
+		if !exists {
+			return true
+		}
+	}
+	c.add(conn)
+	return true
 }
 
 // cleanUpLoop runs in an infinite loop and cleans up the store at the given interval.
@@ -90,18 +119,14 @@ func (c *fromExternalCorrelator) generateKey(conn *connection.Connection) string
 }
 
 // add the given zone zero connection to the store.
-func (c *fromExternalCorrelator) add(conn *connection.Connection) error {
+func (c *fromExternalCorrelator) add(conn *connection.Connection) {
 	c.lock.Lock()
 	defer c.lock.Unlock()
-	if conn.Zone != 0 {
-		return fmt.Errorf("Cannot add connections to store that are not zone zero. Connection has zone %v", conn.Zone)
-	}
 	key := c.generateKey(conn)
 	c.connections[key] = connectionItem{
 		conn:      conn,
 		timestamp: time.Now(),
 	}
-	return nil
 }
 
 // Given an antrea zone connection, generate a key that will equal the corresponding zone zero connection.
