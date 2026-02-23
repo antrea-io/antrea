@@ -13,10 +13,10 @@ jobs:
     steps:
     - name: Check-out code
       uses: actions/checkout@v4
-    - name: Set up Go using version from go.mod
+    - name: Set up Go using version from .go-version
       uses: actions/setup-go@v5
       with:
-        go-version-file: 'go.mod'
+        go-version-file: '.go-version'
     - name: Run verify scripts
       run: make verify
     - name: Checking for broken Markdown links for main branch

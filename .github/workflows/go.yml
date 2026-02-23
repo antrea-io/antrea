@@ -40,10 +40,10 @@ jobs:
       uses: actions/checkout@v4
       with:
         show-progress: false
-    - name: Set up Go using version from go.mod
+    - name: Set up Go using version from .go-version
       uses: actions/setup-go@v5
       with:
-        go-version-file: 'go.mod'
+        go-version-file: '.go-version'
     - name: Run unit tests
       run: make test-unit
     - name: Codecov
@@ -66,10 +66,10 @@ jobs:
         uses: actions/checkout@v4
         with:
           show-progress: false
-      - name: Set up Go using version from go.mod
+      - name: Set up Go using version from .go-version
         uses: actions/setup-go@v5
         with:
-          go-version-file: 'go.mod'
+          go-version-file: '.go-version'
       - name: Run unit tests
         run: make test-unit
       - name: Codecov
@@ -92,10 +92,10 @@ jobs:
         uses: actions/checkout@v4
         with:
           show-progress: false
-      - name: Set up Go using version from go.mod
+      - name: Set up Go using version from .go-version
         uses: actions/setup-go@v5
         with:
-          go-version-file: 'go.mod'
+          go-version-file: '.go-version'
       - name: Run integration tests
         run: |
           ./build/images/ovs/build.sh
@@ -127,10 +127,10 @@ jobs:
       uses: actions/checkout@v4
       with:
         show-progress: false
-    - name: Set up Go using version from go.mod
+    - name: Set up Go using version from .go-version
       uses: actions/setup-go@v5
       with:
-        go-version-file: 'go.mod'
+        go-version-file: '.go-version'
     - name: Run golangci-lint
       run: make golangci
 
@@ -144,10 +144,10 @@ jobs:
         uses: actions/checkout@v4
         with:
           show-progress: false
-      - name: Set up Go using version from go.mod
+      - name: Set up Go using version from .go-version
         uses: actions/setup-go@v5
         with:
-          go-version-file: 'go.mod'
+          go-version-file: '.go-version'
       - name: Run golangci-lint
         run: make golangci
 
@@ -161,10 +161,10 @@ jobs:
       uses: actions/checkout@v4
       with:
         show-progress: false
-    - name: Set up Go using version from go.mod
+    - name: Set up Go using version from .go-version
       uses: actions/setup-go@v5
       with:
-        go-version-file: 'go.mod'
+        go-version-file: '.go-version'
     - name: Build Antrea binaries for amd64
       run: GOARCH=amd64 make bin
     - name: Build Antrea binaries for arm64
@@ -198,10 +198,10 @@ jobs:
       uses: actions/checkout@v4
       with:
         show-progress: false
-    - name: Set up Go using version from go.mod
+    - name: Set up Go using version from .go-version
       uses: actions/setup-go@v5
       with:
-        go-version-file: 'go.mod'
+        go-version-file: '.go-version'
     - name: Build Antrea windows binaries
       run: make windows-bin
 
@@ -215,10 +215,10 @@ jobs:
       uses: actions/checkout@v4
       with:
         show-progress: false
-    - name: Set up Go using version from go.mod
+    - name: Set up Go using version from .go-version
       uses: actions/setup-go@v5
       with:
-        go-version-file: 'go.mod'
+        go-version-file: '.go-version'
     # tidy check need to be run before code generation which will regenerate codes.
     - name: Check tidy
       run: make test-tidy
@@ -237,10 +237,10 @@ jobs:
       uses: actions/checkout@v4
       with:
         show-progress: false
-    - name: Set up Go using version from go.mod
+    - name: Set up Go using version from .go-version
       uses: actions/setup-go@v5
       with:
-        go-version-file: 'go.mod'
+        go-version-file: '.go-version'
     - name: Run verify scripts
       run: make verify
     - name: Checking for broken Markdown links
@@ -275,9 +275,9 @@ jobs:
         uses: actions/checkout@v4
         with:
           show-progress: false
-      - name: Set up Go using version from go.mod
+      - name: Set up Go using version from .go-version
         uses: actions/setup-go@v5
         with:
-          go-version-file: 'go.mod'
+          go-version-file: '.go-version'
       - name: Run Go benchmark test
         run: go test -run '^$' -bench . -benchtime 1x -timeout 10m -cpu 4 -v -benchmem ./pkg/...
