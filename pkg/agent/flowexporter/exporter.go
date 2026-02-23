@@ -306,12 +306,6 @@ func (exp *FlowExporter) findFlowType(conn connection.Connection, nodeRouteContr
 		return utils.FlowTypeIntraNode
 	}
 
-	// The interface can have non nil pointer but nil value so checking both is required
-	if nodeRouteController == nil {
-		klog.V(5).InfoS("Can't find flow type without nodeRouteController")
-		return utils.FlowTypeUnspecified
-	}
-
 	srcIsPod, srcIsGw := nodeRouteController.LookupIPInPodSubnets(conn.FlowKey.SourceAddress)
 	dstIsPod, dstIsGw := nodeRouteController.LookupIPInPodSubnets(conn.FlowKey.DestinationAddress)
 	if dstIsGw {
@@ -364,7 +358,15 @@ func (exp *FlowExporter) fillEgressInfo(conn *connection.Connection) {
 }
 
 func (exp *FlowExporter) exportConn(conn *connection.Connection) error {
-	conn.FlowType = exp.findFlowType(*conn, exp.nodeRouteController)
+	// nil check is done outside findFlowType because it takes an interface which
+	// cannot be properly nil checked within the function without reflection which would be
+	// too expensive.
+	if exp.nodeRouteController == nil {
+		klog.V(5).InfoS("Can't find flow type without nodeRouteController")
+		conn.FlowType = utils.FlowTypeUnspecified
+	} else {
+		conn.FlowType = exp.findFlowType(*conn, exp.nodeRouteController)
+	}
 
 	if conn.FlowType == utils.FlowTypeUnsupported {
 		return nil

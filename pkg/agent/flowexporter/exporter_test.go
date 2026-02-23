@@ -431,12 +431,11 @@ func TestFlowExporter_findFlowType(t *testing.T) {
 		name                string
 		isNetworkPolicyOnly bool
 		conn                connection.Connection
-		expectedFlowType    uint8
+		want                uint8
 	}{
 
 		{"isNetworkPolicy and pod names exist", true, conn1, utils.FlowTypeIntraNode},
 		{"isNetworkPolicy and pod names are missing", true, conn2, utils.FlowTypeInterNode},
-		{"unspecified flow type", false, conn1, utils.FlowTypeUnspecified},
 		{"source is gateway and destination pod namespace is not flow aggregator", false, conn3, utils.FlowTypeFromExternal},
 		{"destination is gateway", false, conn4, utils.FlowTypeUnsupported},
 		{"source is gateway and destination pod namesapce is empty", false, conn5, utils.FlowTypeUnsupported},
@@ -450,13 +449,8 @@ func TestFlowExporter_findFlowType(t *testing.T) {
 			flowExp := &FlowExporter{
 				isNetworkPolicyOnly: tc.isNetworkPolicyOnly,
 			}
-			var flowType uint8
-			if tc.name == "unspecified flow type" {
-				flowType = flowExp.findFlowType(tc.conn, nil)
-			} else {
-				flowType = flowExp.findFlowType(tc.conn, mockController)
-			}
-			assert.Equal(t, tc.expectedFlowType, flowType)
+			got := flowExp.findFlowType(tc.conn, mockController)
+			assert.Equal(t, tc.want, got)
 		})
 	}
 }
