@@ -335,7 +335,7 @@ is not enabled by default.
 
 ### CNI IPAM configuration
 
-To configure Antrea IPAM, `antrea` should be specified as the IPAM plugin in the
+To configure Antrea IPAM, `antrea` should be specified as the IPAM plugin in
 the CNI IPAM configuration, and at least one Antrea IPPool should be specified
 in the `ippools` field. IPs will be allocated from the specified IPPool(s) for
 the secondary network.
