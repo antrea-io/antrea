@@ -776,11 +776,6 @@ func isCorrelationRequired(record *flowpb.Flow) bool {
 // Returns true if the given ip is a Gateway IP from one of the nodes on the cluster.
 // If there are errors, they are logged and false is returned.
 func (a *aggregationProcess) isGateway(ip []byte) bool {
-	addr, ok := netip.AddrFromSlice(ip)
-	if !ok {
-		klog.Errorf("Failed to determine if ip is gateway. IP %v could not be converted to Addr", ip)
-		return false
-	}
 	if a.nodeLister == nil {
 		klog.Error("Failed to determine if ip is gateway. NodeLister is required but is nil")
 		return false
@@ -793,6 +788,12 @@ func (a *aggregationProcess) isGateway(ip []byte) bool {
 
 	if len(nodes) == 0 {
 		klog.Error("Failed to determine if ip is gateway. NodeLister returned 0 nodes")
+	}
+
+	addr, ok := netip.AddrFromSlice(ip)
+	if !ok {
+		klog.Errorf("Failed to determine if ip is gateway. IP %v could not be converted to Addr", ip)
+		return false
 	}
 
 	for _, node := range nodes {
