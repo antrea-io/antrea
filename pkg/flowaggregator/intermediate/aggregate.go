@@ -24,8 +24,8 @@ import (
 	"time"
 
 	timestamppb "google.golang.org/protobuf/types/known/timestamppb"
-	"k8s.io/apimachinery/pkg/labels"
-	listers "k8s.io/client-go/listers/core/v1"
+	v1 "k8s.io/api/core/v1"
+	"k8s.io/client-go/tools/cache"
 	"k8s.io/klog/v2"
 	"k8s.io/utils/clock"
 
@@ -37,6 +37,28 @@ var (
 	MaxRetries    = 2
 	MinExpiryTime = 100 * time.Millisecond
 )
+
+const GatewayIPIndex = "gatewayIPIndex"
+
+var NodeIndexers = cache.Indexers{
+	// GatewayIPIndex extracts Gateway IPs from nodes on the cluster.
+	GatewayIPIndex: func(obj interface{}) ([]string, error) {
+		node, ok := obj.(*v1.Node)
+		if !ok {
+			return nil, fmt.Errorf("object is not a Node: %T", obj)
+		}
+
+		podCIDR := node.Spec.PodCIDR
+		if podCIDR == "" {
+			return nil, fmt.Errorf("podCIDR is nil")
+		}
+		prefix, err := netip.ParsePrefix(podCIDR)
+		if err != nil {
+			return nil, fmt.Errorf("could not parse pod CIDR %s for node %s: %v", podCIDR, node.Name, err)
+		}
+		return []string{prefix.Addr().Next().String()}, nil
+	},
+}
 
 type aggregationProcess struct {
 	// flowKeyRecordMap maps each connection (5-tuple) with its records
@@ -66,7 +88,7 @@ type aggregationProcess struct {
 	clock    clock.Clock
 	// FromExternalStore stores flows that need correlation
 	FromExternalStore map[string]*flowpb.Flow
-	nodeLister        listers.NodeLister
+	nodeIndexer       cache.Indexer
 }
 
 type AggregationInput struct {
@@ -76,7 +98,7 @@ type AggregationInput struct {
 	InactiveExpiryTimeout time.Duration
 }
 
-func initAggregationProcessWithClock(input AggregationInput, clock clock.Clock, nodeLister listers.NodeLister) (*aggregationProcess, error) {
+func initAggregationProcessWithClock(input AggregationInput, clock clock.Clock, nodeIndexer cache.Indexer) (*aggregationProcess, error) {
 	if input.RecordChan == nil {
 		return nil, fmt.Errorf("cannot create aggregationProcess process without input channel")
 	}
@@ -95,12 +117,12 @@ func initAggregationProcessWithClock(input AggregationInput, clock clock.Clock, 
 		make(chan bool),
 		clock,
 		make(map[string]*flowpb.Flow),
-		nodeLister,
+		nodeIndexer,
 	}, nil
 }
 
-func InitAggregationProcess(input AggregationInput, nodeLister listers.NodeLister) (*aggregationProcess, error) {
-	return initAggregationProcessWithClock(input, clock.RealClock{}, nodeLister)
+func InitAggregationProcess(input AggregationInput, nodeIndexer cache.Indexer) (*aggregationProcess, error) {
+	return initAggregationProcessWithClock(input, clock.RealClock{}, nodeIndexer)
 }
 
 func (a *aggregationProcess) Start() {
@@ -776,42 +798,23 @@ func isCorrelationRequired(record *flowpb.Flow) bool {
 // Returns true if the given ip is a Gateway IP from one of the nodes on the cluster.
 // If there are errors, they are logged and false is returned.
 func (a *aggregationProcess) isGateway(ip []byte) bool {
-	if a.nodeLister == nil {
-		klog.Error("Failed to determine if ip is gateway. NodeLister is required but is nil")
-		return false
-	}
-	nodes, err := a.nodeLister.List(labels.Everything())
-	if err != nil {
-		klog.Errorf("Failed to determine if ip is gateway: %v", err)
-		return false
-	}
-
-	if len(nodes) == 0 {
-		klog.Error("Failed to determine if ip is gateway. NodeLister returned 0 nodes")
-	}
-
 	addr, ok := netip.AddrFromSlice(ip)
 	if !ok {
 		klog.Errorf("Failed to determine if ip is gateway. IP %v could not be converted to Addr", ip)
 		return false
 	}
 
-	for _, node := range nodes {
-		podCIDR := node.Spec.PodCIDR
-		if podCIDR == "" {
-			continue
-		}
-		prefix, err := netip.ParsePrefix(podCIDR)
-		if err != nil {
-			klog.Errorf("Failed to determine if ip is gateway. Could not parse pod CIDR %s for node %s: %v", podCIDR, node.Name, err)
-			return false
-		}
-		gatewayAddr := prefix.Addr().Next()
-		if addr == gatewayAddr {
-			return true
-		}
+	objs, err := a.nodeIndexer.ByIndex(GatewayIPIndex, addr.String())
+	if err != nil {
+		klog.Errorf("failed to query Node indexer: %v", err)
+		return false
 	}
-	return false
+
+	if len(objs) == 0 {
+		return false
+	}
+
+	return true
 }
 
 // Returns true if record is FromExternal and represents the flow created from
