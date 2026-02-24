@@ -16,7 +16,7 @@ package intermediate
 
 import (
 	"container/heap"
-	"errors"
+	"fmt"
 	"net"
 	"net/netip"
 	"testing"
@@ -25,9 +25,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/types/known/timestamppb"
-	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/labels"
-	listers "k8s.io/client-go/listers/core/v1"
+	"k8s.io/client-go/tools/cache"
 	clocktesting "k8s.io/utils/clock/testing"
 
 	flowpb "antrea.io/antrea/pkg/apis/flow/v1alpha1"
@@ -463,7 +461,14 @@ func newAggregationProcess() *aggregationProcess {
 	}
 	clock := clocktesting.NewFakeClock(time.Now())
 	ap, _ := initAggregationProcessWithClock(input, clock, nil)
-	ap.nodeLister = mockLister{}
+	ap.nodeIndexer = &mockIndexer{
+		mockByIndex: func(indexName, indexedValue string) ([]interface{}, error) {
+			if indexedValue == "10.244.2.1" {
+				return []interface{}{"found"}, nil
+			}
+			return []interface{}{}, nil
+		},
+	}
 	return ap
 }
 
@@ -953,121 +958,76 @@ func runAggregationAndCheckResult(t *testing.T, ap *aggregationProcess, clock *c
 	assert.EqualValues(t, 915, aggRecord.Record.Aggregation.ReverseThroughputFromDestination)
 }
 
-type mockLister struct{}
-
-func (m mockLister) List(selector labels.Selector) ([]*corev1.Node, error) {
-	gatewayNode := &corev1.Node{Spec: corev1.NodeSpec{
-		PodCIDR: "10.244.2.0/24",
-	}}
-	return []*corev1.Node{gatewayNode}, nil
+type mockIndexer struct {
+	cache.Indexer
+	mockByIndex func(indexName, indexedValue string) ([]interface{}, error)
 }
 
-func (m mockLister) Get(name string) (*corev1.Node, error) {
-	return nil, nil
-}
-
-type failingMockLister struct{}
-
-func (m failingMockLister) List(selector labels.Selector) ([]*corev1.Node, error) {
-	return nil, errors.New("")
-}
-
-func (m failingMockLister) Get(name string) (*corev1.Node, error) {
-	return nil, nil
-}
-
-type emptyMockLister struct{}
-
-func (m emptyMockLister) List(selector labels.Selector) ([]*corev1.Node, error) {
-	return []*corev1.Node{}, nil
-}
-
-func (m emptyMockLister) Get(name string) (*corev1.Node, error) {
-	return nil, nil
-}
-
-type invalidMockLister struct{}
-
-func (m invalidMockLister) List(selector labels.Selector) ([]*corev1.Node, error) {
-	return []*corev1.Node{{Spec: corev1.NodeSpec{}}}, nil
-}
-
-func (m invalidMockLister) Get(name string) (*corev1.Node, error) {
-	return nil, nil
-}
-
-type invalidMockListerB struct{}
-
-func (m invalidMockListerB) List(selector labels.Selector) ([]*corev1.Node, error) {
-	return []*corev1.Node{{Spec: corev1.NodeSpec{PodCIDR: "."}}}, nil
-}
-
-func (m invalidMockListerB) Get(name string) (*corev1.Node, error) {
+func (m *mockIndexer) ByIndex(indexName, indexedValue string) ([]interface{}, error) {
+	if m.mockByIndex != nil {
+		return m.mockByIndex(indexName, indexedValue)
+	}
 	return nil, nil
 }
 
 func TestIsGateway(t *testing.T) {
 	testCases := []struct {
-		name       string
-		ip         []byte
-		expected   bool
-		nodeLister listers.NodeLister
+		name         string
+		ip           []byte
+		setupIndexer func() cache.Indexer
+		want         bool
 	}{
 		{
-			"IP is a node gateway",
-			gatewayIP,
-			true,
-			mockLister{},
+			name: "Invalid IP",
+			ip:   []byte{},
+			setupIndexer: func() cache.Indexer {
+				return &mockIndexer{}
+			},
+			want: false,
 		},
 		{
-			"IP is not a gateway",
-			externalIP,
-			false,
-			mockLister{},
+			name: "nodeIndexer errors",
+			ip:   podIP,
+			setupIndexer: func() cache.Indexer {
+				return &mockIndexer{
+					mockByIndex: func(indexName, indexedValue string) ([]interface{}, error) {
+						return nil, fmt.Errorf("error")
+					},
+				}
+			},
+			want: false,
 		},
 		{
-			"invalid ip",
-			[]byte{},
-			false,
-			mockLister{},
+			name: "nodeIndexer returns no matches",
+			ip:   podIP,
+			setupIndexer: func() cache.Indexer {
+				return &mockIndexer{
+					mockByIndex: func(indexName, indexedValue string) ([]interface{}, error) {
+						return []interface{}{}, nil
+					},
+				}
+			},
+			want: false,
 		},
 		{
-			"nodeLister is nil",
-			gatewayIP,
-			false,
-			nil,
-		},
-		{
-			"failing nodeLister",
-			gatewayIP,
-			false,
-			failingMockLister{},
-		},
-		{
-			"empty nodeLister",
-			gatewayIP,
-			false,
-			emptyMockLister{},
-		},
-		{
-			"empty podCIDR",
-			gatewayIP,
-			false,
-			invalidMockLister{},
-		},
-		{
-			"invalid podCIDR",
-			gatewayIP,
-			false,
-			invalidMockListerB{},
+			name: "Valid Gateway",
+			ip:   gatewayIP,
+			setupIndexer: func() cache.Indexer {
+				return &mockIndexer{
+					mockByIndex: func(indexName, indexedValue string) ([]interface{}, error) {
+						return []interface{}{""}, nil
+					},
+				}
+			},
+			want: true,
 		},
 	}
+
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			ap := newAggregationProcess()
-			ap.nodeLister = tc.nodeLister
-
-			if tc.expected {
+			ap.nodeIndexer = tc.setupIndexer()
+			if tc.want {
 				assert.True(t, ap.isGateway(tc.ip))
 			} else {
 				assert.False(t, ap.isGateway(tc.ip))
