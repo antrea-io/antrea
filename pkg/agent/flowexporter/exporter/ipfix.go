@@ -76,7 +76,7 @@ var (
 		"egressNodeName",
 		"proxySnatPort",
 	}
-	AntreaInfoElementsIPv4 = append(antreaInfoElementsCommon, []string{"destinationClusterIPv4", "proxySnatIPv4", "destinationServiceIPv6"}...)
+	AntreaInfoElementsIPv4 = append(antreaInfoElementsCommon, []string{"destinationClusterIPv4", "proxySnatIPv4", "destinationServiceIPv4"}...)
 	AntreaInfoElementsIPv6 = append(antreaInfoElementsCommon, []string{"destinationClusterIPv6", "proxySnatIPv6", "destinationServiceIPv6"}...)
 )
 
