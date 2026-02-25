@@ -801,6 +801,7 @@ func (c *clause) addConjunctiveMatchFlow(featureNetworkPolicy *featureNetworkPol
 	ctxType := modification
 	var dropFlow *flowChange
 	// Get conjMatchFlowContext from globalConjMatchFlowCache. If it doesn't exist, create a new one and add into the cache.
+	featureNetworkPolicy.conjMatchFlowLock.Lock()
 	context, found = featureNetworkPolicy.globalConjMatchFlowCache[matcherKey]
 	if !found {
 		context = &conjMatchFlowContext{
@@ -824,17 +825,21 @@ func (c *clause) addConjunctiveMatchFlow(featureNetworkPolicy *featureNetworkPol
 					changeType: insertion,
 				}
 			}
+			context.dropFlow = dropFlow.flow
 		}
+		featureNetworkPolicy.globalConjMatchFlowCache[matcherKey] = context
 	} else if context.dropFlowEnableLogging != enableLogging {
 		// Logging requirement of the rule has changed, modify default drop flow accordingly.
 		context.dropFlowEnableLogging = enableLogging
-		if c.dropTable != nil && context.dropFlow != nil {
+	}
+	featureNetworkPolicy.conjMatchFlowLock.Unlock()
+	
+	if c.dropTable != nil && context.dropFlow != nil {
 			dropFlow = &flowChange{
 				flow:       getFlowModMessage(context.featureNetworkPolicy.defaultDropFlow(c.dropTable, match.matchPairs, enableLogging), binding.AddMessage),
 				changeType: modification,
 			}
 		}
-	}
 
 	// Calculate the change on the conjMatchFlowContext.
 	ctxChanges := &conjMatchFlowContextChange{
@@ -1808,6 +1813,8 @@ func (f *featureNetworkPolicy) updateConjunctionActionFlows(conj *policyRuleConj
 
 // updateConjunctionMatchFlows updates the conjuctiveMatchFlows in a policyRuleConjunction.
 func (f *featureNetworkPolicy) updateConjunctionMatchFlows(conj *policyRuleConjunction, newPriority uint16) {
+	f.conjMatchFlowLock.Lock()
+	defer f.conjMatchFlowLock.Unlock()
 	allClause := []*clause{conj.fromClause, conj.toClause, conj.serviceClause}
 	for _, cl := range allClause {
 		if cl == nil {
