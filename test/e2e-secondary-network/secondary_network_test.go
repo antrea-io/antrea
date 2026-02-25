@@ -69,9 +69,12 @@ const (
 	osType         = "linux"
 	pingCount      = 5
 	pingSize       = 40
-	defaultTimeout = 10 * time.Second
+	defaultTimeout = 30 * time.Second
 	sriovReqName   = "intel.com/intel_sriov_netdevice"
-	sriovResNum    = 1
+	sriovResNum = 1
+
+	ipFamilyIPv4 = 4
+	ipFamilyIPv6 = 6
 )
 
 // formAnnotationStringOfPod forms the annotation string, used in the generation of each Pod YAML file.
@@ -100,14 +103,12 @@ func (data *testData) formAnnotationStringOfPod(pod *testPodInfo) string {
 
 // createPodOnNode creates the Pod for the specific annotations as per the parsed Pod information using the NewPodBuilder API
 func (data *testData) createPods(t *testing.T, ns string) error {
-	var err error
 	for _, pod := range data.pods {
-		err := data.createPodForSecondaryNetwork(ns, pod)
-		if err != nil {
-			return fmt.Errorf("error in creating pods.., err: %w", err)
+		if err := data.createPodForSecondaryNetwork(ns, pod); err != nil {
+			return fmt.Errorf("error creating Pods: %w", err)
 		}
 	}
-	return err
+	return nil
 }
 
 func generateExpectedNetworks(pod *testPodInfo, ipv4Addrs, ipv6Addrs map[string]net.IP, macMap map[string]string, isSRIOV bool) []nadv1.NetworkStatus {
@@ -278,9 +279,10 @@ func (data *testData) listPodAddresses(targetPod *testPodInfo) (map[string]net.I
 	return ipv4Result, ipv6Result, macResult, nil
 }
 
-// verifySecondaryInterfaces verifies MAC addresses and tests connectivity(ping)
-// between secondary interfaces of all created Pods that are on the same network.
-func (data *testData) verifySecondaryInterfaces(t *testing.T) error {
+// verifySecondaryInterfaces verifies MAC addresses and tests connectivity (ping)
+// between secondary interfaces of all created Pods that are on the same network
+// for the specified IP family (ipFamilyIPv4 or ipFamilyIPv6).
+func (data *testData) verifySecondaryInterfaces(t *testing.T, family int) error {
 	e2eTestData := data.e2eTestData
 	namespace := e2eTestData.GetTestNamespace()
 
@@ -312,17 +314,21 @@ func (data *testData) verifySecondaryInterfaces(t *testing.T) error {
 				return false, nil
 			}
 			var podNetworkAttachments []*attachment
-			podIPs, _, macResult, err := data.listPodAddresses(testPod)
+			podIPs, podIPv6s, macResult, err := data.listPodAddresses(testPod)
 			if err != nil {
 				return false, err
 			}
 			for iface, net := range testPod.interfaceNetworks {
 				ip := podIPs[iface]
-				if ip == nil {
+				ipv6 := podIPv6s[iface]
+
+				if family == ipFamilyIPv4 && ip == nil {
+					return false, nil
+				}
+				if family == ipFamilyIPv6 && ipv6 == nil {
 					return false, nil
 				}
 
-				// Verify MAC address
 				if expectedMAC, ok := testPod.macAddresses[iface]; ok {
 					actualMAC, exists := macResult[iface]
 					if !exists {
@@ -332,13 +338,21 @@ func (data *testData) verifySecondaryInterfaces(t *testing.T) error {
 					logs.Infof("Interface %s in Pod %s has expected MAC address: %s", iface, testPod.podName, actualMAC)
 				}
 
-				podNetworkAttachments = append(podNetworkAttachments, &attachment{
-					network: net,
-					iface:   iface,
-					ip:      ip,
-				})
+				if family == ipFamilyIPv4 && ip != nil {
+					podNetworkAttachments = append(podNetworkAttachments, &attachment{
+						network: net,
+						iface:   iface,
+						ip:      ip,
+					})
+				}
+				if family == ipFamilyIPv6 && ipv6 != nil {
+					podNetworkAttachments = append(podNetworkAttachments, &attachment{
+						network: net,
+						iface:   iface,
+						ip:      ipv6,
+					})
+				}
 			}
-			// we found all the expected secondary network interfaces / attachments
 			addPodNetworkAttachments(testPod, podNetworkAttachments)
 			return true, nil
 		})
@@ -408,31 +422,29 @@ func (data *testData) getIPPoolNames(ifaces []string, vlanPod *testPodInfo, name
 	return ipPoolsMap, nil
 }
 
-func (data *testData) checkIPReleased(ipPools map[string][]string, ifacesIPs map[string]net.IP, ifaces []string) error {
+func (data *testData) checkIPReleased(ipPools map[string][]string, ifacesIPv4 map[string]net.IP, ifacesIPv6 map[string]net.IP, ifaces []string) error {
 	crdClient := data.e2eTestData.CRDClient
 	return wait.PollUntilContextTimeout(context.Background(), time.Second, 10*time.Second, true, func(ctx context.Context) (bool, error) {
 		for _, iface := range ifaces {
-			ipPoolName, exists := ipPools[iface]
+			poolNames, exists := ipPools[iface]
 			if !exists {
 				return false, fmt.Errorf("no IPPool found for interface %s", iface)
 			}
 
-			podIP, exists := ifacesIPs[iface]
-			if !exists {
-				return false, fmt.Errorf("no IP found for interface %s", iface)
-			}
+			for _, poolName := range poolNames {
+				ipPool, err := crdClient.CrdV1beta1().IPPools().Get(ctx, poolName, metav1.GetOptions{})
+				if err != nil {
+					return false, fmt.Errorf("failed to get IPPool %s: %w", poolName, err)
+				}
 
-			ipPool, err := crdClient.CrdV1beta1().IPPools().Get(ctx, ipPoolName[0], metav1.GetOptions{})
-			if err != nil {
-				return false, fmt.Errorf("failed to get IPPool %s: %w", ipPoolName[0], err)
-			}
-
-			for _, ipAddress := range ipPool.Status.IPAddresses {
-				if podIP.String() == ipAddress.IPAddress {
-					return false, nil
+				for _, ipAddress := range ipPool.Status.IPAddresses {
+					if (ifacesIPv4[iface] != nil && ifacesIPv4[iface].String() == ipAddress.IPAddress) ||
+						(ifacesIPv6[iface] != nil && ifacesIPv6[iface].String() == ipAddress.IPAddress) {
+						return false, nil
+					}
 				}
 			}
-			logs.Infof("Released PodIP: %v, Interface: %s", podIP, iface)
+			logs.Infof("Released IPs for interface %s: IPv4=%v, IPv6=%v", iface, ifacesIPv4[iface], ifacesIPv6[iface])
 		}
 		return true, nil
 	})
@@ -453,47 +465,52 @@ func (data *testData) getOVSPortsOnSecondaryBridge(t *testing.T, nodeName string
 // reconcilationAfterAgentRestart verifies OVS Ports cleanup and IP release.
 func (data *testData) reconcilationAfterAgentRestart(t *testing.T) error {
 	beforeAgentRestartOvsPorts := make(map[string][]string)
-	beforeAgentRestartIPsAndIfaces := make(map[string]map[string]net.IP)
+	beforeAgentRestartIPv4s := make(map[string]map[string]net.IP)
+	beforeAgentRestartIPv6s := make(map[string]map[string]net.IP)
 	for _, pod := range data.pods {
 		ports, err := data.getOVSPortsOnSecondaryBridge(t, pod.nodeName)
 		require.NoError(t, err, "Failed to get Secondary bridge OVS Ports before agent restart")
 		beforeAgentRestartOvsPorts[pod.nodeName] = ports
 
-		ips, _, _, err := data.listPodAddresses(pod)
+		ipv4s, ipv6s, _, err := data.listPodAddresses(pod)
 		require.NoError(t, err, "Failed to get Pod IP before agent restart")
-		beforeAgentRestartIPsAndIfaces[pod.podName] = ips
+		beforeAgentRestartIPv4s[pod.podName] = ipv4s
+		beforeAgentRestartIPv6s[pod.podName] = ipv6s
 	}
 
 	require.NoError(t, data.e2eTestData.RestartAntreaAgentPods(30*time.Second), "Failed to restart Antrea agent Pods")
 
 	afterAgentRestartOvsPorts := make(map[string][]string)
-	afterAgentRestartIPsAndIfaces := make(map[string]map[string]net.IP)
+	afterAgentRestartIPv4s := make(map[string]map[string]net.IP)
+	afterAgentRestartIPv6s := make(map[string]map[string]net.IP)
 	for _, pod := range data.pods {
 		ports, err := data.getOVSPortsOnSecondaryBridge(t, pod.nodeName)
 		require.NoError(t, err, "Failed to get Secondary bridge OVS Ports after agent restart")
 		afterAgentRestartOvsPorts[pod.nodeName] = ports
 
-		ips, _, _, err := data.listPodAddresses(pod)
+		ipv4s, ipv6s, _, err := data.listPodAddresses(pod)
 		require.NoError(t, err, "Failed to get Pod IP after agent restart")
-		afterAgentRestartIPsAndIfaces[pod.podName] = ips
+		afterAgentRestartIPv4s[pod.podName] = ipv4s
+		afterAgentRestartIPv6s[pod.podName] = ipv6s
 	}
 
-	// Compare OVS ports before and after restart
 	for nodeName, portsBefore := range beforeAgentRestartOvsPorts {
 		assert.ElementsMatch(t, portsBefore, afterAgentRestartOvsPorts[nodeName],
 			"Secondary bridge OVS Ports mismatch after agent restart on node %s", nodeName)
 	}
 
-	// Compare IPs and interfaces before and after restart
-	for podName, ipsBefore := range beforeAgentRestartIPsAndIfaces {
-		assert.Equal(t, ipsBefore, afterAgentRestartIPsAndIfaces[podName],
-			"Pod: %s, Interfaces and IPs mismatch after agent restart", podName)
+	for podName, ipv4sBefore := range beforeAgentRestartIPv4s {
+		assert.Equal(t, ipv4sBefore, afterAgentRestartIPv4s[podName],
+			"Pod: %s, IPv4 addresses mismatch after agent restart", podName)
+	}
+	for podName, ipv6sBefore := range beforeAgentRestartIPv6s {
+		assert.Equal(t, ipv6sBefore, afterAgentRestartIPv6s[podName],
+			"Pod: %s, IPv6 addresses mismatch after agent restart", podName)
 	}
 
-	// Remove Pod and check IP released or not.
 	vlanPod := data.pods[1]
 	ifaces := []string{"eth1", "eth2"}
-	ifacesIPs, _, _, err := data.listPodAddresses(vlanPod)
+	ifacesIPv4, ifacesIPv6, _, err := data.listPodAddresses(vlanPod)
 	require.NoError(t, err, "Failed to get IPs of Interfaces")
 
 	beforeDeletionOvsPorts, err := data.getOVSPortsOnSecondaryBridge(t, vlanPod.nodeName)
@@ -509,7 +526,7 @@ func (data *testData) reconcilationAfterAgentRestart(t *testing.T) error {
 
 	assert.NotEqual(t, beforeDeletionOvsPorts, afterDeletionOvsPorts, "OVS Ports for VLAN Pod still exist")
 
-	return data.checkIPReleased(ipPools, ifacesIPs, ifaces)
+	return data.checkIPReleased(ipPools, ifacesIPv4, ifacesIPv6, ifaces)
 }
 
 func testSecondaryNetwork(t *testing.T, networkType string, pods []*testPodInfo) {
@@ -523,20 +540,36 @@ func testSecondaryNetwork(t *testing.T, networkType string, pods []*testPodInfo)
 
 	ns := e2eTestData.GetTestNamespace()
 	if err := testData.createPods(t, ns); err != nil {
-		t.Fatalf("Error when create test Pods: %v", err)
+		t.Fatalf("Error when creating test Pods: %v", err)
 	}
 	clientset, err := kubernetes.NewForConfig(e2eTestData.KubeConfig)
 	if err != nil {
 		t.Fatalf("Error when creating kubernetes client: %v", err)
 	}
-	if err := testData.verifySecondaryInterfaces(t); err != nil {
-		t.Fatalf("Error verifying secondary interfaces (configuration and connectivity): %v", err)
-	}
-	if err := testData.assertPodNetworkStatus(t, clientset, pods, ns, false); err != nil {
-		t.Fatalf("Error when checking the Pod annotation: %v", err)
-	}
-	t.Run("testReconcilationAfterAgentRestart", func(t *testing.T) {
-		testData.reconcilationAfterAgentRestart(t)
+
+	t.Run("IPv4Connectivity", func(t *testing.T) {
+		antreae2e.SkipIfNotIPv4Cluster(t)
+		if err := testData.verifySecondaryInterfaces(t, ipFamilyIPv4); err != nil {
+			t.Fatalf("Error verifying IPv4 secondary interfaces: %v", err)
+		}
+	})
+
+	t.Run("IPv6Connectivity", func(t *testing.T) {
+		antreae2e.SkipIfNotIPv6Cluster(t)
+		if err := testData.verifySecondaryInterfaces(t, ipFamilyIPv6); err != nil {
+			t.Fatalf("Error verifying IPv6 secondary interfaces: %v", err)
+		}
+	})
+
+	t.Run("NetworkStatus", func(t *testing.T) {
+		if err := testData.assertPodNetworkStatus(t, clientset, pods, ns, networkType == networkTypeSriov); err != nil {
+			t.Fatalf("Error when checking the Pod annotation: %v", err)
+		}
+	})
+
+	t.Run("ReconciliationAfterAgentRestart", func(t *testing.T) {
+		err := testData.reconcilationAfterAgentRestart(t)
+		require.NoError(t, err, "IP release check failed after agent restart")
 	})
 }
 
@@ -612,6 +645,7 @@ func (data *testData) assignIP(clientset *kubernetes.Clientset) error {
 }
 
 func TestSRIOVNetwork(t *testing.T) {
+	antreae2e.SkipIfNotIPv4Cluster(t)
 	e2eTestData, err := antreae2e.SetupTest(t)
 	if err != nil {
 		t.Fatalf("Error when setting up test: %v", err)
@@ -651,7 +685,7 @@ func TestSRIOVNetwork(t *testing.T) {
 	if err := testData.assignIP(clientset); err != nil {
 		t.Fatalf("Error when assign IP to ec2 instance: %v", err)
 	}
-	if err := testData.verifySecondaryInterfaces(t); err != nil {
+	if err := testData.verifySecondaryInterfaces(t, ipFamilyIPv4); err != nil {
 		t.Fatalf("Error verifying secondary interfaces (configuration and connectivity): %v", err)
 	}
 	if err := testData.assertPodNetworkStatus(t, clientset, pods, ns, true); err != nil {

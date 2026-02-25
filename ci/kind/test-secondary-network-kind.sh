@@ -99,7 +99,7 @@ printf -v IMAGES "%s " "${IMAGE_LIST[@]}"
 function setup_cluster {
   args=$1
   echo "creating test bed with args $args"
-  eval "timeout 600 $TESTBED_CMD create kind $args"
+  eval "timeout 600 $TESTBED_CMD create kind --ip-family dual $args"
 }
 
 function run_test {
