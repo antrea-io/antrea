@@ -442,12 +442,25 @@ function delete_vlan_subnets {
   fi
 }
 
+function force_remove_docker_network {
+  local network="$1"
+  if ! docker network inspect "$network" >/dev/null 2>&1; then
+    return
+  fi
+  local containers
+  containers=$(docker network inspect "$network" --format '{{range .Containers}}{{.Name}} {{end}}' 2>/dev/null)
+  for c in $containers; do
+    docker network disconnect -f "$network" "$c" 2>/dev/null || true
+  done
+  docker network rm "$network" >/dev/null 2>&1 || true
+}
+
 function delete_network_by_filter {
   local networks=$(docker network ls -f name="$1" --format '{{.Name}}')
-  if [[ -n $networks ]]; then
-    docker network rm $networks > /dev/null 2>&1
-    echo "Deleted networks: $networks"
-  fi
+  for network in $networks; do
+    force_remove_docker_network "$network"
+    echo "Deleted network: $network"
+  done
 }
 
 function delete_networks {
@@ -920,6 +933,7 @@ if [[ $ACTION == "create" ]]; then
         # Reserve IPs after 192.168.240.63 for e2e tests.
         docker_network_args+=("--ip-range" "192.168.240.0/26")
     fi
+    force_remove_docker_network "$CLUSTER_NAME"
     echo "Creating docker network $CLUSTER_NAME with args: ${docker_network_args[@]}"
     docker network create "${docker_network_args[@]}" "$CLUSTER_NAME"
     create
