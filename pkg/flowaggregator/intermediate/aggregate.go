@@ -18,47 +18,21 @@ import (
 	"container/heap"
 	"fmt"
 	"net"
-	"net/netip"
-	"strconv"
 	"sync"
 	"time"
 
 	timestamppb "google.golang.org/protobuf/types/known/timestamppb"
-	v1 "k8s.io/api/core/v1"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/klog/v2"
 	"k8s.io/utils/clock"
 
 	flowpb "antrea.io/antrea/pkg/apis/flow/v1alpha1"
-	"antrea.io/antrea/pkg/flowaggregator/flowrecord"
 )
 
 var (
 	MaxRetries    = 2
 	MinExpiryTime = 100 * time.Millisecond
 )
-
-const GatewayIPIndex = "gatewayIPIndex"
-
-var NodeIndexers = cache.Indexers{
-	// GatewayIPIndex extracts Gateway IPs from nodes on the cluster.
-	GatewayIPIndex: func(obj interface{}) ([]string, error) {
-		node, ok := obj.(*v1.Node)
-		if !ok {
-			return nil, fmt.Errorf("object is not a Node: %T", obj)
-		}
-
-		podCIDR := node.Spec.PodCIDR
-		if podCIDR == "" {
-			return nil, fmt.Errorf("podCIDR is nil")
-		}
-		prefix, err := netip.ParsePrefix(podCIDR)
-		if err != nil {
-			return nil, fmt.Errorf("could not parse pod CIDR %s for node %s: %v", podCIDR, node.Name, err)
-		}
-		return []string{prefix.Addr().Next().String()}, nil
-	},
-}
 
 type aggregationProcess struct {
 	// flowKeyRecordMap maps each connection (5-tuple) with its records
@@ -87,11 +61,7 @@ type aggregationProcess struct {
 	stopChan chan bool
 	clock    clock.Clock
 
-	//todo bump this stuff out?
-	// FromExternalStore stores flows that need correlation
-	FromExternalStore map[string]flowItem
-	nodeIndexer       cache.Indexer
-	lock              sync.RWMutex
+	fromExternalAggregator *fromExternalAggregator
 }
 
 type AggregationInput struct {
@@ -119,9 +89,7 @@ func initAggregationProcessWithClock(input AggregationInput, clock clock.Clock, 
 		input.InactiveExpiryTimeout,
 		make(chan bool),
 		clock,
-		make(map[string]flowItem),
-		nodeIndexer,
-		sync.RWMutex{},
+		newFromExternalAggregator(nodeIndexer),
 	}, nil
 }
 
@@ -367,12 +335,12 @@ func (a *aggregationProcess) addOrUpdateRecordInMap(flowKey *FlowKey, record *fl
 	a.mutex.Lock()
 	defer a.mutex.Unlock()
 
-	if a.FromExternalCorrelationRequired(record) {
+	if a.fromExternalAggregator.FromExternalCorrelationRequired(record) {
 		// Store the record if not yet ready for correlation and return. Otherwise, pass through the correlated record
-		if a.StoreIfNew(record) {
+		if a.fromExternalAggregator.StoreIfNew(record) {
 			return
 		} else {
-			record = a.CorrelateExternal(record)
+			record = a.fromExternalAggregator.CorrelateExternal(record)
 			flowKey, _ = getFlowKeyFromRecord(record)
 		}
 	}
@@ -786,177 +754,4 @@ func getFlowKeyFromRecord(record *flowpb.Flow) (*FlowKey, bool) {
 		DestinationPort:    uint16(record.Transport.DestinationPort),
 	}
 	return flowKey, record.Ip.Version == flowpb.IPVersion_IP_VERSION_4
-}
-
-// TODO - move this to it's own file
-
-// ttl threshold for expiring flows.
-var ttl = time.Millisecond
-
-// cleanUpInterval is the frequency in which we run the cleanup for expiring stale flows.
-var cleanUpInterval = time.Second * 5
-
-// flowItem wraps a zone zero connection along with it's timestamp use for expiring flows.
-type flowItem struct {
-	flow      *flowpb.Flow
-	timestamp time.Time
-}
-
-// cleanUpLoop runs in an infinite loop and cleans up the store at the given interval.
-func (a *aggregationProcess) cleanUpLoop(stopCh <-chan struct{}, interval, ttl time.Duration) {
-	ticker := time.NewTicker(interval)
-	defer ticker.Stop()
-
-	for {
-		select {
-		case <-stopCh:
-			return
-		case <-ticker.C:
-			a.cleanup(ttl)
-		}
-	}
-}
-
-// cleanup loops through the entire store and deleting connections that exceed the ttl.
-func (a *aggregationProcess) cleanup(ttl time.Duration) {
-	a.lock.Lock()
-	defer a.lock.Unlock()
-	now := time.Now()
-	for key, record := range a.FromExternalStore {
-		if now.Sub(record.timestamp) > ttl {
-			delete(a.FromExternalStore, key)
-		}
-	}
-}
-
-// isCorrelationRequired returns true for InterNode flowType when
-// either the egressNetworkPolicyRuleAction is not deny (drop/reject) or
-// the ingressNetworkPolicyRuleAction is not reject.
-func isCorrelationRequired(record *flowpb.Flow) bool {
-	flowType := record.K8S.FlowType
-	return flowType == flowpb.FlowType_FLOW_TYPE_INTER_NODE &&
-		record.K8S.EgressNetworkPolicyRuleAction != flowpb.NetworkPolicyRuleAction_NETWORK_POLICY_RULE_ACTION_DROP &&
-		record.K8S.EgressNetworkPolicyRuleAction != flowpb.NetworkPolicyRuleAction_NETWORK_POLICY_RULE_ACTION_REJECT &&
-		record.K8S.IngressNetworkPolicyRuleAction != flowpb.NetworkPolicyRuleAction_NETWORK_POLICY_RULE_ACTION_REJECT
-}
-
-// Returns true if the given ip is a Gateway IP from one of the nodes on the cluster.
-// If there are errors, they are logged and false is returned.
-func (a *aggregationProcess) isGateway(ip []byte) bool {
-	addr, ok := netip.AddrFromSlice(ip)
-	if !ok {
-		klog.Errorf("Failed to determine if ip is gateway. IP %v could not be converted to Addr", ip)
-		return false
-	}
-
-	objs, err := a.nodeIndexer.ByIndex(GatewayIPIndex, addr.String())
-	if err != nil {
-		klog.Errorf("failed to query Node indexer: %v", err)
-		return false
-	}
-
-	if len(objs) == 0 {
-		return false
-	}
-
-	return true
-}
-
-// Returns true if record is FromExternal and represents the flow created from
-// an external connection where the sourceNode and destinationNode are the same.
-// When a flow goes through two distinct nodes, the sourceNode flow has empty destinationNode
-// and the destinationNode has the gatewayIP as the sourceAddress. If flow is invalid, false
-// is returned
-func (a *aggregationProcess) FromExternalCorrelationRequired(flow *flowpb.Flow) bool {
-	if flow.K8S == nil || flow.K8S.FlowType != flowpb.FlowType_FLOW_TYPE_FROM_EXTERNAL {
-		return false
-	}
-	if flow.Ip == nil {
-		klog.Errorf("Failed to determine correlation of FromExternal record required. Ip missing from flow %v", flow)
-		return false
-	}
-	// DestinationNode flows have source IP as the gateway
-	if a.isGateway(flow.Ip.Source) {
-		return true
-	}
-	// SourceNode flows do not have podName
-	if flow.K8S == nil || flow.K8S.DestinationPodName == "" {
-		return true
-	}
-	return false
-}
-
-// Return a key unique to the pair of flows that make up a FromExternal flow
-func (a *aggregationProcess) generateFromExternalStoreKey(record *flowpb.Flow) string {
-	var gateway string
-	var SNATPort string
-
-	if a.isGateway(record.Ip.Source) {
-		// Is Destination Flow
-		gateway = flowrecord.IpAddressAsString(record.Ip.Source)
-		SNATPort = strconv.FormatUint(uint64(record.Transport.SourcePort), 10)
-	} else {
-		// Is SourceFlow
-		gateway = flowrecord.IpAddressAsString(record.ProxySnatIp)
-		SNATPort = strconv.FormatUint(uint64(record.ProxySnatPort), 10)
-	}
-
-	destinationAddress := flowrecord.IpAddressAsString(record.Ip.Destination)
-	destinationPort := strconv.FormatUint(uint64(record.Transport.DestinationPort), 10)
-
-	return fmt.Sprintf("%s-%s-%s-%s",
-		SNATPort,
-		gateway,
-		destinationAddress,
-		destinationPort,
-	)
-}
-
-// If FromExternal flow is not yet in the store, add it and return true.
-// If the flow is in the store, return false
-func (a *aggregationProcess) StoreIfNew(flow *flowpb.Flow) bool {
-	key := a.generateFromExternalStoreKey(flow)
-	if _, exists := a.FromExternalStore[key]; !exists {
-
-		// TODO ADD method?
-		// TODO mutex
-		a.FromExternalStore[key] = flowItem{
-			flow:      flow,
-			timestamp: time.Now(),
-		}
-		return true
-	}
-	return false
-}
-
-// Return a correlated flow from the given flow and it's matching record from the store. Returns
-// nil if there was no matching flow in store. Upon successful correlation, delete the flow from
-// the store.
-func (a *aggregationProcess) CorrelateExternal(flow *flowpb.Flow) *flowpb.Flow {
-	key := a.generateFromExternalStoreKey(flow)
-	storedFlowItem, exists := a.FromExternalStore[key]
-	if !exists {
-		return nil
-	}
-	storedFlow := storedFlowItem.flow
-	delete(a.FromExternalStore, key)
-	if a.isGateway(flow.Ip.Source) {
-		flow.Ip.Source = storedFlow.Ip.Source
-		if flow.K8S != nil {
-			flow.K8S.DestinationServiceIp = storedFlow.K8S.DestinationServiceIp
-			flow.K8S.DestinationServicePortName = storedFlow.K8S.DestinationServicePortName
-			flow.K8S.DestinationServicePort = storedFlow.K8S.DestinationServicePort
-			flow.K8S.DestinationClusterIp = storedFlow.K8S.DestinationClusterIp
-		}
-		return flow
-	} else {
-		storedFlow.Ip.Source = flow.Ip.Source
-		if storedFlow.K8S != nil {
-			storedFlow.K8S.DestinationServiceIp = flow.K8S.DestinationServiceIp
-			storedFlow.K8S.DestinationServicePortName = flow.K8S.DestinationServicePortName
-			storedFlow.K8S.DestinationServicePort = flow.K8S.DestinationServicePort
-			storedFlow.K8S.DestinationClusterIp = flow.K8S.DestinationClusterIp
-		}
-		return storedFlow
-	}
 }
