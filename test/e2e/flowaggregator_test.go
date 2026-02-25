@@ -2025,7 +2025,7 @@ func testExternalToPodFlows(t *testing.T, data *TestData, isIPv6 bool) {
 
 func flushFlowsFromCollector(t *testing.T, data *TestData, isIPv6 bool) {
 	var cmd string
-	ipfixCollectorIP, err := testData.podWaitForIPs(defaultTimeout, "ipfix-collector", testData.testNamespace)
+	ipfixCollectorIP, err := data.podWaitForIPs(defaultTimeout, "ipfix-collector", testData.testNamespace)
 	if err != nil || len(ipfixCollectorIP.IPStrings) == 0 {
 		require.NoErrorf(t, err, "Should be able to get IP from IPFIX collector Pod")
 	}
