@@ -360,6 +360,13 @@ func TestFromExternalCorrelationRequired(t *testing.T) {
 	}
 }
 
+func contains(a *fromExternalAggregator, key string) bool {
+	a.lock.Lock()
+	defer a.lock.Unlock()
+	_, exists := a.FromExternalStore[key]
+	return exists
+}
+
 func TestStoreIfNew(t *testing.T) {
 	t.Run("storing first flow", func(t *testing.T) {
 		ap := newAggregationProcess()
@@ -368,8 +375,7 @@ func TestStoreIfNew(t *testing.T) {
 		assert.True(t, exists, "Expected not to find flow in an empty store")
 
 		key := ap.fromExternalAggregator.generateFromExternalStoreKey(sourceNodeFlow)
-		_, exists = ap.fromExternalAggregator.FromExternalStore[key]
-		assert.True(t, exists, "Expected flow to have been stored")
+		assert.True(t, contains(ap.fromExternalAggregator, key), "Expected flow to have been stored")
 	})
 	t.Run("flow is in store", func(t *testing.T) {
 		ap := newAggregationProcess()
@@ -389,6 +395,5 @@ func TestExpiresStaleFlows(t *testing.T) {
 	time.Sleep(10 * time.Second) //todo make ttl configurable on newAggregationProcess
 
 	key := ap.fromExternalAggregator.generateFromExternalStoreKey(sourceNodeFlow)
-	_, exists = ap.fromExternalAggregator.FromExternalStore[key]
-	assert.False(t, exists, "Expected flow to have been cleaned up")
+	assert.False(t, contains(ap.fromExternalAggregator, key), "Expected flow to have been cleaned up")
 }
