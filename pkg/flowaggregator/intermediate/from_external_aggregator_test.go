@@ -147,7 +147,6 @@ func newAggregationProcess() *aggregationProcess { // todo - can delete maybe?
 	}
 	clock := clocktesting.NewFakeClock(time.Now())
 	ap, _ := initAggregationProcessWithClock(input, clock, mockIndexerA)
-	go ap.fromExternalAggregator.cleanUpLoop(make(chan struct{}), cleanUpInterval, ttl)
 	return ap
 }
 
