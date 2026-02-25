@@ -28,11 +28,7 @@ import (
 func GetIPRangeSet(ipRanges []crdv1beta1.IPRange) sets.Set[string] {
 	set := sets.New[string]()
 	for _, ipRange := range ipRanges {
-		ipRangeStr := ipRange.CIDR
-		if ipRangeStr == "" {
-			ipRangeStr = fmt.Sprintf("%s-%s", ipRange.Start, ipRange.End)
-		}
-		set.Insert(ipRangeStr)
+		set.Insert(ipRangeToString(ipRange))
 	}
 	return set
 }

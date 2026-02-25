@@ -235,16 +235,23 @@ func run(o *Options) error {
 	ipv4Enabled, ipv6Enabled := true, true
 	if features.DefaultFeatureGate.Enabled(features.NodeIPAM) && o.config.NodeIPAM.EnableNodeIPAM && len(o.config.NodeIPAM.ClusterCIDRs) > 0 {
 		ipv4Enabled, ipv6Enabled = false, false
+		hasValidClusterCIDR := false
 		for _, cidrStr := range o.config.NodeIPAM.ClusterCIDRs {
 			clusterCIDR, _, err := net.ParseCIDR(cidrStr)
 			if err != nil {
+				klog.Warningf("Failed to parse NodeIPAM ClusterCIDR %q: %v", cidrStr, err)
 				continue
 			}
+			hasValidClusterCIDR = true
 			if clusterCIDR.To4() != nil {
 				ipv4Enabled = true
 			} else {
 				ipv6Enabled = true
 			}
+		}
+		if !hasValidClusterCIDR {
+			klog.Warning("No valid NodeIPAM ClusterCIDRs found; assuming both IPv4 and IPv6 are enabled")
+			ipv4Enabled, ipv6Enabled = true, true
 		}
 	}
 
