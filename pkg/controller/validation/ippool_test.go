@@ -757,6 +757,16 @@ func TestValidateIPRangeIPFamily(t *testing.T) {
 			expectErr:   true,
 			errContains: "IPv6 range fd00:10:96::/112 is not allowed in an IPv4-only cluster",
 		},
+		{
+			name: "neither IPv4 nor IPv6 enabled",
+			ipRanges: []crdv1beta1.IPRange{
+				{CIDR: "10.0.0.0/24"},
+			},
+			ipv4Enabled: false,
+			ipv6Enabled: false,
+			expectErr:   true,
+			errContains: "no IP families are enabled in the cluster",
+		},
 	}
 
 	for _, tt := range tests {

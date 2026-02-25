@@ -184,6 +184,9 @@ func RangesOverlap(start1, end1, start2, end2 netip.Addr) bool {
 
 // ValidateIPRangeIPFamily validates that all IP ranges use an IP family enabled in the cluster.
 func ValidateIPRangeIPFamily(ipRanges []crdv1beta1.IPRange, ipv4Enabled, ipv6Enabled bool) error {
+	if !ipv4Enabled && !ipv6Enabled {
+		return fmt.Errorf("no IP families are enabled in the cluster")
+	}
 	for _, ipRange := range ipRanges {
 		isIPv4, err := isIPRangeIPv4(ipRange)
 		if err != nil {
