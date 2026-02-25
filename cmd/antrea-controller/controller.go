@@ -234,28 +234,19 @@ func run(o *Options) error {
 	// If NodeIPAM is not configured, both IPv4 and IPv6 are considered enabled.
 	ipv4Enabled, ipv6Enabled := true, true
 	if features.DefaultFeatureGate.Enabled(features.NodeIPAM) && o.config.NodeIPAM.EnableNodeIPAM {
-		if len(o.config.NodeIPAM.ClusterCIDRs) > 0 {
+		cidrs, err := netutils.ParseCIDRs(o.config.NodeIPAM.ClusterCIDRs)
+		if err != nil {
+			// This should not happen because NodeIPAM options validation enforces valid, non-empty ClusterCIDRs.
+			klog.Errorf("Failed to parse NodeIPAM ClusterCIDRs %v; assuming both IPv4 and IPv6 are enabled: %v", o.config.NodeIPAM.ClusterCIDRs, err)
+		} else {
 			ipv4Enabled, ipv6Enabled = false, false
-			hasValidClusterCIDR := false
-			for _, cidrStr := range o.config.NodeIPAM.ClusterCIDRs {
-				clusterCIDR, _, err := net.ParseCIDR(cidrStr)
-				if err != nil {
-					klog.Warningf("Failed to parse NodeIPAM ClusterCIDR %q: %v", cidrStr, err)
-					continue
-				}
-				hasValidClusterCIDR = true
-				if clusterCIDR.To4() != nil {
+			for _, cidr := range cidrs {
+				if cidr.IP.To4() != nil {
 					ipv4Enabled = true
 				} else {
 					ipv6Enabled = true
 				}
 			}
-			if !hasValidClusterCIDR {
-				klog.Warning("No valid NodeIPAM ClusterCIDRs found; assuming both IPv4 and IPv6 are enabled")
-				ipv4Enabled, ipv6Enabled = true, true
-			}
-		} else {
-			klog.Info("NodeIPAM is enabled but no ClusterCIDRs are configured; assuming both IPv4 and IPv6 are enabled")
 		}
 	}
 
