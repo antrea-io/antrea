@@ -205,16 +205,16 @@ func ValidateIPRangeIPFamily(ipRanges []crdv1beta1.IPRange, ipv4Enabled, ipv6Ena
 // isIPRangeIPv4 returns true if the IP range uses IPv4 addresses.
 func isIPRangeIPv4(ipRange crdv1beta1.IPRange) (bool, error) {
 	if ipRange.CIDR != "" {
-		cidr, err := netip.ParsePrefix(ipRange.CIDR)
+		cidr, err := parseIPRangeCIDR(ipRange.CIDR)
 		if err != nil {
-			return false, fmt.Errorf("invalid cidr %s", ipRange.CIDR)
+			return false, err
 		}
 		return cidr.Addr().Is4(), nil
 	}
-	start, err := netip.ParseAddr(ipRange.Start)
-	if err != nil {
-		return false, fmt.Errorf("invalid start ip address %s", ipRange.Start)
+	if err := validateIPRange(ipRange); err != nil {
+		return false, err
 	}
+	start, _ := netip.ParseAddr(ipRange.Start)
 	return start.Is4(), nil
 }
 
