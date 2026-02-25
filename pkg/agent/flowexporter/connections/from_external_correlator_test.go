@@ -16,6 +16,7 @@ package connections
 
 import (
 	"net/netip"
+	"sync"
 	"testing"
 	"time"
 
@@ -156,6 +157,25 @@ func TestFromExternalCorrelator(t *testing.T) {
 		time.Sleep(1 * time.Millisecond)
 		store.cleanup(1 * time.Millisecond)
 		assert.Equal(t, 0, len(store.connections), "Expected store to expire old records")
+	})
+	t.Run("stopCleanUp is threadsafe", func(t *testing.T) {
+		store := newFromExternalCorrelator()
+
+		var wg sync.WaitGroup
+		for range 10 {
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				store.stopCleanUp()
+			}()
+		}
+		wg.Wait()
+
+		select {
+		case <-store.stopCh:
+		default:
+			t.Fatal("Expected stopCh to be closed, but it was still open")
+		}
 	})
 }
 

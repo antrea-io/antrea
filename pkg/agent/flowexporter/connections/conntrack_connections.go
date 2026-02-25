@@ -100,6 +100,7 @@ func (cs *ConntrackConnectionStore) Run(stopCh <-chan struct{}) {
 	for {
 		select {
 		case <-stopCh:
+			cs.fromExternalCorrelator.stopCleanUp()
 			return
 		case <-pollTicker.C:
 			if _, err := cs.Poll(); err != nil {
@@ -267,7 +268,7 @@ func (cs *ConntrackConnectionStore) AddOrUpdateConn(conn *connection.Connection)
 func (cs *ConntrackConnectionStore) GetExpiredConns(expiredConns []connection.Connection, currTime time.Time, maxSize int) ([]connection.Connection, time.Duration) {
 	cs.AcquireConnStoreLock()
 	defer cs.ReleaseConnStoreLock()
-	for i := 0; i < maxSize; i++ {
+	for range maxSize {
 		pqItem := cs.connectionStore.expirePriorityQueue.GetTopExpiredItem(currTime)
 		if pqItem == nil {
 			break
