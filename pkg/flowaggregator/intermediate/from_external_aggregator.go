@@ -64,11 +64,12 @@ type fromExternalAggregator struct {
 }
 
 func newFromExternalAggregator(nodeIndexer cache.Indexer) *fromExternalAggregator {
-	return &fromExternalAggregator{
-		make(map[string]flowItem),
-		nodeIndexer,
-		sync.RWMutex{},
+	a := &fromExternalAggregator{
+		FromExternalStore: make(map[string]flowItem),
+		nodeIndexer:       nodeIndexer,
 	}
+	go a.cleanUpLoop(make(chan struct{}), cleanUpInterval, ttl)
+	return a
 }
 
 // flowItem wraps a zone zero connection along with it's timestamp use for expiring flows.
