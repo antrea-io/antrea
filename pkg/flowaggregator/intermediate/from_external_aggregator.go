@@ -191,11 +191,12 @@ func (a *fromExternalAggregator) generateFromExternalStoreKey(record *flowpb.Flo
 // If FromExternal flow is not yet in the store, add it and return true.
 // If the flow is in the store, return false
 func (a *fromExternalAggregator) StoreIfNew(flow *flowpb.Flow) bool {
+	a.lock.Lock()
+	defer a.lock.Unlock()
+
 	key := a.generateFromExternalStoreKey(flow)
 	if _, exists := a.FromExternalStore[key]; !exists {
-
 		// TODO ADD method?
-		// TODO mutex
 		a.FromExternalStore[key] = flowItem{
 			flow:      flow,
 			timestamp: time.Now(),
@@ -209,6 +210,8 @@ func (a *fromExternalAggregator) StoreIfNew(flow *flowpb.Flow) bool {
 // nil if there was no matching flow in store. Upon successful correlation, delete the flow from
 // the store.
 func (a *fromExternalAggregator) CorrelateExternal(flow *flowpb.Flow) *flowpb.Flow {
+	a.lock.Lock()
+	defer a.lock.Unlock()
 	key := a.generateFromExternalStoreKey(flow)
 	storedFlowItem, exists := a.FromExternalStore[key]
 	if !exists {
