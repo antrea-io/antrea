@@ -461,6 +461,7 @@ func newAggregationProcess() *aggregationProcess {
 	}
 	clock := clocktesting.NewFakeClock(time.Now())
 	ap, _ := initAggregationProcessWithClock(input, clock, nil)
+	go ap.cleanUpLoop(make(chan struct{}), cleanUpInterval, ttl)
 	ap.nodeIndexer = &mockIndexer{
 		mockByIndex: func(indexName, indexedValue string) ([]interface{}, error) {
 			if indexedValue == "10.244.2.1" {
@@ -1109,4 +1110,16 @@ func TestStoreIfNew(t *testing.T) {
 		exists := ap.StoreIfNew(destinationNodeFlow)
 		assert.False(t, exists, "Expected other half of flow to have been stored")
 	})
+}
+
+func TestExpiresStaleFlows(t *testing.T) {
+	ap := newAggregationProcess()
+	sourceNodeFlow, _ := generateSourceNodeFlowAndFlowKey()
+	exists := ap.StoreIfNew(sourceNodeFlow)
+	assert.True(t, exists, "Expected not to find flow in an empty store")
+	time.Sleep(10 * time.Second) //todo make ttl configurable on newAggregationProcess
+
+	key := ap.generateFromExternalStoreKey(sourceNodeFlow)
+	_, exists = ap.FromExternalStore[key]
+	assert.False(t, exists, "Expected flow to have been cleaned up")
 }

@@ -364,5 +364,4 @@ func TestCorrelateIfExternal(t *testing.T) {
 
 	assert.Equal(t, externalIP, antreaZoneConn.FlowKey.SourceAddress, "Expected connection to have external source IP")
 	assert.Len(t, correlator.connections, 0, "Expected Zone 0 connection to be popped from store")
-
 }

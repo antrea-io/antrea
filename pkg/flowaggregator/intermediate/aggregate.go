@@ -86,9 +86,12 @@ type aggregationProcess struct {
 	// stopChan is the channel to receive stop message
 	stopChan chan bool
 	clock    clock.Clock
+
+	//todo bump this stuff out?
 	// FromExternalStore stores flows that need correlation
-	FromExternalStore map[string]*flowpb.Flow
+	FromExternalStore map[string]flowItem
 	nodeIndexer       cache.Indexer
+	lock              sync.RWMutex
 }
 
 type AggregationInput struct {
@@ -116,8 +119,9 @@ func initAggregationProcessWithClock(input AggregationInput, clock clock.Clock, 
 		input.InactiveExpiryTimeout,
 		make(chan bool),
 		clock,
-		make(map[string]*flowpb.Flow),
+		make(map[string]flowItem),
 		nodeIndexer,
+		sync.RWMutex{},
 	}, nil
 }
 
@@ -784,6 +788,47 @@ func getFlowKeyFromRecord(record *flowpb.Flow) (*FlowKey, bool) {
 	return flowKey, record.Ip.Version == flowpb.IPVersion_IP_VERSION_4
 }
 
+// TODO - move this to it's own file
+
+// ttl threshold for expiring flows.
+var ttl = time.Millisecond
+
+// cleanUpInterval is the frequency in which we run the cleanup for expiring stale flows.
+var cleanUpInterval = time.Second * 5
+
+// flowItem wraps a zone zero connection along with it's timestamp use for expiring flows.
+type flowItem struct {
+	flow      *flowpb.Flow
+	timestamp time.Time
+}
+
+// cleanUpLoop runs in an infinite loop and cleans up the store at the given interval.
+func (a *aggregationProcess) cleanUpLoop(stopCh <-chan struct{}, interval, ttl time.Duration) {
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-stopCh:
+			return
+		case <-ticker.C:
+			a.cleanup(ttl)
+		}
+	}
+}
+
+// cleanup loops through the entire store and deleting connections that exceed the ttl.
+func (a *aggregationProcess) cleanup(ttl time.Duration) {
+	a.lock.Lock()
+	defer a.lock.Unlock()
+	now := time.Now()
+	for key, record := range a.FromExternalStore {
+		if now.Sub(record.timestamp) > ttl {
+			delete(a.FromExternalStore, key)
+		}
+	}
+}
+
 // isCorrelationRequired returns true for InterNode flowType when
 // either the egressNetworkPolicyRuleAction is not deny (drop/reject) or
 // the ingressNetworkPolicyRuleAction is not reject.
@@ -872,7 +917,13 @@ func (a *aggregationProcess) generateFromExternalStoreKey(record *flowpb.Flow) s
 func (a *aggregationProcess) StoreIfNew(flow *flowpb.Flow) bool {
 	key := a.generateFromExternalStoreKey(flow)
 	if _, exists := a.FromExternalStore[key]; !exists {
-		a.FromExternalStore[key] = flow
+
+		// TODO ADD method?
+		// TODO mutex
+		a.FromExternalStore[key] = flowItem{
+			flow:      flow,
+			timestamp: time.Now(),
+		}
 		return true
 	}
 	return false
@@ -883,10 +934,11 @@ func (a *aggregationProcess) StoreIfNew(flow *flowpb.Flow) bool {
 // the store.
 func (a *aggregationProcess) CorrelateExternal(flow *flowpb.Flow) *flowpb.Flow {
 	key := a.generateFromExternalStoreKey(flow)
-	storedFlow, exists := a.FromExternalStore[key]
+	storedFlowItem, exists := a.FromExternalStore[key]
 	if !exists {
 		return nil
 	}
+	storedFlow := storedFlowItem.flow
 	delete(a.FromExternalStore, key)
 	if a.isGateway(flow.Ip.Source) {
 		flow.Ip.Source = storedFlow.Ip.Source
