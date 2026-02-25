@@ -621,7 +621,8 @@ func (c *Controller) addNodeRoute(nodeName string, node *corev1.Node) error {
 	if c.networkConfig.TrafficEncryptionMode == config.TrafficEncryptionModeIPSec {
 		// Create a separate tunnel port for the Node, as OVS IPsec monitor needs to
 		// read PSK and remote IP from the Node's tunnel interface to create IPsec
-		// security policies.
+		// security policies. We use the Node's IPv4 address when present, and the
+		// Node's IPv6 address otherwise.
 		peerNodeIP := peerNodeIPs.IPv4
 		if peerNodeIP == nil {
 			peerNodeIP = peerNodeIPs.IPv6
