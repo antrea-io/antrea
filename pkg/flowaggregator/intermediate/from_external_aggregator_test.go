@@ -17,6 +17,7 @@ package intermediate
 import (
 	"container/heap"
 	"fmt"
+	"sync"
 	"testing"
 	"time"
 
@@ -396,4 +397,24 @@ func TestExpiresStaleFlows(t *testing.T) {
 
 	key := ap.fromExternalAggregator.generateFromExternalStoreKey(sourceNodeFlow)
 	assert.False(t, contains(ap.fromExternalAggregator, key), "Expected flow to have been cleaned up")
+}
+
+func TestStopIsThreadSafe(t *testing.T) {
+	ap := newAggregationProcess()
+
+	var wg sync.WaitGroup
+	for range 10 {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			ap.fromExternalAggregator.stop()
+		}()
+	}
+	wg.Wait()
+
+	select {
+	case <-ap.fromExternalAggregator.stopCh:
+	default:
+		t.Fatal("Expected stopCh to be closed, but it was still open")
+	}
 }

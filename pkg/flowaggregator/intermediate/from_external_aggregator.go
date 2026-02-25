@@ -60,15 +60,19 @@ var cleanUpInterval = time.Second * 5
 type fromExternalAggregator struct {
 	FromExternalStore map[string]flowItem
 	nodeIndexer       cache.Indexer
+	stopCh            chan struct{}
+	stopOnce          sync.Once
 	lock              sync.RWMutex
 }
 
 func newFromExternalAggregator(nodeIndexer cache.Indexer) *fromExternalAggregator {
+	stopCh := make(chan struct{})
 	a := &fromExternalAggregator{
 		FromExternalStore: make(map[string]flowItem),
 		nodeIndexer:       nodeIndexer,
+		stopCh:            stopCh,
 	}
-	go a.cleanUpLoop(make(chan struct{}), cleanUpInterval, ttl)
+	go a.cleanUpLoop(stopCh, cleanUpInterval, ttl)
 	return a
 }
 
@@ -103,6 +107,15 @@ func (a *fromExternalAggregator) cleanup(ttl time.Duration) {
 			delete(a.FromExternalStore, key)
 		}
 	}
+}
+
+// stop kills the goroutine running cleanup of expiring flows.
+func (a *fromExternalAggregator) stop() {
+	a.stopOnce.Do(func() {
+		if a.stopCh != nil {
+			close(a.stopCh)
+		}
+	})
 }
 
 // isCorrelationRequired returns true for InterNode flowType when

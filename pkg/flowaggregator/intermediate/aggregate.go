@@ -114,6 +114,7 @@ func (a *aggregationProcess) Stop() {
 		worker.stop()
 	}
 	a.mutex.Unlock()
+	a.fromExternalAggregator.stop()
 	a.stopChan <- true
 }
 
