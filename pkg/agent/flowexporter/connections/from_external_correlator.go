@@ -35,7 +35,8 @@ var cleanUpInterval = time.Second * 5
 // FromExternalCorrelator handles correlating FromExternal connections
 type fromExternalCorrelator struct {
 	connections map[string]connectionItem
-	stopCh      <-chan struct{}
+	stopCh      chan struct{}
+	stopOnce    sync.Once
 	lock        sync.RWMutex
 }
 
@@ -55,6 +56,15 @@ func newFromExternalCorrelator() *fromExternalCorrelator {
 	}
 	go store.cleanUpLoop(stopCh, cleanUpInterval, ttl)
 	return &store
+}
+
+// stopCleanUp kills the goroutine that removes stale connections from the internal map.
+func (c *fromExternalCorrelator) stopCleanUp() {
+	c.stopOnce.Do(func() {
+		if c.stopCh != nil {
+			close(c.stopCh)
+		}
+	})
 }
 
 // filterAndStoreExternalSource filters for connections that have external source information so correlation can be
