@@ -22,6 +22,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	timestamppb "google.golang.org/protobuf/types/known/timestamppb"
 	"k8s.io/client-go/tools/cache"
 	clocktesting "k8s.io/utils/clock/testing"
@@ -417,4 +418,98 @@ func TestStopIsThreadSafe(t *testing.T) {
 	default:
 		t.Fatal("Expected stopCh to be closed, but it was still open")
 	}
+}
+
+// correlatedFieldSnapshot collects the set of fields that are modified during correlation.
+type correlatedFieldSnapshot struct {
+	DestinationServiceIp       []byte
+	DestinationServicePortName string
+	DestinationServicePort     uint32
+	DestinationClusterIp       []byte
+}
+
+// captureCorrelatedFields return a snapshot of fields relevant for correlation in lieu of a full copy
+// of Flow which includes a mutex.
+func captureCorrelatedFields(flow *flowpb.Flow) correlatedFieldSnapshot {
+	// Protect against nil panics if the test passes an empty flow
+	if flow == nil || flow.K8S == nil {
+		return correlatedFieldSnapshot{}
+	}
+
+	return correlatedFieldSnapshot{
+		DestinationServiceIp:       flow.K8S.DestinationServiceIp,
+		DestinationServicePortName: flow.K8S.DestinationServicePortName,
+		DestinationServicePort:     flow.K8S.DestinationServicePort,
+		DestinationClusterIp:       flow.K8S.DestinationClusterIp,
+	}
+}
+
+func TestCorrelateOrStore(t *testing.T) {
+	t.Run("correlation not required", func(t *testing.T) {
+		a := newFromExternalAggregator(mockIndexerA)
+
+		// Build a correlated record
+		destinationNodeRecord, _ := generateDestinationNodeFlowAndFlowKey()
+		destinationNodeRecord.Ip = sourceNodeIP
+		flowKey, _ := getFlowKeyFromRecord(destinationNodeRecord)
+
+		originalFlowKey := *flowKey
+		recordSnapshot := captureCorrelatedFields(destinationNodeRecord)
+		gotFlowKey, gotRecord := a.correlateOrStore(flowKey, destinationNodeRecord)
+		assert.Equal(t, originalFlowKey, *gotFlowKey, "Expected flowKey for a correlated record to remain unchanged")
+		assert.Equal(t, recordSnapshot, captureCorrelatedFields(gotRecord), "Expected a correlated record to remain unchanged")
+	})
+	t.Run("correlation is required", func(t *testing.T) {
+		t.Run("source node flow arrives first", func(t *testing.T) {
+			a := newFromExternalAggregator(mockIndexerA)
+
+			// Add the sourceNodeFlow
+			sourceNodeRecord, sourceNodeRecordFlowKey := generateSourceNodeFlowAndFlowKey()
+			gotFlowKey, gotRecord := a.correlateOrStore(sourceNodeRecordFlowKey, sourceNodeRecord)
+			assert.Nil(t, gotFlowKey, "Expected nil when flows are stored")
+			assert.Nil(t, gotRecord, "Expected nil when flows are stored")
+			key := a.generateFromExternalStoreKey(sourceNodeRecord)
+			assert.True(t, contains(a, key), "Expected flow to have been stored")
+
+			// Add the destinationNodeFlow
+			destinationNodeRecord, destinationNodeRecordFlowKey := generateDestinationNodeFlowAndFlowKey()
+			_, gotRecord = a.correlateOrStore(destinationNodeRecordFlowKey, destinationNodeRecord)
+
+			require.NotNil(t, gotRecord, "Expected flow to be correlated")
+			require.NotNil(t, gotRecord.Ip, "Expected correlated flow's IP not to be nil")
+			assert.Equal(t, externalIP, gotRecord.Ip.Source, "Expected correlated flow to have original source IP")
+			require.NotNil(t, gotRecord.K8S, "Expected correlated flow's K8S data not to be nil")
+			assert.Equal(t, nodeIP, gotRecord.K8S.DestinationServiceIp, "Expected correlated flow to have node IP")
+			assert.Equal(t, nodeIP, gotRecord.K8S.DestinationClusterIp, "Expected correlated flow to have node IP")
+			assert.Equal(t, containerPort, gotRecord.K8S.DestinationServicePort, "Expected correlated flow to have the container port")
+			assert.Equal(t, destinationServicePortName, gotRecord.K8S.DestinationServicePortName, "Expected correlated flow to have DestinationServicePortName")
+
+			assert.False(t, contains(a, key), "Expected stored flow to be removed")
+		})
+		t.Run("destination node flow arrives first", func(t *testing.T) {
+			a := newFromExternalAggregator(mockIndexerA)
+
+			// Add the destinationNodeFlow
+			destinationNodeRecord, destinationNodeRecordFlowKey := generateDestinationNodeFlowAndFlowKey()
+			gotFlowKey, gotRecord := a.correlateOrStore(destinationNodeRecordFlowKey, destinationNodeRecord)
+			assert.Nil(t, gotFlowKey, "Expected nil when flows are stored")
+			assert.Nil(t, gotRecord, "Expected nil when flows are stored")
+
+			// Add the sourceNodeFlow
+			sourceNodeRecord, sourceNodeRecordFlowKey := generateSourceNodeFlowAndFlowKey()
+			_, gotRecord = a.correlateOrStore(sourceNodeRecordFlowKey, sourceNodeRecord)
+
+			require.NotNil(t, gotRecord, "Expected flow to be correlated")
+			require.NotNil(t, gotRecord.Ip, "Expected correlated flow's IP not to be nil")
+			assert.Equal(t, externalIP, gotRecord.Ip.Source, "Expected correlated flow to have original source IP")
+			require.NotNil(t, gotRecord.K8S, "Expected correlated flow's K8S data not to be nil")
+			assert.Equal(t, nodeIP, gotRecord.K8S.DestinationServiceIp, "Expected correlated flow to have node IP")
+			assert.Equal(t, nodeIP, gotRecord.K8S.DestinationClusterIp, "Expected correlated flow to have node IP")
+			assert.Equal(t, containerPort, gotRecord.K8S.DestinationServicePort, "Expected correlated flow to have the container port")
+			assert.Equal(t, destinationServicePortName, gotRecord.K8S.DestinationServicePortName, "Expected correlated flow to have DestinationServicePortName")
+
+			key := a.generateFromExternalStoreKey(destinationNodeRecord)
+			assert.False(t, contains(a, key), "Expected stored to have been removed")
+		})
+	})
 }
