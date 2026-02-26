@@ -71,7 +71,7 @@ const (
 	pingSize       = 40
 	defaultTimeout = 30 * time.Second
 	sriovReqName   = "intel.com/intel_sriov_netdevice"
-	sriovResNum = 1
+	sriovResNum    = 1
 
 	ipFamilyIPv4 = 4
 	ipFamilyIPv6 = 6
@@ -315,6 +315,7 @@ func (data *testData) verifySecondaryInterfaces(t *testing.T, family int) error 
 			}
 			var podNetworkAttachments []*attachment
 			podIPs, podIPv6s, macResult, err := data.listPodAddresses(testPod)
+			logs.Infoln("IPs:", podIPs, "IPv6s:", podIPv6s, "MACs:", macResult)
 			if err != nil {
 				return false, err
 			}

@@ -130,7 +130,7 @@ spec:
       "cniVersion": "0.3.0",
       "type": "antrea",
       "networkType": "vlan",
-      "mtu": 1200,
+      "mtu": 1300,
       "vlan": 100,
       "ipam": {
         "type": "antrea",
