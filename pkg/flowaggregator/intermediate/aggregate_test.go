@@ -27,6 +27,7 @@ import (
 	clocktesting "k8s.io/utils/clock/testing"
 
 	flowpb "antrea.io/antrea/pkg/apis/flow/v1alpha1"
+	"antrea.io/antrea/pkg/flowaggregator/flowrecord"
 )
 
 func init() {
@@ -378,6 +379,38 @@ func TestAggregateRecordsForInterNodeFlow(t *testing.T) {
 	latestSrcRecord := createFlowRecordForSrc(false, flowpb.FlowType_FLOW_TYPE_INTER_NODE, true, flowpb.NetworkPolicyRuleAction_NETWORK_POLICY_RULE_ACTION_NO_ACTION)
 	latestDstRecord := createFlowRecordForDst(false, flowpb.FlowType_FLOW_TYPE_INTER_NODE, true, flowpb.NetworkPolicyRuleAction_NETWORK_POLICY_RULE_ACTION_NO_ACTION)
 	runAggregationAndCheckResult(t, ap, clock, srcRecord, dstRecord, latestSrcRecord, latestDstRecord, false)
+}
+
+// TestCorrelateRecordsForFromExternalFlow validates flows received by the FlowAggregator
+// are correctly correlated as they come from the source node and destination node
+func TestCorrelateRecordsForFromExternalFlow(t *testing.T) {
+	ap := newAggregationProcess()
+
+	// Add the sourceNodeFlow
+	sourceNodeRecord, sourceNodeRecordFlowKey := generateSourceNodeFlowAndFlowKey()
+	ap.addOrUpdateRecordInMap(sourceNodeRecordFlowKey, sourceNodeRecord, false)
+
+	// Add the destinationNodeFlow
+	destinationNodeRecord, destinationNodeRecordFlowKey := generateDestinationNodeFlowAndFlowKey()
+	ap.addOrUpdateRecordInMap(destinationNodeRecordFlowKey, destinationNodeRecord, false)
+
+	flowKey := destinationNodeRecordFlowKey
+	flowKey.SourceAddress = flowrecord.IpAddressAsString(sourceNodeRecord.Ip.Source)
+	assert.Equal(t, 1, ap.expirePriorityQueue.Len(), "Expected flow to be correlated and added to queue")
+	item := ap.expirePriorityQueue.Peek()
+	got := item.flowKey
+	assert.Equal(t, flowKey, got, "Expected flow to be correlated and added to queue")
+
+	record, exists := ap.flowKeyRecordMap[*flowKey]
+	assert.True(t, exists, "Expected correlated flow to be added to flowKeyRecordMap")
+	assert.True(t, item.flowRecord.ReadyToSend, "Expected correlated flow to be marked ready to send for export")
+	correlatedFlow := record.Record
+	assert.NotNil(t, correlatedFlow, "Expected stored flow to not be nil")
+	assert.Equal(t, externalIP, correlatedFlow.Ip.Source, "Expected correlated flow to have original source IP")
+	assert.Equal(t, nodeIP, correlatedFlow.K8S.DestinationServiceIp, "Expected correlated flow to have node IP")
+	assert.Equal(t, nodeIP, correlatedFlow.K8S.DestinationClusterIp, "Expected correlated flow to have node IP")
+	assert.Equal(t, containerPort, correlatedFlow.K8S.DestinationServicePort, "Expected correlated flow to have the container port")
+	assert.Equal(t, destinationServicePortName, correlatedFlow.K8S.DestinationServicePortName, "Expected correlated flow to have DestinationServicePortName")
 }
 
 func TestDeleteFlowKeyFromMapWithLock(t *testing.T) {
