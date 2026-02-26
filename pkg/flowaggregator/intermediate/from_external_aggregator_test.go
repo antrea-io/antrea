@@ -297,12 +297,11 @@ func TestIsGateway(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			ap := newAggregationProcess()
-			ap.fromExternalAggregator.nodeIndexer = tc.setupIndexer()
+			a := newFromExternalAggregator(tc.setupIndexer())
 			if tc.want {
-				assert.True(t, ap.fromExternalAggregator.isGateway(tc.ip))
+				assert.True(t, a.isGateway(tc.ip))
 			} else {
-				assert.False(t, ap.fromExternalAggregator.isGateway(tc.ip))
+				assert.False(t, a.isGateway(tc.ip))
 			}
 		})
 	}
@@ -352,11 +351,11 @@ func TestFromExternalCorrelationRequired(t *testing.T) {
 	}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			ap := newAggregationProcess()
+			a := newFromExternalAggregator(mockIndexerA)
 			if tc.expected {
-				assert.True(t, ap.fromExternalAggregator.FromExternalCorrelationRequired(tc.flow))
+				assert.True(t, a.FromExternalCorrelationRequired(tc.flow))
 			} else {
-				assert.False(t, ap.fromExternalAggregator.FromExternalCorrelationRequired(tc.flow))
+				assert.False(t, a.FromExternalCorrelationRequired(tc.flow))
 			}
 		})
 	}
@@ -371,20 +370,20 @@ func contains(a *fromExternalAggregator, key string) bool {
 
 func TestStoreIfNew(t *testing.T) {
 	t.Run("storing first flow", func(t *testing.T) {
-		ap := newAggregationProcess()
+		a := newFromExternalAggregator(mockIndexerA)
 		sourceNodeFlow, _ := generateSourceNodeFlowAndFlowKey()
-		exists := ap.fromExternalAggregator.StoreIfNew(sourceNodeFlow)
+		exists := a.StoreIfNew(sourceNodeFlow)
 		assert.True(t, exists, "Expected not to find flow in an empty store")
 
-		key := ap.fromExternalAggregator.generateFromExternalStoreKey(sourceNodeFlow)
-		assert.True(t, contains(ap.fromExternalAggregator, key), "Expected flow to have been stored")
+		key := a.generateFromExternalStoreKey(sourceNodeFlow)
+		assert.True(t, contains(a, key), "Expected flow to have been stored")
 	})
 	t.Run("flow is in store", func(t *testing.T) {
-		ap := newAggregationProcess()
+		a := newFromExternalAggregator(mockIndexerA)
 		sourceNodeFlow, _ := generateSourceNodeFlowAndFlowKey()
 		destinationNodeFlow, _ := generateDestinationNodeFlowAndFlowKey()
-		ap.fromExternalAggregator.StoreIfNew(sourceNodeFlow)
-		exists := ap.fromExternalAggregator.StoreIfNew(destinationNodeFlow)
+		a.StoreIfNew(sourceNodeFlow)
+		exists := a.StoreIfNew(destinationNodeFlow)
 		assert.False(t, exists, "Expected other half of flow to have been stored")
 	})
 }
