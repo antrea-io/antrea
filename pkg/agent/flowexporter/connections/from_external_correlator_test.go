@@ -42,6 +42,13 @@ func withCleanupInterval(interval time.Duration) option {
 	}
 }
 
+func contains(c *fromExternalCorrelator, conn *connection.Connection) bool {
+	c.lock.Lock()
+	defer c.lock.Unlock()
+	_, exists := c.connections[c.generateKey(conn)]
+	return exists
+}
+
 func TestFromExternalCorrelator(t *testing.T) {
 	t.Run("add", func(t *testing.T) {
 		store := newFromExternalCorrelator()
@@ -60,7 +67,7 @@ func TestFromExternalCorrelator(t *testing.T) {
 			ProxySnatPort: uint16(28392),
 		}
 		store.add(zoneZeroConn)
-		assert.Equal(t, 1, len(store.connections), "Expected store to contain newly added connection")
+		assert.True(t, contains(store, zoneZeroConn), "Expected store to contain newly added connection")
 	})
 	t.Run("popMatching", func(t *testing.T) {
 		t.Run("Has Match", func(t *testing.T) {
@@ -149,7 +156,7 @@ func TestFromExternalCorrelator(t *testing.T) {
 		}
 		store.add(zoneZeroConn)
 		store.remove(zoneZeroConn)
-		assert.Empty(t, store.connections)
+		assert.False(t, contains(store, zoneZeroConn))
 	})
 	t.Run("Expires stale records", func(t *testing.T) {
 		store := newFromExternalCorrelator(withTTL(time.Millisecond), withCleanupInterval(time.Millisecond))
@@ -169,7 +176,7 @@ func TestFromExternalCorrelator(t *testing.T) {
 		}
 		store.add(zoneZeroConn)
 		time.Sleep(3 * time.Millisecond)
-		assert.Equal(t, 0, len(store.connections), "Expected store to expire old records")
+		assert.False(t, contains(store, zoneZeroConn), "Expected store to expire old records")
 	})
 	t.Run("stopCleanUp is threadsafe", func(t *testing.T) {
 		store := newFromExternalCorrelator()
