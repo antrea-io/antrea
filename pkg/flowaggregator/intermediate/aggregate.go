@@ -336,14 +336,9 @@ func (a *aggregationProcess) addOrUpdateRecordInMap(flowKey *FlowKey, record *fl
 	a.mutex.Lock()
 	defer a.mutex.Unlock()
 
-	if a.fromExternalAggregator.FromExternalCorrelationRequired(record) {
-		// Store the record if not yet ready for correlation and return. Otherwise, pass through the correlated record
-		if a.fromExternalAggregator.StoreIfNew(record) {
-			return
-		} else {
-			record = a.fromExternalAggregator.CorrelateExternal(record)
-			flowKey, _ = getFlowKeyFromRecord(record)
-		}
+	flowKey, record = a.fromExternalAggregator.correlateOrStore(flowKey, record)
+	if flowKey == nil {
+		return
 	}
 
 	correlationRequired := isCorrelationRequired(record)

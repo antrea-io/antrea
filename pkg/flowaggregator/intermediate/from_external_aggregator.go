@@ -76,6 +76,21 @@ func newFromExternalAggregator(nodeIndexer cache.Indexer) *fromExternalAggregato
 	return a
 }
 
+// correlateOrStore returns the correlated record. If correlation is not needed, the original inputs are returned
+// unchanged. If the record needs to be stored for future correlation, nil is returned.
+func (a *fromExternalAggregator) correlateOrStore(flowKey *FlowKey, record *flowpb.Flow) (*FlowKey, *flowpb.Flow) {
+	if !a.FromExternalCorrelationRequired(record) {
+		return flowKey, record
+	}
+	if a.StoreIfNew(record) {
+		return nil, nil
+	}
+	record = a.CorrelateExternal(record)
+	flowKey, _ = getFlowKeyFromRecord(record)
+
+	return flowKey, record
+}
+
 // flowItem wraps a zone zero connection along with it's timestamp use for expiring flows.
 type flowItem struct {
 	flow      *flowpb.Flow
