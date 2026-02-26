@@ -69,7 +69,8 @@ type Client interface {
 	// InstallNodeFlows should be invoked when a connection to a remote Node is going to be set
 	// up. The hostname is used to identify the added flows. When IPsec tunnel is enabled,
 	// ipsecTunOFPort must be set to the OFPort number of the IPsec tunnel port to the remote Node;
-	// otherwise ipsecTunOFPort must be set to 0.
+	// otherwise ipsecTunOFPort must be 0. In dual-stack, IPv6 traffic will be encapsulated in the
+	// IPv4 tunnel so it goes through the IPsec tunnel and gets encrypted.
 	// InstallNodeFlows has all-or-nothing semantics(call succeeds if all the flows are installed
 	// successfully, otherwise no flows will be installed). Calls to InstallNodeFlows are idempotent.
 	// Concurrent calls to InstallNodeFlows and / or UninstallNodeFlows are supported as long as they
@@ -571,6 +572,14 @@ func (c *client) InstallNodeFlows(hostname string,
 	c.replayMutex.RLock()
 	defer c.replayMutex.RUnlock()
 
+	// When IPsec is enabled, prioritize using the Node's IPv4 address for the tunnel endpoint.
+	// In dual-stack clusters, IPv6 traffic is encapsulated in IPv4 and transmitted through
+	// the IPsec tunnel.
+	ipsecTunnelEndpoint := tunnelPeerIPs.IPv4
+	if ipsecTunnelEndpoint == nil {
+		ipsecTunnelEndpoint = tunnelPeerIPs.IPv6
+	}
+
 	var flows []binding.Flow
 	localGatewayMAC := c.nodeConfig.GatewayConfig.MAC
 	for peerPodCIDR, peerGatewayIP := range peerConfigs {
@@ -585,11 +594,15 @@ func (c *client) InstallNodeFlows(hostname string,
 			// This flow replies to ARP requests sent from the local gateway asking for the MAC address of a remote peer gateway. It ensures that the local Node can reach any remote Pod.
 			flows = append(flows, c.featurePodConnectivity.arpResponderFlow(peerGatewayIP, GlobalVirtualMAC))
 		}
-		// tunnelPeerIP is the Node Internal Address. In a dual-stack setup, one Node has 2 Node Internal
-		// Addresses (IPv4 and IPv6) .
+		tunnelPeerForFlow := tunnelPeerIP
+		if ipsecTunOFPort != 0 {
+			tunnelPeerForFlow = ipsecTunnelEndpoint
+		}
+		// tunnelPeerIP is the Node Internal Address. In a dual-stack setup without IPsec enabled, one Node has 2 Node Internal
+		// Addresses (IPv4 and IPv6).
 		if (!isIPv6 && c.networkConfig.NeedsTunnelToPeer(tunnelPeerIPs.IPv4, c.nodeConfig.NodeTransportIPv4Addr)) ||
 			(isIPv6 && c.networkConfig.NeedsTunnelToPeer(tunnelPeerIPs.IPv6, c.nodeConfig.NodeTransportIPv6Addr)) {
-			flows = append(flows, c.featurePodConnectivity.l3FwdFlowsToRemoteViaTun(localGatewayMAC, *peerPodCIDR, tunnelPeerIP)...)
+			flows = append(flows, c.featurePodConnectivity.l3FwdFlowsToRemoteViaTun(localGatewayMAC, *peerPodCIDR, tunnelPeerForFlow)...)
 		} else {
 			flows = append(flows, c.featurePodConnectivity.l3FwdFlowToRemoteViaRouting(localGatewayMAC, remoteGatewayMAC, tunnelPeerIP, peerPodCIDR)...)
 		}
