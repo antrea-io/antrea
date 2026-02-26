@@ -26,18 +26,20 @@ import (
 	"antrea.io/antrea/pkg/agent/proxy"
 )
 
-// ttl threshold for expiring connections in the fromExternalCorrelator.
-var ttl = time.Minute
+// defaultTTL is the Threshold for expiring connections in the fromExternalCorrelator.
+var defaultTTL = time.Minute
 
-// cleanUpInterval is the frequency in which we run the cleanup for expiring stale connections.
-var cleanUpInterval = time.Second * 5
+// defaultCleanUpInterval is the frequency in which we run the cleanup for expiring stale connections.
+var defaultCleanUpInterval = time.Second * 5
 
 // FromExternalCorrelator handles correlating FromExternal connections
 type fromExternalCorrelator struct {
-	connections map[string]connectionItem
-	stopCh      chan struct{}
-	stopOnce    sync.Once
-	lock        sync.RWMutex
+	connections     map[string]connectionItem
+	stopCh          chan struct{}
+	stopOnce        sync.Once
+	lock            sync.RWMutex
+	ttl             time.Duration
+	cleanUpInterval time.Duration
 }
 
 // connectionItem wraps a zone zero connection along with it's timestamp use for expiring connections.
@@ -46,15 +48,22 @@ type connectionItem struct {
 	timestamp time.Time
 }
 
+type option func(*fromExternalCorrelator)
+
 // newFromExternalCorrelator returns an instance of the FromExternalCorrelator with it's internal map intialized and
-// a go routine initiated to remove stale connections based on `ttl` at `cleanUpInterval`.
-func newFromExternalCorrelator() *fromExternalCorrelator {
+// a go routine initiated to remove stale connections based on `defaultTTL` at `defaultCleanUpInterval`.
+func newFromExternalCorrelator(opts ...option) *fromExternalCorrelator {
 	stopCh := make(chan struct{})
 	store := fromExternalCorrelator{
-		connections: map[string]connectionItem{},
-		stopCh:      stopCh,
+		connections:     map[string]connectionItem{},
+		stopCh:          stopCh,
+		ttl:             defaultTTL,
+		cleanUpInterval: defaultCleanUpInterval,
 	}
-	go store.cleanUpLoop(stopCh, cleanUpInterval, ttl)
+	for _, opt := range opts {
+		opt(&store)
+	}
+	go store.cleanUpLoop(stopCh)
 	return &store
 }
 
@@ -110,8 +119,8 @@ func (c *fromExternalCorrelator) correlateIfExternal(conn *connection.Connection
 }
 
 // cleanUpLoop runs in an infinite loop and cleans up the store at the given interval.
-func (c *fromExternalCorrelator) cleanUpLoop(stopCh <-chan struct{}, interval, ttl time.Duration) {
-	ticker := time.NewTicker(interval)
+func (c *fromExternalCorrelator) cleanUpLoop(stopCh <-chan struct{}) {
+	ticker := time.NewTicker(c.cleanUpInterval)
 	defer ticker.Stop()
 
 	for {
@@ -119,7 +128,7 @@ func (c *fromExternalCorrelator) cleanUpLoop(stopCh <-chan struct{}, interval, t
 		case <-stopCh:
 			return
 		case <-ticker.C:
-			c.cleanup(ttl)
+			c.cleanup(c.ttl)
 		}
 	}
 }
