@@ -52,10 +52,10 @@ var NodeIndexers = cache.Indexers{
 }
 
 // ttl threshold for expiring flows.
-var ttl = time.Millisecond
+var defaultTTL = time.Millisecond
 
-// cleanUpInterval is the frequency in which we run the cleanup for expiring stale flows.
-var cleanUpInterval = time.Second * 5
+// defaultCleanUpInterval is the frequency in which we run the cleanup for expiring stale flows.
+var defaultCleanUpInterval = time.Second * 5
 
 type fromExternalAggregator struct {
 	FromExternalStore map[string]flowItem
@@ -63,16 +63,27 @@ type fromExternalAggregator struct {
 	stopCh            chan struct{}
 	stopOnce          sync.Once
 	lock              sync.RWMutex
+	ttl               time.Duration
+	cleanUpInterval   time.Duration
 }
 
-func newFromExternalAggregator(nodeIndexer cache.Indexer) *fromExternalAggregator {
+type option func(*fromExternalAggregator)
+
+func newFromExternalAggregator(nodeIndexer cache.Indexer, opts ...option) *fromExternalAggregator {
 	stopCh := make(chan struct{})
 	a := &fromExternalAggregator{
 		FromExternalStore: make(map[string]flowItem),
 		nodeIndexer:       nodeIndexer,
 		stopCh:            stopCh,
+		ttl:               defaultTTL,
+		cleanUpInterval:   defaultCleanUpInterval,
 	}
-	go a.cleanUpLoop(stopCh, cleanUpInterval, ttl)
+
+	for _, opt := range opts {
+		opt(a)
+	}
+
+	go a.cleanUpLoop(stopCh)
 	return a
 }
 
@@ -98,8 +109,8 @@ type flowItem struct {
 }
 
 // cleanUpLoop runs in an infinite loop and cleans up the store at the given interval.
-func (a *fromExternalAggregator) cleanUpLoop(stopCh <-chan struct{}, interval, ttl time.Duration) {
-	ticker := time.NewTicker(interval)
+func (a *fromExternalAggregator) cleanUpLoop(stopCh <-chan struct{}) {
+	ticker := time.NewTicker(a.cleanUpInterval)
 	defer ticker.Stop()
 
 	for {
@@ -107,7 +118,7 @@ func (a *fromExternalAggregator) cleanUpLoop(stopCh <-chan struct{}, interval, t
 		case <-stopCh:
 			return
 		case <-ticker.C:
-			a.cleanup(ttl)
+			a.cleanup(a.ttl)
 		}
 	}
 }
