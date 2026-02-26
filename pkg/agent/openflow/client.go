@@ -78,7 +78,7 @@ type Client interface {
 	InstallNodeFlows(
 		hostname string,
 		peerConfigs map[*net.IPNet]net.IP,
-		tunnelPeerIP *utilip.DualStackIPs,
+		peerNodeIPs *utilip.DualStackIPs,
 		ipsecTunOFPort uint32,
 		peerNodeMAC net.HardwareAddr) error
 
@@ -565,7 +565,7 @@ func (c *client) deleteAllFlows(cache *flowCategoryCache) error {
 // InstallNodeFlows installs flows for peer Nodes. Parameter remoteGatewayMAC is only for Windows.
 func (c *client) InstallNodeFlows(hostname string,
 	peerConfigs map[*net.IPNet]net.IP,
-	tunnelPeerIPs *utilip.DualStackIPs,
+	peerNodeIPs *utilip.DualStackIPs,
 	ipsecTunOFPort uint32,
 	remoteGatewayMAC net.HardwareAddr,
 ) error {
@@ -575,18 +575,18 @@ func (c *client) InstallNodeFlows(hostname string,
 	// When IPsec is enabled, prioritize using the Node's IPv4 address for the tunnel endpoint.
 	// In dual-stack clusters, IPv6 traffic is encapsulated in IPv4 and transmitted through
 	// the IPsec tunnel.
-	ipsecTunnelEndpoint := tunnelPeerIPs.IPv4
+	ipsecTunnelEndpoint := peerNodeIPs.IPv4
 	if ipsecTunnelEndpoint == nil {
-		ipsecTunnelEndpoint = tunnelPeerIPs.IPv6
+		ipsecTunnelEndpoint = peerNodeIPs.IPv6
 	}
 
 	var flows []binding.Flow
 	localGatewayMAC := c.nodeConfig.GatewayConfig.MAC
 	for peerPodCIDR, peerGatewayIP := range peerConfigs {
 		isIPv6 := peerGatewayIP.To4() == nil
-		tunnelPeerIP := tunnelPeerIPs.IPv4
+		peerNodeIP := peerNodeIPs.IPv4
 		if isIPv6 {
-			tunnelPeerIP = tunnelPeerIPs.IPv6
+			peerNodeIP = peerNodeIPs.IPv6
 		} else {
 			// Since broadcast is not supported in IPv6, ARP should happen only with IPv4 address, and ARP responder flows
 			// only work for IPv4 addresses.
@@ -594,26 +594,27 @@ func (c *client) InstallNodeFlows(hostname string,
 			// This flow replies to ARP requests sent from the local gateway asking for the MAC address of a remote peer gateway. It ensures that the local Node can reach any remote Pod.
 			flows = append(flows, c.featurePodConnectivity.arpResponderFlow(peerGatewayIP, GlobalVirtualMAC))
 		}
-		tunnelPeerForFlow := tunnelPeerIP
-		if ipsecTunOFPort != 0 {
-			tunnelPeerForFlow = ipsecTunnelEndpoint
-		}
-		// tunnelPeerIP is the Node Internal Address. In a dual-stack setup without IPsec enabled, one Node has 2 Node Internal
-		// Addresses (IPv4 and IPv6).
-		if (!isIPv6 && c.networkConfig.NeedsTunnelToPeer(tunnelPeerIPs.IPv4, c.nodeConfig.NodeTransportIPv4Addr)) ||
-			(isIPv6 && c.networkConfig.NeedsTunnelToPeer(tunnelPeerIPs.IPv6, c.nodeConfig.NodeTransportIPv6Addr)) {
+		// peerNodeIP is the peer Node's transport address. In a dual-stack setup without
+		// IPsec enabled, each Node has 2 transport addresses (IPv4 and IPv6). With IPsec
+		// enabled, we always use the IPv4 address for tunneling encrypted traffic between Nodes.
+		if (!isIPv6 && c.networkConfig.NeedsTunnelToPeer(peerNodeIPs.IPv4, c.nodeConfig.NodeTransportIPv4Addr)) ||
+			(isIPv6 && c.networkConfig.NeedsTunnelToPeer(peerNodeIPs.IPv6, c.nodeConfig.NodeTransportIPv6Addr)) {
+			tunnelPeerForFlow := peerNodeIP
+			if ipsecTunOFPort != 0 {
+				tunnelPeerForFlow = ipsecTunnelEndpoint
+			}
 			flows = append(flows, c.featurePodConnectivity.l3FwdFlowsToRemoteViaTun(localGatewayMAC, *peerPodCIDR, tunnelPeerForFlow)...)
 		} else {
-			flows = append(flows, c.featurePodConnectivity.l3FwdFlowToRemoteViaRouting(localGatewayMAC, remoteGatewayMAC, tunnelPeerIP, peerPodCIDR)...)
+			flows = append(flows, c.featurePodConnectivity.l3FwdFlowToRemoteViaRouting(localGatewayMAC, remoteGatewayMAC, peerNodeIP, peerPodCIDR)...)
 			// Flow to forward the reply packets of Egress connections, whose request packets came from remote Pods
 			// via tunnel, back to those Pods via tunnel, ensuring symmetric paths of the connections. This flow is
 			// only needed when traffic mode is hybrid and remote Nodes are reachable through routing.
 			if c.enableEgress && c.networkConfig.TrafficEncapMode == config.TrafficEncapModeHybrid {
-				flows = append(flows, c.featurePodConnectivity.l3FwdFlowEgressReturnViaTun(localGatewayMAC, *peerPodCIDR, tunnelPeerIP))
+				flows = append(flows, c.featurePodConnectivity.l3FwdFlowEgressReturnViaTun(localGatewayMAC, *peerPodCIDR, peerNodeIP))
 			}
 		}
 		if c.enableEgress {
-			flows = append(flows, c.featureEgress.snatSkipNodeFlow(tunnelPeerIP))
+			flows = append(flows, c.featureEgress.snatSkipNodeFlow(peerNodeIP))
 		}
 		if c.connectUplinkToBridge {
 			// flow to catch traffic from AntreaFlexibleIPAM Pod to remote Per-Node IPAM Pod
