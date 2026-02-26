@@ -130,7 +130,7 @@ func generateDestinationNodeFlowAndFlowKey() (*flowpb.Flow, *FlowKey) {
 	return destinationNodeRecord, destinationNodeFlowKey
 }
 
-var mockIndexerA = &mockIndexer{ // todo - fold into newAggregationProcess?
+var mockIndexerA = &mockIndexer{
 	mockByIndex: func(indexName, indexedValue string) ([]interface{}, error) {
 		if indexedValue == "10.244.2.1" {
 			return []interface{}{"found"}, nil
@@ -389,32 +389,46 @@ func TestStoreIfNew(t *testing.T) {
 	})
 }
 
-func TestExpiresStaleFlows(t *testing.T) {
-	ap := newAggregationProcess()
-	sourceNodeFlow, _ := generateSourceNodeFlowAndFlowKey()
-	exists := ap.fromExternalAggregator.StoreIfNew(sourceNodeFlow)
-	assert.True(t, exists, "Expected not to find flow in an empty store")
-	time.Sleep(10 * time.Second) //todo make ttl configurable on newAggregationProcess
+// withTTL overrides the default flow expiration TTL.
+func withTTL(ttl time.Duration) option {
+	return func(a *fromExternalAggregator) {
+		a.ttl = ttl
+	}
+}
 
-	key := ap.fromExternalAggregator.generateFromExternalStoreKey(sourceNodeFlow)
-	assert.False(t, contains(ap.fromExternalAggregator, key), "Expected flow to have been cleaned up")
+// withCleanupInterval overrides the default background loop interval.
+func withCleanupInterval(interval time.Duration) option {
+	return func(a *fromExternalAggregator) {
+		a.cleanUpInterval = interval
+	}
+}
+
+func TestExpiresStaleFlows(t *testing.T) {
+	a := newFromExternalAggregator(mockIndexerA, withTTL(time.Millisecond), withCleanupInterval(time.Millisecond))
+	sourceNodeFlow, _ := generateSourceNodeFlowAndFlowKey()
+	exists := a.StoreIfNew(sourceNodeFlow)
+	assert.True(t, exists, "Expected not to find flow in an empty store")
+	time.Sleep(3 * time.Millisecond)
+
+	key := a.generateFromExternalStoreKey(sourceNodeFlow)
+	assert.False(t, contains(a, key), "Expected flow to have been cleaned up")
 }
 
 func TestStopIsThreadSafe(t *testing.T) {
-	ap := newAggregationProcess()
+	a := newFromExternalAggregator(mockIndexerA)
 
 	var wg sync.WaitGroup
 	for range 10 {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			ap.fromExternalAggregator.stop()
+			a.stop()
 		}()
 	}
 	wg.Wait()
 
 	select {
-	case <-ap.fromExternalAggregator.stopCh:
+	case <-a.stopCh:
 	default:
 		t.Fatal("Expected stopCh to be closed, but it was still open")
 	}
