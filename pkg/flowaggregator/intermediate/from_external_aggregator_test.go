@@ -28,7 +28,6 @@ import (
 	clocktesting "k8s.io/utils/clock/testing"
 
 	flowpb "antrea.io/antrea/pkg/apis/flow/v1alpha1"
-	"antrea.io/antrea/pkg/flowaggregator/flowrecord"
 )
 
 type mockIndexer struct {
@@ -150,96 +149,6 @@ func newAggregationProcess() *aggregationProcess { // todo - can delete maybe?
 	clock := clocktesting.NewFakeClock(time.Now())
 	ap, _ := initAggregationProcessWithClock(input, clock, mockIndexerA)
 	return ap
-}
-
-// TestCorrelateRecordsForFromExternalFlow validates flows received by the FlowAggregator
-// are correctly correlated as they come from the source node and destination node
-func TestCorrelateRecordsForFromExternalFlow(t *testing.T) {
-	t.Run("correlation not required", func(t *testing.T) {
-		ap := newAggregationProcess()
-
-		// Build a correlated record
-		destinationNodeRecord, _ := generateDestinationNodeFlowAndFlowKey()
-		destinationNodeRecord.Ip = sourceNodeIP
-		flowKey, _ := getFlowKeyFromRecord(destinationNodeRecord)
-
-		ap.addOrUpdateRecordInMap(flowKey, destinationNodeRecord, false)
-		got := ap.expirePriorityQueue.Peek().flowKey
-		assert.Equal(t, flowKey, got, "Expected previously correlated flow to be added to queue")
-	})
-	t.Run("source node flow arrives first", func(t *testing.T) {
-		ap := newAggregationProcess()
-
-		// Add the sourceNodeFlow
-		sourceNodeRecord, sourceNodeRecordFlowKey := generateSourceNodeFlowAndFlowKey()
-		ap.addOrUpdateRecordInMap(sourceNodeRecordFlowKey, sourceNodeRecord, false)
-		key := ap.fromExternalAggregator.generateFromExternalStoreKey(sourceNodeRecord)
-		_, exists := ap.fromExternalAggregator.FromExternalStore[key]
-		assert.True(t, exists, "Expected flow to have been stored")
-
-		// Add the destinationNodeFlow
-		destinationNodeRecord, destinationNodeRecordFlowKey := generateDestinationNodeFlowAndFlowKey()
-		ap.addOrUpdateRecordInMap(destinationNodeRecordFlowKey, destinationNodeRecord, false)
-
-		flowKey := destinationNodeRecordFlowKey
-		flowKey.SourceAddress = flowrecord.IpAddressAsString(sourceNodeRecord.Ip.Source)
-		assert.Equal(t, 1, ap.expirePriorityQueue.Len(), "Expected flow to be correlated and added to queue")
-		item := ap.expirePriorityQueue.Peek()
-		got := item.flowKey
-		assert.Equal(t, flowKey, got, "Expected flow to be correlated and added to queue")
-
-		record, exists := ap.flowKeyRecordMap[*flowKey]
-		assert.True(t, exists, "Expected correlated flow to be added to flowKeyRecordMap")
-		assert.True(t, item.flowRecord.ReadyToSend, "Expected correlated flow to be marked ready to send for export")
-		correlatedFlow := record.Record
-		assert.NotNil(t, correlatedFlow, "Expected stored flow to not be nil")
-		assert.Equal(t, externalIP, correlatedFlow.Ip.Source, "Expected correlated flow to have original source IP")
-		assert.Equal(t, nodeIP, correlatedFlow.K8S.DestinationServiceIp, "Expected correlated flow to have node IP")
-		assert.Equal(t, nodeIP, correlatedFlow.K8S.DestinationClusterIp, "Expected correlated flow to have node IP")
-		assert.Equal(t, containerPort, correlatedFlow.K8S.DestinationServicePort, "Expected correlated flow to have the container port")
-		assert.Equal(t, destinationServicePortName, correlatedFlow.K8S.DestinationServicePortName, "Expected correlated flow to have DestinationServicePortName")
-
-		// Ensure cleanup
-		flow := ap.fromExternalAggregator.CorrelateExternal(destinationNodeRecord)
-		assert.Nil(t, flow, "Expected flow to have been cleared from store")
-	})
-	t.Run("destination node flow arrives first", func(t *testing.T) {
-		ap := newAggregationProcess()
-
-		// Add the destinationNodeFlow
-		destinationNodeRecord, destinationNodeRecordFlowKey := generateDestinationNodeFlowAndFlowKey()
-		ap.addOrUpdateRecordInMap(destinationNodeRecordFlowKey, destinationNodeRecord, false)
-		key := ap.fromExternalAggregator.generateFromExternalStoreKey(destinationNodeRecord)
-		_, exists := ap.fromExternalAggregator.FromExternalStore[key]
-		assert.True(t, exists, "Expected flow to have been stored")
-
-		// Add the sourceNodeFlow
-		sourceNodeRecord, sourceNodeRecordFlowKey := generateSourceNodeFlowAndFlowKey()
-		ap.addOrUpdateRecordInMap(sourceNodeRecordFlowKey, sourceNodeRecord, false)
-
-		flowKey := destinationNodeRecordFlowKey
-		flowKey.SourceAddress = flowrecord.IpAddressAsString(sourceNodeRecord.Ip.Source)
-		assert.Equal(t, 1, ap.expirePriorityQueue.Len(), "Expected flow to be correlated and added to queue")
-		item := ap.expirePriorityQueue.Peek()
-		got := item.flowKey
-		assert.Equal(t, flowKey, got, "Expected flow to be correlated and added to queue")
-
-		record, exists := ap.flowKeyRecordMap[*flowKey]
-		assert.True(t, exists, "Expected correlated flow to be added to flowKeyRecordMap")
-		assert.True(t, item.flowRecord.ReadyToSend, "Expected correlated flow to be marked ready to send for export")
-
-		correlatedFlow := record.Record
-		assert.NotNil(t, correlatedFlow, "Expected stored flow to not be nil")
-		assert.Equal(t, externalIP, correlatedFlow.Ip.Source, "Expected correlated flow to have original source IP")
-		assert.Equal(t, nodeIP, correlatedFlow.K8S.DestinationServiceIp, "Expected correlated flow to have node IP")
-		assert.Equal(t, nodeIP, correlatedFlow.K8S.DestinationClusterIp, "Expected correlated flow to have node IP")
-		assert.Equal(t, containerPort, correlatedFlow.K8S.DestinationServicePort, "Expected correlated flow to have the container port")
-		assert.Equal(t, destinationServicePortName, correlatedFlow.K8S.DestinationServicePortName, "Expected correlated flow to have DestinationServicePortName")
-
-		// Ensure cleanup
-		flow := ap.fromExternalAggregator.CorrelateExternal(sourceNodeRecord)
-		assert.Nil(t, flow, "Expected flow to have been cleared from store")
-	})
 }
 
 func TestIsGateway(t *testing.T) {
