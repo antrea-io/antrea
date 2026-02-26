@@ -28,6 +28,20 @@ import (
 	k8sproxy "antrea.io/antrea/third_party/proxy"
 )
 
+// withTTL overrides the default flow expiration TTL.
+func withTTL(ttl time.Duration) option {
+	return func(a *fromExternalCorrelator) {
+		a.ttl = ttl
+	}
+}
+
+// withCleanupInterval overrides the default background loop interval.
+func withCleanupInterval(interval time.Duration) option {
+	return func(a *fromExternalCorrelator) {
+		a.cleanUpInterval = interval
+	}
+}
+
 func TestFromExternalCorrelator(t *testing.T) {
 	t.Run("add", func(t *testing.T) {
 		store := newFromExternalCorrelator()
@@ -138,7 +152,7 @@ func TestFromExternalCorrelator(t *testing.T) {
 		assert.Empty(t, store.connections)
 	})
 	t.Run("Expires stale records", func(t *testing.T) {
-		store := newFromExternalCorrelator()
+		store := newFromExternalCorrelator(withTTL(time.Millisecond), withCleanupInterval(time.Millisecond))
 		refTime := time.Now()
 		zoneZeroConn := &connection.Connection{
 			StartTime: refTime,
@@ -154,8 +168,7 @@ func TestFromExternalCorrelator(t *testing.T) {
 			ProxySnatPort: uint16(28392),
 		}
 		store.add(zoneZeroConn)
-		time.Sleep(1 * time.Millisecond)
-		store.cleanup(1 * time.Millisecond)
+		time.Sleep(3 * time.Millisecond)
 		assert.Equal(t, 0, len(store.connections), "Expected store to expire old records")
 	})
 	t.Run("stopCleanUp is threadsafe", func(t *testing.T) {
