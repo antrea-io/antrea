@@ -262,9 +262,9 @@ func TestFromExternalCorrelationRequired(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			a := newFromExternalAggregator(mockIndexerA)
 			if tc.expected {
-				assert.True(t, a.FromExternalCorrelationRequired(tc.flow))
+				assert.True(t, a.fromExternalCorrelationRequired(tc.flow))
 			} else {
-				assert.False(t, a.FromExternalCorrelationRequired(tc.flow))
+				assert.False(t, a.fromExternalCorrelationRequired(tc.flow))
 			}
 		})
 	}

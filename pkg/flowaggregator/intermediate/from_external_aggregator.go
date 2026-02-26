@@ -29,11 +29,11 @@ import (
 	"antrea.io/antrea/pkg/flowaggregator/flowrecord"
 )
 
-const GatewayIPIndex = "gatewayIPIndex"
+const gatewayIPIndex = "gatewayIPIndex"
 
 var NodeIndexers = cache.Indexers{
-	// GatewayIPIndex extracts Gateway IPs from nodes on the cluster.
-	GatewayIPIndex: func(obj interface{}) ([]string, error) {
+	// gatewayIPIndex extracts Gateway IPs from nodes on the cluster.
+	gatewayIPIndex: func(obj interface{}) ([]string, error) {
 		node, ok := obj.(*v1.Node)
 		if !ok {
 			return nil, fmt.Errorf("object is not a Node: %T", obj)
@@ -90,7 +90,7 @@ func newFromExternalAggregator(nodeIndexer cache.Indexer, opts ...option) *fromE
 // correlateOrStore returns the correlated record. If correlation is not needed, the original inputs are returned
 // unchanged. If the record needs to be stored for future correlation, nil is returned.
 func (a *fromExternalAggregator) correlateOrStore(flowKey *FlowKey, record *flowpb.Flow) (*FlowKey, *flowpb.Flow) {
-	if !a.FromExternalCorrelationRequired(record) {
+	if !a.fromExternalCorrelationRequired(record) {
 		return flowKey, record
 	}
 	if a.StoreIfNew(record) {
@@ -164,7 +164,7 @@ func (a *fromExternalAggregator) isGateway(ip []byte) bool {
 		return false
 	}
 
-	objs, err := a.nodeIndexer.ByIndex(GatewayIPIndex, addr.String())
+	objs, err := a.nodeIndexer.ByIndex(gatewayIPIndex, addr.String())
 	if err != nil {
 		klog.Errorf("failed to query Node indexer: %v", err)
 		return false
@@ -182,7 +182,7 @@ func (a *fromExternalAggregator) isGateway(ip []byte) bool {
 // When a flow goes through two distinct nodes, the sourceNode flow has empty destinationNode
 // and the destinationNode has the gatewayIP as the sourceAddress. If flow is invalid, false
 // is returned
-func (a *fromExternalAggregator) FromExternalCorrelationRequired(flow *flowpb.Flow) bool {
+func (a *fromExternalAggregator) fromExternalCorrelationRequired(flow *flowpb.Flow) bool {
 	if flow.K8S == nil || flow.K8S.FlowType != flowpb.FlowType_FLOW_TYPE_FROM_EXTERNAL {
 		return false
 	}
