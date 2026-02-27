@@ -268,36 +268,43 @@ func TestFromExternalCorrelator_FilterAndStoreExternalSource(t *testing.T) {
 	testCases := []struct {
 		name   string
 		conn   *connection.Connection
+		want   bool
 		stored bool
 	}{
 		{
 			name:   "Non-Zone Zero connections",
 			conn:   nonZoneZeroConn,
+			want:   false,
 			stored: false,
 		},
 		{
 			name:   "Nil connection",
 			conn:   nil,
+			want:   false,
 			stored: false,
 		},
 		{
 			name:   "Nil Proxier",
 			conn:   zoneZeroConn,
+			want:   true,
 			stored: true,
 		},
 		{
 			name:   "Unknown protocol",
 			conn:   invalidProtocolConn,
+			want:   false,
 			stored: false,
 		},
 		{
 			name:   "No associated service",
 			conn:   zoneZeroConn,
+			want:   true,
 			stored: false,
 		},
 		{
 			name:   "Associated service found",
 			conn:   hasServiceConn,
+			want:   true,
 			stored: true,
 		},
 	}
@@ -312,10 +319,10 @@ func TestFromExternalCorrelator_FilterAndStoreExternalSource(t *testing.T) {
 				got = correlator.filterAndStoreExternalSource(tc.conn, mockProxier)
 			}
 
-			if tc.name == "Non-Zone Zero connections" || tc.name == "Nil connection" {
-				assert.False(t, got, "Expected connection to not be filtered")
-			} else {
+			if tc.want {
 				assert.True(t, got, "Expected connection to be filtered")
+			} else {
+				assert.False(t, got, "Expected connection to not be filtered")
 			}
 
 			if tc.stored {
