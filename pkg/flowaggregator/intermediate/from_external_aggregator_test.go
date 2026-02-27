@@ -281,7 +281,7 @@ func TestStoreIfNew(t *testing.T) {
 	t.Run("storing first flow", func(t *testing.T) {
 		a := newFromExternalAggregator(mockIndexerA)
 		sourceNodeFlow, _ := generateSourceNodeFlowAndFlowKey()
-		exists := a.StoreIfNew(sourceNodeFlow)
+		exists := a.storeIfNew(sourceNodeFlow)
 		assert.True(t, exists, "Expected not to find flow in an empty store")
 
 		key := a.generateFromExternalStoreKey(sourceNodeFlow)
@@ -291,8 +291,8 @@ func TestStoreIfNew(t *testing.T) {
 		a := newFromExternalAggregator(mockIndexerA)
 		sourceNodeFlow, _ := generateSourceNodeFlowAndFlowKey()
 		destinationNodeFlow, _ := generateDestinationNodeFlowAndFlowKey()
-		a.StoreIfNew(sourceNodeFlow)
-		exists := a.StoreIfNew(destinationNodeFlow)
+		a.storeIfNew(sourceNodeFlow)
+		exists := a.storeIfNew(destinationNodeFlow)
 		assert.False(t, exists, "Expected other half of flow to have been stored")
 	})
 }
@@ -314,7 +314,7 @@ func withCleanupInterval(interval time.Duration) option {
 func TestExpiresStaleFlows(t *testing.T) {
 	a := newFromExternalAggregator(mockIndexerA, withTTL(time.Millisecond), withCleanupInterval(time.Millisecond))
 	sourceNodeFlow, _ := generateSourceNodeFlowAndFlowKey()
-	exists := a.StoreIfNew(sourceNodeFlow)
+	exists := a.storeIfNew(sourceNodeFlow)
 	assert.True(t, exists, "Expected not to find flow in an empty store")
 	time.Sleep(3 * time.Millisecond)
 
