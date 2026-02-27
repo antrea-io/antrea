@@ -119,7 +119,7 @@ func (c *fromExternalCorrelator) correlateIfExternal(conn *connection.Connection
 	if zoneZero == nil {
 		return false
 	}
-	CorrelateExternal(zoneZero, conn)
+	correlateExternal(zoneZero, conn)
 	return true
 }
 
@@ -200,4 +200,15 @@ func (c *fromExternalCorrelator) remove(conn *connection.Connection) {
 
 	key := fmt.Sprintf("%s-%s", destinationAddress, zoneZeroReplyDestinationPort)
 	delete(c.connections, key)
+}
+
+// Given a pair of matching connections, modify the antreaZone connection by
+// filling in the fields needed from the zoneZero connection
+func correlateExternal(zoneZero, antreaZone *connection.Connection) {
+	antreaZone.FlowKey.SourcePort = zoneZero.FlowKey.SourcePort
+	antreaZone.FlowKey.SourceAddress = zoneZero.FlowKey.SourceAddress
+	antreaZone.ProxySnatIP = zoneZero.ProxySnatIP
+	antreaZone.ProxySnatPort = zoneZero.ProxySnatPort
+	antreaZone.OriginalDestinationAddress = zoneZero.OriginalDestinationAddress
+	antreaZone.OriginalDestinationPort = zoneZero.OriginalDestinationPort
 }

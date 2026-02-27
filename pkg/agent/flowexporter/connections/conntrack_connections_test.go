@@ -729,6 +729,6 @@ func TestCorrelateExternal(t *testing.T) {
 		ProxySnatIP:             netip.MustParseAddr("172.18.0.2"),
 		ProxySnatPort:           uint16(28392),
 	}
-	CorrelateExternal(&zoneZero, &antreaZone)
+	correlateExternal(&zoneZero, &antreaZone)
 	assert.Equal(t, expected, antreaZone)
 }
