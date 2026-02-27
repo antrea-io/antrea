@@ -48,7 +48,7 @@ in the `antrea-agent` configuration. If you need IPAM for the secondary
 interfaces, you should also enable the `AntreaIPAM` feature gate in both
 `antrea-agent` and `antrea-controller` configuration. At the moment, Antrea IPAM
 is the only available IPAM option for secondary networks managed by Antrea. The
-`antrea-config` ConfigMap with the two feature gates enables is like the
+`antrea-config` ConfigMap with the two feature gates enabled is like the
 following:
 
 ```yaml
@@ -126,8 +126,8 @@ and supports up to eight physical interfaces on the bridge.
 
 Note: when you set the Node's primary NIC as a secondary bridge physical interface,
 if the Node IP is assigned via DHCP and the DNS server is auto-configured by a DNS
-manager (e.g. system-resolved), you may lose the DNS configuration after the interface
-is moved to the OVS bridge, because of the interface state change. Please consider providing
+manager (e.g. systemd-resolved), you may lose the DNS configuration after the interface
+is moved to the OVS bridge due to the interface state change. Please consider providing
 a static DNS configuration in `/etc/systemd/resolved.conf` before installing Antrea to
 use the primary NIC as a physical interface. Check more details on [issue 6558](https://github.com/antrea-io/antrea/issues/6558).
 
@@ -188,16 +188,16 @@ is created in Namespace `networks`.
 apiVersion: v1
 kind: Pod
 metadata:
- name: sample-pod-secondary-network-vlan
- annotations:
-   k8s.v1.cni.cncf.io/networks: '[
-     {"name": "vlan100"},
-     {"name": "vlan200", "namespace": "networks", "interface": "eth200"}
-   ]'
+  name: sample-pod-secondary-network-vlan
+  annotations:
+    k8s.v1.cni.cncf.io/networks: '[
+      {"name": "vlan100"},
+      {"name": "vlan200", "namespace": "networks", "interface": "eth200"}
+    ]'
 spec:
- containers:
- - name: toolbox
-   image: antrea/toolbox:latest
+  containers:
+  - name: toolbox
+    image: antrea/toolbox:latest
 ```
 
 You can also pass the static MAC address for secondary interfaces in annotation.
@@ -206,16 +206,16 @@ You can also pass the static MAC address for secondary interfaces in annotation.
 apiVersion: v1
 kind: Pod
 metadata:
- name: sample-pod-secondary-network-vlan
- annotations:
-   k8s.v1.cni.cncf.io/networks: '[
-     {"name": "vlan100"},
-     {"name": "vlan200", "namespace": "networks", "interface": "eth200", "mac": "6a:08:cb:4b:ff:d3"}
-   ]'
+  name: sample-pod-secondary-network-vlan
+  annotations:
+    k8s.v1.cni.cncf.io/networks: '[
+      {"name": "vlan100"},
+      {"name": "vlan200", "namespace": "networks", "interface": "eth200", "mac": "6a:08:cb:4b:ff:d3"}
+    ]'
 spec:
- containers:
- - name: toolbox
-   image: antrea/toolbox:latest
+  containers:
+  - name: toolbox
+    image: antrea/toolbox:latest
 ```
 
 If the Pod has only a single secondary network interface, you can also set
@@ -229,14 +229,18 @@ For example:
 apiVersion: v1
 kind: Pod
 metadata:
- name: sample-pod-secondary-network-vlan
- annotations:
-   k8s.v1.cni.cncf.io/networks: networks/vlan200@eth200
+  name: sample-pod-secondary-network-vlan
+  annotations:
+    k8s.v1.cni.cncf.io/networks: networks/vlan200@eth200
 spec:
- containers:
- - name: toolbox
-   image: antrea/toolbox:latest
+  containers:
+  - name: toolbox
+    image: antrea/toolbox:latest
 ```
+
+You can remove the annotation `k8s.v1.cni.cncf.io/networks` to delete
+the secondary interfaces. Network updates are not supported. Please check
+the [Limitations](#limitations) section for more details.
 
 ### SR-IOV
 
@@ -244,7 +248,7 @@ spec:
 
 To configure SR-IOV network for Pods, the required network functions must be
 available on the Kubernetes Node, whether it is a virtual machine or a
-bare-metal server. You can follow the following docs to create SR-IOV Virtual
+bare-metal server. You can follow the docs below to create SR-IOV Virtual
 Functions (VFs) or Subfunctions (SFs).
 
 * [Creating SR-IOV Virtual Functions](https://github.com/k8snetworkplumbingwg/sriov-network-device-plugin/blob/master/docs/vf-setup.md)
@@ -325,32 +329,37 @@ SR-IOV network.
 apiVersion: v1
 kind: Pod
 metadata:
- name: sample-pod-secondary-network-sriov
- annotations:
-   k8s.v1.cni.cncf.io/networks: sriov-net-a
+  name: sample-pod-secondary-network-sriov
+  annotations:
+    k8s.v1.cni.cncf.io/networks: sriov-net-a
 spec:
- containers:
- - name: toolbox
-   image: antrea/toolbox:latest
-   resources:
-     requests:
-       intel.com/sriov_net_A: '1'
-     limits:
-       intel.com/sriov_net_A: '1'
+  containers:
+  - name: toolbox
+    image: antrea/toolbox:latest
+    resources:
+      requests:
+        intel.com/sriov_net_A: '1'
+      limits:
+        intel.com/sriov_net_A: '1'
 ```
+
+Similar to the VLAN network configuration, you can remove the annotation
+`k8s.v1.cni.cncf.io/networks` to delete the secondary interfaces.
+Network updates are not supported. Please check the [Limitations](#limitations)
+section for more details.
 
 ## Limitations
 
-* At the moment, we do NOT support annotation update / removal: when the
-  annotation is added to the Pod for the first time (e.g., when creating the
-  Pod), we will configure the secondary network interfaces accordingly, and no
-  change is possible after that, until the Pod is deleted.
-* We don't support K8s Nodes with multi-path routes.
-
+* At the moment, Antrea does NOT support annotation updates: when the annotation is
+  added to the Pod for the first time (e.g., when creating the Pod), Antrea will
+  configure the secondary network interfaces accordingly, and no change is
+  possible after that, until the Pod is deleted. Removing the annotation is
+  supported and will delete the secondary interfaces.
+* Antrea does not support K8s Nodes with multi-path routes.
   > A multi-path route is a route with multiple possible next hops. When listing the
   > rules (e.g., with `ip route list`), a multi-path route may appear as multiple individual
   > routes (one for each next hop), all with the same cost.
 
   When the K8s Node interfaces are managed by a network manager, please make sure the default
   routes for secondary interfaces are disabled, or configure the routes with different metrics.
-  Otherwise, you may encounter K8s Nodes connection issue. Please check issue [#7058](https://github.com/antrea-io/antrea/issues/7058) for details.
+  Otherwise, you may encounter K8s Node connection issues. Please check issue [#7058](https://github.com/antrea-io/antrea/issues/7058) for details.
