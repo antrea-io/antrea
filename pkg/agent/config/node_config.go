@@ -283,14 +283,12 @@ func (nc *NetworkConfig) NeedsTunnelToPeer(peerIP net.IP, localIP *net.IPNet) bo
 }
 
 func (nc *NetworkConfig) NeedsTunnelInterface() bool {
-	// For encap or hybrid mode, we need to create the tunnel interface, except if we are using
-	// WireGuard, in which case inter-Node traffic always goes through the antrea-wg0 interface,
-	// and tunneling is managed by Linux, not OVS.
+	// For encap or hybrid mode, we need to create the tunnel interface.
 	// If multi-cluster gateway is enabled, we always need the tunnel interface. For example,
 	// cross-cluster traffic from a regular Node to the gateway Node for the source cluster
 	// always goes through antrea-tun0, regardless of the actual "traffic mode" for the source
 	// cluster.
-	return (nc.TrafficEncapMode.SupportsEncap() && nc.TrafficEncryptionMode != TrafficEncryptionModeWireGuard) || nc.EnableMulticlusterGW
+	return nc.TrafficEncapMode.SupportsEncap() || nc.EnableMulticlusterGW
 }
 
 // NeedsDirectRoutingToPeer returns true if Pod traffic to peer Node needs a direct route installed to the routing table.

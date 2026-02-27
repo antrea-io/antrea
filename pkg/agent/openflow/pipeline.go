@@ -1365,9 +1365,10 @@ func (f *featurePodConnectivity) l3FwdFlowsToRemoteViaTun(localGatewayMAC net.Ha
 	return flows
 }
 
-// l3FwdFlowEgressReturnViaTun generates the flow to match the packets sourced from the Antrea gateway and destined for
-// remote Pods and forward them via tunnel. This flow is installed only in hybrid mode for matching reply packets of
-// Egress connections originated from tunnel and these packets should be sent to remote Pods via tunnel.
+// l3FwdFlowEgressReturnViaTun generates the flow to match reply packets of Egress connections (whose request packets
+// came from remote Pods via tunnel) and forward them back to those Pods via tunnel, ensuring symmetric paths. It is
+// used when Egress uses a tunnel path distinct from the common Pod-to-Pod path (hybrid or WireGuard) and the peer is
+// reachable via routing.
 func (f *featurePodConnectivity) l3FwdFlowEgressReturnViaTun(localGatewayMAC net.HardwareAddr, peerSubnet net.IPNet, tunnelPeer net.IP) binding.Flow {
 	ipProtocol := getIPProtocol(peerSubnet.IP)
 	flow := L3ForwardingTable.ofTable.BuildFlow(priorityNormal + 1).
