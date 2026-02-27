@@ -200,7 +200,7 @@ func (cs *ConntrackConnectionStore) AddOrUpdateConn(conn *connection.Connection)
 	if cs.fromExternalCorrelator.filterAndStoreExternalSource(conn, cs.antreaProxier) {
 		return
 	}
-	cs.fromExternalCorrelator.correlateIfExternal(conn)
+	fromExternal := cs.fromExternalCorrelator.correlateIfExternal(conn)
 
 	connKey := connection.NewConnectionKey(conn)
 
@@ -234,7 +234,14 @@ func (cs *ConntrackConnectionStore) AddOrUpdateConn(conn *connection.Connection)
 		klog.V(4).InfoS("Antrea flow updated", "connection", existingConn)
 	} else {
 		cs.fillPodInfo(conn)
-		if conn.Mark&openflow.ServiceCTMark.GetRange().ToNXRange().ToUint32Mask() == openflow.ServiceCTMark.GetValue() || conn.Mark == 2 {
+		if !fromExternal && conn.SourcePodName == "" && conn.DestinationPodName == "" {
+			// We don't add connections to connection map or expirePriorityQueue if we can't find the pod
+			// information for both srcPod and dstPod except for from external flows.
+
+			klog.V(5).InfoS("Skip this connection as we cannot map any of the connection IPs to a local Pod", "srcIP", conn.FlowKey.SourceAddress.String(), "dstIP", conn.FlowKey.DestinationAddress.String())
+			return
+		}
+		if conn.Mark&openflow.ServiceCTMark.GetRange().ToNXRange().ToUint32Mask() == openflow.ServiceCTMark.GetValue() || fromExternal {
 			clusterIP := conn.OriginalDestinationAddress.String()
 			svcPort := conn.OriginalDestinationPort
 			protocol, err := lookupServiceProtocol(conn.FlowKey.Protocol)

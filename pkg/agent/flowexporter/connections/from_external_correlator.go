@@ -109,16 +109,18 @@ func (c *fromExternalCorrelator) filterAndStoreExternalSource(conn *connection.C
 	return true
 }
 
-// correlateIfExternal correlates the connection to it's zone zero counterpart to preserve the SNAT'd source IP
-func (c *fromExternalCorrelator) correlateIfExternal(conn *connection.Connection) {
+// correlateIfExternal returns true if it correlates the connection to it's zone zero counterpart to preserve the SNAT'd source IP
+func (c *fromExternalCorrelator) correlateIfExternal(conn *connection.Connection) bool {
 	if conn == nil {
-		return
+		return false
 	}
 
 	zoneZero := c.popMatching(conn)
-	if zoneZero != nil {
-		CorrelateExternal(zoneZero, conn)
+	if zoneZero == nil {
+		return false
 	}
+	CorrelateExternal(zoneZero, conn)
+	return true
 }
 
 // cleanUpLoop runs in an infinite loop and cleans up the store at the given interval.

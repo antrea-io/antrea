@@ -378,16 +378,18 @@ func TestCorrelateIfExternal(t *testing.T) {
 
 	correlator := newFromExternalCorrelator()
 
-	// Validates correlateIfExternal properly handles nil pointers
-	correlator.correlateIfExternal(nil)
+	got := correlator.correlateIfExternal(nil)
+	assert.False(t, got, "Expected invalid connections to not get correlated")
 
 	// Confirm no correlation when no matching zone zero connections previously stored
-	correlator.correlateIfExternal(&antreaZoneConn)
+	got = correlator.correlateIfExternal(&antreaZoneConn)
+	assert.False(t, got, "Expected no correlation when the store is empty")
 	assert.Equal(t, gatewayIP, antreaZoneConn.FlowKey.SourceAddress, "Expected connection to not have changed")
 
 	// Confirm correlation
 	correlator.filterAndStoreExternalSource(hasServiceConn, mockProxier{})
-	correlator.correlateIfExternal(&antreaZoneConn)
+	got = correlator.correlateIfExternal(&antreaZoneConn)
+	assert.True(t, got, "Expected correlation when corresponding zoen zero flow added to store")
 
 	assert.Equal(t, externalIP, antreaZoneConn.FlowKey.SourceAddress, "Expected connection to have external source IP")
 	assert.Len(t, correlator.connections, 0, "Expected Zone 0 connection to be popped from store")
