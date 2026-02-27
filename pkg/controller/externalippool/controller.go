@@ -119,10 +119,15 @@ type ExternalIPPoolController struct {
 
 	// queue maintains the ExternalIPPool objects that need to be synced.
 	queue workqueue.TypedRateLimitingInterface[string]
+
+	// ipv4Enabled indicates whether IPv4 is enabled in the cluster.
+	ipv4Enabled bool
+	// ipv6Enabled indicates whether IPv6 is enabled in the cluster.
+	ipv6Enabled bool
 }
 
 // NewExternalIPPoolController returns a new *ExternalIPPoolController.
-func NewExternalIPPoolController(crdClient clientset.Interface, externalIPPoolInformer antreainformers.ExternalIPPoolInformer) *ExternalIPPoolController {
+func NewExternalIPPoolController(crdClient clientset.Interface, externalIPPoolInformer antreainformers.ExternalIPPoolInformer, ipv4Enabled, ipv6Enabled bool) *ExternalIPPoolController {
 	c := &ExternalIPPoolController{
 		crdClient:                  crdClient,
 		externalIPPoolLister:       externalIPPoolInformer.Lister(),
@@ -135,6 +140,8 @@ func NewExternalIPPoolController(crdClient clientset.Interface, externalIPPoolIn
 		),
 		ipAllocatorInitialized: &atomic.Value{},
 		ipAllocatorMap:         make(map[string]ipallocator.MultiIPAllocator),
+		ipv4Enabled:            ipv4Enabled,
+		ipv6Enabled:            ipv6Enabled,
 	}
 	externalIPPoolInformer.Informer().AddEventHandlerWithResyncPeriod(
 		cache.ResourceEventHandlerFuncs{

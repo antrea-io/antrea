@@ -57,12 +57,22 @@ func (c *ExternalIPPoolController) ValidateExternalIPPool(review *admv1.Admissio
 	switch review.Request.Operation {
 	case admv1.Create:
 		klog.V(2).Info("Validating CREATE request for ExternalIPPool")
+		if err := validation.ValidateIPRangeIPFamily(newObj.Spec.IPRanges, c.ipv4Enabled, c.ipv6Enabled); err != nil {
+			msg = err.Error()
+			allowed = false
+			break
+		}
 		if err := validateIPRangesAndSubnetInfoForExternalIPPool(&newObj, externalIPPools); err != nil {
 			msg = err.Error()
 			allowed = false
 		}
 	case admv1.Update:
 		klog.V(2).Info("Validating UPDATE request for ExternalIPPool")
+		if err := validation.ValidateIPRangeIPFamily(newObj.Spec.IPRanges, c.ipv4Enabled, c.ipv6Enabled); err != nil {
+			msg = err.Error()
+			allowed = false
+			break
+		}
 		if err := validateIPRangesAndSubnetInfoForExternalIPPool(&newObj, externalIPPools); err != nil {
 			msg = err.Error()
 			allowed = false
