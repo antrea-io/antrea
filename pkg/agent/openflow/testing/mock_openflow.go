@@ -1,4 +1,4 @@
-// Copyright 2025 Antrea Authors
+// Copyright 2026 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -423,17 +423,17 @@ func (mr *MockClientMockRecorder) InstallMulticlusterPodFlows(podIP, tunnelPeerI
 }
 
 // InstallNodeFlows mocks base method.
-func (m *MockClient) InstallNodeFlows(hostname string, peerConfigs map[*net.IPNet]net.IP, tunnelPeerIP *ip.DualStackIPs, ipsecTunOFPort uint32, peerNodeMAC net.HardwareAddr) error {
+func (m *MockClient) InstallNodeFlows(hostname string, peerConfigs map[*net.IPNet]net.IP, peerNodeIPs *ip.DualStackIPs, ipsecTunOFPort uint32, peerNodeMAC net.HardwareAddr) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "InstallNodeFlows", hostname, peerConfigs, tunnelPeerIP, ipsecTunOFPort, peerNodeMAC)
+	ret := m.ctrl.Call(m, "InstallNodeFlows", hostname, peerConfigs, peerNodeIPs, ipsecTunOFPort, peerNodeMAC)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // InstallNodeFlows indicates an expected call of InstallNodeFlows.
-func (mr *MockClientMockRecorder) InstallNodeFlows(hostname, peerConfigs, tunnelPeerIP, ipsecTunOFPort, peerNodeMAC any) *gomock.Call {
+func (mr *MockClientMockRecorder) InstallNodeFlows(hostname, peerConfigs, peerNodeIPs, ipsecTunOFPort, peerNodeMAC any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "InstallNodeFlows", reflect.TypeOf((*MockClient)(nil).InstallNodeFlows), hostname, peerConfigs, tunnelPeerIP, ipsecTunOFPort, peerNodeMAC)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "InstallNodeFlows", reflect.TypeOf((*MockClient)(nil).InstallNodeFlows), hostname, peerConfigs, peerNodeIPs, ipsecTunOFPort, peerNodeMAC)
 }
 
 // InstallPodFlows mocks base method.
