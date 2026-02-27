@@ -371,7 +371,7 @@ func testTraceflowIntraNode(t *testing.T, data *TestData) {
 		}
 	}()
 
-	antreaPod, err := data.getAntreaPodOnNode(node1)
+	antreaPod, err := data.GetAntreaPodOnNode(node1)
 	if err = data.waitForNetworkpolicyRealized(antreaPod, node1, isWindows, allowAllEgressName, v1beta2.K8sNetworkPolicy); err != nil {
 		t.Fatal(err)
 	}
@@ -1227,7 +1227,7 @@ func testTraceflowInterNode(t *testing.T, data *TestData) {
 		}
 	}()
 
-	antreaPod, err := data.getAntreaPodOnNode(node2)
+	antreaPod, err := data.GetAntreaPodOnNode(node2)
 	if err = data.waitForNetworkpolicyRealized(antreaPod, node2, isWindows, allowAllEgressName, v1beta2.K8sNetworkPolicy); err != nil {
 		t.Fatal(err)
 	}

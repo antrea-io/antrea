@@ -4830,7 +4830,7 @@ func testACNPMulticastEgress(t *testing.T, data *TestData, acnpName, caseName, g
 // the matchers parameter is a list of regular expressions which will be matched against the
 // contents of the audit logs. The call will "succeed" if all matches are successful.
 func checkAuditLoggingResult(t *testing.T, data *TestData, nodeName, logLocator string, matchers []*regexp.Regexp) {
-	antreaPodName, err := data.getAntreaPodOnNode(nodeName)
+	antreaPodName, err := data.GetAntreaPodOnNode(nodeName)
 	if err != nil {
 		t.Errorf("Error occurred when trying to get the Antrea Agent Pod running on Node %s: %v", nodeName, err)
 	}

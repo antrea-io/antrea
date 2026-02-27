@@ -634,7 +634,7 @@ func testProxyServiceSessionAffinity(ipFamily *corev1.IPFamily, ingressIPs []str
 	// Hold on to make sure that the Service is realized.
 	time.Sleep(serviceDelay)
 
-	agentName, err := data.getAntreaPodOnNode(nodeName)
+	agentName, err := data.GetAntreaPodOnNode(nodeName)
 	require.NoError(t, err)
 	tableSessionAffinityName := "SessionAffinity"
 	tableSessionAffinityOutput, _, err := data.RunCommandFromPod(metav1.NamespaceSystem, agentName, "antrea-agent", []string{"ovs-ofctl", "dump-flows", defaultBridgeName, fmt.Sprintf("table=%s", tableSessionAffinityName)})
@@ -915,7 +915,7 @@ func testProxyEndpointLifeCycle(ipFamily *corev1.IPFamily, data *TestData, t *te
 	// Hold on to make sure that the Service is realized.
 	time.Sleep(serviceDelay)
 
-	agentName, err := data.getAntreaPodOnNode(nodeName)
+	agentName, err := data.GetAntreaPodOnNode(nodeName)
 	require.NoError(t, err)
 	var nginxIP string
 	if *ipFamily == corev1.IPv6Protocol {
@@ -1016,7 +1016,7 @@ func testProxyServiceLifeCycle(ipFamily *corev1.IPFamily, ingressIPs []string, d
 	_, err = data.createNginxLoadBalancerService(false, ingressIPs, ipFamily)
 	defer data.deleteServiceAndWait(defaultTimeout, nginxLBService, data.testNamespace)
 	require.NoError(t, err)
-	agentName, err := data.getAntreaPodOnNode(nodeName)
+	agentName, err := data.GetAntreaPodOnNode(nodeName)
 	require.NoError(t, err)
 
 	// Hold on to make sure that the Service is realized.

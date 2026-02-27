@@ -426,7 +426,7 @@ func testL7NetworkPolicyLogging(t *testing.T, data *TestData) {
 	require.NoError(t, err, "Expected IP for Pod '%s'", serverPodName)
 	serverIPs := podIPs.AsSlice()
 
-	antreaPodName, err := data.getAntreaPodOnNode(l7LoggingNode)
+	antreaPodName, err := data.GetAntreaPodOnNode(l7LoggingNode)
 	require.NoError(t, err, "Error occurred when trying to get the antrea-agent Pod running on Node %s", l7LoggingNode)
 
 	// Find filename of L7 log file.
