@@ -31,6 +31,7 @@ import (
 
 	"antrea.io/antrea/pkg/antctl/raw"
 	"antrea.io/antrea/pkg/antctl/raw/check"
+	antrea "antrea.io/antrea/pkg/client/clientset/versioned"
 )
 
 func Command() *cobra.Command {
@@ -108,6 +109,7 @@ func RegisterTest(name string, test Test) {
 type testContext struct {
 	check.Logger
 	client               kubernetes.Interface
+	antreaClient         antrea.Interface
 	config               *rest.Config
 	clusterName          string
 	antreaNamespace      string
@@ -163,8 +165,12 @@ func Run(o *options) error {
 	if err != nil {
 		return fmt.Errorf("unable to create Kubernetes client: %w", err)
 	}
+	antreaClient, err := antrea.NewForConfig(config)
+	if err != nil {
+		return fmt.Errorf("unable to create Antrea client: %w", err)
+	}
 	ctx := context.Background()
-	testContext := NewTestContext(client, config, clusterName, o.antreaNamespace, runFilterRegex, o.testImage, networkPolicyDelay)
+	testContext := NewTestContext(client, antreaClient, config, clusterName, o.antreaNamespace, runFilterRegex, o.testImage, networkPolicyDelay)
 	defer check.Teardown(ctx, testContext.Logger, testContext.client, testContext.namespace)
 	if err := testContext.setup(ctx); err != nil {
 		return err
@@ -204,6 +210,7 @@ func newService(name string, selector map[string]string, port int32) *corev1.Ser
 
 func NewTestContext(
 	client kubernetes.Interface,
+	antreaClient antrea.Interface,
 	config *rest.Config,
 	clusterName string,
 	antreaNamespace string,
@@ -214,6 +221,7 @@ func NewTestContext(
 	return &testContext{
 		Logger:             check.NewLogger(fmt.Sprintf("[%s] ", clusterName)),
 		client:             client,
+		antreaClient:       antreaClient,
 		config:             config,
 		clusterName:        clusterName,
 		antreaNamespace:    antreaNamespace,

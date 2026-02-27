@@ -16,22 +16,17 @@ package installation
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"regexp"
 	"strconv"
 	"strings"
-	"sync"
-	"time"
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/sets"
-	"k8s.io/utils/ptr"
 	"sigs.k8s.io/yaml"
 
 	"antrea.io/antrea/pkg/antctl/raw"
-	"antrea.io/antrea/pkg/antctl/raw/check"
 	agentconfig "antrea.io/antrea/pkg/config/agent"
 )
 
@@ -39,11 +34,7 @@ const (
 	antreaConfigMapName        = "antrea-config"
 	antreaIPsecSecretName      = "antrea-ipsec" // #nosec G101: false positive triggered by variable name which includes "Secret"
 	ipsecToolboxDeploymentName = "ipsec-tcpdump"
-	tcpdumpPacketCount         = 10
-	tcpdumpTimeout             = 10 * time.Second
 	defaultIPsecPSK            = "changeme"
-	pingResponseTimeoutSeconds = 2
-	maxDisplayLines            = 10
 )
 
 type IPsecTest struct{}
@@ -99,7 +90,7 @@ func (t *IPsecTest) Run(ctx context.Context, testContext *testContext) error {
 
 	// Deploy hostNetwork Pod with tcpdump on the same Node as client Pod
 	testContext.Log("Deploying tcpdump on Node %q...", clientPod.Spec.NodeName)
-	tcpdumpPod, err := deployTcpdumpPod(ctx, testContext, clientPod.Spec.NodeName)
+	tcpdumpPod, err := deployTcpdumpPod(ctx, testContext, clientPod.Spec.NodeName, ipsecToolboxDeploymentName)
 	if err != nil {
 		return fmt.Errorf("failed to deploy tcpdump Pod: %w", err)
 	}
@@ -110,27 +101,17 @@ func (t *IPsecTest) Run(ctx context.Context, testContext *testContext) error {
 		}
 	}()
 
-	for _, podIP := range testContext.echoOtherNodePod.Status.PodIPs {
-		targetIP := podIP.IP
-		testContext.Log("Verifying connectivity from Pod %q to %s...", clientPod.Name, targetIP)
-		if err := verifyConnectivity(ctx, testContext, clientPod.Name, targetIP); err != nil {
-			return fmt.Errorf("initial ping failed: %w", err)
-		}
-		testContext.Log("Ping from Pod %q to %s successful", clientPod.Name, targetIP)
-
-		testContext.Log("Starting background ping from client Pod to echo Pod...")
-		stopPing, err := startBackgroundPing(ctx, testContext, clientPod.Name, targetIP)
-		if err != nil {
-			return fmt.Errorf("failed to start background ping: %w", err)
-		}
-		defer func() {
-			testContext.Log("Stopping background ping...")
-			stopPing()
-		}()
+	stopProbes, err := startBackgroundProbes(ctx, testContext, clientPod.Name, testContext.echoOtherNodePod)
+	if err != nil {
+		return err
 	}
+	defer func() {
+		testContext.Log("Stopping background probes...")
+		stopProbes()
+	}()
 
 	testContext.Log("Capturing ESP packets...")
-	espOutput, err := captureESPackets(ctx, testContext, tcpdumpPod.Name)
+	espOutput, err := runTcpdump(ctx, testContext, tcpdumpPod.Name, "any", "esp")
 	if err != nil {
 		return fmt.Errorf("failed to capture ESP packets: %w", err)
 	}
@@ -144,7 +125,7 @@ func (t *IPsecTest) Run(ctx context.Context, testContext *testContext) error {
 	displayPacketCapture(testContext, espOutput)
 
 	testContext.Log("Verifying no unencrypted %s traffic...", configInfo.tunnelType)
-	tunnelOutput, err := captureTunnelPackets(ctx, testContext, tcpdumpPod.Name, configInfo.tunnelType, configInfo.tunnelPort)
+	tunnelOutput, err := captureTunnelTraffic(ctx, testContext, tcpdumpPod.Name, configInfo.tunnelType, configInfo.tunnelPort)
 	if err != nil {
 		return fmt.Errorf("failed to capture tunnel packets: %w", err)
 	}
@@ -272,168 +253,22 @@ func hasPSKBeenChanged(ctx context.Context, testContext *testContext) (bool, err
 	return psk != defaultIPsecPSK, nil
 }
 
-// verifyConnectivity sends 3 pings from the client Pod to the target IP to verify connectivity
-// It succeeds if at least one of the 3 pings is successful (ping returns exit code 0 if at least 1 packet is received)
-func verifyConnectivity(ctx context.Context, testContext *testContext, clientPodName, targetIP string) error {
-	cmd := []string{"ping", "-c", "3", "-W", fmt.Sprint(pingResponseTimeoutSeconds), targetIP}
-	_, stderr, err := raw.ExecInPod(ctx, testContext.client, testContext.config, testContext.namespace, clientPodName, "", cmd)
-	if err != nil {
-		testContext.Log("ping command stderr: %s", stderr)
-		return fmt.Errorf("ping command failed: %w", err)
-	}
-	return nil
-}
-
-// startBackgroundPing starts a ping in the background from the client Pod to the target IP
-// It returns a cleanup function that should be called to stop the ping goroutine
-func startBackgroundPing(ctx context.Context, testContext *testContext, clientPodName, targetIP string) (func(), error) {
-	pingCtx, cancelPing := context.WithCancel(ctx)
-
-	var wg sync.WaitGroup
-
-	wg.Go(func() {
-		cmd := []string{"ping", "-W", fmt.Sprint(pingResponseTimeoutSeconds), targetIP}
-		if _, _, err := raw.ExecInPod(pingCtx, testContext.client, testContext.config, testContext.namespace, clientPodName, "", cmd); err != nil {
-			if errors.Is(err, context.Canceled) {
-				return
-			}
-			testContext.Warning("ping command failed: %v", err)
-		}
-	})
-
-	cleanup := func() {
-		cancelPing()
-		wg.Wait()
-	}
-
-	return cleanup, nil
-}
-
-// deployTcpdumpPod deploys a hostNetwork Pod with tcpdump on the specified Node
-func deployTcpdumpPod(ctx context.Context, testContext *testContext, nodeName string) (*corev1.Pod, error) {
-	deployment := check.NewDeployment(check.DeploymentParameters{
-		Name:        ipsecToolboxDeploymentName,
-		Role:        "tcpdump",
-		Image:       testContext.testImage,
-		HostNetwork: true,
-		Affinity: &corev1.Affinity{
-			NodeAffinity: &corev1.NodeAffinity{
-				RequiredDuringSchedulingIgnoredDuringExecution: &corev1.NodeSelector{
-					NodeSelectorTerms: []corev1.NodeSelectorTerm{
-						{
-							MatchExpressions: []corev1.NodeSelectorRequirement{
-								{
-									Key:      "kubernetes.io/hostname",
-									Operator: corev1.NodeSelectorOpIn,
-									Values:   []string{nodeName},
-								},
-							},
-						},
-					},
-				},
-			},
-		},
-		Tolerations: []corev1.Toleration{
-			{
-				Key:      "node-role.kubernetes.io/control-plane",
-				Operator: "Exists",
-				Effect:   "NoSchedule",
-			},
-		},
-		SecurityContext: &corev1.SecurityContext{
-			Privileged: ptr.To(true),
-		},
-		Labels: map[string]string{"app": "antrea", "component": "installation-checker", "name": ipsecToolboxDeploymentName},
-	})
-
-	if _, err := testContext.client.AppsV1().Deployments(testContext.namespace).Create(ctx, deployment, metav1.CreateOptions{}); err != nil {
-		return nil, fmt.Errorf("failed to create tcpdump Deployment: %w", err)
-	}
-
-	testContext.Log("Waiting for tcpdump Deployment to be ready...")
-	if err := check.WaitForDeploymentsReady(ctx, time.Second, podReadyTimeout, false, testContext.client, testContext.clusterName, testContext.namespace, ipsecToolboxDeploymentName); err != nil {
-		return nil, fmt.Errorf("tcpdump Deployment did not become ready: %w", err)
-	}
-
-	podList, err := testContext.client.CoreV1().Pods(testContext.namespace).List(ctx, metav1.ListOptions{LabelSelector: "name=" + ipsecToolboxDeploymentName})
-	if err != nil {
-		return nil, fmt.Errorf("failed to list tcpdump Pods: %w", err)
-	}
-	if len(podList.Items) == 0 {
-		return nil, fmt.Errorf("no tcpdump Pod found")
-	}
-
-	return &podList.Items[0], nil
-}
-
-// captureESPackets captures ESP packets using tcpdump
-func captureESPackets(ctx context.Context, testContext *testContext, podName string) (string, error) {
-	cmd := []string{"tcpdump", "-n", "-i", "any", "-c", fmt.Sprint(tcpdumpPacketCount), "esp"}
-	ctx, cancel := context.WithTimeout(ctx, tcpdumpTimeout)
-	defer cancel()
-	stdout, stderr, err := raw.ExecInPod(ctx, testContext.client, testContext.config, testContext.namespace, podName, "", cmd)
-	if err != nil {
-		testContext.Log("tcpdump command stderr: %s", stderr)
-		return "", fmt.Errorf("tcpdump command failed: %w", err)
-	}
-	return stdout, nil
-}
-
-// captureTunnelPackets captures tunnel packets using tcpdump
-// If any packets are captured, it means encryption is not working properly
-func captureTunnelPackets(ctx context.Context, testContext *testContext, podName, tunnelType string, tunnelPort int32) (string, error) {
-	var cmd []string
-
+// captureTunnelTraffic captures unencrypted tunnel packets using tcpdump.
+// If any packets are captured, it means IPsec encryption is not working properly.
+func captureTunnelTraffic(ctx context.Context, testContext *testContext, podName, tunnelType string, tunnelPort int32) (string, error) {
+	var filter []string
 	switch tunnelType {
 	case "gre":
-		// GRE uses IP protocol 47
-		cmd = []string{"tcpdump", "-n", "-i", "any", "-c", fmt.Sprint(tcpdumpPacketCount), "ip", "proto", "47"}
+		filter = []string{"ip", "proto", "47"}
 	case "geneve", "vxlan":
-		// Geneve and VXLAN use UDP
 		if tunnelPort == 0 {
 			return "", fmt.Errorf("tunnel type %s requires a UDP port, but port is 0", tunnelType)
 		}
-		cmd = []string{"tcpdump", "-n", "-i", "any", "-c", fmt.Sprint(tcpdumpPacketCount), "udp", "port", fmt.Sprint(tunnelPort)}
+		filter = []string{"udp", "port", fmt.Sprint(tunnelPort)}
 	default:
 		return "", fmt.Errorf("unsupported tunnel type: %s", tunnelType)
 	}
-
-	ctx, cancel := context.WithTimeout(ctx, tcpdumpTimeout)
-	defer cancel()
-	stdout, stderr, err := raw.ExecInPod(ctx, testContext.client, testContext.config, testContext.namespace, podName, "", cmd)
-	// tcpdump may return an error if timeout is reached with no packets, which is expected
-	if err != nil && !errors.Is(err, context.DeadlineExceeded) {
-		testContext.Log("tcpdump command stderr: %s", stderr)
-		testContext.Warning("tcpdump command encountered an error (may be expected): %v", err)
-	}
-	return stdout, nil
-}
-
-// countNonEmptyLines counts non-empty lines in the output
-func countNonEmptyLines(output string) int {
-	if output == "" {
-		return 0
-	}
-	lines := strings.Split(output, "\n")
-	count := 0
-	for _, line := range lines {
-		if strings.TrimSpace(line) != "" {
-			count++
-		}
-	}
-	return count
-}
-
-// displayPacketCapture displays the first few lines of packet capture output
-func displayPacketCapture(testContext *testContext, output string) {
-	lines := strings.Split(strings.TrimSpace(output), "\n")
-	displayLines := min(len(lines), maxDisplayLines)
-	for i := 0; i < displayLines; i++ {
-		testContext.Log("  %s", lines[i])
-	}
-	if len(lines) > displayLines {
-		testContext.Log("  ... (%d more lines)", len(lines)-displayLines)
-	}
+	return runTcpdump(ctx, testContext, podName, "any", filter...)
 }
 
 // getAntreaAgentPod gets the antrea-agent Pod running on the specified Node
