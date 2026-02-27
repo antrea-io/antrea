@@ -333,7 +333,7 @@ func TestParseDatabaseURL(t *testing.T) {
 			expectedErrMsg: "failed to parse ClickHouse database URL",
 		},
 		{
-			url:            "tcp://user:password@127.0.0.1:9000",
+			url:            "tcp://user:password@127.0.0.1:9000", // #nosec G101: not actual credentials
 			expectedErrMsg: "invalid ClickHouse database URL",
 		},
 		{

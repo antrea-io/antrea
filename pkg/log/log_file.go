@@ -175,6 +175,7 @@ func checkLogFiles() {
 		})
 		// Remove the oldest files.
 		for _, file := range files[maxNum:] {
+			// #nosec G703: Path provided via config by admin; no privilege boundary crossed.
 			err := os.Remove(logDir + "/" + file.Name())
 			if err != nil {
 				klog.Errorf("Failed to delete log file %s: %v", file.Name(), err)

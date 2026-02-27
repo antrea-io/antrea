@@ -45,7 +45,7 @@ func TestValidateSupportBundleCollection(t *testing.T) {
 		authType: crdv1alpha1.APIKey,
 	}
 	authentication := &controlplane.BundleServerAuthConfiguration{
-		APIKey: "bundle_api_key",
+		APIKey: "bundle_api_key", // #nosec G101: not actual credentials
 	}
 	nodeSpan := sets.New[string]("n1", "n2", "n3", "n4")
 	expiredAt := metav1.NewTime(time.Now().Add(time.Minute))

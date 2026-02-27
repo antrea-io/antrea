@@ -984,7 +984,7 @@ func TestAddInternalSupportBundleCollection(t *testing.T) {
 	controller := newController(testClient)
 
 	authentication := &controlplane.BundleServerAuthConfiguration{
-		APIKey: "bundle_api_key",
+		APIKey: "bundle_api_key", // #nosec G101: not actual credentials
 	}
 	expiredAt := metav1.NewTime(time.Now().Add(time.Minute * 60))
 
