@@ -27,6 +27,91 @@ import (
 	crdv1beta1 "antrea.io/antrea/pkg/apis/crd/v1beta1"
 )
 
+const (
+	expectedDualStackCount = 2
+	ipv4Idx                = 0
+	ipv6Idx                = 1
+)
+
+func (c *EgressController) validateDualStackEgress(egress *crdv1beta1.Egress) (bool, string) {
+	lenIPs := len(egress.Spec.EgressIPs)
+	lenPools := len(egress.Spec.ExternalIPPools)
+
+	switch {
+	case lenIPs == expectedDualStackCount && lenPools == 0:
+		for i, ipStr := range egress.Spec.EgressIPs {
+			if ok, msg := c.isCorrectFamilyIP(ipStr, i == ipv6Idx, i); !ok {
+				return false, msg
+			}
+		}
+
+	case lenIPs == 0 && lenPools == expectedDualStackCount:
+		for i, poolName := range egress.Spec.ExternalIPPools {
+			if ok, msg := c.isCorrectFamilyPool(poolName, i == ipv6Idx); !ok {
+				return false, msg
+			}
+		}
+
+	case lenIPs == expectedDualStackCount && lenPools == expectedDualStackCount:
+		for i := 0; i < expectedDualStackCount; i++ {
+			ipStr := egress.Spec.EgressIPs[i]
+			poolName := egress.Spec.ExternalIPPools[i]
+			isIPv6 := (i == ipv6Idx)
+
+			if ok, msg := c.isCorrectFamilyIP(ipStr, isIPv6, i); !ok {
+				return false, msg
+			}
+			if ok, msg := c.isCorrectFamilyPool(poolName, isIPv6); !ok {
+				return false, msg
+			}
+
+			if !c.externalIPAllocator.IPPoolHasIP(poolName, net.ParseIP(ipStr)) {
+				return false, fmt.Sprintf("EgressIP %s does not belong to ExternalIPPool %s", ipStr, poolName)
+			}
+		}
+	default:
+		return false, fmt.Sprintf("invalid dual-stack configuration: %d IPs, %d Pools", lenIPs, lenPools)
+	}
+	return true, ""
+}
+
+func (c *EgressController) isCorrectFamilyIP(ipStr string, expectIPv6 bool, index int) (bool, string) {
+	ip := net.ParseIP(ipStr)
+	if ip == nil {
+		return false, fmt.Sprintf("spec.egressIPs[%d] has invalid IP format: %s", index, ipStr)
+	}
+
+	isIPv6 := ip.To4() == nil
+	if isIPv6 != expectIPv6 {
+		expectedFamily := "IPv4"
+		actualFamily := "IPv6"
+		if expectIPv6 {
+			expectedFamily = "IPv6"
+			actualFamily = "IPv4"
+		}
+		return false, fmt.Sprintf("spec.egressIPs[%d] must be %s but got %s (%s)", index, expectedFamily, ipStr, actualFamily)
+	}
+	return true, ""
+}
+
+func (c *EgressController) isCorrectFamilyPool(poolName string, expectIPv6 bool) (bool, string) {
+	if poolName == "" {
+		return false, "empty pool name"
+	}
+	isIPv6, err := c.externalIPAllocator.IPPoolIsIPv6(poolName)
+	if err != nil {
+		return false, fmt.Errorf("pool %s check failed: %v", poolName, err).Error()
+	}
+	if isIPv6 != expectIPv6 {
+		family := "IPv4"
+		if expectIPv6 {
+			family = "IPv6"
+		}
+		return false, fmt.Sprintf("expected %s pool but %s is not", family, poolName)
+	}
+	return true, ""
+}
+
 func (c *EgressController) ValidateEgress(review *admv1.AdmissionReview) *admv1.AdmissionResponse {
 	var result *metav1.Status
 	var msg string
@@ -48,11 +133,14 @@ func (c *EgressController) ValidateEgress(review *admv1.AdmissionReview) *admv1.
 	}
 
 	shouldAllow := func(oldEgress, newEgress *crdv1beta1.Egress) (bool, string) {
-		if len(newEgress.Spec.EgressIPs) > 0 {
-			return false, "spec.egressIPs is not supported yet"
-		}
-		if len(newEgress.Spec.ExternalIPPools) > 0 {
-			return false, "spec.externalIPPools is not supported yet"
+		// Validate Egress Dual-Stack Configuration
+		if len(newEgress.Spec.EgressIPs) > 0 || len(newEgress.Spec.ExternalIPPools) > 0 {
+			if newEgress.Spec.EgressIP != "" || newEgress.Spec.ExternalIPPool != "" {
+				return false, "{spec.egressIPs, spec.externalIPPools} and {spec.egressIP, spec.externalIPPool} are mutually exclusive"
+			}
+			if allowed, msg := c.validateDualStackEgress(newEgress); !allowed {
+				return false, msg
+			}
 		}
 		// Validate Egress trafficShaping
 		if newEgress.Spec.Bandwidth != nil {

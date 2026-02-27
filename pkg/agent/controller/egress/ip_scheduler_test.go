@@ -85,6 +85,20 @@ func (f *fakeMemberlistCluster) ShouldSelectIP(ip string, pool string, filters .
 	return false, nil
 }
 
+func (f *fakeMemberlistCluster) SelectNodeForDualStackIPs(ipv4, ipv4pool, ipv6, ipv6pool string, filters ...func(string) bool) (string, error) {
+	isSelectedForIPv6 := func(node string) bool {
+		return f.hashMap.GetWithFilters(ipv6, filters...) == node
+	}
+	allFilters := make([]func(string) bool, len(filters)+1)
+	copy(allFilters, filters)
+	allFilters[len(filters)] = isSelectedForIPv6
+	node := f.hashMap.GetWithFilters(ipv4, allFilters...)
+	if node == "" {
+		return "", memberlist.ErrNoNodeAvailable
+	}
+	return node, nil
+}
+
 func TestSchedule(t *testing.T) {
 	egresses := []runtime.Object{
 		&crdv1b1.Egress{
@@ -198,8 +212,9 @@ func TestSchedule(t *testing.T) {
 			clientset := fake.NewSimpleClientset()
 			informerFactory := informers.NewSharedInformerFactory(clientset, 0)
 			nodeInformer := informerFactory.Core().V1().Nodes()
+			externalIPPoolInformer := crdInformerFactory.Crd().V1beta1().ExternalIPPools()
 
-			s := NewEgressIPScheduler(fakeCluster, egressInformer, nodeInformer, tt.maxEgressIPsPerNode)
+			s := NewEgressIPScheduler(fakeCluster, egressInformer, nodeInformer, externalIPPoolInformer, tt.maxEgressIPsPerNode)
 			s.nodeToMaxEgressIPs = tt.nodeToMaxEgressIPs
 			stopCh := make(chan struct{})
 			defer close(stopCh)
@@ -233,8 +248,9 @@ func BenchmarkSchedule(b *testing.B) {
 	clientset := fake.NewSimpleClientset()
 	informerFactory := informers.NewSharedInformerFactory(clientset, 0)
 	nodeInformer := informerFactory.Core().V1().Nodes()
+	externalIPPoolInformer := crdInformerFactory.Crd().V1beta1().ExternalIPPools()
 
-	s := NewEgressIPScheduler(fakeCluster, egressInformer, nodeInformer, 10)
+	s := NewEgressIPScheduler(fakeCluster, egressInformer, nodeInformer, externalIPPoolInformer, 10)
 	stopCh := make(chan struct{})
 	defer close(stopCh)
 	crdInformerFactory.Start(stopCh)
@@ -283,8 +299,9 @@ func TestRun(t *testing.T) {
 	clientset := fake.NewSimpleClientset(node1, node2)
 	informerFactory := informers.NewSharedInformerFactory(clientset, 0)
 	nodeInformer := informerFactory.Core().V1().Nodes()
+	externalIPPoolInformer := crdInformerFactory.Crd().V1beta1().ExternalIPPools()
 
-	s := NewEgressIPScheduler(fakeCluster, egressInformer, nodeInformer, 2)
+	s := NewEgressIPScheduler(fakeCluster, egressInformer, nodeInformer, externalIPPoolInformer, 2)
 	egressUpdates := make(chan string, 10)
 	s.AddEventHandler(func(egress string) {
 		egressUpdates <- egress
