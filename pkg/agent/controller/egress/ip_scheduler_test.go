@@ -198,8 +198,9 @@ func TestSchedule(t *testing.T) {
 			clientset := fake.NewSimpleClientset()
 			informerFactory := informers.NewSharedInformerFactory(clientset, 0)
 			nodeInformer := informerFactory.Core().V1().Nodes()
+			externalIPPoolInformer := crdInformerFactory.Crd().V1beta1().ExternalIPPools()
 
-			s := NewEgressIPScheduler(fakeCluster, egressInformer, nodeInformer, tt.maxEgressIPsPerNode)
+			s := NewEgressIPScheduler(fakeCluster, egressInformer, nodeInformer, externalIPPoolInformer, tt.maxEgressIPsPerNode)
 			s.nodeToMaxEgressIPs = tt.nodeToMaxEgressIPs
 			stopCh := make(chan struct{})
 			defer close(stopCh)
@@ -233,8 +234,9 @@ func BenchmarkSchedule(b *testing.B) {
 	clientset := fake.NewSimpleClientset()
 	informerFactory := informers.NewSharedInformerFactory(clientset, 0)
 	nodeInformer := informerFactory.Core().V1().Nodes()
+	externalIPPoolInformer := crdInformerFactory.Crd().V1beta1().ExternalIPPools()
 
-	s := NewEgressIPScheduler(fakeCluster, egressInformer, nodeInformer, 10)
+	s := NewEgressIPScheduler(fakeCluster, egressInformer, nodeInformer, externalIPPoolInformer, 10)
 	stopCh := make(chan struct{})
 	defer close(stopCh)
 	crdInformerFactory.Start(stopCh)
@@ -283,8 +285,9 @@ func TestRun(t *testing.T) {
 	clientset := fake.NewSimpleClientset(node1, node2)
 	informerFactory := informers.NewSharedInformerFactory(clientset, 0)
 	nodeInformer := informerFactory.Core().V1().Nodes()
+	externalIPPoolInformer := crdInformerFactory.Crd().V1beta1().ExternalIPPools()
 
-	s := NewEgressIPScheduler(fakeCluster, egressInformer, nodeInformer, 2)
+	s := NewEgressIPScheduler(fakeCluster, egressInformer, nodeInformer, externalIPPoolInformer, 2)
 	egressUpdates := make(chan string, 10)
 	s.AddEventHandler(func(egress string) {
 		egressUpdates <- egress
