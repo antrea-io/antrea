@@ -76,8 +76,8 @@ func (c *fromExternalCorrelator) stopCleanUp() {
 	})
 }
 
-// filterAndStoreExternalSource filters for connections that have external source information so correlation can be
-// done on FromExternal flows. Returns true if the connection was zone zero.
+// filterAndStoreExternalSource returns true for valid zone zero connection which are stored for correlation.
+// When antreaProxier is not nil the store is optimized to skip connections that do not have an associated service.
 func (c *fromExternalCorrelator) filterAndStoreExternalSource(conn *connection.Connection, antreaProxier proxy.ProxyQuerier) bool {
 	if conn == nil {
 		return false
@@ -92,17 +92,20 @@ func (c *fromExternalCorrelator) filterAndStoreExternalSource(conn *connection.C
 	protocol, err := lookupServiceProtocol(conn.FlowKey.Protocol)
 	if err != nil {
 		klog.InfoS("Could not retrieve Service protocol", "error", err, "conn", conn)
-		return true
+		return false
 	}
-	// When AntreaProxy is available, the store can selectively store zone zero connections with associated services
+
+	// If AntreaProxy is available, selectively filter out connections without a matching service
+	shouldStore := true
 	if antreaProxier != nil {
 		serviceStr := fmt.Sprintf("%s:%d/%s", clusterIP, svcPort, protocol)
-		_, exists := antreaProxier.GetServiceByIP(serviceStr)
-		if !exists {
-			return true
-		}
+		_, shouldStore = antreaProxier.GetServiceByIP(serviceStr)
 	}
-	c.add(conn)
+
+	if shouldStore {
+		c.add(conn)
+	}
+
 	return true
 }
 
