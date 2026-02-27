@@ -429,7 +429,7 @@ func (c *Controller) worker() {
 
 // processNextWorkItem processes an item in the "node" work queue, by calling syncNodeRoute after
 // casting the item to a string (Node name). If syncNodeRoute returns an error, this function
-// handles it by requeueing the item so that it can be processed again later. If syncNodeRoute is
+// handles it by requeuing the item so that it can be processed again later. If syncNodeRoute is
 // successful, the Node is removed from the queue until we get notified of a new change. This
 // function returns false if and only if the work queue was shutdown (no more items will be
 // processed).
