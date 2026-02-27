@@ -296,6 +296,7 @@ type mockAgentDumper struct {
 	dumpGoroutinePprofErr         error
 	dumpOVSPortsErr               error
 	dumpMemberlistErr             error
+	dumpPrometheusMetricsErr      error
 }
 
 func (d *mockAgentDumper) DumpLog(basedir string) error {
@@ -336,4 +337,8 @@ func (d *mockAgentDumper) DumpOVSPorts(basedir string) error {
 
 func (d *mockAgentDumper) DumpMemberlist(basedir string) error {
 	return d.dumpMemberlistErr
+}
+
+func (d *mockAgentDumper) DumpPrometheusMetrics(basedir string) error {
+	return d.dumpPrometheusMetricsErr
 }

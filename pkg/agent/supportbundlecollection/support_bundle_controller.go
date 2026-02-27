@@ -17,6 +17,7 @@ package supportbundlecollection
 import (
 	"context"
 	"fmt"
+	"path/filepath"
 	"reflect"
 	"sync"
 	"time"
@@ -263,6 +264,35 @@ func (c *SupportBundleController) generateSupportBundle(supportBundle *cpv1b2.Su
 	}
 	if err = agentDumper.DumpOVSPorts(basedir); err != nil {
 		return err
+	}
+
+	metricsDir := filepath.Join(basedir, "metrics")
+	if err = defaultFS.MkdirAll(metricsDir, 0755); err != nil {
+		return fmt.Errorf("error when creating metrics directory: %w", err)
+	}
+
+	if err = agentDumper.DumpPrometheusMetrics(metricsDir); err != nil {
+		return err
+	}
+	// Collect controller metrics if it is present, in external node it will skip it
+	controllerDumper := support.NewControllerDumper(defaultFS, defaultExecutor, supportBundle.SinceTime)
+	if err = controllerDumper.DumpPrometheusMetrics(metricsDir); err != nil {
+		klog.V(2).InfoS("Failed to collect controller metrics, skipping", "error", err)
+	}
+
+	metricsArchive := filepath.Join(basedir, "metrics.tar.gz")
+	metricsFile, err := defaultFS.Create(metricsArchive)
+	if err != nil {
+		return fmt.Errorf("error when creating metrics archive: %w", err)
+	}
+	defer metricsFile.Close()
+
+	if _, err = compress.PackDir(defaultFS, metricsDir, metricsFile); err != nil {
+		return fmt.Errorf("error when compressing metrics: %w", err)
+	}
+
+	if err = defaultFS.RemoveAll(metricsDir); err != nil {
+		klog.V(2).InfoS("Failed to remove metrics directory after compression", "error", err)
 	}
 
 	outputFile, err := afero.TempFile(defaultFS, "", "bundle_*.tar.gz")
