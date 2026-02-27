@@ -965,6 +965,8 @@ type EgressStatus struct {
 	// is not assigned to any Node. It's also useful when there are more than one Egress IP specified in spec.
 	EgressIP string `json:"egressIP"`
 
+	EgressIPs []string `json:"egressIPs,omitempty"`
+
 	Conditions []EgressCondition `json:"conditions,omitempty"`
 }
 

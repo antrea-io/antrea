@@ -15,6 +15,8 @@
 package egress
 
 import (
+	"fmt"
+	"net"
 	"sort"
 	"strconv"
 	"sync"
@@ -48,6 +50,7 @@ type scheduleResult struct {
 	ip   string
 	node string
 	err  error
+	ips []string
 }
 
 // egressIPScheduler is responsible for scheduling Egress IPs to appropriate Nodes according to the Node selector of the
@@ -58,6 +61,7 @@ type egressIPScheduler struct {
 
 	egressLister       crdlisters.EgressLister
 	egressListerSynced cache.InformerSynced
+	externalIPPoolLister    crdlisters.ExternalIPPoolLister
 
 	// queue is used to trigger scheduling. Triggering multiple times before the item is consumed will only cause one
 	// execution of scheduling.
@@ -80,11 +84,12 @@ type egressIPScheduler struct {
 	nodeToMaxEgressIPsMutex sync.RWMutex
 }
 
-func NewEgressIPScheduler(cluster memberlist.Interface, egressInformer crdinformers.EgressInformer, nodeInformer corev1informers.NodeInformer, maxEgressIPsPerNode int) *egressIPScheduler {
+func NewEgressIPScheduler(cluster memberlist.Interface, egressInformer crdinformers.EgressInformer, nodeInformer corev1informers.NodeInformer, externalIPPoolInformer crdinformers.ExternalIPPoolInformer, maxEgressIPsPerNode int) *egressIPScheduler {
 	s := &egressIPScheduler{
 		cluster:             cluster,
 		egressLister:        egressInformer.Lister(),
 		egressListerSynced:  egressInformer.Informer().HasSynced,
+		externalIPPoolLister: externalIPPoolInformer.Lister(),
 		scheduleResults:     map[string]*scheduleResult{},
 		scheduledOnce:       &atomic.Bool{},
 		maxEgressIPsPerNode: maxEgressIPsPerNode,
@@ -263,6 +268,20 @@ func (s *egressIPScheduler) GetEgressIPAndNode(egress string) (string, string, e
 	return result.ip, result.node, nil, true
 }
 
+func (s *egressIPScheduler) GetDualStackEgressIPsAndNode(egress string) ([]string, string, error, bool) {
+	s.mutex.RLock()
+	defer s.mutex.RUnlock()
+
+	result, exists := s.scheduleResults[egress]
+	if !exists {
+		return nil, "", nil, false
+	}
+	if result.err != nil {
+		return nil, "", result.err, false
+	}
+	return result.ips, result.node, nil, true
+}
+
 // EgressesByCreationTimestamp sorts a list of Egresses by creation timestamp.
 type EgressesByCreationTimestamp []*crdv1b1.Egress
 
@@ -339,7 +358,24 @@ func (s *egressIPScheduler) schedule() {
 	sort.Sort(EgressesByCreationTimestamp(egresses))
 	for _, egress := range egresses {
 		// Ignore Egresses that shouldn't be scheduled.
-		if !isEgressSchedulable(egress) {
+		if !isEgressSchedulable(egress) && !isDualStackEgressSchedulable(egress) {
+			continue
+		}
+
+		// Handle dual-stack Egress scheduling separately.
+		if isDualStackEgressSchedulable(egress) {
+			result := s.scheduleDualStackEgress(egress, nodeToIPs)
+			newResults[egress.Name] = result
+			if result.err == nil && result.node != "" {
+				ips, exists := nodeToIPs[result.node]
+				if !exists {
+					ips = sets.New[string]()
+					nodeToIPs[result.node] = ips
+				}
+				for _, ip := range result.ips {
+					ips.Insert(ip)
+				}
+			}
 			continue
 		}
 
@@ -406,4 +442,108 @@ func (s *egressIPScheduler) schedule() {
 	}
 
 	s.scheduledOnce.Store(true)
+}
+
+type dualStackPair struct {
+	ip   string
+	ipPool string
+}
+
+func (s *egressIPScheduler) classifyDualStackPairs(egress *crdv1b1.Egress) (ipv4 dualStackPair, ipv6 dualStackPair, err error) {
+	egressIPs := egress.Spec.EgressIPs
+	pools := egress.Spec.ExternalIPPools
+
+	poolIsIPv6 := [2]bool{}
+	for i, poolName := range pools {
+		pool, getErr := s.externalIPPoolLister.Get(poolName)
+		if getErr != nil {
+			return dualStackPair{}, dualStackPair{}, fmt.Errorf("failed to get ExternalIPPool %s: %w", poolName, getErr)
+		}
+		isIPv6, famErr := externalIPPoolIsIPv6(pool)
+		if famErr != nil {
+			return dualStackPair{}, dualStackPair{}, fmt.Errorf("failed to determine IP family of ExternalIPPool %s: %w", poolName, famErr)
+		}
+		poolIsIPv6[i] = isIPv6
+	}
+	if poolIsIPv6[0] == poolIsIPv6[1] {
+		return dualStackPair{}, dualStackPair{}, fmt.Errorf("spec.externalIPPools must contain one IPv4 pool and one IPv6 pool, got two pools of the same family")
+	}
+
+	ipIsIPv6 := [2]bool{}
+	for i, ipStr := range egressIPs {
+		ip := net.ParseIP(ipStr)
+		if ip == nil {
+			return dualStackPair{}, dualStackPair{}, fmt.Errorf("invalid IP %s in spec.egressIPs", ipStr)
+		}
+		ipIsIPv6[i] = ip.To4() == nil
+	}
+	if ipIsIPv6[0] == ipIsIPv6[1] {
+		return dualStackPair{}, dualStackPair{}, fmt.Errorf("spec.egressIPs must contain one IPv4 and one IPv6 address, got two addresses of the same family")
+	}
+
+	for i := range egressIPs {
+		if ipIsIPv6[i] != poolIsIPv6[i] {
+			return dualStackPair{}, dualStackPair{}, fmt.Errorf("egressIP %s (index %d) does not match the IP family of ExternalIPPool %s", egressIPs[i], i, pools[i])
+		}
+	}
+
+	if ipIsIPv6[0] {
+		return dualStackPair{egressIPs[1], pools[1]}, dualStackPair{egressIPs[0], pools[0]}, nil
+	}
+	return dualStackPair{egressIPs[0], pools[0]}, dualStackPair{egressIPs[1], pools[1]}, nil
+}
+
+func (s *egressIPScheduler) scheduleDualStackEgress(egress *crdv1b1.Egress, nodeToIPs map[string]sets.Set[string]) *scheduleResult {
+	ipv4, ipv6, err := s.classifyDualStackPairs(egress)
+	if err != nil {
+		return &scheduleResult{err: err}
+	}
+
+	// The capacity filter accounts for both IPs at once, since they land on the same Node.
+	egressIPs := egress.Spec.EgressIPs
+	maxEgressIPsFilter := func(node string) bool {
+		ipsOnNode := nodeToIPs[node]
+		numIPs := ipsOnNode.Len()
+		for _, ip := range egressIPs {
+			if !ipsOnNode.Has(ip) {
+				numIPs++
+			}
+		}
+		return numIPs <= s.getMaxEgressIPsByNode(node)
+	}
+
+	node, err := s.cluster.SelectNodeForIPs(ipv4.ip, ipv4.ipPool, ipv6.ip, ipv6.ipPool, maxEgressIPsFilter)
+	if err != nil {
+		klog.InfoS("No single Node can accommodate both dual-stack Egress IPs",
+			"egress", klog.KObj(egress), "ipv4Pool", ipv4.ipPool, "ipv6Pool", ipv6.ipPool)
+		return &scheduleResult{err: fmt.Errorf("no Node can host both dual-stack Egress IPs (pool %s, pool %s): %w", ipv4.ipPool, ipv6.ipPool, err)}
+	}
+
+	return &scheduleResult{
+		ips:  egressIPs,
+		node: node,
+	}
+}
+
+func externalIPPoolIsIPv6(pool *crdv1b1.ExternalIPPool) (bool, error) {
+	if len(pool.Spec.IPRanges) == 0 {
+		return false, fmt.Errorf("ExternalIPPool %s has no IP ranges", pool.Name)
+	}
+	ipRange := pool.Spec.IPRanges[0]
+	var firstIP net.IP
+	if ipRange.CIDR != "" {
+		ip, _, err := net.ParseCIDR(ipRange.CIDR)
+		if err != nil {
+			return false, fmt.Errorf("invalid CIDR %s in ExternalIPPool %s: %w", ipRange.CIDR, pool.Name, err)
+		}
+		firstIP = ip
+	} else if ipRange.Start != "" {
+		firstIP = net.ParseIP(ipRange.Start)
+		if firstIP == nil {
+			return false, fmt.Errorf("invalid start IP %s in ExternalIPPool %s", ipRange.Start, pool.Name)
+		}
+	} else {
+		return false, fmt.Errorf("invalid IP range in ExternalIPPool %s", pool.Name)
+	}
+	return firstIP.To4() == nil, nil
 }

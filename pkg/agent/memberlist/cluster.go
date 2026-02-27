@@ -89,6 +89,7 @@ type ClusterNodeEventHandler func(objName string)
 type Interface interface {
 	ShouldSelectIP(ip string, pool string, filters ...func(node string) bool) (bool, error)
 	SelectNodeForIP(ip, externalIPPool string, filters ...func(string) bool) (string, error)
+	SelectNodeForIPs(ip1, pool1, ip2, pool2 string, filters ...func(string) bool) (string, error)
 	AliveNodes() sets.Set[string]
 	AddClusterEventHandler(handler ClusterNodeEventHandler)
 }
@@ -567,6 +568,33 @@ func (c *Cluster) SelectNodeForIP(ip, externalIPPool string, filters ...func(str
 		return "", fmt.Errorf("local Node consistentHashMap has not synced, ExternalIPPool %s", externalIPPool)
 	}
 	node := consistentHash.GetWithFilters(ip, filters...)
+	if node == "" {
+		return "", ErrNoNodeAvailable
+	}
+	return node, nil
+}
+
+func (c *Cluster) SelectNodeForIPs(ip1, pool1, ip2, pool2 string, filters ...func(string) bool) (string, error) {
+	c.consistentHashRWMutex.RLock()
+	defer c.consistentHashRWMutex.RUnlock()
+
+	hash1, ok := c.consistentHashMap[pool1]
+	if !ok {
+		return "", fmt.Errorf("local Node consistentHashMap has not synced, ExternalIPPool %s", pool1)
+	}
+	hash2, ok := c.consistentHashMap[pool2]
+	if !ok {
+		return "", fmt.Errorf("local Node consistentHashMap has not synced, ExternalIPPool %s", pool2)
+	}
+
+	isSelectedForIP2 := func(node string) bool {
+		return hash2.GetWithFilters(ip2, filters...) == node
+	}
+
+	allFilters := make([]func(string) bool, len(filters)+1)
+	copy(allFilters, filters)
+	allFilters[len(filters)] = isSelectedForIP2
+	node := hash1.GetWithFilters(ip1, allFilters...)
 	if node == "" {
 		return "", ErrNoNodeAvailable
 	}
