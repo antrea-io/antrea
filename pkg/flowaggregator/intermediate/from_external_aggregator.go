@@ -52,7 +52,7 @@ var NodeIndexers = cache.Indexers{
 }
 
 // ttl threshold for expiring flows.
-var defaultTTL = time.Millisecond
+var defaultTTL = time.Minute
 
 // defaultCleanUpInterval is the frequency in which we run the cleanup for expiring stale flows.
 var defaultCleanUpInterval = time.Second * 5
