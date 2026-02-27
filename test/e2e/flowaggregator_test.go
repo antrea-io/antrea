@@ -210,7 +210,8 @@ func setupFlowAggregatorTest(t *testing.T, options flowVisibilityTestOptions) (*
 		t.Fatalf("Error when setting up FlowAggregator: %v", err)
 	}
 
-	if err := getAndCheckFlowAggregatorMetrics(t, data, options.databaseURL != ""); err != nil {
+	faNamespace := flowAggregatorNamespaces[options.flowAggregator.selectedAggregator]
+	if err := getAndCheckFlowAggregatorMetrics(t, data, options.databaseURL != "", faNamespace); err != nil {
 		t.Fatalf("Error when checking metrics of Flow Aggregator: %v", err)
 	}
 
@@ -333,9 +334,11 @@ func TestFlowAggregatorProxyMode(t *testing.T) {
 			includeK8sNames = ptr.To(false)
 		}
 		data, v4Enabled, v6Enabled := setupFlowAggregatorTest(t, flowVisibilityTestOptions{
-			mode:                      flowaggregatorconfig.AggregatorModeProxy,
-			numFlowAggregatorReplicas: 2,
-			clusterID:                 customClusterID,
+			mode: flowaggregatorconfig.AggregatorModeProxy,
+			flowAggregator: flowAggregatorTestOptions{
+				numReplicas: 2,
+			},
+			clusterID: customClusterID,
 			ipfixCollector: flowVisibilityIPFIXTestOptions{
 				tls:             tls,
 				clientAuth:      clientAuth,
@@ -889,7 +892,7 @@ func testHelper(t *testing.T, data *TestData, isIPv6 bool) {
 	// and check the output of antctl commands.
 	t.Run("Antctl", func(t *testing.T) {
 		skipIfNotRequired(t, "mode-irrelevant")
-		flowAggPods, err := data.getFlowAggregators()
+		flowAggPods, err := data.getFlowAggregators(flowAggregatorNamespace)
 		if err != nil {
 			t.Fatalf("Error when getting flow-aggregator Pod: %v", err)
 		}
@@ -1432,12 +1435,16 @@ func getUint64FieldFromRecord(t require.TestingT, record string, field string) u
 // and source port. We send source port to ignore the control flows during the
 // iperf test.
 func getCollectorOutput(t require.TestingT, srcIP, dstIP, srcPort string, isDstService bool, lookForFlowEnd bool, isIPv6 bool, data *TestData, labelFilter string, timeout time.Duration) []string {
+	return getCollectorOutputWithName(t, "ipfix-collector", srcIP, dstIP, srcPort, isDstService, lookForFlowEnd, isIPv6, data, labelFilter, timeout)
+}
+
+func getCollectorOutputWithName(t require.TestingT, name, srcIP, dstIP, srcPort string, isDstService bool, lookForFlowEnd bool, isIPv6 bool, data *TestData, labelFilter string, timeout time.Duration) []string {
 	var allRecords, records []string
 	err := wait.PollUntilContextTimeout(context.Background(), 500*time.Millisecond, timeout, true, func(ctx context.Context) (bool, error) {
 		var rc int
 		var err error
 		var cmd string
-		ipfixCollectorIP, err := testData.podWaitForIPs(defaultTimeout, "ipfix-collector", testData.testNamespace)
+		ipfixCollectorIP, err := testData.podWaitForIPs(defaultTimeout, name, testData.testNamespace)
 		if err != nil || len(ipfixCollectorIP.IPStrings) == 0 {
 			require.NoErrorf(t, err, "Should be able to get IP from IPFIX collector Pod")
 		}
@@ -1481,6 +1488,7 @@ func getCollectorOutput(t require.TestingT, srcIP, dstIP, srcPort string, isDstS
 			fmt.Println(allRecords[i])
 		}
 	}
+
 	require.NoErrorf(t, err, "IPFIX collector did not receive the expected records, source IP: %s, dest IP: %s, source port: %s, total records count: %d, filtered records count: %d", srcIP, dstIP, srcPort, len(allRecords), len(records))
 	return records
 }
@@ -1899,8 +1907,8 @@ func createToExternalTestServer(t *testing.T, data *TestData) *PodIPs {
 	return serverIPs
 }
 
-func getAndCheckFlowAggregatorMetrics(t *testing.T, data *TestData, withClickHouseExporter bool) error {
-	flowAggPods, err := data.getFlowAggregators()
+func getAndCheckFlowAggregatorMetrics(t *testing.T, data *TestData, withClickHouseExporter bool, namespace string) error {
+	flowAggPods, err := data.getFlowAggregators(namespace)
 	if err != nil {
 		return fmt.Errorf("error when getting flow-aggregator Pod: %w", err)
 	}
@@ -1916,7 +1924,7 @@ func getAndCheckFlowAggregatorMetrics(t *testing.T, data *TestData, withClickHou
 
 		for idx := range flowAggPods {
 			podName := flowAggPods[idx].Name
-			stdout, _, err := runAntctl(podName, command, data)
+			stdout, _, err := runAntctlWithNamespace(podName, command, data, namespace)
 			if err != nil {
 				t.Logf("Error when requesting recordmetrics, %v", err)
 				return false, nil
@@ -1935,7 +1943,7 @@ func getAndCheckFlowAggregatorMetrics(t *testing.T, data *TestData, withClickHou
 		hasExpectedClickHouseExporter = (withClickHouseExporter && hasAllClickHouseExporter) || (!withClickHouseExporter && !hasAnyClickHouseExporter)
 
 		if numConnToCollector != int64(clusterInfo.numNodes) || !hasExpectedClickHouseExporter || !hasExpectedIPFIXExporter || numRecordsExported == 0 {
-			t.Logf("Metrics are not correct. Current metrics: NumConnToCollector=%d, NumRecordsExported=%d, HasExpectedClickHouseExporter=%v, HasExpectedIPFIXExporter=%v. Expecting ClickHouseExporter=%v, IPFIXExporter=true", numConnToCollector, numRecordsExported, hasExpectedClickHouseExporter, hasExpectedIPFIXExporter, withClickHouseExporter)
+			t.Logf("Metrics are not correct. Current metrics: NumConnToCollector=%d, NumRecordsExported=%d, HasExpectedClickHouseExporter=%v, HasExpectedIPFIXExporter=%v, Expecting ClickHouseExporter=%v, IPFIXExporter=true", numConnToCollector, numRecordsExported, hasExpectedClickHouseExporter, hasExpectedIPFIXExporter, withClickHouseExporter)
 			return false, nil
 		}
 		return true, nil

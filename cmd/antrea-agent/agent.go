@@ -132,6 +132,7 @@ func run(o *Options) error {
 	endpointSliceInformer := informerFactory.Discovery().V1().EndpointSlices()
 	namespaceInformer := informerFactory.Core().V1().Namespaces()
 	nodeLatencyMonitorInformer := crdInformerFactory.Crd().V1alpha1().NodeLatencyMonitors()
+	flowExporterDestinationInformer := crdInformerFactory.Crd().V1alpha1().FlowExporterDestinations()
 
 	// Create Antrea Clientset for the given config.
 	antreaClientProvider, err := client.NewAntreaClientProvider(o.config.AntreaClientConnection, k8sClient)
@@ -160,7 +161,7 @@ func run(o *Options) error {
 	enableMulticlusterGW := features.DefaultFeatureGate.Enabled(features.Multicluster) && o.config.Multicluster.EnableGateway
 	_, multiclusterEncryptionMode := config.GetTrafficEncryptionModeFromStr(o.config.Multicluster.TrafficEncryptionMode)
 	enableMulticlusterNP := features.DefaultFeatureGate.Enabled(features.Multicluster) && o.config.Multicluster.EnableStretchedNetworkPolicy
-	enableFlowExporter := features.DefaultFeatureGate.Enabled(features.FlowExporter) && o.config.FlowExporter.Enable
+	enableFlowExporter := features.DefaultFeatureGate.Enabled(features.FlowExporter)
 	var nodeIPTracker *nodeip.Tracker
 	if o.nodeType == config.K8sNode {
 		nodeIPTracker = nodeip.NewTracker(nodeInformer)
@@ -722,14 +723,15 @@ func run(o *Options) error {
 	if enableFlowExporter {
 		podStore = objectstore.NewPodStore(localPodInformer.Get())
 		flowExporterOptions := &flowexporteroptions.FlowExporterOptions{
-			FlowCollectorAddr:      o.flowCollectorAddr,
-			FlowCollectorProto:     o.flowCollectorProto,
-			ActiveFlowTimeout:      o.activeFlowTimeout,
-			IdleFlowTimeout:        o.idleFlowTimeout,
-			StaleConnectionTimeout: o.staleConnectionTimeout,
-			PollInterval:           o.pollInterval,
-			ConnectUplinkToBridge:  connectUplinkToBridge,
-			ProtocolFilter:         o.config.FlowExporter.ProtocolFilter,
+			EnableStaticDestination: o.config.FlowExporter.Enable,
+			FlowCollectorAddr:       o.flowCollectorAddr,
+			FlowCollectorProto:      o.flowCollectorProto,
+			ActiveFlowTimeout:       o.activeFlowTimeout,
+			IdleFlowTimeout:         o.idleFlowTimeout,
+			StaleConnectionTimeout:  o.staleConnectionTimeout,
+			PollInterval:            o.pollInterval,
+			ConnectUplinkToBridge:   connectUplinkToBridge,
+			ProtocolFilter:          o.config.FlowExporter.ProtocolFilter,
 		}
 		flowExporter, err = flowexporter.NewFlowExporter(
 			podStore,
@@ -746,13 +748,14 @@ func run(o *Options) error {
 			o.enableAntreaProxy,
 			networkPolicyController,
 			flowExporterOptions,
+			flowExporterDestinationInformer,
 			egressController,
 			podNetworkWait,
 		)
 		if err != nil {
 			return fmt.Errorf("error when creating IPFIX flow exporter: %v", err)
 		}
-		networkPolicyController.SetDenyConnStore(flowExporter.GetDenyConnStore())
+		networkPolicyController.SetDenyStoreNotifier(flowExporter.GetDenyConnStoreNotifier())
 	}
 
 	log.StartLogFileNumberMonitor(stopCh)

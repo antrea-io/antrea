@@ -26,7 +26,6 @@ import (
 
 	"antrea.io/antrea/pkg/agent/config"
 	"antrea.io/antrea/pkg/agent/flowexporter/connection"
-	"antrea.io/antrea/pkg/agent/flowexporter/filter"
 	"antrea.io/antrea/pkg/agent/flowexporter/utils"
 	"antrea.io/antrea/pkg/agent/openflow"
 	"antrea.io/antrea/pkg/ovs/ovsctl"
@@ -65,17 +64,15 @@ type connTrackOvsCtl struct {
 	serviceCIDRv6        netip.Prefix
 	ovsctlClient         ovsctl.OVSCtlClient
 	isAntreaProxyEnabled bool
-	protocolFilter       filter.ProtocolFilter
 }
 
-func NewConnTrackOvsAppCtl(nodeConfig *config.NodeConfig, serviceCIDRv4 netip.Prefix, serviceCIDRv6 netip.Prefix, isAntreaProxyEnabled bool, protocolFilter filter.ProtocolFilter) *connTrackOvsCtl {
+func NewConnTrackOvsAppCtl(nodeConfig *config.NodeConfig, serviceCIDRv4 netip.Prefix, serviceCIDRv6 netip.Prefix, isAntreaProxyEnabled bool) *connTrackOvsCtl {
 	return &connTrackOvsCtl{
 		nodeConfig,
 		serviceCIDRv4,
 		serviceCIDRv6,
 		ovsctl.NewClient(nodeConfig.OVSBridge),
 		isAntreaProxyEnabled,
-		protocolFilter,
 	}
 }
 
@@ -90,7 +87,7 @@ func (ct *connTrackOvsCtl) DumpFlows(zoneFilter uint16) ([]*connection.Connectio
 		return nil, 0, fmt.Errorf("error when dumping flows from conntrack: %v", err)
 	}
 
-	filteredConns := filterAntreaConns(conns, ct.nodeConfig, svcCIDR, zoneFilter, ct.isAntreaProxyEnabled, ct.protocolFilter)
+	filteredConns := filterAntreaConns(conns, ct.nodeConfig, svcCIDR, zoneFilter, ct.isAntreaProxyEnabled)
 	klog.V(2).Infof("FlowExporter considered flows: %d", len(filteredConns))
 
 	return filteredConns, totalConns, nil

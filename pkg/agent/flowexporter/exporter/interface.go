@@ -23,17 +23,26 @@ import (
 )
 
 type TLSConfig struct {
-	ServerName string
-	CAData     []byte
-	CertData   []byte
-	KeyData    []byte
+	ServerName    string
+	CAData        []byte
+	CertData      []byte
+	KeyData       []byte
+	MinTLSVersion string
 }
 
 // AsStdConfig converts the TLSConfig to the standard tls.Config.
 func (c *TLSConfig) AsStdConfig() (*tls.Config, error) {
+	var minTLSVersion uint16 = tls.VersionTLS12
+	switch c.MinTLSVersion {
+	case "VersionTLS12":
+		minTLSVersion = tls.VersionTLS12
+	case "VersionTLS13":
+		minTLSVersion = tls.VersionTLS13
+	}
+
 	tlsConfig := &tls.Config{
 		ServerName: c.ServerName,
-		MinVersion: tls.VersionTLS12,
+		MinVersion: minTLSVersion,
 	}
 	// Use system roots if c.CAData == nil.
 	if c.CAData != nil {

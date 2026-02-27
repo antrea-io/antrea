@@ -63,3 +63,19 @@ var semanticIgnoreLastTransitionTime = conversion.EqualitiesOrDie(
 func PacketCaptureStatusEqual(oldStatus, newStatus PacketCaptureStatus) bool {
 	return semanticIgnoreLastTransitionTime.DeepEqual(oldStatus, newStatus)
 }
+
+func (proto *FlowExporterGRPCConfig) Name() string {
+	return "grpc"
+}
+
+func (proto *FlowExporterIPFIXConfig) Name() string {
+	return "ipfix"
+}
+
+func (proto *FlowExporterGRPCConfig) TransportProtocol() FlowExporterTransportProtocol {
+	return FlowExporterTransportTLS
+}
+
+func (proto *FlowExporterIPFIXConfig) TransportProtocol() FlowExporterTransportProtocol {
+	return proto.Transport
+}

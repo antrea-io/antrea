@@ -17,12 +17,13 @@ package options
 import "time"
 
 type FlowExporterOptions struct {
-	FlowCollectorAddr      string
-	FlowCollectorProto     string
-	ActiveFlowTimeout      time.Duration
-	IdleFlowTimeout        time.Duration
-	StaleConnectionTimeout time.Duration
-	PollInterval           time.Duration
-	ConnectUplinkToBridge  bool
-	ProtocolFilter         []string
+	EnableStaticDestination bool
+	FlowCollectorAddr       string
+	FlowCollectorProto      string
+	ActiveFlowTimeout       time.Duration
+	IdleFlowTimeout         time.Duration
+	StaleConnectionTimeout  time.Duration
+	PollInterval            time.Duration
+	ConnectUplinkToBridge   bool
+	ProtocolFilter          []string
 }

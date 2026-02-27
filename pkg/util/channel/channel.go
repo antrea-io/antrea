@@ -15,6 +15,8 @@
 package channel
 
 import (
+	"slices"
+	"sync"
 	"time"
 
 	"k8s.io/klog/v2"
@@ -26,13 +28,21 @@ const (
 )
 
 type eventHandler func(interface{})
+type SubscriberID uint64
 
 type Subscriber interface {
 	// Subscribe registers an eventHandler which will be called when an event is sent to the channel.
-	// It's not thread-safe and it's supposed to be called serially before first event is published.
 	// The eventHandler is supposed to execute quickly and not perform blocking operation. Blocking operation should be
 	// deferred to a routine that is triggered by the eventHandler.
-	Subscribe(h eventHandler)
+	Subscribe(h eventHandler) SubscriberID
+
+	// Unsubscribe unregisters an eventHandler from the SubscribableChannel.
+	Unsubscribe(id SubscriberID)
+}
+
+type subscriber struct {
+	id      SubscriberID
+	handler eventHandler
 }
 
 type Notifier interface {
@@ -48,8 +58,11 @@ type SubscribableChannel struct {
 	name string
 	// eventCh is the channel used for buffering the pending events.
 	eventCh chan interface{}
-	// handlers is a slice of callbacks registered by consumers.
-	handlers []eventHandler
+	// subscribers is a slice of callbacks registered by consumers.
+	subscribers      []subscriber
+	subscribersMutex sync.Mutex
+	// nextSubscriberID is the next available subscriber ID
+	nextSubscriberID SubscriberID
 }
 
 func NewSubscribableChannel(name string, bufferSize int) *SubscribableChannel {
@@ -60,8 +73,27 @@ func NewSubscribableChannel(name string, bufferSize int) *SubscribableChannel {
 	return n
 }
 
-func (n *SubscribableChannel) Subscribe(h eventHandler) {
-	n.handlers = append(n.handlers, h)
+func (n *SubscribableChannel) Subscribe(h eventHandler) SubscriberID {
+	n.subscribersMutex.Lock()
+	defer n.subscribersMutex.Unlock()
+
+	subscriber := subscriber{
+		id:      n.nextSubscriberID,
+		handler: h,
+	}
+
+	n.subscribers = append(n.subscribers, subscriber)
+	n.nextSubscriberID++
+
+	return subscriber.id
+}
+
+func (n *SubscribableChannel) Unsubscribe(id SubscriberID) {
+	n.subscribersMutex.Lock()
+	defer n.subscribersMutex.Unlock()
+	n.subscribers = slices.DeleteFunc(n.subscribers, func(e subscriber) bool {
+		return e.id == id
+	})
 }
 
 func (n *SubscribableChannel) Notify(e interface{}) bool {
@@ -87,8 +119,11 @@ func (n *SubscribableChannel) Run(stopCh <-chan struct{}) {
 			klog.InfoS("Stopping SubscribableChannel", "name", n.name)
 			return
 		case obj := <-n.eventCh:
-			for _, h := range n.handlers {
-				h(obj)
+			n.subscribersMutex.Lock()
+			subscribers := slices.Clone(n.subscribers)
+			n.subscribersMutex.Unlock()
+			for _, h := range subscribers {
+				h.handler(obj)
 			}
 		}
 	}

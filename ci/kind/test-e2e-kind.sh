@@ -417,23 +417,29 @@ function run_test {
 
   if $flow_visibility; then
       timeout="45m"
-      flow_visibility_args="-run=TestFlowAggregator --flow-visibility"
+      flow_visibility_args="-run=^(TestFlowExporter|TestFlowAggregator) --flow-visibility"
       # This is needed so that the FlowAggregator is already configured to mount the Secrets
       # necessary for (m)TLS testing. The Secret names must match the ones expected by the e2e tests.
-      flow_visibility_manifest_args="--extra-helm-values flowCollector.tls.clientSecretName=ipfix-client-cert,flowCollector.tls.caSecretName=ipfix-server-ca"
+      coverage_flag=""
       if $coverage; then
-          $FLOWAGGREGATOR_YML_CMD --coverage $flow_visibility_manifest_args | docker exec -i kind-control-plane dd of=/root/flow-aggregator-coverage.yml
-      else
-          $FLOWAGGREGATOR_YML_CMD $flow_visibility_manifest_args | docker exec -i kind-control-plane dd of=/root/flow-aggregator.yml
+        coverage_flag="--coverage"
       fi
+      flow_visibility_manifest_default_args=("--extra-helm-values" "flowCollector.tls.clientSecretName=ipfix-client-cert,flowCollector.tls.caSecretName=ipfix-server-ca")
+      $FLOWAGGREGATOR_YML_CMD "${flow_visibility_manifest_default_args[@]}" ${coverage_flag} | docker exec -i kind-control-plane dd of=/root/flow-aggregator.yml
+      # We are generating flow-aggregators for two separate namespaces so we can test forwarding connection details to different destinations
+      $FLOWAGGREGATOR_YML_CMD "${flow_visibility_manifest_default_args[@]}" -n 'flow-aggregator-1' ${coverage_flag} | docker exec -i kind-control-plane dd of=/root/flow-aggregator-1.yml
+      $FLOWAGGREGATOR_YML_CMD "${flow_visibility_manifest_default_args[@]}" -n 'flow-aggregator-2' ${coverage_flag} | docker exec -i kind-control-plane dd of=/root/flow-aggregator-2.yml
+
       $HELM template "$FLOW_VISIBILITY_CHART"  | docker exec -i kind-control-plane dd of=/root/flow-visibility.yml
       $HELM template "$FLOW_VISIBILITY_CHART" --set "secureConnection.enable=true" | docker exec -i kind-control-plane dd of=/root/flow-visibility-tls.yml
 
-      curl -o $CH_OPERATOR_YML https://raw.githubusercontent.com/Altinity/clickhouse-operator/release-0.21.0/deploy/operator/clickhouse-operator-install-bundle.yaml
-      sed -i -e "s|\"image\": \"clickhouse/clickhouse-server:22.3\"|\"image\": \"antrea/clickhouse-server:23.4\"|g" $CH_OPERATOR_YML
-      sed -i -e "s|image: altinity/clickhouse-operator:0.21.0|image: antrea/clickhouse-operator:0.21.0|g" $CH_OPERATOR_YML
-      sed -i -e "s|image: altinity/metrics-exporter:0.21.0|image: antrea/metrics-exporter:0.21.0|g" $CH_OPERATOR_YML
-      cat $CH_OPERATOR_YML | docker exec -i kind-control-plane dd of=/root/clickhouse-operator-install-bundle.yml
+      curl -o "$CH_OPERATOR_YML" https://raw.githubusercontent.com/Altinity/clickhouse-operator/release-0.21.0/deploy/operator/clickhouse-operator-install-bundle.yaml
+      sed -i -e "s|\"image\": \"clickhouse/clickhouse-server:22.3\"|\"image\": \"antrea/clickhouse-server:23.4\"|g" "$CH_OPERATOR_YML"
+      sed -i -e "s|image: altinity/clickhouse-operator:0.21.0|image: antrea/clickhouse-operator:0.21.0|g" "$CH_OPERATOR_YML"
+      sed -i -e "s|image: altinity/metrics-exporter:0.21.0|image: antrea/metrics-exporter:0.21.0|g" "$CH_OPERATOR_YML"
+      cat "$CH_OPERATOR_YML" | docker exec -i kind-control-plane dd of=/root/clickhouse-operator-install-bundle.yml
+
+      printf '%s' "$flow_visibility_protocol" | docker exec -i kind-control-plane dd of=/root/test-flow-visibility-protocol.txt
   fi
 
   if [[ "$kube_proxy_mode" == "none" ]]; then
