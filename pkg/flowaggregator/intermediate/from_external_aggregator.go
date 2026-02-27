@@ -93,10 +93,10 @@ func (a *fromExternalAggregator) correlateOrStore(flowKey *FlowKey, record *flow
 	if !a.fromExternalCorrelationRequired(record) {
 		return flowKey, record
 	}
-	if a.StoreIfNew(record) {
+	if a.storeIfNew(record) {
 		return nil, nil
 	}
-	record = a.CorrelateExternal(record)
+	record = a.correlateExternal(record)
 	flowKey, _ = getFlowKeyFromRecord(record)
 
 	return flowKey, record
@@ -229,7 +229,7 @@ func (a *fromExternalAggregator) generateFromExternalStoreKey(record *flowpb.Flo
 
 // If FromExternal flow is not yet in the store, add it and return true.
 // If the flow is in the store, return false
-func (a *fromExternalAggregator) StoreIfNew(flow *flowpb.Flow) bool {
+func (a *fromExternalAggregator) storeIfNew(flow *flowpb.Flow) bool {
 	a.lock.Lock()
 	defer a.lock.Unlock()
 
@@ -248,7 +248,7 @@ func (a *fromExternalAggregator) StoreIfNew(flow *flowpb.Flow) bool {
 // Return a correlated flow from the given flow and it's matching record from the store. Returns
 // nil if there was no matching flow in store. Upon successful correlation, delete the flow from
 // the store.
-func (a *fromExternalAggregator) CorrelateExternal(flow *flowpb.Flow) *flowpb.Flow {
+func (a *fromExternalAggregator) correlateExternal(flow *flowpb.Flow) *flowpb.Flow {
 	a.lock.Lock()
 	defer a.lock.Unlock()
 	key := a.generateFromExternalStoreKey(flow)
