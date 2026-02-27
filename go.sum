@@ -475,8 +475,8 @@ github.com/k8snetworkplumbingwg/network-attachment-definition-client v1.7.7 h1:z
 github.com/k8snetworkplumbingwg/network-attachment-definition-client v1.7.7/go.mod h1:CM7HAH5PNuIsqjMN0fGc1ydM74Uj+0VZFhob620nklw=
 github.com/k8snetworkplumbingwg/sriovnet v1.2.0 h1:6ELfAxCB1dvosGUy3DVRmfH+HWTzmPD3W67HKQvMR1M=
 github.com/k8snetworkplumbingwg/sriovnet v1.2.0/go.mod h1:jyWzGe6ZtYiPq6ih6aXCOy6mZ49Y9mNyBOLBBXnli+k=
-github.com/kevinburke/ssh_config v1.4.0 h1:6xxtP5bZ2E4NF5tuQulISpTO2z8XbtH8cg1PWkxoFkQ=
-github.com/kevinburke/ssh_config v1.4.0/go.mod h1:q2RIzfka+BXARoNexmF9gkxEX7DmvbW9P4hIVx2Kg4M=
+github.com/kevinburke/ssh_config v1.6.0 h1:J1FBfmuVosPHf5GRdltRLhPJtJpTlMdKTBjRgTaQBFY=
+github.com/kevinburke/ssh_config v1.6.0/go.mod h1:q2RIzfka+BXARoNexmF9gkxEX7DmvbW9P4hIVx2Kg4M=
 github.com/kisielk/errcheck v1.1.0/go.mod h1:EZBBE59ingxPouuu3KfxchcWSUPOHkagtvWXihfKN4Q=
 github.com/kisielk/errcheck v1.2.0/go.mod h1:/BMXB+zMLi60iA8Vv6Ksmxu/1UDYcXs4uQLJ+jE2L00=
 github.com/kisielk/errcheck v1.5.0/go.mod h1:pFxgyoBC7bSaBwPgfKdkLd5X25qrDl4LWUI2bnpBCr8=
