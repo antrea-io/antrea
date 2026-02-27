@@ -66,10 +66,10 @@ func TestCorrelateRecordsForToExternalFlow(t *testing.T) {
 }
 
 var currTime = time.Now()
-var externalIP = []byte{0xac, 0x12, 0x00, 0x01} // 172.12.18.01
-var podIP = []byte{0x0e, 0xec, 0x01, 0x03}      // 10.244.1.3
+var externalIP = []byte{0xac, 0x12, 0x00, 0x01} // 172.18.0.1
+var podIP = []byte{0x0a, 0xf4, 0x01, 0x03}      // 10.244.1.3
 var gatewayIP = []byte{0x0a, 0xf4, 0x02, 0x01}  // 10.244.2.1
-var nodeIP = []byte{0xac, 0x12, 0x00, 0x02}     // 172.12.18.02
+var nodeIP = []byte{0xac, 0x12, 0x00, 0x02}     // 172.18.0.2
 var containerPort = uint32(82)
 var sourceNodeIP = &flowpb.IP{
 	Source:      externalIP,
