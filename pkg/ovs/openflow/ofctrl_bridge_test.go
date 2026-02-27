@@ -178,9 +178,9 @@ func TestOFMeterStats(t *testing.T) {
 	meterStats2 := newMeterStats(2, 0)
 	mpMeterStatsReply.Body = append(mpMeterStatsReply.Body, meterStats1)
 	mpMeterStatsReply.Body = append(mpMeterStatsReply.Body, meterStats2)
-	packetCounts := make(map[int]int64)
+	packetCounts := make(map[int]uint64)
 	packetCountsMutex := sync.RWMutex{}
-	handleMeterStatsReply := func(meterID int, packetCount int64) {
+	handleMeterStatsReply := func(meterID int, packetCount uint64) {
 		packetCountsMutex.Lock()
 		defer packetCountsMutex.Unlock()
 		packetCounts[meterID] = packetCount
@@ -196,7 +196,7 @@ func TestOFMeterStats(t *testing.T) {
 	assert.Eventually(t, func() bool {
 		packetCountsMutex.RLock()
 		defer packetCountsMutex.RUnlock()
-		return packetCounts[1] == int64(100) && packetCounts[2] == int64(0)
+		return packetCounts[1] == uint64(100) && packetCounts[2] == uint64(0)
 	}, 2*time.Second, 50*time.Millisecond)
 }
 

@@ -1708,7 +1708,7 @@ func (c *client) getMeterStats() {
 		PacketInMeterIDTF:  metrics.LabelPacketInMeterTraceflow,
 		PacketInMeterIDDNS: metrics.LabelPacketInMeterDNSInterception,
 	}
-	handleMeterStatsReply := func(meterID int, packetCount int64) {
+	handleMeterStatsReply := func(meterID int, packetCount uint64) {
 		label, exists := labels[meterID]
 		if !exists {
 			klog.V(4).InfoS("Received unexpected meterID", "meterID", meterID)
