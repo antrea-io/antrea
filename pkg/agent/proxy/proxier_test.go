@@ -4084,6 +4084,9 @@ func TestIPToServiceMap(t *testing.T) {
 	clusterIP := "1.1.1.1"
 	externalIP := "2.2.2.2"
 	loadBalancerIP := "3.3.3.3"
+	nodeIPs := []net.IP{
+		net.ParseIP("4.4.4.4"),
+	}
 	service := &corev1.Service{
 		Spec: corev1.ServiceSpec{
 			ClusterIP:   clusterIP,
@@ -4106,7 +4109,7 @@ func TestIPToServiceMap(t *testing.T) {
 		Protocol: corev1.ProtocolTCP,
 	}
 
-	m := newIPToServiceMap()
+	m := newIPToServiceMap(nodeIPs)
 
 	m.add(serviceInfo, servicePortName)
 	assert.Len(t, m.serviceStringMap, 3)
@@ -4119,4 +4122,35 @@ func TestIPToServiceMap(t *testing.T) {
 
 	m.delete(serviceInfo)
 	assert.Len(t, m.serviceStringMap, 0)
+
+	nodePortPort := 12345
+	nodePortServicePort := corev1.ServicePort{
+		Protocol: corev1.ProtocolTCP,
+		Port:     int32(81),
+		NodePort: int32(nodePortPort),
+	}
+	nodePortService := &corev1.Service{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "node-port-service",
+		},
+		Spec: corev1.ServiceSpec{
+			Type: corev1.ServiceTypeNodePort,
+			Ports: []corev1.ServicePort{
+				nodePortServicePort,
+			},
+		},
+	}
+	nodePortBaseServiceInfo := k8sproxy.NewBaseServiceInfo(nodePortService, family, &nodePortServicePort)
+	nodePortServiceInfo := &types.ServiceInfo{
+		BaseServicePortInfo: nodePortBaseServiceInfo,
+	}
+	nodePortServicePortName := k8sproxy.ServicePortName{
+		Port:     "81",
+		Protocol: corev1.ProtocolTCP,
+	}
+	m.add(nodePortServiceInfo, nodePortServicePortName)
+
+	verifyIPToServiceMap(t, m, nodeIPs, []net.IP{}, nodePortPort, corev1.ProtocolTCP, nodePortServicePortName)
+	m.delete(nodePortServiceInfo)
+	verifyIPToServiceMap(t, m, []net.IP{}, nodeIPs, nodePortPort, corev1.ProtocolTCP, nodePortServicePortName)
 }

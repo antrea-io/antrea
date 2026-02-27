@@ -17,6 +17,7 @@ package flowexporter
 import (
 	"context"
 	"fmt"
+	"net/netip"
 	"strings"
 	"testing"
 	"time"
@@ -39,6 +40,7 @@ import (
 	"antrea.io/antrea/pkg/agent/flowexporter/options"
 	"antrea.io/antrea/pkg/agent/flowexporter/priorityqueue"
 	flowexportertesting "antrea.io/antrea/pkg/agent/flowexporter/testing"
+	"antrea.io/antrea/pkg/agent/flowexporter/utils"
 	"antrea.io/antrea/pkg/agent/metrics"
 	agenttypes "antrea.io/antrea/pkg/agent/types"
 	queriertest "antrea.io/antrea/pkg/querier/testing"
@@ -315,8 +317,8 @@ func runSendFlowRecordTests(t *testing.T, flowExp *FlowExporter, isIPv6 bool) {
 				conn.OriginalPackets = tt.originalPackets
 				conn.ReversePackets = tt.reversePackets
 				flowExp.conntrackConnStore.AddOrUpdateConn(conn)
-				assert.Equalf(t, getNumOfConntrackConns(flowExp.conntrackConnStore), 1, "connection is expected to be in the connection map")
-				assert.Equalf(t, flowExp.conntrackPriorityQueue.Len(), 1, "pqItem is expected to be in the expire priority queue")
+				require.Equalf(t, getNumOfConntrackConns(flowExp.conntrackConnStore), 1, "connection is expected to be in the connection map")
+				require.Equalf(t, flowExp.conntrackPriorityQueue.Len(), 1, "pqItem is expected to be in the expire priority queue")
 				conn.PrevPackets = tt.prevPackets
 				conn.PrevReversePackets = tt.prevReversePackets
 				pqItem = flowExp.conntrackPriorityQueue.KeyToItem[connKey]
@@ -387,23 +389,69 @@ func getNumOfDenyConns(connStore *connections.DenyConnectionStore) int {
 	return count
 }
 
+var (
+	isGateway, _ = netip.AddrFromSlice([]byte{9, 9, 9, 9})
+	isNotPod, _  = netip.AddrFromSlice([]byte{8, 8, 8, 8})
+	isPod, _     = netip.AddrFromSlice([]byte{7, 7, 7, 7})
+)
+
+type mockNodeRouteController struct{}
+
+func (m mockNodeRouteController) LookupIPInPodSubnets(ip netip.Addr) (bool, bool) {
+	if ip == isGateway {
+		return true, true
+	}
+	if ip == isPod {
+		return true, false
+	}
+	if ip == isNotPod {
+		return false, false
+	}
+	return false, false
+}
+
+func (m mockNodeRouteController) HasSynced() bool {
+	return true
+}
+
 func TestFlowExporter_findFlowType(t *testing.T) {
 	conn1 := connection.Connection{SourcePodName: "podA", DestinationPodName: "podB"}
 	conn2 := connection.Connection{SourcePodName: "podA", DestinationPodName: ""}
+	conn3 := connection.Connection{FlowKey: connection.Tuple{SourceAddress: isGateway, DestinationAddress: isPod}, DestinationPodNamespace: "not-empty"}
+	conn4 := connection.Connection{FlowKey: connection.Tuple{DestinationAddress: isGateway}}
+	conn5 := connection.Connection{FlowKey: connection.Tuple{SourceAddress: isGateway, DestinationAddress: isPod},
+		DestinationPodNamespace: ""}
+	conn6 := connection.Connection{FlowKey: connection.Tuple{DestinationAddress: isNotPod, SourceAddress: isPod}}
+	conn7 := connection.Connection{FlowKey: connection.Tuple{DestinationAddress: isPod, SourceAddress: isPod}}
+	conn8 := connection.Connection{SourcePodName: "source-pod-name", DestinationPodName: "destination-pod-name", FlowKey: connection.Tuple{DestinationAddress: isPod, SourceAddress: isPod}}
+	conn9 := connection.Connection{FlowKey: connection.Tuple{SourceAddress: isNotPod, DestinationAddress: isPod}}
+	conn10 := connection.Connection{FlowKey: connection.Tuple{SourceAddress: isNotPod, DestinationAddress: isNotPod}}
+	mockController := mockNodeRouteController{}
 	for _, tc := range []struct {
+		name                string
 		isNetworkPolicyOnly bool
 		conn                connection.Connection
-		expectedFlowType    uint8
+		want                uint8
 	}{
-		{true, conn1, 1},
-		{true, conn2, 2},
-		{false, conn1, 0},
+
+		{"isNetworkPolicy and pod names exist", true, conn1, utils.FlowTypeIntraNode},
+		{"isNetworkPolicy and pod names are missing", true, conn2, utils.FlowTypeInterNode},
+		{"source is gateway and destination pod namespace is not flow aggregator", false, conn3, utils.FlowTypeFromExternal},
+		{"destination is gateway", false, conn4, utils.FlowTypeUnsupported},
+		{"source is gateway and destination pod namesapce is empty", false, conn5, utils.FlowTypeUnsupported},
+		{"source is pod, but destination is not", false, conn6, utils.FlowTypeToExternal},
+		{"pod names missing", false, conn7, utils.FlowTypeInterNode},
+		{"pod names not missing", false, conn8, utils.FlowTypeIntraNode},
+		{"source is not pod but destination is", false, conn9, utils.FlowTypeFromExternal},
+		{"source and destination are not pods", false, conn10, utils.FlowTypeUnsupported},
 	} {
-		flowExp := &FlowExporter{
-			isNetworkPolicyOnly: tc.isNetworkPolicyOnly,
-		}
-		flowType := flowExp.findFlowType(tc.conn)
-		assert.Equal(t, tc.expectedFlowType, flowType)
+		t.Run(tc.name, func(t *testing.T) {
+			flowExp := &FlowExporter{
+				isNetworkPolicyOnly: tc.isNetworkPolicyOnly,
+			}
+			got := flowExp.findFlowType(tc.conn, mockController)
+			assert.Equal(t, tc.want, got)
+		})
 	}
 }
 

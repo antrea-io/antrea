@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"hash/fnv"
 	"net"
+	"net/netip"
 	"time"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -68,7 +69,7 @@ type FlowExporter struct {
 	v4Enabled              bool
 	v6Enabled              bool
 	k8sClient              kubernetes.Interface
-	nodeRouteController    *noderoute.Controller
+	nodeRouteController    nodeRouteControllerInterface
 	isNetworkPolicyOnly    bool
 	conntrackPriorityQueue *priorityqueue.ExpirePriorityQueue
 	denyPriorityQueue      *priorityqueue.ExpirePriorityQueue
@@ -82,8 +83,8 @@ type FlowExporter struct {
 func NewFlowExporter(podStore objectstore.PodStore, proxier proxy.ProxyQuerier, k8sClient kubernetes.Interface, nodeRouteController *noderoute.Controller,
 	trafficEncapMode config.TrafficEncapModeType, nodeConfig *config.NodeConfig, v4Enabled, v6Enabled bool, serviceCIDRNet, serviceCIDRNetv6 *net.IPNet,
 	ovsDatapathType ovsconfig.OVSDatapathType, proxyEnabled bool, npQuerier querier.AgentNetworkPolicyInfoQuerier, o *options.FlowExporterOptions,
-	egressQuerier querier.EgressQuerier, podNetworkWait *utilwait.Group,
-) (*FlowExporter, error) {
+	egressQuerier querier.EgressQuerier, podNetworkWait *utilwait.Group) (*FlowExporter, error) {
+
 	protocolFilter := filter.NewProtocolFilter(o.ProtocolFilter)
 	connTrackDumper := connections.InitializeConnTrackDumper(nodeConfig, serviceCIDRNet, serviceCIDRNetv6, ovsDatapathType, proxyEnabled, protocolFilter)
 	denyConnStore := connections.NewDenyConnectionStore(npQuerier, podStore, proxier, o, protocolFilter)
@@ -290,7 +291,13 @@ func (exp *FlowExporter) initFlowExporter(ctx context.Context) error {
 	return nil
 }
 
-func (exp *FlowExporter) findFlowType(conn connection.Connection) uint8 {
+// nodeRouteControllerInterface is an abstraction for nodeRouteController for dependency injection
+type nodeRouteControllerInterface interface {
+	LookupIPInPodSubnets(ip netip.Addr) (bool, bool)
+	HasSynced() bool
+}
+
+func (exp *FlowExporter) findFlowType(conn connection.Connection, nodeRouteController nodeRouteControllerInterface) uint8 {
 	// TODO: support Pod-To-External flows in network policy only mode.
 	if exp.isNetworkPolicyOnly {
 		if conn.SourcePodName == "" || conn.DestinationPodName == "" {
@@ -299,25 +306,36 @@ func (exp *FlowExporter) findFlowType(conn connection.Connection) uint8 {
 		return utils.FlowTypeIntraNode
 	}
 
-	if exp.nodeRouteController == nil {
-		klog.V(5).InfoS("Can't find flow type without nodeRouteController")
-		return utils.FlowTypeUnspecified
-	}
-	srcIsPod, srcIsGw := exp.nodeRouteController.LookupIPInPodSubnets(conn.FlowKey.SourceAddress)
-	dstIsPod, dstIsGw := exp.nodeRouteController.LookupIPInPodSubnets(conn.FlowKey.DestinationAddress)
-	if srcIsGw || dstIsGw {
+	srcIsPod, srcIsGw := nodeRouteController.LookupIPInPodSubnets(conn.FlowKey.SourceAddress)
+	dstIsPod, dstIsGw := nodeRouteController.LookupIPInPodSubnets(conn.FlowKey.DestinationAddress)
+	if dstIsGw {
 		// This matches what we do in filterAntreaConns but is more general as we consider
 		// remote gateways as well.
-		klog.V(5).InfoS("Flows where the source or destination IP is a gateway IP will not be exported")
+		klog.V(5).InfoS("Flows where the destination IP is a gateway IP will not be exported")
 		return utils.FlowTypeUnsupported
 	}
+
+	if srcIsGw {
+		if conn.DestinationPodNamespace == "" {
+			return utils.FlowTypeUnsupported
+		} else {
+			return utils.FlowTypeFromExternal
+		}
+	}
+
 	if !srcIsPod {
-		klog.V(5).InfoS("Flows where the source is not a Pod will not be exported")
-		return utils.FlowTypeUnsupported
+		if dstIsPod {
+			return utils.FlowTypeFromExternal
+		} else {
+			return utils.FlowTypeUnsupported
+		}
+
 	}
+
 	if !dstIsPod {
 		return utils.FlowTypeToExternal
 	}
+
 	if conn.SourcePodName == "" || conn.DestinationPodName == "" {
 		return utils.FlowTypeInterNode
 	}
@@ -340,10 +358,20 @@ func (exp *FlowExporter) fillEgressInfo(conn *connection.Connection) {
 }
 
 func (exp *FlowExporter) exportConn(conn *connection.Connection) error {
-	conn.FlowType = exp.findFlowType(*conn)
+	// nil check is done outside findFlowType because it takes an interface which
+	// cannot be properly nil checked within the function without reflection which would be
+	// too expensive.
+	if exp.nodeRouteController == nil {
+		klog.V(5).InfoS("Can't find flow type without nodeRouteController")
+		conn.FlowType = utils.FlowTypeUnspecified
+	} else {
+		conn.FlowType = exp.findFlowType(*conn, exp.nodeRouteController)
+	}
+
 	if conn.FlowType == utils.FlowTypeUnsupported {
 		return nil
 	}
+
 	if conn.FlowType == utils.FlowTypeToExternal {
 		if conn.SourcePodNamespace != "" && conn.SourcePodName != "" {
 			exp.fillEgressInfo(conn)
@@ -352,13 +380,12 @@ func (exp *FlowExporter) exportConn(conn *connection.Connection) error {
 			return nil
 		}
 	}
+
 	if err := exp.exporter.Export(conn); err != nil {
 		return err
 	}
 	exp.numConnsExported += 1
-	if klog.V(5).Enabled() {
-		klog.InfoS("Record for connection sent successfully", "flowKey", conn.FlowKey, "connection", conn)
-	}
+	klog.V(5).InfoS("Record for connection sent successfully", "flowKey", conn.FlowKey, "connection", conn)
 	return nil
 }
 

@@ -73,6 +73,7 @@ func createConnsForTest() ([]*connection.Connection, []*connection.ConnectionKey
 		ReversePackets:  0xff,
 		ReverseBytes:    0xbaaa,
 		FlowKey:         tuple1,
+		Zone:            65520,
 	}
 	testConnKey1 := connection.NewConnectionKey(testConn1)
 	testConns[0] = testConn1
@@ -87,6 +88,7 @@ func createConnsForTest() ([]*connection.Connection, []*connection.ConnectionKey
 		ReversePackets:  0xbbbb,
 		ReverseBytes:    0xcbbbb0000000000,
 		FlowKey:         tuple2,
+		Zone:            65520,
 	}
 	testConnKey2 := connection.NewConnectionKey(testConn2)
 	testConns[1] = testConn2
@@ -138,6 +140,7 @@ func TestConnectionStoreAndFlowRecords(t *testing.T) {
 		PollInterval:           testPollInterval}
 	conntrackConnStore := connections.NewConntrackConnectionStore(connDumperMock, true, false, npQuerier, mockPodStore, nil, nil, o)
 	// Expect calls for connStore.poll and other callees
+	connDumperMock.EXPECT().DumpFlows(uint16(0)).Return(nil, 0, nil)
 	connDumperMock.EXPECT().DumpFlows(uint16(openflow.CtZone)).Return(testConns, 0, nil)
 	connDumperMock.EXPECT().GetMaxConnections().Return(0, nil)
 	for i, testConn := range testConns {
@@ -152,8 +155,8 @@ func TestConnectionStoreAndFlowRecords(t *testing.T) {
 	// Execute connStore.Poll
 	connsLens, err := conntrackConnStore.Poll()
 	require.Nil(t, err, fmt.Sprintf("Failed to add connections to connection store: %v", err))
-	assert.Len(t, connsLens, 1, "length of connsLens is expected to be 1")
-	assert.Len(t, testConns, connsLens[0], "expected connections should be equal to number of testConns")
+	assert.Len(t, connsLens, 2, "length of connsLens is expected to be 2")
+	assert.Len(t, testConns, connsLens[1], "expected connections should be equal to number of testConns")
 
 	// Check if connections in connectionStore are same as testConns or not
 	for i, expConn := range testConns {
