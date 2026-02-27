@@ -49,6 +49,7 @@ _usage="Usage: $0 [--encap-mode <mode>] [--ip-family <v4|v6|dual>] [--coverage] 
         --antrea-controller-image     The Antrea controller image to use for the test. Default is antrea/antrea-controller-ubuntu.
         --antrea-agent-image          The Antrea agent image to use for the test. Default is antrea/antrea-agent-ubuntu.
         --antrea-image-tag            The Antrea image tag to use for the test. Default is latest.
+        --wireguard                   Enable WireGuard encryption for tunnel traffic.
         --help, -h                    Print this message and exit.
 "
 
@@ -98,6 +99,7 @@ antrea_controller_image="antrea/antrea-controller-ubuntu"
 antrea_agent_image="antrea/antrea-agent-ubuntu"
 use_non_default_images=false
 antrea_image_tag="latest"
+wireguard=false
 while [[ $# -gt 0 ]]
 do
 key="$1"
@@ -210,6 +212,10 @@ case $key in
     antrea_image_tag="$2"
     shift 2
     ;;
+    --wireguard)
+    wireguard=true
+    shift
+    ;;
     -h|--help)
     print_usage
     exit 0
@@ -294,6 +300,9 @@ if [[ "$flow_visibility_protocol" == "ipfix" ]]; then
 fi
 if $flexible_ipam; then
     manifest_args="$manifest_args --flexible-ipam"
+fi
+if $wireguard; then
+    manifest_args="$manifest_args --wireGuard"
 fi
 
 COMMON_IMAGES_LIST=("registry.k8s.io/e2e-test-images/agnhost:2.40" \

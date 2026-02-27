@@ -954,9 +954,8 @@ func (f *featurePodConnectivity) flowsToTrace(dataplaneTag uint8,
 		}
 		flows = append(flows, flowBuilder.Done())
 	}
-
-	// Do not send to controller if captures only dropped packet.
-	ifDroppedOnly := func(fb binding.FlowBuilder) binding.FlowBuilder {
+	// Add controller actions unless we are capturing only dropped packets.
+	ifNotDroppedOnly := func(fb binding.FlowBuilder) binding.FlowBuilder {
 		if !droppedOnly {
 			if ovsMetersAreSupported {
 				fb = fb.Action().Meter(PacketInMeterIDTF)
@@ -973,9 +972,12 @@ func (f *featurePodConnectivity) flowsToTrace(dataplaneTag uint8,
 		}
 		return fb
 	}
-	// Output the packets if traffic mode is noEncap or hybrid.
-	ifSupportsNoEncap := func(fb binding.FlowBuilder) binding.FlowBuilder {
-		if f.networkConfig.TrafficEncapMode.SupportsNoEncap() {
+	// Output the packets if traffic mode uses direct routing (noEncap, hybrid, or WireGuard).
+	// In direct routing modes, packets are routed directly without overlay encapsulation.
+	// WireGuard mode utilizes direct routing for all encrypted Pod traffic, similar to the
+	// behavior seen in noEncap and hybrid modes for direct-reachability traffic.
+	ifDirectRouting := func(fb binding.FlowBuilder) binding.FlowBuilder {
+		if f.networkConfig.TrafficEncapMode.SupportsNoEncap() || f.networkConfig.TrafficEncryptionMode == config.TrafficEncryptionModeWireGuard {
 			fb = fb.Action().OutputToRegField(TargetOFPortField)
 		}
 		return fb
@@ -994,14 +996,14 @@ func (f *featurePodConnectivity) flowsToTrace(dataplaneTag uint8,
 				MatchIPDSCP(dataplaneTag).
 				SetHardTimeout(timeout).
 				Action().OutputToRegField(TargetOFPortField)
-			fb = ifDroppedOnly(fb)
+			fb = ifNotDroppedOnly(fb)
 			flows = append(flows, fb.Done())
 		}
 		// For injected packets, SendToController and Output depending on traffic mode if output port is local gateway.
 		// - In encap mode, a Traceflow packet going out of the gateway port (i.e. exiting the overlay) essentially means
 		//   that the Traceflow request is complete. only SendToController if output port is local gateway.
-		// - In noEncap or hybrid mode, inter-Node Pod-to-Pod traffic is expected to go out of the gateway port on the
-		//   way to its destination.
+		// - In direct routing modes (noEncap, hybrid, or WireGuard), inter-Node Pod-to-Pod traffic is expected to go out of
+		//   the gateway port on the way to its destination.
 		fb := OutputTable.ofTable.BuildFlow(priorityNormal+2).
 			Cookie(cookieID).
 			MatchRegFieldWithValue(TargetOFPortField, f.gatewayPort).
@@ -1009,8 +1011,8 @@ func (f *featurePodConnectivity) flowsToTrace(dataplaneTag uint8,
 			MatchRegMark(OutputToOFPortRegMark).
 			MatchIPDSCP(dataplaneTag).
 			SetHardTimeout(timeout)
-		fb = ifSupportsNoEncap(fb)
-		fb = ifDroppedOnly(fb)
+		fb = ifDirectRouting(fb)
+		fb = ifNotDroppedOnly(fb)
 		fb = ifLiveTraffic(fb)
 		flows = append(flows, fb.Done())
 
@@ -1025,7 +1027,7 @@ func (f *featurePodConnectivity) flowsToTrace(dataplaneTag uint8,
 				MatchRegMark(OutputToOFPortRegMark).
 				MatchIPDSCP(dataplaneTag).
 				SetHardTimeout(timeout)
-			fb = ifDroppedOnly(fb)
+			fb = ifNotDroppedOnly(fb)
 			fb = ifLiveTraffic(fb)
 			flows = append(flows, fb.Done())
 		}
@@ -1036,7 +1038,7 @@ func (f *featurePodConnectivity) flowsToTrace(dataplaneTag uint8,
 			MatchRegMark(OutputToOFPortRegMark).
 			MatchIPDSCP(dataplaneTag).
 			SetHardTimeout(timeout)
-		fb = ifDroppedOnly(fb)
+		fb = ifNotDroppedOnly(fb)
 		fb = ifLiveTraffic(fb)
 		flows = append(flows, fb.Done())
 	}
@@ -1055,8 +1057,8 @@ func (f *featureService) flowsToTrace(dataplaneTag uint8,
 	timeout uint16) []binding.Flow {
 	cookieID := f.cookieAllocator.Request(cookie.Traceflow).Raw()
 	var flows []binding.Flow
-	// Do not send to controller if captures only dropped packet.
-	ifDroppedOnly := func(fb binding.FlowBuilder) binding.FlowBuilder {
+	// Add controller actions unless we are capturing only dropped packets.
+	ifNotDroppedOnly := func(fb binding.FlowBuilder) binding.FlowBuilder {
 		if !droppedOnly {
 			if ovsMetersAreSupported {
 				fb = fb.Action().Meter(PacketInMeterIDTF)
@@ -1086,7 +1088,7 @@ func (f *featureService) flowsToTrace(dataplaneTag uint8,
 				MatchCTMark(HairpinCTMark).
 				MatchIPDSCP(dataplaneTag).
 				SetHardTimeout(timeout)
-			fb = ifDroppedOnly(fb)
+			fb = ifNotDroppedOnly(fb)
 			fb = ifLiveTraffic(fb)
 			flows = append(flows, fb.Done())
 		}
@@ -1365,9 +1367,10 @@ func (f *featurePodConnectivity) l3FwdFlowsToRemoteViaTun(localGatewayMAC net.Ha
 	return flows
 }
 
-// l3FwdFlowEgressReturnViaTun generates the flow to match the packets sourced from the Antrea gateway and destined for
-// remote Pods and forward them via tunnel. This flow is installed only in hybrid mode for matching reply packets of
-// Egress connections originated from tunnel and these packets should be sent to remote Pods via tunnel.
+// l3FwdFlowEgressReturnViaTun generates the flow to match reply packets of Egress connections (whose request packets
+// came from remote Pods via tunnel) and forward them back to those Pods via tunnel, ensuring symmetric paths. It is
+// used when Egress uses a tunnel path distinct from the common Pod-to-Pod path (hybrid or WireGuard) and the peer is
+// reachable via routing.
 func (f *featurePodConnectivity) l3FwdFlowEgressReturnViaTun(localGatewayMAC net.HardwareAddr, peerSubnet net.IPNet, tunnelPeer net.IP) binding.Flow {
 	ipProtocol := getIPProtocol(peerSubnet.IP)
 	flow := L3ForwardingTable.ofTable.BuildFlow(priorityNormal + 1).
