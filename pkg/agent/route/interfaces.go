@@ -62,6 +62,14 @@ type Interface interface {
 	// DeleteSNATRule should delete rule to SNAT outgoing traffic with the mark.
 	DeleteSNATRule(mark uint32) error
 
+	// AddDualStackSNATRules adds SNAT rules for both IPv4 and IPv6 using a shared mark.
+	// Both IPs map to the same mark; the implementation must not let one overwrite the other.
+	AddDualStackSNATRules(ipv4, ipv6 net.IP, mark uint32) error
+
+	// DeleteDualStackSNATRules deletes SNAT rules for both IPv4 and IPv6 that were installed
+	// by AddDualStackSNATRules. It looks up the IPs from the cache by mark.
+	DeleteDualStackSNATRules(mark uint32) error
+
 	// RestoreEgressRoutesAndRules restores the routes and rules configured on the system for Egresses to the cache.
 	RestoreEgressRoutesAndRules(minTableID, maxTableID int) error
 
