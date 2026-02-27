@@ -255,7 +255,8 @@ func (t *testContext) setup(ctx context.Context) error {
 		Role:    kindEchoName,
 		Port:    80,
 		Image:   t.testImage,
-		Command: tcpServerCommand(80),
+		Command: []string{"tini", "--"},
+		Args:    tcpServerCommand(80),
 		Affinity: &corev1.Affinity{
 			PodAffinity: &corev1.PodAffinity{
 				RequiredDuringSchedulingIgnoredDuringExecution: []corev1.PodAffinityTerm{
@@ -299,7 +300,8 @@ func (t *testContext) setup(ctx context.Context) error {
 		Role:    kindEchoName,
 		Port:    80,
 		Image:   t.testImage,
-		Command: tcpServerCommand(80),
+		Command: []string{"tini", "--"},
+		Args:    tcpServerCommand(80),
 		Affinity: &corev1.Affinity{
 			PodAntiAffinity: &corev1.PodAntiAffinity{
 				RequiredDuringSchedulingIgnoredDuringExecution: []corev1.PodAffinityTerm{
