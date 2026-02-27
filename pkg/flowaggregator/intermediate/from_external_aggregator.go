@@ -195,7 +195,7 @@ func (a *fromExternalAggregator) fromExternalCorrelationRequired(flow *flowpb.Fl
 		return true
 	}
 	// SourceNode flows do not have podName
-	if flow.K8S == nil || flow.K8S.DestinationPodName == "" {
+	if flow.K8S.DestinationPodName == "" {
 		return true
 	}
 	return false
