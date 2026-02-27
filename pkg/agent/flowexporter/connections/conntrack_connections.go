@@ -340,14 +340,3 @@ func (cs *ConntrackConnectionStore) getZones() []uint16 {
 	}
 	return zones
 }
-
-// Given a pair of matching connections, modify the antreaZone connection by
-// filling in the fields needed from the zoneZero connection
-func CorrelateExternal(zoneZero, antreaZone *connection.Connection) {
-	antreaZone.FlowKey.SourcePort = zoneZero.FlowKey.SourcePort
-	antreaZone.FlowKey.SourceAddress = zoneZero.FlowKey.SourceAddress
-	antreaZone.ProxySnatIP = zoneZero.ProxySnatIP
-	antreaZone.ProxySnatPort = zoneZero.ProxySnatPort
-	antreaZone.OriginalDestinationAddress = zoneZero.OriginalDestinationAddress
-	antreaZone.OriginalDestinationPort = zoneZero.OriginalDestinationPort
-}
