@@ -85,6 +85,20 @@ func (f *fakeMemberlistCluster) ShouldSelectIP(ip string, pool string, filters .
 	return false, nil
 }
 
+func (f *fakeMemberlistCluster) SelectNodeForDualStackIPs(ipv4, ipv4pool, ipv6, ipv6pool string, filters ...func(string) bool) (string, error) {
+	isSelectedForIPv6 := func(node string) bool {
+		return f.hashMap.GetWithFilters(ipv6, filters...) == node
+	}
+	allFilters := make([]func(string) bool, len(filters)+1)
+	copy(allFilters, filters)
+	allFilters[len(filters)] = isSelectedForIPv6
+	node := f.hashMap.GetWithFilters(ipv4, allFilters...)
+	if node == "" {
+		return "", memberlist.ErrNoNodeAvailable
+	}
+	return node, nil
+}
+
 func TestSchedule(t *testing.T) {
 	egresses := []runtime.Object{
 		&crdv1b1.Egress{
@@ -210,6 +224,95 @@ func TestSchedule(t *testing.T) {
 
 			s.schedule()
 			assert.Equal(t, tt.expectedResults, s.scheduleResults)
+		})
+	}
+}
+
+// TestScheduleDualStackEgress verifies that for dual-stack Egresses the scheduler only counts
+// the first IPv4/IPv6 pair against Node capacity, matching what is actually realized on the
+// datapath (firstDualStackPair / syncDualStackEgress) and what the central controller allocates
+// from ExternalIPPools.
+func TestScheduleDualStackEgress(t *testing.T) {
+	tests := []struct {
+		name                string
+		nodes               []string
+		maxEgressIPsPerNode int
+		egress              *crdv1b1.Egress
+		expectScheduled     bool
+		expectedIPs         []string
+	}{
+		{
+			name:                "two pairs in spec, capacity 2, only first pair counted",
+			nodes:               []string{"node1"},
+			maxEgressIPsPerNode: 2,
+			egress: &crdv1b1.Egress{
+				ObjectMeta: metav1.ObjectMeta{Name: "egressDS", UID: "uidDS", CreationTimestamp: metav1.NewTime(time.Unix(1, 0))},
+				Spec: crdv1b1.EgressSpec{
+					EgressIPs:       []string{"1.1.1.1", "fc00::1", "1.1.1.2", "fc00::2"},
+					ExternalIPPools: []string{"poolV4-1", "poolV6-1", "poolV4-2", "poolV6-2"},
+				},
+			},
+			expectScheduled: true,
+			expectedIPs:     []string{"1.1.1.1", "fc00::1"},
+		},
+		{
+			name:                "single pair in spec, capacity 2, scheduled",
+			nodes:               []string{"node1"},
+			maxEgressIPsPerNode: 2,
+			egress: &crdv1b1.Egress{
+				ObjectMeta: metav1.ObjectMeta{Name: "egressDS", UID: "uidDS", CreationTimestamp: metav1.NewTime(time.Unix(1, 0))},
+				Spec: crdv1b1.EgressSpec{
+					EgressIPs:       []string{"1.1.1.1", "fc00::1"},
+					ExternalIPPools: []string{"poolV4", "poolV6"},
+				},
+			},
+			expectScheduled: true,
+			expectedIPs:     []string{"1.1.1.1", "fc00::1"},
+		},
+		{
+			name:                "two pairs in spec, capacity 1, no Node fits",
+			nodes:               []string{"node1"},
+			maxEgressIPsPerNode: 1,
+			egress: &crdv1b1.Egress{
+				ObjectMeta: metav1.ObjectMeta{Name: "egressDS", UID: "uidDS", CreationTimestamp: metav1.NewTime(time.Unix(1, 0))},
+				Spec: crdv1b1.EgressSpec{
+					EgressIPs:       []string{"1.1.1.1", "fc00::1", "1.1.1.2", "fc00::2"},
+					ExternalIPPools: []string{"poolV4-1", "poolV6-1", "poolV4-2", "poolV6-2"},
+				},
+			},
+			expectScheduled: false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			fakeCluster := newFakeMemberlistCluster(tt.nodes)
+			crdClient := fakeversioned.NewSimpleClientset(tt.egress)
+			crdInformerFactory := crdinformers.NewSharedInformerFactory(crdClient, 0)
+			egressInformer := crdInformerFactory.Crd().V1beta1().Egresses()
+			clientset := fake.NewSimpleClientset()
+			informerFactory := informers.NewSharedInformerFactory(clientset, 0)
+			nodeInformer := informerFactory.Core().V1().Nodes()
+
+			s := NewEgressIPScheduler(fakeCluster, egressInformer, nodeInformer, tt.maxEgressIPsPerNode)
+			stopCh := make(chan struct{})
+			defer close(stopCh)
+			crdInformerFactory.Start(stopCh)
+			informerFactory.Start(stopCh)
+			crdInformerFactory.WaitForCacheSync(stopCh)
+			informerFactory.WaitForCacheSync(stopCh)
+
+			s.schedule()
+
+			gotIPs, gotNode, gotErr, gotScheduled := s.GetDualStackEgressIPsAndNode(tt.egress.Name)
+			if !tt.expectScheduled {
+				assert.False(t, gotScheduled)
+				assert.Error(t, gotErr)
+				return
+			}
+			assert.True(t, gotScheduled)
+			assert.NoError(t, gotErr)
+			assert.Equal(t, tt.expectedIPs, gotIPs, "scheduler must only expose the effective dual-stack pair")
+			assert.NotEmpty(t, gotNode)
 		})
 	}
 }
