@@ -85,6 +85,20 @@ func (f *fakeMemberlistCluster) ShouldSelectIP(ip string, pool string, filters .
 	return false, nil
 }
 
+func (f *fakeMemberlistCluster) SelectNodeForDualStackIPs(ipv4, ipv4pool, ipv6, ipv6pool string, filters ...func(string) bool) (string, error) {
+	isSelectedForIPv6 := func(node string) bool {
+		return f.hashMap.GetWithFilters(ipv6, filters...) == node
+	}
+	allFilters := make([]func(string) bool, len(filters)+1)
+	copy(allFilters, filters)
+	allFilters[len(filters)] = isSelectedForIPv6
+	node := f.hashMap.GetWithFilters(ipv4, allFilters...)
+	if node == "" {
+		return "", memberlist.ErrNoNodeAvailable
+	}
+	return node, nil
+}
+
 func TestSchedule(t *testing.T) {
 	egresses := []runtime.Object{
 		&crdv1b1.Egress{
