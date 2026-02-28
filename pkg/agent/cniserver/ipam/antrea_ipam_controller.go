@@ -25,7 +25,6 @@ import (
 	corelisters "k8s.io/client-go/listers/core/v1"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/klog/v2"
-	utilnet "k8s.io/utils/net"
 
 	crdv1b1 "antrea.io/antrea/pkg/apis/crd/v1beta1"
 	clientsetversioned "antrea.io/antrea/pkg/client/clientset/versioned"
@@ -190,8 +189,10 @@ ownerReferenceLoop:
 	return strings.Split(annotations, annotation.AntreaIPAMAnnotationDelimiter), ips, reservedOwner, ipErr
 }
 
-// Look up IPPools from the Pod annotation.
-func (c *AntreaIPAMController) getPoolAllocatorByPod(namespace, podName string) (mineType, *poolallocator.IPPoolAllocator, []net.IP, *crdv1b1.IPAddressOwner, error) {
+// getPoolAllocatorsByPod looks up IPPools from the Pod annotation and returns
+// allocators for all valid pools. This supports IPv4, IPv6, and dual-stack
+// configurations where multiple pools (one per IP family) may be specified.
+func (c *AntreaIPAMController) getPoolAllocatorsByPod(namespace, podName string) (mineType, []*poolallocator.IPPoolAllocator, []net.IP, *crdv1b1.IPAddressOwner, error) {
 	poolNames, ips, reservedOwner, err := c.getIPPoolsByPod(namespace, podName)
 	if err != nil {
 		return mineUnknown, nil, nil, nil, err
@@ -199,26 +200,23 @@ func (c *AntreaIPAMController) getPoolAllocatorByPod(namespace, podName string) 
 		return mineFalse, nil, nil, nil, nil
 	}
 
-	var allocator *poolallocator.IPPoolAllocator
+	var allocators []*poolallocator.IPPoolAllocator
 	for _, p := range poolNames {
-		allocator, err = poolallocator.NewIPPoolAllocator(p, c.crdClient, c.ipPoolLister)
+		allocator, err := poolallocator.NewIPPoolAllocator(p, c.crdClient, c.ipPoolLister)
 		if err != nil {
 			if !errors.IsNotFound(err) {
-				err = fmt.Errorf("failed to get IPPool %s: %v", p, err)
-				break
+				return mineTrue, nil, nil, nil, fmt.Errorf("failed to get IPPool %s: %v", p, err)
 			}
 			klog.InfoS("IPPool not found", "pool", p)
-			err = nil
-		} else if allocator.IPVersion == utilnet.IPv4 {
-			// Support IPv6 / dual stack in future.
-			break
+			continue
 		}
+		allocators = append(allocators, allocator)
 	}
-	if err == nil && allocator == nil {
-		err = fmt.Errorf("no valid IPPool found")
+	if len(allocators) == 0 {
+		return mineTrue, nil, nil, nil, fmt.Errorf("no valid IPPool found")
 	}
 
-	return mineTrue, allocator, ips, reservedOwner, err
+	return mineTrue, allocators, ips, reservedOwner, nil
 }
 
 // Look up IPPools by matching PodOwner.

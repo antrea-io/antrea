@@ -207,7 +207,11 @@ func testIPAMResultWithSRIOV(cidr string, vlan int, sriov *current.Interface) *i
 
 func testIPAMResult(cidr string, vlan int) *ipam.IPAMResult {
 	ip, _, _ := net.ParseCIDR(cidr)
-	mask := net.CIDRMask(32, 32)
+	bits := 32
+	if ip.To4() == nil {
+		bits = 128
+	}
+	mask := net.CIDRMask(bits, bits)
 	ipNet := net.IPNet{
 		IP:   ip.Mask(mask),
 		Mask: mask,
@@ -223,6 +227,13 @@ func testIPAMResult(cidr string, vlan int) *ipam.IPAMResult {
 		},
 		VLANID: uint16(vlan),
 	}
+}
+
+func testDualStackIPAMResult(ipv4CIDR, ipv6CIDR string, vlan int) *ipam.IPAMResult {
+	ipv4Result := testIPAMResult(ipv4CIDR, vlan)
+	ipv6Result := testIPAMResult(ipv6CIDR, 0)
+	ipv4Result.IPs = append(ipv4Result.IPs, ipv6Result.IPs...)
+	return ipv4Result
 }
 
 func init() {
@@ -740,6 +751,77 @@ func TestConfigurePodSecondaryNetwork(t *testing.T) {
 				// Expect no call to interface configurator
 			},
 			expectedErr: "",
+		},
+		{
+			name:        "VLAN network with IPv6",
+			networkType: vlanNetworkType,
+			mtu:         1500,
+			vlan:        101,
+			expectedCalls: func(mockIPAM *podwatchtesting.MockIPAMAllocator, mockIC *podwatchtesting.MockInterfaceConfigurator) {
+				mockIPAM.EXPECT().SecondaryNetworkAllocate(podOwner, gomock.Any()).Return(testIPAMResult("fd00:192:168:100::10/128", 0), nil)
+				mockIC.EXPECT().ConfigureVLANSecondaryInterface(
+					podName,
+					testNamespace,
+					containerID,
+					containerNetNS(containerID),
+					interfaceName,
+					1500,
+					testIPAMResult("fd00:192:168:100::10/128", 101),
+					nil,
+				)
+			},
+			expectedNetworkStatusAnnot: []netdefv1.NetworkStatus{{
+				Name: "net",
+				IPs:  []string{"fd00:192:168:100::10"},
+				DNS:  netdefv1.DNS{},
+			}, primaryNetworkStatus},
+		},
+		{
+			name:        "VLAN network with dual-stack",
+			networkType: vlanNetworkType,
+			mtu:         1500,
+			vlan:        101,
+			expectedCalls: func(mockIPAM *podwatchtesting.MockIPAMAllocator, mockIC *podwatchtesting.MockInterfaceConfigurator) {
+				mockIPAM.EXPECT().SecondaryNetworkAllocate(podOwner, gomock.Any()).Return(testDualStackIPAMResult("148.14.24.100/24", "fd00:192:168:100::10/128", 0), nil)
+				mockIC.EXPECT().ConfigureVLANSecondaryInterface(
+					podName,
+					testNamespace,
+					containerID,
+					containerNetNS(containerID),
+					interfaceName,
+					1500,
+					testDualStackIPAMResult("148.14.24.100/24", "fd00:192:168:100::10/128", 101),
+					nil,
+				)
+			},
+			expectedNetworkStatusAnnot: []netdefv1.NetworkStatus{{
+				Name: "net",
+				IPs:  []string{"148.14.24.100", "fd00:192:168:100::10"},
+				DNS:  netdefv1.DNS{},
+			}, primaryNetworkStatus},
+		},
+		{
+			name:        "SRIOV network with IPv6",
+			networkType: sriovNetworkType,
+			mtu:         1500,
+			expectedCalls: func(mockIPAM *podwatchtesting.MockIPAMAllocator, mockIC *podwatchtesting.MockInterfaceConfigurator) {
+				mockIPAM.EXPECT().SecondaryNetworkAllocate(podOwner, gomock.Any()).Return(testIPAMResultWithSRIOV("fd00:192:168:100::10/128", 0, &current.Interface{PciID: "sriov-device-id-11"}), nil)
+				mockIC.EXPECT().ConfigureSriovSecondaryInterface(
+					podName,
+					testNamespace,
+					containerID,
+					containerNetNS(containerID),
+					interfaceName,
+					1500,
+					sriovDeviceID11,
+					&testIPAMResultWithSRIOV("fd00:192:168:100::10/128", 0, &current.Interface{PciID: "sriov-device-id-11"}).Result,
+				)
+			},
+			expectedNetworkStatusAnnot: []netdefv1.NetworkStatus{{
+				Name: "net",
+				IPs:  []string{"fd00:192:168:100::10"},
+				DNS:  netdefv1.DNS{},
+			}, primaryNetworkStatus},
 		},
 	}
 

@@ -40,6 +40,30 @@ spec:
 apiVersion: "crd.antrea.io/v1beta1"
 kind: IPPool
 metadata:
+  name: secnet-ipv6-1
+spec:
+  ipRanges:
+  - cidr: "10:2400:1::0/96"
+  subnetInfo:
+    gateway: "10:2400:1::1"
+    prefixLength: 64
+
+---
+apiVersion: "crd.antrea.io/v1beta1"
+kind: IPPool
+metadata:
+  name: secnet-ipv6-2
+spec:
+  ipRanges:
+  - cidr: "10:2400:2::0/96"
+  subnetInfo:
+    gateway: "10:2400:2::1"
+    prefixLength: 64
+
+---
+apiVersion: "crd.antrea.io/v1beta1"
+kind: IPPool
+metadata:
   name: secnet-ipv6-3
 spec:
   ipRanges:
@@ -106,11 +130,11 @@ spec:
       "cniVersion": "0.3.0",
       "type": "antrea",
       "networkType": "vlan",
-      "mtu": 1200,
+      "mtu": 1300,
       "vlan": 100,
       "ipam": {
         "type": "antrea",
-        "ippools": ["secnet-ipv4-1"]
+        "ippools": ["secnet-ipv4-1", "secnet-ipv6-1"]
       }
     }'
 
@@ -126,7 +150,7 @@ spec:
       "networkType": "vlan",
       "ipam": {
         "type": "antrea",
-        "ippools": ["secnet-ipv4-2"]
+        "ippools": ["secnet-ipv4-2", "secnet-ipv6-2"]
       }
     }'
 
