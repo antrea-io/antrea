@@ -1,4 +1,4 @@
-// Copyright 2025 Antrea Authors
+// Copyright 2026 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -24,6 +24,10 @@ import (
 
 type FakeCrdV1alpha1 struct {
 	*testing.Fake
+}
+
+func (c *FakeCrdV1alpha1) AntreaNodeConfigs() v1alpha1.AntreaNodeConfigInterface {
+	return newFakeAntreaNodeConfigs(c)
 }
 
 func (c *FakeCrdV1alpha1) BGPPolicies() v1alpha1.BGPPolicyInterface {
