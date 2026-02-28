@@ -290,7 +290,7 @@ func (c *Controller) syncTraceflow(traceflowName string) error {
 				err = c.startTraceflow(tf)
 			}
 		} else {
-			klog.Warningf("Invalid data plane tag %d for Traceflow %s", tf.Status.DataplaneTag, tf.Name)
+			klog.ErrorS(nil, "Invalid data plane tag for Traceflow", "dataplaneTag", tf.Status.DataplaneTag, "traceflow", tf.Name)
 		}
 	default:
 		c.cleanupTraceflow(traceflowName)

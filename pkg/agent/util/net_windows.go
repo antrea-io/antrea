@@ -223,7 +223,7 @@ func ConfigureLinkAddresses(idx int, ipNets []*net.IPNet) error {
 	for _, addr := range addrsToAdd {
 		klog.V(2).Infof("Adding address %v to interface %s", addr, ifaceName)
 		if addr.IP.To4() == nil {
-			klog.Warningf("Windows only supports IPv4 addresses, skipping this address %v", addr)
+			klog.InfoS("Windows only supports IPv4 addresses, skipping this address", "address", addr)
 			return nil
 		}
 		if err := winnetUtil.AddNetAdapterIPAddress(ifaceName, addr, ""); err != nil {

@@ -144,7 +144,7 @@ func (w *watchWrapper) watch() {
 	// Call the watch func which is initialized in watchWrapper
 	watcher, err := w.watchFunc()
 	if err != nil {
-		klog.Warningf("Failed to start watch for %s: %v", w.name, err)
+		klog.ErrorS(err, "Failed to start watch", "name", w.name)
 		return
 	}
 	eventCount := 0
@@ -161,7 +161,7 @@ loop:
 	for {
 		event, ok := <-watcher.ResultChan()
 		if !ok {
-			klog.Warningf("Result channel for %s was closed", w.name)
+			klog.InfoS("Result channel was closed", "name", w.name)
 			return
 		}
 		switch event.Type {

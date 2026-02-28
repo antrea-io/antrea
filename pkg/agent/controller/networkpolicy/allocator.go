@@ -170,7 +170,7 @@ func (a *idAllocator) processDeleteQueueItem() bool {
 
 	rule, exists, err := a.getRuleFromAsyncCache(key)
 	if !exists {
-		klog.Warningf("Rule with id %v is not present in the async rule cache", key)
+		klog.InfoS("Rule is not present in the async rule cache", "ruleID", key)
 		return true
 	}
 	if err != nil {

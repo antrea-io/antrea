@@ -289,7 +289,7 @@ func (c *Controller) checkTraceflowStatus(tf *crdv1beta1.Traceflow) error {
 					} else if len(pods) > 0 {
 						pod, ok := pods[0].(*corev1.Pod)
 						if !ok {
-							klog.Warningf("Invalid Pod obj in cache")
+							klog.ErrorS(nil, "Invalid Pod obj in cache")
 						} else {
 							tf.Status.Results[i].Observations[j].Pod = fmt.Sprintf("%s/%s", pod.Namespace, pod.Name)
 						}
