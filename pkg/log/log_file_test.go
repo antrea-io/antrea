@@ -68,6 +68,7 @@ func testLogging() {
 	// Log 100 lines, ~100K bytes.
 	for i := 0; i < 100; i++ {
 		klog.Infof("%d: %s", i, string(line))
+		klog.Errorf("%d: %s", i, string(line))
 	}
 	FlushLogs()
 }
@@ -97,7 +98,7 @@ func TestKlogFileLimits(t *testing.T) {
 	}
 
 	infoLogFileNum := 0
-	warningLogFileNum := 0
+	errorLogFileNum := 0
 	validateFn := func() {
 		f, err := os.Open(testLogDir)
 		if err != nil {
@@ -112,7 +113,7 @@ func TestKlogFileLimits(t *testing.T) {
 		f.Close()
 
 		infoLogFiles := []os.FileInfo{}
-		warningLogFiles := []os.FileInfo{}
+		errorLogFiles := []os.FileInfo{}
 		for _, file := range allFiles {
 			if !file.Mode().IsRegular() {
 				// Skip dir, symbol link, etc.
@@ -123,11 +124,10 @@ func TestKlogFileLimits(t *testing.T) {
 			}
 			if strings.Contains(file.Name(), ".log.INFO.") {
 				infoLogFiles = append(infoLogFiles, file)
-			} else if strings.Contains(file.Name(), ".log.WARNING.") {
-				warningLogFiles = append(warningLogFiles, file)
 			} else if strings.Contains(file.Name(), ".log.ERROR.") {
-				// The test should not generate many error logs to
-				// avoid too many messages in the test console logs.
+				errorLogFiles = append(errorLogFiles, file)
+			} else if strings.Contains(file.Name(), ".log.WARNING.") {
+				// Skip WARNING logs - not testing deprecated klog.Warning
 			} else {
 				continue
 			}
@@ -135,18 +135,18 @@ func TestKlogFileLimits(t *testing.T) {
 			t.Logf("Log file %s, size %d", file.Name(), file.Size())
 		}
 		infoLogFileNum = len(infoLogFiles)
-		warningLogFileNum = len(warningLogFiles)
+		errorLogFileNum = len(errorLogFiles)
 	}
 
 	validateFn()
 	assert.Greater(t, infoLogFileNum, testMaxNum, "info log file number before checking")
-	assert.Greater(t, warningLogFileNum, testMaxNum, "warning log file number before checking")
-	t.Logf("INFO log file number: %d, WARNING log file number: %d", infoLogFileNum, warningLogFileNum)
+	assert.Greater(t, errorLogFileNum, testMaxNum, "error log file number before checking")
+	t.Logf("INFO log file number: %d, ERROR log file number: %d", infoLogFileNum, errorLogFileNum)
 	// Call checkLogFiles() to delete extra files.
 	checkLogFiles()
 	validateFn()
 	assert.Equal(t, testMaxNum, infoLogFileNum, "info log file number after checking")
-	assert.Equal(t, testMaxNum, warningLogFileNum, "warning log file number after checking")
+	assert.Equal(t, testMaxNum, errorLogFileNum, "error log file number after checking")
 }
 
 func TestFlags(t *testing.T) {
