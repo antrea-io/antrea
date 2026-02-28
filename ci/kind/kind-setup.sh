@@ -442,12 +442,28 @@ function delete_vlan_subnets {
   fi
 }
 
+function force_remove_docker_network {
+  local network="$1"
+  if ! docker network inspect "$network" >/dev/null 2>&1; then
+    return
+  fi
+  local containers
+  containers=$(docker network inspect "$network" --format '{{range .Containers}}{{.Name}} {{end}}' 2>/dev/null)
+  for c in $containers; do
+    docker network disconnect -f "$network" "$c" 2>/dev/null || true
+  done
+  docker network rm "$network" >/dev/null 2>&1
+}
+
 function delete_network_by_filter {
   local networks=$(docker network ls -f name="$1" --format '{{.Name}}')
-  if [[ -n $networks ]]; then
-    docker network rm $networks > /dev/null 2>&1
-    echo "Deleted networks: $networks"
-  fi
+  for network in $networks; do
+    if force_remove_docker_network "$network"; then
+      echo "Deleted network: $network"
+    else
+      echoerr "Failed to delete network: $network"
+    fi
+  done
 }
 
 function delete_networks {
@@ -493,14 +509,6 @@ function create {
   if [[ $ANTREA_CNI != true ]] && [[ $ENCAP_MODE != "" ]]; then
     echoerr "Using --encap-mode without --antrea-cni has no effect"
   fi
-
-  set +e
-  kind get clusters | grep -x "$cluster_name" > /dev/null 2>&1
-  if [[ $? -eq 0 ]]; then
-    echoerr "cluster $cluster_name already created"
-    exit 0
-  fi
-  set -e
 
   config_file="/tmp/kind.yml"
   cat <<EOF > $config_file
@@ -890,6 +898,11 @@ if [[ $ACTION == "create" ]]; then
         exit 1
     fi
 
+    if kind get clusters 2>/dev/null | grep -qx "$CLUSTER_NAME"; then
+        echoerr "cluster $CLUSTER_NAME already created"
+        exit 0
+    fi
+
     # Create the docker bridge network used as the primary network for the kind cluster. As long as
     # we use the expected name, kind will use our network.
     # We mostly replicate what is in:
@@ -920,6 +933,7 @@ if [[ $ACTION == "create" ]]; then
         # Reserve IPs after 192.168.240.63 for e2e tests.
         docker_network_args+=("--ip-range" "192.168.240.0/26")
     fi
+    force_remove_docker_network "$CLUSTER_NAME" || true
     echo "Creating docker network $CLUSTER_NAME with args: ${docker_network_args[@]}"
     docker network create "${docker_network_args[@]}" "$CLUSTER_NAME"
     create

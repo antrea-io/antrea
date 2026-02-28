@@ -48,11 +48,16 @@ test_only=false
 
 function quit {
   result=$?
-  if [[ $setup_only || $test_only ]]; then
+  if [[ "$setup_only" == "true" || "$test_only" == "true" ]]; then
     exit $result
   fi
   echoerr "Cleaning testbed"
   $TESTBED_CMD destroy kind
+}
+
+function cleanup_stale_kind {
+  echoerr "Cleaning up stale kind cluster and Docker networks if any"
+  $TESTBED_CMD destroy kind 2>/dev/null || true
 }
 
 while [[ $# -gt 0 ]]
@@ -121,7 +126,8 @@ function run_test {
 }
 
 echo "======== Testing Antrea-native secondary network support =========="
-if [[ $test_only == "false" ]];then
+if [[ "$test_only" == "false" ]];then
+  cleanup_stale_kind
   setup_cluster "--extra-networks \"$EXTRA_NETWORK\" --images \"$IMAGES\" --num-workers 1"
 fi
 run_test
