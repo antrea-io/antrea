@@ -113,6 +113,7 @@ func (n *SubscribableChannel) Notify(e interface{}) bool {
 
 func (n *SubscribableChannel) Run(stopCh <-chan struct{}) {
 	klog.InfoS("Starting SubscribableChannel", "name", n.name)
+	subscribers := make([]subscriber, 0)
 	for {
 		select {
 		case <-stopCh:
@@ -120,11 +121,12 @@ func (n *SubscribableChannel) Run(stopCh <-chan struct{}) {
 			return
 		case obj := <-n.eventCh:
 			n.subscribersMutex.Lock()
-			subscribers := slices.Clone(n.subscribers)
+			subscribers = append(subscribers[:0], n.subscribers...)
 			n.subscribersMutex.Unlock()
 			for _, h := range subscribers {
 				h.handler(obj)
 			}
+			subscribers = subscribers[:0]
 		}
 	}
 }

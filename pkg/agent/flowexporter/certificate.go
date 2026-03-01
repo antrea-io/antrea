@@ -25,7 +25,7 @@ import (
 const (
 	caConfigMapNamespace  = "flow-aggregator"
 	caConfigMapName       = "flow-aggregator-ca"
-	caAConfigMapKey       = "ca.crt"
+	caConfigMapKey        = "ca.crt"
 	clientSecretNamespace = "flow-aggregator"
 	// #nosec G101: false positive triggered by variable name which includes "Secret"
 	clientSecretName = "flow-aggregator-client-tls"
@@ -36,10 +36,10 @@ func getCACert(ctx context.Context, k8sClient kubernetes.Interface, namespace, n
 	if err != nil {
 		return nil, fmt.Errorf("error getting ConfigMap %s: %w", name, err)
 	}
-	if caConfigMap.Data == nil || caConfigMap.Data[caAConfigMapKey] == "" {
+	if caConfigMap.Data == nil || caConfigMap.Data[caConfigMapKey] == "" {
 		return nil, fmt.Errorf("no data in %s ConfigMap", name)
 	}
-	return []byte(caConfigMap.Data[caAConfigMapKey]), nil
+	return []byte(caConfigMap.Data[caConfigMapKey]), nil
 }
 
 func getClientCertKey(ctx context.Context, k8sClient kubernetes.Interface, namespace, name string) ([]byte, []byte, error) {
@@ -48,7 +48,7 @@ func getClientCertKey(ctx context.Context, k8sClient kubernetes.Interface, names
 		return nil, nil, fmt.Errorf("error getting Secret %s: %w", name, err)
 	}
 	if clientSecret.Data == nil || clientSecret.Data["tls.crt"] == nil || clientSecret.Data["tls.key"] == nil {
-		return nil, nil, fmt.Errorf("error getting data from Secret %s: %w", name, err)
+		return nil, nil, fmt.Errorf("missing tls.crt or tls.key in Secret %s/%s", namespace, name)
 	}
 	return clientSecret.Data["tls.crt"], clientSecret.Data["tls.key"], nil
 }

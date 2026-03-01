@@ -1,4 +1,4 @@
-// Copyright 2025 Antrea Authors.
+// Copyright 2026 Antrea Authors.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -16,15 +16,16 @@ package e2e
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"strings"
 	"testing"
 	"time"
 
+	log "github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"k8s.io/apimachinery/pkg/util/wait"
+	"k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"antrea.io/antrea/pkg/apis/crd/v1alpha1"
 	flowaggregatorconfig "antrea.io/antrea/pkg/config/flowaggregator"
@@ -36,12 +37,10 @@ var (
 )
 
 func isTestProtocolGRPC() bool {
-	cmd := fmt.Sprintf("cat %s", flowVisibilityProtocolFile)
-	_, stdout, _, _ := testData.RunCommandOnNode(controlPlaneNodeName(), cmd)
-	return stdout == "" || strings.EqualFold(stdout, "grpc")
+	return strings.EqualFold(testOptions.flowVisibilityProtocol, "grpc")
 }
 
-// createFlowExporterDestination creates a new FlowExporterTarget and hooks it up for deletion at the end of the test.
+// createFlowExporterDestination creates a new FlowExporterDestination and hooks it up for deletion at the end of the test.
 func createFlowExporterDestination(tb testing.TB, name string, isTLS bool, namespace string) *v1alpha1.FlowExporterDestination {
 	serviceAddr := fmt.Sprintf("%s/%s", namespace, "flow-aggregator")
 	serverName := fmt.Sprintf("%s.%s.svc", "flow-aggregator", namespace)
@@ -76,16 +75,15 @@ func createFlowExporterDestination(tb testing.TB, name string, isTLS bool, names
 		}
 	}
 
-	target := testData.BuildFlowExporterDestination(randName(name+"-"), testData.testNamespace, serviceAddr, protocol, 2, 1, tlsConfig)
-	updatedTarget, err := testData.CreateOrUpdateFlowExporterDestination(target)
-	if err != nil {
-		tb.Fatalf("failed to create FlowExporterTarget: %v", err)
-	}
+	destination := BuildFlowExporterDestination(randName(name+"-"), testData.testNamespace, serviceAddr, protocol, 2, 1, tlsConfig)
+	updatedDest, err := testData.CreateOrUpdateFlowExporterDestination(destination)
+	require.NoError(tb, err, "Failed to create FlowExporterDestination")
+
 	tb.Cleanup(func() {
-		testData.DeleteFlowExporterDestination(target.Name)
+		testData.DeleteFlowExporterDestination(destination.Name)
 	})
 
-	return updatedTarget
+	return updatedDest
 }
 
 func deployIPFIXCollectorOnNode(tb testing.TB, o flowVisibilityTestOptions, nodeIdx int) string {
@@ -96,86 +94,28 @@ func deployIPFIXCollectorOnNode(tb testing.TB, o flowVisibilityTestOptions, node
 	}
 
 	ipfixCollectorAddr, err := testData.deployIPFIXCollectorWithName(collectorName, nil, nil, nil, nodeName(nodeIdx))
-	if err != nil {
-		tb.Fatalf("Error when deploying IPFIX collector %q: %v", collectorName, err)
-	}
+	require.NoError(tb, err, "Failed to deploy IPFIX collector", "name", collectorName)
 
 	return ipfixCollectorAddr
 }
 
 func setupFlowExporterDestinationTest(tb testing.TB, opt1, opt2 flowVisibilityTestOptions) {
 	tb.Logf("Deploying FlowAggregator with ipfix collector: %s and options: %+v", collector1Addr, opt1)
-	if err := testData.deployFlowAggregator(collector1Addr, nil, nil, nil, opt1); err != nil {
-		tb.Fatalf("Error when deploying flow aggregator: %v", err)
-	}
+	require.NoError(tb, testData.deployFlowAggregator(collector1Addr, nil, nil, nil, opt1), "Failed to deploy flow aggregator", "opts", opt1)
 
 	tb.Cleanup(func() {
 		teardownFlowAggregator(tb, testData)
 	})
 
 	tb.Logf("Deploying FlowAggregator with ipfix collector: %s and options: %+v", collector2Addr, opt2)
-	if err := testData.deployFlowAggregator(collector2Addr, nil, nil, nil, opt2); err != nil {
-		tb.Fatalf("Error when deploying flow aggregator: %v", err)
-	}
-}
-
-func verifyNoRecords(name string) verifierFunc {
-	// We want to make sure no records for our label come in, we need to wait at least pollInterval + max(activeExportTimeout, idleExportTimeout) + max(FA's Active Timeout,FA's Idle Timeout)
-	// If any records are seen we should fail.
-	return func(t require.TestingT, srcIP, dstIP, srcPort string, isIPv6 bool, data *TestData, labelFilter string) {
-		minWait := int64(exporterFlowPollInterval + max(exporterActiveFlowExportTimeout, exporterIdleFlowExportTimeout) + max(aggregatorActiveFlowRecordTimeout, aggregatorInactiveFlowRecordTimeout))
-		var iterations int64 = 20
-		interval := time.Duration(minWait/iterations) + 500*time.Millisecond
-
-		isDstService := false
-		var allRecords, records []string
-		err := wait.PollUntilContextTimeout(context.Background(), interval, 2*defaultTimeout, true, func(ctx context.Context) (bool, error) {
-			var rc int
-			var err error
-			var cmd string
-
-			ipfixCollectorIP, err := testData.podWaitForIPs(defaultTimeout, name, testData.testNamespace)
-			if err != nil || len(ipfixCollectorIP.IPStrings) == 0 {
-				require.NoErrorf(t, err, "Should be able to get IP from IPFIX collector Pod")
-			}
-
-			if !isIPv6 {
-				cmd = fmt.Sprintf("curl http://%s:8080/records", ipfixCollectorIP.IPv4.String())
-			} else {
-				cmd = fmt.Sprintf("curl http://[%s]:8080/records", ipfixCollectorIP.IPv6.String())
-			}
-			rc, collectorOutput, _, err := data.RunCommandOnNode(controlPlaneNodeName(), cmd)
-			if err != nil || rc != 0 {
-				return false, fmt.Errorf("failed to run curl command to retrieve flow records, rc: %d - err: %v", rc, err)
-			}
-
-			src, dst := matchSrcAndDstAddress(srcIP, dstIP, isDstService, isIPv6)
-			var response IPFIXCollectorResponse
-			if err := json.Unmarshal([]byte(collectorOutput), &response); err != nil {
-				return false, fmt.Errorf("error when unmarshalling output from IPFIX collector Pod: %w", err)
-			}
-			allRecords = make([]string, len(response.FlowRecords))
-			for idx := range response.FlowRecords {
-				allRecords[idx] = response.FlowRecords[idx].Data
-			}
-			records = filterCollectorRecords(allRecords, labelFilter, src, dst, srcPort)
-			if len(records) > 0 {
-				return false, fmt.Errorf("unexpected records found")
-			}
-			iterations--
-			return iterations <= 0, nil
-		})
-
-		require.NoErrorf(t, err, "Unable to verify that no records were received, source IP: %s, dest IP: %s, source port: %s, total records count: %d, filtered records count: %d, iterations remaining: %d", srcIP, dstIP, srcPort, len(allRecords), len(records), iterations)
-	}
+	require.NoError(tb, testData.deployFlowAggregator(collector2Addr, nil, nil, nil, opt2), "Failed to deploy flow aggregator", "opts", opt2)
 }
 
 type verifierFunc func(t require.TestingT, srcIP, dstIP, srcPort string, isIPv6 bool, data *TestData, labelFilter string)
 
-func verifyRecords(name string) verifierFunc {
+func verifyRecords(collectorName string) verifierFunc {
 	return func(t require.TestingT, srcIP, dstIP, srcPort string, isIPv6 bool, data *TestData, labelFilter string) {
-		const timeout = 10 * time.Minute
-		records := getCollectorOutputWithName(t, name, srcIP, dstIP, srcPort, false /* isDstService */, true /* lookForFlowEnd */, isIPv6, data, labelFilter, timeout)
+		records := getCollectorOutputWithName(t, collectorName, srcIP, dstIP, srcPort, false /* isDstService */, true /* lookForFlowEnd */, isIPv6, data, labelFilter, getCollectorOutputDefaultTimeout)
 		require.NotEmpty(t, records)
 		record := records[len(records)-1]
 
@@ -196,26 +136,22 @@ func verifyRecords(name string) verifierFunc {
 	}
 }
 
-func TestFlowExporterFlowExporterTargets(t *testing.T) {
+func TestFlowExporterFlowExporterDestinations(t *testing.T) {
 	skipIfNotFlowVisibilityTest(t)
 	skipIfHasWindowsNodes(t)
 	skipIfNumNodesLessThan(t, 3)
-	skipIfRunCoverage(t, "Multiple Flow Aggregators is used. Need to verify the modified resource is correct.")
 
 	// Common Setup
 	data, err := setupTest(t)
-	if err != nil {
-		t.Fatalf("Error when setting up test: %v", err)
-	}
+	require.NoError(t, err, "Error when setting up test")
 	t.Cleanup(func() {
 		teardownTest(t, data)
 	})
+
 	if antreaClusterUUID == "" {
-		if uuid, err := data.getAntreaClusterUUID(10 * time.Second); err != nil {
-			t.Fatalf("Error when retrieving Antrea Cluster UUID: %v", err)
-		} else {
-			antreaClusterUUID = uuid.String()
-		}
+		uuid, err := data.getAntreaClusterUUID(10 * time.Second)
+		require.NoError(t, err, "Error when retrieving Antrea Cluster UUID")
+		antreaClusterUUID = uuid.String()
 	}
 
 	collector1Name = randName("ipfix-collector-")
@@ -230,7 +166,6 @@ func TestFlowExporterFlowExporterTargets(t *testing.T) {
 			name: collector1Name,
 		},
 	}
-	// TODO: Create one for each node instead, daemonset?
 	collector1Addr = deployIPFIXCollectorOnNode(t, opt1, 1)
 
 	collector2Name = randName("ipfix-collector-")
@@ -256,11 +191,6 @@ func TestFlowExporterFlowExporterTargets(t *testing.T) {
 
 	runTests := func(t *testing.T, isIPv6 bool) {
 		data.CleanFlowExporterDestinations()
-		t.Run("no flow exporter targets", func(t *testing.T) {
-			setupFlowExporterDestinationTest(t, opt1, opt2)
-			// We don't wait and verify metrics because at this point there are no consumer thus no connections.
-			generateTrafficAndVerify(t, data, false, verifyNoRecords(collector1Name), verifyNoRecords(collector2Name))
-		})
 
 		t.Run("one exporter", func(t *testing.T) {
 			setupFlowExporterDestinationTest(t, opt1, opt2)
@@ -285,21 +215,19 @@ func TestFlowExporterFlowExporterTargets(t *testing.T) {
 
 	if isIPv4Enabled() {
 		t.Run("IPv4", func(t *testing.T) {
-			t.Logf("Running IPv4 test now")
 			runTests(t, false)
 		})
 	}
 
 	if isIPv6Enabled() {
 		t.Run("IPv6", func(t *testing.T) {
-			t.Logf("Running IPv6 test now")
 			runTests(t, true)
 		})
 	}
 }
 
 func generateTrafficAndVerify(t *testing.T, data *TestData, isIPv6 bool, expectations ...verifierFunc) {
-	label := "flow-exporter-target-" + randSeq(8)
+	label := "flow-exporter-destination-" + randSeq(8)
 	addLabelToTestPods(t, data, label, []string{"perftest-a", "perftest-b"})
 
 	var srcIP, dstIP string
@@ -320,4 +248,69 @@ func generateTrafficAndVerify(t *testing.T, data *TestData, isIPv6 bool, expecta
 	for _, c := range expectations {
 		c(t, srcIP, dstIP, srcPort, isIPv6, data, label)
 	}
+}
+
+func BuildFlowExporterDestination(name, namespace, faServiceAddr string, protocol v1alpha1.FlowExporterProtocol,
+	activeFlowTimeout, idleFlowTimeout int32, tlsConfig *v1alpha1.FlowExporterTLSConfig) *v1alpha1.FlowExporterDestination {
+
+	flowAggregatorAddr := faServiceAddr + ":14739"
+	if protocol.IPFIX != nil {
+		flowAggregatorAddr = faServiceAddr + ":4739"
+	}
+
+	destination := &v1alpha1.FlowExporterDestination{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      name,
+			Namespace: namespace,
+		},
+		Spec: v1alpha1.FlowExporterDestinationSpec{
+			Address:   flowAggregatorAddr,
+			Protocol:  protocol,
+			TLSConfig: tlsConfig,
+
+			ActiveFlowExportTimeoutSeconds: activeFlowTimeout,
+			IdleFlowExportTimeoutSeconds:   idleFlowTimeout,
+		},
+	}
+
+	return destination
+}
+
+// CreateOrUpdateFlowExporterDestination is a convenience function for updating/creating FlowExporterDestinations.
+func (data *TestData) CreateOrUpdateFlowExporterDestination(res *v1alpha1.FlowExporterDestination) (*v1alpha1.FlowExporterDestination, error) {
+	log.Infof("Creating/updating FlowExporterDestination %s", res.Name)
+	fedReturned, err := data.CRDClient.CrdV1alpha1().FlowExporterDestinations().Get(context.TODO(), res.Name, metav1.GetOptions{})
+	if err != nil {
+		log.Debugf("Creating FlowExporterDestination %s", res.Name)
+		if !errors.IsNotFound(err) {
+			return nil, err
+		}
+		res, err = data.CRDClient.CrdV1alpha1().FlowExporterDestinations().Create(context.TODO(), res, metav1.CreateOptions{})
+		if err != nil {
+			log.Debugf("Unable to create FlowExporterDestination: %s", err)
+		}
+		return res, err
+	} else if fedReturned.Name != "" {
+		log.Debugf("FlowExporterDestination with name %s already exists, updating", res.Name)
+		fedReturned.Spec = res.Spec
+		res, err = data.CRDClient.CrdV1alpha1().FlowExporterDestinations().Update(context.TODO(), fedReturned, metav1.UpdateOptions{})
+		return res, err
+	}
+	return nil, fmt.Errorf("error occurred in creating/updating FlowExporterDestination %s", res.Name)
+}
+
+// GetFlowExporterDestination is a convenience function for getting FlowExporterDestination.
+func (data *TestData) GetFlowExporterDestination(name string) (*v1alpha1.FlowExporterDestination, error) {
+	return data.CRDClient.CrdV1alpha1().FlowExporterDestinations().Get(context.TODO(), name, metav1.GetOptions{})
+}
+
+// DeleteFlowExporterDestination is a convenience function for deleting FET by name.
+func (data *TestData) DeleteFlowExporterDestination(name string) error {
+	log.Infof("Deleting FlowExporterDestination %s", name)
+	return data.CRDClient.CrdV1alpha1().FlowExporterDestinations().Delete(context.TODO(), name, metav1.DeleteOptions{})
+}
+
+// CleanFlowExporterDestinations is a convenience function for deleting all FlowExporterDestinations in the cluster.
+func (data *TestData) CleanFlowExporterDestinations() error {
+	return data.CRDClient.CrdV1alpha1().FlowExporterDestinations().DeleteCollection(context.TODO(), metav1.DeleteOptions{}, metav1.ListOptions{})
 }

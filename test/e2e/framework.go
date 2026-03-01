@@ -74,7 +74,7 @@ var AntreaConfigMap *corev1.ConfigMap
 
 var (
 	errConnectionLost = fmt.Errorf("http2: client connection lost")
-	errNoAggregators  = fmt.Errorf("No flow aggregators found")
+	errNoAggregators  = fmt.Errorf("no flow aggregators found")
 )
 
 const (
@@ -108,21 +108,20 @@ const (
 	agentContainerName          = "antrea-agent"
 	flowAggregatorContainerName = "flow-aggregator"
 
-	antreaYML                  = "antrea.yml"
-	antreaIPSecYML             = "antrea-ipsec.yml"
-	antreaCovYML               = "antrea-coverage.yml"
-	antreaIPSecCovYML          = "antrea-ipsec-coverage.yml"
-	flowAggregatorYML          = "flow-aggregator.yml"
-	flowAggregator1YML         = "flow-aggregator-1.yml"
-	flowAggregator2YML         = "flow-aggregator-2.yml"
-	flowVisibilityYML          = "flow-visibility.yml"
-	flowVisibilityTLSYML       = "flow-visibility-tls.yml"
-	flowVisibilityProtocolFile = "test-flow-visibility-protocol.txt"
-	chOperatorYML              = "clickhouse-operator-install-bundle.yml"
-	flowVisibilityCHPodName    = "chi-clickhouse-clickhouse-0-0-0"
-	flowVisibilityNamespace    = "flow-visibility"
-	defaultBridgeName          = "br-int"
-	monitoringNamespace        = "monitoring"
+	antreaYML               = "antrea.yml"
+	antreaIPSecYML          = "antrea-ipsec.yml"
+	antreaCovYML            = "antrea-coverage.yml"
+	antreaIPSecCovYML       = "antrea-ipsec-coverage.yml"
+	flowAggregatorYML       = "flow-aggregator.yml"
+	flowAggregator1YML      = "flow-aggregator-1.yml"
+	flowAggregator2YML      = "flow-aggregator-2.yml"
+	flowVisibilityYML       = "flow-visibility.yml"
+	flowVisibilityTLSYML    = "flow-visibility-tls.yml"
+	chOperatorYML           = "clickhouse-operator-install-bundle.yml"
+	flowVisibilityCHPodName = "chi-clickhouse-clickhouse-0-0-0"
+	flowVisibilityNamespace = "flow-visibility"
+	defaultBridgeName       = "br-int"
+	monitoringNamespace     = "monitoring"
 	// #nosec G101: not credentials
 	flowAggregatorIPFIXClientTLSSecretName = "ipfix-client-cert"
 	// #nosec G101: not credentials
@@ -243,6 +242,8 @@ type TestOptions struct {
 	// TODO: Introduce a BGP router implementation that can be configured remotely over networking to replace FRR.
 	// This would allow the e2e tests for BGPPolicy to be run in environments other than just a Kind cluster.
 	externalFRRCID string
+
+	flowVisibilityProtocol string
 }
 
 type flowVisibilityIPFIXTestOptions struct {

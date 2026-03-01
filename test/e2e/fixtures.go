@@ -221,14 +221,8 @@ func skipIfProxyAllDisabled(t *testing.T, data *TestData) {
 	}
 }
 
-func skipIfFlowExportProtocolIsNotGRPC(t *testing.T, data *TestData) {
-	cmd := fmt.Sprintf("cat %s", flowVisibilityProtocolFile)
-	_, stdout, _, err := data.RunCommandOnNode(controlPlaneNodeName(), cmd)
-	if err != nil {
-		t.Fatalf("Error getting flow visibility protocol file from control plane node: %v", err)
-	}
-	// gRPC is default. If the file doesn't exist assume gRPC
-	if stdout != "" && !strings.EqualFold(stdout, "grpc") {
+func skipIfFlowExportProtocolIsNotGRPC(t *testing.T) {
+	if !strings.EqualFold(testOptions.flowVisibilityProtocol, "grpc") {
 		t.Skip("Skipping test because Flow Exporter does not use gRPC")
 	}
 }
@@ -712,6 +706,7 @@ func testMain(m *testing.M) int {
 	flag.StringVar(&testOptions.externalFRRIPs, "external-frr-ips", "", "IP addresses of external FRR, at most one IP per IP family")
 	flag.StringVar(&testOptions.externalFRRCID, "external-frr-cid", "", "Container ID of external FRR")
 	flag.StringVar(&testOptions.vlanSubnets, "vlan-subnets", "", "ID and IP subnets of the VLAN network the Nodes reside in, at most one subnet per IP family")
+	flag.StringVar(&testOptions.flowVisibilityProtocol, "flow-visibility-protocol", "grpc", "Protocol to use between FlowExporter (Agent) and FlowAggregatior: either grpc (default) or ipfix.")
 	flag.Parse()
 
 	cleanupLogging := testOptions.setupLogging()

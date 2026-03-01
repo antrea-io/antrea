@@ -417,7 +417,7 @@ function run_test {
 
   if $flow_visibility; then
       timeout="45m"
-      flow_visibility_args="-run=^(TestFlowExporter|TestFlowAggregator) --flow-visibility"
+      flow_visibility_args="-run=^(TestFlowExporter|TestFlowAggregator) --flow-visibility --flow-visibility-protocol=$flow_visibility_protocol"
       # This is needed so that the FlowAggregator is already configured to mount the Secrets
       # necessary for (m)TLS testing. The Secret names must match the ones expected by the e2e tests.
       coverage_flag=""
@@ -438,8 +438,6 @@ function run_test {
       sed -i -e "s|image: altinity/clickhouse-operator:0.21.0|image: antrea/clickhouse-operator:0.21.0|g" "$CH_OPERATOR_YML"
       sed -i -e "s|image: altinity/metrics-exporter:0.21.0|image: antrea/metrics-exporter:0.21.0|g" "$CH_OPERATOR_YML"
       cat "$CH_OPERATOR_YML" | docker exec -i kind-control-plane dd of=/root/clickhouse-operator-install-bundle.yml
-
-      printf '%s' "$flow_visibility_protocol" | docker exec -i kind-control-plane dd of=/root/test-flow-visibility-protocol.txt
   fi
 
   if [[ "$kube_proxy_mode" == "none" ]]; then

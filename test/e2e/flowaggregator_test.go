@@ -349,7 +349,7 @@ func TestFlowAggregatorProxyMode(t *testing.T) {
 
 		// UIDs are only supported when using gRPC between FE and FA.
 		if k8sUIDsInsteadOfNames {
-			skipIfFlowExportProtocolIsNotGRPC(t, data)
+			skipIfFlowExportProtocolIsNotGRPC(t)
 		}
 
 		k8sUtils, err = NewKubernetesUtils(data)
@@ -1943,7 +1943,7 @@ func getAndCheckFlowAggregatorMetrics(t *testing.T, data *TestData, withClickHou
 		hasExpectedClickHouseExporter = (withClickHouseExporter && hasAllClickHouseExporter) || (!withClickHouseExporter && !hasAnyClickHouseExporter)
 
 		if numConnToCollector != int64(clusterInfo.numNodes) || !hasExpectedClickHouseExporter || !hasExpectedIPFIXExporter || numRecordsExported == 0 {
-			t.Logf("Metrics are not correct. Current metrics: NumConnToCollector=%d, NumRecordsExported=%d, HasExpectedClickHouseExporter=%v, HasExpectedIPFIXExporter=%v, Expecting ClickHouseExporter=%v, IPFIXExporter=true", numConnToCollector, numRecordsExported, hasExpectedClickHouseExporter, hasExpectedIPFIXExporter, withClickHouseExporter)
+			t.Logf("Metrics are not correct. Current metrics: NumConnToCollector=%d, NumRecordsExported=%d, HasExpectedClickHouseExporter=%v, HasExpectedIPFIXExporter=%v. Expecting ClickHouseExporter=%v, IPFIXExporter=true", numConnToCollector, numRecordsExported, hasExpectedClickHouseExporter, hasExpectedIPFIXExporter, withClickHouseExporter)
 			return false, nil
 		}
 		return true, nil

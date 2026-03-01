@@ -408,7 +408,9 @@ func ServiceAddressToDNS(address string) (string, error) {
 }
 
 func (fe *FlowExporter) createDestinationFromResource(res *api.FlowExporterDestination) (*Destination, error) {
-	validateResource(res)
+	if err := validateResource(res); err != nil {
+		return nil, fmt.Errorf("failed resource validation: %w", err)
+	}
 	protocol := getExporterProtocol(res.Spec.Protocol)
 	exp := fe.createExporter(protocol)
 	if exp == nil {
