@@ -191,12 +191,13 @@ func TestDumpIPToolInfo(t *testing.T) {
 
 func TestDumpSysctlNetIF(t *testing.T) {
 	tests := []struct {
-		name            string
-		interfaces      map[string]map[string]string
-		expectedContent []string
-		notExpected     []string
-		sysctlPathEmpty bool
-		expectedErr     string
+		name             string
+		interfaces       map[string]map[string]string
+		unreadableParams map[string][]string // params to create as dirs to trigger a non-ErrNotExist error
+		expectedContent  []string
+		notExpected      []string
+		sysctlPathEmpty  bool
+		expectedErr      string
 	}{
 		{
 			name: "reads rp_filter, arp_ignore and arp_announce for all interfaces",
@@ -238,6 +239,18 @@ func TestDumpSysctlNetIF(t *testing.T) {
 			},
 		},
 		{
+			name: "non-ErrNotExist read error is returned with interface and param context",
+			interfaces: map[string]map[string]string{
+				"eth0": {"rp_filter": "1"},
+			},
+			// Creating arp_ignore as a directory makes os.ReadFile return EISDIR,
+			// which is not ErrNotExist and must not be silently skipped.
+			unreadableParams: map[string][]string{
+				"eth0": {"arp_ignore"},
+			},
+			expectedErr: "error when reading sysctl parameter arp_ignore for interface eth0",
+		},
+		{
 			name:            "returns error when sysctl path does not exist",
 			sysctlPathEmpty: true,
 			expectedErr:     "error when reading sysctl net IPv4 conf",
@@ -259,6 +272,11 @@ func TestDumpSysctlNetIF(t *testing.T) {
 					require.NoError(t, os.MkdirAll(ifaceDir, 0755))
 					for param, value := range params {
 						require.NoError(t, os.WriteFile(filepath.Join(ifaceDir, param), []byte(value+"\n"), 0644))
+					}
+				}
+				for iface, params := range tc.unreadableParams {
+					for _, param := range params {
+						require.NoError(t, os.MkdirAll(filepath.Join(tmpDir, iface, param), 0755))
 					}
 				}
 			}

@@ -19,6 +19,7 @@ package support
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"os"
 	"path"
@@ -170,7 +171,10 @@ func (d *agentDumper) dumpSysctlNetIF(basedir string) error {
 		for _, param := range params {
 			data, err := os.ReadFile(filepath.Join(sysctlNetIPv4ConfPath, iface, param))
 			if err != nil {
-				continue
+				if errors.Is(err, os.ErrNotExist) {
+					continue
+				}
+				return fmt.Errorf("error when reading sysctl parameter %s for interface %s: %w", param, iface, err)
 			}
 			fmt.Fprintf(&buf, "net.ipv4.conf.%s.%s = %s\n", iface, param, strings.TrimSpace(string(data)))
 		}
