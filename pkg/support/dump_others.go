@@ -20,6 +20,7 @@ package support
 import (
 	"bytes"
 	"fmt"
+	"os"
 	"path"
 	"path/filepath"
 	"strings"
@@ -73,6 +74,9 @@ func (d *agentDumper) DumpHostNetworkInfo(basedir string) error {
 	if err := d.dumpIPToolInfo(basedir); err != nil {
 		return err
 	}
+	if err := d.dumpSysctlNetIF(basedir); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -120,19 +124,58 @@ func (d *agentDumper) dumpNFTables(basedir string) error {
 }
 
 func (d *agentDumper) dumpIPToolInfo(basedir string) error {
-	dump := func(name string) error {
-		output, err := d.executor.Command("ip", name).CombinedOutput()
-		if err != nil {
-			return fmt.Errorf("error when dumping %s: %w", name, err)
-		}
-		return writeFile(d.fs, filepath.Join(basedir, name), name, output)
+	type ipCmd struct {
+		fileName string
+		args     []string
 	}
-	for _, item := range []string{"route", "link", "address"} {
+	dump := func(cmd ipCmd) error {
+		output, err := d.executor.Command("ip", cmd.args...).CombinedOutput()
+		if err != nil {
+			return fmt.Errorf("error when dumping ip %s: %w", strings.Join(cmd.args, " "), err)
+		}
+		return writeFile(d.fs, filepath.Join(basedir, cmd.fileName), cmd.fileName, output)
+	}
+	for _, item := range []ipCmd{
+		{fileName: "route", args: []string{"route"}},
+		{fileName: "route-all", args: []string{"route", "show", "table", "all"}},
+		{fileName: "rule", args: []string{"rule"}},
+		{fileName: "link", args: []string{"link"}},
+		{fileName: "address", args: []string{"address"}},
+	} {
 		if err := dump(item); err != nil {
 			return err
 		}
 	}
 	return nil
+}
+
+// sysctlNetIPv4ConfPath is the path to the per-interface IPv4 sysctl
+// parameters. It is a variable to allow overriding in tests.
+var sysctlNetIPv4ConfPath = "/proc/sys/net/ipv4/conf"
+
+// dumpSysctlNetIF reads the rp_filter, arp_ignore, and arp_announce sysctl
+// parameters for all network interfaces and writes them to a file.
+func (d *agentDumper) dumpSysctlNetIF(basedir string) error {
+	entries, err := os.ReadDir(sysctlNetIPv4ConfPath)
+	if err != nil {
+		return fmt.Errorf("error when reading sysctl net IPv4 conf: %w", err)
+	}
+	params := []string{"rp_filter", "arp_ignore", "arp_announce"}
+	var buf bytes.Buffer
+	for _, entry := range entries {
+		if !entry.IsDir() {
+			continue
+		}
+		iface := entry.Name()
+		for _, param := range params {
+			data, err := os.ReadFile(filepath.Join(sysctlNetIPv4ConfPath, iface, param))
+			if err != nil {
+				continue
+			}
+			fmt.Fprintf(&buf, "net.ipv4.conf.%s.%s = %s\n", iface, param, strings.TrimSpace(string(data)))
+		}
+	}
+	return writeFile(d.fs, filepath.Join(basedir, "sysctl-net"), "sysctl-net", buf.Bytes())
 }
 
 func (d *agentDumper) DumpMemberlist(basedir string) error {
