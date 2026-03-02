@@ -200,7 +200,7 @@ func NewFlowAggregator(
 		fa.ipfixExporter = newIPFIXExporter(clusterUUID, clusterID, opt, registry)
 	}
 
-	klog.InfoS("FlowAggregator initialized", "mode", opt.AggregatorMode, "clusterID", fa.clusterID)
+	klog.InfoS("FlowAggregator initialized - ", "mode", opt.AggregatorMode, "clusterID", fa.clusterID)
 	return fa, nil
 }
 
