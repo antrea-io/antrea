@@ -1305,7 +1305,7 @@ func (c *Client) restoreIptablesData(podCIDR *net.IPNet,
 		"-m", "comment", "--comment", `"Antrea: mark LOCAL output packets"`,
 		"-m", "addrtype", "--src-type", "LOCAL",
 		"-o", c.nodeConfig.GatewayConfig.Name,
-		"-j", iptables.MarkTarget, "--or-mark", fmt.Sprintf("%#08x", types.HostLocalSourceMark),
+		"-j", iptables.MarkTarget, "--set-xmark", fmt.Sprintf("%#08x/%#08x", types.HostLocalSourceMark, types.HostLocalSourceMark),
 	}...)
 	if c.connectUplinkToBridge {
 		writeLine(iptablesData, []string{
@@ -1313,7 +1313,7 @@ func (c *Client) restoreIptablesData(podCIDR *net.IPNet,
 			"-m", "comment", "--comment", `"Antrea: mark LOCAL output packets"`,
 			"-m", "addrtype", "--src-type", "LOCAL",
 			"-o", c.nodeConfig.OVSBridge,
-			"-j", iptables.MarkTarget, "--or-mark", fmt.Sprintf("%#08x", types.HostLocalSourceMark),
+			"-j", iptables.MarkTarget, "--set-xmark", fmt.Sprintf("%#08x/%#08x", types.HostLocalSourceMark, types.HostLocalSourceMark),
 		}...)
 	}
 	if c.egressEnabled && c.networkConfig.TrafficEncapMode == config.TrafficEncapModeHybrid {
