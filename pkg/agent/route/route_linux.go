@@ -393,14 +393,14 @@ func (c *Client) Initialize(nodeConfig *config.NodeConfig, done func()) error {
 		}
 	}
 
-	// In hybrid mode, traffic originating from remote Pod CIDRs is forwarded like this:
+	// In hybrid mode, or encap mode with WireGuard enabled, Egress traffic originating from remote Pod CIDRs is forwarded like this:
 	//     remote Pods -> tunnel (remote Node OVS) -> tunnel (local Node OVS) -> antrea-gw0 (local Node) -> external network.
 	//
 	// To ensure reply packets follow a symmetric path, Antrea uses policy routing on the local Node. However, the
 	// kernel's strict RPF check only validates source paths against the main routing table. Since the transport
 	// interface (not antrea‑gw0) is listed as the next-hop for these routes, strict RPF drops the reply packets
 	// (because policy routing is ignored by rp_filter). As a result, we set its rp_filter to loose mode (2).
-	if c.egressEnabled && c.networkConfig.TrafficEncapMode == config.TrafficEncapModeHybrid {
+	if c.shouldEnableEgressPolicyRouting() {
 		if err := util.EnsureRPFilterOnInterface(c.nodeConfig.GatewayConfig.Name, 2); err != nil {
 			return fmt.Errorf("failed to set %s rp_filter to 2 (loose mode): %w", c.nodeConfig.GatewayConfig.Name, err)
 		}
@@ -413,8 +413,8 @@ func (c *Client) Initialize(nodeConfig *config.NodeConfig, done func()) error {
 			return fmt.Errorf("failed to initialize Service IP routes: %v", err)
 		}
 	}
-	// Set up the policy routing ip rule to support Egress in hybrid mode.
-	if c.egressEnabled && c.networkConfig.TrafficEncapMode == config.TrafficEncapModeHybrid {
+	// Set up the policy routing ip rule to support Egress in hybrid mode or encap mode with WireGuard enabled.
+	if c.shouldEnableEgressPolicyRouting() {
 		if err := c.initEgressIPRules(); err != nil {
 			return fmt.Errorf("failed to initialize ip rules for Egress in hybrid mode: %w", err)
 		}
@@ -620,7 +620,7 @@ func (c *Client) syncNeighbor() error {
 			return restoreNeighbor(v.(*netlink.Neigh))
 		})
 	}
-	if c.egressEnabled && c.networkConfig.TrafficEncapMode == config.TrafficEncapModeHybrid {
+	if c.shouldEnableEgressPolicyRouting() {
 		c.egressNeighbors.Range(func(_, v interface{}) bool {
 			return restoreNeighbor(v.(*netlink.Neigh))
 		})
@@ -1000,7 +1000,7 @@ func (c *Client) syncIPTables(cleanupStaleJumpRules bool) error {
 		jumpRules = append(jumpRules, jumpRule{iptables.FilterTable, iptables.InputChain, antreaInputChain, "Antrea: jump to Antrea input rules", false})
 		jumpRules = append(jumpRules, jumpRule{iptables.FilterTable, iptables.OutputChain, antreaOutputChain, "Antrea: jump to Antrea output rules", false})
 	}
-	if c.egressEnabled && c.networkConfig.TrafficEncapMode == config.TrafficEncapModeHybrid {
+	if c.shouldEnableEgressPolicyRouting() {
 		jumpRules = append(jumpRules, jumpRule{iptables.MangleTable, iptables.PostRoutingChain, antreaPostRoutingChain, "Antrea: jump to Antrea postrouting rules", false})
 	}
 
@@ -1252,7 +1252,7 @@ func (c *Client) restoreIptablesData(podCIDR *net.IPNet,
 	writeLine(iptablesData, "*mangle")
 	writeLine(iptablesData, iptables.MakeChainLine(antreaPreRoutingChain))
 	writeLine(iptablesData, iptables.MakeChainLine(antreaOutputChain))
-	if c.egressEnabled && c.networkConfig.TrafficEncapMode == config.TrafficEncapModeHybrid {
+	if c.shouldEnableEgressPolicyRouting() {
 		writeLine(iptablesData, iptables.MakeChainLine(antreaPostRoutingChain))
 	}
 
@@ -1263,7 +1263,7 @@ func (c *Client) restoreIptablesData(podCIDR *net.IPNet,
 		c.writeEKSMangleRules(iptablesData)
 	}
 
-	if c.egressEnabled && c.networkConfig.TrafficEncapMode == config.TrafficEncapModeHybrid {
+	if c.shouldEnableEgressPolicyRouting() {
 		writeLine(iptablesData, []string{
 			"-A", antreaPreRoutingChain,
 			"-m", "comment", "--comment", `"Antrea: restore fwmark from connmark for reply Egress packets to remote Pods"`,
@@ -3498,4 +3498,14 @@ func (c *Client) deleteExternalIPConfigsIPsets(externalIP net.IP) error {
 	klog.V(4).InfoS("Deleted external IP from ipset", "set", setName, "externalIP", externalIPStr)
 	c.serviceIPSets[setName].Delete(externalIPStr)
 	return nil
+}
+
+// shouldEnableEgressPolicyRouting returns true when Egress is enabled and policy based routing
+// is needed for Egress traffic, such as when traffic encapsulation mode is hybrid or traffic
+// encryption mode is WireGuard. In those cases, Egress uses a tunnel path distinct from the common
+// Pod-to-Pod traffic path (e.g. Pod-to-Pod may go via routing in hybrid), so symmetric-path handling
+// for Egress reply packets is needed.
+func (c *Client) shouldEnableEgressPolicyRouting() bool {
+	return c.egressEnabled && (c.networkConfig.TrafficEncapMode == config.TrafficEncapModeHybrid ||
+		c.networkConfig.TrafficEncryptionMode == config.TrafficEncryptionModeWireGuard)
 }

@@ -374,6 +374,16 @@ func TestNeedsTunnelInterface(t *testing.T) {
 			expected: true,
 		},
 		{
+			name:     "Default encap mode with wireguard enabled",
+			nc:       &NetworkConfig{TunnelType: ovsconfig.GeneveTunnel, TrafficEncryptionMode: TrafficEncryptionModeWireGuard},
+			expected: true,
+		},
+		{
+			name:     "Hybrid mode",
+			nc:       &NetworkConfig{TrafficEncapMode: TrafficEncapModeHybrid, TunnelType: ovsconfig.GeneveTunnel},
+			expected: true,
+		},
+		{
 			name:     "networkPolicyOnly with Multicluster enabled",
 			nc:       &NetworkConfig{TrafficEncapMode: TrafficEncapModeNetworkPolicyOnly, EnableMulticlusterGW: true},
 			expected: true,

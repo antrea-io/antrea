@@ -76,9 +76,9 @@ one if your cluster supports IPv6.
 
 Antrea can leverage [WireGuard](https://www.wireguard.com) to encrypt Pod traffic
 between Nodes. WireGuard encryption works like another tunnel type, and when it
-is enabled the `tunnelType` parameter in the `antrea-agent` configuration file
-will be ignored. It is not applicable with `hybrid`, `noEncap` or `networkPolicyOnly`
-traffic modes.
+is enabled the `tunnelType` parameter in the antrea-agent configuration file will
+only affect other traffic types such as [Egress](egress.md). It is not applicable
+with `hybrid`, `noEncap` or `networkPolicyOnly` traffic modes.
 
 ### Prerequisites
 
@@ -128,3 +128,9 @@ After saving the yaml file change, deploy Antrea with:
 ```bash
 kubectl apply -f antrea.yml
 ```
+
+## Limitations
+
+- Traffic encryption does not apply to [Egress](egress.md) traffic between the
+source Node (where the Pod runs) and the Egress Node. Packets on this hop are
+forwarded unencrypted, regardless of `trafficEncryptionMode`.
