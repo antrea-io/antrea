@@ -195,7 +195,7 @@ func (f *featurePodConnectivity) getRequiredTables() []*Table {
 			tables = append(tables,
 				ARPSpoofGuardTable,
 				ARPResponderTable)
-			if f.enableMulticast {
+			if f.enableMulticast || f.enableTrafficControl {
 				tables = append(tables, PipelineIPClassifierTable)
 			}
 			if f.connectUplinkToBridge {
