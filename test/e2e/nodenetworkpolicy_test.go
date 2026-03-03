@@ -1108,7 +1108,7 @@ func testNodeACNPAuditLogging(t *testing.T, data *TestData) {
 	require.NoError(t, err)
 	require.NoError(t, data.waitForACNPRealized(t, acnp.Name, policyRealizedTimeout))
 
-	antreaPodName, err := data.getAntreaPodOnNode(nodes["x"])
+	antreaPodName, err := data.GetAntreaPodOnNode(nodes["x"])
 	require.NoError(t, err)
 
 	expectedLogPrefix := fmt.Sprintf("Antrea:O:Drop:%s:", randomLogLabel)

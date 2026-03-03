@@ -877,7 +877,7 @@ func (data *TestData) getServiceAssignedNode(node string, service *v1.Service) (
 	if node == "" {
 		node = nodeName(0)
 	}
-	agentPodName, err := data.getAntreaPodOnNode(node)
+	agentPodName, err := data.GetAntreaPodOnNode(node)
 	if err != nil {
 		return "", err
 	}

@@ -73,7 +73,7 @@ func testSupportBundle(name string, t *testing.T) {
 		podName = pod.Name
 		podPort = apis.AntreaControllerAPIPort
 	} else {
-		podName, err = data.getAntreaPodOnNode(controlPlaneNodeName())
+		podName, err = data.GetAntreaPodOnNode(controlPlaneNodeName())
 		require.NoError(t, err)
 		podPort = apis.AntreaAgentAPIPort
 	}

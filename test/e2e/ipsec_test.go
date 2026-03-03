@@ -84,7 +84,7 @@ func TestIPSec(t *testing.T) {
 }
 
 func (data *TestData) readSecurityAssociationsStatus(nodeName string) (up int, connecting int, isCertAuth bool, err error) {
-	antreaPodName, err := data.getAntreaPodOnNode(nodeName)
+	antreaPodName, err := data.GetAntreaPodOnNode(nodeName)
 	if err != nil {
 		return 0, 0, false, err
 	}
@@ -165,7 +165,7 @@ func testIPSecDeleteStaleTunnelPorts(t *testing.T, data *TestData) {
 	nodeName0 := nodeName(0)
 	nodeName1 := nodeName(1)
 	antreaPodName := func() string {
-		antreaPodName, err := data.getAntreaPodOnNode(nodeName0)
+		antreaPodName, err := data.GetAntreaPodOnNode(nodeName0)
 		if err != nil {
 			t.Fatalf("Error when retrieving the name of the Antrea Pod running on Node '%s': %v", nodeName0, err)
 		}
