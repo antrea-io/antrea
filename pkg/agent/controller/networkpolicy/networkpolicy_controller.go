@@ -540,6 +540,8 @@ func NewNetworkPolicyController(antreaClientGetter client.AntreaClientProvider,
 
 func (c *Controller) GetFQDNCache(fqdnFilter *querier.FQDNCacheFilter) []types.DnsCacheEntry {
 	cacheEntryList := []types.DnsCacheEntry{}
+	c.fqdnController.fqdnSelectorMutex.Lock()
+	defer c.fqdnController.fqdnSelectorMutex.Unlock()
 	for fqdn, dnsMeta := range c.fqdnController.dnsEntryCache {
 		for _, ipWithExpiration := range dnsMeta.responseIPs {
 			if fqdnFilter == nil || fqdnFilter.DomainRegex.MatchString(fqdn) {
