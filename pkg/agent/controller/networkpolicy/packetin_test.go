@@ -28,7 +28,6 @@ import (
 	k8stypes "k8s.io/apimachinery/pkg/types"
 
 	"antrea.io/antrea/pkg/agent/flowexporter/connection"
-	flowexporterutils "antrea.io/antrea/pkg/agent/flowexporter/utils"
 	"antrea.io/antrea/pkg/agent/openflow"
 	"antrea.io/antrea/pkg/agent/types"
 	"antrea.io/antrea/pkg/apis/controlplane/v1beta2"
@@ -176,30 +175,22 @@ func TestPublishDenyConnection(t *testing.T) {
 			name:    "ingress policy",
 			tableID: openflow.AntreaPolicyIngressRuleTable.GetID(),
 			expectedConn: &connection.Connection{
-				FlowKey:                        key,
-				OriginalDestinationAddress:     destinationAddr,
-				IngressNetworkPolicyName:       "my-policy",
-				IngressNetworkPolicyNamespace:  "ns",
-				IngressNetworkPolicyUID:        policyUID,
-				IngressNetworkPolicyType:       flowexporterutils.PolicyTypeAntreaClusterNetworkPolicy,
-				IngressNetworkPolicyRuleName:   "my-rule",
-				IngressNetworkPolicyRuleAction: flowexporterutils.NetworkPolicyRuleActionDrop,
-				OriginalBytes:                  20,
+				FlowKey:                    key,
+				OriginalDestinationAddress: destinationAddr,
+				Disposition:                actionDrop,
+				OriginalBytes:              20,
+				IngressRuleID:              0x11111111,
 			},
 		},
 		{
 			name:    "egress policy",
 			tableID: openflow.AntreaPolicyEgressRuleTable.GetID(),
 			expectedConn: &connection.Connection{
-				FlowKey:                       key,
-				OriginalDestinationAddress:    destinationAddr,
-				EgressNetworkPolicyName:       "my-policy",
-				EgressNetworkPolicyNamespace:  "ns",
-				EgressNetworkPolicyUID:        policyUID,
-				EgressNetworkPolicyType:       flowexporterutils.PolicyTypeAntreaClusterNetworkPolicy,
-				EgressNetworkPolicyRuleName:   "my-rule",
-				EgressNetworkPolicyRuleAction: flowexporterutils.NetworkPolicyRuleActionDrop,
-				OriginalBytes:                 20,
+				FlowKey:                    key,
+				OriginalDestinationAddress: destinationAddr,
+				Disposition:                actionDrop,
+				OriginalBytes:              20,
+				EgressRuleID:               0x11111111,
 			},
 		},
 	}

@@ -29,7 +29,6 @@ import (
 	"antrea.io/antrea/pkg/agent/flowexporter/connection"
 	flowexporterutils "antrea.io/antrea/pkg/agent/flowexporter/utils"
 	"antrea.io/antrea/pkg/agent/openflow"
-	"antrea.io/antrea/pkg/apis/controlplane/v1beta2"
 	binding "antrea.io/antrea/pkg/ovs/openflow"
 )
 
@@ -162,6 +161,7 @@ func (c *Controller) storeDenyConnectionParsed(pktIn *ofctrl.PacketIn, packet *b
 		return fmt.Errorf("error when getting disposition from reg: %v", err)
 	}
 	disposition := openflow.DispositionToString[id]
+	denyConn.Disposition = disposition
 
 	// Set match to corresponding ingress/egress reg according to disposition
 	match = getMatch(matchers, tableID, id)
@@ -170,32 +170,10 @@ func (c *Controller) storeDenyConnectionParsed(pktIn *ofctrl.PacketIn, packet *b
 		if err != nil {
 			return fmt.Errorf("error when obtaining rule id from reg: %v", err)
 		}
-		rule := c.GetRuleByFlowID(ruleID)
-		var policy *v1beta2.NetworkPolicyReference
-		if rule != nil {
-			policy = rule.PolicyRef
-		}
-		if policy == nil || rule == nil {
-			klog.V(4).InfoS("Cannot find NetworkPolicy or rule", "ruleID", ruleID)
-			// Ignore the connection if there is no matching NetworkPolicy or rule: the
-			// NetworkPolicy must have been deleted or updated.
-			return nil
-		}
-		// Get name and namespace for Antrea Network Policy or Antrea Cluster Network Policy
 		if isAntreaPolicyIngressTable(tableID) {
-			denyConn.IngressNetworkPolicyName = policy.Name
-			denyConn.IngressNetworkPolicyNamespace = policy.Namespace
-			denyConn.IngressNetworkPolicyUID = string(policy.UID)
-			denyConn.IngressNetworkPolicyType = flowexporterutils.PolicyTypeToUint8(policy.Type)
-			denyConn.IngressNetworkPolicyRuleName = rule.Name
-			denyConn.IngressNetworkPolicyRuleAction = flowexporterutils.RuleActionToUint8(disposition)
+			denyConn.IngressRuleID = ruleID
 		} else if isAntreaPolicyEgressTable(tableID) {
-			denyConn.EgressNetworkPolicyName = policy.Name
-			denyConn.EgressNetworkPolicyNamespace = policy.Namespace
-			denyConn.EgressNetworkPolicyUID = string(policy.UID)
-			denyConn.EgressNetworkPolicyType = flowexporterutils.PolicyTypeToUint8(policy.Type)
-			denyConn.EgressNetworkPolicyRuleName = rule.Name
-			denyConn.EgressNetworkPolicyRuleAction = flowexporterutils.RuleActionToUint8(disposition)
+			denyConn.EgressRuleID = ruleID
 		}
 	} else {
 		// For K8s NetworkPolicy implicit drop action, we cannot get Namespace/name.

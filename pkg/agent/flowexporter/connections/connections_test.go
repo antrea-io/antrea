@@ -15,6 +15,7 @@
 package connections
 
 import (
+	"encoding/binary"
 	"net/netip"
 	"testing"
 	"time"
@@ -23,6 +24,10 @@ import (
 	"go.uber.org/mock/gomock"
 
 	"antrea.io/antrea/pkg/agent/flowexporter/connection"
+	"antrea.io/antrea/pkg/agent/flowexporter/utils"
+	"antrea.io/antrea/pkg/agent/types"
+	"antrea.io/antrea/pkg/apis/controlplane/v1beta2"
+	queriertest "antrea.io/antrea/pkg/querier/testing"
 	objectstoretest "antrea.io/antrea/pkg/util/objectstore/testing"
 
 	"antrea.io/antrea/pkg/agent/metrics"
@@ -125,4 +130,176 @@ func TestConnectionStore_DeleteConnWithoutLock(t *testing.T) {
 	_, exists = conntrackConnStore.GetConnByKey(connKey)
 	assert.Equal(t, false, exists, "connection should be deleted in connection store")
 	checkAntreaConnectionMetrics(t, len(conntrackConnStore.connections))
+}
+
+func TestAddIngressNetworkPolicyMetadata(t *testing.T) {
+	validPolicy := &v1beta2.NetworkPolicyReference{
+		Name:      "allow-web",
+		Namespace: "default",
+		UID:       "uid-123",
+		Type:      v1beta2.AntreaNetworkPolicy,
+	}
+
+	mockCtrl := gomock.NewController(t)
+	mockQuerier := queriertest.NewMockAgentNetworkPolicyInfoQuerier(mockCtrl)
+	mockQuerier.EXPECT().GetRuleByFlowID(uint32(100)).Return(&types.PolicyRule{Name: "rule-100", PolicyRef: validPolicy}).AnyTimes()
+	mockQuerier.EXPECT().GetRuleByFlowID(uint32(200)).Return(&types.PolicyRule{Name: "rule-200", PolicyRef: nil}).AnyTimes()
+	mockQuerier.EXPECT().GetRuleByFlowID(uint32(300)).Return(&types.PolicyRule{Name: "rule-300", PolicyRef: validPolicy}).AnyTimes()
+	mockQuerier.EXPECT().GetRuleByFlowID(gomock.Any()).Return(nil).AnyTimes()
+
+	tests := []struct {
+		name               string
+		conn               *connection.Connection
+		expectedName       string
+		expectedNamespace  string
+		expectedUID        string
+		expectedType       uint8
+		expectedRuleName   string
+		expectedRuleAction uint8
+	}{
+		{
+			name: "Success via IngressRuleID",
+			conn: &connection.Connection{
+				IngressRuleID: 100,
+				Disposition:   "Drop",
+			},
+			expectedName:       "allow-web",
+			expectedNamespace:  "default",
+			expectedRuleName:   "rule-100",
+			expectedUID:        "uid-123",
+			expectedType:       utils.PolicyTypeAntreaNetworkPolicy,
+			expectedRuleAction: utils.NetworkPolicyRuleActionDrop,
+		},
+		{
+			name: "Success via Labels (overrides IngressRuleID)",
+			conn: &connection.Connection{
+				IngressRuleID: 200,
+				Labels:        makeLabels(300, 12),
+				Disposition:   "Drop",
+			},
+			expectedName:       "allow-web",
+			expectedNamespace:  "default",
+			expectedRuleName:   "rule-300",
+			expectedUID:        "uid-123",
+			expectedType:       utils.PolicyTypeAntreaNetworkPolicy,
+			expectedRuleAction: utils.NetworkPolicyRuleActionAllow,
+		},
+		{
+			name:             "Rule not found",
+			conn:             &connection.Connection{},
+			expectedName:     "",
+			expectedRuleName: "",
+		},
+		{
+			name: "Rule found but PolicyRef is nil",
+			conn: &connection.Connection{
+				IngressRuleID: 200,
+			},
+			expectedName:     "",
+			expectedRuleName: "",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cs := &connectionStore{networkPolicyQuerier: mockQuerier}
+			cs.addIngressNetworkPolicyMetadata(tt.conn)
+			assert.Equal(t, tt.expectedName, tt.conn.IngressNetworkPolicyName)
+			assert.Equal(t, tt.expectedNamespace, tt.conn.IngressNetworkPolicyNamespace)
+			assert.Equal(t, tt.expectedType, tt.conn.IngressNetworkPolicyType)
+			assert.Equal(t, tt.expectedUID, tt.conn.IngressNetworkPolicyUID)
+			assert.Equal(t, tt.expectedRuleName, tt.conn.IngressNetworkPolicyRuleName)
+			assert.Equal(t, tt.expectedRuleAction, tt.conn.IngressNetworkPolicyRuleAction)
+		})
+	}
+}
+
+func TestAddEgressNetworkPolicyMetadata(t *testing.T) {
+	validPolicy := &v1beta2.NetworkPolicyReference{
+		Name:      "allow-web",
+		Namespace: "default",
+		UID:       "uid-123",
+		Type:      v1beta2.AntreaNetworkPolicy,
+	}
+
+	mockCtrl := gomock.NewController(t)
+	mockQuerier := queriertest.NewMockAgentNetworkPolicyInfoQuerier(mockCtrl)
+	mockQuerier.EXPECT().GetRuleByFlowID(uint32(100)).Return(&types.PolicyRule{Name: "rule-100", PolicyRef: validPolicy}).AnyTimes()
+	mockQuerier.EXPECT().GetRuleByFlowID(uint32(200)).Return(&types.PolicyRule{Name: "rule-200", PolicyRef: nil}).AnyTimes()
+	mockQuerier.EXPECT().GetRuleByFlowID(uint32(300)).Return(&types.PolicyRule{Name: "rule-300", PolicyRef: validPolicy}).AnyTimes()
+	mockQuerier.EXPECT().GetRuleByFlowID(gomock.Any()).Return(nil).AnyTimes()
+
+	tests := []struct {
+		name               string
+		conn               *connection.Connection
+		expectedName       string
+		expectedNamespace  string
+		expectedUID        string
+		expectedType       uint8
+		expectedRuleName   string
+		expectedRuleAction uint8
+	}{
+		{
+			name: "Success via EgressRuleID",
+			conn: &connection.Connection{
+				EgressRuleID: 100,
+				Disposition:  "Drop",
+			},
+			expectedName:       "allow-web",
+			expectedNamespace:  "default",
+			expectedRuleName:   "rule-100",
+			expectedUID:        "uid-123",
+			expectedType:       utils.PolicyTypeAntreaNetworkPolicy,
+			expectedRuleAction: utils.NetworkPolicyRuleActionDrop,
+		},
+		{
+			name: "Success via Labels (overrides EgressRuleID)",
+			conn: &connection.Connection{
+				EgressRuleID: 200,
+				Labels:       makeLabels(300, 8),
+				Disposition:  "Drop",
+			},
+			expectedName:       "allow-web",
+			expectedNamespace:  "default",
+			expectedRuleName:   "rule-300",
+			expectedUID:        "uid-123",
+			expectedType:       utils.PolicyTypeAntreaNetworkPolicy,
+			expectedRuleAction: utils.NetworkPolicyRuleActionAllow,
+		},
+		{
+			name:             "Rule not found",
+			conn:             &connection.Connection{},
+			expectedName:     "",
+			expectedRuleName: "",
+		},
+		{
+			name: "Rule found but PolicyRef is nil",
+			conn: &connection.Connection{
+				EgressRuleID: 200,
+			},
+			expectedName:     "",
+			expectedRuleName: "",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cs := &connectionStore{networkPolicyQuerier: mockQuerier}
+			cs.addEgressNetworkPolicyMetadata(tt.conn)
+			assert.Equal(t, tt.expectedName, tt.conn.EgressNetworkPolicyName)
+			assert.Equal(t, tt.expectedNamespace, tt.conn.EgressNetworkPolicyNamespace)
+			assert.Equal(t, tt.expectedType, tt.conn.EgressNetworkPolicyType)
+			assert.Equal(t, tt.expectedUID, tt.conn.EgressNetworkPolicyUID)
+			assert.Equal(t, tt.expectedRuleName, tt.conn.EgressNetworkPolicyRuleName)
+			assert.Equal(t, tt.expectedRuleAction, tt.conn.EgressNetworkPolicyRuleAction)
+		})
+	}
+}
+
+func makeLabels(id uint32, start int) []byte {
+	labels := make([]byte, 16)
+	if start+4 <= 16 {
+		binary.BigEndian.PutUint32(labels[start:start+4], id)
+	}
+	return labels
 }

@@ -16,7 +16,6 @@ package connections
 
 import (
 	"encoding/binary"
-	"encoding/hex"
 	"fmt"
 	"sync"
 	"time"
@@ -29,6 +28,7 @@ import (
 	"antrea.io/antrea/pkg/agent/flowexporter/priorityqueue"
 	"antrea.io/antrea/pkg/agent/flowexporter/utils"
 	"antrea.io/antrea/pkg/agent/proxy"
+	"antrea.io/antrea/pkg/agent/types"
 	"antrea.io/antrea/pkg/querier"
 	"antrea.io/antrea/pkg/util/objectstore"
 )
@@ -164,62 +164,74 @@ func lookupServiceProtocol(protoID uint8) (corev1.Protocol, error) {
 	return serviceProto, nil
 }
 
-func (cs *connectionStore) addNetworkPolicyMetadata(conn *connection.Connection) {
-	// Retrieve NetworkPolicy Name and Namespace by using the ingress and egress
-	// IDs stored in the connection label.
-	if len(conn.Labels) != 0 {
-		if klog.V(4).Enabled() {
-			klog.InfoS("Setting NetworkPolicy metadata from connection labels", "labels", hex.EncodeToString(conn.Labels))
-		}
-		ingressOfID := binary.BigEndian.Uint32(conn.Labels[12:16])
-		egressOfID := binary.BigEndian.Uint32(conn.Labels[8:12])
-		if ingressOfID != 0 {
-			rule := cs.networkPolicyQuerier.GetRuleByFlowID(ingressOfID)
-			if rule == nil {
-				// This should not happen because the rule flow ID to rule mapping
-				// is meant to be preserved for long enough (based on the poll
-				// interval), even after the rule deletion.
-				klog.InfoS("Cannot find ingress NetworkPolicy rule", "flowID", ingressOfID)
-			} else if rule.PolicyRef == nil {
-				// This should never be possible.
-				klog.ErrorS(nil, "Found ingress NetworkPolicy rule with nil PolicyRef", "flowID", ingressOfID)
-			} else {
-				policy := rule.PolicyRef
-				conn.IngressNetworkPolicyName = policy.Name
-				conn.IngressNetworkPolicyNamespace = policy.Namespace
-				conn.IngressNetworkPolicyUID = string(policy.UID)
-				conn.IngressNetworkPolicyType = utils.PolicyTypeToUint8(policy.Type)
-				conn.IngressNetworkPolicyRuleName = rule.Name
-				conn.IngressNetworkPolicyRuleAction = registry.NetworkPolicyRuleActionAllow
-				if klog.V(4).Enabled() {
-					klog.InfoS("Found ingress NetworkPolicy rule", "flowID", ingressOfID, "policy", klog.KRef(policy.Namespace, policy.Name), "ruleName", rule.Name)
-				}
-			}
-		}
-		if egressOfID != 0 {
-			rule := cs.networkPolicyQuerier.GetRuleByFlowID(egressOfID)
-			if rule == nil {
-				// This should not happen because the rule flow ID to rule mapping
-				// is meant to be preserved for long enough (based on the poll
-				// interval), even after the rule deletion.
-				klog.InfoS("Cannot find egress NetworkPolicy rule", "flowID", egressOfID)
-			} else if rule.PolicyRef == nil {
-				// This should never be possible.
-				klog.ErrorS(nil, "Found egress NetworkPolicy rule with nil PolicyRef", "flowID", egressOfID)
-			} else {
-				policy := rule.PolicyRef
-				conn.EgressNetworkPolicyName = policy.Name
-				conn.EgressNetworkPolicyNamespace = policy.Namespace
-				conn.EgressNetworkPolicyUID = string(policy.UID)
-				conn.EgressNetworkPolicyType = utils.PolicyTypeToUint8(policy.Type)
-				conn.EgressNetworkPolicyRuleName = rule.Name
-				conn.EgressNetworkPolicyRuleAction = registry.NetworkPolicyRuleActionAllow
-				if klog.V(4).Enabled() {
-					klog.InfoS("Found egress NetworkPolicy rule", "flowID", egressOfID, "policy", klog.KRef(policy.Namespace, policy.Name), "ruleName", rule.Name)
-				}
-			}
+func (cs *connectionStore) getPolicyRuleMetadata(conn *connection.Connection, ruleID uint32, labelStart, labelEnd int) (*types.PolicyRule, uint8, bool) {
+	var rule *types.PolicyRule
+	var disposition uint8
+
+	if ruleID != 0 {
+		rule = cs.networkPolicyQuerier.GetRuleByFlowID(ruleID)
+		disposition = utils.RuleActionToUint8(conn.Disposition)
+	}
+
+	if len(conn.Labels) >= labelEnd {
+		flowID := binary.BigEndian.Uint32(conn.Labels[labelStart:labelEnd])
+		if flowID != 0 {
+			rule = cs.networkPolicyQuerier.GetRuleByFlowID(flowID)
+			disposition = registry.NetworkPolicyRuleActionAllow
 		}
 	}
+
+	if rule == nil {
+		klog.V(4).InfoS("Cannot find NetworkPolicy rule", "ruleID", ruleID)
+		return nil, 0, false
+	}
+	if rule.PolicyRef == nil {
+		klog.V(4).InfoS("Found NetworkPolicy rule with nil PolicyRef", "ruleID", ruleID)
+		return nil, 0, false
+	}
+
+	if klog.V(4).Enabled() {
+		klog.InfoS("Found NetworkPolicy rule",
+			"flowID", ruleID,
+			"policy", klog.KRef(rule.PolicyRef.Namespace, rule.PolicyRef.Name),
+			"ruleName", rule.Name)
+	}
+
+	return rule, disposition, true
+}
+func (cs *connectionStore) addIngressNetworkPolicyMetadata(conn *connection.Connection) {
+	rule, disposition, ok := cs.getPolicyRuleMetadata(conn, conn.IngressRuleID, 12, 16)
+	if !ok {
+		return
+	}
+
+	policy := rule.PolicyRef
+	conn.IngressNetworkPolicyName = policy.Name
+	conn.IngressNetworkPolicyNamespace = policy.Namespace
+	conn.IngressNetworkPolicyUID = string(policy.UID)
+	conn.IngressNetworkPolicyType = utils.PolicyTypeToUint8(policy.Type)
+	conn.IngressNetworkPolicyRuleName = rule.Name
+	conn.IngressNetworkPolicyRuleAction = disposition
+}
+
+func (cs *connectionStore) addEgressNetworkPolicyMetadata(conn *connection.Connection) {
+	rule, disposition, ok := cs.getPolicyRuleMetadata(conn, conn.EgressRuleID, 8, 12)
+	if !ok {
+		return
+	}
+
+	policy := rule.PolicyRef
+	conn.EgressNetworkPolicyName = policy.Name
+	conn.EgressNetworkPolicyNamespace = policy.Namespace
+	conn.EgressNetworkPolicyUID = string(policy.UID)
+	conn.EgressNetworkPolicyType = utils.PolicyTypeToUint8(policy.Type)
+	conn.EgressNetworkPolicyRuleName = rule.Name
+	conn.EgressNetworkPolicyRuleAction = disposition
+}
+
+func (cs *connectionStore) addNetworkPolicyMetadata(conn *connection.Connection) {
+	cs.addIngressNetworkPolicyMetadata(conn)
+	cs.addEgressNetworkPolicyMetadata(conn)
 }
 
 func (cs *connectionStore) AcquireConnStoreLock() {

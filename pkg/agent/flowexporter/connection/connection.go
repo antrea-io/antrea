@@ -56,6 +56,12 @@ type Connection struct {
 	// Labels and LabelsMask use a big-endian representation: the first byte
 	// of the slice (at index 0) is the most-significant byte.
 	Labels, LabelsMask []byte
+	// IngressRuleID is used by deny connections to identify which ingress policy rule denied the connection
+	IngressRuleID uint32
+	// EgressRuleID is used by deny connections to identify which egress policy rule denied the connection
+	EgressRuleID uint32
+	// Disposition is used by deny connections to determine which action was used to deny the connection
+	Disposition string
 	// TODO: Have a separate field for protocol. No need to keep it in Tuple.
 	FlowKey                        Tuple
 	OriginalPackets, OriginalBytes uint64
