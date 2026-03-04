@@ -259,7 +259,7 @@ func (exp *FlowExporter) GetDenyConnStoreNotifier() channel.Notifier {
 
 func (exp *FlowExporter) Run(stopCh <-chan struct{}) {
 	klog.InfoS("Flow Exporter started")
-
+	defer exp.queue.ShutDown()
 	cacheSyncs := []cache.InformerSynced{exp.destinationSynced}
 	if exp.nodeRouteController != nil {
 		// Wait for NodeRouteController to have processed the initial list of Nodes so that
