@@ -15,11 +15,11 @@
 package nodeip
 
 import (
-	"context"
 	"testing"
-	"time"
+	"testing/synctest"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/informers"
@@ -27,53 +27,55 @@ import (
 )
 
 func TestNewTracker(t *testing.T) {
-	k8sClient := fake.NewSimpleClientset()
-	informerFactory := informers.NewSharedInformerFactory(k8sClient, 0)
-	nodeInformer := informerFactory.Core().V1().Nodes()
-	tracker := NewTracker(nodeInformer)
+	synctest.Test(t, func(t *testing.T) {
+		k8sClient := fake.NewSimpleClientset()
+		informerFactory := informers.NewSharedInformerFactory(k8sClient, 0)
+		nodeInformer := informerFactory.Core().V1().Nodes()
+		tracker := NewTracker(nodeInformer)
 
-	assert.False(t, tracker.HasSynced())
+		assert.False(t, tracker.HasSynced())
 
-	stopCh := make(chan struct{})
-	defer close(stopCh)
-	informerFactory.Start(stopCh)
-	informerFactory.WaitForCacheSync(stopCh)
+		stopCh := make(chan struct{})
+		defer close(stopCh)
+		informerFactory.Start(stopCh)
+		informerFactory.WaitForCacheSync(stopCh)
 
-	assert.True(t, tracker.HasSynced())
+		assert.True(t, tracker.HasSynced())
 
-	nodeInternalIP := "1.1.1.1"
-	nodeExternalIP := "2.2.2.2"
-	node := &corev1.Node{
-		ObjectMeta: metav1.ObjectMeta{Name: "node1"},
-		Spec:       corev1.NodeSpec{},
-		Status: corev1.NodeStatus{Addresses: []corev1.NodeAddress{
-			{Type: corev1.NodeInternalIP, Address: nodeInternalIP},
-			{Type: corev1.NodeExternalIP, Address: nodeExternalIP},
-		}},
-	}
-	assert.False(t, tracker.IsNodeIP(nodeInternalIP))
-	assert.False(t, tracker.IsNodeIP(nodeExternalIP))
+		nodeInternalIP := "1.1.1.1"
+		nodeExternalIP := "2.2.2.2"
+		node := &corev1.Node{
+			ObjectMeta: metav1.ObjectMeta{Name: "node1"},
+			Spec:       corev1.NodeSpec{},
+			Status: corev1.NodeStatus{Addresses: []corev1.NodeAddress{
+				{Type: corev1.NodeInternalIP, Address: nodeInternalIP},
+				{Type: corev1.NodeExternalIP, Address: nodeExternalIP},
+			}},
+		}
+		assert.False(t, tracker.IsNodeIP(nodeInternalIP))
+		assert.False(t, tracker.IsNodeIP(nodeExternalIP))
 
-	k8sClient.CoreV1().Nodes().Create(context.TODO(), node, metav1.CreateOptions{})
-	assert.EventuallyWithT(t, func(c *assert.CollectT) {
-		assert.True(c, tracker.IsNodeIP(nodeInternalIP))
-		assert.True(c, tracker.IsNodeIP(nodeExternalIP))
-	}, 2*time.Second, 10*time.Millisecond)
+		_, err := k8sClient.CoreV1().Nodes().Create(t.Context(), node, metav1.CreateOptions{})
+		require.NoError(t, err)
+		synctest.Wait()
+		assert.True(t, tracker.IsNodeIP(nodeInternalIP))
+		assert.True(t, tracker.IsNodeIP(nodeExternalIP))
 
-	updatedNodeInternalIP := "1.1.1.2"
-	updatedNode := node.DeepCopy()
-	updatedNode.Status.Addresses[0].Address = updatedNodeInternalIP
-	k8sClient.CoreV1().Nodes().Update(context.TODO(), updatedNode, metav1.UpdateOptions{})
-	assert.EventuallyWithT(t, func(c *assert.CollectT) {
-		assert.False(c, tracker.IsNodeIP(nodeInternalIP))
-		assert.True(c, tracker.IsNodeIP(updatedNodeInternalIP))
-		assert.True(c, tracker.IsNodeIP(nodeExternalIP))
-	}, 2*time.Second, 10*time.Millisecond)
+		updatedNodeInternalIP := "1.1.1.2"
+		updatedNode := node.DeepCopy()
+		updatedNode.Status.Addresses[0].Address = updatedNodeInternalIP
+		_, err = k8sClient.CoreV1().Nodes().Update(t.Context(), updatedNode, metav1.UpdateOptions{})
+		require.NoError(t, err)
+		synctest.Wait()
+		assert.False(t, tracker.IsNodeIP(nodeInternalIP))
+		assert.True(t, tracker.IsNodeIP(updatedNodeInternalIP))
+		assert.True(t, tracker.IsNodeIP(nodeExternalIP))
 
-	k8sClient.CoreV1().Nodes().Delete(context.TODO(), node.Name, metav1.DeleteOptions{})
-	assert.EventuallyWithT(t, func(c *assert.CollectT) {
-		assert.False(c, tracker.IsNodeIP(nodeInternalIP))
-		assert.False(c, tracker.IsNodeIP(updatedNodeInternalIP))
-		assert.False(c, tracker.IsNodeIP(nodeExternalIP))
-	}, 2*time.Second, 10*time.Millisecond)
+		err = k8sClient.CoreV1().Nodes().Delete(t.Context(), node.Name, metav1.DeleteOptions{})
+		require.NoError(t, err)
+		synctest.Wait()
+		assert.False(t, tracker.IsNodeIP(nodeInternalIP))
+		assert.False(t, tracker.IsNodeIP(updatedNodeInternalIP))
+		assert.False(t, tracker.IsNodeIP(nodeExternalIP))
+	})
 }
