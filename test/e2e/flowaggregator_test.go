@@ -314,7 +314,6 @@ func TestFlowAggregator(t *testing.T) {
 
 	if v4Enabled {
 		t.Run("IPv4", func(t *testing.T) { testHelper(t, data, false) })
-		t.Run("testExternalToPodFlows", func(t *testing.T) { testExternalToPodFlows(t, data, false) })
 	}
 
 	if v6Enabled {
@@ -908,6 +907,10 @@ func testHelper(t *testing.T, data *TestData, isIPv6 bool) {
 			checkAntctlGetFlowRecordsJson(t, data, podName, podAIPs, podBIPs, isIPv6)
 		})
 	})
+
+	// ExternalToPod flows tests the case where connections are made to pods from outside the cluster and their flow information is exported
+	// while maintaining the original source IP.
+	t.Run("ExternalToPodFlows", func(t *testing.T) { testExternalToPodFlows(t, data, isIPv6) })
 }
 
 func checkAntctlGetFlowRecordsJson(t *testing.T, data *TestData, podName string, podAIPs, podBIPs *PodIPs, isIPv6 bool) {
