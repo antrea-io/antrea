@@ -407,9 +407,17 @@ func (e *ipfixExporter) addConnToSet(conn *connection.Connection) error {
 				ie.SetIPAddressValue(net.ParseIP("::"))
 			}
 		case "proxySnatIPv4":
-			ie.SetIPAddressValue(conn.ProxySnatIP.AsSlice())
+			if conn.ProxySnatIP.IsValid() {
+				ie.SetIPAddressValue(conn.ProxySnatIP.AsSlice())
+			} else {
+				ie.SetIPAddressValue(net.IP{0, 0, 0, 0})
+			}
 		case "proxySnatIPv6":
-			ie.SetIPAddressValue(conn.ProxySnatIP.AsSlice())
+			if conn.ProxySnatIP.IsValid() {
+				ie.SetIPAddressValue(conn.ProxySnatIP.AsSlice())
+			} else {
+				ie.SetIPAddressValue(net.ParseIP("::"))
+			}
 		case "proxySnatPort":
 			ie.SetUnsigned16Value(conn.ProxySnatPort)
 		}
