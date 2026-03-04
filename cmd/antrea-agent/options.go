@@ -783,7 +783,7 @@ func (o *Options) setMulticlusterDefaultOptions() {
 func (o *Options) setAuditLoggingDefaultOptions() {
 	auditLogging := &o.config.AuditLogging
 	if auditLogging.MaxSize == 0 {
-		auditLogging.MaxSize = defaultAuditLogsMaxAge
+		auditLogging.MaxSize = defaultAuditLogsMaxSize
 	}
 	if auditLogging.MaxBackups == nil {
 		maxBackups := int32(defaultAuditLogsMaxBackups)
