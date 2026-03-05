@@ -94,14 +94,14 @@ func runEJoinConfig(cmd *cobra.Command, args []string) error {
 	clusterSets := clusterSetList.Items
 
 	if len(clusterSets) == 0 {
-		return fmt.Errorf("No ClusterSet found in Namespace %s", joinConfigOpts.namespace)
+		return fmt.Errorf("no ClusterSet found in Namespace %s", joinConfigOpts.namespace)
 	} else if len(clusterSets) > 1 {
-		return fmt.Errorf("More than one ClusterSets in Namespace %s", joinConfigOpts.namespace)
+		return fmt.Errorf("more than one ClusterSet found in Namespace %s", joinConfigOpts.namespace)
 	}
 
 	cs := clusterSets[0]
 	if len(cs.Spec.Leaders) == 0 {
-		return fmt.Errorf("Invalid ClusterSet %s: no leader cluster", cs.Name)
+		return fmt.Errorf("invalid ClusterSet %s: no leader cluster", cs.Name)
 	}
 
 	var tokenSecret *corev1.Secret
