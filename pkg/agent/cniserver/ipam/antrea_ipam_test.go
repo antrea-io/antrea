@@ -713,6 +713,67 @@ func TestSecondaryNetworkAdd(t *testing.T) {
 			},
 		},
 		{
+			name: "Add secondary network with conflicting VLAN IDs",
+			networkConf: &argtypes.NetworkConfig{
+				CNIVersion: testCNIVersion,
+				IPAM: &argtypes.IPAMConfig{
+					IPPools: []string{
+						testPear,
+						"vlan200-pool",
+					},
+				},
+			},
+			expectedRes: fmt.Errorf("IPPools have conflicting VLAN IDs 100 and 200 for dual-stack allocation"),
+			initFunc: func(stopCh chan struct{}) *AntreaIPAM {
+				k8sClient, crdClient := initTestClients()
+
+				informerFactory := informers.NewSharedInformerFactory(k8sClient, 0)
+				crdInformerFactory := crdinformers.NewSharedInformerFactory(crdClient, 0)
+				listOptions := func(options *metav1.ListOptions) {
+					options.FieldSelector = fields.OneTermEqualSelector("spec.nodeName", "fakeNode").String()
+				}
+				localPodInformer := coreinformers.NewFilteredPodInformer(
+					k8sClient,
+					metav1.NamespaceAll,
+					0,
+					cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc},
+					listOptions,
+				)
+
+				antreaIPAMController, err := InitializeAntreaIPAMController(crdClient,
+					informerFactory.Core().V1().Namespaces(),
+					crdInformerFactory.Crd().V1beta1().IPPools(),
+					localPodInformer,
+					true,
+				)
+				require.NoError(t, err, "Expected no error in initialization for Antrea IPAM Controller")
+				createIPPools(crdClient)
+				crdClient.InitPool(&crdv1b1.IPPool{
+					ObjectMeta: metav1.ObjectMeta{Name: "vlan200-pool"},
+					Spec: crdv1b1.IPPoolSpec{
+						IPRanges: []crdv1b1.IPRange{{
+							Start: "30::2",
+							End:   "30::20",
+						}},
+						SubnetInfo: crdv1b1.SubnetInfo{
+							Gateway:      "30::1",
+							PrefixLength: 64,
+							VLAN:         200,
+						},
+					},
+				})
+
+				go antreaIPAMController.Run(stopCh)
+				crdInformerFactory.Start(stopCh)
+				crdInformerFactory.WaitForCacheSync(stopCh)
+
+				return &AntreaIPAM{
+					controller:      antreaIPAMController,
+					controllerMutex: sync.RWMutex{},
+				}
+			},
+		},
+		{
 			name: "Specify static IPv6 address",
 			networkConf: &argtypes.NetworkConfig{
 				CNIVersion: testCNIVersion,

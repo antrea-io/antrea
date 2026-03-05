@@ -211,8 +211,12 @@ func (d *AntreaIPAM) Add(args *invoke.Args, k8sArgs *types.K8sArgs, networkConfi
 
 		result.Routes = append(result.Routes, defaultRoute)
 		result.IPs = append(result.IPs, ipConfig)
+		vlanID := uint16(subnetInfo.VLAN)
 		if result.VLANID == 0 {
-			result.VLANID = uint16(subnetInfo.VLAN)
+			result.VLANID = vlanID
+		} else if vlanID != 0 && result.VLANID != vlanID {
+			err = fmt.Errorf("IPPools have conflicting VLAN IDs %d and %d for dual-stack allocation", result.VLANID, vlanID)
+			return true, nil, err
 		}
 	}
 
@@ -314,9 +318,11 @@ func (d *AntreaIPAM) SecondaryNetworkAllocate(podOwner *crdv1b1.PodOwner, networ
 			// assume the CNI version >= 0.3.0, and so do not check the number of
 			// addresses.
 			result.IPs = append(result.IPs, ipConfig)
+			vlanID := uint16(subnetInfo.VLAN)
 			if result.VLANID == 0 {
-				// Return the first non-zero VLAN.
-				result.VLANID = uint16(subnetInfo.VLAN)
+				result.VLANID = vlanID
+			} else if vlanID != 0 && result.VLANID != vlanID {
+				return nil, fmt.Errorf("IPPools have conflicting VLAN IDs %d and %d for dual-stack allocation", result.VLANID, vlanID)
 			}
 		}
 		// No failed allocation, so do not release allocated IPs.
