@@ -32,7 +32,7 @@ require (
 	github.com/hashicorp/memberlist v0.5.4
 	github.com/k8snetworkplumbingwg/network-attachment-definition-client v1.7.7
 	github.com/k8snetworkplumbingwg/sriovnet v1.2.0
-	github.com/kevinburke/ssh_config v1.4.0
+	github.com/kevinburke/ssh_config v1.6.0
 	github.com/lithammer/dedent v1.1.0
 	github.com/mdlayher/arp v0.0.0-20220221190821-c37aaafac7f9
 	github.com/mdlayher/ethernet v0.0.0-20220221185849-529eae5b6118
