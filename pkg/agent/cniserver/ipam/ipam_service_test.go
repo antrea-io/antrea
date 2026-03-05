@@ -165,7 +165,7 @@ func TestExecIPAMAdd(t *testing.T) {
 			k8sArgs:     &argtypes.K8sArgs{},
 			ipamType:    "",
 			resultKey:   "",
-			exceptedRes: fmt.Errorf("No suitable IPAM driver found"),
+			exceptedRes: fmt.Errorf("no suitable IPAM driver found"),
 		},
 		{
 			name: "Exec successfully",
@@ -214,7 +214,7 @@ func TestExecIPAMDelete(t *testing.T) {
 			k8sArgs:     &argtypes.K8sArgs{},
 			ipamType:    "",
 			resultKey:   "",
-			exceptedRes: fmt.Errorf("No suitable IPAM driver found"),
+			exceptedRes: fmt.Errorf("no suitable IPAM driver found"),
 		},
 		{
 			name: "Exec successfully",
@@ -261,7 +261,7 @@ func TestExecIPAMCheck(t *testing.T) {
 			cniArgs:     &cnipb.CniCmdArgs{},
 			k8sArgs:     &argtypes.K8sArgs{},
 			ipamType:    "",
-			exceptedRes: fmt.Errorf("No suitable IPAM driver found"),
+			exceptedRes: fmt.Errorf("no suitable IPAM driver found"),
 		},
 		{
 			name: "Exec successfully",

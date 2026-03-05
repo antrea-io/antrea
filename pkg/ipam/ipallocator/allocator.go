@@ -209,7 +209,7 @@ func (a *SingleIPAllocator) AllocateRange(size int) ([]net.IP, error) {
 		}
 	}
 
-	return nil, fmt.Errorf("Continuous range of size %d is not available", size)
+	return nil, fmt.Errorf("continuous range of size %d is not available", size)
 }
 
 func (a *SingleIPAllocator) getOffset(ip net.IP) int {
@@ -291,7 +291,7 @@ func (ma MultiIPAllocator) AllocateNext() (net.IP, error) {
 // If not available in any allocator, error is returned.
 func (ma MultiIPAllocator) AllocateRange(size int) ([]net.IP, error) {
 	if size > ma.Free() {
-		return nil, fmt.Errorf("Not enough IPs to reserve range of size %d", size)
+		return nil, fmt.Errorf("not enough IPs to reserve range of size %d", size)
 	}
 
 	for _, a := range ma {

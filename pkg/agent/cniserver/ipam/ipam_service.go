@@ -101,7 +101,7 @@ func ExecIPAMAdd(cniArgs *cnipb.CniCmdArgs, k8sArgs *types.K8sArgs, ipamType str
 		return result, nil
 	}
 
-	return nil, fmt.Errorf("No suitable IPAM driver found")
+	return nil, fmt.Errorf("no suitable IPAM driver found")
 }
 
 func ExecIPAMDelete(cniArgs *cnipb.CniCmdArgs, k8sArgs *types.K8sArgs, ipamType string, resultKey string) error {
@@ -119,7 +119,7 @@ func ExecIPAMDelete(cniArgs *cnipb.CniCmdArgs, k8sArgs *types.K8sArgs, ipamType 
 		ipamResults.Delete(resultKey)
 		return nil
 	}
-	return fmt.Errorf("No suitable IPAM driver found")
+	return fmt.Errorf("no suitable IPAM driver found")
 }
 
 func ExecIPAMCheck(cniArgs *cnipb.CniCmdArgs, k8sArgs *types.K8sArgs, ipamType string) error {
@@ -135,7 +135,7 @@ func ExecIPAMCheck(cniArgs *cnipb.CniCmdArgs, k8sArgs *types.K8sArgs, ipamType s
 		return err
 
 	}
-	return fmt.Errorf("No suitable IPAM driver found")
+	return fmt.Errorf("no suitable IPAM driver found")
 }
 
 func GetIPFromCache(resultKey string) (*IPAMResult, bool) {
