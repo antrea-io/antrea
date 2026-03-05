@@ -250,19 +250,24 @@ func (d *AntreaIPAM) Check(args *invoke.Args, k8sArgs *types.K8sArgs, networkCon
 	}
 
 	found := false
+	var lastErr error
 	for _, allocator := range allocators {
 		ip, err := allocator.GetContainerIP(args.ContainerID, "")
 		if err != nil {
-			return true, err
+			lastErr = err
+			continue
 		}
 		if ip != nil {
 			found = true
 		}
 	}
-	if !found {
-		return true, fmt.Errorf("no IP Address association found for container %s", string(k8sArgs.K8S_POD_NAME))
+	if found {
+		return true, nil
 	}
-	return true, nil
+	if lastErr != nil {
+		return true, lastErr
+	}
+	return true, fmt.Errorf("no IP Address association found for container %s", string(k8sArgs.K8S_POD_NAME))
 }
 
 // SecondaryNetworkAllocate allocates IP addresses for a Pod secondary network interface, based on
