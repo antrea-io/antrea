@@ -1951,10 +1951,16 @@ func getAndCheckFlowAggregatorMetrics(t *testing.T, data *TestData, withClickHou
 
 // Create a connection to the given service via the given nodeIndex's IP and return the source IP and source Port.
 // If the connection fails, retry 2 more times with a 1 second wait in between.
-func createExternalToPodConnection(t *testing.T, service *corev1.Service, nodeIndex int) (string, string) {
+func createExternalToPodConnection(t *testing.T, service *corev1.Service, nodeIndex int, isIPv6 bool) (string, string) {
 	var sourceIP string
 	var sourcePort string
-	url := fmt.Sprintf("http://%s:%d", clusterInfo.nodes[nodeIndex].ipv4Addr, service.Spec.Ports[0].NodePort)
+	var addr string
+	if isIPv6 {
+		addr = clusterInfo.nodes[nodeIndex].ipv6Addr
+	} else {
+		addr = clusterInfo.nodes[nodeIndex].ipv4Addr
+	}
+	url := fmt.Sprintf("http://%s:%d", addr, service.Spec.Ports[0].NodePort)
 	transport := &http.Transport{
 		DialContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
 			conn, err := net.DialTimeout(network, addr, 10*time.Second)
@@ -1999,7 +2005,7 @@ func testExternalToPodFlows(t *testing.T, data *TestData, isIPv6 bool) {
 	}
 
 	// Trigger FlowAggregator's ipfixExporter process to start
-	createExternalToPodConnection(t, service, 0)
+	createExternalToPodConnection(t, service, 0, isIPv6)
 	time.Sleep(time.Second * 5)
 	flushFlowsFromCollector(t, data, isIPv6)
 
@@ -2010,8 +2016,13 @@ func testExternalToPodFlows(t *testing.T, data *TestData, isIPv6 bool) {
 	}
 	for _, tc := range tc {
 		t.Run(fmt.Sprintf("Testing connection to node %v", tc.node), func(t *testing.T) {
-			sourceIP, _ := createExternalToPodConnection(t, service, tc.node)
-			dstIP := nginxIP.IPv4.String()
+			sourceIP, _ := createExternalToPodConnection(t, service, tc.node, isIPv6)
+			var dstIP string
+			if isIPv6 {
+				dstIP = nginxIP.IPv6.String()
+			} else {
+				dstIP = nginxIP.IPv4.String()
+			}
 
 			records := getCollectorOutput(t, sourceIP, dstIP, "", false, false, isIPv6, data, "", getCollectorOutputDefaultTimeout)
 			assert.NotEmpty(t, records, "Expected flows from ipfix collector to include source IP %s and destination ip %s", sourceIP, dstIP)
