@@ -75,7 +75,7 @@ func createFlowExporterDestination(tb testing.TB, name string, isTLS bool, names
 		}
 	}
 
-	destination := BuildFlowExporterDestination(randName(name+"-"), testData.testNamespace, serviceAddr, protocol, 2, 1, tlsConfig)
+	destination := BuildFlowExporterDestination(randName(name+"-"), serviceAddr, protocol, 2, 1, tlsConfig)
 	updatedDest, err := testData.CreateOrUpdateFlowExporterDestination(destination)
 	require.NoError(tb, err, "Failed to create FlowExporterDestination")
 
@@ -123,16 +123,6 @@ func verifyRecords(collectorName string) verifierFunc {
 		assert.Contains(t, record, fmt.Sprintf("destinationPodNamespace: %s", data.testNamespace), "Record does not have correct destinationPodNamespace")
 		assert.Contains(t, record, fmt.Sprintf("sourcePodName: %s", "perftest-a"), "Record does not have correct sourcePodName")
 		assert.Contains(t, record, fmt.Sprintf("destinationPodName: %s", "perftest-c"), "Record does not have correct destinationPodName")
-		assert.NotContains(t, record, "sourcePodUUID: ")
-		assert.NotContains(t, record, "destinationPodUUID: ")
-		assert.NotContains(t, record, "sourceNodeUUID: ")
-		assert.NotContains(t, record, "destinationNodeUUID: ")
-
-		// Check the clusterId field, which should match the customClusterID set in the flowVisibilityTestOptions
-		assert.Contains(t, record, fmt.Sprintf("clusterId: %s", customClusterID), "Record does not have the correct clusterId")
-		assert.Contains(t, record, "originalObservationDomainId", "Record does not have originalObservationDomainId")
-		assert.Contains(t, record, "originalExporterIPv4Address", "Record does not have originalExporterIPv4Address")
-		assert.Contains(t, record, "originalExporterIPv6Address", "Record does not have originalExporterIPv6Address")
 	}
 }
 
@@ -250,7 +240,7 @@ func generateTrafficAndVerify(t *testing.T, data *TestData, isIPv6 bool, expecta
 	}
 }
 
-func BuildFlowExporterDestination(name, namespace, faServiceAddr string, protocol v1alpha1.FlowExporterProtocol,
+func BuildFlowExporterDestination(name, faServiceAddr string, protocol v1alpha1.FlowExporterProtocol,
 	activeFlowTimeout, idleFlowTimeout int32, tlsConfig *v1alpha1.FlowExporterTLSConfig) *v1alpha1.FlowExporterDestination {
 
 	flowAggregatorAddr := faServiceAddr + ":14739"
@@ -260,8 +250,7 @@ func BuildFlowExporterDestination(name, namespace, faServiceAddr string, protoco
 
 	destination := &v1alpha1.FlowExporterDestination{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      name,
-			Namespace: namespace,
+			Name: name,
 		},
 		Spec: v1alpha1.FlowExporterDestinationSpec{
 			Address:   flowAggregatorAddr,

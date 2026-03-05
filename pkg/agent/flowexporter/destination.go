@@ -142,7 +142,7 @@ func (d *Destination) getExporterTLSConfig(ctx context.Context) (*exporter.TLSCo
 		if strings.Contains(d.address, ":") {
 			hostPart, _, err := net.SplitHostPort(d.address)
 			if err != nil {
-				return nil, fmt.Errorf("unable to split : %w", err)
+				return nil, fmt.Errorf("unable to split host/port for address %q: %w", d.address, err)
 			}
 			host = hostPart
 		}

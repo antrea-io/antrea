@@ -20,7 +20,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/vmware/go-ipfix/pkg/registry"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/klog/v2"
 
@@ -177,7 +176,7 @@ func (cs *connectionStore) getPolicyRuleMetadata(conn *connection.Connection, ru
 		flowID := binary.BigEndian.Uint32(conn.Labels[labelStart:labelEnd])
 		if flowID != 0 {
 			rule = cs.networkPolicyQuerier.GetRuleByFlowID(flowID)
-			disposition = registry.NetworkPolicyRuleActionAllow
+			disposition = utils.NetworkPolicyRuleActionAllow
 		}
 	}
 

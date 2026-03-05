@@ -355,7 +355,7 @@ func (exp *FlowExporter) syncFlowExporterDestination(key string) error {
 	if ok {
 		klog.V(3).InfoS("Removing old instance", "flowExporterDestination", klog.KObj(res))
 		close(destObj.stopCh)
-		delete(exp.destinations, res.Name)
+		delete(exp.destinations, key)
 	}
 
 	klog.V(3).InfoS("Adding destination", "flowExporterDestination", klog.KObj(res))
@@ -365,7 +365,7 @@ func (exp *FlowExporter) syncFlowExporterDestination(key string) error {
 	}
 	stopCh := make(chan struct{})
 	go dest.Run(stopCh)
-	exp.destinations[res.Name] = destinationObj{
+	exp.destinations[key] = destinationObj{
 		destination: dest,
 		stopCh:      stopCh,
 	}

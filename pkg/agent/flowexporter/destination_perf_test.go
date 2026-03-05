@@ -179,7 +179,7 @@ func NewDestinationForTest(tb testing.TB, o *options.FlowExporterOptions) *Desti
 			address:                o.FlowCollectorAddr,
 			activeFlowTimeout:      o.ActiveFlowTimeout,
 			idleFlowTimeout:        o.IdleFlowTimeout,
-			staleConnectionTimeout: 0,
+			staleConnectionTimeout: o.StaleConnectionTimeout,
 			isNetworkPolicyOnly:    false,
 			allowProtocolFilter:    []string{},
 		},

@@ -26,6 +26,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -71,7 +72,7 @@ func BenchmarkAddOrUpdateConns(b *testing.B) {
 	conns := generateConns()
 
 	for b.Loop() {
-		connStore.AddOrUpdateConns(conns)
+		require.NoError(b, connStore.AddOrUpdateConns(conns))
 		b.StopTimer()
 		conns = generateUpdatedConns(conns)
 		b.StartTimer()

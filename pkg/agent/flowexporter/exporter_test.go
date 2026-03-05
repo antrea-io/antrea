@@ -272,6 +272,19 @@ func TestFlowExporter_syncFlowExporterDestination(t *testing.T) {
 		Spec: api.FlowExporterDestinationSpec{
 			ActiveFlowExportTimeoutSeconds: int32(testActiveFlowTimeout.Seconds()),
 			IdleFlowExportTimeoutSeconds:   int32(testIdleFlowTimeout.Seconds()),
+			Protocol:                       api.FlowExporterProtocol{},
+			TLSConfig: &api.FlowExporterTLSConfig{
+				ServerName:    "addr",
+				MinTLSVersion: "TLS1.2",
+				CAConfigMap: api.NamespacedName{
+					Name:      "configmap-1",
+					Namespace: "default",
+				},
+				ClientSecret: &api.NamespacedName{
+					Name:      "secret-1",
+					Namespace: "default",
+				},
+			},
 		},
 	}
 
