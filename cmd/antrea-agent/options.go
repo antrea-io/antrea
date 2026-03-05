@@ -58,7 +58,7 @@ const (
 	defaultStaleConnectionTimeout  = 5 * time.Minute
 	defaultNodeType                = config.K8sNode
 	defaultMaxEgressIPsPerNode     = 255
-	defaultAuditLogsMaxSize        = 100
+	defaultAuditLogsMaxSize        = 500
 	defaultAuditLogsMaxBackups     = 3
 	defaultAuditLogsMaxAge         = 28
 	defaultAuditLogsCompressed     = true
