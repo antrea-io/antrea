@@ -25,12 +25,17 @@ var _ IPFIXRegistry = new(ipfixRegistry)
 type IPFIXRegistry interface {
 	LoadRegistry()
 	GetInfoElement(name string, enterpriseID uint32) (*ipfixentities.InfoElement, error)
+	RegisterInfoElement(element ipfixentities.InfoElement) error
 }
 
-type ipfixRegistry struct{}
+type ipfixRegistry struct {
+	extraElements map[string]ipfixentities.InfoElement
+}
 
 func NewIPFIXRegistry() *ipfixRegistry {
-	return &ipfixRegistry{}
+	return &ipfixRegistry{
+		extraElements: make(map[string]ipfixentities.InfoElement),
+	}
 }
 
 func (reg *ipfixRegistry) LoadRegistry() {
@@ -38,5 +43,13 @@ func (reg *ipfixRegistry) LoadRegistry() {
 }
 
 func (reg *ipfixRegistry) GetInfoElement(name string, enterpriseID uint32) (*ipfixentities.InfoElement, error) {
+	if ie, exists := reg.extraElements[name]; exists {
+		return &ie, nil
+	}
 	return ipfixregistry.GetInfoElement(name, enterpriseID)
+}
+
+func (reg *ipfixRegistry) RegisterInfoElement(element ipfixentities.InfoElement) error {
+	reg.extraElements[element.Name] = element
+	return nil
 }
