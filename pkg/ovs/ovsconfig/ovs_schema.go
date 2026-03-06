@@ -32,6 +32,11 @@ type AccessPort struct {
 	Tag uint32 `json:"tag"`
 }
 
+type TrunkPort struct {
+	Port
+	Trunks []uint32 `json:"trunks"`
+}
+
 type Interface struct {
 	Name          string        `json:"name"`
 	Type          string        `json:"type,omitempty"`
