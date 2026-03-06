@@ -555,7 +555,7 @@ COMMIT
 			networkConfig: &config.NetworkConfig{
 				TrafficEncapMode:      config.TrafficEncapModeEncap,
 				TrafficEncryptionMode: config.TrafficEncryptionModeWireGuard,
-				TunnelType:            ovsconfig.GeneveTunnel,
+				TunnelType:            ovsconfig.VXLANTunnel,
 				IPv4Enabled:           true,
 				IPv6Enabled:           true,
 			},
@@ -592,8 +592,8 @@ COMMIT
 				mockIPTables.Restore(`*raw
 :ANTREA-PREROUTING - [0:0]
 :ANTREA-OUTPUT - [0:0]
--A ANTREA-PREROUTING -m comment --comment "Antrea: do not track incoming encapsulation packets" -m udp -p udp --dport 6081 -m addrtype --dst-type LOCAL -j NOTRACK
--A ANTREA-OUTPUT -m comment --comment "Antrea: do not track outgoing encapsulation packets" -m udp -p udp --dport 6081 -m addrtype --src-type LOCAL -j NOTRACK
+-A ANTREA-PREROUTING -m comment --comment "Antrea: do not track incoming encapsulation packets" -m udp -p udp --dport 4789 -m addrtype --dst-type LOCAL -j NOTRACK
+-A ANTREA-OUTPUT -m comment --comment "Antrea: do not track outgoing encapsulation packets" -m udp -p udp --dport 4789 -m addrtype --src-type LOCAL -j NOTRACK
 COMMIT
 *mangle
 :ANTREA-MANGLE - [0:0]
@@ -619,8 +619,8 @@ COMMIT
 				mockIPTables.Restore(`*raw
 :ANTREA-PREROUTING - [0:0]
 :ANTREA-OUTPUT - [0:0]
--A ANTREA-PREROUTING -m comment --comment "Antrea: do not track incoming encapsulation packets" -m udp -p udp --dport 6081 -m addrtype --dst-type LOCAL -j NOTRACK
--A ANTREA-OUTPUT -m comment --comment "Antrea: do not track outgoing encapsulation packets" -m udp -p udp --dport 6081 -m addrtype --src-type LOCAL -j NOTRACK
+-A ANTREA-PREROUTING -m comment --comment "Antrea: do not track incoming encapsulation packets" -m udp -p udp --dport 4789 -m addrtype --dst-type LOCAL -j NOTRACK
+-A ANTREA-OUTPUT -m comment --comment "Antrea: do not track outgoing encapsulation packets" -m udp -p udp --dport 4789 -m addrtype --src-type LOCAL -j NOTRACK
 COMMIT
 *mangle
 :ANTREA-MANGLE - [0:0]
