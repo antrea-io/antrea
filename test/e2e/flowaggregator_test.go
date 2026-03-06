@@ -2001,7 +2001,7 @@ func testExternalToPodFlows(t *testing.T, data *TestData, isIPv6 bool) {
 	nodePortService := "node-port-service"
 	service, err := data.CreateServiceWithAnnotations(nodePortService, data.testNamespace, 80, containerPort, corev1.ProtocolTCP, map[string]string{"app": "nginx"}, false, false, corev1.ServiceTypeNodePort, nil, nil)
 	if err != nil {
-		t.Fatalf("Failed to create service %s", nodePortService)
+		t.Fatalf("Failed to create service %s: %v", nodePortService, err)
 	}
 
 	// Trigger FlowAggregator's ipfixExporter process to start
