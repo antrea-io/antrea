@@ -1960,7 +1960,11 @@ func createExternalToPodConnection(t *testing.T, service *corev1.Service, nodeIn
 	} else {
 		addr = clusterInfo.nodes[nodeIndex].ipv4Addr
 	}
-	url := fmt.Sprintf("http://%s:%d", addr, service.Spec.Ports[0].NodePort)
+
+	portStr := strconv.Itoa(int(service.Spec.Ports[0].NodePort))
+	hostAndPort := net.JoinHostPort(addr, portStr)
+
+	url := fmt.Sprintf("http://%s", hostAndPort)
 	transport := &http.Transport{
 		DialContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
 			conn, err := net.DialTimeout(network, addr, 10*time.Second)
