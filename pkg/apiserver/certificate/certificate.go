@@ -61,7 +61,7 @@ func ApplyServerCert(selfSignedCert bool,
 				for _, path := range []string{caCertPath, tlsCertPath, tlsKeyPath} {
 					f, err := os.Open(path)
 					if err != nil {
-						klog.Warningf("Couldn't read %s when applying server certificate, retrying", path)
+						klog.InfoS("Couldn't read file when applying server certificate, retrying", "path", path)
 						return false, nil
 					}
 					f.Close()
