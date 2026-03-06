@@ -1999,6 +1999,9 @@ func testExternalToPodFlows(t *testing.T, data *TestData, isIPv6 bool) {
 	defer cleanupFunc()
 
 	nodePortService := "node-port-service"
+	if isIPv6 {
+		nodePortService += "v6"
+	}
 	service, err := data.CreateServiceWithAnnotations(nodePortService, data.testNamespace, 80, containerPort, corev1.ProtocolTCP, map[string]string{"app": "nginx"}, false, false, corev1.ServiceTypeNodePort, nil, nil)
 	if err != nil {
 		t.Fatalf("Failed to create service %s: %v", nodePortService, err)
