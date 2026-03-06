@@ -1168,7 +1168,7 @@ func TestPodControllerAddPod(t *testing.T) {
 		createPodFn(podController, pod)
 		podController.primaryInterfaceStore.AddInterface(primaryInterface)
 		podController.cniCache.Store(podKey, cniConfig)
-		// We don't expect an error here, no requeueing.
+		// We don't expect an error here, no requeuing.
 		assert.NoError(t, podController.syncPod(podKey))
 	})
 
@@ -1187,7 +1187,7 @@ func TestPodControllerAddPod(t *testing.T) {
 		createPodFn(podController, pod)
 		podController.primaryInterfaceStore.AddInterface(primaryInterface)
 		podController.cniCache.Store(podKey, cniConfig)
-		// We don't expect an error here, no requeueing.
+		// We don't expect an error here, no requeuing.
 		assert.NoError(t, podController.syncPod(podKey))
 	})
 
