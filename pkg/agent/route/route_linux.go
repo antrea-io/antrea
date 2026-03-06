@@ -852,6 +852,10 @@ func (c *Client) restoreIptablesData(podCIDR *net.IPNet,
 		} else if c.networkConfig.TunnelType == ovsconfig.VXLANTunnel {
 			udpPort = vxlanPort
 		}
+		// If a tunnel port is specified, use it instead of the default port.
+		if c.networkConfig.TunnelPort != 0 && udpPort != 0 {
+			udpPort = int(c.networkConfig.TunnelPort)
+		}
 		if udpPort > 0 {
 			writeLine(iptablesData, []string{
 				"-A", antreaPreRoutingChain,
