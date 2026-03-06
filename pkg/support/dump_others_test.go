@@ -162,6 +162,151 @@ func TestDumpNFTables(t *testing.T) {
 	}
 }
 
+func TestDumpIPToolInfo(t *testing.T) {
+	fs := afero.NewMemMapFs()
+	fs.MkdirAll(baseDir, os.ModePerm)
+
+	exe := new(testExec)
+	dumper := &agentDumper{
+		fs:       fs,
+		executor: exe,
+	}
+
+	err := dumper.dumpIPToolInfo(baseDir)
+	require.NoError(t, err)
+
+	expectedFiles := map[string]string{
+		"route":     "ip route",
+		"route-all": "ip route show table all",
+		"rule":      "ip rule",
+		"link":      "ip link",
+		"address":   "ip address",
+	}
+	for fileName, expectedContent := range expectedFiles {
+		content, err := afero.ReadFile(fs, filepath.Join(baseDir, fileName))
+		require.NoError(t, err, "expected file %q to exist", fileName)
+		assert.Equal(t, expectedContent, string(content), "unexpected content for file %q", fileName)
+	}
+}
+
+func TestDumpSysctlNetIF(t *testing.T) {
+	tests := []struct {
+		name             string
+		interfaces       map[string]map[string]string
+		unreadableParams map[string][]string // params to create as dirs to trigger a non-ErrNotExist error
+		expectedContent  []string
+		notExpected      []string
+		sysctlPathEmpty  bool
+		expectedErr      string
+	}{
+		{
+			name: "reads rp_filter, arp_ignore and arp_announce for all interfaces",
+			interfaces: map[string]map[string]string{
+				"eth0": {
+					"rp_filter":    "1",
+					"arp_ignore":   "0",
+					"arp_announce": "0",
+				},
+				"antrea-ext.10": {
+					"rp_filter":    "2",
+					"arp_ignore":   "1",
+					"arp_announce": "2",
+				},
+			},
+			expectedContent: []string{
+				"net.ipv4.conf.eth0.rp_filter = 1",
+				"net.ipv4.conf.eth0.arp_ignore = 0",
+				"net.ipv4.conf.eth0.arp_announce = 0",
+				"net.ipv4.conf.antrea-ext.10.rp_filter = 2",
+				"net.ipv4.conf.antrea-ext.10.arp_ignore = 1",
+				"net.ipv4.conf.antrea-ext.10.arp_announce = 2",
+			},
+		},
+		{
+			name: "missing param files are silently skipped",
+			interfaces: map[string]map[string]string{
+				"all": {
+					"rp_filter": "0",
+					// arp_ignore and arp_announce intentionally absent
+				},
+			},
+			expectedContent: []string{
+				"net.ipv4.conf.all.rp_filter = 0",
+			},
+			notExpected: []string{
+				"net.ipv4.conf.all.arp_ignore",
+				"net.ipv4.conf.all.arp_announce",
+			},
+		},
+		{
+			name: "non-ErrNotExist read error is returned with interface and param context",
+			interfaces: map[string]map[string]string{
+				"eth0": {"rp_filter": "1"},
+			},
+			// Creating arp_ignore as a directory makes os.ReadFile return EISDIR,
+			// which is not ErrNotExist and must not be silently skipped.
+			unreadableParams: map[string][]string{
+				"eth0": {"arp_ignore"},
+			},
+			expectedErr: "error when reading sysctl parameter arp_ignore for interface eth0",
+		},
+		{
+			name:            "returns error when sysctl path does not exist",
+			sysctlPathEmpty: true,
+			expectedErr:     "error when reading sysctl net IPv4 conf",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			origPath := sysctlNetIPv4ConfPath
+			t.Cleanup(func() { sysctlNetIPv4ConfPath = origPath })
+
+			if tc.sysctlPathEmpty {
+				sysctlNetIPv4ConfPath = filepath.Join(t.TempDir(), "nonexistent")
+			} else {
+				tmpDir := t.TempDir()
+				sysctlNetIPv4ConfPath = tmpDir
+				for iface, params := range tc.interfaces {
+					ifaceDir := filepath.Join(tmpDir, iface)
+					require.NoError(t, os.MkdirAll(ifaceDir, 0755))
+					for param, value := range params {
+						require.NoError(t, os.WriteFile(filepath.Join(ifaceDir, param), []byte(value+"\n"), 0644))
+					}
+				}
+				for iface, params := range tc.unreadableParams {
+					for _, param := range params {
+						require.NoError(t, os.MkdirAll(filepath.Join(tmpDir, iface, param), 0755))
+					}
+				}
+			}
+
+			fs := afero.NewMemMapFs()
+			fs.MkdirAll(baseDir, os.ModePerm)
+			dumper := &agentDumper{fs: fs}
+
+			err := dumper.dumpSysctlNetIF(baseDir)
+
+			if tc.expectedErr != "" {
+				require.ErrorContains(t, err, tc.expectedErr)
+				return
+			}
+			require.NoError(t, err)
+
+			content, err := afero.ReadFile(fs, filepath.Join(baseDir, "sysctl-net"))
+			require.NoError(t, err)
+			output := string(content)
+
+			for _, expected := range tc.expectedContent {
+				assert.Contains(t, output, expected)
+			}
+			for _, notExpected := range tc.notExpected {
+				assert.NotContains(t, output, notExpected)
+			}
+		})
+	}
+}
+
 func TestDumpIPSet(t *testing.T) {
 	const ipsetOutput = `create ANTREA-POD-IP hash:net family inet hashsize 1024 maxelem 65536 bucketsize 12 initval 0xaff5135c
 add ANTREA-POD-IP 10.244.0.0/24
