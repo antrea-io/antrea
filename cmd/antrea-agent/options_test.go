@@ -388,6 +388,60 @@ func TestOptionsValidateSecondaryNetworkConfig(t *testing.T) {
 	}
 }
 
+func TestOptionsSetAuditLoggingDefaultOptions(t *testing.T) {
+	tests := []struct {
+		name           string
+		auditLogging   agentconfig.AuditLoggingConfig
+		expectedConfig agentconfig.AuditLoggingConfig
+	}{
+		{
+			name:         "all fields zero/nil get defaults",
+			auditLogging: agentconfig.AuditLoggingConfig{},
+			expectedConfig: agentconfig.AuditLoggingConfig{
+				MaxSize:    int32(defaultAuditLogsMaxSize),
+				MaxBackups: ptr.To(int32(defaultAuditLogsMaxBackups)),
+				MaxAge:     ptr.To(int32(defaultAuditLogsMaxAge)),
+				Compress:   ptr.To(defaultAuditLogsCompressed),
+			},
+		},
+		{
+			name: "non-zero MaxSize is not overwritten",
+			auditLogging: agentconfig.AuditLoggingConfig{
+				MaxSize: 50,
+			},
+			expectedConfig: agentconfig.AuditLoggingConfig{
+				MaxSize:    50,
+				MaxBackups: ptr.To(int32(defaultAuditLogsMaxBackups)),
+				MaxAge:     ptr.To(int32(defaultAuditLogsMaxAge)),
+				Compress:   ptr.To(defaultAuditLogsCompressed),
+			},
+		},
+		{
+			name: "non-nil pointer fields are not overwritten",
+			auditLogging: agentconfig.AuditLoggingConfig{
+				MaxBackups: ptr.To(int32(10)),
+				MaxAge:     ptr.To(int32(7)),
+				Compress:   ptr.To(false),
+			},
+			expectedConfig: agentconfig.AuditLoggingConfig{
+				MaxSize:    int32(defaultAuditLogsMaxSize),
+				MaxBackups: ptr.To(int32(10)),
+				MaxAge:     ptr.To(int32(7)),
+				Compress:   ptr.To(false),
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			o := &Options{config: &agentconfig.AgentConfig{
+				AuditLogging: tt.auditLogging,
+			}}
+			o.setAuditLoggingDefaultOptions()
+			assert.Equal(t, tt.expectedConfig, o.config.AuditLogging)
+		})
+	}
+}
+
 func TestOptionsValidateHostNetworkMode(t *testing.T) {
 	tests := []struct {
 		name                          string

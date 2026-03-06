@@ -58,7 +58,7 @@ const (
 	defaultStaleConnectionTimeout  = 5 * time.Minute
 	defaultNodeType                = config.K8sNode
 	defaultMaxEgressIPsPerNode     = 255
-	defaultAuditLogsMaxSize        = 100
+	defaultAuditLogsMaxSize        = 500
 	defaultAuditLogsMaxBackups     = 3
 	defaultAuditLogsMaxAge         = 28
 	defaultAuditLogsCompressed     = true
@@ -783,7 +783,7 @@ func (o *Options) setMulticlusterDefaultOptions() {
 func (o *Options) setAuditLoggingDefaultOptions() {
 	auditLogging := &o.config.AuditLogging
 	if auditLogging.MaxSize == 0 {
-		auditLogging.MaxSize = defaultAuditLogsMaxAge
+		auditLogging.MaxSize = defaultAuditLogsMaxSize
 	}
 	if auditLogging.MaxBackups == nil {
 		maxBackups := int32(defaultAuditLogsMaxBackups)
