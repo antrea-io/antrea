@@ -21,8 +21,11 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"antrea.io/antrea/pkg/antctl/raw/check"
+	crdv1beta1 "antrea.io/antrea/pkg/apis/crd/v1beta1"
+	antreafake "antrea.io/antrea/pkg/client/clientset/versioned/fake"
 )
 
 func overrideTestsRegistry(t *testing.T, registry map[string]Test) {
@@ -49,6 +52,44 @@ type successfulTest struct{}
 
 func (t *successfulTest) Run(ctx context.Context, testContext *testContext) error {
 	return nil
+}
+
+func TestGetNodeTransportInterface(t *testing.T) {
+	ctx := context.Background()
+	nodeName := "test-node"
+
+	testCases := []struct {
+		name           string
+		transportIface string
+		expectedIface  string
+	}{
+		{
+			name:           "transport interface is set",
+			transportIface: "eth0",
+			expectedIface:  "eth0",
+		},
+		{
+			name:           "transport interface is empty, falls back to any",
+			transportIface: "",
+			expectedIface:  "any",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			agentInfo := &crdv1beta1.AntreaAgentInfo{
+				ObjectMeta: metav1.ObjectMeta{Name: nodeName},
+				NetworkInfo: crdv1beta1.NetworkInfo{
+					TransportInterface: tc.transportIface,
+				},
+			}
+			antreaClient := antreafake.NewSimpleClientset(agentInfo)
+			testContext := NewTestContext(nil, antreaClient, nil, "test-cluster", "kube-system", nil, check.DefaultTestImage, minNetworkPolicyDelay)
+			iface, err := getNodeTransportInterface(ctx, testContext, nodeName)
+			require.NoError(t, err)
+			assert.Equal(t, tc.expectedIface, iface)
+		})
+	}
 }
 
 func TestRun(t *testing.T) {
@@ -105,7 +146,7 @@ func TestRun(t *testing.T) {
 			overrideTestsRegistry(t, tc.registry)
 			runFilterRegex, err := compileRunFilter(tc.runFilter)
 			require.NoError(t, err)
-			testContext := NewTestContext(nil, nil, "test-cluster", "kube-system", runFilterRegex, check.DefaultTestImage, minNetworkPolicyDelay)
+			testContext := NewTestContext(nil, nil, nil, "test-cluster", "kube-system", runFilterRegex, check.DefaultTestImage, minNetworkPolicyDelay)
 			stats := testContext.runTests(ctx)
 			assert.Equal(t, tc.expectedStats, stats)
 		})
