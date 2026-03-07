@@ -43,6 +43,7 @@ import (
 	"antrea.io/antrea/pkg/client/clientset/versioned/scheme"
 	systemclientset "antrea.io/antrea/pkg/client/clientset/versioned/typed/system/v1beta1"
 	"antrea.io/antrea/pkg/util/compress"
+	fakenad "github.com/k8snetworkplumbingwg/network-attachment-definition-client/pkg/client/clientset/versioned/fake"
 )
 
 var (
@@ -484,4 +485,23 @@ func TestProcessResults(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestGetClusterInfo(t *testing.T) {
+	k8sClient := fake.NewSimpleClientset()
+	antreaClient := fakeclientset.NewSimpleClientset(&controllerInfo)
+	nadClient := fakenad.NewSimpleClientset()
+
+	// Inject Error for Egresses to verify "best effort" behavior
+	antreaClient.PrependReactor("list", "egresses", func(action k8stesting.Action) (handled bool, ret runtime.Object, err error) {
+		return true, nil, fmt.Errorf("mock error for egresses")
+	})
+
+	var buf bytes.Buffer
+	err := getClusterInfo(&buf, k8sClient, antreaClient, nadClient)
+	require.NoError(t, err)
+
+	assert.Contains(t, buf.String(), "antreaControllerInfos")
+	// Verify that Egresses are NOT present (due to error), but the function succeeded.
+	assert.NotContains(t, buf.String(), "#egresses")
 }
