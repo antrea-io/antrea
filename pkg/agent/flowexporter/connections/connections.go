@@ -163,7 +163,7 @@ func lookupServiceProtocol(protoID uint8) (corev1.Protocol, error) {
 	return serviceProto, nil
 }
 
-func (cs *connectionStore) getPolicyRuleMetadata(conn *connection.Connection, ruleID uint32, labelStart, labelEnd int) (*types.PolicyRule, uint8, bool) {
+func (cs *connectionStore) getPolicyRuleMetadata(conn *connection.Connection, ruleID uint32, labelsStart, labelsEnd int) (*types.PolicyRule, uint8, bool) {
 	var rule *types.PolicyRule
 	var disposition uint8
 
@@ -172,8 +172,8 @@ func (cs *connectionStore) getPolicyRuleMetadata(conn *connection.Connection, ru
 		disposition = utils.RuleActionToUint8(conn.Disposition)
 	}
 
-	if len(conn.Labels) >= labelEnd {
-		flowID := binary.BigEndian.Uint32(conn.Labels[labelStart:labelEnd])
+	if len(conn.Labels) >= labelsEnd {
+		flowID := binary.BigEndian.Uint32(conn.Labels[labelsStart:labelsEnd])
 		if flowID != 0 {
 			rule = cs.networkPolicyQuerier.GetRuleByFlowID(flowID)
 			disposition = utils.NetworkPolicyRuleActionAllow
@@ -190,10 +190,7 @@ func (cs *connectionStore) getPolicyRuleMetadata(conn *connection.Connection, ru
 	}
 
 	if klog.V(4).Enabled() {
-		klog.InfoS("Found NetworkPolicy rule",
-			"flowID", ruleID,
-			"policy", klog.KRef(rule.PolicyRef.Namespace, rule.PolicyRef.Name),
-			"ruleName", rule.Name)
+		klog.InfoS("Found NetworkPolicy rule", "flowID", ruleID, "policy", klog.KRef(rule.PolicyRef.Namespace, rule.PolicyRef.Name), "ruleName", rule.Name)
 	}
 
 	return rule, disposition, true

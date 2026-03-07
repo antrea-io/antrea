@@ -140,6 +140,9 @@ func TestAddIngressNetworkPolicyMetadata(t *testing.T) {
 		Type:      v1beta2.AntreaNetworkPolicy,
 	}
 
+	labels := make([]byte, 16)
+	binary.BigEndian.PutUint32(labels[12:16], 300)
+
 	mockCtrl := gomock.NewController(t)
 	mockQuerier := queriertest.NewMockAgentNetworkPolicyInfoQuerier(mockCtrl)
 	mockQuerier.EXPECT().GetRuleByFlowID(uint32(100)).Return(&types.PolicyRule{Name: "rule-100", PolicyRef: validPolicy}).AnyTimes()
@@ -174,7 +177,7 @@ func TestAddIngressNetworkPolicyMetadata(t *testing.T) {
 			name: "Success via Labels (overrides IngressRuleID)",
 			conn: &connection.Connection{
 				IngressRuleID: 200,
-				Labels:        makeLabels(300, 12),
+				Labels:        labels,
 				Disposition:   "Drop",
 			},
 			expectedName:       "allow-web",
@@ -222,6 +225,9 @@ func TestAddEgressNetworkPolicyMetadata(t *testing.T) {
 		Type:      v1beta2.AntreaNetworkPolicy,
 	}
 
+	labels := make([]byte, 16)
+	binary.BigEndian.PutUint32(labels[8:12], 300)
+
 	mockCtrl := gomock.NewController(t)
 	mockQuerier := queriertest.NewMockAgentNetworkPolicyInfoQuerier(mockCtrl)
 	mockQuerier.EXPECT().GetRuleByFlowID(uint32(100)).Return(&types.PolicyRule{Name: "rule-100", PolicyRef: validPolicy}).AnyTimes()
@@ -256,7 +262,7 @@ func TestAddEgressNetworkPolicyMetadata(t *testing.T) {
 			name: "Success via Labels (overrides EgressRuleID)",
 			conn: &connection.Connection{
 				EgressRuleID: 200,
-				Labels:       makeLabels(300, 8),
+				Labels:       labels,
 				Disposition:  "Drop",
 			},
 			expectedName:       "allow-web",

@@ -1924,7 +1924,7 @@ func getAndCheckFlowAggregatorMetrics(t *testing.T, data *TestData, withClickHou
 
 		for idx := range flowAggPods {
 			podName := flowAggPods[idx].Name
-			stdout, _, err := runAntctlWithNamespace(podName, command, data, namespace)
+			stdout, _, err := runAntctlWithNamespace(namespace, podName, command, data)
 			if err != nil {
 				t.Logf("Error when requesting recordmetrics, %v", err)
 				return false, nil
