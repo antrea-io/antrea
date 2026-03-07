@@ -22,7 +22,7 @@ import (
 	"k8s.io/klog/v2"
 
 	"antrea.io/antrea/pkg/agent/flowexporter/connection"
-	"antrea.io/antrea/pkg/agent/flowexporter/options"
+	"antrea.io/antrea/pkg/agent/flowexporter/filter"
 	"antrea.io/antrea/pkg/agent/flowexporter/priorityqueue"
 	"antrea.io/antrea/pkg/agent/flowexporter/utils"
 	"antrea.io/antrea/pkg/agent/metrics"
@@ -30,7 +30,6 @@ import (
 	"antrea.io/antrea/pkg/agent/proxy"
 	"antrea.io/antrea/pkg/querier"
 	"antrea.io/antrea/pkg/util/objectstore"
-	utilwait "antrea.io/antrea/pkg/util/wait"
 )
 
 var serviceProtocolMap = map[uint8]corev1.Protocol{
@@ -40,116 +39,26 @@ var serviceProtocolMap = map[uint8]corev1.Protocol{
 }
 
 type ConntrackConnectionStore struct {
-	connDumper            ConnTrackDumper
-	v4Enabled             bool
-	v6Enabled             bool
-	pollInterval          time.Duration
-	connectUplinkToBridge bool
-	// networkPolicyWait is used to determine when NetworkPolicy flows have been installed and
-	// when the mapping from flow ID to NetworkPolicy rule is available. We will ignore
-	// connections which started prior to that time to avoid reporting invalid NetworkPolicy
-	// metadata in flow records. This is because the mapping is not "stable" and is expected to
-	// change when the Agent restarts.
-	networkPolicyWait *utilwait.Group
-	// networkPolicyReadyTime is set to the current time when we are done waiting on networkPolicyWait.
 	networkPolicyReadyTime time.Time
+	protocolFilter         filter.ProtocolFilter
 	connectionStore
 }
 
 func NewConntrackConnectionStore(
-	connTrackDumper ConnTrackDumper,
-	v4Enabled bool,
-	v6Enabled bool,
 	npQuerier querier.AgentNetworkPolicyInfoQuerier,
 	podStore objectstore.PodStore,
 	proxier proxy.ProxyQuerier,
-	networkPolicyWait *utilwait.Group,
-	o *options.FlowExporterOptions,
+	cfg ConnectionStoreConfig,
 ) *ConntrackConnectionStore {
 	return &ConntrackConnectionStore{
-		connDumper:            connTrackDumper,
-		v4Enabled:             v4Enabled,
-		v6Enabled:             v6Enabled,
-		pollInterval:          o.PollInterval,
-		connectionStore:       NewConnectionStore(npQuerier, podStore, proxier, o),
-		connectUplinkToBridge: o.ConnectUplinkToBridge,
-		networkPolicyWait:     networkPolicyWait,
+		connectionStore:        NewConnectionStore(npQuerier, podStore, proxier, cfg),
+		protocolFilter:         filter.NewProtocolFilter(cfg.AllowedProtocols),
+		networkPolicyReadyTime: cfg.NetworkPolicyReadyTime,
 	}
 }
 
-// Run enables the periodical polling of conntrack connections at a given flowPollInterval.
-func (cs *ConntrackConnectionStore) Run(stopCh <-chan struct{}) {
-	if cs.networkPolicyWait != nil {
-		klog.Info("Waiting for NetworkPolicies to become ready")
-		if err := cs.networkPolicyWait.WaitUntil(stopCh); err != nil {
-			klog.ErrorS(err, "Error while waiting for NetworkPolicies to become ready")
-			return
-		}
-	} else {
-		klog.Info("Skip waiting for NetworkPolicies to become ready")
-	}
-	cs.networkPolicyReadyTime = time.Now()
-
-	klog.Info("Starting conntrack polling")
-
-	pollTicker := time.NewTicker(cs.pollInterval)
-	defer pollTicker.Stop()
-
-	for {
-		select {
-		case <-stopCh:
-			return
-		case <-pollTicker.C:
-			if _, err := cs.Poll(); err != nil {
-				// Not failing here as errors can be transient and could be resolved in future poll cycles.
-				// TODO: Come up with a backoff/retry mechanism by increasing poll interval and adding retry timeout
-				klog.ErrorS(err, "Error during conntrack poll cycle")
-			}
-		}
-	}
-}
-
-// Poll calls into conntrackDumper interface to dump conntrack flows. It returns the number of connections for each
-// address family, as a slice. In dual-stack clusters, the slice will contain 2 values (number of IPv4 connections first,
-// then number of IPv6 connections).
-// TODO: As optimization, only poll invalid/closed connections during every poll, and poll the established connections right before the export.
-func (cs *ConntrackConnectionStore) Poll() ([]int, error) {
-	klog.V(2).Info("Polling conntrack and updating connection store")
-	startTime := time.Now()
-	defer func() {
-		duration := time.Since(startTime)
-		metrics.ConntrackPollCycleDuration.Observe(duration.Seconds())
-		klog.V(2).InfoS("Polled conntrack and updated connection store", "duration", duration)
-	}()
-
-	var zones []uint16
-	var connsLens []int
-	if cs.v4Enabled {
-		if cs.connectUplinkToBridge {
-			zones = append(zones, uint16(openflow.IPCtZoneTypeRegMark.GetValue()<<12))
-		} else {
-			zones = append(zones, openflow.CtZone)
-		}
-	}
-	if cs.v6Enabled {
-		if cs.connectUplinkToBridge {
-			zones = append(zones, uint16(openflow.IPv6CtZoneTypeRegMark.GetValue()<<12))
-		} else {
-			zones = append(zones, openflow.CtZoneV6)
-		}
-	}
-	var totalConns int
-	var filteredConnsList []*connection.Connection
-	for _, zone := range zones {
-		filteredConnsListPerZone, totalConnsPerZone, err := cs.connDumper.DumpFlows(zone)
-		if err != nil {
-			return []int{}, err
-		}
-		totalConns += totalConnsPerZone
-		filteredConnsList = append(filteredConnsList, filteredConnsListPerZone...)
-		connsLens = append(connsLens, len(filteredConnsList))
-	}
-
+func (cs *ConntrackConnectionStore) AddOrUpdateConns(conns []*connection.Connection) error {
+	klog.V(2).InfoS("Updating connection store")
 	// Reset IsPresent flag for all connections in connection map before updating
 	// the dumped flows information in connection map. If the connection does not
 	// exist in conntrack table and has been exported, then we will delete it from
@@ -181,30 +90,26 @@ func (cs *ConntrackConnectionStore) Poll() ([]int, error) {
 
 	if err := cs.ForAllConnectionsDoWithoutLock(deleteIfStaleOrResetConn); err != nil {
 		cs.ReleaseConnStoreLock()
-		return []int{}, err
+		return err
 	}
 
 	// Update only the Connection store. IPFIX records are generated based on Connection store.
-	for _, conn := range filteredConnsList {
+	for _, conn := range conns {
 		cs.AddOrUpdateConn(conn)
 	}
 
 	cs.ReleaseConnStoreLock()
 
-	metrics.TotalConnectionsInConnTrackTable.Set(float64(totalConns))
-	maxConns, err := cs.connDumper.GetMaxConnections()
-	if err != nil {
-		return []int{}, err
-	}
-	metrics.MaxConnectionsInConnTrackTable.Set(float64(maxConns))
-	klog.V(2).Infof("Conntrack polling successful")
-
-	return connsLens, nil
+	return nil
 }
 
 // AddOrUpdateConn updates the connection if it is already present, i.e., update timestamp, counters etc.,
 // or adds a new connection with the resolved K8s metadata.
 func (cs *ConntrackConnectionStore) AddOrUpdateConn(conn *connection.Connection) {
+	if !cs.protocolFilter.Allow(conn.FlowKey.Protocol) {
+		return
+	}
+
 	conn.IsPresent = true
 	connKey := connection.NewConnectionKey(conn)
 
@@ -237,6 +142,8 @@ func (cs *ConntrackConnectionStore) AddOrUpdateConn(conn *connection.Connection)
 		}
 		klog.V(4).InfoS("Antrea flow updated", "connection", existingConn)
 	} else {
+		connCopy := *conn
+		conn := &connCopy
 		cs.fillPodInfo(conn)
 		if conn.SourcePodName == "" && conn.DestinationPodName == "" {
 			// We don't add connections to connection map or expirePriorityQueue if we can't find the pod
