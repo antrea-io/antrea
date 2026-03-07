@@ -39,6 +39,7 @@ import (
 	"antrea.io/antrea/pkg/agent/flowexporter/options"
 	"antrea.io/antrea/pkg/agent/flowexporter/priorityqueue"
 	flowexportertesting "antrea.io/antrea/pkg/agent/flowexporter/testing"
+	"antrea.io/antrea/pkg/agent/flowexporter/utils"
 	"antrea.io/antrea/pkg/agent/metrics"
 	agenttypes "antrea.io/antrea/pkg/agent/types"
 	queriertest "antrea.io/antrea/pkg/querier/testing"
@@ -300,7 +301,7 @@ func runSendFlowRecordTests(t *testing.T, flowExp *FlowExporter, isIPv6 bool) {
 				StaleConnectionTimeout: 1,
 				PollInterval:           1,
 			}
-			flowExp.conntrackConnStore = connections.NewConntrackConnectionStore(mockConnDumper, !isIPv6, isIPv6, nil, nil, nil, nil, o)
+			flowExp.conntrackConnStore = connections.NewConntrackConnectionStore(mockConnDumper, !isIPv6, isIPv6, nil, nil, nil, nil, o, nil, false)
 			flowExp.denyConnStore = connections.NewDenyConnectionStore(nil, nil, nil, o, filter.NewProtocolFilter(nil))
 			flowExp.conntrackPriorityQueue = flowExp.conntrackConnStore.GetPriorityQueue()
 			flowExp.denyPriorityQueue = flowExp.denyConnStore.GetPriorityQueue()
@@ -387,23 +388,74 @@ func getNumOfDenyConns(connStore *connections.DenyConnectionStore) int {
 	return count
 }
 
-func TestFlowExporter_findFlowType(t *testing.T) {
-	conn1 := connection.Connection{SourcePodName: "podA", DestinationPodName: "podB"}
-	conn2 := connection.Connection{SourcePodName: "podA", DestinationPodName: ""}
-	for _, tc := range []struct {
-		isNetworkPolicyOnly bool
-		conn                connection.Connection
-		expectedFlowType    uint8
+func TestFlowExporter_exportConn(t *testing.T) {
+	testCases := []struct {
+		name         string
+		conn         connection.Connection
+		expectExport bool
+		egressSetup  func(*queriertest.MockEgressQuerier)
 	}{
-		{true, conn1, 1},
-		{true, conn2, 2},
-		{false, conn1, 0},
-	} {
-		flowExp := &FlowExporter{
-			isNetworkPolicyOnly: tc.isNetworkPolicyOnly,
-		}
-		flowType := flowExp.findFlowType(tc.conn)
-		assert.Equal(t, tc.expectedFlowType, flowType)
+		{
+			name: "FlowTypeUnsupported is skipped",
+			conn: connection.Connection{FlowType: utils.FlowTypeUnsupported},
+		},
+		{
+			name: "FlowTypeToExternal without source pod is skipped",
+			conn: connection.Connection{FlowType: utils.FlowTypeToExternal},
+		},
+		{
+			name: "FlowTypeToExternal with source pod is exported",
+			conn: connection.Connection{
+				FlowType:           utils.FlowTypeToExternal,
+				SourcePodNamespace: "ns",
+				SourcePodName:      "pod",
+			},
+			expectExport: true,
+			egressSetup: func(q *queriertest.MockEgressQuerier) {
+				q.EXPECT().GetEgress("ns", "pod").Return(agenttypes.EgressConfig{}, fmt.Errorf("no egress"))
+			},
+		},
+		{
+			name:         "FlowTypeIntraNode is exported",
+			conn:         connection.Connection{FlowType: utils.FlowTypeIntraNode},
+			expectExport: true,
+		},
+		{
+			name:         "FlowTypeInterNode is exported",
+			conn:         connection.Connection{FlowType: utils.FlowTypeInterNode},
+			expectExport: true,
+		},
+		{
+			name:         "FlowTypeUnspecified is exported",
+			conn:         connection.Connection{FlowType: utils.FlowTypeUnspecified},
+			expectExport: true,
+		},
+	}
+
+	for _, tc := range testCases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			mockExporter := exportertesting.NewMockInterface(ctrl)
+			egressQuerier := queriertest.NewMockEgressQuerier(ctrl)
+			exp := &FlowExporter{
+				exporter:      mockExporter,
+				egressQuerier: egressQuerier,
+			}
+			if tc.egressSetup != nil {
+				tc.egressSetup(egressQuerier)
+			}
+			if tc.expectExport {
+				mockExporter.EXPECT().Export(gomock.Any()).Return(nil)
+			}
+			err := exp.exportConn(&tc.conn)
+			require.NoError(t, err)
+			if tc.expectExport {
+				assert.Equal(t, uint64(1), exp.numConnsExported)
+			} else {
+				assert.Equal(t, uint64(0), exp.numConnsExported)
+			}
+		})
 	}
 }
 

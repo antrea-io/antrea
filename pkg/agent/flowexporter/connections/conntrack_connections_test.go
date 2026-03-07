@@ -104,6 +104,7 @@ func TestConntrackConnectionStore_AddOrUpdateConn(t *testing.T) {
 		newConn                          connection.Connection
 		expectedConn                     connection.Connection
 		expectNetworkPolicyMetadataAdded bool
+		nodeRouteController              NodeRouteQuerier
 	}{
 		{
 			name:                             "addNewConn",
@@ -237,7 +238,51 @@ func TestConntrackConnectionStore_AddOrUpdateConn(t *testing.T) {
 				DestinationPodName:         "pod1",
 				DestinationPodNamespace:    "ns1",
 				DestinationServicePortName: servicePortName.String(),
-				// NetworkPolicy fields should be empty for old connections
+			// NetworkPolicy fields should be empty for old connections
+			},
+		},
+		{
+			// Verify that conn.FlowType is set from findFlowType when a
+			// nodeRouteController is provided. Both IPs belong to pod subnets,
+			// but only the destination maps to a local Pod, so SourcePodName is
+			// empty after fillPodInfo → FlowTypeInterNode.
+			name:                             "addNewConn_withRouteController_setsFlowType",
+			oldConn:                          nil,
+			expectNetworkPolicyMetadataAdded: true,
+			nodeRouteController: &fakeNodeRouteQuerier{
+				podSubnets: map[string]bool{
+					"5.6.7.8": true,
+					"8.7.6.5": true,
+				},
+			},
+			newConn: connection.Connection{
+				StartTime: refTime,
+				StopTime:  refTime,
+				FlowKey:   tuple,
+				Labels:    []byte{0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x1},
+				Mark:      openflow.ServiceCTMark.GetValue(),
+			},
+			expectedConn: connection.Connection{
+				StartTime:                      refTime,
+				StopTime:                       refTime,
+				LastExportTime:                 refTime,
+				FlowKey:                        tuple,
+				Labels:                         []byte{0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x1},
+				Mark:                           openflow.ServiceCTMark.GetValue(),
+				IsPresent:                      true,
+				IsActive:                       true,
+				DestinationPodName:             "pod1",
+				DestinationPodNamespace:        "ns1",
+				DestinationServicePortName:     servicePortName.String(),
+				IngressNetworkPolicyName:       np1.Name,
+				IngressNetworkPolicyNamespace:  np1.Namespace,
+				IngressNetworkPolicyUID:        string(np1.UID),
+				IngressNetworkPolicyType:       utils.PolicyTypeToUint8(np1.Type),
+				IngressNetworkPolicyRuleName:   rule1.Name,
+				IngressNetworkPolicyRuleAction: utils.RuleActionToUint8(string(*rule1.Action)),
+				// SourcePodName is "" after fillPodInfo (not a local pod), so
+				// findFlowType returns FlowTypeInterNode.
+				FlowType: utils.FlowTypeInterNode,
 			},
 		},
 	}
@@ -250,7 +295,7 @@ func TestConntrackConnectionStore_AddOrUpdateConn(t *testing.T) {
 			mockConnDumper := connectionstest.NewMockConnTrackDumper(ctrl)
 			npQuerier := queriertest.NewMockAgentNetworkPolicyInfoQuerier(ctrl)
 
-			conntrackConnStore := NewConntrackConnectionStore(mockConnDumper, true, false, npQuerier, mockPodStore, mockProxier, nil, testFlowExporterOptions)
+			conntrackConnStore := NewConntrackConnectionStore(mockConnDumper, true, false, npQuerier, mockPodStore, mockProxier, nil, testFlowExporterOptions, c.nodeRouteController, false)
 			// Set the networkPolicyReadyTime to simulate that NetworkPolicies are ready
 			conntrackConnStore.networkPolicyReadyTime = networkPolicyReadyTime
 
@@ -332,7 +377,7 @@ func TestConnectionStore_DeleteConnectionByKey(t *testing.T) {
 	metrics.TotalAntreaConnectionsInConnTrackTable.Set(float64(len(testFlows)))
 	// Create connectionStore
 	mockPodStore := objectstoretest.NewMockPodStore(ctrl)
-	connStore := NewConntrackConnectionStore(nil, true, false, nil, mockPodStore, nil, nil, testFlowExporterOptions)
+	connStore := NewConntrackConnectionStore(nil, true, false, nil, mockPodStore, nil, nil, testFlowExporterOptions, nil, false)
 	// Add flows to the connection store.
 	for i, flow := range testFlows {
 		connStore.connections[*testFlowKeys[i]] = flow
@@ -354,7 +399,7 @@ func TestConnectionStore_MetricSettingInPoll(t *testing.T) {
 	// Create connectionStore
 	mockPodStore := objectstoretest.NewMockPodStore(ctrl)
 	mockConnDumper := connectionstest.NewMockConnTrackDumper(ctrl)
-	conntrackConnStore := NewConntrackConnectionStore(mockConnDumper, true, false, nil, mockPodStore, nil, nil, testFlowExporterOptions)
+	conntrackConnStore := NewConntrackConnectionStore(mockConnDumper, true, false, nil, mockPodStore, nil, nil, testFlowExporterOptions, nil, false)
 	// Hard-coded conntrack occupancy metrics for test
 	TotalConnections := 0
 	MaxConnections := 300000
@@ -382,7 +427,7 @@ func TestConntrackConnectionStore_Run_NetworkPolicyWait(t *testing.T) {
 		StaleConnectionTimeout: testStaleConnectionTimeout,
 		PollInterval:           100 * time.Millisecond, // Valid but small poll interval
 	}
-	conntrackConnStore := NewConntrackConnectionStore(mockConnDumper, true, false, nil, nil, nil, networkPolicyWait, testOptions)
+	conntrackConnStore := NewConntrackConnectionStore(mockConnDumper, true, false, nil, nil, nil, networkPolicyWait, testOptions, nil, false)
 
 	// Create a signal channel that will be closed on the first DumpFlows call
 	firstPollDoneCh := make(chan struct{})
@@ -436,4 +481,100 @@ func TestConntrackConnectionStore_Run_NetworkPolicyWait(t *testing.T) {
 	// Verify that networkPolicyReadyTime has been set and is after we started the test
 	require.NotZero(t, conntrackConnStore.networkPolicyReadyTime)
 	assert.True(t, conntrackConnStore.networkPolicyReadyTime.After(beforeRunTime))
+}
+
+// fakeNodeRouteQuerier is a test implementation of NodeRouteQuerier.
+type fakeNodeRouteQuerier struct {
+	podSubnets map[string]bool
+	gwSubnets  map[string]bool
+}
+
+func (f *fakeNodeRouteQuerier) LookupIPInPodSubnets(ip netip.Addr) (bool, bool) {
+	s := ip.String()
+	isGw := f.gwSubnets[s]
+	isPod := f.podSubnets[s] || isGw
+	return isPod, isGw
+}
+
+func TestFindFlowType(t *testing.T) {
+	srcIP := netip.MustParseAddr("1.2.3.4")
+	dstIP := netip.MustParseAddr("5.6.7.8")
+	extIP := netip.MustParseAddr("9.9.9.9")
+
+	// nrc: both src and dst are ordinary pod IPs (no gateway).
+	nrc := &fakeNodeRouteQuerier{
+		podSubnets: map[string]bool{srcIP.String(): true, dstIP.String(): true},
+	}
+	// gwNRC: src IP is a gateway (also a pod subnet hit).
+	gwNRC := &fakeNodeRouteQuerier{
+		podSubnets: map[string]bool{srcIP.String(): true, dstIP.String(): true},
+		gwSubnets:  map[string]bool{srcIP.String(): true},
+	}
+	// externalNRC: only src is a pod; dst is external.
+	externalNRC := &fakeNodeRouteQuerier{
+		podSubnets: map[string]bool{srcIP.String(): true},
+	}
+
+	testCases := []struct {
+		name                string
+		conn                *connection.Connection
+		nodeRouteController NodeRouteQuerier
+		isNetworkPolicyOnly bool
+		expected            uint8
+	}{
+		{
+			name:                "networkPolicyOnly_bothPodsKnown_intraNode",
+			conn:                &connection.Connection{SourcePodName: "podA", DestinationPodName: "podB"},
+			isNetworkPolicyOnly: true,
+			expected:            utils.FlowTypeIntraNode,
+		},
+		{
+			name:                "networkPolicyOnly_dstPodUnknown_interNode",
+			conn:                &connection.Connection{SourcePodName: "podA"},
+			isNetworkPolicyOnly: true,
+			expected:            utils.FlowTypeInterNode,
+		},
+		{
+			name:     "noController_unspecified",
+			conn:     &connection.Connection{FlowKey: connection.Tuple{SourceAddress: srcIP, DestinationAddress: dstIP}},
+			expected: utils.FlowTypeUnspecified,
+		},
+		{
+			name:                "srcIsGateway_unsupported",
+			conn:                &connection.Connection{FlowKey: connection.Tuple{SourceAddress: srcIP, DestinationAddress: dstIP}},
+			nodeRouteController: gwNRC,
+			expected:            utils.FlowTypeUnsupported,
+		},
+		{
+			name:                "srcNotPod_unsupported",
+			conn:                &connection.Connection{FlowKey: connection.Tuple{SourceAddress: extIP, DestinationAddress: dstIP}},
+			nodeRouteController: nrc,
+			expected:            utils.FlowTypeUnsupported,
+		},
+		{
+			name:                "dstNotPod_toExternal",
+			conn:                &connection.Connection{FlowKey: connection.Tuple{SourceAddress: srcIP, DestinationAddress: extIP}},
+			nodeRouteController: externalNRC,
+			expected:            utils.FlowTypeToExternal,
+		},
+		{
+			name:                "bothPods_srcPodNameUnknown_interNode",
+			conn:                &connection.Connection{FlowKey: connection.Tuple{SourceAddress: srcIP, DestinationAddress: dstIP}, DestinationPodName: "podB"},
+			nodeRouteController: nrc,
+			expected:            utils.FlowTypeInterNode,
+		},
+		{
+			name:                "bothPods_bothNamesKnown_intraNode",
+			conn:                &connection.Connection{FlowKey: connection.Tuple{SourceAddress: srcIP, DestinationAddress: dstIP}, SourcePodName: "podA", DestinationPodName: "podB"},
+			nodeRouteController: nrc,
+			expected:            utils.FlowTypeIntraNode,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := findFlowType(tc.conn, tc.nodeRouteController, tc.isNetworkPolicyOnly)
+			assert.Equal(t, tc.expected, got)
+		})
+	}
 }
