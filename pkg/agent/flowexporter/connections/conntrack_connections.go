@@ -46,7 +46,7 @@ func findFlowType(conn *connection.Connection, nodeRouteController NodeRouteQuer
 		return utils.FlowTypeIntraNode
 	}
 
-	if nodeRouteController == nil {
+	if !isNetworkPolicyOnly && nodeRouteController == nil {
 		klog.V(5).InfoS("Can't find flow type without nodeRouteController")
 		return utils.FlowTypeUnspecified
 	}
@@ -304,7 +304,12 @@ func (cs *ConntrackConnectionStore) AddOrUpdateConn(conn *connection.Connection)
 			conn.StartTime = time.Now()
 			conn.StopTime = time.Now()
 		}
-		conn.FlowType = findFlowType(conn, cs.nodeRouteController, cs.isNetworkPolicyOnly)
+		// Defer FlowType classification until the nodeRouteController has synced, if possible.
+		if nrc, ok := cs.nodeRouteController.(interface{ HasSynced() bool }); ok && !nrc.HasSynced() {
+			conn.FlowType = utils.FlowTypeUnspecified
+		} else {
+			conn.FlowType = findFlowType(conn, cs.nodeRouteController, cs.isNetworkPolicyOnly)
+		}
 		if conn.StartTime.Before(cs.networkPolicyReadyTime) {
 			klog.V(1).InfoS("Skip adding NetworkPolicy metadata to connection to avoid reporting invalid information")
 		} else {

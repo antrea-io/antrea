@@ -238,7 +238,7 @@ func TestConntrackConnectionStore_AddOrUpdateConn(t *testing.T) {
 				DestinationPodName:         "pod1",
 				DestinationPodNamespace:    "ns1",
 				DestinationServicePortName: servicePortName.String(),
-			// NetworkPolicy fields should be empty for old connections
+				// NetworkPolicy fields should be empty for old connections
 			},
 		},
 		{
