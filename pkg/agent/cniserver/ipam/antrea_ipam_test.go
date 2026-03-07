@@ -50,6 +50,7 @@ var (
 	testApple          = "apple"
 	testOrange         = "orange"
 	testPear           = "pear"
+	testDualStack      = "dualstack"
 	testNoAnnotation   = "empty"
 	testJunkAnnotation = "junk"
 
@@ -171,6 +172,12 @@ func initTestClients() (*fake.Clientset, *fakepoolclient.IPPoolClientset) {
 		},
 		&corev1.Namespace{
 			ObjectMeta: metav1.ObjectMeta{
+				Name:        testDualStack,
+				Annotations: map[string]string{annotations.AntreaIPAMAnnotationKey: testApple + "," + testOrange},
+			},
+		},
+		&corev1.Namespace{
+			ObjectMeta: metav1.ObjectMeta{
 				Name:        testJunkAnnotation,
 				Annotations: map[string]string{annotations.AntreaIPAMAnnotationKey: testJunkAnnotation},
 			},
@@ -287,6 +294,13 @@ func initTestClients() (*fake.Clientset, *fakepoolclient.IPPoolClientset) {
 		},
 		&corev1.Pod{
 			ObjectMeta: metav1.ObjectMeta{
+				Name:      "dualstack1",
+				Namespace: testDualStack,
+			},
+			Spec: corev1.PodSpec{NodeName: "fakeNode"},
+		},
+		&corev1.Pod{
+			ObjectMeta: metav1.ObjectMeta{
 				Name:      testNoAnnotation,
 				Namespace: testNoAnnotation,
 			},
@@ -342,7 +356,7 @@ func TestAntreaIPAMDriver(t *testing.T) {
 	cniArgsMap := make(map[string]*invoke.Args)
 	k8sArgsMap := make(map[string]*argtypes.K8sArgs)
 	vlanArgsMap := map[string]uint16{"pear1": 100, "pear2": 100, "pear3": 100, "pear-sts-8": 100}
-	for _, test := range []string{"apple1", "apple2", "apple-sts-0", "orange1", "orange2", testNoAnnotation, testJunkAnnotation, "pear1", "pear2", "pear3", "pear4", "pear5", "pear6", "pear7", "pear-sts-8", "pear-sts-9", "pear10"} {
+	for _, test := range []string{"apple1", "apple2", "apple-sts-0", "orange1", "orange2", testNoAnnotation, testJunkAnnotation, "pear1", "pear2", "pear3", "pear4", "pear5", "pear6", "pear7", "pear-sts-8", "pear-sts-9", "pear10", "dualstack1"} {
 		// extract Namespace by removing numerals
 		re := regexp.MustCompile("(-sts-)*[0-9]*$")
 		namespace := re.ReplaceAllString(test, "")
@@ -531,6 +545,38 @@ func TestAntreaIPAMDriver(t *testing.T) {
 
 	// Make sure repeated call without previous container results in error
 	testAddError("pear3")
+
+	// Test dual-stack allocation for primary network: a pod in a namespace
+	// annotated with both an IPv4 and an IPv6 pool should receive two IPs.
+	testAddDualStack := func(test string, expectedIPv4, expectedGWv4, expectedMaskv4, expectedIPv6, expectedGWv6, expectedMaskv6 string) {
+		owns, result, err := testDriver.Add(cniArgsMap[test], k8sArgsMap[test], networkConfig)
+		require.NoError(t, err, "expected no error in dual-stack Add call")
+		assert.True(t, owns)
+		require.Len(t, result.IPs, 2)
+		require.Len(t, result.Routes, 2)
+		assert.Equal(t, expectedIPv4, result.IPs[0].Address.IP.String())
+		assert.Equal(t, expectedMaskv4, result.IPs[0].Address.Mask.String())
+		assert.Equal(t, expectedGWv4, result.IPs[0].Gateway.String())
+		assert.Equal(t, expectedIPv6, result.IPs[1].Address.IP.String())
+		assert.Equal(t, expectedMaskv6, result.IPs[1].Address.Mask.String())
+		assert.Equal(t, expectedGWv6, result.IPs[1].Gateway.String())
+		assert.Equal(t, uint16(0), result.VLANID)
+	}
+
+	testAddDualStack("dualstack1", "10.2.2.103", "10.2.2.1", "ffffff00", "20::3", "20::1", ipv6Mask)
+	testCheck("dualstack1", true)
+
+	owns, err = testDriver.Del(cniArgsMap["dualstack1"], k8sArgsMap["dualstack1"], networkConfig)
+	assert.True(t, owns)
+	require.NoError(t, err, "expected no error in dual-stack Del call")
+
+	err = wait.PollUntilContextTimeout(context.Background(), 100*time.Millisecond, 1*time.Second, true,
+		func(ctx context.Context) (bool, error) {
+			_, err := testDriver.Check(cniArgsMap["dualstack1"], k8sArgsMap["dualstack1"], networkConfig)
+			return err != nil, nil
+		})
+	require.NoError(t, err, "dualstack1 pod was not released")
+	testCheck("dualstack1", false)
 }
 
 func TestSecondaryNetworkAdd(t *testing.T) {
@@ -617,6 +663,171 @@ func TestSecondaryNetworkAdd(t *testing.T) {
 					controller:      antreaIPAMController,
 					controllerMutex: sync.RWMutex{},
 				}
+			},
+		},
+		{
+			name: "Add secondary network with IPv6 pool successfully",
+			networkConf: &argtypes.NetworkConfig{
+				CNIVersion: testCNIVersion,
+				IPAM: &argtypes.IPAMConfig{
+					IPPools: []string{
+						testOrange,
+					},
+				},
+			},
+			expectedRes: nil,
+			initFunc: func(stopCh chan struct{}) *AntreaIPAM {
+				k8sClient, crdClient := initTestClients()
+
+				informerFactory := informers.NewSharedInformerFactory(k8sClient, 0)
+				crdInformerFactory := crdinformers.NewSharedInformerFactory(crdClient, 0)
+				listOptions := func(options *metav1.ListOptions) {
+					options.FieldSelector = fields.OneTermEqualSelector("spec.nodeName", "fakeNode").String()
+				}
+				localPodInformer := coreinformers.NewFilteredPodInformer(
+					k8sClient,
+					metav1.NamespaceAll,
+					0,
+					cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc},
+					listOptions,
+				)
+
+				antreaIPAMController, err := InitializeAntreaIPAMController(crdClient,
+					informerFactory.Core().V1().Namespaces(),
+					crdInformerFactory.Crd().V1beta1().IPPools(),
+					localPodInformer,
+					true,
+				)
+				require.NoError(t, err, "Expected no error in initialization for Antrea IPAM Controller")
+				createIPPools(crdClient)
+
+				go antreaIPAMController.Run(stopCh)
+				crdInformerFactory.Start(stopCh)
+				crdInformerFactory.WaitForCacheSync(stopCh)
+
+				return &AntreaIPAM{
+					controller:      antreaIPAMController,
+					controllerMutex: sync.RWMutex{},
+				}
+			},
+		},
+		{
+			name: "Add secondary network with dual-stack pools successfully",
+			networkConf: &argtypes.NetworkConfig{
+				CNIVersion: testCNIVersion,
+				IPAM: &argtypes.IPAMConfig{
+					IPPools: []string{
+						testApple,
+						testOrange,
+					},
+				},
+			},
+			expectedRes: nil,
+			initFunc: func(stopCh chan struct{}) *AntreaIPAM {
+				k8sClient, crdClient := initTestClients()
+
+				informerFactory := informers.NewSharedInformerFactory(k8sClient, 0)
+				crdInformerFactory := crdinformers.NewSharedInformerFactory(crdClient, 0)
+				listOptions := func(options *metav1.ListOptions) {
+					options.FieldSelector = fields.OneTermEqualSelector("spec.nodeName", "fakeNode").String()
+				}
+				localPodInformer := coreinformers.NewFilteredPodInformer(
+					k8sClient,
+					metav1.NamespaceAll,
+					0,
+					cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc},
+					listOptions,
+				)
+
+				antreaIPAMController, err := InitializeAntreaIPAMController(crdClient,
+					informerFactory.Core().V1().Namespaces(),
+					crdInformerFactory.Crd().V1beta1().IPPools(),
+					localPodInformer,
+					true,
+				)
+				require.NoError(t, err, "Expected no error in initialization for Antrea IPAM Controller")
+				createIPPools(crdClient)
+
+				go antreaIPAMController.Run(stopCh)
+				crdInformerFactory.Start(stopCh)
+				crdInformerFactory.WaitForCacheSync(stopCh)
+
+				return &AntreaIPAM{
+					controller:      antreaIPAMController,
+					controllerMutex: sync.RWMutex{},
+				}
+			},
+		},
+		{
+			name: "Add secondary network with conflicting VLAN IDs",
+			networkConf: &argtypes.NetworkConfig{
+				CNIVersion: testCNIVersion,
+				IPAM: &argtypes.IPAMConfig{
+					IPPools: []string{
+						testPear,
+						"vlan200-pool",
+					},
+				},
+			},
+			expectedRes: fmt.Errorf("IPPools have conflicting VLAN IDs 100 and 200 for dual-stack allocation"),
+			initFunc: func(stopCh chan struct{}) *AntreaIPAM {
+				k8sClient, crdClient := initTestClients()
+
+				informerFactory := informers.NewSharedInformerFactory(k8sClient, 0)
+				crdInformerFactory := crdinformers.NewSharedInformerFactory(crdClient, 0)
+				listOptions := func(options *metav1.ListOptions) {
+					options.FieldSelector = fields.OneTermEqualSelector("spec.nodeName", "fakeNode").String()
+				}
+				localPodInformer := coreinformers.NewFilteredPodInformer(
+					k8sClient,
+					metav1.NamespaceAll,
+					0,
+					cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc},
+					listOptions,
+				)
+
+				antreaIPAMController, err := InitializeAntreaIPAMController(crdClient,
+					informerFactory.Core().V1().Namespaces(),
+					crdInformerFactory.Crd().V1beta1().IPPools(),
+					localPodInformer,
+					true,
+				)
+				require.NoError(t, err, "Expected no error in initialization for Antrea IPAM Controller")
+				createIPPools(crdClient)
+				crdClient.InitPool(&crdv1b1.IPPool{
+					ObjectMeta: metav1.ObjectMeta{Name: "vlan200-pool"},
+					Spec: crdv1b1.IPPoolSpec{
+						IPRanges: []crdv1b1.IPRange{{
+							Start: "30::2",
+							End:   "30::20",
+						}},
+						SubnetInfo: crdv1b1.SubnetInfo{
+							Gateway:      "30::1",
+							PrefixLength: 64,
+							VLAN:         200,
+						},
+					},
+				})
+
+				go antreaIPAMController.Run(stopCh)
+				crdInformerFactory.Start(stopCh)
+				crdInformerFactory.WaitForCacheSync(stopCh)
+
+				return &AntreaIPAM{
+					controller:      antreaIPAMController,
+					controllerMutex: sync.RWMutex{},
+				}
+			},
+		},
+		{
+			name: "Specify static IPv6 address",
+			networkConf: &argtypes.NetworkConfig{
+				CNIVersion: testCNIVersion,
+				IPAM: &argtypes.IPAMConfig{
+					Addresses: []argtypes.Address{
+						{Address: "fd00::1/64"},
+					},
+				},
 			},
 		},
 	}
