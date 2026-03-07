@@ -1088,17 +1088,24 @@ func (c *client) UninstallSNATMarkFlows(mark uint32) error {
 
 func (c *client) InstallPodSNATFlows(ofPort uint32, snatIP net.IP, snatMark uint32) error {
 	flows := []binding.Flow{c.featureEgress.snatRuleFlow(ofPort, snatIP, snatMark, c.nodeConfig.GatewayConfig.MAC)}
-	cacheKey := fmt.Sprintf("p%x", ofPort)
+	suffix := "v4"
+	if snatIP.To4() == nil {
+		suffix = "v6"
+	}
+	cacheKey := fmt.Sprintf("p%x-%s", ofPort, suffix)
 	c.replayMutex.RLock()
 	defer c.replayMutex.RUnlock()
 	return c.addFlows(c.featureEgress.cachedFlows, cacheKey, flows)
 }
 
 func (c *client) UninstallPodSNATFlows(ofPort uint32) error {
-	cacheKey := fmt.Sprintf("p%x", ofPort)
+	cacheKeys := []string{
+		fmt.Sprintf("p%x-v4", ofPort),
+		fmt.Sprintf("p%x-v6", ofPort),
+	}
 	c.replayMutex.RLock()
 	defer c.replayMutex.RUnlock()
-	return c.deleteFlows(c.featureEgress.cachedFlows, cacheKey)
+	return c.deleteFlowsWithMultipleKeys(c.featureEgress.cachedFlows, cacheKeys)
 }
 
 func (c *client) InstallEgressQoS(meterID, rate, burst uint32) error {
