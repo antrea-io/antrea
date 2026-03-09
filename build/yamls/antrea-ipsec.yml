@@ -4474,6 +4474,10 @@ data:
     # - AntreaProxy (proxyAll)
     #  NFTablesHostNetworkMode: false
 
+    # Enable support for AntreaNodeConfig CRD, which allows per-Node configuration
+    # of Antrea agent settings via nodeSelector-based policies.
+    #  AntreaNodeConfig: false
+
     # Name of the OpenVSwitch bridge antrea-agent will create and use.
     # Make sure it doesn't conflict with your existing OpenVSwitch bridges.
     ovsBridge: "br-int"
@@ -5893,7 +5897,7 @@ spec:
         kubectl.kubernetes.io/default-container: antrea-agent
         # Automatically restart Pods with a RollingUpdate if the ConfigMap changes
         # See https://helm.sh/docs/howto/charts_tips_and_tricks/#automatically-roll-deployments
-        checksum/config: bd3bfe0a3cf17f563005ab065f7a981e07285271165795d9f1ab81bb9c0dc1e3
+        checksum/config: fdda0560feeb40c9ad9e201f9dcab685a9dad3439667998f42a9e40f3773df5c
         checksum/ipsec-secret: d0eb9c52d0cd4311b6d252a951126bf9bea27ec05590bed8a394f0f792dcb2a4
       labels:
         app: antrea
@@ -6185,7 +6189,7 @@ spec:
       annotations:
         # Automatically restart Pod if the ConfigMap changes
         # See https://helm.sh/docs/howto/charts_tips_and_tricks/#automatically-roll-deployments
-        checksum/config: bd3bfe0a3cf17f563005ab065f7a981e07285271165795d9f1ab81bb9c0dc1e3
+        checksum/config: fdda0560feeb40c9ad9e201f9dcab685a9dad3439667998f42a9e40f3773df5c
       labels:
         app: antrea
         component: antrea-controller
