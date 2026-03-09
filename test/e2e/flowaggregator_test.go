@@ -1998,7 +1998,8 @@ func createExternalToPodConnection(t *testing.T, service *corev1.Service, nodeIn
 }
 
 func testExternalToPodFlows(t *testing.T, data *TestData, isIPv6 bool) {
-	nodeName := nodeName(1)
+	destinationNodeIndex := 1
+	nodeName := nodeName(destinationNodeIndex)
 	nginxPodName, nginxIP, cleanupFunc := createAndWaitForPod(t, data, data.createNginxPodOnNode, "external-to-pod-flows", nodeName, data.testNamespace, false)
 	defer cleanupFunc()
 
@@ -2019,12 +2020,14 @@ func testExternalToPodFlows(t *testing.T, data *TestData, isIPv6 bool) {
 	flushFlowsFromCollector(t, data, isIPv6)
 
 	tc := []struct {
+		name string
 		node int
 	}{
-		{node: 0}, {node: 1},
+		{name: "Connection to source node", node: 0},
+		{name: "Connection to destination node", node: destinationNodeIndex},
 	}
 	for _, tc := range tc {
-		t.Run(fmt.Sprintf("Testing connection to node %v", tc.node), func(t *testing.T) {
+		t.Run(tc.name, func(t *testing.T) {
 			sourceIP, _ := createExternalToPodConnection(t, service, tc.node, isIPv6)
 			var dstIP string
 			if isIPv6 {
