@@ -93,9 +93,14 @@ func (a *fromExternalAggregator) correlateOrStore(flowKey *FlowKey, record *flow
 	if !a.fromExternalCorrelationRequired(record) {
 		return flowKey, record
 	}
+	klog.InfoS("correlateOrStore", "record", record)
 	if a.storeIfNew(record) {
+		klog.InfoS("stored from external for correlation", "record", record)
 		return nil, nil
+	} else {
+		klog.InfoS("record needs correlation", "record", record)
 	}
+
 	record = a.correlateExternal(record)
 	flowKey, _ = getFlowKeyFromRecord(record)
 
@@ -234,6 +239,7 @@ func (a *fromExternalAggregator) storeIfNew(flow *flowpb.Flow) bool {
 	defer a.lock.Unlock()
 
 	key := a.generateFromExternalStoreKey(flow)
+	klog.InfoS("storIfNew", "key", key)
 	if _, exists := a.FromExternalStore[key]; !exists {
 		// TODO ADD method?
 		a.FromExternalStore[key] = flowItem{
