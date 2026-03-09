@@ -35,9 +35,9 @@ import (
 
 type DenyConnectionStore struct {
 	connectionStore
-	protocolFilter       filter.ProtocolFilter
-	nodeRouteController  NodeRouteQuerier
-	isNetworkPolicyOnly  bool
+	protocolFilter      filter.ProtocolFilter
+	nodeRouteController NodeRouteQuerier
+	isNetworkPolicyOnly bool
 }
 
 func NewDenyConnectionStore(
