@@ -108,7 +108,7 @@ func TestConnectionStore_DeleteConnWithoutLock(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	// test on deny connection store
 	mockPodStore := objectstoretest.NewMockPodStore(ctrl)
-	denyConnStore := NewDenyConnectionStore(nil, mockPodStore, nil, testFlowExporterOptions, filter.NewProtocolFilter(nil))
+	denyConnStore := NewDenyConnectionStore(nil, mockPodStore, nil, testFlowExporterOptions, filter.NewProtocolFilter(nil), nil, false)
 	tuple := connection.Tuple{SourceAddress: netip.MustParseAddr("1.2.3.4"), DestinationAddress: netip.MustParseAddr("4.3.2.1"), Protocol: 6, SourcePort: 65280, DestinationPort: 255}
 	conn := &connection.Connection{
 		FlowKey: tuple,

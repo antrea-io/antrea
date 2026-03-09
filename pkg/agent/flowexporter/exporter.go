@@ -85,7 +85,6 @@ func NewFlowExporter(podStore objectstore.PodStore, proxier proxy.ProxyQuerier, 
 ) (*FlowExporter, error) {
 	protocolFilter := filter.NewProtocolFilter(o.ProtocolFilter)
 	connTrackDumper := connections.InitializeConnTrackDumper(nodeConfig, serviceCIDRNet, serviceCIDRNetv6, ovsDatapathType, proxyEnabled, protocolFilter)
-	denyConnStore := connections.NewDenyConnectionStore(npQuerier, podStore, proxier, o, protocolFilter)
 	isNetworkPolicyOnly := trafficEncapMode.IsNetworkPolicyOnly()
 	// Guard against a nil concrete pointer being wrapped in a non-nil interface value,
 	// which would cause a panic inside findFlowType when the nil check is evaluated.
@@ -93,6 +92,7 @@ func NewFlowExporter(podStore objectstore.PodStore, proxier proxy.ProxyQuerier, 
 	if nodeRouteController != nil {
 		nrc = nodeRouteController
 	}
+	denyConnStore := connections.NewDenyConnectionStore(npQuerier, podStore, proxier, o, protocolFilter, nrc, isNetworkPolicyOnly)
 	conntrackConnStore := connections.NewConntrackConnectionStore(connTrackDumper, v4Enabled, v6Enabled, npQuerier, podStore, proxier, podNetworkWait, o, nrc, isNetworkPolicyOnly)
 	if nodeRouteController == nil {
 		klog.InfoS("NodeRouteController is nil, will not be able to determine flow type for connections")

@@ -24,6 +24,7 @@ import (
 	"antrea.io/antrea/pkg/agent/flowexporter/filter"
 	"antrea.io/antrea/pkg/agent/flowexporter/options"
 	"antrea.io/antrea/pkg/agent/flowexporter/priorityqueue"
+	"antrea.io/antrea/pkg/agent/flowexporter/utils"
 	"antrea.io/antrea/pkg/agent/metrics"
 	"antrea.io/antrea/pkg/agent/openflow"
 	"antrea.io/antrea/pkg/agent/proxy"
@@ -34,7 +35,9 @@ import (
 
 type DenyConnectionStore struct {
 	connectionStore
-	protocolFilter filter.ProtocolFilter
+	protocolFilter       filter.ProtocolFilter
+	nodeRouteController  NodeRouteQuerier
+	isNetworkPolicyOnly  bool
 }
 
 func NewDenyConnectionStore(
@@ -43,10 +46,14 @@ func NewDenyConnectionStore(
 	proxier proxy.ProxyQuerier,
 	o *options.FlowExporterOptions,
 	protocolFilter filter.ProtocolFilter,
+	nodeRouteController NodeRouteQuerier,
+	isNetworkPolicyOnly bool,
 ) *DenyConnectionStore {
 	return &DenyConnectionStore{
-		connectionStore: NewConnectionStore(npQuerier, podStore, proxier, o),
-		protocolFilter:  protocolFilter,
+		connectionStore:     NewConnectionStore(npQuerier, podStore, proxier, o),
+		protocolFilter:      protocolFilter,
+		nodeRouteController: nodeRouteController,
+		isNetworkPolicyOnly: isNetworkPolicyOnly,
 	}
 }
 
@@ -125,6 +132,12 @@ func (ds *DenyConnectionStore) AddOrUpdateConn(conn *connection.Connection, time
 		}
 		// For intra-Node flows which are denied by an ingress policy rule, we can retrieve
 		// egress policy information from the CT labels.
+		// Defer FlowType classification until the nodeRouteController has synced, if possible.
+		if nrc, ok := ds.nodeRouteController.(interface{ HasSynced() bool }); ok && !nrc.HasSynced() {
+			conn.FlowType = utils.FlowTypeUnspecified
+		} else {
+			conn.FlowType = findFlowType(conn, ds.nodeRouteController, ds.isNetworkPolicyOnly)
+		}
 		ds.addNetworkPolicyMetadata(conn)
 		metrics.TotalDenyConnections.Inc()
 		conn.IsActive = true
