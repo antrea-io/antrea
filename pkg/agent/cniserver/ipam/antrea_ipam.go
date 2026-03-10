@@ -153,9 +153,10 @@ func findMatchingIP(ips []net.IP, ipVersion utilnet.IPFamily) (net.IP, []net.IP)
 }
 
 // Add allocates IP addresses from the associated IP Pools. It supports IPv4,
-// IPv6, and dual-stack configurations. For dual-stack, IPs are allocated from
-// all valid pools (one per IP family). The allocated IPs and associated
-// resources will be stored in the IP Pool status.
+// IPv6, and dual-stack configurations. For dual-stack, at most one IP per IP
+// family will be allocated even if multiple Pools exist for the same family.
+// The allocated IPs and associated resources will be stored in the IP Pool
+// status.
 func (d *AntreaIPAM) Add(args *invoke.Args, k8sArgs *types.K8sArgs, networkConfig []byte) (bool, *IPAMResult, error) {
 	mine, allocators, ips, reservedOwner, err := d.owns(k8sArgs)
 	if err != nil {
@@ -181,7 +182,22 @@ func (d *AntreaIPAM) Add(args *invoke.Args, k8sArgs *types.K8sArgs, networkConfi
 	}()
 
 	remainingIPs := ips
+	var hasIPv4Pool, hasIPv6Pool bool
+	var allocatedIPv4, allocatedIPv6 bool
 	for _, allocator := range allocators {
+		switch allocator.IPVersion {
+		case utilnet.IPv4:
+			hasIPv4Pool = true
+			if allocatedIPv4 {
+				continue
+			}
+		case utilnet.IPv6:
+			hasIPv6Pool = true
+			if allocatedIPv6 {
+				continue
+			}
+		}
+
 		var ip net.IP
 		var subnetInfo *crdv1b1.SubnetInfo
 		if reservedOwner != nil {
@@ -204,6 +220,13 @@ func (d *AntreaIPAM) Add(args *invoke.Args, k8sArgs *types.K8sArgs, networkConfi
 		}
 		allocatedAllocators = append(allocatedAllocators, allocator)
 
+		switch allocator.IPVersion {
+		case utilnet.IPv4:
+			allocatedIPv4 = true
+		case utilnet.IPv6:
+			allocatedIPv6 = true
+		}
+
 		klog.V(4).InfoS("IP allocation successful", "IP", ip.String(), "Pod", string(k8sArgs.K8S_POD_NAME))
 
 		gwIP := net.ParseIP(subnetInfo.Gateway)
@@ -218,6 +241,15 @@ func (d *AntreaIPAM) Add(args *invoke.Args, k8sArgs *types.K8sArgs, networkConfi
 			err = fmt.Errorf("IPPools have conflicting VLAN IDs %d and %d for dual-stack allocation", result.VLANID, vlanID)
 			return true, nil, err
 		}
+	}
+
+	if hasIPv4Pool && !allocatedIPv4 {
+		err = fmt.Errorf("failed to allocate IPv4 address for Pod %s/%s", string(k8sArgs.K8S_POD_NAMESPACE), string(k8sArgs.K8S_POD_NAME))
+		return true, nil, err
+	}
+	if hasIPv6Pool && !allocatedIPv6 {
+		err = fmt.Errorf("failed to allocate IPv6 address for Pod %s/%s", string(k8sArgs.K8S_POD_NAMESPACE), string(k8sArgs.K8S_POD_NAME))
+		return true, nil, err
 	}
 
 	// All allocations successful, clear the deferred release.

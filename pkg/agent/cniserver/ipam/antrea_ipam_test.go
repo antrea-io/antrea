@@ -51,6 +51,8 @@ var (
 	testOrange         = "orange"
 	testPear           = "pear"
 	testDualStack      = "dualstack"
+	testMultiV4        = "multiv4"
+	testExhaustV4      = "exhaustv4"
 	testNoAnnotation   = "empty"
 	testJunkAnnotation = "junk"
 
@@ -94,6 +96,50 @@ func createIPPools(crdClient *fakepoolclient.IPPoolClientset) {
 		Spec: crdv1b1.IPPoolSpec{
 			IPRanges:   []crdv1b1.IPRange{ipRangeOrange},
 			SubnetInfo: subnetInfoOrange,
+		},
+	})
+
+	// Dedicated Pools for unit tests:
+	// - testMultiV4 references two IPv4 Pools and should receive a single IPv4 address.
+	// - testExhaustV4 references a single IPv4 Pool with only one available IP; the
+	//   second allocation should fail.
+	crdClient.InitPool(&crdv1b1.IPPool{
+		ObjectMeta: metav1.ObjectMeta{Name: "multiv4-pool-a"},
+		Spec: crdv1b1.IPPoolSpec{
+			IPRanges: []crdv1b1.IPRange{{
+				Start: "10.10.0.10",
+				End:   "10.10.0.10",
+			}},
+			SubnetInfo: crdv1b1.SubnetInfo{
+				Gateway:      "10.10.0.1",
+				PrefixLength: 24,
+			},
+		},
+	})
+	crdClient.InitPool(&crdv1b1.IPPool{
+		ObjectMeta: metav1.ObjectMeta{Name: "multiv4-pool-b"},
+		Spec: crdv1b1.IPPoolSpec{
+			IPRanges: []crdv1b1.IPRange{{
+				Start: "10.10.0.20",
+				End:   "10.10.0.20",
+			}},
+			SubnetInfo: crdv1b1.SubnetInfo{
+				Gateway:      "10.10.0.1",
+				PrefixLength: 24,
+			},
+		},
+	})
+	crdClient.InitPool(&crdv1b1.IPPool{
+		ObjectMeta: metav1.ObjectMeta{Name: "exhaustv4-pool"},
+		Spec: crdv1b1.IPPoolSpec{
+			IPRanges: []crdv1b1.IPRange{{
+				Start: "10.20.0.10",
+				End:   "10.20.0.10",
+			}},
+			SubnetInfo: crdv1b1.SubnetInfo{
+				Gateway:      "10.20.0.1",
+				PrefixLength: 24,
+			},
 		},
 	})
 
@@ -174,6 +220,18 @@ func initTestClients() (*fake.Clientset, *fakepoolclient.IPPoolClientset) {
 			ObjectMeta: metav1.ObjectMeta{
 				Name:        testDualStack,
 				Annotations: map[string]string{annotations.AntreaIPAMAnnotationKey: testApple + "," + testOrange},
+			},
+		},
+		&corev1.Namespace{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:        testMultiV4,
+				Annotations: map[string]string{annotations.AntreaIPAMAnnotationKey: "multiv4-pool-a,multiv4-pool-b"},
+			},
+		},
+		&corev1.Namespace{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:        testExhaustV4,
+				Annotations: map[string]string{annotations.AntreaIPAMAnnotationKey: "exhaustv4-pool"},
 			},
 		},
 		&corev1.Namespace{
@@ -301,6 +359,27 @@ func initTestClients() (*fake.Clientset, *fakepoolclient.IPPoolClientset) {
 		},
 		&corev1.Pod{
 			ObjectMeta: metav1.ObjectMeta{
+				Name:      "multiv4-1",
+				Namespace: testMultiV4,
+			},
+			Spec: corev1.PodSpec{NodeName: "fakeNode"},
+		},
+		&corev1.Pod{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "exhaustv4-1",
+				Namespace: testExhaustV4,
+			},
+			Spec: corev1.PodSpec{NodeName: "fakeNode"},
+		},
+		&corev1.Pod{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "exhaustv4-2",
+				Namespace: testExhaustV4,
+			},
+			Spec: corev1.PodSpec{NodeName: "fakeNode"},
+		},
+		&corev1.Pod{
+			ObjectMeta: metav1.ObjectMeta{
 				Name:      testNoAnnotation,
 				Namespace: testNoAnnotation,
 			},
@@ -356,10 +435,18 @@ func TestAntreaIPAMDriver(t *testing.T) {
 	cniArgsMap := make(map[string]*invoke.Args)
 	k8sArgsMap := make(map[string]*argtypes.K8sArgs)
 	vlanArgsMap := map[string]uint16{"pear1": 100, "pear2": 100, "pear3": 100, "pear-sts-8": 100}
-	for _, test := range []string{"apple1", "apple2", "apple-sts-0", "orange1", "orange2", testNoAnnotation, testJunkAnnotation, "pear1", "pear2", "pear3", "pear4", "pear5", "pear6", "pear7", "pear-sts-8", "pear-sts-9", "pear10", "dualstack1"} {
-		// extract Namespace by removing numerals
+	for _, test := range []string{"apple1", "apple2", "apple-sts-0", "orange1", "orange2", testNoAnnotation, testJunkAnnotation, "pear1", "pear2", "pear3", "pear4", "pear5", "pear6", "pear7", "pear-sts-8", "pear-sts-9", "pear10", "dualstack1", "multiv4-1", "exhaustv4-1", "exhaustv4-2"} {
+		// extract Namespace by removing numerals.
+		// Some test Pods include a hyphen before the numeric suffix, which would
+		// otherwise leave a trailing '-' (e.g. "multiv4-1" -> "multiv4-").
 		re := regexp.MustCompile("(-sts-)*[0-9]*$")
 		namespace := re.ReplaceAllString(test, "")
+		switch {
+		case regexp.MustCompile("^multiv4-").MatchString(test):
+			namespace = testMultiV4
+		case regexp.MustCompile("^exhaustv4-").MatchString(test):
+			namespace = testExhaustV4
+		}
 		args := argtypes.K8sArgs{}
 		cnitypes.LoadArgs(cniservertest.GenerateCNIArgs(test, namespace, uuid.New().String()), &args)
 		k8sArgsMap[test] = &args
@@ -576,6 +663,23 @@ func TestAntreaIPAMDriver(t *testing.T) {
 		expectedIPInfo{ip: "20::3", gw: "20::1", mask: ipv6Mask},
 	)
 	testCheck("dualstack1", true)
+
+	// Multiple Pools of the same family: allocate at most one IPv4 address.
+	testAdd("multiv4-1", false, expectedIPInfo{ip: "10.10.0.10", gw: "10.10.0.1", mask: "ffffff00"})
+	err = wait.PollUntilContextTimeout(context.Background(), time.Millisecond*200, time.Second, false, func(ctx context.Context) (bool, error) {
+		ipPool, _ := antreaIPAMController.ipPoolLister.Get("multiv4-pool-b")
+		for _, ipAddress := range ipPool.Status.IPAddresses {
+			if ipAddress.Owner.Pod != nil && ipAddress.Owner.Pod.ContainerID == cniArgsMap["multiv4-1"].ContainerID {
+				return false, nil
+			}
+		}
+		return true, nil
+	})
+	require.NoError(t, err, "multiv4-pool-b should not have any allocation for multiv4-1")
+
+	// Pool exists but no v4 IP is available: the second allocation should return an error.
+	testAdd("exhaustv4-1", false, expectedIPInfo{ip: "10.20.0.10", gw: "10.20.0.1", mask: "ffffff00"})
+	testAddError("exhaustv4-2")
 
 	owns, err = testDriver.Del(cniArgsMap["dualstack1"], k8sArgsMap["dualstack1"], networkConfig)
 	assert.True(t, owns)
