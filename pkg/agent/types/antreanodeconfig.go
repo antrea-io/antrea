@@ -20,8 +20,8 @@ package types
 // interfaces carry per-interface VLAN filters (AllowedVLANs) that are not
 // expressible in the static YAML config.
 //
-// An agent that receives this value should override it with the
-// static secondary-network configuration loaded from the agent config file.
+// When a non-nil value is resolved, it is used to override the static
+// secondary-network configuration loaded from the agent config file.
 type SecondaryNetworkConfig struct {
 	// OVSBridge is the single OVS bridge configuration. The CRD schema enforces
 	// at most one bridge, so a pointer is used — nil means no bridge is configured.
@@ -47,4 +47,56 @@ type PhysicalInterfaceConfig struct {
 	// "200-300") that are allowed on this interface.  If empty, all VLANs
 	// are allowed.
 	AllowedVLANs []string
+}
+
+// DeepCopy returns a deep copy of the OVSBridgeConfig.
+func (b *OVSBridgeConfig) DeepCopy() *OVSBridgeConfig {
+	if b == nil {
+		return nil
+	}
+	cp := &OVSBridgeConfig{
+		BridgeName:              b.BridgeName,
+		EnableMulticastSnooping: b.EnableMulticastSnooping,
+	}
+	if b.PhysicalInterfaces != nil {
+		cp.PhysicalInterfaces = make([]PhysicalInterfaceConfig, len(b.PhysicalInterfaces))
+		for i, pi := range b.PhysicalInterfaces {
+			cp.PhysicalInterfaces[i] = PhysicalInterfaceConfig{Name: pi.Name}
+			if pi.AllowedVLANs != nil {
+				cp.PhysicalInterfaces[i].AllowedVLANs = append([]string(nil), pi.AllowedVLANs...)
+			}
+		}
+	}
+	return cp
+}
+
+// WithoutInterface returns a new OVSBridgeConfig that is identical to b except
+// that the interface with the given name is removed from PhysicalInterfaces.
+func (b *OVSBridgeConfig) WithoutInterface(name string) *OVSBridgeConfig {
+	cp := b.DeepCopy()
+	filtered := cp.PhysicalInterfaces[:0]
+	for _, pi := range cp.PhysicalInterfaces {
+		if pi.Name != name {
+			filtered = append(filtered, pi)
+		}
+	}
+	cp.PhysicalInterfaces = filtered
+	return cp
+}
+
+// WithClearedTrunks returns a new OVSBridgeConfig where AllowedVLANs is
+// cleared for any interface whose entry in desired has no AllowedVLANs.  This
+// reflects the state after clearStaleTrunks has run successfully.
+func (b *OVSBridgeConfig) WithClearedTrunks(desired []PhysicalInterfaceConfig) *OVSBridgeConfig {
+	desiredMap := make(map[string]PhysicalInterfaceConfig, len(desired))
+	for _, pi := range desired {
+		desiredMap[pi.Name] = pi
+	}
+	cp := b.DeepCopy()
+	for i, pi := range cp.PhysicalInterfaces {
+		if d, ok := desiredMap[pi.Name]; ok && len(d.AllowedVLANs) == 0 {
+			cp.PhysicalInterfaces[i].AllowedVLANs = nil
+		}
+	}
+	return cp
 }

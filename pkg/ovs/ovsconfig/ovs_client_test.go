@@ -19,6 +19,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestOVSClient(t *testing.T) {
@@ -116,5 +117,105 @@ func TestBuildPortDataCommon(t *testing.T) {
 			assert.Equal(t, tc.portData, portData)
 		})
 	}
+}
 
+func TestBuildPortDataCommonTrunks(t *testing.T) {
+	basePort := func(trunks interface{}) map[string]interface{} {
+		return map[string]interface{}{
+			"name":         "eth1",
+			"external_ids": []interface{}{"map", []interface{}{}},
+			"trunks":       trunks,
+		}
+	}
+	baseIntf := map[string]interface{}{
+		"name":    "eth1",
+		"mac":     []interface{}{},
+		"type":    "",
+		"ofport":  float64(1),
+		"options": []interface{}{""},
+	}
+
+	tests := []struct {
+		name       string
+		trunks     interface{}
+		wantTrunks []uint16
+	}{
+		{
+			name:       "no trunks field (nil)",
+			trunks:     nil,
+			wantTrunks: nil,
+		},
+		{
+			name:       "empty set",
+			trunks:     []interface{}{"set", []interface{}{}},
+			wantTrunks: nil,
+		},
+		{
+			name:       "multi-value set",
+			trunks:     []interface{}{"set", []interface{}{float64(100), float64(200)}},
+			wantTrunks: []uint16{100, 200},
+		},
+		{
+			// OVSDB returns a bare scalar (float64) for a single-element set.
+			// This is the case that previously caused clearStaleTrunks to skip
+			// single-VLAN trunk ports.
+			name:       "single VLAN — bare scalar (OVSDB single-element encoding)",
+			trunks:     float64(100),
+			wantTrunks: []uint16{100},
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			port := basePort(tc.trunks)
+			portData := &OVSPortData{}
+			buildPortDataCommon(port, baseIntf, portData)
+			assert.Equal(t, tc.wantTrunks, portData.Trunks)
+		})
+	}
+}
+
+func TestParseVLANSpecs(t *testing.T) {
+	tests := []struct {
+		name        string
+		specs       []string
+		wantIDs     []uint16
+		expectedErr string
+	}{
+		{
+			name:    "single VLAN",
+			specs:   []string{"100"},
+			wantIDs: []uint16{100},
+		},
+		{
+			name:    "range",
+			specs:   []string{"10-12"},
+			wantIDs: []uint16{10, 11, 12},
+		},
+		{
+			name:    "mixed",
+			specs:   []string{"5", "10-11"},
+			wantIDs: []uint16{5, 10, 11},
+		},
+		{
+			name:        "invalid single",
+			specs:       []string{"abc"},
+			expectedErr: "invalid VLAN ID",
+		},
+		{
+			name:        "inverted range",
+			specs:       []string{"200-100"},
+			expectedErr: "VLAN range start",
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := parseVLANSpecs(tc.specs)
+			if tc.expectedErr != "" {
+				assert.ErrorContains(t, err, tc.expectedErr)
+			} else {
+				require.NoError(t, err)
+				assert.Equal(t, tc.wantIDs, got)
+			}
+		})
+	}
 }
