@@ -368,21 +368,44 @@ func TestAntreaIPAMDriver(t *testing.T) {
 		}
 	}
 
-	testAdd := func(test string, expectedIP string, expectedGW string, expectedMask string, isReserved bool) {
-		owns, result, err := testDriver.Add(cniArgsMap[test], k8sArgsMap[test], networkConfig)
-		require.NoError(t, err, "expected no error in Add call")
-		assert.True(t, owns)
-		assert.Len(t, result.IPs, 1)
-		assert.Len(t, result.Routes, 1)
-		assert.Equal(t, expectedIP, result.IPs[0].Address.IP.String())
-		assert.Equal(t, expectedMask, result.IPs[0].Address.Mask.String())
-		assert.Equal(t, expectedGW, result.IPs[0].Gateway.String())
+	type expectedIPInfo struct {
+		ip   string
+		gw   string
+		mask string
+	}
+
+	verifyAddResult := func(test string, result *IPAMResult, expectedIPs []expectedIPInfo) {
+		require.Len(t, result.IPs, len(expectedIPs))
+		require.Len(t, result.Routes, len(expectedIPs))
+
+		for i, exp := range expectedIPs {
+			assert.Equal(t, exp.ip, result.IPs[i].Address.IP.String())
+			assert.Equal(t, exp.mask, result.IPs[i].Address.Mask.String())
+			assert.Equal(t, exp.gw, result.IPs[i].Gateway.String())
+		}
+
 		if vlanID, ok := vlanArgsMap[test]; ok {
 			assert.Equal(t, vlanID, result.VLANID)
 		} else {
 			assert.Equal(t, uint16(0), result.VLANID)
 		}
+	}
 
+	testAdd := func(test string, isReserved bool, expectedIPs ...expectedIPInfo) {
+		owns, result, err := testDriver.Add(cniArgsMap[test], k8sArgsMap[test], networkConfig)
+		require.NoError(t, err, "expected no error in Add call")
+		assert.True(t, owns)
+		verifyAddResult(test, result, expectedIPs)
+
+		// Only validate the IPPool owner information for single-stack cases, in which
+		// the Namespace name and the IPPool name are identical. For dual-stack
+		// Namespaces, which reference multiple IPPools, the IP ownership is verified
+		// via other tests.
+		if len(expectedIPs) != 1 {
+			return
+		}
+
+		expectedIP := expectedIPs[0].ip
 		podNamespace := string(k8sArgsMap[test].K8S_POD_NAMESPACE)
 		podName := string(k8sArgsMap[test].K8S_POD_NAME)
 		err = wait.PollUntilContextTimeout(context.Background(), time.Millisecond*200, time.Second, false, func(ctx context.Context) (bool, error) {
@@ -449,17 +472,17 @@ func TestAntreaIPAMDriver(t *testing.T) {
 
 	// Run several adds from two Namespaces that have pool annotations
 	ipv6Mask := "ffffffffffffffff0000000000000000"
-	testAdd("apple1", "10.2.2.100", "10.2.2.1", "ffffff00", false)
+	testAdd("apple1", false, expectedIPInfo{ip: "10.2.2.100", gw: "10.2.2.1", mask: "ffffff00"})
 
 	// introduce new IP Pool in mid-action
-	testAdd("orange1", "20::2", "20::1", ipv6Mask, false)
-	testAdd("orange2", "20::3", "20::1", ipv6Mask, false)
-	testAdd("apple2", "10.2.2.101", "10.2.2.1", "ffffff00", false)
-	testAdd("apple-sts-0", "10.2.2.102", "10.2.2.1", "ffffff00", true)
-	testAdd("pear1", "10.2.3.100", "10.2.3.1", "ffffff00", false)
-	testAdd("pear2", "10.2.3.101", "10.2.3.1", "ffffff00", false)
-	testAdd("pear3", "10.2.3.199", "10.2.3.1", "ffffff00", false)
-	testAdd("pear-sts-8", "10.2.3.198", "10.2.3.1", "ffffff00", true)
+	testAdd("orange1", false, expectedIPInfo{ip: "20::2", gw: "20::1", mask: ipv6Mask})
+	testAdd("orange2", false, expectedIPInfo{ip: "20::3", gw: "20::1", mask: ipv6Mask})
+	testAdd("apple2", false, expectedIPInfo{ip: "10.2.2.101", gw: "10.2.2.1", mask: "ffffff00"})
+	testAdd("apple-sts-0", true, expectedIPInfo{ip: "10.2.2.102", gw: "10.2.2.1", mask: "ffffff00"})
+	testAdd("pear1", false, expectedIPInfo{ip: "10.2.3.100", gw: "10.2.3.1", mask: "ffffff00"})
+	testAdd("pear2", false, expectedIPInfo{ip: "10.2.3.101", gw: "10.2.3.1", mask: "ffffff00"})
+	testAdd("pear3", false, expectedIPInfo{ip: "10.2.3.199", gw: "10.2.3.1", mask: "ffffff00"})
+	testAdd("pear-sts-8", true, expectedIPInfo{ip: "10.2.3.198", gw: "10.2.3.1", mask: "ffffff00"})
 
 	// Make sure the driver does not own request without pool annotation
 	owns, _, err := testDriver.Add(cniArgsMap[testNoAnnotation], k8sArgsMap[testNoAnnotation], networkConfig)
@@ -534,36 +557,24 @@ func TestAntreaIPAMDriver(t *testing.T) {
 	require.NoError(t, err, "expected no error in Del call")
 
 	// Make sure repeated Add works for Pod that was previously released
-	testAdd("apple1", "10.2.2.100", "10.2.2.1", "ffffff00", false)
-	testAdd("apple-sts-0", "10.2.2.102", "10.2.2.1", "ffffff00", true)
+	testAdd("apple1", false, expectedIPInfo{ip: "10.2.2.100", gw: "10.2.2.1", mask: "ffffff00"})
+	testAdd("apple-sts-0", true, expectedIPInfo{ip: "10.2.2.102", gw: "10.2.2.1", mask: "ffffff00"})
 
 	// Make sure repeated call for previous container gets identical result
-	testAdd("apple2", "10.2.2.101", "10.2.2.1", "ffffff00", false)
+	testAdd("apple2", false, expectedIPInfo{ip: "10.2.2.101", gw: "10.2.2.1", mask: "ffffff00"})
 
 	// Make sure repeated Add works for pod that was previously released
-	testAdd("pear3", "10.2.3.199", "10.2.3.1", "ffffff00", false)
+	testAdd("pear3", false, expectedIPInfo{ip: "10.2.3.199", gw: "10.2.3.1", mask: "ffffff00"})
 
 	// Make sure repeated call without previous container results in error
 	testAddError("pear3")
 
 	// Test dual-stack allocation for primary network: a pod in a namespace
 	// annotated with both an IPv4 and an IPv6 pool should receive two IPs.
-	testAddDualStack := func(test string, expectedIPv4, expectedGWv4, expectedMaskv4, expectedIPv6, expectedGWv6, expectedMaskv6 string) {
-		owns, result, err := testDriver.Add(cniArgsMap[test], k8sArgsMap[test], networkConfig)
-		require.NoError(t, err, "expected no error in dual-stack Add call")
-		assert.True(t, owns)
-		require.Len(t, result.IPs, 2)
-		require.Len(t, result.Routes, 2)
-		assert.Equal(t, expectedIPv4, result.IPs[0].Address.IP.String())
-		assert.Equal(t, expectedMaskv4, result.IPs[0].Address.Mask.String())
-		assert.Equal(t, expectedGWv4, result.IPs[0].Gateway.String())
-		assert.Equal(t, expectedIPv6, result.IPs[1].Address.IP.String())
-		assert.Equal(t, expectedMaskv6, result.IPs[1].Address.Mask.String())
-		assert.Equal(t, expectedGWv6, result.IPs[1].Gateway.String())
-		assert.Equal(t, uint16(0), result.VLANID)
-	}
-
-	testAddDualStack("dualstack1", "10.2.2.103", "10.2.2.1", "ffffff00", "20::3", "20::1", ipv6Mask)
+	testAdd("dualstack1", false,
+		expectedIPInfo{ip: "10.2.2.103", gw: "10.2.2.1", mask: "ffffff00"},
+		expectedIPInfo{ip: "20::3", gw: "20::1", mask: ipv6Mask},
+	)
 	testCheck("dualstack1", true)
 
 	owns, err = testDriver.Del(cniArgsMap["dualstack1"], k8sArgsMap["dualstack1"], networkConfig)
