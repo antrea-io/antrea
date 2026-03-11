@@ -1,0 +1,18 @@
+name: Install Kind
+description: >
+  Install the Kind binary. The version is read from ci/kind/version.
+
+runs:
+  using: composite
+  steps:
+    - name: Get Kind version
+      id: get_kind_version
+      shell: bash
+      run: |
+        KIND_VERSION=$(head -n1 ./ci/kind/version)
+        echo "kind_version=${KIND_VERSION}" >> $GITHUB_OUTPUT
+    - name: Install Kind
+      uses: helm/kind-action@v1
+      with:
+        version: ${{ steps.get_kind_version.outputs.kind_version }}
+        install_only: true

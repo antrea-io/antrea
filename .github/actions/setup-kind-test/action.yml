@@ -1,0 +1,62 @@
+name: Set up Kind test environment
+description: >
+  Common setup steps for Kind-based test jobs: free disk space, Go
+  toolchain, Docker classic image store, download and load Antrea image
+  artifacts, and install Kind.
+  The repository must already be checked out before using this action.
+
+inputs:
+  free-disk-space:
+    description: Free disk space before running the test.
+    default: 'true'
+  setup-go:
+    description: Install the Go toolchain.
+    default: 'true'
+  load-flow-aggregator:
+    description: Download and load the Flow Aggregator coverage image.
+    default: 'false'
+  tag-coverage-images:
+    description: >
+      Tag Antrea coverage images to non-coverage image names, so that
+      standard (non-coverage) manifests can be used.
+    default: 'false'
+
+runs:
+  using: composite
+  steps:
+    - name: Free disk space
+      if: ${{ inputs.free-disk-space == 'true' }}
+      shell: bash
+      # https://github.com/actions/virtual-environments/issues/709
+      run: |
+        sudo apt-get clean
+        df -h
+    - uses: actions/setup-go@v6
+      if: ${{ inputs.setup-go == 'true' }}
+      with:
+        go-version-file: '.go-version'
+    # Docker 29+ defaults to the containerd image store, which breaks kind load docker-image.
+    - uses: ./.github/actions/setup-docker-classic
+    - name: Download Antrea image from previous job
+      uses: actions/download-artifact@v7
+      with:
+        name: antrea-ubuntu-cov
+    - name: Load Antrea image
+      shell: bash
+      run: docker load -i antrea-ubuntu.tar
+    - name: Tag coverage images
+      if: ${{ inputs.tag-coverage-images == 'true' }}
+      shell: bash
+      run: |
+        docker tag antrea/antrea-agent-ubuntu-coverage:latest antrea/antrea-agent-ubuntu:latest
+        docker tag antrea/antrea-controller-ubuntu-coverage:latest antrea/antrea-controller-ubuntu:latest
+    - name: Download Flow Aggregator image from previous job
+      if: ${{ inputs.load-flow-aggregator == 'true' }}
+      uses: actions/download-artifact@v7
+      with:
+        name: flow-aggregator-cov
+    - name: Load Flow Aggregator image
+      if: ${{ inputs.load-flow-aggregator == 'true' }}
+      shell: bash
+      run: docker load -i flow-aggregator.tar
+    - uses: ./.github/actions/setup-kind
