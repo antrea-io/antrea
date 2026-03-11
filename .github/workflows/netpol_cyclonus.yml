@@ -20,12 +20,7 @@ jobs:
       # Docker 29+ defaults to the containerd image store, which breaks kind load docker-image.
       - uses: ./.github/actions/setup-docker-classic
       - run: make
-      - name: Install Kind
-        run: |
-          KIND_VERSION=$(head -n1 ./ci/kind/version)
-          curl -Lo ./kind https://github.com/kubernetes-sigs/kind/releases/download/${KIND_VERSION}/kind-$(uname)-amd64
-          chmod +x ./kind
-          sudo mv kind /usr/local/bin
+      - uses: ./.github/actions/setup-kind
       - name: Run cyclonus tests
         working-directory: hack/netpol-generator
         run: ./test-kind.sh
