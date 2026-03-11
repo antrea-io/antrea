@@ -120,17 +120,17 @@ func TestJoinConfig(t *testing.T) {
 		},
 		{
 			name:           "no ClusterSet",
-			expectedOutput: "No ClusterSet found in Namespace",
+			expectedOutput: "no ClusterSet found in Namespace",
 		},
 		{
 			name:           "invalid ClusterSet",
 			clusterSets:    []*mcv1alpha2.ClusterSet{invalidClusterSet},
-			expectedOutput: "Invalid ClusterSet",
+			expectedOutput: "invalid ClusterSet",
 		},
 		{
 			name:           ">1 ClusterSets",
 			clusterSets:    []*mcv1alpha2.ClusterSet{clusterSet1, invalidClusterSet},
-			expectedOutput: "More than one ClusterSets in Namespace",
+			expectedOutput: "more than one ClusterSet found in Namespace",
 		},
 		{
 			name:           "get with token",

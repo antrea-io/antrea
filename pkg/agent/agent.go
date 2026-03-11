@@ -1220,7 +1220,7 @@ func (i *Initializer) getInterfaceMTU(transportInterface *net.Interface) (int, e
 	mtu := transportInterface.MTU
 	// Make sure MTU is set on the interface.
 	if mtu <= 0 {
-		return 0, fmt.Errorf("Failed to fetch Node MTU : %v", mtu)
+		return 0, fmt.Errorf("failed to fetch Node MTU: %d", mtu)
 	}
 
 	isIPv6 := i.nodeConfig.NodeIPv6Addr != nil
