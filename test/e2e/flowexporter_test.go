@@ -86,14 +86,14 @@ func createFlowExporterDestination(tb testing.TB, name string, isTLS bool, names
 	return updatedDest
 }
 
-func deployIPFIXCollectorOnNode(tb testing.TB, o flowVisibilityTestOptions, nodeIdx int) string {
+func deployIPFIXCollectorForTest(tb testing.TB, o flowVisibilityTestOptions) string {
 	tb.Logf("Deploying IPFIX Collector")
 	collectorName := "ipfix-collector"
 	if o.ipfixCollector.name != "" {
 		collectorName = o.ipfixCollector.name
 	}
 
-	ipfixCollectorAddr, err := testData.deployIPFIXCollectorWithName(collectorName, nil, nil, nil, nodeName(nodeIdx))
+	ipfixCollectorAddr, err := testData.deployIPFIXCollectorWithName(collectorName, nil, nil, nil)
 	require.NoError(tb, err, "Failed to deploy IPFIX collector", "name", collectorName)
 
 	return ipfixCollectorAddr
@@ -156,7 +156,7 @@ func TestFlowExporterFlowExporterDestinations(t *testing.T) {
 			name: collector1Name,
 		},
 	}
-	collector1Addr = deployIPFIXCollectorOnNode(t, opt1, 1)
+	collector1Addr = deployIPFIXCollectorForTest(t, opt1)
 
 	collector2Name = randName("ipfix-collector-")
 	opt2 := flowVisibilityTestOptions{
@@ -170,7 +170,7 @@ func TestFlowExporterFlowExporterDestinations(t *testing.T) {
 			name: collector2Name,
 		},
 	}
-	collector2Addr = deployIPFIXCollectorOnNode(t, opt2, 2)
+	collector2Addr = deployIPFIXCollectorForTest(t, opt2)
 
 	k8sUtils, err = NewKubernetesUtils(data)
 	require.NoError(t, err, "Error when creating Kubernetes utils client")

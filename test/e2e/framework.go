@@ -142,9 +142,7 @@ const (
 
 	nginxLBService = "nginx-loadbalancer"
 
-	// Need a non-default (4739) port when testing the FA in hostNetwork mode.
-	// Otherwise we end up with 2 different hostNetwork Pods listening on the same port, with a
-	// conflict if they are scheduled on the same Node.
+	// Port the IPFIX collector test pod listens on for receiving flow records.
 	ipfixCollectorPort                  = "44739"
 	exporterFlowPollInterval            = 1 * time.Second
 	exporterActiveFlowExportTimeout     = 2 * time.Second
@@ -1073,21 +1071,25 @@ func (data *TestData) deleteClickHouseOperator() error {
 }
 
 func (data *TestData) deployIPFIXCollector(serverCert []byte, serverKey []byte, clientCA []byte) (string, error) {
-	return data.deployIPFIXCollectorWithName("ipfix-collector", serverCert, serverKey, clientCA, "")
+	return data.deployIPFIXCollectorWithName("ipfix-collector", serverCert, serverKey, clientCA)
 }
 
-func (data *TestData) deployIPFIXCollectorWithName(name string, serverCert []byte, serverKey []byte, clientCA []byte, node string) (string, error) {
-	// #nosec G404: random number generator not used for security purposes
-	port := strconv.Itoa(rand.Int()%1000 + 40000)
-	args := []string{fmt.Sprintf("--ipfix.port=%s", port)}
+func (data *TestData) deployIPFIXCollectorWithName(name string, serverCert []byte, serverKey []byte, clientCA []byte) (string, error) {
+	args := []string{fmt.Sprintf("--ipfix.port=%s", ipfixCollectorPort)}
 	if serverCert != nil {
 		args = append(args, "--server-cert", "/certs/server/tls.crt", "--server-key", "/certs/server/tls.key")
 		if clientCA != nil {
 			args = append(args, "--client-ca", "/certs/clients/ca.crt")
 		}
 	}
-
-	pb := NewPodBuilder(name, data.testNamespace, ipfixCollectorImage).WithArgs(args).InHostNetwork().OnNode(node)
+	portNum, _ := strconv.ParseInt(ipfixCollectorPort, 10, 32)
+	pb := NewPodBuilder(name, data.testNamespace, ipfixCollectorImage).WithArgs(args).WithPorts([]corev1.ContainerPort{
+		{
+			Name:          "ipfix",
+			ContainerPort: int32(portNum),
+			Protocol:      corev1.ProtocolTCP,
+		},
+	})
 
 	if serverCert != nil {
 		serverCertSecret := &corev1.Secret{
@@ -1135,7 +1137,7 @@ func (data *TestData) deployIPFIXCollectorWithName(name string, serverCert []byt
 	} else {
 		ipStr = ipfixCollectorIP.IPv4.String()
 	}
-	ipfixCollectorAddr := fmt.Sprintf("%s:tcp", net.JoinHostPort(ipStr, port))
+	ipfixCollectorAddr := fmt.Sprintf("%s:tcp", net.JoinHostPort(ipStr, ipfixCollectorPort))
 	return ipfixCollectorAddr, nil
 }
 

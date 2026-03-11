@@ -514,7 +514,9 @@ func TestFlowExporter_networkPolicyWait(t *testing.T) {
 		require.Fail(t, "Run should have finished within 1 second after stopCh was closed")
 	}
 
-	// Verify that networkPolicyReadyTime has been set and is after we started the test
+	// Verify that networkPolicyReadyTime has been set and is not before we started the test.
+	// We use !Before() instead of After() to avoid flakiness on systems with
+	// low clock resolution (e.g. Windows CI) where both timestamps can be the same tick.
 	require.NotZero(t, fe.networkPolicyReadyTime)
-	assert.True(t, fe.networkPolicyReadyTime.After(beforeRunTime))
+	assert.False(t, fe.networkPolicyReadyTime.Before(beforeRunTime))
 }
