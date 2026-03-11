@@ -118,6 +118,10 @@ const (
 	antreaNFTablesSetNodePort6   = "nodeport-6"
 	antreaNFTablesSetExternalIP  = "externalip"
 	antreaNFTablesSetExternalIP6 = "externalip-6"
+
+	// NPL pod IP sets for flowtable acceleration
+	antreaNFTablesSetNPLPodIP  = "npl-pod-ip"
+	antreaNFTablesSetNPLPodIP6 = "npl-pod-ip-6"
 )
 
 // Client implements Interface.
@@ -198,7 +202,8 @@ type Client struct {
 	// iptablesInitialized is used to notify when iptables initialization is done.
 	iptablesInitialized chan struct{}
 	proxyAll            bool
-	// hostNetworkNFTables is only applicable to proxyAll for now.
+	enableNodePortLocal bool
+	// hostNetworkNFTables is used for proxyAll and NodePortLocal when HostNetworkMode is nftables.
 	hostNetworkNFTables            bool
 	connectUplinkToBridge          bool
 	multicastEnabled               bool
@@ -245,6 +250,9 @@ type Client struct {
 	podCIDRNFTablesSetIPv4 sync.Map
 	// podCIDRNFTablesSetIPv6 caches all existing IPv6 Pod CIDRs stored in antreaNFTablesSetPeerPodCIDR.
 	podCIDRNFTablesSetIPv6 sync.Map
+	// nplPodIPsIPv4 and nplPodIPsIPv6 store NPL backend pod IPs for flowtable acceleration.
+	nplPodIPsIPv4 sync.Map
+	nplPodIPsIPv6 sync.Map
 	// deterministic represents whether to write iptables chains and rules for NodeNetworkPolicy deterministically when
 	// syncIPTables is called. Enabling it may carry a performance impact. It's disabled by default and should only be
 	// used in testing.
@@ -269,13 +277,15 @@ func NewClient(networkConfig *config.NetworkConfig,
 	egressSNATRandomFully bool,
 	serviceCIDRProvider servicecidr.Interface,
 	wireguardPort int32,
-	proxyHealthCheckPort int32) (*Client, error) {
+	proxyHealthCheckPort int32,
+	enableNodePortLocal bool) (*Client, error) {
 	return &Client{
 		networkConfig:               networkConfig,
 		noSNAT:                      noSNAT,
 		nodeSNATRandomFully:         nodeSNATRandomFully,
 		egressSNATRandomFully:       egressSNATRandomFully,
 		proxyAll:                    proxyAll,
+		enableNodePortLocal:         enableNodePortLocal,
 		multicastEnabled:            multicastEnabled,
 		connectUplinkToBridge:       connectUplinkToBridge,
 		nodeNetworkPolicyEnabled:    nodeNetworkPolicyEnabled,
@@ -363,12 +373,15 @@ func (c *Client) Initialize(nodeConfig *config.NodeConfig, done func()) error {
 		klog.Info("Initialized iptables")
 	}()
 
-	if c.hostNetworkAccelerationEnabled || c.hostNetworkNFTables && c.proxyAll {
+	if c.hostNetworkAccelerationEnabled || (c.hostNetworkNFTables && (c.proxyAll || c.enableNodePortLocal)) {
 		nftables, err := nftables.New(c.networkConfig.IPv4Enabled, c.networkConfig.IPv6Enabled)
 		if err != nil {
 			if c.proxyAll && c.hostNetworkNFTables {
 				// ProxyAll depends on nftables; fail if unavailable.
 				return fmt.Errorf("failed to create nftables instance: %w", err)
+			}
+			if c.enableNodePortLocal && c.hostNetworkNFTables {
+				return fmt.Errorf("failed to create nftables instance for NodePortLocal: %w", err)
 			}
 			// Host-network acceleration is optional; skip gracefully.
 			if c.hostNetworkAccelerationEnabled {
@@ -3236,6 +3249,30 @@ func (c *Client) nftablesTrafficAcceleration(tx *knftables.Transaction, ipProtoc
 				Comment: ptr.To("Accelerate IPv4 connections: to NodePort Service"),
 			})
 		}
+		// Add rules to accelerate NodePortLocal IPv4 connections via flowtable.
+		if c.enableNodePortLocal {
+			tx.Add(&knftables.Set{
+				Name:    antreaNFTablesSetNPLPodIP,
+				Type:    "ipv4_addr",
+				Comment: ptr.To("Set containing NPL backend Pod IPv4s for flowtable acceleration"),
+			})
+			tx.Flush(&knftables.Set{Name: antreaNFTablesSetNPLPodIP})
+			c.nplPodIPsIPv4.Range(func(key, _ interface{}) bool {
+				tx.Add(&knftables.Element{Set: antreaNFTablesSetNPLPodIP, Key: []string{key.(string)}})
+				return true
+			})
+			tx.Add(&knftables.Rule{
+				Chain: antreaNFTablesChainForwardOffload,
+				Rule: knftables.Concat(
+					"oif", c.nodeConfig.GatewayConfig.Name,
+					"ip", "daddr", "@", antreaNFTablesSetNPLPodIP,
+					serviceAccelerationPacketThreshold,
+					"flow", "add", "@", antreaNFTablesFlowtable,
+					"counter",
+				),
+				Comment: ptr.To("Accelerate IPv4 connections: to NodePortLocal backends"),
+			})
+		}
 	}
 	if ipProtocol == knftables.IPv6Family {
 		// Add rules to accelerate Pod-to-Pod IPv6 connections across Nodes via flowtable.
@@ -3315,6 +3352,30 @@ func (c *Client) nftablesTrafficAcceleration(tx *knftables.Transaction, ipProtoc
 				Comment: ptr.To("Accelerate IPv6 connections: to NodePort Service"),
 			})
 		}
+		// Add rules to accelerate NodePortLocal IPv6 connections via flowtable.
+		if c.enableNodePortLocal {
+			tx.Add(&knftables.Set{
+				Name:    antreaNFTablesSetNPLPodIP6,
+				Type:    "ipv6_addr",
+				Comment: ptr.To("Set containing NPL backend Pod IPv6s for flowtable acceleration"),
+			})
+			tx.Flush(&knftables.Set{Name: antreaNFTablesSetNPLPodIP6})
+			c.nplPodIPsIPv6.Range(func(key, _ interface{}) bool {
+				tx.Add(&knftables.Element{Set: antreaNFTablesSetNPLPodIP6, Key: []string{key.(string)}})
+				return true
+			})
+			tx.Add(&knftables.Rule{
+				Chain: antreaNFTablesChainForwardOffload,
+				Rule: knftables.Concat(
+					"oif", c.nodeConfig.GatewayConfig.Name,
+					"ip6", "daddr", "@", antreaNFTablesSetNPLPodIP6,
+					serviceAccelerationPacketThreshold,
+					"flow", "add", "@", antreaNFTablesFlowtable,
+					"counter",
+				),
+				Comment: ptr.To("Accelerate IPv6 connections: to NodePortLocal backends"),
+			})
+		}
 	}
 }
 
@@ -3332,7 +3393,7 @@ func (c *Client) syncNFTables(ctx context.Context) error {
 			// - ProxyAll with nftables: to implement Service traffic redirection when host network mode uses nftables
 			c.nftablesProxyAllExternalIPSet(tx, ipProtocol)
 		}
-		if c.hostNetworkAccelerationEnabled {
+		if c.hostNetworkAccelerationEnabled || (c.hostNetworkNFTables && c.enableNodePortLocal) {
 			c.nftablesTrafficAcceleration(tx, ipProtocol)
 		}
 		if c.proxyAll && c.hostNetworkNFTables {
@@ -3422,6 +3483,25 @@ func (c *Client) deletePeerPodCIDRFromNFTablesSet(podCIDR *net.IPNet) error {
 	podCIDRNFTablesSet.Delete(podCIDRStr)
 
 	return nil
+}
+
+// SetNPLPodIPs updates the set of NPL backend pod IPs used for flowtable acceleration.
+// The next syncNFTables run will apply the updated set to nftables.
+func (c *Client) SetNPLPodIPs(ipv4 []string, ipv6 []string) {
+	c.nplPodIPsIPv4.Range(func(key, _ interface{}) bool {
+		c.nplPodIPsIPv4.Delete(key)
+		return true
+	})
+	c.nplPodIPsIPv6.Range(func(key, _ interface{}) bool {
+		c.nplPodIPsIPv6.Delete(key)
+		return true
+	})
+	for _, ip := range ipv4 {
+		c.nplPodIPsIPv4.Store(ip, struct{}{})
+	}
+	for _, ip := range ipv6 {
+		c.nplPodIPsIPv6.Store(ip, struct{}{})
+	}
 }
 
 func (c *Client) getNFT(isIPv6 bool) knftables.Interface {

@@ -309,7 +309,7 @@ func setUp(t *testing.T, tc *testConfig, objects ...runtime.Object) *testData {
 	svcInformer := informerFactory.Core().V1().Services().Informer()
 	nodeInformer := informerFactory.Core().V1().Nodes().Informer()
 
-	c := NewNPLController(k8sClient, localPodInformer, svcInformer, nodeInformer, portTableIPv4, portTableIPv6, defaultNodeName)
+	c := NewNPLController(k8sClient, localPodInformer, svcInformer, nodeInformer, portTableIPv4, portTableIPv6, defaultNodeName, nil)
 
 	data := &testData{
 		T:             t,

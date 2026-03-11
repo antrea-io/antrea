@@ -53,6 +53,11 @@ const (
 	resyncPeriod = 0 * time.Minute
 )
 
+// NPLPodIPsNotifier is implemented by the route client for flowtable acceleration.
+type NPLPodIPsNotifier interface {
+	SetNPLPodIPs(ipv4 []string, ipv6 []string)
+}
+
 type NPLController struct {
 	portTableIPv4 *portcache.PortTable
 	portTableIPv6 *portcache.PortTable
@@ -63,6 +68,8 @@ type NPLController struct {
 	svcInformer   cache.SharedIndexInformer
 	nodeInformer  cache.SharedIndexInformer
 	nodeName      string
+	// nplPodIPsNotifier is called when NPL rules change to update flowtable acceleration (optional).
+	nplPodIPsNotifier NPLPodIPsNotifier
 	// nodeIPv4 and nodeIPv6 store the current Node IPs for NPL annotations.
 	// They are populated from the Node object and prioritize external IPs over internal IPs.
 	nodeIPv4    string
@@ -76,16 +83,18 @@ func NewNPLController(kubeClient clientset.Interface,
 	nodeInformer cache.SharedIndexInformer,
 	ptIPv4 *portcache.PortTable,
 	ptIPv6 *portcache.PortTable,
-	nodeName string) *NPLController {
+	nodeName string,
+	nplPodIPsNotifier NPLPodIPsNotifier) *NPLController {
 	c := NPLController{
-		kubeClient:    kubeClient,
-		portTableIPv4: ptIPv4,
-		portTableIPv6: ptIPv6,
-		podInformer:   podInformer,
-		podLister:     corelisters.NewPodLister(podInformer.GetIndexer()),
-		svcInformer:   svcInformer,
-		nodeInformer:  nodeInformer,
-		nodeName:      nodeName,
+		kubeClient:        kubeClient,
+		portTableIPv4:     ptIPv4,
+		portTableIPv6:     ptIPv6,
+		podInformer:       podInformer,
+		podLister:         corelisters.NewPodLister(podInformer.GetIndexer()),
+		svcInformer:       svcInformer,
+		nodeInformer:      nodeInformer,
+		nodeName:          nodeName,
+		nplPodIPsNotifier: nplPodIPsNotifier,
 	}
 
 	podInformer.AddEventHandlerWithResyncPeriod(
@@ -135,6 +144,21 @@ func NewNPLController(kubeClient clientset.Interface,
 		},
 	)
 	return &c
+}
+
+// notifyNPLPodIPs updates the route client with the current set of NPL backend pod IPs for flowtable acceleration.
+func (c *NPLController) notifyNPLPodIPs() {
+	if c.nplPodIPsNotifier == nil {
+		return
+	}
+	var ipv4, ipv6 []string
+	if c.portTableIPv4 != nil {
+		ipv4 = c.portTableIPv4.GetNPLPodIPs()
+	}
+	if c.portTableIPv6 != nil {
+		ipv6 = c.portTableIPv6.GetNPLPodIPs()
+	}
+	c.nplPodIPsNotifier.SetNPLPodIPs(ipv4, ipv6)
 }
 
 func podKeyFunc(pod *corev1.Pod) string {
@@ -692,6 +716,7 @@ func (c *NPLController) handleAddUpdatePod(key string, obj interface{}) error {
 	if updatePodAnnotation {
 		return c.updatePodNPLAnnotation(context.TODO(), pod, nplAnnotationsRequired)
 	}
+	c.notifyNPLPodIPs()
 	return nil
 }
 
@@ -712,6 +737,7 @@ func (c *NPLController) cleanupPodRules(key string, podPortsToKeep sets.Set[stri
 			}
 		}
 	}
+	c.notifyNPLPodIPs()
 	return nil
 }
 
@@ -815,6 +841,7 @@ func (c *NPLController) waitForRulesInitialization(ctx context.Context) error {
 	if err := c.addRulesForNPLPorts(ctx, allNPLPortsV4, allNPLPortsV6); err != nil {
 		return err
 	}
+	c.notifyNPLPodIPs()
 	klog.InfoS("Initialization of NodePortLocal rules successful")
 	return nil
 }

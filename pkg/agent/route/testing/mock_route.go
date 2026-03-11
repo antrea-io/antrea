@@ -434,3 +434,15 @@ func (mr *MockInterfaceMockRecorder) UnMigrateRoutesFromGw(route, linkName any) 
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UnMigrateRoutesFromGw", reflect.TypeOf((*MockInterface)(nil).UnMigrateRoutesFromGw), route, linkName)
 }
+
+// SetNPLPodIPs mocks base method.
+func (m *MockInterface) SetNPLPodIPs(ipv4, ipv6 []string) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "SetNPLPodIPs", ipv4, ipv6)
+}
+
+// SetNPLPodIPs indicates an expected call of SetNPLPodIPs.
+func (mr *MockInterfaceMockRecorder) SetNPLPodIPs(ipv4, ipv6 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetNPLPodIPs", reflect.TypeOf((*MockInterface)(nil).SetNPLPodIPs), ipv4, ipv6)
+}

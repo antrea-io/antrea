@@ -261,6 +261,7 @@ func run(o *Options) error {
 		serviceCIDRProvider,
 		int32(wireguardConfig.Port),
 		int32(proxyHealthCheckPort),
+		o.enableNodePortLocal,
 	)
 	if err != nil {
 		return fmt.Errorf("error creating route client: %v", err)
@@ -777,6 +778,7 @@ func run(o *Options) error {
 
 	// Initialize the NPL agent.
 	if o.enableNodePortLocal {
+		useNFTablesForNPL := networkConfig.HostNetworkMode == config.HostNetworkModeNFTables
 		nplController, err := npl.InitializeNPLAgent(
 			k8sClient,
 			serviceInformer,
@@ -787,6 +789,8 @@ func run(o *Options) error {
 			nodeConfig.Name,
 			v4Enabled,
 			v6Enabled,
+			useNFTablesForNPL,
+			routeClient,
 		)
 		if err != nil {
 			return fmt.Errorf("failed to start NPL agent: %v", err)

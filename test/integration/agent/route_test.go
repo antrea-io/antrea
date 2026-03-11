@@ -116,7 +116,8 @@ func newTestRouteClient(networkConfig *config.NetworkConfig, options routeClient
 		false,
 		&servicecidr.Discoverer{},
 		apis.WireGuardListenPort,
-		apis.AntreaProxyHealthServerPort)
+		apis.AntreaProxyHealthServerPort,
+		false)
 }
 
 func TestInitialize(t *testing.T) {

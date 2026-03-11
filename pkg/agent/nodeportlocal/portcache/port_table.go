@@ -145,7 +145,7 @@ func PodKeyIndexFunc(obj interface{}) ([]string, error) {
 	return []string{npData.PodKey}, nil
 }
 
-func NewPortTable(start, end int, isIPv6 bool) (*PortTable, error) {
+func NewPortTable(start, end int, isIPv6 bool, useNFTables bool) (*PortTable, error) {
 	ptable := PortTable{
 		PortTableCache: cache.NewIndexer(GetPortTableKey, cache.Indexers{
 			NodePortIndex:    NodePortIndexFunc,
@@ -155,7 +155,7 @@ func NewPortTable(start, end int, isIPv6 bool) (*PortTable, error) {
 		StartPort:       start,
 		EndPort:         end,
 		PortSearchStart: start,
-		PodPortRules:    rules.InitRules(isIPv6),
+		PodPortRules:    rules.InitRules(isIPv6, useNFTables),
 		LocalPortOpener: &localPortOpener{},
 		IsIPv6:          isIPv6,
 	}
@@ -175,6 +175,23 @@ func (pt *PortTable) GetDataForPod(podKey string) []*NodePortData {
 	pt.tableLock.RLock()
 	defer pt.tableLock.RUnlock()
 	return pt.getDataForPod(podKey)
+}
+
+// GetNPLPodIPs returns the set of pod IPs that currently have NPL rules in this port table.
+// It is used to notify the route client for flowtable acceleration.
+func (pt *PortTable) GetNPLPodIPs() []string {
+	pt.tableLock.RLock()
+	defer pt.tableLock.RUnlock()
+	seen := make(map[string]struct{})
+	for _, obj := range pt.PortTableCache.List() {
+		npData := obj.(*NodePortData)
+		seen[npData.PodIP] = struct{}{}
+	}
+	ips := make([]string, 0, len(seen))
+	for ip := range seen {
+		ips = append(ips, ip)
+	}
+	return ips
 }
 
 func (pt *PortTable) getDataForPod(podKey string) []*NodePortData {

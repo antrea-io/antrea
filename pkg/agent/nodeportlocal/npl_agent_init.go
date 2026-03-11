@@ -28,6 +28,8 @@ import (
 // InitializeNPLAgent initializes the NodePortLocal agent.
 // It sets up event handlers to handle Pod add, update and delete events.
 // When a Pod gets created, a free Node port is obtained from the port table cache and a DNAT rule is added to NAT traffic to the Pod's ip:port.
+// When useNFTables is true (e.g. HostNetworkMode is nftables), NPL rules are programmed with nftables; otherwise iptables is used.
+// nplPodIPsNotifier is optional; when non-nil it is called when NPL rules change so the route client can update flowtable acceleration.
 func InitializeNPLAgent(
 	kubeClient clientset.Interface,
 	serviceInformer coreinformers.ServiceInformer,
@@ -38,20 +40,22 @@ func InitializeNPLAgent(
 	nodeName string,
 	ipv4Enabled bool,
 	ipv6Enabled bool,
+	useNFTables bool,
+	nplPodIPsNotifier nplk8s.NPLPodIPsNotifier,
 ) (*nplk8s.NPLController, error) {
 	var portTableIPv4, portTableIPv6 *portcache.PortTable
 	var err error
 	if ipv4Enabled {
-		portTableIPv4, err = portcache.NewPortTable(startPort, endPort, false)
+		portTableIPv4, err = portcache.NewPortTable(startPort, endPort, false, useNFTables)
 		if err != nil {
 			return nil, fmt.Errorf("error when initializing NodePortLocal IPv4 port table: %w", err)
 		}
 	}
 	if ipv6Enabled {
-		portTableIPv6, err = portcache.NewPortTable(startPort, endPort, true)
+		portTableIPv6, err = portcache.NewPortTable(startPort, endPort, true, useNFTables)
 		if err != nil {
 			return nil, fmt.Errorf("error when initializing NodePortLocal IPv6 port table: %w", err)
 		}
 	}
-	return nplk8s.NewNPLController(kubeClient, podInformer, serviceInformer.Informer(), nodeInformer.Informer(), portTableIPv4, portTableIPv6, nodeName), nil
+	return nplk8s.NewNPLController(kubeClient, podInformer, serviceInformer.Informer(), nodeInformer.Informer(), portTableIPv4, portTableIPv6, nodeName, nplPodIPsNotifier), nil
 }

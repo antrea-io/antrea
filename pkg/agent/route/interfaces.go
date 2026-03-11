@@ -122,4 +122,8 @@ type Interface interface {
 
 	// DeleteNodeNetworkPolicyIPTables deletes iptables chains and rules within the chains for NodeNetworkPolicy.
 	DeleteNodeNetworkPolicyIPTables(iptablesChains []string, isIPv6 bool) error
+
+	// SetNPLPodIPs updates the set of NodePortLocal backend pod IPs used for nftables flowtable acceleration.
+	// It is called by the NPL controller when NPL rules are added or removed.
+	SetNPLPodIPs(ipv4 []string, ipv6 []string)
 }

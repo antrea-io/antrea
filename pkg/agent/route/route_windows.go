@@ -94,7 +94,8 @@ func NewClient(networkConfig *config.NetworkConfig,
 	egressSNATRandomFully bool, // ignored
 	serviceCIDRProvider servicecidr.Interface,
 	wireguardPort int32,
-	proxyHealthCheckPort int32) (*Client, error) {
+	proxyHealthCheckPort int32,
+	enableNodePortLocal bool) (*Client, error) {
 	return &Client{
 		networkConfig:               networkConfig,
 		winnet:                      &winnet.Handle{},
@@ -651,4 +652,8 @@ func (c *Client) AddOrUpdateNodeNetworkPolicyIPTables(iptablesChains []string, i
 
 func (c *Client) DeleteNodeNetworkPolicyIPTables(iptablesChains []string, isIPv6 bool) error {
 	return errors.New("DeleteNodeNetworkPolicyIPTables is not implemented on Windows")
+}
+
+func (c *Client) SetNPLPodIPs(ipv4 []string, ipv6 []string) {
+	// NPL flowtable acceleration is Linux-only.
 }

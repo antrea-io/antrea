@@ -34,8 +34,9 @@ var (
 	antreaNatNPL = util.AntreaNatName
 )
 
-// InitRules initializes rules based on the netnatstaticmapping implementation on windows
-func InitRules(_ bool) PodPortRules {
+// InitRules initializes rules based on the netnatstaticmapping implementation on windows.
+// useNFTables is ignored on Windows.
+func InitRules(_ bool, _ bool) PodPortRules {
 	return NewNetNatRules()
 }
 

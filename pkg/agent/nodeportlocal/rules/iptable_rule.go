@@ -27,9 +27,18 @@ import (
 	"antrea.io/antrea/pkg/agent/util/iptables"
 )
 
-// InitRules initializes rules based on the underlying implementation
-func InitRules(isIPv6 bool) PodPortRules {
-	// This can be extended based on the system capability.
+// InitRules initializes rules based on the underlying implementation.
+// When useNFTables is true (e.g. HostNetworkMode is nftables), nftables rules are used;
+// otherwise iptables rules are used.
+func InitRules(isIPv6 bool, useNFTables bool) PodPortRules {
+	if useNFTables {
+		nft, err := NewNFTablesRules(isIPv6)
+		if err != nil {
+			klog.ErrorS(err, "Failed to create NPL nftables rules, falling back to iptables", "isIPv6", isIPv6)
+			return NewIPTableRules(isIPv6)
+		}
+		return nft
+	}
 	return NewIPTableRules(isIPv6)
 }
 
