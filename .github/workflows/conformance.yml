@@ -85,16 +85,7 @@ jobs:
         if: ${{ steps.check-release.outputs.released == 'false' }}
         run: |
           ./hack/build-antrea-linux-all.sh --pull --distro ${{ inputs.antrea-image-distro }} --platform ${{ inputs.antrea-image-platform }}
-      - name: Get Kind version
-        id: get_kind_version
-        run: |
-          KIND_VERSION=$(head -n1 ./ci/kind/version || echo v0.31.0)
-          echo "kind_version=${KIND_VERSION}" >> $GITHUB_OUTPUT
-      - name: Install Kind
-        uses: helm/kind-action@v1
-        with:
-          version: ${{ steps.get_kind_version.outputs.kind_version }}
-          install_only: true
+      - uses: ./.github/actions/setup-kind
       - name: Build local image for conformance test
         if: ${{ inputs.k8s-version != '' }}
         run: |

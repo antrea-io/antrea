@@ -80,32 +80,10 @@ jobs:
     needs: [build-antrea-coverage-image]
     runs-on: [ubuntu-latest]
     steps:
-    - name: Free disk space
-      # https://github.com/actions/virtual-environments/issues/709
-      run: |
-        sudo apt-get clean
-        df -h
     - uses: actions/checkout@v6
       with:
         show-progress: false
-    - uses: actions/setup-go@v6
-      with:
-        go-version-file: '.go-version'
-    # Docker 29+ defaults to the containerd image store, which breaks kind load docker-image.
-    - uses: ./.github/actions/setup-docker-classic
-    - name: Download Antrea image from previous job
-      uses: actions/download-artifact@v7
-      with:
-        name: antrea-ubuntu-cov
-    - name: Load Antrea image
-      run: |
-        docker load -i antrea-ubuntu.tar
-    - name: Install Kind
-      run: |
-        KIND_VERSION=$(head -n1 ./ci/kind/version)
-        curl -Lo ./kind https://github.com/kubernetes-sigs/kind/releases/download/${KIND_VERSION}/kind-$(uname)-amd64
-        chmod +x ./kind
-        sudo mv kind /usr/local/bin
+    - uses: ./.github/actions/setup-kind-test
     - name: Run e2e tests
       run: |
         mkdir log
@@ -145,32 +123,10 @@ jobs:
     needs: [build-antrea-coverage-image]
     runs-on: [ubuntu-latest]
     steps:
-    - name: Free disk space
-      # https://github.com/actions/virtual-environments/issues/709
-      run: |
-        sudo apt-get clean
-        df -h
     - uses: actions/checkout@v6
       with:
         show-progress: false
-    - uses: actions/setup-go@v6
-      with:
-        go-version-file: '.go-version'
-    # Docker 29+ defaults to the containerd image store, which breaks kind load docker-image.
-    - uses: ./.github/actions/setup-docker-classic
-    - name: Download Antrea image from previous job
-      uses: actions/download-artifact@v7
-      with:
-        name: antrea-ubuntu-cov
-    - name: Load Antrea image
-      run: |
-        docker load -i antrea-ubuntu.tar
-    - name: Install Kind
-      run: |
-        KIND_VERSION=$(head -n1 ./ci/kind/version)
-        curl -Lo ./kind https://github.com/kubernetes-sigs/kind/releases/download/${KIND_VERSION}/kind-$(uname)-amd64
-        chmod +x ./kind
-        sudo mv kind /usr/local/bin
+    - uses: ./.github/actions/setup-kind-test
     - name: Run e2e tests
       run: |
         mkdir log
@@ -217,32 +173,10 @@ jobs:
     needs: [build-antrea-coverage-image]
     runs-on: [ubuntu-latest]
     steps:
-      - name: Free disk space
-        # https://github.com/actions/virtual-environments/issues/709
-        run: |
-          sudo apt-get clean
-          df -h
       - uses: actions/checkout@v6
         with:
           show-progress: false
-      - uses: actions/setup-go@v6
-        with:
-          go-version-file: '.go-version'
-      # Docker 29+ defaults to the containerd image store, which breaks kind load docker-image.
-      - uses: ./.github/actions/setup-docker-classic
-      - name: Download Antrea image from previous job
-        uses: actions/download-artifact@v7
-        with:
-          name: antrea-ubuntu-cov
-      - name: Load Antrea image
-        run: |
-          docker load -i antrea-ubuntu.tar
-      - name: Install Kind
-        run: |
-          KIND_VERSION=$(head -n1 ./ci/kind/version)
-          curl -Lo ./kind https://github.com/kubernetes-sigs/kind/releases/download/${KIND_VERSION}/kind-$(uname)-amd64
-          chmod +x ./kind
-          sudo mv kind /usr/local/bin
+      - uses: ./.github/actions/setup-kind-test
       - name: Run e2e tests
         run: |
           mkdir log
@@ -294,24 +228,9 @@ jobs:
       - uses: actions/checkout@v6
         with:
           show-progress: false
-      - uses: actions/setup-go@v6
+      - uses: ./.github/actions/setup-kind-test
         with:
-          go-version-file: '.go-version'
-      # Docker 29+ defaults to the containerd image store, which breaks kind load docker-image.
-      - uses: ./.github/actions/setup-docker-classic
-      - name: Download Antrea image from previous job
-        uses: actions/download-artifact@v7
-        with:
-          name: antrea-ubuntu-cov
-      - name: Load Antrea image
-        run: |
-          docker load -i antrea-ubuntu.tar
-      - name: Install Kind
-        run: |
-          KIND_VERSION=$(head -n1 ./ci/kind/version)
-          curl -Lo ./kind https://github.com/kubernetes-sigs/kind/releases/download/${KIND_VERSION}/kind-$(uname)-amd64
-          chmod +x ./kind
-          sudo mv kind /usr/local/bin
+          free-disk-space: 'false'
       - name: Run ipam e2e tests
         # We enable multicast as some FlexibleIPAM e2e tests require it
         run: |
@@ -357,32 +276,10 @@ jobs:
     needs: [build-antrea-coverage-image]
     runs-on: [ubuntu-latest]
     steps:
-    - name: Free disk space
-      # https://github.com/actions/virtual-environments/issues/709
-      run: |
-        sudo apt-get clean
-        df -h
     - uses: actions/checkout@v6
       with:
         show-progress: false
-    - uses: actions/setup-go@v6
-      with:
-        go-version-file: '.go-version'
-    # Docker 29+ defaults to the containerd image store, which breaks kind load docker-image.
-    - uses: ./.github/actions/setup-docker-classic
-    - name: Download Antrea image from previous job
-      uses: actions/download-artifact@v7
-      with:
-        name: antrea-ubuntu-cov
-    - name: Load Antrea image
-      run: |
-        docker load -i antrea-ubuntu.tar
-    - name: Install Kind
-      run: |
-        KIND_VERSION=$(head -n1 ./ci/kind/version)
-        curl -Lo ./kind https://github.com/kubernetes-sigs/kind/releases/download/${KIND_VERSION}/kind-$(uname)-amd64
-        chmod +x ./kind
-        sudo mv kind /usr/local/bin
+    - uses: ./.github/actions/setup-kind-test
     - name: Run e2e tests
       run: |
         mkdir log
@@ -422,32 +319,10 @@ jobs:
     needs: [build-antrea-coverage-image]
     runs-on: [ubuntu-latest]
     steps:
-    - name: Free disk space
-      # https://github.com/actions/virtual-environments/issues/709
-      run: |
-        sudo apt-get clean
-        df -h
     - uses: actions/checkout@v6
       with:
         show-progress: false
-    - uses: actions/setup-go@v6
-      with:
-        go-version-file: '.go-version'
-    # Docker 29+ defaults to the containerd image store, which breaks kind load docker-image.
-    - uses: ./.github/actions/setup-docker-classic
-    - name: Download Antrea image from previous job
-      uses: actions/download-artifact@v7
-      with:
-        name: antrea-ubuntu-cov
-    - name: Load Antrea image
-      run: |
-        docker load -i antrea-ubuntu.tar
-    - name: Install Kind
-      run: |
-        KIND_VERSION=$(head -n1 ./ci/kind/version)
-        curl -Lo ./kind https://github.com/kubernetes-sigs/kind/releases/download/${KIND_VERSION}/kind-$(uname)-amd64
-        chmod +x ./kind
-        sudo mv kind /usr/local/bin
+    - uses: ./.github/actions/setup-kind-test
     - name: Run e2e tests
       run: |
         mkdir log
@@ -487,32 +362,10 @@ jobs:
     needs: [ build-antrea-coverage-image ]
     runs-on: [ ubuntu-latest ]
     steps:
-      - name: Free disk space
-        # https://github.com/actions/virtual-environments/issues/709
-        run: |
-          sudo apt-get clean
-          df -h
       - uses: actions/checkout@v6
         with:
           show-progress: false
-      - uses: actions/setup-go@v6
-        with:
-          go-version-file: '.go-version'
-      # Docker 29+ defaults to the containerd image store, which breaks kind load docker-image.
-      - uses: ./.github/actions/setup-docker-classic
-      - name: Download Antrea image from previous job
-        uses: actions/download-artifact@v7
-        with:
-          name: antrea-ubuntu-cov
-      - name: Load Antrea image
-        run: |
-          docker load -i antrea-ubuntu.tar
-      - name: Install Kind
-        run: |
-          KIND_VERSION=$(head -n1 ./ci/kind/version)
-          curl -Lo ./kind https://github.com/kubernetes-sigs/kind/releases/download/${KIND_VERSION}/kind-$(uname)-amd64
-          chmod +x ./kind
-          sudo mv kind /usr/local/bin
+      - uses: ./.github/actions/setup-kind-test
       - name: Run e2e tests
         run: |
           mkdir log
@@ -562,7 +415,7 @@ jobs:
       matrix:
         protocol: [grpc, ipfix]
     steps:
-      - name: Free disk space
+      - name: Free disk space (extended)
         # https://github.com/actions/virtual-environments/issues/709
         run: |
           sudo apt-get clean
@@ -575,31 +428,10 @@ jobs:
       - uses: actions/checkout@v6
         with:
           show-progress: false
-      - uses: actions/setup-go@v6
+      - uses: ./.github/actions/setup-kind-test
         with:
-          go-version-file: '.go-version'
-      # Docker 29+ defaults to the containerd image store, which breaks kind load docker-image.
-      - uses: ./.github/actions/setup-docker-classic
-      - name: Download Antrea image from previous job
-        uses: actions/download-artifact@v7
-        with:
-          name: antrea-ubuntu-cov
-      - name: Load Antrea image
-        run: |
-          docker load -i antrea-ubuntu.tar
-      - name: Download Flow Aggregator image from previous job
-        uses: actions/download-artifact@v7
-        with:
-          name: flow-aggregator-cov
-      - name: Load Flow Aggregator image
-        run: |
-          docker load -i flow-aggregator.tar
-      - name: Install Kind
-        run: |
-          KIND_VERSION=$(head -n1 ./ci/kind/version)
-          curl -Lo ./kind https://github.com/kubernetes-sigs/kind/releases/download/${KIND_VERSION}/kind-$(uname)-amd64
-          chmod +x ./kind
-          sudo mv kind /usr/local/bin
+          free-disk-space: 'false'
+          load-flow-aggregator: 'true'
       - name: Run e2e tests
         run: |
           mkdir log
@@ -639,34 +471,12 @@ jobs:
     needs: [build-antrea-coverage-image]
     runs-on: [ubuntu-latest]
     steps:
-    - name: Free disk space
-      # https://github.com/actions/virtual-environments/issues/709
-      run: |
-        sudo apt-get clean
-        df -h
     - uses: actions/checkout@v6
       with:
         show-progress: false
-    - uses: actions/setup-go@v6
+    - uses: ./.github/actions/setup-kind-test
       with:
-        go-version-file: '.go-version'
-    # Docker 29+ defaults to the containerd image store, which breaks kind load docker-image.
-    - uses: ./.github/actions/setup-docker-classic
-    - name: Download Antrea image from previous job
-      uses: actions/download-artifact@v7
-      with:
-        name: antrea-ubuntu-cov
-    - name: Load Antrea image
-      run: |
-        docker load -i antrea-ubuntu.tar
-        docker tag antrea/antrea-agent-ubuntu-coverage:latest antrea/antrea-agent-ubuntu:latest
-        docker tag antrea/antrea-controller-ubuntu-coverage:latest antrea/antrea-controller-ubuntu:latest
-    - name: Install Kind
-      run: |
-        KIND_VERSION=$(head -n1 ./ci/kind/version)
-        curl -Lo ./kind https://github.com/kubernetes-sigs/kind/releases/download/${KIND_VERSION}/kind-$(uname)-amd64
-        chmod +x ./kind
-        sudo mv kind /usr/local/bin
+        tag-coverage-images: 'true'
     - name: Run NetworkPolicy conformance tests
       run: |
         mkdir log
@@ -687,34 +497,12 @@ jobs:
     needs: [build-antrea-coverage-image]
     runs-on: [ubuntu-latest]
     steps:
-    - name: Free disk space
-      # https://github.com/actions/virtual-environments/issues/709
-      run: |
-        sudo apt-get clean
-        df -h
     - uses: actions/checkout@v6
       with:
         show-progress: false
-    - uses: actions/setup-go@v6
+    - uses: ./.github/actions/setup-kind-test
       with:
-        go-version-file: '.go-version'
-    # Docker 29+ defaults to the containerd image store, which breaks kind load docker-image.
-    - uses: ./.github/actions/setup-docker-classic
-    - name: Download Antrea image from previous job
-      uses: actions/download-artifact@v7
-      with:
-        name: antrea-ubuntu-cov
-    - name: Load Antrea image
-      run: |
-        docker load -i antrea-ubuntu.tar
-        docker tag antrea/antrea-agent-ubuntu-coverage:latest antrea/antrea-agent-ubuntu:latest
-        docker tag antrea/antrea-controller-ubuntu-coverage:latest antrea/antrea-controller-ubuntu:latest
-    - name: Install Kind
-      run: |
-        KIND_VERSION=$(head -n1 ./ci/kind/version)
-        curl -Lo ./kind https://github.com/kubernetes-sigs/kind/releases/download/${KIND_VERSION}/kind-$(uname)-amd64
-        chmod +x ./kind
-        sudo mv kind /usr/local/bin
+        tag-coverage-images: 'true'
     - name: Run secondary network tests
       run: |
         mkdir log
@@ -735,34 +523,12 @@ jobs:
     needs: build-antrea-coverage-image
     runs-on: [ubuntu-latest]
     steps:
-      - name: Free disk space
-        # https://github.com/actions/virtual-environments/issues/709
-        run: |
-          sudo apt-get clean
-          df -h
       - uses: actions/checkout@v6
         with:
           show-progress: false
-      - uses: actions/setup-go@v6
+      - uses: ./.github/actions/setup-kind-test
         with:
-          go-version-file: '.go-version'
-      # Docker 29+ defaults to the containerd image store, which breaks kind load docker-image.
-      - uses: ./.github/actions/setup-docker-classic
-      - name: Download Antrea image from previous job
-        uses: actions/download-artifact@v7
-        with:
-          name: antrea-ubuntu-cov
-      - name: Load Antrea image
-        run: |
-          docker load -i antrea-ubuntu.tar
-          docker tag antrea/antrea-agent-ubuntu-coverage:latest antrea/antrea-agent-ubuntu:latest
-          docker tag antrea/antrea-controller-ubuntu-coverage:latest antrea/antrea-controller-ubuntu:latest
-      - name: Install Kind
-        run: |
-          KIND_VERSION=$(head -n1 ./ci/kind/version)
-          curl -Lo ./kind https://github.com/kubernetes-sigs/kind/releases/download/${KIND_VERSION}/kind-$(uname)-amd64
-          chmod +x ./kind
-          sudo mv kind /usr/local/bin
+          tag-coverage-images: 'true'
       - name: Run test
         run: |
           mkdir log
@@ -783,34 +549,12 @@ jobs:
     needs: build-antrea-coverage-image
     runs-on: [ubuntu-latest]
     steps:
-      - name: Free disk space
-        # https://github.com/actions/virtual-environments/issues/709
-        run: |
-          sudo apt-get clean
-          df -h
       - uses: actions/checkout@v6
         with:
           show-progress: false
-      - uses: actions/setup-go@v6
+      - uses: ./.github/actions/setup-kind-test
         with:
-          go-version-file: '.go-version'
-      # Docker 29+ defaults to the containerd image store, which breaks kind load docker-image.
-      - uses: ./.github/actions/setup-docker-classic
-      - name: Download Antrea image from previous job
-        uses: actions/download-artifact@v7
-        with:
-          name: antrea-ubuntu-cov
-      - name: Load Antrea image
-        run: |
-          docker load -i antrea-ubuntu.tar
-          docker tag antrea/antrea-agent-ubuntu-coverage:latest antrea/antrea-agent-ubuntu:latest
-          docker tag antrea/antrea-controller-ubuntu-coverage:latest antrea/antrea-controller-ubuntu:latest
-      - name: Install Kind
-        run: |
-          KIND_VERSION=$(head -n1 ./ci/kind/version)
-          curl -Lo ./kind https://github.com/kubernetes-sigs/kind/releases/download/${KIND_VERSION}/kind-$(uname)-amd64
-          chmod +x ./kind
-          sudo mv kind /usr/local/bin
+          tag-coverage-images: 'true'
       - name: Run test
         run: |
           mkdir log
@@ -831,34 +575,12 @@ jobs:
     needs: build-antrea-coverage-image
     runs-on: [ubuntu-latest]
     steps:
-      - name: Free disk space
-        # https://github.com/actions/virtual-environments/issues/709
-        run: |
-          sudo apt-get clean
-          df -h
       - uses: actions/checkout@v6
         with:
           show-progress: false
-      - uses: actions/setup-go@v6
+      - uses: ./.github/actions/setup-kind-test
         with:
-          go-version-file: '.go-version'
-      # Docker 29+ defaults to the containerd image store, which breaks kind load docker-image.
-      - uses: ./.github/actions/setup-docker-classic
-      - name: Download Antrea image from previous job
-        uses: actions/download-artifact@v7
-        with:
-          name: antrea-ubuntu-cov
-      - name: Load Antrea image
-        run: |
-          docker load -i antrea-ubuntu.tar
-          docker tag antrea/antrea-agent-ubuntu-coverage:latest antrea/antrea-agent-ubuntu:latest
-          docker tag antrea/antrea-controller-ubuntu-coverage:latest antrea/antrea-controller-ubuntu:latest
-      - name: Install Kind
-        run: |
-          KIND_VERSION=$(head -n1 ./ci/kind/version)
-          curl -Lo ./kind https://github.com/kubernetes-sigs/kind/releases/download/${KIND_VERSION}/kind-$(uname)-amd64
-          chmod +x ./kind
-          sudo mv kind /usr/local/bin
+          tag-coverage-images: 'true'
       - name: Run test
         run: |
           mkdir log
@@ -879,34 +601,12 @@ jobs:
     needs: build-antrea-coverage-image
     runs-on: [ubuntu-latest]
     steps:
-      - name: Free disk space
-        # https://github.com/actions/virtual-environments/issues/709
-        run: |
-          sudo apt-get clean
-          df -h
       - uses: actions/checkout@v6
         with:
           show-progress: false
-      - uses: actions/setup-go@v6
+      - uses: ./.github/actions/setup-kind-test
         with:
-          go-version-file: '.go-version'
-      # Docker 29+ defaults to the containerd image store, which breaks kind load docker-image.
-      - uses: ./.github/actions/setup-docker-classic
-      - name: Download Antrea image from previous job
-        uses: actions/download-artifact@v7
-        with:
-          name: antrea-ubuntu-cov
-      - name: Load Antrea image
-        run: |
-          docker load -i antrea-ubuntu.tar
-          docker tag antrea/antrea-agent-ubuntu-coverage:latest antrea/antrea-agent-ubuntu:latest
-          docker tag antrea/antrea-controller-ubuntu-coverage:latest antrea/antrea-controller-ubuntu:latest
-      - name: Install Kind
-        run: |
-          KIND_VERSION=$(head -n1 ./ci/kind/version)
-          curl -Lo ./kind https://github.com/kubernetes-sigs/kind/releases/download/${KIND_VERSION}/kind-$(uname)-amd64
-          chmod +x ./kind
-          sudo mv kind /usr/local/bin
+          tag-coverage-images: 'true'
       - name: Run test
         run: |
           mkdir log
@@ -927,31 +627,10 @@ jobs:
     needs: [ build-antrea-coverage-image ]
     runs-on: [ ubuntu-latest ]
     steps:
-      - name: Free disk space
-        run: |
-          sudo apt-get clean
-          df -h
       - uses: actions/checkout@v6
         with:
           show-progress: false
-      - uses: actions/setup-go@v6
-        with:
-          go-version-file: '.go-version'
-      # Docker 29+ defaults to the containerd image store, which breaks kind load docker-image.
-      - uses: ./.github/actions/setup-docker-classic
-      - name: Download Antrea image from previous job
-        uses: actions/download-artifact@v7
-        with:
-          name: antrea-ubuntu-cov
-      - name: Load Antrea image
-        run: |
-          docker load -i antrea-ubuntu.tar
-      - name: Install Kind
-        run: |
-          KIND_VERSION=$(head -n1 ./ci/kind/version)
-          curl -Lo ./kind https://github.com/kubernetes-sigs/kind/releases/download/${KIND_VERSION}/kind-$(uname)-amd64
-          chmod +x ./kind
-          sudo mv kind /usr/local/bin
+      - uses: ./.github/actions/setup-kind-test
       - name: Create Kind Cluster
         run: |
           ./ci/kind/kind-setup.sh create kind --ip-family dual
@@ -975,31 +654,13 @@ jobs:
     needs: build-antrea-coverage-image
     runs-on: [ubuntu-latest]
     steps:
-      - name: Free disk space
-        # https://github.com/actions/virtual-environments/issues/709
-        run: |
-          sudo apt-get clean
-          df -h
       - uses: actions/checkout@v6
         with:
           show-progress: false
-      # Docker 29+ defaults to the containerd image store, which breaks kind load docker-image.
-      - uses: ./.github/actions/setup-docker-classic
-      - name: Download Antrea image from previous job
-        uses: actions/download-artifact@v7
+      - uses: ./.github/actions/setup-kind-test
         with:
-          name: antrea-ubuntu-cov
-      - name: Load Antrea image
-        run: |
-          docker load -i antrea-ubuntu.tar
-          docker tag antrea/antrea-agent-ubuntu-coverage:latest antrea/antrea-agent-ubuntu:latest
-          docker tag antrea/antrea-controller-ubuntu-coverage:latest antrea/antrea-controller-ubuntu:latest
-      - name: Install Kind
-        run: |
-          KIND_VERSION=$(head -n1 ./ci/kind/version)
-          curl -Lo ./kind https://github.com/kubernetes-sigs/kind/releases/download/${KIND_VERSION}/kind-$(uname)-amd64
-          chmod +x ./kind
-          sudo mv kind /usr/local/bin
+          setup-go: 'false'
+          tag-coverage-images: 'true'
       - name: Validate document
         run: |
           ./ci/kind/validate-metrics-doc.sh
