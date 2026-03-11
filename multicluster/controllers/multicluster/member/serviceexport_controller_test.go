@@ -41,14 +41,6 @@ import (
 )
 
 var (
-	epPorts8080 = []corev1.EndpointPort{
-		{
-			Name:     "http",
-			Port:     8080,
-			Protocol: corev1.ProtocolTCP,
-		},
-	}
-
 	nginxReq = ctrl.Request{NamespacedName: types.NamespacedName{
 		Namespace: "default",
 		Name:      "nginx",
@@ -83,7 +75,7 @@ func TestServiceExportReconciler_handleDeleteEvent(t *testing.T) {
 	commonArea := commonarea.NewFakeRemoteCommonArea(fakeRemoteClient, "leader-cluster", common.LocalClusterID, "default", nil)
 	mcReconciler := NewMemberClusterSetReconciler(fakeClient, common.TestScheme, "default", false, false, make(chan struct{}))
 	mcReconciler.SetRemoteCommonArea(commonArea)
-	r := NewServiceExportReconciler(fakeClient, common.TestScheme, mcReconciler, "ClusterIP", false, "default")
+	r := NewServiceExportReconciler(fakeClient, common.TestScheme, mcReconciler, "ClusterIP", "default")
 	r.installedSvcs.Add(&svcInfo{
 		name:      common.SvcNginx.Name,
 		namespace: common.SvcNginx.Namespace,
@@ -153,12 +145,15 @@ func TestServiceExportReconciler_CheckExportStatus(t *testing.T) {
 		},
 	}
 
-	nginx1EP := &corev1.Endpoints{
+	nginx1EPS := &discovery.EndpointSlice{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: "default",
 			Name:      "nginx1",
+			Labels:    map[string]string{discovery.LabelServiceName: "nginx1"},
 		},
-		Subsets: common.EPNginxSubset,
+		AddressType: discovery.AddressTypeIPv4,
+		Endpoints:   common.EPNginxEndpoints,
+		Ports:       common.EPNginxPorts,
 	}
 
 	nginx2Svc := common.SvcNginx.DeepCopy()
@@ -191,12 +186,15 @@ func TestServiceExportReconciler_CheckExportStatus(t *testing.T) {
 		},
 	}
 
-	svcNoClusterIPEP := &corev1.Endpoints{
+	svcNoClusterIPEPS := &discovery.EndpointSlice{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: "default",
 			Name:      "nginx-no-ip",
+			Labels:    map[string]string{discovery.LabelServiceName: "nginx-no-ip"},
 		},
-		Subsets: common.EPNginxSubset,
+		AddressType: discovery.AddressTypeIPv4,
+		Endpoints:   common.EPNginxEndpoints,
+		Ports:       common.EPNginxPorts,
 	}
 
 	svcExpNoClusterIP := &k8smcv1alpha1.ServiceExport{
@@ -271,16 +269,17 @@ func TestServiceExportReconciler_CheckExportStatus(t *testing.T) {
 		},
 	}
 
-	fakeClient := fake.NewClientBuilder().WithScheme(common.TestScheme).WithObjects(mcsSvc, nginx0Svc, nginx1Svc, nginx3Svc, svcNoClusterIP, nginx1EP, svcNoClusterIPEP,
-		nginx2Svc, existSvcExport, nginx0SvcExport, nginx1SvcExportWithStatus, nginx2SvcExportWithStatus, nginx3SvcExport, mcsSvcExport, svcExpNoClusterIP).
-		WithStatusSubresource(mcsSvc, nginx0Svc, nginx1Svc, nginx3Svc, svcNoClusterIP, nginx1EP, svcNoClusterIPEP, nginx0SvcExport, nginx1SvcExportWithStatus, nginx2SvcExportWithStatus, nginx3SvcExport, mcsSvcExport, svcExpNoClusterIP).
+	fakeClient := fake.NewClientBuilder().WithScheme(common.TestScheme).WithObjects(mcsSvc, nginx0Svc, nginx1Svc, nginx3Svc, svcNoClusterIP,
+		nginx2Svc, existSvcExport, nginx0SvcExport, nginx1SvcExportWithStatus, nginx2SvcExportWithStatus, nginx3SvcExport, mcsSvcExport, svcExpNoClusterIP,
+		nginx1EPS, svcNoClusterIPEPS).
+		WithStatusSubresource(mcsSvc, nginx0Svc, nginx1Svc, nginx3Svc, svcNoClusterIP, nginx0SvcExport, nginx1SvcExportWithStatus, nginx2SvcExportWithStatus, nginx3SvcExport, mcsSvcExport, svcExpNoClusterIP).
 		Build()
 	fakeRemoteClient := fake.NewClientBuilder().WithScheme(common.TestScheme).Build()
 	commonArea := commonarea.NewFakeRemoteCommonArea(fakeRemoteClient, "leader-cluster", common.LocalClusterID, "default", nil)
 
 	mcReconciler := NewMemberClusterSetReconciler(fakeClient, common.TestScheme, "default", false, false, make(chan struct{}))
 	mcReconciler.SetRemoteCommonArea(commonArea)
-	r := NewServiceExportReconciler(fakeClient, common.TestScheme, mcReconciler, "ClusterIP", false, "default")
+	r := NewServiceExportReconciler(fakeClient, common.TestScheme, mcReconciler, "ClusterIP", "default")
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			if _, err := r.Reconcile(common.TestCtx, tt.req); err != nil {
@@ -332,23 +331,15 @@ func TestServiceExportReconciler_handleServiceExportCreateEvent(t *testing.T) {
 	}
 
 	tests := []struct {
-		name                 string
-		endpointIPType       string
-		endpointSliceEnabled bool
-		fakeClient           client.WithWatch
+		name           string
+		endpointIPType string
+		fakeClient     client.WithWatch
 	}{
-		{
-			name: "with Endpoint API",
-			fakeClient: fake.NewClientBuilder().WithScheme(common.TestScheme).WithObjects(common.SvcNginx, common.EPNginx, existSvcExport).
-				WithStatusSubresource(common.SvcNginx, common.EPNginx, existSvcExport).Build(),
-			endpointIPType: "ClusterIP",
-		},
 		{
 			name: "with EndpointSlice API",
 			fakeClient: fake.NewClientBuilder().WithScheme(common.TestScheme).WithObjects(common.SvcNginx, epsNginx, existSvcExport).
 				WithStatusSubresource(common.SvcNginx, epsNginx, existSvcExport).Build(),
-			endpointIPType:       "PodIP",
-			endpointSliceEnabled: true,
+			endpointIPType: "PodIP",
 		},
 	}
 
@@ -358,7 +349,7 @@ func TestServiceExportReconciler_handleServiceExportCreateEvent(t *testing.T) {
 			commonArea := commonarea.NewFakeRemoteCommonArea(fakeRemoteClient, "leader-cluster", common.LocalClusterID, "default", nil)
 			mcReconciler := NewMemberClusterSetReconciler(tt.fakeClient, common.TestScheme, "default", false, false, make(chan struct{}))
 			mcReconciler.SetRemoteCommonArea(commonArea)
-			r := NewServiceExportReconciler(tt.fakeClient, common.TestScheme, mcReconciler, tt.endpointIPType, tt.endpointSliceEnabled, "default")
+			r := NewServiceExportReconciler(tt.fakeClient, common.TestScheme, mcReconciler, tt.endpointIPType, "default")
 			if _, err := r.Reconcile(common.TestCtx, nginxReq); err != nil {
 				t.Errorf("ServiceExport Reconciler should create ResourceExports but got error = %v", err)
 			} else {
@@ -395,41 +386,72 @@ func TestServiceExportReconciler_handleUpdateEvent(t *testing.T) {
 		svcType:    string(common.SvcNginx.Spec.Type),
 	}
 
-	filteredSubsets := []corev1.EndpointSubset{
+	epReady := true
+	epTCP := corev1.ProtocolTCP
+	epHTTP := "http"
+	epPort80 := int32(80)
+	filteredEndpoints := []discovery.Endpoint{
 		{
-			Addresses: []corev1.EndpointAddress{
-				{
-					IP: "192.168.17.11",
-				},
-			},
-			Ports: []corev1.EndpointPort{
-				{
-					Name:     "http",
-					Port:     80,
-					Protocol: corev1.ProtocolTCP,
-				},
-			},
+			Addresses:  []string{"192.168.17.11"},
+			Conditions: discovery.EndpointConditions{Ready: &epReady},
 		},
+	}
+	filteredPorts := []discovery.EndpointPort{
+		{Name: &epHTTP, Port: &epPort80, Protocol: &epTCP},
 	}
 
 	epInfo := &epInfo{
-		name:      common.EPNginx.Name,
-		namespace: common.EPNginx.Namespace,
-		subsets:   filteredSubsets,
+		name:      "nginx",
+		namespace: "default",
+		endpoints: filteredEndpoints,
+		ports:     filteredPorts,
 	}
 
 	newSvcNginx := common.SvcNginx.DeepCopy()
 	newSvcNginx.Spec.Ports = []corev1.ServicePort{common.SvcPort8080}
-	newEpNginx := common.EPNginx.DeepCopy()
-	newEpNginx.Subsets[0].Ports = epPorts8080
 
-	svcNginxEPs := &corev1.Endpoints{
+	// EndpointSlice for the pod-IP test cases.
+	ep8080 := int32(8080)
+	epHTTP8080 := "http"
+	epTCP8080 := corev1.ProtocolTCP
+	epsNginxPodIP8080 := &discovery.EndpointSlice{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "nginx",
 			Namespace: "default",
+			Labels:    map[string]string{discovery.LabelServiceName: "nginx"},
 		},
-		Subsets: common.EPNginxSubset,
+		AddressType: discovery.AddressTypeIPv4,
+		Endpoints: []discovery.Endpoint{
+			{Addresses: []string{"192.168.17.11"}, Conditions: discovery.EndpointConditions{Ready: &epReady}},
+		},
+		Ports: []discovery.EndpointPort{
+			{Name: &epHTTP8080, Port: &ep8080, Protocol: &epTCP8080},
+		},
 	}
+	// EndpointSlice for the "no change" test case (port 80, same as filteredEndpoints).
+	epsNginxPodIP80 := &discovery.EndpointSlice{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "nginx",
+			Namespace: "default",
+			Labels:    map[string]string{discovery.LabelServiceName: "nginx"},
+		},
+		AddressType: discovery.AddressTypeIPv4,
+		Endpoints:   filteredEndpoints,
+		Ports:       filteredPorts,
+	}
+	// EndpointSlice for the ClusterIP test case — only needs to signal readiness.
+	epsNginxClusterIP := &discovery.EndpointSlice{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "nginx",
+			Namespace: "default",
+			Labels:    map[string]string{discovery.LabelServiceName: "nginx"},
+		},
+		AddressType: discovery.AddressTypeIPv4,
+		Endpoints: []discovery.Endpoint{
+			{Addresses: []string{"192.168.17.11"}, Conditions: discovery.EndpointConditions{Ready: &epReady}},
+		},
+	}
+
 	re := mcv1alpha1.ResourceExport{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: common.LeaderNamespace,
@@ -452,96 +474,72 @@ func TestServiceExportReconciler_handleUpdateEvent(t *testing.T) {
 
 	existEpRe := re.DeepCopy()
 	existEpRe.Name = "cluster-a-default-nginx-endpoints"
-	existEpRe.Spec.Endpoints = &mcv1alpha1.EndpointsExport{Subsets: filteredSubsets}
+	existEpRe.Spec.Endpoints = &mcv1alpha1.EndpointsExport{
+		Endpoints: filteredEndpoints,
+		Ports:     filteredPorts,
+	}
 
 	tests := []struct {
-		name              string
-		existingEndpoints *corev1.Endpoints
-		existingService   *corev1.Service
-		expectedPorts     []corev1.ServicePort
-		expectedSubsets   []corev1.EndpointSubset
-		endpointIPType    string
+		name                string
+		existingEps         *discovery.EndpointSlice
+		existingService     *corev1.Service
+		expectedSvcPorts    []corev1.ServicePort
+		expectedEpEndpoints []discovery.Endpoint
+		expectedEpPorts     []discovery.EndpointPort
+		endpointIPType      string
 	}{
 		{
-			name:              "update ResourceExport successfully with ClusterIP",
-			existingEndpoints: svcNginxEPs,
-			existingService:   newSvcNginx,
-			endpointIPType:    "ClusterIP",
-			expectedPorts: []corev1.ServicePort{
-				{
-					Name:     "http",
-					Protocol: corev1.ProtocolTCP,
-					Port:     8080,
-				},
+			name:            "update ResourceExport successfully with ClusterIP",
+			existingEps:     epsNginxClusterIP,
+			existingService: newSvcNginx,
+			endpointIPType:  "ClusterIP",
+			expectedSvcPorts: []corev1.ServicePort{
+				{Name: "http", Protocol: corev1.ProtocolTCP, Port: 8080},
 			},
-			expectedSubsets: []corev1.EndpointSubset{
-				{
-					Addresses: []corev1.EndpointAddress{
-						{
-							IP: "192.168.2.3",
-						},
-					},
-					Ports: epPorts8080,
-				},
+			expectedEpEndpoints: []discovery.Endpoint{
+				{Addresses: []string{"192.168.2.3"}, Conditions: discovery.EndpointConditions{Ready: &epReady}},
+			},
+			expectedEpPorts: []discovery.EndpointPort{
+				{Name: &epHTTP8080, Port: &ep8080, Protocol: &epTCP8080},
 			},
 		},
 		{
-			name:              "update ResourceExport successfully with Pod IP",
-			existingEndpoints: newEpNginx,
-			existingService:   newSvcNginx,
-			endpointIPType:    "PodIP",
-			expectedPorts: []corev1.ServicePort{
-				{
-					Name:     "http",
-					Protocol: corev1.ProtocolTCP,
-					Port:     8080,
-				},
+			name:            "update ResourceExport successfully with Pod IP",
+			existingEps:     epsNginxPodIP8080,
+			existingService: newSvcNginx,
+			endpointIPType:  "PodIP",
+			expectedSvcPorts: []corev1.ServicePort{
+				{Name: "http", Protocol: corev1.ProtocolTCP, Port: 8080},
 			},
-			expectedSubsets: []corev1.EndpointSubset{
-				{
-					Addresses: []corev1.EndpointAddress{
-						{
-							IP: "192.168.17.11",
-						},
-					},
-					Ports: epPorts8080,
-				},
+			expectedEpEndpoints: []discovery.Endpoint{
+				{Addresses: []string{"192.168.17.11"}, Conditions: discovery.EndpointConditions{Ready: &epReady}},
+			},
+			expectedEpPorts: []discovery.EndpointPort{
+				{Name: &epHTTP8080, Port: &ep8080, Protocol: &epTCP8080},
 			},
 		},
 		{
-			name:              "update ResourceExport successfully without change",
-			existingEndpoints: svcNginxEPs,
-			existingService:   common.SvcNginx,
-			endpointIPType:    "PodIP",
-			expectedPorts: []corev1.ServicePort{
-				{
-					Name:     "http",
-					Protocol: corev1.ProtocolTCP,
-					Port:     80,
-				},
+			name:            "update ResourceExport successfully without change",
+			existingEps:     epsNginxPodIP80,
+			existingService: common.SvcNginx,
+			endpointIPType:  "PodIP",
+			expectedSvcPorts: []corev1.ServicePort{
+				{Name: "http", Protocol: corev1.ProtocolTCP, Port: 80},
 			},
-			expectedSubsets: []corev1.EndpointSubset{
-				{
-					Addresses: []corev1.EndpointAddress{
-						{
-							IP: "192.168.17.11",
-						},
-					},
-					Ports: common.EPPorts80,
-				},
-			},
+			expectedEpEndpoints: filteredEndpoints,
+			expectedEpPorts:     filteredPorts,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			fakeClient := fake.NewClientBuilder().WithScheme(common.TestScheme).WithObjects(tt.existingService, tt.existingEndpoints, existSvcExport).Build()
+			fakeClient := fake.NewClientBuilder().WithScheme(common.TestScheme).WithObjects(tt.existingService, tt.existingEps, existSvcExport).Build()
 			fakeRemoteClient := fake.NewClientBuilder().WithScheme(common.TestScheme).WithObjects(existSvcRe, existEpRe).Build()
 
 			commonArea := commonarea.NewFakeRemoteCommonArea(fakeRemoteClient, "leader-cluster", common.LocalClusterID, "default", nil)
 			mcReconciler := NewMemberClusterSetReconciler(fakeClient, common.TestScheme, "default", false, false, make(chan struct{}))
 			mcReconciler.SetRemoteCommonArea(commonArea)
-			r := NewServiceExportReconciler(fakeClient, common.TestScheme, mcReconciler, tt.endpointIPType, false, "default")
+			r := NewServiceExportReconciler(fakeClient, common.TestScheme, mcReconciler, tt.endpointIPType, "default")
 			r.installedSvcs.Add(sinfo)
 			r.installedEps.Add(epInfo)
 			if _, err := r.Reconcile(common.TestCtx, nginxReq); err != nil {
@@ -553,8 +551,8 @@ func TestServiceExportReconciler_handleUpdateEvent(t *testing.T) {
 					t.Errorf("ServiceExport Reconciler should get new Service kind of ResourceExport successfully but got error = %v", err)
 				} else {
 					ports := svcResExport.Spec.Service.ServiceSpec.Ports
-					if !reflect.DeepEqual(ports, tt.expectedPorts) {
-						t.Errorf("Expected Service ports are %v but got %v", tt.expectedPorts, ports)
+					if !reflect.DeepEqual(ports, tt.expectedSvcPorts) {
+						t.Errorf("Expected Service ports are %v but got %v", tt.expectedSvcPorts, ports)
 					}
 				}
 				epResExport := &mcv1alpha1.ResourceExport{}
@@ -562,9 +560,11 @@ func TestServiceExportReconciler_handleUpdateEvent(t *testing.T) {
 				if err != nil {
 					t.Errorf("ServiceExport Reconciler should get new Endpoints kind of ResourceExport successfully but got error = %v", err)
 				} else {
-					subsets := epResExport.Spec.Endpoints.Subsets
-					if !reflect.DeepEqual(subsets, tt.expectedSubsets) {
-						t.Errorf("Expected Endpoints subsets are %v but got %v", tt.expectedSubsets, subsets)
+					if !reflect.DeepEqual(epResExport.Spec.Endpoints.Endpoints, tt.expectedEpEndpoints) {
+						t.Errorf("Expected Endpoints are %v but got %v", tt.expectedEpEndpoints, epResExport.Spec.Endpoints.Endpoints)
+					}
+					if !reflect.DeepEqual(epResExport.Spec.Endpoints.Ports, tt.expectedEpPorts) {
+						t.Errorf("Expected Ports are %v but got %v", tt.expectedEpPorts, epResExport.Spec.Endpoints.Ports)
 					}
 				}
 			}
@@ -705,16 +705,16 @@ func TestClusterSetMapFunc_ServiceExport(t *testing.T) {
 	}
 	ctx := context.Background()
 	fakeClient := fake.NewClientBuilder().WithScheme(common.TestScheme).WithObjects(clusterSet).WithLists(serviceExports).Build()
-	r := NewServiceExportReconciler(fakeClient, common.TestScheme, nil, "PodIP", true, clusterSet.Namespace)
+	r := NewServiceExportReconciler(fakeClient, common.TestScheme, nil, "PodIP", clusterSet.Namespace)
 	requests := r.clusterSetMapFunc(ctx, clusterSet)
 	assert.Equal(t, expectedReqs, requests)
 
-	r = NewServiceExportReconciler(fakeClient, common.TestScheme, nil, "PodIP", true, "mismatch_ns")
+	r = NewServiceExportReconciler(fakeClient, common.TestScheme, nil, "PodIP", "mismatch_ns")
 	requests = r.clusterSetMapFunc(ctx, clusterSet)
 	assert.Equal(t, []reconcile.Request{}, requests)
 
 	// non-existing ClusterSet
-	r = NewServiceExportReconciler(fakeClient, common.TestScheme, nil, "PodIP", true, "default")
+	r = NewServiceExportReconciler(fakeClient, common.TestScheme, nil, "PodIP", "default")
 	r.installedSvcs.Add(&svcInfo{name: "nginx-stale", namespace: "default"})
 	r.installedEps.Add(&epInfo{name: "nginx-stale", namespace: "default"})
 	requests = r.clusterSetMapFunc(ctx, clusterSet2)

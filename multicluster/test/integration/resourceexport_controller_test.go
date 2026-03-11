@@ -20,8 +20,8 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	"github.com/stretchr/testify/assert"
 	corev1 "k8s.io/api/core/v1"
+	discoveryv1 "k8s.io/api/discovery/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -105,14 +105,8 @@ var _ = Describe("ResourceExport controller", func() {
 			Namespace: namespace,
 			Kind:      constants.EndpointsKind,
 			Endpoints: &mcsv1alpha1.EndpointsExport{
-				Subsets: []corev1.EndpointSubset{
-					{
-						Addresses: []corev1.EndpointAddress{
-							addr1,
-						},
-						Ports: epPorts,
-					},
-				},
+				Endpoints: epEndpointsA,
+				Ports:     epDiscoveryPorts,
 			},
 		},
 	}
@@ -160,15 +154,8 @@ var _ = Describe("ResourceExport controller", func() {
 			Namespace: namespace,
 			Kind:      constants.EndpointsKind,
 			Endpoints: &mcsv1alpha1.EndpointsExport{
-				Subsets: []corev1.EndpointSubset{
-					{
-						Addresses: []corev1.EndpointAddress{
-							addr2,
-							addr3,
-						},
-						Ports: epPorts,
-					},
-				},
+				Endpoints: epEndpointsB,
+				Ports:     epDiscoveryPorts,
 			},
 		},
 	}
@@ -199,9 +186,9 @@ var _ = Describe("ResourceExport controller", func() {
 			err = k8sClient.Get(ctx, epResImportName, epResImport)
 			return err == nil
 		}, timeout, interval).Should(BeTrue())
-		Expect(epResImport.Spec.Endpoints.Subsets).Should(Equal(epResExportA.Spec.Endpoints.Subsets))
+		Expect(endpointAddresses(epResImport.Spec.Endpoints.Endpoints)).Should(ConsistOf(endpointAddresses(epResExportA.Spec.Endpoints.Endpoints)))
 
-		expectedSubsets := append(epResExportA.Spec.Endpoints.Subsets, epResExportB.Spec.Endpoints.Subsets...)
+		expectedAddresses := endpointAddresses(append(epResExportA.Spec.Endpoints.Endpoints, epResExportB.Spec.Endpoints.Endpoints...))
 		err = k8sClient.Create(ctx, svcResExportB, &client.CreateOptions{})
 		Expect(err == nil).Should(BeTrue())
 		err = k8sClient.Create(ctx, epResExportB, &client.CreateOptions{})
@@ -210,7 +197,7 @@ var _ = Describe("ResourceExport controller", func() {
 		// wait 2s for ResourceImport update
 		time.Sleep(2 * time.Second)
 		err = k8sClient.Get(ctx, epResImportName, epResImport)
-		Expect(elementsMatch(epResImport.Spec.Endpoints.Subsets, expectedSubsets)).Should(BeTrue())
+		Expect(endpointAddresses(epResImport.Spec.Endpoints.Endpoints)).Should(ConsistOf(expectedAddresses))
 	})
 
 	It("Should update ResourceImports when a member cluster's ResourceExports are removed", func() {
@@ -225,7 +212,7 @@ var _ = Describe("ResourceExport controller", func() {
 		epResImport := &mcsv1alpha1.ResourceImport{}
 		err = k8sClient.Get(ctx, epResImportName, epResImport)
 		Expect(err == nil).Should(BeTrue())
-		Expect(epResImport.Spec.Endpoints.Subsets).Should(Equal(epResExportB.Spec.Endpoints.Subsets))
+		Expect(epResImport.Spec.Endpoints.Endpoints).Should(Equal(epResExportB.Spec.Endpoints.Endpoints))
 		svcResImport := &mcsv1alpha1.ResourceImport{}
 		err = k8sClient.Get(ctx, svcResImportName, svcResImport)
 		Expect(err == nil).Should(BeTrue())
@@ -249,11 +236,12 @@ var _ = Describe("ResourceExport controller", func() {
 	})
 })
 
-type dummyT struct{}
-
-func (t dummyT) Errorf(string, ...interface{}) {}
-
-// compare array ignoring the order of elements.
-func elementsMatch(listA, listB interface{}) bool {
-	return assert.ElementsMatch(dummyT{}, listA, listB)
+// endpointAddresses extracts a flat list of address strings from a slice of discoveryv1.Endpoint
+// for order-insensitive comparison that is robust against API-server defaulting of nil fields.
+func endpointAddresses(eps []discoveryv1.Endpoint) []string {
+	var addrs []string
+	for _, ep := range eps {
+		addrs = append(addrs, ep.Addresses...)
+	}
+	return addrs
 }

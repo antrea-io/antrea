@@ -160,7 +160,8 @@ func TestResourceExportReconciler_handleEndpointsExportDeleteEvent(t *testing.T)
 			Name:      "nginx",
 			Kind:      constants.EndpointsKind,
 			Endpoints: &mcsv1alpha1.EndpointsExport{
-				Subsets: common.EPNginxSubset,
+				Endpoints: common.EPNginxEndpoints,
+				Ports:     common.EPNginxPorts,
 			},
 		},
 	}
@@ -176,7 +177,8 @@ func TestResourceExportReconciler_handleEndpointsExportDeleteEvent(t *testing.T)
 			Name:      "nginx",
 			Kind:      constants.EndpointsKind,
 			Endpoints: &mcsv1alpha1.EndpointsExport{
-				Subsets: common.EPNginxSubset2,
+				Endpoints: common.EPNginxEndpoints2,
+				Ports:     common.EPNginxPorts,
 			},
 		},
 	}
@@ -206,11 +208,11 @@ func TestResourceExportReconciler_handleEndpointsExportDeleteEvent(t *testing.T)
 			Namespace: "default",
 			Kind:      constants.EndpointsKind,
 			Endpoints: &mcsv1alpha1.EndpointsImport{
-				Subsets: append(common.EPNginxSubset, common.EPNginxSubset2...),
+				Endpoints: append(common.EPNginxEndpoints, common.EPNginxEndpoints2...),
+				Ports:     common.EPNginxPorts,
 			},
 		},
 	}
-	expectedSubsets := common.EPNginxSubset2
 	namespacedName := types.NamespacedName{Namespace: "default", Name: "default-nginx-endpoints"}
 	fakeClient := fake.NewClientBuilder().WithScheme(common.TestScheme).WithObjects(existingResExport1, existingResExport2, existingResExport3, existResImport).
 		WithStatusSubresource(existingResExport1, existingResExport2, existingResExport3, existResImport).Build()
@@ -224,7 +226,7 @@ func TestResourceExportReconciler_handleEndpointsExportDeleteEvent(t *testing.T)
 	resImport := &mcsv1alpha1.ResourceImport{}
 	err = fakeClient.Get(common.TestCtx, namespacedName, resImport)
 	require.NoError(t, err, "failed to get ResourceImport")
-	assert.ElementsMatch(t, expectedSubsets, resImport.Spec.Endpoints.Subsets, "unexpected ResourceImport Subsets")
+	assert.ElementsMatch(t, common.EPNginxEndpoints2, resImport.Spec.Endpoints.Endpoints, "unexpected ResourceImport Endpoints")
 
 	resExportsLeft := &mcsv1alpha1.ResourceExportList{}
 	err = fakeClient.List(common.TestCtx, resExportsLeft)
@@ -292,7 +294,8 @@ func TestResourceExportReconciler_handleEndpointExportCreateEvent(t *testing.T) 
 			Name:      "nginx",
 			Kind:      constants.EndpointsKind,
 			Endpoints: &mcsv1alpha1.EndpointsExport{
-				Subsets: common.EPNginxSubset,
+				Endpoints: common.EPNginxEndpoints,
+				Ports:     common.EPNginxPorts,
 			},
 		},
 	}
@@ -318,7 +321,8 @@ func TestResourceExportReconciler_handleEndpointExportCreateEvent(t *testing.T) 
 		Namespace: "default",
 		Kind:      constants.EndpointsKind,
 		Endpoints: &mcsv1alpha1.EndpointsImport{
-			Subsets: existEPResExport.Spec.Endpoints.Subsets,
+			Endpoints: existEPResExport.Spec.Endpoints.Endpoints,
+			Ports:     existEPResExport.Spec.Endpoints.Ports,
 		},
 	}
 	namespacedName := types.NamespacedName{Namespace: "default", Name: "default-nginx-endpoints"}

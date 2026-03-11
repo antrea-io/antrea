@@ -21,6 +21,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
+	discoveryv1 "k8s.io/api/discovery/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -38,40 +39,6 @@ import (
 //  * Delete ResourceExport when the ServiceExport is deleted
 
 var (
-	epSubset = []corev1.EndpointSubset{
-		{
-			Addresses: []corev1.EndpointAddress{
-				{
-					IP:       "192.168.17.11",
-					Hostname: "pod1",
-				},
-			},
-			Ports: []corev1.EndpointPort{
-				{
-					Name:     "http",
-					Port:     80,
-					Protocol: corev1.ProtocolTCP,
-				},
-			},
-		},
-	}
-	newEpSubset = []corev1.EndpointSubset{
-		{
-			Addresses: []corev1.EndpointAddress{
-				{
-					IP:       "192.168.17.12",
-					Hostname: "pod2",
-				},
-			},
-			Ports: []corev1.EndpointPort{
-				{
-					Name:     "http",
-					Port:     80,
-					Protocol: corev1.ProtocolTCP,
-				},
-			},
-		},
-	}
 	nignxSvcResImport = &mcsv1alpha1.ResourceImport{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: "leader-ns",
@@ -129,7 +96,8 @@ var _ = Describe("ResourceImport controller", func() {
 				Name:      "exported-nginx",
 				Kind:      "Endpoints",
 				Endpoints: &mcsv1alpha1.EndpointsImport{
-					Subsets: epSubset,
+					Endpoints: epEndpointsA,
+					Ports:     epDiscoveryPorts,
 				},
 			},
 		}
@@ -137,8 +105,8 @@ var _ = Describe("ResourceImport controller", func() {
 		Expect(k8sClient.Create(ctx, epResImport)).Should(Succeed())
 
 		Eventually(func() bool {
-			ep := &corev1.Endpoints{}
-			err := k8sClient.Get(ctx, types.NamespacedName{Namespace: "default", Name: "antrea-mc-exported-nginx"}, ep)
+			eps := &discoveryv1.EndpointSlice{}
+			err := k8sClient.Get(ctx, types.NamespacedName{Namespace: "default", Name: "antrea-mc-exported-nginx"}, eps)
 			return err == nil
 		}, timeout, interval).Should(BeTrue())
 	})
@@ -184,17 +152,22 @@ var _ = Describe("ResourceImport controller", func() {
 			Name:      "cluster-a-exported-nginx-endpoints"}, epResImp)
 		Expect(err).ToNot(HaveOccurred())
 		epResImp.Spec.Endpoints = &mcsv1alpha1.EndpointsImport{
-			Subsets: newEpSubset,
+			Endpoints: epEndpointsB[:1],
+			Ports:     epDiscoveryPorts,
 		}
 
 		err = k8sClient.Update(ctx, epResImp, &client.UpdateOptions{})
 		Expect(err).ToNot(HaveOccurred())
 
+		expectedAddresses := epEndpointsB[:1][0].Addresses
 		Eventually(func() bool {
-			newEp := &corev1.Endpoints{}
-			err := k8sClient.Get(ctx, types.NamespacedName{Namespace: "default", Name: "antrea-mc-exported-nginx"}, newEp)
+			newEps := &discoveryv1.EndpointSlice{}
+			err := k8sClient.Get(ctx, types.NamespacedName{Namespace: "default", Name: "antrea-mc-exported-nginx"}, newEps)
 			Expect(err).ToNot(HaveOccurred())
-			return reflect.DeepEqual(newEp.Subsets, newEpSubset)
+			if len(newEps.Endpoints) != 1 {
+				return false
+			}
+			return reflect.DeepEqual(newEps.Endpoints[0].Addresses, expectedAddresses)
 		}, timeout, interval).Should(BeTrue())
 	})
 
@@ -204,6 +177,12 @@ var _ = Describe("ResourceImport controller", func() {
 		err := k8sClient.Delete(ctx, nignxSvcResImport, &client.DeleteOptions{})
 		Expect(err).ToNot(HaveOccurred())
 
+		epResImportToDelete := &mcsv1alpha1.ResourceImport{}
+		err = k8sClient.Get(ctx, types.NamespacedName{Namespace: "leader-ns", Name: "cluster-a-exported-nginx-endpoints"}, epResImportToDelete)
+		Expect(err).ToNot(HaveOccurred())
+		err = k8sClient.Delete(ctx, epResImportToDelete, &client.DeleteOptions{})
+		Expect(err).ToNot(HaveOccurred())
+
 		Eventually(func() bool {
 			svc := &corev1.Service{}
 			err := k8sClient.Get(ctx, types.NamespacedName{Namespace: "default", Name: "antrea-mc-exported-nginx"}, svc)
@@ -211,8 +190,8 @@ var _ = Describe("ResourceImport controller", func() {
 		}, timeout, interval).Should(BeTrue())
 
 		Eventually(func() bool {
-			ep := &corev1.Endpoints{}
-			err := k8sClient.Get(ctx, types.NamespacedName{Namespace: "default", Name: "antrea-mc-exported-nginx"}, ep)
+			eps := &discoveryv1.EndpointSlice{}
+			err := k8sClient.Get(ctx, types.NamespacedName{Namespace: "default", Name: "antrea-mc-exported-nginx"}, eps)
 			return apierrors.IsNotFound(err)
 		}, timeout, interval).Should(BeTrue())
 

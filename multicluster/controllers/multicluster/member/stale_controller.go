@@ -20,6 +20,7 @@ import (
 	"context"
 
 	corev1 "k8s.io/api/core/v1"
+	discoveryv1 "k8s.io/api/discovery/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
@@ -102,6 +103,16 @@ func (c *StaleResCleanupController) cleanUpStaleResourcesOnMember(ctx context.Co
 	if err := c.List(ctx, svcList, &client.ListOptions{}); err != nil {
 		return err
 	}
+	epsList := &discoveryv1.EndpointSliceList{}
+	if err := c.List(ctx, epsList, &client.ListOptions{}); err != nil {
+		return err
+	}
+	// List legacy corev1.Endpoints objects that may have been created by older versions
+	// of the controller (before EndpointSlice support was introduced).
+	legacyEndpointsList := &corev1.EndpointsList{}
+	if err := c.List(ctx, legacyEndpointsList, &client.ListOptions{}); err != nil {
+		return err
+	}
 	acnpList := &crdv1beta1.ClusterNetworkPolicyList{}
 	if err := c.List(ctx, acnpList, &client.ListOptions{}); err != nil {
 		return err
@@ -121,8 +132,9 @@ func (c *StaleResCleanupController) cleanUpStaleResourcesOnMember(ctx context.Co
 	if err := commonArea.List(ctx, resImpList, &client.ListOptions{Namespace: commonArea.GetNamespace()}); err != nil {
 		return err
 	}
-	// Clean up any imported Services that do not have corresponding ResourceImport anymore
-	if err := c.cleanUpStaleServiceResources(ctx, svcImpList, svcList, resImpList); err != nil {
+	// Clean up any imported Services and EndpointSlices that do not have corresponding ResourceImport anymore
+	if err := c.cleanUpStaleServiceResources(ctx, svcImpList, svcList, epsList,
+		legacyEndpointsList, resImpList); err != nil {
 		klog.ErrorS(err, "Failed to cleanup stale imported Services")
 		return err
 	}
@@ -166,7 +178,8 @@ func (c *StaleResCleanupController) cleanUpStaleResourceExportsOnLeader(ctx cont
 }
 
 func (c *StaleResCleanupController) cleanUpStaleServiceResources(ctx context.Context, svcImpList *k8smcv1alpha1.ServiceImportList,
-	svcList *corev1.ServiceList, resImpList *mcv1alpha1.ResourceImportList) error {
+	svcList *corev1.ServiceList, epsList *discoveryv1.EndpointSliceList, legacyEndpointsList *corev1.EndpointsList,
+	resImpList *mcv1alpha1.ResourceImportList) error {
 	svcImpItems := map[string]k8smcv1alpha1.ServiceImport{}
 	for _, svcImp := range svcImpList.Items {
 		svcImpItems[svcImp.Namespace+"/"+svcImp.Name] = svcImp
@@ -178,10 +191,30 @@ func (c *StaleResCleanupController) cleanUpStaleServiceResources(ctx context.Con
 			mcsSvcItems[svc.Namespace+"/"+svc.Name] = svc
 		}
 	}
+
+	mcsEpsItems := map[string]discoveryv1.EndpointSlice{}
+	for _, eps := range epsList.Items {
+		if _, ok := eps.Annotations[common.AntreaMCServiceAnnotation]; ok {
+			mcsEpsItems[eps.Namespace+"/"+eps.Name] = eps
+		}
+	}
+
+	// Collect legacy corev1.Endpoints objects created by older controller versions.
+	legacyEndpointsItems := map[string]corev1.Endpoints{}
+	for _, ep := range legacyEndpointsList.Items {
+		if _, ok := ep.Annotations[common.AntreaMCServiceAnnotation]; ok {
+			legacyEndpointsItems[ep.Namespace+"/"+ep.Name] = ep
+		}
+	}
+
 	for _, resImp := range resImpList.Items {
 		if resImp.Spec.Kind == constants.ServiceImportKind {
 			delete(mcsSvcItems, resImp.Spec.Namespace+"/"+common.AntreaMCSPrefix+resImp.Spec.Name)
 			delete(svcImpItems, resImp.Spec.Namespace+"/"+resImp.Spec.Name)
+		}
+		if resImp.Spec.Kind == constants.EndpointsKind {
+			delete(mcsEpsItems, resImp.Spec.Namespace+"/"+common.AntreaMCSPrefix+resImp.Spec.Name)
+			delete(legacyEndpointsItems, resImp.Spec.Namespace+"/"+common.AntreaMCSPrefix+resImp.Spec.Name)
 		}
 	}
 
@@ -196,6 +229,20 @@ func (c *StaleResCleanupController) cleanUpStaleServiceResources(ctx context.Con
 		svcImp := staleSvcImp
 		klog.InfoS("Cleaning up stale ServiceImport", "serviceimport", klog.KObj(&svcImp))
 		if err := c.Client.Delete(ctx, &svcImp, &client.DeleteOptions{}); err != nil && !apierrors.IsNotFound(err) {
+			return err
+		}
+	}
+	for _, staleEps := range mcsEpsItems {
+		eps := staleEps
+		klog.InfoS("Cleaning up stale imported EndpointSlice", "endpointslice", klog.KObj(&eps))
+		if err := c.Client.Delete(ctx, &eps, &client.DeleteOptions{}); err != nil && !apierrors.IsNotFound(err) {
+			return err
+		}
+	}
+	for _, staleEp := range legacyEndpointsItems {
+		ep := staleEp
+		klog.InfoS("Cleaning up legacy imported Endpoints", "endpoints", klog.KObj(&ep))
+		if err := c.Client.Delete(ctx, &ep, &client.DeleteOptions{}); err != nil && !apierrors.IsNotFound(err) {
 			return err
 		}
 	}
@@ -441,6 +488,28 @@ func cleanUpMCServicesAndServiceImports(ctx context.Context, mgrClient client.Cl
 			},
 		}
 		err = mgrClient.Delete(ctx, mcsvc, &client.DeleteOptions{})
+		if err != nil && !apierrors.IsNotFound(err) {
+			return err
+		}
+		mcEps := &discoveryv1.EndpointSlice{
+			ObjectMeta: metav1.ObjectMeta{
+				Namespace: svcImp.Namespace,
+				Name:      common.ToMCResourceName(svcImp.Name),
+			},
+		}
+		err = mgrClient.Delete(ctx, mcEps, &client.DeleteOptions{})
+		if err != nil && !apierrors.IsNotFound(err) {
+			return err
+		}
+		// Also delete any legacy corev1.Endpoints object with the same name, created by
+		// older controller versions before EndpointSlice support was introduced.
+		legacyEp := &corev1.Endpoints{
+			ObjectMeta: metav1.ObjectMeta{
+				Namespace: svcImp.Namespace,
+				Name:      common.ToMCResourceName(svcImp.Name),
+			},
+		}
+		err = mgrClient.Delete(ctx, legacyEp, &client.DeleteOptions{})
 		if err != nil && !apierrors.IsNotFound(err) {
 			return err
 		}

@@ -20,6 +20,7 @@ import (
 	"context"
 
 	corev1 "k8s.io/api/core/v1"
+	discoveryv1 "k8s.io/api/discovery/v1"
 	networkingv1 "k8s.io/api/networking/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -61,43 +62,25 @@ var (
 		},
 		Spec: SvcNginxSpec,
 	}
-	addr1 = corev1.EndpointAddress{
-		IP:       "192.168.17.11",
-		Hostname: "pod1",
-	}
-	addr2 = corev1.EndpointAddress{
-		IP:       "192.168.17.12",
-		Hostname: "pod1",
-	}
-	EPPorts80 = []corev1.EndpointPort{
+	epReady    = true
+	epTCP      = corev1.ProtocolTCP
+	epHTTPName = "http"
+	epPort80   = int32(80)
+
+	EPNginxEndpoints = []discoveryv1.Endpoint{
 		{
-			Name:     "http",
-			Port:     80,
-			Protocol: corev1.ProtocolTCP,
+			Addresses:  []string{"192.168.17.11"},
+			Conditions: discoveryv1.EndpointConditions{Ready: &epReady},
 		},
 	}
-	EPNginxSubset = []corev1.EndpointSubset{
+	EPNginxPorts = []discoveryv1.EndpointPort{
+		{Name: &epHTTPName, Port: &epPort80, Protocol: &epTCP},
+	}
+	EPNginxEndpoints2 = []discoveryv1.Endpoint{
 		{
-			Addresses: []corev1.EndpointAddress{
-				addr1,
-			},
-			Ports: EPPorts80,
+			Addresses:  []string{"192.168.17.12"},
+			Conditions: discoveryv1.EndpointConditions{Ready: &epReady},
 		},
-	}
-	EPNginxSubset2 = []corev1.EndpointSubset{
-		{
-			Addresses: []corev1.EndpointAddress{
-				addr2,
-			},
-			Ports: EPPorts80,
-		},
-	}
-	EPNginx = &corev1.Endpoints{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "nginx",
-			Namespace: "default",
-		},
-		Subsets: EPNginxSubset,
 	}
 
 	TestCtx    = context.Background()

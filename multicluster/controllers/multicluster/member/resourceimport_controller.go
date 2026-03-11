@@ -22,6 +22,7 @@ import (
 	"fmt"
 
 	corev1 "k8s.io/api/core/v1"
+	discoveryv1 "k8s.io/api/discovery/v1"
 	apiequality "k8s.io/apimachinery/pkg/api/equality"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -89,6 +90,7 @@ func newResourceImportReconciler(localClusterClient client.Client,
 // +kubebuilder:rbac:groups="",resources=endpoints,verbs=get;list;watch;update;create;patch;delete
 // +kubebuilder:rbac:groups="",resources=services,verbs=get;list;watch;update;create;patch;delete
 // +kubebuilder:rbac:groups="",resources=events,verbs=create
+// +kubebuilder:rbac:groups=discovery.k8s.io,resources=endpointslices,verbs=get;list;watch;create;update;patch;delete
 
 // Reconcile will attempt to ensure that the imported Resource is installed in local cluster as per the
 // ResourceImport object.
@@ -255,53 +257,58 @@ func (r *ResourceImportReconciler) handleResImpDeleteForService(ctx context.Cont
 }
 
 func (r *ResourceImportReconciler) handleResImpUpdateForEndpoints(ctx context.Context, resImp *multiclusterv1alpha1.ResourceImport) (ctrl.Result, error) {
-	epName := common.ToMCResourceName(resImp.Spec.Name)
-	epNamespaced := types.NamespacedName{Namespace: resImp.Spec.Namespace, Name: epName}
-	klog.InfoS("Updating Endpoints corresponding to ResourceImport", "endpoints", epNamespaced.String(),
+	epsName := common.ToMCResourceName(resImp.Spec.Name)
+	epsNamespaced := types.NamespacedName{Namespace: resImp.Spec.Namespace, Name: epsName}
+	klog.InfoS("Updating EndpointSlice corresponding to ResourceImport", "endpointslice", epsNamespaced.String(),
 		"resourceimport", klog.KObj(resImp))
 
-	ep := &corev1.Endpoints{}
-	err := r.localClusterClient.Get(ctx, epNamespaced, ep)
-	epNotFound := apierrors.IsNotFound(err)
-	if err != nil && !epNotFound {
+	eps := &discoveryv1.EndpointSlice{}
+	err := r.localClusterClient.Get(ctx, epsNamespaced, eps)
+	epsNotFound := apierrors.IsNotFound(err)
+	if err != nil && !epsNotFound {
 		return ctrl.Result{}, err
 	}
-	if !epNotFound {
-		if _, ok := ep.Annotations[common.AntreaMCServiceAnnotation]; !ok {
-			err := errors.New("the Endpoints conflicts with existing one")
-			klog.ErrorS(err, "Unable to import Endpoints", "endpoints", klog.KObj(ep))
+	if !epsNotFound {
+		if _, ok := eps.Annotations[common.AntreaMCServiceAnnotation]; !ok {
+			err := errors.New("the EndpointSlice conflicts with existing one")
+			klog.ErrorS(err, "Unable to import EndpointSlice", "endpointslice", klog.KObj(eps))
 			return ctrl.Result{}, err
 		}
 	}
 
-	newSubsets := resImp.Spec.Endpoints.Subsets
-	mcsEpObj := &corev1.Endpoints{
+	var newEndpoints []discoveryv1.Endpoint
+	var newPorts []discoveryv1.EndpointPort
+	if resImp.Spec.Endpoints != nil {
+		newEndpoints = resImp.Spec.Endpoints.Endpoints
+		newPorts = resImp.Spec.Endpoints.Ports
+	}
+	mcsEpsObj := &discoveryv1.EndpointSlice{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:        epName,
-			Namespace:   resImp.Spec.Namespace,
+			Name:      epsName,
+			Namespace: resImp.Spec.Namespace,
+			Labels: map[string]string{
+				discoveryv1.LabelServiceName: epsName,
+			},
 			Annotations: map[string]string{common.AntreaMCServiceAnnotation: "true"},
 		},
-		Subsets: newSubsets,
+		AddressType: discoveryv1.AddressTypeIPv4,
+		Endpoints:   newEndpoints,
+		Ports:       newPorts,
 	}
-	if epNotFound {
-		err := r.localClusterClient.Create(ctx, mcsEpObj, &client.CreateOptions{})
-		if err != nil {
-			klog.ErrorS(err, "Failed to create MCS Endpoints", "endpoints", klog.KObj(mcsEpObj))
+	if epsNotFound {
+		if err := r.localClusterClient.Create(ctx, mcsEpsObj, &client.CreateOptions{}); err != nil {
+			klog.ErrorS(err, "Failed to create MCS EndpointSlice", "endpointslice", klog.KObj(mcsEpsObj))
 			return ctrl.Result{}, err
 		}
 		r.installedResImports.Add(*resImp)
 		return ctrl.Result{}, nil
 	}
-	if _, ok := ep.Annotations[common.AntreaMCServiceAnnotation]; !ok {
-		klog.InfoS("Endpoints has no desired annotation, skip update", "annotation", common.AntreaMCServiceAnnotation, "endpoints", epNamespaced.String())
-		return ctrl.Result{}, nil
-	}
-	// TODO: check label difference ?
-	if !apiequality.Semantic.DeepEqual(newSubsets, ep.Subsets) {
-		ep.Subsets = newSubsets
-		err = r.localClusterClient.Update(ctx, ep, &client.UpdateOptions{})
-		if err != nil {
-			klog.ErrorS(err, "Failed to update MCS Endpoints", "endpoints", epNamespaced.String())
+	if !apiequality.Semantic.DeepEqual(newEndpoints, eps.Endpoints) ||
+		!apiequality.Semantic.DeepEqual(newPorts, eps.Ports) {
+		eps.Endpoints = newEndpoints
+		eps.Ports = newPorts
+		if err := r.localClusterClient.Update(ctx, eps, &client.UpdateOptions{}); err != nil {
+			klog.ErrorS(err, "Failed to update MCS EndpointSlice", "endpointslice", epsNamespaced.String())
 			return ctrl.Result{}, err
 		}
 	}
@@ -310,20 +317,19 @@ func (r *ResourceImportReconciler) handleResImpUpdateForEndpoints(ctx context.Co
 }
 
 func (r *ResourceImportReconciler) handleResImpDeleteForEndpoints(ctx context.Context, resImp *multiclusterv1alpha1.ResourceImport) (ctrl.Result, error) {
-	epName := common.ToMCResourceName(resImp.Spec.Name)
-	epNamespacedName := common.NamespacedName(resImp.Spec.Namespace, epName)
-	klog.InfoS("Deleting Endpoints corresponding to ResourceImport", "endpoints", epNamespacedName,
+	epsName := common.ToMCResourceName(resImp.Spec.Name)
+	epsNamespacedName := common.NamespacedName(resImp.Spec.Namespace, epsName)
+	klog.InfoS("Deleting EndpointSlice corresponding to ResourceImport", "endpointslice", epsNamespacedName,
 		"resourceimport", klog.KObj(resImp))
 
-	ep := &corev1.Endpoints{
+	eps := &discoveryv1.EndpointSlice{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      epName,
+			Name:      epsName,
 			Namespace: resImp.Spec.Namespace,
 		},
 	}
-	err := client.IgnoreNotFound(r.localClusterClient.Delete(ctx, ep, &client.DeleteOptions{}))
-	if err != nil {
-		klog.ErrorS(err, "Failed to delete imported Endpoints", "endpoints", epNamespacedName)
+	if err := client.IgnoreNotFound(r.localClusterClient.Delete(ctx, eps, &client.DeleteOptions{})); err != nil {
+		klog.ErrorS(err, "Failed to delete imported EndpointSlice", "endpointslice", epsNamespacedName)
 		return ctrl.Result{}, err
 	}
 	r.installedResImports.Delete(*resImp)

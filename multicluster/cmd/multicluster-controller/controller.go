@@ -48,7 +48,6 @@ import (
 	antreacrdv1beta1 "antrea.io/antrea/pkg/apis/crd/v1beta1"
 	"antrea.io/antrea/pkg/apiserver/certificate"
 	"antrea.io/antrea/pkg/util/env"
-	k8sutil "antrea.io/antrea/pkg/util/k8s"
 	// +kubebuilder:scaffold:imports
 )
 
@@ -201,19 +200,6 @@ func setupManagerAndCertController(isLeader bool, o *Options) (manager.Manager, 
 				},
 			},
 		}
-	}
-
-	// EndpointSlice is enabled in AntreaProxy by default since v1.11, so Antrea MC
-	// will use EndpointSlice API by default to keep consistent with AntreaProxy.
-	endpointSliceAPIAvailable, err := k8sutil.EndpointSliceAPIAvailable(client)
-	if err != nil {
-		return nil, fmt.Errorf("error checking if EndpointSlice v1 API is available")
-	}
-	if !endpointSliceAPIAvailable {
-		klog.InfoS("The EndpointSlice v1 API is not available, falling back to the Endpoints API")
-		o.EnableEndpointSlice = false
-	} else {
-		o.EnableEndpointSlice = true
 	}
 
 	// ClusterClaim CRD is removed since v1.13. Check the existence of

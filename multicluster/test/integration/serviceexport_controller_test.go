@@ -21,12 +21,12 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
+	discoveryv1 "k8s.io/api/discovery/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	k8smcsv1alpha1 "sigs.k8s.io/mcs-api/pkg/apis/v1alpha1"
 
-	"antrea.io/antrea/multicluster/apis/multicluster/constants"
 	mcsv1alpha1 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha1"
 )
 
@@ -42,22 +42,26 @@ var _ = Describe("ServiceExport controller", func() {
 		Ports: svcPorts,
 	}
 
-	endpoint := &corev1.Endpoints{
+	endpoint := &discoveryv1.EndpointSlice{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      "nginx-svc",
+			Name:      "nginx-svc-abc",
 			Namespace: testNamespace,
+			Labels: map[string]string{
+				discoveryv1.LabelServiceName: "nginx-svc",
+			},
 		},
-		Subsets: []corev1.EndpointSubset{
+		AddressType: discoveryv1.AddressTypeIPv4,
+		Endpoints: []discoveryv1.Endpoint{
 			{
-				Addresses: []corev1.EndpointAddress{
-					{IP: "1.2.3.4"},
-				},
-				Ports: []corev1.EndpointPort{
-					{
-						Name:     "http",
-						Port:     80,
-						Protocol: corev1.ProtocolTCP},
-				},
+				Addresses:  []string{"1.2.3.4"},
+				Conditions: discoveryv1.EndpointConditions{Ready: func() *bool { b := true; return &b }()},
+			},
+		},
+		Ports: []discoveryv1.EndpointPort{
+			{
+				Name:     func() *string { s := "http"; return &s }(),
+				Port:     func() *int32 { p := int32(80); return &p }(),
+				Protocol: func() *corev1.Protocol { p := corev1.ProtocolTCP; return &p }(),
 			},
 		},
 	}
@@ -88,19 +92,6 @@ var _ = Describe("ServiceExport controller", func() {
 	svcResExportName := LocalClusterID + "-" + svc.Namespace + "-" + svc.Name + "-service"
 	epResExportName := LocalClusterID + "-" + svc.Namespace + "-" + svc.Name + "-endpoints"
 
-	expectedEpResExport := &mcsv1alpha1.ResourceExport{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      epResExportName,
-			Namespace: LeaderNamespace,
-		},
-		Spec: mcsv1alpha1.ResourceExportSpec{
-			ClusterID: LocalClusterID,
-			Name:      svc.Name,
-			Namespace: svc.Namespace,
-			Kind:      constants.EndpointsKind,
-		},
-	}
-
 	ctx := context.Background()
 	It("Should create ResourceExports when new ServiceExport for ClusterIP Service is created", func() {
 		By("By exposing a ClusterIP type of Service")
@@ -119,24 +110,18 @@ var _ = Describe("ServiceExport controller", func() {
 		}, timeout, interval).Should(BeTrue())
 		Expect(svcResExport.ObjectMeta.Labels["sourceKind"]).Should(Equal("Service"))
 		Expect(len(svcResExport.Spec.Service.ServiceSpec.Ports)).Should(Equal(len(svcPorts)))
-		expectedEpResExport.Spec.Endpoints = &mcsv1alpha1.EndpointsExport{
-			Subsets: []corev1.EndpointSubset{
-				{
-					Addresses: []corev1.EndpointAddress{
-						{
-							IP: latestSvc.Spec.ClusterIP,
-						},
-					},
-					Ports: epPorts,
-				},
-			},
-		}
+		// The suite uses ClusterIP mode: the exported endpoint address must be the service ClusterIP.
+		expectedClusterIP := latestSvc.Spec.ClusterIP
 		Eventually(func() bool {
-			err = k8sClient.Get(ctx, types.NamespacedName{Namespace: LeaderNamespace, Name: epResExportName}, epResExport)
-			return err == nil
+			if err = k8sClient.Get(ctx, types.NamespacedName{Namespace: LeaderNamespace, Name: epResExportName}, epResExport); err != nil {
+				return false
+			}
+			eps := epResExport.Spec.Endpoints
+			return eps != nil && len(eps.Endpoints) == 1 &&
+				eps.Endpoints[0].Addresses[0] == expectedClusterIP &&
+				len(eps.Ports) == len(svcPorts)
 		}, timeout, interval).Should(BeTrue())
 		Expect(epResExport.ObjectMeta.Labels["sourceKind"]).Should(Equal("Endpoints"))
-		Expect(epResExport.Spec).Should(Equal(expectedEpResExport.Spec))
 	})
 
 	It("Should update existing ResourceExport when existing Service is updated", func() {

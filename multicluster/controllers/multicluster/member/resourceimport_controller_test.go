@@ -27,6 +27,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
+	discoveryv1 "k8s.io/api/discovery/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -81,36 +82,34 @@ var (
 			},
 		},
 	}
-	epSubset = []corev1.EndpointSubset{
-		{
-			Addresses: []corev1.EndpointAddress{
-				{
-					IP: "192.168.17.11",
+	epResImport = func() *mcv1alpha1.ResourceImport {
+		ready := true
+		tcpProto := corev1.ProtocolTCP
+		httpName := "http"
+		port80 := int32(80)
+		return &mcv1alpha1.ResourceImport{
+			ObjectMeta: metav1.ObjectMeta{
+				Namespace: leaderNamespace,
+				Name:      epResImportName,
+			},
+			Spec: mcv1alpha1.ResourceImportSpec{
+				Namespace: "default",
+				Name:      "nginx",
+				Kind:      "Endpoints",
+				Endpoints: &mcv1alpha1.EndpointsImport{
+					Endpoints: []discoveryv1.Endpoint{
+						{
+							Addresses:  []string{"192.168.17.11"},
+							Conditions: discoveryv1.EndpointConditions{Ready: &ready},
+						},
+					},
+					Ports: []discoveryv1.EndpointPort{
+						{Name: &httpName, Port: &port80, Protocol: &tcpProto},
+					},
 				},
 			},
-			Ports: []corev1.EndpointPort{
-				{
-					Name:     "http",
-					Port:     80,
-					Protocol: corev1.ProtocolTCP,
-				},
-			},
-		},
-	}
-	epResImport = &mcv1alpha1.ResourceImport{
-		ObjectMeta: metav1.ObjectMeta{
-			Namespace: leaderNamespace,
-			Name:      epResImportName,
-		},
-		Spec: mcv1alpha1.ResourceImportSpec{
-			Namespace: "default",
-			Name:      "nginx",
-			Kind:      "Endpoints",
-			Endpoints: &mcv1alpha1.EndpointsImport{
-				Subsets: epSubset,
-			},
-		},
-	}
+		}
+	}()
 )
 
 func TestResourceImportReconciler_handleCreateEvent(t *testing.T) {
@@ -154,9 +153,9 @@ func TestResourceImportReconciler_handleCreateEvent(t *testing.T) {
 					t.Errorf("ResourceImport Reconciler should create a ServiceImport successfully but got error = %v", err)
 				}
 			case "Endpoints":
-				ep := &corev1.Endpoints{}
-				if err := fakeClient.Get(ctx, types.NamespacedName{Namespace: "default", Name: "antrea-mc-nginx"}, ep); err != nil {
-					t.Errorf("ResourceImport Reconciler should import an Endpoint successfully but got error = %v", err)
+				eps := &discoveryv1.EndpointSlice{}
+				if err := fakeClient.Get(ctx, types.NamespacedName{Namespace: "default", Name: "antrea-mc-nginx"}, eps); err != nil {
+					t.Errorf("ResourceImport Reconciler should import an EndpointSlice successfully but got error = %v", err)
 				}
 			}
 
@@ -177,14 +176,15 @@ func TestResourceImportReconciler_handleDeleteEvent(t *testing.T) {
 			Name:      "nginx",
 		},
 	}
-	existEp := &corev1.Endpoints{
+	existEps := &discoveryv1.EndpointSlice{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: "default",
 			Name:      "antrea-mc-nginx",
 		},
+		AddressType: discoveryv1.AddressTypeIPv4,
 	}
 
-	fakeClient := fake.NewClientBuilder().WithScheme(common.TestScheme).WithObjects(existSvc, existEp, existSvcImp).Build()
+	fakeClient := fake.NewClientBuilder().WithScheme(common.TestScheme).WithObjects(existSvc, existEps, existSvcImp).Build()
 	fakeRemoteClient := fake.NewClientBuilder().WithScheme(common.TestScheme).Build()
 	remoteCluster := commonarea.NewFakeRemoteCommonArea(fakeRemoteClient, "leader-cluster", localClusterID, "default", nil)
 
@@ -228,9 +228,9 @@ func TestResourceImportReconciler_handleDeleteEvent(t *testing.T) {
 						t.Errorf("Reconciler should delete ResImport from installedResImports after successful resource deletion")
 					}
 				case "Endpoints":
-					ep := &corev1.Endpoints{}
-					if err := fakeClient.Get(ctx, types.NamespacedName{Namespace: "default", Name: "antrea-mc-nginx"}, ep); !apierrors.IsNotFound(err) {
-						t.Errorf("ResourceImport Reconciler should delete an Endpoint successfully but got error = %v", err)
+					eps := &discoveryv1.EndpointSlice{}
+					if err := fakeClient.Get(ctx, types.NamespacedName{Namespace: "default", Name: "antrea-mc-nginx"}, eps); !apierrors.IsNotFound(err) {
+						t.Errorf("ResourceImport Reconciler should delete an EndpointSlice successfully but got error = %v", err)
 					}
 					if _, exists, _ := r.installedResImports.Get(*epResImport); exists {
 						t.Errorf("Reconciler should delete ResImport from installedResImports after successful resource deletion")
@@ -284,51 +284,40 @@ func TestResourceImportReconciler_handleUpdateEvent(t *testing.T) {
 			},
 		},
 	}
-	existMCEp := &corev1.Endpoints{
+	ready := true
+	existMCEps := &discoveryv1.EndpointSlice{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace:   "default",
 			Name:        "antrea-mc-nginx",
 			Annotations: map[string]string{common.AntreaMCServiceAnnotation: "true"},
 		},
-		Subsets: epSubset,
+		AddressType: discoveryv1.AddressTypeIPv4,
+		Endpoints: []discoveryv1.Endpoint{
+			{
+				Addresses:  []string{"192.168.17.11"},
+				Conditions: discoveryv1.EndpointConditions{Ready: &ready},
+			},
+		},
 	}
-	existMCEpConflicts := &corev1.Endpoints{
+	existMCEpsConflicts := &discoveryv1.EndpointSlice{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: "kube-system",
 			Name:      "antrea-mc-nginx",
 		},
-		Subsets: epSubset,
+		AddressType: discoveryv1.AddressTypeIPv4,
 	}
 
-	subSetA := corev1.EndpointSubset{
-		Addresses: []corev1.EndpointAddress{
-			{
-				IP: "192.168.17.12",
-			},
-		},
-		Ports: []corev1.EndpointPort{
-			{
-				Name:     "http",
-				Port:     8080,
-				Protocol: corev1.ProtocolTCP,
-			},
-		},
+	newEpReady := true
+	newEpTCP := corev1.ProtocolTCP
+	newEpHTTP := "http"
+	newEpPort := int32(8080)
+	newEndpoints := []discoveryv1.Endpoint{
+		{Addresses: []string{"192.168.17.12"}, Conditions: discoveryv1.EndpointConditions{Ready: &newEpReady}},
+		{Addresses: []string{"10.10.11.13"}, Conditions: discoveryv1.EndpointConditions{Ready: &newEpReady}},
 	}
-	subSetB := corev1.EndpointSubset{
-		Addresses: []corev1.EndpointAddress{
-			{
-				IP: "10.10.11.13",
-			},
-		},
-		Ports: []corev1.EndpointPort{
-			{
-				Name:     "http",
-				Port:     8080,
-				Protocol: corev1.ProtocolTCP,
-			},
-		},
+	newEpPorts := []discoveryv1.EndpointPort{
+		{Name: &newEpHTTP, Port: &newEpPort, Protocol: &newEpTCP},
 	}
-	newSubsets := []corev1.EndpointSubset{subSetA, subSetB}
 
 	existSvc := &corev1.Service{
 		ObjectMeta: metav1.ObjectMeta{
@@ -358,13 +347,15 @@ func TestResourceImportReconciler_handleUpdateEvent(t *testing.T) {
 		},
 	}
 
-	epWithoutAutoAnnotation := &corev1.Endpoints{
+	epsWithoutAutoAnnotation := &discoveryv1.EndpointSlice{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: "kube-system",
 			Name:      "nginx",
 		},
-		Subsets: epSubset,
+		AddressType: discoveryv1.AddressTypeIPv4,
 	}
+	expectedEndpoints := newEndpoints
+	expectedPorts := newEpPorts
 	newPorts := []k8smcsapi.ServicePort{
 		{
 			Name:     "http",
@@ -380,7 +371,8 @@ func TestResourceImportReconciler_handleUpdateEvent(t *testing.T) {
 	}
 	updatedEpResImport := epResImport.DeepCopy()
 	updatedEpResImport.Spec.Endpoints = &mcv1alpha1.EndpointsImport{
-		Subsets: newSubsets,
+		Endpoints: newEndpoints,
+		Ports:     newEpPorts,
 	}
 	svcResImportWithConflicts := svcResImport.DeepCopy()
 	svcResImportWithConflicts.Name = "kube-system-nginx-service"
@@ -389,20 +381,21 @@ func TestResourceImportReconciler_handleUpdateEvent(t *testing.T) {
 	epResImportWithConflicts.Name = "kube-system-nginx-endpoints"
 	epResImportWithConflicts.Spec.Namespace = "kube-system"
 
-	fakeClient := fake.NewClientBuilder().WithScheme(common.TestScheme).WithObjects(existMCSvc, existMCEp, existSvcImp,
-		existSvc, existMCSvcConflicts, existMCEpConflicts, svcWithoutAutoAnnotation, epWithoutAutoAnnotation).Build()
+	fakeClient := fake.NewClientBuilder().WithScheme(common.TestScheme).WithObjects(existMCSvc, existMCEps, existSvcImp,
+		existSvc, existMCSvcConflicts, existMCEpsConflicts, svcWithoutAutoAnnotation, epsWithoutAutoAnnotation).Build()
 	fakeRemoteClient := fake.NewClientBuilder().WithScheme(common.TestScheme).WithObjects(updatedEpResImport, updatedSvcResImport,
 		svcResImportWithConflicts, epResImportWithConflicts).Build()
 	remoteCluster := commonarea.NewFakeRemoteCommonArea(fakeRemoteClient, "leader-cluster", localClusterID, "default", nil)
 
 	tests := []struct {
-		name             string
-		objType          string
-		req              ctrl.Request
-		resNamespaceName types.NamespacedName
-		expectedSvcPorts []corev1.ServicePort
-		expectedSubset   []corev1.EndpointSubset
-		expectedErr      bool
+		name              string
+		objType           string
+		req               ctrl.Request
+		resNamespaceName  types.NamespacedName
+		expectedSvcPorts  []corev1.ServicePort
+		expectedEndpoints []discoveryv1.Endpoint
+		expectedPorts     []discoveryv1.EndpointPort
+		expectedErr       bool
 	}{
 		{
 			name:             "update Service",
@@ -418,11 +411,12 @@ func TestResourceImportReconciler_handleUpdateEvent(t *testing.T) {
 			},
 		},
 		{
-			name:             "update Endpoints",
-			objType:          "Endpoints",
-			req:              epImportReq,
-			resNamespaceName: types.NamespacedName{Namespace: "default", Name: "antrea-mc-nginx"},
-			expectedSubset:   newSubsets,
+			name:              "update Endpoints",
+			objType:           "Endpoints",
+			req:               epImportReq,
+			resNamespaceName:  types.NamespacedName{Namespace: "default", Name: "antrea-mc-nginx"},
+			expectedEndpoints: expectedEndpoints,
+			expectedPorts:     expectedPorts,
 		},
 		{
 			name:    "skip update a Service without mcs annotation",
@@ -482,12 +476,15 @@ func TestResourceImportReconciler_handleUpdateEvent(t *testing.T) {
 						}
 					}
 				case "Endpoints":
-					ep := &corev1.Endpoints{}
-					if err := fakeClient.Get(ctx, tt.resNamespaceName, ep); err != nil {
-						t.Errorf("ResourceImport Reconciler should update an Endpoint successfully but got error = %v", err)
+					eps := &discoveryv1.EndpointSlice{}
+					if err := fakeClient.Get(ctx, tt.resNamespaceName, eps); err != nil {
+						t.Errorf("ResourceImport Reconciler should update an EndpointSlice successfully but got error = %v", err)
 					} else {
-						if !reflect.DeepEqual(ep.Subsets, tt.expectedSubset) {
-							t.Errorf("expected Subsets are %v but got %v", tt.expectedSubset, ep.Subsets)
+						if !reflect.DeepEqual(eps.Endpoints, tt.expectedEndpoints) {
+							t.Errorf("expected Endpoints are %v but got %v", tt.expectedEndpoints, eps.Endpoints)
+						}
+						if !reflect.DeepEqual(eps.Ports, tt.expectedPorts) {
+							t.Errorf("expected Ports are %v but got %v", tt.expectedPorts, eps.Ports)
 						}
 					}
 				}

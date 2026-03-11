@@ -17,7 +17,8 @@ limitations under the License.
 package v1alpha1
 
 import (
-	v1 "k8s.io/api/core/v1"
+	corev1 "k8s.io/api/core/v1"
+	discoveryv1 "k8s.io/api/discovery/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	mcs "sigs.k8s.io/mcs-api/pkg/apis/v1alpha1"
 
@@ -25,9 +26,10 @@ import (
 	"antrea.io/antrea/pkg/apis/crd/v1beta1"
 )
 
-// EndpointsImport imports Endpoints.
+// EndpointsImport imports Endpoints as EndpointSlice fields.
 type EndpointsImport struct {
-	Subsets []v1.EndpointSubset `json:"subsets,omitempty"`
+	Endpoints []discoveryv1.Endpoint     `json:"endpoints,omitempty"`
+	Ports     []discoveryv1.EndpointPort `json:"ports,omitempty"`
 }
 
 // ExternalEntityImport imports ExternalEntity.
@@ -78,7 +80,7 @@ const (
 type ResourceImportCondition struct {
 	Type ResourceImportConditionType `json:"type,omitempty"`
 	// Status of the condition, one of True, False, Unknown.
-	Status v1.ConditionStatus `json:"status,omitempty"`
+	Status corev1.ConditionStatus `json:"status,omitempty"`
 	// +optional
 	// Last time the condition transited from one status to another.
 	LastTransitionTime metav1.Time `json:"lastTransitionTime,omitempty"`
