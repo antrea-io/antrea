@@ -495,8 +495,16 @@ func TestAntreaIPAMDriver(t *testing.T) {
 		expectedIP := expectedIPs[0].ip
 		podNamespace := string(k8sArgsMap[test].K8S_POD_NAMESPACE)
 		podName := string(k8sArgsMap[test].K8S_POD_NAME)
+		// Only validate the IPPool owner information when the Namespace name and
+		// the IPPool name are identical (single-stack cases).
+		if podNamespace != testApple && podNamespace != testOrange && podNamespace != testPear {
+			return
+		}
 		err = wait.PollUntilContextTimeout(context.Background(), time.Millisecond*200, time.Second, false, func(ctx context.Context) (bool, error) {
-			ipPool, _ := antreaIPAMController.ipPoolLister.Get(podNamespace)
+			ipPool, err := antreaIPAMController.ipPoolLister.Get(podNamespace)
+			if err != nil || ipPool == nil {
+				return false, nil
+			}
 			found := false
 			for _, ipAddress := range ipPool.Status.IPAddresses {
 				if expectedIP == ipAddress.IPAddress {
@@ -528,9 +536,17 @@ func TestAntreaIPAMDriver(t *testing.T) {
 		require.NoError(t, err, "expected no error in Del call")
 
 		podNamespace := string(k8sArgsMap[test].K8S_POD_NAMESPACE)
+		// Only validate the IPPool owner information when the Namespace name and
+		// the IPPool name are identical (single-stack cases).
+		if podNamespace != testApple && podNamespace != testOrange && podNamespace != testPear {
+			return
+		}
 		podName := string(k8sArgsMap[test].K8S_POD_NAME)
 		err = wait.PollUntilContextTimeout(context.Background(), time.Millisecond*200, time.Second, false, func(ctx context.Context) (bool, error) {
-			ipPool, _ := antreaIPAMController.ipPoolLister.Get(podNamespace)
+			ipPool, err := antreaIPAMController.ipPoolLister.Get(podNamespace)
+			if err != nil || ipPool == nil {
+				return false, nil
+			}
 			found := false
 			for _, ipAddress := range ipPool.Status.IPAddresses {
 				if ipAddress.Owner.Pod != nil && ipAddress.Owner.Pod.Name == podName && ipAddress.Owner.Pod.Namespace == podNamespace {
