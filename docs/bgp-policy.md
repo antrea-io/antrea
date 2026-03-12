@@ -136,7 +136,8 @@ The `bgpPeers` field lists the BGP peers to which the advertisements are sent.
   before the session is declared down, with a range of 3 to 65535 seconds. Setting it to 0 disables the hold timer.
   The default value is 180 seconds.
 - `bfd`: Configures BFD (Bidirectional Forwarding Detection) for the BGP peer, which enables faster failure detection
-  compared to the BGP hold timer. The sub-fields are:
+  compared to the BGP hold timer. **Note: this field is accepted by the API for forward compatibility but is not yet
+  enforced by the agent. BFD settings will have no effect until GoBGP adds per-peer BFD support.** The sub-fields are:
   - `enabled`: Whether BFD is enabled for this peer.
   - `minTransmitInterval`: The minimum interval in milliseconds between BFD control packets sent to the peer, with a
     range of 10 to 60000 milliseconds. The default value is 300 milliseconds.

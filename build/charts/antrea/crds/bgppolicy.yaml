@@ -97,6 +97,15 @@ spec:
                     required:
                       - address
                       - asn
+                    x-kubernetes-validations:
+                      - rule: "!has(self.keepaliveTimeSeconds) || has(self.holdTimeSeconds)"
+                        message: "keepaliveTimeSeconds requires holdTimeSeconds to be set"
+                      - rule: "!has(self.holdTimeSeconds) || self.holdTimeSeconds == 0 || has(self.keepaliveTimeSeconds)"
+                        message: "holdTimeSeconds requires keepaliveTimeSeconds to be set"
+                      - rule: "!(has(self.holdTimeSeconds) && self.holdTimeSeconds == 0 && has(self.keepaliveTimeSeconds))"
+                        message: "keepaliveTimeSeconds cannot be set when holdTimeSeconds is 0 (hold timer disabled)"
+                      - rule: "!(has(self.keepaliveTimeSeconds) && has(self.holdTimeSeconds) && self.holdTimeSeconds > 0 && self.keepaliveTimeSeconds >= self.holdTimeSeconds)"
+                        message: "keepaliveTimeSeconds must be less than holdTimeSeconds"
                     properties:
                       address:
                         type: string
@@ -134,7 +143,10 @@ spec:
                       holdTimeSeconds:
                         type: integer
                         format: int32
-                        minimum: 0
+                        anyOf:
+                          - enum:
+                              - 0
+                          - minimum: 3
                         maximum: 65535
                       bfd:
                         type: object

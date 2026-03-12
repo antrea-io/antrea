@@ -201,6 +201,7 @@ func TestConvertPeerConfigToGoBGPPeerTimers(t *testing.T) {
 		expectedKeepalive    uint64
 		expectedHoldTime     uint64
 		expectTimersNil      bool
+		expectError          bool
 	}{
 		{
 			name:                 "Both KeepaliveTimeSeconds and HoldTimeSeconds set",
@@ -208,29 +209,37 @@ func TestConvertPeerConfigToGoBGPPeerTimers(t *testing.T) {
 			holdTimeSeconds:      ptr.To(int32(90)),
 			expectedKeepalive:    30,
 			expectedHoldTime:     90,
-			expectTimersNil:      false,
 		},
 		{
-			name:                 "Only KeepaliveTimeSeconds set",
+			name:                 "Only KeepaliveTimeSeconds set without HoldTimeSeconds",
 			keepaliveTimeSeconds: ptr.To(int32(10)),
-			expectedKeepalive:    10,
-			expectTimersNil:      false,
+			expectError:          true,
 		},
 		{
-			name:             "Only HoldTimeSeconds set",
+			name:             "Only HoldTimeSeconds set without KeepaliveTimeSeconds",
 			holdTimeSeconds:  ptr.To(int32(60)),
-			expectedHoldTime: 60,
-			expectTimersNil:  false,
+			expectError:      true,
 		},
 		{
 			name:            "Neither KeepaliveTimeSeconds nor HoldTimeSeconds set",
 			expectTimersNil: true,
 		},
 		{
-			name:             "HoldTimeSeconds set to 0 (disabled)",
+			name:             "HoldTimeSeconds set to 0 disables hold timer",
 			holdTimeSeconds:  ptr.To(int32(0)),
 			expectedHoldTime: 0,
-			expectTimersNil:  false,
+		},
+		{
+			name:                 "KeepaliveTimeSeconds equal to HoldTimeSeconds is invalid",
+			keepaliveTimeSeconds: ptr.To(int32(60)),
+			holdTimeSeconds:      ptr.To(int32(60)),
+			expectError:          true,
+		},
+		{
+			name:                 "KeepaliveTimeSeconds greater than HoldTimeSeconds is invalid",
+			keepaliveTimeSeconds: ptr.To(int32(90)),
+			holdTimeSeconds:      ptr.To(int32(30)),
+			expectError:          true,
 		},
 	}
 
@@ -241,6 +250,10 @@ func TestConvertPeerConfigToGoBGPPeerTimers(t *testing.T) {
 			peer.HoldTimeSeconds = tt.holdTimeSeconds
 
 			result, err := convertPeerConfigToGoBGPPeer(bgp.PeerConfig{BGPPeer: &peer})
+			if tt.expectError {
+				assert.Error(t, err)
+				return
+			}
 			assert.NoError(t, err)
 			if tt.expectTimersNil {
 				assert.Nil(t, result.GetTimers())

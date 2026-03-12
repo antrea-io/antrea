@@ -356,7 +356,8 @@ type BGPPeer struct {
 	HoldTimeSeconds *int32 `json:"holdTimeSeconds,omitempty"`
 
 	// BFD specifies the BFD (Bidirectional Forwarding Detection) configuration for this BGP peer, which can be
-	// used to detect failures in the BGP session more quickly.
+	// used to detect failures in the BGP session more quickly. Note: this field is accepted by the API but is not
+	// yet applied by the agent; it will have no effect until GoBGP adds per-peer BFD support.
 	BFD *BFDConfig `json:"bfd,omitempty"`
 }
 
