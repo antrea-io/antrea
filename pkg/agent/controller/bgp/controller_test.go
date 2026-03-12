@@ -2398,6 +2398,18 @@ func generateBGPPeerConfig(peerConfig *v1alpha1.BGPPeer, password string) bgp.Pe
 	}
 }
 
+func generateBGPPeerWithTimers(ip string, asn, port, gracefulRestartTimeSeconds, keepaliveTimeSeconds, holdTimeSeconds int32) v1alpha1.BGPPeer {
+	return v1alpha1.BGPPeer{
+		Address:                    ip,
+		Port:                       &port,
+		ASN:                        asn,
+		MultihopTTL:                ptr.To(int32(1)),
+		GracefulRestartTimeSeconds: &gracefulRestartTimeSeconds,
+		KeepaliveTimeSeconds:       &keepaliveTimeSeconds,
+		HoldTimeSeconds:            &holdTimeSeconds,
+	}
+}
+
 func generateSecret(rawData map[string]string) *corev1.Secret {
 	data := make(map[string][]byte)
 	for k, v := range rawData {
@@ -2597,4 +2609,84 @@ func TestGetBGPRoutes(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestBGPPolicyWithTimers(t *testing.T) {
+	ipv4PeerWithTimers := generateBGPPeerWithTimers(ipv4Peer1Addr, peer1ASN, 179, 120, 30, 90)
+	ipv4TimerPeerConfig := generateBGPPeerConfig(&ipv4PeerWithTimers, peer1AuthPassword)
+	updatedIPv4PeerWithTimers := generateBGPPeerWithTimers(ipv4Peer1Addr, peer1ASN, 179, 120, 60, 180)
+	updatedIPv4TimerPeerConfig := generateBGPPeerConfig(&updatedIPv4PeerWithTimers, peer1AuthPassword)
+
+	t.Run("Add BGPPolicy with peer timers", func(t *testing.T) {
+		policy := generateBGPPolicy(bgpPolicyName1, creationTimestamp, nodeLabels1, 179, 65000,
+			true, false, false, false, false,
+			[]v1alpha1.BGPPeer{ipv4PeerWithTimers}, nil)
+		c := newFakeController(t,
+			[]runtime.Object{ipv4ClusterIP1, ipv4ClusterIP1Eps, node},
+			[]runtime.Object{policy}, true, false)
+
+		stopCh := make(chan struct{})
+		defer close(stopCh)
+		ctx := context.Background()
+		c.startInformers(stopCh)
+
+		c.bgpPeerPasswords = bgpPeerPasswords
+
+		waitAndGetDummyEvent(t, c)
+		c.mockBGPServer.EXPECT().Start(gomock.Any())
+		c.mockBGPServer.EXPECT().AddPeer(gomock.Any(), ipv4TimerPeerConfig)
+		c.mockBGPServer.EXPECT().AdvertiseRoutes(gomock.Any(), []bgp.Route{clusterIPv4Route1})
+		assert.NoError(t, c.syncBGPPolicy(ctx))
+		doneDummyEvent(t, c)
+
+		expectedState := generateBGPPolicyState(bgpPolicyName1, 179, 65000,
+			nodeAnnotations1[types.NodeBGPRouterIDAnnotationKey],
+			[]bgp.Route{clusterIPv4Route1}, []bgp.PeerConfig{ipv4TimerPeerConfig}, nil)
+		checkBGPPolicyState(t, expectedState, c.bgpPolicyState)
+	})
+
+	t.Run("Update peer timers", func(t *testing.T) {
+		initialPolicy := generateBGPPolicy(bgpPolicyName1, creationTimestamp, nodeLabels1, 179, 65000,
+			true, false, false, false, false,
+			[]v1alpha1.BGPPeer{ipv4PeerWithTimers}, nil)
+		initialState := generateBGPPolicyState(bgpPolicyName1, 179, 65000,
+			nodeAnnotations1[types.NodeBGPRouterIDAnnotationKey],
+			[]bgp.Route{clusterIPv4Route1}, []bgp.PeerConfig{ipv4TimerPeerConfig}, nil)
+		c := newFakeController(t,
+			[]runtime.Object{ipv4ClusterIP1, ipv4ClusterIP1Eps, node},
+			[]runtime.Object{initialPolicy}, true, false)
+
+		stopCh := make(chan struct{})
+		defer close(stopCh)
+		ctx := context.Background()
+		c.startInformers(stopCh)
+
+		// Wait for the dummy event triggered by BGPPolicy add events, and mark it done directly
+		// since we fake the expected state.
+		waitAndGetDummyEvent(t, c)
+		doneDummyEvent(t, c)
+
+		// Fake the BGPPolicy state and passwords.
+		c.bgpPolicyState = deepCopyBGPPolicyState(initialState)
+		c.bgpPolicyState.bgpServer = c.mockBGPServer
+		c.bgpPeerPasswords = bgpPeerPasswords
+
+		// Update policy with new timer values.
+		updatedPolicy := generateBGPPolicy(bgpPolicyName1, creationTimestamp, nodeLabels1, 179, 65000,
+			true, false, false, false, false,
+			[]v1alpha1.BGPPeer{updatedIPv4PeerWithTimers}, nil)
+		updatedPolicy.Generation += 1
+		_, err := c.crdClient.CrdV1alpha1().BGPPolicies().Update(context.TODO(), updatedPolicy, metav1.UpdateOptions{})
+		require.NoError(t, err)
+
+		waitAndGetDummyEvent(t, c)
+		c.mockBGPServer.EXPECT().UpdatePeer(gomock.Any(), updatedIPv4TimerPeerConfig)
+		assert.NoError(t, c.syncBGPPolicy(ctx))
+		doneDummyEvent(t, c)
+
+		expectedState := generateBGPPolicyState(bgpPolicyName1, 179, 65000,
+			nodeAnnotations1[types.NodeBGPRouterIDAnnotationKey],
+			[]bgp.Route{clusterIPv4Route1}, []bgp.PeerConfig{updatedIPv4TimerPeerConfig}, nil)
+		checkBGPPolicyState(t, expectedState, c.bgpPolicyState)
+	})
 }

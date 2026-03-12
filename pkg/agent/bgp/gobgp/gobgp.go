@@ -307,6 +307,18 @@ func convertPeerConfigToGoBGPPeer(peerConfig bgp.PeerConfig) (*gobgpapi.Peer, er
 			RestartTime: uint32(*peerConfig.GracefulRestartTimeSeconds),
 		}
 	}
+	if peerConfig.KeepaliveTimeSeconds != nil || peerConfig.HoldTimeSeconds != nil {
+		timersConfig := &gobgpapi.TimersConfig{}
+		if peerConfig.KeepaliveTimeSeconds != nil {
+			timersConfig.KeepaliveInterval = uint64(*peerConfig.KeepaliveTimeSeconds)
+		}
+		if peerConfig.HoldTimeSeconds != nil {
+			timersConfig.HoldTime = uint64(*peerConfig.HoldTimeSeconds)
+		}
+		peer.Timers = &gobgpapi.Timers{Config: timersConfig}
+	}
+	// BFD configuration is not currently supported by GoBGP v3.37.0. The mapping logic will be added
+	// when GoBGP API adds per-peer BFD support.
 	return peer, nil
 }
 

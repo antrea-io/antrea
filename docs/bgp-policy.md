@@ -130,6 +130,20 @@ The `bgpPeers` field lists the BGP peers to which the advertisements are sent.
   The default value is 1.
 - `gracefulRestartTimeSeconds`: Specifies how long the BGP peer waits for the BGP session to re-establish after a
   restart before deleting stale routes, with a range of 1 to 3600 seconds. The default value is 120 seconds.
+- `keepaliveTimeSeconds`: The interval in seconds between BGP KEEPALIVE messages sent to the peer, with a range of
+  1 to 65535 seconds. The default value is 60 seconds.
+- `holdTimeSeconds`: The hold time in seconds — the maximum interval without receiving a KEEPALIVE or UPDATE message
+  before the session is declared down, with a range of 3 to 65535 seconds. Setting it to 0 disables the hold timer.
+  The default value is 180 seconds.
+- `bfd`: Configures BFD (Bidirectional Forwarding Detection) for the BGP peer, which enables faster failure detection
+  compared to the BGP hold timer. The sub-fields are:
+  - `enabled`: Whether BFD is enabled for this peer.
+  - `minTransmitInterval`: The minimum interval in milliseconds between BFD control packets sent to the peer, with a
+    range of 10 to 60000 milliseconds. The default value is 300 milliseconds.
+  - `minReceiveInterval`: The minimum interval in milliseconds between BFD control packets expected from the peer,
+    with a range of 10 to 60000 milliseconds. The default value is 300 milliseconds.
+  - `multiplier`: The number of consecutive BFD control packets that must be missed before the session is declared
+    down, with a range of 2 to 255. The default value is 3.
 
 ## BGP router ID
 
