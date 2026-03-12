@@ -216,9 +216,9 @@ func TestConvertPeerConfigToGoBGPPeerTimers(t *testing.T) {
 			expectError:          true,
 		},
 		{
-			name:             "Only HoldTimeSeconds set without KeepaliveTimeSeconds",
-			holdTimeSeconds:  ptr.To(int32(60)),
-			expectError:      true,
+			name:            "Only HoldTimeSeconds set without KeepaliveTimeSeconds",
+			holdTimeSeconds: ptr.To(int32(60)),
+			expectError:     true,
 		},
 		{
 			name:            "Neither KeepaliveTimeSeconds nor HoldTimeSeconds set",

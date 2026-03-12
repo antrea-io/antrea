@@ -424,6 +424,15 @@ spec:
                     required:
                       - address
                       - asn
+                    x-kubernetes-validations:
+                      - rule: "!has(self.keepaliveTimeSeconds) || has(self.holdTimeSeconds)"
+                        message: "keepaliveTimeSeconds requires holdTimeSeconds to be set"
+                      - rule: "!has(self.holdTimeSeconds) || self.holdTimeSeconds == 0 || has(self.keepaliveTimeSeconds)"
+                        message: "holdTimeSeconds requires keepaliveTimeSeconds to be set"
+                      - rule: "!(has(self.holdTimeSeconds) && self.holdTimeSeconds == 0 && has(self.keepaliveTimeSeconds))"
+                        message: "keepaliveTimeSeconds cannot be set when holdTimeSeconds is 0 (hold timer disabled)"
+                      - rule: "!(has(self.keepaliveTimeSeconds) && has(self.holdTimeSeconds) && self.holdTimeSeconds > 0 && self.keepaliveTimeSeconds >= self.holdTimeSeconds)"
+                        message: "keepaliveTimeSeconds must be less than holdTimeSeconds"
                     properties:
                       address:
                         type: string
@@ -453,6 +462,41 @@ spec:
                         minimum: 1
                         maximum: 3600
                         default: 120
+                      keepaliveTimeSeconds:
+                        type: integer
+                        format: int32
+                        minimum: 1
+                        maximum: 65535
+                      holdTimeSeconds:
+                        type: integer
+                        format: int32
+                        anyOf:
+                          - enum:
+                              - 0
+                          - minimum: 3
+                        maximum: 65535
+                      bfd:
+                        type: object
+                        required:
+                          - enabled
+                        properties:
+                          enabled:
+                            type: boolean
+                          minTransmitInterval:
+                            type: integer
+                            format: int32
+                            minimum: 10
+                            maximum: 60000
+                          minReceiveInterval:
+                            type: integer
+                            format: int32
+                            minimum: 10
+                            maximum: 60000
+                          multiplier:
+                            type: integer
+                            format: int32
+                            minimum: 2
+                            maximum: 255
       additionalPrinterColumns:
         - description: Local BGP AS number
           jsonPath: .spec.localASN
