@@ -74,7 +74,7 @@ installation of `antctl`, please refer to the [installation guide](../antctl.md#
 Run the following commands to deploy Multi-cluster Controller for the leader
 into Namespace `antrea-multicluster` (Namespace `antrea-multicluster` will be
 created by the commands), and Multi-cluster Controller for the member into
-Namepsace `kube-system`.
+Namespace `kube-system`.
 
 ```bash
 kubectl create ns antrea-multicluster
@@ -213,7 +213,7 @@ antctl mc join --clusterid test-cluster-member2 -n kube-system --config-file joi
 Run the following commands to deploy Multi-cluster Controller for the leader
 into Namespace `antrea-multicluster` (Namespace `antrea-multicluster` will be
 created by the commands), and Multi-cluster Controller for the member into
-Namepsace `kube-system`.
+Namespace `kube-system`.
 
 ```bash
 kubectl apply -f https://github.com/antrea-io/antrea/releases/download/$TAG/antrea-multicluster-leader-global.yml

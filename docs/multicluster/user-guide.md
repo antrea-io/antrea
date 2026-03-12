@@ -377,7 +377,7 @@ there are several possibilities:
 * By default, the K8s Node's `InternalIP` is used as `gatewayIP` too.
 * You can choose to use the K8s Node's `ExternalIP` as `gatewayIP`, by changing
 the configuration option `gatewayIPPrecedence` to value: `external`, when
-deploying the member Multi-cluster Controller. The configration option is
+deploying the member Multi-cluster Controller. The configuration option is
 defined in ConfigMap `antrea-mc-controller-config` in `antrea-multicluster-member.yml`.
 * When the Gateway Node has a separate IP for external communication or is
 associated with a public IP (e.g. an Elastic IP on AWS), but the IP is not added
@@ -510,7 +510,7 @@ requests may be routed to other clusters, and the endpoints from the local
 cluster do not take precedence. A Service cannot have conflicted definitions in
 different export clusters, otherwise only the first export will be replicated to
 other clusters; other exports as well as new updates to the Service will be
-ingored, until user fixes the conflicts. For example, after a member cluster
+ignored, until user fixes the conflicts. For example, after a member cluster
 exported a Service: `default/nginx` with TCP Port `80`, other clusters can only
 export the same Service with the same Ports definition including Port names. At
 the moment, Antrea Multi-cluster supports only IPv4 multi-cluster Services.

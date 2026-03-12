@@ -18,6 +18,7 @@ bin
 
 .idea/
 .vscode/
+.cursor/
 vendor
 
 ci/jenkins/jobs/defaults.yml

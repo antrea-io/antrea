@@ -17,7 +17,7 @@
 
 Antrea introduces nftables flowtable to accelerate traffic that is forwarded through the Node's host network when the
 traffic mode is noEncap or hybrid. By offloading eligible connections into the nftables flowtable at the ingress hook,
-packets can be fast-tracked through the Node's host networking stack. Once offloaded, theses packets bypass most kernel
+packets can be fast-tracked through the Node's host networking stack. Once offloaded, these packets bypass most kernel
 networking processing, reducing overhead and significantly improving forwarding performance.
 
 ## Prerequisites

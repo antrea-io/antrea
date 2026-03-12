@@ -121,7 +121,7 @@ code to `./resources/kubernetes.conf`, then update ConfigMap in
   count_interval 3  # The time window for counting errors (in secs)
   input_key code    # The field to apply the regular expression
   regexp ^5\d\d$    # The regular expression to be applied
-  threshold 1       # The minimum number of erros to trigger an alert
+  threshold 1       # The minimum number of errors to trigger an alert
   add_tag_prefix error_ANPxx  # Generate tags like "error_ANPxx.antrea-networkpolicy"
 </match>
 

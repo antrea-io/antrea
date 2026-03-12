@@ -210,7 +210,7 @@ included over time):
 
 **Be aware that the generated support bundle includes a lot of information,
   including logs, so please review the contents of the directory before sharing
-  it on Github and ensure that you do not share anything sensitive.**
+  it on GitHub and ensure that you do not share anything sensitive.**
 
 The `antctl supportbundle` command can also be run inside a Controller or Agent
 Pod, in which case only local information will be collected.
@@ -560,7 +560,7 @@ More examples of `antctl traceflow`:
 ```bash
 # Start a Traceflow from pod1 to pod2, both Pods are in Namespace default
 $ antctl traceflow -S pod1 -D pod2
-# Start a Traceflow from pod1 in Namepace ns1 to a destination IP
+# Start a Traceflow from pod1 in Namespace ns1 to a destination IP
 $ antctl traceflow -S ns1/pod1 -D 123.123.123.123
 # Start a Traceflow from pod1 to Service svc1 in Namespace ns1
 $ antctl traceflow -S pod1 -D ns1/svc1 -f tcp,tcp_dst=80
