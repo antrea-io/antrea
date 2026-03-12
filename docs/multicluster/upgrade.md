@@ -2,7 +2,7 @@
 
 The Antrea Multi-cluster feature is introduced from v1.5.0. There is no data-plane
 related changes from release v1.5.0, so Antrea deployment and Antrea Multi-cluster
-deployment are indenpendent. However, we suggest to keep Antrea and Antrea Multi-cluster
+deployment are independent. However, we suggest to keep Antrea and Antrea Multi-cluster
 in the same version considering there will be data-plane change involved in the future.
 Please refer to [Antrea upgrade and supported version skew](../versioning.md#antrea-upgrade-and-supported-version-skew)
 to learn the requirement of Antrea upgrade. This doc focuses on Multi-cluster deployment only.

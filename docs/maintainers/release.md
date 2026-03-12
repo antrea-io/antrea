@@ -24,7 +24,7 @@ release. We use `<TAG>` as a placeholder for the release tag (e.g. `v1.4.0`).
      will look for this commit and cherry-pick it to update the main branch
      (starting with Antrea v1.0). The
      [prepare-changelog.sh](../../hack/release/prepare-changelog.sh) script may
-     be used to easily generate links to PRs and the Github profiles of PR
+     be used to easily generate links to PRs and the GitHub profiles of PR
      authors. Use `prepare-changelog.sh -h` to get the usage.
    - a commit to update [VERSION](../../VERSION) as needed, using the following
      commit message: `"Set VERSION to <TAG>"`. Before committing, ensure that
@@ -32,7 +32,7 @@ release. We use `<TAG>` as a placeholder for the release tag (e.g. `v1.4.0`).
 
 3. Run all the tests for the PR, investigating test failures and re-triggering
    the tests as needed.
-   - Github worfklows are run automatically whenever the head branch is updated.
+   - GitHub workflows are run automatically whenever the head branch is updated.
    - Jenkins tests need to be [triggered manually](../../CONTRIBUTING.md#getting-your-pr-verified-by-ci).
    - Cloud tests need to be triggered manually through the
      [Jenkins web UI](https://jenkins.antrea.io/). Admin access is
@@ -54,7 +54,7 @@ release. We use `<TAG>` as a placeholder for the release tag (e.g. `v1.4.0`).
      repository settings temporarily, and remember to disable it again right
      after you merge.
 
-5. Make the release on Github **with the release branch as the target** and copy
+5. Make the release on GitHub **with the release branch as the target** and copy
    the relevant section of the CHANGELOG as the release description (make sure
    all the markdown links work). The
    [draft-release.sh](../../hack/release/draft-release.sh) script can
@@ -62,13 +62,13 @@ release. We use `<TAG>` as a placeholder for the release tag (e.g. `v1.4.0`).
    usage. You typically should **not** be checking the `Set as a pre-release`
    box. This would only be necessary for a release candidate (e.g., `<TAG>` is
    `1.4.0-rc.1`), which we do not have at the moment. There is no need to upload
-   any assets as this will be done automatically by a Github workflow, after you
+   any assets as this will be done automatically by a GitHub workflow, after you
    create the release.
    - the `Set as the latest release` box is checked by default. **If you are
      creating a patch release for an older minor version of Antrea, you should
      uncheck the box.**
 
-6. After a while (time for the relevant Github workflows to complete), check that:
+6. After a while (time for the relevant GitHub workflows to complete), check that:
    - the Docker image has been pushed to
      [dockerhub](https://hub.docker.com/u/antrea) with the correct tag.
    - the assets have been uploaded to the release (`antctl` binaries and yaml
@@ -76,7 +76,7 @@ release. We use `<TAG>` as a placeholder for the release tag (e.g. `v1.4.0`).
      particular, the following link should work:
      `https://github.com/antrea-io/antrea/releases/download/<TAG>/antrea.yml`.
 
-7. After the appropriate Github workflow completes, a bot will automatically
+7. After the appropriate GitHub workflow completes, a bot will automatically
    submit a PR to update the CHANGELOG in the main branch. You should verify the
    contents of the PR and merge it (no need to run the tests, use admin
    privileges).

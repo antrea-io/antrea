@@ -51,7 +51,7 @@ you must set the `selfSignedCert` field of `antrea-controller.conf` to `false`,
 so that the antrea-controller will read the certificate key pair from the
 `antrea-controller-tls` Secret. The example manifests and descriptions below
 assume Antrea is deployed in the `kube-system` Namespace. If you deploy Antrea
-in a different Namepace, please update the Namespace name in the manifests
+in a different Namespace, please update the Namespace name in the manifests
 accordingly.
 
 ```yaml

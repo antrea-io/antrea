@@ -47,7 +47,7 @@ policy](../versioning.md#minor-releases-and-patch-releases).
   why we ask contributors to backport their own bug fixes, as their
   participation is critical in case of such a conflict.
 
-The script will create a PR on Github for you, which will automatically be
+The script will create a PR on GitHub for you, which will automatically be
 labelled with `kind/cherry-pick`. This PR will go through the normal testing
 process, although it should be very quick given that the original PR was already
 approved and merged into the main branch. The PR should also go through normal
