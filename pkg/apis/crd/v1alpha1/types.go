@@ -577,6 +577,78 @@ type PacketCaptureCondition struct {
 	Message            string                     `json:"message"`
 }
 
+// +genclient
+// +genclient:nonNamespaced
+// +genclient:noStatus
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+
+// AntreaNodeConfig defines Antrea agent configuration for a set of Nodes
+// selected by nodeSelector.
+type AntreaNodeConfig struct {
+	metav1.TypeMeta `json:",inline"`
+	// Standard metadata of the object.
+	metav1.ObjectMeta `json:"metadata,omitempty"`
+
+	// +required
+	Spec AntreaNodeConfigSpec `json:"spec"`
+}
+
+// AntreaNodeConfigSpec defines the desired state of AntreaNodeConfig.
+type AntreaNodeConfigSpec struct {
+	// NodeSelector selects Nodes to which this AntreaNodeConfig applies. If multiple
+	// AntreaNodeConfigs select the same Node, only the one with the highest priority
+	// (the one created earliest: oldest creationTimestamp wins) will be applied.
+	NodeSelector metav1.LabelSelector `json:"nodeSelector"`
+
+	// SecondaryNetwork defines secondary network bridge configuration for the selected Nodes.
+	// +optional
+	SecondaryNetwork *SecondaryNetworkConfig `json:"secondaryNetwork,omitempty"`
+}
+
+// SecondaryNetworkConfig defines secondary network bridge configuration.
+type SecondaryNetworkConfig struct {
+	// OVSBridges is a list of OVS bridge configurations for secondary networks.
+	// At the moment, only a single OVS bridge is supported.
+	OVSBridges []OVSBridgeConfig `json:"ovsBridges,omitempty"`
+}
+
+// OVSBridgeConfig defines an OVS bridge and its uplink physical interfaces
+// with allowed VLANs.
+type OVSBridgeConfig struct {
+	// BridgeName is the name of the OVS bridge. Defaults to "br1". Once set, it is immutable.
+	// +optional
+	BridgeName string `json:"bridgeName,omitempty"`
+	// PhysicalInterfaces is a list of physical interfaces to be connected to this bridge.
+	// +required
+	PhysicalInterfaces []PhysicalInterfaceConfig `json:"physicalInterfaces,omitempty"`
+	// EnableMulticastSnooping enables multicast snooping on the bridge, allowing the bridge
+	// to learn about multicast group memberships and forward multicast traffic only to ports
+	// that have interested receivers. When disabled, multicast traffic is flooded to all ports
+	// in the bridge.
+	// Defaults to false.
+	EnableMulticastSnooping bool `json:"enableMulticastSnooping,omitempty"`
+}
+
+// PhysicalInterfaceConfig defines a physical interface configuration including VLAN filters.
+type PhysicalInterfaceConfig struct {
+	// Name is the name of the physical interface.
+	Name string `json:"name"`
+	// AllowedVLANs is a list of VLAN IDs or VLAN ID ranges (e.g. "100", "200-300") that are
+	// allowed on this interface. If not specified, all VLANs are allowed.
+	AllowedVLANs []string `json:"allowedVLANs,omitempty"`
+}
+
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+
+// AntreaNodeConfigList contains a list of AntreaNodeConfig resources.
+type AntreaNodeConfigList struct {
+	metav1.TypeMeta `json:",inline"`
+	// +optional
+	metav1.ListMeta `json:"metadata,omitempty"`
+
+	Items []AntreaNodeConfig `json:"items"`
+}
+
 type FlowExporterTransportProtocol string
 
 const (

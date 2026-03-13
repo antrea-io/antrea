@@ -55,6 +55,7 @@ func Test_getGatesResponse(t *testing.T) {
 			},
 			want: []apis.FeatureGateResponse{
 				{Component: "agent", Name: "AntreaIPAM", Status: "Disabled", Version: "ALPHA"},
+				{Component: "agent", Name: "AntreaNodeConfig", Status: "Disabled", Version: "ALPHA"},
 				{Component: "agent", Name: "AntreaPolicy", Status: "Disabled", Version: "BETA"},
 				{Component: "agent", Name: "AntreaProxy", Status: "Enabled", Version: "GA"},
 				{Component: "agent", Name: "BGPPolicy", Status: "Disabled", Version: "ALPHA"},

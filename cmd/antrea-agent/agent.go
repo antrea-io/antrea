@@ -22,6 +22,7 @@ import (
 	"time"
 
 	"github.com/spf13/afero"
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/util/sets"
@@ -618,11 +619,25 @@ func run(o *Options) error {
 	cniDeleteChecker = nil
 	// Secondary network controller should be created before CNIServer.Run() to make sure no Pod CNI updates will be missed.
 	if features.DefaultFeatureGate.Enabled(features.SecondaryNetwork) {
+		var antreaNodeConfigInformer crdv1alpha1informers.AntreaNodeConfigInformer
+		var localNode *corev1.Node
+		if features.DefaultFeatureGate.Enabled(features.AntreaNodeConfig) {
+			antreaNodeConfigInformer = crdInformerFactory.Crd().V1alpha1().AntreaNodeConfigs()
+			// Fetch the Node object so AntreaNodeConfig selector matching can be performed
+			// at controller creation time. The node is already available since the agent
+			// initializer has completed successfully.
+			localNode, err = k8sClient.CoreV1().Nodes().Get(context.TODO(), nodeConfig.Name, metav1.GetOptions{})
+			if err != nil {
+				return fmt.Errorf("failed to get Node %s for secondary network config: %w", nodeConfig.Name, err)
+			}
+		}
 		secondaryNetworkController, err = secondarynetwork.NewController(
 			o.config.ClientConnection, o.config.KubeAPIServerOverride,
 			k8sClient, localPodInformer.Get(),
 			podUpdateChannel, ifaceStore, nodeConfig,
-			&o.config.SecondaryNetwork, ovsdbConnection, ipPoolInformer.Lister())
+			localNode,
+			&o.config.SecondaryNetwork, ovsdbConnection, ipPoolInformer.Lister(),
+			antreaNodeConfigInformer, nodeInformer)
 		if err != nil {
 			return fmt.Errorf("failed to create secondary network controller: %w", err)
 		}
@@ -908,7 +923,7 @@ func run(o *Options) error {
 			nodeConfig,
 			ifaceStore,
 			multicastSocket,
-			sets.New[string](append(o.config.Multicast.MulticastInterfaces, nodeConfig.NodeTransportInterfaceName)...),
+			sets.New(append(o.config.Multicast.MulticastInterfaces, nodeConfig.NodeTransportInterfaceName)...),
 			podUpdateChannel,
 			o.igmpQueryInterval,
 			o.igmpQueryVersions,

@@ -280,3 +280,11 @@ rules:
       - create
       - patch
       - update
+  - apiGroups:
+      - crd.antrea.io
+    resources:
+      - antreanodeconfigs
+    verbs:
+      - get
+      - watch
+      - list
