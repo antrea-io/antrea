@@ -227,7 +227,7 @@ func testPacketCaptureBasic(t *testing.T, data *TestData, sftpServerIP string, p
 
 	// This is the name of the Antrea Pod which performs the capture. The capture is performed
 	// on the Node where the source Pod (clientPodName) is running, which is node1.
-	antreaPodName, err := data.getAntreaPodOnNode(node1)
+	antreaPodName, err := data.GetAntreaPodOnNode(node1)
 	require.NoError(t, err)
 
 	getPcapURL := func(name string) string {
@@ -1091,7 +1091,7 @@ func runPacketCaptureTest(t *testing.T, data *TestData, tc pcTestCase) {
 	require.NotEmpty(t, captureNodeName, "Could not determine any node for packet capture")
 
 	// verify packets.
-	antreaPodName, err := data.getAntreaPodOnNode(captureNodeName)
+	antreaPodName, err := data.GetAntreaPodOnNode(captureNodeName)
 	require.NoError(t, err)
 	tmpDir := t.TempDir()
 	dstFileName := filepath.Join(tmpDir, tc.pc.Name+".pcapng")

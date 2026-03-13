@@ -158,7 +158,7 @@ func (data *TestData) dumpOVSFlows(t *testing.T, workerNode string) []string {
 		ovsOfctlCmd = `c:/openvswitch/usr/bin/ovs-ofctl.exe`
 	}
 	cmd := []string{ovsOfctlCmd, "dump-flows", defaultBridgeName, "--names"}
-	antreaPodName, err := data.getAntreaPodOnNode(workerNode)
+	antreaPodName, err := data.GetAntreaPodOnNode(workerNode)
 	if err != nil {
 		t.Fatalf("Error when retrieving the name of the Antrea Pod running on Node '%s': %v", workerNode, err)
 	}
@@ -520,7 +520,7 @@ func testOVSFlowReplay(t *testing.T, data *TestData, namespace string) {
 
 	var antreaPodName string
 	var err error
-	if antreaPodName, err = data.getAntreaPodOnNode(workerNode); err != nil {
+	if antreaPodName, err = data.GetAntreaPodOnNode(workerNode); err != nil {
 		t.Fatalf("Error when retrieving the name of the Antrea Pod running on Node '%s': %v", workerNode, err)
 	}
 	t.Logf("The Antrea Pod for Node '%s' is '%s'", workerNode, antreaPodName)

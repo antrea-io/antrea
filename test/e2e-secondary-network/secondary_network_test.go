@@ -34,6 +34,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/kubernetes"
+	k8sExec "k8s.io/client-go/util/exec"
 
 	"antrea.io/antrea/pkg/agent/cniserver"
 	antreae2e "antrea.io/antrea/test/e2e"
@@ -251,8 +252,7 @@ func (data *testData) listPodAddresses(targetPod *testPodInfo) (map[string]net.I
 	macResult := make(map[string]string)
 	ipv6Result := make(map[string]net.IP)
 	var currentInterface string
-	lines := strings.Split(stdout, "\n")
-	for _, line := range lines {
+	for line := range strings.SplitSeq(stdout, "\n") {
 		fields := strings.Fields(line)
 		if len(fields) >= 2 && strings.HasSuffix(fields[0], ":") {
 			// first field is ifindex, second field is interface name
@@ -278,11 +278,83 @@ func (data *testData) listPodAddresses(targetPod *testPodInfo) (map[string]net.I
 	return ipv4Result, ipv6Result, macResult, nil
 }
 
+// waitForPodsScheduled checks the pods have been scheduled. An error is returned
+// with the number of pods that were not scheduled.
+func (data *testData) waitForPodsScheduled(deadline time.Time) error {
+	var podsScheduled int
+	var timeout time.Duration
+	for _, testPod := range data.pods {
+		timeout = time.Until(deadline)
+		data.e2eTestData.PodWaitFor(timeout, testPod.podName, data.e2eTestData.GetTestNamespace(), func(pod *corev1.Pod) (bool, error) {
+			for _, condition := range pod.Status.Conditions {
+				if condition.Type == corev1.PodScheduled && condition.Status != corev1.ConditionTrue {
+					return false, nil
+				}
+			}
+			podsScheduled += 1
+			return true, nil
+		})
+	}
+	if podsScheduled != len(data.pods) {
+		return fmt.Errorf("Reached timeout (%v) for when waiting for Pod to be scheduled. %v out of %v pods scheduled.", timeout, podsScheduled, len(data.pods))
+	}
+	return nil
+}
+
+// waitForPodInterface verifies a podInterface has been created for each pod. An
+// error is returned with the number of podInterfaces found.
+func (data *testData) waitForPodInterface(deadline time.Time) error {
+	var podInterfaceCreated int
+	var timeout time.Duration
+	for _, testPod := range data.pods {
+		timeout = time.Until(deadline)
+		var containerName string
+		colocatedAgentName, err := data.e2eTestData.GetAntreaPodOnNode(testPod.nodeName)
+		if err != nil {
+			return fmt.Errorf("Error when getting antrea-agent pod name: %v", err)
+		}
+		if strings.Contains(colocatedAgentName, "agent") {
+			containerName = "antrea-agent"
+		} else {
+			containerName = "antrea-controller"
+		}
+
+		cmd := []string{"antctl", "get", "podinterface", "-n", data.e2eTestData.GetTestNamespace(), testPod.podName}
+		wait.PollUntilContextTimeout(context.Background(), time.Second, timeout, true, func(ctx context.Context) (bool, error) {
+			_, _, err := data.e2eTestData.RunCommandFromPod("kube-system", colocatedAgentName, containerName, cmd)
+			if err != nil {
+				if _, ok := err.(k8sExec.ExitError); ok {
+					return false, nil
+				}
+				return false, fmt.Errorf("failed to run %v on %v :%v", cmd, colocatedAgentName, err)
+			}
+			podInterfaceCreated += 1
+			return true, nil
+		})
+	}
+	if podInterfaceCreated != len(data.pods) {
+		return fmt.Errorf("Reached timeout (%v) for when waiting for podInterface to be created. %v out of %v podInterfaces created.", timeout, podInterfaceCreated, len(data.pods))
+	}
+	return nil
+}
+
 // verifySecondaryInterfaces verifies MAC addresses and tests connectivity(ping)
 // between secondary interfaces of all created Pods that are on the same network.
 func (data *testData) verifySecondaryInterfaces(t *testing.T) error {
 	e2eTestData := data.e2eTestData
 	namespace := e2eTestData.GetTestNamespace()
+
+	deadline := time.Now().Add(defaultTimeout * time.Duration(len(data.pods)))
+
+	err := data.waitForPodsScheduled(deadline)
+	if err != nil {
+		return err
+	}
+
+	err = data.waitForPodInterface(deadline)
+	if err != nil {
+		return err
+	}
 
 	type attachment struct {
 		network string
@@ -305,9 +377,12 @@ func (data *testData) verifySecondaryInterfaces(t *testing.T) error {
 		}
 	}
 
+	var timeout time.Duration
+	var interfacesVerified int
 	// Collect all secondary network IPs and verify MACs when they are available.
 	for _, testPod := range data.pods {
-		_, err := e2eTestData.PodWaitFor(defaultTimeout, testPod.podName, namespace, func(pod *corev1.Pod) (bool, error) {
+		timeout = time.Until(deadline)
+		e2eTestData.PodWaitFor(timeout, testPod.podName, namespace, func(pod *corev1.Pod) (bool, error) {
 			if pod.Status.Phase != corev1.PodRunning {
 				return false, nil
 			}
@@ -340,11 +415,12 @@ func (data *testData) verifySecondaryInterfaces(t *testing.T) error {
 			}
 			// we found all the expected secondary network interfaces / attachments
 			addPodNetworkAttachments(testPod, podNetworkAttachments)
+			interfacesVerified += 1
 			return true, nil
 		})
-		if err != nil {
-			return fmt.Errorf("error when waiting for secondary IPs for Pod %+v: %w", testPod, err)
-		}
+	}
+	if interfacesVerified != len(data.pods) {
+		return fmt.Errorf("Reached timeout (%v) for verifying secondary network interfaces . %v out of %v network interfaces verified.", timeout, interfacesVerified, len(data.pods))
 	}
 
 	// Run ping-mesh test for each secondary network.
