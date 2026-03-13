@@ -368,21 +368,27 @@ func (r *ResourceExportReconciler) refreshEndpointsResourceImport(
 
 	if createResImport {
 		newResImport.Spec.Endpoints = &mcsv1alpha1.EndpointsImport{
-			Subsets: resExport.Spec.Endpoints.Subsets,
+			Endpoints: resExport.Spec.Endpoints.Endpoints,
+			Ports:     resExport.Spec.Endpoints.Ports,
 		}
 		return newResImport, true, nil
 	}
-	// check all matched Endpoints ResourceExport and generate a new EndpointSubset
-	var newSubsets []corev1.EndpointSubset
+	// merge Endpoints from all non-deleted ResourceExports into one ResourceImport
 	undeleteItems, err := r.getNotDeletedResourceExports(resExport)
 	if err != nil {
 		klog.ErrorS(err, "Failed to list ResourceExports, retry later")
 		return newResImport, false, err
 	}
+	merged := &mcsv1alpha1.EndpointsImport{}
 	for _, re := range undeleteItems {
-		newSubsets = append(newSubsets, re.Spec.Endpoints.Subsets...)
+		if re.Spec.Endpoints != nil {
+			merged.Endpoints = append(merged.Endpoints, re.Spec.Endpoints.Endpoints...)
+			if len(merged.Ports) == 0 {
+				merged.Ports = re.Spec.Endpoints.Ports
+			}
+		}
 	}
-	newResImport.Spec.Endpoints = &mcsv1alpha1.EndpointsImport{Subsets: newSubsets}
+	newResImport.Spec.Endpoints = merged
 	if apiequality.Semantic.DeepEqual(newResImport.Spec.Endpoints, resImport.Spec.Endpoints) {
 		return newResImport, false, nil
 	}

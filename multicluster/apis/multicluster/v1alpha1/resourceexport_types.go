@@ -18,6 +18,7 @@ package v1alpha1
 
 import (
 	v1 "k8s.io/api/core/v1"
+	discoveryv1 "k8s.io/api/discovery/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"antrea.io/antrea/pkg/apis/crd/v1alpha2"
@@ -29,9 +30,10 @@ type ServiceExport struct {
 	ServiceSpec v1.ServiceSpec `json:"serviceSpec,omitempty"`
 }
 
-// EndpointsExport exports Endpoints.
+// EndpointsExport exports Endpoints as EndpointSlice fields.
 type EndpointsExport struct {
-	Subsets []v1.EndpointSubset `json:"subsets,omitempty"`
+	Endpoints []discoveryv1.Endpoint     `json:"endpoints,omitempty"`
+	Ports     []discoveryv1.EndpointPort `json:"ports,omitempty"`
 }
 
 // ExternalEntityExport exports ExternalEntity.

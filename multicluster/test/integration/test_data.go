@@ -14,7 +14,10 @@
 
 package integration
 
-import corev1 "k8s.io/api/core/v1"
+import (
+	corev1 "k8s.io/api/core/v1"
+	discoveryv1 "k8s.io/api/discovery/v1"
+)
 
 var (
 	addr1 = corev1.EndpointAddress{
@@ -42,5 +45,21 @@ var (
 			Protocol: corev1.ProtocolTCP,
 			Port:     80,
 		},
+	}
+
+	epReady    = true
+	epTCP      = corev1.ProtocolTCP
+	epHTTPName = "http"
+	epPort80   = int32(80)
+
+	epDiscoveryPorts = []discoveryv1.EndpointPort{
+		{Name: &epHTTPName, Port: &epPort80, Protocol: &epTCP},
+	}
+	epEndpointsA = []discoveryv1.Endpoint{
+		{Addresses: []string{addr1.IP}, Conditions: discoveryv1.EndpointConditions{Ready: &epReady}},
+	}
+	epEndpointsB = []discoveryv1.Endpoint{
+		{Addresses: []string{addr2.IP}, Conditions: discoveryv1.EndpointConditions{Ready: &epReady}},
+		{Addresses: []string{addr3.IP}, Conditions: discoveryv1.EndpointConditions{Ready: &epReady}},
 	}
 )

@@ -23,6 +23,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
+	discoveryv1 "k8s.io/api/discovery/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -74,10 +75,40 @@ func TestStaleController_CleanUpService(t *testing.T) {
 			Kind:      constants.ServiceImportKind,
 		},
 	}
+	epsResImport := mcv1alpha1.ResourceImport{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace: "default",
+			Name:      "default-non-nginx-endpoints",
+		},
+		Spec: mcv1alpha1.ResourceImportSpec{
+			Name:      "non-nginx",
+			Namespace: "default",
+			Kind:      constants.EndpointsKind,
+		},
+	}
+	// antrea-mc-nginx has no corresponding ResourceImport and should be cleaned up.
+	staleEps := discoveryv1.EndpointSlice{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace:   "default",
+			Name:        "antrea-mc-nginx",
+			Annotations: map[string]string{common.AntreaMCServiceAnnotation: "true"},
+		},
+		AddressType: discoveryv1.AddressTypeIPv4,
+	}
+	// antrea-mc-non-nginx has a matching ResourceImport and should be kept.
+	validEps := discoveryv1.EndpointSlice{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace:   "default",
+			Name:        "antrea-mc-non-nginx",
+			Annotations: map[string]string{common.AntreaMCServiceAnnotation: "true"},
+		},
+		AddressType: discoveryv1.AddressTypeIPv4,
+	}
 	tests := []struct {
 		name               string
 		existSvcList       *corev1.ServiceList
 		existSvcImpList    *k8smcv1alpha1.ServiceImportList
+		existEpsList       *discoveryv1.EndpointSliceList
 		existingResImpList *mcv1alpha1.ResourceImportList
 		wantErr            bool
 	}{
@@ -91,9 +122,12 @@ func TestStaleController_CleanUpService(t *testing.T) {
 					mcSvcImpNginx, mcSvcImpNonNginx,
 				},
 			},
+			existEpsList: &discoveryv1.EndpointSliceList{
+				Items: []discoveryv1.EndpointSlice{staleEps, validEps},
+			},
 			existingResImpList: &mcv1alpha1.ResourceImportList{
 				Items: []mcv1alpha1.ResourceImport{
-					svcResImport,
+					svcResImport, epsResImport,
 				},
 			},
 		},
@@ -101,7 +135,7 @@ func TestStaleController_CleanUpService(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			fakeClient := fake.NewClientBuilder().WithScheme(common.TestScheme).WithObjects(clusterSet).
-				WithLists(tt.existSvcList, tt.existSvcImpList).Build()
+				WithLists(tt.existSvcList, tt.existSvcImpList, tt.existEpsList).Build()
 			fakeRemoteClient := fake.NewClientBuilder().WithScheme(common.TestScheme).WithLists(tt.existingResImpList).Build()
 			commonArea := commonarea.NewFakeRemoteCommonArea(fakeRemoteClient, "leader-cluster", common.LocalClusterID, "default", nil)
 			mcReconciler := NewMemberClusterSetReconciler(fakeClient, common.TestScheme, "default", false, false, make(chan struct{}))
@@ -131,8 +165,66 @@ func TestStaleController_CleanUpService(t *testing.T) {
 			} else {
 				t.Errorf("Should list ServiceImport successfully but got err = %v", err)
 			}
+			epsList := &discoveryv1.EndpointSliceList{}
+			err = fakeClient.List(ctx, epsList, &client.ListOptions{})
+			if err == nil {
+				if len(epsList.Items) != 1 {
+					t.Errorf("Should only one valid EndpointSlice left but got %v", len(epsList.Items))
+				}
+			} else {
+				t.Errorf("Should list EndpointSlice successfully but got err = %v", err)
+			}
 		})
 	}
+}
+
+func TestStaleController_CleanUpLegacyEndpoints(t *testing.T) {
+	// staleEp simulates a corev1.Endpoints object created by an older controller version
+	// (before EndpointSlice support). It has no corresponding ResourceImport so it should
+	// be deleted.
+	staleEp := corev1.Endpoints{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace:   "default",
+			Name:        "antrea-mc-nginx",
+			Annotations: map[string]string{common.AntreaMCServiceAnnotation: "true"},
+		},
+	}
+	// validEp has a corresponding ResourceImport and should be kept.
+	validEp := corev1.Endpoints{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace:   "default",
+			Name:        "antrea-mc-non-nginx",
+			Annotations: map[string]string{common.AntreaMCServiceAnnotation: "true"},
+		},
+	}
+	epsResImport := mcv1alpha1.ResourceImport{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace: "default",
+			Name:      "default-non-nginx-endpoints",
+		},
+		Spec: mcv1alpha1.ResourceImportSpec{
+			Name:      "non-nginx",
+			Namespace: "default",
+			Kind:      constants.EndpointsKind,
+		},
+	}
+
+	ctx := context.TODO()
+	fakeClient := fake.NewClientBuilder().WithScheme(common.TestScheme).WithObjects(clusterSet, &staleEp, &validEp).Build()
+	fakeRemoteClient := fake.NewClientBuilder().WithScheme(common.TestScheme).
+		WithLists(&mcv1alpha1.ResourceImportList{Items: []mcv1alpha1.ResourceImport{epsResImport}}).Build()
+	commonArea := commonarea.NewFakeRemoteCommonArea(
+		fakeRemoteClient, "leader-cluster", common.LocalClusterID, "default", nil)
+	mcReconciler := NewMemberClusterSetReconciler(
+		fakeClient, common.TestScheme, "default", false, false, make(chan struct{}))
+	mcReconciler.SetRemoteCommonArea(commonArea)
+	c := NewStaleResCleanupController(fakeClient, common.TestScheme, make(chan struct{}), "default", mcReconciler)
+	require.NoError(t, c.cleanUpStaleResources(ctx))
+
+	epList := &corev1.EndpointsList{}
+	require.NoError(t, fakeClient.List(ctx, epList, &client.ListOptions{}))
+	assert.Len(t, epList.Items, 1, "stale legacy Endpoints should have been deleted, valid one kept")
+	assert.Equal(t, "antrea-mc-non-nginx", epList.Items[0].Name)
 }
 
 func TestStaleController_CleanUpACNP(t *testing.T) {
@@ -659,8 +751,20 @@ func TestCleanUpMCServiceAndServiceImport(t *testing.T) {
 			},
 		},
 	}
+	existingEPSlices := &discoveryv1.EndpointSliceList{
+		Items: []discoveryv1.EndpointSlice{
+			{
+				ObjectMeta: metav1.ObjectMeta{
+					Namespace: "default",
+					Name:      "antrea-mc-svc-b",
+				},
+				AddressType: discoveryv1.AddressTypeIPv4,
+			},
+		},
+	}
 
-	fakeClient := fake.NewClientBuilder().WithScheme(common.TestScheme).WithLists(existingSVCImports, existingSVCs).Build()
+	fakeClient := fake.NewClientBuilder().WithScheme(common.TestScheme).
+		WithLists(existingSVCImports, existingSVCs, existingEPSlices).Build()
 	ctx := context.Background()
 	err := cleanUpMCServicesAndServiceImports(ctx, fakeClient)
 	require.NoError(t, err)
@@ -673,6 +777,11 @@ func TestCleanUpMCServiceAndServiceImport(t *testing.T) {
 	err = fakeClient.List(ctx, actualSvcImpList)
 	require.NoError(t, err)
 	assert.Equal(t, 0, len(actualSvcImpList.Items))
+
+	actualEPSliceList := &discoveryv1.EndpointSliceList{}
+	err = fakeClient.List(ctx, actualEPSliceList)
+	require.NoError(t, err)
+	assert.Equal(t, 0, len(actualEPSliceList.Items))
 }
 
 func TestCleanUpReplicatedACNP(t *testing.T) {
