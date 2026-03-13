@@ -71,6 +71,7 @@ type OVSBridgeClient interface {
 	GetPortData(portUUID, ifName string) (*OVSPortData, Error)
 	GetPortList() ([]OVSPortData, Error)
 	SetInterfaceMTU(name string, MTU int) error
+	AddTrunksToPort(portName string, vlanID int32) Error
 	GetOVSVersion() (string, Error)
 	AddOVSOtherConfig(configs map[string]interface{}) Error
 	GetOVSOtherConfig() (map[string]string, Error)

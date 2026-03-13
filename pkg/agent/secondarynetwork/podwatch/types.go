@@ -32,4 +32,8 @@ type SecondaryNetworkConfig struct {
 	// non-zero VLAN is specified, it will override the VLAN in the Antrea
 	// IPAM IPPool subnet.
 	VLAN int32 `json:"vlan,omitempty"`
+	// The physical interface name on the host to which the OVS bridge will be
+	// bound. Applicable only to the VLAN network type.
+	// When the Master is specified, the VLAN field must be non-zero.
+	Master string `json:"master,omitempty"`
 }
