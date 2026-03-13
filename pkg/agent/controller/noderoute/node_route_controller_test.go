@@ -19,6 +19,7 @@ import (
 	"net"
 	"net/netip"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/stretchr/testify/assert"
@@ -135,38 +136,35 @@ func newController(t testing.TB, networkConfig *config.NetworkConfig, objects ..
 }
 
 func TestControllerWithDuplicatePodCIDR(t *testing.T) {
-	c := newController(t, &config.NetworkConfig{})
-	defer c.queue.ShutDown()
+	synctest.Test(t, func(t *testing.T) {
+		c := newController(t, &config.NetworkConfig{})
+		defer c.queue.ShutDown()
 
-	stopCh := make(chan struct{})
-	defer close(stopCh)
-	c.informerFactory.Start(stopCh)
-	// Must wait for cache sync, otherwise resource creation events will be missing if the resources are created
-	// in-between list and watch call of an informer. This is because fake clientset doesn't support watching with
-	// resourceVersion. A watcher of fake clientset only gets events that happen after the watcher is created.
-	c.informerFactory.WaitForCacheSync(stopCh)
+		stopCh := make(chan struct{})
+		defer close(stopCh)
+		c.informerFactory.Start(stopCh)
+		// Must wait for cache sync, otherwise resource creation events will be missing if the resources are created
+		// in-between list and watch call of an informer. This is because fake clientset doesn't support watching with
+		// resourceVersion. A watcher of fake clientset only gets events that happen after the watcher is created.
+		c.informerFactory.WaitForCacheSync(stopCh)
 
-	otherNode := &corev1.Node{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: "otherNode",
-		},
-		Spec: corev1.NodeSpec{
-			PodCIDR:  podCIDR1.String(),
-			PodCIDRs: []string{podCIDR1.String()},
-		},
-		Status: corev1.NodeStatus{
-			Addresses: []corev1.NodeAddress{
-				{
-					Type:    corev1.NodeInternalIP,
-					Address: nodeIP2.String(),
+		otherNode := &corev1.Node{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: "otherNode",
+			},
+			Spec: corev1.NodeSpec{
+				PodCIDR:  podCIDR1.String(),
+				PodCIDRs: []string{podCIDR1.String()},
+			},
+			Status: corev1.NodeStatus{
+				Addresses: []corev1.NodeAddress{
+					{
+						Type:    corev1.NodeInternalIP,
+						Address: nodeIP2.String(),
+					},
 				},
 			},
-		},
-	}
-
-	finishCh := make(chan struct{})
-	go func() {
-		defer close(finishCh)
+		}
 
 		c.clientset.CoreV1().Nodes().Create(context.TODO(), node1, metav1.CreateOptions{})
 		c.ofClient.EXPECT().InstallNodeFlows("node1", gomock.Any(), &dsIPs1, uint32(0), nil).Times(1)
@@ -189,13 +187,7 @@ func TestControllerWithDuplicatePodCIDR(t *testing.T) {
 		c.ofClient.EXPECT().InstallNodeFlows("otherNode", gomock.Any(), &dsIPs2, uint32(0), nil).Times(1)
 		c.routeClient.EXPECT().AddRoutes(podCIDR1, "otherNode", nodeIP2, podCIDR1Gateway).Times(1)
 		c.processNextWorkItem()
-	}()
-
-	select {
-	case <-time.After(5 * time.Second):
-		t.Errorf("Test didn't finish in time")
-	case <-finishCh:
-	}
+	})
 }
 
 func TestLookupIPInPodSubnets(t *testing.T) {
@@ -814,18 +806,24 @@ func TestInitialListHasSyncedStopChClosedEarly(t *testing.T) {
 }
 
 func TestInitialListHasSyncedPolicyOnlyMode(t *testing.T) {
-	c := newController(t, &config.NetworkConfig{
-		TrafficEncapMode: config.TrafficEncapModeNetworkPolicyOnly,
+	synctest.Test(t, func(t *testing.T) {
+		c := newController(t, &config.NetworkConfig{
+			TrafficEncapMode: config.TrafficEncapModeNetworkPolicyOnly,
+		})
+		defer c.queue.ShutDown()
+
+		stopCh := make(chan struct{})
+		defer close(stopCh)
+		go c.Run(stopCh)
+
+		// In networkPolicyOnly mode, c.flowRestoreCompleteWait should be done immediately when
+		// calling Run, even though workers are never started and c.hasProcessedInitialList.HasSynced
+		// will remain false.
+		// synctest.Wait ensures Run has done all its work (signaling flowRestoreCompleteWait)
+		// before we proceed. flowRestoreCompleteWait.Wait() must return immediately; if it
+		// blocks, synctest.Test detects the deadlock and fails the test.
+		synctest.Wait()
+		c.flowRestoreCompleteWait.Wait()
+		assert.False(t, c.hasProcessedInitialList.HasSynced())
 	})
-	defer c.queue.ShutDown()
-
-	stopCh := make(chan struct{})
-	defer close(stopCh)
-	go c.Run(stopCh)
-
-	// In networkPolicyOnly mode, c.flowRestoreCompleteWait should be decremented immediately
-	// when calling Run, even though workers are never started and c.hasProcessedInitialList.HasSynced
-	// will remain false.
-	assert.NoError(t, c.flowRestoreCompleteWait.WaitWithTimeout(500*time.Millisecond))
-	assert.False(t, c.hasProcessedInitialList.HasSynced())
 }
