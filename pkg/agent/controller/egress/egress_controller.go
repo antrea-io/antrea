@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"net"
 	"reflect"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -39,7 +40,6 @@ import (
 	"k8s.io/client-go/util/retry"
 	"k8s.io/client-go/util/workqueue"
 	"k8s.io/klog/v2"
-	"k8s.io/utils/strings/slices"
 
 	"antrea.io/antrea/pkg/agent/client"
 	"antrea.io/antrea/pkg/agent/interfacestore"
