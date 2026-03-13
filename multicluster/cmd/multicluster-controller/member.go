@@ -140,6 +140,7 @@ func runMember(o *Options) error {
 		commonAreaCreationCh,
 		env.GetPodNamespace(),
 		commonAreaGetter,
+		mgr.GetCache(),
 	)
 
 	go staleController.Run(stopCh)

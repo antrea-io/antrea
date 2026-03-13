@@ -27,6 +27,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/util/retry"
 	"k8s.io/klog/v2"
+	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	k8smcv1alpha1 "sigs.k8s.io/mcs-api/pkg/apis/v1alpha1"
 
@@ -52,6 +53,7 @@ type StaleResCleanupController struct {
 	localClusterID       string
 	commonAreaGetter     commonarea.RemoteCommonAreaGetter
 	namespace            string
+	cache                cache.Cache
 }
 
 func NewStaleResCleanupController(
@@ -60,6 +62,7 @@ func NewStaleResCleanupController(
 	commonAreaCreationCh chan struct{},
 	namespace string,
 	commonAreaGetter commonarea.RemoteCommonAreaGetter,
+	cache cache.Cache,
 ) *StaleResCleanupController {
 	reconciler := &StaleResCleanupController{
 		Client:               Client,
@@ -67,6 +70,7 @@ func NewStaleResCleanupController(
 		commonAreaCreationCh: commonAreaCreationCh,
 		namespace:            namespace,
 		commonAreaGetter:     commonAreaGetter,
+		cache:                cache,
 	}
 	return reconciler
 }
@@ -367,6 +371,12 @@ func (c *StaleResCleanupController) Run(stopCh <-chan struct{}) {
 	defer klog.InfoS("Shutting down StaleResCleanupController")
 
 	ctx := wait.ContextForChannel(stopCh)
+
+	if !c.cache.WaitForCacheSync(ctx) {
+		klog.ErrorS(nil, "Failed to wait for cache sync")
+		return
+	}
+	klog.InfoS("Cache synced, starting cleanup")
 
 	go func() {
 		retry.OnError(common.CleanUpRetry, func(err error) bool { return true },
