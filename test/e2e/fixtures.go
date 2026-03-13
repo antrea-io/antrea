@@ -221,12 +221,8 @@ func skipIfProxyAllDisabled(t *testing.T, data *TestData) {
 	}
 }
 
-func skipIfFlowExportProtocolIsNotGRPC(t *testing.T, data *TestData) {
-	agentConf, err := data.GetAntreaAgentConf()
-	if err != nil {
-		t.Fatalf("Error getting Antrea Agent config: %v", err)
-	}
-	if !strings.HasSuffix(agentConf.FlowExporter.FlowCollectorAddr, ":grpc") {
+func skipIfFlowExportProtocolIsNotGRPC(t *testing.T) {
+	if !strings.EqualFold(testOptions.flowVisibilityProtocol, "grpc") {
 		t.Skip("Skipping test because Flow Exporter does not use gRPC")
 	}
 }
@@ -411,8 +407,10 @@ func exportLogs(tb testing.TB, data *TestData, logsSubDir string, writeNodeLogs 
 	// dump the logs for monitoring Pods to disk.
 	data.forAllMatchingPodsInNamespace("", monitoringNamespace, writePodLogs)
 
-	// dump the logs for flow-aggregator Pods to disk.
-	data.forAllMatchingPodsInNamespace("", flowAggregatorNamespace, writePodLogs)
+	// dump the logs for all flow-aggregator Pods to disk.
+	for _, ns := range flowAggregatorNamespaces {
+		data.forAllMatchingPodsInNamespace("", ns, writePodLogs)
+	}
 
 	// dump the logs for flow-visibility Pods to disk.
 	data.forAllMatchingPodsInNamespace("", flowVisibilityNamespace, writePodLogs)
@@ -505,13 +503,15 @@ func exportLogs(tb testing.TB, data *TestData, logsSubDir string, writeNodeLogs 
 
 func teardownFlowAggregator(tb testing.TB, data *TestData) {
 	if testOptions.enableCoverage {
-		if err := testData.gracefulExitFlowAggregator(testOptions.coverageDir); err != nil {
+		if err := testData.gracefulExitFlowAggregators(testOptions.coverageDir); err != nil {
 			tb.Fatalf("Error when gracefully exiting Flow Aggregator: %v", err)
 		}
 	}
-	tb.Logf("Deleting '%s' K8s Namespace", flowAggregatorNamespace)
-	if err := data.DeleteNamespace(flowAggregatorNamespace, defaultTimeout); err != nil {
-		tb.Logf("Error when tearing down flow aggregator: %v", err)
+	for _, ns := range flowAggregatorNamespaces {
+		tb.Logf("Deleting '%s' K8s Namespace", ns)
+		if err := data.DeleteNamespace(ns, defaultTimeout); err != nil {
+			tb.Logf("Error when tearing down flow aggregator: %v", err)
+		}
 	}
 	tb.Logf("Deleting K8s resources created by flow visibility YAML")
 	if err := data.deleteFlowVisibility(); err != nil {
@@ -706,6 +706,7 @@ func testMain(m *testing.M) int {
 	flag.StringVar(&testOptions.externalFRRIPs, "external-frr-ips", "", "IP addresses of external FRR, at most one IP per IP family")
 	flag.StringVar(&testOptions.externalFRRCID, "external-frr-cid", "", "Container ID of external FRR")
 	flag.StringVar(&testOptions.vlanSubnets, "vlan-subnets", "", "ID and IP subnets of the VLAN network the Nodes reside in, at most one subnet per IP family")
+	flag.StringVar(&testOptions.flowVisibilityProtocol, "flow-visibility-protocol", "grpc", "Protocol to use between FlowExporter (Agent) and FlowAggregatior: either grpc (default) or ipfix.")
 	flag.Parse()
 
 	cleanupLogging := testOptions.setupLogging()
