@@ -115,7 +115,7 @@ type Bridge interface {
 	NewMeter(id MeterIDType, flags ofctrl.MeterFlag) Meter
 	// DeleteMeterAll deletes all meter entries from the switch.
 	DeleteMeterAll() error
-	GetMeterStats(handleMeterStatsReply func(meterID int, packetCount int64)) error
+	GetMeterStats(handleMeterStatsReply func(meterID int, packetCount uint64)) error
 	DumpTableStatus() []TableStatus
 	// DumpFlows queries the Openflow entries from OFSwitch. The filter of the query is Openflow cookieID; the result is
 	// a map from flow cookieID to FlowStates.
