@@ -1,4 +1,4 @@
-// Copyright 2025 Antrea Authors
+// Copyright 2026 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -22,6 +22,8 @@ import (
 
 // Interface provides access to all the informers in this group version.
 type Interface interface {
+	// AntreaNodeConfigs returns a AntreaNodeConfigInformer.
+	AntreaNodeConfigs() AntreaNodeConfigInformer
 	// BGPPolicies returns a BGPPolicyInformer.
 	BGPPolicies() BGPPolicyInformer
 	// ExternalNodes returns a ExternalNodeInformer.
@@ -45,6 +47,11 @@ type version struct {
 // New returns a new Interface.
 func New(f internalinterfaces.SharedInformerFactory, namespace string, tweakListOptions internalinterfaces.TweakListOptionsFunc) Interface {
 	return &version{factory: f, namespace: namespace, tweakListOptions: tweakListOptions}
+}
+
+// AntreaNodeConfigs returns a AntreaNodeConfigInformer.
+func (v *version) AntreaNodeConfigs() AntreaNodeConfigInformer {
+	return &antreaNodeConfigInformer{factory: v.factory, tweakListOptions: v.tweakListOptions}
 }
 
 // BGPPolicies returns a BGPPolicyInformer.
