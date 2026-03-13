@@ -43,7 +43,7 @@ jobs:
     # Docker 29+ defaults to the containerd image store, which breaks kind load docker-image.
     - uses: ./.github/actions/setup-docker-classic
     - name: Set up Docker Buildx
-      uses: docker/setup-buildx-action@v3
+      uses: docker/setup-buildx-action@v4
       with:
         driver: docker
     - uses: actions/setup-go@v6
