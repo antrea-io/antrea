@@ -74,6 +74,7 @@ var (
 		"egressName",
 		"egressIP",
 		"egressNodeName",
+		"nodeSnatIP",
 	}
 	AntreaInfoElementsIPv4 = append(antreaInfoElementsCommon, []string{"destinationClusterIPv4"}...)
 	AntreaInfoElementsIPv6 = append(antreaInfoElementsCommon, []string{"destinationClusterIPv6"}...)
@@ -98,6 +99,11 @@ func NewIPFIXExporter(collectorProto string, nodeName string, obsDomainID uint32
 	// Initialize IPFIX registry
 	registry := ipfix.NewIPFIXRegistry()
 	registry.LoadRegistry()
+	// Register nodeSnatIP element
+	element := ipfixentities.NewInfoElement("nodeSnatIP", 240, ipfixentities.String, ipfixregistry.AntreaEnterpriseID, 0)
+	if err := registry.RegisterInfoElement(*element); err != nil {
+		klog.ErrorS(err, "Failed to register nodeSnatIP info element")
+	}
 
 	return &ipfixExporter{
 		collectorProto: collectorProto,
@@ -393,6 +399,8 @@ func (e *ipfixExporter) addConnToSet(conn *connection.Connection) error {
 			ie.SetStringValue(conn.EgressIP)
 		case "egressNodeName":
 			ie.SetStringValue(conn.EgressNodeName)
+		case "nodeSnatIP":
+			ie.SetStringValue(conn.NodeSnatIP)
 		}
 	}
 	err := e.ipfixSet.AddRecordV2(eL, templateID)
