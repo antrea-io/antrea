@@ -73,6 +73,7 @@ var AntreaConfigMap *corev1.ConfigMap
 
 var (
 	errConnectionLost = fmt.Errorf("http2: client connection lost")
+	containerPort     = int32(80)
 )
 
 const (
@@ -1789,7 +1790,7 @@ func (data *TestData) createNginxPodOnNode(name string, ns string, nodeName stri
 	return NewPodBuilder(name, ns, image).OnNode(nodeName).WithPorts([]corev1.ContainerPort{
 		{
 			Name:          "http",
-			ContainerPort: 80,
+			ContainerPort: containerPort,
 			Protocol:      corev1.ProtocolTCP,
 		},
 	}).WithHostNetwork(hostNetwork).Create(data)
