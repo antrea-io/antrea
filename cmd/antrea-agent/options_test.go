@@ -489,3 +489,57 @@ func TestOptionsValidateHostNetworkMode(t *testing.T) {
 		})
 	}
 }
+
+func TestOptionsValidateHostNetworkAccelerationPacketThreshold(t *testing.T) {
+	tests := []struct {
+		name        string
+		threshold   *int
+		expectedErr string
+	}{
+		{
+			name:        "valid zero",
+			threshold:   ptr.To(0),
+			expectedErr: "",
+		},
+		{
+			name:        "valid default",
+			threshold:   ptr.To(20),
+			expectedErr: "",
+		},
+		{
+			name:        "valid max",
+			threshold:   ptr.To(1000),
+			expectedErr: "",
+		},
+		{
+			name:        "nil not validated",
+			threshold:   nil,
+			expectedErr: "",
+		},
+		{
+			name:        "invalid negative",
+			threshold:   ptr.To(-1),
+			expectedErr: "must be between 0 and 1000",
+		},
+		{
+			name:        "invalid over max",
+			threshold:   ptr.To(1001),
+			expectedErr: "must be between 0 and 1000",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			o := &Options{config: &agentconfig.AgentConfig{
+				HostNetworkAcceleration: agentconfig.HostNetworkAccelerationConfig{
+					ServiceAccelerationPacketThreshold: tt.threshold,
+				},
+			}}
+			err := o.validateHostNetworkAccelerationOptions()
+			if tt.expectedErr == "" {
+				require.NoError(t, err)
+			} else {
+				require.ErrorContains(t, err, tt.expectedErr)
+			}
+		})
+	}
+}
