@@ -53,6 +53,9 @@ const (
 	ip6TCPFlags              uint32 = 13
 	ip6ICMPv6Type            uint32 = 0
 	ip6ICMPv6Code            uint32 = 1
+	ip6FragmentNextHeader    uint32 = 44                // IPv6 Fragment Extension Header
+	ip6FragExtInnerProtocol  uint32 = ip6L4HeaderOffset // offset of Next Header inside Fragment Ext Header
+	ip6FragExtInstructionCnt        = 3                 // number of extra instructions for fragment header handling
 )
 
 var (
@@ -115,6 +118,17 @@ type transportFilters struct {
 	dstPort  uint16
 	tcpFlags []tcpFlagsFilter
 	icmp     []icmpFilter
+}
+
+// hasTransportFilters returns true if any L4-level filters (ports, flags, ICMP messages)
+// are configured. This is used to decide whether to add IPv6 extension header handling,
+// which is only needed for protocol-only filters.
+func hasTransportFilters(packet *crdv1alpha1.Packet) bool {
+	if packet == nil {
+		return false
+	}
+	t := packet.TransportHeader
+	return t.TCP != nil || t.UDP != nil || t.ICMP != nil || t.ICMPv6 != nil
 }
 
 // ipFamilyHandler encapsulates protocol-specific constants and filter compilation logic
@@ -405,7 +419,27 @@ func compileGenericPacketFilter(handler *ipFamilyHandler, packetSpec *crdv1alpha
 			proto = ProtocolMap[strings.ToUpper(packetSpec.Protocol.StrVal)]
 		}
 		inst = append(inst, handler.loadProtocol)
-		inst = append(inst, compareProtocol(proto, 0, size-5))
+
+		// For IPv6 without transport filters, add Fragment Extension Header
+		// handling to match libpcap/tcpdump behavior. When an IPv6 packet
+		// has a Fragment Extension Header (Next Header = 44), the real
+		// protocol is inside the extension header at offset [54].
+		if handler.etherType == etherTypeIPv6 && !hasTransportFilters(packetSpec) {
+			inst = append(inst,
+				// If protocol matches directly, skip past the extension header check.
+				compareProtocol(proto, ip6FragExtInstructionCnt, 0),
+				// If Next Header is NOT Fragment (44), jump to drop.
+				// size-6 because: at this point we have 5 instructions, this is the 6th,
+				// and we need to skip to the last instruction (ret drop) at position size-1.
+				bpf.JumpIf{Cond: bpf.JumpEqual, Val: ip6FragmentNextHeader, SkipTrue: 0, SkipFalse: size - 6},
+				// Load the inner Next Header from inside the Fragment Extension Header.
+				bpf.LoadAbsolute{Off: ip6FragExtInnerProtocol, Size: lengthByte},
+				// Check if the inner protocol matches. Jump to drop if not.
+				compareProtocol(proto, 0, size-8),
+			)
+		} else {
+			inst = append(inst, compareProtocol(proto, 0, size-5))
+		}
 	}
 
 	// ports, TCP flags, ICMP and ICMPv6 messages
@@ -628,6 +662,11 @@ func calculateInstructionsSize(handler *ipFamilyHandler, packet *crdv1alpha1.Pac
 		// protocol check
 		if packet.Protocol != nil {
 			count += 2
+			// IPv6 Fragment Extension Header handling adds 3 extra instructions
+			// when there are no transport-layer filters (ports, flags, ICMP).
+			if handler.etherType == etherTypeIPv6 && !hasTransportFilters(packet) {
+				count += ip6FragExtInstructionCnt
+			}
 		}
 		transport := packet.TransportHeader
 		portFiltersSize := func() int {
