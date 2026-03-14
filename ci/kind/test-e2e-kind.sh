@@ -49,6 +49,7 @@ _usage="Usage: $0 [--encap-mode <mode>] [--ip-family <v4|v6|dual>] [--coverage] 
         --antrea-controller-image     The Antrea controller image to use for the test. Default is antrea/antrea-controller-ubuntu.
         --antrea-agent-image          The Antrea agent image to use for the test. Default is antrea/antrea-agent-ubuntu.
         --antrea-image-tag            The Antrea image tag to use for the test. Default is latest.
+        --traffic-encryption-mode     Encryption for tunnel traffic: ipsec or wireguard.
         --help, -h                    Print this message and exit.
 "
 
@@ -98,6 +99,7 @@ antrea_controller_image="antrea/antrea-controller-ubuntu"
 antrea_agent_image="antrea/antrea-agent-ubuntu"
 use_non_default_images=false
 antrea_image_tag="latest"
+traffic_encryption_mode=""
 while [[ $# -gt 0 ]]
 do
 key="$1"
@@ -210,6 +212,10 @@ case $key in
     antrea_image_tag="$2"
     shift 2
     ;;
+    --traffic-encryption-mode)
+    traffic_encryption_mode="$2"
+    shift 2
+    ;;
     -h|--help)
     print_usage
     exit 0
@@ -220,6 +226,14 @@ case $key in
     ;;
 esac
 done
+
+if [[ -n "$traffic_encryption_mode" ]]; then
+    if [[ "$traffic_encryption_mode" != "ipsec" && "$traffic_encryption_mode" != "wireguard" ]]; then
+        echoerr "--traffic-encryption-mode must be 'ipsec' or 'wireguard', got '$traffic_encryption_mode'"
+        print_help
+        exit 1
+    fi
+fi
 
 source $THIS_DIR/../../hack/verify-helm.sh
 
@@ -404,14 +418,18 @@ function run_test {
     export AGENT_IMG_NAME=${antrea_agent_image}
     export CONTROLLER_IMG_NAME=${antrea_controller_image}
   fi
+  encryption_mode_args=""
+  if [ -n "$traffic_encryption_mode" ]; then
+      encryption_mode_args="--traffic-encryption-mode $traffic_encryption_mode"
+  fi
   if $coverage; then
-      $YML_CMD --encap-mode $current_mode $manifest_args | docker exec -i kind-control-plane dd of=/root/antrea-coverage.yml
-      $YML_CMD --ipsec $manifest_args | docker exec -i kind-control-plane dd of=/root/antrea-ipsec-coverage.yml
+      $YML_CMD --encap-mode $current_mode $encryption_mode_args $manifest_args | docker exec -i kind-control-plane dd of=/root/antrea-coverage.yml
+      $YML_CMD --traffic-encryption-mode ipsec $manifest_args | docker exec -i kind-control-plane dd of=/root/antrea-ipsec-coverage.yml
       timeout="80m"
       coverage_args="--coverage --coverage-dir $ANTREA_COV_DIR"
   else
-      $YML_CMD --encap-mode $current_mode $manifest_args | docker exec -i kind-control-plane dd of=/root/antrea.yml
-      $YML_CMD --ipsec $manifest_args | docker exec -i kind-control-plane dd of=/root/antrea-ipsec.yml
+      $YML_CMD --encap-mode $current_mode $encryption_mode_args $manifest_args | docker exec -i kind-control-plane dd of=/root/antrea.yml
+      $YML_CMD --traffic-encryption-mode ipsec $manifest_args | docker exec -i kind-control-plane dd of=/root/antrea-ipsec.yml
       timeout="75m"
   fi
 
@@ -470,7 +488,7 @@ function run_test {
      EXTRA_ARGS="$EXTRA_ARGS --antrea-ipam"
      timeout="100m"
   fi
- 
+
   go test -v -timeout=$timeout $RUN_OPT antrea.io/antrea/test/e2e $flow_visibility_args -provider=kind --logs-export-dir=$ANTREA_LOG_DIR $np_evaluation_flag --skip-cases=$skiplist $coverage_args $EXTRA_ARGS
 
   if $coverage; then
