@@ -15,10 +15,17 @@
 package connections
 
 import (
+	"net/netip"
 	"time"
 
 	"antrea.io/antrea/pkg/agent/flowexporter/connection"
 )
+
+// NodeRouteQuerier is used by ConntrackConnectionStore to classify connections
+// by flow type. It is satisfied by *noderoute.Controller.
+type NodeRouteQuerier interface {
+	LookupIPInPodSubnets(ip netip.Addr) (bool, bool)
+}
 
 // ConnTrackDumper is an interface that is used to dump connections from conntrack module. This supports dumping through
 // netfilter socket (OVS kernel datapath) and ovs-appctl command (OVS userspace datapath).

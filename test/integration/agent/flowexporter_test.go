@@ -136,7 +136,7 @@ func TestConnectionStoreAndFlowRecords(t *testing.T) {
 		IdleFlowTimeout:        testIdleFlowTimeout,
 		StaleConnectionTimeout: testStaleConnectionTimeout,
 		PollInterval:           testPollInterval}
-	conntrackConnStore := connections.NewConntrackConnectionStore(connDumperMock, true, false, npQuerier, mockPodStore, nil, nil, o)
+	conntrackConnStore := connections.NewConntrackConnectionStore(connDumperMock, true, false, npQuerier, mockPodStore, nil, nil, o, nil, false)
 	// Expect calls for connStore.poll and other callees
 	connDumperMock.EXPECT().DumpFlows(uint16(openflow.CtZone)).Return(testConns, 0, nil)
 	connDumperMock.EXPECT().GetMaxConnections().Return(0, nil)
@@ -366,6 +366,8 @@ func BenchmarkConntrackConnectionStorePoll(b *testing.B) {
 		nil,
 		nil,
 		o,
+		nil,
+		false,
 	)
 
 	for b.Loop() {

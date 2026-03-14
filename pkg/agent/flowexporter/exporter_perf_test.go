@@ -167,8 +167,8 @@ func NewFlowExporterForTest(tb testing.TB, o *options.FlowExporterOptions) *Flow
 	v4Enabled := !testWithIPv6
 	v6Enabled := testWithIPv6
 
-	denyConnStore := connections.NewDenyConnectionStore(nil, nil, nil, o, filter.NewProtocolFilter(nil))
-	conntrackConnStore := connections.NewConntrackConnectionStore(nil, v4Enabled, v6Enabled, nil, nil, nil, nil, o)
+	denyConnStore := connections.NewDenyConnectionStore(nil, nil, nil, o, filter.NewProtocolFilter(nil), nil, false)
+	conntrackConnStore := connections.NewConntrackConnectionStore(nil, v4Enabled, v6Enabled, nil, nil, nil, nil, o, nil, false)
 
 	return &FlowExporter{
 		collectorProto:         o.FlowCollectorProto,
@@ -180,7 +180,6 @@ func NewFlowExporterForTest(tb testing.TB, o *options.FlowExporterOptions) *Flow
 		v6Enabled:              v6Enabled,
 		k8sClient:              nil,
 		nodeRouteController:    nil,
-		isNetworkPolicyOnly:    false,
 		conntrackPriorityQueue: conntrackConnStore.GetPriorityQueue(),
 		denyPriorityQueue:      denyConnStore.GetPriorityQueue(),
 		expiredConns:           make([]connection.Connection, 0, maxConnsToExport*2),

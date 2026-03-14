@@ -33,6 +33,44 @@ import (
 	utilwait "antrea.io/antrea/pkg/util/wait"
 )
 
+// findFlowType classifies a Connection into one of the supported flow types.
+// It relies on the nodeRouteController to look up whether IPs belong to Pod
+// subnets. The result should be stored in conn.FlowType when the connection is
+// first added to the store so that exportConn() can treat FlowType as read-only.
+func findFlowType(conn *connection.Connection, nodeRouteController NodeRouteQuerier, isNetworkPolicyOnly bool) uint8 {
+	// TODO: support Pod-To-External flows in network policy only mode.
+	if isNetworkPolicyOnly {
+		if conn.SourcePodName == "" || conn.DestinationPodName == "" {
+			return utils.FlowTypeInterNode
+		}
+		return utils.FlowTypeIntraNode
+	}
+
+	if !isNetworkPolicyOnly && nodeRouteController == nil {
+		klog.V(5).InfoS("Can't find flow type without nodeRouteController")
+		return utils.FlowTypeUnspecified
+	}
+	srcIsPod, srcIsGw := nodeRouteController.LookupIPInPodSubnets(conn.FlowKey.SourceAddress)
+	dstIsPod, dstIsGw := nodeRouteController.LookupIPInPodSubnets(conn.FlowKey.DestinationAddress)
+	if srcIsGw || dstIsGw {
+		// This matches what we do in filterAntreaConns but is more general as we consider
+		// remote gateways as well.
+		klog.V(5).InfoS("Flows where the source or destination IP is a gateway IP will not be exported")
+		return utils.FlowTypeUnsupported
+	}
+	if !srcIsPod {
+		klog.V(5).InfoS("Flows where the source is not a Pod will not be exported")
+		return utils.FlowTypeUnsupported
+	}
+	if !dstIsPod {
+		return utils.FlowTypeToExternal
+	}
+	if conn.SourcePodName == "" || conn.DestinationPodName == "" {
+		return utils.FlowTypeInterNode
+	}
+	return utils.FlowTypeIntraNode
+}
+
 var serviceProtocolMap = map[uint8]corev1.Protocol{
 	6:   corev1.ProtocolTCP,
 	17:  corev1.ProtocolUDP,
@@ -45,6 +83,8 @@ type ConntrackConnectionStore struct {
 	v6Enabled             bool
 	pollInterval          time.Duration
 	connectUplinkToBridge bool
+	nodeRouteController   NodeRouteQuerier
+	isNetworkPolicyOnly   bool
 	// networkPolicyWait is used to determine when NetworkPolicy flows have been installed and
 	// when the mapping from flow ID to NetworkPolicy rule is available. We will ignore
 	// connections which started prior to that time to avoid reporting invalid NetworkPolicy
@@ -65,6 +105,8 @@ func NewConntrackConnectionStore(
 	proxier proxy.ProxyQuerier,
 	networkPolicyWait *utilwait.Group,
 	o *options.FlowExporterOptions,
+	nodeRouteController NodeRouteQuerier,
+	isNetworkPolicyOnly bool,
 ) *ConntrackConnectionStore {
 	return &ConntrackConnectionStore{
 		connDumper:            connTrackDumper,
@@ -74,6 +116,8 @@ func NewConntrackConnectionStore(
 		connectionStore:       NewConnectionStore(npQuerier, podStore, proxier, o),
 		connectUplinkToBridge: o.ConnectUplinkToBridge,
 		networkPolicyWait:     networkPolicyWait,
+		nodeRouteController:   nodeRouteController,
+		isNetworkPolicyOnly:   isNetworkPolicyOnly,
 	}
 }
 
@@ -259,6 +303,12 @@ func (cs *ConntrackConnectionStore) AddOrUpdateConn(conn *connection.Connection)
 		if conn.StartTime.IsZero() {
 			conn.StartTime = time.Now()
 			conn.StopTime = time.Now()
+		}
+		// Defer FlowType classification until the nodeRouteController has synced, if possible.
+		if nrc, ok := cs.nodeRouteController.(interface{ HasSynced() bool }); ok && !nrc.HasSynced() {
+			conn.FlowType = utils.FlowTypeUnspecified
+		} else {
+			conn.FlowType = findFlowType(conn, cs.nodeRouteController, cs.isNetworkPolicyOnly)
 		}
 		if conn.StartTime.Before(cs.networkPolicyReadyTime) {
 			klog.V(1).InfoS("Skip adding NetworkPolicy metadata to connection to avoid reporting invalid information")
