@@ -344,6 +344,39 @@ type BGPPeer struct {
 	// GracefulRestartTimeSeconds specifies how long the BGP peer would wait for the BGP session to re-establish after
 	// a restart before deleting stale routes. The range of the value is from 1 to 3600, and the default value is 120.
 	GracefulRestartTimeSeconds *int32 `json:"gracefulRestartTimeSeconds,omitempty"`
+
+	// KeepaliveTimeSeconds specifies the BGP keepalive interval in seconds for this peer. Keepalive messages are
+	// sent to keep the BGP session alive. The value must be lower than HoldTimeSeconds. The range of the value is
+	// from 1 to 65535, and the default value is 60.
+	KeepaliveTimeSeconds *int32 `json:"keepaliveTimeSeconds,omitempty"`
+
+	// HoldTimeSeconds specifies the BGP hold time in seconds for this peer. The hold time is the number of seconds
+	// the BGP session can be idle before it is considered down. The range of the value is from 3 to 65535, and the
+	// default value is 180. Setting it to 0 disables the hold timer.
+	HoldTimeSeconds *int32 `json:"holdTimeSeconds,omitempty"`
+
+	// BFD specifies the BFD (Bidirectional Forwarding Detection) configuration for this BGP peer, which can be
+	// used to detect failures in the BGP session more quickly. Note: this field is accepted by the API but is not
+	// yet applied by the agent; it will have no effect until GoBGP adds per-peer BFD support.
+	BFD *BFDConfig `json:"bfd,omitempty"`
+}
+
+// BFDConfig defines the BFD (Bidirectional Forwarding Detection) configuration for a BGP peer.
+type BFDConfig struct {
+	// Enabled specifies whether BFD is enabled for this BGP peer.
+	Enabled bool `json:"enabled"`
+
+	// MinTransmitInterval specifies the minimum interval in milliseconds for BFD control packets sent to this BGP
+	// peer. The range of the value is from 10 to 60000, and the default value is 300.
+	MinTransmitInterval *int32 `json:"minTransmitInterval,omitempty"`
+
+	// MinReceiveInterval specifies the minimum interval in milliseconds for BFD control packets received from this
+	// BGP peer. The range of the value is from 10 to 60000, and the default value is 300.
+	MinReceiveInterval *int32 `json:"minReceiveInterval,omitempty"`
+
+	// Multiplier specifies the number of missed BFD control packets before the BGP session is considered down. The
+	// range of the value is from 2 to 255, and the default value is 3.
+	Multiplier *int32 `json:"multiplier,omitempty"`
 }
 
 type PodReference struct {
