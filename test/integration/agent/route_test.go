@@ -115,8 +115,13 @@ func newTestRouteClient(networkConfig *config.NetworkConfig, options routeClient
 		options.nodeSNATRandomFully,
 		false,
 		&servicecidr.Discoverer{},
-		apis.WireGuardListenPort,
-		apis.AntreaProxyHealthServerPort)
+		nil,
+		route.NewHostNetworkPortRules().
+			Allow(apis.AntreaAgentAPIPort, "AgentAPIServer").
+			Allow(apis.AntreaAgentClusterMembershipPort, "AgentClusterMembership").
+			Allow(apis.WireGuardListenPort, "Wireguard").
+			Allow(apis.AntreaProxyHealthServerPort, "ProxyHealthCheck"),
+	)
 }
 
 func TestInitialize(t *testing.T) {
@@ -321,8 +326,7 @@ func TestInitialize(t *testing.T) {
 -A ANTREA-PREROUTING -p udp -m comment --comment "Antrea: do not track incoming encapsulation packets" -m udp --dport %d -m addrtype --dst-type LOCAL -j NOTRACK
 `, tc.expectUDPPortInRules, tc.expectUDPPortInRules)
 			}
-			if tc.proxyAll {
-				expectedIPTables["filter"] = `:ANTREA-FORWARD - [0:0]
+			expectedIPTables["filter"] = `:ANTREA-FORWARD - [0:0]
 :ANTREA-INPUT - [0:0]
 :ANTREA-OUTPUT - [0:0]
 -A INPUT -m comment --comment "Antrea: jump to Antrea input rules" -j ANTREA-INPUT
@@ -330,10 +334,31 @@ func TestInitialize(t *testing.T) {
 -A OUTPUT -m comment --comment "Antrea: jump to Antrea output rules" -j ANTREA-OUTPUT
 -A ANTREA-FORWARD -i antrea-gw0 -m comment --comment "Antrea: accept packets from local Pods" -j ACCEPT
 -A ANTREA-FORWARD -o antrea-gw0 -m comment --comment "Antrea: accept packets to local Pods" -j ACCEPT
--A ANTREA-INPUT -p tcp -m comment --comment "Antrea: allow proxy health check input packets" -m tcp --dport 10256 -j ACCEPT
--A ANTREA-OUTPUT -p tcp -m comment --comment "Antrea: allow proxy health check reply packets" -m tcp --sport 10256 -j ACCEPT
+`
+			if tc.networkConfig.TrafficEncapMode.SupportsEncap() {
+				expectedIPTables["filter"] += fmt.Sprintf(`-A ANTREA-INPUT -p udp -m comment --comment "Antrea: allow tunnel input packets" -m udp --dport %d -j ACCEPT
+`, tc.expectUDPPortInRules)
+			}
+			if tc.proxyAll {
+				expectedIPTables["filter"] += `-A ANTREA-INPUT -p tcp -m comment --comment "Antrea: allow proxy health check input packets" -m tcp --dport 10256 -j ACCEPT
 `
 			}
+			expectedIPTables["filter"] += `-A ANTREA-INPUT -p tcp -m comment --comment "Antrea: allow Agent APIServer input packets" -m tcp --dport 10350 -j ACCEPT
+-A ANTREA-INPUT -p tcp -m comment --comment "Antrea: allow Agent cluster memberships input packets" -m tcp --dport 10351 -j ACCEPT
+-A ANTREA-INPUT -p udp -m comment --comment "Antrea: allow Agent cluster memberships input packets" -m udp --dport 10351 -j ACCEPT
+`
+			if tc.networkConfig.TrafficEncapMode.SupportsEncap() {
+				expectedIPTables["filter"] += fmt.Sprintf(`-A ANTREA-OUTPUT -p udp -m comment --comment "Antrea: allow tunnel output packets" -m udp --dport %d -j ACCEPT
+`, tc.expectUDPPortInRules)
+			}
+			if tc.proxyAll {
+				expectedIPTables["filter"] += `-A ANTREA-OUTPUT -p tcp -m comment --comment "Antrea: allow proxy health check reply packets" -m tcp --sport 10256 -j ACCEPT
+`
+			}
+			expectedIPTables["filter"] += `-A ANTREA-OUTPUT -p tcp -m comment --comment "Antrea: allow Agent APIServer reply packets" -m tcp --sport 10350 -j ACCEPT
+-A ANTREA-OUTPUT -p tcp -m comment --comment "Antrea: allow Agent cluster memberships output packets" -m tcp --dport 10351 -j ACCEPT
+-A ANTREA-OUTPUT -p udp -m comment --comment "Antrea: allow Agent cluster memberships output packets" -m udp --dport 10351 -j ACCEPT
+`
 
 			for table, expectedData := range expectedIPTables {
 				// #nosec G204: ignore in test code
@@ -463,7 +488,11 @@ func TestIpTablesSync(t *testing.T) {
 	gwLink := createDummyGW(t)
 	defer netlink.LinkDel(gwLink)
 
-	routeClient, err := newTestRouteClient(&config.NetworkConfig{TrafficEncapMode: config.TrafficEncapModeEncap, IPv4Enabled: true}, routeClientOptions{})
+	routeClient, err := newTestRouteClient(&config.NetworkConfig{
+		TrafficEncapMode: config.TrafficEncapModeEncap,
+		TunnelType:       ovsconfig.GeneveTunnel,
+		IPv4Enabled:      true},
+		routeClientOptions{})
 	require.NoError(t, err)
 
 	inited := make(chan struct{})
@@ -482,6 +511,12 @@ func TestIpTablesSync(t *testing.T) {
 	}{
 		{Table: "raw", Cmd: "-A", Chain: "OUTPUT", RuleSpec: "-m comment --comment \"Antrea: jump to Antrea output rules\" -j ANTREA-OUTPUT"},
 		{Table: "filter", Cmd: "-A", Chain: "ANTREA-FORWARD", RuleSpec: "-i antrea-gw0 -m comment --comment \"Antrea: accept packets from local Pods\" -j ACCEPT"},
+		{Table: "filter", Cmd: "-A", Chain: "ANTREA-INPUT", RuleSpec: "-p udp -m comment --comment \"Antrea: allow tunnel input packets\" -m udp --dport 6081 -j ACCEPT"},
+		{Table: "filter", Cmd: "-A", Chain: "ANTREA-INPUT", RuleSpec: "-p tcp -m comment --comment \"Antrea: allow Agent APIServer input packets\" -m tcp --dport 10350 -j ACCEPT"},
+		{Table: "filter", Cmd: "-A", Chain: "ANTREA-INPUT", RuleSpec: "-p tcp -m comment --comment \"Antrea: allow Agent cluster memberships input packets\" -m tcp --dport 10351 -j ACCEPT"},
+		{Table: "filter", Cmd: "-A", Chain: "ANTREA-OUTPUT", RuleSpec: "-p udp -m comment --comment \"Antrea: allow tunnel output packets\" -m udp --dport 6081 -j ACCEPT"},
+		{Table: "filter", Cmd: "-A", Chain: "ANTREA-OUTPUT", RuleSpec: "-p tcp -m comment --comment \"Antrea: allow Agent cluster memberships output packets\" -m tcp --dport 10351 -j ACCEPT"},
+		{Table: "filter", Cmd: "-A", Chain: "ANTREA-OUTPUT", RuleSpec: "-p tcp -m comment --comment \"Antrea: allow Agent APIServer reply packets\" -m tcp --sport 10350 -j ACCEPT"},
 		{Table: "nat", Cmd: "-A", Chain: "ANTREA-POSTROUTING", RuleSpec: fmt.Sprintf("! -o antrea-gw0 -m comment --comment \"Antrea: SNAT Pod to external packets\" -m mark --mark %#x/0xff -j SNAT --to-source %s", mark, snatIP)},
 	}
 	// we delete some rules, start the sync goroutine, wait for sync operation to restore them.
