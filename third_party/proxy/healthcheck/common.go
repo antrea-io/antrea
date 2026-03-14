@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-// Original file https://raw.githubusercontent.com/kubernetes/kubernetes/refs/tags/v1.34.2/pkg/proxy/healthcheck/common.go
+// Derived from Kubernetes pkg/proxy/healthcheck/common.go (v1.34.2); Antrea customizations applied.
 
 package healthcheck
 
