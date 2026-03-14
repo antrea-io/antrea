@@ -294,7 +294,7 @@ func TestCalculateIPv6InstructionsSize(t *testing.T) {
 				IPFamily: v1.IPv6Protocol,
 				Protocol: &testTCPProtocol,
 			},
-			count:     22,
+			count:     25, // +3 for IPv6 Fragment Extension Header handling (no transport filters)
 			direction: crdv1alpha1.CaptureDirectionSourceToDestination,
 		},
 		{
