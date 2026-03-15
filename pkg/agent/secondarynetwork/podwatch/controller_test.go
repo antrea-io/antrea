@@ -96,6 +96,7 @@ const (
 	podName            = "pod1"
 	containerID        = "container1"
 	podIP              = "1.2.3.4"
+	podIPv6            = "fd00::1"
 	networkName        = "net"
 	interfaceName      = "eth2"
 	gatewayIP          = "1.1.1.1"
@@ -155,6 +156,10 @@ func containerNetNS(container string) string {
 }
 
 func testPod(name string, container string, podIP string, networks ...netdefv1.NetworkSelectionElement) (*corev1.Pod, *podCNIInfo) {
+	return testPodWithIPs(name, container, []string{podIP}, networks...)
+}
+
+func testPodWithIPs(name string, container string, podIPs []string, networks ...netdefv1.NetworkSelectionElement) (*corev1.Pod, *podCNIInfo) {
 	annotations := make(map[string]string)
 	if len(networks) > 0 {
 		annotation, _ := json.Marshal(networks)
@@ -173,7 +178,17 @@ func testPod(name string, container string, podIP string, networks ...netdefv1.N
 			NodeName: testNode,
 		},
 	}
-	if podIP != "" {
+	firstIP := ""
+	if len(podIPs) > 0 {
+		firstIP = podIPs[0]
+	}
+	if firstIP != "" {
+		var ips []corev1.PodIP
+		for _, ip := range podIPs {
+			if ip != "" {
+				ips = append(ips, corev1.PodIP{IP: ip})
+			}
+		}
 		pod.Status = corev1.PodStatus{
 			Conditions: []corev1.PodCondition{
 				{
@@ -181,10 +196,8 @@ func testPod(name string, container string, podIP string, networks ...netdefv1.N
 					Status: corev1.ConditionTrue,
 				},
 			},
-			PodIP: podIP,
-			PodIPs: []corev1.PodIP{
-				{IP: podIP},
-			},
+			PodIP:  firstIP,
+			PodIPs: ips,
 		}
 	}
 	cniInfo := &podCNIInfo{
@@ -498,6 +511,7 @@ func TestConfigurePodSecondaryNetwork(t *testing.T) {
 	tests := []struct {
 		name                       string
 		element                    *netdefv1.NetworkSelectionElement
+		podIPs                     []string
 		cniVersion                 string
 		cniType                    string
 		networkType                networkType
@@ -753,7 +767,8 @@ func TestConfigurePodSecondaryNetwork(t *testing.T) {
 			expectedErr: "",
 		},
 		{
-			name:        "VLAN network with IPv6",
+			name:        "VLAN network with IPv6 Pod and IPv6 secondary",
+			podIPs:      []string{podIPv6},
 			networkType: vlanNetworkType,
 			mtu:         1500,
 			vlan:        101,
@@ -777,7 +792,8 @@ func TestConfigurePodSecondaryNetwork(t *testing.T) {
 			}, primaryNetworkStatus},
 		},
 		{
-			name:        "VLAN network with dual-stack",
+			name:        "VLAN network with dual-stack Pod and dual-stack secondary",
+			podIPs:      []string{podIP, podIPv6},
 			networkType: vlanNetworkType,
 			mtu:         1500,
 			vlan:        101,
@@ -801,7 +817,8 @@ func TestConfigurePodSecondaryNetwork(t *testing.T) {
 			}, primaryNetworkStatus},
 		},
 		{
-			name:        "SRIOV network with IPv6",
+			name:        "SRIOV network with IPv6 Pod and IPv6 secondary",
+			podIPs:      []string{podIPv6},
 			networkType: sriovNetworkType,
 			mtu:         1500,
 			expectedCalls: func(mockIPAM *podwatchtesting.MockIPAMAllocator, mockIC *podwatchtesting.MockInterfaceConfigurator) {
@@ -823,6 +840,38 @@ func TestConfigurePodSecondaryNetwork(t *testing.T) {
 				DNS:  netdefv1.DNS{},
 			}, primaryNetworkStatus},
 		},
+		{
+			name:        "IPv4-only Pod with IPv6 secondary fails",
+			networkType: vlanNetworkType,
+			mtu:         1500,
+			vlan:        101,
+			expectedCalls: func(mockIPAM *podwatchtesting.MockIPAMAllocator, mockIC *podwatchtesting.MockInterfaceConfigurator) {
+				mockIPAM.EXPECT().SecondaryNetworkAllocate(podOwner, gomock.Any()).Return(testIPAMResult("fd00:192:168:100::10/128", 0), nil)
+				mockIPAM.EXPECT().SecondaryNetworkRelease(podOwner)
+			},
+			expectedErr: "not aligned with Pod's primary interface",
+		},
+		{
+			name:        "IPv6-only Pod with IPv4 secondary fails",
+			podIPs:      []string{podIPv6},
+			networkType: vlanNetworkType,
+			mtu:         1500,
+			expectedCalls: func(mockIPAM *podwatchtesting.MockIPAMAllocator, mockIC *podwatchtesting.MockInterfaceConfigurator) {
+				mockIPAM.EXPECT().SecondaryNetworkAllocate(podOwner, gomock.Any()).Return(testIPAMResult("148.14.24.100/24", 0), nil)
+				mockIPAM.EXPECT().SecondaryNetworkRelease(podOwner)
+			},
+			expectedErr: "not aligned with Pod's primary interface",
+		},
+		{
+			name:        "IPv4-only Pod with dual-stack secondary fails",
+			networkType: vlanNetworkType,
+			mtu:         1500,
+			expectedCalls: func(mockIPAM *podwatchtesting.MockIPAMAllocator, mockIC *podwatchtesting.MockInterfaceConfigurator) {
+				mockIPAM.EXPECT().SecondaryNetworkAllocate(podOwner, gomock.Any()).Return(testDualStackIPAMResult("148.14.24.100/24", "fd00:192:168:100::10/128", 0), nil)
+				mockIPAM.EXPECT().SecondaryNetworkRelease(podOwner)
+			},
+			expectedErr: "not aligned with Pod's primary interface",
+		},
 	}
 
 	for _, tc := range tests {
@@ -832,7 +881,13 @@ func TestConfigurePodSecondaryNetwork(t *testing.T) {
 				element = element1
 			}
 
-			pod, cniInfo := testPod(podName, containerID, podIP, *element)
+			var pod *corev1.Pod
+			var cniInfo *podCNIInfo
+			if len(tc.podIPs) > 0 {
+				pod, cniInfo = testPodWithIPs(podName, containerID, tc.podIPs, *element)
+			} else {
+				pod, cniInfo = testPod(podName, containerID, podIP, *element)
+			}
 			pc, mockIPAM, interfaceConfigurator := testPodControllerStart(ctrl)
 			_, err := pc.kubeClient.CoreV1().Pods(pod.Namespace).Create(context.TODO(), pod, metav1.CreateOptions{})
 			require.NoError(t, err)
@@ -1563,4 +1618,128 @@ func TestInitializeSRIOVSecondaryInterfaceStore(t *testing.T) {
 	require.Equal(t, 1, pc.interfaceStore.Len())
 	_, ok := pc.vfDeviceIDUsageMap.Load(podKeyGet(pod1.Name, pod1.Namespace))
 	require.Equal(t, true, ok)
+}
+
+func TestValidateSecondaryIPFamily(t *testing.T) {
+	tests := []struct {
+		name           string
+		podIPs         []string
+		secondaryCIDRs []string
+		expectErr      bool
+	}{
+		{
+			name:           "IPv4 Pod with IPv4 secondary",
+			podIPs:         []string{"10.0.0.1"},
+			secondaryCIDRs: []string{"192.168.1.10/24"},
+		},
+		{
+			name:           "IPv6 Pod with IPv6 secondary",
+			podIPs:         []string{"fd00::1"},
+			secondaryCIDRs: []string{"fd00:192:168::10/64"},
+		},
+		{
+			name:           "dual-stack Pod with IPv4 secondary",
+			podIPs:         []string{"10.0.0.1", "fd00::1"},
+			secondaryCIDRs: []string{"192.168.1.10/24"},
+		},
+		{
+			name:           "dual-stack Pod with IPv6 secondary",
+			podIPs:         []string{"10.0.0.1", "fd00::1"},
+			secondaryCIDRs: []string{"fd00:192:168::10/64"},
+		},
+		{
+			name:           "dual-stack Pod with dual-stack secondary",
+			podIPs:         []string{"10.0.0.1", "fd00::1"},
+			secondaryCIDRs: []string{"192.168.1.10/24", "fd00:192:168::10/64"},
+		},
+		{
+			name:           "IPv4 Pod with IPv6 secondary rejected",
+			podIPs:         []string{"10.0.0.1"},
+			secondaryCIDRs: []string{"fd00:192:168::10/64"},
+			expectErr:      true,
+		},
+		{
+			name:           "IPv6 Pod with IPv4 secondary rejected",
+			podIPs:         []string{"fd00::1"},
+			secondaryCIDRs: []string{"192.168.1.10/24"},
+			expectErr:      true,
+		},
+		{
+			name:           "IPv4 Pod with dual-stack secondary rejected",
+			podIPs:         []string{"10.0.0.1"},
+			secondaryCIDRs: []string{"192.168.1.10/24", "fd00:192:168::10/64"},
+			expectErr:      true,
+		},
+		{
+			name:           "IPv6 Pod with dual-stack secondary rejected",
+			podIPs:         []string{"fd00::1"},
+			secondaryCIDRs: []string{"192.168.1.10/24", "fd00:192:168::10/64"},
+			expectErr:      true,
+		},
+		{
+			name:           "empty IPAM result always passes",
+			podIPs:         []string{"10.0.0.1"},
+			secondaryCIDRs: []string{},
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			pod, _ := testPodWithIPs("test-pod", "container1", tc.podIPs)
+
+			result := &ipam.IPAMResult{}
+			for _, cidr := range tc.secondaryCIDRs {
+				ip, ipNet, err := net.ParseCIDR(cidr)
+				require.NoError(t, err)
+				ipNet.IP = ip
+				result.IPs = append(result.IPs, &current.IPConfig{Address: *ipNet})
+			}
+
+			err := validateSecondaryIPFamily(pod, result)
+			if tc.expectErr {
+				assert.Error(t, err)
+				assert.Contains(t, err.Error(), "not aligned with Pod's primary interface")
+			} else {
+				assert.NoError(t, err)
+			}
+		})
+	}
+}
+
+func TestGetPodPrimaryIPFamilies(t *testing.T) {
+	tests := []struct {
+		name     string
+		podIPs   []string
+		wantIPv4 bool
+		wantIPv6 bool
+	}{
+		{
+			name:     "IPv4 only",
+			podIPs:   []string{"10.0.0.1"},
+			wantIPv4: true,
+		},
+		{
+			name:     "IPv6 only",
+			podIPs:   []string{"fd00::1"},
+			wantIPv6: true,
+		},
+		{
+			name:     "dual-stack",
+			podIPs:   []string{"10.0.0.1", "fd00::1"},
+			wantIPv4: true,
+			wantIPv6: true,
+		},
+		{
+			name: "no IPs",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			pod, _ := testPodWithIPs("test-pod", "container1", tc.podIPs)
+			hasIPv4, hasIPv6 := getPodPrimaryIPFamilies(pod)
+			assert.Equal(t, tc.wantIPv4, hasIPv4)
+			assert.Equal(t, tc.wantIPv6, hasIPv6)
+		})
+	}
 }

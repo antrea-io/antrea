@@ -448,12 +448,15 @@ func (pc *PodController) configureSecondaryInterface(
 		}
 		defer func() {
 			if ifConfigErr != nil {
-				// Interface creation failed. Free allocated IP address
+				// Interface creation or validation failed. Free allocated IP address.
 				if err := pc.ipamAllocator.SecondaryNetworkRelease(podOwner); err != nil {
 					klog.ErrorS(err, "IPAM de-allocation failed", "podOwner", podOwner)
 				}
 			}
 		}()
+		if ifConfigErr = validateSecondaryIPFamily(pod, ipamResult); ifConfigErr != nil {
+			return nil, ifConfigErr
+		}
 		for _, ip := range ipamResult.IPs {
 			ip.Interface = current.Int(1)
 		}
@@ -622,6 +625,44 @@ func (pc *PodController) configurePodSecondaryNetwork(pod *corev1.Pod, networkLi
 	}
 
 	return netStatus, nil
+}
+
+// getPodPrimaryIPFamilies returns whether the Pod's primary interface has IPv4
+// and/or IPv6 addresses based on pod.Status.PodIPs.
+func getPodPrimaryIPFamilies(pod *corev1.Pod) (hasIPv4, hasIPv6 bool) {
+	for _, podIP := range pod.Status.PodIPs {
+		ip := net.ParseIP(podIP.IP)
+		if ip == nil {
+			continue
+		}
+		if ip.To4() != nil {
+			hasIPv4 = true
+		} else {
+			hasIPv6 = true
+		}
+	}
+	return
+}
+
+// validateSecondaryIPFamily checks that the IP families of the allocated
+// secondary network IPs are aligned with the Pod's primary interface IP
+// families. For example, an IPv6-only secondary IP is not allowed when the
+// Pod's primary interface has only IPv4.
+func validateSecondaryIPFamily(pod *corev1.Pod, ipamResult *ipam.IPAMResult) error {
+	primaryIPv4, primaryIPv6 := getPodPrimaryIPFamilies(pod)
+	for _, ipConfig := range ipamResult.IPs {
+		ip := ipConfig.Address.IP
+		if ip.To4() != nil {
+			if !primaryIPv4 {
+				return fmt.Errorf("secondary network IPv4 address %s is not aligned with Pod's primary interface which has no IPv4 address", ip)
+			}
+		} else {
+			if !primaryIPv6 {
+				return fmt.Errorf("secondary network IPv6 address %s is not aligned with Pod's primary interface which has no IPv6 address", ip)
+			}
+		}
+	}
+	return nil
 }
 
 func validateNetworkConfig(cniConfig []byte) (*SecondaryNetworkConfig, error) {
