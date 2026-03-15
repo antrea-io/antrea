@@ -2694,7 +2694,7 @@ func TestDeleteHandlerTombstone(t *testing.T) {
 			name:    "deleteSecret with valid tombstone enqueues",
 			handler: func(c *Controller, obj interface{}) { c.deleteSecret(obj) },
 			tombstoneObj: &corev1.Secret{
-				ObjectMeta: metav1.ObjectMeta{Name: "bgp-passwords", Namespace: namespaceKubeSystem},
+				ObjectMeta: metav1.ObjectMeta{Name: types.BGPPolicySecretName, Namespace: namespaceKubeSystem},
 			},
 			expectEnqueue: true,
 		},
@@ -2715,10 +2715,17 @@ func TestDeleteHandlerTombstone(t *testing.T) {
 			defer close(stopCh)
 			c.startInformers(stopCh)
 
-			// Drain any ADD events produced by informer startup before testing.
+			// Wait for at least one startup event to arrive before draining, so we don't
+			// drain prematurely when informer ADD events are still in flight.
 			if len(tt.crdObjects) > 0 {
-				waitAndGetDummyEvent(t, c)
-				doneDummyEvent(t, c)
+				require.Eventually(t, func() bool {
+					return c.queue.Len() > 0
+				}, 5*time.Second, 10*time.Millisecond, "timed out waiting for informer startup events")
+			}
+			// Drain all startup ADD events so the queue is empty before the tombstone test.
+			for c.queue.Len() > 0 {
+				item, _ := c.queue.Get()
+				c.queue.Done(item)
 			}
 
 			tombstone := cache.DeletedFinalStateUnknown{Key: "test/tombstone-key", Obj: tt.tombstoneObj}
@@ -2730,9 +2737,9 @@ func TestDeleteHandlerTombstone(t *testing.T) {
 					return c.queue.Len() == 1
 				}, 5*time.Second, 10*time.Millisecond, "expected handler to enqueue an event via tombstone")
 			} else {
-				// Give the handler a moment to potentially (incorrectly) enqueue, then assert empty.
-				time.Sleep(50 * time.Millisecond)
-				assert.Equal(t, 0, c.queue.Len(), "expected handler to not enqueue an event for invalid tombstone inner type")
+				assert.Never(t, func() bool {
+					return c.queue.Len() > 0
+				}, 200*time.Millisecond, 10*time.Millisecond, "expected handler to not enqueue an event for invalid tombstone inner type")
 			}
 		})
 	}

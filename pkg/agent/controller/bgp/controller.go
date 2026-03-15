@@ -217,6 +217,11 @@ func NewBGPPolicyController(nodeInformer coreinformers.NodeInformer,
 	}
 	if nodeConfig.NodeIPv4Addr != nil {
 		c.nodeIPv4Addr = nodeConfig.NodeIPv4Addr.IP.String()
+	} else if networkConfig.IPv4Enabled {
+		// Fall back to a deterministic IPv4 address derived from the node name when no
+		// explicit NodeIPv4Addr is available (e.g., NetworkPolicyOnly mode), so that
+		// the BGP RouterID is always non-empty when IPv4 is enabled.
+		c.nodeIPv4Addr = hashNodeNameToIP(nodeConfig.Name)
 	}
 	c.bgpPolicyInformer.AddEventHandlerWithResyncPeriod(
 		cache.ResourceEventHandlerFuncs{
@@ -688,10 +693,10 @@ func (c *Controller) addEgressRoutes(allRoutes map[bgp.Route]RouteMetadata) {
 }
 
 func (c *Controller) addPodRoutes(allRoutes map[bgp.Route]RouteMetadata) {
-	if c.enabledIPv4 {
+	if c.enabledIPv4 && c.podIPv4CIDR != "" {
 		addRoutes(allRoutes, c.podIPv4CIDR, "", NodeIPAMPodCIDR)
 	}
-	if c.enabledIPv6 {
+	if c.enabledIPv6 && c.podIPv6CIDR != "" {
 		addRoutes(allRoutes, c.podIPv6CIDR, "", NodeIPAMPodCIDR)
 	}
 }
@@ -770,12 +775,12 @@ func (c *Controller) deleteBGPPolicy(obj interface{}) {
 	if !ok {
 		deletedState, ok := obj.(cache.DeletedFinalStateUnknown)
 		if !ok {
-			klog.Errorf("Received unexpected object: %v", obj)
+			klog.ErrorS(nil, "Received unexpected object", "obj", obj)
 			return
 		}
 		bgpPolicy, ok = deletedState.Obj.(*v1alpha1.BGPPolicy)
 		if !ok {
-			klog.Errorf("DeletedFinalStateUnknown contains non-BGPPolicy object: %v", deletedState.Obj)
+			klog.ErrorS(nil, "DeletedFinalStateUnknown contains non-BGPPolicy object", "key", deletedState.Key, "obj", deletedState.Obj)
 			return
 		}
 	}
@@ -862,12 +867,12 @@ func (c *Controller) deleteService(obj interface{}) {
 	if !ok {
 		deletedState, ok := obj.(cache.DeletedFinalStateUnknown)
 		if !ok {
-			klog.Errorf("Received unexpected object: %v", obj)
+			klog.ErrorS(nil, "Received unexpected object", "obj", obj)
 			return
 		}
 		svc, ok = deletedState.Obj.(*corev1.Service)
 		if !ok {
-			klog.Errorf("DeletedFinalStateUnknown contains non-Service object: %v", deletedState.Obj)
+			klog.ErrorS(nil, "DeletedFinalStateUnknown contains non-Service object", "key", deletedState.Key, "obj", deletedState.Obj)
 			return
 		}
 	}
@@ -925,12 +930,12 @@ func (c *Controller) deleteEndpointSlice(obj interface{}) {
 	if !ok {
 		deletedState, ok := obj.(cache.DeletedFinalStateUnknown)
 		if !ok {
-			klog.Errorf("Received unexpected object: %v", obj)
+			klog.ErrorS(nil, "Received unexpected object", "obj", obj)
 			return
 		}
 		eps, ok = deletedState.Obj.(*discovery.EndpointSlice)
 		if !ok {
-			klog.Errorf("DeletedFinalStateUnknown contains non-EndpointSlice object: %v", deletedState.Obj)
+			klog.ErrorS(nil, "DeletedFinalStateUnknown contains non-EndpointSlice object", "key", deletedState.Key, "obj", deletedState.Obj)
 			return
 		}
 	}
@@ -993,12 +998,12 @@ func (c *Controller) deleteEgress(obj interface{}) {
 	if !ok {
 		deletedState, ok := obj.(cache.DeletedFinalStateUnknown)
 		if !ok {
-			klog.Errorf("Received unexpected object: %v", obj)
+			klog.ErrorS(nil, "Received unexpected object", "obj", obj)
 			return
 		}
 		eg, ok = deletedState.Obj.(*v1beta1.Egress)
 		if !ok {
-			klog.Errorf("DeletedFinalStateUnknown contains non-Egress object: %v", deletedState.Obj)
+			klog.ErrorS(nil, "DeletedFinalStateUnknown contains non-Egress object", "key", deletedState.Key, "obj", deletedState.Obj)
 			return
 		}
 	}
@@ -1067,12 +1072,12 @@ func (c *Controller) deleteSecret(obj interface{}) {
 	if !ok {
 		deletedState, ok := obj.(cache.DeletedFinalStateUnknown)
 		if !ok {
-			klog.Errorf("Received unexpected object: %v", obj)
+			klog.ErrorS(nil, "Received unexpected object", "obj", obj)
 			return
 		}
 		secret, ok = deletedState.Obj.(*corev1.Secret)
 		if !ok {
-			klog.Errorf("DeletedFinalStateUnknown contains non-Secret object: %v", deletedState.Obj)
+			klog.ErrorS(nil, "DeletedFinalStateUnknown contains non-Secret object", "key", deletedState.Key, "obj", deletedState.Obj)
 			return
 		}
 	}
