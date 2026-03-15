@@ -198,9 +198,6 @@ func NewBGPPolicyController(nodeInformer coreinformers.NodeInformer,
 		nodeName:                  nodeConfig.Name,
 		enabledIPv4:               networkConfig.IPv4Enabled,
 		enabledIPv6:               networkConfig.IPv6Enabled,
-		podIPv4CIDR:               nodeConfig.PodIPv4CIDR.String(),
-		podIPv6CIDR:               nodeConfig.PodIPv6CIDR.String(),
-		nodeIPv4Addr:              nodeConfig.NodeIPv4Addr.IP.String(),
 		egressEnabled:             egressEnabled,
 		newBGPServerFn: func(globalConfig *bgp.GlobalConfig) bgp.Interface {
 			return gobgp.NewGoBGPServer(globalConfig)
@@ -211,6 +208,15 @@ func NewBGPPolicyController(nodeInformer coreinformers.NodeInformer,
 				Name: "bgpPolicy",
 			},
 		),
+	}
+	if nodeConfig.PodIPv4CIDR != nil {
+		c.podIPv4CIDR = nodeConfig.PodIPv4CIDR.String()
+	}
+	if nodeConfig.PodIPv6CIDR != nil {
+		c.podIPv6CIDR = nodeConfig.PodIPv6CIDR.String()
+	}
+	if nodeConfig.NodeIPv4Addr != nil {
+		c.nodeIPv4Addr = nodeConfig.NodeIPv4Addr.IP.String()
 	}
 	c.bgpPolicyInformer.AddEventHandlerWithResyncPeriod(
 		cache.ResourceEventHandlerFuncs{
@@ -287,7 +293,6 @@ func (c *Controller) Run(ctx context.Context) {
 		c.serviceListerSynced,
 		c.bgpPolicyListerSynced,
 		c.endpointSliceListerSynced,
-		c.serviceListerSynced,
 		c.secretInformer.HasSynced,
 	}
 	if c.egressEnabled {
@@ -761,7 +766,19 @@ func (c *Controller) updateBGPPolicy(oldObj, obj interface{}) {
 }
 
 func (c *Controller) deleteBGPPolicy(obj interface{}) {
-	bgpPolicy := obj.(*v1alpha1.BGPPolicy)
+	bgpPolicy, ok := obj.(*v1alpha1.BGPPolicy)
+	if !ok {
+		deletedState, ok := obj.(cache.DeletedFinalStateUnknown)
+		if !ok {
+			klog.Errorf("Received unexpected object: %v", obj)
+			return
+		}
+		bgpPolicy, ok = deletedState.Obj.(*v1alpha1.BGPPolicy)
+		if !ok {
+			klog.Errorf("DeletedFinalStateUnknown contains non-BGPPolicy object: %v", deletedState.Obj)
+			return
+		}
+	}
 	if !c.matchesCurrentNode(bgpPolicy) {
 		return
 	}
@@ -841,7 +858,19 @@ func (c *Controller) updateService(oldObj, obj interface{}) {
 }
 
 func (c *Controller) deleteService(obj interface{}) {
-	svc := obj.(*corev1.Service)
+	svc, ok := obj.(*corev1.Service)
+	if !ok {
+		deletedState, ok := obj.(cache.DeletedFinalStateUnknown)
+		if !ok {
+			klog.Errorf("Received unexpected object: %v", obj)
+			return
+		}
+		svc, ok = deletedState.Obj.(*corev1.Service)
+		if !ok {
+			klog.Errorf("DeletedFinalStateUnknown contains non-Service object: %v", deletedState.Obj)
+			return
+		}
+	}
 	if c.hasAffectedPolicyByService(svc) {
 		klog.V(2).InfoS("Processing Service DELETE event", "Service", klog.KObj(svc))
 		c.queue.Add(dummyKey)
@@ -892,7 +921,19 @@ func (c *Controller) updateEndpointSlice(_, obj interface{}) {
 }
 
 func (c *Controller) deleteEndpointSlice(obj interface{}) {
-	eps := obj.(*discovery.EndpointSlice)
+	eps, ok := obj.(*discovery.EndpointSlice)
+	if !ok {
+		deletedState, ok := obj.(cache.DeletedFinalStateUnknown)
+		if !ok {
+			klog.Errorf("Received unexpected object: %v", obj)
+			return
+		}
+		eps, ok = deletedState.Obj.(*discovery.EndpointSlice)
+		if !ok {
+			klog.Errorf("DeletedFinalStateUnknown contains non-EndpointSlice object: %v", deletedState.Obj)
+			return
+		}
+	}
 	svc, _ := c.serviceLister.Services(eps.GetNamespace()).Get(eps.GetLabels()[discovery.LabelServiceName])
 	if svc == nil {
 		return
@@ -948,7 +989,19 @@ func (c *Controller) updateEgress(oldObj, obj interface{}) {
 }
 
 func (c *Controller) deleteEgress(obj interface{}) {
-	eg := obj.(*v1beta1.Egress)
+	eg, ok := obj.(*v1beta1.Egress)
+	if !ok {
+		deletedState, ok := obj.(cache.DeletedFinalStateUnknown)
+		if !ok {
+			klog.Errorf("Received unexpected object: %v", obj)
+			return
+		}
+		eg, ok = deletedState.Obj.(*v1beta1.Egress)
+		if !ok {
+			klog.Errorf("DeletedFinalStateUnknown contains non-Egress object: %v", deletedState.Obj)
+			return
+		}
+	}
 	if eg.Status.EgressNode != c.nodeName {
 		return
 	}
@@ -1010,7 +1063,20 @@ func (c *Controller) updateSecret(_, obj interface{}) {
 }
 
 func (c *Controller) deleteSecret(obj interface{}) {
-	klog.V(2).InfoS("Processing Secret DELETE event", "Secret", klog.KObj(obj.(*corev1.Secret)))
+	secret, ok := obj.(*corev1.Secret)
+	if !ok {
+		deletedState, ok := obj.(cache.DeletedFinalStateUnknown)
+		if !ok {
+			klog.Errorf("Received unexpected object: %v", obj)
+			return
+		}
+		secret, ok = deletedState.Obj.(*corev1.Secret)
+		if !ok {
+			klog.Errorf("DeletedFinalStateUnknown contains non-Secret object: %v", deletedState.Obj)
+			return
+		}
+	}
+	klog.V(2).InfoS("Processing Secret DELETE event", "Secret", klog.KObj(secret))
 	c.updateBGPPeerPasswords(nil)
 	c.queue.Add(dummyKey)
 }
