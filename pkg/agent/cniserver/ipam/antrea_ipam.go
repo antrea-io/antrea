@@ -190,7 +190,7 @@ func (d *AntreaIPAM) Add(args *invoke.Args, k8sArgs *types.K8sArgs, networkConfi
 			if allocatedIPv4 {
 				continue
 			}
-		} else {
+		} else if allocator.IPVersion == utilnet.IPv6 {
 			hasIPv6Pool = true
 			if allocatedIPv6 {
 				continue
@@ -221,7 +221,7 @@ func (d *AntreaIPAM) Add(args *invoke.Args, k8sArgs *types.K8sArgs, networkConfi
 
 		if allocator.IPVersion == utilnet.IPv4 {
 			allocatedIPv4 = true
-		} else {
+		} else if allocator.IPVersion == utilnet.IPv6 {
 			allocatedIPv6 = true
 		}
 
@@ -238,6 +238,9 @@ func (d *AntreaIPAM) Add(args *invoke.Args, k8sArgs *types.K8sArgs, networkConfi
 		} else if vlanID != 0 && result.VLANID != vlanID {
 			err = fmt.Errorf("IPPools have conflicting VLAN IDs %d and %d for dual-stack allocation", result.VLANID, vlanID)
 			return true, nil, err
+		}
+		if allocatedIPv4 && allocatedIPv6 {
+			break
 		}
 	}
 
