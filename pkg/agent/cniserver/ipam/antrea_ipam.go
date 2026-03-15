@@ -185,13 +185,12 @@ func (d *AntreaIPAM) Add(args *invoke.Args, k8sArgs *types.K8sArgs, networkConfi
 	var hasIPv4Pool, hasIPv6Pool bool
 	var allocatedIPv4, allocatedIPv6 bool
 	for _, allocator := range allocators {
-		switch allocator.IPVersion {
-		case utilnet.IPv4:
+		if allocator.IPVersion == utilnet.IPv4 {
 			hasIPv4Pool = true
 			if allocatedIPv4 {
 				continue
 			}
-		case utilnet.IPv6:
+		} else {
 			hasIPv6Pool = true
 			if allocatedIPv6 {
 				continue
@@ -220,10 +219,9 @@ func (d *AntreaIPAM) Add(args *invoke.Args, k8sArgs *types.K8sArgs, networkConfi
 		}
 		allocatedAllocators = append(allocatedAllocators, allocator)
 
-		switch allocator.IPVersion {
-		case utilnet.IPv4:
+		if allocator.IPVersion == utilnet.IPv4 {
 			allocatedIPv4 = true
-		case utilnet.IPv6:
+		} else {
 			allocatedIPv6 = true
 		}
 
