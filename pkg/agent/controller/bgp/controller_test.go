@@ -2598,3 +2598,149 @@ func TestGetBGPRoutes(t *testing.T) {
 		})
 	}
 }
+
+// TestDeleteHandlerTombstone verifies that all delete event handlers correctly handle
+// cache.DeletedFinalStateUnknown (tombstone) objects, which are delivered by the informer
+// when a watch reconnects and the original DELETE event was missed.
+func TestDeleteHandlerTombstone(t *testing.T) {
+	// A BGPPolicy that matches the local node (nodeLabels1) and advertises various IPs.
+	policy := generateBGPPolicy(bgpPolicyName1, creationTimestamp, nodeLabels1, 179, 65000,
+		true,  // advertiseClusterIP
+		false, // advertiseExternalIP
+		false, // advertiseLoadBalancerIP
+		true,  // advertiseEgressIP
+		true,  // advertisePodCIDR
+		[]v1alpha1.BGPPeer{ipv4Peer1},
+		nil)
+	// A ClusterIP service with local traffic policy so deleteEndpointSlice conditions are met.
+	localSvc := generateService(ipv4ClusterIPName1, corev1.ServiceTypeClusterIP, clusterIPv4s[0], "", "", true, false)
+	localEps := generateEndpointSlice(ipv4ClusterIPName1, endpointSliceSuffix, false, false, endpointIPv4)
+
+	testCases := []struct {
+		name          string
+		handler       func(c *Controller, obj interface{})
+		tombstoneObj  interface{}
+		crdObjects    []runtime.Object
+		objects       []runtime.Object
+		expectEnqueue bool
+	}{
+		// deleteBGPPolicy: tombstone wraps the correct *v1alpha1.BGPPolicy.
+		{
+			name:          "deleteBGPPolicy with valid tombstone enqueues",
+			handler:       func(c *Controller, obj interface{}) { c.deleteBGPPolicy(obj) },
+			tombstoneObj:  policy,
+			crdObjects:    []runtime.Object{policy},
+			objects:       []runtime.Object{node},
+			expectEnqueue: true,
+		},
+		// deleteBGPPolicy: tombstone wraps an unexpected type — must not panic, must not enqueue.
+		{
+			name:          "deleteBGPPolicy with invalid tombstone inner type does not enqueue",
+			handler:       func(c *Controller, obj interface{}) { c.deleteBGPPolicy(obj) },
+			tombstoneObj:  &corev1.Pod{},
+			objects:       []runtime.Object{node},
+			expectEnqueue: false,
+		},
+		// deleteService: tombstone wraps the correct *corev1.Service.
+		{
+			name:          "deleteService with valid tombstone enqueues",
+			handler:       func(c *Controller, obj interface{}) { c.deleteService(obj) },
+			tombstoneObj:  localSvc,
+			crdObjects:    []runtime.Object{policy},
+			objects:       []runtime.Object{node, localSvc},
+			expectEnqueue: true,
+		},
+		// deleteService: tombstone wraps an unexpected type — must not panic, must not enqueue.
+		{
+			name:          "deleteService with invalid tombstone inner type does not enqueue",
+			handler:       func(c *Controller, obj interface{}) { c.deleteService(obj) },
+			tombstoneObj:  &corev1.Pod{},
+			expectEnqueue: false,
+		},
+		// deleteEndpointSlice: tombstone wraps the correct *discovery.EndpointSlice.
+		{
+			name:          "deleteEndpointSlice with valid tombstone enqueues",
+			handler:       func(c *Controller, obj interface{}) { c.deleteEndpointSlice(obj) },
+			tombstoneObj:  localEps,
+			crdObjects:    []runtime.Object{policy},
+			objects:       []runtime.Object{node, localSvc, localEps},
+			expectEnqueue: true,
+		},
+		// deleteEndpointSlice: tombstone wraps an unexpected type — must not panic, must not enqueue.
+		{
+			name:          "deleteEndpointSlice with invalid tombstone inner type does not enqueue",
+			handler:       func(c *Controller, obj interface{}) { c.deleteEndpointSlice(obj) },
+			tombstoneObj:  &corev1.Pod{},
+			expectEnqueue: false,
+		},
+		// deleteEgress: tombstone wraps the correct *crdv1b1.Egress.
+		{
+			name:          "deleteEgress with valid tombstone enqueues",
+			handler:       func(c *Controller, obj interface{}) { c.deleteEgress(obj) },
+			tombstoneObj:  ipv4Egress1,
+			crdObjects:    []runtime.Object{policy, ipv4Egress1},
+			objects:       []runtime.Object{node},
+			expectEnqueue: true,
+		},
+		// deleteEgress: tombstone wraps an unexpected type — must not panic, must not enqueue.
+		{
+			name:          "deleteEgress with invalid tombstone inner type does not enqueue",
+			handler:       func(c *Controller, obj interface{}) { c.deleteEgress(obj) },
+			tombstoneObj:  &corev1.Pod{},
+			expectEnqueue: false,
+		},
+		// deleteSecret: tombstone wraps the correct *corev1.Secret.
+		{
+			name:    "deleteSecret with valid tombstone enqueues",
+			handler: func(c *Controller, obj interface{}) { c.deleteSecret(obj) },
+			tombstoneObj: &corev1.Secret{
+				ObjectMeta: metav1.ObjectMeta{Name: types.BGPPolicySecretName, Namespace: namespaceKubeSystem},
+			},
+			expectEnqueue: true,
+		},
+		// deleteSecret: tombstone wraps an unexpected type — must not panic, must not enqueue.
+		{
+			name:          "deleteSecret with invalid tombstone inner type does not enqueue",
+			handler:       func(c *Controller, obj interface{}) { c.deleteSecret(obj) },
+			tombstoneObj:  &corev1.Pod{},
+			expectEnqueue: false,
+		},
+	}
+
+	for _, tt := range testCases {
+		t.Run(tt.name, func(t *testing.T) {
+			c := newFakeController(t, tt.objects, tt.crdObjects, true, true)
+
+			stopCh := make(chan struct{})
+			defer close(stopCh)
+			c.startInformers(stopCh)
+
+			// Wait for at least one startup event to arrive before draining, so we don't
+			// drain prematurely when informer ADD events are still in flight.
+			if len(tt.crdObjects) > 0 {
+				require.Eventually(t, func() bool {
+					return c.queue.Len() > 0
+				}, 5*time.Second, 10*time.Millisecond, "timed out waiting for informer startup events")
+			}
+			// Drain all startup ADD events so the queue is empty before the tombstone test.
+			for c.queue.Len() > 0 {
+				item, _ := c.queue.Get()
+				c.queue.Done(item)
+			}
+
+			tombstone := cache.DeletedFinalStateUnknown{Key: "test/tombstone-key", Obj: tt.tombstoneObj}
+			// This must not panic regardless of the inner object type.
+			tt.handler(c.Controller, tombstone)
+
+			if tt.expectEnqueue {
+				assert.Eventually(t, func() bool {
+					return c.queue.Len() == 1
+				}, 5*time.Second, 10*time.Millisecond, "expected handler to enqueue an event via tombstone")
+			} else {
+				assert.Never(t, func() bool {
+					return c.queue.Len() > 0
+				}, 200*time.Millisecond, 10*time.Millisecond, "expected handler to not enqueue an event for invalid tombstone inner type")
+			}
+		})
+	}
+}
