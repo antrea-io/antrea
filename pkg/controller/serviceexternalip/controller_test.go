@@ -86,7 +86,7 @@ func newController(objects, crdObjects []runtime.Object) *loadBalancerController
 	crdClient := fakeversioned.NewSimpleClientset(crdObjects...)
 	informerFactory := informers.NewSharedInformerFactory(client, resyncPeriod)
 	crdInformerFactory := crdinformers.NewSharedInformerFactory(crdClient, resyncPeriod)
-	externalIPPoolController := externalippool.NewExternalIPPoolController(crdClient, crdInformerFactory.Crd().V1beta1().ExternalIPPools())
+	externalIPPoolController := externalippool.NewExternalIPPoolController(crdClient, crdInformerFactory.Crd().V1beta1().ExternalIPPools(), true, true)
 	controller := NewServiceExternalIPController(client, informerFactory.Core().V1().Services(), externalIPPoolController)
 	return &loadBalancerController{
 		ServiceExternalIPController: controller,

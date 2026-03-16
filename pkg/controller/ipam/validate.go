@@ -50,12 +50,22 @@ func (c *AntreaIPAMController) ValidateIPPool(review *admv1.AdmissionReview) *ad
 	switch review.Request.Operation {
 	case admv1.Create:
 		klog.V(2).Info("Validating CREATE request for IPPool")
+		if err := validation.ValidateIPRangeIPFamily(newObj.Spec.IPRanges, c.ipv4Enabled, c.ipv6Enabled); err != nil {
+			msg = err.Error()
+			allowed = false
+			break
+		}
 		if _, err := validation.ValidateIPRangesAndSubnetInfo(&newObj.Spec.SubnetInfo, newObj.Spec.IPRanges); err != nil {
 			msg = err.Error()
 			allowed = false
 		}
 	case admv1.Update:
 		klog.V(2).Info("Validating UPDATE request for IPPool")
+		if err := validation.ValidateIPRangeIPFamily(newObj.Spec.IPRanges, c.ipv4Enabled, c.ipv6Enabled); err != nil {
+			msg = err.Error()
+			allowed = false
+			break
+		}
 		if _, err := validation.ValidateIPRangesAndSubnetInfo(&newObj.Spec.SubnetInfo, newObj.Spec.IPRanges); err != nil {
 			msg = err.Error()
 			allowed = false
