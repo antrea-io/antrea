@@ -538,6 +538,9 @@ func (o *Options) setK8sNodeDefaultOptions() {
 	if o.config.Egress.UniqueMACForSubInterfaces == nil {
 		o.config.Egress.UniqueMACForSubInterfaces = ptr.To(true)
 	}
+	if o.config.Egress.IgnoreUserInterfaces == nil {
+		o.config.Egress.IgnoreUserInterfaces = ptr.To(false)
+	}
 	if o.config.HostNetworkAcceleration.Enable == nil {
 		o.config.HostNetworkAcceleration.Enable = ptr.To(true)
 	}
