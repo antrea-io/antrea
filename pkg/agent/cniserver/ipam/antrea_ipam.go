@@ -190,7 +190,7 @@ func (d *AntreaIPAM) Add(args *invoke.Args, k8sArgs *types.K8sArgs, networkConfi
 			if allocatedIPv4 {
 				continue
 			}
-		} else if allocator.IPVersion == utilnet.IPv6 {
+		} else {
 			hasIPv6Pool = true
 			if allocatedIPv6 {
 				continue
@@ -221,7 +221,7 @@ func (d *AntreaIPAM) Add(args *invoke.Args, k8sArgs *types.K8sArgs, networkConfi
 
 		if allocator.IPVersion == utilnet.IPv4 {
 			allocatedIPv4 = true
-		} else if allocator.IPVersion == utilnet.IPv6 {
+		} else {
 			allocatedIPv6 = true
 		}
 
