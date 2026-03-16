@@ -19,5 +19,6 @@ LABEL description="The development Docker image to deploy the antrea-controller.
 
 USER root
 
+COPY LICENSE /LICENSE
 COPY bin/antrea-controller /usr/local/bin/
 COPY bin/antctl /usr/local/bin/
