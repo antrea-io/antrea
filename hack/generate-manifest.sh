@@ -20,12 +20,13 @@ function echoerr {
     >&2 echo "$@"
 }
 
-_usage="Usage: $0 [--mode (dev|release)] [--encap-mode (mode)] [--ipsec] [--tun (geneve|vxlan|gre|stt)] [--verbose-log]
+_usage="Usage: $0 [--mode (dev|release)] [--encap-mode (mode)] [--traffic-encryption-mode (ipsec|wireguard)] [--tun (geneve|vxlan|gre|stt)] [--verbose-log]
 Generate a YAML manifest for Antrea using Helm and print it to stdout.
         --mode (dev|release)          Choose the configuration variant that you need (default is 'dev').
         --encap-mode (mode)           Traffic encapsulation mode (default is 'encap').
         --cloud                       Generate a manifest appropriate for running Antrea in Public Cloud.
-        --ipsec                       Generate a manifest with IPsec encryption of tunnel traffic enabled.
+        --traffic-encryption-mode     (ipsec|wireguard)  Enable encryption of tunnel traffic. Only one of ipsec or wireguard can be set.
+        --ipsec                       Deprecated. Use --traffic-encryption-mode ipsec instead.
         --feature-gates               A comma-separated list of key=value pairs that describe feature gates, e.g. TrafficControl=true,Egress=false.
                                       This option can be specified multiple times.
         --proxy-all                   Generate a manifest with Antrea proxy with all Service support enabled.
@@ -89,6 +90,8 @@ MULTICAST_INTERFACES=""
 HELM_VALUES_FILES=()
 HELM_VALUES=()
 FEATURE_GATES=()
+WIREGUARD=false
+TRAFFIC_ENCRYPTION_MODE=""
 
 while [[ $# -gt 0 ]]
 do
@@ -111,8 +114,13 @@ case $key in
     shift
     ;;
     --ipsec)
+    echoerr "Warning: --ipsec is deprecated, use --traffic-encryption-mode ipsec instead."
     IPSEC=true
     shift
+    ;;
+    --traffic-encryption-mode)
+    TRAFFIC_ENCRYPTION_MODE="$2"
+    shift 2
     ;;
     --feature-gates)
     FEATURE_GATES+=("$2")
@@ -245,8 +253,30 @@ if $COVERAGE && $VERBOSE_LOG; then
     VERBOSE_LOG=false
 fi
 
+if [[ -n "$TRAFFIC_ENCRYPTION_MODE" ]]; then
+    if [[ "$TRAFFIC_ENCRYPTION_MODE" == "ipsec" ]]; then
+        IPSEC=true
+    elif [[ "$TRAFFIC_ENCRYPTION_MODE" == "wireguard" ]]; then
+        WIREGUARD=true
+    else
+        echoerr "--traffic-encryption-mode must be 'ipsec' or 'wireguard', got '$TRAFFIC_ENCRYPTION_MODE'"
+        print_help
+        exit 1
+    fi
+fi
+
 if [[ "$ENCAP_MODE" != "" ]] && [[ "$ENCAP_MODE" != "encap" ]] && $IPSEC; then
     echoerr "Encap mode '$ENCAP_MODE' does not make sense with IPsec"
+    exit 1
+fi
+
+if [[ "$ENCAP_MODE" != "" ]] && [[ "$ENCAP_MODE" != "encap" ]] && $WIREGUARD; then
+    echoerr "Encap mode '$ENCAP_MODE' does not make sense with WireGuard"
+    exit 1
+fi
+
+if $WIREGUARD && $IPSEC; then
+    echoerr "Cannot enable both IPsec and WireGuard"
     exit 1
 fi
 
@@ -266,6 +296,10 @@ TMP_DIR=$(mktemp -d $THIS_DIR/../build/yamls/chart-values.XXXXXXXX)
 
 if $IPSEC; then
     HELM_VALUES+=("trafficEncryptionMode=ipsec" "tunnelType=gre")
+fi
+
+if $WIREGUARD; then
+    HELM_VALUES+=("trafficEncryptionMode=wireGuard")
 fi
 
 if $FLEXIBLE_IPAM; then
