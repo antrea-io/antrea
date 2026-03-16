@@ -385,7 +385,7 @@ jobs:
     - name: Tar coverage files
       run: tar -czf test-e2e-wireguard-coverage.tar.gz test-e2e-wireguard-coverage
     - name: Upload coverage for test-e2e-wireguard-coverage
-      uses: actions/upload-artifact@v6
+      uses: actions/upload-artifact@v7
       with:
         name: test-e2e-wireguard-coverage
         path: test-e2e-wireguard-coverage.tar.gz
@@ -404,7 +404,7 @@ jobs:
       if: ${{ failure() }}
       run: tar -czf log.tar.gz log
     - name: Upload test log
-      uses: actions/upload-artifact@v6
+      uses: actions/upload-artifact@v7
       if: ${{ failure() }}
       with:
         name: e2e-kind-wireguard.tar.gz
