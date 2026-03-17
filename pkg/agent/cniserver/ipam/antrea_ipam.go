@@ -157,6 +157,14 @@ func findMatchingIP(ips []net.IP, ipVersion utilnet.IPFamily) (net.IP, []net.IP)
 // family will be allocated even if multiple Pools exist for the same family.
 // The allocated IPs and associated resources will be stored in the IP Pool
 // status.
+//
+// When a Pod specifies desired IPs via the AntreaIPAMPodIP annotation, at most
+// one IPv4 and one IPv6 address are used; additional addresses of the same
+// family are silently ignored. Each specified IP is matched to the first Pool
+// of the corresponding IP family (in annotation order). If the IP does not
+// belong to that Pool, allocation fails immediately without trying subsequent
+// Pools of the same family.
+// See https://antrea.io/docs/main/docs/antrea-ipam.md for more details.
 func (d *AntreaIPAM) Add(args *invoke.Args, k8sArgs *types.K8sArgs, networkConfig []byte) (bool, *IPAMResult, error) {
 	mine, allocators, ips, reservedOwner, err := d.owns(k8sArgs)
 	if err != nil {
@@ -204,7 +212,10 @@ func (d *AntreaIPAM) Add(args *invoke.Args, k8sArgs *types.K8sArgs, networkConfi
 		} else if len(remainingIPs) == 0 {
 			ip, subnetInfo, err = allocator.AllocateNext(crdv1b1.IPAddressPhaseAllocated, owner)
 		} else {
-			// Match the IP to the allocator's IP version.
+			// Match the specified IP to the allocator's IP version. Only the
+			// first IP of each family is used; it must belong to the first
+			// Pool of the same family or the allocation will fail (no
+			// fallback to subsequent Pools).
 			var matchedIP net.IP
 			matchedIP, remainingIPs = findMatchingIP(remainingIPs, allocator.IPVersion)
 			if matchedIP != nil {

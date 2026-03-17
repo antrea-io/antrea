@@ -147,7 +147,11 @@ func (c *AntreaIPAMController) getIPPoolsByPod(namespace, name string) ([]string
 		}
 	}
 
-	// Collect specified IPs if exist
+	// Collect specified IPs from the AntreaIPAMPodIP annotation.
+	// Multiple IPs (comma-separated) may be provided, but the caller
+	// (AntreaIPAM.Add) will only consume at most one IPv4 and one IPv6
+	// address. Each IP must belong to the first Pool of the corresponding
+	// IP family listed in the AntreaIPAM annotation.
 	ipStrings := pod.Annotations[annotation.AntreaIPAMPodIPAnnotationKey]
 	ipStrings = strings.ReplaceAll(ipStrings, " ", "")
 	var ipErr error
