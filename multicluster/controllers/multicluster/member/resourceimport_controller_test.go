@@ -27,11 +27,13 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
+	discovery "k8s.io/api/discovery/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/util/workqueue"
+	"k8s.io/utils/ptr"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 	k8smcsapi "sigs.k8s.io/mcs-api/pkg/apis/v1alpha1"
@@ -81,22 +83,24 @@ var (
 			},
 		},
 	}
-	epSubset = []corev1.EndpointSubset{
+	riEPReady    = true
+	riEPProtocol = corev1.ProtocolTCP
+	riEPPort80   = int32(80)
+
+	discEndpoints = []discovery.Endpoint{
 		{
-			Addresses: []corev1.EndpointAddress{
-				{
-					IP: "192.168.17.11",
-				},
-			},
-			Ports: []corev1.EndpointPort{
-				{
-					Name:     "http",
-					Port:     80,
-					Protocol: corev1.ProtocolTCP,
-				},
-			},
+			Addresses:  []string{"192.168.17.11"},
+			Conditions: discovery.EndpointConditions{Ready: &riEPReady},
 		},
 	}
+	discPorts = []discovery.EndpointPort{
+		{
+			Name:     ptr.To("http"),
+			Port:     &riEPPort80,
+			Protocol: &riEPProtocol,
+		},
+	}
+
 	epResImport = &mcv1alpha1.ResourceImport{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: leaderNamespace,
@@ -107,7 +111,8 @@ var (
 			Name:      "nginx",
 			Kind:      "Endpoints",
 			Endpoints: &mcv1alpha1.EndpointsImport{
-				Subsets: epSubset,
+				Endpoints: discEndpoints,
+				Ports:     discPorts,
 			},
 		},
 	}
@@ -154,9 +159,9 @@ func TestResourceImportReconciler_handleCreateEvent(t *testing.T) {
 					t.Errorf("ResourceImport Reconciler should create a ServiceImport successfully but got error = %v", err)
 				}
 			case "Endpoints":
-				ep := &corev1.Endpoints{}
-				if err := fakeClient.Get(ctx, types.NamespacedName{Namespace: "default", Name: "antrea-mc-nginx"}, ep); err != nil {
-					t.Errorf("ResourceImport Reconciler should import an Endpoint successfully but got error = %v", err)
+				eps := &discovery.EndpointSlice{}
+				if err := fakeClient.Get(ctx, types.NamespacedName{Namespace: "default", Name: "antrea-mc-nginx"}, eps); err != nil {
+					t.Errorf("ResourceImport Reconciler should import an EndpointSlice successfully but got error = %v", err)
 				}
 			}
 
@@ -177,14 +182,16 @@ func TestResourceImportReconciler_handleDeleteEvent(t *testing.T) {
 			Name:      "nginx",
 		},
 	}
-	existEp := &corev1.Endpoints{
+	existEPS := &discovery.EndpointSlice{
 		ObjectMeta: metav1.ObjectMeta{
-			Namespace: "default",
-			Name:      "antrea-mc-nginx",
+			Namespace:   "default",
+			Name:        "antrea-mc-nginx",
+			Annotations: map[string]string{common.AntreaMCServiceAnnotation: "true"},
 		},
+		AddressType: discovery.AddressTypeIPv4,
 	}
 
-	fakeClient := fake.NewClientBuilder().WithScheme(common.TestScheme).WithObjects(existSvc, existEp, existSvcImp).Build()
+	fakeClient := fake.NewClientBuilder().WithScheme(common.TestScheme).WithObjects(existSvc, existEPS, existSvcImp).Build()
 	fakeRemoteClient := fake.NewClientBuilder().WithScheme(common.TestScheme).Build()
 	remoteCluster := commonarea.NewFakeRemoteCommonArea(fakeRemoteClient, "leader-cluster", localClusterID, "default", nil)
 
@@ -228,9 +235,9 @@ func TestResourceImportReconciler_handleDeleteEvent(t *testing.T) {
 						t.Errorf("Reconciler should delete ResImport from installedResImports after successful resource deletion")
 					}
 				case "Endpoints":
-					ep := &corev1.Endpoints{}
-					if err := fakeClient.Get(ctx, types.NamespacedName{Namespace: "default", Name: "antrea-mc-nginx"}, ep); !apierrors.IsNotFound(err) {
-						t.Errorf("ResourceImport Reconciler should delete an Endpoint successfully but got error = %v", err)
+					eps := &discovery.EndpointSlice{}
+					if err := fakeClient.Get(ctx, types.NamespacedName{Namespace: "default", Name: "antrea-mc-nginx"}, eps); !apierrors.IsNotFound(err) {
+						t.Errorf("ResourceImport Reconciler should delete the EndpointSlice successfully but got error = %v", err)
 					}
 					if _, exists, _ := r.installedResImports.Get(*epResImport); exists {
 						t.Errorf("Reconciler should delete ResImport from installedResImports after successful resource deletion")
@@ -284,51 +291,65 @@ func TestResourceImportReconciler_handleUpdateEvent(t *testing.T) {
 			},
 		},
 	}
-	existMCEp := &corev1.Endpoints{
+	existMCEPS := &discovery.EndpointSlice{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace:   "default",
 			Name:        "antrea-mc-nginx",
 			Annotations: map[string]string{common.AntreaMCServiceAnnotation: "true"},
 		},
-		Subsets: epSubset,
+		AddressType: discovery.AddressTypeIPv4,
+		Endpoints:   discEndpoints,
+		Ports:       discPorts,
 	}
-	existMCEpConflicts := &corev1.Endpoints{
+	// existMCEPSConflicts is an EndpointSlice in kube-system without the MC annotation,
+	// simulating a conflict with an unrelated existing EndpointSlice.
+	existMCEPSConflicts := &discovery.EndpointSlice{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: "kube-system",
 			Name:      "antrea-mc-nginx",
 		},
-		Subsets: epSubset,
+		AddressType: discovery.AddressTypeIPv4,
 	}
 
-	subSetA := corev1.EndpointSubset{
-		Addresses: []corev1.EndpointAddress{
-			{
-				IP: "192.168.17.12",
-			},
+	port8080 := int32(8080)
+	newDiscEndpoints := []discovery.Endpoint{
+		{
+			Addresses:  []string{"192.168.17.12"},
+			Conditions: discovery.EndpointConditions{Ready: &epReady},
 		},
-		Ports: []corev1.EndpointPort{
-			{
-				Name:     "http",
-				Port:     8080,
-				Protocol: corev1.ProtocolTCP,
-			},
+		{
+			Addresses:  []string{"10.10.11.13"},
+			Conditions: discovery.EndpointConditions{Ready: &epReady},
 		},
 	}
-	subSetB := corev1.EndpointSubset{
-		Addresses: []corev1.EndpointAddress{
-			{
-				IP: "10.10.11.13",
-			},
-		},
-		Ports: []corev1.EndpointPort{
-			{
-				Name:     "http",
-				Port:     8080,
-				Protocol: corev1.ProtocolTCP,
-			},
+	newDiscPorts := []discovery.EndpointPort{
+		{
+			Name:     ptr.To("http"),
+			Port:     &port8080,
+			Protocol: &epProtocol,
 		},
 	}
-	newSubsets := []corev1.EndpointSubset{subSetA, subSetB}
+
+	// legacyEP is a legacy Endpoints object that was created before migration to EndpointSlice.
+	legacyEP := &corev1.Endpoints{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace:   "default",
+			Name:        "antrea-mc-nginx-legacy",
+			Annotations: map[string]string{common.AntreaMCServiceAnnotation: "true"},
+		},
+	}
+	// existMCSvcLegacy is the MC Service that owns the EndpointSlice for the legacy test case.
+	existMCSvcLegacy := &corev1.Service{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace:   "default",
+			Name:        "antrea-mc-nginx-legacy",
+			Annotations: map[string]string{common.AntreaMCServiceAnnotation: "true"},
+		},
+		Spec: corev1.ServiceSpec{
+			Ports:     nginxPorts,
+			ClusterIP: "192.168.1.2",
+		},
+	}
 
 	existSvc := &corev1.Service{
 		ObjectMeta: metav1.ObjectMeta{
@@ -358,13 +379,6 @@ func TestResourceImportReconciler_handleUpdateEvent(t *testing.T) {
 		},
 	}
 
-	epWithoutAutoAnnotation := &corev1.Endpoints{
-		ObjectMeta: metav1.ObjectMeta{
-			Namespace: "kube-system",
-			Name:      "nginx",
-		},
-		Subsets: epSubset,
-	}
 	newPorts := []k8smcsapi.ServicePort{
 		{
 			Name:     "http",
@@ -380,7 +394,8 @@ func TestResourceImportReconciler_handleUpdateEvent(t *testing.T) {
 	}
 	updatedEpResImport := epResImport.DeepCopy()
 	updatedEpResImport.Spec.Endpoints = &mcv1alpha1.EndpointsImport{
-		Subsets: newSubsets,
+		Endpoints: newDiscEndpoints,
+		Ports:     newDiscPorts,
 	}
 	svcResImportWithConflicts := svcResImport.DeepCopy()
 	svcResImportWithConflicts.Name = "kube-system-nginx-service"
@@ -389,20 +404,35 @@ func TestResourceImportReconciler_handleUpdateEvent(t *testing.T) {
 	epResImportWithConflicts.Name = "kube-system-nginx-endpoints"
 	epResImportWithConflicts.Spec.Namespace = "kube-system"
 
-	fakeClient := fake.NewClientBuilder().WithScheme(common.TestScheme).WithObjects(existMCSvc, existMCEp, existSvcImp,
-		existSvc, existMCSvcConflicts, existMCEpConflicts, svcWithoutAutoAnnotation, epWithoutAutoAnnotation).Build()
-	fakeRemoteClient := fake.NewClientBuilder().WithScheme(common.TestScheme).WithObjects(updatedEpResImport, updatedSvcResImport,
-		svcResImportWithConflicts, epResImportWithConflicts).Build()
+	// epResImportLegacy is an endpoint ResourceImport whose name maps to a legacy Endpoints object.
+	epResImportLegacy := epResImport.DeepCopy()
+	epResImportLegacy.Name = leaderNamespace + "-nginx-legacy-endpoints"
+	epResImportLegacy.Spec.Name = "nginx-legacy"
+	epResImportLegacy.Spec.Endpoints = &mcv1alpha1.EndpointsImport{
+		Endpoints: newDiscEndpoints,
+		Ports:     newDiscPorts,
+	}
+
+	fakeClient := fake.NewClientBuilder().WithScheme(common.TestScheme).WithObjects(
+		existMCSvc, existMCEPS, existSvcImp,
+		existSvc, existMCSvcConflicts, existMCEPSConflicts,
+		svcWithoutAutoAnnotation,
+		legacyEP, existMCSvcLegacy).Build()
+	fakeRemoteClient := fake.NewClientBuilder().WithScheme(common.TestScheme).WithObjects(
+		updatedEpResImport, updatedSvcResImport,
+		svcResImportWithConflicts, epResImportWithConflicts,
+		epResImportLegacy).Build()
 	remoteCluster := commonarea.NewFakeRemoteCommonArea(fakeRemoteClient, "leader-cluster", localClusterID, "default", nil)
 
 	tests := []struct {
-		name             string
-		objType          string
-		req              ctrl.Request
-		resNamespaceName types.NamespacedName
-		expectedSvcPorts []corev1.ServicePort
-		expectedSubset   []corev1.EndpointSubset
-		expectedErr      bool
+		name                string
+		objType             string
+		req                 ctrl.Request
+		resNamespaceName    types.NamespacedName
+		expectedSvcPorts    []corev1.ServicePort
+		expectedEPEndpoints []discovery.Endpoint
+		expectedEPPorts     []discovery.EndpointPort
+		expectedErr         bool
 	}{
 		{
 			name:             "update Service",
@@ -418,11 +448,12 @@ func TestResourceImportReconciler_handleUpdateEvent(t *testing.T) {
 			},
 		},
 		{
-			name:             "update Endpoints",
-			objType:          "Endpoints",
-			req:              epImportReq,
-			resNamespaceName: types.NamespacedName{Namespace: "default", Name: "antrea-mc-nginx"},
-			expectedSubset:   newSubsets,
+			name:                "update EndpointSlice",
+			objType:             "Endpoints",
+			req:                 epImportReq,
+			resNamespaceName:    types.NamespacedName{Namespace: "default", Name: "antrea-mc-nginx"},
+			expectedEPEndpoints: newDiscEndpoints,
+			expectedEPPorts:     newDiscPorts,
 		},
 		{
 			name:    "skip update a Service without mcs annotation",
@@ -435,7 +466,7 @@ func TestResourceImportReconciler_handleUpdateEvent(t *testing.T) {
 			expectedErr:      true,
 		},
 		{
-			name:    "skip update an Endpoint without mcs annotation",
+			name:    "skip update an EndpointSlice without mcs annotation",
 			objType: "Endpoints",
 			req: ctrl.Request{NamespacedName: types.NamespacedName{
 				Namespace: leaderNamespace,
@@ -443,6 +474,17 @@ func TestResourceImportReconciler_handleUpdateEvent(t *testing.T) {
 			}},
 			resNamespaceName: types.NamespacedName{Namespace: "kube-system", Name: "antrea-mc-nginx"},
 			expectedErr:      true,
+		},
+		{
+			name:    "clean up legacy Endpoints and create EndpointSlice",
+			objType: "Endpoints",
+			req: ctrl.Request{NamespacedName: types.NamespacedName{
+				Namespace: leaderNamespace,
+				Name:      epResImportLegacy.Name,
+			}},
+			resNamespaceName:    types.NamespacedName{Namespace: "default", Name: "antrea-mc-nginx-legacy"},
+			expectedEPEndpoints: newDiscEndpoints,
+			expectedEPPorts:     newDiscPorts,
 		},
 	}
 
@@ -482,14 +524,21 @@ func TestResourceImportReconciler_handleUpdateEvent(t *testing.T) {
 						}
 					}
 				case "Endpoints":
-					ep := &corev1.Endpoints{}
-					if err := fakeClient.Get(ctx, tt.resNamespaceName, ep); err != nil {
-						t.Errorf("ResourceImport Reconciler should update an Endpoint successfully but got error = %v", err)
+					eps := &discovery.EndpointSlice{}
+					if err := fakeClient.Get(ctx, tt.resNamespaceName, eps); err != nil {
+						t.Errorf("ResourceImport Reconciler should update an EndpointSlice successfully but got error = %v", err)
 					} else {
-						if !reflect.DeepEqual(ep.Subsets, tt.expectedSubset) {
-							t.Errorf("expected Subsets are %v but got %v", tt.expectedSubset, ep.Subsets)
+						if !reflect.DeepEqual(eps.Endpoints, tt.expectedEPEndpoints) {
+							t.Errorf("expected Endpoints are %v but got %v", tt.expectedEPEndpoints, eps.Endpoints)
+						}
+						if !reflect.DeepEqual(eps.Ports, tt.expectedEPPorts) {
+							t.Errorf("expected Ports are %v but got %v", tt.expectedEPPorts, eps.Ports)
 						}
 					}
+					// Verify that any legacy Endpoints with the same name have been deleted.
+					legacyCheck := &corev1.Endpoints{}
+					err := fakeClient.Get(ctx, tt.resNamespaceName, legacyCheck)
+					assert.True(t, apierrors.IsNotFound(err), "legacy Endpoints should have been cleaned up")
 				}
 			}
 		})

@@ -95,7 +95,6 @@ func runMember(o *Options) error {
 		mgrScheme,
 		commonAreaGetter,
 		o.EndpointIPType,
-		o.EnableEndpointSlice,
 		podNamespace,
 	)
 	if err = svcExportReconciler.SetupWithManager(mgr); err != nil {

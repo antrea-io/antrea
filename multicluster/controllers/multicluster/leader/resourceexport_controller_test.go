@@ -23,9 +23,11 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
+	discoveryv1 "k8s.io/api/discovery/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/utils/ptr"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
@@ -50,6 +52,32 @@ var (
 		constants.SourceNamespace: "default",
 		constants.SourceName:      "nginx",
 		constants.SourceKind:      "Endpoints",
+	}
+
+	epReady    = true
+	epProtocol = corev1.ProtocolTCP
+	epPort80   = int32(80)
+
+	// discEPsA is a set of discovery endpoints from cluster-a (pod1).
+	discEPsA = []discoveryv1.Endpoint{
+		{
+			Addresses:  []string{"192.168.17.11"},
+			Conditions: discoveryv1.EndpointConditions{Ready: &epReady},
+		},
+	}
+	// discEPsB is a set of discovery endpoints from cluster-b (pod2).
+	discEPsB = []discoveryv1.Endpoint{
+		{
+			Addresses:  []string{"192.168.17.12"},
+			Conditions: discoveryv1.EndpointConditions{Ready: &epReady},
+		},
+	}
+	discPorts80 = []discoveryv1.EndpointPort{
+		{
+			Name:     ptr.To("http"),
+			Port:     ptr.To(epPort80),
+			Protocol: ptr.To(epProtocol),
+		},
 	}
 	svcResReq = ctrl.Request{NamespacedName: types.NamespacedName{
 		Namespace: "default",
@@ -147,6 +175,7 @@ func TestResourceExportReconciler_handleServiceExportDeleteEvent(t *testing.T) {
 }
 
 func TestResourceExportReconciler_handleEndpointsExportDeleteEvent(t *testing.T) {
+	// cluster-a export is being deleted (DeletionTimestamp set).
 	existingResExport1 := &mcsv1alpha1.ResourceExport{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace:         "default",
@@ -160,10 +189,12 @@ func TestResourceExportReconciler_handleEndpointsExportDeleteEvent(t *testing.T)
 			Name:      "nginx",
 			Kind:      constants.EndpointsKind,
 			Endpoints: &mcsv1alpha1.EndpointsExport{
-				Subsets: common.EPNginxSubset,
+				Endpoints: discEPsA,
+				Ports:     discPorts80,
 			},
 		},
 	}
+	// cluster-b export remains active after cluster-a is deleted.
 	existingResExport2 := &mcsv1alpha1.ResourceExport{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace:  "default",
@@ -176,7 +207,8 @@ func TestResourceExportReconciler_handleEndpointsExportDeleteEvent(t *testing.T)
 			Name:      "nginx",
 			Kind:      constants.EndpointsKind,
 			Endpoints: &mcsv1alpha1.EndpointsExport{
-				Subsets: common.EPNginxSubset2,
+				Endpoints: discEPsB,
+				Ports:     discPorts80,
 			},
 		},
 	}
@@ -206,11 +238,11 @@ func TestResourceExportReconciler_handleEndpointsExportDeleteEvent(t *testing.T)
 			Namespace: "default",
 			Kind:      constants.EndpointsKind,
 			Endpoints: &mcsv1alpha1.EndpointsImport{
-				Subsets: append(common.EPNginxSubset, common.EPNginxSubset2...),
+				Endpoints: append(discEPsA, discEPsB...),
+				Ports:     discPorts80,
 			},
 		},
 	}
-	expectedSubsets := common.EPNginxSubset2
 	namespacedName := types.NamespacedName{Namespace: "default", Name: "default-nginx-endpoints"}
 	fakeClient := fake.NewClientBuilder().WithScheme(common.TestScheme).WithObjects(existingResExport1, existingResExport2, existingResExport3, existResImport).
 		WithStatusSubresource(existingResExport1, existingResExport2, existingResExport3, existResImport).Build()
@@ -224,7 +256,9 @@ func TestResourceExportReconciler_handleEndpointsExportDeleteEvent(t *testing.T)
 	resImport := &mcsv1alpha1.ResourceImport{}
 	err = fakeClient.Get(common.TestCtx, namespacedName, resImport)
 	require.NoError(t, err, "failed to get ResourceImport")
-	assert.ElementsMatch(t, expectedSubsets, resImport.Spec.Endpoints.Subsets, "unexpected ResourceImport Subsets")
+	// After cluster-a is deleted, only cluster-b's endpoints should remain.
+	assert.ElementsMatch(t, discEPsB, resImport.Spec.Endpoints.Endpoints, "unexpected ResourceImport Endpoints")
+	assert.ElementsMatch(t, discPorts80, resImport.Spec.Endpoints.Ports, "unexpected ResourceImport Ports")
 
 	resExportsLeft := &mcsv1alpha1.ResourceExportList{}
 	err = fakeClient.List(common.TestCtx, resExportsLeft)
@@ -292,7 +326,8 @@ func TestResourceExportReconciler_handleEndpointExportCreateEvent(t *testing.T) 
 			Name:      "nginx",
 			Kind:      constants.EndpointsKind,
 			Endpoints: &mcsv1alpha1.EndpointsExport{
-				Subsets: common.EPNginxSubset,
+				Endpoints: discEPsA,
+				Ports:     discPorts80,
 			},
 		},
 	}
@@ -318,14 +353,15 @@ func TestResourceExportReconciler_handleEndpointExportCreateEvent(t *testing.T) 
 		Namespace: "default",
 		Kind:      constants.EndpointsKind,
 		Endpoints: &mcsv1alpha1.EndpointsImport{
-			Subsets: existEPResExport.Spec.Endpoints.Subsets,
+			Endpoints: discEPsA,
+			Ports:     discPorts80,
 		},
 	}
 	namespacedName := types.NamespacedName{Namespace: "default", Name: "default-nginx-endpoints"}
 	fakeClient := fake.NewClientBuilder().WithScheme(common.TestScheme).WithObjects(existEPResExport, existSvcResExport).Build()
 	r := NewResourceExportReconciler(fakeClient, common.TestScheme)
 	if _, err := r.Reconcile(common.TestCtx, epResReq); err != nil {
-		t.Errorf("ResourceExport Reconciler should handle Endpoints ResourceExport  create event successfully but got error = %v", err)
+		t.Errorf("ResourceExport Reconciler should handle Endpoints ResourceExport create event successfully but got error = %v", err)
 	} else {
 		resImport := &mcsv1alpha1.ResourceImport{}
 		err := fakeClient.Get(common.TestCtx, namespacedName, resImport)
