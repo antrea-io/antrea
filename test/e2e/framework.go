@@ -143,7 +143,7 @@ const (
 	nginxLBService = "nginx-loadbalancer"
 
 	// Port the IPFIX collector test pod listens on for receiving flow records.
-	ipfixCollectorPort                  = "44739"
+	ipfixCollectorPort                  = "4739"
 	exporterFlowPollInterval            = 1 * time.Second
 	exporterActiveFlowExportTimeout     = 2 * time.Second
 	exporterIdleFlowExportTimeout       = 1 * time.Second

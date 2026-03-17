@@ -376,9 +376,9 @@ func (exp *FlowExporter) syncFlowExporterDestination(key string) error {
 func (fe *FlowExporter) createExporter(protocol exporterProtocol) exporter.Interface {
 	var exp exporter.Interface
 	switch protocol.Name() {
-	case grpcExporterProtocol:
+	case api.FlowExporterProtocolGRPC:
 		exp = exporter.NewGRPCExporter(fe.nodeName, fe.nodeUID, fe.obsDomainID)
-	case ipfixExporterProtocol:
+	case api.FlowExporterProtocolIPFIX:
 		var collectorProto string
 		if protocol.TransportProtocol() == api.FlowExporterTransportTLS {
 			collectorProto = string(api.FlowExporterTransportTCP)
@@ -525,11 +525,11 @@ func genObservationID(nodeName string) uint32 {
 func validateResource(res *api.FlowExporterDestination) error {
 	protocol := getExporterProtocol(res.Spec.Protocol)
 	switch protocol.Name() {
-	case grpcExporterProtocol:
+	case api.FlowExporterProtocolGRPC:
 		if res.Spec.TLSConfig == nil {
 			return fmt.Errorf("missing spec.TLSConfig for grpc connection")
 		}
-	case ipfixExporterProtocol:
+	case api.FlowExporterProtocolIPFIX:
 		if protocol.TransportProtocol() == api.FlowExporterTransportTLS && res.Spec.TLSConfig == nil {
 			return fmt.Errorf("missing spec.TLSConfig for IPFIX connection over TLS")
 		}

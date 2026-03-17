@@ -40,11 +40,6 @@ import (
 	"antrea.io/antrea/pkg/util/objectstore"
 )
 
-const (
-	grpcExporterProtocol  string = "grpc"
-	ipfixExporterProtocol string = "ipfix"
-)
-
 type exporterProtocol interface {
 	Name() string
 	TransportProtocol() api.FlowExporterTransportProtocol

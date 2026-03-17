@@ -174,9 +174,9 @@ func TestAddIngressNetworkPolicyMetadata(t *testing.T) {
 			expectedRuleAction: utils.NetworkPolicyRuleActionDrop,
 		},
 		{
-			name: "Success via Labels (overrides IngressRuleID)",
+			name: "Success via Labels when IngressRuleID is zero",
 			conn: &connection.Connection{
-				IngressRuleID: 200,
+				IngressRuleID: 0,
 				Labels:        labels,
 				Disposition:   "Drop",
 			},
@@ -259,9 +259,9 @@ func TestAddEgressNetworkPolicyMetadata(t *testing.T) {
 			expectedRuleAction: utils.NetworkPolicyRuleActionDrop,
 		},
 		{
-			name: "Success via Labels (overrides EgressRuleID)",
+			name: "Success via Labels when EgressRuleID is zero",
 			conn: &connection.Connection{
-				EgressRuleID: 200,
+				EgressRuleID: 0,
 				Labels:       labels,
 				Disposition:  "Drop",
 			},

@@ -168,16 +168,18 @@ func (cs *connectionStore) getPolicyRuleMetadata(conn *connection.Connection, ru
 	var disposition uint8
 
 	if ruleID != 0 {
+		// deny connections have their ruleIDs set
 		rule = cs.networkPolicyQuerier.GetRuleByFlowID(ruleID)
 		disposition = utils.RuleActionToUint8(conn.Disposition)
-	}
-
-	if len(conn.Labels) >= labelsEnd {
+	} else if len(conn.Labels) >= labelsEnd {
+		// allow connections have their flowIDs set in the labels
 		flowID := binary.BigEndian.Uint32(conn.Labels[labelsStart:labelsEnd])
 		if flowID != 0 {
 			rule = cs.networkPolicyQuerier.GetRuleByFlowID(flowID)
 			disposition = utils.NetworkPolicyRuleActionAllow
 		}
+	} else {
+		klog.V(4).InfoS("Failed to lookup policy rule for connection", "connectionLabels", conn.Labels)
 	}
 
 	if rule == nil {
