@@ -28,6 +28,8 @@ import (
 	"go.uber.org/mock/gomock"
 	"golang.org/x/sys/unix"
 	"k8s.io/apimachinery/pkg/util/sets"
+	"k8s.io/utils/exec"
+	exectesting "k8s.io/utils/exec/testing"
 	utilnet "k8s.io/utils/net"
 	"k8s.io/utils/ptr"
 	"sigs.k8s.io/knftables"
@@ -405,7 +407,7 @@ func TestSyncIPTables(t *testing.T) {
 		expectedCalls             func(iptables *iptablestest.MockInterfaceMockRecorder)
 	}{
 		{
-			name:                      "encap,wireguard,egress=true,multicastEnabled=true,proxyAll=true,nodeNetworkPolicy=true,nodeLatencyMonitor=true,nodeSNATRandomFully=true,proxyHealthCheck",
+			name:                      "encap,wireguard,egress=true,multicastEnabled=true,proxyAll=true,nodeNetworkPolicy=true,nodeLatencyMonitor=true,nodeSNATRandomFully=true,proxyHealthCheck,kube-proxy present",
 			proxyAll:                  true,
 			multicastEnabled:          true,
 			nodeNetworkPolicyEnabled:  true,
@@ -454,7 +456,7 @@ func TestSyncIPTables(t *testing.T) {
 							"-A " + iptables.PreRoutingChain + " -j " + antreaPreRoutingChain,
 							"-A " + iptables.PreRoutingChain + " -j " + kubeProxyServiceChain,
 						},
-					}, nil)
+					}, nil).Times(2)
 				mockIPTables.DeleteRule(iptables.ProtocolIPv4, iptables.NATTable, iptables.PreRoutingChain, []string{"-j", antreaPreRoutingChain, "-m", "comment", "--comment", "Antrea: jump to Antrea prerouting rules"})
 				mockIPTables.ListRules(iptables.ProtocolDual, iptables.NATTable, iptables.OutputChain).Return(
 					map[iptables.Protocol][]string{
@@ -732,7 +734,7 @@ COMMIT
 			},
 		},
 		{
-			name:                      "hybrid,egress=true,multicastEnabled=true,proxyAll=true,nodeNetworkPolicy=true,nodeLatencyMonitor=true,nodeSNATRandomFully=true",
+			name:                      "hybrid,egress=true,multicastEnabled=true,proxyAll=true,nodeNetworkPolicy=true,nodeLatencyMonitor=true,nodeSNATRandomFully=true,kube-proxy not present",
 			proxyAll:                  true,
 			multicastEnabled:          true,
 			nodeNetworkPolicyEnabled:  true,
@@ -774,27 +776,21 @@ COMMIT
 				mockIPTables.ListRules(iptables.ProtocolDual, iptables.NATTable, iptables.PreRoutingChain).Return(
 					map[iptables.Protocol][]string{
 						iptables.ProtocolIPv4: {
-							"-A " + iptables.PreRoutingChain + " -j " + kubeProxyServiceChain,
 							"-A " + iptables.PreRoutingChain + " -j " + antreaPreRoutingChain,
 						},
 						iptables.ProtocolIPv6: {
 							"-A " + iptables.PreRoutingChain + " -j " + antreaPreRoutingChain,
-							"-A " + iptables.PreRoutingChain + " -j " + kubeProxyServiceChain,
 						},
-					}, nil)
-				mockIPTables.DeleteRule(iptables.ProtocolIPv4, iptables.NATTable, iptables.PreRoutingChain, []string{"-j", antreaPreRoutingChain, "-m", "comment", "--comment", "Antrea: jump to Antrea prerouting rules"})
+					}, nil).Times(2)
 				mockIPTables.ListRules(iptables.ProtocolDual, iptables.NATTable, iptables.OutputChain).Return(
 					map[iptables.Protocol][]string{
 						iptables.ProtocolIPv4: {
 							"-A " + iptables.OutputChain + " -j " + antreaOutputChain,
-							"-A " + iptables.OutputChain + " -j " + kubeProxyServiceChain,
 						},
 						iptables.ProtocolIPv6: {
-							"-A " + iptables.OutputChain + " -j " + kubeProxyServiceChain,
 							"-A " + iptables.OutputChain + " -j " + antreaOutputChain,
 						},
-					}, nil)
-				mockIPTables.DeleteRule(iptables.ProtocolIPv6, iptables.NATTable, iptables.OutputChain, []string{"-j", antreaOutputChain, "-m", "comment", "--comment", "Antrea: jump to Antrea output rules"})
+					}, nil).Times(2)
 				mockIPTables.EnsureChain(iptables.ProtocolDual, iptables.NATTable, antreaPreRoutingChain)
 				mockIPTables.InsertRule(iptables.ProtocolDual, iptables.NATTable, iptables.PreRoutingChain, []string{"-j", antreaPreRoutingChain, "-m", "comment", "--comment", "Antrea: jump to Antrea prerouting rules"})
 				mockIPTables.EnsureChain(iptables.ProtocolDual, iptables.NATTable, antreaOutputChain)
@@ -809,9 +805,6 @@ COMMIT
 -A ANTREA-PREROUTING -m comment --comment "Antrea: do not track incoming encapsulation packets" -m udp -p udp --dport 6082 -m addrtype --dst-type LOCAL -j NOTRACK
 -A ANTREA-OUTPUT -m comment --comment "Antrea: do not track outgoing encapsulation packets" -m udp -p udp --dport 6082 -m addrtype --src-type LOCAL -j NOTRACK
 -A ANTREA-PREROUTING -m comment --comment "Antrea: drop Pod multicast traffic forwarded via underlay network" -m set --match-set CLUSTER-NODE-IP src -d 224.0.0.0/4 -j DROP
--A ANTREA-PREROUTING -m comment --comment "Antrea: do not track request packets destined to external IPs" -m set --match-set ANTREA-EXTERNAL-IP dst -j NOTRACK
--A ANTREA-PREROUTING -m comment --comment "Antrea: do not track reply packets sourced from external IPs" -m set --match-set ANTREA-EXTERNAL-IP src -j NOTRACK
--A ANTREA-OUTPUT -m comment --comment "Antrea: do not track request packets destined to external IPs" -m set --match-set ANTREA-EXTERNAL-IP dst -j NOTRACK
 COMMIT
 *mangle
 :ANTREA-PREROUTING - [0:0]
@@ -865,9 +858,6 @@ COMMIT
 :ANTREA-OUTPUT - [0:0]
 -A ANTREA-PREROUTING -m comment --comment "Antrea: do not track incoming encapsulation packets" -m udp -p udp --dport 6082 -m addrtype --dst-type LOCAL -j NOTRACK
 -A ANTREA-OUTPUT -m comment --comment "Antrea: do not track outgoing encapsulation packets" -m udp -p udp --dport 6082 -m addrtype --src-type LOCAL -j NOTRACK
--A ANTREA-PREROUTING -m comment --comment "Antrea: do not track request packets destined to external IPs" -m set --match-set ANTREA-EXTERNAL-IP6 dst -j NOTRACK
--A ANTREA-PREROUTING -m comment --comment "Antrea: do not track reply packets sourced from external IPs" -m set --match-set ANTREA-EXTERNAL-IP6 src -j NOTRACK
--A ANTREA-OUTPUT -m comment --comment "Antrea: do not track request packets destined to external IPs" -m set --match-set ANTREA-EXTERNAL-IP6 dst -j NOTRACK
 COMMIT
 *mangle
 :ANTREA-PREROUTING - [0:0]
@@ -1205,6 +1195,17 @@ COMMIT
 		t.Run(tt.name, func(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			mockIPTables := iptablestest.NewMockInterface(ctrl)
+			fakeExecutor := &exectesting.FakeExec{}
+			fakeExecutor.CommandScript = []exectesting.FakeCommandAction{
+				func(cmd string, args ...string) exec.Cmd {
+					return exectesting.InitFakeCmd(&exectesting.FakeCmd{
+						CombinedOutputScript: []exectesting.FakeAction{
+							func() ([]byte, []byte, error) { return []byte("table ip nat"), nil, nil },
+						},
+					}, cmd, args...)
+				},
+			}
+
 			c := &Client{iptables: mockIPTables,
 				networkConfig:            tt.networkConfig,
 				nodeConfig:               tt.nodeConfig,
@@ -1220,6 +1221,7 @@ COMMIT
 				wireguardPort:            tt.wireguardPort,
 				proxyHealthCheckPort:     tt.proxyHealthCheckPort,
 				iptablesCache:            newIPTablesCache(),
+				executor:                 fakeExecutor,
 			}
 			for mark, snatIP := range tt.markToSNATIP {
 				c.markToSNATIP.Store(mark, net.ParseIP(snatIP))
@@ -1241,7 +1243,157 @@ COMMIT
 				c.initProxyHealthCheck()
 			}
 			tt.expectedCalls(mockIPTables.EXPECT())
+			if c.proxyAll {
+				c.kubeProxyDetect()
+			}
 			assert.NoError(t, c.syncIPTables(true))
+		})
+	}
+}
+
+func TestKubeProxyDetect(t *testing.T) {
+	tests := []struct {
+		name          string
+		ipv4Enabled   bool
+		ipv6Enabled   bool
+		commandScript []exectesting.FakeCommandAction
+		expectedCalls func(*iptablestest.MockInterfaceMockRecorder)
+		expected      bool
+	}{
+		{
+			name:        "nftables ip kube-proxy table exists",
+			ipv4Enabled: true,
+			ipv6Enabled: false,
+			commandScript: []exectesting.FakeCommandAction{
+				func(cmd string, args ...string) exec.Cmd {
+					return exectesting.InitFakeCmd(&exectesting.FakeCmd{
+						CombinedOutputScript: []exectesting.FakeAction{
+							func() ([]byte, []byte, error) { return []byte("table ip kube-proxy"), nil, nil },
+						},
+					}, cmd, args...)
+				},
+			},
+			expectedCalls: func(*iptablestest.MockInterfaceMockRecorder) {},
+			expected:      true,
+		},
+		{
+			name:        "nftables ip6 kube-proxy table exists",
+			ipv4Enabled: false,
+			ipv6Enabled: true,
+			commandScript: []exectesting.FakeCommandAction{
+				func(cmd string, args ...string) exec.Cmd {
+					return exectesting.InitFakeCmd(&exectesting.FakeCmd{
+						CombinedOutputScript: []exectesting.FakeAction{
+							func() ([]byte, []byte, error) { return []byte("table ip6 kube-proxy"), nil, nil },
+						},
+					}, cmd, args...)
+				},
+			},
+			expectedCalls: func(*iptablestest.MockInterfaceMockRecorder) {},
+			expected:      true,
+		},
+
+		{
+			name:        "no nftables kube-proxy table exists, iptables PREROUTING has rule targeting KUBE-SERVICES",
+			ipv4Enabled: true,
+			ipv6Enabled: false,
+			commandScript: []exectesting.FakeCommandAction{
+				func(cmd string, args ...string) exec.Cmd {
+					return exectesting.InitFakeCmd(&exectesting.FakeCmd{
+						CombinedOutputScript: []exectesting.FakeAction{
+							func() ([]byte, []byte, error) { return []byte("table ip nat"), nil, nil },
+						},
+					}, cmd, args...)
+				},
+			},
+			expectedCalls: func(m *iptablestest.MockInterfaceMockRecorder) {
+				m.ListRules(iptables.ProtocolIPv4, iptables.NATTable, iptables.PreRoutingChain).
+					Return(map[iptables.Protocol][]string{iptables.ProtocolIPv4: {"-A PREROUTING -j KUBE-SERVICES"}}, nil)
+			},
+			expected: true,
+		},
+		{
+			name:        "no nftables kube-proxy table exists, ip6tables OUTPUT has rule targeting KUBE-SERVICES chain",
+			ipv4Enabled: false,
+			ipv6Enabled: true,
+			commandScript: []exectesting.FakeCommandAction{
+				func(cmd string, args ...string) exec.Cmd {
+					return exectesting.InitFakeCmd(&exectesting.FakeCmd{
+						CombinedOutputScript: []exectesting.FakeAction{
+							func() ([]byte, []byte, error) { return []byte("table ip nat"), nil, nil },
+						},
+					}, cmd, args...)
+				},
+			},
+			expectedCalls: func(m *iptablestest.MockInterfaceMockRecorder) {
+				m.ListRules(iptables.ProtocolIPv6, iptables.NATTable, iptables.PreRoutingChain).
+					Return(map[iptables.Protocol][]string{iptables.ProtocolIPv6: {"-A PREROUTING -j ANTREA-PREROUTING"}}, nil)
+				m.ListRules(iptables.ProtocolIPv6, iptables.NATTable, iptables.OutputChain).
+					Return(map[iptables.Protocol][]string{iptables.ProtocolIPv6: {"-A OUTPUT -j KUBE-SERVICES"}}, nil)
+			},
+			expected: true,
+		},
+		{
+			name:        "no kube-proxy rules found",
+			ipv4Enabled: true,
+			ipv6Enabled: false,
+			commandScript: []exectesting.FakeCommandAction{
+				func(cmd string, args ...string) exec.Cmd {
+					return exectesting.InitFakeCmd(&exectesting.FakeCmd{
+						CombinedOutputScript: []exectesting.FakeAction{
+							func() ([]byte, []byte, error) { return []byte("table ip nat"), nil, nil },
+						},
+					}, cmd, args...)
+				},
+			},
+			expectedCalls: func(m *iptablestest.MockInterfaceMockRecorder) {
+				m.ListRules(iptables.ProtocolIPv4, iptables.NATTable, iptables.PreRoutingChain).
+					Return(map[iptables.Protocol][]string{iptables.ProtocolIPv4: {"-A PREROUTING -j ANTREA-PREROUTING"}}, nil)
+				m.ListRules(iptables.ProtocolIPv4, iptables.NATTable, iptables.OutputChain).
+					Return(map[iptables.Protocol][]string{iptables.ProtocolIPv4: {"-A OUTPUT -j ANTREA-OUTPUT"}}, nil)
+			},
+			expected: false,
+		},
+		{
+			name:        "error detecting kube-proxy",
+			ipv4Enabled: true,
+			ipv6Enabled: false,
+			commandScript: []exectesting.FakeCommandAction{
+				func(cmd string, args ...string) exec.Cmd {
+					return exectesting.InitFakeCmd(&exectesting.FakeCmd{
+						CombinedOutputScript: []exectesting.FakeAction{
+							func() ([]byte, []byte, error) { return nil, nil, fmt.Errorf("failed to list tables") },
+						},
+					}, cmd, args...)
+				},
+			},
+			expectedCalls: func(m *iptablestest.MockInterfaceMockRecorder) {
+				m.ListRules(iptables.ProtocolIPv4, iptables.NATTable, iptables.PreRoutingChain).
+					Return(nil, fmt.Errorf("failed to list rules"))
+				m.ListRules(iptables.ProtocolIPv4, iptables.NATTable, iptables.OutputChain).
+					Return(nil, fmt.Errorf("failed to list rules"))
+			},
+			expected: true,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			mockIPTables := iptablestest.NewMockInterface(ctrl)
+			tt.expectedCalls(mockIPTables.EXPECT())
+			c := &Client{
+				networkConfig: &config.NetworkConfig{
+					IPv4Enabled: tt.ipv4Enabled,
+					IPv6Enabled: tt.ipv6Enabled,
+				},
+				iptables: mockIPTables,
+				executor: &exectesting.FakeExec{
+					CommandScript: tt.commandScript,
+				},
+			}
+			c.kubeProxyExist.Store(true)
+			c.kubeProxyDetect()
+			assert.Equal(t, tt.expected, c.kubeProxyExist.Load())
 		})
 	}
 }

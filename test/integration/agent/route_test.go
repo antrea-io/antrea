@@ -412,8 +412,6 @@ func TestInitialize(t *testing.T) {
 	chain raw-prerouting-proxy-all {
 		comment "Raw prerouting for proxyAll"
 		type filter hook prerouting priority raw; policy accept;
-		ip daddr @externalip counter packets 0 bytes 0 notrack comment "Do not track request packets destined to external IPs"
-		ip saddr @externalip counter packets 0 bytes 0 notrack comment "Do not track reply packets sourced from external IPs"
 	}
 }
 `
@@ -421,7 +419,6 @@ func TestInitialize(t *testing.T) {
 	chain raw-output-proxy-all {
 		comment "Raw output for proxyAll"
 		type filter hook output priority raw; policy accept;
-		ip daddr @externalip counter packets 0 bytes 0 notrack comment "Do not track request packets destined to external IPs"
 	}
 }
 `

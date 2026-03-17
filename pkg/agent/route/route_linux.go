@@ -25,6 +25,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/containernetworking/plugins/pkg/ip"
@@ -36,6 +37,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/klog/v2"
+	"k8s.io/utils/exec"
 	utilnet "k8s.io/utils/net"
 	"k8s.io/utils/ptr"
 	"sigs.k8s.io/knftables"
@@ -180,6 +182,8 @@ func newIPTablesCache() *iptablesCache {
 	return cache
 }
 
+var defaultExecutor = exec.New()
+
 // Client takes care of routing container packets in host network, coordinating ip route, ip rule, iptables and ipset.
 type Client struct {
 	nodeConfig             *config.NodeConfig
@@ -257,6 +261,12 @@ type Client struct {
 	wireguardPort int32
 	// proxyHealthCheckPort is the port on which AntreaProxy health check server listens when proxyAll is enabled.
 	proxyHealthCheckPort int32
+	// executor is used to execute commands.
+	executor exec.Interface
+	// kubeProxyExist should be set to true when kube-proxy is present (or detection failed). It is updated by kubeProxyDetect.
+	// and read by syncIPTables and syncNFTables to decide whether to install the rules to bypass kube-proxy process
+	// for Service external IPs.
+	kubeProxyExist atomic.Bool
 }
 
 // NewClient returns a route client.
@@ -291,6 +301,7 @@ func NewClient(networkConfig *config.NetworkConfig,
 		serviceExternalIPReferences: make(map[string]sets.Set[string]),
 		wireguardPort:               wireguardPort,
 		proxyHealthCheckPort:        proxyHealthCheckPort,
+		executor:                    defaultExecutor,
 	}, nil
 }
 
@@ -318,6 +329,8 @@ func (c *Client) initializeServiceSets() {
 				}
 			}
 		}
+		// Assume kube-proxy is present until detection runs.
+		c.kubeProxyExist.Store(true)
 	}
 }
 
@@ -346,6 +359,12 @@ func (c *Client) Initialize(nodeConfig *config.NodeConfig, done func()) error {
 	c.iptablesHasRandomFully = c.iptables.HasRandomFully()
 	if (c.nodeSNATRandomFully || c.egressSNATRandomFully) && !c.iptablesHasRandomFully {
 		return fmt.Errorf("iptables does not support --random-fully for SNAT / MASQUERADE rules")
+	}
+
+	// Perform an initial kube-proxy detection after iptables client is ready so the first iptables/nftables sync can
+	// use an accurate kubeProxyExist value.
+	if c.proxyAll {
+		c.kubeProxyDetect()
 	}
 
 	c.iptablesCache = newIPTablesCache()
@@ -471,6 +490,9 @@ func (c *Client) syncNetworkConfig(ctx context.Context) {
 	if err := c.syncIPSet(); err != nil {
 		klog.ErrorS(err, "Failed to sync ipset")
 		return
+	}
+	if c.proxyAll {
+		c.kubeProxyDetect()
 	}
 	if err := c.syncIPTables(false); err != nil {
 		klog.ErrorS(err, "Failed to sync iptables")
@@ -959,6 +981,74 @@ func (j *jumpRule) getKey() jumpRuleKey {
 	}
 }
 
+// kubeProxyDetect updates c.kubeProxyExist by detecting whether kube-proxy rules exist.
+// It checks the existence of kube-proxy nftables tables first, then iptables table nat chains PREROUTING and OUTPUT
+// jump rules targeting KUBE-SERVICES. If any check fails, we assume that kube-proxy is present and set kubeProxyExist
+// to true. Only when all checks succeed and no rules are found we set kubeProxyExist to false.
+func (c *Client) kubeProxyDetect() {
+	var errors []error
+
+	kubeProxyTables := []string{
+		"ip kube-proxy",
+		"ip6 kube-proxy",
+	}
+
+	output, err := c.executor.Command("nft", "list", "tables").CombinedOutput()
+	if err != nil {
+		errors = append(errors, fmt.Errorf("failed to run 'nft list tables': %w, output: %s", err, strings.TrimSpace(string(output))))
+	} else {
+		for _, table := range kubeProxyTables {
+			if strings.Contains(string(output), table) {
+				c.kubeProxyExist.Store(true)
+				klog.V(5).InfoS("Detected kube-proxy via nftables table existence", "table", table)
+				return
+			}
+		}
+	}
+
+	kubeProxyJumpRuleKeyword := fmt.Sprintf("-j %s", kubeProxyServiceChain)
+	ipProtocol := c.getIPProtocol()
+	checkChain := func(table, chain string) (found bool, err error) {
+		allRules, err := c.iptables.ListRules(ipProtocol, table, chain)
+		if err != nil {
+			return false, fmt.Errorf("failed to list iptables table %s chain %s rules: %w", table, chain, err)
+		}
+		for _, rules := range allRules {
+			for _, rule := range rules {
+				if strings.Contains(rule, kubeProxyJumpRuleKeyword) {
+					return true, nil
+				}
+			}
+		}
+		return false, nil
+	}
+
+	if found, err := checkChain(iptables.NATTable, iptables.PreRoutingChain); err != nil {
+		errors = append(errors, err)
+	} else if found {
+		c.kubeProxyExist.Store(true)
+		klog.V(5).InfoS("Detected kube-proxy via iptables rule", "table", iptables.NATTable, "chain", iptables.PreRoutingChain)
+		return
+	}
+
+	if found, err := checkChain(iptables.NATTable, iptables.OutputChain); err != nil {
+		errors = append(errors, err)
+	} else if found {
+		c.kubeProxyExist.Store(true)
+		klog.V(5).InfoS("Detected kube-proxy via iptables rule", "table", iptables.NATTable, "chain", iptables.OutputChain)
+		return
+	}
+
+	// If any check failed, assume kube-proxy is present.
+	if len(errors) > 0 {
+		c.kubeProxyExist.Store(true)
+		klog.V(5).InfoS("Got errors when detecting kube-proxy, assume kube-proxy is present", "errors", errors)
+	} else {
+		c.kubeProxyExist.Store(false)
+		klog.V(5).InfoS("Detected no rules related to kube-proxy, assume kube-proxy is not present")
+	}
+}
+
 func (c *Client) removeUnexpectedAntreaJumpRule(protocol iptables.Protocol, jumpRule jumpRule) error {
 	// List all the existing rules of the table and the chain where the Antrea jump rule will be added.
 	allExistingRules, err := c.iptables.ListRules(protocol, jumpRule.table, jumpRule.srcChain)
@@ -1242,7 +1332,7 @@ func (c *Client) restoreIptablesData(podCIDR *net.IPNet,
 		}
 	}
 
-	if c.proxyAll && !c.hostNetworkNFTables {
+	if c.proxyAll && !c.hostNetworkNFTables && c.kubeProxyExist.Load() {
 		// This rule is to bypass conntrack for packets sourced from external and destined to externalIPs, which also
 		// results in bypassing the chains managed by Antrea Proxy and kube-proxy in nat table.
 		writeLine(iptablesData, []string{
@@ -3084,33 +3174,36 @@ func (c *Client) nftablesProxyAll(tx *knftables.Transaction, ipProtocol knftable
 		return true
 	})
 
-	tx.Add(&knftables.Rule{
-		Chain: antreaNFTablesRawChainPreroutingProxyAll,
-		Rule: knftables.Concat(
-			ip, "daddr", "@", externalIPSet,
-			"counter",
-			"notrack",
-		),
-		Comment: ptr.To("Do not track request packets destined to external IPs"),
-	})
-	tx.Add(&knftables.Rule{
-		Chain: antreaNFTablesRawChainPreroutingProxyAll,
-		Rule: knftables.Concat(
-			ip, "saddr", "@", externalIPSet,
-			"counter",
-			"notrack",
-		),
-		Comment: ptr.To("Do not track reply packets sourced from external IPs"),
-	})
-	tx.Add(&knftables.Rule{
-		Chain: antreaNFTablesRawChainOutputProxyAll,
-		Rule: knftables.Concat(
-			ip, "daddr", "@", externalIPSet,
-			"counter",
-			"notrack",
-		),
-		Comment: ptr.To("Do not track request packets destined to external IPs"),
-	})
+	// When kube-proxy is present, add NOTRACK rules matching Service external IPs to bypass kube-proxy process.
+	if c.kubeProxyExist.Load() {
+		tx.Add(&knftables.Rule{
+			Chain: antreaNFTablesRawChainPreroutingProxyAll,
+			Rule: knftables.Concat(
+				ip, "daddr", "@", externalIPSet,
+				"counter",
+				"notrack",
+			),
+			Comment: ptr.To("Do not track request packets destined to external IPs"),
+		})
+		tx.Add(&knftables.Rule{
+			Chain: antreaNFTablesRawChainPreroutingProxyAll,
+			Rule: knftables.Concat(
+				ip, "saddr", "@", externalIPSet,
+				"counter",
+				"notrack",
+			),
+			Comment: ptr.To("Do not track reply packets sourced from external IPs"),
+		})
+		tx.Add(&knftables.Rule{
+			Chain: antreaNFTablesRawChainOutputProxyAll,
+			Rule: knftables.Concat(
+				ip, "daddr", "@", externalIPSet,
+				"counter",
+				"notrack",
+			),
+			Comment: ptr.To("Do not track request packets destined to external IPs"),
+		})
+	}
 
 	tx.Add(&knftables.Rule{
 		Chain: antreaNFTablesNatChainPreroutingProxyAll,
