@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"reflect"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/stretchr/testify/assert"
@@ -2705,38 +2706,43 @@ func TestDeleteHandlerTombstone(t *testing.T) {
 
 	for _, tt := range testCases {
 		t.Run(tt.name, func(t *testing.T) {
-			c := newFakeController(t, tt.objects, tt.crdObjects, true, true)
+			synctest.Test(t, func(t *testing.T) {
+				// Create the controller inside the bubble so that all goroutines
+				// it spawns (e.g. workqueue's waitingLoop) use the bubble's fake
+				// clock and are correctly tracked by synctest.Wait().
+				c := newFakeController(t, tt.objects, tt.crdObjects, true, true)
+				stopCh := make(chan struct{})
+				// Shut down the queue and stop informers before the bubble exits,
+				// matching the tearDown pattern used in other synctest-based tests.
+				t.Cleanup(func() {
+					close(stopCh)
+					c.queue.ShutDown()
+					synctest.Wait()
+				})
+				// Start informers inside the bubble so their goroutines are tracked
+				// by synctest. Do not call WaitForCacheSync here; synctest.Wait()
+				// blocks until all goroutines are idle, which guarantees all startup
+				// ADD events have been delivered to the queue.
+				c.informerFactory.Start(stopCh)
+				c.crdInformerFactory.Start(stopCh)
+				synctest.Wait()
+				// Drain any startup ADD events so the queue is empty before the tombstone test.
+				for c.queue.Len() > 0 {
+					item, _ := c.queue.Get()
+					c.queue.Done(item)
+				}
 
-			stopCh := make(chan struct{})
-			defer close(stopCh)
-			c.startInformers(stopCh)
+				tombstone := cache.DeletedFinalStateUnknown{Key: "test/tombstone-key", Obj: tt.tombstoneObj}
+				// This must not panic regardless of the inner object type.
+				tt.handler(c.Controller, tombstone)
+				synctest.Wait()
 
-			// Wait for at least one startup event to arrive before draining, so we don't
-			// drain prematurely when informer ADD events are still in flight.
-			if len(tt.crdObjects) > 0 {
-				require.Eventually(t, func() bool {
-					return c.queue.Len() > 0
-				}, 5*time.Second, 10*time.Millisecond, "timed out waiting for informer startup events")
-			}
-			// Drain all startup ADD events so the queue is empty before the tombstone test.
-			for c.queue.Len() > 0 {
-				item, _ := c.queue.Get()
-				c.queue.Done(item)
-			}
-
-			tombstone := cache.DeletedFinalStateUnknown{Key: "test/tombstone-key", Obj: tt.tombstoneObj}
-			// This must not panic regardless of the inner object type.
-			tt.handler(c.Controller, tombstone)
-
-			if tt.expectEnqueue {
-				assert.Eventually(t, func() bool {
-					return c.queue.Len() == 1
-				}, 5*time.Second, 10*time.Millisecond, "expected handler to enqueue an event via tombstone")
-			} else {
-				assert.Never(t, func() bool {
-					return c.queue.Len() > 0
-				}, 200*time.Millisecond, 10*time.Millisecond, "expected handler to not enqueue an event for invalid tombstone inner type")
-			}
+				if tt.expectEnqueue {
+					assert.Equal(t, 1, c.queue.Len(), "expected handler to enqueue an event via tombstone")
+				} else {
+					assert.Equal(t, 0, c.queue.Len(), "expected handler to not enqueue an event for invalid tombstone inner type")
+				}
+			})
 		})
 	}
 }
