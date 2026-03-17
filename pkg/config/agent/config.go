@@ -365,6 +365,14 @@ type EgressConfig struct {
 	// inheriting the parent interface’s MAC. Useful in cloud environments that require
 	// unique MAC addresses per interface.
 	UniqueMACForSubInterfaces *bool `yaml:"uniqueMACForSubInterfaces,omitempty"`
+	// When enabled, the IP assigner will ignore VLAN sub-interfaces of the transport
+	// interface that were not created by antrea-agent (i.e. those whose names don't start
+	// with "antrea-ext."). This prevents accidental modification or deletion of
+	// user-managed VLAN interfaces and their IP addresses during Egress IP reconciliation.
+	// Note that if a user-managed VLAN sub-interface already exists with the same VLAN ID
+	// needed by an Egress ExternalIPPool, creating the Antrea-managed sub-interface will fail.
+	// Defaults to false.
+	IgnoreUserInterfaces *bool `yaml:"ignoreUserInterfaces,omitempty"`
 }
 
 type IPsecConfig struct {

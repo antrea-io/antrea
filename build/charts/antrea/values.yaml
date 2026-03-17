@@ -133,6 +133,11 @@ egress:
   # inheriting the parent interface’s MAC. Useful in cloud environments that require
   # unique MAC addresses per interface.
   uniqueMACForSubInterfaces: true
+  # -- Ignore VLAN sub-interfaces of the transport interface not created by antrea-agent
+  # during Egress IP reconciliation. When enabled, only sub-interfaces named with the
+  # "antrea-ext." prefix are managed, preventing accidental deletion of user-managed
+  # VLAN interfaces and their IPs.
+  ignoreUserInterfaces: false
 
 nodePortLocal:
   # -- Enable the NodePortLocal feature.

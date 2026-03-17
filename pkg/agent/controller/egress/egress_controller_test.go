@@ -139,7 +139,7 @@ func (c *fakeSingleNodeCluster) AddClusterEventHandler(handler memberlist.Cluste
 
 func mockNewIPAssigner(ipAssigner ipassigner.IPAssigner) func() {
 	originalNewIPAssigner := newIPAssigner
-	newIPAssigner = func(_, _ string, _ linkmonitor.Interface, _ bool) (ipassigner.IPAssigner, error) {
+	newIPAssigner = func(_, _ string, _ linkmonitor.Interface, _, _ bool) (ipassigner.IPAssigner, error) {
 		return ipAssigner, nil
 	}
 	return func() {
@@ -207,6 +207,7 @@ func newFakeController(t *testing.T, initObjects []runtime.Object) *fakeControll
 		true,
 		nil,
 		true,
+		false,
 	)
 	egressController.localIPDetector = localIPDetector
 	return &fakeController{

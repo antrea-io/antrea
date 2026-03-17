@@ -4484,6 +4484,11 @@ data:
       # inheriting the parent interface’s MAC. Useful in cloud environments that require
       # unique MAC addresses per interface.
       uniqueMACForSubInterfaces: true
+      # Ignore VLAN sub-interfaces of the transport interface not created by antrea-agent
+      # during Egress IP reconciliation. When enabled, only sub-interfaces named with the
+      # "antrea-ext." prefix are managed, preventing accidental deletion of user-managed
+      # VLAN interfaces and their IPs.
+      ignoreUserInterfaces: false
 
     # ClusterIP CIDR range for Services. It's required when AntreaProxy is not enabled, and should be
     # set to the same value as the one specified by --service-cluster-ip-range for kube-apiserver. When
@@ -5771,7 +5776,7 @@ spec:
         kubectl.kubernetes.io/default-container: antrea-agent
         # Automatically restart Pods with a RollingUpdate if the ConfigMap changes
         # See https://helm.sh/docs/howto/charts_tips_and_tricks/#automatically-roll-deployments
-        checksum/config: bd3bfe0a3cf17f563005ab065f7a981e07285271165795d9f1ab81bb9c0dc1e3
+        checksum/config: a4a71c6b1093f5e6a208b85fa8e3f6265f2aeb1f17db94af741688e8dd429781
         checksum/ipsec-secret: d0eb9c52d0cd4311b6d252a951126bf9bea27ec05590bed8a394f0f792dcb2a4
       labels:
         app: antrea
@@ -6063,7 +6068,7 @@ spec:
       annotations:
         # Automatically restart Pod if the ConfigMap changes
         # See https://helm.sh/docs/howto/charts_tips_and_tricks/#automatically-roll-deployments
-        checksum/config: bd3bfe0a3cf17f563005ab065f7a981e07285271165795d9f1ab81bb9c0dc1e3
+        checksum/config: a4a71c6b1093f5e6a208b85fa8e3f6265f2aeb1f17db94af741688e8dd429781
       labels:
         app: antrea
         component: antrea-controller

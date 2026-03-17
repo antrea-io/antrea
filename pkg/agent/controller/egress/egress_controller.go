@@ -229,6 +229,7 @@ func NewEgressController(
 	supportSeparateSubnet bool,
 	linkMonitor linkmonitor.Interface,
 	uniqueMACForSubInterfaces bool,
+	ignoreUserInterfaces bool,
 ) (*EgressController, error) {
 	if trafficShapingEnabled && !openflow.OVSMetersAreSupported() {
 		klog.Info("EgressTrafficShaping feature gate is enabled, but it is ignored because OVS meters are not supported.")
@@ -289,7 +290,7 @@ func NewEgressController(
 			resyncPeriod,
 		)
 	}
-	ipAssigner, err := newIPAssigner(nodeTransportInterface, egressDummyDevice, linkMonitor, uniqueMACForSubInterfaces)
+	ipAssigner, err := newIPAssigner(nodeTransportInterface, egressDummyDevice, linkMonitor, uniqueMACForSubInterfaces, ignoreUserInterfaces)
 	if err != nil {
 		return nil, fmt.Errorf("initializing egressIP assigner failed: %v", err)
 	}

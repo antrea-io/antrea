@@ -217,10 +217,15 @@ type ipAssigner struct {
 	mutex       sync.RWMutex
 	// uniqueMACForSubInterfaces indicates whether to assign a unique MAC address to VLAN sub-interfaces.
 	uniqueMACForSubInterfaces bool
+	// ignoreUserInterfaces indicates whether to ignore VLAN sub-interfaces not created by
+	// antrea-agent during initialization. When true, only VLAN sub-interfaces whose names
+	// start with the vlanInterfacePrefix ("antrea-ext.") are considered by the IP assigner.
+	// This prevents accidental modification of user-managed interfaces and their IPs.
+	ignoreUserInterfaces bool
 }
 
 // NewIPAssigner returns an *ipAssigner.
-func NewIPAssigner(nodeTransportInterface string, dummyDeviceName string, linkMonitor linkmonitor.Interface, uniqueMACForSubInterfaces bool) (IPAssigner, error) {
+func NewIPAssigner(nodeTransportInterface string, dummyDeviceName string, linkMonitor linkmonitor.Interface, uniqueMACForSubInterfaces bool, ignoreUserInterfaces bool) (IPAssigner, error) {
 	ipv4, ipv6, externalInterface, err := util.GetIPNetDeviceByName(nodeTransportInterface)
 	if err != nil {
 		return nil, fmt.Errorf("get IPNetDevice from name %s error: %+v", nodeTransportInterface, err)
@@ -234,6 +239,7 @@ func NewIPAssigner(nodeTransportInterface string, dummyDeviceName string, linkMo
 		},
 		vlanAssignees:             map[int32]*assignee{},
 		uniqueMACForSubInterfaces: uniqueMACForSubInterfaces,
+		ignoreUserInterfaces:      ignoreUserInterfaces,
 	}
 	if ipv4 != nil {
 		// For the Egress scenario, the external IPs should always be present on the dummy
@@ -258,7 +264,7 @@ func NewIPAssigner(nodeTransportInterface string, dummyDeviceName string, linkMo
 			return nil, fmt.Errorf("error when ensuring dummy device exists: %v", err)
 		}
 	}
-	vlans, err := getVLANInterfaces(externalInterface.Index)
+	vlans, err := getVLANInterfaces(externalInterface.Index, ignoreUserInterfaces)
 	if err != nil {
 		return nil, fmt.Errorf("error when getting vlan devices: %w", err)
 	}
@@ -268,17 +274,25 @@ func NewIPAssigner(nodeTransportInterface string, dummyDeviceName string, linkMo
 	return a, nil
 }
 
-// getVLANInterfaces returns all VLAN sub-interfaces of the given parent interface.
-func getVLANInterfaces(parentIndex int) ([]*netlink.Vlan, error) {
+// getVLANInterfaces returns VLAN sub-interfaces of the given parent interface.
+// When ignoreUserInterfaces is true, only interfaces whose names start with
+// vlanInterfacePrefix are returned, skipping user-managed VLAN sub-interfaces.
+func getVLANInterfaces(parentIndex int, ignoreUserInterfaces bool) ([]*netlink.Vlan, error) {
 	links, err := netlink.LinkList()
 	if err != nil {
 		return nil, err
 	}
 	var vlans []*netlink.Vlan
 	for _, link := range links {
-		if vlan, ok := link.(*netlink.Vlan); ok && vlan.ParentIndex == parentIndex {
-			vlans = append(vlans, vlan)
+		vlan, ok := link.(*netlink.Vlan)
+		if !ok || vlan.ParentIndex != parentIndex {
+			continue
 		}
+		if ignoreUserInterfaces && !strings.HasPrefix(vlan.Attrs().Name, vlanInterfacePrefix) {
+			klog.V(2).InfoS("Ignoring user-managed VLAN sub-interface", "interface", vlan.Attrs().Name)
+			continue
+		}
+		vlans = append(vlans, vlan)
 	}
 	return vlans, nil
 }
