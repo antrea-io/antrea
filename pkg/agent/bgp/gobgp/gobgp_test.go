@@ -183,7 +183,88 @@ func TestConvertPeerConfigToGoBGPPeer(t *testing.T) {
 	assert.Equal(t, uint32(179), peer.GetTransport().GetRemotePort())
 	assert.Equal(t, uint32(2), peer.GetEbgpMultihop().GetMultihopTtl())
 	assert.Equal(t, uint32(120), peer.GetGracefulRestart().GetRestartTime())
+	assert.Nil(t, peer.GetTimers())
 
+}
+
+func TestConvertPeerConfigToGoBGPPeerTimers(t *testing.T) {
+	basePeer := &v1alpha1.BGPPeer{
+		Address: "192.168.0.1",
+		ASN:     65000,
+		Port:    ptr.To(int32(179)),
+	}
+
+	tests := []struct {
+		name                 string
+		keepaliveTimeSeconds *int32
+		holdTimeSeconds      *int32
+		expectedKeepalive    uint64
+		expectedHoldTime     uint64
+		expectTimersNil      bool
+		expectError          bool
+	}{
+		{
+			name:                 "Both KeepaliveTimeSeconds and HoldTimeSeconds set",
+			keepaliveTimeSeconds: ptr.To(int32(30)),
+			holdTimeSeconds:      ptr.To(int32(90)),
+			expectedKeepalive:    30,
+			expectedHoldTime:     90,
+		},
+		{
+			name:                 "Only KeepaliveTimeSeconds set without HoldTimeSeconds",
+			keepaliveTimeSeconds: ptr.To(int32(10)),
+			expectError:          true,
+		},
+		{
+			name:            "Only HoldTimeSeconds set without KeepaliveTimeSeconds",
+			holdTimeSeconds: ptr.To(int32(60)),
+			expectError:     true,
+		},
+		{
+			name:            "Neither KeepaliveTimeSeconds nor HoldTimeSeconds set",
+			expectTimersNil: true,
+		},
+		{
+			name:             "HoldTimeSeconds set to 0 disables hold timer",
+			holdTimeSeconds:  ptr.To(int32(0)),
+			expectedHoldTime: 0,
+		},
+		{
+			name:                 "KeepaliveTimeSeconds equal to HoldTimeSeconds is invalid",
+			keepaliveTimeSeconds: ptr.To(int32(60)),
+			holdTimeSeconds:      ptr.To(int32(60)),
+			expectError:          true,
+		},
+		{
+			name:                 "KeepaliveTimeSeconds greater than HoldTimeSeconds is invalid",
+			keepaliveTimeSeconds: ptr.To(int32(90)),
+			holdTimeSeconds:      ptr.To(int32(30)),
+			expectError:          true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			peer := *basePeer
+			peer.KeepaliveTimeSeconds = tt.keepaliveTimeSeconds
+			peer.HoldTimeSeconds = tt.holdTimeSeconds
+
+			result, err := convertPeerConfigToGoBGPPeer(bgp.PeerConfig{BGPPeer: &peer})
+			if tt.expectError {
+				assert.Error(t, err)
+				return
+			}
+			assert.NoError(t, err)
+			if tt.expectTimersNil {
+				assert.Nil(t, result.GetTimers())
+			} else {
+				timersConfig := result.GetTimers().GetConfig()
+				assert.NotNil(t, timersConfig)
+				assert.Equal(t, tt.expectedKeepalive, timersConfig.GetKeepaliveInterval())
+				assert.Equal(t, tt.expectedHoldTime, timersConfig.GetHoldTime())
+			}
+		})
+	}
 }
 
 func TestConvertGoBGPSessionStateToSessionState(t *testing.T) {

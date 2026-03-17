@@ -307,6 +307,32 @@ func convertPeerConfigToGoBGPPeer(peerConfig bgp.PeerConfig) (*gobgpapi.Peer, er
 			RestartTime: uint32(*peerConfig.GracefulRestartTimeSeconds),
 		}
 	}
+	if peerConfig.KeepaliveTimeSeconds != nil || peerConfig.HoldTimeSeconds != nil {
+		if peerConfig.HoldTimeSeconds != nil && *peerConfig.HoldTimeSeconds == 0 {
+			// holdTimeSeconds=0 explicitly disables the hold timer; keepaliveTimeSeconds must not be set.
+			if peerConfig.KeepaliveTimeSeconds != nil {
+				return nil, fmt.Errorf("keepaliveTimeSeconds cannot be set when holdTimeSeconds is 0 (hold timer disabled)")
+			}
+			peer.Timers = &gobgpapi.Timers{Config: &gobgpapi.TimersConfig{HoldTime: 0}}
+		} else {
+			// For a non-zero hold time, both fields must be provided together to avoid sending an
+			// unintended zero value for the missing field to GoBGP.
+			if peerConfig.KeepaliveTimeSeconds == nil || peerConfig.HoldTimeSeconds == nil {
+				return nil, fmt.Errorf("keepaliveTimeSeconds and holdTimeSeconds must be configured together")
+			}
+			keepalive := uint64(*peerConfig.KeepaliveTimeSeconds)
+			hold := uint64(*peerConfig.HoldTimeSeconds)
+			if keepalive >= hold {
+				return nil, fmt.Errorf("keepaliveTimeSeconds (%d) must be less than holdTimeSeconds (%d)", keepalive, hold)
+			}
+			peer.Timers = &gobgpapi.Timers{Config: &gobgpapi.TimersConfig{
+				KeepaliveInterval: keepalive,
+				HoldTime:          hold,
+			}}
+		}
+	}
+	// BFD configuration is not currently supported by GoBGP v3.37.0. The mapping logic will be added
+	// when GoBGP API adds per-peer BFD support.
 	return peer, nil
 }
 
