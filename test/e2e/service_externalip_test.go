@@ -300,7 +300,11 @@ func testServiceExternalTrafficPolicyLocal(t *testing.T, data *TestData) {
 			require.NoError(t, err)
 			defer data.clientset.CoreV1().Services(service.Namespace).Delete(context.TODO(), service.Name, metav1.DeleteOptions{})
 
-			eps = createEndpointSlice(service.Name, service.Namespace, tt.originalEndpoints)
+			epsAddrType := discoveryv1.AddressTypeIPv4
+			if utilnet.IsIPv6String(tt.expectedExternalIP) {
+				epsAddrType = discoveryv1.AddressTypeIPv6
+			}
+			eps = createEndpointSlice(service.Name, service.Namespace, epsAddrType, tt.originalEndpoints)
 			eps, err = data.clientset.DiscoveryV1().EndpointSlices(eps.Namespace).Create(context.TODO(), eps, metav1.CreateOptions{})
 			require.NoError(t, err)
 			defer data.clientset.DiscoveryV1().EndpointSlices(eps.Namespace).Delete(context.TODO(), eps.Name, metav1.DeleteOptions{})
@@ -322,19 +326,9 @@ func testServiceExternalTrafficPolicyLocal(t *testing.T, data *TestData) {
 }
 
 // createEndpointSlice creates an EndpointSlice for the given service with the specified endpoints.
-func createEndpointSlice(serviceName, namespace string, endpoints []discoveryv1.Endpoint) *discoveryv1.EndpointSlice {
-	var addressType discoveryv1.AddressType
-	// Determine address type from first endpoint
-	if len(endpoints) > 0 && len(endpoints[0].Addresses) > 0 {
-		if utilnet.IsIPv6String(endpoints[0].Addresses[0]) {
-			addressType = discoveryv1.AddressTypeIPv6
-		} else {
-			addressType = discoveryv1.AddressTypeIPv4
-		}
-	} else {
-		// Default to IPv4 if no endpoints
-		addressType = discoveryv1.AddressTypeIPv4
-	}
+// The addressType parameter determines the address family of the EndpointSlice, which is immutable
+// after creation. It must be set correctly even when the initial endpoints slice is empty.
+func createEndpointSlice(serviceName, namespace string, addressType discoveryv1.AddressType, endpoints []discoveryv1.Endpoint) *discoveryv1.EndpointSlice {
 	return &discoveryv1.EndpointSlice{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      fmt.Sprintf("%s-%s", serviceName, "slice"),
@@ -917,7 +911,7 @@ func (data *TestData) waitForServiceConfigured(service *v1.Service, expectedExte
 		return true, nil
 	})
 	if err != nil {
-		return service, assignedNode, fmt.Errorf("wait for Service %q configured failed: %v. Expected external IP %s on Node %s, actual status %#v, assigned Node: %s"+
+		return service, assignedNode, fmt.Errorf("wait for Service %q configured failed: %v. Expected external IP %s on Node %s, actual status %#v, assigned Node: %s",
 			service.Name, err, expectedExternalIP, expectedNodeName, service.Status, assignedNode)
 	}
 	return service, assignedNode, nil

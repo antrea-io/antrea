@@ -33,6 +33,7 @@ import (
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/util/workqueue"
 	"k8s.io/klog/v2"
+	utilnet "k8s.io/utils/net"
 
 	"antrea.io/antrea/pkg/agent/apis"
 	"antrea.io/antrea/pkg/agent/ipassigner"
@@ -432,7 +433,8 @@ func (c *ServiceExternalIPController) unassignIP(ip string, service apimachinery
 	return nil
 }
 
-// nodesHasHealthyServiceEndpoint returns the set of Nodes which has at least one healthy endpoint.
+// nodesHasHealthyServiceEndpoint returns the set of Nodes which has at least one healthy endpoint
+// for the address family matching the service's external IP.
 func (c *ServiceExternalIPController) nodesHasHealthyServiceEndpoint(service *corev1.Service) (sets.Set[string], error) {
 	nodes := sets.New[string]()
 	// List all EndpointSlices for this service using the label selector
@@ -443,7 +445,17 @@ func (c *ServiceExternalIPController) nodesHasHealthyServiceEndpoint(service *co
 	if err != nil {
 		return nodes, err
 	}
+	// Determine the address type matching the service's external IP, so that on dual-stack clusters
+	// we only consider EndpointSlices of the correct address family.
+	externalIP := c.getServiceExternalIP(service)
+	wantAddressType := discoveryv1.AddressTypeIPv4
+	if utilnet.IsIPv6String(externalIP) {
+		wantAddressType = discoveryv1.AddressTypeIPv6
+	}
 	for _, endpointSlice := range endpointSlices {
+		if endpointSlice.AddressType != wantAddressType {
+			continue
+		}
 		for _, ep := range endpointSlice.Endpoints {
 			if ep.NodeName == nil {
 				continue
