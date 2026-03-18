@@ -2711,14 +2711,9 @@ func TestDeleteHandlerTombstone(t *testing.T) {
 				// it spawns (e.g. workqueue's waitingLoop) use the bubble's fake
 				// clock and are correctly tracked by synctest.Wait().
 				c := newFakeController(t, tt.objects, tt.crdObjects, true, true)
-				stopCh := make(chan struct{})
-				// Shut down the queue and stop informers before the bubble exits,
-				// matching the tearDown pattern used in other synctest-based tests.
-				t.Cleanup(func() {
-					close(stopCh)
-					c.queue.ShutDown()
-					synctest.Wait()
-				})
+				ctx := t.Context()
+				stopCh := ctx.Done()
+				t.Cleanup(c.queue.ShutDown)
 				// Start informers inside the bubble so their goroutines are tracked
 				// by synctest. Do not call WaitForCacheSync here; synctest.Wait()
 				// blocks until all goroutines are idle, which guarantees all startup
