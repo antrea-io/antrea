@@ -188,6 +188,11 @@ const (
 	// features that rely on netfilter. Currently, nftables is supported by the following features:
 	// - AntreaProxy (proxyAll)
 	NFTablesHostNetworkMode featuregate.Feature = "NFTablesHostNetworkMode"
+
+	// alpha: v2.6
+	// Enable support for AntreaNodeConfig CRD, which allows per-Node configuration
+	// of Antrea agent settings via nodeSelector-based policies.
+	AntreaNodeConfig featuregate.Feature = "AntreaNodeConfig"
 )
 
 var (
@@ -234,12 +239,14 @@ var (
 		EgressSeparateSubnet:          {Default: true, PreRelease: featuregate.Beta},
 		NodeNetworkPolicy:             {Default: false, PreRelease: featuregate.Alpha},
 		NodeLatencyMonitor:            {Default: false, PreRelease: featuregate.Alpha},
+		AntreaNodeConfig:              {Default: false, PreRelease: featuregate.Alpha},
 	}
 
 	// AgentGates consists of all known feature gates for the Antrea Agent.
 	// When adding a new feature gate that applies to the Antrea Agent, please also add it here.
-	AgentGates = sets.New[featuregate.Feature](
+	AgentGates = sets.New(
 		AntreaIPAM,
+		AntreaNodeConfig,
 		AntreaPolicy,
 		AntreaProxy,
 		BGPPolicy,
@@ -273,7 +280,7 @@ var (
 
 	// ControllerGates consists of all known feature gates for the Antrea Controller.
 	// When adding a new feature gate that applies to the Antrea Controller, please also add it here.
-	ControllerGates = sets.New[featuregate.Feature](
+	ControllerGates = sets.New(
 		AdminNetworkPolicy,
 		AntreaIPAM,
 		AntreaPolicy,
@@ -306,6 +313,7 @@ var (
 		// in the future if it's fully tested on Windows.
 		BGPPolicy:         {},
 		Multicast:         {},
+		AntreaNodeConfig:  {},
 		SecondaryNetwork:  {},
 		ServiceExternalIP: {},
 		IPsecCertAuth:     {},
