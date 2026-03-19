@@ -1,5 +1,15 @@
 # Changelog 2.4
 
+## 2.4.5 - 2026-03-20
+
+### Fixed
+
+- Fix host tunnel traffic rules ignoring the configured TunnelPort and always using a fixed port value. ([#7824](https://github.com/antrea-io/antrea/pull/7824), [@hongliangl])
+- Support IPv6 traffic over IPv4 IPsec tunnel. ([#7759](https://github.com/antrea-io/antrea/pull/7759), [@xliuxu])
+- Add missing Service info for Pod to LB flows. ([#7614](https://github.com/antrea-io/antrea/pull/7614), [@petertran-avgo])
+- Update to latest iptables-wrapper, which fixes Antrea with recent versions of Talos. ([#7729](https://github.com/antrea-io/antrea/pull/7729), [@antoninbas])
+- Fix concurrent map access in GetFQDNCache to avoid Antrea agent crash issue. ([#7794](https://github.com/antrea-io/antrea/pull/7794), [@Ady0333])
+
 ## 2.4.4 - 2026-01-04
 
 ### Fixed
