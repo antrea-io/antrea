@@ -253,6 +253,18 @@ metadata:
     ipam.antrea.io/pod-ips: '<ip-in-namespace-pool>'
 ```
 
+**Restrictions on specified Pod IPs:**
+
+- At most one IPv4 address and one IPv6 address can be allocated to a Pod. If
+  the `ipam.antrea.io/pod-ips` annotation contains multiple addresses of the
+  same IP family, only the first one of each family will be used; the rest are
+  silently ignored.
+- When multiple IPPools of the same IP family are listed in the
+  `ipam.antrea.io/ippools` annotation (or inherited from the Namespace), a
+  specified IP must belong to the first IPPool of the matching IP family.
+  Allocation will fail if the IP is not within that Pool's range; subsequent
+  Pools of the same family will **not** be tried as a fallback.
+
 #### Persistent IP for StatefulSet Pod (available since Antrea 1.5)
 
 A StatefulSet Pod's IP will be kept after Pod restarts, when the IP is allocated from the
