@@ -131,6 +131,9 @@ var (
 	// The system auto-generated IPv6 link-local route always uses "fe80::/64" as the destination regardless of the
 	// interface's global address's mask.
 	_, llrCIDR, _ = net.ParseCIDR("fe80::/64")
+
+	// Declare this a global variable to allow for testing.
+	newNFTables = nftables.New
 )
 
 // jumpToAntreaChainPattern matches iptables jump rules that have a comment enclosed in double quotes and target
@@ -327,6 +330,7 @@ func (c *Client) Initialize(nodeConfig *config.NodeConfig, done func()) error {
 	c.hostNetworkNFTables = c.networkConfig.HostNetworkMode == config.HostNetworkModeNFTables
 
 	c.initializeServiceSets()
+	c.cleanupNFTablesLeftovers()
 
 	c.iptablesInitialized = make(chan struct{})
 	var err error
@@ -364,7 +368,13 @@ func (c *Client) Initialize(nodeConfig *config.NodeConfig, done func()) error {
 	}()
 
 	if c.hostNetworkAccelerationEnabled || c.hostNetworkNFTables && c.proxyAll {
-		nftables, err := nftables.New(c.networkConfig.IPv4Enabled, c.networkConfig.IPv6Enabled)
+		var nftOptions []nftables.OptionsFn
+		if c.hostNetworkAccelerationEnabled {
+			// When host-network acceleration is enabled, do the flowtable dry-run check.
+			nftOptions = append(nftOptions, nftables.WithFlowtableCheck)
+		}
+
+		nftables, err := newNFTables(c.networkConfig.IPv4Enabled, c.networkConfig.IPv6Enabled, nftOptions...)
 		if err != nil {
 			if c.proxyAll && c.hostNetworkNFTables {
 				// ProxyAll depends on nftables; fail if unavailable.
@@ -3304,6 +3314,86 @@ func (c *Client) nftablesTrafficAcceleration(tx *knftables.Transaction, ipProtoc
 			})
 		}
 	}
+}
+
+// cleanupNFTablesLeftovers removes nftables objects from a previous run when they are no longer used.
+func (c *Client) cleanupNFTablesLeftovers() {
+	cleanAcceleration := !c.hostNetworkAccelerationEnabled
+	cleanProxyAll := !c.proxyAll || !c.hostNetworkNFTables
+	if !cleanAcceleration && !cleanProxyAll {
+		return
+	}
+
+	nftClient, err := newNFTables(c.networkConfig.IPv4Enabled, c.networkConfig.IPv6Enabled)
+	if err != nil {
+		klog.InfoS("Skipping nftables leftover cleanup because nftables is not available", "err", err)
+		return
+	}
+
+	for ipProtocol, nft := range nftClient.All() {
+		tx := nft.NewTransaction()
+		if cleanAcceleration {
+			c.nftablesTrafficAccelerationCleanup(tx, ipProtocol)
+		}
+		if cleanProxyAll {
+			c.nftablesProxyAllCleanup(tx, ipProtocol)
+		}
+		if err = nft.Run(context.TODO(), tx); err != nil {
+			klog.InfoS("nftables leftover cleanup did not fully apply", "family", ipProtocol, "err", err)
+		}
+	}
+}
+
+func (c *Client) nftablesTrafficAccelerationCleanup(tx *knftables.Transaction, ipProtocol knftables.Family) {
+	tx.Destroy(&knftables.Chain{Name: antreaNFTablesChainForwardOffload})
+	tx.Destroy(&knftables.Flowtable{Name: antreaNFTablesFlowtable})
+	var ipAddr string
+	switch ipProtocol {
+	case knftables.IPv4Family:
+		ipAddr = "ipv4_addr"
+	case knftables.IPv6Family:
+		ipAddr = "ipv6_addr"
+	}
+	tx.Destroy(&knftables.Set{
+		Name:  antreaNFTablesSetPeerPodCIDR,
+		Type:  ipAddr,
+		Flags: []knftables.SetFlag{knftables.IntervalFlag},
+	})
+}
+
+func (c *Client) nftablesProxyAllCleanup(tx *knftables.Transaction, ipProtocol knftables.Family) {
+	for _, chain := range []string{
+		antreaNFTablesRawChainPreroutingProxyAll,
+		antreaNFTablesRawChainOutputProxyAll,
+		antreaNFTablesNatChainPreroutingProxyAll,
+		antreaNFTablesNatChainOutputProxyAll,
+		antreaNFTablesNatChainPostroutingProxyAll,
+	} {
+		tx.Destroy(&knftables.Chain{Name: chain})
+	}
+
+	var ipAddr string
+	var nodePortSet string
+	var externalIPSet string
+	switch ipProtocol {
+	case knftables.IPv4Family:
+		ipAddr = "ipv4_addr"
+		nodePortSet = antreaNFTablesSetNodePort
+		externalIPSet = antreaNFTablesSetExternalIP
+	case knftables.IPv6Family:
+		ipAddr = "ipv6_addr"
+		nodePortSet = antreaNFTablesSetNodePort6
+		externalIPSet = antreaNFTablesSetExternalIP6
+	}
+
+	tx.Destroy(&knftables.Set{
+		Name: nodePortSet,
+		Type: ipAddr + " . inet_proto . inet_service",
+	})
+	tx.Destroy(&knftables.Set{
+		Name: externalIPSet,
+		Type: ipAddr,
+	})
 }
 
 func (c *Client) syncNFTables(ctx context.Context) error {
