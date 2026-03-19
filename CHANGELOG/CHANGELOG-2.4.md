@@ -1,5 +1,18 @@
 # Changelog 2.4
 
+## 2.4.5 - 2026-03-26
+
+### Fixed
+
+- Fix host tunnel traffic rules ignoring the configured TunnelPort and always using a fixed port value. ([#7824](https://github.com/antrea-io/antrea/pull/7824), [@hongliangl])
+- Support IPv6 traffic over IPv4 IPsec tunnel. ([#7759](https://github.com/antrea-io/antrea/pull/7759), [@xliuxu])
+- Add missing Service info for Pod to LB flows. ([#7614](https://github.com/antrea-io/antrea/pull/7614), [@petertran-avgo])
+- Update to latest iptables-wrapper, which fixes Antrea with recent versions of Talos. ([#7729](https://github.com/antrea-io/antrea/pull/7729), [@antoninbas])
+- Fix concurrent map access in GetFQDNCache to avoid Antrea agent crash issue. ([#7794](https://github.com/antrea-io/antrea/pull/7794), [@Ady0333])
+- Update CNI plugins to 1.9.1 with CVE fix. ([#7896](https://github.com/antrea-io/antrea/pull/7896), [@luolanzone])
+- Update module google.golang.org/grpc to v1.79.3 with CVE fix. ([#7860](https://github.com/antrea-io/antrea/pull/7860), [@renovatebot])
+- Update module go.opentelemetry.io/otel/sdk to v1.40.0 with CVE fix. ([#7815](https://github.com/antrea-io/antrea/pull/7815), [@renovatebot])
+
 ## 2.4.4 - 2026-01-04
 
 ### Fixed
@@ -95,7 +108,7 @@
 - Enhance OVS commands for Antrea Windows to accelerate container recovery and improve robustness. ([#7228](https://github.com/antrea-io/antrea/pull/7228), [@XinShuYang])
 - Configure routes via `ip route add` to avoid incorrect replacement of routes when the interface is managed by a network daemon. ([#7134](https://github.com/antrea-io/antrea/pull/7134), [@luolanzone])
 - Restore secondary VLAN interface information and reconcile OVS ports after Agent restarts. ([#6853](https://github.com/antrea-io/antrea/pull/6853), [@KMAnju-2021])
-- Persist container netns with OVS port external IDs. ([#7199](https://github.com/antrea-io/antrea/pull/7199), [@[@jianjuns])
+- Persist container netns with OVS port external IDs. ([#7199](https://github.com/antrea-io/antrea/pull/7199), [@jianjuns])
 - Restore the existing SR-IOV secondary interface information when Agent restarts, using the information stored in the Pod NetworkStatus annotation, which ensures correct IP release and VF device name restoration after Pod deletion. ([#7240](https://github.com/antrea-io/antrea/pull/7240), [@luolanzone])
 - Fix invalid template ID in FlowAggregator for IPFIX exporter. ([#7208](https://github.com/antrea-io/antrea/pull/7208), [@antoninbas])
 - Fix race condition when getting metrics via `antctl` for FlowAggregator. ([#7230](https://github.com/antrea-io/antrea/pull/7230), [@antoninbas])
@@ -106,6 +119,7 @@
 - Fix rollback when `configureContainerLinkVeth` fails, to ensure subsequent retries can succeed. ([#7210](https://github.com/antrea-io/antrea/pull/7210) [#7213](https://github.com/antrea-io/antrea/pull/7213), [@tnqn])
 - Upgrade `otelhttp` to v0.55.0 to fix `WriteHeader` logging flood. ([#7196](https://github.com/antrea-io/antrea/pull/7196), [@DeeBi9])
 
+[@Ady0333]: https://github.com/Ady0333
 [@AryanBakliwal]: https://github.com/AryanBakliwal
 [@ColonelBundy]: https://github.com/ColonelBundy
 [@DeeBi9]: https://github.com/DeeBi9
@@ -122,6 +136,8 @@
 [@luolanzone]: https://github.com/luolanzone
 [@petertran-avgo]: https://github.com/petertran-avgo
 [@rajnkamr]: https://github.com/rajnkamr
+[@renovatebot]: https://github.com/renovatebot
 [@tnqn]: https://github.com/tnqn
 [@wenqiq]: https://github.com/wenqiq
 [@wenyingd]: https://github.com/wenyingd
+[@xliuxu]: https://github.com/xliuxu
