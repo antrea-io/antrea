@@ -1,5 +1,24 @@
 # Changelog 2.5
 
+## 2.5.2 - 2026-03-26
+
+### Added
+
+- Add nftables information in Agent supportbundle. ([#7547](https://github.com/antrea-io/antrea/pull/7547), [@molegit9])
+- Support IPv6 traffic over IPv4 IPsec tunnel. ([#7759](https://github.com/antrea-io/antrea/pull/7759), [@xliuxu])
+
+### Fixed
+
+- Fix host tunnel traffic rules ignoring the configured TunnelPort and always using a fixed port value. ([#7824](https://github.com/antrea-io/antrea/pull/7824), [@hongliangl])
+- Fix a bug in hybrid mode where a failed nftables delete for a non-existent Pod CIDR element left stale cached state, preventing OVS flows and routes from being installed when a new Node reused the same Pod CIDR. ([#7760](https://github.com/antrea-io/antrea/pull/7760), [@hongliangl])
+- Update to latest iptables-wrapper, which fixes Antrea with recent versions of Talos. ([#7729](https://github.com/antrea-io/antrea/pull/7729), [@antoninbas])
+- Add missing Service info in AntreaProxy for Pod to Service flows. ([#7614](https://github.com/antrea-io/antrea/pull/7614), [@petertran-avgo])
+- Fix FlowAggregator skipping Service UID population for flows from Services without a port name, causing exported flows to be missing Service UID information. ([#7681](https://github.com/antrea-io/antrea/pull/7681), [@luolanzone])
+- Fix concurrent map access in GetFQDNCache to avoid Antrea agent crash issue. ([#7794](https://github.com/antrea-io/antrea/pull/7794), [@Ady0333])
+- Update CNI plugins to 1.9.1 with CVE fix. ([#7896](https://github.com/antrea-io/antrea/pull/7896), [@luolanzone])
+- Update module google.golang.org/grpc to v1.79.3 with CVE fix. ([#7860](https://github.com/antrea-io/antrea/pull/7860), [@renovatebot])
+- Update module go.opentelemetry.io/otel/sdk to v1.40.0 with CVE fix. ([#7815](https://github.com/antrea-io/antrea/pull/7815), [@renovatebot])
+
 ## 2.5.1 - 2026-01-06
 
 ### Fixed
@@ -71,6 +90,7 @@
 - Add missing Run calls for nodeStore / serviceStore to start the garbage collection routines and fix a memory leak for FlowAggregator. ([#7343](https://github.com/antrea-io/antrea/pull/7343), [@antoninbas])
 - Remove trailing whitespace from default manifests to fix antrea-config ConfigMap formatting issues. ([#7311](https://github.com/antrea-io/antrea/pull/7311), [@antoninbas])
 
+[@Ady0333]: https://github.com/Ady0333
 [@Atish-iaf]: https://github.com/Atish-iaf
 [@Dyanngg]: https://github.com/Dyanngg
 [@XinShuYang]: https://github.com/XinShuYang
@@ -83,7 +103,10 @@
 [@hongliangl]: https://github.com/hongliangl
 [@jianjuns]: https://github.com/jianjuns
 [@luolanzone]: https://github.com/luolanzone
-[@renovatebot](https://github.com/renovatebot)
+[@molegit9]: https://github.com/molegit9
+[@petertran-avgo]: https://github.com/petertran-avgo
+[@renovatebot]: https://github.com/renovatebot
 [@sratslla]: https://github.com/sratslla
 [@wenqiq]: https://github.com/wenqiq
 [@wenyingd]: https://github.com/wenyingd
+[@xliuxu]: https://github.com/xliuxu
