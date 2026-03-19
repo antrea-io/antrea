@@ -267,6 +267,13 @@ func (cs *ConntrackConnectionStore) AddOrUpdateConn(conn *connection.Connection)
 		existingConn.ReversePackets = conn.ReversePackets
 		existingConn.TCPState = conn.TCPState
 		existingConn.IsActive = utils.CheckConntrackConnActive(existingConn)
+		// If FlowType was set to Unspecified because the nodeRouteController had not yet
+		// synced when the connection was first seen, recompute it now if the controller is synced.
+		if existingConn.FlowType == utils.FlowTypeUnspecified {
+			if nrc, ok := cs.nodeRouteController.(interface{ HasSynced() bool }); !ok || nrc.HasSynced() {
+				existingConn.FlowType = findFlowType(existingConn, cs.nodeRouteController, cs.isNetworkPolicyOnly)
+			}
+		}
 		if existingConn.IsActive {
 			existingItem, exists := cs.expirePriorityQueue.KeyToItem[connKey]
 			if !exists {

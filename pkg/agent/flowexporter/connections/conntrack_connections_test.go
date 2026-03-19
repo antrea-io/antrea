@@ -216,6 +216,98 @@ func TestConntrackConnectionStore_AddOrUpdateConn(t *testing.T) {
 			},
 		},
 		{
+			// A connection stored with FlowTypeUnspecified (NRC not yet synced) must have its
+			// FlowType recomputed on the next update once the NRC has synced.
+			name:                             "updateConn_recomputesFlowTypeWhenUnspecifiedAndSynced",
+			expectNetworkPolicyMetadataAdded: false,
+			nodeRouteController: &fakeNodeRouteQuerier{
+				hasSynced:  true,
+				podSubnets: map[string]bool{"5.6.7.8": true, "8.7.6.5": true},
+			},
+			oldConn: &connection.Connection{
+				StartTime:       refTime.Add(-(time.Second * 50)),
+				StopTime:        refTime.Add(-(time.Second * 30)),
+				LastExportTime:  refTime.Add(-(time.Second * 50)),
+				OriginalPackets: 0xfff,
+				OriginalBytes:   0xbaaaaa00000000,
+				ReversePackets:  0xf,
+				ReverseBytes:    0xbaa,
+				FlowKey:         tuple,
+				IsPresent:       true,
+				FlowType:        utils.FlowTypeUnspecified,
+			},
+			newConn: connection.Connection{
+				StartTime:       refTime.Add(-(time.Second * 50)),
+				StopTime:        refTime,
+				OriginalPackets: 0xffff,
+				OriginalBytes:   0xbaaaaa0000000000,
+				ReversePackets:  0xff,
+				ReverseBytes:    0xbaaa,
+				FlowKey:         tuple,
+				IsPresent:       true,
+			},
+			expectedConn: connection.Connection{
+				StartTime:       refTime.Add(-(time.Second * 50)),
+				StopTime:        refTime,
+				LastExportTime:  refTime.Add(-(time.Second * 50)),
+				OriginalPackets: 0xffff,
+				OriginalBytes:   0xbaaaaa0000000000,
+				ReversePackets:  0xff,
+				ReverseBytes:    0xbaaa,
+				FlowKey:         tuple,
+				IsPresent:       true,
+				IsActive:        true,
+				// Both IPs are in pod subnets; neither SourcePodName nor DestinationPodName
+				// is set on the stored connection, so findFlowType returns FlowTypeInterNode.
+				FlowType: utils.FlowTypeInterNode,
+			},
+		},
+		{
+			// A connection stored with FlowTypeUnspecified must remain Unspecified on update
+			// when the NRC has still not synced.
+			name:                             "updateConn_keepsUnspecifiedFlowTypeWhenNotSynced",
+			expectNetworkPolicyMetadataAdded: false,
+			nodeRouteController: &fakeNodeRouteQuerier{
+				hasSynced:  false,
+				podSubnets: map[string]bool{"5.6.7.8": true, "8.7.6.5": true},
+			},
+			oldConn: &connection.Connection{
+				StartTime:       refTime.Add(-(time.Second * 50)),
+				StopTime:        refTime.Add(-(time.Second * 30)),
+				LastExportTime:  refTime.Add(-(time.Second * 50)),
+				OriginalPackets: 0xfff,
+				OriginalBytes:   0xbaaaaa00000000,
+				ReversePackets:  0xf,
+				ReverseBytes:    0xbaa,
+				FlowKey:         tuple,
+				IsPresent:       true,
+				FlowType:        utils.FlowTypeUnspecified,
+			},
+			newConn: connection.Connection{
+				StartTime:       refTime.Add(-(time.Second * 50)),
+				StopTime:        refTime,
+				OriginalPackets: 0xffff,
+				OriginalBytes:   0xbaaaaa0000000000,
+				ReversePackets:  0xff,
+				ReverseBytes:    0xbaaa,
+				FlowKey:         tuple,
+				IsPresent:       true,
+			},
+			expectedConn: connection.Connection{
+				StartTime:       refTime.Add(-(time.Second * 50)),
+				StopTime:        refTime,
+				LastExportTime:  refTime.Add(-(time.Second * 50)),
+				OriginalPackets: 0xffff,
+				OriginalBytes:   0xbaaaaa0000000000,
+				ReversePackets:  0xff,
+				ReverseBytes:    0xbaaa,
+				FlowKey:         tuple,
+				IsPresent:       true,
+				IsActive:        true,
+				FlowType:        utils.FlowTypeUnspecified,
+			},
+		},
+		{
 			name:                             "addConnWithOldTimestamp_NoNetworkPolicyMetadata",
 			oldConn:                          nil,
 			expectNetworkPolicyMetadataAdded: false,
@@ -250,6 +342,7 @@ func TestConntrackConnectionStore_AddOrUpdateConn(t *testing.T) {
 			oldConn:                          nil,
 			expectNetworkPolicyMetadataAdded: true,
 			nodeRouteController: &fakeNodeRouteQuerier{
+				hasSynced: true,
 				podSubnets: map[string]bool{
 					"5.6.7.8": true,
 					"8.7.6.5": true,
@@ -487,6 +580,7 @@ func TestConntrackConnectionStore_Run_NetworkPolicyWait(t *testing.T) {
 type fakeNodeRouteQuerier struct {
 	podSubnets map[string]bool
 	gwSubnets  map[string]bool
+	hasSynced  bool
 }
 
 func (f *fakeNodeRouteQuerier) LookupIPInPodSubnets(ip netip.Addr) (bool, bool) {
@@ -494,6 +588,10 @@ func (f *fakeNodeRouteQuerier) LookupIPInPodSubnets(ip netip.Addr) (bool, bool) 
 	isGw := f.gwSubnets[s]
 	isPod := f.podSubnets[s] || isGw
 	return isPod, isGw
+}
+
+func (f *fakeNodeRouteQuerier) HasSynced() bool {
+	return f.hasSynced
 }
 
 func TestFindFlowType(t *testing.T) {
