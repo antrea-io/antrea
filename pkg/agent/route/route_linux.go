@@ -355,22 +355,29 @@ func (c *Client) Initialize(nodeConfig *config.NodeConfig, done func()) error {
 		klog.Info("Initialized iptables")
 	}()
 
-	if c.hostNetworkAccelerationEnabled || c.hostNetworkNFTables && c.proxyAll {
-		nftables, err := nftables.New(c.networkConfig.IPv4Enabled, c.networkConfig.IPv6Enabled)
-		if err != nil {
-			if c.proxyAll && c.hostNetworkNFTables {
-				// ProxyAll depends on nftables; fail if unavailable.
-				return fmt.Errorf("failed to create nftables instance: %w", err)
-			}
-			// Host-network acceleration is optional; skip gracefully.
-			if c.hostNetworkAccelerationEnabled {
-				klog.ErrorS(err, "Failed to create nftables instance, skipping host network acceleration")
-			}
+	// Create a nftables client and sync nftables configuration. This is done even when no nftables
+	// feature is currently active, to clean up any stale objects left from a previous run.
+	var nftOptions []nftables.OptionsFn
+	if c.hostNetworkAccelerationEnabled {
+		// When host-network acceleration is enabled, do the flowtable dry-run check.
+		nftOptions = append(nftOptions, nftables.WithFlowtableCheck)
+	}
+	nftClient, err := nftables.New(c.networkConfig.IPv4Enabled, c.networkConfig.IPv6Enabled, nftOptions...)
+	if err != nil {
+		if c.proxyAll && c.hostNetworkNFTables {
+			// ProxyAll depends on nftables; fail if unavailable.
+			return fmt.Errorf("failed to create nftables instance: %w", err)
+		}
+		// Host-network acceleration is optional; skip gracefully.
+		if c.hostNetworkAccelerationEnabled {
+			klog.ErrorS(err, "Failed to create nftables instance, skipping host network acceleration")
 		} else {
-			c.nftables = nftables
-			if err := c.syncNFTables(context.TODO()); err != nil {
-				return fmt.Errorf("failed to initialize nftables: %w", err)
-			}
+			klog.ErrorS(err, "Skipping nftables leftover cleanup because nftables is not available")
+		}
+	} else {
+		c.nftables = nftClient
+		if err := c.syncNFTables(context.TODO(), true); err != nil {
+			return fmt.Errorf("failed to initialize nftables: %w", err)
 		}
 	}
 
@@ -459,7 +466,7 @@ func (c *Client) syncNetworkConfig(ctx context.Context) {
 		return
 	}
 	if c.nftables != nil {
-		if err := c.syncNFTables(ctx); err != nil {
+		if err := c.syncNFTables(ctx, false); err != nil {
 			klog.ErrorS(err, "Failed to sync nftables")
 		}
 	}
@@ -2036,7 +2043,7 @@ func (c *Client) AddRoutes(podCIDR *net.IPNet, nodeName string, nodeIP, nodeGwIP
 		podCIDRRoute.Gw = nodeIP
 		routes = append(routes, podCIDRRoute)
 		// Update the nftables set that contains all peer PodCIDRs.
-		if c.nftables != nil {
+		if c.hostNetworkAccelerationEnabled && c.nftables != nil {
 			if err := c.addPeerPodCIDRToNFTablesSet(podCIDR); err != nil {
 				return err
 			}
@@ -2130,7 +2137,7 @@ func (c *Client) DeleteRoutes(podCIDR *net.IPNet) error {
 			c.nodeNeighbors.Delete(podCIDRStr)
 		}
 	}
-	if c.nftables != nil {
+	if c.hostNetworkAccelerationEnabled && c.nftables != nil {
 		if err := c.deletePeerPodCIDRFromNFTablesSet(podCIDR); err != nil {
 			return err
 		}
@@ -3201,8 +3208,79 @@ func (c *Client) nftablesTrafficAcceleration(tx *knftables.Transaction, ipProtoc
 	}
 }
 
-func (c *Client) syncNFTables(ctx context.Context) error {
+func (c *Client) nftablesTrafficAccelerationCleanup(tx *knftables.Transaction, ipProtocol knftables.Family) {
+	tx.Destroy(&knftables.Chain{Name: antreaNFTablesChainForwardOffload})
+	tx.Destroy(&knftables.Flowtable{Name: antreaNFTablesFlowtable})
+	var ipAddr string
+	switch ipProtocol {
+	case knftables.IPv4Family:
+		ipAddr = "ipv4_addr"
+	case knftables.IPv6Family:
+		ipAddr = "ipv6_addr"
+	}
+	tx.Destroy(&knftables.Set{
+		Name:  antreaNFTablesSetPeerPodCIDR,
+		Type:  ipAddr,
+		Flags: []knftables.SetFlag{knftables.IntervalFlag},
+	})
+}
+
+func (c *Client) nftablesProxyAllCleanup(tx *knftables.Transaction, ipProtocol knftables.Family) {
+	for _, chain := range []string{
+		antreaNFTablesRawChainPreroutingProxyAll,
+		antreaNFTablesRawChainOutputProxyAll,
+		antreaNFTablesNatChainPreroutingProxyAll,
+		antreaNFTablesNatChainOutputProxyAll,
+		antreaNFTablesNatChainPostroutingProxyAll,
+	} {
+		tx.Destroy(&knftables.Chain{Name: chain})
+	}
+	var ipAddr string
+	var nodePortSet string
+	var externalIPSet string
+	switch ipProtocol {
+	case knftables.IPv4Family:
+		ipAddr = "ipv4_addr"
+		nodePortSet = antreaNFTablesSetNodePort
+		externalIPSet = antreaNFTablesSetExternalIP
+	case knftables.IPv6Family:
+		ipAddr = "ipv6_addr"
+		nodePortSet = antreaNFTablesSetNodePort6
+		externalIPSet = antreaNFTablesSetExternalIP6
+	}
+	tx.Destroy(&knftables.Set{
+		Name: nodePortSet,
+		Type: ipAddr + " . inet_proto . inet_service",
+	})
+	tx.Destroy(&knftables.Set{
+		Name: externalIPSet,
+		Type: ipAddr,
+	})
+}
+
+func (c *Client) syncNFTables(ctx context.Context, cleanupStaleObjects bool) error {
 	for ipProtocol, nft := range c.nftables.All() {
+		if cleanupStaleObjects {
+			cleanAcceleration := !c.hostNetworkAccelerationEnabled
+			cleanProxyAll := !c.proxyAll || !c.hostNetworkNFTables
+			if cleanAcceleration || cleanProxyAll {
+				tx := nft.NewTransaction()
+				if cleanAcceleration {
+					c.nftablesTrafficAccelerationCleanup(tx, ipProtocol)
+				}
+				if cleanProxyAll {
+					c.nftablesProxyAllCleanup(tx, ipProtocol)
+				}
+				if err := nft.Run(ctx, tx); err != nil {
+					klog.InfoS("nftables leftover cleanup did not fully apply", "family", ipProtocol, "err", err)
+				}
+			}
+		}
+
+		if !c.hostNetworkAccelerationEnabled && (!c.proxyAll || !c.hostNetworkNFTables) {
+			continue
+		}
+
 		tx := nft.NewTransaction()
 		// Add the table whose name is defined when initializing nftables instance.
 		tx.Add(&knftables.Table{
