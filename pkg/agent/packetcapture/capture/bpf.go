@@ -193,6 +193,33 @@ func compareProtocol(protocol uint32, skipTrue, skipFalse uint8) bpf.Instruction
 	return bpf.JumpIf{Cond: bpf.JumpEqual, Val: protocol, SkipTrue: skipTrue, SkipFalse: skipFalse}
 }
 
+// appendProtocolFilters appends protocol-related checks and computes jump offsets
+// based on the current instruction length.
+func appendProtocolFilters(inst []bpf.Instruction, handler *ipFamilyHandler, proto uint32, hasTransport bool, size uint8) []bpf.Instruction {
+	skipToEnd := func(curLen int) uint8 {
+		return size - uint8(curLen) - 2
+	}
+
+	inst = append(inst, handler.loadProtocol)
+
+	// For IPv6 without transport filters, include Fragment Extension Header handling
+	// to match libpcap/tcpdump behavior.
+	if handler.etherType == etherTypeIPv6 && !hasTransport {
+		// If protocol matches directly, skip past the extension header check.
+		inst = append(inst, compareProtocol(proto, ip6FragExtInstructionCnt, 0))
+		// If Next Header is NOT Fragment (44), jump to drop.
+		inst = append(inst, bpf.JumpIf{Cond: bpf.JumpEqual, Val: ip6FragmentNextHeader, SkipTrue: 0, SkipFalse: skipToEnd(len(inst))})
+		// Load the inner Next Header from inside the Fragment Extension Header.
+		inst = append(inst, bpf.LoadAbsolute{Off: ip6FragExtInnerProtocol, Size: lengthByte})
+		// Check if the inner protocol matches. Jump to drop if not.
+		inst = append(inst, compareProtocol(proto, 0, skipToEnd(len(inst))))
+		return inst
+	}
+
+	inst = append(inst, compareProtocol(proto, 0, skipToEnd(len(inst))))
+	return inst
+}
+
 // getAddressChunk abstracts the process of extracting a 4-byte chunk from an IP address,
 // handling the structural differences between IPv4 (one chunk) and IPv6 (four chunks).
 func (h *ipFamilyHandler) getAddressChunk(ip net.IP, chunkIndex int) uint32 {
@@ -411,34 +438,33 @@ func compileGenericPacketFilter(handler *ipFamilyHandler, packetSpec *crdv1alpha
 	// have 3 instructions so far.
 	inst = append(inst, compareProtocolIP(handler.etherType, 0, size-3))
 
+	hasTransport := hasTransportFilters(packetSpec)
+	var (
+		hasProtocol      bool
+		proto           uint32
+		deferProtoCheck bool
+	)
+
 	if packetSpec != nil && packetSpec.Protocol != nil {
-		var proto uint32
+		hasProtocol = true
 		if packetSpec.Protocol.Type == intstr.Int {
 			proto = uint32(packetSpec.Protocol.IntVal)
 		} else {
 			proto = ProtocolMap[strings.ToUpper(packetSpec.Protocol.StrVal)]
 		}
-		inst = append(inst, handler.loadProtocol)
 
-		// For IPv6 without transport filters, add Fragment Extension Header
-		// handling to match libpcap/tcpdump behavior. When an IPv6 packet
-		// has a Fragment Extension Header (Next Header = 44), the real
-		// protocol is inside the extension header at offset [54].
-		if handler.etherType == etherTypeIPv6 && !hasTransportFilters(packetSpec) {
-			inst = append(inst,
-				// If protocol matches directly, skip past the extension header check.
-				compareProtocol(proto, ip6FragExtInstructionCnt, 0),
-				// If Next Header is NOT Fragment (44), jump to drop.
-				// size-6 because: at this point we have 5 instructions, this is the 6th,
-				// and we need to skip to the last instruction (ret drop) at position size-1.
-				bpf.JumpIf{Cond: bpf.JumpEqual, Val: ip6FragmentNextHeader, SkipTrue: 0, SkipFalse: size - 6},
-				// Load the inner Next Header from inside the Fragment Extension Header.
-				bpf.LoadAbsolute{Off: ip6FragExtInnerProtocol, Size: lengthByte},
-				// Check if the inner protocol matches. Jump to drop if not.
-				compareProtocol(proto, 0, size-8),
-			)
-		} else {
-			inst = append(inst, compareProtocol(proto, 0, size-5))
+		// For IPv6 with transport-level filters and at least one IP filter,
+		// defer protocol checks until after IP checks for one-way directions.
+		// This better aligns with tcpdump output ordering for many complex
+		// expressions where L3 constraints are evaluated before protocol checks.
+		deferProtoCheck = handler.etherType == etherTypeIPv6 &&
+			hasTransport &&
+			(srcIP != nil || dstIP != nil) &&
+			(direction == crdv1alpha1.CaptureDirectionSourceToDestination ||
+				direction == crdv1alpha1.CaptureDirectionDestinationToSource)
+
+		if !deferProtoCheck {
+			inst = appendProtocolFilters(inst, handler, proto, hasTransport, size)
 		}
 	}
 
@@ -511,9 +537,15 @@ func compileGenericPacketFilter(handler *ipFamilyHandler, packetSpec *crdv1alpha
 	switch direction {
 	case crdv1alpha1.CaptureDirectionSourceToDestination:
 		inst = append(inst, compileIPFilters(handler, srcIP, dstIP, size, uint8(len(inst)), 0, false)...)
+		if hasProtocol && deferProtoCheck {
+			inst = appendProtocolFilters(inst, handler, proto, hasTransport, size)
+		}
 	case crdv1alpha1.CaptureDirectionDestinationToSource:
 		transport.srcPort, transport.dstPort = transport.dstPort, transport.srcPort
 		inst = append(inst, compileIPFilters(handler, dstIP, srcIP, size, uint8(len(inst)), 0, false)...)
+		if hasProtocol && deferProtoCheck {
+			inst = appendProtocolFilters(inst, handler, proto, hasTransport, size)
+		}
 	default:
 		skipFalse := calculateSkipFalse(handler, srcIP, dstIP, &transport)
 		inst = append(inst, compileIPFilters(handler, srcIP, dstIP, size, uint8(len(inst)), skipFalse, true)...)
