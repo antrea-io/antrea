@@ -3683,3 +3683,225 @@ func newMockNFTables(enableIPv4, enableIPv6 bool) (*nftables.Client, error) {
 
 	return mockNFTables, nil
 }
+
+type nftablesRunErrFake struct {
+	*knftables.Fake
+}
+
+func (f *nftablesRunErrFake) Run(_ context.Context, _ *knftables.Transaction) error {
+	return fmt.Errorf("mock nft Run failure")
+}
+
+func testNFTAddAccelerationRules(t *testing.T, ctx context.Context, f *knftables.Fake) {
+	t.Helper()
+	tx := f.NewTransaction()
+	tx.Add(&knftables.Table{Comment: ptr.To("Rules for Antrea")})
+	tx.Add(&knftables.Flowtable{
+		Name:     antreaNFTablesFlowtable,
+		Priority: ptr.To(knftables.FilterIngressPriority),
+		Devices:  []string{"antrea-gw0"},
+	})
+	tx.Add(&knftables.Chain{
+		Name:     antreaNFTablesChainForwardOffload,
+		Type:     ptr.To(knftables.FilterType),
+		Hook:     ptr.To(knftables.ForwardHook),
+		Priority: ptr.To(knftables.FilterPriority),
+	})
+	tx.Add(&knftables.Set{
+		Name:  antreaNFTablesSetPeerPodCIDR,
+		Type:  "ipv4_addr",
+		Flags: []knftables.SetFlag{knftables.IntervalFlag},
+	})
+	require.NoError(t, f.Run(ctx, tx))
+}
+
+func testNFTAddProxyAllRules(t *testing.T, ctx context.Context, f *knftables.Fake) {
+	t.Helper()
+	dnatPrio := knftables.DNATPriority + "-1"
+	tx := f.NewTransaction()
+	tx.Add(&knftables.Table{Comment: ptr.To("Rules for Antrea")})
+	tx.Add(&knftables.Chain{
+		Name:     antreaNFTablesRawChainPreroutingProxyAll,
+		Type:     ptr.To(knftables.FilterType),
+		Hook:     ptr.To(knftables.PreroutingHook),
+		Priority: ptr.To(knftables.RawPriority),
+	})
+	tx.Add(&knftables.Chain{
+		Name:     antreaNFTablesRawChainOutputProxyAll,
+		Type:     ptr.To(knftables.FilterType),
+		Hook:     ptr.To(knftables.OutputHook),
+		Priority: ptr.To(knftables.RawPriority),
+	})
+	tx.Add(&knftables.Chain{
+		Name:     antreaNFTablesNatChainPreroutingProxyAll,
+		Type:     ptr.To(knftables.NATType),
+		Hook:     ptr.To(knftables.PreroutingHook),
+		Priority: &dnatPrio,
+	})
+	tx.Add(&knftables.Chain{
+		Name:     antreaNFTablesNatChainOutputProxyAll,
+		Type:     ptr.To(knftables.NATType),
+		Hook:     ptr.To(knftables.OutputHook),
+		Priority: &dnatPrio,
+	})
+	tx.Add(&knftables.Chain{
+		Name:     antreaNFTablesNatChainPostroutingProxyAll,
+		Type:     ptr.To(knftables.NATType),
+		Hook:     ptr.To(knftables.PostroutingHook),
+		Priority: ptr.To(knftables.SNATPriority),
+	})
+	tx.Add(&knftables.Set{Name: antreaNFTablesSetNodePort, Type: "ipv4_addr . inet_proto . inet_service"})
+	tx.Add(&knftables.Set{Name: antreaNFTablesSetExternalIP, Type: "ipv4_addr"})
+	require.NoError(t, f.Run(ctx, tx))
+}
+
+func TestCleanupNFTablesLeftovers(t *testing.T) {
+	ctx := context.TODO()
+	proxyAllChainNames := []string{
+		antreaNFTablesRawChainPreroutingProxyAll,
+		antreaNFTablesRawChainOutputProxyAll,
+		antreaNFTablesNatChainPreroutingProxyAll,
+		antreaNFTablesNatChainOutputProxyAll,
+		antreaNFTablesNatChainPostroutingProxyAll,
+	}
+	testCases := []struct {
+		name                           string
+		hostNetworkAccelerationEnabled bool
+		proxyAll                       bool
+		hostNetworkNFTables            bool
+		accelerationRulesInstalled     bool
+		proxyAllRulesInstalled         bool
+		nftRunFails                    bool
+		checkNFTAfterCleanup           func(t *testing.T, f *knftables.Fake)
+	}{
+		{
+			name:                           "no need to cleanup",
+			hostNetworkAccelerationEnabled: true,
+			proxyAll:                       true,
+			hostNetworkNFTables:            true,
+			accelerationRulesInstalled:     true,
+			proxyAllRulesInstalled:         true,
+			checkNFTAfterCleanup: func(t *testing.T, f *knftables.Fake) {
+				chains, err := f.List(ctx, "chains")
+				require.NoError(t, err)
+				assert.Contains(t, chains, antreaNFTablesChainForwardOffload)
+
+				for _, n := range proxyAllChainNames {
+					assert.Contains(t, chains, n)
+				}
+				ft, err := f.List(ctx, "flowtables")
+				require.NoError(t, err)
+				assert.Contains(t, ft, antreaNFTablesFlowtable)
+
+				sets, err := f.List(ctx, "sets")
+				require.NoError(t, err)
+				assert.Contains(t, sets, antreaNFTablesSetPeerPodCIDR)
+				assert.Contains(t, sets, antreaNFTablesSetNodePort)
+				assert.Contains(t, sets, antreaNFTablesSetExternalIP)
+			},
+		},
+		{
+			name:                           "cleanup acceleration successfully",
+			hostNetworkAccelerationEnabled: false,
+			proxyAll:                       true,
+			hostNetworkNFTables:            true,
+			accelerationRulesInstalled:     true,
+			proxyAllRulesInstalled:         true,
+			checkNFTAfterCleanup: func(t *testing.T, f *knftables.Fake) {
+				chains, err := f.List(ctx, "chains")
+				require.NoError(t, err)
+				assert.NotContains(t, chains, antreaNFTablesChainForwardOffload)
+				for _, n := range proxyAllChainNames {
+					assert.Contains(t, chains, n, "proxyAll nft should be untouched when only acceleration cleanup runs")
+				}
+
+				ft, err := f.List(ctx, "flowtables")
+				require.NoError(t, err)
+				assert.NotContains(t, ft, antreaNFTablesFlowtable)
+
+				sets, err := f.List(ctx, "sets")
+				require.NoError(t, err)
+				assert.NotContains(t, sets, antreaNFTablesSetPeerPodCIDR)
+				assert.Contains(t, sets, antreaNFTablesSetNodePort)
+				assert.Contains(t, sets, antreaNFTablesSetExternalIP)
+			},
+		},
+		{
+			name:                           "cleanup proxyAll successfully",
+			hostNetworkAccelerationEnabled: true,
+			proxyAll:                       true,
+			hostNetworkNFTables:            false,
+			accelerationRulesInstalled:     true,
+			proxyAllRulesInstalled:         true,
+			checkNFTAfterCleanup: func(t *testing.T, f *knftables.Fake) {
+				chains, err := f.List(ctx, "chains")
+				require.NoError(t, err)
+				for _, n := range proxyAllChainNames {
+					assert.NotContains(t, chains, n)
+				}
+				assert.Contains(t, chains, antreaNFTablesChainForwardOffload, "acceleration nft should remain when only proxyAll cleanup runs")
+
+				ft, err := f.List(ctx, "flowtables")
+				require.NoError(t, err)
+				assert.Contains(t, ft, antreaNFTablesFlowtable)
+
+				sets, err := f.List(ctx, "sets")
+				require.NoError(t, err)
+				assert.NotContains(t, sets, antreaNFTablesSetNodePort)
+				assert.NotContains(t, sets, antreaNFTablesSetExternalIP)
+				assert.Contains(t, sets, antreaNFTablesSetPeerPodCIDR)
+			},
+		},
+		{
+			name:                           "cleanup failed",
+			hostNetworkAccelerationEnabled: false,
+			proxyAll:                       false,
+			hostNetworkNFTables:            false,
+			accelerationRulesInstalled:     true,
+			proxyAllRulesInstalled:         false,
+			nftRunFails:                    true,
+			checkNFTAfterCleanup: func(t *testing.T, f *knftables.Fake) {
+				chains, err := f.List(ctx, "chains")
+				require.NoError(t, err)
+				assert.Contains(t, chains, antreaNFTablesChainForwardOffload)
+				ft, err := f.List(ctx, "flowtables")
+				require.NoError(t, err)
+				assert.Contains(t, ft, antreaNFTablesFlowtable)
+				sets, err := f.List(ctx, "sets")
+				require.NoError(t, err)
+				assert.Contains(t, sets, antreaNFTablesSetPeerPodCIDR)
+			},
+		},
+	}
+	for _, tt := range testCases {
+		t.Run(tt.name, func(t *testing.T) {
+			fakeNFT := knftables.NewFake(knftables.IPv4Family, "antrea")
+			if tt.accelerationRulesInstalled {
+				testNFTAddAccelerationRules(t, ctx, fakeNFT)
+			}
+			if tt.proxyAllRulesInstalled {
+				testNFTAddProxyAllRules(t, ctx, fakeNFT)
+			}
+
+			ipv4Iface := knftables.Interface(fakeNFT)
+			if tt.nftRunFails {
+				ipv4Iface = &nftablesRunErrFake{Fake: fakeNFT}
+			}
+
+			origNewNFTables := newNFTables
+			t.Cleanup(func() { newNFTables = origNewNFTables })
+			newNFTables = func(enableIPv4, enableIPv6 bool, optionFns ...nftables.OptionsFn) (*nftables.Client, error) {
+				return &nftables.Client{IPv4: ipv4Iface}, nil
+			}
+
+			client := &Client{
+				networkConfig:                  &config.NetworkConfig{IPv4Enabled: true, IPv6Enabled: false},
+				hostNetworkAccelerationEnabled: tt.hostNetworkAccelerationEnabled,
+				proxyAll:                       tt.proxyAll,
+				hostNetworkNFTables:            tt.hostNetworkNFTables,
+			}
+			client.cleanupNFTablesLeftovers()
+			tt.checkNFTAfterCleanup(t, fakeNFT)
+		})
+	}
+}
