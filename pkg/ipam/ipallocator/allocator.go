@@ -71,13 +71,30 @@ func NewCIDRAllocator(cidr *net.IPNet, reservedIPs []net.IP) (*SingleIPAllocator
 		max = 65536
 	}
 
+	end := big.NewInt(max)
+	end.Add(base, end)
+	// Make sure that all reserved IPs are in the supported range. This is important because
+	// len(reservedIPs) is used to determine the number of available IPs, and we don't want to
+	// undercount. We also filter duplicates out for the same reason.
+	reservedIPSet := make(utilnet.IPSet)
+	for _, ip := range reservedIPs {
+		x := utilnet.BigForIP(ip)
+		if x.Cmp(base) >= 0 && x.Cmp(end) <= 0 {
+			reservedIPSet.Insert(ip)
+		}
+	}
+	newReservedIPs := make([]net.IP, 0, len(reservedIPSet))
+	for _, ip := range reservedIPSet {
+		newReservedIPs = append(newReservedIPs, ip)
+	}
+
 	allocator := &SingleIPAllocator{
 		ipRangeStr:  cidr.String(),
 		base:        base,
 		max:         int(max),
 		allocated:   big.NewInt(0),
 		count:       0,
-		reservedIPs: reservedIPs,
+		reservedIPs: newReservedIPs,
 	}
 	return allocator, nil
 }

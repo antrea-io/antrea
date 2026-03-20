@@ -280,6 +280,30 @@ func TestCreateOrUpdateIPAllocator(t *testing.T) {
 	assert.Equal(t, 29, allocator.Total())
 }
 
+func TestCreateOrUpdateIPAllocatorSubnetInfoGateway(t *testing.T) {
+	controller := newController(nil)
+
+	ipPool := newExternalIPPool("ipPoolA", "192.168.1.144/28", "", "")
+	ipPool.Spec.SubnetInfo = &antreacrds.SubnetInfo{
+		Gateway:      "192.168.1.145",
+		PrefixLength: 28,
+		VLAN:         201,
+	}
+	changed := controller.createOrUpdateIPAllocator(ipPool)
+	assert.True(t, changed)
+	allocator, exists := controller.getIPAllocator(ipPool.Name)
+	require.True(t, exists)
+	gwIP := net.ParseIP("192.168.1.145")
+	assert.True(t, allocator.Has(gwIP))
+	assert.Equal(t, 1, len(allocator))
+	// 16 (block size) - network IP - broadcast IP - gateway IP
+	assert.Equal(t, 13, allocator.Total())
+	assert.Error(t, allocator.AllocateIP(gwIP))
+	firstIP, err := allocator.AllocateNext()
+	require.NoError(t, err)
+	assert.Equal(t, "192.168.1.146", firstIP.String())
+}
+
 func TestIPPoolEvents(t *testing.T) {
 	stopCh := make(chan struct{})
 	defer close(stopCh)

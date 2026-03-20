@@ -233,6 +233,15 @@ func (c *ExternalIPPoolController) createOrUpdateIPAllocator(ipPool *antreacrds.
 				if utilnet.IsIPv4CIDR(ipNet) {
 					reservedIPs = append(reservedIPs, iputil.GetLocalBroadcastIP(ipNet))
 				}
+				// If the ExternalIPPool includes a SubnetInfo, and the subnet
+				// gateway is part of the CIDR, make sure that it won't be allocated.
+				// This makes it consistent with the IPPoolAllocator (pkg/ipam/poolallocator/).
+				if ipPool.Spec.SubnetInfo != nil {
+					gatewayIP := net.ParseIP(ipPool.Spec.SubnetInfo.Gateway)
+					if ipNet.Contains(gatewayIP) {
+						reservedIPs = append(reservedIPs, gatewayIP)
+					}
+				}
 				return ipallocator.NewCIDRAllocator(ipNet, reservedIPs)
 			} else {
 				if existingIPRanges.Has(fmt.Sprintf("%s-%s", ipRange.Start, ipRange.End)) {
