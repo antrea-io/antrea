@@ -294,7 +294,7 @@ func TestCalculateIPv6InstructionsSize(t *testing.T) {
 				IPFamily: v1.IPv6Protocol,
 				Protocol: &testTCPProtocol,
 			},
-			count:     22,
+			count:     25, // +3 for IPv6 Fragment Extension Header handling (no transport filters)
 			direction: crdv1alpha1.CaptureDirectionSourceToDestination,
 		},
 		{
@@ -417,24 +417,24 @@ func TestPacketCaptureCompileBPF(t *testing.T) {
 			inst: []bpf.Instruction{
 				bpf.LoadAbsolute{Off: 12, Size: 2},
 				bpf.JumpIf{Cond: bpf.JumpEqual, Val: 0x86dd, SkipFalse: 23},
-				bpf.LoadAbsolute{Off: 20, Size: 1},                       // ip protocol
-				bpf.JumpIf{Cond: bpf.JumpEqual, Val: 0x6, SkipFalse: 21}, // tcp
 				bpf.LoadAbsolute{Off: 22, Size: 4},
-				bpf.JumpIf{Cond: bpf.JumpEqual, Val: 0xfd000010, SkipTrue: 0, SkipFalse: 19},
+				bpf.JumpIf{Cond: bpf.JumpEqual, Val: 0xfd000010, SkipTrue: 0, SkipFalse: 21},
 				bpf.LoadAbsolute{Off: 26, Size: 4},
-				bpf.JumpIf{Cond: bpf.JumpEqual, Val: 0x2440000, SkipTrue: 0, SkipFalse: 17},
+				bpf.JumpIf{Cond: bpf.JumpEqual, Val: 0x2440000, SkipTrue: 0, SkipFalse: 19},
 				bpf.LoadAbsolute{Off: 30, Size: 4},
-				bpf.JumpIf{Cond: bpf.JumpEqual, Val: 0x0, SkipTrue: 0, SkipFalse: 15},
+				bpf.JumpIf{Cond: bpf.JumpEqual, Val: 0x0, SkipTrue: 0, SkipFalse: 17},
 				bpf.LoadAbsolute{Off: 34, Size: 4},
-				bpf.JumpIf{Cond: bpf.JumpEqual, Val: 0x1, SkipTrue: 0, SkipFalse: 13},
+				bpf.JumpIf{Cond: bpf.JumpEqual, Val: 0x1, SkipTrue: 0, SkipFalse: 15},
 				bpf.LoadAbsolute{Off: 38, Size: 4},
-				bpf.JumpIf{Cond: bpf.JumpEqual, Val: 0xfd000010, SkipTrue: 0, SkipFalse: 11},
+				bpf.JumpIf{Cond: bpf.JumpEqual, Val: 0xfd000010, SkipTrue: 0, SkipFalse: 13},
 				bpf.LoadAbsolute{Off: 42, Size: 4},
-				bpf.JumpIf{Cond: bpf.JumpEqual, Val: 0x2440000, SkipTrue: 0, SkipFalse: 9},
+				bpf.JumpIf{Cond: bpf.JumpEqual, Val: 0x2440000, SkipTrue: 0, SkipFalse: 11},
 				bpf.LoadAbsolute{Off: 46, Size: 4},
-				bpf.JumpIf{Cond: bpf.JumpEqual, Val: 0x0, SkipTrue: 0, SkipFalse: 7},
+				bpf.JumpIf{Cond: bpf.JumpEqual, Val: 0x0, SkipTrue: 0, SkipFalse: 9},
 				bpf.LoadAbsolute{Off: 50, Size: 4},
-				bpf.JumpIf{Cond: bpf.JumpEqual, Val: 0x2, SkipTrue: 0, SkipFalse: 5},
+				bpf.JumpIf{Cond: bpf.JumpEqual, Val: 0x2, SkipTrue: 0, SkipFalse: 7},
+				bpf.LoadAbsolute{Off: 20, Size: 1},                      // ip protocol
+				bpf.JumpIf{Cond: bpf.JumpEqual, Val: 0x6, SkipFalse: 5}, // tcp
 				bpf.LoadAbsolute{Off: 54, Size: 2},                         // src port
 				bpf.JumpIf{Cond: bpf.JumpEqual, Val: 0x3039, SkipFalse: 3}, // port 12345
 				bpf.LoadAbsolute{Off: 56, Size: 2},                         // dst port
@@ -1050,24 +1050,24 @@ func TestPacketCaptureCompileBPF(t *testing.T) {
 			inst: []bpf.Instruction{
 				bpf.LoadAbsolute{Off: 12, Size: 2},
 				bpf.JumpIf{Cond: bpf.JumpEqual, Val: 0x86dd, SkipFalse: 22},
-				bpf.LoadAbsolute{Off: 20, Size: 1},                        // ip protocol
-				bpf.JumpIf{Cond: bpf.JumpEqual, Val: 0x3a, SkipFalse: 20}, // icmpv6
 				bpf.LoadAbsolute{Off: 22, Size: 4},
-				bpf.JumpIf{Cond: bpf.JumpEqual, Val: 0xfd000010, SkipTrue: 0, SkipFalse: 18},
+				bpf.JumpIf{Cond: bpf.JumpEqual, Val: 0xfd000010, SkipTrue: 0, SkipFalse: 20},
 				bpf.LoadAbsolute{Off: 26, Size: 4},
-				bpf.JumpIf{Cond: bpf.JumpEqual, Val: 0x2440000, SkipTrue: 0, SkipFalse: 16},
+				bpf.JumpIf{Cond: bpf.JumpEqual, Val: 0x2440000, SkipTrue: 0, SkipFalse: 18},
 				bpf.LoadAbsolute{Off: 30, Size: 4},
-				bpf.JumpIf{Cond: bpf.JumpEqual, Val: 0x0, SkipTrue: 0, SkipFalse: 14},
+				bpf.JumpIf{Cond: bpf.JumpEqual, Val: 0x0, SkipTrue: 0, SkipFalse: 16},
 				bpf.LoadAbsolute{Off: 34, Size: 4},
-				bpf.JumpIf{Cond: bpf.JumpEqual, Val: 0x1, SkipTrue: 0, SkipFalse: 12},
+				bpf.JumpIf{Cond: bpf.JumpEqual, Val: 0x1, SkipTrue: 0, SkipFalse: 14},
 				bpf.LoadAbsolute{Off: 38, Size: 4},
-				bpf.JumpIf{Cond: bpf.JumpEqual, Val: 0xfd000010, SkipTrue: 0, SkipFalse: 10},
+				bpf.JumpIf{Cond: bpf.JumpEqual, Val: 0xfd000010, SkipTrue: 0, SkipFalse: 12},
 				bpf.LoadAbsolute{Off: 42, Size: 4},
-				bpf.JumpIf{Cond: bpf.JumpEqual, Val: 0x2440000, SkipTrue: 0, SkipFalse: 8},
+				bpf.JumpIf{Cond: bpf.JumpEqual, Val: 0x2440000, SkipTrue: 0, SkipFalse: 10},
 				bpf.LoadAbsolute{Off: 46, Size: 4},
-				bpf.JumpIf{Cond: bpf.JumpEqual, Val: 0x0, SkipTrue: 0, SkipFalse: 6},
+				bpf.JumpIf{Cond: bpf.JumpEqual, Val: 0x0, SkipTrue: 0, SkipFalse: 8},
 				bpf.LoadAbsolute{Off: 50, Size: 4},
-				bpf.JumpIf{Cond: bpf.JumpEqual, Val: 0x2, SkipTrue: 0, SkipFalse: 4},
+				bpf.JumpIf{Cond: bpf.JumpEqual, Val: 0x2, SkipTrue: 0, SkipFalse: 6},
+				bpf.LoadAbsolute{Off: 20, Size: 1},                         // ip protocol
+				bpf.JumpIf{Cond: bpf.JumpEqual, Val: 0x3a, SkipFalse: 4}, // icmpv6
 				bpf.LoadAbsolute{Off: 54, Size: lengthByte}, // load ICMP type
 				bpf.JumpIf{Cond: bpf.JumpEqual, Val: 0x80, SkipTrue: 1, SkipFalse: 0},
 				bpf.JumpIf{Cond: bpf.JumpEqual, Val: 0x81, SkipTrue: 0, SkipFalse: 1},
@@ -1081,6 +1081,27 @@ func TestPacketCaptureCompileBPF(t *testing.T) {
 		t.Run(item.name, func(t *testing.T) {
 			result := compilePacketFilter(item.spec.Packet, item.srcIP, item.dstIP, item.spec.Direction)
 			assert.Equal(t, item.inst, result)
+		})
+	}
+}
+
+// BPFTestCases is the source of truth for BPF equivalence tests.
+// Reference BPF bytecode is generated offline using pkg/agent/packetcapture/capture/testdata/generate_bpf_testdata.sh.
+func TestBPFEquivalenceWithTcpdump(t *testing.T) {
+	for _, tt := range BPFTestCases {
+		t.Run(tt.Name, func(t *testing.T) {
+			expectedRaw, ok := generatedBPFTestCases[tt.Name]
+			if !ok {
+				t.Fatalf("No generated test data found for %q. Did you run ./testdata/generate_bpf_testdata.sh?", tt.Name)
+			}
+
+			antreaProg := compilePacketFilter(tt.Packet, tt.SrcIP, tt.DstIP, tt.Direction)
+			antreaRaw, err := bpf.Assemble(antreaProg)
+			if err != nil {
+				t.Fatalf("Failed to assemble Antrea BPF: %v", err)
+			}
+
+			assert.Equal(t, expectedRaw, antreaRaw, "Antrea BPF output does not match tcpdump reference for filter: %s", tt.TcpdumpFilter)
 		})
 	}
 }
