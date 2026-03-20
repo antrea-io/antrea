@@ -15,8 +15,10 @@
 package flowexporter
 
 import (
+	"context"
 	"sync"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/stretchr/testify/assert"
@@ -547,65 +549,86 @@ func TestFlowExporter_networkPolicyWait(t *testing.T) {
 	assert.False(t, fe.networkPolicyReadyTime.Before(beforeRunTime))
 }
 
-func TestFlowExporter_noPollingWithoutActiveDestinations(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	mockConnDumper := connectionstest.NewMockConnTrackDumper(ctrl)
+func TestFlowExporter_pollerLifecycle(t *testing.T) {
+	const testPollInterval = 50 * time.Millisecond
 
-	crdClient := fakeversioned.NewSimpleClientset()
-	informerFactory := crdinformers.NewSharedInformerFactory(crdClient, 100*time.Millisecond)
-	destInformer := informerFactory.Crd().V1alpha1().FlowExporterDestinations()
+	synctest.Test(t, func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		mockConnDumper := connectionstest.NewMockConnTrackDumper(ctrl)
 
-	testSubChannel := channel.NewSubscribableChannel("Test Connections", 5)
+		crdClient := fakeversioned.NewSimpleClientset()
+		informerFactory := crdinformers.NewSharedInformerFactory(crdClient, 0)
+		destInformer := informerFactory.Crd().V1alpha1().FlowExporterDestinations()
 
-	fe := &FlowExporter{
-		k8sClient:              fake.NewSimpleClientset(),
-		staleConnectionTimeout: 5 * time.Minute,
-		v4Enabled:              true,
-		destinationInformer:    destInformer,
-		destinationLister:      destInformer.Lister(),
-		destinationSynced:      destInformer.Informer().HasSynced,
-		networkPolicyWait:      nil,
-		queue: workqueue.NewTypedRateLimitingQueueWithConfig(
-			workqueue.NewTypedItemExponentialFailureRateLimiter[string](0, 0),
-			workqueue.TypedRateLimitingQueueConfig[string]{Name: "flowexporterdestination-test"},
-		),
-		poller:                connections.NewPoller(mockConnDumper, testSubChannel, 50*time.Millisecond, true, false, false),
-		ctConnUpdateChannel:   testSubChannel,
-		denyConnUpdateChannel: testSubChannel,
-		destinations:          make(map[string]destinationObj),
-		staticDestinationRes:  nil,
-	}
-	destInformer.Informer().AddEventHandlerWithResyncPeriod(cache.ResourceEventHandlerFuncs{
-		AddFunc:    fe.addDestination,
-		UpdateFunc: fe.updateDestination,
-		DeleteFunc: fe.deleteDestination,
-	}, 0)
+		testSubChannel := channel.NewSubscribableChannel("Test Connections", 5)
 
-	// No conntrack polling without destinations
-	mockConnDumper.EXPECT().DumpFlows(gomock.Any()).Times(0)
-	mockConnDumper.EXPECT().GetMaxConnections().Times(0)
+		fe := &FlowExporter{
+			k8sClient:              fake.NewSimpleClientset(),
+			staleConnectionTimeout: 5 * time.Minute,
+			v4Enabled:              true,
+			destinationInformer:    destInformer,
+			destinationLister:      destInformer.Lister(),
+			destinationSynced:      destInformer.Informer().HasSynced,
+			networkPolicyWait:      nil,
+			queue: workqueue.NewTypedRateLimitingQueueWithConfig(
+				workqueue.NewTypedItemExponentialFailureRateLimiter[string](0, 0),
+				workqueue.TypedRateLimitingQueueConfig[string]{Name: "flowexporterdestination-test"},
+			),
+			poller:                connections.NewPoller(mockConnDumper, testSubChannel, testPollInterval, true, false, false),
+			ctConnUpdateChannel:   testSubChannel,
+			denyConnUpdateChannel: testSubChannel,
+			destinations:          make(map[string]destinationObj),
+			staticDestinationRes:  nil,
+		}
+		destInformer.Informer().AddEventHandlerWithResyncPeriod(cache.ResourceEventHandlerFuncs{
+			AddFunc:    fe.addDestination,
+			UpdateFunc: fe.updateDestination,
+			DeleteFunc: fe.deleteDestination,
+		}, 0)
 
-	informerFactory.Start(t.Context().Done())
-	informerFactory.WaitForCacheSync(t.Context().Done())
+		informerFactory.Start(t.Context().Done())
+		informerFactory.WaitForCacheSync(t.Context().Done())
 
-	stopCh := make(chan struct{})
-	runFinishedCh := make(chan struct{})
-	go func() {
-		defer close(runFinishedCh)
-		fe.Run(stopCh)
-	}()
+		go fe.Run(t.Context().Done())
 
-	select {
-	case <-time.After(400 * time.Millisecond):
-		// Expected: no conntrack polling without destinations
-	case <-runFinishedCh:
-		t.Fatal("Run should not exit before stopCh is closed")
-	}
+		// Phase 1: no destinations — poller should not run.
+		mockConnDumper.EXPECT().DumpFlows(gomock.Any()).Times(0)
+		mockConnDumper.EXPECT().GetMaxConnections().Times(0)
+		time.Sleep(10 * testPollInterval)
+		synctest.Wait()
+		assert.False(t, fe.pollerRunning, "poller should not be running without destinations")
 
-	close(stopCh)
-	select {
-	case <-runFinishedCh:
-	case <-time.After(2 * time.Second):
-		t.Fatal("Run should finish after stopCh is closed")
-	}
+		// Phase 2: create a FlowExporterDestination — poller should start.
+		pollCount := 0
+		mockConnDumper.EXPECT().DumpFlows(gomock.Any()).DoAndReturn(func(uint16) ([]*connection.Connection, int, error) {
+			pollCount++
+			return nil, 0, nil
+		}).AnyTimes()
+		mockConnDumper.EXPECT().GetMaxConnections().Return(0, nil).AnyTimes()
+
+		dest := &api.FlowExporterDestination{
+			ObjectMeta: metav1.ObjectMeta{Name: "dest1"},
+			Spec: api.FlowExporterDestinationSpec{
+				Address: "127.0.0.1:4739",
+				Protocol: api.FlowExporterProtocol{
+					IPFIX: &api.FlowExporterIPFIXConfig{Transport: api.FlowExporterTransportTCP},
+				},
+				ActiveFlowExportTimeoutSeconds: 5,
+				IdleFlowExportTimeoutSeconds:   5,
+			},
+		}
+		_, err := crdClient.CrdV1alpha1().FlowExporterDestinations().Create(context.Background(), dest, metav1.CreateOptions{})
+		require.NoError(t, err)
+		// Advance past one poll interval so the poller polls at least once.
+		time.Sleep(testPollInterval)
+		synctest.Wait()
+		assert.True(t, fe.pollerRunning, "poller should be running after destination is created")
+		assert.Greater(t, pollCount, 0, "conntrack should have been polled at least once")
+
+		// Phase 3: delete the only destination — poller should stop.
+		err = crdClient.CrdV1alpha1().FlowExporterDestinations().Delete(context.Background(), "dest1", metav1.DeleteOptions{})
+		require.NoError(t, err)
+		synctest.Wait()
+		assert.False(t, fe.pollerRunning, "poller should stop after last destination is deleted")
+	})
 }

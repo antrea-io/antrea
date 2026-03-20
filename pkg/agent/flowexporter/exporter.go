@@ -113,16 +113,14 @@ type FlowExporter struct {
 
 	// staticDestinationRes is set in NewFlowExporter when static export is enabled. Run() clears
 	// it if createDestinationFromResource fails; if still non-nil at shutdown, static destination
-	// export was started and is included in activeDestCount.
+	// export was started and the poller must account for it.
 	staticDestinationRes *api.FlowExporterDestination
 	destinations         map[string]destinationObj
 	destinationsMutex    sync.Mutex
 
-	// activeDestCount is the number of running export destinations (FlowExporterDestination CRs plus
-	// the optional static destination from config). The conntrack poller runs only while this is > 0.
-	activeDestCount int
-	pollerRunning   bool
-	pollerStopCh    chan struct{}
+	pollerRunning bool
+	pollerStopCh  chan struct{}
+	pollerDoneCh  chan struct{}
 
 	// Used to create exporter
 	nodeName    string
@@ -266,22 +264,38 @@ func (exp *FlowExporter) GetDenyConnStoreNotifier() channel.Notifier {
 	return exp.denyConnUpdateChannel
 }
 
+// hasActiveDestinationsLocked reports whether at least one export destination (CR-based or static)
+// is currently active. The caller must hold exp.destinationsMutex.
+func (exp *FlowExporter) hasActiveDestinationsLocked() bool {
+	return exp.staticDestinationRes != nil || len(exp.destinations) > 0
+}
+
 // startPollerIfNeededLocked starts the conntrack poller when there is at least one active destination
 // and the poller is not already running. The caller must hold exp.destinationsMutex.
 func (exp *FlowExporter) startPollerIfNeededLocked() {
-	if exp.activeDestCount == 0 || exp.poller == nil || exp.pollerRunning {
+	if !exp.hasActiveDestinationsLocked() || exp.poller == nil || exp.pollerRunning {
 		return
 	}
+	// If a previous poller goroutine is still exiting, wait for it to finish so we never have
+	// two concurrent poller.Run goroutines.
+	if exp.pollerDoneCh != nil {
+		klog.InfoS("Waiting for previous conntrack poller to exit")
+		<-exp.pollerDoneCh
+	}
 	exp.pollerStopCh = make(chan struct{})
+	exp.pollerDoneCh = make(chan struct{})
 	exp.pollerRunning = true
-	klog.InfoS("Starting conntrack poller for flow exporter", "activeDestinations", exp.activeDestCount)
-	go exp.poller.Run(exp.pollerStopCh)
+	klog.InfoS("Starting conntrack poller for flow exporter")
+	go func() {
+		defer close(exp.pollerDoneCh)
+		exp.poller.Run(exp.pollerStopCh)
+	}()
 }
 
 // stopPollerIfNeededLocked stops the conntrack poller when there are no active destinations and the
 // poller is running. The caller must hold exp.destinationsMutex.
 func (exp *FlowExporter) stopPollerIfNeededLocked() {
-	if exp.activeDestCount != 0 || !exp.pollerRunning {
+	if exp.hasActiveDestinationsLocked() || !exp.pollerRunning {
 		return
 	}
 	close(exp.pollerStopCh)
@@ -327,12 +341,11 @@ func (exp *FlowExporter) Run(stopCh <-chan struct{}) {
 		staticDest, err := exp.createDestinationFromResource(exp.staticDestinationRes)
 		if err != nil {
 			klog.ErrorS(err, "Could not create FlowExporterDestination from static configuration")
-			// Clear staticDestinationRes when createDestinationFromResource fails, so that activeDestCount
-			// stays consistent when it decrements.
+			// Clear staticDestinationRes when createDestinationFromResource fails, so that
+			// hasActiveDestinationsLocked will function correctly.
 			exp.staticDestinationRes = nil
 		} else {
 			exp.destinationsMutex.Lock()
-			exp.activeDestCount++
 			exp.startPollerIfNeededLocked()
 			exp.destinationsMutex.Unlock()
 			go staticDest.Run(stopCh)
@@ -347,13 +360,10 @@ func (exp *FlowExporter) Run(stopCh <-chan struct{}) {
 	for key, destination := range exp.destinations {
 		close(destination.stopCh)
 		delete(exp.destinations, key)
-		exp.activeDestCount--
-		exp.stopPollerIfNeededLocked()
 	}
-	if exp.staticDestinationRes != nil {
-		exp.activeDestCount--
-		exp.stopPollerIfNeededLocked()
-	}
+	// Clear staticDestinationRes so hasActiveDestinationsLocked returns false.
+	exp.staticDestinationRes = nil
+	exp.stopPollerIfNeededLocked()
 }
 
 func (exp *FlowExporter) worker() {
@@ -392,7 +402,6 @@ func (exp *FlowExporter) syncFlowExporterDestination(key string) error {
 			if ok {
 				close(dest.stopCh)
 				delete(exp.destinations, key)
-				exp.activeDestCount--
 				exp.stopPollerIfNeededLocked()
 			}
 			return nil
@@ -408,13 +417,8 @@ func (exp *FlowExporter) syncFlowExporterDestination(key string) error {
 
 	destObj, ok := exp.destinations[key]
 	if ok {
-		// Replacing an existing destination: activeDestCount and the poller state stay as-is.
-		klog.V(3).InfoS("Removing old instance", "flowExporterDestination", klog.KObj(res))
+		klog.V(4).InfoS("Removing old instance", "flowExporterDestination", klog.KObj(res))
 		close(destObj.stopCh)
-		delete(exp.destinations, key)
-	} else {
-		exp.activeDestCount++
-		exp.startPollerIfNeededLocked()
 	}
 
 	stopCh := make(chan struct{})
@@ -423,6 +427,7 @@ func (exp *FlowExporter) syncFlowExporterDestination(key string) error {
 		destination: dest,
 		stopCh:      stopCh,
 	}
+	exp.startPollerIfNeededLocked()
 
 	return nil
 }
