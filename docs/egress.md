@@ -262,6 +262,14 @@ supported in a cluster is 20, which should be sufficient for most cases. If you
 need to have more subnets, please raise an issue with your use case, and we will
 consider revising the limit based on that.
 
+**Note**: When using a CIDR in `ipRanges` that includes the `gateway` IP, Antrea
+will **not** automatically exclude the gateway from the allocatable IP range. If
+the gateway IP is allocated (e.g., as an Egress IP), it will cause networking
+issues. To avoid this, ensure that the gateway IP is not part of any CIDR
+specified in `ipRanges`, or use explicit `start` / `end` ranges that do not
+include the gateway IP. See [#7868](https://github.com/antrea-io/antrea/issues/7868)
+for more information.
+
 ### NodeSelector
 
 The `nodeSelector` field specifies which Nodes the IPs in this pool can be
