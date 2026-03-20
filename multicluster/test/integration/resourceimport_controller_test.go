@@ -16,14 +16,15 @@ package integration
 
 import (
 	"context"
-	"reflect"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
+	discovery "k8s.io/api/discovery/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	k8smcsapi "sigs.k8s.io/mcs-api/pkg/apis/v1alpha1"
 
@@ -31,47 +32,11 @@ import (
 )
 
 // This file contains test cases for below basic scenarios:
-//  * Create ResourceExports when a ServiceExport is created.
-//  * Update ResourceExport when exported Service is updated.
-//  * Update ServiceExport status when the Service doesn't exist
-//  * Update ResourceExport when the Endpoints has new Endpoints
-//  * Delete ResourceExport when the ServiceExport is deleted
+//   - Create MC Service, ServiceImport and EndpointSlice when a ResourceImport is created.
+//   - Update MC Service and EndpointSlice when a ResourceImport is updated.
+//   - Delete MC Service, ServiceImport and EndpointSlice when a ResourceImport is deleted.
 
 var (
-	epSubset = []corev1.EndpointSubset{
-		{
-			Addresses: []corev1.EndpointAddress{
-				{
-					IP:       "192.168.17.11",
-					Hostname: "pod1",
-				},
-			},
-			Ports: []corev1.EndpointPort{
-				{
-					Name:     "http",
-					Port:     80,
-					Protocol: corev1.ProtocolTCP,
-				},
-			},
-		},
-	}
-	newEpSubset = []corev1.EndpointSubset{
-		{
-			Addresses: []corev1.EndpointAddress{
-				{
-					IP:       "192.168.17.12",
-					Hostname: "pod2",
-				},
-			},
-			Ports: []corev1.EndpointPort{
-				{
-					Name:     "http",
-					Port:     80,
-					Protocol: corev1.ProtocolTCP,
-				},
-			},
-		},
-	}
 	nignxSvcResImport = &mcsv1alpha1.ResourceImport{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: "leader-ns",
@@ -93,6 +58,38 @@ var (
 					Type: k8smcsapi.ClusterSetIP,
 				},
 			},
+		},
+	}
+
+	riReady    = true
+	riProtocol = corev1.ProtocolTCP
+	riPort80   = int32(80)
+	riPort8080 = int32(8080)
+
+	riDiscEndpoints = []discovery.Endpoint{
+		{
+			Addresses:  []string{"192.168.17.11"},
+			Conditions: discovery.EndpointConditions{Ready: &riReady},
+		},
+	}
+	riDiscPorts = []discovery.EndpointPort{
+		{
+			Name:     ptr.To("http"),
+			Port:     &riPort80,
+			Protocol: &riProtocol,
+		},
+	}
+	riNewDiscEndpoints = []discovery.Endpoint{
+		{
+			Addresses:  []string{"192.168.17.12"},
+			Conditions: discovery.EndpointConditions{Ready: &riReady},
+		},
+	}
+	riNewDiscPorts = []discovery.EndpointPort{
+		{
+			Name:     ptr.To("http"),
+			Port:     &riPort8080,
+			Protocol: &riProtocol,
 		},
 	}
 )
@@ -117,7 +114,7 @@ var _ = Describe("ResourceImport controller", func() {
 		}, timeout, interval).Should(BeTrue())
 	})
 
-	It("Should create MC Endpoints for an existing ResourceImport", func() {
+	It("Should create MC EndpointSlice for an existing ResourceImport", func() {
 		By("By adding an Endpoints ResourceImport")
 		epResImport := &mcsv1alpha1.ResourceImport{
 			ObjectMeta: metav1.ObjectMeta{
@@ -129,7 +126,8 @@ var _ = Describe("ResourceImport controller", func() {
 				Name:      "exported-nginx",
 				Kind:      "Endpoints",
 				Endpoints: &mcsv1alpha1.EndpointsImport{
-					Subsets: epSubset,
+					Endpoints: riDiscEndpoints,
+					Ports:     riDiscPorts,
 				},
 			},
 		}
@@ -137,8 +135,8 @@ var _ = Describe("ResourceImport controller", func() {
 		Expect(k8sClient.Create(ctx, epResImport)).Should(Succeed())
 
 		Eventually(func() bool {
-			ep := &corev1.Endpoints{}
-			err := k8sClient.Get(ctx, types.NamespacedName{Namespace: "default", Name: "antrea-mc-exported-nginx"}, ep)
+			eps := &discovery.EndpointSlice{}
+			err := k8sClient.Get(ctx, types.NamespacedName{Namespace: "default", Name: "antrea-mc-exported-nginx"}, eps)
 			return err == nil
 		}, timeout, interval).Should(BeTrue())
 	})
@@ -176,7 +174,7 @@ var _ = Describe("ResourceImport controller", func() {
 		}, timeout, interval).Should(BeTrue())
 	})
 
-	It("Should update MC Endpoints for an existing ResourceImport", func() {
+	It("Should update MC EndpointSlice for an existing ResourceImport", func() {
 		By("By updating a ResourceImport")
 		epResImp := &mcsv1alpha1.ResourceImport{}
 		err := k8sClient.Get(ctx, types.NamespacedName{
@@ -184,21 +182,26 @@ var _ = Describe("ResourceImport controller", func() {
 			Name:      "cluster-a-exported-nginx-endpoints"}, epResImp)
 		Expect(err).ToNot(HaveOccurred())
 		epResImp.Spec.Endpoints = &mcsv1alpha1.EndpointsImport{
-			Subsets: newEpSubset,
+			Endpoints: riNewDiscEndpoints,
+			Ports:     riNewDiscPorts,
 		}
 
 		err = k8sClient.Update(ctx, epResImp, &client.UpdateOptions{})
 		Expect(err).ToNot(HaveOccurred())
 
 		Eventually(func() bool {
-			newEp := &corev1.Endpoints{}
-			err := k8sClient.Get(ctx, types.NamespacedName{Namespace: "default", Name: "antrea-mc-exported-nginx"}, newEp)
+			newEPS := &discovery.EndpointSlice{}
+			err := k8sClient.Get(ctx, types.NamespacedName{Namespace: "default", Name: "antrea-mc-exported-nginx"}, newEPS)
 			Expect(err).ToNot(HaveOccurred())
-			return reflect.DeepEqual(newEp.Subsets, newEpSubset)
+			if len(newEPS.Endpoints) == 0 || len(newEPS.Ports) == 0 {
+				return false
+			}
+			return newEPS.Endpoints[0].Addresses[0] == riNewDiscEndpoints[0].Addresses[0] &&
+				*newEPS.Ports[0].Port == *riNewDiscPorts[0].Port
 		}, timeout, interval).Should(BeTrue())
 	})
 
-	It("Should delete MC Service and ServiceImport for a deleted ResourceImport", func() {
+	It("Should delete MC Service, ServiceImport and EndpointSlice for a deleted ResourceImport", func() {
 		By("By deleting an existing ResourceImport")
 
 		err := k8sClient.Delete(ctx, nignxSvcResImport, &client.DeleteOptions{})
@@ -211,8 +214,8 @@ var _ = Describe("ResourceImport controller", func() {
 		}, timeout, interval).Should(BeTrue())
 
 		Eventually(func() bool {
-			ep := &corev1.Endpoints{}
-			err := k8sClient.Get(ctx, types.NamespacedName{Namespace: "default", Name: "antrea-mc-exported-nginx"}, ep)
+			eps := &discovery.EndpointSlice{}
+			err := k8sClient.Get(ctx, types.NamespacedName{Namespace: "default", Name: "antrea-mc-exported-nginx"}, eps)
 			return apierrors.IsNotFound(err)
 		}, timeout, interval).Should(BeTrue())
 

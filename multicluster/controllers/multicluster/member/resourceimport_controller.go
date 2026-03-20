@@ -22,6 +22,7 @@ import (
 	"fmt"
 
 	corev1 "k8s.io/api/core/v1"
+	discovery "k8s.io/api/discovery/v1"
 	apiequality "k8s.io/apimachinery/pkg/api/equality"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -89,6 +90,7 @@ func newResourceImportReconciler(localClusterClient client.Client,
 // +kubebuilder:rbac:groups="",resources=endpoints,verbs=get;list;watch;update;create;patch;delete
 // +kubebuilder:rbac:groups="",resources=services,verbs=get;list;watch;update;create;patch;delete
 // +kubebuilder:rbac:groups="",resources=events,verbs=create
+// +kubebuilder:rbac:groups="discovery.k8s.io",resources=endpointslices,verbs=get;list;watch;create;update;patch;delete
 
 // Reconcile will attempt to ensure that the imported Resource is installed in local cluster as per the
 // ResourceImport object.
@@ -255,53 +257,62 @@ func (r *ResourceImportReconciler) handleResImpDeleteForService(ctx context.Cont
 }
 
 func (r *ResourceImportReconciler) handleResImpUpdateForEndpoints(ctx context.Context, resImp *multiclusterv1alpha1.ResourceImport) (ctrl.Result, error) {
-	epName := common.ToMCResourceName(resImp.Spec.Name)
-	epNamespaced := types.NamespacedName{Namespace: resImp.Spec.Namespace, Name: epName}
-	klog.InfoS("Updating Endpoints corresponding to ResourceImport", "endpoints", epNamespaced.String(),
+	epsName := common.ToMCResourceName(resImp.Spec.Name)
+	epsNamespaced := types.NamespacedName{Namespace: resImp.Spec.Namespace, Name: epsName}
+	klog.InfoS("Updating EndpointSlice corresponding to ResourceImport", "endpointslice", epsNamespaced.String(),
 		"resourceimport", klog.KObj(resImp))
 
-	ep := &corev1.Endpoints{}
-	err := r.localClusterClient.Get(ctx, epNamespaced, ep)
-	epNotFound := apierrors.IsNotFound(err)
-	if err != nil && !epNotFound {
+	// Clean up any legacy Endpoints object that was created before the EndpointSlice migration.
+	if err := r.cleanUpLegacyEndpoints(ctx, resImp.Spec.Namespace, epsName); err != nil {
 		return ctrl.Result{}, err
 	}
-	if !epNotFound {
-		if _, ok := ep.Annotations[common.AntreaMCServiceAnnotation]; !ok {
-			err := errors.New("the Endpoints conflicts with existing one")
-			klog.ErrorS(err, "Unable to import Endpoints", "endpoints", klog.KObj(ep))
+
+	eps := &discovery.EndpointSlice{}
+	err := r.localClusterClient.Get(ctx, epsNamespaced, eps)
+	epsNotFound := apierrors.IsNotFound(err)
+	if err != nil && !epsNotFound {
+		return ctrl.Result{}, err
+	}
+	if !epsNotFound {
+		if _, ok := eps.Annotations[common.AntreaMCServiceAnnotation]; !ok {
+			err := errors.New("the EndpointSlice conflicts with existing one")
+			klog.ErrorS(err, "Unable to import EndpointSlice", "endpointslice", klog.KObj(eps))
 			return ctrl.Result{}, err
 		}
 	}
 
-	newSubsets := resImp.Spec.Endpoints.Subsets
-	mcsEpObj := &corev1.Endpoints{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:        epName,
-			Namespace:   resImp.Spec.Namespace,
-			Annotations: map[string]string{common.AntreaMCServiceAnnotation: "true"},
-		},
-		Subsets: newSubsets,
+	// Fetch the MC Service to use as the owner of the EndpointSlice. When the Service is
+	// deleted, Kubernetes GC will automatically delete this EndpointSlice as well.
+	svc := &corev1.Service{}
+	if err := r.localClusterClient.Get(ctx, types.NamespacedName{Namespace: resImp.Spec.Namespace, Name: epsName}, svc); err != nil {
+		if !apierrors.IsNotFound(err) {
+			return ctrl.Result{}, err
+		}
+		// Service not yet created (race between Service and Endpoints ResourceImports).
+		// Requeue so we retry once the Service exists.
+		return ctrl.Result{}, fmt.Errorf("MC Service %s not found yet, requeue", epsNamespaced.String())
 	}
-	if epNotFound {
-		err := r.localClusterClient.Create(ctx, mcsEpObj, &client.CreateOptions{})
-		if err != nil {
-			klog.ErrorS(err, "Failed to create MCS Endpoints", "endpoints", klog.KObj(mcsEpObj))
+
+	if resImp.Spec.Endpoints == nil || (len(resImp.Spec.Endpoints.Endpoints) == 0 && len(resImp.Spec.Endpoints.Ports) == 0) {
+		klog.InfoS("ResourceImport has no endpoint data; the leader CRD may not have been updated yet",
+			"resourceimport", klog.KObj(resImp))
+	}
+	newEPS := getMCEndpointSlice(resImp, epsName, svc)
+	if epsNotFound {
+		if err := r.localClusterClient.Create(ctx, newEPS, &client.CreateOptions{}); err != nil {
+			klog.ErrorS(err, "Failed to create MCS EndpointSlice", "endpointslice", klog.KObj(newEPS))
 			return ctrl.Result{}, err
 		}
 		r.installedResImports.Add(*resImp)
 		return ctrl.Result{}, nil
 	}
-	if _, ok := ep.Annotations[common.AntreaMCServiceAnnotation]; !ok {
-		klog.InfoS("Endpoints has no desired annotation, skip update", "annotation", common.AntreaMCServiceAnnotation, "endpoints", epNamespaced.String())
-		return ctrl.Result{}, nil
-	}
-	// TODO: check label difference ?
-	if !apiequality.Semantic.DeepEqual(newSubsets, ep.Subsets) {
-		ep.Subsets = newSubsets
-		err = r.localClusterClient.Update(ctx, ep, &client.UpdateOptions{})
-		if err != nil {
-			klog.ErrorS(err, "Failed to update MCS Endpoints", "endpoints", epNamespaced.String())
+
+	if !apiequality.Semantic.DeepEqual(newEPS.Endpoints, eps.Endpoints) ||
+		!apiequality.Semantic.DeepEqual(newEPS.Ports, eps.Ports) {
+		eps.Endpoints = newEPS.Endpoints
+		eps.Ports = newEPS.Ports
+		if err = r.localClusterClient.Update(ctx, eps, &client.UpdateOptions{}); err != nil {
+			klog.ErrorS(err, "Failed to update MCS EndpointSlice", "endpointslice", epsNamespaced.String())
 			return ctrl.Result{}, err
 		}
 	}
@@ -310,24 +321,47 @@ func (r *ResourceImportReconciler) handleResImpUpdateForEndpoints(ctx context.Co
 }
 
 func (r *ResourceImportReconciler) handleResImpDeleteForEndpoints(ctx context.Context, resImp *multiclusterv1alpha1.ResourceImport) (ctrl.Result, error) {
-	epName := common.ToMCResourceName(resImp.Spec.Name)
-	epNamespacedName := common.NamespacedName(resImp.Spec.Namespace, epName)
-	klog.InfoS("Deleting Endpoints corresponding to ResourceImport", "endpoints", epNamespacedName,
+	epsName := common.ToMCResourceName(resImp.Spec.Name)
+	epsNamespacedName := common.NamespacedName(resImp.Spec.Namespace, epsName)
+	klog.InfoS("Deleting EndpointSlice corresponding to ResourceImport", "endpointslice", epsNamespacedName,
 		"resourceimport", klog.KObj(resImp))
 
-	ep := &corev1.Endpoints{
+	// Also clean up any legacy Endpoints object that may have been left from before the migration.
+	if err := r.cleanUpLegacyEndpoints(ctx, resImp.Spec.Namespace, epsName); err != nil {
+		return ctrl.Result{}, err
+	}
+
+	eps := &discovery.EndpointSlice{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      epName,
+			Name:      epsName,
 			Namespace: resImp.Spec.Namespace,
 		},
 	}
-	err := client.IgnoreNotFound(r.localClusterClient.Delete(ctx, ep, &client.DeleteOptions{}))
-	if err != nil {
-		klog.ErrorS(err, "Failed to delete imported Endpoints", "endpoints", epNamespacedName)
+	if err := client.IgnoreNotFound(r.localClusterClient.Delete(ctx, eps, &client.DeleteOptions{})); err != nil {
+		klog.ErrorS(err, "Failed to delete imported EndpointSlice", "endpointslice", epsNamespacedName)
 		return ctrl.Result{}, err
 	}
 	r.installedResImports.Delete(*resImp)
 	return ctrl.Result{}, nil
+}
+
+// cleanUpLegacyEndpoints deletes the legacy Endpoints object with the given name if it carries
+// the Antrea MC annotation, which means it was previously created by this controller before the
+// migration to EndpointSlice.
+func (r *ResourceImportReconciler) cleanUpLegacyEndpoints(ctx context.Context, namespace, name string) error {
+	ep := &corev1.Endpoints{}
+	err := r.localClusterClient.Get(ctx, types.NamespacedName{Namespace: namespace, Name: name}, ep)
+	if apierrors.IsNotFound(err) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	if _, ok := ep.Annotations[common.AntreaMCServiceAnnotation]; !ok {
+		return nil
+	}
+	klog.InfoS("Cleaning up legacy Endpoints resource", "endpoints", common.NamespacedName(namespace, name))
+	return client.IgnoreNotFound(r.localClusterClient.Delete(ctx, ep, &client.DeleteOptions{}))
 }
 
 func getMCService(resImp *multiclusterv1alpha1.ResourceImport) *corev1.Service {
@@ -364,6 +398,46 @@ func getMCServiceImport(resImp *multiclusterv1alpha1.ResourceImport) *k8smcsv1al
 		Spec: resImp.Spec.ServiceImport.Spec,
 	}
 	return svcImp
+}
+
+// getMCEndpointSlice builds an EndpointSlice for the imported endpoints.
+// The EndpointSlice is named after the MC-prefixed Service name, labeled so
+// that it is associated with the imported Service, and owned by the MC Service
+// so that Kubernetes GC deletes it automatically when the Service is deleted.
+func getMCEndpointSlice(resImp *multiclusterv1alpha1.ResourceImport, name string, svc *corev1.Service) *discovery.EndpointSlice {
+	var endpoints []discovery.Endpoint
+	var ports []discovery.EndpointPort
+	if resImp.Spec.Endpoints != nil {
+		endpoints = resImp.Spec.Endpoints.Endpoints
+		ports = normalizeEndpointPorts(resImp.Spec.Endpoints.Ports)
+	}
+	t := true
+	return &discovery.EndpointSlice{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      name,
+			Namespace: resImp.Spec.Namespace,
+			Annotations: map[string]string{
+				common.AntreaMCServiceAnnotation: "true",
+			},
+			Labels: map[string]string{
+				discovery.LabelServiceName: name,
+				discovery.LabelManagedBy:   common.AntreaMCSPrefix + "controller",
+			},
+			OwnerReferences: []metav1.OwnerReference{
+				{
+					APIVersion:         "v1",
+					Kind:               "Service",
+					Name:               svc.Name,
+					UID:                svc.UID,
+					Controller:         &t,
+					BlockOwnerDeletion: &t,
+				},
+			},
+		},
+		AddressType: discovery.AddressTypeIPv4,
+		Endpoints:   endpoints,
+		Ports:       ports,
+	}
 }
 
 // SetupWithManager sets up the controller with the ClusterManager

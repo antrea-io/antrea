@@ -24,6 +24,7 @@ import (
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
+	discoveryv1 "k8s.io/api/discovery/v1"
 	apiequality "k8s.io/apimachinery/pkg/api/equality"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -202,8 +203,8 @@ func (r *ResourceExportReconciler) handleUpdateEvent(ctx context.Context,
 	return nil
 }
 
-// handleDeleteEvent will either delete the corrsponding ResourceImport if no more ResourceExport exists
-// or regenerate ResourceImport's Subsets from latest ResourceExports without Endpoints from
+// handleDeleteEvent will either delete the corresponding ResourceImport if no more ResourceExport exists
+// or regenerate ResourceImport's endpoints from latest ResourceExports without endpoints from
 // the deleted ResourceExport.
 func (r *ResourceExportReconciler) handleDeleteEvent(ctx context.Context, resExport *mcsv1alpha1.ResourceExport) error {
 	reList := &mcsv1alpha1.ResourceExportList{}
@@ -331,7 +332,7 @@ func (r *ResourceExportReconciler) refreshServiceResourceImport(
 }
 
 // refreshEndpointsResourceImport returns a new Endpoints kind of ResourceImport or
-// updates existing one to reflect any change from member cluster's ResourceExport
+// updates existing one to reflect any change from member cluster's ResourceExport.
 func (r *ResourceExportReconciler) refreshEndpointsResourceImport(
 	resExport *mcsv1alpha1.ResourceExport,
 	resImport *mcsv1alpha1.ResourceImport,
@@ -367,26 +368,69 @@ func (r *ResourceExportReconciler) refreshEndpointsResourceImport(
 	}
 
 	if createResImport {
-		newResImport.Spec.Endpoints = &mcsv1alpha1.EndpointsImport{
-			Subsets: resExport.Spec.Endpoints.Subsets,
-		}
+		newResImport.Spec.Endpoints = endpointsImportFromExport(resExport.Spec.Endpoints)
 		return newResImport, true, nil
 	}
-	// check all matched Endpoints ResourceExport and generate a new EndpointSubset
-	var newSubsets []corev1.EndpointSubset
-	undeleteItems, err := r.getNotDeletedResourceExports(resExport)
+	undeletedItems, err := r.getNotDeletedResourceExports(resExport)
 	if err != nil {
 		klog.ErrorS(err, "Failed to list ResourceExports, retry later")
 		return newResImport, false, err
 	}
-	for _, re := range undeleteItems {
-		newSubsets = append(newSubsets, re.Spec.Endpoints.Subsets...)
+	// The controller-runtime cache may not yet reflect the update that triggered this
+	// reconciliation. Replace the stale cache entry for the triggering ResourceExport
+	// with the live object so mergeEndpointsImport sees the latest endpoint data.
+	for i, item := range undeletedItems {
+		if item.Name == resExport.Name && item.Namespace == resExport.Namespace {
+			undeletedItems[i] = *resExport
+			break
+		}
 	}
-	newResImport.Spec.Endpoints = &mcsv1alpha1.EndpointsImport{Subsets: newSubsets}
+	newResImport.Spec.Endpoints = mergeEndpointsImport(undeletedItems)
 	if apiequality.Semantic.DeepEqual(newResImport.Spec.Endpoints, resImport.Spec.Endpoints) {
 		return newResImport, false, nil
 	}
 	return newResImport, true, nil
+}
+
+// endpointsImportFromExport builds an EndpointsImport from a single EndpointsExport.
+// It prefers the new Endpoints/Ports fields over the deprecated Subsets field.
+func endpointsImportFromExport(export *mcsv1alpha1.EndpointsExport) *mcsv1alpha1.EndpointsImport {
+	if export == nil {
+		return &mcsv1alpha1.EndpointsImport{}
+	}
+	if len(export.Endpoints) > 0 {
+		return &mcsv1alpha1.EndpointsImport{
+			Endpoints: export.Endpoints,
+			Ports:     export.Ports,
+		}
+	}
+	// Ignore Subsets field since it's deprecated and will be removed in the future.
+	return &mcsv1alpha1.EndpointsImport{}
+}
+
+// mergeEndpointsImport merges endpoint data from multiple ResourceExports into a single
+// EndpointsImport. When any ResourceExport carries the new Endpoints/Ports fields, only
+// those fields are aggregated; the legacy Subsets field is ignored.
+func mergeEndpointsImport(items []mcsv1alpha1.ResourceExport) *mcsv1alpha1.EndpointsImport {
+	var newEndpoints []discoveryv1.Endpoint
+	var newPorts []discoveryv1.EndpointPort
+	for _, re := range items {
+		if re.Spec.Endpoints == nil {
+			continue
+		}
+		if len(re.Spec.Endpoints.Endpoints) > 0 {
+			newEndpoints = append(newEndpoints, re.Spec.Endpoints.Endpoints...)
+			// only set newPorts once it's non-nil
+			if newPorts == nil {
+				newPorts = re.Spec.Endpoints.Ports
+			}
+		}
+	}
+	if len(newEndpoints) > 0 {
+		return &mcsv1alpha1.EndpointsImport{Endpoints: newEndpoints, Ports: newPorts}
+	}
+	// Ignore Subsets field since it's deprecated and will be removed in the future.
+	return &mcsv1alpha1.EndpointsImport{}
 }
 
 func (r *ResourceExportReconciler) refreshACNPResourceImport(
