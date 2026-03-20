@@ -1665,6 +1665,10 @@ func TestAddRoutes(t *testing.T) {
 				networkConfig: tt.networkConfig,
 				nodeConfig:    tt.nodeConfig,
 				nftables:      mockNFTables,
+				serviceNFTablesSets: map[string]*sync.Map{
+					antreaNFTablesSetExternalIP:  {},
+					antreaNFTablesSetExternalIP6: {},
+				},
 				hostNetworkAccelerationEnabled: tt.networkConfig.EnableHostNetworkAcceleration &&
 					(tt.networkConfig.TrafficEncapMode == config.TrafficEncapModeNoEncap ||
 						tt.networkConfig.TrafficEncapMode == config.TrafficEncapModeHybrid),

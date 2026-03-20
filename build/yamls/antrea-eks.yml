@@ -4717,8 +4717,11 @@ data:
       ovsBridges:
 
     hostNetworkAcceleration:
-      # Enable to accelerate Pod-to-Pod traffic in the Node's host network using nftables flowtable when traffic mode is
-      # noEncap or hybrid.
+      # Enable to accelerate traffic in the Node's host network using nftables flowtable. The supported traffic types are:
+      # - Pod-to-Pod traffic (when traffic mode is noEncap or hybrid)
+      # - External-to-Service traffic (NodePort, LoadBalancer ingress IPs, and externalIPs, when proxyAll is enabled)
+      # Note: When proxyAll is enabled and kube-proxy is running on the Node, External-to-Service traffic to LoadBalancer
+      # ingress IPs and externalIPs is not accelerated. It can be accelerated only after kube-proxy is removed.
       enable: true
 
     # HostNetworkMode determines how antrea-agent implements Node host network netfilter rules required by Antrea
@@ -5767,7 +5770,7 @@ spec:
         kubectl.kubernetes.io/default-container: antrea-agent
         # Automatically restart Pods with a RollingUpdate if the ConfigMap changes
         # See https://helm.sh/docs/howto/charts_tips_and_tricks/#automatically-roll-deployments
-        checksum/config: 19cea71ebb0d852621308d71c5ee31a965d1fd7c0bc6a4c04bd09aa7ac2c1687
+        checksum/config: 3db031214faf7266e256d2996ec5a2ec2479ec47a0be6f49d786a9255eac137e
       labels:
         app: antrea
         component: antrea-agent
@@ -6016,7 +6019,7 @@ spec:
       annotations:
         # Automatically restart Pod if the ConfigMap changes
         # See https://helm.sh/docs/howto/charts_tips_and_tricks/#automatically-roll-deployments
-        checksum/config: 19cea71ebb0d852621308d71c5ee31a965d1fd7c0bc6a4c04bd09aa7ac2c1687
+        checksum/config: 3db031214faf7266e256d2996ec5a2ec2479ec47a0be6f49d786a9255eac137e
       labels:
         app: antrea
         component: antrea-controller
