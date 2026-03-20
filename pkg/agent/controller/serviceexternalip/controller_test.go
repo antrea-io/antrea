@@ -30,6 +30,7 @@ import (
 	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes/fake"
 	"k8s.io/client-go/util/workqueue"
+	utilnet "k8s.io/utils/net"
 	"k8s.io/utils/ptr"
 
 	"antrea.io/antrea/pkg/agent/apis"
@@ -39,16 +40,18 @@ import (
 )
 
 const (
-	fakeNode1              = "node1"
-	fakeNode2              = "node2"
-	fakeExternalIPPoolName = "pool1"
-	fakeServiceExternalIP1 = "1.2.3.4"
-	fakeServiceExternalIP2 = "1.2.3.5"
+	fakeNode1               = "node1"
+	fakeNode2               = "node2"
+	fakeExternalIPPoolName  = "pool1"
+	fakeServiceExternalIP1  = "1.2.3.4"
+	fakeServiceExternalIP2  = "1.2.3.5"
+	fakeServiceExternalIPv6 = "2021:1::aa01"
 )
 
 var (
-	servicePolicyCluster = makeService("svc1", "ns1", corev1.ServiceTypeLoadBalancer, corev1.ServiceExternalTrafficPolicyCluster, fakeExternalIPPoolName, fakeServiceExternalIP1)
-	servicePolicyLocal   = makeService("svc2", "ns1", corev1.ServiceTypeLoadBalancer, corev1.ServiceExternalTrafficPolicyLocal, fakeExternalIPPoolName, fakeServiceExternalIP1)
+	servicePolicyCluster   = makeService("svc1", "ns1", corev1.ServiceTypeLoadBalancer, corev1.ServiceExternalTrafficPolicyCluster, fakeExternalIPPoolName, fakeServiceExternalIP1)
+	servicePolicyLocal     = makeService("svc2", "ns1", corev1.ServiceTypeLoadBalancer, corev1.ServiceExternalTrafficPolicyLocal, fakeExternalIPPoolName, fakeServiceExternalIP1)
+	servicePolicyLocalIPv6 = makeService("svc3", "ns1", corev1.ServiceTypeLoadBalancer, corev1.ServiceExternalTrafficPolicyLocal, fakeExternalIPPoolName, fakeServiceExternalIPv6)
 )
 
 type fakeMemberlistCluster struct {
@@ -182,7 +185,30 @@ func makeService(name, namespace string, serviceType corev1.ServiceType,
 }
 
 func makeEndpointSlice(name, namespace string, addresses, notReadyAddresses map[string]string) *discoveryv1.EndpointSlice {
+	return makeEndpointSliceWithSuffix(name, namespace, "slice", addresses, notReadyAddresses)
+}
+
+func makeEndpointSliceWithSuffix(name, namespace, suffix string, addresses, notReadyAddresses map[string]string) *discoveryv1.EndpointSlice {
 	var readyEndpoints, notReadyEndpoints []discoveryv1.Endpoint
+	// Derive AddressType from the first address found in either map, defaulting to IPv4.
+	addressType := discoveryv1.AddressTypeIPv4
+	for ip := range addresses {
+		if utilnet.IsIPv6String(ip) {
+			addressType = discoveryv1.AddressTypeIPv6
+			break
+		}
+	}
+
+	// Only check notReadyAddresses if we haven't already detected an IPv6 address.
+	if addressType == discoveryv1.AddressTypeIPv4 {
+		for ip := range notReadyAddresses {
+			if utilnet.IsIPv6String(ip) {
+				addressType = discoveryv1.AddressTypeIPv6
+				break
+			}
+		}
+	}
+
 	for ip, nodeName := range addresses {
 		readyEndpoints = append(readyEndpoints, discoveryv1.Endpoint{
 			Addresses: []string{ip},
@@ -204,18 +230,17 @@ func makeEndpointSlice(name, namespace string, addresses, notReadyAddresses map[
 		})
 	}
 	allEndpoints := append(readyEndpoints, notReadyEndpoints...)
-	endpointSlice := &discoveryv1.EndpointSlice{
+	return &discoveryv1.EndpointSlice{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      fmt.Sprintf("%s-%s", name, "slice"),
+			Name:      fmt.Sprintf("%s-%s", name, suffix),
 			Namespace: namespace,
 			Labels: map[string]string{
 				discoveryv1.LabelServiceName: name,
 			},
 		},
-		AddressType: discoveryv1.AddressTypeIPv4,
+		AddressType: addressType,
 		Endpoints:   allEndpoints,
 	}
-	return endpointSlice
 }
 
 func TestCreateService(t *testing.T) {
@@ -685,6 +710,40 @@ func TestServiceExternalIPController_nodesHasHealthyServiceEndpoint(t *testing.T
 			},
 			serviceToTest:        servicePolicyLocal.DeepCopy(),
 			expectedHealthyNodes: sets.New(fakeNode1, fakeNode2),
+		},
+		{
+			name: "IPv6 service only considers IPv6 EndpointSlices",
+			endpointSlices: []*discoveryv1.EndpointSlice{
+				makeEndpointSliceWithSuffix(servicePolicyLocalIPv6.Name, servicePolicyLocalIPv6.Namespace, "slice-ipv6",
+					map[string]string{
+						"2021:1::1": fakeNode1,
+					},
+					nil),
+				makeEndpointSliceWithSuffix(servicePolicyLocalIPv6.Name, servicePolicyLocalIPv6.Namespace, "slice-ipv4",
+					map[string]string{
+						"2.3.4.5": fakeNode2,
+					},
+					nil),
+			},
+			serviceToTest:        servicePolicyLocalIPv6.DeepCopy(),
+			expectedHealthyNodes: sets.New(fakeNode1),
+		},
+		{
+			name: "IPv6 EndpointSlice is ignored for IPv4 service",
+			endpointSlices: []*discoveryv1.EndpointSlice{
+				makeEndpointSliceWithSuffix(servicePolicyLocal.Name, servicePolicyLocal.Namespace, "slice-ipv6",
+					map[string]string{
+						"2021:1::1": fakeNode1,
+					},
+					nil),
+				makeEndpointSliceWithSuffix(servicePolicyLocal.Name, servicePolicyLocal.Namespace, "slice-ipv4",
+					map[string]string{
+						"2.3.4.5": fakeNode2,
+					},
+					nil),
+			},
+			serviceToTest:        servicePolicyLocal.DeepCopy(),
+			expectedHealthyNodes: sets.New(fakeNode2),
 		},
 	}
 	for _, tt := range tests {
