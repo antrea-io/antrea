@@ -27,6 +27,7 @@ import (
 
 	"antrea.io/antrea/pkg/agent/flowexporter/connection"
 	"antrea.io/antrea/pkg/agent/flowexporter/filter"
+	"antrea.io/antrea/pkg/agent/flowexporter/utils"
 	"antrea.io/antrea/pkg/agent/metrics"
 	"antrea.io/antrea/pkg/agent/openflow"
 	proxytest "antrea.io/antrea/pkg/agent/proxy/testing"
@@ -132,7 +133,7 @@ func TestDenyConnectionStore_AddOrUpdateConn(t *testing.T) {
 				mockPodStore.EXPECT().GetPodByIPAndTime(tuple.DestinationAddress.String(), gomock.Any()).Return(pod1, true)
 			}
 
-			denyConnStore := NewDenyConnectionStore(nil, mockPodStore, mockProxier, testFlowExporterOptions, filter.NewProtocolFilter(c.protocolFilter))
+			denyConnStore := NewDenyConnectionStore(nil, mockPodStore, mockProxier, testFlowExporterOptions, filter.NewProtocolFilter(c.protocolFilter), nil, false)
 
 			denyConnStore.AddOrUpdateConn(&c.testFlow, refTime.Add(-(time.Second * 20)), uint64(60))
 			expConn := c.testFlow
@@ -164,4 +165,53 @@ func TestDenyConnectionStore_AddOrUpdateConn(t *testing.T) {
 			checkDenyConnectionMetrics(t, len(denyConnStore.connections))
 		})
 	}
+}
+
+func TestDenyConnectionStore_FlowTypeRecomputeAfterSync(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	refTime := time.Now()
+	tuple := connection.Tuple{
+		SourceAddress:      netip.MustParseAddr("1.2.3.4"),
+		DestinationAddress: netip.MustParseAddr("4.3.2.1"),
+		Protocol:           6,
+		SourcePort:         65280,
+		DestinationPort:    255,
+	}
+
+	mockPodStore := objectstoretest.NewMockPodStore(ctrl)
+	mockProxier := proxytest.NewMockProxyQuerier(ctrl)
+
+	// fillPodInfo is called once during the initial add; both IPs map to pod1.
+	mockPodStore.EXPECT().GetPodByIPAndTime(tuple.SourceAddress.String(), gomock.Any()).Return(pod1, true)
+	mockPodStore.EXPECT().GetPodByIPAndTime(tuple.DestinationAddress.String(), gomock.Any()).Return(pod1, true)
+
+	// NRC starts unsynced; both IPs are in pod subnets.
+	nrc := &fakeNodeRouteQuerier{
+		hasSynced:  false,
+		podSubnets: map[string]bool{"1.2.3.4": true, "4.3.2.1": true},
+	}
+	denyConnStore := NewDenyConnectionStore(nil, mockPodStore, mockProxier, testFlowExporterOptions, filter.NewProtocolFilter(nil), nrc, false)
+
+	testFlow := &connection.Connection{
+		FlowKey:                    tuple,
+		OriginalDestinationAddress: tuple.DestinationAddress,
+		OriginalDestinationPort:    tuple.DestinationPort,
+	}
+
+	// First add: NRC not yet synced → FlowType must be Unspecified.
+	denyConnStore.AddOrUpdateConn(testFlow, refTime, 60)
+	actualConn, ok := denyConnStore.GetConnByKey(connection.NewConnectionKey(testFlow))
+	assert.True(t, ok, "deny connection should be present after add")
+	assert.Equal(t, utils.FlowTypeUnspecified, actualConn.FlowType, "FlowType should be Unspecified before NRC syncs")
+
+	// Simulate NRC becoming synced.
+	nrc.hasSynced = true
+
+	// Update: NRC is now synced → FlowType must be recomputed.
+	// Both IPs are pod subnets and both pod names are populated by fillPodInfo
+	// during the initial add, so findFlowType returns FlowTypeIntraNode.
+	denyConnStore.AddOrUpdateConn(testFlow, refTime.Add(time.Second), 60)
+	actualConn, ok = denyConnStore.GetConnByKey(connection.NewConnectionKey(testFlow))
+	assert.True(t, ok, "deny connection should still be present after update")
+	assert.Equal(t, utils.FlowTypeIntraNode, actualConn.FlowType, "FlowType should be recomputed to IntraNode after NRC syncs")
 }

@@ -69,7 +69,6 @@ type FlowExporter struct {
 	v6Enabled              bool
 	k8sClient              kubernetes.Interface
 	nodeRouteController    *noderoute.Controller
-	isNetworkPolicyOnly    bool
 	conntrackPriorityQueue *priorityqueue.ExpirePriorityQueue
 	denyPriorityQueue      *priorityqueue.ExpirePriorityQueue
 	expiredConns           []connection.Connection
@@ -86,8 +85,15 @@ func NewFlowExporter(podStore objectstore.PodStore, proxier proxy.ProxyQuerier, 
 ) (*FlowExporter, error) {
 	protocolFilter := filter.NewProtocolFilter(o.ProtocolFilter)
 	connTrackDumper := connections.InitializeConnTrackDumper(nodeConfig, serviceCIDRNet, serviceCIDRNetv6, ovsDatapathType, proxyEnabled, protocolFilter)
-	denyConnStore := connections.NewDenyConnectionStore(npQuerier, podStore, proxier, o, protocolFilter)
-	conntrackConnStore := connections.NewConntrackConnectionStore(connTrackDumper, v4Enabled, v6Enabled, npQuerier, podStore, proxier, podNetworkWait, o)
+	isNetworkPolicyOnly := trafficEncapMode.IsNetworkPolicyOnly()
+	// Guard against a nil concrete pointer being wrapped in a non-nil interface value,
+	// which would cause a panic inside findFlowType when the nil check is evaluated.
+	var nrc connections.NodeRouteQuerier
+	if nodeRouteController != nil {
+		nrc = nodeRouteController
+	}
+	denyConnStore := connections.NewDenyConnectionStore(npQuerier, podStore, proxier, o, protocolFilter, nrc, isNetworkPolicyOnly)
+	conntrackConnStore := connections.NewConntrackConnectionStore(connTrackDumper, v4Enabled, v6Enabled, npQuerier, podStore, proxier, podNetworkWait, o, nrc, isNetworkPolicyOnly)
 	if nodeRouteController == nil {
 		klog.InfoS("NodeRouteController is nil, will not be able to determine flow type for connections")
 	}
@@ -129,7 +135,6 @@ func NewFlowExporter(podStore objectstore.PodStore, proxier proxy.ProxyQuerier, 
 		v6Enabled:              v6Enabled,
 		k8sClient:              k8sClient,
 		nodeRouteController:    nodeRouteController,
-		isNetworkPolicyOnly:    trafficEncapMode.IsNetworkPolicyOnly(),
 		conntrackPriorityQueue: conntrackConnStore.GetPriorityQueue(),
 		denyPriorityQueue:      denyConnStore.GetPriorityQueue(),
 		expiredConns:           make([]connection.Connection, 0, maxConnsToExport*2),
@@ -290,40 +295,6 @@ func (exp *FlowExporter) initFlowExporter(ctx context.Context) error {
 	return nil
 }
 
-func (exp *FlowExporter) findFlowType(conn connection.Connection) uint8 {
-	// TODO: support Pod-To-External flows in network policy only mode.
-	if exp.isNetworkPolicyOnly {
-		if conn.SourcePodName == "" || conn.DestinationPodName == "" {
-			return utils.FlowTypeInterNode
-		}
-		return utils.FlowTypeIntraNode
-	}
-
-	if exp.nodeRouteController == nil {
-		klog.V(5).InfoS("Can't find flow type without nodeRouteController")
-		return utils.FlowTypeUnspecified
-	}
-	srcIsPod, srcIsGw := exp.nodeRouteController.LookupIPInPodSubnets(conn.FlowKey.SourceAddress)
-	dstIsPod, dstIsGw := exp.nodeRouteController.LookupIPInPodSubnets(conn.FlowKey.DestinationAddress)
-	if srcIsGw || dstIsGw {
-		// This matches what we do in filterAntreaConns but is more general as we consider
-		// remote gateways as well.
-		klog.V(5).InfoS("Flows where the source or destination IP is a gateway IP will not be exported")
-		return utils.FlowTypeUnsupported
-	}
-	if !srcIsPod {
-		klog.V(5).InfoS("Flows where the source is not a Pod will not be exported")
-		return utils.FlowTypeUnsupported
-	}
-	if !dstIsPod {
-		return utils.FlowTypeToExternal
-	}
-	if conn.SourcePodName == "" || conn.DestinationPodName == "" {
-		return utils.FlowTypeInterNode
-	}
-	return utils.FlowTypeIntraNode
-}
-
 func (exp *FlowExporter) fillEgressInfo(conn *connection.Connection) {
 	egress, err := exp.egressQuerier.GetEgress(conn.SourcePodNamespace, conn.SourcePodName)
 	if err != nil {
@@ -340,7 +311,6 @@ func (exp *FlowExporter) fillEgressInfo(conn *connection.Connection) {
 }
 
 func (exp *FlowExporter) exportConn(conn *connection.Connection) error {
-	conn.FlowType = exp.findFlowType(*conn)
 	if conn.FlowType == utils.FlowTypeUnsupported {
 		return nil
 	}
