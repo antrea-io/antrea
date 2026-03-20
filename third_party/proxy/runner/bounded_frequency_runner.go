@@ -15,31 +15,22 @@ limitations under the License.
 */
 
 /*
-// Copyright 2025 Antrea Authors
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+Copyright 2025 Antrea Authors
 
-Original file https://raw.githubusercontent.com/kubernetes/kubernetes/refs/tags/v1.34.2/pkg/proxy/runner/bounded_frequency_runner.go
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
 
-Modifies:
+	http://www.apache.org/licenses/LICENSE-2.0
 
-- Remove `defer close(bfr.run)` from `BoundedFrequencyRunner.Loop()`. AntreaProxy may still call `BoundedFrequencyRunner.Run()`
-  from informer event handlers after `Loop()` has exited, which causes a data race when `Run()` attempts to send on a
-  channel that is being closed. The previous Kubernetes implementation of BoundedFrequencyRunner did not close the
-  trigger channel, and its concurrency semantics allowed `Run()` to be invoked independently of `Loop()`’s lifetime.
-
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
 */
 
+// Derived from Kubernetes pkg/proxy/runner/bounded_frequency_runner.go (v1.34.2); Antrea customizations applied.
 package runner
 
 import (
@@ -51,13 +42,15 @@ import (
 	"k8s.io/utils/clock"
 )
 
-// BoundedFrequencyRunner manages runs of a user-provided work function.
+// BoundedFrequencyRunner manages runs of a function, ensuring it runs no more
+// often than minInterval, with retries not exceeding retryInterval, and at
+// least once per maxInterval.
 type BoundedFrequencyRunner struct {
-	name string // the name of this instance
+	name string
 
-	minInterval   time.Duration // the min time between runs
-	retryInterval time.Duration // the time between a run and a retry
-	maxInterval   time.Duration // the max time between runs
+	minInterval   time.Duration
+	retryInterval time.Duration
+	maxInterval   time.Duration
 
 	run chan struct{} // try an async run
 
