@@ -31,8 +31,8 @@ echo "Updating renovate configuration with versions: $VERSION1, $VERSION2, $VERS
 
 sed -i.bak "s/baseBranches: \[\"main\", \"[^\"]*\", \"[^\"]*\", \"[^\"]*\"\],/baseBranches: [\"main\", \"$VERSION1\", \"$VERSION2\", \"$VERSION3\"],/" "$RENOVATE_CONFIG"
 
-# Update first matchBaseBranches occurrence that disables regular updates for active release branches
-sed -i.bak2 "0,/matchBaseBranches: \[\"[^\"]*\", \"[^\"]*\", \"[^\"]*\"\],/{s/matchBaseBranches: \[\"[^\"]*\", \"[^\"]*\", \"[^\"]*\"\],/matchBaseBranches: [\"$VERSION1\", \"$VERSION2\", \"$VERSION3\"],/}" "$RENOVATE_CONFIG"
+# Update all matchBaseBranches occurrences that list the active release branches
+sed -i.bak2 "s/matchBaseBranches: \[\"release-[^\"]*\", \"release-[^\"]*\", \"release-[^\"]*\"\],/matchBaseBranches: [\"$VERSION1\", \"$VERSION2\", \"$VERSION3\"],/g" "$RENOVATE_CONFIG"
 
 rm -f "$RENOVATE_CONFIG.bak" "$RENOVATE_CONFIG.bak2"
 
