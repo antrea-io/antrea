@@ -1406,6 +1406,7 @@ func TestInitIPRoutes(t *testing.T) {
 
 	tests := []struct {
 		name          string
+		proxyAll      bool
 		networkConfig *config.NetworkConfig
 		nodeConfig    *config.NodeConfig
 		expectedCalls func(mockNetlink *netlinktest.MockInterfaceMockRecorder)
@@ -1454,12 +1455,14 @@ func TestInitIPRoutes(t *testing.T) {
 func TestInitServiceIPRoutes(t *testing.T) {
 	tests := []struct {
 		name          string
+		proxyAll      bool
 		networkConfig *config.NetworkConfig
 		nodeConfig    *config.NodeConfig
 		expectedCalls func(mockNetlink *netlinktest.MockInterfaceMockRecorder)
 	}{
 		{
-			name: "encap",
+			name:     "encap",
+			proxyAll: false,
 			networkConfig: &config.NetworkConfig{
 				TrafficEncapMode: config.TrafficEncapModeEncap,
 				IPv4Enabled:      true,
@@ -1519,6 +1522,100 @@ func TestInitServiceIPRoutes(t *testing.T) {
 				})
 			},
 		},
+		{
+			name:     "noEncap with proxyAll",
+			proxyAll: true,
+			networkConfig: &config.NetworkConfig{
+				TrafficEncapMode: config.TrafficEncapModeNoEncap,
+				IPv4Enabled:      true,
+				IPv6Enabled:      true,
+			},
+			nodeConfig: &config.NodeConfig{
+				PodIPv4CIDR:   ip.MustParseCIDR("10.244.0.0/24"),
+				PodIPv6CIDR:   ip.MustParseCIDR("2001:db8:244::/64"),
+				GatewayConfig: &config.GatewayConfig{Name: "antrea-gw0", LinkIndex: 10},
+			},
+			expectedCalls: func(mockNetlink *netlinktest.MockInterfaceMockRecorder) {
+				mockNetlink.NeighSet(&netlink.Neigh{
+					LinkIndex:    10,
+					Family:       netlink.FAMILY_V4,
+					State:        netlink.NUD_PERMANENT,
+					IP:           config.VirtualServiceIPv4,
+					HardwareAddr: globalVMAC,
+				})
+				mockNetlink.RouteReplace(&netlink.Route{
+					Dst: &net.IPNet{
+						IP:   config.VirtualServiceIPv4,
+						Mask: net.CIDRMask(32, 32),
+					},
+					Scope:     netlink.SCOPE_LINK,
+					LinkIndex: 10,
+				})
+				mockNetlink.NeighSet(&netlink.Neigh{
+					LinkIndex:    10,
+					Family:       netlink.FAMILY_V4,
+					State:        netlink.NUD_PERMANENT,
+					IP:           net.ParseIP("10.244.0.0"),
+					HardwareAddr: globalVMAC,
+				})
+				mockNetlink.RouteReplace(&netlink.Route{
+					Dst: &net.IPNet{
+						IP:   net.ParseIP("10.244.0.0"),
+						Mask: net.CIDRMask(32, 32),
+					},
+					Scope:     netlink.SCOPE_LINK,
+					LinkIndex: 10,
+				})
+				mockNetlink.RouteReplace(&netlink.Route{
+					Dst: &net.IPNet{
+						IP:   config.VirtualNodePortDNATIPv4,
+						Mask: net.CIDRMask(32, 32),
+					},
+					Gw:        config.VirtualServiceIPv4,
+					Scope:     netlink.SCOPE_UNIVERSE,
+					LinkIndex: 10,
+				})
+				mockNetlink.NeighSet(&netlink.Neigh{
+					LinkIndex:    10,
+					Family:       netlink.FAMILY_V6,
+					State:        netlink.NUD_PERMANENT,
+					IP:           config.VirtualServiceIPv6,
+					HardwareAddr: globalVMAC,
+				})
+				mockNetlink.RouteReplace(&netlink.Route{
+					Dst: &net.IPNet{
+						IP:   config.VirtualServiceIPv6,
+						Mask: net.CIDRMask(128, 128),
+					},
+					Scope:     netlink.SCOPE_LINK,
+					LinkIndex: 10,
+				})
+				mockNetlink.NeighSet(&netlink.Neigh{
+					LinkIndex:    10,
+					Family:       netlink.FAMILY_V6,
+					State:        netlink.NUD_PERMANENT,
+					IP:           net.ParseIP("2001:db8:244::"),
+					HardwareAddr: globalVMAC,
+				})
+				mockNetlink.RouteReplace(&netlink.Route{
+					Dst: &net.IPNet{
+						IP:   net.ParseIP("2001:db8:244::"),
+						Mask: net.CIDRMask(128, 128),
+					},
+					Scope:     netlink.SCOPE_LINK,
+					LinkIndex: 10,
+				})
+				mockNetlink.RouteReplace(&netlink.Route{
+					Dst: &net.IPNet{
+						IP:   config.VirtualNodePortDNATIPv6,
+						Mask: net.CIDRMask(128, 128),
+					},
+					Gw:        config.VirtualServiceIPv6,
+					Scope:     netlink.SCOPE_UNIVERSE,
+					LinkIndex: 10,
+				})
+			},
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -1529,6 +1626,7 @@ func TestInitServiceIPRoutes(t *testing.T) {
 				networkConfig:       tt.networkConfig,
 				nodeConfig:          tt.nodeConfig,
 				serviceCIDRProvider: mockServiceCIDRProvider,
+				proxyAll:            tt.proxyAll,
 			}
 			tt.expectedCalls(mockNetlink.EXPECT())
 			mockServiceCIDRProvider.EXPECT().AddEventHandler(gomock.Any())

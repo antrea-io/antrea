@@ -1653,6 +1653,11 @@ func (c *Client) initServiceIPRoutes() error {
 		if err := c.addVirtualServiceIPRoute(false); err != nil {
 			return err
 		}
+		if c.proxyAll {
+			if err := c.addPodCIDRNetworkRoute(c.nodeConfig.PodIPv4CIDR); err != nil {
+				return err
+			}
+		}
 		if err := c.addVirtualNodePortDNATIPRoute(false); err != nil {
 			return err
 		}
@@ -1660,6 +1665,11 @@ func (c *Client) initServiceIPRoutes() error {
 	if c.networkConfig.IPv6Enabled {
 		if err := c.addVirtualServiceIPRoute(true); err != nil {
 			return err
+		}
+		if c.proxyAll {
+			if err := c.addPodCIDRNetworkRoute(c.nodeConfig.PodIPv6CIDR); err != nil {
+				return err
+			}
 		}
 		if err := c.addVirtualNodePortDNATIPRoute(true); err != nil {
 			return err
@@ -1672,6 +1682,22 @@ func (c *Client) initServiceIPRoutes() error {
 			}
 		}
 	})
+	return nil
+}
+
+// addPodCIDRNetworkRoute installs a host route and a neighbor entry for PodCIDR network address
+// so packets destined to that address are redirected to Antrea gateway and re-injected into OVS pipeline.
+func (c *Client) addPodCIDRNetworkRoute(podCIDR *net.IPNet) error {
+	if podCIDR == nil {
+		return nil
+	}
+	linkIndex := c.nodeConfig.GatewayConfig.LinkIndex
+	networkIP := podCIDR.IP.Mask(podCIDR.Mask)
+	neigh := generateNeigh(networkIP, linkIndex)
+	if err := c.netlink.NeighSet(neigh); err != nil {
+		return fmt.Errorf("failed to add neighbor for PodCIDR network IP %s: %w", networkIP, err)
+	}
+	c.serviceNeighbors.Store(networkIP.String(), neigh)
 	return nil
 }
 
