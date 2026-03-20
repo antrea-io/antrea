@@ -1545,6 +1545,11 @@ func (c *Client) initServiceIPRoutes() error {
 		if err := c.addVirtualServiceIPRoute(false); err != nil {
 			return err
 		}
+		if c.hostNetworkAccelerationEnabled {
+			if err := c.addPodCIDRNetworkNeighbor(false); err != nil {
+				return err
+			}
+		}
 		if err := c.addVirtualNodePortDNATIPRoute(false); err != nil {
 			return err
 		}
@@ -1552,6 +1557,11 @@ func (c *Client) initServiceIPRoutes() error {
 	if c.networkConfig.IPv6Enabled {
 		if err := c.addVirtualServiceIPRoute(true); err != nil {
 			return err
+		}
+		if c.hostNetworkAccelerationEnabled {
+			if err := c.addPodCIDRNetworkNeighbor(true); err != nil {
+				return err
+			}
 		}
 		if err := c.addVirtualNodePortDNATIPRoute(true); err != nil {
 			return err
@@ -1564,6 +1574,32 @@ func (c *Client) initServiceIPRoutes() error {
 			}
 		}
 	})
+	return nil
+}
+
+// addPodCIDRNetworkNeighbor installs a neighbor entry for the Pod CIDR network address to ensure packets destined to
+// that address are forwarded to the OVS pipeline via the Antrea gateway without querying the destination MAC address
+// through ARP/NDP query. The on-link route for the Pod CIDR is already added by the NodeController, so no additional
+// route is needed here.
+func (c *Client) addPodCIDRNetworkNeighbor(isIPv6 bool) error {
+	var podCIDR *net.IPNet
+	if isIPv6 {
+		podCIDR = c.nodeConfig.PodIPv6CIDR
+	} else {
+		podCIDR = c.nodeConfig.PodIPv4CIDR
+	}
+	if podCIDR == nil {
+		return fmt.Errorf("Pod CIDR is not configured")
+	}
+	networkIP := podCIDR.IP.Mask(podCIDR.Mask)
+	if networkIP == nil {
+		return fmt.Errorf("failed to compute network IP from Pod CIDR %s", podCIDR.String())
+	}
+	neigh := generateNeigh(networkIP, c.nodeConfig.GatewayConfig.LinkIndex)
+	if err := c.netlink.NeighSet(neigh); err != nil {
+		return fmt.Errorf("failed to add neighbor for Pod CIDR network IP %s: %w", networkIP, err)
+	}
+	c.serviceNeighbors.Store(networkIP.String(), neigh)
 	return nil
 }
 

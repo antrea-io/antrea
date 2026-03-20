@@ -742,11 +742,33 @@ func testProxyHairpin(t *testing.T, isIPv6 bool) {
 
 	// These are expected client IP.
 	expectedGatewayIP, _ := nodeGatewayIPs(1)
-	expectedVirtualIP := config.VirtualServiceIPv4.String()
+	expectedSNATIP := config.VirtualServiceIPv4.String()
 	expectedNodeIP := worker2NodeIP
 	if isIPv6 {
 		_, expectedGatewayIP = nodeGatewayIPs(1)
-		expectedVirtualIP = config.VirtualServiceIPv6.String()
+		expectedSNATIP = config.VirtualServiceIPv6.String()
+	}
+
+	// In noEncap or hybrid mode with hostNetworkAcceleration enabled, the SNAT IP for
+	// host-network intra-node hairpin connections is the Pod CIDR network address of the
+	// worker node instead of the virtual Service IP.
+	encapMode, err := data.GetEncapMode()
+	require.NoError(t, err)
+	if encapMode == config.TrafficEncapModeNoEncap || encapMode == config.TrafficEncapModeHybrid {
+		agentConf, err := data.GetAntreaAgentConf()
+		require.NoError(t, err)
+		if agentConf.HostNetworkAcceleration.Enable != nil && *agentConf.HostNetworkAcceleration.Enable {
+			workerNode := clusterInfo.nodes[1]
+			var podCIDR *net.IPNet
+			var err error
+			if isIPv6 {
+				_, podCIDR, err = net.ParseCIDR(workerNode.podV6NetworkCIDR)
+			} else {
+				_, podCIDR, err = net.ParseCIDR(workerNode.podV4NetworkCIDR)
+			}
+			require.NoError(t, err)
+			expectedSNATIP = podCIDR.IP.Mask(podCIDR.Mask).String()
+		}
 	}
 
 	agnhost := fmt.Sprintf("agnhost-%v", isIPv6)
@@ -761,7 +783,7 @@ func testProxyHairpin(t *testing.T, isIPv6 bool) {
 	createAgnhostPod(t, data, agnhostHost, node, true)
 	t.Run("HostNetwork Endpoints", func(t *testing.T) {
 		skipIfProxyAllDisabled(t, data)
-		testProxyIntraNodeHairpinCases(data, t, expectedVirtualIP, agnhostHost, clusterIPUrl, workerNodePortClusterUrl, workerNodePortLocalUrl, lbClusterUrl, lbLocalUrl)
+		testProxyIntraNodeHairpinCases(data, t, expectedSNATIP, agnhostHost, clusterIPUrl, workerNodePortClusterUrl, workerNodePortLocalUrl, lbClusterUrl, lbLocalUrl)
 		testProxyInterNodeHairpinCases(data, t, true, expectedNodeIP, nodeName(2), clusterIPUrl, worker2NodePortClusterUrl, lbClusterUrl)
 	})
 }
@@ -775,12 +797,13 @@ func testProxyHairpin(t *testing.T, isIPv6 bool) {
 //
 // If a Pod is on host network, when it accesses a ClusterIP/NodePort/LoadBalancer Service whose Endpoint is on itself
 // (this is equivalent to that a Node accesses a Cluster/NodePort/LoadBalancer whose Endpoint is host network and the
-// Endpoint is on this Node), that means a hairpin connection. A virtual IP is used to SNAT the connection to ensure
-// that the packet can be routed via Antrea gateway. The IP changes of the connection are:
+// Endpoint is on this Node), that means a hairpin connection. A virtual IP (or the Pod CIDR network address when
+// hostNetworkAcceleration is enabled in noEncap/hybrid mode) is used to SNAT the connection to ensure that the packet
+// can be routed via Antrea gateway. The IP changes of the connection are:
 // - Antrea gateway: Antrea gateway IP  -> Service IP
 // - OVS DNAT:       Antrea gateway IP  -> Node IP
-// - OVS SNAT:       virtual IP         -> Node IP
-// - Antrea gateway: virtual IP         -> Node IP
+// - OVS SNAT:       virtual IP (or Pod CIDR network address) -> Node IP
+// - Antrea gateway: virtual IP (or Pod CIDR network address) -> Node IP
 func testProxyIntraNodeHairpinCases(data *TestData, t *testing.T, expectedClientIP, pod, clusterIPUrl, nodePortClusterUrl, nodePortLocalUrl, lbClusterUrl, lbLocalUrl string) {
 	t.Run("IntraNode/ClusterIP", func(t *testing.T) {
 		clientIP, err := probeClientIPFromPod(data, pod, agnhostContainerName, clusterIPUrl)
@@ -823,12 +846,14 @@ func testProxyIntraNodeHairpinCases(data *TestData, t *testing.T, expectedClient
 // - Traffic mode: noEncap,  Endpoint network: not host network, OS: Linux (packets are routed via uplink interface)
 // - Traffic mode: noEncap,  Endpoint network: host network,     OS: Linux/Windows
 // The IP changes of the hairpin connections are:
-// - Node A Antrea gateway: Antrea gateway IP  -> Service IP
-// - OVS DNAT:              Antrea gateway IP  -> Endpoint IP
-// - OVS SNAT:              virtual IP         -> Endpoint IP
-// - Node A Antrea gateway: virtual IP         -> Endpoint IP
-// - Node A output:         Node A IP          -> Endpoint IP (another SNAT for virtual IP, otherwise reply packets can't be routed back).
-// - Node B:                Node A IP          -> Endpoint IP
+// - Node A Antrea gateway: Antrea gateway IP                       -> Service IP
+// - OVS DNAT:              Antrea gateway IP                       -> Endpoint IP
+// - OVS SNAT:              virtual IP (or Pod CIDR network address) -> Endpoint IP
+// - Node A Antrea gateway: virtual IP (or Pod CIDR network address) -> Endpoint IP
+// - Node A output:         Node A IP -> Endpoint IP (Node IP SNAT so reply can be routed back).
+// - Node B:                Node A IP -> Endpoint IP
+// Note: when hostNetworkAcceleration is enabled in noEncap or hybrid mode, the Pod CIDR network
+// address of Node A is used as the OVS SNAT IP instead of the virtual IP.
 func testProxyInterNodeHairpinCases(data *TestData, t *testing.T, hostNetwork bool, expectedClientIP, node, clusterIPUrl, nodePortClusterUrl, lbClusterUrl string) {
 	skipIfAntreaIPAMTest(t)
 	currentEncapMode, err := data.GetEncapMode()
