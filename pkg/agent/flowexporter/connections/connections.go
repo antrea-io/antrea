@@ -192,7 +192,7 @@ func (cs *connectionStore) getPolicyRuleMetadata(conn *connection.Connection, ru
 	}
 
 	if klog.V(4).Enabled() {
-		klog.InfoS("Found NetworkPolicy rule", "flowID", ruleID, "policy", klog.KRef(rule.PolicyRef.Namespace, rule.PolicyRef.Name), "ruleName", rule.Name)
+		klog.InfoS("Found NetworkPolicy rule", "ruleID", ruleID, "policy", klog.KRef(rule.PolicyRef.Namespace, rule.PolicyRef.Name), "ruleName", rule.Name)
 	}
 
 	return rule, disposition, true

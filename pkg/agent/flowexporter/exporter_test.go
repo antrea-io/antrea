@@ -23,6 +23,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/kubernetes/fake"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/util/workqueue"
 
@@ -445,22 +446,47 @@ func TestFlowExporter_networkPolicyWait(t *testing.T) {
 	networkPolicyWait := utilwait.NewGroup()
 	networkPolicyWait.Increment()
 
-	crdClient := fakeversioned.NewSimpleClientset()
+	dest := &api.FlowExporterDestination{
+		ObjectMeta: metav1.ObjectMeta{Name: "dest1"},
+		Spec: api.FlowExporterDestinationSpec{
+			Address: "127.0.0.1:4739",
+			Protocol: api.FlowExporterProtocol{
+				IPFIX: &api.FlowExporterIPFIXConfig{
+					Transport: api.FlowExporterTransportTCP,
+				},
+			},
+			ActiveFlowExportTimeoutSeconds: 5,
+			IdleFlowExportTimeoutSeconds:   5,
+		},
+	}
+	crdClient := fakeversioned.NewSimpleClientset(dest)
 	informerFactory := crdinformers.NewSharedInformerFactory(crdClient, 100*time.Millisecond)
 	destInformer := informerFactory.Crd().V1alpha1().FlowExporterDestinations()
 
 	testSubChannel := channel.NewSubscribableChannel("Test Connections", 5)
 
 	fe := &FlowExporter{
-		destinationInformer:   destInformer,
-		destinationLister:     destInformer.Lister(),
-		destinationSynced:     destInformer.Informer().HasSynced,
-		networkPolicyWait:     networkPolicyWait,
-		queue:                 workqueue.NewTypedRateLimitingQueue(workqueue.NewTypedItemExponentialFailureRateLimiter[string](0, 0)),
+		k8sClient:              fake.NewSimpleClientset(),
+		staleConnectionTimeout: 5 * time.Minute,
+		v4Enabled:              true,
+		destinationInformer:    destInformer,
+		destinationLister:      destInformer.Lister(),
+		destinationSynced:      destInformer.Informer().HasSynced,
+		networkPolicyWait:      networkPolicyWait,
+		queue: workqueue.NewTypedRateLimitingQueueWithConfig(
+			workqueue.NewTypedItemExponentialFailureRateLimiter[string](0, 0),
+			workqueue.TypedRateLimitingQueueConfig[string]{Name: "flowexporterdestination-test"},
+		),
 		poller:                connections.NewPoller(mockConnDumper, testSubChannel, 100*time.Millisecond, true, false, false),
 		ctConnUpdateChannel:   testSubChannel,
 		denyConnUpdateChannel: testSubChannel,
+		destinations:          make(map[string]destinationObj),
 	}
+	destInformer.Informer().AddEventHandlerWithResyncPeriod(cache.ResourceEventHandlerFuncs{
+		AddFunc:    fe.addDestination,
+		UpdateFunc: fe.updateDestination,
+		DeleteFunc: fe.deleteDestination,
+	}, 0)
 
 	informerFactory.Start(t.Context().Done())
 	informerFactory.WaitForCacheSync(t.Context().Done())
@@ -519,4 +545,67 @@ func TestFlowExporter_networkPolicyWait(t *testing.T) {
 	// low clock resolution (e.g. Windows CI) where both timestamps can be the same tick.
 	require.NotZero(t, fe.networkPolicyReadyTime)
 	assert.False(t, fe.networkPolicyReadyTime.Before(beforeRunTime))
+}
+
+func TestFlowExporter_noPollingWithoutActiveDestinations(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	mockConnDumper := connectionstest.NewMockConnTrackDumper(ctrl)
+
+	crdClient := fakeversioned.NewSimpleClientset()
+	informerFactory := crdinformers.NewSharedInformerFactory(crdClient, 100*time.Millisecond)
+	destInformer := informerFactory.Crd().V1alpha1().FlowExporterDestinations()
+
+	testSubChannel := channel.NewSubscribableChannel("Test Connections", 5)
+
+	fe := &FlowExporter{
+		k8sClient:              fake.NewSimpleClientset(),
+		staleConnectionTimeout: 5 * time.Minute,
+		v4Enabled:              true,
+		destinationInformer:    destInformer,
+		destinationLister:      destInformer.Lister(),
+		destinationSynced:      destInformer.Informer().HasSynced,
+		networkPolicyWait:      nil,
+		queue: workqueue.NewTypedRateLimitingQueueWithConfig(
+			workqueue.NewTypedItemExponentialFailureRateLimiter[string](0, 0),
+			workqueue.TypedRateLimitingQueueConfig[string]{Name: "flowexporterdestination-test"},
+		),
+		poller:                connections.NewPoller(mockConnDumper, testSubChannel, 50*time.Millisecond, true, false, false),
+		ctConnUpdateChannel:   testSubChannel,
+		denyConnUpdateChannel: testSubChannel,
+		destinations:          make(map[string]destinationObj),
+		staticDestinationRes:  nil,
+	}
+	destInformer.Informer().AddEventHandlerWithResyncPeriod(cache.ResourceEventHandlerFuncs{
+		AddFunc:    fe.addDestination,
+		UpdateFunc: fe.updateDestination,
+		DeleteFunc: fe.deleteDestination,
+	}, 0)
+
+	// No conntrack polling without destinations
+	mockConnDumper.EXPECT().DumpFlows(gomock.Any()).Times(0)
+	mockConnDumper.EXPECT().GetMaxConnections().Times(0)
+
+	informerFactory.Start(t.Context().Done())
+	informerFactory.WaitForCacheSync(t.Context().Done())
+
+	stopCh := make(chan struct{})
+	runFinishedCh := make(chan struct{})
+	go func() {
+		defer close(runFinishedCh)
+		fe.Run(stopCh)
+	}()
+
+	select {
+	case <-time.After(400 * time.Millisecond):
+		// Expected: no conntrack polling without destinations
+	case <-runFinishedCh:
+		t.Fatal("Run should not exit before stopCh is closed")
+	}
+
+	close(stopCh)
+	select {
+	case <-runFinishedCh:
+	case <-time.After(2 * time.Second):
+		t.Fatal("Run should finish after stopCh is closed")
+	}
 }

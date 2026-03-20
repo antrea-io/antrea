@@ -111,9 +111,18 @@ type FlowExporter struct {
 	ctConnUpdateChannel   *channel.SubscribableChannel
 	denyConnUpdateChannel *channel.SubscribableChannel
 
+	// staticDestinationRes is set in NewFlowExporter when static export is enabled. Run() clears
+	// it if createDestinationFromResource fails; if still non-nil at shutdown, static destination
+	// export was started and is included in activeDestCount.
 	staticDestinationRes *api.FlowExporterDestination
 	destinations         map[string]destinationObj
 	destinationsMutex    sync.Mutex
+
+	// activeDestCount is the number of running export destinations (FlowExporterDestination CRs plus
+	// the optional static destination from config). The conntrack poller runs only while this is > 0.
+	activeDestCount int
+	pollerRunning   bool
+	pollerStopCh    chan struct{}
 
 	// Used to create exporter
 	nodeName    string
@@ -155,7 +164,7 @@ func NewFlowExporter(
 	}
 	obsDomainID := genObservationID(nodeName)
 
-	klog.InfoS("Retrieveing this Node's UID from K8s", "nodeName", nodeName)
+	klog.InfoS("Retrieving this Node's UID from K8s", "nodeName", nodeName)
 	node, err := k8sClient.CoreV1().Nodes().Get(context.TODO(), nodeName, metav1.GetOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("failed to get Node with name %s from K8s: %w", nodeName, err)
@@ -257,6 +266,29 @@ func (exp *FlowExporter) GetDenyConnStoreNotifier() channel.Notifier {
 	return exp.denyConnUpdateChannel
 }
 
+// startPollerIfNeededLocked starts the conntrack poller when there is at least one active destination
+// and the poller is not already running. The caller must hold exp.destinationsMutex.
+func (exp *FlowExporter) startPollerIfNeededLocked() {
+	if exp.activeDestCount == 0 || exp.poller == nil || exp.pollerRunning {
+		return
+	}
+	exp.pollerStopCh = make(chan struct{})
+	exp.pollerRunning = true
+	klog.InfoS("Starting conntrack poller for flow exporter", "activeDestinations", exp.activeDestCount)
+	go exp.poller.Run(exp.pollerStopCh)
+}
+
+// stopPollerIfNeededLocked stops the conntrack poller when there are no active destinations and the
+// poller is running. The caller must hold exp.destinationsMutex.
+func (exp *FlowExporter) stopPollerIfNeededLocked() {
+	if exp.activeDestCount != 0 || !exp.pollerRunning {
+		return
+	}
+	close(exp.pollerStopCh)
+	exp.pollerRunning = false
+	klog.InfoS("Stopped conntrack poller for flow exporter")
+}
+
 func (exp *FlowExporter) Run(stopCh <-chan struct{}) {
 	klog.InfoS("Flow Exporter started")
 	defer exp.queue.ShutDown()
@@ -282,9 +314,10 @@ func (exp *FlowExporter) Run(stopCh <-chan struct{}) {
 	}
 	exp.networkPolicyReadyTime = time.Now()
 
+	// SubscribableChannels must run whenever the flow exporter is active so Notify does not block
+	// producers (e.g. denied-connection updates) when there are no export destinations yet.
 	go exp.ctConnUpdateChannel.Run(stopCh)
 	go exp.denyConnUpdateChannel.Run(stopCh)
-	go exp.poller.Run(stopCh)
 
 	for range defaultWorkers {
 		go wait.Until(exp.worker, time.Second, stopCh)
@@ -294,7 +327,14 @@ func (exp *FlowExporter) Run(stopCh <-chan struct{}) {
 		staticDest, err := exp.createDestinationFromResource(exp.staticDestinationRes)
 		if err != nil {
 			klog.ErrorS(err, "Could not create FlowExporterDestination from static configuration")
+			// Clear staticDestinationRes when createDestinationFromResource fails, so that activeDestCount
+			// stays consistent when it decrements.
+			exp.staticDestinationRes = nil
 		} else {
+			exp.destinationsMutex.Lock()
+			exp.activeDestCount++
+			exp.startPollerIfNeededLocked()
+			exp.destinationsMutex.Unlock()
 			go staticDest.Run(stopCh)
 		}
 	}
@@ -302,11 +342,18 @@ func (exp *FlowExporter) Run(stopCh <-chan struct{}) {
 	<-stopCh
 
 	exp.destinationsMutex.Lock()
+	defer exp.destinationsMutex.Unlock()
+
 	for key, destination := range exp.destinations {
 		close(destination.stopCh)
 		delete(exp.destinations, key)
+		exp.activeDestCount--
+		exp.stopPollerIfNeededLocked()
 	}
-	exp.destinationsMutex.Unlock()
+	if exp.staticDestinationRes != nil {
+		exp.activeDestCount--
+		exp.stopPollerIfNeededLocked()
+	}
 }
 
 func (exp *FlowExporter) worker() {
@@ -345,24 +392,31 @@ func (exp *FlowExporter) syncFlowExporterDestination(key string) error {
 			if ok {
 				close(dest.stopCh)
 				delete(exp.destinations, key)
+				exp.activeDestCount--
+				exp.stopPollerIfNeededLocked()
 			}
 			return nil
 		}
 		return err
 	}
 
-	destObj, ok := exp.destinations[key]
-	if ok {
-		klog.V(3).InfoS("Removing old instance", "flowExporterDestination", klog.KObj(res))
-		close(destObj.stopCh)
-		delete(exp.destinations, key)
-	}
-
-	klog.V(3).InfoS("Adding destination", "flowExporterDestination", klog.KObj(res))
+	klog.V(2).InfoS("Adding destination", "flowExporterDestination", klog.KObj(res))
 	dest, err := exp.createDestinationFromResource(res)
 	if err != nil {
 		return fmt.Errorf("unable to create destination from resource: %w", err)
 	}
+
+	destObj, ok := exp.destinations[key]
+	if ok {
+		// Replacing an existing destination: activeDestCount and the poller state stay as-is.
+		klog.V(3).InfoS("Removing old instance", "flowExporterDestination", klog.KObj(res))
+		close(destObj.stopCh)
+		delete(exp.destinations, key)
+	} else {
+		exp.activeDestCount++
+		exp.startPollerIfNeededLocked()
+	}
+
 	stopCh := make(chan struct{})
 	go dest.Run(stopCh)
 	exp.destinations[key] = destinationObj{

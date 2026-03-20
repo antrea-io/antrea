@@ -376,7 +376,7 @@ func resolveCollectorAddress(ctx context.Context, k8sClient kubernetes.Interface
 	}
 	svc, err := k8sClient.CoreV1().Services(ns).Get(ctx, name, metav1.GetOptions{})
 	if err != nil {
-		return "", fmt.Errorf("failed to resolve Service: %s/%s", ns, name)
+		return "", fmt.Errorf("failed to resolve Service: %s/%s: %w", ns, name, err)
 	}
 	if svc.Spec.ClusterIP == "" {
 		return "", fmt.Errorf("ClusterIP is not available for Service: %s/%s", ns, name)
