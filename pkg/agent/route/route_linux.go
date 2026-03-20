@@ -195,6 +195,10 @@ type Client struct {
 	nodeNeighbors sync.Map
 	// markToSNATIP caches marks to SNAT IPs. It's used in Egress feature.
 	markToSNATIP sync.Map
+	// dualStackMarkToSNATIPs caches marks to dual-stack SNAT IP pairs [ipv4, ipv6].
+	// It is used instead of markToSNATIP for dual-stack Egress so that both address families
+	// are stored under the shared mark without overwriting each other.
+	dualStackMarkToSNATIPs sync.Map
 	// iptablesInitialized is used to notify when iptables initialization is done.
 	iptablesInitialized chan struct{}
 	proxyAll            bool
@@ -1052,6 +1056,18 @@ func (c *Client) syncIPTables(cleanupStaleJumpRules bool) error {
 			snatMarkToIPv4[snatMark] = snatIP
 		} else {
 			snatMarkToIPv6[snatMark] = snatIP
+		}
+		return true
+	})
+	// Also include dual-stack mark pairs stored in dualStackMarkToSNATIPs.
+	c.dualStackMarkToSNATIPs.Range(func(key, value interface{}) bool {
+		snatMark := key.(uint32)
+		pair := value.([2]net.IP)
+		if pair[0] != nil {
+			snatMarkToIPv4[snatMark] = pair[0]
+		}
+		if pair[1] != nil {
+			snatMarkToIPv6[snatMark] = pair[1]
 		}
 		return true
 	})
@@ -2266,6 +2282,39 @@ func (c *Client) DeleteSNATRule(mark uint32) error {
 		protocol = iptables.ProtocolIPv6
 	}
 	return c.iptables.DeleteRule(protocol, iptables.NATTable, antreaPostRoutingChain, c.snatRuleSpec(snatIP, mark))
+}
+
+// AddDualStackSNATRules installs SNAT iptables rules for both IPv4 and IPv6 under a shared mark.
+func (c *Client) AddDualStackSNATRules(ipv4, ipv6 net.IP, mark uint32) error {
+	c.dualStackMarkToSNATIPs.Store(mark, [2]net.IP{ipv4, ipv6})
+	if err := c.iptables.InsertRule(iptables.ProtocolIPv4, iptables.NATTable, antreaPostRoutingChain, c.snatRuleSpec(ipv4, mark)); err != nil {
+		return err
+	}
+	return c.iptables.InsertRule(iptables.ProtocolIPv6, iptables.NATTable, antreaPostRoutingChain, c.snatRuleSpec(ipv6, mark))
+}
+
+// DeleteDualStackSNATRules removes the SNAT iptables rules for both IPv4 and IPv6 that were
+// installed by AddDualStackSNATRules.
+func (c *Client) DeleteDualStackSNATRules(mark uint32) error {
+	value, ok := c.dualStackMarkToSNATIPs.Load(mark)
+	if !ok {
+		klog.Warningf("Didn't find dual-stack SNAT rule with mark %#x in cache", mark)
+		return nil
+	}
+	ips := value.([2]net.IP)
+	c.dualStackMarkToSNATIPs.Delete(mark)
+
+	var errV4, errV6 error
+	if ips[0] != nil {
+		errV4 = c.iptables.DeleteRule(iptables.ProtocolIPv4, iptables.NATTable, antreaPostRoutingChain, c.snatRuleSpec(ips[0], mark))
+	}
+	if ips[1] != nil {
+		errV6 = c.iptables.DeleteRule(iptables.ProtocolIPv6, iptables.NATTable, antreaPostRoutingChain, c.snatRuleSpec(ips[1], mark))
+	}
+	if errV4 != nil {
+		return errV4
+	}
+	return errV6
 }
 
 func (c *Client) AddEgressRoutes(tableID uint32, dev int, gateway net.IP, prefixLength int) error {

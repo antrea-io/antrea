@@ -491,6 +491,14 @@ func (c *Client) DeleteSNATRule(mark uint32) error {
 	return nil
 }
 
+func (c *Client) AddDualStackSNATRules(ipv4, ipv6 net.IP, mark uint32) error {
+	return nil
+}
+
+func (c *Client) DeleteDualStackSNATRules(mark uint32) error {
+	return nil
+}
+
 // TODO: nodePortAddresses is not supported currently.
 func (c *Client) AddNodePortConfigs(nodePortAddresses []net.IP, port uint16, protocol binding.Protocol) error {
 	netNatStaticMapping := &winnet.NetNatStaticMapping{
