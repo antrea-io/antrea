@@ -92,6 +92,10 @@ type Connection struct {
 	EgressUID                            string
 	EgressIP                             string
 	EgressNodeName                       string
+
+	// Used for correlating external to pod flows
+	ProxySnatIP   netip.Addr
+	ProxySnatPort uint16
 }
 
 // NewConnectionKey creates 5-tuple of flow as connection key
