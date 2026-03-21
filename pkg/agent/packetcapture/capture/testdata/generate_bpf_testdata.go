@@ -62,14 +62,37 @@ func parseLine(line string) (bpf.Instruction, error) {
 		return nil, nil
 	}
 	if m := reLoadAbsolute.FindStringSubmatch(line); m != nil {
-		off, _ := strconv.ParseUint(m[3], 10, 32)
+		off, err := strconv.ParseUint(m[3], 10, 32)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse offset %q: %v", m[3], err)
+		}
 		return bpf.LoadAbsolute{Off: uint32(off), Size: sizeFromOpcode(m[2])}, nil
 	}
 	if m := reJump.FindStringSubmatch(line); m != nil {
-		idx, _ := strconv.ParseUint(m[1], 10, 32)
-		val, _ := strconv.ParseUint(m[3][2:], 16, 32)
-		jt, _ := strconv.ParseUint(m[4], 10, 32)
-		jf, _ := strconv.ParseUint(m[5], 10, 32)
+		idx, err := strconv.ParseUint(m[1], 10, 32)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse instruction index %q: %v", m[1], err)
+		}
+		val, err := strconv.ParseUint(m[3][2:], 16, 32)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse jump value %q: %v", m[3], err)
+		}
+		jt, err := strconv.ParseUint(m[4], 10, 32)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse jt offset %q: %v", m[4], err)
+		}
+		jf, err := strconv.ParseUint(m[5], 10, 32)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse jf offset %q: %v", m[5], err)
+		}
+		if jt <= idx || jf <= idx {
+			return nil, fmt.Errorf("invalid jump offsets: jt=%d, jf=%d must be > idx=%d", jt, jf, idx)
+		}
+		skipTrue := jt - idx - 1
+		skipFalse := jf - idx - 1
+		if skipTrue > 255 || skipFalse > 255 {
+			return nil, fmt.Errorf("jump offsets exceed uint8 range: skipTrue=%d, skipFalse=%d", skipTrue, skipFalse)
+		}
 		cond := bpf.JumpEqual
 		if m[2] == "jset" {
 			cond = bpf.JumpBitsSet
@@ -77,16 +100,22 @@ func parseLine(line string) (bpf.Instruction, error) {
 		return bpf.JumpIf{
 			Cond:      cond,
 			Val:       uint32(val),
-			SkipTrue:  uint8(jt - idx - 1),
-			SkipFalse: uint8(jf - idx - 1),
+			SkipTrue:  uint8(skipTrue),
+			SkipFalse: uint8(skipFalse),
 		}, nil
 	}
 	if m := reReturn.FindStringSubmatch(line); m != nil {
-		val, _ := strconv.ParseUint(m[2], 10, 32)
+		val, err := strconv.ParseUint(m[2], 10, 32)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse return value %q: %v", m[2], err)
+		}
 		return bpf.RetConstant{Val: uint32(val)}, nil
 	}
 	if m := reLoadMemShift.FindStringSubmatch(line); m != nil {
-		off, _ := strconv.ParseUint(m[2], 10, 32)
+		off, err := strconv.ParseUint(m[2], 10, 32)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse memory offset %q: %v", m[2], err)
+		}
 		return bpf.LoadMemShift{Off: uint32(off)}, nil
 	}
 	if m := reLoadIndirect.FindStringSubmatch(line); m != nil {
