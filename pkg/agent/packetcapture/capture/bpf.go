@@ -440,7 +440,7 @@ func compileGenericPacketFilter(handler *ipFamilyHandler, packetSpec *crdv1alpha
 
 	hasTransport := hasTransportFilters(packetSpec)
 	var (
-		hasProtocol      bool
+		hasProtocol     bool
 		proto           uint32
 		deferProtoCheck bool
 	)

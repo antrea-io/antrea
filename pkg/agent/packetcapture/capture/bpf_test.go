@@ -433,8 +433,8 @@ func TestPacketCaptureCompileBPF(t *testing.T) {
 				bpf.JumpIf{Cond: bpf.JumpEqual, Val: 0x0, SkipTrue: 0, SkipFalse: 9},
 				bpf.LoadAbsolute{Off: 50, Size: 4},
 				bpf.JumpIf{Cond: bpf.JumpEqual, Val: 0x2, SkipTrue: 0, SkipFalse: 7},
-				bpf.LoadAbsolute{Off: 20, Size: 1},                      // ip protocol
-				bpf.JumpIf{Cond: bpf.JumpEqual, Val: 0x6, SkipFalse: 5}, // tcp
+				bpf.LoadAbsolute{Off: 20, Size: 1},                         // ip protocol
+				bpf.JumpIf{Cond: bpf.JumpEqual, Val: 0x6, SkipFalse: 5},    // tcp
 				bpf.LoadAbsolute{Off: 54, Size: 2},                         // src port
 				bpf.JumpIf{Cond: bpf.JumpEqual, Val: 0x3039, SkipFalse: 3}, // port 12345
 				bpf.LoadAbsolute{Off: 56, Size: 2},                         // dst port
@@ -1066,9 +1066,9 @@ func TestPacketCaptureCompileBPF(t *testing.T) {
 				bpf.JumpIf{Cond: bpf.JumpEqual, Val: 0x0, SkipTrue: 0, SkipFalse: 8},
 				bpf.LoadAbsolute{Off: 50, Size: 4},
 				bpf.JumpIf{Cond: bpf.JumpEqual, Val: 0x2, SkipTrue: 0, SkipFalse: 6},
-				bpf.LoadAbsolute{Off: 20, Size: 1},                         // ip protocol
+				bpf.LoadAbsolute{Off: 20, Size: 1},                       // ip protocol
 				bpf.JumpIf{Cond: bpf.JumpEqual, Val: 0x3a, SkipFalse: 4}, // icmpv6
-				bpf.LoadAbsolute{Off: 54, Size: lengthByte}, // load ICMP type
+				bpf.LoadAbsolute{Off: 54, Size: lengthByte},              // load ICMP type
 				bpf.JumpIf{Cond: bpf.JumpEqual, Val: 0x80, SkipTrue: 1, SkipFalse: 0},
 				bpf.JumpIf{Cond: bpf.JumpEqual, Val: 0x81, SkipTrue: 0, SkipFalse: 1},
 				bpf.RetConstant{Val: 262144},
