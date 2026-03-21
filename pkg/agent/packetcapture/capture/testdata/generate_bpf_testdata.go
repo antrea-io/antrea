@@ -1,6 +1,3 @@
-//go:build ignore
-// +build ignore
-
 // Copyright 2026 Antrea Authors.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -14,6 +11,9 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+
+//go:build ignore
+// +build ignore
 
 package main
 
@@ -121,47 +121,40 @@ func parseTcpdumpOutput(output string) ([]bpf.Instruction, error) {
 	return instructions, nil
 }
 
-// These filters must match the entries in inputs_test.go.
-var filterInputs = map[string]string{
-	"ICMP protocol only":                                          "icmp",
-	"UDP protocol only":                                           "ip proto 17",
-	"TCP with dst port 80":                                        "ip proto 6 and dst port 80",
-	"TCP with src+dst IP and src+dst port":                        "ip proto 6 and src host 127.0.0.1 and dst host 127.0.0.2 and src port 12345 and dst port 80",
-	"TCP with srcIP only and src+dst port":                        "ip proto 6 and src host 127.0.0.1 and src port 12345 and dst port 80",
-	"UDP with dstIP only and src+dst port":                        "ip proto 17 and dst host 127.0.0.2 and src port 12345 and dst port 80",
-	"UDP with src+dst IP and src+dst port":                        "ip proto 17 and src host 127.0.0.1 and dst host 127.0.0.2 and src port 12345 and dst port 80",
-	"ICMP dst-unreachable with code 1":                            "ip proto 1 and src host 127.0.0.1 and dst host 127.0.0.2 and icmp[0]=3 and icmp[1]=1",
-	"TCP with SYN flag and IPs":                                   "ip proto 6 and src host 127.0.0.1 and dst host 127.0.0.2 and (tcp[tcpflags] & tcp-syn == tcp-syn)",
-	"IPv6 TCP with DstPort 80":                                    "ip6 proto 6 and dst port 80",
-	"ICMPv6 (IPv6 protocol only)":                                 "ip6 proto 58",
-	"IPv6 TCP SrcPort+DstPort":                                    "ip6 proto 6 and src port 12345 and dst port 80",
-	"IPv6 TCP with SrcIP+DstIP (no ports)":                        "ip6 proto 6 and src host fd00:10:244::1 and dst host fd00:10:244::2",
-	"ICMPv6 with type and code":                                   "ip6 proto 58 and icmp6[0]=3 and icmp6[1]=1",
-	"IPv4 TCP exact flags (SYN set, ACK cleared)":                 "ip proto 6 and src host 127.0.0.1 and dst host 127.0.0.2 and src port 12345 and dst port 80 and (tcp[tcpflags] & (tcp-syn|tcp-ack) == tcp-syn)",
-	"IPv4 TCP exact strict flags (SYN+ACK only) with IP and Port": "ip proto 6 and src host 1.2.3.4 and dst port 443 and (tcp[tcpflags] & (tcp-syn|tcp-fin|tcp-rst|tcp-push|tcp-ack) == (tcp-syn|tcp-ack))",
-	"IPv4 UDP with DstPort only":                                  "ip proto 17 and dst port 53",
-	"ICMP with Type only":                                         "ip proto 1 and icmp[0]=8",
-	"IPv4 TCP with RST flag":                                      "ip proto 6 and (tcp[tcpflags] & tcp-rst == tcp-rst)",
-	"IPv4 IP only without transport":                              "ip proto 6 and src host 10.0.0.1 and dst host 10.0.0.2",
-	"IPv6 UDP with SrcPort only":                                  "ip6 proto 17 and src port 12345",
-	"IPv6 UDP full combo with optimized order":                    "ip6 and src host fd00:10:244::1 and dst host fd00:10:244::2 and proto 17 and src port 12345 and dst port 80",
-	"IPv6 TCP with srcIP only and src+dst ports":                  "ip6 and src host fd00:10:244::1 and proto 6 and src port 12345 and dst port 80",
-	"IPv6 TCP with dstIP only and src+dst ports":                  "ip6 and dst host fd00:10:244::2 and proto 6 and src port 12345 and dst port 80",
-	"IPv6 UDP with srcIP only and src+dst ports":                  "ip6 and src host fd00:10:244::1 and proto 17 and src port 12345 and dst port 80",
-	"IPv6 UDP with dstIP only and src+dst ports":                  "ip6 and dst host fd00:10:244::2 and proto 17 and src port 12345 and dst port 80",
-	"IPv6 ICMPv6 type+code with srcIP only":                       "ip6 and src host fd00:10:244::1 and proto 58 and icmp6[0]=128 and icmp6[1]=1",
-	"IPv6 ICMPv6 type+code with dstIP only":                       "ip6 and dst host fd00:10:244::2 and proto 58 and icmp6[0]=128 and icmp6[1]=1",
-	"IPv6 TCP src+dst IP and src+dst ports DestinationToSource":   "ip6 and src host fd00:10:244::2 and dst host fd00:10:244::1 and proto 6 and src port 80 and dst port 12345",
-	"IPv6 UDP src+dst IP and src+dst ports DestinationToSource":   "ip6 and src host fd00:10:244::2 and dst host fd00:10:244::1 and proto 17 and src port 80 and dst port 12345",
-	"IPv4 TCP src+dst IP and src+dst ports DestinationToSource alt": "ip proto 6 and src host 127.0.0.2 and dst host 127.0.0.1 and src port 80 and dst port 12345",
-	"IPv4 UDP src+dst IP and src+dst ports DestinationToSource alt": "ip proto 17 and src host 127.0.0.2 and dst host 127.0.0.1 and src port 80 and dst port 12345",
-	"IPv4 ICMP time exceeded with code 0 unique":                    "ip proto 1 and src host 10.0.0.1 and dst host 10.0.0.2 and icmp[0]=11 and icmp[1]=0",
-	"IPv6 ICMPv6 echo reply with src+dst IP unique":                 "ip6 and src host fd00:10:244::1 and dst host fd00:10:244::2 and proto 58 and icmp6[0]=129",
-	"IPv6 numeric protocol 132 only unique":                         "ip6 proto 132",
+func extractFilterInputsFromInputsTest(filePath string) (map[string]string, error) {
+	content, err := os.ReadFile(filePath)
+	if err != nil {
+		return nil, fmt.Errorf("read %s: %w", filePath, err)
+	}
+
+	reName := regexp.MustCompile(`^\s*Name:\s*"([^"]+)",\s*$`)
+	reFilter := regexp.MustCompile(`^\s*TcpdumpFilter:\s*"([^"]+)",\s*$`)
+
+	filters := make(map[string]string)
+	var currentName string
+	for _, line := range strings.Split(string(content), "\n") {
+		if m := reName.FindStringSubmatch(line); m != nil {
+			currentName = m[1]
+			continue
+		}
+		if m := reFilter.FindStringSubmatch(line); m != nil && currentName != "" {
+			filters[currentName] = m[1]
+			currentName = ""
+		}
+	}
+
+	if len(filters) == 0 {
+		return nil, fmt.Errorf("no BPF test case filters found in %s", filePath)
+	}
+	return filters, nil
 }
 
 func main() {
-	log.Println("Generating reference BPF instructions using tcpdump offline...")
+	filterInputs, err := extractFilterInputsFromInputsTest("inputs_test.go")
+	if err != nil {
+		log.Fatalf("failed to load tcpdump filters from inputs_test.go: %v", err)
+	}
+	log.Println("Generating reference BPF instructions from BPFTestCases...")
 
 	var b bytes.Buffer
 	b.WriteString(`// Copyright 2026 Antrea Authors.
@@ -178,7 +171,6 @@ func main() {
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// Code generated by generate_bpf_testdata.go; DO NOT EDIT.
 package capture
 
 import "golang.org/x/net/bpf"
