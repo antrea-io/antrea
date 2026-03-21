@@ -119,11 +119,17 @@ func parseLine(line string) (bpf.Instruction, error) {
 		return bpf.LoadMemShift{Off: uint32(off)}, nil
 	}
 	if m := reLoadIndirect.FindStringSubmatch(line); m != nil {
-		off, _ := strconv.ParseUint(m[3], 10, 32)
+		off, err := strconv.ParseUint(m[3], 10, 32)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse indirect offset %q: %v", m[3], err)
+		}
 		return bpf.LoadIndirect{Off: uint32(off), Size: sizeFromOpcode(m[2])}, nil
 	}
 	if m := reALUAnd.FindStringSubmatch(line); m != nil {
-		val, _ := strconv.ParseUint(m[2][2:], 16, 32)
+		val, err := strconv.ParseUint(m[2][2:], 16, 32)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse and constant %q: %v", m[2], err)
+		}
 		return bpf.ALUOpConstant{Op: bpf.ALUOpAnd, Val: uint32(val)}, nil
 	}
 	if reTax.MatchString(line) {
