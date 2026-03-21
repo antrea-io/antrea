@@ -54,6 +54,12 @@ func ConditionSliceEqualsIgnoreLastTransitionTime(as, bs []PacketCaptureConditio
 	return true
 }
 
+// Flow exporter protocol name constants
+const (
+	FlowExporterProtocolGRPC  = "grpc"
+	FlowExporterProtocolIPFIX = "ipfix"
+)
+
 var semanticIgnoreLastTransitionTime = conversion.EqualitiesOrDie(
 	ConditionSliceEqualsIgnoreLastTransitionTime,
 )
@@ -62,4 +68,20 @@ var semanticIgnoreLastTransitionTime = conversion.EqualitiesOrDie(
 // PacketCaptureStatus objects.
 func PacketCaptureStatusEqual(oldStatus, newStatus PacketCaptureStatus) bool {
 	return semanticIgnoreLastTransitionTime.DeepEqual(oldStatus, newStatus)
+}
+
+func (proto *FlowExporterGRPCConfig) Name() string {
+	return FlowExporterProtocolGRPC
+}
+
+func (proto *FlowExporterIPFIXConfig) Name() string {
+	return FlowExporterProtocolIPFIX
+}
+
+func (proto *FlowExporterGRPCConfig) TransportProtocol() FlowExporterTransportProtocol {
+	return FlowExporterTransportTLS
+}
+
+func (proto *FlowExporterIPFIXConfig) TransportProtocol() FlowExporterTransportProtocol {
+	return proto.Transport
 }

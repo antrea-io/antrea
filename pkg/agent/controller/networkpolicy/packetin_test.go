@@ -18,22 +18,21 @@ import (
 	"fmt"
 	"net/netip"
 	"testing"
+	"time"
 
 	"antrea.io/libOpenflow/openflow15"
 	"antrea.io/ofnet/ofctrl"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"go.uber.org/mock/gomock"
 	k8stypes "k8s.io/apimachinery/pkg/types"
 
 	"antrea.io/antrea/pkg/agent/flowexporter/connection"
-	connectionstesting "antrea.io/antrea/pkg/agent/flowexporter/connections/testing"
-	flowexporterutils "antrea.io/antrea/pkg/agent/flowexporter/utils"
 	"antrea.io/antrea/pkg/agent/openflow"
 	"antrea.io/antrea/pkg/agent/types"
 	"antrea.io/antrea/pkg/apis/controlplane/v1beta2"
 	binding "antrea.io/antrea/pkg/ovs/openflow"
+	"antrea.io/antrea/pkg/util/channel"
 )
 
 func TestController_HandlePacketIn(t *testing.T) {
@@ -136,7 +135,7 @@ func (c *fakeRuleCache) GetRuleByFlowID(ruleID uint32) (*types.PolicyRule, bool,
 
 func (c *fakeRuleCache) RunIDAllocatorWorker(stopCh <-chan struct{}) {}
 
-func TestStoreDenyConnection(t *testing.T) {
+func TestPublishDenyConnection(t *testing.T) {
 	prepareMockTables()
 
 	sourceAddr := netip.MustParseAddr("1.2.3.4")
@@ -176,38 +175,39 @@ func TestStoreDenyConnection(t *testing.T) {
 			name:    "ingress policy",
 			tableID: openflow.AntreaPolicyIngressRuleTable.GetID(),
 			expectedConn: &connection.Connection{
-				FlowKey:                        key,
-				OriginalDestinationAddress:     destinationAddr,
-				IngressNetworkPolicyName:       "my-policy",
-				IngressNetworkPolicyNamespace:  "ns",
-				IngressNetworkPolicyUID:        policyUID,
-				IngressNetworkPolicyType:       flowexporterutils.PolicyTypeAntreaClusterNetworkPolicy,
-				IngressNetworkPolicyRuleName:   "my-rule",
-				IngressNetworkPolicyRuleAction: flowexporterutils.NetworkPolicyRuleActionDrop,
+				FlowKey:                    key,
+				OriginalDestinationAddress: destinationAddr,
+				Disposition:                actionDrop,
+				OriginalBytes:              20,
+				IngressRuleID:              0x11111111,
 			},
 		},
 		{
 			name:    "egress policy",
 			tableID: openflow.AntreaPolicyEgressRuleTable.GetID(),
 			expectedConn: &connection.Connection{
-				FlowKey:                       key,
-				OriginalDestinationAddress:    destinationAddr,
-				EgressNetworkPolicyName:       "my-policy",
-				EgressNetworkPolicyNamespace:  "ns",
-				EgressNetworkPolicyUID:        policyUID,
-				EgressNetworkPolicyType:       flowexporterutils.PolicyTypeAntreaClusterNetworkPolicy,
-				EgressNetworkPolicyRuleName:   "my-rule",
-				EgressNetworkPolicyRuleAction: flowexporterutils.NetworkPolicyRuleActionDrop,
+				FlowKey:                    key,
+				OriginalDestinationAddress: destinationAddr,
+				Disposition:                actionDrop,
+				OriginalBytes:              20,
+				EgressRuleID:               0x11111111,
 			},
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			ctrl := gomock.NewController(t)
+			updateReceivedCh := make(chan *connection.Connection)
 			controller, _, _ := newTestController()
-			mockStore := connectionstesting.NewMockDenyConnectionStoreUpdater(ctrl)
-			controller.denyConnStore = mockStore
+			connUpdateChannel := channel.NewSubscribableChannel("conn update channel", 100)
+			connUpdateChannel.Subscribe(func(connInterface any) {
+				conn := connInterface.(*connection.Connection)
+				tc.expectedConn.StartTime = conn.StartTime
+				updateReceivedCh <- conn
+			})
+			go connUpdateChannel.Run(t.Context().Done())
+
+			controller.denyConnNotifier = connUpdateChannel
 			controller.podReconciler = ruleCache
 			pktIn := &ofctrl.PacketIn{
 				PacketIn: &openflow15.PacketIn{
@@ -220,11 +220,16 @@ func TestStoreDenyConnection(t *testing.T) {
 			packet := &binding.Packet{
 				SourceIP:      sourceAddr.AsSlice(),
 				DestinationIP: destinationAddr.AsSlice(),
+				IPLength:      20,
 			}
-			mockStore.EXPECT().GetConnByKey(key).Return(nil, false)
-
-			mockStore.EXPECT().AddOrUpdateConn(tc.expectedConn, gomock.Any(), gomock.Any())
 			require.NoError(t, controller.storeDenyConnectionParsed(pktIn, packet))
+
+			select {
+			case conn := <-updateReceivedCh:
+				assert.Equal(t, tc.expectedConn, conn)
+			case <-time.After(time.Second):
+				require.Fail(t, "connection update channel did not receive the expected packet")
+			}
 		})
 	}
 }

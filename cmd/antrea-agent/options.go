@@ -292,16 +292,21 @@ func (o *Options) validateAntreaProxyConfig(encapMode config.TrafficEncapModeTyp
 }
 
 func (o *Options) validateFlowExporterConfig() error {
-	if features.DefaultFeatureGate.Enabled(features.FlowExporter) && o.config.FlowExporter.Enable {
+	if features.DefaultFeatureGate.Enabled(features.FlowExporter) {
 		if features.DefaultFeatureGate.Enabled(features.AntreaIPAM) {
 			klog.InfoS("The FlowExporter feature does not support AntreaIPAM Pods")
 		}
-		host, port, proto, err := flowexport.ParseFlowCollectorAddr(o.config.FlowExporter.FlowCollectorAddr, defaultFlowCollectorPort, defaultFlowCollectorTransport)
-		if err != nil {
-			return err
+		// Only validate and parse the static collector address when the legacy static
+		// destination is enabled; a bad value here should not prevent the agent from starting
+		// when only FlowExporterDestination CRs are used.
+		if o.config.FlowExporter.Enable {
+			host, port, proto, err := flowexport.ParseFlowCollectorAddr(o.config.FlowExporter.FlowCollectorAddr, defaultFlowCollectorPort, defaultFlowCollectorTransport)
+			if err != nil {
+				return err
+			}
+			o.flowCollectorAddr = net.JoinHostPort(host, port)
+			o.flowCollectorProto = proto
 		}
-		o.flowCollectorAddr = net.JoinHostPort(host, port)
-		o.flowCollectorProto = proto
 
 		// Parse the given flowPollInterval config
 		if o.config.FlowExporter.FlowPollInterval != "" {
@@ -313,10 +318,11 @@ func (o *Options) validateFlowExporterConfig() error {
 		}
 		// Parse the given activeFlowExportTimeout config
 		if o.config.FlowExporter.ActiveFlowExportTimeout != "" {
-			o.activeFlowTimeout, err = time.ParseDuration(o.config.FlowExporter.ActiveFlowExportTimeout)
+			activeFlowTimeout, err := time.ParseDuration(o.config.FlowExporter.ActiveFlowExportTimeout)
 			if err != nil {
 				return fmt.Errorf("ActiveFlowExportTimeout is not provided in right format")
 			}
+			o.activeFlowTimeout = activeFlowTimeout
 			if o.activeFlowTimeout < o.pollInterval {
 				o.activeFlowTimeout = o.pollInterval
 				klog.Warningf("ActiveFlowExportTimeout must be greater than or equal to FlowPollInterval")
@@ -324,10 +330,11 @@ func (o *Options) validateFlowExporterConfig() error {
 		}
 		// Parse the given inactiveFlowExportTimeout config
 		if o.config.FlowExporter.IdleFlowExportTimeout != "" {
-			o.idleFlowTimeout, err = time.ParseDuration(o.config.FlowExporter.IdleFlowExportTimeout)
+			idleFlowTimeout, err := time.ParseDuration(o.config.FlowExporter.IdleFlowExportTimeout)
 			if err != nil {
 				return fmt.Errorf("IdleFlowExportTimeout is not provided in right format")
 			}
+			o.idleFlowTimeout = idleFlowTimeout
 			if o.idleFlowTimeout < o.pollInterval {
 				o.idleFlowTimeout = o.pollInterval
 				klog.Warningf("IdleFlowExportTimeout must be greater than or equal to FlowPollInterval")
