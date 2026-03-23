@@ -79,11 +79,7 @@ func (c *fromExternalCorrelator) stopCleanUp() {
 // filterAndStoreExternalSource returns true for valid zone zero connection which are stored for correlation.
 // When antreaProxier is not nil the store is optimized to skip connections that do not have an associated service.
 func (c *fromExternalCorrelator) filterAndStoreExternalSource(conn *connection.Connection, antreaProxier proxy.ProxyQuerier) bool {
-	if conn == nil {
-		return false
-	}
-
-	if conn.Zone != 0 {
+	if conn == nil || conn.Zone != 0 {
 		return false
 	}
 

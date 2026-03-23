@@ -175,8 +175,9 @@ func TestFromExternalCorrelator(t *testing.T) {
 			ProxySnatPort: uint16(28392),
 		}
 		store.add(zoneZeroConn)
-		time.Sleep(3 * time.Millisecond)
-		assert.False(t, contains(store, zoneZeroConn), "Expected store to expire old records")
+		assert.Eventually(t, func() bool {
+			return !contains(store, zoneZeroConn)
+		}, time.Second, time.Millisecond, "Expected store to expire old records")
 	})
 	t.Run("stopCleanUp is threadsafe", func(t *testing.T) {
 		store := newFromExternalCorrelator()

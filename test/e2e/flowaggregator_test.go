@@ -2058,20 +2058,17 @@ func testExternalToPodFlows(t *testing.T, data *TestData, isIPv6 bool) {
 }
 
 func flushFlowsFromCollector(t *testing.T, data *TestData, isIPv6 bool) {
+	ipfixCollectorIP, err := data.podWaitForIPs(defaultTimeout, "ipfix-collector", data.testNamespace)
+	require.NoErrorf(t, err, "Should be able to get IP from IPFIX collector Pod")
+	require.NotEmpty(t, ipfixCollectorIP.IPStrings, "IPFIX collector Pod should have at least one IP")
 	var cmd string
-	ipfixCollectorIP, err := data.podWaitForIPs(defaultTimeout, "ipfix-collector", testData.testNamespace)
-	if err != nil || len(ipfixCollectorIP.IPStrings) == 0 {
-		require.NoErrorf(t, err, "Should be able to get IP from IPFIX collector Pod")
-	}
 	if !isIPv6 {
 		cmd = fmt.Sprintf("curl http://%s:8080/reset", ipfixCollectorIP.IPv4.String())
 	} else {
 		cmd = fmt.Sprintf("curl http://[%s]:8080/reset", ipfixCollectorIP.IPv6.String())
 	}
 	_, _, _, err = data.RunCommandOnNode(controlPlaneNodeName(), cmd)
-	if err != nil {
-		require.NoErrorf(t, err, "failed to reach the ipfix collector's '/reset' endpoint to flush it's cache of flows")
-	}
+	require.NoErrorf(t, err, "failed to reach the ipfix collector's '/reset' endpoint to flush its cache of flows")
 }
 
 type ClickHouseFullRow struct {
