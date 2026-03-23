@@ -239,7 +239,11 @@ func (cs *ConntrackConnectionStore) DeleteAllConnections() int {
 	return num
 }
 
+// Stop terminates background goroutines owned by the store.
+func (cs *ConntrackConnectionStore) Stop() {
+	cs.fromExternalCorrelator.stopCleanUp()
+}
+
 func (cs *ConntrackConnectionStore) GetPriorityQueue() *priorityqueue.ExpirePriorityQueue {
 	return cs.connectionStore.expirePriorityQueue
 }
-

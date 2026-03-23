@@ -22,10 +22,10 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"antrea.io/antrea/pkg/agent/flowexporter/connection"
-	"antrea.io/antrea/pkg/agent/openflow"
-	binding "antrea.io/antrea/pkg/ovs/openflow"
-	k8sproxy "antrea.io/antrea/third_party/proxy"
+	"antrea.io/antrea/v2/pkg/agent/flowexporter/connection"
+	"antrea.io/antrea/v2/pkg/agent/openflow"
+	binding "antrea.io/antrea/v2/pkg/ovs/openflow"
+	k8sproxy "antrea.io/antrea/v2/third_party/proxy"
 )
 
 // withTTL overrides the default flow expiration TTL.
@@ -175,8 +175,9 @@ func TestFromExternalCorrelator(t *testing.T) {
 			ProxySnatPort: uint16(28392),
 		}
 		store.add(zoneZeroConn)
-		time.Sleep(3 * time.Millisecond)
-		assert.False(t, contains(store, zoneZeroConn), "Expected store to expire old records")
+		assert.Eventually(t, func() bool {
+			return !contains(store, zoneZeroConn)
+		}, time.Second, time.Millisecond, "Expected store to expire old records")
 	})
 	t.Run("stopCleanUp is threadsafe", func(t *testing.T) {
 		store := newFromExternalCorrelator()

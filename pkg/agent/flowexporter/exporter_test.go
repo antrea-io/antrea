@@ -496,7 +496,9 @@ func TestFlowExporter_networkPolicyWait(t *testing.T) {
 	// Create a signal channel that will be closed on the first DumpFlows call
 	firstPollDoneCh := make(chan struct{})
 
-	// Set up mock expectations - close signal channel on first DumpFlows call, then return normally
+	// Set up mock expectations - close signal channel on first DumpFlows call, then return normally.
+	// Zone 0 is always polled first for external-to-Pod flow support.
+	mockConnDumper.EXPECT().DumpFlows(uint16(0)).Return([]*connection.Connection{}, 0, nil).AnyTimes()
 	mockConnDumper.EXPECT().DumpFlows(uint16(openflow.CtZone)).DoAndReturn(func(uint16) ([]*connection.Connection, int, error) {
 		defer close(firstPollDoneCh)
 		return []*connection.Connection{}, 0, nil
