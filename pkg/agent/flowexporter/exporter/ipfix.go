@@ -291,14 +291,14 @@ func (e *ipfixExporter) addConnToSet(conn *connection.Connection) error {
 			ie.SetUnsigned64Value(conn.OriginalBytes)
 		case "packetDeltaCount":
 			if conn.OriginalPackets < conn.PrevPackets {
-				klog.InfoS("Packet delta count for connection should not be negative", "packet delta count", conn.PrevPackets-conn.OriginalPackets)
+				klog.InfoS("Packet delta count for connection should not be negative", "prevPackets", conn.PrevPackets, "currPackets", conn.OriginalPackets)
 				ie.SetUnsigned64Value(0)
 			} else {
 				ie.SetUnsigned64Value(conn.OriginalPackets - conn.PrevPackets)
 			}
 		case "octetDeltaCount":
 			if conn.OriginalBytes < conn.PrevBytes {
-				klog.InfoS("Byte delta count for connection should not be negative", "byte delta count", conn.PrevBytes-conn.OriginalBytes)
+				klog.InfoS("Byte delta count for connection should not be negative", "prevBytes", conn.PrevBytes, "currBytes", conn.OriginalBytes)
 				ie.SetUnsigned64Value(0)
 			} else {
 				ie.SetUnsigned64Value(conn.OriginalBytes - conn.PrevBytes)
@@ -309,14 +309,14 @@ func (e *ipfixExporter) addConnToSet(conn *connection.Connection) error {
 			ie.SetUnsigned64Value(conn.ReverseBytes)
 		case "reversePacketDeltaCount":
 			if conn.ReversePackets < conn.PrevReversePackets {
-				klog.InfoS("Reverse packet delta count for connection should not be negative", "packet delta count", conn.PrevReversePackets-conn.ReversePackets)
+				klog.InfoS("Reverse packet delta count for connection should not be negative", "prevReversePackets", conn.PrevReversePackets, "currReversePackets", conn.ReversePackets)
 				ie.SetUnsigned64Value(0)
 			} else {
 				ie.SetUnsigned64Value(conn.ReversePackets - conn.PrevReversePackets)
 			}
 		case "reverseOctetDeltaCount":
 			if conn.ReverseBytes < conn.PrevReverseBytes {
-				klog.InfoS("Reverse byte delta count for connection should not be negative", "byte delta count", conn.PrevReverseBytes-conn.ReverseBytes)
+				klog.InfoS("Reverse byte delta count for connection should not be negative", "prevReverseBytes", conn.PrevReverseBytes, "currReverseBytes", conn.ReverseBytes)
 				ie.SetUnsigned64Value(0)
 			} else {
 				ie.SetUnsigned64Value(conn.ReverseBytes - conn.PrevReverseBytes)

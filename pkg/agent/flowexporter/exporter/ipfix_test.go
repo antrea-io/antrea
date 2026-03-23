@@ -15,6 +15,7 @@
 package exporter
 
 import (
+	"math"
 	"net"
 	"testing"
 	"time"
@@ -256,15 +257,33 @@ func createElement(name string, enterpriseID uint32) ipfixentities.InfoElementWi
 	return ieWithValue
 }
 
+// getDeltaValues extracts the current exported values of the four delta fields from the
+// exporter's element list. Because addConnToSet mutates elementsListv4 in place and passes
+// the same slice to AddRecordV2, inspecting elementsListv4 after the call is equivalent to
+// inspecting what was actually sent.
+func getDeltaValues(eL []ipfixentities.InfoElementWithValue) map[string]uint64 {
+	result := map[string]uint64{
+		"packetDeltaCount":        ^uint64(0),
+		"octetDeltaCount":         ^uint64(0),
+		"reversePacketDeltaCount": ^uint64(0),
+		"reverseOctetDeltaCount":  ^uint64(0),
+	}
+	for _, ie := range eL {
+		if _, ok := result[ie.GetInfoElement().Name]; ok {
+			result[ie.GetInfoElement().Name] = ie.GetUnsigned64Value()
+		}
+	}
+	return result
+}
+
 // TestIPFIXExporter_negativeDeltaCounts verifies that when current packet/byte counters are
-// lower than the previously recorded values (negative delta), the exported delta fields are
-// clamped to 0 rather than wrapping around to a large uint64 value.
+// lower than the previously recorded values (counter rollback), the exported delta fields are
+// set to 0 rather than wrapping around to a large uint64 value.
 func TestIPFIXExporter_negativeDeltaCounts(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	mockIPFIXSet := ipfixentitiestesting.NewMockSet(ctrl)
 
 	elemListv4 := getElemList(IANAInfoElementsIPv4, AntreaInfoElementsIPv4)
-
 	flowExp := &ipfixExporter{
 		elementsListv4: elemListv4,
 		templateIDv4:   testTemplateIDv4,
@@ -272,7 +291,7 @@ func TestIPFIXExporter_negativeDeltaCounts(t *testing.T) {
 	}
 
 	conn := flowexportertesting.GetConnection(false, true, 302, 6, "ESTABLISHED")
-	// Set Prev* fields to be larger than the current counters to force negative deltas.
+	// Set Prev* fields to be larger than the current counters to simulate a counter rollback.
 	conn.PrevPackets = conn.OriginalPackets + 10
 	conn.PrevBytes = conn.OriginalBytes + 100
 	conn.PrevReversePackets = conn.ReversePackets + 5
@@ -285,22 +304,57 @@ func TestIPFIXExporter_negativeDeltaCounts(t *testing.T) {
 	err := flowExp.addConnToSet(conn)
 	assert.NoError(t, err)
 
-	// Verify the 4 delta fields were clamped to 0 instead of wrapping to a huge uint64.
-	deltaFields := map[string]uint64{
-		"packetDeltaCount":        ^uint64(0),
-		"octetDeltaCount":         ^uint64(0),
-		"reversePacketDeltaCount": ^uint64(0),
-		"reverseOctetDeltaCount":  ^uint64(0),
-	}
-	for _, ie := range flowExp.elementsListv4 {
-		name := ie.GetInfoElement().Name
-		if _, ok := deltaFields[name]; ok {
-			deltaFields[name] = ie.GetUnsigned64Value()
-		}
-	}
-	for name, val := range deltaFields {
+	for name, val := range getDeltaValues(flowExp.elementsListv4) {
 		assert.Equal(t, uint64(0), val,
-			"delta field %q: expected 0 when delta is negative, got %d (possible uint64 wrap)", name, val)
+			"delta field %q: expected 0 on counter rollback, got %d", name, val)
+	}
+}
+
+// TestIPFIXExporter_largeCounterDelta verifies that delta fields are computed correctly when
+// counter values exceed math.MaxInt64. With the previous int64-based arithmetic, casting a
+// uint64 value above math.MaxInt64 to int64 would overflow and produce a negative result,
+// causing a valid positive delta to be incorrectly clamped to 0.
+func TestIPFIXExporter_largeCounterDelta(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	mockIPFIXSet := ipfixentitiestesting.NewMockSet(ctrl)
+
+	elemListv4 := getElemList(IANAInfoElementsIPv4, AntreaInfoElementsIPv4)
+	flowExp := &ipfixExporter{
+		elementsListv4: elemListv4,
+		templateIDv4:   testTemplateIDv4,
+		ipfixSet:       mockIPFIXSet,
+	}
+
+	conn := flowexportertesting.GetConnection(false, true, 302, 6, "ESTABLISHED")
+	// curr is above math.MaxInt64; prev is below it. int64 casting of curr overflows to a
+	// negative value, so the old int64 subtraction would have produced a negative result and
+	// clamped the delta to 0. The uint64-safe path must produce the correct positive delta.
+	const aboveMaxInt64 = uint64(math.MaxInt64) + 1
+	conn.OriginalPackets = aboveMaxInt64 + 50
+	conn.PrevPackets = aboveMaxInt64 - 50
+	conn.OriginalBytes = aboveMaxInt64 + 200
+	conn.PrevBytes = aboveMaxInt64 - 200
+	conn.ReversePackets = aboveMaxInt64 + 10
+	conn.PrevReversePackets = aboveMaxInt64 - 10
+	conn.ReverseBytes = aboveMaxInt64 + 100
+	conn.PrevReverseBytes = aboveMaxInt64 - 100
+
+	mockIPFIXSet.EXPECT().ResetSet()
+	mockIPFIXSet.EXPECT().PrepareSet(ipfixentities.Data, testTemplateIDv4).Return(nil)
+	mockIPFIXSet.EXPECT().AddRecordV2(gomock.Any(), testTemplateIDv4).Return(nil)
+
+	err := flowExp.addConnToSet(conn)
+	assert.NoError(t, err)
+
+	expected := map[string]uint64{
+		"packetDeltaCount":        100,
+		"octetDeltaCount":         400,
+		"reversePacketDeltaCount": 20,
+		"reverseOctetDeltaCount":  200,
+	}
+	for name, got := range getDeltaValues(flowExp.elementsListv4) {
+		assert.Equal(t, expected[name], got,
+			"delta field %q: expected %d for large counter value, got %d", name, expected[name], got)
 	}
 }
 
