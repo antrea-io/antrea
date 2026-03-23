@@ -141,6 +141,8 @@ message Kubernetes {
   string egress_node_name = 32;
   string egress_node_uid = 33;
   string egress_uid = 34;
+
+  bytes destination_service_ip = 35;
 }
 
 message App {
@@ -198,4 +200,7 @@ message Flow {
   FlowDirection flow_direction = 12;
 
   Aggregation aggregation = 13;
+
+  bytes proxy_snat_ip = 14;
+  uint32 proxy_snat_port = 15;
 }

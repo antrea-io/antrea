@@ -1,0 +1,214 @@
+// Copyright 2026 Antrea Authors
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//      http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+package connections
+
+import (
+	"fmt"
+	"strconv"
+	"sync"
+	"time"
+
+	"k8s.io/klog/v2"
+
+	"antrea.io/antrea/pkg/agent/flowexporter/connection"
+	"antrea.io/antrea/pkg/agent/proxy"
+)
+
+// defaultTTL is the Threshold for expiring connections in the fromExternalCorrelator.
+var defaultTTL = time.Minute
+
+// defaultCleanUpInterval is the frequency in which we run the cleanup for expiring stale connections.
+var defaultCleanUpInterval = time.Second * 5
+
+// FromExternalCorrelator handles correlating FromExternal connections
+type fromExternalCorrelator struct {
+	connections     map[string]connectionItem
+	stopCh          chan struct{}
+	stopOnce        sync.Once
+	lock            sync.RWMutex
+	ttl             time.Duration
+	cleanUpInterval time.Duration
+}
+
+// connectionItem wraps a zone zero connection along with it's timestamp use for expiring connections.
+type connectionItem struct {
+	conn      *connection.Connection
+	timestamp time.Time
+}
+
+type option func(*fromExternalCorrelator)
+
+// newFromExternalCorrelator returns an instance of the FromExternalCorrelator with it's internal map intialized and
+// a go routine initiated to remove stale connections based on `defaultTTL` at `defaultCleanUpInterval`.
+func newFromExternalCorrelator(opts ...option) *fromExternalCorrelator {
+	stopCh := make(chan struct{})
+	store := fromExternalCorrelator{
+		connections:     map[string]connectionItem{},
+		stopCh:          stopCh,
+		ttl:             defaultTTL,
+		cleanUpInterval: defaultCleanUpInterval,
+	}
+	for _, opt := range opts {
+		opt(&store)
+	}
+	go store.cleanUpLoop(stopCh)
+	return &store
+}
+
+// stopCleanUp kills the goroutine that removes stale connections from the internal map.
+func (c *fromExternalCorrelator) stopCleanUp() {
+	c.stopOnce.Do(func() {
+		if c.stopCh != nil {
+			close(c.stopCh)
+		}
+	})
+}
+
+// filterAndStoreExternalSource returns true for valid zone zero connection which are stored for correlation.
+// When antreaProxier is not nil the store is optimized to skip connections that do not have an associated service.
+func (c *fromExternalCorrelator) filterAndStoreExternalSource(conn *connection.Connection, antreaProxier proxy.ProxyQuerier) bool {
+	if conn == nil {
+		return false
+	}
+
+	if conn.Zone != 0 {
+		return false
+	}
+
+	clusterIP := conn.OriginalDestinationAddress.String()
+	svcPort := conn.OriginalDestinationPort
+	protocol, err := lookupServiceProtocol(conn.FlowKey.Protocol)
+	if err != nil {
+		klog.InfoS("Could not retrieve Service protocol", "error", err, "conn", conn)
+		return false
+	}
+
+	// If AntreaProxy is available, selectively filter out connections without a matching service
+	shouldStore := true
+	if antreaProxier != nil {
+		serviceStr := fmt.Sprintf("%s:%d/%s", clusterIP, svcPort, protocol)
+		_, shouldStore = antreaProxier.GetServiceByIP(serviceStr)
+	}
+
+	if shouldStore {
+		c.add(conn)
+	}
+
+	return true
+}
+
+// correlateIfExternal returns true if it correlates the connection to it's zone zero counterpart to preserve the SNAT'd source IP
+func (c *fromExternalCorrelator) correlateIfExternal(conn *connection.Connection) bool {
+	if conn == nil {
+		return false
+	}
+
+	zoneZero := c.popMatching(conn)
+	if zoneZero == nil {
+		return false
+	}
+	correlateExternal(zoneZero, conn)
+	return true
+}
+
+// cleanUpLoop runs in an infinite loop and cleans up the store at the given interval.
+func (c *fromExternalCorrelator) cleanUpLoop(stopCh <-chan struct{}) {
+	ticker := time.NewTicker(c.cleanUpInterval)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-stopCh:
+			return
+		case <-ticker.C:
+			c.cleanup(c.ttl)
+		}
+	}
+}
+
+// cleanup loops through the entire store and deleting connections that exceed the ttl.
+func (c *fromExternalCorrelator) cleanup(ttl time.Duration) {
+	c.lock.Lock()
+	defer c.lock.Unlock()
+	now := time.Now()
+	for key, record := range c.connections {
+		if now.Sub(record.timestamp) > ttl {
+			delete(c.connections, key)
+		}
+	}
+}
+
+// Given a conn, generate a key that is unique to this connection
+// but can also be derived for the matching antrea ct_zone record.
+func (c *fromExternalCorrelator) generateKey(conn *connection.Connection) string {
+	destinationAddress := conn.FlowKey.DestinationAddress.String()
+	replyDestinationPort := strconv.FormatUint(uint64(conn.ProxySnatPort), 10)
+	return fmt.Sprintf("%s-%s", destinationAddress, replyDestinationPort)
+}
+
+// add the given zone zero connection to the store.
+func (c *fromExternalCorrelator) add(conn *connection.Connection) {
+	c.lock.Lock()
+	defer c.lock.Unlock()
+	key := c.generateKey(conn)
+	c.connections[key] = connectionItem{
+		conn:      conn,
+		timestamp: time.Now(),
+	}
+}
+
+// Given an antrea zone connection, generate a key that will equal the corresponding zone zero connection.
+func (c *fromExternalCorrelator) generateKeyFromAntreaZone(conn *connection.Connection) string {
+	destinationAddress := conn.FlowKey.DestinationAddress.String()
+	zoneZeroReplyDestinationPort := strconv.FormatUint(uint64(conn.FlowKey.SourcePort), 10)
+	return fmt.Sprintf("%s-%s", destinationAddress, zoneZeroReplyDestinationPort)
+}
+
+// Given an antrea ct zone connection, if there is a corresponding zone zero connection remove it from the store and
+// return it. Otherwise return nil.
+func (c *fromExternalCorrelator) popMatching(conn *connection.Connection) *connection.Connection {
+	c.lock.Lock()
+	defer c.lock.Unlock()
+	key := c.generateKeyFromAntreaZone(conn)
+	record, exists := c.connections[key]
+	if !exists {
+		return nil
+	}
+	delete(c.connections, key)
+	return record.conn
+}
+
+// Given a connection key, remove it from the store. Log an error
+// if it didn't exist in the store.
+func (c *fromExternalCorrelator) remove(conn *connection.Connection) {
+	c.lock.Lock()
+	defer c.lock.Unlock()
+	destinationAddress := conn.FlowKey.DestinationAddress
+	zoneZeroReplyDestinationPort := strconv.FormatUint(uint64(conn.ProxySnatPort), 10)
+
+	key := fmt.Sprintf("%s-%s", destinationAddress, zoneZeroReplyDestinationPort)
+	delete(c.connections, key)
+}
+
+// Given a pair of matching connections, modify the antreaZone connection by
+// filling in the fields needed from the zoneZero connection
+func correlateExternal(zoneZero, antreaZone *connection.Connection) {
+	antreaZone.FlowKey.SourcePort = zoneZero.FlowKey.SourcePort
+	antreaZone.FlowKey.SourceAddress = zoneZero.FlowKey.SourceAddress
+	antreaZone.ProxySnatIP = zoneZero.ProxySnatIP
+	antreaZone.ProxySnatPort = zoneZero.ProxySnatPort
+	antreaZone.OriginalDestinationAddress = zoneZero.OriginalDestinationAddress
+	antreaZone.OriginalDestinationPort = zoneZero.OriginalDestinationPort
+}

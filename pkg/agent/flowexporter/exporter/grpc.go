@@ -146,6 +146,8 @@ func (e *grpcExporter) createMessage(conn *connection.Connection) *flowpb.Flow {
 			PacketTotalCount: conn.ReversePackets,
 			OctetTotalCount:  conn.ReverseBytes,
 		},
+		ProxySnatIp:   conn.ProxySnatIP.AsSlice(),
+		ProxySnatPort: uint32(conn.ProxySnatPort),
 	}
 	if utils.IsConnectionDying(conn) {
 		flow.EndReason = flowpb.FlowEndReason_FLOW_END_REASON_END_OF_FLOW
@@ -165,6 +167,7 @@ func (e *grpcExporter) createMessage(conn *connection.Connection) *flowpb.Flow {
 	}
 	if conn.DestinationServicePortName != "" {
 		flow.K8S.DestinationClusterIp = conn.OriginalDestinationAddress.AsSlice()
+		flow.K8S.DestinationServiceIp = conn.OriginalDestinationAddress.AsSlice()
 		flow.K8S.DestinationServicePort = uint32(conn.OriginalDestinationPort)
 		flow.K8S.DestinationServicePortName = conn.DestinationServicePortName
 	}
