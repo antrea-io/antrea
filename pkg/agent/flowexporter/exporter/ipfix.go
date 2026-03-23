@@ -293,12 +293,14 @@ func (e *ipfixExporter) addConnToSet(conn *connection.Connection) error {
 			deltaPkts := int64(conn.OriginalPackets) - int64(conn.PrevPackets)
 			if deltaPkts < 0 {
 				klog.InfoS("Packet delta count for connection should not be negative", "packet delta count", deltaPkts)
+				deltaPkts = 0
 			}
 			ie.SetUnsigned64Value(uint64(deltaPkts))
 		case "octetDeltaCount":
 			deltaBytes := int64(conn.OriginalBytes) - int64(conn.PrevBytes)
 			if deltaBytes < 0 {
 				klog.InfoS("Byte delta count for connection should not be negative", "byte delta count", deltaBytes)
+				deltaBytes = 0
 			}
 			ie.SetUnsigned64Value(uint64(deltaBytes))
 		case "reversePacketTotalCount":
@@ -309,12 +311,14 @@ func (e *ipfixExporter) addConnToSet(conn *connection.Connection) error {
 			deltaPkts := int64(conn.ReversePackets) - int64(conn.PrevReversePackets)
 			if deltaPkts < 0 {
 				klog.InfoS("Reverse packet delta count for connection should not be negative", "packet delta count", deltaPkts)
+				deltaPkts = 0
 			}
 			ie.SetUnsigned64Value(uint64(deltaPkts))
 		case "reverseOctetDeltaCount":
 			deltaBytes := int64(conn.ReverseBytes) - int64(conn.PrevReverseBytes)
 			if deltaBytes < 0 {
 				klog.InfoS("Reverse byte delta count for connection should not be negative", "byte delta count", deltaBytes)
+				deltaBytes = 0
 			}
 			ie.SetUnsigned64Value(uint64(deltaBytes))
 		case "sourcePodNamespace":

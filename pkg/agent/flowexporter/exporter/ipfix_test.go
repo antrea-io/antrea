@@ -256,6 +256,54 @@ func createElement(name string, enterpriseID uint32) ipfixentities.InfoElementWi
 	return ieWithValue
 }
 
+// TestIPFIXExporter_negativeDeltaCounts verifies that when current packet/byte counters are
+// lower than the previously recorded values (negative delta), the exported delta fields are
+// clamped to 0 rather than wrapping around to a large uint64 value.
+func TestIPFIXExporter_negativeDeltaCounts(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	mockIPFIXSet := ipfixentitiestesting.NewMockSet(ctrl)
+
+	elemListv4 := getElemList(IANAInfoElementsIPv4, AntreaInfoElementsIPv4)
+
+	flowExp := &ipfixExporter{
+		elementsListv4: elemListv4,
+		templateIDv4:   testTemplateIDv4,
+		ipfixSet:       mockIPFIXSet,
+	}
+
+	conn := flowexportertesting.GetConnection(false, true, 302, 6, "ESTABLISHED")
+	// Set Prev* fields to be larger than the current counters to force negative deltas.
+	conn.PrevPackets = conn.OriginalPackets + 10
+	conn.PrevBytes = conn.OriginalBytes + 100
+	conn.PrevReversePackets = conn.ReversePackets + 5
+	conn.PrevReverseBytes = conn.ReverseBytes + 50
+
+	mockIPFIXSet.EXPECT().ResetSet()
+	mockIPFIXSet.EXPECT().PrepareSet(ipfixentities.Data, testTemplateIDv4).Return(nil)
+	mockIPFIXSet.EXPECT().AddRecordV2(gomock.Any(), testTemplateIDv4).Return(nil)
+
+	err := flowExp.addConnToSet(conn)
+	assert.NoError(t, err)
+
+	// Verify the 4 delta fields were clamped to 0 instead of wrapping to a huge uint64.
+	deltaFields := map[string]uint64{
+		"packetDeltaCount":        ^uint64(0),
+		"octetDeltaCount":         ^uint64(0),
+		"reversePacketDeltaCount": ^uint64(0),
+		"reverseOctetDeltaCount":  ^uint64(0),
+	}
+	for _, ie := range flowExp.elementsListv4 {
+		name := ie.GetInfoElement().Name
+		if _, ok := deltaFields[name]; ok {
+			deltaFields[name] = ie.GetUnsigned64Value()
+		}
+	}
+	for name, val := range deltaFields {
+		assert.Equal(t, uint64(0), val,
+			"delta field %q: expected 0 when delta is negative, got %d (possible uint64 wrap)", name, val)
+	}
+}
+
 func getElemList(ianaIE []string, antreaIE []string) []ipfixentities.InfoElementWithValue {
 	// Following consists of all elements that are in IANAInfoElements and AntreaInfoElements (globals)
 	// Need only element name and other fields are set to dummy values
