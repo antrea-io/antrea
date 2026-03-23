@@ -18,6 +18,7 @@ import (
 	"context"
 	"fmt"
 	"net"
+	"net/netip"
 	"strings"
 	"time"
 
@@ -25,7 +26,6 @@ import (
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/klog/v2"
 
-	"antrea.io/antrea/v2/pkg/agent/controller/noderoute"
 	"antrea.io/antrea/v2/pkg/agent/flowexporter/connection"
 	"antrea.io/antrea/v2/pkg/agent/flowexporter/connections"
 	"antrea.io/antrea/v2/pkg/agent/flowexporter/exporter"
@@ -43,6 +43,12 @@ import (
 type exporterProtocol interface {
 	Name() string
 	TransportProtocol() api.FlowExporterTransportProtocol
+}
+
+// podSubnetChecker determines whether an IP belongs to a Pod subnet and
+// whether it is a gateway IP. *noderoute.Controller implements this interface.
+type podSubnetChecker interface {
+	LookupIPInPodSubnets(ip netip.Addr) (isPod bool, isGw bool)
 }
 
 type DestinationConfig struct {
@@ -75,7 +81,7 @@ type Destination struct {
 	denyConnStore     *connections.DenyConnectionStore
 	denyPriorityQueue *priorityqueue.ExpirePriorityQueue
 
-	nodeRouteController *noderoute.Controller
+	nodeRouteController podSubnetChecker
 	egressQuerier       querier.EgressQuerier
 
 	exp       exporter.Interface
@@ -90,7 +96,7 @@ func NewDestination(
 	denyConnSubscriber channel.Subscriber,
 	exporter exporter.Interface,
 	k8sClient kubernetes.Interface,
-	nodeRouteController *noderoute.Controller,
+	nodeRouteController podSubnetChecker,
 	podStore objectstore.PodStore,
 	npQuerier querier.AgentNetworkPolicyInfoQuerier,
 	proxier proxy.ProxyQuerier,
@@ -213,6 +219,9 @@ func (d *Destination) Run(stopCh <-chan struct{}) {
 	for {
 		select {
 		case <-stopCh:
+			// Stop the conntrack connection store to terminate the
+			// fromExternalCorrelator cleanup goroutine.
+			d.conntrackConnStore.Stop()
 			d.resetFlowExporter()
 			return
 		case <-exportTicker.C:

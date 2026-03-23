@@ -599,6 +599,7 @@ func TestConntrackConnectionStore_AddOrUpdateConns(t *testing.T) {
 				StartTime: refTime,
 				StopTime:  refTime,
 				FlowKey:   tuple1,
+				Zone:      openflow.CtZone,
 				IsPresent: true,
 			},
 		}, {
@@ -607,6 +608,7 @@ func TestConntrackConnectionStore_AddOrUpdateConns(t *testing.T) {
 				StartTime: refTime,
 				StopTime:  refTime,
 				FlowKey:   tuple1,
+				Zone:      openflow.CtZone,
 				IsPresent: false,
 			},
 			expectDeleted: true,
@@ -616,6 +618,7 @@ func TestConntrackConnectionStore_AddOrUpdateConns(t *testing.T) {
 				StartTime: refTime,
 				StopTime:  refTime,
 				FlowKey:   tuple1,
+				Zone:      openflow.CtZone,
 				IsPresent: true,
 			},
 			resubmitOldConn: true,
@@ -636,6 +639,7 @@ func TestConntrackConnectionStore_AddOrUpdateConns(t *testing.T) {
 					StartTime:     refTime,
 					StopTime:      refTime,
 					FlowKey:       tuple2,
+					Zone:          openflow.CtZone,
 					IsPresent:     true,
 					SourcePodName: "test",
 				}
@@ -651,6 +655,48 @@ func TestConntrackConnectionStore_AddOrUpdateConns(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestConntrackConnectionStore_AddOrUpdateConns_ZoneZeroFlow(t *testing.T) {
+	refTime := time.Now()
+
+	zoneZeroConn := &connection.Connection{
+		StartTime:                  refTime,
+		StopTime:                   refTime,
+		FlowKey:                    connection.Tuple{SourceAddress: netip.MustParseAddr("172.18.0.1"), DestinationAddress: netip.MustParseAddr("10.244.2.2"), Protocol: 6, SourcePort: 52142, DestinationPort: 80},
+		OriginalDestinationAddress: netip.MustParseAddr("172.18.0.3"),
+		OriginalDestinationPort:    12345,
+		ProxySnatPort:              28392,
+		IsPresent:                  true,
+	}
+	antreaZoneConn := &connection.Connection{
+		StartTime:                  refTime,
+		StopTime:                   refTime,
+		FlowKey:                    connection.Tuple{SourceAddress: netip.MustParseAddr("10.244.2.1"), DestinationAddress: netip.MustParseAddr("10.244.2.2"), Protocol: 6, SourcePort: 28392, DestinationPort: 80},
+		Zone:                       openflow.CtZone,
+		Mark:                       openflow.ServiceCTMark.GetValue(),
+		ProxySnatPort:              28392,
+		OriginalDestinationAddress: netip.MustParseAddr("10.244.2.2"),
+		OriginalDestinationPort:    80,
+		IsPresent:                  true,
+	}
+
+	cs := NewConntrackConnectionStore(nil, nil, nil, testFlowExporterOptions)
+
+	// Zone-zero connections submitted through AddOrUpdateConns should be stored
+	// in the correlator, not the connection store.
+	require.NoError(t, cs.AddOrUpdateConns([]*connection.Connection{zoneZeroConn}))
+	assert.Empty(t, cs.connections, "zone-zero connection should not appear in the connection store")
+	assert.Len(t, cs.fromExternalCorrelator.connections, 1, "zone-zero connection should be stored in correlator")
+
+	// When the Antrea-zone counterpart arrives, it should be correlated and the
+	// correlator entry consumed.
+	require.NoError(t, cs.AddOrUpdateConns([]*connection.Connection{antreaZoneConn}))
+	assert.Len(t, cs.fromExternalCorrelator.connections, 0, "zone-zero entry should have been consumed by correlation")
+	connKey := connection.NewConnectionKey(antreaZoneConn)
+	storedConn, exists := cs.GetConnByKey(connKey)
+	require.True(t, exists, "correlated connection should be in the store")
+	assert.Equal(t, netip.MustParseAddr("172.18.0.1"), storedConn.FlowKey.SourceAddress, "source address should be overwritten from zone-zero connection")
 }
 
 func TestCorrelateExternal(t *testing.T) {

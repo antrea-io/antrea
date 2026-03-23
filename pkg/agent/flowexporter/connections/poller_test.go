@@ -55,14 +55,16 @@ func TestPoller_Poll(t *testing.T) {
 			ctrl := gomock.NewController(t)
 
 			mockDumper := connstesting.NewMockConnTrackDumper(ctrl)
-			mockDumper.EXPECT().DumpFlows(gomock.Any()).Return(tt.conns, len(tt.conns), nil)
+			// Zone 0 is always polled first (returns no connections for this test).
+			mockDumper.EXPECT().DumpFlows(uint16(0)).Return(nil, 0, nil)
+			mockDumper.EXPECT().DumpFlows(gomock.Not(uint16(0))).Return(tt.conns, len(tt.conns), nil)
 			mockDumper.EXPECT().GetMaxConnections().Return(maxConnections, nil)
 
 			p := NewPoller(mockDumper, nil, 0, true, false, false)
 			conns, connsLens, err := p.Poll()
 			require.NoError(t, err)
 			assert.ElementsMatch(t, tt.conns, conns)
-			assert.Equal(t, []int{len(tt.conns)}, connsLens)
+			assert.Equal(t, []int{0, len(tt.conns)}, connsLens)
 
 			// Validate Metrics
 			checkTotalConnectionsMetric(t, len(tt.conns))
