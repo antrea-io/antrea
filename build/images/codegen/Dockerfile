@@ -36,19 +36,42 @@ ARG K8S_VERSION=1.31.1
 # correct K8s version).
 ARG KUBEOPENAPI_VERSION=v0.0.0-20240228011516-70dd3763d340
 
-RUN go install k8s.io/code-generator/cmd/client-gen@kubernetes-$K8S_VERSION && \
-    go install k8s.io/code-generator/cmd/deepcopy-gen@kubernetes-$K8S_VERSION && \
-    go install k8s.io/code-generator/cmd/conversion-gen@kubernetes-$K8S_VERSION && \
-    go install k8s.io/code-generator/cmd/lister-gen@kubernetes-$K8S_VERSION && \
-    go install k8s.io/code-generator/cmd/informer-gen@kubernetes-$K8S_VERSION && \
-    go install k8s.io/kube-openapi/cmd/openapi-gen@$KUBEOPENAPI_VERSION && \
-    go install k8s.io/code-generator/cmd/go-to-protobuf@kubernetes-$K8S_VERSION && \
-    go install k8s.io/code-generator/cmd/go-to-protobuf/protoc-gen-gogo@kubernetes-$K8S_VERSION && \
-    go install go.uber.org/mock/mockgen@v0.5.0 && \
-    go install google.golang.org/protobuf/cmd/protoc-gen-go@v1.33.0 && \
-    go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@v1.3.0 && \
-    go install golang.org/x/tools/cmd/goimports@latest && \
-    go install sigs.k8s.io/controller-tools/cmd/controller-gen@v0.16.3
+# kubernetes-1.31.x code-generator requires golang.org/x/tools v0.21.x which
+# fails to build with Go 1.25 (see https://go.dev/issue/74462). We work around
+# this by using a single temporary module for all tools: Go's MVS picks the
+# highest required x/tools version across all dependencies, and goimports@latest
+# pulls in a compatible version (>= v0.26.0), fixing the build for all tools.
+RUN mkdir /tmp/codegen && cd /tmp/codegen && \
+    go mod init codegen && \
+    go get \
+        k8s.io/code-generator/cmd/client-gen@kubernetes-$K8S_VERSION \
+        k8s.io/code-generator/cmd/deepcopy-gen@kubernetes-$K8S_VERSION \
+        k8s.io/code-generator/cmd/conversion-gen@kubernetes-$K8S_VERSION \
+        k8s.io/code-generator/cmd/lister-gen@kubernetes-$K8S_VERSION \
+        k8s.io/code-generator/cmd/informer-gen@kubernetes-$K8S_VERSION \
+        k8s.io/kube-openapi/cmd/openapi-gen@$KUBEOPENAPI_VERSION \
+        k8s.io/code-generator/cmd/go-to-protobuf@kubernetes-$K8S_VERSION \
+        k8s.io/code-generator/cmd/go-to-protobuf/protoc-gen-gogo@kubernetes-$K8S_VERSION \
+        go.uber.org/mock/mockgen@v0.5.0 \
+        google.golang.org/grpc/cmd/protoc-gen-go-grpc@v1.3.0 \
+        golang.org/x/tools/cmd/goimports@latest \
+        sigs.k8s.io/controller-tools/cmd/controller-gen@v0.16.4 && \
+    go install \
+        k8s.io/code-generator/cmd/client-gen \
+        k8s.io/code-generator/cmd/deepcopy-gen \
+        k8s.io/code-generator/cmd/conversion-gen \
+        k8s.io/code-generator/cmd/lister-gen \
+        k8s.io/code-generator/cmd/informer-gen \
+        k8s.io/kube-openapi/cmd/openapi-gen \
+        k8s.io/code-generator/cmd/go-to-protobuf \
+        k8s.io/code-generator/cmd/go-to-protobuf/protoc-gen-gogo \
+        go.uber.org/mock/mockgen \
+        google.golang.org/grpc/cmd/protoc-gen-go-grpc \
+        golang.org/x/tools/cmd/goimports \
+        sigs.k8s.io/controller-tools/cmd/controller-gen && \
+    # protoc-gen-go is installed separately because google.golang.org/protobuf@v1.33.0
+    # conflicts with the version required by k8s.io/code-generator@kubernetes-1.31.1.
+    go install google.golang.org/protobuf/cmd/protoc-gen-go@v1.33.0
 
 COPY --from=protoc /tmp/protoc/bin /usr/local/bin
 COPY --from=protoc /tmp/protoc/include /usr/local/include

@@ -1,4 +1,4 @@
-// Copyright 2025 Antrea Authors
+// Copyright 2026 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -177,7 +177,7 @@ func (mr *MockDenyConnectionStoreUpdaterMockRecorder) AddOrUpdateConn(conn, time
 }
 
 // GetConnByKey mocks base method.
-func (m *MockDenyConnectionStoreUpdater) GetConnByKey(connKey connection.Tuple) (*connection.Connection, bool) {
+func (m *MockDenyConnectionStoreUpdater) GetConnByKey(connKey connection.ConnectionKey) (*connection.Connection, bool) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetConnByKey", connKey)
 	ret0, _ := ret[0].(*connection.Connection)
