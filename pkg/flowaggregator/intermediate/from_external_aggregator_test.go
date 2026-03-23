@@ -159,6 +159,14 @@ func TestIsGateway(t *testing.T) {
 		want         bool
 	}{
 		{
+			name: "Nil nodeIndexer",
+			ip:   gatewayIP,
+			setupIndexer: func() cache.Indexer {
+				return nil
+			},
+			want: false,
+		},
+		{
 			name: "Invalid IP",
 			ip:   []byte{},
 			setupIndexer: func() cache.Indexer {
@@ -281,8 +289,8 @@ func TestStoreIfNew(t *testing.T) {
 	t.Run("storing first flow", func(t *testing.T) {
 		a := newFromExternalAggregator(mockIndexerA)
 		sourceNodeFlow, _ := generateSourceNodeFlowAndFlowKey()
-		exists := a.storeIfNew(sourceNodeFlow)
-		assert.True(t, exists, "Expected not to find flow in an empty store")
+		matched := a.storeIfNew(sourceNodeFlow)
+		assert.Nil(t, matched, "Expected nil when flow is stored for the first time")
 
 		key := a.generateFromExternalStoreKey(sourceNodeFlow)
 		assert.True(t, contains(a, key), "Expected flow to have been stored")
@@ -292,8 +300,8 @@ func TestStoreIfNew(t *testing.T) {
 		sourceNodeFlow, _ := generateSourceNodeFlowAndFlowKey()
 		destinationNodeFlow, _ := generateDestinationNodeFlowAndFlowKey()
 		a.storeIfNew(sourceNodeFlow)
-		exists := a.storeIfNew(destinationNodeFlow)
-		assert.False(t, exists, "Expected other half of flow to have been stored")
+		matched := a.storeIfNew(destinationNodeFlow)
+		assert.Equal(t, sourceNodeFlow, matched, "Expected the previously stored flow to be returned")
 	})
 }
 
@@ -314,12 +322,13 @@ func withCleanupInterval(interval time.Duration) option {
 func TestExpiresStaleFlows(t *testing.T) {
 	a := newFromExternalAggregator(mockIndexerA, withTTL(time.Millisecond), withCleanupInterval(time.Millisecond))
 	sourceNodeFlow, _ := generateSourceNodeFlowAndFlowKey()
-	exists := a.storeIfNew(sourceNodeFlow)
-	assert.True(t, exists, "Expected not to find flow in an empty store")
-	time.Sleep(3 * time.Millisecond)
+	matched := a.storeIfNew(sourceNodeFlow)
+	assert.Nil(t, matched, "Expected nil when flow is stored for the first time")
 
 	key := a.generateFromExternalStoreKey(sourceNodeFlow)
-	assert.False(t, contains(a, key), "Expected flow to have been cleaned up")
+	assert.Eventually(t, func() bool {
+		return !contains(a, key)
+	}, time.Second, time.Millisecond, "Expected flow to have been cleaned up")
 }
 
 func TestStopIsThreadSafe(t *testing.T) {
