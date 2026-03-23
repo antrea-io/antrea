@@ -107,7 +107,7 @@ type tcpFlagsFilter struct {
 	mask uint32
 }
 
-// handles both icmp & icmpv6 msgs
+// icmpFilter represents an ICMP or ICMPv6 message filter with type and optional code.
 type icmpFilter struct {
 	icmpType uint32
 	icmpCode *uint32
@@ -277,10 +277,10 @@ func calculateSkipFalse(handler *ipFamilyHandler, srcIP, dstIP net.IP, transport
 		if len(transport.tcpFlags) > 0 {
 			count += uint8(len(transport.tcpFlags) * 3)
 		}
-		if len(transport.icmp) > 0 { // handles both icmp & icmpv6 msgs
-			count += 1
+		if len(transport.icmp) > 0 {
+			count++
 			for _, m := range transport.icmp {
-				count += 1
+				count++
 				if m.icmpCode != nil {
 					count += 2
 				}
@@ -288,7 +288,7 @@ func calculateSkipFalse(handler *ipFamilyHandler, srcIP, dstIP net.IP, transport
 		}
 	}
 	// ret keep
-	count += 1
+	count++
 
 	return count
 }
@@ -298,7 +298,7 @@ func calculateSkipFalse(handler *ipFamilyHandler, srcIP, dstIP net.IP, transport
 // between IPv4 (1 chunk) and IPv6 (4 chunks). It also manages the complex jump logic
 // required for bidirectional traffic matching.
 func compileIPFilters(handler *ipFamilyHandler, srcIP, dstIP net.IP, size, curLen, skipFalse uint8, needsOtherTrafficDirectionCheck bool) []bpf.Instruction {
-	inst := []bpf.Instruction{}
+	var inst []bpf.Instruction
 
 	// calculate skip size to jump to the final instruction (NO MATCH)
 	skipToEnd := func() uint8 {
@@ -344,7 +344,7 @@ func compileIPFilters(handler *ipFamilyHandler, srcIP, dstIP net.IP, size, curLe
 // Generates BPF instructions for filtering transport-layer traffic based on ports, TCP flags,
 // ICMP and ICMPv6 messages.
 func compileTransportFilters(handler *ipFamilyHandler, size, curLen uint8, transport *transportFilters) []bpf.Instruction {
-	inst := []bpf.Instruction{}
+	var inst []bpf.Instruction
 
 	// calculate skip size to jump to the final instruction (NO MATCH)
 	skipToEnd := func() uint8 {

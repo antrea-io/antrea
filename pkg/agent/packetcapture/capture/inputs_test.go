@@ -19,6 +19,7 @@ import (
 
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
+	"k8s.io/utils/ptr"
 
 	crdv1alpha1 "antrea.io/antrea/pkg/apis/crd/v1alpha1"
 )
@@ -32,17 +33,6 @@ type BPFTestCase struct {
 	SrcIP         net.IP
 	DstIP         net.IP
 	Direction     crdv1alpha1.CaptureDirection
-}
-
-// ptrInt32 is a test helper to create an *int32.
-func ptrInt32(v int32) *int32 {
-	return &v
-}
-
-// ptrIntOrStringInt32 creates a pointer to an IntOrString int value.
-func ptrIntOrStringInt32(v int32) *intstr.IntOrString {
-	vv := intstr.FromInt32(v)
-	return &vv
 }
 
 // BPFTestCases is the generative list of all test inputs.
@@ -153,7 +143,7 @@ var BPFTestCases = []BPFTestCase{
 			TransportHeader: crdv1alpha1.TransportHeader{
 				ICMP: &crdv1alpha1.ICMPHeader{
 					Messages: []crdv1alpha1.ICMPMsgMatcher{
-						{Type: testICMPMsgDstUnreach, Code: ptrInt32(1)},
+						{Type: testICMPMsgDstUnreach, Code: ptr.To[int32](1)},
 					},
 				},
 			},
@@ -228,7 +218,7 @@ var BPFTestCases = []BPFTestCase{
 			TransportHeader: crdv1alpha1.TransportHeader{
 				ICMPv6: &crdv1alpha1.ICMPv6Header{
 					Messages: []crdv1alpha1.ICMPv6MsgMatcher{
-						{Type: intstr.FromInt32(3), Code: ptrInt32(1)},
+						{Type: intstr.FromInt32(3), Code: ptr.To[int32](1)},
 					},
 				},
 			},
@@ -247,7 +237,7 @@ var BPFTestCases = []BPFTestCase{
 					SrcPort: &testSrcPort,
 					DstPort: &testDstPort,
 					Flags: []crdv1alpha1.TCPFlagsMatcher{
-						{Value: 0x2, Mask: ptrInt32(0x12)}, // SYN bit set (2), but masked with 0x12 (SYN|ACK)
+						{Value: 0x2, Mask: ptr.To[int32](0x12)}, // SYN bit set (2), but masked with 0x12 (SYN|ACK)
 					},
 				},
 			},
@@ -262,9 +252,9 @@ var BPFTestCases = []BPFTestCase{
 			Protocol: &testTCPProtocol,
 			TransportHeader: crdv1alpha1.TransportHeader{
 				TCP: &crdv1alpha1.TCPHeader{
-					DstPort: ptrInt32(443),
+					DstPort: ptr.To[int32](443),
 					Flags: []crdv1alpha1.TCPFlagsMatcher{
-						{Value: 0x12, Mask: ptrInt32(0x1F)},
+						{Value: 0x12, Mask: ptr.To[int32](0x1F)},
 					},
 				},
 			},
@@ -278,7 +268,7 @@ var BPFTestCases = []BPFTestCase{
 			Protocol: &testUDPProtocol,
 			TransportHeader: crdv1alpha1.TransportHeader{
 				UDP: &crdv1alpha1.UDPHeader{
-					DstPort: ptrInt32(53),
+					DstPort: ptr.To[int32](53),
 				},
 			},
 		},
@@ -332,7 +322,7 @@ var BPFTestCases = []BPFTestCase{
 			Protocol: &testUDPProtocol,
 			TransportHeader: crdv1alpha1.TransportHeader{
 				UDP: &crdv1alpha1.UDPHeader{
-					SrcPort: ptrInt32(12345),
+					SrcPort: ptr.To[int32](12345),
 				},
 			},
 		},
@@ -348,8 +338,8 @@ var BPFTestCases = []BPFTestCase{
 			Protocol: &testUDPProtocol,
 			TransportHeader: crdv1alpha1.TransportHeader{
 				UDP: &crdv1alpha1.UDPHeader{
-					SrcPort: ptrInt32(12345),
-					DstPort: ptrInt32(80),
+					SrcPort: ptr.To[int32](12345),
+					DstPort: ptr.To[int32](80),
 				},
 			},
 		},
@@ -416,7 +406,7 @@ var BPFTestCases = []BPFTestCase{
 			Protocol: &testICMPv6Protocol,
 			TransportHeader: crdv1alpha1.TransportHeader{
 				ICMPv6: &crdv1alpha1.ICMPv6Header{
-					Messages: []crdv1alpha1.ICMPv6MsgMatcher{{Type: intstr.FromInt32(128), Code: ptrInt32(1)}},
+					Messages: []crdv1alpha1.ICMPv6MsgMatcher{{Type: intstr.FromInt32(128), Code: ptr.To[int32](1)}},
 				},
 			},
 		},
@@ -431,7 +421,7 @@ var BPFTestCases = []BPFTestCase{
 			Protocol: &testICMPv6Protocol,
 			TransportHeader: crdv1alpha1.TransportHeader{
 				ICMPv6: &crdv1alpha1.ICMPv6Header{
-					Messages: []crdv1alpha1.ICMPv6MsgMatcher{{Type: intstr.FromInt32(128), Code: ptrInt32(1)}},
+					Messages: []crdv1alpha1.ICMPv6MsgMatcher{{Type: intstr.FromInt32(128), Code: ptr.To[int32](1)}},
 				},
 			},
 		},
@@ -471,7 +461,7 @@ var BPFTestCases = []BPFTestCase{
 		SrcIP:         net.ParseIP("127.0.0.1"),
 		DstIP:         net.ParseIP("127.0.0.2"),
 		Packet: &crdv1alpha1.Packet{
-			Protocol: ptrIntOrStringInt32(6),
+			Protocol: ptr.To(intstr.FromInt32(6)),
 			TransportHeader: crdv1alpha1.TransportHeader{
 				TCP: &crdv1alpha1.TCPHeader{SrcPort: &testSrcPort, DstPort: &testDstPort},
 			},
@@ -484,7 +474,7 @@ var BPFTestCases = []BPFTestCase{
 		SrcIP:         net.ParseIP("127.0.0.1"),
 		DstIP:         net.ParseIP("127.0.0.2"),
 		Packet: &crdv1alpha1.Packet{
-			Protocol: ptrIntOrStringInt32(17),
+			Protocol: ptr.To(intstr.FromInt32(17)),
 			TransportHeader: crdv1alpha1.TransportHeader{
 				UDP: &crdv1alpha1.UDPHeader{SrcPort: &testSrcPort, DstPort: &testDstPort},
 			},
@@ -497,10 +487,10 @@ var BPFTestCases = []BPFTestCase{
 		SrcIP:         net.ParseIP("10.0.0.1"),
 		DstIP:         net.ParseIP("10.0.0.2"),
 		Packet: &crdv1alpha1.Packet{
-			Protocol: ptrIntOrStringInt32(1),
+			Protocol: ptr.To(intstr.FromInt32(1)),
 			TransportHeader: crdv1alpha1.TransportHeader{
 				ICMP: &crdv1alpha1.ICMPHeader{
-					Messages: []crdv1alpha1.ICMPMsgMatcher{{Type: intstr.FromInt32(11), Code: ptrInt32(0)}},
+					Messages: []crdv1alpha1.ICMPMsgMatcher{{Type: intstr.FromInt32(11), Code: ptr.To[int32](0)}},
 				},
 			},
 		},
@@ -513,7 +503,7 @@ var BPFTestCases = []BPFTestCase{
 		DstIP:         net.ParseIP("fd00:10:244::2"),
 		Packet: &crdv1alpha1.Packet{
 			IPFamily: v1.IPv6Protocol,
-			Protocol: ptrIntOrStringInt32(58),
+			Protocol: ptr.To(intstr.FromInt32(58)),
 			TransportHeader: crdv1alpha1.TransportHeader{
 				ICMPv6: &crdv1alpha1.ICMPv6Header{
 					Messages: []crdv1alpha1.ICMPv6MsgMatcher{{Type: intstr.FromInt32(129)}},
@@ -527,7 +517,7 @@ var BPFTestCases = []BPFTestCase{
 		TcpdumpFilter: "ip6 proto 132",
 		Packet: &crdv1alpha1.Packet{
 			IPFamily: v1.IPv6Protocol,
-			Protocol: ptrIntOrStringInt32(132),
+			Protocol: ptr.To(intstr.FromInt32(132)),
 		},
 		Direction: crdv1alpha1.CaptureDirectionSourceToDestination,
 	},
