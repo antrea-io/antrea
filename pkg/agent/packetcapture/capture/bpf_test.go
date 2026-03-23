@@ -984,9 +984,9 @@ func TestPacketCaptureCompileBPF(t *testing.T) {
 				bpf.LoadAbsolute{Off: 20, Size: 2},                          // flags+fragment offset, since we need to calc where the src/dst port is
 				bpf.JumpIf{Cond: bpf.JumpBitsSet, Val: 0x1fff, SkipTrue: 7}, // do we have an L4 header?
 				bpf.LoadMemShift{Off: 14},                                   // calculate size of IP header
-				bpf.LoadIndirect{Off: 14, Size: lengthByte},                 // load ICMP type
+				bpf.LoadIndirect{Off: 14, Size: 1},                 // load ICMP type
 				bpf.JumpIf{Cond: bpf.JumpEqual, Val: 0x3, SkipTrue: 0, SkipFalse: 2},
-				bpf.LoadIndirect{Off: 15, Size: lengthByte}, // load ICMP code
+				bpf.LoadIndirect{Off: 15, Size: 1}, // load ICMP code
 				bpf.JumpIf{Cond: bpf.JumpEqual, Val: 0x1, SkipTrue: 1, SkipFalse: 2},
 				bpf.JumpIf{Cond: bpf.JumpEqual, Val: 0x8, SkipTrue: 0, SkipFalse: 1},
 				bpf.RetConstant{Val: 262144},
@@ -1022,7 +1022,7 @@ func TestPacketCaptureCompileBPF(t *testing.T) {
 				bpf.LoadAbsolute{Off: 20, Size: 2},                          // flags+fragment offset, since we need to calc where the src/dst port is
 				bpf.JumpIf{Cond: bpf.JumpBitsSet, Val: 0x1fff, SkipTrue: 5}, // do we have an L4 header?
 				bpf.LoadMemShift{Off: 14},                                   // calculate size of IP header
-				bpf.LoadIndirect{Off: 14, Size: lengthByte},                 // load ICMP type
+				bpf.LoadIndirect{Off: 14, Size: 1},                 // load ICMP type
 				bpf.JumpIf{Cond: bpf.JumpEqual, Val: 0x8, SkipTrue: 1, SkipFalse: 0},
 				bpf.JumpIf{Cond: bpf.JumpEqual, Val: 0x0, SkipTrue: 0, SkipFalse: 1},
 				bpf.RetConstant{Val: 262144},
@@ -1068,7 +1068,7 @@ func TestPacketCaptureCompileBPF(t *testing.T) {
 				bpf.JumpIf{Cond: bpf.JumpEqual, Val: 0x2, SkipTrue: 0, SkipFalse: 6},
 				bpf.LoadAbsolute{Off: 20, Size: 1},                       // ip protocol
 				bpf.JumpIf{Cond: bpf.JumpEqual, Val: 0x3a, SkipFalse: 4}, // icmpv6
-				bpf.LoadAbsolute{Off: 54, Size: lengthByte},              // load ICMP type
+				bpf.LoadAbsolute{Off: 54, Size: 1},              // load ICMP type
 				bpf.JumpIf{Cond: bpf.JumpEqual, Val: 0x80, SkipTrue: 1, SkipFalse: 0},
 				bpf.JumpIf{Cond: bpf.JumpEqual, Val: 0x81, SkipTrue: 0, SkipFalse: 1},
 				bpf.RetConstant{Val: 262144},

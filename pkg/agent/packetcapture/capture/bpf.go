@@ -102,6 +102,7 @@ var ICMPv6MsgTypeMap = map[crdv1alpha1.ICMPv6MsgType]uint32{
 	crdv1alpha1.ICMPv6MsgTypeParamProblem: 4,
 }
 
+// tcpFlagsFilter represents a TCP flag match condition with a value and mask.
 type tcpFlagsFilter struct {
 	flag uint32
 	mask uint32
@@ -113,6 +114,8 @@ type icmpFilter struct {
 	icmpCode *uint32
 }
 
+// transportFilters holds the parsed transport-layer filter criteria
+// extracted from the PacketCapture CRD spec.
 type transportFilters struct {
 	srcPort  uint16
 	dstPort  uint16
@@ -341,8 +344,8 @@ func compileIPFilters(handler *ipFamilyHandler, srcIP, dstIP net.IP, size, curLe
 	return inst
 }
 
-// Generates BPF instructions for filtering transport-layer traffic based on ports, TCP flags,
-// ICMP and ICMPv6 messages.
+// compileTransportFilters generates BPF instructions for filtering transport-layer
+// traffic based on ports, TCP flags, ICMP and ICMPv6 messages.
 func compileTransportFilters(handler *ipFamilyHandler, size, curLen uint8, transport *transportFilters) []bpf.Instruction {
 	var inst []bpf.Instruction
 
@@ -380,7 +383,7 @@ func compileTransportFilters(handler *ipFamilyHandler, size, curLen uint8, trans
 			}
 		}
 
-		// handles both icmp & icmpv6 msgs
+		// ICMP and ICMPv6 message filters.
 		if len(transport.icmp) > 0 {
 			inst = append(inst, handler.loadICMPType)
 			for i, f := range transport.icmp {
@@ -470,7 +473,7 @@ func compileGenericPacketFilter(handler *ipFamilyHandler, packetSpec *crdv1alpha
 
 	// ports, TCP flags, ICMP and ICMPv6 messages
 	var transport transportFilters
-	if packetSpec.TransportHeader.TCP != nil {
+	if packetSpec != nil && packetSpec.TransportHeader.TCP != nil {
 		if packetSpec.TransportHeader.TCP.SrcPort != nil {
 			transport.srcPort = uint16(*packetSpec.TransportHeader.TCP.SrcPort)
 		}
@@ -734,17 +737,17 @@ func calculateInstructionsSize(handler *ipFamilyHandler, packet *crdv1alpha1.Pac
 				if handler.etherType == etherTypeIPv4 {
 					count += 3
 				}
-				count += 1 // load icmp type
+				count++ // load icmp type
 				for _, m := range transport.ICMP.Messages {
-					count += 1 // compare icmp type
+					count++ // compare icmp type
 					if m.Code != nil {
 						count += 2 // load + compare icmp code
 					}
 				}
 			} else if transport.ICMPv6 != nil {
-				count += 1 // load icmpv6 type
+				count++ // load icmpv6 type
 				for _, m := range transport.ICMPv6.Messages {
-					count += 1 // compare icmpv6 type
+					count++ // compare icmpv6 type
 					if m.Code != nil {
 						count += 2 // load + compare icmpv6 code
 					}
@@ -756,7 +759,6 @@ func calculateInstructionsSize(handler *ipFamilyHandler, packet *crdv1alpha1.Pac
 		count += portFiltersSize
 
 		if direction == crdv1alpha1.CaptureDirectionBoth {
-
 			// extra returnKeep
 			count++
 
