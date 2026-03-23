@@ -38,15 +38,15 @@ require (
 	github.com/mdlayher/ethernet v0.0.0-20220221185849-529eae5b6118
 	github.com/mdlayher/ndp v1.1.0
 	github.com/mdlayher/packet v1.1.2
-	github.com/miekg/dns v1.1.70
+	github.com/miekg/dns v1.1.72
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822
-	github.com/onsi/ginkgo/v2 v2.27.3
-	github.com/onsi/gomega v1.38.3
-	github.com/osrg/gobgp/v3 v3.37.0
+	github.com/onsi/ginkgo/v2 v2.27.4
+	github.com/onsi/gomega v1.39.0
+	github.com/osrg/gobgp/v4 v4.0.0
 	github.com/pkg/sftp v1.13.10
 	github.com/prometheus/client_golang v1.23.2
-	github.com/prometheus/common v0.66.1
-	github.com/sirupsen/logrus v1.9.3
+	github.com/prometheus/common v0.67.0
+	github.com/sirupsen/logrus v1.9.4
 	github.com/spf13/afero v1.15.0
 	github.com/spf13/cobra v1.10.2
 	github.com/spf13/pflag v1.0.10
@@ -66,7 +66,7 @@ require (
 	google.golang.org/grpc v1.79.3
 	google.golang.org/protobuf v1.36.11
 	gopkg.in/natefinch/lumberjack.v2 v2.2.1
-	gopkg.in/yaml.v2 v2.4.0
+	gopkg.in/yaml.v3 v3.0.0
 	gopkg.in/yaml.v3 v3.0.1
 	k8s.io/api v0.35.0
 	k8s.io/apiextensions-apiserver v0.35.0
