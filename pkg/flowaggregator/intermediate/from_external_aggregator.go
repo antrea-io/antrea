@@ -207,7 +207,11 @@ func (a *fromExternalAggregator) isGateway(ip []byte) bool {
 		klog.ErrorS(nil, "Failed to determine if IP is gateway: could not convert to Addr", "ip", ip)
 		return false
 	}
-	objs, err := a.nodeIndexer.ByIndex(gatewayIPIndex, addr.String())
+	// Unmap normalizes IPv4-in-IPv6 addresses (e.g. ::ffff:10.244.1.1) to
+	// their pure IPv4 form so the index lookup matches the keys stored by
+	// NodeIndexers (which are derived from netip.ParsePrefix and therefore
+	// always pure IPv4/IPv6).
+	objs, err := a.nodeIndexer.ByIndex(gatewayIPIndex, addr.Unmap().String())
 	if err != nil {
 		klog.ErrorS(err, "Failed to query Node indexer")
 		return false
