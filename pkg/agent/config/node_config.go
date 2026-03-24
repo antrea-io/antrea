@@ -18,7 +18,7 @@ import (
 	"fmt"
 	"net"
 
-	"antrea.io/antrea/pkg/ovs/ovsconfig"
+	"antrea.io/antrea/v2/pkg/ovs/ovsconfig"
 )
 
 const (

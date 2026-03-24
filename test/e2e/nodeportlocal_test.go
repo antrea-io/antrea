@@ -31,10 +31,10 @@ import (
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/utils/ptr"
 
-	npltesting "antrea.io/antrea/pkg/agent/nodeportlocal/testing"
-	"antrea.io/antrea/pkg/agent/nodeportlocal/types"
-	agentconfig "antrea.io/antrea/pkg/config/agent"
-	"antrea.io/antrea/pkg/features"
+	npltesting "antrea.io/antrea/v2/pkg/agent/nodeportlocal/testing"
+	"antrea.io/antrea/v2/pkg/agent/nodeportlocal/types"
+	agentconfig "antrea.io/antrea/v2/pkg/config/agent"
+	"antrea.io/antrea/v2/pkg/features"
 )
 
 const (

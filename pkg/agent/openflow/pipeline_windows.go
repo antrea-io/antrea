@@ -20,7 +20,7 @@ package openflow
 import (
 	"net"
 
-	binding "antrea.io/antrea/pkg/ovs/openflow"
+	binding "antrea.io/antrea/v2/pkg/ovs/openflow"
 )
 
 // matchUplinkInPortInClassifierTable matches dstIP field to prevent unintended forwarding when promiscuous mode is enabled on Windows.

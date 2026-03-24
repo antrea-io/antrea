@@ -28,16 +28,16 @@ import (
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/util/workqueue"
 
-	mcv1alpha1 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha1"
-	mcfake "antrea.io/antrea/multicluster/pkg/client/clientset/versioned/fake"
-	mcinformers "antrea.io/antrea/multicluster/pkg/client/informers/externalversions"
-	"antrea.io/antrea/pkg/agent/config"
-	oftest "antrea.io/antrea/pkg/agent/openflow/testing"
-	antrearoute "antrea.io/antrea/pkg/agent/route"
-	routemock "antrea.io/antrea/pkg/agent/route/testing"
-	"antrea.io/antrea/pkg/agent/wireguard"
-	wgtest "antrea.io/antrea/pkg/agent/wireguard/testing"
-	"antrea.io/antrea/pkg/config/agent"
+	mcv1alpha1 "antrea.io/antrea/v2/multicluster/apis/multicluster/v1alpha1"
+	mcfake "antrea.io/antrea/v2/multicluster/pkg/client/clientset/versioned/fake"
+	mcinformers "antrea.io/antrea/v2/multicluster/pkg/client/informers/externalversions"
+	"antrea.io/antrea/v2/pkg/agent/config"
+	oftest "antrea.io/antrea/v2/pkg/agent/openflow/testing"
+	antrearoute "antrea.io/antrea/v2/pkg/agent/route"
+	routemock "antrea.io/antrea/v2/pkg/agent/route/testing"
+	"antrea.io/antrea/v2/pkg/agent/wireguard"
+	wgtest "antrea.io/antrea/v2/pkg/agent/wireguard/testing"
+	"antrea.io/antrea/v2/pkg/config/agent"
 )
 
 type fakeRouteController struct {

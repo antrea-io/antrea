@@ -17,7 +17,7 @@ package portcache
 import (
 	"k8s.io/client-go/tools/cache"
 
-	"antrea.io/antrea/pkg/agent/nodeportlocal/rules"
+	"antrea.io/antrea/v2/pkg/agent/nodeportlocal/rules"
 )
 
 const (

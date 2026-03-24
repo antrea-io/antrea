@@ -3,7 +3,7 @@ layout:
 - go.kubebuilder.io/v3
 multigroup: true
 projectName: multicluster
-repo: antrea.io/antrea/multicluster
+repo: antrea.io/antrea/v2/multicluster
 resources:
 - api:
     crdVersion: v1
@@ -12,7 +12,7 @@ resources:
   domain: crd.antrea.io
   group: multicluster
   kind: MemberClusterAnnounce
-  path: antrea.io/antrea/multicluster/apis/multicluster/v1alpha1
+  path: antrea.io/antrea/v2/multicluster/apis/multicluster/v1alpha1
   version: v1alpha1
   webhooks:
     defaulting: true
@@ -25,7 +25,7 @@ resources:
   domain: crd.antrea.io
   group: multicluster
   kind: ClusterSet
-  path: antrea.io/antrea/multicluster/apis/multicluster/v1alpha2
+  path: antrea.io/antrea/v2/multicluster/apis/multicluster/v1alpha2
   version: v1alpha2
   webhooks:
     defaulting: true
@@ -38,7 +38,7 @@ resources:
   domain: crd.antrea.io
   group: multicluster
   kind: ResourceExport
-  path: antrea.io/antrea/multicluster/apis/multicluster/v1alpha1
+  path: antrea.io/antrea/v2/multicluster/apis/multicluster/v1alpha1
   version: v1alpha1
   webhooks:
     defaulting: true
@@ -51,7 +51,7 @@ resources:
   domain: crd.antrea.io
   group: multicluster
   kind: ResourceImport
-  path: antrea.io/antrea/multicluster/apis/multicluster/v1alpha1
+  path: antrea.io/antrea/v2/multicluster/apis/multicluster/v1alpha1
   version: v1alpha1
   webhooks:
     defaulting: true
@@ -63,7 +63,7 @@ resources:
   domain: crd.antrea.io
   group: multicluster
   kind: MultiClusterConfig
-  path: antrea.io/antrea/multicluster/apis/multicluster/v1alpha1
+  path: antrea.io/antrea/v2/multicluster/apis/multicluster/v1alpha1
   version: v1alpha1
 - api:
     crdVersion: v1
@@ -72,7 +72,7 @@ resources:
   domain: crd.antrea.io
   group: multicluster
   kind: ClusterInfoImport
-  path: antrea.io/antrea/multicluster/apis/multicluster/v1alpha1
+  path: antrea.io/antrea/v2/multicluster/apis/multicluster/v1alpha1
   version: v1alpha1
 - api:
     crdVersion: v1
@@ -81,6 +81,6 @@ resources:
   domain: crd.antrea.io
   group: multicluster
   kind: Gateway
-  path: antrea.io/antrea/multicluster/apis/multicluster/v1alpha1
+  path: antrea.io/antrea/v2/multicluster/apis/multicluster/v1alpha1
   version: v1alpha1
 version: "3"

@@ -493,7 +493,7 @@ function run_test {
      timeout="100m"
   fi
 
-  go test -v -timeout=$timeout $RUN_OPT antrea.io/antrea/test/e2e $flow_visibility_args -provider=kind --logs-export-dir=$ANTREA_LOG_DIR $np_evaluation_flag --skip-cases=$skiplist $coverage_args $EXTRA_ARGS
+  go test -v -timeout=$timeout $RUN_OPT antrea.io/antrea/v2/test/e2e $flow_visibility_args -provider=kind --logs-export-dir=$ANTREA_LOG_DIR $np_evaluation_flag --skip-cases=$skiplist $coverage_args $EXTRA_ARGS
 
   if $coverage; then
     pushd $ANTREA_COV_DIR

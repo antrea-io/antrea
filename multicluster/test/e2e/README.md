@@ -18,7 +18,7 @@ CIDRs could be `10.96.10.0/24`, `10.96.20.0/24`, and `10.96.30.0/24` for three c
 
 Make sure that your clusters are provisioned and the Antrea build artifacts are
 uploaded to all the Nodes. If you install the Multi-cluster Controller manually,
-you can run the tests from the top-level directory with `go test -v antrea.io/antrea/multicluster/test/e2e --mc-gateway`
+you can run the tests from the top-level directory with `go test -v antrea.io/antrea/v2/multicluster/test/e2e --mc-gateway`
 or run `bash ci/jenkins/test-mc.sh --testcase e2e --mc-gateway`. If you'd like
 to run test with Kind clusters, you can run `bash ci/jenkins/test-mc.sh --testcase e2e --mc-gateway --kind`.
 The command will create three Kind clusters and deploy Multi-cluster Controllers

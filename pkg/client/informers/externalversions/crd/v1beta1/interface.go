@@ -17,7 +17,7 @@
 package v1beta1
 
 import (
-	internalinterfaces "antrea.io/antrea/pkg/client/informers/externalversions/internalinterfaces"
+	internalinterfaces "antrea.io/antrea/v2/pkg/client/informers/externalversions/internalinterfaces"
 )
 
 // Interface provides access to all the informers in this group version.

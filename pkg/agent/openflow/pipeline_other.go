@@ -22,7 +22,7 @@ package openflow
 import (
 	"net"
 
-	binding "antrea.io/antrea/pkg/ovs/openflow"
+	binding "antrea.io/antrea/v2/pkg/ovs/openflow"
 )
 
 func (f *featurePodConnectivity) matchUplinkInPortInClassifierTable(flowBuilder binding.FlowBuilder) binding.FlowBuilder {

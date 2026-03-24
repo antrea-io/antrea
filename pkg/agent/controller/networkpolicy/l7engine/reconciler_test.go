@@ -28,8 +28,8 @@ import (
 	"go.uber.org/mock/gomock"
 	"k8s.io/apimachinery/pkg/util/sets"
 
-	oftesting "antrea.io/antrea/pkg/agent/openflow/testing"
-	v1beta "antrea.io/antrea/pkg/apis/controlplane/v1beta2"
+	oftesting "antrea.io/antrea/v2/pkg/agent/openflow/testing"
+	v1beta "antrea.io/antrea/v2/pkg/apis/controlplane/v1beta2"
 )
 
 type fakeSuricata struct {

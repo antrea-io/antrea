@@ -24,7 +24,7 @@ default, then run below commands:
 export KUBECONFIG=/tmp/mc-integration-kubeconfig
 kubectl create namespace leader-ns
 kubectl apply -f test/integration/cluster-admin.yml
-go test -coverpkg=antrea.io/antrea/multicluster/controllers/multicluster/... -coverprofile=../.coverage/coverage-integration.txt -covermode=atomic -cover antrea.io/antrea/multicluster/test/integration/...
+go test -coverpkg=antrea.io/antrea/v2/multicluster/controllers/multicluster/... -coverprofile=../.coverage/coverage-integration.txt -covermode=atomic -cover antrea.io/antrea/v2/multicluster/test/integration/...
 ```
 
 You should be able to see the overall results from terminal, if you'd like to

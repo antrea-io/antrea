@@ -29,9 +29,9 @@ import (
 	"k8s.io/client-go/rest"
 	"k8s.io/utils/ptr"
 
-	"antrea.io/antrea/pkg/antctl/raw"
-	"antrea.io/antrea/pkg/antctl/raw/check"
-	antrea "antrea.io/antrea/pkg/client/clientset/versioned"
+	"antrea.io/antrea/v2/pkg/antctl/raw"
+	"antrea.io/antrea/v2/pkg/antctl/raw/check"
+	antrea "antrea.io/antrea/v2/pkg/client/clientset/versioned"
 )
 
 func Command() *cobra.Command {

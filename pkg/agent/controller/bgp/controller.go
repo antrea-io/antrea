@@ -45,17 +45,17 @@ import (
 	"k8s.io/utils/ptr"
 	"k8s.io/utils/strings/slices"
 
-	"antrea.io/antrea/pkg/agent/bgp"
-	"antrea.io/antrea/pkg/agent/bgp/gobgp"
-	"antrea.io/antrea/pkg/agent/config"
-	"antrea.io/antrea/pkg/agent/types"
-	"antrea.io/antrea/pkg/apis/crd/v1alpha1"
-	"antrea.io/antrea/pkg/apis/crd/v1beta1"
-	crdinformersv1a1 "antrea.io/antrea/pkg/client/informers/externalversions/crd/v1alpha1"
-	crdinformersv1b1 "antrea.io/antrea/pkg/client/informers/externalversions/crd/v1beta1"
-	crdlistersv1a1 "antrea.io/antrea/pkg/client/listers/crd/v1alpha1"
-	crdlistersv1b1 "antrea.io/antrea/pkg/client/listers/crd/v1beta1"
-	"antrea.io/antrea/pkg/util/env"
+	"antrea.io/antrea/v2/pkg/agent/bgp"
+	"antrea.io/antrea/v2/pkg/agent/bgp/gobgp"
+	"antrea.io/antrea/v2/pkg/agent/config"
+	"antrea.io/antrea/v2/pkg/agent/types"
+	"antrea.io/antrea/v2/pkg/apis/crd/v1alpha1"
+	"antrea.io/antrea/v2/pkg/apis/crd/v1beta1"
+	crdinformersv1a1 "antrea.io/antrea/v2/pkg/client/informers/externalversions/crd/v1alpha1"
+	crdinformersv1b1 "antrea.io/antrea/v2/pkg/client/informers/externalversions/crd/v1beta1"
+	crdlistersv1a1 "antrea.io/antrea/v2/pkg/client/listers/crd/v1alpha1"
+	crdlistersv1b1 "antrea.io/antrea/v2/pkg/client/listers/crd/v1beta1"
+	"antrea.io/antrea/v2/pkg/util/env"
 )
 
 const (
