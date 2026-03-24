@@ -37,13 +37,6 @@
       enabled: false,
     },
 
-    // Re-enable vulnerability/security updates for active release branches
-    {
-      matchBaseBranches: ["release-2.6", "release-2.5", "release-2.4"],
-      isVulnerabilityAlert: true,
-      enabled: true,
-    },
-
     // Disable indirect go dependencies updates, resource: https://github.com/renovatebot/renovate/discussions/35225#discussioncomment-13666269
     {
       matchManagers: ["gomod"],
