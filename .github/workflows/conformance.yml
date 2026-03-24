@@ -59,7 +59,7 @@ jobs:
         run: |
           sudo apt-get clean
           df -h
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           ref: ${{ inputs.antrea-version }}
           fetch-depth: 0
@@ -78,7 +78,7 @@ jobs:
           fi
       - name: Set up Docker Buildx if required
         if: ${{ steps.check-release.outputs.released == 'false' }}
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@v4
         with:
           driver: docker
       - name: Build Antrea image if required
@@ -151,7 +151,7 @@ jobs:
         run: |
           ./ci/run-k8s-e2e-tests.sh "--e2e-${{ inputs.test-suite }}"
       - name: Upload test log
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         if: ${{ failure() || inputs.always-upload-logs }}
         with:
           name: sonobuoy.tar.gz

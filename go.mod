@@ -7,7 +7,7 @@ require (
 	antrea.io/ofnet v0.15.0
 	github.com/ClickHouse/clickhouse-go/v2 v2.6.1
 	github.com/DATA-DOG/go-sqlmock v1.5.2
-	github.com/Mellanox/sriovnet v1.1.0
+	github.com/Mellanox/sriovnet v1.2.0
 	github.com/Microsoft/go-winio v0.6.2
 	github.com/Microsoft/hcsshim v0.13.0
 	github.com/TomCodeLV/OVSDB-golang-lib v0.0.0-20200116135253-9bbdfadcd881
@@ -22,52 +22,52 @@ require (
 	github.com/containernetworking/plugins v1.9.0
 	github.com/coreos/go-iptables v0.8.0
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc
-	github.com/fatih/color v1.18.0
+	github.com/fatih/color v1.19.0
 	github.com/fsnotify/fsnotify v1.9.0
-	github.com/gammazero/deque v1.0.0
+	github.com/gammazero/deque v1.1.0
 	github.com/go-logr/logr v1.4.3
 	github.com/gogo/protobuf v1.3.2
 	github.com/google/btree v1.1.3
 	github.com/google/go-cmp v0.7.0
 	github.com/google/uuid v1.6.0
-	github.com/gopacket/gopacket v1.3.2-0.20241202175635-b43272ae1eb8
-	github.com/hashicorp/memberlist v0.5.3
-	github.com/k8snetworkplumbingwg/network-attachment-definition-client v1.7.5
-	github.com/kevinburke/ssh_config v1.2.0
+	github.com/gopacket/gopacket v1.4.0
+	github.com/hashicorp/memberlist v0.5.4
+	github.com/k8snetworkplumbingwg/network-attachment-definition-client v1.7.6
+	github.com/kevinburke/ssh_config v1.4.0
 	github.com/lithammer/dedent v1.1.0
 	github.com/mdlayher/arp v0.0.0-20220221190821-c37aaafac7f9
 	github.com/mdlayher/ethernet v0.0.0-20220221185849-529eae5b6118
 	github.com/mdlayher/ndp v1.1.0
 	github.com/mdlayher/packet v1.1.2
-	github.com/miekg/dns v1.1.65
+	github.com/miekg/dns v1.1.66
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822
-	github.com/onsi/ginkgo/v2 v2.25.1
-	github.com/onsi/gomega v1.38.1
-	github.com/osrg/gobgp/v3 v3.37.0
-	github.com/pkg/sftp v1.13.9
-	github.com/prometheus/client_golang v1.20.5
-	github.com/prometheus/common v0.62.0
-	github.com/sirupsen/logrus v1.9.3
-	github.com/spf13/afero v1.14.0
-	github.com/spf13/cobra v1.9.1
-	github.com/spf13/pflag v1.0.6
-	github.com/stretchr/testify v1.10.0
-	github.com/ti-mo/conntrack v0.5.2
+	github.com/onsi/ginkgo/v2 v2.25.2
+	github.com/onsi/gomega v1.38.2
+	github.com/osrg/gobgp/v4 v4.0.0
+	github.com/pkg/sftp v1.13.10
+	github.com/prometheus/client_golang v1.21.0
+	github.com/prometheus/common v0.63.0
+	github.com/sirupsen/logrus v1.9.4
+	github.com/spf13/afero v1.15.0
+	github.com/spf13/cobra v1.10.0
+	github.com/spf13/pflag v1.0.7
+	github.com/stretchr/testify v1.11.0
+	github.com/ti-mo/conntrack v0.6.0
 	github.com/vishvananda/netlink v1.3.1
 	github.com/vmware/go-ipfix v0.16.0
-	go.uber.org/mock v0.5.0
-	golang.org/x/crypto v0.45.0
-	golang.org/x/mod v0.29.0
-	golang.org/x/net v0.47.0
-	golang.org/x/sync v0.18.0
-	golang.org/x/sys v0.38.0
-	golang.org/x/time v0.12.0
-	golang.org/x/tools v0.38.0
-	golang.zx2c4.com/wireguard/wgctrl v0.0.0-20210506160403-92e472f520a5
-	google.golang.org/grpc v1.72.0
-	google.golang.org/protobuf v1.36.7
+	go.uber.org/mock v0.5.1
+	golang.org/x/crypto v0.46.0
+	golang.org/x/mod v0.30.0
+	golang.org/x/net v0.48.0
+	golang.org/x/sync v0.19.0
+	golang.org/x/sys v0.39.0
+	golang.org/x/time v0.13.0
+	golang.org/x/tools v0.39.0
+	golang.zx2c4.com/wireguard/wgctrl a9ab2273dd10
+	google.golang.org/grpc v1.72.1
+	google.golang.org/protobuf v1.36.8
 	gopkg.in/natefinch/lumberjack.v2 v2.2.1
-	gopkg.in/yaml.v2 v2.4.0
+	gopkg.in/yaml.v3 v3.0.0
 	gopkg.in/yaml.v3 v3.0.1
 	k8s.io/api v0.31.1
 	k8s.io/apiextensions-apiserver v0.31.1

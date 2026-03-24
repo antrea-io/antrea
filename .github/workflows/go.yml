@@ -16,7 +16,7 @@ jobs:
     name: Check whether tests need to be run based on diff
     runs-on: [ubuntu-latest]
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v5
       with:
         fetch-depth: 0
         show-progress: false
@@ -37,11 +37,11 @@ jobs:
     runs-on: [ubuntu-latest]
     steps:
     - name: Check-out code
-      uses: actions/checkout@v4
+      uses: actions/checkout@v5
       with:
         show-progress: false
     - name: Set up Go using version from .go-version
-      uses: actions/setup-go@v5
+      uses: actions/setup-go@v6
       with:
         go-version-file: '.go-version'
     - name: Run unit tests
@@ -63,11 +63,11 @@ jobs:
     runs-on: [windows-2022]
     steps:
       - name: Check-out code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           show-progress: false
       - name: Set up Go using version from .go-version
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v6
         with:
           go-version-file: '.go-version'
       - name: Run unit tests
@@ -89,11 +89,11 @@ jobs:
     runs-on: [ubuntu-latest]
     steps:
       - name: Check-out code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           show-progress: false
       - name: Set up Go using version from .go-version
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v6
         with:
           go-version-file: '.go-version'
       - name: Run integration tests
@@ -124,11 +124,11 @@ jobs:
     runs-on: [ubuntu-latest]
     steps:
     - name: Check-out code
-      uses: actions/checkout@v4
+      uses: actions/checkout@v5
       with:
         show-progress: false
     - name: Set up Go using version from .go-version
-      uses: actions/setup-go@v5
+      uses: actions/setup-go@v6
       with:
         go-version-file: '.go-version'
     - name: Run golangci-lint
@@ -141,11 +141,11 @@ jobs:
     runs-on: [macos-latest]
     steps:
       - name: Check-out code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           show-progress: false
       - name: Set up Go using version from .go-version
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v6
         with:
           go-version-file: '.go-version'
       - name: Run golangci-lint
@@ -158,11 +158,11 @@ jobs:
     runs-on: [ubuntu-latest]
     steps:
     - name: Check-out code
-      uses: actions/checkout@v4
+      uses: actions/checkout@v5
       with:
         show-progress: false
     - name: Set up Go using version from .go-version
-      uses: actions/setup-go@v5
+      uses: actions/setup-go@v6
       with:
         go-version-file: '.go-version'
     - name: Build Antrea binaries for amd64
@@ -195,11 +195,11 @@ jobs:
     runs-on: [ubuntu-latest]
     steps:
     - name: Check-out code
-      uses: actions/checkout@v4
+      uses: actions/checkout@v5
       with:
         show-progress: false
     - name: Set up Go using version from .go-version
-      uses: actions/setup-go@v5
+      uses: actions/setup-go@v6
       with:
         go-version-file: '.go-version'
     - name: Build Antrea windows binaries
@@ -212,11 +212,11 @@ jobs:
     runs-on: [ubuntu-latest]
     steps:
     - name: Check-out code
-      uses: actions/checkout@v4
+      uses: actions/checkout@v5
       with:
         show-progress: false
     - name: Set up Go using version from .go-version
-      uses: actions/setup-go@v5
+      uses: actions/setup-go@v6
       with:
         go-version-file: '.go-version'
     # tidy check need to be run before code generation which will regenerate codes.
@@ -234,11 +234,11 @@ jobs:
     runs-on: [ubuntu-latest]
     steps:
     - name: Check-out code
-      uses: actions/checkout@v4
+      uses: actions/checkout@v5
       with:
         show-progress: false
     - name: Set up Go using version from .go-version
-      uses: actions/setup-go@v5
+      uses: actions/setup-go@v6
       with:
         go-version-file: '.go-version'
     - name: Run verify scripts
@@ -272,11 +272,11 @@ jobs:
     runs-on: [ubuntu-latest]
     steps:
       - name: Check-out code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           show-progress: false
       - name: Set up Go using version from .go-version
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v6
         with:
           go-version-file: '.go-version'
       - name: Run Go benchmark test

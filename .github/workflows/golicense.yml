@@ -18,7 +18,7 @@ jobs:
     name: Check whether tests need to be run based on diff
     runs-on: [ubuntu-latest]
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v5
       with:
         fetch-depth: 0
         show-progress: false
@@ -34,15 +34,15 @@ jobs:
     if: ${{ needs.check-changes.outputs.has_changes == 'yes' || github.event_name != 'pull_request' }}
     runs-on: [ubuntu-latest]
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v5
       with:
         show-progress: false
     - name: Set up Go using version from .go-version
-      uses: actions/setup-go@v5
+      uses: actions/setup-go@v6
       with:
         go-version-file: '.go-version'
     - name: Cache licensing information for dependencies
-      uses: actions/cache@v4
+      uses: actions/cache@v5
       id: cache
       env:
         cache-name: cache-lichen-deps-licensing-info
@@ -63,7 +63,7 @@ jobs:
         ./ci/golicense/run.sh ./antrea-bins ./license-reports
     - name: Upload licensing information
       if: ${{ always() }}
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v5
       with:
         name: licenses.deps
         path: license-reports/ALL.deps.txt

@@ -31,14 +31,14 @@ jobs:
     if: ${{ github.actor == 'dependabot[bot]' && contains(github.event.pull_request.labels.*.name, 'dependencies') && contains(github.event.pull_request.labels.*.name, 'go') }}
     runs-on: [ubuntu-latest]
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v5
       with:
         # Check out the pull request HEAD
         ref: ${{ github.event.pull_request.head.sha }}
         token: ${{ secrets.ANTREA_BOT_WRITE_PAT }}
         show-progress: false
     - name: Set up Go using version from go.mod
-      uses: actions/setup-go@v5
+      uses: actions/setup-go@v6
       with:
         go-version-file: 'go.mod'
     - name: Run go mod tidy
@@ -49,7 +49,7 @@ jobs:
       # "dependencies" and "go" labels.
       run: make tidy
     - name: Commit changes
-      uses: stefanzweifel/git-auto-commit-action@v6
+      uses: stefanzweifel/git-auto-commit-action@v7
       with:
         commit_message: Go tidiness for Dependabot PR
         commit_options: '--no-verify'

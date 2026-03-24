@@ -11,13 +11,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Check out code into the Go module directory
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           fetch-depth: 0
           show-progress: false
 
       - name: Set up Go using version from .go-version
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v6
         with:
           go-version-file: '.go-version'
 
