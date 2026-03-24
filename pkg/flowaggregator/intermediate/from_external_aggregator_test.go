@@ -210,6 +210,23 @@ func TestIsGateway(t *testing.T) {
 			},
 			want: true,
 		},
+		{
+			// In a dual-stack cluster, protobuf may encode an IPv4 address as a
+			// 16-byte IPv4-in-IPv6 slice.
+			name: "IPv4-mapped IPv6 gateway (dual-stack)",
+			ip:   []byte{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0xff, 0xff, 10, 244, 2, 1},
+			setupIndexer: func() cache.Indexer {
+				return &mockIndexer{
+					mockByIndex: func(indexName, indexedValue string) ([]interface{}, error) {
+						if indexedValue == "10.244.2.1" {
+							return []interface{}{""}, nil
+						}
+						return []interface{}{}, nil
+					},
+				}
+			},
+			want: true,
+		},
 	}
 
 	for _, tc := range testCases {
