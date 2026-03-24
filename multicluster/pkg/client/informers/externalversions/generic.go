@@ -19,8 +19,8 @@ package externalversions
 import (
 	fmt "fmt"
 
-	v1alpha1 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha1"
-	v1alpha2 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha2"
+	v1alpha1 "antrea.io/antrea/v2/multicluster/apis/multicluster/v1alpha1"
+	v1alpha2 "antrea.io/antrea/v2/multicluster/apis/multicluster/v1alpha2"
 	schema "k8s.io/apimachinery/pkg/runtime/schema"
 	cache "k8s.io/client-go/tools/cache"
 )

@@ -30,7 +30,7 @@ limitations under the License.
 
 Modifies:
 - Replace k8s.io/kubernetes/pkg/controller/nodeipam/ipam import with
-  antrea.io/antrea/third_party/ipam/nodeipam/ipam
+  antrea.io/antrea/v2/third_party/nodeipam/ipam
 - Remove recorder from rangeAllocator type, NewCIDRRangeAllocator(), RecordNodeStatusChange() calls
 - Run() takes stopCh <-chan struct{} instead of context.Context
 */
@@ -54,9 +54,9 @@ import (
 	"k8s.io/client-go/util/workqueue"
 	"k8s.io/klog/v2"
 
-	nodeutil "antrea.io/antrea/third_party/ipam/controller_util_node"
-	"antrea.io/antrea/third_party/ipam/nodeipam/ipam/cidrset"
-	utilnode "antrea.io/antrea/third_party/ipam/util_node"
+	nodeutil "antrea.io/antrea/v2/third_party/ipam/controller_util_node"
+	"antrea.io/antrea/v2/third_party/ipam/nodeipam/ipam/cidrset"
+	utilnode "antrea.io/antrea/v2/third_party/ipam/util_node"
 )
 
 type rangeAllocator struct {

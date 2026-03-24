@@ -24,9 +24,9 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 
-	"antrea.io/antrea/pkg/agent/config"
-	binding "antrea.io/antrea/pkg/ovs/openflow"
-	openflowtest "antrea.io/antrea/pkg/ovs/openflow/testing"
+	"antrea.io/antrea/v2/pkg/agent/config"
+	binding "antrea.io/antrea/v2/pkg/ovs/openflow"
+	openflowtest "antrea.io/antrea/v2/pkg/ovs/openflow/testing"
 )
 
 func multicastInitFlows(isEncap bool) []string {

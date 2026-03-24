@@ -23,9 +23,9 @@ import (
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/mock/gomock"
 
-	"antrea.io/antrea/pkg/flowaggregator/apis"
-	"antrea.io/antrea/pkg/flowaggregator/intermediate"
-	queriertest "antrea.io/antrea/pkg/flowaggregator/querier/testing"
+	"antrea.io/antrea/v2/pkg/flowaggregator/apis"
+	"antrea.io/antrea/v2/pkg/flowaggregator/intermediate"
+	queriertest "antrea.io/antrea/v2/pkg/flowaggregator/querier/testing"
 )
 
 var (

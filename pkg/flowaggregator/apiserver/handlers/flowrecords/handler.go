@@ -19,9 +19,9 @@ import (
 	"net/http"
 	"strconv"
 
-	"antrea.io/antrea/pkg/flowaggregator/apis"
-	"antrea.io/antrea/pkg/flowaggregator/intermediate"
-	"antrea.io/antrea/pkg/flowaggregator/querier"
+	"antrea.io/antrea/v2/pkg/flowaggregator/apis"
+	"antrea.io/antrea/v2/pkg/flowaggregator/intermediate"
+	"antrea.io/antrea/v2/pkg/flowaggregator/querier"
 )
 
 // HandleFunc returns the function which can handle the /flowrecords API request.

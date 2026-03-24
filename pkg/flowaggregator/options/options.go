@@ -21,9 +21,9 @@ import (
 
 	"k8s.io/klog/v2"
 
-	flowaggregatorconfig "antrea.io/antrea/pkg/config/flowaggregator"
-	"antrea.io/antrea/pkg/util/flowexport"
-	"antrea.io/antrea/pkg/util/yaml"
+	flowaggregatorconfig "antrea.io/antrea/v2/pkg/config/flowaggregator"
+	"antrea.io/antrea/v2/pkg/util/flowexport"
+	"antrea.io/antrea/v2/pkg/util/yaml"
 )
 
 type Options struct {

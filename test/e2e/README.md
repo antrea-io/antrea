@@ -137,7 +137,7 @@ To workaround this issue, you can either:
 
 Make sure that your cluster was provisioned and that the Antrea build artifacts
 were pushed to all the Nodes. You can then run the tests from the top-level
-directory with `go test -v -timeout=30m antrea.io/antrea/test/e2e`
+directory with `go test -v -timeout=30m antrea.io/antrea/v2/test/e2e`
 (the `-v` enables verbose output).
 
 ### Running the tests with vagrant
@@ -149,7 +149,7 @@ therefore need the following steps:
 1. `./infra/vagrant/provision.sh`
 2. `make`
 3. `./infra/vagrant/push_antrea.sh`
-4. `go test -v -timeout=30m antrea.io/antrea/test/e2e`
+4. `go test -v -timeout=30m antrea.io/antrea/v2/test/e2e`
 
 If you need to test an updated version of Antrea, just run
 `./infra/vagrant/push_antrea.sh` and then run the tests again.
@@ -184,7 +184,7 @@ Third, the `antrea.yml` (and `antrea-windows.yml` if the cluster has Windows Nod
 Now you can start e2e tests using the command below:
 
 ```bash
-go test -v antrea.io/antrea/test/e2e -provider=remote
+go test -v antrea.io/antrea/v2/test/e2e -provider=remote
 ```
 
 You can specify ssh and kubeconfig locations with `-remote.sshconfig` and `-remote.kubeconfig`. The default location of `-remote.sshconfig` is `$HOME/.ssh/config` and the default location of `-remote.kubeconfig` is `$HOME/.kube/config`.
@@ -214,12 +214,12 @@ Antrea manifest to the control-plane Docker container:
 
 ```bash
 ./hack/generate-manifest.sh | docker exec -i kind-control-plane dd of=/root/antrea.yml
-go test -timeout=75m -v antrea.io/antrea/test/e2e -provider=kind
+go test -timeout=75m -v antrea.io/antrea/v2/test/e2e -provider=kind
 ```
 
 The default timeout of `go test` is [10 minutes](https://pkg.go.dev/cmd/go#hdr-Testing_flags).
 If you encounter any timeout issue during e2e, you can try to increase timeout first. Some cases
-take more than 10 minutes. eg: `go test -v -timeout=20m antrea.io/antrea/test/e2e -run=TestAntreaPolicy -provider=kind`.
+take more than 10 minutes. eg: `go test -v -timeout=20m antrea.io/antrea/v2/test/e2e -run=TestAntreaPolicy -provider=kind`.
 
 `generate-manifest.sh` supports generating the Antrea manifest with different
 Antrea configurations. Run `./hack/generate-manifest.sh --help` to see the
@@ -244,7 +244,7 @@ temporary directory. You may also choose your own directory using
 
 ```bash
 mkdir antrea-test-logs
-go test -count=1 -v -run=TestDeletePod antrea.io/antrea/test/e2e --logs-export-dir `pwd`/antrea-test-logs
+go test -count=1 -v -run=TestDeletePod antrea.io/antrea/v2/test/e2e --logs-export-dir `pwd`/antrea-test-logs
 ```
 
 If the user provides a log directory which was used for a previous run, existing
@@ -261,7 +261,7 @@ enabled explicitly.
 * To load Antrea into the cluster with Prometheus enabled, use:
 `./infra/vagrant/push_antrea.sh --prometheus`
 * To run the Prometheus tests within the e2e suite, use:
-`go test -v antrea.io/antrea/test/e2e --prometheus`
+`go test -v antrea.io/antrea/v2/test/e2e --prometheus`
 
 ## Running the performance test
 
@@ -269,7 +269,7 @@ To run all benchmarks, without the standard e2e tests:
 
 ```bash
 go test -v -timeout=30m -run=XXX -bench=. \
-    antrea.io/antrea/test/e2e \
+    antrea.io/antrea/v2/test/e2e \
     -perf.http.concurrency=16
 ```
 
@@ -281,7 +281,7 @@ If you would like to run the performance tests in a different scale, you could r
 
 ```bash
 go test -v -timeout=30m -run=XXX -bench=BenchmarkCustomize \
-    antrea.io/antrea/test/e2e \
+    antrea.io/antrea/v2/test/e2e \
     -perf.http.requests=5000 \
     -perf.http.policy_rules=1000 \
     -perf.http.concurrency=16

@@ -18,9 +18,9 @@ import (
 	"fmt"
 	"strings"
 
-	"antrea.io/antrea/pkg/agent/flowexporter/connection"
-	"antrea.io/antrea/pkg/apis/controlplane/v1beta2"
-	flowpb "antrea.io/antrea/pkg/apis/flow/v1alpha1"
+	"antrea.io/antrea/v2/pkg/agent/flowexporter/connection"
+	"antrea.io/antrea/v2/pkg/apis/controlplane/v1beta2"
+	flowpb "antrea.io/antrea/v2/pkg/apis/flow/v1alpha1"
 )
 
 const (

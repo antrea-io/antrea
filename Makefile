@@ -96,7 +96,7 @@ uninstall-hooks:
 .PHONY: bin
 bin:
 	@mkdir -p $(BINDIR)
-	GOOS=linux $(GO) build -o $(BINDIR) $(GOFLAGS) -ldflags '$(LDFLAGS)' antrea.io/antrea/cmd/...
+	GOOS=linux $(GO) build -o $(BINDIR) $(GOFLAGS) -ldflags '$(LDFLAGS)' antrea.io/antrea/v2/cmd/...
 
 .trivy-bin:
 	curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh -s -- -b $@ v0.56.2
@@ -111,32 +111,32 @@ trivy-scan: .trivy-bin check-TRIVY_TARGET_IMAGE
 .PHONY: antrea-agent
 antrea-agent:
 	@mkdir -p $(BINDIR)
-	GOOS=linux $(GO) build -o $(BINDIR) $(GOFLAGS) -ldflags '$(LDFLAGS)' antrea.io/antrea/cmd/antrea-agent
+	GOOS=linux $(GO) build -o $(BINDIR) $(GOFLAGS) -ldflags '$(LDFLAGS)' antrea.io/antrea/v2/cmd/antrea-agent
 
 .PHONY: antrea-agent-release
 antrea-agent-release:
 	@mkdir -p $(BINDIR)
-	$(GO) build -o $(BINDIR)/$(ANTREA_AGENT_BINARY_NAME) $(GOFLAGS) -ldflags '$(LDFLAGS)' antrea.io/antrea/cmd/antrea-agent
+	$(GO) build -o $(BINDIR)/$(ANTREA_AGENT_BINARY_NAME) $(GOFLAGS) -ldflags '$(LDFLAGS)' antrea.io/antrea/v2/cmd/antrea-agent
 
 .PHONY: antrea-agent-simulator
 antrea-agent-simulator:
 	@mkdir -p $(BINDIR)
-	GOOS=linux $(GO) build -o $(BINDIR) $(GOFLAGS) -ldflags '$(LDFLAGS)' antrea.io/antrea/cmd/antrea-agent-simulator
+	GOOS=linux $(GO) build -o $(BINDIR) $(GOFLAGS) -ldflags '$(LDFLAGS)' antrea.io/antrea/v2/cmd/antrea-agent-simulator
 
 .PHONY: antrea-agent-instr-binary
 antrea-agent-instr-binary:
 	@mkdir -p $(BINDIR)
-	GOOS=linux $(GO) build -cover -o $(BINDIR)/antrea-agent-coverage -coverpkg=antrea.io/antrea/cmd/antrea-agent,antrea.io/antrea/pkg/... $(GOFLAGS) -ldflags '$(LDFLAGS)' antrea.io/antrea/cmd/antrea-agent
+	GOOS=linux $(GO) build -cover -o $(BINDIR)/antrea-agent-coverage -coverpkg=antrea.io/antrea/v2/cmd/antrea-agent,antrea.io/antrea/v2/pkg/... $(GOFLAGS) -ldflags '$(LDFLAGS)' antrea.io/antrea/v2/cmd/antrea-agent
 
 .PHONY: antrea-controller
 antrea-controller:
 	@mkdir -p $(BINDIR)
-	GOOS=linux $(GO) build -o $(BINDIR) $(GOFLAGS) -ldflags '$(LDFLAGS)' antrea.io/antrea/cmd/antrea-controller
+	GOOS=linux $(GO) build -o $(BINDIR) $(GOFLAGS) -ldflags '$(LDFLAGS)' antrea.io/antrea/v2/cmd/antrea-controller
 
 .PHONY: antrea-sysctl-init
 antrea-sysctl-init:
 	@mkdir -p $(BINDIR)
-	GOOS=linux $(GO) build -o $(BINDIR) $(GOFLAGS) -ldflags '$(LDFLAGS)' antrea.io/antrea/cmd/antrea-sysctl-init
+	GOOS=linux $(GO) build -o $(BINDIR) $(GOFLAGS) -ldflags '$(LDFLAGS)' antrea.io/antrea/v2/cmd/antrea-sysctl-init
 
 .PHONY: .coverage
 .coverage:
@@ -145,37 +145,37 @@ antrea-sysctl-init:
 .PHONY: antrea-controller-instr-binary
 antrea-controller-instr-binary:
 	@mkdir -p $(BINDIR)
-	GOOS=linux $(GO) build -cover -o $(BINDIR)/antrea-controller-coverage -coverpkg=antrea.io/antrea/cmd/antrea-controller,antrea.io/antrea/pkg/... $(GOFLAGS) -ldflags '$(LDFLAGS)' antrea.io/antrea/cmd/antrea-controller
+	GOOS=linux $(GO) build -cover -o $(BINDIR)/antrea-controller-coverage -coverpkg=antrea.io/antrea/v2/cmd/antrea-controller,antrea.io/antrea/v2/pkg/... $(GOFLAGS) -ldflags '$(LDFLAGS)' antrea.io/antrea/v2/cmd/antrea-controller
 
 .PHONY: antrea-cni
 antrea-cni:
 	@mkdir -p $(BINDIR)
-	GOOS=linux $(GO) build -o $(BINDIR) $(GOFLAGS) -ldflags '$(LDFLAGS)' antrea.io/antrea/cmd/antrea-cni
+	GOOS=linux $(GO) build -o $(BINDIR) $(GOFLAGS) -ldflags '$(LDFLAGS)' antrea.io/antrea/v2/cmd/antrea-cni
 
 .PHONY: antrea-cni
 antrea-cni-release:
 	@mkdir -p $(BINDIR)
-	$(GO) build -o $(BINDIR)/$(ANTREA_CNI_BINARY_NAME) $(GOFLAGS) -ldflags '$(LDFLAGS)' antrea.io/antrea/cmd/antrea-cni
+	$(GO) build -o $(BINDIR)/$(ANTREA_CNI_BINARY_NAME) $(GOFLAGS) -ldflags '$(LDFLAGS)' antrea.io/antrea/v2/cmd/antrea-cni
 
 .PHONY: antctl-instr-binary
 antctl-instr-binary:
 	@mkdir -p $(BINDIR)
-	GOOS=linux $(GO) build -cover -o $(BINDIR)/antctl-coverage -coverpkg=antrea.io/antrea/cmd/antctl,antrea.io/antrea/pkg/... $(GOFLAGS) -ldflags '$(LDFLAGS)' antrea.io/antrea/cmd/antctl
+	GOOS=linux $(GO) build -cover -o $(BINDIR)/antctl-coverage -coverpkg=antrea.io/antrea/v2/cmd/antctl,antrea.io/antrea/v2/pkg/... $(GOFLAGS) -ldflags '$(LDFLAGS)' antrea.io/antrea/v2/cmd/antctl
 
 .PHONY: windows-bin
 windows-bin:
 	@mkdir -p $(BINDIR)
-	GOOS=windows $(GO) build -o $(BINDIR) $(GOFLAGS) -ldflags '$(LDFLAGS)' antrea.io/antrea/cmd/antrea-cni antrea.io/antrea/cmd/antrea-agent antrea.io/antrea/cmd/antctl
+	GOOS=windows $(GO) build -o $(BINDIR) $(GOFLAGS) -ldflags '$(LDFLAGS)' antrea.io/antrea/v2/cmd/antrea-cni antrea.io/antrea/v2/cmd/antrea-agent antrea.io/antrea/v2/cmd/antctl
 
 .PHONY: flow-aggregator
 flow-aggregator:
 	@mkdir -p $(BINDIR)
-	GOOS=linux $(GO) build -o $(BINDIR) $(GOFLAGS) -ldflags '$(LDFLAGS)' antrea.io/antrea/cmd/flow-aggregator
+	GOOS=linux $(GO) build -o $(BINDIR) $(GOFLAGS) -ldflags '$(LDFLAGS)' antrea.io/antrea/v2/cmd/flow-aggregator
 
 .PHONY: flow-aggregator-instr-binary
 flow-aggregator-instr-binary:
 	@mkdir -p $(BINDIR)
-	GOOS=linux $(GO) build -cover -o $(BINDIR)/flow-aggregator-coverage -coverpkg=antrea.io/antrea/cmd/flow-aggregator,antrea.io/antrea/pkg/... $(GOFLAGS) -ldflags '$(LDFLAGS)' antrea.io/antrea/cmd/flow-aggregator
+	GOOS=linux $(GO) build -cover -o $(BINDIR)/flow-aggregator-coverage -coverpkg=antrea.io/antrea/v2/cmd/flow-aggregator,antrea.io/antrea/v2/pkg/... $(GOFLAGS) -ldflags '$(LDFLAGS)' antrea.io/antrea/v2/cmd/flow-aggregator
 
 .PHONY: test-unit test-integration
 ifeq ($(UNAME_S),Linux)
@@ -213,10 +213,10 @@ DOCKER_ENV := \
 		-e "GOCACHE=/tmp/gocache" \
 		-e "GOPATH=/tmp/gopath" \
 		-e "TEST_ARGS=$(TEST_ARGS)" \
-		-w /usr/src/antrea.io/antrea \
+		-w /usr/src/antrea.io/antrea/v2 \
 		-v $(DOCKER_CACHE)/gopath:/tmp/gopath \
 		-v $(DOCKER_CACHE)/gocache:/tmp/gocache \
-		-v $(CURDIR):/usr/src/antrea.io/antrea \
+		-v $(CURDIR):/usr/src/antrea.io/antrea/v2 \
 		golang:$(GO_VERSION)
 
 .PHONY: docker-bin
@@ -242,11 +242,11 @@ docker-test-integration: .coverage
 		-e "GOPATH=/tmp/gopath" \
 		-e "INCONTAINER=true" \
 		-e "TEST_ARGS=$(TEST_ARGS)" \
-		-w /usr/src/antrea.io/antrea \
+		-w /usr/src/antrea.io/antrea/v2 \
 		-v $(DOCKER_CACHE)/gopath:/tmp/gopath \
 		-v $(DOCKER_CACHE)/gocache:/tmp/gocache \
-		-v $(CURDIR)/.coverage:/usr/src/antrea.io/antrea/.coverage \
-		-v $(CURDIR):/usr/src/antrea.io/antrea:ro \
+		-v $(CURDIR)/.coverage:/usr/src/antrea.io/antrea/v2/.coverage \
+		-v $(CURDIR):/usr/src/antrea.io/antrea/v2:ro \
 		-v /lib/modules:/lib/modules \
 		--sysctl net.ipv6.conf.all.disable_ipv6=0 \
 		antrea/test test-integration $(USERID) $(GRPID)
@@ -260,7 +260,7 @@ docker-tidy: $(DOCKER_CACHE)
 
 ANTCTL_BINARIES := antctl-darwin antctl-linux antctl-windows
 $(ANTCTL_BINARIES): antctl-%:
-	@GOOS=$* $(GO) build -o $(BINDIR)/$@ $(GOFLAGS) -ldflags '$(LDFLAGS)' antrea.io/antrea/cmd/antctl
+	@GOOS=$* $(GO) build -o $(BINDIR)/$@ $(GOFLAGS) -ldflags '$(LDFLAGS)' antrea.io/antrea/v2/cmd/antctl
 	@if [[ $@ != *windows ]]; then \
 	  chmod 0755 $(BINDIR)/$@; \
 	else \
@@ -272,7 +272,7 @@ antctl: antctl-release
 
 .PHONY: antctl-release
 antctl-release:
-	$(GO) build -o $(BINDIR)/$(ANTCTL_BINARY_NAME) $(GOFLAGS) -ldflags '$(LDFLAGS)' antrea.io/antrea/cmd/antctl
+	$(GO) build -o $(BINDIR)/$(ANTCTL_BINARY_NAME) $(GOFLAGS) -ldflags '$(LDFLAGS)' antrea.io/antrea/v2/cmd/antctl
 
 .PHONY: check-copyright
 check-copyright: 
@@ -288,15 +288,15 @@ add-copyright:
 .linux-test-unit: .coverage
 	@echo
 	@echo "==> Running unit tests <=="
-	CGO_ENABLED=1 $(GO) test $(TEST_ARGS) -race -coverpkg=antrea.io/antrea/cmd/...,antrea.io/antrea/pkg/...,antrea.io/antrea/multicluster/cmd/...,antrea.io/antrea/multicluster/controllers/... \
+	CGO_ENABLED=1 $(GO) test $(TEST_ARGS) -race -coverpkg=antrea.io/antrea/v2/cmd/...,antrea.io/antrea/v2/pkg/...,antrea.io/antrea/v2/multicluster/cmd/...,antrea.io/antrea/v2/multicluster/controllers/... \
 	  -coverprofile=.coverage/coverage-unit.txt -covermode=atomic \
-	  antrea.io/antrea/cmd/... antrea.io/antrea/pkg/... antrea.io/antrea/multicluster/cmd/... antrea.io/antrea/multicluster/controllers/...
+	  antrea.io/antrea/v2/cmd/... antrea.io/antrea/v2/pkg/... antrea.io/antrea/v2/multicluster/cmd/... antrea.io/antrea/v2/multicluster/controllers/...
 
 .PHONY: .windows-test-unit
 .windows-test-unit: .coverage
 	@echo
 	@echo "==> Running unit tests <=="
-	@pkgs=$$($(GO) list antrea.io/antrea/cmd/... antrea.io/antrea/pkg/... | grep -v antrea.io/antrea/pkg/controller); \
+	@pkgs=$$($(GO) list antrea.io/antrea/v2/cmd/... antrea.io/antrea/v2/pkg/... | grep -v antrea.io/antrea/v2/pkg/controller); \
 	CGO_ENABLED=1 $(GO) test $(TEST_ARGS) -race -coverpkg=$$(echo "$$pkgs" | tr '\n' ',' | sed 's/,$$//') \
 	  -coverprofile=.coverage/coverage-unit.txt -covermode=atomic \
 	  $$pkgs
@@ -311,7 +311,7 @@ tidy:
 	@echo
 	@echo "==> Running integration tests <=="
 	@echo "SOME TESTS WILL FAIL IF NOT RUN AS ROOT!"
-	$(GO) test $(TEST_ARGS) -v -coverpkg=antrea.io/antrea/pkg/... -coverprofile=.coverage/coverage-integration.txt -covermode=atomic antrea.io/antrea/test/integration/...
+	$(GO) test $(TEST_ARGS) -v -coverpkg=antrea.io/antrea/v2/pkg/... -coverprofile=.coverage/coverage-integration.txt -covermode=atomic antrea.io/antrea/v2/test/integration/...
 
 test-tidy:
 	@echo

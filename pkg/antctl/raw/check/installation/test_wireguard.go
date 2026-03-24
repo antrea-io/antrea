@@ -21,8 +21,8 @@ import (
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	agentypes "antrea.io/antrea/pkg/agent/types"
-	apis "antrea.io/antrea/pkg/apis"
+	agentypes "antrea.io/antrea/v2/pkg/agent/types"
+	apis "antrea.io/antrea/v2/pkg/apis"
 )
 
 const (

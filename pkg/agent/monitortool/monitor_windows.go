@@ -19,9 +19,9 @@ package monitortool
 import (
 	coreinformers "k8s.io/client-go/informers/core/v1"
 
-	"antrea.io/antrea/pkg/agent/client"
-	"antrea.io/antrea/pkg/agent/config"
-	crdinformers "antrea.io/antrea/pkg/client/informers/externalversions/crd/v1alpha1"
+	"antrea.io/antrea/v2/pkg/agent/client"
+	"antrea.io/antrea/v2/pkg/agent/config"
+	crdinformers "antrea.io/antrea/v2/pkg/client/informers/externalversions/crd/v1alpha1"
 )
 
 type NodeLatencyMonitor struct{}

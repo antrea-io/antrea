@@ -39,12 +39,12 @@ import (
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/utils/ptr"
 
-	"antrea.io/antrea/pkg/agent/nodeportlocal/portcache"
-	portcachetesting "antrea.io/antrea/pkg/agent/nodeportlocal/portcache/testing"
-	"antrea.io/antrea/pkg/agent/nodeportlocal/rules"
-	rulestesting "antrea.io/antrea/pkg/agent/nodeportlocal/rules/testing"
-	npltesting "antrea.io/antrea/pkg/agent/nodeportlocal/testing"
-	"antrea.io/antrea/pkg/agent/nodeportlocal/types"
+	"antrea.io/antrea/v2/pkg/agent/nodeportlocal/portcache"
+	portcachetesting "antrea.io/antrea/v2/pkg/agent/nodeportlocal/portcache/testing"
+	"antrea.io/antrea/v2/pkg/agent/nodeportlocal/rules"
+	rulestesting "antrea.io/antrea/v2/pkg/agent/nodeportlocal/rules/testing"
+	npltesting "antrea.io/antrea/v2/pkg/agent/nodeportlocal/testing"
+	"antrea.io/antrea/v2/pkg/agent/nodeportlocal/types"
 )
 
 const (

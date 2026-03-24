@@ -27,9 +27,9 @@ import (
 
 	"k8s.io/klog/v2"
 
-	"antrea.io/antrea/pkg/agent/util/iptables"
-	"antrea.io/antrea/pkg/agent/util/nftables"
-	"antrea.io/antrea/pkg/util/logdir"
+	"antrea.io/antrea/v2/pkg/agent/util/iptables"
+	"antrea.io/antrea/v2/pkg/agent/util/nftables"
+	"antrea.io/antrea/v2/pkg/util/logdir"
 )
 
 // nftablesIPv4Supported and nftablesIPv6Supported check if the kernel supports nftables.

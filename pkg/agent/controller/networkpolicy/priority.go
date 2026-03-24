@@ -21,7 +21,7 @@ import (
 
 	"k8s.io/klog/v2"
 
-	"antrea.io/antrea/pkg/agent/types"
+	"antrea.io/antrea/v2/pkg/agent/types"
 )
 
 const (

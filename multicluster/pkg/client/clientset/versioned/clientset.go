@@ -20,8 +20,8 @@ import (
 	fmt "fmt"
 	http "net/http"
 
-	multiclusterv1alpha1 "antrea.io/antrea/multicluster/pkg/client/clientset/versioned/typed/multicluster/v1alpha1"
-	multiclusterv1alpha2 "antrea.io/antrea/multicluster/pkg/client/clientset/versioned/typed/multicluster/v1alpha2"
+	multiclusterv1alpha1 "antrea.io/antrea/v2/multicluster/pkg/client/clientset/versioned/typed/multicluster/v1alpha1"
+	multiclusterv1alpha2 "antrea.io/antrea/v2/multicluster/pkg/client/clientset/versioned/typed/multicluster/v1alpha2"
 	discovery "k8s.io/client-go/discovery"
 	rest "k8s.io/client-go/rest"
 	flowcontrol "k8s.io/client-go/util/flowcontrol"

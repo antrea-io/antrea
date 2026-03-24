@@ -74,8 +74,8 @@ function tidy {
     docker run --rm -u "$(id -u):$(id -g)" \
       -e "GOCACHE=/tmp/gocache" \
       -e "GOPATH=/tmp/gopath" \
-      -w /usr/src/antrea.io/antrea \
-      -v "$(dirname "$THIS_DIR"):/usr/src/antrea.io/antrea" \
+      -w /usr/src/antrea.io/antrea/v2 \
+      -v "$(dirname "$THIS_DIR"):/usr/src/antrea.io/antrea/v2" \
       golang:$TARGET_GO_VERSION bash -c "$TIDY_COMMAND"
   fi
 }

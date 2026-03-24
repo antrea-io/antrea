@@ -19,8 +19,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"antrea.io/antrea/pkg/agent/config"
-	"antrea.io/antrea/pkg/util/runtime"
+	"antrea.io/antrea/v2/pkg/agent/config"
+	"antrea.io/antrea/v2/pkg/util/runtime"
 )
 
 func podConnectivityInitFlows(

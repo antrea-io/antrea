@@ -23,14 +23,14 @@ import (
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/mock/gomock"
 
-	"antrea.io/antrea/pkg/agent/flowexporter/connection"
-	"antrea.io/antrea/pkg/agent/flowexporter/utils"
-	"antrea.io/antrea/pkg/agent/types"
-	"antrea.io/antrea/pkg/apis/controlplane/v1beta2"
-	queriertest "antrea.io/antrea/pkg/querier/testing"
-	objectstoretest "antrea.io/antrea/pkg/util/objectstore/testing"
+	"antrea.io/antrea/v2/pkg/agent/flowexporter/connection"
+	"antrea.io/antrea/v2/pkg/agent/flowexporter/utils"
+	"antrea.io/antrea/v2/pkg/agent/types"
+	"antrea.io/antrea/v2/pkg/apis/controlplane/v1beta2"
+	queriertest "antrea.io/antrea/v2/pkg/querier/testing"
+	objectstoretest "antrea.io/antrea/v2/pkg/util/objectstore/testing"
 
-	"antrea.io/antrea/pkg/agent/metrics"
+	"antrea.io/antrea/v2/pkg/agent/metrics"
 )
 
 const (

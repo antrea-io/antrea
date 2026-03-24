@@ -32,7 +32,7 @@ Original file https://raw.githubusercontent.com/kubernetes/kubernetes/refs/tags/
 
 Modifies:
 
-- Replace import utilfeature "k8s.io/apiserver/pkg/util/feature" with "antrea.io/antrea/pkg/features".
+- Replace import utilfeature "k8s.io/apiserver/pkg/util/feature" with "antrea.io/antrea/v2/pkg/features".
 - Remove import "k8s.io/kubernetes/pkg/features".
 - Remove import "sort".
 - Change type of "EndpointsMap" from "map[ServicePortName][]Endpoint" to "map[ServicePortName]map[string]Endpoint".
@@ -52,7 +52,7 @@ import (
 	"k8s.io/klog/v2"
 	utilnet "k8s.io/utils/net"
 
-	"antrea.io/antrea/pkg/features"
+	"antrea.io/antrea/v2/pkg/features"
 )
 
 // EndpointSliceCache is used as a cache of EndpointSlice information.

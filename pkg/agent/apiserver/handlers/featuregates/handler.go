@@ -21,8 +21,8 @@ import (
 
 	"k8s.io/klog/v2"
 
-	"antrea.io/antrea/pkg/agent/apis"
-	"antrea.io/antrea/pkg/features"
+	"antrea.io/antrea/v2/pkg/agent/apis"
+	"antrea.io/antrea/v2/pkg/features"
 )
 
 // HandleFunc returns the function which can handle queries issued by 'antctl get featuregates' command.

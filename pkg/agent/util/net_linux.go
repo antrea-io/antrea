@@ -33,9 +33,9 @@ import (
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/klog/v2"
 
-	utilnetlink "antrea.io/antrea/pkg/agent/util/netlink"
-	"antrea.io/antrea/pkg/agent/util/sysctl"
-	"antrea.io/antrea/pkg/ovs/ovsconfig"
+	utilnetlink "antrea.io/antrea/v2/pkg/agent/util/netlink"
+	"antrea.io/antrea/v2/pkg/agent/util/sysctl"
+	"antrea.io/antrea/v2/pkg/ovs/ovsconfig"
 )
 
 var (

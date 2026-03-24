@@ -20,7 +20,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"antrea.io/antrea/pkg/ovs/ovsconfig"
+	"antrea.io/antrea/v2/pkg/ovs/ovsconfig"
 )
 
 func TestNetworkConfig_NeedsTunnelToPeer(t *testing.T) {

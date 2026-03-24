@@ -26,8 +26,8 @@ import (
 	"k8s.io/apimachinery/pkg/util/sets"
 	"sigs.k8s.io/yaml"
 
-	"antrea.io/antrea/pkg/antctl/raw"
-	agentconfig "antrea.io/antrea/pkg/config/agent"
+	"antrea.io/antrea/v2/pkg/antctl/raw"
+	agentconfig "antrea.io/antrea/v2/pkg/config/agent"
 )
 
 const (

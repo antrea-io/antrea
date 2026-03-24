@@ -21,7 +21,7 @@ import (
 
 	"k8s.io/klog/v2"
 
-	"antrea.io/antrea/pkg/log"
+	"antrea.io/antrea/v2/pkg/log"
 )
 
 // HandleFunc returns the function which can handle the /loglevel API request.

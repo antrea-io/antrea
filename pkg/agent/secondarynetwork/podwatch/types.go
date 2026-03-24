@@ -15,7 +15,7 @@
 package podwatch
 
 import (
-	"antrea.io/antrea/pkg/agent/cniserver/types"
+	"antrea.io/antrea/v2/pkg/agent/cniserver/types"
 )
 
 type networkType string

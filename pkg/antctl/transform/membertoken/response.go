@@ -17,7 +17,7 @@ package membertoken
 import (
 	corev1 "k8s.io/api/core/v1"
 
-	"antrea.io/antrea/pkg/antctl/transform/common"
+	"antrea.io/antrea/v2/pkg/antctl/transform/common"
 )
 
 type Response struct {
