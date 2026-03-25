@@ -16,6 +16,7 @@ package agent
 
 import (
 	"fmt"
+	"net"
 	"os/exec"
 	"testing"
 
@@ -177,6 +178,60 @@ func TestIPAssigner(t *testing.T) {
 	assert.Equal(t, sets.New[string](), actualIPs, "Actual IPs don't match")
 	_, err = netlink.LinkByName("antrea-ext.20")
 	require.Error(t, err, "VLAN 20 device should be deleted but was not")
+}
+
+func TestIPAssignerIgnoresUserInterfaces(t *testing.T) {
+	nodeLinkName := nodeIntf.Name
+	require.NotEmpty(t, nodeLinkName, "Get Node link failed")
+
+	nodeLink, err := netlink.LinkByName(nodeLinkName)
+	require.NoError(t, err)
+
+	userVLANName := "myvlan.100"
+	userVLAN := &netlink.Vlan{
+		LinkAttrs: netlink.LinkAttrs{
+			Name:        userVLANName,
+			ParentIndex: nodeLink.Attrs().Index,
+		},
+		VlanId: 100,
+	}
+	require.NoError(t, netlink.LinkAdd(userVLAN))
+	require.NoError(t, netlink.LinkSetUp(userVLAN))
+	defer func() {
+		link, err := netlink.LinkByName(userVLANName)
+		require.NoError(t, err)
+		require.NoError(t, netlink.LinkDel(link))
+	}()
+
+	userIP := "192.168.100.10"
+	addr := &netlink.Addr{
+		IPNet: &net.IPNet{
+			IP:   net.ParseIP(userIP),
+			Mask: net.CIDRMask(24, 32),
+		},
+	}
+	require.NoError(t, netlink.AddrAdd(userVLAN, addr))
+
+	ipAssigner, err := ipassigner.NewIPAssigner(nodeLinkName, dummyDeviceName, nil, true)
+	require.NoError(t, err, "Initializing IP assigner failed")
+	defer func() {
+		dummyDevice, err := netlink.LinkByName(dummyDeviceName)
+		if err == nil {
+			netlink.LinkDel(dummyDevice)
+		}
+	}()
+
+	assert.Equal(t, map[string]*crdv1b1.SubnetInfo{}, ipAssigner.AssignedIPs(),
+		"User VLAN IPs should not be loaded")
+
+	require.NoError(t, ipAssigner.InitIPs(map[string]*crdv1b1.SubnetInfo{}))
+
+	link, err := netlink.LinkByName(userVLANName)
+	require.NoError(t, err, "User VLAN interface should still exist after InitIPs")
+	actualIPs, err := listIPAddresses(link)
+	require.NoError(t, err)
+	assert.Equal(t, sets.New(fmt.Sprintf("%s/24", userIP)), actualIPs,
+		"User VLAN IPs should be untouched after reconciliation")
 }
 
 func listIPAddresses(device netlink.Link) (sets.Set[string], error) {
