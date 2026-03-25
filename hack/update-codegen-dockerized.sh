@@ -189,6 +189,7 @@ function generate_antrea_client_code {
     --output-dir "pkg/apiserver/openapi" \
     --output-pkg "${ANTREA_PKG}/pkg/apiserver/openapi" \
     --output-file zz_generated.openapi.go \
+    --output-model-name-file zz_generated_model_name.go \
     --go-header-file hack/boilerplate/license_header.go.txt \
      "${ANTREA_PKG}/pkg/apis/controlplane/v1beta2" \
      "${ANTREA_PKG}/pkg/apis/system/v1beta1" \
