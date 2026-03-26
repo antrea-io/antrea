@@ -25,6 +25,7 @@ import (
 	corelisters "k8s.io/client-go/listers/core/v1"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/klog/v2"
+	utilnet "k8s.io/utils/net"
 
 	crdv1b1 "antrea.io/antrea/v2/pkg/apis/crd/v1beta1"
 	clientsetversioned "antrea.io/antrea/v2/pkg/client/clientset/versioned"
@@ -148,14 +149,13 @@ func (c *AntreaIPAMController) getIPPoolsByPod(namespace, name string) ([]string
 	}
 
 	// Collect specified IPs from the AntreaIPAMPodIP annotation.
-	// Multiple IPs (comma-separated) may be provided, but the caller
-	// (AntreaIPAM.Add) will only consume at most one IPv4 and one IPv6
-	// address. Each IP must belong to the first Pool of the corresponding
-	// IP family listed in the AntreaIPAM annotation.
+	// At most one IPv4 and one IPv6 address may be specified; duplicates
+	// within the same family are rejected.
 	ipStrings := pod.Annotations[annotation.AntreaIPAMPodIPAnnotationKey]
 	ipStrings = strings.ReplaceAll(ipStrings, " ", "")
 	var ipErr error
 	if ipStrings != "" {
+		var hasV4, hasV6 bool
 		splittedIPStrings := strings.Split(ipStrings, annotation.AntreaIPAMAnnotationDelimiter)
 		for _, ipString := range splittedIPStrings {
 			if ipString == "" {
@@ -166,6 +166,21 @@ func (c *AntreaIPAMController) getIPPoolsByPod(namespace, name string) ([]string
 				ipErr = fmt.Errorf("invalid IP annotation %s", ipStrings)
 				ips = nil
 				break
+			}
+			if ip.To4() != nil {
+				if hasV4 {
+					ipErr = fmt.Errorf("multiple IPv4 addresses in annotation %s", ipStrings)
+					ips = nil
+					break
+				}
+				hasV4 = true
+			} else {
+				if hasV6 {
+					ipErr = fmt.Errorf("multiple IPv6 addresses in annotation %s", ipStrings)
+					ips = nil
+					break
+				}
+				hasV6 = true
 			}
 			ips = append(ips, ip)
 		}
@@ -199,6 +214,8 @@ ownerReferenceLoop:
 // getPoolAllocatorsByPod looks up IPPools from the Pod annotation and returns
 // allocators for all valid pools. This supports IPv4, IPv6, and dual-stack
 // configurations where multiple pools (one per IP family) may be specified.
+// When specific IPs are requested, it validates that only one pool of each
+// requested IP family is configured.
 func (c *AntreaIPAMController) getPoolAllocatorsByPod(namespace, podName string) (mineType, []*poolallocator.IPPoolAllocator, []net.IP, *crdv1b1.IPAddressOwner, error) {
 	poolNames, ips, reservedOwner, err := c.getIPPoolsByPod(namespace, podName)
 	if err != nil {
@@ -221,6 +238,31 @@ func (c *AntreaIPAMController) getPoolAllocatorsByPod(namespace, podName string)
 	}
 	if len(allocators) == 0 {
 		return mineTrue, nil, nil, nil, fmt.Errorf("no valid IPPool found")
+	}
+
+	if len(ips) > 0 {
+		var hasRequestedV4, hasRequestedV6 bool
+		for _, ip := range ips {
+			if ip.To4() != nil {
+				hasRequestedV4 = true
+			} else {
+				hasRequestedV6 = true
+			}
+		}
+		var v4Pools, v6Pools int
+		for _, a := range allocators {
+			if a.IPVersion == utilnet.IPv4 {
+				v4Pools++
+			} else {
+				v6Pools++
+			}
+		}
+		if hasRequestedV4 && v4Pools > 1 {
+			return mineTrue, nil, nil, nil, fmt.Errorf("multiple IPv4 IPPools configured with a requested IPv4 address; only one IPv4 IPPool is allowed when specifying an IP")
+		}
+		if hasRequestedV6 && v6Pools > 1 {
+			return mineTrue, nil, nil, nil, fmt.Errorf("multiple IPv6 IPPools configured with a requested IPv6 address; only one IPv6 IPPool is allowed when specifying an IP")
+		}
 	}
 
 	return mineTrue, allocators, ips, reservedOwner, nil
