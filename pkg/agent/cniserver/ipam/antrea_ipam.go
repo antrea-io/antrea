@@ -141,6 +141,9 @@ func (d *AntreaIPAM) setController(controller *AntreaIPAMController) {
 // Additional addresses of the same family are silently ignored.
 func splitIPsByFamily(ips []net.IP) (v4, v6 net.IP) {
 	for _, ip := range ips {
+		if ip == nil {
+			continue
+		}
 		if ip.To4() != nil {
 			if v4 == nil {
 				v4 = ip
@@ -280,6 +283,7 @@ func (d *AntreaIPAM) Add(args *invoke.Args, k8sArgs *types.K8sArgs, networkConfi
 		if lastIPv4ExhaustedErr != nil {
 			allocErrs = append(allocErrs, fmt.Errorf("failed to allocate IPv4 address for Pod %s/%s: %w", string(k8sArgs.K8S_POD_NAMESPACE), string(k8sArgs.K8S_POD_NAME), lastIPv4ExhaustedErr))
 		} else {
+			// defensive; should normally be exhausted
 			allocErrs = append(allocErrs, fmt.Errorf("failed to allocate IPv4 address for Pod %s/%s", string(k8sArgs.K8S_POD_NAMESPACE), string(k8sArgs.K8S_POD_NAME)))
 		}
 	}
@@ -287,6 +291,7 @@ func (d *AntreaIPAM) Add(args *invoke.Args, k8sArgs *types.K8sArgs, networkConfi
 		if lastIPv6ExhaustedErr != nil {
 			allocErrs = append(allocErrs, fmt.Errorf("failed to allocate IPv6 address for Pod %s/%s: %w", string(k8sArgs.K8S_POD_NAMESPACE), string(k8sArgs.K8S_POD_NAME), lastIPv6ExhaustedErr))
 		} else {
+			// defensive; should normally be exhausted
 			allocErrs = append(allocErrs, fmt.Errorf("failed to allocate IPv6 address for Pod %s/%s", string(k8sArgs.K8S_POD_NAMESPACE), string(k8sArgs.K8S_POD_NAME)))
 		}
 	}
