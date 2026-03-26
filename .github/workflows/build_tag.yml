@@ -11,11 +11,6 @@ on:
         type: string
         required: true
 
-permissions:
-  contents: read
-  packages: write
-  actions: write
-
 jobs:
   get-version:
     runs-on: [ubuntu-latest]
@@ -36,6 +31,10 @@ jobs:
 
   build:
     needs: get-version
+    permissions:
+      contents: read
+      packages: write
+      actions: write
     strategy:
       matrix:
         include:
@@ -100,6 +99,9 @@ jobs:
 
   push-manifest:
     needs: [get-version, build]
+    permissions:
+      contents: read
+      packages: write
     strategy:
       matrix:
         include:
@@ -200,6 +202,9 @@ jobs:
 
   build-flow-aggregator:
     needs: get-version
+    permissions:
+      contents: read
+      packages: write
     runs-on: ubuntu-latest
     env:
       DOCKER_TAG: ${{ needs.get-version.outputs.version }}
