@@ -277,6 +277,8 @@ func Test_linkMonitor_listAndWatchLinks(t *testing.T) {
 					for _, l := range tt.eventHandlers {
 						assert.Equal(t, l.expectedLinkEvents, l.getReceivedLinkEvents())
 					}
+					d.mutex.RLock()
+					defer d.mutex.RUnlock()
 					assert.ElementsMatch(t, tt.expectedExistingLinks, d.linkNames.UnsortedList())
 				},
 				1*time.Second, 100*time.Millisecond, "timeout waiting for link events",
