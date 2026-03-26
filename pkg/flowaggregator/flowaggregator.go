@@ -37,6 +37,7 @@ import (
 	"antrea.io/antrea/pkg/flowaggregator/certificate"
 	"antrea.io/antrea/pkg/flowaggregator/collector"
 	"antrea.io/antrea/pkg/flowaggregator/exporter"
+	"antrea.io/antrea/pkg/flowaggregator/flowstreamservice"
 	"antrea.io/antrea/pkg/flowaggregator/intermediate"
 	"antrea.io/antrea/pkg/flowaggregator/options"
 	"antrea.io/antrea/pkg/flowaggregator/querier"
@@ -113,6 +114,7 @@ type flowAggregator struct {
 	recordCh                    chan *flowpb.Flow
 
 	recordBuffer        ringbuffer.BroadcastBuffer[*flowpb.Flow]
+	flowStreamService   *flowstreamservice.FlowStreamService
 	ipfixHandle         *exporterHandle
 	clickHouseHandle    *exporterHandle
 	s3Handle            *exporterHandle
@@ -187,6 +189,8 @@ func NewFlowAggregator(
 		certificateProvider:         newCertificateProvider(k8sClient, opt.Config.FlowAggregatorAddress),
 		certificateUpdateCh:         make(chan struct{}, 1),
 	}
+	fa.flowStreamService = flowstreamservice.NewFlowStreamService(fa.recordBuffer)
+
 	if opt.AggregatorMode == flowaggregatorconfig.AggregatorModeAggregate {
 		if err := fa.InitAggregationProcess(); err != nil {
 			return nil, fmt.Errorf("error when creating aggregation process: %w", err)
@@ -219,7 +223,7 @@ func (fa *flowAggregator) initCollectors() error {
 	defer fa.collectorMutex.Unlock()
 
 	caCert, serverCert, serverKey := fa.certificateProvider.GetTLSConfig()
-	grpcCollector, err := collector.NewGRPCCollector(fa.recordCh, caCert, serverKey, serverCert)
+	grpcCollector, err := collector.NewGRPCCollector(fa.recordCh, fa.flowStreamService, caCert, serverKey, serverCert)
 	if err != nil {
 		return fmt.Errorf("failed to create gRPC collector: %w", err)
 	}

@@ -15,6 +15,7 @@
 syntax = "proto3";
 
 import "pkg/apis/flow/v1alpha1/flow.proto";
+import "google/protobuf/timestamp.proto";
 
 package antrea_io.antrea.pkg.apis.flow.v1alpha1;
 
@@ -29,4 +30,74 @@ message ExportRequest {
 }
 
 message ExportResponse {
+}
+
+// FlowStreamService provides a server-streaming RPC for real-time flow visibility.
+// It is registered on the same gRPC server as FlowExportService, reusing the
+// existing mTLS infrastructure.
+service FlowStreamService {
+  // GetFlows streams flow records matching the provided filters.
+  // Historical flows (from the ring buffer) are sent first, followed by
+  // real-time flows if follow is set to true.
+  rpc GetFlows(GetFlowsRequest) returns (stream GetFlowsResponse);
+}
+
+// FlowFilterDirection changes how namespace and pod_names filters are applied.
+// FLOW_FILTER_DIRECTION_BOTH is the default and matches either source or destination.
+enum FlowFilterDirection {
+  FLOW_FILTER_DIRECTION_BOTH = 0;
+  FLOW_FILTER_DIRECTION_FROM = 1;
+  FLOW_FILTER_DIRECTION_TO   = 2;
+}
+
+// FlowFilter specifies optional criteria to narrow which flows are returned.
+// All specified filters are AND-ed; values within a repeated field are OR-ed.
+// An absent or fully-empty filter matches all flows.
+message FlowFilter {
+  // Match flows where source or destination Pod namespace is in this list
+  // (direction semantics are affected by the direction field).
+  repeated string namespaces = 1;
+  // Match flows where source or destination Pod name is in this list.
+  repeated string pod_names = 2;
+  // Match flows where source or destination Pod labels match this selector.
+  // Uses the same syntax as Kubernetes label selectors (e.g. "app=frontend").
+  string pod_label_selector = 3;
+  // Match flows where the destination Service name is in this list.
+  // Provide the plain Service name without a namespace prefix (e.g. "frontend",
+  // not "default/frontend"). The match is exact on the name only; to restrict
+  // to a specific namespace combine this filter with the namespaces field.
+  repeated string service_names = 4;
+  // Match flows based on their type.
+  repeated FlowType flow_types = 5;
+  // Match flows where source or destination IP is in this list.
+  // CIDR notation is supported (e.g. "10.0.0.0/8").
+  repeated string ips = 6;
+  // Changes the semantics of namespaces and pod_names:
+  //   BOTH (default) - match source OR destination
+  //   FROM           - match source only
+  //   TO             - match destination only
+  // Cannot combine TO with service_names.
+  FlowFilterDirection direction = 7;
+}
+
+// GetFlowsRequest is sent once by the client when opening a GetFlows stream.
+message GetFlowsRequest {
+  // Filters to apply server-side. All specified filters are AND-ed.
+  FlowFilter filter = 1;
+  // If set, only flows with end_ts >= since are returned.
+  google.protobuf.Timestamp since = 2;
+  // Maximum number of flows to return in total. 0 means no limit.
+  uint32 max_count = 3;
+  // If true, keep the stream open and push new flows as they arrive after
+  // historical flows have been sent. If false, close after historical flows.
+  bool follow = 4;
+}
+
+// GetFlowsResponse carries a batch of flow records from the server.
+message GetFlowsResponse {
+  // The matching flow records.
+  repeated Flow flows = 1;
+  // Number of flows dropped because the consumer fell behind and the ring
+  // buffer wrapped around. Cumulative since the start of the stream.
+  uint64 dropped_count = 2;
 }
