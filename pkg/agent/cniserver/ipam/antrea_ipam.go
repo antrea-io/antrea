@@ -141,9 +141,6 @@ func (d *AntreaIPAM) setController(controller *AntreaIPAMController) {
 // Additional addresses of the same family are silently ignored.
 func splitIPsByFamily(ips []net.IP) (v4, v6 net.IP) {
 	for _, ip := range ips {
-		if ip == nil {
-			continue
-		}
 		if ip.To4() != nil {
 			if v4 == nil {
 				v4 = ip
@@ -208,30 +205,31 @@ func (d *AntreaIPAM) Add(args *invoke.Args, k8sArgs *types.K8sArgs, networkConfi
 	var allocatedIPv4, allocatedIPv6 bool
 	var lastIPv4ExhaustedErr, lastIPv6ExhaustedErr error
 	for _, allocator := range allocators {
+		var requestedIP net.IP
 		if allocator.IPVersion == utilnet.IPv4 {
-			hasIPv4Pool = true
 			if allocatedIPv4 {
 				continue
 			}
+			hasIPv4Pool = true
+			requestedIP = requestedV4
 		} else {
-			hasIPv6Pool = true
 			if allocatedIPv6 {
 				continue
 			}
+			hasIPv6Pool = true
+			requestedIP = requestedV6
 		}
 
 		var ip net.IP
 		var subnetInfo *crdv1b1.SubnetInfo
-		requestedIP := requestedV4
-		if allocator.IPVersion == utilnet.IPv6 {
-			requestedIP = requestedV6
-		}
 		if reservedOwner != nil {
 			ip, subnetInfo, err = allocator.AllocateReservedOrNext(crdv1b1.IPAddressPhaseAllocated, owner)
 		} else if requestedIP != nil {
 			ip = requestedIP
 			subnetInfo, err = allocator.AllocateIP(ip, crdv1b1.IPAddressPhaseAllocated, owner)
 			if err != nil {
+				// For a requested IP, we only attempt allocation from the first matching pool,
+				// and do not fall back to other pools if the allocation fails.
 				return true, nil, err
 			}
 		} else {
@@ -281,6 +279,7 @@ func (d *AntreaIPAM) Add(args *invoke.Args, k8sArgs *types.K8sArgs, networkConfi
 		if lastIPv4ExhaustedErr != nil {
 			err = fmt.Errorf("failed to allocate IPv4 address for Pod %s/%s: %w", string(k8sArgs.K8S_POD_NAMESPACE), string(k8sArgs.K8S_POD_NAME), lastIPv4ExhaustedErr)
 		} else {
+			// defensive; should normally be exhausted
 			err = fmt.Errorf("failed to allocate IPv4 address for Pod %s/%s", string(k8sArgs.K8S_POD_NAMESPACE), string(k8sArgs.K8S_POD_NAME))
 		}
 		return true, nil, err
@@ -289,6 +288,7 @@ func (d *AntreaIPAM) Add(args *invoke.Args, k8sArgs *types.K8sArgs, networkConfi
 		if lastIPv6ExhaustedErr != nil {
 			err = fmt.Errorf("failed to allocate IPv6 address for Pod %s/%s: %w", string(k8sArgs.K8S_POD_NAMESPACE), string(k8sArgs.K8S_POD_NAME), lastIPv6ExhaustedErr)
 		} else {
+			// defensive; should normally be exhausted
 			err = fmt.Errorf("failed to allocate IPv6 address for Pod %s/%s", string(k8sArgs.K8S_POD_NAMESPACE), string(k8sArgs.K8S_POD_NAME))
 		}
 		return true, nil, err
