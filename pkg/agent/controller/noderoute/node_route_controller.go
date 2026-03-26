@@ -817,7 +817,7 @@ func (c *Controller) findPodSubnetForIP(ip netip.Addr) (netip.Prefix, bool, erro
 	var maskSize int
 
 	if c == nil {
-		return netip.Prefix{}, false, errors.New("Cannot find pod subnet for IP, NodeRouteController is nil")
+		return netip.Prefix{}, false, errors.New("cannot find pod subnet for IP: controller is nil")
 	}
 
 	if ip.Is4() {
@@ -826,7 +826,7 @@ func (c *Controller) findPodSubnetForIP(ip netip.Addr) (netip.Prefix, bool, erro
 		maskSize = c.maskSizeV6
 	}
 	if maskSize == 0 {
-		return netip.Prefix{}, false, errors.New("Cannot find pod subnet for IP, maskSize is 0")
+		return netip.Prefix{}, false, errors.New("cannot find pod subnet for IP: mask size is 0")
 	}
 	prefix, err := ip.Prefix(maskSize)
 	if err != nil {
