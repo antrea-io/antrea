@@ -138,7 +138,7 @@ var mockIndexerA = &mockIndexer{
 	},
 }
 
-func newAggregationProcess() *aggregationProcess { // todo - can delete maybe?
+func newAggregationProcess() *aggregationProcess {
 	recordChan := make(chan *flowpb.Flow)
 	input := AggregationInput{
 		RecordChan:            recordChan,

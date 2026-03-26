@@ -299,7 +299,7 @@ func run(o *Options) error {
 
 	// Get all available NodePort addresses.
 	var nodePortAddressesIPv4, nodePortAddressesIPv6 []net.IP
-	excludeNodePortDevices := append(excludeNodePortDevices, o.config.HostGateway)
+	excludeNodePortDevices = append(excludeNodePortDevices, o.config.HostGateway)
 	nodePortAddressesIPv4, nodePortAddressesIPv6, err = getAvailableNodePortAddresses(o.config.AntreaProxy.NodePortAddresses, excludeNodePortDevices, excludeNodePortDevicePrefixes)
 	if err != nil {
 		return fmt.Errorf("getting available NodePort IP addresses failed: %v", err)

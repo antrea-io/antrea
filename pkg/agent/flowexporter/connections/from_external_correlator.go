@@ -42,7 +42,7 @@ type fromExternalCorrelator struct {
 	cleanUpInterval time.Duration
 }
 
-// connectionItem wraps a zone zero connection along with it's timestamp use for expiring connections.
+// connectionItem wraps a zone zero connection along with its timestamp used for expiring connections.
 type connectionItem struct {
 	conn      *connection.Connection
 	timestamp time.Time
@@ -50,8 +50,8 @@ type connectionItem struct {
 
 type option func(*fromExternalCorrelator)
 
-// newFromExternalCorrelator returns an instance of the FromExternalCorrelator with it's internal map intialized and
-// a go routine initiated to remove stale connections based on `defaultTTL` at `defaultCleanUpInterval`.
+// newFromExternalCorrelator returns an instance of the fromExternalCorrelator with its internal map initialized and
+// a goroutine initiated to remove stale connections based on `defaultTTL` at `defaultCleanUpInterval`.
 func newFromExternalCorrelator(opts ...option) *fromExternalCorrelator {
 	stopCh := make(chan struct{})
 	store := fromExternalCorrelator{
@@ -76,8 +76,9 @@ func (c *fromExternalCorrelator) stopCleanUp() {
 	})
 }
 
-// filterAndStoreExternalSource returns true for valid zone zero connection which are stored for correlation.
-// When antreaProxier is not nil the store is optimized to skip connections that do not have an associated service.
+// filterAndStoreExternalSource returns true for any zone-0 connection (indicating it should be excluded
+// from the main connection store before correlation).
+// When antreaProxier is not nil, it skips connections that do not have an associated service.
 func (c *fromExternalCorrelator) filterAndStoreExternalSource(conn *connection.Connection, antreaProxier proxy.ProxyQuerier) bool {
 	if conn == nil || conn.Zone != 0 {
 		return false
@@ -88,7 +89,8 @@ func (c *fromExternalCorrelator) filterAndStoreExternalSource(conn *connection.C
 	protocol, err := lookupServiceProtocol(conn.FlowKey.Protocol)
 	if err != nil {
 		klog.InfoS("Could not retrieve Service protocol", "error", err, "conn", conn)
-		return false
+		// Still return true: zone-0 connections must never be added to the main store.
+		return true
 	}
 
 	// If AntreaProxy is available, selectively filter out connections without a matching service
@@ -105,7 +107,7 @@ func (c *fromExternalCorrelator) filterAndStoreExternalSource(conn *connection.C
 	return true
 }
 
-// correlateIfExternal returns true if it correlates the connection to it's zone zero counterpart to preserve the SNAT'd source IP
+// correlateIfExternal returns true if it correlates the connection to its zone-zero counterpart to preserve the SNAT'd source IP.
 func (c *fromExternalCorrelator) correlateIfExternal(conn *connection.Connection) bool {
 	if conn == nil {
 		return false
@@ -186,8 +188,8 @@ func (c *fromExternalCorrelator) popMatching(conn *connection.Connection) *conne
 	return record.conn
 }
 
-// Given a connection key, remove it from the store. Log an error
-// if it didn't exist in the store.
+// remove deletes the correlator entry that matches this Antrea-zone connection, if any.
+// Most main-store connections were never stored here (only zone-0 external paths are added)
 func (c *fromExternalCorrelator) remove(conn *connection.Connection) {
 	c.lock.Lock()
 	defer c.lock.Unlock()
