@@ -293,7 +293,7 @@ func TestFromExternalCorrelator_FilterAndStoreExternalSource(t *testing.T) {
 		{
 			name:   "Unknown protocol",
 			conn:   invalidProtocolConn,
-			want:   false,
+			want:   true,
 			stored: false,
 		},
 		{

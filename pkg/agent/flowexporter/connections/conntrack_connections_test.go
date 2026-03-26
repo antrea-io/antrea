@@ -438,8 +438,6 @@ func TestConntrackConnectionStore_AddOrUpdateConn_FromExternalConns(t *testing.T
 	require.Equal(t, exist, true, "The connection should exist in the connection store")
 	assert.Equal(t, expectedConn, *actualConn, "Connections should be equal")
 
-	//TODO re-add updated conns and do checks
-
 	//Add updated Zone Zero
 	protocol, _ = lookupServiceProtocol(updatedZoneZeroConn.FlowKey.Protocol)
 	serviceStr = fmt.Sprintf("%s:%d/%s", updatedZoneZeroConn.OriginalDestinationAddress.String(), updatedZoneZeroConn.OriginalDestinationPort, protocol)
