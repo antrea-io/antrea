@@ -11,6 +11,11 @@ on:
         type: string
         required: true
 
+permissions:
+  contents: read
+  packages: write
+  actions: write
+
 jobs:
   get-version:
     runs-on: [ubuntu-latest]

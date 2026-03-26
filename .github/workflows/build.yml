@@ -12,6 +12,11 @@ on:
       - release-*
       - feature/*
 
+permissions:
+  contents: read
+  packages: write
+  actions: write
+
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
