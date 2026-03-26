@@ -20,6 +20,10 @@
 package openapi
 
 import (
+	v1beta2 "antrea.io/antrea/pkg/apis/controlplane/v1beta2"
+	v1beta1 "antrea.io/antrea/pkg/apis/crd/v1beta1"
+	v1alpha1 "antrea.io/antrea/pkg/apis/stats/v1alpha1"
+	systemv1beta1 "antrea.io/antrea/pkg/apis/system/v1beta1"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	runtime "k8s.io/apimachinery/pkg/runtime"
@@ -31,439 +35,439 @@ import (
 
 func GetOpenAPIDefinitions(ref common.ReferenceCallback) map[string]common.OpenAPIDefinition {
 	return map[string]common.OpenAPIDefinition{
-		"antrea.io/antrea/pkg/apis/controlplane/v1beta2.AddressGroup":                      schema_pkg_apis_controlplane_v1beta2_AddressGroup(ref),
-		"antrea.io/antrea/pkg/apis/controlplane/v1beta2.AddressGroupList":                  schema_pkg_apis_controlplane_v1beta2_AddressGroupList(ref),
-		"antrea.io/antrea/pkg/apis/controlplane/v1beta2.AddressGroupPatch":                 schema_pkg_apis_controlplane_v1beta2_AddressGroupPatch(ref),
-		"antrea.io/antrea/pkg/apis/controlplane/v1beta2.AppliedToGroup":                    schema_pkg_apis_controlplane_v1beta2_AppliedToGroup(ref),
-		"antrea.io/antrea/pkg/apis/controlplane/v1beta2.AppliedToGroupList":                schema_pkg_apis_controlplane_v1beta2_AppliedToGroupList(ref),
-		"antrea.io/antrea/pkg/apis/controlplane/v1beta2.AppliedToGroupPatch":               schema_pkg_apis_controlplane_v1beta2_AppliedToGroupPatch(ref),
-		"antrea.io/antrea/pkg/apis/controlplane/v1beta2.BasicAuthentication":               schema_pkg_apis_controlplane_v1beta2_BasicAuthentication(ref),
-		"antrea.io/antrea/pkg/apis/controlplane/v1beta2.BundleFileServer":                  schema_pkg_apis_controlplane_v1beta2_BundleFileServer(ref),
-		"antrea.io/antrea/pkg/apis/controlplane/v1beta2.BundleServerAuthConfiguration":     schema_pkg_apis_controlplane_v1beta2_BundleServerAuthConfiguration(ref),
-		"antrea.io/antrea/pkg/apis/controlplane/v1beta2.ClusterGroupMembers":               schema_pkg_apis_controlplane_v1beta2_ClusterGroupMembers(ref),
-		"antrea.io/antrea/pkg/apis/controlplane/v1beta2.EgressGroup":                       schema_pkg_apis_controlplane_v1beta2_EgressGroup(ref),
-		"antrea.io/antrea/pkg/apis/controlplane/v1beta2.EgressGroupList":                   schema_pkg_apis_controlplane_v1beta2_EgressGroupList(ref),
-		"antrea.io/antrea/pkg/apis/controlplane/v1beta2.EgressGroupPatch":                  schema_pkg_apis_controlplane_v1beta2_EgressGroupPatch(ref),
-		"antrea.io/antrea/pkg/apis/controlplane/v1beta2.Entity":                            schema_pkg_apis_controlplane_v1beta2_Entity(ref),
-		"antrea.io/antrea/pkg/apis/controlplane/v1beta2.ExternalEntityReference":           schema_pkg_apis_controlplane_v1beta2_ExternalEntityReference(ref),
-		"antrea.io/antrea/pkg/apis/controlplane/v1beta2.GroupAssociation":                  schema_pkg_apis_controlplane_v1beta2_GroupAssociation(ref),
-		"antrea.io/antrea/pkg/apis/controlplane/v1beta2.GroupMember":                       schema_pkg_apis_controlplane_v1beta2_GroupMember(ref),
-		"antrea.io/antrea/pkg/apis/controlplane/v1beta2.GroupMembers":                      schema_pkg_apis_controlplane_v1beta2_GroupMembers(ref),
-		"antrea.io/antrea/pkg/apis/controlplane/v1beta2.GroupReference":                    schema_pkg_apis_controlplane_v1beta2_GroupReference(ref),
-		"antrea.io/antrea/pkg/apis/controlplane/v1beta2.HTTPProtocol":                      schema_pkg_apis_controlplane_v1beta2_HTTPProtocol(ref),
-		"antrea.io/antrea/pkg/apis/controlplane/v1beta2.IPBlock":                           schema_pkg_apis_controlplane_v1beta2_IPBlock(ref),
-		"antrea.io/antrea/pkg/apis/controlplane/v1beta2.IPGroupAssociation":                schema_pkg_apis_controlplane_v1beta2_IPGroupAssociation(ref),
-		"antrea.io/antrea/pkg/apis/controlplane/v1beta2.IPNet":                             schema_pkg_apis_controlplane_v1beta2_IPNet(ref),
-		"antrea.io/antrea/pkg/apis/controlplane/v1beta2.L7Protocol":                        schema_pkg_apis_controlplane_v1beta2_L7Protocol(ref),
-		"antrea.io/antrea/pkg/apis/controlplane/v1beta2.MulticastGroupInfo":                schema_pkg_apis_controlplane_v1beta2_MulticastGroupInfo(ref),
-		"antrea.io/antrea/pkg/apis/controlplane/v1beta2.NamedPort":                         schema_pkg_apis_controlplane_v1beta2_NamedPort(ref),
-		"antrea.io/antrea/pkg/apis/controlplane/v1beta2.NetworkPolicy":                     schema_pkg_apis_controlplane_v1beta2_NetworkPolicy(ref),
-		"antrea.io/antrea/pkg/apis/controlplane/v1beta2.NetworkPolicyEvaluation":           schema_pkg_apis_controlplane_v1beta2_NetworkPolicyEvaluation(ref),
-		"antrea.io/antrea/pkg/apis/controlplane/v1beta2.NetworkPolicyEvaluationRequest":    schema_pkg_apis_controlplane_v1beta2_NetworkPolicyEvaluationRequest(ref),
-		"antrea.io/antrea/pkg/apis/controlplane/v1beta2.NetworkPolicyEvaluationResponse":   schema_pkg_apis_controlplane_v1beta2_NetworkPolicyEvaluationResponse(ref),
-		"antrea.io/antrea/pkg/apis/controlplane/v1beta2.NetworkPolicyList":                 schema_pkg_apis_controlplane_v1beta2_NetworkPolicyList(ref),
-		"antrea.io/antrea/pkg/apis/controlplane/v1beta2.NetworkPolicyNodeStatus":           schema_pkg_apis_controlplane_v1beta2_NetworkPolicyNodeStatus(ref),
-		"antrea.io/antrea/pkg/apis/controlplane/v1beta2.NetworkPolicyPeer":                 schema_pkg_apis_controlplane_v1beta2_NetworkPolicyPeer(ref),
-		"antrea.io/antrea/pkg/apis/controlplane/v1beta2.NetworkPolicyReference":            schema_pkg_apis_controlplane_v1beta2_NetworkPolicyReference(ref),
-		"antrea.io/antrea/pkg/apis/controlplane/v1beta2.NetworkPolicyRule":                 schema_pkg_apis_controlplane_v1beta2_NetworkPolicyRule(ref),
-		"antrea.io/antrea/pkg/apis/controlplane/v1beta2.NetworkPolicyStats":                schema_pkg_apis_controlplane_v1beta2_NetworkPolicyStats(ref),
-		"antrea.io/antrea/pkg/apis/controlplane/v1beta2.NetworkPolicyStatus":               schema_pkg_apis_controlplane_v1beta2_NetworkPolicyStatus(ref),
-		"antrea.io/antrea/pkg/apis/controlplane/v1beta2.NodeReference":                     schema_pkg_apis_controlplane_v1beta2_NodeReference(ref),
-		"antrea.io/antrea/pkg/apis/controlplane/v1beta2.NodeStatsSummary":                  schema_pkg_apis_controlplane_v1beta2_NodeStatsSummary(ref),
-		"antrea.io/antrea/pkg/apis/controlplane/v1beta2.PaginationGetOptions":              schema_pkg_apis_controlplane_v1beta2_PaginationGetOptions(ref),
-		"antrea.io/antrea/pkg/apis/controlplane/v1beta2.PodReference":                      schema_pkg_apis_controlplane_v1beta2_PodReference(ref),
-		"antrea.io/antrea/pkg/apis/controlplane/v1beta2.RuleRef":                           schema_pkg_apis_controlplane_v1beta2_RuleRef(ref),
-		"antrea.io/antrea/pkg/apis/controlplane/v1beta2.Service":                           schema_pkg_apis_controlplane_v1beta2_Service(ref),
-		"antrea.io/antrea/pkg/apis/controlplane/v1beta2.ServiceReference":                  schema_pkg_apis_controlplane_v1beta2_ServiceReference(ref),
-		"antrea.io/antrea/pkg/apis/controlplane/v1beta2.SupportBundleCollection":           schema_pkg_apis_controlplane_v1beta2_SupportBundleCollection(ref),
-		"antrea.io/antrea/pkg/apis/controlplane/v1beta2.SupportBundleCollectionList":       schema_pkg_apis_controlplane_v1beta2_SupportBundleCollectionList(ref),
-		"antrea.io/antrea/pkg/apis/controlplane/v1beta2.SupportBundleCollectionNodeStatus": schema_pkg_apis_controlplane_v1beta2_SupportBundleCollectionNodeStatus(ref),
-		"antrea.io/antrea/pkg/apis/controlplane/v1beta2.SupportBundleCollectionStatus":     schema_pkg_apis_controlplane_v1beta2_SupportBundleCollectionStatus(ref),
-		"antrea.io/antrea/pkg/apis/controlplane/v1beta2.TLSProtocol":                       schema_pkg_apis_controlplane_v1beta2_TLSProtocol(ref),
-		"antrea.io/antrea/pkg/apis/crd/v1beta1.AgentCondition":                             schema_pkg_apis_crd_v1beta1_AgentCondition(ref),
-		"antrea.io/antrea/pkg/apis/crd/v1beta1.AntreaAgentInfo":                            schema_pkg_apis_crd_v1beta1_AntreaAgentInfo(ref),
-		"antrea.io/antrea/pkg/apis/crd/v1beta1.AntreaAgentInfoList":                        schema_pkg_apis_crd_v1beta1_AntreaAgentInfoList(ref),
-		"antrea.io/antrea/pkg/apis/crd/v1beta1.AntreaControllerInfo":                       schema_pkg_apis_crd_v1beta1_AntreaControllerInfo(ref),
-		"antrea.io/antrea/pkg/apis/crd/v1beta1.AntreaControllerInfoList":                   schema_pkg_apis_crd_v1beta1_AntreaControllerInfoList(ref),
-		"antrea.io/antrea/pkg/apis/crd/v1beta1.AppliedTo":                                  schema_pkg_apis_crd_v1beta1_AppliedTo(ref),
-		"antrea.io/antrea/pkg/apis/crd/v1beta1.Bandwidth":                                  schema_pkg_apis_crd_v1beta1_Bandwidth(ref),
-		"antrea.io/antrea/pkg/apis/crd/v1beta1.ClusterGroup":                               schema_pkg_apis_crd_v1beta1_ClusterGroup(ref),
-		"antrea.io/antrea/pkg/apis/crd/v1beta1.ClusterGroupList":                           schema_pkg_apis_crd_v1beta1_ClusterGroupList(ref),
-		"antrea.io/antrea/pkg/apis/crd/v1beta1.ClusterNetworkPolicy":                       schema_pkg_apis_crd_v1beta1_ClusterNetworkPolicy(ref),
-		"antrea.io/antrea/pkg/apis/crd/v1beta1.ClusterNetworkPolicyList":                   schema_pkg_apis_crd_v1beta1_ClusterNetworkPolicyList(ref),
-		"antrea.io/antrea/pkg/apis/crd/v1beta1.ClusterNetworkPolicySpec":                   schema_pkg_apis_crd_v1beta1_ClusterNetworkPolicySpec(ref),
-		"antrea.io/antrea/pkg/apis/crd/v1beta1.ControllerCondition":                        schema_pkg_apis_crd_v1beta1_ControllerCondition(ref),
-		"antrea.io/antrea/pkg/apis/crd/v1beta1.Destination":                                schema_pkg_apis_crd_v1beta1_Destination(ref),
-		"antrea.io/antrea/pkg/apis/crd/v1beta1.Egress":                                     schema_pkg_apis_crd_v1beta1_Egress(ref),
-		"antrea.io/antrea/pkg/apis/crd/v1beta1.EgressCondition":                            schema_pkg_apis_crd_v1beta1_EgressCondition(ref),
-		"antrea.io/antrea/pkg/apis/crd/v1beta1.EgressList":                                 schema_pkg_apis_crd_v1beta1_EgressList(ref),
-		"antrea.io/antrea/pkg/apis/crd/v1beta1.EgressSpec":                                 schema_pkg_apis_crd_v1beta1_EgressSpec(ref),
-		"antrea.io/antrea/pkg/apis/crd/v1beta1.EgressStatus":                               schema_pkg_apis_crd_v1beta1_EgressStatus(ref),
-		"antrea.io/antrea/pkg/apis/crd/v1beta1.ExternalIPPool":                             schema_pkg_apis_crd_v1beta1_ExternalIPPool(ref),
-		"antrea.io/antrea/pkg/apis/crd/v1beta1.ExternalIPPoolList":                         schema_pkg_apis_crd_v1beta1_ExternalIPPoolList(ref),
-		"antrea.io/antrea/pkg/apis/crd/v1beta1.ExternalIPPoolSpec":                         schema_pkg_apis_crd_v1beta1_ExternalIPPoolSpec(ref),
-		"antrea.io/antrea/pkg/apis/crd/v1beta1.ExternalIPPoolStatus":                       schema_pkg_apis_crd_v1beta1_ExternalIPPoolStatus(ref),
-		"antrea.io/antrea/pkg/apis/crd/v1beta1.Group":                                      schema_pkg_apis_crd_v1beta1_Group(ref),
-		"antrea.io/antrea/pkg/apis/crd/v1beta1.GroupCondition":                             schema_pkg_apis_crd_v1beta1_GroupCondition(ref),
-		"antrea.io/antrea/pkg/apis/crd/v1beta1.GroupList":                                  schema_pkg_apis_crd_v1beta1_GroupList(ref),
-		"antrea.io/antrea/pkg/apis/crd/v1beta1.GroupSpec":                                  schema_pkg_apis_crd_v1beta1_GroupSpec(ref),
-		"antrea.io/antrea/pkg/apis/crd/v1beta1.GroupStatus":                                schema_pkg_apis_crd_v1beta1_GroupStatus(ref),
-		"antrea.io/antrea/pkg/apis/crd/v1beta1.HTTPProtocol":                               schema_pkg_apis_crd_v1beta1_HTTPProtocol(ref),
-		"antrea.io/antrea/pkg/apis/crd/v1beta1.ICMPEchoRequestHeader":                      schema_pkg_apis_crd_v1beta1_ICMPEchoRequestHeader(ref),
-		"antrea.io/antrea/pkg/apis/crd/v1beta1.ICMPProtocol":                               schema_pkg_apis_crd_v1beta1_ICMPProtocol(ref),
-		"antrea.io/antrea/pkg/apis/crd/v1beta1.IGMPProtocol":                               schema_pkg_apis_crd_v1beta1_IGMPProtocol(ref),
-		"antrea.io/antrea/pkg/apis/crd/v1beta1.IPAddressOwner":                             schema_pkg_apis_crd_v1beta1_IPAddressOwner(ref),
-		"antrea.io/antrea/pkg/apis/crd/v1beta1.IPAddressState":                             schema_pkg_apis_crd_v1beta1_IPAddressState(ref),
-		"antrea.io/antrea/pkg/apis/crd/v1beta1.IPBlock":                                    schema_pkg_apis_crd_v1beta1_IPBlock(ref),
-		"antrea.io/antrea/pkg/apis/crd/v1beta1.IPHeader":                                   schema_pkg_apis_crd_v1beta1_IPHeader(ref),
-		"antrea.io/antrea/pkg/apis/crd/v1beta1.IPPool":                                     schema_pkg_apis_crd_v1beta1_IPPool(ref),
-		"antrea.io/antrea/pkg/apis/crd/v1beta1.IPPoolList":                                 schema_pkg_apis_crd_v1beta1_IPPoolList(ref),
-		"antrea.io/antrea/pkg/apis/crd/v1beta1.IPPoolSpec":                                 schema_pkg_apis_crd_v1beta1_IPPoolSpec(ref),
-		"antrea.io/antrea/pkg/apis/crd/v1beta1.IPPoolStatus":                               schema_pkg_apis_crd_v1beta1_IPPoolStatus(ref),
-		"antrea.io/antrea/pkg/apis/crd/v1beta1.IPPoolUsage":                                schema_pkg_apis_crd_v1beta1_IPPoolUsage(ref),
-		"antrea.io/antrea/pkg/apis/crd/v1beta1.IPRange":                                    schema_pkg_apis_crd_v1beta1_IPRange(ref),
-		"antrea.io/antrea/pkg/apis/crd/v1beta1.IPv6Header":                                 schema_pkg_apis_crd_v1beta1_IPv6Header(ref),
-		"antrea.io/antrea/pkg/apis/crd/v1beta1.L7Protocol":                                 schema_pkg_apis_crd_v1beta1_L7Protocol(ref),
-		"antrea.io/antrea/pkg/apis/crd/v1beta1.NamespacedName":                             schema_pkg_apis_crd_v1beta1_NamespacedName(ref),
-		"antrea.io/antrea/pkg/apis/crd/v1beta1.NetworkInfo":                                schema_pkg_apis_crd_v1beta1_NetworkInfo(ref),
-		"antrea.io/antrea/pkg/apis/crd/v1beta1.NetworkPolicy":                              schema_pkg_apis_crd_v1beta1_NetworkPolicy(ref),
-		"antrea.io/antrea/pkg/apis/crd/v1beta1.NetworkPolicyCondition":                     schema_pkg_apis_crd_v1beta1_NetworkPolicyCondition(ref),
-		"antrea.io/antrea/pkg/apis/crd/v1beta1.NetworkPolicyControllerInfo":                schema_pkg_apis_crd_v1beta1_NetworkPolicyControllerInfo(ref),
-		"antrea.io/antrea/pkg/apis/crd/v1beta1.NetworkPolicyList":                          schema_pkg_apis_crd_v1beta1_NetworkPolicyList(ref),
-		"antrea.io/antrea/pkg/apis/crd/v1beta1.NetworkPolicyPeer":                          schema_pkg_apis_crd_v1beta1_NetworkPolicyPeer(ref),
-		"antrea.io/antrea/pkg/apis/crd/v1beta1.NetworkPolicyPort":                          schema_pkg_apis_crd_v1beta1_NetworkPolicyPort(ref),
-		"antrea.io/antrea/pkg/apis/crd/v1beta1.NetworkPolicyProtocol":                      schema_pkg_apis_crd_v1beta1_NetworkPolicyProtocol(ref),
-		"antrea.io/antrea/pkg/apis/crd/v1beta1.NetworkPolicySpec":                          schema_pkg_apis_crd_v1beta1_NetworkPolicySpec(ref),
-		"antrea.io/antrea/pkg/apis/crd/v1beta1.NetworkPolicyStatus":                        schema_pkg_apis_crd_v1beta1_NetworkPolicyStatus(ref),
-		"antrea.io/antrea/pkg/apis/crd/v1beta1.NodeResult":                                 schema_pkg_apis_crd_v1beta1_NodeResult(ref),
-		"antrea.io/antrea/pkg/apis/crd/v1beta1.OVSInfo":                                    schema_pkg_apis_crd_v1beta1_OVSInfo(ref),
-		"antrea.io/antrea/pkg/apis/crd/v1beta1.Observation":                                schema_pkg_apis_crd_v1beta1_Observation(ref),
-		"antrea.io/antrea/pkg/apis/crd/v1beta1.Packet":                                     schema_pkg_apis_crd_v1beta1_Packet(ref),
-		"antrea.io/antrea/pkg/apis/crd/v1beta1.PeerNamespaces":                             schema_pkg_apis_crd_v1beta1_PeerNamespaces(ref),
-		"antrea.io/antrea/pkg/apis/crd/v1beta1.PeerService":                                schema_pkg_apis_crd_v1beta1_PeerService(ref),
-		"antrea.io/antrea/pkg/apis/crd/v1beta1.PodOwner":                                   schema_pkg_apis_crd_v1beta1_PodOwner(ref),
-		"antrea.io/antrea/pkg/apis/crd/v1beta1.Rule":                                       schema_pkg_apis_crd_v1beta1_Rule(ref),
-		"antrea.io/antrea/pkg/apis/crd/v1beta1.Source":                                     schema_pkg_apis_crd_v1beta1_Source(ref),
-		"antrea.io/antrea/pkg/apis/crd/v1beta1.StatefulSetOwner":                           schema_pkg_apis_crd_v1beta1_StatefulSetOwner(ref),
-		"antrea.io/antrea/pkg/apis/crd/v1beta1.SubnetInfo":                                 schema_pkg_apis_crd_v1beta1_SubnetInfo(ref),
-		"antrea.io/antrea/pkg/apis/crd/v1beta1.TCPHeader":                                  schema_pkg_apis_crd_v1beta1_TCPHeader(ref),
-		"antrea.io/antrea/pkg/apis/crd/v1beta1.TLSProtocol":                                schema_pkg_apis_crd_v1beta1_TLSProtocol(ref),
-		"antrea.io/antrea/pkg/apis/crd/v1beta1.Tier":                                       schema_pkg_apis_crd_v1beta1_Tier(ref),
-		"antrea.io/antrea/pkg/apis/crd/v1beta1.TierList":                                   schema_pkg_apis_crd_v1beta1_TierList(ref),
-		"antrea.io/antrea/pkg/apis/crd/v1beta1.TierSpec":                                   schema_pkg_apis_crd_v1beta1_TierSpec(ref),
-		"antrea.io/antrea/pkg/apis/crd/v1beta1.Traceflow":                                  schema_pkg_apis_crd_v1beta1_Traceflow(ref),
-		"antrea.io/antrea/pkg/apis/crd/v1beta1.TraceflowList":                              schema_pkg_apis_crd_v1beta1_TraceflowList(ref),
-		"antrea.io/antrea/pkg/apis/crd/v1beta1.TraceflowSpec":                              schema_pkg_apis_crd_v1beta1_TraceflowSpec(ref),
-		"antrea.io/antrea/pkg/apis/crd/v1beta1.TraceflowStatus":                            schema_pkg_apis_crd_v1beta1_TraceflowStatus(ref),
-		"antrea.io/antrea/pkg/apis/crd/v1beta1.TransportHeader":                            schema_pkg_apis_crd_v1beta1_TransportHeader(ref),
-		"antrea.io/antrea/pkg/apis/crd/v1beta1.UDPHeader":                                  schema_pkg_apis_crd_v1beta1_UDPHeader(ref),
-		"antrea.io/antrea/pkg/apis/stats/v1alpha1.AntreaClusterNetworkPolicyStats":         schema_pkg_apis_stats_v1alpha1_AntreaClusterNetworkPolicyStats(ref),
-		"antrea.io/antrea/pkg/apis/stats/v1alpha1.AntreaClusterNetworkPolicyStatsList":     schema_pkg_apis_stats_v1alpha1_AntreaClusterNetworkPolicyStatsList(ref),
-		"antrea.io/antrea/pkg/apis/stats/v1alpha1.AntreaNetworkPolicyStats":                schema_pkg_apis_stats_v1alpha1_AntreaNetworkPolicyStats(ref),
-		"antrea.io/antrea/pkg/apis/stats/v1alpha1.AntreaNetworkPolicyStatsList":            schema_pkg_apis_stats_v1alpha1_AntreaNetworkPolicyStatsList(ref),
-		"antrea.io/antrea/pkg/apis/stats/v1alpha1.MulticastGroup":                          schema_pkg_apis_stats_v1alpha1_MulticastGroup(ref),
-		"antrea.io/antrea/pkg/apis/stats/v1alpha1.MulticastGroupList":                      schema_pkg_apis_stats_v1alpha1_MulticastGroupList(ref),
-		"antrea.io/antrea/pkg/apis/stats/v1alpha1.NetworkPolicyStats":                      schema_pkg_apis_stats_v1alpha1_NetworkPolicyStats(ref),
-		"antrea.io/antrea/pkg/apis/stats/v1alpha1.NetworkPolicyStatsList":                  schema_pkg_apis_stats_v1alpha1_NetworkPolicyStatsList(ref),
-		"antrea.io/antrea/pkg/apis/stats/v1alpha1.NodeLatencyStats":                        schema_pkg_apis_stats_v1alpha1_NodeLatencyStats(ref),
-		"antrea.io/antrea/pkg/apis/stats/v1alpha1.NodeLatencyStatsList":                    schema_pkg_apis_stats_v1alpha1_NodeLatencyStatsList(ref),
-		"antrea.io/antrea/pkg/apis/stats/v1alpha1.PeerNodeLatencyStats":                    schema_pkg_apis_stats_v1alpha1_PeerNodeLatencyStats(ref),
-		"antrea.io/antrea/pkg/apis/stats/v1alpha1.PodReference":                            schema_pkg_apis_stats_v1alpha1_PodReference(ref),
-		"antrea.io/antrea/pkg/apis/stats/v1alpha1.RuleTrafficStats":                        schema_pkg_apis_stats_v1alpha1_RuleTrafficStats(ref),
-		"antrea.io/antrea/pkg/apis/stats/v1alpha1.TargetIPLatencyStats":                    schema_pkg_apis_stats_v1alpha1_TargetIPLatencyStats(ref),
-		"antrea.io/antrea/pkg/apis/stats/v1alpha1.TrafficStats":                            schema_pkg_apis_stats_v1alpha1_TrafficStats(ref),
-		"antrea.io/antrea/pkg/apis/system/v1beta1.SupportBundle":                           schema_pkg_apis_system_v1beta1_SupportBundle(ref),
-		v1.AWSElasticBlockStoreVolumeSource{}.OpenAPIModelName():                           schema_k8sio_api_core_v1_AWSElasticBlockStoreVolumeSource(ref),
-		v1.Affinity{}.OpenAPIModelName():                                                   schema_k8sio_api_core_v1_Affinity(ref),
-		v1.AppArmorProfile{}.OpenAPIModelName():                                            schema_k8sio_api_core_v1_AppArmorProfile(ref),
-		v1.AttachedVolume{}.OpenAPIModelName():                                             schema_k8sio_api_core_v1_AttachedVolume(ref),
-		v1.AvoidPods{}.OpenAPIModelName():                                                  schema_k8sio_api_core_v1_AvoidPods(ref),
-		v1.AzureDiskVolumeSource{}.OpenAPIModelName():                                      schema_k8sio_api_core_v1_AzureDiskVolumeSource(ref),
-		v1.AzureFilePersistentVolumeSource{}.OpenAPIModelName():                            schema_k8sio_api_core_v1_AzureFilePersistentVolumeSource(ref),
-		v1.AzureFileVolumeSource{}.OpenAPIModelName():                                      schema_k8sio_api_core_v1_AzureFileVolumeSource(ref),
-		v1.Binding{}.OpenAPIModelName():                                                    schema_k8sio_api_core_v1_Binding(ref),
-		v1.CSIPersistentVolumeSource{}.OpenAPIModelName():                                  schema_k8sio_api_core_v1_CSIPersistentVolumeSource(ref),
-		v1.CSIVolumeSource{}.OpenAPIModelName():                                            schema_k8sio_api_core_v1_CSIVolumeSource(ref),
-		v1.Capabilities{}.OpenAPIModelName():                                               schema_k8sio_api_core_v1_Capabilities(ref),
-		v1.CephFSPersistentVolumeSource{}.OpenAPIModelName():                               schema_k8sio_api_core_v1_CephFSPersistentVolumeSource(ref),
-		v1.CephFSVolumeSource{}.OpenAPIModelName():                                         schema_k8sio_api_core_v1_CephFSVolumeSource(ref),
-		v1.CinderPersistentVolumeSource{}.OpenAPIModelName():                               schema_k8sio_api_core_v1_CinderPersistentVolumeSource(ref),
-		v1.CinderVolumeSource{}.OpenAPIModelName():                                         schema_k8sio_api_core_v1_CinderVolumeSource(ref),
-		v1.ClientIPConfig{}.OpenAPIModelName():                                             schema_k8sio_api_core_v1_ClientIPConfig(ref),
-		v1.ClusterTrustBundleProjection{}.OpenAPIModelName():                               schema_k8sio_api_core_v1_ClusterTrustBundleProjection(ref),
-		v1.ComponentCondition{}.OpenAPIModelName():                                         schema_k8sio_api_core_v1_ComponentCondition(ref),
-		v1.ComponentStatus{}.OpenAPIModelName():                                            schema_k8sio_api_core_v1_ComponentStatus(ref),
-		v1.ComponentStatusList{}.OpenAPIModelName():                                        schema_k8sio_api_core_v1_ComponentStatusList(ref),
-		v1.ConfigMap{}.OpenAPIModelName():                                                  schema_k8sio_api_core_v1_ConfigMap(ref),
-		v1.ConfigMapEnvSource{}.OpenAPIModelName():                                         schema_k8sio_api_core_v1_ConfigMapEnvSource(ref),
-		v1.ConfigMapKeySelector{}.OpenAPIModelName():                                       schema_k8sio_api_core_v1_ConfigMapKeySelector(ref),
-		v1.ConfigMapList{}.OpenAPIModelName():                                              schema_k8sio_api_core_v1_ConfigMapList(ref),
-		v1.ConfigMapNodeConfigSource{}.OpenAPIModelName():                                  schema_k8sio_api_core_v1_ConfigMapNodeConfigSource(ref),
-		v1.ConfigMapProjection{}.OpenAPIModelName():                                        schema_k8sio_api_core_v1_ConfigMapProjection(ref),
-		v1.ConfigMapVolumeSource{}.OpenAPIModelName():                                      schema_k8sio_api_core_v1_ConfigMapVolumeSource(ref),
-		v1.Container{}.OpenAPIModelName():                                                  schema_k8sio_api_core_v1_Container(ref),
-		v1.ContainerExtendedResourceRequest{}.OpenAPIModelName():                           schema_k8sio_api_core_v1_ContainerExtendedResourceRequest(ref),
-		v1.ContainerImage{}.OpenAPIModelName():                                             schema_k8sio_api_core_v1_ContainerImage(ref),
-		v1.ContainerPort{}.OpenAPIModelName():                                              schema_k8sio_api_core_v1_ContainerPort(ref),
-		v1.ContainerResizePolicy{}.OpenAPIModelName():                                      schema_k8sio_api_core_v1_ContainerResizePolicy(ref),
-		v1.ContainerRestartRule{}.OpenAPIModelName():                                       schema_k8sio_api_core_v1_ContainerRestartRule(ref),
-		v1.ContainerRestartRuleOnExitCodes{}.OpenAPIModelName():                            schema_k8sio_api_core_v1_ContainerRestartRuleOnExitCodes(ref),
-		v1.ContainerState{}.OpenAPIModelName():                                             schema_k8sio_api_core_v1_ContainerState(ref),
-		v1.ContainerStateRunning{}.OpenAPIModelName():                                      schema_k8sio_api_core_v1_ContainerStateRunning(ref),
-		v1.ContainerStateTerminated{}.OpenAPIModelName():                                   schema_k8sio_api_core_v1_ContainerStateTerminated(ref),
-		v1.ContainerStateWaiting{}.OpenAPIModelName():                                      schema_k8sio_api_core_v1_ContainerStateWaiting(ref),
-		v1.ContainerStatus{}.OpenAPIModelName():                                            schema_k8sio_api_core_v1_ContainerStatus(ref),
-		v1.ContainerUser{}.OpenAPIModelName():                                              schema_k8sio_api_core_v1_ContainerUser(ref),
-		v1.DaemonEndpoint{}.OpenAPIModelName():                                             schema_k8sio_api_core_v1_DaemonEndpoint(ref),
-		v1.DownwardAPIProjection{}.OpenAPIModelName():                                      schema_k8sio_api_core_v1_DownwardAPIProjection(ref),
-		v1.DownwardAPIVolumeFile{}.OpenAPIModelName():                                      schema_k8sio_api_core_v1_DownwardAPIVolumeFile(ref),
-		v1.DownwardAPIVolumeSource{}.OpenAPIModelName():                                    schema_k8sio_api_core_v1_DownwardAPIVolumeSource(ref),
-		v1.EmptyDirVolumeSource{}.OpenAPIModelName():                                       schema_k8sio_api_core_v1_EmptyDirVolumeSource(ref),
-		v1.EndpointAddress{}.OpenAPIModelName():                                            schema_k8sio_api_core_v1_EndpointAddress(ref),
-		v1.EndpointPort{}.OpenAPIModelName():                                               schema_k8sio_api_core_v1_EndpointPort(ref),
-		v1.EndpointSubset{}.OpenAPIModelName():                                             schema_k8sio_api_core_v1_EndpointSubset(ref),
-		v1.Endpoints{}.OpenAPIModelName():                                                  schema_k8sio_api_core_v1_Endpoints(ref),
-		v1.EndpointsList{}.OpenAPIModelName():                                              schema_k8sio_api_core_v1_EndpointsList(ref),
-		v1.EnvFromSource{}.OpenAPIModelName():                                              schema_k8sio_api_core_v1_EnvFromSource(ref),
-		v1.EnvVar{}.OpenAPIModelName():                                                     schema_k8sio_api_core_v1_EnvVar(ref),
-		v1.EnvVarSource{}.OpenAPIModelName():                                               schema_k8sio_api_core_v1_EnvVarSource(ref),
-		v1.EphemeralContainer{}.OpenAPIModelName():                                         schema_k8sio_api_core_v1_EphemeralContainer(ref),
-		v1.EphemeralContainerCommon{}.OpenAPIModelName():                                   schema_k8sio_api_core_v1_EphemeralContainerCommon(ref),
-		v1.EphemeralVolumeSource{}.OpenAPIModelName():                                      schema_k8sio_api_core_v1_EphemeralVolumeSource(ref),
-		v1.Event{}.OpenAPIModelName():                                                      schema_k8sio_api_core_v1_Event(ref),
-		v1.EventList{}.OpenAPIModelName():                                                  schema_k8sio_api_core_v1_EventList(ref),
-		v1.EventSeries{}.OpenAPIModelName():                                                schema_k8sio_api_core_v1_EventSeries(ref),
-		v1.EventSource{}.OpenAPIModelName():                                                schema_k8sio_api_core_v1_EventSource(ref),
-		v1.ExecAction{}.OpenAPIModelName():                                                 schema_k8sio_api_core_v1_ExecAction(ref),
-		v1.FCVolumeSource{}.OpenAPIModelName():                                             schema_k8sio_api_core_v1_FCVolumeSource(ref),
-		v1.FileKeySelector{}.OpenAPIModelName():                                            schema_k8sio_api_core_v1_FileKeySelector(ref),
-		v1.FlexPersistentVolumeSource{}.OpenAPIModelName():                                 schema_k8sio_api_core_v1_FlexPersistentVolumeSource(ref),
-		v1.FlexVolumeSource{}.OpenAPIModelName():                                           schema_k8sio_api_core_v1_FlexVolumeSource(ref),
-		v1.FlockerVolumeSource{}.OpenAPIModelName():                                        schema_k8sio_api_core_v1_FlockerVolumeSource(ref),
-		v1.GCEPersistentDiskVolumeSource{}.OpenAPIModelName():                              schema_k8sio_api_core_v1_GCEPersistentDiskVolumeSource(ref),
-		v1.GRPCAction{}.OpenAPIModelName():                                                 schema_k8sio_api_core_v1_GRPCAction(ref),
-		v1.GitRepoVolumeSource{}.OpenAPIModelName():                                        schema_k8sio_api_core_v1_GitRepoVolumeSource(ref),
-		v1.GlusterfsPersistentVolumeSource{}.OpenAPIModelName():                            schema_k8sio_api_core_v1_GlusterfsPersistentVolumeSource(ref),
-		v1.GlusterfsVolumeSource{}.OpenAPIModelName():                                      schema_k8sio_api_core_v1_GlusterfsVolumeSource(ref),
-		v1.HTTPGetAction{}.OpenAPIModelName():                                              schema_k8sio_api_core_v1_HTTPGetAction(ref),
-		v1.HTTPHeader{}.OpenAPIModelName():                                                 schema_k8sio_api_core_v1_HTTPHeader(ref),
-		v1.HostAlias{}.OpenAPIModelName():                                                  schema_k8sio_api_core_v1_HostAlias(ref),
-		v1.HostIP{}.OpenAPIModelName():                                                     schema_k8sio_api_core_v1_HostIP(ref),
-		v1.HostPathVolumeSource{}.OpenAPIModelName():                                       schema_k8sio_api_core_v1_HostPathVolumeSource(ref),
-		v1.ISCSIPersistentVolumeSource{}.OpenAPIModelName():                                schema_k8sio_api_core_v1_ISCSIPersistentVolumeSource(ref),
-		v1.ISCSIVolumeSource{}.OpenAPIModelName():                                          schema_k8sio_api_core_v1_ISCSIVolumeSource(ref),
-		v1.ImageVolumeSource{}.OpenAPIModelName():                                          schema_k8sio_api_core_v1_ImageVolumeSource(ref),
-		v1.KeyToPath{}.OpenAPIModelName():                                                  schema_k8sio_api_core_v1_KeyToPath(ref),
-		v1.Lifecycle{}.OpenAPIModelName():                                                  schema_k8sio_api_core_v1_Lifecycle(ref),
-		v1.LifecycleHandler{}.OpenAPIModelName():                                           schema_k8sio_api_core_v1_LifecycleHandler(ref),
-		v1.LimitRange{}.OpenAPIModelName():                                                 schema_k8sio_api_core_v1_LimitRange(ref),
-		v1.LimitRangeItem{}.OpenAPIModelName():                                             schema_k8sio_api_core_v1_LimitRangeItem(ref),
-		v1.LimitRangeList{}.OpenAPIModelName():                                             schema_k8sio_api_core_v1_LimitRangeList(ref),
-		v1.LimitRangeSpec{}.OpenAPIModelName():                                             schema_k8sio_api_core_v1_LimitRangeSpec(ref),
-		v1.LinuxContainerUser{}.OpenAPIModelName():                                         schema_k8sio_api_core_v1_LinuxContainerUser(ref),
-		v1.List{}.OpenAPIModelName():                                                       schema_k8sio_api_core_v1_List(ref),
-		v1.LoadBalancerIngress{}.OpenAPIModelName():                                        schema_k8sio_api_core_v1_LoadBalancerIngress(ref),
-		v1.LoadBalancerStatus{}.OpenAPIModelName():                                         schema_k8sio_api_core_v1_LoadBalancerStatus(ref),
-		v1.LocalObjectReference{}.OpenAPIModelName():                                       schema_k8sio_api_core_v1_LocalObjectReference(ref),
-		v1.LocalVolumeSource{}.OpenAPIModelName():                                          schema_k8sio_api_core_v1_LocalVolumeSource(ref),
-		v1.ModifyVolumeStatus{}.OpenAPIModelName():                                         schema_k8sio_api_core_v1_ModifyVolumeStatus(ref),
-		v1.NFSVolumeSource{}.OpenAPIModelName():                                            schema_k8sio_api_core_v1_NFSVolumeSource(ref),
-		v1.Namespace{}.OpenAPIModelName():                                                  schema_k8sio_api_core_v1_Namespace(ref),
-		v1.NamespaceCondition{}.OpenAPIModelName():                                         schema_k8sio_api_core_v1_NamespaceCondition(ref),
-		v1.NamespaceList{}.OpenAPIModelName():                                              schema_k8sio_api_core_v1_NamespaceList(ref),
-		v1.NamespaceSpec{}.OpenAPIModelName():                                              schema_k8sio_api_core_v1_NamespaceSpec(ref),
-		v1.NamespaceStatus{}.OpenAPIModelName():                                            schema_k8sio_api_core_v1_NamespaceStatus(ref),
-		v1.Node{}.OpenAPIModelName():                                                       schema_k8sio_api_core_v1_Node(ref),
-		v1.NodeAddress{}.OpenAPIModelName():                                                schema_k8sio_api_core_v1_NodeAddress(ref),
-		v1.NodeAffinity{}.OpenAPIModelName():                                               schema_k8sio_api_core_v1_NodeAffinity(ref),
-		v1.NodeCondition{}.OpenAPIModelName():                                              schema_k8sio_api_core_v1_NodeCondition(ref),
-		v1.NodeConfigSource{}.OpenAPIModelName():                                           schema_k8sio_api_core_v1_NodeConfigSource(ref),
-		v1.NodeConfigStatus{}.OpenAPIModelName():                                           schema_k8sio_api_core_v1_NodeConfigStatus(ref),
-		v1.NodeDaemonEndpoints{}.OpenAPIModelName():                                        schema_k8sio_api_core_v1_NodeDaemonEndpoints(ref),
-		v1.NodeFeatures{}.OpenAPIModelName():                                               schema_k8sio_api_core_v1_NodeFeatures(ref),
-		v1.NodeList{}.OpenAPIModelName():                                                   schema_k8sio_api_core_v1_NodeList(ref),
-		v1.NodeProxyOptions{}.OpenAPIModelName():                                           schema_k8sio_api_core_v1_NodeProxyOptions(ref),
-		v1.NodeRuntimeHandler{}.OpenAPIModelName():                                         schema_k8sio_api_core_v1_NodeRuntimeHandler(ref),
-		v1.NodeRuntimeHandlerFeatures{}.OpenAPIModelName():                                 schema_k8sio_api_core_v1_NodeRuntimeHandlerFeatures(ref),
-		v1.NodeSelector{}.OpenAPIModelName():                                               schema_k8sio_api_core_v1_NodeSelector(ref),
-		v1.NodeSelectorRequirement{}.OpenAPIModelName():                                    schema_k8sio_api_core_v1_NodeSelectorRequirement(ref),
-		v1.NodeSelectorTerm{}.OpenAPIModelName():                                           schema_k8sio_api_core_v1_NodeSelectorTerm(ref),
-		v1.NodeSpec{}.OpenAPIModelName():                                                   schema_k8sio_api_core_v1_NodeSpec(ref),
-		v1.NodeStatus{}.OpenAPIModelName():                                                 schema_k8sio_api_core_v1_NodeStatus(ref),
-		v1.NodeSwapStatus{}.OpenAPIModelName():                                             schema_k8sio_api_core_v1_NodeSwapStatus(ref),
-		v1.NodeSystemInfo{}.OpenAPIModelName():                                             schema_k8sio_api_core_v1_NodeSystemInfo(ref),
-		v1.ObjectFieldSelector{}.OpenAPIModelName():                                        schema_k8sio_api_core_v1_ObjectFieldSelector(ref),
-		v1.ObjectReference{}.OpenAPIModelName():                                            schema_k8sio_api_core_v1_ObjectReference(ref),
-		v1.PersistentVolume{}.OpenAPIModelName():                                           schema_k8sio_api_core_v1_PersistentVolume(ref),
-		v1.PersistentVolumeClaim{}.OpenAPIModelName():                                      schema_k8sio_api_core_v1_PersistentVolumeClaim(ref),
-		v1.PersistentVolumeClaimCondition{}.OpenAPIModelName():                             schema_k8sio_api_core_v1_PersistentVolumeClaimCondition(ref),
-		v1.PersistentVolumeClaimList{}.OpenAPIModelName():                                  schema_k8sio_api_core_v1_PersistentVolumeClaimList(ref),
-		v1.PersistentVolumeClaimSpec{}.OpenAPIModelName():                                  schema_k8sio_api_core_v1_PersistentVolumeClaimSpec(ref),
-		v1.PersistentVolumeClaimStatus{}.OpenAPIModelName():                                schema_k8sio_api_core_v1_PersistentVolumeClaimStatus(ref),
-		v1.PersistentVolumeClaimTemplate{}.OpenAPIModelName():                              schema_k8sio_api_core_v1_PersistentVolumeClaimTemplate(ref),
-		v1.PersistentVolumeClaimVolumeSource{}.OpenAPIModelName():                          schema_k8sio_api_core_v1_PersistentVolumeClaimVolumeSource(ref),
-		v1.PersistentVolumeList{}.OpenAPIModelName():                                       schema_k8sio_api_core_v1_PersistentVolumeList(ref),
-		v1.PersistentVolumeSource{}.OpenAPIModelName():                                     schema_k8sio_api_core_v1_PersistentVolumeSource(ref),
-		v1.PersistentVolumeSpec{}.OpenAPIModelName():                                       schema_k8sio_api_core_v1_PersistentVolumeSpec(ref),
-		v1.PersistentVolumeStatus{}.OpenAPIModelName():                                     schema_k8sio_api_core_v1_PersistentVolumeStatus(ref),
-		v1.PhotonPersistentDiskVolumeSource{}.OpenAPIModelName():                           schema_k8sio_api_core_v1_PhotonPersistentDiskVolumeSource(ref),
-		v1.Pod{}.OpenAPIModelName():                                                        schema_k8sio_api_core_v1_Pod(ref),
-		v1.PodAffinity{}.OpenAPIModelName():                                                schema_k8sio_api_core_v1_PodAffinity(ref),
-		v1.PodAffinityTerm{}.OpenAPIModelName():                                            schema_k8sio_api_core_v1_PodAffinityTerm(ref),
-		v1.PodAntiAffinity{}.OpenAPIModelName():                                            schema_k8sio_api_core_v1_PodAntiAffinity(ref),
-		v1.PodAttachOptions{}.OpenAPIModelName():                                           schema_k8sio_api_core_v1_PodAttachOptions(ref),
-		v1.PodCertificateProjection{}.OpenAPIModelName():                                   schema_k8sio_api_core_v1_PodCertificateProjection(ref),
-		v1.PodCondition{}.OpenAPIModelName():                                               schema_k8sio_api_core_v1_PodCondition(ref),
-		v1.PodDNSConfig{}.OpenAPIModelName():                                               schema_k8sio_api_core_v1_PodDNSConfig(ref),
-		v1.PodDNSConfigOption{}.OpenAPIModelName():                                         schema_k8sio_api_core_v1_PodDNSConfigOption(ref),
-		v1.PodExecOptions{}.OpenAPIModelName():                                             schema_k8sio_api_core_v1_PodExecOptions(ref),
-		v1.PodExtendedResourceClaimStatus{}.OpenAPIModelName():                             schema_k8sio_api_core_v1_PodExtendedResourceClaimStatus(ref),
-		v1.PodIP{}.OpenAPIModelName():                                                      schema_k8sio_api_core_v1_PodIP(ref),
-		v1.PodList{}.OpenAPIModelName():                                                    schema_k8sio_api_core_v1_PodList(ref),
-		v1.PodLogOptions{}.OpenAPIModelName():                                              schema_k8sio_api_core_v1_PodLogOptions(ref),
-		v1.PodOS{}.OpenAPIModelName():                                                      schema_k8sio_api_core_v1_PodOS(ref),
-		v1.PodPortForwardOptions{}.OpenAPIModelName():                                      schema_k8sio_api_core_v1_PodPortForwardOptions(ref),
-		v1.PodProxyOptions{}.OpenAPIModelName():                                            schema_k8sio_api_core_v1_PodProxyOptions(ref),
-		v1.PodReadinessGate{}.OpenAPIModelName():                                           schema_k8sio_api_core_v1_PodReadinessGate(ref),
-		v1.PodResourceClaim{}.OpenAPIModelName():                                           schema_k8sio_api_core_v1_PodResourceClaim(ref),
-		v1.PodResourceClaimStatus{}.OpenAPIModelName():                                     schema_k8sio_api_core_v1_PodResourceClaimStatus(ref),
-		v1.PodSchedulingGate{}.OpenAPIModelName():                                          schema_k8sio_api_core_v1_PodSchedulingGate(ref),
-		v1.PodSecurityContext{}.OpenAPIModelName():                                         schema_k8sio_api_core_v1_PodSecurityContext(ref),
-		v1.PodSignature{}.OpenAPIModelName():                                               schema_k8sio_api_core_v1_PodSignature(ref),
-		v1.PodSpec{}.OpenAPIModelName():                                                    schema_k8sio_api_core_v1_PodSpec(ref),
-		v1.PodStatus{}.OpenAPIModelName():                                                  schema_k8sio_api_core_v1_PodStatus(ref),
-		v1.PodStatusResult{}.OpenAPIModelName():                                            schema_k8sio_api_core_v1_PodStatusResult(ref),
-		v1.PodTemplate{}.OpenAPIModelName():                                                schema_k8sio_api_core_v1_PodTemplate(ref),
-		v1.PodTemplateList{}.OpenAPIModelName():                                            schema_k8sio_api_core_v1_PodTemplateList(ref),
-		v1.PodTemplateSpec{}.OpenAPIModelName():                                            schema_k8sio_api_core_v1_PodTemplateSpec(ref),
-		v1.PortStatus{}.OpenAPIModelName():                                                 schema_k8sio_api_core_v1_PortStatus(ref),
-		v1.PortworxVolumeSource{}.OpenAPIModelName():                                       schema_k8sio_api_core_v1_PortworxVolumeSource(ref),
-		v1.PreferAvoidPodsEntry{}.OpenAPIModelName():                                       schema_k8sio_api_core_v1_PreferAvoidPodsEntry(ref),
-		v1.PreferredSchedulingTerm{}.OpenAPIModelName():                                    schema_k8sio_api_core_v1_PreferredSchedulingTerm(ref),
-		v1.Probe{}.OpenAPIModelName():                                                      schema_k8sio_api_core_v1_Probe(ref),
-		v1.ProbeHandler{}.OpenAPIModelName():                                               schema_k8sio_api_core_v1_ProbeHandler(ref),
-		v1.ProjectedVolumeSource{}.OpenAPIModelName():                                      schema_k8sio_api_core_v1_ProjectedVolumeSource(ref),
-		v1.QuobyteVolumeSource{}.OpenAPIModelName():                                        schema_k8sio_api_core_v1_QuobyteVolumeSource(ref),
-		v1.RBDPersistentVolumeSource{}.OpenAPIModelName():                                  schema_k8sio_api_core_v1_RBDPersistentVolumeSource(ref),
-		v1.RBDVolumeSource{}.OpenAPIModelName():                                            schema_k8sio_api_core_v1_RBDVolumeSource(ref),
-		v1.RangeAllocation{}.OpenAPIModelName():                                            schema_k8sio_api_core_v1_RangeAllocation(ref),
-		v1.ReplicationController{}.OpenAPIModelName():                                      schema_k8sio_api_core_v1_ReplicationController(ref),
-		v1.ReplicationControllerCondition{}.OpenAPIModelName():                             schema_k8sio_api_core_v1_ReplicationControllerCondition(ref),
-		v1.ReplicationControllerList{}.OpenAPIModelName():                                  schema_k8sio_api_core_v1_ReplicationControllerList(ref),
-		v1.ReplicationControllerSpec{}.OpenAPIModelName():                                  schema_k8sio_api_core_v1_ReplicationControllerSpec(ref),
-		v1.ReplicationControllerStatus{}.OpenAPIModelName():                                schema_k8sio_api_core_v1_ReplicationControllerStatus(ref),
-		v1.ResourceClaim{}.OpenAPIModelName():                                              schema_k8sio_api_core_v1_ResourceClaim(ref),
-		v1.ResourceFieldSelector{}.OpenAPIModelName():                                      schema_k8sio_api_core_v1_ResourceFieldSelector(ref),
-		v1.ResourceHealth{}.OpenAPIModelName():                                             schema_k8sio_api_core_v1_ResourceHealth(ref),
-		v1.ResourceQuota{}.OpenAPIModelName():                                              schema_k8sio_api_core_v1_ResourceQuota(ref),
-		v1.ResourceQuotaList{}.OpenAPIModelName():                                          schema_k8sio_api_core_v1_ResourceQuotaList(ref),
-		v1.ResourceQuotaSpec{}.OpenAPIModelName():                                          schema_k8sio_api_core_v1_ResourceQuotaSpec(ref),
-		v1.ResourceQuotaStatus{}.OpenAPIModelName():                                        schema_k8sio_api_core_v1_ResourceQuotaStatus(ref),
-		v1.ResourceRequirements{}.OpenAPIModelName():                                       schema_k8sio_api_core_v1_ResourceRequirements(ref),
-		v1.ResourceStatus{}.OpenAPIModelName():                                             schema_k8sio_api_core_v1_ResourceStatus(ref),
-		v1.SELinuxOptions{}.OpenAPIModelName():                                             schema_k8sio_api_core_v1_SELinuxOptions(ref),
-		v1.ScaleIOPersistentVolumeSource{}.OpenAPIModelName():                              schema_k8sio_api_core_v1_ScaleIOPersistentVolumeSource(ref),
-		v1.ScaleIOVolumeSource{}.OpenAPIModelName():                                        schema_k8sio_api_core_v1_ScaleIOVolumeSource(ref),
-		v1.ScopeSelector{}.OpenAPIModelName():                                              schema_k8sio_api_core_v1_ScopeSelector(ref),
-		v1.ScopedResourceSelectorRequirement{}.OpenAPIModelName():                          schema_k8sio_api_core_v1_ScopedResourceSelectorRequirement(ref),
-		v1.SeccompProfile{}.OpenAPIModelName():                                             schema_k8sio_api_core_v1_SeccompProfile(ref),
-		v1.Secret{}.OpenAPIModelName():                                                     schema_k8sio_api_core_v1_Secret(ref),
-		v1.SecretEnvSource{}.OpenAPIModelName():                                            schema_k8sio_api_core_v1_SecretEnvSource(ref),
-		v1.SecretKeySelector{}.OpenAPIModelName():                                          schema_k8sio_api_core_v1_SecretKeySelector(ref),
-		v1.SecretList{}.OpenAPIModelName():                                                 schema_k8sio_api_core_v1_SecretList(ref),
-		v1.SecretProjection{}.OpenAPIModelName():                                           schema_k8sio_api_core_v1_SecretProjection(ref),
-		v1.SecretReference{}.OpenAPIModelName():                                            schema_k8sio_api_core_v1_SecretReference(ref),
-		v1.SecretVolumeSource{}.OpenAPIModelName():                                         schema_k8sio_api_core_v1_SecretVolumeSource(ref),
-		v1.SecurityContext{}.OpenAPIModelName():                                            schema_k8sio_api_core_v1_SecurityContext(ref),
-		v1.SerializedReference{}.OpenAPIModelName():                                        schema_k8sio_api_core_v1_SerializedReference(ref),
-		v1.Service{}.OpenAPIModelName():                                                    schema_k8sio_api_core_v1_Service(ref),
-		v1.ServiceAccount{}.OpenAPIModelName():                                             schema_k8sio_api_core_v1_ServiceAccount(ref),
-		v1.ServiceAccountList{}.OpenAPIModelName():                                         schema_k8sio_api_core_v1_ServiceAccountList(ref),
-		v1.ServiceAccountTokenProjection{}.OpenAPIModelName():                              schema_k8sio_api_core_v1_ServiceAccountTokenProjection(ref),
-		v1.ServiceList{}.OpenAPIModelName():                                                schema_k8sio_api_core_v1_ServiceList(ref),
-		v1.ServicePort{}.OpenAPIModelName():                                                schema_k8sio_api_core_v1_ServicePort(ref),
-		v1.ServiceProxyOptions{}.OpenAPIModelName():                                        schema_k8sio_api_core_v1_ServiceProxyOptions(ref),
-		v1.ServiceSpec{}.OpenAPIModelName():                                                schema_k8sio_api_core_v1_ServiceSpec(ref),
-		v1.ServiceStatus{}.OpenAPIModelName():                                              schema_k8sio_api_core_v1_ServiceStatus(ref),
-		v1.SessionAffinityConfig{}.OpenAPIModelName():                                      schema_k8sio_api_core_v1_SessionAffinityConfig(ref),
-		v1.SleepAction{}.OpenAPIModelName():                                                schema_k8sio_api_core_v1_SleepAction(ref),
-		v1.StorageOSPersistentVolumeSource{}.OpenAPIModelName():                            schema_k8sio_api_core_v1_StorageOSPersistentVolumeSource(ref),
-		v1.StorageOSVolumeSource{}.OpenAPIModelName():                                      schema_k8sio_api_core_v1_StorageOSVolumeSource(ref),
-		v1.Sysctl{}.OpenAPIModelName():                                                     schema_k8sio_api_core_v1_Sysctl(ref),
-		v1.TCPSocketAction{}.OpenAPIModelName():                                            schema_k8sio_api_core_v1_TCPSocketAction(ref),
-		v1.Taint{}.OpenAPIModelName():                                                      schema_k8sio_api_core_v1_Taint(ref),
-		v1.Toleration{}.OpenAPIModelName():                                                 schema_k8sio_api_core_v1_Toleration(ref),
-		v1.TopologySelectorLabelRequirement{}.OpenAPIModelName():                           schema_k8sio_api_core_v1_TopologySelectorLabelRequirement(ref),
-		v1.TopologySelectorTerm{}.OpenAPIModelName():                                       schema_k8sio_api_core_v1_TopologySelectorTerm(ref),
-		v1.TopologySpreadConstraint{}.OpenAPIModelName():                                   schema_k8sio_api_core_v1_TopologySpreadConstraint(ref),
-		v1.TypedLocalObjectReference{}.OpenAPIModelName():                                  schema_k8sio_api_core_v1_TypedLocalObjectReference(ref),
-		v1.TypedObjectReference{}.OpenAPIModelName():                                       schema_k8sio_api_core_v1_TypedObjectReference(ref),
-		v1.Volume{}.OpenAPIModelName():                                                     schema_k8sio_api_core_v1_Volume(ref),
-		v1.VolumeDevice{}.OpenAPIModelName():                                               schema_k8sio_api_core_v1_VolumeDevice(ref),
-		v1.VolumeMount{}.OpenAPIModelName():                                                schema_k8sio_api_core_v1_VolumeMount(ref),
-		v1.VolumeMountStatus{}.OpenAPIModelName():                                          schema_k8sio_api_core_v1_VolumeMountStatus(ref),
-		v1.VolumeNodeAffinity{}.OpenAPIModelName():                                         schema_k8sio_api_core_v1_VolumeNodeAffinity(ref),
-		v1.VolumeProjection{}.OpenAPIModelName():                                           schema_k8sio_api_core_v1_VolumeProjection(ref),
-		v1.VolumeResourceRequirements{}.OpenAPIModelName():                                 schema_k8sio_api_core_v1_VolumeResourceRequirements(ref),
-		v1.VolumeSource{}.OpenAPIModelName():                                               schema_k8sio_api_core_v1_VolumeSource(ref),
-		v1.VsphereVirtualDiskVolumeSource{}.OpenAPIModelName():                             schema_k8sio_api_core_v1_VsphereVirtualDiskVolumeSource(ref),
-		v1.WeightedPodAffinityTerm{}.OpenAPIModelName():                                    schema_k8sio_api_core_v1_WeightedPodAffinityTerm(ref),
-		v1.WindowsSecurityContextOptions{}.OpenAPIModelName():                              schema_k8sio_api_core_v1_WindowsSecurityContextOptions(ref),
-		v1.WorkloadReference{}.OpenAPIModelName():                                          schema_k8sio_api_core_v1_WorkloadReference(ref),
-		metav1.APIGroup{}.OpenAPIModelName():                                               schema_pkg_apis_meta_v1_APIGroup(ref),
-		metav1.APIGroupList{}.OpenAPIModelName():                                           schema_pkg_apis_meta_v1_APIGroupList(ref),
-		metav1.APIResource{}.OpenAPIModelName():                                            schema_pkg_apis_meta_v1_APIResource(ref),
-		metav1.APIResourceList{}.OpenAPIModelName():                                        schema_pkg_apis_meta_v1_APIResourceList(ref),
-		metav1.APIVersions{}.OpenAPIModelName():                                            schema_pkg_apis_meta_v1_APIVersions(ref),
-		metav1.ApplyOptions{}.OpenAPIModelName():                                           schema_pkg_apis_meta_v1_ApplyOptions(ref),
-		metav1.Condition{}.OpenAPIModelName():                                              schema_pkg_apis_meta_v1_Condition(ref),
-		metav1.CreateOptions{}.OpenAPIModelName():                                          schema_pkg_apis_meta_v1_CreateOptions(ref),
-		metav1.DeleteOptions{}.OpenAPIModelName():                                          schema_pkg_apis_meta_v1_DeleteOptions(ref),
-		metav1.Duration{}.OpenAPIModelName():                                               schema_pkg_apis_meta_v1_Duration(ref),
-		metav1.FieldSelectorRequirement{}.OpenAPIModelName():                               schema_pkg_apis_meta_v1_FieldSelectorRequirement(ref),
-		metav1.FieldsV1{}.OpenAPIModelName():                                               schema_pkg_apis_meta_v1_FieldsV1(ref),
-		metav1.GetOptions{}.OpenAPIModelName():                                             schema_pkg_apis_meta_v1_GetOptions(ref),
-		metav1.GroupKind{}.OpenAPIModelName():                                              schema_pkg_apis_meta_v1_GroupKind(ref),
-		metav1.GroupResource{}.OpenAPIModelName():                                          schema_pkg_apis_meta_v1_GroupResource(ref),
-		metav1.GroupVersion{}.OpenAPIModelName():                                           schema_pkg_apis_meta_v1_GroupVersion(ref),
-		metav1.GroupVersionForDiscovery{}.OpenAPIModelName():                               schema_pkg_apis_meta_v1_GroupVersionForDiscovery(ref),
-		metav1.GroupVersionKind{}.OpenAPIModelName():                                       schema_pkg_apis_meta_v1_GroupVersionKind(ref),
-		metav1.GroupVersionResource{}.OpenAPIModelName():                                   schema_pkg_apis_meta_v1_GroupVersionResource(ref),
-		metav1.InternalEvent{}.OpenAPIModelName():                                          schema_pkg_apis_meta_v1_InternalEvent(ref),
-		metav1.LabelSelector{}.OpenAPIModelName():                                          schema_pkg_apis_meta_v1_LabelSelector(ref),
-		metav1.LabelSelectorRequirement{}.OpenAPIModelName():                               schema_pkg_apis_meta_v1_LabelSelectorRequirement(ref),
-		metav1.List{}.OpenAPIModelName():                                                   schema_pkg_apis_meta_v1_List(ref),
-		metav1.ListMeta{}.OpenAPIModelName():                                               schema_pkg_apis_meta_v1_ListMeta(ref),
-		metav1.ListOptions{}.OpenAPIModelName():                                            schema_pkg_apis_meta_v1_ListOptions(ref),
-		metav1.ManagedFieldsEntry{}.OpenAPIModelName():                                     schema_pkg_apis_meta_v1_ManagedFieldsEntry(ref),
-		metav1.MicroTime{}.OpenAPIModelName():                                              schema_pkg_apis_meta_v1_MicroTime(ref),
-		metav1.ObjectMeta{}.OpenAPIModelName():                                             schema_pkg_apis_meta_v1_ObjectMeta(ref),
-		metav1.OwnerReference{}.OpenAPIModelName():                                         schema_pkg_apis_meta_v1_OwnerReference(ref),
-		metav1.PartialObjectMetadata{}.OpenAPIModelName():                                  schema_pkg_apis_meta_v1_PartialObjectMetadata(ref),
-		metav1.PartialObjectMetadataList{}.OpenAPIModelName():                              schema_pkg_apis_meta_v1_PartialObjectMetadataList(ref),
-		metav1.Patch{}.OpenAPIModelName():                                                  schema_pkg_apis_meta_v1_Patch(ref),
-		metav1.PatchOptions{}.OpenAPIModelName():                                           schema_pkg_apis_meta_v1_PatchOptions(ref),
-		metav1.Preconditions{}.OpenAPIModelName():                                          schema_pkg_apis_meta_v1_Preconditions(ref),
-		metav1.RootPaths{}.OpenAPIModelName():                                              schema_pkg_apis_meta_v1_RootPaths(ref),
-		metav1.ServerAddressByClientCIDR{}.OpenAPIModelName():                              schema_pkg_apis_meta_v1_ServerAddressByClientCIDR(ref),
-		metav1.Status{}.OpenAPIModelName():                                                 schema_pkg_apis_meta_v1_Status(ref),
-		metav1.StatusCause{}.OpenAPIModelName():                                            schema_pkg_apis_meta_v1_StatusCause(ref),
-		metav1.StatusDetails{}.OpenAPIModelName():                                          schema_pkg_apis_meta_v1_StatusDetails(ref),
-		metav1.Table{}.OpenAPIModelName():                                                  schema_pkg_apis_meta_v1_Table(ref),
-		metav1.TableColumnDefinition{}.OpenAPIModelName():                                  schema_pkg_apis_meta_v1_TableColumnDefinition(ref),
-		metav1.TableOptions{}.OpenAPIModelName():                                           schema_pkg_apis_meta_v1_TableOptions(ref),
-		metav1.TableRow{}.OpenAPIModelName():                                               schema_pkg_apis_meta_v1_TableRow(ref),
-		metav1.TableRowCondition{}.OpenAPIModelName():                                      schema_pkg_apis_meta_v1_TableRowCondition(ref),
-		metav1.Time{}.OpenAPIModelName():                                                   schema_pkg_apis_meta_v1_Time(ref),
-		metav1.Timestamp{}.OpenAPIModelName():                                              schema_pkg_apis_meta_v1_Timestamp(ref),
-		metav1.TypeMeta{}.OpenAPIModelName():                                               schema_pkg_apis_meta_v1_TypeMeta(ref),
-		metav1.UpdateOptions{}.OpenAPIModelName():                                          schema_pkg_apis_meta_v1_UpdateOptions(ref),
-		metav1.WatchEvent{}.OpenAPIModelName():                                             schema_pkg_apis_meta_v1_WatchEvent(ref),
-		runtime.RawExtension{}.OpenAPIModelName():                                          schema_k8sio_apimachinery_pkg_runtime_RawExtension(ref),
-		runtime.TypeMeta{}.OpenAPIModelName():                                              schema_k8sio_apimachinery_pkg_runtime_TypeMeta(ref),
-		runtime.Unknown{}.OpenAPIModelName():                                               schema_k8sio_apimachinery_pkg_runtime_Unknown(ref),
-		intstr.IntOrString{}.OpenAPIModelName():                                            schema_apimachinery_pkg_util_intstr_IntOrString(ref),
-		version.Info{}.OpenAPIModelName():                                                  schema_k8sio_apimachinery_pkg_version_Info(ref),
+		v1beta2.AddressGroup{}.OpenAPIModelName():                         schema_pkg_apis_controlplane_v1beta2_AddressGroup(ref),
+		v1beta2.AddressGroupList{}.OpenAPIModelName():                     schema_pkg_apis_controlplane_v1beta2_AddressGroupList(ref),
+		v1beta2.AddressGroupPatch{}.OpenAPIModelName():                    schema_pkg_apis_controlplane_v1beta2_AddressGroupPatch(ref),
+		v1beta2.AppliedToGroup{}.OpenAPIModelName():                       schema_pkg_apis_controlplane_v1beta2_AppliedToGroup(ref),
+		v1beta2.AppliedToGroupList{}.OpenAPIModelName():                   schema_pkg_apis_controlplane_v1beta2_AppliedToGroupList(ref),
+		v1beta2.AppliedToGroupPatch{}.OpenAPIModelName():                  schema_pkg_apis_controlplane_v1beta2_AppliedToGroupPatch(ref),
+		v1beta2.BasicAuthentication{}.OpenAPIModelName():                  schema_pkg_apis_controlplane_v1beta2_BasicAuthentication(ref),
+		v1beta2.BundleFileServer{}.OpenAPIModelName():                     schema_pkg_apis_controlplane_v1beta2_BundleFileServer(ref),
+		v1beta2.BundleServerAuthConfiguration{}.OpenAPIModelName():        schema_pkg_apis_controlplane_v1beta2_BundleServerAuthConfiguration(ref),
+		v1beta2.ClusterGroupMembers{}.OpenAPIModelName():                  schema_pkg_apis_controlplane_v1beta2_ClusterGroupMembers(ref),
+		v1beta2.EgressGroup{}.OpenAPIModelName():                          schema_pkg_apis_controlplane_v1beta2_EgressGroup(ref),
+		v1beta2.EgressGroupList{}.OpenAPIModelName():                      schema_pkg_apis_controlplane_v1beta2_EgressGroupList(ref),
+		v1beta2.EgressGroupPatch{}.OpenAPIModelName():                     schema_pkg_apis_controlplane_v1beta2_EgressGroupPatch(ref),
+		v1beta2.Entity{}.OpenAPIModelName():                               schema_pkg_apis_controlplane_v1beta2_Entity(ref),
+		v1beta2.ExternalEntityReference{}.OpenAPIModelName():              schema_pkg_apis_controlplane_v1beta2_ExternalEntityReference(ref),
+		v1beta2.GroupAssociation{}.OpenAPIModelName():                     schema_pkg_apis_controlplane_v1beta2_GroupAssociation(ref),
+		v1beta2.GroupMember{}.OpenAPIModelName():                          schema_pkg_apis_controlplane_v1beta2_GroupMember(ref),
+		v1beta2.GroupMembers{}.OpenAPIModelName():                         schema_pkg_apis_controlplane_v1beta2_GroupMembers(ref),
+		v1beta2.GroupReference{}.OpenAPIModelName():                       schema_pkg_apis_controlplane_v1beta2_GroupReference(ref),
+		v1beta2.HTTPProtocol{}.OpenAPIModelName():                         schema_pkg_apis_controlplane_v1beta2_HTTPProtocol(ref),
+		v1beta2.IPBlock{}.OpenAPIModelName():                              schema_pkg_apis_controlplane_v1beta2_IPBlock(ref),
+		v1beta2.IPGroupAssociation{}.OpenAPIModelName():                   schema_pkg_apis_controlplane_v1beta2_IPGroupAssociation(ref),
+		v1beta2.IPNet{}.OpenAPIModelName():                                schema_pkg_apis_controlplane_v1beta2_IPNet(ref),
+		v1beta2.L7Protocol{}.OpenAPIModelName():                           schema_pkg_apis_controlplane_v1beta2_L7Protocol(ref),
+		v1beta2.MulticastGroupInfo{}.OpenAPIModelName():                   schema_pkg_apis_controlplane_v1beta2_MulticastGroupInfo(ref),
+		v1beta2.NamedPort{}.OpenAPIModelName():                            schema_pkg_apis_controlplane_v1beta2_NamedPort(ref),
+		v1beta2.NetworkPolicy{}.OpenAPIModelName():                        schema_pkg_apis_controlplane_v1beta2_NetworkPolicy(ref),
+		v1beta2.NetworkPolicyEvaluation{}.OpenAPIModelName():              schema_pkg_apis_controlplane_v1beta2_NetworkPolicyEvaluation(ref),
+		v1beta2.NetworkPolicyEvaluationRequest{}.OpenAPIModelName():       schema_pkg_apis_controlplane_v1beta2_NetworkPolicyEvaluationRequest(ref),
+		v1beta2.NetworkPolicyEvaluationResponse{}.OpenAPIModelName():      schema_pkg_apis_controlplane_v1beta2_NetworkPolicyEvaluationResponse(ref),
+		v1beta2.NetworkPolicyList{}.OpenAPIModelName():                    schema_pkg_apis_controlplane_v1beta2_NetworkPolicyList(ref),
+		v1beta2.NetworkPolicyNodeStatus{}.OpenAPIModelName():              schema_pkg_apis_controlplane_v1beta2_NetworkPolicyNodeStatus(ref),
+		v1beta2.NetworkPolicyPeer{}.OpenAPIModelName():                    schema_pkg_apis_controlplane_v1beta2_NetworkPolicyPeer(ref),
+		v1beta2.NetworkPolicyReference{}.OpenAPIModelName():               schema_pkg_apis_controlplane_v1beta2_NetworkPolicyReference(ref),
+		v1beta2.NetworkPolicyRule{}.OpenAPIModelName():                    schema_pkg_apis_controlplane_v1beta2_NetworkPolicyRule(ref),
+		v1beta2.NetworkPolicyStats{}.OpenAPIModelName():                   schema_pkg_apis_controlplane_v1beta2_NetworkPolicyStats(ref),
+		v1beta2.NetworkPolicyStatus{}.OpenAPIModelName():                  schema_pkg_apis_controlplane_v1beta2_NetworkPolicyStatus(ref),
+		v1beta2.NodeReference{}.OpenAPIModelName():                        schema_pkg_apis_controlplane_v1beta2_NodeReference(ref),
+		v1beta2.NodeStatsSummary{}.OpenAPIModelName():                     schema_pkg_apis_controlplane_v1beta2_NodeStatsSummary(ref),
+		v1beta2.PaginationGetOptions{}.OpenAPIModelName():                 schema_pkg_apis_controlplane_v1beta2_PaginationGetOptions(ref),
+		v1beta2.PodReference{}.OpenAPIModelName():                         schema_pkg_apis_controlplane_v1beta2_PodReference(ref),
+		v1beta2.RuleRef{}.OpenAPIModelName():                              schema_pkg_apis_controlplane_v1beta2_RuleRef(ref),
+		v1beta2.Service{}.OpenAPIModelName():                              schema_pkg_apis_controlplane_v1beta2_Service(ref),
+		v1beta2.ServiceReference{}.OpenAPIModelName():                     schema_pkg_apis_controlplane_v1beta2_ServiceReference(ref),
+		v1beta2.SupportBundleCollection{}.OpenAPIModelName():              schema_pkg_apis_controlplane_v1beta2_SupportBundleCollection(ref),
+		v1beta2.SupportBundleCollectionList{}.OpenAPIModelName():          schema_pkg_apis_controlplane_v1beta2_SupportBundleCollectionList(ref),
+		v1beta2.SupportBundleCollectionNodeStatus{}.OpenAPIModelName():    schema_pkg_apis_controlplane_v1beta2_SupportBundleCollectionNodeStatus(ref),
+		v1beta2.SupportBundleCollectionStatus{}.OpenAPIModelName():        schema_pkg_apis_controlplane_v1beta2_SupportBundleCollectionStatus(ref),
+		v1beta2.TLSProtocol{}.OpenAPIModelName():                          schema_pkg_apis_controlplane_v1beta2_TLSProtocol(ref),
+		v1beta1.AgentCondition{}.OpenAPIModelName():                       schema_pkg_apis_crd_v1beta1_AgentCondition(ref),
+		v1beta1.AntreaAgentInfo{}.OpenAPIModelName():                      schema_pkg_apis_crd_v1beta1_AntreaAgentInfo(ref),
+		v1beta1.AntreaAgentInfoList{}.OpenAPIModelName():                  schema_pkg_apis_crd_v1beta1_AntreaAgentInfoList(ref),
+		v1beta1.AntreaControllerInfo{}.OpenAPIModelName():                 schema_pkg_apis_crd_v1beta1_AntreaControllerInfo(ref),
+		v1beta1.AntreaControllerInfoList{}.OpenAPIModelName():             schema_pkg_apis_crd_v1beta1_AntreaControllerInfoList(ref),
+		v1beta1.AppliedTo{}.OpenAPIModelName():                            schema_pkg_apis_crd_v1beta1_AppliedTo(ref),
+		v1beta1.Bandwidth{}.OpenAPIModelName():                            schema_pkg_apis_crd_v1beta1_Bandwidth(ref),
+		v1beta1.ClusterGroup{}.OpenAPIModelName():                         schema_pkg_apis_crd_v1beta1_ClusterGroup(ref),
+		v1beta1.ClusterGroupList{}.OpenAPIModelName():                     schema_pkg_apis_crd_v1beta1_ClusterGroupList(ref),
+		v1beta1.ClusterNetworkPolicy{}.OpenAPIModelName():                 schema_pkg_apis_crd_v1beta1_ClusterNetworkPolicy(ref),
+		v1beta1.ClusterNetworkPolicyList{}.OpenAPIModelName():             schema_pkg_apis_crd_v1beta1_ClusterNetworkPolicyList(ref),
+		v1beta1.ClusterNetworkPolicySpec{}.OpenAPIModelName():             schema_pkg_apis_crd_v1beta1_ClusterNetworkPolicySpec(ref),
+		v1beta1.ControllerCondition{}.OpenAPIModelName():                  schema_pkg_apis_crd_v1beta1_ControllerCondition(ref),
+		v1beta1.Destination{}.OpenAPIModelName():                          schema_pkg_apis_crd_v1beta1_Destination(ref),
+		v1beta1.Egress{}.OpenAPIModelName():                               schema_pkg_apis_crd_v1beta1_Egress(ref),
+		v1beta1.EgressCondition{}.OpenAPIModelName():                      schema_pkg_apis_crd_v1beta1_EgressCondition(ref),
+		v1beta1.EgressList{}.OpenAPIModelName():                           schema_pkg_apis_crd_v1beta1_EgressList(ref),
+		v1beta1.EgressSpec{}.OpenAPIModelName():                           schema_pkg_apis_crd_v1beta1_EgressSpec(ref),
+		v1beta1.EgressStatus{}.OpenAPIModelName():                         schema_pkg_apis_crd_v1beta1_EgressStatus(ref),
+		v1beta1.ExternalIPPool{}.OpenAPIModelName():                       schema_pkg_apis_crd_v1beta1_ExternalIPPool(ref),
+		v1beta1.ExternalIPPoolList{}.OpenAPIModelName():                   schema_pkg_apis_crd_v1beta1_ExternalIPPoolList(ref),
+		v1beta1.ExternalIPPoolSpec{}.OpenAPIModelName():                   schema_pkg_apis_crd_v1beta1_ExternalIPPoolSpec(ref),
+		v1beta1.ExternalIPPoolStatus{}.OpenAPIModelName():                 schema_pkg_apis_crd_v1beta1_ExternalIPPoolStatus(ref),
+		v1beta1.Group{}.OpenAPIModelName():                                schema_pkg_apis_crd_v1beta1_Group(ref),
+		v1beta1.GroupCondition{}.OpenAPIModelName():                       schema_pkg_apis_crd_v1beta1_GroupCondition(ref),
+		v1beta1.GroupList{}.OpenAPIModelName():                            schema_pkg_apis_crd_v1beta1_GroupList(ref),
+		v1beta1.GroupSpec{}.OpenAPIModelName():                            schema_pkg_apis_crd_v1beta1_GroupSpec(ref),
+		v1beta1.GroupStatus{}.OpenAPIModelName():                          schema_pkg_apis_crd_v1beta1_GroupStatus(ref),
+		v1beta1.HTTPProtocol{}.OpenAPIModelName():                         schema_pkg_apis_crd_v1beta1_HTTPProtocol(ref),
+		v1beta1.ICMPEchoRequestHeader{}.OpenAPIModelName():                schema_pkg_apis_crd_v1beta1_ICMPEchoRequestHeader(ref),
+		v1beta1.ICMPProtocol{}.OpenAPIModelName():                         schema_pkg_apis_crd_v1beta1_ICMPProtocol(ref),
+		v1beta1.IGMPProtocol{}.OpenAPIModelName():                         schema_pkg_apis_crd_v1beta1_IGMPProtocol(ref),
+		v1beta1.IPAddressOwner{}.OpenAPIModelName():                       schema_pkg_apis_crd_v1beta1_IPAddressOwner(ref),
+		v1beta1.IPAddressState{}.OpenAPIModelName():                       schema_pkg_apis_crd_v1beta1_IPAddressState(ref),
+		v1beta1.IPBlock{}.OpenAPIModelName():                              schema_pkg_apis_crd_v1beta1_IPBlock(ref),
+		v1beta1.IPHeader{}.OpenAPIModelName():                             schema_pkg_apis_crd_v1beta1_IPHeader(ref),
+		v1beta1.IPPool{}.OpenAPIModelName():                               schema_pkg_apis_crd_v1beta1_IPPool(ref),
+		v1beta1.IPPoolList{}.OpenAPIModelName():                           schema_pkg_apis_crd_v1beta1_IPPoolList(ref),
+		v1beta1.IPPoolSpec{}.OpenAPIModelName():                           schema_pkg_apis_crd_v1beta1_IPPoolSpec(ref),
+		v1beta1.IPPoolStatus{}.OpenAPIModelName():                         schema_pkg_apis_crd_v1beta1_IPPoolStatus(ref),
+		v1beta1.IPPoolUsage{}.OpenAPIModelName():                          schema_pkg_apis_crd_v1beta1_IPPoolUsage(ref),
+		v1beta1.IPRange{}.OpenAPIModelName():                              schema_pkg_apis_crd_v1beta1_IPRange(ref),
+		v1beta1.IPv6Header{}.OpenAPIModelName():                           schema_pkg_apis_crd_v1beta1_IPv6Header(ref),
+		v1beta1.L7Protocol{}.OpenAPIModelName():                           schema_pkg_apis_crd_v1beta1_L7Protocol(ref),
+		v1beta1.NamespacedName{}.OpenAPIModelName():                       schema_pkg_apis_crd_v1beta1_NamespacedName(ref),
+		v1beta1.NetworkInfo{}.OpenAPIModelName():                          schema_pkg_apis_crd_v1beta1_NetworkInfo(ref),
+		v1beta1.NetworkPolicy{}.OpenAPIModelName():                        schema_pkg_apis_crd_v1beta1_NetworkPolicy(ref),
+		v1beta1.NetworkPolicyCondition{}.OpenAPIModelName():               schema_pkg_apis_crd_v1beta1_NetworkPolicyCondition(ref),
+		v1beta1.NetworkPolicyControllerInfo{}.OpenAPIModelName():          schema_pkg_apis_crd_v1beta1_NetworkPolicyControllerInfo(ref),
+		v1beta1.NetworkPolicyList{}.OpenAPIModelName():                    schema_pkg_apis_crd_v1beta1_NetworkPolicyList(ref),
+		v1beta1.NetworkPolicyPeer{}.OpenAPIModelName():                    schema_pkg_apis_crd_v1beta1_NetworkPolicyPeer(ref),
+		v1beta1.NetworkPolicyPort{}.OpenAPIModelName():                    schema_pkg_apis_crd_v1beta1_NetworkPolicyPort(ref),
+		v1beta1.NetworkPolicyProtocol{}.OpenAPIModelName():                schema_pkg_apis_crd_v1beta1_NetworkPolicyProtocol(ref),
+		v1beta1.NetworkPolicySpec{}.OpenAPIModelName():                    schema_pkg_apis_crd_v1beta1_NetworkPolicySpec(ref),
+		v1beta1.NetworkPolicyStatus{}.OpenAPIModelName():                  schema_pkg_apis_crd_v1beta1_NetworkPolicyStatus(ref),
+		v1beta1.NodeResult{}.OpenAPIModelName():                           schema_pkg_apis_crd_v1beta1_NodeResult(ref),
+		v1beta1.OVSInfo{}.OpenAPIModelName():                              schema_pkg_apis_crd_v1beta1_OVSInfo(ref),
+		v1beta1.Observation{}.OpenAPIModelName():                          schema_pkg_apis_crd_v1beta1_Observation(ref),
+		v1beta1.Packet{}.OpenAPIModelName():                               schema_pkg_apis_crd_v1beta1_Packet(ref),
+		v1beta1.PeerNamespaces{}.OpenAPIModelName():                       schema_pkg_apis_crd_v1beta1_PeerNamespaces(ref),
+		v1beta1.PeerService{}.OpenAPIModelName():                          schema_pkg_apis_crd_v1beta1_PeerService(ref),
+		v1beta1.PodOwner{}.OpenAPIModelName():                             schema_pkg_apis_crd_v1beta1_PodOwner(ref),
+		v1beta1.Rule{}.OpenAPIModelName():                                 schema_pkg_apis_crd_v1beta1_Rule(ref),
+		v1beta1.Source{}.OpenAPIModelName():                               schema_pkg_apis_crd_v1beta1_Source(ref),
+		v1beta1.StatefulSetOwner{}.OpenAPIModelName():                     schema_pkg_apis_crd_v1beta1_StatefulSetOwner(ref),
+		v1beta1.SubnetInfo{}.OpenAPIModelName():                           schema_pkg_apis_crd_v1beta1_SubnetInfo(ref),
+		v1beta1.TCPHeader{}.OpenAPIModelName():                            schema_pkg_apis_crd_v1beta1_TCPHeader(ref),
+		v1beta1.TLSProtocol{}.OpenAPIModelName():                          schema_pkg_apis_crd_v1beta1_TLSProtocol(ref),
+		v1beta1.Tier{}.OpenAPIModelName():                                 schema_pkg_apis_crd_v1beta1_Tier(ref),
+		v1beta1.TierList{}.OpenAPIModelName():                             schema_pkg_apis_crd_v1beta1_TierList(ref),
+		v1beta1.TierSpec{}.OpenAPIModelName():                             schema_pkg_apis_crd_v1beta1_TierSpec(ref),
+		v1beta1.Traceflow{}.OpenAPIModelName():                            schema_pkg_apis_crd_v1beta1_Traceflow(ref),
+		v1beta1.TraceflowList{}.OpenAPIModelName():                        schema_pkg_apis_crd_v1beta1_TraceflowList(ref),
+		v1beta1.TraceflowSpec{}.OpenAPIModelName():                        schema_pkg_apis_crd_v1beta1_TraceflowSpec(ref),
+		v1beta1.TraceflowStatus{}.OpenAPIModelName():                      schema_pkg_apis_crd_v1beta1_TraceflowStatus(ref),
+		v1beta1.TransportHeader{}.OpenAPIModelName():                      schema_pkg_apis_crd_v1beta1_TransportHeader(ref),
+		v1beta1.UDPHeader{}.OpenAPIModelName():                            schema_pkg_apis_crd_v1beta1_UDPHeader(ref),
+		v1alpha1.AntreaClusterNetworkPolicyStats{}.OpenAPIModelName():     schema_pkg_apis_stats_v1alpha1_AntreaClusterNetworkPolicyStats(ref),
+		v1alpha1.AntreaClusterNetworkPolicyStatsList{}.OpenAPIModelName(): schema_pkg_apis_stats_v1alpha1_AntreaClusterNetworkPolicyStatsList(ref),
+		v1alpha1.AntreaNetworkPolicyStats{}.OpenAPIModelName():            schema_pkg_apis_stats_v1alpha1_AntreaNetworkPolicyStats(ref),
+		v1alpha1.AntreaNetworkPolicyStatsList{}.OpenAPIModelName():        schema_pkg_apis_stats_v1alpha1_AntreaNetworkPolicyStatsList(ref),
+		v1alpha1.MulticastGroup{}.OpenAPIModelName():                      schema_pkg_apis_stats_v1alpha1_MulticastGroup(ref),
+		v1alpha1.MulticastGroupList{}.OpenAPIModelName():                  schema_pkg_apis_stats_v1alpha1_MulticastGroupList(ref),
+		v1alpha1.NetworkPolicyStats{}.OpenAPIModelName():                  schema_pkg_apis_stats_v1alpha1_NetworkPolicyStats(ref),
+		v1alpha1.NetworkPolicyStatsList{}.OpenAPIModelName():              schema_pkg_apis_stats_v1alpha1_NetworkPolicyStatsList(ref),
+		v1alpha1.NodeLatencyStats{}.OpenAPIModelName():                    schema_pkg_apis_stats_v1alpha1_NodeLatencyStats(ref),
+		v1alpha1.NodeLatencyStatsList{}.OpenAPIModelName():                schema_pkg_apis_stats_v1alpha1_NodeLatencyStatsList(ref),
+		v1alpha1.PeerNodeLatencyStats{}.OpenAPIModelName():                schema_pkg_apis_stats_v1alpha1_PeerNodeLatencyStats(ref),
+		v1alpha1.PodReference{}.OpenAPIModelName():                        schema_pkg_apis_stats_v1alpha1_PodReference(ref),
+		v1alpha1.RuleTrafficStats{}.OpenAPIModelName():                    schema_pkg_apis_stats_v1alpha1_RuleTrafficStats(ref),
+		v1alpha1.TargetIPLatencyStats{}.OpenAPIModelName():                schema_pkg_apis_stats_v1alpha1_TargetIPLatencyStats(ref),
+		v1alpha1.TrafficStats{}.OpenAPIModelName():                        schema_pkg_apis_stats_v1alpha1_TrafficStats(ref),
+		systemv1beta1.SupportBundle{}.OpenAPIModelName():                  schema_pkg_apis_system_v1beta1_SupportBundle(ref),
+		v1.AWSElasticBlockStoreVolumeSource{}.OpenAPIModelName():          schema_k8sio_api_core_v1_AWSElasticBlockStoreVolumeSource(ref),
+		v1.Affinity{}.OpenAPIModelName():                                  schema_k8sio_api_core_v1_Affinity(ref),
+		v1.AppArmorProfile{}.OpenAPIModelName():                           schema_k8sio_api_core_v1_AppArmorProfile(ref),
+		v1.AttachedVolume{}.OpenAPIModelName():                            schema_k8sio_api_core_v1_AttachedVolume(ref),
+		v1.AvoidPods{}.OpenAPIModelName():                                 schema_k8sio_api_core_v1_AvoidPods(ref),
+		v1.AzureDiskVolumeSource{}.OpenAPIModelName():                     schema_k8sio_api_core_v1_AzureDiskVolumeSource(ref),
+		v1.AzureFilePersistentVolumeSource{}.OpenAPIModelName():           schema_k8sio_api_core_v1_AzureFilePersistentVolumeSource(ref),
+		v1.AzureFileVolumeSource{}.OpenAPIModelName():                     schema_k8sio_api_core_v1_AzureFileVolumeSource(ref),
+		v1.Binding{}.OpenAPIModelName():                                   schema_k8sio_api_core_v1_Binding(ref),
+		v1.CSIPersistentVolumeSource{}.OpenAPIModelName():                 schema_k8sio_api_core_v1_CSIPersistentVolumeSource(ref),
+		v1.CSIVolumeSource{}.OpenAPIModelName():                           schema_k8sio_api_core_v1_CSIVolumeSource(ref),
+		v1.Capabilities{}.OpenAPIModelName():                              schema_k8sio_api_core_v1_Capabilities(ref),
+		v1.CephFSPersistentVolumeSource{}.OpenAPIModelName():              schema_k8sio_api_core_v1_CephFSPersistentVolumeSource(ref),
+		v1.CephFSVolumeSource{}.OpenAPIModelName():                        schema_k8sio_api_core_v1_CephFSVolumeSource(ref),
+		v1.CinderPersistentVolumeSource{}.OpenAPIModelName():              schema_k8sio_api_core_v1_CinderPersistentVolumeSource(ref),
+		v1.CinderVolumeSource{}.OpenAPIModelName():                        schema_k8sio_api_core_v1_CinderVolumeSource(ref),
+		v1.ClientIPConfig{}.OpenAPIModelName():                            schema_k8sio_api_core_v1_ClientIPConfig(ref),
+		v1.ClusterTrustBundleProjection{}.OpenAPIModelName():              schema_k8sio_api_core_v1_ClusterTrustBundleProjection(ref),
+		v1.ComponentCondition{}.OpenAPIModelName():                        schema_k8sio_api_core_v1_ComponentCondition(ref),
+		v1.ComponentStatus{}.OpenAPIModelName():                           schema_k8sio_api_core_v1_ComponentStatus(ref),
+		v1.ComponentStatusList{}.OpenAPIModelName():                       schema_k8sio_api_core_v1_ComponentStatusList(ref),
+		v1.ConfigMap{}.OpenAPIModelName():                                 schema_k8sio_api_core_v1_ConfigMap(ref),
+		v1.ConfigMapEnvSource{}.OpenAPIModelName():                        schema_k8sio_api_core_v1_ConfigMapEnvSource(ref),
+		v1.ConfigMapKeySelector{}.OpenAPIModelName():                      schema_k8sio_api_core_v1_ConfigMapKeySelector(ref),
+		v1.ConfigMapList{}.OpenAPIModelName():                             schema_k8sio_api_core_v1_ConfigMapList(ref),
+		v1.ConfigMapNodeConfigSource{}.OpenAPIModelName():                 schema_k8sio_api_core_v1_ConfigMapNodeConfigSource(ref),
+		v1.ConfigMapProjection{}.OpenAPIModelName():                       schema_k8sio_api_core_v1_ConfigMapProjection(ref),
+		v1.ConfigMapVolumeSource{}.OpenAPIModelName():                     schema_k8sio_api_core_v1_ConfigMapVolumeSource(ref),
+		v1.Container{}.OpenAPIModelName():                                 schema_k8sio_api_core_v1_Container(ref),
+		v1.ContainerExtendedResourceRequest{}.OpenAPIModelName():          schema_k8sio_api_core_v1_ContainerExtendedResourceRequest(ref),
+		v1.ContainerImage{}.OpenAPIModelName():                            schema_k8sio_api_core_v1_ContainerImage(ref),
+		v1.ContainerPort{}.OpenAPIModelName():                             schema_k8sio_api_core_v1_ContainerPort(ref),
+		v1.ContainerResizePolicy{}.OpenAPIModelName():                     schema_k8sio_api_core_v1_ContainerResizePolicy(ref),
+		v1.ContainerRestartRule{}.OpenAPIModelName():                      schema_k8sio_api_core_v1_ContainerRestartRule(ref),
+		v1.ContainerRestartRuleOnExitCodes{}.OpenAPIModelName():           schema_k8sio_api_core_v1_ContainerRestartRuleOnExitCodes(ref),
+		v1.ContainerState{}.OpenAPIModelName():                            schema_k8sio_api_core_v1_ContainerState(ref),
+		v1.ContainerStateRunning{}.OpenAPIModelName():                     schema_k8sio_api_core_v1_ContainerStateRunning(ref),
+		v1.ContainerStateTerminated{}.OpenAPIModelName():                  schema_k8sio_api_core_v1_ContainerStateTerminated(ref),
+		v1.ContainerStateWaiting{}.OpenAPIModelName():                     schema_k8sio_api_core_v1_ContainerStateWaiting(ref),
+		v1.ContainerStatus{}.OpenAPIModelName():                           schema_k8sio_api_core_v1_ContainerStatus(ref),
+		v1.ContainerUser{}.OpenAPIModelName():                             schema_k8sio_api_core_v1_ContainerUser(ref),
+		v1.DaemonEndpoint{}.OpenAPIModelName():                            schema_k8sio_api_core_v1_DaemonEndpoint(ref),
+		v1.DownwardAPIProjection{}.OpenAPIModelName():                     schema_k8sio_api_core_v1_DownwardAPIProjection(ref),
+		v1.DownwardAPIVolumeFile{}.OpenAPIModelName():                     schema_k8sio_api_core_v1_DownwardAPIVolumeFile(ref),
+		v1.DownwardAPIVolumeSource{}.OpenAPIModelName():                   schema_k8sio_api_core_v1_DownwardAPIVolumeSource(ref),
+		v1.EmptyDirVolumeSource{}.OpenAPIModelName():                      schema_k8sio_api_core_v1_EmptyDirVolumeSource(ref),
+		v1.EndpointAddress{}.OpenAPIModelName():                           schema_k8sio_api_core_v1_EndpointAddress(ref),
+		v1.EndpointPort{}.OpenAPIModelName():                              schema_k8sio_api_core_v1_EndpointPort(ref),
+		v1.EndpointSubset{}.OpenAPIModelName():                            schema_k8sio_api_core_v1_EndpointSubset(ref),
+		v1.Endpoints{}.OpenAPIModelName():                                 schema_k8sio_api_core_v1_Endpoints(ref),
+		v1.EndpointsList{}.OpenAPIModelName():                             schema_k8sio_api_core_v1_EndpointsList(ref),
+		v1.EnvFromSource{}.OpenAPIModelName():                             schema_k8sio_api_core_v1_EnvFromSource(ref),
+		v1.EnvVar{}.OpenAPIModelName():                                    schema_k8sio_api_core_v1_EnvVar(ref),
+		v1.EnvVarSource{}.OpenAPIModelName():                              schema_k8sio_api_core_v1_EnvVarSource(ref),
+		v1.EphemeralContainer{}.OpenAPIModelName():                        schema_k8sio_api_core_v1_EphemeralContainer(ref),
+		v1.EphemeralContainerCommon{}.OpenAPIModelName():                  schema_k8sio_api_core_v1_EphemeralContainerCommon(ref),
+		v1.EphemeralVolumeSource{}.OpenAPIModelName():                     schema_k8sio_api_core_v1_EphemeralVolumeSource(ref),
+		v1.Event{}.OpenAPIModelName():                                     schema_k8sio_api_core_v1_Event(ref),
+		v1.EventList{}.OpenAPIModelName():                                 schema_k8sio_api_core_v1_EventList(ref),
+		v1.EventSeries{}.OpenAPIModelName():                               schema_k8sio_api_core_v1_EventSeries(ref),
+		v1.EventSource{}.OpenAPIModelName():                               schema_k8sio_api_core_v1_EventSource(ref),
+		v1.ExecAction{}.OpenAPIModelName():                                schema_k8sio_api_core_v1_ExecAction(ref),
+		v1.FCVolumeSource{}.OpenAPIModelName():                            schema_k8sio_api_core_v1_FCVolumeSource(ref),
+		v1.FileKeySelector{}.OpenAPIModelName():                           schema_k8sio_api_core_v1_FileKeySelector(ref),
+		v1.FlexPersistentVolumeSource{}.OpenAPIModelName():                schema_k8sio_api_core_v1_FlexPersistentVolumeSource(ref),
+		v1.FlexVolumeSource{}.OpenAPIModelName():                          schema_k8sio_api_core_v1_FlexVolumeSource(ref),
+		v1.FlockerVolumeSource{}.OpenAPIModelName():                       schema_k8sio_api_core_v1_FlockerVolumeSource(ref),
+		v1.GCEPersistentDiskVolumeSource{}.OpenAPIModelName():             schema_k8sio_api_core_v1_GCEPersistentDiskVolumeSource(ref),
+		v1.GRPCAction{}.OpenAPIModelName():                                schema_k8sio_api_core_v1_GRPCAction(ref),
+		v1.GitRepoVolumeSource{}.OpenAPIModelName():                       schema_k8sio_api_core_v1_GitRepoVolumeSource(ref),
+		v1.GlusterfsPersistentVolumeSource{}.OpenAPIModelName():           schema_k8sio_api_core_v1_GlusterfsPersistentVolumeSource(ref),
+		v1.GlusterfsVolumeSource{}.OpenAPIModelName():                     schema_k8sio_api_core_v1_GlusterfsVolumeSource(ref),
+		v1.HTTPGetAction{}.OpenAPIModelName():                             schema_k8sio_api_core_v1_HTTPGetAction(ref),
+		v1.HTTPHeader{}.OpenAPIModelName():                                schema_k8sio_api_core_v1_HTTPHeader(ref),
+		v1.HostAlias{}.OpenAPIModelName():                                 schema_k8sio_api_core_v1_HostAlias(ref),
+		v1.HostIP{}.OpenAPIModelName():                                    schema_k8sio_api_core_v1_HostIP(ref),
+		v1.HostPathVolumeSource{}.OpenAPIModelName():                      schema_k8sio_api_core_v1_HostPathVolumeSource(ref),
+		v1.ISCSIPersistentVolumeSource{}.OpenAPIModelName():               schema_k8sio_api_core_v1_ISCSIPersistentVolumeSource(ref),
+		v1.ISCSIVolumeSource{}.OpenAPIModelName():                         schema_k8sio_api_core_v1_ISCSIVolumeSource(ref),
+		v1.ImageVolumeSource{}.OpenAPIModelName():                         schema_k8sio_api_core_v1_ImageVolumeSource(ref),
+		v1.KeyToPath{}.OpenAPIModelName():                                 schema_k8sio_api_core_v1_KeyToPath(ref),
+		v1.Lifecycle{}.OpenAPIModelName():                                 schema_k8sio_api_core_v1_Lifecycle(ref),
+		v1.LifecycleHandler{}.OpenAPIModelName():                          schema_k8sio_api_core_v1_LifecycleHandler(ref),
+		v1.LimitRange{}.OpenAPIModelName():                                schema_k8sio_api_core_v1_LimitRange(ref),
+		v1.LimitRangeItem{}.OpenAPIModelName():                            schema_k8sio_api_core_v1_LimitRangeItem(ref),
+		v1.LimitRangeList{}.OpenAPIModelName():                            schema_k8sio_api_core_v1_LimitRangeList(ref),
+		v1.LimitRangeSpec{}.OpenAPIModelName():                            schema_k8sio_api_core_v1_LimitRangeSpec(ref),
+		v1.LinuxContainerUser{}.OpenAPIModelName():                        schema_k8sio_api_core_v1_LinuxContainerUser(ref),
+		v1.List{}.OpenAPIModelName():                                      schema_k8sio_api_core_v1_List(ref),
+		v1.LoadBalancerIngress{}.OpenAPIModelName():                       schema_k8sio_api_core_v1_LoadBalancerIngress(ref),
+		v1.LoadBalancerStatus{}.OpenAPIModelName():                        schema_k8sio_api_core_v1_LoadBalancerStatus(ref),
+		v1.LocalObjectReference{}.OpenAPIModelName():                      schema_k8sio_api_core_v1_LocalObjectReference(ref),
+		v1.LocalVolumeSource{}.OpenAPIModelName():                         schema_k8sio_api_core_v1_LocalVolumeSource(ref),
+		v1.ModifyVolumeStatus{}.OpenAPIModelName():                        schema_k8sio_api_core_v1_ModifyVolumeStatus(ref),
+		v1.NFSVolumeSource{}.OpenAPIModelName():                           schema_k8sio_api_core_v1_NFSVolumeSource(ref),
+		v1.Namespace{}.OpenAPIModelName():                                 schema_k8sio_api_core_v1_Namespace(ref),
+		v1.NamespaceCondition{}.OpenAPIModelName():                        schema_k8sio_api_core_v1_NamespaceCondition(ref),
+		v1.NamespaceList{}.OpenAPIModelName():                             schema_k8sio_api_core_v1_NamespaceList(ref),
+		v1.NamespaceSpec{}.OpenAPIModelName():                             schema_k8sio_api_core_v1_NamespaceSpec(ref),
+		v1.NamespaceStatus{}.OpenAPIModelName():                           schema_k8sio_api_core_v1_NamespaceStatus(ref),
+		v1.Node{}.OpenAPIModelName():                                      schema_k8sio_api_core_v1_Node(ref),
+		v1.NodeAddress{}.OpenAPIModelName():                               schema_k8sio_api_core_v1_NodeAddress(ref),
+		v1.NodeAffinity{}.OpenAPIModelName():                              schema_k8sio_api_core_v1_NodeAffinity(ref),
+		v1.NodeCondition{}.OpenAPIModelName():                             schema_k8sio_api_core_v1_NodeCondition(ref),
+		v1.NodeConfigSource{}.OpenAPIModelName():                          schema_k8sio_api_core_v1_NodeConfigSource(ref),
+		v1.NodeConfigStatus{}.OpenAPIModelName():                          schema_k8sio_api_core_v1_NodeConfigStatus(ref),
+		v1.NodeDaemonEndpoints{}.OpenAPIModelName():                       schema_k8sio_api_core_v1_NodeDaemonEndpoints(ref),
+		v1.NodeFeatures{}.OpenAPIModelName():                              schema_k8sio_api_core_v1_NodeFeatures(ref),
+		v1.NodeList{}.OpenAPIModelName():                                  schema_k8sio_api_core_v1_NodeList(ref),
+		v1.NodeProxyOptions{}.OpenAPIModelName():                          schema_k8sio_api_core_v1_NodeProxyOptions(ref),
+		v1.NodeRuntimeHandler{}.OpenAPIModelName():                        schema_k8sio_api_core_v1_NodeRuntimeHandler(ref),
+		v1.NodeRuntimeHandlerFeatures{}.OpenAPIModelName():                schema_k8sio_api_core_v1_NodeRuntimeHandlerFeatures(ref),
+		v1.NodeSelector{}.OpenAPIModelName():                              schema_k8sio_api_core_v1_NodeSelector(ref),
+		v1.NodeSelectorRequirement{}.OpenAPIModelName():                   schema_k8sio_api_core_v1_NodeSelectorRequirement(ref),
+		v1.NodeSelectorTerm{}.OpenAPIModelName():                          schema_k8sio_api_core_v1_NodeSelectorTerm(ref),
+		v1.NodeSpec{}.OpenAPIModelName():                                  schema_k8sio_api_core_v1_NodeSpec(ref),
+		v1.NodeStatus{}.OpenAPIModelName():                                schema_k8sio_api_core_v1_NodeStatus(ref),
+		v1.NodeSwapStatus{}.OpenAPIModelName():                            schema_k8sio_api_core_v1_NodeSwapStatus(ref),
+		v1.NodeSystemInfo{}.OpenAPIModelName():                            schema_k8sio_api_core_v1_NodeSystemInfo(ref),
+		v1.ObjectFieldSelector{}.OpenAPIModelName():                       schema_k8sio_api_core_v1_ObjectFieldSelector(ref),
+		v1.ObjectReference{}.OpenAPIModelName():                           schema_k8sio_api_core_v1_ObjectReference(ref),
+		v1.PersistentVolume{}.OpenAPIModelName():                          schema_k8sio_api_core_v1_PersistentVolume(ref),
+		v1.PersistentVolumeClaim{}.OpenAPIModelName():                     schema_k8sio_api_core_v1_PersistentVolumeClaim(ref),
+		v1.PersistentVolumeClaimCondition{}.OpenAPIModelName():            schema_k8sio_api_core_v1_PersistentVolumeClaimCondition(ref),
+		v1.PersistentVolumeClaimList{}.OpenAPIModelName():                 schema_k8sio_api_core_v1_PersistentVolumeClaimList(ref),
+		v1.PersistentVolumeClaimSpec{}.OpenAPIModelName():                 schema_k8sio_api_core_v1_PersistentVolumeClaimSpec(ref),
+		v1.PersistentVolumeClaimStatus{}.OpenAPIModelName():               schema_k8sio_api_core_v1_PersistentVolumeClaimStatus(ref),
+		v1.PersistentVolumeClaimTemplate{}.OpenAPIModelName():             schema_k8sio_api_core_v1_PersistentVolumeClaimTemplate(ref),
+		v1.PersistentVolumeClaimVolumeSource{}.OpenAPIModelName():         schema_k8sio_api_core_v1_PersistentVolumeClaimVolumeSource(ref),
+		v1.PersistentVolumeList{}.OpenAPIModelName():                      schema_k8sio_api_core_v1_PersistentVolumeList(ref),
+		v1.PersistentVolumeSource{}.OpenAPIModelName():                    schema_k8sio_api_core_v1_PersistentVolumeSource(ref),
+		v1.PersistentVolumeSpec{}.OpenAPIModelName():                      schema_k8sio_api_core_v1_PersistentVolumeSpec(ref),
+		v1.PersistentVolumeStatus{}.OpenAPIModelName():                    schema_k8sio_api_core_v1_PersistentVolumeStatus(ref),
+		v1.PhotonPersistentDiskVolumeSource{}.OpenAPIModelName():          schema_k8sio_api_core_v1_PhotonPersistentDiskVolumeSource(ref),
+		v1.Pod{}.OpenAPIModelName():                                       schema_k8sio_api_core_v1_Pod(ref),
+		v1.PodAffinity{}.OpenAPIModelName():                               schema_k8sio_api_core_v1_PodAffinity(ref),
+		v1.PodAffinityTerm{}.OpenAPIModelName():                           schema_k8sio_api_core_v1_PodAffinityTerm(ref),
+		v1.PodAntiAffinity{}.OpenAPIModelName():                           schema_k8sio_api_core_v1_PodAntiAffinity(ref),
+		v1.PodAttachOptions{}.OpenAPIModelName():                          schema_k8sio_api_core_v1_PodAttachOptions(ref),
+		v1.PodCertificateProjection{}.OpenAPIModelName():                  schema_k8sio_api_core_v1_PodCertificateProjection(ref),
+		v1.PodCondition{}.OpenAPIModelName():                              schema_k8sio_api_core_v1_PodCondition(ref),
+		v1.PodDNSConfig{}.OpenAPIModelName():                              schema_k8sio_api_core_v1_PodDNSConfig(ref),
+		v1.PodDNSConfigOption{}.OpenAPIModelName():                        schema_k8sio_api_core_v1_PodDNSConfigOption(ref),
+		v1.PodExecOptions{}.OpenAPIModelName():                            schema_k8sio_api_core_v1_PodExecOptions(ref),
+		v1.PodExtendedResourceClaimStatus{}.OpenAPIModelName():            schema_k8sio_api_core_v1_PodExtendedResourceClaimStatus(ref),
+		v1.PodIP{}.OpenAPIModelName():                                     schema_k8sio_api_core_v1_PodIP(ref),
+		v1.PodList{}.OpenAPIModelName():                                   schema_k8sio_api_core_v1_PodList(ref),
+		v1.PodLogOptions{}.OpenAPIModelName():                             schema_k8sio_api_core_v1_PodLogOptions(ref),
+		v1.PodOS{}.OpenAPIModelName():                                     schema_k8sio_api_core_v1_PodOS(ref),
+		v1.PodPortForwardOptions{}.OpenAPIModelName():                     schema_k8sio_api_core_v1_PodPortForwardOptions(ref),
+		v1.PodProxyOptions{}.OpenAPIModelName():                           schema_k8sio_api_core_v1_PodProxyOptions(ref),
+		v1.PodReadinessGate{}.OpenAPIModelName():                          schema_k8sio_api_core_v1_PodReadinessGate(ref),
+		v1.PodResourceClaim{}.OpenAPIModelName():                          schema_k8sio_api_core_v1_PodResourceClaim(ref),
+		v1.PodResourceClaimStatus{}.OpenAPIModelName():                    schema_k8sio_api_core_v1_PodResourceClaimStatus(ref),
+		v1.PodSchedulingGate{}.OpenAPIModelName():                         schema_k8sio_api_core_v1_PodSchedulingGate(ref),
+		v1.PodSecurityContext{}.OpenAPIModelName():                        schema_k8sio_api_core_v1_PodSecurityContext(ref),
+		v1.PodSignature{}.OpenAPIModelName():                              schema_k8sio_api_core_v1_PodSignature(ref),
+		v1.PodSpec{}.OpenAPIModelName():                                   schema_k8sio_api_core_v1_PodSpec(ref),
+		v1.PodStatus{}.OpenAPIModelName():                                 schema_k8sio_api_core_v1_PodStatus(ref),
+		v1.PodStatusResult{}.OpenAPIModelName():                           schema_k8sio_api_core_v1_PodStatusResult(ref),
+		v1.PodTemplate{}.OpenAPIModelName():                               schema_k8sio_api_core_v1_PodTemplate(ref),
+		v1.PodTemplateList{}.OpenAPIModelName():                           schema_k8sio_api_core_v1_PodTemplateList(ref),
+		v1.PodTemplateSpec{}.OpenAPIModelName():                           schema_k8sio_api_core_v1_PodTemplateSpec(ref),
+		v1.PortStatus{}.OpenAPIModelName():                                schema_k8sio_api_core_v1_PortStatus(ref),
+		v1.PortworxVolumeSource{}.OpenAPIModelName():                      schema_k8sio_api_core_v1_PortworxVolumeSource(ref),
+		v1.PreferAvoidPodsEntry{}.OpenAPIModelName():                      schema_k8sio_api_core_v1_PreferAvoidPodsEntry(ref),
+		v1.PreferredSchedulingTerm{}.OpenAPIModelName():                   schema_k8sio_api_core_v1_PreferredSchedulingTerm(ref),
+		v1.Probe{}.OpenAPIModelName():                                     schema_k8sio_api_core_v1_Probe(ref),
+		v1.ProbeHandler{}.OpenAPIModelName():                              schema_k8sio_api_core_v1_ProbeHandler(ref),
+		v1.ProjectedVolumeSource{}.OpenAPIModelName():                     schema_k8sio_api_core_v1_ProjectedVolumeSource(ref),
+		v1.QuobyteVolumeSource{}.OpenAPIModelName():                       schema_k8sio_api_core_v1_QuobyteVolumeSource(ref),
+		v1.RBDPersistentVolumeSource{}.OpenAPIModelName():                 schema_k8sio_api_core_v1_RBDPersistentVolumeSource(ref),
+		v1.RBDVolumeSource{}.OpenAPIModelName():                           schema_k8sio_api_core_v1_RBDVolumeSource(ref),
+		v1.RangeAllocation{}.OpenAPIModelName():                           schema_k8sio_api_core_v1_RangeAllocation(ref),
+		v1.ReplicationController{}.OpenAPIModelName():                     schema_k8sio_api_core_v1_ReplicationController(ref),
+		v1.ReplicationControllerCondition{}.OpenAPIModelName():            schema_k8sio_api_core_v1_ReplicationControllerCondition(ref),
+		v1.ReplicationControllerList{}.OpenAPIModelName():                 schema_k8sio_api_core_v1_ReplicationControllerList(ref),
+		v1.ReplicationControllerSpec{}.OpenAPIModelName():                 schema_k8sio_api_core_v1_ReplicationControllerSpec(ref),
+		v1.ReplicationControllerStatus{}.OpenAPIModelName():               schema_k8sio_api_core_v1_ReplicationControllerStatus(ref),
+		v1.ResourceClaim{}.OpenAPIModelName():                             schema_k8sio_api_core_v1_ResourceClaim(ref),
+		v1.ResourceFieldSelector{}.OpenAPIModelName():                     schema_k8sio_api_core_v1_ResourceFieldSelector(ref),
+		v1.ResourceHealth{}.OpenAPIModelName():                            schema_k8sio_api_core_v1_ResourceHealth(ref),
+		v1.ResourceQuota{}.OpenAPIModelName():                             schema_k8sio_api_core_v1_ResourceQuota(ref),
+		v1.ResourceQuotaList{}.OpenAPIModelName():                         schema_k8sio_api_core_v1_ResourceQuotaList(ref),
+		v1.ResourceQuotaSpec{}.OpenAPIModelName():                         schema_k8sio_api_core_v1_ResourceQuotaSpec(ref),
+		v1.ResourceQuotaStatus{}.OpenAPIModelName():                       schema_k8sio_api_core_v1_ResourceQuotaStatus(ref),
+		v1.ResourceRequirements{}.OpenAPIModelName():                      schema_k8sio_api_core_v1_ResourceRequirements(ref),
+		v1.ResourceStatus{}.OpenAPIModelName():                            schema_k8sio_api_core_v1_ResourceStatus(ref),
+		v1.SELinuxOptions{}.OpenAPIModelName():                            schema_k8sio_api_core_v1_SELinuxOptions(ref),
+		v1.ScaleIOPersistentVolumeSource{}.OpenAPIModelName():             schema_k8sio_api_core_v1_ScaleIOPersistentVolumeSource(ref),
+		v1.ScaleIOVolumeSource{}.OpenAPIModelName():                       schema_k8sio_api_core_v1_ScaleIOVolumeSource(ref),
+		v1.ScopeSelector{}.OpenAPIModelName():                             schema_k8sio_api_core_v1_ScopeSelector(ref),
+		v1.ScopedResourceSelectorRequirement{}.OpenAPIModelName():         schema_k8sio_api_core_v1_ScopedResourceSelectorRequirement(ref),
+		v1.SeccompProfile{}.OpenAPIModelName():                            schema_k8sio_api_core_v1_SeccompProfile(ref),
+		v1.Secret{}.OpenAPIModelName():                                    schema_k8sio_api_core_v1_Secret(ref),
+		v1.SecretEnvSource{}.OpenAPIModelName():                           schema_k8sio_api_core_v1_SecretEnvSource(ref),
+		v1.SecretKeySelector{}.OpenAPIModelName():                         schema_k8sio_api_core_v1_SecretKeySelector(ref),
+		v1.SecretList{}.OpenAPIModelName():                                schema_k8sio_api_core_v1_SecretList(ref),
+		v1.SecretProjection{}.OpenAPIModelName():                          schema_k8sio_api_core_v1_SecretProjection(ref),
+		v1.SecretReference{}.OpenAPIModelName():                           schema_k8sio_api_core_v1_SecretReference(ref),
+		v1.SecretVolumeSource{}.OpenAPIModelName():                        schema_k8sio_api_core_v1_SecretVolumeSource(ref),
+		v1.SecurityContext{}.OpenAPIModelName():                           schema_k8sio_api_core_v1_SecurityContext(ref),
+		v1.SerializedReference{}.OpenAPIModelName():                       schema_k8sio_api_core_v1_SerializedReference(ref),
+		v1.Service{}.OpenAPIModelName():                                   schema_k8sio_api_core_v1_Service(ref),
+		v1.ServiceAccount{}.OpenAPIModelName():                            schema_k8sio_api_core_v1_ServiceAccount(ref),
+		v1.ServiceAccountList{}.OpenAPIModelName():                        schema_k8sio_api_core_v1_ServiceAccountList(ref),
+		v1.ServiceAccountTokenProjection{}.OpenAPIModelName():             schema_k8sio_api_core_v1_ServiceAccountTokenProjection(ref),
+		v1.ServiceList{}.OpenAPIModelName():                               schema_k8sio_api_core_v1_ServiceList(ref),
+		v1.ServicePort{}.OpenAPIModelName():                               schema_k8sio_api_core_v1_ServicePort(ref),
+		v1.ServiceProxyOptions{}.OpenAPIModelName():                       schema_k8sio_api_core_v1_ServiceProxyOptions(ref),
+		v1.ServiceSpec{}.OpenAPIModelName():                               schema_k8sio_api_core_v1_ServiceSpec(ref),
+		v1.ServiceStatus{}.OpenAPIModelName():                             schema_k8sio_api_core_v1_ServiceStatus(ref),
+		v1.SessionAffinityConfig{}.OpenAPIModelName():                     schema_k8sio_api_core_v1_SessionAffinityConfig(ref),
+		v1.SleepAction{}.OpenAPIModelName():                               schema_k8sio_api_core_v1_SleepAction(ref),
+		v1.StorageOSPersistentVolumeSource{}.OpenAPIModelName():           schema_k8sio_api_core_v1_StorageOSPersistentVolumeSource(ref),
+		v1.StorageOSVolumeSource{}.OpenAPIModelName():                     schema_k8sio_api_core_v1_StorageOSVolumeSource(ref),
+		v1.Sysctl{}.OpenAPIModelName():                                    schema_k8sio_api_core_v1_Sysctl(ref),
+		v1.TCPSocketAction{}.OpenAPIModelName():                           schema_k8sio_api_core_v1_TCPSocketAction(ref),
+		v1.Taint{}.OpenAPIModelName():                                     schema_k8sio_api_core_v1_Taint(ref),
+		v1.Toleration{}.OpenAPIModelName():                                schema_k8sio_api_core_v1_Toleration(ref),
+		v1.TopologySelectorLabelRequirement{}.OpenAPIModelName():          schema_k8sio_api_core_v1_TopologySelectorLabelRequirement(ref),
+		v1.TopologySelectorTerm{}.OpenAPIModelName():                      schema_k8sio_api_core_v1_TopologySelectorTerm(ref),
+		v1.TopologySpreadConstraint{}.OpenAPIModelName():                  schema_k8sio_api_core_v1_TopologySpreadConstraint(ref),
+		v1.TypedLocalObjectReference{}.OpenAPIModelName():                 schema_k8sio_api_core_v1_TypedLocalObjectReference(ref),
+		v1.TypedObjectReference{}.OpenAPIModelName():                      schema_k8sio_api_core_v1_TypedObjectReference(ref),
+		v1.Volume{}.OpenAPIModelName():                                    schema_k8sio_api_core_v1_Volume(ref),
+		v1.VolumeDevice{}.OpenAPIModelName():                              schema_k8sio_api_core_v1_VolumeDevice(ref),
+		v1.VolumeMount{}.OpenAPIModelName():                               schema_k8sio_api_core_v1_VolumeMount(ref),
+		v1.VolumeMountStatus{}.OpenAPIModelName():                         schema_k8sio_api_core_v1_VolumeMountStatus(ref),
+		v1.VolumeNodeAffinity{}.OpenAPIModelName():                        schema_k8sio_api_core_v1_VolumeNodeAffinity(ref),
+		v1.VolumeProjection{}.OpenAPIModelName():                          schema_k8sio_api_core_v1_VolumeProjection(ref),
+		v1.VolumeResourceRequirements{}.OpenAPIModelName():                schema_k8sio_api_core_v1_VolumeResourceRequirements(ref),
+		v1.VolumeSource{}.OpenAPIModelName():                              schema_k8sio_api_core_v1_VolumeSource(ref),
+		v1.VsphereVirtualDiskVolumeSource{}.OpenAPIModelName():            schema_k8sio_api_core_v1_VsphereVirtualDiskVolumeSource(ref),
+		v1.WeightedPodAffinityTerm{}.OpenAPIModelName():                   schema_k8sio_api_core_v1_WeightedPodAffinityTerm(ref),
+		v1.WindowsSecurityContextOptions{}.OpenAPIModelName():             schema_k8sio_api_core_v1_WindowsSecurityContextOptions(ref),
+		v1.WorkloadReference{}.OpenAPIModelName():                         schema_k8sio_api_core_v1_WorkloadReference(ref),
+		metav1.APIGroup{}.OpenAPIModelName():                              schema_pkg_apis_meta_v1_APIGroup(ref),
+		metav1.APIGroupList{}.OpenAPIModelName():                          schema_pkg_apis_meta_v1_APIGroupList(ref),
+		metav1.APIResource{}.OpenAPIModelName():                           schema_pkg_apis_meta_v1_APIResource(ref),
+		metav1.APIResourceList{}.OpenAPIModelName():                       schema_pkg_apis_meta_v1_APIResourceList(ref),
+		metav1.APIVersions{}.OpenAPIModelName():                           schema_pkg_apis_meta_v1_APIVersions(ref),
+		metav1.ApplyOptions{}.OpenAPIModelName():                          schema_pkg_apis_meta_v1_ApplyOptions(ref),
+		metav1.Condition{}.OpenAPIModelName():                             schema_pkg_apis_meta_v1_Condition(ref),
+		metav1.CreateOptions{}.OpenAPIModelName():                         schema_pkg_apis_meta_v1_CreateOptions(ref),
+		metav1.DeleteOptions{}.OpenAPIModelName():                         schema_pkg_apis_meta_v1_DeleteOptions(ref),
+		metav1.Duration{}.OpenAPIModelName():                              schema_pkg_apis_meta_v1_Duration(ref),
+		metav1.FieldSelectorRequirement{}.OpenAPIModelName():              schema_pkg_apis_meta_v1_FieldSelectorRequirement(ref),
+		metav1.FieldsV1{}.OpenAPIModelName():                              schema_pkg_apis_meta_v1_FieldsV1(ref),
+		metav1.GetOptions{}.OpenAPIModelName():                            schema_pkg_apis_meta_v1_GetOptions(ref),
+		metav1.GroupKind{}.OpenAPIModelName():                             schema_pkg_apis_meta_v1_GroupKind(ref),
+		metav1.GroupResource{}.OpenAPIModelName():                         schema_pkg_apis_meta_v1_GroupResource(ref),
+		metav1.GroupVersion{}.OpenAPIModelName():                          schema_pkg_apis_meta_v1_GroupVersion(ref),
+		metav1.GroupVersionForDiscovery{}.OpenAPIModelName():              schema_pkg_apis_meta_v1_GroupVersionForDiscovery(ref),
+		metav1.GroupVersionKind{}.OpenAPIModelName():                      schema_pkg_apis_meta_v1_GroupVersionKind(ref),
+		metav1.GroupVersionResource{}.OpenAPIModelName():                  schema_pkg_apis_meta_v1_GroupVersionResource(ref),
+		metav1.InternalEvent{}.OpenAPIModelName():                         schema_pkg_apis_meta_v1_InternalEvent(ref),
+		metav1.LabelSelector{}.OpenAPIModelName():                         schema_pkg_apis_meta_v1_LabelSelector(ref),
+		metav1.LabelSelectorRequirement{}.OpenAPIModelName():              schema_pkg_apis_meta_v1_LabelSelectorRequirement(ref),
+		metav1.List{}.OpenAPIModelName():                                  schema_pkg_apis_meta_v1_List(ref),
+		metav1.ListMeta{}.OpenAPIModelName():                              schema_pkg_apis_meta_v1_ListMeta(ref),
+		metav1.ListOptions{}.OpenAPIModelName():                           schema_pkg_apis_meta_v1_ListOptions(ref),
+		metav1.ManagedFieldsEntry{}.OpenAPIModelName():                    schema_pkg_apis_meta_v1_ManagedFieldsEntry(ref),
+		metav1.MicroTime{}.OpenAPIModelName():                             schema_pkg_apis_meta_v1_MicroTime(ref),
+		metav1.ObjectMeta{}.OpenAPIModelName():                            schema_pkg_apis_meta_v1_ObjectMeta(ref),
+		metav1.OwnerReference{}.OpenAPIModelName():                        schema_pkg_apis_meta_v1_OwnerReference(ref),
+		metav1.PartialObjectMetadata{}.OpenAPIModelName():                 schema_pkg_apis_meta_v1_PartialObjectMetadata(ref),
+		metav1.PartialObjectMetadataList{}.OpenAPIModelName():             schema_pkg_apis_meta_v1_PartialObjectMetadataList(ref),
+		metav1.Patch{}.OpenAPIModelName():                                 schema_pkg_apis_meta_v1_Patch(ref),
+		metav1.PatchOptions{}.OpenAPIModelName():                          schema_pkg_apis_meta_v1_PatchOptions(ref),
+		metav1.Preconditions{}.OpenAPIModelName():                         schema_pkg_apis_meta_v1_Preconditions(ref),
+		metav1.RootPaths{}.OpenAPIModelName():                             schema_pkg_apis_meta_v1_RootPaths(ref),
+		metav1.ServerAddressByClientCIDR{}.OpenAPIModelName():             schema_pkg_apis_meta_v1_ServerAddressByClientCIDR(ref),
+		metav1.Status{}.OpenAPIModelName():                                schema_pkg_apis_meta_v1_Status(ref),
+		metav1.StatusCause{}.OpenAPIModelName():                           schema_pkg_apis_meta_v1_StatusCause(ref),
+		metav1.StatusDetails{}.OpenAPIModelName():                         schema_pkg_apis_meta_v1_StatusDetails(ref),
+		metav1.Table{}.OpenAPIModelName():                                 schema_pkg_apis_meta_v1_Table(ref),
+		metav1.TableColumnDefinition{}.OpenAPIModelName():                 schema_pkg_apis_meta_v1_TableColumnDefinition(ref),
+		metav1.TableOptions{}.OpenAPIModelName():                          schema_pkg_apis_meta_v1_TableOptions(ref),
+		metav1.TableRow{}.OpenAPIModelName():                              schema_pkg_apis_meta_v1_TableRow(ref),
+		metav1.TableRowCondition{}.OpenAPIModelName():                     schema_pkg_apis_meta_v1_TableRowCondition(ref),
+		metav1.Time{}.OpenAPIModelName():                                  schema_pkg_apis_meta_v1_Time(ref),
+		metav1.Timestamp{}.OpenAPIModelName():                             schema_pkg_apis_meta_v1_Timestamp(ref),
+		metav1.TypeMeta{}.OpenAPIModelName():                              schema_pkg_apis_meta_v1_TypeMeta(ref),
+		metav1.UpdateOptions{}.OpenAPIModelName():                         schema_pkg_apis_meta_v1_UpdateOptions(ref),
+		metav1.WatchEvent{}.OpenAPIModelName():                            schema_pkg_apis_meta_v1_WatchEvent(ref),
+		runtime.RawExtension{}.OpenAPIModelName():                         schema_k8sio_apimachinery_pkg_runtime_RawExtension(ref),
+		runtime.TypeMeta{}.OpenAPIModelName():                             schema_k8sio_apimachinery_pkg_runtime_TypeMeta(ref),
+		runtime.Unknown{}.OpenAPIModelName():                              schema_k8sio_apimachinery_pkg_runtime_Unknown(ref),
+		intstr.IntOrString{}.OpenAPIModelName():                           schema_apimachinery_pkg_util_intstr_IntOrString(ref),
+		version.Info{}.OpenAPIModelName():                                 schema_k8sio_apimachinery_pkg_version_Info(ref),
 	}
 }
 
@@ -501,7 +505,7 @@ func schema_pkg_apis_controlplane_v1beta2_AddressGroup(ref common.ReferenceCallb
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
-										Ref:     ref("antrea.io/antrea/pkg/apis/controlplane/v1beta2.GroupMember"),
+										Ref:     ref(v1beta2.GroupMember{}.OpenAPIModelName()),
 									},
 								},
 							},
@@ -511,7 +515,7 @@ func schema_pkg_apis_controlplane_v1beta2_AddressGroup(ref common.ReferenceCallb
 			},
 		},
 		Dependencies: []string{
-			"antrea.io/antrea/pkg/apis/controlplane/v1beta2.GroupMember", metav1.ObjectMeta{}.OpenAPIModelName()},
+			v1beta2.GroupMember{}.OpenAPIModelName(), metav1.ObjectMeta{}.OpenAPIModelName()},
 	}
 }
 
@@ -549,7 +553,7 @@ func schema_pkg_apis_controlplane_v1beta2_AddressGroupList(ref common.ReferenceC
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
-										Ref:     ref("antrea.io/antrea/pkg/apis/controlplane/v1beta2.AddressGroup"),
+										Ref:     ref(v1beta2.AddressGroup{}.OpenAPIModelName()),
 									},
 								},
 							},
@@ -560,7 +564,7 @@ func schema_pkg_apis_controlplane_v1beta2_AddressGroupList(ref common.ReferenceC
 			},
 		},
 		Dependencies: []string{
-			"antrea.io/antrea/pkg/apis/controlplane/v1beta2.AddressGroup", metav1.ListMeta{}.OpenAPIModelName()},
+			v1beta2.AddressGroup{}.OpenAPIModelName(), metav1.ListMeta{}.OpenAPIModelName()},
 	}
 }
 
@@ -598,7 +602,7 @@ func schema_pkg_apis_controlplane_v1beta2_AddressGroupPatch(ref common.Reference
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
-										Ref:     ref("antrea.io/antrea/pkg/apis/controlplane/v1beta2.GroupMember"),
+										Ref:     ref(v1beta2.GroupMember{}.OpenAPIModelName()),
 									},
 								},
 							},
@@ -611,7 +615,7 @@ func schema_pkg_apis_controlplane_v1beta2_AddressGroupPatch(ref common.Reference
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
-										Ref:     ref("antrea.io/antrea/pkg/apis/controlplane/v1beta2.GroupMember"),
+										Ref:     ref(v1beta2.GroupMember{}.OpenAPIModelName()),
 									},
 								},
 							},
@@ -621,7 +625,7 @@ func schema_pkg_apis_controlplane_v1beta2_AddressGroupPatch(ref common.Reference
 			},
 		},
 		Dependencies: []string{
-			"antrea.io/antrea/pkg/apis/controlplane/v1beta2.GroupMember", metav1.ObjectMeta{}.OpenAPIModelName()},
+			v1beta2.GroupMember{}.OpenAPIModelName(), metav1.ObjectMeta{}.OpenAPIModelName()},
 	}
 }
 
@@ -660,7 +664,7 @@ func schema_pkg_apis_controlplane_v1beta2_AppliedToGroup(ref common.ReferenceCal
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
-										Ref:     ref("antrea.io/antrea/pkg/apis/controlplane/v1beta2.GroupMember"),
+										Ref:     ref(v1beta2.GroupMember{}.OpenAPIModelName()),
 									},
 								},
 							},
@@ -670,7 +674,7 @@ func schema_pkg_apis_controlplane_v1beta2_AppliedToGroup(ref common.ReferenceCal
 			},
 		},
 		Dependencies: []string{
-			"antrea.io/antrea/pkg/apis/controlplane/v1beta2.GroupMember", metav1.ObjectMeta{}.OpenAPIModelName()},
+			v1beta2.GroupMember{}.OpenAPIModelName(), metav1.ObjectMeta{}.OpenAPIModelName()},
 	}
 }
 
@@ -708,7 +712,7 @@ func schema_pkg_apis_controlplane_v1beta2_AppliedToGroupList(ref common.Referenc
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
-										Ref:     ref("antrea.io/antrea/pkg/apis/controlplane/v1beta2.AppliedToGroup"),
+										Ref:     ref(v1beta2.AppliedToGroup{}.OpenAPIModelName()),
 									},
 								},
 							},
@@ -719,7 +723,7 @@ func schema_pkg_apis_controlplane_v1beta2_AppliedToGroupList(ref common.Referenc
 			},
 		},
 		Dependencies: []string{
-			"antrea.io/antrea/pkg/apis/controlplane/v1beta2.AppliedToGroup", metav1.ListMeta{}.OpenAPIModelName()},
+			v1beta2.AppliedToGroup{}.OpenAPIModelName(), metav1.ListMeta{}.OpenAPIModelName()},
 	}
 }
 
@@ -757,7 +761,7 @@ func schema_pkg_apis_controlplane_v1beta2_AppliedToGroupPatch(ref common.Referen
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
-										Ref:     ref("antrea.io/antrea/pkg/apis/controlplane/v1beta2.GroupMember"),
+										Ref:     ref(v1beta2.GroupMember{}.OpenAPIModelName()),
 									},
 								},
 							},
@@ -770,7 +774,7 @@ func schema_pkg_apis_controlplane_v1beta2_AppliedToGroupPatch(ref common.Referen
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
-										Ref:     ref("antrea.io/antrea/pkg/apis/controlplane/v1beta2.GroupMember"),
+										Ref:     ref(v1beta2.GroupMember{}.OpenAPIModelName()),
 									},
 								},
 							},
@@ -780,7 +784,7 @@ func schema_pkg_apis_controlplane_v1beta2_AppliedToGroupPatch(ref common.Referen
 			},
 		},
 		Dependencies: []string{
-			"antrea.io/antrea/pkg/apis/controlplane/v1beta2.GroupMember", metav1.ObjectMeta{}.OpenAPIModelName()},
+			v1beta2.GroupMember{}.OpenAPIModelName(), metav1.ObjectMeta{}.OpenAPIModelName()},
 	}
 }
 
@@ -857,14 +861,14 @@ func schema_pkg_apis_controlplane_v1beta2_BundleServerAuthConfiguration(ref comm
 					},
 					"basicAuthentication": {
 						SchemaProps: spec.SchemaProps{
-							Ref: ref("antrea.io/antrea/pkg/apis/controlplane/v1beta2.BasicAuthentication"),
+							Ref: ref(v1beta2.BasicAuthentication{}.OpenAPIModelName()),
 						},
 					},
 				},
 			},
 		},
 		Dependencies: []string{
-			"antrea.io/antrea/pkg/apis/controlplane/v1beta2.BasicAuthentication"},
+			v1beta2.BasicAuthentication{}.OpenAPIModelName()},
 	}
 }
 
@@ -902,7 +906,7 @@ func schema_pkg_apis_controlplane_v1beta2_ClusterGroupMembers(ref common.Referen
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
-										Ref:     ref("antrea.io/antrea/pkg/apis/controlplane/v1beta2.GroupMember"),
+										Ref:     ref(v1beta2.GroupMember{}.OpenAPIModelName()),
 									},
 								},
 							},
@@ -915,7 +919,7 @@ func schema_pkg_apis_controlplane_v1beta2_ClusterGroupMembers(ref common.Referen
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
-										Ref:     ref("antrea.io/antrea/pkg/apis/controlplane/v1beta2.IPNet"),
+										Ref:     ref(v1beta2.IPNet{}.OpenAPIModelName()),
 									},
 								},
 							},
@@ -947,7 +951,7 @@ func schema_pkg_apis_controlplane_v1beta2_ClusterGroupMembers(ref common.Referen
 			},
 		},
 		Dependencies: []string{
-			"antrea.io/antrea/pkg/apis/controlplane/v1beta2.GroupMember", "antrea.io/antrea/pkg/apis/controlplane/v1beta2.IPNet", metav1.ObjectMeta{}.OpenAPIModelName()},
+			v1beta2.GroupMember{}.OpenAPIModelName(), v1beta2.IPNet{}.OpenAPIModelName(), metav1.ObjectMeta{}.OpenAPIModelName()},
 	}
 }
 
@@ -985,7 +989,7 @@ func schema_pkg_apis_controlplane_v1beta2_EgressGroup(ref common.ReferenceCallba
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
-										Ref:     ref("antrea.io/antrea/pkg/apis/controlplane/v1beta2.GroupMember"),
+										Ref:     ref(v1beta2.GroupMember{}.OpenAPIModelName()),
 									},
 								},
 							},
@@ -995,7 +999,7 @@ func schema_pkg_apis_controlplane_v1beta2_EgressGroup(ref common.ReferenceCallba
 			},
 		},
 		Dependencies: []string{
-			"antrea.io/antrea/pkg/apis/controlplane/v1beta2.GroupMember", metav1.ObjectMeta{}.OpenAPIModelName()},
+			v1beta2.GroupMember{}.OpenAPIModelName(), metav1.ObjectMeta{}.OpenAPIModelName()},
 	}
 }
 
@@ -1033,7 +1037,7 @@ func schema_pkg_apis_controlplane_v1beta2_EgressGroupList(ref common.ReferenceCa
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
-										Ref:     ref("antrea.io/antrea/pkg/apis/controlplane/v1beta2.EgressGroup"),
+										Ref:     ref(v1beta2.EgressGroup{}.OpenAPIModelName()),
 									},
 								},
 							},
@@ -1044,7 +1048,7 @@ func schema_pkg_apis_controlplane_v1beta2_EgressGroupList(ref common.ReferenceCa
 			},
 		},
 		Dependencies: []string{
-			"antrea.io/antrea/pkg/apis/controlplane/v1beta2.EgressGroup", metav1.ListMeta{}.OpenAPIModelName()},
+			v1beta2.EgressGroup{}.OpenAPIModelName(), metav1.ListMeta{}.OpenAPIModelName()},
 	}
 }
 
@@ -1074,7 +1078,7 @@ func schema_pkg_apis_controlplane_v1beta2_EgressGroupPatch(ref common.ReferenceC
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
-										Ref:     ref("antrea.io/antrea/pkg/apis/controlplane/v1beta2.GroupMember"),
+										Ref:     ref(v1beta2.GroupMember{}.OpenAPIModelName()),
 									},
 								},
 							},
@@ -1087,7 +1091,7 @@ func schema_pkg_apis_controlplane_v1beta2_EgressGroupPatch(ref common.ReferenceC
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
-										Ref:     ref("antrea.io/antrea/pkg/apis/controlplane/v1beta2.GroupMember"),
+										Ref:     ref(v1beta2.GroupMember{}.OpenAPIModelName()),
 									},
 								},
 							},
@@ -1098,7 +1102,7 @@ func schema_pkg_apis_controlplane_v1beta2_EgressGroupPatch(ref common.ReferenceC
 			},
 		},
 		Dependencies: []string{
-			"antrea.io/antrea/pkg/apis/controlplane/v1beta2.GroupMember", metav1.ObjectMeta{}.OpenAPIModelName(), metav1.TypeMeta{}.OpenAPIModelName()},
+			v1beta2.GroupMember{}.OpenAPIModelName(), metav1.ObjectMeta{}.OpenAPIModelName(), metav1.TypeMeta{}.OpenAPIModelName()},
 	}
 }
 
@@ -1111,14 +1115,14 @@ func schema_pkg_apis_controlplane_v1beta2_Entity(ref common.ReferenceCallback) c
 				Properties: map[string]spec.Schema{
 					"pod": {
 						SchemaProps: spec.SchemaProps{
-							Ref: ref("antrea.io/antrea/pkg/apis/controlplane/v1beta2.PodReference"),
+							Ref: ref(v1beta2.PodReference{}.OpenAPIModelName()),
 						},
 					},
 				},
 			},
 		},
 		Dependencies: []string{
-			"antrea.io/antrea/pkg/apis/controlplane/v1beta2.PodReference"},
+			v1beta2.PodReference{}.OpenAPIModelName()},
 	}
 }
 
@@ -1184,7 +1188,7 @@ func schema_pkg_apis_controlplane_v1beta2_GroupAssociation(ref common.ReferenceC
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
-										Ref:     ref("antrea.io/antrea/pkg/apis/controlplane/v1beta2.GroupReference"),
+										Ref:     ref(v1beta2.GroupReference{}.OpenAPIModelName()),
 									},
 								},
 							},
@@ -1195,7 +1199,7 @@ func schema_pkg_apis_controlplane_v1beta2_GroupAssociation(ref common.ReferenceC
 			},
 		},
 		Dependencies: []string{
-			"antrea.io/antrea/pkg/apis/controlplane/v1beta2.GroupReference", metav1.ObjectMeta{}.OpenAPIModelName()},
+			v1beta2.GroupReference{}.OpenAPIModelName(), metav1.ObjectMeta{}.OpenAPIModelName()},
 	}
 }
 
@@ -1209,13 +1213,13 @@ func schema_pkg_apis_controlplane_v1beta2_GroupMember(ref common.ReferenceCallba
 					"pod": {
 						SchemaProps: spec.SchemaProps{
 							Description: "Pod maintains the reference to the Pod.",
-							Ref:         ref("antrea.io/antrea/pkg/apis/controlplane/v1beta2.PodReference"),
+							Ref:         ref(v1beta2.PodReference{}.OpenAPIModelName()),
 						},
 					},
 					"externalEntity": {
 						SchemaProps: spec.SchemaProps{
 							Description: "ExternalEntity maintains the reference to the ExternalEntity.",
-							Ref:         ref("antrea.io/antrea/pkg/apis/controlplane/v1beta2.ExternalEntityReference"),
+							Ref:         ref(v1beta2.ExternalEntityReference{}.OpenAPIModelName()),
 						},
 					},
 					"ips": {
@@ -1240,7 +1244,7 @@ func schema_pkg_apis_controlplane_v1beta2_GroupMember(ref common.ReferenceCallba
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
-										Ref:     ref("antrea.io/antrea/pkg/apis/controlplane/v1beta2.NamedPort"),
+										Ref:     ref(v1beta2.NamedPort{}.OpenAPIModelName()),
 									},
 								},
 							},
@@ -1249,20 +1253,20 @@ func schema_pkg_apis_controlplane_v1beta2_GroupMember(ref common.ReferenceCallba
 					"node": {
 						SchemaProps: spec.SchemaProps{
 							Description: "Node maintains the reference to the Node.",
-							Ref:         ref("antrea.io/antrea/pkg/apis/controlplane/v1beta2.NodeReference"),
+							Ref:         ref(v1beta2.NodeReference{}.OpenAPIModelName()),
 						},
 					},
 					"service": {
 						SchemaProps: spec.SchemaProps{
 							Description: "Service is the reference to the Service. It can only be used in an AppliedTo Group and only a NodePort type Service can be referred by this field.",
-							Ref:         ref("antrea.io/antrea/pkg/apis/controlplane/v1beta2.ServiceReference"),
+							Ref:         ref(v1beta2.ServiceReference{}.OpenAPIModelName()),
 						},
 					},
 				},
 			},
 		},
 		Dependencies: []string{
-			"antrea.io/antrea/pkg/apis/controlplane/v1beta2.ExternalEntityReference", "antrea.io/antrea/pkg/apis/controlplane/v1beta2.NamedPort", "antrea.io/antrea/pkg/apis/controlplane/v1beta2.NodeReference", "antrea.io/antrea/pkg/apis/controlplane/v1beta2.PodReference", "antrea.io/antrea/pkg/apis/controlplane/v1beta2.ServiceReference"},
+			v1beta2.ExternalEntityReference{}.OpenAPIModelName(), v1beta2.NamedPort{}.OpenAPIModelName(), v1beta2.NodeReference{}.OpenAPIModelName(), v1beta2.PodReference{}.OpenAPIModelName(), v1beta2.ServiceReference{}.OpenAPIModelName()},
 	}
 }
 
@@ -1300,7 +1304,7 @@ func schema_pkg_apis_controlplane_v1beta2_GroupMembers(ref common.ReferenceCallb
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
-										Ref:     ref("antrea.io/antrea/pkg/apis/controlplane/v1beta2.GroupMember"),
+										Ref:     ref(v1beta2.GroupMember{}.OpenAPIModelName()),
 									},
 								},
 							},
@@ -1313,7 +1317,7 @@ func schema_pkg_apis_controlplane_v1beta2_GroupMembers(ref common.ReferenceCallb
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
-										Ref:     ref("antrea.io/antrea/pkg/apis/controlplane/v1beta2.IPNet"),
+										Ref:     ref(v1beta2.IPNet{}.OpenAPIModelName()),
 									},
 								},
 							},
@@ -1345,7 +1349,7 @@ func schema_pkg_apis_controlplane_v1beta2_GroupMembers(ref common.ReferenceCallb
 			},
 		},
 		Dependencies: []string{
-			"antrea.io/antrea/pkg/apis/controlplane/v1beta2.GroupMember", "antrea.io/antrea/pkg/apis/controlplane/v1beta2.IPNet", metav1.ObjectMeta{}.OpenAPIModelName()},
+			v1beta2.GroupMember{}.OpenAPIModelName(), v1beta2.IPNet{}.OpenAPIModelName(), metav1.ObjectMeta{}.OpenAPIModelName()},
 	}
 }
 
@@ -1427,7 +1431,7 @@ func schema_pkg_apis_controlplane_v1beta2_IPBlock(ref common.ReferenceCallback) 
 						SchemaProps: spec.SchemaProps{
 							Description: "CIDR is an IPNet represents the IP Block.",
 							Default:     map[string]interface{}{},
-							Ref:         ref("antrea.io/antrea/pkg/apis/controlplane/v1beta2.IPNet"),
+							Ref:         ref(v1beta2.IPNet{}.OpenAPIModelName()),
 						},
 					},
 					"except": {
@@ -1438,7 +1442,7 @@ func schema_pkg_apis_controlplane_v1beta2_IPBlock(ref common.ReferenceCallback) 
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
-										Ref:     ref("antrea.io/antrea/pkg/apis/controlplane/v1beta2.IPNet"),
+										Ref:     ref(v1beta2.IPNet{}.OpenAPIModelName()),
 									},
 								},
 							},
@@ -1449,7 +1453,7 @@ func schema_pkg_apis_controlplane_v1beta2_IPBlock(ref common.ReferenceCallback) 
 			},
 		},
 		Dependencies: []string{
-			"antrea.io/antrea/pkg/apis/controlplane/v1beta2.IPNet"},
+			v1beta2.IPNet{}.OpenAPIModelName()},
 	}
 }
 
@@ -1487,7 +1491,7 @@ func schema_pkg_apis_controlplane_v1beta2_IPGroupAssociation(ref common.Referenc
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
-										Ref:     ref("antrea.io/antrea/pkg/apis/controlplane/v1beta2.GroupReference"),
+										Ref:     ref(v1beta2.GroupReference{}.OpenAPIModelName()),
 									},
 								},
 							},
@@ -1498,7 +1502,7 @@ func schema_pkg_apis_controlplane_v1beta2_IPGroupAssociation(ref common.Referenc
 			},
 		},
 		Dependencies: []string{
-			"antrea.io/antrea/pkg/apis/controlplane/v1beta2.GroupReference", metav1.ObjectMeta{}.OpenAPIModelName()},
+			v1beta2.GroupReference{}.OpenAPIModelName(), metav1.ObjectMeta{}.OpenAPIModelName()},
 	}
 }
 
@@ -1536,19 +1540,19 @@ func schema_pkg_apis_controlplane_v1beta2_L7Protocol(ref common.ReferenceCallbac
 				Properties: map[string]spec.Schema{
 					"http": {
 						SchemaProps: spec.SchemaProps{
-							Ref: ref("antrea.io/antrea/pkg/apis/controlplane/v1beta2.HTTPProtocol"),
+							Ref: ref(v1beta2.HTTPProtocol{}.OpenAPIModelName()),
 						},
 					},
 					"tls": {
 						SchemaProps: spec.SchemaProps{
-							Ref: ref("antrea.io/antrea/pkg/apis/controlplane/v1beta2.TLSProtocol"),
+							Ref: ref(v1beta2.TLSProtocol{}.OpenAPIModelName()),
 						},
 					},
 				},
 			},
 		},
 		Dependencies: []string{
-			"antrea.io/antrea/pkg/apis/controlplane/v1beta2.HTTPProtocol", "antrea.io/antrea/pkg/apis/controlplane/v1beta2.TLSProtocol"},
+			v1beta2.HTTPProtocol{}.OpenAPIModelName(), v1beta2.TLSProtocol{}.OpenAPIModelName()},
 	}
 }
 
@@ -1574,7 +1578,7 @@ func schema_pkg_apis_controlplane_v1beta2_MulticastGroupInfo(ref common.Referenc
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
-										Ref:     ref("antrea.io/antrea/pkg/apis/controlplane/v1beta2.PodReference"),
+										Ref:     ref(v1beta2.PodReference{}.OpenAPIModelName()),
 									},
 								},
 							},
@@ -1584,7 +1588,7 @@ func schema_pkg_apis_controlplane_v1beta2_MulticastGroupInfo(ref common.Referenc
 			},
 		},
 		Dependencies: []string{
-			"antrea.io/antrea/pkg/apis/controlplane/v1beta2.PodReference"},
+			v1beta2.PodReference{}.OpenAPIModelName()},
 	}
 }
 
@@ -1657,7 +1661,7 @@ func schema_pkg_apis_controlplane_v1beta2_NetworkPolicy(ref common.ReferenceCall
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
-										Ref:     ref("antrea.io/antrea/pkg/apis/controlplane/v1beta2.NetworkPolicyRule"),
+										Ref:     ref(v1beta2.NetworkPolicyRule{}.OpenAPIModelName()),
 									},
 								},
 							},
@@ -1695,14 +1699,14 @@ func schema_pkg_apis_controlplane_v1beta2_NetworkPolicy(ref common.ReferenceCall
 					"sourceRef": {
 						SchemaProps: spec.SchemaProps{
 							Description: "Reference to the original NetworkPolicy that the internal NetworkPolicy is created for.",
-							Ref:         ref("antrea.io/antrea/pkg/apis/controlplane/v1beta2.NetworkPolicyReference"),
+							Ref:         ref(v1beta2.NetworkPolicyReference{}.OpenAPIModelName()),
 						},
 					},
 				},
 			},
 		},
 		Dependencies: []string{
-			"antrea.io/antrea/pkg/apis/controlplane/v1beta2.NetworkPolicyReference", "antrea.io/antrea/pkg/apis/controlplane/v1beta2.NetworkPolicyRule", metav1.ObjectMeta{}.OpenAPIModelName()},
+			v1beta2.NetworkPolicyReference{}.OpenAPIModelName(), v1beta2.NetworkPolicyRule{}.OpenAPIModelName(), metav1.ObjectMeta{}.OpenAPIModelName()},
 	}
 }
 
@@ -1736,19 +1740,19 @@ func schema_pkg_apis_controlplane_v1beta2_NetworkPolicyEvaluation(ref common.Ref
 					},
 					"request": {
 						SchemaProps: spec.SchemaProps{
-							Ref: ref("antrea.io/antrea/pkg/apis/controlplane/v1beta2.NetworkPolicyEvaluationRequest"),
+							Ref: ref(v1beta2.NetworkPolicyEvaluationRequest{}.OpenAPIModelName()),
 						},
 					},
 					"response": {
 						SchemaProps: spec.SchemaProps{
-							Ref: ref("antrea.io/antrea/pkg/apis/controlplane/v1beta2.NetworkPolicyEvaluationResponse"),
+							Ref: ref(v1beta2.NetworkPolicyEvaluationResponse{}.OpenAPIModelName()),
 						},
 					},
 				},
 			},
 		},
 		Dependencies: []string{
-			"antrea.io/antrea/pkg/apis/controlplane/v1beta2.NetworkPolicyEvaluationRequest", "antrea.io/antrea/pkg/apis/controlplane/v1beta2.NetworkPolicyEvaluationResponse", metav1.ObjectMeta{}.OpenAPIModelName()},
+			v1beta2.NetworkPolicyEvaluationRequest{}.OpenAPIModelName(), v1beta2.NetworkPolicyEvaluationResponse{}.OpenAPIModelName(), metav1.ObjectMeta{}.OpenAPIModelName()},
 	}
 }
 
@@ -1762,20 +1766,20 @@ func schema_pkg_apis_controlplane_v1beta2_NetworkPolicyEvaluationRequest(ref com
 					"source": {
 						SchemaProps: spec.SchemaProps{
 							Default: map[string]interface{}{},
-							Ref:     ref("antrea.io/antrea/pkg/apis/controlplane/v1beta2.Entity"),
+							Ref:     ref(v1beta2.Entity{}.OpenAPIModelName()),
 						},
 					},
 					"destination": {
 						SchemaProps: spec.SchemaProps{
 							Default: map[string]interface{}{},
-							Ref:     ref("antrea.io/antrea/pkg/apis/controlplane/v1beta2.Entity"),
+							Ref:     ref(v1beta2.Entity{}.OpenAPIModelName()),
 						},
 					},
 				},
 			},
 		},
 		Dependencies: []string{
-			"antrea.io/antrea/pkg/apis/controlplane/v1beta2.Entity"},
+			v1beta2.Entity{}.OpenAPIModelName()},
 	}
 }
 
@@ -1790,7 +1794,7 @@ func schema_pkg_apis_controlplane_v1beta2_NetworkPolicyEvaluationResponse(ref co
 						SchemaProps: spec.SchemaProps{
 							Description: "The reference of the effective NetworkPolicy.",
 							Default:     map[string]interface{}{},
-							Ref:         ref("antrea.io/antrea/pkg/apis/controlplane/v1beta2.NetworkPolicyReference"),
+							Ref:         ref(v1beta2.NetworkPolicyReference{}.OpenAPIModelName()),
 						},
 					},
 					"ruleIndex": {
@@ -1803,14 +1807,14 @@ func schema_pkg_apis_controlplane_v1beta2_NetworkPolicyEvaluationResponse(ref co
 						SchemaProps: spec.SchemaProps{
 							Description: "The content of the effective rule.",
 							Default:     map[string]interface{}{},
-							Ref:         ref("antrea.io/antrea/pkg/apis/controlplane/v1beta2.RuleRef"),
+							Ref:         ref(v1beta2.RuleRef{}.OpenAPIModelName()),
 						},
 					},
 				},
 			},
 		},
 		Dependencies: []string{
-			"antrea.io/antrea/pkg/apis/controlplane/v1beta2.NetworkPolicyReference", "antrea.io/antrea/pkg/apis/controlplane/v1beta2.RuleRef"},
+			v1beta2.NetworkPolicyReference{}.OpenAPIModelName(), v1beta2.RuleRef{}.OpenAPIModelName()},
 	}
 }
 
@@ -1848,7 +1852,7 @@ func schema_pkg_apis_controlplane_v1beta2_NetworkPolicyList(ref common.Reference
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
-										Ref:     ref("antrea.io/antrea/pkg/apis/controlplane/v1beta2.NetworkPolicy"),
+										Ref:     ref(v1beta2.NetworkPolicy{}.OpenAPIModelName()),
 									},
 								},
 							},
@@ -1859,7 +1863,7 @@ func schema_pkg_apis_controlplane_v1beta2_NetworkPolicyList(ref common.Reference
 			},
 		},
 		Dependencies: []string{
-			"antrea.io/antrea/pkg/apis/controlplane/v1beta2.NetworkPolicy", metav1.ListMeta{}.OpenAPIModelName()},
+			v1beta2.NetworkPolicy{}.OpenAPIModelName(), metav1.ListMeta{}.OpenAPIModelName()},
 	}
 }
 
@@ -1936,7 +1940,7 @@ func schema_pkg_apis_controlplane_v1beta2_NetworkPolicyPeer(ref common.Reference
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
-										Ref:     ref("antrea.io/antrea/pkg/apis/controlplane/v1beta2.IPBlock"),
+										Ref:     ref(v1beta2.IPBlock{}.OpenAPIModelName()),
 									},
 								},
 							},
@@ -1965,7 +1969,7 @@ func schema_pkg_apis_controlplane_v1beta2_NetworkPolicyPeer(ref common.Reference
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
-										Ref:     ref("antrea.io/antrea/pkg/apis/controlplane/v1beta2.ServiceReference"),
+										Ref:     ref(v1beta2.ServiceReference{}.OpenAPIModelName()),
 									},
 								},
 							},
@@ -1990,7 +1994,7 @@ func schema_pkg_apis_controlplane_v1beta2_NetworkPolicyPeer(ref common.Reference
 			},
 		},
 		Dependencies: []string{
-			"antrea.io/antrea/pkg/apis/controlplane/v1beta2.IPBlock", "antrea.io/antrea/pkg/apis/controlplane/v1beta2.ServiceReference"},
+			v1beta2.IPBlock{}.OpenAPIModelName(), v1beta2.ServiceReference{}.OpenAPIModelName()},
 	}
 }
 
@@ -2052,14 +2056,14 @@ func schema_pkg_apis_controlplane_v1beta2_NetworkPolicyRule(ref common.Reference
 						SchemaProps: spec.SchemaProps{
 							Description: "From represents sources which should be able to access the GroupMembers selected by the policy.",
 							Default:     map[string]interface{}{},
-							Ref:         ref("antrea.io/antrea/pkg/apis/controlplane/v1beta2.NetworkPolicyPeer"),
+							Ref:         ref(v1beta2.NetworkPolicyPeer{}.OpenAPIModelName()),
 						},
 					},
 					"to": {
 						SchemaProps: spec.SchemaProps{
 							Description: "To represents destinations which should be able to be accessed by the GroupMembers selected by the policy.",
 							Default:     map[string]interface{}{},
-							Ref:         ref("antrea.io/antrea/pkg/apis/controlplane/v1beta2.NetworkPolicyPeer"),
+							Ref:         ref(v1beta2.NetworkPolicyPeer{}.OpenAPIModelName()),
 						},
 					},
 					"services": {
@@ -2070,7 +2074,7 @@ func schema_pkg_apis_controlplane_v1beta2_NetworkPolicyRule(ref common.Reference
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
-										Ref:     ref("antrea.io/antrea/pkg/apis/controlplane/v1beta2.Service"),
+										Ref:     ref(v1beta2.Service{}.OpenAPIModelName()),
 									},
 								},
 							},
@@ -2128,7 +2132,7 @@ func schema_pkg_apis_controlplane_v1beta2_NetworkPolicyRule(ref common.Reference
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
-										Ref:     ref("antrea.io/antrea/pkg/apis/controlplane/v1beta2.L7Protocol"),
+										Ref:     ref(v1beta2.L7Protocol{}.OpenAPIModelName()),
 									},
 								},
 							},
@@ -2146,7 +2150,7 @@ func schema_pkg_apis_controlplane_v1beta2_NetworkPolicyRule(ref common.Reference
 			},
 		},
 		Dependencies: []string{
-			"antrea.io/antrea/pkg/apis/controlplane/v1beta2.L7Protocol", "antrea.io/antrea/pkg/apis/controlplane/v1beta2.NetworkPolicyPeer", "antrea.io/antrea/pkg/apis/controlplane/v1beta2.Service"},
+			v1beta2.L7Protocol{}.OpenAPIModelName(), v1beta2.NetworkPolicyPeer{}.OpenAPIModelName(), v1beta2.Service{}.OpenAPIModelName()},
 	}
 }
 
@@ -2161,14 +2165,14 @@ func schema_pkg_apis_controlplane_v1beta2_NetworkPolicyStats(ref common.Referenc
 						SchemaProps: spec.SchemaProps{
 							Description: "The reference of the NetworkPolicy.",
 							Default:     map[string]interface{}{},
-							Ref:         ref("antrea.io/antrea/pkg/apis/controlplane/v1beta2.NetworkPolicyReference"),
+							Ref:         ref(v1beta2.NetworkPolicyReference{}.OpenAPIModelName()),
 						},
 					},
 					"trafficStats": {
 						SchemaProps: spec.SchemaProps{
 							Description: "The stats of the NetworkPolicy.",
 							Default:     map[string]interface{}{},
-							Ref:         ref("antrea.io/antrea/pkg/apis/stats/v1alpha1.TrafficStats"),
+							Ref:         ref(v1alpha1.TrafficStats{}.OpenAPIModelName()),
 						},
 					},
 					"ruleTrafficStats": {
@@ -2179,7 +2183,7 @@ func schema_pkg_apis_controlplane_v1beta2_NetworkPolicyStats(ref common.Referenc
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
-										Ref:     ref("antrea.io/antrea/pkg/apis/stats/v1alpha1.RuleTrafficStats"),
+										Ref:     ref(v1alpha1.RuleTrafficStats{}.OpenAPIModelName()),
 									},
 								},
 							},
@@ -2189,7 +2193,7 @@ func schema_pkg_apis_controlplane_v1beta2_NetworkPolicyStats(ref common.Referenc
 			},
 		},
 		Dependencies: []string{
-			"antrea.io/antrea/pkg/apis/controlplane/v1beta2.NetworkPolicyReference", "antrea.io/antrea/pkg/apis/stats/v1alpha1.RuleTrafficStats", "antrea.io/antrea/pkg/apis/stats/v1alpha1.TrafficStats"},
+			v1beta2.NetworkPolicyReference{}.OpenAPIModelName(), v1alpha1.RuleTrafficStats{}.OpenAPIModelName(), v1alpha1.TrafficStats{}.OpenAPIModelName()},
 	}
 }
 
@@ -2228,7 +2232,7 @@ func schema_pkg_apis_controlplane_v1beta2_NetworkPolicyStatus(ref common.Referen
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
-										Ref:     ref("antrea.io/antrea/pkg/apis/controlplane/v1beta2.NetworkPolicyNodeStatus"),
+										Ref:     ref(v1beta2.NetworkPolicyNodeStatus{}.OpenAPIModelName()),
 									},
 								},
 							},
@@ -2238,7 +2242,7 @@ func schema_pkg_apis_controlplane_v1beta2_NetworkPolicyStatus(ref common.Referen
 			},
 		},
 		Dependencies: []string{
-			"antrea.io/antrea/pkg/apis/controlplane/v1beta2.NetworkPolicyNodeStatus", metav1.ObjectMeta{}.OpenAPIModelName()},
+			v1beta2.NetworkPolicyNodeStatus{}.OpenAPIModelName(), metav1.ObjectMeta{}.OpenAPIModelName()},
 	}
 }
 
@@ -2297,7 +2301,7 @@ func schema_pkg_apis_controlplane_v1beta2_NodeStatsSummary(ref common.ReferenceC
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
-										Ref:     ref("antrea.io/antrea/pkg/apis/controlplane/v1beta2.NetworkPolicyStats"),
+										Ref:     ref(v1beta2.NetworkPolicyStats{}.OpenAPIModelName()),
 									},
 								},
 							},
@@ -2311,7 +2315,7 @@ func schema_pkg_apis_controlplane_v1beta2_NodeStatsSummary(ref common.ReferenceC
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
-										Ref:     ref("antrea.io/antrea/pkg/apis/controlplane/v1beta2.NetworkPolicyStats"),
+										Ref:     ref(v1beta2.NetworkPolicyStats{}.OpenAPIModelName()),
 									},
 								},
 							},
@@ -2325,7 +2329,7 @@ func schema_pkg_apis_controlplane_v1beta2_NodeStatsSummary(ref common.ReferenceC
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
-										Ref:     ref("antrea.io/antrea/pkg/apis/controlplane/v1beta2.NetworkPolicyStats"),
+										Ref:     ref(v1beta2.NetworkPolicyStats{}.OpenAPIModelName()),
 									},
 								},
 							},
@@ -2339,7 +2343,7 @@ func schema_pkg_apis_controlplane_v1beta2_NodeStatsSummary(ref common.ReferenceC
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
-										Ref:     ref("antrea.io/antrea/pkg/apis/controlplane/v1beta2.MulticastGroupInfo"),
+										Ref:     ref(v1beta2.MulticastGroupInfo{}.OpenAPIModelName()),
 									},
 								},
 							},
@@ -2349,7 +2353,7 @@ func schema_pkg_apis_controlplane_v1beta2_NodeStatsSummary(ref common.ReferenceC
 			},
 		},
 		Dependencies: []string{
-			"antrea.io/antrea/pkg/apis/controlplane/v1beta2.MulticastGroupInfo", "antrea.io/antrea/pkg/apis/controlplane/v1beta2.NetworkPolicyStats", metav1.ObjectMeta{}.OpenAPIModelName()},
+			v1beta2.MulticastGroupInfo{}.OpenAPIModelName(), v1beta2.NetworkPolicyStats{}.OpenAPIModelName(), metav1.ObjectMeta{}.OpenAPIModelName()},
 	}
 }
 
@@ -2594,20 +2598,20 @@ func schema_pkg_apis_controlplane_v1beta2_SupportBundleCollection(ref common.Ref
 					"fileServer": {
 						SchemaProps: spec.SchemaProps{
 							Default: map[string]interface{}{},
-							Ref:     ref("antrea.io/antrea/pkg/apis/controlplane/v1beta2.BundleFileServer"),
+							Ref:     ref(v1beta2.BundleFileServer{}.OpenAPIModelName()),
 						},
 					},
 					"authentication": {
 						SchemaProps: spec.SchemaProps{
 							Default: map[string]interface{}{},
-							Ref:     ref("antrea.io/antrea/pkg/apis/controlplane/v1beta2.BundleServerAuthConfiguration"),
+							Ref:     ref(v1beta2.BundleServerAuthConfiguration{}.OpenAPIModelName()),
 						},
 					},
 				},
 			},
 		},
 		Dependencies: []string{
-			"antrea.io/antrea/pkg/apis/controlplane/v1beta2.BundleFileServer", "antrea.io/antrea/pkg/apis/controlplane/v1beta2.BundleServerAuthConfiguration", metav1.ObjectMeta{}.OpenAPIModelName(), metav1.Time{}.OpenAPIModelName()},
+			v1beta2.BundleFileServer{}.OpenAPIModelName(), v1beta2.BundleServerAuthConfiguration{}.OpenAPIModelName(), metav1.ObjectMeta{}.OpenAPIModelName(), metav1.Time{}.OpenAPIModelName()},
 	}
 }
 
@@ -2645,7 +2649,7 @@ func schema_pkg_apis_controlplane_v1beta2_SupportBundleCollectionList(ref common
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
-										Ref:     ref("antrea.io/antrea/pkg/apis/controlplane/v1beta2.SupportBundleCollection"),
+										Ref:     ref(v1beta2.SupportBundleCollection{}.OpenAPIModelName()),
 									},
 								},
 							},
@@ -2656,7 +2660,7 @@ func schema_pkg_apis_controlplane_v1beta2_SupportBundleCollectionList(ref common
 			},
 		},
 		Dependencies: []string{
-			"antrea.io/antrea/pkg/apis/controlplane/v1beta2.SupportBundleCollection", metav1.ListMeta{}.OpenAPIModelName()},
+			v1beta2.SupportBundleCollection{}.OpenAPIModelName(), metav1.ListMeta{}.OpenAPIModelName()},
 	}
 }
 
@@ -2742,7 +2746,7 @@ func schema_pkg_apis_controlplane_v1beta2_SupportBundleCollectionStatus(ref comm
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
-										Ref:     ref("antrea.io/antrea/pkg/apis/controlplane/v1beta2.SupportBundleCollectionNodeStatus"),
+										Ref:     ref(v1beta2.SupportBundleCollectionNodeStatus{}.OpenAPIModelName()),
 									},
 								},
 							},
@@ -2752,7 +2756,7 @@ func schema_pkg_apis_controlplane_v1beta2_SupportBundleCollectionStatus(ref comm
 			},
 		},
 		Dependencies: []string{
-			"antrea.io/antrea/pkg/apis/controlplane/v1beta2.SupportBundleCollectionNodeStatus", metav1.ObjectMeta{}.OpenAPIModelName()},
+			v1beta2.SupportBundleCollectionNodeStatus{}.OpenAPIModelName(), metav1.ObjectMeta{}.OpenAPIModelName()},
 	}
 }
 
@@ -2893,14 +2897,14 @@ func schema_pkg_apis_crd_v1beta1_AntreaAgentInfo(ref common.ReferenceCallback) c
 						SchemaProps: spec.SchemaProps{
 							Description: "OVS Information",
 							Default:     map[string]interface{}{},
-							Ref:         ref("antrea.io/antrea/pkg/apis/crd/v1beta1.OVSInfo"),
+							Ref:         ref(v1beta1.OVSInfo{}.OpenAPIModelName()),
 						},
 					},
 					"networkPolicyControllerInfo": {
 						SchemaProps: spec.SchemaProps{
 							Description: "Antrea Agent NetworkPolicy information",
 							Default:     map[string]interface{}{},
-							Ref:         ref("antrea.io/antrea/pkg/apis/crd/v1beta1.NetworkPolicyControllerInfo"),
+							Ref:         ref(v1beta1.NetworkPolicyControllerInfo{}.OpenAPIModelName()),
 						},
 					},
 					"localPodNum": {
@@ -2918,7 +2922,7 @@ func schema_pkg_apis_crd_v1beta1_AntreaAgentInfo(ref common.ReferenceCallback) c
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
-										Ref:     ref("antrea.io/antrea/pkg/apis/crd/v1beta1.AgentCondition"),
+										Ref:     ref(v1beta1.AgentCondition{}.OpenAPIModelName()),
 									},
 								},
 							},
@@ -2949,14 +2953,14 @@ func schema_pkg_apis_crd_v1beta1_AntreaAgentInfo(ref common.ReferenceCallback) c
 						SchemaProps: spec.SchemaProps{
 							Description: "Network information",
 							Default:     map[string]interface{}{},
-							Ref:         ref("antrea.io/antrea/pkg/apis/crd/v1beta1.NetworkInfo"),
+							Ref:         ref(v1beta1.NetworkInfo{}.OpenAPIModelName()),
 						},
 					},
 				},
 			},
 		},
 		Dependencies: []string{
-			"antrea.io/antrea/pkg/apis/crd/v1beta1.AgentCondition", "antrea.io/antrea/pkg/apis/crd/v1beta1.NetworkInfo", "antrea.io/antrea/pkg/apis/crd/v1beta1.NetworkPolicyControllerInfo", "antrea.io/antrea/pkg/apis/crd/v1beta1.OVSInfo", v1.ObjectReference{}.OpenAPIModelName(), metav1.ObjectMeta{}.OpenAPIModelName()},
+			v1beta1.AgentCondition{}.OpenAPIModelName(), v1beta1.NetworkInfo{}.OpenAPIModelName(), v1beta1.NetworkPolicyControllerInfo{}.OpenAPIModelName(), v1beta1.OVSInfo{}.OpenAPIModelName(), v1.ObjectReference{}.OpenAPIModelName(), metav1.ObjectMeta{}.OpenAPIModelName()},
 	}
 }
 
@@ -2993,7 +2997,7 @@ func schema_pkg_apis_crd_v1beta1_AntreaAgentInfoList(ref common.ReferenceCallbac
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
-										Ref:     ref("antrea.io/antrea/pkg/apis/crd/v1beta1.AntreaAgentInfo"),
+										Ref:     ref(v1beta1.AntreaAgentInfo{}.OpenAPIModelName()),
 									},
 								},
 							},
@@ -3004,7 +3008,7 @@ func schema_pkg_apis_crd_v1beta1_AntreaAgentInfoList(ref common.ReferenceCallbac
 			},
 		},
 		Dependencies: []string{
-			"antrea.io/antrea/pkg/apis/crd/v1beta1.AntreaAgentInfo", metav1.ListMeta{}.OpenAPIModelName()},
+			v1beta1.AntreaAgentInfo{}.OpenAPIModelName(), metav1.ListMeta{}.OpenAPIModelName()},
 	}
 }
 
@@ -3066,7 +3070,7 @@ func schema_pkg_apis_crd_v1beta1_AntreaControllerInfo(ref common.ReferenceCallba
 						SchemaProps: spec.SchemaProps{
 							Description: "Antrea Controller NetworkPolicy information",
 							Default:     map[string]interface{}{},
-							Ref:         ref("antrea.io/antrea/pkg/apis/crd/v1beta1.NetworkPolicyControllerInfo"),
+							Ref:         ref(v1beta1.NetworkPolicyControllerInfo{}.OpenAPIModelName()),
 						},
 					},
 					"connectedAgentNum": {
@@ -3084,7 +3088,7 @@ func schema_pkg_apis_crd_v1beta1_AntreaControllerInfo(ref common.ReferenceCallba
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
-										Ref:     ref("antrea.io/antrea/pkg/apis/crd/v1beta1.ControllerCondition"),
+										Ref:     ref(v1beta1.ControllerCondition{}.OpenAPIModelName()),
 									},
 								},
 							},
@@ -3101,7 +3105,7 @@ func schema_pkg_apis_crd_v1beta1_AntreaControllerInfo(ref common.ReferenceCallba
 			},
 		},
 		Dependencies: []string{
-			"antrea.io/antrea/pkg/apis/crd/v1beta1.ControllerCondition", "antrea.io/antrea/pkg/apis/crd/v1beta1.NetworkPolicyControllerInfo", v1.ObjectReference{}.OpenAPIModelName(), metav1.ObjectMeta{}.OpenAPIModelName()},
+			v1beta1.ControllerCondition{}.OpenAPIModelName(), v1beta1.NetworkPolicyControllerInfo{}.OpenAPIModelName(), v1.ObjectReference{}.OpenAPIModelName(), metav1.ObjectMeta{}.OpenAPIModelName()},
 	}
 }
 
@@ -3138,7 +3142,7 @@ func schema_pkg_apis_crd_v1beta1_AntreaControllerInfoList(ref common.ReferenceCa
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
-										Ref:     ref("antrea.io/antrea/pkg/apis/crd/v1beta1.AntreaControllerInfo"),
+										Ref:     ref(v1beta1.AntreaControllerInfo{}.OpenAPIModelName()),
 									},
 								},
 							},
@@ -3149,7 +3153,7 @@ func schema_pkg_apis_crd_v1beta1_AntreaControllerInfoList(ref common.ReferenceCa
 			},
 		},
 		Dependencies: []string{
-			"antrea.io/antrea/pkg/apis/crd/v1beta1.AntreaControllerInfo", metav1.ListMeta{}.OpenAPIModelName()},
+			v1beta1.AntreaControllerInfo{}.OpenAPIModelName(), metav1.ListMeta{}.OpenAPIModelName()},
 	}
 }
 
@@ -3188,13 +3192,13 @@ func schema_pkg_apis_crd_v1beta1_AppliedTo(ref common.ReferenceCallback) common.
 					"serviceAccount": {
 						SchemaProps: spec.SchemaProps{
 							Description: "Select all Pods with the ServiceAccount matched by this field, as workloads in AppliedTo fields. Cannot be set with any other selector.",
-							Ref:         ref("antrea.io/antrea/pkg/apis/crd/v1beta1.NamespacedName"),
+							Ref:         ref(v1beta1.NamespacedName{}.OpenAPIModelName()),
 						},
 					},
 					"service": {
 						SchemaProps: spec.SchemaProps{
 							Description: "Select a certain Service which matches the NamespacedName. A Service can only be set in either policy level AppliedTo field in a policy that only has ingress rules or rule level AppliedTo field in an ingress rule. Only a NodePort Service can be referred by this field. Cannot be set with any other selector.",
-							Ref:         ref("antrea.io/antrea/pkg/apis/crd/v1beta1.NamespacedName"),
+							Ref:         ref(v1beta1.NamespacedName{}.OpenAPIModelName()),
 						},
 					},
 					"nodeSelector": {
@@ -3207,7 +3211,7 @@ func schema_pkg_apis_crd_v1beta1_AppliedTo(ref common.ReferenceCallback) common.
 			},
 		},
 		Dependencies: []string{
-			"antrea.io/antrea/pkg/apis/crd/v1beta1.NamespacedName", metav1.LabelSelector{}.OpenAPIModelName()},
+			v1beta1.NamespacedName{}.OpenAPIModelName(), metav1.LabelSelector{}.OpenAPIModelName()},
 	}
 }
 
@@ -3271,14 +3275,14 @@ func schema_pkg_apis_crd_v1beta1_ClusterGroup(ref common.ReferenceCallback) comm
 						SchemaProps: spec.SchemaProps{
 							Description: "Desired state of the group.",
 							Default:     map[string]interface{}{},
-							Ref:         ref("antrea.io/antrea/pkg/apis/crd/v1beta1.GroupSpec"),
+							Ref:         ref(v1beta1.GroupSpec{}.OpenAPIModelName()),
 						},
 					},
 					"status": {
 						SchemaProps: spec.SchemaProps{
 							Description: "Most recently observed status of the group.",
 							Default:     map[string]interface{}{},
-							Ref:         ref("antrea.io/antrea/pkg/apis/crd/v1beta1.GroupStatus"),
+							Ref:         ref(v1beta1.GroupStatus{}.OpenAPIModelName()),
 						},
 					},
 				},
@@ -3286,7 +3290,7 @@ func schema_pkg_apis_crd_v1beta1_ClusterGroup(ref common.ReferenceCallback) comm
 			},
 		},
 		Dependencies: []string{
-			"antrea.io/antrea/pkg/apis/crd/v1beta1.GroupSpec", "antrea.io/antrea/pkg/apis/crd/v1beta1.GroupStatus", metav1.ObjectMeta{}.OpenAPIModelName()},
+			v1beta1.GroupSpec{}.OpenAPIModelName(), v1beta1.GroupStatus{}.OpenAPIModelName(), metav1.ObjectMeta{}.OpenAPIModelName()},
 	}
 }
 
@@ -3323,7 +3327,7 @@ func schema_pkg_apis_crd_v1beta1_ClusterGroupList(ref common.ReferenceCallback) 
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
-										Ref:     ref("antrea.io/antrea/pkg/apis/crd/v1beta1.ClusterGroup"),
+										Ref:     ref(v1beta1.ClusterGroup{}.OpenAPIModelName()),
 									},
 								},
 							},
@@ -3333,7 +3337,7 @@ func schema_pkg_apis_crd_v1beta1_ClusterGroupList(ref common.ReferenceCallback) 
 			},
 		},
 		Dependencies: []string{
-			"antrea.io/antrea/pkg/apis/crd/v1beta1.ClusterGroup", metav1.ListMeta{}.OpenAPIModelName()},
+			v1beta1.ClusterGroup{}.OpenAPIModelName(), metav1.ListMeta{}.OpenAPIModelName()},
 	}
 }
 
@@ -3368,14 +3372,14 @@ func schema_pkg_apis_crd_v1beta1_ClusterNetworkPolicy(ref common.ReferenceCallba
 						SchemaProps: spec.SchemaProps{
 							Description: "Specification of the desired behavior of ClusterNetworkPolicy.",
 							Default:     map[string]interface{}{},
-							Ref:         ref("antrea.io/antrea/pkg/apis/crd/v1beta1.ClusterNetworkPolicySpec"),
+							Ref:         ref(v1beta1.ClusterNetworkPolicySpec{}.OpenAPIModelName()),
 						},
 					},
 					"status": {
 						SchemaProps: spec.SchemaProps{
 							Description: "Most recently observed status of the NetworkPolicy.",
 							Default:     map[string]interface{}{},
-							Ref:         ref("antrea.io/antrea/pkg/apis/crd/v1beta1.NetworkPolicyStatus"),
+							Ref:         ref(v1beta1.NetworkPolicyStatus{}.OpenAPIModelName()),
 						},
 					},
 				},
@@ -3383,7 +3387,7 @@ func schema_pkg_apis_crd_v1beta1_ClusterNetworkPolicy(ref common.ReferenceCallba
 			},
 		},
 		Dependencies: []string{
-			"antrea.io/antrea/pkg/apis/crd/v1beta1.ClusterNetworkPolicySpec", "antrea.io/antrea/pkg/apis/crd/v1beta1.NetworkPolicyStatus", metav1.ObjectMeta{}.OpenAPIModelName()},
+			v1beta1.ClusterNetworkPolicySpec{}.OpenAPIModelName(), v1beta1.NetworkPolicyStatus{}.OpenAPIModelName(), metav1.ObjectMeta{}.OpenAPIModelName()},
 	}
 }
 
@@ -3420,7 +3424,7 @@ func schema_pkg_apis_crd_v1beta1_ClusterNetworkPolicyList(ref common.ReferenceCa
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
-										Ref:     ref("antrea.io/antrea/pkg/apis/crd/v1beta1.ClusterNetworkPolicy"),
+										Ref:     ref(v1beta1.ClusterNetworkPolicy{}.OpenAPIModelName()),
 									},
 								},
 							},
@@ -3431,7 +3435,7 @@ func schema_pkg_apis_crd_v1beta1_ClusterNetworkPolicyList(ref common.ReferenceCa
 			},
 		},
 		Dependencies: []string{
-			"antrea.io/antrea/pkg/apis/crd/v1beta1.ClusterNetworkPolicy", metav1.ListMeta{}.OpenAPIModelName()},
+			v1beta1.ClusterNetworkPolicy{}.OpenAPIModelName(), metav1.ListMeta{}.OpenAPIModelName()},
 	}
 }
 
@@ -3465,7 +3469,7 @@ func schema_pkg_apis_crd_v1beta1_ClusterNetworkPolicySpec(ref common.ReferenceCa
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
-										Ref:     ref("antrea.io/antrea/pkg/apis/crd/v1beta1.AppliedTo"),
+										Ref:     ref(v1beta1.AppliedTo{}.OpenAPIModelName()),
 									},
 								},
 							},
@@ -3479,7 +3483,7 @@ func schema_pkg_apis_crd_v1beta1_ClusterNetworkPolicySpec(ref common.ReferenceCa
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
-										Ref:     ref("antrea.io/antrea/pkg/apis/crd/v1beta1.Rule"),
+										Ref:     ref(v1beta1.Rule{}.OpenAPIModelName()),
 									},
 								},
 							},
@@ -3493,7 +3497,7 @@ func schema_pkg_apis_crd_v1beta1_ClusterNetworkPolicySpec(ref common.ReferenceCa
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
-										Ref:     ref("antrea.io/antrea/pkg/apis/crd/v1beta1.Rule"),
+										Ref:     ref(v1beta1.Rule{}.OpenAPIModelName()),
 									},
 								},
 							},
@@ -3504,7 +3508,7 @@ func schema_pkg_apis_crd_v1beta1_ClusterNetworkPolicySpec(ref common.ReferenceCa
 			},
 		},
 		Dependencies: []string{
-			"antrea.io/antrea/pkg/apis/crd/v1beta1.AppliedTo", "antrea.io/antrea/pkg/apis/crd/v1beta1.Rule"},
+			v1beta1.AppliedTo{}.OpenAPIModelName(), v1beta1.Rule{}.OpenAPIModelName()},
 	}
 }
 
@@ -3632,14 +3636,14 @@ func schema_pkg_apis_crd_v1beta1_Egress(ref common.ReferenceCallback) common.Ope
 						SchemaProps: spec.SchemaProps{
 							Description: "Specification of the desired behavior of Egress.",
 							Default:     map[string]interface{}{},
-							Ref:         ref("antrea.io/antrea/pkg/apis/crd/v1beta1.EgressSpec"),
+							Ref:         ref(v1beta1.EgressSpec{}.OpenAPIModelName()),
 						},
 					},
 					"status": {
 						SchemaProps: spec.SchemaProps{
 							Description: "EgressStatus represents the current status of an Egress.",
 							Default:     map[string]interface{}{},
-							Ref:         ref("antrea.io/antrea/pkg/apis/crd/v1beta1.EgressStatus"),
+							Ref:         ref(v1beta1.EgressStatus{}.OpenAPIModelName()),
 						},
 					},
 				},
@@ -3647,7 +3651,7 @@ func schema_pkg_apis_crd_v1beta1_Egress(ref common.ReferenceCallback) common.Ope
 			},
 		},
 		Dependencies: []string{
-			"antrea.io/antrea/pkg/apis/crd/v1beta1.EgressSpec", "antrea.io/antrea/pkg/apis/crd/v1beta1.EgressStatus", metav1.ObjectMeta{}.OpenAPIModelName()},
+			v1beta1.EgressSpec{}.OpenAPIModelName(), v1beta1.EgressStatus{}.OpenAPIModelName(), metav1.ObjectMeta{}.OpenAPIModelName()},
 	}
 }
 
@@ -3727,7 +3731,7 @@ func schema_pkg_apis_crd_v1beta1_EgressList(ref common.ReferenceCallback) common
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
-										Ref:     ref("antrea.io/antrea/pkg/apis/crd/v1beta1.Egress"),
+										Ref:     ref(v1beta1.Egress{}.OpenAPIModelName()),
 									},
 								},
 							},
@@ -3738,7 +3742,7 @@ func schema_pkg_apis_crd_v1beta1_EgressList(ref common.ReferenceCallback) common
 			},
 		},
 		Dependencies: []string{
-			"antrea.io/antrea/pkg/apis/crd/v1beta1.Egress", metav1.ListMeta{}.OpenAPIModelName()},
+			v1beta1.Egress{}.OpenAPIModelName(), metav1.ListMeta{}.OpenAPIModelName()},
 	}
 }
 
@@ -3753,7 +3757,7 @@ func schema_pkg_apis_crd_v1beta1_EgressSpec(ref common.ReferenceCallback) common
 						SchemaProps: spec.SchemaProps{
 							Description: "AppliedTo selects Pods to which the Egress will be applied.",
 							Default:     map[string]interface{}{},
-							Ref:         ref("antrea.io/antrea/pkg/apis/crd/v1beta1.AppliedTo"),
+							Ref:         ref(v1beta1.AppliedTo{}.OpenAPIModelName()),
 						},
 					},
 					"egressIP": {
@@ -3803,7 +3807,7 @@ func schema_pkg_apis_crd_v1beta1_EgressSpec(ref common.ReferenceCallback) common
 					"bandwidth": {
 						SchemaProps: spec.SchemaProps{
 							Description: "Bandwidth specifies the rate limit of north-south egress traffic of this Egress.",
-							Ref:         ref("antrea.io/antrea/pkg/apis/crd/v1beta1.Bandwidth"),
+							Ref:         ref(v1beta1.Bandwidth{}.OpenAPIModelName()),
 						},
 					},
 				},
@@ -3811,7 +3815,7 @@ func schema_pkg_apis_crd_v1beta1_EgressSpec(ref common.ReferenceCallback) common
 			},
 		},
 		Dependencies: []string{
-			"antrea.io/antrea/pkg/apis/crd/v1beta1.AppliedTo", "antrea.io/antrea/pkg/apis/crd/v1beta1.Bandwidth"},
+			v1beta1.AppliedTo{}.OpenAPIModelName(), v1beta1.Bandwidth{}.OpenAPIModelName()},
 	}
 }
 
@@ -3845,7 +3849,7 @@ func schema_pkg_apis_crd_v1beta1_EgressStatus(ref common.ReferenceCallback) comm
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
-										Ref:     ref("antrea.io/antrea/pkg/apis/crd/v1beta1.EgressCondition"),
+										Ref:     ref(v1beta1.EgressCondition{}.OpenAPIModelName()),
 									},
 								},
 							},
@@ -3856,7 +3860,7 @@ func schema_pkg_apis_crd_v1beta1_EgressStatus(ref common.ReferenceCallback) comm
 			},
 		},
 		Dependencies: []string{
-			"antrea.io/antrea/pkg/apis/crd/v1beta1.EgressCondition"},
+			v1beta1.EgressCondition{}.OpenAPIModelName()},
 	}
 }
 
@@ -3892,14 +3896,14 @@ func schema_pkg_apis_crd_v1beta1_ExternalIPPool(ref common.ReferenceCallback) co
 						SchemaProps: spec.SchemaProps{
 							Description: "Specification of the ExternalIPPool.",
 							Default:     map[string]interface{}{},
-							Ref:         ref("antrea.io/antrea/pkg/apis/crd/v1beta1.ExternalIPPoolSpec"),
+							Ref:         ref(v1beta1.ExternalIPPoolSpec{}.OpenAPIModelName()),
 						},
 					},
 					"status": {
 						SchemaProps: spec.SchemaProps{
 							Description: "The current status of the ExternalIPPool.",
 							Default:     map[string]interface{}{},
-							Ref:         ref("antrea.io/antrea/pkg/apis/crd/v1beta1.ExternalIPPoolStatus"),
+							Ref:         ref(v1beta1.ExternalIPPoolStatus{}.OpenAPIModelName()),
 						},
 					},
 				},
@@ -3907,7 +3911,7 @@ func schema_pkg_apis_crd_v1beta1_ExternalIPPool(ref common.ReferenceCallback) co
 			},
 		},
 		Dependencies: []string{
-			"antrea.io/antrea/pkg/apis/crd/v1beta1.ExternalIPPoolSpec", "antrea.io/antrea/pkg/apis/crd/v1beta1.ExternalIPPoolStatus", metav1.ObjectMeta{}.OpenAPIModelName()},
+			v1beta1.ExternalIPPoolSpec{}.OpenAPIModelName(), v1beta1.ExternalIPPoolStatus{}.OpenAPIModelName(), metav1.ObjectMeta{}.OpenAPIModelName()},
 	}
 }
 
@@ -3944,7 +3948,7 @@ func schema_pkg_apis_crd_v1beta1_ExternalIPPoolList(ref common.ReferenceCallback
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
-										Ref:     ref("antrea.io/antrea/pkg/apis/crd/v1beta1.ExternalIPPool"),
+										Ref:     ref(v1beta1.ExternalIPPool{}.OpenAPIModelName()),
 									},
 								},
 							},
@@ -3955,7 +3959,7 @@ func schema_pkg_apis_crd_v1beta1_ExternalIPPoolList(ref common.ReferenceCallback
 			},
 		},
 		Dependencies: []string{
-			"antrea.io/antrea/pkg/apis/crd/v1beta1.ExternalIPPool", metav1.ListMeta{}.OpenAPIModelName()},
+			v1beta1.ExternalIPPool{}.OpenAPIModelName(), metav1.ListMeta{}.OpenAPIModelName()},
 	}
 }
 
@@ -3973,7 +3977,7 @@ func schema_pkg_apis_crd_v1beta1_ExternalIPPoolSpec(ref common.ReferenceCallback
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
-										Ref:     ref("antrea.io/antrea/pkg/apis/crd/v1beta1.IPRange"),
+										Ref:     ref(v1beta1.IPRange{}.OpenAPIModelName()),
 									},
 								},
 							},
@@ -3982,7 +3986,7 @@ func schema_pkg_apis_crd_v1beta1_ExternalIPPoolSpec(ref common.ReferenceCallback
 					"subnetInfo": {
 						SchemaProps: spec.SchemaProps{
 							Description: "The Subnet info of this IP pool. If set, all IP ranges in the IP pool should share the same subnet attributes. Currently, it's only used when an IP is allocated from the pool for Egress, and is ignored otherwise.",
-							Ref:         ref("antrea.io/antrea/pkg/apis/crd/v1beta1.SubnetInfo"),
+							Ref:         ref(v1beta1.SubnetInfo{}.OpenAPIModelName()),
 						},
 					},
 					"nodeSelector": {
@@ -3997,7 +4001,7 @@ func schema_pkg_apis_crd_v1beta1_ExternalIPPoolSpec(ref common.ReferenceCallback
 			},
 		},
 		Dependencies: []string{
-			"antrea.io/antrea/pkg/apis/crd/v1beta1.IPRange", "antrea.io/antrea/pkg/apis/crd/v1beta1.SubnetInfo", metav1.LabelSelector{}.OpenAPIModelName()},
+			v1beta1.IPRange{}.OpenAPIModelName(), v1beta1.SubnetInfo{}.OpenAPIModelName(), metav1.LabelSelector{}.OpenAPIModelName()},
 	}
 }
 
@@ -4010,14 +4014,14 @@ func schema_pkg_apis_crd_v1beta1_ExternalIPPoolStatus(ref common.ReferenceCallba
 					"usage": {
 						SchemaProps: spec.SchemaProps{
 							Default: map[string]interface{}{},
-							Ref:     ref("antrea.io/antrea/pkg/apis/crd/v1beta1.IPPoolUsage"),
+							Ref:     ref(v1beta1.IPPoolUsage{}.OpenAPIModelName()),
 						},
 					},
 				},
 			},
 		},
 		Dependencies: []string{
-			"antrea.io/antrea/pkg/apis/crd/v1beta1.IPPoolUsage"},
+			v1beta1.IPPoolUsage{}.OpenAPIModelName()},
 	}
 }
 
@@ -4053,14 +4057,14 @@ func schema_pkg_apis_crd_v1beta1_Group(ref common.ReferenceCallback) common.Open
 						SchemaProps: spec.SchemaProps{
 							Description: "Desired state of the group.",
 							Default:     map[string]interface{}{},
-							Ref:         ref("antrea.io/antrea/pkg/apis/crd/v1beta1.GroupSpec"),
+							Ref:         ref(v1beta1.GroupSpec{}.OpenAPIModelName()),
 						},
 					},
 					"status": {
 						SchemaProps: spec.SchemaProps{
 							Description: "Most recently observed status of the group.",
 							Default:     map[string]interface{}{},
-							Ref:         ref("antrea.io/antrea/pkg/apis/crd/v1beta1.GroupStatus"),
+							Ref:         ref(v1beta1.GroupStatus{}.OpenAPIModelName()),
 						},
 					},
 				},
@@ -4068,7 +4072,7 @@ func schema_pkg_apis_crd_v1beta1_Group(ref common.ReferenceCallback) common.Open
 			},
 		},
 		Dependencies: []string{
-			"antrea.io/antrea/pkg/apis/crd/v1beta1.GroupSpec", "antrea.io/antrea/pkg/apis/crd/v1beta1.GroupStatus", metav1.ObjectMeta{}.OpenAPIModelName()},
+			v1beta1.GroupSpec{}.OpenAPIModelName(), v1beta1.GroupStatus{}.OpenAPIModelName(), metav1.ObjectMeta{}.OpenAPIModelName()},
 	}
 }
 
@@ -4139,7 +4143,7 @@ func schema_pkg_apis_crd_v1beta1_GroupList(ref common.ReferenceCallback) common.
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
-										Ref:     ref("antrea.io/antrea/pkg/apis/crd/v1beta1.Group"),
+										Ref:     ref(v1beta1.Group{}.OpenAPIModelName()),
 									},
 								},
 							},
@@ -4149,7 +4153,7 @@ func schema_pkg_apis_crd_v1beta1_GroupList(ref common.ReferenceCallback) common.
 			},
 		},
 		Dependencies: []string{
-			"antrea.io/antrea/pkg/apis/crd/v1beta1.Group", metav1.ListMeta{}.OpenAPIModelName()},
+			v1beta1.Group{}.OpenAPIModelName(), metav1.ListMeta{}.OpenAPIModelName()},
 	}
 }
 
@@ -4185,7 +4189,7 @@ func schema_pkg_apis_crd_v1beta1_GroupSpec(ref common.ReferenceCallback) common.
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
-										Ref:     ref("antrea.io/antrea/pkg/apis/crd/v1beta1.IPBlock"),
+										Ref:     ref(v1beta1.IPBlock{}.OpenAPIModelName()),
 									},
 								},
 							},
@@ -4194,7 +4198,7 @@ func schema_pkg_apis_crd_v1beta1_GroupSpec(ref common.ReferenceCallback) common.
 					"serviceReference": {
 						SchemaProps: spec.SchemaProps{
 							Description: "Select backend Pods of the referred Service. Cannot be set with any other selector or ipBlock.",
-							Ref:         ref("antrea.io/antrea/pkg/apis/crd/v1beta1.NamespacedName"),
+							Ref:         ref(v1beta1.NamespacedName{}.OpenAPIModelName()),
 						},
 					},
 					"externalEntitySelector": {
@@ -4222,7 +4226,7 @@ func schema_pkg_apis_crd_v1beta1_GroupSpec(ref common.ReferenceCallback) common.
 			},
 		},
 		Dependencies: []string{
-			"antrea.io/antrea/pkg/apis/crd/v1beta1.IPBlock", "antrea.io/antrea/pkg/apis/crd/v1beta1.NamespacedName", metav1.LabelSelector{}.OpenAPIModelName()},
+			v1beta1.IPBlock{}.OpenAPIModelName(), v1beta1.NamespacedName{}.OpenAPIModelName(), metav1.LabelSelector{}.OpenAPIModelName()},
 	}
 }
 
@@ -4240,7 +4244,7 @@ func schema_pkg_apis_crd_v1beta1_GroupStatus(ref common.ReferenceCallback) commo
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
-										Ref:     ref("antrea.io/antrea/pkg/apis/crd/v1beta1.GroupCondition"),
+										Ref:     ref(v1beta1.GroupCondition{}.OpenAPIModelName()),
 									},
 								},
 							},
@@ -4250,7 +4254,7 @@ func schema_pkg_apis_crd_v1beta1_GroupStatus(ref common.ReferenceCallback) commo
 			},
 		},
 		Dependencies: []string{
-			"antrea.io/antrea/pkg/apis/crd/v1beta1.GroupCondition"},
+			v1beta1.GroupCondition{}.OpenAPIModelName()},
 	}
 }
 
@@ -4373,19 +4377,19 @@ func schema_pkg_apis_crd_v1beta1_IPAddressOwner(ref common.ReferenceCallback) co
 				Properties: map[string]spec.Schema{
 					"pod": {
 						SchemaProps: spec.SchemaProps{
-							Ref: ref("antrea.io/antrea/pkg/apis/crd/v1beta1.PodOwner"),
+							Ref: ref(v1beta1.PodOwner{}.OpenAPIModelName()),
 						},
 					},
 					"statefulSet": {
 						SchemaProps: spec.SchemaProps{
-							Ref: ref("antrea.io/antrea/pkg/apis/crd/v1beta1.StatefulSetOwner"),
+							Ref: ref(v1beta1.StatefulSetOwner{}.OpenAPIModelName()),
 						},
 					},
 				},
 			},
 		},
 		Dependencies: []string{
-			"antrea.io/antrea/pkg/apis/crd/v1beta1.PodOwner", "antrea.io/antrea/pkg/apis/crd/v1beta1.StatefulSetOwner"},
+			v1beta1.PodOwner{}.OpenAPIModelName(), v1beta1.StatefulSetOwner{}.OpenAPIModelName()},
 	}
 }
 
@@ -4415,7 +4419,7 @@ func schema_pkg_apis_crd_v1beta1_IPAddressState(ref common.ReferenceCallback) co
 						SchemaProps: spec.SchemaProps{
 							Description: "Owner this IP Address is allocated to",
 							Default:     map[string]interface{}{},
-							Ref:         ref("antrea.io/antrea/pkg/apis/crd/v1beta1.IPAddressOwner"),
+							Ref:         ref(v1beta1.IPAddressOwner{}.OpenAPIModelName()),
 						},
 					},
 				},
@@ -4423,7 +4427,7 @@ func schema_pkg_apis_crd_v1beta1_IPAddressState(ref common.ReferenceCallback) co
 			},
 		},
 		Dependencies: []string{
-			"antrea.io/antrea/pkg/apis/crd/v1beta1.IPAddressOwner"},
+			v1beta1.IPAddressOwner{}.OpenAPIModelName()},
 	}
 }
 
@@ -4530,14 +4534,14 @@ func schema_pkg_apis_crd_v1beta1_IPPool(ref common.ReferenceCallback) common.Ope
 						SchemaProps: spec.SchemaProps{
 							Description: "Specification of the IPPool.",
 							Default:     map[string]interface{}{},
-							Ref:         ref("antrea.io/antrea/pkg/apis/crd/v1beta1.IPPoolSpec"),
+							Ref:         ref(v1beta1.IPPoolSpec{}.OpenAPIModelName()),
 						},
 					},
 					"status": {
 						SchemaProps: spec.SchemaProps{
 							Description: "Most recently observed status of the pool.",
 							Default:     map[string]interface{}{},
-							Ref:         ref("antrea.io/antrea/pkg/apis/crd/v1beta1.IPPoolStatus"),
+							Ref:         ref(v1beta1.IPPoolStatus{}.OpenAPIModelName()),
 						},
 					},
 				},
@@ -4545,7 +4549,7 @@ func schema_pkg_apis_crd_v1beta1_IPPool(ref common.ReferenceCallback) common.Ope
 			},
 		},
 		Dependencies: []string{
-			"antrea.io/antrea/pkg/apis/crd/v1beta1.IPPoolSpec", "antrea.io/antrea/pkg/apis/crd/v1beta1.IPPoolStatus", metav1.ObjectMeta{}.OpenAPIModelName()},
+			v1beta1.IPPoolSpec{}.OpenAPIModelName(), v1beta1.IPPoolStatus{}.OpenAPIModelName(), metav1.ObjectMeta{}.OpenAPIModelName()},
 	}
 }
 
@@ -4582,7 +4586,7 @@ func schema_pkg_apis_crd_v1beta1_IPPoolList(ref common.ReferenceCallback) common
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
-										Ref:     ref("antrea.io/antrea/pkg/apis/crd/v1beta1.IPPool"),
+										Ref:     ref(v1beta1.IPPool{}.OpenAPIModelName()),
 									},
 								},
 							},
@@ -4593,7 +4597,7 @@ func schema_pkg_apis_crd_v1beta1_IPPoolList(ref common.ReferenceCallback) common
 			},
 		},
 		Dependencies: []string{
-			"antrea.io/antrea/pkg/apis/crd/v1beta1.IPPool", metav1.ListMeta{}.OpenAPIModelName()},
+			v1beta1.IPPool{}.OpenAPIModelName(), metav1.ListMeta{}.OpenAPIModelName()},
 	}
 }
 
@@ -4611,7 +4615,7 @@ func schema_pkg_apis_crd_v1beta1_IPPoolSpec(ref common.ReferenceCallback) common
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
-										Ref:     ref("antrea.io/antrea/pkg/apis/crd/v1beta1.IPRange"),
+										Ref:     ref(v1beta1.IPRange{}.OpenAPIModelName()),
 									},
 								},
 							},
@@ -4621,7 +4625,7 @@ func schema_pkg_apis_crd_v1beta1_IPPoolSpec(ref common.ReferenceCallback) common
 						SchemaProps: spec.SchemaProps{
 							Description: "The Subnet info of this IP pool. All the IP ranges in the IP pool should share the same subnet attributes.",
 							Default:     map[string]interface{}{},
-							Ref:         ref("antrea.io/antrea/pkg/apis/crd/v1beta1.SubnetInfo"),
+							Ref:         ref(v1beta1.SubnetInfo{}.OpenAPIModelName()),
 						},
 					},
 				},
@@ -4629,7 +4633,7 @@ func schema_pkg_apis_crd_v1beta1_IPPoolSpec(ref common.ReferenceCallback) common
 			},
 		},
 		Dependencies: []string{
-			"antrea.io/antrea/pkg/apis/crd/v1beta1.IPRange", "antrea.io/antrea/pkg/apis/crd/v1beta1.SubnetInfo"},
+			v1beta1.IPRange{}.OpenAPIModelName(), v1beta1.SubnetInfo{}.OpenAPIModelName()},
 	}
 }
 
@@ -4646,7 +4650,7 @@ func schema_pkg_apis_crd_v1beta1_IPPoolStatus(ref common.ReferenceCallback) comm
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
-										Ref:     ref("antrea.io/antrea/pkg/apis/crd/v1beta1.IPAddressState"),
+										Ref:     ref(v1beta1.IPAddressState{}.OpenAPIModelName()),
 									},
 								},
 							},
@@ -4655,14 +4659,14 @@ func schema_pkg_apis_crd_v1beta1_IPPoolStatus(ref common.ReferenceCallback) comm
 					"usage": {
 						SchemaProps: spec.SchemaProps{
 							Default: map[string]interface{}{},
-							Ref:     ref("antrea.io/antrea/pkg/apis/crd/v1beta1.IPPoolUsage"),
+							Ref:     ref(v1beta1.IPPoolUsage{}.OpenAPIModelName()),
 						},
 					},
 				},
 			},
 		},
 		Dependencies: []string{
-			"antrea.io/antrea/pkg/apis/crd/v1beta1.IPAddressState", "antrea.io/antrea/pkg/apis/crd/v1beta1.IPPoolUsage"},
+			v1beta1.IPAddressState{}.OpenAPIModelName(), v1beta1.IPPoolUsage{}.OpenAPIModelName()},
 	}
 }
 
@@ -4764,19 +4768,19 @@ func schema_pkg_apis_crd_v1beta1_L7Protocol(ref common.ReferenceCallback) common
 				Properties: map[string]spec.Schema{
 					"http": {
 						SchemaProps: spec.SchemaProps{
-							Ref: ref("antrea.io/antrea/pkg/apis/crd/v1beta1.HTTPProtocol"),
+							Ref: ref(v1beta1.HTTPProtocol{}.OpenAPIModelName()),
 						},
 					},
 					"tls": {
 						SchemaProps: spec.SchemaProps{
-							Ref: ref("antrea.io/antrea/pkg/apis/crd/v1beta1.TLSProtocol"),
+							Ref: ref(v1beta1.TLSProtocol{}.OpenAPIModelName()),
 						},
 					},
 				},
 			},
 		},
 		Dependencies: []string{
-			"antrea.io/antrea/pkg/apis/crd/v1beta1.HTTPProtocol", "antrea.io/antrea/pkg/apis/crd/v1beta1.TLSProtocol"},
+			v1beta1.HTTPProtocol{}.OpenAPIModelName(), v1beta1.TLSProtocol{}.OpenAPIModelName()},
 	}
 }
 
@@ -4884,14 +4888,14 @@ func schema_pkg_apis_crd_v1beta1_NetworkPolicy(ref common.ReferenceCallback) com
 						SchemaProps: spec.SchemaProps{
 							Description: "Specification of the desired behavior of NetworkPolicy.",
 							Default:     map[string]interface{}{},
-							Ref:         ref("antrea.io/antrea/pkg/apis/crd/v1beta1.NetworkPolicySpec"),
+							Ref:         ref(v1beta1.NetworkPolicySpec{}.OpenAPIModelName()),
 						},
 					},
 					"status": {
 						SchemaProps: spec.SchemaProps{
 							Description: "Most recently observed status of the NetworkPolicy.",
 							Default:     map[string]interface{}{},
-							Ref:         ref("antrea.io/antrea/pkg/apis/crd/v1beta1.NetworkPolicyStatus"),
+							Ref:         ref(v1beta1.NetworkPolicyStatus{}.OpenAPIModelName()),
 						},
 					},
 				},
@@ -4899,7 +4903,7 @@ func schema_pkg_apis_crd_v1beta1_NetworkPolicy(ref common.ReferenceCallback) com
 			},
 		},
 		Dependencies: []string{
-			"antrea.io/antrea/pkg/apis/crd/v1beta1.NetworkPolicySpec", "antrea.io/antrea/pkg/apis/crd/v1beta1.NetworkPolicyStatus", metav1.ObjectMeta{}.OpenAPIModelName()},
+			v1beta1.NetworkPolicySpec{}.OpenAPIModelName(), v1beta1.NetworkPolicyStatus{}.OpenAPIModelName(), metav1.ObjectMeta{}.OpenAPIModelName()},
 	}
 }
 
@@ -5018,7 +5022,7 @@ func schema_pkg_apis_crd_v1beta1_NetworkPolicyList(ref common.ReferenceCallback)
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
-										Ref:     ref("antrea.io/antrea/pkg/apis/crd/v1beta1.NetworkPolicy"),
+										Ref:     ref(v1beta1.NetworkPolicy{}.OpenAPIModelName()),
 									},
 								},
 							},
@@ -5029,7 +5033,7 @@ func schema_pkg_apis_crd_v1beta1_NetworkPolicyList(ref common.ReferenceCallback)
 			},
 		},
 		Dependencies: []string{
-			"antrea.io/antrea/pkg/apis/crd/v1beta1.NetworkPolicy", metav1.ListMeta{}.OpenAPIModelName()},
+			v1beta1.NetworkPolicy{}.OpenAPIModelName(), metav1.ListMeta{}.OpenAPIModelName()},
 	}
 }
 
@@ -5043,7 +5047,7 @@ func schema_pkg_apis_crd_v1beta1_NetworkPolicyPeer(ref common.ReferenceCallback)
 					"ipBlock": {
 						SchemaProps: spec.SchemaProps{
 							Description: "IPBlock describes the IPAddresses/IPBlocks that is matched in to/from. IPBlock cannot be set as part of the AppliedTo field. Cannot be set with any other selector.",
-							Ref:         ref("antrea.io/antrea/pkg/apis/crd/v1beta1.IPBlock"),
+							Ref:         ref(v1beta1.IPBlock{}.OpenAPIModelName()),
 						},
 					},
 					"podSelector": {
@@ -5061,7 +5065,7 @@ func schema_pkg_apis_crd_v1beta1_NetworkPolicyPeer(ref common.ReferenceCallback)
 					"namespaces": {
 						SchemaProps: spec.SchemaProps{
 							Description: "Select Pod/ExternalEntity from Namespaces matched by specific criteria. Current supported criteria is match: Self, which selects from the same Namespace of the appliedTo workloads. Cannot be set with any other selector except PodSelector or ExternalEntitySelector. This field can only be set when NetworkPolicyPeer is created for ClusterNetworkPolicy ingress/egress rules. Cannot be set with NamespaceSelector.",
-							Ref:         ref("antrea.io/antrea/pkg/apis/crd/v1beta1.PeerNamespaces"),
+							Ref:         ref(v1beta1.PeerNamespaces{}.OpenAPIModelName()),
 						},
 					},
 					"externalEntitySelector": {
@@ -5087,7 +5091,7 @@ func schema_pkg_apis_crd_v1beta1_NetworkPolicyPeer(ref common.ReferenceCallback)
 					"serviceAccount": {
 						SchemaProps: spec.SchemaProps{
 							Description: "Select all Pods with the ServiceAccount matched by this field, as workloads in To/From fields. Cannot be set with any other selector.",
-							Ref:         ref("antrea.io/antrea/pkg/apis/crd/v1beta1.NamespacedName"),
+							Ref:         ref(v1beta1.NamespacedName{}.OpenAPIModelName()),
 						},
 					},
 					"nodeSelector": {
@@ -5107,7 +5111,7 @@ func schema_pkg_apis_crd_v1beta1_NetworkPolicyPeer(ref common.ReferenceCallback)
 			},
 		},
 		Dependencies: []string{
-			"antrea.io/antrea/pkg/apis/crd/v1beta1.IPBlock", "antrea.io/antrea/pkg/apis/crd/v1beta1.NamespacedName", "antrea.io/antrea/pkg/apis/crd/v1beta1.PeerNamespaces", metav1.LabelSelector{}.OpenAPIModelName()},
+			v1beta1.IPBlock{}.OpenAPIModelName(), v1beta1.NamespacedName{}.OpenAPIModelName(), v1beta1.PeerNamespaces{}.OpenAPIModelName(), metav1.LabelSelector{}.OpenAPIModelName()},
 	}
 }
 
@@ -5170,19 +5174,19 @@ func schema_pkg_apis_crd_v1beta1_NetworkPolicyProtocol(ref common.ReferenceCallb
 				Properties: map[string]spec.Schema{
 					"icmp": {
 						SchemaProps: spec.SchemaProps{
-							Ref: ref("antrea.io/antrea/pkg/apis/crd/v1beta1.ICMPProtocol"),
+							Ref: ref(v1beta1.ICMPProtocol{}.OpenAPIModelName()),
 						},
 					},
 					"igmp": {
 						SchemaProps: spec.SchemaProps{
-							Ref: ref("antrea.io/antrea/pkg/apis/crd/v1beta1.IGMPProtocol"),
+							Ref: ref(v1beta1.IGMPProtocol{}.OpenAPIModelName()),
 						},
 					},
 				},
 			},
 		},
 		Dependencies: []string{
-			"antrea.io/antrea/pkg/apis/crd/v1beta1.ICMPProtocol", "antrea.io/antrea/pkg/apis/crd/v1beta1.IGMPProtocol"},
+			v1beta1.ICMPProtocol{}.OpenAPIModelName(), v1beta1.IGMPProtocol{}.OpenAPIModelName()},
 	}
 }
 
@@ -5216,7 +5220,7 @@ func schema_pkg_apis_crd_v1beta1_NetworkPolicySpec(ref common.ReferenceCallback)
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
-										Ref:     ref("antrea.io/antrea/pkg/apis/crd/v1beta1.AppliedTo"),
+										Ref:     ref(v1beta1.AppliedTo{}.OpenAPIModelName()),
 									},
 								},
 							},
@@ -5230,7 +5234,7 @@ func schema_pkg_apis_crd_v1beta1_NetworkPolicySpec(ref common.ReferenceCallback)
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
-										Ref:     ref("antrea.io/antrea/pkg/apis/crd/v1beta1.Rule"),
+										Ref:     ref(v1beta1.Rule{}.OpenAPIModelName()),
 									},
 								},
 							},
@@ -5244,7 +5248,7 @@ func schema_pkg_apis_crd_v1beta1_NetworkPolicySpec(ref common.ReferenceCallback)
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
-										Ref:     ref("antrea.io/antrea/pkg/apis/crd/v1beta1.Rule"),
+										Ref:     ref(v1beta1.Rule{}.OpenAPIModelName()),
 									},
 								},
 							},
@@ -5255,7 +5259,7 @@ func schema_pkg_apis_crd_v1beta1_NetworkPolicySpec(ref common.ReferenceCallback)
 			},
 		},
 		Dependencies: []string{
-			"antrea.io/antrea/pkg/apis/crd/v1beta1.AppliedTo", "antrea.io/antrea/pkg/apis/crd/v1beta1.Rule"},
+			v1beta1.AppliedTo{}.OpenAPIModelName(), v1beta1.Rule{}.OpenAPIModelName()},
 	}
 }
 
@@ -5306,7 +5310,7 @@ func schema_pkg_apis_crd_v1beta1_NetworkPolicyStatus(ref common.ReferenceCallbac
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
-										Ref:     ref("antrea.io/antrea/pkg/apis/crd/v1beta1.NetworkPolicyCondition"),
+										Ref:     ref(v1beta1.NetworkPolicyCondition{}.OpenAPIModelName()),
 									},
 								},
 							},
@@ -5317,7 +5321,7 @@ func schema_pkg_apis_crd_v1beta1_NetworkPolicyStatus(ref common.ReferenceCallbac
 			},
 		},
 		Dependencies: []string{
-			"antrea.io/antrea/pkg/apis/crd/v1beta1.NetworkPolicyCondition"},
+			v1beta1.NetworkPolicyCondition{}.OpenAPIModelName()},
 	}
 }
 
@@ -5356,7 +5360,7 @@ func schema_pkg_apis_crd_v1beta1_NodeResult(ref common.ReferenceCallback) common
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
-										Ref:     ref("antrea.io/antrea/pkg/apis/crd/v1beta1.Observation"),
+										Ref:     ref(v1beta1.Observation{}.OpenAPIModelName()),
 									},
 								},
 							},
@@ -5366,7 +5370,7 @@ func schema_pkg_apis_crd_v1beta1_NodeResult(ref common.ReferenceCallback) common
 			},
 		},
 		Dependencies: []string{
-			"antrea.io/antrea/pkg/apis/crd/v1beta1.Observation"},
+			v1beta1.Observation{}.OpenAPIModelName()},
 	}
 }
 
@@ -5555,25 +5559,25 @@ func schema_pkg_apis_crd_v1beta1_Packet(ref common.ReferenceCallback) common.Ope
 					},
 					"ipHeader": {
 						SchemaProps: spec.SchemaProps{
-							Ref: ref("antrea.io/antrea/pkg/apis/crd/v1beta1.IPHeader"),
+							Ref: ref(v1beta1.IPHeader{}.OpenAPIModelName()),
 						},
 					},
 					"ipv6Header": {
 						SchemaProps: spec.SchemaProps{
-							Ref: ref("antrea.io/antrea/pkg/apis/crd/v1beta1.IPv6Header"),
+							Ref: ref(v1beta1.IPv6Header{}.OpenAPIModelName()),
 						},
 					},
 					"transportHeader": {
 						SchemaProps: spec.SchemaProps{
 							Default: map[string]interface{}{},
-							Ref:     ref("antrea.io/antrea/pkg/apis/crd/v1beta1.TransportHeader"),
+							Ref:     ref(v1beta1.TransportHeader{}.OpenAPIModelName()),
 						},
 					},
 				},
 			},
 		},
 		Dependencies: []string{
-			"antrea.io/antrea/pkg/apis/crd/v1beta1.IPHeader", "antrea.io/antrea/pkg/apis/crd/v1beta1.IPv6Header", "antrea.io/antrea/pkg/apis/crd/v1beta1.TransportHeader"},
+			v1beta1.IPHeader{}.OpenAPIModelName(), v1beta1.IPv6Header{}.OpenAPIModelName(), v1beta1.TransportHeader{}.OpenAPIModelName()},
 	}
 }
 
@@ -5707,7 +5711,7 @@ func schema_pkg_apis_crd_v1beta1_Rule(ref common.ReferenceCallback) common.OpenA
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
-										Ref:     ref("antrea.io/antrea/pkg/apis/crd/v1beta1.NetworkPolicyPort"),
+										Ref:     ref(v1beta1.NetworkPolicyPort{}.OpenAPIModelName()),
 									},
 								},
 							},
@@ -5721,7 +5725,7 @@ func schema_pkg_apis_crd_v1beta1_Rule(ref common.ReferenceCallback) common.OpenA
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
-										Ref:     ref("antrea.io/antrea/pkg/apis/crd/v1beta1.NetworkPolicyProtocol"),
+										Ref:     ref(v1beta1.NetworkPolicyProtocol{}.OpenAPIModelName()),
 									},
 								},
 							},
@@ -5735,7 +5739,7 @@ func schema_pkg_apis_crd_v1beta1_Rule(ref common.ReferenceCallback) common.OpenA
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
-										Ref:     ref("antrea.io/antrea/pkg/apis/crd/v1beta1.L7Protocol"),
+										Ref:     ref(v1beta1.L7Protocol{}.OpenAPIModelName()),
 									},
 								},
 							},
@@ -5749,7 +5753,7 @@ func schema_pkg_apis_crd_v1beta1_Rule(ref common.ReferenceCallback) common.OpenA
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
-										Ref:     ref("antrea.io/antrea/pkg/apis/crd/v1beta1.NetworkPolicyPeer"),
+										Ref:     ref(v1beta1.NetworkPolicyPeer{}.OpenAPIModelName()),
 									},
 								},
 							},
@@ -5763,7 +5767,7 @@ func schema_pkg_apis_crd_v1beta1_Rule(ref common.ReferenceCallback) common.OpenA
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
-										Ref:     ref("antrea.io/antrea/pkg/apis/crd/v1beta1.NetworkPolicyPeer"),
+										Ref:     ref(v1beta1.NetworkPolicyPeer{}.OpenAPIModelName()),
 									},
 								},
 							},
@@ -5777,7 +5781,7 @@ func schema_pkg_apis_crd_v1beta1_Rule(ref common.ReferenceCallback) common.OpenA
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
-										Ref:     ref("antrea.io/antrea/pkg/apis/crd/v1beta1.PeerService"),
+										Ref:     ref(v1beta1.PeerService{}.OpenAPIModelName()),
 									},
 								},
 							},
@@ -5813,7 +5817,7 @@ func schema_pkg_apis_crd_v1beta1_Rule(ref common.ReferenceCallback) common.OpenA
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
-										Ref:     ref("antrea.io/antrea/pkg/apis/crd/v1beta1.AppliedTo"),
+										Ref:     ref(v1beta1.AppliedTo{}.OpenAPIModelName()),
 									},
 								},
 							},
@@ -5824,7 +5828,7 @@ func schema_pkg_apis_crd_v1beta1_Rule(ref common.ReferenceCallback) common.OpenA
 			},
 		},
 		Dependencies: []string{
-			"antrea.io/antrea/pkg/apis/crd/v1beta1.AppliedTo", "antrea.io/antrea/pkg/apis/crd/v1beta1.L7Protocol", "antrea.io/antrea/pkg/apis/crd/v1beta1.NetworkPolicyPeer", "antrea.io/antrea/pkg/apis/crd/v1beta1.NetworkPolicyPort", "antrea.io/antrea/pkg/apis/crd/v1beta1.NetworkPolicyProtocol", "antrea.io/antrea/pkg/apis/crd/v1beta1.PeerService"},
+			v1beta1.AppliedTo{}.OpenAPIModelName(), v1beta1.L7Protocol{}.OpenAPIModelName(), v1beta1.NetworkPolicyPeer{}.OpenAPIModelName(), v1beta1.NetworkPolicyPort{}.OpenAPIModelName(), v1beta1.NetworkPolicyProtocol{}.OpenAPIModelName(), v1beta1.PeerService{}.OpenAPIModelName()},
 	}
 }
 
@@ -6019,7 +6023,7 @@ func schema_pkg_apis_crd_v1beta1_Tier(ref common.ReferenceCallback) common.OpenA
 						SchemaProps: spec.SchemaProps{
 							Description: "Specification of the desired behavior of Tier.",
 							Default:     map[string]interface{}{},
-							Ref:         ref("antrea.io/antrea/pkg/apis/crd/v1beta1.TierSpec"),
+							Ref:         ref(v1beta1.TierSpec{}.OpenAPIModelName()),
 						},
 					},
 				},
@@ -6027,7 +6031,7 @@ func schema_pkg_apis_crd_v1beta1_Tier(ref common.ReferenceCallback) common.OpenA
 			},
 		},
 		Dependencies: []string{
-			"antrea.io/antrea/pkg/apis/crd/v1beta1.TierSpec", metav1.ObjectMeta{}.OpenAPIModelName()},
+			v1beta1.TierSpec{}.OpenAPIModelName(), metav1.ObjectMeta{}.OpenAPIModelName()},
 	}
 }
 
@@ -6064,7 +6068,7 @@ func schema_pkg_apis_crd_v1beta1_TierList(ref common.ReferenceCallback) common.O
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
-										Ref:     ref("antrea.io/antrea/pkg/apis/crd/v1beta1.Tier"),
+										Ref:     ref(v1beta1.Tier{}.OpenAPIModelName()),
 									},
 								},
 							},
@@ -6075,7 +6079,7 @@ func schema_pkg_apis_crd_v1beta1_TierList(ref common.ReferenceCallback) common.O
 			},
 		},
 		Dependencies: []string{
-			"antrea.io/antrea/pkg/apis/crd/v1beta1.Tier", metav1.ListMeta{}.OpenAPIModelName()},
+			v1beta1.Tier{}.OpenAPIModelName(), metav1.ListMeta{}.OpenAPIModelName()},
 	}
 }
 
@@ -6137,20 +6141,20 @@ func schema_pkg_apis_crd_v1beta1_Traceflow(ref common.ReferenceCallback) common.
 					"spec": {
 						SchemaProps: spec.SchemaProps{
 							Default: map[string]interface{}{},
-							Ref:     ref("antrea.io/antrea/pkg/apis/crd/v1beta1.TraceflowSpec"),
+							Ref:     ref(v1beta1.TraceflowSpec{}.OpenAPIModelName()),
 						},
 					},
 					"status": {
 						SchemaProps: spec.SchemaProps{
 							Default: map[string]interface{}{},
-							Ref:     ref("antrea.io/antrea/pkg/apis/crd/v1beta1.TraceflowStatus"),
+							Ref:     ref(v1beta1.TraceflowStatus{}.OpenAPIModelName()),
 						},
 					},
 				},
 			},
 		},
 		Dependencies: []string{
-			"antrea.io/antrea/pkg/apis/crd/v1beta1.TraceflowSpec", "antrea.io/antrea/pkg/apis/crd/v1beta1.TraceflowStatus", metav1.ObjectMeta{}.OpenAPIModelName()},
+			v1beta1.TraceflowSpec{}.OpenAPIModelName(), v1beta1.TraceflowStatus{}.OpenAPIModelName(), metav1.ObjectMeta{}.OpenAPIModelName()},
 	}
 }
 
@@ -6187,7 +6191,7 @@ func schema_pkg_apis_crd_v1beta1_TraceflowList(ref common.ReferenceCallback) com
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
-										Ref:     ref("antrea.io/antrea/pkg/apis/crd/v1beta1.Traceflow"),
+										Ref:     ref(v1beta1.Traceflow{}.OpenAPIModelName()),
 									},
 								},
 							},
@@ -6198,7 +6202,7 @@ func schema_pkg_apis_crd_v1beta1_TraceflowList(ref common.ReferenceCallback) com
 			},
 		},
 		Dependencies: []string{
-			"antrea.io/antrea/pkg/apis/crd/v1beta1.Traceflow", metav1.ListMeta{}.OpenAPIModelName()},
+			v1beta1.Traceflow{}.OpenAPIModelName(), metav1.ListMeta{}.OpenAPIModelName()},
 	}
 }
 
@@ -6212,19 +6216,19 @@ func schema_pkg_apis_crd_v1beta1_TraceflowSpec(ref common.ReferenceCallback) com
 					"source": {
 						SchemaProps: spec.SchemaProps{
 							Default: map[string]interface{}{},
-							Ref:     ref("antrea.io/antrea/pkg/apis/crd/v1beta1.Source"),
+							Ref:     ref(v1beta1.Source{}.OpenAPIModelName()),
 						},
 					},
 					"destination": {
 						SchemaProps: spec.SchemaProps{
 							Default: map[string]interface{}{},
-							Ref:     ref("antrea.io/antrea/pkg/apis/crd/v1beta1.Destination"),
+							Ref:     ref(v1beta1.Destination{}.OpenAPIModelName()),
 						},
 					},
 					"packet": {
 						SchemaProps: spec.SchemaProps{
 							Default: map[string]interface{}{},
-							Ref:     ref("antrea.io/antrea/pkg/apis/crd/v1beta1.Packet"),
+							Ref:     ref(v1beta1.Packet{}.OpenAPIModelName()),
 						},
 					},
 					"liveTraffic": {
@@ -6252,7 +6256,7 @@ func schema_pkg_apis_crd_v1beta1_TraceflowSpec(ref common.ReferenceCallback) com
 			},
 		},
 		Dependencies: []string{
-			"antrea.io/antrea/pkg/apis/crd/v1beta1.Destination", "antrea.io/antrea/pkg/apis/crd/v1beta1.Packet", "antrea.io/antrea/pkg/apis/crd/v1beta1.Source"},
+			v1beta1.Destination{}.OpenAPIModelName(), v1beta1.Packet{}.OpenAPIModelName(), v1beta1.Source{}.OpenAPIModelName()},
 	}
 }
 
@@ -6298,7 +6302,7 @@ func schema_pkg_apis_crd_v1beta1_TraceflowStatus(ref common.ReferenceCallback) c
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
-										Ref:     ref("antrea.io/antrea/pkg/apis/crd/v1beta1.NodeResult"),
+										Ref:     ref(v1beta1.NodeResult{}.OpenAPIModelName()),
 									},
 								},
 							},
@@ -6307,14 +6311,14 @@ func schema_pkg_apis_crd_v1beta1_TraceflowStatus(ref common.ReferenceCallback) c
 					"capturedPacket": {
 						SchemaProps: spec.SchemaProps{
 							Description: "CapturedPacket is the captured packet in live-traffic Traceflow.",
-							Ref:         ref("antrea.io/antrea/pkg/apis/crd/v1beta1.Packet"),
+							Ref:         ref(v1beta1.Packet{}.OpenAPIModelName()),
 						},
 					},
 				},
 			},
 		},
 		Dependencies: []string{
-			"antrea.io/antrea/pkg/apis/crd/v1beta1.NodeResult", "antrea.io/antrea/pkg/apis/crd/v1beta1.Packet", metav1.Time{}.OpenAPIModelName()},
+			v1beta1.NodeResult{}.OpenAPIModelName(), v1beta1.Packet{}.OpenAPIModelName(), metav1.Time{}.OpenAPIModelName()},
 	}
 }
 
@@ -6327,24 +6331,24 @@ func schema_pkg_apis_crd_v1beta1_TransportHeader(ref common.ReferenceCallback) c
 				Properties: map[string]spec.Schema{
 					"icmp": {
 						SchemaProps: spec.SchemaProps{
-							Ref: ref("antrea.io/antrea/pkg/apis/crd/v1beta1.ICMPEchoRequestHeader"),
+							Ref: ref(v1beta1.ICMPEchoRequestHeader{}.OpenAPIModelName()),
 						},
 					},
 					"udp": {
 						SchemaProps: spec.SchemaProps{
-							Ref: ref("antrea.io/antrea/pkg/apis/crd/v1beta1.UDPHeader"),
+							Ref: ref(v1beta1.UDPHeader{}.OpenAPIModelName()),
 						},
 					},
 					"tcp": {
 						SchemaProps: spec.SchemaProps{
-							Ref: ref("antrea.io/antrea/pkg/apis/crd/v1beta1.TCPHeader"),
+							Ref: ref(v1beta1.TCPHeader{}.OpenAPIModelName()),
 						},
 					},
 				},
 			},
 		},
 		Dependencies: []string{
-			"antrea.io/antrea/pkg/apis/crd/v1beta1.ICMPEchoRequestHeader", "antrea.io/antrea/pkg/apis/crd/v1beta1.TCPHeader", "antrea.io/antrea/pkg/apis/crd/v1beta1.UDPHeader"},
+			v1beta1.ICMPEchoRequestHeader{}.OpenAPIModelName(), v1beta1.TCPHeader{}.OpenAPIModelName(), v1beta1.UDPHeader{}.OpenAPIModelName()},
 	}
 }
 
@@ -6406,7 +6410,7 @@ func schema_pkg_apis_stats_v1alpha1_AntreaClusterNetworkPolicyStats(ref common.R
 						SchemaProps: spec.SchemaProps{
 							Description: "The traffic stats of the Antrea ClusterNetworkPolicy.",
 							Default:     map[string]interface{}{},
-							Ref:         ref("antrea.io/antrea/pkg/apis/stats/v1alpha1.TrafficStats"),
+							Ref:         ref(v1alpha1.TrafficStats{}.OpenAPIModelName()),
 						},
 					},
 					"ruleTrafficStats": {
@@ -6417,7 +6421,7 @@ func schema_pkg_apis_stats_v1alpha1_AntreaClusterNetworkPolicyStats(ref common.R
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
-										Ref:     ref("antrea.io/antrea/pkg/apis/stats/v1alpha1.RuleTrafficStats"),
+										Ref:     ref(v1alpha1.RuleTrafficStats{}.OpenAPIModelName()),
 									},
 								},
 							},
@@ -6427,7 +6431,7 @@ func schema_pkg_apis_stats_v1alpha1_AntreaClusterNetworkPolicyStats(ref common.R
 			},
 		},
 		Dependencies: []string{
-			"antrea.io/antrea/pkg/apis/stats/v1alpha1.RuleTrafficStats", "antrea.io/antrea/pkg/apis/stats/v1alpha1.TrafficStats", metav1.ObjectMeta{}.OpenAPIModelName()},
+			v1alpha1.RuleTrafficStats{}.OpenAPIModelName(), v1alpha1.TrafficStats{}.OpenAPIModelName(), metav1.ObjectMeta{}.OpenAPIModelName()},
 	}
 }
 
@@ -6466,7 +6470,7 @@ func schema_pkg_apis_stats_v1alpha1_AntreaClusterNetworkPolicyStatsList(ref comm
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
-										Ref:     ref("antrea.io/antrea/pkg/apis/stats/v1alpha1.AntreaClusterNetworkPolicyStats"),
+										Ref:     ref(v1alpha1.AntreaClusterNetworkPolicyStats{}.OpenAPIModelName()),
 									},
 								},
 							},
@@ -6477,7 +6481,7 @@ func schema_pkg_apis_stats_v1alpha1_AntreaClusterNetworkPolicyStatsList(ref comm
 			},
 		},
 		Dependencies: []string{
-			"antrea.io/antrea/pkg/apis/stats/v1alpha1.AntreaClusterNetworkPolicyStats", metav1.ListMeta{}.OpenAPIModelName()},
+			v1alpha1.AntreaClusterNetworkPolicyStats{}.OpenAPIModelName(), metav1.ListMeta{}.OpenAPIModelName()},
 	}
 }
 
@@ -6512,7 +6516,7 @@ func schema_pkg_apis_stats_v1alpha1_AntreaNetworkPolicyStats(ref common.Referenc
 						SchemaProps: spec.SchemaProps{
 							Description: "The traffic stats of the Antrea NetworkPolicy.",
 							Default:     map[string]interface{}{},
-							Ref:         ref("antrea.io/antrea/pkg/apis/stats/v1alpha1.TrafficStats"),
+							Ref:         ref(v1alpha1.TrafficStats{}.OpenAPIModelName()),
 						},
 					},
 					"ruleTrafficStats": {
@@ -6523,7 +6527,7 @@ func schema_pkg_apis_stats_v1alpha1_AntreaNetworkPolicyStats(ref common.Referenc
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
-										Ref:     ref("antrea.io/antrea/pkg/apis/stats/v1alpha1.RuleTrafficStats"),
+										Ref:     ref(v1alpha1.RuleTrafficStats{}.OpenAPIModelName()),
 									},
 								},
 							},
@@ -6533,7 +6537,7 @@ func schema_pkg_apis_stats_v1alpha1_AntreaNetworkPolicyStats(ref common.Referenc
 			},
 		},
 		Dependencies: []string{
-			"antrea.io/antrea/pkg/apis/stats/v1alpha1.RuleTrafficStats", "antrea.io/antrea/pkg/apis/stats/v1alpha1.TrafficStats", metav1.ObjectMeta{}.OpenAPIModelName()},
+			v1alpha1.RuleTrafficStats{}.OpenAPIModelName(), v1alpha1.TrafficStats{}.OpenAPIModelName(), metav1.ObjectMeta{}.OpenAPIModelName()},
 	}
 }
 
@@ -6572,7 +6576,7 @@ func schema_pkg_apis_stats_v1alpha1_AntreaNetworkPolicyStatsList(ref common.Refe
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
-										Ref:     ref("antrea.io/antrea/pkg/apis/stats/v1alpha1.AntreaNetworkPolicyStats"),
+										Ref:     ref(v1alpha1.AntreaNetworkPolicyStats{}.OpenAPIModelName()),
 									},
 								},
 							},
@@ -6583,7 +6587,7 @@ func schema_pkg_apis_stats_v1alpha1_AntreaNetworkPolicyStatsList(ref common.Refe
 			},
 		},
 		Dependencies: []string{
-			"antrea.io/antrea/pkg/apis/stats/v1alpha1.AntreaNetworkPolicyStats", metav1.ListMeta{}.OpenAPIModelName()},
+			v1alpha1.AntreaNetworkPolicyStats{}.OpenAPIModelName(), metav1.ListMeta{}.OpenAPIModelName()},
 	}
 }
 
@@ -6629,7 +6633,7 @@ func schema_pkg_apis_stats_v1alpha1_MulticastGroup(ref common.ReferenceCallback)
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
-										Ref:     ref("antrea.io/antrea/pkg/apis/stats/v1alpha1.PodReference"),
+										Ref:     ref(v1alpha1.PodReference{}.OpenAPIModelName()),
 									},
 								},
 							},
@@ -6640,7 +6644,7 @@ func schema_pkg_apis_stats_v1alpha1_MulticastGroup(ref common.ReferenceCallback)
 			},
 		},
 		Dependencies: []string{
-			"antrea.io/antrea/pkg/apis/stats/v1alpha1.PodReference", metav1.ObjectMeta{}.OpenAPIModelName()},
+			v1alpha1.PodReference{}.OpenAPIModelName(), metav1.ObjectMeta{}.OpenAPIModelName()},
 	}
 }
 
@@ -6679,7 +6683,7 @@ func schema_pkg_apis_stats_v1alpha1_MulticastGroupList(ref common.ReferenceCallb
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
-										Ref:     ref("antrea.io/antrea/pkg/apis/stats/v1alpha1.MulticastGroup"),
+										Ref:     ref(v1alpha1.MulticastGroup{}.OpenAPIModelName()),
 									},
 								},
 							},
@@ -6690,7 +6694,7 @@ func schema_pkg_apis_stats_v1alpha1_MulticastGroupList(ref common.ReferenceCallb
 			},
 		},
 		Dependencies: []string{
-			"antrea.io/antrea/pkg/apis/stats/v1alpha1.MulticastGroup", metav1.ListMeta{}.OpenAPIModelName()},
+			v1alpha1.MulticastGroup{}.OpenAPIModelName(), metav1.ListMeta{}.OpenAPIModelName()},
 	}
 }
 
@@ -6725,14 +6729,14 @@ func schema_pkg_apis_stats_v1alpha1_NetworkPolicyStats(ref common.ReferenceCallb
 						SchemaProps: spec.SchemaProps{
 							Description: "The traffic stats of the K8s NetworkPolicy.",
 							Default:     map[string]interface{}{},
-							Ref:         ref("antrea.io/antrea/pkg/apis/stats/v1alpha1.TrafficStats"),
+							Ref:         ref(v1alpha1.TrafficStats{}.OpenAPIModelName()),
 						},
 					},
 				},
 			},
 		},
 		Dependencies: []string{
-			"antrea.io/antrea/pkg/apis/stats/v1alpha1.TrafficStats", metav1.ObjectMeta{}.OpenAPIModelName()},
+			v1alpha1.TrafficStats{}.OpenAPIModelName(), metav1.ObjectMeta{}.OpenAPIModelName()},
 	}
 }
 
@@ -6771,7 +6775,7 @@ func schema_pkg_apis_stats_v1alpha1_NetworkPolicyStatsList(ref common.ReferenceC
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
-										Ref:     ref("antrea.io/antrea/pkg/apis/stats/v1alpha1.NetworkPolicyStats"),
+										Ref:     ref(v1alpha1.NetworkPolicyStats{}.OpenAPIModelName()),
 									},
 								},
 							},
@@ -6782,7 +6786,7 @@ func schema_pkg_apis_stats_v1alpha1_NetworkPolicyStatsList(ref common.ReferenceC
 			},
 		},
 		Dependencies: []string{
-			"antrea.io/antrea/pkg/apis/stats/v1alpha1.NetworkPolicyStats", metav1.ListMeta{}.OpenAPIModelName()},
+			v1alpha1.NetworkPolicyStats{}.OpenAPIModelName(), metav1.ListMeta{}.OpenAPIModelName()},
 	}
 }
 
@@ -6821,7 +6825,7 @@ func schema_pkg_apis_stats_v1alpha1_NodeLatencyStats(ref common.ReferenceCallbac
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
-										Ref:     ref("antrea.io/antrea/pkg/apis/stats/v1alpha1.PeerNodeLatencyStats"),
+										Ref:     ref(v1alpha1.PeerNodeLatencyStats{}.OpenAPIModelName()),
 									},
 								},
 							},
@@ -6831,7 +6835,7 @@ func schema_pkg_apis_stats_v1alpha1_NodeLatencyStats(ref common.ReferenceCallbac
 			},
 		},
 		Dependencies: []string{
-			"antrea.io/antrea/pkg/apis/stats/v1alpha1.PeerNodeLatencyStats", metav1.ObjectMeta{}.OpenAPIModelName()},
+			v1alpha1.PeerNodeLatencyStats{}.OpenAPIModelName(), metav1.ObjectMeta{}.OpenAPIModelName()},
 	}
 }
 
@@ -6870,7 +6874,7 @@ func schema_pkg_apis_stats_v1alpha1_NodeLatencyStatsList(ref common.ReferenceCal
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
-										Ref:     ref("antrea.io/antrea/pkg/apis/stats/v1alpha1.NodeLatencyStats"),
+										Ref:     ref(v1alpha1.NodeLatencyStats{}.OpenAPIModelName()),
 									},
 								},
 							},
@@ -6881,7 +6885,7 @@ func schema_pkg_apis_stats_v1alpha1_NodeLatencyStatsList(ref common.ReferenceCal
 			},
 		},
 		Dependencies: []string{
-			"antrea.io/antrea/pkg/apis/stats/v1alpha1.NodeLatencyStats", metav1.ListMeta{}.OpenAPIModelName()},
+			v1alpha1.NodeLatencyStats{}.OpenAPIModelName(), metav1.ListMeta{}.OpenAPIModelName()},
 	}
 }
 
@@ -6907,7 +6911,7 @@ func schema_pkg_apis_stats_v1alpha1_PeerNodeLatencyStats(ref common.ReferenceCal
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
-										Ref:     ref("antrea.io/antrea/pkg/apis/stats/v1alpha1.TargetIPLatencyStats"),
+										Ref:     ref(v1alpha1.TargetIPLatencyStats{}.OpenAPIModelName()),
 									},
 								},
 							},
@@ -6917,7 +6921,7 @@ func schema_pkg_apis_stats_v1alpha1_PeerNodeLatencyStats(ref common.ReferenceCal
 			},
 		},
 		Dependencies: []string{
-			"antrea.io/antrea/pkg/apis/stats/v1alpha1.TargetIPLatencyStats"},
+			v1alpha1.TargetIPLatencyStats{}.OpenAPIModelName()},
 	}
 }
 
@@ -6964,14 +6968,14 @@ func schema_pkg_apis_stats_v1alpha1_RuleTrafficStats(ref common.ReferenceCallbac
 					"trafficStats": {
 						SchemaProps: spec.SchemaProps{
 							Default: map[string]interface{}{},
-							Ref:     ref("antrea.io/antrea/pkg/apis/stats/v1alpha1.TrafficStats"),
+							Ref:     ref(v1alpha1.TrafficStats{}.OpenAPIModelName()),
 						},
 					},
 				},
 			},
 		},
 		Dependencies: []string{
-			"antrea.io/antrea/pkg/apis/stats/v1alpha1.TrafficStats"},
+			v1alpha1.TrafficStats{}.OpenAPIModelName()},
 	}
 }
 

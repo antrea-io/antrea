@@ -13,6 +13,7 @@
 // limitations under the License.
 
 // +k8s:openapi-gen=true
+// +k8s:openapi-model-package=io.antrea.controlplane.v1beta2
 // +k8s:deepcopy-gen=package
 // +k8s:protobuf-gen=package
 // +k8s:conversion-gen=antrea.io/antrea/pkg/apis/controlplane
