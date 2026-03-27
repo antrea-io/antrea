@@ -30,8 +30,9 @@ limitations under the License.
 
 Modifies:
 - Replace k8s.io/kubernetes/pkg/controller/nodeipam/ipam import with
- antrea.io/antrea/third_party/nodeipam/ipam
+  antrea.io/antrea/third_party/ipam/nodeipam/ipam
 - Remove recorder from rangeAllocator type, NewCIDRRangeAllocator(), RecordNodeStatusChange() calls
+- Run() takes stopCh <-chan struct{} instead of context.Context
 */
 
 package ipam
@@ -39,30 +40,24 @@ package ipam
 import (
 	"fmt"
 	"net"
-	"sync"
+	"time"
 
 	v1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/types"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
-	"k8s.io/apimachinery/pkg/util/sets"
+	"k8s.io/apimachinery/pkg/util/wait"
 	informers "k8s.io/client-go/informers/core/v1"
 	clientset "k8s.io/client-go/kubernetes"
 	corelisters "k8s.io/client-go/listers/core/v1"
 	"k8s.io/client-go/tools/cache"
+	"k8s.io/client-go/util/workqueue"
 	"k8s.io/klog/v2"
 
 	nodeutil "antrea.io/antrea/third_party/ipam/controller_util_node"
 	"antrea.io/antrea/third_party/ipam/nodeipam/ipam/cidrset"
 	utilnode "antrea.io/antrea/third_party/ipam/util_node"
 )
-
-// cidrs are reserved, then node resource is patched with them
-// this type holds the reservation info for a node
-type nodeReservedCIDRs struct {
-	allocatedCIDRs []*net.IPNet
-	nodeName       string
-}
 
 type rangeAllocator struct {
 	client clientset.Interface
@@ -74,12 +69,10 @@ type rangeAllocator struct {
 	nodeLister corelisters.NodeLister
 	// nodesSynced returns true if the node shared informer has been synced at least once.
 	nodesSynced cache.InformerSynced
-	// Channel that is used to pass updating Nodes and their reserved CIDRs to the background
-	// This increases a throughput of CIDR assignment by not blocking on long operations.
-	nodeCIDRUpdateChannel chan nodeReservedCIDRs
-	// Keep a set of nodes that are currently being processed to avoid races in CIDR allocation
-	lock              sync.Mutex
-	nodesInProcessing sets.Set[string]
+
+	// queues are where incoming work is placed to de-dup and to allow "easy"
+	// rate limited requeues on errors
+	queue workqueue.RateLimitingInterface
 }
 
 // NewCIDRRangeAllocator returns a CIDRAllocator to allocate CIDRs for node (one from each of clusterCIDRs)
@@ -106,13 +99,12 @@ func NewCIDRRangeAllocator(client clientset.Interface, nodeInformer informers.No
 	}
 
 	ra := &rangeAllocator{
-		client:                client,
-		clusterCIDRs:          allocatorParams.ClusterCIDRs,
-		cidrSets:              cidrSets,
-		nodeLister:            nodeInformer.Lister(),
-		nodesSynced:           nodeInformer.Informer().HasSynced,
-		nodeCIDRUpdateChannel: make(chan nodeReservedCIDRs, cidrUpdateQueueSize),
-		nodesInProcessing:     sets.New[string](),
+		client:       client,
+		clusterCIDRs: allocatorParams.ClusterCIDRs,
+		cidrSets:     cidrSets,
+		nodeLister:   nodeInformer.Lister(),
+		nodesSynced:  nodeInformer.Informer().HasSynced,
+		queue:        workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), "cidrallocator_node"),
 	}
 
 	if allocatorParams.ServiceCIDR != nil {
@@ -145,33 +137,38 @@ func NewCIDRRangeAllocator(client clientset.Interface, nodeInformer informers.No
 	}
 
 	nodeInformer.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
-		AddFunc: nodeutil.CreateAddNodeHandler(ra.AllocateOrOccupyCIDR),
-		UpdateFunc: nodeutil.CreateUpdateNodeHandler(func(_, newNode *v1.Node) error {
-			// If the PodCIDRs list is not empty we either:
-			// - already processed a Node that already had CIDRs after NC restarted
-			//   (cidr is marked as used),
-			// - already processed a Node successfully and allocated CIDRs for it
-			//   (cidr is marked as used),
-			// - already processed a Node but we did saw a "timeout" response and
-			//   request eventually got through in this case we haven't released
-			//   the allocated CIDRs (cidr is still marked as used).
-			// There's a possible error here:
-			// - NC sees a new Node and assigns CIDRs X,Y.. to it,
-			// - Update Node call fails with a timeout,
-			// - Node is updated by some other component, NC sees an update and
-			//   assigns CIDRs A,B.. to the Node,
-			// - Both CIDR X,Y.. and CIDR A,B.. are marked as used in the local cache,
-			//   even though Node sees only CIDR A,B..
-			// The problem here is that in in-memory cache we see CIDR X,Y.. as marked,
-			// which prevents it from being assigned to any new node. The cluster
-			// state is correct.
-			// Restart of NC fixes the issue.
-			if len(newNode.Spec.PodCIDRs) == 0 {
-				return ra.AllocateOrOccupyCIDR(newNode)
+		AddFunc: func(obj interface{}) {
+			key, err := cache.MetaNamespaceKeyFunc(obj)
+			if err == nil {
+				ra.queue.Add(key)
 			}
-			return nil
-		}),
-		DeleteFunc: nodeutil.CreateDeleteNodeHandler(ra.ReleaseCIDR),
+		},
+		UpdateFunc: func(old, new interface{}) {
+			key, err := cache.MetaNamespaceKeyFunc(new)
+			if err == nil {
+				ra.queue.Add(key)
+			}
+		},
+		DeleteFunc: func(obj interface{}) {
+			// The informer cache no longer has the object, and since Node doesn't have a finalizer,
+			// we don't see the Update with DeletionTimestamp != 0.
+			node, ok := obj.(*v1.Node)
+			if !ok {
+				tombstone, ok := obj.(cache.DeletedFinalStateUnknown)
+				if !ok {
+					utilruntime.HandleError(fmt.Errorf("unexpected object type: %v", obj))
+					return
+				}
+				node, ok = tombstone.Obj.(*v1.Node)
+				if !ok {
+					utilruntime.HandleError(fmt.Errorf("unexpected object type: %v", obj))
+					return
+				}
+			}
+			if err := ra.ReleaseCIDR(node); err != nil {
+				utilruntime.HandleError(fmt.Errorf("error while processing CIDR Release: %w", err))
+			}
+		},
 	})
 
 	return ra, nil
@@ -179,6 +176,7 @@ func NewCIDRRangeAllocator(client clientset.Interface, nodeInformer informers.No
 
 func (r *rangeAllocator) Run(stopCh <-chan struct{}) {
 	defer utilruntime.HandleCrash()
+	defer r.queue.ShutDown()
 
 	klog.Infof("Starting range CIDR allocator")
 	defer klog.Infof("Shutting down range CIDR allocator")
@@ -188,49 +186,78 @@ func (r *rangeAllocator) Run(stopCh <-chan struct{}) {
 	}
 
 	for i := 0; i < cidrUpdateWorkers; i++ {
-		go r.worker(stopCh)
+		go wait.Until(r.runWorker, time.Second, stopCh)
 	}
 
 	<-stopCh
 }
 
-func (r *rangeAllocator) worker(stopChan <-chan struct{}) {
-	for {
-		select {
-		case workItem, ok := <-r.nodeCIDRUpdateChannel:
-			if !ok {
-				klog.Warning("Channel nodeCIDRUpdateChannel was unexpectedly closed")
-				return
-			}
-			if err := r.updateCIDRsAllocation(workItem); err != nil {
-				// Requeue the failed node for update again.
-				r.nodeCIDRUpdateChannel <- workItem
-			}
-		case <-stopChan:
-			return
-		}
+// runWorker is a long-running function that will continually call the
+// processNextNodeWorkItem function in order to read and process a message on the
+// queue.
+func (r *rangeAllocator) runWorker() {
+	for r.processNextNodeWorkItem() {
 	}
 }
 
-func (r *rangeAllocator) insertNodeToProcessing(nodeName string) bool {
-	r.lock.Lock()
-	defer r.lock.Unlock()
-	if r.nodesInProcessing.Has(nodeName) {
+// processNextNodeWorkItem will read a single work item off the queue and
+// attempt to process it, by calling the syncHandler.
+func (r *rangeAllocator) processNextNodeWorkItem() bool {
+	obj, shutdown := r.queue.Get()
+	if shutdown {
 		return false
 	}
-	r.nodesInProcessing.Insert(nodeName)
+
+	err := func(obj interface{}) error {
+		defer r.queue.Done(obj)
+		var key string
+		var ok bool
+		if key, ok = obj.(string); !ok {
+			r.queue.Forget(obj)
+			utilruntime.HandleError(fmt.Errorf("expected string in work queue but got %#v", obj))
+			return nil
+		}
+		if err := r.syncNode(key); err != nil {
+			r.queue.AddRateLimited(key)
+			return fmt.Errorf("error syncing '%s': %s, requeuing", key, err.Error())
+		}
+		r.queue.Forget(obj)
+		klog.V(4).Infof("Successfully synced '%s'", key)
+		return nil
+	}(obj)
+
+	if err != nil {
+		utilruntime.HandleError(err)
+		return true
+	}
+
 	return true
 }
 
-func (r *rangeAllocator) removeNodeFromProcessing(nodeName string) {
-	r.lock.Lock()
-	defer r.lock.Unlock()
-	r.nodesInProcessing.Delete(nodeName)
+func (r *rangeAllocator) syncNode(key string) error {
+	startTime := time.Now()
+	defer func() {
+		klog.V(4).Infof("Finished syncing Node request '%s' (%v)", key, time.Since(startTime))
+	}()
+
+	node, err := r.nodeLister.Get(key)
+	if apierrors.IsNotFound(err) {
+		klog.V(3).Infof("Node %s has been deleted", key)
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	// Check the DeletionTimestamp to determine if object is under deletion.
+	if !node.DeletionTimestamp.IsZero() {
+		klog.V(3).Infof("Node %s is being deleted", key)
+		return nil
+	}
+	return r.AllocateOrOccupyCIDR(node)
 }
 
 // marks node.PodCIDRs[...] as used in allocator's tracked cidrSet
 func (r *rangeAllocator) occupyCIDRs(node *v1.Node) error {
-	defer r.removeNodeFromProcessing(node.Name)
 	if len(node.Spec.PodCIDRs) == 0 {
 		return nil
 	}
@@ -253,41 +280,29 @@ func (r *rangeAllocator) occupyCIDRs(node *v1.Node) error {
 	return nil
 }
 
-// WARNING: If you're adding any return calls or defer any more work from this
-// function you have to make sure to update nodesInProcessing properly with the
-// disposition of the node when the work is done.
 func (r *rangeAllocator) AllocateOrOccupyCIDR(node *v1.Node) error {
 	if node == nil {
-		return nil
-	}
-	if !r.insertNodeToProcessing(node.Name) {
-		klog.V(2).Infof("Node %v is already in a process of CIDR assignment.", node.Name)
 		return nil
 	}
 
 	if len(node.Spec.PodCIDRs) > 0 {
 		return r.occupyCIDRs(node)
 	}
-	// allocate and queue the assignment
-	allocated := nodeReservedCIDRs{
-		nodeName:       node.Name,
-		allocatedCIDRs: make([]*net.IPNet, len(r.cidrSets)),
-	}
+
+	allocatedCIDRs := make([]*net.IPNet, len(r.cidrSets))
 
 	for idx := range r.cidrSets {
 		podCIDR, err := r.cidrSets[idx].AllocateNext()
 		if err != nil {
-			r.removeNodeFromProcessing(node.Name)
 			nodeutil.RecordNodeStatusChange(node, "CIDRNotAvailable")
 			return fmt.Errorf("failed to allocate cidr from cluster cidr at idx:%v: %v", idx, err)
 		}
-		allocated.allocatedCIDRs[idx] = podCIDR
+		allocatedCIDRs[idx] = podCIDR
 	}
 
 	//queue the assignment
-	klog.V(4).Infof("Putting node %s with CIDR %v into the work queue", node.Name, allocated.allocatedCIDRs)
-	r.nodeCIDRUpdateChannel <- allocated
-	return nil
+	klog.V(4).Infof("Putting node %s with CIDR %v into the work queue", node.Name, allocatedCIDRs)
+	return r.updateCIDRsAllocation(node.Name, allocatedCIDRs)
 }
 
 // ReleaseCIDR marks node.podCIDRs[...] as unused in our tracked cidrSets
@@ -339,21 +354,20 @@ func (r *rangeAllocator) filterOutServiceRange(serviceCIDR *net.IPNet) {
 }
 
 // updateCIDRsAllocation assigns CIDR to Node and sends an update to the API server.
-func (r *rangeAllocator) updateCIDRsAllocation(data nodeReservedCIDRs) error {
+func (r *rangeAllocator) updateCIDRsAllocation(nodeName string, allocatedCIDRs []*net.IPNet) error {
 	var err error
 	var node *v1.Node
-	defer r.removeNodeFromProcessing(data.nodeName)
-	cidrsString := cidrsAsString(data.allocatedCIDRs)
-	node, err = r.nodeLister.Get(data.nodeName)
+	cidrsString := cidrsAsString(allocatedCIDRs)
+	node, err = r.nodeLister.Get(nodeName)
 	if err != nil {
-		klog.Errorf("Failed while getting node %v for updating Node.Spec.PodCIDRs: %v", data.nodeName, err)
+		klog.Errorf("Failed while getting node %v for updating Node.Spec.PodCIDRs: %v", nodeName, err)
 		return err
 	}
 
 	// if cidr list matches the proposed.
 	// then we possibly updated this node
 	// and just failed to ack the success.
-	if len(node.Spec.PodCIDRs) == len(data.allocatedCIDRs) {
+	if len(node.Spec.PodCIDRs) == len(allocatedCIDRs) {
 		match := true
 		for idx, cidr := range cidrsString {
 			if node.Spec.PodCIDRs[idx] != cidr {
@@ -362,7 +376,7 @@ func (r *rangeAllocator) updateCIDRsAllocation(data nodeReservedCIDRs) error {
 			}
 		}
 		if match {
-			klog.V(4).Infof("Node %v already has allocated CIDR %v. It matches the proposed one.", node.Name, data.allocatedCIDRs)
+			klog.V(4).Infof("Node %v already has allocated CIDR %v. It matches the proposed one.", node.Name, allocatedCIDRs)
 			return nil
 		}
 	}
@@ -370,7 +384,7 @@ func (r *rangeAllocator) updateCIDRsAllocation(data nodeReservedCIDRs) error {
 	// node has cidrs, release the reserved
 	if len(node.Spec.PodCIDRs) != 0 {
 		klog.Errorf("Node %v already has a CIDR allocated %v. Releasing the new one.", node.Name, node.Spec.PodCIDRs)
-		for idx, cidr := range data.allocatedCIDRs {
+		for idx, cidr := range allocatedCIDRs {
 			if releaseErr := r.cidrSets[idx].Release(cidr); releaseErr != nil {
 				klog.Errorf("Error when releasing CIDR idx:%v value: %v err:%v", idx, cidr, releaseErr)
 			}
@@ -393,7 +407,7 @@ func (r *rangeAllocator) updateCIDRsAllocation(data nodeReservedCIDRs) error {
 	// NodeController restart will return all falsely allocated CIDRs to the pool.
 	if !apierrors.IsServerTimeout(err) {
 		klog.Errorf("CIDR assignment for node %v failed: %v. Releasing allocated CIDR", node.Name, err)
-		for idx, cidr := range data.allocatedCIDRs {
+		for idx, cidr := range allocatedCIDRs {
 			if releaseErr := r.cidrSets[idx].Release(cidr); releaseErr != nil {
 				klog.Errorf("Error releasing allocated CIDR for node %v: %v", node.Name, releaseErr)
 			}
