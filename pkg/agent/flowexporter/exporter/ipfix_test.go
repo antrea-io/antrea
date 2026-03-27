@@ -313,7 +313,6 @@ func TestIPFIXExporter_negativeDeltaCounts(t *testing.T) {
 	}
 }
 
-
 func getElemList(ianaIE []string, antreaIE []string) []ipfixentities.InfoElementWithValue {
 	// Following consists of all elements that are in IANAInfoElements and AntreaInfoElements (globals)
 	// Need only element name and other fields are set to dummy values
