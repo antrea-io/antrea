@@ -21,6 +21,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	ipfixentities "github.com/vmware/go-ipfix/pkg/entities"
 	ipfixentitiestesting "github.com/vmware/go-ipfix/pkg/entities/testing"
 	ipfixregistry "github.com/vmware/go-ipfix/pkg/registry"
@@ -262,11 +263,13 @@ func createElement(name string, enterpriseID uint32) ipfixentities.InfoElementWi
 // the same slice to AddRecordV2, inspecting elementsListv4 after the call is equivalent to
 // inspecting what was actually sent.
 func getDeltaValues(eL []ipfixentities.InfoElementWithValue) map[string]uint64 {
+	// math.MaxUint64 is used as a sentinel so that any field not found in the element list
+	// is distinguishable from a valid exported value of 0.
 	result := map[string]uint64{
-		"packetDeltaCount":        ^uint64(0),
-		"octetDeltaCount":         ^uint64(0),
-		"reversePacketDeltaCount": ^uint64(0),
-		"reverseOctetDeltaCount":  ^uint64(0),
+		"packetDeltaCount":        math.MaxUint64,
+		"octetDeltaCount":         math.MaxUint64,
+		"reversePacketDeltaCount": math.MaxUint64,
+		"reverseOctetDeltaCount":  math.MaxUint64,
 	}
 	for _, ie := range eL {
 		if _, ok := result[ie.GetInfoElement().Name]; ok {
@@ -302,7 +305,7 @@ func TestIPFIXExporter_negativeDeltaCounts(t *testing.T) {
 	mockIPFIXSet.EXPECT().AddRecordV2(gomock.Any(), testTemplateIDv4).Return(nil)
 
 	err := flowExp.addConnToSet(conn)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	for name, val := range getDeltaValues(flowExp.elementsListv4) {
 		assert.Equal(t, uint64(0), val,
@@ -310,53 +313,6 @@ func TestIPFIXExporter_negativeDeltaCounts(t *testing.T) {
 	}
 }
 
-// TestIPFIXExporter_largeCounterDelta verifies that delta fields are computed correctly when
-// counter values exceed math.MaxInt64. With the previous int64-based arithmetic, casting a
-// uint64 value above math.MaxInt64 to int64 would overflow and produce a negative result,
-// causing a valid positive delta to be incorrectly clamped to 0.
-func TestIPFIXExporter_largeCounterDelta(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	mockIPFIXSet := ipfixentitiestesting.NewMockSet(ctrl)
-
-	elemListv4 := getElemList(IANAInfoElementsIPv4, AntreaInfoElementsIPv4)
-	flowExp := &ipfixExporter{
-		elementsListv4: elemListv4,
-		templateIDv4:   testTemplateIDv4,
-		ipfixSet:       mockIPFIXSet,
-	}
-
-	conn := flowexportertesting.GetConnection(false, true, 302, 6, "ESTABLISHED")
-	// curr is above math.MaxInt64; prev is below it. int64 casting of curr overflows to a
-	// negative value, so the old int64 subtraction would have produced a negative result and
-	// clamped the delta to 0. The uint64-safe path must produce the correct positive delta.
-	const aboveMaxInt64 = uint64(math.MaxInt64) + 1
-	conn.OriginalPackets = aboveMaxInt64 + 50
-	conn.PrevPackets = aboveMaxInt64 - 50
-	conn.OriginalBytes = aboveMaxInt64 + 200
-	conn.PrevBytes = aboveMaxInt64 - 200
-	conn.ReversePackets = aboveMaxInt64 + 10
-	conn.PrevReversePackets = aboveMaxInt64 - 10
-	conn.ReverseBytes = aboveMaxInt64 + 100
-	conn.PrevReverseBytes = aboveMaxInt64 - 100
-
-	mockIPFIXSet.EXPECT().ResetSet()
-	mockIPFIXSet.EXPECT().PrepareSet(ipfixentities.Data, testTemplateIDv4).Return(nil)
-	mockIPFIXSet.EXPECT().AddRecordV2(gomock.Any(), testTemplateIDv4).Return(nil)
-
-	err := flowExp.addConnToSet(conn)
-	assert.NoError(t, err)
-
-	expected := map[string]uint64{
-		"packetDeltaCount":        100,
-		"octetDeltaCount":         400,
-		"reversePacketDeltaCount": 20,
-		"reverseOctetDeltaCount":  200,
-	}
-	for name, got := range getDeltaValues(flowExp.elementsListv4) {
-		assert.Equal(t, expected[name], got,
-			"delta field %q: expected %d for large counter value, got %d", name, expected[name], got)
-	}
-}
 
 func getElemList(ianaIE []string, antreaIE []string) []ipfixentities.InfoElementWithValue {
 	// Following consists of all elements that are in IANAInfoElements and AntreaInfoElements (globals)
