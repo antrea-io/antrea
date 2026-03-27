@@ -48,6 +48,10 @@ jobs:
   build:
     needs: check-env
     if: ${{ needs.check-env.outputs.has_changes == 'yes' || github.event_name == 'push' }}
+    permissions:
+      contents: read
+      packages: write
+      actions: write
     strategy:
       matrix:
         include:
@@ -146,6 +150,9 @@ jobs:
   push-manifest:
     needs: [check-env, build]
     if: ${{ needs.check-env.outputs.push_needed == 'true' }}
+    permissions:
+      contents: read
+      packages: write
     strategy:
       matrix:
         include:
@@ -286,6 +293,9 @@ jobs:
   build-flow-aggregator:
     needs: check-env
     if: ${{ needs.check-env.outputs.has_changes == 'yes' || github.event_name == 'push' }}
+    permissions:
+      contents: read
+      packages: write
     runs-on: ubuntu-latest
     env:
       DOCKER_TAG: latest
