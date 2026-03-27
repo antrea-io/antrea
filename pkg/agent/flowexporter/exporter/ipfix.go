@@ -292,33 +292,37 @@ func (e *ipfixExporter) addConnToSet(conn *connection.Connection) error {
 		case "octetTotalCount":
 			ie.SetUnsigned64Value(conn.OriginalBytes)
 		case "packetDeltaCount":
-			deltaPkts := int64(conn.OriginalPackets) - int64(conn.PrevPackets)
-			if deltaPkts < 0 {
-				klog.InfoS("Packet delta count for connection should not be negative", "packet delta count", deltaPkts)
+			if conn.OriginalPackets < conn.PrevPackets {
+				klog.InfoS("Packet delta count for connection should not be negative", "prevPackets", conn.PrevPackets, "currPackets", conn.OriginalPackets)
+				ie.SetUnsigned64Value(0)
+			} else {
+				ie.SetUnsigned64Value(conn.OriginalPackets - conn.PrevPackets)
 			}
-			ie.SetUnsigned64Value(uint64(deltaPkts))
 		case "octetDeltaCount":
-			deltaBytes := int64(conn.OriginalBytes) - int64(conn.PrevBytes)
-			if deltaBytes < 0 {
-				klog.InfoS("Byte delta count for connection should not be negative", "byte delta count", deltaBytes)
+			if conn.OriginalBytes < conn.PrevBytes {
+				klog.InfoS("Byte delta count for connection should not be negative", "prevBytes", conn.PrevBytes, "currBytes", conn.OriginalBytes)
+				ie.SetUnsigned64Value(0)
+			} else {
+				ie.SetUnsigned64Value(conn.OriginalBytes - conn.PrevBytes)
 			}
-			ie.SetUnsigned64Value(uint64(deltaBytes))
 		case "reversePacketTotalCount":
 			ie.SetUnsigned64Value(conn.ReversePackets)
 		case "reverseOctetTotalCount":
 			ie.SetUnsigned64Value(conn.ReverseBytes)
 		case "reversePacketDeltaCount":
-			deltaPkts := int64(conn.ReversePackets) - int64(conn.PrevReversePackets)
-			if deltaPkts < 0 {
-				klog.InfoS("Reverse packet delta count for connection should not be negative", "packet delta count", deltaPkts)
+			if conn.ReversePackets < conn.PrevReversePackets {
+				klog.InfoS("Reverse packet delta count for connection should not be negative", "prevReversePackets", conn.PrevReversePackets, "currReversePackets", conn.ReversePackets)
+				ie.SetUnsigned64Value(0)
+			} else {
+				ie.SetUnsigned64Value(conn.ReversePackets - conn.PrevReversePackets)
 			}
-			ie.SetUnsigned64Value(uint64(deltaPkts))
 		case "reverseOctetDeltaCount":
-			deltaBytes := int64(conn.ReverseBytes) - int64(conn.PrevReverseBytes)
-			if deltaBytes < 0 {
-				klog.InfoS("Reverse byte delta count for connection should not be negative", "byte delta count", deltaBytes)
+			if conn.ReverseBytes < conn.PrevReverseBytes {
+				klog.InfoS("Reverse byte delta count for connection should not be negative", "prevReverseBytes", conn.PrevReverseBytes, "currReverseBytes", conn.ReverseBytes)
+				ie.SetUnsigned64Value(0)
+			} else {
+				ie.SetUnsigned64Value(conn.ReverseBytes - conn.PrevReverseBytes)
 			}
-			ie.SetUnsigned64Value(uint64(deltaBytes))
 		case "sourcePodNamespace":
 			ie.SetStringValue(conn.SourcePodNamespace)
 		case "sourcePodName":
