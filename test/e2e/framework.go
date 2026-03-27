@@ -2351,9 +2351,11 @@ func (data *TestData) createAgnhostLoadBalancerService(serviceName string, affin
 	for idx, ingressIP := range ingressIPs {
 		ingress[idx].IP = ingressIP
 	}
-	updatedSvc := svc.DeepCopy()
-	updatedSvc.Status.LoadBalancer.Ingress = ingress
-	patchData, err := json.Marshal(updatedSvc)
+	patchData, err := json.Marshal(&corev1.Service{
+		Status: corev1.ServiceStatus{
+			LoadBalancer: corev1.LoadBalancerStatus{Ingress: ingress},
+		},
+	})
 	if err != nil {
 		return svc, err
 	}
@@ -2369,9 +2371,11 @@ func (data *TestData) createNginxLoadBalancerService(affinity bool, ingressIPs [
 	for idx, ingressIP := range ingressIPs {
 		ingress[idx].IP = ingressIP
 	}
-	updatedSvc := svc.DeepCopy()
-	updatedSvc.Status.LoadBalancer.Ingress = ingress
-	patchData, err := json.Marshal(updatedSvc)
+	patchData, err := json.Marshal(&corev1.Service{
+		Status: corev1.ServiceStatus{
+			LoadBalancer: corev1.LoadBalancerStatus{Ingress: ingress},
+		},
+	})
 	if err != nil {
 		return svc, err
 	}
