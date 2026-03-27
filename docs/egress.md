@@ -233,7 +233,12 @@ Egress IP, otherwise route it to the destination directly.
 Once set, Antrea will tag Egress traffic leaving the Egress Node with the
 specified VLAN ID. Correspondingly, it's expected that reply traffic towards
 these Egress IPs is also tagged with the specified VLAN ID when arriving at the
-Egress Node.
+Egress Node. When a VLAN is specified, Antrea will automatically create and
+manage VLAN sub-interfaces on the Node's transport interface, named with an
+`antrea-ext.` prefix (e.g. `antrea-ext.10` for VLAN 10). Users should **not**
+pre-create VLAN sub-interfaces for Egress purposes, as Antrea only manages
+sub-interfaces with the `antrea-ext.` prefix and will ignore any other VLAN
+sub-interfaces on the transport interface.
 
 An example of ExternalIPPool using a non-default subnet is as below:
 

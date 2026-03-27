@@ -268,7 +268,10 @@ func NewIPAssigner(nodeTransportInterface string, dummyDeviceName string, linkMo
 	return a, nil
 }
 
-// getVLANInterfaces returns all VLAN sub-interfaces of the given parent interface.
+// getVLANInterfaces returns VLAN sub-interfaces of the given parent interface
+// that were created by antrea-agent (i.e., whose names start with vlanInterfacePrefix).
+// User-managed VLAN sub-interfaces are ignored to avoid accidentally loading
+// their IPs and deleting them as stale during reconciliation.
 func getVLANInterfaces(parentIndex int) ([]*netlink.Vlan, error) {
 	links, err := netlink.LinkList()
 	if err != nil {
@@ -276,9 +279,15 @@ func getVLANInterfaces(parentIndex int) ([]*netlink.Vlan, error) {
 	}
 	var vlans []*netlink.Vlan
 	for _, link := range links {
-		if vlan, ok := link.(*netlink.Vlan); ok && vlan.ParentIndex == parentIndex {
-			vlans = append(vlans, vlan)
+		vlan, ok := link.(*netlink.Vlan)
+		if !ok || vlan.ParentIndex != parentIndex {
+			continue
 		}
+		if !strings.HasPrefix(vlan.Attrs().Name, vlanInterfacePrefix) {
+			klog.InfoS("Ignoring user-managed VLAN sub-interface", "interface", vlan.Attrs().Name)
+			continue
+		}
+		vlans = append(vlans, vlan)
 	}
 	return vlans, nil
 }
