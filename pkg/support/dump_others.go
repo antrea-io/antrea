@@ -26,6 +26,8 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/spf13/afero"
+
 	"k8s.io/klog/v2"
 
 	"antrea.io/antrea/v2/pkg/agent/util/iptables"
@@ -143,7 +145,7 @@ func (d *agentDumper) dumpIPToolInfo(basedir string) error {
 // arp_announce) that are relevant for debugging Egress and EgressSeparateSubnet issues.
 func (d *agentDumper) dumpSysctlNetIF(basedir string) error {
 	const sysctlNetIPv4ConfDir = "/proc/sys/net/ipv4/conf"
-	entries, err := os.ReadDir(sysctlNetIPv4ConfDir)
+	entries, err := afero.ReadDir(d.fs, sysctlNetIPv4ConfDir)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return nil
@@ -155,7 +157,7 @@ func (d *agentDumper) dumpSysctlNetIF(basedir string) error {
 		iface := entry.Name()
 		for _, param := range []string{"rp_filter", "arp_ignore", "arp_announce"} {
 			paramPath := filepath.Join(sysctlNetIPv4ConfDir, iface, param)
-			data, readErr := os.ReadFile(paramPath)
+			data, readErr := afero.ReadFile(d.fs, paramPath)
 			if readErr != nil {
 				if os.IsNotExist(readErr) {
 					continue
