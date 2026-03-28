@@ -146,7 +146,6 @@ func (br *OVSBridge) Create() Error {
 	br.isHardwareOffloadEnabled, err = br.getHardwareOffload()
 	if err != nil {
 		klog.ErrorS(err, "Failed to get hardware offload")
-		return err
 	}
 	return nil
 }
