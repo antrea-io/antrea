@@ -229,3 +229,154 @@ add ANTREA-POD-IP6 fd00:10:244::/64
 		})
 	}
 }
+
+func TestDumpIPToolInfo(t *testing.T) {
+	makeAction := func(output []byte) testingexec.FakeAction {
+		return func() ([]byte, []byte, error) { return output, nil, nil }
+	}
+	errorAction := func() ([]byte, []byte, error) { return nil, nil, fmt.Errorf("ip error") }
+
+	tests := []struct {
+		name           string
+		commandActions []testingexec.FakeCommandAction
+		expectFiles    map[string]string
+		expectedErr    string
+	}{
+		{
+			name: "all ip subcommands succeed and output files are created",
+			commandActions: []testingexec.FakeCommandAction{
+				func(cmd string, args ...string) exec.Cmd {
+					return &testingexec.FakeCmd{CombinedOutputScript: []testingexec.FakeAction{makeAction([]byte("route output\n"))}}
+				},
+				func(cmd string, args ...string) exec.Cmd {
+					return &testingexec.FakeCmd{CombinedOutputScript: []testingexec.FakeAction{makeAction([]byte("link output\n"))}}
+				},
+				func(cmd string, args ...string) exec.Cmd {
+					return &testingexec.FakeCmd{CombinedOutputScript: []testingexec.FakeAction{makeAction([]byte("address output\n"))}}
+				},
+				func(cmd string, args ...string) exec.Cmd {
+					return &testingexec.FakeCmd{CombinedOutputScript: []testingexec.FakeAction{makeAction([]byte("rule output\n"))}}
+				},
+				func(cmd string, args ...string) exec.Cmd {
+					return &testingexec.FakeCmd{CombinedOutputScript: []testingexec.FakeAction{makeAction([]byte("route-all output\n"))}}
+				},
+			},
+			expectFiles: map[string]string{
+				"route":            "route output\n",
+				"link":             "link output\n",
+				"address":          "address output\n",
+				"rule":             "rule output\n",
+				"route-all-tables": "route-all output\n",
+			},
+		},
+		{
+			name: "ip rule command failure returns error",
+			commandActions: []testingexec.FakeCommandAction{
+				func(cmd string, args ...string) exec.Cmd {
+					return &testingexec.FakeCmd{CombinedOutputScript: []testingexec.FakeAction{makeAction([]byte("route output\n"))}}
+				},
+				func(cmd string, args ...string) exec.Cmd {
+					return &testingexec.FakeCmd{CombinedOutputScript: []testingexec.FakeAction{makeAction([]byte("link output\n"))}}
+				},
+				func(cmd string, args ...string) exec.Cmd {
+					return &testingexec.FakeCmd{CombinedOutputScript: []testingexec.FakeAction{makeAction([]byte("address output\n"))}}
+				},
+				func(cmd string, args ...string) exec.Cmd {
+					return &testingexec.FakeCmd{CombinedOutputScript: []testingexec.FakeAction{errorAction}}
+				},
+			},
+			expectedErr: "error when dumping ip rule",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			fs := afero.NewMemMapFs()
+			fs.MkdirAll(baseDir, os.ModePerm)
+			fakeExecutor := &testingexec.FakeExec{}
+			fakeExecutor.CommandScript = tc.commandActions
+			dumper := &agentDumper{fs: fs, executor: fakeExecutor}
+			err := dumper.dumpIPToolInfo(baseDir)
+			if tc.expectedErr != "" {
+				assert.ErrorContains(t, err, tc.expectedErr)
+				return
+			}
+			require.NoError(t, err)
+			for fileName, expectedContent := range tc.expectFiles {
+				filePath := filepath.Join(baseDir, fileName)
+				content, readErr := afero.ReadFile(fs, filePath)
+				require.NoError(t, readErr, "expected file %s to exist", fileName)
+				assert.Equal(t, expectedContent, string(content))
+			}
+		})
+	}
+}
+
+func TestDumpSysctlNetIF(t *testing.T) {
+	const confDir = "/proc/sys/net/ipv4/conf"
+	tests := []struct {
+		name            string
+		setupFS         func(fs afero.Fs)
+		expectedContent string
+		expectFile      bool
+	}{
+		{
+			name:       "conf dir absent returns nil without error",
+			setupFS:    func(fs afero.Fs) {},
+			expectFile: false,
+		},
+		{
+			name: "populates sysctl file for each interface in alphabetical order",
+			setupFS: func(fs afero.Fs) {
+				for _, iface := range []string{"eth0", "lo"} {
+					for param, val := range map[string]string{
+						"rp_filter":    "1",
+						"arp_ignore":   "0",
+						"arp_announce": "2",
+					} {
+						p := filepath.Join(confDir, iface, param)
+						fs.MkdirAll(filepath.Dir(p), os.ModePerm)
+						afero.WriteFile(fs, p, []byte(val), 0644)
+					}
+				}
+			},
+			expectedContent: "net.ipv4.conf.eth0.rp_filter = 1\n" +
+				"net.ipv4.conf.eth0.arp_ignore = 0\n" +
+				"net.ipv4.conf.eth0.arp_announce = 2\n" +
+				"net.ipv4.conf.lo.rp_filter = 1\n" +
+				"net.ipv4.conf.lo.arp_ignore = 0\n" +
+				"net.ipv4.conf.lo.arp_announce = 2\n",
+			expectFile: true,
+		},
+		{
+			name: "missing param file is skipped gracefully",
+			setupFS: func(fs afero.Fs) {
+				p := filepath.Join(confDir, "eth0", "rp_filter")
+				fs.MkdirAll(filepath.Dir(p), os.ModePerm)
+				afero.WriteFile(fs, p, []byte("1"), 0644)
+			},
+			expectedContent: "net.ipv4.conf.eth0.rp_filter = 1\n",
+			expectFile:      true,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			fs := afero.NewMemMapFs()
+			fs.MkdirAll(baseDir, os.ModePerm)
+			tc.setupFS(fs)
+			dumper := &agentDumper{fs: fs}
+			err := dumper.dumpSysctlNetIF(baseDir)
+			require.NoError(t, err)
+			filePath := filepath.Join(baseDir, "sysctl-net-ipv4-conf")
+			ok, err := afero.Exists(fs, filePath)
+			require.NoError(t, err)
+			assert.Equal(t, tc.expectFile, ok)
+			if tc.expectFile {
+				content, err := afero.ReadFile(fs, filePath)
+				require.NoError(t, err)
+				assert.Equal(t, tc.expectedContent, string(content))
+			}
+		})
+	}
+}
