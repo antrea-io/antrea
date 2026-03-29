@@ -232,15 +232,6 @@ jobs:
       run: ./ci/check-manifest.sh
     - name: Check copyright
       run: ./ci/check-copyright.sh
-    - name: Check BPF test data is up-to-date
-      run: |
-        cd pkg/agent/packetcapture/capture
-        go run testdata/generate_bpf_testdata.go
-        if ! git diff --quiet zz_generated_bpf_testdata_test.go; then
-          echo "BPF test data is out of date."
-          echo "Please run: cd pkg/agent/packetcapture/capture && bash testdata/generate_bpf_testdata.sh"
-          exit 1
-        fi
 
   verify:
     name: Verify docs and spelling

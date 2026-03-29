@@ -20,7 +20,10 @@ package main
 import (
 	"bytes"
 	"fmt"
+	"go/ast"
 	"go/format"
+	"go/parser"
+	"go/token"
 	"log"
 	"os"
 	"os/exec"
@@ -157,24 +160,100 @@ func parseTcpdumpOutput(output string) ([]bpf.Instruction, error) {
 }
 
 func extractFilterInputsFromInputsTest(filePath string) (map[string]string, error) {
-	content, err := os.ReadFile(filePath)
+	fset := token.NewFileSet()
+	file, err := parser.ParseFile(fset, filePath, nil, parser.ParseComments)
 	if err != nil {
-		return nil, fmt.Errorf("read %s: %w", filePath, err)
+		return nil, fmt.Errorf("parse %s: %w", filePath, err)
 	}
 
-	reName := regexp.MustCompile(`^\s*Name:\s*"([^"]+)",\s*$`)
-	reFilter := regexp.MustCompile(`^\s*TcpdumpFilter:\s*"([^"]+)",\s*$`)
-
-	filters := make(map[string]string)
-	var currentName string
-	for _, line := range strings.Split(string(content), "\n") {
-		if m := reName.FindStringSubmatch(line); m != nil {
-			currentName = m[1]
+	var casesLit *ast.CompositeLit
+	for _, decl := range file.Decls {
+		genDecl, ok := decl.(*ast.GenDecl)
+		if !ok || genDecl.Tok != token.VAR {
 			continue
 		}
-		if m := reFilter.FindStringSubmatch(line); m != nil && currentName != "" {
-			filters[currentName] = m[1]
-			currentName = ""
+		for _, spec := range genDecl.Specs {
+			valueSpec, ok := spec.(*ast.ValueSpec)
+			if !ok {
+				continue
+			}
+			for i, name := range valueSpec.Names {
+				if name.Name != "BPFTestCases" || i >= len(valueSpec.Values) {
+					continue
+				}
+				if lit, ok := valueSpec.Values[i].(*ast.CompositeLit); ok {
+					casesLit = lit
+					break
+				}
+			}
+			if casesLit != nil {
+				break
+			}
+		}
+		if casesLit != nil {
+			break
+		}
+	}
+	if casesLit == nil {
+		return nil, fmt.Errorf("BPFTestCases declaration not found in %s", filePath)
+	}
+
+	readString := func(expr ast.Expr) (string, bool, error) {
+		lit, ok := expr.(*ast.BasicLit)
+		if !ok || lit.Kind != token.STRING {
+			return "", false, nil
+		}
+		value, err := strconv.Unquote(lit.Value)
+		if err != nil {
+			return "", false, fmt.Errorf("invalid string literal %s: %w", lit.Value, err)
+		}
+		return value, true, nil
+	}
+
+	filters := make(map[string]string)
+	for _, elt := range casesLit.Elts {
+		testCaseLit, ok := elt.(*ast.CompositeLit)
+		if !ok {
+			continue
+		}
+
+		var (
+			name   string
+			filter string
+		)
+
+		for _, field := range testCaseLit.Elts {
+			kv, ok := field.(*ast.KeyValueExpr)
+			if !ok {
+				continue
+			}
+			key, ok := kv.Key.(*ast.Ident)
+			if !ok {
+				continue
+			}
+
+			switch key.Name {
+			case "Name":
+				value, ok, err := readString(kv.Value)
+				if err != nil {
+					return nil, fmt.Errorf("extract Name at %s: %w", fset.Position(kv.Pos()), err)
+				}
+				if ok {
+					name = value
+				}
+			case "TcpdumpFilter":
+				value, ok, err := readString(kv.Value)
+				if err != nil {
+					return nil, fmt.Errorf("extract TcpdumpFilter at %s: %w", fset.Position(kv.Pos()), err)
+				}
+				if ok {
+					filter = value
+				}
+			}
+		}
+
+		if name != "" && filter != "" {
+			filters[name] = filter
 		}
 	}
 
