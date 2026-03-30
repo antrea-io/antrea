@@ -13,6 +13,7 @@
 // limitations under the License.
 
 // +k8s:openapi-gen=true
+// +k8s:openapi-model-package=io.antrea.system.v1beta1
 // +k8s:deepcopy-gen=package
 // +k8s:defaulter-gen=TypeMeta
 // +groupName=system.antrea.io
