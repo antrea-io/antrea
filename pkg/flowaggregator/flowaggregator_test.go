@@ -16,6 +16,7 @@ package flowaggregator
 
 import (
 	"bytes"
+	"context"
 	"net/netip"
 	"os"
 	"path/filepath"
@@ -50,6 +51,7 @@ import (
 	intermediatetesting "antrea.io/antrea/v2/pkg/flowaggregator/intermediate/testing"
 	"antrea.io/antrea/v2/pkg/flowaggregator/options"
 	"antrea.io/antrea/v2/pkg/flowaggregator/querier"
+	"antrea.io/antrea/v2/pkg/flowaggregator/ringbuffer"
 	"antrea.io/antrea/v2/pkg/ipfix"
 	ipfixtesting "antrea.io/antrea/v2/pkg/ipfix/testing"
 	"antrea.io/antrea/v2/pkg/util/k8s"
@@ -127,10 +129,11 @@ func TestFlowAggregator_sendAggregatedRecord(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			mockPodStore := objectstoretest.NewMockPodStore(ctrl)
-			mockIPFIXExporter := exportertesting.NewMockInterface(ctrl)
-			mockClickHouseExporter := exportertesting.NewMockInterface(ctrl)
 			mockIPFIXRegistry := ipfixtesting.NewMockIPFIXRegistry(ctrl)
 			mockAggregationProcess := intermediatetesting.NewMockAggregationProcess(ctrl)
+
+			buf := ringbuffer.NewBroadcastBuffer[*flowpb.Flow](8)
+			defer buf.Shutdown()
 
 			newFlowAggregator := func(includePodLabels bool) *flowAggregator {
 				return &flowAggregator{
@@ -138,16 +141,13 @@ func TestFlowAggregator_sendAggregatedRecord(t *testing.T) {
 					aggregationProcess:          mockAggregationProcess,
 					activeFlowRecordTimeout:     testActiveTimeout,
 					inactiveFlowRecordTimeout:   testInactiveTimeout,
-					ipfixExporter:               mockIPFIXExporter,
-					clickHouseExporter:          mockClickHouseExporter,
 					registry:                    mockIPFIXRegistry,
 					flowAggregatorAddress:       "",
 					includePodLabels:            includePodLabels,
 					podStore:                    mockPodStore,
+					recordBuffer:                buf,
 				}
 			}
-
-			mockExporters := []*exportertesting.MockInterface{mockIPFIXExporter, mockClickHouseExporter}
 
 			startTime := time.Now().UTC().Truncate(time.Second)
 			record := &flowpb.Flow{
@@ -170,9 +170,6 @@ func TestFlowAggregator_sendAggregatedRecord(t *testing.T) {
 			}
 
 			fa := newFlowAggregator(tc.includePodLabels)
-			for _, exporter := range mockExporters {
-				exporter.EXPECT().AddRecord(record, tc.isIPv6)
-			}
 
 			mockAggregationProcess.EXPECT().ResetStatAndThroughputElementsInRecord(record).Return(nil)
 			mockAggregationProcess.EXPECT().AreCorrelatedFieldsFilled(*flowRecord).Return(false)
@@ -183,10 +180,9 @@ func TestFlowAggregator_sendAggregatedRecord(t *testing.T) {
 				mockPodStore.EXPECT().GetPodByIPAndTime(tc.flowKey.DestinationAddress, startTime).Return(podB, true)
 			}
 			mockAggregationProcess.EXPECT().SetExternalFieldsFilled(flowRecord, true)
-			mockAggregationProcess.EXPECT().IsAggregatedRecordIPv4(*flowRecord).Return(!tc.isIPv6)
 
 			err := fa.sendAggregatedRecord(tc.flowKey, flowRecord)
-			assert.NoError(t, err, "Error when sending flow key record, key: %v, record: %v", tc.flowKey, flowRecord)
+			require.NoError(t, err, "Error when sending flow key record, key: %v, record: %v", tc.flowKey, flowRecord)
 			if tc.includePodLabels {
 				assert.NotNil(t, record.K8S.SourcePodLabels)
 				assert.NotNil(t, record.K8S.DestinationPodLabels)
@@ -245,24 +241,20 @@ func TestFlowAggregator_proxyRecord(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			mockPodStore := objectstoretest.NewMockPodStore(ctrl)
-			mockIPFIXExporter := exportertesting.NewMockInterface(ctrl)
-			mockIPFIXRegistry := ipfixtesting.NewMockIPFIXRegistry(ctrl)
 
-			newFlowAggregator := func(includePodLabels bool) *flowAggregator {
-				return &flowAggregator{
-					aggregatorMode:              flowaggregatorconfig.AggregatorModeProxy,
-					aggregatorTransportProtocol: "tcp",
-					activeFlowRecordTimeout:     testActiveTimeout,
-					inactiveFlowRecordTimeout:   testInactiveTimeout,
-					ipfixExporter:               mockIPFIXExporter,
-					registry:                    mockIPFIXRegistry,
-					flowAggregatorAddress:       "",
-					includePodLabels:            includePodLabels,
-					podStore:                    mockPodStore,
-				}
+			buf := ringbuffer.NewBroadcastBuffer[*flowpb.Flow](8)
+			defer buf.Shutdown()
+
+			fa := &flowAggregator{
+				aggregatorMode:              flowaggregatorconfig.AggregatorModeProxy,
+				aggregatorTransportProtocol: "tcp",
+				activeFlowRecordTimeout:     testActiveTimeout,
+				inactiveFlowRecordTimeout:   testInactiveTimeout,
+				flowAggregatorAddress:       "",
+				includePodLabels:            tc.includePodLabels,
+				podStore:                    mockPodStore,
+				recordBuffer:                buf,
 			}
-
-			fa := newFlowAggregator(tc.includePodLabels)
 
 			startTime := time.Now().UTC().Truncate(time.Second)
 			record := &flowpb.Flow{
@@ -280,8 +272,6 @@ func TestFlowAggregator_proxyRecord(t *testing.T) {
 				Stats:        &flowpb.Stats{},
 				ReverseStats: &flowpb.Stats{},
 			}
-
-			mockIPFIXExporter.EXPECT().AddRecord(record, tc.isIPv6)
 
 			var sourceAddress, destinationAddress string
 			if tc.isIPv6 {
@@ -301,8 +291,7 @@ func TestFlowAggregator_proxyRecord(t *testing.T) {
 				mockPodStore.EXPECT().GetPodByIPAndTime(destinationAddress, startTime).Return(podB, true)
 			}
 
-			err := fa.proxyRecord(record)
-			assert.NoError(t, err, "Error when proxying flow record")
+			fa.proxyRecord(record)
 			if tc.includePodLabels {
 				assert.NotNil(t, record.K8S.SourcePodLabels)
 				assert.NotNil(t, record.K8S.DestinationPodLabels)
@@ -397,15 +386,15 @@ func TestFlowAggregator_watchConfiguration(t *testing.T) {
 // the FlowAggregator when instantiating an exporter, if applicable. Same for clusterID for the
 // IPFIX exporter.
 func mockExporters(t *testing.T, ctrl *gomock.Controller, expectedClusterUUID *uuid.UUID, expectedClusterID *string) (
-	*exportertesting.MockInterface,
-	*exportertesting.MockInterface,
-	*exportertesting.MockInterface,
-	*exportertesting.MockInterface,
+	*exportertesting.MockRunner,
+	*exportertesting.MockRunner,
+	*exportertesting.MockRunner,
+	*exportertesting.MockRunner,
 ) {
-	mockIPFIXExporter := exportertesting.NewMockInterface(ctrl)
-	mockClickHouseExporter := exportertesting.NewMockInterface(ctrl)
-	mockS3Exporter := exportertesting.NewMockInterface(ctrl)
-	mockLogExporter := exportertesting.NewMockInterface(ctrl)
+	mockIPFIXExporter := exportertesting.NewMockRunner(ctrl)
+	mockClickHouseExporter := exportertesting.NewMockRunner(ctrl)
+	mockS3Exporter := exportertesting.NewMockRunner(ctrl)
+	mockLogExporter := exportertesting.NewMockRunner(ctrl)
 
 	newIPFIXExporterSaved := newIPFIXExporter
 	newClickHouseExporterSaved := newClickHouseExporter
@@ -417,7 +406,7 @@ func mockExporters(t *testing.T, ctrl *gomock.Controller, expectedClusterUUID *u
 		newS3Exporter = newS3ExporterSaved
 		newLogExporter = newLogExporterSaved
 	})
-	newIPFIXExporter = func(clusterUUID uuid.UUID, clusterID string, opts *options.Options, registry ipfix.IPFIXRegistry) exporter.Interface {
+	newIPFIXExporter = func(clusterUUID uuid.UUID, clusterID string, opts *options.Options, registry ipfix.IPFIXRegistry) exporter.Runner {
 		if expectedClusterUUID != nil {
 			assert.Equal(t, *expectedClusterUUID, clusterUUID)
 		}
@@ -426,19 +415,19 @@ func mockExporters(t *testing.T, ctrl *gomock.Controller, expectedClusterUUID *u
 		}
 		return mockIPFIXExporter
 	}
-	newClickHouseExporter = func(clusterUUID uuid.UUID, opts *options.Options) (exporter.Interface, error) {
+	newClickHouseExporter = func(clusterUUID uuid.UUID, opts *options.Options) (exporter.Runner, error) {
 		if expectedClusterUUID != nil {
 			assert.Equal(t, *expectedClusterUUID, clusterUUID)
 		}
 		return mockClickHouseExporter, nil
 	}
-	newS3Exporter = func(clusterUUID uuid.UUID, opts *options.Options) (exporter.Interface, error) {
+	newS3Exporter = func(clusterUUID uuid.UUID, opts *options.Options) (exporter.Runner, error) {
 		if expectedClusterUUID != nil {
 			assert.Equal(t, *expectedClusterUUID, clusterUUID)
 		}
 		return mockS3Exporter, nil
 	}
-	newLogExporter = func(opt *options.Options) (exporter.Interface, error) {
+	newLogExporter = func(opt *options.Options) (exporter.Runner, error) {
 		return mockLogExporter, nil
 	}
 
@@ -450,10 +439,25 @@ func TestFlowAggregator_updateFlowAggregator(t *testing.T) {
 
 	mockIPFIXExporter, mockClickHouseExporter, mockS3Exporter, mockLogExporter := mockExporters(t, ctrl, nil, nil)
 
-	t.Run("updateIPFIX", func(t *testing.T) {
-		flowAggregator := &flowAggregator{
-			ipfixExporter: mockIPFIXExporter,
+	// All mock exporters' Run methods should block until context cancellation.
+	blockingRun := func(ctx context.Context, buf ringbuffer.BroadcastBuffer[*flowpb.Flow]) {
+		<-ctx.Done()
+	}
+	mockIPFIXExporter.EXPECT().Run(gomock.Any(), gomock.Any()).Do(blockingRun).AnyTimes()
+	mockClickHouseExporter.EXPECT().Run(gomock.Any(), gomock.Any()).Do(blockingRun).AnyTimes()
+	mockS3Exporter.EXPECT().Run(gomock.Any(), gomock.Any()).Do(blockingRun).AnyTimes()
+	mockLogExporter.EXPECT().Run(gomock.Any(), gomock.Any()).Do(blockingRun).AnyTimes()
+
+	newFA := func() *flowAggregator {
+		buf := ringbuffer.NewBroadcastBuffer[*flowpb.Flow](8)
+		t.Cleanup(buf.Shutdown)
+		return &flowAggregator{
+			recordBuffer: buf,
 		}
+	}
+
+	t.Run("enableIPFIX", func(t *testing.T) {
+		fa := newFA()
 		opt := &options.Options{
 			Config: &flowaggregatorconfig.FlowAggregatorConfig{
 				FlowCollector: flowaggregatorconfig.FlowCollectorConfig{
@@ -463,25 +467,33 @@ func TestFlowAggregator_updateFlowAggregator(t *testing.T) {
 				},
 			},
 		}
-		mockIPFIXExporter.EXPECT().UpdateOptions(opt)
-		flowAggregator.updateFlowAggregator(opt)
+		fa.updateFlowAggregator(opt)
+		assert.NotNil(t, fa.ipfixHandle)
 	})
 	t.Run("disableIPFIX", func(t *testing.T) {
-		flowAggregator := &flowAggregator{
-			ipfixExporter: mockIPFIXExporter,
-		}
+		fa := newFA()
 		opt := &options.Options{
+			Config: &flowaggregatorconfig.FlowAggregatorConfig{
+				FlowCollector: flowaggregatorconfig.FlowCollectorConfig{
+					Enable:         true,
+					IncludeK8sUIDs: ptr.To(false),
+				},
+			},
+		}
+		fa.updateFlowAggregator(opt)
+		require.NotNil(t, fa.ipfixHandle)
+		opt = &options.Options{
 			Config: &flowaggregatorconfig.FlowAggregatorConfig{
 				FlowCollector: flowaggregatorconfig.FlowCollectorConfig{
 					Enable: false,
 				},
 			},
 		}
-		mockIPFIXExporter.EXPECT().Stop()
-		flowAggregator.updateFlowAggregator(opt)
+		fa.updateFlowAggregator(opt)
+		assert.Nil(t, fa.ipfixHandle)
 	})
 	t.Run("enableClickHouse", func(t *testing.T) {
-		flowAggregator := &flowAggregator{}
+		fa := newFA()
 		opt := &options.Options{
 			Config: &flowaggregatorconfig.FlowAggregatorConfig{
 				ClickHouse: flowaggregatorconfig.ClickHouseConfig{
@@ -489,27 +501,11 @@ func TestFlowAggregator_updateFlowAggregator(t *testing.T) {
 				},
 			},
 		}
-		mockClickHouseExporter.EXPECT().Start()
-		flowAggregator.updateFlowAggregator(opt)
+		fa.updateFlowAggregator(opt)
+		assert.NotNil(t, fa.clickHouseHandle)
 	})
 	t.Run("disableClickHouse", func(t *testing.T) {
-		flowAggregator := &flowAggregator{
-			clickHouseExporter: mockClickHouseExporter,
-		}
-		opt := &options.Options{
-			Config: &flowaggregatorconfig.FlowAggregatorConfig{
-				ClickHouse: flowaggregatorconfig.ClickHouseConfig{
-					Enable: false,
-				},
-			},
-		}
-		mockClickHouseExporter.EXPECT().Stop()
-		flowAggregator.updateFlowAggregator(opt)
-	})
-	t.Run("updateClickHouse", func(t *testing.T) {
-		flowAggregator := &flowAggregator{
-			clickHouseExporter: mockClickHouseExporter,
-		}
+		fa := newFA()
 		opt := &options.Options{
 			Config: &flowaggregatorconfig.FlowAggregatorConfig{
 				ClickHouse: flowaggregatorconfig.ClickHouseConfig{
@@ -517,11 +513,20 @@ func TestFlowAggregator_updateFlowAggregator(t *testing.T) {
 				},
 			},
 		}
-		mockClickHouseExporter.EXPECT().UpdateOptions(opt)
-		flowAggregator.updateFlowAggregator(opt)
+		fa.updateFlowAggregator(opt)
+		require.NotNil(t, fa.clickHouseHandle)
+		opt = &options.Options{
+			Config: &flowaggregatorconfig.FlowAggregatorConfig{
+				ClickHouse: flowaggregatorconfig.ClickHouseConfig{
+					Enable: false,
+				},
+			},
+		}
+		fa.updateFlowAggregator(opt)
+		assert.Nil(t, fa.clickHouseHandle)
 	})
 	t.Run("enableS3Uploader", func(t *testing.T) {
-		flowAggregator := &flowAggregator{}
+		fa := newFA()
 		opt := &options.Options{
 			Config: &flowaggregatorconfig.FlowAggregatorConfig{
 				S3Uploader: flowaggregatorconfig.S3UploaderConfig{
@@ -530,27 +535,11 @@ func TestFlowAggregator_updateFlowAggregator(t *testing.T) {
 				},
 			},
 		}
-		mockS3Exporter.EXPECT().Start()
-		flowAggregator.updateFlowAggregator(opt)
+		fa.updateFlowAggregator(opt)
+		assert.NotNil(t, fa.s3Handle)
 	})
 	t.Run("disableS3Uploader", func(t *testing.T) {
-		flowAggregator := &flowAggregator{
-			s3Exporter: mockS3Exporter,
-		}
-		opt := &options.Options{
-			Config: &flowaggregatorconfig.FlowAggregatorConfig{
-				S3Uploader: flowaggregatorconfig.S3UploaderConfig{
-					Enable: false,
-				},
-			},
-		}
-		mockS3Exporter.EXPECT().Stop()
-		flowAggregator.updateFlowAggregator(opt)
-	})
-	t.Run("updateS3Uploader", func(t *testing.T) {
-		flowAggregator := &flowAggregator{
-			s3Exporter: mockS3Exporter,
-		}
+		fa := newFA()
 		opt := &options.Options{
 			Config: &flowaggregatorconfig.FlowAggregatorConfig{
 				S3Uploader: flowaggregatorconfig.S3UploaderConfig{
@@ -559,11 +548,20 @@ func TestFlowAggregator_updateFlowAggregator(t *testing.T) {
 				},
 			},
 		}
-		mockS3Exporter.EXPECT().UpdateOptions(opt)
-		flowAggregator.updateFlowAggregator(opt)
+		fa.updateFlowAggregator(opt)
+		require.NotNil(t, fa.s3Handle)
+		opt = &options.Options{
+			Config: &flowaggregatorconfig.FlowAggregatorConfig{
+				S3Uploader: flowaggregatorconfig.S3UploaderConfig{
+					Enable: false,
+				},
+			},
+		}
+		fa.updateFlowAggregator(opt)
+		assert.Nil(t, fa.s3Handle)
 	})
 	t.Run("enableFlowLogger", func(t *testing.T) {
-		flowAggregator := &flowAggregator{}
+		fa := newFA()
 		opt := &options.Options{
 			Config: &flowaggregatorconfig.FlowAggregatorConfig{
 				FlowLogger: flowaggregatorconfig.FlowLoggerConfig{
@@ -572,41 +570,62 @@ func TestFlowAggregator_updateFlowAggregator(t *testing.T) {
 				},
 			},
 		}
-		mockLogExporter.EXPECT().Start()
-		flowAggregator.updateFlowAggregator(opt)
+		fa.updateFlowAggregator(opt)
+		assert.NotNil(t, fa.logHandle)
 	})
 	t.Run("disableFlowLogger", func(t *testing.T) {
-		flowAggregator := &flowAggregator{
-			s3Exporter: mockLogExporter,
-		}
+		fa := newFA()
 		opt := &options.Options{
+			Config: &flowaggregatorconfig.FlowAggregatorConfig{
+				FlowLogger: flowaggregatorconfig.FlowLoggerConfig{
+					Enable: true,
+					Path:   "/tmp/antrea-flows.log",
+				},
+			},
+		}
+		fa.updateFlowAggregator(opt)
+		require.NotNil(t, fa.logHandle)
+		opt = &options.Options{
 			Config: &flowaggregatorconfig.FlowAggregatorConfig{
 				FlowLogger: flowaggregatorconfig.FlowLoggerConfig{
 					Enable: false,
 				},
 			},
 		}
-		mockLogExporter.EXPECT().Stop()
-		flowAggregator.updateFlowAggregator(opt)
+		fa.updateFlowAggregator(opt)
+		assert.Nil(t, fa.logHandle)
 	})
-	t.Run("updateFlowLogger", func(t *testing.T) {
-		flowAggregator := &flowAggregator{
-			logExporter: mockLogExporter,
-		}
+	t.Run("replaceIPFIX", func(t *testing.T) {
+		fa := newFA()
 		opt := &options.Options{
 			Config: &flowaggregatorconfig.FlowAggregatorConfig{
-				FlowLogger: flowaggregatorconfig.FlowLoggerConfig{
-					Enable: true,
-					Path:   "/tmp/antrea-flows.log",
+				FlowCollector: flowaggregatorconfig.FlowCollectorConfig{
+					Enable:         true,
+					IncludeK8sUIDs: ptr.To(false),
 				},
 			},
 		}
-		mockLogExporter.EXPECT().UpdateOptions(opt)
-		flowAggregator.updateFlowAggregator(opt)
+		fa.updateFlowAggregator(opt)
+		firstHandle := fa.ipfixHandle
+		require.NotNil(t, firstHandle)
+		// Updating with new config should stop-and-replace.
+		opt = &options.Options{
+			Config: &flowaggregatorconfig.FlowAggregatorConfig{
+				FlowCollector: flowaggregatorconfig.FlowCollectorConfig{
+					Enable:         true,
+					Address:        "10.10.10.10:155",
+					IncludeK8sUIDs: ptr.To(true),
+				},
+			},
+		}
+		fa.updateFlowAggregator(opt)
+		assert.NotNil(t, fa.ipfixHandle)
+		// The handle should be different (new exporter).
+		assert.NotSame(t, firstHandle, fa.ipfixHandle)
 	})
 	t.Run("includePodLabels", func(t *testing.T) {
-		flowAggregator := &flowAggregator{}
-		require.False(t, flowAggregator.includePodLabels)
+		fa := newFA()
+		require.False(t, fa.includePodLabels)
 		opt := &options.Options{
 			Config: &flowaggregatorconfig.FlowAggregatorConfig{
 				RecordContents: flowaggregatorconfig.RecordContentsConfig{
@@ -614,11 +633,11 @@ func TestFlowAggregator_updateFlowAggregator(t *testing.T) {
 				},
 			},
 		}
-		flowAggregator.updateFlowAggregator(opt)
-		assert.True(t, flowAggregator.includePodLabels)
+		fa.updateFlowAggregator(opt)
+		assert.True(t, fa.includePodLabels)
 	})
 	t.Run("unsupportedUpdate", func(t *testing.T) {
-		flowAggregator := &flowAggregator{}
+		fa := newFA()
 		var b bytes.Buffer
 		klog.SetOutput(&b)
 		klog.LogToStderr(false)
@@ -630,7 +649,7 @@ func TestFlowAggregator_updateFlowAggregator(t *testing.T) {
 			ActiveFlowRecordTimeout: 30 * time.Second,
 			Config:                  &flowaggregatorconfig.FlowAggregatorConfig{},
 		}
-		flowAggregator.updateFlowAggregator(opt)
+		fa.updateFlowAggregator(opt)
 		assert.Contains(t, b.String(), "Ignoring unsupported configuration updates, please restart FlowAggregator\" keys=[\"activeFlowRecordTimeout\"]")
 	})
 }
@@ -643,7 +662,11 @@ func TestFlowAggregator_Run(t *testing.T) {
 	mockNodeStore.EXPECT().HasSynced().Return(true)
 	mockServiceStore := objectstoretest.NewMockServiceStore(ctrl)
 	mockServiceStore.EXPECT().HasSynced().Return(true)
-	mockIPFIXExporter, mockClickHouseExporter, mockS3Exporter, mockLogExporter := mockExporters(t, ctrl, nil, nil)
+	clusterUUID := uuid.New()
+	clusterID := clusterUUID.String()
+	// This will validate that the correct UUID / ID is provided by the
+	// FlowAggregator when instantiating exporters.
+	mockIPFIXExporter, mockClickHouseExporter, mockS3Exporter, mockLogExporter := mockExporters(t, ctrl, &clusterUUID, &clusterID)
 	mockCollector := collectortesting.NewMockInterface(ctrl)
 	mockAggregationProcess := intermediatetesting.NewMockAggregationProcess(ctrl)
 
@@ -663,54 +686,59 @@ func TestFlowAggregator_Run(t *testing.T) {
 		updateCh <- opt
 	}
 
-	flowAggregator := &flowAggregator{
+	buf := ringbuffer.NewBroadcastBuffer[*flowpb.Flow](8)
+
+	initialConfig := &flowaggregatorconfig.FlowAggregatorConfig{
+		FlowCollector: flowaggregatorconfig.FlowCollectorConfig{
+			Enable:  true,
+			Address: "10.10.10.10:155",
+		},
+	}
+	flowaggregatorconfig.SetConfigDefaults(initialConfig)
+	initialConfigData, err := yaml.Marshal(initialConfig)
+	require.NoError(t, err)
+
+	fa := &flowAggregator{
+		clusterUUID:    clusterUUID,
+		clusterID:      clusterID,
 		aggregatorMode: flowaggregatorconfig.AggregatorModeAggregate,
 		// must be large enough to avoid a call to ForAllExpiredFlowRecordsDo
 		activeFlowRecordTimeout: 1 * time.Hour,
 		logTickerDuration:       1 * time.Hour,
 		grpcCollector:           mockCollector,
 		aggregationProcess:      mockAggregationProcess,
-		ipfixExporter:           mockIPFIXExporter,
 		configWatcher:           configWatcher,
 		updateCh:                updateCh,
 		podStore:                mockPodStore,
 		nodeStore:               mockNodeStore,
 		serviceStore:            mockServiceStore,
+		recordBuffer:            buf,
+		configData:              initialConfigData,
 	}
 
 	mockAggregationProcess.EXPECT().Start()
 	mockAggregationProcess.EXPECT().Stop()
 
-	// Mock expectations determined by sequence of updateOptions operations below.
-	mockIPFIXExporter.EXPECT().Start().Times(2)
-	mockIPFIXExporter.EXPECT().Stop().Times(2)
-	mockClickHouseExporter.EXPECT().Start()
-	mockClickHouseExporter.EXPECT().Stop()
-	mockS3Exporter.EXPECT().Start()
-	mockS3Exporter.EXPECT().Stop()
-	mockLogExporter.EXPECT().Start()
-	mockLogExporter.EXPECT().Stop()
-
-	// this is not really relevant; but in practice there will be one call
-	// to mockClickHouseExporter.UpdateOptions because of the hack used to
-	// implement updateOptions above.
-	mockIPFIXExporter.EXPECT().UpdateOptions(gomock.Any()).AnyTimes()
-	mockClickHouseExporter.EXPECT().UpdateOptions(gomock.Any()).AnyTimes()
-	mockS3Exporter.EXPECT().UpdateOptions(gomock.Any()).AnyTimes()
-	mockLogExporter.EXPECT().UpdateOptions(gomock.Any()).AnyTimes()
+	blockingRun := func(ctx context.Context, buf ringbuffer.BroadcastBuffer[*flowpb.Flow]) {
+		<-ctx.Done()
+	}
+	mockIPFIXExporter.EXPECT().Run(gomock.Any(), gomock.Any()).Do(blockingRun).AnyTimes()
+	mockClickHouseExporter.EXPECT().Run(gomock.Any(), gomock.Any()).Do(blockingRun).AnyTimes()
+	mockS3Exporter.EXPECT().Run(gomock.Any(), gomock.Any()).Do(blockingRun).AnyTimes()
+	mockLogExporter.EXPECT().Run(gomock.Any(), gomock.Any()).Do(blockingRun).AnyTimes()
 
 	stopCh := make(chan struct{})
 	var wg sync.WaitGroup
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		flowAggregator.Run(stopCh)
+		fa.Run(stopCh)
 	}()
 
 	makeOptions := func(config *flowaggregatorconfig.FlowAggregatorConfig) *options.Options {
 		return &options.Options{
-			AggregatorMode:          flowAggregator.aggregatorMode,
-			ActiveFlowRecordTimeout: flowAggregator.activeFlowRecordTimeout,
+			AggregatorMode:          fa.aggregatorMode,
+			ActiveFlowRecordTimeout: fa.activeFlowRecordTimeout,
 			Config:                  config,
 		}
 	}
@@ -759,16 +787,16 @@ func TestFlowAggregator_Run(t *testing.T) {
 
 	// we do a few operations: the main purpose is to ensure that cleanup
 	// (i.e., stopping the exporters) is done properly.
-	// 1. The IPFIXExporter is enabled on start, so we expect a call to mockIPFIXExporter.Start()
-	// 2. The IPFIXExporter is then disabled, so we expect a call to mockIPFIXExporter.Stop()
-	// 3. The ClickHouseExporter is then enabled, so we expect a call to mockClickHouseExporter.Start()
-	// 4. The ClickHouseExporter is then disabled, so we expect a call to mockClickHouseExporter.Stop()
-	// 5. The S3Uploader is then enabled, so we expect a call to mockS3Exporter.Start()
-	// 6. The S3Uploader is then disabled, so we expect a call to mockS3Exporter.Stop()
-	// 7. The FlowLogger is then enabled, so we expect a call to mockLogExporter.Start()
-	// 8. The FlowLogger is then disabled, so we expect a call to mockLogExporter.Stop()
-	// 9. The IPFIXExporter is then re-enabled, so we expect a second call to mockIPFIXExporter.Start()
-	// 10. Finally, when Run() is stopped, we expect a second call to mockIPFIXExporter.Stop()
+	// 1. The IPFIXExporter is enabled on start (via initExporters), so we expect a call to mockIPFIXExporter.Run()
+	// 2. The IPFIXExporter is then disabled, so we expect the context to be cancelled
+	// 3. The ClickHouseExporter is then enabled, so we expect a call to mockClickHouseExporter.Run()
+	// 4. The ClickHouseExporter is then disabled, so we expect the context to be cancelled
+	// 5. The S3Uploader is then enabled, so we expect a call to mockS3Exporter.Run()
+	// 6. The S3Uploader is then disabled, so we expect the context to be cancelled
+	// 7. The FlowLogger is then enabled, so we expect a call to mockLogExporter.Run()
+	// 8. The FlowLogger is then disabled, so we expect the context to be cancelled
+	// 9. The IPFIXExporter is then re-enabled, so we expect a second call to mockIPFIXExporter.Run()
+	// 10. Finally, when Run() is stopped, we expect the context to be cancelled for the IPFIXExporter
 	updateOptions(disableIPFIXOptions)
 	updateOptions(enableClickHouseOptions)
 	updateOptions(disableClickHouseOptions)
@@ -909,10 +937,6 @@ func TestFlowAggregator_GetRecordMetrics(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	mockCollector := collectortesting.NewMockInterface(ctrl)
 	mockAggregationProcess := intermediatetesting.NewMockAggregationProcess(ctrl)
-	mockIPFIXExporter := exportertesting.NewMockInterface(ctrl)
-	mockClickHouseExporter := exportertesting.NewMockInterface(ctrl)
-	mockS3Exporter := exportertesting.NewMockInterface(ctrl)
-	mockLogExporter := exportertesting.NewMockInterface(ctrl)
 	want := querier.Metrics{
 		NumRecordsExported:     10,
 		NumRecordsReceived:     1,
@@ -928,10 +952,10 @@ func TestFlowAggregator_GetRecordMetrics(t *testing.T) {
 	fa := &flowAggregator{
 		grpcCollector:      mockCollector,
 		aggregationProcess: mockAggregationProcess,
-		clickHouseExporter: mockClickHouseExporter,
-		s3Exporter:         mockS3Exporter,
-		logExporter:        mockLogExporter,
-		ipfixExporter:      mockIPFIXExporter,
+		clickHouseHandle:   &exporterHandle{},
+		s3Handle:           &exporterHandle{},
+		logHandle:          &exporterHandle{},
+		ipfixHandle:        &exporterHandle{},
 	}
 	fa.numRecordsExported.Store(10)
 	fa.numRecordsDropped.Store(1)
@@ -1124,8 +1148,8 @@ func TestNewFlowAggregator(t *testing.T) {
 	}
 	for _, tc := range testcases {
 		t.Run(tc.name, func(t *testing.T) {
-			ctrl := gomock.NewController(t)
 			client := fake.NewSimpleClientset()
+			ctrl := gomock.NewController(t)
 			mockPodStore := objectstoretest.NewMockPodStore(ctrl)
 			mockNodeStore := objectstoretest.NewMockNodeStore(ctrl)
 			mockServiceStore := objectstoretest.NewMockServiceStore(ctrl)
@@ -1134,9 +1158,10 @@ func TestNewFlowAggregator(t *testing.T) {
 			if clusterID == "" {
 				clusterID = clusterUUID.String()
 			}
-			// This will validate that the correct UUID / ID is provided by the
-			// FlowAggregator when instantiating exporters.
-			mockExporters(t, ctrl, &clusterUUID, &clusterID)
+			// Exporters are created lazily in initExporters (called from Run),
+			// not during NewFlowAggregator, so mockExporters is not needed here.
+			// Validation that the correct UUID/ID is forwarded to exporter
+			// constructors is covered by TestFlowAggregator_Run.
 			b, err := yaml.Marshal(tc.config)
 			require.NoError(t, err)
 			_, err = f.Write(b)
@@ -1145,6 +1170,7 @@ func TestNewFlowAggregator(t *testing.T) {
 			require.NoError(t, err)
 			assert.Equal(t, clusterUUID, fa.clusterUUID)
 			assert.Equal(t, clusterID, fa.clusterID)
+			assert.NotNil(t, fa.recordBuffer)
 		})
 	}
 }

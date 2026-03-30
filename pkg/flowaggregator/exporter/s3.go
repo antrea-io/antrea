@@ -15,11 +15,14 @@
 package exporter
 
 import (
+	"context"
+
 	"github.com/google/uuid"
 	"k8s.io/klog/v2"
 
 	flowpb "antrea.io/antrea/v2/pkg/apis/flow/v1alpha1"
 	"antrea.io/antrea/v2/pkg/flowaggregator/options"
+	"antrea.io/antrea/v2/pkg/flowaggregator/ringbuffer"
 	"antrea.io/antrea/v2/pkg/flowaggregator/s3uploader"
 )
 
@@ -48,43 +51,23 @@ func NewS3Exporter(clusterUUID uuid.UUID, opt *options.Options) (*S3Exporter, er
 	}, nil
 }
 
-func (e *S3Exporter) AddRecord(record *flowpb.Flow, isRecordIPv6 bool) error {
-	return e.s3UploadProcess.CacheRecord(record)
-}
-
-func (e *S3Exporter) Start() {
+// Run consumes flow records from the ring buffer and uploads them to S3.
+// It blocks until ctx is cancelled or the consumer signals shutdown.
+func (e *S3Exporter) Run(ctx context.Context, buf ringbuffer.BroadcastBuffer[*flowpb.Flow]) {
+	consumer := buf.NewConsumer(ringbuffer.WithMaxConsumeDeadline(consumeDeadline))
 	e.s3UploadProcess.Start()
-}
+	defer e.s3UploadProcess.Stop()
 
-func (e *S3Exporter) Stop() {
-	e.s3UploadProcess.Stop()
-}
-
-func (e *S3Exporter) UpdateOptions(opt *options.Options) {
-	s3Input := buildS3Input(opt)
-	config := s3Input.Config
-	if config.BucketName == e.s3UploadProcess.GetBucketName() &&
-		config.BucketPrefix == e.s3UploadProcess.GetBucketPrefix() &&
-		config.Region == e.s3UploadProcess.GetRegion() &&
-		s3Input.UploadInterval == e.s3UploadProcess.GetUploadInterval() {
-		return
-	}
-	klog.InfoS("Updating S3Uploader")
-	if s3Input.UploadInterval != e.s3UploadProcess.GetUploadInterval() {
-		e.s3UploadProcess.SetUploadInterval(s3Input.UploadInterval)
-	}
-	if config.BucketName != e.s3UploadProcess.GetBucketName() ||
-		config.BucketPrefix != e.s3UploadProcess.GetBucketPrefix() ||
-		config.Region != e.s3UploadProcess.GetRegion() {
-		err := e.s3UploadProcess.UpdateS3Uploader(config.BucketName, config.BucketPrefix, config.Region)
-		if err != nil {
-			klog.ErrorS(err, "Error when updating S3Uploader config")
+	records := make([]*flowpb.Flow, consumeMultipleBatchSize)
+	for {
+		n, _, shutdown := consumer.ConsumeMultiple(records)
+		for _, record := range records[:n] {
+			if err := e.s3UploadProcess.CacheRecord(record); err != nil {
+				klog.ErrorS(err, "Error when caching record for S3")
+			}
+		}
+		if shutdown || ctx.Err() != nil {
 			return
 		}
 	}
-	klog.InfoS("New S3Uploader configuration", "bucketName", s3Input.Config.BucketName, "bucketPrefix", s3Input.Config.BucketPrefix, "region", s3Input.Config.Region, "recordFormat", s3Input.Config.RecordFormat, "compress", *s3Input.Config.Compress, "maxRecordsPerFile", s3Input.Config.MaxRecordsPerFile, "uploadInterval", s3Input.Config.UploadInterval)
-}
-
-func (e *S3Exporter) Flush() error {
-	return nil
 }
