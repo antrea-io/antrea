@@ -1,5 +1,14 @@
 # Changelog 2.6
 
+## 2.6.1 - 2026-03-31
+
+### Fixed
+
+- Fix OpenAPI schema generation for Antrea API. ([#7901](https://github.com/antrea-io/antrea/pull/7901), [@antoninbas])
+- Fix Antrea Controller panic in NodeIPsIndexFunc for Nodes without IPs. ([#7916](https://github.com/antrea-io/antrea/pull/7916), [@antoninbas])
+- Update CNI plugins to 1.9.1 with CVE fix. ([#7894](https://github.com/antrea-io/antrea/pull/7894), [@luolanzone])
+- Clamp negative IPFIX delta counts to 0 instead of wrapping them on FlowExporter. ([#7883](https://github.com/antrea-io/antrea/pull/7883), [@Denyme24])
+
 ## 2.6.0 - 2026-03-20
 
 ### Added
