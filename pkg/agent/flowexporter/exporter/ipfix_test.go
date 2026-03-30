@@ -15,11 +15,13 @@
 package exporter
 
 import (
+	"math"
 	"net"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	ipfixentities "github.com/vmware/go-ipfix/pkg/entities"
 	ipfixentitiestesting "github.com/vmware/go-ipfix/pkg/entities/testing"
 	ipfixregistry "github.com/vmware/go-ipfix/pkg/registry"
@@ -254,6 +256,61 @@ func createElement(name string, enterpriseID uint32) ipfixentities.InfoElementWi
 	element, _ := ipfixregistry.GetInfoElement(name, enterpriseID)
 	ieWithValue, _ := ipfixentities.DecodeAndCreateInfoElementWithValue(element, nil)
 	return ieWithValue
+}
+
+// getDeltaValues extracts the current exported values of the four delta fields from the
+// exporter's element list. Because addConnToSet mutates elementsListv4 in place and passes
+// the same slice to AddRecordV2, inspecting elementsListv4 after the call is equivalent to
+// inspecting what was actually sent.
+func getDeltaValues(eL []ipfixentities.InfoElementWithValue) map[string]uint64 {
+	// math.MaxUint64 is used as a sentinel so that any field not found in the element list
+	// is distinguishable from a valid exported value of 0.
+	result := map[string]uint64{
+		"packetDeltaCount":        math.MaxUint64,
+		"octetDeltaCount":         math.MaxUint64,
+		"reversePacketDeltaCount": math.MaxUint64,
+		"reverseOctetDeltaCount":  math.MaxUint64,
+	}
+	for _, ie := range eL {
+		if _, ok := result[ie.GetInfoElement().Name]; ok {
+			result[ie.GetInfoElement().Name] = ie.GetUnsigned64Value()
+		}
+	}
+	return result
+}
+
+// TestIPFIXExporter_negativeDeltaCounts verifies that when current packet/byte counters are
+// lower than the previously recorded values (counter rollback), the exported delta fields are
+// set to 0 rather than wrapping around to a large uint64 value.
+func TestIPFIXExporter_negativeDeltaCounts(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	mockIPFIXSet := ipfixentitiestesting.NewMockSet(ctrl)
+
+	elemListv4 := getElemList(IANAInfoElementsIPv4, AntreaInfoElementsIPv4)
+	flowExp := &ipfixExporter{
+		elementsListv4: elemListv4,
+		templateIDv4:   testTemplateIDv4,
+		ipfixSet:       mockIPFIXSet,
+	}
+
+	conn := flowexportertesting.GetConnection(false, true, 302, 6, "ESTABLISHED")
+	// Set Prev* fields to be larger than the current counters to simulate a counter rollback.
+	conn.PrevPackets = conn.OriginalPackets + 10
+	conn.PrevBytes = conn.OriginalBytes + 100
+	conn.PrevReversePackets = conn.ReversePackets + 5
+	conn.PrevReverseBytes = conn.ReverseBytes + 50
+
+	mockIPFIXSet.EXPECT().ResetSet()
+	mockIPFIXSet.EXPECT().PrepareSet(ipfixentities.Data, testTemplateIDv4).Return(nil)
+	mockIPFIXSet.EXPECT().AddRecordV2(gomock.Any(), testTemplateIDv4).Return(nil)
+
+	err := flowExp.addConnToSet(conn)
+	require.NoError(t, err)
+
+	for name, val := range getDeltaValues(flowExp.elementsListv4) {
+		assert.Equal(t, uint64(0), val,
+			"delta field %q: expected 0 on counter rollback, got %d", name, val)
+	}
 }
 
 func getElemList(ianaIE []string, antreaIE []string) []ipfixentities.InfoElementWithValue {
