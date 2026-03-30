@@ -141,9 +141,6 @@ func (d *AntreaIPAM) setController(controller *AntreaIPAMController) {
 // Additional addresses of the same family are silently ignored.
 func splitIPsByFamily(ips []net.IP) (v4, v6 net.IP) {
 	for _, ip := range ips {
-		if ip == nil {
-			continue
-		}
 		if ip.To4() != nil {
 			if v4 == nil {
 				v4 = ip
@@ -158,8 +155,8 @@ func splitIPsByFamily(ips []net.IP) (v4, v6 net.IP) {
 }
 
 // Add allocates IP addresses from the associated IP Pools. It supports IPv4,
-// IPv6, and dual-stack configurations. For dual-stack, at most one IP per IP
-// family will be allocated even if multiple Pools exist for the same family.
+// IPv6, and dual-stack configurations. At most one IP is allocated per address
+// family regardless of stack mode, even when multiple Pools exist for that family.
 // The allocated IPs and associated resources will be stored in the IP Pool
 // status.
 //
