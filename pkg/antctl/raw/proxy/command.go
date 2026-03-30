@@ -98,7 +98,7 @@ func (o *proxyOptions) validateAndComplete() error {
 
 	if o.disableFilter {
 		if o.unixSocket == "" {
-			klog.Warning("Request filter disabled, your proxy is vulnerable to XSRF attacks, please be cautious")
+			klog.InfoS("Request filter disabled, your proxy is vulnerable to XSRF attacks, please be cautious")
 		}
 		o.filter = nil
 	} else {

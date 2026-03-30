@@ -38,7 +38,7 @@ func RegisterSignalHandlers() <-chan struct{} {
 		<-notifyCh
 		close(stopCh)
 		<-notifyCh
-		klog.Warning("Received second signal, will force exit")
+		klog.InfoS("Received second signal, will force exit")
 		klog.Flush()
 		os.Exit(1)
 	}()
