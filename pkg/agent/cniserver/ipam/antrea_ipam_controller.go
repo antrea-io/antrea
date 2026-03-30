@@ -155,8 +155,11 @@ func (c *AntreaIPAMController) getIPPoolsByPod(namespace, name string) ([]string
 	if ipStrings != "" {
 		splittedIPStrings := strings.Split(ipStrings, annotation.AntreaIPAMAnnotationDelimiter)
 		for _, ipString := range splittedIPStrings {
+			if ipString == "" {
+				continue
+			}
 			ip := net.ParseIP(ipString)
-			if ipString != "" && ip == nil {
+			if ip == nil {
 				ipErr = fmt.Errorf("invalid IP annotation %s", ipStrings)
 				ips = nil
 				break
