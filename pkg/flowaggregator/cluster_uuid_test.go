@@ -15,9 +15,8 @@
 package flowaggregator
 
 import (
-	"context"
 	"testing"
-	"time"
+	"testing/synctest"
 
 	"github.com/stretchr/testify/require"
 	"k8s.io/client-go/kubernetes/fake"
@@ -26,19 +25,22 @@ import (
 )
 
 func TestGetClusterUUID(t *testing.T) {
-	ctx := context.Background()
-	client := fake.NewSimpleClientset()
-	clusterIdentityAllocator := clusteridentity.NewClusterIdentityAllocator(
-		"kube-system",
-		clusteridentity.DefaultClusterIdentityConfigMapName,
-		client,
-	)
-	stopCh := make(chan struct{})
-	defer close(stopCh)
-	go clusterIdentityAllocator.Run(stopCh)
+	synctest.Test(t, func(t *testing.T) {
+		client := fake.NewSimpleClientset()
+		clusterIdentityAllocator := clusteridentity.NewClusterIdentityAllocator(
+			"kube-system",
+			clusteridentity.DefaultClusterIdentityConfigMapName,
+			client,
+		)
+		stopCh := make(chan struct{})
+		defer close(stopCh)
+		go clusterIdentityAllocator.Run(stopCh)
 
-	ctx, cancel := context.WithTimeout(ctx, 2*time.Second)
-	defer cancel()
-	_, err := GetClusterUUID(ctx, client)
-	require.NoError(t, err, "cluster UUID not available")
+		// Wait for the allocator goroutine to create the ConfigMap before
+		// polling, so GetClusterUUID succeeds on the first attempt.
+		synctest.Wait()
+
+		_, err := GetClusterUUID(t.Context(), client)
+		require.NoError(t, err, "cluster UUID not available")
+	})
 }
