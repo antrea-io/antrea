@@ -145,10 +145,13 @@ func splitIPsByFamily(ips []net.IP) (v4, v6 net.IP) {
 			if v4 == nil {
 				v4 = ip
 			}
-		} else {
+		} else if ip.To16() != nil {
 			if v6 == nil {
 				v6 = ip
 			}
+		}
+		if v4 != nil && v6 != nil {
+			break
 		}
 	}
 	return v4, v6
@@ -156,9 +159,8 @@ func splitIPsByFamily(ips []net.IP) (v4, v6 net.IP) {
 
 // Add allocates IP addresses from the associated IP Pools. It supports IPv4,
 // IPv6, and dual-stack configurations. At most one IP is allocated per address
-// family regardless of stack mode, even when multiple Pools exist for that family.
-// The allocated IPs and associated resources will be stored in the IP Pool
-// status.
+// family, even when multiple Pools exist for that family. The allocated IPs and
+// associated resources will be stored in the IP Pool status.
 //
 // When multiple Pools of the same IP family are configured and no specific IP
 // is requested, Add will try each Pool in order. If a Pool is exhausted (no
@@ -294,6 +296,13 @@ func (d *AntreaIPAM) Add(args *invoke.Args, k8sArgs *types.K8sArgs, networkConfi
 	}
 	if len(allocErrs) > 0 {
 		return true, nil, errors.Join(allocErrs...)
+	}
+
+	// At this point an IP should have been allocated: we already determined that this Pod matches
+	// at least one Antrea IPPool (otherwise owns / getPoolAllocatorsByPod would have returned an
+	// error), and any allocation failure should have been caught above.
+	if len(result.IPs) == 0 {
+		return true, nil, fmt.Errorf("failed to allocate IP address for Pod %s/%s: no IP was allocated", string(k8sArgs.K8S_POD_NAMESPACE), string(k8sArgs.K8S_POD_NAME))
 	}
 
 	// All allocations successful, clear the deferred release.
