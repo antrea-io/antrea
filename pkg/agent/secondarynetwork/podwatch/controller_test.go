@@ -308,14 +308,14 @@ func TestPodControllerRun(t *testing.T) {
 	crdInformerFactory.Start(stopCh)
 	crdInformerFactory.WaitForCacheSync(stopCh)
 
+	mockIPAM.EXPECT().SecondaryNetworkRelease(stalePodOwner).Return(nil)
+
 	var wg sync.WaitGroup
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
 		podController.Run(stopCh)
 	}()
-
-	mockIPAM.EXPECT().SecondaryNetworkRelease(stalePodOwner)
 	pod, cniInfo := testPod(podName, containerID, podIP, netdefv1.NetworkSelectionElement{
 		Name:             networkName,
 		InterfaceRequest: interfaceName,
