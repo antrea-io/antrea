@@ -601,7 +601,6 @@ func (a *aggregationProcess) aggregateRecords(incomingRecord, existingRecord *fl
 	// throughput = (octetTotalCount - prevOctetTotalCount) / (flowEndSeconds - prevFlowEndSeconds)
 	// reverseThroughput = (reverseOctetTotalCount - prevReverseOctetTotalCount) / (flowEndSeconds - prevFlowEndSeconds)
 	var throughput, reverseThroughput uint64
-
 	if flowEndSecondsDiff > 0 {
 		throughput = totalCountDiff * 8 / uint64(flowEndSecondsDiff)
 		reverseThroughput = reverseTotalCountDiff * 8 / uint64(flowEndSecondsDiff)
