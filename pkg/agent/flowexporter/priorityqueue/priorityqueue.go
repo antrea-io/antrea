@@ -110,6 +110,7 @@ func (pq *ExpirePriorityQueue) Remove(connKey connection.ConnectionKey) *ItemToE
 
 // Clear removes all items from the queue and key index map.
 func (pq *ExpirePriorityQueue) Clear() {
+	clear(pq.items)
 	pq.items = pq.items[:0]
 	clear(pq.KeyToItem)
 }
