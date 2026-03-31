@@ -55,7 +55,7 @@ const (
 	ip6ICMPv6Code            uint32 = 1
 	ip6FragmentNextHeader    uint32 = 44                // IPv6 Fragment Extension Header
 	ip6FragExtInnerProtocol  uint32 = ip6L4HeaderOffset // offset of Next Header inside Fragment Ext Header
-	ip6FragExtInstructionCnt        = 3                 // number of extra instructions for fragment header handling
+	ip6FragExtInstructionCount int = 3 // number of extra instructions for fragment header handling
 )
 
 var (
@@ -127,11 +127,7 @@ type transportFilters struct {
 // are configured. This is used to decide whether to add IPv6 extension header handling,
 // which is only needed for protocol-only filters.
 func hasTransportFilters(packet *crdv1alpha1.Packet) bool {
-	if packet == nil {
-		return false
-	}
-	t := packet.TransportHeader
-	return t.TCP != nil || t.UDP != nil || t.ICMP != nil || t.ICMPv6 != nil
+	return packet != nil && packet.TransportHeader != (crdv1alpha1.TransportHeader{})
 }
 
 // ipFamilyHandler encapsulates protocol-specific constants and filter compilation logic
@@ -198,6 +194,37 @@ func compareProtocol(protocol uint32, skipTrue, skipFalse uint8) bpf.Instruction
 
 // appendProtocolFilters appends protocol-related checks and computes jump offsets
 // based on the current instruction length.
+//
+// For IPv6 protocol-only filters (no transport-layer filters like ports, flags, or ICMP),
+// tcpdump/libpcap adds extra instructions to handle the IPv6 Fragment Extension Header.
+// This is because the Next Header field may point to a Fragment header (44) rather
+// than the actual transport protocol, so we must check both cases.
+//
+// Example: 'ip6 proto 58' (ICMPv6 protocol only) generates:
+//
+//	(000) ldh      [12]                             # Load EtherType
+//	(001) jeq      #0x86dd     jt 2    jf 8         # Is IPv6?
+//	(002) ldb      [20]                             # Load Next Header
+//	(003) jeq      #0x3a       jt 7    jf 4         # Is ICMPv6 (58)? → MATCH, else check Fragment
+//	(004) jeq      #0x2c       jt 5    jf 8         # Is Fragment (44)? → check inner, else DROP
+//	(005) ldb      [54]                             # Load inner Next Header from Fragment Ext Header
+//	(006) jeq      #0x3a       jt 7    jf 8         # Is ICMPv6 (58)? → MATCH, else DROP
+//	(007) ret      #262144                          # MATCH
+//	(008) ret      #0                               # DROP
+//
+// In contrast, when transport filters are present (e.g., ports), the Fragment Extension
+// Header check is omitted because tcpdump/libpcap does not add it:
+//
+// Example: 'ip6 proto 6 and dst port 80' generates:
+//
+//	(000) ldh      [12]                             # Load EtherType
+//	(001) jeq      #0x86dd     jt 2    jf 7         # Is IPv6?
+//	(002) ldb      [20]                             # Load Next Header
+//	(003) jeq      #0x6        jt 4    jf 7         # Is TCP (6)?
+//	(004) ldh      [56]                             # Load TCP Dst Port
+//	(005) jeq      #0x50       jt 6    jf 7         # Is port 80?
+//	(006) ret      #262144                          # MATCH
+//	(007) ret      #0                               # DROP
 func appendProtocolFilters(inst []bpf.Instruction, handler *ipFamilyHandler, proto uint32, hasTransport bool, size uint8) []bpf.Instruction {
 	skipToEnd := func(curLen int) uint8 {
 		return size - uint8(curLen) - 2
@@ -209,7 +236,7 @@ func appendProtocolFilters(inst []bpf.Instruction, handler *ipFamilyHandler, pro
 	// to match libpcap/tcpdump behavior.
 	if handler.etherType == etherTypeIPv6 && !hasTransport {
 		// If protocol matches directly, skip past the extension header check.
-		inst = append(inst, compareProtocol(proto, ip6FragExtInstructionCnt, 0))
+		inst = append(inst, compareProtocol(proto, uint8(ip6FragExtInstructionCount), 0))
 		// If Next Header is NOT Fragment (44), jump to drop.
 		inst = append(inst, bpf.JumpIf{Cond: bpf.JumpEqual, Val: ip6FragmentNextHeader, SkipTrue: 0, SkipFalse: skipToEnd(len(inst))})
 		// Load the inner Next Header from inside the Fragment Extension Header.
@@ -700,7 +727,7 @@ func calculateInstructionsSize(handler *ipFamilyHandler, packet *crdv1alpha1.Pac
 			// IPv6 Fragment Extension Header handling adds 3 extra instructions
 			// when there are no transport-layer filters (ports, flags, ICMP).
 			if handler.etherType == etherTypeIPv6 && !hasTransportFilters(packet) {
-				count += ip6FragExtInstructionCnt
+				count += ip6FragExtInstructionCount
 			}
 		}
 		transport := packet.TransportHeader
