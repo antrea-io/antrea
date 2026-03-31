@@ -12,24 +12,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//go:build ignore
-// +build ignore
-
-package main
+package capture
 
 import (
 	"bytes"
 	"fmt"
-	"go/ast"
 	"go/format"
-	"go/parser"
-	"go/token"
-	"log"
 	"os"
 	"os/exec"
 	"sort"
 	"strconv"
 	"strings"
+	"testing"
 
 	"golang.org/x/net/bpf"
 )
@@ -81,116 +75,23 @@ func parseTcpdumpRawOutput(output string) ([]bpf.RawInstruction, error) {
 	return instructions, nil
 }
 
-func extractFilterInputsFromInputsTest(filePath string) (map[string]string, error) {
-	fset := token.NewFileSet()
-	file, err := parser.ParseFile(fset, filePath, nil, parser.ParseComments)
-	if err != nil {
-		return nil, fmt.Errorf("parse %s: %w", filePath, err)
+// TestUpdateBPFTestdata regenerates the reference BPF test data file by running
+// tcpdump -ddd for each filter in BPFTestCases. It reads the BPFTestCases
+// variable directly rather than parsing the Go source file.
+//
+// Run with: go test -run TestUpdateBPFTestdata -update
+func TestUpdateBPFTestdata(t *testing.T) {
+	if os.Getenv("UPDATE_BPF_TESTDATA") == "" {
+		t.Skip("set UPDATE_BPF_TESTDATA=1 to regenerate BPF test data")
 	}
 
-	var casesLit *ast.CompositeLit
-	for _, decl := range file.Decls {
-		genDecl, ok := decl.(*ast.GenDecl)
-		if !ok || genDecl.Tok != token.VAR {
-			continue
+	filters := make(map[string]string, len(BPFTestCases))
+	for _, tc := range BPFTestCases {
+		if tc.TcpdumpFilter == "" {
+			t.Fatalf("test case %q has no TcpdumpFilter", tc.Name)
 		}
-		for _, spec := range genDecl.Specs {
-			valueSpec, ok := spec.(*ast.ValueSpec)
-			if !ok {
-				continue
-			}
-			for i, name := range valueSpec.Names {
-				if name.Name != "BPFTestCases" || i >= len(valueSpec.Values) {
-					continue
-				}
-				if lit, ok := valueSpec.Values[i].(*ast.CompositeLit); ok {
-					casesLit = lit
-					break
-				}
-			}
-			if casesLit != nil {
-				break
-			}
-		}
-		if casesLit != nil {
-			break
-		}
+		filters[tc.Name] = tc.TcpdumpFilter
 	}
-	if casesLit == nil {
-		return nil, fmt.Errorf("BPFTestCases declaration not found in %s", filePath)
-	}
-
-	readString := func(expr ast.Expr) (string, bool, error) {
-		lit, ok := expr.(*ast.BasicLit)
-		if !ok || lit.Kind != token.STRING {
-			return "", false, nil
-		}
-		value, err := strconv.Unquote(lit.Value)
-		if err != nil {
-			return "", false, fmt.Errorf("invalid string literal %s: %w", lit.Value, err)
-		}
-		return value, true, nil
-	}
-
-	filters := make(map[string]string)
-	for _, elt := range casesLit.Elts {
-		testCaseLit, ok := elt.(*ast.CompositeLit)
-		if !ok {
-			continue
-		}
-
-		var (
-			name   string
-			filter string
-		)
-
-		for _, field := range testCaseLit.Elts {
-			kv, ok := field.(*ast.KeyValueExpr)
-			if !ok {
-				continue
-			}
-			key, ok := kv.Key.(*ast.Ident)
-			if !ok {
-				continue
-			}
-
-			switch key.Name {
-			case "Name":
-				value, ok, err := readString(kv.Value)
-				if err != nil {
-					return nil, fmt.Errorf("extract Name at %s: %w", fset.Position(kv.Pos()), err)
-				}
-				if ok {
-					name = value
-				}
-			case "TcpdumpFilter":
-				value, ok, err := readString(kv.Value)
-				if err != nil {
-					return nil, fmt.Errorf("extract TcpdumpFilter at %s: %w", fset.Position(kv.Pos()), err)
-				}
-				if ok {
-					filter = value
-				}
-			}
-		}
-
-		if name != "" && filter != "" {
-			filters[name] = filter
-		}
-	}
-
-	if len(filters) == 0 {
-		return nil, fmt.Errorf("no BPF test case filters found in %s", filePath)
-	}
-	return filters, nil
-}
-
-func main() {
-	filterInputs, err := extractFilterInputsFromInputsTest("inputs_test.go")
-	if err != nil {
-		log.Fatalf("failed to load tcpdump filters from inputs_test.go: %v", err)
-	}
-	log.Println("Generating reference BPF instructions from BPFTestCases...")
 
 	var b bytes.Buffer
 	b.WriteString(`// Copyright 2026 Antrea Authors.
@@ -215,24 +116,24 @@ import "golang.org/x/net/bpf"
 var generatedBPFTestCases = map[string][]bpf.RawInstruction{
 `)
 
-	names := make([]string, 0, len(filterInputs))
-	for name := range filterInputs {
+	names := make([]string, 0, len(filters))
+	for name := range filters {
 		names = append(names, name)
 	}
 	sort.Strings(names)
 
 	for _, name := range names {
-		filter := filterInputs[name]
-		log.Printf("Running tcpdump for: %s", name)
+		filter := filters[name]
+		t.Logf("Running tcpdump for: %s", name)
 		cmd := exec.Command("tcpdump", "-ddd", filter)
 		out, err := cmd.Output()
 		if err != nil {
-			log.Fatalf("tcpdump failed for '%s': %v", filter, err)
+			t.Fatalf("tcpdump failed for %q: %v", filter, err)
 		}
 
 		rawInsts, err := parseTcpdumpRawOutput(string(out))
 		if err != nil {
-			log.Fatalf("Failed to parse tcpdump -ddd output for '%s': %v", name, err)
+			t.Fatalf("failed to parse tcpdump output for %q: %v", name, err)
 		}
 
 		b.WriteString(fmt.Sprintf("\t%q: {\n", name))
@@ -246,13 +147,12 @@ var generatedBPFTestCases = map[string][]bpf.RawInstruction{
 
 	formatted, err := format.Source(b.Bytes())
 	if err != nil {
-		log.Fatalf("Failed to format generated source: %v", err)
+		t.Fatalf("failed to format generated source: %v", err)
 	}
 
-	err = os.WriteFile("zz_generated_bpf_testdata_test.go", formatted, 0o644)
-	if err != nil {
-		log.Fatalf("Failed to write to file: %v", err)
+	if err := os.WriteFile("zz_generated_bpf_testdata_test.go", formatted, 0o644); err != nil {
+		t.Fatalf("failed to write file: %v", err)
 	}
 
-	log.Println("Successfully generated zz_generated_bpf_testdata_test.go!")
+	t.Log("Successfully generated zz_generated_bpf_testdata_test.go!")
 }

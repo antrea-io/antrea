@@ -21,11 +21,10 @@ set -o pipefail
 CUR_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PKG_ROOT="$(cd "${CUR_DIR}/.." && pwd)"
 
-# Ensure we are in the package root to run the go script.
 pushd "${PKG_ROOT}" > /dev/null
 
 echo "Generating BPF test data..."
-go run testdata/generate_bpf_testdata.go
+UPDATE_BPF_TESTDATA=1 go test -run TestUpdateBPFTestdata -count=1 -v
 
 popd > /dev/null
 
