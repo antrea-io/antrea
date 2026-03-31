@@ -342,6 +342,57 @@ func TestConnectionStore_DeleteConnectionByKey(t *testing.T) {
 	}
 }
 
+func TestConntrackConnectionStore_DeleteAllConnections(t *testing.T) {
+	metrics.TotalAntreaConnectionsInConnTrackTable.Set(0)
+
+	cs := NewConntrackConnectionStore(nil, nil, nil, testFlowExporterOptions)
+
+	conns := []*connection.Connection{
+		{
+			FlowKey: connection.Tuple{
+				SourceAddress:      netip.MustParseAddr("10.0.0.1"),
+				DestinationAddress: netip.MustParseAddr("10.0.0.10"),
+				Protocol:           6,
+				SourcePort:         10001,
+				DestinationPort:    80,
+			},
+		},
+		{
+			FlowKey: connection.Tuple{
+				SourceAddress:      netip.MustParseAddr("10.0.0.2"),
+				DestinationAddress: netip.MustParseAddr("10.0.0.11"),
+				Protocol:           6,
+				SourcePort:         10002,
+				DestinationPort:    80,
+			},
+		},
+		{
+			FlowKey: connection.Tuple{
+				SourceAddress:      netip.MustParseAddr("10.0.0.3"),
+				DestinationAddress: netip.MustParseAddr("10.0.0.12"),
+				Protocol:           17,
+				SourcePort:         10003,
+				DestinationPort:    53,
+			},
+		},
+	}
+
+	for _, conn := range conns {
+		addConnToStore(cs, conn)
+	}
+
+	checkAntreaConnectionMetrics(t, len(conns))
+	assert.Equal(t, len(conns), cs.GetPriorityQueue().Len())
+	assert.Equal(t, len(conns), len(cs.GetPriorityQueue().KeyToItem))
+
+	deletedCount := cs.DeleteAllConnections()
+	assert.Equal(t, len(conns), deletedCount)
+	assert.Equal(t, 0, cs.NumConnections())
+	checkAntreaConnectionMetrics(t, 0)
+	assert.Equal(t, 0, cs.GetPriorityQueue().Len())
+	assert.Equal(t, 0, len(cs.GetPriorityQueue().KeyToItem))
+}
+
 func TestConntrackConnectionStore_AddOrUpdateConns(t *testing.T) {
 	refTime := time.Now()
 	tuple1 := connection.Tuple{SourceAddress: netip.MustParseAddr("1.1.1.1"), DestinationAddress: netip.MustParseAddr("2.2.2.2"), Protocol: 6, SourcePort: 50000, DestinationPort: 100}
