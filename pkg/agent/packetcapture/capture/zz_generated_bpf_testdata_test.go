@@ -16,7 +16,7 @@ package capture
 
 import "golang.org/x/net/bpf"
 
-// generatedBPFTestCases contains the reference BPF arrays generated via tcpdump -d.
+// generatedBPFTestCases contains the reference BPF arrays generated via tcpdump -ddd.
 var generatedBPFTestCases = map[string][]bpf.RawInstruction{
 	"ICMP dst-unreachable with code 1": {
 		{Op: 40, Jt: 0, Jf: 0, K: 12},

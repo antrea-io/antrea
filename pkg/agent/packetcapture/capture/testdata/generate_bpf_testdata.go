@@ -27,7 +27,6 @@ import (
 	"log"
 	"os"
 	"os/exec"
-	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -35,126 +34,49 @@ import (
 	"golang.org/x/net/bpf"
 )
 
-// Pre-compiled regular expressions for parsing tcpdump -d output lines.
-var (
-	reLoadAbsolute = regexp.MustCompile(`^\((\d+)\)\s+(ldh|ldb|ld)\s+\[(\d+)\]$`)
-	reJump         = regexp.MustCompile(`^\((\d+)\)\s+(jeq|jset)\s+#(0x[\da-fA-F]+)\s+jt\s+(\d+)\s+jf\s+(\d+)$`)
-	reReturn       = regexp.MustCompile(`^\((\d+)\)\s+ret\s+#(\d+)$`)
-	reLoadMemShift = regexp.MustCompile(`^\((\d+)\)\s+ldxb\s+4\*\(\[(\d+)\]&0xf\)$`)
-	reLoadIndirect = regexp.MustCompile(`^\((\d+)\)\s+(ldh|ldb|ld)\s+\[x\s*\+\s*(\d+)\]$`)
-	reALUAnd       = regexp.MustCompile(`^\((\d+)\)\s+and\s+#(0x[\da-fA-F]+)$`)
-	reTax          = regexp.MustCompile(`^\((\d+)\)\s+tax$`)
-)
-
-func sizeFromOpcode(opcode string) int {
-	switch opcode {
-	case "ld":
-		return 4
-	case "ldh":
-		return 2
-	case "ldb":
-		return 1
-	default:
-		return 0
+// parseTcpdumpRawOutput parses the output of `tcpdump -ddd` which prints raw BPF
+// numeric instructions. The first line is the instruction count, followed by
+// one line per instruction in the format: "opcode jt jf k".
+func parseTcpdumpRawOutput(output string) ([]bpf.RawInstruction, error) {
+	lines := strings.Split(strings.TrimSpace(output), "\n")
+	if len(lines) < 1 {
+		return nil, fmt.Errorf("empty tcpdump -ddd output")
 	}
-}
-
-func parseLine(line string) (bpf.Instruction, error) {
-	line = strings.TrimSpace(line)
-	if line == "" {
-		return nil, nil
+	count, err := strconv.Atoi(strings.TrimSpace(lines[0]))
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse instruction count %q: %w", lines[0], err)
 	}
-	if m := reLoadAbsolute.FindStringSubmatch(line); m != nil {
-		off, err := strconv.ParseUint(m[3], 10, 32)
-		if err != nil {
-			return nil, fmt.Errorf("failed to parse offset %q: %v", m[3], err)
-		}
-		return bpf.LoadAbsolute{Off: uint32(off), Size: sizeFromOpcode(m[2])}, nil
+	if len(lines)-1 != count {
+		return nil, fmt.Errorf("expected %d instructions but got %d lines", count, len(lines)-1)
 	}
-	if m := reJump.FindStringSubmatch(line); m != nil {
-		idx, err := strconv.ParseUint(m[1], 10, 32)
+	instructions := make([]bpf.RawInstruction, 0, count)
+	for i := 1; i <= count; i++ {
+		fields := strings.Fields(strings.TrimSpace(lines[i]))
+		if len(fields) != 4 {
+			return nil, fmt.Errorf("line %d: expected 4 fields, got %d: %q", i, len(fields), lines[i])
+		}
+		op, err := strconv.ParseUint(fields[0], 10, 16)
 		if err != nil {
-			return nil, fmt.Errorf("failed to parse instruction index %q: %v", m[1], err)
+			return nil, fmt.Errorf("line %d: invalid opcode %q: %w", i, fields[0], err)
 		}
-		val, err := strconv.ParseUint(m[3][2:], 16, 32)
+		jt, err := strconv.ParseUint(fields[1], 10, 8)
 		if err != nil {
-			return nil, fmt.Errorf("failed to parse jump value %q: %v", m[3], err)
+			return nil, fmt.Errorf("line %d: invalid jt %q: %w", i, fields[1], err)
 		}
-		jt, err := strconv.ParseUint(m[4], 10, 32)
+		jf, err := strconv.ParseUint(fields[2], 10, 8)
 		if err != nil {
-			return nil, fmt.Errorf("failed to parse jt offset %q: %v", m[4], err)
+			return nil, fmt.Errorf("line %d: invalid jf %q: %w", i, fields[2], err)
 		}
-		jf, err := strconv.ParseUint(m[5], 10, 32)
+		k, err := strconv.ParseUint(fields[3], 10, 32)
 		if err != nil {
-			return nil, fmt.Errorf("failed to parse jf offset %q: %v", m[5], err)
+			return nil, fmt.Errorf("line %d: invalid k %q: %w", i, fields[3], err)
 		}
-		if jt <= idx || jf <= idx {
-			return nil, fmt.Errorf("invalid jump offsets: jt=%d, jf=%d must be > idx=%d", jt, jf, idx)
-		}
-		skipTrue := jt - idx - 1
-		skipFalse := jf - idx - 1
-		if skipTrue > 255 || skipFalse > 255 {
-			return nil, fmt.Errorf("jump offsets exceed uint8 range: skipTrue=%d, skipFalse=%d", skipTrue, skipFalse)
-		}
-		cond := bpf.JumpEqual
-		if m[2] == "jset" {
-			cond = bpf.JumpBitsSet
-		}
-		return bpf.JumpIf{
-			Cond:      cond,
-			Val:       uint32(val),
-			SkipTrue:  uint8(skipTrue),
-			SkipFalse: uint8(skipFalse),
-		}, nil
-	}
-	if m := reReturn.FindStringSubmatch(line); m != nil {
-		val, err := strconv.ParseUint(m[2], 10, 32)
-		if err != nil {
-			return nil, fmt.Errorf("failed to parse return value %q: %v", m[2], err)
-		}
-		return bpf.RetConstant{Val: uint32(val)}, nil
-	}
-	if m := reLoadMemShift.FindStringSubmatch(line); m != nil {
-		off, err := strconv.ParseUint(m[2], 10, 32)
-		if err != nil {
-			return nil, fmt.Errorf("failed to parse memory offset %q: %v", m[2], err)
-		}
-		return bpf.LoadMemShift{Off: uint32(off)}, nil
-	}
-	if m := reLoadIndirect.FindStringSubmatch(line); m != nil {
-		off, err := strconv.ParseUint(m[3], 10, 32)
-		if err != nil {
-			return nil, fmt.Errorf("failed to parse indirect offset %q: %v", m[3], err)
-		}
-		return bpf.LoadIndirect{Off: uint32(off), Size: sizeFromOpcode(m[2])}, nil
-	}
-	if m := reALUAnd.FindStringSubmatch(line); m != nil {
-		val, err := strconv.ParseUint(m[2][2:], 16, 32)
-		if err != nil {
-			return nil, fmt.Errorf("failed to parse and constant %q: %v", m[2], err)
-		}
-		return bpf.ALUOpConstant{Op: bpf.ALUOpAnd, Val: uint32(val)}, nil
-	}
-	if reTax.MatchString(line) {
-		return bpf.TAX{}, nil
-	}
-	return nil, fmt.Errorf("unsupported tcpdump instruction format: %q", line)
-}
-
-func parseTcpdumpOutput(output string) ([]bpf.Instruction, error) {
-	var instructions []bpf.Instruction
-	for _, line := range strings.Split(output, "\n") {
-		line = strings.TrimSpace(line)
-		if line == "" || strings.HasPrefix(line, "Warning:") {
-			continue
-		}
-		inst, err := parseLine(line)
-		if err != nil {
-			return nil, fmt.Errorf("parsing tcpdump output: %w", err)
-		}
-		if inst != nil {
-			instructions = append(instructions, inst)
-		}
+		instructions = append(instructions, bpf.RawInstruction{
+			Op: uint16(op),
+			Jt: uint8(jt),
+			Jf: uint8(jf),
+			K:  uint32(k),
+		})
 	}
 	return instructions, nil
 }
@@ -289,7 +211,7 @@ package capture
 
 import "golang.org/x/net/bpf"
 
-// generatedBPFTestCases contains the reference BPF arrays generated via tcpdump -d.
+// generatedBPFTestCases contains the reference BPF arrays generated via tcpdump -ddd.
 var generatedBPFTestCases = map[string][]bpf.RawInstruction{
 `)
 
@@ -302,20 +224,15 @@ var generatedBPFTestCases = map[string][]bpf.RawInstruction{
 	for _, name := range names {
 		filter := filterInputs[name]
 		log.Printf("Running tcpdump for: %s", name)
-		cmd := exec.Command("tcpdump", "-d", filter)
-		out, err := cmd.CombinedOutput()
+		cmd := exec.Command("tcpdump", "-ddd", filter)
+		out, err := cmd.Output()
 		if err != nil {
-			log.Fatalf("tcpdump failed for '%s': %v\nOutput:%s", filter, err, string(out))
+			log.Fatalf("tcpdump failed for '%s': %v", filter, err)
 		}
 
-		insts, err := parseTcpdumpOutput(string(out))
+		rawInsts, err := parseTcpdumpRawOutput(string(out))
 		if err != nil {
-			log.Fatalf("Failed to parse tcpdump output for '%s': %v", name, err)
-		}
-
-		rawInsts, err := bpf.Assemble(insts)
-		if err != nil {
-			log.Fatalf("Failed to assemble BPF for '%s': %v", name, err)
+			log.Fatalf("Failed to parse tcpdump -ddd output for '%s': %v", name, err)
 		}
 
 		b.WriteString(fmt.Sprintf("\t%q: {\n", name))
