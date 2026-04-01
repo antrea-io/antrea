@@ -283,6 +283,10 @@ func (d *AntreaIPAM) Add(args *invoke.Args, k8sArgs *types.K8sArgs, networkConfi
 			allocErrs = append(allocErrs, fmt.Errorf("failed to allocate IPv4 address for Pod %s/%s: %w", string(k8sArgs.K8S_POD_NAMESPACE), string(k8sArgs.K8S_POD_NAME), lastIPv4ExhaustedErr))
 		} else {
 			// defensive; should normally be exhausted
+			// Any allocator error other than ErrPoolExhausted is returned inside the allocation
+			// loop. If we reach here with an IPv4 pool configured but no IPv4 allocated and no
+			// recorded exhaustion, treat it as an unexpected invariant violation and return a
+			// family-specific error instead of only the generic no-IP check below.
 			allocErrs = append(allocErrs, fmt.Errorf("failed to allocate IPv4 address for Pod %s/%s", string(k8sArgs.K8S_POD_NAMESPACE), string(k8sArgs.K8S_POD_NAME)))
 		}
 	}
@@ -291,6 +295,7 @@ func (d *AntreaIPAM) Add(args *invoke.Args, k8sArgs *types.K8sArgs, networkConfi
 			allocErrs = append(allocErrs, fmt.Errorf("failed to allocate IPv6 address for Pod %s/%s: %w", string(k8sArgs.K8S_POD_NAMESPACE), string(k8sArgs.K8S_POD_NAME), lastIPv6ExhaustedErr))
 		} else {
 			// defensive; should normally be exhausted
+			// Same as the IPv4 branch above.
 			allocErrs = append(allocErrs, fmt.Errorf("failed to allocate IPv6 address for Pod %s/%s", string(k8sArgs.K8S_POD_NAMESPACE), string(k8sArgs.K8S_POD_NAME)))
 		}
 	}
