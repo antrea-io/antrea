@@ -217,6 +217,27 @@ func (e *IPFIXExporter) Run(ctx context.Context, buf ringbuffer.BroadcastBuffer[
 		default:
 		}
 
+		// When not connected, wait until the backoff period expires before consuming
+		// more records. This prevents records from being consumed and dropped while a
+		// reconnection is pending, which could cause permanent loss of inactive flow
+		// records (removed from the aggregation process after being produced to the
+		// ring buffer).
+		if e.exportingProcess == nil {
+			if remaining := e.initNextAttempt.Sub(e.clock.Now()); remaining > 0 {
+				select {
+				case <-ctx.Done():
+					return
+				case <-flushTicker.C:
+					// flush() is a no-op when exportingProcess is nil.
+					if err := e.flush(); err != nil {
+						klog.ErrorS(err, "Error when flushing IPFIX exporter")
+					}
+				case <-time.After(remaining):
+				}
+				continue
+			}
+		}
+
 		record, n, _, shutdown := consumer.Consume()
 		if n == 0 {
 			if shutdown {

@@ -132,6 +132,95 @@ func TestIPFIXExporter_Run(t *testing.T) {
 	})
 }
 
+// TestIPFIXExporter_Run_Backoff verifies that records produced to the ring buffer
+// while the exporter is in backoff state are not dropped. They should be held in
+// the ring buffer and processed after the backoff period expires.
+func TestIPFIXExporter_Run_Backoff(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+
+		mockIPFIXExpProc := ipfixtesting.NewMockIPFIXExportingProcess(ctrl)
+		mockIPFIXBufferedExp := ipfixtesting.NewMockIPFIXBufferedExporter(ctrl)
+		mockIPFIXRegistry := ipfixtesting.NewMockIPFIXRegistry(ctrl)
+		record := flowaggregatortesting.PrepareTestFlowRecord(true)
+
+		initCallCount := 0
+		initIPFIXExportingProcessSaved := initIPFIXExportingProcess
+		initIPFIXExportingProcess = func(exporter *IPFIXExporter) error {
+			initCallCount++
+			if initCallCount == 1 {
+				// First call fails, triggering a 1-second backoff.
+				return fmt.Errorf("connection error")
+			}
+			exporter.exportingProcess = mockIPFIXExpProc
+			exporter.bufferedExporter = mockIPFIXBufferedExp
+			return nil
+		}
+		defer func() {
+			initIPFIXExportingProcess = initIPFIXExportingProcessSaved
+		}()
+
+		ipfixExporter := &IPFIXExporter{
+			externalFlowCollectorAddr:  "",
+			externalFlowCollectorProto: "",
+			includeK8sNames:            true,
+			templateIDv4:               testTemplateIDv4,
+			templateIDv6:               testTemplateIDv6,
+			registry:                   mockIPFIXRegistry,
+			aggregatorMode:             flowaggregatorconfig.AggregatorModeAggregate,
+			observationDomainID:        testObservationDomainID,
+			initBackoff:                newInitBackoff(),
+			clock:                      clock.RealClock{},
+		}
+		createElementList(flowaggregatorconfig.AggregatorModeAggregate, true, false, false, mockIPFIXRegistry)
+		ipfixExporter.elementsV4, _ = ipfixExporter.prepareElements(false)
+		createElementList(flowaggregatorconfig.AggregatorModeAggregate, true, false, true, mockIPFIXRegistry)
+		ipfixExporter.elementsV6, _ = ipfixExporter.prepareElements(true)
+
+		buf := ringbuffer.NewBroadcastBuffer[*flowpb.Flow](8)
+		defer buf.Shutdown()
+
+		// AddRecord is expected exactly once: for the record produced during backoff,
+		// after the backoff expires and the connection is re-established.
+		mockIPFIXBufferedExp.EXPECT().AddRecord(gomock.Cond(func(r ipfixentities.Record) bool {
+			return r.GetTemplateID() == testTemplateIDv4
+		})).Return(nil)
+		mockIPFIXBufferedExp.EXPECT().Flush().Return(nil).AnyTimes()
+		mockIPFIXExpProc.EXPECT().CloseConnToCollector().AnyTimes()
+
+		ctx, cancel := context.WithCancel(t.Context())
+		doneCh := make(chan struct{})
+		go func() {
+			defer close(doneCh)
+			ipfixExporter.Run(ctx, buf)
+		}()
+
+		// Wait until the Run goroutine is blocked in consumer.Consume() (no backoff yet
+		// on initial start).
+		synctest.Wait()
+		// record1: triggers the first (failed) init attempt; this record is dropped
+		// because it was consumed before the backoff was established.
+		buf.Produce(record)
+		// Wait for the Run goroutine to process record1 (init fails, backoff starts).
+		// The goroutine then enters the backoff wait (time.After(1s)).
+		synctest.Wait()
+
+		// Produce record2 while Run is blocked in the 1-second backoff wait.
+		// With the fix, the record stays in the ring buffer instead of being consumed
+		// and dropped.
+		buf.Produce(record)
+
+		// Advance fake time past the 1-second backoff. This unblocks the backoff wait,
+		// after which Run consumes record2, re-establishes the connection, and calls
+		// AddRecord.
+		time.Sleep(1 * time.Second)
+		synctest.Wait()
+
+		cancel()
+		<-doneCh
+	})
+}
+
 func TestIPFIXExporter_createAndSendTemplate(t *testing.T) {
 	runTest := func(t *testing.T, isIPv6 bool) {
 		ctrl := gomock.NewController(t)

@@ -28,6 +28,7 @@ import (
 
 	"github.com/fsnotify/fsnotify"
 	"github.com/google/uuid"
+	"google.golang.org/protobuf/proto"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/klog/v2"
@@ -576,7 +577,14 @@ func (fa *flowAggregator) sendAggregatedRecord(key intermediate.FlowKey, record 
 		}
 		fa.aggregationProcess.SetExternalFieldsFilled(record, true)
 	}
-	fa.produceRecord(record.Record)
+	// Clone the record before producing it to the ring buffer. The ring buffer
+	// holds only a pointer, and ResetStatAndThroughputElementsInRecord (called
+	// below) mutates the same object in-place. Without a clone, exporters
+	// consuming from the ring buffer would race against the reset and read
+	// zeroed delta counts, causing the exported records to be filtered out by
+	// the test (which rejects records with octetDeltaCount == 0).
+	snapshot := proto.Clone(record.Record).(*flowpb.Flow)
+	fa.produceRecord(snapshot)
 	if err := fa.aggregationProcess.ResetStatAndThroughputElementsInRecord(record.Record); err != nil {
 		return err
 	}
