@@ -38,6 +38,7 @@ var (
 	cleanupStaleUDPSvcConntrackStatus string
 	serviceExternalIPStatus           string
 	egressSeparateSubnetStatus        string
+	antreaNodeConfigStatus            string
 )
 
 func Test_getGatesResponse(t *testing.T) {
@@ -55,6 +56,7 @@ func Test_getGatesResponse(t *testing.T) {
 			},
 			want: []apis.FeatureGateResponse{
 				{Component: "agent", Name: "AntreaIPAM", Status: "Disabled", Version: "ALPHA"},
+				{Component: "agent", Name: "AntreaNodeConfig", Status: antreaNodeConfigStatus, Version: "BETA"},
 				{Component: "agent", Name: "AntreaPolicy", Status: "Disabled", Version: "BETA"},
 				{Component: "agent", Name: "AntreaProxy", Status: "Enabled", Version: "GA"},
 				{Component: "agent", Name: "BGPPolicy", Status: "Disabled", Version: "ALPHA"},
@@ -230,11 +232,14 @@ func init() {
 	multicastStatus = "Enabled"
 	cleanupStaleUDPSvcConntrackStatus = "Enabled"
 	serviceExternalIPStatus = "Enabled"
+	antreaNodeConfigStatus = "Enabled"
 	if runtime.IsWindowsPlatform() {
 		egressStatus = "Disabled"
 		egressSeparateSubnetStatus = "Disabled"
 		multicastStatus = "Disabled"
 		cleanupStaleUDPSvcConntrackStatus = "Disabled"
 		serviceExternalIPStatus = "Disabled"
+		// AntreaNodeConfig is unsupported on Windows; pkg/features init() forces its default off.
+		antreaNodeConfigStatus = "Disabled"
 	}
 }
