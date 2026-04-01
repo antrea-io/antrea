@@ -1,3 +1,5 @@
+//go:build update_bpf_testdata
+
 // Copyright 2026 Antrea Authors.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -16,6 +18,7 @@ package capture
 
 import (
 	"bytes"
+	"flag"
 	"fmt"
 	"go/format"
 	"os"
@@ -75,14 +78,16 @@ func parseTcpdumpRawOutput(output string) ([]bpf.RawInstruction, error) {
 	return instructions, nil
 }
 
+var update = flag.Bool("update", false, "Regenerate BPF test data")
+
 // TestUpdateBPFTestdata regenerates the reference BPF test data file by running
 // tcpdump -ddd for each filter in BPFTestCases. It reads the BPFTestCases
 // variable directly rather than parsing the Go source file.
 //
-// Run with: go test -run TestUpdateBPFTestdata -update
+// Run with: go test -tags update_bpf_testdata -run TestUpdateBPFTestdata -update
 func TestUpdateBPFTestdata(t *testing.T) {
-	if os.Getenv("UPDATE_BPF_TESTDATA") == "" {
-		t.Skip("set UPDATE_BPF_TESTDATA=1 to regenerate BPF test data")
+	if !*update {
+		t.Skip("set -update to regenerate BPF test data")
 	}
 
 	filters := make(map[string]string, len(BPFTestCases))
@@ -94,7 +99,7 @@ func TestUpdateBPFTestdata(t *testing.T) {
 	}
 
 	var b bytes.Buffer
-	b.WriteString(`// Copyright 2026 Antrea Authors.
+	fmt.Fprintf(&b, `// Copyright 2026 Antrea Authors.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.

@@ -228,6 +228,8 @@ jobs:
       run: make test-tidy
     - name: Check code generation
       run: ./ci/check-codegen.sh
+    - name: Check PacketCapture BPF generated test data
+      run: go test ./pkg/agent/packetcapture/capture -run TestBPFEquivalenceWithTcpdump -count=1
     - name: Check manifest
       run: ./ci/check-manifest.sh
     - name: Check copyright

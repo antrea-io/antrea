@@ -18,13 +18,13 @@ set -o errexit
 set -o nounset
 set -o pipefail
 
-CUR_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PKG_ROOT="$(cd "${CUR_DIR}/.." && pwd)"
+THIS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ROOT_DIR="$(cd "${THIS_DIR}/.." && pwd)"
 
-pushd "${PKG_ROOT}" > /dev/null
+pushd "${ROOT_DIR}" > /dev/null
 
 echo "Generating BPF test data..."
-UPDATE_BPF_TESTDATA=1 go test -run TestUpdateBPFTestdata -count=1 -v
+go test ./pkg/agent/packetcapture/capture -tags update_bpf_testdata -run TestUpdateBPFTestdata -count=1 -v -update
 
 popd > /dev/null
 

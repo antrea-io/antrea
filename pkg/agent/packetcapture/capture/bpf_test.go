@@ -1086,13 +1086,13 @@ func TestPacketCaptureCompileBPF(t *testing.T) {
 }
 
 // BPFTestCases is the source of truth for BPF equivalence tests.
-// Reference BPF bytecode is generated offline using pkg/agent/packetcapture/capture/testdata/generate_bpf_testdata.sh.
+// Reference BPF bytecode is generated offline using hack/generate-bpf-testdata.sh.
 func TestBPFEquivalenceWithTcpdump(t *testing.T) {
 	for _, tt := range BPFTestCases {
 		t.Run(tt.Name, func(t *testing.T) {
 			expectedRaw, ok := generatedBPFTestCases[tt.Name]
 			if !ok {
-				t.Fatalf("No generated test data found for %q. Did you run ./testdata/generate_bpf_testdata.sh?", tt.Name)
+				t.Fatalf("No generated test data found for %q. Did you run ./hack/generate-bpf-testdata.sh?", tt.Name)
 			}
 
 			antreaProg := compilePacketFilter(tt.Packet, tt.SrcIP, tt.DstIP, tt.Direction)
