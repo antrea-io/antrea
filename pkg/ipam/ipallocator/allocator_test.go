@@ -304,6 +304,12 @@ func TestAllocateRange(t *testing.T) {
 			assert.Equal(t, tt.wantFirst, ips[0])
 			assert.Equal(t, tt.wantLast, ips[len(ips)-1])
 			assert.Equal(t, prevUsed+len(ips), tt.ipAllocator.Used())
+
+			// Verify every returned IP is marked allocated and cannot be re-allocated.
+			for _, ip := range ips {
+				err := tt.ipAllocator.AllocateIP(ip)
+				assert.Errorf(t, err, "expected error re-allocating %v, but got nil", ip)
+			}
 		})
 	}
 }
