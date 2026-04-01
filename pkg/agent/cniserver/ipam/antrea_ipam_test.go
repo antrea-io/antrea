@@ -646,3 +646,63 @@ func TestSecondaryNetworkAdd(t *testing.T) {
 		})
 	}
 }
+
+func TestGetIPPoolsByPod_SkipEmptyIPTokens(t *testing.T) {
+	stopCh := make(chan struct{})
+	defer close(stopCh)
+
+	k8sClient, crdClient := initTestClients()
+
+	// Pod with trailing comma in AntreaIPAMPodIP annotation.
+	_, err := k8sClient.CoreV1().Pods(testPear).Create(context.Background(), &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "pear-trailing-comma",
+			Namespace: testPear,
+			Annotations: map[string]string{
+				annotations.AntreaIPAMAnnotationKey:      testPear,
+				annotations.AntreaIPAMPodIPAnnotationKey: "10.2.3.199,",
+			},
+		},
+		Spec: corev1.PodSpec{NodeName: "fakeNode"},
+	}, metav1.CreateOptions{})
+	require.NoError(t, err)
+
+	informerFactory := informers.NewSharedInformerFactory(k8sClient, 0)
+	crdInformerFactory := crdinformers.NewSharedInformerFactory(crdClient, 0)
+	listOptions := func(options *metav1.ListOptions) {
+		options.FieldSelector = fields.OneTermEqualSelector("spec.nodeName", "fakeNode").String()
+	}
+	localPodInformer := coreinformers.NewFilteredPodInformer(
+		k8sClient,
+		metav1.NamespaceAll,
+		0,
+		cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc},
+		listOptions,
+	)
+
+	c, err := InitializeAntreaIPAMController(
+		crdClient,
+		informerFactory.Core().V1().Namespaces(),
+		crdInformerFactory.Crd().V1beta1().IPPools(),
+		localPodInformer,
+		true,
+	)
+	require.NoError(t, err)
+
+	informerFactory.Start(stopCh)
+	go localPodInformer.Run(stopCh)
+	crdInformerFactory.Start(stopCh)
+
+	informerFactory.WaitForCacheSync(stopCh)
+	crdInformerFactory.WaitForCacheSync(stopCh)
+	require.True(t, cache.WaitForCacheSync(stopCh, localPodInformer.HasSynced), "failed to sync localPodInformer cache")
+
+	pools, ips, reservedOwner, ipErr := c.getIPPoolsByPod(testPear, "pear-trailing-comma")
+	require.NoError(t, ipErr)
+	require.Nil(t, reservedOwner)
+
+	require.Equal(t, []string{testPear}, pools)
+	require.Len(t, ips, 1)
+	require.NotNil(t, ips[0])
+	require.Equal(t, "10.2.3.199", ips[0].String())
+}
