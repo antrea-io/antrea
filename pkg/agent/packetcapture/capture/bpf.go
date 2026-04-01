@@ -42,20 +42,20 @@ const (
 	ip4HeaderSize            uint32 = 14
 	ip4HeaderFlags           uint32 = 20
 
-	ip6HeaderOffset          uint32 = 14
-	ip6HeaderSize            uint32 = 40
-	ip6NextHeaderOffset      uint32 = ip6HeaderOffset + 6             // 20
-	ip6SourceAddrOffset      uint32 = ip6HeaderOffset + 8             // 22
-	ip6DestinationAddrOffset uint32 = ip6HeaderOffset + 24            // 38
-	ip6L4HeaderOffset        uint32 = ip6HeaderOffset + ip6HeaderSize // 54
-	ip6SourcePort            uint32 = 0
-	ip6DestinationPort       uint32 = 2
-	ip6TCPFlags              uint32 = 13
-	ip6ICMPv6Type            uint32 = 0
-	ip6ICMPv6Code            uint32 = 1
-	ip6FragmentNextHeader    uint32 = 44                // IPv6 Fragment Extension Header
-	ip6FragExtInnerProtocol  uint32 = ip6L4HeaderOffset // offset of Next Header inside Fragment Ext Header
-	ip6FragExtInstructionCount int = 3 // number of extra instructions for fragment header handling
+	ip6HeaderOffset            uint32 = 14
+	ip6HeaderSize              uint32 = 40
+	ip6NextHeaderOffset        uint32 = ip6HeaderOffset + 6             // 20
+	ip6SourceAddrOffset        uint32 = ip6HeaderOffset + 8             // 22
+	ip6DestinationAddrOffset   uint32 = ip6HeaderOffset + 24            // 38
+	ip6L4HeaderOffset          uint32 = ip6HeaderOffset + ip6HeaderSize // 54
+	ip6SourcePort              uint32 = 0
+	ip6DestinationPort         uint32 = 2
+	ip6TCPFlags                uint32 = 13
+	ip6ICMPv6Type              uint32 = 0
+	ip6ICMPv6Code              uint32 = 1
+	ip6FragmentNextHeader      uint32 = 44                // IPv6 Fragment Extension Header
+	ip6FragExtInnerProtocol    uint32 = ip6L4HeaderOffset // offset of Next Header inside Fragment Ext Header
+	ip6FragExtInstructionCount int    = 3                 // number of extra instructions for fragment header handling
 )
 
 var (

@@ -136,9 +136,9 @@ var generatedBPFTestCases = map[string][]bpf.RawInstruction{
 			t.Fatalf("failed to parse tcpdump output for %q: %v", name, err)
 		}
 
-		b.WriteString(fmt.Sprintf("\t%q: {\n", name))
+		fmt.Fprintf(&b, "\t%q: {\n", name)
 		for _, raw := range rawInsts {
-			b.WriteString(fmt.Sprintf("\t\t{Op: %d, Jt: %d, Jf: %d, K: %d},\n", raw.Op, raw.Jt, raw.Jf, raw.K))
+			fmt.Fprintf(&b, "\t\t{Op: %d, Jt: %d, Jf: %d, K: %d},\n", raw.Op, raw.Jt, raw.Jf, raw.K)
 		}
 		b.WriteString("\t},\n")
 	}
@@ -150,7 +150,7 @@ var generatedBPFTestCases = map[string][]bpf.RawInstruction{
 		t.Fatalf("failed to format generated source: %v", err)
 	}
 
-	if err := os.WriteFile("zz_generated_bpf_testdata_test.go", formatted, 0o644); err != nil {
+	if err := os.WriteFile("zz_generated_bpf_testdata_test.go", formatted, 0o600); err != nil {
 		t.Fatalf("failed to write file: %v", err)
 	}
 
