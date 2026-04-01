@@ -224,6 +224,8 @@ func (cs *ConntrackConnectionStore) DeleteAllConnections() int {
 	defer cs.ReleaseConnStoreLock()
 	num := len(cs.connections)
 	clear(cs.connections)
+	metrics.TotalAntreaConnectionsInConnTrackTable.Set(0)
+	cs.expirePriorityQueue.Clear()
 	return num
 }
 
