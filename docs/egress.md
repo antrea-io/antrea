@@ -10,6 +10,9 @@
   - [EgressIP](#egressip)
   - [ExternalIPPool](#externalippool)
   - [Bandwidth](#bandwidth)
+- [Dual-stack Egress](#dual-stack-egress)
+  - [EgressIPs](#egressips)
+  - [ExternalIPPools](#externalippools)
 - [The ExternalIPPool resource](#the-externalippool-resource)
   - [IPRanges](#ipranges)
   - [SubnetInfo](#subnetinfo)
@@ -17,6 +20,7 @@
 - [Usage examples](#usage-examples)
   - [Configuring High-Availability Egress](#configuring-high-availability-egress)
   - [Configuring static Egress](#configuring-static-egress)
+  - [Configuring dual-stack Egress](#configuring-dual-stack-egress)
 - [Configuration options](#configuration-options)
 - [Reverse Path Filtering (rp_filter) Requirements](#reverse-path-filtering-rp_filter-requirements)
   - [Why loose rp_filter is required](#why-loose-rp_filter-is-required)
@@ -179,6 +183,70 @@ spec:
 status:
   egressNode: node01
 ```
+
+## Dual-stack Egress
+
+Starting with Antrea v2.7, an Egress can be configured with both an IPv4 and an
+IPv6 address, enabling dual-stack SNAT for selected Pods. Dual-stack Egress uses
+the `egressIPs` and `externalIPPools` fields instead of the single-stack
+`egressIP` and `externalIPPool` fields.
+
+A typical dual-stack Egress resource example:
+
+```yaml
+apiVersion: crd.antrea.io/v1beta1
+kind: Egress
+metadata:
+  name: egress-dual-stack
+spec:
+  appliedTo:
+    podSelector:
+      matchLabels:
+        app: web
+  egressIPs:
+  - 10.10.0.8
+  - 2001:db8::8
+  externalIPPools:
+  - pool-ipv4
+  - pool-ipv6
+status:
+  egressNode: node01
+  egressIPs:
+  - 10.10.0.8
+  - 2001:db8::8
+```
+
+### EgressIPs
+
+The `egressIPs` field specifies Egress IPs for both address families. Entries must
+be ordered as alternating IPv4/IPv6 pairs. In the current implementation, only the first
+IPv4/IPv6 pair is realized on the datapath; additional pairs are accepted by the
+API but are not processed by Antrea.
+
+The same allocation rules as `egressIP` apply to each entry:
+
+- If `egressIPs` is empty and `externalIPPools` is specified, IPs will be
+  allocated from the pools automatically.
+- If both are specified, each IP must belong to the corresponding pool at the
+  same index.
+- If only `egressIPs` is specified without `externalIPPools`, all IPs must be
+  assigned to a Node manually.
+
+`egressIPs` cannot be set together with the single-stack `egressIP` field.
+
+### ExternalIPPools
+
+The `externalIPPools` field specifies the IP pools corresponding to each entry
+in `egressIPs`. Each pool is associated with the IP at the same index in
+`egressIPs`.
+
+`externalIPPools` cannot be set together with the single-stack `externalIPPool`
+field.
+
+**Note**: Dual-stack Egress shares a single mark on the datapath for both
+address families, so both IPs are always co-located on the same Node. High
+availability works the same way as single-stack: if the Egress Node fails,
+both IPs are migrated to another eligible Node together.
 
 ## The ExternalIPPool resource
 
@@ -399,6 +467,71 @@ In this configuration, if the `node-4` Node powers off, re-configuring
 another Node's IP can recover the egress connection. Antrea will detect the
 configuration change and redirect the packets from the Pods in the `prod`
 Namespace to the new Node.
+
+### Configuring dual-stack Egress
+
+In this example, we will configure a dual-stack Egress so that selected Pods
+use specific IPv4 and IPv6 addresses when accessing the external network.
+
+First, create two `ExternalIPPool` resources, one for each address family.
+
+```yaml
+apiVersion: crd.antrea.io/v1beta1
+kind: ExternalIPPool
+metadata:
+  name: pool-ipv4
+spec:
+  ipRanges:
+  - start: 10.10.0.11
+    end: 10.10.0.20
+  nodeSelector: {}
+---
+apiVersion: crd.antrea.io/v1beta1
+kind: ExternalIPPool
+metadata:
+  name: pool-ipv6
+spec:
+  ipRanges:
+  - start: 2001:db8::11
+    end: 2001:db8::20
+  nodeSelector: {}
+```
+
+Then create an `Egress` that references both pools.
+
+```yaml
+apiVersion: crd.antrea.io/v1beta1
+kind: Egress
+metadata:
+  name: egress-dual-stack
+spec:
+  appliedTo:
+    namespaceSelector:
+      matchLabels:
+        kubernetes.io/metadata.name: prod
+    podSelector:
+      matchLabels:
+        app: web
+  externalIPPools:
+  - pool-ipv4
+  - pool-ipv6
+```
+
+List the `Egress` resource with kubectl. The output shows the Egress gets one
+IPv4 and one IPv6 IP from the respective pools, both assigned to the same Node.
+
+```bash
+# kubectl get egress egress-dual-stack -o yaml
+status:
+  egressNode: node-4
+  egressIPs:
+  - 10.10.0.11
+  - 2001:db8::11
+```
+
+Now, IPv4 egress traffic from the selected Pods will be SNATed to `10.10.0.11`
+and IPv6 egress traffic will be SNATed to `2001:db8::11`. If `node-4` fails,
+both IPs will be migrated to another Node together.
 
 ## Configuration options
 
