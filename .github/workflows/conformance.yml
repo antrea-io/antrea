@@ -109,7 +109,6 @@ jobs:
             sudo rm -rf /usr/share/dotnet || true
             sudo rm -rf /opt/ghc || true
             sudo rm -rf "/usr/local/share/boost" || true
-            sudo rm -rf "$AGENT_TOOLSDIRECTORY" || true
 
             git clone --depth 1 --branch ${{ inputs.k8s-version }} https://github.com/kubernetes/kubernetes.git /tmp/kubernetes
             echo "Building Kind Node image with Kubernetes version ${{ inputs.k8s-version }}"
