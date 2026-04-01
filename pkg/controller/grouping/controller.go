@@ -69,9 +69,14 @@ func NodeIPsIndexFunc(obj interface{}) ([]string, error) {
 		return nil, nil
 	}
 
+	// We should not return an error if no IP is found as it can be a transient condition, and
+	// it would cause a panic.
+	// In practice, the only reason for k8s.GetNodeAllAddrs to return an error is if no matching
+	// IP address is found for the Node.
 	ips, err := k8s.GetNodeAllAddrs(node)
 	if err != nil {
-		return nil, err
+		klog.V(3).InfoS("Failed to get addresses for Node", "node", klog.KObj(node), "err", err)
+		return nil, nil
 	}
 	return ips.UnsortedList(), nil
 }

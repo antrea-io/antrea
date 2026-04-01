@@ -108,6 +108,13 @@ func (pq *ExpirePriorityQueue) Remove(connKey connection.ConnectionKey) *ItemToE
 	return removedItem.(*ItemToExpire)
 }
 
+// Clear removes all items from the queue and key index map.
+func (pq *ExpirePriorityQueue) Clear() {
+	clear(pq.items)
+	pq.items = pq.items[:0]
+	clear(pq.KeyToItem)
+}
+
 // GetExpiryFromExpirePriorityQueue returns the shortest expire time duration
 // from expire priority queue.
 func (pq *ExpirePriorityQueue) GetExpiryFromExpirePriorityQueue() time.Duration {

@@ -201,3 +201,24 @@ func TestExpirePriorityQueue_GetTopExpiredItem(t *testing.T) {
 		assert.Equal(t, tc.expectedResult, result)
 	}
 }
+
+func TestExpirePriorityQueue_Clear(t *testing.T) {
+	pq := NewExpirePriorityQueue(1*time.Second, 2*time.Second)
+	for i := 0; i < 3; i++ {
+		conn := &connection.Connection{}
+		pq.WriteItemToQueue(testConnectionKey(i), conn)
+	}
+
+	assert.Equal(t, 3, pq.Len())
+	assert.Equal(t, 3, len(pq.KeyToItem))
+
+	pq.Clear()
+
+	assert.Equal(t, 0, pq.Len())
+	assert.Equal(t, 0, len(pq.KeyToItem))
+
+	// Ensure Clear is safe to call repeatedly.
+	pq.Clear()
+	assert.Equal(t, 0, pq.Len())
+	assert.Equal(t, 0, len(pq.KeyToItem))
+}

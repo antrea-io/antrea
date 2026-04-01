@@ -342,6 +342,11 @@ func (a *aggregationProcess) IsAggregatedRecordIPv4(record AggregationFlowRecord
 // addOrUpdateRecordInMap either adds the record to flowKeyMap or updates the record in
 // flowKeyMap by doing correlation or updating the stats.
 func (a *aggregationProcess) addOrUpdateRecordInMap(flowKey *FlowKey, record *flowpb.Flow, isIPv4 bool) {
+	if record.EndTs == nil || record.StartTs == nil {
+		klog.V(4).InfoS("Dropping flow record with nil timestamps", "record", record)
+		return
+	}
+
 	a.mutex.Lock()
 	defer a.mutex.Unlock()
 
@@ -595,8 +600,11 @@ func (a *aggregationProcess) aggregateRecords(incomingRecord, existingRecord *fl
 	// Update the throughput & reverseThroughput fields:
 	// throughput = (octetTotalCount - prevOctetTotalCount) / (flowEndSeconds - prevFlowEndSeconds)
 	// reverseThroughput = (reverseOctetTotalCount - prevReverseOctetTotalCount) / (flowEndSeconds - prevFlowEndSeconds)
-	throughput := totalCountDiff * 8 / uint64(flowEndSecondsDiff)
-	reverseThroughput := reverseTotalCountDiff * 8 / uint64(flowEndSecondsDiff)
+	var throughput, reverseThroughput uint64
+	if flowEndSecondsDiff > 0 {
+		throughput = totalCountDiff * 8 / uint64(flowEndSecondsDiff)
+		reverseThroughput = reverseTotalCountDiff * 8 / uint64(flowEndSecondsDiff)
+	}
 	if fillSrcStats {
 		existingRecord.Aggregation.ThroughputFromSource = throughput
 		existingRecord.Aggregation.ReverseThroughputFromSource = reverseThroughput

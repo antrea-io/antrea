@@ -198,7 +198,7 @@ func TestNodeIPsIndexFunc(t *testing.T) {
 				Spec: v1.NodeSpec{PodCIDR: "10.0.0.0/8"},
 			}},
 			want:    nil,
-			wantErr: true,
+			wantErr: false,
 		},
 		{
 			name:    "empty PODCIDR",
@@ -213,7 +213,21 @@ func TestNodeIPsIndexFunc(t *testing.T) {
 				Spec:   v1.NodeSpec{PodCIDR: "10.0.0.0/8"},
 			}},
 			want:    nil,
-			wantErr: true,
+			wantErr: false,
+		},
+		{
+			name: "invalid IP address",
+			args: args{obj: &v1.Node{
+				Status: v1.NodeStatus{Addresses: []v1.NodeAddress{
+					{
+						Type:    v1.NodeInternalIP,
+						Address: "not-a-valid-ip",
+					},
+				}},
+				Spec: v1.NodeSpec{PodCIDR: "10.0.0.0/8"},
+			}},
+			want:    nil,
+			wantErr: false,
 		},
 		{
 			name: "Node with IPs",

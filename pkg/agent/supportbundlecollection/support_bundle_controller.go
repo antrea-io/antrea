@@ -338,7 +338,7 @@ func (c *SupportBundleController) updateSupportBundleCollectionStatus(key string
 			},
 		},
 	}); updateErr != nil {
-		return fmt.Errorf("failed to update collection status for bundle: %s, err: %w", key, err)
+		return fmt.Errorf("failed to update collection status for bundle: %s, err: %w", key, updateErr)
 	}
 	return nil
 }
