@@ -126,8 +126,32 @@ type transportFilters struct {
 // hasTransportFilters returns true if any L4-level filters (ports, flags, ICMP messages)
 // are configured. This is used to decide whether to add IPv6 extension header handling,
 // which is only needed for protocol-only filters.
+//
+// Example: For 'ip6 proto 58' (ICMPv6 only, no transport header), returns false,
+// so Fragment Extension Header checks are added. For 'ip6 proto 6 and dst port 80',
+// returns true, so Fragment checks are omitted.
 func hasTransportFilters(packet *crdv1alpha1.Packet) bool {
-	return packet != nil && packet.TransportHeader != (crdv1alpha1.TransportHeader{})
+	if packet == nil {
+		return false
+	}
+	t := packet.TransportHeader
+	if t.TCP != nil {
+		if t.TCP.SrcPort != nil || t.TCP.DstPort != nil || len(t.TCP.Flags) > 0 {
+			return true
+		}
+	}
+	if t.UDP != nil {
+		if t.UDP.SrcPort != nil || t.UDP.DstPort != nil {
+			return true
+		}
+	}
+	if t.ICMP != nil && len(t.ICMP.Messages) > 0 {
+		return true
+	}
+	if t.ICMPv6 != nil && len(t.ICMPv6.Messages) > 0 {
+		return true
+	}
+	return false
 }
 
 // ipFamilyHandler encapsulates protocol-specific constants and filter compilation logic
@@ -500,67 +524,69 @@ func compileGenericPacketFilter(handler *ipFamilyHandler, packetSpec *crdv1alpha
 
 	// ports, TCP flags, ICMP and ICMPv6 messages
 	var transport transportFilters
-	if packetSpec != nil && packetSpec.TransportHeader.TCP != nil {
-		if packetSpec.TransportHeader.TCP.SrcPort != nil {
-			transport.srcPort = uint16(*packetSpec.TransportHeader.TCP.SrcPort)
-		}
-		if packetSpec.TransportHeader.TCP.DstPort != nil {
-			transport.dstPort = uint16(*packetSpec.TransportHeader.TCP.DstPort)
-		}
-		if packetSpec.TransportHeader.TCP.Flags != nil {
-			for _, f := range packetSpec.TransportHeader.TCP.Flags {
-				m := f.Value // default to flag if not specified
-				if f.Mask != nil {
-					m = *f.Mask
+	if packetSpec != nil {
+		if packetSpec.TransportHeader.TCP != nil {
+			if packetSpec.TransportHeader.TCP.SrcPort != nil {
+				transport.srcPort = uint16(*packetSpec.TransportHeader.TCP.SrcPort)
+			}
+			if packetSpec.TransportHeader.TCP.DstPort != nil {
+				transport.dstPort = uint16(*packetSpec.TransportHeader.TCP.DstPort)
+			}
+			if packetSpec.TransportHeader.TCP.Flags != nil {
+				for _, f := range packetSpec.TransportHeader.TCP.Flags {
+					m := f.Value // default to flag if not specified
+					if f.Mask != nil {
+						m = *f.Mask
+					}
+					transport.tcpFlags = append(transport.tcpFlags, tcpFlagsFilter{
+						flag: uint32(f.Value),
+						mask: uint32(m),
+					})
 				}
-				transport.tcpFlags = append(transport.tcpFlags, tcpFlagsFilter{
-					flag: uint32(f.Value),
-					mask: uint32(m),
+			}
+		} else if packetSpec.TransportHeader.UDP != nil {
+			if packetSpec.TransportHeader.UDP.SrcPort != nil {
+				transport.srcPort = uint16(*packetSpec.TransportHeader.UDP.SrcPort)
+			}
+			if packetSpec.TransportHeader.UDP.DstPort != nil {
+				transport.dstPort = uint16(*packetSpec.TransportHeader.UDP.DstPort)
+			}
+		} else if packetSpec.TransportHeader.ICMP != nil {
+			for _, f := range packetSpec.TransportHeader.ICMP.Messages {
+				var typeValue uint32
+				var codeValue *uint32
+				if f.Type.Type == intstr.Int {
+					typeValue = uint32(f.Type.IntVal)
+				} else {
+					typeValue = ICMPMsgTypeMap[crdv1alpha1.ICMPMsgType(strings.ToLower(f.Type.StrVal))]
+				}
+				if f.Code != nil {
+					codeValue = ptr.To(uint32(*f.Code))
+				}
+
+				transport.icmp = append(transport.icmp, icmpFilter{
+					icmpType: typeValue,
+					icmpCode: codeValue,
 				})
 			}
-		}
-	} else if packetSpec.TransportHeader.UDP != nil {
-		if packetSpec.TransportHeader.UDP.SrcPort != nil {
-			transport.srcPort = uint16(*packetSpec.TransportHeader.UDP.SrcPort)
-		}
-		if packetSpec.TransportHeader.UDP.DstPort != nil {
-			transport.dstPort = uint16(*packetSpec.TransportHeader.UDP.DstPort)
-		}
-	} else if packetSpec.TransportHeader.ICMP != nil {
-		for _, f := range packetSpec.TransportHeader.ICMP.Messages {
-			var typeValue uint32
-			var codeValue *uint32
-			if f.Type.Type == intstr.Int {
-				typeValue = uint32(f.Type.IntVal)
-			} else {
-				typeValue = ICMPMsgTypeMap[crdv1alpha1.ICMPMsgType(strings.ToLower(f.Type.StrVal))]
-			}
-			if f.Code != nil {
-				codeValue = ptr.To(uint32(*f.Code))
-			}
+		} else if packetSpec.TransportHeader.ICMPv6 != nil {
+			for _, f := range packetSpec.TransportHeader.ICMPv6.Messages {
+				var typeValue uint32
+				var codeValue *uint32
+				if f.Type.Type == intstr.Int {
+					typeValue = uint32(f.Type.IntVal)
+				} else {
+					typeValue = ICMPv6MsgTypeMap[crdv1alpha1.ICMPv6MsgType(strings.ToLower(f.Type.StrVal))]
+				}
+				if f.Code != nil {
+					codeValue = ptr.To(uint32(*f.Code))
+				}
 
-			transport.icmp = append(transport.icmp, icmpFilter{
-				icmpType: typeValue,
-				icmpCode: codeValue,
-			})
-		}
-	} else if packetSpec.TransportHeader.ICMPv6 != nil {
-		for _, f := range packetSpec.TransportHeader.ICMPv6.Messages {
-			var typeValue uint32
-			var codeValue *uint32
-			if f.Type.Type == intstr.Int {
-				typeValue = uint32(f.Type.IntVal)
-			} else {
-				typeValue = ICMPv6MsgTypeMap[crdv1alpha1.ICMPv6MsgType(strings.ToLower(f.Type.StrVal))]
+				transport.icmp = append(transport.icmp, icmpFilter{
+					icmpType: typeValue,
+					icmpCode: codeValue,
+				})
 			}
-			if f.Code != nil {
-				codeValue = ptr.To(uint32(*f.Code))
-			}
-
-			transport.icmp = append(transport.icmp, icmpFilter{
-				icmpType: typeValue,
-				icmpCode: codeValue,
-			})
 		}
 	}
 

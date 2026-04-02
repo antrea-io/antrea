@@ -1075,6 +1075,44 @@ func TestPacketCaptureCompileBPF(t *testing.T) {
 				bpf.RetConstant{Val: 0},
 			},
 		},
+		{
+			name:  "ipv6-proto-only-fragment-ext-header",
+			srcIP: nil,
+			dstIP: nil,
+			spec: &crdv1alpha1.PacketCaptureSpec{
+				Packet: &crdv1alpha1.Packet{
+					IPFamily: v1.IPv6Protocol,
+					Protocol: &testICMPv6Protocol,
+				},
+				Direction: crdv1alpha1.CaptureDirectionSourceToDestination,
+			},
+			inst: []bpf.Instruction{
+				bpf.LoadAbsolute{Off: 12, Size: 2},
+				bpf.JumpIf{Cond: bpf.JumpEqual, Val: 0x86dd, SkipFalse: 6},
+				bpf.LoadAbsolute{Off: 20, Size: 1},                                    // ip protocol
+				bpf.JumpIf{Cond: bpf.JumpEqual, Val: 0x3a, SkipTrue: 3, SkipFalse: 0}, // icmpv6, skip fragment check
+				bpf.JumpIf{Cond: bpf.JumpEqual, Val: 0x2c, SkipTrue: 0, SkipFalse: 3}, // Fragment (44)?
+				bpf.LoadAbsolute{Off: 54, Size: 1},                                    // load inner Next Header from Fragment Ext Header
+				bpf.JumpIf{Cond: bpf.JumpEqual, Val: 0x3a, SkipTrue: 0, SkipFalse: 1}, // icmpv6
+				bpf.RetConstant{Val: 262144},
+				bpf.RetConstant{Val: 0},
+			},
+		},
+		{
+			name:  "nil-packetspec",
+			srcIP: nil,
+			dstIP: nil,
+			spec: &crdv1alpha1.PacketCaptureSpec{
+				Packet:    nil,
+				Direction: crdv1alpha1.CaptureDirectionSourceToDestination,
+			},
+			inst: []bpf.Instruction{
+				bpf.LoadAbsolute{Off: 12, Size: 2},
+				bpf.JumpIf{Cond: bpf.JumpEqual, Val: 0x800, SkipFalse: 1},
+				bpf.RetConstant{Val: 262144},
+				bpf.RetConstant{Val: 0},
+			},
+		},
 	}
 
 	for _, item := range tt {
