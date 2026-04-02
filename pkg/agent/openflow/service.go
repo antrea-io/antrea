@@ -42,6 +42,7 @@ type featureService struct {
 	snatCtZones            map[binding.Protocol]int
 	gatewayMAC             net.HardwareAddr
 	nodePortAddresses      map[binding.Protocol][]net.IP
+	podCIDRs               map[binding.Protocol]*net.IPNet
 	serviceCIDRs           map[binding.Protocol]net.IPNet
 	networkConfig          *config.NetworkConfig
 	gatewayPort            uint32
@@ -51,7 +52,10 @@ type featureService struct {
 	proxyAll              bool
 	enableDSR             bool
 	connectUplinkToBridge bool
-	ctZoneSrcField        *binding.RegField
+
+	hostNetworkAccelerationEnabled bool
+
+	ctZoneSrcField *binding.RegField
 
 	category cookie.Category
 }
@@ -79,6 +83,7 @@ func newFeatureService(
 	dnatCtZones := make(map[binding.Protocol]int)
 	snatCtZones := make(map[binding.Protocol]int)
 	nodePortAddresses := make(map[binding.Protocol][]net.IP)
+	podCIDRs := make(map[binding.Protocol]*net.IPNet)
 	serviceCIDRs := make(map[binding.Protocol]net.IPNet)
 	for _, ipProtocol := range ipProtocols {
 		switch ipProtocol {
@@ -89,6 +94,7 @@ func newFeatureService(
 			dnatCtZones[ipProtocol] = CtZone
 			snatCtZones[ipProtocol] = SNATCtZone
 			nodePortAddresses[ipProtocol] = serviceConfig.NodePortAddressesIPv4
+			podCIDRs[ipProtocol] = nodeConfig.PodIPv4CIDR
 			if serviceConfig.ServiceCIDR != nil {
 				serviceCIDRs[ipProtocol] = *serviceConfig.ServiceCIDR
 			}
@@ -99,36 +105,42 @@ func newFeatureService(
 			dnatCtZones[ipProtocol] = CtZoneV6
 			snatCtZones[ipProtocol] = SNATCtZoneV6
 			nodePortAddresses[ipProtocol] = serviceConfig.NodePortAddressesIPv6
+			podCIDRs[ipProtocol] = nodeConfig.PodIPv6CIDR
 			if serviceConfig.ServiceCIDRv6 != nil {
 				serviceCIDRs[ipProtocol] = *serviceConfig.ServiceCIDRv6
 			}
 		}
 	}
-
+	hostNetworkAccelerationEnabled := networkConfig.EnableHostNetworkAcceleration &&
+		proxyAll &&
+		(networkConfig.TrafficEncapMode == config.TrafficEncapModeNoEncap ||
+			networkConfig.TrafficEncapMode == config.TrafficEncapModeHybrid)
 	return &featureService{
-		cookieAllocator:        cookieAllocator,
-		nodeIPChecker:          nodeIPChecker,
-		ipProtocols:            ipProtocols,
-		bridge:                 bridge,
-		cachedFlows:            newFlowCategoryCache(),
-		groupCache:             sync.Map{},
-		gatewayIPs:             gatewayIPs,
-		virtualIPs:             virtualIPs,
-		virtualNodePortDNATIPs: virtualNodePortDNATIPs,
-		dnatCtZones:            dnatCtZones,
-		snatCtZones:            snatCtZones,
-		nodePortAddresses:      nodePortAddresses,
-		serviceCIDRs:           serviceCIDRs,
-		gatewayMAC:             nodeConfig.GatewayConfig.MAC,
-		gatewayPort:            nodeConfig.GatewayConfig.OFPort,
-		networkConfig:          networkConfig,
-		enableAntreaPolicy:     enableAntreaPolicy,
-		enableProxy:            enableProxy,
-		proxyAll:               proxyAll,
-		enableDSR:              enableDSR,
-		connectUplinkToBridge:  connectUplinkToBridge,
-		ctZoneSrcField:         getZoneSrcField(connectUplinkToBridge),
-		category:               cookie.Service,
+		cookieAllocator:                cookieAllocator,
+		nodeIPChecker:                  nodeIPChecker,
+		ipProtocols:                    ipProtocols,
+		bridge:                         bridge,
+		cachedFlows:                    newFlowCategoryCache(),
+		groupCache:                     sync.Map{},
+		gatewayIPs:                     gatewayIPs,
+		virtualIPs:                     virtualIPs,
+		virtualNodePortDNATIPs:         virtualNodePortDNATIPs,
+		dnatCtZones:                    dnatCtZones,
+		snatCtZones:                    snatCtZones,
+		nodePortAddresses:              nodePortAddresses,
+		podCIDRs:                       podCIDRs,
+		serviceCIDRs:                   serviceCIDRs,
+		gatewayMAC:                     nodeConfig.GatewayConfig.MAC,
+		gatewayPort:                    nodeConfig.GatewayConfig.OFPort,
+		networkConfig:                  networkConfig,
+		enableAntreaPolicy:             enableAntreaPolicy,
+		enableProxy:                    enableProxy,
+		proxyAll:                       proxyAll,
+		enableDSR:                      enableDSR,
+		connectUplinkToBridge:          connectUplinkToBridge,
+		hostNetworkAccelerationEnabled: hostNetworkAccelerationEnabled,
+		ctZoneSrcField:                 getZoneSrcField(connectUplinkToBridge),
+		category:                       cookie.Service,
 	}
 }
 

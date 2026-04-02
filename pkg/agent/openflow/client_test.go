@@ -81,19 +81,20 @@ func skipTest(tb testing.TB, skipLinux, skipWindows bool) {
 }
 
 type clientOptions struct {
-	enableOVSMeters            bool
-	enableProxy                bool
-	enableAntreaPolicy         bool
-	enableEgress               bool
-	enableEgressTrafficShaping bool
-	proxyAll                   bool
-	enableDSR                  bool
-	connectUplinkToBridge      bool
-	enableMulticast            bool
-	enableTrafficControl       bool
-	enableMulticluster         bool
-	enableL7NetworkPolicy      bool
-	trafficEncryptionMode      config.TrafficEncryptionModeType
+	enableOVSMeters               bool
+	enableProxy                   bool
+	enableAntreaPolicy            bool
+	enableEgress                  bool
+	enableEgressTrafficShaping    bool
+	proxyAll                      bool
+	enableDSR                     bool
+	connectUplinkToBridge         bool
+	enableHostNetworkAcceleration bool
+	enableMulticast               bool
+	enableTrafficControl          bool
+	enableMulticluster            bool
+	enableL7NetworkPolicy         bool
+	trafficEncryptionMode         config.TrafficEncryptionModeType
 }
 
 type clientOptionsFn func(*clientOptions)
@@ -145,6 +146,10 @@ func setEnableEgressTrafficShaping(v bool) clientOptionsFn {
 
 func enableConnectUplinkToBridge(o *clientOptions) {
 	o.connectUplinkToBridge = true
+}
+
+func enableHostNetworkAcceleration(o *clientOptions) {
+	o.enableHostNetworkAcceleration = true
 }
 
 func enableMulticast(o *clientOptions) {
@@ -463,10 +468,11 @@ func newFakeClientWithBridge(
 		OFPort: config.DefaultHostGatewayOFPort,
 	}
 	networkConfig := &config.NetworkConfig{
-		IPv4Enabled:           enableIPv4,
-		IPv6Enabled:           enableIPv6,
-		TrafficEncapMode:      trafficEncapMode,
-		TrafficEncryptionMode: o.trafficEncryptionMode,
+		IPv4Enabled:                   enableIPv4,
+		IPv6Enabled:                   enableIPv6,
+		TrafficEncapMode:              trafficEncapMode,
+		TrafficEncryptionMode:         o.trafficEncryptionMode,
+		EnableHostNetworkAcceleration: o.enableHostNetworkAcceleration,
 	}
 	tunnelOFPort := uint32(0)
 	if networkConfig.NeedsTunnelInterface() {
@@ -2751,7 +2757,7 @@ func Test_client_ReplayFlows(t *testing.T) {
 	expectedFlows = append(expectedFlows, multicastInitFlows(true)...)
 	expectedFlows = append(expectedFlows, networkPolicyInitFlows(true, false)...)
 	expectedFlows = append(expectedFlows, podConnectivityInitFlows(config.TrafficEncapModeEncap, config.TrafficEncryptionModeNone, false, true, true, true)...)
-	expectedFlows = append(expectedFlows, serviceInitFlows(true, true, false, false)...)
+	expectedFlows = append(expectedFlows, serviceInitFlows(true, true, false, false, false, config.TrafficEncapModeEncap)...)
 
 	addFlowInCache := func(cache *flowCategoryCache, cacheKey string, flows []binding.Flow) {
 		fCache := flowMessageCache{}
