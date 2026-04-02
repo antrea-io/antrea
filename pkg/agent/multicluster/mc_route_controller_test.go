@@ -523,6 +523,16 @@ func TestSyncWireGuardPeerUpdateByClusterInfoImportChange(t *testing.T) {
 			}(),
 			expectPeerUpdate: true,
 		},
+		{
+			name:          "changed GatewayIP is updated",
+			installedPeer: clusterInfoImport3.DeepCopy(),
+			currentPeer: func() *mcv1alpha1.ClusterInfoImport {
+				ci := clusterInfoImport3.DeepCopy()
+				ci.Spec.GatewayInfos[0].GatewayIP = "12.13.0.11"
+				return ci
+			}(),
+			expectPeerUpdate: true,
+		},
 	}
 
 	for _, tc := range testCases {

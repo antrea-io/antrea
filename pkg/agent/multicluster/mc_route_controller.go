@@ -671,6 +671,12 @@ func isWireGuardInfoChanged(cache, cur *mcv1alpha1.ClusterInfoImport) bool {
 	if cache.Spec.ServiceCIDR != cur.Spec.ServiceCIDR {
 		return true
 	}
+	if len(cache.Spec.GatewayInfos) != len(cur.Spec.GatewayInfos) {
+		return true
+	}
+	if len(cache.Spec.GatewayInfos) > 0 && cache.Spec.GatewayInfos[0].GatewayIP != cur.Spec.GatewayInfos[0].GatewayIP {
+		return true
+	}
 	if cache.Spec.WireGuard == nil && cur.Spec.WireGuard == nil {
 		return false
 	}
