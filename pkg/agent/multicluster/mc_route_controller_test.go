@@ -484,6 +484,100 @@ func TestRemoveWireGuardRouteAndPeer(t *testing.T) {
 	assert.NoError(t, err)
 }
 
+func TestSyncWireGuardPeerUpdateByClusterInfoImportChange(t *testing.T) {
+	testCases := []struct {
+		name             string
+		installedPeer    *mcv1alpha1.ClusterInfoImport
+		currentPeer      *mcv1alpha1.ClusterInfoImport
+		expectPeerUpdate bool
+	}{
+		{
+			name:             "unchanged ClusterInfoImport is skipped",
+			installedPeer:    clusterInfoImport3.DeepCopy(),
+			currentPeer:      clusterInfoImport3.DeepCopy(),
+			expectPeerUpdate: false,
+		},
+		{
+			name:             "new ClusterInfoImport is updated",
+			installedPeer:    nil,
+			currentPeer:      clusterInfoImport3.DeepCopy(),
+			expectPeerUpdate: true,
+		},
+		{
+			name:          "changed ServiceCIDR is updated",
+			installedPeer: clusterInfoImport3.DeepCopy(),
+			currentPeer: func() *mcv1alpha1.ClusterInfoImport {
+				ci := clusterInfoImport3.DeepCopy()
+				ci.Spec.ServiceCIDR = "10.200.0.0/16"
+				return ci
+			}(),
+			expectPeerUpdate: true,
+		},
+		{
+			name:          "changed PublicKey is updated",
+			installedPeer: clusterInfoImport3.DeepCopy(),
+			currentPeer: func() *mcv1alpha1.ClusterInfoImport {
+				ci := clusterInfoImport3.DeepCopy()
+				ci.Spec.WireGuard.PublicKey = "key-updated"
+				return ci
+			}(),
+			expectPeerUpdate: true,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			mockRouteClient := routemock.NewMockInterface(ctrl)
+			wgClient := wgtest.NewMockInterface(ctrl)
+
+			c := newMCDefaultRouteController(t,
+				&config.NodeConfig{
+					Name:        "node-4",
+					PodIPv4CIDR: &net.IPNet{IP: net.ParseIP("10.10.0.0")},
+				},
+				&config.NetworkConfig{},
+				agent.WireGuardConfig{},
+				mockRouteClient,
+				"wireGuard",
+				wgClient,
+			)
+			defer c.queue.ShutDown()
+
+			c.wireGuardInitialized = true
+			c.wireGuardClient = wgClient
+
+			gw := gateway4.DeepCopy()
+			err := c.gwInformer.Informer().GetStore().Add(gw)
+			assert.NoError(t, err)
+
+			ci := tc.currentPeer.DeepCopy()
+			err = c.ciImportInformer.Informer().GetStore().Add(ci)
+			assert.NoError(t, err)
+
+			if tc.installedPeer != nil {
+				c.installedWireGuardPeers[ci.Name] = tc.installedPeer.DeepCopy()
+			}
+
+			if tc.expectPeerUpdate {
+				wgClient.EXPECT().UpdatePeer(ci.Name, ci.Spec.WireGuard.PublicKey,
+					net.ParseIP(ci.Spec.GatewayInfos[0].GatewayIP), gomock.Any()).Times(1)
+				mockRouteClient.EXPECT().AddRouteForLink(gomock.Any(), c.wireGuardConfig.LinkIndex).Times(1)
+			}
+
+			err = c.syncWireGuard()
+			assert.NoError(t, err)
+
+			cachedPeer, exists := c.installedWireGuardPeers[ci.Name]
+			assert.True(t, exists)
+			assert.Equal(t, ci.Spec.ServiceCIDR, cachedPeer.Spec.ServiceCIDR)
+			if ci.Spec.WireGuard != nil {
+				assert.Equal(t, ci.Spec.WireGuard.PublicKey, cachedPeer.Spec.WireGuard.PublicKey)
+			}
+		})
+	}
+}
+
 func TestEnqueueGateway(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	mockInterface := routemock.NewMockInterface(ctrl)

@@ -313,6 +313,7 @@ func (c *MCDefaultRouteController) syncWireGuard() error {
 		desiredCIImports.Insert(ciImport.Name)
 		if ciImportCache, ok := c.installedWireGuardPeers[ciImport.Name]; ok && !isWireGuardInfoChanged(ciImportCache, ciImport) {
 			klog.V(2).InfoS("The ClusterInfoImport did not change, skip updating WireGuard peer", "ClusterInfoImport", klog.KObj(ciImport))
+			continue
 		}
 		if err = c.addWireGuardRouteAndPeer(ciImport); err != nil {
 			klog.ErrorS(err, "Failed to update WireGuard peer", "ClusterInfoImport", klog.KObj(ciImport))
