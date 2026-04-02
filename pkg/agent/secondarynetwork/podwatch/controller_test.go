@@ -323,7 +323,6 @@ func TestPodControllerRun(t *testing.T) {
 
 	var wg sync.WaitGroup
 	wg.Add(1)
-	mockIPAM.EXPECT().SecondaryNetworkRelease(stalePodOwner)
 	go func() {
 		defer wg.Done()
 		podController.Run(stopCh)
