@@ -28,6 +28,7 @@ import (
 
 	"github.com/fsnotify/fsnotify"
 	"github.com/google/uuid"
+	"google.golang.org/protobuf/proto"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/klog/v2"
@@ -573,7 +574,10 @@ func (fa *flowAggregator) sendAggregatedRecord(key intermediate.FlowKey, record 
 		}
 		fa.aggregationProcess.SetExternalFieldsFilled(record, true)
 	}
-	fa.produceRecord(record.Record)
+	// In Aggregate mode, we need to clone the record before placing it in the ring buffer, as
+	// it is "owned" by the aggregation process and will be updated as new records are received
+	// from the FlowExporters.
+	fa.produceRecord(proto.CloneOf(record.Record))
 	if err := fa.aggregationProcess.ResetStatAndThroughputElementsInRecord(record.Record); err != nil {
 		return err
 	}
