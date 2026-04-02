@@ -497,14 +497,19 @@ func PrepareHostInterfaceConnection(
 	return bridgedName, false, nil
 }
 
-// RestoreHostInterfaceConfiguration restore the configuration from bridge back to host interface, reverting the
-// actions taken in PrepareHostInterfaceConnection.
-func RestoreHostInterfaceConfiguration(brName string, interfaceName string) {
+// RestoreHostInterfaceConfiguration restores the configuration from the bridge back to the host
+// interface, reverting the actions taken in PrepareHostInterfaceConnection.  It returns an error
+// only when the critical uplink OVS port (bridgedName, e.g. "eth0~") cannot be deleted, because
+// that prevents the kernel-interface rename and leaves the system in a fully-intact state that
+// the caller can retry.  All other sub-step failures (IP/route restore, internal port delete,
+// rename) are logged but do not cause a return error, since they represent best-effort cleanup
+// after the point of no return.
+func RestoreHostInterfaceConfiguration(brName string, interfaceName string) error {
 	klog.V(4).InfoS("Restoring bridge config to host interface")
 	bridgedName := GenerateUplinkInterfaceName(interfaceName)
 	// restore only when interface eth0~ exists
 	if !HostInterfaceExists(bridgedName) {
-		return
+		return nil
 	}
 
 	// get interface config
@@ -519,38 +524,39 @@ func RestoreHostInterfaceConfiguration(brName string, interfaceName string) {
 
 		// delete internal port (eth0)
 		if err = deleteOVSPort(brName, interfaceName); err != nil {
-			klog.ErrorS(err, "Delete OVS port failed", "port", bridgedName)
+			klog.ErrorS(err, "Delete OVS port failed", "port", interfaceName)
 		}
 	}
-	// remove host interface (eth0~) from bridge
+	// remove host interface (eth0~) from bridge — this is the critical step: if it fails the
+	// kernel interface is still renamed and both OVS ports still exist, so the caller can retry.
 	if err = deleteOVSPort(brName, bridgedName); err != nil {
-		klog.ErrorS(err, "Delete OVS port failed", "port", bridgedName)
-		return
+		return fmt.Errorf("failed to delete OVS uplink port %s from bridge %s: %w", bridgedName, brName, err)
 	}
 
 	// rename host interface(eth0~ -> eth0)
 	if err = RenameInterface(bridgedName, interfaceName); err != nil {
 		klog.ErrorS(err, "Restore host interface name failed", "from", bridgedName, "to", interfaceName)
-		return
+		return nil
 	}
 	var link netlink.Link
 	if link, err = netlink.LinkByName(interfaceName); err != nil {
 		klog.ErrorS(err, "Failed to get link", "interface", interfaceName)
-		return
+		return nil
 	}
 	if len(interfaceIPs) > 0 {
 		// restore IPs to eth0
 		if err = ConfigureLinkAddresses(link.Attrs().Index, interfaceIPs); err != nil {
 			klog.ErrorS(err, "Restore IPs to host interface failed", "interface", interfaceName)
-			return
+			return nil
 		}
 	}
 	if len(interfaceRoutes) > 0 {
 		// restore routes to eth0
 		if err = ConfigureLinkRoutes(link, interfaceRoutes); err != nil {
 			klog.ErrorS(err, "Restore routes to host interface failed", "interface", interfaceName)
-			return
+			return nil
 		}
 	}
 	klog.V(2).InfoS("Finished restoring bridge config to host interface", "interface", interfaceName, "bridge", brName)
+	return nil
 }
