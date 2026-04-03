@@ -15,8 +15,8 @@
 package exporter
 
 import (
+	"context"
 	"math"
-	"reflect"
 	"slices"
 	"sync"
 
@@ -27,6 +27,7 @@ import (
 	"antrea.io/antrea/pkg/flowaggregator/flowlogger"
 	"antrea.io/antrea/pkg/flowaggregator/flowrecord"
 	"antrea.io/antrea/pkg/flowaggregator/options"
+	"antrea.io/antrea/pkg/flowaggregator/ringbuffer"
 )
 
 type flowFilter struct {
@@ -87,18 +88,6 @@ func (e *LogExporter) buildFilters() {
 	}
 }
 
-func (e *LogExporter) AddRecord(record *flowpb.Flow, isRecordIPv6 bool) error {
-	r, err := flowrecord.GetFlowRecord(record)
-	if err != nil {
-		return err
-	}
-	if !e.applyFilters(r) {
-		klog.V(5).InfoS("Ignoring record in FlowLogger because filters do not match")
-		return nil
-	}
-	return e.flowLogger.WriteRecord(r, *e.config.PrettyPrint)
-}
-
 func (e *LogExporter) applyFilters(r *flowrecord.FlowRecord) bool {
 	if len(e.filters) == 0 {
 		return true
@@ -111,25 +100,18 @@ func (e *LogExporter) applyFilters(r *flowrecord.FlowRecord) bool {
 		if len(filter.EgressNetworkPolicyRuleActions) > 0 && !slices.Contains(filter.EgressNetworkPolicyRuleActions, r.EgressNetworkPolicyRuleAction) {
 			continue
 		}
-		// both conditions match
 		return true
 	}
 	return false
 }
 
-func (e *LogExporter) Start() {
-	e.start()
-}
-
-func (e *LogExporter) Stop() {
-	e.stop()
-}
-
-func (e *LogExporter) start() {
+// Run consumes flow records from the ring buffer and writes them to a local log file.
+// It blocks until ctx is cancelled or the consumer signals shutdown.
+func (e *LogExporter) Run(ctx context.Context, buf ringbuffer.BroadcastBuffer[*flowpb.Flow]) {
+	consumer := buf.NewConsumer(ringbuffer.WithMaxConsumeDeadline(consumeDeadline))
 	e.stopCh = make(chan struct{})
 	e.flowLogger = flowlogger.NewFlowLogger(
 		e.config.Path,
-		// these are all valid conversions from int32 to int
 		int(e.config.MaxSize),
 		int(e.config.MaxBackups),
 		int(e.config.MaxAge),
@@ -140,29 +122,31 @@ func (e *LogExporter) start() {
 		defer e.wg.Done()
 		e.flowLogger.FlushLoop(e.stopCh)
 	}()
-}
 
-func (e *LogExporter) stop() {
-	close(e.stopCh)
-	e.wg.Wait()
-	e.flowLogger.Close()
-	e.flowLogger = nil
-}
+	defer func() {
+		close(e.stopCh)
+		e.wg.Wait()
+		e.flowLogger.Close()
+		e.flowLogger = nil
+	}()
 
-func (e *LogExporter) UpdateOptions(opt *options.Options) {
-	config := opt.Config.FlowLogger
-	if reflect.DeepEqual(e.config, config) {
-		return
+	records := make([]*flowpb.Flow, consumeMultipleBatchSize)
+	for {
+		n, _, shutdown := consumer.ConsumeMultiple(records)
+		for _, record := range records[:n] {
+			r, err := flowrecord.GetFlowRecord(record)
+			if err != nil {
+				klog.ErrorS(err, "Error when getting flow record for FlowLogger")
+			} else {
+				if !e.applyFilters(r) {
+					klog.V(5).InfoS("Ignoring record in FlowLogger because filters do not match")
+				} else if err := e.flowLogger.WriteRecord(r, *e.config.PrettyPrint); err != nil {
+					klog.ErrorS(err, "Error when writing record to FlowLogger")
+				}
+			}
+		}
+		if shutdown || ctx.Err() != nil {
+			return
+		}
 	}
-	klog.InfoS("Updating FlowLogger")
-	e.stop()
-	e.config = config
-	klog.InfoS("New FlowLogger configuration", "path", config.Path, "maxSize", config.MaxSize, "maxBackups", config.MaxBackups, "maxAge", config.MaxAge, "compress", *config.Compress, "prettyPrint", *config.PrettyPrint)
-	e.buildFilters()
-	e.start()
-}
-
-func (e *LogExporter) Flush() error {
-	// TODO: replace FlushLoop in flowlogger.FlowLogger?
-	return nil
 }

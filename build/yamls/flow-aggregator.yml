@@ -273,6 +273,10 @@ data:
       # representation.
       prettyPrint: true
 
+    # Number of entries in the ring buffer used to distribute flow records to exporters.
+    # Each exporter independently consumes from the buffer. Defaults to 8192.
+    recordBufferSize: 8192
+
     # Provide a clusterID to be added to records. By default this ID is an auto-generated UUID which
     # can be found in the antrea-cluster-identity ConfigMap. Currently this is only consumed by the
     # flowCollector (IPFIX) exporter.
@@ -483,7 +487,7 @@ spec:
       annotations:
         # Automatically restart Pod if the ConfigMap changes
         # See https://helm.sh/docs/howto/charts_tips_and_tricks/#automatically-roll-deployments
-        checksum/config: 90ac254e5326185b3bdb2ae70568457015f7505606d73b3f27d948872479a279
+        checksum/config: df357100183ee1aab918881e2f20565449e0de8a4da5c79f12885e3f6ab1c137
       labels:
         app: flow-aggregator
     spec:

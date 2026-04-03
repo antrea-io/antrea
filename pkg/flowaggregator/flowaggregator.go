@@ -17,7 +17,6 @@ package flowaggregator
 import (
 	"bytes"
 	"context"
-	"errors"
 	"fmt"
 	"net"
 	"os"
@@ -29,6 +28,7 @@ import (
 
 	"github.com/fsnotify/fsnotify"
 	"github.com/google/uuid"
+	"google.golang.org/protobuf/proto"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/klog/v2"
@@ -41,6 +41,7 @@ import (
 	"antrea.io/antrea/pkg/flowaggregator/intermediate"
 	"antrea.io/antrea/pkg/flowaggregator/options"
 	"antrea.io/antrea/pkg/flowaggregator/querier"
+	"antrea.io/antrea/pkg/flowaggregator/ringbuffer"
 	"antrea.io/antrea/pkg/ipfix"
 	"antrea.io/antrea/pkg/util/objectstore"
 )
@@ -49,16 +50,16 @@ const aggregationWorkerNum = 2
 
 // these are used for unit testing
 var (
-	newIPFIXExporter = func(clusterUUID uuid.UUID, clusterID string, opt *options.Options, registry ipfix.IPFIXRegistry) exporter.Interface {
+	newIPFIXExporter = func(clusterUUID uuid.UUID, clusterID string, opt *options.Options, registry ipfix.IPFIXRegistry) exporter.Runner {
 		return exporter.NewIPFIXExporter(clusterUUID, clusterID, opt, registry)
 	}
-	newClickHouseExporter = func(clusterUUID uuid.UUID, opt *options.Options) (exporter.Interface, error) {
+	newClickHouseExporter = func(clusterUUID uuid.UUID, opt *options.Options) (exporter.Runner, error) {
 		return exporter.NewClickHouseExporter(clusterUUID, opt)
 	}
-	newS3Exporter = func(clusterUUID uuid.UUID, opt *options.Options) (exporter.Interface, error) {
+	newS3Exporter = func(clusterUUID uuid.UUID, opt *options.Options) (exporter.Runner, error) {
 		return exporter.NewS3Exporter(clusterUUID, opt)
 	}
-	newLogExporter = func(opt *options.Options) (exporter.Interface, error) {
+	newLogExporter = func(opt *options.Options) (exporter.Runner, error) {
 		return exporter.NewLogExporter(opt)
 	}
 
@@ -66,6 +67,22 @@ var (
 		return certificate.NewProvider(k8sClient, addr)
 	}
 )
+
+// exporterHandle tracks the lifecycle of a running exporter goroutine.
+type exporterHandle struct {
+	exporter exporter.Runner
+	// cancel cancels the context passed to the exporter's Run method,
+	// signalling it to stop.
+	cancel context.CancelFunc
+	// doneCh is closed when the exporter's Run goroutine has returned.
+	doneCh chan struct{}
+}
+
+// stop cancels the exporter's context and waits for its goroutine to exit.
+func (h *exporterHandle) stop() {
+	h.cancel()
+	<-h.doneCh
+}
 
 type flowAggregator struct {
 	aggregatorMode              flowaggregatorconfig.AggregatorMode
@@ -88,20 +105,26 @@ type flowAggregator struct {
 	nodeStore                   objectstore.NodeStore
 	serviceStore                objectstore.ServiceStore
 	numRecordsExported          atomic.Int64
-	numRecordsDropped           atomic.Int64
-	updateCh                    chan *options.Options
-	configFile                  string
-	configWatcher               *fsnotify.Watcher
-	configData                  []byte
-	APIServer                   flowaggregatorconfig.APIServerConfig
-	ipfixExporter               exporter.Interface
-	clickHouseExporter          exporter.Interface
-	s3Exporter                  exporter.Interface
-	logExporter                 exporter.Interface
-	logTickerDuration           time.Duration
-	recordCh                    chan *flowpb.Flow
-	exportersMutex              sync.Mutex
-	certificateProvider         *certificate.Provider
+	// numRecordsDropped is always 0 with the current ring-buffer design: records
+	// are produced to the buffer (which may discard them when full, counted
+	// separately by the buffer itself) and proxyRecord no longer returns an error.
+	// Kept for API/metrics compatibility.
+	numRecordsDropped atomic.Int64
+	updateCh          chan *options.Options
+	configFile        string
+	configWatcher     *fsnotify.Watcher
+	configData        []byte
+	APIServer         flowaggregatorconfig.APIServerConfig
+	logTickerDuration time.Duration
+	recordCh          chan *flowpb.Flow
+
+	recordBuffer        ringbuffer.BroadcastBuffer[*flowpb.Flow]
+	ipfixHandle         *exporterHandle
+	clickHouseHandle    *exporterHandle
+	s3Handle            *exporterHandle
+	logHandle           *exporterHandle
+	exportersMutex      sync.Mutex
+	certificateProvider *certificate.Provider
 }
 
 func NewFlowAggregator(
@@ -165,43 +188,36 @@ func NewFlowAggregator(
 		configData:                  data,
 		APIServer:                   opt.Config.APIServer,
 		logTickerDuration:           time.Minute,
-		// We support buffering a small amount of flow records.
-		recordCh:            make(chan *flowpb.Flow, 128),
-		certificateProvider: newCertificateProvider(k8sClient, opt.Config.FlowAggregatorAddress),
-		certificateUpdateCh: make(chan struct{}, 1),
+		recordCh:                    make(chan *flowpb.Flow, 128),
+		recordBuffer:                ringbuffer.NewBroadcastBuffer[*flowpb.Flow](int(opt.Config.RecordBufferSize)),
+		certificateProvider:         newCertificateProvider(k8sClient, opt.Config.FlowAggregatorAddress),
+		certificateUpdateCh:         make(chan struct{}, 1),
 	}
 	if opt.AggregatorMode == flowaggregatorconfig.AggregatorModeAggregate {
 		if err := fa.InitAggregationProcess(); err != nil {
 			return nil, fmt.Errorf("error when creating aggregation process: %w", err)
 		}
 	}
-	if opt.Config.ClickHouse.Enable {
-		var err error
-		fa.clickHouseExporter, err = newClickHouseExporter(clusterUUID, opt)
-		if err != nil {
-			return nil, fmt.Errorf("error when creating ClickHouse export process: %v", err)
-		}
-	}
-	if opt.Config.S3Uploader.Enable {
-		var err error
-		fa.s3Exporter, err = newS3Exporter(clusterUUID, opt)
-		if err != nil {
-			return nil, fmt.Errorf("error when creating S3 export process: %v", err)
-		}
-	}
-	if opt.Config.FlowLogger.Enable {
-		var err error
-		fa.logExporter, err = newLogExporter(opt)
-		if err != nil {
-			return nil, fmt.Errorf("error when creating log export process: %v", err)
-		}
-	}
-	if opt.Config.FlowCollector.Enable {
-		fa.ipfixExporter = newIPFIXExporter(clusterUUID, clusterID, opt, registry)
-	}
 
-	klog.InfoS("FlowAggregator initialized", "mode", opt.AggregatorMode, "clusterID", fa.clusterID)
+	klog.InfoS("FlowAggregator initialized", "mode", opt.AggregatorMode, "clusterID", fa.clusterID, "recordBufferSize", opt.Config.RecordBufferSize)
 	return fa, nil
+}
+
+// launchExporter creates a new consumer from the ring buffer, starts the
+// exporter's Run method in a goroutine, and returns a handle for lifecycle
+// management.
+func (fa *flowAggregator) launchExporter(exp exporter.Runner) *exporterHandle {
+	ctx, cancel := context.WithCancel(context.Background())
+	doneCh := make(chan struct{})
+	go func() {
+		defer close(doneCh)
+		exp.Run(ctx, fa.recordBuffer)
+	}()
+	return &exporterHandle{
+		exporter: exp,
+		cancel:   cancel,
+		doneCh:   doneCh,
+	}
 }
 
 func (fa *flowAggregator) initCollectors() error {
@@ -324,71 +340,100 @@ func (fa *flowAggregator) Run(stopCh <-chan struct{}) {
 		}()
 	}
 
-	if fa.ipfixExporter != nil {
-		fa.ipfixExporter.Start()
-	}
-	if fa.clickHouseExporter != nil {
-		fa.clickHouseExporter.Start()
-	}
-	if fa.s3Exporter != nil {
-		fa.s3Exporter.Start()
-	}
-	if fa.logExporter != nil {
-		fa.logExporter.Start()
-	}
+	fa.initExporters()
 
 	wg.Add(1)
 	go func() {
-		// We want to make sure that flowExportLoop returns before
-		// returning from this function. This is because flowExportLoop
-		// is in charge of cleanly stopping the exporters.
 		defer wg.Done()
 		fa.flowExportLoop(stopCh)
 	}()
 	wg.Add(1)
 	go func() {
-		// there is no strong reason to wait for this function to return
-		// on stop, but it does seem like the best thing to do.
 		defer wg.Done()
 		fa.watchConfiguration(stopCh)
-		// the watcher should not be closed until watchConfiguration returns.
-		// note that it is safe to close an fsnotify watcher multiple times,
-		// for example:
-		// https://github.com/fsnotify/fsnotify/blob/v1.6.0/backend_inotify.go#L184
-		// in practice, this should only happen during unit tests.
 		fa.configWatcher.Close()
 	}()
 	<-stopCh
 	if fa.aggregationProcess != nil {
 		fa.aggregationProcess.Stop()
 	}
+	fa.recordBuffer.Shutdown()
+	fa.stopAllExporters()
 	if fa.certificateUpdateCh != nil {
 		close(fa.certificateUpdateCh)
 	}
 	wg.Wait()
 }
 
-// flowExportLoop is the main loop for the FlowAggregator. It runs in a single
-// goroutine. All calls to exporter.Interface methods happen within this
-// function, hence preventing any concurrency issue as the exporter.Interface
-// implementations are not safe for concurrent access.
+// initExporters reads the initial configuration and launches exporter
+// goroutines for all enabled exporters.
+func (fa *flowAggregator) initExporters() {
+	fa.exportersMutex.Lock()
+	defer fa.exportersMutex.Unlock()
+	opt, err := options.LoadConfig(fa.configData)
+	if err != nil {
+		klog.ErrorS(err, "Error loading config during exporter init")
+		return
+	}
+	if opt.Config.FlowCollector.Enable {
+		exp := newIPFIXExporter(fa.clusterUUID, fa.clusterID, opt, fa.registry)
+		fa.ipfixHandle = fa.launchExporter(exp)
+		klog.InfoS("Started IPFIX exporter")
+	}
+	if opt.Config.ClickHouse.Enable {
+		exp, err := newClickHouseExporter(fa.clusterUUID, opt)
+		if err != nil {
+			klog.ErrorS(err, "Error when creating ClickHouse export process")
+		} else {
+			fa.clickHouseHandle = fa.launchExporter(exp)
+			klog.InfoS("Started ClickHouse exporter")
+		}
+	}
+	if opt.Config.S3Uploader.Enable {
+		exp, err := newS3Exporter(fa.clusterUUID, opt)
+		if err != nil {
+			klog.ErrorS(err, "Error when creating S3 export process")
+		} else {
+			fa.s3Handle = fa.launchExporter(exp)
+			klog.InfoS("Started S3 exporter")
+		}
+	}
+	if opt.Config.FlowLogger.Enable {
+		exp, err := newLogExporter(opt)
+		if err != nil {
+			klog.ErrorS(err, "Error when creating log export process")
+		} else {
+			fa.logHandle = fa.launchExporter(exp)
+			klog.InfoS("Started log exporter")
+		}
+	}
+}
+
+// stopAllExporters stops all running exporter goroutines.
+func (fa *flowAggregator) stopAllExporters() {
+	fa.exportersMutex.Lock()
+	defer fa.exportersMutex.Unlock()
+	if fa.ipfixHandle != nil {
+		fa.ipfixHandle.stop()
+		fa.ipfixHandle = nil
+	}
+	if fa.clickHouseHandle != nil {
+		fa.clickHouseHandle.stop()
+		fa.clickHouseHandle = nil
+	}
+	if fa.s3Handle != nil {
+		fa.s3Handle.stop()
+		fa.s3Handle = nil
+	}
+	if fa.logHandle != nil {
+		fa.logHandle.stop()
+		fa.logHandle = nil
+	}
+}
+
+// flowExportLoop reads records from recordCh, enriches them, and produces them
+// into the ring buffer. Each exporter independently consumes from the buffer.
 func (fa *flowAggregator) flowExportLoop(stopCh <-chan struct{}) {
-	defer func() {
-		// We stop the exporters from flowExportLoop and not from Run,
-		// to avoid any possible race condition.
-		if fa.ipfixExporter != nil {
-			fa.ipfixExporter.Stop()
-		}
-		if fa.clickHouseExporter != nil {
-			fa.clickHouseExporter.Stop()
-		}
-		if fa.s3Exporter != nil {
-			fa.s3Exporter.Stop()
-		}
-		if fa.logExporter != nil {
-			fa.logExporter.Stop()
-		}
-	}()
 	switch fa.aggregatorMode {
 	case flowaggregatorconfig.AggregatorModeAggregate:
 		fa.flowExportLoopAggregate(stopCh)
@@ -397,10 +442,9 @@ func (fa *flowAggregator) flowExportLoop(stopCh <-chan struct{}) {
 	}
 }
 
-func (fa *flowAggregator) proxyRecord(record *flowpb.Flow) error {
+func (fa *flowAggregator) proxyRecord(record *flowpb.Flow) {
 	sourceAddress := net.IP(record.Ip.Source).String()
 	destinationAddress := net.IP(record.Ip.Destination).String()
-	isIPv6 := record.Ip.Version == flowpb.IPVersion_IP_VERSION_6
 	startTime := record.StartTs.AsTime()
 	flowType := record.K8S.FlowType
 	withSource := record.K8S.SourcePodName != ""
@@ -433,26 +477,13 @@ func (fa *flowAggregator) proxyRecord(record *flowpb.Flow) error {
 		fa.fillEgressNodeUID(record, startTime)
 	}
 	fa.fillPodLabels(sourceAddress, destinationAddress, record, startTime)
-	return fa.sendRecord(record, isIPv6)
+	fa.produceRecord(record)
 }
 
 func (fa *flowAggregator) flowExportLoopProxy(stopCh <-chan struct{}) {
 	logTicker := time.NewTicker(fa.logTickerDuration)
 	defer logTicker.Stop()
-	const flushTickerDuration = 1 * time.Second
-	flushTicker := time.NewTicker(flushTickerDuration)
-	defer flushTicker.Stop()
 	recordCh := fa.recordCh
-
-	proxyRecord := func(record *flowpb.Flow) {
-		if err := fa.proxyRecord(record); err != nil {
-			fa.numRecordsDropped.Add(1)
-			if errors.Is(err, exporter.ErrIPFIXExporterBackoff) {
-				return
-			}
-			klog.ErrorS(err, "Failed to proxy record")
-		}
-	}
 
 	updateCh := fa.updateCh
 	for {
@@ -464,13 +495,8 @@ func (fa *flowAggregator) flowExportLoopProxy(stopCh <-chan struct{}) {
 				recordCh = nil
 				break
 			}
-			proxyRecord(record)
-		case <-flushTicker.C:
-			if err := fa.flushExporters(); err != nil {
-				klog.ErrorS(err, "Error when flushing exporters")
-			}
+			fa.proxyRecord(record)
 		case <-logTicker.C:
-			// Add visibility of processing stats of Flow Aggregator
 			klog.V(4).InfoS("Total number of records received", "count", fa.getNumRecordsReceived())
 			klog.V(4).InfoS("Total number of records exported by each active exporter", "count", fa.numRecordsExported.Load())
 			klog.V(4).InfoS("Total number of records dropped", "count", fa.numRecordsDropped.Load())
@@ -501,20 +527,13 @@ func (fa *flowAggregator) flowExportLoopAggregate(stopCh <-chan struct{}) {
 		case <-stopCh:
 			return
 		case <-expireTimer.C:
-			// Pop the flow record item from expire priority queue in the Aggregation
-			// Process and send the flow records.
 			if err := fa.aggregationProcess.ForAllExpiredFlowRecordsDo(fa.sendAggregatedRecord); err != nil {
 				klog.ErrorS(err, "Error when sending expired flow records")
 				expireTimer.Reset(fa.activeFlowRecordTimeout)
 				continue
 			}
-			// Get the new expiry and reset the timer.
 			expireTimer.Reset(fa.aggregationProcess.GetExpiryFromExpirePriorityQueue())
-			if err := fa.flushExporters(); err != nil {
-				klog.ErrorS(err, "Error when flushing exporters")
-			}
 		case <-logTicker.C:
-			// Add visibility of processing stats of Flow Aggregator
 			klog.V(4).InfoS("Total number of records received", "count", fa.getNumRecordsReceived())
 			klog.V(4).InfoS("Total number of records exported by each active exporter", "count", fa.numRecordsExported.Load())
 			klog.V(4).InfoS("Total number of flows stored in Flow Aggregator", "count", fa.aggregationProcess.GetNumFlows())
@@ -533,43 +552,14 @@ func (fa *flowAggregator) flowExportLoopAggregate(stopCh <-chan struct{}) {
 	}
 }
 
-func (fa *flowAggregator) sendRecord(record *flowpb.Flow, isRecordIPv6 bool) error {
-	if fa.ipfixExporter != nil {
-		if err := fa.ipfixExporter.AddRecord(record, isRecordIPv6); err != nil {
-			return err
-		}
-	}
-	if fa.clickHouseExporter != nil {
-		if err := fa.clickHouseExporter.AddRecord(record, isRecordIPv6); err != nil {
-			return err
-		}
-	}
-	if fa.s3Exporter != nil {
-		if err := fa.s3Exporter.AddRecord(record, isRecordIPv6); err != nil {
-			return err
-		}
-	}
-	if fa.logExporter != nil {
-		if err := fa.logExporter.AddRecord(record, isRecordIPv6); err != nil {
-			return err
-		}
-	}
+// produceRecord publishes a flow record into the ring buffer for all active
+// exporter consumers to pick up independently.
+func (fa *flowAggregator) produceRecord(record *flowpb.Flow) {
+	fa.recordBuffer.Produce(record)
 	fa.numRecordsExported.Add(1)
-	return nil
-}
-
-func (fa *flowAggregator) flushExporters() error {
-	if fa.ipfixExporter != nil {
-		if err := fa.ipfixExporter.Flush(); err != nil {
-			return err
-		}
-	}
-	// Other exporters don't leverage Flush for now, so we skip them.
-	return nil
 }
 
 func (fa *flowAggregator) sendAggregatedRecord(key intermediate.FlowKey, record *intermediate.AggregationFlowRecord) error {
-	isRecordIPv4 := fa.aggregationProcess.IsAggregatedRecordIPv4(*record)
 	startTime := record.Record.StartTs.AsTime()
 	if !fa.aggregationProcess.AreCorrelatedFieldsFilled(*record) {
 		fa.fillK8sMetadata(key.SourceAddress, key.DestinationAddress, record.Record, startTime)
@@ -584,9 +574,10 @@ func (fa *flowAggregator) sendAggregatedRecord(key intermediate.FlowKey, record 
 		}
 		fa.aggregationProcess.SetExternalFieldsFilled(record, true)
 	}
-	if err := fa.sendRecord(record.Record, !isRecordIPv4); err != nil {
-		return err
-	}
+	// In Aggregate mode, we need to clone the record before placing it in the ring buffer, as
+	// it is "owned" by the aggregation process and will be updated as new records are received
+	// from the FlowExporters.
+	fa.produceRecord(proto.CloneOf(record.Record))
 	if err := fa.aggregationProcess.ResetStatAndThroughputElementsInRecord(record.Record); err != nil {
 		return err
 	}
@@ -742,10 +733,10 @@ func (fa *flowAggregator) GetRecordMetrics() querier.Metrics {
 	}
 	fa.exportersMutex.Lock()
 	defer fa.exportersMutex.Unlock()
-	metrics.WithClickHouseExporter = fa.clickHouseExporter != nil
-	metrics.WithS3Exporter = fa.s3Exporter != nil
-	metrics.WithLogExporter = fa.logExporter != nil
-	metrics.WithIPFIXExporter = fa.ipfixExporter != nil
+	metrics.WithClickHouseExporter = fa.clickHouseHandle != nil
+	metrics.WithS3Exporter = fa.s3Handle != nil
+	metrics.WithLogExporter = fa.logHandle != nil
+	metrics.WithIPFIXExporter = fa.ipfixHandle != nil
 	return metrics
 }
 
@@ -800,101 +791,108 @@ func (fa *flowAggregator) handleWatcherEvent() error {
 }
 
 func (fa *flowAggregator) updateFlowAggregator(opt *options.Options) {
-	// This function potentially modifies the exporter pointer fields (e.g.,
-	// fa.ipfixExporter). We protect these writes by locking fa.exportersMutex, so that
-	// GetRecordMetrics() can safely read the fields (by also locking the mutex).
+	// This function potentially modifies the exporter handle fields (e.g.,
+	// fa.ipfixHandle). We protect these writes by locking fa.exportersMutex, so
+	// that GetRecordMetrics() can safely read the fields (by also locking the mutex).
 	fa.exportersMutex.Lock()
 	defer fa.exportersMutex.Unlock()
-	// If user tries to change the mode dynamically, it makes sense to error out immediately and
-	// ignore other updates, as this is such a major configuration parameter.
-	// Unsupported "minor" updates are handled at the end of this function.
+
+	// If user tries to change the mode dynamically, it makes sense to error out
+	// immediately and ignore other updates, as this is such a major configuration
+	// parameter. Unsupported "minor" updates are handled at the end of this function.
 	if opt.AggregatorMode != fa.aggregatorMode {
 		klog.ErrorS(nil, "FlowAggregator mode cannot be changed without restarting")
 		return
 	}
+
+	// IPFIX exporter: stop-and-replace
 	if opt.Config.FlowCollector.Enable {
-		if fa.ipfixExporter == nil {
+		if fa.ipfixHandle != nil {
+			klog.InfoS("Replacing Flow-Collector exporter")
+			fa.ipfixHandle.stop()
+			fa.ipfixHandle = nil
+		} else {
 			klog.InfoS("Enabling Flow-Collector")
-			fa.ipfixExporter = newIPFIXExporter(fa.clusterUUID, fa.clusterID, opt, fa.registry)
-			fa.ipfixExporter.Start()
-			klog.InfoS("Enabled Flow-Collector")
-		} else {
-			fa.ipfixExporter.UpdateOptions(opt)
 		}
-	} else {
-		if fa.ipfixExporter != nil {
-			klog.InfoS("Disabling Flow-Collector")
-			fa.ipfixExporter.Stop()
-			fa.ipfixExporter = nil
-			klog.InfoS("Disabled Flow-Collector")
-		}
+		exp := newIPFIXExporter(fa.clusterUUID, fa.clusterID, opt, fa.registry)
+		fa.ipfixHandle = fa.launchExporter(exp)
+		klog.InfoS("Started Flow-Collector exporter")
+	} else if fa.ipfixHandle != nil {
+		klog.InfoS("Disabling Flow-Collector")
+		fa.ipfixHandle.stop()
+		fa.ipfixHandle = nil
+		klog.InfoS("Disabled Flow-Collector")
 	}
+
+	// ClickHouse exporter: stop-and-replace
 	if opt.Config.ClickHouse.Enable {
-		if fa.clickHouseExporter == nil {
+		if fa.clickHouseHandle != nil {
+			klog.InfoS("Replacing ClickHouse exporter")
+			fa.clickHouseHandle.stop()
+			fa.clickHouseHandle = nil
+		} else {
 			klog.InfoS("Enabling ClickHouse")
-			var err error
-			fa.clickHouseExporter, err = newClickHouseExporter(fa.clusterUUID, opt)
-			if err != nil {
-				klog.ErrorS(err, "Error when creating ClickHouse export process")
-				return
-			}
-			fa.clickHouseExporter.Start()
-			klog.InfoS("Enabled ClickHouse")
+		}
+		exp, err := newClickHouseExporter(fa.clusterUUID, opt)
+		if err != nil {
+			klog.ErrorS(err, "Error when creating ClickHouse export process")
 		} else {
-			fa.clickHouseExporter.UpdateOptions(opt)
+			fa.clickHouseHandle = fa.launchExporter(exp)
+			klog.InfoS("Started ClickHouse exporter")
 		}
-	} else {
-		if fa.clickHouseExporter != nil {
-			klog.InfoS("Disabling ClickHouse")
-			fa.clickHouseExporter.Stop()
-			fa.clickHouseExporter = nil
-			klog.InfoS("Disabled ClickHouse")
-		}
+	} else if fa.clickHouseHandle != nil {
+		klog.InfoS("Disabling ClickHouse")
+		fa.clickHouseHandle.stop()
+		fa.clickHouseHandle = nil
+		klog.InfoS("Disabled ClickHouse")
 	}
+
+	// S3 exporter: stop-and-replace
 	if opt.Config.S3Uploader.Enable {
-		if fa.s3Exporter == nil {
+		if fa.s3Handle != nil {
+			klog.InfoS("Replacing S3 exporter")
+			fa.s3Handle.stop()
+			fa.s3Handle = nil
+		} else {
 			klog.InfoS("Enabling S3Uploader")
-			var err error
-			fa.s3Exporter, err = newS3Exporter(fa.clusterUUID, opt)
-			if err != nil {
-				klog.ErrorS(err, "Error when creating S3 export process")
-				return
-			}
-			fa.s3Exporter.Start()
-			klog.InfoS("Enabled S3Uploader")
+		}
+		exp, err := newS3Exporter(fa.clusterUUID, opt)
+		if err != nil {
+			klog.ErrorS(err, "Error when creating S3 export process")
 		} else {
-			fa.s3Exporter.UpdateOptions(opt)
+			fa.s3Handle = fa.launchExporter(exp)
+			klog.InfoS("Started S3 exporter")
 		}
-	} else {
-		if fa.s3Exporter != nil {
-			klog.InfoS("Disabling S3Uploader")
-			fa.s3Exporter.Stop()
-			fa.s3Exporter = nil
-			klog.InfoS("Disabled S3Uploader")
-		}
+	} else if fa.s3Handle != nil {
+		klog.InfoS("Disabling S3Uploader")
+		fa.s3Handle.stop()
+		fa.s3Handle = nil
+		klog.InfoS("Disabled S3Uploader")
 	}
+
+	// Log exporter: stop-and-replace
 	if opt.Config.FlowLogger.Enable {
-		if fa.logExporter == nil {
-			klog.InfoS("Enabling FlowLogger")
-			var err error
-			fa.logExporter, err = newLogExporter(opt)
-			if err != nil {
-				klog.ErrorS(err, "Error when creating log export process")
-				return
-			}
-			fa.logExporter.Start()
-			klog.InfoS("Enabled FlowLogger")
+		if fa.logHandle != nil {
+			klog.InfoS("Replacing FlowLogger exporter")
+			fa.logHandle.stop()
+			fa.logHandle = nil
 		} else {
-			fa.logExporter.UpdateOptions(opt)
+			klog.InfoS("Enabling FlowLogger")
 		}
-	} else {
-		if fa.logExporter != nil {
-			klog.InfoS("Disabling FlowLogger")
-			fa.logExporter.Stop()
-			fa.logExporter = nil
-			klog.InfoS("Disabled FlowLogger")
+		exp, err := newLogExporter(opt)
+		if err != nil {
+			klog.ErrorS(err, "Error when creating log export process")
+		} else {
+			fa.logHandle = fa.launchExporter(exp)
+			klog.InfoS("Started FlowLogger exporter")
 		}
+	} else if fa.logHandle != nil {
+		klog.InfoS("Disabling FlowLogger")
+		fa.logHandle.stop()
+		fa.logHandle = nil
+		klog.InfoS("Disabled FlowLogger")
 	}
+
 	if opt.Config.RecordContents.PodLabels != fa.includePodLabels {
 		fa.includePodLabels = opt.Config.RecordContents.PodLabels
 		klog.InfoS("Updated recordContents.podLabels configuration", "value", fa.includePodLabels)
