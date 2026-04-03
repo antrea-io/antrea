@@ -18,6 +18,7 @@ package v1alpha1
 
 import (
 	v1 "k8s.io/api/core/v1"
+	discoveryv1 "k8s.io/api/discovery/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	mcs "sigs.k8s.io/mcs-api/pkg/apis/v1alpha1"
 
@@ -27,7 +28,13 @@ import (
 
 // EndpointsImport imports Endpoints.
 type EndpointsImport struct {
+	// Subsets is the list of endpoint subsets.
+	// Deprecated: Use Endpoints and Ports instead.
 	Subsets []v1.EndpointSubset `json:"subsets,omitempty"`
+	// Endpoints is the list of endpoints imported from EndpointSlices.
+	Endpoints []discoveryv1.Endpoint `json:"endpoints,omitempty"`
+	// Ports is the list of endpoint ports imported from EndpointSlices.
+	Ports []discoveryv1.EndpointPort `json:"ports,omitempty"`
 }
 
 // ExternalEntityImport imports ExternalEntity.

@@ -21,9 +21,11 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
+	discovery "k8s.io/api/discovery/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/utils/ptr"
 	k8smcsv1alpha1 "sigs.k8s.io/mcs-api/pkg/apis/v1alpha1"
 
 	"antrea.io/antrea/multicluster/apis/multicluster/constants"
@@ -31,33 +33,38 @@ import (
 )
 
 // This file contains test cases for below basic scenarios:
-//  * Create ResourceExports when a ServiceExport is created.
-//  * Update ResourceExport when exported Service is updated.
-//  * Update ServiceExport status when the Service doesn't exist
-//  * Update ResourceExport when the Endpoints has new Endpoints
-//  * Delete ResourceExport when the ServiceExport is deleted
+//   - Create ResourceExports when a ServiceExport is created.
+//   - Update ResourceExport when exported Service is updated.
+//   - Update ServiceExport status when the Service doesn't exist
+//   - Update ResourceExport when the EndpointSlice has new Endpoints
+//   - Delete ResourceExport when the ServiceExport is deleted
 
 var _ = Describe("ServiceExport controller", func() {
 	svcSpec := corev1.ServiceSpec{
 		Ports: svcPorts,
 	}
 
-	endpoint := &corev1.Endpoints{
+	ready := true
+	epSlice := &discovery.EndpointSlice{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      "nginx-svc",
+			Name:      "nginx-svc-abc",
 			Namespace: testNamespace,
+			Labels: map[string]string{
+				discovery.LabelServiceName: "nginx-svc",
+			},
 		},
-		Subsets: []corev1.EndpointSubset{
+		AddressType: discovery.AddressTypeIPv4,
+		Endpoints: []discovery.Endpoint{
 			{
-				Addresses: []corev1.EndpointAddress{
-					{IP: "1.2.3.4"},
-				},
-				Ports: []corev1.EndpointPort{
-					{
-						Name:     "http",
-						Port:     80,
-						Protocol: corev1.ProtocolTCP},
-				},
+				Addresses:  []string{"1.2.3.4"},
+				Conditions: discovery.EndpointConditions{Ready: &ready},
+			},
+		},
+		Ports: []discovery.EndpointPort{
+			{
+				Name:     ptr.To("http"),
+				Port:     ptr.To(int32(80)),
+				Protocol: ptr.To(corev1.ProtocolTCP),
 			},
 		},
 	}
@@ -88,29 +95,16 @@ var _ = Describe("ServiceExport controller", func() {
 	svcResExportName := LocalClusterID + "-" + svc.Namespace + "-" + svc.Name + "-service"
 	epResExportName := LocalClusterID + "-" + svc.Namespace + "-" + svc.Name + "-endpoints"
 
-	expectedEpResExport := &mcsv1alpha1.ResourceExport{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      epResExportName,
-			Namespace: LeaderNamespace,
-		},
-		Spec: mcsv1alpha1.ResourceExportSpec{
-			ClusterID: LocalClusterID,
-			Name:      svc.Name,
-			Namespace: svc.Namespace,
-			Kind:      constants.EndpointsKind,
-		},
-	}
-
 	ctx := context.Background()
 	It("Should create ResourceExports when new ServiceExport for ClusterIP Service is created", func() {
 		By("By exposing a ClusterIP type of Service")
-		Expect(k8sClient.Create(ctx, endpoint)).Should(Succeed())
+		Expect(k8sClient.Create(ctx, epSlice)).Should(Succeed())
 		Expect(k8sClient.Create(ctx, svc)).Should(Succeed())
 		Expect(k8sClient.Create(ctx, svcExport)).Should(Succeed())
-		var err error
 		latestSvc := &corev1.Service{}
-		err = k8sClient.Get(ctx, svcNamespacedName, latestSvc)
+		err := k8sClient.Get(ctx, svcNamespacedName, latestSvc)
 		Expect(err).ToNot(HaveOccurred())
+
 		svcResExport := &mcsv1alpha1.ResourceExport{}
 		epResExport := &mcsv1alpha1.ResourceExport{}
 		Eventually(func() bool {
@@ -119,28 +113,28 @@ var _ = Describe("ServiceExport controller", func() {
 		}, timeout, interval).Should(BeTrue())
 		Expect(svcResExport.ObjectMeta.Labels["sourceKind"]).Should(Equal("Service"))
 		Expect(len(svcResExport.Spec.Service.ServiceSpec.Ports)).Should(Equal(len(svcPorts)))
-		expectedEpResExport.Spec.Endpoints = &mcsv1alpha1.EndpointsExport{
-			Subsets: []corev1.EndpointSubset{
-				{
-					Addresses: []corev1.EndpointAddress{
-						{
-							IP: latestSvc.Spec.ClusterIP,
-						},
-					},
-					Ports: epPorts,
-				},
-			},
-		}
+
+		// Wait until the endpoints ResourceExport exists and has Endpoints populated.
 		Eventually(func() bool {
 			err = k8sClient.Get(ctx, types.NamespacedName{Namespace: LeaderNamespace, Name: epResExportName}, epResExport)
-			return err == nil
+			if err != nil {
+				return false
+			}
+			return epResExport.Spec.Endpoints != nil && len(epResExport.Spec.Endpoints.Endpoints) > 0
 		}, timeout, interval).Should(BeTrue())
 		Expect(epResExport.ObjectMeta.Labels["sourceKind"]).Should(Equal("Endpoints"))
-		Expect(epResExport.Spec).Should(Equal(expectedEpResExport.Spec))
+		Expect(epResExport.Spec.Kind).Should(Equal(constants.EndpointsKind))
+		Expect(epResExport.Spec.ClusterID).Should(Equal(LocalClusterID))
+		Expect(epResExport.Spec.Name).Should(Equal(svc.Name))
+		Expect(epResExport.Spec.Namespace).Should(Equal(svc.Namespace))
+		// With ClusterIP endpoint type, the exported endpoints should use the Service ClusterIP.
+		Expect(epResExport.Spec.Endpoints).ShouldNot(BeNil())
+		Expect(len(epResExport.Spec.Endpoints.Endpoints)).Should(Equal(1))
+		Expect(epResExport.Spec.Endpoints.Endpoints[0].Addresses).Should(ConsistOf(latestSvc.Spec.ClusterIP))
 	})
 
 	It("Should update existing ResourceExport when existing Service is updated", func() {
-		By("By update Service's ports")
+		By("By updating Service's ports")
 		newPorts := []corev1.ServicePort{
 			{
 				Name:     "udp88",
@@ -165,7 +159,7 @@ var _ = Describe("ServiceExport controller", func() {
 	})
 
 	It("Should update existing ServiceExport status when corresponding Service doesn't exist", func() {
-		By("By create a ServiceExport without a real Service")
+		By("By creating a ServiceExport without a real Service")
 		Expect(k8sClient.Create(ctx, svcExportNoService)).Should(Succeed())
 		time.Sleep(2 * time.Second)
 		latestSvcExportNoService := &k8smcsv1alpha1.ServiceExport{}
@@ -180,7 +174,7 @@ var _ = Describe("ServiceExport controller", func() {
 	})
 
 	It("Should delete existing ResourceExport when existing ServiceExport is deleted", func() {
-		By("By remove a ServiceExport resource")
+		By("By removing a ServiceExport resource")
 		err := k8sClient.Delete(ctx, svcExport)
 		Expect(err).ToNot(HaveOccurred())
 		resExp := &mcsv1alpha1.ResourceExport{}
@@ -203,25 +197,31 @@ var _ = Describe("ServiceExport controller", func() {
 			},
 			Spec: svcSpec,
 		}
-		ep := &corev1.Endpoints{
+		eps := &discovery.EndpointSlice{
 			ObjectMeta: metav1.ObjectMeta{
-				Name:      "nginx-svc-deleted",
+				Name:      "nginx-svc-deleted-xyz",
 				Namespace: testNamespace,
+				Labels: map[string]string{
+					discovery.LabelServiceName: "nginx-svc-deleted",
+				},
 			},
-			Subsets: []corev1.EndpointSubset{
+			AddressType: discovery.AddressTypeIPv4,
+			Endpoints: []discovery.Endpoint{
 				{
-					Addresses: []corev1.EndpointAddress{
-						{
-							IP:       "192.168.170.11",
-							Hostname: "pod1",
-						},
-					},
-					Ports: epPorts,
+					Addresses:  []string{"192.168.170.11"},
+					Conditions: discovery.EndpointConditions{Ready: &ready},
+				},
+			},
+			Ports: []discovery.EndpointPort{
+				{
+					Name:     ptr.To("http"),
+					Port:     ptr.To(int32(80)),
+					Protocol: ptr.To(corev1.ProtocolTCP),
 				},
 			},
 		}
 		svcResExportName := LocalClusterID + "-" + svc.Namespace + "-" + svc.Name + "-service"
-		epResExportName := LocalClusterID + "-" + ep.Namespace + "-" + ep.Name + "-endpoints"
+		epResExportName := LocalClusterID + "-" + svc.Namespace + "-" + svc.Name + "-endpoints"
 
 		svcExportDeletedService := &k8smcsv1alpha1.ServiceExport{
 			ObjectMeta: metav1.ObjectMeta{
@@ -230,7 +230,7 @@ var _ = Describe("ServiceExport controller", func() {
 			},
 		}
 		Expect(k8sClient.Create(ctx, svc)).Should(Succeed())
-		Expect(k8sClient.Create(ctx, ep)).Should(Succeed())
+		Expect(k8sClient.Create(ctx, eps)).Should(Succeed())
 		Expect(k8sClient.Create(ctx, svcExportDeletedService)).Should(Succeed())
 		time.Sleep(2 * time.Second)
 
@@ -238,13 +238,13 @@ var _ = Describe("ServiceExport controller", func() {
 		Expect(err).ToNot(HaveOccurred())
 		time.Sleep(2 * time.Second)
 
-		latestsvcExportDeletedService := &k8smcsv1alpha1.ServiceExport{}
+		latestSvcExportDeletedService := &k8smcsv1alpha1.ServiceExport{}
 		err = k8sClient.Get(ctx, types.NamespacedName{
 			Namespace: svcExportDeletedService.Namespace,
 			Name:      svcExportDeletedService.Name,
-		}, latestsvcExportDeletedService)
+		}, latestSvcExportDeletedService)
 		Expect(err).ToNot(HaveOccurred())
-		conditions := latestsvcExportDeletedService.Status.Conditions
+		conditions := latestSvcExportDeletedService.Status.Conditions
 		Expect(len(conditions)).Should(Equal(1))
 		Expect(*conditions[0].Message).Should(Equal("Service does not exist"))
 

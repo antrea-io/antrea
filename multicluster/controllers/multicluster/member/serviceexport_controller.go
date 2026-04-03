@@ -32,6 +32,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/klog/v2"
+	"k8s.io/utils/ptr"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -61,23 +62,24 @@ type (
 		name      string
 		namespace string
 		subsets   []corev1.EndpointSubset
+		endpoints []discovery.Endpoint
+		ports     []discovery.EndpointPort
 	}
 
 	// ServiceExportReconciler reconciles a ServiceExport object in the member cluster.
 	ServiceExportReconciler struct {
 		client.Client
-		mutex                sync.Mutex
-		Scheme               *runtime.Scheme
-		commonAreaGetter     commonarea.RemoteCommonAreaGetter
-		remoteCommonArea     commonarea.RemoteCommonArea
-		installedSvcs        cache.Indexer
-		installedEps         cache.Indexer
-		namespace            string
-		leaderNamespace      string
-		leaderClusterID      string
-		localClusterID       string
-		endpointIPType       string
-		endpointSliceEnabled bool
+		mutex            sync.Mutex
+		Scheme           *runtime.Scheme
+		commonAreaGetter commonarea.RemoteCommonAreaGetter
+		remoteCommonArea commonarea.RemoteCommonArea
+		installedSvcs    cache.Indexer
+		installedEps     cache.Indexer
+		namespace        string
+		leaderNamespace  string
+		leaderClusterID  string
+		localClusterID   string
+		endpointIPType   string
 	}
 )
 
@@ -97,17 +99,15 @@ func NewServiceExportReconciler(
 	scheme *runtime.Scheme,
 	commonAreaGetter commonarea.RemoteCommonAreaGetter,
 	endpointIPType string,
-	endpointSliceEnabled bool,
 	namespace string) *ServiceExportReconciler {
 	reconciler := &ServiceExportReconciler{
-		Client:               client,
-		Scheme:               scheme,
-		namespace:            namespace,
-		commonAreaGetter:     commonAreaGetter,
-		endpointIPType:       endpointIPType,
-		endpointSliceEnabled: endpointSliceEnabled,
-		installedSvcs:        cache.NewIndexer(svcInfoKeyFunc, cache.Indexers{}),
-		installedEps:         cache.NewIndexer(epInfoKeyFunc, cache.Indexers{}),
+		Client:           client,
+		Scheme:           scheme,
+		namespace:        namespace,
+		commonAreaGetter: commonAreaGetter,
+		endpointIPType:   endpointIPType,
+		installedSvcs:    cache.NewIndexer(svcInfoKeyFunc, cache.Indexers{}),
+		installedEps:     cache.NewIndexer(epInfoKeyFunc, cache.Indexers{}),
 	}
 
 	return reconciler
@@ -137,9 +137,10 @@ func epInfoKeyFunc(obj interface{}) (string, error) {
 // and also Services/Endpoints resources. It will create/update/remove ResourceExport
 // in a leader cluster for corresponding ServiceExport from a member cluster.
 func (r *ServiceExportReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	if skip := r.checkRemoteCommonArea(); skip {
-		klog.V(2).InfoS("Skip reconciling ServiceExports since there is no connection to the leader")
-		return ctrl.Result{}, nil
+	if requeue := r.checkRemoteCommonArea(); requeue {
+		klog.V(2).InfoS("RemoteCommonArea not ready yet, requeue ServiceExport reconciliation",
+			"serviceexport", req.NamespacedName)
+		return ctrl.Result{Requeue: true}, nil
 	}
 
 	klog.V(2).InfoS("Reconciling ServiceExport", "serviceexport", req.NamespacedName)
@@ -219,7 +220,7 @@ func (r *ServiceExportReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 	}
 
 	// The ExternalName type of Service is not supported since it has no ClusterIP
-	// assgined to the Service.
+	// assigned to the Service.
 	if svc.Spec.Type == corev1.ServiceTypeExternalName {
 		err = r.updateSvcExportStatus(ctx, req, serviceNotSupported)
 		if err != nil {
@@ -242,27 +243,19 @@ func (r *ServiceExportReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 
 	// Delete existing ResourceExport if the exported Service has no ready Endpoints,
 	// and update the ServiceExport status.
-	eps := &corev1.Endpoints{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      req.Name,
-			Namespace: req.Namespace,
-		},
-	}
 
+	// newEpInfo holds the endpoint data that will be stored in the ResourceExport.
+	// Endpoints/Ports are populated instead of Subsets since EndpointSlice is supported by default.
+	var newEpInfo epInfo
 	var hasReadyEndpoints bool
-	var newSubsets []corev1.EndpointSubset
-	if r.endpointSliceEnabled {
-		newSubsets, hasReadyEndpoints, err = r.getSubsetsFromEndpointSlice(ctx, req)
-		if err != nil {
-			return ctrl.Result{}, err
-		}
-	} else {
-		newSubsets, hasReadyEndpoints, err = r.checkSubsetsFromEndpoint(ctx, req, eps)
-		if err != nil {
-			klog.ErrorS(err, "Failed to get Endpoints", "endpoints", req.String())
-			return ctrl.Result{}, err
-		}
+	var newEndpoints []discovery.Endpoint
+	var newPorts []discovery.EndpointPort
+	newEndpoints, newPorts, hasReadyEndpoints, err = r.getEndpointsFromEndpointSlice(ctx, req)
+	if err != nil {
+		return ctrl.Result{}, err
 	}
+	newEpInfo.endpoints = newEndpoints
+	newEpInfo.ports = newPorts
 
 	if !hasReadyEndpoints {
 		// When the controller restarts, `svcInstalled` is false as the cache will be empty, but the available Endpoints of
@@ -279,16 +272,18 @@ func (r *ServiceExportReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 	}
 
 	if r.endpointIPType == common.EndpointIPTypeClusterIP {
-		svcIPAsSubset := getClusterIPEndpointSubset(svc)
-		if len(svcIPAsSubset.Addresses) == 0 {
+		clusterIPEndpoints, clusterIPPorts := getClusterIPEndpointAndPorts(svc)
+		if len(clusterIPEndpoints) == 0 {
 			err = r.updateSvcExportStatus(ctx, req, serviceNoClusterIP)
 			if err != nil {
 				return ctrl.Result{}, err
 			}
 			return ctrl.Result{}, nil
-		} else {
-			newSubsets = []corev1.EndpointSubset{svcIPAsSubset}
 		}
+		newEpInfo.endpoints = clusterIPEndpoints
+		newEpInfo.ports = clusterIPPorts
+		newEpInfo.subsets = nil
+
 	}
 
 	// We also watch Service events via events mapping function.
@@ -307,7 +302,8 @@ func (r *ServiceExportReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 
 	if epsInstalled {
 		installedEp := epsObj.(*epInfo)
-		if apiequality.Semantic.DeepEqual(newSubsets, installedEp.subsets) {
+		if apiequality.Semantic.DeepEqual(newEpInfo.endpoints, installedEp.endpoints) &&
+			apiequality.Semantic.DeepEqual(newEpInfo.ports, installedEp.ports) {
 			// When the EndpointIPType is EndpointIPTypeClusterIP, skipUpdateEPResourceExport should be false only
 			// when there is a ClusterIP/Port change or the recreation flag is true.
 			skipUpdateEPResourceExport = true
@@ -352,10 +348,9 @@ func (r *ServiceExportReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 	}
 
 	if !skipUpdateEPResourceExport {
-		eps.Subsets = newSubsets
 		klog.InfoS("Endpoints or EndpointSlices has new changes, update ResourceExport", "Service",
 			req.String(), "resourceexport", epExportNSName)
-		err = r.endpointsHandler(ctx, req, eps, epResExportName, re, r.remoteCommonArea)
+		err = r.endpointsHandler(ctx, req, newEpInfo.endpoints, newEpInfo.ports, epResExportName, re, r.remoteCommonArea)
 		if err != nil {
 			klog.ErrorS(err, "Failed to handle Endpoints or EndpointSlices change", "service", req.String())
 			return ctrl.Result{}, err
@@ -443,24 +438,24 @@ func (r *ServiceExportReconciler) updateSvcExportStatus(ctx context.Context, req
 
 	switch cause {
 	case serviceNotFound:
-		newCondition.Reason = getStringPointer("ServiceNotFound")
-		newCondition.Message = getStringPointer("Service does not exist")
+		newCondition.Reason = ptr.To("ServiceNotFound")
+		newCondition.Message = ptr.To("Service does not exist")
 	case serviceNotSupported:
-		newCondition.Reason = getStringPointer("ServiceTypeNotSupported")
-		newCondition.Message = getStringPointer("Service of ExternalName type is not supported")
+		newCondition.Reason = ptr.To("ServiceTypeNotSupported")
+		newCondition.Message = ptr.To("Service of ExternalName type is not supported")
 	case serviceNoClusterIP:
-		newCondition.Reason = getStringPointer("ServiceNoClusterIP")
-		newCondition.Message = getStringPointer("Service does not have a valid ClusterIP")
+		newCondition.Reason = ptr.To("ServiceNoClusterIP")
+		newCondition.Message = ptr.To("Service does not have a valid ClusterIP")
 	case serviceWithoutEndpoints:
-		newCondition.Reason = getStringPointer("ServiceWithoutEndpoints")
-		newCondition.Message = getStringPointer("Service has no Endpoints")
+		newCondition.Reason = ptr.To("ServiceWithoutEndpoints")
+		newCondition.Message = ptr.To("Service has no Endpoints")
 	case isImportedService:
-		newCondition.Reason = getStringPointer("ImportedService")
-		newCondition.Message = getStringPointer("The Service is imported, not allowed to export")
+		newCondition.Reason = ptr.To("ImportedService")
+		newCondition.Message = ptr.To("The Service is imported, not allowed to export")
 	case serviceExported:
 		newCondition.Status = corev1.ConditionTrue
-		newCondition.Reason = getStringPointer("Succeed")
-		newCondition.Message = getStringPointer("The Service is exported successfully")
+		newCondition.Reason = ptr.To("Succeed")
+		newCondition.Message = ptr.To("The Service is exported successfully")
 	}
 
 	svcExportConditions := svcExport.Status.DeepCopy().Conditions
@@ -502,24 +497,11 @@ func (r *ServiceExportReconciler) updateSvcExportStatus(ctx context.Context, req
 func (r *ServiceExportReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	// Watch events only when resource version changes
 	versionChangePredicates := builder.WithPredicates(predicate.ResourceVersionChangedPredicate{})
-	if r.endpointSliceEnabled {
-		return ctrl.NewControllerManagedBy(mgr).
-			For(&k8smcsv1alpha1.ServiceExport{}, versionChangePredicates).
-			Named("serviceexport").
-			Watches(&corev1.Service{}, handler.EnqueueRequestsFromMapFunc(objectMapFunc), versionChangePredicates).
-			Watches(&discovery.EndpointSlice{}, handler.EnqueueRequestsFromMapFunc(endpointSliceMapFunc), versionChangePredicates).
-			Watches(&mcv1alpha2.ClusterSet{}, handler.EnqueueRequestsFromMapFunc(r.clusterSetMapFunc),
-				builder.WithPredicates(statusReadyPredicate)).
-			WithOptions(controller.Options{
-				MaxConcurrentReconciles: common.DefaultWorkerCount,
-			}).
-			Complete(r)
-	}
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&k8smcsv1alpha1.ServiceExport{}, versionChangePredicates).
 		Named("serviceexport").
 		Watches(&corev1.Service{}, handler.EnqueueRequestsFromMapFunc(objectMapFunc), versionChangePredicates).
-		Watches(&corev1.Endpoints{}, handler.EnqueueRequestsFromMapFunc(objectMapFunc), versionChangePredicates).
+		Watches(&discovery.EndpointSlice{}, handler.EnqueueRequestsFromMapFunc(endpointSliceMapFunc), versionChangePredicates).
 		Watches(&mcv1alpha2.ClusterSet{}, handler.EnqueueRequestsFromMapFunc(r.clusterSetMapFunc),
 			builder.WithPredicates(statusReadyPredicate)).
 		WithOptions(controller.Options{
@@ -610,7 +592,7 @@ func (r *ServiceExportReconciler) serviceHandler(
 		ports:      svc.Spec.Ports,
 		svcType:    string(svc.Spec.Type),
 	}
-	r.resetResourceExport(resName, kind, svc, nil, &re)
+	r.resetResourceExport(resName, kind, svc, nil, nil, &re)
 	existingResExport := &mcv1alpha1.ResourceExport{}
 	resNamespaced := types.NamespacedName{Namespace: rc.GetNamespace(), Name: resName}
 	err := rc.Get(ctx, resNamespaced, existingResExport)
@@ -632,17 +614,19 @@ func (r *ServiceExportReconciler) serviceHandler(
 func (r *ServiceExportReconciler) endpointsHandler(
 	ctx context.Context,
 	req ctrl.Request,
-	eps *corev1.Endpoints,
+	endpoints []discovery.Endpoint,
+	ports []discovery.EndpointPort,
 	resName string,
 	re mcv1alpha1.ResourceExport,
 	rc commonarea.RemoteCommonArea) error {
 	kind := constants.EndpointsKind
 	epInfo := &epInfo{
-		name:      eps.Name,
-		namespace: eps.Namespace,
-		subsets:   eps.Subsets,
+		name:      req.Name,
+		namespace: req.Namespace,
+		endpoints: endpoints,
+		ports:     ports,
 	}
-	r.resetResourceExport(resName, kind, nil, eps, &re)
+	r.resetResourceExport(resName, kind, nil, endpoints, ports, &re)
 	existingResExport := &mcv1alpha1.ResourceExport{}
 	resNamespaced := types.NamespacedName{Namespace: rc.GetNamespace(), Name: resName}
 	err := rc.Get(ctx, resNamespaced, existingResExport)
@@ -661,7 +645,8 @@ func (r *ServiceExportReconciler) endpointsHandler(
 
 func (r *ServiceExportReconciler) resetResourceExport(resName, kind string,
 	svc *corev1.Service,
-	ep *corev1.Endpoints,
+	endpoints []discovery.Endpoint,
+	ports []discovery.EndpointPort,
 	re *mcv1alpha1.ResourceExport) mcv1alpha1.ResourceExport {
 	re.Spec.Kind = kind
 	switch kind {
@@ -675,8 +660,11 @@ func (r *ServiceExportReconciler) resetResourceExport(resName, kind string,
 		re.Labels[constants.SourceKind] = constants.ServiceKind
 	case constants.EndpointsKind:
 		re.ObjectMeta.Name = resName
-		re.Spec.Endpoints = &mcv1alpha1.EndpointsExport{
-			Subsets: ep.Subsets,
+		if len(endpoints) > 0 {
+			re.Spec.Endpoints = &mcv1alpha1.EndpointsExport{
+				Endpoints: endpoints,
+				Ports:     ports,
+			}
 		}
 		re.Labels[constants.SourceKind] = constants.EndpointsKind
 	}
@@ -717,108 +705,44 @@ func (r *ServiceExportReconciler) updateOrCreateResourceExport(resName string,
 	return nil
 }
 
-// getSubsetsFromEndpointSlice will get all ready endpoints from all the EndpointSlices which will
-// be merged to one Endpoints. In the future, we should change to track and export individual
-// EndpointSlices, rather than merge them to one Endpoints.
-func (r *ServiceExportReconciler) getSubsetsFromEndpointSlice(ctx context.Context, req ctrl.Request) ([]corev1.EndpointSubset, bool, error) {
+// getEndpointsFromEndpointSlice returns the ready endpoints and ports from all IPv4
+// EndpointSlices for the given Service, using the native discovery/v1 types.
+// When endpointIPType is ClusterIP it returns early as soon as a ready endpoint is found.
+func (r *ServiceExportReconciler) getEndpointsFromEndpointSlice(ctx context.Context, req ctrl.Request) ([]discovery.Endpoint, []discovery.EndpointPort, bool, error) {
 	epSliceList := &discovery.EndpointSliceList{}
-	hasReadyEndpoints := false
 	err := r.Client.List(ctx, epSliceList, &client.ListOptions{
 		LabelSelector: getEndpointSliceLabelSelector(req.Name),
-		Namespace:     req.Namespace})
+		Namespace:     req.Namespace,
+	})
 	if err != nil {
-		return nil, hasReadyEndpoints, err
+		return nil, nil, false, err
 	}
 	if len(epSliceList.Items) == 0 {
-		return nil, hasReadyEndpoints, nil
+		return nil, nil, false, nil
 	}
-	var subsets []corev1.EndpointSubset
+	var endpoints []discovery.Endpoint
+	var ports []discovery.EndpointPort
 	for _, eps := range epSliceList.Items {
-		if eps.AddressType == discovery.AddressTypeIPv4 {
-			var ports []corev1.EndpointPort
-			if r.endpointIPType == common.EndpointIPTypePodIP {
-				ports = convertEndpointPorts(eps.Ports)
-			}
-			subset := corev1.EndpointSubset{}
-			subset.Ports = ports
-			for _, ep := range eps.Endpoints {
-				if ep.Conditions.Ready != nil && *ep.Conditions.Ready {
-					// We only cares if there is ready Endpoints for a Service when the endpointIPType is ClusterIP,
-					// so skip handling the EndpointSubset and stop the loop early if any ready address is found.
-					if r.endpointIPType == common.EndpointIPTypeClusterIP {
-						return nil, true, nil
-					}
-					readyAddresses := ipsToEndpointAddresses(ep.Addresses)
-					if len(readyAddresses) > 0 {
-						subset.Addresses = append(subset.Addresses, readyAddresses...)
-						subsets = append(subsets, subset)
-					}
+		if eps.AddressType != discovery.AddressTypeIPv4 {
+			continue
+		}
+		if ports == nil {
+			ports = normalizeEndpointPorts(eps.Ports)
+		}
+		for _, ep := range eps.Endpoints {
+			if ep.Conditions.Ready != nil && *ep.Conditions.Ready {
+				if r.endpointIPType == common.EndpointIPTypeClusterIP {
+					return nil, ports, true, nil
 				}
+				endpoints = append(endpoints, ep)
 			}
 		}
 	}
-	return subsets, len(subsets) > 0, nil
-}
-
-func (r *ServiceExportReconciler) checkSubsetsFromEndpoint(ctx context.Context, req ctrl.Request, eps *corev1.Endpoints) ([]corev1.EndpointSubset, bool, error) {
-	var newSubsets []corev1.EndpointSubset
-	err := r.Client.Get(ctx, req.NamespacedName, eps)
-	if err == nil {
-		for _, s := range eps.Subsets {
-			subset := corev1.EndpointSubset{}
-			var newAddresses []corev1.EndpointAddress
-			for _, addr := range s.Addresses {
-				newAddresses = append(newAddresses, corev1.EndpointAddress{
-					IP: addr.IP,
-				})
-			}
-			if len(newAddresses) > 0 {
-				subset.Addresses = newAddresses
-				subset.Ports = s.Ports
-				newSubsets = append(newSubsets, subset)
-			}
-		}
-		return newSubsets, len(newSubsets) > 0, nil
-	}
-	if !apierrors.IsNotFound(err) {
-		return nil, false, err
-	}
-	return nil, false, nil
-}
-
-func convertEndpointPorts(ports []discovery.EndpointPort) []corev1.EndpointPort {
-	var v1Ports []corev1.EndpointPort
-	for _, port := range ports {
-		v1Port := corev1.EndpointPort{}
-		if port.Name != nil {
-			v1Port.Name = *port.Name
-		}
-		if port.Port != nil {
-			v1Port.Port = *port.Port
-		}
-		if port.Protocol != nil {
-			v1Port.Protocol = *port.Protocol
-		}
-		v1Port.AppProtocol = port.AppProtocol
-		v1Ports = append(v1Ports, v1Port)
-	}
-	return v1Ports
-}
-
-func ipsToEndpointAddresses(ips []string) []corev1.EndpointAddress {
-	var addresses []corev1.EndpointAddress
-	for _, ip := range ips {
-		addresses = append(addresses, corev1.EndpointAddress{IP: ip})
-	}
-	return addresses
+	return endpoints, ports, len(endpoints) > 0, nil
 }
 
 func getResourceExportName(clusterID string, req ctrl.Request, kind string) string {
 	return clusterID + "-" + req.Namespace + "-" + req.Name + "-" + kind
-}
-
-func getStringPointer(str string) *string {
-	return &str
 }
 
 func getEndpointSliceLabelSelector(svcName string) labels.Selector {
@@ -831,32 +755,48 @@ func getEndpointSliceLabelSelector(svcName string) labels.Selector {
 	return selector
 }
 
-func getClusterIPEndpointSubset(svc *corev1.Service) corev1.EndpointSubset {
-	var epSubset corev1.EndpointSubset
-	for _, ip := range svc.Spec.ClusterIPs {
-		parsedIP := net.ParseIP(ip)
-		if parsedIP.To4() == nil {
-			continue
+// normalizeEndpointPorts normalizes a slice of EndpointPorts so that a Name
+// pointer to an empty string is treated the same as nil. The Kubernetes API
+// serializes *string("") with omitempty, so it round-trips as nil; normalizing
+// here prevents spurious DeepEqual mismatches and update loops.
+func normalizeEndpointPorts(ports []discovery.EndpointPort) []discovery.EndpointPort {
+	for i := range ports {
+		if ports[i].Name != nil && *ports[i].Name == "" {
+			ports[i].Name = nil
 		}
-		epSubset.Addresses = append(epSubset.Addresses, corev1.EndpointAddress{IP: ip})
 	}
-
-	epSubset.Ports = getServiceEndpointPorts(svc.Spec.Ports)
-	return epSubset
+	return ports
 }
 
-// getServiceEndpointPorts converts Service's port to EndpointPort
-func getServiceEndpointPorts(ports []corev1.ServicePort) []corev1.EndpointPort {
-	if len(ports) == 0 {
-		return nil
+// getClusterIPEndpointAndPorts returns the Service's IPv4 ClusterIPs as discovery.Endpoint
+// entries and its ports as discovery.EndpointPort entries, for use with the EndpointSlice path.
+func getClusterIPEndpointAndPorts(svc *corev1.Service) ([]discovery.Endpoint, []discovery.EndpointPort) {
+	var addresses []string
+	for _, ip := range svc.Spec.ClusterIPs {
+		if net.ParseIP(ip).To4() == nil {
+			continue
+		}
+		addresses = append(addresses, ip)
 	}
-	var epPorts []corev1.EndpointPort
-	for _, p := range ports {
-		epPorts = append(epPorts, corev1.EndpointPort{
-			Name:     p.Name,
-			Port:     p.Port,
-			Protocol: p.Protocol,
+	if len(addresses) == 0 {
+		return nil, nil
+	}
+	ready := true
+	endpoints := []discovery.Endpoint{{
+		Addresses:  addresses,
+		Conditions: discovery.EndpointConditions{Ready: &ready},
+	}}
+	var ports []discovery.EndpointPort
+	for _, p := range svc.Spec.Ports {
+		name := p.Name
+		port := p.Port
+		proto := p.Protocol
+		ports = append(ports, discovery.EndpointPort{
+			Name:        &name,
+			Port:        &port,
+			Protocol:    &proto,
+			AppProtocol: p.AppProtocol,
 		})
 	}
-	return epPorts
+	return endpoints, normalizeEndpointPorts(ports)
 }

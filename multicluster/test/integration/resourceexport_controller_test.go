@@ -22,8 +22,10 @@ import (
 	. "github.com/onsi/gomega"
 	"github.com/stretchr/testify/assert"
 	corev1 "k8s.io/api/core/v1"
+	discovery "k8s.io/api/discovery/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	mcs "sigs.k8s.io/mcs-api/pkg/apis/v1alpha1"
 
@@ -86,6 +88,9 @@ var _ = Describe("ResourceExport controller", func() {
 			},
 		},
 	}
+	reReady := true
+	reProtocol := corev1.ProtocolTCP
+	rePort80 := int32(80)
 	epResExportA := &mcsv1alpha1.ResourceExport{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      epResExportNameA,
@@ -105,12 +110,17 @@ var _ = Describe("ResourceExport controller", func() {
 			Namespace: namespace,
 			Kind:      constants.EndpointsKind,
 			Endpoints: &mcsv1alpha1.EndpointsExport{
-				Subsets: []corev1.EndpointSubset{
+				Endpoints: []discovery.Endpoint{
 					{
-						Addresses: []corev1.EndpointAddress{
-							addr1,
-						},
-						Ports: epPorts,
+						Addresses:  []string{addr1.IP},
+						Conditions: discovery.EndpointConditions{Ready: &reReady},
+					},
+				},
+				Ports: []discovery.EndpointPort{
+					{
+						Name:     ptr.To("http"),
+						Port:     &rePort80,
+						Protocol: &reProtocol,
 					},
 				},
 			},
@@ -160,13 +170,21 @@ var _ = Describe("ResourceExport controller", func() {
 			Namespace: namespace,
 			Kind:      constants.EndpointsKind,
 			Endpoints: &mcsv1alpha1.EndpointsExport{
-				Subsets: []corev1.EndpointSubset{
+				Endpoints: []discovery.Endpoint{
 					{
-						Addresses: []corev1.EndpointAddress{
-							addr2,
-							addr3,
-						},
-						Ports: epPorts,
+						Addresses:  []string{addr2.IP},
+						Conditions: discovery.EndpointConditions{Ready: &reReady},
+					},
+					{
+						Addresses:  []string{addr3.IP},
+						Conditions: discovery.EndpointConditions{Ready: &reReady},
+					},
+				},
+				Ports: []discovery.EndpointPort{
+					{
+						Name:     ptr.To("http"),
+						Port:     &rePort80,
+						Protocol: &reProtocol,
 					},
 				},
 			},
@@ -199,9 +217,10 @@ var _ = Describe("ResourceExport controller", func() {
 			err = k8sClient.Get(ctx, epResImportName, epResImport)
 			return err == nil
 		}, timeout, interval).Should(BeTrue())
-		Expect(epResImport.Spec.Endpoints.Subsets).Should(Equal(epResExportA.Spec.Endpoints.Subsets))
+		Expect(epResImport.Spec.Endpoints.Endpoints).Should(Equal(epResExportA.Spec.Endpoints.Endpoints))
+		Expect(epResImport.Spec.Endpoints.Ports).Should(Equal(epResExportA.Spec.Endpoints.Ports))
 
-		expectedSubsets := append(epResExportA.Spec.Endpoints.Subsets, epResExportB.Spec.Endpoints.Subsets...)
+		expectedEndpoints := append(epResExportA.Spec.Endpoints.Endpoints, epResExportB.Spec.Endpoints.Endpoints...)
 		err = k8sClient.Create(ctx, svcResExportB, &client.CreateOptions{})
 		Expect(err == nil).Should(BeTrue())
 		err = k8sClient.Create(ctx, epResExportB, &client.CreateOptions{})
@@ -210,7 +229,7 @@ var _ = Describe("ResourceExport controller", func() {
 		// wait 2s for ResourceImport update
 		time.Sleep(2 * time.Second)
 		err = k8sClient.Get(ctx, epResImportName, epResImport)
-		Expect(elementsMatch(epResImport.Spec.Endpoints.Subsets, expectedSubsets)).Should(BeTrue())
+		Expect(elementsMatch(epResImport.Spec.Endpoints.Endpoints, expectedEndpoints)).Should(BeTrue())
 	})
 
 	It("Should update ResourceImports when a member cluster's ResourceExports are removed", func() {
@@ -225,7 +244,8 @@ var _ = Describe("ResourceExport controller", func() {
 		epResImport := &mcsv1alpha1.ResourceImport{}
 		err = k8sClient.Get(ctx, epResImportName, epResImport)
 		Expect(err == nil).Should(BeTrue())
-		Expect(epResImport.Spec.Endpoints.Subsets).Should(Equal(epResExportB.Spec.Endpoints.Subsets))
+		Expect(epResImport.Spec.Endpoints.Endpoints).Should(Equal(epResExportB.Spec.Endpoints.Endpoints))
+		Expect(epResImport.Spec.Endpoints.Ports).Should(Equal(epResExportB.Spec.Endpoints.Ports))
 		svcResImport := &mcsv1alpha1.ResourceImport{}
 		err = k8sClient.Get(ctx, svcResImportName, svcResImport)
 		Expect(err == nil).Should(BeTrue())
