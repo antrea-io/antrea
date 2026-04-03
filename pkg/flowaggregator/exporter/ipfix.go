@@ -15,13 +15,13 @@
 package exporter
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"hash/fnv"
 	"net"
 	"path/filepath"
-	"reflect"
 	"time"
 
 	"github.com/google/uuid"
@@ -37,6 +37,7 @@ import (
 	flowaggregatorconfig "antrea.io/antrea/pkg/config/flowaggregator"
 	"antrea.io/antrea/pkg/flowaggregator/infoelements"
 	"antrea.io/antrea/pkg/flowaggregator/options"
+	"antrea.io/antrea/pkg/flowaggregator/ringbuffer"
 	"antrea.io/antrea/pkg/ipfix"
 	"antrea.io/antrea/pkg/util/env"
 )
@@ -188,66 +189,89 @@ func (e *IPFIXExporter) reset() {
 	e.exportingProcess = nil
 }
 
-func (e *IPFIXExporter) Start() {
-	// no-op, initExportingProcessWithBackoff will be called whenever AddRecord is
-	// called as needed.
-}
-
-func (e *IPFIXExporter) Stop() {
-	if e.exportingProcess != nil {
-		if err := e.bufferedExporter.Flush(); err != nil {
-			klog.ErrorS(err, "Error when flushing buffered IPFIX exporter")
-		}
-		e.reset()
-	}
-}
-
-// AddRecord will send the record to the destination IPFIX collector.
-// If necessary, it will initialize the exporting process (i.e., the connection to the
-// connector). An exponential backoff mechanism is used to limit the number of initialization
-// attempts. If a delay is required before the next initialization attempt, an error wrapping
-// ErrIPFIXExporterBackoff will be returned.
-func (e *IPFIXExporter) AddRecord(record *flowpb.Flow, isRecordIPv6 bool) error {
-	if err := e.sendRecord(record, isRecordIPv6); err != nil {
+// Run consumes flow records from the ring buffer and exports them via IPFIX.
+// It blocks until ctx is cancelled or the consumer signals shutdown.
+func (e *IPFIXExporter) Run(ctx context.Context, buf ringbuffer.BroadcastBuffer[*flowpb.Flow]) {
+	defer func() {
 		if e.exportingProcess != nil {
+			if err := e.flush(); err != nil {
+				klog.ErrorS(err, "Error when flushing buffered IPFIX exporter on shutdown")
+			}
 			e.reset()
 		}
-		// in case of error:
-		// in Aggregate mode: the FlowAggregator flowExportLoop will retry after activeFlowRecordTimeout
-		// in Proxy mode: the FlowAggregator flowExportLoop will retry the next time a record is proxied
-		return fmt.Errorf("error when sending IPFIX record: %w", err)
+	}()
+
+	const flushInterval = 1 * time.Second
+	consumer := buf.NewConsumer(ringbuffer.WithMaxConsumeDeadline(flushInterval))
+	flushTicker := time.NewTicker(flushInterval)
+	defer flushTicker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-flushTicker.C:
+			if err := e.flush(); err != nil {
+				klog.ErrorS(err, "Error when flushing IPFIX exporter")
+			}
+		default:
+		}
+
+		// When not connected, wait until the backoff period expires before consuming
+		// more records. This prevents records from being consumed and dropped while a
+		// reconnection is pending, which could cause permanent loss of inactive flow
+		// records (removed from the aggregation process after being produced to the
+		// ring buffer).
+		if e.exportingProcess == nil {
+			if remaining := e.initNextAttempt.Sub(e.clock.Now()); remaining > 0 {
+				select {
+				case <-ctx.Done():
+					return
+				case <-flushTicker.C:
+					// flush() is a no-op when exportingProcess is nil.
+					if err := e.flush(); err != nil {
+						klog.ErrorS(err, "Error when flushing IPFIX exporter")
+					}
+				case <-time.After(remaining):
+				}
+				continue
+			}
+		}
+
+		record, n, _, shutdown := consumer.Consume()
+		if n == 0 {
+			if shutdown {
+				return
+			}
+			continue
+		}
+
+		isIPv6 := record.Ip.Version == flowpb.IPVersion_IP_VERSION_6
+		if err := e.sendRecord(record, isIPv6); err != nil {
+			if e.exportingProcess != nil {
+				e.reset()
+			}
+			if errors.Is(err, ErrIPFIXExporterBackoff) {
+				continue
+			}
+			klog.ErrorS(err, "Error when sending IPFIX record")
+		}
+
+		if shutdown {
+			return
+		}
 	}
-	return nil
 }
 
-func (e *IPFIXExporter) UpdateOptions(opt *options.Options) {
-	config := opt.Config.FlowCollector
-	if reflect.DeepEqual(config, e.config) {
-		return
+func (e *IPFIXExporter) flush() error {
+	if e.exportingProcess == nil {
+		return nil
 	}
-
-	e.config = config
-	e.externalFlowCollectorAddr = opt.ExternalFlowCollectorAddr
-	e.externalFlowCollectorProto = opt.ExternalFlowCollectorProto
-	e.sendJSONRecord = config.RecordFormat == "JSON"
-	e.includeK8sNames = *config.IncludeK8sNames
-	e.includeK8sUIDs = *config.IncludeK8sUIDs
-	if config.ObservationDomainID != nil {
-		e.observationDomainID = *config.ObservationDomainID
-	} else {
-		e.observationDomainID = genObservationDomainID(e.clusterUUID)
-	}
-	e.templateRefreshTimeout = opt.TemplateRefreshTimeout
-	e.maxIPFIXMsgSize = int(config.MaxIPFIXMsgSize)
-	e.tls = newIPFIXExporterTLSConfig(config.TLS)
-	klog.InfoS("New IPFIXExporter configuration", "collectorAddress", e.externalFlowCollectorAddr, "collectorProtocol", e.externalFlowCollectorProto, "sendJSON", e.sendJSONRecord, "domainID", e.observationDomainID, "templateRefreshTimeout", e.templateRefreshTimeout, "maxIPFIXMsgSize", e.maxIPFIXMsgSize, "tls", e.tls.enable)
-
-	if e.exportingProcess != nil {
-		if err := e.bufferedExporter.Flush(); err != nil {
-			klog.ErrorS(err, "Error when flushing buffered IPFIX exporter")
-		}
+	if err := e.bufferedExporter.Flush(); err != nil {
 		e.reset()
+		return err
 	}
+	return nil
 }
 
 func (e *IPFIXExporter) makeIPFIXRecord(flow *flowpb.Flow, isIPv6 bool) ipfixentities.Record {
@@ -779,15 +803,4 @@ func (e *IPFIXExporter) createInfoElement(ieName string, enterpriseID uint32) (i
 		return nil, err
 	}
 	return ie, nil
-}
-
-func (e *IPFIXExporter) Flush() error {
-	if e.exportingProcess == nil {
-		return nil
-	}
-	if err := e.bufferedExporter.Flush(); err != nil {
-		e.reset()
-		return err
-	}
-	return nil
 }

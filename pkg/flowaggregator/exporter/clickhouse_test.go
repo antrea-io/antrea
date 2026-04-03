@@ -28,7 +28,7 @@ import (
 	"antrea.io/antrea/pkg/flowaggregator/options"
 )
 
-func TestClickHouse_UpdateOptions(t *testing.T) {
+func TestClickHouse_NewClickHouseExporter(t *testing.T) {
 	t.Setenv("CH_USERNAME", "default")
 	t.Setenv("CH_PASSWORD", "default")
 	PrepareClickHouseConnectionSaved := clickhouseclient.PrepareClickHouseConnection
@@ -52,29 +52,8 @@ func TestClickHouse_UpdateOptions(t *testing.T) {
 		ClickHouseCommitInterval: 8 * time.Second,
 	}
 	chConfig := buildClickHouseConfig(opt)
-	chExportProcess, err := clickhouseclient.NewClickHouseClient(chConfig, uuid.New().String())
+	exporter, err := NewClickHouseExporter(uuid.New(), opt)
 	require.NoError(t, err)
-	clickHouseExporter := ClickHouseExporter{chConfig: &chConfig, chExportProcess: chExportProcess}
-	clickHouseExporter.Start()
-	assert.Equal(t, clickHouseExporter.chExportProcess.GetClickHouseConfig(), chConfig)
-	assert.Equal(t, clickHouseExporter.chExportProcess.GetCommitInterval().String(), "8s")
-
-	compress = true
-	newOpt := &options.Options{
-		Config: &flowaggregator.FlowAggregatorConfig{
-			ClickHouse: flowaggregator.ClickHouseConfig{
-				Enable:      true,
-				Database:    "databaseTest",
-				DatabaseURL: "databaseTestURL",
-				Debug:       false,
-				Compress:    &compress,
-			},
-		},
-		ClickHouseCommitInterval: 5 * time.Second,
-	}
-	newChConfig := buildClickHouseConfig(newOpt)
-	clickHouseExporter.UpdateOptions(newOpt)
-	assert.Equal(t, clickHouseExporter.chExportProcess.GetClickHouseConfig(), newChConfig)
-	assert.Equal(t, clickHouseExporter.chExportProcess.GetCommitInterval().String(), "5s")
-	clickHouseExporter.Stop()
+	require.NotNil(t, exporter)
+	assert.Equal(t, chConfig, *exporter.chConfig)
 }

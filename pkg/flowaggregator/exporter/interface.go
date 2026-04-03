@@ -15,19 +15,18 @@
 package exporter
 
 import (
+	"context"
+
 	flowpb "antrea.io/antrea/pkg/apis/flow/v1alpha1"
-	"antrea.io/antrea/pkg/flowaggregator/options"
+	"antrea.io/antrea/pkg/flowaggregator/ringbuffer"
 )
 
 // Interface is the interface that all supported exporters must implement.
-// Note that the objects implementing this interface make no concurrency
-// guarantee: none of the interface functions should be called concurrently.
+// Run blocks, consuming records from the ring buffer until ctx is cancelled
+// or the buffer signals shutdown. The exporter is responsible for creating
+// its own consumer from the buffer, with appropriate options (e.g. deadline).
+// All resource setup happens at the start of Run; all teardown (flush, close)
+// happens before Run returns.
 type Interface interface {
-	Start()
-	Stop()
-	AddRecord(record *flowpb.Flow, isRecordIPv6 bool) error
-	UpdateOptions(opt *options.Options)
-	// Some exporters may be buffered, in which case the FlowAggregator
-	// should call this method periodically.
-	Flush() error
+	Run(ctx context.Context, buf ringbuffer.BroadcastBuffer[*flowpb.Flow])
 }
