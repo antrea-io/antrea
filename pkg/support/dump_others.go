@@ -20,10 +20,13 @@ package support
 import (
 	"bytes"
 	"fmt"
+	"os"
 	"path"
 	"path/filepath"
 	"strings"
 	"sync"
+
+	"github.com/spf13/afero"
 
 	"k8s.io/klog/v2"
 
@@ -53,7 +56,6 @@ var nftablesIPv6Supported = sync.OnceValue(func() bool {
 func (d *agentDumper) DumpLog(basedir string) error {
 	logDir := logdir.GetLogDir()
 	timeFilter := timestampFilter(d.since)
-
 	if err := directoryCopy(d.fs, path.Join(basedir, "logs", "agent"), logDir, "antrea-agent", timeFilter); err != nil {
 		return err
 	}
@@ -71,6 +73,9 @@ func (d *agentDumper) DumpHostNetworkInfo(basedir string) error {
 		return err
 	}
 	if err := d.dumpIPToolInfo(basedir); err != nil {
+		return err
+	}
+	if err := d.dumpSysctlNetIF(basedir); err != nil {
 		return err
 	}
 	return nil
@@ -98,7 +103,6 @@ func (d *agentDumper) dumpIPSet(basedir string) error {
 
 func (d *agentDumper) dumpNFTables(basedir string) error {
 	var data bytes.Buffer
-
 	if d.v4Enabled && nftablesIPv4Supported() || d.v6Enabled && nftablesIPv6Supported() {
 		output, err := d.executor.Command("nft", "list", "ruleset").CombinedOutput()
 		if err != nil {
@@ -110,29 +114,60 @@ func (d *agentDumper) dumpNFTables(basedir string) error {
 		data.Write(output)
 		data.WriteByte('\n')
 	}
-
 	fileName := "nftables"
 	if err := writeFile(d.fs, filepath.Join(basedir, fileName), fileName, data.Bytes()); err != nil {
 		return fmt.Errorf("failed to write nftables file: %w", err)
 	}
-
 	return nil
 }
 
 func (d *agentDumper) dumpIPToolInfo(basedir string) error {
-	dump := func(name string) error {
-		output, err := d.executor.Command("ip", name).CombinedOutput()
+	dump := func(fileName string, args ...string) error {
+		output, err := d.executor.Command("ip", args...).CombinedOutput()
 		if err != nil {
-			return fmt.Errorf("error when dumping %s: %w", name, err)
+			return fmt.Errorf("error when dumping ip %s: %w", strings.Join(args, " "), err)
 		}
-		return writeFile(d.fs, filepath.Join(basedir, name), name, output)
+		return writeFile(d.fs, filepath.Join(basedir, fileName), fileName, output)
 	}
-	for _, item := range []string{"route", "link", "address"} {
-		if err := dump(item); err != nil {
+	for _, item := range []string{"route", "link", "address", "rule"} {
+		if err := dump(item, item); err != nil {
 			return err
 		}
 	}
+	// Dump all routing tables (not just the main table) for diagnosing Egress routing issues.
+	if err := dump("route-all-tables", "route", "show", "table", "all"); err != nil {
+		return err
+	}
 	return nil
+}
+
+// dumpSysctlNetIF dumps per-interface IPv4 sysctl parameters (rp_filter, arp_ignore,
+// arp_announce) that are relevant for debugging Egress and EgressSeparateSubnet issues.
+func (d *agentDumper) dumpSysctlNetIF(basedir string) error {
+	const sysctlNetIPv4ConfDir = "/proc/sys/net/ipv4/conf"
+	entries, err := afero.ReadDir(d.fs, sysctlNetIPv4ConfDir)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
+		return fmt.Errorf("error reading %s: %w", sysctlNetIPv4ConfDir, err)
+	}
+	var buf bytes.Buffer
+	for _, entry := range entries {
+		iface := entry.Name()
+		for _, param := range []string{"rp_filter", "arp_ignore", "arp_announce"} {
+			paramPath := filepath.Join(sysctlNetIPv4ConfDir, iface, param)
+			data, readErr := afero.ReadFile(d.fs, paramPath)
+			if readErr != nil {
+				if os.IsNotExist(readErr) {
+					continue
+				}
+				return fmt.Errorf("error reading sysctl %s: %w", paramPath, readErr)
+			}
+			fmt.Fprintf(&buf, "net.ipv4.conf.%s.%s = %s\n", iface, param, strings.TrimSpace(string(data)))
+		}
+	}
+	return writeFile(d.fs, filepath.Join(basedir, "sysctl-net-ipv4-conf"), "sysctl-net-ipv4-conf", buf.Bytes())
 }
 
 func (d *agentDumper) DumpMemberlist(basedir string) error {
