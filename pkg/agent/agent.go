@@ -140,9 +140,13 @@ type Initializer struct {
 	// been installed. We use it to determine whether flows from previous
 	// rounds can be deleted.
 	flowRestoreCompleteWait *utilwait.Group
-	stopCh                  <-chan struct{}
-	nodeType                config.NodeType
-	externalNodeNamespace   string
+	// staleFlowsDeletedCh is closed once DeleteStaleFlows has completed (or
+	// failed). Components that must not observe stale flows from a previous
+	// agent round should wait for this channel before starting.
+	staleFlowsDeletedCh   chan struct{}
+	stopCh                <-chan struct{}
+	nodeType              config.NodeType
+	externalNodeNamespace string
 }
 
 func NewInitializer(
@@ -188,6 +192,7 @@ func NewInitializer(
 		l7NetworkPolicyConfig:    &config.L7NetworkPolicyConfig{},
 		podNetworkWait:           podNetworkWait,
 		flowRestoreCompleteWait:  flowRestoreCompleteWait,
+		staleFlowsDeletedCh:      make(chan struct{}),
 		stopCh:                   stopCh,
 		nodeType:                 nodeType,
 		externalNodeNamespace:    externalNodeNamespace,
@@ -206,6 +211,14 @@ func (i *Initializer) GetNodeConfig() *config.NodeConfig {
 // GetWireGuardClient returns the Wireguard client.
 func (i *Initializer) GetWireGuardClient() wireguard.Interface {
 	return i.wireGuardClient
+}
+
+// GetStaleFlowsDeletedCh returns a channel that is closed once stale flows
+// from the previous agent round have been deleted (or the deletion attempt has
+// failed). Callers that must not observe stale flows should block on this
+// channel before starting.
+func (i *Initializer) GetStaleFlowsDeletedCh() <-chan struct{} {
+	return i.staleFlowsDeletedCh
 }
 
 // setupOVSBridge sets up the OVS bridge and create host gateway interface and tunnel port
@@ -550,6 +563,11 @@ func (i *Initializer) initOpenFlowPipeline() error {
 		// block until some key flows (NetworkPolicy flows, Pod flows, Node route flows)
 		// have been installed. But not all entities responsible for installing flows
 		// currently use this wait group, so we block for a minimum of 10 seconds.
+		//
+		// staleFlowsDeletedCh is closed when this goroutine exits so that
+		// components which must not see stale flows (e.g. the NP stats
+		// collector) can delay their start until cleanup is guaranteed.
+		defer close(i.staleFlowsDeletedCh)
 		time.Sleep(10 * time.Second)
 		i.flowRestoreCompleteWait.Wait()
 		klog.Info("Deleting stale flows from previous round if any")
