@@ -278,26 +278,11 @@ func (d *AntreaIPAM) Add(args *invoke.Args, k8sArgs *types.K8sArgs, networkConfi
 	}
 
 	var allocErrs []error
-	if hasIPv4Pool && !allocatedIPv4 {
-		if lastIPv4ExhaustedErr != nil {
-			allocErrs = append(allocErrs, fmt.Errorf("failed to allocate IPv4 address for Pod %s/%s: %w", string(k8sArgs.K8S_POD_NAMESPACE), string(k8sArgs.K8S_POD_NAME), lastIPv4ExhaustedErr))
-		} else {
-			// defensive; should normally be exhausted
-			// Any allocator error other than ErrPoolExhausted is returned inside the allocation
-			// loop. If we reach here with an IPv4 pool configured but no IPv4 allocated and no
-			// recorded exhaustion, treat it as an unexpected invariant violation and return a
-			// family-specific error instead of only the generic no-IP check below.
-			allocErrs = append(allocErrs, fmt.Errorf("failed to allocate IPv4 address for Pod %s/%s", string(k8sArgs.K8S_POD_NAMESPACE), string(k8sArgs.K8S_POD_NAME)))
-		}
+	if hasIPv4Pool && !allocatedIPv4 && lastIPv4ExhaustedErr != nil {
+		allocErrs = append(allocErrs, fmt.Errorf("failed to allocate IPv4 address for Pod %s/%s: %w", string(k8sArgs.K8S_POD_NAMESPACE), string(k8sArgs.K8S_POD_NAME), lastIPv4ExhaustedErr))
 	}
-	if hasIPv6Pool && !allocatedIPv6 {
-		if lastIPv6ExhaustedErr != nil {
-			allocErrs = append(allocErrs, fmt.Errorf("failed to allocate IPv6 address for Pod %s/%s: %w", string(k8sArgs.K8S_POD_NAMESPACE), string(k8sArgs.K8S_POD_NAME), lastIPv6ExhaustedErr))
-		} else {
-			// defensive; should normally be exhausted
-			// Same as the IPv4 branch above.
-			allocErrs = append(allocErrs, fmt.Errorf("failed to allocate IPv6 address for Pod %s/%s", string(k8sArgs.K8S_POD_NAMESPACE), string(k8sArgs.K8S_POD_NAME)))
-		}
+	if hasIPv6Pool && !allocatedIPv6 && lastIPv6ExhaustedErr != nil {
+		allocErrs = append(allocErrs, fmt.Errorf("failed to allocate IPv6 address for Pod %s/%s: %w", string(k8sArgs.K8S_POD_NAMESPACE), string(k8sArgs.K8S_POD_NAME), lastIPv6ExhaustedErr))
 	}
 	if len(allocErrs) > 0 {
 		return true, nil, errors.Join(allocErrs...)
