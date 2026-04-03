@@ -29,7 +29,7 @@ import (
 	"k8s.io/apiserver/pkg/registry/rest"
 	"k8s.io/client-go/tools/cache"
 
-	statsv1alpha1 "antrea.io/antrea/pkg/apis/stats/v1alpha1"
+	statsv1alpha1 "antrea.io/antrea/v2/pkg/apis/stats/v1alpha1"
 )
 
 type REST struct {

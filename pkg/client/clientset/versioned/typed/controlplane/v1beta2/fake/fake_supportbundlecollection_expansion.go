@@ -19,7 +19,7 @@ import (
 
 	"k8s.io/client-go/testing"
 
-	"antrea.io/antrea/pkg/apis/controlplane/v1beta2"
+	"antrea.io/antrea/v2/pkg/apis/controlplane/v1beta2"
 )
 
 func (c *fakeSupportBundleCollections) UpdateStatus(ctx context.Context, name string, status *v1beta2.SupportBundleCollectionStatus) error {

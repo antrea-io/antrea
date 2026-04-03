@@ -25,7 +25,7 @@ import (
 	"google.golang.org/protobuf/types/known/anypb"
 	"k8s.io/utils/net"
 
-	"antrea.io/antrea/pkg/agent/bgp"
+	"antrea.io/antrea/v2/pkg/agent/bgp"
 )
 
 const (

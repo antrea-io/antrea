@@ -19,8 +19,8 @@ package v1alpha2
 import (
 	http "net/http"
 
-	crdv1alpha2 "antrea.io/antrea/pkg/apis/crd/v1alpha2"
-	scheme "antrea.io/antrea/pkg/client/clientset/versioned/scheme"
+	crdv1alpha2 "antrea.io/antrea/v2/pkg/apis/crd/v1alpha2"
+	scheme "antrea.io/antrea/v2/pkg/client/clientset/versioned/scheme"
 	rest "k8s.io/client-go/rest"
 )
 

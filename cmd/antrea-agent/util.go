@@ -23,8 +23,8 @@ import (
 	clientset "k8s.io/client-go/kubernetes"
 	"k8s.io/klog/v2"
 
-	"antrea.io/antrea/pkg/agent/util"
-	k8sutil "antrea.io/antrea/pkg/util/k8s"
+	"antrea.io/antrea/v2/pkg/agent/util"
+	k8sutil "antrea.io/antrea/v2/pkg/util/k8s"
 )
 
 var (

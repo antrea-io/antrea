@@ -36,16 +36,16 @@ import (
 	v1 "k8s.io/client-go/listers/core/v1"
 	"k8s.io/client-go/tools/cache"
 
-	"antrea.io/antrea/multicluster/apis/multicluster/v1alpha1"
-	mcfake "antrea.io/antrea/multicluster/pkg/client/clientset/versioned/fake"
-	mcinformers "antrea.io/antrea/multicluster/pkg/client/informers/externalversions"
-	"antrea.io/antrea/pkg/agent/interfacestore"
-	interfacestoretest "antrea.io/antrea/pkg/agent/interfacestore/testing"
-	"antrea.io/antrea/pkg/agent/openflow"
-	oftest "antrea.io/antrea/pkg/agent/openflow/testing"
-	antreatypes "antrea.io/antrea/pkg/agent/types"
-	ovsconfigtest "antrea.io/antrea/pkg/ovs/ovsconfig/testing"
-	"antrea.io/antrea/pkg/util/channel"
+	"antrea.io/antrea/v2/multicluster/apis/multicluster/v1alpha1"
+	mcfake "antrea.io/antrea/v2/multicluster/pkg/client/clientset/versioned/fake"
+	mcinformers "antrea.io/antrea/v2/multicluster/pkg/client/informers/externalversions"
+	"antrea.io/antrea/v2/pkg/agent/interfacestore"
+	interfacestoretest "antrea.io/antrea/v2/pkg/agent/interfacestore/testing"
+	"antrea.io/antrea/v2/pkg/agent/openflow"
+	oftest "antrea.io/antrea/v2/pkg/agent/openflow/testing"
+	antreatypes "antrea.io/antrea/v2/pkg/agent/types"
+	ovsconfigtest "antrea.io/antrea/v2/pkg/ovs/ovsconfig/testing"
+	"antrea.io/antrea/v2/pkg/util/channel"
 )
 
 const (

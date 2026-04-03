@@ -41,7 +41,7 @@ import (
 	"k8s.io/client-go/restmapper"
 	coretesting "k8s.io/client-go/testing"
 
-	mcscheme "antrea.io/antrea/pkg/antctl/raw/multicluster/scheme"
+	mcscheme "antrea.io/antrea/v2/pkg/antctl/raw/multicluster/scheme"
 )
 
 func TestGenerateManifests(t *testing.T) {

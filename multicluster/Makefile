@@ -67,7 +67,7 @@ vet: ## Run go vet against code.
 .PHONY: test-unit test-integration
 test-unit: fmt vet .coverage
 	@echo "==> Running unit tests <=="
-	go test -race -coverprofile=.coverage/coverage-unit.txt -covermode=atomic -cover antrea.io/antrea/multicluster/controllers/multicluster/...
+	go test -race -coverprofile=.coverage/coverage-unit.txt -covermode=atomic -cover antrea.io/antrea/v2/multicluster/controllers/multicluster/...
 test-integration: .coverage
 	@echo "==> Running Multi-cluster integration tests <=="
 	$(CURDIR)/hack/verify-tools.sh
@@ -75,11 +75,11 @@ test-integration: .coverage
 ##@ Build
 
 bin: fmt vet ## Build manager binary.
-	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o bin/antrea-mc-controller antrea.io/antrea/multicluster/cmd/...
+	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o bin/antrea-mc-controller antrea.io/antrea/v2/multicluster/cmd/...
 
 .PHONY: antrea-mc-instr-binary
 antrea-mc-instr-binary:
-	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -cover -coverpkg=antrea.io/antrea/multicluster/...,antrea.io/antrea/multicluster/cmd/... -o bin/antrea-mc-controller-coverage antrea.io/antrea/multicluster/cmd/...
+	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -cover -coverpkg=antrea.io/antrea/v2/multicluster/...,antrea.io/antrea/v2/multicluster/cmd/... -o bin/antrea-mc-controller-coverage antrea.io/antrea/v2/multicluster/cmd/...
 
 run: manifests generate fmt vet ## Run a controller from your host.
 	go run ./main.go

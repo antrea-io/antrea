@@ -23,9 +23,9 @@ import (
 	ipfixregistry "github.com/vmware/go-ipfix/pkg/registry"
 	"k8s.io/klog/v2"
 
-	"antrea.io/antrea/pkg/agent/flowexporter/connection"
-	"antrea.io/antrea/pkg/agent/flowexporter/utils"
-	"antrea.io/antrea/pkg/ipfix"
+	"antrea.io/antrea/v2/pkg/agent/flowexporter/connection"
+	"antrea.io/antrea/v2/pkg/agent/flowexporter/utils"
+	"antrea.io/antrea/v2/pkg/ipfix"
 )
 
 var (

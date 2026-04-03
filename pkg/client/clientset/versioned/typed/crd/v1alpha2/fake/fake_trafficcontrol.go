@@ -17,8 +17,8 @@
 package fake
 
 import (
-	v1alpha2 "antrea.io/antrea/pkg/apis/crd/v1alpha2"
-	crdv1alpha2 "antrea.io/antrea/pkg/client/clientset/versioned/typed/crd/v1alpha2"
+	v1alpha2 "antrea.io/antrea/v2/pkg/apis/crd/v1alpha2"
+	crdv1alpha2 "antrea.io/antrea/v2/pkg/client/clientset/versioned/typed/crd/v1alpha2"
 	gentype "k8s.io/client-go/gentype"
 )
 

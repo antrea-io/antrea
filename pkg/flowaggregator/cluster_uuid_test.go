@@ -22,7 +22,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"k8s.io/client-go/kubernetes/fake"
 
-	"antrea.io/antrea/pkg/clusteridentity"
+	"antrea.io/antrea/v2/pkg/clusteridentity"
 )
 
 func TestGetClusterUUID(t *testing.T) {

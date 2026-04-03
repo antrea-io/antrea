@@ -20,10 +20,10 @@ set -o pipefail
 set -o xtrace
 
 GOPATH=`go env GOPATH`
-ANTREA_PKG="antrea.io/antrea"
-# Cannot use "antrea.io/antrea" because of name resolution in protoc. Without
+ANTREA_PKG="antrea.io/antrea/v2"
+# Cannot use "antrea.io/antrea/v2" because of name resolution in protoc. Without
 # this, we get the error:
-# antrea.io/antrea/pkg/apis/controlplane/v1beta1/generated.proto:281:12: "antrea.io.antrea.pkg.apis.stats.v1alpha1.RuleTrafficStats" is resolved to "antrea.io.antrea.io.antrea.pkg.apis.stats.v1alpha1.RuleTrafficStats", which is not defined. The innermost scope is searched first in name resolution. Consider using a leading '.'(i.e., ".antrea.io.antrea.pkg.apis.stats.v1alpha1.RuleTrafficStats") to start from the outermost scope.
+# antrea.io/antrea/v2/pkg/apis/controlplane/v1beta1/generated.proto:281:12: "antrea.io.antrea.pkg.apis.stats.v1alpha1.RuleTrafficStats" is resolved to "antrea.io.antrea.io.antrea.pkg.apis.stats.v1alpha1.RuleTrafficStats", which is not defined. The innermost scope is searched first in name resolution. Consider using a leading '.'(i.e., ".antrea.io.antrea.pkg.apis.stats.v1alpha1.RuleTrafficStats") to start from the outermost scope.
 #
 # When resolving "antrea.io.antrea.pkg.apis.stats.v1alpha1.RuleTrafficStats",
 # protoc will look at the package name of the current .proto starting from the
@@ -40,7 +40,7 @@ ANTREA_PROTO_PKG="antrea_io.antrea"
 # copy is in the container's writable layer, which is much faster than a bind
 # mount on non-Linux hosts (Docker Desktop, Colima).
 ANTREA_SRC_PATH=$(pwd)
-ANTREA_CODEGEN_PATH=/go/src/antrea.io/antrea
+ANTREA_CODEGEN_PATH=/go/src/antrea.io/antrea/v2
 git clone ${ANTREA_SRC_PATH} ${ANTREA_CODEGEN_PATH}
 pushd ${ANTREA_CODEGEN_PATH}
 

@@ -21,9 +21,9 @@ import (
 	sync "sync"
 	time "time"
 
-	versioned "antrea.io/antrea/multicluster/pkg/client/clientset/versioned"
-	internalinterfaces "antrea.io/antrea/multicluster/pkg/client/informers/externalversions/internalinterfaces"
-	multicluster "antrea.io/antrea/multicluster/pkg/client/informers/externalversions/multicluster"
+	versioned "antrea.io/antrea/v2/multicluster/pkg/client/clientset/versioned"
+	internalinterfaces "antrea.io/antrea/v2/multicluster/pkg/client/informers/externalversions/internalinterfaces"
+	multicluster "antrea.io/antrea/v2/multicluster/pkg/client/informers/externalversions/multicluster"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	runtime "k8s.io/apimachinery/pkg/runtime"
 	schema "k8s.io/apimachinery/pkg/runtime/schema"

@@ -24,7 +24,7 @@ import (
 
 	"k8s.io/klog/v2"
 
-	"antrea.io/antrea/pkg/agent/util/iptables"
+	"antrea.io/antrea/v2/pkg/agent/util/iptables"
 )
 
 // InitRules initializes rules based on the underlying implementation

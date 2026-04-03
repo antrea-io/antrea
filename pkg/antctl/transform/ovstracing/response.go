@@ -18,7 +18,7 @@ import (
 	"encoding/json"
 	"io"
 
-	"antrea.io/antrea/pkg/agent/apis"
+	"antrea.io/antrea/v2/pkg/agent/apis"
 )
 
 func Transform(reader io.Reader, _ bool, _ map[string]string) (interface{}, error) {

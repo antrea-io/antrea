@@ -15,8 +15,8 @@
 package exporter
 
 import (
-	flowpb "antrea.io/antrea/pkg/apis/flow/v1alpha1"
-	"antrea.io/antrea/pkg/flowaggregator/options"
+	flowpb "antrea.io/antrea/v2/pkg/apis/flow/v1alpha1"
+	"antrea.io/antrea/v2/pkg/flowaggregator/options"
 )
 
 // Interface is the interface that all supported exporters must implement.

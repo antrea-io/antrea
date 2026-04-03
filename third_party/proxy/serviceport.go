@@ -33,7 +33,7 @@ Original file https://raw.githubusercontent.com/kubernetes/kubernetes/refs/tags/
 Modifies:
 
 - Remove import apiservice "k8s.io/kubernetes/pkg/api/v1/service" and replace its usages.
-- Replace import proxyutil "k8s.io/kubernetes/pkg/proxy/util" with proxyutil "antrea.io/antrea/third_party/proxy/util".
+- Replace import proxyutil "k8s.io/kubernetes/pkg/proxy/util" with proxyutil "antrea.io/antrea/v2/third_party/proxy/util".
 - Modify "UsesLocalEndpoints()" to support DSR implementation in Antrea.
 
 */
@@ -50,8 +50,8 @@ import (
 	"k8s.io/klog/v2"
 	netutils "k8s.io/utils/net"
 
-	"antrea.io/antrea/pkg/features"
-	proxyutil "antrea.io/antrea/third_party/proxy/util"
+	"antrea.io/antrea/v2/pkg/features"
+	proxyutil "antrea.io/antrea/v2/third_party/proxy/util"
 )
 
 // ServicePort is an interface which abstracts information about a service.

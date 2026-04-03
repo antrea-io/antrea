@@ -32,7 +32,7 @@ import (
 	"k8s.io/client-go/tools/cache"
 	clocktesting "k8s.io/utils/clock/testing"
 
-	antreastorage "antrea.io/antrea/pkg/apiserver/storage"
+	antreastorage "antrea.io/antrea/v2/pkg/apiserver/storage"
 )
 
 // testEvent implements InternalEvent.

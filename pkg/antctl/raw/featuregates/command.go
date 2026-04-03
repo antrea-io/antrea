@@ -26,11 +26,11 @@ import (
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 
-	"antrea.io/antrea/pkg/antctl/raw"
-	"antrea.io/antrea/pkg/antctl/runtime"
-	"antrea.io/antrea/pkg/apiserver/apis"
-	"antrea.io/antrea/pkg/apiserver/handlers/featuregates"
-	antrea "antrea.io/antrea/pkg/client/clientset/versioned"
+	"antrea.io/antrea/v2/pkg/antctl/raw"
+	"antrea.io/antrea/v2/pkg/antctl/runtime"
+	"antrea.io/antrea/v2/pkg/apiserver/apis"
+	"antrea.io/antrea/v2/pkg/apiserver/handlers/featuregates"
+	antrea "antrea.io/antrea/v2/pkg/client/clientset/versioned"
 )
 
 var Command *cobra.Command

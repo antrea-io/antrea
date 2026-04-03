@@ -21,7 +21,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"golang.org/x/crypto/ssh"
 
-	sftptesting "antrea.io/antrea/pkg/util/sftp/testing"
+	sftptesting "antrea.io/antrea/v2/pkg/util/sftp/testing"
 )
 
 func TestGetSSHClientConfig(t *testing.T) {
