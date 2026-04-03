@@ -27,7 +27,7 @@ import (
 	"time"
 
 	"github.com/spf13/afero"
-	"gopkg.in/yaml.v2"
+	"go.yaml.in/yaml/v2"
 	"k8s.io/utils/exec"
 
 	agentquerier "antrea.io/antrea/pkg/agent/querier"
