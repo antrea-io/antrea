@@ -1091,6 +1091,18 @@ func TestParseMetricFlow(t *testing.T) {
 				Sessions: 0,
 			},
 		},
+		"Stale L3 routing flow without ct_label": {
+			// A stale flow from a prior agent version that occupied the same table ID
+			// after a pipeline table shift. It has neither reg0 nor ct_label and must
+			// be skipped without panicking.
+			flow: "table=101, n_packets=289, n_bytes=2385154, priority=200,ip,nw_dst=193.5.2.0/24 actions=resubmit(,SNATMark)",
+			rule: 0,
+			metric: types.RuleMetric{
+				Bytes:    0,
+				Packets:  0,
+				Sessions: 0,
+			},
+		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			rule, metric := parseMetricFlow(parseFlowToMap(tc.flow))
@@ -1138,6 +1150,22 @@ func TestNetworkPolicyMetrics(t *testing.T) {
 				5:  {Bytes: 1091, Sessions: 2, Packets: 14},
 				3:  {Bytes: 0, Sessions: 0, Packets: 0},
 				11: {Bytes: 338, Sessions: 4, Packets: 4},
+			},
+		},
+		{
+			name: "Stale flows mixed with normal metric flows",
+			egressFlows: []string{
+				// Valid metric flows.
+				"table=61, n_packets=1, n_bytes=74, priority=200,ct_state=+new,ct_label=0x200000000/0xffffffff00000000,ip actions=goto_table:70",
+				"table=61, n_packets=11, n_bytes=1661, priority=200,ct_state=-new,ct_label=0x200000000/0xffffffff00000000,ip actions=goto_table:70",
+				// Stale L3 routing flows from a prior pipeline version (no ct_label, no reg0).
+				// These must be silently skipped without panicking.
+				"table=61, n_packets=289, n_bytes=2385154, priority=200,ip,nw_dst=193.5.2.0/24 actions=resubmit(,SNATMark)",
+				"table=61, n_packets=31, n_bytes=2465, priority=200,ip,nw_dst=193.5.1.0/24 actions=mod_dl_dst:1e:48:f1:41:e2:15,resubmit(,EgressMark)",
+			},
+			ingressFlows: []string{},
+			want: map[uint32]*types.RuleMetric{
+				2: {Bytes: 1735, Sessions: 1, Packets: 12},
 			},
 		},
 		{

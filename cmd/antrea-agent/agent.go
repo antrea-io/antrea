@@ -975,7 +975,21 @@ func run(o *Options) error {
 	// NetworkPolicy stats and Multicast stats.
 	if features.DefaultFeatureGate.Enabled(features.NetworkPolicyStats) {
 		statsCollector := stats.NewCollector(antreaClientProvider, ofClient, networkPolicyController, mcastController)
-		go statsCollector.Run(stopCh)
+		// Wait for stale flows from the previous agent round to be removed
+		// before starting the collector. Without this wait the very first
+		// collect() call could read non-metric OVS flows (e.g. old L3 routing
+		// flows that now share the EgressMetricTable ID after a pipeline table
+		// shift), which would previously cause a "slice bounds out of range"
+		// panic when trying to parse an absent ct_label field.
+		staleFlowsDeletedCh := agentInitializer.GetStaleFlowsDeletedCh()
+		go func() {
+			select {
+			case <-staleFlowsDeletedCh:
+			case <-stopCh:
+				return
+			}
+			statsCollector.Run(stopCh)
+		}()
 	}
 
 	agentQuerier := querier.NewAgentQuerier(
