@@ -421,14 +421,20 @@ func TestInitialize(t *testing.T) {
 	}
 }
 `
-				expectedNFTablesChains["nat-postrouting-proxy-all"] = `table ip antrea {
+				natPostRoutingProxyAll := `table ip antrea {
 	chain nat-postrouting-proxy-all {
 		comment "NAT postrouting for proxyAll"
 		type nat hook postrouting priority srcnat; policy accept;
-		ip saddr 169.254.0.253 counter packets 0 bytes 0 masquerade comment "Masquerade OVS virtual source IP"
+`
+				if tc.networkConfig.EnableHostNetworkAcceleration {
+					natPostRoutingProxyAll += fmt.Sprintf(`		ip saddr 169.254.0.253 ip daddr @peer-pod-cidr counter packets 0 bytes 0 snat to %s comment "SNAT OVS virtual source IP to gateway IP for Pod traffic"
+`, nodeConfig.GatewayConfig.IPv4.String())
+				}
+				natPostRoutingProxyAll += `		ip saddr 169.254.0.253 counter packets 0 bytes 0 masquerade comment "Masquerade OVS virtual source IP"
 	}
 }
 `
+				expectedNFTablesChains["nat-postrouting-proxy-all"] = natPostRoutingProxyAll
 			}
 
 			for set, expected := range expectedNFTablesSets {

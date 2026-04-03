@@ -422,6 +422,8 @@ func TestSyncIPTables(t *testing.T) {
 				PodIPv6CIDR: ip.MustParseCIDR("2001:ab03:cd04:55ef::/64"),
 				GatewayConfig: &config.GatewayConfig{
 					Name: "antrea-gw0",
+					IPv4: net.ParseIP("172.16.10.1"),
+					IPv6: net.ParseIP("2001:ab03:cd04:55ef::1"),
 				},
 			},
 			nodeSNATRandomFully: true,
@@ -534,6 +536,7 @@ COMMIT
 -A ANTREA-POSTROUTING -m comment --comment "Antrea: SNAT Pod to external packets" ! -o antrea-gw0 -m mark --mark 0x00000001/0x000000ff -j SNAT --to 1.1.1.1
 -A ANTREA-POSTROUTING -m comment --comment "Antrea: masquerade Pod to external packets" -s 172.16.10.0/24 -m set ! --match-set ANTREA-POD-IP dst ! -o antrea-gw0 -j MASQUERADE --random-fully
 -A ANTREA-POSTROUTING -m comment --comment "Antrea: masquerade LOCAL traffic" -o antrea-gw0 -m addrtype ! --src-type LOCAL --limit-iface-out -m addrtype --src-type LOCAL -j MASQUERADE --random-fully
+-A ANTREA-POSTROUTING -m comment --comment "Antrea: SNAT OVS virtual source IP to gateway IP for Pod traffic" -s 169.254.0.253 -m set --match-set ANTREA-POD-IP dst -j SNAT --to 172.16.10.1
 -A ANTREA-POSTROUTING -m comment --comment "Antrea: masquerade OVS virtual source IP" -s 169.254.0.253 -j MASQUERADE
 COMMIT
 `, false, false)
@@ -592,6 +595,7 @@ COMMIT
 -A ANTREA-POSTROUTING -m comment --comment "Antrea: SNAT Pod to external packets" ! -o antrea-gw0 -m mark --mark 0x00000002/0x000000ff -j SNAT --to fe80::e643:4bff:fe02
 -A ANTREA-POSTROUTING -m comment --comment "Antrea: masquerade Pod to external packets" -s 2001:ab03:cd04:55ef::/64 -m set ! --match-set ANTREA-POD-IP6 dst ! -o antrea-gw0 -j MASQUERADE --random-fully
 -A ANTREA-POSTROUTING -m comment --comment "Antrea: masquerade LOCAL traffic" -o antrea-gw0 -m addrtype ! --src-type LOCAL --limit-iface-out -m addrtype --src-type LOCAL -j MASQUERADE --random-fully
+-A ANTREA-POSTROUTING -m comment --comment "Antrea: SNAT OVS virtual source IP to gateway IP for Pod traffic" -s fc01::aabb:ccdd:eeff -m set --match-set ANTREA-POD-IP6 dst -j SNAT --to 2001:ab03:cd04:55ef::1
 -A ANTREA-POSTROUTING -m comment --comment "Antrea: masquerade OVS virtual source IP" -s fc01::aabb:ccdd:eeff -j MASQUERADE
 COMMIT
 `, false, true)

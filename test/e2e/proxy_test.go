@@ -753,7 +753,7 @@ func testProxyHairpin(t *testing.T, isIPv6 bool) {
 	createAgnhostPod(t, data, agnhost, node, false)
 	t.Run("Non-HostNetwork Endpoints", func(t *testing.T) {
 		testProxyIntraNodeHairpinCases(data, t, expectedGatewayIP, agnhost, clusterIPUrl, workerNodePortClusterUrl, workerNodePortLocalUrl, lbClusterUrl, lbLocalUrl)
-		testProxyInterNodeHairpinCases(data, t, false, expectedNodeIP, nodeName(2), clusterIPUrl, worker2NodePortClusterUrl, lbClusterUrl)
+		testProxyInterNodeHairpinCases(data, t, false, expectedNodeIP, expectedGatewayIP, nodeName(2), clusterIPUrl, worker2NodePortClusterUrl, lbClusterUrl)
 	})
 	require.NoError(t, data.DeletePod(data.testNamespace, agnhost))
 
@@ -762,7 +762,7 @@ func testProxyHairpin(t *testing.T, isIPv6 bool) {
 	t.Run("HostNetwork Endpoints", func(t *testing.T) {
 		skipIfProxyAllDisabled(t, data)
 		testProxyIntraNodeHairpinCases(data, t, expectedVirtualIP, agnhostHost, clusterIPUrl, workerNodePortClusterUrl, workerNodePortLocalUrl, lbClusterUrl, lbLocalUrl)
-		testProxyInterNodeHairpinCases(data, t, true, expectedNodeIP, nodeName(2), clusterIPUrl, worker2NodePortClusterUrl, lbClusterUrl)
+		testProxyInterNodeHairpinCases(data, t, true, expectedNodeIP, expectedGatewayIP, nodeName(2), clusterIPUrl, worker2NodePortClusterUrl, lbClusterUrl)
 	})
 }
 
@@ -829,7 +829,7 @@ func testProxyIntraNodeHairpinCases(data *TestData, t *testing.T, expectedClient
 // - Node A Antrea gateway: virtual IP         -> Endpoint IP
 // - Node A output:         Node A IP          -> Endpoint IP (another SNAT for virtual IP, otherwise reply packets can't be routed back).
 // - Node B:                Node A IP          -> Endpoint IP
-func testProxyInterNodeHairpinCases(data *TestData, t *testing.T, hostNetwork bool, expectedClientIP, node, clusterIPUrl, nodePortClusterUrl, lbClusterUrl string) {
+func testProxyInterNodeHairpinCases(data *TestData, t *testing.T, hostNetwork bool, expectedClientIP, localGatewayIP, node, clusterIPUrl, nodePortClusterUrl, lbClusterUrl string) {
 	skipIfAntreaIPAMTest(t)
 	currentEncapMode, err := data.GetEncapMode()
 	if err != nil {
@@ -853,21 +853,37 @@ func testProxyInterNodeHairpinCases(data *TestData, t *testing.T, hostNetwork bo
 	})
 	t.Run("InterNode/NodePort/ExternalTrafficPolicy:Cluster", func(t *testing.T) {
 		skipIfProxyAllDisabled(t, data)
+		var expectedIP string
 		if !hostNetwork && currentEncapMode == config.TrafficEncapModeNoEncap {
 			skipIfHasWindowsNodes(t)
+			// For non-hostNetwork Endpoints in noEncap mode, clientIP should be the local gateway IP
+			// to ensure the remote Node treats the traffic as Pod-to-Pod and can accelerate it via flowtable.
+			expectedIP = localGatewayIP
+		} else if !hostNetwork && currentEncapMode == config.TrafficEncapModeHybrid {
+			skipIfHasWindowsNodes(t)
+			expectedIP = localGatewayIP
+		} else {
+			expectedIP = expectedClientIP
 		}
 		clientIP, err := probeClientIPFromNode(node, nodePortClusterUrl, data)
 		require.NoError(t, err, "NodePort whose externalTrafficPolicy is Cluster hairpin should be able to be connected")
-		require.Equal(t, expectedClientIP, clientIP)
+		require.Equal(t, expectedIP, clientIP)
 	})
 	t.Run("InterNode/LoadBalancer/ExternalTrafficPolicy:Cluster", func(t *testing.T) {
 		skipIfProxyAllDisabled(t, data)
+		var expectedIP string
 		if !hostNetwork && currentEncapMode == config.TrafficEncapModeNoEncap {
 			skipIfHasWindowsNodes(t)
+			expectedIP = localGatewayIP
+		} else if !hostNetwork && currentEncapMode == config.TrafficEncapModeHybrid {
+			skipIfHasWindowsNodes(t)
+			expectedIP = localGatewayIP
+		} else {
+			expectedIP = expectedClientIP
 		}
 		clientIP, err := probeClientIPFromNode(node, lbClusterUrl, data)
 		require.NoError(t, err, "LoadBalancer whose externalTrafficPolicy is Cluster hairpin should be able to be connected")
-		require.Equal(t, expectedClientIP, clientIP)
+		require.Equal(t, expectedIP, clientIP)
 	})
 }
 
