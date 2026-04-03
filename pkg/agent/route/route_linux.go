@@ -25,6 +25,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/containernetworking/plugins/pkg/ip"
@@ -36,6 +37,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/klog/v2"
+	"k8s.io/utils/exec"
 	utilnet "k8s.io/utils/net"
 	"k8s.io/utils/ptr"
 	"sigs.k8s.io/knftables"
@@ -131,6 +133,9 @@ var (
 	// The system auto-generated IPv6 link-local route always uses "fe80::/64" as the destination regardless of the
 	// interface's global address's mask.
 	_, llrCIDR, _ = net.ParseCIDR("fe80::/64")
+
+	// Declare this a global variable to allow for testing.
+	newNFTables = nftables.New
 )
 
 // jumpToAntreaChainPattern matches iptables jump rules that have a comment enclosed in double quotes and target
@@ -176,6 +181,8 @@ func newIPTablesCache() *iptablesCache {
 	}
 	return cache
 }
+
+var defaultExecutor = exec.New()
 
 // Client takes care of routing container packets in host network, coordinating ip route, ip rule, iptables and ipset.
 type Client struct {
@@ -254,6 +261,12 @@ type Client struct {
 	wireguardPort int32
 	// proxyHealthCheckPort is the port on which AntreaProxy health check server listens when proxyAll is enabled.
 	proxyHealthCheckPort int32
+	// executor is used to execute commands.
+	executor exec.Interface
+	// kubeProxyExist should be set to true when kube-proxy is present (or detection failed). It is updated by kubeProxyDetect.
+	// and read by syncIPTables and syncNFTables to decide whether to install the rules to bypass kube-proxy process
+	// for Service external IPs.
+	kubeProxyExist atomic.Bool
 }
 
 // NewClient returns a route client.
@@ -288,20 +301,12 @@ func NewClient(networkConfig *config.NetworkConfig,
 		serviceExternalIPReferences: make(map[string]sets.Set[string]),
 		wireguardPort:               wireguardPort,
 		proxyHealthCheckPort:        proxyHealthCheckPort,
+		executor:                    defaultExecutor,
 	}, nil
 }
 
-// Initialize initializes all infrastructures required to route container packets in host network.
-// It is idempotent and can be safely called on every startup.
-func (c *Client) Initialize(nodeConfig *config.NodeConfig, done func()) error {
-	c.nodeConfig = nodeConfig
-
-	encapMode := c.networkConfig.TrafficEncapMode
-	c.hostNetworkAccelerationEnabled = c.networkConfig.EnableHostNetworkAcceleration &&
-		(encapMode == config.TrafficEncapModeNoEncap || encapMode == config.TrafficEncapModeHybrid)
-
-	c.hostNetworkNFTables = c.networkConfig.HostNetworkMode == config.HostNetworkModeNFTables
-
+// initializeServiceSets initializes required ipsets or nftables sets.
+func (c *Client) initializeServiceSets() {
 	if c.proxyAll {
 		if c.hostNetworkNFTables {
 			c.serviceNFTablesSets = map[string]*sync.Map{
@@ -317,8 +322,28 @@ func (c *Client) Initialize(nodeConfig *config.NodeConfig, done func()) error {
 				antreaExternalIPIPSet:  {},
 				antreaExternalIPIP6Set: {},
 			}
+			if c.hostNetworkAccelerationEnabled {
+				c.serviceNFTablesSets = map[string]*sync.Map{
+					antreaNFTablesSetExternalIP:  {},
+					antreaNFTablesSetExternalIP6: {},
+				}
+			}
 		}
+		// Assume kube-proxy is present until detection runs.
+		c.kubeProxyExist.Store(true)
 	}
+}
+
+// Initialize initializes all infrastructures required to route container packets in host network.
+// It is idempotent and can be safely called on every startup.
+func (c *Client) Initialize(nodeConfig *config.NodeConfig, done func()) error {
+	c.nodeConfig = nodeConfig
+	c.hostNetworkAccelerationEnabled = c.networkConfig.EnableHostNetworkAcceleration &&
+		(c.networkConfig.TrafficEncapMode.SupportsNoEncap() || c.proxyAll)
+	c.hostNetworkNFTables = c.networkConfig.HostNetworkMode == config.HostNetworkModeNFTables
+
+	c.initializeServiceSets()
+	c.cleanupNFTablesLeftovers()
 
 	c.iptablesInitialized = make(chan struct{})
 	var err error
@@ -334,6 +359,12 @@ func (c *Client) Initialize(nodeConfig *config.NodeConfig, done func()) error {
 	c.iptablesHasRandomFully = c.iptables.HasRandomFully()
 	if (c.nodeSNATRandomFully || c.egressSNATRandomFully) && !c.iptablesHasRandomFully {
 		return fmt.Errorf("iptables does not support --random-fully for SNAT / MASQUERADE rules")
+	}
+
+	// Perform an initial kube-proxy detection after iptables client is ready so the first iptables/nftables sync can
+	// use an accurate kubeProxyExist value.
+	if c.proxyAll {
+		c.kubeProxyDetect()
 	}
 
 	c.iptablesCache = newIPTablesCache()
@@ -356,7 +387,13 @@ func (c *Client) Initialize(nodeConfig *config.NodeConfig, done func()) error {
 	}()
 
 	if c.hostNetworkAccelerationEnabled || c.hostNetworkNFTables && c.proxyAll {
-		nftables, err := nftables.New(c.networkConfig.IPv4Enabled, c.networkConfig.IPv6Enabled)
+		var nftOptions []nftables.OptionsFn
+		if c.hostNetworkAccelerationEnabled {
+			// When host-network acceleration is enabled, do the flowtable dry-run check.
+			nftOptions = append(nftOptions, nftables.WithFlowtableCheck)
+		}
+
+		nftables, err := newNFTables(c.networkConfig.IPv4Enabled, c.networkConfig.IPv6Enabled, nftOptions...)
 		if err != nil {
 			if c.proxyAll && c.hostNetworkNFTables {
 				// ProxyAll depends on nftables; fail if unavailable.
@@ -453,6 +490,9 @@ func (c *Client) syncNetworkConfig(ctx context.Context) {
 	if err := c.syncIPSet(); err != nil {
 		klog.ErrorS(err, "Failed to sync ipset")
 		return
+	}
+	if c.proxyAll {
+		c.kubeProxyDetect()
 	}
 	if err := c.syncIPTables(false); err != nil {
 		klog.ErrorS(err, "Failed to sync iptables")
@@ -941,6 +981,74 @@ func (j *jumpRule) getKey() jumpRuleKey {
 	}
 }
 
+// kubeProxyDetect updates c.kubeProxyExist by detecting whether kube-proxy rules exist.
+// It checks the existence of kube-proxy nftables tables first, then iptables table nat chains PREROUTING and OUTPUT
+// jump rules targeting KUBE-SERVICES. If any check fails, we assume that kube-proxy is present and set kubeProxyExist
+// to true. Only when all checks succeed and no rules are found we set kubeProxyExist to false.
+func (c *Client) kubeProxyDetect() {
+	var errors []error
+
+	kubeProxyTables := []string{
+		"ip kube-proxy",
+		"ip6 kube-proxy",
+	}
+
+	output, err := c.executor.Command("nft", "list", "tables").CombinedOutput()
+	if err != nil {
+		errors = append(errors, fmt.Errorf("failed to run 'nft list tables': %w, output: %s", err, strings.TrimSpace(string(output))))
+	} else {
+		for _, table := range kubeProxyTables {
+			if strings.Contains(string(output), table) {
+				c.kubeProxyExist.Store(true)
+				klog.V(5).InfoS("Detected kube-proxy via nftables table existence", "table", table)
+				return
+			}
+		}
+	}
+
+	kubeProxyJumpRuleKeyword := fmt.Sprintf("-j %s", kubeProxyServiceChain)
+	ipProtocol := c.getIPProtocol()
+	checkChain := func(table, chain string) (found bool, err error) {
+		allRules, err := c.iptables.ListRules(ipProtocol, table, chain)
+		if err != nil {
+			return false, fmt.Errorf("failed to list iptables table %s chain %s rules: %w", table, chain, err)
+		}
+		for _, rules := range allRules {
+			for _, rule := range rules {
+				if strings.Contains(rule, kubeProxyJumpRuleKeyword) {
+					return true, nil
+				}
+			}
+		}
+		return false, nil
+	}
+
+	if found, err := checkChain(iptables.NATTable, iptables.PreRoutingChain); err != nil {
+		errors = append(errors, err)
+	} else if found {
+		c.kubeProxyExist.Store(true)
+		klog.V(5).InfoS("Detected kube-proxy via iptables rule", "table", iptables.NATTable, "chain", iptables.PreRoutingChain)
+		return
+	}
+
+	if found, err := checkChain(iptables.NATTable, iptables.OutputChain); err != nil {
+		errors = append(errors, err)
+	} else if found {
+		c.kubeProxyExist.Store(true)
+		klog.V(5).InfoS("Detected kube-proxy via iptables rule", "table", iptables.NATTable, "chain", iptables.OutputChain)
+		return
+	}
+
+	// If any check failed, assume kube-proxy is present.
+	if len(errors) > 0 {
+		c.kubeProxyExist.Store(true)
+		klog.V(5).InfoS("Got errors when detecting kube-proxy, assume kube-proxy is present", "errors", errors)
+	} else {
+		c.kubeProxyExist.Store(false)
+		klog.V(5).InfoS("Detected no rules related to kube-proxy, assume kube-proxy is not present")
+	}
+}
+
 func (c *Client) removeUnexpectedAntreaJumpRule(protocol iptables.Protocol, jumpRule jumpRule) error {
 	// List all the existing rules of the table and the chain where the Antrea jump rule will be added.
 	allExistingRules, err := c.iptables.ListRules(protocol, jumpRule.table, jumpRule.srcChain)
@@ -1224,7 +1332,7 @@ func (c *Client) restoreIptablesData(podCIDR *net.IPNet,
 		}
 	}
 
-	if c.proxyAll && !c.hostNetworkNFTables {
+	if c.proxyAll && !c.hostNetworkNFTables && c.kubeProxyExist.Load() {
 		// This rule is to bypass conntrack for packets sourced from external and destined to externalIPs, which also
 		// results in bypassing the chains managed by Antrea Proxy and kube-proxy in nat table.
 		writeLine(iptablesData, []string{
@@ -1545,6 +1653,11 @@ func (c *Client) initServiceIPRoutes() error {
 		if err := c.addVirtualServiceIPRoute(false); err != nil {
 			return err
 		}
+		if c.proxyAll {
+			if err := c.addPodCIDRNetworkRoute(c.nodeConfig.PodIPv4CIDR); err != nil {
+				return err
+			}
+		}
 		if err := c.addVirtualNodePortDNATIPRoute(false); err != nil {
 			return err
 		}
@@ -1552,6 +1665,11 @@ func (c *Client) initServiceIPRoutes() error {
 	if c.networkConfig.IPv6Enabled {
 		if err := c.addVirtualServiceIPRoute(true); err != nil {
 			return err
+		}
+		if c.proxyAll {
+			if err := c.addPodCIDRNetworkRoute(c.nodeConfig.PodIPv6CIDR); err != nil {
+				return err
+			}
 		}
 		if err := c.addVirtualNodePortDNATIPRoute(true); err != nil {
 			return err
@@ -1564,6 +1682,22 @@ func (c *Client) initServiceIPRoutes() error {
 			}
 		}
 	})
+	return nil
+}
+
+// addPodCIDRNetworkRoute installs a host route and a neighbor entry for PodCIDR network address
+// so packets destined to that address are redirected to Antrea gateway and re-injected into OVS pipeline.
+func (c *Client) addPodCIDRNetworkRoute(podCIDR *net.IPNet) error {
+	if podCIDR == nil {
+		return nil
+	}
+	linkIndex := c.nodeConfig.GatewayConfig.LinkIndex
+	networkIP := podCIDR.IP.Mask(podCIDR.Mask)
+	neigh := generateNeigh(networkIP, linkIndex)
+	if err := c.netlink.NeighSet(neigh); err != nil {
+		return fmt.Errorf("failed to add neighbor for PodCIDR network IP %s: %w", networkIP, err)
+	}
+	c.serviceNeighbors.Store(networkIP.String(), neigh)
 	return nil
 }
 
@@ -2539,14 +2673,19 @@ func (c *Client) AddExternalIPConfigs(svcInfoStr string, externalIP net.IP) erro
 		return err
 	}
 
-	var err error
 	if c.hostNetworkNFTables {
-		err = c.addExternalIPConfigsNFTables(externalIP)
+		if err := c.addExternalIPConfigsNFTables(externalIP); err != nil {
+			return err
+		}
 	} else {
-		err = c.addExternalIPConfigsIPsets(externalIP)
-	}
-	if err != nil {
-		return err
+		if err := c.addExternalIPConfigsIPsets(externalIP); err != nil {
+			return err
+		}
+		if c.hostNetworkAccelerationEnabled && c.nftables != nil {
+			if err := c.addExternalIPConfigsNFTables(externalIP); err != nil {
+				return err
+			}
+		}
 	}
 
 	references = sets.New[string](svcInfoStr)
@@ -2571,14 +2710,19 @@ func (c *Client) DeleteExternalIPConfigs(svcInfoStr string, externalIP net.IP) e
 		return err
 	}
 
-	var err error
 	if c.hostNetworkNFTables {
-		err = c.deleteExternalIPConfigsNFTables(externalIP)
+		if err := c.deleteExternalIPConfigsNFTables(externalIP); err != nil {
+			return err
+		}
 	} else {
-		err = c.deleteExternalIPConfigsIPsets(externalIP)
-	}
-	if err != nil {
-		return err
+		if err := c.deleteExternalIPConfigsIPsets(externalIP); err != nil {
+			return err
+		}
+		if c.hostNetworkAccelerationEnabled && c.nftables != nil {
+			if err := c.deleteExternalIPConfigsNFTables(externalIP); err != nil {
+				return err
+			}
+		}
 	}
 
 	delete(c.serviceExternalIPReferences, externalIPStr)
@@ -2928,6 +3072,38 @@ func (c *Client) DeleteNodeNetworkPolicyIPTables(iptablesChains []string, isIPv6
 	return nil
 }
 
+func (c *Client) nftablesProxyAllExternalIPSet(tx *knftables.Transaction, ipProtocol knftables.Family) {
+	var ipAddr string
+	var externalIPSet string
+
+	switch ipProtocol {
+	case knftables.IPv4Family:
+		ipAddr = "ipv4_addr"
+		externalIPSet = antreaNFTablesSetExternalIP
+	case knftables.IPv6Family:
+		ipAddr = "ipv6_addr"
+		externalIPSet = antreaNFTablesSetExternalIP6
+	}
+
+	tx.Add(&knftables.Set{
+		Name:    externalIPSet,
+		Type:    ipAddr,
+		Comment: ptr.To("Set containing external IPs"),
+	})
+	// Flush the sets if it exists.
+	tx.Flush(&knftables.Set{
+		Name: externalIPSet,
+	})
+	// Restore the elements.
+	c.serviceNFTablesSets[externalIPSet].Range(func(_, value any) bool {
+		elements := value.([]*knftables.Element)
+		for _, element := range elements {
+			tx.Add(element)
+		}
+		return true
+	})
+}
+
 func (c *Client) nftablesProxyAll(tx *knftables.Transaction, ipProtocol knftables.Family) {
 	tx.Add(&knftables.Chain{
 		Name:     antreaNFTablesRawChainPreroutingProxyAll,
@@ -3011,53 +3187,49 @@ func (c *Client) nftablesProxyAll(tx *knftables.Transaction, ipProtocol knftable
 		Type:    ipAddr + " . inet_proto . inet_service",
 		Comment: ptr.To("Set containing NodePort tuples (ip, protocol, port)"),
 	})
-	tx.Add(&knftables.Set{
-		Name:    externalIPSet,
-		Type:    ipAddr,
-		Comment: ptr.To("Set containing external IPs"),
+	// Flush the sets if it exists.
+	tx.Flush(&knftables.Set{
+		Name: nodePortSet,
 	})
-	for _, set := range []string{nodePortSet, externalIPSet} {
-		// Flush the sets if it exists.
-		tx.Flush(&knftables.Set{
-			Name: set,
+	// Restore the elements.
+	c.serviceNFTablesSets[nodePortSet].Range(func(_, value any) bool {
+		elements := value.([]*knftables.Element)
+		for _, element := range elements {
+			tx.Add(element)
+		}
+		return true
+	})
+
+	// When kube-proxy is present, add NOTRACK rules matching Service external IPs to bypass kube-proxy process.
+	if c.kubeProxyExist.Load() {
+		tx.Add(&knftables.Rule{
+			Chain: antreaNFTablesRawChainPreroutingProxyAll,
+			Rule: knftables.Concat(
+				ip, "daddr", "@", externalIPSet,
+				"counter",
+				"notrack",
+			),
+			Comment: ptr.To("Do not track request packets destined to external IPs"),
 		})
-		// Restore the elements.
-		c.serviceNFTablesSets[set].Range(func(_, value any) bool {
-			elements := value.([]*knftables.Element)
-			for _, element := range elements {
-				tx.Add(element)
-			}
-			return true
+		tx.Add(&knftables.Rule{
+			Chain: antreaNFTablesRawChainPreroutingProxyAll,
+			Rule: knftables.Concat(
+				ip, "saddr", "@", externalIPSet,
+				"counter",
+				"notrack",
+			),
+			Comment: ptr.To("Do not track reply packets sourced from external IPs"),
+		})
+		tx.Add(&knftables.Rule{
+			Chain: antreaNFTablesRawChainOutputProxyAll,
+			Rule: knftables.Concat(
+				ip, "daddr", "@", externalIPSet,
+				"counter",
+				"notrack",
+			),
+			Comment: ptr.To("Do not track request packets destined to external IPs"),
 		})
 	}
-
-	tx.Add(&knftables.Rule{
-		Chain: antreaNFTablesRawChainPreroutingProxyAll,
-		Rule: knftables.Concat(
-			ip, "daddr", "@", externalIPSet,
-			"counter",
-			"notrack",
-		),
-		Comment: ptr.To("Do not track request packets destined to external IPs"),
-	})
-	tx.Add(&knftables.Rule{
-		Chain: antreaNFTablesRawChainPreroutingProxyAll,
-		Rule: knftables.Concat(
-			ip, "saddr", "@", externalIPSet,
-			"counter",
-			"notrack",
-		),
-		Comment: ptr.To("Do not track reply packets sourced from external IPs"),
-	})
-	tx.Add(&knftables.Rule{
-		Chain: antreaNFTablesRawChainOutputProxyAll,
-		Rule: knftables.Concat(
-			ip, "daddr", "@", externalIPSet,
-			"counter",
-			"notrack",
-		),
-		Comment: ptr.To("Do not track request packets destined to external IPs"),
-	})
 
 	tx.Add(&knftables.Rule{
 		Chain: antreaNFTablesNatChainPreroutingProxyAll,
@@ -3110,95 +3282,237 @@ func (c *Client) nftablesTrafficAcceleration(tx *knftables.Transaction, ipProtoc
 		Name: antreaNFTablesChainForwardOffload,
 	})
 	if ipProtocol == knftables.IPv4Family {
-		// Add the set to contain peer Pod IPv4 CIDRs.
-		tx.Add(&knftables.Set{
-			Name:    antreaNFTablesSetPeerPodCIDR,
-			Type:    "ipv4_addr",
-			Flags:   []knftables.SetFlag{knftables.IntervalFlag},
-			Comment: ptr.To("Set containing IPv4 peer Pods CIDRs"),
-		})
-		// Flush the set if it exists.
-		tx.Flush(&knftables.Set{
-			Name: antreaNFTablesSetPeerPodCIDR,
-		})
-		// Restore existing IPv4 peer Pod CIDRs into the set.
-		c.podCIDRNFTablesSetIPv4.Range(func(_, v interface{}) bool {
-			return func(element *knftables.Element) bool {
-				tx.Add(element)
-				return true
-			}(v.(*knftables.Element))
-		})
-		// Add rules to accelerate Pod-to-Pod IPv4 connections via flowtable.
-		tx.Add(&knftables.Rule{
-			Chain: antreaNFTablesChainForwardOffload,
-			Rule: knftables.Concat(
-				"iif", c.nodeConfig.GatewayConfig.Name,
-				"ip", "saddr", c.nodeConfig.PodIPv4CIDR.String(),
-				"oif", c.nodeConfig.NodeTransportInterfaceName,
-				"ip", "daddr", "@", antreaNFTablesSetPeerPodCIDR,
-				"flow", "add", "@", antreaNFTablesFlowtable,
-				"counter",
-			),
-			Comment: ptr.To("Accelerate IPv4 connections: local Pod CIDR to remote Pod CIDRs"),
-		})
-		tx.Add(&knftables.Rule{
-			Chain: antreaNFTablesChainForwardOffload,
-			Rule: knftables.Concat(
-				"iif", c.nodeConfig.NodeTransportInterfaceName,
-				"ip", "saddr", "@", antreaNFTablesSetPeerPodCIDR,
-				"oif", c.nodeConfig.GatewayConfig.Name,
-				"ip", "daddr", c.nodeConfig.PodIPv4CIDR.String(),
-				"flow", "add", "@", antreaNFTablesFlowtable,
-				"counter",
-			),
-			Comment: ptr.To("Accelerate IPv4 connections: remote Pod CIDRs to local Pod CIDR"),
-		})
+		// Add rules to accelerate Pod-to-Pod IPv4 connections across Nodes via flowtable.
+		if c.networkConfig.TrafficEncapMode.SupportsNoEncap() {
+			// Add the set to contain peer Pod IPv4 CIDRs.
+			tx.Add(&knftables.Set{
+				Name:    antreaNFTablesSetPeerPodCIDR,
+				Type:    "ipv4_addr",
+				Flags:   []knftables.SetFlag{knftables.IntervalFlag},
+				Comment: ptr.To("Set containing IPv4 peer Pods CIDRs"),
+			})
+			// Flush the set if it exists.
+			tx.Flush(&knftables.Set{
+				Name: antreaNFTablesSetPeerPodCIDR,
+			})
+			// Restore existing IPv4 peer Pod CIDRs into the set.
+			c.podCIDRNFTablesSetIPv4.Range(func(_, v interface{}) bool {
+				return func(element *knftables.Element) bool {
+					tx.Add(element)
+					return true
+				}(v.(*knftables.Element))
+			})
+			// Add rules to accelerate Pod-to-Pod IPv4 connections via flowtable.
+			tx.Add(&knftables.Rule{
+				Chain: antreaNFTablesChainForwardOffload,
+				Rule: knftables.Concat(
+					"iif", c.nodeConfig.GatewayConfig.Name,
+					"ip", "saddr", c.nodeConfig.PodIPv4CIDR.String(),
+					"oif", c.nodeConfig.NodeTransportInterfaceName,
+					"ip", "daddr", "@", antreaNFTablesSetPeerPodCIDR,
+					"flow", "add", "@", antreaNFTablesFlowtable,
+					"counter",
+				),
+				Comment: ptr.To("Accelerate IPv4 connections: local Pod CIDR to remote Pod CIDRs"),
+			})
+			tx.Add(&knftables.Rule{
+				Chain: antreaNFTablesChainForwardOffload,
+				Rule: knftables.Concat(
+					"iif", c.nodeConfig.NodeTransportInterfaceName,
+					"ip", "saddr", "@", antreaNFTablesSetPeerPodCIDR,
+					"oif", c.nodeConfig.GatewayConfig.Name,
+					"ip", "daddr", c.nodeConfig.PodIPv4CIDR.String(),
+					"flow", "add", "@", antreaNFTablesFlowtable,
+					"counter",
+				),
+				Comment: ptr.To("Accelerate IPv4 connections: remote Pod CIDRs to local Pod CIDR"),
+			})
+		}
+		// Add rules to accelerate external-to-Service IPv4 connections via flowtable.
+		if c.proxyAll {
+			// Add rule to accelerate external-to-Service IPv4 connections by matching the nftables set containing external
+			// Service IPs as destination address, including LoadBalancer ingress IPs and ClusterIP externalIPs.
+			tx.Add(&knftables.Rule{
+				Chain: antreaNFTablesChainForwardOffload,
+				Rule: knftables.Concat(
+					"oif", c.nodeConfig.GatewayConfig.Name,
+					"ip", "daddr", "@", antreaNFTablesSetExternalIP,
+					"flow", "add", "@", antreaNFTablesFlowtable,
+					"counter",
+				),
+				Comment: ptr.To("Accelerate IPv4 connections: to external Service IPs"),
+			})
+			// Add rule to accelerate external-to-Service (NodePort) IPv4 connections by matching VirtualNodePortDNATIPv4
+			// as the destination address since NodePort connections are DNATed to this virtual address in the Node's host
+			// network.
+			tx.Add(&knftables.Rule{
+				Chain: antreaNFTablesChainForwardOffload,
+				Rule: knftables.Concat(
+					"oif", c.nodeConfig.GatewayConfig.Name,
+					"ip", "daddr", config.VirtualNodePortDNATIPv4,
+					"flow", "add", "@", antreaNFTablesFlowtable,
+					"counter",
+				),
+				Comment: ptr.To("Accelerate IPv4 connections: to NodePort Service"),
+			})
+		}
 	}
 	if ipProtocol == knftables.IPv6Family {
-		// Add the nft set to contain peer Pod IPv6 CIDRs.
-		tx.Add(&knftables.Set{
-			Name:    antreaNFTablesSetPeerPodCIDR,
-			Type:    "ipv6_addr",
-			Flags:   []knftables.SetFlag{knftables.IntervalFlag},
-			Comment: ptr.To("Set containing IPv6 peer Pods CIDRs"),
-		})
-		// Flush the set if it exists.
-		tx.Flush(&knftables.Set{
-			Name: antreaNFTablesSetPeerPodCIDR,
-		})
-		// Restore existing IPv6 peer Pod CIDRs into the set.
-		c.podCIDRNFTablesSetIPv6.Range(func(_, v interface{}) bool {
-			return func(element *knftables.Element) bool {
-				tx.Add(element)
-				return true
-			}(v.(*knftables.Element))
-		})
-		// Add rules to accelerate Pod-to-Pod IPv6 connections via flowtable.
-		tx.Add(&knftables.Rule{
-			Chain: antreaNFTablesChainForwardOffload,
-			Rule: knftables.Concat(
-				"iif", c.nodeConfig.GatewayConfig.Name,
-				"ip6", "saddr", c.nodeConfig.PodIPv6CIDR.String(),
-				"oif", c.nodeConfig.NodeTransportInterfaceName,
-				"ip6", "daddr", "@", antreaNFTablesSetPeerPodCIDR,
-				"flow", "add", "@", antreaNFTablesFlowtable,
-				"counter",
-			),
-			Comment: ptr.To("Accelerate IPv6 connections: local Pod CIDR to remote Pod CIDRs"),
-		})
-		tx.Add(&knftables.Rule{
-			Chain: antreaNFTablesChainForwardOffload,
-			Rule: knftables.Concat(
-				"iif", c.nodeConfig.NodeTransportInterfaceName,
-				"ip6", "saddr", "@", antreaNFTablesSetPeerPodCIDR,
-				"oif", c.nodeConfig.GatewayConfig.Name,
-				"ip6", "daddr", c.nodeConfig.PodIPv6CIDR.String(),
-				"flow", "add", "@", antreaNFTablesFlowtable,
-				"counter",
-			),
-			Comment: ptr.To("Accelerate IPv6 connections: remote Pod CIDRs to local Pod CIDR"),
-		})
+		// Add rules to accelerate Pod-to-Pod IPv6 connections across Nodes via flowtable.
+		if c.networkConfig.TrafficEncapMode.SupportsNoEncap() {
+			// Add the nft set to contain peer Pod IPv6 CIDRs.
+			tx.Add(&knftables.Set{
+				Name:    antreaNFTablesSetPeerPodCIDR,
+				Type:    "ipv6_addr",
+				Flags:   []knftables.SetFlag{knftables.IntervalFlag},
+				Comment: ptr.To("Set containing IPv6 peer Pods CIDRs"),
+			})
+			// Flush the set if it exists.
+			tx.Flush(&knftables.Set{
+				Name: antreaNFTablesSetPeerPodCIDR,
+			})
+			// Restore existing IPv6 peer Pod CIDRs into the set.
+			c.podCIDRNFTablesSetIPv6.Range(func(_, v interface{}) bool {
+				return func(element *knftables.Element) bool {
+					tx.Add(element)
+					return true
+				}(v.(*knftables.Element))
+			})
+			// Add rules to accelerate Pod-to-Pod IPv6 connections via flowtable.
+			tx.Add(&knftables.Rule{
+				Chain: antreaNFTablesChainForwardOffload,
+				Rule: knftables.Concat(
+					"iif", c.nodeConfig.GatewayConfig.Name,
+					"ip6", "saddr", c.nodeConfig.PodIPv6CIDR.String(),
+					"oif", c.nodeConfig.NodeTransportInterfaceName,
+					"ip6", "daddr", "@", antreaNFTablesSetPeerPodCIDR,
+					"flow", "add", "@", antreaNFTablesFlowtable,
+					"counter",
+				),
+				Comment: ptr.To("Accelerate IPv6 connections: local Pod CIDR to remote Pod CIDRs"),
+			})
+			tx.Add(&knftables.Rule{
+				Chain: antreaNFTablesChainForwardOffload,
+				Rule: knftables.Concat(
+					"iif", c.nodeConfig.NodeTransportInterfaceName,
+					"ip6", "saddr", "@", antreaNFTablesSetPeerPodCIDR,
+					"oif", c.nodeConfig.GatewayConfig.Name,
+					"ip6", "daddr", c.nodeConfig.PodIPv6CIDR.String(),
+					"flow", "add", "@", antreaNFTablesFlowtable,
+					"counter",
+				),
+				Comment: ptr.To("Accelerate IPv6 connections: remote Pod CIDRs to local Pod CIDR"),
+			})
+		}
+		// Add rules to accelerate external-to-Service IPv6 connections via flowtable.
+		if c.proxyAll {
+			// Add rule to accelerate external-to-Service IPv6 connections by matching the nftables set containing external
+			// Service IPs as destination address, including LoadBalancer ingress IPs and ClusterIP externalIPs.
+			tx.Add(&knftables.Rule{
+				Chain: antreaNFTablesChainForwardOffload,
+				Rule: knftables.Concat(
+					"oif", c.nodeConfig.GatewayConfig.Name,
+					"ip6", "daddr", "@", antreaNFTablesSetExternalIP6,
+					"flow", "add", "@", antreaNFTablesFlowtable,
+					"counter",
+				),
+				Comment: ptr.To("Accelerate IPv6 connections: to external Service IPs"),
+			})
+			// Add rule to accelerate external-to-Service (NodePort) IPv6 connections by matching VirtualNodePortDNATIPv6
+			// as the destination address since NodePort connections are DNATed to this virtual address in the Node's host
+			// network.
+			tx.Add(&knftables.Rule{
+				Chain: antreaNFTablesChainForwardOffload,
+				Rule: knftables.Concat(
+					"oif", c.nodeConfig.GatewayConfig.Name,
+					"ip6", "daddr", config.VirtualNodePortDNATIPv6,
+					"flow", "add", "@", antreaNFTablesFlowtable,
+					"counter",
+				),
+				Comment: ptr.To("Accelerate IPv6 connections: to NodePort Service"),
+			})
+		}
 	}
+}
+
+// cleanupNFTablesLeftovers removes nftables objects from a previous run when they are no longer used.
+func (c *Client) cleanupNFTablesLeftovers() {
+	cleanAcceleration := !c.hostNetworkAccelerationEnabled
+	cleanProxyAll := !c.proxyAll || !c.hostNetworkNFTables
+	if !cleanAcceleration && !cleanProxyAll {
+		return
+	}
+
+	nftClient, err := newNFTables(c.networkConfig.IPv4Enabled, c.networkConfig.IPv6Enabled)
+	if err != nil {
+		klog.InfoS("Skipping nftables leftover cleanup because nftables is not available", "err", err)
+		return
+	}
+
+	for ipProtocol, nft := range nftClient.All() {
+		tx := nft.NewTransaction()
+		if cleanAcceleration {
+			c.nftablesTrafficAccelerationCleanup(tx, ipProtocol)
+		}
+		if cleanProxyAll {
+			c.nftablesProxyAllCleanup(tx, ipProtocol)
+		}
+		if err = nft.Run(context.TODO(), tx); err != nil {
+			klog.InfoS("nftables leftover cleanup did not fully apply", "family", ipProtocol, "err", err)
+		}
+	}
+}
+
+func (c *Client) nftablesTrafficAccelerationCleanup(tx *knftables.Transaction, ipProtocol knftables.Family) {
+	tx.Destroy(&knftables.Chain{Name: antreaNFTablesChainForwardOffload})
+	tx.Destroy(&knftables.Flowtable{Name: antreaNFTablesFlowtable})
+	var ipAddr string
+	switch ipProtocol {
+	case knftables.IPv4Family:
+		ipAddr = "ipv4_addr"
+	case knftables.IPv6Family:
+		ipAddr = "ipv6_addr"
+	}
+	tx.Destroy(&knftables.Set{
+		Name:  antreaNFTablesSetPeerPodCIDR,
+		Type:  ipAddr,
+		Flags: []knftables.SetFlag{knftables.IntervalFlag},
+	})
+}
+
+func (c *Client) nftablesProxyAllCleanup(tx *knftables.Transaction, ipProtocol knftables.Family) {
+	for _, chain := range []string{
+		antreaNFTablesRawChainPreroutingProxyAll,
+		antreaNFTablesRawChainOutputProxyAll,
+		antreaNFTablesNatChainPreroutingProxyAll,
+		antreaNFTablesNatChainOutputProxyAll,
+		antreaNFTablesNatChainPostroutingProxyAll,
+	} {
+		tx.Destroy(&knftables.Chain{Name: chain})
+	}
+
+	var ipAddr string
+	var nodePortSet string
+	var externalIPSet string
+	switch ipProtocol {
+	case knftables.IPv4Family:
+		ipAddr = "ipv4_addr"
+		nodePortSet = antreaNFTablesSetNodePort
+		externalIPSet = antreaNFTablesSetExternalIP
+	case knftables.IPv6Family:
+		ipAddr = "ipv6_addr"
+		nodePortSet = antreaNFTablesSetNodePort6
+		externalIPSet = antreaNFTablesSetExternalIP6
+	}
+
+	tx.Destroy(&knftables.Set{
+		Name: nodePortSet,
+		Type: ipAddr + " . inet_proto . inet_service",
+	})
+	tx.Destroy(&knftables.Set{
+		Name: externalIPSet,
+		Type: ipAddr,
+	})
 }
 
 func (c *Client) syncNFTables(ctx context.Context) error {
@@ -3209,6 +3523,13 @@ func (c *Client) syncNFTables(ctx context.Context) error {
 			Comment: ptr.To("Rules for Antrea"),
 		})
 
+		if c.proxyAll && (c.hostNetworkAccelerationEnabled || c.hostNetworkNFTables) {
+			// Create nftables sets containing Service external IPs. These sets are used for:
+			// - Host network acceleration: to accelerate external-to-Service connections via flowtable offloading
+			// - ProxyAll with nftables: to implement Service traffic bypassing kube-proxy PREROUTING process when host
+			//   network mode uses nftables
+			c.nftablesProxyAllExternalIPSet(tx, ipProtocol)
+		}
 		if c.hostNetworkAccelerationEnabled {
 			c.nftablesTrafficAcceleration(tx, ipProtocol)
 		}
@@ -3426,7 +3747,7 @@ func (c *Client) addExternalIPConfigsNFTables(externalIP net.IP) error {
 	}
 	tx.Add(element)
 	if err := nft.Run(context.TODO(), tx); err != nil {
-		return fmt.Errorf("failed to add externalIP %s to nftables set %s", externalIPStr, setName)
+		return fmt.Errorf("failed to add externalIP %s to nftables set %s: %w", externalIPStr, setName, err)
 	}
 	klog.V(4).InfoS("Added externalIP to nftables set", "set", setName, "externalIP", externalIPStr)
 
@@ -3483,7 +3804,7 @@ func (c *Client) deleteExternalIPConfigsNFTables(externalIP net.IP) error {
 	}
 	tx.Delete(element)
 	if err := nft.Run(context.TODO(), tx); err != nil {
-		return fmt.Errorf("failed to delete externalIP %s from nftables set %s", externalIPStr, setName)
+		return fmt.Errorf("failed to delete externalIP %s from nftables set %s: %w", externalIPStr, setName, err)
 	}
 
 	klog.V(4).InfoS("Deleted externalIP from nftables set", "set", setName, "externalIP", externalIPStr)
