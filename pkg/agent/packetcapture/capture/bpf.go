@@ -42,17 +42,20 @@ const (
 	ip4HeaderSize            uint32 = 14
 	ip4HeaderFlags           uint32 = 20
 
-	ip6HeaderOffset          uint32 = 14
-	ip6HeaderSize            uint32 = 40
-	ip6NextHeaderOffset      uint32 = ip6HeaderOffset + 6             // 20
-	ip6SourceAddrOffset      uint32 = ip6HeaderOffset + 8             // 22
-	ip6DestinationAddrOffset uint32 = ip6HeaderOffset + 24            // 38
-	ip6L4HeaderOffset        uint32 = ip6HeaderOffset + ip6HeaderSize // 54
-	ip6SourcePort            uint32 = 0
-	ip6DestinationPort       uint32 = 2
-	ip6TCPFlags              uint32 = 13
-	ip6ICMPv6Type            uint32 = 0
-	ip6ICMPv6Code            uint32 = 1
+	ip6HeaderOffset            uint32 = 14
+	ip6HeaderSize              uint32 = 40
+	ip6NextHeaderOffset        uint32 = ip6HeaderOffset + 6             // 20
+	ip6SourceAddrOffset        uint32 = ip6HeaderOffset + 8             // 22
+	ip6DestinationAddrOffset   uint32 = ip6HeaderOffset + 24            // 38
+	ip6L4HeaderOffset          uint32 = ip6HeaderOffset + ip6HeaderSize // 54
+	ip6SourcePort              uint32 = 0
+	ip6DestinationPort         uint32 = 2
+	ip6TCPFlags                uint32 = 13
+	ip6ICMPv6Type              uint32 = 0
+	ip6ICMPv6Code              uint32 = 1
+	ip6FragmentNextHeader      uint32 = 44                // IPv6 Fragment Extension Header
+	ip6FragExtInnerProtocol    uint32 = ip6L4HeaderOffset // offset of Next Header inside Fragment Ext Header
+	ip6FragExtInstructionCount int    = 3                 // number of extra instructions for fragment header handling
 )
 
 var (
@@ -99,22 +102,56 @@ var ICMPv6MsgTypeMap = map[crdv1alpha1.ICMPv6MsgType]uint32{
 	crdv1alpha1.ICMPv6MsgTypeParamProblem: 4,
 }
 
+// tcpFlagsFilter represents a TCP flag match condition with a value and mask.
 type tcpFlagsFilter struct {
 	flag uint32
 	mask uint32
 }
 
-// handles both icmp & icmpv6 msgs
+// icmpFilter represents an ICMP or ICMPv6 message filter with type and optional code.
 type icmpFilter struct {
 	icmpType uint32
 	icmpCode *uint32
 }
 
+// transportFilters holds the parsed transport-layer filter criteria
+// extracted from the PacketCapture CRD spec.
 type transportFilters struct {
 	srcPort  uint16
 	dstPort  uint16
 	tcpFlags []tcpFlagsFilter
 	icmp     []icmpFilter
+}
+
+// hasTransportFilters returns true if any L4-level filters (ports, flags, ICMP messages)
+// are configured. This is used to decide whether to add IPv6 extension header handling,
+// which is only needed for protocol-only filters.
+//
+// Example: For 'ip6 proto 58' (ICMPv6 only, no transport header), returns false,
+// so Fragment Extension Header checks are added. For 'ip6 proto 6 and dst port 80',
+// returns true, so Fragment checks are omitted.
+func hasTransportFilters(packet *crdv1alpha1.Packet) bool {
+	if packet == nil {
+		return false
+	}
+	t := packet.TransportHeader
+	if t.TCP != nil {
+		if t.TCP.SrcPort != nil || t.TCP.DstPort != nil || len(t.TCP.Flags) > 0 {
+			return true
+		}
+	}
+	if t.UDP != nil {
+		if t.UDP.SrcPort != nil || t.UDP.DstPort != nil {
+			return true
+		}
+	}
+	if t.ICMP != nil && len(t.ICMP.Messages) > 0 {
+		return true
+	}
+	if t.ICMPv6 != nil && len(t.ICMPv6.Messages) > 0 {
+		return true
+	}
+	return false
 }
 
 // ipFamilyHandler encapsulates protocol-specific constants and filter compilation logic
@@ -179,6 +216,64 @@ func compareProtocol(protocol uint32, skipTrue, skipFalse uint8) bpf.Instruction
 	return bpf.JumpIf{Cond: bpf.JumpEqual, Val: protocol, SkipTrue: skipTrue, SkipFalse: skipFalse}
 }
 
+// appendProtocolFilters appends protocol-related checks and computes jump offsets
+// based on the current instruction length.
+//
+// For IPv6 protocol-only filters (no transport-layer filters like ports, flags, or ICMP),
+// tcpdump/libpcap adds extra instructions to handle the IPv6 Fragment Extension Header.
+// This is because the Next Header field may point to a Fragment header (44) rather
+// than the actual transport protocol, so we must check both cases.
+//
+// Example: 'ip6 proto 58' (ICMPv6 protocol only) generates:
+//
+//	(000) ldh      [12]                             # Load EtherType
+//	(001) jeq      #0x86dd     jt 2    jf 8         # Is IPv6?
+//	(002) ldb      [20]                             # Load Next Header
+//	(003) jeq      #0x3a       jt 7    jf 4         # Is ICMPv6 (58)? → MATCH, else check Fragment
+//	(004) jeq      #0x2c       jt 5    jf 8         # Is Fragment (44)? → check inner, else DROP
+//	(005) ldb      [54]                             # Load inner Next Header from Fragment Ext Header
+//	(006) jeq      #0x3a       jt 7    jf 8         # Is ICMPv6 (58)? → MATCH, else DROP
+//	(007) ret      #262144                          # MATCH
+//	(008) ret      #0                               # DROP
+//
+// In contrast, when transport filters are present (e.g., ports), the Fragment Extension
+// Header check is omitted because tcpdump/libpcap does not add it:
+//
+// Example: 'ip6 proto 6 and dst port 80' generates:
+//
+//	(000) ldh      [12]                             # Load EtherType
+//	(001) jeq      #0x86dd     jt 2    jf 7         # Is IPv6?
+//	(002) ldb      [20]                             # Load Next Header
+//	(003) jeq      #0x6        jt 4    jf 7         # Is TCP (6)?
+//	(004) ldh      [56]                             # Load TCP Dst Port
+//	(005) jeq      #0x50       jt 6    jf 7         # Is port 80?
+//	(006) ret      #262144                          # MATCH
+//	(007) ret      #0                               # DROP
+func appendProtocolFilters(inst []bpf.Instruction, handler *ipFamilyHandler, proto uint32, hasTransport bool, size uint8) []bpf.Instruction {
+	skipToEnd := func(curLen int) uint8 {
+		return size - uint8(curLen) - 2
+	}
+
+	inst = append(inst, handler.loadProtocol)
+
+	// For IPv6 without transport filters, include Fragment Extension Header handling
+	// to match libpcap/tcpdump behavior.
+	if handler.etherType == etherTypeIPv6 && !hasTransport {
+		// If protocol matches directly, skip past the extension header check.
+		inst = append(inst, compareProtocol(proto, uint8(ip6FragExtInstructionCount), 0))
+		// If Next Header is NOT Fragment (44), jump to drop.
+		inst = append(inst, bpf.JumpIf{Cond: bpf.JumpEqual, Val: ip6FragmentNextHeader, SkipTrue: 0, SkipFalse: skipToEnd(len(inst))})
+		// Load the inner Next Header from inside the Fragment Extension Header.
+		inst = append(inst, bpf.LoadAbsolute{Off: ip6FragExtInnerProtocol, Size: lengthByte})
+		// Check if the inner protocol matches. Jump to drop if not.
+		inst = append(inst, compareProtocol(proto, 0, skipToEnd(len(inst))))
+		return inst
+	}
+
+	inst = append(inst, compareProtocol(proto, 0, skipToEnd(len(inst))))
+	return inst
+}
+
 // getAddressChunk abstracts the process of extracting a 4-byte chunk from an IP address,
 // handling the structural differences between IPv4 (one chunk) and IPv6 (four chunks).
 func (h *ipFamilyHandler) getAddressChunk(ip net.IP, chunkIndex int) uint32 {
@@ -236,10 +331,10 @@ func calculateSkipFalse(handler *ipFamilyHandler, srcIP, dstIP net.IP, transport
 		if len(transport.tcpFlags) > 0 {
 			count += uint8(len(transport.tcpFlags) * 3)
 		}
-		if len(transport.icmp) > 0 { // handles both icmp & icmpv6 msgs
-			count += 1
+		if len(transport.icmp) > 0 {
+			count++
 			for _, m := range transport.icmp {
-				count += 1
+				count++
 				if m.icmpCode != nil {
 					count += 2
 				}
@@ -247,7 +342,7 @@ func calculateSkipFalse(handler *ipFamilyHandler, srcIP, dstIP net.IP, transport
 		}
 	}
 	// ret keep
-	count += 1
+	count++
 
 	return count
 }
@@ -257,7 +352,7 @@ func calculateSkipFalse(handler *ipFamilyHandler, srcIP, dstIP net.IP, transport
 // between IPv4 (1 chunk) and IPv6 (4 chunks). It also manages the complex jump logic
 // required for bidirectional traffic matching.
 func compileIPFilters(handler *ipFamilyHandler, srcIP, dstIP net.IP, size, curLen, skipFalse uint8, needsOtherTrafficDirectionCheck bool) []bpf.Instruction {
-	inst := []bpf.Instruction{}
+	var inst []bpf.Instruction
 
 	// calculate skip size to jump to the final instruction (NO MATCH)
 	skipToEnd := func() uint8 {
@@ -300,10 +395,10 @@ func compileIPFilters(handler *ipFamilyHandler, srcIP, dstIP net.IP, size, curLe
 	return inst
 }
 
-// Generates BPF instructions for filtering transport-layer traffic based on ports, TCP flags,
-// ICMP and ICMPv6 messages.
+// compileTransportFilters generates BPF instructions for filtering transport-layer
+// traffic based on ports, TCP flags, ICMP and ICMPv6 messages.
 func compileTransportFilters(handler *ipFamilyHandler, size, curLen uint8, transport *transportFilters) []bpf.Instruction {
-	inst := []bpf.Instruction{}
+	var inst []bpf.Instruction
 
 	// calculate skip size to jump to the final instruction (NO MATCH)
 	skipToEnd := func() uint8 {
@@ -339,7 +434,7 @@ func compileTransportFilters(handler *ipFamilyHandler, size, curLen uint8, trans
 			}
 		}
 
-		// handles both icmp & icmpv6 msgs
+		// ICMP and ICMPv6 message filters.
 		if len(transport.icmp) > 0 {
 			inst = append(inst, handler.loadICMPType)
 			for i, f := range transport.icmp {
@@ -397,89 +492,116 @@ func compileGenericPacketFilter(handler *ipFamilyHandler, packetSpec *crdv1alpha
 	// have 3 instructions so far.
 	inst = append(inst, compareProtocolIP(handler.etherType, 0, size-3))
 
+	hasTransport := hasTransportFilters(packetSpec)
+	var (
+		hasProtocol     bool
+		proto           uint32
+		deferProtoCheck bool
+	)
+
 	if packetSpec != nil && packetSpec.Protocol != nil {
-		var proto uint32
+		hasProtocol = true
 		if packetSpec.Protocol.Type == intstr.Int {
 			proto = uint32(packetSpec.Protocol.IntVal)
 		} else {
 			proto = ProtocolMap[strings.ToUpper(packetSpec.Protocol.StrVal)]
 		}
-		inst = append(inst, handler.loadProtocol)
-		inst = append(inst, compareProtocol(proto, 0, size-5))
+
+		// For IPv6 with transport-level filters and at least one IP filter,
+		// defer protocol checks until after IP checks for one-way directions.
+		// This better aligns with tcpdump output ordering for many complex
+		// expressions where L3 constraints are evaluated before protocol checks.
+		deferProtoCheck = handler.etherType == etherTypeIPv6 &&
+			hasTransport &&
+			(srcIP != nil || dstIP != nil) &&
+			(direction == crdv1alpha1.CaptureDirectionSourceToDestination ||
+				direction == crdv1alpha1.CaptureDirectionDestinationToSource)
+
+		if !deferProtoCheck {
+			inst = appendProtocolFilters(inst, handler, proto, hasTransport, size)
+		}
 	}
 
 	// ports, TCP flags, ICMP and ICMPv6 messages
 	var transport transportFilters
-	if packetSpec.TransportHeader.TCP != nil {
-		if packetSpec.TransportHeader.TCP.SrcPort != nil {
-			transport.srcPort = uint16(*packetSpec.TransportHeader.TCP.SrcPort)
-		}
-		if packetSpec.TransportHeader.TCP.DstPort != nil {
-			transport.dstPort = uint16(*packetSpec.TransportHeader.TCP.DstPort)
-		}
-		if packetSpec.TransportHeader.TCP.Flags != nil {
-			for _, f := range packetSpec.TransportHeader.TCP.Flags {
-				m := f.Value // default to flag if not specified
-				if f.Mask != nil {
-					m = *f.Mask
+	if packetSpec != nil {
+		if packetSpec.TransportHeader.TCP != nil {
+			if packetSpec.TransportHeader.TCP.SrcPort != nil {
+				transport.srcPort = uint16(*packetSpec.TransportHeader.TCP.SrcPort)
+			}
+			if packetSpec.TransportHeader.TCP.DstPort != nil {
+				transport.dstPort = uint16(*packetSpec.TransportHeader.TCP.DstPort)
+			}
+			if packetSpec.TransportHeader.TCP.Flags != nil {
+				for _, f := range packetSpec.TransportHeader.TCP.Flags {
+					m := f.Value // default to flag if not specified
+					if f.Mask != nil {
+						m = *f.Mask
+					}
+					transport.tcpFlags = append(transport.tcpFlags, tcpFlagsFilter{
+						flag: uint32(f.Value),
+						mask: uint32(m),
+					})
 				}
-				transport.tcpFlags = append(transport.tcpFlags, tcpFlagsFilter{
-					flag: uint32(f.Value),
-					mask: uint32(m),
+			}
+		} else if packetSpec.TransportHeader.UDP != nil {
+			if packetSpec.TransportHeader.UDP.SrcPort != nil {
+				transport.srcPort = uint16(*packetSpec.TransportHeader.UDP.SrcPort)
+			}
+			if packetSpec.TransportHeader.UDP.DstPort != nil {
+				transport.dstPort = uint16(*packetSpec.TransportHeader.UDP.DstPort)
+			}
+		} else if packetSpec.TransportHeader.ICMP != nil {
+			for _, f := range packetSpec.TransportHeader.ICMP.Messages {
+				var typeValue uint32
+				var codeValue *uint32
+				if f.Type.Type == intstr.Int {
+					typeValue = uint32(f.Type.IntVal)
+				} else {
+					typeValue = ICMPMsgTypeMap[crdv1alpha1.ICMPMsgType(strings.ToLower(f.Type.StrVal))]
+				}
+				if f.Code != nil {
+					codeValue = ptr.To(uint32(*f.Code))
+				}
+
+				transport.icmp = append(transport.icmp, icmpFilter{
+					icmpType: typeValue,
+					icmpCode: codeValue,
 				})
 			}
-		}
-	} else if packetSpec.TransportHeader.UDP != nil {
-		if packetSpec.TransportHeader.UDP.SrcPort != nil {
-			transport.srcPort = uint16(*packetSpec.TransportHeader.UDP.SrcPort)
-		}
-		if packetSpec.TransportHeader.UDP.DstPort != nil {
-			transport.dstPort = uint16(*packetSpec.TransportHeader.UDP.DstPort)
-		}
-	} else if packetSpec.TransportHeader.ICMP != nil {
-		for _, f := range packetSpec.TransportHeader.ICMP.Messages {
-			var typeValue uint32
-			var codeValue *uint32
-			if f.Type.Type == intstr.Int {
-				typeValue = uint32(f.Type.IntVal)
-			} else {
-				typeValue = ICMPMsgTypeMap[crdv1alpha1.ICMPMsgType(strings.ToLower(f.Type.StrVal))]
-			}
-			if f.Code != nil {
-				codeValue = ptr.To(uint32(*f.Code))
-			}
+		} else if packetSpec.TransportHeader.ICMPv6 != nil {
+			for _, f := range packetSpec.TransportHeader.ICMPv6.Messages {
+				var typeValue uint32
+				var codeValue *uint32
+				if f.Type.Type == intstr.Int {
+					typeValue = uint32(f.Type.IntVal)
+				} else {
+					typeValue = ICMPv6MsgTypeMap[crdv1alpha1.ICMPv6MsgType(strings.ToLower(f.Type.StrVal))]
+				}
+				if f.Code != nil {
+					codeValue = ptr.To(uint32(*f.Code))
+				}
 
-			transport.icmp = append(transport.icmp, icmpFilter{
-				icmpType: typeValue,
-				icmpCode: codeValue,
-			})
-		}
-	} else if packetSpec.TransportHeader.ICMPv6 != nil {
-		for _, f := range packetSpec.TransportHeader.ICMPv6.Messages {
-			var typeValue uint32
-			var codeValue *uint32
-			if f.Type.Type == intstr.Int {
-				typeValue = uint32(f.Type.IntVal)
-			} else {
-				typeValue = ICMPv6MsgTypeMap[crdv1alpha1.ICMPv6MsgType(strings.ToLower(f.Type.StrVal))]
+				transport.icmp = append(transport.icmp, icmpFilter{
+					icmpType: typeValue,
+					icmpCode: codeValue,
+				})
 			}
-			if f.Code != nil {
-				codeValue = ptr.To(uint32(*f.Code))
-			}
-
-			transport.icmp = append(transport.icmp, icmpFilter{
-				icmpType: typeValue,
-				icmpCode: codeValue,
-			})
 		}
 	}
 
 	switch direction {
 	case crdv1alpha1.CaptureDirectionSourceToDestination:
 		inst = append(inst, compileIPFilters(handler, srcIP, dstIP, size, uint8(len(inst)), 0, false)...)
+		if hasProtocol && deferProtoCheck {
+			inst = appendProtocolFilters(inst, handler, proto, hasTransport, size)
+		}
 	case crdv1alpha1.CaptureDirectionDestinationToSource:
 		transport.srcPort, transport.dstPort = transport.dstPort, transport.srcPort
 		inst = append(inst, compileIPFilters(handler, dstIP, srcIP, size, uint8(len(inst)), 0, false)...)
+		if hasProtocol && deferProtoCheck {
+			inst = appendProtocolFilters(inst, handler, proto, hasTransport, size)
+		}
 	default:
 		skipFalse := calculateSkipFalse(handler, srcIP, dstIP, &transport)
 		inst = append(inst, compileIPFilters(handler, srcIP, dstIP, size, uint8(len(inst)), skipFalse, true)...)
@@ -628,6 +750,11 @@ func calculateInstructionsSize(handler *ipFamilyHandler, packet *crdv1alpha1.Pac
 		// protocol check
 		if packet.Protocol != nil {
 			count += 2
+			// IPv6 Fragment Extension Header handling adds 3 extra instructions
+			// when there are no transport-layer filters (ports, flags, ICMP).
+			if handler.etherType == etherTypeIPv6 && !hasTransportFilters(packet) {
+				count += ip6FragExtInstructionCount
+			}
 		}
 		transport := packet.TransportHeader
 		portFiltersSize := func() int {
@@ -663,17 +790,17 @@ func calculateInstructionsSize(handler *ipFamilyHandler, packet *crdv1alpha1.Pac
 				if handler.etherType == etherTypeIPv4 {
 					count += 3
 				}
-				count += 1 // load icmp type
+				count++ // load icmp type
 				for _, m := range transport.ICMP.Messages {
-					count += 1 // compare icmp type
+					count++ // compare icmp type
 					if m.Code != nil {
 						count += 2 // load + compare icmp code
 					}
 				}
 			} else if transport.ICMPv6 != nil {
-				count += 1 // load icmpv6 type
+				count++ // load icmpv6 type
 				for _, m := range transport.ICMPv6.Messages {
-					count += 1 // compare icmpv6 type
+					count++ // compare icmpv6 type
 					if m.Code != nil {
 						count += 2 // load + compare icmpv6 code
 					}
@@ -685,7 +812,6 @@ func calculateInstructionsSize(handler *ipFamilyHandler, packet *crdv1alpha1.Pac
 		count += portFiltersSize
 
 		if direction == crdv1alpha1.CaptureDirectionBoth {
-
 			// extra returnKeep
 			count++
 
