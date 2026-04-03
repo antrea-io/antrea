@@ -37,7 +37,7 @@ import (
 	"github.com/containernetworking/plugins/pkg/ip"
 	"github.com/google/uuid"
 	log "github.com/sirupsen/logrus"
-	"gopkg.in/yaml.v2"
+	"go.yaml.in/yaml/v2"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
