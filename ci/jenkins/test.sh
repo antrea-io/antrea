@@ -488,8 +488,8 @@ function deliver_antrea_windows {
     sed -i 's/if (!(Test-Path $AntreaAgentConfigPath))/if ($true)/' hack/windows/Helper.psm1
     kubectl get nodes -o wide --no-headers=true | awk -v role="$CONTROL_PLANE_NODE_ROLE" '$3 !~ role && $1 ~ /win/ {print $1}' | while read WORKER_NAME; do
         revert_snapshot_windows ${WORKER_NAME}
-        k8s_images=("registry.k8s.io/e2e-test-images/agnhost:2.52" "registry.k8s.io/e2e-test-images/jessie-dnsutils:1.5" "registry.k8s.io/e2e-test-images/nginx:1.14-2" "registry.k8s.io/pause:3.10")
-        conformance_images=("k8sprow.azurecr.io/kubernetes-e2e-test-images/agnhost:2.52" "k8sprow.azurecr.io/kubernetes-e2e-test-images/jessie-dnsutils:1.5" "k8sprow.azurecr.io/kubernetes-e2e-test-images/nginx:1.14-2" "registry.k8s.io/e2e-test-images/pause:3.10")
+        k8s_images=("registry.k8s.io/e2e-test-images/agnhost:2.52" "registry.k8s.io/e2e-test-images/jessie-dnsutils:1.5" "registry.k8s.io/e2e-test-images/nginx:1.14-2" "registry.k8s.io/pause:3.10" "registry.k8s.io/pause:3.10.1")
+        conformance_images=("k8sprow.azurecr.io/kubernetes-e2e-test-images/agnhost:2.52" "k8sprow.azurecr.io/kubernetes-e2e-test-images/jessie-dnsutils:1.5" "k8sprow.azurecr.io/kubernetes-e2e-test-images/nginx:1.14-2" "registry.k8s.io/e2e-test-images/pause:3.10" "registry.k8s.io/e2e-test-images/pause:3.10.1")
         e2e_images=("${DOCKER_REGISTRY}/antrea/toolbox:1.5-1" "registry.k8s.io/e2e-test-images/agnhost:2.40")
         # Pull necessary images in advance to avoid transient error
         for i in "${!k8s_images[@]}"; do
