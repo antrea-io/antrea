@@ -28,6 +28,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/klog/v2"
 
+	"antrea.io/antrea/pkg/agent/client"
 	"antrea.io/antrea/pkg/agent/config"
 	"antrea.io/antrea/pkg/agent/openflow"
 	"antrea.io/antrea/pkg/agent/servicecidr"
@@ -47,6 +48,17 @@ const (
 
 	serviceIPv4CIDRKey = "serviceIPv4CIDRKey"
 )
+
+type HostNetworkPortRules struct {
+}
+
+func NewHostNetworkPortRules() *HostNetworkPortRules {
+	return &HostNetworkPortRules{}
+}
+
+func (h *HostNetworkPortRules) Allow(_ int32, _ string) *HostNetworkPortRules {
+	return h
+}
 
 var (
 	antreaNat                  = util.AntreaNatName
@@ -93,8 +105,8 @@ func NewClient(networkConfig *config.NetworkConfig,
 	nodeSNATRandomFully bool, // ignored
 	egressSNATRandomFully bool, // ignored
 	serviceCIDRProvider servicecidr.Interface,
-	wireguardPort int32,
-	proxyHealthCheckPort int32) (*Client, error) {
+	endpointResolver *client.EndpointResolver,
+	hostNetworkPortRules *HostNetworkPortRules) (*Client, error) {
 	return &Client{
 		networkConfig:               networkConfig,
 		winnet:                      &winnet.Handle{},

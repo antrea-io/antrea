@@ -48,8 +48,13 @@ func run() error {
 		return fmt.Errorf("failed to get hostname: %v", err)
 	}
 
+	antreaServiceEndpointResolver, err := client.NewAntreaServiceEndpointResolver(k8sClient)
+	if err != nil {
+		return fmt.Errorf("error creating Antrea Service Endpoint resolver: %w", err)
+	}
+
 	// Create Antrea Clientset for the given config.
-	antreaClientProvider, err := client.NewAntreaClientProvider(componentbaseconfig.ClientConnectionConfiguration{}, k8sClient)
+	antreaClientProvider, err := client.NewAntreaClientProvider(componentbaseconfig.ClientConnectionConfiguration{}, k8sClient, antreaServiceEndpointResolver)
 	if err != nil {
 		return err
 	}
