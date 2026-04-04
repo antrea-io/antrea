@@ -23,6 +23,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/tools/cache"
@@ -559,30 +560,31 @@ func TestSyncWireGuardPeerUpdateByClusterInfoImportChange(t *testing.T) {
 
 			gw := gateway4.DeepCopy()
 			err := c.gwInformer.Informer().GetStore().Add(gw)
-			assert.NoError(t, err)
+			require.NoError(t, err)
 
-			ci := tc.currentPeer.DeepCopy()
-			err = c.ciImportInformer.Informer().GetStore().Add(ci)
-			assert.NoError(t, err)
+			currentCIImport := tc.currentPeer.DeepCopy()
+			err = c.ciImportInformer.Informer().GetStore().Add(currentCIImport)
+			require.NoError(t, err)
 
 			if tc.installedPeer != nil {
-				c.installedWireGuardPeers[ci.Name] = tc.installedPeer.DeepCopy()
+				c.installedWireGuardPeers[currentCIImport.Name] = tc.installedPeer.DeepCopy()
 			}
 
 			if tc.expectPeerUpdate {
-				wgClient.EXPECT().UpdatePeer(ci.Name, ci.Spec.WireGuard.PublicKey,
-					net.ParseIP(ci.Spec.GatewayInfos[0].GatewayIP), gomock.Any()).Times(1)
+				wgClient.EXPECT().UpdatePeer(currentCIImport.Name, currentCIImport.Spec.WireGuard.PublicKey,
+					net.ParseIP(currentCIImport.Spec.GatewayInfos[0].GatewayIP), gomock.Any()).Times(1)
 				mockRouteClient.EXPECT().AddRouteForLink(gomock.Any(), c.wireGuardConfig.LinkIndex).Times(1)
 			}
 
 			err = c.syncWireGuard()
-			assert.NoError(t, err)
+			require.NoError(t, err)
 
-			cachedPeer, exists := c.installedWireGuardPeers[ci.Name]
-			assert.True(t, exists)
-			assert.Equal(t, ci.Spec.ServiceCIDR, cachedPeer.Spec.ServiceCIDR)
-			if ci.Spec.WireGuard != nil {
-				assert.Equal(t, ci.Spec.WireGuard.PublicKey, cachedPeer.Spec.WireGuard.PublicKey)
+			cachedPeer, exists := c.installedWireGuardPeers[currentCIImport.Name]
+			require.True(t, exists)
+			assert.Equal(t, currentCIImport.Spec.ServiceCIDR, cachedPeer.Spec.ServiceCIDR)
+			assert.Equal(t, currentCIImport.Spec.GatewayInfos, cachedPeer.Spec.GatewayInfos)
+			if currentCIImport.Spec.WireGuard != nil {
+				assert.Equal(t, currentCIImport.Spec.WireGuard.PublicKey, cachedPeer.Spec.WireGuard.PublicKey)
 			}
 		})
 	}
