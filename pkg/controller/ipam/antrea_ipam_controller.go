@@ -163,7 +163,21 @@ func (c *AntreaIPAMController) enqueueStatefulSetCreateEvent(obj interface{}) {
 
 // Enqueue the StatefulSet delete notification to be processed by the worker
 func (c *AntreaIPAMController) enqueueStatefulSetDeleteEvent(obj interface{}) {
-	ss := obj.(*appsv1.StatefulSet)
+	ss, ok := obj.(*appsv1.StatefulSet)
+	if !ok {
+		// When the informer's watch connection is interrupted and re-established,
+		// delete events are delivered as cache.DeletedFinalStateUnknown tombstones.
+		tombstone, ok := obj.(cache.DeletedFinalStateUnknown)
+		if !ok {
+			klog.ErrorS(nil, "Error decoding object when deleting StatefulSet, invalid type", "object", obj)
+			return
+		}
+		ss, ok = tombstone.Obj.(*appsv1.StatefulSet)
+		if !ok {
+			klog.ErrorS(nil, "Error decoding object tombstone when deleting StatefulSet, invalid type", "object", tombstone.Obj)
+			return
+		}
+	}
 	klog.V(2).InfoS("Delete notification", "Namespace", ss.Namespace, "StatefulSet", ss.Name)
 
 	key := k8s.NamespacedName(ss.Namespace, ss.Name)
