@@ -45,6 +45,8 @@ import (
 	"k8s.io/client-go/rest"
 	"k8s.io/klog/v2"
 
+	nadclientset "github.com/k8snetworkplumbingwg/network-attachment-definition-client/pkg/client/clientset/versioned"
+
 	"antrea.io/antrea/pkg/antctl/raw"
 	"antrea.io/antrea/pkg/antctl/runtime"
 	"antrea.io/antrea/pkg/apis/crd/v1beta1"
@@ -444,7 +446,7 @@ func createControllerClient(
 	return controllerClient.SupportBundles(), nil
 }
 
-func getClusterInfo(w io.Writer, k8sClient kubernetes.Interface) error {
+func getClusterInfo(w io.Writer, k8sClient kubernetes.Interface, antreaClient antrea.Interface, nadClient nadclientset.Interface) error {
 	g := new(errgroup.Group)
 	var writeLock sync.Mutex
 
@@ -483,6 +485,14 @@ func getClusterInfo(w io.Writer, k8sClient kubernetes.Interface) error {
 			return err
 		}
 		return outputObjects(objects, comment)
+	}
+	safelyOutputList := func(listFunc func() (k8sruntime.Object, error), comment string) error {
+		list, err := listFunc()
+		if err != nil {
+			klog.V(2).ErrorS(err, "Error listing resource for support bundle", "resource", comment)
+			return nil
+		}
+		return outputList(list, comment)
 	}
 
 	g.Go(func() error {
@@ -558,6 +568,102 @@ func getClusterInfo(w io.Writer, k8sClient kubernetes.Interface) error {
 		}
 		return nil
 	})
+	g.Go(func() error {
+		return safelyOutputList(func() (k8sruntime.Object, error) {
+			return antreaClient.CrdV1beta1().AntreaControllerInfos().List(context.TODO(), metav1.ListOptions{ResourceVersion: "0"})
+		}, "antreaControllerInfos")
+	})
+	g.Go(func() error {
+		return safelyOutputList(func() (k8sruntime.Object, error) {
+			return antreaClient.CrdV1beta1().AntreaAgentInfos().List(context.TODO(), metav1.ListOptions{ResourceVersion: "0"})
+		}, "antreaAgentInfos")
+	})
+	g.Go(func() error {
+		return safelyOutputList(func() (k8sruntime.Object, error) {
+			return antreaClient.CrdV1beta1().ClusterGroups().List(context.TODO(), metav1.ListOptions{ResourceVersion: "0"})
+		}, "clusterGroups")
+	})
+	g.Go(func() error {
+		return safelyOutputList(func() (k8sruntime.Object, error) {
+			return antreaClient.CrdV1beta1().Groups(metav1.NamespaceAll).List(context.TODO(), metav1.ListOptions{ResourceVersion: "0"})
+		}, "groups")
+	})
+	g.Go(func() error {
+		return safelyOutputList(func() (k8sruntime.Object, error) {
+			return antreaClient.CrdV1beta1().NetworkPolicies(metav1.NamespaceAll).List(context.TODO(), metav1.ListOptions{ResourceVersion: "0"})
+		}, "networkPolicies")
+	})
+	g.Go(func() error {
+		return safelyOutputList(func() (k8sruntime.Object, error) {
+			return antreaClient.CrdV1beta1().Tiers().List(context.TODO(), metav1.ListOptions{ResourceVersion: "0"})
+		}, "tiers")
+	})
+	g.Go(func() error {
+		return safelyOutputList(func() (k8sruntime.Object, error) {
+			return antreaClient.CrdV1beta1().Egresses().List(context.TODO(), metav1.ListOptions{ResourceVersion: "0"})
+		}, "egresses")
+	})
+	g.Go(func() error {
+		return safelyOutputList(func() (k8sruntime.Object, error) {
+			return antreaClient.CrdV1beta1().Traceflows().List(context.TODO(), metav1.ListOptions{ResourceVersion: "0"})
+		}, "traceflows")
+	})
+	g.Go(func() error {
+		return safelyOutputList(func() (k8sruntime.Object, error) {
+			return antreaClient.CrdV1beta1().IPPools().List(context.TODO(), metav1.ListOptions{ResourceVersion: "0"})
+		}, "ipPools")
+	})
+	g.Go(func() error {
+		return safelyOutputList(func() (k8sruntime.Object, error) {
+			return antreaClient.CrdV1beta1().ExternalIPPools().List(context.TODO(), metav1.ListOptions{ResourceVersion: "0"})
+		}, "externalIPPools")
+	})
+	g.Go(func() error {
+		return safelyOutputList(func() (k8sruntime.Object, error) {
+			return antreaClient.CrdV1alpha1().ExternalNodes(metav1.NamespaceAll).List(context.TODO(), metav1.ListOptions{ResourceVersion: "0"})
+		}, "externalNodes")
+	})
+	g.Go(func() error {
+		return safelyOutputList(func() (k8sruntime.Object, error) {
+			return antreaClient.CrdV1alpha2().TrafficControls().List(context.TODO(), metav1.ListOptions{ResourceVersion: "0"})
+		}, "trafficControls")
+	})
+	g.Go(func() error {
+		return safelyOutputList(func() (k8sruntime.Object, error) {
+			return antreaClient.CrdV1alpha1().BGPPolicies().List(context.TODO(), metav1.ListOptions{ResourceVersion: "0"})
+		}, "bgpPolicies")
+	})
+	g.Go(func() error {
+		return safelyOutputList(func() (k8sruntime.Object, error) {
+			return antreaClient.CrdV1alpha1().SupportBundleCollections().List(context.TODO(), metav1.ListOptions{ResourceVersion: "0"})
+		}, "supportBundleCollections")
+	})
+	g.Go(func() error {
+		return safelyOutputList(func() (k8sruntime.Object, error) {
+			return antreaClient.CrdV1alpha1().NodeLatencyMonitors().List(context.TODO(), metav1.ListOptions{ResourceVersion: "0"})
+		}, "nodeLatencyMonitors")
+	})
+	g.Go(func() error {
+		return safelyOutputList(func() (k8sruntime.Object, error) {
+			return antreaClient.CrdV1alpha1().PacketCaptures().List(context.TODO(), metav1.ListOptions{ResourceVersion: "0"})
+		}, "packetCaptures")
+	})
+	g.Go(func() error {
+		return safelyOutputList(func() (k8sruntime.Object, error) {
+			return antreaClient.CrdV1alpha1().FlowExporterDestinations().List(context.TODO(), metav1.ListOptions{ResourceVersion: "0"})
+		}, "flowExporterDestinations")
+	})
+	g.Go(func() error {
+		return safelyOutputList(func() (k8sruntime.Object, error) {
+			return antreaClient.CrdV1alpha2().ExternalEntities(metav1.NamespaceAll).List(context.TODO(), metav1.ListOptions{ResourceVersion: "0"})
+		}, "externalEntities")
+	})
+	g.Go(func() error {
+		return safelyOutputList(func() (k8sruntime.Object, error) {
+			return nadClient.K8sCniCncfIoV1().NetworkAttachmentDefinitions(metav1.NamespaceAll).List(context.TODO(), metav1.ListOptions{ResourceVersion: "0"})
+		}, "networkAttachmentDefinitions")
+	})
+
 	return g.Wait()
 }
 
@@ -591,12 +697,17 @@ func controllerRemoteRunE(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("error when creating output dir: %w", err)
 	}
 
+	nadClientset, err := nadclientset.NewForConfig(kubeconfig)
+	if err != nil {
+		return fmt.Errorf("failed to create network-attachment-definition-client: %w", err)
+	}
+
 	f, err := os.Create(filepath.Join(option.dir, "clusterinfo"))
 	if err != nil {
 		return err
 	}
 	defer f.Close()
-	err = getClusterInfo(f, k8sClientset)
+	err = getClusterInfo(f, k8sClientset, antreaClientset, nadClientset)
 	if err != nil {
 		return err
 	}
