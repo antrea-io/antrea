@@ -18,6 +18,7 @@ import (
 	"context"
 	"fmt"
 	"net"
+	"net/netip"
 	"strings"
 	"time"
 
@@ -25,7 +26,6 @@ import (
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/klog/v2"
 
-	"antrea.io/antrea/pkg/agent/controller/noderoute"
 	"antrea.io/antrea/pkg/agent/flowexporter/connection"
 	"antrea.io/antrea/pkg/agent/flowexporter/connections"
 	"antrea.io/antrea/pkg/agent/flowexporter/exporter"
@@ -43,6 +43,12 @@ import (
 type exporterProtocol interface {
 	Name() string
 	TransportProtocol() api.FlowExporterTransportProtocol
+}
+
+// podSubnetChecker determines whether an IP belongs to a Pod subnet and
+// whether it is a gateway IP. *noderoute.Controller implements this interface.
+type podSubnetChecker interface {
+	LookupIPInPodSubnets(ip netip.Addr) (isPod bool, isGw bool)
 }
 
 type DestinationConfig struct {
@@ -75,7 +81,7 @@ type Destination struct {
 	denyConnStore     *connections.DenyConnectionStore
 	denyPriorityQueue *priorityqueue.ExpirePriorityQueue
 
-	nodeRouteController *noderoute.Controller
+	nodeRouteController podSubnetChecker
 	egressQuerier       querier.EgressQuerier
 
 	exp       exporter.Interface
@@ -90,7 +96,7 @@ func NewDestination(
 	denyConnSubscriber channel.Subscriber,
 	exporter exporter.Interface,
 	k8sClient kubernetes.Interface,
-	nodeRouteController *noderoute.Controller,
+	nodeRouteController podSubnetChecker,
 	podStore objectstore.PodStore,
 	npQuerier querier.AgentNetworkPolicyInfoQuerier,
 	proxier proxy.ProxyQuerier,
@@ -213,6 +219,9 @@ func (d *Destination) Run(stopCh <-chan struct{}) {
 	for {
 		select {
 		case <-stopCh:
+			// Stop the conntrack connection store to terminate the
+			// fromExternalCorrelator cleanup goroutine.
+			d.conntrackConnStore.Stop()
 			d.resetFlowExporter()
 			return
 		case <-exportTicker.C:
@@ -321,14 +330,20 @@ func (d *Destination) findFlowType(conn connection.Connection) uint8 {
 	}
 	srcIsPod, srcIsGw := d.nodeRouteController.LookupIPInPodSubnets(conn.FlowKey.SourceAddress)
 	dstIsPod, dstIsGw := d.nodeRouteController.LookupIPInPodSubnets(conn.FlowKey.DestinationAddress)
-	if srcIsGw || dstIsGw {
-		// This matches what we do in filterAntreaConns but is more general as we consider
-		// remote gateways as well.
-		klog.V(5).InfoS("Flows where the source or destination IP is a gateway IP will not be exported")
+	if dstIsGw {
+		klog.V(5).InfoS("Flows where the destination IP is a gateway IP will not be exported")
 		return utils.FlowTypeUnsupported
 	}
+	if srcIsGw {
+		if conn.DestinationPodNamespace == "" {
+			return utils.FlowTypeUnsupported
+		}
+		return utils.FlowTypeFromExternal
+	}
 	if !srcIsPod {
-		klog.V(5).InfoS("Flows where the source is not a Pod will not be exported")
+		if dstIsPod {
+			return utils.FlowTypeFromExternal
+		}
 		return utils.FlowTypeUnsupported
 	}
 	if !dstIsPod {

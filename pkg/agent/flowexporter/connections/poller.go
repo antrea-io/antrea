@@ -39,7 +39,10 @@ type Poller struct {
 }
 
 func NewPoller(ctDumper ConnTrackDumper, notifier channel.Notifier, pollInterval time.Duration, v4Enabled, v6Enabled, connectUplinkToBridge bool) *Poller {
-	var zones []uint16
+	// Zone 0 is polled first so that zone-zero connections (before Antrea
+	// DNAT/SNAT) are available in the fromExternalCorrelator before the
+	// corresponding Antrea-zone connections are processed.
+	zones := []uint16{0}
 	if v4Enabled {
 		if connectUplinkToBridge {
 			zones = append(zones, uint16(openflow.IPCtZoneTypeRegMark.GetValue()<<12))
