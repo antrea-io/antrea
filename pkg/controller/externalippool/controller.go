@@ -225,10 +225,24 @@ func (c *ExternalIPPoolController) createOrUpdateIPAllocator(ipPool *antreacrds.
 				// 192.168.0.1/24 will be considered new even if it doesn't change.
 				// Validating or normalizing the input CIDR should be a better solution but the externalIPPools that
 				// have been created will still have this issue, so we just normalize the CIDR when using it.
-				if existingIPRanges.Has(ipNet.String()) {
+				normalizedCIDR := ipNet.String()
+				// For /31 and /32 CIDRs, use IPRangeAllocator to treat all IPs as usable host addresses.
+				// RFC 3021 defines that /31 addresses are interpreted as host addresses for point-to-point links,
+				// and /32 represents a single host address.
+				ones, _ := ipNet.Mask.Size()
+				if utilnet.IsIPv4CIDR(ipNet) && ones >= 31 {
+					startIP := ipNet.IP
+					endIP := iputil.GetLocalBroadcastIP(ipNet)
+					rangeKey := fmt.Sprintf("%s-%s", startIP.String(), endIP.String())
+					if existingIPRanges.Has(rangeKey) {
+						return nil, nil
+					}
+					return ipallocator.NewIPRangeAllocator(startIP, endIP)
+				}
+				if existingIPRanges.Has(normalizedCIDR) {
 					return nil, nil
 				}
-				// Don't use the IPv4 network's broadcast address.
+				// Don't use the IPv4 network's broadcast address for regular CIDRs.
 				var reservedIPs []net.IP
 				if utilnet.IsIPv4CIDR(ipNet) {
 					reservedIPs = append(reservedIPs, iputil.GetLocalBroadcastIP(ipNet))
