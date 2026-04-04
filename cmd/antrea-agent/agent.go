@@ -561,7 +561,7 @@ func run(o *Options) error {
 
 	if o.enableEgress || features.DefaultFeatureGate.Enabled(features.ServiceExternalIP) {
 		externalIPPoolController = externalippool.NewExternalIPPoolController(
-			crdClient, externalIPPoolInformer,
+			crdClient, externalIPPoolInformer, v4Enabled, v6Enabled,
 		)
 		var nodeTransportIP net.IP
 		if nodeConfig.NodeTransportIPv4Addr != nil {
