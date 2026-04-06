@@ -727,18 +727,25 @@ func (f *featureService) snatConntrackFlows() []binding.Flow {
 	var flows []binding.Flow
 	for _, ipProtocol := range f.ipProtocols {
 		gatewayIP := f.gatewayIPs[ipProtocol]
-		// virtualIP is used as SNAT IP when a request's source IP is gateway IP and we need to forward it back to
-		// gateway interface to avoid asymmetry path.
-		virtualIP := f.virtualIPs[ipProtocol]
+		// snatIP is used as SNAT IP when a request's source IP is gateway IP and we need to forward it back to
+		// gateway interface to avoid asymmetry path. In noEncap or hybrid mode with hostNetworkAcceleration enabled,
+		// the Pod CIDR network address is used so that SNAT packets can be delivered to the Node via its uplink
+		// interface. In other cases, the virtual IP is used.
+		snatIP := f.virtualIPs[ipProtocol]
+		if f.hostNetworkAccelerationEnabled {
+			if podCIDR := f.podCIDRs[ipProtocol]; podCIDR != nil {
+				snatIP = podCIDR.IP.Mask(podCIDR.Mask)
+			}
+		}
 		flows = append(flows,
 			// SNAT should be performed for the following connections:
 			// - Hairpin Service connection initiated through a local Pod, and SNAT should be performed with the Antrea
 			//   gateway IP.
 			// - Hairpin Service connection initiated through the Antrea gateway, and SNAT should be performed with a
-			//   virtual IP.
+			//   virtual IP (or Pod CIDR network address when hostNetworkAcceleration is enabled in noEncap/hybrid mode).
 			// - Nodeport / LoadBalancer connection initiated through the Antrea gateway and externalTrafficPolicy is
 			//   Cluster, if the selected Endpoint is not on local Node, then SNAT should be performed with the Antrea
-			//   gateway IP.
+			//   gateway IP when traffic mode is encap.
 			// Note that, for Service connections that require SNAT, ServiceCTMark is loaded in SNAT CT zone when performing
 			// SNAT since ServiceCTMark loaded in DNAT CT zone cannot be read in SNAT CT zone. For Service connections,
 			// ServiceCTMark (loaded in DNAT / SNAT CT zone) is used to bypass ConntrackCommitTable which is used to commit
@@ -756,7 +763,7 @@ func (f *featureService) snatConntrackFlows() []binding.Flow {
 				MatchRegMark(FromGatewayRegMark).
 				MatchCTMark(HairpinCTMark).
 				Action().CT(true, SNATTable.GetNext(), f.snatCtZones[ipProtocol], nil).
-				SNAT(&binding.IPRange{StartIP: virtualIP, EndIP: virtualIP}, nil).
+				SNAT(&binding.IPRange{StartIP: snatIP, EndIP: snatIP}, nil).
 				LoadToCtMark(ServiceCTMark, ConnSNATCTMark, HairpinCTMark).
 				CTDone().
 				Done(),
@@ -764,7 +771,7 @@ func (f *featureService) snatConntrackFlows() []binding.Flow {
 			UnSNATTable.ofTable.BuildFlow(priorityNormal).
 				Cookie(cookieID).
 				MatchProtocol(ipProtocol).
-				MatchDstIP(virtualIP).
+				MatchDstIP(snatIP).
 				Action().CT(false, UnSNATTable.GetNext(), f.snatCtZones[ipProtocol], nil).
 				NAT().
 				CTDone().
