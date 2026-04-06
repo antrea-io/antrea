@@ -24,6 +24,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes/fake"
+	"k8s.io/client-go/tools/cache"
 )
 
 func TestNewTracker(t *testing.T) {
@@ -78,4 +79,27 @@ func TestNewTracker(t *testing.T) {
 		assert.False(t, tracker.IsNodeIP(updatedNodeInternalIP))
 		assert.False(t, tracker.IsNodeIP(nodeExternalIP))
 	})
+}
+
+func TestOnNodeDelete_Tombstone(t *testing.T) {
+	k8sClient := fake.NewSimpleClientset()
+	informerFactory := informers.NewSharedInformerFactory(k8sClient, 0)
+	nodeInformer := informerFactory.Core().V1().Nodes()
+	tracker := NewTracker(nodeInformer)
+
+	nodeIP := "3.3.3.3"
+	node := &corev1.Node{
+		ObjectMeta: metav1.ObjectMeta{Name: "node2"},
+		Status: corev1.NodeStatus{Addresses: []corev1.NodeAddress{
+			{Type: corev1.NodeInternalIP, Address: nodeIP},
+		}},
+	}
+
+	// Seed the tracker directly.
+	tracker.OnNodeAdd(node)
+	assert.True(t, tracker.IsNodeIP(nodeIP))
+
+	// Deliver the delete as a tombstone, as the informer does after a watch reconnect.
+	tracker.OnNodeDelete(cache.DeletedFinalStateUnknown{Key: "node2", Obj: node})
+	assert.False(t, tracker.IsNodeIP(nodeIP))
 }

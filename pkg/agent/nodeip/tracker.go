@@ -72,7 +72,16 @@ func (t *Tracker) OnNodeUpdate(oldObj, obj interface{}) {
 func (t *Tracker) OnNodeDelete(obj interface{}) {
 	node, ok := obj.(*corev1.Node)
 	if !ok {
-		return
+		// When the informer's watch connection is interrupted and re-established,
+		// delete events are delivered as cache.DeletedFinalStateUnknown tombstones.
+		tombstone, ok := obj.(cache.DeletedFinalStateUnknown)
+		if !ok {
+			return
+		}
+		node, ok = tombstone.Obj.(*corev1.Node)
+		if !ok {
+			return
+		}
 	}
 	t.mutex.Lock()
 	defer t.mutex.Unlock()
