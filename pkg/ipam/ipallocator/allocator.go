@@ -200,7 +200,7 @@ func (a *SingleIPAllocator) AllocateRange(size int) ([]net.IP, error) {
 			for i := 0; i < size; i++ {
 				offset := start + i
 				ip := utilnet.AddIPOffset(a.base, offset)
-				a.allocated.SetBit(a.allocated, i, 1)
+				a.allocated.SetBit(a.allocated, offset, 1)
 				a.count++
 				ips = append(ips, ip)
 			}
