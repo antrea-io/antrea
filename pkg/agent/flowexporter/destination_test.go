@@ -17,6 +17,7 @@ package flowexporter
 import (
 	"context"
 	"fmt"
+	"net/netip"
 	"strings"
 	"testing"
 	"time"
@@ -38,6 +39,7 @@ import (
 	exportertesting "antrea.io/antrea/pkg/agent/flowexporter/exporter/testing"
 	"antrea.io/antrea/pkg/agent/flowexporter/priorityqueue"
 	flowexportertesting "antrea.io/antrea/pkg/agent/flowexporter/testing"
+	"antrea.io/antrea/pkg/agent/flowexporter/utils"
 	"antrea.io/antrea/pkg/agent/metrics"
 	agenttypes "antrea.io/antrea/pkg/agent/types"
 	"antrea.io/antrea/pkg/apis/crd/v1alpha1"
@@ -319,25 +321,144 @@ func testSendFlowRecords(t *testing.T, v4Enabled bool, v6Enabled bool) {
 	}
 }
 
+// fakePodSubnetChecker is a test implementation of podSubnetChecker that
+// returns pre-configured (isPod, isGw) results for specific IP addresses.
+type fakePodSubnetChecker struct {
+	results map[netip.Addr]struct{ isPod, isGw bool }
+}
+
+func (f *fakePodSubnetChecker) LookupIPInPodSubnets(ip netip.Addr) (bool, bool) {
+	if r, ok := f.results[ip]; ok {
+		return r.isPod, r.isGw
+	}
+	return false, false
+}
+
 func TestDestination_findFlowType(t *testing.T) {
-	conn1 := connection.Connection{SourcePodName: "podA", DestinationPodName: "podB"}
-	conn2 := connection.Connection{SourcePodName: "podA", DestinationPodName: ""}
-	for _, tc := range []struct {
+	podIP := netip.MustParseAddr("10.10.0.2")
+	podIP2 := netip.MustParseAddr("10.10.0.3")
+	gwIP := netip.MustParseAddr("10.10.0.1")
+	externalIP := netip.MustParseAddr("8.8.8.8")
+
+	checker := &fakePodSubnetChecker{
+		results: map[netip.Addr]struct{ isPod, isGw bool }{
+			podIP:  {isPod: true, isGw: false},
+			podIP2: {isPod: true, isGw: false},
+			gwIP:   {isPod: true, isGw: true},
+		},
+	}
+
+	tests := []struct {
+		name                string
 		isNetworkPolicyOnly bool
+		checker             podSubnetChecker
 		conn                connection.Connection
 		expectedFlowType    uint8
 	}{
-		{true, conn1, 1},
-		{true, conn2, 2},
-		{false, conn1, 0},
-	} {
-		flowExp := &Destination{
-			DestinationConfig: DestinationConfig{
-				isNetworkPolicyOnly: tc.isNetworkPolicyOnly,
+		{
+			name:                "NetworkPolicyOnly mode - IntraNode",
+			isNetworkPolicyOnly: true,
+			conn:                connection.Connection{SourcePodName: "podA", DestinationPodName: "podB"},
+			expectedFlowType:    utils.FlowTypeIntraNode,
+		},
+		{
+			name:                "NetworkPolicyOnly mode - InterNode (no dst pod)",
+			isNetworkPolicyOnly: true,
+			conn:                connection.Connection{SourcePodName: "podA", DestinationPodName: ""},
+			expectedFlowType:    utils.FlowTypeInterNode,
+		},
+		{
+			name:             "Nil nodeRouteController - Unspecified",
+			checker:          nil,
+			conn:             connection.Connection{SourcePodName: "podA", DestinationPodName: "podB"},
+			expectedFlowType: utils.FlowTypeUnspecified,
+		},
+		{
+			name:    "Pod to Pod on same node - IntraNode",
+			checker: checker,
+			conn: connection.Connection{
+				FlowKey:            connection.Tuple{SourceAddress: podIP, DestinationAddress: podIP2},
+				SourcePodName:      "podA",
+				DestinationPodName: "podB",
 			},
-		}
-		flowType := flowExp.findFlowType(tc.conn)
-		assert.Equal(t, tc.expectedFlowType, flowType)
+			expectedFlowType: utils.FlowTypeIntraNode,
+		},
+		{
+			name:    "Pod to Pod on different node - InterNode",
+			checker: checker,
+			conn: connection.Connection{
+				FlowKey:            connection.Tuple{SourceAddress: podIP, DestinationAddress: podIP2},
+				SourcePodName:      "podA",
+				DestinationPodName: "",
+			},
+			expectedFlowType: utils.FlowTypeInterNode,
+		},
+		{
+			name:    "Pod to external - ToExternal",
+			checker: checker,
+			conn: connection.Connection{
+				FlowKey:       connection.Tuple{SourceAddress: podIP, DestinationAddress: externalIP},
+				SourcePodName: "podA",
+			},
+			expectedFlowType: utils.FlowTypeToExternal,
+		},
+		{
+			name:    "Destination is gateway - Unsupported",
+			checker: checker,
+			conn: connection.Connection{
+				FlowKey:       connection.Tuple{SourceAddress: podIP, DestinationAddress: gwIP},
+				SourcePodName: "podA",
+			},
+			expectedFlowType: utils.FlowTypeUnsupported,
+		},
+		{
+			name:    "Source is gateway with destination Pod namespace - FromExternal",
+			checker: checker,
+			conn: connection.Connection{
+				FlowKey:                 connection.Tuple{SourceAddress: gwIP, DestinationAddress: podIP},
+				DestinationPodNamespace: "default",
+				DestinationPodName:      "podB",
+			},
+			expectedFlowType: utils.FlowTypeFromExternal,
+		},
+		{
+			name:    "Source is gateway without destination Pod namespace - Unsupported",
+			checker: checker,
+			conn: connection.Connection{
+				FlowKey: connection.Tuple{SourceAddress: gwIP, DestinationAddress: podIP},
+			},
+			expectedFlowType: utils.FlowTypeUnsupported,
+		},
+		{
+			name:    "External source to Pod destination - FromExternal",
+			checker: checker,
+			conn: connection.Connection{
+				FlowKey:            connection.Tuple{SourceAddress: externalIP, DestinationAddress: podIP},
+				DestinationPodName: "podB",
+			},
+			expectedFlowType: utils.FlowTypeFromExternal,
+		},
+		{
+			name:    "External source to external destination - Unsupported",
+			checker: checker,
+			conn: connection.Connection{
+				FlowKey: connection.Tuple{SourceAddress: externalIP, DestinationAddress: externalIP},
+			},
+			expectedFlowType: utils.FlowTypeUnsupported,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			dest := &Destination{
+				DestinationConfig: DestinationConfig{
+					isNetworkPolicyOnly: tc.isNetworkPolicyOnly,
+				},
+				nodeRouteController: tc.checker,
+			}
+			flowType := dest.findFlowType(tc.conn)
+			assert.Equal(t, tc.expectedFlowType, flowType)
+		})
 	}
 }
 

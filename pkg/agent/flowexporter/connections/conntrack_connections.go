@@ -42,6 +42,7 @@ type ConntrackConnectionStore struct {
 	networkPolicyReadyTime time.Time
 	protocolFilter         filter.ProtocolFilter
 	connectionStore
+	fromExternalCorrelator *fromExternalCorrelator
 }
 
 func NewConntrackConnectionStore(
@@ -54,6 +55,7 @@ func NewConntrackConnectionStore(
 		connectionStore:        NewConnectionStore(npQuerier, podStore, proxier, cfg),
 		protocolFilter:         filter.NewProtocolFilter(cfg.AllowedProtocols),
 		networkPolicyReadyTime: cfg.NetworkPolicyReadyTime,
+		fromExternalCorrelator: newFromExternalCorrelator(),
 	}
 }
 
@@ -77,6 +79,7 @@ func (cs *ConntrackConnectionStore) AddOrUpdateConns(conns []*connection.Connect
 				if err := cs.deleteConnWithoutLock(key); err != nil {
 					return err
 				}
+				cs.fromExternalCorrelator.remove(conn)
 			}
 		} else {
 			conn.IsPresent = false
@@ -111,6 +114,12 @@ func (cs *ConntrackConnectionStore) AddOrUpdateConn(conn *connection.Connection)
 	}
 
 	conn.IsPresent = true
+
+	if cs.fromExternalCorrelator.filterAndStoreExternalSource(conn, cs.antreaProxier) {
+		return
+	}
+	fromExternal := cs.fromExternalCorrelator.correlateIfExternal(conn)
+
 	connKey := connection.NewConnectionKey(conn)
 
 	existingConn, exists := cs.connections[connKey]
@@ -145,13 +154,14 @@ func (cs *ConntrackConnectionStore) AddOrUpdateConn(conn *connection.Connection)
 		connCopy := *conn
 		conn := &connCopy
 		cs.fillPodInfo(conn)
-		if conn.SourcePodName == "" && conn.DestinationPodName == "" {
+		if !fromExternal && conn.SourcePodName == "" && conn.DestinationPodName == "" {
 			// We don't add connections to connection map or expirePriorityQueue if we can't find the pod
-			// information for both srcPod and dstPod
+			// information for both srcPod and dstPod except for from external flows.
+
 			klog.V(5).InfoS("Skip this connection as we cannot map any of the connection IPs to a local Pod", "srcIP", conn.FlowKey.SourceAddress.String(), "dstIP", conn.FlowKey.DestinationAddress.String())
 			return
 		}
-		if conn.Mark&openflow.ServiceCTMark.GetRange().ToNXRange().ToUint32Mask() == openflow.ServiceCTMark.GetValue() {
+		if conn.Mark&openflow.ServiceCTMark.GetRange().ToNXRange().ToUint32Mask() == openflow.ServiceCTMark.GetValue() || fromExternal {
 			clusterIP := conn.OriginalDestinationAddress.String()
 			svcPort := conn.OriginalDestinationPort
 			protocol, err := lookupServiceProtocol(conn.FlowKey.Protocol)
@@ -185,7 +195,7 @@ func (cs *ConntrackConnectionStore) AddOrUpdateConn(conn *connection.Connection)
 func (cs *ConntrackConnectionStore) GetExpiredConns(expiredConns []connection.Connection, currTime time.Time, maxSize int) ([]connection.Connection, time.Duration) {
 	cs.AcquireConnStoreLock()
 	defer cs.ReleaseConnStoreLock()
-	for i := 0; i < maxSize; i++ {
+	for range maxSize {
 		pqItem := cs.connectionStore.expirePriorityQueue.GetTopExpiredItem(currTime)
 		if pqItem == nil {
 			break
@@ -227,6 +237,11 @@ func (cs *ConntrackConnectionStore) DeleteAllConnections() int {
 	metrics.TotalAntreaConnectionsInConnTrackTable.Set(0)
 	cs.expirePriorityQueue.Clear()
 	return num
+}
+
+// Stop terminates background goroutines owned by the store.
+func (cs *ConntrackConnectionStore) Stop() {
+	cs.fromExternalCorrelator.stopCleanUp()
 }
 
 func (cs *ConntrackConnectionStore) GetPriorityQueue() *priorityqueue.ExpirePriorityQueue {
