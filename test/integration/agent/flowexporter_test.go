@@ -36,13 +36,13 @@ import (
 	"k8s.io/client-go/kubernetes/fake"
 	"k8s.io/client-go/tools/cache"
 
-	"antrea.io/antrea/pkg/agent/config"
-	"antrea.io/antrea/pkg/agent/flowexporter/connections"
-	"antrea.io/antrea/pkg/agent/openflow"
-	"antrea.io/antrea/pkg/agent/util/sysctl"
-	queriertest "antrea.io/antrea/pkg/querier/testing"
-	"antrea.io/antrea/pkg/util/k8s"
-	"antrea.io/antrea/pkg/util/objectstore"
+	"antrea.io/antrea/v2/pkg/agent/config"
+	"antrea.io/antrea/v2/pkg/agent/flowexporter/connections"
+	"antrea.io/antrea/v2/pkg/agent/openflow"
+	"antrea.io/antrea/v2/pkg/agent/util/sysctl"
+	queriertest "antrea.io/antrea/v2/pkg/querier/testing"
+	"antrea.io/antrea/v2/pkg/util/k8s"
+	"antrea.io/antrea/v2/pkg/util/objectstore"
 )
 
 const (

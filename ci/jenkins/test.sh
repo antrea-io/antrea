@@ -665,13 +665,13 @@ function run_e2e {
     # HACK: see https://github.com/antrea-io/antrea/issues/2292
     go mod edit -replace github.com/moby/spdystream=github.com/antoninbas/spdystream@v0.2.1 && go mod tidy
     if [[ $TESTBED_TYPE == "flexible-ipam" ]]; then
-        go test -v antrea.io/antrea/test/e2e --logs-export-dir `pwd`/antrea-test-logs --provider remote -timeout=100m --prometheus --antrea-ipam
+        go test -v antrea.io/antrea/v2/test/e2e --logs-export-dir `pwd`/antrea-test-logs --provider remote -timeout=100m --prometheus --antrea-ipam
     elif [[ $TESTBED_TYPE == "kind" ]]; then
-        go test -v antrea.io/antrea/test/e2e --logs-export-dir `pwd`/antrea-test-logs --provider kind --kind.kubeconfig ${KUBECONFIG_PATH} -timeout=100m --prometheus
+        go test -v antrea.io/antrea/v2/test/e2e --logs-export-dir `pwd`/antrea-test-logs --provider kind --kind.kubeconfig ${KUBECONFIG_PATH} -timeout=100m --prometheus
     elif [[ $TESTBED_TYPE == "kind-flexible-ipam" ]]; then
-        go test -v antrea.io/antrea/test/e2e --logs-export-dir `pwd`/antrea-test-logs --provider kind --kind.kubeconfig ${KUBECONFIG_PATH} -timeout=100m --prometheus --antrea-ipam
+        go test -v antrea.io/antrea/v2/test/e2e --logs-export-dir `pwd`/antrea-test-logs --provider kind --kind.kubeconfig ${KUBECONFIG_PATH} -timeout=100m --prometheus --antrea-ipam
     else
-        go test -v antrea.io/antrea/test/e2e --logs-export-dir `pwd`/antrea-test-logs --provider remote -timeout=100m --prometheus
+        go test -v antrea.io/antrea/v2/test/e2e --logs-export-dir `pwd`/antrea-test-logs --provider remote -timeout=100m --prometheus
     fi
     if [[ "$?" != "0" ]]; then
         TEST_FAILURE=true
@@ -745,7 +745,7 @@ function run_e2e_windows {
     mkdir -p `pwd`/antrea-test-logs
 
     echo "====== Run test with e2e test ======"
-    go test -v antrea.io/antrea/test/e2e --logs-export-dir `pwd`/antrea-test-logs --provider remote -timeout=50m --prometheus
+    go test -v antrea.io/antrea/v2/test/e2e --logs-export-dir `pwd`/antrea-test-logs --provider remote -timeout=50m --prometheus
     if [[ "$?" != "0" ]]; then
         TEST_FAILURE=true
     fi

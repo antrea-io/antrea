@@ -31,16 +31,16 @@ import (
 	"k8s.io/klog/v2"
 	netutils "k8s.io/utils/net"
 
-	"antrea.io/antrea/pkg/agent/config"
-	"antrea.io/antrea/pkg/agent/nodeip"
-	"antrea.io/antrea/pkg/agent/openflow/cookie"
-	"antrea.io/antrea/pkg/agent/openflow/operations"
-	"antrea.io/antrea/pkg/agent/types"
-	"antrea.io/antrea/pkg/agent/util"
-	binding "antrea.io/antrea/pkg/ovs/openflow"
-	"antrea.io/antrea/pkg/ovs/ovsctl"
-	"antrea.io/antrea/pkg/util/runtime"
-	"antrea.io/antrea/third_party/proxy"
+	"antrea.io/antrea/v2/pkg/agent/config"
+	"antrea.io/antrea/v2/pkg/agent/nodeip"
+	"antrea.io/antrea/v2/pkg/agent/openflow/cookie"
+	"antrea.io/antrea/v2/pkg/agent/openflow/operations"
+	"antrea.io/antrea/v2/pkg/agent/types"
+	"antrea.io/antrea/v2/pkg/agent/util"
+	binding "antrea.io/antrea/v2/pkg/ovs/openflow"
+	"antrea.io/antrea/v2/pkg/ovs/ovsctl"
+	"antrea.io/antrea/v2/pkg/util/runtime"
+	"antrea.io/antrea/v2/third_party/proxy"
 )
 
 var (

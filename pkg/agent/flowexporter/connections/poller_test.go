@@ -22,8 +22,8 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 
-	"antrea.io/antrea/pkg/agent/flowexporter/connection"
-	connstesting "antrea.io/antrea/pkg/agent/flowexporter/connections/testing"
+	"antrea.io/antrea/v2/pkg/agent/flowexporter/connection"
+	connstesting "antrea.io/antrea/v2/pkg/agent/flowexporter/connections/testing"
 )
 
 func TestPoller_Poll(t *testing.T) {

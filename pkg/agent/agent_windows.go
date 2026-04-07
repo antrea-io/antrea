@@ -25,16 +25,16 @@ import (
 	"github.com/Microsoft/hcsshim"
 	"k8s.io/klog/v2"
 
-	"antrea.io/antrea/pkg/agent/config"
-	"antrea.io/antrea/pkg/agent/externalnode"
-	"antrea.io/antrea/pkg/agent/interfacestore"
-	"antrea.io/antrea/pkg/agent/util"
-	antreasyscall "antrea.io/antrea/pkg/agent/util/syscall"
-	"antrea.io/antrea/pkg/agent/util/winnet"
-	"antrea.io/antrea/pkg/apis/crd/v1alpha1"
-	"antrea.io/antrea/pkg/ovs/ovsconfig"
-	"antrea.io/antrea/pkg/ovs/ovsctl"
-	utilip "antrea.io/antrea/pkg/util/ip"
+	"antrea.io/antrea/v2/pkg/agent/config"
+	"antrea.io/antrea/v2/pkg/agent/externalnode"
+	"antrea.io/antrea/v2/pkg/agent/interfacestore"
+	"antrea.io/antrea/v2/pkg/agent/util"
+	antreasyscall "antrea.io/antrea/v2/pkg/agent/util/syscall"
+	"antrea.io/antrea/v2/pkg/agent/util/winnet"
+	"antrea.io/antrea/v2/pkg/apis/crd/v1alpha1"
+	"antrea.io/antrea/v2/pkg/ovs/ovsconfig"
+	"antrea.io/antrea/v2/pkg/ovs/ovsctl"
+	utilip "antrea.io/antrea/v2/pkg/util/ip"
 )
 
 var (

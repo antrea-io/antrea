@@ -22,8 +22,8 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/assert"
 
-	"antrea.io/antrea/pkg/antctl/runtime"
-	"antrea.io/antrea/pkg/client/clientset/versioned/scheme"
+	"antrea.io/antrea/v2/pkg/antctl/runtime"
+	"antrea.io/antrea/v2/pkg/client/clientset/versioned/scheme"
 )
 
 type testResponse struct {

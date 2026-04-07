@@ -17,7 +17,7 @@ package ipassigner
 import (
 	"errors"
 
-	"antrea.io/antrea/pkg/agent/ipassigner/linkmonitor"
+	"antrea.io/antrea/v2/pkg/agent/ipassigner/linkmonitor"
 )
 
 func NewIPAssigner(nodeTransportInterface string, dummyDeviceName string, linkMonitor linkmonitor.Interface, uniqueMACForSubInterfaces bool) (IPAssigner, error) {

@@ -22,9 +22,9 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 
-	"antrea.io/antrea/pkg/agent/config"
-	opstest "antrea.io/antrea/pkg/agent/openflow/operations/testing"
-	binding "antrea.io/antrea/pkg/ovs/openflow"
+	"antrea.io/antrea/v2/pkg/agent/config"
+	opstest "antrea.io/antrea/v2/pkg/agent/openflow/operations/testing"
+	binding "antrea.io/antrea/v2/pkg/ovs/openflow"
 )
 
 func Test_client_InstallVMUplinkFlows(t *testing.T) {

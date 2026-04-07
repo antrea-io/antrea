@@ -79,7 +79,7 @@ formatters:
   settings:
     goimports:
       local-prefixes:
-        - antrea.io/antrea
+        - antrea.io/antrea/v2
   exclusions:
     paths:
       - ^third_party/.*

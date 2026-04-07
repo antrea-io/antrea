@@ -489,7 +489,7 @@ function run_test() {
      kubectl label node "$CONTROLPLANE_NODE" eni-id="$CONTROLPLANE_NODE_ENI"
      kubectl label node "$WORKER_NODE" eni-id="$WORKER_NODE_ENI"
 
-     go test -v -timeout="$TIMEOUT" antrea.io/antrea/test/e2e-secondary-network -run=TestSRIOVNetwork -provider=remote -remote.sshconfig="$SSH_CONFIG_FILE" -remote.kubeconfig="$KUBECONFIG_FILE" -deploy-antrea=false
+     go test -v -timeout="$TIMEOUT" antrea.io/antrea/v2/test/e2e-secondary-network -run=TestSRIOVNetwork -provider=remote -remote.sshconfig="$SSH_CONFIG_FILE" -remote.kubeconfig="$KUBECONFIG_FILE" -deploy-antrea=false
 }
 
 function clean_up() {

@@ -20,10 +20,10 @@
 package openapi
 
 import (
-	v1beta2 "antrea.io/antrea/pkg/apis/controlplane/v1beta2"
-	v1beta1 "antrea.io/antrea/pkg/apis/crd/v1beta1"
-	v1alpha1 "antrea.io/antrea/pkg/apis/stats/v1alpha1"
-	systemv1beta1 "antrea.io/antrea/pkg/apis/system/v1beta1"
+	v1beta2 "antrea.io/antrea/v2/pkg/apis/controlplane/v1beta2"
+	v1beta1 "antrea.io/antrea/v2/pkg/apis/crd/v1beta1"
+	v1alpha1 "antrea.io/antrea/v2/pkg/apis/stats/v1alpha1"
+	systemv1beta1 "antrea.io/antrea/v2/pkg/apis/system/v1beta1"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	runtime "k8s.io/apimachinery/pkg/runtime"

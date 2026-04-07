@@ -22,7 +22,7 @@ import (
 
 	"github.com/kevinburke/ssh_config"
 
-	"antrea.io/antrea/test/e2e/providers/exec"
+	"antrea.io/antrea/v2/test/e2e/providers/exec"
 )
 
 var (

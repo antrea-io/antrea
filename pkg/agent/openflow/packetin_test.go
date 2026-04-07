@@ -21,8 +21,8 @@ import (
 	"antrea.io/ofnet/ofctrl"
 	"github.com/stretchr/testify/assert"
 
-	"antrea.io/antrea/pkg/agent/config"
-	"antrea.io/antrea/pkg/ovs/openflow"
+	"antrea.io/antrea/v2/pkg/agent/config"
+	"antrea.io/antrea/v2/pkg/ovs/openflow"
 )
 
 type fakeHandler struct {

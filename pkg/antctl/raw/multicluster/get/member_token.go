@@ -25,8 +25,8 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	"antrea.io/antrea/pkg/antctl/raw/multicluster/common"
-	"antrea.io/antrea/pkg/antctl/transform/membertoken"
+	"antrea.io/antrea/v2/pkg/antctl/raw/multicluster/common"
+	"antrea.io/antrea/v2/pkg/antctl/transform/membertoken"
 )
 
 type tokenOptions struct {

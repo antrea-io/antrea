@@ -32,13 +32,13 @@ import (
 	"github.com/vishvananda/netlink"
 	"go.uber.org/mock/gomock"
 
-	cniservertest "antrea.io/antrea/pkg/agent/cniserver/testing"
-	"antrea.io/antrea/pkg/agent/util"
-	"antrea.io/antrea/pkg/agent/util/arping"
-	"antrea.io/antrea/pkg/agent/util/ndp"
-	netlinkutil "antrea.io/antrea/pkg/agent/util/netlink"
-	netlinktest "antrea.io/antrea/pkg/agent/util/netlink/testing"
-	"antrea.io/antrea/pkg/ovs/ovsconfig"
+	cniservertest "antrea.io/antrea/v2/pkg/agent/cniserver/testing"
+	"antrea.io/antrea/v2/pkg/agent/util"
+	"antrea.io/antrea/v2/pkg/agent/util/arping"
+	"antrea.io/antrea/v2/pkg/agent/util/ndp"
+	netlinkutil "antrea.io/antrea/v2/pkg/agent/util/netlink"
+	netlinktest "antrea.io/antrea/v2/pkg/agent/util/netlink/testing"
+	"antrea.io/antrea/v2/pkg/ovs/ovsconfig"
 )
 
 var (

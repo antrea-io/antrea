@@ -41,14 +41,14 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 	k8smcsv1alpha1 "sigs.k8s.io/mcs-api/pkg/apis/v1alpha1"
 
-	mcv1alpha1 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha1"
-	mcv1alpha2 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha2"
-	"antrea.io/antrea/multicluster/controllers/multicluster/common"
-	antreacrdv1alpha1 "antrea.io/antrea/pkg/apis/crd/v1alpha1"
-	antreacrdv1beta1 "antrea.io/antrea/pkg/apis/crd/v1beta1"
-	"antrea.io/antrea/pkg/apiserver/certificate"
-	"antrea.io/antrea/pkg/util/env"
-	k8sutil "antrea.io/antrea/pkg/util/k8s"
+	mcv1alpha1 "antrea.io/antrea/v2/multicluster/apis/multicluster/v1alpha1"
+	mcv1alpha2 "antrea.io/antrea/v2/multicluster/apis/multicluster/v1alpha2"
+	"antrea.io/antrea/v2/multicluster/controllers/multicluster/common"
+	antreacrdv1alpha1 "antrea.io/antrea/v2/pkg/apis/crd/v1alpha1"
+	antreacrdv1beta1 "antrea.io/antrea/v2/pkg/apis/crd/v1beta1"
+	"antrea.io/antrea/v2/pkg/apiserver/certificate"
+	"antrea.io/antrea/v2/pkg/util/env"
+	k8sutil "antrea.io/antrea/v2/pkg/util/k8s"
 	// +kubebuilder:scaffold:imports
 )
 

@@ -28,8 +28,8 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 
-	"antrea.io/antrea/pkg/antctl/raw"
-	flowaggregatorconfig "antrea.io/antrea/pkg/config/flowaggregator"
+	"antrea.io/antrea/v2/pkg/antctl/raw"
+	flowaggregatorconfig "antrea.io/antrea/v2/pkg/config/flowaggregator"
 )
 
 // Command is the support bundle command implementation.

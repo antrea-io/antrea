@@ -23,7 +23,7 @@ import "k8s.io/apimachinery/pkg/runtime/generated.proto";
 import "k8s.io/apimachinery/pkg/runtime/schema/generated.proto";
 
 // Package-wide variables from generator "generated".
-option go_package = "antrea.io/antrea/pkg/apis/stats/v1alpha1";
+option go_package = "antrea.io/antrea/v2/pkg/apis/stats/v1alpha1";
 
 // AntreaClusterNetworkPolicyStats is the statistics of a Antrea ClusterNetworkPolicy.
 message AntreaClusterNetworkPolicyStats {

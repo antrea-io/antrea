@@ -22,7 +22,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/vishvananda/netlink"
 
-	"antrea.io/antrea/pkg/agent/util"
+	"antrea.io/antrea/v2/pkg/agent/util"
 )
 
 func createTestInterface(t *testing.T, name string) string {

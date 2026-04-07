@@ -32,7 +32,7 @@ Original file https://raw.githubusercontent.com/kubernetes/kubernetes/refs/tags/
 
 Modifies:
 
-- Replace import "k8s.io/kubernetes/pkg/proxy" with "antrea.io/antrea/third_party/proxy".
+- Replace import "k8s.io/kubernetes/pkg/proxy" with "antrea.io/antrea/v2/third_party/proxy".
 
 Adds:
 
@@ -49,7 +49,7 @@ import (
 	discovery "k8s.io/api/discovery/v1"
 	"k8s.io/klog/v2"
 
-	"antrea.io/antrea/third_party/proxy"
+	"antrea.io/antrea/v2/third_party/proxy"
 )
 
 type metaProxier struct {

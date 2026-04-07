@@ -30,10 +30,10 @@ import (
 	"k8s.io/client-go/kubernetes/fake"
 	corelisters "k8s.io/client-go/listers/core/v1"
 
-	"antrea.io/antrea/pkg/agent/apis"
-	"antrea.io/antrea/pkg/agent/memberlist"
-	memberlisttest "antrea.io/antrea/pkg/agent/memberlist/testing"
-	queriertest "antrea.io/antrea/pkg/agent/querier/testing"
+	"antrea.io/antrea/v2/pkg/agent/apis"
+	"antrea.io/antrea/v2/pkg/agent/memberlist"
+	memberlisttest "antrea.io/antrea/v2/pkg/agent/memberlist/testing"
+	queriertest "antrea.io/antrea/v2/pkg/agent/querier/testing"
 )
 
 var (

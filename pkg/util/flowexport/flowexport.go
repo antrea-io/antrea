@@ -20,8 +20,8 @@ import (
 	"strings"
 	"time"
 
-	flowaggregatorconfig "antrea.io/antrea/pkg/config/flowaggregator"
-	"antrea.io/antrea/pkg/util/validation"
+	flowaggregatorconfig "antrea.io/antrea/v2/pkg/config/flowaggregator"
+	"antrea.io/antrea/v2/pkg/util/validation"
 )
 
 // ParseFlowCollectorAddr parses the flow collector address input for flow exporter and aggregator

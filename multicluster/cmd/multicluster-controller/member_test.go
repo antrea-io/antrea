@@ -31,8 +31,8 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	"antrea.io/antrea/multicluster/controllers/multicluster/member"
-	"antrea.io/antrea/multicluster/test/mocks"
+	"antrea.io/antrea/v2/multicluster/controllers/multicluster/member"
+	"antrea.io/antrea/v2/multicluster/test/mocks"
 )
 
 var shutdownSignals = []os.Signal{os.Interrupt, syscall.SIGTERM}
