@@ -29,6 +29,7 @@ import (
 	clientset "k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/kubernetes/fake"
 	k8stesting "k8s.io/client-go/testing"
+	"k8s.io/client-go/tools/cache"
 
 	crdv1beta1 "antrea.io/antrea/pkg/apis/crd/v1beta1"
 	"antrea.io/antrea/pkg/client/clientset/versioned"
@@ -196,4 +197,35 @@ func newCRDClientset() *fakeversioned.Clientset {
 	}))
 
 	return client
+}
+
+func TestDeleteTraceflow_Tombstone(t *testing.T) {
+	tfc := newController()
+
+	tf := &crdv1beta1.Traceflow{
+		ObjectMeta: metav1.ObjectMeta{Name: "tf1", UID: "uid1"},
+		Spec: crdv1beta1.TraceflowSpec{
+			Source:      crdv1beta1.Source{Namespace: "ns1", Pod: "pod1"},
+			Destination: crdv1beta1.Destination{Namespace: "ns2", Pod: "pod2"},
+		},
+		Status: crdv1beta1.TraceflowStatus{
+			DataplaneTag: 5,
+		},
+	}
+
+	// Simulate the tag being tracked as running.
+	tfc.runningTraceflowsMutex.Lock()
+	tfc.runningTraceflows[uint8(tf.Status.DataplaneTag)] = tf.Name
+	tfc.runningTraceflowsMutex.Unlock()
+
+	// Deliver the delete as a tombstone, as the informer does after a watch reconnect.
+	tfc.deleteTraceflow(cache.DeletedFinalStateUnknown{
+		Key: tf.Name,
+		Obj: tf,
+	})
+
+	tfc.runningTraceflowsMutex.Lock()
+	_, exists := tfc.runningTraceflows[uint8(tf.Status.DataplaneTag)]
+	tfc.runningTraceflowsMutex.Unlock()
+	assert.False(t, exists, "expected tag to be deallocated after tombstone delete")
 }
