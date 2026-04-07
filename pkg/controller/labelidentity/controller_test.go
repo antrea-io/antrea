@@ -21,6 +21,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/client-go/tools/cache"
 
 	mcv1alpha1 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha1"
 	fakeversioned "antrea.io/antrea/multicluster/pkg/client/clientset/versioned/fake"
@@ -80,4 +81,22 @@ func TestGroupEntityControllerRun(t *testing.T) {
 	assert.Eventually(t, func() bool {
 		return index.HasSynced()
 	}, 1*time.Second, 10*time.Millisecond, "LabelIdentityIndex hasn't been synced in 1 second after starting LabelIdentityController")
+}
+
+func TestDeleteLabelIdentity_Tombstone(t *testing.T) {
+	index := NewLabelIdentityIndex()
+	mcClient := fakeversioned.NewSimpleClientset()
+	mcInformerFactory := crdinformers.NewSharedInformerFactory(mcClient, informerDefaultResync)
+	c := NewLabelIdentityController(index, mcInformerFactory.Multicluster().V1alpha1().LabelIdentities())
+
+	// Add the label identity to the index first.
+	c.addLabelIdentity(labelIdentityA)
+	assert.Contains(t, index.labelIdentities, labelIdentityA.Spec.Label)
+
+	// Deliver the delete as a tombstone, as the informer does after a watch reconnect.
+	c.deleteLabelIdentity(cache.DeletedFinalStateUnknown{
+		Key: labelIdentityA.Name,
+		Obj: labelIdentityA,
+	})
+	assert.NotContains(t, index.labelIdentities, labelIdentityA.Spec.Label)
 }
