@@ -162,7 +162,21 @@ func (c *Controller) updateTraceflow(_, curObj interface{}) {
 }
 
 func (c *Controller) deleteTraceflow(old interface{}) {
-	tf := old.(*crdv1beta1.Traceflow)
+	tf, ok := old.(*crdv1beta1.Traceflow)
+	if !ok {
+		// When the informer's watch connection is interrupted and re-established,
+		// delete events are delivered as cache.DeletedFinalStateUnknown tombstones.
+		tombstone, ok := old.(cache.DeletedFinalStateUnknown)
+		if !ok {
+			klog.Errorf("Error decoding object when deleting Traceflow, invalid type: %v", old)
+			return
+		}
+		tf, ok = tombstone.Obj.(*crdv1beta1.Traceflow)
+		if !ok {
+			klog.Errorf("Error decoding object tombstone when deleting Traceflow, invalid type: %v", tombstone.Obj)
+			return
+		}
+	}
 	klog.Infof("Processing Traceflow %s DELETE event", tf.Name)
 	c.deallocateTagForTF(tf)
 }
