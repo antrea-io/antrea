@@ -416,7 +416,19 @@ func (c *ExternalIPPoolController) updateExternalIPPool(_, cur interface{}) {
 // deleteExternalIPPool processes ExternalIPPool DELETE events. It deletes the IPAllocator for the pool and triggers
 // reconciliation of all consumers that refer to the pool.
 func (c *ExternalIPPoolController) deleteExternalIPPool(obj interface{}) {
-	pool := obj.(*antreacrds.ExternalIPPool)
+	pool, ok := obj.(*antreacrds.ExternalIPPool)
+	if !ok {
+		tombstone, ok := obj.(cache.DeletedFinalStateUnknown)
+		if !ok {
+			klog.ErrorS(nil, "Error decoding object when deleting ExternalIPPool, invalid type", "object", obj)
+			return
+		}
+		pool, ok = tombstone.Obj.(*antreacrds.ExternalIPPool)
+		if !ok {
+			klog.ErrorS(nil, "Error decoding object tombstone when deleting ExternalIPPool, invalid type", "object", tombstone.Obj)
+			return
+		}
+	}
 	klog.InfoS("Processing ExternalIPPool DELETE event", "pool", pool.Name, "ipRanges", pool.Spec.IPRanges)
 	c.deleteIPAllocator(pool.Name)
 	// Call consumers to reclaim the IPs allocated from the pool.
