@@ -38,322 +38,9 @@ var (
 	testICMPMsgEcho             = intstr.FromString(string(crdv1alpha1.ICMPMsgTypeEcho))
 	testICMPMsgEchoReply        = intstr.FromString(string(crdv1alpha1.ICMPMsgTypeEchoReply))
 
-	testICMPv6MsgDstUnreach = intstr.FromString(string(crdv1alpha1.ICMPv6MsgTypeDstUnreach))
-	testICMPv6MsgEcho       = intstr.FromString(string(crdv1alpha1.ICMPv6MsgTypeEcho))
-	testICMPv6MsgEchoReply  = intstr.FromString(string(crdv1alpha1.ICMPv6MsgTypeEchoReply))
+	testICMPv6MsgEcho      = intstr.FromString(string(crdv1alpha1.ICMPv6MsgTypeEcho))
+	testICMPv6MsgEchoReply = intstr.FromString(string(crdv1alpha1.ICMPv6MsgTypeEchoReply))
 )
-
-func TestCalculateIPv4InstructionsSize(t *testing.T) {
-	tt := []struct {
-		name      string
-		srcIP     net.IP
-		dstIP     net.IP
-		packet    *crdv1alpha1.Packet
-		count     int
-		direction crdv1alpha1.CaptureDirection
-	}{
-		{
-			name:  "proto and host and port",
-			srcIP: net.ParseIP("127.0.0.1"),
-			dstIP: net.ParseIP("127.0.0.2"),
-			packet: &crdv1alpha1.Packet{
-				Protocol: &testTCPProtocol,
-				TransportHeader: crdv1alpha1.TransportHeader{
-					TCP: &crdv1alpha1.TCPHeader{
-						SrcPort: &testSrcPort,
-						DstPort: &testDstPort,
-					},
-				},
-			},
-			count:     17,
-			direction: crdv1alpha1.CaptureDirectionSourceToDestination,
-		},
-		{
-			name:  "proto and src host only and port",
-			srcIP: net.ParseIP("127.0.0.1"),
-			dstIP: nil,
-			packet: &crdv1alpha1.Packet{
-				Protocol: &testTCPProtocol,
-				TransportHeader: crdv1alpha1.TransportHeader{
-					TCP: &crdv1alpha1.TCPHeader{
-						SrcPort: &testSrcPort,
-						DstPort: &testDstPort,
-					},
-				},
-			},
-			count:     15,
-			direction: crdv1alpha1.CaptureDirectionSourceToDestination,
-		},
-		{
-			name:  "proto and dst host only and port",
-			srcIP: nil,
-			dstIP: net.ParseIP("127.0.0.2"),
-			packet: &crdv1alpha1.Packet{
-				Protocol: &testUDPProtocol,
-				TransportHeader: crdv1alpha1.TransportHeader{
-					UDP: &crdv1alpha1.UDPHeader{
-						SrcPort: &testSrcPort,
-						DstPort: &testDstPort,
-					},
-				},
-			},
-			count:     15,
-			direction: crdv1alpha1.CaptureDirectionSourceToDestination,
-		},
-		{
-			name:  "proto and host and port and DestinationToSource",
-			srcIP: net.ParseIP("127.0.0.1"),
-			dstIP: net.ParseIP("127.0.0.2"),
-			packet: &crdv1alpha1.Packet{
-				Protocol: &testTCPProtocol,
-				TransportHeader: crdv1alpha1.TransportHeader{
-					TCP: &crdv1alpha1.TCPHeader{
-						SrcPort: &testSrcPort,
-						DstPort: &testDstPort,
-					},
-				},
-			},
-			count:     17,
-			direction: crdv1alpha1.CaptureDirectionDestinationToSource,
-		},
-		{
-			name:  "proto and host and port and Both",
-			srcIP: net.ParseIP("127.0.0.1"),
-			dstIP: net.ParseIP("127.0.0.2"),
-			packet: &crdv1alpha1.Packet{
-				Protocol: &testTCPProtocol,
-				TransportHeader: crdv1alpha1.TransportHeader{
-					TCP: &crdv1alpha1.TCPHeader{
-						SrcPort: &testSrcPort,
-						DstPort: &testDstPort,
-					},
-				},
-			},
-			count:     29,
-			direction: crdv1alpha1.CaptureDirectionBoth,
-		},
-		{
-			name:  "proto with host",
-			srcIP: net.ParseIP("127.0.0.1"),
-			dstIP: net.ParseIP("127.0.0.2"),
-			packet: &crdv1alpha1.Packet{
-				Protocol: &testTCPProtocol,
-			},
-			count:     10,
-			direction: crdv1alpha1.CaptureDirectionSourceToDestination,
-		},
-		{
-			name:  "proto with src port",
-			srcIP: net.ParseIP("127.0.0.1"),
-			dstIP: net.ParseIP("127.0.0.2"),
-			packet: &crdv1alpha1.Packet{
-				Protocol: &testTCPProtocol,
-				TransportHeader: crdv1alpha1.TransportHeader{
-					TCP: &crdv1alpha1.TCPHeader{
-						SrcPort: &testSrcPort,
-					},
-				},
-			},
-			count:     15,
-			direction: crdv1alpha1.CaptureDirectionSourceToDestination,
-		},
-		{
-			name:  "proto with dst port",
-			srcIP: net.ParseIP("127.0.0.1"),
-			dstIP: net.ParseIP("127.0.0.2"),
-			packet: &crdv1alpha1.Packet{
-				Protocol: &testUDPProtocol,
-				TransportHeader: crdv1alpha1.TransportHeader{
-					UDP: &crdv1alpha1.UDPHeader{
-						DstPort: &testDstPort,
-					},
-				},
-			},
-			count:     15,
-			direction: crdv1alpha1.CaptureDirectionSourceToDestination,
-		},
-		{
-			name:  "proto with dst port and syn or ack flags",
-			srcIP: net.ParseIP("127.0.0.1"),
-			dstIP: net.ParseIP("127.0.0.2"),
-			packet: &crdv1alpha1.Packet{
-				Protocol: &testTCPProtocol,
-				TransportHeader: crdv1alpha1.TransportHeader{
-					TCP: &crdv1alpha1.TCPHeader{
-						DstPort: &testDstPort,
-						Flags: []crdv1alpha1.TCPFlagsMatcher{
-							{Value: 0x2},  // syn
-							{Value: 0x10}, // ack
-						},
-					},
-				},
-			},
-			count:     21,
-			direction: crdv1alpha1.CaptureDirectionSourceToDestination,
-		},
-		{
-			name:  "proto with icmp messages echo and destination unreachable (host unreachable)",
-			srcIP: net.ParseIP("127.0.0.1"),
-			dstIP: net.ParseIP("127.0.0.2"),
-			packet: &crdv1alpha1.Packet{
-				Protocol: &testICMPProtocol,
-				TransportHeader: crdv1alpha1.TransportHeader{
-					ICMP: &crdv1alpha1.ICMPHeader{
-						Messages: []crdv1alpha1.ICMPMsgMatcher{
-							{Type: testICMPMsgDstUnreach, Code: ptr.To(int32(1))},
-							{Type: testICMPMsgEcho},
-						},
-					},
-				},
-			},
-			count:     18,
-			direction: crdv1alpha1.CaptureDirectionSourceToDestination,
-		},
-		{
-			name:      "any proto",
-			srcIP:     net.ParseIP("127.0.0.1"),
-			dstIP:     net.ParseIP("127.0.0.2"),
-			packet:    &crdv1alpha1.Packet{},
-			count:     8,
-			direction: crdv1alpha1.CaptureDirectionSourceToDestination,
-		},
-	}
-
-	for _, item := range tt {
-		t.Run(item.name, func(t *testing.T) {
-			assert.Equal(t, item.count, calculateInstructionsSize(ipv4Handler, item.packet, item.srcIP, item.dstIP, item.direction))
-		})
-	}
-}
-
-func TestCalculateIPv6InstructionsSize(t *testing.T) {
-	tt := []struct {
-		name      string
-		srcIP     net.IP
-		dstIP     net.IP
-		packet    *crdv1alpha1.Packet
-		count     int
-		direction crdv1alpha1.CaptureDirection
-	}{
-		{
-			name:  "ipv6 proto and host and port",
-			srcIP: net.ParseIP("fd00:10:244::1"),
-			dstIP: net.ParseIP("fd00:10:244::2"),
-			packet: &crdv1alpha1.Packet{
-				IPFamily: v1.IPv6Protocol,
-				Protocol: &testTCPProtocol,
-				TransportHeader: crdv1alpha1.TransportHeader{
-					TCP: &crdv1alpha1.TCPHeader{
-						SrcPort: &testSrcPort,
-						DstPort: &testDstPort,
-					},
-				},
-			},
-			count:     26,
-			direction: crdv1alpha1.CaptureDirectionSourceToDestination,
-		},
-		{
-			name:  "ipv6 proto and src host only and port",
-			srcIP: net.ParseIP("fd00:10:244::1"),
-			dstIP: nil,
-			packet: &crdv1alpha1.Packet{
-				IPFamily: v1.IPv6Protocol,
-				Protocol: &testTCPProtocol,
-				TransportHeader: crdv1alpha1.TransportHeader{
-					TCP: &crdv1alpha1.TCPHeader{
-						SrcPort: &testSrcPort,
-						DstPort: &testDstPort,
-					},
-				},
-			},
-			count:     18,
-			direction: crdv1alpha1.CaptureDirectionSourceToDestination,
-		},
-		{
-			name:  "ipv6 proto and host and port and Both",
-			srcIP: net.ParseIP("fd00:10:244::1"),
-			dstIP: net.ParseIP("fd00:10:244::2"),
-			packet: &crdv1alpha1.Packet{
-				IPFamily: v1.IPv6Protocol,
-				Protocol: &testTCPProtocol,
-				TransportHeader: crdv1alpha1.TransportHeader{
-					TCP: &crdv1alpha1.TCPHeader{
-						SrcPort: &testSrcPort,
-						DstPort: &testDstPort,
-					},
-				},
-			},
-			count:     47,
-			direction: crdv1alpha1.CaptureDirectionBoth,
-		},
-		{
-			name:  "ipv6 proto with host",
-			srcIP: net.ParseIP("fd00:10:244::1"),
-			dstIP: net.ParseIP("fd00:10:244::2"),
-			packet: &crdv1alpha1.Packet{
-				IPFamily: v1.IPv6Protocol,
-				Protocol: &testTCPProtocol,
-			},
-			count:     22,
-			direction: crdv1alpha1.CaptureDirectionSourceToDestination,
-		},
-		{
-			name:  "ipv6 proto with dst port and syn or ack flags",
-			srcIP: net.ParseIP("fd00:10:244::1"),
-			dstIP: net.ParseIP("fd00:10:244::2"),
-			packet: &crdv1alpha1.Packet{
-				IPFamily: v1.IPv6Protocol,
-				Protocol: &testTCPProtocol,
-				TransportHeader: crdv1alpha1.TransportHeader{
-					TCP: &crdv1alpha1.TCPHeader{
-						DstPort: &testDstPort,
-						Flags: []crdv1alpha1.TCPFlagsMatcher{
-							{Value: 0x2},  // syn
-							{Value: 0x10}, // ack
-						},
-					},
-				},
-			},
-			count:     30,
-			direction: crdv1alpha1.CaptureDirectionSourceToDestination,
-		},
-		{
-			name:  "ipv6 proto with icmpv6 messages echo and destination unreachable (host unreachable)",
-			srcIP: net.ParseIP("fd00:10:244::1"),
-			dstIP: net.ParseIP("fd00:10:244::2"),
-			packet: &crdv1alpha1.Packet{
-				IPFamily: v1.IPv6Protocol,
-				Protocol: &testICMPv6Protocol,
-				TransportHeader: crdv1alpha1.TransportHeader{
-					ICMPv6: &crdv1alpha1.ICMPv6Header{
-						Messages: []crdv1alpha1.ICMPv6MsgMatcher{
-							{Type: testICMPv6MsgDstUnreach, Code: ptr.To(int32(1))},
-							{Type: testICMPv6MsgEcho},
-						},
-					},
-				},
-			},
-			count:     27,
-			direction: crdv1alpha1.CaptureDirectionSourceToDestination,
-		},
-		{
-			name:  "ipv6 any proto",
-			srcIP: net.ParseIP("fd00:10:244::1"),
-			dstIP: net.ParseIP("fd00:10:244::2"),
-			packet: &crdv1alpha1.Packet{
-				IPFamily: v1.IPv6Protocol,
-			},
-			count:     20,
-			direction: crdv1alpha1.CaptureDirectionSourceToDestination,
-		},
-	}
-
-	for _, item := range tt {
-		t.Run(item.name, func(t *testing.T) {
-			assert.Equal(t, item.count, calculateInstructionsSize(ipv6Handler, item.packet, item.srcIP, item.dstIP, item.direction))
-		})
-	}
-}
 
 func TestPacketCaptureCompileBPF(t *testing.T) {
 	tt := []struct {
@@ -363,314 +50,6 @@ func TestPacketCaptureCompileBPF(t *testing.T) {
 		spec  *crdv1alpha1.PacketCaptureSpec
 		inst  []bpf.Instruction
 	}{
-		{
-			name:  "with-proto-and-port",
-			srcIP: net.ParseIP("127.0.0.1"),
-			dstIP: net.ParseIP("127.0.0.2"),
-			spec: &crdv1alpha1.PacketCaptureSpec{
-				Packet: &crdv1alpha1.Packet{
-					Protocol: &testTCPProtocol,
-					TransportHeader: crdv1alpha1.TransportHeader{
-						TCP: &crdv1alpha1.TCPHeader{
-							SrcPort: &testSrcPort,
-							DstPort: &testDstPort,
-						}},
-				},
-				Direction: crdv1alpha1.CaptureDirectionSourceToDestination,
-			},
-			inst: []bpf.Instruction{
-				bpf.LoadAbsolute{Off: 12, Size: 2},
-				bpf.JumpIf{Cond: bpf.JumpEqual, Val: 0x800, SkipFalse: 14},
-				bpf.LoadAbsolute{Off: 23, Size: 1},                       // ip protocol
-				bpf.JumpIf{Cond: bpf.JumpEqual, Val: 0x6, SkipFalse: 12}, // tcp
-				bpf.LoadAbsolute{Off: 26, Size: 4},
-				bpf.JumpIf{Cond: bpf.JumpEqual, Val: 0x7f000001, SkipTrue: 0, SkipFalse: 10},
-				bpf.LoadAbsolute{Off: 30, Size: 4},
-				bpf.JumpIf{Cond: bpf.JumpEqual, Val: 0x7f000002, SkipTrue: 0, SkipFalse: 8},
-				bpf.LoadAbsolute{Off: 20, Size: 2},                          // flags+fragment offset, since we need to calc where the src/dst port is
-				bpf.JumpIf{Cond: bpf.JumpBitsSet, Val: 0x1fff, SkipTrue: 6}, // do we have an L4 header?
-				bpf.LoadMemShift{Off: 14},                                   // calculate size of IP header
-				bpf.LoadIndirect{Off: 14, Size: 2},                          // src port
-				bpf.JumpIf{Cond: bpf.JumpEqual, Val: 0x3039, SkipFalse: 3},  // port 12345
-				bpf.LoadIndirect{Off: 16, Size: 2},                          // dst port
-				bpf.JumpIf{Cond: bpf.JumpEqual, Val: 0x50, SkipFalse: 1},    // port 80
-				bpf.RetConstant{Val: 262144},
-				bpf.RetConstant{Val: 0},
-			},
-		},
-		{
-			name:  "with-ipv6-proto-and-port",
-			srcIP: net.ParseIP("fd00:10:244::1"),
-			dstIP: net.ParseIP("fd00:10:244::2"),
-			spec: &crdv1alpha1.PacketCaptureSpec{
-				Packet: &crdv1alpha1.Packet{
-					IPFamily: v1.IPv6Protocol,
-					Protocol: &testTCPProtocol,
-					TransportHeader: crdv1alpha1.TransportHeader{
-						TCP: &crdv1alpha1.TCPHeader{
-							SrcPort: &testSrcPort,
-							DstPort: &testDstPort,
-						}},
-				},
-				Direction: crdv1alpha1.CaptureDirectionSourceToDestination,
-			},
-			inst: []bpf.Instruction{
-				bpf.LoadAbsolute{Off: 12, Size: 2},
-				bpf.JumpIf{Cond: bpf.JumpEqual, Val: 0x86dd, SkipFalse: 23},
-				bpf.LoadAbsolute{Off: 20, Size: 1},                       // ip protocol
-				bpf.JumpIf{Cond: bpf.JumpEqual, Val: 0x6, SkipFalse: 21}, // tcp
-				bpf.LoadAbsolute{Off: 22, Size: 4},
-				bpf.JumpIf{Cond: bpf.JumpEqual, Val: 0xfd000010, SkipTrue: 0, SkipFalse: 19},
-				bpf.LoadAbsolute{Off: 26, Size: 4},
-				bpf.JumpIf{Cond: bpf.JumpEqual, Val: 0x2440000, SkipTrue: 0, SkipFalse: 17},
-				bpf.LoadAbsolute{Off: 30, Size: 4},
-				bpf.JumpIf{Cond: bpf.JumpEqual, Val: 0x0, SkipTrue: 0, SkipFalse: 15},
-				bpf.LoadAbsolute{Off: 34, Size: 4},
-				bpf.JumpIf{Cond: bpf.JumpEqual, Val: 0x1, SkipTrue: 0, SkipFalse: 13},
-				bpf.LoadAbsolute{Off: 38, Size: 4},
-				bpf.JumpIf{Cond: bpf.JumpEqual, Val: 0xfd000010, SkipTrue: 0, SkipFalse: 11},
-				bpf.LoadAbsolute{Off: 42, Size: 4},
-				bpf.JumpIf{Cond: bpf.JumpEqual, Val: 0x2440000, SkipTrue: 0, SkipFalse: 9},
-				bpf.LoadAbsolute{Off: 46, Size: 4},
-				bpf.JumpIf{Cond: bpf.JumpEqual, Val: 0x0, SkipTrue: 0, SkipFalse: 7},
-				bpf.LoadAbsolute{Off: 50, Size: 4},
-				bpf.JumpIf{Cond: bpf.JumpEqual, Val: 0x2, SkipTrue: 0, SkipFalse: 5},
-				bpf.LoadAbsolute{Off: 54, Size: 2},                         // src port
-				bpf.JumpIf{Cond: bpf.JumpEqual, Val: 0x3039, SkipFalse: 3}, // port 12345
-				bpf.LoadAbsolute{Off: 56, Size: 2},                         // dst port
-				bpf.JumpIf{Cond: bpf.JumpEqual, Val: 0x50, SkipFalse: 1},   // port 80
-				bpf.RetConstant{Val: 262144},
-				bpf.RetConstant{Val: 0},
-			},
-		},
-		{
-			name:  "with-proto-srcOnly-and-port",
-			srcIP: net.ParseIP("127.0.0.1"),
-			dstIP: nil,
-			spec: &crdv1alpha1.PacketCaptureSpec{
-				Packet: &crdv1alpha1.Packet{
-					Protocol: &testTCPProtocol,
-					TransportHeader: crdv1alpha1.TransportHeader{
-						TCP: &crdv1alpha1.TCPHeader{
-							SrcPort: &testSrcPort,
-							DstPort: &testDstPort,
-						}},
-				},
-				Direction: crdv1alpha1.CaptureDirectionSourceToDestination,
-			},
-			inst: []bpf.Instruction{
-				bpf.LoadAbsolute{Off: 12, Size: 2},
-				bpf.JumpIf{Cond: bpf.JumpEqual, Val: 0x800, SkipFalse: 12},
-				bpf.LoadAbsolute{Off: 23, Size: 1},                       // ip protocol
-				bpf.JumpIf{Cond: bpf.JumpEqual, Val: 0x6, SkipFalse: 10}, // tcp
-				bpf.LoadAbsolute{Off: 26, Size: 4},
-				bpf.JumpIf{Cond: bpf.JumpEqual, Val: 0x7f000001, SkipTrue: 0, SkipFalse: 8},
-				bpf.LoadAbsolute{Off: 20, Size: 2},                          // flags+fragment offset, since we need to calc where the src/dst port is
-				bpf.JumpIf{Cond: bpf.JumpBitsSet, Val: 0x1fff, SkipTrue: 6}, // do we have an L4 header?
-				bpf.LoadMemShift{Off: 14},                                   // calculate size of IP header
-				bpf.LoadIndirect{Off: 14, Size: 2},                          // src port
-				bpf.JumpIf{Cond: bpf.JumpEqual, Val: 0x3039, SkipFalse: 3},  // port 12345
-				bpf.LoadIndirect{Off: 16, Size: 2},                          // dst port
-				bpf.JumpIf{Cond: bpf.JumpEqual, Val: 0x50, SkipFalse: 1},    // port 80
-				bpf.RetConstant{Val: 262144},
-				bpf.RetConstant{Val: 0},
-			},
-		},
-		{
-			name:  "with-udp-proto-dstOnly-and-port",
-			srcIP: nil,
-			dstIP: net.ParseIP("127.0.0.2"),
-			spec: &crdv1alpha1.PacketCaptureSpec{
-				Packet: &crdv1alpha1.Packet{
-					Protocol: &testUDPProtocol,
-					TransportHeader: crdv1alpha1.TransportHeader{
-						UDP: &crdv1alpha1.UDPHeader{
-							SrcPort: &testSrcPort,
-							DstPort: &testDstPort,
-						}},
-				},
-				Direction: crdv1alpha1.CaptureDirectionSourceToDestination,
-			},
-			inst: []bpf.Instruction{
-				bpf.LoadAbsolute{Off: 12, Size: 2},
-				bpf.JumpIf{Cond: bpf.JumpEqual, Val: 0x800, SkipFalse: 12},
-				bpf.LoadAbsolute{Off: 23, Size: 1},                        // ip protocol
-				bpf.JumpIf{Cond: bpf.JumpEqual, Val: 0x11, SkipFalse: 10}, // udp
-				bpf.LoadAbsolute{Off: 30, Size: 4},
-				bpf.JumpIf{Cond: bpf.JumpEqual, Val: 0x7f000002, SkipTrue: 0, SkipFalse: 8},
-				bpf.LoadAbsolute{Off: 20, Size: 2},                          // flags+fragment offset, since we need to calc where the src/dst port is
-				bpf.JumpIf{Cond: bpf.JumpBitsSet, Val: 0x1fff, SkipTrue: 6}, // do we have an L4 header?
-				bpf.LoadMemShift{Off: 14},                                   // calculate size of IP header
-				bpf.LoadIndirect{Off: 14, Size: 2},                          // src port
-				bpf.JumpIf{Cond: bpf.JumpEqual, Val: 0x3039, SkipFalse: 3},  // port 12345
-				bpf.LoadIndirect{Off: 16, Size: 2},                          // dst port
-				bpf.JumpIf{Cond: bpf.JumpEqual, Val: 0x50, SkipFalse: 1},    // port 80
-				bpf.RetConstant{Val: 262144},
-				bpf.RetConstant{Val: 0},
-			},
-		},
-		{
-			name:  "with-ipv6-udp-proto-dstOnly-and-port-both",
-			srcIP: nil,
-			dstIP: net.ParseIP("fd00:10:244::2"),
-			spec: &crdv1alpha1.PacketCaptureSpec{
-				Packet: &crdv1alpha1.Packet{
-					IPFamily: v1.IPv6Protocol,
-					Protocol: &testUDPProtocol,
-					TransportHeader: crdv1alpha1.TransportHeader{
-						UDP: &crdv1alpha1.UDPHeader{
-							SrcPort: &testSrcPort,
-							DstPort: &testDstPort,
-						}},
-				},
-				Direction: crdv1alpha1.CaptureDirectionBoth,
-			},
-			inst: []bpf.Instruction{
-				bpf.LoadAbsolute{Off: 12, Size: 2},
-				bpf.JumpIf{Cond: bpf.JumpEqual, Val: 0x86dd, SkipFalse: 28},
-				bpf.LoadAbsolute{Off: 20, Size: 1},                        // ip protocol
-				bpf.JumpIf{Cond: bpf.JumpEqual, Val: 0x11, SkipFalse: 26}, // udp
-				bpf.LoadAbsolute{Off: 38, Size: 4},
-				bpf.JumpIf{Cond: bpf.JumpEqual, Val: 0xfd000010, SkipTrue: 0, SkipFalse: 11},
-				bpf.LoadAbsolute{Off: 42, Size: 4},
-				bpf.JumpIf{Cond: bpf.JumpEqual, Val: 0x2440000, SkipTrue: 0, SkipFalse: 9},
-				bpf.LoadAbsolute{Off: 46, Size: 4},
-				bpf.JumpIf{Cond: bpf.JumpEqual, Val: 0x0, SkipTrue: 0, SkipFalse: 7},
-				bpf.LoadAbsolute{Off: 50, Size: 4},
-				bpf.JumpIf{Cond: bpf.JumpEqual, Val: 0x2, SkipTrue: 0, SkipFalse: 5},
-				bpf.LoadAbsolute{Off: 54, Size: 2},                          // src port
-				bpf.JumpIf{Cond: bpf.JumpEqual, Val: 0x3039, SkipFalse: 16}, // port 12345
-				bpf.LoadAbsolute{Off: 56, Size: 2},                          // dst port
-				bpf.JumpIf{Cond: bpf.JumpEqual, Val: 0x50, SkipFalse: 14},   // port 80
-				bpf.RetConstant{Val: 262144},
-				bpf.LoadAbsolute{Off: 22, Size: 4},
-				bpf.JumpIf{Cond: bpf.JumpEqual, Val: 0xfd000010, SkipTrue: 0, SkipFalse: 11},
-				bpf.LoadAbsolute{Off: 26, Size: 4},
-				bpf.JumpIf{Cond: bpf.JumpEqual, Val: 0x2440000, SkipTrue: 0, SkipFalse: 9},
-				bpf.LoadAbsolute{Off: 30, Size: 4},
-				bpf.JumpIf{Cond: bpf.JumpEqual, Val: 0x0, SkipTrue: 0, SkipFalse: 7},
-				bpf.LoadAbsolute{Off: 34, Size: 4},
-				bpf.JumpIf{Cond: bpf.JumpEqual, Val: 0x2, SkipTrue: 0, SkipFalse: 5},
-				bpf.LoadAbsolute{Off: 54, Size: 2},                         // src port
-				bpf.JumpIf{Cond: bpf.JumpEqual, Val: 0x50, SkipFalse: 3},   // port 80
-				bpf.LoadAbsolute{Off: 56, Size: 2},                         // dst port
-				bpf.JumpIf{Cond: bpf.JumpEqual, Val: 0x3039, SkipFalse: 1}, // port 12345
-				bpf.RetConstant{Val: 262144},
-				bpf.RetConstant{Val: 0},
-			},
-		},
-		{
-			name:  "udp-proto-str",
-			srcIP: net.ParseIP("127.0.0.1"),
-			dstIP: net.ParseIP("127.0.0.2"),
-			spec: &crdv1alpha1.PacketCaptureSpec{
-				Packet: &crdv1alpha1.Packet{
-					Protocol: &testUDPProtocol,
-					TransportHeader: crdv1alpha1.TransportHeader{
-						UDP: &crdv1alpha1.UDPHeader{
-							SrcPort: &testSrcPort,
-							DstPort: &testDstPort,
-						}},
-				},
-				Direction: crdv1alpha1.CaptureDirectionSourceToDestination,
-			},
-			inst: []bpf.Instruction{
-				bpf.LoadAbsolute{Off: 12, Size: 2},
-				bpf.JumpIf{Cond: bpf.JumpEqual, Val: 0x800, SkipFalse: 14},
-				bpf.LoadAbsolute{Off: 23, Size: 1},                        // ip protocol
-				bpf.JumpIf{Cond: bpf.JumpEqual, Val: 0x11, SkipFalse: 12}, // udp
-				bpf.LoadAbsolute{Off: 26, Size: 4},
-				bpf.JumpIf{Cond: bpf.JumpEqual, Val: 0x7f000001, SkipTrue: 0, SkipFalse: 10},
-				bpf.LoadAbsolute{Off: 30, Size: 4},
-				bpf.JumpIf{Cond: bpf.JumpEqual, Val: 0x7f000002, SkipTrue: 0, SkipFalse: 8},
-				bpf.LoadAbsolute{Off: 20, Size: 2},                          // flags+fragment offset, since we need to calc where the src/dst port is
-				bpf.JumpIf{Cond: bpf.JumpBitsSet, Val: 0x1fff, SkipTrue: 6}, // do we have an L4 header?
-				bpf.LoadMemShift{Off: 14},                                   // calculate size of IP header
-				bpf.LoadIndirect{Off: 14, Size: 2},                          // src port
-				bpf.JumpIf{Cond: bpf.JumpEqual, Val: 0x3039, SkipFalse: 3},  // port 12345
-				bpf.LoadIndirect{Off: 16, Size: 2},                          // dst port
-				bpf.JumpIf{Cond: bpf.JumpEqual, Val: 0x50, SkipFalse: 1},    // port 80
-				bpf.RetConstant{Val: 262144},
-				bpf.RetConstant{Val: 0},
-			},
-		},
-		{
-			name:  "with-proto-port-DestinationToSource",
-			srcIP: net.ParseIP("127.0.0.1"),
-			dstIP: net.ParseIP("127.0.0.2"),
-			spec: &crdv1alpha1.PacketCaptureSpec{
-				Packet: &crdv1alpha1.Packet{
-					Protocol: &testTCPProtocol,
-					TransportHeader: crdv1alpha1.TransportHeader{
-						TCP: &crdv1alpha1.TCPHeader{
-							SrcPort: &testSrcPort,
-							DstPort: &testDstPort,
-						}},
-				},
-				Direction: crdv1alpha1.CaptureDirectionDestinationToSource,
-			},
-			inst: []bpf.Instruction{
-				bpf.LoadAbsolute{Off: 12, Size: 2},
-				bpf.JumpIf{Cond: bpf.JumpEqual, Val: 0x800, SkipFalse: 14},
-				bpf.LoadAbsolute{Off: 23, Size: 1},                       // ip protocol
-				bpf.JumpIf{Cond: bpf.JumpEqual, Val: 0x6, SkipFalse: 12}, // tcp
-				bpf.LoadAbsolute{Off: 26, Size: 4},
-				bpf.JumpIf{Cond: bpf.JumpEqual, Val: 0x7f000002, SkipTrue: 0, SkipFalse: 10},
-				bpf.LoadAbsolute{Off: 30, Size: 4},
-				bpf.JumpIf{Cond: bpf.JumpEqual, Val: 0x7f000001, SkipTrue: 0, SkipFalse: 8},
-				bpf.LoadAbsolute{Off: 20, Size: 2},                          // flags+fragment offset, since we need to calc where the src/dst port is
-				bpf.JumpIf{Cond: bpf.JumpBitsSet, Val: 0x1fff, SkipTrue: 6}, // do we have an L4 header?
-				bpf.LoadMemShift{Off: 14},                                   // calculate size of IP header
-				bpf.LoadIndirect{Off: 14, Size: 2},                          // src port
-				bpf.JumpIf{Cond: bpf.JumpEqual, Val: 0x50, SkipFalse: 3},    // port 80
-				bpf.LoadIndirect{Off: 16, Size: 2},                          // dst port
-				bpf.JumpIf{Cond: bpf.JumpEqual, Val: 0x3039, SkipFalse: 1},  // port 12345
-				bpf.RetConstant{Val: 262144},
-				bpf.RetConstant{Val: 0},
-			},
-		},
-		{
-			name:  "with-proto-dstPort-and-Both",
-			srcIP: net.ParseIP("127.0.0.1"),
-			dstIP: net.ParseIP("127.0.0.2"),
-			spec: &crdv1alpha1.PacketCaptureSpec{
-				Packet: &crdv1alpha1.Packet{
-					Protocol: &testTCPProtocol,
-					TransportHeader: crdv1alpha1.TransportHeader{
-						TCP: &crdv1alpha1.TCPHeader{
-							DstPort: &testDstPort,
-						}},
-				},
-				Direction: crdv1alpha1.CaptureDirectionBoth,
-			},
-			inst: []bpf.Instruction{
-				bpf.LoadAbsolute{Off: 12, Size: 2},
-				bpf.JumpIf{Cond: bpf.JumpEqual, Val: 0x800, SkipFalse: 22},
-				bpf.LoadAbsolute{Off: 23, Size: 1},                       // ip protocol
-				bpf.JumpIf{Cond: bpf.JumpEqual, Val: 0x6, SkipFalse: 20}, // tcp
-				bpf.LoadAbsolute{Off: 26, Size: 4},
-				bpf.JumpIf{Cond: bpf.JumpEqual, Val: 0x7f000001, SkipTrue: 0, SkipFalse: 8},
-				bpf.LoadAbsolute{Off: 30, Size: 4},
-				bpf.JumpIf{Cond: bpf.JumpEqual, Val: 0x7f000002, SkipTrue: 0, SkipFalse: 16},
-				bpf.LoadAbsolute{Off: 20, Size: 2},                                     // flags+fragment offset, since we need to calc where the src/dst port is
-				bpf.JumpIf{Cond: bpf.JumpBitsSet, Val: 0x1fff, SkipTrue: 14},           // do we have an L4 header?
-				bpf.LoadMemShift{Off: 14},                                              // calculate size of IP header
-				bpf.LoadIndirect{Off: 16, Size: 2},                                     // dst port
-				bpf.JumpIf{Cond: bpf.JumpEqual, Val: 0x50, SkipTrue: 0, SkipFalse: 11}, // port 80
-				bpf.RetConstant{Val: 262144},
-				bpf.LoadAbsolute{Off: 26, Size: 4},
-				bpf.JumpIf{Cond: bpf.JumpEqual, Val: 0x7f000002, SkipTrue: 0, SkipFalse: 8},
-				bpf.LoadAbsolute{Off: 30, Size: 4},
-				bpf.JumpIf{Cond: bpf.JumpEqual, Val: 0x7f000001, SkipTrue: 0, SkipFalse: 6},
-				bpf.LoadAbsolute{Off: 20, Size: 2},                          // flags+fragment offset, since we need to calc where the src/dst port is
-				bpf.JumpIf{Cond: bpf.JumpBitsSet, Val: 0x1fff, SkipTrue: 4}, // do we have an L4 header?
-				bpf.LoadMemShift{Off: 14},                                   // calculate size of IP header
-				bpf.LoadIndirect{Off: 14, Size: 2},                          // src port
-				bpf.JumpIf{Cond: bpf.JumpEqual, Val: 0x50, SkipFalse: 1},    // port 80
-				bpf.RetConstant{Val: 262144},
-				bpf.RetConstant{Val: 0},
-			},
-		},
 		{
 			name:  "with-proto-port-and-Both",
 			srcIP: net.ParseIP("127.0.0.1"),
@@ -785,177 +164,6 @@ func TestPacketCaptureCompileBPF(t *testing.T) {
 			},
 		},
 		{
-			name:  "with-proto-dstOnly-dstPort-and-Both",
-			srcIP: nil,
-			dstIP: net.ParseIP("127.0.0.2"),
-			spec: &crdv1alpha1.PacketCaptureSpec{
-				Packet: &crdv1alpha1.Packet{
-					Protocol: &testTCPProtocol,
-					TransportHeader: crdv1alpha1.TransportHeader{
-						TCP: &crdv1alpha1.TCPHeader{
-							DstPort: &testDstPort,
-						}},
-				},
-				Direction: crdv1alpha1.CaptureDirectionBoth,
-			},
-			inst: []bpf.Instruction{
-				bpf.LoadAbsolute{Off: 12, Size: 2},
-				bpf.JumpIf{Cond: bpf.JumpEqual, Val: 0x800, SkipFalse: 18},
-				bpf.LoadAbsolute{Off: 23, Size: 1},                       // ip protocol
-				bpf.JumpIf{Cond: bpf.JumpEqual, Val: 0x6, SkipFalse: 16}, // tcp
-				bpf.LoadAbsolute{Off: 30, Size: 4},
-				bpf.JumpIf{Cond: bpf.JumpEqual, Val: 0x7f000002, SkipFalse: 6},
-				bpf.LoadAbsolute{Off: 20, Size: 2},                           // flags+fragment offset, since we need to calc where the src/dst port is
-				bpf.JumpIf{Cond: bpf.JumpBitsSet, Val: 0x1fff, SkipTrue: 12}, // do we have an L4 header?
-				bpf.LoadMemShift{Off: 14},                                    // calculate size of IP header
-				bpf.LoadIndirect{Off: 16, Size: 2},                           // dst port
-				bpf.JumpIf{Cond: bpf.JumpEqual, Val: 0x50, SkipFalse: 9},     // port 80
-				bpf.RetConstant{Val: 262144},
-				bpf.LoadAbsolute{Off: 26, Size: 4},
-				bpf.JumpIf{Cond: bpf.JumpEqual, Val: 0x7f000002, SkipFalse: 6},
-				bpf.LoadAbsolute{Off: 20, Size: 2},                          // flags+fragment offset, since we need to calc where the src/dst port is
-				bpf.JumpIf{Cond: bpf.JumpBitsSet, Val: 0x1fff, SkipTrue: 4}, // do we have an L4 header?
-				bpf.LoadMemShift{Off: 14},                                   // calculate size of IP header
-				bpf.LoadIndirect{Off: 14, Size: 2},                          // src port
-				bpf.JumpIf{Cond: bpf.JumpEqual, Val: 0x50, SkipFalse: 1},    // port 80
-				bpf.RetConstant{Val: 262144},
-				bpf.RetConstant{Val: 0},
-			},
-		},
-		{
-			name:  "with-proto-and-flags",
-			srcIP: net.ParseIP("127.0.0.1"),
-			dstIP: net.ParseIP("127.0.0.2"),
-			spec: &crdv1alpha1.PacketCaptureSpec{
-				Packet: &crdv1alpha1.Packet{
-					Protocol: &testTCPProtocol,
-					TransportHeader: crdv1alpha1.TransportHeader{
-						TCP: &crdv1alpha1.TCPHeader{
-							Flags: []crdv1alpha1.TCPFlagsMatcher{
-								{Value: 0x2},  // +syn
-								{Value: 0x10}, // +ack
-							},
-						}},
-				},
-				Direction: crdv1alpha1.CaptureDirectionSourceToDestination,
-			},
-			inst: []bpf.Instruction{
-				bpf.LoadAbsolute{Off: 12, Size: 2},
-				bpf.JumpIf{Cond: bpf.JumpEqual, Val: 0x800, SkipFalse: 16},
-				bpf.LoadAbsolute{Off: 23, Size: 1},                       // ip protocol
-				bpf.JumpIf{Cond: bpf.JumpEqual, Val: 0x6, SkipFalse: 14}, // tcp
-				bpf.LoadAbsolute{Off: 26, Size: 4},
-				bpf.JumpIf{Cond: bpf.JumpEqual, Val: 0x7f000001, SkipTrue: 0, SkipFalse: 12},
-				bpf.LoadAbsolute{Off: 30, Size: 4},
-				bpf.JumpIf{Cond: bpf.JumpEqual, Val: 0x7f000002, SkipTrue: 0, SkipFalse: 10},
-				bpf.LoadAbsolute{Off: 20, Size: 2},                                    // flags+fragment offset, since we need to calc where the src/dst port is
-				bpf.JumpIf{Cond: bpf.JumpBitsSet, Val: 0x1fff, SkipTrue: 8},           // do we have an L4 header?
-				bpf.LoadMemShift{Off: 14},                                             // calculate size of IP header
-				bpf.LoadIndirect{Off: 27, Size: 1},                                    // tcp flags
-				bpf.ALUOpConstant{Op: bpf.ALUOpAnd, Val: 0x2},                         // AND with mask
-				bpf.JumpIf{Cond: bpf.JumpEqual, Val: 0x2, SkipTrue: 3, SkipFalse: 0},  // compare with flag
-				bpf.LoadIndirect{Off: 27, Size: 1},                                    // load offset 13
-				bpf.ALUOpConstant{Op: bpf.ALUOpAnd, Val: 0x10},                        // AND with mask
-				bpf.JumpIf{Cond: bpf.JumpEqual, Val: 0x10, SkipTrue: 0, SkipFalse: 1}, // compare with flag
-				bpf.RetConstant{Val: 262144},
-				bpf.RetConstant{Val: 0},
-			},
-		},
-		{
-			name:  "with-proto-port-and-flags",
-			srcIP: net.ParseIP("127.0.0.1"),
-			dstIP: net.ParseIP("127.0.0.2"),
-			spec: &crdv1alpha1.PacketCaptureSpec{
-				Packet: &crdv1alpha1.Packet{
-					Protocol: &testTCPProtocol,
-					TransportHeader: crdv1alpha1.TransportHeader{
-						TCP: &crdv1alpha1.TCPHeader{
-							DstPort: &testDstPort,
-							Flags: []crdv1alpha1.TCPFlagsMatcher{
-								{Value: 0x12}, // +syn+ack
-							},
-						}},
-				},
-				Direction: crdv1alpha1.CaptureDirectionSourceToDestination,
-			},
-			inst: []bpf.Instruction{
-				bpf.LoadAbsolute{Off: 12, Size: 2},
-				bpf.JumpIf{Cond: bpf.JumpEqual, Val: 0x800, SkipFalse: 15},
-				bpf.LoadAbsolute{Off: 23, Size: 1},                       // ip protocol
-				bpf.JumpIf{Cond: bpf.JumpEqual, Val: 0x6, SkipFalse: 13}, // tcp
-				bpf.LoadAbsolute{Off: 26, Size: 4},
-				bpf.JumpIf{Cond: bpf.JumpEqual, Val: 0x7f000001, SkipTrue: 0, SkipFalse: 11},
-				bpf.LoadAbsolute{Off: 30, Size: 4},
-				bpf.JumpIf{Cond: bpf.JumpEqual, Val: 0x7f000002, SkipTrue: 0, SkipFalse: 9},
-				bpf.LoadAbsolute{Off: 20, Size: 2},                                  // flags+fragment offset, since we need to calc where the src/dst port is
-				bpf.JumpIf{Cond: bpf.JumpBitsSet, Val: 0x1fff, SkipTrue: 7},         // do we have an L4 header?
-				bpf.LoadMemShift{Off: 14},                                           // calculate size of IP header
-				bpf.LoadIndirect{Off: 16, Size: 2},                                  // dst port
-				bpf.JumpIf{Cond: bpf.JumpEqual, Val: 0x50, SkipFalse: 4},            // port 80
-				bpf.LoadIndirect{Off: 27, Size: 1},                                  // tcp flags
-				bpf.ALUOpConstant{Op: bpf.ALUOpAnd, Val: 18},                        // AND with mask
-				bpf.JumpIf{Cond: bpf.JumpEqual, Val: 18, SkipTrue: 0, SkipFalse: 1}, // compare with flag
-				bpf.RetConstant{Val: 262144},
-				bpf.RetConstant{Val: 0},
-			},
-		},
-		{
-			name:  "with-proto-port-flags-and-Both",
-			srcIP: net.ParseIP("127.0.0.1"),
-			dstIP: net.ParseIP("127.0.0.2"),
-			spec: &crdv1alpha1.PacketCaptureSpec{
-				Packet: &crdv1alpha1.Packet{
-					Protocol: &testTCPProtocol,
-					TransportHeader: crdv1alpha1.TransportHeader{
-						TCP: &crdv1alpha1.TCPHeader{
-							SrcPort: &testSrcPort,
-							DstPort: &testDstPort,
-							Flags: []crdv1alpha1.TCPFlagsMatcher{
-								{Value: 0, Mask: ptr.To(int32(0x10))}, // -ack
-							},
-						}},
-				},
-				Direction: crdv1alpha1.CaptureDirectionBoth,
-			},
-			inst: []bpf.Instruction{
-				bpf.LoadAbsolute{Off: 12, Size: 2},
-				bpf.JumpIf{Cond: bpf.JumpEqual, Val: 0x800, SkipFalse: 32},
-				bpf.LoadAbsolute{Off: 23, Size: 1},                       // ip protocol
-				bpf.JumpIf{Cond: bpf.JumpEqual, Val: 0x6, SkipFalse: 30}, // tcp
-				bpf.LoadAbsolute{Off: 26, Size: 4},
-				bpf.JumpIf{Cond: bpf.JumpEqual, Val: 0x7f000001, SkipTrue: 0, SkipFalse: 13},
-				bpf.LoadAbsolute{Off: 30, Size: 4},
-				bpf.JumpIf{Cond: bpf.JumpEqual, Val: 0x7f000002, SkipTrue: 0, SkipFalse: 26},
-				bpf.LoadAbsolute{Off: 20, Size: 2},                                     // flags+fragment offset, since we need to calc where the src/dst port is
-				bpf.JumpIf{Cond: bpf.JumpBitsSet, Val: 0x1fff, SkipTrue: 24},           // do we have an L4 header?
-				bpf.LoadMemShift{Off: 14},                                              // calculate size of IP header
-				bpf.LoadIndirect{Off: 14, Size: 2},                                     // src port
-				bpf.JumpIf{Cond: bpf.JumpEqual, Val: 0x3039, SkipFalse: 21},            // port 12345
-				bpf.LoadIndirect{Off: 16, Size: 2},                                     // dst port
-				bpf.JumpIf{Cond: bpf.JumpEqual, Val: 0x50, SkipTrue: 0, SkipFalse: 19}, // port 80
-				bpf.LoadIndirect{Off: 27, Size: 1},                                     // tcp flags
-				bpf.ALUOpConstant{Op: bpf.ALUOpAnd, Val: 16},                           // AND with mask
-				bpf.JumpIf{Cond: bpf.JumpEqual, Val: 0, SkipTrue: 0, SkipFalse: 16},    // compare with flag
-				bpf.RetConstant{Val: 262144},
-				bpf.LoadAbsolute{Off: 26, Size: 4},
-				bpf.JumpIf{Cond: bpf.JumpEqual, Val: 0x7f000002, SkipTrue: 0, SkipFalse: 13},
-				bpf.LoadAbsolute{Off: 30, Size: 4},
-				bpf.JumpIf{Cond: bpf.JumpEqual, Val: 0x7f000001, SkipTrue: 0, SkipFalse: 11},
-				bpf.LoadAbsolute{Off: 20, Size: 2},                                      // flags+fragment offset, since we need to calc where the src/dst port is
-				bpf.JumpIf{Cond: bpf.JumpBitsSet, Val: 0x1fff, SkipTrue: 9},             // do we have an L4 header?
-				bpf.LoadMemShift{Off: 14},                                               // calculate size of IP header
-				bpf.LoadIndirect{Off: 14, Size: 2},                                      // src port
-				bpf.JumpIf{Cond: bpf.JumpEqual, Val: 0x50, SkipTrue: 0, SkipFalse: 6},   // port 80
-				bpf.LoadIndirect{Off: 16, Size: 2},                                      // dst port
-				bpf.JumpIf{Cond: bpf.JumpEqual, Val: 0x3039, SkipTrue: 0, SkipFalse: 4}, // port 12345
-				bpf.LoadIndirect{Off: 27, Size: 1},                                      // tcp flags
-				bpf.ALUOpConstant{Op: bpf.ALUOpAnd, Val: 16},                            // AND with mask
-				bpf.JumpIf{Cond: bpf.JumpEqual, Val: 0, SkipTrue: 0, SkipFalse: 1},      // compare with flag
-				bpf.RetConstant{Val: 262144},
-				bpf.RetConstant{Val: 0},
-			},
-		},
-		{
 			name:  "with-proto-and-icmp-messages",
 			srcIP: net.ParseIP("127.0.0.1"),
 			dstIP: net.ParseIP("127.0.0.2"),
@@ -984,9 +192,9 @@ func TestPacketCaptureCompileBPF(t *testing.T) {
 				bpf.LoadAbsolute{Off: 20, Size: 2},                          // flags+fragment offset, since we need to calc where the src/dst port is
 				bpf.JumpIf{Cond: bpf.JumpBitsSet, Val: 0x1fff, SkipTrue: 7}, // do we have an L4 header?
 				bpf.LoadMemShift{Off: 14},                                   // calculate size of IP header
-				bpf.LoadIndirect{Off: 14, Size: lengthByte},                 // load ICMP type
+				bpf.LoadIndirect{Off: 14, Size: 1},                          // load ICMP type
 				bpf.JumpIf{Cond: bpf.JumpEqual, Val: 0x3, SkipTrue: 0, SkipFalse: 2},
-				bpf.LoadIndirect{Off: 15, Size: lengthByte}, // load ICMP code
+				bpf.LoadIndirect{Off: 15, Size: 1}, // load ICMP code
 				bpf.JumpIf{Cond: bpf.JumpEqual, Val: 0x1, SkipTrue: 1, SkipFalse: 2},
 				bpf.JumpIf{Cond: bpf.JumpEqual, Val: 0x8, SkipTrue: 0, SkipFalse: 1},
 				bpf.RetConstant{Val: 262144},
@@ -1022,7 +230,7 @@ func TestPacketCaptureCompileBPF(t *testing.T) {
 				bpf.LoadAbsolute{Off: 20, Size: 2},                          // flags+fragment offset, since we need to calc where the src/dst port is
 				bpf.JumpIf{Cond: bpf.JumpBitsSet, Val: 0x1fff, SkipTrue: 5}, // do we have an L4 header?
 				bpf.LoadMemShift{Off: 14},                                   // calculate size of IP header
-				bpf.LoadIndirect{Off: 14, Size: lengthByte},                 // load ICMP type
+				bpf.LoadIndirect{Off: 14, Size: 1},                          // load ICMP type
 				bpf.JumpIf{Cond: bpf.JumpEqual, Val: 0x8, SkipTrue: 1, SkipFalse: 0},
 				bpf.JumpIf{Cond: bpf.JumpEqual, Val: 0x0, SkipTrue: 0, SkipFalse: 1},
 				bpf.RetConstant{Val: 262144},
@@ -1050,27 +258,42 @@ func TestPacketCaptureCompileBPF(t *testing.T) {
 			inst: []bpf.Instruction{
 				bpf.LoadAbsolute{Off: 12, Size: 2},
 				bpf.JumpIf{Cond: bpf.JumpEqual, Val: 0x86dd, SkipFalse: 22},
-				bpf.LoadAbsolute{Off: 20, Size: 1},                        // ip protocol
-				bpf.JumpIf{Cond: bpf.JumpEqual, Val: 0x3a, SkipFalse: 20}, // icmpv6
 				bpf.LoadAbsolute{Off: 22, Size: 4},
-				bpf.JumpIf{Cond: bpf.JumpEqual, Val: 0xfd000010, SkipTrue: 0, SkipFalse: 18},
+				bpf.JumpIf{Cond: bpf.JumpEqual, Val: 0xfd000010, SkipTrue: 0, SkipFalse: 20},
 				bpf.LoadAbsolute{Off: 26, Size: 4},
-				bpf.JumpIf{Cond: bpf.JumpEqual, Val: 0x2440000, SkipTrue: 0, SkipFalse: 16},
+				bpf.JumpIf{Cond: bpf.JumpEqual, Val: 0x2440000, SkipTrue: 0, SkipFalse: 18},
 				bpf.LoadAbsolute{Off: 30, Size: 4},
-				bpf.JumpIf{Cond: bpf.JumpEqual, Val: 0x0, SkipTrue: 0, SkipFalse: 14},
+				bpf.JumpIf{Cond: bpf.JumpEqual, Val: 0x0, SkipTrue: 0, SkipFalse: 16},
 				bpf.LoadAbsolute{Off: 34, Size: 4},
-				bpf.JumpIf{Cond: bpf.JumpEqual, Val: 0x1, SkipTrue: 0, SkipFalse: 12},
+				bpf.JumpIf{Cond: bpf.JumpEqual, Val: 0x1, SkipTrue: 0, SkipFalse: 14},
 				bpf.LoadAbsolute{Off: 38, Size: 4},
-				bpf.JumpIf{Cond: bpf.JumpEqual, Val: 0xfd000010, SkipTrue: 0, SkipFalse: 10},
+				bpf.JumpIf{Cond: bpf.JumpEqual, Val: 0xfd000010, SkipTrue: 0, SkipFalse: 12},
 				bpf.LoadAbsolute{Off: 42, Size: 4},
-				bpf.JumpIf{Cond: bpf.JumpEqual, Val: 0x2440000, SkipTrue: 0, SkipFalse: 8},
+				bpf.JumpIf{Cond: bpf.JumpEqual, Val: 0x2440000, SkipTrue: 0, SkipFalse: 10},
 				bpf.LoadAbsolute{Off: 46, Size: 4},
-				bpf.JumpIf{Cond: bpf.JumpEqual, Val: 0x0, SkipTrue: 0, SkipFalse: 6},
+				bpf.JumpIf{Cond: bpf.JumpEqual, Val: 0x0, SkipTrue: 0, SkipFalse: 8},
 				bpf.LoadAbsolute{Off: 50, Size: 4},
-				bpf.JumpIf{Cond: bpf.JumpEqual, Val: 0x2, SkipTrue: 0, SkipFalse: 4},
-				bpf.LoadAbsolute{Off: 54, Size: lengthByte}, // load ICMP type
+				bpf.JumpIf{Cond: bpf.JumpEqual, Val: 0x2, SkipTrue: 0, SkipFalse: 6},
+				bpf.LoadAbsolute{Off: 20, Size: 1},                       // ip protocol
+				bpf.JumpIf{Cond: bpf.JumpEqual, Val: 0x3a, SkipFalse: 4}, // icmpv6
+				bpf.LoadAbsolute{Off: 54, Size: 1},                       // load ICMP type
 				bpf.JumpIf{Cond: bpf.JumpEqual, Val: 0x80, SkipTrue: 1, SkipFalse: 0},
 				bpf.JumpIf{Cond: bpf.JumpEqual, Val: 0x81, SkipTrue: 0, SkipFalse: 1},
+				bpf.RetConstant{Val: 262144},
+				bpf.RetConstant{Val: 0},
+			},
+		},
+		{
+			name:  "nil-packetspec",
+			srcIP: nil,
+			dstIP: nil,
+			spec: &crdv1alpha1.PacketCaptureSpec{
+				Packet:    nil,
+				Direction: crdv1alpha1.CaptureDirectionSourceToDestination,
+			},
+			inst: []bpf.Instruction{
+				bpf.LoadAbsolute{Off: 12, Size: 2},
+				bpf.JumpIf{Cond: bpf.JumpEqual, Val: 0x800, SkipFalse: 1},
 				bpf.RetConstant{Val: 262144},
 				bpf.RetConstant{Val: 0},
 			},
@@ -1081,6 +304,30 @@ func TestPacketCaptureCompileBPF(t *testing.T) {
 		t.Run(item.name, func(t *testing.T) {
 			result := compilePacketFilter(item.spec.Packet, item.srcIP, item.dstIP, item.spec.Direction)
 			assert.Equal(t, item.inst, result)
+		})
+	}
+}
+
+// BPFTestCases is the source of truth for BPF equivalence tests.
+// Reference BPF bytecode is generated offline using hack/generate-bpf-testdata.sh.
+func TestBPFEquivalenceWithTcpdump(t *testing.T) {
+	for _, tt := range BPFTestCases {
+		t.Run(tt.Name, func(t *testing.T) {
+			expectedRaw, ok := generatedBPFTestCases[tt.Name]
+			if !ok {
+				t.Fatalf("No generated test data found for %q. Did you run ./hack/generate-bpf-testdata.sh?", tt.Name)
+			}
+
+			antreaProg := compilePacketFilter(tt.Packet, tt.SrcIP, tt.DstIP, tt.Direction)
+			antreaRaw, err := bpf.Assemble(antreaProg)
+			if err != nil {
+				t.Fatalf("Failed to assemble Antrea BPF: %v", err)
+			}
+
+			assert.Equal(t, expectedRaw, antreaRaw,
+				"Antrea BPF output does not match tcpdump reference for filter: %s. "+
+					"If you modified BPF generation code, regenerate the reference data with: ./hack/generate-bpf-testdata.sh",
+				tt.TcpdumpFilter)
 		})
 	}
 }
