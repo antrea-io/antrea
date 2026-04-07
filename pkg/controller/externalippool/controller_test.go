@@ -632,3 +632,24 @@ func TestExternalIPPoolController_RestoreIPAllocations(t *testing.T) {
 		})
 	}
 }
+
+func TestDeleteExternalIPPool_Tombstone(t *testing.T) {
+	pool := newExternalIPPool("pool1", "10.10.10.0/24", "", "")
+	c := newController([]runtime.Object{pool})
+
+	stopCh := make(chan struct{})
+	defer close(stopCh)
+	c.crdInformerFactory.Start(stopCh)
+	c.crdInformerFactory.WaitForCacheSync(stopCh)
+
+	// Simulate the controller having created an allocator for the pool.
+	c.createOrUpdateIPAllocator(pool)
+	require.True(t, c.IPPoolExists(pool.Name))
+
+	// Deliver the delete as a tombstone, as the informer does after a watch reconnect.
+	c.deleteExternalIPPool(cache.DeletedFinalStateUnknown{
+		Key: pool.Name,
+		Obj: pool,
+	})
+	assert.False(t, c.IPPoolExists(pool.Name))
+}
