@@ -155,3 +155,126 @@ var FlowExportService_ServiceDesc = grpc.ServiceDesc{
 	},
 	Metadata: "pkg/apis/flow/v1alpha1/service.proto",
 }
+
+const (
+	FlowStreamService_GetFlows_FullMethodName = "/antrea_io.antrea.pkg.apis.flow.v1alpha1.FlowStreamService/GetFlows"
+)
+
+// FlowStreamServiceClient is the client API for FlowStreamService service.
+//
+// For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
+type FlowStreamServiceClient interface {
+	// GetFlows streams flow records matching the provided filters.
+	// Historical flows (from the ring buffer) are sent first, followed by
+	// real-time flows if follow is set to true.
+	GetFlows(ctx context.Context, in *GetFlowsRequest, opts ...grpc.CallOption) (FlowStreamService_GetFlowsClient, error)
+}
+
+type flowStreamServiceClient struct {
+	cc grpc.ClientConnInterface
+}
+
+func NewFlowStreamServiceClient(cc grpc.ClientConnInterface) FlowStreamServiceClient {
+	return &flowStreamServiceClient{cc}
+}
+
+func (c *flowStreamServiceClient) GetFlows(ctx context.Context, in *GetFlowsRequest, opts ...grpc.CallOption) (FlowStreamService_GetFlowsClient, error) {
+	stream, err := c.cc.NewStream(ctx, &FlowStreamService_ServiceDesc.Streams[0], FlowStreamService_GetFlows_FullMethodName, opts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &flowStreamServiceGetFlowsClient{stream}
+	if err := x.ClientStream.SendMsg(in); err != nil {
+		return nil, err
+	}
+	if err := x.ClientStream.CloseSend(); err != nil {
+		return nil, err
+	}
+	return x, nil
+}
+
+type FlowStreamService_GetFlowsClient interface {
+	Recv() (*GetFlowsResponse, error)
+	grpc.ClientStream
+}
+
+type flowStreamServiceGetFlowsClient struct {
+	grpc.ClientStream
+}
+
+func (x *flowStreamServiceGetFlowsClient) Recv() (*GetFlowsResponse, error) {
+	m := new(GetFlowsResponse)
+	if err := x.ClientStream.RecvMsg(m); err != nil {
+		return nil, err
+	}
+	return m, nil
+}
+
+// FlowStreamServiceServer is the server API for FlowStreamService service.
+// All implementations must embed UnimplementedFlowStreamServiceServer
+// for forward compatibility
+type FlowStreamServiceServer interface {
+	// GetFlows streams flow records matching the provided filters.
+	// Historical flows (from the ring buffer) are sent first, followed by
+	// real-time flows if follow is set to true.
+	GetFlows(*GetFlowsRequest, FlowStreamService_GetFlowsServer) error
+	mustEmbedUnimplementedFlowStreamServiceServer()
+}
+
+// UnimplementedFlowStreamServiceServer must be embedded to have forward compatible implementations.
+type UnimplementedFlowStreamServiceServer struct {
+}
+
+func (UnimplementedFlowStreamServiceServer) GetFlows(*GetFlowsRequest, FlowStreamService_GetFlowsServer) error {
+	return status.Errorf(codes.Unimplemented, "method GetFlows not implemented")
+}
+func (UnimplementedFlowStreamServiceServer) mustEmbedUnimplementedFlowStreamServiceServer() {}
+
+// UnsafeFlowStreamServiceServer may be embedded to opt out of forward compatibility for this service.
+// Use of this interface is not recommended, as added methods to FlowStreamServiceServer will
+// result in compilation errors.
+type UnsafeFlowStreamServiceServer interface {
+	mustEmbedUnimplementedFlowStreamServiceServer()
+}
+
+func RegisterFlowStreamServiceServer(s grpc.ServiceRegistrar, srv FlowStreamServiceServer) {
+	s.RegisterService(&FlowStreamService_ServiceDesc, srv)
+}
+
+func _FlowStreamService_GetFlows_Handler(srv interface{}, stream grpc.ServerStream) error {
+	m := new(GetFlowsRequest)
+	if err := stream.RecvMsg(m); err != nil {
+		return err
+	}
+	return srv.(FlowStreamServiceServer).GetFlows(m, &flowStreamServiceGetFlowsServer{stream})
+}
+
+type FlowStreamService_GetFlowsServer interface {
+	Send(*GetFlowsResponse) error
+	grpc.ServerStream
+}
+
+type flowStreamServiceGetFlowsServer struct {
+	grpc.ServerStream
+}
+
+func (x *flowStreamServiceGetFlowsServer) Send(m *GetFlowsResponse) error {
+	return x.ServerStream.SendMsg(m)
+}
+
+// FlowStreamService_ServiceDesc is the grpc.ServiceDesc for FlowStreamService service.
+// It's only intended for direct use with grpc.RegisterService,
+// and not to be introspected or modified (even as a copy)
+var FlowStreamService_ServiceDesc = grpc.ServiceDesc{
+	ServiceName: "antrea_io.antrea.pkg.apis.flow.v1alpha1.FlowStreamService",
+	HandlerType: (*FlowStreamServiceServer)(nil),
+	Methods:     []grpc.MethodDesc{},
+	Streams: []grpc.StreamDesc{
+		{
+			StreamName:    "GetFlows",
+			Handler:       _FlowStreamService_GetFlows_Handler,
+			ServerStreams: true,
+		},
+	},
+	Metadata: "pkg/apis/flow/v1alpha1/service.proto",
+}
