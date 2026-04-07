@@ -16,7 +16,7 @@ package serviceexternalip
 
 import (
 	"context"
-	"net"
+	"net/netip"
 	"testing"
 	"time"
 
@@ -215,7 +215,7 @@ func TestAddService(t *testing.T) {
 			assert.NotEmpty(t, ipPool)
 			assert.True(t, controller.externalIPAllocator.IPPoolExists(ipPool))
 			if externalIP != "" {
-				assert.True(t, controller.externalIPAllocator.IPPoolHasIP(ipPool, net.ParseIP(externalIP)))
+				assert.True(t, controller.externalIPAllocator.IPPoolHasIP(ipPool, netip.MustParseAddr(externalIP)))
 			}
 		})
 	}

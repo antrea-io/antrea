@@ -279,6 +279,12 @@ func AppendPortIfMissing(addr, port string) string {
 	return net.JoinHostPort(addr, port)
 }
 
+// GetLocalBroadcastAddr returns the last address in a prefix (the IPv4 broadcast address).
+func GetLocalBroadcastAddr(prefix netip.Prefix) netip.Addr {
+	_, end := GetStartAndEndOfPrefix(prefix)
+	return end
+}
+
 // GetStartAndEndOfPrefix retrieves the start and end addresses of a netip.Prefix.
 // For example:  10.10.40.0/24 -> 10.10.40.0, 10.10.40.255
 func GetStartAndEndOfPrefix(prefix netip.Prefix) (netip.Addr, netip.Addr) {

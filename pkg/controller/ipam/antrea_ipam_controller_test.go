@@ -17,7 +17,7 @@ package ipam
 import (
 	"context"
 	"fmt"
-	"net"
+	"net/netip"
 	"testing"
 	"time"
 
@@ -304,7 +304,7 @@ func TestAntreaIPAMController_getIPPoolsForStatefulSet(t *testing.T) {
 		name        string
 		prepareFunc func(*appsv1.StatefulSet)
 		hasIPPool   bool
-		expectedIPs []net.IP
+		expectedIPs []netip.Addr
 	}{
 		{
 			name: "no annotation",
@@ -326,7 +326,7 @@ func TestAntreaIPAMController_getIPPoolsForStatefulSet(t *testing.T) {
 				sts.Spec.Template.Annotations[annotation.AntreaIPAMPodIPAnnotationKey] = "10.2.2.109"
 			},
 			hasIPPool:   true,
-			expectedIPs: []net.IP{net.ParseIP("10.2.2.109")},
+			expectedIPs: []netip.Addr{netip.MustParseAddr("10.2.2.109")},
 		},
 		{
 			name: "invalid ip",

@@ -17,7 +17,7 @@ package poolallocator
 import (
 	"context"
 	"fmt"
-	"net"
+	"net/netip"
 	"testing"
 	"time"
 
@@ -84,7 +84,7 @@ func validateAllocationSequence(t *testing.T, allocator *IPPoolAllocator, subnet
 		}
 		ip, returnInfo, err := allocator.AllocateNext(crdv1b1.IPAddressPhaseAllocated, owner)
 		require.NoError(t, err)
-		assert.Equal(t, net.ParseIP(expectedIP), ip)
+		assert.Equal(t, netip.MustParseAddr(expectedIP), ip)
 		assert.Equal(t, subnetInfo, *returnInfo)
 		i += 1
 	}
@@ -115,19 +115,19 @@ func TestAllocateIP(t *testing.T) {
 	assert.Equal(t, 21, allocator.Total())
 
 	// Allocate specific IP from the range
-	returnInfo, err := allocator.AllocateIP(net.ParseIP("10.2.2.101"), crdv1b1.IPAddressPhaseAllocated, fakePodOwner)
+	returnInfo, err := allocator.AllocateIP(netip.MustParseAddr("10.2.2.101"), crdv1b1.IPAddressPhaseAllocated, fakePodOwner)
 	assert.Equal(t, subnetInfo, *returnInfo)
 	require.NoError(t, err)
 
 	// Validate IP outside the range is not allocated
-	_, err = allocator.AllocateIP(net.ParseIP("10.2.2.121"), crdv1b1.IPAddressPhaseAllocated, fakePodOwner)
+	_, err = allocator.AllocateIP(netip.MustParseAddr("10.2.2.121"), crdv1b1.IPAddressPhaseAllocated, fakePodOwner)
 	require.Error(t, err)
 
 	// Make sure IP allocated above is not allocated again
 	validateAllocationSequence(t, allocator, subnetInfo, []string{"10.2.2.100", "10.2.2.102"})
 
 	// Validate error is returned if IP is already allocated
-	_, err = allocator.AllocateIP(net.ParseIP("10.2.2.102"), crdv1b1.IPAddressPhaseAllocated, fakePodOwner)
+	_, err = allocator.AllocateIP(netip.MustParseAddr("10.2.2.102"), crdv1b1.IPAddressPhaseAllocated, fakePodOwner)
 	require.Error(t, err)
 }
 
@@ -252,7 +252,7 @@ func TestAllocateReleaseSequence(t *testing.T) {
 
 	// Release first IP from first range and middle IP from second range
 	for _, ipToRelease := range []string{"2001::1000", "2001::2"} {
-		err := allocator.Release(net.ParseIP(ipToRelease))
+		err := allocator.Release(netip.MustParseAddr(ipToRelease))
 		require.NoError(t, err)
 	}
 
@@ -272,7 +272,8 @@ func (a *IPPoolAllocator) releasePod(namespace, podName string) error {
 		// Mark allocated IPs from pool status as unavailable
 		for _, ip := range ipPool.Status.IPAddresses {
 			if ip.Owner.Pod != nil && ip.Owner.Pod.Namespace == namespace && ip.Owner.Pod.Name == podName {
-				return a.removeIPAddressState(ipPool, net.ParseIP(ip.IPAddress))
+				addr, _ := netip.ParseAddr(ip.IPAddress)
+				return a.removeIPAddressState(ipPool, addr)
 
 			}
 		}
@@ -366,16 +367,16 @@ func TestHas(t *testing.T) {
 	has, err := allocator.hasPod(testNamespace, "realPod")
 	require.NoError(t, err)
 	assert.False(t, has)
-	var ip net.IP
+	var ip netip.Addr
 	ip, err = allocator.GetContainerIP("fakeContainer", "eth1")
 	require.NoError(t, err)
-	assert.NotNil(t, ip)
+	assert.True(t, ip.IsValid())
 	ip, err = allocator.GetContainerIP("fakeContainer", "")
 	require.NoError(t, err)
-	assert.Nil(t, ip)
+	assert.False(t, ip.IsValid())
 	ip, err = allocator.GetContainerIP("realContainer", "eth1")
 	require.NoError(t, err)
-	assert.Nil(t, ip)
+	assert.False(t, ip.IsValid())
 }
 
 func TestAllocateReleaseStatefulSet(t *testing.T) {
@@ -399,7 +400,7 @@ func TestAllocateReleaseStatefulSet(t *testing.T) {
 	}
 
 	allocator := newTestIPPoolAllocator(&pool, stopCh)
-	err := allocator.AllocateStatefulSet(testNamespace, setName, 7, nil)
+	err := allocator.AllocateStatefulSet(testNamespace, setName, 7, netip.Addr{})
 	require.NoError(t, err)
 
 	// Make sure reserved IPs are respected for next allocate
@@ -413,7 +414,7 @@ func TestAllocateReleaseStatefulSet(t *testing.T) {
 	validateAllocationSequence(t, allocator, subnetInfo, []string{"10.2.2.100"})
 
 	allocator = newTestIPPoolAllocator(&pool, stopCh)
-	err = allocator.AllocateStatefulSet(testNamespace, setName, 1, net.ParseIP("10.2.2.101"))
+	err = allocator.AllocateStatefulSet(testNamespace, setName, 1, netip.MustParseAddr("10.2.2.101"))
 	require.NoError(t, err)
 
 	// Make sure specified IP is reserved
@@ -427,6 +428,6 @@ func TestAllocateReleaseStatefulSet(t *testing.T) {
 	validateAllocationSequence(t, allocator, subnetInfo, []string{"10.2.2.101"})
 
 	// Invalid IP will result in an error
-	err = allocator.AllocateStatefulSet(testNamespace, setName, 1, net.ParseIP("10.2.3.103"))
+	err = allocator.AllocateStatefulSet(testNamespace, setName, 1, netip.MustParseAddr("10.2.3.103"))
 	require.Error(t, err)
 }

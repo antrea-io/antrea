@@ -18,6 +18,7 @@ import (
 	"context"
 	"fmt"
 	"net"
+	"net/netip"
 	"sync"
 	"time"
 
@@ -148,26 +149,26 @@ func (d *AntreaIPAM) Add(args *invoke.Args, k8sArgs *types.K8sArgs, networkConfi
 	}
 
 	owner := *getAllocationOwner(args, k8sArgs, reservedOwner, false)
-	var ip net.IP
+	var allocatedIP netip.Addr
 	var subnetInfo *crdv1b1.SubnetInfo
 	if reservedOwner != nil {
-		ip, subnetInfo, err = allocator.AllocateReservedOrNext(crdv1b1.IPAddressPhaseAllocated, owner)
+		allocatedIP, subnetInfo, err = allocator.AllocateReservedOrNext(crdv1b1.IPAddressPhaseAllocated, owner)
 	} else if len(ips) == 0 {
-		ip, subnetInfo, err = allocator.AllocateNext(crdv1b1.IPAddressPhaseAllocated, owner)
+		allocatedIP, subnetInfo, err = allocator.AllocateNext(crdv1b1.IPAddressPhaseAllocated, owner)
 	} else {
-		ip = ips[0]
-		subnetInfo, err = allocator.AllocateIP(ip, crdv1b1.IPAddressPhaseAllocated, owner)
+		allocatedIP = ips[0]
+		subnetInfo, err = allocator.AllocateIP(allocatedIP, crdv1b1.IPAddressPhaseAllocated, owner)
 	}
 	if err != nil {
 		return true, nil, err
 	}
 
-	klog.V(4).InfoS("IP allocation successful", "IP", ip.String(), "Pod", string(k8sArgs.K8S_POD_NAME))
+	klog.V(4).InfoS("IP allocation successful", "IP", allocatedIP.String(), "Pod", string(k8sArgs.K8S_POD_NAME))
 
 	result := IPAMResult{Result: current.Result{CNIVersion: current.ImplementedSpecVersion}, VLANID: uint16(subnetInfo.VLAN)}
 	gwIP := net.ParseIP(subnetInfo.Gateway)
 
-	ipConfig, defaultRoute := generateIPConfig(ip, int(subnetInfo.PrefixLength), gwIP)
+	ipConfig, defaultRoute := generateIPConfig(allocatedIP.AsSlice(), int(subnetInfo.PrefixLength), gwIP)
 
 	result.Routes = append(result.Routes, defaultRoute)
 	result.IPs = append(result.IPs, ipConfig)
@@ -203,7 +204,7 @@ func (d *AntreaIPAM) Check(args *invoke.Args, k8sArgs *types.K8sArgs, networkCon
 		return true, err
 	}
 
-	if ip == nil {
+	if !ip.IsValid() {
 		return true, fmt.Errorf("no IP Address association found for container %s", string(k8sArgs.K8S_POD_NAME))
 	}
 	return true, nil
@@ -245,10 +246,10 @@ func (d *AntreaIPAM) SecondaryNetworkAllocate(podOwner *crdv1b1.PodOwner, networ
 				return nil, err
 			}
 
-			var ip net.IP
+			var allocatedAddr netip.Addr
 			var subnetInfo *crdv1b1.SubnetInfo
 			owner := crdv1b1.IPAddressOwner{Pod: podOwner}
-			ip, subnetInfo, err = allocator.AllocateNext(crdv1b1.IPAddressPhaseAllocated, owner)
+			allocatedAddr, subnetInfo, err = allocator.AllocateNext(crdv1b1.IPAddressPhaseAllocated, owner)
 			if err != nil {
 				return nil, err
 			}
@@ -257,7 +258,7 @@ func (d *AntreaIPAM) SecondaryNetworkAllocate(podOwner *crdv1b1.PodOwner, networ
 			}
 
 			gwIP := net.ParseIP(subnetInfo.Gateway)
-			ipConfig, _ := generateIPConfig(ip, int(subnetInfo.PrefixLength), gwIP)
+			ipConfig, _ := generateIPConfig(allocatedAddr.AsSlice(), int(subnetInfo.PrefixLength), gwIP)
 			// CNI spec 0.2.0 and below support only one v4 and one v6 address. But we
 			// assume the CNI version >= 0.3.0, and so do not check the number of
 			// addresses.
@@ -340,7 +341,7 @@ func (d *AntreaIPAM) del(podOwner *crdv1b1.PodOwner) (foundAllocation bool, err 
 // mineTrue + timeout error
 // mineTrue + IPPoolNotFound error
 // mineTrue + nil error
-func (d *AntreaIPAM) owns(k8sArgs *types.K8sArgs) (mineType, *poolallocator.IPPoolAllocator, []net.IP, *crdv1b1.IPAddressOwner, error) {
+func (d *AntreaIPAM) owns(k8sArgs *types.K8sArgs) (mineType, *poolallocator.IPPoolAllocator, []netip.Addr, *crdv1b1.IPAddressOwner, error) {
 	// Wait controller ready to avoid inappropriate behaviors on the CNI request.
 	if err := d.waitForControllerReady(); err != nil {
 		// Return mineTrue to make this request fail and kubelet will retry.

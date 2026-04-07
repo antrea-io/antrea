@@ -18,7 +18,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"net"
+	"net/netip"
 	"strings"
 	"time"
 
@@ -290,17 +290,17 @@ func (c *AntreaIPAMController) cleanIPPoolForStatefulSet(namespacedName string) 
 }
 
 // Find IP Pools annotated to StatefulSet via direct annotation or Namespace annotation
-func (c *AntreaIPAMController) getIPPoolsForStatefulSet(ss *appsv1.StatefulSet) ([]string, []net.IP) {
+func (c *AntreaIPAMController) getIPPoolsForStatefulSet(ss *appsv1.StatefulSet) ([]string, []netip.Addr) {
 
 	// Inspect IP annotation for the Pods
 	ipStrings := ss.Spec.Template.Annotations[annotation.AntreaIPAMPodIPAnnotationKey]
 	ipStrings = strings.ReplaceAll(ipStrings, " ", "")
-	var ips []net.IP
+	var ips []netip.Addr
 	if ipStrings != "" {
 		splittedIPStrings := strings.Split(ipStrings, annotation.AntreaIPAMAnnotationDelimiter)
 		for _, ipString := range splittedIPStrings {
-			ip := net.ParseIP(ipString)
-			if ip == nil {
+			ip, err := netip.ParseAddr(ipString)
+			if err != nil {
 				klog.ErrorS(nil, "Ignored invalid Pod IP annotation in the StatefulSet template", "annotation", ipStrings, "statefulSet", klog.KObj(ss))
 				ips = nil
 				break
@@ -342,7 +342,7 @@ func (c *AntreaIPAMController) preallocateIPPoolForStatefulSet(ss *appsv1.Statef
 	klog.InfoS("Processing create notification", "Namespace", ss.Namespace, "StatefulSet", ss.Name)
 
 	ipPools, ips := c.getIPPoolsForStatefulSet(ss)
-	var ip net.IP
+	var ip netip.Addr
 	if len(ips) > 0 {
 		ip = ips[0]
 	}
