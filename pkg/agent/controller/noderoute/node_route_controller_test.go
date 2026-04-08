@@ -49,11 +49,13 @@ var (
 	// podCIDRs of "local" Node
 	_, podCIDR, _   = net.ParseCIDR("1.1.0.0/24")
 	_, podCIDRv6, _ = net.ParseCIDR("2001:4860:0000::/48")
-	// podCIDRs of "remote" Node
+	// podCIDRs of "remote" Nodes
 	_, podCIDR1, _    = net.ParseCIDR("1.1.1.0/24")
 	_, podCIDR1v6, _  = net.ParseCIDR("2001:4860:0001::/48")
+	_, podCIDR2, _    = net.ParseCIDR("1.1.2.0/24")
 	podCIDR1Gateway   = util.GetGatewayIPForPodCIDR(podCIDR1)
 	podCIDR1v6Gateway = util.GetGatewayIPForPodCIDR(podCIDR1v6)
+	podCIDR2Gateway   = util.GetGatewayIPForPodCIDR(podCIDR2)
 	nodeIP1           = net.ParseIP("10.10.10.10")
 	dsIPs1            = utilip.DualStackIPs{IPv4: nodeIP1}
 	nodeIP2           = net.ParseIP("10.10.10.11")
@@ -196,6 +198,52 @@ func TestControllerWithDuplicatePodCIDR(t *testing.T) {
 		t.Errorf("Test didn't finish in time")
 	case <-finishCh:
 	}
+}
+
+func TestNodeRecreateNewPodCIDR(t *testing.T) {
+	c := newController(t, &config.NetworkConfig{})
+	defer c.queue.ShutDown()
+
+	stopCh := make(chan struct{})
+	defer close(stopCh)
+	c.informerFactory.Start(stopCh)
+	c.informerFactory.WaitForCacheSync(stopCh)
+
+	// Remove IPv6 Pod CIDR to simplify test.
+	oldNode := node1.DeepCopy()
+	oldNode.UID = "old-uid"
+	oldNode.Spec.PodCIDR = podCIDR1.String()
+	oldNode.Spec.PodCIDRs = []string{podCIDR1.String()}
+
+	newNode := node1.DeepCopy()
+	newNode.UID = "new-uid"
+	newNode.Spec.PodCIDR = podCIDR2.String()
+	newNode.Spec.PodCIDRs = []string{podCIDR2.String()}
+
+	c.clientset.CoreV1().Nodes().Create(context.TODO(), oldNode, metav1.CreateOptions{})
+	c.ofClient.EXPECT().InstallNodeFlows("node1", gomock.Any(), &dsIPs1, uint32(0), nil).Times(1)
+	c.routeClient.EXPECT().AddRoutes(podCIDR1, "node1", nodeIP1, podCIDR1Gateway).Times(1)
+	c.processNextWorkItem()
+
+	// Node is deleted, then shortly after is "recreated" (same name) with a different PodCIDR.
+	c.clientset.CoreV1().Nodes().Delete(context.TODO(), oldNode.Name, metav1.DeleteOptions{})
+	// The sleep is for illustration purposes. The duration does not really matter. What matters
+	// is that by the time we call processNextWorkItem below, the informer store has been
+	// updated with the new Node.
+	time.Sleep(10 * time.Millisecond)
+	c.clientset.CoreV1().Nodes().Create(context.TODO(), newNode, metav1.CreateOptions{})
+
+	// At the moment, the test will fail because these expectations are not met.
+	c.ofClient.EXPECT().InstallNodeFlows("node1", gomock.Any(), &dsIPs1, uint32(0), nil).Times(1)
+	c.routeClient.EXPECT().AddRoutes(podCIDR2, "node1", nodeIP1, podCIDR2Gateway).Times(1)
+
+	require.Eventually(t, func() bool {
+		node, err := c.nodeLister.Get("node1")
+		return err == nil && node.UID == "new-uid"
+	}, 1*time.Second, 10*time.Millisecond)
+
+	// The workqueue may still be empty by the time this is called, but processNextWorkItem will block.
+	c.processNextWorkItem()
 }
 
 func TestLookupIPInPodSubnets(t *testing.T) {

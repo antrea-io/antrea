@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"net"
 	"net/netip"
+	"slices"
 	"sync"
 	"time"
 
@@ -548,21 +549,32 @@ func (c *Controller) addNodeRoute(nodeName string, node *corev1.Node) error {
 		return err
 	}
 	peerWireGuardPublicKey := node.Annotations[types.NodeWireGuardPublicAnnotationKey]
-
-	nrInfo, installed, _ := c.installedNodes.GetByKey(nodeName)
-	// Route is already added for this Node and Node MAC, transport IP
-	// and WireGuard public key are not changed.
-	if installed && nrInfo.(*nodeRouteInfo).nodeMAC.String() == peerNodeMAC.String() &&
-		peerNodeIPs.Equal(*nrInfo.(*nodeRouteInfo).nodeIPs) &&
-		nrInfo.(*nodeRouteInfo).wireGuardPublicKey == peerWireGuardPublicKey {
-		return nil
-	}
-
 	podCIDRStrs := getPodCIDRsOnNode(node)
 	if len(podCIDRStrs) == 0 {
 		// If no valid PodCIDR is configured in Node.Spec, return immediately.
 		return nil
 	}
+
+	nrInfo, installed, _ := c.installedNodes.GetByKey(nodeName)
+	samePodCIDRs := func(podCIDRs []*net.IPNet) bool {
+		// There is no reason to worry about the ordering of the CIDRs here. In a dual-stack
+		// cluster, the CIDRs should always be ordered consistently by IP family. Even if
+		// this was not true, samePodCIDRs would just return false and we would end up
+		// re-installing the same routes (and the podCIDRs field in nodeRouteInfo would be
+		// updated).
+		return slices.EqualFunc(podCIDRStrs, podCIDRs, func(cidrStr string, cidr *net.IPNet) bool {
+			return cidr.String() == cidrStr
+		})
+	}
+	// Route is already added for this Node and Node MAC, transport IP, podCIDRs and WireGuard
+	// public key are not changed.
+	if installed && nrInfo.(*nodeRouteInfo).nodeMAC.String() == peerNodeMAC.String() &&
+		peerNodeIPs.Equal(*nrInfo.(*nodeRouteInfo).nodeIPs) &&
+		samePodCIDRs(nrInfo.(*nodeRouteInfo).podCIDRs) &&
+		nrInfo.(*nodeRouteInfo).wireGuardPublicKey == peerWireGuardPublicKey {
+		return nil
+	}
+
 	klog.InfoS("Adding routes and flows to Node", "Node", nodeName, "podCIDRs", podCIDRStrs,
 		"addresses", node.Status.Addresses)
 
