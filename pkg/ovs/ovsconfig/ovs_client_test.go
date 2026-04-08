@@ -16,9 +16,11 @@ package ovsconfig
 
 import (
 	"net"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestOVSClient(t *testing.T) {
@@ -117,4 +119,70 @@ func TestBuildPortDataCommon(t *testing.T) {
 		})
 	}
 
+}
+
+func TestParseHardwareOffloadConfig(t *testing.T) {
+	tests := []struct {
+		name            string
+		otherConfig     map[string]string
+		expectedEnabled bool
+		expectErr       bool
+		errContains     string
+	}{
+		{
+			name:            "empty config returns false",
+			otherConfig:     map[string]string{},
+			expectedEnabled: false,
+		},
+		{
+			name:            "hw-offload set to true",
+			otherConfig:     map[string]string{"hw-offload": "true"},
+			expectedEnabled: true,
+		},
+		{
+			name:            "hw-offload set to false",
+			otherConfig:     map[string]string{"hw-offload": "false"},
+			expectedEnabled: false,
+		},
+		{
+			name:            "hw-offload set to 1 (alternate truthy form)",
+			otherConfig:     map[string]string{"hw-offload": "1"},
+			expectedEnabled: true,
+		},
+		{
+			name:            "hw-offload set to 0 (alternate falsy form)",
+			otherConfig:     map[string]string{"hw-offload": "0"},
+			expectedEnabled: false,
+		},
+		{
+			name:        "hw-offload set to invalid value returns error with original string",
+			otherConfig: map[string]string{"hw-offload": "notabool"},
+			expectErr:   true,
+			errContains: "notabool",
+		},
+		{
+			name:            "unrelated keys present, no hw-offload key returns false",
+			otherConfig:     map[string]string{"flow-restore-wait": "true", "disable-in-band": "true"},
+			expectedEnabled: false,
+		},
+		{
+			name:            "multiple keys including hw-offload true",
+			otherConfig:     map[string]string{"flow-restore-wait": "true", "hw-offload": "true"},
+			expectedEnabled: true,
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			enabled, err := parseHardwareOffloadConfig(tc.otherConfig)
+			if tc.expectErr {
+				require.Error(t, err)
+				assert.True(t, strings.Contains(err.Error(), tc.errContains),
+					"expected error message to contain %q, got: %s", tc.errContains, err.Error())
+				assert.False(t, enabled)
+			} else {
+				require.NoError(t, err)
+				assert.Equal(t, tc.expectedEnabled, enabled)
+			}
+		})
+	}
 }

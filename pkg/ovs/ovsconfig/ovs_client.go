@@ -145,7 +145,7 @@ func (br *OVSBridge) Create() Error {
 	}
 	br.isHardwareOffloadEnabled, err = br.getHardwareOffload()
 	if err != nil {
-		klog.ErrorS(err, "Failed to get hardware offload")
+		return err
 	}
 	return nil
 }
@@ -1063,11 +1063,18 @@ func (br *OVSBridge) getHardwareOffload() (bool, Error) {
 	if err != nil {
 		return false, err
 	}
+	return parseHardwareOffloadConfig(otherConfig)
+}
+
+// parseHardwareOffloadConfig reads the hardware-offload key from the OVS
+// other_config map and returns its boolean value. It returns false with no
+// error when the key is absent.
+func parseHardwareOffloadConfig(otherConfig map[string]string) (bool, Error) {
 	for configKey, configValue := range otherConfig {
 		if configKey == hardwareOffload {
 			boolConfigVal, err := strconv.ParseBool(configValue)
 			if err != nil {
-				return boolConfigVal, newInvalidArgumentsError(fmt.Sprint("invalid hardwareOffload value: ", boolConfigVal))
+				return false, newInvalidArgumentsError(fmt.Sprint("invalid hardwareOffload value: ", configValue))
 			}
 			return boolConfigVal, nil
 		}
