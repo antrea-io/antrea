@@ -1469,6 +1469,20 @@ func (c *Client) restoreIptablesData(podCIDR *net.IPNet,
 	// If AntreaProxy full support is enabled, it SNATs the packets whose source IP is VirtualServiceIPv4/VirtualServiceIPv6
 	// so the packets can be routed back to this Node.
 	if c.proxyAll && !c.hostNetworkNFTables {
+		// In noEncap/hybrid mode, or when WireGuard encryption is used, packets sourced from the OVS virtual Service IP
+		// destined for peer Pod CIDRs must be SNATed to the Antrea gateway IP instead of the Node IP. This ensures the
+		// remote Node treats the traffic as Pod-to-Pod. The gateway IP belongs to the local Pod CIDR, so it is recognized
+		// as a peer Pod CIDR address on the remote Node.
+		gatewayIP := c.gatewayIP(isIPv6)
+		if gatewayIP != "" {
+			writeLine(iptablesData, []string{
+				"-A", antreaPostRoutingChain,
+				"-m", "comment", "--comment", `"Antrea: SNAT OVS virtual source IP to gateway IP for Pod traffic"`,
+				"-s", serviceVirtualIP.String(),
+				"-m", "set", "--match-set", podIPSet, "dst",
+				"-j", iptables.SNATTarget, "--to", gatewayIP,
+			}...)
+		}
 		writeLine(iptablesData, []string{
 			"-A", antreaPostRoutingChain,
 			"-m", "comment", "--comment", `"Antrea: masquerade OVS virtual source IP"`,
@@ -2986,6 +3000,7 @@ func (c *Client) nftablesProxyAll(tx *knftables.Transaction, ipProtocol knftable
 	var svcSNATVIP string
 	var nodePortSet string
 	var externalIPSet string
+	var gatewayIP string
 
 	switch ipProtocol {
 	case knftables.IPv4Family:
@@ -2996,6 +3011,7 @@ func (c *Client) nftablesProxyAll(tx *knftables.Transaction, ipProtocol knftable
 		svcSNATVIP = config.VirtualServiceIPv4.String()
 		nodePortSet = antreaNFTablesSetNodePort
 		externalIPSet = antreaNFTablesSetExternalIP
+		gatewayIP = c.gatewayIP(false)
 	case knftables.IPv6Family:
 		ipAddr = "ipv6_addr"
 		ip = "ip6"
@@ -3004,6 +3020,7 @@ func (c *Client) nftablesProxyAll(tx *knftables.Transaction, ipProtocol knftable
 		svcSNATVIP = config.VirtualServiceIPv6.String()
 		nodePortSet = antreaNFTablesSetNodePort6
 		externalIPSet = antreaNFTablesSetExternalIP6
+		gatewayIP = c.gatewayIP(true)
 	}
 
 	tx.Add(&knftables.Set{
@@ -3077,6 +3094,22 @@ func (c *Client) nftablesProxyAll(tx *knftables.Transaction, ipProtocol knftable
 		),
 		Comment: ptr.To("DNAT local to NodePort packets"),
 	})
+	// In noEncap/hybrid mode, or when WireGuard encryption is used, packets sourced from the OVS virtual Service IP
+	// destined for peer Pod CIDRs must be SNATed to the Antrea gateway IP instead of the Node IP. This ensures the
+	// remote Node treats the traffic as Pod-to-Pod. The gateway IP belongs to the local Pod CIDR, so it is recognized
+	// as a peer Pod CIDR address on the remote Node.
+	if gatewayIP != "" {
+		tx.Add(&knftables.Rule{
+			Chain: antreaNFTablesNatChainPostroutingProxyAll,
+			Rule: knftables.Concat(
+				ip, "saddr", svcSNATVIP,
+				ip, "daddr", "@", antreaNFTablesSetPeerPodCIDR,
+				"counter",
+				"snat", "to", gatewayIP,
+			),
+			Comment: ptr.To("SNAT OVS virtual source IP to gateway IP for Pod traffic"),
+		})
+	}
 	tx.Add(&knftables.Rule{
 		Chain: antreaNFTablesNatChainPostroutingProxyAll,
 		Rule: knftables.Concat(
@@ -3512,4 +3545,21 @@ func (c *Client) deleteExternalIPConfigsIPsets(externalIP net.IP) error {
 func (c *Client) shouldEnableEgressPolicyRouting() bool {
 	return c.egressEnabled && (c.networkConfig.TrafficEncapMode == config.TrafficEncapModeHybrid ||
 		c.networkConfig.TrafficEncryptionMode == config.TrafficEncryptionModeWireGuard)
+}
+
+// gatewayIP returns the Antrea gateway IPv4 or IPv6 address.
+func (c *Client) gatewayIP(ipv6 bool) string {
+	if c.nodeConfig == nil || c.nodeConfig.GatewayConfig == nil {
+		return ""
+	}
+	var ipAddr net.IP
+	if ipv6 {
+		ipAddr = c.nodeConfig.GatewayConfig.IPv6
+	} else {
+		ipAddr = c.nodeConfig.GatewayConfig.IPv4
+	}
+	if ipAddr == nil {
+		return ""
+	}
+	return ipAddr.String()
 }
