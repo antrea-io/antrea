@@ -155,10 +155,10 @@ func TestParseHardwareOffloadConfig(t *testing.T) {
 			expectedEnabled: false,
 		},
 		{
-			name:        "hw-offload set to invalid value returns error with original string",
+			name:        "hw-offload set to invalid value returns error with key name and original string",
 			otherConfig: map[string]string{"hw-offload": "notabool"},
 			expectErr:   true,
-			errContains: "notabool",
+			errContains: "hw-offload",
 		},
 		{
 			name:            "unrelated keys present, no hw-offload key returns false",

@@ -1066,20 +1066,19 @@ func (br *OVSBridge) getHardwareOffload() (bool, Error) {
 	return parseHardwareOffloadConfig(otherConfig)
 }
 
-// parseHardwareOffloadConfig reads the hardware-offload key from the OVS
+// parseHardwareOffloadConfig reads the hw-offload key from the OVS
 // other_config map and returns its boolean value. It returns false with no
 // error when the key is absent.
 func parseHardwareOffloadConfig(otherConfig map[string]string) (bool, Error) {
-	for configKey, configValue := range otherConfig {
-		if configKey == hardwareOffload {
-			boolConfigVal, err := strconv.ParseBool(configValue)
-			if err != nil {
-				return false, newInvalidArgumentsError(fmt.Sprint("invalid hardwareOffload value: ", configValue))
-			}
-			return boolConfigVal, nil
-		}
+	configValue, ok := otherConfig[hardwareOffload]
+	if !ok {
+		return false, nil
 	}
-	return false, nil
+	boolConfigVal, err := strconv.ParseBool(configValue)
+	if err != nil {
+		return false, newInvalidArgumentsError(fmt.Sprintf("invalid %s value: %q", hardwareOffload, configValue))
+	}
+	return boolConfigVal, nil
 }
 
 func (br *OVSBridge) GetOVSDatapathType() OVSDatapathType {
