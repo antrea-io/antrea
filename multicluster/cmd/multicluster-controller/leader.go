@@ -119,6 +119,7 @@ func runLeader(o *Options) error {
 	staleController := leader.NewStaleResCleanupController(
 		mgr.GetClient(),
 		mgr.GetScheme(),
+		mgr.GetCache(),
 	)
 	if err = staleController.SetupWithManager(mgr); err != nil {
 		return fmt.Errorf("error creating StaleResCleanupController: %v", err)
