@@ -20,6 +20,7 @@ import (
 	"net"
 	"sync"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/hashicorp/memberlist"
@@ -676,25 +677,34 @@ func TestCluster_RejoinNodes(t *testing.T) {
 		ObjectMeta: metav1.ObjectMeta{Name: "winnode1", Labels: labelsWindowsOS},
 		Status:     v1.NodeStatus{Addresses: []v1.NodeAddress{{Type: v1.NodeInternalIP, Address: "10.0.0.11"}}},
 	}
-	stopCh := make(chan struct{})
-	defer close(stopCh)
-	controller := gomock.NewController(t)
-	mockMemberlist := NewMockMemberlist(controller)
-	mockMemberlist.EXPECT().Join([]string{"10.0.0.2"})
-	mockMemberlist.EXPECT().Join([]string{"10.0.0.3"})
-	fakeCluster, _ := newFakeCluster(localNodeConfig, stopCh, mockMemberlist, node1, node2, node3, winNode1)
+	synctest.Test(t, func(t *testing.T) {
+		stopCh := make(chan struct{})
+		defer close(stopCh)
+		controller := gomock.NewController(t)
+		mockMemberlist := NewMockMemberlist(controller)
+		mockMemberlist.EXPECT().Join([]string{"10.0.0.2"}).Return(1, nil)
+		mockMemberlist.EXPECT().Join([]string{"10.0.0.3"}).Return(1, nil)
+		fakeCluster, _ := newFakeCluster(localNodeConfig, stopCh, mockMemberlist, node1, node2, node3, winNode1)
+		defer fakeCluster.cluster.queue.ShutDown()
+		// We need to wait for the "add" event handler (handleCreateNode) to have been
+		// called for the initial list of Nodes. Otherwise, we can potentially end up with a
+		// flaky test, as it is possible for the test to exit with some unsatisfied
+		// expectations.
+		// This is also the reason why we use a synctest bubble to begin with.
+		synctest.Wait()
 
-	mockMemberlist.EXPECT().Members().Return([]*memberlist.Node{
-		{Name: "node1"},
-		{Name: "node2"},
-	})
-	mockMemberlist.EXPECT().Join([]string{"10.0.0.3"})
-	fakeCluster.cluster.RejoinNodes()
+		mockMemberlist.EXPECT().Members().Return([]*memberlist.Node{
+			{Name: "node1"},
+			{Name: "node2"},
+		})
+		mockMemberlist.EXPECT().Join([]string{"10.0.0.3"}).Return(1, nil)
+		fakeCluster.cluster.RejoinNodes()
 
-	mockMemberlist.EXPECT().Members().Return([]*memberlist.Node{
-		{Name: "node1"},
-		{Name: "node3"},
+		mockMemberlist.EXPECT().Members().Return([]*memberlist.Node{
+			{Name: "node1"},
+			{Name: "node3"},
+		})
+		mockMemberlist.EXPECT().Join([]string{"10.0.0.2"}).Return(1, nil)
+		fakeCluster.cluster.RejoinNodes()
 	})
-	mockMemberlist.EXPECT().Join([]string{"10.0.0.2"})
-	fakeCluster.cluster.RejoinNodes()
 }
