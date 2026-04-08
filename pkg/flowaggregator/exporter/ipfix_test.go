@@ -15,6 +15,7 @@
 package exporter
 
 import (
+	"context"
 	"crypto/tls"
 	"crypto/x509"
 	"fmt"
@@ -23,6 +24,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/google/uuid"
@@ -36,9 +38,11 @@ import (
 	clocktesting "k8s.io/utils/clock/testing"
 	"k8s.io/utils/ptr"
 
+	flowpb "antrea.io/antrea/v2/pkg/apis/flow/v1alpha1"
 	flowaggregatorconfig "antrea.io/antrea/v2/pkg/config/flowaggregator"
 	"antrea.io/antrea/v2/pkg/flowaggregator/infoelements"
 	"antrea.io/antrea/v2/pkg/flowaggregator/options"
+	"antrea.io/antrea/v2/pkg/flowaggregator/ringbuffer"
 	flowaggregatortesting "antrea.io/antrea/v2/pkg/flowaggregator/testing"
 	ipfixtesting "antrea.io/antrea/v2/pkg/ipfix/testing"
 	"antrea.io/antrea/v2/pkg/util/tlstest"
@@ -58,6 +62,69 @@ func createElement(name string, enterpriseID uint32) ipfixentities.InfoElementWi
 	element, _ := ipfixregistry.GetInfoElement(name, enterpriseID)
 	ieWithValue, _ := ipfixentities.DecodeAndCreateInfoElementWithValue(element, nil)
 	return ieWithValue
+}
+
+func TestIPFIXExporter_Run(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+
+		mockIPFIXExpProc := ipfixtesting.NewMockIPFIXExportingProcess(ctrl)
+		mockIPFIXBufferedExp := ipfixtesting.NewMockIPFIXBufferedExporter(ctrl)
+		mockIPFIXRegistry := ipfixtesting.NewMockIPFIXRegistry(ctrl)
+		record := flowaggregatortesting.PrepareTestFlowRecord(true)
+
+		initIPFIXExportingProcessSaved := initIPFIXExportingProcess
+		initIPFIXExportingProcess = func(exporter *IPFIXExporter) error {
+			exporter.exportingProcess = mockIPFIXExpProc
+			exporter.bufferedExporter = mockIPFIXBufferedExp
+			return nil
+		}
+		defer func() {
+			initIPFIXExportingProcess = initIPFIXExportingProcessSaved
+		}()
+
+		ipfixExporter := &IPFIXExporter{
+			externalFlowCollectorAddr:  "",
+			externalFlowCollectorProto: "",
+			includeK8sNames:            true,
+			templateIDv4:               testTemplateIDv4,
+			templateIDv6:               testTemplateIDv6,
+			registry:                   mockIPFIXRegistry,
+			aggregatorMode:             flowaggregatorconfig.AggregatorModeAggregate,
+			observationDomainID:        testObservationDomainID,
+			clock:                      clock.RealClock{},
+		}
+		createElementList(flowaggregatorconfig.AggregatorModeAggregate, true, false, false, mockIPFIXRegistry)
+		ipfixExporter.elementsV4, _ = ipfixExporter.prepareElements(false)
+		createElementList(flowaggregatorconfig.AggregatorModeAggregate, true, false, true, mockIPFIXRegistry)
+		ipfixExporter.elementsV6, _ = ipfixExporter.prepareElements(true)
+
+		buf := ringbuffer.NewBroadcastBuffer[*flowpb.Flow](8)
+		defer buf.Shutdown()
+
+		mockIPFIXBufferedExp.EXPECT().AddRecord(gomock.Cond(func(record ipfixentities.Record) bool {
+			return record.GetTemplateID() == testTemplateIDv4
+		})).Return(nil)
+		// Expect flush on periodic tick and/or shutdown.
+		mockIPFIXBufferedExp.EXPECT().Flush().Return(nil).AnyTimes()
+		mockIPFIXExpProc.EXPECT().CloseConnToCollector().AnyTimes()
+
+		ctx, cancel := context.WithCancel(t.Context())
+		go ipfixExporter.Run(ctx, buf)
+
+		// Wait until Run's goroutine is blocked in consumer.ConsumeMultiple() — this
+		// guarantees the consumer has been created and will see the next Produce.
+		synctest.Wait()
+		buf.Produce(record)
+		// Wait for the Run goroutine to process the record (calls AddRecord).
+		synctest.Wait()
+
+		// Trigger the periodic flush by advancing fake time past flushInterval.
+		time.Sleep(flushInterval)
+		synctest.Wait()
+
+		cancel()
+	})
 }
 
 func TestIPFIXExporter_createAndSendTemplate(t *testing.T) {
@@ -97,7 +164,7 @@ func TestIPFIXExporter_createAndSendTemplate(t *testing.T) {
 	t.Run("IPv6", func(t *testing.T) { runTest(t, true) })
 }
 
-func TestIPFIXExporter_UpdateOptions(t *testing.T) {
+func TestIPFIXExporter_flush(t *testing.T) {
 	ctrl := gomock.NewController(t)
 
 	mockIPFIXExpProc := ipfixtesting.NewMockIPFIXExportingProcess(ctrl)
@@ -108,8 +175,6 @@ func TestIPFIXExporter_UpdateOptions(t *testing.T) {
 	// we override the initIPFIXExportingProcess var function: it will
 	// simply set the exportingProcess and bufferedExporter member fields of
 	// the ipfixExporter to our mocks.
-	// note that even though we "update" the external flow collector address
-	// as part of the test, we still use the same mocks for simplicity's sake.
 	initIPFIXExportingProcessSaved := initIPFIXExportingProcess
 	initIPFIXExportingProcess = func(exporter *IPFIXExporter) error {
 		exporter.exportingProcess = mockIPFIXExpProc
@@ -120,107 +185,7 @@ func TestIPFIXExporter_UpdateOptions(t *testing.T) {
 		initIPFIXExportingProcess = initIPFIXExportingProcessSaved
 	}()
 
-	config := &flowaggregatorconfig.FlowAggregatorConfig{
-		FlowCollector: flowaggregatorconfig.FlowCollectorConfig{
-			Enable:              true,
-			Address:             "",
-			ObservationDomainID: ptr.To[uint32](testObservationDomainID),
-			RecordFormat:        "IPFIX",
-			IncludeK8sNames:     ptr.To(true),
-			IncludeK8sUIDs:      ptr.To(false),
-		},
-	}
 	ipfixExporter := &IPFIXExporter{
-		config:                     config.FlowCollector,
-		externalFlowCollectorAddr:  "",
-		externalFlowCollectorProto: "",
-		includeK8sNames:            true,
-		templateIDv4:               testTemplateIDv4,
-		templateIDv6:               testTemplateIDv6,
-		registry:                   mockIPFIXRegistry,
-		aggregatorMode:             flowaggregatorconfig.AggregatorModeAggregate,
-		observationDomainID:        testObservationDomainID,
-		clock:                      clock.RealClock{},
-	}
-	createElementList(flowaggregatorconfig.AggregatorModeAggregate, true, false, false, mockIPFIXRegistry)
-	ipfixExporter.elementsV4, _ = ipfixExporter.prepareElements(false)
-
-	setCount := 0
-	mockIPFIXBufferedExp.EXPECT().AddRecord(gomock.Cond(func(record ipfixentities.Record) bool {
-		return record.GetTemplateID() == testTemplateIDv4
-	})).Do(func(record ipfixentities.Record) {
-		setCount += 1
-	}).Return(nil).Times(2)
-	// connection will be closed when updating the external flow collector address
-	mockIPFIXBufferedExp.EXPECT().Flush()
-	mockIPFIXExpProc.EXPECT().CloseConnToCollector()
-
-	require.NoError(t, ipfixExporter.AddRecord(record, false))
-	assert.Equal(t, 1, setCount, "Invalid number of flow sets sent by exporter")
-
-	const newAddr = "newAddr"
-	const newProto = "newProto"
-	const newTemplateRefreshTimeout = 1200 * time.Second
-	config.FlowCollector.Address = fmt.Sprintf("%s:%s", newAddr, newProto)
-	config.FlowCollector.RecordFormat = "JSON"
-	config.FlowCollector.IncludeK8sNames = ptr.To(false)
-	config.FlowCollector.IncludeK8sUIDs = ptr.To(true)
-	config.FlowCollector.TemplateRefreshTimeout = newTemplateRefreshTimeout.String()
-	config.FlowCollector.TLS.Enable = true
-	config.FlowCollector.TLS.MinVersion = "VersionTLS13"
-
-	ipfixExporter.UpdateOptions(&options.Options{
-		Config:                     config,
-		ExternalFlowCollectorAddr:  newAddr,
-		ExternalFlowCollectorProto: newProto,
-		TemplateRefreshTimeout:     newTemplateRefreshTimeout,
-	})
-
-	assert.Equal(t, newAddr, ipfixExporter.externalFlowCollectorAddr)
-	assert.Equal(t, newProto, ipfixExporter.externalFlowCollectorProto)
-	assert.True(t, ipfixExporter.sendJSONRecord)
-	assert.Equal(t, newTemplateRefreshTimeout, ipfixExporter.templateRefreshTimeout)
-	assert.True(t, ipfixExporter.tls.enable)
-	assert.Equal(t, uint16(tls.VersionTLS13), ipfixExporter.tls.minVersion)
-	assert.False(t, ipfixExporter.includeK8sNames)
-	assert.True(t, ipfixExporter.includeK8sUIDs)
-
-	// We have switched includeK8sNames and includeK8sUIDs
-	createElementList(flowaggregatorconfig.AggregatorModeAggregate, false, true, false, mockIPFIXRegistry)
-	ipfixExporter.elementsV4, _ = ipfixExporter.prepareElements(false)
-
-	require.NoError(t, ipfixExporter.AddRecord(record, false))
-	assert.Equal(t, 2, setCount, "Invalid number of flow sets sent by exporter")
-}
-
-func TestIPFIXExporter_Stop(t *testing.T) {
-	ctrl := gomock.NewController(t)
-
-	mockIPFIXExpProc := ipfixtesting.NewMockIPFIXExportingProcess(ctrl)
-	mockIPFIXBufferedExp := ipfixtesting.NewMockIPFIXBufferedExporter(ctrl)
-	mockIPFIXRegistry := ipfixtesting.NewMockIPFIXRegistry(ctrl)
-	record := flowaggregatortesting.PrepareTestFlowRecord(true)
-
-	initIPFIXExportingProcessSaved := initIPFIXExportingProcess
-	initIPFIXExportingProcess = func(exporter *IPFIXExporter) error {
-		exporter.exportingProcess = mockIPFIXExpProc
-		exporter.bufferedExporter = mockIPFIXBufferedExp
-		return nil
-	}
-	defer func() {
-		initIPFIXExportingProcess = initIPFIXExportingProcessSaved
-	}()
-
-	config := &flowaggregatorconfig.FlowAggregatorConfig{
-		FlowCollector: flowaggregatorconfig.FlowCollectorConfig{
-			Enable:              true,
-			Address:             "",
-			ObservationDomainID: ptr.To[uint32](testObservationDomainID),
-			RecordFormat:        "IPFIX",
-		},
-	}
-	ipfixExporter := &IPFIXExporter{
-		config:                     config.FlowCollector,
 		externalFlowCollectorAddr:  "",
 		externalFlowCollectorProto: "",
 		includeK8sNames:            true,
@@ -237,15 +202,13 @@ func TestIPFIXExporter_Stop(t *testing.T) {
 	mockIPFIXBufferedExp.EXPECT().AddRecord(gomock.Cond(func(record ipfixentities.Record) bool {
 		return record.GetTemplateID() == testTemplateIDv4
 	})).Return(nil)
-	mockIPFIXBufferedExp.EXPECT().Flush()
-	mockIPFIXExpProc.EXPECT().CloseConnToCollector()
+	mockIPFIXBufferedExp.EXPECT().Flush().Return(nil)
 
-	require.NoError(t, ipfixExporter.AddRecord(record, false))
-	ipfixExporter.Stop()
-	assert.Nil(t, ipfixExporter.exportingProcess)
+	require.NoError(t, ipfixExporter.sendRecord(record, false))
+	require.NoError(t, ipfixExporter.flush())
 }
 
-func TestIPFIXExporter_AddRecord(t *testing.T) {
+func TestIPFIXExporter_sendRecord(t *testing.T) {
 	testCases := []struct {
 		aggregatorMode flowaggregatorconfig.AggregatorMode
 		isIPv6         bool
@@ -301,7 +264,7 @@ func TestIPFIXExporter_AddRecord(t *testing.T) {
 				// TODO: also validate record contents?
 				return record.GetTemplateID() == testTemplateID && !elems[len(elems)-1].IsValueEmpty()
 			})).Return(nil)
-			assert.NoError(t, ipfixExporter.AddRecord(record, tc.isIPv6))
+			assert.NoError(t, ipfixExporter.sendRecord(record, tc.isIPv6))
 		})
 	}
 }
@@ -327,7 +290,7 @@ func TestIPFIXExporter_initIPFIXExportingProcess_Error(t *testing.T) {
 		clock:                      clock.RealClock{},
 	}
 
-	assert.Error(t, ipfixExporter.AddRecord(record, false))
+	assert.Error(t, ipfixExporter.sendRecord(record, false))
 }
 
 func TestIPFIXExporter_sendRecord_Error(t *testing.T) {
@@ -357,9 +320,8 @@ func TestIPFIXExporter_sendRecord_Error(t *testing.T) {
 	mockIPFIXBufferedExp.EXPECT().AddRecord(gomock.Cond(func(record ipfixentities.Record) bool {
 		return record.GetTemplateID() == testTemplateIDv4
 	})).Return(fmt.Errorf("send error"))
-	mockIPFIXExpProc.EXPECT().CloseConnToCollector()
 
-	assert.Error(t, ipfixExporter.AddRecord(record, false))
+	assert.Error(t, ipfixExporter.sendRecord(record, false))
 }
 
 func createElementList(mode flowaggregatorconfig.AggregatorMode, includeK8sNames, includeK8sUIDs, isIPv6 bool, mockIPFIXRegistry *ipfixtesting.MockIPFIXRegistry) []ipfixentities.InfoElementWithValue {
@@ -579,7 +541,7 @@ func TestInitExportingProcess(t *testing.T) {
 		createElementList(flowaggregatorconfig.AggregatorModeAggregate, true, false, false, mockIPFIXRegistry)
 		createElementList(flowaggregatorconfig.AggregatorModeAggregate, true, false, true, mockIPFIXRegistry)
 		exp := NewIPFIXExporter(clusterUUID, clusterUUID.String(), opt, mockIPFIXRegistry)
-		defer exp.Stop()
+		defer exp.reset()
 		err = exp.initExportingProcess()
 		assert.NoError(t, err)
 		select {
@@ -624,7 +586,7 @@ func TestInitExportingProcess(t *testing.T) {
 		createElementList(flowaggregatorconfig.AggregatorModeAggregate, true, false, false, mockIPFIXRegistry)
 		createElementList(flowaggregatorconfig.AggregatorModeAggregate, true, false, true, mockIPFIXRegistry)
 		exp := NewIPFIXExporter(clusterUUID, clusterUUID.String(), opt, mockIPFIXRegistry)
-		defer exp.Stop()
+		defer exp.reset()
 		err = exp.initExportingProcess()
 		assert.NoError(t, err)
 		select {
