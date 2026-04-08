@@ -278,10 +278,10 @@ func (d *AntreaIPAM) Add(args *invoke.Args, k8sArgs *types.K8sArgs, networkConfi
 	}
 
 	var allocErrs []error
-	if hasIPv4Pool && !allocatedIPv4 && lastIPv4ExhaustedErr != nil {
+	if hasIPv4Pool && !allocatedIPv4 {
 		allocErrs = append(allocErrs, fmt.Errorf("failed to allocate IPv4 address for Pod %s/%s: %w", string(k8sArgs.K8S_POD_NAMESPACE), string(k8sArgs.K8S_POD_NAME), lastIPv4ExhaustedErr))
 	}
-	if hasIPv6Pool && !allocatedIPv6 && lastIPv6ExhaustedErr != nil {
+	if hasIPv6Pool && !allocatedIPv6 {
 		allocErrs = append(allocErrs, fmt.Errorf("failed to allocate IPv6 address for Pod %s/%s: %w", string(k8sArgs.K8S_POD_NAMESPACE), string(k8sArgs.K8S_POD_NAME), lastIPv6ExhaustedErr))
 	}
 	if len(allocErrs) > 0 {
