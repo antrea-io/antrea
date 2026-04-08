@@ -547,13 +547,25 @@ func (pc *podConfigurator) disconnectInterfaceFromOVS(containerConfig *interface
 		}
 	}
 
-	// TODO: handle error and introduce garbage collection for failure on deletion
+	// Remove container configuration from cache BEFORE deleting the OVS port.
+	// This ordering is critical to prevent a race condition where:
+	// 1. DeletePort() releases the ofPort number back to OVS
+	// 2. A new Pod gets assigned the same ofPort number
+	// 3. A concurrent NetworkPolicy reconciliation queries the interface store
+	//    and gets the stale interface with the now-reused ofPort
+	// 4. NetworkPolicy flows are incorrectly applied to the new Pod
+	// By removing from cache first, getOFPorts() in the NetworkPolicy reconciler
+	// will never see an interface whose ofPort has been released.
+	pc.ifaceStore.DeleteInterface(containerConfig)
+
+	// Delete the OVS port. If this fails, the interface is already removed from
+	// cache which is acceptable since the Pod is being deleted. The OVS port will
+	// be cleaned up by garbage collection or on the next agent restart.
 	if err := pc.ovsBridgeClient.DeletePort(containerConfig.PortUUID); err != nil {
+		klog.ErrorS(err, "Failed to delete OVS port for container, will rely on GC", "container", containerID, "interface", containerConfig.InterfaceName)
 		return fmt.Errorf("failed to delete OVS port for container %s interface %s: %v", containerID, containerConfig.InterfaceName, err)
 	}
 
-	// Remove container configuration from cache.
-	pc.ifaceStore.DeleteInterface(containerConfig)
 	if !pc.isSecondaryNetwork {
 		event := agenttypes.PodUpdate{
 			PodName:      containerConfig.PodName,
