@@ -248,7 +248,7 @@ func (b *OFBridge) DeleteGroupAll() error {
 	return b.ofSwitch.Send(groupMod)
 }
 
-func (b *OFBridge) GetMeterStats(handleMeterStatsReply func(meterID int, packetCount int64)) error {
+func (b *OFBridge) GetMeterStats(handleMeterStatsReply func(meterID int, packetCount uint64)) error {
 	const OFPM_ALL = 0xffffffff // Represents all meters
 	mpMeterStatsReq := openflow15.NewMpRequest(openflow15.MultipartType_MeterStats)
 	meterMPReq := openflow15.NewMeterMultipartRequest(OFPM_ALL)
@@ -263,7 +263,7 @@ func (b *OFBridge) GetMeterStats(handleMeterStatsReply func(meterID int, packetC
 				for _, entry := range reply.Body {
 					stats := entry.(*openflow15.MeterStats)
 					if len(stats.BandStats) > 0 {
-						handleMeterStatsReply(int(stats.MeterId), int64(stats.BandStats[0].PacketBandCount))
+						handleMeterStatsReply(int(stats.MeterId), stats.BandStats[0].PacketBandCount)
 					}
 				}
 			}

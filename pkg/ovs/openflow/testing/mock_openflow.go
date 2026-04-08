@@ -1,4 +1,4 @@
-// Copyright 2025 Antrea Authors
+// Copyright 2026 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -202,7 +202,7 @@ func (mr *MockBridgeMockRecorder) DumpTableStatus() *gomock.Call {
 }
 
 // GetMeterStats mocks base method.
-func (m *MockBridge) GetMeterStats(handleMeterStatsReply func(int, int64)) error {
+func (m *MockBridge) GetMeterStats(handleMeterStatsReply func(int, uint64)) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetMeterStats", handleMeterStatsReply)
 	ret0, _ := ret[0].(error)
