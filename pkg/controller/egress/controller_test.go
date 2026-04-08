@@ -938,20 +938,41 @@ func TestUpdateEgressAllocatedCondition(t *testing.T) {
 func TestDeleteEgress_Tombstone(t *testing.T) {
 	egress := newEgress("egressA", "", "", &metav1.LabelSelector{}, nil, nil)
 	egress.UID = "uidA"
-	controller := newController(nil, []runtime.Object{egress})
 
-	// Simulate the controller having processed the Egress ADD event.
-	controller.addEgress(egress)
-	_, found, _ := controller.egressGroupStore.Get(egress.Name)
-	require.True(t, found)
+	t.Run("valid tombstone", func(t *testing.T) {
+		controller := newController(nil, []runtime.Object{egress})
 
-	// Deliver the delete as a tombstone, as the informer does after a watch reconnect.
-	controller.deleteEgress(cache.DeletedFinalStateUnknown{
-		Key: egress.Name,
-		Obj: egress,
+		// Simulate the controller having processed the Egress ADD event.
+		controller.addEgress(egress)
+		_, found, _ := controller.egressGroupStore.Get(egress.Name)
+		require.True(t, found)
+
+		// Deliver the delete as a cache.DeletedFinalStateUnknown tombstone, as the
+		// informer does after a watch reconnect. This exercises the tombstone path
+		// in deleteEgress rather than the direct *Egress type assertion.
+		controller.deleteEgress(cache.DeletedFinalStateUnknown{
+			Key: egress.Name,
+			Obj: egress,
+		})
+
+		// The EgressGroup must be removed and the name enqueued for sync, same as a
+		// normal delete.
+		_, found, _ = controller.egressGroupStore.Get(egress.Name)
+		assert.False(t, found)
+		assert.Equal(t, 1, controller.queue.Len())
 	})
 
-	_, found, _ = controller.egressGroupStore.Get(egress.Name)
-	assert.False(t, found)
-	assert.Equal(t, 1, controller.queue.Len())
+	t.Run("invalid tombstone object does not panic", func(t *testing.T) {
+		controller := newController(nil, nil)
+
+		// Passing a tombstone whose inner object is not an *Egress must not panic
+		// and must not enqueue anything.
+		assert.NotPanics(t, func() {
+			controller.deleteEgress(cache.DeletedFinalStateUnknown{
+				Key: egress.Name,
+				Obj: "unexpected-type",
+			})
+		})
+		assert.Equal(t, 0, controller.queue.Len())
+	})
 }
