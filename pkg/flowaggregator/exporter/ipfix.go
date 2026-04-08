@@ -390,6 +390,7 @@ func (e *IPFIXExporter) makeIPFIXRecord(flow *flowpb.Flow, isIPv6 bool) ipfixent
 		setUUID(flow.K8S.EgressNodeUid)
 	}
 	setIPAddress(flow.K8S.DestinationClusterIp)
+	setIPAddress(flow.K8S.DestinationServiceIp)
 	if e.aggregatorMode == flowaggregatorconfig.AggregatorModeAggregate {
 		// Add Antrea source stats fields
 		next().SetUnsigned64Value(flow.Aggregation.StatsFromSource.PacketTotalCount)

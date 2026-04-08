@@ -80,11 +80,13 @@ func TestGetFlowRecord(t *testing.T) {
 			assert.Equal(t, "10.10.0.79", flowRecord.SourceIP)
 			assert.Equal(t, "10.10.0.80", flowRecord.DestinationIP)
 			assert.Equal(t, "10.10.1.10", flowRecord.DestinationClusterIP)
+			assert.Equal(t, "10.10.1.10", flowRecord.DestinationServiceIP)
 			assert.Equal(t, "172.18.0.1", flowRecord.EgressIP)
 		} else {
 			assert.Equal(t, "2001:0:3238:dfe1:63::fefb", flowRecord.SourceIP)
 			assert.Equal(t, "2001:0:3238:dfe1:63::fefc", flowRecord.DestinationIP)
 			assert.Equal(t, "2001:0:3238:dfe1:64::a", flowRecord.DestinationClusterIP)
+			assert.Equal(t, "2001:0:3238:dfe1:64::a", flowRecord.DestinationServiceIP)
 			assert.Equal(t, "2001:0:3238:dfe1::ac12:1", flowRecord.EgressIP)
 		}
 	}
