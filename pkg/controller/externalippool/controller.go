@@ -420,12 +420,12 @@ func (c *ExternalIPPoolController) deleteExternalIPPool(obj interface{}) {
 	if !ok {
 		tombstone, ok := obj.(cache.DeletedFinalStateUnknown)
 		if !ok {
-			klog.ErrorS(nil, "Error decoding object when deleting ExternalIPPool, invalid type", "object", obj)
+			klog.V(2).InfoS("Error decoding object when deleting ExternalIPPool, invalid type", "object", obj)
 			return
 		}
 		pool, ok = tombstone.Obj.(*antreacrds.ExternalIPPool)
 		if !ok {
-			klog.ErrorS(nil, "Error decoding object tombstone when deleting ExternalIPPool, invalid type", "object", tombstone.Obj)
+			klog.V(2).InfoS("Error decoding object tombstone when deleting ExternalIPPool, invalid type", "object", tombstone.Obj)
 			return
 		}
 	}

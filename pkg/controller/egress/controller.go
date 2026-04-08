@@ -463,12 +463,12 @@ func (c *EgressController) deleteEgress(obj interface{}) {
 	if !ok {
 		tombstone, ok := obj.(cache.DeletedFinalStateUnknown)
 		if !ok {
-			klog.ErrorS(nil, "Error decoding object when deleting Egress, invalid type", "object", obj)
+			klog.V(2).InfoS("Error decoding object when deleting Egress, invalid type", "object", obj)
 			return
 		}
 		egress, ok = tombstone.Obj.(*egressv1beta1.Egress)
 		if !ok {
-			klog.ErrorS(nil, "Error decoding object tombstone when deleting Egress, invalid type", "object", tombstone.Obj)
+			klog.V(2).InfoS("Error decoding object tombstone when deleting Egress, invalid type", "object", tombstone.Obj)
 			return
 		}
 	}

@@ -120,12 +120,12 @@ func (c *Controller) deleteLabelIdentity(obj interface{}) {
 	if !ok {
 		tombstone, ok := obj.(cache.DeletedFinalStateUnknown)
 		if !ok {
-			klog.ErrorS(nil, "Error decoding object when deleting LabelIdentity, invalid type", "object", obj)
+			klog.V(2).InfoS("Error decoding object when deleting LabelIdentity, invalid type", "object", obj)
 			return
 		}
 		labelIdentity, ok = tombstone.Obj.(*mcv1alpha1.LabelIdentity)
 		if !ok {
-			klog.ErrorS(nil, "Error decoding object tombstone when deleting LabelIdentity, invalid type", "object", tombstone.Obj)
+			klog.V(2).InfoS("Error decoding object tombstone when deleting LabelIdentity, invalid type", "object", tombstone.Obj)
 			return
 		}
 	}

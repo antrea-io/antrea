@@ -123,12 +123,12 @@ func (c *ExternalNodeController) enqueueExternalNodeDelete(obj interface{}) {
 	if !ok {
 		tombstone, ok := obj.(cache.DeletedFinalStateUnknown)
 		if !ok {
-			klog.ErrorS(nil, "Error decoding object when deleting ExternalNode, invalid type", "object", obj)
+			klog.V(2).InfoS("Error decoding object when deleting ExternalNode, invalid type", "object", obj)
 			return
 		}
 		en, ok = tombstone.Obj.(*v1alpha1.ExternalNode)
 		if !ok {
-			klog.ErrorS(nil, "Error decoding object tombstone when deleting ExternalNode, invalid type", "object", tombstone.Obj)
+			klog.V(2).InfoS("Error decoding object tombstone when deleting ExternalNode, invalid type", "object", tombstone.Obj)
 			return
 		}
 	}
