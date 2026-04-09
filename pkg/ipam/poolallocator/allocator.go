@@ -16,6 +16,7 @@ package poolallocator
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net"
 	"reflect"
@@ -31,6 +32,9 @@ import (
 	"k8s.io/klog/v2"
 	utilnet "k8s.io/utils/net"
 )
+
+// ErrPoolExhausted is returned when an IPPool has no available IPs left.
+var ErrPoolExhausted = errors.New("pool exhausted")
 
 // IPPoolAllocator is responsible for allocating IPs from IP set defined in IPPool CRD.
 // The will update CRD usage accordingly.
@@ -358,8 +362,7 @@ func (a *IPPoolAllocator) AllocateNext(state v1beta1.IPAddressPhase, owner v1bet
 		}
 
 		if index == len(allocators) {
-			// Failed to find matching range
-			return fmt.Errorf("failed to allocate IP: Pool %s is exhausted", a.ipPoolName)
+			return fmt.Errorf("failed to allocate IP: Pool %s is exhausted: %w", a.ipPoolName, ErrPoolExhausted)
 		}
 
 		subnetInfo = &ipPool.Spec.SubnetInfo
@@ -619,7 +622,12 @@ func (a *IPPoolAllocator) getReservedIP(reservedOwner v1beta1.IPAddressOwner) (n
 	return nil, nil
 }
 
-func (a IPPoolAllocator) Total() int {
+// Name returns the name of the IPPool managed by this allocator.
+func (a *IPPoolAllocator) Name() string {
+	return a.ipPoolName
+}
+
+func (a *IPPoolAllocator) Total() int {
 	_, allocators, err := a.getPoolAndInitIPAllocators()
 	if err != nil {
 		return 0
