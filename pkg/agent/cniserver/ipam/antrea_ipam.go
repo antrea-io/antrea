@@ -369,7 +369,6 @@ func (d *AntreaIPAM) SecondaryNetworkAllocate(podOwner *crdv1b1.PodOwner, networ
 			}
 		}()
 
-		var lastExhaustedErr error
 		for _, p := range ipamConf.IPPools {
 			allocator, err := d.controller.getPoolAllocatorByName(p)
 			if err != nil {
@@ -383,7 +382,6 @@ func (d *AntreaIPAM) SecondaryNetworkAllocate(podOwner *crdv1b1.PodOwner, networ
 			if err != nil {
 				if errors.Is(err, poolallocator.ErrPoolExhausted) {
 					klog.InfoS("IPPool exhausted, trying next pool", "IPPool", p)
-					lastExhaustedErr = err
 					continue
 				}
 				return nil, err
@@ -406,10 +404,7 @@ func (d *AntreaIPAM) SecondaryNetworkAllocate(podOwner *crdv1b1.PodOwner, networ
 			}
 		}
 		if len(result.IPs) == 0 {
-			if lastExhaustedErr != nil {
-				return nil, fmt.Errorf("failed to allocate any IP for Pod %s/%s: %w", podOwner.Namespace, podOwner.Name, lastExhaustedErr)
-			}
-			return nil, fmt.Errorf("failed to allocate any IP for Pod %s/%s", podOwner.Namespace, podOwner.Name)
+			return nil, fmt.Errorf("failed to allocate any IP for Pod %s/%s: all IPPools exhausted", podOwner.Namespace, podOwner.Name)
 		}
 		// No failed allocation, so do not release allocated IPs.
 		allocatorsToRelease = nil

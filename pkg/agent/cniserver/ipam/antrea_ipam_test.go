@@ -753,13 +753,13 @@ func TestAntreaIPAMDriver(t *testing.T) {
 	require.NoError(t, err, "multiv4-pool-b should not have any allocation for multiv4-1")
 
 	// Pool exists but no v4 IP is available: the second allocation should
-	// return an error that preserves the underlying pool-exhausted cause.
+	// return an error indicating all IPPools are exhausted.
 	testAdd("exhaustv4-1", false, expectedIPInfo{ip: "10.20.0.10", gw: "10.20.0.1", mask: "ffffff00"})
 	owns, _, err = testDriver.Add(cniArgsMap["exhaustv4-2"], k8sArgsMap["exhaustv4-2"], networkConfig)
 	assert.True(t, owns)
 	require.Error(t, err, "expected error in Add call")
-	assert.ErrorContains(t, err, "pool exhausted")
-	assert.ErrorContains(t, err, "exhaustv4-pool")
+	assert.ErrorContains(t, err, "failed to allocate IPv4 address")
+	assert.ErrorContains(t, err, "all IPPools exhausted")
 
 	// Two IPv4 Pools: the first Pod gets an IP from pool-a; the second Pod
 	// should fall back to pool-b because pool-a is now exhausted.
