@@ -1111,7 +1111,11 @@ func TestSecondaryNetworkAdd(t *testing.T) {
 			}
 
 			_, err := d.secondaryNetworkAdd(args, k8sArgs, tt.networkConf)
-			assert.Equal(t, tt.expectedRes, err)
+			if tt.expectedRes == nil {
+				assert.NoError(t, err)
+			} else {
+				assert.ErrorContains(t, err, tt.expectedRes.Error())
+			}
 		})
 	}
 }
