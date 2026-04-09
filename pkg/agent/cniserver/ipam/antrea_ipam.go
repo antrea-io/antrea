@@ -205,7 +205,6 @@ func (d *AntreaIPAM) Add(args *invoke.Args, k8sArgs *types.K8sArgs, networkConfi
 
 	var hasIPv4Pool, hasIPv6Pool bool
 	var allocatedIPv4, allocatedIPv6 bool
-	var lastIPv4ExhaustedErr, lastIPv6ExhaustedErr error
 	for _, allocator := range allocators {
 		var requestedIP net.IP
 		if allocator.IPVersion == utilnet.IPv4 {
@@ -240,11 +239,6 @@ func (d *AntreaIPAM) Add(args *invoke.Args, k8sArgs *types.K8sArgs, networkConfi
 		if err != nil {
 			if errors.Is(err, poolallocator.ErrPoolExhausted) {
 				klog.V(4).InfoS("IPPool exhausted, trying next pool", "IPPool", allocator.Name(), "Pod", string(k8sArgs.K8S_POD_NAME))
-				if allocator.IPVersion == utilnet.IPv4 {
-					lastIPv4ExhaustedErr = err
-				} else {
-					lastIPv6ExhaustedErr = err
-				}
 				err = nil
 				continue
 			}
@@ -279,10 +273,10 @@ func (d *AntreaIPAM) Add(args *invoke.Args, k8sArgs *types.K8sArgs, networkConfi
 
 	var allocErrs []error
 	if hasIPv4Pool && !allocatedIPv4 {
-		allocErrs = append(allocErrs, fmt.Errorf("failed to allocate IPv4 address for Pod %s/%s: %w", string(k8sArgs.K8S_POD_NAMESPACE), string(k8sArgs.K8S_POD_NAME), lastIPv4ExhaustedErr))
+		allocErrs = append(allocErrs, fmt.Errorf("failed to allocate IPv4 address for Pod %s/%s: all IPPools exhausted", string(k8sArgs.K8S_POD_NAMESPACE), string(k8sArgs.K8S_POD_NAME)))
 	}
 	if hasIPv6Pool && !allocatedIPv6 {
-		allocErrs = append(allocErrs, fmt.Errorf("failed to allocate IPv6 address for Pod %s/%s: %w", string(k8sArgs.K8S_POD_NAMESPACE), string(k8sArgs.K8S_POD_NAME), lastIPv6ExhaustedErr))
+		allocErrs = append(allocErrs, fmt.Errorf("failed to allocate IPv6 address for Pod %s/%s: all IPPools exhausted", string(k8sArgs.K8S_POD_NAMESPACE), string(k8sArgs.K8S_POD_NAME)))
 	}
 	if len(allocErrs) > 0 {
 		return true, nil, errors.Join(allocErrs...)
