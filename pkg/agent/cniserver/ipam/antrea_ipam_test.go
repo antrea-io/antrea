@@ -959,6 +959,64 @@ func TestSecondaryNetworkAdd(t *testing.T) {
 			},
 		},
 		{
+			name: "Add secondary network with dual-stack pools but IPv4 exhausted",
+			networkConf: &argtypes.NetworkConfig{
+				CNIVersion: testCNIVersion,
+				IPAM: &argtypes.IPAMConfig{
+					IPPools: []string{
+						"exhaustv4-pool",
+						testOrange,
+					},
+				},
+			},
+			expectedRes: fmt.Errorf("failed to allocate IPv4 address for Pod test-ns/test-pod: all IPPools exhausted"),
+			initFunc: func(stopCh chan struct{}) *AntreaIPAM {
+				k8sClient, crdClient := initTestClients()
+
+				informerFactory := informers.NewSharedInformerFactory(k8sClient, 0)
+				crdInformerFactory := crdinformers.NewSharedInformerFactory(crdClient, 0)
+				listOptions := func(options *metav1.ListOptions) {
+					options.FieldSelector = fields.OneTermEqualSelector("spec.nodeName", "fakeNode").String()
+				}
+				localPodInformer := coreinformers.NewFilteredPodInformer(
+					k8sClient,
+					metav1.NamespaceAll,
+					0,
+					cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc},
+					listOptions,
+				)
+
+				antreaIPAMController, err := InitializeAntreaIPAMController(crdClient,
+					informerFactory.Core().V1().Namespaces(),
+					crdInformerFactory.Crd().V1beta1().IPPools(),
+					localPodInformer,
+					true,
+				)
+				require.NoError(t, err, "Expected no error in initialization for Antrea IPAM Controller")
+				createIPPools(crdClient)
+
+				go antreaIPAMController.Run(stopCh)
+				crdInformerFactory.Start(stopCh)
+				crdInformerFactory.WaitForCacheSync(stopCh)
+
+				allocator, err := antreaIPAMController.getPoolAllocatorByName("exhaustv4-pool")
+				require.NoError(t, err)
+				_, _, err = allocator.AllocateNext(crdv1b1.IPAddressPhaseAllocated, crdv1b1.IPAddressOwner{
+					Pod: &crdv1b1.PodOwner{
+						Name:        "prealloc-pod",
+						Namespace:   "prealloc-ns",
+						ContainerID: "prealloc-container",
+					},
+				})
+				require.NoError(t, err)
+
+				return &AntreaIPAM{
+					controller:      antreaIPAMController,
+					controllerMutex: sync.RWMutex{},
+				}
+			},
+		},
+		{
 			name: "Add secondary network with conflicting VLAN IDs",
 			networkConf: &argtypes.NetworkConfig{
 				CNIVersion: testCNIVersion,

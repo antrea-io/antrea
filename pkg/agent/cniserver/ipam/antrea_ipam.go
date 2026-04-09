@@ -369,10 +369,18 @@ func (d *AntreaIPAM) SecondaryNetworkAllocate(podOwner *crdv1b1.PodOwner, networ
 			}
 		}()
 
+		var hasIPv4Pool, hasIPv6Pool bool
+		var allocatedIPv4, allocatedIPv6 bool
 		for _, p := range ipamConf.IPPools {
 			allocator, err := d.controller.getPoolAllocatorByName(p)
 			if err != nil {
 				return nil, err
+			}
+
+			if allocator.IPVersion == utilnet.IPv4 {
+				hasIPv4Pool = true
+			} else {
+				hasIPv6Pool = true
 			}
 
 			var ip net.IP
@@ -390,6 +398,12 @@ func (d *AntreaIPAM) SecondaryNetworkAllocate(podOwner *crdv1b1.PodOwner, networ
 				allocatorsToRelease = append(allocatorsToRelease, allocator)
 			}
 
+			if allocator.IPVersion == utilnet.IPv4 {
+				allocatedIPv4 = true
+			} else {
+				allocatedIPv6 = true
+			}
+
 			gwIP := net.ParseIP(subnetInfo.Gateway)
 			ipConfig, _ := generateIPConfig(ip, int(subnetInfo.PrefixLength), gwIP)
 			// CNI spec 0.2.0 and below support only one v4 and one v6 address. But we
@@ -403,8 +417,15 @@ func (d *AntreaIPAM) SecondaryNetworkAllocate(podOwner *crdv1b1.PodOwner, networ
 				return nil, fmt.Errorf("IPPools have conflicting VLAN IDs %d and %d for dual-stack allocation", result.VLANID, vlanID)
 			}
 		}
-		if len(result.IPs) == 0 {
-			return nil, fmt.Errorf("failed to allocate any IP for Pod %s/%s: all IPPools exhausted", podOwner.Namespace, podOwner.Name)
+		var allocErrs []error
+		if hasIPv4Pool && !allocatedIPv4 {
+			allocErrs = append(allocErrs, fmt.Errorf("failed to allocate IPv4 address for Pod %s/%s: all IPPools exhausted", podOwner.Namespace, podOwner.Name))
+		}
+		if hasIPv6Pool && !allocatedIPv6 {
+			allocErrs = append(allocErrs, fmt.Errorf("failed to allocate IPv6 address for Pod %s/%s: all IPPools exhausted", podOwner.Namespace, podOwner.Name))
+		}
+		if len(allocErrs) > 0 {
+			return nil, errors.Join(allocErrs...)
 		}
 		// No failed allocation, so do not release allocated IPs.
 		allocatorsToRelease = nil
