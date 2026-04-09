@@ -32,6 +32,13 @@ type AccessPort struct {
 	Tag uint32 `json:"tag"`
 }
 
+// TrunkPort is an OVS port in trunk mode, allowing only the specified VLAN IDs.
+// When Trunks is empty, all VLANs are allowed (OVS default trunk behavior).
+type TrunkPort struct {
+	Port
+	Trunks []interface{} `json:"trunks,omitempty"`
+}
+
 type Interface struct {
 	Name          string        `json:"name"`
 	Type          string        `json:"type,omitempty"`

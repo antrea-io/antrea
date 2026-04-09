@@ -24,3 +24,8 @@ func (c *Controller) Initialize() error {
 func (c *Controller) Restore() {
 	// Not supported on Windows.
 }
+
+func (c *Controller) reconcileBridge() error {
+	// Not supported on Windows.
+	return nil
+}
