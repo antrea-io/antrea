@@ -49,6 +49,7 @@ type FlowRecord struct {
 	DestinationPodNamespace              string
 	DestinationNodeName                  string
 	DestinationClusterIP                 string
+	DestinationServiceIP                 string
 	DestinationServicePort               uint16
 	DestinationServicePortName           string
 	IngressNetworkPolicyName             string
@@ -144,6 +145,7 @@ func GetFlowRecord(record *flowpb.Flow) (*FlowRecord, error) {
 		DestinationPodNamespace:           record.K8S.DestinationPodNamespace,
 		DestinationNodeName:               record.K8S.DestinationNodeName,
 		DestinationClusterIP:              ipAddressAsString(record.K8S.DestinationClusterIp),
+		DestinationServiceIP:              ipAddressAsString(record.K8S.DestinationServiceIp),
 		DestinationServicePort:            uint16(record.K8S.DestinationServicePort),
 		DestinationServicePortName:        record.K8S.DestinationServicePortName,
 		IngressNetworkPolicyName:          record.K8S.IngressNetworkPolicyName,
