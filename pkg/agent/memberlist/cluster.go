@@ -89,6 +89,7 @@ type ClusterNodeEventHandler func(objName string)
 type Interface interface {
 	ShouldSelectIP(ip string, pool string, filters ...func(node string) bool) (bool, error)
 	SelectNodeForIP(ip, externalIPPool string, filters ...func(string) bool) (string, error)
+	SelectNodeForDualStackIPs(ipv4, ipv4pool, ipv6, ipv6pool string, filters ...func(string) bool) (string, error)
 	AliveNodes() sets.Set[string]
 	AddClusterEventHandler(handler ClusterNodeEventHandler)
 }
@@ -567,6 +568,34 @@ func (c *Cluster) SelectNodeForIP(ip, externalIPPool string, filters ...func(str
 		return "", fmt.Errorf("local Node consistentHashMap has not synced, ExternalIPPool %s", externalIPPool)
 	}
 	node := consistentHash.GetWithFilters(ip, filters...)
+	if node == "" {
+		return "", ErrNoNodeAvailable
+	}
+	return node, nil
+}
+
+// For dual-stack IPs, we select the closest item based on the IPv4 IP among the nodes which both ipv4pool and ipv6pool contains.
+func (c *Cluster) SelectNodeForDualStackIPs(ipv4, ipv4pool, ipv6, ipv6pool string, filters ...func(string) bool) (string, error) {
+	c.consistentHashRWMutex.RLock()
+	defer c.consistentHashRWMutex.RUnlock()
+
+	hashIPv4, existHashIPv4 := c.consistentHashMap[ipv4pool]
+	if !existHashIPv4 {
+		return "", fmt.Errorf("local Node consistentHashMap has not synced, ExternalIPPool %s", ipv4pool)
+	}
+	hashIPv6, existHashIPv6 := c.consistentHashMap[ipv6pool]
+	if !existHashIPv6 {
+		return "", fmt.Errorf("local Node consistentHashMap has not synced, ExternalIPPool %s", ipv6pool)
+	}
+
+	isSelectedForIPv6 := func(node string) bool {
+		return hashIPv6.Has(node)
+	}
+
+	allFilters := make([]func(string) bool, len(filters)+1)
+	copy(allFilters, filters)
+	allFilters[len(filters)] = isSelectedForIPv6
+	node := hashIPv4.GetWithFilters(ipv4, allFilters...)
 	if node == "" {
 		return "", ErrNoNodeAvailable
 	}
