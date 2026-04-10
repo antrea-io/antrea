@@ -67,16 +67,15 @@ foo: abc
 			wantErr: true,
 		},
 		{
+			// go-yaml v3 unconditionally rejects duplicate keys per the YAML 1.2
+			// spec. This explicitly breaks from v2's silent last-wins behavior.
 			name: "duplicate field",
 			data: []byte(`
 foo: abc
 bar: 123
 foo: abcd
 `),
-			expectedV: &Config{
-				Foo: "abcd",
-				Bar: 123,
-			},
+			wantErr: true,
 		},
 		{
 			name: "unknown field",
