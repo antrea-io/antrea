@@ -150,6 +150,17 @@ func OfctlFlowMatch(flowList []string, tableName string, flow *ExpectFlow) bool 
 	return false
 }
 
+// trimOVSFlowLine matches historical pkg/ovs/ovsctl.trimFlowStr: find " table" and
+// return the substring from the "t" of "table=..." onward so each dump line is shaped
+// like the output ovsctl used to return. pkg/ovs/ovsctl no longer applies this trim, so
+// the integration test helpers do it before formatFlowDump.
+func trimOVSFlowLine(line string) string {
+	if idx := strings.Index(line, " table"); idx >= 0 {
+		return line[idx+1:]
+	}
+	return line
+}
+
 func formatFlowDump(rawFlows []string) []string {
 	flowList := []string{}
 	for _, flow := range rawFlows {
@@ -168,6 +179,9 @@ func OfctlDumpFlows(ovsCtlClient ovsctl.OVSCtlClient, args ...string) ([]string,
 	if err != nil {
 		return nil, err
 	}
+	for i := range rawFlows {
+		rawFlows[i] = trimOVSFlowLine(rawFlows[i])
+	}
 	return formatFlowDump(rawFlows), nil
 }
 
@@ -176,6 +190,9 @@ func OfctlDumpTableFlows(ovsCtlClient ovsctl.OVSCtlClient, table string) ([]stri
 	if err != nil {
 		return nil, err
 	}
+	for i := range rawFlows {
+		rawFlows[i] = trimOVSFlowLine(rawFlows[i])
+	}
 	return formatFlowDump(rawFlows), nil
 }
 
@@ -183,6 +200,9 @@ func OfctlDumpTableFlowsWithoutName(ovsCtlClient ovsctl.OVSCtlClient, table uint
 	rawFlows, err := ovsCtlClient.DumpFlowsWithoutTableNames(fmt.Sprintf("table=%d", table))
 	if err != nil {
 		return nil, err
+	}
+	for i := range rawFlows {
+		rawFlows[i] = trimOVSFlowLine(rawFlows[i])
 	}
 	return formatFlowDump(rawFlows), nil
 }

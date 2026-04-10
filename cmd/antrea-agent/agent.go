@@ -281,6 +281,10 @@ func run(o *Options) error {
 	// NodeRouteController. Additional requirements may be added in the future.
 	flowRestoreCompleteWait := utilwait.NewGroup()
 
+	// staleFlowsDeletedWait starts with one pending unit (Increment); the stale-flow cleanup
+	// goroutine calls Done when deletion completes.
+	staleFlowsDeletedWait := utilwait.NewGroup().Increment()
+
 	// set up signal capture: the first SIGTERM / SIGINT signal is handled gracefully and will
 	// cause the stopCh channel to be closed; if another signal is received before the program
 	// exits, we will force exit.
@@ -327,6 +331,7 @@ func run(o *Options) error {
 		serviceConfig,
 		podNetworkWait,
 		flowRestoreCompleteWait,
+		staleFlowsDeletedWait,
 		stopCh,
 		o.nodeType,
 		o.config.ExternalNode.ExternalNodeNamespace,
@@ -974,7 +979,10 @@ func run(o *Options) error {
 	// statsCollector collects stats and reports to the antrea-controller periodically. For now it's only used for
 	// NetworkPolicy stats and Multicast stats.
 	if features.DefaultFeatureGate.Enabled(features.NetworkPolicyStats) {
-		statsCollector := stats.NewCollector(antreaClientProvider, ofClient, networkPolicyController, mcastController)
+		// staleFlowsDeletedWait: the collector waits inside Run until the initializer's stale-flow
+		// cleanup calls Done, so we do not report stats for flows from the prior round (see
+		// Initializer.initOpenFlowPipeline and flowRestoreCompleteWait / podNetworkWait).
+		statsCollector := stats.NewCollector(antreaClientProvider, ofClient, networkPolicyController, mcastController, staleFlowsDeletedWait)
 		go statsCollector.Run(stopCh)
 	}
 

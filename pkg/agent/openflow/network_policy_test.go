@@ -76,6 +76,9 @@ var (
 	icmpType8    = int32(8)
 	icmpCode0    = int32(0)
 
+	// testNPMCMetricCookieRound0 is the OVS cookie field prefix for NetworkPolicy metric flows at agent round 0.
+	testNPMCMetricCookieRound0 = fmt.Sprintf("cookie=0x%x,", cookie.NewAllocator(0).Request(cookie.NetworkPolicy).Raw())
+
 	mockFeaturePodConnectivity = featurePodConnectivity{}
 	mockFeatureNetworkPolicy   = featureNetworkPolicy{enableAntreaPolicy: true}
 	activeFeatures             = []feature{&mockFeaturePodConnectivity, &mockFeatureNetworkPolicy}
@@ -1058,11 +1061,67 @@ func prepareClient(ctrl *gomock.Controller, dualStack bool) *client {
 	return c
 }
 
+func TestParseMulticastMetricFlow(t *testing.T) {
+	for name, tc := range map[string]struct {
+		flow        string
+		wantID      uint32
+		wantPackets uint64
+		wantBytes   uint64
+		wantErr     error
+	}{
+		"egress allow": {
+			flow:        "table=MulticastEgressMetric, n_packets=11, n_bytes=1562, priority=200,reg0=0x400/0x400,reg3=0x4 actions=goto_table:MulticastEgressPodMetric",
+			wantID:      4,
+			wantPackets: 11,
+			wantBytes:   1562,
+		},
+		"egress drop": {
+			flow:        "table=MulticastEgressMetric, n_packets=230, n_bytes=32660, priority=200,reg0=0x400/0x400,reg3=0x3 actions=drop",
+			wantID:      3,
+			wantPackets: 230,
+			wantBytes:   32660,
+		},
+		"ingress allow": {
+			flow:        "table=MulticastIngressMetric, n_packets=18, n_bytes=780, priority=200,reg0=0x400/0x400,reg3=0x3 actions=resubmit(,MulticastOutput)",
+			wantID:      3,
+			wantPackets: 18,
+			wantBytes:   780,
+		},
+		"stale routing-like flow without reg3": {
+			flow:    "table=MulticastEgressMetric, n_packets=289, n_bytes=2385154, priority=200,ip,nw_dst=10.0.0.0/24 actions=resubmit(,SNATMark)",
+			wantErr: errSkipMulticastMetricFlow,
+		},
+		"malformed reg3": {
+			flow:    "table=MulticastEgressMetric, n_packets=1, n_bytes=74, priority=200,reg0=0x400/0x400,reg3=notahex actions=drop",
+			wantErr: errSkipMulticastMetricFlow,
+		},
+		"reg3 zero": {
+			flow:    "table=MulticastEgressMetric, n_packets=1, n_bytes=74, priority=200,reg0=0x400/0x400,reg3=0x0 actions=drop",
+			wantErr: errSkipMulticastMetricFlow,
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			id, m, err := parseMulticastMetricFlow(parseFlowToMap(tc.flow))
+			if tc.wantErr != nil {
+				require.ErrorIs(t, err, tc.wantErr)
+				require.Equal(t, uint32(0), id)
+				require.Equal(t, types.RuleMetric{}, m)
+			} else {
+				require.NoError(t, err)
+				require.Equal(t, tc.wantID, id)
+				require.Equal(t, tc.wantPackets, m.Packets)
+				require.Equal(t, tc.wantBytes, m.Bytes)
+			}
+		})
+	}
+}
+
 func TestParseMetricFlow(t *testing.T) {
 	for name, tc := range map[string]struct {
-		flow   string
-		rule   uint32
-		metric types.RuleMetric
+		flow        string
+		rule        uint32
+		metric      types.RuleMetric
+		wantSkipErr bool
 	}{
 		"Drop flow": {
 			flow: "table=101, n_packets=9, n_bytes=666, priority=200,reg0=0x100000/0x100000,reg3=0x5 actions=drop",
@@ -1072,6 +1131,18 @@ func TestParseMetricFlow(t *testing.T) {
 				Packets:  9,
 				Sessions: 9,
 			},
+		},
+		"Drop flow without reg3": {
+			flow:        "table=101, n_packets=1, n_bytes=64, priority=200,reg0=0x100000/0x100000,ip actions=drop",
+			wantSkipErr: true,
+		},
+		"Drop flow malformed reg3": {
+			flow:        "table=101, n_packets=1, n_bytes=64, priority=200,reg0=0x100000/0x100000,reg3=notahex actions=drop",
+			wantSkipErr: true,
+		},
+		"Drop flow reg3 zero": {
+			flow:        "table=101, n_packets=1, n_bytes=64, priority=200,reg0=0x100000/0x100000,reg3=0x0 actions=drop",
+			wantSkipErr: true,
 		},
 		"New allow flow": {
 			flow: "table=101, n_packets=123, n_bytes=456, priority=200,ct_state=+new,ct_label=0x112345678/0xffffffff00000000,ip actions=goto_table:105",
@@ -1091,42 +1162,68 @@ func TestParseMetricFlow(t *testing.T) {
 				Sessions: 0,
 			},
 		},
+		"Stale L3 routing flow without ct_label": {
+			// A stale flow from a prior agent version that occupied the same table ID
+			// after a pipeline table shift. It has neither reg0 nor ct_label and must
+			// be skipped without panicking.
+			flow:        "table=101, n_packets=289, n_bytes=2385154, priority=200,ip,nw_dst=193.5.2.0/24 actions=resubmit(,SNATMark)",
+			wantSkipErr: true,
+		},
+		"Allow flow malformed ct_label missing slash": {
+			flow:        "table=101, n_packets=1, n_bytes=10, priority=200,ct_state=+new,ct_label=0x5abcde,ip actions=goto_table:105",
+			wantSkipErr: true,
+		},
+		"Allow flow malformed ct_label empty hex segment": {
+			flow:        "table=101, n_packets=1, n_bytes=10, priority=200,ct_state=+new,ct_label=0x/0xffffffff,ip actions=goto_table:105",
+			wantSkipErr: true,
+		},
 	} {
 		t.Run(name, func(t *testing.T) {
-			rule, metric := parseMetricFlow(parseFlowToMap(tc.flow))
-			require.Equal(t, tc.rule, rule)
-			require.Equal(t, tc.metric.Bytes, metric.Bytes)
-			require.Equal(t, tc.metric.Sessions, metric.Sessions)
-			require.Equal(t, tc.metric.Packets, metric.Packets)
+			rule, metric, err := parseMetricFlow(parseFlowToMap(tc.flow))
+			if tc.wantSkipErr {
+				require.ErrorIs(t, err, errSkipNetworkPolicyMetricFlow)
+				require.Equal(t, uint32(0), rule)
+				require.Equal(t, types.RuleMetric{}, metric)
+			} else {
+				require.NoError(t, err)
+				require.Equal(t, tc.rule, rule)
+				require.Equal(t, tc.metric.Bytes, metric.Bytes)
+				require.Equal(t, tc.metric.Sessions, metric.Sessions)
+				require.Equal(t, tc.metric.Packets, metric.Packets)
+			}
 		})
 	}
 }
 
 func TestNetworkPolicyMetrics(t *testing.T) {
+	dumpErr := errors.New("injected ovs dump failure")
 	tests := []struct {
-		name         string
-		egressFlows  []string
-		ingressFlows []string
-		want         map[uint32]*types.RuleMetric
+		name           string
+		roundNum       uint64
+		egressFlows    []string
+		ingressFlows   []string
+		want           map[uint32]*types.RuleMetric
+		egressDumpErr  bool
+		ingressDumpErr bool
 	}{
 		{
 			name: "Normal flows",
 			egressFlows: []string{
-				"table=61, n_packets=1, n_bytes=74, priority=200,ct_state=+new,ct_label=0x200000000/0xffffffff00000000,ip actions=goto_table:70",
-				"table=61, n_packets=11, n_bytes=1661, priority=200,ct_state=-new,ct_label=0x200000000/0xffffffff00000000,ip actions=goto_table:70",
-				"table=61, n_packets=0, n_bytes=0, priority=200,ct_state=+new,ct_label=0x600000000/0xffffffff00000000,ip actions=goto_table:70",
-				"table=61, n_packets=0, n_bytes=0, priority=200,ct_state=-new,ct_label=0x600000000/0xffffffff00000000,ip actions=goto_table:70",
-				"table=61, n_packets=4, n_bytes=336, priority=200,reg0=0x100000/0x100000,reg3=0x4 actions=drop",
-				"table=61, n_packets=0, n_bytes=0, priority=200,reg0=0x100000/0x100000,reg3=0x8 actions=drop",
+				testNPMCMetricCookieRound0 + "table=61, n_packets=1, n_bytes=74, priority=200,ct_state=+new,ct_label=0x200000000/0xffffffff00000000,ip actions=goto_table:70",
+				testNPMCMetricCookieRound0 + "table=61, n_packets=11, n_bytes=1661, priority=200,ct_state=-new,ct_label=0x200000000/0xffffffff00000000,ip actions=goto_table:70",
+				testNPMCMetricCookieRound0 + "table=61, n_packets=0, n_bytes=0, priority=200,ct_state=+new,ct_label=0x600000000/0xffffffff00000000,ip actions=goto_table:70",
+				testNPMCMetricCookieRound0 + "table=61, n_packets=0, n_bytes=0, priority=200,ct_state=-new,ct_label=0x600000000/0xffffffff00000000,ip actions=goto_table:70",
+				testNPMCMetricCookieRound0 + "table=61, n_packets=4, n_bytes=336, priority=200,reg0=0x100000/0x100000,reg3=0x4 actions=drop",
+				testNPMCMetricCookieRound0 + "table=61, n_packets=0, n_bytes=0, priority=200,reg0=0x100000/0x100000,reg3=0x8 actions=drop",
 				"table=61, n_packets=1502362, n_bytes=601635949, priority=0 actions=goto_table:70",
 			},
 			ingressFlows: []string{
-				"table=101, n_packets=1, n_bytes=74, priority=200,ct_state=+new,ct_label=0x1/0xffffffff,ip actions=resubmit(,105)",
-				"table=101, n_packets=11, n_bytes=1661, priority=200,ct_state=-new,ct_label=0x1/0xffffffff,ip actions=resubmit(,105)",
-				"table=101, n_packets=2, n_bytes=148, priority=200,ct_state=+new,ct_label=0x5/0xffffffff,ip actions=resubmit(,105)",
-				"table=101, n_packets=12, n_bytes=943, priority=200,ct_state=-new,ct_label=0x5/0xffffffff,ip actions=resubmit(,105)",
-				"table=101, n_packets=0, n_bytes=0, priority=200,reg0=0x100000/0x100000,reg3=0x3 actions=drop",
-				"table=101, n_packets=4, n_bytes=338, priority=200,reg0=0x100000/0x100000,reg3=0xb actions=drop",
+				testNPMCMetricCookieRound0 + "table=101, n_packets=1, n_bytes=74, priority=200,ct_state=+new,ct_label=0x1/0xffffffff,ip actions=resubmit(,105)",
+				testNPMCMetricCookieRound0 + "table=101, n_packets=11, n_bytes=1661, priority=200,ct_state=-new,ct_label=0x1/0xffffffff,ip actions=resubmit(,105)",
+				testNPMCMetricCookieRound0 + "table=101, n_packets=2, n_bytes=148, priority=200,ct_state=+new,ct_label=0x5/0xffffffff,ip actions=resubmit(,105)",
+				testNPMCMetricCookieRound0 + "table=101, n_packets=12, n_bytes=943, priority=200,ct_state=-new,ct_label=0x5/0xffffffff,ip actions=resubmit(,105)",
+				testNPMCMetricCookieRound0 + "table=101, n_packets=0, n_bytes=0, priority=200,reg0=0x100000/0x100000,reg3=0x3 actions=drop",
+				testNPMCMetricCookieRound0 + "table=101, n_packets=4, n_bytes=338, priority=200,reg0=0x100000/0x100000,reg3=0xb actions=drop",
 				"table=101, n_packets=1407190, n_bytes=509746586, priority=0 actions=resubmit(,105)",
 			},
 			want: map[uint32]*types.RuleMetric{
@@ -1141,27 +1238,60 @@ func TestNetworkPolicyMetrics(t *testing.T) {
 			},
 		},
 		{
+			name: "Stale flows mixed with normal metric flows",
+			egressFlows: []string{
+				// Valid metric flows.
+				testNPMCMetricCookieRound0 + "table=61, n_packets=1, n_bytes=74, priority=200,ct_state=+new,ct_label=0x200000000/0xffffffff00000000,ip actions=goto_table:70",
+				testNPMCMetricCookieRound0 + "table=61, n_packets=11, n_bytes=1661, priority=200,ct_state=-new,ct_label=0x200000000/0xffffffff00000000,ip actions=goto_table:70",
+				// Stale L3 routing flows from a prior pipeline version (no ct_label, no reg0).
+				// No matching cookie: skipped before parse (no panic, no bogus stats).
+				"table=61, n_packets=289, n_bytes=2385154, priority=200,ip,nw_dst=193.5.2.0/24 actions=resubmit(,SNATMark)",
+				"table=61, n_packets=31, n_bytes=2465, priority=200,ip,nw_dst=193.5.1.0/24 actions=mod_dl_dst:1e:48:f1:41:e2:15,resubmit(,EgressMark)",
+			},
+			ingressFlows: []string{},
+			want: map[uint32]*types.RuleMetric{
+				2: {Bytes: 1735, Sessions: 1, Packets: 12},
+			},
+		},
+		{
+			name:     "Skips flows by cookie when round or category does not match",
+			roundNum: 2,
+			// round=2, category=NetworkPolicy (see pkg/agent/openflow/cookie/allocator.go).
+			egressFlows: []string{
+				"cookie=0x2020000000000, table=61, n_packets=1, n_bytes=74, priority=200,ct_state=+new,ct_label=0x200000000/0xffffffff00000000,ip actions=goto_table:70",
+				"cookie=0x2020000000000, table=61, n_packets=11, n_bytes=1661, priority=200,ct_state=-new,ct_label=0x200000000/0xffffffff00000000,ip actions=goto_table:70",
+				// Prior round, Pod connectivity cookie — not an NP metric flow for this round.
+				"cookie=0x1010000000000, table=61, n_packets=999, n_bytes=9999, priority=200,ip,nw_dst=10.0.0.0/24 actions=resubmit(,SNATMark)",
+				// Current round but Pod connectivity category.
+				"cookie=0x2010000000000, table=61, n_packets=888, n_bytes=8888, priority=200,ip,nw_dst=10.1.0.0/24 actions=resubmit(,SNATMark)",
+			},
+			ingressFlows: []string{},
+			want: map[uint32]*types.RuleMetric{
+				2: {Bytes: 1735, Sessions: 1, Packets: 12},
+			},
+		},
+		{
 			name: "Flows with traceflow flows",
 			egressFlows: []string{
 				"table=61, n_packets=0, n_bytes=0, hard_timeout=300, priority=202,ip,reg0=0x100000/0x100000,reg3=0x4,nw_tos=28 actions=controller(max_len=65535,id=15768)",
 				"table=61, n_packets=0, n_bytes=0, hard_timeout=300, priority=202,ip,reg0=0x100000/0x100000,reg3=0x8,nw_tos=28 actions=controller(max_len=65535,id=15768)",
-				"table=61, n_packets=1, n_bytes=74, priority=200,ct_state=+new,ct_label=0x200000000/0xffffffff00000000,ip actions=goto_table:70",
-				"table=61, n_packets=11, n_bytes=1661, priority=200,ct_state=-new,ct_label=0x200000000/0xffffffff00000000,ip actions=goto_table:70",
-				"table=61, n_packets=0, n_bytes=0, priority=200,ct_state=+new,ct_label=0x600000000/0xffffffff00000000,ip actions=goto_table:70",
-				"table=61, n_packets=0, n_bytes=0, priority=200,ct_state=-new,ct_label=0x600000000/0xffffffff00000000,ip actions=goto_table:70",
-				"table=61, n_packets=4, n_bytes=336, priority=200,reg0=0x100000/0x100000,reg3=0x4 actions=drop",
-				"table=61, n_packets=0, n_bytes=0, priority=200,reg0=0x100000/0x100000,reg3=0x8 actions=drop",
+				testNPMCMetricCookieRound0 + "table=61, n_packets=1, n_bytes=74, priority=200,ct_state=+new,ct_label=0x200000000/0xffffffff00000000,ip actions=goto_table:70",
+				testNPMCMetricCookieRound0 + "table=61, n_packets=11, n_bytes=1661, priority=200,ct_state=-new,ct_label=0x200000000/0xffffffff00000000,ip actions=goto_table:70",
+				testNPMCMetricCookieRound0 + "table=61, n_packets=0, n_bytes=0, priority=200,ct_state=+new,ct_label=0x600000000/0xffffffff00000000,ip actions=goto_table:70",
+				testNPMCMetricCookieRound0 + "table=61, n_packets=0, n_bytes=0, priority=200,ct_state=-new,ct_label=0x600000000/0xffffffff00000000,ip actions=goto_table:70",
+				testNPMCMetricCookieRound0 + "table=61, n_packets=4, n_bytes=336, priority=200,reg0=0x100000/0x100000,reg3=0x4 actions=drop",
+				testNPMCMetricCookieRound0 + "table=61, n_packets=0, n_bytes=0, priority=200,reg0=0x100000/0x100000,reg3=0x8 actions=drop",
 				"table=61, n_packets=1502362, n_bytes=601635949, priority=0 actions=goto_table:70",
 			},
 			ingressFlows: []string{
 				"table=101, n_packets=0, n_bytes=0, hard_timeout=300, priority=202,ip,reg0=0x100000/0x100000,reg3=0x3,nw_tos=28 actions=controller(max_len=65535,id=15768)",
 				"table=101, n_packets=0, n_bytes=0, hard_timeout=300, priority=202,ip,reg0=0x100000/0x100000,reg3=0xb,nw_tos=28 actions=controller(max_len=65535,id=15768)",
-				"table=101, n_packets=1, n_bytes=74, priority=200,ct_state=+new,ct_label=0x1/0xffffffff,ip actions=resubmit(,105)",
-				"table=101, n_packets=11, n_bytes=1661, priority=200,ct_state=-new,ct_label=0x1/0xffffffff,ip actions=resubmit(,105)",
-				"table=101, n_packets=2, n_bytes=148, priority=200,ct_state=+new,ct_label=0x5/0xffffffff,ip actions=resubmit(,105)",
-				"table=101, n_packets=12, n_bytes=943, priority=200,ct_state=-new,ct_label=0x5/0xffffffff,ip actions=resubmit(,105)",
-				"table=101, n_packets=0, n_bytes=0, priority=200,reg0=0x100000/0x100000,reg3=0x3 actions=drop",
-				"table=101, n_packets=4, n_bytes=338, priority=200,reg0=0x100000/0x100000,reg3=0xb actions=drop",
+				testNPMCMetricCookieRound0 + "table=101, n_packets=1, n_bytes=74, priority=200,ct_state=+new,ct_label=0x1/0xffffffff,ip actions=resubmit(,105)",
+				testNPMCMetricCookieRound0 + "table=101, n_packets=11, n_bytes=1661, priority=200,ct_state=-new,ct_label=0x1/0xffffffff,ip actions=resubmit(,105)",
+				testNPMCMetricCookieRound0 + "table=101, n_packets=2, n_bytes=148, priority=200,ct_state=+new,ct_label=0x5/0xffffffff,ip actions=resubmit(,105)",
+				testNPMCMetricCookieRound0 + "table=101, n_packets=12, n_bytes=943, priority=200,ct_state=-new,ct_label=0x5/0xffffffff,ip actions=resubmit(,105)",
+				testNPMCMetricCookieRound0 + "table=101, n_packets=0, n_bytes=0, priority=200,reg0=0x100000/0x100000,reg3=0x3 actions=drop",
+				testNPMCMetricCookieRound0 + "table=101, n_packets=4, n_bytes=338, priority=200,reg0=0x100000/0x100000,reg3=0xb actions=drop",
 				"table=101, n_packets=1407190, n_bytes=509746586, priority=0 actions=resubmit(,105)",
 			},
 			want: map[uint32]*types.RuleMetric{
@@ -1173,6 +1303,54 @@ func TestNetworkPolicyMetrics(t *testing.T) {
 				5:  {Bytes: 1091, Sessions: 2, Packets: 14},
 				3:  {Bytes: 0, Sessions: 0, Packets: 0},
 				11: {Bytes: 338, Sessions: 4, Packets: 4},
+			},
+		},
+		{
+			name:           "DumpTableFlows error on both NP metric tables",
+			roundNum:       0,
+			egressDumpErr:  true,
+			ingressDumpErr: true,
+			want:           map[uint32]*types.RuleMetric{},
+		},
+		{
+			name:          "DumpTableFlows error on egress only",
+			roundNum:      0,
+			egressDumpErr: true,
+			ingressFlows: []string{
+				testNPMCMetricCookieRound0 + "table=101, n_packets=1, n_bytes=74, priority=200,ct_state=+new,ct_label=0x1/0xffffffff,ip actions=resubmit(,105)",
+				testNPMCMetricCookieRound0 + "table=101, n_packets=11, n_bytes=1661, priority=200,ct_state=-new,ct_label=0x1/0xffffffff,ip actions=resubmit(,105)",
+				testNPMCMetricCookieRound0 + "table=101, n_packets=2, n_bytes=148, priority=200,ct_state=+new,ct_label=0x5/0xffffffff,ip actions=resubmit(,105)",
+				testNPMCMetricCookieRound0 + "table=101, n_packets=12, n_bytes=943, priority=200,ct_state=-new,ct_label=0x5/0xffffffff,ip actions=resubmit(,105)",
+				testNPMCMetricCookieRound0 + "table=101, n_packets=0, n_bytes=0, priority=200,ct_state=+new,ct_label=0x600000000/0xffffffff00000000,ip actions=resubmit(,105)",
+				testNPMCMetricCookieRound0 + "table=101, n_packets=0, n_bytes=0, priority=200,ct_state=-new,ct_label=0x600000000/0xffffffff00000000,ip actions=resubmit(,105)",
+				testNPMCMetricCookieRound0 + "table=101, n_packets=0, n_bytes=0, priority=200,reg0=0x100000/0x100000,reg3=0x3 actions=drop",
+				testNPMCMetricCookieRound0 + "table=101, n_packets=4, n_bytes=338, priority=200,reg0=0x100000/0x100000,reg3=0xb actions=drop",
+			},
+			want: map[uint32]*types.RuleMetric{
+				1:  {Bytes: 1735, Sessions: 1, Packets: 12},
+				5:  {Bytes: 1091, Sessions: 2, Packets: 14},
+				6:  {Bytes: 0, Sessions: 0, Packets: 0},
+				3:  {Bytes: 0, Sessions: 0, Packets: 0},
+				11: {Bytes: 338, Sessions: 4, Packets: 4},
+			},
+		},
+		{
+			name:           "DumpTableFlows error on ingress only",
+			roundNum:       0,
+			ingressDumpErr: true,
+			egressFlows: []string{
+				testNPMCMetricCookieRound0 + "table=61, n_packets=1, n_bytes=74, priority=200,ct_state=+new,ct_label=0x200000000/0xffffffff00000000,ip actions=goto_table:70",
+				testNPMCMetricCookieRound0 + "table=61, n_packets=11, n_bytes=1661, priority=200,ct_state=-new,ct_label=0x200000000/0xffffffff00000000,ip actions=goto_table:70",
+				testNPMCMetricCookieRound0 + "table=61, n_packets=0, n_bytes=0, priority=200,ct_state=+new,ct_label=0x600000000/0xffffffff00000000,ip actions=goto_table:70",
+				testNPMCMetricCookieRound0 + "table=61, n_packets=0, n_bytes=0, priority=200,ct_state=-new,ct_label=0x600000000/0xffffffff00000000,ip actions=goto_table:70",
+				testNPMCMetricCookieRound0 + "table=61, n_packets=4, n_bytes=336, priority=200,reg0=0x100000/0x100000,reg3=0x4 actions=drop",
+				testNPMCMetricCookieRound0 + "table=61, n_packets=0, n_bytes=0, priority=200,reg0=0x100000/0x100000,reg3=0x8 actions=drop",
+			},
+			want: map[uint32]*types.RuleMetric{
+				2: {Bytes: 1735, Sessions: 1, Packets: 12},
+				6: {Bytes: 0, Sessions: 0, Packets: 0},
+				4: {Bytes: 336, Sessions: 4, Packets: 4},
+				8: {Bytes: 0, Sessions: 0, Packets: 0},
 			},
 		},
 	}
@@ -1184,9 +1362,21 @@ func TestNetworkPolicyMetrics(t *testing.T) {
 			c = prepareClient(ctrl, false)
 			mockOVSClient := ovsctltest.NewMockOVSCtlClient(ctrl)
 			c.ovsctlClient = mockOVSClient
+			c.roundInfo = types.RoundInfo{RoundNum: tt.roundNum}
+			round := tt.roundNum % (1 << cookie.BitwidthRound)
+			npCookie := cookie.NewAllocator(round).Request(cookie.NetworkPolicy).Raw()
+			flowFilter := fmt.Sprintf("cookie=0x%x/0x%x", npCookie, ^uint64(0))
+			egressFlows, egressErr := tt.egressFlows, error(nil)
+			if tt.egressDumpErr {
+				egressFlows, egressErr = nil, dumpErr
+			}
+			ingressFlows, ingressErr := tt.ingressFlows, error(nil)
+			if tt.ingressDumpErr {
+				ingressFlows, ingressErr = nil, dumpErr
+			}
 			gomock.InOrder(
-				mockOVSClient.EXPECT().DumpTableFlows(EgressMetricTable.ofTable.GetID()).Return(tt.egressFlows, nil),
-				mockOVSClient.EXPECT().DumpTableFlows(IngressMetricTable.ofTable.GetID()).Return(tt.ingressFlows, nil),
+				mockOVSClient.EXPECT().DumpTableFlows(EgressMetricTable.ofTable.GetID(), flowFilter).Return(egressFlows, egressErr),
+				mockOVSClient.EXPECT().DumpTableFlows(IngressMetricTable.ofTable.GetID(), flowFilter).Return(ingressFlows, ingressErr),
 			)
 			got := c.NetworkPolicyMetrics()
 			assert.Equal(t, tt.want, got)
