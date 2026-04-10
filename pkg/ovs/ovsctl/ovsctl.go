@@ -292,7 +292,7 @@ func (c *ovsCtlClient) parseFlowEntries(flowDump []byte) ([]string, error) {
 	scanner.Split(bufio.ScanLines)
 	flowList := []string{}
 	for scanner.Scan() {
-		flow := trimFlowStr(scanner.Text())
+		flow := strings.TrimSpace(scanner.Text())
 		// Skip the non-flow line, which is printed when using parameter "--no-names" in tests.
 		if strings.Contains(flow, "NXST_FLOW reply") || strings.Contains(flow, "OFPST_FLOW reply") {
 			continue
@@ -310,7 +310,7 @@ func (c *ovsCtlClient) DumpMatchedFlow(matchStr string) (string, error) {
 	scanner := bufio.NewScanner(strings.NewReader(string(flowDump)))
 	scanner.Split(bufio.ScanLines)
 	for scanner.Scan() {
-		flowStr := trimFlowStr(scanner.Text())
+		flowStr := strings.TrimSpace(scanner.Text())
 		// ovs-ofctl dump-flows can return multiple flows that match matchStr, here we
 		// check and return only the one that exactly matches matchStr (no extra match
 		// conditions).
@@ -325,6 +325,18 @@ func (c *ovsCtlClient) DumpMatchedFlow(matchStr string) (string, error) {
 
 func (c *ovsCtlClient) DumpTableFlows(table uint8) ([]string, error) {
 	return c.DumpFlows(fmt.Sprintf("table=%d", table))
+}
+
+func (c *ovsCtlClient) DumpTableFlowsWithFilters(table uint8, filters ...string) ([]string, error) {
+	match := fmt.Sprintf("table=%d", table)
+	for _, f := range filters {
+		f = strings.TrimSpace(f)
+		if f == "" {
+			continue
+		}
+		match += "," + strings.TrimPrefix(f, ",")
+	}
+	return c.DumpFlows(match)
 }
 
 func (c *ovsCtlClient) DumpGroup(groupID uint32) (string, error) {
@@ -410,11 +422,6 @@ func (c *ovsCtlClient) SetPortNoFlood(ofport int) error {
 
 func (c *ovsCtlClient) RunOfctlCmd(cmd string, args ...string) ([]byte, error) {
 	return c.ovsOfctlRunner.RunOfctlCmd(cmd, args...)
-}
-
-// trimFlowStr removes undesirable fields from the flow string.
-func trimFlowStr(flowStr string) string {
-	return flowStr[strings.Index(flowStr, " table")+1:]
 }
 
 func flowExactMatch(matchStr, flowStr string) bool {
