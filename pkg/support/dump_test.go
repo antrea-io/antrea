@@ -24,7 +24,7 @@ import (
 	"github.com/spf13/afero"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"go.yaml.in/yaml/v2"
+	"go.yaml.in/yaml/v3"
 	"k8s.io/utils/exec"
 	exectesting "k8s.io/utils/exec/testing"
 )
