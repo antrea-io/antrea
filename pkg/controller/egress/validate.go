@@ -17,7 +17,7 @@ package egress
 import (
 	"encoding/json"
 	"fmt"
-	"net"
+	"net/netip"
 
 	admv1 "k8s.io/api/admission/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -73,8 +73,8 @@ func (c *EgressController) ValidateEgress(review *admv1.AdmissionReview) *admv1.
 		if newEgress.Spec.EgressIP == "" || newEgress.Spec.ExternalIPPool == "" {
 			return true, ""
 		}
-		ip := net.ParseIP(newEgress.Spec.EgressIP)
-		if ip == nil {
+		ip, err := netip.ParseAddr(newEgress.Spec.EgressIP)
+		if err != nil {
 			return false, fmt.Sprintf("IP %s is not valid", newEgress.Spec.EgressIP)
 		}
 		if !c.externalIPAllocator.IPPoolExists(newEgress.Spec.ExternalIPPool) {

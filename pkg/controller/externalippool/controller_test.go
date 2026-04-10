@@ -16,7 +16,7 @@ package externalippool
 
 import (
 	"context"
-	"net"
+	"net/netip"
 	"sort"
 	"testing"
 	"time"
@@ -77,7 +77,7 @@ func TestAllocateIPFromPool(t *testing.T) {
 			pool string
 		}
 		allocateFrom         string
-		expectedIP           string
+		expectedIP           netip.Addr
 		expectError          bool
 		expectedIPPoolStatus []antreacrds.IPPoolUsage
 	}{
@@ -88,7 +88,7 @@ func TestAllocateIPFromPool(t *testing.T) {
 			},
 			allocatedIP:  nil,
 			allocateFrom: "eip1",
-			expectedIP:   "10.10.10.2",
+			expectedIP:   netip.MustParseAddr("10.10.10.2"),
 			expectError:  false,
 			expectedIPPoolStatus: []antreacrds.IPPoolUsage{
 				{Total: 2, Used: 1},
@@ -107,7 +107,6 @@ func TestAllocateIPFromPool(t *testing.T) {
 				{"10.10.10.3", "eip1"},
 			},
 			allocateFrom: "eip1",
-			expectedIP:   "",
 			expectError:  true,
 			expectedIPPoolStatus: []antreacrds.IPPoolUsage{
 				{Total: 2, Used: 2},
@@ -120,7 +119,6 @@ func TestAllocateIPFromPool(t *testing.T) {
 			},
 			allocatedIP:  nil,
 			allocateFrom: "eip2",
-			expectedIP:   "",
 			expectError:  true,
 			expectedIPPoolStatus: []antreacrds.IPPoolUsage{
 				{Total: 2, Used: 0},
@@ -141,11 +139,11 @@ func TestAllocateIPFromPool(t *testing.T) {
 			go controller.Run(stopCh)
 			require.True(t, cache.WaitForCacheSync(stopCh, controller.HasSynced))
 			for _, alloc := range tt.allocatedIP {
-				require.NoError(t, controller.UpdateIPAllocation(alloc.pool, net.ParseIP(alloc.ip)))
+				require.NoError(t, controller.UpdateIPAllocation(alloc.pool, netip.MustParseAddr(alloc.ip)))
 			}
 			ipGot, err := controller.AllocateIPFromPool(tt.allocateFrom)
 			assert.Equal(t, tt.expectError, err != nil)
-			assert.Equal(t, net.ParseIP(tt.expectedIP), ipGot)
+			assert.Equal(t, tt.expectedIP, ipGot)
 			for idx, pool := range tt.ipPools {
 				checkExternalIPPoolStatus(t, controller, pool.Name, tt.expectedIPPoolStatus[idx])
 			}
@@ -219,9 +217,9 @@ func TestReleaseIP(t *testing.T) {
 			go controller.Run(stopCh)
 			require.True(t, cache.WaitForCacheSync(stopCh, controller.HasSynced))
 			for _, alloc := range tt.allocatedIP {
-				require.NoError(t, controller.UpdateIPAllocation(alloc.pool, net.ParseIP(alloc.ip)))
+				require.NoError(t, controller.UpdateIPAllocation(alloc.pool, netip.MustParseAddr(alloc.ip)))
 			}
-			err := controller.ReleaseIP(tt.ipPoolToRelease, net.ParseIP(tt.ipToRelease))
+			err := controller.ReleaseIP(tt.ipPoolToRelease, netip.MustParseAddr(tt.ipToRelease))
 			assert.Equal(t, tt.expectError, err != nil)
 			for idx, pool := range tt.ipPools {
 				checkExternalIPPoolStatus(t, controller, pool.Name, tt.expectedIPPoolStatus[idx])
@@ -335,7 +333,7 @@ func TestConsumersRestoreIPAllocation(t *testing.T) {
 		allocatedIPs := []IPAllocation{
 			{
 				IPPoolName: "eip1",
-				IP:         net.ParseIP("10.10.10.2"),
+				IP:         netip.MustParseAddr("10.10.10.2"),
 			},
 		}
 		restored := controller.RestoreIPAllocations(allocatedIPs)
@@ -348,7 +346,7 @@ func TestConsumersRestoreIPAllocation(t *testing.T) {
 		allocatedIPs := []IPAllocation{
 			{
 				IPPoolName: "eip1",
-				IP:         net.ParseIP("10.10.10.3"),
+				IP:         netip.MustParseAddr("10.10.10.3"),
 			},
 		}
 		restored := controller.RestoreIPAllocations(allocatedIPs)
@@ -414,7 +412,7 @@ func TestIPPoolHasIP(t *testing.T) {
 		name           string
 		ipPools        []*antreacrds.ExternalIPPool
 		ipPoolToCheck  string
-		ipToCheck      net.IP
+		ipToCheck      netip.Addr
 		expectedExists bool
 	}{
 		{
@@ -423,7 +421,7 @@ func TestIPPoolHasIP(t *testing.T) {
 				newExternalIPPool("eip1", "", "10.10.10.2", "10.10.10.3"),
 			},
 			ipPoolToCheck:  "eip1",
-			ipToCheck:      net.ParseIP("10.10.10.2"),
+			ipToCheck:      netip.MustParseAddr("10.10.10.2"),
 			expectedExists: true,
 		},
 		{
@@ -432,7 +430,7 @@ func TestIPPoolHasIP(t *testing.T) {
 				newExternalIPPool("eip1", "", "10.10.10.2", "10.10.10.3"),
 			},
 			ipPoolToCheck:  "eip1",
-			ipToCheck:      net.ParseIP("10.10.10.1"),
+			ipToCheck:      netip.MustParseAddr("10.10.10.1"),
 			expectedExists: false,
 		},
 	}
@@ -490,14 +488,14 @@ func TestExternalIPPoolController_RestoreIPAllocations(t *testing.T) {
 						Name: "egress-1",
 					},
 					"eip1",
-					net.ParseIP("10.10.10.2"),
+					netip.MustParseAddr("10.10.10.2"),
 				},
 				{
 					v1.ObjectReference{
 						Name: "egress-2",
 					},
 					"eip2",
-					net.ParseIP("10.10.11.2"),
+					netip.MustParseAddr("10.10.11.2"),
 				},
 			},
 			expectedSucceeded: []IPAllocation{
@@ -506,14 +504,14 @@ func TestExternalIPPoolController_RestoreIPAllocations(t *testing.T) {
 						Name: "egress-1",
 					},
 					"eip1",
-					net.ParseIP("10.10.10.2"),
+					netip.MustParseAddr("10.10.10.2"),
 				},
 				{
 					v1.ObjectReference{
 						Name: "egress-2",
 					},
 					"eip2",
-					net.ParseIP("10.10.11.2"),
+					netip.MustParseAddr("10.10.11.2"),
 				},
 			},
 			expectedIPPoolStatus: []antreacrds.IPPoolUsage{
@@ -533,7 +531,7 @@ func TestExternalIPPoolController_RestoreIPAllocations(t *testing.T) {
 						Name: "other-service-1",
 					},
 					"eip1",
-					net.ParseIP("10.10.10.2"),
+					netip.MustParseAddr("10.10.10.2"),
 				},
 			},
 			allocationsToRestore: []IPAllocation{
@@ -542,14 +540,14 @@ func TestExternalIPPoolController_RestoreIPAllocations(t *testing.T) {
 						Name: "egress-1",
 					},
 					"eip1",
-					net.ParseIP("10.10.10.2"),
+					netip.MustParseAddr("10.10.10.2"),
 				},
 				{
 					v1.ObjectReference{
 						Name: "egress-2",
 					},
 					"eip2",
-					net.ParseIP("10.10.11.2"),
+					netip.MustParseAddr("10.10.11.2"),
 				},
 			},
 			expectedSucceeded: []IPAllocation{
@@ -558,7 +556,7 @@ func TestExternalIPPoolController_RestoreIPAllocations(t *testing.T) {
 						Name: "egress-2",
 					},
 					"eip2",
-					net.ParseIP("10.10.11.2"),
+					netip.MustParseAddr("10.10.11.2"),
 				},
 			},
 			expectedIPPoolStatus: []antreacrds.IPPoolUsage{
@@ -579,14 +577,14 @@ func TestExternalIPPoolController_RestoreIPAllocations(t *testing.T) {
 						Name: "egress-1",
 					},
 					"eip2",
-					net.ParseIP("10.10.11.2"),
+					netip.MustParseAddr("10.10.11.2"),
 				},
 				{
 					v1.ObjectReference{
 						Name: "egress-2",
 					},
 					"eip3",
-					net.ParseIP("10.10.12.2"),
+					netip.MustParseAddr("10.10.12.2"),
 				},
 			},
 			expectedSucceeded: []IPAllocation{
@@ -595,7 +593,7 @@ func TestExternalIPPoolController_RestoreIPAllocations(t *testing.T) {
 						Name: "egress-1",
 					},
 					"eip2",
-					net.ParseIP("10.10.11.2"),
+					netip.MustParseAddr("10.10.11.2"),
 				},
 			},
 			expectedIPPoolStatus: []antreacrds.IPPoolUsage{

@@ -18,7 +18,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"net"
+	"net/netip"
 	"testing"
 	"time"
 
@@ -579,7 +579,7 @@ func TestRecreateExternalIPPoolWithNewRange(t *testing.T) {
 	require.True(t, controller.externalIPAllocator.IPPoolExists(eipFoo1.Name))
 	getEgressIP, egress, err := controller.syncEgressIP(egress)
 	require.NoError(t, err)
-	assert.Equal(t, net.ParseIP("1.1.1.1"), getEgressIP)
+	assert.Equal(t, netip.MustParseAddr("1.1.1.1"), getEgressIP)
 
 	// Delete and recreate the ExternalIPPool immediately with a different IP range. We do not
 	// call syncEgressIP in-between, so the Egress controller doesn't have a chance to process
@@ -597,7 +597,7 @@ func TestRecreateExternalIPPoolWithNewRange(t *testing.T) {
 
 	getEgressIP, _, err = controller.syncEgressIP(egress)
 	require.NoError(t, err)
-	assert.Equal(t, net.ParseIP("1.1.2.1"), getEgressIP)
+	assert.Equal(t, netip.MustParseAddr("1.1.2.1"), getEgressIP)
 }
 
 func TestSyncEgressIP(t *testing.T) {
@@ -606,7 +606,7 @@ func TestSyncEgressIP(t *testing.T) {
 		existingEgresses           []*v1beta1.Egress
 		existingExternalIPPool     *v1beta1.ExternalIPPool
 		inputEgress                *v1beta1.Egress
-		expectedEgressIP           string
+		expectedEgressIP           netip.Addr
 		expectedExternalIPPoolUsed int
 		expectErr                  bool
 	}{
@@ -628,8 +628,8 @@ func TestSyncEgressIP(t *testing.T) {
 					},
 				},
 			},
-			// The first IPRange 1.1.1.0/30 should be occupied by the existing Egresses. The input Egress's IP should
-			// be allocated from the second IPRange 1.1.2.10-1.1.2.20.
+			// The first IPRange 1.1.1.0/30 should be occupied by the existing Egresses. The input
+			// Egress's IP should be allocated from the second IPRange 1.1.2.10-1.1.2.20.
 			existingExternalIPPool: newExternalIPPool("ipPoolA", "1.1.1.0/30", "1.1.2.10", "1.1.2.20"),
 			inputEgress: &v1beta1.Egress{
 				ObjectMeta: metav1.ObjectMeta{Name: "egressC", UID: "uidC"},
@@ -638,7 +638,7 @@ func TestSyncEgressIP(t *testing.T) {
 					ExternalIPPool: "ipPoolA",
 				},
 			},
-			expectedEgressIP:           "1.1.2.10",
+			expectedEgressIP:           netip.MustParseAddr("1.1.2.10"),
 			expectedExternalIPPoolUsed: 3,
 			expectErr:                  false,
 		},
@@ -652,7 +652,6 @@ func TestSyncEgressIP(t *testing.T) {
 					ExternalIPPool: "ipPoolB",
 				},
 			},
-			expectedEgressIP:           "",
 			expectedExternalIPPoolUsed: 0,
 			expectErr:                  true,
 		},
@@ -665,7 +664,7 @@ func TestSyncEgressIP(t *testing.T) {
 					ExternalIPPool: "ipPoolA",
 				},
 			},
-			expectedEgressIP:           "2021:2::aaa1",
+			expectedEgressIP:           netip.MustParseAddr("2021:2::aaa1"),
 			expectedExternalIPPoolUsed: 1,
 			expectErr:                  false,
 		},
@@ -679,7 +678,7 @@ func TestSyncEgressIP(t *testing.T) {
 					ExternalIPPool: "ipPoolA",
 				},
 			},
-			expectedEgressIP:           "1.1.1.2",
+			expectedEgressIP:           netip.MustParseAddr("1.1.1.2"),
 			expectedExternalIPPoolUsed: 1,
 			expectErr:                  false,
 		},
@@ -693,7 +692,6 @@ func TestSyncEgressIP(t *testing.T) {
 					ExternalIPPool: "ipPoolA",
 				},
 			},
-			expectedEgressIP:           "",
 			expectedExternalIPPoolUsed: 0,
 			expectErr:                  true,
 		},
@@ -716,7 +714,7 @@ func TestSyncEgressIP(t *testing.T) {
 					ExternalIPPool: "ipPoolA",
 				},
 			},
-			expectedEgressIP:           "1.1.1.3",
+			expectedEgressIP:           netip.MustParseAddr("1.1.1.3"),
 			expectedExternalIPPoolUsed: 1,
 			expectErr:                  false,
 		},
@@ -739,7 +737,7 @@ func TestSyncEgressIP(t *testing.T) {
 					ExternalIPPool: "ipPoolA",
 				},
 			},
-			expectedEgressIP:           "1.1.1.2",
+			expectedEgressIP:           netip.MustParseAddr("1.1.1.2"),
 			expectedExternalIPPoolUsed: 1,
 			expectErr:                  false,
 		},
@@ -762,7 +760,6 @@ func TestSyncEgressIP(t *testing.T) {
 					ExternalIPPool: "ipPoolA",
 				},
 			},
-			expectedEgressIP:           "",
 			expectedExternalIPPoolUsed: 1,
 			expectErr:                  true,
 		},
@@ -784,7 +781,7 @@ func TestSyncEgressIP(t *testing.T) {
 					EgressIP: "10.10.10.10",
 				},
 			},
-			expectedEgressIP:           "10.10.10.10",
+			expectedEgressIP:           netip.MustParseAddr("10.10.10.10"),
 			expectedExternalIPPoolUsed: 0,
 			expectErr:                  false,
 		},
@@ -809,7 +806,7 @@ func TestSyncEgressIP(t *testing.T) {
 			} else {
 				assert.NoError(t, err)
 			}
-			assert.Equal(t, net.ParseIP(tt.expectedEgressIP), getEgressIP)
+			assert.Equal(t, tt.expectedEgressIP, getEgressIP)
 			checkExternalIPPoolUsed(t, controller, tt.existingExternalIPPool.Name, tt.expectedExternalIPPoolUsed)
 		})
 	}

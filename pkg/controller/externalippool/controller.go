@@ -18,7 +18,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"net"
+	"net/netip"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -33,7 +33,6 @@ import (
 	"k8s.io/client-go/util/retry"
 	"k8s.io/client-go/util/workqueue"
 	"k8s.io/klog/v2"
-	utilnet "k8s.io/utils/net"
 
 	antreacrds "antrea.io/antrea/v2/pkg/apis/crd/v1beta1"
 	clientset "antrea.io/antrea/v2/pkg/client/clientset/versioned"
@@ -66,7 +65,7 @@ type IPAllocation struct {
 	// IPPoolName is the name of the IP pool.
 	IPPoolName string
 	// IP is the allocated IP.
-	IP net.IP
+	IP netip.Addr
 }
 
 // ExternalIPPoolEventHandler defines a consumer to subscribe for external ExternalIPPool events.
@@ -80,19 +79,19 @@ type ExternalIPAllocator interface {
 	// succeeded IP Allocations.
 	RestoreIPAllocations(allocations []IPAllocation) []IPAllocation
 	// AllocateIPFromPool allocates an IP from the given IP pool.
-	AllocateIPFromPool(externalIPPool string) (net.IP, error)
+	AllocateIPFromPool(externalIPPool string) (netip.Addr, error)
 	// IPPoolExists checks whether the IP pool exists.
 	IPPoolExists(externalIPPool string) bool
 	// IPPoolHasIP checks whether the IP pool contains the given IP.
-	IPPoolHasIP(externalIPPool string, ip net.IP) bool
+	IPPoolHasIP(externalIPPool string, ip netip.Addr) bool
 	// UpdateIPAllocation marks the IP in the specified ExternalIPPool as occupied.
-	UpdateIPAllocation(externalIPPool string, ip net.IP) error
+	UpdateIPAllocation(externalIPPool string, ip netip.Addr) error
 	// ReleaseIP releases the IP to the IP pool.
 	// It returns ErrExternalIPPoolNotFound if the externalIPPool does not exist.
 	// Any other error indicates that the IP was not allocated, or is not currently allocated.
 	// In case of an error, there is no reason to try again with the same arguments, as
 	// transient errors are not possible.
-	ReleaseIP(externalIPPool string, ip net.IP) error
+	ReleaseIP(externalIPPool string, ip netip.Addr) error
 	// HasSynced indicates ExternalIPAllocator has finished syncing all ExternalIPPool resources.
 	HasSynced() bool
 }
@@ -217,28 +216,37 @@ func (c *ExternalIPPoolController) createOrUpdateIPAllocator(ipPool *antreacrds.
 		ipRange := &ipPool.Spec.IPRanges[idx]
 		ipAllocator, err := func() (*ipallocator.SingleIPAllocator, error) {
 			if ipRange.CIDR != "" {
-				_, ipNet, err := net.ParseCIDR(ipRange.CIDR)
+				prefix, err := netip.ParsePrefix(ipRange.CIDR)
 				if err != nil {
 					return nil, err
 				}
-				// Must use normalized IPNet string to check if the IP range exists. Otherwise non-strict CIDR like
-				// 192.168.0.1/24 will be considered new even if it doesn't change.
-				// Validating or normalizing the input CIDR should be a better solution but the externalIPPools that
-				// have been created will still have this issue, so we just normalize the CIDR when using it.
-				if existingIPRanges.Has(ipNet.String()) {
+				// Normalize the prefix: a non-strict CIDR like 192.168.0.1/24 would otherwise
+				// be treated as a new range even when unchanged. Validating at admission would be
+				// cleaner, but existing pools may already carry non-canonical CIDRs, so we
+				// normalize at the point of use.
+				prefix = prefix.Masked()
+				if existingIPRanges.Has(prefix.String()) {
 					return nil, nil
 				}
 				// Don't use the IPv4 network's broadcast address.
-				var reservedIPs []net.IP
-				if utilnet.IsIPv4CIDR(ipNet) {
-					reservedIPs = append(reservedIPs, iputil.GetLocalBroadcastIP(ipNet))
+				var reservedIPs []netip.Addr
+				if prefix.Addr().Is4() {
+					reservedIPs = append(reservedIPs, iputil.GetLocalBroadcastAddr(prefix))
 				}
-				return ipallocator.NewCIDRAllocator(ipNet, reservedIPs)
+				return ipallocator.NewCIDRAllocator(prefix, reservedIPs)
 			} else {
 				if existingIPRanges.Has(fmt.Sprintf("%s-%s", ipRange.Start, ipRange.End)) {
 					return nil, nil
 				}
-				return ipallocator.NewIPRangeAllocator(net.ParseIP(ipRange.Start), net.ParseIP(ipRange.End))
+				startIP, err := netip.ParseAddr(ipRange.Start)
+				if err != nil {
+					return nil, err
+				}
+				endIP, err := netip.ParseAddr(ipRange.End)
+				if err != nil {
+					return nil, err
+				}
+				return ipallocator.NewIPRangeAllocator(startIP, endIP)
 			}
 		}()
 		if err != nil {
@@ -273,11 +281,11 @@ func (c *ExternalIPPoolController) getIPAllocator(poolName string) (ipallocator.
 }
 
 // AllocateIPFromPool allocates an IP from the the given IP pool.
-func (c *ExternalIPPoolController) AllocateIPFromPool(ipPoolName string) (net.IP, error) {
+func (c *ExternalIPPoolController) AllocateIPFromPool(ipPoolName string) (netip.Addr, error) {
 	c.handlersWaitGroup.Wait()
 	ipAllocator, exists := c.getIPAllocator(ipPoolName)
 	if !exists {
-		return nil, ErrExternalIPPoolNotFound
+		return netip.Addr{}, ErrExternalIPPoolNotFound
 	}
 	ip, err := ipAllocator.AllocateNext()
 	if err != nil {
@@ -288,7 +296,7 @@ func (c *ExternalIPPoolController) AllocateIPFromPool(ipPoolName string) (net.IP
 }
 
 // UpdateIPAllocation sets the IP in the specified ExternalIPPool.
-func (c *ExternalIPPoolController) UpdateIPAllocation(poolName string, ip net.IP) error {
+func (c *ExternalIPPoolController) UpdateIPAllocation(poolName string, ip netip.Addr) error {
 	ipAllocator, exists := c.getIPAllocator(poolName)
 	if !exists {
 		return ErrExternalIPPoolNotFound
@@ -341,7 +349,7 @@ func (c *ExternalIPPoolController) updateExternalIPPoolStatus(poolName string) e
 }
 
 // ReleaseIP releases the IP to the pool.
-func (c *ExternalIPPoolController) ReleaseIP(poolName string, ip net.IP) error {
+func (c *ExternalIPPoolController) ReleaseIP(poolName string, ip netip.Addr) error {
 	allocator, exists := c.getIPAllocator(poolName)
 	if !exists {
 		return ErrExternalIPPoolNotFound
@@ -353,7 +361,7 @@ func (c *ExternalIPPoolController) ReleaseIP(poolName string, ip net.IP) error {
 	return nil
 }
 
-func (c *ExternalIPPoolController) IPPoolHasIP(poolName string, ip net.IP) bool {
+func (c *ExternalIPPoolController) IPPoolHasIP(poolName string, ip netip.Addr) bool {
 	allocator, exists := c.getIPAllocator(poolName)
 	if !exists {
 		return false

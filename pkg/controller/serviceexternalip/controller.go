@@ -17,7 +17,7 @@ package serviceexternalip
 import (
 	"context"
 	"fmt"
-	"net"
+	"net/netip"
 	"reflect"
 	"strconv"
 	"sync"
@@ -61,7 +61,7 @@ const (
 // ipAllocation contains the IP and the IP Pool which allocates it.
 type ipAllocation struct {
 	service  apimachinerytypes.NamespacedName
-	ip       net.IP
+	ip       netip.Addr
 	ipPool   string
 	sharable bool
 }
@@ -228,8 +228,8 @@ func (c *ServiceExternalIPController) restoreIPAllocations(services []*corev1.Se
 		if svc.Spec.Type != corev1.ServiceTypeLoadBalancer || ipPool == "" || ip == "" {
 			continue
 		}
-		parsedIP := net.ParseIP(ip)
-		if parsedIP == nil {
+		parsedIP, err := netip.ParseAddr(ip)
+		if err != nil {
 			continue
 		}
 
@@ -272,13 +272,14 @@ func (c *ServiceExternalIPController) restoreIPAllocations(services []*corev1.Se
 				Namespace: svc.Namespace,
 				Name:      svc.Name,
 			}
-			c.addIPAllocationLocked(name, ipPool, net.ParseIP(ip), isServiceExternalIPSharable(svc))
+			restoredIP, _ := netip.ParseAddr(ip)
+			c.addIPAllocationLocked(name, ipPool, restoredIP, isServiceExternalIPSharable(svc))
 		}
 		klog.InfoS("Restored external IP", "service", klog.KObj(svc), "ip", ip, "pool", ipPool)
 	}
 }
 
-func (c *ServiceExternalIPController) updateIPAllocation(name apimachinerytypes.NamespacedName, ipPool string, ip net.IP, sharable bool) {
+func (c *ServiceExternalIPController) updateIPAllocation(name apimachinerytypes.NamespacedName, ipPool string, ip netip.Addr, sharable bool) {
 	c.ipAllocationMutex.Lock()
 	defer c.ipAllocationMutex.Unlock()
 	newAllocation := &ipAllocation{
@@ -295,7 +296,7 @@ func (c *ServiceExternalIPController) updateIPAllocation(name apimachinerytypes.
 	}
 }
 
-func (c *ServiceExternalIPController) addIPAllocationLocked(name apimachinerytypes.NamespacedName, ipPool string, ip net.IP, sharable bool) {
+func (c *ServiceExternalIPController) addIPAllocationLocked(name apimachinerytypes.NamespacedName, ipPool string, ip netip.Addr, sharable bool) {
 	c.ipAllocations.Add(&ipAllocation{
 		service:  name,
 		ip:       ip,
@@ -364,7 +365,7 @@ func (c *ServiceExternalIPController) releaseExternalIP(service apimachinerytype
 	return false, nil
 }
 
-func (c *ServiceExternalIPController) allocateExternalIP(service apimachinerytypes.NamespacedName, pool string, requestedIP string, allowSharedIP bool) (net.IP, error) {
+func (c *ServiceExternalIPController) allocateExternalIP(service apimachinerytypes.NamespacedName, pool string, requestedIP string, allowSharedIP bool) (netip.Addr, error) {
 	c.ipAllocationMutex.Lock()
 	defer c.ipAllocationMutex.Unlock()
 
@@ -372,7 +373,7 @@ func (c *ServiceExternalIPController) allocateExternalIP(service apimachinerytyp
 	if requestedIP == "" {
 		ip, err := c.externalIPAllocator.AllocateIPFromPool(pool)
 		if err != nil {
-			return nil, fmt.Errorf("error when allocating IP from ExternalIPPool %s for Service %s: %v", pool, service, err)
+			return netip.Addr{}, fmt.Errorf("error when allocating IP from ExternalIPPool %s for Service %s: %v", pool, service, err)
 		}
 		klog.InfoS("Allocated external IP for Service", "service", service, "externalIPPool", pool, "ip", ip)
 		c.addIPAllocationLocked(service, pool, ip, allowSharedIP)
@@ -380,10 +381,10 @@ func (c *ServiceExternalIPController) allocateExternalIP(service apimachinerytyp
 	}
 
 	// Check whether the requested IP is in the IP pool or not.
-	ip := net.ParseIP(requestedIP)
+	ip, _ := netip.ParseAddr(requestedIP)
 	if !c.externalIPAllocator.IPPoolHasIP(pool, ip) {
 		klog.ErrorS(nil, "ExternalIPPool did not contain the requested IP", "externalIPPool", pool, "ip", requestedIP)
-		return nil, nil
+		return netip.Addr{}, nil
 	}
 
 	// Check whether the requested IP is already used.
@@ -392,14 +393,14 @@ func (c *ServiceExternalIPController) allocateExternalIP(service apimachinerytyp
 		// Fail if the Service itself doesn't allow shared IP.
 		if !allowSharedIP {
 			klog.ErrorS(nil, "The Service didn't allow shared IP but the requested IP had been allocated to other Service", "service", service, "externalIPPool", pool, "ip", requestedIP)
-			return nil, nil
+			return netip.Addr{}, nil
 		}
 		// Fail if any Service already using the IP doesn't allow shared IP.
 		for _, obj := range objs {
 			allocation := obj.(*ipAllocation)
 			if !allocation.sharable {
 				klog.ErrorS(nil, "The requested IP had been allocated to other Service not allowing shared IP", "service", service, "externalIPPool", pool, "ip", requestedIP)
-				return nil, nil
+				return netip.Addr{}, nil
 			}
 		}
 		klog.InfoS("Shared external IP for Service", "service", service, "externalIPPool", pool, "ip", ip)
@@ -409,7 +410,7 @@ func (c *ServiceExternalIPController) allocateExternalIP(service apimachinerytyp
 
 	// The requested IP is not used yet, allocate it.
 	if err := c.externalIPAllocator.UpdateIPAllocation(pool, ip); err != nil {
-		return nil, fmt.Errorf("error when allocating IP %s from ExternalIPPool %s for Service %s: %v", requestedIP, pool, service, err)
+		return netip.Addr{}, fmt.Errorf("error when allocating IP %s from ExternalIPPool %s for Service %s: %v", requestedIP, pool, service, err)
 	}
 	klog.InfoS("Requested external IP for Service", "service", service, "externalIPPool", pool, "ip", ip)
 	c.addIPAllocationLocked(service, pool, ip, allowSharedIP)
@@ -472,7 +473,7 @@ func (c *ServiceExternalIPController) syncService(key apimachinerytypes.Namespac
 		}
 		// Ensure the LoadBalancerStatus in Kubernetes API is unset if the IP was allocated by it.
 		if released {
-			return c.updateServiceLoadBalancerIP(service, nil)
+			return c.updateServiceLoadBalancerIP(service, netip.Addr{})
 		}
 		return nil
 	}
@@ -503,7 +504,7 @@ func (c *ServiceExternalIPController) syncService(key apimachinerytypes.Namespac
 		if _, err := c.releaseExternalIP(key); err != nil {
 			return err
 		}
-		return c.updateServiceLoadBalancerIP(service, nil)
+		return c.updateServiceLoadBalancerIP(service, netip.Addr{})
 	}
 
 	// The external IP or ExternalIPPool changes. Delete the previous allocation.
@@ -515,7 +516,7 @@ func (c *ServiceExternalIPController) syncService(key apimachinerytypes.Namespac
 	if currentIPPool == "" {
 		klog.V(2).InfoS("Ignored Service as the required annotation no longer exists", "service", key)
 		if released {
-			return c.updateServiceLoadBalancerIP(service, nil)
+			return c.updateServiceLoadBalancerIP(service, netip.Addr{})
 		}
 		return nil
 	}
@@ -531,9 +532,9 @@ func (c *ServiceExternalIPController) syncService(key apimachinerytypes.Namespac
 }
 
 // updateService updates the Service status in Kubernetes API.
-func (c *ServiceExternalIPController) updateServiceLoadBalancerIP(svc *corev1.Service, ip net.IP) error {
+func (c *ServiceExternalIPController) updateServiceLoadBalancerIP(svc *corev1.Service, ip netip.Addr) error {
 	expectedLoadBalancerStatus := corev1.LoadBalancerStatus{}
-	if ip != nil {
+	if ip.IsValid() {
 		expectedLoadBalancerStatus.Ingress = append(expectedLoadBalancerStatus.Ingress, corev1.LoadBalancerIngress{IP: ip.String()})
 	}
 	toUpdate := svc.DeepCopy()

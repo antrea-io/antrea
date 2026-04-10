@@ -16,7 +16,7 @@ package ipam
 
 import (
 	"fmt"
-	"net"
+	"net/netip"
 	"strings"
 
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -127,8 +127,8 @@ func (c *AntreaIPAMController) Run(stopCh <-chan struct{}) {
 }
 
 // Look up IPPools from the Pod annotation.
-func (c *AntreaIPAMController) getIPPoolsByPod(namespace, name string) ([]string, []net.IP, *crdv1b1.IPAddressOwner, error) {
-	var ips []net.IP
+func (c *AntreaIPAMController) getIPPoolsByPod(namespace, name string) ([]string, []netip.Addr, *crdv1b1.IPAddressOwner, error) {
+	var ips []netip.Addr
 	var reservedOwner *crdv1b1.IPAddressOwner
 	pod, err := c.podLister.Pods(namespace).Get(name)
 	if err != nil {
@@ -158,8 +158,8 @@ func (c *AntreaIPAMController) getIPPoolsByPod(namespace, name string) ([]string
 			if ipString == "" {
 				continue
 			}
-			ip := net.ParseIP(ipString)
-			if ip == nil {
+			ip, err := netip.ParseAddr(ipString)
+			if err != nil {
 				ipErr = fmt.Errorf("invalid IP annotation %s", ipStrings)
 				ips = nil
 				break
@@ -194,7 +194,7 @@ ownerReferenceLoop:
 }
 
 // Look up IPPools from the Pod annotation.
-func (c *AntreaIPAMController) getPoolAllocatorByPod(namespace, podName string) (mineType, *poolallocator.IPPoolAllocator, []net.IP, *crdv1b1.IPAddressOwner, error) {
+func (c *AntreaIPAMController) getPoolAllocatorByPod(namespace, podName string) (mineType, *poolallocator.IPPoolAllocator, []netip.Addr, *crdv1b1.IPAddressOwner, error) {
 	poolNames, ips, reservedOwner, err := c.getIPPoolsByPod(namespace, podName)
 	if err != nil {
 		return mineUnknown, nil, nil, nil, err
