@@ -80,6 +80,10 @@ const (
 )
 
 var (
+	// staleFlowDeleteMaxAttempts and staleFlowDeleteRetryInterval may be overridden in tests.
+	staleFlowDeleteMaxAttempts   = 5
+	staleFlowDeleteRetryInterval = 2 * time.Second
+
 	// getIPNetDeviceFromIP is meant to be overridden for testing.
 	getIPNetDeviceFromIP = util.GetIPNetDeviceFromIP
 
@@ -140,9 +144,15 @@ type Initializer struct {
 	// been installed. We use it to determine whether flows from previous
 	// rounds can be deleted.
 	flowRestoreCompleteWait *utilwait.Group
-	stopCh                  <-chan struct{}
-	nodeType                config.NodeType
-	externalNodeNamespace   string
+	// staleFlowsDeletedWait is created by the caller with NewGroup().Increment();
+	// the stale-flow cleanup goroutine in initOpenFlowPipeline calls Done when
+	// deletion has finished (or the goroutine exits after a failed delete).
+	// Components that must not observe stale flows from a previous agent round
+	// should wait on this group before starting.
+	staleFlowsDeletedWait *utilwait.Group
+	stopCh                <-chan struct{}
+	nodeType              config.NodeType
+	externalNodeNamespace string
 }
 
 func NewInitializer(
@@ -162,6 +172,7 @@ func NewInitializer(
 	serviceConfig *config.ServiceConfig,
 	podNetworkWait *utilwait.Group,
 	flowRestoreCompleteWait *utilwait.Group,
+	staleFlowsDeletedWait *utilwait.Group,
 	stopCh <-chan struct{},
 	nodeType config.NodeType,
 	externalNodeNamespace string,
@@ -188,6 +199,7 @@ func NewInitializer(
 		l7NetworkPolicyConfig:    &config.L7NetworkPolicyConfig{},
 		podNetworkWait:           podNetworkWait,
 		flowRestoreCompleteWait:  flowRestoreCompleteWait,
+		staleFlowsDeletedWait:    staleFlowsDeletedWait,
 		stopCh:                   stopCh,
 		nodeType:                 nodeType,
 		externalNodeNamespace:    externalNodeNamespace,
@@ -506,6 +518,31 @@ func persistRoundNum(num uint64, bridgeClient ovsconfig.OVSBridgeClient, interva
 	klog.Errorf("Unable to persist round number %d to OVSDB after %d tries", num, maxRetries+1)
 }
 
+// deleteStaleFlowsWithRetry calls DeleteStaleFlows until it succeeds, stopCh is closed, or
+// staleFlowDeleteMaxAttempts retries are exhausted. It returns false when the new round number
+// must not be persisted (shutdown or persistent OVS failure).
+func (i *Initializer) deleteStaleFlowsWithRetry() bool {
+	var lastErr error
+	maxAttempts := staleFlowDeleteMaxAttempts
+	for attempt := 1; attempt <= maxAttempts; attempt++ {
+		lastErr = i.ofClient.DeleteStaleFlows()
+		if lastErr == nil {
+			return true
+		}
+		klog.ErrorS(lastErr, "Error when deleting stale flows from previous round", "attempt", attempt, "maxAttempts", maxAttempts)
+		if attempt < maxAttempts {
+			select {
+			case <-i.stopCh:
+				klog.InfoS("Stopped retrying stale flow deletion; agent shutting down")
+				return false
+			case <-time.After(staleFlowDeleteRetryInterval):
+			}
+		}
+	}
+	klog.ErrorS(lastErr, "Giving up deleting stale flows after max attempts; new round number will not be persisted")
+	return false
+}
+
 // initOpenFlowPipeline sets up necessary Openflow entries, including pipeline, classifiers, conn_track, and gateway flows
 // Every time the agent is (re)started, we go through the following sequence:
 //  1. agent determines the new round number (this is done by incrementing the round number
@@ -550,11 +587,15 @@ func (i *Initializer) initOpenFlowPipeline() error {
 		// block until some key flows (NetworkPolicy flows, Pod flows, Node route flows)
 		// have been installed. But not all entities responsible for installing flows
 		// currently use this wait group, so we block for a minimum of 10 seconds.
+		//
+		// staleFlowsDeletedWait is satisfied when this goroutine exits so that
+		// components which must not see stale flows (e.g. the NP stats
+		// collector) can delay their start until cleanup is guaranteed.
+		defer i.staleFlowsDeletedWait.Done()
 		time.Sleep(10 * time.Second)
 		i.flowRestoreCompleteWait.Wait()
 		klog.Info("Deleting stale flows from previous round if any")
-		if err := i.ofClient.DeleteStaleFlows(); err != nil {
-			klog.Errorf("Error when deleting stale flows from previous round: %v", err)
+		if !i.deleteStaleFlowsWithRetry() {
 			return
 		}
 		persistRoundNum(roundInfo.RoundNum, i.ovsBridgeClient, 1*time.Second, maxRetryForRoundNumSave)

@@ -281,6 +281,10 @@ func run(o *Options) error {
 	// NodeRouteController. Additional requirements may be added in the future.
 	flowRestoreCompleteWait := utilwait.NewGroup()
 
+	// staleFlowsDeletedWait starts with one pending unit (Increment); the stale-flow cleanup
+	// goroutine calls Done when deletion completes.
+	staleFlowsDeletedWait := utilwait.NewGroup().Increment()
+
 	// set up signal capture: the first SIGTERM / SIGINT signal is handled gracefully and will
 	// cause the stopCh channel to be closed; if another signal is received before the program
 	// exits, we will force exit.
@@ -327,6 +331,7 @@ func run(o *Options) error {
 		serviceConfig,
 		podNetworkWait,
 		flowRestoreCompleteWait,
+		staleFlowsDeletedWait,
 		stopCh,
 		o.nodeType,
 		o.config.ExternalNode.ExternalNodeNamespace,
@@ -975,7 +980,18 @@ func run(o *Options) error {
 	// NetworkPolicy stats and Multicast stats.
 	if features.DefaultFeatureGate.Enabled(features.NetworkPolicyStats) {
 		statsCollector := stats.NewCollector(antreaClientProvider, ofClient, networkPolicyController, mcastController)
-		go statsCollector.Run(stopCh)
+		// Wait for stale flows from the previous agent round to be removed before starting the
+		// collector, so we do not report stats for flows from the prior round. Deletion runs only
+		// after flowRestoreCompleteWait (which includes podNetworkWait for NetworkPolicy flows); see
+		// Initializer.initOpenFlowPipeline.
+		go func() {
+			klog.InfoS("Waiting for stale flows from previous agent round to be deleted")
+			if err := staleFlowsDeletedWait.WaitUntil(stopCh); err != nil {
+				klog.ErrorS(err, "Stopped waiting for stale flow deletion; stats collector will not start")
+				return
+			}
+			statsCollector.Run(stopCh)
+		}()
 	}
 
 	agentQuerier := querier.NewAgentQuerier(
