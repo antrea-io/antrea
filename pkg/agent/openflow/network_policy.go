@@ -1937,8 +1937,14 @@ func parseAllowFlow(flowMap map[string]string) (uint32, types.RuleMetric) {
 	if strings.Contains(flowMap["ct_state"], "+") { // ct_state=+new
 		m.Sessions = m.Packets
 	}
-	ct_label := flowMap["ct_label"]
-	idRaw := ct_label[strings.Index(ct_label, "0x")+2 : strings.Index(ct_label, "/")]
+	ctLabel := flowMap["ct_label"]
+	hexIdx := strings.Index(ctLabel, "0x")
+	slashIdx := strings.Index(ctLabel, "/")
+	if hexIdx == -1 || slashIdx == -1 || slashIdx <= hexIdx+2 {
+		// ct_label is absent or malformed; this is not a valid allow metric flow.
+		return 0, m
+	}
+	idRaw := ctLabel[hexIdx+2 : slashIdx]
 	if len(idRaw) > 8 { // only 32 bits are valid.
 		idRaw = idRaw[:len(idRaw)-8]
 	}
@@ -1976,6 +1982,15 @@ func parseMetricFlow(flowMap map[string]string) (uint32, types.RuleMetric) {
 	// table=101, n_packets=9, n_bytes=666, priority=200,reg0=0x100000/0x100000,reg3=0x5 actions=drop
 	if _, ok := flowMap[dropIdentifier]; ok {
 		return parseDropFlow(flowMap)
+	}
+	// A valid allow metric flow must have ct_label, which encodes the rule ID.
+	// Flows without ct_label are not metric flows — they may be stale flows from a
+	// prior agent version that occupied the same table ID after a pipeline table shift
+	// (e.g., L3 routing flows from an old pipeline that now share the EgressMetricTable
+	// ID after a new table was inserted earlier in the pipeline). Skip them to avoid
+	// misinterpreting non-metric flows as NetworkPolicy statistics.
+	if _, ok := flowMap["ct_label"]; !ok {
+		return 0, types.RuleMetric{}
 	}
 	return parseAllowFlow(flowMap)
 }
@@ -2042,6 +2057,12 @@ func (c *client) NetworkPolicyMetrics() map[uint32]*types.RuleMetric {
 			}
 			flowMap := parseFlowToMap(flow)
 			ruleID, metric := getMetricAndID(flowMap)
+			// ruleID=0 is a sentinel indicating the flow is not a valid metric flow
+			// (e.g., a stale flow skipped by parseMetricFlow). Valid rule IDs always
+			// start from 1.
+			if ruleID == 0 {
+				continue
+			}
 			if accMetric, ok := result[ruleID]; ok {
 				accMetric.Merge(&metric)
 			} else {
