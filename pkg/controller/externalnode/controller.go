@@ -119,7 +119,19 @@ func (c *ExternalNodeController) enqueueExternalNodeUpdate(oldObj interface{}, n
 }
 
 func (c *ExternalNodeController) enqueueExternalNodeDelete(obj interface{}) {
-	en := obj.(*v1alpha1.ExternalNode)
+	en, ok := obj.(*v1alpha1.ExternalNode)
+	if !ok {
+		tombstone, ok := obj.(cache.DeletedFinalStateUnknown)
+		if !ok {
+			klog.V(2).InfoS("Error decoding object when deleting ExternalNode, invalid type", "object", obj)
+			return
+		}
+		en, ok = tombstone.Obj.(*v1alpha1.ExternalNode)
+		if !ok {
+			klog.V(2).InfoS("Error decoding object tombstone when deleting ExternalNode, invalid type", "object", tombstone.Obj)
+			return
+		}
+	}
 	key, _ := keyFunc(en)
 	c.queue.Add(key)
 	klog.InfoS("Enqueued ExternalNode DELETE event", "ExternalNode", klog.KObj(en))

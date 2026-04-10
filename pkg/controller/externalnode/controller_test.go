@@ -28,6 +28,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/wait"
 	k8stesting "k8s.io/client-go/testing"
+	"k8s.io/client-go/tools/cache"
 
 	"antrea.io/antrea/v2/pkg/apis/crd/v1alpha1"
 	"antrea.io/antrea/v2/pkg/apis/crd/v1alpha2"
@@ -662,4 +663,25 @@ func newExternalNodeController(objects []runtime.Object) *ExternalNodeController
 	externalNodeInformer := informerFactory.Crd().V1alpha1().ExternalNodes()
 	externalEntityInformer := informerFactory.Crd().V1alpha2().ExternalEntities()
 	return NewExternalNodeController(crdClient, externalNodeInformer, externalEntityInformer)
+}
+
+func TestEnqueueExternalNodeDelete_Tombstone(t *testing.T) {
+	externalNode := &v1alpha1.ExternalNode{
+		ObjectMeta: metav1.ObjectMeta{Name: "vm1", Namespace: "ns1"},
+		Spec: v1alpha1.ExternalNodeSpec{
+			Interfaces: []v1alpha1.NetworkInterface{{IPs: []string{"1.1.1.2"}}},
+		},
+	}
+	controller := newExternalNodeController(nil)
+	expectedKey, _ := keyFunc(externalNode)
+
+	// Deliver the delete as a tombstone, as the informer does after a watch reconnect.
+	controller.enqueueExternalNodeDelete(cache.DeletedFinalStateUnknown{
+		Key: expectedKey,
+		Obj: externalNode,
+	})
+
+	require.Equal(t, 1, controller.queue.Len())
+	key, _ := controller.queue.Get()
+	assert.Equal(t, expectedKey, key)
 }
