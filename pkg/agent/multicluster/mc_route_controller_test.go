@@ -559,12 +559,19 @@ func TestSyncWireGuardPeerUpdateByClusterInfoImportChange(t *testing.T) {
 			c.wireGuardClient = wgClient
 
 			gw := gateway4.DeepCopy()
-			err := c.gwInformer.Informer().GetStore().Add(gw)
+			_, err := c.mcClient.MulticlusterV1alpha1().Gateways(gw.GetNamespace()).
+				Create(context.TODO(), gw, metav1.CreateOptions{})
 			require.NoError(t, err)
 
 			currentCIImport := tc.currentPeer.DeepCopy()
-			err = c.ciImportInformer.Informer().GetStore().Add(currentCIImport)
+			_, err = c.mcClient.MulticlusterV1alpha1().ClusterInfoImports(currentCIImport.GetNamespace()).
+				Create(context.TODO(), currentCIImport, metav1.CreateOptions{})
 			require.NoError(t, err)
+
+			stopCh := make(chan struct{})
+			defer close(stopCh)
+			c.informerFactory.Start(stopCh)
+			c.informerFactory.WaitForCacheSync(stopCh)
 
 			if tc.installedPeer != nil {
 				c.installedWireGuardPeers[currentCIImport.Name] = tc.installedPeer.DeepCopy()
