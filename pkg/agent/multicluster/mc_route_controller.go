@@ -19,6 +19,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net"
+	"reflect"
 	"time"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -313,6 +314,7 @@ func (c *MCDefaultRouteController) syncWireGuard() error {
 		desiredCIImports.Insert(ciImport.Name)
 		if ciImportCache, ok := c.installedWireGuardPeers[ciImport.Name]; ok && !isWireGuardInfoChanged(ciImportCache, ciImport) {
 			klog.V(2).InfoS("The ClusterInfoImport did not change, skip updating WireGuard peer", "ClusterInfoImport", klog.KObj(ciImport))
+			continue
 		}
 		if err = c.addWireGuardRouteAndPeer(ciImport); err != nil {
 			klog.ErrorS(err, "Failed to update WireGuard peer", "ClusterInfoImport", klog.KObj(ciImport))
@@ -668,6 +670,9 @@ func getLocalGatewayIP(gateway *mcv1alpha1.Gateway, enableWireGuard bool) net.IP
 // isWireGuardInfoChanged checks the information in ClusterInfoImport needed by WireGuard change or not.
 func isWireGuardInfoChanged(cache, cur *mcv1alpha1.ClusterInfoImport) bool {
 	if cache.Spec.ServiceCIDR != cur.Spec.ServiceCIDR {
+		return true
+	}
+	if !reflect.DeepEqual(cache.Spec.GatewayInfos, cur.Spec.GatewayInfos) {
 		return true
 	}
 	if cache.Spec.WireGuard == nil && cur.Spec.WireGuard == nil {
