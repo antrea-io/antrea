@@ -23,7 +23,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"k8s.io/component-base/metrics/legacyregistry"
 
-	"antrea.io/antrea/pkg/agent/metrics"
+	"antrea.io/antrea/v2/pkg/agent/metrics"
 )
 
 func init() {

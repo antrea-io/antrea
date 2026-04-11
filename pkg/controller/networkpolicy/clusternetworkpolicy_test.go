@@ -30,12 +30,12 @@ import (
 	corelisters "k8s.io/client-go/listers/core/v1"
 	"k8s.io/utils/ptr"
 
-	"antrea.io/antrea/multicluster/controllers/multicluster/common"
-	"antrea.io/antrea/pkg/apis/controlplane"
-	crdv1beta1 "antrea.io/antrea/pkg/apis/crd/v1beta1"
-	crdv1b1listers "antrea.io/antrea/pkg/client/listers/crd/v1beta1"
-	antreatypes "antrea.io/antrea/pkg/controller/types"
-	"antrea.io/antrea/pkg/util/k8s"
+	"antrea.io/antrea/v2/multicluster/controllers/multicluster/common"
+	"antrea.io/antrea/v2/pkg/apis/controlplane"
+	crdv1beta1 "antrea.io/antrea/v2/pkg/apis/crd/v1beta1"
+	crdv1b1listers "antrea.io/antrea/v2/pkg/client/listers/crd/v1beta1"
+	antreatypes "antrea.io/antrea/v2/pkg/controller/types"
+	"antrea.io/antrea/v2/pkg/util/k8s"
 )
 
 func TestProcessClusterNetworkPolicy(t *testing.T) {

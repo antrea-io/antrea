@@ -23,9 +23,9 @@ import (
 	"github.com/stretchr/testify/require"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	"antrea.io/antrea/pkg/antctl/raw/check"
-	crdv1beta1 "antrea.io/antrea/pkg/apis/crd/v1beta1"
-	antreafake "antrea.io/antrea/pkg/client/clientset/versioned/fake"
+	"antrea.io/antrea/v2/pkg/antctl/raw/check"
+	crdv1beta1 "antrea.io/antrea/v2/pkg/apis/crd/v1beta1"
+	antreafake "antrea.io/antrea/v2/pkg/client/clientset/versioned/fake"
 )
 
 func overrideTestsRegistry(t *testing.T, registry map[string]Test) {

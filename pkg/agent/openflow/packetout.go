@@ -19,7 +19,7 @@ import (
 
 	"antrea.io/libOpenflow/protocol"
 
-	binding "antrea.io/antrea/pkg/ovs/openflow"
+	binding "antrea.io/antrea/v2/pkg/ovs/openflow"
 )
 
 const (

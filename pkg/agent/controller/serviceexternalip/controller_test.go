@@ -33,10 +33,10 @@ import (
 	utilnet "k8s.io/utils/net"
 	"k8s.io/utils/ptr"
 
-	"antrea.io/antrea/pkg/agent/apis"
-	ipassignertest "antrea.io/antrea/pkg/agent/ipassigner/testing"
-	"antrea.io/antrea/pkg/agent/memberlist"
-	"antrea.io/antrea/pkg/agent/types"
+	"antrea.io/antrea/v2/pkg/agent/apis"
+	ipassignertest "antrea.io/antrea/v2/pkg/agent/ipassigner/testing"
+	"antrea.io/antrea/v2/pkg/agent/memberlist"
+	"antrea.io/antrea/v2/pkg/agent/types"
 )
 
 const (

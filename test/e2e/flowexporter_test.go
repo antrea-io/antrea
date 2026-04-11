@@ -27,8 +27,8 @@ import (
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	"antrea.io/antrea/pkg/apis/crd/v1alpha1"
-	flowaggregatorconfig "antrea.io/antrea/pkg/config/flowaggregator"
+	"antrea.io/antrea/v2/pkg/apis/crd/v1alpha1"
+	flowaggregatorconfig "antrea.io/antrea/v2/pkg/config/flowaggregator"
 )
 
 var (

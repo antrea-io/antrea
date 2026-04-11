@@ -16,22 +16,19 @@ package s3uploader
 
 import (
 	"bytes"
-	"context"
 	"fmt"
 	"strings"
 	"testing"
 	"time"
 
-	"github.com/aws/aws-sdk-go-v2/config"
 	s3manager "github.com/aws/aws-sdk-go-v2/feature/s3/manager"
-	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 
-	s3uploadertesting "antrea.io/antrea/pkg/flowaggregator/s3uploader/testing"
-	flowaggregatortesting "antrea.io/antrea/pkg/flowaggregator/testing"
+	s3uploadertesting "antrea.io/antrea/v2/pkg/flowaggregator/s3uploader/testing"
+	flowaggregatortesting "antrea.io/antrea/v2/pkg/flowaggregator/testing"
 )
 
 var (
@@ -98,8 +95,7 @@ func TestCacheRecord(t *testing.T) {
 func TestBatchUploadAll(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	mockS3Uploader := s3uploadertesting.NewMockS3UploaderAPI(ctrl)
-	ctx := context.Background()
-	mockS3Uploader.EXPECT().Upload(ctx, gomock.Any(), nil).Return(nil, nil)
+	mockS3Uploader.EXPECT().Upload(gomock.Any(), gomock.Any(), nil).Return(nil, nil)
 	s3UploadProc := S3UploadProcess{
 		compress:         false,
 		maxRecordPerFile: 10,
@@ -113,7 +109,7 @@ func TestBatchUploadAll(t *testing.T) {
 	s3UploadProc.CacheRecord(record)
 	assert.EqualValues(t, 1, s3UploadProc.cachedRecordCount)
 
-	err := s3UploadProc.batchUploadAll(ctx)
+	err := s3UploadProc.batchUploadAll(t.Context())
 	assert.NoError(t, err)
 	assert.Equal(t, 0, len(s3UploadProc.bufferQueue))
 	assert.Equal(t, 0, len(s3UploadProc.buffersToUpload))
@@ -124,10 +120,9 @@ func TestBatchUploadAll(t *testing.T) {
 func TestBatchUploadAllPartialSuccess(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	mockS3Uploader := s3uploadertesting.NewMockS3UploaderAPI(ctrl)
-	ctx := context.Background()
 	gomock.InOrder(
-		mockS3Uploader.EXPECT().Upload(ctx, gomock.Any(), nil).Return(nil, nil),
-		mockS3Uploader.EXPECT().Upload(ctx, gomock.Any(), nil).Return(nil, fmt.Errorf("random error")),
+		mockS3Uploader.EXPECT().Upload(gomock.Any(), gomock.Any(), nil).Return(nil, nil),
+		mockS3Uploader.EXPECT().Upload(gomock.Any(), gomock.Any(), nil).Return(nil, fmt.Errorf("random error")),
 	)
 	s3UploadProc := S3UploadProcess{
 		compress:         false,
@@ -143,15 +138,18 @@ func TestBatchUploadAllPartialSuccess(t *testing.T) {
 	record = flowaggregatortesting.PrepareTestFlowRecord(false)
 	s3UploadProc.CacheRecord(record)
 
-	err := s3UploadProc.batchUploadAll(ctx)
+	err := s3UploadProc.batchUploadAll(t.Context())
 	assert.Equal(t, 0, len(s3UploadProc.bufferQueue))
 	assert.Equal(t, 1, len(s3UploadProc.buffersToUpload))
 	assert.EqualError(t, err, "error when uploading file to S3: random error")
 }
 
 func TestBatchUploadAllError(t *testing.T) {
-	ctx := context.Background()
-	s3uploader := &S3Uploader{}
+	ctrl := gomock.NewController(t)
+	mockS3Uploader := s3uploadertesting.NewMockS3UploaderAPI(ctrl)
+	uploadErr := fmt.Errorf("operation error S3: PutObject, no such bucket")
+	mockS3Uploader.EXPECT().Upload(gomock.Any(), gomock.Any(), nil).Return(nil, uploadErr)
+
 	s3UploadProc := S3UploadProcess{
 		bucketName:       "test-bucket-name",
 		compress:         false,
@@ -159,19 +157,14 @@ func TestBatchUploadAllError(t *testing.T) {
 		currentBuffer:    &bytes.Buffer{},
 		bufferQueue:      make([]*bytes.Buffer, 0),
 		buffersToUpload:  make([]*bytes.Buffer, 0, maxNumBuffersPendingUpload),
-		s3UploaderAPI:    s3uploader,
+		s3UploaderAPI:    mockS3Uploader,
 	}
-	cfg, _ := config.LoadDefaultConfig(ctx, config.WithRegion("us-west-2"))
-	s3UploadProc.awsS3Client = s3.NewFromConfig(cfg)
-	s3UploadProc.awsS3Uploader = s3manager.NewUploader(s3UploadProc.awsS3Client)
 
 	record := flowaggregatortesting.PrepareTestFlowRecord(true)
 	s3UploadProc.CacheRecord(record)
 	assert.EqualValues(t, 1, s3UploadProc.cachedRecordCount)
 
-	// It is expected to fail when calling uploadFile, as the correct S3 bucket
-	// configuration is not provided.
-	err := s3UploadProc.batchUploadAll(ctx)
+	err := s3UploadProc.batchUploadAll(t.Context())
 	assert.Equal(t, 1, len(s3UploadProc.buffersToUpload))
 	assert.Equal(t, 0, len(s3UploadProc.bufferQueue))
 	assert.Equal(t, "", s3UploadProc.currentBuffer.String())
@@ -184,7 +177,7 @@ func TestFlowRecordPeriodicCommit(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	mockS3Uploader := s3uploadertesting.NewMockS3UploaderAPI(ctrl)
 	waitCh := make(chan struct{})
-	mockS3Uploader.EXPECT().Upload(context.Background(), gomock.Any(), nil).DoAndReturn(
+	mockS3Uploader.EXPECT().Upload(gomock.Any(), gomock.Any(), nil).DoAndReturn(
 		func(arg0, arg1, arg2 interface{}, arg3 ...interface{}) (*s3manager.UploadOutput, error) {
 			close(waitCh)
 			return nil, nil

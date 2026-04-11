@@ -34,11 +34,12 @@ import (
 	k8stesting "k8s.io/client-go/testing"
 	"k8s.io/client-go/tools/cache"
 
-	crdv1b1 "antrea.io/antrea/pkg/apis/crd/v1beta1"
-	fakecrd "antrea.io/antrea/pkg/client/clientset/versioned/fake"
-	crdinformers "antrea.io/antrea/pkg/client/informers/externalversions"
-	listers "antrea.io/antrea/pkg/client/listers/crd/v1beta1"
-	annotation "antrea.io/antrea/pkg/ipam"
+	crdv1b1 "antrea.io/antrea/v2/pkg/apis/crd/v1beta1"
+	fakecrd "antrea.io/antrea/v2/pkg/client/clientset/versioned/fake"
+	crdinformers "antrea.io/antrea/v2/pkg/client/informers/externalversions"
+	listers "antrea.io/antrea/v2/pkg/client/listers/crd/v1beta1"
+	annotation "antrea.io/antrea/v2/pkg/ipam"
+	"antrea.io/antrea/v2/pkg/util/k8s"
 )
 
 type fakeAntreaIPAMController struct {
@@ -438,4 +439,21 @@ func BenchmarkCleanUpStaleIPAddresses(b *testing.B) {
 			}
 		})
 	}
+}
+
+func TestEnqueueStatefulSetDeleteEvent_Tombstone(t *testing.T) {
+	namespace, pool, statefulSet := initTestObjects(false, true, 3)
+	controller := newFakeAntreaIPAMController(pool, namespace, statefulSet)
+
+	expectedKey := k8s.NamespacedName(statefulSet.Namespace, statefulSet.Name)
+
+	// Deliver the delete as a tombstone, as the informer does after a watch reconnect.
+	controller.enqueueStatefulSetDeleteEvent(cache.DeletedFinalStateUnknown{
+		Key: expectedKey,
+		Obj: statefulSet,
+	})
+
+	require.Equal(t, 1, controller.statefulSetQueue.Len())
+	key, _ := controller.statefulSetQueue.Get()
+	assert.Equal(t, expectedKey, key)
 }

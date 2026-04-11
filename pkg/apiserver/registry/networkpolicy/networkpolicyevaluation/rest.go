@@ -23,8 +23,8 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apiserver/pkg/registry/rest"
 
-	"antrea.io/antrea/pkg/apis/controlplane"
-	"antrea.io/antrea/pkg/controller/networkpolicy"
+	"antrea.io/antrea/v2/pkg/apis/controlplane"
+	"antrea.io/antrea/v2/pkg/controller/networkpolicy"
 )
 
 type REST struct {

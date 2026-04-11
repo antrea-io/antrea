@@ -19,16 +19,16 @@ import (
 	"fmt"
 	"os"
 	"path"
-	"reflect"
 	"time"
 
 	"github.com/google/uuid"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/klog/v2"
 
-	flowpb "antrea.io/antrea/pkg/apis/flow/v1alpha1"
-	"antrea.io/antrea/pkg/flowaggregator/clickhouseclient"
-	"antrea.io/antrea/pkg/flowaggregator/options"
+	flowpb "antrea.io/antrea/v2/pkg/apis/flow/v1alpha1"
+	"antrea.io/antrea/v2/pkg/flowaggregator/clickhouseclient"
+	"antrea.io/antrea/v2/pkg/flowaggregator/options"
+	"antrea.io/antrea/v2/pkg/flowaggregator/ringbuffer"
 )
 
 type ClickHouseExporter struct {
@@ -87,41 +87,23 @@ func NewClickHouseExporter(clusterUUID uuid.UUID, opt *options.Options) (*ClickH
 	}, nil
 }
 
-func (e *ClickHouseExporter) AddRecord(record *flowpb.Flow, isRecordIPv6 bool) error {
-	return e.chExportProcess.CacheRecord(record)
-}
-
-func (e *ClickHouseExporter) Start() {
+// Run consumes flow records from the ring buffer and writes them to ClickHouse.
+// It blocks until ctx is cancelled or the consumer signals shutdown.
+func (e *ClickHouseExporter) Run(ctx context.Context, buf ringbuffer.BroadcastBuffer[*flowpb.Flow]) {
+	consumer := buf.NewConsumer(ringbuffer.WithMaxConsumeDeadline(consumeDeadline))
 	e.chExportProcess.Start()
-}
+	defer e.chExportProcess.Stop()
 
-func (e *ClickHouseExporter) Stop() {
-	e.chExportProcess.Stop()
-}
-
-func (e *ClickHouseExporter) UpdateOptions(opt *options.Options) {
-	chConfig := buildClickHouseConfig(opt)
-	connect, err := clickhouseclient.PrepareClickHouseConnection(chConfig)
-	if err != nil {
-		klog.ErrorS(err, "Error when checking new connection")
-		return
+	records := make([]*flowpb.Flow, consumeMultipleBatchSize)
+	for {
+		n, _, shutdown := consumer.ConsumeMultiple(records)
+		for _, record := range records[:n] {
+			if err := e.chExportProcess.CacheRecord(record); err != nil {
+				klog.ErrorS(err, "Error when caching record for ClickHouse")
+			}
+		}
+		if shutdown || ctx.Err() != nil {
+			return
+		}
 	}
-	if reflect.DeepEqual(chConfig, e.chExportProcess.GetClickHouseConfig()) {
-		return
-	}
-	klog.InfoS("Updating ClickHouse")
-	if chConfig.CommitInterval != e.chExportProcess.GetCommitInterval() {
-		e.chExportProcess.SetCommitInterval(chConfig.CommitInterval)
-	}
-	// When a new commitInterval was updated through
-	// e.chExportProcess.SetCommitInterval, the following
-	// e.chExportProcess.UpdateCH will not be called.
-	if !reflect.DeepEqual(chConfig, e.chExportProcess.GetClickHouseConfig()) {
-		e.chExportProcess.UpdateCH(chConfig, connect)
-	}
-	klog.InfoS("New ClickHouse configuration", "database", chConfig.Database, "databaseURL", chConfig.DatabaseURL, "debug", chConfig.Debug, "compress", *chConfig.Compress, "commitInterval", chConfig.CommitInterval)
-}
-
-func (e *ClickHouseExporter) Flush() error {
-	return nil
 }

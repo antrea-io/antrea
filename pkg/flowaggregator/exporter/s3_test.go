@@ -23,12 +23,12 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"antrea.io/antrea/pkg/config/flowaggregator"
-	"antrea.io/antrea/pkg/flowaggregator/options"
-	"antrea.io/antrea/pkg/flowaggregator/s3uploader"
+	"antrea.io/antrea/v2/pkg/config/flowaggregator"
+	"antrea.io/antrea/v2/pkg/flowaggregator/options"
+	"antrea.io/antrea/v2/pkg/flowaggregator/s3uploader"
 )
 
-func TestS3_UpdateOptions(t *testing.T) {
+func TestS3_NewS3Exporter(t *testing.T) {
 	GetS3BucketRegionSaved := s3uploader.GetS3BucketRegion
 	s3uploader.GetS3BucketRegion = func(ctx context.Context, bucket string, regionHint string) (string, error) {
 		return "us-west-2", nil
@@ -50,34 +50,10 @@ func TestS3_UpdateOptions(t *testing.T) {
 		},
 		S3UploadInterval: 8 * time.Second,
 	}
-	s3Input := buildS3Input(opt)
-	s3UploadProcess, err := s3uploader.NewS3UploadProcess(s3Input, uuid.New().String())
+	exporter, err := NewS3Exporter(uuid.New(), opt)
 	require.NoError(t, err)
-	s3Exporter := S3Exporter{s3Input: &s3Input, s3UploadProcess: s3UploadProcess}
-	s3Exporter.Start()
-	assert.Equal(t, s3Exporter.s3UploadProcess.GetBucketName(), "defaultBucketName")
-	assert.Equal(t, s3Exporter.s3UploadProcess.GetBucketPrefix(), "defaultBucketPrefix")
-	assert.Equal(t, s3Exporter.s3UploadProcess.GetRegion(), "us-west-2")
-	assert.Equal(t, s3Exporter.s3UploadProcess.GetUploadInterval().String(), "8s")
-
-	compress = true
-	newOpt := &options.Options{
-		Config: &flowaggregator.FlowAggregatorConfig{
-			S3Uploader: flowaggregator.S3UploaderConfig{
-				BucketName:        "testBucketName",
-				BucketPrefix:      "testBucketPrefix",
-				Region:            "us-west-1",
-				RecordFormat:      "CSV",
-				Compress:          &compress,
-				MaxRecordsPerFile: 0,
-			},
-		},
-		S3UploadInterval: 5 * time.Second,
-	}
-	s3Exporter.UpdateOptions(newOpt)
-	assert.Equal(t, s3Exporter.s3UploadProcess.GetBucketName(), "testBucketName")
-	assert.Equal(t, s3Exporter.s3UploadProcess.GetBucketPrefix(), "testBucketPrefix")
-	assert.Equal(t, s3Exporter.s3UploadProcess.GetRegion(), "us-west-1")
-	assert.Equal(t, s3Exporter.s3UploadProcess.GetUploadInterval().String(), "5s")
-	s3Exporter.Stop()
+	require.NotNil(t, exporter)
+	assert.Equal(t, "defaultBucketName", exporter.s3UploadProcess.GetBucketName())
+	assert.Equal(t, "defaultBucketPrefix", exporter.s3UploadProcess.GetBucketPrefix())
+	assert.Equal(t, "us-west-2", exporter.s3UploadProcess.GetRegion())
 }

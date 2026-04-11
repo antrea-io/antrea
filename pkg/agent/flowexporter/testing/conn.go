@@ -20,8 +20,8 @@ import (
 
 	"github.com/google/uuid"
 
-	"antrea.io/antrea/pkg/agent/flowexporter/connection"
-	"antrea.io/antrea/pkg/agent/flowexporter/utils"
+	"antrea.io/antrea/v2/pkg/agent/flowexporter/connection"
+	"antrea.io/antrea/v2/pkg/agent/flowexporter/utils"
 )
 
 func GetConnection(isIPv6 bool, isPresent bool, statusFlag uint32, protoID uint8, tcpState string) *connection.Connection {

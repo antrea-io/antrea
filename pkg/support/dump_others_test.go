@@ -23,8 +23,8 @@ import (
 	"path/filepath"
 	"testing"
 
-	ipsettest "antrea.io/antrea/pkg/agent/util/ipset/testing"
-	"antrea.io/antrea/pkg/util/logdir"
+	ipsettest "antrea.io/antrea/v2/pkg/agent/util/ipset/testing"
+	"antrea.io/antrea/v2/pkg/util/logdir"
 
 	"github.com/spf13/afero"
 	"github.com/stretchr/testify/assert"

@@ -24,7 +24,7 @@ import (
 
 	"k8s.io/apimachinery/pkg/util/intstr"
 
-	"antrea.io/antrea/pkg/agent/util/ipset"
+	"antrea.io/antrea/v2/pkg/agent/util/ipset"
 )
 
 type iptablesRule struct {

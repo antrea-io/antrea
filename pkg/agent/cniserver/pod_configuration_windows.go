@@ -31,8 +31,8 @@ import (
 	"k8s.io/client-go/util/workqueue"
 	"k8s.io/klog/v2"
 
-	"antrea.io/antrea/pkg/agent/cniserver/ipam"
-	"antrea.io/antrea/pkg/agent/interfacestore"
+	"antrea.io/antrea/v2/pkg/agent/cniserver/ipam"
+	"antrea.io/antrea/v2/pkg/agent/interfacestore"
 )
 
 var (

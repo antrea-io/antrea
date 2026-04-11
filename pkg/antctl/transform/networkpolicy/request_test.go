@@ -21,7 +21,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"k8s.io/apimachinery/pkg/runtime"
 
-	cpv1beta "antrea.io/antrea/pkg/apis/controlplane/v1beta2"
+	cpv1beta "antrea.io/antrea/v2/pkg/apis/controlplane/v1beta2"
 )
 
 func TestNewNetworkPolicyEvaluation(t *testing.T) {

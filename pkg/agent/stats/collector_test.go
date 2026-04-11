@@ -22,11 +22,11 @@ import (
 	"go.uber.org/mock/gomock"
 	"k8s.io/apimachinery/pkg/types"
 
-	oftest "antrea.io/antrea/pkg/agent/openflow/testing"
-	agenttypes "antrea.io/antrea/pkg/agent/types"
-	cpv1beta "antrea.io/antrea/pkg/apis/controlplane/v1beta2"
-	statsv1alpha1 "antrea.io/antrea/pkg/apis/stats/v1alpha1"
-	queriertest "antrea.io/antrea/pkg/querier/testing"
+	oftest "antrea.io/antrea/v2/pkg/agent/openflow/testing"
+	agenttypes "antrea.io/antrea/v2/pkg/agent/types"
+	cpv1beta "antrea.io/antrea/v2/pkg/apis/controlplane/v1beta2"
+	statsv1alpha1 "antrea.io/antrea/v2/pkg/apis/stats/v1alpha1"
+	queriertest "antrea.io/antrea/v2/pkg/querier/testing"
 )
 
 var (

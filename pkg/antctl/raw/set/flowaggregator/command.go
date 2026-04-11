@@ -23,13 +23,13 @@ import (
 	"time"
 
 	"github.com/spf13/cobra"
-	"gopkg.in/yaml.v2"
+	"go.yaml.in/yaml/v2"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 
-	"antrea.io/antrea/pkg/antctl/raw"
-	flowaggregatorconfig "antrea.io/antrea/pkg/config/flowaggregator"
+	"antrea.io/antrea/v2/pkg/antctl/raw"
+	flowaggregatorconfig "antrea.io/antrea/v2/pkg/config/flowaggregator"
 )
 
 // Command is the support bundle command implementation.

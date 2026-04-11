@@ -17,7 +17,7 @@ package intermediate
 import (
 	"time"
 
-	flowpb "antrea.io/antrea/pkg/apis/flow/v1alpha1"
+	flowpb "antrea.io/antrea/v2/pkg/apis/flow/v1alpha1"
 )
 
 type AggregationProcess interface {

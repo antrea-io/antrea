@@ -20,8 +20,8 @@ import (
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/labels"
 
-	"antrea.io/antrea/pkg/agent/proxy/types"
-	k8sproxy "antrea.io/antrea/third_party/proxy"
+	"antrea.io/antrea/v2/pkg/agent/proxy/types"
+	k8sproxy "antrea.io/antrea/v2/third_party/proxy"
 )
 
 type serviceChangesTracker struct {

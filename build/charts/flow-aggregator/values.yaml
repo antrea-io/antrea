@@ -40,6 +40,14 @@ inactiveFlowRecordTimeout: 90s
 aggregatorTransportProtocol: "tls"
 # -- Provide an extra DNS name or IP address of flow aggregator for generating TLS certificate.
 flowAggregatorAddress: ""
+# -- Number of entries in the ring buffer used to distribute flow records to exporters.
+# Each exporter independently consumes from the buffer. This defines the maximum number
+# of flow records the buffer can store before new records overwrite the oldest ones.
+# If the value is too small, slower consumers are more likely to lose records, there is
+# less tolerance to temporary consumer unavailability, and fewer historical snapshots
+# are available. If the value is too large, it will result in higher memory usage.
+# Defaults to 8192.
+recordBufferSize: 8192
 # -- Provide a clusterID to be added to records. This is only consumed by the
 # flowCollector (IPFIX) exporter.
 clusterID: ""

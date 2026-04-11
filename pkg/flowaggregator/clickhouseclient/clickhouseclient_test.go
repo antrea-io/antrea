@@ -15,7 +15,6 @@
 package clickhouseclient
 
 import (
-	"context"
 	"database/sql/driver"
 	"fmt"
 	"reflect"
@@ -28,9 +27,9 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"antrea.io/antrea/pkg/flowaggregator/flowrecord"
-	flowrecordtesting "antrea.io/antrea/pkg/flowaggregator/flowrecord/testing"
-	flowaggregatortesting "antrea.io/antrea/pkg/flowaggregator/testing"
+	"antrea.io/antrea/v2/pkg/flowaggregator/flowrecord"
+	flowrecordtesting "antrea.io/antrea/v2/pkg/flowaggregator/flowrecord/testing"
+	flowaggregatortesting "antrea.io/antrea/v2/pkg/flowaggregator/testing"
 )
 
 var fakeClusterUUID = uuid.New().String()
@@ -125,7 +124,7 @@ func TestBatchCommitAll(t *testing.T) {
 		WillReturnResult(sqlmock.NewResult(0, 1))
 	mock.ExpectCommit()
 
-	count, err := chExportProc.batchCommitAll(context.Background())
+	count, err := chExportProc.batchCommitAll(t.Context())
 	assert.NoError(t, err, "error occurred when committing record with mock sql db")
 	assert.Equal(t, 1, count)
 	assert.Equal(t, 0, chExportProc.deque.Len())
@@ -156,7 +155,7 @@ func TestBatchCommitAllMultiRecord(t *testing.T) {
 	}
 	mock.ExpectCommit()
 
-	count, err := chExportProc.batchCommitAll(context.Background())
+	count, err := chExportProc.batchCommitAll(t.Context())
 	assert.NoError(t, err, "error occurred when committing record with mock sql db")
 	assert.Equal(t, 10, count)
 	assert.Equal(t, 0, chExportProc.deque.Len())
@@ -185,7 +184,7 @@ func TestBatchCommitAllError(t *testing.T) {
 		fmt.Errorf("mock error for sql stmt exec"))
 	mock.ExpectRollback()
 
-	count, err := chExportProc.batchCommitAll(context.Background())
+	count, err := chExportProc.batchCommitAll(t.Context())
 	assert.Error(t, err, "expected error when SQL transaction error")
 	assert.Equal(t, 0, count)
 	assert.Equal(t, 1, chExportProc.deque.Len())

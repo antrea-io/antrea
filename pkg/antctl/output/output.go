@@ -24,10 +24,10 @@ import (
 	"strings"
 	"text/tabwriter"
 
-	"gopkg.in/yaml.v2"
+	"go.yaml.in/yaml/v2"
 
-	"antrea.io/antrea/pkg/antctl/transform/common"
-	"antrea.io/antrea/pkg/apiserver/apis"
+	"antrea.io/antrea/v2/pkg/antctl/transform/common"
+	"antrea.io/antrea/v2/pkg/apiserver/apis"
 )
 
 const (

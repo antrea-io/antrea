@@ -15,62 +15,15 @@
 package exporter
 
 import (
-	"bytes"
-	"os"
-	"path/filepath"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	flowaggregatorconfig "antrea.io/antrea/pkg/config/flowaggregator"
-	"antrea.io/antrea/pkg/flowaggregator/flowrecord"
-	"antrea.io/antrea/pkg/flowaggregator/options"
-	flowaggregatortesting "antrea.io/antrea/pkg/flowaggregator/testing"
+	flowaggregatorconfig "antrea.io/antrea/v2/pkg/config/flowaggregator"
+	"antrea.io/antrea/v2/pkg/flowaggregator/flowrecord"
+	"antrea.io/antrea/v2/pkg/flowaggregator/options"
 )
-
-func TestLog_UpdateOptions(t *testing.T) {
-	record1 := flowaggregatortesting.PrepareTestFlowRecord(true)
-	record2 := flowaggregatortesting.PrepareTestFlowRecord(true)
-
-	dir, err := os.MkdirTemp("", "flows")
-	defer os.RemoveAll(dir)
-	require.NoError(t, err)
-	path1 := filepath.Join(dir, "1.log")
-	path2 := filepath.Join(dir, "2.log")
-
-	opt := func(path string) *options.Options {
-		return &options.Options{
-			Config: &flowaggregatorconfig.FlowAggregatorConfig{
-				FlowLogger: flowaggregatorconfig.FlowLoggerConfig{
-					Enable:      true,
-					Path:        path,
-					Compress:    new(bool),
-					PrettyPrint: new(bool),
-				},
-			},
-		}
-	}
-
-	countRecords := func(path string) int {
-		data, err := os.ReadFile(path)
-		if err != nil { // assume this always means the file does not exist
-			return 0
-		}
-		return bytes.Count(data, []byte{'\n'})
-	}
-	require.Equal(t, 0, countRecords(path1))
-	require.Equal(t, 0, countRecords(path2))
-
-	logExporter, _ := NewLogExporter(opt(path1))
-	logExporter.Start()
-	require.NoError(t, logExporter.AddRecord(record1, false))
-	logExporter.UpdateOptions(opt(path2))
-	assert.Equal(t, 1, countRecords(path1))
-	require.NoError(t, logExporter.AddRecord(record2, false))
-	logExporter.Stop()
-	assert.Equal(t, 1, countRecords(path2))
-}
 
 func TestLog_Filters(t *testing.T) {
 	type testRecord struct {
@@ -179,7 +132,8 @@ func TestLog_Filters(t *testing.T) {
 					},
 				},
 			}
-			logExporter, _ := NewLogExporter(opt)
+			logExporter, err := NewLogExporter(opt)
+			require.NoError(t, err)
 			for record, expected := range tc.testRecords {
 				assert.Equal(t, expected, logExporter.applyFilters(record.FlowRecord), "unexpected result for record %s", record.name)
 			}

@@ -15,19 +15,30 @@
 package exporter
 
 import (
-	flowpb "antrea.io/antrea/pkg/apis/flow/v1alpha1"
-	"antrea.io/antrea/pkg/flowaggregator/options"
+	"context"
+	"time"
+
+	flowpb "antrea.io/antrea/v2/pkg/apis/flow/v1alpha1"
+	"antrea.io/antrea/v2/pkg/flowaggregator/ringbuffer"
 )
 
-// Interface is the interface that all supported exporters must implement.
-// Note that the objects implementing this interface make no concurrency
-// guarantee: none of the interface functions should be called concurrently.
-type Interface interface {
-	Start()
-	Stop()
-	AddRecord(record *flowpb.Flow, isRecordIPv6 bool) error
-	UpdateOptions(opt *options.Options)
-	// Some exporters may be buffered, in which case the FlowAggregator
-	// should call this method periodically.
-	Flush() error
+const (
+	// consumeDeadline is the maximum time ConsumeMultiple will block before
+	// returning with n==0, giving the Run loop a chance to check ctx
+	// cancellation. Keeping this at 1s bounds shutdown latency for all
+	// exporters regardless of their internal commit/upload intervals.
+	consumeDeadline = 1 * time.Second
+
+	// consumeMultipleBatchSize is the maximum number of records fetched in a
+	// single ConsumeMultiple call. The slice is pre-allocated and reused.
+	consumeMultipleBatchSize = 100
+)
+
+// Runner is the interface that all supported exporters must implement.
+// Run blocks, consuming records from the ring buffer until ctx is cancelled
+// or the buffer signals shutdown. The exporter is responsible for creating
+// its own consumer from the buffer. All resource setup happens at the start
+// of Run; all teardown (flush, close) happens before Run returns.
+type Runner interface {
+	Run(ctx context.Context, buf ringbuffer.BroadcastBuffer[*flowpb.Flow])
 }

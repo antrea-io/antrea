@@ -28,11 +28,11 @@ import (
 	"k8s.io/apimachinery/pkg/util/wait"
 	certutil "k8s.io/client-go/util/cert"
 
-	"antrea.io/antrea/pkg/apis"
-	"antrea.io/antrea/pkg/apis/crd/v1beta1"
-	"antrea.io/antrea/pkg/apiserver/certificate"
-	controllerconfig "antrea.io/antrea/pkg/config/controller"
-	"antrea.io/antrea/pkg/util/k8s"
+	"antrea.io/antrea/v2/pkg/apis"
+	"antrea.io/antrea/v2/pkg/apis/crd/v1beta1"
+	"antrea.io/antrea/v2/pkg/apiserver/certificate"
+	controllerconfig "antrea.io/antrea/v2/pkg/config/controller"
+	"antrea.io/antrea/v2/pkg/util/k8s"
 )
 
 const (

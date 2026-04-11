@@ -26,7 +26,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/klog/v2"
 
-	"antrea.io/antrea/pkg/util/runtime"
+	"antrea.io/antrea/v2/pkg/util/runtime"
 )
 
 const (

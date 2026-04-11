@@ -19,7 +19,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"antrea.io/antrea/pkg/agent/config"
+	"antrea.io/antrea/v2/pkg/agent/config"
 )
 
 func egressInitFlows(isIPv4 bool) []string {

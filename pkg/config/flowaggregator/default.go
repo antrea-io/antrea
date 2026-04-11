@@ -21,7 +21,7 @@ import (
 
 	"k8s.io/utils/ptr"
 
-	"antrea.io/antrea/pkg/apis"
+	"antrea.io/antrea/v2/pkg/apis"
 )
 
 const (
@@ -49,6 +49,8 @@ const (
 	DefaultLoggerMaxSize      = 100
 	DefaultLoggerMaxBackups   = 3
 	DefaultLoggerRecordFormat = "CSV"
+
+	DefaultRecordBufferSize = 8192
 )
 
 func SetConfigDefaults(flowAggregatorConf *FlowAggregatorConfig) {
@@ -120,5 +122,8 @@ func SetConfigDefaults(flowAggregatorConf *FlowAggregatorConfig) {
 	}
 	if flowAggregatorConf.FlowLogger.PrettyPrint == nil {
 		flowAggregatorConf.FlowLogger.PrettyPrint = ptr.To(true)
+	}
+	if flowAggregatorConf.RecordBufferSize == 0 {
+		flowAggregatorConf.RecordBufferSize = DefaultRecordBufferSize
 	}
 }

@@ -30,9 +30,9 @@ import (
 	"github.com/cheggaaa/pb/v3"
 	"github.com/spf13/afero"
 	"github.com/spf13/cobra"
+	"go.yaml.in/yaml/v2"
 	"golang.org/x/sync/errgroup"
 	"golang.org/x/time/rate"
-	"gopkg.in/yaml.v2"
 
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -45,14 +45,14 @@ import (
 	"k8s.io/client-go/rest"
 	"k8s.io/klog/v2"
 
-	"antrea.io/antrea/pkg/antctl/raw"
-	"antrea.io/antrea/pkg/antctl/runtime"
-	"antrea.io/antrea/pkg/apis/crd/v1beta1"
-	systemv1beta1 "antrea.io/antrea/pkg/apis/system/v1beta1"
-	antrea "antrea.io/antrea/pkg/client/clientset/versioned"
-	systemclientset "antrea.io/antrea/pkg/client/clientset/versioned/typed/system/v1beta1"
-	"antrea.io/antrea/pkg/util/compress"
-	"antrea.io/antrea/pkg/util/k8s"
+	"antrea.io/antrea/v2/pkg/antctl/raw"
+	"antrea.io/antrea/v2/pkg/antctl/runtime"
+	"antrea.io/antrea/v2/pkg/apis/crd/v1beta1"
+	systemv1beta1 "antrea.io/antrea/v2/pkg/apis/system/v1beta1"
+	antrea "antrea.io/antrea/v2/pkg/client/clientset/versioned"
+	systemclientset "antrea.io/antrea/v2/pkg/client/clientset/versioned/typed/system/v1beta1"
+	"antrea.io/antrea/v2/pkg/util/compress"
+	"antrea.io/antrea/v2/pkg/util/k8s"
 )
 
 const (
