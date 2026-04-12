@@ -308,6 +308,58 @@ func TestPacketCaptureCompileBPF(t *testing.T) {
 	}
 }
 
+func TestCalculateSkipFalse(t *testing.T) {
+	tt := []struct {
+		name      string
+		handler   *ipFamilyHandler
+		srcIP     net.IP
+		dstIP     net.IP
+		transport *transportFilters
+		expected  uint8
+	}{
+		{
+			name:      "no ip no transport filters",
+			handler:   ipv4Handler,
+			transport: &transportFilters{},
+			expected:  1,
+		},
+		{
+			name:    "ipv4 src and dst ip with src and dst ports",
+			handler: ipv4Handler,
+			srcIP:   net.ParseIP("10.0.0.1"),
+			dstIP:   net.ParseIP("10.0.0.2"),
+			transport: &transportFilters{
+				srcPort: 12345,
+				dstPort: 80,
+			},
+			expected: 12,
+		},
+		{
+			name:    "ipv6 src ip with multiple tcp flags",
+			handler: ipv6Handler,
+			srcIP:   net.ParseIP("fd00:10:244::1"),
+			transport: &transportFilters{
+				tcpFlags: []tcpFlagsFilter{{flag: 0x2, mask: 0x2}, {flag: 0x10, mask: 0x10}},
+			},
+			expected: 15,
+		},
+		{
+			name:    "icmp filters with and without code",
+			handler: ipv6Handler,
+			transport: &transportFilters{
+				icmp: []icmpFilter{{icmpType: 3, icmpCode: ptr.To[uint32](1)}, {icmpType: 128}},
+			},
+			expected: 6,
+		},
+	}
+
+	for _, item := range tt {
+		t.Run(item.name, func(t *testing.T) {
+			assert.Equal(t, item.expected, calculateSkipFalse(item.handler, item.srcIP, item.dstIP, item.transport))
+		})
+	}
+}
+
 // BPFTestCases is the source of truth for BPF equivalence tests.
 // Reference BPF bytecode is generated offline using hack/generate-bpf-testdata.sh.
 func TestBPFEquivalenceWithTcpdump(t *testing.T) {

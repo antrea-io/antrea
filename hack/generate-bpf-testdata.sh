@@ -24,7 +24,7 @@ ROOT_DIR="$(cd "${THIS_DIR}/.." && pwd)"
 pushd "${ROOT_DIR}" > /dev/null
 
 echo "Generating BPF test data..."
-go test ./pkg/agent/packetcapture/capture -tags update_bpf_testdata -run TestUpdateBPFTestdata -count=1 -v -update
+go test ./pkg/agent/packetcapture/capture -tags update_bpf_testdata -run TestUpdateBPFTestdata -count=1 -v
 
 popd > /dev/null
 
