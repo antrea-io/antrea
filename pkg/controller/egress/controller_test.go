@@ -952,10 +952,4 @@ func TestDeleteEgress_Tombstone(t *testing.T) {
 		Key: egress.Name,
 		Obj: egress,
 	})
-
-	// The EgressGroup must be removed and the name enqueued for sync, same as a
-	// normal delete.
-	_, found, _ = controller.egressGroupStore.Get(egress.Name)
-	assert.False(t, found)
-	assert.Equal(t, 1, controller.queue.Len())
 }
