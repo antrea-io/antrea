@@ -42,24 +42,58 @@ type ConntrackConnectionStore struct {
 	networkPolicyReadyTime time.Time
 	protocolFilter         filter.ProtocolFilter
 	connectionStore
-	fromExternalCorrelator *fromExternalCorrelator
+	fromExternalCorrelator *FromExternalCorrelator
 }
 
+// ConntrackPollBatch is the result of one conntrack poll cycle, split by kernel zone at the poller.
+// ZoneZero holds default-zone (zone 0) flows for FromExternalCorrelator ingestion only. AntreaZone
+// holds all non-zone-0 flows from the polled Antrea conntrack zones (IPv4/IPv6 per configuration)
+// and is merged into the connection store.
+type ConntrackPollBatch struct {
+	ZoneZero   []*connection.Connection
+	AntreaZone []*connection.Connection
+}
+
+// NewConntrackConnectionStore creates a connection store. If fromExternal is non-nil, zone-0 flows
+// are correlated with Antrea-zone flows for external-to-Pod export.
 func NewConntrackConnectionStore(
 	npQuerier querier.AgentNetworkPolicyInfoQuerier,
 	podStore objectstore.PodStore,
 	proxier proxy.ProxyQuerier,
 	cfg ConnectionStoreConfig,
+	fromExternal *FromExternalCorrelator,
 ) *ConntrackConnectionStore {
 	return &ConntrackConnectionStore{
 		connectionStore:        NewConnectionStore(npQuerier, podStore, proxier, cfg),
 		protocolFilter:         filter.NewProtocolFilter(cfg.AllowedProtocols),
 		networkPolicyReadyTime: cfg.NetworkPolicyReadyTime,
-		fromExternalCorrelator: newFromExternalCorrelator(),
+		fromExternalCorrelator: fromExternal,
 	}
 }
 
-func (cs *ConntrackConnectionStore) AddOrUpdateConns(conns []*connection.Connection) error {
+func (cs *ConntrackConnectionStore) ingestZoneZero(conn *connection.Connection) {
+	if c := cs.fromExternalCorrelator; c != nil {
+		c.IngestZoneZero(conn, cs.antreaProxier)
+	}
+}
+
+func (cs *ConntrackConnectionStore) correlateIfExternal(conn *connection.Connection) bool {
+	if c := cs.fromExternalCorrelator; c != nil {
+		return c.CorrelateIfExternal(conn)
+	}
+	return false
+}
+
+func (cs *ConntrackConnectionStore) removeFromExternalCorrelator(conn *connection.Connection) {
+	if c := cs.fromExternalCorrelator; c != nil {
+		c.remove(conn)
+	}
+}
+
+func (cs *ConntrackConnectionStore) AddOrUpdateConns(batch *ConntrackPollBatch) error {
+	if batch == nil {
+		batch = &ConntrackPollBatch{}
+	}
 	klog.V(2).InfoS("Updating connection store")
 	// Reset IsPresent flag for all connections in connection map before updating
 	// the dumped flows information in connection map. If the connection does not
@@ -79,7 +113,7 @@ func (cs *ConntrackConnectionStore) AddOrUpdateConns(conns []*connection.Connect
 				if err := cs.deleteConnWithoutLock(key); err != nil {
 					return err
 				}
-				cs.fromExternalCorrelator.remove(conn)
+				cs.removeFromExternalCorrelator(conn)
 			}
 		} else {
 			conn.IsPresent = false
@@ -96,8 +130,15 @@ func (cs *ConntrackConnectionStore) AddOrUpdateConns(conns []*connection.Connect
 		return err
 	}
 
-	// Update only the Connection store. IPFIX records are generated based on Connection store.
-	for _, conn := range conns {
+	// Ingest default conntrack zone (zone 0) first so correlator state exists before Antrea-zone
+	// connections from the same poll batch are merged into the main store.
+	for _, conn := range batch.ZoneZero {
+		if !cs.protocolFilter.Allow(conn.FlowKey.Protocol) {
+			continue
+		}
+		cs.ingestZoneZero(conn)
+	}
+	for _, conn := range batch.AntreaZone {
 		cs.AddOrUpdateConn(conn)
 	}
 
@@ -107,21 +148,16 @@ func (cs *ConntrackConnectionStore) AddOrUpdateConns(conns []*connection.Connect
 }
 
 // AddOrUpdateConn updates the connection if it is already present, i.e., update timestamp, counters etc.,
-// or adds a new connection with the resolved K8s metadata.
+// or adds a new connection with the resolved K8s metadata. Zone 0 flows are not added here.
 func (cs *ConntrackConnectionStore) AddOrUpdateConn(conn *connection.Connection) {
 	if !cs.protocolFilter.Allow(conn.FlowKey.Protocol) {
 		return
 	}
 
 	conn.IsPresent = true
-
-	if cs.fromExternalCorrelator.filterAndStoreExternalSource(conn, cs.antreaProxier) {
-		return
-	}
-	fromExternal := cs.fromExternalCorrelator.correlateIfExternal(conn)
+	fromExternal := cs.correlateIfExternal(conn)
 
 	connKey := connection.NewConnectionKey(conn)
-
 	existingConn, exists := cs.connections[connKey]
 	if exists {
 		existingConn.IsPresent = conn.IsPresent
@@ -162,13 +198,13 @@ func (cs *ConntrackConnectionStore) AddOrUpdateConn(conn *connection.Connection)
 			return
 		}
 		if conn.Mark&openflow.ServiceCTMark.GetRange().ToNXRange().ToUint32Mask() == openflow.ServiceCTMark.GetValue() || fromExternal {
-			clusterIP := conn.OriginalDestinationAddress.String()
+			serviceFrontend := conn.OriginalDestinationAddress.String()
 			svcPort := conn.OriginalDestinationPort
 			protocol, err := lookupServiceProtocol(conn.FlowKey.Protocol)
 			if err != nil {
 				klog.InfoS("Could not retrieve Service protocol", "error", err)
 			} else {
-				serviceStr := fmt.Sprintf("%s:%d/%s", clusterIP, svcPort, protocol)
+				serviceStr := fmt.Sprintf("%s:%d/%s", serviceFrontend, svcPort, protocol)
 				cs.fillServiceInfo(conn, serviceStr)
 			}
 		}
@@ -237,11 +273,6 @@ func (cs *ConntrackConnectionStore) DeleteAllConnections() int {
 	metrics.TotalAntreaConnectionsInConnTrackTable.Set(0)
 	cs.expirePriorityQueue.Clear()
 	return num
-}
-
-// Stop terminates background goroutines owned by the store.
-func (cs *ConntrackConnectionStore) Stop() {
-	cs.fromExternalCorrelator.stopCleanUp()
 }
 
 func (cs *ConntrackConnectionStore) GetPriorityQueue() *priorityqueue.ExpirePriorityQueue {
