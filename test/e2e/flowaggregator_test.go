@@ -1434,6 +1434,25 @@ func getUint64FieldFromRecord(t require.TestingT, record string, field string) u
 	return 0
 }
 
+// assertIPFIXRecordProxySnatUnset checks IPFIX collector text for proxy SNAT info elements. For
+// NodePort traffic with externalTrafficPolicy Local hitting a local endpoint, conntrack is
+// symmetric so the agent should not export a non-zero proxy SNAT (see NetlinkFlowToAntreaConnection
+// and correlateExternal).
+func assertIPFIXRecordProxySnatUnset(t *testing.T, record string) {
+	t.Helper()
+	for _, line := range strings.Split(record, "\n") {
+		s := strings.TrimSpace(line)
+		switch {
+		case strings.HasPrefix(s, "proxySnatIPv4:"):
+			assert.Contains(t, s, "0.0.0.0", "proxySnatIPv4 should be unset for symmetric/local-endpoint flows, line: %s", line)
+		case strings.HasPrefix(s, "proxySnatIPv6:"):
+			assert.Contains(t, s, "::", "proxySnatIPv6 should be unset (::), line: %s", line)
+		case strings.HasPrefix(s, "proxySnatPort:"):
+			assert.Regexp(t, `proxySnatPort:\s*0\b`, s, "proxySnatPort should be 0, line: %s", line)
+		}
+	}
+}
+
 // getCollectorOutput polls the output of go-ipfix collector and checks if we have
 // received all the expected records for a given flow with source IP, destination IP
 // and source port. We send source port to ignore the control flows during the
@@ -2055,6 +2074,37 @@ func testExternalToPodFlows(t *testing.T, data *TestData, isIPv6 bool) {
 			flushFlowsFromCollector(t, data, isIPv6)
 		})
 	}
+
+	// NodePort with externalTrafficPolicy Local: exported flows should not carry proxySnat fields.
+	t.Run("NodePortExternalTrafficPolicyLocal", func(t *testing.T) {
+		skipIfProxyDisabled(t, data)
+		svcLocalName := "node-port-etp-local"
+		if isIPv6 {
+			svcLocalName += "v6"
+		}
+		svcETPLocal, err := data.CreateServiceWithAnnotations(svcLocalName, data.testNamespace, 80, containerPort, corev1.ProtocolTCP, map[string]string{"app": "nginx"}, false, true, corev1.ServiceTypeNodePort, &ipFamily, nil)
+		require.NoError(t, err)
+		t.Cleanup(func() {
+			_ = data.clientset.CoreV1().Services(data.testNamespace).Delete(context.Background(), svcLocalName, metav1.DeleteOptions{})
+		})
+		createExternalToPodConnection(t, svcETPLocal, destinationNodeIndex, isIPv6)
+		time.Sleep(5 * time.Second)
+		flushFlowsFromCollector(t, data, isIPv6)
+		sourceIP, sourcePort := createExternalToPodConnection(t, svcETPLocal, destinationNodeIndex, isIPv6)
+		var dstIP string
+		if isIPv6 {
+			dstIP = nginxIP.IPv6.String()
+		} else {
+			dstIP = nginxIP.IPv4.String()
+		}
+		srcPortFilter := "sourceTransportPort: " + sourcePort
+		records := getCollectorOutput(t, sourceIP, dstIP, srcPortFilter, false, false, isIPv6, data, "", getCollectorOutputDefaultTimeout)
+		require.NotEmpty(t, records, "Expected flows for NodePort with ExternalTrafficPolicy Local")
+		for _, record := range records {
+			assert.Contains(t, record, nginxPodName, "Record should include destination Pod name")
+			assertIPFIXRecordProxySnatUnset(t, record)
+		}
+	})
 }
 
 func flushFlowsFromCollector(t *testing.T, data *TestData, isIPv6 bool) {

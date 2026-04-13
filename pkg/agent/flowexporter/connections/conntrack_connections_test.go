@@ -255,7 +255,7 @@ func TestConntrackConnectionStore_AddOrUpdateConn(t *testing.T) {
 			mockProxier := proxytest.NewMockProxyQuerier(ctrl)
 			npQuerier := queriertest.NewMockAgentNetworkPolicyInfoQuerier(ctrl)
 
-			conntrackConnStore := NewConntrackConnectionStore(npQuerier, mockPodStore, mockProxier, testFlowExporterOptions)
+			conntrackConnStore := NewConntrackConnectionStore(npQuerier, mockPodStore, mockProxier, testFlowExporterOptions, nil)
 			// Set the networkPolicyReadyTime to simulate that NetworkPolicies are ready
 			conntrackConnStore.networkPolicyReadyTime = networkPolicyReadyTime
 
@@ -276,6 +276,8 @@ func TestConntrackConnectionStore_AddOrUpdateConn(t *testing.T) {
 }
 
 func TestConntrackConnectionStore_AddOrUpdateConn_FromExternalConns(t *testing.T) {
+	fe := NewFromExternalCorrelator()
+	t.Cleanup(fe.StopCleanUp)
 	refTime := time.Now()
 	networkPolicyReadyTime := refTime.Add(-time.Hour)
 
@@ -415,14 +417,16 @@ func TestConntrackConnectionStore_AddOrUpdateConn_FromExternalConns(t *testing.T
 	mockPodStore := objectstoretest.NewMockPodStore(ctrl)
 	mockProxier := proxytest.NewMockProxyQuerier(ctrl)
 	npQuerier := queriertest.NewMockAgentNetworkPolicyInfoQuerier(ctrl)
-	conntrackConnStore := NewConntrackConnectionStore(npQuerier, mockPodStore, mockProxier, testFlowExporterOptions)
+	conntrackConnStore := NewConntrackConnectionStore(npQuerier, mockPodStore, mockProxier, testFlowExporterOptions, fe)
 	conntrackConnStore.networkPolicyReadyTime = networkPolicyReadyTime
 
 	// Add Zone Zero
 	protocol, _ := lookupServiceProtocol(zoneZeroConn.FlowKey.Protocol)
 	serviceStr := fmt.Sprintf("%s:%d/%s", zoneZeroConn.OriginalDestinationAddress.String(), zoneZeroConn.OriginalDestinationPort, protocol)
 	mockProxier.EXPECT().GetServiceByIP(serviceStr).Return(servicePortName, true)
-	conntrackConnStore.AddOrUpdateConn(zoneZeroConn)
+	if conntrackConnStore.protocolFilter.Allow(zoneZeroConn.FlowKey.Protocol) {
+		conntrackConnStore.ingestZoneZero(zoneZeroConn)
+	}
 
 	// Add Antrea Zone
 	mockPodStore.EXPECT().GetPodByIPAndTime(zoneZeroConn.FlowKey.SourceAddress.String(), gomock.Any()).Return(nil, false)
@@ -442,7 +446,9 @@ func TestConntrackConnectionStore_AddOrUpdateConn_FromExternalConns(t *testing.T
 	protocol, _ = lookupServiceProtocol(updatedZoneZeroConn.FlowKey.Protocol)
 	serviceStr = fmt.Sprintf("%s:%d/%s", updatedZoneZeroConn.OriginalDestinationAddress.String(), updatedZoneZeroConn.OriginalDestinationPort, protocol)
 	mockProxier.EXPECT().GetServiceByIP(serviceStr).Return(servicePortName, true)
-	conntrackConnStore.AddOrUpdateConn(updatedZoneZeroConn)
+	if conntrackConnStore.protocolFilter.Allow(updatedZoneZeroConn.FlowKey.Protocol) {
+		conntrackConnStore.ingestZoneZero(updatedZoneZeroConn)
+	}
 
 	//Add updated Antrea Zone
 	conntrackConnStore.AddOrUpdateConn(&updatedAntreaZoneConn)
@@ -513,7 +519,7 @@ func TestConnectionStore_DeleteConnectionByKey(t *testing.T) {
 	metrics.TotalAntreaConnectionsInConnTrackTable.Set(float64(len(testFlows)))
 	// Create connectionStore
 	mockPodStore := objectstoretest.NewMockPodStore(ctrl)
-	connStore := NewConntrackConnectionStore(nil, mockPodStore, nil, testFlowExporterOptions)
+	connStore := NewConntrackConnectionStore(nil, mockPodStore, nil, testFlowExporterOptions, nil)
 	// Add flows to the connection store.
 	for i, flow := range testFlows {
 		connStore.connections[*testFlowKeys[i]] = flow
@@ -531,7 +537,7 @@ func TestConnectionStore_DeleteConnectionByKey(t *testing.T) {
 func TestConntrackConnectionStore_DeleteAllConnections(t *testing.T) {
 	metrics.TotalAntreaConnectionsInConnTrackTable.Set(0)
 
-	cs := NewConntrackConnectionStore(nil, nil, nil, testFlowExporterOptions)
+	cs := NewConntrackConnectionStore(nil, nil, nil, testFlowExporterOptions, nil)
 
 	conns := []*connection.Connection{
 		{
@@ -625,13 +631,13 @@ func TestConntrackConnectionStore_AddOrUpdateConns(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			cs := NewConntrackConnectionStore(nil, nil, nil, testFlowExporterOptions)
+			cs := NewConntrackConnectionStore(nil, nil, nil, testFlowExporterOptions, nil)
 
 			require.NotNil(t, tt.oldConn)
 			addConnToStore(cs, tt.oldConn)
 
 			if tt.resubmitOldConn {
-				require.NoError(t, cs.AddOrUpdateConns([]*connection.Connection{tt.oldConn}))
+				require.NoError(t, cs.AddOrUpdateConns(&ConntrackPollBatch{AntreaZone: []*connection.Connection{tt.oldConn}}))
 			} else {
 				newConn := &connection.Connection{
 					StartTime:     refTime,
@@ -641,7 +647,7 @@ func TestConntrackConnectionStore_AddOrUpdateConns(t *testing.T) {
 					IsPresent:     true,
 					SourcePodName: "test",
 				}
-				require.NoError(t, cs.AddOrUpdateConns([]*connection.Connection{newConn}))
+				require.NoError(t, cs.AddOrUpdateConns(&ConntrackPollBatch{AntreaZone: []*connection.Connection{newConn}}))
 				assert.Contains(t, cs.connections, tuple2)
 			}
 
@@ -679,17 +685,19 @@ func TestConntrackConnectionStore_AddOrUpdateConns_ZoneZeroFlow(t *testing.T) {
 		IsPresent:                  true,
 	}
 
-	cs := NewConntrackConnectionStore(nil, nil, nil, testFlowExporterOptions)
+	fe := NewFromExternalCorrelator()
+	t.Cleanup(fe.StopCleanUp)
+	cs := NewConntrackConnectionStore(nil, nil, nil, testFlowExporterOptions, fe)
 
 	// Zone-zero connections submitted through AddOrUpdateConns should be stored
 	// in the correlator, not the connection store.
-	require.NoError(t, cs.AddOrUpdateConns([]*connection.Connection{zoneZeroConn}))
+	require.NoError(t, cs.AddOrUpdateConns(&ConntrackPollBatch{ZoneZero: []*connection.Connection{zoneZeroConn}}))
 	assert.Empty(t, cs.connections, "zone-zero connection should not appear in the connection store")
 	assert.Len(t, cs.fromExternalCorrelator.connections, 1, "zone-zero connection should be stored in correlator")
 
 	// When the Antrea-zone counterpart arrives, it should be correlated and the
 	// correlator entry consumed.
-	require.NoError(t, cs.AddOrUpdateConns([]*connection.Connection{antreaZoneConn}))
+	require.NoError(t, cs.AddOrUpdateConns(&ConntrackPollBatch{AntreaZone: []*connection.Connection{antreaZoneConn}}))
 	assert.Len(t, cs.fromExternalCorrelator.connections, 0, "zone-zero entry should have been consumed by correlation")
 	connKey := connection.NewConnectionKey(antreaZoneConn)
 	storedConn, exists := cs.GetConnByKey(connKey)
@@ -740,6 +748,6 @@ func TestCorrelateExternal(t *testing.T) {
 		ProxySnatIP:             netip.MustParseAddr("172.18.0.2"),
 		ProxySnatPort:           uint16(28392),
 	}
-	correlateExternal(&zoneZero, &antreaZone)
+	correlateExternal(zoneZeroSnapshotFromConn(&zoneZero), &antreaZone)
 	assert.Equal(t, expected, antreaZone)
 }

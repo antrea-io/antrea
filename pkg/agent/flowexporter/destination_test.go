@@ -167,8 +167,7 @@ func runSendFlowRecordTests(t *testing.T, destination *Destination, isIPv6 bool)
 				IdleFlowTimeout:        testIdleFlowTimeout,
 				StaleConnectionTimeout: 1,
 			}
-
-			destination.conntrackConnStore = connections.NewConntrackConnectionStore(nil, nil, nil, config)
+			destination.conntrackConnStore = connections.NewConntrackConnectionStore(nil, nil, nil, config, nil)
 			destination.denyConnStore = connections.NewDenyConnectionStore(nil, nil, nil, config)
 			destination.conntrackPriorityQueue = destination.conntrackConnStore.GetPriorityQueue()
 			destination.denyPriorityQueue = destination.denyConnStore.GetPriorityQueue()
@@ -339,6 +338,8 @@ func TestDestination_findFlowType(t *testing.T) {
 	podIP2 := netip.MustParseAddr("10.10.0.3")
 	gwIP := netip.MustParseAddr("10.10.0.1")
 	externalIP := netip.MustParseAddr("8.8.8.8")
+	// Not in fakePodSubnetChecker: simulates a Node host IP or other non-Pod, non-gateway address.
+	nodeHostIP := netip.MustParseAddr("192.168.1.10")
 
 	checker := &fakePodSubnetChecker{
 		results: map[netip.Addr]struct{ isPod, isGw bool }{
@@ -434,6 +435,15 @@ func TestDestination_findFlowType(t *testing.T) {
 			checker: checker,
 			conn: connection.Connection{
 				FlowKey:            connection.Tuple{SourceAddress: externalIP, DestinationAddress: podIP},
+				DestinationPodName: "podB",
+			},
+			expectedFlowType: utils.FlowTypeFromExternal,
+		},
+		{
+			name:    "Non-Pod source (e.g. Node host IP) to Pod - FromExternal",
+			checker: checker,
+			conn: connection.Connection{
+				FlowKey:            connection.Tuple{SourceAddress: nodeHostIP, DestinationAddress: podIP},
 				DestinationPodName: "podB",
 			},
 			expectedFlowType: utils.FlowTypeFromExternal,
