@@ -1,4 +1,4 @@
-// Copyright 2024 Antrea Authors
+// Copyright 2026 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -28,8 +28,7 @@ import (
 	context "context"
 	reflect "reflect"
 
-	manager "github.com/aws/aws-sdk-go-v2/feature/s3/manager"
-	s3 "github.com/aws/aws-sdk-go-v2/service/s3"
+	transfermanager "github.com/aws/aws-sdk-go-v2/feature/s3/transfermanager"
 	gomock "go.uber.org/mock/gomock"
 )
 
@@ -58,14 +57,14 @@ func (m *MockS3UploaderAPI) EXPECT() *MockS3UploaderAPIMockRecorder {
 }
 
 // Upload mocks base method.
-func (m *MockS3UploaderAPI) Upload(ctx context.Context, input *s3.PutObjectInput, awsS3Uploader *manager.Uploader, opts ...func(*manager.Uploader)) (*manager.UploadOutput, error) {
+func (m *MockS3UploaderAPI) Upload(ctx context.Context, input *transfermanager.UploadObjectInput, awsS3Uploader *transfermanager.Client, opts ...func(*transfermanager.Options)) (*transfermanager.UploadObjectOutput, error) {
 	m.ctrl.T.Helper()
 	varargs := []any{ctx, input, awsS3Uploader}
 	for _, a := range opts {
 		varargs = append(varargs, a)
 	}
 	ret := m.ctrl.Call(m, "Upload", varargs...)
-	ret0, _ := ret[0].(*manager.UploadOutput)
+	ret0, _ := ret[0].(*transfermanager.UploadObjectOutput)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
