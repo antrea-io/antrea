@@ -122,7 +122,7 @@ func TestConnectionStore_DeleteConnWithoutLock(t *testing.T) {
 	checkDenyConnectionMetrics(t, len(denyConnStore.connections))
 
 	// test on conntrack connection store
-	conntrackConnStore := NewConntrackConnectionStore(nil, mockPodStore, nil, testFlowExporterOptions)
+	conntrackConnStore := NewConntrackConnectionStore(nil, mockPodStore, nil, testFlowExporterOptions, nil)
 	conntrackConnStore.connections[connKey] = conn
 
 	metrics.TotalAntreaConnectionsInConnTrackTable.Set(1)

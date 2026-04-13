@@ -72,7 +72,7 @@ func BenchmarkAddOrUpdateConns(b *testing.B) {
 	conns := generateConns()
 
 	for b.Loop() {
-		require.NoError(b, connStore.AddOrUpdateConns(conns))
+		require.NoError(b, connStore.AddOrUpdateConns(&ConntrackPollBatch{AntreaZone: conns}))
 		b.StopTimer()
 		conns = generateUpdatedConns(conns)
 		b.StartTimer()
@@ -140,7 +140,7 @@ func setupConntrackConnStore(b *testing.B) *ConntrackConnectionStore {
 	mockProxier.EXPECT().GetServiceByIP(serviceStr).Return(servicePortName, true).AnyTimes()
 
 	npQuerier := queriertest.NewMockAgentNetworkPolicyInfoQuerier(ctrl)
-	return NewConntrackConnectionStore(npQuerier, mockPodStore, mockProxier, testFlowExporterOptions)
+	return NewConntrackConnectionStore(npQuerier, mockPodStore, mockProxier, testFlowExporterOptions, nil)
 }
 
 func generateConns() []*connection.Connection {

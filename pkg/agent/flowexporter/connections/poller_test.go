@@ -61,9 +61,10 @@ func TestPoller_Poll(t *testing.T) {
 			mockDumper.EXPECT().GetMaxConnections().Return(maxConnections, nil)
 
 			p := NewPoller(mockDumper, nil, 0, true, false, false)
-			conns, connsLens, err := p.Poll()
+			batch, connsLens, err := p.Poll()
 			require.NoError(t, err)
-			assert.ElementsMatch(t, tt.conns, conns)
+			assert.Empty(t, batch.ZoneZero)
+			assert.ElementsMatch(t, tt.conns, batch.AntreaZone)
 			assert.Equal(t, []int{0, len(tt.conns)}, connsLens)
 
 			// Validate Metrics

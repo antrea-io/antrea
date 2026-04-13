@@ -103,6 +103,7 @@ func NewDestination(
 	egressQuerier querier.EgressQuerier,
 	networkPolicyReadyTime time.Time,
 	destinationConfig DestinationConfig,
+	fromExternal *connections.FromExternalCorrelator,
 ) *Destination {
 	connectionStoreConfig := connections.ConnectionStoreConfig{
 		ActiveFlowTimeout:      destinationConfig.activeFlowTimeout,
@@ -111,7 +112,7 @@ func NewDestination(
 		NetworkPolicyReadyTime: networkPolicyReadyTime,
 		AllowedProtocols:       destinationConfig.allowProtocolFilter,
 	}
-	conntrackConnStore := connections.NewConntrackConnectionStore(npQuerier, podStore, proxier, connectionStoreConfig)
+	conntrackConnStore := connections.NewConntrackConnectionStore(npQuerier, podStore, proxier, connectionStoreConfig, fromExternal)
 	denyConnStore := connections.NewDenyConnectionStore(npQuerier, podStore, proxier, connectionStoreConfig)
 
 	return &Destination{
@@ -219,9 +220,7 @@ func (d *Destination) Run(stopCh <-chan struct{}) {
 	for {
 		select {
 		case <-stopCh:
-			// Stop the conntrack connection store to terminate the
-			// fromExternalCorrelator cleanup goroutine.
-			d.conntrackConnStore.Stop()
+			// FromExternalCorrelator lifecycle is owned by FlowExporter (StopCleanUp on Run exit).
 			d.resetFlowExporter()
 			return
 		case <-exportTicker.C:
@@ -255,13 +254,13 @@ func (d *Destination) Run(stopCh <-chan struct{}) {
 }
 
 func (d *Destination) populateCTStore(e any) {
-	conns, ok := e.([]*connection.Connection)
+	batch, ok := e.(*connections.ConntrackPollBatch)
 	if !ok {
 		klog.InfoS("Received unexpected items for ct conn store", "type", fmt.Sprintf("%T", e))
 		return
 	}
 
-	d.conntrackConnStore.AddOrUpdateConns(conns)
+	d.conntrackConnStore.AddOrUpdateConns(batch)
 }
 
 func (d *Destination) populateDenyStore(e any) {
@@ -342,6 +341,9 @@ func (d *Destination) findFlowType(conn connection.Connection) uint8 {
 	}
 	if !srcIsPod {
 		if dstIsPod {
+			// Any source that is not classified as a Pod IP (including the Antrea gateway case
+			// handled above) and not in the Pod CIDR set is treated as FromExternal. That includes
+			// local to Pod traffic.
 			return utils.FlowTypeFromExternal
 		}
 		return utils.FlowTypeUnsupported
