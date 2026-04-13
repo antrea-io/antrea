@@ -166,12 +166,12 @@ func (c *Controller) deleteTraceflow(old interface{}) {
 	if !ok {
 		tombstone, ok := old.(cache.DeletedFinalStateUnknown)
 		if !ok {
-			klog.V(2).InfoS("Error decoding object when deleting Traceflow, invalid type", "object", old)
+			klog.V(2).InfoS("Unexpected object type when deleting Traceflow", "object", old)
 			return
 		}
 		tf, ok = tombstone.Obj.(*crdv1beta1.Traceflow)
 		if !ok {
-			klog.V(2).InfoS("Error decoding object tombstone when deleting Traceflow, invalid type", "object", tombstone.Obj)
+			klog.V(2).InfoS("Unexpected object type in tombstone when deleting Traceflow", "object", tombstone.Obj)
 			return
 		}
 	}
