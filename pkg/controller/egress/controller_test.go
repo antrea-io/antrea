@@ -934,3 +934,22 @@ func TestUpdateEgressAllocatedCondition(t *testing.T) {
 		})
 	}
 }
+
+func TestDeleteEgress_Tombstone(t *testing.T) {
+	egress := newEgress("egressA", "", "", &metav1.LabelSelector{}, nil, nil)
+	egress.UID = "uidA"
+	controller := newController(nil, []runtime.Object{egress})
+
+	// Simulate the controller having processed the Egress ADD event.
+	controller.addEgress(egress)
+	_, found, _ := controller.egressGroupStore.Get(egress.Name)
+	require.True(t, found)
+
+	// Deliver the delete as a cache.DeletedFinalStateUnknown tombstone, as the
+	// informer does after a watch reconnect. This exercises the tombstone path
+	// in deleteEgress rather than the direct *Egress type assertion.
+	controller.deleteEgress(cache.DeletedFinalStateUnknown{
+		Key: egress.Name,
+		Obj: egress,
+	})
+}
