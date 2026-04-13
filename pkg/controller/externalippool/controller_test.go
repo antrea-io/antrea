@@ -637,11 +637,6 @@ func TestDeleteExternalIPPool_Tombstone(t *testing.T) {
 	pool := newExternalIPPool("pool1", "10.10.10.0/24", "", "")
 	c := newController([]runtime.Object{pool})
 
-	stopCh := make(chan struct{})
-	defer close(stopCh)
-	c.crdInformerFactory.Start(stopCh)
-	c.crdInformerFactory.WaitForCacheSync(stopCh)
-
 	// Simulate the controller having created an allocator for the pool.
 	c.createOrUpdateIPAllocator(pool)
 	require.True(t, c.IPPoolExists(pool.Name))
