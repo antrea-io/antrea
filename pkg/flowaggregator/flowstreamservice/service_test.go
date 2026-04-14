@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"net/netip"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/stretchr/testify/assert"
@@ -602,6 +603,40 @@ func TestGetFlows_FilterByNamespace(t *testing.T) {
 	}
 }
 
+// TestGetFlows_FilterCombinedNamespacesAndPodNames verifies AND semantics across
+// filter fields: a flow must satisfy namespaces (per direction) and pod_names
+// together. Values inside each repeated field are OR-ed (see FlowFilter comment
+// in service.proto).
+func TestGetFlows_FilterCombinedNamespacesAndPodNames(t *testing.T) {
+	buf := ringbuffer.NewBroadcastBuffer[*flowpb.Flow](64)
+	t.Cleanup(func() { buf.Shutdown() })
+
+	// Matches: namespace default on source, pod name app on source.
+	buf.Produce(newFlow("match-src", newPodK8S("default", "app", "kube-system", "db")))
+	// Matches: namespace default on destination, pod name app on destination.
+	buf.Produce(newFlow("match-dst", newPodK8S("kube-system", "x", "default", "app")))
+	// Namespace matches but pod name does not.
+	buf.Produce(newFlow("wrong-pod", newPodK8S("default", "nginx", "default", "nginx")))
+	// Pod name matches but neither side is in default namespace.
+	buf.Produce(newFlow("wrong-ns", newPodK8S("kube-system", "app", "kube-system", "app")))
+
+	svc := newTestService(buf)
+	stream := newFakeStream(context.Background())
+	req := &flowpb.GetFlowsRequest{
+		Follow: false,
+		Filter: &flowpb.FlowFilter{
+			Namespaces: []string{"default"},
+			PodNames:   []string{"app"},
+		},
+	}
+	require.NoError(t, svc.GetFlows(req, stream))
+
+	got := collectFlows(stream.responses)
+	require.Len(t, got, 2)
+	gotIDs := []string{got[0].GetId(), got[1].GetId()}
+	assert.ElementsMatch(t, []string{"match-src", "match-dst"}, gotIDs)
+}
+
 func TestGetFlows_SinceFilter(t *testing.T) {
 	buf := ringbuffer.NewBroadcastBuffer[*flowpb.Flow](64)
 	t.Cleanup(func() { buf.Shutdown() })
@@ -647,25 +682,30 @@ func TestGetFlows_InvalidLabelSelector(t *testing.T) {
 }
 
 func TestGetFlows_FollowContextCancelled(t *testing.T) {
-	buf := ringbuffer.NewBroadcastBuffer[*flowpb.Flow](64)
-	t.Cleanup(func() { buf.Shutdown() })
+	synctest.Test(t, func(t *testing.T) {
+		buf := ringbuffer.NewBroadcastBuffer[*flowpb.Flow](64)
+		t.Cleanup(func() { buf.Shutdown() })
 
-	ctx, cancel := context.WithCancel(context.Background())
-	svc := newTestService(buf)
-	stream := newFakeStream(ctx)
+		ctx, cancel := context.WithCancel(t.Context())
+		svc := newTestService(buf)
+		stream := newFakeStream(ctx)
 
-	errCh := make(chan error, 1)
-	go func() { errCh <- svc.GetFlows(&flowpb.GetFlowsRequest{Follow: true}, stream) }()
+		errCh := make(chan error, 1)
+		go func() { errCh <- svc.GetFlows(&flowpb.GetFlowsRequest{Follow: true}, stream) }()
 
-	time.Sleep(20 * time.Millisecond)
-	cancel()
+		// Wait until GetFlows is blocked in the consumer (e.g. ConsumeMultiple).
+		synctest.Wait()
+		cancel()
+		// Wait until GetFlows observes cancellation and returns.
+		synctest.Wait()
 
-	select {
-	case err := <-errCh:
-		st, ok := status.FromError(err)
-		require.True(t, ok)
-		assert.Equal(t, codes.Canceled, st.Code())
-	case <-time.After(500 * time.Millisecond):
-		t.Fatal("GetFlows did not return after context cancellation")
-	}
+		select {
+		case err := <-errCh:
+			st, ok := status.FromError(err)
+			require.True(t, ok)
+			assert.Equal(t, codes.Canceled, st.Code())
+		case <-time.After(2 * time.Second):
+			t.Fatal("GetFlows did not return after context cancellation")
+		}
+	})
 }
