@@ -197,14 +197,24 @@ func TestParseVLANSpecs(t *testing.T) {
 			wantIDs: []uint16{5, 10, 11},
 		},
 		{
-			name:        "invalid single",
-			specs:       []string{"abc"},
-			expectedErr: "invalid VLAN ID",
+			name:    "maximum VLAN ID",
+			specs:   []string{"4094"},
+			wantIDs: []uint16{4094},
 		},
 		{
 			name:        "inverted range",
-			specs:       []string{"200-100"},
-			expectedErr: "VLAN range start",
+			specs:       []string{"300-200"},
+			expectedErr: "VLAN range start 300 is greater than end 200",
+		},
+		{
+			name:        "single VLAN above maximum",
+			specs:       []string{"4095"},
+			expectedErr: "VLAN ID 4095 is greater than maximum VLAN ID 4094",
+		},
+		{
+			name:        "range end above maximum",
+			specs:       []string{"4094-4095"},
+			expectedErr: "VLAN range end 4095 is greater than maximum VLAN ID 4094",
 		},
 	}
 	for _, tc := range tests {

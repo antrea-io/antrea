@@ -19,6 +19,7 @@ type Bridge struct {
 	Protocols           []interface{} `json:"protocols,omitempty"`
 	DatapathType        string        `json:"datapath_type,omitempty"`
 	McastSnoopingEnable bool          `json:"mcast_snooping_enable,omitempty"`
+	ExternalIDs         []interface{} `json:"external_ids,omitempty"`
 }
 
 type Port struct {

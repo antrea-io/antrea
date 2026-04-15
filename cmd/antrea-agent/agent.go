@@ -627,39 +627,34 @@ func run(o *Options) error {
 	var antreaNodeConfigController *antreanodeconfig.Controller
 	var cniDeleteChecker agenttypes.CNIDeleteChecker
 	cniDeleteChecker = nil
+	var ancSubscriber channel.Subscriber
+
+	if features.DefaultFeatureGate.Enabled(features.AntreaNodeConfig) {
+		antreaNodeConfigInformer := crdInformerFactory.Crd().V1alpha1().AntreaNodeConfigs()
+		antreaNodeConfigUpdateChannel = channel.NewSubscribableChannel("AntreaNodeConfig", 100)
+		antreaNodeConfigController = antreanodeconfig.NewController(
+			antreaNodeConfigInformer,
+			nodeInformer,
+			nodeConfig.Name,
+			antreaNodeConfigUpdateChannel,
+		)
+		ancSubscriber = antreaNodeConfigUpdateChannel
+	}
+
 	// Secondary network controller should be created before CNIServer.Run() to make sure no Pod CNI updates will be missed.
 	if features.DefaultFeatureGate.Enabled(features.SecondaryNetwork) {
-		var effectiveBridgeFn func() *agenttypes.OVSBridgeConfig
-		var ancSubscriber channel.Subscriber
-
-		if features.DefaultFeatureGate.Enabled(features.AntreaNodeConfig) {
-			antreaNodeConfigInformer := crdInformerFactory.Crd().V1alpha1().AntreaNodeConfigs()
-			antreaNodeConfigUpdateChannel = channel.NewSubscribableChannel("AntreaNodeConfig", 100)
-			antreaNodeConfigController = antreanodeconfig.NewController(
-				antreaNodeConfigInformer,
-				nodeInformer,
-				nodeConfig.Name,
-				o.config,
-				antreaNodeConfigUpdateChannel,
-			)
-			effectiveBridgeFn = antreaNodeConfigController.EffectiveSecondaryOVSBridge
-			ancSubscriber = antreaNodeConfigUpdateChannel
-		} else {
-			effectiveBridgeFn = func() *agenttypes.OVSBridgeConfig {
-				return antreanodeconfig.EffectiveSecondaryOVSBridge(nil, nil, nil, false, &o.config.SecondaryNetwork)
-			}
-		}
-
 		secondaryNetworkController, err = secondarynetwork.NewController(
 			o.config.ClientConnection, o.config.KubeAPIServerOverride,
 			k8sClient, localPodInformer.Get(),
 			podUpdateChannel, ifaceStore, nodeConfig,
 			&o.config.SecondaryNetwork, ovsdbConnection, ipPoolInformer.Lister(),
-			effectiveBridgeFn, ancSubscriber)
+			ancSubscriber)
 		if err != nil {
 			return fmt.Errorf("failed to create secondary network controller: %w", err)
 		}
-		cniDeleteChecker = secondaryNetworkController
+		if secondaryNetworkController != nil {
+			cniDeleteChecker = secondaryNetworkController
+		}
 	}
 
 	if o.nodeType == config.K8sNode {
@@ -1001,10 +996,11 @@ func run(o *Options) error {
 		}
 	}
 	// secondaryNetworkController Initialize must be run after FlowRestoreComplete for the case that Node
-	// IPs are moved to the secondary OVS bridge
-	if features.DefaultFeatureGate.Enabled(features.SecondaryNetwork) {
+	// IPs are moved to the secondary OVS bridge. When AntreaNodeConfig drives the secondary bridge,
+	// Initialize waits for the first ANC snapshot before setting up the bridge.
+	if features.DefaultFeatureGate.Enabled(features.SecondaryNetwork) && secondaryNetworkController != nil {
 		defer secondaryNetworkController.Restore()
-		if err = secondaryNetworkController.Initialize(); err != nil {
+		if err = secondaryNetworkController.Initialize(stopCh); err != nil {
 			return fmt.Errorf("failed to initialize secondary network: %v", err)
 		}
 		go secondaryNetworkController.Run(stopCh)

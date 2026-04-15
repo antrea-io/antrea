@@ -498,10 +498,10 @@ func PrepareHostInterfaceConnection(
 }
 
 // RestoreHostInterfaceConfiguration restores the configuration from the bridge back to the host
-// interface, reverting the actions taken in PrepareHostInterfaceConnection.  It returns an error
+// interface, reverting the actions taken in PrepareHostInterfaceConnection. It returns an error
 // only when the critical uplink OVS port (bridgedName, e.g. "eth0~") cannot be deleted, because
 // that prevents the kernel-interface rename and leaves the system in a fully-intact state that
-// the caller can retry.  All other sub-step failures (IP/route restore, internal port delete,
+// the caller can retry. All other sub-step failures (IP/route restore, internal port delete,
 // rename) are logged but do not cause a return error, since they represent best-effort cleanup
 // after the point of no return.
 func RestoreHostInterfaceConfiguration(brName string, interfaceName string) error {
@@ -527,8 +527,9 @@ func RestoreHostInterfaceConfiguration(brName string, interfaceName string) erro
 			klog.ErrorS(err, "Delete OVS port failed", "port", interfaceName)
 		}
 	}
-	// remove host interface (eth0~) from bridge — this is the critical step: if it fails the
-	// kernel interface is still renamed and both OVS ports still exist, so the caller can retry.
+	// remove host interface (eth0~) from bridge. This is the critical step - if it fails the
+	// kernel interface is still renamed and both OVS ports still exist. Return the error at a
+	// failure so the caller can retry.
 	if err = deleteOVSPort(brName, bridgedName); err != nil {
 		return fmt.Errorf("failed to delete OVS uplink port %s from bridge %s: %w", bridgedName, brName, err)
 	}
