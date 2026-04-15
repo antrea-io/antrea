@@ -1325,7 +1325,7 @@ func TestGetPoolAllocatorsByPod_RequestedIPPoolFamilyValidation(t *testing.T) {
 			podName:       "pool-val-req-v4-two-v4",
 			ipamAnnot:     "multiv4-pool-a,multiv4-pool-b",
 			podIPAnnot:    "10.10.0.10",
-			wantErrSubstr: "multiple IPv4 IPPools configured with a requested IPv4 address",
+			wantErrSubstr: "multiple IPv4 IPPools configured with requested IPv4 address(es)",
 		},
 		{
 			name:             "requested IPv4 with one IPv4 pool and two IPv6 pools",
@@ -1339,14 +1339,14 @@ func TestGetPoolAllocatorsByPod_RequestedIPPoolFamilyValidation(t *testing.T) {
 			podName:       "pool-val-dual-two-v4",
 			ipamAnnot:     "multiv4-pool-a,multiv4-pool-b",
 			podIPAnnot:    "10.10.0.10,20::5",
-			wantErrSubstr: "multiple IPv4 IPPools configured with a requested IPv4 address",
+			wantErrSubstr: "multiple IPv4 IPPools configured with requested IPv4 address(es)",
 		},
 		{
 			name:          "dual-stack requested with two IPv6 pools",
 			podName:       "pool-val-dual-two-v6",
 			ipamAnnot:     "multiv4-pool-a,ippool-family-val-ipv6-a,ippool-family-val-ipv6-b",
 			podIPAnnot:    "10.10.0.10,fd00:aa::10",
-			wantErrSubstr: "multiple IPv6 IPPools configured with a requested IPv6 address",
+			wantErrSubstr: "multiple IPv6 IPPools configured with requested IPv6 address(es)",
 		},
 	}
 
