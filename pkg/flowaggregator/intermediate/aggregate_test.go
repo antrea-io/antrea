@@ -396,6 +396,7 @@ func TestCorrelateRecordsForFromExternalFlow(t *testing.T) {
 
 	flowKey := destinationNodeRecordFlowKey
 	flowKey.SourceAddress = flowrecord.IpAddressAsString(sourceNodeRecord.Ip.Source)
+	flowKey.SourcePort = uint16(sourceNodeRecord.Transport.SourcePort)
 	assert.Equal(t, 1, ap.expirePriorityQueue.Len(), "Expected flow to be correlated and added to queue")
 	item := ap.expirePriorityQueue.Peek()
 	got := item.flowKey
@@ -407,6 +408,7 @@ func TestCorrelateRecordsForFromExternalFlow(t *testing.T) {
 	correlatedFlow := record.Record
 	assert.NotNil(t, correlatedFlow, "Expected stored flow to not be nil")
 	assert.Equal(t, externalIP, correlatedFlow.Ip.Source, "Expected correlated flow to have original source IP")
+	assert.Equal(t, sourceNodeRecord.Transport.SourcePort, correlatedFlow.Transport.SourcePort, "Expected correlated flow to have the original client source port")
 	assert.Equal(t, nodeIP, correlatedFlow.K8S.DestinationServiceIp, "Expected correlated flow to have node IP")
 	assert.Equal(t, nodeIP, correlatedFlow.K8S.DestinationClusterIp, "Expected correlated flow to have node IP")
 	assert.Equal(t, containerPort, correlatedFlow.K8S.DestinationServicePort, "Expected correlated flow to have the container port")
