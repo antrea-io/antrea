@@ -178,17 +178,13 @@ func testPodWithIPs(name string, container string, podIPs []string, networks ...
 			NodeName: testNode,
 		},
 	}
-	firstIP := ""
-	if len(podIPs) > 0 {
-		firstIP = podIPs[0]
-	}
-	if firstIP != "" {
-		var ips []corev1.PodIP
-		for _, ip := range podIPs {
-			if ip != "" {
-				ips = append(ips, corev1.PodIP{IP: ip})
-			}
+	var ips []corev1.PodIP
+	for _, ip := range podIPs {
+		if ip != "" {
+			ips = append(ips, corev1.PodIP{IP: ip})
 		}
+	}
+	if len(ips) > 0 {
 		pod.Status = corev1.PodStatus{
 			Conditions: []corev1.PodCondition{
 				{
@@ -196,7 +192,7 @@ func testPodWithIPs(name string, container string, podIPs []string, networks ...
 					Status: corev1.ConditionTrue,
 				},
 			},
-			PodIP:  firstIP,
+			PodIP:  ips[0].IP,
 			PodIPs: ips,
 		}
 	}
