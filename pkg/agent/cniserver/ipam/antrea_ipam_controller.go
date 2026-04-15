@@ -163,20 +163,20 @@ func (c *AntreaIPAMController) getIPPoolsByPod(namespace, name string) ([]string
 			}
 			ip := net.ParseIP(ipString)
 			if ip == nil {
-				ipErr = fmt.Errorf("invalid IP annotation %s", ipStrings)
+				ipErr = fmt.Errorf("invalid IP %q in %s annotation %q", ipString, annotation.AntreaIPAMPodIPAnnotationKey, ipStrings)
 				ips = nil
 				break
 			}
 			if ip.To4() != nil {
 				if hasV4 {
-					ipErr = fmt.Errorf("multiple IPv4 addresses in annotation %s", ipStrings)
+					ipErr = fmt.Errorf("multiple IPv4 addresses in %s annotation %q", annotation.AntreaIPAMPodIPAnnotationKey, ipStrings)
 					ips = nil
 					break
 				}
 				hasV4 = true
 			} else {
 				if hasV6 {
-					ipErr = fmt.Errorf("multiple IPv6 addresses in annotation %s", ipStrings)
+					ipErr = fmt.Errorf("multiple IPv6 addresses in %s annotation %q", annotation.AntreaIPAMPodIPAnnotationKey, ipStrings)
 					ips = nil
 					break
 				}
@@ -237,31 +237,37 @@ func (c *AntreaIPAMController) getPoolAllocatorsByPod(namespace, podName string)
 		allocators = append(allocators, allocator)
 	}
 	if len(allocators) == 0 {
-		return mineTrue, nil, nil, nil, fmt.Errorf("no valid IPPool found")
+		return mineTrue, nil, nil, nil, fmt.Errorf("no valid IPPool found for configured pools: [%s]", strings.Join(poolNames, ", "))
 	}
 
 	if len(ips) > 0 {
 		var hasRequestedV4, hasRequestedV6 bool
+		var requestedV4IPs, requestedV6IPs []string
 		for _, ip := range ips {
 			if ip.To4() != nil {
 				hasRequestedV4 = true
+				requestedV4IPs = append(requestedV4IPs, ip.String())
 			} else {
 				hasRequestedV6 = true
+				requestedV6IPs = append(requestedV6IPs, ip.String())
 			}
 		}
 		var v4Pools, v6Pools int
+		var v4PoolNames, v6PoolNames []string
 		for _, a := range allocators {
 			if a.IPVersion == utilnet.IPv4 {
 				v4Pools++
+				v4PoolNames = append(v4PoolNames, a.Name())
 			} else {
 				v6Pools++
+				v6PoolNames = append(v6PoolNames, a.Name())
 			}
 		}
 		if hasRequestedV4 && v4Pools > 1 {
-			return mineTrue, nil, nil, nil, fmt.Errorf("multiple IPv4 IPPools configured with a requested IPv4 address; only one IPv4 IPPool is allowed when specifying an IP")
+			return mineTrue, nil, nil, nil, fmt.Errorf("multiple IPv4 IPPools configured with requested IPv4 address(es) [%s]; configured IPv4 IPPools (%d): [%s]; only one IPv4 IPPool is allowed when specifying an IP", strings.Join(requestedV4IPs, ", "), v4Pools, strings.Join(v4PoolNames, ", "))
 		}
 		if hasRequestedV6 && v6Pools > 1 {
-			return mineTrue, nil, nil, nil, fmt.Errorf("multiple IPv6 IPPools configured with a requested IPv6 address; only one IPv6 IPPool is allowed when specifying an IP")
+			return mineTrue, nil, nil, nil, fmt.Errorf("multiple IPv6 IPPools configured with requested IPv6 address(es) [%s]; configured IPv6 IPPools (%d): [%s]; only one IPv6 IPPool is allowed when specifying an IP", strings.Join(requestedV6IPs, ", "), v6Pools, strings.Join(v6PoolNames, ", "))
 		}
 	}
 
