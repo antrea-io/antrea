@@ -669,6 +669,7 @@ func TestFlowAggregator_Run(t *testing.T) {
 	mockIPFIXExporter, mockClickHouseExporter, mockS3Exporter, mockLogExporter := mockExporters(t, ctrl, &clusterUUID, &clusterID)
 	mockCollector := collectortesting.NewMockInterface(ctrl)
 	mockAggregationProcess := intermediatetesting.NewMockAggregationProcess(ctrl)
+	mockAggregationProcess.EXPECT().ForAllExpiredFlowRecordsDo(gomock.Any()).AnyTimes()
 
 	// create dummy watcher: we will not add any files or directory to it.
 	configWatcher, err := fsnotify.NewWatcher()
@@ -699,21 +700,19 @@ func TestFlowAggregator_Run(t *testing.T) {
 	require.NoError(t, err)
 
 	fa := &flowAggregator{
-		clusterUUID:    clusterUUID,
-		clusterID:      clusterID,
-		aggregatorMode: flowaggregatorconfig.AggregatorModeAggregate,
-		// must be large enough to avoid a call to ForAllExpiredFlowRecordsDo
-		activeFlowRecordTimeout: 1 * time.Hour,
-		logTickerDuration:       1 * time.Hour,
-		grpcCollector:           mockCollector,
-		aggregationProcess:      mockAggregationProcess,
-		configWatcher:           configWatcher,
-		updateCh:                updateCh,
-		podStore:                mockPodStore,
-		nodeStore:               mockNodeStore,
-		serviceStore:            mockServiceStore,
-		recordBuffer:            buf,
-		configData:              initialConfigData,
+		clusterUUID:        clusterUUID,
+		clusterID:          clusterID,
+		aggregatorMode:     flowaggregatorconfig.AggregatorModeAggregate,
+		logTickerDuration:  1 * time.Hour,
+		grpcCollector:      mockCollector,
+		aggregationProcess: mockAggregationProcess,
+		configWatcher:      configWatcher,
+		updateCh:           updateCh,
+		podStore:           mockPodStore,
+		nodeStore:          mockNodeStore,
+		serviceStore:       mockServiceStore,
+		recordBuffer:       buf,
+		configData:         initialConfigData,
 	}
 
 	mockAggregationProcess.EXPECT().Start()

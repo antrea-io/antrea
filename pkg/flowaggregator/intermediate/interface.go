@@ -15,8 +15,6 @@
 package intermediate
 
 import (
-	"time"
-
 	flowpb "antrea.io/antrea/v2/pkg/apis/flow/v1alpha1"
 )
 
@@ -24,7 +22,6 @@ type AggregationProcess interface {
 	Start()
 	Stop()
 	ForAllExpiredFlowRecordsDo(callback FlowKeyRecordMapCallBack) error
-	GetExpiryFromExpirePriorityQueue() time.Duration
 	GetRecords(flowKey *FlowKey) []map[string]interface{}
 	ResetStatAndThroughputElementsInRecord(record *flowpb.Flow) error
 	SetCorrelatedFieldsFilled(record *AggregationFlowRecord, isFilled bool)
