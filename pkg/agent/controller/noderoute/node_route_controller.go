@@ -16,7 +16,6 @@ package noderoute
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"net"
 	"net/netip"
@@ -813,36 +812,28 @@ func ParseTunnelInterfaceConfig(
 	return interfaceConfig
 }
 
-func (c *Controller) findPodSubnetForIP(ip netip.Addr) (netip.Prefix, bool, error) {
+func (c *Controller) findPodSubnetForIP(ip netip.Addr) (netip.Prefix, bool) {
 	var maskSize int
-
-	if c == nil {
-		return netip.Prefix{}, false, errors.New("cannot find pod subnet for IP: controller is nil")
-	}
-
 	if ip.Is4() {
 		maskSize = c.maskSizeV4
 	} else {
 		maskSize = c.maskSizeV6
 	}
 	if maskSize == 0 {
-		return netip.Prefix{}, false, errors.New("cannot find pod subnet for IP: mask size is 0")
+		return netip.Prefix{}, false
 	}
-	prefix, err := ip.Prefix(maskSize)
-	if err != nil {
-		return netip.Prefix{}, false, err
-	}
+	prefix, _ := ip.Prefix(maskSize)
 	c.podSubnetsMutex.RLock()
 	defer c.podSubnetsMutex.RUnlock()
-	return prefix, c.podSubnets.Has(prefix), nil
+	return prefix, c.podSubnets.Has(prefix)
 }
 
 // LookupIPInPodSubnets returns two boolean values. The first one indicates whether the IP can be
 // found in a PodCIDR for one of the cluster Nodes. The second one indicates whether the IP is used
 // as a gateway IP. The second boolean value can only be true if the first one is true.
 func (c *Controller) LookupIPInPodSubnets(ip netip.Addr) (bool, bool) {
-	prefix, ok, err := c.findPodSubnetForIP(ip)
-	if !ok || err != nil {
+	prefix, ok := c.findPodSubnetForIP(ip)
+	if !ok {
 		return false, false
 	}
 	return ok, ip == util.GetGatewayIPForPodPrefix(prefix)

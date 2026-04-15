@@ -103,7 +103,7 @@ func NewDestination(
 	egressQuerier querier.EgressQuerier,
 	networkPolicyReadyTime time.Time,
 	destinationConfig DestinationConfig,
-	fromExternal *connections.FromExternalCorrelator,
+	fromExternal connections.ExternalCorrelator,
 ) *Destination {
 	connectionStoreConfig := connections.ConnectionStoreConfig{
 		ActiveFlowTimeout:      destinationConfig.activeFlowTimeout,
@@ -220,7 +220,7 @@ func (d *Destination) Run(stopCh <-chan struct{}) {
 	for {
 		select {
 		case <-stopCh:
-			// FromExternalCorrelator lifecycle is owned by FlowExporter (StopCleanUp on Run exit).
+			// FromExternalCorrelator lifecycle is owned by FlowExporter (Run in FlowExporter.Run, StopCleanUp on exit).
 			d.resetFlowExporter()
 			return
 		case <-exportTicker.C:

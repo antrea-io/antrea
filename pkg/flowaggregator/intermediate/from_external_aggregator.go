@@ -62,11 +62,12 @@ var NodeIndexers = cache.Indexers{
 	},
 }
 
-// ttl threshold for expiring flows.
-var defaultTTL = time.Minute
-
-// defaultCleanUpInterval is the frequency in which we run the cleanup for expiring stale flows.
-var defaultCleanUpInterval = time.Second * 5
+const (
+	// defaultTTL is the threshold for expiring flows in the from-external store.
+	defaultTTL = time.Minute
+	// defaultCleanUpInterval is how often the background cleanup runs.
+	defaultCleanUpInterval = 5 * time.Second
+)
 
 type fromExternalAggregator struct {
 	FromExternalStore map[string]flowItem
@@ -78,24 +79,19 @@ type fromExternalAggregator struct {
 	cleanUpInterval   time.Duration
 }
 
-type option func(*fromExternalAggregator)
-
-func newFromExternalAggregator(nodeIndexer cache.Indexer, opts ...option) *fromExternalAggregator {
+func newFromExternalAggregator(nodeIndexer cache.Indexer) *fromExternalAggregator {
 	stopCh := make(chan struct{})
-	a := &fromExternalAggregator{
+	return &fromExternalAggregator{
 		FromExternalStore: make(map[string]flowItem),
 		nodeIndexer:       nodeIndexer,
 		stopCh:            stopCh,
 		ttl:               defaultTTL,
 		cleanUpInterval:   defaultCleanUpInterval,
 	}
+}
 
-	for _, opt := range opts {
-		opt(a)
-	}
-
-	go a.cleanUpLoop(stopCh)
-	return a
+func (a *fromExternalAggregator) Run(stopCh <-chan struct{}) {
+	a.cleanUpLoop(stopCh)
 }
 
 // correlateOrStore returns the correlated record. If correlation is not
@@ -168,6 +164,7 @@ func (a *fromExternalAggregator) cleanUpLoop(stopCh <-chan struct{}) {
 func (a *fromExternalAggregator) cleanup(ttl time.Duration) {
 	a.lock.Lock()
 	defer a.lock.Unlock()
+
 	now := time.Now()
 	for key, record := range a.FromExternalStore {
 		if now.Sub(record.timestamp) > ttl {

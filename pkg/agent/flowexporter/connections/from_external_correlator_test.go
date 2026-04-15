@@ -18,6 +18,7 @@ import (
 	"net/netip"
 	"sync"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/stretchr/testify/assert"
@@ -27,20 +28,6 @@ import (
 	binding "antrea.io/antrea/v2/pkg/ovs/openflow"
 	k8sproxy "antrea.io/antrea/v2/third_party/proxy"
 )
-
-// withTTL overrides the default flow expiration TTL.
-func withTTL(ttl time.Duration) FromExternalCorrelatorOption {
-	return func(a *FromExternalCorrelator) {
-		a.ttl = ttl
-	}
-}
-
-// withCleanupInterval overrides the default background loop interval.
-func withCleanupInterval(interval time.Duration) FromExternalCorrelatorOption {
-	return func(a *FromExternalCorrelator) {
-		a.cleanUpInterval = interval
-	}
-}
 
 func contains(c *FromExternalCorrelator, conn *connection.Connection) bool {
 	c.lock.Lock()
@@ -165,29 +152,38 @@ func TestFromExternalCorrelator(t *testing.T) {
 				DestinationPort:    80,
 			},
 		}
-		store.remove(antreaConn)
+		store.RemoveStaleZoneZero(antreaConn)
 		assert.False(t, contains(store, zoneZeroConn))
 	})
 	t.Run("Expires stale records", func(t *testing.T) {
-		store := NewFromExternalCorrelator(withTTL(time.Millisecond), withCleanupInterval(time.Millisecond))
-		refTime := time.Now()
-		zoneZeroConn := &connection.Connection{
-			StartTime: refTime,
-			StopTime:  refTime,
-			FlowKey: connection.Tuple{
-				SourceAddress:      netip.MustParseAddr("172.18.0.1"),
-				DestinationAddress: netip.MustParseAddr("10.244.2.2"),
-				Protocol:           6,
-				SourcePort:         52142,
-				DestinationPort:    80},
-			Mark:          openflow.ServiceCTMark.GetValue(),
-			ProxySnatIP:   netip.MustParseAddr("172.18.0.2"),
-			ProxySnatPort: uint16(28392),
-		}
-		store.add(zoneZeroConn)
-		assert.Eventually(t, func() bool {
-			return !contains(store, zoneZeroConn)
-		}, time.Second, time.Millisecond, "Expected store to expire old records")
+		synctest.Test(t, func(t *testing.T) {
+			store := NewFromExternalCorrelator()
+			t.Cleanup(store.StopCleanUp)
+			go store.Run()
+
+			refTime := time.Now()
+			zoneZeroConn := &connection.Connection{
+				StartTime: refTime,
+				StopTime:  refTime,
+				FlowKey: connection.Tuple{
+					SourceAddress:      netip.MustParseAddr("172.18.0.1"),
+					DestinationAddress: netip.MustParseAddr("10.244.2.2"),
+					Protocol:           6,
+					SourcePort:         52142,
+					DestinationPort:    80},
+				Mark:          openflow.ServiceCTMark.GetValue(),
+				ProxySnatIP:   netip.MustParseAddr("172.18.0.2"),
+				ProxySnatPort: uint16(28392),
+			}
+			store.add(zoneZeroConn)
+			assert.True(t, contains(store, zoneZeroConn), "expected entry before expiry")
+
+			// Advance virtual time past defaultTTL and allow cleanUpLoop to tick.
+			time.Sleep(defaultTTL + 2*defaultCleanUpInterval)
+			synctest.Wait()
+
+			assert.False(t, contains(store, zoneZeroConn), "expected store to expire old records")
+		})
 	})
 	t.Run("StopCleanUp is threadsafe", func(t *testing.T) {
 		store := NewFromExternalCorrelator()
@@ -404,11 +400,11 @@ func TestCorrelateExternal_SymmetricZoneZeroClearsAntreaProxySnat(t *testing.T) 
 	ext := netip.MustParseAddr("203.0.113.10")
 	pod := netip.MustParseAddr("10.244.2.2")
 	snap := zoneZeroSnapshot{
-		sourceAddress:           ext,
+		sourceIP:                ext,
 		sourcePort:              50000,
 		proxySnatIP:             netip.Addr{},
 		proxySnatPort:           0,
-		originalDestinationAddr: netip.MustParseAddr("172.18.0.50"),
+		originalDestinationIP:   netip.MustParseAddr("172.18.0.50"),
 		originalDestinationPort: 30080,
 	}
 	antrea := &connection.Connection{
@@ -426,7 +422,7 @@ func TestCorrelateExternal_SymmetricZoneZeroClearsAntreaProxySnat(t *testing.T) 
 	assert.Equal(t, ext, antrea.FlowKey.SourceAddress)
 	assert.False(t, antrea.ProxySnatIP.IsValid())
 	assert.Equal(t, uint16(0), antrea.ProxySnatPort)
-	assert.Equal(t, snap.originalDestinationAddr, antrea.OriginalDestinationAddress)
+	assert.Equal(t, snap.originalDestinationIP, antrea.OriginalDestinationAddress)
 	assert.Equal(t, snap.originalDestinationPort, antrea.OriginalDestinationPort)
 }
 
