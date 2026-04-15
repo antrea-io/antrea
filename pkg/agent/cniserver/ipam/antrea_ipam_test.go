@@ -1196,12 +1196,12 @@ func TestGetIPPoolsByPod_PodIPAnnotationPerFamilyLimit(t *testing.T) {
 		{
 			podName:       "pear-podip-two-v4",
 			podIPAnnot:    "10.2.3.199,10.2.3.198",
-			wantErrSubstr: "multiple IPv4 addresses in annotation",
+			wantErrSubstr: fmt.Sprintf("multiple IPv4 addresses in %s annotation", annotations.AntreaIPAMPodIPAnnotationKey),
 		},
 		{
 			podName:       "pear-podip-two-v6",
 			podIPAnnot:    "fd00::1,fd00::2",
-			wantErrSubstr: "multiple IPv6 addresses in annotation",
+			wantErrSubstr: fmt.Sprintf("multiple IPv6 addresses in %s annotation", annotations.AntreaIPAMPodIPAnnotationKey),
 		},
 		{
 			podName:    "pear-podip-dual-stack",
