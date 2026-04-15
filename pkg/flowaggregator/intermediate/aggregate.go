@@ -95,6 +95,7 @@ func InitAggregationProcess(input AggregationInput, nodeIndexer cache.Indexer) (
 }
 
 func (a *aggregationProcess) Start() {
+	go a.fromExternalAggregator.Run(a.fromExternalAggregator.stopCh)
 	a.mutex.Lock()
 	for i := 0; i < a.workerNum; i++ {
 		w := createWorker(i, a.recordChan, a.aggregateRecordByFlowKey)
