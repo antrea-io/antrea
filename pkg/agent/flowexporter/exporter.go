@@ -112,7 +112,8 @@ type FlowExporter struct {
 	denyConnUpdateChannel *channel.SubscribableChannel
 
 	// fromExternalCorrelator is created by FlowExporter, shared by every Destination's connection
-	// store (same conntrack poll fan-out), and stopped in Run via StopCleanUp.
+	// store (same conntrack poll fan-out). FlowExporter.Run starts its cleanup loop; defer StopCleanUp
+	// stops it on shutdown.
 	fromExternalCorrelator *connections.FromExternalCorrelator
 
 	// staticDestinationRes is set in NewFlowExporter when static export is enabled. Run() clears
@@ -342,6 +343,9 @@ func (exp *FlowExporter) Run(stopCh <-chan struct{}) {
 	// producers (e.g. denied-connection updates) when there are no export destinations yet.
 	go exp.ctConnUpdateChannel.Run(stopCh)
 	go exp.denyConnUpdateChannel.Run(stopCh)
+	if exp.fromExternalCorrelator != nil {
+		go exp.fromExternalCorrelator.Run()
+	}
 
 	for range defaultWorkers {
 		go wait.Until(exp.worker, time.Second, stopCh)

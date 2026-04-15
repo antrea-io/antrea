@@ -18,6 +18,7 @@ import (
 	"net/netip"
 	"sync"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/stretchr/testify/assert"
@@ -27,20 +28,6 @@ import (
 	binding "antrea.io/antrea/v2/pkg/ovs/openflow"
 	k8sproxy "antrea.io/antrea/v2/third_party/proxy"
 )
-
-// withTTL overrides the default flow expiration TTL.
-func withTTL(ttl time.Duration) FromExternalCorrelatorOption {
-	return func(a *FromExternalCorrelator) {
-		a.ttl = ttl
-	}
-}
-
-// withCleanupInterval overrides the default background loop interval.
-func withCleanupInterval(interval time.Duration) FromExternalCorrelatorOption {
-	return func(a *FromExternalCorrelator) {
-		a.cleanUpInterval = interval
-	}
-}
 
 func contains(c *FromExternalCorrelator, conn *connection.Connection) bool {
 	c.lock.Lock()
@@ -165,29 +152,38 @@ func TestFromExternalCorrelator(t *testing.T) {
 				DestinationPort:    80,
 			},
 		}
-		store.remove(antreaConn)
+		store.RemoveStaleZoneZero(antreaConn)
 		assert.False(t, contains(store, zoneZeroConn))
 	})
 	t.Run("Expires stale records", func(t *testing.T) {
-		store := NewFromExternalCorrelator(withTTL(time.Millisecond), withCleanupInterval(time.Millisecond))
-		refTime := time.Now()
-		zoneZeroConn := &connection.Connection{
-			StartTime: refTime,
-			StopTime:  refTime,
-			FlowKey: connection.Tuple{
-				SourceAddress:      netip.MustParseAddr("172.18.0.1"),
-				DestinationAddress: netip.MustParseAddr("10.244.2.2"),
-				Protocol:           6,
-				SourcePort:         52142,
-				DestinationPort:    80},
-			Mark:          openflow.ServiceCTMark.GetValue(),
-			ProxySnatIP:   netip.MustParseAddr("172.18.0.2"),
-			ProxySnatPort: uint16(28392),
-		}
-		store.add(zoneZeroConn)
-		assert.Eventually(t, func() bool {
-			return !contains(store, zoneZeroConn)
-		}, time.Second, time.Millisecond, "Expected store to expire old records")
+		synctest.Test(t, func(t *testing.T) {
+			store := NewFromExternalCorrelator()
+			t.Cleanup(store.StopCleanUp)
+			go store.Run()
+
+			refTime := time.Now()
+			zoneZeroConn := &connection.Connection{
+				StartTime: refTime,
+				StopTime:  refTime,
+				FlowKey: connection.Tuple{
+					SourceAddress:      netip.MustParseAddr("172.18.0.1"),
+					DestinationAddress: netip.MustParseAddr("10.244.2.2"),
+					Protocol:           6,
+					SourcePort:         52142,
+					DestinationPort:    80},
+				Mark:          openflow.ServiceCTMark.GetValue(),
+				ProxySnatIP:   netip.MustParseAddr("172.18.0.2"),
+				ProxySnatPort: uint16(28392),
+			}
+			store.add(zoneZeroConn)
+			assert.True(t, contains(store, zoneZeroConn), "expected entry before expiry")
+
+			// Advance virtual time past defaultTTL and allow cleanUpLoop to tick.
+			time.Sleep(defaultTTL + 2*defaultCleanUpInterval)
+			synctest.Wait()
+
+			assert.False(t, contains(store, zoneZeroConn), "expected store to expire old records")
+		})
 	})
 	t.Run("StopCleanUp is threadsafe", func(t *testing.T) {
 		store := NewFromExternalCorrelator()
@@ -404,11 +400,11 @@ func TestCorrelateExternal_SymmetricZoneZeroClearsAntreaProxySnat(t *testing.T) 
 	ext := netip.MustParseAddr("203.0.113.10")
 	pod := netip.MustParseAddr("10.244.2.2")
 	snap := zoneZeroSnapshot{
-		sourceAddress:           ext,
+		sourceIP:                ext,
 		sourcePort:              50000,
 		proxySnatIP:             netip.Addr{},
 		proxySnatPort:           0,
-		originalDestinationAddr: netip.MustParseAddr("172.18.0.50"),
+		originalDestinationIP:   netip.MustParseAddr("172.18.0.50"),
 		originalDestinationPort: 30080,
 	}
 	antrea := &connection.Connection{
@@ -426,23 +422,25 @@ func TestCorrelateExternal_SymmetricZoneZeroClearsAntreaProxySnat(t *testing.T) 
 	assert.Equal(t, ext, antrea.FlowKey.SourceAddress)
 	assert.False(t, antrea.ProxySnatIP.IsValid())
 	assert.Equal(t, uint16(0), antrea.ProxySnatPort)
-	assert.Equal(t, snap.originalDestinationAddr, antrea.OriginalDestinationAddress)
+	assert.Equal(t, snap.originalDestinationIP, antrea.OriginalDestinationAddress)
 	assert.Equal(t, snap.originalDestinationPort, antrea.OriginalDestinationPort)
 }
 
-// TestFromExternalCorrelator_ZoneZeroKeyWithoutProxySNAT documents that when conntrack has a
+// TestFromExternalCorrelator_ZoneZeroKeyWithoutProxySNAT verifies that when conntrack has a
 // symmetric reply tuple (no kube-proxy/Antrea SNAT), NetlinkFlowToAntreaConnection leaves
-// ProxySnatPort unset; the correlator still indexes such flows by (Pod IP, 0).
+// ProxySnatPort at 0 and the correlator indexes the zone-0 entry by the real client source port
+// so that keyFromAntreaZoneConn (which always keys by FlowKey.SourcePort) can match it.
 func TestFromExternalCorrelator_ZoneZeroKeyWithoutProxySNAT(t *testing.T) {
 	podIP := netip.MustParseAddr("10.244.2.2")
 	extClient := netip.MustParseAddr("203.0.113.5")
+	clientPort := uint16(40000)
 	conn := &connection.Connection{
 		Zone: 0,
 		FlowKey: connection.Tuple{
 			SourceAddress:      extClient,
 			DestinationAddress: podIP,
 			Protocol:           6,
-			SourcePort:         40000,
+			SourcePort:         clientPort,
 			DestinationPort:    80,
 		},
 		OriginalDestinationAddress: netip.MustParseAddr("172.18.0.111"),
@@ -456,5 +454,62 @@ func TestFromExternalCorrelator_ZoneZeroKeyWithoutProxySNAT(t *testing.T) {
 	key := keyFromZoneZeroConn(conn)
 	_, exists := correlator.connections[key]
 	assert.True(t, exists, "zone-0 entry should be stored when Service lookup succeeds")
-	assert.Equal(t, uint16(0), key.port)
+	// Key must use the real client source port (not 0) so it matches keyFromAntreaZoneConn.
+	assert.Equal(t, clientPort, key.port)
+}
+
+// TestFromExternalCorrelator_SymmetricNATCorrelation verifies that a zone-0 entry with no proxy
+// SNAT (symmetric conntrack, e.g. NodePort externalTrafficPolicy=Local or NodePortLocal) is
+// correctly correlated with its Antrea-zone counterpart.
+func TestFromExternalCorrelator_SymmetricNATCorrelation(t *testing.T) {
+	extClient := netip.MustParseAddr("203.0.113.5")
+	podIP := netip.MustParseAddr("10.244.2.2")
+	nodeIP := netip.MustParseAddr("172.18.0.111")
+	clientPort := uint16(40000)
+
+	// Zone-0 connection: symmetric NAT, ProxySnatPort == 0.
+	zoneZeroConn := &connection.Connection{
+		Zone: 0,
+		FlowKey: connection.Tuple{
+			SourceAddress:      extClient,
+			DestinationAddress: podIP,
+			Protocol:           6,
+			SourcePort:         clientPort,
+			DestinationPort:    80,
+		},
+		OriginalDestinationAddress: nodeIP,
+		OriginalDestinationPort:    12345,
+		ProxySnatIP:                netip.Addr{},
+		ProxySnatPort:              0,
+		Mark:                       openflow.ServiceCTMark.GetValue(),
+	}
+
+	// Antrea-zone connection: source is the gateway, source port is the real client port
+	// (unchanged because no SNAT was applied).
+	gatewayIP := netip.MustParseAddr("10.244.2.1")
+	antreaZoneConn := &connection.Connection{
+		Zone: 65520,
+		FlowKey: connection.Tuple{
+			SourceAddress:      gatewayIP,
+			DestinationAddress: podIP,
+			Protocol:           6,
+			SourcePort:         clientPort,
+			DestinationPort:    80,
+		},
+		OriginalDestinationAddress: podIP,
+		OriginalDestinationPort:    80,
+	}
+
+	correlator := NewFromExternalCorrelator()
+	correlator.IngestZoneZero(zoneZeroConn, mockProxier{})
+
+	correlated := correlator.CorrelateIfExternal(antreaZoneConn)
+	assert.True(t, correlated, "Expected symmetric-NAT zone-0 connection to be correlated")
+	assert.Equal(t, extClient, antreaZoneConn.FlowKey.SourceAddress, "Expected original external client IP")
+	assert.Equal(t, clientPort, antreaZoneConn.FlowKey.SourcePort, "Expected original client source port")
+	assert.Equal(t, nodeIP, antreaZoneConn.OriginalDestinationAddress, "Expected original destination IP (node IP)")
+	assert.Equal(t, uint16(12345), antreaZoneConn.OriginalDestinationPort, "Expected original destination port (NodePort)")
+	assert.False(t, antreaZoneConn.ProxySnatIP.IsValid(), "Expected no proxy SNAT IP for symmetric NAT")
+	assert.Equal(t, uint16(0), antreaZoneConn.ProxySnatPort, "Expected no proxy SNAT port for symmetric NAT")
+	assert.Len(t, correlator.connections, 0, "Expected zone-0 entry to be consumed after correlation")
 }
