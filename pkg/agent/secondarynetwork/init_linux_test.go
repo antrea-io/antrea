@@ -470,8 +470,9 @@ func TestReconcileBridge(t *testing.T) {
 					{Name: eth2, IFName: eth2, Trunks: nil},
 				}, nil).Times(1)
 			},
-			wantNewClient:     true,
-			wantUpdateBridgeN: 1,
+			wantNewClient: true,
+			// UpdateOVSBridge(nil) after old bridge deleted, then UpdateOVSBridge(new) from createAndConnectBridge.
+			wantUpdateBridgeN: 2,
 		},
 		{
 			// When the old ANC CR stops matching (e.g. Node labels change) and a new ANC with a
@@ -495,8 +496,9 @@ func TestReconcileBridge(t *testing.T) {
 					{Name: eth2, IFName: eth2, Trunks: nil},
 				}, nil).Times(1)
 			},
-			wantNewClient:     true,
-			wantUpdateBridgeN: 1,
+			wantNewClient: true,
+			// UpdateOVSBridge(nil) after old bridge deleted, then UpdateOVSBridge(new) from createAndConnectBridge.
+			wantUpdateBridgeN: 2,
 		},
 		{
 			name:       "rule 3: same bridge name — add new interface",
@@ -733,12 +735,12 @@ func TestReconcileBridge(t *testing.T) {
 			fakePc := &fakePodController{}
 			desiredCfg := tc.desiredCfg
 			c := &Controller{
-				ovsBridgeClient:    oldMock,
-				secNetConfig:       &agentconfig.SecondaryNetworkConfig{},
-				effectiveBridgeCfg: tc.prevCfg,
-				effectiveBridgeFn:  func() *agenttypes.OVSBridgeConfig { return desiredCfg },
-				ovsdbConn:          nil,
-				podController:      fakePc,
+				ovsBridgeClient:         oldMock,
+				secNetConfig:            &agentconfig.SecondaryNetworkConfig{},
+				effectiveBridgeCfg:      tc.prevCfg,
+				effectiveBridgeOverride: func() *agenttypes.OVSBridgeConfig { return desiredCfg },
+				ovsdbConn:               nil,
+				podController:           fakePc,
 			}
 
 			err := c.reconcileBridge()
@@ -819,12 +821,12 @@ func TestReconcileBridgeStateCleared(t *testing.T) {
 	}
 
 	c := &Controller{
-		ovsBridgeClient:    oldMock,
-		secNetConfig:       &agentconfig.SecondaryNetworkConfig{},
-		effectiveBridgeCfg: prevCfg,
-		effectiveBridgeFn:  func() *agenttypes.OVSBridgeConfig { return desired },
-		ovsdbConn:          nil,
-		podController:      &fakePodController{},
+		ovsBridgeClient:         oldMock,
+		secNetConfig:            &agentconfig.SecondaryNetworkConfig{},
+		effectiveBridgeCfg:      prevCfg,
+		effectiveBridgeOverride: func() *agenttypes.OVSBridgeConfig { return desired },
+		ovsdbConn:               nil,
+		podController:           &fakePodController{},
 	}
 	capturedController = c
 

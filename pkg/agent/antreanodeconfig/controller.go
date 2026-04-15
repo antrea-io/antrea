@@ -12,25 +12,33 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// Package antreanodeconfig watches AntreaNodeConfig resources and the local Node,
+// and publishes immutable snapshots (Node plus the oldest matching AntreaNodeConfig)
+// to channel subscribers when relevant state
+// changes. Feature packages (for example secondary network) consume those
+// snapshots and merge them with their own static configuration.
 package antreanodeconfig
 
 import (
+	"fmt"
 	"reflect"
-	"sync"
+	"sort"
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
+	"k8s.io/apimachinery/pkg/util/wait"
 	coreinformers "k8s.io/client-go/informers/core/v1"
 	corelisters "k8s.io/client-go/listers/core/v1"
 	"k8s.io/client-go/tools/cache"
+	"k8s.io/client-go/util/workqueue"
 	"k8s.io/klog/v2"
 
-	agenttypes "antrea.io/antrea/v2/pkg/agent/types"
+	crdv1alpha1 "antrea.io/antrea/v2/pkg/apis/crd/v1alpha1"
 	crdinformers "antrea.io/antrea/v2/pkg/client/informers/externalversions/crd/v1alpha1"
 	crdv1alpha1listers "antrea.io/antrea/v2/pkg/client/listers/crd/v1alpha1"
-	agentconfig "antrea.io/antrea/v2/pkg/config/agent"
 	"antrea.io/antrea/v2/pkg/util/channel"
 )
 
@@ -39,58 +47,69 @@ const (
 	// SubscribableChannel delivery before reconciling AntreaNodeConfig-derived
 	// state from the informer cache again.
 	ancInformerResyncPeriod = 5 * time.Minute
+
+	// snapshotQueueKey is the sole workqueue item: one worker reconciles the full
+	// snapshot from Node + AntreaNodeConfig listers whenever any relevant object changes.
+	snapshotQueueKey = "snapshot"
+
+	defaultWorkers = 1
+
+	minRetryDelay = 5 * time.Millisecond
+	maxRetryDelay = 30 * time.Second
 )
 
-// Controller watches AntreaNodeConfig and the local Node, evaluates derived
-// agent settings (see EffectiveSnapshot), and notifies subscribers when that
-// aggregate snapshot changes.
+// Controller watches AntreaNodeConfig and the local Node, builds snapshots of
+// the effective AntreaNodeConfig for this Node (plus list errors), and notifies
+// subscribers when that snapshot changes.
 type Controller struct {
-	nodeName                  string
-	staticSecondaryNetworkCfg *agentconfig.SecondaryNetworkConfig
-	ancLister                 crdv1alpha1listers.AntreaNodeConfigLister
-	nodeLister                corelisters.NodeLister
-	notifier                  channel.Notifier
+	nodeName   string
+	ancLister  crdv1alpha1listers.AntreaNodeConfigLister
+	nodeLister corelisters.NodeLister
+	notifier   channel.Notifier
 
 	nodeListerSynced cache.InformerSynced
 	ancListerSynced  cache.InformerSynced
 
-	mu           sync.RWMutex
-	node         *corev1.Node
-	lastNotified *EffectiveSnapshot
+	queue workqueue.TypedRateLimitingInterface[string]
+
+	// lastNotified is only read/written by the snapshot worker goroutine(s).
+	lastNotified *Snapshot
 }
 
 // NewController constructs a Controller and registers informer handlers.
-// The local Node is loaded from nodeInformer after its cache syncs (see Run)
-// and kept up to date via Add/Update/Delete callbacks. notifier.Notify
-// receives *EffectiveSnapshot payloads (deep-copied).
+// The local Node is read from nodeInformer after its cache syncs (see Run).
+// notifier.Notify receives *Snapshot payloads (deep-copied).
 func NewController(
 	ancInformer crdinformers.AntreaNodeConfigInformer,
 	nodeInformer coreinformers.NodeInformer,
 	nodeName string,
-	agentConfig *agentconfig.AgentConfig,
 	notifier channel.Notifier,
 ) *Controller {
 	c := &Controller{
-		nodeName:                  nodeName,
-		staticSecondaryNetworkCfg: &agentConfig.SecondaryNetwork,
-		ancLister:                 ancInformer.Lister(),
-		nodeLister:                nodeInformer.Lister(),
-		notifier:                  notifier,
-		nodeListerSynced:          nodeInformer.Informer().HasSynced,
-		ancListerSynced:           ancInformer.Informer().HasSynced,
+		nodeName:         nodeName,
+		ancLister:        ancInformer.Lister(),
+		nodeLister:       nodeInformer.Lister(),
+		notifier:         notifier,
+		nodeListerSynced: nodeInformer.Informer().HasSynced,
+		ancListerSynced:  ancInformer.Informer().HasSynced,
+		queue: workqueue.NewTypedRateLimitingQueueWithConfig(
+			workqueue.NewTypedItemExponentialFailureRateLimiter[string](minRetryDelay, maxRetryDelay),
+			workqueue.TypedRateLimitingQueueConfig[string]{
+				Name: "AntreaNodeConfig",
+			},
+		),
 	}
 
 	nodeInformer.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
 		AddFunc:    c.onNodeAdd,
 		UpdateFunc: c.onNodeUpdate,
-		DeleteFunc: c.onNodeDelete,
 	})
 
 	ancInformer.Informer().AddEventHandlerWithResyncPeriod(
 		cache.ResourceEventHandlerFuncs{
-			AddFunc:    func(_ interface{}) { c.recomputeAndNotifyAsync() },
-			UpdateFunc: func(_, _ interface{}) { c.recomputeAndNotifyAsync() },
-			DeleteFunc: func(_ interface{}) { c.recomputeAndNotifyAsync() },
+			AddFunc:    func(_ interface{}) { c.enqueueSnapshot() },
+			UpdateFunc: func(_, _ interface{}) { c.enqueueSnapshot() },
+			DeleteFunc: func(_ interface{}) { c.enqueueSnapshot() },
 		},
 		ancInformerResyncPeriod,
 	)
@@ -98,62 +117,113 @@ func NewController(
 	return c
 }
 
-// EffectiveSecondaryOVSBridge returns the current effective bridge configuration
-// from the informer cache and the latest known Node labels. It is safe to call
-// concurrently with Run and informer callbacks.
-//
-// Before the Node and AntreaNodeConfig informer caches have synced, it returns
-// nil so the secondary-network controller does not create a bridge from static
-// ConfigMap data while AntreaNodeConfig objects are not yet visible (which would
-// later be replaced by CR-driven reconcile).
-func (c *Controller) EffectiveSecondaryOVSBridge() *agenttypes.OVSBridgeConfig {
-	if !c.nodeListerSynced() || !c.ancListerSynced() {
-		return nil
-	}
-	c.mu.RLock()
-	node := c.node
-	c.mu.RUnlock()
-	all, err := c.ancLister.List(labels.Everything())
-	snap := ComputeEffectiveSnapshot(node, all, err, c.staticSecondaryNetworkCfg)
-	if snap == nil {
-		return nil
-	}
-	return snap.SecondaryOVSBridge
+func (c *Controller) enqueueSnapshot() {
+	c.queue.Add(snapshotQueueKey)
 }
 
-// Run waits for the AntreaNodeConfig and Node informer caches to sync, publishes
-// the initial effective configuration, then blocks until stopCh is closed.
+// InformersSynced reports whether both the Node and AntreaNodeConfig informer caches
+// have completed an initial sync.
+func (c *Controller) InformersSynced() bool {
+	return c.nodeListerSynced() && c.ancListerSynced()
+}
+
+// getLocalNodeFromLister returns the Node for this agent's nodeName from the informer
+// cache. If the Node is not present (NotFound), it returns (nil, nil) because an empty
+// Node is valid snapshot input. Any other lister error is returned.
+func (c *Controller) getLocalNodeFromLister() (*corev1.Node, error) {
+	node, err := c.nodeLister.Get(c.nodeName)
+	if err == nil {
+		return node, nil
+	}
+	if apierrors.IsNotFound(err) {
+		return nil, nil
+	}
+	return nil, err
+}
+
+// CurrentSnapshot returns a deep-copied snapshot of the local Node and the
+// oldest AntreaNodeConfig that matches this Node's labels. It returns nil if
+// informers are not synced yet.
+func (c *Controller) CurrentSnapshot() *Snapshot {
+	if !c.InformersSynced() {
+		return nil
+	}
+	node, err := c.getLocalNodeFromLister()
+	if err != nil {
+		klog.ErrorS(err, "Failed to get local Node from lister for snapshot", "node", c.nodeName)
+		return nil
+	}
+	all, err := c.ancLister.List(labels.Everything())
+	effective := antreaNodeConfigForSnapshot(node, all, err)
+	return NewSnapshot(node, effective, err)
+}
+
+// Run waits for the AntreaNodeConfig and Node informer caches to sync, enqueues one
+// snapshot reconciliation, then runs workers until stopCh is closed. The first
+// successful syncSnapshot publishes a *Snapshot to notifier subscribers (including
+// when no AntreaNodeConfig matches this Node: non-nil *Snapshot with nil
+// AntreaNodeConfig).
 func (c *Controller) Run(stopCh <-chan struct{}) {
 	klog.InfoS("Starting AntreaNodeConfig controller")
 	defer klog.InfoS("Shutting down AntreaNodeConfig controller")
+
+	defer c.queue.ShutDown()
 
 	if !cache.WaitForNamedCacheSync("AntreaNodeConfigController", stopCh,
 		c.nodeListerSynced, c.ancListerSynced) {
 		return
 	}
-	c.loadLocalNodeFromLister()
-	c.recomputeAndNotify()
+	c.enqueueSnapshot()
+
+	for i := 0; i < defaultWorkers; i++ {
+		go wait.Until(func() {
+			for c.processNextWorkItem() {
+			}
+		}, time.Second, stopCh)
+	}
 	<-stopCh
 }
 
-// loadLocalNodeFromLister sets c.node from the shared Node informer cache after
-// sync. Event handlers keep it current afterward.
-func (c *Controller) loadLocalNodeFromLister() {
-	node, err := c.nodeLister.Get(c.nodeName)
-	if err != nil {
-		if apierrors.IsNotFound(err) {
-			klog.InfoS("Local Node not present in informer cache after sync", "node", c.nodeName)
-		} else {
-			klog.ErrorS(err, "Failed to get local Node from informer lister", "node", c.nodeName)
-		}
-		c.mu.Lock()
-		c.node = nil
-		c.mu.Unlock()
-		return
+func (c *Controller) processNextWorkItem() bool {
+	key, quit := c.queue.Get()
+	if quit {
+		return false
 	}
-	c.mu.Lock()
-	c.node = node
-	c.mu.Unlock()
+	defer c.queue.Done(key)
+
+	if err := c.syncSnapshot(key); err != nil {
+		c.queue.AddRateLimited(key)
+		klog.ErrorS(err, "Failed to sync AntreaNodeConfig snapshot", "key", key)
+		return true
+	}
+	c.queue.Forget(key)
+	return true
+}
+
+// syncSnapshot builds a snapshot from informer listers and notifies subscribers
+// when it differs from lastNotified. It is intended to run only from the workqueue worker.
+func (c *Controller) syncSnapshot(key string) error {
+	_ = key
+	node, err := c.getLocalNodeFromLister()
+	if err != nil {
+		return err
+	}
+
+	all, listErr := c.ancLister.List(labels.Everything())
+	effective := antreaNodeConfigForSnapshot(node, all, listErr)
+	next := NewSnapshot(node, effective, listErr)
+
+	payload := next.DeepCopy()
+	if c.lastNotified != nil && reflect.DeepEqual(c.lastNotified, payload) {
+		return nil
+	}
+
+	if !c.notifier.Notify(payload) {
+		return fmt.Errorf("notifier rejected AntreaNodeConfig snapshot update")
+	}
+
+	c.lastNotified = payload
+	return nil
 }
 
 func (c *Controller) onNodeAdd(obj interface{}) {
@@ -164,10 +234,7 @@ func (c *Controller) onNodeAdd(obj interface{}) {
 	if node.Name != c.nodeName {
 		return
 	}
-	c.mu.Lock()
-	c.node = node
-	c.mu.Unlock()
-	c.recomputeAndNotifyAsync()
+	c.enqueueSnapshot()
 }
 
 func (c *Controller) onNodeUpdate(oldObj, newObj interface{}) {
@@ -182,62 +249,65 @@ func (c *Controller) onNodeUpdate(oldObj, newObj interface{}) {
 	if newNode.Name != c.nodeName {
 		return
 	}
-	c.mu.Lock()
-	c.node = newNode
-	c.mu.Unlock()
 	if reflect.DeepEqual(oldNode.Labels, newNode.Labels) {
 		return
 	}
-	klog.V(2).InfoS("Local Node labels changed, recomputing AntreaNodeConfig-derived agent settings")
-	c.recomputeAndNotifyAsync()
+	klog.V(2).InfoS("Local Node labels changed, recomputing AntreaNodeConfig snapshot")
+	c.enqueueSnapshot()
 }
 
-func (c *Controller) onNodeDelete(obj interface{}) {
-	node, ok := obj.(*corev1.Node)
-	if !ok {
-		tombstone, ok := obj.(cache.DeletedFinalStateUnknown)
-		if !ok {
-			return
+// antreaNodeConfigForSnapshot returns the oldest AntreaNodeConfig that applies to
+// node when the list succeeded; otherwise nil so subscribers do not act on a
+// partial cluster view.
+func antreaNodeConfigForSnapshot(node *corev1.Node, all []*crdv1alpha1.AntreaNodeConfig, listErr error) *crdv1alpha1.AntreaNodeConfig {
+	if listErr != nil {
+		return nil
+	}
+	return OldestMatchingAntreaNodeConfigForNode(node, all)
+}
+
+// OldestMatchingAntreaNodeConfigForNode returns the AntreaNodeConfig whose
+// nodeSelector matches the given Node's labels and has the oldest
+// creationTimestamp (name breaks ties). It returns nil when node is nil, when no
+// config matches, or when every matching config has an invalid nodeSelector.
+func OldestMatchingAntreaNodeConfigForNode(node *corev1.Node, configs []*crdv1alpha1.AntreaNodeConfig) *crdv1alpha1.AntreaNodeConfig {
+	matched := SelectAntreaNodeConfigsForNode(node, configs)
+	if len(matched) == 0 {
+		return nil
+	}
+	return matched[0]
+}
+
+// SelectAntreaNodeConfigsForNode returns AntreaNodeConfig objects whose nodeSelector
+// matches the given Node's labels, sorted by creationTimestamp ascending (oldest
+// first; name is used as a stable tiebreaker when timestamps are equal).
+// Configs with an invalid nodeSelector are skipped with a log line.
+func SelectAntreaNodeConfigsForNode(node *corev1.Node, configs []*crdv1alpha1.AntreaNodeConfig) []*crdv1alpha1.AntreaNodeConfig {
+	if node == nil {
+		return nil
+	}
+	nodeLabels := labels.Set(node.Labels)
+	var matching []*crdv1alpha1.AntreaNodeConfig
+	for _, cfg := range configs {
+		if cfg == nil {
+			continue
 		}
-		n, ok := tombstone.Obj.(*corev1.Node)
-		if !ok {
-			return
+		sel, err := metav1.LabelSelectorAsSelector(&cfg.Spec.NodeSelector)
+		if err != nil {
+			klog.ErrorS(err, "Skipping AntreaNodeConfig with invalid nodeSelector", "config", cfg.Name)
+			continue
 		}
-		node = n
+		if sel.Matches(nodeLabels) {
+			matching = append(matching, cfg)
+		}
 	}
-	if node.Name != c.nodeName {
-		return
-	}
-	c.mu.Lock()
-	c.node = nil
-	c.mu.Unlock()
-	c.recomputeAndNotifyAsync()
-}
-
-func (c *Controller) recomputeAndNotifyAsync() {
-	go c.recomputeAndNotify()
-}
-
-func (c *Controller) recomputeAndNotify() {
-	c.mu.RLock()
-	node := c.node
-	c.mu.RUnlock()
-	all, err := c.ancLister.List(labels.Everything())
-	next := ComputeEffectiveSnapshot(node, all, err, c.staticSecondaryNetworkCfg)
-
-	// Compare and store using a deep copy so lastNotified is not aliased to
-	// memory that callers or the informer cache might reuse, and so future
-	// EffectiveSnapshot fields remain safe to extend.
-	payload := next.DeepCopy()
-	c.mu.Lock()
-	if c.lastNotified != nil && reflect.DeepEqual(c.lastNotified, payload) {
-		c.mu.Unlock()
-		return
-	}
-	c.lastNotified = payload
-	c.mu.Unlock()
-
-	if !c.notifier.Notify(payload) {
-		klog.Error("Failed to notify AntreaNodeConfig effective snapshot update; subscribers may be stale until next resync")
-	}
+	sort.Slice(matching, func(i, j int) bool {
+		ti := matching[i].CreationTimestamp
+		tj := matching[j].CreationTimestamp
+		if ti.Equal(&tj) {
+			return matching[i].Name < matching[j].Name
+		}
+		return ti.Before(&tj)
+	})
+	return matching
 }

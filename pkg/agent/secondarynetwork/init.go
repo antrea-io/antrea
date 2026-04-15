@@ -15,8 +15,10 @@
 package secondarynetwork
 
 import (
+	"errors"
 	"fmt"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/TomCodeLV/OVSDB-golang-lib/pkg/ovsdb"
@@ -27,6 +29,7 @@ import (
 	componentbaseconfig "k8s.io/component-base/config"
 	"k8s.io/klog/v2"
 
+	"antrea.io/antrea/v2/pkg/agent/antreanodeconfig"
 	"antrea.io/antrea/v2/pkg/agent/config"
 	"antrea.io/antrea/v2/pkg/agent/interfacestore"
 	"antrea.io/antrea/v2/pkg/agent/secondarynetwork/podwatch"
@@ -67,9 +70,17 @@ type Controller struct {
 	nodeName        string
 	ovsdbConn       *ovsdb.OVSDB
 
-	// effectiveBridgeFn returns the desired OVS bridge configuration (from static
-	// agent config and, when enabled, AntreaNodeConfig via the controller).
-	effectiveBridgeFn func() *agenttypes.OVSBridgeConfig
+	// latestANCSnapshot is the last *antreanodeconfig.Snapshot received on the ANC
+	// notify channel.
+	latestANCSnapshot atomic.Pointer[antreanodeconfig.Snapshot]
+	// effectiveBridgeOverride is set only by unit tests to stub desired bridge resolution.
+	effectiveBridgeOverride func() *agenttypes.OVSBridgeConfig
+
+	// ancFirstSnapshotCh is closed when the first *Snapshot is delivered after ANC
+	// informers have synced (including the no-ANC case: non-nil *Snapshot with nil
+	// AntreaNodeConfig). Only used when dynamicBridgeReconcile is true.
+	ancFirstSnapshotCh chan struct{}
+	signalFirstANC     sync.Once
 
 	// mu protects effectiveBridgeCfg for atomic point-in-time reads and writes.
 	// It must never be held across blocking OVS calls.
@@ -96,16 +107,35 @@ func NewController(
 	secNetConfig *agentconfig.SecondaryNetworkConfig,
 	ovsdbConn *ovsdb.OVSDB,
 	ipPoolLister crdlisters.IPPoolLister,
-	effectiveBridgeFn func() *agenttypes.OVSBridgeConfig,
 	ancUpdateSubscriber channel.Subscriber,
 ) (*Controller, error) {
-	if effectiveBridgeFn == nil {
-		return nil, fmt.Errorf("effectiveBridge must not be nil")
+	dynamic := ancUpdateSubscriber != nil
+	c := &Controller{
+		ovsBridgeClient:        nil,
+		secNetConfig:           secNetConfig,
+		podController:          nil,
+		nodeName:               nodeConfig.Name,
+		ovsdbConn:              ovsdbConn,
+		dynamicBridgeReconcile: dynamic,
+		queue: workqueue.NewTypedRateLimitingQueueWithConfig(
+			workqueue.NewTypedItemExponentialFailureRateLimiter[string](minRetryDelay, maxRetryDelay),
+			workqueue.TypedRateLimitingQueueConfig[string]{Name: "secondaryNetworkBridge"},
+		),
+	}
+	if dynamic {
+		c.ancFirstSnapshotCh = make(chan struct{})
 	}
 
-	effectiveBridgeCfg, ovsBridgeClient, err := resolveAndCreateOVSBridge(effectiveBridgeFn, ovsdbConn)
-	if err != nil {
-		return nil, err
+	var effectiveBridgeCfg *agenttypes.OVSBridgeConfig
+	var ovsBridgeClient ovsconfig.OVSBridgeClient
+	var err error
+	if dynamic {
+		effectiveBridgeCfg, ovsBridgeClient = nil, nil
+	} else {
+		effectiveBridgeCfg, ovsBridgeClient, err = resolveAndCreateOVSBridge(c.effectiveOVSBridge, ovsdbConn)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	netAttachDefClient, err := createNetworkAttachDefClient(clientConnectionConfig, kubeAPIServerOverride)
@@ -120,31 +150,75 @@ func NewController(
 		return nil, err
 	}
 
-	dynamicBridgeReconcile := ancUpdateSubscriber != nil
-	c := &Controller{
-		ovsBridgeClient:        ovsBridgeClient,
-		secNetConfig:           secNetConfig,
-		effectiveBridgeCfg:     effectiveBridgeCfg,
-		podController:          podWatchController,
-		nodeName:               nodeConfig.Name,
-		effectiveBridgeFn:      effectiveBridgeFn,
-		ovsdbConn:              ovsdbConn,
-		dynamicBridgeReconcile: dynamicBridgeReconcile,
-		queue: workqueue.NewTypedRateLimitingQueueWithConfig(
-			workqueue.NewTypedItemExponentialFailureRateLimiter[string](minRetryDelay, maxRetryDelay),
-			workqueue.TypedRateLimitingQueueConfig[string]{Name: "secondaryNetworkBridge"},
-		),
-	}
+	c.ovsBridgeClient = ovsBridgeClient
+	c.secNetConfig = secNetConfig
+	c.effectiveBridgeCfg = effectiveBridgeCfg
+	c.podController = podWatchController
 
-	if dynamicBridgeReconcile {
-		// Notify payloads are *antreanodeconfig.EffectiveSnapshot; this controller
-		// reconciles from effectiveBridge() so it only needs the wakeup.
-		ancUpdateSubscriber.Subscribe(func(_ interface{}) {
+	if c.dynamicBridgeReconcile {
+		ancUpdateSubscriber.Subscribe(func(p interface{}) {
+			snap, ok := p.(*antreanodeconfig.Snapshot)
+			if !ok {
+				klog.ErrorS(errors.New("unexpected notify payload"), "AntreaNodeConfig notify payload", "type", fmt.Sprintf("%T", p))
+				return
+			}
+			if snap == nil {
+				klog.ErrorS(errors.New("nil snapshot from notifier"), "AntreaNodeConfig notify payload")
+				return
+			}
+			c.latestANCSnapshot.Store(snap)
+			c.signalFirstANC.Do(func() { close(c.ancFirstSnapshotCh) })
 			c.enqueue()
 		})
 	}
 
 	return c, nil
+}
+
+// effectiveOVSBridge returns the desired OVS bridge for this node. When AntreaNodeConfig
+// drives the bridge, only snapshots delivered on the notify channel are used.
+// When ANC is disabled, only static agent config is consulted.
+func (c *Controller) effectiveOVSBridge() *agenttypes.OVSBridgeConfig {
+	if c.effectiveBridgeOverride != nil {
+		return c.effectiveBridgeOverride()
+	}
+	if c.dynamicBridgeReconcile {
+		return EffectiveSecondaryOVSBridgeFromSnapshot(c.latestANCSnapshot.Load(), c.secNetConfig)
+	}
+	return EffectiveSecondaryOVSBridgeFromStatic(c.secNetConfig)
+}
+
+// WaitForInitialANCSnapshotAndEnsureBridge blocks until the AntreaNodeConfig controller
+// publishes the first *Snapshot after Node and ANC informers have synced (the same
+// notify path as later updates). That snapshot may carry nil AntreaNodeConfig when no
+// CR matches this Node. It then creates the OVS bridge if needed and updates the pod
+// watcher.
+//
+// The agent calls this once before Initialize when AntreaNodeConfig drives the bridge;
+// on error the agent exits and restarts, so this path does not retry or support
+// concurrent callers.
+func (c *Controller) WaitForInitialANCSnapshotAndEnsureBridge(stopCh <-chan struct{}) error {
+	if !c.dynamicBridgeReconcile {
+		return nil
+	}
+	select {
+	case <-c.ancFirstSnapshotCh:
+	case <-stopCh:
+		return fmt.Errorf("interrupted while waiting for initial AntreaNodeConfig snapshot")
+	}
+	effectiveBridgeCfg, ovsBridgeClient, err := resolveAndCreateOVSBridge(c.effectiveOVSBridge, c.ovsdbConn)
+	if err != nil {
+		return err
+	}
+	c.mu.Lock()
+	c.effectiveBridgeCfg = effectiveBridgeCfg
+	c.ovsBridgeClient = ovsBridgeClient
+	c.mu.Unlock()
+	if err := c.podController.UpdateOVSBridge(ovsBridgeClient); err != nil {
+		return err
+	}
+	klog.InfoS("Secondary network bridge bootstrapped from initial AntreaNodeConfig snapshot")
+	return nil
 }
 
 // enqueue adds the single reconciliation key to the work queue.
@@ -153,10 +227,9 @@ func (c *Controller) enqueue() {
 }
 
 // Run starts the secondary network controller. When AntreaNodeConfig is
-// enabled, a bridge reconciliation worker processes items enqueued by the ANC
-// SubscribableChannel (the AntreaNodeConfig controller only notifies after its
-// informers have synced). When ANC is off, the bridge is static and no worker
-// is started.
+// enabled, the agent must have called WaitForInitialANCSnapshotAndEnsureBridge before
+// Initialize; a bridge reconciliation worker then processes items enqueued by the ANC
+// SubscribableChannel. When ANC is off, the bridge is static and no worker is started.
 func (c *Controller) Run(stopCh <-chan struct{}) {
 	defer c.queue.ShutDown()
 
