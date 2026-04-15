@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"net"
 	"reflect"
+	"time"
 
 	"antrea.io/antrea/v2/pkg/apis/crd/v1beta1"
 	crdclientset "antrea.io/antrea/v2/pkg/client/clientset/versioned"
@@ -28,6 +29,7 @@ import (
 	iputil "antrea.io/antrea/v2/pkg/util/ip"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/util/retry"
 	"k8s.io/klog/v2"
 	utilnet "k8s.io/utils/net"
@@ -35,6 +37,16 @@ import (
 
 // ErrPoolExhausted is returned when an IPPool has no available IPs left.
 var ErrPoolExhausted = errors.New("pool exhausted")
+
+// ipPoolStatusRetry backs off longer than retry.DefaultRetry. Many Nodes may
+// update the same IPPool status concurrently (shared pools, multi-NIC), causing
+// frequent resourceVersion conflicts on UpdateStatus.
+var ipPoolStatusRetry = wait.Backoff{
+	Steps:    15,
+	Duration: 10 * time.Millisecond,
+	Factor:   1.5,
+	Jitter:   0.1,
+}
 
 // IPPoolAllocator is responsible for allocating IPs from IP set defined in IPPool CRD.
 // The will update CRD usage accordingly.
@@ -289,7 +301,7 @@ func (a *IPPoolAllocator) getExistingAllocation(podOwner *v1beta1.PodOwner) (net
 func (a *IPPoolAllocator) AllocateIP(ip net.IP, state v1beta1.IPAddressPhase, owner v1beta1.IPAddressOwner) (*v1beta1.SubnetInfo, error) {
 	var subnetInfo *v1beta1.SubnetInfo
 	// Retry on CRD update conflict which is caused by multiple agents updating a pool at same time.
-	err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
+	err := retry.RetryOnConflict(ipPoolStatusRetry, func() error {
 		ipPool, allocators, err := a.getPoolAndInitIPAllocators()
 		if err != nil {
 			return err
@@ -345,7 +357,7 @@ func (a *IPPoolAllocator) AllocateNext(state v1beta1.IPAddressPhase, owner v1bet
 	}
 
 	// Retry on CRD update conflict which is caused by multiple agents updating a pool at same time.
-	err = retry.RetryOnConflict(retry.DefaultRetry, func() error {
+	err = retry.RetryOnConflict(ipPoolStatusRetry, func() error {
 		ipPool, allocators, err := a.getPoolAndInitIPAllocators()
 		if err != nil {
 			return err
@@ -402,7 +414,7 @@ func (a *IPPoolAllocator) AllocateReservedOrNext(state v1beta1.IPAddressPhase, o
 	}
 
 	// Retry on CRD update conflict which is caused by multiple agents updating a pool at same time.
-	err = retry.RetryOnConflict(retry.DefaultRetry, func() error {
+	err = retry.RetryOnConflict(ipPoolStatusRetry, func() error {
 		ipPool, allocators, err := a.getPoolAndInitIPAllocators()
 		if err != nil {
 			return err
@@ -437,7 +449,7 @@ func (a *IPPoolAllocator) AllocateReservedOrNext(state v1beta1.IPAddressPhase, o
 // be allocated on the fly, and there is no guarantee for continuous IPs.
 func (a *IPPoolAllocator) AllocateStatefulSet(namespace, name string, size int, ip net.IP) error {
 	// Retry on CRD update conflict which is caused by multiple agents updating a pool at same time.
-	err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
+	err := retry.RetryOnConflict(ipPoolStatusRetry, func() error {
 		ipPool, allocators, err := a.getPoolAndInitIPAllocators()
 		if err != nil {
 			return err
@@ -476,7 +488,7 @@ func (a *IPPoolAllocator) AllocateStatefulSet(namespace, name string, size int, 
 func (a *IPPoolAllocator) Release(ip net.IP) error {
 
 	// Retry on CRD update conflict which is caused by multiple agents updating a pool at same time.
-	err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
+	err := retry.RetryOnConflict(ipPoolStatusRetry, func() error {
 		ipPool, allocators, err := a.getPoolAndInitIPAllocators()
 		if err != nil {
 			return err
@@ -504,7 +516,7 @@ func (a *IPPoolAllocator) Release(ip net.IP) error {
 func (a *IPPoolAllocator) ReleaseStatefulSet(namespace, name string) error {
 
 	// Retry on CRD update conflict which is caused by multiple agents updating a pool at same time.
-	err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
+	err := retry.RetryOnConflict(ipPoolStatusRetry, func() error {
 		ipPool, err := a.getPool()
 
 		if err != nil {
@@ -548,7 +560,7 @@ func (a *IPPoolAllocator) ReleaseStatefulSet(namespace, name string) error {
 // change.
 func (a *IPPoolAllocator) ReleaseContainer(containerID, ifName string) error {
 	// Retry on CRD update conflict which is caused by multiple agents updating a pool at same time.
-	err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
+	err := retry.RetryOnConflict(ipPoolStatusRetry, func() error {
 		ipPool, err := a.getPool()
 		if err != nil {
 			return err
