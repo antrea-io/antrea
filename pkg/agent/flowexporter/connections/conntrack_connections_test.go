@@ -278,6 +278,7 @@ func TestConntrackConnectionStore_AddOrUpdateConn(t *testing.T) {
 func TestConntrackConnectionStore_AddOrUpdateConn_FromExternalConns(t *testing.T) {
 	fe := NewFromExternalCorrelator()
 	t.Cleanup(fe.StopCleanUp)
+	go fe.Run()
 	refTime := time.Now()
 	networkPolicyReadyTime := refTime.Add(-time.Hour)
 
@@ -687,18 +688,21 @@ func TestConntrackConnectionStore_AddOrUpdateConns_ZoneZeroFlow(t *testing.T) {
 
 	fe := NewFromExternalCorrelator()
 	t.Cleanup(fe.StopCleanUp)
+	go fe.Run()
 	cs := NewConntrackConnectionStore(nil, nil, nil, testFlowExporterOptions, fe)
 
 	// Zone-zero connections submitted through AddOrUpdateConns should be stored
 	// in the correlator, not the connection store.
 	require.NoError(t, cs.AddOrUpdateConns(&ConntrackPollBatch{ZoneZero: []*connection.Connection{zoneZeroConn}}))
 	assert.Empty(t, cs.connections, "zone-zero connection should not appear in the connection store")
-	assert.Len(t, cs.fromExternalCorrelator.connections, 1, "zone-zero connection should be stored in correlator")
+	fe, ok := cs.fromExternal.(*FromExternalCorrelator)
+	require.True(t, ok, "expected *FromExternalCorrelator")
+	assert.Len(t, fe.connections, 1, "zone-zero connection should be stored in correlator")
 
 	// When the Antrea-zone counterpart arrives, it should be correlated and the
 	// correlator entry consumed.
 	require.NoError(t, cs.AddOrUpdateConns(&ConntrackPollBatch{AntreaZone: []*connection.Connection{antreaZoneConn}}))
-	assert.Len(t, cs.fromExternalCorrelator.connections, 0, "zone-zero entry should have been consumed by correlation")
+	assert.Len(t, fe.connections, 0, "zone-zero entry should have been consumed by correlation")
 	connKey := connection.NewConnectionKey(antreaZoneConn)
 	storedConn, exists := cs.GetConnByKey(connKey)
 	require.True(t, exists, "correlated connection should be in the store")

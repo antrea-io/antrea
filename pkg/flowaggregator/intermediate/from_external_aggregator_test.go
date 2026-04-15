@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"sync"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/stretchr/testify/assert"
@@ -322,30 +323,24 @@ func TestStoreIfNew(t *testing.T) {
 	})
 }
 
-// withTTL overrides the default flow expiration TTL.
-func withTTL(ttl time.Duration) option {
-	return func(a *fromExternalAggregator) {
-		a.ttl = ttl
-	}
-}
-
-// withCleanupInterval overrides the default background loop interval.
-func withCleanupInterval(interval time.Duration) option {
-	return func(a *fromExternalAggregator) {
-		a.cleanUpInterval = interval
-	}
-}
-
 func TestExpiresStaleFlows(t *testing.T) {
-	a := newFromExternalAggregator(mockIndexerA, withTTL(time.Millisecond), withCleanupInterval(time.Millisecond))
-	sourceNodeFlow, _ := generateSourceNodeFlowAndFlowKey()
-	matched := a.storeIfNew(sourceNodeFlow)
-	assert.Nil(t, matched, "Expected nil when flow is stored for the first time")
+	synctest.Test(t, func(t *testing.T) {
+		a := newFromExternalAggregator(mockIndexerA)
+		t.Cleanup(a.stop)
+		go a.Run(a.stopCh)
 
-	key := a.generateFromExternalStoreKey(sourceNodeFlow)
-	assert.Eventually(t, func() bool {
-		return !contains(a, key)
-	}, time.Second, time.Millisecond, "Expected flow to have been cleaned up")
+		sourceNodeFlow, _ := generateSourceNodeFlowAndFlowKey()
+		matched := a.storeIfNew(sourceNodeFlow)
+		assert.Nil(t, matched, "Expected nil when flow is stored for the first time")
+
+		key := a.generateFromExternalStoreKey(sourceNodeFlow)
+		assert.True(t, contains(a, key), "expected entry before expiry")
+
+		time.Sleep(defaultTTL + 2*defaultCleanUpInterval)
+		synctest.Wait()
+
+		assert.False(t, contains(a, key), "expected flow to have been cleaned up")
+	})
 }
 
 func TestStopIsThreadSafe(t *testing.T) {
@@ -426,6 +421,8 @@ func TestCorrelateOrStore(t *testing.T) {
 			require.NotNil(t, gotRecord, "Expected flow to be correlated")
 			require.NotNil(t, gotRecord.Ip, "Expected correlated flow's IP not to be nil")
 			assert.Equal(t, externalIP, gotRecord.Ip.Source, "Expected correlated flow to have original source IP")
+			require.NotNil(t, gotRecord.Transport, "Expected correlated flow's Transport not to be nil")
+			assert.Equal(t, sourceNodeRecord.Transport.SourcePort, gotRecord.Transport.SourcePort, "Expected correlated flow to have the original client source port")
 			require.NotNil(t, gotRecord.K8S, "Expected correlated flow's K8S data not to be nil")
 			assert.Equal(t, nodeIP, gotRecord.K8S.DestinationServiceIp, "Expected correlated flow to have node IP")
 			assert.Equal(t, nodeIP, gotRecord.K8S.DestinationClusterIp, "Expected correlated flow to have node IP")
@@ -450,6 +447,8 @@ func TestCorrelateOrStore(t *testing.T) {
 			require.NotNil(t, gotRecord, "Expected flow to be correlated")
 			require.NotNil(t, gotRecord.Ip, "Expected correlated flow's IP not to be nil")
 			assert.Equal(t, externalIP, gotRecord.Ip.Source, "Expected correlated flow to have original source IP")
+			require.NotNil(t, gotRecord.Transport, "Expected correlated flow's Transport not to be nil")
+			assert.Equal(t, sourceNodeRecord.Transport.SourcePort, gotRecord.Transport.SourcePort, "Expected correlated flow to have the original client source port")
 			require.NotNil(t, gotRecord.K8S, "Expected correlated flow's K8S data not to be nil")
 			assert.Equal(t, nodeIP, gotRecord.K8S.DestinationServiceIp, "Expected correlated flow to have node IP")
 			assert.Equal(t, nodeIP, gotRecord.K8S.DestinationClusterIp, "Expected correlated flow to have node IP")

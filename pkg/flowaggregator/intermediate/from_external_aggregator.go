@@ -62,11 +62,12 @@ var NodeIndexers = cache.Indexers{
 	},
 }
 
-// ttl threshold for expiring flows.
-var defaultTTL = time.Minute
-
-// defaultCleanUpInterval is the frequency in which we run the cleanup for expiring stale flows.
-var defaultCleanUpInterval = time.Second * 5
+const (
+	// defaultTTL is the threshold for expiring flows in the from-external store.
+	defaultTTL = time.Minute
+	// defaultCleanUpInterval is how often the background cleanup runs.
+	defaultCleanUpInterval = 5 * time.Second
+)
 
 type fromExternalAggregator struct {
 	FromExternalStore map[string]flowItem
@@ -78,24 +79,19 @@ type fromExternalAggregator struct {
 	cleanUpInterval   time.Duration
 }
 
-type option func(*fromExternalAggregator)
-
-func newFromExternalAggregator(nodeIndexer cache.Indexer, opts ...option) *fromExternalAggregator {
+func newFromExternalAggregator(nodeIndexer cache.Indexer) *fromExternalAggregator {
 	stopCh := make(chan struct{})
-	a := &fromExternalAggregator{
+	return &fromExternalAggregator{
 		FromExternalStore: make(map[string]flowItem),
 		nodeIndexer:       nodeIndexer,
 		stopCh:            stopCh,
 		ttl:               defaultTTL,
 		cleanUpInterval:   defaultCleanUpInterval,
 	}
+}
 
-	for _, opt := range opts {
-		opt(a)
-	}
-
-	go a.cleanUpLoop(stopCh)
-	return a
+func (a *fromExternalAggregator) Run(stopCh <-chan struct{}) {
+	a.cleanUpLoop(stopCh)
 }
 
 // correlateOrStore returns the correlated record. If correlation is not
@@ -120,11 +116,16 @@ func (a *fromExternalAggregator) correlateOrStore(flowKey *FlowKey, record *flow
 
 // mergeExternalFlows merges the incoming flow with the previously stored
 // counterpart. The destination-node flow (whose source is the gateway)
-// receives the original external source IP and service metadata from the
-// source-node flow.
+// receives the original external source IP, original source port, and service
+// metadata from the source-node flow.
 func (a *fromExternalAggregator) mergeExternalFlows(incoming, stored *flowpb.Flow) *flowpb.Flow {
 	if a.isGateway(incoming.Ip.Source) {
+		// incoming is the destination-node flow (source == gatewayIP).
+		// stored is the source-node flow (source == real external client IP).
 		incoming.Ip.Source = stored.Ip.Source
+		// Restore the real client source port from the source-node flow so that
+		// the final 5-tuple is consistent (external IP + original ephemeral port).
+		incoming.Transport.SourcePort = stored.Transport.SourcePort
 		if incoming.K8S != nil {
 			incoming.K8S.DestinationServiceIp = stored.K8S.DestinationServiceIp
 			incoming.K8S.DestinationServicePortName = stored.K8S.DestinationServicePortName
@@ -133,7 +134,11 @@ func (a *fromExternalAggregator) mergeExternalFlows(incoming, stored *flowpb.Flo
 		}
 		return incoming
 	}
+	// incoming is the source-node flow (source == real external client IP).
+	// stored is the destination-node flow (source == gatewayIP).
 	stored.Ip.Source = incoming.Ip.Source
+	// Restore the real client source port.
+	stored.Transport.SourcePort = incoming.Transport.SourcePort
 	if stored.K8S != nil {
 		stored.K8S.DestinationServiceIp = incoming.K8S.DestinationServiceIp
 		stored.K8S.DestinationServicePortName = incoming.K8S.DestinationServicePortName
@@ -168,6 +173,7 @@ func (a *fromExternalAggregator) cleanUpLoop(stopCh <-chan struct{}) {
 func (a *fromExternalAggregator) cleanup(ttl time.Duration) {
 	a.lock.Lock()
 	defer a.lock.Unlock()
+
 	now := time.Now()
 	for key, record := range a.FromExternalStore {
 		if now.Sub(record.timestamp) > ttl {

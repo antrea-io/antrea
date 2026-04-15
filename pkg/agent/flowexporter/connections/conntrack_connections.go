@@ -42,7 +42,7 @@ type ConntrackConnectionStore struct {
 	networkPolicyReadyTime time.Time
 	protocolFilter         filter.ProtocolFilter
 	connectionStore
-	fromExternalCorrelator *FromExternalCorrelator
+	fromExternal ExternalCorrelator
 }
 
 // ConntrackPollBatch is the result of one conntrack poll cycle, split by kernel zone at the poller.
@@ -54,40 +54,36 @@ type ConntrackPollBatch struct {
 	AntreaZone []*connection.Connection
 }
 
-// NewConntrackConnectionStore creates a connection store. If fromExternal is non-nil, zone-0 flows
-// are correlated with Antrea-zone flows for external-to-Pod export.
+// NewConntrackConnectionStore creates a connection store. fromExternal correlates zone-0 flows
+// with Antrea-zone flows for external-to-Pod export; if nil, NewFakeExternalCorrelator() is used.
 func NewConntrackConnectionStore(
 	npQuerier querier.AgentNetworkPolicyInfoQuerier,
 	podStore objectstore.PodStore,
 	proxier proxy.ProxyQuerier,
 	cfg ConnectionStoreConfig,
-	fromExternal *FromExternalCorrelator,
+	fromExternal ExternalCorrelator,
 ) *ConntrackConnectionStore {
+	if fromExternal == nil {
+		fromExternal = NewFakeExternalCorrelator()
+	}
 	return &ConntrackConnectionStore{
 		connectionStore:        NewConnectionStore(npQuerier, podStore, proxier, cfg),
 		protocolFilter:         filter.NewProtocolFilter(cfg.AllowedProtocols),
 		networkPolicyReadyTime: cfg.NetworkPolicyReadyTime,
-		fromExternalCorrelator: fromExternal,
+		fromExternal:           fromExternal,
 	}
 }
 
 func (cs *ConntrackConnectionStore) ingestZoneZero(conn *connection.Connection) {
-	if c := cs.fromExternalCorrelator; c != nil {
-		c.IngestZoneZero(conn, cs.antreaProxier)
-	}
+	cs.fromExternal.IngestZoneZero(conn, cs.antreaProxier)
 }
 
 func (cs *ConntrackConnectionStore) correlateIfExternal(conn *connection.Connection) bool {
-	if c := cs.fromExternalCorrelator; c != nil {
-		return c.CorrelateIfExternal(conn)
-	}
-	return false
+	return cs.fromExternal.CorrelateIfExternal(conn)
 }
 
 func (cs *ConntrackConnectionStore) removeFromExternalCorrelator(conn *connection.Connection) {
-	if c := cs.fromExternalCorrelator; c != nil {
-		c.remove(conn)
-	}
+	cs.fromExternal.RemoveStaleZoneZero(conn)
 }
 
 func (cs *ConntrackConnectionStore) AddOrUpdateConns(batch *ConntrackPollBatch) error {
@@ -198,13 +194,13 @@ func (cs *ConntrackConnectionStore) AddOrUpdateConn(conn *connection.Connection)
 			return
 		}
 		if conn.Mark&openflow.ServiceCTMark.GetRange().ToNXRange().ToUint32Mask() == openflow.ServiceCTMark.GetValue() || fromExternal {
-			serviceFrontend := conn.OriginalDestinationAddress.String()
+			serviceIP := conn.OriginalDestinationAddress.String()
 			svcPort := conn.OriginalDestinationPort
 			protocol, err := lookupServiceProtocol(conn.FlowKey.Protocol)
 			if err != nil {
 				klog.InfoS("Could not retrieve Service protocol", "error", err)
 			} else {
-				serviceStr := fmt.Sprintf("%s:%d/%s", serviceFrontend, svcPort, protocol)
+				serviceStr := fmt.Sprintf("%s:%d/%s", serviceIP, svcPort, protocol)
 				cs.fillServiceInfo(conn, serviceStr)
 			}
 		}
