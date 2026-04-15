@@ -216,10 +216,13 @@ func (c *Controller) reconcileBridge() error {
 	prev := c.effectiveBridgeCfg
 	c.mu.RUnlock()
 
-	desired := c.effectiveBridgeFn()
+	desired := c.effectiveOVSBridge()
 
+	if prev == nil && desired == nil {
+		return nil
+	}
 	// No change — nothing to do.
-	if reflect.DeepEqual(prev, desired) {
+	if prev != nil && desired != nil && reflect.DeepEqual(*prev, *desired) {
 		return nil
 	}
 
@@ -228,20 +231,7 @@ func (c *Controller) reconcileBridge() error {
 
 	// Case: no bridge desired — delete the existing one.
 	if desired == nil {
-		if err := c.deleteBridge(prev); err != nil {
-			return err
-		}
-		// Clear state immediately after successful deletion so that a retry
-		// does not attempt to delete an already-removed bridge.
-		c.mu.Lock()
-		c.effectiveBridgeCfg = nil
-		c.ovsBridgeClient = nil
-		c.mu.Unlock()
-		// Notify PodController that the bridge is gone.
-		if err := c.podController.UpdateOVSBridge(nil); err != nil {
-			return err
-		}
-		return nil
+		return c.deleteAndDisconnectBridge(prev)
 	}
 
 	// Case: new bridge desired when none existed before.
@@ -257,14 +247,9 @@ func (c *Controller) reconcileBridge() error {
 	if prev.BridgeName != desired.BridgeName {
 		klog.InfoS("Secondary OVS bridge name changed, deleting old bridge before creating new one",
 			"old", prev.BridgeName, "new", desired.BridgeName)
-		if err := c.deleteBridge(prev); err != nil {
+		if err := c.deleteAndDisconnectBridge(prev); err != nil {
 			return err
 		}
-		// Old bridge is gone — clear state before proceeding.
-		c.mu.Lock()
-		c.effectiveBridgeCfg = nil
-		c.ovsBridgeClient = nil
-		c.mu.Unlock()
 		return c.createAndConnectBridge(desired)
 	}
 
@@ -274,6 +259,26 @@ func (c *Controller) reconcileBridge() error {
 	klog.InfoS("Secondary OVS bridge name unchanged, updating physical interfaces",
 		"bridge", desired.BridgeName)
 	return c.updatePhysicalInterfaces(prev, desired)
+}
+
+func (c *Controller) clearBridgeState() {
+	c.mu.Lock()
+	c.effectiveBridgeCfg = nil
+	c.ovsBridgeClient = nil
+	c.mu.Unlock()
+}
+
+// deleteAndDisconnectBridge deletes the OVS bridge for cfg, notifies the pod controller that
+// no secondary bridge is in use, and clears controller state. cfg may be nil (no-op delete).
+func (c *Controller) deleteAndDisconnectBridge(cfg *agenttypes.OVSBridgeConfig) error {
+	if err := c.deleteBridge(cfg); err != nil {
+		return err
+	}
+	if err := c.podController.UpdateOVSBridge(nil); err != nil {
+		return err
+	}
+	c.clearBridgeState()
+	return nil
 }
 
 // deleteBridge tears down the single-interface host connection (if applicable) and deletes the
