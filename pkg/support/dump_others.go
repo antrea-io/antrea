@@ -20,18 +20,17 @@ package support
 import (
 	"bytes"
 	"fmt"
-	"os"
+	"net"
 	"path"
 	"path/filepath"
 	"strings"
 	"sync"
 
-	"github.com/spf13/afero"
-
 	"k8s.io/klog/v2"
 
 	"antrea.io/antrea/v2/pkg/agent/util/iptables"
 	"antrea.io/antrea/v2/pkg/agent/util/nftables"
+	"antrea.io/antrea/v2/pkg/agent/util/sysctl"
 	"antrea.io/antrea/v2/pkg/util/logdir"
 )
 
@@ -75,7 +74,7 @@ func (d *agentDumper) DumpHostNetworkInfo(basedir string) error {
 	if err := d.dumpIPToolInfo(basedir); err != nil {
 		return err
 	}
-	if err := d.dumpSysctlNetIF(basedir); err != nil {
+	if err := d.dumpInterfaceConfigs(basedir); err != nil {
 		return err
 	}
 	return nil
@@ -122,52 +121,58 @@ func (d *agentDumper) dumpNFTables(basedir string) error {
 }
 
 func (d *agentDumper) dumpIPToolInfo(basedir string) error {
-	dump := func(fileName string, args ...string) error {
+	dump := func(args ...string) error {
 		output, err := d.executor.Command("ip", args...).CombinedOutput()
 		if err != nil {
-			return fmt.Errorf("error when dumping ip %s: %w", strings.Join(args, " "), err)
+			return fmt.Errorf("error when dumping %s: %w", strings.Join(args, " "), err)
 		}
-		return writeFile(d.fs, filepath.Join(basedir, fileName), fileName, output)
+		return writeFile(d.fs, filepath.Join(basedir, args[0]), args[0], output)
 	}
-	for _, item := range []string{"route", "link", "address", "rule"} {
-		if err := dump(item, item); err != nil {
+	commands := [][]string{
+		{"link"},
+		{"address"},
+		{"rule", "show"},
+		{"route", "show", "table", "all"},
+	}
+	for _, cmd := range commands {
+		if err := dump(cmd...); err != nil {
 			return err
 		}
-	}
-	// Dump all routing tables (not just the main table) for diagnosing Egress routing issues.
-	if err := dump("route-all-tables", "route", "show", "table", "all"); err != nil {
-		return err
 	}
 	return nil
 }
 
-// dumpSysctlNetIF dumps per-interface IPv4 sysctl parameters (rp_filter, arp_ignore,
-// arp_announce) that are relevant for debugging Egress and EgressSeparateSubnet issues.
-func (d *agentDumper) dumpSysctlNetIF(basedir string) error {
-	const sysctlNetIPv4ConfDir = "/proc/sys/net/ipv4/conf"
-	entries, err := afero.ReadDir(d.fs, sysctlNetIPv4ConfDir)
+func (d *agentDumper) dumpInterfaceConfigs(basedir string) error {
+	interfaces, err := net.Interfaces()
 	if err != nil {
-		if os.IsNotExist(err) {
-			return nil
-		}
-		return fmt.Errorf("error reading %s: %w", sysctlNetIPv4ConfDir, err)
+		return fmt.Errorf("error getting network interfaces: %w", err)
 	}
-	var buf bytes.Buffer
-	for _, entry := range entries {
-		iface := entry.Name()
-		for _, param := range []string{"rp_filter", "arp_ignore", "arp_announce"} {
-			paramPath := filepath.Join(sysctlNetIPv4ConfDir, iface, param)
-			data, readErr := afero.ReadFile(d.fs, paramPath)
-			if readErr != nil {
-				if os.IsNotExist(readErr) {
-					continue
-				}
-				return fmt.Errorf("error reading sysctl %s: %w", paramPath, readErr)
+	hostGateway := d.aq.GetNodeConfig().GatewayConfig.Name
+	isRelevantIface := func(ifaceName string) bool {
+		return ifaceName == hostGateway ||
+			ifaceName == "antrea-egress0" ||
+			ifaceName == "antrea-ingress0" ||
+			strings.HasPrefix(ifaceName, "antrea-ext.")
+	}
+	params := []string{"rp_filter", "arp_ignore", "arp_announce"}
+	var output bytes.Buffer
+	for _, iface := range interfaces {
+		if !isRelevantIface(iface.Name) {
+			continue
+		}
+		output.WriteString(iface.Name)
+		output.WriteString("\n")
+		for _, param := range params {
+			value, err := sysctl.GetSysctlNet(fmt.Sprintf("ipv4/conf/%s/%s", iface.Name, param))
+			if err != nil {
+				klog.ErrorS(err, "Failed to get sysctl value", "interface", iface.Name, "param", param)
+				continue
 			}
-			fmt.Fprintf(&buf, "net.ipv4.conf.%s.%s = %s\n", iface, param, strings.TrimSpace(string(data)))
+			output.WriteString(fmt.Sprintf("%s=%d\n", param, value))
 		}
+		output.WriteString("\n")
 	}
-	return writeFile(d.fs, filepath.Join(basedir, "sysctl-net-ipv4-conf"), "sysctl-net-ipv4-conf", buf.Bytes())
+	return writeFile(d.fs, filepath.Join(basedir, "interface-config"), "interface-config", output.Bytes())
 }
 
 func (d *agentDumper) DumpMemberlist(basedir string) error {
