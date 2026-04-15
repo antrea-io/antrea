@@ -137,8 +137,8 @@ func NewController(
 	}
 
 	if dynamicBridgeReconcile {
-		// Notify payloads are *antreanodeconfig.EffectiveSnapshot; this controller
-		// reconciles from effectiveBridge() so it only needs the wakeup.
+		// Notify payloads are *antreanodeconfig.Snapshot; this controller
+		// reconciles from effectiveBridgeFn() so it only needs the wakeup.
 		ancUpdateSubscriber.Subscribe(func(_ interface{}) {
 			c.enqueue()
 		})

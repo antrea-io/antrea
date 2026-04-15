@@ -12,25 +12,31 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// Package antreanodeconfig watches AntreaNodeConfig resources and the local Node,
+// and publishes immutable snapshots (Node plus the oldest matching AntreaNodeConfig)
+// to channel subscribers when relevant state
+// changes. Feature packages (for example secondary network) consume those
+// snapshots and merge them with their own static configuration.
 package antreanodeconfig
 
 import (
 	"reflect"
+	"sort"
 	"sync"
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	coreinformers "k8s.io/client-go/informers/core/v1"
 	corelisters "k8s.io/client-go/listers/core/v1"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/klog/v2"
 
-	agenttypes "antrea.io/antrea/v2/pkg/agent/types"
+	crdv1alpha1 "antrea.io/antrea/v2/pkg/apis/crd/v1alpha1"
 	crdinformers "antrea.io/antrea/v2/pkg/client/informers/externalversions/crd/v1alpha1"
 	crdv1alpha1listers "antrea.io/antrea/v2/pkg/client/listers/crd/v1alpha1"
-	agentconfig "antrea.io/antrea/v2/pkg/config/agent"
 	"antrea.io/antrea/v2/pkg/util/channel"
 )
 
@@ -41,43 +47,42 @@ const (
 	ancInformerResyncPeriod = 5 * time.Minute
 )
 
-// Controller watches AntreaNodeConfig and the local Node, evaluates derived
-// agent settings (see EffectiveSnapshot), and notifies subscribers when that
-// aggregate snapshot changes.
+// Controller watches AntreaNodeConfig and the local Node, builds snapshots of
+// the effective AntreaNodeConfig for this Node (plus list errors), and notifies
+// subscribers when that snapshot changes.
 type Controller struct {
-	nodeName                  string
-	staticSecondaryNetworkCfg *agentconfig.SecondaryNetworkConfig
-	ancLister                 crdv1alpha1listers.AntreaNodeConfigLister
-	nodeLister                corelisters.NodeLister
-	notifier                  channel.Notifier
+	nodeName   string
+	ancLister  crdv1alpha1listers.AntreaNodeConfigLister
+	nodeLister corelisters.NodeLister
+	notifier   channel.Notifier
 
 	nodeListerSynced cache.InformerSynced
 	ancListerSynced  cache.InformerSynced
 
-	mu           sync.RWMutex
-	node         *corev1.Node
-	lastNotified *EffectiveSnapshot
+	mu   sync.RWMutex
+	node *corev1.Node
+	// lastNotified is the last snapshot successfully passed to notifier.Notify;
+	// it is not updated when Notify returns false so the next recompute retries.
+	lastNotified *Snapshot
 }
 
 // NewController constructs a Controller and registers informer handlers.
 // The local Node is loaded from nodeInformer after its cache syncs (see Run)
 // and kept up to date via Add/Update/Delete callbacks. notifier.Notify
-// receives *EffectiveSnapshot payloads (deep-copied).
+// receives *Snapshot payloads (deep-copied).
 func NewController(
 	ancInformer crdinformers.AntreaNodeConfigInformer,
 	nodeInformer coreinformers.NodeInformer,
 	nodeName string,
-	agentConfig *agentconfig.AgentConfig,
 	notifier channel.Notifier,
 ) *Controller {
 	c := &Controller{
-		nodeName:                  nodeName,
-		staticSecondaryNetworkCfg: &agentConfig.SecondaryNetwork,
-		ancLister:                 ancInformer.Lister(),
-		nodeLister:                nodeInformer.Lister(),
-		notifier:                  notifier,
-		nodeListerSynced:          nodeInformer.Informer().HasSynced,
-		ancListerSynced:           ancInformer.Informer().HasSynced,
+		nodeName:         nodeName,
+		ancLister:        ancInformer.Lister(),
+		nodeLister:       nodeInformer.Lister(),
+		notifier:         notifier,
+		nodeListerSynced: nodeInformer.Informer().HasSynced,
+		ancListerSynced:  ancInformer.Informer().HasSynced,
 	}
 
 	nodeInformer.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
@@ -98,31 +103,29 @@ func NewController(
 	return c
 }
 
-// EffectiveSecondaryOVSBridge returns the current effective bridge configuration
-// from the informer cache and the latest known Node labels. It is safe to call
-// concurrently with Run and informer callbacks.
-//
-// Before the Node and AntreaNodeConfig informer caches have synced, it returns
-// nil so the secondary-network controller does not create a bridge from static
-// ConfigMap data while AntreaNodeConfig objects are not yet visible (which would
-// later be replaced by CR-driven reconcile).
-func (c *Controller) EffectiveSecondaryOVSBridge() *agenttypes.OVSBridgeConfig {
-	if !c.nodeListerSynced() || !c.ancListerSynced() {
+// InformersSynced reports whether both the Node and AntreaNodeConfig informer caches
+// have completed an initial sync.
+func (c *Controller) InformersSynced() bool {
+	return c.nodeListerSynced() && c.ancListerSynced()
+}
+
+// CurrentSnapshot returns a deep-copied snapshot of the local Node and the
+// oldest AntreaNodeConfig that matches this Node's labels. It returns nil if
+// informers are not synced yet.
+func (c *Controller) CurrentSnapshot() *Snapshot {
+	if !c.InformersSynced() {
 		return nil
 	}
 	c.mu.RLock()
 	node := c.node
 	c.mu.RUnlock()
 	all, err := c.ancLister.List(labels.Everything())
-	snap := ComputeEffectiveSnapshot(node, all, err, c.staticSecondaryNetworkCfg)
-	if snap == nil {
-		return nil
-	}
-	return snap.SecondaryOVSBridge
+	effective := antreaNodeConfigForSnapshot(node, all, err)
+	return NewSnapshot(node, effective, err)
 }
 
 // Run waits for the AntreaNodeConfig and Node informer caches to sync, publishes
-// the initial effective configuration, then blocks until stopCh is closed.
+// the initial snapshot, then blocks until stopCh is closed.
 func (c *Controller) Run(stopCh <-chan struct{}) {
 	klog.InfoS("Starting AntreaNodeConfig controller")
 	defer klog.InfoS("Shutting down AntreaNodeConfig controller")
@@ -188,19 +191,21 @@ func (c *Controller) onNodeUpdate(oldObj, newObj interface{}) {
 	if reflect.DeepEqual(oldNode.Labels, newNode.Labels) {
 		return
 	}
-	klog.V(2).InfoS("Local Node labels changed, recomputing AntreaNodeConfig-derived agent settings")
+	klog.V(2).InfoS("Local Node labels changed, recomputing AntreaNodeConfig snapshot")
 	c.recomputeAndNotifyAsync()
 }
 
 func (c *Controller) onNodeDelete(obj interface{}) {
 	node, ok := obj.(*corev1.Node)
 	if !ok {
-		tombstone, ok := obj.(cache.DeletedFinalStateUnknown)
+		deletedState, ok := obj.(cache.DeletedFinalStateUnknown)
 		if !ok {
+			klog.Errorf("Received unexpected object: %v", obj)
 			return
 		}
-		n, ok := tombstone.Obj.(*corev1.Node)
+		n, ok := deletedState.Obj.(*corev1.Node)
 		if !ok {
+			klog.Errorf("DeletedFinalStateUnknown contains non-Node object: %v", deletedState.Obj)
 			return
 		}
 		node = n
@@ -211,6 +216,7 @@ func (c *Controller) onNodeDelete(obj interface{}) {
 	c.mu.Lock()
 	c.node = nil
 	c.mu.Unlock()
+	klog.V(2).InfoS("Local Node deleted, recomputing AntreaNodeConfig snapshot")
 	c.recomputeAndNotifyAsync()
 }
 
@@ -223,21 +229,79 @@ func (c *Controller) recomputeAndNotify() {
 	node := c.node
 	c.mu.RUnlock()
 	all, err := c.ancLister.List(labels.Everything())
-	next := ComputeEffectiveSnapshot(node, all, err, c.staticSecondaryNetworkCfg)
+	effective := antreaNodeConfigForSnapshot(node, all, err)
+	next := NewSnapshot(node, effective, err)
 
-	// Compare and store using a deep copy so lastNotified is not aliased to
-	// memory that callers or the informer cache might reuse, and so future
-	// EffectiveSnapshot fields remain safe to extend.
 	payload := next.DeepCopy()
 	c.mu.Lock()
 	if c.lastNotified != nil && reflect.DeepEqual(c.lastNotified, payload) {
 		c.mu.Unlock()
 		return
 	}
-	c.lastNotified = payload
 	c.mu.Unlock()
 
 	if !c.notifier.Notify(payload) {
-		klog.Error("Failed to notify AntreaNodeConfig effective snapshot update; subscribers may be stale until next resync")
+		klog.Error("Failed to notify AntreaNodeConfig snapshot update; subscribers may be stale until next resync")
+		return
 	}
+
+	c.mu.Lock()
+	c.lastNotified = payload
+	c.mu.Unlock()
+}
+
+// antreaNodeConfigForSnapshot returns the oldest AntreaNodeConfig that applies to
+// node when the list succeeded; otherwise nil so subscribers do not act on a
+// partial cluster view.
+func antreaNodeConfigForSnapshot(node *corev1.Node, all []*crdv1alpha1.AntreaNodeConfig, listErr error) *crdv1alpha1.AntreaNodeConfig {
+	if listErr != nil {
+		return nil
+	}
+	return OldestMatchingAntreaNodeConfigForNode(node, all)
+}
+
+// OldestMatchingAntreaNodeConfigForNode returns the AntreaNodeConfig whose
+// nodeSelector matches the given Node's labels and has the oldest
+// creationTimestamp (name breaks ties). It returns nil when node is nil, when no
+// config matches, or when every matching config has an invalid nodeSelector.
+func OldestMatchingAntreaNodeConfigForNode(node *corev1.Node, configs []*crdv1alpha1.AntreaNodeConfig) *crdv1alpha1.AntreaNodeConfig {
+	matched := SelectAntreaNodeConfigsForNode(node, configs)
+	if len(matched) == 0 {
+		return nil
+	}
+	return matched[0]
+}
+
+// SelectAntreaNodeConfigsForNode returns AntreaNodeConfig objects whose nodeSelector
+// matches the given Node's labels, sorted by creationTimestamp ascending (oldest
+// first; name is used as a stable tiebreaker when timestamps are equal).
+// Configs with an invalid nodeSelector are skipped with a log line.
+func SelectAntreaNodeConfigsForNode(node *corev1.Node, configs []*crdv1alpha1.AntreaNodeConfig) []*crdv1alpha1.AntreaNodeConfig {
+	if node == nil {
+		return nil
+	}
+	nodeLabels := labels.Set(node.Labels)
+	var matching []*crdv1alpha1.AntreaNodeConfig
+	for _, cfg := range configs {
+		if cfg == nil {
+			continue
+		}
+		sel, err := metav1.LabelSelectorAsSelector(&cfg.Spec.NodeSelector)
+		if err != nil {
+			klog.ErrorS(err, "Skipping AntreaNodeConfig with invalid nodeSelector", "config", cfg.Name)
+			continue
+		}
+		if sel.Matches(nodeLabels) {
+			matching = append(matching, cfg)
+		}
+	}
+	sort.Slice(matching, func(i, j int) bool {
+		ti := matching[i].CreationTimestamp
+		tj := matching[j].CreationTimestamp
+		if ti.Equal(&tj) {
+			return matching[i].Name < matching[j].Name
+		}
+		return ti.Before(&tj)
+	})
+	return matching
 }

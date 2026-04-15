@@ -622,29 +622,30 @@ func run(o *Options) error {
 	var antreaNodeConfigController *antreanodeconfig.Controller
 	var cniDeleteChecker agenttypes.CNIDeleteChecker
 	cniDeleteChecker = nil
+	var effectiveBridgeFn func() *agenttypes.OVSBridgeConfig
+	var ancSubscriber channel.Subscriber
+
+	if features.DefaultFeatureGate.Enabled(features.AntreaNodeConfig) {
+		antreaNodeConfigInformer := crdInformerFactory.Crd().V1alpha1().AntreaNodeConfigs()
+		antreaNodeConfigUpdateChannel = channel.NewSubscribableChannel("AntreaNodeConfig", 100)
+		antreaNodeConfigController = antreanodeconfig.NewController(
+			antreaNodeConfigInformer,
+			nodeInformer,
+			nodeConfig.Name,
+			antreaNodeConfigUpdateChannel,
+		)
+		effectiveBridgeFn = func() *agenttypes.OVSBridgeConfig {
+			return secondarynetwork.EffectiveSecondaryOVSBridge(antreaNodeConfigController, &o.config.SecondaryNetwork)
+		}
+		ancSubscriber = antreaNodeConfigUpdateChannel
+	} else {
+		effectiveBridgeFn = func() *agenttypes.OVSBridgeConfig {
+			return secondarynetwork.EffectiveSecondaryOVSBridge(nil, &o.config.SecondaryNetwork)
+		}
+	}
+
 	// Secondary network controller should be created before CNIServer.Run() to make sure no Pod CNI updates will be missed.
 	if features.DefaultFeatureGate.Enabled(features.SecondaryNetwork) {
-		var effectiveBridgeFn func() *agenttypes.OVSBridgeConfig
-		var ancSubscriber channel.Subscriber
-
-		if features.DefaultFeatureGate.Enabled(features.AntreaNodeConfig) {
-			antreaNodeConfigInformer := crdInformerFactory.Crd().V1alpha1().AntreaNodeConfigs()
-			antreaNodeConfigUpdateChannel = channel.NewSubscribableChannel("AntreaNodeConfig", 100)
-			antreaNodeConfigController = antreanodeconfig.NewController(
-				antreaNodeConfigInformer,
-				nodeInformer,
-				nodeConfig.Name,
-				o.config,
-				antreaNodeConfigUpdateChannel,
-			)
-			effectiveBridgeFn = antreaNodeConfigController.EffectiveSecondaryOVSBridge
-			ancSubscriber = antreaNodeConfigUpdateChannel
-		} else {
-			effectiveBridgeFn = func() *agenttypes.OVSBridgeConfig {
-				return antreanodeconfig.EffectiveSecondaryOVSBridge(nil, nil, nil, false, &o.config.SecondaryNetwork)
-			}
-		}
-
 		secondaryNetworkController, err = secondarynetwork.NewController(
 			o.config.ClientConnection, o.config.KubeAPIServerOverride,
 			k8sClient, localPodInformer.Get(),
