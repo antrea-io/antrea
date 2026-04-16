@@ -516,8 +516,12 @@ func (fa *flowAggregator) flowExportLoopProxy(stopCh <-chan struct{}) {
 }
 
 func (fa *flowAggregator) flowExportLoopAggregate(stopCh <-chan struct{}) {
-	expireTimer := time.NewTimer(fa.activeFlowRecordTimeout)
-	defer expireTimer.Stop()
+	// Every 1s, we check for expired records and we export all of them. 1s is small enough to have good accuracy,
+	// and long enough that we don't call the function too often. In the future, we can support handling batches of
+	// expired records, which we can add to the ring buffer in a single API call.
+	// Note that ActiveFlowRecordTimeout / InactiveFlowRecordTimeout values under 1s are not reasonable and not supported.
+	expiredFlowRecordsTicker := time.NewTicker(1 * time.Second)
+	defer expiredFlowRecordsTicker.Stop()
 	logTicker := time.NewTicker(fa.logTickerDuration)
 	defer logTicker.Stop()
 
@@ -526,13 +530,10 @@ func (fa *flowAggregator) flowExportLoopAggregate(stopCh <-chan struct{}) {
 		select {
 		case <-stopCh:
 			return
-		case <-expireTimer.C:
+		case <-expiredFlowRecordsTicker.C:
 			if err := fa.aggregationProcess.ForAllExpiredFlowRecordsDo(fa.sendAggregatedRecord); err != nil {
 				klog.ErrorS(err, "Error when sending expired flow records")
-				expireTimer.Reset(fa.activeFlowRecordTimeout)
-				continue
 			}
-			expireTimer.Reset(fa.aggregationProcess.GetExpiryFromExpirePriorityQueue())
 		case <-logTicker.C:
 			klog.V(4).InfoS("Total number of records received", "count", fa.getNumRecordsReceived())
 			klog.V(4).InfoS("Total number of records exported by each active exporter", "count", fa.numRecordsExported.Load())
