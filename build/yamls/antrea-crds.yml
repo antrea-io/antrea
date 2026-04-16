@@ -388,6 +388,7 @@ spec:
                           bridgeName:
                             description: Name of the OVS bridge.
                             type: string
+                            minLength: 1
                           physicalInterfaces:
                             description: >-
                               Physical interfaces to be connected to this bridge.
