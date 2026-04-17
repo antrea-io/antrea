@@ -243,6 +243,7 @@ func BenchmarkConntrackConnectionStorePoll(b *testing.B) {
 		podStore,
 		nil,
 		storeCfg,
+		nil,
 	)
 
 	for b.Loop() {
