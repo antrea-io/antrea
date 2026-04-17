@@ -241,15 +241,12 @@ func (c *AntreaIPAMController) getPoolAllocatorsByPod(namespace, podName string)
 	}
 
 	if len(ips) > 0 {
-		var hasRequestedV4, hasRequestedV6 bool
-		var requestedV4IPs, requestedV6IPs []string
+		var requestedV4, requestedV6 string
 		for _, ip := range ips {
 			if ip.To4() != nil {
-				hasRequestedV4 = true
-				requestedV4IPs = append(requestedV4IPs, ip.String())
+				requestedV4 = ip.String()
 			} else {
-				hasRequestedV6 = true
-				requestedV6IPs = append(requestedV6IPs, ip.String())
+				requestedV6 = ip.String()
 			}
 		}
 		var v4Pools, v6Pools int
@@ -263,11 +260,11 @@ func (c *AntreaIPAMController) getPoolAllocatorsByPod(namespace, podName string)
 				v6PoolNames = append(v6PoolNames, a.Name())
 			}
 		}
-		if hasRequestedV4 && v4Pools > 1 {
-			return mineTrue, nil, nil, nil, fmt.Errorf("multiple IPv4 IPPools configured with requested IPv4 address(es) [%s]; configured IPv4 IPPools (%d): [%s]; only one IPv4 IPPool is allowed when specifying an IP", strings.Join(requestedV4IPs, ", "), v4Pools, strings.Join(v4PoolNames, ", "))
+		if requestedV4 != "" && v4Pools > 1 {
+			return mineTrue, nil, nil, nil, fmt.Errorf("multiple IPv4 IPPools configured with requested IPv4 address(es) [%s]; configured IPv4 IPPools (%d): [%s]; specifying an IP restricts the selection to exactly one IPPool of that corresponding IP family", requestedV4, v4Pools, strings.Join(v4PoolNames, ", "))
 		}
-		if hasRequestedV6 && v6Pools > 1 {
-			return mineTrue, nil, nil, nil, fmt.Errorf("multiple IPv6 IPPools configured with requested IPv6 address(es) [%s]; configured IPv6 IPPools (%d): [%s]; only one IPv6 IPPool is allowed when specifying an IP", strings.Join(requestedV6IPs, ", "), v6Pools, strings.Join(v6PoolNames, ", "))
+		if requestedV6 != "" && v6Pools > 1 {
+			return mineTrue, nil, nil, nil, fmt.Errorf("multiple IPv6 IPPools configured with requested IPv6 address(es) [%s]; configured IPv6 IPPools (%d): [%s]; specifying an IP restricts the selection to exactly one IPPool of that corresponding IP family", requestedV6, v6Pools, strings.Join(v6PoolNames, ", "))
 		}
 	}
 
