@@ -20,6 +20,7 @@ import (
 	"net"
 	"strings"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/google/uuid"
@@ -39,6 +40,7 @@ import (
 	"antrea.io/antrea/v2/pkg/agent/cniserver"
 	"antrea.io/antrea/v2/pkg/agent/config"
 	"antrea.io/antrea/v2/pkg/agent/interfacestore"
+	openflowtest "antrea.io/antrea/v2/pkg/agent/openflow/testing"
 	"antrea.io/antrea/v2/pkg/agent/types"
 	crdv1alpha1 "antrea.io/antrea/v2/pkg/apis/crd/v1alpha1"
 	fakeversioned "antrea.io/antrea/v2/pkg/client/clientset/versioned/fake"
@@ -1043,6 +1045,112 @@ func TestValidateSupportedDPFeatures(t *testing.T) {
 			} else {
 				require.NoError(t, err)
 			}
+		})
+	}
+}
+
+func TestDeleteStaleFlowsWithRetry(t *testing.T) {
+	// Subtests adjust staleFlowDeleteRetryInterval; do not use t.Parallel().
+	origInterval := staleFlowDeleteRetryInterval
+	t.Cleanup(func() {
+		staleFlowDeleteRetryInterval = origInterval
+	})
+
+	// Readable durations: each table row runs its own synctest bubble below, so fake time does
+	// not accumulate across cases and channels/timers from stopCh() are created inside the bubble.
+	fastRetryInterval := 100 * time.Millisecond
+	backoffStopInterval := 10 * time.Second
+	backoffStopDelay := 5 * time.Second
+
+	ovsErr := fmt.Errorf("ovs send failed")
+	openStopCh := func() <-chan struct{} {
+		return make(chan struct{})
+	}
+
+	tests := []struct {
+		name      string
+		interval  time.Duration
+		setupMock func(m *openflowtest.MockClient)
+		// stopCh returns the channel used as Initializer.stopCh (may be pre-closed or closed during backoff).
+		stopCh func() <-chan struct{}
+		want   bool
+	}{
+		{
+			name:     "success on first attempt",
+			interval: fastRetryInterval,
+			setupMock: func(m *openflowtest.MockClient) {
+				m.EXPECT().DeleteStaleFlows().Return(nil)
+			},
+			stopCh: openStopCh,
+			want:   true,
+		},
+		{
+			name:     "success after transient failures",
+			interval: fastRetryInterval,
+			setupMock: func(m *openflowtest.MockClient) {
+				mock.InOrder(
+					m.EXPECT().DeleteStaleFlows().Return(ovsErr),
+					m.EXPECT().DeleteStaleFlows().Return(ovsErr),
+					m.EXPECT().DeleteStaleFlows().Return(nil),
+				)
+			},
+			stopCh: openStopCh,
+			want:   true,
+		},
+		{
+			name:     "success after many consecutive failures",
+			interval: fastRetryInterval,
+			setupMock: func(m *openflowtest.MockClient) {
+				m.EXPECT().DeleteStaleFlows().Return(ovsErr).Times(20)
+				m.EXPECT().DeleteStaleFlows().Return(nil)
+			},
+			stopCh: openStopCh,
+			want:   true,
+		},
+		{
+			name:     "stop retrying when stopCh already closed",
+			interval: fastRetryInterval,
+			// stopCh is already closed; the retry interval is never waited on.
+			setupMock: func(m *openflowtest.MockClient) {
+				m.EXPECT().DeleteStaleFlows().Return(ovsErr)
+			},
+			stopCh: func() <-chan struct{} {
+				ch := make(chan struct{})
+				close(ch)
+				return ch
+			},
+			want: false,
+		},
+		{
+			name:     "stopCh closed during backoff",
+			interval: backoffStopInterval,
+			setupMock: func(m *openflowtest.MockClient) {
+				m.EXPECT().DeleteStaleFlows().Return(ovsErr).Times(1)
+			},
+			stopCh: func() <-chan struct{} {
+				ch := make(chan struct{})
+				go func() {
+					time.Sleep(backoffStopDelay)
+					close(ch)
+				}()
+				return ch
+			},
+			want: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			synctest.Test(t, func(t *testing.T) {
+				staleFlowDeleteRetryInterval = tt.interval
+
+				ctrl := mock.NewController(t)
+				mockOF := openflowtest.NewMockClient(ctrl)
+				tt.setupMock(mockOF)
+
+				i := &Initializer{ofClient: mockOF, stopCh: tt.stopCh()}
+				assert.Equal(t, tt.want, i.deleteStaleFlowsWithRetry())
+			})
 		})
 	}
 }

@@ -38,6 +38,10 @@ type OVSCtlClient interface {
 	DumpMatchedFlow(matchStr string) (string, error)
 	// DumpTableFlows returns all flows in the table.
 	DumpTableFlows(table uint8) ([]string, error)
+	// DumpTableFlowsWithFilters returns flows in the table that match additional ovs-ofctl dump-flows
+	// FLOW fields (see ovs-fields(7)). Each non-empty filters element is appended to the match after
+	// "table=<id>,"; an element may already contain commas (e.g. "cookie=0x1/0xffffffffffffffff,priority=200").
+	DumpTableFlowsWithFilters(table uint8, filters ...string) ([]string, error)
 	// DumpGroup returns the OpenFlow group if it exists on the bridge.
 	DumpGroup(groupID uint32) (string, error)
 	// DumpGroups returns OpenFlow groups of the bridge.

@@ -182,6 +182,26 @@ func (mr *MockOVSCtlClientMockRecorder) DumpTableFlows(table any) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DumpTableFlows", reflect.TypeOf((*MockOVSCtlClient)(nil).DumpTableFlows), table)
 }
 
+// DumpTableFlowsWithFilters mocks base method.
+func (m *MockOVSCtlClient) DumpTableFlowsWithFilters(table uint8, filters ...string) ([]string, error) {
+	m.ctrl.T.Helper()
+	varargs := []any{table}
+	for _, a := range filters {
+		varargs = append(varargs, a)
+	}
+	ret := m.ctrl.Call(m, "DumpTableFlowsWithFilters", varargs...)
+	ret0, _ := ret[0].([]string)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// DumpTableFlowsWithFilters indicates an expected call of DumpTableFlowsWithFilters.
+func (mr *MockOVSCtlClientMockRecorder) DumpTableFlowsWithFilters(table any, filters ...any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	varargs := append([]any{table}, filters...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DumpTableFlowsWithFilters", reflect.TypeOf((*MockOVSCtlClient)(nil).DumpTableFlowsWithFilters), varargs...)
+}
+
 // GetDPFeatures mocks base method.
 func (m *MockOVSCtlClient) GetDPFeatures() (map[ovsctl.DPFeature]bool, error) {
 	m.ctrl.T.Helper()

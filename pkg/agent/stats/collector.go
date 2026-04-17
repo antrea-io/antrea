@@ -32,6 +32,7 @@ import (
 	"antrea.io/antrea/v2/pkg/querier"
 	"antrea.io/antrea/v2/pkg/util/env"
 	"antrea.io/antrea/v2/pkg/util/k8s"
+	utilwait "antrea.io/antrea/v2/pkg/util/wait"
 )
 
 const (
@@ -66,23 +67,35 @@ type Collector struct {
 	// It is used to calculate the delta of the statistics that will be reported.
 	lastStatsCollection *statsCollection
 	multicastEnabled    bool
+	// staleFlowsDeletedWait, when non-nil, must unblock before the first collect so metric dumps
+	// do not include flows from a prior agent round. The initializer's stale-flow goroutine calls
+	// Done on this group when deletion finishes or exits.
+	staleFlowsDeletedWait *utilwait.Group
 }
 
-func NewCollector(antreaClientProvider client.AntreaClientProvider, ofClient openflow.Client, npQuerier querier.AgentNetworkPolicyInfoQuerier, mcQuerier *multicast.Controller) *Collector {
+func NewCollector(antreaClientProvider client.AntreaClientProvider, ofClient openflow.Client, npQuerier querier.AgentNetworkPolicyInfoQuerier, mcQuerier *multicast.Controller, staleFlowsDeletedWait *utilwait.Group) *Collector {
 	nodeName, _ := env.GetNodeName()
 	manager := &Collector{
-		nodeName:             nodeName,
-		antreaClientProvider: antreaClientProvider,
-		ofClient:             ofClient,
-		networkPolicyQuerier: npQuerier,
-		multicastQuerier:     mcQuerier,
-		multicastEnabled:     mcQuerier != nil,
+		nodeName:              nodeName,
+		antreaClientProvider:  antreaClientProvider,
+		ofClient:              ofClient,
+		networkPolicyQuerier:  npQuerier,
+		multicastQuerier:      mcQuerier,
+		multicastEnabled:      mcQuerier != nil,
+		staleFlowsDeletedWait: staleFlowsDeletedWait,
 	}
 	return manager
 }
 
 // Run runs a loop that collects statistics and reports them until the provided channel is closed.
 func (m *Collector) Run(stopCh <-chan struct{}) {
+	if m.staleFlowsDeletedWait != nil {
+		klog.InfoS("Waiting for stale flows from previous agent round to be deleted")
+		if err := m.staleFlowsDeletedWait.WaitUntil(stopCh); err != nil {
+			klog.ErrorS(err, "Stopped waiting for stale flow deletion; stats collector will not start")
+			return
+		}
+	}
 	klog.Info("Start collecting metrics")
 	ticker := time.NewTicker(collectPeriod)
 	defer ticker.Stop()
