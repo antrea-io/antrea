@@ -167,7 +167,7 @@ func runSendFlowRecordTests(t *testing.T, destination *Destination, isIPv6 bool)
 				IdleFlowTimeout:        testIdleFlowTimeout,
 				StaleConnectionTimeout: 1,
 			}
-			destination.conntrackConnStore = connections.NewConntrackConnectionStore(nil, nil, nil, config, nil)
+			destination.conntrackConnStore = connections.NewConntrackConnectionStore(nil, nil, nil, config, nil, nil)
 			destination.denyConnStore = connections.NewDenyConnectionStore(nil, nil, nil, config)
 			destination.conntrackPriorityQueue = destination.conntrackConnStore.GetPriorityQueue()
 			destination.denyPriorityQueue = destination.denyConnStore.GetPriorityQueue()

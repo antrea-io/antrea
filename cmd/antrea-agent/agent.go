@@ -60,6 +60,7 @@ import (
 	mcroute "antrea.io/antrea/v2/pkg/agent/multicluster"
 	"antrea.io/antrea/v2/pkg/agent/nodeip"
 	npl "antrea.io/antrea/v2/pkg/agent/nodeportlocal"
+	"antrea.io/antrea/v2/pkg/agent/nodeportlocal/portcache"
 	"antrea.io/antrea/v2/pkg/agent/openflow"
 	"antrea.io/antrea/v2/pkg/agent/packetcapture"
 	"antrea.io/antrea/v2/pkg/agent/proxy"
@@ -716,6 +717,28 @@ func run(o *Options) error {
 		return err
 	}
 
+	// Initialize the NPL agent before the flow exporter so the controller can be passed as
+	// portcache.NPLQuerier (NPLController implements that interface).
+	var nplQuerier portcache.NPLQuerier
+	if o.enableNodePortLocal {
+		nplController, err := npl.InitializeNPLAgent(
+			k8sClient,
+			serviceInformer,
+			localPodInformer.Get(),
+			nodeInformer,
+			o.nplStartPort,
+			o.nplEndPort,
+			nodeConfig.Name,
+			v4Enabled,
+			v6Enabled,
+		)
+		if err != nil {
+			return fmt.Errorf("failed to start NPL agent: %v", err)
+		}
+		nplQuerier = nplController
+		go nplController.Run(stopCh)
+	}
+
 	var podStore objectstore.PodStore
 	var flowExporter *flowexporter.FlowExporter
 	if enableFlowExporter {
@@ -748,7 +771,8 @@ func run(o *Options) error {
 			flowExporterOptions,
 			flowExporterDestinationInformer,
 			egressController,
-			podNetworkWait)
+			podNetworkWait,
+			nplQuerier)
 		if err != nil {
 			return fmt.Errorf("error when creating IPFIX flow exporter: %v", err)
 		}
@@ -773,25 +797,6 @@ func run(o *Options) error {
 	}
 
 	go antreaClientProvider.Run(ctx)
-
-	// Initialize the NPL agent.
-	if o.enableNodePortLocal {
-		nplController, err := npl.InitializeNPLAgent(
-			k8sClient,
-			serviceInformer,
-			localPodInformer.Get(),
-			nodeInformer,
-			o.nplStartPort,
-			o.nplEndPort,
-			nodeConfig.Name,
-			v4Enabled,
-			v6Enabled,
-		)
-		if err != nil {
-			return fmt.Errorf("failed to start NPL agent: %v", err)
-		}
-		go nplController.Run(stopCh)
-	}
 
 	// Antrea IPAM is needed by bridging mode and secondary network IPAM.
 	if enableAntreaIPAM {

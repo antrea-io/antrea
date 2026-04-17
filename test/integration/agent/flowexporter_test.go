@@ -244,6 +244,7 @@ func BenchmarkConntrackConnectionStorePoll(b *testing.B) {
 		nil,
 		storeCfg,
 		nil,
+		nil,
 	)
 
 	for b.Loop() {

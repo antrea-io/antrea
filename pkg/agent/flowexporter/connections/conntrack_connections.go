@@ -26,6 +26,7 @@ import (
 	"antrea.io/antrea/v2/pkg/agent/flowexporter/priorityqueue"
 	"antrea.io/antrea/v2/pkg/agent/flowexporter/utils"
 	"antrea.io/antrea/v2/pkg/agent/metrics"
+	"antrea.io/antrea/v2/pkg/agent/nodeportlocal/portcache"
 	"antrea.io/antrea/v2/pkg/agent/openflow"
 	"antrea.io/antrea/v2/pkg/agent/proxy"
 	"antrea.io/antrea/v2/pkg/querier"
@@ -43,6 +44,7 @@ type ConntrackConnectionStore struct {
 	protocolFilter         filter.ProtocolFilter
 	connectionStore
 	fromExternal ExternalCorrelator
+	nplQuerier   portcache.NPLQuerier
 }
 
 // ConntrackPollBatch is the result of one conntrack poll cycle, split by kernel zone at the poller.
@@ -56,12 +58,14 @@ type ConntrackPollBatch struct {
 
 // NewConntrackConnectionStore creates a connection store. fromExternal correlates zone-0 flows
 // with Antrea-zone flows for external-to-Pod export; if nil, NewFakeExternalCorrelator() is used.
+// nplQuerier is used to resolve NPL node ports to Service names.
 func NewConntrackConnectionStore(
 	npQuerier querier.AgentNetworkPolicyInfoQuerier,
 	podStore objectstore.PodStore,
 	proxier proxy.ProxyQuerier,
 	cfg ConnectionStoreConfig,
 	fromExternal ExternalCorrelator,
+	nplQuerier portcache.NPLQuerier,
 ) *ConntrackConnectionStore {
 	if fromExternal == nil {
 		fromExternal = NewFakeExternalCorrelator()
@@ -71,6 +75,7 @@ func NewConntrackConnectionStore(
 		protocolFilter:         filter.NewProtocolFilter(cfg.AllowedProtocols),
 		networkPolicyReadyTime: cfg.NetworkPolicyReadyTime,
 		fromExternal:           fromExternal,
+		nplQuerier:             nplQuerier,
 	}
 }
 
@@ -202,6 +207,17 @@ func (cs *ConntrackConnectionStore) AddOrUpdateConn(conn *connection.Connection)
 			} else {
 				serviceStr := fmt.Sprintf("%s:%d/%s", serviceIP, svcPort, protocol)
 				cs.fillServiceInfo(conn, serviceStr)
+			}
+		}
+		// NPL flows bypass Antrea proxy (no ServiceCTMark), but the destination pod is local
+		// and the original destination port is the NPL node port. Use the NPL querier to
+		// resolve it to a Service name for IPFIX export.
+		if conn.DestinationServicePortName == "" && conn.DestinationPodName != "" && cs.nplQuerier != nil {
+			protocol, err := lookupServiceProtocol(conn.FlowKey.Protocol)
+			if err == nil {
+				if svcPortName, ok := cs.nplQuerier.GetServiceForNPLPort(int(conn.OriginalDestinationPort), string(protocol)); ok {
+					conn.DestinationServicePortName = svcPortName
+				}
 			}
 		}
 		// This should only happen if we failed to set net.netfilter.nf_conntrack_timestamp

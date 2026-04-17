@@ -32,6 +32,7 @@ import (
 	"antrea.io/antrea/v2/pkg/agent/flowexporter/priorityqueue"
 	"antrea.io/antrea/v2/pkg/agent/flowexporter/utils"
 	"antrea.io/antrea/v2/pkg/agent/metrics"
+	"antrea.io/antrea/v2/pkg/agent/nodeportlocal/portcache"
 	"antrea.io/antrea/v2/pkg/agent/proxy"
 	api "antrea.io/antrea/v2/pkg/apis/crd/v1alpha1"
 	"antrea.io/antrea/v2/pkg/querier"
@@ -104,6 +105,7 @@ func NewDestination(
 	networkPolicyReadyTime time.Time,
 	destinationConfig DestinationConfig,
 	fromExternal connections.ExternalCorrelator,
+	nplQuerier portcache.NPLQuerier,
 ) *Destination {
 	connectionStoreConfig := connections.ConnectionStoreConfig{
 		ActiveFlowTimeout:      destinationConfig.activeFlowTimeout,
@@ -112,7 +114,7 @@ func NewDestination(
 		NetworkPolicyReadyTime: networkPolicyReadyTime,
 		AllowedProtocols:       destinationConfig.allowProtocolFilter,
 	}
-	conntrackConnStore := connections.NewConntrackConnectionStore(npQuerier, podStore, proxier, connectionStoreConfig, fromExternal)
+	conntrackConnStore := connections.NewConntrackConnectionStore(npQuerier, podStore, proxier, connectionStoreConfig, fromExternal, nplQuerier)
 	denyConnStore := connections.NewDenyConnectionStore(npQuerier, podStore, proxier, connectionStoreConfig)
 
 	return &Destination{
