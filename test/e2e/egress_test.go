@@ -41,6 +41,7 @@ import (
 )
 
 const waitEgressRealizedTimeout = 3 * time.Second
+const waitEgressDualStackRealizedTimeout = 5 * time.Second
 
 func skipIfEgressDisabled(tb testing.TB) {
 	skipIfFeatureDisabled(tb, features.Egress, true, true)
@@ -73,6 +74,32 @@ func TestEgress(t *testing.T) {
 	t.Run("testEgressNodeFailure", func(t *testing.T) { testEgressNodeFailure(t, data) })
 	t.Run("testCreateExternalIPPool", func(t *testing.T) { testCreateExternalIPPool(t, data) })
 	t.Run("testUpdateBandwidth", func(t *testing.T) { testEgressUpdateBandwidth(t, data) })
+}
+
+func TestDualStackEgress(t *testing.T) {
+	skipIfHasWindowsNodes(t)
+	skipIfNumNodesLessThan(t, 2)
+	skipIfAntreaIPAMTest(t)
+	skipIfEgressDisabled(t)
+	// Dual-stack Egress requires a cluster with both IPv4 and IPv6 pod networks.
+	skipIfNotIPv4Cluster(t)
+	skipIfNotIPv6Cluster(t)
+
+	data, err := setupTest(t)
+	if err != nil {
+		t.Fatalf("Error when setting up test: %v", err)
+	}
+	defer teardownTest(t, data)
+	skipIfEncapModeIs(t, data, config.TrafficEncapModeNoEncap)
+	skipIfEncapModeIs(t, data, config.TrafficEncapModeNetworkPolicyOnly)
+
+	t.Run("testDualStackEgressClientIP", func(t *testing.T) { testDualStackEgressClientIP(t, data) })
+	t.Run("testDualStackEgressCRUD", func(t *testing.T) { testDualStackEgressCRUD(t, data) })
+	t.Run("testDualStackEgressUpdateEgressIPs", func(t *testing.T) { testDualStackEgressUpdateEgressIPs(t, data) })
+	t.Run("testDualStackEgressUpdateNodeSelector", func(t *testing.T) { testDualStackEgressUpdateNodeSelector(t, data) })
+	t.Run("testDualStackEgressNodeFailure", func(t *testing.T) { testDualStackEgressNodeFailure(t, data) })
+	t.Run("testDualStackEgressUpdateBandwidth", func(t *testing.T) { testDualStackEgressUpdateBandwidth(t, data) })
+
 }
 
 func testCreateExternalIPPool(t *testing.T, data *TestData) {
@@ -1063,4 +1090,794 @@ func assertConnError(data *TestData, t *testing.T, pod, container, serverIP stri
 		})
 	require.NoError(t, err, "Failed to get expected error, stdout: %v, stderr: %v, err: %v", stdout, stderr, exeErr)
 
+}
+
+func (data *TestData) createDualStackEgress(t *testing.T, generateName string,
+	matchExpressions []metav1.LabelSelectorRequirement, matchLabels map[string]string,
+	ipv4Pool, ipv6Pool string, ipv4IP, ipv6IP string) *v1beta1.Egress {
+
+	egress := &v1beta1.Egress{
+		ObjectMeta: metav1.ObjectMeta{GenerateName: generateName},
+		Spec: v1beta1.EgressSpec{
+			AppliedTo: v1beta1.AppliedTo{
+				PodSelector: &metav1.LabelSelector{
+					MatchExpressions: matchExpressions,
+					MatchLabels:      matchLabels,
+				},
+			},
+		},
+	}
+	if ipv4Pool != "" && ipv6Pool != "" && ipv4IP == "" && ipv6IP == "" {
+		egress.Spec.ExternalIPPools = []string{ipv4Pool, ipv6Pool}
+	}
+	if ipv4IP != "" && ipv6IP != "" && ipv4Pool == "" && ipv6Pool == "" {
+		egress.Spec.EgressIPs = []string{ipv4IP, ipv6IP}
+	}
+	if ipv4Pool != "" && ipv6Pool != "" && ipv4IP != "" && ipv6IP != "" {
+		egress.Spec.EgressIPs = []string{ipv4IP, ipv6IP}
+		egress.Spec.ExternalIPPools = []string{ipv4Pool, ipv6Pool}
+	}
+	var err error
+	egress, err = data.CRDClient.CrdV1beta1().Egresses().Create(context.TODO(), egress, metav1.CreateOptions{})
+	require.NoError(t, err, "Failed to create dual-stack Egress")
+	return egress
+}
+
+func (data *TestData) checkDualStackEgressState(t *testing.T, egressName, expectedIPv4, expectedIPv6 string, timeout time.Duration) (*v1beta1.Egress, error) {
+	t.Helper()
+	var egress *v1beta1.Egress
+	pollErr := wait.PollUntilContextTimeout(context.Background(), 200*time.Millisecond, timeout, true, func(ctx context.Context) (bool, error) {
+		var err error
+		egress, err = data.CRDClient.CrdV1beta1().Egresses().Get(context.TODO(), egressName, metav1.GetOptions{})
+		if err != nil {
+			return false, err
+		}
+		if egress.Status.EgressNode == "" {
+			return false, nil
+		}
+		statusIPs := sets.New[string](egress.Status.EgressIPs...)
+		if !statusIPs.Has(expectedIPv4) || !statusIPs.Has(expectedIPv6) {
+			return false, nil
+		}
+		for _, ip := range []string{expectedIPv4, expectedIPv6} {
+			ok, err := hasIP(data, egress.Status.EgressNode, ip)
+			if err != nil {
+				return false, nil
+			}
+			if !ok {
+				return false, nil
+			}
+		}
+		return true, nil
+	})
+	if pollErr != nil {
+		return egress, fmt.Errorf("dual-stack egress %s did not reach expected state (ipv4=%s ipv6=%s): %v, got status=%+v",
+			egressName, expectedIPv4, expectedIPv6, pollErr, egress.Status)
+	}
+	return egress, nil
+}
+
+func (data *TestData) waitForDualStackEgressRealized(egress *v1beta1.Egress) (*v1beta1.Egress, error) {
+	err := wait.PollUntilContextTimeout(context.Background(), 200*time.Millisecond, waitEgressDualStackRealizedTimeout, true,
+		func(ctx context.Context) (done bool, err error) {
+			egress, err = data.CRDClient.CrdV1beta1().Egresses().Get(context.TODO(), egress.Name, metav1.GetOptions{})
+			if err != nil {
+				return false, err
+			}
+			if egress.Status.EgressNode == "" || len(egress.Status.EgressIPs) < 2 {
+				return false, nil
+			}
+			return true, nil
+		})
+	if err != nil {
+		return nil, fmt.Errorf("wait for dual-stack Egress %s realized failed: %v, status=%+v", egress.Name, err, egress.Status)
+	}
+	return egress, nil
+}
+
+func testDualStackEgressClientIP(t *testing.T, data *TestData) {
+	tests := []struct {
+		name       string
+		localIP0v4 string
+		localIP1v4 string
+		serverIPv4 string
+		localIP0v6 string
+		localIP1v6 string
+		serverIPv6 string
+		fakeV4Name string
+		fakeV6Name string
+	}{
+		{
+			name:       "dual-stack-cluster",
+			localIP0v4: "1.1.2.10",
+			localIP1v4: "1.1.2.11",
+			serverIPv4: "1.1.2.20",
+			localIP0v6: "2021:50::aa0a",
+			localIP1v6: "2021:50::aa0b",
+			serverIPv6: "2021:50::aa14",
+			fakeV4Name: "ds-fake-v4",
+			fakeV6Name: "ds-fake-v6",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			egressNode := controlPlaneNodeName()
+			egressNodeIPv4 := controlPlaneNodeIPv4()
+			egressNodeIPv6 := controlPlaneNodeIPv6()
+
+			cmdIPv4, _ := getCommandInFakeExternalNetwork("/agnhost netexec", 24, tt.serverIPv4, tt.localIP0v4, tt.localIP1v4)
+			if err := NewPodBuilder(tt.fakeV4Name, data.testNamespace, agnhostImage).OnNode(egressNode).
+				WithCommand([]string{"sh", "-c", cmdIPv4}).InHostNetwork().Privileged().Create(data); err != nil {
+				t.Fatalf("Failed to create IPv4 fake server Pod: %v", err)
+			}
+			defer deletePodWrapper(t, data, data.testNamespace, tt.fakeV4Name)
+
+			cmdIPv6, _ := getCommandInFakeExternalNetwork("/agnhost netexec", 120, tt.serverIPv6, tt.localIP0v6, tt.localIP1v6)
+			if err := NewPodBuilder(tt.fakeV6Name, data.testNamespace, agnhostImage).OnNode(egressNode).
+				WithCommand([]string{"sh", "-c", cmdIPv6}).InHostNetwork().Privileged().Create(data); err != nil {
+				t.Fatalf("Failed to create IPv6 fake server Pod: %v", err)
+			}
+			defer deletePodWrapper(t, data, data.testNamespace, tt.fakeV6Name)
+
+			for _, name := range []string{tt.fakeV4Name, tt.fakeV6Name} {
+				if err := data.podWaitForRunning(defaultTimeout, name, data.testNamespace); err != nil {
+					t.Fatalf("Error waiting for fake server Pod %s: %v", name, err)
+				}
+			}
+
+			localPod := "ds-localpod"
+			remotePod := "ds-remotepod"
+			if err := data.createToolboxPodOnNode(localPod, data.testNamespace, egressNode, false); err != nil {
+				t.Fatalf("Failed to create local Pod: %v", err)
+			}
+			defer deletePodWrapper(t, data, data.testNamespace, localPod)
+			if err := data.createToolboxPodOnNode(remotePod, data.testNamespace, workerNodeName(1), false); err != nil {
+				t.Fatalf("Failed to create remote Pod: %v", err)
+			}
+			defer deletePodWrapper(t, data, data.testNamespace, remotePod)
+			for _, p := range []string{localPod, remotePod} {
+				if err := data.podWaitForRunning(defaultTimeout, p, data.testNamespace); err != nil {
+					t.Fatalf("Error waiting for Pod %s: %v", p, err)
+				}
+			}
+
+			assertClientIP(data, t, localPod, toolboxContainerName, tt.serverIPv4, tt.localIP0v4, tt.localIP1v4)
+			assertConnError(data, t, remotePod, toolboxContainerName, tt.serverIPv4)
+			assertClientIP(data, t, localPod, toolboxContainerName, tt.serverIPv6, tt.localIP0v6, tt.localIP1v6)
+			assertConnError(data, t, remotePod, toolboxContainerName, tt.serverIPv6)
+
+			t.Logf("Creating a dual-stack Egress with static IPs [%s, %s]", egressNodeIPv4, egressNodeIPv6)
+			matchExpressions := []metav1.LabelSelectorRequirement{
+				{Key: "antrea-e2e", Operator: metav1.LabelSelectorOpExists},
+			}
+			egress := data.createDualStackEgress(t, "ds-egress-", matchExpressions, nil,
+				"", "", egressNodeIPv4, egressNodeIPv6)
+			defer data.CRDClient.CrdV1beta1().Egresses().Delete(context.TODO(), egress.Name, metav1.DeleteOptions{})
+
+			assertClientIP(data, t, localPod, toolboxContainerName, tt.serverIPv4, egressNodeIPv4)
+			assertClientIP(data, t, remotePod, toolboxContainerName, tt.serverIPv4, egressNodeIPv4)
+			assertClientIP(data, t, localPod, toolboxContainerName, tt.serverIPv6, egressNodeIPv6)
+			assertClientIP(data, t, remotePod, toolboxContainerName, tt.serverIPv6, egressNodeIPv6)
+
+			var err error
+			err = wait.PollUntilContextTimeout(context.Background(), time.Millisecond*100, time.Second*5, false,
+				func(ctx context.Context) (bool, error) {
+					egress, err = data.CRDClient.CrdV1beta1().Egresses().Get(context.TODO(), egress.Name, metav1.GetOptions{})
+					if err != nil {
+						return false, err
+					}
+					return egress.Status.EgressNode == egressNode, nil
+				})
+			assert.NoError(t, err, "Dual-stack Egress failed to set EgressNode in status")
+
+			t.Log("Updating AppliedTo to remotePod only")
+			egress.Spec.AppliedTo = v1beta1.AppliedTo{
+				PodSelector: &metav1.LabelSelector{MatchLabels: map[string]string{"antrea-e2e": remotePod}},
+			}
+			egress, err = data.CRDClient.CrdV1beta1().Egresses().Update(context.TODO(), egress, metav1.UpdateOptions{})
+			require.NoError(t, err)
+
+			assertClientIP(data, t, localPod, toolboxContainerName, tt.serverIPv4, tt.localIP0v4, tt.localIP1v4)
+			assertClientIP(data, t, remotePod, toolboxContainerName, tt.serverIPv4, egressNodeIPv4)
+			assertClientIP(data, t, localPod, toolboxContainerName, tt.serverIPv6, tt.localIP0v6, tt.localIP1v6)
+			assertClientIP(data, t, remotePod, toolboxContainerName, tt.serverIPv6, egressNodeIPv6)
+
+			t.Log("Updating AppliedTo to localPod only")
+			egress.Spec.AppliedTo = v1beta1.AppliedTo{
+				PodSelector: &metav1.LabelSelector{MatchLabels: map[string]string{"antrea-e2e": localPod}},
+			}
+			egress, err = data.CRDClient.CrdV1beta1().Egresses().Update(context.TODO(), egress, metav1.UpdateOptions{})
+			require.NoError(t, err)
+
+			assertClientIP(data, t, localPod, toolboxContainerName, tt.serverIPv4, egressNodeIPv4)
+			assertConnError(data, t, remotePod, toolboxContainerName, tt.serverIPv4)
+			assertClientIP(data, t, localPod, toolboxContainerName, tt.serverIPv6, egressNodeIPv6)
+			assertConnError(data, t, remotePod, toolboxContainerName, tt.serverIPv6)
+
+			t.Log("Updating EgressIPs to localIP0v4/localIP0v6")
+			egress, err = data.CRDClient.CrdV1beta1().Egresses().Get(context.TODO(), egress.Name, metav1.GetOptions{})
+			require.NoError(t, err)
+			egress.Spec.EgressIPs = []string{tt.localIP0v4, tt.localIP0v6}
+			egress, err = data.CRDClient.CrdV1beta1().Egresses().Update(context.TODO(), egress, metav1.UpdateOptions{})
+			require.NoError(t, err)
+
+			assertClientIP(data, t, localPod, toolboxContainerName, tt.serverIPv4, tt.localIP0v4)
+			assertConnError(data, t, remotePod, toolboxContainerName, tt.serverIPv4)
+			assertClientIP(data, t, localPod, toolboxContainerName, tt.serverIPv6, tt.localIP0v6)
+			assertConnError(data, t, remotePod, toolboxContainerName, tt.serverIPv6)
+
+			t.Log("Deleting the dual-stack Egress")
+			require.NoError(t, data.CRDClient.CrdV1beta1().Egresses().Delete(context.TODO(), egress.Name, metav1.DeleteOptions{}))
+			assertClientIP(data, t, localPod, toolboxContainerName, tt.serverIPv4, tt.localIP0v4, tt.localIP1v4)
+			assertConnError(data, t, remotePod, toolboxContainerName, tt.serverIPv4)
+		})
+	}
+}
+
+func testDualStackEgressCRUD(t *testing.T, data *TestData) {
+	tests := []struct {
+		name           string
+		ipv4Range      v1beta1.IPRange
+		ipv6Range      v1beta1.IPRange
+		expectedIPv4   string
+		expectedIPv6   string
+		nodeSelector   metav1.LabelSelector
+		expectedNodes  sets.Set[string]
+		noNodeExpected bool
+	}{
+		{
+			name:         "single matching Node",
+			ipv4Range:    v1beta1.IPRange{CIDR: "169.254.200.0/30"},
+			ipv6Range:    v1beta1.IPRange{CIDR: "2021:10::aaa0/124"},
+			expectedIPv4: "169.254.200.1",
+			expectedIPv6: "2021:10::aaa1",
+			nodeSelector: metav1.LabelSelector{
+				MatchLabels: map[string]string{v1.LabelHostname: nodeName(0)},
+			},
+			expectedNodes: sets.New[string](nodeName(0)),
+		},
+		{
+			name:         "two matching Nodes",
+			ipv4Range:    v1beta1.IPRange{Start: "169.254.201.10", End: "169.254.201.11"},
+			ipv6Range:    v1beta1.IPRange{CIDR: "2021:11::aaa0/124"},
+			expectedIPv4: "169.254.201.10",
+			expectedIPv6: "2021:11::aaa1",
+			nodeSelector: metav1.LabelSelector{
+				MatchExpressions: []metav1.LabelSelectorRequirement{
+					{
+						Key:      v1.LabelHostname,
+						Operator: metav1.LabelSelectorOpIn,
+						Values:   []string{nodeName(0), nodeName(1)},
+					},
+				},
+			},
+			expectedNodes: sets.New[string](nodeName(0), nodeName(1)),
+		},
+		{
+			name:         "no matching Node",
+			ipv4Range:    v1beta1.IPRange{CIDR: "169.254.202.0/30"},
+			ipv6Range:    v1beta1.IPRange{CIDR: "2021:12::aaa0/124"},
+			expectedIPv4: "169.254.202.1",
+			expectedIPv6: "2021:12::aaa1",
+			nodeSelector: metav1.LabelSelector{
+				MatchLabels: map[string]string{"foo": "bar"},
+			},
+			expectedNodes:  sets.New[string](),
+			noNodeExpected: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ipv4Pool := data.createExternalIPPool(t, "ds-crud-v4-pool-", tt.ipv4Range, nil,
+				tt.nodeSelector.MatchExpressions, tt.nodeSelector.MatchLabels)
+			defer data.CRDClient.CrdV1beta1().ExternalIPPools().Delete(context.TODO(), ipv4Pool.Name, metav1.DeleteOptions{})
+
+			ipv6Pool := data.createExternalIPPool(t, "ds-crud-v6-pool-", tt.ipv6Range, nil,
+				tt.nodeSelector.MatchExpressions, tt.nodeSelector.MatchLabels)
+			defer data.CRDClient.CrdV1beta1().ExternalIPPools().Delete(context.TODO(), ipv6Pool.Name, metav1.DeleteOptions{})
+
+			egress := data.createDualStackEgress(t, "ds-crud-egress-", nil, map[string]string{"foo": "bar"},
+				ipv4Pool.Name, ipv6Pool.Name, "", "")
+			defer data.CRDClient.CrdV1beta1().Egresses().Delete(context.TODO(), egress.Name, metav1.DeleteOptions{})
+
+			var gotEgress *v1beta1.Egress
+			err := wait.PollUntilContextTimeout(context.Background(), 500*time.Millisecond, 10*time.Second, false, func(ctx context.Context) (bool, error) {
+				var e error
+				gotEgress, e = data.CRDClient.CrdV1beta1().Egresses().Get(context.TODO(), egress.Name, metav1.GetOptions{})
+				if e != nil {
+					return false, e
+				}
+				if tt.noNodeExpected {
+					specIPs := sets.New[string](gotEgress.Spec.EgressIPs...)
+					if !specIPs.Has(tt.expectedIPv4) || !specIPs.Has(tt.expectedIPv6) {
+						return false, nil
+					}
+					if gotEgress.Status.EgressNode != "" {
+						return false, nil
+					}
+					cond := v1beta1.GetEgressCondition(gotEgress.Status.Conditions, v1beta1.IPAssigned)
+					return cond != nil && cond.Status == v1.ConditionFalse, nil
+				}
+				statusIPs := sets.New[string](gotEgress.Status.EgressIPs...)
+				if !statusIPs.Has(tt.expectedIPv4) || !statusIPs.Has(tt.expectedIPv6) {
+					return false, nil
+				}
+				return tt.expectedNodes.Has(gotEgress.Status.EgressNode), nil
+			})
+			require.NoError(t, err, "Dual-stack Egress did not reach expected state: ipv4=%s ipv6=%s nodes=%v, got=Spec.EgressIPs=%v Status=%+v",
+				tt.expectedIPv4, tt.expectedIPv6, sets.List(tt.expectedNodes), gotEgress.Spec.EgressIPs, gotEgress.Status)
+
+			if !tt.noNodeExpected {
+				for _, ip := range []string{tt.expectedIPv4, tt.expectedIPv6} {
+					exists, err := hasIP(data, gotEgress.Status.EgressNode, ip)
+					require.NoError(t, err)
+					assert.True(t, exists, "IP %s not found on node %s", ip, gotEgress.Status.EgressNode)
+				}
+			}
+
+			// Verify ExternalIPPool usage increases by 1 for both pools.
+			for _, poolName := range []string{ipv4Pool.Name, ipv6Pool.Name} {
+				err := wait.PollUntilContextTimeout(context.Background(), 200*time.Millisecond, 2*time.Second, true,
+					func(ctx context.Context) (bool, error) {
+						pool, e := data.CRDClient.CrdV1beta1().ExternalIPPools().Get(context.TODO(), poolName, metav1.GetOptions{})
+						if e != nil {
+							return false, e
+						}
+						return pool.Status.Usage.Used == 1, nil
+					})
+				require.NoError(t, err, "ExternalIPPool %s usage did not reach 1", poolName)
+			}
+
+			// Delete and verify IPs are removed from the Node and pool usage drops to 0.
+			err = data.CRDClient.CrdV1beta1().Egresses().Delete(context.TODO(), egress.Name, metav1.DeleteOptions{})
+			require.NoError(t, err)
+
+			if !tt.noNodeExpected {
+				for _, ip := range []string{tt.expectedIPv4, tt.expectedIPv6} {
+					err = wait.PollUntilContextTimeout(context.Background(), 200*time.Millisecond, timeout, true,
+						func(ctx context.Context) (bool, error) {
+							exists, e := hasIP(data, gotEgress.Status.EgressNode, ip)
+							if e != nil {
+								return false, nil
+							}
+							return !exists, nil
+						})
+					require.NoError(t, err, "Stale IP %s still exists on node %s after Egress deletion", ip, gotEgress.Status.EgressNode)
+				}
+			}
+
+			for _, poolName := range []string{ipv4Pool.Name, ipv6Pool.Name} {
+				err := wait.PollUntilContextTimeout(context.Background(), 200*time.Millisecond, 2*time.Second, true,
+					func(ctx context.Context) (bool, error) {
+						pool, e := data.CRDClient.CrdV1beta1().ExternalIPPools().Get(context.TODO(), poolName, metav1.GetOptions{})
+						if e != nil {
+							return false, e
+						}
+						return pool.Status.Usage.Used == 0, nil
+					})
+				require.NoError(t, err, "ExternalIPPool %s usage did not drop to 0 after Egress deletion", poolName)
+			}
+		})
+	}
+}
+
+func testDualStackEgressUpdateEgressIPs(t *testing.T, data *TestData) {
+	tests := []struct {
+		name          string
+		originalNode  string
+		newNode       string
+		origIPv4Range v1beta1.IPRange
+		origIPv6Range v1beta1.IPRange
+		origIPv4      string
+		origIPv6      string
+		newIPv4Range  v1beta1.IPRange
+		newIPv6Range  v1beta1.IPRange
+		newIPv4       string
+		newIPv6       string
+	}{
+		{
+			name:          "same Node",
+			originalNode:  nodeName(0),
+			newNode:       nodeName(0),
+			origIPv4Range: v1beta1.IPRange{CIDR: "169.254.210.0/30"},
+			origIPv6Range: v1beta1.IPRange{CIDR: "2021:20::aaa0/124"},
+			origIPv4:      "169.254.210.1",
+			origIPv6:      "2021:20::aaa1",
+			newIPv4Range:  v1beta1.IPRange{CIDR: "169.254.211.0/30"},
+			newIPv6Range:  v1beta1.IPRange{CIDR: "2021:21::aaa0/124"},
+			newIPv4:       "169.254.211.1",
+			newIPv6:       "2021:21::aaa1",
+		},
+		{
+			name:          "different Nodes",
+			originalNode:  nodeName(0),
+			newNode:       nodeName(1),
+			origIPv4Range: v1beta1.IPRange{CIDR: "169.254.212.0/30"},
+			origIPv6Range: v1beta1.IPRange{CIDR: "2021:22::aaa0/124"},
+			origIPv4:      "169.254.212.1",
+			origIPv6:      "2021:22::aaa1",
+			newIPv4Range:  v1beta1.IPRange{CIDR: "169.254.213.0/30"},
+			newIPv6Range:  v1beta1.IPRange{CIDR: "2021:23::aaa0/124"},
+			newIPv4:       "169.254.213.1",
+			newIPv6:       "2021:23::aaa1",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			origIPv4Pool := data.createExternalIPPool(t, "ds-update-orig-v4-", tt.origIPv4Range, nil, nil,
+				map[string]string{v1.LabelHostname: tt.originalNode})
+			defer data.CRDClient.CrdV1beta1().ExternalIPPools().Delete(context.TODO(), origIPv4Pool.Name, metav1.DeleteOptions{})
+			origIPv6Pool := data.createExternalIPPool(t, "ds-update-orig-v6-", tt.origIPv6Range, nil, nil,
+				map[string]string{v1.LabelHostname: tt.originalNode})
+			defer data.CRDClient.CrdV1beta1().ExternalIPPools().Delete(context.TODO(), origIPv6Pool.Name, metav1.DeleteOptions{})
+
+			newIPv4Pool := data.createExternalIPPool(t, "ds-update-new-v4-", tt.newIPv4Range, nil, nil,
+				map[string]string{v1.LabelHostname: tt.newNode})
+			defer data.CRDClient.CrdV1beta1().ExternalIPPools().Delete(context.TODO(), newIPv4Pool.Name, metav1.DeleteOptions{})
+			newIPv6Pool := data.createExternalIPPool(t, "ds-update-new-v6-", tt.newIPv6Range, nil, nil,
+				map[string]string{v1.LabelHostname: tt.newNode})
+			defer data.CRDClient.CrdV1beta1().ExternalIPPools().Delete(context.TODO(), newIPv6Pool.Name, metav1.DeleteOptions{})
+
+			egress := data.createDualStackEgress(t, "ds-update-egress-", nil, map[string]string{"foo": "bar"},
+				origIPv4Pool.Name, origIPv6Pool.Name, "", "")
+			defer data.CRDClient.CrdV1beta1().Egresses().Delete(context.TODO(), egress.Name, metav1.DeleteOptions{})
+
+			egress, err := data.checkDualStackEgressState(t, egress.Name, tt.origIPv4, tt.origIPv6, 3*time.Second)
+			require.NoError(t, err, "Original dual-stack Egress state not reached")
+			assert.Equal(t, tt.originalNode, egress.Status.EgressNode)
+
+			toUpdate := egress.DeepCopy()
+			updateErr := retry.RetryOnConflict(retry.DefaultRetry, func() error {
+				toUpdate.Spec.ExternalIPPools = []string{newIPv4Pool.Name, newIPv6Pool.Name}
+				toUpdate.Spec.EgressIPs = []string{tt.newIPv4, tt.newIPv6}
+				_, e := data.CRDClient.CrdV1beta1().Egresses().Update(context.TODO(), toUpdate, metav1.UpdateOptions{})
+				if e != nil && errors.IsConflict(e) {
+					toUpdate, _ = data.CRDClient.CrdV1beta1().Egresses().Get(context.TODO(), egress.Name, metav1.GetOptions{})
+				}
+				return e
+			})
+			require.NoError(t, updateErr, "Failed to update dual-stack Egress pools")
+
+			_, err = data.checkDualStackEgressState(t, egress.Name, tt.newIPv4, tt.newIPv6, 3*time.Second)
+			require.NoError(t, err, "New dual-stack Egress state not reached")
+
+			// Old IPs must be removed from the original node.
+			for _, ip := range []string{tt.origIPv4, tt.origIPv6} {
+				err = wait.PollUntilContextTimeout(context.Background(), 200*time.Millisecond, timeout, true,
+					func(ctx context.Context) (bool, error) {
+						exists, e := hasIP(data, tt.originalNode, ip)
+						if e != nil {
+							return false, nil
+						}
+						return !exists, nil
+					})
+				require.NoError(t, err, "Stale IP %s still present on original node %s", ip, tt.originalNode)
+			}
+		})
+	}
+}
+
+func testDualStackEgressUpdateNodeSelector(t *testing.T, data *TestData) {
+	skipIfEncapModeIsNot(t, data, config.TrafficEncapModeEncap)
+
+	ipv4Range := v1beta1.IPRange{CIDR: "169.254.220.0/30"}
+	ipv6Range := v1beta1.IPRange{CIDR: "2021:30::aaa0/124"}
+	nodeCandidates := sets.New[string](nodeName(0), nodeName(1))
+	matchExpressions := []metav1.LabelSelectorRequirement{
+		{
+			Key:      v1.LabelHostname,
+			Operator: metav1.LabelSelectorOpIn,
+			Values:   sets.List(nodeCandidates),
+		},
+	}
+
+	ipv4Pool := data.createExternalIPPool(t, "ds-ns-v4-pool-", ipv4Range, nil, matchExpressions, nil)
+	defer data.CRDClient.CrdV1beta1().ExternalIPPools().Delete(context.TODO(), ipv4Pool.Name, metav1.DeleteOptions{})
+
+	ipv6Pool := data.createExternalIPPool(t, "ds-ns-v6-pool-", ipv6Range, nil, matchExpressions, nil)
+	defer data.CRDClient.CrdV1beta1().ExternalIPPools().Delete(context.TODO(), ipv6Pool.Name, metav1.DeleteOptions{})
+
+	egress := data.createDualStackEgress(t, "ds-ns-egress-", nil, map[string]string{"foo": "bar"},
+		ipv4Pool.Name, ipv6Pool.Name, "", "")
+	defer data.CRDClient.CrdV1beta1().Egresses().Delete(context.TODO(), egress.Name, metav1.DeleteOptions{})
+
+	egress, err := data.waitForDualStackEgressRealized(egress)
+	require.NoError(t, err)
+	require.True(t, nodeCandidates.Has(egress.Status.EgressNode), "Initial EgressNode not in candidate set")
+
+	fromNode := egress.Status.EgressNode
+	toNode := nodeName(0)
+	if fromNode == nodeName(0) {
+		toNode = nodeName(1)
+	}
+	allocatedIPv4 := ""
+	allocatedIPv6 := ""
+	for _, ip := range egress.Status.EgressIPs {
+		if utilnet.IsIPv6String(ip) {
+			allocatedIPv6 = ip
+		} else {
+			allocatedIPv4 = ip
+		}
+	}
+	require.NotEmpty(t, allocatedIPv4, "No IPv4 found in Status.EgressIPs")
+	require.NotEmpty(t, allocatedIPv6, "No IPv6 found in Status.EgressIPs")
+
+	// Remove fromNode from both pools simultaneously.
+	updatePoolNodeSelector := func(poolName, evictNode string, add bool) {
+		pool, e := data.CRDClient.CrdV1beta1().ExternalIPPools().Get(context.TODO(), poolName, metav1.GetOptions{})
+		require.NoError(t, e)
+		nodes := sets.New[string](pool.Spec.NodeSelector.MatchExpressions[0].Values...)
+		if add {
+			nodes.Insert(evictNode)
+		} else {
+			nodes.Delete(evictNode)
+		}
+		pool.Spec.NodeSelector.MatchExpressions[0].Values = sets.List(nodes)
+		_, e = data.CRDClient.CrdV1beta1().ExternalIPPools().Update(context.TODO(), pool, metav1.UpdateOptions{})
+		require.NoError(t, e)
+	}
+
+	updatePoolNodeSelector(ipv4Pool.Name, fromNode, false)
+	updatePoolNodeSelector(ipv6Pool.Name, fromNode, false)
+	defer func() {
+		updatePoolNodeSelector(ipv4Pool.Name, fromNode, true)
+		updatePoolNodeSelector(ipv6Pool.Name, fromNode, true)
+	}()
+
+	// Both IPs must appear on toNode and not on fromNode.
+	_, err = data.checkDualStackEgressState(t, egress.Name, allocatedIPv4, allocatedIPv6, 3*time.Second)
+	require.NoError(t, err)
+	updatedEgress, _ := data.CRDClient.CrdV1beta1().Egresses().Get(context.TODO(), egress.Name, metav1.GetOptions{})
+	assert.Equal(t, toNode, updatedEgress.Status.EgressNode, "EgressNode did not migrate to expected node")
+
+	for _, ip := range []string{allocatedIPv4, allocatedIPv6} {
+		exists, e := hasIP(data, fromNode, ip)
+		require.NoError(t, e)
+		assert.False(t, exists, "IP %s still present on evicted node %s", ip, fromNode)
+	}
+
+	// Restore fromNode to both pools; IPs should migrate back.
+	updatePoolNodeSelector(ipv4Pool.Name, fromNode, true)
+	updatePoolNodeSelector(ipv6Pool.Name, fromNode, true)
+
+	_, err = data.checkDualStackEgressState(t, egress.Name, allocatedIPv4, allocatedIPv6, 3*time.Second)
+	require.NoError(t, err)
+	restoredEgress, _ := data.CRDClient.CrdV1beta1().Egresses().Get(context.TODO(), egress.Name, metav1.GetOptions{})
+	assert.Equal(t, fromNode, restoredEgress.Status.EgressNode, "EgressNode did not migrate back to original node")
+}
+
+func testDualStackEgressNodeFailure(t *testing.T, data *TestData) {
+	skipIfEncapModeIsNot(t, data, config.TrafficEncapModeEncap)
+
+	ipv4Range := v1beta1.IPRange{CIDR: "169.254.230.0/30"}
+	ipv6Range := v1beta1.IPRange{CIDR: "2021:40::aaa0/124"}
+	nodeCandidates := sets.New[string](nodeName(0), nodeName(1))
+	matchExpressions := []metav1.LabelSelectorRequirement{
+		{
+			Key:      v1.LabelHostname,
+			Operator: metav1.LabelSelectorOpIn,
+			Values:   sets.List(nodeCandidates),
+		},
+	}
+
+	ipv4Pool := data.createExternalIPPool(t, "ds-fail-v4-pool-", ipv4Range, nil, matchExpressions, nil)
+	defer data.CRDClient.CrdV1beta1().ExternalIPPools().Delete(context.TODO(), ipv4Pool.Name, metav1.DeleteOptions{})
+
+	ipv6Pool := data.createExternalIPPool(t, "ds-fail-v6-pool-", ipv6Range, nil, matchExpressions, nil)
+	defer data.CRDClient.CrdV1beta1().ExternalIPPools().Delete(context.TODO(), ipv6Pool.Name, metav1.DeleteOptions{})
+
+	egress := data.createDualStackEgress(t, "ds-fail-egress-", nil, map[string]string{"foo": "bar"},
+		ipv4Pool.Name, ipv6Pool.Name, "", "")
+	defer data.CRDClient.CrdV1beta1().Egresses().Delete(context.TODO(), egress.Name, metav1.DeleteOptions{})
+
+	egress, err := data.waitForDualStackEgressRealized(egress)
+	require.NoError(t, err)
+	require.True(t, nodeCandidates.Has(egress.Status.EgressNode))
+
+	fromNode := egress.Status.EgressNode
+	toNode := nodeName(0)
+	if fromNode == nodeName(0) {
+		toNode = nodeName(1)
+	}
+	allocatedIPv4 := ""
+	allocatedIPv6 := ""
+	for _, ip := range egress.Status.EgressIPs {
+		if utilnet.IsIPv6String(ip) {
+			allocatedIPv6 = ip
+		} else {
+			allocatedIPv4 = ip
+		}
+	}
+	require.NotEmpty(t, allocatedIPv4)
+	require.NotEmpty(t, allocatedIPv6)
+
+	type neighborChecker struct {
+		check func(string)
+	}
+	var ipNeighborCheckers []neighborChecker
+	if observerNode := nodeName(2); observerNode != "" {
+		for _, ip := range []string{allocatedIPv4, allocatedIPv6} {
+			fn, setupErr := setupIPNeighborChecker(data, t, observerNode, fromNode, toNode, ip)
+			require.NoError(t, setupErr)
+			ipNeighborCheckers = append(ipNeighborCheckers, neighborChecker{check: fn})
+		}
+	} else {
+		noopChecker := neighborChecker{check: func(_ string) {
+			t.Logf("The cluster didn't have enough Nodes, skip IP neighbor check")
+		}}
+		ipNeighborCheckers = []neighborChecker{noopChecker, noopChecker}
+	}
+	checkAllIPNeighbors := func(expectNode string) {
+		for _, nc := range ipNeighborCheckers {
+			nc.check(expectNode)
+		}
+	}
+
+	checkAllIPNeighbors(fromNode)
+
+	signalAgent := func(nodeName, signal string) {
+		cmd := fmt.Sprintf("pkill -%s antrea-agent", signal)
+		if testOptions.providerName != "kind" {
+			cmd = "sudo " + cmd
+		}
+		rc, stdout, stderr, runErr := data.RunCommandOnNode(nodeName, cmd)
+		if rc != 0 || runErr != nil {
+			t.Errorf("Error running '%s' on Node '%s', rc: %d, stdout: %s, stderr: %s, err: %v",
+				cmd, nodeName, rc, stdout, stderr, runErr)
+		}
+	}
+
+	checkDualStackEgressOnNode := func(expectedNode string, timeout time.Duration) error {
+		var expectedNodeHasIPv4, expectedNodeHasIPv6 bool
+		pollErr := wait.PollUntilContextTimeout(context.Background(), 200*time.Millisecond, timeout, true, func(ctx context.Context) (bool, error) {
+			e, getErr := data.CRDClient.CrdV1beta1().Egresses().Get(context.TODO(), egress.Name, metav1.GetOptions{})
+			if getErr != nil {
+				return false, getErr
+			}
+			if e.Status.EgressNode != expectedNode {
+				return false, nil
+			}
+			statusIPs := sets.New[string](e.Status.EgressIPs...)
+			if !statusIPs.Has(allocatedIPv4) || !statusIPs.Has(allocatedIPv6) {
+				return false, nil
+			}
+			var ipErr error
+			expectedNodeHasIPv4, ipErr = hasIP(data, expectedNode, allocatedIPv4)
+			if ipErr != nil {
+				return false, nil
+			}
+			if !expectedNodeHasIPv4 {
+				return false, nil
+			}
+			expectedNodeHasIPv6, ipErr = hasIP(data, expectedNode, allocatedIPv6)
+			if ipErr != nil {
+				return false, nil
+			}
+			if !expectedNodeHasIPv6 {
+				return false, nil
+			}
+			return true, nil
+		})
+		if pollErr != nil {
+			return fmt.Errorf("dual-stack egress did not reach expected state on node %s: %v (hasIPv4=%v, hasIPv6=%v)",
+				expectedNode, pollErr, expectedNodeHasIPv4, expectedNodeHasIPv6)
+		}
+		return nil
+	}
+
+	signalAgent(fromNode, "STOP")
+	defer signalAgent(fromNode, "CONT")
+
+	assert.NoError(t, checkDualStackEgressOnNode(toNode, 15*time.Second),
+		"EgressNode did not migrate to toNode after agent pause")
+	checkAllIPNeighbors(toNode)
+
+	signalAgent(fromNode, "CONT")
+	assert.NoError(t, checkDualStackEgressOnNode(fromNode, 15*time.Second),
+		"EgressNode did not migrate back after agent resume")
+	checkAllIPNeighbors(fromNode)
+}
+
+func testDualStackEgressUpdateBandwidth(t *testing.T, data *TestData) {
+	skipIfEgressShapingDisabled(t)
+
+	bandwidth := &v1beta1.Bandwidth{
+		Rate:  "100M",
+		Burst: "200M",
+	}
+	transMap := map[string]int{
+		"100M": 100,
+		"200M": 200,
+	}
+
+	egressNode := controlPlaneNodeName()
+	egressNodeIPv4 := controlPlaneNodeIPv4()
+	egressNodeIPv6 := controlPlaneNodeIPv6()
+
+	// Fake IPv4 external network running iperf3 server.
+	fakeIPv4Name := "ds-bw-fake-v4"
+	fakeIPv4ServerIP := "1.1.3.20"
+	fakeIPv4LocalIP := "1.1.3.10"
+	cmdIPv4, _ := getCommandInFakeExternalNetwork("iperf3 -s", 24, fakeIPv4ServerIP, fakeIPv4LocalIP)
+	err := NewPodBuilder(fakeIPv4Name, data.testNamespace, ToolboxImage).OnNode(egressNode).
+		WithCommand([]string{"bash", "-c", cmdIPv4}).InHostNetwork().Privileged().Create(data)
+	require.NoError(t, err, "Failed to create IPv4 iperf server Pod")
+	defer deletePodWrapper(t, data, data.testNamespace, fakeIPv4Name)
+
+	// Fake IPv6 external network running iperf3 server.
+	fakeIPv6Name := "ds-bw-fake-v6"
+	fakeIPv6ServerIP := "2021:60::aa14"
+	fakeIPv6LocalIP := "2021:60::aa0a"
+	cmdIPv6, _ := getCommandInFakeExternalNetwork("iperf3 -s", 120, fakeIPv6ServerIP, fakeIPv6LocalIP)
+	err = NewPodBuilder(fakeIPv6Name, data.testNamespace, ToolboxImage).OnNode(egressNode).
+		WithCommand([]string{"bash", "-c", cmdIPv6}).InHostNetwork().Privileged().Create(data)
+	require.NoError(t, err, "Failed to create IPv6 iperf server Pod")
+	defer deletePodWrapper(t, data, data.testNamespace, fakeIPv6Name)
+
+	for _, name := range []string{fakeIPv4Name, fakeIPv6Name} {
+		require.NoError(t, data.podWaitForRunning(defaultTimeout, name, data.testNamespace),
+			"Fake iperf server Pod %s did not become ready", name)
+	}
+
+	clientPodName := "ds-bw-client"
+	err = NewPodBuilder(clientPodName, data.testNamespace, ToolboxImage).OnNode(egressNode).Create(data)
+	require.NoError(t, err, "Failed to create client Pod")
+	defer deletePodWrapper(t, data, data.testNamespace, clientPodName)
+	require.NoError(t, data.podWaitForRunning(defaultTimeout, clientPodName, data.testNamespace),
+		"Client Pod did not become ready")
+
+	egress := &v1beta1.Egress{
+		ObjectMeta: metav1.ObjectMeta{GenerateName: "ds-egress-bw-"},
+		Spec: v1beta1.EgressSpec{
+			AppliedTo: v1beta1.AppliedTo{
+				PodSelector: &metav1.LabelSelector{
+					MatchLabels: map[string]string{"antrea-e2e": clientPodName},
+				},
+			},
+			EgressIPs: []string{egressNodeIPv4, egressNodeIPv6},
+			Bandwidth: bandwidth,
+		},
+	}
+	egress, err = data.CRDClient.CrdV1beta1().Egresses().Create(context.TODO(), egress, metav1.CreateOptions{})
+	require.NoError(t, err, "Failed to create dual-stack Egress with bandwidth")
+	defer data.CRDClient.CrdV1beta1().Egresses().Delete(context.TODO(), egress.Name, metav1.DeleteOptions{})
+
+	err = wait.PollUntilContextTimeout(context.Background(), 200*time.Millisecond, waitEgressRealizedTimeout, true,
+		func(ctx context.Context) (bool, error) {
+			egress, err = data.CRDClient.CrdV1beta1().Egresses().Get(context.TODO(), egress.Name, metav1.GetOptions{})
+			if err != nil {
+				return false, err
+			}
+			return egress.Status.EgressNode != "", nil
+		})
+	require.NoError(t, err, "Dual-stack Egress did not set EgressNode, status=%+v", egress.Status)
+
+	runIperf := func(cmd []string, expectedBandwidth int) {
+		stdout, _, err := data.RunCommandFromPod(data.testNamespace, clientPodName, "toolbox", cmd)
+		if err != nil {
+			t.Fatalf("Error when running iperf3 client: %v", err)
+		}
+		stdout = strings.TrimSpace(stdout)
+		actualBandwidth, _ := strconv.ParseFloat(strings.TrimSpace(stdout), 64)
+		t.Logf("Actual bandwidth: %v Mbits/sec", actualBandwidth)
+		assert.InEpsilon(t, actualBandwidth, expectedBandwidth, 0.2)
+	}
+
+	// Verify IPv4 traffic is shaped.
+	t.Log("Measuring IPv4 bandwidth (burst)")
+	runIperf([]string{"bash", "-c", fmt.Sprintf("iperf3 -c %s -f m -t 1|grep sender|awk '{print $7}'", fakeIPv4ServerIP)},
+		transMap[bandwidth.Rate]+transMap[bandwidth.Burst])
+	t.Log("Measuring IPv4 bandwidth (sustained)")
+	runIperf([]string{"bash", "-c", fmt.Sprintf("iperf3 -c %s -f m -O 1|grep sender|awk '{print $7}'", fakeIPv4ServerIP)},
+		transMap[bandwidth.Rate])
+
+	// Verify IPv6 traffic is shaped independently by its own meter.
+	t.Log("Measuring IPv6 bandwidth (burst)")
+	runIperf([]string{"bash", "-c", fmt.Sprintf("iperf3 -c %s -6 -f m -t 1|grep sender|awk '{print $7}'", fakeIPv6ServerIP)},
+		transMap[bandwidth.Rate]+transMap[bandwidth.Burst])
+	t.Log("Measuring IPv6 bandwidth (sustained)")
+	runIperf([]string{"bash", "-c", fmt.Sprintf("iperf3 -c %s -6 -f m -O 1|grep sender|awk '{print $7}'", fakeIPv6ServerIP)},
+		transMap[bandwidth.Rate])
 }

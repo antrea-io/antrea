@@ -15,6 +15,8 @@
 package egress
 
 import (
+	"fmt"
+	"slices"
 	"sort"
 	"strconv"
 	"sync"
@@ -48,6 +50,7 @@ type scheduleResult struct {
 	ip   string
 	node string
 	err  error
+	ips  []string
 }
 
 // egressIPScheduler is responsible for scheduling Egress IPs to appropriate Nodes according to the Node selector of the
@@ -56,8 +59,8 @@ type egressIPScheduler struct {
 	// cluster is responsible for selecting a Node for a given IP and pool.
 	cluster memberlist.Interface
 
-	egressLister       crdlisters.EgressLister
-	egressListerSynced cache.InformerSynced
+	egressLister         crdlisters.EgressLister
+	egressListerSynced   cache.InformerSynced
 
 	// queue is used to trigger scheduling. Triggering multiple times before the item is consumed will only cause one
 	// execution of scheduling.
@@ -172,7 +175,7 @@ func (s *egressIPScheduler) deleteNode(obj interface{}) {
 // addEgress processes Egress ADD events.
 func (s *egressIPScheduler) addEgress(obj interface{}) {
 	egress := obj.(*crdv1b1.Egress)
-	if !isEgressSchedulable(egress) {
+	if !isEgressSchedulable(egress) && !isDualStackEgressSchedulable(egress) {
 		return
 	}
 	s.queue.Add(workItem)
@@ -183,10 +186,10 @@ func (s *egressIPScheduler) addEgress(obj interface{}) {
 func (s *egressIPScheduler) updateEgress(old, cur interface{}) {
 	oldEgress := old.(*crdv1b1.Egress)
 	curEgress := cur.(*crdv1b1.Egress)
-	if !isEgressSchedulable(oldEgress) && !isEgressSchedulable(curEgress) {
+	if !isEgressSchedulable(oldEgress) && !isEgressSchedulable(curEgress) && !isDualStackEgressSchedulable(oldEgress) && !isDualStackEgressSchedulable(curEgress) {
 		return
 	}
-	if oldEgress.Spec.EgressIP == curEgress.Spec.EgressIP && oldEgress.Spec.ExternalIPPool == curEgress.Spec.ExternalIPPool {
+	if oldEgress.Spec.EgressIP == curEgress.Spec.EgressIP && oldEgress.Spec.ExternalIPPool == curEgress.Spec.ExternalIPPool && slices.Equal(oldEgress.Spec.EgressIPs, curEgress.Spec.EgressIPs) && slices.Equal(oldEgress.Spec.ExternalIPPools, curEgress.Spec.ExternalIPPools) {
 		return
 	}
 	s.queue.Add(workItem)
@@ -208,7 +211,7 @@ func (s *egressIPScheduler) deleteEgress(obj interface{}) {
 			return
 		}
 	}
-	if !isEgressSchedulable(egress) {
+	if !isEgressSchedulable(egress) && !isDualStackEgressSchedulable(egress) {
 		return
 	}
 	s.queue.Add(workItem)
@@ -261,6 +264,20 @@ func (s *egressIPScheduler) GetEgressIPAndNode(egress string) (string, string, e
 		return "", "", result.err, false
 	}
 	return result.ip, result.node, nil, true
+}
+
+func (s *egressIPScheduler) GetDualStackEgressIPsAndNode(egress string) ([]string, string, error, bool) {
+	s.mutex.RLock()
+	defer s.mutex.RUnlock()
+
+	result, exists := s.scheduleResults[egress]
+	if !exists {
+		return nil, "", nil, false
+	}
+	if result.err != nil {
+		return nil, "", result.err, false
+	}
+	return result.ips, result.node, nil, true
 }
 
 // EgressesByCreationTimestamp sorts a list of Egresses by creation timestamp.
@@ -339,7 +356,24 @@ func (s *egressIPScheduler) schedule() {
 	sort.Sort(EgressesByCreationTimestamp(egresses))
 	for _, egress := range egresses {
 		// Ignore Egresses that shouldn't be scheduled.
-		if !isEgressSchedulable(egress) {
+		if !isEgressSchedulable(egress) && !isDualStackEgressSchedulable(egress) {
+			continue
+		}
+
+		// Handle dual-stack Egress scheduling separately.
+		if isDualStackEgressSchedulable(egress) {
+			result := s.scheduleDualStackEgress(egress, nodeToIPs)
+			newResults[egress.Name] = result
+			if result.err == nil && result.node != "" {
+				ips, exists := nodeToIPs[result.node]
+				if !exists {
+					ips = sets.New[string]()
+					nodeToIPs[result.node] = ips
+				}
+				for _, ip := range result.ips {
+					ips.Insert(ip)
+				}
+			}
 			continue
 		}
 
@@ -386,7 +420,7 @@ func (s *egressIPScheduler) schedule() {
 		prevResults := s.scheduleResults
 		for egress, result := range newResults {
 			prevResult, exists := prevResults[egress]
-			if !exists || prevResult.ip != result.ip || prevResult.node != result.node || prevResult.err != result.err {
+			if !exists || prevResult.ip != result.ip || prevResult.node != result.node || prevResult.err != result.err || !slices.Equal(prevResult.ips, result.ips) {
 				egressesToUpdate = append(egressesToUpdate, egress)
 			}
 			delete(prevResults, egress)
@@ -406,4 +440,51 @@ func (s *egressIPScheduler) schedule() {
 	}
 
 	s.scheduledOnce.Store(true)
+}
+
+type dualStackPair struct {
+	ip     string
+	ipPool string
+}
+
+// Since dual-stack egress specifies a fixed IP family order, resources can be directly categorized using a fixed index.
+func (s *egressIPScheduler) classifyDualStackPairs(egress *crdv1b1.Egress) (ipv4 dualStackPair, ipv6 dualStackPair, err error) {
+	if !isDualStackEgressSchedulable(egress) {
+		return dualStackPair{}, dualStackPair{}, fmt.Errorf("dual-stack pairs are unavailable because dual-stack egress cannot be scheduled")
+	}
+	return dualStackPair{egress.Spec.EgressIPs[0], egress.Spec.ExternalIPPools[0]},
+		dualStackPair{egress.Spec.EgressIPs[1], egress.Spec.ExternalIPPools[1]}, nil
+}
+
+// scheduleDualStackEgress uses SelectNodeForDualStackIPs to schedule dual-stack IPs, ensuring that the selected node supports allocation of both IPs.
+func (s *egressIPScheduler) scheduleDualStackEgress(egress *crdv1b1.Egress, nodeToIPs map[string]sets.Set[string]) *scheduleResult {
+	ipv4, ipv6, err := s.classifyDualStackPairs(egress)
+	if err != nil {
+		return &scheduleResult{err: err}
+	}
+
+	// The capacity filter accounts for both IPs at once, since they land on the same Node.
+	egressIPs := egress.Spec.EgressIPs
+	maxEgressIPsFilter := func(node string) bool {
+		ipsOnNode := nodeToIPs[node]
+		numIPs := ipsOnNode.Len()
+		for _, ip := range egressIPs {
+			if !ipsOnNode.Has(ip) {
+				numIPs++
+			}
+		}
+		return numIPs <= s.getMaxEgressIPsByNode(node)
+	}
+
+	node, err := s.cluster.SelectNodeForDualStackIPs(ipv4.ip, ipv4.ipPool, ipv6.ip, ipv6.ipPool, maxEgressIPsFilter)
+	if err != nil {
+		klog.InfoS("No single Node can accommodate both dual-stack Egress IPs",
+			"egress", klog.KObj(egress), "ipv4Pool", ipv4.ipPool, "ipv6Pool", ipv6.ipPool)
+		return &scheduleResult{err: fmt.Errorf("no Node can host both dual-stack Egress IPs (pool %s, pool %s): %w", ipv4.ipPool, ipv6.ipPool, err)}
+	}
+
+	return &scheduleResult{
+		ips:  egressIPs,
+		node: node,
+	}
 }
