@@ -129,6 +129,17 @@ func (nfct *netFilterConnTrack) DumpFlowsInCtZone(zoneFilter uint16) ([]*connect
 }
 
 func NetlinkFlowToAntreaConnection(conn *conntrack.Flow) *connection.Connection {
+	// TupleReply destination matches TupleOrig source when the reverse path is symmetric (no SNAT).
+	// Only populate Proxy SNAT fields when the reply tuple indicates non-symmetric NAT (e.g. kube-proxy /
+	// Antrea proxy masquerade), so we do not label ordinary flows with a misleading proxy SNAT IP/port.
+	var proxySnatIP netip.Addr
+	var proxySnatPort uint16
+	if conn.TupleReply.IP.DestinationAddress != conn.TupleOrig.IP.SourceAddress ||
+		conn.TupleReply.Proto.DestinationPort != conn.TupleOrig.Proto.SourcePort {
+		proxySnatIP = conn.TupleReply.IP.DestinationAddress
+		proxySnatPort = conn.TupleReply.Proto.DestinationPort
+	}
+
 	newConn := connection.Connection{
 		ID:         conn.ID,
 		Timeout:    conn.Timeout,
@@ -146,6 +157,8 @@ func NetlinkFlowToAntreaConnection(conn *conntrack.Flow) *connection.Connection 
 			SourcePort:         conn.TupleOrig.Proto.SourcePort,
 			DestinationPort:    conn.TupleReply.Proto.SourcePort,
 		},
+		ProxySnatIP:                proxySnatIP,
+		ProxySnatPort:              proxySnatPort,
 		OriginalDestinationAddress: conn.TupleOrig.IP.DestinationAddress,
 		OriginalDestinationPort:    conn.TupleOrig.Proto.DestinationPort,
 		OriginalPackets:            conn.CountersOrig.Packets,

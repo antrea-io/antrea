@@ -19,7 +19,6 @@ import (
 
 	"k8s.io/klog/v2"
 
-	"antrea.io/antrea/v2/pkg/agent/flowexporter/connection"
 	"antrea.io/antrea/v2/pkg/agent/metrics"
 	"antrea.io/antrea/v2/pkg/agent/openflow"
 	"antrea.io/antrea/v2/pkg/util/channel"
@@ -39,7 +38,10 @@ type Poller struct {
 }
 
 func NewPoller(ctDumper ConnTrackDumper, notifier channel.Notifier, pollInterval time.Duration, v4Enabled, v6Enabled, connectUplinkToBridge bool) *Poller {
-	var zones []uint16
+	// Zone 0 is polled first so that zone-zero connections (before Antrea
+	// DNAT/SNAT) are available in the FromExternalCorrelator before the
+	// corresponding Antrea-zone connections are processed.
+	zones := []uint16{0}
 	if v4Enabled {
 		if connectUplinkToBridge {
 			zones = append(zones, uint16(openflow.IPCtZoneTypeRegMark.GetValue()<<12))
@@ -77,7 +79,7 @@ func (p *Poller) Run(stopCh <-chan struct{}) {
 		case <-stopCh:
 			return
 		case <-pollTicker.C:
-			conns, _, err := p.Poll()
+			batch, _, err := p.Poll()
 			if err != nil {
 				// Not failing here as errors can be transient and could be resolved in future poll cycles.
 				// TODO: Come up with a backoff/retry mechanism by increasing poll interval and adding retry timeout
@@ -86,18 +88,18 @@ func (p *Poller) Run(stopCh <-chan struct{}) {
 			}
 
 			if p.notifier != nil {
-				p.notifier.Notify(conns)
+				p.notifier.Notify(batch)
 			}
 		}
 	}
 }
 
-// Poll calls into conntrackDumper interface to dump conntrack flows. It returns the connections
-// filtered by zones and number of connections for each address family, as a slice.
-// In dual-stack clusters, the slice will contain 2 values (number of IPv4 connections first, then
-// number of IPv6 connections).
+// Poll calls into conntrackDumper interface to dump conntrack flows per zone. It returns a
+// ConntrackPollBatch (zone 0 vs Antrea zones splitted) and per-zone filtered connection
+// counts. In dual-stack clusters, connsLens has one entry per polled zone (zone 0 first, then
+// IPv4 Antrea zone, then IPv6 Antrea zone when enabled).
 // TODO: As optimization, only poll invalid/closed connections during every poll, and poll the established connections right before the export.
-func (p *Poller) Poll() ([]*connection.Connection, []int, error) {
+func (p *Poller) Poll() (*ConntrackPollBatch, []int, error) {
 	klog.V(2).InfoS("Polling conntrack")
 	startTime := time.Now()
 	defer func() {
@@ -106,16 +108,20 @@ func (p *Poller) Poll() ([]*connection.Connection, []int, error) {
 		klog.V(2).InfoS("Polled conntrack", "duration", duration)
 	}()
 
+	batch := &ConntrackPollBatch{}
 	var connsLens []int
 	var totalConns int
-	var filteredConnsList []*connection.Connection
 	for _, zone := range p.zones {
 		filteredConnsListPerZone, totalConnsPerZone, err := p.connTrackDumper.DumpFlows(zone)
 		if err != nil {
 			return nil, nil, err
 		}
 		totalConns += totalConnsPerZone
-		filteredConnsList = append(filteredConnsList, filteredConnsListPerZone...)
+		if zone == 0 {
+			batch.ZoneZero = append(batch.ZoneZero, filteredConnsListPerZone...)
+		} else {
+			batch.AntreaZone = append(batch.AntreaZone, filteredConnsListPerZone...)
+		}
 		connsLens = append(connsLens, len(filteredConnsListPerZone))
 	}
 
@@ -125,5 +131,5 @@ func (p *Poller) Poll() ([]*connection.Connection, []int, error) {
 		return nil, nil, err
 	}
 	metrics.MaxConnectionsInConnTrackTable.Set(float64(maxConns))
-	return filteredConnsList, connsLens, nil
+	return batch, connsLens, nil
 }
