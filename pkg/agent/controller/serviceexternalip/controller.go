@@ -117,7 +117,9 @@ func NewServiceExternalIPController(
 		linkMonitor:               linkMonitor,
 	}
 	ipAssigner, err := ipassigner.NewIPAssigner(nodeTransportInterface, "", linkMonitor, false)
-	if err != nil {
+	// On Windows, ipassigner.NewIPAssigner always returns a non-nil error (see ip_assigner_windows.go);
+	// on Linux, err is nil when initialization succeeds. golangci runs staticcheck with GOOS=windows too.
+	if err != nil { //nolint:staticcheck // SA4023: err is always non-nil on Windows only.
 		return nil, fmt.Errorf("initializing service external IP assigner failed: %v", err)
 	}
 	c.ipAssigner = ipAssigner
