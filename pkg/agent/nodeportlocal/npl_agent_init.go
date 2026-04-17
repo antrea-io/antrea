@@ -28,6 +28,7 @@ import (
 // InitializeNPLAgent initializes the NodePortLocal agent.
 // It sets up event handlers to handle Pod add, update and delete events.
 // When a Pod gets created, a free Node port is obtained from the port table cache and a DNAT rule is added to NAT traffic to the Pod's ip:port.
+// The returned controller implements portcache.NPLQuerier for resolving NPL node ports to Service names (e.g. IPFIX flow export).
 func InitializeNPLAgent(
 	kubeClient clientset.Interface,
 	serviceInformer coreinformers.ServiceInformer,

@@ -32,6 +32,7 @@ import (
 	"antrea.io/antrea/v2/pkg/agent/flowexporter/priorityqueue"
 	"antrea.io/antrea/v2/pkg/agent/flowexporter/utils"
 	"antrea.io/antrea/v2/pkg/agent/metrics"
+	"antrea.io/antrea/v2/pkg/agent/nodeportlocal/portcache"
 	"antrea.io/antrea/v2/pkg/agent/proxy"
 	api "antrea.io/antrea/v2/pkg/apis/crd/v1alpha1"
 	"antrea.io/antrea/v2/pkg/querier"
@@ -103,6 +104,7 @@ func NewDestination(
 	egressQuerier querier.EgressQuerier,
 	networkPolicyReadyTime time.Time,
 	destinationConfig DestinationConfig,
+	nplQuerier portcache.NPLQuerier,
 ) *Destination {
 	connectionStoreConfig := connections.ConnectionStoreConfig{
 		ActiveFlowTimeout:      destinationConfig.activeFlowTimeout,
@@ -113,7 +115,7 @@ func NewDestination(
 	}
 	// External correlation is now done in the poller before connections are delivered to each
 	// destination's connection store, so no ExternalCorrelator is needed here.
-	conntrackConnStore := connections.NewConntrackConnectionStore(npQuerier, podStore, proxier, connectionStoreConfig)
+	conntrackConnStore := connections.NewConntrackConnectionStore(npQuerier, podStore, proxier, connectionStoreConfig, nplQuerier)
 	denyConnStore := connections.NewDenyConnectionStore(npQuerier, podStore, proxier, connectionStoreConfig)
 
 	return &Destination{

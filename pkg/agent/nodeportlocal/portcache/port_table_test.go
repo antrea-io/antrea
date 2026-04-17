@@ -15,6 +15,10 @@
 package portcache
 
 import (
+	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"k8s.io/client-go/tools/cache"
 
 	"antrea.io/antrea/v2/pkg/agent/nodeportlocal/rules"
@@ -43,4 +47,42 @@ func newPortTable(mockIPTables rules.PodPortRules, mockPortOpener LocalPortOpene
 		LocalPortOpener: mockPortOpener,
 		IsIPv6:          isIPv6,
 	}
+}
+
+func TestGetServiceForNPLPort(t *testing.T) {
+	pt := newPortTable(nil, nil, false)
+	// The NPL controller stores the protocol in lower case (see util.BuildPortProto).
+	require.NoError(t, pt.addPortTableCache(&NodePortData{
+		PodKey:           podKey,
+		NodePort:         nodePort1,
+		PodPort:          1001,
+		PodIP:            podIP,
+		Protocol:         ProtocolSocketData{Protocol: "tcp"},
+		ServiceName:      "mysvc",
+		ServiceNamespace: "myns",
+	}))
+	// An NPL mapping with no associated Service (e.g. a container hostPort rule).
+	require.NoError(t, pt.addPortTableCache(&NodePortData{
+		PodKey:   podKey,
+		NodePort: nodePort2,
+		PodPort:  1002,
+		PodIP:    podIP,
+		Protocol: ProtocolSocketData{Protocol: "tcp"},
+	}))
+
+	// The flow exporter passes an upper-case corev1.Protocol ("TCP"); the lookup must be
+	// case-insensitive because the table is keyed with the lower-case protocol.
+	assert.Equal(t, "myns/mysvc", pt.GetServiceForNPLPort(nodePort1, "TCP"))
+
+	// Lower-case protocol resolves too.
+	assert.Equal(t, "myns/mysvc", pt.GetServiceForNPLPort(nodePort1, "tcp"))
+
+	// Mapping without a Service name does not resolve.
+	assert.Empty(t, pt.GetServiceForNPLPort(nodePort2, "TCP"))
+
+	// Wrong protocol does not resolve.
+	assert.Empty(t, pt.GetServiceForNPLPort(nodePort1, "UDP"))
+
+	// Unknown node port does not resolve.
+	assert.Empty(t, pt.GetServiceForNPLPort(endPort, "TCP"))
 }
