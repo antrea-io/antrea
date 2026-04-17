@@ -20,6 +20,7 @@ package support
 import (
 	"bytes"
 	"fmt"
+	"net"
 	"path"
 	"path/filepath"
 	"strings"
@@ -29,6 +30,7 @@ import (
 
 	"antrea.io/antrea/v2/pkg/agent/util/iptables"
 	"antrea.io/antrea/v2/pkg/agent/util/nftables"
+	"antrea.io/antrea/v2/pkg/agent/util/sysctl"
 	"antrea.io/antrea/v2/pkg/util/logdir"
 )
 
@@ -53,7 +55,6 @@ var nftablesIPv6Supported = sync.OnceValue(func() bool {
 func (d *agentDumper) DumpLog(basedir string) error {
 	logDir := logdir.GetLogDir()
 	timeFilter := timestampFilter(d.since)
-
 	if err := directoryCopy(d.fs, path.Join(basedir, "logs", "agent"), logDir, "antrea-agent", timeFilter); err != nil {
 		return err
 	}
@@ -71,6 +72,9 @@ func (d *agentDumper) DumpHostNetworkInfo(basedir string) error {
 		return err
 	}
 	if err := d.dumpIPToolInfo(basedir); err != nil {
+		return err
+	}
+	if err := d.dumpInterfaceConfigs(basedir); err != nil {
 		return err
 	}
 	return nil
@@ -98,7 +102,6 @@ func (d *agentDumper) dumpIPSet(basedir string) error {
 
 func (d *agentDumper) dumpNFTables(basedir string) error {
 	var data bytes.Buffer
-
 	if d.v4Enabled && nftablesIPv4Supported() || d.v6Enabled && nftablesIPv6Supported() {
 		output, err := d.executor.Command("nft", "list", "ruleset").CombinedOutput()
 		if err != nil {
@@ -110,29 +113,66 @@ func (d *agentDumper) dumpNFTables(basedir string) error {
 		data.Write(output)
 		data.WriteByte('\n')
 	}
-
 	fileName := "nftables"
 	if err := writeFile(d.fs, filepath.Join(basedir, fileName), fileName, data.Bytes()); err != nil {
 		return fmt.Errorf("failed to write nftables file: %w", err)
 	}
-
 	return nil
 }
 
 func (d *agentDumper) dumpIPToolInfo(basedir string) error {
-	dump := func(name string) error {
-		output, err := d.executor.Command("ip", name).CombinedOutput()
+	dump := func(args ...string) error {
+		output, err := d.executor.Command("ip", args...).CombinedOutput()
 		if err != nil {
-			return fmt.Errorf("error when dumping %s: %w", name, err)
+			return fmt.Errorf("error when dumping %s: %w", strings.Join(args, " "), err)
 		}
-		return writeFile(d.fs, filepath.Join(basedir, name), name, output)
+		return writeFile(d.fs, filepath.Join(basedir, args[0]), args[0], output)
 	}
-	for _, item := range []string{"route", "link", "address"} {
-		if err := dump(item); err != nil {
+	commands := [][]string{
+		{"link"},
+		{"address"},
+		{"rule", "show"},
+		{"route", "show", "table", "all"},
+	}
+	for _, cmd := range commands {
+		if err := dump(cmd...); err != nil {
 			return err
 		}
 	}
 	return nil
+}
+
+func (d *agentDumper) dumpInterfaceConfigs(basedir string) error {
+	interfaces, err := net.Interfaces()
+	if err != nil {
+		return fmt.Errorf("error getting network interfaces: %w", err)
+	}
+	hostGateway := d.aq.GetNodeConfig().GatewayConfig.Name
+	isRelevantIface := func(ifaceName string) bool {
+		return ifaceName == hostGateway ||
+			ifaceName == "antrea-egress0" ||
+			ifaceName == "antrea-ingress0" ||
+			strings.HasPrefix(ifaceName, "antrea-ext.")
+	}
+	params := []string{"rp_filter", "arp_ignore", "arp_announce"}
+	var output bytes.Buffer
+	for _, iface := range interfaces {
+		if !isRelevantIface(iface.Name) {
+			continue
+		}
+		output.WriteString(iface.Name)
+		output.WriteString("\n")
+		for _, param := range params {
+			value, err := sysctl.GetSysctlNet(fmt.Sprintf("ipv4/conf/%s/%s", iface.Name, param))
+			if err != nil {
+				klog.ErrorS(err, "Failed to get sysctl value", "interface", iface.Name, "param", param)
+				continue
+			}
+			output.WriteString(fmt.Sprintf("%s=%d\n", param, value))
+		}
+		output.WriteString("\n")
+	}
+	return writeFile(d.fs, filepath.Join(basedir, "interface-config"), "interface-config", output.Bytes())
 }
 
 func (d *agentDumper) DumpMemberlist(basedir string) error {
