@@ -18,10 +18,12 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"strings"
 	"sync"
 
 	"antrea.io/antrea/v2/pkg/agent/nodeportlocal/rules"
 
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/klog/v2"
 )
@@ -44,6 +46,10 @@ type NodePortData struct {
 	PodPort  int
 	PodIP    string
 	Protocol ProtocolSocketData
+	// ServiceName is the name of the Kubernetes Service that owns this NPL mapping.
+	ServiceName string
+	// ServiceNamespace is the namespace of the Kubernetes Service that owns this NPL mapping.
+	ServiceNamespace string
 	// defunct is used to indicate that a rule has been partially deleted: it is no longer
 	// usable and deletion needs to be re-attempted.
 	defunct bool
@@ -219,6 +225,27 @@ func (pt *PortTable) RuleExists(podKey string, podPort int, protocol string) boo
 // nodePortProtoFormat formats the nodeport, protocol to string port:protocol.
 func NodePortProtoFormat(nodeport int, protocol string) string {
 	return fmt.Sprintf("%d:%s", nodeport, protocol)
+}
+
+// GetDataForNodePort returns the NPL mapping for a given node port and protocol,
+// or (nil, false) if no mapping exists. The protocol is normalized to lower case because
+// the port table is keyed with the lower-case protocol (see util.BuildPortProto), while
+// callers (e.g. the flow exporter) may pass an upper-case corev1.Protocol such as "TCP".
+func (pt *PortTable) GetDataForNodePort(nodePort int, protocol string) (*NodePortData, bool) {
+	pt.tableLock.RLock()
+	defer pt.tableLock.RUnlock()
+	return pt.getPortTableCacheFromNodePortIndex(NodePortProtoFormat(nodePort, strings.ToLower(protocol)))
+}
+
+// GetServiceForNPLPort returns the namespaced Service name (e.g. "default/mysvc")
+// for the given NPL node port and protocol, or "" if no mapping exists or the mapping
+// has no associated Service name. It implements NPLQuerier.
+func (pt *PortTable) GetServiceForNPLPort(nodePort int, protocol string) string {
+	data, ok := pt.GetDataForNodePort(nodePort, protocol)
+	if !ok || data.ServiceName == "" {
+		return ""
+	}
+	return types.NamespacedName{Namespace: data.ServiceNamespace, Name: data.ServiceName}.String()
 }
 
 // openLocalPort binds to the provided port.
