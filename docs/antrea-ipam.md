@@ -193,7 +193,11 @@ Since Antrea v1.5.0, Pod IPPool annotation is supported and has a higher
 priority than the Namespace IPPool annotation. This annotation can be added to
 `PodTemplate` of a controller resource such as StatefulSet and Deployment.
 
-Pod IP annotation is supported for a single Pod to specify a fixed IP for the Pod.
+The `ipam.antrea.io/pod-ips` annotation sets a fixed IP for a Pod. Antrea reads it from
+each Pod object; set it on the Pod or on a workload Pod template so controllers copy
+it to Pods they create. A fixed value in a template is only valid when one Pod is
+created from that template (for example, `replicas: 1`); see the StatefulSet examples
+below.
 
 Examples of annotations on a Pod or PodTemplate:
 
