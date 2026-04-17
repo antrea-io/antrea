@@ -17,6 +17,7 @@ package ipam
 import (
 	"context"
 	"fmt"
+	"net"
 	"regexp"
 	"sync"
 	"testing"
@@ -1178,4 +1179,237 @@ func TestGetIPPoolsByPod_SkipEmptyIPTokens(t *testing.T) {
 	require.Len(t, ips, 1)
 	require.NotNil(t, ips[0])
 	require.Equal(t, "10.2.3.199", ips[0].String())
+}
+
+func TestGetIPPoolsByPod_PodIPAnnotationPerFamilyLimit(t *testing.T) {
+	stopCh := make(chan struct{})
+	defer close(stopCh)
+
+	k8sClient, crdClient := initTestClients()
+
+	cases := []struct {
+		podName       string
+		podIPAnnot    string
+		wantErrSubstr string
+		wantIPs       []string
+	}{
+		{
+			podName:       "pear-podip-two-v4",
+			podIPAnnot:    "10.2.3.199,10.2.3.198",
+			wantErrSubstr: fmt.Sprintf("multiple IPv4 addresses in %s annotation", annotations.AntreaIPAMPodIPAnnotationKey),
+		},
+		{
+			podName:       "pear-podip-two-v6",
+			podIPAnnot:    "fd00::1,fd00::2",
+			wantErrSubstr: fmt.Sprintf("multiple IPv6 addresses in %s annotation", annotations.AntreaIPAMPodIPAnnotationKey),
+		},
+		{
+			podName:    "pear-podip-dual-stack",
+			podIPAnnot: "10.2.3.199,fd00::1",
+			wantIPs:    []string{"10.2.3.199", "fd00::1"},
+		},
+	}
+
+	for _, tc := range cases {
+		tc := tc
+		_, err := k8sClient.CoreV1().Pods(testPear).Create(context.Background(), &corev1.Pod{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      tc.podName,
+				Namespace: testPear,
+				Annotations: map[string]string{
+					annotations.AntreaIPAMAnnotationKey:      testPear,
+					annotations.AntreaIPAMPodIPAnnotationKey: tc.podIPAnnot,
+				},
+			},
+			Spec: corev1.PodSpec{NodeName: "fakeNode"},
+		}, metav1.CreateOptions{})
+		require.NoError(t, err)
+	}
+
+	informerFactory := informers.NewSharedInformerFactory(k8sClient, 0)
+	crdInformerFactory := crdinformers.NewSharedInformerFactory(crdClient, 0)
+	listOptions := func(options *metav1.ListOptions) {
+		options.FieldSelector = fields.OneTermEqualSelector("spec.nodeName", "fakeNode").String()
+	}
+	localPodInformer := coreinformers.NewFilteredPodInformer(
+		k8sClient,
+		metav1.NamespaceAll,
+		0,
+		cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc},
+		listOptions,
+	)
+
+	c, err := InitializeAntreaIPAMController(
+		crdClient,
+		informerFactory.Core().V1().Namespaces(),
+		crdInformerFactory.Crd().V1beta1().IPPools(),
+		localPodInformer,
+		true,
+	)
+	require.NoError(t, err)
+
+	informerFactory.Start(stopCh)
+	go localPodInformer.Run(stopCh)
+	crdInformerFactory.Start(stopCh)
+
+	informerFactory.WaitForCacheSync(stopCh)
+	crdInformerFactory.WaitForCacheSync(stopCh)
+	require.True(t, cache.WaitForCacheSync(stopCh, localPodInformer.HasSynced), "failed to sync localPodInformer cache")
+
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.podName, func(t *testing.T) {
+			pools, ips, reservedOwner, ipErr := c.getIPPoolsByPod(testPear, tc.podName)
+			require.Nil(t, reservedOwner)
+			require.Equal(t, []string{testPear}, pools)
+			if tc.wantErrSubstr != "" {
+				require.Error(t, ipErr)
+				require.Contains(t, ipErr.Error(), tc.wantErrSubstr)
+				require.Nil(t, ips)
+				return
+			}
+			require.NoError(t, ipErr)
+			require.Len(t, ips, len(tc.wantIPs))
+			for i, want := range tc.wantIPs {
+				require.True(t, ips[i].Equal(net.ParseIP(want)), "got %s want %s", ips[i].String(), want)
+			}
+		})
+	}
+}
+
+func TestGetPoolAllocatorsByPod_RequestedIPPoolFamilyValidation(t *testing.T) {
+	stopCh := make(chan struct{})
+	defer close(stopCh)
+
+	k8sClient, crdClient := initTestClients()
+	createIPPools(crdClient)
+
+	// Extra IPv6 pools for cases that combine one IPv4 pool with multiple IPv6 pools.
+	crdClient.InitPool(&crdv1b1.IPPool{
+		ObjectMeta: metav1.ObjectMeta{Name: "ippool-family-val-ipv6-a"},
+		Spec: crdv1b1.IPPoolSpec{
+			IPRanges: []crdv1b1.IPRange{{
+				Start: "fd00:aa::10",
+				End:   "fd00:aa::20",
+			}},
+			SubnetInfo: crdv1b1.SubnetInfo{
+				Gateway:      "fd00:aa::1",
+				PrefixLength: 64,
+			},
+		},
+	})
+	crdClient.InitPool(&crdv1b1.IPPool{
+		ObjectMeta: metav1.ObjectMeta{Name: "ippool-family-val-ipv6-b"},
+		Spec: crdv1b1.IPPoolSpec{
+			IPRanges: []crdv1b1.IPRange{{
+				Start: "fd00:bb::10",
+				End:   "fd00:bb::20",
+			}},
+			SubnetInfo: crdv1b1.SubnetInfo{
+				Gateway:      "fd00:bb::1",
+				PrefixLength: 64,
+			},
+		},
+	})
+
+	cases := []struct {
+		name             string
+		podName          string
+		ipamAnnot        string
+		podIPAnnot       string
+		wantErrSubstr    string
+		wantAllocatorLen int
+	}{
+		{
+			name:          "requested IPv4 with two IPv4 pools",
+			podName:       "pool-val-req-v4-two-v4",
+			ipamAnnot:     "multiv4-pool-a,multiv4-pool-b",
+			podIPAnnot:    "10.10.0.10",
+			wantErrSubstr: "multiple IPv4 IPPools configured with requested IPv4 address(es)",
+		},
+		{
+			name:             "requested IPv4 with one IPv4 pool and two IPv6 pools",
+			podName:          "pool-val-req-v4-multi-v6",
+			ipamAnnot:        "multiv4-pool-a,ippool-family-val-ipv6-a,ippool-family-val-ipv6-b",
+			podIPAnnot:       "10.10.0.10",
+			wantAllocatorLen: 3,
+		},
+		{
+			name:          "dual-stack requested with two IPv4 pools",
+			podName:       "pool-val-dual-two-v4",
+			ipamAnnot:     "multiv4-pool-a,multiv4-pool-b",
+			podIPAnnot:    "10.10.0.10,20::5",
+			wantErrSubstr: "multiple IPv4 IPPools configured with requested IPv4 address(es)",
+		},
+		{
+			name:          "dual-stack requested with two IPv6 pools",
+			podName:       "pool-val-dual-two-v6",
+			ipamAnnot:     "multiv4-pool-a,ippool-family-val-ipv6-a,ippool-family-val-ipv6-b",
+			podIPAnnot:    "10.10.0.10,fd00:aa::10",
+			wantErrSubstr: "multiple IPv6 IPPools configured with requested IPv6 address(es)",
+		},
+	}
+
+	for _, tc := range cases {
+		tc := tc
+		_, err := k8sClient.CoreV1().Pods(testMultiV4).Create(context.Background(), &corev1.Pod{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      tc.podName,
+				Namespace: testMultiV4,
+				Annotations: map[string]string{
+					annotations.AntreaIPAMAnnotationKey:      tc.ipamAnnot,
+					annotations.AntreaIPAMPodIPAnnotationKey: tc.podIPAnnot,
+				},
+			},
+			Spec: corev1.PodSpec{NodeName: "fakeNode"},
+		}, metav1.CreateOptions{})
+		require.NoError(t, err)
+	}
+
+	informerFactory := informers.NewSharedInformerFactory(k8sClient, 0)
+	crdInformerFactory := crdinformers.NewSharedInformerFactory(crdClient, 0)
+	listOptions := func(options *metav1.ListOptions) {
+		options.FieldSelector = fields.OneTermEqualSelector("spec.nodeName", "fakeNode").String()
+	}
+	localPodInformer := coreinformers.NewFilteredPodInformer(
+		k8sClient,
+		metav1.NamespaceAll,
+		0,
+		cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc},
+		listOptions,
+	)
+
+	c, err := InitializeAntreaIPAMController(
+		crdClient,
+		informerFactory.Core().V1().Namespaces(),
+		crdInformerFactory.Crd().V1beta1().IPPools(),
+		localPodInformer,
+		true,
+	)
+	require.NoError(t, err)
+
+	informerFactory.Start(stopCh)
+	go localPodInformer.Run(stopCh)
+	crdInformerFactory.Start(stopCh)
+
+	informerFactory.WaitForCacheSync(stopCh)
+	crdInformerFactory.WaitForCacheSync(stopCh)
+	require.True(t, cache.WaitForCacheSync(stopCh, localPodInformer.HasSynced), "failed to sync localPodInformer cache")
+
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			mt, allocators, _, _, err := c.getPoolAllocatorsByPod(testMultiV4, tc.podName)
+			if tc.wantErrSubstr != "" {
+				require.Error(t, err)
+				require.Contains(t, err.Error(), tc.wantErrSubstr)
+				require.Nil(t, allocators)
+				require.Equal(t, mineTrue, mt)
+				return
+			}
+			require.NoError(t, err)
+			require.Equal(t, mineTrue, mt)
+			require.Len(t, allocators, tc.wantAllocatorLen)
+		})
+	}
 }
