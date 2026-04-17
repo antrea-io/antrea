@@ -26,6 +26,7 @@ import (
 	"antrea.io/antrea/v2/pkg/agent/flowexporter/priorityqueue"
 	"antrea.io/antrea/v2/pkg/agent/flowexporter/utils"
 	"antrea.io/antrea/v2/pkg/agent/metrics"
+	"antrea.io/antrea/v2/pkg/agent/nodeportlocal/portcache"
 	"antrea.io/antrea/v2/pkg/agent/openflow"
 	"antrea.io/antrea/v2/pkg/agent/proxy"
 	"antrea.io/antrea/v2/pkg/querier"
@@ -42,21 +43,25 @@ type ConntrackConnectionStore struct {
 	networkPolicyReadyTime time.Time
 	protocolFilter         filter.ProtocolFilter
 	connectionStore
+	nplQuerier portcache.NPLQuerier
 }
 
 // NewConntrackConnectionStore creates a connection store. External correlation (default-zone to
 // Antrea-zone) is performed by the poller before connections are delivered here, so no correlator
-// parameter is needed.
+// parameter is needed. nplQuerier is used to resolve NodePortLocal node ports to Service names for
+// IPFIX export; it may be nil.
 func NewConntrackConnectionStore(
 	npQuerier querier.AgentNetworkPolicyInfoQuerier,
 	podStore objectstore.PodStore,
 	proxier proxy.ProxyQuerier,
 	cfg ConnectionStoreConfig,
+	nplQuerier portcache.NPLQuerier,
 ) *ConntrackConnectionStore {
 	return &ConntrackConnectionStore{
 		connectionStore:        NewConnectionStore(npQuerier, podStore, proxier, cfg),
 		protocolFilter:         filter.NewProtocolFilter(cfg.AllowedProtocols),
 		networkPolicyReadyTime: cfg.NetworkPolicyReadyTime,
+		nplQuerier:             nplQuerier,
 	}
 }
 
@@ -167,6 +172,20 @@ func (cs *ConntrackConnectionStore) AddOrUpdateConn(conn *connection.Connection)
 			} else {
 				serviceStr := fmt.Sprintf("%s:%d/%s", serviceIP, svcPort, protocol)
 				cs.fillServiceInfo(conn, serviceStr)
+			}
+		}
+		// NodePortLocal flows bypass Antrea proxy (no ServiceCTMark), so the block above does not
+		// resolve a Service for them. For these flows the FromExternalCorrelator has already
+		// correlated the Antrea-zone connection with its default-zone counterpart, restoring
+		// OriginalDestinationAddress/Port to the node IP and NPL node port the external client
+		// targeted. Use the NPL querier to resolve that node port to the owning Service name so it
+		// (and the node IP/port) are included in the exported IPFIX record.
+		if conn.IsFromExternal && conn.DestinationServicePortName == "" && conn.DestinationPodName != "" && cs.nplQuerier != nil {
+			protocol, err := lookupServiceProtocol(conn.FlowKey.Protocol)
+			if err == nil {
+				if svcPortName := cs.nplQuerier.GetServiceForNPLPort(int(conn.OriginalDestinationPort), string(protocol), conn.FlowKey.DestinationAddress.Is6()); svcPortName != "" {
+					conn.DestinationServicePortName = svcPortName
+				}
 			}
 		}
 		// This should only happen if we failed to set net.netfilter.nf_conntrack_timestamp

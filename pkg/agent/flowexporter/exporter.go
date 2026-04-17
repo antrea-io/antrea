@@ -37,6 +37,7 @@ import (
 	"antrea.io/antrea/v2/pkg/agent/flowexporter/connections"
 	"antrea.io/antrea/v2/pkg/agent/flowexporter/exporter"
 	"antrea.io/antrea/v2/pkg/agent/flowexporter/options"
+	"antrea.io/antrea/v2/pkg/agent/nodeportlocal/portcache"
 	"antrea.io/antrea/v2/pkg/agent/proxy"
 	api "antrea.io/antrea/v2/pkg/apis/crd/v1alpha1"
 	crdinformers "antrea.io/antrea/v2/pkg/client/informers/externalversions/crd/v1alpha1"
@@ -98,6 +99,7 @@ type FlowExporter struct {
 	proxier             proxy.ProxyQuerier
 	egressQuerier       querier.EgressQuerier
 	npQuerier           querier.AgentNetworkPolicyInfoQuerier
+	nplQuerier          portcache.NPLQuerier
 
 	// networkPolicyWait is used to determine when NetworkPolicy flows have been installed and
 	// when the mapping from flow ID to NetworkPolicy rule is available. We will ignore
@@ -152,10 +154,11 @@ func NewFlowExporter(
 	destinationInformer crdinformers.FlowExporterDestinationInformer,
 	egressQuerier querier.EgressQuerier,
 	networkPolicyWait *utilwait.Group,
+	nplQuerier portcache.NPLQuerier,
 ) (*FlowExporter, error) {
 	ctConnsUpdateChannel := channel.NewSubscribableChannel("Conntrack Connections", ctConnsUpdateChannelBufferSize)
 	denyConnUpdateChannel := channel.NewSubscribableChannel("Deny Connections", denyConnUpdateChannelBufferSize)
-	fromExternalCorrelator := connections.NewFromExternalCorrelator(proxier)
+	fromExternalCorrelator := connections.NewFromExternalCorrelator(proxier, nplQuerier)
 	connTrackDumper := connections.InitializeConnTrackDumper(nodeConfig, serviceCIDRNet, serviceCIDRNetv6, ovsDatapathType, proxyEnabled)
 	poller := connections.NewPoller(connTrackDumper, ctConnsUpdateChannel, fromExternalCorrelator, o.PollInterval, v4Enabled, v6Enabled, o.ConnectUplinkToBridge)
 
@@ -199,6 +202,7 @@ func NewFlowExporter(
 		proxier:             proxier,
 		egressQuerier:       egressQuerier,
 		npQuerier:           npQuerier,
+		nplQuerier:          nplQuerier,
 		networkPolicyWait:   networkPolicyWait,
 
 		poller:                 poller,
@@ -513,6 +517,7 @@ func (fe *FlowExporter) createDestinationFromResource(res *api.FlowExporterDesti
 		fe.egressQuerier,
 		fe.networkPolicyReadyTime,
 		config,
+		fe.nplQuerier,
 	), nil
 }
 

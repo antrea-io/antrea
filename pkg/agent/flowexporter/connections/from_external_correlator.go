@@ -23,6 +23,7 @@ import (
 	"k8s.io/klog/v2"
 
 	"antrea.io/antrea/v2/pkg/agent/flowexporter/connection"
+	"antrea.io/antrea/v2/pkg/agent/nodeportlocal/portcache"
 	"antrea.io/antrea/v2/pkg/agent/proxy"
 )
 
@@ -47,6 +48,7 @@ type ExternalCorrelator interface {
 // Antrea-zone connections so external client IP information can be preserved on exported flows.
 type FromExternalCorrelator struct {
 	proxier         proxy.ProxyQuerier
+	nplQuerier      portcache.NPLQuerier
 	connections     map[correlatorKey]connectionItem
 	lock            sync.Mutex
 	ttl             time.Duration
@@ -120,12 +122,13 @@ type connectionItem struct {
 // NewFromExternalCorrelator returns a FromExternalCorrelator with its internal map initialized.
 // proxier is used for GetServiceByIP during IngestDefaultZoneFlow; if nil, every default-zone flow is
 // retained without Service lookup.
+// nplQuerier is used to retain default-zone flows whose original destination is a NodePortLocal
+// node port (these are not registered in the proxier's Service map); it may be nil.
 // Note: The caller should run the cleanup loop with go correlator.Run(stopCh) and close stopCh to stop.
-// NodePortLocal flows are not handled by the correlator since the per-Pod node port is not
-// registered in the proxier's service map.
-func NewFromExternalCorrelator(proxier proxy.ProxyQuerier) *FromExternalCorrelator {
+func NewFromExternalCorrelator(proxier proxy.ProxyQuerier, nplQuerier portcache.NPLQuerier) *FromExternalCorrelator {
 	return &FromExternalCorrelator{
 		proxier:         proxier,
+		nplQuerier:      nplQuerier,
 		connections:     map[correlatorKey]connectionItem{},
 		ttl:             defaultTTL,
 		cleanUpInterval: defaultCleanUpInterval,
@@ -200,6 +203,13 @@ func (c *FromExternalCorrelator) IngestDefaultZoneFlow(conn *connection.Connecti
 	if c.proxier != nil {
 		serviceStr := fmt.Sprintf("%s:%d/%s", svcIP, svcPort, protocol)
 		_, shouldStore = c.proxier.GetServiceByIP(serviceStr)
+		// NodePortLocal node ports are allocated per-Pod by the NPL agent and are not registered
+		// in the proxier's Service map, so they are not matched above. Retain the default-zone
+		// flow when its original destination is an NPL node port, so the Antrea-zone half can be
+		// correlated and its OriginalDestination restored to the node IP/port the client targeted.
+		if !shouldStore && c.nplQuerier != nil {
+			shouldStore = c.nplQuerier.GetServiceForNPLPort(int(svcPort), string(protocol), conn.OriginalDestinationAddress.Is6()) != ""
+		}
 	}
 	if shouldStore {
 		c.add(conn)

@@ -1336,3 +1336,49 @@ func TestDualStack(t *testing.T) {
 		assert.True(t, testData.portTableIPv6.RuleExists(defaultPodKey, defaultPort, protocolTCP))
 	})
 }
+
+// TestGetServiceForNPLPort verifies that NPLController.GetServiceForNPLPort returns the correct
+// namespaced Service name for an allocated NPL node port and delegates to the right IP-family
+// port table (IPv4 vs IPv6).
+func TestGetServiceForNPLPort(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		testData, _, _ := setUpWithTestServiceAndPod(t, newTestConfig(), nil)
+
+		nplData := testData.portTable.GetEntry(defaultPodKey, defaultPort, protocolTCP)
+		require.NotNil(t, nplData)
+		nodePort := nplData.NodePort
+
+		want := defaultNS + "/" + defaultSvcName
+		// Upper-case protocol must be accepted (corev1.ProtocolTCP).
+		assert.Equal(t, want, testData.nplController.GetServiceForNPLPort(nodePort, "TCP", false))
+		// Lower-case protocol must also resolve (the port table normalizes case internally).
+		assert.Equal(t, want, testData.nplController.GetServiceForNPLPort(nodePort, "tcp", false))
+		// Wrong IP family (IPv6 table is nil in this test config) returns "".
+		assert.Empty(t, testData.nplController.GetServiceForNPLPort(nodePort, "TCP", true))
+		// Unknown node port returns "".
+		assert.Empty(t, testData.nplController.GetServiceForNPLPort(defaultEndPort+1, "TCP", false))
+	})
+}
+
+// TestServiceNameStoredWithNamedPort verifies that when a Service targets a named container port,
+// the NPL controller correctly propagates the Service identity from the string-keyed portToService
+// entry to the numeric-port entry, so the port table stores the owning Service name.
+func TestServiceNameStoredWithNamedPort(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		portName := "http"
+		testSvc := getTestSvcWithPortName(portName)
+		testPod := getTestPod()
+		testPod.Spec.Containers[0].Ports = append(
+			testPod.Spec.Containers[0].Ports,
+			corev1.ContainerPort{ContainerPort: int32(defaultPort), Name: portName, Protocol: corev1.ProtocolTCP},
+		)
+		testData := setUp(t, newTestConfig(), testSvc, testPod)
+
+		synctest.Wait()
+
+		nplData := testData.portTable.GetEntry(defaultPodKey, defaultPort, protocolTCP)
+		require.NotNil(t, nplData, "Expected NPL rule to be created for named port")
+		assert.Equal(t, defaultSvcName, nplData.ServiceName)
+		assert.Equal(t, defaultNS, nplData.ServiceNamespace)
+	})
+}
