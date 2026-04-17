@@ -55,7 +55,7 @@ require (
 	github.com/stretchr/testify v1.11.1
 	github.com/ti-mo/conntrack v0.6.0
 	github.com/vishvananda/netlink v1.3.1
-	github.com/vmware/go-ipfix v0.16.0
+	github.com/vmware/go-ipfix v0.2.1-0.20260107215310-d9256ccb0ed9
 	go.uber.org/mock v0.6.0
 	go.yaml.in/yaml/v2 v2.4.4
 	go.yaml.in/yaml/v3 v3.0.4

@@ -60,15 +60,10 @@ func filterAntreaConns(conns []*connection.Connection, nodeConfig *config.NodeCo
 		if conn.Zone != zoneFilter {
 			continue
 		}
-
-		srcIP := conn.FlowKey.SourceAddress
 		dstIP := conn.FlowKey.DestinationAddress
 
-		// Consider Pod-to-Pod, Pod-To-Service and Pod-To-External flows.
-		if srcIP == gwIPv4 || dstIP == gwIPv4 {
-			continue
-		}
-		if srcIP == gwIPv6 || dstIP == gwIPv6 {
+		// Skip flows whose destination is this Node's Antrea gateway.
+		if dstIP == gwIPv4 || dstIP == gwIPv6 {
 			continue
 		}
 
@@ -87,12 +82,14 @@ func filterAntreaConns(conns []*connection.Connection, nodeConfig *config.NodeCo
 			}
 		}
 
-		policyAllowed := conn.Mark&connAllowedCTMarkMask != 0
-		if !policyAllowed {
-			if klog.V(5).Enabled() {
-				klog.InfoS("Ignoring connection as it may have been denied by a policy rule", "conn", conn)
+		if conn.Zone != 0 {
+			policyAllowed := conn.Mark&connAllowedCTMarkMask != 0
+			if !policyAllowed {
+				if klog.V(5).Enabled() {
+					klog.V(5).InfoS("Ignoring connection as it may have been denied by a policy rule", "conn", conn)
+				}
+				continue
 			}
-			continue
 		}
 
 		filteredConns = append(filteredConns, conn)

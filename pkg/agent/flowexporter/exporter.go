@@ -37,6 +37,7 @@ import (
 	"antrea.io/antrea/v2/pkg/agent/flowexporter/connections"
 	"antrea.io/antrea/v2/pkg/agent/flowexporter/exporter"
 	"antrea.io/antrea/v2/pkg/agent/flowexporter/options"
+	"antrea.io/antrea/v2/pkg/agent/nodeportlocal/portcache"
 	"antrea.io/antrea/v2/pkg/agent/proxy"
 	api "antrea.io/antrea/v2/pkg/apis/crd/v1alpha1"
 	crdinformers "antrea.io/antrea/v2/pkg/client/informers/externalversions/crd/v1alpha1"
@@ -98,6 +99,7 @@ type FlowExporter struct {
 	proxier             proxy.ProxyQuerier
 	egressQuerier       querier.EgressQuerier
 	npQuerier           querier.AgentNetworkPolicyInfoQuerier
+	nplQuerier          portcache.NPLQuerier
 
 	// networkPolicyWait is used to determine when NetworkPolicy flows have been installed and
 	// when the mapping from flow ID to NetworkPolicy rule is available. We will ignore
@@ -110,6 +112,11 @@ type FlowExporter struct {
 	poller                *connections.Poller
 	ctConnUpdateChannel   *channel.SubscribableChannel
 	denyConnUpdateChannel *channel.SubscribableChannel
+
+	// fromExternalCorrelator is created by FlowExporter, shared by every Destination's connection
+	// store (same conntrack poll fan-out). FlowExporter.Run starts its cleanup loop; defer StopCleanUp
+	// stops it on shutdown.
+	fromExternalCorrelator *connections.FromExternalCorrelator
 
 	// staticDestinationRes is set in NewFlowExporter when static export is enabled. Run() clears
 	// it if createDestinationFromResource fails; if still non-nil at shutdown, static destination
@@ -146,6 +153,7 @@ func NewFlowExporter(
 	destinationInformer crdinformers.FlowExporterDestinationInformer,
 	egressQuerier querier.EgressQuerier,
 	networkPolicyWait *utilwait.Group,
+	nplQuerier portcache.NPLQuerier,
 ) (*FlowExporter, error) {
 	ctConnsUpdateChannel := channel.NewSubscribableChannel("Conntrack Connections", ctConnsUpdateChannelBufferSize)
 	denyConnUpdateChannel := channel.NewSubscribableChannel("Deny Connections", denyConnUpdateChannelBufferSize)
@@ -192,11 +200,13 @@ func NewFlowExporter(
 		proxier:             proxier,
 		egressQuerier:       egressQuerier,
 		npQuerier:           npQuerier,
+		nplQuerier:          nplQuerier,
 		networkPolicyWait:   networkPolicyWait,
 
-		poller:                poller,
-		ctConnUpdateChannel:   ctConnsUpdateChannel,
-		denyConnUpdateChannel: denyConnUpdateChannel,
+		poller:                 poller,
+		ctConnUpdateChannel:    ctConnsUpdateChannel,
+		denyConnUpdateChannel:  denyConnUpdateChannel,
+		fromExternalCorrelator: connections.NewFromExternalCorrelator(),
 
 		staticDestinationRes: staticDestination,
 		destinations:         make(map[string]destinationObj),
@@ -305,6 +315,11 @@ func (exp *FlowExporter) stopPollerIfNeededLocked() {
 
 func (exp *FlowExporter) Run(stopCh <-chan struct{}) {
 	klog.InfoS("Flow Exporter started")
+	defer func() {
+		if exp.fromExternalCorrelator != nil {
+			exp.fromExternalCorrelator.StopCleanUp()
+		}
+	}()
 	defer exp.queue.ShutDown()
 	cacheSyncs := []cache.InformerSynced{exp.destinationSynced}
 	if exp.nodeRouteController != nil {
@@ -332,6 +347,9 @@ func (exp *FlowExporter) Run(stopCh <-chan struct{}) {
 	// producers (e.g. denied-connection updates) when there are no export destinations yet.
 	go exp.ctConnUpdateChannel.Run(stopCh)
 	go exp.denyConnUpdateChannel.Run(stopCh)
+	if exp.fromExternalCorrelator != nil {
+		go exp.fromExternalCorrelator.Run()
+	}
 
 	for range defaultWorkers {
 		go wait.Until(exp.worker, time.Second, stopCh)
@@ -502,6 +520,8 @@ func (fe *FlowExporter) createDestinationFromResource(res *api.FlowExporterDesti
 		fe.egressQuerier,
 		fe.networkPolicyReadyTime,
 		config,
+		fe.fromExternalCorrelator,
+		fe.nplQuerier,
 	), nil
 }
 

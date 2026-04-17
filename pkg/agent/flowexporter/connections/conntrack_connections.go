@@ -26,6 +26,7 @@ import (
 	"antrea.io/antrea/v2/pkg/agent/flowexporter/priorityqueue"
 	"antrea.io/antrea/v2/pkg/agent/flowexporter/utils"
 	"antrea.io/antrea/v2/pkg/agent/metrics"
+	"antrea.io/antrea/v2/pkg/agent/nodeportlocal/portcache"
 	"antrea.io/antrea/v2/pkg/agent/openflow"
 	"antrea.io/antrea/v2/pkg/agent/proxy"
 	"antrea.io/antrea/v2/pkg/querier"
@@ -42,22 +43,58 @@ type ConntrackConnectionStore struct {
 	networkPolicyReadyTime time.Time
 	protocolFilter         filter.ProtocolFilter
 	connectionStore
+	fromExternal ExternalCorrelator
+	nplQuerier   portcache.NPLQuerier
 }
 
+// ConntrackPollBatch is the result of one conntrack poll cycle, split by kernel zone at the poller.
+// ZoneZero holds default-zone (zone 0) flows for FromExternalCorrelator ingestion only. AntreaZone
+// holds all non-zone-0 flows from the polled Antrea conntrack zones (IPv4/IPv6 per configuration)
+// and is merged into the connection store.
+type ConntrackPollBatch struct {
+	ZoneZero   []*connection.Connection
+	AntreaZone []*connection.Connection
+}
+
+// NewConntrackConnectionStore creates a connection store. fromExternal correlates zone-0 flows
+// with Antrea-zone flows for external-to-Pod export; if nil, NewFakeExternalCorrelator() is used.
+// nplQuerier is used to resolve NPL node ports to Service names.
 func NewConntrackConnectionStore(
 	npQuerier querier.AgentNetworkPolicyInfoQuerier,
 	podStore objectstore.PodStore,
 	proxier proxy.ProxyQuerier,
 	cfg ConnectionStoreConfig,
+	fromExternal ExternalCorrelator,
+	nplQuerier portcache.NPLQuerier,
 ) *ConntrackConnectionStore {
+	if fromExternal == nil {
+		fromExternal = NewFakeExternalCorrelator()
+	}
 	return &ConntrackConnectionStore{
 		connectionStore:        NewConnectionStore(npQuerier, podStore, proxier, cfg),
 		protocolFilter:         filter.NewProtocolFilter(cfg.AllowedProtocols),
 		networkPolicyReadyTime: cfg.NetworkPolicyReadyTime,
+		fromExternal:           fromExternal,
+		nplQuerier:             nplQuerier,
 	}
 }
 
-func (cs *ConntrackConnectionStore) AddOrUpdateConns(conns []*connection.Connection) error {
+func (cs *ConntrackConnectionStore) ingestZoneZero(conn *connection.Connection) {
+	cs.fromExternal.IngestZoneZero(conn, cs.antreaProxier)
+}
+
+func (cs *ConntrackConnectionStore) correlateIfExternal(conn *connection.Connection) bool {
+	return cs.fromExternal.CorrelateIfExternal(conn)
+}
+
+func (cs *ConntrackConnectionStore) removeFromExternalCorrelator(conn *connection.Connection) {
+	cs.fromExternal.RemoveStaleZoneZero(conn)
+}
+
+func (cs *ConntrackConnectionStore) AddOrUpdateConns(batch *ConntrackPollBatch) error {
+	if batch == nil {
+		batch = &ConntrackPollBatch{}
+	}
 	klog.V(2).InfoS("Updating connection store")
 	// Reset IsPresent flag for all connections in connection map before updating
 	// the dumped flows information in connection map. If the connection does not
@@ -77,6 +114,7 @@ func (cs *ConntrackConnectionStore) AddOrUpdateConns(conns []*connection.Connect
 				if err := cs.deleteConnWithoutLock(key); err != nil {
 					return err
 				}
+				cs.removeFromExternalCorrelator(conn)
 			}
 		} else {
 			conn.IsPresent = false
@@ -93,8 +131,15 @@ func (cs *ConntrackConnectionStore) AddOrUpdateConns(conns []*connection.Connect
 		return err
 	}
 
-	// Update only the Connection store. IPFIX records are generated based on Connection store.
-	for _, conn := range conns {
+	// Ingest default conntrack zone (zone 0) first so correlator state exists before Antrea-zone
+	// connections from the same poll batch are merged into the main store.
+	for _, conn := range batch.ZoneZero {
+		if !cs.protocolFilter.Allow(conn.FlowKey.Protocol) {
+			continue
+		}
+		cs.ingestZoneZero(conn)
+	}
+	for _, conn := range batch.AntreaZone {
 		cs.AddOrUpdateConn(conn)
 	}
 
@@ -104,15 +149,16 @@ func (cs *ConntrackConnectionStore) AddOrUpdateConns(conns []*connection.Connect
 }
 
 // AddOrUpdateConn updates the connection if it is already present, i.e., update timestamp, counters etc.,
-// or adds a new connection with the resolved K8s metadata.
+// or adds a new connection with the resolved K8s metadata. Zone 0 flows are not added here.
 func (cs *ConntrackConnectionStore) AddOrUpdateConn(conn *connection.Connection) {
 	if !cs.protocolFilter.Allow(conn.FlowKey.Protocol) {
 		return
 	}
 
 	conn.IsPresent = true
-	connKey := connection.NewConnectionKey(conn)
+	fromExternal := cs.correlateIfExternal(conn)
 
+	connKey := connection.NewConnectionKey(conn)
 	existingConn, exists := cs.connections[connKey]
 	if exists {
 		existingConn.IsPresent = conn.IsPresent
@@ -145,21 +191,33 @@ func (cs *ConntrackConnectionStore) AddOrUpdateConn(conn *connection.Connection)
 		connCopy := *conn
 		conn := &connCopy
 		cs.fillPodInfo(conn)
-		if conn.SourcePodName == "" && conn.DestinationPodName == "" {
+		if !fromExternal && conn.SourcePodName == "" && conn.DestinationPodName == "" {
 			// We don't add connections to connection map or expirePriorityQueue if we can't find the pod
-			// information for both srcPod and dstPod
+			// information for both srcPod and dstPod except for from external flows.
+
 			klog.V(5).InfoS("Skip this connection as we cannot map any of the connection IPs to a local Pod", "srcIP", conn.FlowKey.SourceAddress.String(), "dstIP", conn.FlowKey.DestinationAddress.String())
 			return
 		}
-		if conn.Mark&openflow.ServiceCTMark.GetRange().ToNXRange().ToUint32Mask() == openflow.ServiceCTMark.GetValue() {
-			clusterIP := conn.OriginalDestinationAddress.String()
+		if conn.Mark&openflow.ServiceCTMark.GetRange().ToNXRange().ToUint32Mask() == openflow.ServiceCTMark.GetValue() || fromExternal {
+			serviceIP := conn.OriginalDestinationAddress.String()
 			svcPort := conn.OriginalDestinationPort
 			protocol, err := lookupServiceProtocol(conn.FlowKey.Protocol)
 			if err != nil {
 				klog.InfoS("Could not retrieve Service protocol", "error", err)
 			} else {
-				serviceStr := fmt.Sprintf("%s:%d/%s", clusterIP, svcPort, protocol)
+				serviceStr := fmt.Sprintf("%s:%d/%s", serviceIP, svcPort, protocol)
 				cs.fillServiceInfo(conn, serviceStr)
+			}
+		}
+		// NPL flows bypass Antrea proxy (no ServiceCTMark), but the destination pod is local
+		// and the original destination port is the NPL node port. Use the NPL querier to
+		// resolve it to a Service name for IPFIX export.
+		if conn.DestinationServicePortName == "" && conn.DestinationPodName != "" && cs.nplQuerier != nil {
+			protocol, err := lookupServiceProtocol(conn.FlowKey.Protocol)
+			if err == nil {
+				if svcPortName, ok := cs.nplQuerier.GetServiceForNPLPort(int(conn.OriginalDestinationPort), string(protocol)); ok {
+					conn.DestinationServicePortName = svcPortName
+				}
 			}
 		}
 		// This should only happen if we failed to set net.netfilter.nf_conntrack_timestamp
@@ -185,7 +243,7 @@ func (cs *ConntrackConnectionStore) AddOrUpdateConn(conn *connection.Connection)
 func (cs *ConntrackConnectionStore) GetExpiredConns(expiredConns []connection.Connection, currTime time.Time, maxSize int) ([]connection.Connection, time.Duration) {
 	cs.AcquireConnStoreLock()
 	defer cs.ReleaseConnStoreLock()
-	for i := 0; i < maxSize; i++ {
+	for range maxSize {
 		pqItem := cs.connectionStore.expirePriorityQueue.GetTopExpiredItem(currTime)
 		if pqItem == nil {
 			break

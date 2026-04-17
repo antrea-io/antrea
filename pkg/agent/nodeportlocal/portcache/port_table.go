@@ -39,11 +39,15 @@ type ProtocolSocketData struct {
 
 type NodePortData struct {
 	// PodKey is the namespaced name of the Pod.
-	PodKey   string
-	NodePort int
-	PodPort  int
-	PodIP    string
-	Protocol ProtocolSocketData
+	PodKey           string
+	NodePort         int
+	PodPort          int
+	PodIP            string
+	Protocol         ProtocolSocketData
+	// ServiceName is the name of the Kubernetes Service that owns this NPL mapping.
+	ServiceName      string
+	// ServiceNamespace is the namespace of the Kubernetes Service that owns this NPL mapping.
+	ServiceNamespace string
 	// defunct is used to indicate that a rule has been partially deleted: it is no longer
 	// usable and deletion needs to be re-attempted.
 	defunct bool
@@ -219,6 +223,25 @@ func (pt *PortTable) RuleExists(podKey string, podPort int, protocol string) boo
 // nodePortProtoFormat formats the nodeport, protocol to string port:protocol.
 func NodePortProtoFormat(nodeport int, protocol string) string {
 	return fmt.Sprintf("%d:%s", nodeport, protocol)
+}
+
+// GetDataForNodePort returns the NPL mapping for a given node port and protocol,
+// or (nil, false) if no mapping exists.
+func (pt *PortTable) GetDataForNodePort(nodePort int, protocol string) (*NodePortData, bool) {
+	pt.tableLock.RLock()
+	defer pt.tableLock.RUnlock()
+	return pt.getPortTableCacheFromNodePortIndex(NodePortProtoFormat(nodePort, protocol))
+}
+
+// GetServiceForNPLPort returns the namespaced Service name (e.g. "default/mysvc")
+// for the given NPL node port and protocol, or ("", false) if no mapping exists or
+// the mapping has no associated Service name. It implements NPLQuerier.
+func (pt *PortTable) GetServiceForNPLPort(nodePort int, protocol string) (string, bool) {
+	data, ok := pt.GetDataForNodePort(nodePort, protocol)
+	if !ok || data.ServiceName == "" {
+		return "", false
+	}
+	return data.ServiceNamespace + "/" + data.ServiceName, true
 }
 
 // openLocalPort binds to the provided port.

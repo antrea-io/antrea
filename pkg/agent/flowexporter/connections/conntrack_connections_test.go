@@ -111,6 +111,7 @@ func TestConntrackConnectionStore_AddOrUpdateConn(t *testing.T) {
 				FlowKey:   tuple,
 				Labels:    []byte{0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x1},
 				Mark:      openflow.ServiceCTMark.GetValue(),
+				Zone:      65520,
 			},
 			expectedConn: connection.Connection{
 				StartTime:                      refTime,
@@ -130,6 +131,7 @@ func TestConntrackConnectionStore_AddOrUpdateConn(t *testing.T) {
 				IngressNetworkPolicyType:       utils.PolicyTypeToUint8(np1.Type),
 				IngressNetworkPolicyRuleName:   rule1.Name,
 				IngressNetworkPolicyRuleAction: utils.RuleActionToUint8(string(*rule1.Action)),
+				Zone:                           65520,
 			},
 		},
 		{
@@ -145,6 +147,7 @@ func TestConntrackConnectionStore_AddOrUpdateConn(t *testing.T) {
 				ReverseBytes:    0xbaa,
 				FlowKey:         tuple,
 				IsPresent:       true,
+				Zone:            65520,
 			},
 			newConn: connection.Connection{
 				StartTime:       refTime.Add(-(time.Second * 50)),
@@ -155,6 +158,7 @@ func TestConntrackConnectionStore_AddOrUpdateConn(t *testing.T) {
 				ReverseBytes:    0xbaaa,
 				FlowKey:         tuple,
 				IsPresent:       true,
+				Zone:            65520,
 			},
 			expectedConn: connection.Connection{
 				StartTime:       refTime.Add(-(time.Second * 50)),
@@ -167,6 +171,7 @@ func TestConntrackConnectionStore_AddOrUpdateConn(t *testing.T) {
 				FlowKey:         tuple,
 				IsPresent:       true,
 				IsActive:        true,
+				Zone:            65520,
 			},
 		},
 		{
@@ -185,6 +190,7 @@ func TestConntrackConnectionStore_AddOrUpdateConn(t *testing.T) {
 				FlowKey:         tuple,
 				TCPState:        "TIME_WAIT",
 				IsPresent:       true,
+				Zone:            65520,
 			},
 			newConn: connection.Connection{
 				StartTime:       refTime.Add(-(time.Second * 50)),
@@ -196,6 +202,7 @@ func TestConntrackConnectionStore_AddOrUpdateConn(t *testing.T) {
 				FlowKey:         tuple,
 				TCPState:        "TIME_WAIT",
 				IsPresent:       true,
+				Zone:            65520,
 			},
 			expectedConn: connection.Connection{
 				StartTime:       refTime.Add(-(time.Second * 50)),
@@ -208,6 +215,7 @@ func TestConntrackConnectionStore_AddOrUpdateConn(t *testing.T) {
 				FlowKey:         tuple,
 				TCPState:        "TIME_WAIT",
 				IsPresent:       true,
+				Zone:            65520,
 			},
 		},
 		{
@@ -220,6 +228,7 @@ func TestConntrackConnectionStore_AddOrUpdateConn(t *testing.T) {
 				FlowKey:   tuple,
 				Labels:    []byte{0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x1},
 				Mark:      openflow.ServiceCTMark.GetValue(),
+				Zone:      65520,
 			},
 			expectedConn: connection.Connection{
 				StartTime:                  networkPolicyReadyTime.Add(-time.Minute),
@@ -233,6 +242,7 @@ func TestConntrackConnectionStore_AddOrUpdateConn(t *testing.T) {
 				DestinationPodName:         "pod1",
 				DestinationPodNamespace:    "ns1",
 				DestinationServicePortName: servicePortName.String(),
+				Zone:                       65520,
 				// NetworkPolicy fields should be empty for old connections
 			},
 		},
@@ -245,7 +255,7 @@ func TestConntrackConnectionStore_AddOrUpdateConn(t *testing.T) {
 			mockProxier := proxytest.NewMockProxyQuerier(ctrl)
 			npQuerier := queriertest.NewMockAgentNetworkPolicyInfoQuerier(ctrl)
 
-			conntrackConnStore := NewConntrackConnectionStore(npQuerier, mockPodStore, mockProxier, testFlowExporterOptions)
+			conntrackConnStore := NewConntrackConnectionStore(npQuerier, mockPodStore, mockProxier, testFlowExporterOptions, nil, nil)
 			// Set the networkPolicyReadyTime to simulate that NetworkPolicies are ready
 			conntrackConnStore.networkPolicyReadyTime = networkPolicyReadyTime
 
@@ -263,6 +273,189 @@ func TestConntrackConnectionStore_AddOrUpdateConn(t *testing.T) {
 			conntrackConnStore.connectionStore.expirePriorityQueue.Pop() // empty the PQ
 		})
 	}
+}
+
+func TestConntrackConnectionStore_AddOrUpdateConn_FromExternalConns(t *testing.T) {
+	fe := NewFromExternalCorrelator()
+	t.Cleanup(fe.StopCleanUp)
+	go fe.Run()
+	refTime := time.Now()
+	networkPolicyReadyTime := refTime.Add(-time.Hour)
+
+	zoneZeroConn := &connection.Connection{
+		OriginalDestinationAddress: netip.MustParseAddr("172.18.0.3"),
+		OriginalDestinationPort:    12345,
+		StartTime:                  refTime.Add(-(time.Second * 50)),
+		StopTime:                   refTime.Add(-(time.Second * 30)),
+		LastExportTime:             refTime.Add(-(time.Second * 50)),
+		FlowKey: connection.Tuple{
+			SourceAddress:      netip.MustParseAddr("172.18.0.1"),
+			DestinationAddress: netip.MustParseAddr("10.244.2.2"),
+			Protocol:           6,
+			SourcePort:         52142,
+			DestinationPort:    80},
+		Mark:          openflow.ServiceCTMark.GetValue(),
+		ProxySnatIP:   netip.MustParseAddr("172.18.0.2"),
+		ProxySnatPort: uint16(28392),
+	}
+	updatedZoneZeroConn := &connection.Connection{
+		OriginalDestinationAddress: netip.MustParseAddr("172.18.0.3"),
+		OriginalDestinationPort:    12345,
+		StartTime:                  refTime.Add(-(time.Second * 50)),
+		StopTime:                   refTime,
+		FlowKey: connection.Tuple{
+			SourceAddress:      netip.MustParseAddr("172.18.0.1"),
+			DestinationAddress: netip.MustParseAddr("10.244.2.2"),
+			Protocol:           6,
+			SourcePort:         52142,
+			DestinationPort:    80},
+		Mark:          openflow.ServiceCTMark.GetValue(),
+		ProxySnatIP:   netip.MustParseAddr("172.18.0.2"),
+		ProxySnatPort: uint16(28392),
+	}
+	antreaZoneConn := connection.Connection{
+		OriginalDestinationAddress: netip.MustParseAddr("10.244.2.2"),
+		OriginalDestinationPort:    80,
+		StartTime:                  refTime.Add(-(time.Second * 50)),
+		StopTime:                   refTime.Add(-(time.Second * 30)),
+		LastExportTime:             refTime.Add(-(time.Second * 50)),
+		FlowKey: connection.Tuple{
+			SourceAddress:      netip.MustParseAddr("10.244.2.1"),
+			DestinationAddress: netip.MustParseAddr("10.244.2.2"),
+			Protocol:           6,
+			SourcePort:         28392,
+			DestinationPort:    80},
+		Mark:                    openflow.ServiceCTMark.GetValue(),
+		Labels:                  []byte{0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x1},
+		ProxySnatIP:             netip.MustParseAddr("10.244.2.1"),
+		ProxySnatPort:           uint16(28392),
+		Zone:                    65520,
+		OriginalPackets:         0xfff,
+		DestinationPodName:      "pod1",
+		DestinationPodNamespace: "ns1",
+	}
+	updatedAntreaZoneConn := connection.Connection{
+		OriginalDestinationAddress: netip.MustParseAddr("10.244.2.2"),
+		OriginalDestinationPort:    80,
+		StartTime:                  refTime.Add(-(time.Second * 50)),
+		StopTime:                   refTime,
+		FlowKey: connection.Tuple{
+			SourceAddress:      netip.MustParseAddr("10.244.2.1"),
+			DestinationAddress: netip.MustParseAddr("10.244.2.2"),
+			Protocol:           6,
+			SourcePort:         28392,
+			DestinationPort:    80},
+		Mark:                    openflow.ServiceCTMark.GetValue(),
+		Labels:                  []byte{0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x1},
+		ProxySnatIP:             netip.MustParseAddr("10.244.2.1"),
+		ProxySnatPort:           uint16(28392),
+		Zone:                    65520,
+		OriginalPackets:         0xffff,
+		DestinationPodName:      "pod1",
+		DestinationPodNamespace: "ns1",
+	}
+	expectedConn := connection.Connection{
+		OriginalDestinationAddress: netip.MustParseAddr("172.18.0.3"),
+		OriginalDestinationPort:    12345,
+		StartTime:                  refTime.Add(-(time.Second * 50)),
+		StopTime:                   refTime.Add(-(time.Second * 30)),
+		LastExportTime:             refTime.Add(-(time.Second * 50)),
+		FlowKey: connection.Tuple{
+			SourceAddress:      netip.MustParseAddr("172.18.0.1"),
+			DestinationAddress: netip.MustParseAddr("10.244.2.2"),
+			Protocol:           6,
+			SourcePort:         52142,
+			DestinationPort:    80},
+		Mark:                           openflow.ServiceCTMark.GetValue(),
+		Labels:                         []byte{0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x1},
+		IsPresent:                      true,
+		IsActive:                       true,
+		DestinationPodName:             "pod1",
+		DestinationPodNamespace:        "ns1",
+		DestinationServicePortName:     servicePortName.String(),
+		IngressNetworkPolicyName:       np1.Name,
+		IngressNetworkPolicyNamespace:  np1.Namespace,
+		IngressNetworkPolicyUID:        string(np1.UID),
+		IngressNetworkPolicyType:       utils.PolicyTypeToUint8(np1.Type),
+		IngressNetworkPolicyRuleName:   rule1.Name,
+		IngressNetworkPolicyRuleAction: utils.RuleActionToUint8(string(*rule1.Action)),
+		Zone:                           65520,
+		OriginalPackets:                0xfff,
+		ProxySnatIP:                    netip.MustParseAddr("172.18.0.2"),
+		ProxySnatPort:                  uint16(28392),
+	}
+	updatedExpectedConn := connection.Connection{
+		OriginalDestinationAddress: netip.MustParseAddr("172.18.0.3"),
+		OriginalDestinationPort:    12345,
+		StartTime:                  refTime.Add(-(time.Second * 50)),
+		StopTime:                   refTime,
+		LastExportTime:             refTime.Add(-(time.Second * 50)),
+		FlowKey: connection.Tuple{
+			SourceAddress:      netip.MustParseAddr("172.18.0.1"),
+			DestinationAddress: netip.MustParseAddr("10.244.2.2"),
+			Protocol:           6,
+			SourcePort:         52142,
+			DestinationPort:    80},
+		Mark:                           openflow.ServiceCTMark.GetValue(),
+		Labels:                         []byte{0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x1},
+		IsPresent:                      true,
+		IsActive:                       true,
+		DestinationPodName:             "pod1",
+		DestinationPodNamespace:        "ns1",
+		DestinationServicePortName:     servicePortName.String(),
+		IngressNetworkPolicyName:       np1.Name,
+		IngressNetworkPolicyNamespace:  np1.Namespace,
+		IngressNetworkPolicyUID:        string(np1.UID),
+		IngressNetworkPolicyType:       utils.PolicyTypeToUint8(np1.Type),
+		IngressNetworkPolicyRuleName:   rule1.Name,
+		IngressNetworkPolicyRuleAction: utils.RuleActionToUint8(string(*rule1.Action)),
+		Zone:                           65520,
+		OriginalPackets:                0xffff,
+		ProxySnatIP:                    netip.MustParseAddr("172.18.0.2"),
+		ProxySnatPort:                  uint16(28392),
+	}
+	ctrl := gomock.NewController(t)
+	mockPodStore := objectstoretest.NewMockPodStore(ctrl)
+	mockProxier := proxytest.NewMockProxyQuerier(ctrl)
+	npQuerier := queriertest.NewMockAgentNetworkPolicyInfoQuerier(ctrl)
+	conntrackConnStore := NewConntrackConnectionStore(npQuerier, mockPodStore, mockProxier, testFlowExporterOptions, fe, nil)
+	conntrackConnStore.networkPolicyReadyTime = networkPolicyReadyTime
+
+	// Add Zone Zero
+	protocol, _ := lookupServiceProtocol(zoneZeroConn.FlowKey.Protocol)
+	serviceStr := fmt.Sprintf("%s:%d/%s", zoneZeroConn.OriginalDestinationAddress.String(), zoneZeroConn.OriginalDestinationPort, protocol)
+	mockProxier.EXPECT().GetServiceByIP(serviceStr).Return(servicePortName, true)
+	if conntrackConnStore.protocolFilter.Allow(zoneZeroConn.FlowKey.Protocol) {
+		conntrackConnStore.ingestZoneZero(zoneZeroConn)
+	}
+
+	// Add Antrea Zone
+	mockPodStore.EXPECT().GetPodByIPAndTime(zoneZeroConn.FlowKey.SourceAddress.String(), gomock.Any()).Return(nil, false)
+	mockPodStore.EXPECT().GetPodByIPAndTime(antreaZoneConn.FlowKey.DestinationAddress.String(), gomock.Any()).Return(nil, false)
+	protocol, _ = lookupServiceProtocol(antreaZoneConn.FlowKey.Protocol)
+	serviceStr = fmt.Sprintf("%s:%d/%s", expectedConn.OriginalDestinationAddress.String(), expectedConn.OriginalDestinationPort, protocol)
+	mockProxier.EXPECT().GetServiceByIP(serviceStr).Return(servicePortName, true)
+	ingressOfID := binary.BigEndian.Uint32(expectedConn.Labels[12:16])
+	npQuerier.EXPECT().GetRuleByFlowID(ingressOfID).Return(&rule1)
+	conntrackConnStore.AddOrUpdateConn(&antreaZoneConn)
+
+	actualConn, exist := conntrackConnStore.GetConnByKey(expectedConn.FlowKey)
+	require.Equal(t, exist, true, "The connection should exist in the connection store")
+	assert.Equal(t, expectedConn, *actualConn, "Connections should be equal")
+
+	//Add updated Zone Zero
+	protocol, _ = lookupServiceProtocol(updatedZoneZeroConn.FlowKey.Protocol)
+	serviceStr = fmt.Sprintf("%s:%d/%s", updatedZoneZeroConn.OriginalDestinationAddress.String(), updatedZoneZeroConn.OriginalDestinationPort, protocol)
+	mockProxier.EXPECT().GetServiceByIP(serviceStr).Return(servicePortName, true)
+	if conntrackConnStore.protocolFilter.Allow(updatedZoneZeroConn.FlowKey.Protocol) {
+		conntrackConnStore.ingestZoneZero(updatedZoneZeroConn)
+	}
+
+	//Add updated Antrea Zone
+	conntrackConnStore.AddOrUpdateConn(&updatedAntreaZoneConn)
+	actualConn, exist = conntrackConnStore.GetConnByKey(expectedConn.FlowKey)
+	require.Equal(t, exist, true, "The connection should exist in the connection store")
+	assert.Equal(t, updatedExpectedConn, *actualConn, "Connections should be equal")
 }
 
 // testAddNewConn tests podInfo, Services, network policy mapping.
@@ -327,7 +520,7 @@ func TestConnectionStore_DeleteConnectionByKey(t *testing.T) {
 	metrics.TotalAntreaConnectionsInConnTrackTable.Set(float64(len(testFlows)))
 	// Create connectionStore
 	mockPodStore := objectstoretest.NewMockPodStore(ctrl)
-	connStore := NewConntrackConnectionStore(nil, mockPodStore, nil, testFlowExporterOptions)
+	connStore := NewConntrackConnectionStore(nil, mockPodStore, nil, testFlowExporterOptions, nil, nil)
 	// Add flows to the connection store.
 	for i, flow := range testFlows {
 		connStore.connections[*testFlowKeys[i]] = flow
@@ -345,7 +538,7 @@ func TestConnectionStore_DeleteConnectionByKey(t *testing.T) {
 func TestConntrackConnectionStore_DeleteAllConnections(t *testing.T) {
 	metrics.TotalAntreaConnectionsInConnTrackTable.Set(0)
 
-	cs := NewConntrackConnectionStore(nil, nil, nil, testFlowExporterOptions)
+	cs := NewConntrackConnectionStore(nil, nil, nil, testFlowExporterOptions, nil, nil)
 
 	conns := []*connection.Connection{
 		{
@@ -411,6 +604,7 @@ func TestConntrackConnectionStore_AddOrUpdateConns(t *testing.T) {
 				StartTime: refTime,
 				StopTime:  refTime,
 				FlowKey:   tuple1,
+				Zone:      openflow.CtZone,
 				IsPresent: true,
 			},
 		}, {
@@ -419,6 +613,7 @@ func TestConntrackConnectionStore_AddOrUpdateConns(t *testing.T) {
 				StartTime: refTime,
 				StopTime:  refTime,
 				FlowKey:   tuple1,
+				Zone:      openflow.CtZone,
 				IsPresent: false,
 			},
 			expectDeleted: true,
@@ -428,6 +623,7 @@ func TestConntrackConnectionStore_AddOrUpdateConns(t *testing.T) {
 				StartTime: refTime,
 				StopTime:  refTime,
 				FlowKey:   tuple1,
+				Zone:      openflow.CtZone,
 				IsPresent: true,
 			},
 			resubmitOldConn: true,
@@ -436,22 +632,23 @@ func TestConntrackConnectionStore_AddOrUpdateConns(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			cs := NewConntrackConnectionStore(nil, nil, nil, testFlowExporterOptions)
+			cs := NewConntrackConnectionStore(nil, nil, nil, testFlowExporterOptions, nil, nil)
 
 			require.NotNil(t, tt.oldConn)
 			addConnToStore(cs, tt.oldConn)
 
 			if tt.resubmitOldConn {
-				require.NoError(t, cs.AddOrUpdateConns([]*connection.Connection{tt.oldConn}))
+				require.NoError(t, cs.AddOrUpdateConns(&ConntrackPollBatch{AntreaZone: []*connection.Connection{tt.oldConn}}))
 			} else {
 				newConn := &connection.Connection{
 					StartTime:     refTime,
 					StopTime:      refTime,
 					FlowKey:       tuple2,
+					Zone:          openflow.CtZone,
 					IsPresent:     true,
 					SourcePodName: "test",
 				}
-				require.NoError(t, cs.AddOrUpdateConns([]*connection.Connection{newConn}))
+				require.NoError(t, cs.AddOrUpdateConns(&ConntrackPollBatch{AntreaZone: []*connection.Connection{newConn}}))
 				assert.Contains(t, cs.connections, tuple2)
 			}
 
@@ -463,4 +660,98 @@ func TestConntrackConnectionStore_AddOrUpdateConns(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestConntrackConnectionStore_AddOrUpdateConns_ZoneZeroFlow(t *testing.T) {
+	refTime := time.Now()
+
+	zoneZeroConn := &connection.Connection{
+		StartTime:                  refTime,
+		StopTime:                   refTime,
+		FlowKey:                    connection.Tuple{SourceAddress: netip.MustParseAddr("172.18.0.1"), DestinationAddress: netip.MustParseAddr("10.244.2.2"), Protocol: 6, SourcePort: 52142, DestinationPort: 80},
+		OriginalDestinationAddress: netip.MustParseAddr("172.18.0.3"),
+		OriginalDestinationPort:    12345,
+		ProxySnatPort:              28392,
+		IsPresent:                  true,
+	}
+	antreaZoneConn := &connection.Connection{
+		StartTime:                  refTime,
+		StopTime:                   refTime,
+		FlowKey:                    connection.Tuple{SourceAddress: netip.MustParseAddr("10.244.2.1"), DestinationAddress: netip.MustParseAddr("10.244.2.2"), Protocol: 6, SourcePort: 28392, DestinationPort: 80},
+		Zone:                       openflow.CtZone,
+		Mark:                       openflow.ServiceCTMark.GetValue(),
+		ProxySnatPort:              28392,
+		OriginalDestinationAddress: netip.MustParseAddr("10.244.2.2"),
+		OriginalDestinationPort:    80,
+		IsPresent:                  true,
+	}
+
+	fe := NewFromExternalCorrelator()
+	t.Cleanup(fe.StopCleanUp)
+	go fe.Run()
+	cs := NewConntrackConnectionStore(nil, nil, nil, testFlowExporterOptions, fe, nil)
+
+	// Zone-zero connections submitted through AddOrUpdateConns should be stored
+	// in the correlator, not the connection store.
+	require.NoError(t, cs.AddOrUpdateConns(&ConntrackPollBatch{ZoneZero: []*connection.Connection{zoneZeroConn}}))
+	assert.Empty(t, cs.connections, "zone-zero connection should not appear in the connection store")
+	fe, ok := cs.fromExternal.(*FromExternalCorrelator)
+	require.True(t, ok, "expected *FromExternalCorrelator")
+	assert.Len(t, fe.connections, 1, "zone-zero connection should be stored in correlator")
+
+	// When the Antrea-zone counterpart arrives, it should be correlated and the
+	// correlator entry consumed.
+	require.NoError(t, cs.AddOrUpdateConns(&ConntrackPollBatch{AntreaZone: []*connection.Connection{antreaZoneConn}}))
+	assert.Len(t, fe.connections, 0, "zone-zero entry should have been consumed by correlation")
+	connKey := connection.NewConnectionKey(antreaZoneConn)
+	storedConn, exists := cs.GetConnByKey(connKey)
+	require.True(t, exists, "correlated connection should be in the store")
+	assert.Equal(t, netip.MustParseAddr("172.18.0.1"), storedConn.FlowKey.SourceAddress, "source address should be overwritten from zone-zero connection")
+}
+
+func TestCorrelateExternal(t *testing.T) {
+	refTime := time.Now()
+	zoneZero := connection.Connection{
+		StartTime: refTime,
+		StopTime:  refTime,
+		FlowKey: connection.Tuple{
+			SourceAddress:      netip.MustParseAddr("172.18.0.1"),
+			DestinationAddress: netip.MustParseAddr("10.244.2.2"),
+			Protocol:           6,
+			SourcePort:         52142,
+			DestinationPort:    80},
+		Mark:                    openflow.ServiceCTMark.GetValue(),
+		OriginalDestinationPort: 12345,
+		ProxySnatIP:             netip.MustParseAddr("172.18.0.2"),
+		ProxySnatPort:           uint16(28392),
+	}
+	antreaZone := connection.Connection{
+		StartTime: refTime,
+		StopTime:  refTime,
+		FlowKey: connection.Tuple{
+			SourceAddress:      netip.MustParseAddr("10.244.2.1"),
+			DestinationAddress: netip.MustParseAddr("10.244.2.2"),
+			Protocol:           6,
+			SourcePort:         55555,
+			DestinationPort:    80},
+		Mark:          openflow.ServiceCTMark.GetValue(),
+		ProxySnatIP:   netip.MustParseAddr("10.244.2.1"),
+		ProxySnatPort: uint16(28392),
+	}
+	expected := connection.Connection{
+		StartTime: refTime,
+		StopTime:  refTime,
+		FlowKey: connection.Tuple{
+			SourceAddress:      netip.MustParseAddr("172.18.0.1"),
+			DestinationAddress: netip.MustParseAddr("10.244.2.2"),
+			Protocol:           6,
+			SourcePort:         52142,
+			DestinationPort:    80},
+		Mark:                    openflow.ServiceCTMark.GetValue(),
+		OriginalDestinationPort: 12345,
+		ProxySnatIP:             netip.MustParseAddr("172.18.0.2"),
+		ProxySnatPort:           uint16(28392),
+	}
+	correlateExternal(zoneZeroSnapshotFromConn(&zoneZero), &antreaZone)
+	assert.Equal(t, expected, antreaZone)
 }
