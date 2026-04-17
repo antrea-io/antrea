@@ -39,7 +39,7 @@ type grpcCollector struct {
 	server  *grpc.Server
 }
 
-func NewGRPCCollector(recordCh chan *flowpb.Flow, caCert, serverKey, serverCert []byte) (*grpcCollector, error) {
+func NewGRPCCollector(recordCh chan *flowpb.Flow, streamSvc flowpb.FlowStreamServiceServer, caCert, serverKey, serverCert []byte) (*grpcCollector, error) {
 	cas := x509.NewCertPool()
 	if ok := cas.AppendCertsFromPEM(caCert); !ok {
 		return nil, fmt.Errorf("error when adding generate CA cert to pool")
@@ -59,6 +59,7 @@ func NewGRPCCollector(recordCh chan *flowpb.Flow, caCert, serverKey, serverCert 
 	}
 	server := grpc.NewServer(grpc.Creds(credentials.NewTLS(tlsConfig)))
 	flowpb.RegisterFlowExportServiceServer(server, service)
+	flowpb.RegisterFlowStreamServiceServer(server, streamSvc)
 	return &grpcCollector{
 		service: service,
 		server:  server,
