@@ -75,8 +75,8 @@ var (
 		"egressIP",
 		"egressNodeName",
 	}
-	AntreaInfoElementsIPv4 = append(antreaInfoElementsCommon, []string{"destinationClusterIPv4"}...)
-	AntreaInfoElementsIPv6 = append(antreaInfoElementsCommon, []string{"destinationClusterIPv6"}...)
+	AntreaInfoElementsIPv4 = append(antreaInfoElementsCommon, []string{"destinationClusterIPv4", "destinationServiceIPv4"}...)
+	AntreaInfoElementsIPv6 = append(antreaInfoElementsCommon, []string{"destinationClusterIPv6", "destinationServiceIPv6"}...)
 )
 
 type ipfixExporter struct {
@@ -343,7 +343,7 @@ func (e *ipfixExporter) addConnToSet(conn *connection.Connection) error {
 			} else {
 				ie.SetStringValue("")
 			}
-		case "destinationClusterIPv4":
+		case "destinationClusterIPv4", "destinationServiceIPv4":
 			if conn.DestinationServicePortName != "" {
 				ie.SetIPAddressValue(conn.OriginalDestinationAddress.AsSlice())
 			} else {
@@ -352,7 +352,7 @@ func (e *ipfixExporter) addConnToSet(conn *connection.Connection) error {
 				// this dummy IP address.
 				ie.SetIPAddressValue(net.IP{0, 0, 0, 0})
 			}
-		case "destinationClusterIPv6":
+		case "destinationClusterIPv6", "destinationServiceIPv6":
 			if conn.DestinationServicePortName != "" {
 				ie.SetIPAddressValue(conn.OriginalDestinationAddress.AsSlice())
 			} else {
