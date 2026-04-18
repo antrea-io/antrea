@@ -126,6 +126,32 @@ func TestAllocateIPFromPool(t *testing.T) {
 				{Total: 2, Used: 0},
 			},
 		},
+		{
+			name: "allocate from /32 CIDR",
+			ipPools: []*antreacrds.ExternalIPPool{
+				newExternalIPPool("eip1", "10.10.0.1/32", "", ""),
+			},
+			allocatedIP:  nil,
+			allocateFrom: "eip1",
+			expectedIP:   "10.10.0.1",
+			expectError:  false,
+			expectedIPPoolStatus: []antreacrds.IPPoolUsage{
+				{Total: 1, Used: 1},
+			},
+		},
+		{
+			name: "allocate from /31 CIDR",
+			ipPools: []*antreacrds.ExternalIPPool{
+				newExternalIPPool("eip1", "10.10.0.2/31", "", ""),
+			},
+			allocatedIP:  nil,
+			allocateFrom: "eip1",
+			expectedIP:   "10.10.0.2",
+			expectError:  false,
+			expectedIPPoolStatus: []antreacrds.IPPoolUsage{
+				{Total: 2, Used: 1},
+			},
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -245,22 +271,40 @@ func TestCreateOrUpdateIPAllocator(t *testing.T) {
 	assert.Equal(t, 1, len(allocator))
 	assert.Equal(t, 2, allocator.Total())
 
+	// Test /32 CIDR which should have Total=1 (RFC 3021: single usable host address).
+	ipPool.Spec.IPRanges = append(ipPool.Spec.IPRanges, antreacrds.IPRange{CIDR: "10.10.0.1/32"})
+	changed = controller.createOrUpdateIPAllocator(ipPool)
+	assert.True(t, changed)
+	allocator, exists = controller.getIPAllocator(ipPool.Name)
+	require.True(t, exists)
+	assert.Equal(t, 2, len(allocator))
+	assert.Equal(t, 3, allocator.Total())
+
+	// Test /31 CIDR which should have Total=2 (RFC 3021: both IPs are usable host addresses).
+	ipPool.Spec.IPRanges = append(ipPool.Spec.IPRanges, antreacrds.IPRange{CIDR: "10.10.0.2/31"})
+	changed = controller.createOrUpdateIPAllocator(ipPool)
+	assert.True(t, changed)
+	allocator, exists = controller.getIPAllocator(ipPool.Name)
+	require.True(t, exists)
+	assert.Equal(t, 3, len(allocator))
+	assert.Equal(t, 5, allocator.Total())
+
 	// Append a non-strict CIDR, it should handle it correctly.
 	ipPool.Spec.IPRanges = append(ipPool.Spec.IPRanges, antreacrds.IPRange{CIDR: "1.1.2.1/30"})
 	changed = controller.createOrUpdateIPAllocator(ipPool)
 	assert.True(t, changed)
 	allocator, exists = controller.getIPAllocator(ipPool.Name)
 	require.True(t, exists)
-	assert.Equal(t, 2, len(allocator))
-	assert.Equal(t, 4, allocator.Total())
+	assert.Equal(t, 4, len(allocator))
+	assert.Equal(t, 7, allocator.Total())
 
 	ipPool.Spec.IPRanges = append(ipPool.Spec.IPRanges, antreacrds.IPRange{Start: "1.1.3.1", End: "1.1.3.10"})
 	changed = controller.createOrUpdateIPAllocator(ipPool)
 	assert.True(t, changed)
 	allocator, exists = controller.getIPAllocator(ipPool.Name)
 	require.True(t, exists)
-	assert.Equal(t, 3, len(allocator))
-	assert.Equal(t, 14, allocator.Total())
+	assert.Equal(t, 5, len(allocator))
+	assert.Equal(t, 17, allocator.Total())
 
 	// IPv6 CIDR shouldn't exclude broadcast address, so total should be increased by 15.
 	ipPool.Spec.IPRanges = append(ipPool.Spec.IPRanges, antreacrds.IPRange{CIDR: "2021:3::aaa1/124"})
@@ -268,16 +312,16 @@ func TestCreateOrUpdateIPAllocator(t *testing.T) {
 	assert.True(t, changed)
 	allocator, exists = controller.getIPAllocator(ipPool.Name)
 	require.True(t, exists)
-	assert.Equal(t, 4, len(allocator))
-	assert.Equal(t, 29, allocator.Total())
+	assert.Equal(t, 6, len(allocator))
+	assert.Equal(t, 32, allocator.Total())
 
 	// When there is no change, the method should do nothing and the return value should be false.
 	changed = controller.createOrUpdateIPAllocator(ipPool)
 	assert.False(t, changed)
 	allocator, exists = controller.getIPAllocator(ipPool.Name)
 	require.True(t, exists)
-	assert.Equal(t, 4, len(allocator))
-	assert.Equal(t, 29, allocator.Total())
+	assert.Equal(t, 6, len(allocator))
+	assert.Equal(t, 32, allocator.Total())
 }
 
 func TestIPPoolEvents(t *testing.T) {
