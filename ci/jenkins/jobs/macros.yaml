@@ -23,6 +23,17 @@
           sudo ./ci/test-conformance-eks.sh --cluster-name "${CLUSTERNAME}" --cleanup-only
 
 - builder:
+    name: builder-cloud-clusters-gc
+    builders:
+      - shell: |-
+          #!/bin/bash
+          set -ex
+          sudo ./ci/test-conformance-eks.sh --gc-cluster --gc-cluster-age-hours 3 \
+            --aws-region us-west-2
+          sudo ./ci/test-conformance-gke.sh --gc-cluster --gc-cluster-age-hours 3 \
+            --gke-zone us-west1-a
+
+- builder:
     name: builder-gke-cluster-cleanup
     builders:
       - shell: |-
