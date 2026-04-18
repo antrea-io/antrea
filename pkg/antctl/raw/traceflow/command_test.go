@@ -269,6 +269,17 @@ destination: default/service
 source: default/pod-1
 `,
 		},
+		{
+			name:       "dummy-traceflow-tree-output",
+			src:        srcPod,
+			dst:        dstPod,
+			outputType: "tree",
+			expected: `Phase: Succeeded
+Source: default/pod-1
+Destination: default/pod-2
+Packet Flow:
+`,
+		},
 	}
 
 	for _, tt := range tcs {
