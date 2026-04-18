@@ -1,16 +1,10 @@
-// Copyright 2021 Antrea Authors
+// Copyright 2024 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
 //
 //     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
 
 package networkpolicy
 
@@ -735,6 +729,70 @@ func TestValidateAntreaClusterNetworkPolicy(t *testing.T) {
 			},
 			operation:      admv1.Update,
 			expectedReason: "invalid except CIDR value: invalid CIDR address: fd00:192:168::",
+		},
+		{
+			name: "acnp-rule-ipblock-set-with-podselector",
+			policy: &crdv1beta1.ClusterNetworkPolicy{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "acnp-rule-ipblock-set-with-podselector",
+				},
+				Spec: crdv1beta1.ClusterNetworkPolicySpec{
+					AppliedTo: []crdv1beta1.AppliedTo{
+						{
+							NamespaceSelector: &metav1.LabelSelector{
+								MatchLabels: map[string]string{"foo1": "bar1"},
+							},
+						},
+					},
+					Ingress: []crdv1beta1.Rule{
+						{
+							Action: &allowAction,
+							From: []crdv1beta1.NetworkPolicyPeer{
+								{
+									IPBlock: &crdv1beta1.IPBlock{
+										CIDR: "10.0.0.10/32",
+									},
+									PodSelector: &metav1.LabelSelector{
+										MatchLabels: map[string]string{"foo2": "bar2"},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			operation:      admv1.Create,
+			expectedReason: "NetworkPolicyPeer: ipBlock cannot be combined with other selectors",
+		},
+		{
+			name: "acnp-rule-only-ipblock",
+			policy: &crdv1beta1.ClusterNetworkPolicy{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "acnp-rule-only-ipblock",
+				},
+				Spec: crdv1beta1.ClusterNetworkPolicySpec{
+					AppliedTo: []crdv1beta1.AppliedTo{
+						{
+							NamespaceSelector: &metav1.LabelSelector{
+								MatchLabels: map[string]string{"foo1": "bar1"},
+							},
+						},
+					},
+					Ingress: []crdv1beta1.Rule{
+						{
+							Action: &allowAction,
+							From: []crdv1beta1.NetworkPolicyPeer{
+								{
+									IPBlock: &crdv1beta1.IPBlock{
+										CIDR: "10.0.0.10/32",
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			operation: admv1.Create,
 		},
 		{
 			name: "acnp-rule-ipblock-except-outside-of-cidr-range",
