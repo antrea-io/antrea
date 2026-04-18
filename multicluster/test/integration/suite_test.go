@@ -173,6 +173,7 @@ var _ = BeforeSuite(func() {
 		commonAreaCreationCh,
 		"default",
 		clusterSetReconciler,
+		k8sManager.GetCache(),
 	)
 
 	go staleController.Run(stopCh)
