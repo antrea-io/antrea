@@ -571,7 +571,6 @@ spec:
             memory: 256Mi
       nodeSelector:
         kubernetes.io/os: linux
-        kubernetes.io/arch: amd64
       priorityClassName: system-cluster-critical
       serviceAccountName: flow-aggregator
       volumes:
