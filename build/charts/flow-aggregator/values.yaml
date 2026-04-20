@@ -29,9 +29,11 @@ flowAggregator:
 mode: "Aggregate"
 # -- Provide the active flow record timeout as a duration string.
 # Valid time units are "ns", "us" (or "µs"), "ms", "s", "m", "h".
+# Values under 1s are not supported; they will be rounded up to 1s.
 activeFlowRecordTimeout: 60s
 # -- Provide the inactive flow record timeout as a duration string.
 # Valid time units are "ns", "us" (or "µs"), "ms", "s", "m", "h".
+# Values under 1s are not supported; they will be rounded up to 1s.
 inactiveFlowRecordTimeout: 90s
 # -- Provide the transport protocol for the flow aggregator collecting process, which must be one of
 # "tls", "tcp", "udp" or "none". Note that this only applies to the IPFIX collector. The gRPC

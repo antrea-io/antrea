@@ -151,12 +151,12 @@ const (
 )
 
 var (
-	// Single iperf run results in two connections with separate ports (control connection and actual data connection).
-	// As 2s is the export active timeout of flow exporter and iperf traffic runs for 12s, we expect totally 12 records
-	// exporting to the flow aggregator at time 2s, 4s, 6s, 8s, 10s, and 12s after iperf traffic begins.
-	// Since flow aggregator will aggregate records based on 5-tuple connection key and active timeout is 3.5 seconds,
-	// we expect 3 records at time 5.5s, 9s, and 12.5s after iperf traffic begins.
-	expectedNumDataRecords                      = 3
+	// For a given connection, we expect the first record around 2s (export active timeout of FlowExporter) when
+	// the record becomes "ready to send". We should then have additional records at 5.5s, 9s and 12.5s, based on
+	// the 3.5s active timeout for the FlowAggregator and the iperf duration (12s). Some variability is expected
+	// because of batching and buffering in the FlowAggregator, but it is safe to assume that we need to receive at
+	// least 4 records.
+	expectedNumDataRecords                      = 4
 	podAIPs, podBIPs, podCIPs, podDIPs, podEIPs *PodIPs
 	serviceNames                                = []string{"perftest-a", "perftest-b", "perftest-c", "perftest-d", "perftest-e"}
 	podNames                                    = serviceNames
@@ -164,9 +164,11 @@ var (
 	// It will be initialized the first time setupFlowAggregatorTest is called.
 	antreaClusterUUID = ""
 
-	// In the ToExternalFlows test, flow record will arrive 5.5s (exporterActiveFlowExportTimeout+aggregatorActiveFlowRecordTimeout) after executing wget command
-	// We set the timeout to 9s (5.5s plus one more aggregatorActiveFlowRecordTimeout) to make the ToExternalFlows test more stable
-	getCollectorOutputDefaultTimeout = exporterActiveFlowExportTimeout + 2*aggregatorActiveFlowRecordTimeout
+	// Makes sure we have enough time to receive all expected records.
+	// After the connection closes, need to account for: the poll interval, the export active timeout of
+	// FlowExporter, the export active timeout of the FlowAggregator. The extra 2s are to account for processing
+	// time and variability in the FlowAggregator.
+	getCollectorOutputDefaultTimeout = exporterFlowPollInterval + exporterActiveFlowExportTimeout + aggregatorActiveFlowRecordTimeout + 2*time.Second
 )
 
 type testFlow struct {
@@ -1049,25 +1051,32 @@ func checkRecordsForFlowsCollector(t *testing.T, data *TestData, srcIP, dstIP, s
 		}
 
 		// Skip the bandwidth check for the iperf control flow records which have 0 throughput.
-		if !strings.Contains(record, "throughput: 0") {
-			flowStartTime := int64(getUint64FieldFromRecord(t, record, "flowStartSeconds"))
-			exportTime := int64(getUint64FieldFromRecord(t, record, "flowEndSeconds"))
-			flowEndReason := int64(getUint64FieldFromRecord(t, record, "flowEndReason"))
-			var recBandwidth float64
-			// flowEndReason == 3 means the end of flow detected
-			if flowEndReason == 3 {
-				// Check average bandwidth on the last record.
-				octetTotalCount := getUint64FieldFromRecord(t, record, "octetTotalCount")
-				recBandwidth = float64(octetTotalCount) * 8 / float64(iperfTimeSec) / 1000000
-			} else {
-				// Check bandwidth with the field "throughput" except for the last record,
-				// as their throughput may be significantly lower than the average Iperf throughput.
-				throughput := getUint64FieldFromRecord(t, record, "throughput")
-				recBandwidth = float64(throughput) / 1000000
-			}
-			t.Logf("Throughput check on record with flowEndSeconds-flowStartSeconds: %v, Iperf throughput: %.2f Mbits/s, IPFIX record throughput: %.2f Mbits/s", exportTime-flowStartTime, bandwidthInMbps, recBandwidth)
-			assert.InDeltaf(recBandwidth, bandwidthInMbps, bandwidthInMbps*0.15, "Difference between Iperf bandwidth and IPFIX record bandwidth should be lower than 15%%, record: %s", record)
+		if strings.Contains(record, "throughput: 0") {
+			continue
 		}
+		flowStartTime := int64(getUint64FieldFromRecord(t, record, "flowStartSeconds"))
+		exportTime := int64(getUint64FieldFromRecord(t, record, "flowEndSeconds"))
+		// Because the timestamps in the flow records have a granularity of a second, throughput calculation by
+		// the FlowAggregator will be inaccurate at the beginning of the flow. So we exclude records coming in
+		// before 5s (the first record comes at 2s),
+		if exportTime-flowStartTime <= 5 {
+			continue
+		}
+		flowEndReason := int64(getUint64FieldFromRecord(t, record, "flowEndReason"))
+		var recBandwidth float64
+		// flowEndReason == 3 means the end of flow detected
+		if flowEndReason == 3 {
+			// Check average bandwidth on the last record.
+			octetTotalCount := getUint64FieldFromRecord(t, record, "octetTotalCount")
+			recBandwidth = float64(octetTotalCount) * 8 / float64(iperfTimeSec) / 1000000
+		} else {
+			// Check bandwidth with the field "throughput" except for the last record,
+			// as their throughput may be significantly lower than the average Iperf throughput.
+			throughput := getUint64FieldFromRecord(t, record, "throughput")
+			recBandwidth = float64(throughput) / 1000000
+		}
+		t.Logf("Throughput check on record with flowEndSeconds-flowStartSeconds: %v, Iperf throughput: %.2f Mbits/s, IPFIX record throughput: %.2f Mbits/s", exportTime-flowStartTime, bandwidthInMbps, recBandwidth)
+		assert.InDeltaf(recBandwidth, bandwidthInMbps, bandwidthInMbps*0.15, "Difference between Iperf bandwidth and IPFIX record bandwidth should be lower than 15%%, record: %s", record)
 	}
 }
 
@@ -1118,24 +1127,30 @@ func checkRecordsForFlowsClickHouse(t *testing.T, data *TestData, srcIP, dstIP, 
 		}
 
 		// Skip the bandwidth check for the iperf control flow records which have 0 throughput.
-		if record.Throughput > 0 {
-			flowStartTime := record.FlowStartSeconds.Unix()
-			exportTime := record.FlowEndSeconds.Unix()
-			var recBandwidth float64
-			// flowEndReason == 3 means the end of flow detected
-			if record.FlowEndReason == 3 {
-				octetTotalCount := record.OctetTotalCount
-				recBandwidth = float64(octetTotalCount) * 8 / float64(exportTime-flowStartTime) / 1000000
-			} else {
-				// Check bandwidth with the field "throughput" except for the last record,
-				// as their throughput may be significantly lower than the average Iperf throughput.
-				throughput := record.Throughput
-				recBandwidth = float64(throughput) / 1000000
-			}
-			t.Logf("Throughput check on record with flowEndSeconds-flowStartSeconds: %v, Iperf throughput: %.2f Mbits/s, ClickHouse record throughput: %.2f Mbits/s", exportTime-flowStartTime, bandwidthInMbps, recBandwidth)
-			assert.InDeltaf(recBandwidth, bandwidthInMbps, bandwidthInMbps*0.15, "Difference between Iperf bandwidth and ClickHouse record bandwidth should be lower than 15%%, record: %v", record)
+		if record.Throughput == 0 {
+			continue
 		}
-
+		flowStartTime := record.FlowStartSeconds.Unix()
+		exportTime := record.FlowEndSeconds.Unix()
+		// Because the timestamps in the flow records have a granularity of a second, throughput calculation by
+		// the FlowAggregator will be inaccurate at the beginning of the flow. So we exclude records coming in
+		// before 5s (the first record comes at 2s),
+		if exportTime-flowStartTime <= 5 {
+			continue
+		}
+		var recBandwidth float64
+		// flowEndReason == 3 means the end of flow detected
+		if record.FlowEndReason == 3 {
+			octetTotalCount := record.OctetTotalCount
+			recBandwidth = float64(octetTotalCount) * 8 / float64(exportTime-flowStartTime) / 1000000
+		} else {
+			// Check bandwidth with the field "throughput" except for the last record,
+			// as their throughput may be significantly lower than the average Iperf throughput.
+			throughput := record.Throughput
+			recBandwidth = float64(throughput) / 1000000
+		}
+		t.Logf("Throughput check on record with flowEndSeconds-flowStartSeconds: %v, Iperf throughput: %.2f Mbits/s, ClickHouse record throughput: %.2f Mbits/s", exportTime-flowStartTime, bandwidthInMbps, recBandwidth)
+		assert.InDeltaf(recBandwidth, bandwidthInMbps, bandwidthInMbps*0.15, "Difference between Iperf bandwidth and ClickHouse record bandwidth should be lower than 15%%, record: %v", record)
 	}
 	// Checking only data records as data records cannot be decoded without template record.
 	assert.GreaterOrEqualf(t, len(clickHouseRecords), expectedNumDataRecords, "ClickHouse should receive expected number of flow records. Considered records: %s", clickHouseRecords)

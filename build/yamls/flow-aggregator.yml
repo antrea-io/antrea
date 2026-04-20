@@ -64,6 +64,7 @@ data:
     # will be exported to the collector once the elapsed time since the last export
     # event in the flow aggregator is equal to the value of this timeout.
     # Valid time units are "ns", "us" (or "µs"), "ms", "s", "m", "h".
+    # Values under 1s are not supported; they will be rounded up to 1s.
     activeFlowRecordTimeout: 60s
 
     # Provide the inactive flow record timeout as a duration string. This determines
@@ -71,6 +72,7 @@ data:
     # collector. A flow record is considered to be inactive if no matching record
     # has been received by the flow aggregator in the specified interval.
     # Valid time units are "ns", "us" (or "µs"), "ms", "s", "m", "h".
+    # Values under 1s are not supported; they will be rounded up to 1s.
     inactiveFlowRecordTimeout: 90s
 
     # Provide the transport protocol for the flow aggregator collecting process, which must be one of
@@ -492,7 +494,7 @@ spec:
       annotations:
         # Automatically restart Pod if the ConfigMap changes
         # See https://helm.sh/docs/howto/charts_tips_and_tricks/#automatically-roll-deployments
-        checksum/config: 7f2d0d8a536a220895730b91887df92fb154d1294d945c6ff4b7e54d296bd58c
+        checksum/config: b754d61f2a19c5b221897f568384a711a96fbd96e50fff9770821c8ace477ef8
       labels:
         app: flow-aggregator
     spec:

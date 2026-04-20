@@ -18,7 +18,7 @@ Kubernetes: `>= 1.23.0-0`
 
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
-| activeFlowRecordTimeout | string | `"60s"` | Provide the active flow record timeout as a duration string. Valid time units are "ns", "us" (or "µs"), "ms", "s", "m", "h". |
+| activeFlowRecordTimeout | string | `"60s"` | Provide the active flow record timeout as a duration string. Valid time units are "ns", "us" (or "µs"), "ms", "s", "m", "h". Values under 1s are not supported; they will be rounded up to 1s. |
 | aggregatorTransportProtocol | string | `"tls"` | Provide the transport protocol for the flow aggregator collecting process, which must be one of "tls", "tcp", "udp" or "none". Note that this only applies to the IPFIX collector. The gRPC collector will always run (and always use mTLS), regardless of this configuration. When using "none", the IPFIX collector will be disabled. |
 | antreaNamespace | string | `"kube-system"` | Namespace in which Antrea was installed. |
 | apiServer.apiPort | int | `10348` | The port for the Flow Aggregator APIServer to serve on. |
@@ -67,7 +67,7 @@ Kubernetes: `>= 1.23.0-0`
 | hostAliases | list | `[]` | HostAliases to be injected into the Pod's hosts file. For example: `[{"ip": "8.8.8.8", "hostnames": ["clickhouse.example.com"]}]` |
 | hostNetwork | bool | `false` | Run the flow-aggregator Pod in the host network. With hostNetwork enabled, it is usually necessary to set dnsPolicy to ClusterFirstWithHostNet. |
 | image | object | `{"pullPolicy":"IfNotPresent","repository":"antrea/flow-aggregator","tag":""}` | Container image used by Flow Aggregator. |
-| inactiveFlowRecordTimeout | string | `"90s"` | Provide the inactive flow record timeout as a duration string. Valid time units are "ns", "us" (or "µs"), "ms", "s", "m", "h". |
+| inactiveFlowRecordTimeout | string | `"90s"` | Provide the inactive flow record timeout as a duration string. Valid time units are "ns", "us" (or "µs"), "ms", "s", "m", "h". Values under 1s are not supported; they will be rounded up to 1s. |
 | logVerbosity | int | `0` | Log verbosity switch for Flow Aggregator. |
 | mode | string | `"Aggregate"` | Mode in which to run the flow aggregator. Must be one of "Aggregate" or "Proxy". In Aggregate mode, flow records received from source and destination are aggregated and sent as one flow record. In Proxy mode, flow records are enhanced with some additional information, then sent directly without buffering or aggregation. |
 | nameOverride | string | `""` | Override the name of the chart. |
