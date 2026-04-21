@@ -301,10 +301,11 @@ func TestReleaseStaleAddresses(t *testing.T) {
 
 func TestAntreaIPAMController_getIPPoolsForStatefulSet(t *testing.T) {
 	tests := []struct {
-		name        string
-		prepareFunc func(*appsv1.StatefulSet)
-		hasIPPool   bool
-		expectedIPs []net.IP
+		name          string
+		prepareFunc   func(*appsv1.StatefulSet)
+		hasIPPool     bool
+		expectedIPs   []net.IP
+		wantErrSubstr string
 	}{
 		{
 			name: "no annotation",
@@ -333,8 +334,14 @@ func TestAntreaIPAMController_getIPPoolsForStatefulSet(t *testing.T) {
 			prepareFunc: func(sts *appsv1.StatefulSet) {
 				sts.Spec.Template.Annotations[annotation.AntreaIPAMPodIPAnnotationKey] = "10.2.2.109, a.b.c.d"
 			},
-			hasIPPool:   true,
-			expectedIPs: nil,
+			wantErrSubstr: `invalid IP "a.b.c.d"`,
+		},
+		{
+			name: "duplicate ipv4",
+			prepareFunc: func(sts *appsv1.StatefulSet) {
+				sts.Spec.Template.Annotations[annotation.AntreaIPAMPodIPAnnotationKey] = "10.2.2.109,10.2.2.110"
+			},
+			wantErrSubstr: fmt.Sprintf("multiple IPv4 addresses in %s annotation", annotation.AntreaIPAMPodIPAnnotationKey),
 		},
 	}
 	for _, tt := range tests {
@@ -349,7 +356,15 @@ func TestAntreaIPAMController_getIPPoolsForStatefulSet(t *testing.T) {
 			controller.informerFactory.WaitForCacheSync(stopCh)
 			controller.crdInformerFactory.WaitForCacheSync(stopCh)
 
-			got, got1 := controller.getIPPoolsForStatefulSet(statefulSet)
+			got, got1, err := controller.getIPPoolsForStatefulSet(statefulSet)
+			if tt.wantErrSubstr != "" {
+				require.Error(t, err)
+				require.Contains(t, err.Error(), tt.wantErrSubstr)
+				require.Nil(t, got)
+				require.Nil(t, got1)
+				return
+			}
+			require.NoError(t, err)
 			var want []string
 			if tt.hasIPPool {
 				want = []string{pool.Name}
