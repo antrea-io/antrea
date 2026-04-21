@@ -153,7 +153,7 @@ func NewFlowAggregator(
 		return nil, fmt.Errorf("error when starting file watch on configuration dir: %v", err)
 	}
 
-	data, err := os.ReadFile(configFile) // #nosec G703: path is provided by a cluster admin via a ConfigMap mount; no privilege boundary crossed.
+	data, err := os.ReadFile(configFile) // #nosec G703: path is provided by a cluster admin via command-line args to the flow-aggregator; no privilege boundary crossed.
 	if err != nil {
 		return nil, fmt.Errorf("cannot read FlowAggregator configuration file: %v", err)
 	}

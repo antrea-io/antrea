@@ -1105,8 +1105,6 @@ func TestFlowAggregator_fillK8sMetadata(t *testing.T) {
 func TestNewFlowAggregator(t *testing.T) {
 	wd, err := os.Getwd()
 	require.NoError(t, err)
-	// fsnotify does not seem to work when using the default tempdir on MacOS, which is why we
-	// use the current working directory.
 	newFlowAggregatorConfig := func(clusterID string) *flowaggregatorconfig.FlowAggregatorConfig {
 		return &flowaggregatorconfig.FlowAggregatorConfig{
 			FlowCollector: flowaggregatorconfig.FlowCollectorConfig{
@@ -1145,6 +1143,8 @@ func TestNewFlowAggregator(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			// Create a separate temp file for each test case to avoid
 			// duplicate key conflicts in YAML (v3+ rejects duplicate keys).
+			// fsnotify does not seem to work when using the default tempdir on MacOS, which is why we
+			// use the current working directory.
 			f, err := os.CreateTemp(wd, "test_*.config")
 			require.NoError(t, err, "Failed to create test config file")
 			fileName := f.Name()
