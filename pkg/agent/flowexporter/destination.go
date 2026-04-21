@@ -348,7 +348,7 @@ func (d *Destination) fillEgressInfo(conn *connection.Connection) {
 	}
 	conn.EgressName = egress.Name
 	conn.EgressUID = string(egress.UID)
-	conn.EgressIP = egress.EgressIP
+	conn.EgressIP = egress.EgressIPByFamily(conn.FlowKey.DestinationAddress.Is6())
 	conn.EgressNodeName = egress.EgressNode
 	if klog.V(5).Enabled() {
 		klog.InfoS("Filling Egress Info for flow", "Egress", conn.EgressName, "EgressIP", conn.EgressIP, "EgressNode", conn.EgressNodeName, "SourcePod", klog.KRef(conn.SourcePodNamespace, conn.SourcePodName))

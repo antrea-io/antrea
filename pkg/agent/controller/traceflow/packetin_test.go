@@ -202,6 +202,17 @@ func TestParseCapturedPacket(t *testing.T) {
 	}
 }
 
+func TestGetEgressIPByFamily(t *testing.T) {
+	egressConfig := types.EgressConfig{
+		EgressIP:  "192.168.100.100",
+		EgressIPs: []string{"192.168.100.100", "fd00::100"},
+	}
+
+	assert.Equal(t, "192.168.100.100", egressConfig.EgressIPByFamily(false))
+	assert.Equal(t, "fd00::100", egressConfig.EgressIPByFamily(true))
+	assert.Equal(t, "192.168.100.100", types.EgressConfig{EgressIP: "192.168.100.100"}.EgressIPByFamily(true))
+}
+
 func getTestPacketBytes(dstIP string) []byte {
 	ipPacket := &protocol.IPv4{
 		Version:  0x4,
@@ -457,7 +468,7 @@ func TestParsePacketIn(t *testing.T) {
 				},
 			},
 			expectedCalls: func(npQuerierq *queriertest.MockAgentNetworkPolicyInfoQuerier, egressQuerier *queriertest.MockEgressQuerier) {
-				egressQuerier.EXPECT().GetEgressIPByMark(uint32(1)).Return(egressIP, nil)
+				egressQuerier.EXPECT().GetEgressIPByMark(uint32(1), false).Return(egressIP, nil)
 			},
 			expectedTf: &crdv1beta1.Traceflow{
 				ObjectMeta: metav1.ObjectMeta{

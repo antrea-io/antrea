@@ -518,7 +518,7 @@ func TestUpdateEgress(t *testing.T) {
 	// Delete the IPPool in use. The EgressIP should be released.
 	controller.crdClient.CrdV1beta1().ExternalIPPools().Delete(context.TODO(), eipFoo2.Name, metav1.DeleteOptions{})
 	assert.Eventually(t, func() bool {
-		_, _, exists := controller.getIPAllocation(egress.Name)
+		_, exists := controller.getIPAllocation(egress.Name)
 		if exists {
 			return false
 		}
@@ -529,7 +529,7 @@ func TestUpdateEgress(t *testing.T) {
 	// Recreate the ExternalIPPool. An EgressIP should be allocated.
 	controller.crdClient.CrdV1beta1().ExternalIPPools().Create(context.TODO(), eipFoo2, metav1.CreateOptions{})
 	assert.Eventually(t, func() bool {
-		_, _, exists := controller.getIPAllocation(egress.Name)
+		_, exists := controller.getIPAllocation(egress.Name)
 		return exists
 	}, time.Second, 50*time.Millisecond, "IP was not allocated after the ExternalIPPool was created")
 	checkExternalIPPoolUsed(t, controller, eipFoo2.Name, 1)
@@ -537,7 +537,7 @@ func TestUpdateEgress(t *testing.T) {
 	// Delete the Egress. The EgressIP should be released.
 	controller.crdClient.CrdV1beta1().Egresses().Delete(context.TODO(), egress.Name, metav1.DeleteOptions{})
 	assert.Eventually(t, func() bool {
-		_, _, exists := controller.getIPAllocation(egress.Name)
+		_, exists := controller.getIPAllocation(egress.Name)
 		return !exists
 	}, time.Second, 50*time.Millisecond, "IP allocation was not deleted after the Egress was deleted")
 	checkExternalIPPoolUsed(t, controller, eipFoo2.Name, 0)
@@ -577,8 +577,12 @@ func TestRecreateExternalIPPoolWithNewRange(t *testing.T) {
 	controller.restoreIPAllocations([]*v1beta1.Egress{egress})
 
 	require.True(t, controller.externalIPAllocator.IPPoolExists(eipFoo1.Name))
-	getEgressIP, egress, err := controller.syncEgressIP(egress)
+	egressIPs, egress, err := controller.syncEgressIPs(egress)
 	require.NoError(t, err)
+	var getEgressIP net.IP
+	if len(egressIPs) > 0 {
+		getEgressIP = egressIPs[0]
+	}
 	assert.Equal(t, net.ParseIP("1.1.1.1"), getEgressIP)
 
 	// Delete and recreate the ExternalIPPool immediately with a different IP range. We do not
@@ -595,8 +599,11 @@ func TestRecreateExternalIPPoolWithNewRange(t *testing.T) {
 		assert.True(t, controller.externalIPAllocator.IPPoolExists(eipFoo1.Name))
 	}, 1*time.Second, 10*time.Millisecond)
 
-	getEgressIP, _, err = controller.syncEgressIP(egress)
+	egressIPs, _, err = controller.syncEgressIPs(egress)
 	require.NoError(t, err)
+	if len(egressIPs) > 0 {
+		getEgressIP = egressIPs[0]
+	}
 	assert.Equal(t, net.ParseIP("1.1.2.1"), getEgressIP)
 }
 
@@ -803,11 +810,15 @@ func TestSyncEgressIP(t *testing.T) {
 			go controller.externalIPAllocator.Run(stopCh)
 			require.True(t, cache.WaitForCacheSync(stopCh, controller.externalIPAllocator.HasSynced))
 			controller.restoreIPAllocations(tt.existingEgresses)
-			getEgressIP, _, err := controller.syncEgressIP(tt.inputEgress)
+			egressIPs, _, err := controller.syncEgressIPs(tt.inputEgress)
 			if tt.expectErr {
 				assert.Error(t, err)
 			} else {
 				assert.NoError(t, err)
+			}
+			var getEgressIP net.IP
+			if len(egressIPs) > 0 {
+				getEgressIP = egressIPs[0]
 			}
 			assert.Equal(t, net.ParseIP(tt.expectedEgressIP), getEgressIP)
 			checkExternalIPPoolUsed(t, controller, tt.existingExternalIPPool.Name, tt.expectedExternalIPPoolUsed)

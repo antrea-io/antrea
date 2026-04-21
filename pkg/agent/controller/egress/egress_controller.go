@@ -582,7 +582,7 @@ func (c *EgressController) replaceEgressIPs() error {
 				}
 				desiredLocalEgressIPs[ip] = subnetInfo
 			}
-			c.newDualStackEgressState(egress.Name, effectiveStatusIPs)
+			c.newEgressState(egress.Name, effectiveStatusIPs...)
 		}
 	}
 	if err := c.ipAssigner.InitIPs(desiredLocalEgressIPs); err != nil {
@@ -775,7 +775,7 @@ func (c *EgressController) realizeEgressIP(egressName, egressIP string, subnetIn
 // realizeDualStackEgressIPs realizes a pair of dual-stack Egress IPs under a single shared mark.
 // Compared with calling realizeEgressIP twice, this function is collision-safe:
 //   - The mark is allocated once and mirrored to both ipStates.
-//   - SNAT iptables rules for both families are installed via AddDualStackSNATRules so that the
+//   - SNAT iptables rules for both families are installed via AddSNATRules so that the
 //     route-client cache never stores only one family's IP under the shared mark key.
 //   - OVS SNAT-mark flows use distinct cache keys ("s%x-v4" / "s%x-v6") to avoid overwriting.
 //   - Policy routes reuse installPolicyRoute/uninstallPolicyRoute because IPv4 and IPv6 have
@@ -838,26 +838,18 @@ func (c *EgressController) realizeDualStackEgressIPs(egressName string, egressIP
 			}
 		}
 		if !allFlowsInstalled {
-			parsedIPs := make([]net.IP, len(ipStates))
-			for i, s := range ipStates {
-				parsedIPs[i] = s.egressIP
-			}
-			if err := c.ofClient.InstallDualStackSNATMarkFlows(parsedIPs, sharedMark); err != nil {
-				return 0, fmt.Errorf("error installing dual-stack SNAT mark flows for IPs %v: %v", egressIPs, err)
-			}
 			for _, s := range ipStates {
+				if err := c.ofClient.InstallSNATMarkFlows(s.egressIP, sharedMark); err != nil {
+					return 0, fmt.Errorf("error installing SNAT mark flows for IP %v: %v", s.egressIP, err)
+				}
 				s.flowsInstalled = true
 			}
 		}
 		if !allRulesInstalled {
-			parsedIPs := make([]net.IP, len(ipStates))
-			for i, s := range ipStates {
-				parsedIPs[i] = s.egressIP
-			}
-			if err := c.routeClient.AddDualStackSNATRules(parsedIPs, sharedMark); err != nil {
-				return 0, fmt.Errorf("error installing dual-stack SNAT rules for IPs %v: %v", egressIPs, err)
-			}
 			for _, s := range ipStates {
+				if err := c.routeClient.AddSNATRule(s.egressIP, sharedMark); err != nil {
+					return 0, fmt.Errorf("error installing SNAT rules for IP %v: %v", s.egressIP, err)
+				}
 				s.ruleInstalled = true
 			}
 		}
@@ -883,16 +875,16 @@ func (c *EgressController) realizeDualStackEgressIPs(egressName string, egressIP
 			}
 		}
 		if anyRuleInstalled {
-			if err := c.routeClient.DeleteDualStackSNATRules(sharedMark); err != nil {
-				return 0, fmt.Errorf("error uninstalling dual-stack SNAT rules for mark %#x: %v", sharedMark, err)
+			if err := c.routeClient.DeleteSNATRule(sharedMark); err != nil {
+				return 0, fmt.Errorf("error uninstalling SNAT rules for mark %#x: %v", sharedMark, err)
 			}
 			for _, s := range ipStates {
 				s.ruleInstalled = false
 			}
 		}
 		if anyFlowInstalled {
-			if err := c.ofClient.UninstallDualStackSNATMarkFlows(sharedMark); err != nil {
-				return 0, fmt.Errorf("error uninstalling dual-stack SNAT mark flows for IPs %v: %v", egressIPs, err)
+			if err := c.ofClient.UninstallSNATMarkFlows(sharedMark); err != nil {
+				return 0, fmt.Errorf("error uninstalling SNAT mark flows for IPs %v: %v", egressIPs, err)
 			}
 			for _, s := range ipStates {
 				s.flowsInstalled = false
@@ -1057,7 +1049,7 @@ func (c *EgressController) unrealizeDualStackEgressIPs(egressName string, egress
 			}
 		}
 		if anyRuleInstalled {
-			if err := c.routeClient.DeleteDualStackSNATRules(sharedMark); err != nil {
+			if err := c.routeClient.DeleteSNATRule(sharedMark); err != nil {
 				return err
 			}
 			for _, s := range ipStates {
@@ -1065,7 +1057,7 @@ func (c *EgressController) unrealizeDualStackEgressIPs(egressName string, egress
 			}
 		}
 		if anyFlowInstalled {
-			if err := c.ofClient.UninstallDualStackSNATMarkFlows(sharedMark); err != nil {
+			if err := c.ofClient.UninstallSNATMarkFlows(sharedMark); err != nil {
 				return err
 			}
 			for _, s := range ipStates {
@@ -1094,13 +1086,17 @@ func (c *EgressController) deleteEgressState(egressName string) {
 	delete(c.egressStates, egressName)
 }
 
-func (c *EgressController) newEgressState(egressName string, egressIP string) *egressState {
+func (c *EgressController) newEgressState(egressName string, egressIPs ...string) *egressState {
 	c.egressStatesMutex.Lock()
 	defer c.egressStatesMutex.Unlock()
 	state := &egressState{
-		egressIP: egressIP,
-		ofPorts:  sets.New[int32](),
-		pods:     sets.New[string](),
+		ofPorts: sets.New[int32](),
+		pods:    sets.New[string](),
+	}
+	if len(egressIPs) == 1 {
+		state.egressIP = egressIPs[0]
+	} else if len(egressIPs) > 1 {
+		state.egressIPs = egressIPs
 	}
 	c.egressStates[egressName] = state
 	return state
@@ -1152,6 +1148,130 @@ func (c *EgressController) unbindPodEgress(pod, egress string) (string, bool) {
 	return "", false
 }
 
+func (c *EgressController) reconcileEgressIPAssignment(egress *crdv1b1.Egress, egressIP string, subnetInfo *crdv1b1.SubnetInfo, desiredNode string) error {
+	if desiredNode == c.nodeName {
+		// Ensure the Egress IP is assigned to the system. Force advertising the IP if it was previously assigned to
+		// another Node in the Egress API. This could force refreshing other peers' neighbor cache when the Egress IP is
+		// obtained by this Node and another Node at the same time in some situations, e.g. split brain.
+		assigned, err := c.ipAssigner.AssignIP(egressIP, subnetInfo, egress.Status.EgressNode != c.nodeName)
+		if err != nil {
+			return err
+		}
+		if assigned {
+			c.record.Eventf(egress, nil, corev1.EventTypeNormal, "IPAssigned", "NodeAssignment", "Assigned Egress %s with IP %s on Node %s", egress.Name, egressIP, desiredNode)
+		}
+		return nil
+	}
+
+	// Unassign the Egress IP from the local Node if it was assigned by the agent.
+	unassigned, err := c.ipAssigner.UnassignIP(egressIP)
+	if err != nil {
+		return err
+	}
+	if unassigned {
+		c.record.Eventf(egress, nil, corev1.EventTypeNormal, "IPUnassigned", "NodeAssignment", "Unassigned Egress %s with IP %s from Node %s", egress.Name, egressIP, c.nodeName)
+	}
+	return nil
+}
+
+func (c *EgressController) reconcileEgressMark(egressName string, eState *egressState, mark uint32) error {
+	if eState.mark == mark {
+		return nil
+	}
+	// If the mark changes, uninstall all of the Egress's Pod flows first, then install them with the new mark.
+	// It could happen when the Egress IP is added to or removed from the Node.
+	if err := c.uninstallPodFlows(egressName, eState, eState.ofPorts, eState.pods); err != nil {
+		return err
+	}
+	eState.mark = mark
+	return nil
+}
+
+func (c *EgressController) syncPodSNATFlows(egressName string, eState *egressState, egressIPs []string, mark uint32) error {
+	// Copy the previous ofPorts and Pods. They will be used to identify stale ofPorts and Pods.
+	staleOFPorts := eState.ofPorts.Union(nil)
+	stalePods := eState.pods.Union(nil)
+
+	pods := func() sets.Set[string] {
+		c.egressGroupsMutex.RLock()
+		defer c.egressGroupsMutex.RUnlock()
+		pods, exist := c.egressGroups[egressName]
+		if !exist {
+			return nil
+		}
+		return pods.Union(nil)
+	}()
+
+	for pod := range pods {
+		eState.pods.Insert(pod)
+		stalePods.Delete(pod)
+
+		// If the Egress is not the effective one for the Pod, do nothing.
+		if !c.bindPodEgress(pod, egressName) {
+			continue
+		}
+
+		// Get the Pod's openflow port.
+		parts := strings.Split(pod, "/")
+		podNamespace, podName := parts[0], parts[1]
+		ifaces := c.ifaceStore.GetContainerInterfacesByPod(podName, podNamespace)
+		if len(ifaces) == 0 {
+			klog.Infof("Interfaces of Pod %s/%s not found", podNamespace, podName)
+			continue
+		}
+
+		ofPort := ifaces[0].OFPort
+		if eState.ofPorts.Has(ofPort) {
+			staleOFPorts.Delete(ofPort)
+			continue
+		}
+		for _, egressIP := range egressIPs {
+			if err := c.ofClient.InstallPodSNATFlows(uint32(ofPort), net.ParseIP(egressIP), mark); err != nil {
+				return err
+			}
+		}
+		eState.ofPorts.Insert(ofPort)
+	}
+
+	// Uninstall SNAT flows for stale Pods.
+	return c.uninstallPodFlows(egressName, eState, staleOFPorts, stalePods)
+}
+
+func (c *EgressController) updateEgressStatusWithRetry(egress *crdv1b1.Egress, desiredStatus *crdv1b1.EgressStatus, compareStatus func(current, desired *crdv1b1.EgressStatus) bool, logUpdate func(status *crdv1b1.EgressStatus), logUpdatedMsg string) error {
+	toUpdate := egress.DeepCopy()
+	var updateErr, getErr error
+	if err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
+		if compareStatus(&toUpdate.Status, desiredStatus) {
+			return nil
+		}
+		// Must make a copy here as we will append more conditions. If it's appended to desiredStatus directly, there
+		// would be duplicate conditions when the function retries.
+		statusToUpdate := desiredStatus.DeepCopy()
+		// Copy conditions other than crdv1b1.IPAssigned to statusToUpdate.
+		for _, c := range toUpdate.Status.Conditions {
+			if c.Type != crdv1b1.IPAssigned {
+				statusToUpdate.Conditions = append(statusToUpdate.Conditions, c)
+			}
+		}
+		toUpdate.Status = *statusToUpdate
+
+		logUpdate(&toUpdate.Status)
+		_, updateErr = c.crdClient.CrdV1beta1().Egresses().UpdateStatus(context.TODO(), toUpdate, metav1.UpdateOptions{})
+		if updateErr != nil && errors.IsConflict(updateErr) {
+			if toUpdate, getErr = c.crdClient.CrdV1beta1().Egresses().Get(context.TODO(), egress.Name, metav1.GetOptions{}); getErr != nil {
+				return getErr
+			}
+		}
+		// Return the error from UPDATE.
+		return updateErr
+	}); err != nil {
+		return err
+	}
+	klog.V(2).InfoS(logUpdatedMsg, "Egress", egress.Name)
+	metrics.AntreaEgressStatusUpdates.Inc()
+	return nil
+}
+
 func (c *EgressController) updateEgressStatus(egress *crdv1b1.Egress, egressIP string, scheduleErr error) error {
 	isLocal := false
 	if egressIP != "" {
@@ -1162,6 +1282,9 @@ func (c *EgressController) updateEgressStatus(egress *crdv1b1.Egress, egressIP s
 	if isLocal {
 		desiredStatus.EgressNode = c.nodeName
 		desiredStatus.EgressIP = egressIP
+		// Keep status.egressIPs in sync with status.egressIP for single-stack Egresses. This preserves the
+		// legacy status.egressIP field while giving new consumers one list-shaped status field to read.
+		desiredStatus.EgressIPs = []string{egressIP}
 		if isEgressSchedulable(egress) {
 			desiredStatus.Conditions = []crdv1b1.EgressCondition{
 				{
@@ -1207,38 +1330,15 @@ func (c *EgressController) updateEgressStatus(egress *crdv1b1.Egress, egressIP s
 		return nil
 	}
 
-	toUpdate := egress.DeepCopy()
-	var updateErr, getErr error
-	if err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
-		if compareEgressStatus(&toUpdate.Status, desiredStatus) {
-			return nil
-		}
-		// Must make a copy here as we will append more conditions. If it's appended to desiredStatus directly, there
-		// would be duplicate conditions when the function retries.
-		statusToUpdate := desiredStatus.DeepCopy()
-		// Copy conditions other than crdv1b1.IPAssigned to statusToUpdate.
-		for _, c := range toUpdate.Status.Conditions {
-			if c.Type != crdv1b1.IPAssigned {
-				statusToUpdate.Conditions = append(statusToUpdate.Conditions, c)
-			}
-		}
-		toUpdate.Status = *statusToUpdate
-
-		klog.V(2).InfoS("Updating Egress status", "Egress", egress.Name, "oldNode", egress.Status.EgressNode, "newNode", toUpdate.Status.EgressNode)
-		_, updateErr = c.crdClient.CrdV1beta1().Egresses().UpdateStatus(context.TODO(), toUpdate, metav1.UpdateOptions{})
-		if updateErr != nil && errors.IsConflict(updateErr) {
-			if toUpdate, getErr = c.crdClient.CrdV1beta1().Egresses().Get(context.TODO(), egress.Name, metav1.GetOptions{}); getErr != nil {
-				return getErr
-			}
-		}
-		// Return the error from UPDATE.
-		return updateErr
-	}); err != nil {
-		return err
-	}
-	klog.V(2).InfoS("Updated Egress status", "Egress", egress.Name)
-	metrics.AntreaEgressStatusUpdates.Inc()
-	return nil
+	return c.updateEgressStatusWithRetry(
+		egress,
+		desiredStatus,
+		compareEgressStatus,
+		func(status *crdv1b1.EgressStatus) {
+			klog.V(2).InfoS("Updating Egress status", "Egress", egress.Name, "oldNode", egress.Status.EgressNode, "newNode", status.EgressNode)
+		},
+		"Updated Egress status",
+	)
 }
 
 func (c *EgressController) syncEgress(egressName string) error {
@@ -1305,33 +1405,15 @@ func (c *EgressController) syncEgress(egressName string) error {
 	}
 
 	var subnetInfo *crdv1b1.SubnetInfo
-	if desiredNode == c.nodeName {
-		if c.supportSeparateSubnet && egress.Spec.ExternalIPPool != "" {
-			if pool, err := c.externalIPPoolLister.Get(egress.Spec.ExternalIPPool); err != nil {
-				return err
-			} else {
-				subnetInfo = pool.Spec.SubnetInfo
-			}
-		}
-		// Ensure the Egress IP is assigned to the system. Force advertising the IP if it was previously assigned to
-		// another Node in the Egress API. This could force refreshing other peers' neighbor cache when the Egress IP is
-		// obtained by this Node and another Node at the same time in some situations, e.g. split brain.
-		assigned, err := c.ipAssigner.AssignIP(desiredEgressIP, subnetInfo, egress.Status.EgressNode != c.nodeName)
+	if desiredNode == c.nodeName && c.supportSeparateSubnet && egress.Spec.ExternalIPPool != "" {
+		pool, err := c.externalIPPoolLister.Get(egress.Spec.ExternalIPPool)
 		if err != nil {
 			return err
 		}
-		if assigned {
-			c.record.Eventf(egress, nil, corev1.EventTypeNormal, "IPAssigned", "NodeAssignment", "Assigned Egress %s with IP %s on Node %s", egress.Name, desiredEgressIP, desiredNode)
-		}
-	} else {
-		// Unassign the Egress IP from the local Node if it was assigned by the agent.
-		unassigned, err := c.ipAssigner.UnassignIP(desiredEgressIP)
-		if err != nil {
-			return err
-		}
-		if unassigned {
-			c.record.Eventf(egress, nil, corev1.EventTypeNormal, "IPUnassigned", "NodeAssignment", "Unassigned Egress %s with IP %s from Node %s", egress.Name, desiredEgressIP, c.nodeName)
-		}
+		subnetInfo = pool.Spec.SubnetInfo
+	}
+	if err := c.reconcileEgressIPAssignment(egress, desiredEgressIP, subnetInfo, desiredNode); err != nil {
+		return err
 	}
 
 	// Realize the latest EgressIP and get the desired mark.
@@ -1344,71 +1426,15 @@ func (c *EgressController) syncEgress(egressName string) error {
 		return err
 	}
 
-	// If the mark changes, uninstall all of the Egress's Pod flows first, then installs them with new mark.
-	// It could happen when the Egress IP is added to or removed from the Node.
-	if eState.mark != mark {
-		// Uninstall all of its Pod flows.
-		if err := c.uninstallPodFlows(egressName, eState, eState.ofPorts, eState.pods); err != nil {
-			return err
-		}
-		eState.mark = mark
+	if err := c.reconcileEgressMark(egressName, eState, mark); err != nil {
+		return err
 	}
 
 	if err := c.updateEgressStatus(egress, desiredEgressIP, nil); err != nil {
 		return fmt.Errorf("update Egress %s status error: %v", egressName, err)
 	}
 
-	// Copy the previous ofPorts and Pods. They will be used to identify stale ofPorts and Pods.
-	staleOFPorts := eState.ofPorts.Union(nil)
-	stalePods := eState.pods.Union(nil)
-
-	// Get a copy of the desired Pods.
-	pods := func() sets.Set[string] {
-		c.egressGroupsMutex.RLock()
-		defer c.egressGroupsMutex.RUnlock()
-		pods, exist := c.egressGroups[egressName]
-		if !exist {
-			return nil
-		}
-		return pods.Union(nil)
-	}()
-
-	egressIP := net.ParseIP(eState.egressIP)
-	// Install SNAT flows for desired Pods.
-	for pod := range pods {
-		eState.pods.Insert(pod)
-		stalePods.Delete(pod)
-
-		// If the Egress is not the effective one for the Pod, do nothing.
-		if !c.bindPodEgress(pod, egressName) {
-			continue
-		}
-
-		// Get the Pod's openflow port.
-		parts := strings.Split(pod, "/")
-		podNamespace, podName := parts[0], parts[1]
-		ifaces := c.ifaceStore.GetContainerInterfacesByPod(podName, podNamespace)
-		if len(ifaces) == 0 {
-			klog.Infof("Interfaces of Pod %s/%s not found", podNamespace, podName)
-			continue
-		}
-
-		ofPort := ifaces[0].OFPort
-		if eState.ofPorts.Has(ofPort) {
-			staleOFPorts.Delete(ofPort)
-			continue
-		}
-		if err := c.ofClient.InstallPodSNATFlows(uint32(ofPort), egressIP, mark); err != nil {
-			return err
-		}
-		eState.ofPorts.Insert(ofPort)
-	}
-
-	// Uninstall SNAT flows for stale Pods.
-	if err := c.uninstallPodFlows(egressName, eState, staleOFPorts, stalePods); err != nil {
-		return err
-	}
-	return nil
+	return c.syncPodSNATFlows(egressName, eState, []string{desiredEgressIP}, mark)
 }
 
 // syncDualStackEgress maintains the same logic as syncEgress to ensure consistent behavior across single-stack
@@ -1431,8 +1457,16 @@ func (c *EgressController) syncDualStackEgress(egressName string, egress *crdv1b
 		desiredEgressIPs = egress.Spec.EgressIPs
 	}
 
+	eState, exist := c.getEgressState(egressName)
 	// Do not proceed if fewer than effectiveDualStackCount IPs (at least one IPv4/IPv6 pair required).
 	if len(desiredEgressIPs) < effectiveDualStackCount {
+		// Keep the dual-stack cleanup behavior consistent with single-stack Egress: if the scheduler no longer returns
+		// an effective IP pair, remove any stale datapath and IP assignment state before clearing status.
+		if exist {
+			if err := c.uninstallEgress(egressName, eState, egress); err != nil {
+				return err
+			}
+		}
 		if err := c.updateDualStackEgressStatus(egress, nil, scheduleErr); err != nil {
 			return fmt.Errorf("update Egress %s status error: %v", egressName, err)
 		}
@@ -1442,7 +1476,6 @@ func (c *EgressController) syncDualStackEgress(egressName string, egress *crdv1b
 	// Only the first IPv4/IPv6 pair takes effect in the current implementation.
 	effectiveDesiredIPs := firstDualStackPair(desiredEgressIPs)
 
-	eState, exist := c.getEgressState(egressName)
 	// If the effective EgressIPs change, uninstall this Egress first.
 	if exist && !slices.Equal(eState.egressIPs, effectiveDesiredIPs) {
 		if err := c.uninstallEgress(egressName, eState, egress); err != nil {
@@ -1452,7 +1485,7 @@ func (c *EgressController) syncDualStackEgress(egressName string, egress *crdv1b
 	}
 
 	if !exist {
-		eState = c.newDualStackEgressState(egressName, effectiveDesiredIPs)
+		eState = c.newEgressState(egressName, effectiveDesiredIPs...)
 	}
 
 	// Assign/unassign only the effective IPs on this Node.
@@ -1467,25 +1500,18 @@ func (c *EgressController) syncDualStackEgress(egressName string, egress *crdv1b
 				}
 				subnetInfo = pool.Spec.SubnetInfo
 			}
-			assigned, err := c.ipAssigner.AssignIP(ipStr, subnetInfo, egress.Status.EgressNode != c.nodeName)
-			if err != nil {
+			if err := c.reconcileEgressIPAssignment(egress, ipStr, subnetInfo, desiredNode); err != nil {
 				return err
-			}
-			if assigned {
-				c.record.Eventf(egress, nil, corev1.EventTypeNormal, "IPAssigned", "NodeAssignment", "Assigned Egress %s with IP %s on Node %s", egress.Name, ipStr, desiredNode)
 			}
 		}
 	} else {
 		for _, ipStr := range effectiveDesiredIPs {
-			unassigned, err := c.ipAssigner.UnassignIP(ipStr)
-			if err != nil {
+			if err := c.reconcileEgressIPAssignment(egress, ipStr, nil, desiredNode); err != nil {
 				return err
-			}
-			if unassigned {
-				c.record.Eventf(egress, nil, corev1.EventTypeNormal, "IPUnassigned", "NodeAssignment", "Unassigned Egress %s with IP %s from Node %s", egress.Name, ipStr, c.nodeName)
 			}
 		}
 	}
+
 	subnetInfos := make([]*crdv1b1.SubnetInfo, len(effectiveDesiredIPs))
 	for i := range effectiveDesiredIPs {
 		if c.supportSeparateSubnet && i < len(egress.Spec.ExternalIPPools) {
@@ -1506,13 +1532,8 @@ func (c *EgressController) syncDualStackEgress(egressName string, egress *crdv1b
 		return err
 	}
 
-	// If the mark changes, uninstall all of the Egress's Pod flows first, then install them with
-	// the new mark. It could happen when the Egress IP is added to or removed from the Node.
-	if eState.mark != sharedMark {
-		if err := c.uninstallPodFlows(egressName, eState, eState.ofPorts, eState.pods); err != nil {
-			return err
-		}
-		eState.mark = sharedMark
+	if err := c.reconcileEgressMark(egressName, eState, sharedMark); err != nil {
+		return err
 	}
 
 	// Update status with the effective dual-stack IPs only.
@@ -1520,70 +1541,7 @@ func (c *EgressController) syncDualStackEgress(egressName string, egress *crdv1b
 		return fmt.Errorf("update Egress %s status error: %v", egressName, err)
 	}
 
-	// Copy the previous ofPorts and Pods. They will be used to identify stale ofPorts and Pods.
-	staleOFPorts := eState.ofPorts.Union(nil)
-	stalePods := eState.pods.Union(nil)
-
-	pods := func() sets.Set[string] {
-		c.egressGroupsMutex.RLock()
-		defer c.egressGroupsMutex.RUnlock()
-		pods, exist := c.egressGroups[egressName]
-		if !exist {
-			return nil
-		}
-		return pods.Union(nil)
-	}()
-
-	// Install SNAT flows for desired Pods.
-	for pod := range pods {
-		eState.pods.Insert(pod)
-		stalePods.Delete(pod)
-
-		if !c.bindPodEgress(pod, egressName) {
-			continue
-		}
-
-		parts := strings.Split(pod, "/")
-		podNamespace, podName := parts[0], parts[1]
-		ifaces := c.ifaceStore.GetContainerInterfacesByPod(podName, podNamespace)
-		if len(ifaces) == 0 {
-			klog.Infof("Interfaces of Pod %s/%s not found", podNamespace, podName)
-			continue
-		}
-
-		// We already checked uninstalled egress with changed egressIPs, so it's safe to skip flow installation if ofport exists.
-		ofPort := ifaces[0].OFPort
-		if eState.ofPorts.Has(ofPort) {
-			staleOFPorts.Delete(ofPort)
-			continue
-		}
-
-		for _, ipStr := range effectiveDesiredIPs {
-			egressIP := net.ParseIP(ipStr)
-			if err := c.ofClient.InstallPodSNATFlows(uint32(ofPort), egressIP, sharedMark); err != nil {
-				return err
-			}
-		}
-		eState.ofPorts.Insert(ofPort)
-	}
-
-	// Uninstall SNAT flows for stale Pods.
-	if err := c.uninstallPodFlows(egressName, eState, staleOFPorts, stalePods); err != nil {
-		return err
-	}
-	return nil
-}
-
-func (c *EgressController) newDualStackEgressState(egressName string, egressIPs []string) *egressState {
-	c.egressStatesMutex.Lock()
-	defer c.egressStatesMutex.Unlock()
-	state := &egressState{
-		egressIPs: egressIPs,
-		ofPorts:   sets.New[int32](),
-		pods:      sets.New[string](),
-	}
-	c.egressStates[egressName] = state
-	return state
+	return c.syncPodSNATFlows(egressName, eState, effectiveDesiredIPs, sharedMark)
 }
 
 func (c *EgressController) updateDualStackEgressStatus(egress *crdv1b1.Egress, egressIPs []string, scheduleErr error) error {
@@ -1596,6 +1554,10 @@ func (c *EgressController) updateDualStackEgressStatus(egress *crdv1b1.Egress, e
 	desiredStatus := &crdv1b1.EgressStatus{}
 	if isLocal {
 		desiredStatus.EgressNode = c.nodeName
+		// status.egressIP remains the compatibility field and points to the first effective IP (IPv4 for valid
+		// dual-stack Egresses). status.egressIPs is the canonical list-shaped field for dual-stack consumers and is
+		// intended to let future code move away from status.egressIP without changing the single-stack API behavior.
+		desiredStatus.EgressIP = egressIPs[0]
 		desiredStatus.EgressIPs = egressIPs
 		if isDualStackEgressSchedulable(egress) {
 			desiredStatus.Conditions = []crdv1b1.EgressCondition{
@@ -1610,12 +1572,14 @@ func (c *EgressController) updateDualStackEgressStatus(egress *crdv1b1.Egress, e
 		}
 	} else if lenIPs == 0 {
 		// Select one Node to update false status among all Nodes.
-		// We don't care about the value of egress.Spec.EgressIPs, just use it to reach a consensus among all agents
-		// about which one should do the update.
-		if len(egress.Spec.EgressIPs) < effectiveDualStackCount {
-			return fmt.Errorf("spec.EgressIPs is unavailable, the dual-stack egress status failed to update")
+		// We don't care about the value of the key, just use it to reach a consensus among all agents about which one
+		// should do the update. Keep this aligned with single-stack Egresses: pool-based Egresses may not have
+		// spec.egressIPs populated yet while waiting for IP allocation, and that pending state should not fail sync.
+		key := ""
+		if len(egress.Spec.EgressIPs) > 0 {
+			key = egress.Spec.EgressIPs[0]
 		}
-		nodeToUpdateStatus, err := c.cluster.SelectNodeForIP(egress.Spec.EgressIPs[0], "")
+		nodeToUpdateStatus, err := c.cluster.SelectNodeForIP(key, "")
 		if err != nil {
 			return err
 		}
@@ -1639,37 +1603,24 @@ func (c *EgressController) updateDualStackEgressStatus(egress *crdv1b1.Egress, e
 		return nil
 	}
 
-	toUpdate := egress.DeepCopy()
-	var updateErr, getErr error
-	if err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
-		if compareDualStackEgressStatus(&toUpdate.Status, desiredStatus) {
-			return nil
-		}
-		statusToUpdate := desiredStatus.DeepCopy()
-		for _, c := range toUpdate.Status.Conditions {
-			if c.Type != crdv1b1.IPAssigned {
-				statusToUpdate.Conditions = append(statusToUpdate.Conditions, c)
-			}
-		}
-		toUpdate.Status = *statusToUpdate
-
-		klog.V(2).InfoS("Updating dual-stack Egress status", "Egress", egress.Name, "IPs", egressIPs)
-		_, updateErr = c.crdClient.CrdV1beta1().Egresses().UpdateStatus(context.TODO(), toUpdate, metav1.UpdateOptions{})
-		if updateErr != nil && errors.IsConflict(updateErr) {
-			if toUpdate, getErr = c.crdClient.CrdV1beta1().Egresses().Get(context.TODO(), egress.Name, metav1.GetOptions{}); getErr != nil {
-				return getErr
-			}
-		}
-		return updateErr
-	}); err != nil {
-		return err
-	}
-	klog.V(2).InfoS("Updated dual-stack Egress status", "Egress", egress.Name)
-	metrics.AntreaEgressStatusUpdates.Inc()
-	return nil
+	return c.updateEgressStatusWithRetry(
+		egress,
+		desiredStatus,
+		compareDualStackEgressStatus,
+		func(_ *crdv1b1.EgressStatus) {
+			klog.V(2).InfoS("Updating dual-stack Egress status", "Egress", egress.Name, "IPs", egressIPs)
+		},
+		"Updated dual-stack Egress status",
+	)
 }
 
 func compareDualStackEgressStatus(current, desired *crdv1b1.EgressStatus) bool {
+	return compareEgressStatusWithIPs(current, desired, func(status *crdv1b1.EgressStatus) []string {
+		return status.EgressIPs
+	})
+}
+
+func compareEgressStatusWithIPs(current, desired *crdv1b1.EgressStatus, getIPs func(status *crdv1b1.EgressStatus) []string) bool {
 	if current == nil && desired == nil {
 		return true
 	}
@@ -1679,13 +1630,11 @@ func compareDualStackEgressStatus(current, desired *crdv1b1.EgressStatus) bool {
 	if current.EgressNode != desired.EgressNode {
 		return false
 	}
-	if len(current.EgressIPs) != len(desired.EgressIPs) {
+	if current.EgressIP != desired.EgressIP {
 		return false
 	}
-	for i := range current.EgressIPs {
-		if current.EgressIPs[i] != desired.EgressIPs[i] {
-			return false
-		}
+	if !slices.Equal(getIPs(current), getIPs(desired)) {
+		return false
 	}
 	currentIPAssignedCondition := crdv1b1.GetEgressCondition(current.Conditions, crdv1b1.IPAssigned)
 	desiredIPAssignedCondition := crdv1b1.GetEgressCondition(desired.Conditions, crdv1b1.IPAssigned)
@@ -1914,16 +1863,16 @@ func (c *EgressController) deleteEgressGroup(group *cpv1b2.EgressGroup) {
 	c.queue.Add(group.Name)
 }
 
-// GetEgressIPByMark returns the Egress IP associated with the snatMark.
-func (c *EgressController) GetEgressIPByMark(mark uint32) (string, error) {
+// GetEgressIPByMark returns the Egress IP of the requested IP family associated with the snatMark.
+func (c *EgressController) GetEgressIPByMark(mark uint32, isIPv6 bool) (string, error) {
 	c.egressIPStatesMutex.Lock()
 	defer c.egressIPStatesMutex.Unlock()
 	for _, e := range c.egressIPStates {
-		if e.mark == mark {
+		if e.mark == mark && (e.egressIP.To4() == nil) == isIPv6 {
 			return e.egressIP.String(), nil
 		}
 	}
-	return "", fmt.Errorf("no EgressIP associated with mark %v", mark)
+	return "", fmt.Errorf("no EgressIP associated with mark %v and isIPv6 %v", mark, isIPv6)
 }
 
 // GetEgress returns the Egress configuration applied to this Pod.
@@ -1953,6 +1902,7 @@ func (c *EgressController) GetEgress(ns, podName string) (types.EgressConfig, er
 		Name:       egressName,
 		UID:        egress.UID,
 		EgressIP:   egress.Status.EgressIP,
+		EgressIPs:  egress.Status.EgressIPs,
 		EgressNode: egress.Status.EgressNode,
 	}, nil
 }
@@ -1983,22 +1933,7 @@ func isDualStackEgressSchedulable(egress *crdv1b1.Egress) bool {
 
 // compareEgressStatus compares two Egress Statuses, ignoring LastTransitionTime and conditions other than IPAssigned, returns true if they are equal.
 func compareEgressStatus(currentStatus, desiredStatus *crdv1b1.EgressStatus) bool {
-	if currentStatus == nil && desiredStatus == nil {
-		return true
-	}
-	if currentStatus == nil || desiredStatus == nil {
-		return false
-	}
-	if currentStatus.EgressIP != desiredStatus.EgressIP || currentStatus.EgressNode != desiredStatus.EgressNode {
-		return false
-	}
-	currentIPAssignedCondition := crdv1b1.GetEgressCondition(currentStatus.Conditions, crdv1b1.IPAssigned)
-	desiredIPAssignedCondition := crdv1b1.GetEgressCondition(desiredStatus.Conditions, crdv1b1.IPAssigned)
-	if currentIPAssignedCondition == nil && desiredIPAssignedCondition == nil {
-		return true
-	}
-	if currentIPAssignedCondition == nil || desiredIPAssignedCondition == nil {
-		return false
-	}
-	return currentIPAssignedCondition.Status == desiredIPAssignedCondition.Status && currentIPAssignedCondition.Reason == desiredIPAssignedCondition.Reason && currentIPAssignedCondition.Message == desiredIPAssignedCondition.Message
+	return compareEgressStatusWithIPs(currentStatus, desiredStatus, func(status *crdv1b1.EgressStatus) []string {
+		return status.EgressIPs
+	})
 }
