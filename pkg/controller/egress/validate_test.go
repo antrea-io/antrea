@@ -215,3 +215,87 @@ func TestEgressControllerValidateEgress(t *testing.T) {
 		})
 	}
 }
+
+func TestEgressControllerValidateDualStackEgressPartialOverlap(t *testing.T) {
+	newDualStackEgress := func(name string, egressIPs ...string) *crdv1beta1.Egress {
+		egress := newEgress(name, "", "", nil, nil, nil)
+		egress.Spec.EgressIPs = egressIPs
+		return egress
+	}
+	newSingleStackEgress := func(name, egressIP string) *crdv1beta1.Egress {
+		return newEgress(name, egressIP, "", nil, nil, nil)
+	}
+
+	tests := []struct {
+		name             string
+		existingEgresses []runtime.Object
+		egress           *crdv1beta1.Egress
+		allowed          bool
+		expectedMessage  string
+	}{
+		{
+			name:             "exact same pair is allowed",
+			existingEgresses: []runtime.Object{newDualStackEgress("egress-a", "10.10.10.1", "fd00::1")},
+			egress:           newDualStackEgress("egress-b", "10.10.10.1", "fd00::1"),
+			allowed:          true,
+		},
+		{
+			name:             "overlapping IPv4 only is not allowed",
+			existingEgresses: []runtime.Object{newDualStackEgress("egress-a", "10.10.10.1", "fd00::1")},
+			egress:           newDualStackEgress("egress-b", "10.10.10.1", "fd00::2"),
+			expectedMessage:  "dual-stack EgressIP pair (10.10.10.1, fd00::2) partially overlaps with Egress egress-a pair (10.10.10.1, fd00::1); sharing exactly one IP of a dual-stack pair is not supported",
+		},
+		{
+			name:             "overlapping IPv6 only is not allowed",
+			existingEgresses: []runtime.Object{newDualStackEgress("egress-a", "10.10.10.1", "fd00::1")},
+			egress:           newDualStackEgress("egress-b", "10.10.10.2", "fd00::1"),
+			expectedMessage:  "dual-stack EgressIP pair (10.10.10.2, fd00::1) partially overlaps with Egress egress-a pair (10.10.10.1, fd00::1); sharing exactly one IP of a dual-stack pair is not supported",
+		},
+		{
+			name:            "partial overlap within the same Egress is not allowed",
+			egress:          newDualStackEgress("egress-a", "10.10.10.1", "fd00::1", "10.10.10.1", "fd00::2"),
+			expectedMessage: "spec.egressIPs contains partially overlapping dual-stack pairs (10.10.10.1, fd00::1) and (10.10.10.1, fd00::2); sharing exactly one IP of a dual-stack pair is not supported",
+		},
+		{
+			name:             "dual-stack Egress overlapping with single-stack Egress is not allowed",
+			existingEgresses: []runtime.Object{newSingleStackEgress("egress-a", "10.10.10.1")},
+			egress:           newDualStackEgress("egress-b", "10.10.10.1", "fd00::1"),
+			expectedMessage:  "dual-stack EgressIP pair (10.10.10.1, fd00::1) overlaps with single-stack Egress egress-a IP 10.10.10.1; sharing an IP between single-stack and dual-stack Egresses is not supported",
+		},
+		{
+			name:             "single-stack Egress overlapping with dual-stack Egress is not allowed",
+			existingEgresses: []runtime.Object{newDualStackEgress("egress-a", "10.10.10.1", "fd00::1")},
+			egress:           newSingleStackEgress("egress-b", "fd00::1"),
+			expectedMessage:  "single-stack EgressIP fd00::1 overlaps with Egress egress-a dual-stack pair (10.10.10.1, fd00::1); sharing an IP between single-stack and dual-stack Egresses is not supported",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			stopCh := make(chan struct{})
+			defer close(stopCh)
+			controller := newController(nil, tt.existingEgresses)
+			controller.informerFactory.Start(stopCh)
+			controller.crdInformerFactory.Start(stopCh)
+			controller.informerFactory.WaitForCacheSync(stopCh)
+			controller.crdInformerFactory.WaitForCacheSync(stopCh)
+
+			gotResponse := controller.ValidateEgress(&admv1.AdmissionReview{
+				Request: &admv1.AdmissionRequest{
+					Name:      tt.egress.Name,
+					Operation: admv1.Create,
+					Object:    runtime.RawExtension{Raw: marshal(tt.egress)},
+				},
+			})
+			if tt.allowed {
+				assert.Equal(t, &admv1.AdmissionResponse{Allowed: true}, gotResponse)
+			} else {
+				assert.Equal(t, &admv1.AdmissionResponse{
+					Allowed: false,
+					Result: &metav1.Status{
+						Message: tt.expectedMessage,
+					},
+				}, gotResponse)
+			}
+		})
+	}
+}

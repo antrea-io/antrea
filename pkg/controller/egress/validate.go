@@ -22,10 +22,16 @@ import (
 	admv1 "k8s.io/api/admission/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/klog/v2"
 
 	crdv1beta1 "antrea.io/antrea/v2/pkg/apis/crd/v1beta1"
 )
+
+type dualStackEgressIPPair struct {
+	ipv4 string
+	ipv6 string
+}
 
 func (c *EgressController) validateDualStackEgress(egress *crdv1beta1.Egress) (bool, string) {
 	lenIPs := len(egress.Spec.EgressIPs)
@@ -64,6 +70,89 @@ func (c *EgressController) validateDualStackEgress(egress *crdv1beta1.Egress) (b
 			poolName := egress.Spec.ExternalIPPools[i]
 			if !c.externalIPAllocator.IPPoolHasIP(poolName, net.ParseIP(ipStr)) {
 				return false, fmt.Sprintf("EgressIP %s does not belong to ExternalIPPool %s", ipStr, poolName)
+			}
+		}
+	}
+	if ok, msg := c.validateNoPartialOverlapDualStackEgressIPPairs(egress); !ok {
+		return false, msg
+	}
+	return true, ""
+}
+
+func collectDualStackEgressIPPairs(egressIPs []string) []dualStackEgressIPPair {
+	pairs := make([]dualStackEgressIPPair, 0, len(egressIPs)/2)
+	for i := 0; i+1 < len(egressIPs); i += 2 {
+		pairs = append(pairs, dualStackEgressIPPair{ipv4: egressIPs[i], ipv6: egressIPs[i+1]})
+	}
+	return pairs
+}
+
+func dualStackEgressIPPairsPartiallyOverlap(a, b dualStackEgressIPPair) bool {
+	return (a.ipv4 == b.ipv4) != (a.ipv6 == b.ipv6)
+}
+
+func (c *EgressController) validateNoPartialOverlapDualStackEgressIPPairs(egress *crdv1beta1.Egress) (bool, string) {
+	newPairs := collectDualStackEgressIPPairs(egress.Spec.EgressIPs)
+	if len(newPairs) == 0 {
+		return true, ""
+	}
+
+	// Exact pair sharing is allowed to preserve the existing shared-Egress-IP behavior. Partial overlap is not:
+	// if two Egresses share only the IPv4 or only the IPv6 side of a dual-stack pair, the Agent cannot represent
+	// their state with one shared mark per pair without leaking or deleting the other Egress's datapath state.
+	for i := range newPairs {
+		for j := i + 1; j < len(newPairs); j++ {
+			if dualStackEgressIPPairsPartiallyOverlap(newPairs[i], newPairs[j]) {
+				return false, fmt.Sprintf("spec.egressIPs contains partially overlapping dual-stack pairs (%s, %s) and (%s, %s); sharing exactly one IP of a dual-stack pair is not supported",
+					newPairs[i].ipv4, newPairs[i].ipv6, newPairs[j].ipv4, newPairs[j].ipv6)
+			}
+		}
+	}
+
+	egresses, err := c.egressLister.List(labels.Everything())
+	if err != nil {
+		return false, fmt.Sprintf("failed to list Egresses for dual-stack overlap validation: %v", err)
+	}
+	for _, existingEgress := range egresses {
+		if existingEgress.Name == egress.Name {
+			continue
+		}
+		if existingEgress.Spec.EgressIP != "" {
+			for _, newPair := range newPairs {
+				if existingEgress.Spec.EgressIP == newPair.ipv4 || existingEgress.Spec.EgressIP == newPair.ipv6 {
+					return false, fmt.Sprintf("dual-stack EgressIP pair (%s, %s) overlaps with single-stack Egress %s IP %s; sharing an IP between single-stack and dual-stack Egresses is not supported",
+						newPair.ipv4, newPair.ipv6, existingEgress.Name, existingEgress.Spec.EgressIP)
+				}
+			}
+		}
+		for _, newPair := range newPairs {
+			for _, existingPair := range collectDualStackEgressIPPairs(existingEgress.Spec.EgressIPs) {
+				if dualStackEgressIPPairsPartiallyOverlap(newPair, existingPair) {
+					return false, fmt.Sprintf("dual-stack EgressIP pair (%s, %s) partially overlaps with Egress %s pair (%s, %s); sharing exactly one IP of a dual-stack pair is not supported",
+						newPair.ipv4, newPair.ipv6, existingEgress.Name, existingPair.ipv4, existingPair.ipv6)
+				}
+			}
+		}
+	}
+	return true, ""
+}
+
+func (c *EgressController) validateNoSingleStackDualStackEgressIPOverlap(egress *crdv1beta1.Egress) (bool, string) {
+	if egress.Spec.EgressIP == "" {
+		return true, ""
+	}
+	egresses, err := c.egressLister.List(labels.Everything())
+	if err != nil {
+		return false, fmt.Sprintf("failed to list Egresses for single-stack overlap validation: %v", err)
+	}
+	for _, existingEgress := range egresses {
+		if existingEgress.Name == egress.Name {
+			continue
+		}
+		for _, existingPair := range collectDualStackEgressIPPairs(existingEgress.Spec.EgressIPs) {
+			if egress.Spec.EgressIP == existingPair.ipv4 || egress.Spec.EgressIP == existingPair.ipv6 {
+				return false, fmt.Sprintf("single-stack EgressIP %s overlaps with Egress %s dual-stack pair (%s, %s); sharing an IP between single-stack and dual-stack Egresses is not supported",
+					egress.Spec.EgressIP, existingEgress.Name, existingPair.ipv4, existingPair.ipv6)
 			}
 		}
 	}
@@ -136,6 +225,9 @@ func (c *EgressController) ValidateEgress(review *admv1.AdmissionReview) *admv1.
 			if allowed, msg := c.validateDualStackEgress(newEgress); !allowed {
 				return false, msg
 			}
+		}
+		if allowed, msg := c.validateNoSingleStackDualStackEgressIPOverlap(newEgress); !allowed {
+			return false, msg
 		}
 		// Validate Egress trafficShaping
 		if newEgress.Spec.Bandwidth != nil {

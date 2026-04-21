@@ -335,7 +335,7 @@ func TestSyncEgress(t *testing.T) {
 				{
 					ObjectMeta: metav1.ObjectMeta{Name: "egressA", UID: "uidA"},
 					Spec:       crdv1b1.EgressSpec{EgressIP: fakeRemoteEgressIP1, Bandwidth: &fakeBandwidth},
-					Status:     crdv1b1.EgressStatus{EgressIP: fakeRemoteEgressIP1, EgressNode: fakeNode},
+					Status:     crdv1b1.EgressStatus{EgressIP: fakeRemoteEgressIP1, EgressIPs: []string{fakeRemoteEgressIP1}, EgressNode: fakeNode},
 				},
 			},
 			expectedCalls: func(mockOFClient *openflowtest.MockClient, mockRouteClient *routetest.MockInterface, mockIPAssigner *ipassignertest.MockIPAssigner) {
@@ -383,7 +383,7 @@ func TestSyncEgress(t *testing.T) {
 				{
 					ObjectMeta: metav1.ObjectMeta{Name: "egressA", UID: "uidA"},
 					Spec:       crdv1b1.EgressSpec{EgressIP: fakeLocalEgressIP2, Bandwidth: &fakeBandwidth},
-					Status:     crdv1b1.EgressStatus{EgressIP: fakeLocalEgressIP2, EgressNode: fakeNode},
+					Status:     crdv1b1.EgressStatus{EgressIP: fakeLocalEgressIP2, EgressIPs: []string{fakeLocalEgressIP2}, EgressNode: fakeNode},
 				},
 			},
 			expectedCalls: func(mockOFClient *openflowtest.MockClient, mockRouteClient *routetest.MockInterface, mockIPAssigner *ipassignertest.MockIPAssigner) {
@@ -489,7 +489,7 @@ func TestSyncEgress(t *testing.T) {
 				{
 					ObjectMeta: metav1.ObjectMeta{Name: "egressA", UID: "uidA"},
 					Spec:       crdv1b1.EgressSpec{EgressIP: fakeLocalEgressIP1, Bandwidth: &fakeBandwidth},
-					Status:     crdv1b1.EgressStatus{EgressIP: fakeLocalEgressIP1, EgressNode: fakeNode},
+					Status:     crdv1b1.EgressStatus{EgressIP: fakeLocalEgressIP1, EgressIPs: []string{fakeLocalEgressIP1}, EgressNode: fakeNode},
 				},
 			},
 			expectedCalls: func(mockOFClient *openflowtest.MockClient, mockRouteClient *routetest.MockInterface, mockIPAssigner *ipassignertest.MockIPAssigner) {
@@ -538,12 +538,12 @@ func TestSyncEgress(t *testing.T) {
 				{
 					ObjectMeta: metav1.ObjectMeta{Name: "egressA", UID: "uidA"},
 					Spec:       crdv1b1.EgressSpec{EgressIP: fakeLocalEgressIP1},
-					Status:     crdv1b1.EgressStatus{EgressIP: fakeLocalEgressIP1, EgressNode: fakeNode},
+					Status:     crdv1b1.EgressStatus{EgressIP: fakeLocalEgressIP1, EgressIPs: []string{fakeLocalEgressIP1}, EgressNode: fakeNode},
 				},
 				{
 					ObjectMeta: metav1.ObjectMeta{Name: "egressB", UID: "uidB"},
 					Spec:       crdv1b1.EgressSpec{EgressIP: fakeLocalEgressIP2},
-					Status:     crdv1b1.EgressStatus{EgressIP: fakeLocalEgressIP2, EgressNode: fakeNode},
+					Status:     crdv1b1.EgressStatus{EgressIP: fakeLocalEgressIP2, EgressIPs: []string{fakeLocalEgressIP2}, EgressNode: fakeNode},
 				},
 			},
 			expectedCalls: func(mockOFClient *openflowtest.MockClient, mockRouteClient *routetest.MockInterface, mockIPAssigner *ipassignertest.MockIPAssigner) {
@@ -589,12 +589,12 @@ func TestSyncEgress(t *testing.T) {
 				{
 					ObjectMeta: metav1.ObjectMeta{Name: "egressA", UID: "uidA"},
 					Spec:       crdv1b1.EgressSpec{EgressIP: fakeLocalEgressIP1},
-					Status:     crdv1b1.EgressStatus{EgressIP: fakeLocalEgressIP1, EgressNode: fakeNode},
+					Status:     crdv1b1.EgressStatus{EgressIP: fakeLocalEgressIP1, EgressIPs: []string{fakeLocalEgressIP1}, EgressNode: fakeNode},
 				},
 				{
 					ObjectMeta: metav1.ObjectMeta{Name: "egressB", UID: "uidB"},
 					Spec:       crdv1b1.EgressSpec{EgressIP: fakeLocalEgressIP1},
-					Status:     crdv1b1.EgressStatus{EgressIP: fakeLocalEgressIP1, EgressNode: fakeNode},
+					Status:     crdv1b1.EgressStatus{EgressIP: fakeLocalEgressIP1, EgressIPs: []string{fakeLocalEgressIP1}, EgressNode: fakeNode},
 				},
 			},
 			expectedCalls: func(mockOFClient *openflowtest.MockClient, mockRouteClient *routetest.MockInterface, mockIPAssigner *ipassignertest.MockIPAssigner) {
@@ -635,12 +635,12 @@ func TestSyncEgress(t *testing.T) {
 				{
 					ObjectMeta: metav1.ObjectMeta{Name: "egressA", UID: "uidA"},
 					Spec:       crdv1b1.EgressSpec{EgressIP: fakeLocalEgressIP1},
-					Status:     crdv1b1.EgressStatus{EgressIP: fakeLocalEgressIP1, EgressNode: fakeNode},
+					Status:     crdv1b1.EgressStatus{EgressIP: fakeLocalEgressIP1, EgressIPs: []string{fakeLocalEgressIP1}, EgressNode: fakeNode},
 				},
 				{
 					ObjectMeta: metav1.ObjectMeta{Name: "egressB", UID: "uidB"},
 					Spec:       crdv1b1.EgressSpec{EgressIP: fakeLocalEgressIP2, ExternalIPPool: fakeExternalIPPool},
-					Status: crdv1b1.EgressStatus{EgressIP: fakeLocalEgressIP2, EgressNode: fakeNode, Conditions: []crdv1b1.EgressCondition{
+					Status: crdv1b1.EgressStatus{EgressIP: fakeLocalEgressIP2, EgressIPs: []string{fakeLocalEgressIP2}, EgressNode: fakeNode, Conditions: []crdv1b1.EgressCondition{
 						{Type: crdv1b1.IPAssigned, Status: v1.ConditionTrue, Reason: "Assigned", Message: "EgressIP is successfully assigned to EgressNode"},
 					}},
 				},
@@ -690,7 +690,7 @@ func TestSyncEgress(t *testing.T) {
 				{
 					ObjectMeta: metav1.ObjectMeta{Name: "egressA", UID: "uidA"},
 					Spec:       crdv1b1.EgressSpec{EgressIP: fakeLocalEgressIP1, ExternalIPPool: fakeExternalIPPool},
-					Status: crdv1b1.EgressStatus{EgressIP: fakeLocalEgressIP1, EgressNode: fakeNode, Conditions: []crdv1b1.EgressCondition{
+					Status: crdv1b1.EgressStatus{EgressIP: fakeLocalEgressIP1, EgressIPs: []string{fakeLocalEgressIP1}, EgressNode: fakeNode, Conditions: []crdv1b1.EgressCondition{
 						{Type: crdv1b1.IPAssigned, Status: v1.ConditionTrue, Reason: "Assigned", Message: "EgressIP is successfully assigned to EgressNode"},
 					}},
 				},
@@ -723,7 +723,7 @@ func TestSyncEgress(t *testing.T) {
 			newEgress: &crdv1b1.Egress{
 				ObjectMeta: metav1.ObjectMeta{Name: "egressA", UID: "uidA"},
 				Spec:       crdv1b1.EgressSpec{ExternalIPPool: fakeExternalIPPool},
-				Status:     crdv1b1.EgressStatus{EgressIP: fakeLocalEgressIP1, EgressNode: fakeNode},
+				Status:     crdv1b1.EgressStatus{EgressIP: fakeLocalEgressIP1, EgressIPs: []string{fakeLocalEgressIP1}, EgressNode: fakeNode},
 			},
 			existingEgressGroup: &cpv1b2.EgressGroup{
 				ObjectMeta: metav1.ObjectMeta{Name: "egressA", UID: "uidA"},
@@ -789,7 +789,7 @@ func TestSyncEgress(t *testing.T) {
 				{
 					ObjectMeta: metav1.ObjectMeta{Name: "egressA", UID: "uidA"},
 					Spec:       crdv1b1.EgressSpec{EgressIP: fakeLocalEgressIP1, Bandwidth: &fakeBandwidth},
-					Status:     crdv1b1.EgressStatus{EgressIP: fakeLocalEgressIP1, EgressNode: fakeNode},
+					Status:     crdv1b1.EgressStatus{EgressIP: fakeLocalEgressIP1, EgressIPs: []string{fakeLocalEgressIP1}, EgressNode: fakeNode},
 				},
 			},
 			expectedCalls: func(mockOFClient *openflowtest.MockClient, mockRouteClient *routetest.MockInterface, mockIPAssigner *ipassignertest.MockIPAssigner) {
@@ -827,7 +827,7 @@ func TestSyncEgress(t *testing.T) {
 				{
 					ObjectMeta: metav1.ObjectMeta{Name: "egressA", UID: "uidA"},
 					Spec:       crdv1b1.EgressSpec{EgressIP: fakeLocalEgressIP1},
-					Status:     crdv1b1.EgressStatus{EgressIP: fakeLocalEgressIP1, EgressNode: fakeNode},
+					Status:     crdv1b1.EgressStatus{EgressIP: fakeLocalEgressIP1, EgressIPs: []string{fakeLocalEgressIP1}, EgressNode: fakeNode},
 				},
 			},
 			expectedCalls: func(mockOFClient *openflowtest.MockClient, mockRouteClient *routetest.MockInterface, mockIPAssigner *ipassignertest.MockIPAssigner) {
@@ -866,7 +866,7 @@ func TestSyncEgress(t *testing.T) {
 				{
 					ObjectMeta: metav1.ObjectMeta{Name: "egressA", UID: "uidA"},
 					Spec:       crdv1b1.EgressSpec{EgressIP: fakeLocalEgressIP1, Bandwidth: &newFakeBandwidth},
-					Status:     crdv1b1.EgressStatus{EgressIP: fakeLocalEgressIP1, EgressNode: fakeNode},
+					Status:     crdv1b1.EgressStatus{EgressIP: fakeLocalEgressIP1, EgressIPs: []string{fakeLocalEgressIP1}, EgressNode: fakeNode},
 				},
 			},
 			expectedCalls: func(mockOFClient *openflowtest.MockClient, mockRouteClient *routetest.MockInterface, mockIPAssigner *ipassignertest.MockIPAssigner) {
@@ -912,7 +912,7 @@ func TestSyncEgress(t *testing.T) {
 				{
 					ObjectMeta: metav1.ObjectMeta{Name: "egressA", UID: "uidA"},
 					Spec:       crdv1b1.EgressSpec{EgressIP: fakeLocalEgressIP1, ExternalIPPool: fakeExternalIPPool},
-					Status: crdv1b1.EgressStatus{EgressIP: fakeLocalEgressIP1, EgressNode: fakeNode, Conditions: []crdv1b1.EgressCondition{
+					Status: crdv1b1.EgressStatus{EgressIP: fakeLocalEgressIP1, EgressIPs: []string{fakeLocalEgressIP1}, EgressNode: fakeNode, Conditions: []crdv1b1.EgressCondition{
 						{Type: crdv1b1.IPAssigned, Status: v1.ConditionTrue, Reason: "Assigned", Message: "EgressIP is successfully assigned to EgressNode"},
 					}},
 				},
@@ -972,7 +972,7 @@ func TestSyncEgress(t *testing.T) {
 				{
 					ObjectMeta: metav1.ObjectMeta{Name: "egressA", UID: "uidA"},
 					Spec:       crdv1b1.EgressSpec{EgressIP: fakeLocalEgressIP1, ExternalIPPool: fakeExternalIPPool},
-					Status: crdv1b1.EgressStatus{EgressIP: fakeLocalEgressIP1, EgressNode: fakeNode, Conditions: []crdv1b1.EgressCondition{
+					Status: crdv1b1.EgressStatus{EgressIP: fakeLocalEgressIP1, EgressIPs: []string{fakeLocalEgressIP1}, EgressNode: fakeNode, Conditions: []crdv1b1.EgressCondition{
 						{Type: crdv1b1.IPAssigned, Status: v1.ConditionTrue, Reason: "Assigned", Message: "EgressIP is successfully assigned to EgressNode"},
 					}},
 				},
@@ -1036,14 +1036,14 @@ func TestSyncEgress(t *testing.T) {
 				{
 					ObjectMeta: metav1.ObjectMeta{Name: "egressA", UID: "uidA"},
 					Spec:       crdv1b1.EgressSpec{EgressIP: fakeLocalEgressIP1, ExternalIPPool: fakeExternalIPPool},
-					Status: crdv1b1.EgressStatus{EgressIP: fakeLocalEgressIP1, EgressNode: fakeNode, Conditions: []crdv1b1.EgressCondition{
+					Status: crdv1b1.EgressStatus{EgressIP: fakeLocalEgressIP1, EgressIPs: []string{fakeLocalEgressIP1}, EgressNode: fakeNode, Conditions: []crdv1b1.EgressCondition{
 						{Type: crdv1b1.IPAssigned, Status: v1.ConditionTrue, Reason: "Assigned", Message: "EgressIP is successfully assigned to EgressNode"},
 					}},
 				},
 				{
 					ObjectMeta: metav1.ObjectMeta{Name: "egressB", UID: "uidB"},
 					Spec:       crdv1b1.EgressSpec{EgressIP: fakeLocalEgressIP2, ExternalIPPool: fakeExternalIPPool},
-					Status: crdv1b1.EgressStatus{EgressIP: fakeLocalEgressIP2, EgressNode: fakeNode, Conditions: []crdv1b1.EgressCondition{
+					Status: crdv1b1.EgressStatus{EgressIP: fakeLocalEgressIP2, EgressIPs: []string{fakeLocalEgressIP2}, EgressNode: fakeNode, Conditions: []crdv1b1.EgressCondition{
 						{Type: crdv1b1.IPAssigned, Status: v1.ConditionTrue, Reason: "Assigned", Message: "EgressIP is successfully assigned to EgressNode"},
 					}},
 				},
@@ -1149,13 +1149,15 @@ func TestSyncEgress(t *testing.T) {
 				{
 					ObjectMeta: metav1.ObjectMeta{Name: "egressA", UID: "uidA"},
 					Spec:       crdv1b1.EgressSpec{EgressIPs: []string{fakeLocalEgressIPv4, fakeLocalEgressIPv6}},
-					Status:     crdv1b1.EgressStatus{EgressIPs: []string{fakeLocalEgressIPv4, fakeLocalEgressIPv6}, EgressNode: fakeNode},
+					Status:     crdv1b1.EgressStatus{EgressIP: fakeLocalEgressIPv4, EgressIPs: []string{fakeLocalEgressIPv4, fakeLocalEgressIPv6}, EgressNode: fakeNode},
 				},
 			},
 			expectedCalls: func(mockOFClient *openflowtest.MockClient, mockRouteClient *routetest.MockInterface, mockIPAssigner *ipassignertest.MockIPAssigner) {
 				// First sync: install dual-stack flows/rules with shared mark 1.
-				mockOFClient.EXPECT().InstallDualStackSNATMarkFlows([]net.IP{net.ParseIP(fakeLocalEgressIPv4), net.ParseIP(fakeLocalEgressIPv6)}, uint32(1))
-				mockRouteClient.EXPECT().AddDualStackSNATRules([]net.IP{net.ParseIP(fakeLocalEgressIPv4), net.ParseIP(fakeLocalEgressIPv6)}, uint32(1))
+				mockOFClient.EXPECT().InstallSNATMarkFlows(net.ParseIP(fakeLocalEgressIPv4), uint32(1))
+				mockOFClient.EXPECT().InstallSNATMarkFlows(net.ParseIP(fakeLocalEgressIPv6), uint32(1))
+				mockRouteClient.EXPECT().AddSNATRule(net.ParseIP(fakeLocalEgressIPv4), uint32(1))
+				mockRouteClient.EXPECT().AddSNATRule(net.ParseIP(fakeLocalEgressIPv6), uint32(1))
 				mockOFClient.EXPECT().InstallPodSNATFlows(uint32(1), net.ParseIP(fakeLocalEgressIPv4), uint32(1))
 				mockOFClient.EXPECT().InstallPodSNATFlows(uint32(1), net.ParseIP(fakeLocalEgressIPv6), uint32(1))
 
@@ -1166,6 +1168,96 @@ func TestSyncEgress(t *testing.T) {
 				// UnassignIP is called once per IP per sync (3 syncs: first, second, idempotent).
 				mockIPAssigner.EXPECT().UnassignIP(fakeLocalEgressIPv4).Return(false, nil).Times(3)
 				mockIPAssigner.EXPECT().UnassignIP(fakeLocalEgressIPv6).Return(false, nil).Times(3)
+			},
+		},
+		{
+			name:                "Dual-stack local Egress loses scheduling result",
+			maxEgressIPsPerNode: 1,
+			existingEgress: &crdv1b1.Egress{
+				ObjectMeta: metav1.ObjectMeta{Name: "egressA", UID: "uidA"},
+				Spec:       crdv1b1.EgressSpec{EgressIPs: []string{fakeLocalEgressIPv4, fakeLocalEgressIPv6}},
+			},
+			newEgress: &crdv1b1.Egress{
+				ObjectMeta: metav1.ObjectMeta{Name: "egressA", UID: "uidA"},
+				Spec: crdv1b1.EgressSpec{
+					EgressIPs:       []string{fakeLocalEgressIPv4, fakeLocalEgressIPv6},
+					ExternalIPPools: []string{"pool-v4", "pool-v6"},
+				},
+			},
+			existingEgressGroup: &cpv1b2.EgressGroup{
+				ObjectMeta: metav1.ObjectMeta{Name: "egressA", UID: "uidA"},
+				GroupMembers: []cpv1b2.GroupMember{
+					{Pod: &cpv1b2.PodReference{Name: "pod1", Namespace: "ns1"}},
+				},
+			},
+			newEgressGroup: &cpv1b2.EgressGroup{
+				ObjectMeta: metav1.ObjectMeta{Name: "egressA", UID: "uidA"},
+				GroupMembers: []cpv1b2.GroupMember{
+					{Pod: &cpv1b2.PodReference{Name: "pod1", Namespace: "ns1"}},
+				},
+			},
+			expectedEgresses: []*crdv1b1.Egress{
+				{
+					ObjectMeta: metav1.ObjectMeta{Name: "egressA", UID: "uidA"},
+					Spec: crdv1b1.EgressSpec{
+						EgressIPs:       []string{fakeLocalEgressIPv4, fakeLocalEgressIPv6},
+						ExternalIPPools: []string{"pool-v4", "pool-v6"},
+					},
+					Status: crdv1b1.EgressStatus{
+						Conditions: []crdv1b1.EgressCondition{
+							{Type: crdv1b1.IPAssigned, Status: v1.ConditionFalse, Reason: "AssignmentError", Message: "Failed to assign dual-stack EgressIPs to a Node: no Node can host both dual-stack Egress IPs (pool pool-v4, pool pool-v6): no Node available"},
+						},
+					},
+				},
+			},
+			expectedCalls: func(mockOFClient *openflowtest.MockClient, mockRouteClient *routetest.MockInterface, mockIPAssigner *ipassignertest.MockIPAssigner) {
+				// First sync: static dual-stack Egress is local and installs datapath state.
+				mockOFClient.EXPECT().InstallSNATMarkFlows(net.ParseIP(fakeLocalEgressIPv4), uint32(1))
+				mockOFClient.EXPECT().InstallSNATMarkFlows(net.ParseIP(fakeLocalEgressIPv6), uint32(1))
+				mockRouteClient.EXPECT().AddSNATRule(net.ParseIP(fakeLocalEgressIPv4), uint32(1))
+				mockRouteClient.EXPECT().AddSNATRule(net.ParseIP(fakeLocalEgressIPv6), uint32(1))
+				mockOFClient.EXPECT().InstallPodSNATFlows(uint32(1), net.ParseIP(fakeLocalEgressIPv4), uint32(1))
+				mockOFClient.EXPECT().InstallPodSNATFlows(uint32(1), net.ParseIP(fakeLocalEgressIPv6), uint32(1))
+
+				// Second sync: scheduling fails, so stale datapath state from the first sync must be removed.
+				mockOFClient.EXPECT().UninstallPodSNATFlows(uint32(1))
+				mockRouteClient.EXPECT().DeleteSNATRule(uint32(1))
+				mockOFClient.EXPECT().UninstallSNATMarkFlows(uint32(1))
+				mockIPAssigner.EXPECT().UnassignIP(fakeLocalEgressIPv4).Return(false, nil).Times(2)
+				mockIPAssigner.EXPECT().UnassignIP(fakeLocalEgressIPv6).Return(false, nil).Times(2)
+			},
+		},
+		{
+			name: "Dual-stack pool based Egress before IP allocation",
+			existingEgress: &crdv1b1.Egress{
+				ObjectMeta: metav1.ObjectMeta{Name: "egressA", UID: "uidA"},
+				Spec: crdv1b1.EgressSpec{
+					ExternalIPPools: []string{"pool-v4", "pool-v6"},
+				},
+				Status: crdv1b1.EgressStatus{
+					EgressNode: fakeNode,
+					EgressIP:   fakeLocalEgressIPv4,
+					EgressIPs:  []string{fakeLocalEgressIPv4, fakeLocalEgressIPv6},
+				},
+			},
+			newEgress: &crdv1b1.Egress{
+				ObjectMeta: metav1.ObjectMeta{Name: "egressA", UID: "uidA"},
+				Spec: crdv1b1.EgressSpec{
+					ExternalIPPools: []string{"pool-v4", "pool-v6"},
+				},
+			},
+			existingEgressGroup: &cpv1b2.EgressGroup{
+				ObjectMeta: metav1.ObjectMeta{Name: "egressA", UID: "uidA"},
+			},
+			expectedEgresses: []*crdv1b1.Egress{
+				{
+					ObjectMeta: metav1.ObjectMeta{Name: "egressA", UID: "uidA"},
+					Spec: crdv1b1.EgressSpec{
+						ExternalIPPools: []string{"pool-v4", "pool-v6"},
+					},
+				},
+			},
+			expectedCalls: func(mockOFClient *openflowtest.MockClient, mockRouteClient *routetest.MockInterface, mockIPAssigner *ipassignertest.MockIPAssigner) {
 			},
 		},
 		{
@@ -1199,14 +1291,16 @@ func TestSyncEgress(t *testing.T) {
 			},
 			expectedCalls: func(mockOFClient *openflowtest.MockClient, mockRouteClient *routetest.MockInterface, mockIPAssigner *ipassignertest.MockIPAssigner) {
 				// First sync: local, install everything.
-				mockOFClient.EXPECT().InstallDualStackSNATMarkFlows([]net.IP{net.ParseIP(fakeLocalEgressIPv4), net.ParseIP(fakeLocalEgressIPv6)}, uint32(1))
-				mockRouteClient.EXPECT().AddDualStackSNATRules([]net.IP{net.ParseIP(fakeLocalEgressIPv4), net.ParseIP(fakeLocalEgressIPv6)}, uint32(1))
+				mockOFClient.EXPECT().InstallSNATMarkFlows(net.ParseIP(fakeLocalEgressIPv4), uint32(1))
+				mockOFClient.EXPECT().InstallSNATMarkFlows(net.ParseIP(fakeLocalEgressIPv6), uint32(1))
+				mockRouteClient.EXPECT().AddSNATRule(net.ParseIP(fakeLocalEgressIPv4), uint32(1))
+				mockRouteClient.EXPECT().AddSNATRule(net.ParseIP(fakeLocalEgressIPv6), uint32(1))
 				mockOFClient.EXPECT().InstallPodSNATFlows(uint32(1), net.ParseIP(fakeLocalEgressIPv4), uint32(1))
 				mockOFClient.EXPECT().InstallPodSNATFlows(uint32(1), net.ParseIP(fakeLocalEgressIPv6), uint32(1))
 
 				// Second sync: IPs become non-local, uninstall SNAT mark flows and rules.
-				mockOFClient.EXPECT().UninstallDualStackSNATMarkFlows(uint32(1))
-				mockRouteClient.EXPECT().DeleteDualStackSNATRules(uint32(1))
+				mockOFClient.EXPECT().UninstallSNATMarkFlows(uint32(1))
+				mockRouteClient.EXPECT().DeleteSNATRule(uint32(1))
 				mockOFClient.EXPECT().UninstallPodSNATFlows(uint32(1))
 
 				// Re-install pod flows with mark 0 (non-local).
@@ -1244,28 +1338,32 @@ func TestSyncEgress(t *testing.T) {
 				{
 					ObjectMeta: metav1.ObjectMeta{Name: "egressA", UID: "uidA"},
 					Spec:       crdv1b1.EgressSpec{EgressIPs: []string{fakeLocalEgressIPv42, fakeLocalEgressIPv62}},
-					Status:     crdv1b1.EgressStatus{EgressIPs: []string{fakeLocalEgressIPv42, fakeLocalEgressIPv62}, EgressNode: fakeNode},
+					Status:     crdv1b1.EgressStatus{EgressIP: fakeLocalEgressIPv42, EgressIPs: []string{fakeLocalEgressIPv42, fakeLocalEgressIPv62}, EgressNode: fakeNode},
 				},
 			},
 			expectedCalls: func(mockOFClient *openflowtest.MockClient, mockRouteClient *routetest.MockInterface, mockIPAssigner *ipassignertest.MockIPAssigner) {
 				// First sync: install with old IPs.
-				mockOFClient.EXPECT().InstallDualStackSNATMarkFlows([]net.IP{net.ParseIP(fakeLocalEgressIPv4), net.ParseIP(fakeLocalEgressIPv6)}, uint32(1))
-				mockRouteClient.EXPECT().AddDualStackSNATRules([]net.IP{net.ParseIP(fakeLocalEgressIPv4), net.ParseIP(fakeLocalEgressIPv6)}, uint32(1))
+				mockOFClient.EXPECT().InstallSNATMarkFlows(net.ParseIP(fakeLocalEgressIPv4), uint32(1))
+				mockOFClient.EXPECT().InstallSNATMarkFlows(net.ParseIP(fakeLocalEgressIPv6), uint32(1))
+				mockRouteClient.EXPECT().AddSNATRule(net.ParseIP(fakeLocalEgressIPv4), uint32(1))
+				mockRouteClient.EXPECT().AddSNATRule(net.ParseIP(fakeLocalEgressIPv6), uint32(1))
 				mockOFClient.EXPECT().InstallPodSNATFlows(uint32(1), net.ParseIP(fakeLocalEgressIPv4), uint32(1))
 				mockOFClient.EXPECT().InstallPodSNATFlows(uint32(1), net.ParseIP(fakeLocalEgressIPv6), uint32(1))
 
 				// IPs changed: uninstall old Egress (pod flows + unrealize + unassign).
 				mockOFClient.EXPECT().UninstallPodSNATFlows(uint32(1))
-				mockOFClient.EXPECT().UninstallDualStackSNATMarkFlows(uint32(1))
-				mockRouteClient.EXPECT().DeleteDualStackSNATRules(uint32(1))
+				mockOFClient.EXPECT().UninstallSNATMarkFlows(uint32(1))
+				mockRouteClient.EXPECT().DeleteSNATRule(uint32(1))
 
 				// Old IPs: UnassignIP called during first sync + uninstallEgress during second sync.
 				mockIPAssigner.EXPECT().UnassignIP(fakeLocalEgressIPv4).Return(false, nil).Times(2)
 				mockIPAssigner.EXPECT().UnassignIP(fakeLocalEgressIPv6).Return(false, nil).Times(2)
 
 				// Install with new IPs and a fresh mark (mark 1 was released, re-allocated).
-				mockOFClient.EXPECT().InstallDualStackSNATMarkFlows([]net.IP{net.ParseIP(fakeLocalEgressIPv42), net.ParseIP(fakeLocalEgressIPv62)}, uint32(1))
-				mockRouteClient.EXPECT().AddDualStackSNATRules([]net.IP{net.ParseIP(fakeLocalEgressIPv42), net.ParseIP(fakeLocalEgressIPv62)}, uint32(1))
+				mockOFClient.EXPECT().InstallSNATMarkFlows(net.ParseIP(fakeLocalEgressIPv42), uint32(1))
+				mockOFClient.EXPECT().InstallSNATMarkFlows(net.ParseIP(fakeLocalEgressIPv62), uint32(1))
+				mockRouteClient.EXPECT().AddSNATRule(net.ParseIP(fakeLocalEgressIPv42), uint32(1))
+				mockRouteClient.EXPECT().AddSNATRule(net.ParseIP(fakeLocalEgressIPv62), uint32(1))
 				mockOFClient.EXPECT().InstallPodSNATFlows(uint32(1), net.ParseIP(fakeLocalEgressIPv42), uint32(1))
 				mockOFClient.EXPECT().InstallPodSNATFlows(uint32(1), net.ParseIP(fakeLocalEgressIPv62), uint32(1))
 
@@ -1652,8 +1750,10 @@ func TestSyncOverlappingDualStackEgress(t *testing.T) {
 	checkQueueItemExistence(t, c.queue, egress1.Name, egress2.Name)
 
 	// Sync egress1: first reference to the IP pair — mark, SNAT mark flows, and SNAT rules are installed.
-	c.mockOFClient.EXPECT().InstallDualStackSNATMarkFlows([]net.IP{net.ParseIP(fakeLocalEgressIPv4), net.ParseIP(fakeLocalEgressIPv6)}, uint32(1))
-	c.mockRouteClient.EXPECT().AddDualStackSNATRules([]net.IP{net.ParseIP(fakeLocalEgressIPv4), net.ParseIP(fakeLocalEgressIPv6)}, uint32(1))
+	c.mockOFClient.EXPECT().InstallSNATMarkFlows(net.ParseIP(fakeLocalEgressIPv4), uint32(1))
+	c.mockOFClient.EXPECT().InstallSNATMarkFlows(net.ParseIP(fakeLocalEgressIPv6), uint32(1))
+	c.mockRouteClient.EXPECT().AddSNATRule(net.ParseIP(fakeLocalEgressIPv4), uint32(1))
+	c.mockRouteClient.EXPECT().AddSNATRule(net.ParseIP(fakeLocalEgressIPv6), uint32(1))
 	c.mockOFClient.EXPECT().InstallPodSNATFlows(uint32(1), net.ParseIP(fakeLocalEgressIPv4), uint32(1))
 	c.mockOFClient.EXPECT().InstallPodSNATFlows(uint32(1), net.ParseIP(fakeLocalEgressIPv6), uint32(1))
 	c.mockOFClient.EXPECT().InstallPodSNATFlows(uint32(2), net.ParseIP(fakeLocalEgressIPv4), uint32(1))
@@ -1696,8 +1796,8 @@ func TestSyncOverlappingDualStackEgress(t *testing.T) {
 	assert.NoError(t, err)
 
 	// Delete egress2. Now the IP pair is fully unreferenced — SNAT mark flows, SNAT rules, and mark should be released.
-	c.mockOFClient.EXPECT().UninstallDualStackSNATMarkFlows(uint32(1))
-	c.mockRouteClient.EXPECT().DeleteDualStackSNATRules(uint32(1))
+	c.mockOFClient.EXPECT().UninstallSNATMarkFlows(uint32(1))
+	c.mockRouteClient.EXPECT().DeleteSNATRule(uint32(1))
 	c.mockOFClient.EXPECT().UninstallPodSNATFlows(uint32(2))
 	c.mockOFClient.EXPECT().UninstallPodSNATFlows(uint32(3))
 	c.crdClient.CrdV1beta1().Egresses().Delete(context.TODO(), egress2.Name, metav1.DeleteOptions{})
@@ -1755,6 +1855,7 @@ func TestUpdateEgressStatus(t *testing.T) {
 			expectedEgressStatus: crdv1b1.EgressStatus{
 				EgressNode: fakeNode,
 				EgressIP:   fakeLocalEgressIP1,
+				EgressIPs:  []string{fakeLocalEgressIP1},
 			},
 		},
 		{
@@ -1771,6 +1872,7 @@ func TestUpdateEgressStatus(t *testing.T) {
 			expectedEgressStatus: crdv1b1.EgressStatus{
 				EgressNode: fakeNode,
 				EgressIP:   fakeLocalEgressIP1,
+				EgressIPs:  []string{fakeLocalEgressIP1},
 			},
 		},
 		{
@@ -1823,6 +1925,7 @@ func TestUpdateEgressStatus(t *testing.T) {
 			expectedEgressStatus: crdv1b1.EgressStatus{
 				EgressNode: fakeNode,
 				EgressIP:   fakeLocalEgressIP1,
+				EgressIPs:  []string{fakeLocalEgressIP1},
 				Conditions: []crdv1b1.EgressCondition{
 					{Type: crdv1b1.IPAssigned, Status: v1.ConditionTrue, Reason: "Assigned", Message: "EgressIP is successfully assigned to EgressNode"},
 					{Type: crdv1b1.IPAllocated, Status: v1.ConditionTrue, Reason: "Allocated", Message: "EgressIP is successfully allocated"},
@@ -1954,6 +2057,7 @@ func TestGetEgress(t *testing.T) {
 		Status: crdv1b1.EgressStatus{
 			EgressNode: fakeNode,
 			EgressIP:   fakeLocalEgressIP1,
+			EgressIPs:  []string{fakeLocalEgressIP1},
 		},
 	}
 	egressGroup := &cpv1b2.EgressGroup{
@@ -2014,6 +2118,7 @@ func TestGetEgress(t *testing.T) {
 					Name:       tt.expectedEgress.Name,
 					UID:        tt.expectedEgress.UID,
 					EgressIP:   tt.expectedEgress.Status.EgressIP,
+					EgressIPs:  tt.expectedEgress.Status.EgressIPs,
 					EgressNode: tt.expectedEgress.Status.EgressNode,
 				}, gotEgress)
 			} else {
@@ -2045,6 +2150,7 @@ func TestGetEgressIPByMark(t *testing.T) {
 	tests := []struct {
 		name             string
 		mark             uint32
+		isIPv6           bool
 		expectedEgressIP string
 		expectedErr      string
 	}{
@@ -2056,12 +2162,12 @@ func TestGetEgressIPByMark(t *testing.T) {
 		{
 			name:        "snatMark not associated with any local egressIP",
 			mark:        uint32(2),
-			expectedErr: "no EgressIP associated with mark 2",
+			expectedErr: "no EgressIP associated with mark 2 and isIPv6 false",
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			gotEgressIP, err := c.GetEgressIPByMark(tt.mark)
+			gotEgressIP, err := c.GetEgressIPByMark(tt.mark, tt.isIPv6)
 			if tt.expectedErr == "" {
 				require.NoError(t, err)
 			} else {
@@ -2070,6 +2176,37 @@ func TestGetEgressIPByMark(t *testing.T) {
 			assert.Equal(t, tt.expectedEgressIP, gotEgressIP)
 		})
 	}
+}
+
+func TestGetDualStackEgressIPByMark(t *testing.T) {
+	egress := &crdv1b1.Egress{
+		ObjectMeta: metav1.ObjectMeta{Name: "egressA", UID: "uidA"},
+		Spec:       crdv1b1.EgressSpec{EgressIPs: []string{fakeLocalEgressIPv4, fakeLocalEgressIPv6}},
+	}
+
+	c := newFakeController(t, []runtime.Object{egress})
+	stopCh := make(chan struct{})
+	defer close(stopCh)
+	c.crdInformerFactory.Start(stopCh)
+	c.informerFactory.Start(stopCh)
+	c.crdInformerFactory.WaitForCacheSync(stopCh)
+	c.informerFactory.WaitForCacheSync(stopCh)
+	c.mockOFClient.EXPECT().InstallSNATMarkFlows(net.ParseIP(fakeLocalEgressIPv4), uint32(1))
+	c.mockOFClient.EXPECT().InstallSNATMarkFlows(net.ParseIP(fakeLocalEgressIPv6), uint32(1))
+	c.mockRouteClient.EXPECT().AddSNATRule(net.ParseIP(fakeLocalEgressIPv4), uint32(1))
+	c.mockRouteClient.EXPECT().AddSNATRule(net.ParseIP(fakeLocalEgressIPv6), uint32(1))
+	c.mockIPAssigner.EXPECT().UnassignIP(fakeLocalEgressIPv4)
+	c.mockIPAssigner.EXPECT().UnassignIP(fakeLocalEgressIPv6)
+	err := c.syncEgress(egress.Name)
+	require.NoError(t, err)
+
+	gotIPv4, err := c.GetEgressIPByMark(1, false)
+	require.NoError(t, err)
+	assert.Equal(t, fakeLocalEgressIPv4, gotIPv4)
+
+	gotIPv6, err := c.GetEgressIPByMark(1, true)
+	require.NoError(t, err)
+	assert.Equal(t, fakeLocalEgressIPv6, gotIPv6)
 }
 
 func TestUpdateServiceCIDRs(t *testing.T) {
@@ -2264,23 +2401,23 @@ func TestEgressControllerReplaceEgressIPs(t *testing.T) {
 		&crdv1b1.Egress{
 			ObjectMeta: metav1.ObjectMeta{Name: "egressA", UID: "uidA"},
 			Spec:       crdv1b1.EgressSpec{EgressIP: fakeLocalEgressIP1, ExternalIPPool: fakeExternalIPPool},
-			Status:     crdv1b1.EgressStatus{EgressNode: fakeNode, EgressIP: fakeLocalEgressIP1},
+			Status:     crdv1b1.EgressStatus{EgressNode: fakeNode, EgressIP: fakeLocalEgressIP1, EgressIPs: []string{fakeLocalEgressIP1}},
 		},
 		&crdv1b1.Egress{
 			ObjectMeta: metav1.ObjectMeta{Name: "egressB", UID: "uidB"},
 			Spec:       crdv1b1.EgressSpec{EgressIP: fakeLocalEgressIP2, ExternalIPPool: fakeExternalIPPool},
-			Status:     crdv1b1.EgressStatus{EgressNode: fakeNode, EgressIP: fakeLocalEgressIP2},
+			Status:     crdv1b1.EgressStatus{EgressNode: fakeNode, EgressIP: fakeLocalEgressIP2, EgressIPs: []string{fakeLocalEgressIP2}},
 		},
 		// Should not be included.
 		&crdv1b1.Egress{
 			ObjectMeta: metav1.ObjectMeta{Name: "egressC", UID: "uidA"},
 			Spec:       crdv1b1.EgressSpec{EgressIP: fakeRemoteEgressIP1, ExternalIPPool: fakeExternalIPPool},
-			Status:     crdv1b1.EgressStatus{EgressNode: fakeNode2, EgressIP: fakeRemoteEgressIP1},
+			Status:     crdv1b1.EgressStatus{EgressNode: fakeNode2, EgressIP: fakeRemoteEgressIP1, EgressIPs: []string{fakeRemoteEgressIP1}},
 		},
 		&crdv1b1.Egress{
 			ObjectMeta: metav1.ObjectMeta{Name: "egressD", UID: "uidA"},
 			Spec:       crdv1b1.EgressSpec{EgressIP: "1.2.3.4", ExternalIPPool: "other-pool"},
-			Status:     crdv1b1.EgressStatus{EgressNode: fakeNode, EgressIP: "1.2.3.4"},
+			Status:     crdv1b1.EgressStatus{EgressNode: fakeNode, EgressIP: "1.2.3.4", EgressIPs: []string{"1.2.3.4"}},
 		},
 		&crdv1b1.ExternalIPPool{
 			ObjectMeta: metav1.ObjectMeta{Name: fakeExternalIPPool, UID: "pool-uidA"},
@@ -2339,7 +2476,7 @@ func TestEgressControllerReplaceEgressIPsDualStack(t *testing.T) {
 		&crdv1b1.Egress{
 			ObjectMeta: metav1.ObjectMeta{Name: "egressSS", UID: "uidSS"},
 			Spec:       crdv1b1.EgressSpec{EgressIP: fakeLocalEgressIP1, ExternalIPPool: fakeExternalIPPool},
-			Status:     crdv1b1.EgressStatus{EgressNode: fakeNode, EgressIP: fakeLocalEgressIP1},
+			Status:     crdv1b1.EgressStatus{EgressNode: fakeNode, EgressIP: fakeLocalEgressIP1, EgressIPs: []string{fakeLocalEgressIP1}},
 		},
 		&crdv1b1.ExternalIPPool{
 			ObjectMeta: metav1.ObjectMeta{Name: fakeExternalIPPoolV4, UID: "pool-v4-uid"},

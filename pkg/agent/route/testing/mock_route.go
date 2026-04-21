@@ -199,20 +199,6 @@ func (mr *MockInterfaceMockRecorder) AddSNATRule(snatIP, mark any) *gomock.Call 
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddSNATRule", reflect.TypeOf((*MockInterface)(nil).AddSNATRule), snatIP, mark)
 }
 
-// AddDualStackSNATRules mocks base method.
-func (m *MockInterface) AddDualStackSNATRules(ips []net.IP, mark uint32) error {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "AddDualStackSNATRules", ips, mark)
-	ret0, _ := ret[0].(error)
-	return ret0
-}
-
-// AddDualStackSNATRules indicates an expected call of AddDualStackSNATRules.
-func (mr *MockInterfaceMockRecorder) AddDualStackSNATRules(ips, mark any) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddDualStackSNATRules", reflect.TypeOf((*MockInterface)(nil).AddDualStackSNATRules), ips, mark)
-}
-
 // ClearConntrackEntryForService mocks base method.
 func (m *MockInterface) ClearConntrackEntryForService(svcIP net.IP, svcPort uint16, endpointIP net.IP, protocol openflow.Protocol) error {
 	m.ctrl.T.Helper()
@@ -365,20 +351,6 @@ func (m *MockInterface) DeleteSNATRule(mark uint32) error {
 func (mr *MockInterfaceMockRecorder) DeleteSNATRule(mark any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteSNATRule", reflect.TypeOf((*MockInterface)(nil).DeleteSNATRule), mark)
-}
-
-// DeleteDualStackSNATRules mocks base method.
-func (m *MockInterface) DeleteDualStackSNATRules(mark uint32) error {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "DeleteDualStackSNATRules", mark)
-	ret0, _ := ret[0].(error)
-	return ret0
-}
-
-// DeleteDualStackSNATRules indicates an expected call of DeleteDualStackSNATRules.
-func (mr *MockInterfaceMockRecorder) DeleteDualStackSNATRules(mark any) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteDualStackSNATRules", reflect.TypeOf((*MockInterface)(nil).DeleteDualStackSNATRules), mark)
 }
 
 // Initialize mocks base method.

@@ -15,6 +15,8 @@
 package types
 
 import (
+	"net"
+
 	"k8s.io/apimachinery/pkg/types"
 )
 
@@ -22,5 +24,16 @@ type EgressConfig struct {
 	Name       string
 	UID        types.UID
 	EgressIP   string
+	EgressIPs  []string
 	EgressNode string
+}
+
+func (e EgressConfig) EgressIPByFamily(isIPv6 bool) string {
+	for _, ipStr := range e.EgressIPs {
+		ip := net.ParseIP(ipStr)
+		if ip != nil && (ip.To4() == nil) == isIPv6 {
+			return ipStr
+		}
+	}
+	return e.EgressIP
 }

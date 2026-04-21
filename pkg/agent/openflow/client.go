@@ -154,15 +154,6 @@ type Client interface {
 	// Calling the method with new CIDRs will override the flows installed for previous CIDRs.
 	InstallSNATBypassServiceFlows(serviceCIDRs []*net.IPNet) error
 
-	// InstallDualStackSNATMarkFlows installs OVS mark flows for a set of Egress IPs sharing a
-	// single mark. It uses distinct cache keys per IP family so neither family's flow overwrites
-	// the other in the flow cache.
-	InstallDualStackSNATMarkFlows(ips []net.IP, mark uint32) error
-
-	// UninstallDualStackSNATMarkFlows removes the OVS mark flows installed by
-	// InstallDualStackSNATMarkFlows.
-	UninstallDualStackSNATMarkFlows(mark uint32) error
-
 	// InstallSNATMarkFlows installs flows for a local SNAT IP. On Linux, a
 	// single flow is added to mark the packets tunnelled from remote Nodes
 	// that should be SNAT'd with the SNAT IP.
@@ -1082,46 +1073,27 @@ func (c *client) InstallSNATBypassServiceFlows(serviceCIDRs []*net.IPNet) error 
 
 func (c *client) InstallSNATMarkFlows(snatIP net.IP, mark uint32) error {
 	flow := c.featureEgress.snatIPFromTunnelFlow(snatIP, mark)
-	cacheKey := fmt.Sprintf("s%x", mark)
+	suffix := "v4"
+	if snatIP.To4() == nil {
+		suffix = "v6"
+	}
+	cacheKey := fmt.Sprintf("s%x-%s", mark, suffix)
 	c.replayMutex.RLock()
 	defer c.replayMutex.RUnlock()
 	return c.addFlows(c.featureEgress.cachedFlows, cacheKey, []binding.Flow{flow})
 }
 
 func (c *client) UninstallSNATMarkFlows(mark uint32) error {
-	cacheKey := fmt.Sprintf("s%x", mark)
-	c.replayMutex.RLock()
-	defer c.replayMutex.RUnlock()
-	return c.deleteFlows(c.featureEgress.cachedFlows, cacheKey)
-}
-
-// InstallDualStackSNATMarkFlows installs OVS tunnel-mark flows for a set of Egress IPs sharing
-// a single mark. It uses separate cache keys per IP family ("s%x-v4" / "s%x-v6") to prevent
-// overwriting.
-func (c *client) InstallDualStackSNATMarkFlows(ips []net.IP, mark uint32) error {
-	flowMap := make(map[string][]binding.Flow, len(ips))
-	for _, ip := range ips {
-		flow := c.featureEgress.snatIPFromTunnelFlow(ip, mark)
-		suffix := "v4"
-		if ip.To4() == nil {
-			suffix = "v6"
-		}
-		key := fmt.Sprintf("s%x-%s", mark, suffix)
-		flowMap[key] = []binding.Flow{flow}
-	}
-	c.replayMutex.RLock()
-	defer c.replayMutex.RUnlock()
-	return c.addFlowsWithMultipleKeys(c.featureEgress.cachedFlows, flowMap)
-}
-
-// UninstallDualStackSNATMarkFlows removes the OVS tunnel-mark flows installed by InstallDualStackSNATMarkFlows.
-func (c *client) UninstallDualStackSNATMarkFlows(mark uint32) error {
-	c.replayMutex.RLock()
-	defer c.replayMutex.RUnlock()
-	return c.deleteFlowsWithMultipleKeys(c.featureEgress.cachedFlows, []string{
+	cacheKeys := []string{
 		fmt.Sprintf("s%x-v4", mark),
 		fmt.Sprintf("s%x-v6", mark),
-	})
+		fmt.Sprintf("s%x", mark), // For backward compatibility
+	}
+
+	c.replayMutex.RLock()
+	defer c.replayMutex.RUnlock()
+
+	return c.deleteFlowsWithMultipleKeys(c.featureEgress.cachedFlows, cacheKeys)
 }
 
 func (c *client) InstallPodSNATFlows(ofPort uint32, snatIP net.IP, snatMark uint32) error {

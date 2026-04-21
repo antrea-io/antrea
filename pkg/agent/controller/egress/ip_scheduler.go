@@ -59,8 +59,8 @@ type egressIPScheduler struct {
 	// cluster is responsible for selecting a Node for a given IP and pool.
 	cluster memberlist.Interface
 
-	egressLister         crdlisters.EgressLister
-	egressListerSynced   cache.InformerSynced
+	egressLister       crdlisters.EgressLister
+	egressListerSynced cache.InformerSynced
 
 	// queue is used to trigger scheduling. Triggering multiple times before the item is consumed will only cause one
 	// execution of scheduling.

@@ -69,7 +69,7 @@ type ControllerNetworkPolicyInfoQuerier interface {
 }
 
 type EgressQuerier interface {
-	GetEgressIPByMark(mark uint32) (string, error)
+	GetEgressIPByMark(mark uint32, isIPv6 bool) (string, error)
 	GetEgress(podNamespace, podName string) (types.EgressConfig, error)
 }
 
