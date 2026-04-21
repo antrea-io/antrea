@@ -16,6 +16,7 @@ package traceflow
 
 import (
 	"bytes"
+	"context"
 	"net"
 	"net/netip"
 	"os"
@@ -619,20 +620,23 @@ func TestErrTraceflowCRD(t *testing.T) {
 		},
 		Status: crdv1beta1.TraceflowStatus{
 			Phase:        crdv1beta1.Running,
-			DataplaneTag: 1,
+			DataplaneTag: 7,
 		},
 	}
-	expectedTf := tf
-	reason := "failed"
-	expectedTf.Status.Phase = crdv1beta1.Failed
-	expectedTf.Status.Reason = reason
-	expectedTf.Status.DataplaneTag = 0
+	reason := "node error"
 
 	tfc := newFakeTraceflowController(t, []runtime.Object{tf}, nil, nil)
 
-	gotTf, err := tfc.errorTraceflowCRD(tf, reason)
+	_, err := tfc.errorTraceflowCRD(tf, reason)
 	require.NoError(t, err)
-	assert.Equal(t, expectedTf, gotTf)
+
+	// Fetch the patched object directly from the fake client to avoid
+	// comparing against a stale in-memory pointer.
+	gotTf, err := tfc.crdClient.CrdV1beta1().Traceflows().Get(context.TODO(), tf.Name, metav1.GetOptions{})
+	require.NoError(t, err)
+	assert.Equal(t, crdv1beta1.Failed, gotTf.Status.Phase)
+	assert.Equal(t, reason, gotTf.Status.Reason)
+	assert.Equal(t, int8(0), gotTf.Status.DataplaneTag)
 }
 
 func TestStartTraceflow(t *testing.T) {

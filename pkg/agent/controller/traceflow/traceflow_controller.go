@@ -590,10 +590,15 @@ func (c *Controller) preparePacket(tf *crdv1beta1.Traceflow, intf *interfacestor
 func (c *Controller) errorTraceflowCRD(tf *crdv1beta1.Traceflow, reason string) (*crdv1beta1.Traceflow, error) {
 	tf.Status.Phase = crdv1beta1.Failed
 
-	type Traceflow struct {
-		Status crdv1beta1.TraceflowStatus `json:"status,omitempty"`
+	// Use a raw map so that dataplaneTag: 0 is explicitly included in the patch.
+	// A typed struct with omitempty would silently drop the zero value.
+	patchData := map[string]interface{}{
+		"status": map[string]interface{}{
+			"phase":        crdv1beta1.Failed,
+			"reason":       reason,
+			"dataplaneTag": 0,
+		},
 	}
-	patchData := Traceflow{Status: crdv1beta1.TraceflowStatus{Phase: tf.Status.Phase, Reason: reason, DataplaneTag: 0}}
 	payloads, _ := json.Marshal(patchData)
 	return c.crdClient.CrdV1beta1().Traceflows().Patch(context.TODO(), tf.Name, types.MergePatchType, payloads, metav1.PatchOptions{}, "status")
 }
