@@ -593,7 +593,7 @@ func (c *Controller) errorTraceflowCRD(tf *crdv1beta1.Traceflow, reason string) 
 	type Traceflow struct {
 		Status crdv1beta1.TraceflowStatus `json:"status,omitempty"`
 	}
-	patchData := Traceflow{Status: crdv1beta1.TraceflowStatus{Phase: tf.Status.Phase, Reason: reason}}
+	patchData := Traceflow{Status: crdv1beta1.TraceflowStatus{Phase: tf.Status.Phase, Reason: reason, DataplaneTag: 0}}
 	payloads, _ := json.Marshal(patchData)
 	return c.crdClient.CrdV1beta1().Traceflows().Patch(context.TODO(), tf.Name, types.MergePatchType, payloads, metav1.PatchOptions{}, "status")
 }

@@ -626,6 +626,7 @@ func TestErrTraceflowCRD(t *testing.T) {
 	reason := "failed"
 	expectedTf.Status.Phase = crdv1beta1.Failed
 	expectedTf.Status.Reason = reason
+	expectedTf.Status.DataplaneTag = 0
 
 	tfc := newFakeTraceflowController(t, []runtime.Object{tf}, nil, nil)
 
