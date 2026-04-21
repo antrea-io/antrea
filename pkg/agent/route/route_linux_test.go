@@ -399,7 +399,7 @@ func TestSyncIPTables(t *testing.T) {
 		networkConfig             *config.NetworkConfig
 		nodeConfig                *config.NodeConfig
 		nodeSNATRandomFully       bool
-		markToSNATIP              map[uint32]string
+		markToSNATIPs             map[uint32][]string
 		wireguardPort             int32
 		proxyHealthCheckPort      int32
 		expectedCalls             func(iptables *iptablestest.MockInterfaceMockRecorder)
@@ -425,9 +425,9 @@ func TestSyncIPTables(t *testing.T) {
 				},
 			},
 			nodeSNATRandomFully: true,
-			markToSNATIP: map[uint32]string{
-				1: "1.1.1.1",
-				2: "fe80::e643:4bff:fe02",
+			markToSNATIPs: map[uint32][]string{
+				1: {"1.1.1.1"},
+				2: {"fe80::e643:4bff:fe02"},
 			},
 			wireguardPort:        51820,
 			proxyHealthCheckPort: 10256,
@@ -635,9 +635,9 @@ COMMIT
 				},
 			},
 			nodeSNATRandomFully: true,
-			markToSNATIP: map[uint32]string{
-				1: "1.1.1.1",
-				2: "fe80::e643:4bff:fe02",
+			markToSNATIPs: map[uint32][]string{
+				1: {"1.1.1.1"},
+				2: {"fe80::e643:4bff:fe02"},
 			},
 			wireguardPort: 51820,
 			expectedCalls: func(mockIPTables *iptablestest.MockInterfaceMockRecorder) {
@@ -752,9 +752,9 @@ COMMIT
 				},
 			},
 			nodeSNATRandomFully: true,
-			markToSNATIP: map[uint32]string{
-				1: "1.1.1.1",
-				2: "fe80::e643:4bff:fe02",
+			markToSNATIPs: map[uint32][]string{
+				1: {"1.1.1.1"},
+				2: {"fe80::e643:4bff:fe02"},
 			},
 			expectedCalls: func(mockIPTables *iptablestest.MockInterfaceMockRecorder) {
 				mockIPTables.EnsureChain(iptables.ProtocolDual, iptables.RawTable, antreaPreRoutingChain)
@@ -945,9 +945,9 @@ COMMIT
 				},
 			},
 			nodeSNATRandomFully: true,
-			markToSNATIP: map[uint32]string{
-				1: "1.1.1.1",
-				2: "fe80::e643:4bff:fe02",
+			markToSNATIPs: map[uint32][]string{
+				1: {"1.1.1.1"},
+				2: {"fe80::e643:4bff:fe02"},
 			},
 			expectedCalls: func(mockIPTables *iptablestest.MockInterfaceMockRecorder) {
 				mockIPTables.EnsureChain(iptables.ProtocolDual, iptables.RawTable, antreaPreRoutingChain)
@@ -1221,8 +1221,12 @@ COMMIT
 				proxyHealthCheckPort:     tt.proxyHealthCheckPort,
 				iptablesCache:            newIPTablesCache(),
 			}
-			for mark, snatIP := range tt.markToSNATIP {
-				c.markToSNATIP.Store(mark, net.ParseIP(snatIP))
+			for mark, snatIPs := range tt.markToSNATIPs {
+				var ips []net.IP
+				for _, ipStr := range snatIPs {
+					ips = append(ips, net.ParseIP(ipStr))
+				}
+				c.markToSNATIPs.Store(mark, ips)
 			}
 			if tt.nodeNetworkPolicyEnabled {
 				c.initNodeNetworkPolicy()
@@ -2221,7 +2225,7 @@ func TestDeleteSNATRule(t *testing.T) {
 		name                  string
 		networkConfig         *config.NetworkConfig
 		egressSNATRandomFully bool
-		markToSNATIP          map[uint32]net.IP
+		markToSNATIPs         map[uint32][]net.IP
 		nodeConfig            *config.NodeConfig
 		mark                  uint32
 		expectedCalls         func(mockIPTables *iptablestest.MockInterfaceMockRecorder)
@@ -2233,9 +2237,9 @@ func TestDeleteSNATRule(t *testing.T) {
 					Name: "antrea-gw0",
 				},
 			},
-			markToSNATIP: map[uint32]net.IP{
-				10: net.ParseIP("1.1.1.1"),
-				11: net.ParseIP("1.1.1.2"),
+			markToSNATIPs: map[uint32][]net.IP{
+				10: {net.ParseIP("1.1.1.1")},
+				11: {net.ParseIP("1.1.1.2")},
 			},
 			mark: 10,
 			expectedCalls: func(mockIPTables *iptablestest.MockInterfaceMockRecorder) {
@@ -2254,9 +2258,9 @@ func TestDeleteSNATRule(t *testing.T) {
 					Name: "antrea-gw0",
 				},
 			},
-			markToSNATIP: map[uint32]net.IP{
-				10: net.ParseIP("fe80::e643:4bff:fe44:1"),
-				11: net.ParseIP("fe80::e643:4bff:fe44:2"),
+			markToSNATIPs: map[uint32][]net.IP{
+				10: {net.ParseIP("fe80::e643:4bff:fe44:1")},
+				11: {net.ParseIP("fe80::e643:4bff:fe44:2")},
 			},
 			mark: 11,
 			expectedCalls: func(mockIPTables *iptablestest.MockInterfaceMockRecorder) {
@@ -2276,9 +2280,9 @@ func TestDeleteSNATRule(t *testing.T) {
 				},
 			},
 			egressSNATRandomFully: true,
-			markToSNATIP: map[uint32]net.IP{
-				10: net.ParseIP("1.1.1.1"),
-				11: net.ParseIP("1.1.1.2"),
+			markToSNATIPs: map[uint32][]net.IP{
+				10: {net.ParseIP("1.1.1.1")},
+				11: {net.ParseIP("1.1.1.2")},
 			},
 			mark: 10,
 			expectedCalls: func(mockIPTables *iptablestest.MockInterfaceMockRecorder) {
@@ -2299,10 +2303,10 @@ func TestDeleteSNATRule(t *testing.T) {
 				iptables:              mockIPTables,
 				nodeConfig:            tt.nodeConfig,
 				egressSNATRandomFully: tt.egressSNATRandomFully,
-				markToSNATIP:          sync.Map{},
+				markToSNATIPs:         sync.Map{},
 			}
-			for mark, snatIP := range tt.markToSNATIP {
-				c.markToSNATIP.Store(mark, snatIP)
+			for mark, snatIPs := range tt.markToSNATIPs {
+				c.markToSNATIPs.Store(mark, snatIPs)
 			}
 			tt.expectedCalls(mockIPTables.EXPECT())
 			assert.NoError(t, c.DeleteSNATRule(tt.mark))

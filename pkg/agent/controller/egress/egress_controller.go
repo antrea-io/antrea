@@ -775,7 +775,7 @@ func (c *EgressController) realizeEgressIP(egressName, egressIP string, subnetIn
 // realizeDualStackEgressIPs realizes a pair of dual-stack Egress IPs under a single shared mark.
 // Compared with calling realizeEgressIP twice, this function is collision-safe:
 //   - The mark is allocated once and mirrored to both ipStates.
-//   - SNAT iptables rules for both families are installed via AddDualStackSNATRules so that the
+//   - SNAT iptables rules for both families are installed via AddSNATRules so that the
 //     route-client cache never stores only one family's IP under the shared mark key.
 //   - OVS SNAT-mark flows use distinct cache keys ("s%x-v4" / "s%x-v6") to avoid overwriting.
 //   - Policy routes reuse installPolicyRoute/uninstallPolicyRoute because IPv4 and IPv6 have
@@ -838,26 +838,18 @@ func (c *EgressController) realizeDualStackEgressIPs(egressName string, egressIP
 			}
 		}
 		if !allFlowsInstalled {
-			parsedIPs := make([]net.IP, len(ipStates))
-			for i, s := range ipStates {
-				parsedIPs[i] = s.egressIP
-			}
-			if err := c.ofClient.InstallDualStackSNATMarkFlows(parsedIPs, sharedMark); err != nil {
-				return 0, fmt.Errorf("error installing dual-stack SNAT mark flows for IPs %v: %v", egressIPs, err)
-			}
 			for _, s := range ipStates {
+				if err := c.ofClient.InstallSNATMarkFlows(s.egressIP, sharedMark); err != nil {
+					return 0, fmt.Errorf("error installing SNAT mark flows for IP %v: %v", s.egressIP, err)
+				}
 				s.flowsInstalled = true
 			}
 		}
 		if !allRulesInstalled {
-			parsedIPs := make([]net.IP, len(ipStates))
-			for i, s := range ipStates {
-				parsedIPs[i] = s.egressIP
-			}
-			if err := c.routeClient.AddDualStackSNATRules(parsedIPs, sharedMark); err != nil {
-				return 0, fmt.Errorf("error installing dual-stack SNAT rules for IPs %v: %v", egressIPs, err)
-			}
 			for _, s := range ipStates {
+				if err := c.routeClient.AddSNATRule(s.egressIP, sharedMark); err != nil {
+					return 0, fmt.Errorf("error installing SNAT rules for IP %v: %v", s.egressIP, err)
+				}
 				s.ruleInstalled = true
 			}
 		}
@@ -883,16 +875,16 @@ func (c *EgressController) realizeDualStackEgressIPs(egressName string, egressIP
 			}
 		}
 		if anyRuleInstalled {
-			if err := c.routeClient.DeleteDualStackSNATRules(sharedMark); err != nil {
-				return 0, fmt.Errorf("error uninstalling dual-stack SNAT rules for mark %#x: %v", sharedMark, err)
+			if err := c.routeClient.DeleteSNATRule(sharedMark); err != nil {
+				return 0, fmt.Errorf("error uninstalling SNAT rules for mark %#x: %v", sharedMark, err)
 			}
 			for _, s := range ipStates {
 				s.ruleInstalled = false
 			}
 		}
 		if anyFlowInstalled {
-			if err := c.ofClient.UninstallDualStackSNATMarkFlows(sharedMark); err != nil {
-				return 0, fmt.Errorf("error uninstalling dual-stack SNAT mark flows for IPs %v: %v", egressIPs, err)
+			if err := c.ofClient.UninstallSNATMarkFlows(sharedMark); err != nil {
+				return 0, fmt.Errorf("error uninstalling SNAT mark flows for IPs %v: %v", egressIPs, err)
 			}
 			for _, s := range ipStates {
 				s.flowsInstalled = false
@@ -1057,7 +1049,7 @@ func (c *EgressController) unrealizeDualStackEgressIPs(egressName string, egress
 			}
 		}
 		if anyRuleInstalled {
-			if err := c.routeClient.DeleteDualStackSNATRules(sharedMark); err != nil {
+			if err := c.routeClient.DeleteSNATRule(sharedMark); err != nil {
 				return err
 			}
 			for _, s := range ipStates {
@@ -1065,7 +1057,7 @@ func (c *EgressController) unrealizeDualStackEgressIPs(egressName string, egress
 			}
 		}
 		if anyFlowInstalled {
-			if err := c.ofClient.UninstallDualStackSNATMarkFlows(sharedMark); err != nil {
+			if err := c.ofClient.UninstallSNATMarkFlows(sharedMark); err != nil {
 				return err
 			}
 			for _, s := range ipStates {

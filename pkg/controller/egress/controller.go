@@ -72,9 +72,9 @@ type ipAllocation struct {
 	ipPool string
 }
 
-// dualStackIPAllocation tracks all IP allocations for a dual-stack Egress.
+// multipleIPAllocation tracks all IP allocations for an Egress.
 // Each entry corresponds positionally to EgressIPs[i] / ExternalIPPools[i].
-type dualStackIPAllocation struct {
+type multipleIPAllocation struct {
 	allocs []*ipAllocation
 }
 
@@ -85,12 +85,9 @@ type EgressController struct {
 	externalIPAllocator externalippool.ExternalIPAllocator
 
 	// ipAllocationMap is a map from Egress name to ipAllocation, which is used to check whether the Egress's IP has
-	// changed and to release the IP after the Egress is removed.
-	ipAllocationMap   map[string]*ipAllocation
+	// changed and to release the IP after the Egress is removed. It supports both single-IP and multiple-IP(dual-stack) Egresses.
+	ipAllocationMap   map[string]*multipleIPAllocation
 	ipAllocationMutex sync.RWMutex
-
-	dualStackIPAllocationMap   map[string]*dualStackIPAllocation
-	dualStackIPAllocationMutex sync.RWMutex
 
 	egressInformer egressinformers.EgressInformer
 	egressLister   egresslisters.EgressLister
@@ -126,11 +123,10 @@ func NewEgressController(crdClient clientset.Interface,
 				Name: "egress",
 			},
 		),
-		groupingInterface:        groupingInterface,
-		groupingInterfaceSynced:  groupingInterface.HasSynced,
-		ipAllocationMap:          map[string]*ipAllocation{},
-		dualStackIPAllocationMap: map[string]*dualStackIPAllocation{},
-		externalIPAllocator:      externalIPAllocator,
+		groupingInterface:       groupingInterface,
+		groupingInterfaceSynced: groupingInterface.HasSynced,
+		ipAllocationMap:         map[string]*multipleIPAllocation{},
+		externalIPAllocator:     externalIPAllocator,
 	}
 	// Add handlers for Group events and Egress events.
 	c.groupingInterface.AddEventHandler(egressGroupType, c.enqueueEgressGroup)
@@ -208,7 +204,9 @@ func (c *EgressController) getPoolToIPMapping(egress *egressv1beta1.Egress) map[
 // restoreIPAllocations restores the existing EgressIPs of Egresses and records the successful ones in ipAllocationMap.
 func (c *EgressController) restoreIPAllocations(egresses []*egressv1beta1.Egress) {
 	var previousIPAllocations []externalippool.IPAllocation
+	egressByName := make(map[string]*egressv1beta1.Egress, len(egresses))
 	for _, egress := range egresses {
+		egressByName[egress.Name] = egress
 		poolToIPs := c.getPoolToIPMapping(egress)
 
 		for pool, ipStr := range poolToIPs {
@@ -231,35 +229,35 @@ func (c *EgressController) restoreIPAllocations(egresses []*egressv1beta1.Egress
 	succeededAllocations := c.externalIPAllocator.RestoreIPAllocations(previousIPAllocations)
 	for _, alloc := range succeededAllocations {
 		egressName := alloc.ObjectReference.Name
-		egress, err := c.egressLister.Get(egressName)
-		if err != nil {
-			klog.ErrorS(err, "Failed to get Egress during restore, skipping", "egress", egressName)
+		egress, exists := egressByName[egressName]
+		if !exists {
+			klog.InfoS("Failed to find Egress in restore input, skipping", "egress", egressName)
 			continue
 		}
-		if isDualStackEgress(egress) {
-			effectivePools := egress.Spec.ExternalIPPools
-			if len(effectivePools) > effectiveDualStackCount {
-				effectivePools = effectivePools[:effectiveDualStackCount]
-			}
-			existing, _ := c.getDualStackIPAllocation(egressName)
-			if existing == nil {
-				existing = &dualStackIPAllocation{
-					allocs: make([]*ipAllocation, len(effectivePools)),
-				}
-			}
-			a := c.newIPAllocation(alloc.IP, alloc.IPPoolName)
-			for idx, pool := range effectivePools {
-				if pool == alloc.IPPoolName {
-					existing.allocs[idx] = a
-					break
-				}
-			}
-			c.setDualStackIPAllocation(egressName, existing)
-			klog.InfoS("Restored dual-stack EgressIP", "egress", egressName, "ip", alloc.IP, "pool", alloc.IPPoolName)
-		} else {
-			c.setIPAllocation(alloc.ObjectReference.Name, alloc.IP, alloc.IPPoolName)
-			klog.InfoS("Restored EgressIP", "egress", alloc.ObjectReference.Name, "ip", alloc.IP, "pool", alloc.IPPoolName)
+
+		effectivePools := egress.Spec.ExternalIPPools
+		if egress.Spec.ExternalIPPool != "" {
+			effectivePools = []string{egress.Spec.ExternalIPPool}
 		}
+		if len(effectivePools) > effectiveDualStackCount {
+			effectivePools = effectivePools[:effectiveDualStackCount]
+		}
+
+		existing, _ := c.getIPAllocation(egressName)
+		if existing == nil {
+			existing = &multipleIPAllocation{
+				allocs: make([]*ipAllocation, len(effectivePools)),
+			}
+		}
+		a := c.newIPAllocation(alloc.IP, alloc.IPPoolName)
+		for idx, pool := range effectivePools {
+			if pool == alloc.IPPoolName {
+				existing.allocs[idx] = a
+				break
+			}
+		}
+		c.setIPAllocation(egressName, existing)
+		klog.InfoS("Restored EgressIP", "egress", egressName, "ip", alloc.IP, "pool", alloc.IPPoolName)
 	}
 }
 
@@ -287,14 +285,11 @@ func (c *EgressController) processNextEgressGroupWorkItem() bool {
 	return true
 }
 
-func (c *EgressController) getIPAllocation(egressName string) (net.IP, string, bool) {
+func (c *EgressController) getIPAllocation(egressName string) (*multipleIPAllocation, bool) {
 	c.ipAllocationMutex.RLock()
 	defer c.ipAllocationMutex.RUnlock()
 	allocation, exists := c.ipAllocationMap[egressName]
-	if !exists {
-		return nil, "", false
-	}
-	return allocation.ip, allocation.ipPool, true
+	return allocation, exists
 }
 
 func (c *EgressController) deleteIPAllocation(egressName string) {
@@ -303,13 +298,10 @@ func (c *EgressController) deleteIPAllocation(egressName string) {
 	delete(c.ipAllocationMap, egressName)
 }
 
-func (c *EgressController) setIPAllocation(egressName string, ip net.IP, poolName string) {
+func (c *EgressController) setIPAllocation(egressName string, alloc *multipleIPAllocation) {
 	c.ipAllocationMutex.Lock()
 	defer c.ipAllocationMutex.Unlock()
-	c.ipAllocationMap[egressName] = &ipAllocation{
-		ip:     ip,
-		ipPool: poolName,
-	}
+	c.ipAllocationMap[egressName] = alloc
 }
 
 func (c *EgressController) newIPAllocation(ip net.IP, poolName string) *ipAllocation {
@@ -319,32 +311,13 @@ func (c *EgressController) newIPAllocation(ip net.IP, poolName string) *ipAlloca
 	}
 }
 
-func (c *EgressController) getDualStackIPAllocation(egressName string) (*dualStackIPAllocation, bool) {
-	c.dualStackIPAllocationMutex.RLock()
-	defer c.dualStackIPAllocationMutex.RUnlock()
-	alloc, exists := c.dualStackIPAllocationMap[egressName]
-	return alloc, exists
-}
-
-func (c *EgressController) setDualStackIPAllocation(egressName string, alloc *dualStackIPAllocation) {
-	c.dualStackIPAllocationMutex.Lock()
-	defer c.dualStackIPAllocationMutex.Unlock()
-	c.dualStackIPAllocationMap[egressName] = alloc
-}
-
-func (c *EgressController) deleteDualStackIPAllocation(egressName string) {
-	c.dualStackIPAllocationMutex.Lock()
-	defer c.dualStackIPAllocationMutex.Unlock()
-	delete(c.dualStackIPAllocationMap, egressName)
-}
-
-func (c *EgressController) releaseEgressIPs(egressName string, alloc *dualStackIPAllocation) {
+func (c *EgressController) releaseEgressIPs(egressName string, alloc *multipleIPAllocation) {
 	for _, a := range alloc.allocs {
 		if a != nil {
 			c.releaseEgressIP(egressName, a.ip, a.ipPool)
 		}
 	}
-	c.deleteDualStackIPAllocation(egressName)
+	c.deleteIPAllocation(egressName)
 }
 
 func (c *EgressController) updateEgressIPs(egress *egressv1beta1.Egress, ips []string) (*egressv1beta1.Egress, error) {
@@ -364,7 +337,7 @@ func (c *EgressController) updateEgressIPs(egress *egressv1beta1.Egress, ips []s
 	return updatedEgress, nil
 }
 
-func (c *EgressController) dualStackAllocationsValid(pools, specIPs []string, alloc *dualStackIPAllocation) bool {
+func (c *EgressController) ipAllocationsValid(pools, specIPs []string, alloc *multipleIPAllocation) bool {
 	if len(pools) != len(alloc.allocs) {
 		return false
 	}
@@ -393,20 +366,45 @@ func (c *EgressController) dualStackAllocationsValid(pools, specIPs []string, al
 }
 
 func (c *EgressController) syncEgressIPs(egress *egressv1beta1.Egress) ([]net.IP, *egressv1beta1.Egress, error) {
-	// Only the first effectiveDualStackCount pools and IPs take effect.
-	effectivePools := egress.Spec.ExternalIPPools
+	var effectivePools []string
+	var effectiveSpecIPs []string
+
+	if egress.Spec.ExternalIPPool != "" {
+		// Single-stack with ExternalIPPool
+		effectivePools = []string{egress.Spec.ExternalIPPool}
+		if egress.Spec.EgressIP != "" {
+			effectiveSpecIPs = []string{egress.Spec.EgressIP}
+		}
+	} else if egress.Spec.EgressIP != "" {
+		// Single-stack IP-Only mode: user specifies EgressIP directly without pool
+		effectivePools = []string{}
+		effectiveSpecIPs = []string{egress.Spec.EgressIP}
+	} else {
+		effectivePools = egress.Spec.ExternalIPPools
+		effectiveSpecIPs = egress.Spec.EgressIPs
+
+		// Validate: if EgressIPs is specified but ExternalIPPools is empty,
+		// this is egress IP-Only mode.
+		// However, if EgressIPs is specified but ExternalIPPools is NOT empty,
+		// we need len(EgressIPs) == len(ExternalIPPools) to avoid index out of bounds.
+		if len(effectivePools) > 0 && len(effectiveSpecIPs) > 0 && len(effectiveSpecIPs) != len(effectivePools) {
+			klog.ErrorS(nil, "Mismatched EgressIPs and ExternalIPPools", "egress", klog.KObj(egress), "ipsCount", len(effectiveSpecIPs), "poolsCount", len(effectivePools))
+			return nil, egress, fmt.Errorf("invalid Egress configuration: %d EgressIPs specified but only %d ExternalIPPools provided", len(effectiveSpecIPs), len(effectivePools))
+		}
+	}
+
+	// Limit to effectiveDualStackCount for now (can support more in the future)
 	if len(effectivePools) > effectiveDualStackCount {
 		effectivePools = effectivePools[:effectiveDualStackCount]
 	}
-	effectiveSpecIPs := egress.Spec.EgressIPs
 	if len(effectiveSpecIPs) > effectiveDualStackCount {
 		effectiveSpecIPs = effectiveSpecIPs[:effectiveDualStackCount]
 	}
 
-	prevAlloc, exists := c.getDualStackIPAllocation(egress.Name)
+	prevAlloc, exists := c.getIPAllocation(egress.Name)
 
 	if exists {
-		if c.dualStackAllocationsValid(effectivePools, effectiveSpecIPs, prevAlloc) {
+		if c.ipAllocationsValid(effectivePools, effectiveSpecIPs, prevAlloc) {
 			var ips []net.IP
 			for _, a := range prevAlloc.allocs {
 				if a != nil {
@@ -415,29 +413,90 @@ func (c *EgressController) syncEgressIPs(egress *egressv1beta1.Egress) ([]net.IP
 			}
 			return ips, egress, nil
 		}
-		c.releaseEgressIPs(egress.Name, prevAlloc)
+
+		// If transitioning to IP-Only mode (no pools), just release previous allocations
+		if len(effectivePools) == 0 {
+			c.releaseEgressIPs(egress.Name, prevAlloc)
+			// Return the user-provided IPs for IP-Only mode
+			var ips []net.IP
+			for _, ipStr := range effectiveSpecIPs {
+				if ipStr != "" {
+					ips = append(ips, net.ParseIP(ipStr))
+				}
+			}
+			return ips, egress, nil
+		}
+
+		poolsMatch := len(effectivePools) == len(prevAlloc.allocs)
+		if poolsMatch {
+			for i, poolName := range effectivePools {
+				if prevAlloc.allocs[i] == nil || prevAlloc.allocs[i].ipPool != poolName {
+					poolsMatch = false
+					break
+				}
+				if i < len(effectiveSpecIPs) && effectiveSpecIPs[i] != "" {
+					if prevAlloc.allocs[i].ip.String() != effectiveSpecIPs[i] {
+						poolsMatch = false
+						break
+					}
+				}
+			}
+		}
+		if poolsMatch {
+			klog.InfoS("Allocated EgressIPs are no longer valid for ExternalIPPools, releasing them", "egress", klog.KObj(egress))
+			c.releaseEgressIPs(egress.Name, prevAlloc)
+			// Clear the effectiveSpecIPs to trigger re-allocation
+			effectiveSpecIPs = nil
+		} else {
+			// If pools changed, release IPs immediately as they're no longer valid
+			c.releaseEgressIPs(egress.Name, prevAlloc)
+		}
 	}
 
+	// Support IP-Only mode: if no pools are specified, just return the user-provided IPs
+	// without attempting to allocate or track them
 	if len(effectivePools) == 0 {
 		var ips []net.IP
 		for _, ipStr := range effectiveSpecIPs {
-			ips = append(ips, net.ParseIP(ipStr))
+			if ipStr != "" {
+				ips = append(ips, net.ParseIP(ipStr))
+			}
 		}
 		return ips, egress, nil
 	}
 
 	for _, poolName := range effectivePools {
 		if !c.externalIPAllocator.IPPoolExists(poolName) {
+			// The IP pool has been deleted, reclaim the IP from the Egress.
+			if len(effectiveSpecIPs) > 0 {
+				if egress.Spec.ExternalIPPool != "" {
+					if updatedEgress, err := c.updateEgressIP(egress, ""); err != nil {
+						return nil, egress, err
+					} else {
+						egress = updatedEgress
+					}
+				} else {
+					if updatedEgress, err := c.updateEgressIPs(egress, nil); err != nil {
+						return nil, egress, err
+					} else {
+						egress = updatedEgress
+					}
+				}
+			}
 			return nil, egress, fmt.Errorf("ExternalIPPool %s does not exist", poolName)
 		}
 	}
 
 	var allocs []*ipAllocation
-	newAlloc := &dualStackIPAllocation{}
+	newAlloc := &multipleIPAllocation{}
 	var allocatedIPs []net.IP
 
 	if len(effectiveSpecIPs) > 0 {
 		for i, ipStr := range effectiveSpecIPs {
+			// Boundary check: ensure the pool index exists
+			if i >= len(effectivePools) {
+				return nil, egress, fmt.Errorf("invalid Egress configuration: EgressIP index %d out of range for ExternalIPPools (length %d)", i, len(effectivePools))
+			}
 			ip := net.ParseIP(ipStr)
 			if err := c.externalIPAllocator.UpdateIPAllocation(effectivePools[i], ip); err != nil {
 				for j := 0; j < i; j++ {
@@ -452,6 +511,7 @@ func (c *EgressController) syncEgressIPs(egress *egressv1beta1.Egress) ([]net.IP
 		for i, poolName := range effectivePools {
 			ip, err := c.externalIPAllocator.AllocateIPFromPool(poolName)
 			if err != nil {
+				// Rollback: release all previously allocated IPs in this batch
 				for j := 0; j < i; j++ {
 					c.externalIPAllocator.ReleaseIP(effectivePools[j], allocatedIPs[j])
 				}
@@ -461,95 +521,46 @@ func (c *EgressController) syncEgressIPs(egress *egressv1beta1.Egress) ([]net.IP
 			allocs = append(allocs, c.newIPAllocation(ip, poolName))
 		}
 
+		// Update the Egress with allocated IPs
 		ipStrs := make([]string, len(allocatedIPs))
 		for i, ip := range allocatedIPs {
 			ipStrs[i] = ip.String()
 		}
-		if updatedEgress, err := c.updateEgressIPs(egress, ipStrs); err != nil {
-			for i, ip := range allocatedIPs {
-				c.externalIPAllocator.ReleaseIP(effectivePools[i], ip)
+
+		if egress.Spec.ExternalIPPool != "" {
+			// Single ExternalIPPool case: update EgressIP field
+			if updatedEgress, err := c.updateEgressIP(egress, ipStrs[0]); err != nil {
+				// Rollback: release all allocated IPs
+				for i, ip := range allocatedIPs {
+					if rerr := c.externalIPAllocator.ReleaseIP(effectivePools[i], ip); rerr != nil {
+						klog.ErrorS(rerr, "Failed to release IP during rollback", "ip", ip, "pool", effectivePools[i])
+					}
+				}
+				return nil, egress, err
+			} else {
+				egress = updatedEgress
 			}
-			return nil, egress, err
 		} else {
-			egress = updatedEgress
+			// Multiple ExternalIPPools case: update EgressIPs field
+			if updatedEgress, err := c.updateEgressIPs(egress, ipStrs); err != nil {
+				// Rollback: release all allocated IPs
+				for i, ip := range allocatedIPs {
+					if rerr := c.externalIPAllocator.ReleaseIP(effectivePools[i], ip); rerr != nil {
+						klog.ErrorS(rerr, "Failed to release IP during rollback", "ip", ip, "pool", effectivePools[i])
+					}
+				}
+				return nil, egress, err
+			} else {
+				egress = updatedEgress
+			}
 		}
 	}
 
 	newAlloc.allocs = allocs
 
-	c.setDualStackIPAllocation(egress.Name, newAlloc)
-	klog.InfoS("Allocated dual-stack EgressIPs", "egress", egress.Name, "ips", allocatedIPs)
+	c.setIPAllocation(egress.Name, newAlloc)
+	klog.InfoS("Allocated EgressIPs", "egress", egress.Name, "ips", allocatedIPs)
 	return allocatedIPs, egress, nil
-}
-
-// syncEgressIP is responsible for releasing stale EgressIP and allocating new EgressIP for an Egress if applicable.
-func (c *EgressController) syncEgressIP(egress *egressv1beta1.Egress) (net.IP, *egressv1beta1.Egress, error) {
-	prevIP, prevIPPool, exists := c.getIPAllocation(egress.Name)
-	if exists {
-		// The EgressIP and the ExternalIPPool haven't changed.
-		if prevIP.String() == egress.Spec.EgressIP && prevIPPool == egress.Spec.ExternalIPPool {
-			// If the EgressIP is still valid for the ExternalIPPool, nothing needs to be done.
-			if c.externalIPAllocator.IPPoolHasIP(prevIPPool, prevIP) {
-				return prevIP, egress, nil
-			}
-			// The ExternalIPPool may no longer exist, or the IP is not in range.
-			// Reclaim the IP from the Egress API.
-			klog.InfoS("Allocated EgressIP is no longer part of ExternalIPPool, releasing it", "egress", klog.KObj(egress), "ip", egress.Spec.EgressIP, "pool", egress.Spec.ExternalIPPool)
-			if updatedEgress, err := c.updateEgressIP(egress, ""); err != nil {
-				return nil, egress, err
-			} else {
-				egress = updatedEgress
-			}
-		}
-		// Either EgressIP or ExternalIPPool changes, release the previous one first.
-		c.releaseEgressIP(egress.Name, prevIP, prevIPPool)
-	}
-
-	// Skip allocating EgressIP if ExternalIPPool is not specified and return whatever user specifies.
-	if egress.Spec.ExternalIPPool == "" {
-		return net.ParseIP(egress.Spec.EgressIP), egress, nil
-	}
-
-	if !c.externalIPAllocator.IPPoolExists(egress.Spec.ExternalIPPool) {
-		// The IP pool has been deleted, reclaim the IP from the Egress API.
-		if egress.Spec.EgressIP != "" {
-			if updatedEgress, err := c.updateEgressIP(egress, ""); err != nil {
-				return nil, egress, err
-			} else {
-				egress = updatedEgress
-			}
-		}
-		return nil, egress, fmt.Errorf("ExternalIPPool %s does not exist", egress.Spec.ExternalIPPool)
-	}
-
-	var ip net.IP
-	// User specifies the Egress IP, try to allocate it. If it fails, the datapath may still work, we just don't track
-	// the IP allocation so deleting this Egress won't release the IP to the Pool.
-	// TODO: Use validation webhook to ensure the requested IP matches the pool.
-	if egress.Spec.EgressIP != "" {
-		ip = net.ParseIP(egress.Spec.EgressIP)
-		if err := c.externalIPAllocator.UpdateIPAllocation(egress.Spec.ExternalIPPool, ip); err != nil {
-			return nil, egress, fmt.Errorf("error when allocating IP %v for Egress %s from ExternalIPPool %s: %v", ip, egress.Name, egress.Spec.ExternalIPPool, err)
-		}
-	} else {
-		var err error
-		// User doesn't specify the Egress IP, allocate one.
-		if ip, err = c.externalIPAllocator.AllocateIPFromPool(egress.Spec.ExternalIPPool); err != nil {
-			return nil, egress, err
-		}
-		if updatedEgress, err := c.updateEgressIP(egress, ip.String()); err != nil {
-			if rerr := c.externalIPAllocator.ReleaseIP(egress.Spec.ExternalIPPool, ip); rerr != nil &&
-				rerr != externalippool.ErrExternalIPPoolNotFound {
-				klog.ErrorS(rerr, "Failed to release IP", "ip", ip, "pool", egress.Spec.ExternalIPPool)
-			}
-			return nil, egress, err
-		} else {
-			egress = updatedEgress
-		}
-	}
-	c.setIPAllocation(egress.Name, ip, egress.Spec.ExternalIPPool)
-	klog.InfoS("Allocated EgressIP", "egress", egress.Name, "ip", ip, "pool", egress.Spec.ExternalIPPool)
-	return ip, egress, nil
 }
 
 // updateEgressIP updates the Egress's EgressIP in Kubernetes API.
@@ -594,11 +605,6 @@ func (c *EgressController) releaseEgressIP(egressName string, egressIP net.IP, p
 	c.deleteIPAllocation(egressName)
 }
 
-// isDualStackEgress returns true if the Egress is configured for dual-stack mode.
-func isDualStackEgress(egress *egressv1beta1.Egress) bool {
-	return len(egress.Spec.EgressIPs) >= effectiveDualStackCount || len(egress.Spec.ExternalIPPools) >= effectiveDualStackCount
-}
-
 func (c *EgressController) syncEgress(key string) error {
 	startTime := time.Now()
 	defer func() {
@@ -609,21 +615,13 @@ func (c *EgressController) syncEgress(key string) error {
 	egress, err := c.egressLister.Get(key)
 	if err != nil {
 		// The Egress has been deleted, release its EgressIP if there was one.
-		if prevIP, prevIPPool, exists := c.getIPAllocation(key); exists {
-			c.releaseEgressIP(key, prevIP, prevIPPool)
-		}
-		// Check for dual-stack IP allocations.
-		if prevAlloc, exists := c.getDualStackIPAllocation(key); exists {
+		if prevAlloc, exists := c.getIPAllocation(key); exists {
 			c.releaseEgressIPs(key, prevAlloc)
 		}
 		return nil
 	}
 
-	if isDualStackEgress(egress) {
-		_, egress, err = c.syncEgressIPs(egress)
-	} else {
-		_, egress, err = c.syncEgressIP(egress)
-	}
+	_, egress, err = c.syncEgressIPs(egress)
 	c.updateEgressAllocatedCondition(egress, err)
 	if err != nil {
 		return err
@@ -745,9 +743,6 @@ func (c *EgressController) updateEgressAllocatedCondition(egress *egressv1beta1.
 	var desiredCondition *egressv1beta1.EgressCondition
 	if egress.Spec.ExternalIPPool != "" || len(egress.Spec.ExternalIPPools) > 0 {
 		msg := "EgressIP is successfully allocated"
-		if isDualStackEgress(egress) {
-			msg = "Dual-stack EgressIPs are successfully allocated"
-		}
 		if err == nil {
 			desiredCondition = &egressv1beta1.EgressCondition{
 				Type:               egressv1beta1.IPAllocated,
