@@ -260,15 +260,16 @@ example, `replicas: 1`); see the StatefulSet examples above.
 
 The following restrictions apply when you use `ipam.antrea.io/pod-ips`:
 
-- At most one IPv4 address and one IPv6 address can be allocated to a Pod. If
-  the `ipam.antrea.io/pod-ips` annotation contains multiple addresses of the
-  same IP family, only the first one of each family will be used, and the rest are
-  silently ignored.
-- When multiple IPPools of the same IP family are listed in the
-  `ipam.antrea.io/ippools` annotation (or inherited from the Namespace), a
-  specified IP must belong to the first IPPool of the matching IP family.
-  Allocation will fail if the IP is not within that Pool's range, and subsequent
-  Pools of the same family will **not** be tried as a fallback.
+- At most one IPv4 address and one IPv6 address can be specified. If the
+  `ipam.antrea.io/pod-ips` annotation contains more than one address of the
+  same IP family, the request is **rejected** (it is not valid to list
+  duplicates and have the rest ignored).
+- For each address family in which a static IP is requested, the effective
+  `ipam.antrea.io/ippools` list (on the Pod or inherited from the Namespace) must
+  name **at most one** IPPool of that family. If a static IPv4 is requested, you
+  cannot list two IPv4 IPPools; the same applies to IPv6 when a static IPv6 is
+  requested. (You can still list one IPv4 pool and one IPv6 pool for dual-stack
+  static addresses.)
 
 #### Persistent IP for StatefulSet Pod (available since Antrea 1.5)
 
