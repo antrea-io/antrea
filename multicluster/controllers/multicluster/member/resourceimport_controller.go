@@ -94,7 +94,6 @@ func newResourceImportReconciler(localClusterClient client.Client,
 // ResourceImport object.
 func (r *ResourceImportReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	klog.V(2).InfoS("Reconciling ResourceImport", "resourceimport", req.NamespacedName)
-	// TODO: Must check whether this ResourceImport must be reconciled by this member cluster. Check `spec.clusters` field.
 	var resImp multiclusterv1alpha1.ResourceImport
 	err := r.remoteCommonArea.Get(ctx, req.NamespacedName, &resImp)
 	var isDeleted bool
@@ -113,6 +112,21 @@ func (r *ResourceImportReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 				return ctrl.Result{}, nil
 			}
 		}
+	}
+	if !isDeleted && !r.isResourceImportTargeted(&resImp) {
+		resImpObj, exist, err := r.installedResImports.GetByKey(req.NamespacedName.String())
+		if err != nil {
+			return ctrl.Result{}, err
+		}
+		if !exist {
+			klog.V(2).InfoS("Skip reconciling ResourceImport since it is not targeted to local cluster",
+				"resourceimport", req.NamespacedName, "clusterID", r.localClusterID)
+			return ctrl.Result{}, nil
+		}
+		cachedResImp := resImpObj.(multiclusterv1alpha1.ResourceImport)
+		klog.InfoS("ResourceImport is no longer targeted to local cluster, cleaning up installed resources",
+			"resourceimport", req.NamespacedName, "clusterID", r.localClusterID)
+		return r.cleanupInstalledResourceImport(ctx, req, &cachedResImp)
 	}
 	switch resImp.Spec.Kind {
 	case constants.ServiceImportKind:
@@ -137,6 +151,35 @@ func (r *ResourceImportReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 		return r.handleResImpUpdateForClusterInfo(ctx, req, &resImp)
 	}
 	return ctrl.Result{}, nil
+}
+
+func (r *ResourceImportReconciler) isResourceImportTargeted(resImp *multiclusterv1alpha1.ResourceImport) bool {
+	if len(resImp.Spec.ClusterIDs) == 0 {
+		return true
+	}
+	for _, clusterID := range resImp.Spec.ClusterIDs {
+		if clusterID == r.localClusterID {
+			return true
+		}
+	}
+	return false
+}
+
+func (r *ResourceImportReconciler) cleanupInstalledResourceImport(ctx context.Context, req ctrl.Request,
+	resImp *multiclusterv1alpha1.ResourceImport) (ctrl.Result, error) {
+	switch resImp.Spec.Kind {
+	case constants.ServiceImportKind:
+		return r.handleResImpDeleteForService(ctx, resImp)
+	case constants.EndpointsKind:
+		return r.handleResImpDeleteForEndpoints(ctx, resImp)
+	case constants.AntreaClusterNetworkPolicyKind:
+		return r.handleResImpDeleteForClusterNetworkPolicy(ctx, resImp)
+	case constants.ClusterInfoKind:
+		return r.handleResImpDeleteForClusterInfo(ctx, req, resImp)
+	default:
+		r.installedResImports.Delete(*resImp)
+		return ctrl.Result{}, nil
+	}
 }
 
 func (r *ResourceImportReconciler) handleResImpUpdateForService(ctx context.Context, resImp *multiclusterv1alpha1.ResourceImport) (ctrl.Result, error) {
