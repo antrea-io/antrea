@@ -36,8 +36,11 @@ type OVSCtlClient interface {
 	DumpFlowsWithoutTableNames(args ...string) ([]string, error)
 	// DumpMatchedFlows returns the flow which exactly matches the matchStr.
 	DumpMatchedFlow(matchStr string) (string, error)
-	// DumpTableFlows returns all flows in the table.
-	DumpTableFlows(table uint8) ([]string, error)
+	// DumpTableFlows returns flows in the table. Optional filters are extra ovs-ofctl dump-flows
+	// FLOW fields (see ovs-fields(7)); each non-empty element is appended after "table=<id>," (for
+	// example "cookie=0x1/0xffffffffffffffff" as one or more comma-separated fields). Note:
+	// "priority=N" is not a valid keyword in ovs-ofctl dump-flows match syntax and must not be used.
+	DumpTableFlows(table uint8, filters ...string) ([]string, error)
 	// DumpGroup returns the OpenFlow group if it exists on the bridge.
 	DumpGroup(groupID uint32) (string, error)
 	// DumpGroups returns OpenFlow groups of the bridge.
