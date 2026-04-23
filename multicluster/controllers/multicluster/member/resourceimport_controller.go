@@ -119,9 +119,9 @@ func (r *ResourceImportReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 			return ctrl.Result{}, err
 		}
 		if !exist {
-			klog.V(2).InfoS("Skip reconciling ResourceImport since it is not targeted to local cluster",
+			klog.InfoS("ResourceImport is no longer targeted to local cluster and no cached installed state was found, performing best-effort cleanup",
 				"resourceimport", req.NamespacedName, "clusterID", r.localClusterID)
-			return ctrl.Result{}, nil
+			return r.cleanupInstalledResourceImport(ctx, req, &resImp)
 		}
 		cachedResImp := resImpObj.(multiclusterv1alpha1.ResourceImport)
 		klog.InfoS("ResourceImport is no longer targeted to local cluster, cleaning up installed resources",
