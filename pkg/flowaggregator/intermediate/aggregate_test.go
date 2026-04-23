@@ -98,8 +98,10 @@ func createFlowRecordForSrc(isIPv6 bool, flowType flowpb.FlowType, isUpdatedReco
 	record.K8S.DestinationServicePort = 4739
 	if isIPv6 {
 		record.K8S.DestinationClusterIp = netip.MustParseAddr("2001:0:3238:BBBB:63::AAAA").AsSlice()
+		record.K8S.DestinationServiceIp = netip.MustParseAddr("2001:0:3238:BBBB:63::AAAA").AsSlice()
 	} else {
 		record.K8S.DestinationClusterIp = netip.MustParseAddr("192.168.0.1").AsSlice()
+		record.K8S.DestinationServiceIp = netip.MustParseAddr("192.168.0.1").AsSlice()
 	}
 	record.K8S.EgressNetworkPolicyRuleAction = egressNetworkPolicyRuleAction
 	if !isUpdatedRecord {
@@ -130,8 +132,10 @@ func createFlowRecordForDst(isIPv6 bool, flowType flowpb.FlowType, isUpdatedReco
 		record.K8S.DestinationServicePort = 4739
 		if isIPv6 {
 			record.K8S.DestinationClusterIp = netip.MustParseAddr("2001:0:3238:BBBB:63::AAAA").AsSlice()
+			record.K8S.DestinationServiceIp = netip.MustParseAddr("2001:0:3238:BBBB:63::AAAA").AsSlice()
 		} else {
 			record.K8S.DestinationClusterIp = netip.MustParseAddr("192.168.0.1").AsSlice()
+			record.K8S.DestinationServiceIp = netip.MustParseAddr("192.168.0.1").AsSlice()
 		}
 	}
 	record.K8S.IngressNetworkPolicyRuleAction = ingressNetworkPolicyRuleAction
@@ -435,10 +439,12 @@ func assertElementMap(t *testing.T, record map[string]interface{}, ipv6 bool) {
 		assert.Equal(t, net.ParseIP("2001:0:3238:dfe1:63::fefb"), record["sourceIPv6Address"])
 		assert.Equal(t, net.ParseIP("2001:0:3238:dfe1:63::fefc"), record["destinationIPv6Address"])
 		assert.Equal(t, net.ParseIP("2001:0:3238:bbbb:63::aaaa"), record["destinationClusterIPv6"])
+		assert.Equal(t, net.ParseIP("2001:0:3238:bbbb:63::aaaa"), record["destinationServiceIPv6"])
 	} else {
 		assert.Equal(t, net.ParseIP("10.0.0.1").To4(), record["sourceIPv4Address"])
 		assert.Equal(t, net.ParseIP("10.0.0.2").To4(), record["destinationIPv4Address"])
 		assert.Equal(t, net.ParseIP("192.168.0.1").To4(), record["destinationClusterIPv4"])
+		assert.Equal(t, net.ParseIP("192.168.0.1").To4(), record["destinationServiceIPv4"])
 	}
 	assert.Equal(t, uint16(1234), record["sourceTransportPort"])
 	assert.Equal(t, uint16(5678), record["destinationTransportPort"])

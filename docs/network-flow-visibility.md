@@ -196,8 +196,10 @@ Flow Exporter are listed below:
 | destinationPodName               | 103      | string      |             |
 | sourceNodeName                   | 104      | string      |             |
 | destinationNodeName              | 105      | string      |             |
-| destinationClusterIPv4           | 106      | ipv4Address |             |
-| destinationClusterIPv6           | 107      | ipv6Address |             |
+| destinationClusterIPv4           | 106      | ipv4Address | Deprecated in favor of destinationServiceIPv4. |
+| destinationClusterIPv6           | 107      | ipv6Address | Deprecated in favor of destinationServiceIPv6. |
+| destinationServiceIPv4           | 168      | ipv4Address | The service IP (ClusterIP, NodePort, or LoadBalancer) for the destination. |
+| destinationServiceIPv6           | 169      | ipv6Address | The service IP (ClusterIP, NodePort, or LoadBalancer) for the destination. |
 | destinationServicePort           | 108      | unsigned16  |             |
 | destinationServicePortName       | 109      | string      |             |
 | ingressNetworkPolicyName         | 110      | string      | Name of the ingress network policy applied to the destination Pod for this flow. |
