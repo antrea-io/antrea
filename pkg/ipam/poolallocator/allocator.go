@@ -38,11 +38,14 @@ import (
 // ErrPoolExhausted is returned when an IPPool has no available IPs left.
 var ErrPoolExhausted = errors.New("pool exhausted")
 
-// ipPoolStatusRetry backs off longer than retry.DefaultRetry. Many Nodes may
-// update the same IPPool status concurrently (shared pools, multi-NIC), causing
-// frequent resourceVersion conflicts on UpdateStatus.
+// ipPoolStatusRetry backs off longer than retry.DefaultRetry (5 fixed ~10ms
+// sleeps) but avoids an overly long tail. client-go's retry.DefaultBackoff uses
+// fewer steps with a larger factor for a sub-second total; here we use a mild
+// exponential (1.5) with more attempts than DefaultRetry so many Nodes updating
+// the same IPPool status (shared pools, multi-NIC) can clear conflicts without
+// multi-second CNI stalls.
 var ipPoolStatusRetry = wait.Backoff{
-	Steps:    15,
+	Steps:    8,
 	Duration: 10 * time.Millisecond,
 	Factor:   1.5,
 	Jitter:   0.1,
