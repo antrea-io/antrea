@@ -227,3 +227,6 @@ rm -rf vendor
 
 reset_year_change
 copy_generated_code_to_source
+
+# Regenerate BPF test reference data using tcpdump.
+hack/generate-bpf-testdata.sh
