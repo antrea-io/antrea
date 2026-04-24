@@ -25,6 +25,7 @@ import (
 	corelisters "k8s.io/client-go/listers/core/v1"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/klog/v2"
+	utilnet "k8s.io/utils/net"
 
 	crdv1b1 "antrea.io/antrea/v2/pkg/apis/crd/v1beta1"
 	clientsetversioned "antrea.io/antrea/v2/pkg/client/clientset/versioned"
@@ -148,14 +149,13 @@ func (c *AntreaIPAMController) getIPPoolsByPod(namespace, name string) ([]string
 	}
 
 	// Collect specified IPs from the AntreaIPAMPodIP annotation.
-	// Multiple IPs (comma-separated) may be provided, but the caller
-	// (AntreaIPAM.Add) will only consume at most one IPv4 and one IPv6
-	// address. Each IP must belong to the first Pool of the corresponding
-	// IP family listed in the AntreaIPAM annotation.
+	// At most one IPv4 and one IPv6 address may be specified; duplicates
+	// within the same family are rejected.
 	ipStrings := pod.Annotations[annotation.AntreaIPAMPodIPAnnotationKey]
 	ipStrings = strings.ReplaceAll(ipStrings, " ", "")
 	var ipErr error
 	if ipStrings != "" {
+		var hasV4, hasV6 bool
 		splittedIPStrings := strings.Split(ipStrings, annotation.AntreaIPAMAnnotationDelimiter)
 		for _, ipString := range splittedIPStrings {
 			if ipString == "" {
@@ -163,9 +163,24 @@ func (c *AntreaIPAMController) getIPPoolsByPod(namespace, name string) ([]string
 			}
 			ip := net.ParseIP(ipString)
 			if ip == nil {
-				ipErr = fmt.Errorf("invalid IP annotation %s", ipStrings)
+				ipErr = fmt.Errorf("invalid IP %q in %s annotation %q", ipString, annotation.AntreaIPAMPodIPAnnotationKey, ipStrings)
 				ips = nil
 				break
+			}
+			if ip.To4() != nil {
+				if hasV4 {
+					ipErr = fmt.Errorf("multiple IPv4 addresses in %s annotation %q", annotation.AntreaIPAMPodIPAnnotationKey, ipStrings)
+					ips = nil
+					break
+				}
+				hasV4 = true
+			} else {
+				if hasV6 {
+					ipErr = fmt.Errorf("multiple IPv6 addresses in %s annotation %q", annotation.AntreaIPAMPodIPAnnotationKey, ipStrings)
+					ips = nil
+					break
+				}
+				hasV6 = true
 			}
 			ips = append(ips, ip)
 		}
@@ -199,6 +214,8 @@ ownerReferenceLoop:
 // getPoolAllocatorsByPod looks up IPPools from the Pod annotation and returns
 // allocators for all valid pools. This supports IPv4, IPv6, and dual-stack
 // configurations where multiple pools (one per IP family) may be specified.
+// When specific IPs are requested, it validates that only one pool of each
+// requested IP family is configured.
 func (c *AntreaIPAMController) getPoolAllocatorsByPod(namespace, podName string) (mineType, []*poolallocator.IPPoolAllocator, []net.IP, *crdv1b1.IPAddressOwner, error) {
 	poolNames, ips, reservedOwner, err := c.getIPPoolsByPod(namespace, podName)
 	if err != nil {
@@ -220,7 +237,35 @@ func (c *AntreaIPAMController) getPoolAllocatorsByPod(namespace, podName string)
 		allocators = append(allocators, allocator)
 	}
 	if len(allocators) == 0 {
-		return mineTrue, nil, nil, nil, fmt.Errorf("no valid IPPool found")
+		return mineTrue, nil, nil, nil, fmt.Errorf("no valid IPPool found for configured pools: [%s]", strings.Join(poolNames, ", "))
+	}
+
+	if len(ips) > 0 {
+		var requestedV4, requestedV6 string
+		for _, ip := range ips {
+			if ip.To4() != nil {
+				requestedV4 = ip.String()
+			} else {
+				requestedV6 = ip.String()
+			}
+		}
+		var v4Pools, v6Pools int
+		var v4PoolNames, v6PoolNames []string
+		for _, a := range allocators {
+			if a.IPVersion == utilnet.IPv4 {
+				v4Pools++
+				v4PoolNames = append(v4PoolNames, a.Name())
+			} else {
+				v6Pools++
+				v6PoolNames = append(v6PoolNames, a.Name())
+			}
+		}
+		if requestedV4 != "" && v4Pools > 1 {
+			return mineTrue, nil, nil, nil, fmt.Errorf("multiple IPv4 IPPools configured with requested IPv4 address(es) [%s]; configured IPv4 IPPools (%d): [%s]; specifying an IP restricts the selection to exactly one IPPool of that corresponding IP family", requestedV4, v4Pools, strings.Join(v4PoolNames, ", "))
+		}
+		if requestedV6 != "" && v6Pools > 1 {
+			return mineTrue, nil, nil, nil, fmt.Errorf("multiple IPv6 IPPools configured with requested IPv6 address(es) [%s]; configured IPv6 IPPools (%d): [%s]; specifying an IP restricts the selection to exactly one IPPool of that corresponding IP family", requestedV6, v6Pools, strings.Join(v6PoolNames, ", "))
+		}
 	}
 
 	return mineTrue, allocators, ips, reservedOwner, nil

@@ -138,7 +138,6 @@ func (d *AntreaIPAM) setController(controller *AntreaIPAMController) {
 }
 
 // splitIPsByFamily returns the first IPv4 and IPv6 address found in ips.
-// Additional addresses of the same family are silently ignored.
 func splitIPsByFamily(ips []net.IP) (v4, v6 net.IP) {
 	for _, ip := range ips {
 		if ip.To4() != nil {
@@ -168,11 +167,12 @@ func splitIPsByFamily(ips []net.IP) (v4, v6 net.IP) {
 // (e.g. API failures) cause an immediate return.
 //
 // When a Pod specifies desired IPs via the AntreaIPAMPodIP annotation, at most
-// one IPv4 and one IPv6 address are used; additional addresses of the same
-// family are silently ignored. The specified IP is always allocated from the
-// first Pool of the corresponding IP family. If the allocation fails for any
-// reason (IP not in range, already allocated, etc.), the error is returned
-// immediately without trying subsequent Pools.
+// one IPv4 address and at most one IPv6 address may be provided. Multiple
+// addresses of the same family are rejected during annotation parsing. When an
+// IP is specified, only a single Pool of that IP family is allowed; multiple
+// Pools of the same family will also be rejected. The specified IP is
+// allocated from that Pool, and if the allocation fails for any reason (IP not
+// in range, already allocated, etc.), the error is returned immediately.
 // See https://antrea.io/docs/main/docs/antrea-ipam.md for more details.
 func (d *AntreaIPAM) Add(args *invoke.Args, k8sArgs *types.K8sArgs, networkConfig []byte) (bool, *IPAMResult, error) {
 	mine, allocators, ips, reservedOwner, err := d.owns(k8sArgs)
