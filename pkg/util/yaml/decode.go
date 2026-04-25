@@ -37,7 +37,7 @@ func UnmarshalLenient(data []byte, v interface{}) error {
 			return strictErr
 		}
 		if e, ok := strictErr.(*yaml.TypeError); ok {
-			// TypeError.Errors is a []string slice; log each entry directly.
+			// TypeError.Error() breaks the error into multiple lines, reformat it to keep the log on one line.
 			klog.InfoS("Used lenient decoding as strict decoding failed", "err", e.Errors)
 		} else {
 			klog.InfoS("Used lenient decoding as strict decoding failed", "err", e)
