@@ -120,17 +120,21 @@ func (d *agentDumper) dumpNFTables(basedir string) error {
 }
 
 func (d *agentDumper) dumpIPToolInfo(basedir string) error {
-	dump := func(name string) error {
-		output, err := d.executor.Command("ip", name).CombinedOutput()
+	dump := func(filename string, args ...string) error {
+		output, err := d.executor.Command("ip", args...).CombinedOutput()
 		if err != nil {
-			return fmt.Errorf("error when dumping %s: %w", name, err)
+			return fmt.Errorf("error when dumping ip %s: %w", strings.Join(args, " "), err)
 		}
-		return writeFile(d.fs, filepath.Join(basedir, name), name, output)
+		return writeFile(d.fs, filepath.Join(basedir, filename), filename, output)
 	}
-	for _, item := range []string{"route", "link", "address"} {
-		if err := dump(item); err != nil {
+	for _, item := range []string{"rule", "route", "link", "address"} {
+		if err := dump(item, item); err != nil {
 			return err
 		}
+	}
+	// Dump routes from all routing tables (Antrea installs per-Egress custom tables).
+	if err := dump("route-table-all", "route", "show", "table", "all"); err != nil {
+		return err
 	}
 	return nil
 }
