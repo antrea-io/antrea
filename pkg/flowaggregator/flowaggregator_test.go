@@ -47,6 +47,7 @@ import (
 	collectortesting "antrea.io/antrea/v2/pkg/flowaggregator/collector/testing"
 	"antrea.io/antrea/v2/pkg/flowaggregator/exporter"
 	exportertesting "antrea.io/antrea/v2/pkg/flowaggregator/exporter/testing"
+	"antrea.io/antrea/v2/pkg/flowaggregator/flowstreamservice"
 	"antrea.io/antrea/v2/pkg/flowaggregator/intermediate"
 	intermediatetesting "antrea.io/antrea/v2/pkg/flowaggregator/intermediate/testing"
 	"antrea.io/antrea/v2/pkg/flowaggregator/options"
@@ -999,11 +1000,15 @@ func TestFlowAggregator_InitCollectors(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			recordBuffer := ringbuffer.NewBroadcastBuffer[*flowpb.Flow](8)
 			fa := &flowAggregator{
 				aggregatorTransportProtocol: tt.aggregatorTransportProtocol,
 				flowAggregatorAddress:       tt.flowAggregatorAddress,
 				k8sClient:                   tt.k8sClient,
 				certificateProvider:         certificate.NewProvider(tt.k8sClient, ""),
+				recordCh:                    make(chan *flowpb.Flow, 128),
+				recordBuffer:                recordBuffer,
+				flowStreamService:           flowstreamservice.NewFlowStreamService(recordBuffer),
 			}
 			stopCh := make(chan struct{})
 			go func() {
