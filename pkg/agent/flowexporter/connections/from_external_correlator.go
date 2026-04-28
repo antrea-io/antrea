@@ -37,14 +37,14 @@ const (
 // external-to-pod export. The concrete type is *FromExternalCorrelator; use NewFakeExternalCorrelator
 // when correlation should be disabled (e.g. in unit tests that do not need correlator lifecycle).
 type ExternalCorrelator interface {
-	IngestZoneZero(conn *connection.Connection, antreaProxier proxy.ProxyQuerier)
+	IngestZoneZero(conn *connection.Connection)
 	CorrelateIfExternal(conn *connection.Connection) bool
 	RemoveStaleZoneZero(conn *connection.Connection)
 }
 
 type fakeExternalCorrelator struct{}
 
-func (fakeExternalCorrelator) IngestZoneZero(*connection.Connection, proxy.ProxyQuerier) {}
+func (fakeExternalCorrelator) IngestZoneZero(*connection.Connection) {}
 
 func (fakeExternalCorrelator) CorrelateIfExternal(*connection.Connection) bool { return false }
 
@@ -58,6 +58,7 @@ func NewFakeExternalCorrelator() ExternalCorrelator {
 // FromExternalCorrelator correlates zone-0 (pre-Antrea DNAT/SNAT) connections with Antrea-zone
 // connections so external client IP information can be preserved on exported flows.
 type FromExternalCorrelator struct {
+	proxier         proxy.ProxyQuerier
 	connections     map[correlatorKey]connectionItem
 	stopCh          chan struct{}
 	stopOnce        sync.Once
@@ -103,11 +104,14 @@ type connectionItem struct {
 }
 
 // NewFromExternalCorrelator returns a FromExternalCorrelator with its internal map initialized.
+// proxier is used for GetServiceByIP during IngestZoneZero; if nil, every zone-0 flow is retained
+// without Service lookup.
 // The caller should run the cleanup loop with go correlator.Run() (e.g. alongside other flow
 // exporter workers) and call StopCleanUp when shutting down.
-func NewFromExternalCorrelator() *FromExternalCorrelator {
+func NewFromExternalCorrelator(proxier proxy.ProxyQuerier) *FromExternalCorrelator {
 	stopCh := make(chan struct{})
 	return &FromExternalCorrelator{
+		proxier:         proxier,
 		connections:     map[correlatorKey]connectionItem{},
 		stopCh:          stopCh,
 		ttl:             defaultTTL,
@@ -148,8 +152,8 @@ func keyFromAntreaZoneConn(conn *connection.Connection) correlatorKey {
 }
 
 // IngestZoneZero stores zone-0 connections that may later pair with Antrea-zone connections.
-// Only connections that map to a Service (when antreaProxier is non-nil) are retained.
-func (c *FromExternalCorrelator) IngestZoneZero(conn *connection.Connection, antreaProxier proxy.ProxyQuerier) {
+// Only connections that map to a Service (when proxier is non-nil) are retained.
+func (c *FromExternalCorrelator) IngestZoneZero(conn *connection.Connection) {
 	if conn == nil || conn.Zone != 0 {
 		return
 	}
@@ -167,12 +171,12 @@ func (c *FromExternalCorrelator) IngestZoneZero(conn *connection.Connection, ant
 		klog.InfoS("Could not retrieve Service protocol", "error", err, "conn", conn)
 		return
 	}
-	// With no proxier, retain every zone-0 flow (no Service lookup). With Antrea proxier, only
-	// retain when GetServiceByIP matches.
+	// With no proxier, retain every zone-0 flow (no Service lookup). With proxier, only retain
+	// when GetServiceByIP matches.
 	shouldStore := true
-	if antreaProxier != nil {
+	if c.proxier != nil {
 		serviceStr := fmt.Sprintf("%s:%d/%s", svcIP, svcPort, protocol)
-		_, shouldStore = antreaProxier.GetServiceByIP(serviceStr)
+		_, shouldStore = c.proxier.GetServiceByIP(serviceStr)
 	}
 	if shouldStore {
 		c.add(conn)

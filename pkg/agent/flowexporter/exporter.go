@@ -154,8 +154,9 @@ func NewFlowExporter(
 ) (*FlowExporter, error) {
 	ctConnsUpdateChannel := channel.NewSubscribableChannel("Conntrack Connections", ctConnsUpdateChannelBufferSize)
 	denyConnUpdateChannel := channel.NewSubscribableChannel("Deny Connections", denyConnUpdateChannelBufferSize)
+	fromExternalCorrelator := connections.NewFromExternalCorrelator(proxier)
 	connTrackDumper := connections.InitializeConnTrackDumper(nodeConfig, serviceCIDRNet, serviceCIDRNetv6, ovsDatapathType, proxyEnabled)
-	poller := connections.NewPoller(connTrackDumper, ctConnsUpdateChannel, o.PollInterval, v4Enabled, v6Enabled, o.ConnectUplinkToBridge)
+	poller := connections.NewPoller(connTrackDumper, ctConnsUpdateChannel, fromExternalCorrelator, o.PollInterval, v4Enabled, v6Enabled, o.ConnectUplinkToBridge)
 
 	if nodeRouteController == nil {
 		klog.InfoS("NodeRouteController is nil, will not be able to determine flow type for connections")
@@ -202,7 +203,7 @@ func NewFlowExporter(
 		poller:                 poller,
 		ctConnUpdateChannel:    ctConnsUpdateChannel,
 		denyConnUpdateChannel:  denyConnUpdateChannel,
-		fromExternalCorrelator: connections.NewFromExternalCorrelator(),
+		fromExternalCorrelator: fromExternalCorrelator,
 
 		staticDestinationRes: staticDestination,
 		destinations:         make(map[string]destinationObj),
