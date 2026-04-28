@@ -228,7 +228,7 @@ func BenchmarkConntrackConnectionStorePoll(b *testing.B) {
 	}
 	serviceCIDRv4 := netip.MustParsePrefix("10.96.0.0/12")
 	connDumper := connections.NewConnTrackSystem(nodeConfig, serviceCIDRv4, netip.Prefix{}, false)
-	poller := connections.NewPoller(connDumper, nil, testPollInterval, true, false, false)
+	poller := connections.NewPoller(connDumper, nil, nil, testPollInterval, true, false, false)
 
 	ctrl := mock.NewController(b)
 	npQuerier := queriertest.NewMockAgentNetworkPolicyInfoQuerier(ctrl)
@@ -238,20 +238,20 @@ func BenchmarkConntrackConnectionStorePoll(b *testing.B) {
 		IdleFlowTimeout:        testIdleFlowTimeout,
 		StaleConnectionTimeout: testStaleConnectionTimeout,
 	}
-
 	conntrackConnStore := connections.NewConntrackConnectionStore(
 		npQuerier,
 		podStore,
 		nil,
 		storeCfg,
+		nil,
 	)
 
 	for b.Loop() {
-		conns, connsLens, err := poller.Poll()
+		antreaConns, connsLens, err := poller.Poll()
 		require.NoError(b, err, "Poll() should not return error")
-		require.Len(b, connsLens, 1, "Poll() should return slice of length 1")
-		assert.Equal(b, numConnections, connsLens[0], "Poll() should return %d connections", numConnections)
-		require.NoError(b, conntrackConnStore.AddOrUpdateConns(conns))
+		require.Len(b, connsLens, 2, "Poll() should return per-zone counts (zone 0 and Antrea zone)")
+		assert.Equal(b, numConnections, connsLens[1], "Antrea zone dump should return %d filtered connections", numConnections)
+		require.NoError(b, conntrackConnStore.AddOrUpdateConns(antreaConns))
 		assert.Equal(b, numConnections, conntrackConnStore.NumConnections(), "NumConnections() should return %d connections", numConnections)
 		// Delete all connections, so that we only benchmark the performance of adding new connections.
 		assert.Equal(b, numConnections, conntrackConnStore.DeleteAllConnections(), "DeleteAllConnections() should return %d connections", numConnections)

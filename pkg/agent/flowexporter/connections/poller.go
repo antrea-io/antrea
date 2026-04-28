@@ -33,13 +33,18 @@ type Poller struct {
 	v6Enabled             bool
 	connectUplinkToBridge bool
 
-	notifier channel.Notifier
+	notifier           channel.Notifier
+	externalCorrelator ExternalCorrelator
 
 	zones []uint16
 }
 
-func NewPoller(ctDumper ConnTrackDumper, notifier channel.Notifier, pollInterval time.Duration, v4Enabled, v6Enabled, connectUplinkToBridge bool) *Poller {
-	var zones []uint16
+// NewPoller creates a conntrack poller. externalCorrelator may be nil; zone-0 dumps are never
+// delivered to subscribers—when externalCorrelator is non-nil they are ingested here. Only
+// Antrea-zone dumps are passed to the notifier.
+func NewPoller(ctDumper ConnTrackDumper, notifier channel.Notifier, externalCorrelator ExternalCorrelator, pollInterval time.Duration, v4Enabled, v6Enabled, connectUplinkToBridge bool) *Poller {
+	// Zone 0 is polled first so correlator state exists before Antrea-zones are polled.
+	zones := []uint16{0}
 	if v4Enabled {
 		if connectUplinkToBridge {
 			zones = append(zones, uint16(openflow.IPCtZoneTypeRegMark.GetValue()<<12))
@@ -59,6 +64,7 @@ func NewPoller(ctDumper ConnTrackDumper, notifier channel.Notifier, pollInterval
 		connTrackDumper:       ctDumper,
 		zones:                 zones,
 		notifier:              notifier,
+		externalCorrelator:    externalCorrelator,
 		pollInterval:          pollInterval,
 		v4Enabled:             v4Enabled,
 		v6Enabled:             v6Enabled,
@@ -92,11 +98,13 @@ func (p *Poller) Run(stopCh <-chan struct{}) {
 	}
 }
 
-// Poll calls into conntrackDumper interface to dump conntrack flows. It returns the connections
-// filtered by zones and number of connections for each address family, as a slice.
-// In dual-stack clusters, the slice will contain 2 values (number of IPv4 connections first, then
-// number of IPv6 connections).
-// TODO: As optimization, only poll invalid/closed connections during every poll, and poll the established connections right before the export.
+// Poll calls into conntrackDumper to dump each configured zone. Zone-0 flows are never returned;
+// when externalCorrelator is non-nil they are ingested here. Non-zone-0 dumps are returned as
+// Antrea-zone connections (IPv4/IPv6 per configuration). connsLens has one entry per polled zone
+// (zone 0 first, then IPv4 Antrea zone, then IPv6 Antrea zone when enabled), each the length of
+// that zone's filtered dump.
+// TODO: As optimization, only poll invalid/closed connections during every poll, and poll the
+// established connections right before the export.
 func (p *Poller) Poll() ([]*connection.Connection, []int, error) {
 	klog.V(2).InfoS("Polling conntrack")
 	startTime := time.Now()
@@ -106,17 +114,27 @@ func (p *Poller) Poll() ([]*connection.Connection, []int, error) {
 		klog.V(2).InfoS("Polled conntrack", "duration", duration)
 	}()
 
+	var antreaConns []*connection.Connection
 	var connsLens []int
 	var totalConns int
-	var filteredConnsList []*connection.Connection
 	for _, zone := range p.zones {
 		filteredConnsListPerZone, totalConnsPerZone, err := p.connTrackDumper.DumpFlows(zone)
 		if err != nil {
 			return nil, nil, err
 		}
 		totalConns += totalConnsPerZone
-		filteredConnsList = append(filteredConnsList, filteredConnsListPerZone...)
 		connsLens = append(connsLens, len(filteredConnsListPerZone))
+		if zone == 0 {
+			if p.externalCorrelator != nil {
+				for _, conn := range filteredConnsListPerZone {
+					if conn != nil {
+						p.externalCorrelator.IngestZoneZero(conn)
+					}
+				}
+			}
+			continue
+		}
+		antreaConns = append(antreaConns, filteredConnsListPerZone...)
 	}
 
 	metrics.TotalConnectionsInConnTrackTable.Set(float64(totalConns))
@@ -125,5 +143,5 @@ func (p *Poller) Poll() ([]*connection.Connection, []int, error) {
 		return nil, nil, err
 	}
 	metrics.MaxConnectionsInConnTrackTable.Set(float64(maxConns))
-	return filteredConnsList, connsLens, nil
+	return antreaConns, connsLens, nil
 }

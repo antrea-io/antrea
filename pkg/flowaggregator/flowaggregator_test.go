@@ -35,6 +35,7 @@ import (
 	timestamppb "google.golang.org/protobuf/types/known/timestamppb"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	coreinformers "k8s.io/client-go/informers/core/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/kubernetes/fake"
 	"k8s.io/client-go/tools/cache"
@@ -1101,6 +1102,42 @@ func TestFlowAggregator_fillK8sMetadata(t *testing.T) {
 	assert.Equal(t, "destinationNode", record.K8S.DestinationNodeName)
 }
 
+type mockNodeInformer struct {
+	coreinformers.NodeInformer
+	mockInformer func() cache.SharedIndexInformer
+}
+
+func (m mockNodeInformer) Informer() cache.SharedIndexInformer {
+	return m.mockInformer()
+}
+
+type mockInformer struct {
+	cache.SharedIndexInformer
+	mockAddIndexers func(indexers cache.Indexers) error
+	mockGetIndexer  func() cache.Indexer
+}
+
+func (m mockInformer) AddIndexers(indexers cache.Indexers) error {
+	return m.mockAddIndexers(indexers)
+}
+
+func (m mockInformer) GetIndexer() cache.Indexer {
+	return m.mockGetIndexer()
+}
+
+var mockNodeInformerA = mockNodeInformer{
+	mockInformer: func() cache.SharedIndexInformer {
+		return mockInformer{
+			mockAddIndexers: func(indexers cache.Indexers) error {
+				return nil
+			},
+			mockGetIndexer: func() cache.Indexer {
+				return nil
+			},
+		}
+	},
+}
+
 func TestNewFlowAggregator(t *testing.T) {
 	wd, err := os.Getwd()
 	require.NoError(t, err)
@@ -1165,7 +1202,7 @@ func TestNewFlowAggregator(t *testing.T) {
 			require.NoError(t, err)
 			_, err = f.Write(b)
 			require.NoError(t, err)
-			fa, err := NewFlowAggregator(client, clusterUUID, mockPodStore, mockNodeStore, mockServiceStore, fileName)
+			fa, err := NewFlowAggregator(client, clusterUUID, mockPodStore, mockNodeStore, mockServiceStore, fileName, mockNodeInformerA)
 			require.NoError(t, err)
 			assert.Equal(t, clusterUUID, fa.clusterUUID)
 			assert.Equal(t, clusterID, fa.clusterID)

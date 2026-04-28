@@ -55,18 +55,38 @@ func TestPoller_Poll(t *testing.T) {
 			ctrl := gomock.NewController(t)
 
 			mockDumper := connstesting.NewMockConnTrackDumper(ctrl)
-			mockDumper.EXPECT().DumpFlows(gomock.Any()).Return(tt.conns, len(tt.conns), nil)
+			// Zone 0 is always polled first (returns no connections for this test).
+			mockDumper.EXPECT().DumpFlows(uint16(0)).Return(nil, 0, nil)
+			mockDumper.EXPECT().DumpFlows(gomock.Not(uint16(0))).Return(tt.conns, len(tt.conns), nil)
 			mockDumper.EXPECT().GetMaxConnections().Return(maxConnections, nil)
 
-			p := NewPoller(mockDumper, nil, 0, true, false, false)
-			conns, connsLens, err := p.Poll()
+			p := NewPoller(mockDumper, nil, nil, 0, true, false, false)
+			antreaConns, connsLens, err := p.Poll()
 			require.NoError(t, err)
-			assert.ElementsMatch(t, tt.conns, conns)
-			assert.Equal(t, []int{len(tt.conns)}, connsLens)
+			assert.ElementsMatch(t, tt.conns, antreaConns)
+			assert.Equal(t, []int{0, len(tt.conns)}, connsLens)
 
 			// Validate Metrics
 			checkTotalConnectionsMetric(t, len(tt.conns))
 			checkMaxConnectionsMetric(t, maxConnections)
 		})
 	}
+}
+
+func TestPoller_Poll_zoneZeroNotForwardedWhenCorrelatorNil(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	z := &connection.Connection{Zone: 0, FlowKey: connection.Tuple{SourceAddress: netip.MustParseAddr("8.8.8.8"), DestinationAddress: netip.MustParseAddr("10.0.0.1"), Protocol: 6, SourcePort: 1, DestinationPort: 2}}
+	antrea := &connection.Connection{Zone: 65520, FlowKey: connection.Tuple{SourceAddress: netip.MustParseAddr("10.0.0.2"), DestinationAddress: netip.MustParseAddr("10.0.0.3"), Protocol: 6, SourcePort: 3, DestinationPort: 4}}
+
+	mockDumper := connstesting.NewMockConnTrackDumper(ctrl)
+	mockDumper.EXPECT().DumpFlows(uint16(0)).Return([]*connection.Connection{z}, 1, nil)
+	mockDumper.EXPECT().DumpFlows(gomock.Not(uint16(0))).Return([]*connection.Connection{antrea}, 1, nil)
+	mockDumper.EXPECT().GetMaxConnections().Return(100000, nil)
+
+	p := NewPoller(mockDumper, nil, nil, 0, true, false, false)
+	out, lens, err := p.Poll()
+	require.NoError(t, err)
+	assert.Equal(t, []int{1, 1}, lens, "per-zone lengths should include zone 0")
+	require.Len(t, out, 1)
+	assert.Same(t, antrea, out[0], "only Antrea-zone connection should be returned")
 }

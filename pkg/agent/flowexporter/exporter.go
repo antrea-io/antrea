@@ -111,6 +111,11 @@ type FlowExporter struct {
 	ctConnUpdateChannel   *channel.SubscribableChannel
 	denyConnUpdateChannel *channel.SubscribableChannel
 
+	// fromExternalCorrelator is created by FlowExporter, shared by every Destination's connection
+	// store (same conntrack poll fan-out). FlowExporter.Run starts its cleanup loop; defer StopCleanUp
+	// stops it on shutdown.
+	fromExternalCorrelator *connections.FromExternalCorrelator
+
 	// staticDestinationRes is set in NewFlowExporter when static export is enabled. Run() clears
 	// it if createDestinationFromResource fails; if still non-nil at shutdown, static destination
 	// export was started and the poller must account for it.
@@ -149,8 +154,9 @@ func NewFlowExporter(
 ) (*FlowExporter, error) {
 	ctConnsUpdateChannel := channel.NewSubscribableChannel("Conntrack Connections", ctConnsUpdateChannelBufferSize)
 	denyConnUpdateChannel := channel.NewSubscribableChannel("Deny Connections", denyConnUpdateChannelBufferSize)
+	fromExternalCorrelator := connections.NewFromExternalCorrelator(proxier)
 	connTrackDumper := connections.InitializeConnTrackDumper(nodeConfig, serviceCIDRNet, serviceCIDRNetv6, ovsDatapathType, proxyEnabled)
-	poller := connections.NewPoller(connTrackDumper, ctConnsUpdateChannel, o.PollInterval, v4Enabled, v6Enabled, o.ConnectUplinkToBridge)
+	poller := connections.NewPoller(connTrackDumper, ctConnsUpdateChannel, fromExternalCorrelator, o.PollInterval, v4Enabled, v6Enabled, o.ConnectUplinkToBridge)
 
 	if nodeRouteController == nil {
 		klog.InfoS("NodeRouteController is nil, will not be able to determine flow type for connections")
@@ -194,9 +200,10 @@ func NewFlowExporter(
 		npQuerier:           npQuerier,
 		networkPolicyWait:   networkPolicyWait,
 
-		poller:                poller,
-		ctConnUpdateChannel:   ctConnsUpdateChannel,
-		denyConnUpdateChannel: denyConnUpdateChannel,
+		poller:                 poller,
+		ctConnUpdateChannel:    ctConnsUpdateChannel,
+		denyConnUpdateChannel:  denyConnUpdateChannel,
+		fromExternalCorrelator: fromExternalCorrelator,
 
 		staticDestinationRes: staticDestination,
 		destinations:         make(map[string]destinationObj),
@@ -305,6 +312,11 @@ func (exp *FlowExporter) stopPollerIfNeededLocked() {
 
 func (exp *FlowExporter) Run(stopCh <-chan struct{}) {
 	klog.InfoS("Flow Exporter started")
+	defer func() {
+		if exp.fromExternalCorrelator != nil {
+			exp.fromExternalCorrelator.StopCleanUp()
+		}
+	}()
 	defer exp.queue.ShutDown()
 	cacheSyncs := []cache.InformerSynced{exp.destinationSynced}
 	if exp.nodeRouteController != nil {
@@ -332,6 +344,9 @@ func (exp *FlowExporter) Run(stopCh <-chan struct{}) {
 	// producers (e.g. denied-connection updates) when there are no export destinations yet.
 	go exp.ctConnUpdateChannel.Run(stopCh)
 	go exp.denyConnUpdateChannel.Run(stopCh)
+	if exp.fromExternalCorrelator != nil {
+		go exp.fromExternalCorrelator.Run()
+	}
 
 	for range defaultWorkers {
 		go wait.Until(exp.worker, time.Second, stopCh)
@@ -502,6 +517,7 @@ func (fe *FlowExporter) createDestinationFromResource(res *api.FlowExporterDesti
 		fe.egressQuerier,
 		fe.networkPolicyReadyTime,
 		config,
+		fe.fromExternalCorrelator,
 	), nil
 }
 

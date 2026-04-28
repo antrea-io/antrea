@@ -479,7 +479,7 @@ func TestFlowExporter_networkPolicyWait(t *testing.T) {
 			workqueue.NewTypedItemExponentialFailureRateLimiter[string](0, 0),
 			workqueue.TypedRateLimitingQueueConfig[string]{Name: "flowexporterdestination-test"},
 		),
-		poller:                connections.NewPoller(mockConnDumper, testSubChannel, 100*time.Millisecond, true, false, false),
+		poller:                connections.NewPoller(mockConnDumper, testSubChannel, nil, 100*time.Millisecond, true, false, false),
 		ctConnUpdateChannel:   testSubChannel,
 		denyConnUpdateChannel: testSubChannel,
 		destinations:          make(map[string]destinationObj),
@@ -496,7 +496,9 @@ func TestFlowExporter_networkPolicyWait(t *testing.T) {
 	// Create a signal channel that will be closed on the first DumpFlows call
 	firstPollDoneCh := make(chan struct{})
 
-	// Set up mock expectations - close signal channel on first DumpFlows call, then return normally
+	// Set up mock expectations - close signal channel on first DumpFlows call, then return normally.
+	// Zone 0 is always polled first for external-to-Pod flow support.
+	mockConnDumper.EXPECT().DumpFlows(uint16(0)).Return([]*connection.Connection{}, 0, nil).AnyTimes()
 	mockConnDumper.EXPECT().DumpFlows(uint16(openflow.CtZone)).DoAndReturn(func(uint16) ([]*connection.Connection, int, error) {
 		defer close(firstPollDoneCh)
 		return []*connection.Connection{}, 0, nil
@@ -574,7 +576,7 @@ func TestFlowExporter_pollerLifecycle(t *testing.T) {
 				workqueue.NewTypedItemExponentialFailureRateLimiter[string](0, 0),
 				workqueue.TypedRateLimitingQueueConfig[string]{Name: "flowexporterdestination-test"},
 			),
-			poller:                connections.NewPoller(mockConnDumper, testSubChannel, testPollInterval, true, false, false),
+			poller:                connections.NewPoller(mockConnDumper, testSubChannel, nil, testPollInterval, true, false, false),
 			ctConnUpdateChannel:   testSubChannel,
 			denyConnUpdateChannel: testSubChannel,
 			destinations:          make(map[string]destinationObj),
