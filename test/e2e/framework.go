@@ -3099,7 +3099,7 @@ func (data *TestData) gracefulExitFlowAggregators(covDir string) error {
 // collectCovFiles collects coverage files from the Pod and saves them to the coverage directory
 func (data *TestData) collectCovFiles(podName string, containerName string, nsName string, covDir string) error {
 	// copy antctl coverage files from Pod to the coverage directory
-	cmds := []string{"bash", "-c", "find /tmp/coverage  -mindepth 1"}
+	cmds := []string{"bash", "-c", "[ -d /tmp/coverage ] && find /tmp/coverage -mindepth 1 || true"}
 	stdout, stderr, err := data.RunCommandFromPod(nsName, podName, containerName, cmds)
 	if err != nil {
 		return fmt.Errorf("error when running this find command '%s' on Pod '%s', stderr: <%v>, err: <%v>", cmds, podName, stderr, err)
@@ -3109,6 +3109,10 @@ func (data *TestData) collectCovFiles(podName string, containerName string, nsNa
 		return fmt.Errorf("error creating coverage directory for Pod %s: %v", podName, err)
 	}
 	stdout = strings.TrimSpace(stdout)
+	if stdout == "" {
+		// No coverage files found, nothing to collect.
+		return nil
+	}
 	files := strings.Split(stdout, "\n")
 	for _, file := range files {
 		if len(file) == 0 {
