@@ -69,7 +69,7 @@ jobs:
         key: ${{ steps.restore-db-cache.outputs.cache-primary-key }}
     - name: Run Trivy vulnerability scanner on latest antrea-agent Docker image
       if: ${{ always() && steps.pull.conclusion == 'success' }}
-      uses: aquasecurity/trivy-action@57a97c7e7821a5776cebc9bb87c984fa69cba8f1  # v0.35.0
+      uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25  # v0.36.0
       # we cannot use .trivy.yml as we need to override some config parameters
       # and that is not supported by aquasecurity/trivy-action
       with:
@@ -91,7 +91,7 @@ jobs:
       run: cat trivy.agent.latest.txt || true
     - name: Run Trivy vulnerability scanner on latest antrea-controller Docker image
       if: ${{ always() && steps.pull.conclusion == 'success' }}
-      uses: aquasecurity/trivy-action@57a97c7e7821a5776cebc9bb87c984fa69cba8f1  # v0.35.0
+      uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25  # v0.36.0
       # we cannot use .trivy.yml as we need to override some config parameters
       # and that is not supported by aquasecurity/trivy-action
       with:
@@ -112,7 +112,7 @@ jobs:
       run: cat trivy.controller.latest.txt || true
     - name: Run Trivy vulnerability scanner on antrea-agent Docker image for latest released version
       if: ${{ always() && steps.pull.conclusion == 'success' }}
-      uses: aquasecurity/trivy-action@57a97c7e7821a5776cebc9bb87c984fa69cba8f1  # v0.35.0
+      uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25  # v0.36.0
       with:
         scan-type: 'image'
         image-ref: 'antrea/antrea-agent-ubuntu:${{ steps.find-antrea-greatest-version.outputs.antrea_version }}'
@@ -131,7 +131,7 @@ jobs:
       run: cat trivy.agent.${{ steps.find-antrea-greatest-version.outputs.antrea_version }}.txt || true
     - name: Run Trivy vulnerability scanner on antrea-controller Docker image for latest released version
       if: ${{ always() && steps.pull.conclusion == 'success' }}
-      uses: aquasecurity/trivy-action@57a97c7e7821a5776cebc9bb87c984fa69cba8f1  # v0.35.0
+      uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25  # v0.36.0
       with:
         scan-type: 'image'
         image-ref: 'antrea/antrea-controller-ubuntu:${{ steps.find-antrea-greatest-version.outputs.antrea_version }}'
