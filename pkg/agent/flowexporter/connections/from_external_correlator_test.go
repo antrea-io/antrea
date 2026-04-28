@@ -38,7 +38,7 @@ func contains(c *FromExternalCorrelator, conn *connection.Connection) bool {
 
 func TestFromExternalCorrelator(t *testing.T) {
 	t.Run("add", func(t *testing.T) {
-		store := NewFromExternalCorrelator()
+		store := NewFromExternalCorrelator(nil)
 		refTime := time.Now()
 		zoneZeroConn := &connection.Connection{
 			StartTime: refTime,
@@ -58,7 +58,7 @@ func TestFromExternalCorrelator(t *testing.T) {
 	})
 	t.Run("popMatching", func(t *testing.T) {
 		t.Run("Has Match", func(t *testing.T) {
-			store := NewFromExternalCorrelator()
+			store := NewFromExternalCorrelator(nil)
 			refTime := time.Now()
 			zoneZeroConn := &connection.Connection{
 				StartTime: refTime,
@@ -92,7 +92,7 @@ func TestFromExternalCorrelator(t *testing.T) {
 			assert.Equal(t, zoneZeroSnapshotFromConn(zoneZeroConn), match)
 		})
 		t.Run("Does Not Have Match", func(t *testing.T) {
-			store := NewFromExternalCorrelator()
+			store := NewFromExternalCorrelator(nil)
 			refTime := time.Now()
 			zoneZeroConn := &connection.Connection{
 				StartTime: refTime,
@@ -126,7 +126,7 @@ func TestFromExternalCorrelator(t *testing.T) {
 		})
 	})
 	t.Run("remove", func(t *testing.T) {
-		store := NewFromExternalCorrelator()
+		store := NewFromExternalCorrelator(nil)
 		refTime := time.Now()
 		zoneZeroConn := &connection.Connection{
 			StartTime: refTime,
@@ -157,7 +157,7 @@ func TestFromExternalCorrelator(t *testing.T) {
 	})
 	t.Run("Expires stale records", func(t *testing.T) {
 		synctest.Test(t, func(t *testing.T) {
-			store := NewFromExternalCorrelator()
+			store := NewFromExternalCorrelator(nil)
 			t.Cleanup(store.StopCleanUp)
 			go store.Run()
 
@@ -186,7 +186,7 @@ func TestFromExternalCorrelator(t *testing.T) {
 		})
 	})
 	t.Run("StopCleanUp is threadsafe", func(t *testing.T) {
-		store := NewFromExternalCorrelator()
+		store := NewFromExternalCorrelator(nil)
 
 		var wg sync.WaitGroup
 		for range 10 {
@@ -274,7 +274,7 @@ func TestFromExternalCorrelator_IngestZoneZero(t *testing.T) {
 		ProxySnatIP:   netip.MustParseAddr("172.18.0.2"),
 		ProxySnatPort: uint16(28392),
 	}
-	mockProxier := mockProxier{}
+	mp := mockProxier{}
 	testCases := []struct {
 		name   string
 		conn   *connection.Connection
@@ -314,12 +314,13 @@ func TestFromExternalCorrelator_IngestZoneZero(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			correlator := NewFromExternalCorrelator()
+			var correlator *FromExternalCorrelator
 			if tc.name == "Nil Proxier" {
-				correlator.IngestZoneZero(tc.conn, nil)
+				correlator = NewFromExternalCorrelator(nil)
 			} else {
-				correlator.IngestZoneZero(tc.conn, mockProxier)
+				correlator = NewFromExternalCorrelator(mp)
 			}
+			correlator.IngestZoneZero(tc.conn)
 
 			if tc.stored {
 				assert.Equal(t, 1, len(correlator.connections), "Expected connection to be stored in correlator")
@@ -373,7 +374,7 @@ func TestCorrelateIfExternal(t *testing.T) {
 		DestinationPodNamespace: "ns1",
 	}
 
-	correlator := NewFromExternalCorrelator()
+	correlator := NewFromExternalCorrelator(mockProxier{})
 
 	got := correlator.CorrelateIfExternal(nil)
 	assert.False(t, got, "Expected invalid connections to not get correlated")
@@ -384,7 +385,7 @@ func TestCorrelateIfExternal(t *testing.T) {
 	assert.Equal(t, gatewayIP, antreaZoneConn.FlowKey.SourceAddress, "Expected connection to not have changed")
 
 	// Confirm correlation
-	correlator.IngestZoneZero(hasServiceConn, mockProxier{})
+	correlator.IngestZoneZero(hasServiceConn)
 	got = correlator.CorrelateIfExternal(&antreaZoneConn)
 	assert.True(t, got, "Expected correlation when corresponding zone zero flow added to store")
 
@@ -449,8 +450,8 @@ func TestFromExternalCorrelator_ZoneZeroKeyWithoutProxySNAT(t *testing.T) {
 		ProxySnatPort:              0,
 		Mark:                       openflow.ServiceCTMark.GetValue(),
 	}
-	correlator := NewFromExternalCorrelator()
-	correlator.IngestZoneZero(conn, mockProxier{})
+	correlator := NewFromExternalCorrelator(mockProxier{})
+	correlator.IngestZoneZero(conn)
 	key := keyFromZoneZeroConn(conn)
 	_, exists := correlator.connections[key]
 	assert.True(t, exists, "zone-0 entry should be stored when Service lookup succeeds")
@@ -500,8 +501,8 @@ func TestFromExternalCorrelator_SymmetricNATCorrelation(t *testing.T) {
 		OriginalDestinationPort:    80,
 	}
 
-	correlator := NewFromExternalCorrelator()
-	correlator.IngestZoneZero(zoneZeroConn, mockProxier{})
+	correlator := NewFromExternalCorrelator(mockProxier{})
+	correlator.IngestZoneZero(zoneZeroConn)
 
 	correlated := correlator.CorrelateIfExternal(antreaZoneConn)
 	assert.True(t, correlated, "Expected symmetric-NAT zone-0 connection to be correlated")

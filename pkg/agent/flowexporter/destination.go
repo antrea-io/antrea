@@ -254,13 +254,13 @@ func (d *Destination) Run(stopCh <-chan struct{}) {
 }
 
 func (d *Destination) populateCTStore(e any) {
-	batch, ok := e.(*connections.ConntrackPollBatch)
+	conns, ok := e.([]*connection.Connection)
 	if !ok {
 		klog.InfoS("Received unexpected items for ct conn store", "type", fmt.Sprintf("%T", e))
 		return
 	}
 
-	d.conntrackConnStore.AddOrUpdateConns(batch)
+	d.conntrackConnStore.AddOrUpdateConns(conns)
 }
 
 func (d *Destination) populateDenyStore(e any) {

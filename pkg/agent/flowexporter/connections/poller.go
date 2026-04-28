@@ -19,6 +19,7 @@ import (
 
 	"k8s.io/klog/v2"
 
+	"antrea.io/antrea/v2/pkg/agent/flowexporter/connection"
 	"antrea.io/antrea/v2/pkg/agent/metrics"
 	"antrea.io/antrea/v2/pkg/agent/openflow"
 	"antrea.io/antrea/v2/pkg/util/channel"
@@ -32,15 +33,17 @@ type Poller struct {
 	v6Enabled             bool
 	connectUplinkToBridge bool
 
-	notifier channel.Notifier
+	notifier           channel.Notifier
+	externalCorrelator ExternalCorrelator
 
 	zones []uint16
 }
 
-func NewPoller(ctDumper ConnTrackDumper, notifier channel.Notifier, pollInterval time.Duration, v4Enabled, v6Enabled, connectUplinkToBridge bool) *Poller {
-	// Zone 0 is polled first so that zone-zero connections (before Antrea
-	// DNAT/SNAT) are available in the FromExternalCorrelator before the
-	// corresponding Antrea-zone connections are processed.
+// NewPoller creates a conntrack poller. externalCorrelator may be nil; zone-0 dumps are never
+// delivered to subscribers—when externalCorrelator is non-nil they are ingested here. Only
+// Antrea-zone dumps are passed to the notifier.
+func NewPoller(ctDumper ConnTrackDumper, notifier channel.Notifier, externalCorrelator ExternalCorrelator, pollInterval time.Duration, v4Enabled, v6Enabled, connectUplinkToBridge bool) *Poller {
+	// Zone 0 is polled first so correlator state exists before Antrea-zones are polled.
 	zones := []uint16{0}
 	if v4Enabled {
 		if connectUplinkToBridge {
@@ -61,6 +64,7 @@ func NewPoller(ctDumper ConnTrackDumper, notifier channel.Notifier, pollInterval
 		connTrackDumper:       ctDumper,
 		zones:                 zones,
 		notifier:              notifier,
+		externalCorrelator:    externalCorrelator,
 		pollInterval:          pollInterval,
 		v4Enabled:             v4Enabled,
 		v6Enabled:             v6Enabled,
@@ -79,7 +83,7 @@ func (p *Poller) Run(stopCh <-chan struct{}) {
 		case <-stopCh:
 			return
 		case <-pollTicker.C:
-			batch, _, err := p.Poll()
+			conns, _, err := p.Poll()
 			if err != nil {
 				// Not failing here as errors can be transient and could be resolved in future poll cycles.
 				// TODO: Come up with a backoff/retry mechanism by increasing poll interval and adding retry timeout
@@ -88,18 +92,20 @@ func (p *Poller) Run(stopCh <-chan struct{}) {
 			}
 
 			if p.notifier != nil {
-				p.notifier.Notify(batch)
+				p.notifier.Notify(conns)
 			}
 		}
 	}
 }
 
-// Poll calls into conntrackDumper interface to dump conntrack flows per zone. It returns a
-// ConntrackPollBatch (zone 0 vs Antrea zones splitted) and per-zone filtered connection
-// counts. In dual-stack clusters, connsLens has one entry per polled zone (zone 0 first, then
-// IPv4 Antrea zone, then IPv6 Antrea zone when enabled).
-// TODO: As optimization, only poll invalid/closed connections during every poll, and poll the established connections right before the export.
-func (p *Poller) Poll() (*ConntrackPollBatch, []int, error) {
+// Poll calls into conntrackDumper to dump each configured zone. Zone-0 flows are never returned;
+// when externalCorrelator is non-nil they are ingested here. Non-zone-0 dumps are returned as
+// Antrea-zone connections (IPv4/IPv6 per configuration). connsLens has one entry per polled zone
+// (zone 0 first, then IPv4 Antrea zone, then IPv6 Antrea zone when enabled), each the length of
+// that zone's filtered dump.
+// TODO: As optimization, only poll invalid/closed connections during every poll, and poll the
+// established connections right before the export.
+func (p *Poller) Poll() ([]*connection.Connection, []int, error) {
 	klog.V(2).InfoS("Polling conntrack")
 	startTime := time.Now()
 	defer func() {
@@ -108,7 +114,7 @@ func (p *Poller) Poll() (*ConntrackPollBatch, []int, error) {
 		klog.V(2).InfoS("Polled conntrack", "duration", duration)
 	}()
 
-	batch := &ConntrackPollBatch{}
+	var antreaConns []*connection.Connection
 	var connsLens []int
 	var totalConns int
 	for _, zone := range p.zones {
@@ -117,12 +123,18 @@ func (p *Poller) Poll() (*ConntrackPollBatch, []int, error) {
 			return nil, nil, err
 		}
 		totalConns += totalConnsPerZone
-		if zone == 0 {
-			batch.ZoneZero = append(batch.ZoneZero, filteredConnsListPerZone...)
-		} else {
-			batch.AntreaZone = append(batch.AntreaZone, filteredConnsListPerZone...)
-		}
 		connsLens = append(connsLens, len(filteredConnsListPerZone))
+		if zone == 0 {
+			if p.externalCorrelator != nil {
+				for _, conn := range filteredConnsListPerZone {
+					if conn != nil {
+						p.externalCorrelator.IngestZoneZero(conn)
+					}
+				}
+			}
+			continue
+		}
+		antreaConns = append(antreaConns, filteredConnsListPerZone...)
 	}
 
 	metrics.TotalConnectionsInConnTrackTable.Set(float64(totalConns))
@@ -131,5 +143,5 @@ func (p *Poller) Poll() (*ConntrackPollBatch, []int, error) {
 		return nil, nil, err
 	}
 	metrics.MaxConnectionsInConnTrackTable.Set(float64(maxConns))
-	return batch, connsLens, nil
+	return antreaConns, connsLens, nil
 }

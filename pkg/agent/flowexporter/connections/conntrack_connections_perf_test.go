@@ -72,7 +72,7 @@ func BenchmarkAddOrUpdateConns(b *testing.B) {
 	conns := generateConns()
 
 	for b.Loop() {
-		require.NoError(b, connStore.AddOrUpdateConns(&ConntrackPollBatch{AntreaZone: conns}))
+		require.NoError(b, connStore.AddOrUpdateConns(conns))
 		b.StopTimer()
 		conns = generateUpdatedConns(conns)
 		b.StartTimer()

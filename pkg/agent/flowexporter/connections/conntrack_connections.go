@@ -45,17 +45,8 @@ type ConntrackConnectionStore struct {
 	fromExternal ExternalCorrelator
 }
 
-// ConntrackPollBatch is the result of one conntrack poll cycle, split by kernel zone at the poller.
-// ZoneZero holds default-zone (zone 0) flows for FromExternalCorrelator ingestion only. AntreaZone
-// holds all non-zone-0 flows from the polled Antrea conntrack zones (IPv4/IPv6 per configuration)
-// and is merged into the connection store.
-type ConntrackPollBatch struct {
-	ZoneZero   []*connection.Connection
-	AntreaZone []*connection.Connection
-}
-
-// NewConntrackConnectionStore creates a connection store. fromExternal correlates zone-0 flows
-// with Antrea-zone flows for external-to-Pod export; if nil, NewFakeExternalCorrelator() is used.
+// NewConntrackConnectionStore creates a connection store. fromExternal correlates Antrea-zone
+// flows with zone-0 state ingested by the poller; if nil, NewFakeExternalCorrelator() is used.
 func NewConntrackConnectionStore(
 	npQuerier querier.AgentNetworkPolicyInfoQuerier,
 	podStore objectstore.PodStore,
@@ -74,10 +65,6 @@ func NewConntrackConnectionStore(
 	}
 }
 
-func (cs *ConntrackConnectionStore) ingestZoneZero(conn *connection.Connection) {
-	cs.fromExternal.IngestZoneZero(conn, cs.antreaProxier)
-}
-
 func (cs *ConntrackConnectionStore) correlateIfExternal(conn *connection.Connection) bool {
 	return cs.fromExternal.CorrelateIfExternal(conn)
 }
@@ -86,10 +73,9 @@ func (cs *ConntrackConnectionStore) removeFromExternalCorrelator(conn *connectio
 	cs.fromExternal.RemoveStaleZoneZero(conn)
 }
 
-func (cs *ConntrackConnectionStore) AddOrUpdateConns(batch *ConntrackPollBatch) error {
-	if batch == nil {
-		batch = &ConntrackPollBatch{}
-	}
+// AddOrUpdateConns merges one poll of Antrea-zone conntrack connections into the store.
+// Zone-0 ingestion is performed by the poller.
+func (cs *ConntrackConnectionStore) AddOrUpdateConns(conns []*connection.Connection) error {
 	klog.V(2).InfoS("Updating connection store")
 	// Reset IsPresent flag for all connections in connection map before updating
 	// the dumped flows information in connection map. If the connection does not
@@ -126,15 +112,7 @@ func (cs *ConntrackConnectionStore) AddOrUpdateConns(batch *ConntrackPollBatch) 
 		return err
 	}
 
-	// Ingest default conntrack zone (zone 0) first so correlator state exists before Antrea-zone
-	// connections from the same poll batch are merged into the main store.
-	for _, conn := range batch.ZoneZero {
-		if !cs.protocolFilter.Allow(conn.FlowKey.Protocol) {
-			continue
-		}
-		cs.ingestZoneZero(conn)
-	}
-	for _, conn := range batch.AntreaZone {
+	for _, conn := range conns {
 		cs.AddOrUpdateConn(conn)
 	}
 
