@@ -18,6 +18,7 @@ import (
 	"context"
 	"fmt"
 	"net"
+	"sync"
 	"testing"
 	"time"
 
@@ -155,6 +156,77 @@ func TestAllocateNext(t *testing.T) {
 	assert.Equal(t, 21, allocator.Total())
 
 	validateAllocationSequence(t, allocator, subnetInfo, []string{"10.2.2.100", "10.2.2.101"})
+}
+
+// TestConcurrentAllocateNextSharedIPPool simulates many Nodes (or many Pods on
+// different Nodes) calling AllocateNext on the same IPPool at once. The fake
+// client returns 409-style conflicts when ResourceVersion is stale, matching
+// concurrent UpdateStatus on a shared pool (e.g. several DaemonSets using the
+// same Antrea IPPool for secondary networks). All goroutines must succeed with
+// distinct IPs if ipPoolStatusRetry allows enough conflict retries.
+func TestConcurrentAllocateNextSharedIPPool(t *testing.T) {
+	stopCh := make(chan struct{})
+	defer close(stopCh)
+
+	// Six DaemonSets on a six-Node cluster all requesting the same pool is 36
+	// concurrent status writers; keep headroom in the range.
+	const concurrency = 36
+
+	poolName := uuid.New().String()
+	ipRange := crdv1b1.IPRange{
+		Start: "10.2.2.10",
+		End:   "10.2.2.99", // 90 addresses
+	}
+	subnetInfo := crdv1b1.SubnetInfo{
+		Gateway:      "10.2.2.1",
+		PrefixLength: 24,
+		VLAN:         101,
+	}
+	pool := crdv1b1.IPPool{
+		ObjectMeta: metav1.ObjectMeta{Name: poolName},
+		Spec:       crdv1b1.IPPoolSpec{IPRanges: []crdv1b1.IPRange{ipRange}, SubnetInfo: subnetInfo},
+	}
+
+	allocator := newTestIPPoolAllocator(&pool, stopCh)
+	require.NotNil(t, allocator)
+	require.GreaterOrEqual(t, allocator.Total(), concurrency)
+
+	var wg sync.WaitGroup
+	errs := make([]error, concurrency)
+	ipStrs := make([]string, concurrency)
+
+	for i := 0; i < concurrency; i++ {
+		wg.Add(1)
+		go func(idx int) {
+			defer wg.Done()
+			owner := crdv1b1.IPAddressOwner{
+				Pod: &crdv1b1.PodOwner{
+					Name:        fmt.Sprintf("concurrent-pod-%d", idx),
+					Namespace:   testNamespace,
+					ContainerID: uuid.New().String(),
+					IFName:      "net1",
+				},
+			}
+			ip, _, err := allocator.AllocateNext(crdv1b1.IPAddressPhaseAllocated, owner)
+			if err != nil {
+				errs[idx] = err
+				return
+			}
+			ipStrs[idx] = ip.String()
+		}(i)
+	}
+	wg.Wait()
+
+	for i, err := range errs {
+		require.NoError(t, err, "AllocateNext for worker %d should succeed under contention", i)
+	}
+	seen := make(map[string]struct{}, concurrency)
+	for _, s := range ipStrs {
+		_, dup := seen[s]
+		require.False(t, dup, "duplicate IP %s allocated", s)
+		seen[s] = struct{}{}
+	}
+	require.Len(t, seen, concurrency, "expected a distinct IP per concurrent allocator")
 }
 
 func TestAllocateNextMultiRange(t *testing.T) {
