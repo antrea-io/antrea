@@ -30,7 +30,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
-	"go.yaml.in/yaml/v2"
+	"go.yaml.in/yaml/v3"
 	"google.golang.org/protobuf/testing/protocmp"
 	timestamppb "google.golang.org/protobuf/types/known/timestamppb"
 	v1 "k8s.io/api/core/v1"
@@ -1104,13 +1104,6 @@ func TestFlowAggregator_fillK8sMetadata(t *testing.T) {
 func TestNewFlowAggregator(t *testing.T) {
 	wd, err := os.Getwd()
 	require.NoError(t, err)
-	// fsnotify does not seem to work when using the default tempdir on MacOS, which is why we
-	// use the current working directory.
-	f, err := os.CreateTemp(wd, "test_*.config")
-	require.NoError(t, err, "Failed to create test config file")
-	fileName := f.Name()
-	defer os.Remove(fileName)
-
 	newFlowAggregatorConfig := func(clusterID string) *flowaggregatorconfig.FlowAggregatorConfig {
 		return &flowaggregatorconfig.FlowAggregatorConfig{
 			FlowCollector: flowaggregatorconfig.FlowCollectorConfig{
@@ -1147,6 +1140,15 @@ func TestNewFlowAggregator(t *testing.T) {
 	}
 	for _, tc := range testcases {
 		t.Run(tc.name, func(t *testing.T) {
+			// Create a separate temp file for each test case to avoid
+			// duplicate key conflicts in YAML (v3+ rejects duplicate keys).
+			// fsnotify does not seem to work when using the default tempdir on MacOS, which is why we
+			// use the current working directory.
+			f, err := os.CreateTemp(wd, "test_*.config")
+			require.NoError(t, err, "Failed to create test config file")
+			fileName := f.Name()
+			defer os.Remove(fileName)
+
 			client := fake.NewSimpleClientset()
 			ctrl := gomock.NewController(t)
 			mockPodStore := objectstoretest.NewMockPodStore(ctrl)
