@@ -169,3 +169,88 @@ spec:
         "ippools": ["secnet-ipv4-3", "secnet-ipv6-3"]
       }
     }'
+
+---
+# VLAN 300 on eth3 for AntreaNodeConfig pool1 (see antrea-node-configs-nodepools.yml).
+apiVersion: crd.antrea.io/v1beta1
+kind: IPPool
+metadata:
+  name: secnet-ipv4-pool1-vlan300
+spec:
+  ipRanges:
+  - cidr: "148.14.28.0/24"
+  subnetInfo:
+    gateway: "148.14.28.1"
+    prefixLength: 24
+    vlan: 300
+---
+apiVersion: "k8s.cni.cncf.io/v1"
+kind: NetworkAttachmentDefinition
+metadata:
+  name: vlan-net-pool1-eth3-300
+spec:
+  config: '{
+      "cniVersion": "0.3.0",
+      "type": "antrea",
+      "networkType": "vlan",
+      "ipam": {
+        "type": "antrea",
+        "ippools": ["secnet-ipv4-pool1-vlan300"]
+      }
+    }'
+---
+# VLAN 400 on eth3 for AntreaNodeConfig pool2 (see antrea-node-configs-nodepools.yml).
+apiVersion: crd.antrea.io/v1beta1
+kind: IPPool
+metadata:
+  name: secnet-ipv4-pool2-vlan400
+spec:
+  ipRanges:
+  - cidr: "148.14.27.0/24"
+  subnetInfo:
+    gateway: "148.14.27.1"
+    prefixLength: 24
+---
+apiVersion: "k8s.cni.cncf.io/v1"
+kind: NetworkAttachmentDefinition
+metadata:
+  name: vlan-net-pool2-eth3-400
+spec:
+  config: '{
+      "cniVersion": "0.3.0",
+      "type": "antrea",
+      "networkType": "vlan",
+      "vlan": 400,
+      "ipam": {
+        "type": "antrea",
+        "ippools": ["secnet-ipv4-pool2-vlan400"]
+      }
+    }'
+---
+# Shared VLAN 100 on eth2 for cross-pool connectivity (pool1 and pool2 both allow VLAN 100 on eth2).
+apiVersion: crd.antrea.io/v1beta1
+kind: IPPool
+metadata:
+  name: cross-pool-vlan100-eth2
+spec:
+  ipRanges:
+  - cidr: "172.27.100.0/24"
+  subnetInfo:
+    gateway: "172.27.100.1"
+    prefixLength: 24
+---
+apiVersion: "k8s.cni.cncf.io/v1"
+kind: NetworkAttachmentDefinition
+metadata:
+  name: vlan-net-cross-pool-eth2-vlan100
+spec:
+  config: '{
+      "cniVersion": "0.3.0",
+      "type": "antrea",
+      "networkType": "vlan",
+      "vlan": 100,
+      "ipam": {
+        "type": "antrea",
+        "ippools": ["cross-pool-vlan100-eth2"]
+      }
+    }'

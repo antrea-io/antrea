@@ -34,6 +34,7 @@ import (
 
 	mcinformers "antrea.io/antrea/v2/multicluster/pkg/client/informers/externalversions"
 	"antrea.io/antrea/v2/pkg/agent"
+	"antrea.io/antrea/v2/pkg/agent/antreanodeconfig"
 	"antrea.io/antrea/v2/pkg/agent/apiserver"
 	"antrea.io/antrea/v2/pkg/agent/client"
 	"antrea.io/antrea/v2/pkg/agent/cniserver"
@@ -375,6 +376,9 @@ func run(o *Options) error {
 	// externalEntityUpdateChannel is a channel for receiving ExternalEntity updates from ExternalNodeController and
 	// notifying NetworkPolicyController to reconcile rules related to the updated ExternalEntities.
 	var externalEntityUpdateChannel *channel.SubscribableChannel
+	// antreaNodeConfigUpdateChannel broadcasts effective AntreaNodeConfig-derived state
+	// (e.g. secondary-network OVS bridge) to subscribers on the agent.
+	var antreaNodeConfigUpdateChannel *channel.SubscribableChannel
 	if o.nodeType == config.K8sNode {
 		podUpdateChannel = channel.NewSubscribableChannel("PodUpdate", 100)
 	} else {
@@ -620,15 +624,31 @@ func run(o *Options) error {
 	var localExternalNodeInformer cache.SharedIndexInformer
 
 	var secondaryNetworkController *secondarynetwork.Controller
+	var antreaNodeConfigController *antreanodeconfig.Controller
 	var cniDeleteChecker agenttypes.CNIDeleteChecker
 	cniDeleteChecker = nil
+	var ancSubscriber channel.Subscriber
+
+	if features.DefaultFeatureGate.Enabled(features.AntreaNodeConfig) {
+		antreaNodeConfigInformer := crdInformerFactory.Crd().V1alpha1().AntreaNodeConfigs()
+		antreaNodeConfigUpdateChannel = channel.NewSubscribableChannel("AntreaNodeConfig", 100)
+		antreaNodeConfigController = antreanodeconfig.NewController(
+			antreaNodeConfigInformer,
+			nodeInformer,
+			nodeConfig.Name,
+			antreaNodeConfigUpdateChannel,
+		)
+		ancSubscriber = antreaNodeConfigUpdateChannel
+	}
+
 	// Secondary network controller should be created before CNIServer.Run() to make sure no Pod CNI updates will be missed.
 	if features.DefaultFeatureGate.Enabled(features.SecondaryNetwork) {
 		secondaryNetworkController, err = secondarynetwork.NewController(
 			o.config.ClientConnection, o.config.KubeAPIServerOverride,
 			k8sClient, localPodInformer.Get(),
 			podUpdateChannel, ifaceStore, nodeConfig,
-			&o.config.SecondaryNetwork, ovsdbConnection, ipPoolInformer.Lister())
+			&o.config.SecondaryNetwork, ovsdbConnection, ipPoolInformer.Lister(),
+			ancSubscriber)
 		if err != nil {
 			return fmt.Errorf("failed to create secondary network controller: %w", err)
 		}
@@ -768,6 +788,9 @@ func run(o *Options) error {
 	if o.nodeType == config.K8sNode {
 		go routeClient.Run(ctx)
 		go podUpdateChannel.Run(stopCh)
+		if antreaNodeConfigUpdateChannel != nil {
+			go antreaNodeConfigUpdateChannel.Run(stopCh)
+		}
 		go cniServer.Run(stopCh)
 		go nodeRouteController.Run(stopCh)
 	} else {
@@ -860,6 +883,10 @@ func run(o *Options) error {
 	informerFactory.Start(stopCh)
 	crdInformerFactory.Start(stopCh)
 
+	if antreaNodeConfigController != nil {
+		go antreaNodeConfigController.Run(stopCh)
+	}
+
 	if o.enableEgress || features.DefaultFeatureGate.Enabled(features.ServiceExternalIP) {
 		go externalIPPoolController.Run(stopCh)
 		go memberlistCluster.Run(stopCh)
@@ -916,7 +943,7 @@ func run(o *Options) error {
 			nodeConfig,
 			ifaceStore,
 			multicastSocket,
-			sets.New[string](append(o.config.Multicast.MulticastInterfaces, nodeConfig.NodeTransportInterfaceName)...),
+			sets.New(append(o.config.Multicast.MulticastInterfaces, nodeConfig.NodeTransportInterfaceName)...),
 			podUpdateChannel,
 			o.igmpQueryInterval,
 			o.igmpQueryVersions,
@@ -967,8 +994,12 @@ func run(o *Options) error {
 		}
 	}
 	// secondaryNetworkController Initialize must be run after FlowRestoreComplete for the case that Node
-	// IPs are moved to the secondary OVS bridge
+	// IPs are moved to the secondary OVS bridge. When AntreaNodeConfig drives the secondary bridge,
+	// wait for the first ANC snapshot before Initialize so the effective bridge is known.
 	if features.DefaultFeatureGate.Enabled(features.SecondaryNetwork) {
+		if err := secondaryNetworkController.WaitForInitialANCSnapshotAndEnsureBridge(stopCh); err != nil {
+			return fmt.Errorf("failed to wait for AntreaNodeConfig snapshot for secondary network: %w", err)
+		}
 		defer secondaryNetworkController.Restore()
 		if err = secondaryNetworkController.Initialize(); err != nil {
 			return fmt.Errorf("failed to initialize secondary network: %v", err)
