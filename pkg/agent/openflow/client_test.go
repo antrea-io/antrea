@@ -1698,7 +1698,11 @@ func Test_client_InstallSNATMarkFlows(t *testing.T) {
 			m.EXPECT().AddAll(gomock.Any()).Return(nil).Times(1)
 			m.EXPECT().DeleteAll(gomock.Any()).Return(nil).Times(1)
 
-			cacheKey := fmt.Sprintf("s%x", mark)
+			suffix := "v4"
+			if tc.snatIP.To4() == nil {
+				suffix = "v6"
+			}
+			cacheKey := fmt.Sprintf("s%x-%s", mark, suffix)
 			assert.NoError(t, fc.InstallSNATMarkFlows(tc.snatIP, mark))
 			fCacheI, ok := fc.featureEgress.cachedFlows.Load(cacheKey)
 			require.True(t, ok)
@@ -1755,7 +1759,11 @@ func Test_client_InstallPodSNATFlows(t *testing.T) {
 
 			m.EXPECT().AddAll(gomock.Any()).Return(nil).Times(1)
 			m.EXPECT().DeleteAll(gomock.Any()).Return(nil).Times(1)
-			cacheKey := fmt.Sprintf("p%x", ofPort)
+			suffix := "v4"
+			if snatIP.To4() == nil {
+				suffix = "v6"
+			}
+			cacheKey := fmt.Sprintf("p%x-%s", ofPort, suffix)
 
 			assert.NoError(t, fc.InstallPodSNATFlows(ofPort, snatIP, tc.snatMark))
 			fCacheI, ok := fc.featureEgress.cachedFlows.Load(cacheKey)

@@ -125,6 +125,10 @@ spec:
                   type: string
                 egressIP:
                   type: string
+                egressIPs:
+                  type: array
+                  items:
+                    type: string
                 conditions:
                   type: array
                   items:
