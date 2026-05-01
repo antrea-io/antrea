@@ -34,6 +34,7 @@ import (
 	meta "k8s.io/apimachinery/pkg/api/meta"
 	runtime "k8s.io/apimachinery/pkg/runtime"
 	rest "k8s.io/client-go/rest"
+	events "k8s.io/client-go/tools/events"
 	record "k8s.io/client-go/tools/record"
 	cache "sigs.k8s.io/controller-runtime/pkg/cache"
 	client "sigs.k8s.io/controller-runtime/pkg/client"
@@ -41,6 +42,7 @@ import (
 	healthz "sigs.k8s.io/controller-runtime/pkg/healthz"
 	manager "sigs.k8s.io/controller-runtime/pkg/manager"
 	webhook "sigs.k8s.io/controller-runtime/pkg/webhook"
+	conversion "sigs.k8s.io/controller-runtime/pkg/webhook/conversion"
 )
 
 // MockManager is a mock of Manager interface.
@@ -207,6 +209,20 @@ func (mr *MockManagerMockRecorder) GetControllerOptions() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetControllerOptions", reflect.TypeOf((*MockManager)(nil).GetControllerOptions))
 }
 
+// GetConverterRegistry mocks base method.
+func (m *MockManager) GetConverterRegistry() conversion.Registry {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetConverterRegistry")
+	ret0, _ := ret[0].(conversion.Registry)
+	return ret0
+}
+
+// GetConverterRegistry indicates an expected call of GetConverterRegistry.
+func (mr *MockManagerMockRecorder) GetConverterRegistry() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetConverterRegistry", reflect.TypeOf((*MockManager)(nil).GetConverterRegistry))
+}
+
 // GetEventRecorderFor mocks base method.
 func (m *MockManager) GetEventRecorderFor(name string) record.EventRecorder {
 	m.ctrl.T.Helper()
@@ -219,6 +235,20 @@ func (m *MockManager) GetEventRecorderFor(name string) record.EventRecorder {
 func (mr *MockManagerMockRecorder) GetEventRecorderFor(name any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetEventRecorderFor", reflect.TypeOf((*MockManager)(nil).GetEventRecorderFor), name)
+}
+
+// GetEventRecorder mocks base method.
+func (m *MockManager) GetEventRecorder(name string) events.EventRecorder {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetEventRecorder", name)
+	ret0, _ := ret[0].(events.EventRecorder)
+	return ret0
+}
+
+// GetEventRecorder indicates an expected call of GetEventRecorder.
+func (mr *MockManagerMockRecorder) GetEventRecorder(name any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetEventRecorder", reflect.TypeOf((*MockManager)(nil).GetEventRecorder), name)
 }
 
 // GetFieldIndexer mocks base method.

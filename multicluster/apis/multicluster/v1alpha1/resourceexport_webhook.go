@@ -18,20 +18,17 @@ package v1alpha1
 
 import (
 	"context"
-	"fmt"
 	"slices"
 
-	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/klog/v2"
 	ctrl "sigs.k8s.io/controller-runtime"
-	"sigs.k8s.io/controller-runtime/pkg/webhook"
+	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 
 	"antrea.io/antrea/v2/multicluster/apis/multicluster/constants"
 )
 
 func (r *ResourceExport) SetupWebhookWithManager(mgr ctrl.Manager) error {
-	return ctrl.NewWebhookManagedBy(mgr).
-		For(r).
+	return ctrl.NewWebhookManagedBy(mgr, r).
 		WithDefaulter(&ResourceExportCustomDefaulter{}).
 		Complete()
 }
@@ -40,19 +37,11 @@ func (r *ResourceExport) SetupWebhookWithManager(mgr ctrl.Manager) error {
 
 type ResourceExportCustomDefaulter struct{}
 
-var _ webhook.CustomDefaulter = &ResourceExportCustomDefaulter{}
+var _ admission.Defaulter[*ResourceExport] = &ResourceExportCustomDefaulter{}
 
-// Default implements webhook.CustomDefaulter so a webhook will be registered for the Kind ResourceExport.
-func (d *ResourceExportCustomDefaulter) Default(_ context.Context, obj runtime.Object) error {
-	r, ok := obj.(*ResourceExport)
-
-	if !ok {
-		return fmt.Errorf("expected a ResourceExport object but got %T", obj)
-	}
-
+// Default implements admission.Defaulter so a webhook will be registered for the Kind ResourceExport.
+func (d *ResourceExportCustomDefaulter) Default(_ context.Context, r *ResourceExport) error {
 	klog.InfoS("Defaulting ResourceExport", "name", r.Name)
-
-	// Set default values
 	d.applyDefaults(r)
 	return nil
 }

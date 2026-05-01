@@ -4932,9 +4932,14 @@ data:
     # into account application context.
     #  L7NetworkPolicy: false
 
-    # Enable the use of Network Policy APIs (https://network-policy-api.sigs.k8s.io/api-overview) which helps administrators
-    # set security postures for their clusters.
+    # DEPRECATED: Enable the deprecated v1alpha1 AdminNetworkPolicy and BaselineAdminNetworkPolicy APIs from the
+    # network-policy-api project. Users should migrate to the new ClusterNetworkPolicy feature.
     #  AdminNetworkPolicy: false
+
+    # Enable the ClusterNetworkPolicy API from the network-policy-api project
+    # (https://network-policy-api.sigs.k8s.io/api-overview)
+    # This is the successor to the deprecated AdminNetworkPolicy APIs.
+    #  ClusterNetworkPolicy: false
 
     # The port for the antrea-controller APIServer to serve on.
     # Note that if it's set to another value, the `containerPort` of the `api` port of the
@@ -5713,6 +5718,7 @@ rules:
     resources:
       - adminnetworkpolicies
       - baselineadminnetworkpolicies
+      - clusternetworkpolicies
     verbs:
       - get
       - list
@@ -5894,7 +5900,7 @@ spec:
         kubectl.kubernetes.io/default-container: antrea-agent
         # Automatically restart Pods with a RollingUpdate if the ConfigMap changes
         # See https://helm.sh/docs/howto/charts_tips_and_tricks/#automatically-roll-deployments
-        checksum/config: a9782c402bb6dbad085d0abb61931d4a21a9398bdd12794942ee8c73ef21c193
+        checksum/config: 9df205ede7aab3f442e0f04b1e6152d1400f65c7b17a6369bc79a04554ebb9a9
         checksum/ipsec-secret: d0eb9c52d0cd4311b6d252a951126bf9bea27ec05590bed8a394f0f792dcb2a4
       labels:
         app: antrea
@@ -6186,7 +6192,7 @@ spec:
       annotations:
         # Automatically restart Pod if the ConfigMap changes
         # See https://helm.sh/docs/howto/charts_tips_and_tricks/#automatically-roll-deployments
-        checksum/config: a9782c402bb6dbad085d0abb61931d4a21a9398bdd12794942ee8c73ef21c193
+        checksum/config: 9df205ede7aab3f442e0f04b1e6152d1400f65c7b17a6369bc79a04554ebb9a9
       labels:
         app: antrea
         component: antrea-controller
@@ -6434,34 +6440,6 @@ webhooks:
         apiVersions: ["v1beta1"]
         resources: ["networkpolicies"]
         scope: "Namespaced"
-    admissionReviewVersions: ["v1", "v1beta1"]
-    sideEffects: None
-    timeoutSeconds: 5
-  - name: "anpvalidator.antrea.io"
-    clientConfig:
-      service:
-        name: "antrea"
-        namespace: kube-system
-        path: "/validate/anp"
-    rules:
-      - operations: ["CREATE", "UPDATE"]
-        apiGroups: ["policy.networking.k8s.io"]
-        apiVersions: ["v1alpha1"]
-        resources: ["adminnetworkpolicies"]
-    admissionReviewVersions: ["v1", "v1beta1"]
-    sideEffects: None
-    timeoutSeconds: 5
-  - name: "banpvalidator.antrea.io"
-    clientConfig:
-      service:
-        name: "antrea"
-        namespace: kube-system
-        path: "/validate/banp"
-    rules:
-      - operations: ["CREATE", "UPDATE"]
-        apiGroups: ["policy.networking.k8s.io"]
-        apiVersions: ["v1alpha1"]
-        resources: ["baselineadminnetworkpolicies"]
     admissionReviewVersions: ["v1", "v1beta1"]
     sideEffects: None
     timeoutSeconds: 5
