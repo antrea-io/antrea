@@ -38,6 +38,7 @@ function print_usage {
 
 TESTBED_CMD=$(dirname $0)"/kind-setup.sh"
 YML_CMD=$(dirname $0)"/../../hack/generate-manifest.sh"
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 
 function quit {
   result=$?
@@ -48,9 +49,9 @@ function quit {
   $TESTBED_CMD destroy kind
 }
 
-api_version="v0.1.0"
+api_version="v0.2.0"
 ipfamily="v4"
-feature_gates="AdminNetworkPolicy=true"
+feature_gates="ClusterNetworkPolicy=true"
 setup_only=false
 cleanup_only=false
 test_only=false
@@ -109,6 +110,8 @@ IMAGE_LIST=("registry.k8s.io/e2e-test-images/agnhost:2.43" \
             "antrea/antrea-agent-ubuntu:latest" \
             "antrea/antrea-controller-ubuntu:latest")
 
+# Kubernetes 1.31+ provides isCIDR CEL validation used by ClusterNetworkPolicy CRDs (network-policy-api v0.2.0).
+K8S_VERSION="v1.34.0"
 printf -v IMAGES "%s " "${IMAGE_LIST[@]}"
 
 function setup_cluster {
@@ -127,7 +130,7 @@ function setup_cluster {
 
 function run_test {
   # Install the network-policy-api CRDs in the kind cluster
-  kubectl apply -f https://github.com/kubernetes-sigs/network-policy-api/releases/download/"$api_version"/install.yaml
+  kubectl apply -f https://raw.githubusercontent.com/kubernetes-sigs/network-policy-api/"$api_version"/config/crd/experimental/policy.networking.k8s.io_clusternetworkpolicies.yaml
   echo "Generating Antrea manifest with args $manifest_args"
   $YML_CMD $manifest_args | kubectl apply -f -
 
@@ -141,17 +144,30 @@ function run_test {
   export KUBE_CONTAINER_RUNTIME_ENDPOINT=unix:///run/containerd/containerd.sock
   export KUBE_CONTAINER_RUNTIME_NAME=containerd
 
-  # Clone the network-policy-api repo at the specified tag version
+  # Implementation version for the conformance profile report (not the network-policy-api CRD version).
+  conformance_antrea_version="${ANTREA_CONFORMANCE_VERSION:-}"
+  if [[ -z "${conformance_antrea_version}" ]]; then
+    conformance_antrea_version="$(tr -d ' \t\r\n' < "${REPO_ROOT}/VERSION")"
+  fi
+
+  # Clone the network-policy-api repo at the specified tag version.
+  # Note: --branch works for both branches and tags.
+  rm -rf network-policy-api
   git clone --branch "$api_version" --depth 1 https://github.com/kubernetes-sigs/network-policy-api.git
   pushd network-policy-api/conformance
   go mod download
-  go test -v --debug=true -timeout=15m
+  go test -timeout=30m -v -run TestConformanceProfiles -count=1 -args --conformance-profiles=ClusterNetworkPolicy \
+    --all-features=true \
+    --organization=antrea-io -project=antrea -url=https://github.com/antrea-io/antrea -version="${conformance_antrea_version}" \
+    --contact=https://github.com/antrea-io/antrea/issues/new \
+    --additional-info=https://github.com/antrea-io/antrea/actions/workflows/kind.yml \
+    --debug=true
   popd
 }
 
 echo "======== Testing networkpolicy v2 conformance in encap mode =========="
 if [[ $test_only == "false" ]];then
-  setup_cluster "--images \"$IMAGES\""
+  setup_cluster "--images \"$IMAGES\" --k8s-version $K8S_VERSION"
 fi
 run_test
 exit 0

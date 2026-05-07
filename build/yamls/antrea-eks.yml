@@ -4924,9 +4924,14 @@ data:
     # into account application context.
     #  L7NetworkPolicy: false
 
-    # Enable the use of Network Policy APIs (https://network-policy-api.sigs.k8s.io/api-overview) which helps administrators
-    # set security postures for their clusters.
+    # DEPRECATED: Enable the deprecated v1alpha1 AdminNetworkPolicy and BaselineAdminNetworkPolicy APIs from the
+    # network-policy-api project. Users should migrate to the new ClusterNetworkPolicy feature.
     #  AdminNetworkPolicy: false
+
+    # Enable the ClusterNetworkPolicy API from the network-policy-api project
+    # (https://network-policy-api.sigs.k8s.io/api-overview)
+    # This is the successor to the deprecated AdminNetworkPolicy APIs.
+    #  ClusterNetworkPolicy: false
 
     # The port for the antrea-controller APIServer to serve on.
     # Note that if it's set to another value, the `containerPort` of the `api` port of the
@@ -5714,6 +5719,7 @@ rules:
     resources:
       - adminnetworkpolicies
       - baselineadminnetworkpolicies
+      - clusternetworkpolicies
     verbs:
       - get
       - list
@@ -5895,7 +5901,7 @@ spec:
         kubectl.kubernetes.io/default-container: antrea-agent
         # Automatically restart Pods with a RollingUpdate if the ConfigMap changes
         # See https://helm.sh/docs/howto/charts_tips_and_tricks/#automatically-roll-deployments
-        checksum/config: 8210b1e66f6269e7d5a9c85f070a2b1e76459aefa850d7a5066b7b824f00c292
+        checksum/config: 25599d7161bbcad17091c9ac2842e6e991a102a9559439bec60eb3ff2a3f8fca
       labels:
         app: antrea
         component: antrea-agent
@@ -6144,7 +6150,7 @@ spec:
       annotations:
         # Automatically restart Pod if the ConfigMap changes
         # See https://helm.sh/docs/howto/charts_tips_and_tricks/#automatically-roll-deployments
-        checksum/config: 8210b1e66f6269e7d5a9c85f070a2b1e76459aefa850d7a5066b7b824f00c292
+        checksum/config: 25599d7161bbcad17091c9ac2842e6e991a102a9559439bec60eb3ff2a3f8fca
       labels:
         app: antrea
         component: antrea-controller

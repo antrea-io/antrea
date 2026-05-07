@@ -93,6 +93,7 @@ type networkPolicyController struct {
 	annpStore                  cache.Store
 	anpStore                   cache.Store
 	banpStore                  cache.Store
+	cnpStore                   cache.Store
 	tierStore                  cache.Store
 	cgStore                    cache.Store
 	gStore                     cache.Store
@@ -142,6 +143,7 @@ func newController(k8sObjects, crdObjects []runtime.Object) (*fake.Clientset, *n
 		crdInformerFactory.Crd().V1beta1().NetworkPolicies(),
 		policyInformerFactory.Policy().V1alpha1().AdminNetworkPolicies(),
 		policyInformerFactory.Policy().V1alpha1().BaselineAdminNetworkPolicies(),
+		policyInformerFactory.Policy().V1alpha2().ClusterNetworkPolicies(),
 		crdInformerFactory.Crd().V1beta1().Tiers(),
 		cgInformer,
 		gInformer,
@@ -170,6 +172,7 @@ func newController(k8sObjects, crdObjects []runtime.Object) (*fake.Clientset, *n
 		crdInformerFactory.Crd().V1beta1().NetworkPolicies().Informer().GetStore(),
 		policyInformerFactory.Policy().V1alpha1().AdminNetworkPolicies().Informer().GetStore(),
 		policyInformerFactory.Policy().V1alpha1().BaselineAdminNetworkPolicies().Informer().GetStore(),
+		policyInformerFactory.Policy().V1alpha2().ClusterNetworkPolicies().Informer().GetStore(),
 		crdInformerFactory.Crd().V1beta1().Tiers().Informer().GetStore(),
 		crdInformerFactory.Crd().V1beta1().ClusterGroups().Informer().GetStore(),
 		crdInformerFactory.Crd().V1beta1().Groups().Informer().GetStore(),
@@ -203,6 +206,7 @@ func newControllerWithoutEventHandler(k8sObjects, crdObjects []runtime.Object) (
 	annpInformer := crdInformerFactory.Crd().V1beta1().NetworkPolicies()
 	anpInformer := policyInformerFactory.Policy().V1alpha1().AdminNetworkPolicies()
 	banpInformer := policyInformerFactory.Policy().V1alpha1().BaselineAdminNetworkPolicies()
+	cnpInformer := policyInformerFactory.Policy().V1alpha2().ClusterNetworkPolicies()
 	cgInformer := crdInformerFactory.Crd().V1beta1().ClusterGroups()
 	groupInformer := crdInformerFactory.Crd().V1beta1().Groups()
 	groupEntityIndex := grouping.NewGroupEntityIndex()
@@ -219,6 +223,9 @@ func newControllerWithoutEventHandler(k8sObjects, crdObjects []runtime.Object) (
 		acnpInformer:               acnpInformer,
 		acnpLister:                 acnpInformer.Lister(),
 		acnpListerSynced:           acnpInformer.Informer().HasSynced,
+		cnpInformer:                cnpInformer,
+		cnpLister:                  cnpInformer.Lister(),
+		cnpListerSynced:            cnpInformer.Informer().HasSynced,
 		annpInformer:               annpInformer,
 		annpLister:                 annpInformer.Lister(),
 		annpListerSynced:           annpInformer.Informer().HasSynced,
@@ -268,6 +275,7 @@ func newControllerWithoutEventHandler(k8sObjects, crdObjects []runtime.Object) (
 		annpInformer.Informer().GetStore(),
 		anpInformer.Informer().GetStore(),
 		banpInformer.Informer().GetStore(),
+		cnpInformer.Informer().GetStore(),
 		tierInformer.Informer().GetStore(),
 		cgInformer.Informer().GetStore(),
 		groupInformer.Informer().GetStore(),

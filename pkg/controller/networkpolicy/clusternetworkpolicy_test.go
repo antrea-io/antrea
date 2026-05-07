@@ -1,4 +1,4 @@
-// Copyright 2020 Antrea Authors
+// Copyright 2026 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -15,1890 +15,349 @@
 package networkpolicy
 
 import (
-	"errors"
-	"fmt"
-	"net"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/labels"
-	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/util/sets"
-	corelisters "k8s.io/client-go/listers/core/v1"
+	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/utils/ptr"
+	v1alpha2 "sigs.k8s.io/network-policy-api/apis/v1alpha2"
 
-	"antrea.io/antrea/v2/multicluster/controllers/multicluster/common"
 	"antrea.io/antrea/v2/pkg/apis/controlplane"
 	crdv1beta1 "antrea.io/antrea/v2/pkg/apis/crd/v1beta1"
-	crdv1b1listers "antrea.io/antrea/v2/pkg/client/listers/crd/v1beta1"
 	antreatypes "antrea.io/antrea/v2/pkg/controller/types"
-	"antrea.io/antrea/v2/pkg/util/k8s"
 )
 
 func TestProcessClusterNetworkPolicy(t *testing.T) {
-	p10 := float64(10)
-	t10 := int32(10)
-	tierA := crdv1beta1.Tier{
-		ObjectMeta: metav1.ObjectMeta{Name: "tier-A", UID: "uidA"},
-		Spec: crdv1beta1.TierSpec{
-			Priority:    t10,
-			Description: "tier-A",
-		},
-	}
-	nsA := v1.Namespace{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:   "nsA",
-			Labels: map[string]string{"foo1": "bar1"},
-		},
-	}
-	nsB := v1.Namespace{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:   "nsB",
-			Labels: map[string]string{"foo2": "bar2"},
-		},
-	}
-	nsC := v1.Namespace{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:   "nsC",
-			Labels: map[string]string{"foo2": "bar2"},
-		},
-	}
+	p100 := float64(100)
+	p50 := float64(50)
+	allow := crdv1beta1.RuleActionAllow
+	drop := crdv1beta1.RuleActionDrop
+	pass := crdv1beta1.RuleActionPass
+	protoTCP := controlplane.ProtocolTCP
+	protoUDP := controlplane.ProtocolUDP
 
-	svcA := v1.Service{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "svcA",
-			Namespace: "nsA",
-		},
-		Spec: v1.ServiceSpec{
-			Ports: []v1.ServicePort{
-				{
-					Port:       80,
-					TargetPort: int80,
-				},
-			},
-		},
-	}
+	selApp := metav1.LabelSelector{MatchLabels: map[string]string{"app": "web"}}
+	selEnv := metav1.LabelSelector{MatchLabels: map[string]string{"env": "prod"}}
+	selClient := metav1.LabelSelector{MatchLabels: map[string]string{"client": "yes"}}
+	selDstPod := metav1.LabelSelector{MatchLabels: map[string]string{"tier": "db"}}
+	selDstNs := metav1.LabelSelector{MatchLabels: map[string]string{"zone": "east"}}
+	selGateway := metav1.LabelSelector{MatchLabels: map[string]string{"role": "gateway"}}
+	emptyNSSel := metav1.LabelSelector{}
+	selTeam := metav1.LabelSelector{MatchLabels: map[string]string{"team": "a"}}
 
-	saA := v1.ServiceAccount{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "saA",
-			Namespace: nsA.Name,
-		},
-	}
+	port80 := intstr.FromInt32(80)
+	port443 := intstr.FromInt32(443)
+	port53 := intstr.FromInt32(53)
 
-	ipA := "1.1.1.1"
+	cidr203, _ := cidrStrToIPNet("203.0.113.0/24")
 
-	allowAction := crdv1beta1.RuleActionAllow
-	dropAction := crdv1beta1.RuleActionDrop
-	protocolTCP := controlplane.ProtocolTCP
-	query := crdv1beta1.IGMPQuery
-	report := crdv1beta1.IGMPReportV1
-	selectorA := metav1.LabelSelector{MatchLabels: map[string]string{"foo1": "bar1"}}
-	selectorB := metav1.LabelSelector{MatchLabels: map[string]string{"foo2": "bar2"}}
-	selectorC := metav1.LabelSelector{MatchLabels: map[string]string{"foo3": "bar3"}}
-	selectorD := metav1.LabelSelector{MatchLabels: map[string]string{"internal.antrea.io/service-account": saA.Name}}
-	queryAddr := "224.0.0.1"
-	reportAddr := "225.1.2.3"
-	cgA := crdv1beta1.ClusterGroup{
-		ObjectMeta: metav1.ObjectMeta{Name: "cgA", UID: "uidA"},
-		Spec: crdv1beta1.GroupSpec{
-			NamespaceSelector: &selectorA,
-		},
-	}
 	tests := []struct {
 		name                    string
-		inputPolicy             *crdv1beta1.ClusterNetworkPolicy
+		inputPolicy             *v1alpha2.ClusterNetworkPolicy
 		expectedPolicy          *antreatypes.NetworkPolicy
 		expectedAppliedToGroups int
 		expectedAddressGroups   int
 	}{
 		{
-			name: "rules-with-same-selectors",
-			inputPolicy: &crdv1beta1.ClusterNetworkPolicy{
-				ObjectMeta: metav1.ObjectMeta{Name: "cnpA", UID: "uidA"},
-				Spec: crdv1beta1.ClusterNetworkPolicySpec{
-					AppliedTo: []crdv1beta1.AppliedTo{
-						{PodSelector: &selectorA},
-					},
-					Priority: p10,
-					Ingress: []crdv1beta1.Rule{
-						{
-							Ports: []crdv1beta1.NetworkPolicyPort{
-								{
-									Port: &int80,
-								},
-							},
-							From: []crdv1beta1.NetworkPolicyPeer{
-								{
-									PodSelector:       &selectorB,
-									NamespaceSelector: &selectorC,
-								},
-							},
-							Action: &allowAction,
+			name: "admin-tier-ingress-from-namespaces-with-tcp",
+			inputPolicy: &v1alpha2.ClusterNetworkPolicy{
+				ObjectMeta: metav1.ObjectMeta{Name: "cnp-ingress-ns", UID: "uid-1"},
+				Spec: v1alpha2.ClusterNetworkPolicySpec{
+					Tier:     v1alpha2.AdminTier,
+					Priority: 100,
+					Subject: v1alpha2.ClusterNetworkPolicySubject{
+						Pods: &v1alpha2.NamespacedPod{
+							NamespaceSelector: selEnv,
+							PodSelector:       selApp,
 						},
 					},
-					Egress: []crdv1beta1.Rule{
+					Ingress: []v1alpha2.ClusterNetworkPolicyIngressRule{
 						{
-							Ports: []crdv1beta1.NetworkPolicyPort{
-								{
-									Port: &int81,
-								},
+							Name:   "r1",
+							Action: v1alpha2.ClusterNetworkPolicyRuleActionAccept,
+							From: []v1alpha2.ClusterNetworkPolicyIngressPeer{
+								{Namespaces: &selClient},
 							},
-							To: []crdv1beta1.NetworkPolicyPeer{
-								{
-									PodSelector:       &selectorB,
-									NamespaceSelector: &selectorC,
-								},
+							Protocols: []v1alpha2.ClusterNetworkPolicyProtocol{
+								{TCP: &v1alpha2.ClusterNetworkPolicyProtocolTCP{
+									DestinationPort: &v1alpha2.Port{Number: 80},
+								}},
 							},
-							Action: &allowAction,
 						},
 					},
 				},
 			},
 			expectedPolicy: &antreatypes.NetworkPolicy{
-				UID:  "uidA",
-				Name: "uidA",
+				UID:  "uid-1",
+				Name: "uid-1",
 				SourceRef: &controlplane.NetworkPolicyReference{
-					Type: controlplane.AntreaClusterNetworkPolicy,
-					Name: "cnpA",
-					UID:  "uidA",
+					Type: controlplane.ClusterNetworkPolicy,
+					Name: "cnp-ingress-ns",
+					UID:  "uid-1",
 				},
-				Priority:     &p10,
-				TierPriority: ptr.To(crdv1beta1.DefaultTierPriority),
+				Priority:         &p100,
+				TierPriority:     ptr.To(adminTierPriority),
+				AppliedToPerRule: false,
 				Rules: []controlplane.NetworkPolicyRule{
 					{
 						Direction: controlplane.DirectionIn,
 						From: controlplane.NetworkPolicyPeer{
-							AddressGroups: []string{getNormalizedUID(antreatypes.NewGroupSelector("", &selectorB, &selectorC, nil, nil).NormalizedName)},
+							AddressGroups: []string{getNormalizedUID(antreatypes.NewGroupSelector("", nil, &selClient, nil, nil).NormalizedName)},
 						},
-						Services: []controlplane.Service{
-							{
-								Protocol: &protocolTCP,
-								Port:     &int80,
-							},
-						},
+						Services: []controlplane.Service{{Protocol: &protoTCP, Port: &port80}},
+						Name:     "r1",
+						Action:   &allow,
 						Priority: 0,
-						Action:   &allowAction,
-					},
-					{
-						Direction: controlplane.DirectionOut,
-						To: controlplane.NetworkPolicyPeer{
-							AddressGroups: []string{getNormalizedUID(antreatypes.NewGroupSelector("", &selectorB, &selectorC, nil, nil).NormalizedName)},
-						},
-						Services: []controlplane.Service{
-							{
-								Protocol: &protocolTCP,
-								Port:     &int81,
-							},
-						},
-						Priority: 0,
-						Action:   &allowAction,
 					},
 				},
-				AppliedToGroups: []string{getNormalizedUID(antreatypes.NewGroupSelector("", &selectorA, nil, nil, nil).NormalizedName)},
+				AppliedToGroups: []string{getNormalizedUID(antreatypes.NewGroupSelector("", &selApp, &selEnv, nil, nil).NormalizedName)},
 			},
 			expectedAppliedToGroups: 1,
 			expectedAddressGroups:   1,
 		},
 		{
-			name: "rules-with-different-selectors",
-			inputPolicy: &crdv1beta1.ClusterNetworkPolicy{
-				ObjectMeta: metav1.ObjectMeta{Namespace: "", Name: "cnpB", UID: "uidB"},
-				Spec: crdv1beta1.ClusterNetworkPolicySpec{
-					AppliedTo: []crdv1beta1.AppliedTo{
-						{PodSelector: &selectorA},
-					},
-					Priority: p10,
-					Ingress: []crdv1beta1.Rule{
-						{
-							Ports: []crdv1beta1.NetworkPolicyPort{
-								{
-									Port: &int80,
-								},
-							},
-							From: []crdv1beta1.NetworkPolicyPeer{
-								{
-									PodSelector: &selectorB,
-								},
-							},
-							Action: &allowAction,
+			name: "baseline-tier-egress-to-namespaces-deny-udp",
+			inputPolicy: &v1alpha2.ClusterNetworkPolicy{
+				ObjectMeta: metav1.ObjectMeta{Name: "cnp-egress-ns", UID: "uid-2"},
+				Spec: v1alpha2.ClusterNetworkPolicySpec{
+					Tier:     v1alpha2.BaselineTier,
+					Priority: 50,
+					Subject: v1alpha2.ClusterNetworkPolicySubject{
+						Pods: &v1alpha2.NamespacedPod{
+							NamespaceSelector: emptyNSSel,
+							PodSelector:       selGateway,
 						},
+					},
+					Egress: []v1alpha2.ClusterNetworkPolicyEgressRule{
 						{
-							Ports: []crdv1beta1.NetworkPolicyPort{
-								{
-									Port: &int81,
-								},
+							Name:   "e1",
+							Action: v1alpha2.ClusterNetworkPolicyRuleActionDeny,
+							To: []v1alpha2.ClusterNetworkPolicyEgressPeer{
+								{Namespaces: &selDstNs},
 							},
-							From: []crdv1beta1.NetworkPolicyPeer{
-								{
-									NamespaceSelector: &selectorC,
-								},
+							Protocols: []v1alpha2.ClusterNetworkPolicyProtocol{
+								{UDP: &v1alpha2.ClusterNetworkPolicyProtocolUDP{
+									DestinationPort: &v1alpha2.Port{Number: 53},
+								}},
 							},
-							Action: &allowAction,
 						},
 					},
 				},
 			},
 			expectedPolicy: &antreatypes.NetworkPolicy{
-				UID:  "uidB",
-				Name: "uidB",
+				UID:  "uid-2",
+				Name: "uid-2",
 				SourceRef: &controlplane.NetworkPolicyReference{
-					Type: controlplane.AntreaClusterNetworkPolicy,
-					Name: "cnpB",
-					UID:  "uidB",
+					Type: controlplane.ClusterNetworkPolicy,
+					Name: "cnp-egress-ns",
+					UID:  "uid-2",
 				},
-				Priority:     &p10,
-				TierPriority: ptr.To(crdv1beta1.DefaultTierPriority),
+				Priority:         &p50,
+				TierPriority:     ptr.To(baselineTierPriority),
+				AppliedToPerRule: false,
+				Rules: []controlplane.NetworkPolicyRule{
+					{
+						Direction: controlplane.DirectionOut,
+						To: controlplane.NetworkPolicyPeer{
+							AddressGroups: []string{getNormalizedUID(antreatypes.NewGroupSelector("", nil, &selDstNs, nil, nil).NormalizedName)},
+						},
+						Services: []controlplane.Service{{Protocol: &protoUDP, Port: &port53}},
+						Name:     "e1",
+						Action:   &drop,
+						Priority: 0,
+					},
+				},
+				AppliedToGroups: []string{getNormalizedUID(antreatypes.NewGroupSelector("", &selGateway, &emptyNSSel, nil, nil).NormalizedName)},
+			},
+			expectedAppliedToGroups: 1,
+			expectedAddressGroups:   1,
+		},
+		{
+			name: "ingress-from-pods-peer-and-pass-action",
+			inputPolicy: &v1alpha2.ClusterNetworkPolicy{
+				ObjectMeta: metav1.ObjectMeta{Name: "cnp-ingress-pods", UID: "uid-3"},
+				Spec: v1alpha2.ClusterNetworkPolicySpec{
+					Tier:     v1alpha2.AdminTier,
+					Priority: 10,
+					Subject: v1alpha2.ClusterNetworkPolicySubject{
+						Namespaces: &selTeam,
+					},
+					Ingress: []v1alpha2.ClusterNetworkPolicyIngressRule{
+						{
+							Name:   "from-app",
+							Action: v1alpha2.ClusterNetworkPolicyRuleActionPass,
+							From: []v1alpha2.ClusterNetworkPolicyIngressPeer{
+								{
+									Pods: &v1alpha2.NamespacedPod{
+										NamespaceSelector: selDstNs,
+										PodSelector:       selDstPod,
+									},
+								},
+							},
+							Protocols: []v1alpha2.ClusterNetworkPolicyProtocol{
+								{TCP: &v1alpha2.ClusterNetworkPolicyProtocolTCP{
+									DestinationPort: &v1alpha2.Port{Number: 443},
+								}},
+							},
+						},
+					},
+				},
+			},
+			expectedPolicy: &antreatypes.NetworkPolicy{
+				UID:  "uid-3",
+				Name: "uid-3",
+				SourceRef: &controlplane.NetworkPolicyReference{
+					Type: controlplane.ClusterNetworkPolicy,
+					Name: "cnp-ingress-pods",
+					UID:  "uid-3",
+				},
+				Priority:         ptr.To(float64(10)),
+				TierPriority:     ptr.To(adminTierPriority),
+				AppliedToPerRule: false,
 				Rules: []controlplane.NetworkPolicyRule{
 					{
 						Direction: controlplane.DirectionIn,
 						From: controlplane.NetworkPolicyPeer{
-							AddressGroups: []string{getNormalizedUID(antreatypes.NewGroupSelector("", &selectorB, nil, nil, nil).NormalizedName)},
+							AddressGroups: []string{getNormalizedUID(antreatypes.NewGroupSelector("", &selDstPod, &selDstNs, nil, nil).NormalizedName)},
 						},
-						Services: []controlplane.Service{
-							{
-								Protocol: &protocolTCP,
-								Port:     &int80,
+						Services: []controlplane.Service{{Protocol: &protoTCP, Port: &port443}},
+						Name:     "from-app",
+						Action:   &pass,
+						Priority: 0,
+					},
+				},
+				AppliedToGroups: []string{getNormalizedUID(antreatypes.NewGroupSelector("", nil, &selTeam, nil, nil).NormalizedName)},
+			},
+			expectedAppliedToGroups: 1,
+			expectedAddressGroups:   1,
+		},
+		{
+			name: "egress-to-networks-cidr",
+			inputPolicy: &v1alpha2.ClusterNetworkPolicy{
+				ObjectMeta: metav1.ObjectMeta{Name: "cnp-egress-net", UID: "uid-4"},
+				Spec: v1alpha2.ClusterNetworkPolicySpec{
+					Tier:     v1alpha2.AdminTier,
+					Priority: 200,
+					Subject: v1alpha2.ClusterNetworkPolicySubject{
+						Pods: &v1alpha2.NamespacedPod{
+							NamespaceSelector: selEnv,
+							PodSelector:       selApp,
+						},
+					},
+					Egress: []v1alpha2.ClusterNetworkPolicyEgressRule{
+						{
+							Name:   "to-external",
+							Action: v1alpha2.ClusterNetworkPolicyRuleActionAccept,
+							To: []v1alpha2.ClusterNetworkPolicyEgressPeer{
+								{Networks: []v1alpha2.CIDR{v1alpha2.CIDR("203.0.113.0/24")}},
 							},
 						},
+					},
+				},
+			},
+			expectedPolicy: &antreatypes.NetworkPolicy{
+				UID:  "uid-4",
+				Name: "uid-4",
+				SourceRef: &controlplane.NetworkPolicyReference{
+					Type: controlplane.ClusterNetworkPolicy,
+					Name: "cnp-egress-net",
+					UID:  "uid-4",
+				},
+				Priority:         ptr.To(float64(200)),
+				TierPriority:     ptr.To(adminTierPriority),
+				AppliedToPerRule: false,
+				Rules: []controlplane.NetworkPolicyRule{
+					{
+						Direction: controlplane.DirectionOut,
+						To: controlplane.NetworkPolicyPeer{
+							IPBlocks: []controlplane.IPBlock{{CIDR: *cidr203}},
+						},
+						Name:     "to-external",
+						Action:   &allow,
 						Priority: 0,
-						Action:   &allowAction,
+					},
+				},
+				AppliedToGroups: []string{getNormalizedUID(antreatypes.NewGroupSelector("", &selApp, &selEnv, nil, nil).NormalizedName)},
+			},
+			expectedAppliedToGroups: 1,
+			expectedAddressGroups:   0,
+		},
+		{
+			name: "two-ingress-rules-distinct-peers",
+			inputPolicy: &v1alpha2.ClusterNetworkPolicy{
+				ObjectMeta: metav1.ObjectMeta{Name: "cnp-multi-in", UID: "uid-5"},
+				Spec: v1alpha2.ClusterNetworkPolicySpec{
+					Tier:     v1alpha2.AdminTier,
+					Priority: 30,
+					Subject: v1alpha2.ClusterNetworkPolicySubject{
+						Pods: &v1alpha2.NamespacedPod{
+							NamespaceSelector: selEnv,
+							PodSelector:       selApp,
+						},
+					},
+					Ingress: []v1alpha2.ClusterNetworkPolicyIngressRule{
+						{
+							Name:   "first",
+							Action: v1alpha2.ClusterNetworkPolicyRuleActionAccept,
+							From: []v1alpha2.ClusterNetworkPolicyIngressPeer{
+								{Namespaces: &selClient},
+							},
+						},
+						{
+							Name:   "second",
+							Action: v1alpha2.ClusterNetworkPolicyRuleActionAccept,
+							From: []v1alpha2.ClusterNetworkPolicyIngressPeer{
+								{Namespaces: &selDstNs},
+							},
+						},
+					},
+				},
+			},
+			expectedPolicy: &antreatypes.NetworkPolicy{
+				UID:  "uid-5",
+				Name: "uid-5",
+				SourceRef: &controlplane.NetworkPolicyReference{
+					Type: controlplane.ClusterNetworkPolicy,
+					Name: "cnp-multi-in",
+					UID:  "uid-5",
+				},
+				Priority:         ptr.To(float64(30)),
+				TierPriority:     ptr.To(adminTierPriority),
+				AppliedToPerRule: false,
+				Rules: []controlplane.NetworkPolicyRule{
+					{
+						Direction: controlplane.DirectionIn,
+						From: controlplane.NetworkPolicyPeer{
+							AddressGroups: []string{getNormalizedUID(antreatypes.NewGroupSelector("", nil, &selClient, nil, nil).NormalizedName)},
+						},
+						Name:     "first",
+						Action:   &allow,
+						Priority: 0,
 					},
 					{
 						Direction: controlplane.DirectionIn,
 						From: controlplane.NetworkPolicyPeer{
-							AddressGroups: []string{getNormalizedUID(antreatypes.NewGroupSelector("", nil, &selectorC, nil, nil).NormalizedName)},
+							AddressGroups: []string{getNormalizedUID(antreatypes.NewGroupSelector("", nil, &selDstNs, nil, nil).NormalizedName)},
 						},
-						Services: []controlplane.Service{
-							{
-								Protocol: &protocolTCP,
-								Port:     &int81,
-							},
-						},
+						Name:     "second",
+						Action:   &allow,
 						Priority: 1,
-						Action:   &allowAction,
 					},
 				},
-				AppliedToGroups: []string{getNormalizedUID(antreatypes.NewGroupSelector("", &selectorA, nil, nil, nil).NormalizedName)},
+				AppliedToGroups: []string{getNormalizedUID(antreatypes.NewGroupSelector("", &selApp, &selEnv, nil, nil).NormalizedName)},
 			},
 			expectedAppliedToGroups: 1,
 			expectedAddressGroups:   2,
-		},
-		{
-			name: "with-tier-A",
-			inputPolicy: &crdv1beta1.ClusterNetworkPolicy{
-				ObjectMeta: metav1.ObjectMeta{Namespace: "", Name: "cnpC", UID: "uidC"},
-				Spec: crdv1beta1.ClusterNetworkPolicySpec{
-					AppliedTo: []crdv1beta1.AppliedTo{
-						{PodSelector: &selectorA},
-					},
-					Priority: p10,
-					Tier:     tierA.Name,
-					Ingress: []crdv1beta1.Rule{
-						{
-							From: []crdv1beta1.NetworkPolicyPeer{
-								{
-									PodSelector: &selectorB,
-								},
-							},
-							Action: &allowAction,
-						},
-					},
-				},
-			},
-			expectedPolicy: &antreatypes.NetworkPolicy{
-				UID:  "uidC",
-				Name: "uidC",
-				SourceRef: &controlplane.NetworkPolicyReference{
-					Type: controlplane.AntreaClusterNetworkPolicy,
-					Name: "cnpC",
-					UID:  "uidC",
-				},
-				Priority:     &p10,
-				TierPriority: &tierA.Spec.Priority,
-				Rules: []controlplane.NetworkPolicyRule{
-					{
-						Direction: controlplane.DirectionIn,
-						From: controlplane.NetworkPolicyPeer{
-							AddressGroups: []string{getNormalizedUID(antreatypes.NewGroupSelector("", &selectorB, nil, nil, nil).NormalizedName)},
-						},
-						Priority: 0,
-						Action:   &allowAction,
-					},
-				},
-				AppliedToGroups: []string{getNormalizedUID(antreatypes.NewGroupSelector("", &selectorA, nil, nil, nil).NormalizedName)},
-			},
-			expectedAppliedToGroups: 1,
-			expectedAddressGroups:   1,
-		},
-		{
-			name: "with-port-range",
-			inputPolicy: &crdv1beta1.ClusterNetworkPolicy{
-				ObjectMeta: metav1.ObjectMeta{Namespace: "", Name: "cnpD", UID: "uidD"},
-				Spec: crdv1beta1.ClusterNetworkPolicySpec{
-					AppliedTo: []crdv1beta1.AppliedTo{
-						{PodSelector: &selectorA},
-					},
-					Priority: p10,
-					Ingress: []crdv1beta1.Rule{
-						{
-							Ports: []crdv1beta1.NetworkPolicyPort{
-								{
-									Protocol: &k8sProtocolTCP,
-									Port:     &int1000,
-									EndPort:  &int32For1999,
-								},
-							},
-							From: []crdv1beta1.NetworkPolicyPeer{
-								{
-									PodSelector: &selectorB,
-								},
-							},
-							Action: &allowAction,
-						},
-					},
-				},
-			},
-			expectedPolicy: &antreatypes.NetworkPolicy{
-				UID:  "uidD",
-				Name: "uidD",
-				SourceRef: &controlplane.NetworkPolicyReference{
-					Type: controlplane.AntreaClusterNetworkPolicy,
-					Name: "cnpD",
-					UID:  "uidD",
-				},
-				Priority:     &p10,
-				TierPriority: ptr.To(crdv1beta1.DefaultTierPriority),
-				Rules: []controlplane.NetworkPolicyRule{
-					{
-						Direction: controlplane.DirectionIn,
-						From: controlplane.NetworkPolicyPeer{
-							AddressGroups: []string{getNormalizedUID(antreatypes.NewGroupSelector("", &selectorB, nil, nil, nil).NormalizedName)},
-						},
-						Services: []controlplane.Service{
-							{
-								Protocol: toAntreaProtocol(&k8sProtocolTCP),
-								Port:     &int1000,
-								EndPort:  &int32For1999,
-							},
-						},
-						Priority: 0,
-						Action:   &allowAction,
-					},
-				},
-				AppliedToGroups: []string{getNormalizedUID(antreatypes.NewGroupSelector("", &selectorA, nil, nil, nil).NormalizedName)},
-			},
-			expectedAppliedToGroups: 1,
-			expectedAddressGroups:   1,
-		},
-		{
-			name: "with-l7Protocol",
-			inputPolicy: &crdv1beta1.ClusterNetworkPolicy{
-				ObjectMeta: metav1.ObjectMeta{Namespace: "", Name: "cnpE", UID: "uidE"},
-				Spec: crdv1beta1.ClusterNetworkPolicySpec{
-					AppliedTo: []crdv1beta1.AppliedTo{
-						{PodSelector: &selectorA},
-					},
-					Priority: p10,
-					Ingress: []crdv1beta1.Rule{
-						{
-							L7Protocols: []crdv1beta1.L7Protocol{{HTTP: &crdv1beta1.HTTPProtocol{Host: "test.com", Method: "GET", Path: "/admin"}}},
-							From: []crdv1beta1.NetworkPolicyPeer{
-								{
-									PodSelector: &selectorB,
-								},
-							},
-							Action: &allowAction,
-						},
-					},
-				},
-			},
-			expectedPolicy: &antreatypes.NetworkPolicy{
-				UID:  "uidE",
-				Name: "uidE",
-				SourceRef: &controlplane.NetworkPolicyReference{
-					Type: controlplane.AntreaClusterNetworkPolicy,
-					Name: "cnpE",
-					UID:  "uidE",
-				},
-				Priority:     &p10,
-				TierPriority: ptr.To(crdv1beta1.DefaultTierPriority),
-				Rules: []controlplane.NetworkPolicyRule{
-					{
-						Direction: controlplane.DirectionIn,
-						From: controlplane.NetworkPolicyPeer{
-							AddressGroups: []string{getNormalizedUID(antreatypes.NewGroupSelector("", &selectorB, nil, nil, nil).NormalizedName)},
-						},
-						L7Protocols: []controlplane.L7Protocol{{HTTP: &controlplane.HTTPProtocol{Host: "test.com", Method: "GET", Path: "/admin"}}},
-						Priority:    0,
-						Action:      &allowAction,
-					},
-				},
-				AppliedToGroups: []string{getNormalizedUID(antreatypes.NewGroupSelector("", &selectorA, nil, nil, nil).NormalizedName)},
-			},
-			expectedAppliedToGroups: 1,
-			expectedAddressGroups:   1,
-		},
-		{
-			name: "appliedTo-per-rule",
-			inputPolicy: &crdv1beta1.ClusterNetworkPolicy{
-				ObjectMeta: metav1.ObjectMeta{Name: "cnpH", UID: "uidH"},
-				Spec: crdv1beta1.ClusterNetworkPolicySpec{
-					AppliedTo: nil,
-					Priority:  p10,
-					Ingress: []crdv1beta1.Rule{
-						{
-							AppliedTo: []crdv1beta1.AppliedTo{
-								{
-									PodSelector: &selectorA,
-								},
-							},
-							Ports: []crdv1beta1.NetworkPolicyPort{
-								{
-									Port: &int80,
-								},
-							},
-							From: []crdv1beta1.NetworkPolicyPeer{
-								{
-									PodSelector: &selectorB,
-								},
-							},
-							Action: &allowAction,
-						},
-						{
-							AppliedTo: []crdv1beta1.AppliedTo{
-								{
-									PodSelector:       &selectorB,
-									NamespaceSelector: &selectorC,
-								},
-							},
-							Ports: []crdv1beta1.NetworkPolicyPort{
-								{
-									Port: &int81,
-								},
-							},
-							From: []crdv1beta1.NetworkPolicyPeer{
-								{
-									NamespaceSelector: &selectorC,
-								},
-							},
-							Action: &allowAction,
-						},
-					},
-				},
-			},
-			expectedPolicy: &antreatypes.NetworkPolicy{
-				UID:  "uidH",
-				Name: "uidH",
-				SourceRef: &controlplane.NetworkPolicyReference{
-					Type: controlplane.AntreaClusterNetworkPolicy,
-					Name: "cnpH",
-					UID:  "uidH",
-				},
-				Priority:     &p10,
-				TierPriority: ptr.To(crdv1beta1.DefaultTierPriority),
-				Rules: []controlplane.NetworkPolicyRule{
-					{
-						Direction:       controlplane.DirectionIn,
-						AppliedToGroups: []string{getNormalizedUID(antreatypes.NewGroupSelector("", &selectorA, nil, nil, nil).NormalizedName)},
-						From: controlplane.NetworkPolicyPeer{
-							AddressGroups: []string{getNormalizedUID(antreatypes.NewGroupSelector("", &selectorB, nil, nil, nil).NormalizedName)},
-						},
-						Services: []controlplane.Service{
-							{
-								Protocol: &protocolTCP,
-								Port:     &int80,
-							},
-						},
-						Priority: 0,
-						Action:   &allowAction,
-					},
-					{
-						Direction:       controlplane.DirectionIn,
-						AppliedToGroups: []string{getNormalizedUID(antreatypes.NewGroupSelector("", &selectorB, &selectorC, nil, nil).NormalizedName)},
-						From: controlplane.NetworkPolicyPeer{
-							AddressGroups: []string{getNormalizedUID(antreatypes.NewGroupSelector("", nil, &selectorC, nil, nil).NormalizedName)},
-						},
-						Services: []controlplane.Service{
-							{
-								Protocol: &protocolTCP,
-								Port:     &int81,
-							},
-						},
-						Priority: 1,
-						Action:   &allowAction,
-					},
-				},
-				AppliedToGroups: []string{
-					getNormalizedUID(antreatypes.NewGroupSelector("", &selectorA, nil, nil, nil).NormalizedName),
-					getNormalizedUID(antreatypes.NewGroupSelector("", &selectorB, &selectorC, nil, nil).NormalizedName),
-				},
-				AppliedToPerRule: true,
-			},
-			expectedAppliedToGroups: 2,
-			expectedAddressGroups:   2,
-		},
-		{
-			name: "with-cluster-group-ingress-egress",
-			inputPolicy: &crdv1beta1.ClusterNetworkPolicy{
-				ObjectMeta: metav1.ObjectMeta{Name: "cnpI", UID: "uidI"},
-				Spec: crdv1beta1.ClusterNetworkPolicySpec{
-					AppliedTo: []crdv1beta1.AppliedTo{
-						{PodSelector: &selectorA},
-					},
-					Priority: p10,
-					Ingress: []crdv1beta1.Rule{
-						{
-							Ports: []crdv1beta1.NetworkPolicyPort{
-								{
-									Port: &int80,
-								},
-							},
-							From: []crdv1beta1.NetworkPolicyPeer{
-								{
-									Group: cgA.Name,
-								},
-							},
-							Action: &allowAction,
-						},
-					},
-					Egress: []crdv1beta1.Rule{
-						{
-							Ports: []crdv1beta1.NetworkPolicyPort{
-								{
-									Port: &int81,
-								},
-							},
-							To: []crdv1beta1.NetworkPolicyPeer{
-								{
-									Group: cgA.Name,
-								},
-							},
-							Action: &allowAction,
-						},
-					},
-				},
-			},
-			expectedPolicy: &antreatypes.NetworkPolicy{
-				UID:  "uidI",
-				Name: "uidI",
-				SourceRef: &controlplane.NetworkPolicyReference{
-					Type: controlplane.AntreaClusterNetworkPolicy,
-					Name: "cnpI",
-					UID:  "uidI",
-				},
-				Priority:     &p10,
-				TierPriority: ptr.To(crdv1beta1.DefaultTierPriority),
-				Rules: []controlplane.NetworkPolicyRule{
-					{
-						Direction: controlplane.DirectionIn,
-						From: controlplane.NetworkPolicyPeer{
-							AddressGroups: []string{cgA.Name},
-						},
-						Services: []controlplane.Service{
-							{
-								Protocol: &protocolTCP,
-								Port:     &int80,
-							},
-						},
-						Priority: 0,
-						Action:   &allowAction,
-					},
-					{
-						Direction: controlplane.DirectionOut,
-						To: controlplane.NetworkPolicyPeer{
-							AddressGroups: []string{cgA.Name},
-						},
-						Services: []controlplane.Service{
-							{
-								Protocol: &protocolTCP,
-								Port:     &int81,
-							},
-						},
-						Priority: 0,
-						Action:   &allowAction,
-					},
-				},
-				AppliedToGroups: []string{getNormalizedUID(antreatypes.NewGroupSelector("", &selectorA, nil, nil, nil).NormalizedName)},
-			},
-			expectedAppliedToGroups: 1,
-			expectedAddressGroups:   1,
-		},
-		{
-			name: "with-applied-to-cluster-group-ingress-egress",
-			inputPolicy: &crdv1beta1.ClusterNetworkPolicy{
-				ObjectMeta: metav1.ObjectMeta{Name: "cnpI", UID: "uidI"},
-				Spec: crdv1beta1.ClusterNetworkPolicySpec{
-					Priority: p10,
-					Ingress: []crdv1beta1.Rule{
-						{
-							Ports: []crdv1beta1.NetworkPolicyPort{
-								{
-									Port: &int80,
-								},
-							},
-							From: []crdv1beta1.NetworkPolicyPeer{
-								{
-									PodSelector: &selectorB,
-								},
-							},
-							AppliedTo: []crdv1beta1.AppliedTo{
-								{
-									Group: cgA.Name,
-								},
-							},
-							Action: &allowAction,
-						},
-					},
-					Egress: []crdv1beta1.Rule{
-						{
-							Ports: []crdv1beta1.NetworkPolicyPort{
-								{
-									Port: &int81,
-								},
-							},
-							To: []crdv1beta1.NetworkPolicyPeer{
-								{
-									PodSelector: &selectorB,
-								},
-							},
-							AppliedTo: []crdv1beta1.AppliedTo{
-								{
-									Group: cgA.Name,
-								},
-							},
-							Action: &allowAction,
-						},
-					},
-				},
-			},
-			expectedPolicy: &antreatypes.NetworkPolicy{
-				UID:  "uidI",
-				Name: "uidI",
-				SourceRef: &controlplane.NetworkPolicyReference{
-					Type: controlplane.AntreaClusterNetworkPolicy,
-					Name: "cnpI",
-					UID:  "uidI",
-				},
-				Priority:     &p10,
-				TierPriority: ptr.To(crdv1beta1.DefaultTierPriority),
-				Rules: []controlplane.NetworkPolicyRule{
-					{
-						Direction:       controlplane.DirectionIn,
-						AppliedToGroups: []string{cgA.Name},
-						From: controlplane.NetworkPolicyPeer{
-							AddressGroups: []string{getNormalizedUID(antreatypes.NewGroupSelector("", &selectorB, nil, nil, nil).NormalizedName)},
-						},
-						Services: []controlplane.Service{
-							{
-								Protocol: &protocolTCP,
-								Port:     &int80,
-							},
-						},
-						Priority: 0,
-						Action:   &allowAction,
-					},
-					{
-						Direction:       controlplane.DirectionOut,
-						AppliedToGroups: []string{cgA.Name},
-						To: controlplane.NetworkPolicyPeer{
-							AddressGroups: []string{getNormalizedUID(antreatypes.NewGroupSelector("", &selectorB, nil, nil, nil).NormalizedName)},
-						},
-						Services: []controlplane.Service{
-							{
-								Protocol: &protocolTCP,
-								Port:     &int81,
-							},
-						},
-						Priority: 0,
-						Action:   &allowAction,
-					},
-				},
-				AppliedToGroups:  []string{cgA.Name},
-				AppliedToPerRule: true,
-			},
-			expectedAppliedToGroups: 1,
-			expectedAddressGroups:   1,
-		},
-		{
-			name: "with-per-namespace-rule",
-			inputPolicy: &crdv1beta1.ClusterNetworkPolicy{
-				ObjectMeta: metav1.ObjectMeta{Name: "cnpI", UID: "uidI"},
-				Spec: crdv1beta1.ClusterNetworkPolicySpec{
-					AppliedTo: []crdv1beta1.AppliedTo{
-						{
-							NamespaceSelector: &metav1.LabelSelector{},
-						},
-					},
-					Priority: p10,
-					Ingress: []crdv1beta1.Rule{
-						{
-							Ports: []crdv1beta1.NetworkPolicyPort{
-								{
-									Port: &int80,
-								},
-							},
-							From: []crdv1beta1.NetworkPolicyPeer{
-								{
-									Namespaces: &crdv1beta1.PeerNamespaces{
-										Match: crdv1beta1.NamespaceMatchSelf,
-									},
-								},
-							},
-							Action: &allowAction,
-						},
-						{
-							Ports: []crdv1beta1.NetworkPolicyPort{
-								{
-									Port: &int81,
-								},
-							},
-							From: []crdv1beta1.NetworkPolicyPeer{
-								{
-									NamespaceSelector: &selectorA,
-								},
-							},
-							Action: &allowAction,
-						},
-					},
-				},
-			},
-			expectedPolicy: &antreatypes.NetworkPolicy{
-				UID:  "uidI",
-				Name: "uidI",
-				SourceRef: &controlplane.NetworkPolicyReference{
-					Type: controlplane.AntreaClusterNetworkPolicy,
-					Name: "cnpI",
-					UID:  "uidI",
-				},
-				Priority:     &p10,
-				TierPriority: ptr.To(crdv1beta1.DefaultTierPriority),
-				Rules: []controlplane.NetworkPolicyRule{
-					{
-						Direction:       controlplane.DirectionIn,
-						AppliedToGroups: []string{getNormalizedUID(antreatypes.NewGroupSelector("nsA", nil, nil, nil, nil).NormalizedName)},
-						From: controlplane.NetworkPolicyPeer{
-							AddressGroups: []string{getNormalizedUID(antreatypes.NewGroupSelector("nsA", nil, nil, nil, nil).NormalizedName)},
-						},
-						Services: []controlplane.Service{
-							{
-								Protocol: &protocolTCP,
-								Port:     &int80,
-							},
-						},
-						Priority: 0,
-						Action:   &allowAction,
-					},
-					{
-						Direction:       controlplane.DirectionIn,
-						AppliedToGroups: []string{getNormalizedUID(antreatypes.NewGroupSelector("nsB", nil, nil, nil, nil).NormalizedName)},
-						From: controlplane.NetworkPolicyPeer{
-							AddressGroups: []string{getNormalizedUID(antreatypes.NewGroupSelector("nsB", nil, nil, nil, nil).NormalizedName)},
-						},
-						Services: []controlplane.Service{
-							{
-								Protocol: &protocolTCP,
-								Port:     &int80,
-							},
-						},
-						Priority: 0,
-						Action:   &allowAction,
-					},
-					{
-						Direction:       controlplane.DirectionIn,
-						AppliedToGroups: []string{getNormalizedUID(antreatypes.NewGroupSelector("nsC", nil, nil, nil, nil).NormalizedName)},
-						From: controlplane.NetworkPolicyPeer{
-							AddressGroups: []string{getNormalizedUID(antreatypes.NewGroupSelector("nsC", nil, nil, nil, nil).NormalizedName)},
-						},
-						Services: []controlplane.Service{
-							{
-								Protocol: &protocolTCP,
-								Port:     &int80,
-							},
-						},
-						Priority: 0,
-						Action:   &allowAction,
-					},
-					{
-						Direction:       controlplane.DirectionIn,
-						AppliedToGroups: []string{getNormalizedUID(antreatypes.NewGroupSelector("", nil, &metav1.LabelSelector{}, nil, nil).NormalizedName)},
-						From: controlplane.NetworkPolicyPeer{
-							AddressGroups: []string{getNormalizedUID(antreatypes.NewGroupSelector("", nil, &selectorA, nil, nil).NormalizedName)},
-						},
-						Services: []controlplane.Service{
-							{
-								Protocol: &protocolTCP,
-								Port:     &int81,
-							},
-						},
-						Priority: 1,
-						Action:   &allowAction,
-					},
-				},
-				AppliedToGroups: []string{
-					getNormalizedUID(antreatypes.NewGroupSelector("nsA", nil, nil, nil, nil).NormalizedName),
-					getNormalizedUID(antreatypes.NewGroupSelector("nsB", nil, nil, nil, nil).NormalizedName),
-					getNormalizedUID(antreatypes.NewGroupSelector("nsC", nil, nil, nil, nil).NormalizedName),
-					getNormalizedUID(antreatypes.NewGroupSelector("", nil, &metav1.LabelSelector{}, nil, nil).NormalizedName),
-				},
-				AppliedToPerRule: true,
-			},
-			expectedAppliedToGroups: 4,
-			expectedAddressGroups:   4,
-		},
-		{
-			name: "with-per-namespace-rule-applied-to-per-rule",
-			inputPolicy: &crdv1beta1.ClusterNetworkPolicy{
-				ObjectMeta: metav1.ObjectMeta{Name: "cnpJ", UID: "uidJ"},
-				Spec: crdv1beta1.ClusterNetworkPolicySpec{
-					Priority: p10,
-					Ingress: []crdv1beta1.Rule{
-						{
-							AppliedTo: []crdv1beta1.AppliedTo{
-								{
-									NamespaceSelector: &selectorA,
-									PodSelector:       &selectorA,
-								},
-							},
-							Ports: []crdv1beta1.NetworkPolicyPort{
-								{
-									Port: &int80,
-								},
-							},
-							From: []crdv1beta1.NetworkPolicyPeer{
-								{
-									Namespaces: &crdv1beta1.PeerNamespaces{
-										Match: crdv1beta1.NamespaceMatchSelf,
-									},
-									PodSelector: &selectorA,
-								},
-							},
-							Action: &dropAction,
-						},
-						{
-							AppliedTo: []crdv1beta1.AppliedTo{
-								{
-									NamespaceSelector: &selectorB,
-								},
-							},
-							Ports: []crdv1beta1.NetworkPolicyPort{
-								{
-									Port: &int81,
-								},
-							},
-							From: []crdv1beta1.NetworkPolicyPeer{
-								{
-									Namespaces: &crdv1beta1.PeerNamespaces{
-										Match: crdv1beta1.NamespaceMatchSelf,
-									},
-								},
-							},
-							Action: &dropAction,
-						},
-					},
-				},
-			},
-			expectedPolicy: &antreatypes.NetworkPolicy{
-				UID:  "uidJ",
-				Name: "uidJ",
-				SourceRef: &controlplane.NetworkPolicyReference{
-					Type: controlplane.AntreaClusterNetworkPolicy,
-					Name: "cnpJ",
-					UID:  "uidJ",
-				},
-				Priority:     &p10,
-				TierPriority: ptr.To(crdv1beta1.DefaultTierPriority),
-				Rules: []controlplane.NetworkPolicyRule{
-					{
-						Direction:       controlplane.DirectionIn,
-						AppliedToGroups: []string{getNormalizedUID(antreatypes.NewGroupSelector("nsA", &selectorA, nil, nil, nil).NormalizedName)},
-						From: controlplane.NetworkPolicyPeer{
-							AddressGroups: []string{getNormalizedUID(antreatypes.NewGroupSelector("nsA", &selectorA, nil, nil, nil).NormalizedName)},
-						},
-						Services: []controlplane.Service{
-							{
-								Protocol: &protocolTCP,
-								Port:     &int80,
-							},
-						},
-						Priority: 0,
-						Action:   &dropAction,
-					},
-					{
-						Direction:       controlplane.DirectionIn,
-						AppliedToGroups: []string{getNormalizedUID(antreatypes.NewGroupSelector("nsB", nil, nil, nil, nil).NormalizedName)},
-						From: controlplane.NetworkPolicyPeer{
-							AddressGroups: []string{getNormalizedUID(antreatypes.NewGroupSelector("nsB", nil, nil, nil, nil).NormalizedName)},
-						},
-						Services: []controlplane.Service{
-							{
-								Protocol: &protocolTCP,
-								Port:     &int81,
-							},
-						},
-						Priority: 1,
-						Action:   &dropAction,
-					},
-					{
-						Direction:       controlplane.DirectionIn,
-						AppliedToGroups: []string{getNormalizedUID(antreatypes.NewGroupSelector("nsC", nil, nil, nil, nil).NormalizedName)},
-						From: controlplane.NetworkPolicyPeer{
-							AddressGroups: []string{getNormalizedUID(antreatypes.NewGroupSelector("nsC", nil, nil, nil, nil).NormalizedName)},
-						},
-						Services: []controlplane.Service{
-							{
-								Protocol: &protocolTCP,
-								Port:     &int81,
-							},
-						},
-						Priority: 1,
-						Action:   &dropAction,
-					},
-				},
-				AppliedToGroups: []string{
-					getNormalizedUID(antreatypes.NewGroupSelector("nsA", &selectorA, nil, nil, nil).NormalizedName),
-					getNormalizedUID(antreatypes.NewGroupSelector("nsB", nil, nil, nil, nil).NormalizedName),
-					getNormalizedUID(antreatypes.NewGroupSelector("nsC", nil, nil, nil, nil).NormalizedName),
-				},
-				AppliedToPerRule: true,
-			},
-			expectedAppliedToGroups: 3,
-			expectedAddressGroups:   3,
-		},
-		{
-			name: "with-same-labels-namespace-rule",
-			inputPolicy: &crdv1beta1.ClusterNetworkPolicy{
-				ObjectMeta: metav1.ObjectMeta{Name: "cnpS", UID: "uidS"},
-				Spec: crdv1beta1.ClusterNetworkPolicySpec{
-					AppliedTo: []crdv1beta1.AppliedTo{
-						{
-							NamespaceSelector: &metav1.LabelSelector{},
-						},
-					},
-					Priority: p10,
-					Ingress: []crdv1beta1.Rule{
-						{
-							Ports: []crdv1beta1.NetworkPolicyPort{
-								{
-									Port: &int80,
-								},
-							},
-							From: []crdv1beta1.NetworkPolicyPeer{
-								{
-									Namespaces: &crdv1beta1.PeerNamespaces{
-										SameLabels: []string{"foo2"},
-									},
-								},
-							},
-							Action: &allowAction,
-						},
-					},
-				},
-			},
-			expectedPolicy: &antreatypes.NetworkPolicy{
-				UID:  "uidS",
-				Name: "uidS",
-				SourceRef: &controlplane.NetworkPolicyReference{
-					Type: controlplane.AntreaClusterNetworkPolicy,
-					Name: "cnpS",
-					UID:  "uidS",
-				},
-				Priority:     &p10,
-				TierPriority: ptr.To(crdv1beta1.DefaultTierPriority),
-				Rules: []controlplane.NetworkPolicyRule{
-					{
-						Direction: controlplane.DirectionIn,
-						AppliedToGroups: []string{
-							getNormalizedUID(antreatypes.NewGroupSelector("nsB", nil, nil, nil, nil).NormalizedName),
-							getNormalizedUID(antreatypes.NewGroupSelector("nsC", nil, nil, nil, nil).NormalizedName),
-						},
-						From: controlplane.NetworkPolicyPeer{
-							AddressGroups: []string{
-								getNormalizedUID(antreatypes.NewGroupSelector("", nil, &selectorB, nil, nil).NormalizedName),
-							},
-						},
-						Services: []controlplane.Service{
-							{
-								Protocol: &protocolTCP,
-								Port:     &int80,
-							},
-						},
-						Priority: 0,
-						Action:   &allowAction,
-					},
-				},
-				AppliedToGroups: []string{
-					getNormalizedUID(antreatypes.NewGroupSelector("nsA", nil, nil, nil, nil).NormalizedName),
-					getNormalizedUID(antreatypes.NewGroupSelector("nsB", nil, nil, nil, nil).NormalizedName),
-					getNormalizedUID(antreatypes.NewGroupSelector("nsC", nil, nil, nil, nil).NormalizedName),
-				},
-				AppliedToPerRule: true,
-			},
-			expectedAppliedToGroups: 3,
-			expectedAddressGroups:   1,
-		},
-		{
-			name: "rule-with-to-service",
-			inputPolicy: &crdv1beta1.ClusterNetworkPolicy{
-				ObjectMeta: metav1.ObjectMeta{Name: "cnpK", UID: "uidK"},
-				Spec: crdv1beta1.ClusterNetworkPolicySpec{
-					AppliedTo: []crdv1beta1.AppliedTo{
-						{PodSelector: &selectorA},
-					},
-					Priority: p10,
-					Egress: []crdv1beta1.Rule{
-						{
-							ToServices: []crdv1beta1.PeerService{
-								{
-									Namespace: "nsA",
-									Name:      "svcA",
-								},
-							},
-							Action: &dropAction,
-						},
-					},
-				},
-			},
-			expectedPolicy: &antreatypes.NetworkPolicy{
-				UID:  "uidK",
-				Name: "uidK",
-				SourceRef: &controlplane.NetworkPolicyReference{
-					Type: controlplane.AntreaClusterNetworkPolicy,
-					Name: "cnpK",
-					UID:  "uidK",
-				},
-				Priority:     &p10,
-				TierPriority: ptr.To(crdv1beta1.DefaultTierPriority),
-				Rules: []controlplane.NetworkPolicyRule{
-					{
-						Direction: controlplane.DirectionOut,
-						To: controlplane.NetworkPolicyPeer{
-							ToServices: []controlplane.ServiceReference{
-								{
-									Namespace: "nsA",
-									Name:      "svcA",
-								},
-							},
-						},
-						Priority: 0,
-						Action:   &dropAction,
-					},
-				},
-				AppliedToGroups: []string{getNormalizedUID(antreatypes.NewGroupSelector("", &selectorA, nil, nil, nil).NormalizedName)},
-			},
-			expectedAppliedToGroups: 1,
-			expectedAddressGroups:   0,
-		},
-		{
-			name: "rule-with-to-mc-service",
-			inputPolicy: &crdv1beta1.ClusterNetworkPolicy{
-				ObjectMeta: metav1.ObjectMeta{Name: "cnpM", UID: "uidM"},
-				Spec: crdv1beta1.ClusterNetworkPolicySpec{
-					AppliedTo: []crdv1beta1.AppliedTo{
-						{PodSelector: &selectorA},
-					},
-					Priority: p10,
-					Egress: []crdv1beta1.Rule{
-						{
-							ToServices: []crdv1beta1.PeerService{
-								{
-									Namespace: "nsA",
-									Name:      "svcA",
-									Scope:     crdv1beta1.ScopeClusterSet,
-								},
-							},
-							Action: &dropAction,
-						},
-					},
-				},
-			},
-			expectedPolicy: &antreatypes.NetworkPolicy{
-				UID:  "uidM",
-				Name: "uidM",
-				SourceRef: &controlplane.NetworkPolicyReference{
-					Type: controlplane.AntreaClusterNetworkPolicy,
-					Name: "cnpM",
-					UID:  "uidM",
-				},
-				Priority:     &p10,
-				TierPriority: ptr.To(crdv1beta1.DefaultTierPriority),
-				Rules: []controlplane.NetworkPolicyRule{
-					{
-						Direction: controlplane.DirectionOut,
-						To: controlplane.NetworkPolicyPeer{
-							ToServices: []controlplane.ServiceReference{
-								{
-									Namespace: "nsA",
-									Name:      common.ToMCResourceName("svcA"),
-								},
-							},
-						},
-						Priority: 0,
-						Action:   &dropAction,
-					},
-				},
-				AppliedToGroups: []string{getNormalizedUID(antreatypes.NewGroupSelector("", &selectorA, nil, nil, nil).NormalizedName)},
-			},
-			expectedAppliedToGroups: 1,
-			expectedAddressGroups:   0,
-		},
-		{
-			name: "applied-to-with-service-account-namespaced-name",
-			inputPolicy: &crdv1beta1.ClusterNetworkPolicy{
-				ObjectMeta: metav1.ObjectMeta{Name: "cnpL", UID: "uidL"},
-				Spec: crdv1beta1.ClusterNetworkPolicySpec{
-					AppliedTo: []crdv1beta1.AppliedTo{
-						{
-							ServiceAccount: &crdv1beta1.NamespacedName{
-								Name:      saA.Name,
-								Namespace: saA.Namespace,
-							},
-						},
-					},
-					Priority: p10,
-					Egress: []crdv1beta1.Rule{
-						{
-							ToServices: []crdv1beta1.PeerService{
-								{
-									Namespace: "nsA",
-									Name:      "svcA",
-								},
-							},
-							Action: &dropAction,
-						},
-					},
-				},
-			},
-			expectedPolicy: &antreatypes.NetworkPolicy{
-				UID:  "uidL",
-				Name: "uidL",
-				SourceRef: &controlplane.NetworkPolicyReference{
-					Type: controlplane.AntreaClusterNetworkPolicy,
-					Name: "cnpL",
-					UID:  "uidL",
-				},
-				Priority:     &p10,
-				TierPriority: ptr.To(crdv1beta1.DefaultTierPriority),
-				Rules: []controlplane.NetworkPolicyRule{
-					{
-						Direction: controlplane.DirectionOut,
-						To: controlplane.NetworkPolicyPeer{
-							ToServices: []controlplane.ServiceReference{
-								{
-									Namespace: "nsA",
-									Name:      "svcA",
-								},
-							},
-						},
-						Priority: 0,
-						Action:   &dropAction,
-					},
-				},
-				AppliedToGroups: []string{getNormalizedUID(antreatypes.NewGroupSelector("nsA", &selectorD, nil, nil, nil).NormalizedName)},
-			},
-			expectedAppliedToGroups: 1,
-			expectedAddressGroups:   0,
-		},
-		{
-			name: "rule-with-service-account-namespaced-name",
-			inputPolicy: &crdv1beta1.ClusterNetworkPolicy{
-				ObjectMeta: metav1.ObjectMeta{Name: "cnpP", UID: "uidP"},
-				Spec: crdv1beta1.ClusterNetworkPolicySpec{
-					AppliedTo: []crdv1beta1.AppliedTo{
-						{
-							PodSelector: &selectorA,
-						},
-					},
-					Priority: p10,
-					Egress: []crdv1beta1.Rule{
-						{
-							To: []crdv1beta1.NetworkPolicyPeer{
-								{
-									ServiceAccount: &crdv1beta1.NamespacedName{
-										Name:      saA.Name,
-										Namespace: saA.Namespace,
-									},
-								},
-							},
-							Action: &dropAction,
-						},
-					},
-				},
-			},
-			expectedPolicy: &antreatypes.NetworkPolicy{
-				UID:  "uidP",
-				Name: "uidP",
-				SourceRef: &controlplane.NetworkPolicyReference{
-					Type: controlplane.AntreaClusterNetworkPolicy,
-					Name: "cnpP",
-					UID:  "uidP",
-				},
-				Priority:     &p10,
-				TierPriority: ptr.To(crdv1beta1.DefaultTierPriority),
-				Rules: []controlplane.NetworkPolicyRule{
-					{
-						Direction: controlplane.DirectionOut,
-						To: controlplane.NetworkPolicyPeer{
-							AddressGroups: []string{getNormalizedUID(antreatypes.NewGroupSelector("nsA", &selectorD, nil, nil, nil).NormalizedName)},
-						},
-						Priority: 0,
-						Action:   &dropAction,
-					},
-				},
-				AppliedToGroups: []string{getNormalizedUID(antreatypes.NewGroupSelector("", &selectorA, nil, nil, nil).NormalizedName)},
-			},
-			expectedAppliedToGroups: 1,
-			expectedAddressGroups:   1,
-		},
-		{
-			name: "rule-applied-to-with-service-account-namespaced-name",
-			inputPolicy: &crdv1beta1.ClusterNetworkPolicy{
-				ObjectMeta: metav1.ObjectMeta{Name: "cnpQ", UID: "uidQ"},
-				Spec: crdv1beta1.ClusterNetworkPolicySpec{
-					Priority: p10,
-					Egress: []crdv1beta1.Rule{
-						{
-							To: []crdv1beta1.NetworkPolicyPeer{
-								{
-									PodSelector: &selectorA,
-								},
-							},
-							Action: &dropAction,
-							AppliedTo: []crdv1beta1.AppliedTo{
-								{
-									ServiceAccount: &crdv1beta1.NamespacedName{
-										Name:      saA.Name,
-										Namespace: saA.Namespace,
-									},
-								},
-							},
-						},
-					},
-				},
-			},
-			expectedPolicy: &antreatypes.NetworkPolicy{
-				UID:  "uidQ",
-				Name: "uidQ",
-				SourceRef: &controlplane.NetworkPolicyReference{
-					Type: controlplane.AntreaClusterNetworkPolicy,
-					Name: "cnpQ",
-					UID:  "uidQ",
-				},
-				Priority:     &p10,
-				TierPriority: ptr.To(crdv1beta1.DefaultTierPriority),
-				Rules: []controlplane.NetworkPolicyRule{
-					{
-						Direction: controlplane.DirectionOut,
-						To: controlplane.NetworkPolicyPeer{
-							AddressGroups: []string{getNormalizedUID(antreatypes.NewGroupSelector("", &selectorA, nil, nil, nil).NormalizedName)},
-						},
-						Priority:        0,
-						Action:          &dropAction,
-						AppliedToGroups: []string{getNormalizedUID(antreatypes.NewGroupSelector("nsA", &selectorD, nil, nil, nil).NormalizedName)},
-					},
-				},
-				AppliedToGroups:  []string{getNormalizedUID(antreatypes.NewGroupSelector("nsA", &selectorD, nil, nil, nil).NormalizedName)},
-				AppliedToPerRule: true,
-			},
-			expectedAppliedToGroups: 1,
-			expectedAddressGroups:   1,
-		},
-		{
-			name: "service-account-per-namespace-rule",
-			inputPolicy: &crdv1beta1.ClusterNetworkPolicy{
-				ObjectMeta: metav1.ObjectMeta{Name: "cnpR", UID: "uidR"},
-				Spec: crdv1beta1.ClusterNetworkPolicySpec{
-					AppliedTo: []crdv1beta1.AppliedTo{
-						{
-							ServiceAccount: &crdv1beta1.NamespacedName{
-								Name:      saA.Name,
-								Namespace: saA.Namespace,
-							},
-						},
-					},
-					Priority: p10,
-					Egress: []crdv1beta1.Rule{
-						{
-							To: []crdv1beta1.NetworkPolicyPeer{
-								{
-									Namespaces: &crdv1beta1.PeerNamespaces{
-										Match: crdv1beta1.NamespaceMatchSelf,
-									},
-								},
-							},
-							Action: &dropAction,
-						},
-						{
-							To: []crdv1beta1.NetworkPolicyPeer{
-								{
-									NamespaceSelector: &selectorB,
-								},
-							},
-							Action: &allowAction,
-						},
-					},
-				},
-			},
-			expectedPolicy: &antreatypes.NetworkPolicy{
-				UID:  "uidR",
-				Name: "uidR",
-				SourceRef: &controlplane.NetworkPolicyReference{
-					Type: controlplane.AntreaClusterNetworkPolicy,
-					Name: "cnpR",
-					UID:  "uidR",
-				},
-				Priority:     &p10,
-				TierPriority: ptr.To(crdv1beta1.DefaultTierPriority),
-				Rules: []controlplane.NetworkPolicyRule{
-					{
-						Direction: controlplane.DirectionOut,
-						To: controlplane.NetworkPolicyPeer{
-							AddressGroups: []string{getNormalizedUID(antreatypes.NewGroupSelector("nsA", nil, nil, nil, nil).NormalizedName)},
-						},
-						Priority:        0,
-						Action:          &dropAction,
-						AppliedToGroups: []string{getNormalizedUID(antreatypes.NewGroupSelector("nsA", &selectorD, nil, nil, nil).NormalizedName)},
-					},
-					{
-						Direction: controlplane.DirectionOut,
-						To: controlplane.NetworkPolicyPeer{
-							AddressGroups: []string{getNormalizedUID(antreatypes.NewGroupSelector("", nil, &selectorB, nil, nil).NormalizedName)},
-						},
-						Priority:        1,
-						Action:          &allowAction,
-						AppliedToGroups: []string{getNormalizedUID(antreatypes.NewGroupSelector("nsA", &selectorD, nil, nil, nil).NormalizedName)},
-					},
-				},
-				AppliedToGroups: []string{
-					getNormalizedUID(antreatypes.NewGroupSelector("nsA", &selectorD, nil, nil, nil).NormalizedName),
-				},
-				AppliedToPerRule: true,
-			},
-			expectedAppliedToGroups: 1,
-			expectedAddressGroups:   2,
-		},
-		{
-			name: "rule-with-node-selector",
-			inputPolicy: &crdv1beta1.ClusterNetworkPolicy{
-				ObjectMeta: metav1.ObjectMeta{Name: "cnpL", UID: "uidL"},
-				Spec: crdv1beta1.ClusterNetworkPolicySpec{
-					AppliedTo: []crdv1beta1.AppliedTo{
-						{PodSelector: &selectorA},
-					},
-					Priority: p10,
-					Ingress: []crdv1beta1.Rule{
-						{
-							Ports: []crdv1beta1.NetworkPolicyPort{
-								{
-									Port: &int80,
-								},
-							},
-							From: []crdv1beta1.NetworkPolicyPeer{
-								{
-									NodeSelector: &selectorA,
-								},
-							},
-							Action: &allowAction,
-						},
-					},
-					Egress: []crdv1beta1.Rule{
-						{
-							Ports: []crdv1beta1.NetworkPolicyPort{
-								{
-									Port: &int81,
-								},
-							},
-							To: []crdv1beta1.NetworkPolicyPeer{
-								{
-									NodeSelector: &selectorB,
-								},
-							},
-							Action: &dropAction,
-						},
-					},
-				},
-			},
-			expectedPolicy: &antreatypes.NetworkPolicy{
-				UID:  "uidL",
-				Name: "uidL",
-				SourceRef: &controlplane.NetworkPolicyReference{
-					Type: controlplane.AntreaClusterNetworkPolicy,
-					Name: "cnpL",
-					UID:  "uidL",
-				},
-				Priority:     &p10,
-				TierPriority: ptr.To(crdv1beta1.DefaultTierPriority),
-				Rules: []controlplane.NetworkPolicyRule{
-					{
-						Direction: controlplane.DirectionIn,
-						From: controlplane.NetworkPolicyPeer{
-							AddressGroups: []string{getNormalizedUID(antreatypes.NewGroupSelector("", nil, nil, nil, &selectorA).NormalizedName)},
-						},
-						Services: []controlplane.Service{
-							{
-								Protocol: &protocolTCP,
-								Port:     &int80,
-							},
-						},
-						Priority: 0,
-						Action:   &allowAction,
-					},
-					{
-						Direction: controlplane.DirectionOut,
-						To: controlplane.NetworkPolicyPeer{
-							AddressGroups: []string{getNormalizedUID(antreatypes.NewGroupSelector("", nil, nil, nil, &selectorB).NormalizedName)},
-						},
-						Services: []controlplane.Service{
-							{
-								Protocol: &protocolTCP,
-								Port:     &int81,
-							},
-						},
-						Priority: 0,
-						Action:   &dropAction,
-					},
-				},
-				AppliedToGroups: []string{getNormalizedUID(antreatypes.NewGroupSelector("", &selectorA, nil, nil, nil).NormalizedName)},
-			},
-			expectedAppliedToGroups: 1,
-			expectedAddressGroups:   2,
-		},
-		{
-			name: "rules-with-icmp-protocol",
-			inputPolicy: &crdv1beta1.ClusterNetworkPolicy{
-				ObjectMeta: metav1.ObjectMeta{Name: "cnp-icmp", UID: "uid-icmp"},
-				Spec: crdv1beta1.ClusterNetworkPolicySpec{
-					AppliedTo: []crdv1beta1.AppliedTo{
-						{PodSelector: &selectorA},
-					},
-					Priority: p10,
-					Ingress: []crdv1beta1.Rule{
-						{
-							Protocols: []crdv1beta1.NetworkPolicyProtocol{
-								{
-									ICMP: &crdv1beta1.ICMPProtocol{
-										ICMPType: &icmpType8,
-										ICMPCode: &icmpCode0,
-									},
-								},
-							},
-							From: []crdv1beta1.NetworkPolicyPeer{
-								{
-									NodeSelector: &selectorB,
-								},
-							},
-							Action: &allowAction,
-						},
-					},
-					Egress: []crdv1beta1.Rule{
-						{
-							Protocols: []crdv1beta1.NetworkPolicyProtocol{
-								{
-									ICMP: &crdv1beta1.ICMPProtocol{},
-								},
-							},
-							To: []crdv1beta1.NetworkPolicyPeer{
-								{
-									NodeSelector: &selectorA,
-								},
-							},
-							Action: &allowAction,
-						},
-					},
-				},
-			},
-			expectedPolicy: &antreatypes.NetworkPolicy{
-				UID:  "uid-icmp",
-				Name: "uid-icmp",
-				SourceRef: &controlplane.NetworkPolicyReference{
-					Type: controlplane.AntreaClusterNetworkPolicy,
-					Name: "cnp-icmp",
-					UID:  "uid-icmp",
-				},
-				Priority:     &p10,
-				TierPriority: ptr.To(crdv1beta1.DefaultTierPriority),
-				Rules: []controlplane.NetworkPolicyRule{
-					{
-						Direction: controlplane.DirectionIn,
-						From: controlplane.NetworkPolicyPeer{
-							AddressGroups: []string{getNormalizedUID(antreatypes.NewGroupSelector("", nil, nil, nil, &selectorB).NormalizedName)},
-						},
-						Services: []controlplane.Service{
-							{
-								Protocol: &protocolICMP,
-								ICMPType: &icmpType8,
-								ICMPCode: &icmpCode0,
-							},
-						},
-						Priority: 0,
-						Action:   &allowAction,
-					},
-					{
-						Direction: controlplane.DirectionOut,
-						To: controlplane.NetworkPolicyPeer{
-							AddressGroups: []string{getNormalizedUID(antreatypes.NewGroupSelector("", nil, nil, nil, &selectorA).NormalizedName)},
-						},
-						Services: []controlplane.Service{
-							{
-								Protocol: &protocolICMP,
-							},
-						},
-						Priority: 0,
-						Action:   &allowAction,
-					},
-				},
-				AppliedToGroups: []string{getNormalizedUID(antreatypes.NewGroupSelector("", &selectorA, nil, nil, nil).NormalizedName)},
-			},
-			expectedAppliedToGroups: 1,
-			expectedAddressGroups:   2,
-		},
-		{
-			name: "rule-with-igmp-query",
-			inputPolicy: &crdv1beta1.ClusterNetworkPolicy{
-				ObjectMeta: metav1.ObjectMeta{Name: "cnpL", UID: "uidL"},
-				Spec: crdv1beta1.ClusterNetworkPolicySpec{
-					AppliedTo: []crdv1beta1.AppliedTo{
-						{PodSelector: &selectorA},
-					},
-					Priority: p10,
-					Ingress: []crdv1beta1.Rule{
-						{
-							Action: &dropAction,
-							Protocols: []crdv1beta1.NetworkPolicyProtocol{
-								{
-									IGMP: &crdv1beta1.IGMPProtocol{
-										IGMPType:     &query,
-										GroupAddress: queryAddr,
-									},
-								},
-							},
-						},
-					},
-				},
-			},
-			expectedPolicy: &antreatypes.NetworkPolicy{
-				UID:  "uidL",
-				Name: "uidL",
-				SourceRef: &controlplane.NetworkPolicyReference{
-					Type: controlplane.AntreaClusterNetworkPolicy,
-					Name: "cnpL",
-					UID:  "uidL",
-				},
-				Priority:     &p10,
-				TierPriority: ptr.To(crdv1beta1.DefaultTierPriority),
-				Rules: []controlplane.NetworkPolicyRule{
-					{
-						Direction: controlplane.DirectionIn,
-						Services: []controlplane.Service{
-							{
-								Protocol:     &protocolIGMP,
-								IGMPType:     &query,
-								GroupAddress: queryAddr,
-							},
-						},
-						Priority: 0,
-						Action:   &dropAction,
-						From: controlplane.NetworkPolicyPeer{
-							IPBlocks: []controlplane.IPBlock{
-								{CIDR: controlplane.IPNet{IP: controlplane.IPAddress(net.IPv4zero), PrefixLength: 0}},
-								{CIDR: controlplane.IPNet{IP: controlplane.IPAddress(net.IPv6zero), PrefixLength: 0}},
-							},
-						},
-					},
-				},
-				AppliedToGroups: []string{getNormalizedUID(antreatypes.NewGroupSelector("", &selectorA, nil, nil, nil).NormalizedName)},
-			},
-			expectedAppliedToGroups: 1,
-			expectedAddressGroups:   0,
-		},
-		{
-			name: "rule-with-igmp-report",
-			inputPolicy: &crdv1beta1.ClusterNetworkPolicy{
-				ObjectMeta: metav1.ObjectMeta{Name: "cnpL", UID: "uidL"},
-				Spec: crdv1beta1.ClusterNetworkPolicySpec{
-					AppliedTo: []crdv1beta1.AppliedTo{
-						{PodSelector: &selectorA},
-					},
-					Priority: p10,
-					Egress: []crdv1beta1.Rule{
-						{
-							Action: &dropAction,
-							Protocols: []crdv1beta1.NetworkPolicyProtocol{
-								{
-									IGMP: &crdv1beta1.IGMPProtocol{
-										IGMPType:     &report,
-										GroupAddress: reportAddr,
-									},
-								},
-							},
-						},
-					},
-				},
-			},
-			expectedPolicy: &antreatypes.NetworkPolicy{
-				UID:  "uidL",
-				Name: "uidL",
-				SourceRef: &controlplane.NetworkPolicyReference{
-					Type: controlplane.AntreaClusterNetworkPolicy,
-					Name: "cnpL",
-					UID:  "uidL",
-				},
-				Priority:     &p10,
-				TierPriority: ptr.To(crdv1beta1.DefaultTierPriority),
-				Rules: []controlplane.NetworkPolicyRule{
-					{
-						Direction: controlplane.DirectionOut,
-						Services: []controlplane.Service{
-							{
-								Protocol:     &protocolIGMP,
-								IGMPType:     &report,
-								GroupAddress: reportAddr,
-							},
-						},
-						Priority: 0,
-						Action:   &dropAction,
-						To: controlplane.NetworkPolicyPeer{
-							IPBlocks: []controlplane.IPBlock{
-								{CIDR: controlplane.IPNet{IP: controlplane.IPAddress(net.IPv4zero), PrefixLength: 0}},
-								{CIDR: controlplane.IPNet{IP: controlplane.IPAddress(net.IPv6zero), PrefixLength: 0}},
-							},
-						},
-					},
-				},
-				AppliedToGroups: []string{getNormalizedUID(antreatypes.NewGroupSelector("", &selectorA, nil, nil, nil).NormalizedName)},
-			},
-			expectedAppliedToGroups: 1,
-			expectedAddressGroups:   0,
-		},
-		{
-			name: "appliedTo-service",
-			inputPolicy: &crdv1beta1.ClusterNetworkPolicy{
-				ObjectMeta: metav1.ObjectMeta{Name: "cnpM", UID: "uidM"},
-				Spec: crdv1beta1.ClusterNetworkPolicySpec{
-					AppliedTo: nil,
-					Priority:  p10,
-					Ingress: []crdv1beta1.Rule{
-						{
-							AppliedTo: []crdv1beta1.AppliedTo{
-								{
-									Service: &crdv1beta1.NamespacedName{
-										Name:      svcA.Name,
-										Namespace: svcA.Namespace,
-									},
-								},
-							},
-							From: []crdv1beta1.NetworkPolicyPeer{
-								{
-									IPBlock: &crdv1beta1.IPBlock{
-										CIDR: ipA + "/32",
-									},
-								},
-							},
-							Action: &allowAction,
-						},
-					},
-				},
-			},
-			expectedPolicy: &antreatypes.NetworkPolicy{
-				UID:  "uidM",
-				Name: "uidM",
-				SourceRef: &controlplane.NetworkPolicyReference{
-					Type: controlplane.AntreaClusterNetworkPolicy,
-					Name: "cnpM",
-					UID:  "uidM",
-				},
-				Priority:     &p10,
-				TierPriority: ptr.To(crdv1beta1.DefaultTierPriority),
-				Rules: []controlplane.NetworkPolicyRule{
-					{
-						Direction:       controlplane.DirectionIn,
-						AppliedToGroups: []string{getNormalizedUID(k8s.NamespacedName(svcA.Namespace, svcA.Name))},
-						From: controlplane.NetworkPolicyPeer{
-							IPBlocks: []controlplane.IPBlock{
-								{
-									CIDR: controlplane.IPNet{
-										IP:           controlplane.IPAddress(net.ParseIP(ipA)),
-										PrefixLength: 32,
-									},
-								},
-							},
-						},
-						Priority: 0,
-						Action:   &allowAction,
-					},
-				},
-				AppliedToGroups: []string{
-					getNormalizedUID(k8s.NamespacedName(svcA.Namespace, svcA.Name)),
-				},
-				AppliedToPerRule: true,
-			},
-			expectedAppliedToGroups: 1,
-			expectedAddressGroups:   0,
-		},
-		{
-			name: "with-log-label",
-			inputPolicy: &crdv1beta1.ClusterNetworkPolicy{
-				ObjectMeta: metav1.ObjectMeta{Name: "cnpN", UID: "uidN"},
-				Spec: crdv1beta1.ClusterNetworkPolicySpec{
-					AppliedTo: []crdv1beta1.AppliedTo{
-						{PodSelector: &selectorA},
-					},
-					Priority: p10,
-					Ingress: []crdv1beta1.Rule{
-						{
-							Ports: []crdv1beta1.NetworkPolicyPort{
-								{
-									Port: &int80,
-								},
-							},
-							From: []crdv1beta1.NetworkPolicyPeer{
-								{
-									PodSelector:       &selectorB,
-									NamespaceSelector: &selectorC,
-								},
-							},
-							Action:        &allowAction,
-							EnableLogging: true,
-							LogLabel:      "test-log-label",
-						},
-					},
-				},
-			},
-			expectedPolicy: &antreatypes.NetworkPolicy{
-				UID:  "uidN",
-				Name: "uidN",
-				SourceRef: &controlplane.NetworkPolicyReference{
-					Type: controlplane.AntreaClusterNetworkPolicy,
-					Name: "cnpN",
-					UID:  "uidN",
-				},
-				Priority:     &p10,
-				TierPriority: ptr.To(crdv1beta1.DefaultTierPriority),
-				Rules: []controlplane.NetworkPolicyRule{
-					{
-						Direction: controlplane.DirectionIn,
-						From: controlplane.NetworkPolicyPeer{
-							AddressGroups: []string{getNormalizedUID(antreatypes.NewGroupSelector("", &selectorB, &selectorC, nil, nil).NormalizedName)},
-						},
-						Services: []controlplane.Service{
-							{
-								Protocol: &protocolTCP,
-								Port:     &int80,
-							},
-						},
-						Priority:      0,
-						Action:        &allowAction,
-						EnableLogging: true,
-						LogLabel:      "test-log-label",
-					},
-				},
-				AppliedToGroups: []string{getNormalizedUID(antreatypes.NewGroupSelector("", &selectorA, nil, nil, nil).NormalizedName)},
-			},
-			expectedAppliedToGroups: 1,
-			expectedAddressGroups:   1,
-		},
-		{
-			name: "appliedTo-Node",
-			inputPolicy: &crdv1beta1.ClusterNetworkPolicy{
-				ObjectMeta: metav1.ObjectMeta{Name: "cnpZ", UID: "uidZ"},
-				Spec: crdv1beta1.ClusterNetworkPolicySpec{
-					AppliedTo: []crdv1beta1.AppliedTo{
-						{NodeSelector: &selectorA},
-					},
-					Priority: p10,
-					Ingress: []crdv1beta1.Rule{
-						{
-							Ports: []crdv1beta1.NetworkPolicyPort{
-								{
-									Port: &int80,
-								},
-							},
-							From: []crdv1beta1.NetworkPolicyPeer{
-								{
-									PodSelector:       &selectorB,
-									NamespaceSelector: &selectorC,
-								},
-							},
-							Action: &allowAction,
-						},
-					},
-					Egress: []crdv1beta1.Rule{
-						{
-							Ports: []crdv1beta1.NetworkPolicyPort{
-								{
-									Port: &int81,
-								},
-							},
-							To: []crdv1beta1.NetworkPolicyPeer{
-								{
-									PodSelector:       &selectorB,
-									NamespaceSelector: &selectorC,
-								},
-							},
-							Action: &allowAction,
-						},
-					},
-				},
-			},
-			expectedPolicy: &antreatypes.NetworkPolicy{
-				UID:  "uidZ",
-				Name: "uidZ",
-				SourceRef: &controlplane.NetworkPolicyReference{
-					Type: controlplane.AntreaClusterNetworkPolicy,
-					Name: "cnpZ",
-					UID:  "uidZ",
-				},
-				Priority:     &p10,
-				TierPriority: ptr.To(crdv1beta1.DefaultTierPriority),
-				Rules: []controlplane.NetworkPolicyRule{
-					{
-						Direction: controlplane.DirectionIn,
-						From: controlplane.NetworkPolicyPeer{
-							AddressGroups: []string{getNormalizedUID(antreatypes.NewGroupSelector("", &selectorB, &selectorC, nil, nil).NormalizedName)},
-						},
-						Services: []controlplane.Service{
-							{
-								Protocol: &protocolTCP,
-								Port:     &int80,
-							},
-						},
-						Priority: 0,
-						Action:   &allowAction,
-					},
-					{
-						Direction: controlplane.DirectionOut,
-						To: controlplane.NetworkPolicyPeer{
-							AddressGroups: []string{getNormalizedUID(antreatypes.NewGroupSelector("", &selectorB, &selectorC, nil, nil).NormalizedName)},
-						},
-						Services: []controlplane.Service{
-							{
-								Protocol: &protocolTCP,
-								Port:     &int81,
-							},
-						},
-						Priority: 0,
-						Action:   &allowAction,
-					},
-				},
-				AppliedToGroups: []string{getNormalizedUID(antreatypes.NewGroupSelector("", nil, nil, nil, &selectorA).NormalizedName)},
-			},
-			expectedAppliedToGroups: 1,
-			expectedAddressGroups:   1,
 		},
 	}
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			_, c := newController(nil, nil)
-			c.addClusterGroup(&cgA)
-			c.cgStore.Add(&cgA)
-			c.namespaceStore.Add(&nsA)
-			c.namespaceStore.Add(&nsB)
-			c.namespaceStore.Add(&nsC)
-			c.serviceStore.Add(&svcA)
-			c.tierStore.Add(&tierA)
+			c.namespaceStore.Add(&v1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "nsA"}})
 			actualPolicy, actualAppliedToGroups, actualAddressGroups := c.processClusterNetworkPolicy(tt.inputPolicy)
 			assert.Equal(t, tt.expectedPolicy.UID, actualPolicy.UID)
 			assert.Equal(t, tt.expectedPolicy.Name, actualPolicy.Name)
@@ -1914,677 +373,56 @@ func TestProcessClusterNetworkPolicy(t *testing.T) {
 	}
 }
 
-func TestAddACNP(t *testing.T) {
+func cnpForInformerTests() *v1alpha2.ClusterNetworkPolicy {
+	return &v1alpha2.ClusterNetworkPolicy{
+		ObjectMeta: metav1.ObjectMeta{Name: "cnp-informer", UID: "uid-inf"},
+		Spec: v1alpha2.ClusterNetworkPolicySpec{
+			Tier:     v1alpha2.AdminTier,
+			Priority: 1,
+			Subject: v1alpha2.ClusterNetworkPolicySubject{
+				Namespaces: &metav1.LabelSelector{MatchLabels: map[string]string{"team": "blue"}},
+			},
+			Ingress: []v1alpha2.ClusterNetworkPolicyIngressRule{
+				{
+					Action: v1alpha2.ClusterNetworkPolicyRuleActionAccept,
+					From: []v1alpha2.ClusterNetworkPolicyIngressPeer{
+						{Namespaces: &metav1.LabelSelector{MatchLabels: map[string]string{"client": "x"}}},
+					},
+				},
+			},
+		},
+	}
+}
+
+func TestAddCNP(t *testing.T) {
 	_, npc := newController(nil, nil)
-	cnp := getACNP()
+	cnp := cnpForInformerTests()
 	npc.addCNP(cnp)
 	require.Equal(t, 1, npc.internalNetworkPolicyQueue.Len())
 	key, done := npc.internalNetworkPolicyQueue.Get()
-	expectedKey := getACNPReference(cnp)
+	expectedKey := getCNPReference(cnp)
 	assert.Equal(t, *expectedKey, key)
 	assert.False(t, done)
 }
 
-func TestUpdateACNP(t *testing.T) {
+func TestUpdateCNP(t *testing.T) {
 	_, npc := newController(nil, nil)
-	cnp := getACNP()
+	cnp := cnpForInformerTests()
 	newCNP := cnp.DeepCopy()
-	// Make a change to the CNP.
-	newCNP.Annotations = map[string]string{"foo": "bar"}
+	newCNP.Annotations = map[string]string{"k": "v"}
 	npc.updateCNP(cnp, newCNP)
 	require.Equal(t, 1, npc.internalNetworkPolicyQueue.Len())
 	key, done := npc.internalNetworkPolicyQueue.Get()
-	expectedKey := getACNPReference(cnp)
-	assert.Equal(t, *expectedKey, key)
+	assert.Equal(t, *getCNPReference(cnp), key)
 	assert.False(t, done)
 }
 
-func TestDeleteACNP(t *testing.T) {
+func TestDeleteCNP(t *testing.T) {
 	_, npc := newController(nil, nil)
-	cnp := getACNP()
+	cnp := cnpForInformerTests()
 	npc.deleteCNP(cnp)
 	require.Equal(t, 1, npc.internalNetworkPolicyQueue.Len())
 	key, done := npc.internalNetworkPolicyQueue.Get()
-	expectedKey := getACNPReference(cnp)
-	assert.Equal(t, *expectedKey, key)
+	assert.Equal(t, *getCNPReference(cnp), key)
 	assert.False(t, done)
-}
-
-func TestGetTierPriority(t *testing.T) {
-	p10 := int32(10)
-	tests := []struct {
-		name      string
-		inputTier *crdv1beta1.Tier
-		expPrio   int32
-	}{
-		{
-			name:      "empty-tier-name",
-			inputTier: nil,
-			expPrio:   crdv1beta1.DefaultTierPriority,
-		},
-		{
-			name: "tier10",
-			inputTier: &crdv1beta1.Tier{
-				ObjectMeta: metav1.ObjectMeta{Name: "tA", UID: "uidA"},
-				Spec: crdv1beta1.TierSpec{
-					Priority:    p10,
-					Description: "tier10",
-				},
-			},
-			expPrio: p10,
-		},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			_, npc := newController(nil, nil)
-			name := ""
-			if tt.inputTier != nil {
-				npc.tierStore.Add(tt.inputTier)
-				name = tt.inputTier.Name
-			}
-			actualPrio := npc.getTierPriority(name)
-			assert.Equal(t, tt.expPrio, actualPrio, "tier priorities do not match")
-		})
-	}
-}
-
-func TestProcessRefGroupOrClusterGroup(t *testing.T) {
-	selectorA := metav1.LabelSelector{MatchLabels: map[string]string{"foo1": "bar1"}}
-	cidr := "10.0.0.0/24"
-	exceptCIDR := "10.0.0.0/25"
-	cidrIPNet, _ := cidrStrToIPNet(cidr)
-	exceptCIDRIPNet, _ := cidrStrToIPNet(exceptCIDR)
-	// cgA with selector present in cache
-	cgA := crdv1beta1.ClusterGroup{
-		ObjectMeta: metav1.ObjectMeta{Name: "cgA", UID: "uidA"},
-		Spec: crdv1beta1.GroupSpec{
-			NamespaceSelector: &selectorA,
-		},
-	}
-	// cgB with IPBlock present in cache
-	cgB := crdv1beta1.ClusterGroup{
-		ObjectMeta: metav1.ObjectMeta{Name: "cgB", UID: "uidB"},
-		Spec: crdv1beta1.GroupSpec{
-			IPBlocks: []crdv1beta1.IPBlock{
-				{
-					CIDR: cidr,
-				},
-			},
-		},
-	}
-	// cgC not found in cache
-	cgC := crdv1beta1.ClusterGroup{
-		ObjectMeta: metav1.ObjectMeta{Name: "cgC", UID: "uidC"},
-		Spec: crdv1beta1.GroupSpec{
-			NamespaceSelector: &selectorA,
-		},
-	}
-	cgNested1 := crdv1beta1.ClusterGroup{
-		ObjectMeta: metav1.ObjectMeta{Name: "cgD", UID: "uidD"},
-		Spec: crdv1beta1.GroupSpec{
-			ChildGroups: []crdv1beta1.ClusterGroupReference{"cgB"},
-		},
-	}
-	cgNested2 := crdv1beta1.ClusterGroup{
-		ObjectMeta: metav1.ObjectMeta{Name: "cgE", UID: "uidE"},
-		Spec: crdv1beta1.GroupSpec{
-			ChildGroups: []crdv1beta1.ClusterGroupReference{"cgA", "cgB"},
-		},
-	}
-	// gA with selector present in cache
-	gA := crdv1beta1.Group{
-		ObjectMeta: metav1.ObjectMeta{Namespace: "nsA", Name: "gA", UID: "uidGA"},
-		Spec: crdv1beta1.GroupSpec{
-			NamespaceSelector: &selectorA,
-		},
-	}
-	// gB with IPBlock present in cache
-	gB := crdv1beta1.Group{
-		ObjectMeta: metav1.ObjectMeta{Namespace: "nsB", Name: "gB", UID: "uidGB"},
-		Spec: crdv1beta1.GroupSpec{
-			IPBlocks: []crdv1beta1.IPBlock{
-				{
-					CIDR: cidr,
-				},
-			},
-		},
-	}
-	// gC with an except IPBlock present in cache
-	gC := crdv1beta1.Group{
-		ObjectMeta: metav1.ObjectMeta{Namespace: "nsC", Name: "gC", UID: "uidGC"},
-		Spec: crdv1beta1.GroupSpec{
-			IPBlocks: []crdv1beta1.IPBlock{
-				{
-					CIDR:   cidr,
-					Except: []string{exceptCIDR},
-				},
-			},
-		},
-	}
-	_, npc := newController(nil, nil)
-	npc.addClusterGroup(&cgA)
-	npc.addClusterGroup(&cgB)
-	npc.addClusterGroup(&cgNested1)
-	npc.addClusterGroup(&cgNested2)
-	npc.cgStore.Add(&cgA)
-	npc.cgStore.Add(&cgB)
-	npc.cgStore.Add(&cgNested1)
-	npc.cgStore.Add(&cgNested2)
-	npc.addGroup(&gA)
-	npc.addGroup(&gB)
-	npc.addGroup(&gC)
-	npc.gStore.Add(&gA)
-	npc.gStore.Add(&gB)
-	npc.gStore.Add(&gC)
-	tests := []struct {
-		name           string
-		inputNamespace string
-		inputGroupName string
-		expectedAG     *antreatypes.AddressGroup
-		expectedIPB    []controlplane.IPBlock
-	}{
-		{
-			name:           "empty-cg-no-result",
-			inputGroupName: "",
-			expectedAG:     nil,
-			expectedIPB:    nil,
-		},
-		{
-			name:           "cg-with-selector",
-			inputGroupName: cgA.Name,
-			expectedAG: &antreatypes.AddressGroup{
-				UID:         cgA.UID,
-				Name:        cgA.Name,
-				SourceGroup: cgA.Name,
-			},
-			expectedIPB: nil,
-		},
-		{
-			name:           "cg-with-selector-not-found",
-			inputGroupName: cgC.Name,
-			expectedAG:     nil,
-			expectedIPB:    nil,
-		},
-		{
-			name:           "cg-with-ipblock",
-			inputGroupName: cgB.Name,
-			expectedAG:     nil,
-			expectedIPB: []controlplane.IPBlock{
-				{
-					CIDR: *cidrIPNet,
-				},
-			},
-		},
-		{
-			name:           "nested-cg-with-ipblock",
-			inputGroupName: cgNested1.Name,
-			expectedAG:     nil,
-			expectedIPB: []controlplane.IPBlock{
-				{
-					CIDR: *cidrIPNet,
-				},
-			},
-		},
-		{
-			name:           "nested-cg-with-ipblock-and-selector",
-			inputGroupName: cgNested2.Name,
-			expectedAG: &antreatypes.AddressGroup{
-				UID:         cgNested2.UID,
-				Name:        cgNested2.Name,
-				SourceGroup: cgNested2.Name,
-			},
-			expectedIPB: []controlplane.IPBlock{
-				{
-					CIDR: *cidrIPNet,
-				},
-			},
-		},
-		{
-			name:           "empty-g-no-result",
-			inputNamespace: "",
-			inputGroupName: "",
-			expectedAG:     nil,
-			expectedIPB:    nil,
-		},
-		{
-			name:           "g-with-selector",
-			inputNamespace: gA.Namespace,
-			inputGroupName: gA.Name,
-			expectedAG: &antreatypes.AddressGroup{
-				UID:         gA.UID,
-				Name:        fmt.Sprintf("%s/%s", gA.Namespace, gA.Name),
-				SourceGroup: fmt.Sprintf("%s/%s", gA.Namespace, gA.Name),
-			},
-			expectedIPB: nil,
-		},
-		{
-			name:           "non-existing-group",
-			inputNamespace: "non-existing-namespace",
-			inputGroupName: "non-existing-group",
-			expectedAG:     nil,
-			expectedIPB:    nil,
-		},
-		{
-			name:           "g-with-ipblock",
-			inputNamespace: gB.Namespace,
-			inputGroupName: gB.Name,
-			expectedAG:     nil,
-			expectedIPB: []controlplane.IPBlock{
-				{
-					CIDR: *cidrIPNet,
-				},
-			},
-		},
-		{
-			name:           "g-with-ipblock-except",
-			inputNamespace: gC.Namespace,
-			inputGroupName: gC.Name,
-			expectedAG:     nil,
-			expectedIPB: []controlplane.IPBlock{
-				{
-					CIDR:   *cidrIPNet,
-					Except: []controlplane.IPNet{*exceptCIDRIPNet},
-				},
-			},
-		},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			actualAG, actualIPB := npc.processRefGroupOrClusterGroup(tt.inputGroupName, tt.inputNamespace)
-			assert.Equal(t, tt.expectedIPB, actualIPB, "IPBlock does not match")
-			assert.Equal(t, tt.expectedAG, actualAG, "addressGroup does not match")
-		})
-	}
-}
-
-// util functions for testing.
-
-func getACNP() *crdv1beta1.ClusterNetworkPolicy {
-	p10 := float64(10)
-	allowAction := crdv1beta1.RuleActionAllow
-	selectorA := metav1.LabelSelector{MatchLabels: map[string]string{"foo1": "bar1"}}
-	selectorB := metav1.LabelSelector{MatchLabels: map[string]string{"foo2": "bar2"}}
-	selectorC := metav1.LabelSelector{MatchLabels: map[string]string{"foo3": "bar3"}}
-	ingressRules := []crdv1beta1.Rule{
-		{
-			From: []crdv1beta1.NetworkPolicyPeer{
-				{
-					NamespaceSelector: &selectorB,
-				},
-			},
-			Action: &allowAction,
-		},
-	}
-	egressRules := []crdv1beta1.Rule{
-		{
-			To: []crdv1beta1.NetworkPolicyPeer{
-				{
-					PodSelector: &selectorC,
-				},
-			},
-			Action: &allowAction,
-		},
-	}
-	npObj := &crdv1beta1.ClusterNetworkPolicy{
-		ObjectMeta: metav1.ObjectMeta{Name: "test-cnp"},
-		Spec: crdv1beta1.ClusterNetworkPolicySpec{
-			AppliedTo: []crdv1beta1.AppliedTo{
-				{PodSelector: &selectorA},
-			},
-			Priority: p10,
-			Ingress:  ingressRules,
-			Egress:   egressRules,
-		},
-	}
-	return npObj
-}
-
-func TestFilterPerNamespaceRuleACNPsByNSLabels(t *testing.T) {
-	group := &crdv1beta1.ClusterGroup{
-		ObjectMeta: metav1.ObjectMeta{Name: "group1"},
-		Spec:       crdv1beta1.GroupSpec{NamespaceSelector: &metav1.LabelSelector{MatchLabels: map[string]string{"foo2": "bar2"}}},
-	}
-	cnpWithSpecAppliedTo := &crdv1beta1.ClusterNetworkPolicy{
-		ObjectMeta: metav1.ObjectMeta{Name: "cnp-with-spec-appliedTo"},
-		Spec: crdv1beta1.ClusterNetworkPolicySpec{
-			AppliedTo: []crdv1beta1.AppliedTo{
-				{NamespaceSelector: &metav1.LabelSelector{MatchLabels: map[string]string{"foo1": "bar1"}}},
-			},
-			Ingress: []crdv1beta1.Rule{
-				{
-					From: []crdv1beta1.NetworkPolicyPeer{
-						{Namespaces: &crdv1beta1.PeerNamespaces{Match: crdv1beta1.NamespaceMatchSelf}},
-					},
-				},
-			},
-		},
-	}
-	cnpWithRuleAppliedTo := &crdv1beta1.ClusterNetworkPolicy{
-		ObjectMeta: metav1.ObjectMeta{Name: "cnp-with-rule-appliedTo"},
-		Spec: crdv1beta1.ClusterNetworkPolicySpec{
-			Ingress: []crdv1beta1.Rule{
-				{
-					AppliedTo: []crdv1beta1.AppliedTo{
-						{Group: group.Name},
-					},
-					From: []crdv1beta1.NetworkPolicyPeer{
-						{Namespaces: &crdv1beta1.PeerNamespaces{Match: crdv1beta1.NamespaceMatchSelf}},
-					},
-				},
-				{
-					AppliedTo: []crdv1beta1.AppliedTo{
-						{NamespaceSelector: &metav1.LabelSelector{MatchLabels: map[string]string{"foo3": "bar3"}}},
-					},
-					From: []crdv1beta1.NetworkPolicyPeer{
-						{IPBlock: &crdv1beta1.IPBlock{CIDR: "10.0.0.0/8"}},
-					},
-				},
-			},
-			Egress: []crdv1beta1.Rule{
-				{
-					AppliedTo: []crdv1beta1.AppliedTo{
-						{Group: "non-existing-group"},
-						{NamespaceSelector: &metav1.LabelSelector{MatchLabels: map[string]string{"foo4": "bar4"}}},
-					},
-					To: []crdv1beta1.NetworkPolicyPeer{
-						{Namespaces: &crdv1beta1.PeerNamespaces{Match: crdv1beta1.NamespaceMatchSelf}},
-					},
-				},
-			},
-		},
-	}
-	cnpMatchAllNamespaces := &crdv1beta1.ClusterNetworkPolicy{
-		ObjectMeta: metav1.ObjectMeta{Name: "cnp3-match-all-namespaces"},
-		Spec: crdv1beta1.ClusterNetworkPolicySpec{
-			AppliedTo: []crdv1beta1.AppliedTo{
-				{PodSelector: &metav1.LabelSelector{MatchLabels: map[string]string{"foo": "bar"}}},
-			},
-			Ingress: []crdv1beta1.Rule{
-				{
-					From: []crdv1beta1.NetworkPolicyPeer{
-						{Namespaces: &crdv1beta1.PeerNamespaces{Match: crdv1beta1.NamespaceMatchSelf}},
-					},
-				},
-			},
-		},
-	}
-	tests := []struct {
-		name     string
-		nsLabels labels.Set
-		want     sets.Set[string]
-	}{
-		{
-			name: "match spec AppliedTo",
-			nsLabels: map[string]string{
-				"foo1": "bar1",
-			},
-			want: sets.New[string](cnpWithSpecAppliedTo.Name, cnpMatchAllNamespaces.Name),
-		},
-		{
-			name: "match per-namespace ingress rule AppliedTo",
-			nsLabels: map[string]string{
-				"foo2": "bar2",
-			},
-			want: sets.New[string](cnpWithRuleAppliedTo.Name, cnpMatchAllNamespaces.Name),
-		},
-		{
-			name: "match non-per-namespace ingress rule AppliedTo",
-			nsLabels: map[string]string{
-				"foo3": "bar3",
-			},
-			want: sets.New[string](cnpMatchAllNamespaces.Name),
-		},
-		{
-			name: "match per-namespace egress rule AppliedTo",
-			nsLabels: map[string]string{
-				"foo4": "bar4",
-			},
-			want: sets.New[string](cnpWithRuleAppliedTo.Name, cnpMatchAllNamespaces.Name),
-		},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			_, c := newController(nil, nil)
-			c.acnpStore.Add(cnpWithSpecAppliedTo)
-			c.acnpStore.Add(cnpWithRuleAppliedTo)
-			c.acnpStore.Add(cnpMatchAllNamespaces)
-			c.cgStore.Add(group)
-			assert.Equal(t, tt.want, c.filterPerNamespaceRuleACNPsByNSLabels(tt.nsLabels))
-		})
-	}
-}
-
-func TestGetACNPsWithRulesMatchingLabelKeysAcrossNSUpdate(t *testing.T) {
-	acnp1 := &crdv1beta1.ClusterNetworkPolicy{
-		ObjectMeta: metav1.ObjectMeta{Name: "acnp-with-tier-label-rule"},
-		Spec: crdv1beta1.ClusterNetworkPolicySpec{
-			AppliedTo: []crdv1beta1.AppliedTo{
-				{
-					NamespaceSelector: &metav1.LabelSelector{},
-				},
-			},
-			Ingress: []crdv1beta1.Rule{
-				{
-					From: []crdv1beta1.NetworkPolicyPeer{
-						{
-							Namespaces: &crdv1beta1.PeerNamespaces{
-								SameLabels: []string{"tier"},
-							},
-						},
-					},
-				},
-			},
-		},
-	}
-	acnp2 := &crdv1beta1.ClusterNetworkPolicy{
-		ObjectMeta: metav1.ObjectMeta{Name: "acnp-with-tier-and-purpose-label-rule"},
-		Spec: crdv1beta1.ClusterNetworkPolicySpec{
-			AppliedTo: []crdv1beta1.AppliedTo{
-				{
-					NamespaceSelector: &metav1.LabelSelector{},
-				},
-			},
-			Ingress: []crdv1beta1.Rule{
-				{
-					From: []crdv1beta1.NetworkPolicyPeer{
-						{
-							Namespaces: &crdv1beta1.PeerNamespaces{
-								SameLabels: []string{"tier", "purpose"},
-							},
-						},
-					},
-				},
-			},
-		},
-	}
-	tests := []struct {
-		name        string
-		oldNSLabels labels.Set
-		newNSLabels labels.Set
-		want        sets.Set[string]
-	}{
-		{
-			name: "Namespace updated to have tier label",
-			oldNSLabels: map[string]string{
-				"kubernetes.io/metadata.name": "ns1",
-			},
-			newNSLabels: map[string]string{
-				"kubernetes.io/metadata.name": "ns1",
-				"tier":                        "production",
-			},
-			want: sets.New[string](acnp1.Name, acnp2.Name),
-		},
-		{
-			name: "Namespace updated to have purpose label",
-			oldNSLabels: map[string]string{
-				"kubernetes.io/metadata.name": "ns2",
-			},
-			newNSLabels: map[string]string{
-				"kubernetes.io/metadata.name": "ns2",
-				"purpose":                     "test",
-			},
-			want: sets.New[string](acnp2.Name),
-		},
-		{
-			name: "Namespace updated for irrelevant label",
-			oldNSLabels: map[string]string{
-				"kubernetes.io/metadata.name": "ns3",
-				"tier":                        "production",
-			},
-			newNSLabels: map[string]string{
-				"kubernetes.io/metadata.name": "ns2",
-				"tier":                        "production",
-				"owned-by":                    "dev-team",
-			},
-			want: sets.New[string](),
-		},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			_, c := newController(nil, []runtime.Object{acnp1, acnp2})
-			c.acnpStore.Add(acnp1)
-			c.acnpStore.Add(acnp2)
-			assert.Equal(t, tt.want, c.getACNPsWithRulesMatchingAnyUpdatedLabels(tt.oldNSLabels, tt.newNSLabels))
-		})
-	}
-}
-
-type mockCGLister struct {
-}
-
-func (m mockCGLister) List(selector labels.Selector) (ret []*crdv1beta1.ClusterGroup, err error) {
-	return []*crdv1beta1.ClusterGroup{{}}, errors.New("always-errors")
-}
-
-func (m mockCGLister) Get(name string) (*crdv1beta1.ClusterGroup, error) {
-	return &crdv1beta1.ClusterGroup{}, errors.New("always-errors")
-}
-
-type mockCGListerA struct {
-}
-
-var labelA = map[string]string{"a": "a"}
-var labelB = map[string]string{"b": "b"}
-var namespaceA = &v1.Namespace{
-	ObjectMeta: metav1.ObjectMeta{
-		Name:   "namespace-a",
-		Labels: labelA,
-	},
-}
-var namespaceB = &v1.Namespace{
-	ObjectMeta: metav1.ObjectMeta{
-		Name:   "namespace-b",
-		Labels: labelB,
-	},
-}
-
-func (m mockCGListerA) List(selector labels.Selector) (ret []*crdv1beta1.ClusterGroup, err error) {
-	return []*crdv1beta1.ClusterGroup{
-		{
-			Spec: crdv1beta1.GroupSpec{
-				NamespaceSelector: &metav1.LabelSelector{
-					MatchLabels: labelA,
-				},
-			},
-		}}, nil
-}
-
-func (m mockCGListerA) Get(name string) (*crdv1beta1.ClusterGroup, error) {
-	if name == "has-pod-selector" {
-		return &crdv1beta1.ClusterGroup{
-			Spec: crdv1beta1.GroupSpec{
-				PodSelector: &metav1.LabelSelector{
-					MatchLabels: map[string]string{"c": "c"},
-				},
-			},
-		}, nil
-	}
-	return &crdv1beta1.ClusterGroup{
-		Spec: crdv1beta1.GroupSpec{
-			NamespaceSelector: &metav1.LabelSelector{
-				MatchLabels: labelA,
-			},
-		},
-	}, nil
-}
-
-type mockNamespaceListerA struct {
-}
-
-func (m mockNamespaceListerA) List(selector labels.Selector) (ret []*v1.Namespace, err error) {
-	return []*v1.Namespace{namespaceA}, nil
-}
-
-func (m mockNamespaceListerA) Get(name string) (*v1.Namespace, error) {
-	return namespaceA, nil
-}
-
-type mockNamespaceListerB struct {
-}
-
-func (m mockNamespaceListerB) List(selector labels.Selector) (ret []*v1.Namespace, err error) {
-	return []*v1.Namespace{namespaceA, namespaceB}, nil
-}
-
-func (m mockNamespaceListerB) Get(name string) (*v1.Namespace, error) {
-	return namespaceA, nil
-}
-
-func TestGetAffectedNamespacesForAppliedTo(t *testing.T) {
-	tests := []struct {
-		name            string
-		appliedTo       crdv1beta1.AppliedTo
-		cgLister        crdv1b1listers.ClusterGroupLister
-		namespaceLister corelisters.NamespaceLister
-		want            map[string]labels.Set
-	}{
-		{
-			"empty appliedTo",
-			crdv1beta1.AppliedTo{},
-			nil,
-			nil,
-			map[string]labels.Set{},
-		},
-		{
-			"match on appliedTo namespaceSelector",
-			crdv1beta1.AppliedTo{NamespaceSelector: &metav1.LabelSelector{MatchLabels: map[string]string{"a": "a"}}},
-			nil,
-			mockNamespaceListerA{},
-			map[string]labels.Set{"namespace-a": labelA},
-		},
-		{
-			"cluster group lister errors",
-			crdv1beta1.AppliedTo{Group: "non-empty"},
-			mockCGLister{},
-			nil,
-			map[string]labels.Set{},
-		},
-		{
-			"match all namespace for empty namespaceSelector",
-			crdv1beta1.AppliedTo{},
-			mockCGListerA{},
-			mockNamespaceListerB{},
-			map[string]labels.Set{"namespace-a": labelA, "namespace-b": labelB},
-		},
-		{
-			"match all namespace when namespaceSeletor is nil but podSelector is not",
-			crdv1beta1.AppliedTo{Group: "has-pod-selector"},
-			mockCGListerA{},
-			mockNamespaceListerB{},
-			map[string]labels.Set{"namespace-a": labelA, "namespace-b": labelB},
-		},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			_, npc := newController(nil, nil)
-			if tt.cgLister != nil {
-				npc.cgLister = tt.cgLister
-			}
-			if tt.namespaceLister != nil {
-				npc.namespaceLister = tt.namespaceLister
-			}
-			got := npc.getAffectedNamespacesForAppliedTo(tt.appliedTo)
-			assert.Equal(t, tt.want, got)
-		})
-	}
 }

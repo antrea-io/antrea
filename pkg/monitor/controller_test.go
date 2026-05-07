@@ -30,7 +30,7 @@ import (
 	"k8s.io/client-go/kubernetes/fake"
 	cgtesting "k8s.io/client-go/testing"
 	fakepolicyversioned "sigs.k8s.io/network-policy-api/pkg/client/clientset/versioned/fake"
-	policyv1a1informers "sigs.k8s.io/network-policy-api/pkg/client/informers/externalversions"
+	policyinformers "sigs.k8s.io/network-policy-api/pkg/client/informers/externalversions"
 
 	"antrea.io/antrea/v2/pkg/apis/crd/v1alpha1"
 	"antrea.io/antrea/v2/pkg/apis/crd/v1beta1"
@@ -60,7 +60,7 @@ func newControllerMonitor(crdClient *fakeclientset.Clientset) *fakeController {
 	policyClient := fakepolicyversioned.NewSimpleClientset()
 	informerFactory := informers.NewSharedInformerFactory(client, informerDefaultResync)
 	crdInformerFactory := crdinformers.NewSharedInformerFactory(crdClient, informerDefaultResync)
-	policyInformerFactory := policyv1a1informers.NewSharedInformerFactory(policyClient, informerDefaultResync)
+	policyInformerFactory := policyinformers.NewSharedInformerFactory(policyClient, informerDefaultResync)
 	namespaceInformer := informerFactory.Core().V1().Namespaces()
 	serviceInformer := informerFactory.Core().V1().Services()
 	networkPolicyInformer := informerFactory.Networking().V1().NetworkPolicies()
@@ -69,6 +69,7 @@ func newControllerMonitor(crdClient *fakeclientset.Clientset) *fakeController {
 	annpInformer := crdInformerFactory.Crd().V1beta1().NetworkPolicies()
 	adminNPInformer := policyInformerFactory.Policy().V1alpha1().AdminNetworkPolicies()
 	banpInformer := policyInformerFactory.Policy().V1alpha1().BaselineAdminNetworkPolicies()
+	cnpInformer := policyInformerFactory.Policy().V1alpha2().ClusterNetworkPolicies()
 	tierInformer := crdInformerFactory.Crd().V1beta1().Tiers()
 	cgInformer := crdInformerFactory.Crd().V1beta1().ClusterGroups()
 	grpInformer := crdInformerFactory.Crd().V1beta1().Groups()
@@ -93,6 +94,7 @@ func newControllerMonitor(crdClient *fakeclientset.Clientset) *fakeController {
 		annpInformer,
 		adminNPInformer,
 		banpInformer,
+		cnpInformer,
 		tierInformer,
 		cgInformer,
 		grpInformer,
