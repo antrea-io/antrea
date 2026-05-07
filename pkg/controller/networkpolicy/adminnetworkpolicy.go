@@ -137,46 +137,6 @@ func (n *NetworkPolicyController) deleteBANP(old interface{}) {
 	n.enqueueInternalNetworkPolicy(getBANPReference(banp))
 }
 
-// anpHasNamespaceLabelRule returns whether an AdminNetworkPolicy has rules defined by
-// advanced Namespace selection (sameLabels and notSameLabels)
-func anpHasNamespaceLabelRule(anp *v1alpha1.AdminNetworkPolicy) bool {
-	for _, ingress := range anp.Spec.Ingress {
-		for _, peer := range ingress.From {
-			if peer.Namespaces != nil && (len(peer.Namespaces.SameLabels) > 0 || len(peer.Namespaces.NotSameLabels) > 0) {
-				return true
-			}
-		}
-	}
-	for _, egress := range anp.Spec.Egress {
-		for _, peer := range egress.To {
-			if peer.Namespaces != nil && (len(peer.Namespaces.SameLabels) > 0 || len(peer.Namespaces.NotSameLabels) > 0) {
-				return true
-			}
-		}
-	}
-	return false
-}
-
-// banpHasNamespaceLabelRule returns whether a BaselineAdminNetworkPolicy has rules defined by
-// advanced Namespace selection (sameLabels and notSameLabels)
-func banpHasNamespaceLabelRule(banp *v1alpha1.BaselineAdminNetworkPolicy) bool {
-	for _, ingress := range banp.Spec.Ingress {
-		for _, peer := range ingress.From {
-			if peer.Namespaces != nil && (len(peer.Namespaces.SameLabels) > 0 || len(peer.Namespaces.NotSameLabels) > 0) {
-				return true
-			}
-		}
-	}
-	for _, egress := range banp.Spec.Egress {
-		for _, peer := range egress.To {
-			if peer.Namespaces != nil && (len(peer.Namespaces.SameLabels) > 0 || len(peer.Namespaces.NotSameLabels) > 0) {
-				return true
-			}
-		}
-	}
-	return false
-}
-
 // toAntreaServicesForPolicyCRD processes ports field for ANPs/BANPs and returns the translated
 // Antrea Services.
 func toAntreaServicesForPolicyCRD(npPorts []v1alpha1.AdminNetworkPolicyPort) []controlplane.Service {
@@ -265,7 +225,7 @@ func banpActionToCRDAction(action v1alpha1.BaselineAdminNetworkPolicyRuleAction)
 }
 
 func (n *NetworkPolicyController) processAdminNetworkPolicy(anp *v1alpha1.AdminNetworkPolicy) (*antreatypes.NetworkPolicy, map[string]*antreatypes.AppliedToGroup, map[string]*antreatypes.AddressGroup) {
-	appliedToPerRule := anpHasNamespaceLabelRule(anp)
+	appliedToPerRule := false
 	appliedToGroups := map[string]*antreatypes.AppliedToGroup{}
 	addressGroups := map[string]*antreatypes.AddressGroup{}
 	var rules []controlplane.NetworkPolicyRule
@@ -335,7 +295,7 @@ func (n *NetworkPolicyController) processAdminNetworkPolicy(anp *v1alpha1.AdminN
 }
 
 func (n *NetworkPolicyController) processBaselineAdminNetworkPolicy(banp *v1alpha1.BaselineAdminNetworkPolicy) (*antreatypes.NetworkPolicy, map[string]*antreatypes.AppliedToGroup, map[string]*antreatypes.AddressGroup) {
-	appliedToPerRule := banpHasNamespaceLabelRule(banp)
+	appliedToPerRule := false
 	appliedToGroups := map[string]*antreatypes.AppliedToGroup{}
 	addressGroups := map[string]*antreatypes.AddressGroup{}
 	var rules []controlplane.NetworkPolicyRule
