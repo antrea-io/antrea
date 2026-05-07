@@ -212,6 +212,10 @@ func TestConcurrentAllocateNextSharedIPPool(t *testing.T) {
 				errs[idx] = err
 				return
 			}
+			if ip == nil {
+				errs[idx] = fmt.Errorf("worker %d: AllocateNext returned nil IP without error", idx)
+				return
+			}
 			ipStrs[idx] = ip.String()
 		}(i)
 	}
@@ -219,6 +223,7 @@ func TestConcurrentAllocateNextSharedIPPool(t *testing.T) {
 
 	for i, err := range errs {
 		require.NoError(t, err, "AllocateNext for worker %d should succeed under contention", i)
+		require.NotEmpty(t, ipStrs[i], "worker %d: no error but empty IP string returned", i)
 	}
 	seen := make(map[string]struct{}, concurrency)
 	for _, s := range ipStrs {
