@@ -80,9 +80,17 @@ func LoadConfig(configBytes []byte) (*Options, error) {
 	if err != nil {
 		return nil, err
 	}
+	if opt.ActiveFlowRecordTimeout < time.Second {
+		klog.InfoS("ActiveFlowRecordTimeout is too small, rounding up to 1s", "configured", opt.ActiveFlowRecordTimeout)
+		opt.ActiveFlowRecordTimeout = time.Second
+	}
 	opt.InactiveFlowRecordTimeout, err = time.ParseDuration(opt.Config.InactiveFlowRecordTimeout)
 	if err != nil {
 		return nil, err
+	}
+	if opt.InactiveFlowRecordTimeout < time.Second {
+		klog.InfoS("InactiveFlowRecordTimeout is too small, rounding up to 1s", "configured", opt.InactiveFlowRecordTimeout)
+		opt.InactiveFlowRecordTimeout = time.Second
 	}
 	opt.AggregatorTransportProtocol, err = flowexport.ParseTransportProtocol(opt.Config.AggregatorTransportProtocol)
 	if err != nil {

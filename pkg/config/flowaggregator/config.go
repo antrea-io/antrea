@@ -43,14 +43,14 @@ type FlowAggregatorConfig struct {
 	// will be exported to the collector once the elapsed time since the last export
 	// event in the flow aggregator is equal to the value of this timeout.
 	// Defaults to "60s". Valid time units are "ns", "us" (or "µs"), "ms", "s",
-	// "m", "h".
+	// "m", "h". Values under 1s are not supported; they will be rounded up to 1s.
 	ActiveFlowRecordTimeout string `yaml:"activeFlowRecordTimeout,omitempty"`
 	// Provide the inactive flow record timeout as a duration string. This determines
 	// how often the flow aggregator exports the inactive flow records to the flow
 	// collector. A flow record is considered to be inactive if no matching record
 	// has been received by the flow aggregator in the specified interval.
 	// Defaults to "90s". Valid time units are "ns", "us" (or "µs"), "ms", "s",
-	// "m", "h".
+	// "m", "h". Values under 1s are not supported; they will be rounded up to 1s.
 	InactiveFlowRecordTimeout string `yaml:"inactiveFlowRecordTimeout,omitempty"`
 	// Transport protocol over which the aggregator collects IPFIX records from all Agents.
 	// Defaults to "tls"

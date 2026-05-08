@@ -26,7 +26,6 @@ package testing
 
 import (
 	reflect "reflect"
-	time "time"
 
 	v1alpha1 "antrea.io/antrea/v2/pkg/apis/flow/v1alpha1"
 	intermediate "antrea.io/antrea/v2/pkg/flowaggregator/intermediate"
@@ -97,20 +96,6 @@ func (m *MockAggregationProcess) ForAllExpiredFlowRecordsDo(callback intermediat
 func (mr *MockAggregationProcessMockRecorder) ForAllExpiredFlowRecordsDo(callback any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ForAllExpiredFlowRecordsDo", reflect.TypeOf((*MockAggregationProcess)(nil).ForAllExpiredFlowRecordsDo), callback)
-}
-
-// GetExpiryFromExpirePriorityQueue mocks base method.
-func (m *MockAggregationProcess) GetExpiryFromExpirePriorityQueue() time.Duration {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetExpiryFromExpirePriorityQueue")
-	ret0, _ := ret[0].(time.Duration)
-	return ret0
-}
-
-// GetExpiryFromExpirePriorityQueue indicates an expected call of GetExpiryFromExpirePriorityQueue.
-func (mr *MockAggregationProcessMockRecorder) GetExpiryFromExpirePriorityQueue() *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetExpiryFromExpirePriorityQueue", reflect.TypeOf((*MockAggregationProcess)(nil).GetExpiryFromExpirePriorityQueue))
 }
 
 // GetNumFlows mocks base method.
