@@ -27,7 +27,6 @@ import (
 	"time"
 
 	"github.com/spf13/afero"
-	"go.yaml.in/yaml/v3"
 	"k8s.io/utils/exec"
 
 	agentquerier "antrea.io/antrea/v2/pkg/agent/querier"
@@ -36,6 +35,7 @@ import (
 	"antrea.io/antrea/v2/pkg/ovs/ovsctl"
 	"antrea.io/antrea/v2/pkg/querier"
 	"antrea.io/antrea/v2/pkg/util/logdir"
+	utilyaml "antrea.io/antrea/v2/pkg/util/yaml"
 )
 
 // AgentDumper is the interface for dumping runtime information of the agent. Its
@@ -252,9 +252,12 @@ func writeYAMLFile(fs afero.Fs, filePath string, resource string, data interface
 		return fmt.Errorf("error when creating file %s to write %s: %w", filePath, resource, err)
 	}
 	defer f.Close()
-	encoder := yaml.NewEncoder(f)
+	encoder, err := utilyaml.NewDumper(f, 4)
+	if err != nil {
+		return fmt.Errorf("error when writing %s to %s in YAML format: %w", resource, filePath, err)
+	}
 	defer encoder.Close()
-	if err := encoder.Encode(data); err != nil {
+	if err := encoder.Dump(data); err != nil {
 		return fmt.Errorf("error when writing %s to %s in YAML format: %w", resource, filePath, err)
 	}
 	return nil

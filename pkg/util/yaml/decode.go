@@ -17,7 +17,7 @@ package yaml
 import (
 	"bytes"
 
-	"go.yaml.in/yaml/v3"
+	"go.yaml.in/yaml/v4"
 	"k8s.io/klog/v2"
 )
 
@@ -36,12 +36,7 @@ func UnmarshalLenient(data []byte, v interface{}) error {
 			// The data is malformed, return the original strict error.
 			return strictErr
 		}
-		if e, ok := strictErr.(*yaml.TypeError); ok {
-			// TypeError.Error() breaks the error into multiple lines, reformat it to keep the log on one line.
-			klog.InfoS("Used lenient decoding as strict decoding failed", "err", e.Errors)
-		} else {
-			klog.InfoS("Used lenient decoding as strict decoding failed", "err", e)
-		}
+		klog.InfoS("Used lenient decoding as strict decoding failed", "err", strictErr)
 	}
 	return nil
 }

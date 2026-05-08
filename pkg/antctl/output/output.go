@@ -24,10 +24,11 @@ import (
 	"strings"
 	"text/tabwriter"
 
-	"go.yaml.in/yaml/v3"
+	"go.yaml.in/yaml/v4"
 
 	"antrea.io/antrea/v2/pkg/antctl/transform/common"
 	"antrea.io/antrea/v2/pkg/apiserver/apis"
+	utilyaml "antrea.io/antrea/v2/pkg/util/yaml"
 )
 
 const (
@@ -143,9 +144,12 @@ func YamlOutput(obj interface{}, writer io.Writer) error {
 	if err := yaml.Unmarshal(buf.Bytes(), &jsonObj); err != nil {
 		return fmt.Errorf("error when outputing in yaml format: %w", err)
 	}
-	enc := yaml.NewEncoder(writer)
-	enc.SetIndent(2)
-	if err := enc.Encode(jsonObj); err != nil {
+	enc, err := utilyaml.NewDumper(writer, 2)
+	if err != nil {
+		return fmt.Errorf("error when outputing in yaml format: %w", err)
+	}
+	defer enc.Close()
+	if err := enc.Dump(jsonObj); err != nil {
 		return fmt.Errorf("error when outputing in yaml format: %w", err)
 	}
 	return nil

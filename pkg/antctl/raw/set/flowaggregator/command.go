@@ -24,13 +24,14 @@ import (
 	"time"
 
 	"github.com/spf13/cobra"
-	"go.yaml.in/yaml/v3"
+	"go.yaml.in/yaml/v4"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 
 	"antrea.io/antrea/v2/pkg/antctl/raw"
 	flowaggregatorconfig "antrea.io/antrea/v2/pkg/config/flowaggregator"
+	utilyaml "antrea.io/antrea/v2/pkg/util/yaml"
 )
 
 // Command is the support bundle command implementation.
@@ -138,9 +139,12 @@ func updateRunE(cmd *cobra.Command, args []string) error {
 	}
 	// marshal back the changed parameters to configmap
 	var buf bytes.Buffer
-	enc := yaml.NewEncoder(&buf)
-	enc.SetIndent(2)
-	if err := enc.Encode(&flowAggregatorConf); err != nil {
+	enc, err := utilyaml.NewDumper(&buf, 2)
+	if err != nil {
+		return err
+	}
+	defer enc.Close()
+	if err := enc.Dump(&flowAggregatorConf); err != nil {
 		return err
 	}
 	b := buf.Bytes()
