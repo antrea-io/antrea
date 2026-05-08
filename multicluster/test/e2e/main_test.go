@@ -26,7 +26,7 @@ import (
 	"testing"
 	"time"
 
-	"go.yaml.in/yaml/v3"
+	"go.yaml.in/yaml/v4"
 
 	agentconfig "antrea.io/antrea/v2/pkg/config/agent"
 )
