@@ -1185,8 +1185,6 @@ func TestGetIPPoolsByPod_PodIPAnnotationPerFamilyLimit(t *testing.T) {
 	stopCh := make(chan struct{})
 	defer close(stopCh)
 
-	k8sClient, crdClient := initTestClients()
-
 	cases := []struct {
 		podName       string
 		podIPAnnot    string
@@ -1208,7 +1206,18 @@ func TestGetIPPoolsByPod_PodIPAnnotationPerFamilyLimit(t *testing.T) {
 			podIPAnnot: "10.2.3.199,fd00::1",
 			wantIPs:    []string{"10.2.3.199", "fd00::1"},
 		},
+		{
+			podName:       "pear-podip-v4-v6-v4",
+			podIPAnnot:    "10.2.3.199,fd00::1,10.2.3.198",
+			wantErrSubstr: fmt.Sprintf("multiple IPv4 addresses in %s annotation", annotations.AntreaIPAMPodIPAnnotationKey),
+		},
+		{
+			podName:       "pear-podip-wrong-delimiter",
+			podIPAnnot:    "10.2.3.199;fd00::1",
+			wantErrSubstr: fmt.Sprintf("invalid IP %q in %s annotation", "10.2.3.199;fd00::1", annotations.AntreaIPAMPodIPAnnotationKey),
+		},
 	}
+	k8sClient, crdClient := initTestClients()
 
 	for _, tc := range cases {
 		tc := tc
@@ -1328,7 +1337,9 @@ func TestGetPoolAllocatorsByPod_RequestedIPPoolFamilyValidation(t *testing.T) {
 			wantErrSubstr: "multiple IPv4 IPPools configured with requested IPv4 address(es)",
 		},
 		{
-			name:             "requested IPv4 with one IPv4 pool and two IPv6 pools",
+			// Only an IPv4 address is requested; no IPv6 address is requested, so
+			// having multiple IPv6 pools does not trigger the single-pool constraint.
+			name:             "requested IPv4 only, one IPv4 pool and two IPv6 pools",
 			podName:          "pool-val-req-v4-multi-v6",
 			ipamAnnot:        "multiv4-pool-a,ippool-family-val-ipv6-a,ippool-family-val-ipv6-b",
 			podIPAnnot:       "10.10.0.10",

@@ -356,12 +356,12 @@ func TestAntreaIPAMController_getIPPoolsForStatefulSet(t *testing.T) {
 			controller.informerFactory.WaitForCacheSync(stopCh)
 			controller.crdInformerFactory.WaitForCacheSync(stopCh)
 
-			got, got1, err := controller.getIPPoolsForStatefulSet(statefulSet)
+			gotIPPools, gotIPs, err := controller.getIPPoolsForStatefulSet(statefulSet)
 			if tt.wantErrSubstr != "" {
 				require.Error(t, err)
 				require.Contains(t, err.Error(), tt.wantErrSubstr)
-				require.Nil(t, got)
-				require.Nil(t, got1)
+				require.Nil(t, gotIPPools)
+				require.Nil(t, gotIPs)
 				return
 			}
 			require.NoError(t, err)
@@ -369,8 +369,8 @@ func TestAntreaIPAMController_getIPPoolsForStatefulSet(t *testing.T) {
 			if tt.hasIPPool {
 				want = []string{pool.Name}
 			}
-			assert.Equalf(t, want, got, "Unexpected IPPool result")
-			assert.Equalf(t, tt.expectedIPs, got1, "Unexpected IP result")
+			assert.Equalf(t, want, gotIPPools, "Unexpected IPPool result")
+			assert.Equalf(t, tt.expectedIPs, gotIPs, "Unexpected IP result")
 		})
 	}
 }
