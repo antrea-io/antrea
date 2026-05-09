@@ -167,7 +167,7 @@ func splitIPsByFamily(ips []net.IP) (v4, v6 net.IP) {
 // (e.g. API failures) cause an immediate return.
 //
 // When a Pod specifies desired IPs via the AntreaIPAMPodIP annotation, at most
-// one IPv4 address and at most one IPv6 address may be provided. Multiple
+// one IPv4 address and one IPv6 address may be provided. Multiple
 // addresses of the same family are rejected during annotation parsing. When an
 // IP is specified, only a single Pool of that IP family is allowed; multiple
 // Pools of the same family will also be rejected. The specified IP is

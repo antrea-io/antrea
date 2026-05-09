@@ -346,7 +346,6 @@ func (c *AntreaIPAMController) getIPPoolsForStatefulSet(ss *appsv1.StatefulSet) 
 	}
 
 	return nil, nil, nil
-
 }
 
 // Look for an IP Pool associated with this StatefulSet, either a dedicated one or

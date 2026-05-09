@@ -214,8 +214,8 @@ ownerReferenceLoop:
 // getPoolAllocatorsByPod looks up IPPools from the Pod annotation and returns
 // allocators for all valid pools. This supports IPv4, IPv6, and dual-stack
 // configurations where multiple pools (one per IP family) may be specified.
-// When specific IPs are requested, it validates that only one pool of each
-// requested IP family is configured.
+// When specific IPs are requested, it validates and ensures that at most one
+// pool is configured for each requested IP family.
 func (c *AntreaIPAMController) getPoolAllocatorsByPod(namespace, podName string) (mineType, []*poolallocator.IPPoolAllocator, []net.IP, *crdv1b1.IPAddressOwner, error) {
 	poolNames, ips, reservedOwner, err := c.getIPPoolsByPod(namespace, podName)
 	if err != nil {
