@@ -19,7 +19,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/blang/semver"
+	"golang.org/x/mod/semver"
 )
 
 type checkK8sVersion struct{}
@@ -34,15 +34,19 @@ func (t *checkK8sVersion) Run(ctx context.Context, testContext *testContext) err
 	if err != nil {
 		return fmt.Errorf("error getting server version: %w", err)
 	}
-	currentVersion, err := semver.Parse(strings.TrimPrefix(serverVersion.GitVersion, "v"))
-	if err != nil {
-		return fmt.Errorf("error parsing server version: %w", err)
+	currentVersion := serverVersion.GitVersion
+	if !strings.HasPrefix(currentVersion, "v") {
+		currentVersion = "v" + currentVersion
 	}
-	minVersion := semver.MustParse("1.23.0")
-	if currentVersion.GTE(minVersion) {
+	currentVersion = semver.Canonical(currentVersion)
+	if currentVersion == "" {
+		return fmt.Errorf("error parsing server version: invalid version %q", serverVersion.GitVersion)
+	}
+	const minVersion = "v1.23.0"
+	if semver.Compare(currentVersion, minVersion) >= 0 {
 		testContext.Log("Kubernetes server version is compatible with Antrea. Kubernetes version: %s", serverVersion.GitVersion)
 	} else {
-		return fmt.Errorf("Kubernetes min version required: %s", minVersion.String())
+		return fmt.Errorf("Kubernetes min version required: %s", minVersion)
 	}
 	return nil
 }
