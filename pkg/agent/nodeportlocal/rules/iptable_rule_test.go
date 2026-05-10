@@ -70,7 +70,6 @@ func TestAddAndDeleteRule(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		tt := tt
 		t.Run(tt.podIP, func(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			mockIPTables := iptablestest.NewMockInterface(ctrl)
@@ -172,7 +171,6 @@ COMMIT
 	}
 
 	for _, tt := range tests {
-		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			mockIPTables := iptablestest.NewMockInterface(ctrl)

@@ -719,7 +719,6 @@ func testPacketCaptureBasic(t *testing.T, data *TestData, sftpServerIP string, p
 
 	t.Run("testPacketCaptureBasic", func(t *testing.T) {
 		for _, tc := range testcases {
-			tc := tc
 			t.Run(tc.name, func(t *testing.T) {
 				t.Parallel()
 				runPacketCaptureTest(t, data, tc)
@@ -901,7 +900,6 @@ func testPacketCaptureL4Filters(t *testing.T, data *TestData, sftpServerIP strin
 	}
 	t.Run("testPacketCaptureL4Filters", func(t *testing.T) {
 		for _, tc := range testcases {
-			tc := tc
 			t.Run(tc.name, func(t *testing.T) {
 				t.Parallel()
 				runPacketCaptureTest(t, data, tc)

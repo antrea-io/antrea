@@ -71,7 +71,6 @@ func TestAntreaApiserverTLSConfig(t *testing.T) {
 		{"AgentApiserver", apis.AntreaAgentAPIPort, "Agent"},
 	}
 	for _, tc := range tests {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			data.checkTLS(t, clientPodName, toolboxContainerName, tc.apiserver, tc.apiserverStr, nodeIPv4, nodeIPv6)
 		})

@@ -320,7 +320,6 @@ func TestQueryNetworkPolicyRules(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 			endpointQuerier := makeControllerAndEndpointQuerier(tc.objs...)
@@ -574,7 +573,6 @@ func TestQueryNetworkPolicyEvaluation(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 			mockQuerier := queriermock.NewMockEndpointQuerier(mockCtrl)

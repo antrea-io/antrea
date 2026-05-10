@@ -278,7 +278,6 @@ func TestDestination_fillEgressInfo(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			egressQuerier := queriertest.NewMockEgressQuerier(ctrl)
@@ -603,7 +602,6 @@ func TestFlowExporter_resolveCollectorAddress(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			addr, err := resolveCollectorAddress(ctx, k8sClient, tc.inputAddr)
 			if tc.expectedErr != "" {
