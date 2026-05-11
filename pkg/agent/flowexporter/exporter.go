@@ -111,9 +111,10 @@ type FlowExporter struct {
 	ctConnUpdateChannel   *channel.SubscribableChannel
 	denyConnUpdateChannel *channel.SubscribableChannel
 
-	// fromExternalCorrelator is created by FlowExporter, shared by every Destination's connection
-	// store (same conntrack poll fan-out). FlowExporter.Run starts its cleanup loop; defer StopCleanUp
-	// stops it on shutdown.
+	// fromExternalCorrelator is owned by FlowExporter and wired into the poller. The poller calls
+	// CorrelateIfExternal on each Antrea-zone connection once, before notifying subscribers, so
+	// all destinations see the same already-correlated connection state. FlowExporter.Run starts
+	// its cleanup loop via Run(stopCh).
 	fromExternalCorrelator *connections.FromExternalCorrelator
 
 	// staticDestinationRes is set in NewFlowExporter when static export is enabled. Run() clears
@@ -512,7 +513,6 @@ func (fe *FlowExporter) createDestinationFromResource(res *api.FlowExporterDesti
 		fe.egressQuerier,
 		fe.networkPolicyReadyTime,
 		config,
-		fe.fromExternalCorrelator,
 	), nil
 }
 

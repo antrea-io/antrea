@@ -140,7 +140,7 @@ func setupConntrackConnStore(b *testing.B) *ConntrackConnectionStore {
 	mockProxier.EXPECT().GetServiceByIP(serviceStr).Return(servicePortName, true).AnyTimes()
 
 	npQuerier := queriertest.NewMockAgentNetworkPolicyInfoQuerier(ctrl)
-	return NewConntrackConnectionStore(npQuerier, mockPodStore, mockProxier, testFlowExporterOptions, NewFakeExternalCorrelator())
+	return NewConntrackConnectionStore(npQuerier, mockPodStore, mockProxier, testFlowExporterOptions)
 }
 
 func generateConns() []*connection.Connection {

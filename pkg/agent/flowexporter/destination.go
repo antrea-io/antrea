@@ -103,7 +103,6 @@ func NewDestination(
 	egressQuerier querier.EgressQuerier,
 	networkPolicyReadyTime time.Time,
 	destinationConfig DestinationConfig,
-	fromExternal connections.ExternalCorrelator,
 ) *Destination {
 	connectionStoreConfig := connections.ConnectionStoreConfig{
 		ActiveFlowTimeout:      destinationConfig.activeFlowTimeout,
@@ -112,7 +111,9 @@ func NewDestination(
 		NetworkPolicyReadyTime: networkPolicyReadyTime,
 		AllowedProtocols:       destinationConfig.allowProtocolFilter,
 	}
-	conntrackConnStore := connections.NewConntrackConnectionStore(npQuerier, podStore, proxier, connectionStoreConfig, fromExternal)
+	// External correlation is now done in the poller before connections are delivered to each
+	// destination's connection store, so no ExternalCorrelator is needed here.
+	conntrackConnStore := connections.NewConntrackConnectionStore(npQuerier, podStore, proxier, connectionStoreConfig)
 	denyConnStore := connections.NewDenyConnectionStore(npQuerier, podStore, proxier, connectionStoreConfig)
 
 	return &Destination{

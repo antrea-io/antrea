@@ -171,7 +171,7 @@ func NewDestinationForTest(tb testing.TB, o *options.FlowExporterOptions) *Desti
 		AllowedProtocols:       o.ProtocolFilter,
 	}
 	denyConnStore := connections.NewDenyConnectionStore(nil, nil, nil, config)
-	conntrackConnStore := connections.NewConntrackConnectionStore(nil, nil, nil, config, connections.NewFakeExternalCorrelator())
+	conntrackConnStore := connections.NewConntrackConnectionStore(nil, nil, nil, config)
 
 	return &Destination{
 		DestinationConfig: DestinationConfig{

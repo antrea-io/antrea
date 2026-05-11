@@ -36,11 +36,11 @@ const (
 )
 
 // ExternalCorrelator correlates default-zone conntrack with Antrea-zone flows for
-// external-to-pod export.
+// external-to-pod export. Correlation is performed in the poller before fan-out to connection
+// store subscribers, so all destinations see the same already-correlated connection state.
 type ExternalCorrelator interface {
 	IngestDefaultZoneFlow(conn *connection.Connection)
 	CorrelateIfExternal(conn *connection.Connection) bool
-	RemoveStaleDefaultZoneFlow(conn *connection.Connection)
 }
 
 // FromExternalCorrelator correlates default-zone (pre-Antrea DNAT/SNAT) connections with
@@ -230,17 +230,10 @@ func (c *FromExternalCorrelator) popMatching(conn *connection.Connection) (defau
 	return record.snapshot, true
 }
 
-// RemoveStaleDefaultZoneFlow deletes the default-zone entry left in the map when the Antrea-zone flow
-// expires before correlation.
-func (c *FromExternalCorrelator) RemoveStaleDefaultZoneFlow(conn *connection.Connection) {
-	key := keyFromAntreaZoneConn(conn)
-	c.lock.Lock()
-	defer c.lock.Unlock()
-
-	delete(c.connections, key)
-}
-
-// correlateExternal copies correlation fields from the default-zone snapshot onto the Antrea-zone connection.
+// correlateExternal copies correlation fields from the default-zone snapshot onto the Antrea-zone
+// connection and marks it as from-external. IsFromExternal is set to true unconditionally so that
+// ETP=Local flows (where ProxySnatIP is zero) are still correctly identified as from-external
+// connections downstream.
 func correlateExternal(snap defaultZoneSnapshot, antreaZone *connection.Connection) {
 	antreaZone.FlowKey.SourcePort = snap.sourcePort
 	antreaZone.FlowKey.SourceAddress = snap.sourceIP
@@ -248,4 +241,5 @@ func correlateExternal(snap defaultZoneSnapshot, antreaZone *connection.Connecti
 	antreaZone.ProxySnatPort = snap.proxySnatPort
 	antreaZone.OriginalDestinationAddress = snap.originalDestinationIP
 	antreaZone.OriginalDestinationPort = snap.originalDestinationPort
+	antreaZone.IsFromExternal = true
 }

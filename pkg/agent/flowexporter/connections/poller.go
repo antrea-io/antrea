@@ -134,6 +134,16 @@ func (p *Poller) Poll() ([]*connection.Connection, []int, error) {
 			}
 			continue
 		}
+		// Correlate Antrea-zone connections with default-zone state before notifying
+		// subscribers. Doing this here — once, centrally, before fan-out — ensures that
+		// all subscribers see the same already-correlated view of each connection pointer.
+		if p.externalCorrelator != nil {
+			for _, conn := range filteredConnsListPerZone {
+				if conn != nil {
+					p.externalCorrelator.CorrelateIfExternal(conn)
+				}
+			}
+		}
 		antreaConns = append(antreaConns, filteredConnsListPerZone...)
 	}
 
