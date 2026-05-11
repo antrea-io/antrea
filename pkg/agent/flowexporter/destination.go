@@ -337,13 +337,17 @@ func (d *Destination) findFlowType(conn connection.Connection) uint8 {
 		if conn.DestinationPodNamespace == "" {
 			return utils.FlowTypeUnsupported
 		}
-		return utils.FlowTypeFromExternal
+		// The source IP is the remote node's gateway: this is the destination-node half of an
+		// inter-node FROM_EXTERNAL connection. Export it as INTER_NODE so the FlowAggregator can
+		// use the standard inter-node correlation path. The FlowAggregator will merge it with the
+		// FROM_EXTERNAL source-node record and restore the final flow type to FROM_EXTERNAL.
+		return utils.FlowTypeInterNode
 	}
 	if !srcIsPod {
 		if dstIsPod {
-			// Any source that is not classified as a Pod IP (including the Antrea gateway case
-			// handled above) and not in the Pod CIDR set is treated as FromExternal. That includes
-			// local to Pod traffic.
+			// Any source that is not a Pod IP and not a gateway IP is treated as FromExternal.
+			// This covers external-to-Pod traffic (e.g. a host-network process on the node
+			// connecting to a local Pod via the node's transport IP rather than antrea-gw0).
 			return utils.FlowTypeFromExternal
 		}
 		return utils.FlowTypeUnsupported

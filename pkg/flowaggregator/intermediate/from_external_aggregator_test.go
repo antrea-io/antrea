@@ -16,8 +16,6 @@ package intermediate
 
 import (
 	"container/heap"
-	"fmt"
-	"sync"
 	"testing"
 	"testing/synctest"
 	"time"
@@ -25,23 +23,10 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	timestamppb "google.golang.org/protobuf/types/known/timestamppb"
-	"k8s.io/client-go/tools/cache"
 	clocktesting "k8s.io/utils/clock/testing"
 
 	flowpb "antrea.io/antrea/v2/pkg/apis/flow/v1alpha1"
 )
-
-type mockIndexer struct {
-	cache.Indexer
-	mockByIndex func(indexName, indexedValue string) ([]interface{}, error)
-}
-
-func (m *mockIndexer) ByIndex(indexName, indexedValue string) ([]interface{}, error) {
-	if m.mockByIndex != nil {
-		return m.mockByIndex(indexName, indexedValue)
-	}
-	return nil, nil
-}
 
 func TestCorrelateRecordsForToExternalFlow(t *testing.T) {
 	recordChan := make(chan *flowpb.Flow)
@@ -52,7 +37,7 @@ func TestCorrelateRecordsForToExternalFlow(t *testing.T) {
 		InactiveExpiryTimeout: testInactiveExpiry,
 	}
 	clock := clocktesting.NewFakeClock(time.Now())
-	ap, _ := initAggregationProcessWithClock(input, clock, nil)
+	ap, _ := initAggregationProcessWithClock(input, clock)
 	// Test IPv4 fields.
 	record1 := createFlowRecordForSrc(false, flowpb.FlowType_FLOW_TYPE_TO_EXTERNAL, false, flowpb.NetworkPolicyRuleAction_NETWORK_POLICY_RULE_ACTION_NO_ACTION)
 	runCorrelationAndCheckResult(t, ap, clock, record1, nil, false, flowpb.FlowType_FLOW_TYPE_TO_EXTERNAL, false)
@@ -66,18 +51,24 @@ func TestCorrelateRecordsForToExternalFlow(t *testing.T) {
 	runCorrelationAndCheckResult(t, ap, clock, record1, nil, true, flowpb.FlowType_FLOW_TYPE_TO_EXTERNAL, false)
 }
 
-var currTime = time.Now()
-var externalIP = []byte{0xac, 0x12, 0x00, 0x01} // 172.18.0.1
-var podIP = []byte{0x0a, 0xf4, 0x01, 0x03}      // 10.244.1.3
-var gatewayIP = []byte{0x0a, 0xf4, 0x02, 0x01}  // 10.244.2.1
-var nodeIP = []byte{0xac, 0x12, 0x00, 0x02}     // 172.18.0.2
-var containerPort = uint32(82)
+var (
+	currTime                   = time.Now()
+	externalIP                 = []byte{0xac, 0x12, 0x00, 0x01} // 172.18.0.1
+	podIP                      = []byte{0x0a, 0xf4, 0x01, 0x03} // 10.244.1.3
+	gatewayIP                  = []byte{0x0a, 0xf4, 0x02, 0x01} // 10.244.2.1
+	nodeIP                     = []byte{0xac, 0x12, 0x00, 0x02} // 172.18.0.2
+	containerPort              = uint32(82)
+	destinationServicePortName = "namespace/service-name:serviceportname"
+)
+
 var sourceNodeIP = &flowpb.IP{
 	Source:      externalIP,
 	Destination: podIP,
 }
-var destinationServicePortName = "namespace/service-name:serviceportname"
 
+// generateSourceNodeFlowAndFlowKey returns a FROM_EXTERNAL source-node flow. It has ProxySnatIp
+// set (the source node's gateway masqueraded the external client) and no DestinationPodName (the
+// pod is on the destination node).
 func generateSourceNodeFlowAndFlowKey() (*flowpb.Flow, *FlowKey) {
 	sourceNodeRecord := &flowpb.Flow{
 		K8S: &flowpb.Kubernetes{
@@ -103,12 +94,15 @@ func generateSourceNodeFlowAndFlowKey() (*flowpb.Flow, *FlowKey) {
 	return sourceNodeRecord, sourceNodeFlowKey
 }
 
+// generateDestinationNodeFlowAndFlowKey returns the destination-node half of an inter-node
+// FROM_EXTERNAL connection. The agent exports it with FlowType=INTER_NODE (srcIsGw branch).
+// ProxySnatIp is absent because conntrack is symmetric at the destination node (no SNAT here).
 func generateDestinationNodeFlowAndFlowKey() (*flowpb.Flow, *FlowKey) {
 	destinationNodeRecord := &flowpb.Flow{
 		K8S: &flowpb.Kubernetes{
 			DestinationPodName:      "nginx-deployment-HASH",
 			DestinationPodNamespace: "some-namespace",
-			FlowType:                flowpb.FlowType_FLOW_TYPE_FROM_EXTERNAL,
+			FlowType:                flowpb.FlowType_FLOW_TYPE_INTER_NODE,
 		},
 		Ip: &flowpb.IP{
 			Source:      gatewayIP,
@@ -119,24 +113,13 @@ func generateDestinationNodeFlowAndFlowKey() (*flowpb.Flow, *FlowKey) {
 			SourcePort:      52391,
 			DestinationPort: 80,
 		},
-		Stats:         &flowpb.Stats{},
-		ReverseStats:  &flowpb.Stats{},
-		StartTs:       timestamppb.New(currTime),
-		EndTs:         timestamppb.New(currTime.Add(2 * time.Minute)),
-		ProxySnatIp:   gatewayIP,
-		ProxySnatPort: uint32(52391),
+		Stats:        &flowpb.Stats{},
+		ReverseStats: &flowpb.Stats{},
+		StartTs:      timestamppb.New(currTime),
+		EndTs:        timestamppb.New(currTime.Add(2 * time.Minute)),
 	}
 	destinationNodeFlowKey, _ := getFlowKeyFromRecord(destinationNodeRecord)
 	return destinationNodeRecord, destinationNodeFlowKey
-}
-
-var mockIndexerA = &mockIndexer{
-	mockByIndex: func(indexName, indexedValue string) ([]interface{}, error) {
-		if indexedValue == "10.244.2.1" {
-			return []interface{}{"found"}, nil
-		}
-		return []interface{}{}, nil
-	},
 }
 
 func newAggregationProcess() *aggregationProcess {
@@ -148,103 +131,13 @@ func newAggregationProcess() *aggregationProcess {
 		InactiveExpiryTimeout: testInactiveExpiry,
 	}
 	clock := clocktesting.NewFakeClock(time.Now())
-	ap, _ := initAggregationProcessWithClock(input, clock, mockIndexerA)
+	ap, _ := initAggregationProcessWithClock(input, clock)
 	return ap
 }
 
-func TestIsGateway(t *testing.T) {
-	testCases := []struct {
-		name         string
-		ip           []byte
-		setupIndexer func() cache.Indexer
-		want         bool
-	}{
-		{
-			name: "Nil nodeIndexer",
-			ip:   gatewayIP,
-			setupIndexer: func() cache.Indexer {
-				return nil
-			},
-			want: false,
-		},
-		{
-			name: "Invalid IP",
-			ip:   []byte{},
-			setupIndexer: func() cache.Indexer {
-				return &mockIndexer{}
-			},
-			want: false,
-		},
-		{
-			name: "nodeIndexer errors",
-			ip:   podIP,
-			setupIndexer: func() cache.Indexer {
-				return &mockIndexer{
-					mockByIndex: func(indexName, indexedValue string) ([]interface{}, error) {
-						return nil, fmt.Errorf("error")
-					},
-				}
-			},
-			want: false,
-		},
-		{
-			name: "nodeIndexer returns no matches",
-			ip:   podIP,
-			setupIndexer: func() cache.Indexer {
-				return &mockIndexer{
-					mockByIndex: func(indexName, indexedValue string) ([]interface{}, error) {
-						return []interface{}{}, nil
-					},
-				}
-			},
-			want: false,
-		},
-		{
-			name: "Valid Gateway",
-			ip:   gatewayIP,
-			setupIndexer: func() cache.Indexer {
-				return &mockIndexer{
-					mockByIndex: func(indexName, indexedValue string) ([]interface{}, error) {
-						return []interface{}{""}, nil
-					},
-				}
-			},
-			want: true,
-		},
-		{
-			// In a dual-stack cluster, protobuf may encode an IPv4 address as a
-			// 16-byte IPv4-in-IPv6 slice.
-			name: "IPv4-mapped IPv6 gateway (dual-stack)",
-			ip:   []byte{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0xff, 0xff, 10, 244, 2, 1},
-			setupIndexer: func() cache.Indexer {
-				return &mockIndexer{
-					mockByIndex: func(indexName, indexedValue string) ([]interface{}, error) {
-						if indexedValue == "10.244.2.1" {
-							return []interface{}{""}, nil
-						}
-						return []interface{}{}, nil
-					},
-				}
-			},
-			want: true,
-		},
-	}
-
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			a := newFromExternalAggregator(tc.setupIndexer())
-			if tc.want {
-				assert.True(t, a.isGateway(tc.ip))
-			} else {
-				assert.False(t, a.isGateway(tc.ip))
-			}
-		})
-	}
-}
-
-func TestFromExternalCorrelationRequired(t *testing.T) {
-	destinationNodeFlow, _ := generateDestinationNodeFlowAndFlowKey()
+func TestIsSourceNodeFromExternalFlow(t *testing.T) {
 	sourceNodeFlow, _ := generateSourceNodeFlowAndFlowKey()
+	destinationNodeFlow, _ := generateDestinationNodeFlowAndFlowKey()
 	testCases := []struct {
 		name     string
 		flow     *flowpb.Flow
@@ -256,16 +149,18 @@ func TestFromExternalCorrelationRequired(t *testing.T) {
 			false,
 		},
 		{
-			"nil IP",
+			"FROM_EXTERNAL with destination pod (single-node, not source-node)",
 			&flowpb.Flow{
 				K8S: &flowpb.Kubernetes{
-					FlowType: flowpb.FlowType_FLOW_TYPE_FROM_EXTERNAL,
+					FlowType:                flowpb.FlowType_FLOW_TYPE_FROM_EXTERNAL,
+					DestinationPodName:      "pod",
+					DestinationPodNamespace: "ns",
 				},
 			},
 			false,
 		},
 		{
-			"non FromExternal flow",
+			"TO_EXTERNAL flow",
 			&flowpb.Flow{
 				K8S: &flowpb.Kubernetes{
 					FlowType: flowpb.FlowType_FLOW_TYPE_TO_EXTERNAL,
@@ -274,23 +169,79 @@ func TestFromExternalCorrelationRequired(t *testing.T) {
 			false,
 		},
 		{
-			"destinationNode flow",
+			"destination-node INTER_NODE flow",
 			destinationNodeFlow,
-			true,
+			false,
 		},
 		{
-			"sourceNode flow",
+			"source-node FROM_EXTERNAL flow",
 			sourceNodeFlow,
 			true,
 		},
 	}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			a := newFromExternalAggregator(mockIndexerA)
 			if tc.expected {
-				assert.True(t, a.fromExternalCorrelationRequired(tc.flow))
+				assert.True(t, isSourceNodeFromExternalFlow(tc.flow))
 			} else {
-				assert.False(t, a.fromExternalCorrelationRequired(tc.flow))
+				assert.False(t, isSourceNodeFromExternalFlow(tc.flow))
+			}
+		})
+	}
+}
+
+func TestIsDestinationNodeFromExternalFlow(t *testing.T) {
+	sourceNodeFlow, _ := generateSourceNodeFlowAndFlowKey()
+	destinationNodeFlow, _ := generateDestinationNodeFlowAndFlowKey()
+	testCases := []struct {
+		name     string
+		flow     *flowpb.Flow
+		expected bool
+	}{
+		{
+			"k8s nil flow",
+			&flowpb.Flow{},
+			false,
+		},
+		{
+			"FROM_EXTERNAL source-node flow",
+			sourceNodeFlow,
+			false,
+		},
+		{
+			"INTER_NODE with SourcePodName set (regular inter-node)",
+			&flowpb.Flow{
+				K8S: &flowpb.Kubernetes{
+					FlowType:           flowpb.FlowType_FLOW_TYPE_INTER_NODE,
+					SourcePodName:      "source-pod",
+					DestinationPodName: "dst-pod",
+				},
+			},
+			false,
+		},
+		{
+			"INTER_NODE with ProxySnatIp set",
+			&flowpb.Flow{
+				K8S: &flowpb.Kubernetes{
+					FlowType:           flowpb.FlowType_FLOW_TYPE_INTER_NODE,
+					DestinationPodName: "pod",
+				},
+				ProxySnatIp: gatewayIP,
+			},
+			false,
+		},
+		{
+			"destination-node INTER_NODE flow (from srcIsGw branch)",
+			destinationNodeFlow,
+			true,
+		},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			if tc.expected {
+				assert.True(t, isDestinationNodeFromExternalFlow(tc.flow))
+			} else {
+				assert.False(t, isDestinationNodeFromExternalFlow(tc.flow))
 			}
 		})
 	}
@@ -299,41 +250,44 @@ func TestFromExternalCorrelationRequired(t *testing.T) {
 func contains(a *fromExternalAggregator, key string) bool {
 	a.lock.Lock()
 	defer a.lock.Unlock()
-	_, exists := a.FromExternalStore[key]
+	_, exists := a.fromExternalStore[key]
 	return exists
 }
 
-func TestStoreIfNew(t *testing.T) {
-	t.Run("storing first flow", func(t *testing.T) {
-		a := newFromExternalAggregator(mockIndexerA)
-		sourceNodeFlow, _ := generateSourceNodeFlowAndFlowKey()
-		matched := a.storeIfNew(sourceNodeFlow)
-		assert.Nil(t, matched, "Expected nil when flow is stored for the first time")
+func TestCorrelateOrStore_SourceNodeFlow(t *testing.T) {
+	t.Run("stores source-node flow and returns nil", func(t *testing.T) {
+		a := newFromExternalAggregator()
+		sourceNodeFlow, sourceNodeFlowKey := generateSourceNodeFlowAndFlowKey()
+		gotFlowKey, gotRecord := a.correlateOrStore(sourceNodeFlowKey, sourceNodeFlow)
+		assert.Nil(t, gotFlowKey, "Expected nil flowKey: source-node flow should be stored")
+		assert.Nil(t, gotRecord, "Expected nil record: source-node flow should be stored")
 
-		key := a.generateFromExternalStoreKey(sourceNodeFlow)
-		assert.True(t, contains(a, key), "Expected flow to have been stored")
+		key := generateFromExternalStoreKey(sourceNodeFlow)
+		assert.True(t, contains(a, key), "Expected source-node flow to be stored in fromExternalStore")
 	})
-	t.Run("flow is in store", func(t *testing.T) {
-		a := newFromExternalAggregator(mockIndexerA)
-		sourceNodeFlow, _ := generateSourceNodeFlowAndFlowKey()
-		destinationNodeFlow, _ := generateDestinationNodeFlowAndFlowKey()
-		a.storeIfNew(sourceNodeFlow)
-		matched := a.storeIfNew(destinationNodeFlow)
-		assert.Equal(t, sourceNodeFlow, matched, "Expected the previously stored flow to be returned")
+	t.Run("stored flow can be popped by cross-key", func(t *testing.T) {
+		a := newFromExternalAggregator()
+		sourceNodeFlow, sourceNodeFlowKey := generateSourceNodeFlowAndFlowKey()
+		a.correlateOrStore(sourceNodeFlowKey, sourceNodeFlow)
+
+		key := generateFromExternalStoreKey(sourceNodeFlow)
+		popped := a.popSourceNodeFlow(key)
+		assert.Equal(t, sourceNodeFlow, popped, "Expected popSourceNodeFlow to return the stored flow")
+		assert.False(t, contains(a, key), "Expected store to be empty after pop")
 	})
 }
 
 func TestExpiresStaleFlows(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
-		a := newFromExternalAggregator(mockIndexerA)
-		t.Cleanup(a.stop)
-		go a.Run(a.stopCh)
+		a := newFromExternalAggregator()
+		stopCh := make(chan struct{})
+		t.Cleanup(func() { close(stopCh) })
+		go a.Run(stopCh)
 
-		sourceNodeFlow, _ := generateSourceNodeFlowAndFlowKey()
-		matched := a.storeIfNew(sourceNodeFlow)
-		assert.Nil(t, matched, "Expected nil when flow is stored for the first time")
+		sourceNodeFlow, sourceNodeFlowKey := generateSourceNodeFlowAndFlowKey()
+		a.correlateOrStore(sourceNodeFlowKey, sourceNodeFlow)
 
-		key := a.generateFromExternalStoreKey(sourceNodeFlow)
+		key := generateFromExternalStoreKey(sourceNodeFlow)
 		assert.True(t, contains(a, key), "expected entry before expiry")
 
 		time.Sleep(defaultTTL + 2*defaultCleanUpInterval)
@@ -343,120 +297,69 @@ func TestExpiresStaleFlows(t *testing.T) {
 	})
 }
 
-func TestStopIsThreadSafe(t *testing.T) {
-	a := newFromExternalAggregator(mockIndexerA)
-
-	var wg sync.WaitGroup
-	for range 10 {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			a.stop()
-		}()
-	}
-	wg.Wait()
-
-	select {
-	case <-a.stopCh:
-	default:
-		t.Fatal("Expected stopCh to be closed, but it was still open")
-	}
-}
-
-// correlatedFieldSnapshot collects the set of fields that are modified during correlation.
-type correlatedFieldSnapshot struct {
-	DestinationServiceIp       []byte
-	DestinationServicePortName string
-	DestinationServicePort     uint32
-	DestinationClusterIp       []byte
-}
-
-// captureCorrelatedFields return a snapshot of fields relevant for correlation in lieu of a full copy
-// of Flow which includes a mutex.
-func captureCorrelatedFields(flow *flowpb.Flow) correlatedFieldSnapshot {
-	// Protect against nil panics if the test passes an empty flow
-	if flow == nil || flow.K8S == nil {
-		return correlatedFieldSnapshot{}
-	}
-
-	return correlatedFieldSnapshot{
-		DestinationServiceIp:       flow.K8S.DestinationServiceIp,
-		DestinationServicePortName: flow.K8S.DestinationServicePortName,
-		DestinationServicePort:     flow.K8S.DestinationServicePort,
-		DestinationClusterIp:       flow.K8S.DestinationClusterIp,
-	}
-}
-
+// TestCorrelateOrStore verifies the correlateOrStore contract at the fromExternalAggregator
+// level. End-to-end correlation (including the cross-key merge in flowKeyRecordMap) is tested
+// in TestCorrelateRecordsForFromExternalFlow in aggregate_test.go.
 func TestCorrelateOrStore(t *testing.T) {
-	t.Run("correlation not required", func(t *testing.T) {
-		a := newFromExternalAggregator(mockIndexerA)
-
-		// Build a correlated record
-		destinationNodeRecord, _ := generateDestinationNodeFlowAndFlowKey()
-		destinationNodeRecord.Ip = sourceNodeIP
-		flowKey, _ := getFlowKeyFromRecord(destinationNodeRecord)
-
+	t.Run("single-node FROM_EXTERNAL passes through unchanged", func(t *testing.T) {
+		a := newFromExternalAggregator()
+		singleNodeRecord := &flowpb.Flow{
+			K8S: &flowpb.Kubernetes{
+				FlowType:                flowpb.FlowType_FLOW_TYPE_FROM_EXTERNAL,
+				DestinationPodName:      "nginx",
+				DestinationPodNamespace: "default",
+			},
+			Ip:        sourceNodeIP,
+			Transport: &flowpb.Transport{ProtocolNumber: 6, SourcePort: 12345, DestinationPort: 80},
+			StartTs:   timestamppb.New(currTime),
+			EndTs:     timestamppb.New(currTime.Add(time.Minute)),
+		}
+		flowKey, _ := getFlowKeyFromRecord(singleNodeRecord)
 		originalFlowKey := *flowKey
-		recordSnapshot := captureCorrelatedFields(destinationNodeRecord)
-		gotFlowKey, gotRecord := a.correlateOrStore(flowKey, destinationNodeRecord)
-		assert.Equal(t, originalFlowKey, *gotFlowKey, "Expected flowKey for a correlated record to remain unchanged")
-		assert.Equal(t, recordSnapshot, captureCorrelatedFields(gotRecord), "Expected a correlated record to remain unchanged")
+		gotFlowKey, gotRecord := a.correlateOrStore(flowKey, singleNodeRecord)
+		require.NotNil(t, gotFlowKey)
+		assert.Equal(t, originalFlowKey, *gotFlowKey)
+		assert.Same(t, singleNodeRecord, gotRecord)
+		assert.Empty(t, a.fromExternalStore, "single-node flow must not be stored")
 	})
-	t.Run("correlation is required", func(t *testing.T) {
-		t.Run("source node flow arrives first", func(t *testing.T) {
-			a := newFromExternalAggregator(mockIndexerA)
-
-			// Add the sourceNodeFlow
-			sourceNodeRecord, sourceNodeRecordFlowKey := generateSourceNodeFlowAndFlowKey()
-			gotFlowKey, gotRecord := a.correlateOrStore(sourceNodeRecordFlowKey, sourceNodeRecord)
-			assert.Nil(t, gotFlowKey, "Expected nil when flows are stored")
-			assert.Nil(t, gotRecord, "Expected nil when flows are stored")
-			key := a.generateFromExternalStoreKey(sourceNodeRecord)
-			assert.True(t, contains(a, key), "Expected flow to have been stored")
-
-			// Add the destinationNodeFlow
-			destinationNodeRecord, destinationNodeRecordFlowKey := generateDestinationNodeFlowAndFlowKey()
-			_, gotRecord = a.correlateOrStore(destinationNodeRecordFlowKey, destinationNodeRecord)
-
-			require.NotNil(t, gotRecord, "Expected flow to be correlated")
-			require.NotNil(t, gotRecord.Ip, "Expected correlated flow's IP not to be nil")
-			assert.Equal(t, externalIP, gotRecord.Ip.Source, "Expected correlated flow to have original source IP")
-			require.NotNil(t, gotRecord.Transport, "Expected correlated flow's Transport not to be nil")
-			assert.Equal(t, sourceNodeRecord.Transport.SourcePort, gotRecord.Transport.SourcePort, "Expected correlated flow to have the original client source port")
-			require.NotNil(t, gotRecord.K8S, "Expected correlated flow's K8S data not to be nil")
-			assert.Equal(t, nodeIP, gotRecord.K8S.DestinationServiceIp, "Expected correlated flow to have node IP")
-			assert.Equal(t, nodeIP, gotRecord.K8S.DestinationClusterIp, "Expected correlated flow to have node IP")
-			assert.Equal(t, containerPort, gotRecord.K8S.DestinationServicePort, "Expected correlated flow to have the container port")
-			assert.Equal(t, destinationServicePortName, gotRecord.K8S.DestinationServicePortName, "Expected correlated flow to have DestinationServicePortName")
-
-			assert.False(t, contains(a, key), "Expected stored flow to be removed")
-		})
-		t.Run("destination node flow arrives first", func(t *testing.T) {
-			a := newFromExternalAggregator(mockIndexerA)
-
-			// Add the destinationNodeFlow
-			destinationNodeRecord, destinationNodeRecordFlowKey := generateDestinationNodeFlowAndFlowKey()
-			gotFlowKey, gotRecord := a.correlateOrStore(destinationNodeRecordFlowKey, destinationNodeRecord)
-			assert.Nil(t, gotFlowKey, "Expected nil when flows are stored")
-			assert.Nil(t, gotRecord, "Expected nil when flows are stored")
-
-			// Add the sourceNodeFlow
-			sourceNodeRecord, sourceNodeRecordFlowKey := generateSourceNodeFlowAndFlowKey()
-			_, gotRecord = a.correlateOrStore(sourceNodeRecordFlowKey, sourceNodeRecord)
-
-			require.NotNil(t, gotRecord, "Expected flow to be correlated")
-			require.NotNil(t, gotRecord.Ip, "Expected correlated flow's IP not to be nil")
-			assert.Equal(t, externalIP, gotRecord.Ip.Source, "Expected correlated flow to have original source IP")
-			require.NotNil(t, gotRecord.Transport, "Expected correlated flow's Transport not to be nil")
-			assert.Equal(t, sourceNodeRecord.Transport.SourcePort, gotRecord.Transport.SourcePort, "Expected correlated flow to have the original client source port")
-			require.NotNil(t, gotRecord.K8S, "Expected correlated flow's K8S data not to be nil")
-			assert.Equal(t, nodeIP, gotRecord.K8S.DestinationServiceIp, "Expected correlated flow to have node IP")
-			assert.Equal(t, nodeIP, gotRecord.K8S.DestinationClusterIp, "Expected correlated flow to have node IP")
-			assert.Equal(t, containerPort, gotRecord.K8S.DestinationServicePort, "Expected correlated flow to have the container port")
-			assert.Equal(t, destinationServicePortName, gotRecord.K8S.DestinationServicePortName, "Expected correlated flow to have DestinationServicePortName")
-
-			key := a.generateFromExternalStoreKey(destinationNodeRecord)
-			assert.False(t, contains(a, key), "Expected stored to have been removed")
-		})
+	t.Run("destination-node INTER_NODE passes through unchanged, nothing stored", func(t *testing.T) {
+		a := newFromExternalAggregator()
+		destinationNodeRecord, destinationNodeFlowKey := generateDestinationNodeFlowAndFlowKey()
+		originalFlowKey := *destinationNodeFlowKey
+		gotFlowKey, gotRecord := a.correlateOrStore(destinationNodeFlowKey, destinationNodeRecord)
+		require.NotNil(t, gotFlowKey)
+		assert.Equal(t, originalFlowKey, *gotFlowKey)
+		assert.Same(t, destinationNodeRecord, gotRecord)
+		assert.Empty(t, a.fromExternalStore, "destination-node flow must not be stored here")
+	})
+	t.Run("regular INTER_NODE destination flow passes through unchanged, nothing stored", func(t *testing.T) {
+		a := newFromExternalAggregator()
+		regularInterNodeDst := &flowpb.Flow{
+			K8S: &flowpb.Kubernetes{
+				FlowType:                flowpb.FlowType_FLOW_TYPE_INTER_NODE,
+				DestinationPodName:      "dst-pod",
+				DestinationPodNamespace: "default",
+			},
+			Ip:        &flowpb.IP{Source: []byte{10, 244, 1, 5}, Destination: podIP},
+			Transport: &flowpb.Transport{ProtocolNumber: 6, SourcePort: 40000, DestinationPort: 80},
+			StartTs:   timestamppb.New(currTime),
+			EndTs:     timestamppb.New(currTime.Add(time.Minute)),
+		}
+		flowKey, _ := getFlowKeyFromRecord(regularInterNodeDst)
+		originalFlowKey := *flowKey
+		gotFlowKey, gotRecord := a.correlateOrStore(flowKey, regularInterNodeDst)
+		require.NotNil(t, gotFlowKey)
+		assert.Equal(t, originalFlowKey, *gotFlowKey)
+		assert.Same(t, regularInterNodeDst, gotRecord)
+		assert.Empty(t, a.fromExternalStore)
+	})
+	t.Run("FROM_EXTERNAL source-node flow stored; returns nil to signal cross-key merge", func(t *testing.T) {
+		a := newFromExternalAggregator()
+		sourceNodeRecord, sourceNodeFlowKey := generateSourceNodeFlowAndFlowKey()
+		gotFlowKey, gotRecord := a.correlateOrStore(sourceNodeFlowKey, sourceNodeRecord)
+		assert.Nil(t, gotFlowKey, "Expected nil: source-node flow stored, addOrUpdateRecordInMap will merge")
+		assert.Nil(t, gotRecord)
+		key := generateFromExternalStoreKey(sourceNodeRecord)
+		assert.True(t, contains(a, key), "Expected source-node flow in fromExternalStore")
 	})
 }

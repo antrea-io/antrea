@@ -46,7 +46,8 @@ type ConntrackConnectionStore struct {
 }
 
 // NewConntrackConnectionStore creates a connection store. fromExternal correlates Antrea-zone
-// flows with zone-0 state ingested by the poller; if nil, NewFakeExternalCorrelator() is used.
+// flows with default-zone state ingested by the poller; use NewFakeExternalCorrelator() in tests that
+// do not need external correlation.
 func NewConntrackConnectionStore(
 	npQuerier querier.AgentNetworkPolicyInfoQuerier,
 	podStore objectstore.PodStore,
@@ -54,9 +55,6 @@ func NewConntrackConnectionStore(
 	cfg ConnectionStoreConfig,
 	fromExternal ExternalCorrelator,
 ) *ConntrackConnectionStore {
-	if fromExternal == nil {
-		fromExternal = NewFakeExternalCorrelator()
-	}
 	return &ConntrackConnectionStore{
 		connectionStore:        NewConnectionStore(npQuerier, podStore, proxier, cfg),
 		protocolFilter:         filter.NewProtocolFilter(cfg.AllowedProtocols),
@@ -70,7 +68,7 @@ func (cs *ConntrackConnectionStore) correlateIfExternal(conn *connection.Connect
 }
 
 func (cs *ConntrackConnectionStore) removeFromExternalCorrelator(conn *connection.Connection) {
-	cs.fromExternal.RemoveStaleZoneZero(conn)
+	cs.fromExternal.RemoveStaleDefaultZoneFlow(conn)
 }
 
 // AddOrUpdateConns merges one poll of Antrea-zone conntrack connections into the store.

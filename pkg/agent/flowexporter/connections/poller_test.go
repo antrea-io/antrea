@@ -55,7 +55,7 @@ func TestPoller_Poll(t *testing.T) {
 			ctrl := gomock.NewController(t)
 
 			mockDumper := connstesting.NewMockConnTrackDumper(ctrl)
-			// Zone 0 is always polled first (returns no connections for this test).
+			// The default zone is always polled first (returns no connections for this test).
 			mockDumper.EXPECT().DumpFlows(uint16(0)).Return(nil, 0, nil)
 			mockDumper.EXPECT().DumpFlows(gomock.Not(uint16(0))).Return(tt.conns, len(tt.conns), nil)
 			mockDumper.EXPECT().GetMaxConnections().Return(maxConnections, nil)
@@ -86,7 +86,7 @@ func TestPoller_Poll_zoneZeroNotForwardedWhenCorrelatorNil(t *testing.T) {
 	p := NewPoller(mockDumper, nil, nil, 0, true, false, false)
 	out, lens, err := p.Poll()
 	require.NoError(t, err)
-	assert.Equal(t, []int{1, 1}, lens, "per-zone lengths should include zone 0")
+	assert.Equal(t, []int{1, 1}, lens, "per-zone lengths should include the default zone")
 	require.Len(t, out, 1)
 	assert.Same(t, antrea, out[0], "only Antrea-zone connection should be returned")
 }

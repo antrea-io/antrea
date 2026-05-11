@@ -39,12 +39,12 @@ type Poller struct {
 	zones []uint16
 }
 
-// NewPoller creates a conntrack poller. externalCorrelator may be nil; zone-0 dumps are never
-// delivered to subscribers—when externalCorrelator is non-nil they are ingested here. Only
+// NewPoller creates a conntrack poller. externalCorrelator may be nil; default-zone dumps are
+// never delivered to subscribers—when externalCorrelator is non-nil they are ingested here. Only
 // Antrea-zone dumps are passed to the notifier.
 func NewPoller(ctDumper ConnTrackDumper, notifier channel.Notifier, externalCorrelator ExternalCorrelator, pollInterval time.Duration, v4Enabled, v6Enabled, connectUplinkToBridge bool) *Poller {
-	// Zone 0 is polled first so correlator state exists before Antrea-zones are polled.
-	zones := []uint16{0}
+	// The default zone is polled first so correlator state exists before Antrea-zones are polled.
+	zones := []uint16{DefaultZone}
 	if v4Enabled {
 		if connectUplinkToBridge {
 			zones = append(zones, uint16(openflow.IPCtZoneTypeRegMark.GetValue()<<12))
@@ -98,11 +98,11 @@ func (p *Poller) Run(stopCh <-chan struct{}) {
 	}
 }
 
-// Poll calls into conntrackDumper to dump each configured zone. Zone-0 flows are never returned;
-// when externalCorrelator is non-nil they are ingested here. Non-zone-0 dumps are returned as
-// Antrea-zone connections (IPv4/IPv6 per configuration). connsLens has one entry per polled zone
-// (zone 0 first, then IPv4 Antrea zone, then IPv6 Antrea zone when enabled), each the length of
-// that zone's filtered dump.
+// Poll calls into conntrackDumper to dump each configured zone. Default-zone flows are never
+// returned; when externalCorrelator is non-nil they are ingested here. Non-default-zone dumps
+// are returned as Antrea-zone connections (IPv4/IPv6 per configuration). connsLens has one entry
+// per polled zone (default zone first, then IPv4 Antrea zone, then IPv6 Antrea zone when
+// enabled), each the length of that zone's filtered dump.
 // TODO: As optimization, only poll invalid/closed connections during every poll, and poll the
 // established connections right before the export.
 func (p *Poller) Poll() ([]*connection.Connection, []int, error) {
@@ -124,11 +124,11 @@ func (p *Poller) Poll() ([]*connection.Connection, []int, error) {
 		}
 		totalConns += totalConnsPerZone
 		connsLens = append(connsLens, len(filteredConnsListPerZone))
-		if zone == 0 {
+		if zone == DefaultZone {
 			if p.externalCorrelator != nil {
 				for _, conn := range filteredConnsListPerZone {
 					if conn != nil {
-						p.externalCorrelator.IngestZoneZero(conn)
+						p.externalCorrelator.IngestDefaultZoneFlow(conn)
 					}
 				}
 			}
