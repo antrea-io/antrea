@@ -255,7 +255,7 @@ func TestConntrackConnectionStore_AddOrUpdateConn(t *testing.T) {
 			mockProxier := proxytest.NewMockProxyQuerier(ctrl)
 			npQuerier := queriertest.NewMockAgentNetworkPolicyInfoQuerier(ctrl)
 
-			conntrackConnStore := NewConntrackConnectionStore(npQuerier, mockPodStore, mockProxier, testFlowExporterOptions, NewFakeExternalCorrelator())
+			conntrackConnStore := NewConntrackConnectionStore(npQuerier, mockPodStore, mockProxier, testFlowExporterOptions)
 			// Set the networkPolicyReadyTime to simulate that NetworkPolicies are ready
 			conntrackConnStore.networkPolicyReadyTime = networkPolicyReadyTime
 
@@ -286,22 +286,6 @@ func TestConntrackConnectionStore_AddOrUpdateConn_FromExternalConns(t *testing.T
 		StartTime:                  refTime.Add(-(time.Second * 50)),
 		StopTime:                   refTime.Add(-(time.Second * 30)),
 		LastExportTime:             refTime.Add(-(time.Second * 50)),
-		FlowKey: connection.Tuple{
-			SourceAddress:      netip.MustParseAddr("172.18.0.1"),
-			DestinationAddress: netip.MustParseAddr("10.244.2.2"),
-			Protocol:           6,
-			SourcePort:         52142,
-			DestinationPort:    80},
-		Mark:          openflow.ServiceCTMark.GetValue(),
-		ProxySnatIP:   netip.MustParseAddr("172.18.0.2"),
-		ProxySnatPort: uint16(28392),
-	}
-	updatedDefaultZoneConn := &connection.Connection{
-		Zone:                       0,
-		OriginalDestinationAddress: netip.MustParseAddr("172.18.0.3"),
-		OriginalDestinationPort:    12345,
-		StartTime:                  refTime.Add(-(time.Second * 50)),
-		StopTime:                   refTime,
 		FlowKey: connection.Tuple{
 			SourceAddress:      netip.MustParseAddr("172.18.0.1"),
 			DestinationAddress: netip.MustParseAddr("10.244.2.2"),
@@ -382,6 +366,7 @@ func TestConntrackConnectionStore_AddOrUpdateConn_FromExternalConns(t *testing.T
 		OriginalPackets:                0xfff,
 		ProxySnatIP:                    netip.MustParseAddr("172.18.0.2"),
 		ProxySnatPort:                  uint16(28392),
+		IsFromExternal:                 true,
 	}
 	updatedExpectedConn := connection.Connection{
 		OriginalDestinationAddress: netip.MustParseAddr("172.18.0.3"),
@@ -412,31 +397,33 @@ func TestConntrackConnectionStore_AddOrUpdateConn_FromExternalConns(t *testing.T
 		OriginalPackets:                0xffff,
 		ProxySnatIP:                    netip.MustParseAddr("172.18.0.2"),
 		ProxySnatPort:                  uint16(28392),
+		IsFromExternal:                 true,
 	}
 	ctrl := gomock.NewController(t)
 	mockPodStore := objectstoretest.NewMockPodStore(ctrl)
 	mockProxier := proxytest.NewMockProxyQuerier(ctrl)
 	npQuerier := queriertest.NewMockAgentNetworkPolicyInfoQuerier(ctrl)
-	fe := NewFromExternalCorrelator(mockProxier)
-	feStopCh := make(chan struct{})
-	t.Cleanup(func() { close(feStopCh) })
-	go fe.Run(feStopCh)
-	conntrackConnStore := NewConntrackConnectionStore(npQuerier, mockPodStore, mockProxier, testFlowExporterOptions, fe)
+	conntrackConnStore := NewConntrackConnectionStore(npQuerier, mockPodStore, mockProxier, testFlowExporterOptions)
 	conntrackConnStore.networkPolicyReadyTime = networkPolicyReadyTime
 
-	// Add Default zone (ingestion is owned by the poller in production; tests drive the correlator directly).
-	protocol, _ := lookupServiceProtocol(defaultZoneConn.FlowKey.Protocol)
-	serviceStr := fmt.Sprintf("%s:%d/%s", defaultZoneConn.OriginalDestinationAddress.String(), defaultZoneConn.OriginalDestinationPort, protocol)
-	mockProxier.EXPECT().GetServiceByIP(serviceStr).Return(servicePortName, true)
-	if conntrackConnStore.protocolFilter.Allow(defaultZoneConn.FlowKey.Protocol) {
-		fe.IngestDefaultZoneFlow(defaultZoneConn)
+	// Simulate what the poller does before fan-out: correlate both Antrea-zone connections
+	// with the default-zone snapshot. In production, Poll() calls CorrelateIfExternal on
+	// each Antrea-zone conn before notifying subscribers.
+	for _, conn := range []*connection.Connection{&antreaZoneConn, &updatedAntreaZoneConn} {
+		conn.FlowKey.SourceAddress = defaultZoneConn.FlowKey.SourceAddress
+		conn.FlowKey.SourcePort = defaultZoneConn.FlowKey.SourcePort
+		conn.ProxySnatIP = defaultZoneConn.ProxySnatIP
+		conn.ProxySnatPort = defaultZoneConn.ProxySnatPort
+		conn.OriginalDestinationAddress = defaultZoneConn.OriginalDestinationAddress
+		conn.OriginalDestinationPort = defaultZoneConn.OriginalDestinationPort
+		conn.IsFromExternal = true
 	}
 
 	// Add Antrea Zone
 	mockPodStore.EXPECT().GetPodByIPAndTime(defaultZoneConn.FlowKey.SourceAddress.String(), gomock.Any()).Return(nil, false)
 	mockPodStore.EXPECT().GetPodByIPAndTime(antreaZoneConn.FlowKey.DestinationAddress.String(), gomock.Any()).Return(nil, false)
-	protocol, _ = lookupServiceProtocol(antreaZoneConn.FlowKey.Protocol)
-	serviceStr = fmt.Sprintf("%s:%d/%s", expectedConn.OriginalDestinationAddress.String(), expectedConn.OriginalDestinationPort, protocol)
+	protocol, _ := lookupServiceProtocol(antreaZoneConn.FlowKey.Protocol)
+	serviceStr := fmt.Sprintf("%s:%d/%s", expectedConn.OriginalDestinationAddress.String(), expectedConn.OriginalDestinationPort, protocol)
 	mockProxier.EXPECT().GetServiceByIP(serviceStr).Return(servicePortName, true)
 	ingressOfID := binary.BigEndian.Uint32(expectedConn.Labels[12:16])
 	npQuerier.EXPECT().GetRuleByFlowID(ingressOfID).Return(&rule1)
@@ -446,15 +433,8 @@ func TestConntrackConnectionStore_AddOrUpdateConn_FromExternalConns(t *testing.T
 	require.Equal(t, exist, true, "The connection should exist in the connection store")
 	assert.Equal(t, expectedConn, *actualConn, "Connections should be equal")
 
-	//Add updated Default zone
-	protocol, _ = lookupServiceProtocol(updatedDefaultZoneConn.FlowKey.Protocol)
-	serviceStr = fmt.Sprintf("%s:%d/%s", updatedDefaultZoneConn.OriginalDestinationAddress.String(), updatedDefaultZoneConn.OriginalDestinationPort, protocol)
-	mockProxier.EXPECT().GetServiceByIP(serviceStr).Return(servicePortName, true)
-	if conntrackConnStore.protocolFilter.Allow(updatedDefaultZoneConn.FlowKey.Protocol) {
-		fe.IngestDefaultZoneFlow(updatedDefaultZoneConn)
-	}
-
-	//Add updated Antrea Zone
+	// Add updated Antrea Zone — this updates the existing entry (exists=true path), so
+	// fillPodInfo and fillServiceInfo are NOT called again. No re-correlation needed.
 	conntrackConnStore.AddOrUpdateConn(&updatedAntreaZoneConn)
 	actualConn, exist = conntrackConnStore.GetConnByKey(expectedConn.FlowKey)
 	require.Equal(t, exist, true, "The connection should exist in the connection store")
@@ -523,7 +503,7 @@ func TestConnectionStore_DeleteConnectionByKey(t *testing.T) {
 	metrics.TotalAntreaConnectionsInConnTrackTable.Set(float64(len(testFlows)))
 	// Create connectionStore
 	mockPodStore := objectstoretest.NewMockPodStore(ctrl)
-	connStore := NewConntrackConnectionStore(nil, mockPodStore, nil, testFlowExporterOptions, NewFakeExternalCorrelator())
+	connStore := NewConntrackConnectionStore(nil, mockPodStore, nil, testFlowExporterOptions)
 	// Add flows to the connection store.
 	for i, flow := range testFlows {
 		connStore.connections[*testFlowKeys[i]] = flow
@@ -541,7 +521,7 @@ func TestConnectionStore_DeleteConnectionByKey(t *testing.T) {
 func TestConntrackConnectionStore_DeleteAllConnections(t *testing.T) {
 	metrics.TotalAntreaConnectionsInConnTrackTable.Set(0)
 
-	cs := NewConntrackConnectionStore(nil, nil, nil, testFlowExporterOptions, NewFakeExternalCorrelator())
+	cs := NewConntrackConnectionStore(nil, nil, nil, testFlowExporterOptions)
 
 	conns := []*connection.Connection{
 		{
@@ -635,7 +615,7 @@ func TestConntrackConnectionStore_AddOrUpdateConns(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			cs := NewConntrackConnectionStore(nil, nil, nil, testFlowExporterOptions, NewFakeExternalCorrelator())
+			cs := NewConntrackConnectionStore(nil, nil, nil, testFlowExporterOptions)
 
 			require.NotNil(t, tt.oldConn)
 			addConnToStore(cs, tt.oldConn)
@@ -675,8 +655,10 @@ func TestConntrackConnectionStore_AddOrUpdateConns_DefaultZoneFlow(t *testing.T)
 		FlowKey:                    connection.Tuple{SourceAddress: netip.MustParseAddr("172.18.0.1"), DestinationAddress: netip.MustParseAddr("10.244.2.2"), Protocol: 6, SourcePort: 52142, DestinationPort: 80},
 		OriginalDestinationAddress: netip.MustParseAddr("172.18.0.3"),
 		OriginalDestinationPort:    12345,
-		ProxySnatPort:              28392,
-		IsPresent:                  true,
+		// ProxySnatIP/Port are set by NetlinkFlowToAntreaConnection when SNAT is detected.
+		ProxySnatIP:   netip.MustParseAddr("10.244.2.1"), // source node gateway IP
+		ProxySnatPort: 28392,
+		IsPresent:     true,
 	}
 	antreaZoneConn := &connection.Connection{
 		StartTime:                  refTime,
@@ -684,7 +666,6 @@ func TestConntrackConnectionStore_AddOrUpdateConns_DefaultZoneFlow(t *testing.T)
 		FlowKey:                    connection.Tuple{SourceAddress: netip.MustParseAddr("10.244.2.1"), DestinationAddress: netip.MustParseAddr("10.244.2.2"), Protocol: 6, SourcePort: 28392, DestinationPort: 80},
 		Zone:                       openflow.CtZone,
 		Mark:                       openflow.ServiceCTMark.GetValue(),
-		ProxySnatPort:              28392,
 		OriginalDestinationAddress: netip.MustParseAddr("10.244.2.2"),
 		OriginalDestinationPort:    80,
 		IsPresent:                  true,
@@ -694,17 +675,19 @@ func TestConntrackConnectionStore_AddOrUpdateConns_DefaultZoneFlow(t *testing.T)
 	stopCh := make(chan struct{})
 	t.Cleanup(func() { close(stopCh) })
 	go fe.Run(stopCh)
-	cs := NewConntrackConnectionStore(nil, nil, nil, testFlowExporterOptions, fe)
+	cs := NewConntrackConnectionStore(nil, nil, nil, testFlowExporterOptions)
 
 	// Default-zone snapshots live in the correlator (poller calls IngestDefaultZoneFlow in production).
 	fe.IngestDefaultZoneFlow(defaultZoneConn)
 	assert.Empty(t, cs.connections, "default-zone connection should not appear in the connection store")
 	assert.Len(t, fe.connections, 1, "default-zone connection should be stored in correlator")
 
-	// When the Antrea-zone counterpart arrives, it should be correlated and the
-	// correlator entry consumed.
-	require.NoError(t, cs.AddOrUpdateConns([]*connection.Connection{antreaZoneConn}))
+	// Simulate the poller correlating the Antrea-zone connection before delivering it to the
+	// connection store (correlation now happens in Poll() before fan-out, not in AddOrUpdateConn).
+	fe.CorrelateIfExternal(antreaZoneConn)
 	assert.Len(t, fe.connections, 0, "default-zone entry should have been consumed by correlation")
+
+	require.NoError(t, cs.AddOrUpdateConns([]*connection.Connection{antreaZoneConn}))
 	connKey := connection.NewConnectionKey(antreaZoneConn)
 	storedConn, exists := cs.GetConnByKey(connKey)
 	require.True(t, exists, "correlated connection should be in the store")
@@ -753,6 +736,7 @@ func TestCorrelateExternal(t *testing.T) {
 		OriginalDestinationPort: 12345,
 		ProxySnatIP:             netip.MustParseAddr("172.18.0.2"),
 		ProxySnatPort:           uint16(28392),
+		IsFromExternal:          true,
 	}
 	correlateExternal(defaultZoneSnapshotFromConn(&zoneZero), &antreaZone)
 	assert.Equal(t, expected, antreaZone)

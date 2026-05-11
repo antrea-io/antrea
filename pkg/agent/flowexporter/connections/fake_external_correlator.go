@@ -22,8 +22,6 @@ func (fakeExternalCorrelator) IngestDefaultZoneFlow(*connection.Connection) {}
 
 func (fakeExternalCorrelator) CorrelateIfExternal(*connection.Connection) bool { return false }
 
-func (fakeExternalCorrelator) RemoveStaleDefaultZoneFlow(*connection.Connection) {}
-
 // NewFakeExternalCorrelator returns an ExternalCorrelator with no-op methods for use in tests.
 func NewFakeExternalCorrelator() ExternalCorrelator {
 	return fakeExternalCorrelator{}

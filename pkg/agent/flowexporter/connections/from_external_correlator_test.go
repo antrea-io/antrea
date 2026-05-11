@@ -124,35 +124,11 @@ func TestFromExternalCorrelator(t *testing.T) {
 			assert.False(t, ok, "Expected store to return no match")
 		})
 	})
-	t.Run("remove", func(t *testing.T) {
-		store := NewFromExternalCorrelator(nil)
-		refTime := time.Now()
-		defaultZoneConn := &connection.Connection{
-			StartTime: refTime,
-			StopTime:  refTime,
-			FlowKey: connection.Tuple{
-				SourceAddress:      netip.MustParseAddr("172.18.0.1"),
-				DestinationAddress: netip.MustParseAddr("10.244.2.2"),
-				Protocol:           6,
-				SourcePort:         52142,
-				DestinationPort:    80},
-			Mark:          openflow.ServiceCTMark.GetValue(),
-			ProxySnatIP:   netip.MustParseAddr("172.18.0.2"),
-			ProxySnatPort: uint16(28392),
-		}
-		store.add(defaultZoneConn)
-		// remove uses the same key as popMatching (Antrea-zone view of the flow).
-		antreaConn := &connection.Connection{
-			FlowKey: connection.Tuple{
-				SourceAddress:      netip.MustParseAddr("10.244.2.1"),
-				DestinationAddress: netip.MustParseAddr("10.244.2.2"),
-				Protocol:           6,
-				SourcePort:         defaultZoneConn.ProxySnatPort,
-				DestinationPort:    80,
-			},
-		}
-		store.RemoveStaleDefaultZoneFlow(antreaConn)
-		assert.False(t, contains(store, defaultZoneConn))
+	t.Run("Stale entries expire via TTL cleanup loop", func(t *testing.T) {
+		// RemoveStaleDefaultZoneFlow was removed: the correlator no longer needs explicit
+		// cleanup because correlation now happens in the poller before fan-out. Stale
+		// default-zone entries that were never matched are evicted by the TTL cleanup loop.
+		// This is covered by the "Expires stale records" sub-test below.
 	})
 	t.Run("Expires stale records", func(t *testing.T) {
 		synctest.Test(t, func(t *testing.T) {
@@ -406,6 +382,7 @@ func TestCorrelateExternal_SymmetricDefaultZoneClearsAntreaProxySnat(t *testing.
 	assert.Equal(t, uint16(0), antrea.ProxySnatPort)
 	assert.Equal(t, snap.originalDestinationIP, antrea.OriginalDestinationAddress)
 	assert.Equal(t, snap.originalDestinationPort, antrea.OriginalDestinationPort)
+	assert.True(t, antrea.IsFromExternal, "IsFromExternal must be set even when no SNAT was applied (ETP=Local)")
 }
 
 // TestFromExternalCorrelator_DefaultZoneKeyWithoutProxySNAT verifies that when conntrack has a
@@ -440,16 +417,16 @@ func TestFromExternalCorrelator_DefaultZoneKeyWithoutProxySNAT(t *testing.T) {
 	assert.Equal(t, clientPort, key.port)
 }
 
-// TestFromExternalCorrelator_SymmetricNATCorrelation verifies that a zone-0 entry with no proxy
+// TestFromExternalCorrelator_SingleNodeCorrelation verifies that a zone-0 entry with no proxy
 // SNAT (symmetric conntrack, e.g. NodePort externalTrafficPolicy=Local or NodePortLocal) is
 // correctly correlated with its Antrea-zone counterpart.
-func TestFromExternalCorrelator_SymmetricNATCorrelation(t *testing.T) {
+func TestFromExternalCorrelator_SingleNodeCorrelation(t *testing.T) {
 	extClient := netip.MustParseAddr("203.0.113.5")
 	podIP := netip.MustParseAddr("10.244.2.2")
 	nodeIP := netip.MustParseAddr("172.18.0.111")
 	clientPort := uint16(40000)
 
-	// Zone-0 connection: symmetric NAT, ProxySnatPort == 0.
+	// Zone-0 connection: no SNAT, ProxySnatPort == 0.
 	defaultZoneConn := &connection.Connection{
 		Zone: 0,
 		FlowKey: connection.Tuple{
@@ -491,7 +468,8 @@ func TestFromExternalCorrelator_SymmetricNATCorrelation(t *testing.T) {
 	assert.Equal(t, clientPort, antreaZoneConn.FlowKey.SourcePort, "Expected original client source port")
 	assert.Equal(t, nodeIP, antreaZoneConn.OriginalDestinationAddress, "Expected original destination IP (node IP)")
 	assert.Equal(t, uint16(12345), antreaZoneConn.OriginalDestinationPort, "Expected original destination port (NodePort)")
-	assert.False(t, antreaZoneConn.ProxySnatIP.IsValid(), "Expected no proxy SNAT IP for symmetric NAT")
-	assert.Equal(t, uint16(0), antreaZoneConn.ProxySnatPort, "Expected no proxy SNAT port for symmetric NAT")
+	assert.False(t, antreaZoneConn.ProxySnatIP.IsValid(), "Expected no proxy SNAT IP when no SNAT was applied")
+	assert.Equal(t, uint16(0), antreaZoneConn.ProxySnatPort, "Expected no proxy SNAT port when no SNAT was applied")
+	assert.True(t, antreaZoneConn.IsFromExternal, "Expected IsFromExternal to be set")
 	assert.Len(t, correlator.connections, 0, "Expected zone-0 entry to be consumed after correlation")
 }

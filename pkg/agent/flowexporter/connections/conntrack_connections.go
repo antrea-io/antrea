@@ -42,33 +42,22 @@ type ConntrackConnectionStore struct {
 	networkPolicyReadyTime time.Time
 	protocolFilter         filter.ProtocolFilter
 	connectionStore
-	fromExternal ExternalCorrelator
 }
 
-// NewConntrackConnectionStore creates a connection store. fromExternal correlates Antrea-zone
-// flows with default-zone state ingested by the poller; use NewFakeExternalCorrelator() in tests that
-// do not need external correlation.
+// NewConntrackConnectionStore creates a connection store. External correlation (default-zone to
+// Antrea-zone) is performed by the poller before connections are delivered here, so no correlator
+// parameter is needed.
 func NewConntrackConnectionStore(
 	npQuerier querier.AgentNetworkPolicyInfoQuerier,
 	podStore objectstore.PodStore,
 	proxier proxy.ProxyQuerier,
 	cfg ConnectionStoreConfig,
-	fromExternal ExternalCorrelator,
 ) *ConntrackConnectionStore {
 	return &ConntrackConnectionStore{
 		connectionStore:        NewConnectionStore(npQuerier, podStore, proxier, cfg),
 		protocolFilter:         filter.NewProtocolFilter(cfg.AllowedProtocols),
 		networkPolicyReadyTime: cfg.NetworkPolicyReadyTime,
-		fromExternal:           fromExternal,
 	}
-}
-
-func (cs *ConntrackConnectionStore) correlateIfExternal(conn *connection.Connection) bool {
-	return cs.fromExternal.CorrelateIfExternal(conn)
-}
-
-func (cs *ConntrackConnectionStore) removeFromExternalCorrelator(conn *connection.Connection) {
-	cs.fromExternal.RemoveStaleDefaultZoneFlow(conn)
 }
 
 // AddOrUpdateConns merges one poll of Antrea-zone conntrack connections into the store.
@@ -93,7 +82,6 @@ func (cs *ConntrackConnectionStore) AddOrUpdateConns(conns []*connection.Connect
 				if err := cs.deleteConnWithoutLock(key); err != nil {
 					return err
 				}
-				cs.removeFromExternalCorrelator(conn)
 			}
 		} else {
 			conn.IsPresent = false
@@ -127,7 +115,8 @@ func (cs *ConntrackConnectionStore) AddOrUpdateConn(conn *connection.Connection)
 	}
 
 	conn.IsPresent = true
-	fromExternal := cs.correlateIfExternal(conn)
+	// External correlation (default-zone → Antrea-zone) is performed by the poller before
+	// connections are delivered here.
 
 	connKey := connection.NewConnectionKey(conn)
 	existingConn, exists := cs.connections[connKey]
@@ -162,14 +151,14 @@ func (cs *ConntrackConnectionStore) AddOrUpdateConn(conn *connection.Connection)
 		connCopy := *conn
 		conn := &connCopy
 		cs.fillPodInfo(conn)
-		if !fromExternal && conn.SourcePodName == "" && conn.DestinationPodName == "" {
+		if !conn.IsFromExternal && conn.SourcePodName == "" && conn.DestinationPodName == "" {
 			// We don't add connections to connection map or expirePriorityQueue if we can't find the pod
 			// information for both srcPod and dstPod except for from external flows.
 
 			klog.V(5).InfoS("Skip this connection as we cannot map any of the connection IPs to a local Pod", "srcIP", conn.FlowKey.SourceAddress.String(), "dstIP", conn.FlowKey.DestinationAddress.String())
 			return
 		}
-		if conn.Mark&openflow.ServiceCTMark.GetRange().ToNXRange().ToUint32Mask() == openflow.ServiceCTMark.GetValue() || fromExternal {
+		if conn.Mark&openflow.ServiceCTMark.GetRange().ToNXRange().ToUint32Mask() == openflow.ServiceCTMark.GetValue() || conn.IsFromExternal {
 			serviceIP := conn.OriginalDestinationAddress.String()
 			svcPort := conn.OriginalDestinationPort
 			protocol, err := lookupServiceProtocol(conn.FlowKey.Protocol)

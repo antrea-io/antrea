@@ -243,7 +243,6 @@ func BenchmarkConntrackConnectionStorePoll(b *testing.B) {
 		podStore,
 		nil,
 		storeCfg,
-		connections.NewFakeExternalCorrelator(),
 	)
 
 	for b.Loop() {

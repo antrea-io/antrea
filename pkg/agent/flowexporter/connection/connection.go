@@ -102,6 +102,10 @@ type Connection struct {
 	// Used for correlating external to pod flows
 	ProxySnatIP   netip.Addr
 	ProxySnatPort uint16
+	// IsFromExternal is set to true by the correlator when this Antrea-zone connection was
+	// matched against a default-zone entry. It is set regardless of whether SNAT was applied
+	// (ProxySnatIP may be zero for ExternalTrafficPolicy=Local).
+	IsFromExternal bool
 }
 
 // NewConnectionKey creates 5-tuple of flow as connection key
