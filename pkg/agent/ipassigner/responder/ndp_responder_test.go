@@ -54,7 +54,7 @@ func (c *fakeNDPConn) LeaveGroup(ip netip.Addr) error {
 
 func TestNDPResponder_handleNeighborSolicitation(t *testing.T) {
 	hwAddr := []byte{0x00, 0x11, 0x22, 0x33, 0x44, 0x55}
-	iface := newFakeNetworkInterface(hwAddr)
+	iface := newFakeNetworkInterface(1, hwAddr)
 
 	tests := []struct {
 		name           string
@@ -129,17 +129,10 @@ func TestNDPResponder_handleNeighborSolicitation(t *testing.T) {
 					return msg, nil, tt.requestIP, err
 				},
 			}
-			assignedIPs := sets.New[string]()
-			for _, ip := range tt.assignedIPs {
-				assignedIPs.Insert(ip.String())
-			}
 			responder := &ndpResponder{
 				linkName:    iface.Name,
 				conn:        fakeConn,
-				assignedIPs: sets.New[netip.Addr](),
-			}
-			for _, ip := range tt.assignedIPs {
-				responder.assignedIPs[ip] = struct{}{}
+				assignedIPs: sets.New[netip.Addr](tt.assignedIPs...),
 			}
 			err := responder.handleNeighborSolicitation(fakeConn, iface)
 			if tt.expectError {
@@ -185,7 +178,7 @@ func Test_parseIPv6SolicitedNodeMulticastAddress(t *testing.T) {
 
 func Test_ndpResponder_addIP(t *testing.T) {
 	hwAddr := []byte{0x00, 0x11, 0x22, 0x33, 0x44, 0x55}
-	iface := newFakeNetworkInterface(hwAddr)
+	iface := newFakeNetworkInterface(1, hwAddr)
 
 	tests := []struct {
 		name                    string
@@ -268,7 +261,7 @@ func Test_ndpResponder_addIP(t *testing.T) {
 				assignedIPs:     tt.assignedIPs,
 				multicastGroups: tt.multicastGroups,
 			}
-			err := r.AddIP(tt.ip.AsSlice())
+			err := r.AddIP(tt.ip)
 			if tt.expectedError {
 				assert.Error(t, err)
 			} else {
@@ -284,7 +277,7 @@ func Test_ndpResponder_addIP(t *testing.T) {
 
 func Test_ndpResponder_removeIP(t *testing.T) {
 	hwAddr := []byte{0x00, 0x11, 0x22, 0x33, 0x44, 0x55}
-	iface := newFakeNetworkInterface(hwAddr)
+	iface := newFakeNetworkInterface(1, hwAddr)
 
 	tests := []struct {
 		name                    string
@@ -374,7 +367,7 @@ func Test_ndpResponder_removeIP(t *testing.T) {
 				assignedIPs:     tt.assignedIPs,
 				multicastGroups: tt.multicastGroups,
 			}
-			err := r.RemoveIP(tt.ip.AsSlice())
+			err := r.RemoveIP(tt.ip)
 			if tt.expectedError {
 				assert.Error(t, err)
 			} else {

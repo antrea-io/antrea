@@ -17,6 +17,7 @@ package responder
 import (
 	"fmt"
 	"net"
+	"net/netip"
 	"sync"
 	"time"
 
@@ -24,13 +25,12 @@ import (
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/klog/v2"
-	utilnet "k8s.io/utils/net"
 )
 
 type arpResponder struct {
 	once        sync.Once
 	linkName    string
-	assignedIPs sets.Set[string]
+	assignedIPs sets.Set[netip.Addr]
 	mutex       sync.Mutex
 	linkEventCh chan struct{}
 }
@@ -41,8 +41,8 @@ func (r *arpResponder) InterfaceName() string {
 	return r.linkName
 }
 
-func (r *arpResponder) AddIP(ip net.IP) error {
-	if !utilnet.IsIPv4(ip) {
+func (r *arpResponder) AddIP(ip netip.Addr) error {
+	if !ip.Is4() {
 		return fmt.Errorf("only IPv4 is supported")
 	}
 	if r.addIP(ip) {
@@ -51,8 +51,8 @@ func (r *arpResponder) AddIP(ip net.IP) error {
 	return nil
 }
 
-func (r *arpResponder) RemoveIP(ip net.IP) error {
-	if !utilnet.IsIPv4(ip) {
+func (r *arpResponder) RemoveIP(ip netip.Addr) error {
+	if !ip.Is4() {
 		return fmt.Errorf("only IPv4 is supported")
 	}
 	if r.deleteIP(ip) {
@@ -143,28 +143,28 @@ func (r *arpResponder) dialAndHandleRequests(stopCh <-chan struct{}) {
 	}
 }
 
-func (r *arpResponder) isIPAssigned(ip net.IP) bool {
+func (r *arpResponder) isIPAssigned(ip netip.Addr) bool {
 	r.mutex.Lock()
 	defer r.mutex.Unlock()
-	return r.assignedIPs.Has(ip.String())
+	return r.assignedIPs.Has(ip)
 }
 
-func (r *arpResponder) deleteIP(ip net.IP) bool {
+func (r *arpResponder) deleteIP(ip netip.Addr) bool {
 	r.mutex.Lock()
 	defer r.mutex.Unlock()
-	exist := r.assignedIPs.Has(ip.String())
+	exist := r.assignedIPs.Has(ip)
 	if exist {
-		r.assignedIPs.Delete(ip.String())
+		r.assignedIPs.Delete(ip)
 	}
 	return exist
 }
 
-func (r *arpResponder) addIP(ip net.IP) bool {
+func (r *arpResponder) addIP(ip netip.Addr) bool {
 	r.mutex.Lock()
 	defer r.mutex.Unlock()
-	exist := r.assignedIPs.Has(ip.String())
+	exist := r.assignedIPs.Has(ip)
 	if !exist {
-		r.assignedIPs.Insert(ip.String())
+		r.assignedIPs.Insert(ip)
 	}
 	return !exist
 }

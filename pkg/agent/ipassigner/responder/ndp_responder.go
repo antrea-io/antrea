@@ -26,7 +26,6 @@ import (
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/klog/v2"
-	utilnet "k8s.io/utils/net"
 )
 
 var (
@@ -189,22 +188,21 @@ func (r *ndpResponder) dialAndHandleRequests(stopCh <-chan struct{}) {
 	}
 }
 
-func (r *ndpResponder) AddIP(ip net.IP) error {
-	if !utilnet.IsIPv6(ip) {
+func (r *ndpResponder) AddIP(ip netip.Addr) error {
+	if !ip.Is6() {
 		return fmt.Errorf("only IPv6 is supported")
 	}
 
-	target, _ := netip.AddrFromSlice(ip)
 	r.mutex.Lock()
 	defer r.mutex.Unlock()
 
-	if r.assignedIPs.Has(target) {
+	if r.assignedIPs.Has(ip) {
 		return nil
 	}
-	if err := r.joinMulticastGroup(target); err != nil {
+	if err := r.joinMulticastGroup(ip); err != nil {
 		return err
 	}
-	r.assignedIPs.Insert(target)
+	r.assignedIPs.Insert(ip)
 
 	return nil
 }
@@ -245,21 +243,20 @@ func (r *ndpResponder) leaveMulticastGroup(ip netip.Addr) error {
 	return nil
 }
 
-func (r *ndpResponder) RemoveIP(ip net.IP) error {
-	if !utilnet.IsIPv6(ip) {
+func (r *ndpResponder) RemoveIP(ip netip.Addr) error {
+	if !ip.Is6() {
 		return fmt.Errorf("only IPv6 is supported")
 	}
-	target, _ := netip.AddrFromSlice(ip)
 	r.mutex.Lock()
 	defer r.mutex.Unlock()
 
-	if !r.assignedIPs.Has(target) {
+	if !r.assignedIPs.Has(ip) {
 		return nil
 	}
-	if err := r.leaveMulticastGroup(target); err != nil {
+	if err := r.leaveMulticastGroup(ip); err != nil {
 		return err
 	}
-	r.assignedIPs.Delete(target)
+	r.assignedIPs.Delete(ip)
 
 	klog.InfoS("Removed IP from NDP responder", "ip", ip, "interface", r.linkName)
 	return nil
