@@ -312,11 +312,6 @@ func (exp *FlowExporter) stopPollerIfNeededLocked() {
 
 func (exp *FlowExporter) Run(stopCh <-chan struct{}) {
 	klog.InfoS("Flow Exporter started")
-	defer func() {
-		if exp.fromExternalCorrelator != nil {
-			exp.fromExternalCorrelator.StopCleanUp()
-		}
-	}()
 	defer exp.queue.ShutDown()
 	cacheSyncs := []cache.InformerSynced{exp.destinationSynced}
 	if exp.nodeRouteController != nil {
@@ -345,7 +340,7 @@ func (exp *FlowExporter) Run(stopCh <-chan struct{}) {
 	go exp.ctConnUpdateChannel.Run(stopCh)
 	go exp.denyConnUpdateChannel.Run(stopCh)
 	if exp.fromExternalCorrelator != nil {
-		go exp.fromExternalCorrelator.Run()
+		go exp.fromExternalCorrelator.Run(stopCh)
 	}
 
 	for range defaultWorkers {

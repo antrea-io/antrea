@@ -167,7 +167,7 @@ func runSendFlowRecordTests(t *testing.T, destination *Destination, isIPv6 bool)
 				IdleFlowTimeout:        testIdleFlowTimeout,
 				StaleConnectionTimeout: 1,
 			}
-			destination.conntrackConnStore = connections.NewConntrackConnectionStore(nil, nil, nil, config, nil)
+			destination.conntrackConnStore = connections.NewConntrackConnectionStore(nil, nil, nil, config, connections.NewFakeExternalCorrelator())
 			destination.denyConnStore = connections.NewDenyConnectionStore(nil, nil, nil, config)
 			destination.conntrackPriorityQueue = destination.conntrackConnStore.GetPriorityQueue()
 			destination.denyPriorityQueue = destination.denyConnStore.GetPriorityQueue()
@@ -412,14 +412,17 @@ func TestDestination_findFlowType(t *testing.T) {
 			expectedFlowType: utils.FlowTypeUnsupported,
 		},
 		{
-			name:    "Source is gateway with destination Pod namespace - FromExternal",
+			name:    "Source is gateway with destination Pod namespace - InterNode (destination-node from-external)",
 			checker: checker,
 			conn: connection.Connection{
 				FlowKey:                 connection.Tuple{SourceAddress: gwIP, DestinationAddress: podIP},
 				DestinationPodNamespace: "default",
 				DestinationPodName:      "podB",
 			},
-			expectedFlowType: utils.FlowTypeFromExternal,
+			// When srcIsGw=true and the destination pod is local, the agent exports FlowTypeInterNode
+			// so that the FlowAggregator can correlate it with the FROM_EXTERNAL source-node record
+			// without needing gateway IP knowledge.
+			expectedFlowType: utils.FlowTypeInterNode,
 		},
 		{
 			name:    "Source is gateway without destination Pod namespace - Unsupported",

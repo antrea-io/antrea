@@ -30,9 +30,7 @@ import (
 	"github.com/google/uuid"
 	"google.golang.org/protobuf/proto"
 	"k8s.io/apimachinery/pkg/util/wait"
-	coreinformers "k8s.io/client-go/informers/core/v1"
 	"k8s.io/client-go/kubernetes"
-	"k8s.io/client-go/tools/cache"
 	"k8s.io/klog/v2"
 
 	flowpb "antrea.io/antrea/v2/pkg/apis/flow/v1alpha1"
@@ -136,7 +134,6 @@ type flowAggregator struct {
 	logHandle           *exporterHandle
 	exportersMutex      sync.Mutex
 	certificateProvider *certificate.Provider
-	nodeIndexer         cache.Indexer
 }
 
 func NewFlowAggregator(
@@ -146,7 +143,6 @@ func NewFlowAggregator(
 	nodeStore objectstore.NodeStore,
 	serviceStore objectstore.ServiceStore,
 	configFile string,
-	nodeInformer coreinformers.NodeInformer,
 ) (*flowAggregator, error) {
 	if len(configFile) == 0 {
 		return nil, fmt.Errorf("configFile is empty string")
@@ -180,15 +176,6 @@ func NewFlowAggregator(
 		clusterID = clusterUUID.String()
 	}
 
-	if nodeInformer == nil {
-		return nil, fmt.Errorf("nodeInformer is nil")
-	}
-	informer := nodeInformer.Informer()
-	err = informer.AddIndexers(intermediate.NodeIndexers)
-	if err != nil {
-		return nil, fmt.Errorf("failed to add nodeIndexer: %v", err)
-	}
-
 	fa := &flowAggregator{
 		aggregatorMode:              opt.AggregatorMode,
 		clusterUUID:                 clusterUUID,
@@ -212,7 +199,6 @@ func NewFlowAggregator(
 		logTickerDuration:           time.Minute,
 		recordCh:                    make(chan *flowpb.Flow, 128),
 		recordBuffer:                ringbuffer.NewBroadcastBuffer[*flowpb.Flow](int(opt.Config.RecordBufferSize)),
-		nodeIndexer:                 informer.GetIndexer(),
 		certificateProvider:         newCertificateProvider(k8sClient, opt.Config.FlowAggregatorAddress),
 		certificateUpdateCh:         make(chan struct{}, 1),
 	}
@@ -282,7 +268,7 @@ func (fa *flowAggregator) InitAggregationProcess() error {
 		ActiveExpiryTimeout:   fa.activeFlowRecordTimeout,
 		InactiveExpiryTimeout: fa.inactiveFlowRecordTimeout,
 	}
-	fa.aggregationProcess, err = intermediate.InitAggregationProcess(apInput, fa.nodeIndexer)
+	fa.aggregationProcess, err = intermediate.InitAggregationProcess(apInput)
 	return err
 }
 

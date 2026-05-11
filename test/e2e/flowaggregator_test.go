@@ -2117,6 +2117,7 @@ func testExternalToPodFlows(t *testing.T, data *TestData, isIPv6 bool) {
 		require.NotEmpty(t, records, "Expected flows for NodePort with ExternalTrafficPolicy Local")
 		for _, record := range records {
 			assert.Contains(t, record, nginxPodName, "Record should include destination Pod name")
+			assert.Contains(t, record, svcLocalName, "Record should include Service name for ExternalTrafficPolicy Local flow")
 			assertIPFIXRecordProxySnatUnset(t, record)
 		}
 	})

@@ -22,11 +22,11 @@ import (
 	"time"
 
 	timestamppb "google.golang.org/protobuf/types/known/timestamppb"
-	"k8s.io/client-go/tools/cache"
 	"k8s.io/klog/v2"
 	"k8s.io/utils/clock"
 
 	flowpb "antrea.io/antrea/v2/pkg/apis/flow/v1alpha1"
+	"antrea.io/antrea/v2/pkg/flowaggregator/flowrecord"
 )
 
 var MaxRetries = 2
@@ -59,6 +59,7 @@ type aggregationProcess struct {
 	clock    clock.Clock
 
 	fromExternalAggregator *fromExternalAggregator
+	fromExternalStopCh     chan struct{}
 }
 
 type AggregationInput struct {
@@ -68,34 +69,36 @@ type AggregationInput struct {
 	InactiveExpiryTimeout time.Duration
 }
 
-func initAggregationProcessWithClock(input AggregationInput, clock clock.Clock, nodeIndexer cache.Indexer) (*aggregationProcess, error) {
+func initAggregationProcessWithClock(input AggregationInput, clock clock.Clock) (*aggregationProcess, error) {
 	if input.RecordChan == nil {
 		return nil, fmt.Errorf("cannot create aggregationProcess process without input channel")
 	}
 	if input.WorkerNum <= 0 {
 		return nil, fmt.Errorf("worker number cannot be <= 0")
 	}
-	return &aggregationProcess{
-		make(map[FlowKey]*AggregationFlowRecord),
-		make(TimeToExpirePriorityQueue, 0),
-		sync.RWMutex{},
-		input.RecordChan,
-		input.WorkerNum,
-		make([]aggregationWorker, 0),
-		input.ActiveExpiryTimeout,
-		input.InactiveExpiryTimeout,
-		make(chan bool),
-		clock,
-		newFromExternalAggregator(nodeIndexer),
-	}, nil
+	ap := &aggregationProcess{
+		flowKeyRecordMap:      make(map[FlowKey]*AggregationFlowRecord),
+		expirePriorityQueue:   make(TimeToExpirePriorityQueue, 0),
+		mutex:                 sync.RWMutex{},
+		recordChan:            input.RecordChan,
+		workerNum:             input.WorkerNum,
+		workerList:            make([]aggregationWorker, 0),
+		activeExpiryTimeout:   input.ActiveExpiryTimeout,
+		inactiveExpiryTimeout: input.InactiveExpiryTimeout,
+		stopChan:              make(chan bool),
+		clock:                 clock,
+		fromExternalStopCh:    make(chan struct{}),
+	}
+	ap.fromExternalAggregator = newFromExternalAggregator()
+	return ap, nil
 }
 
-func InitAggregationProcess(input AggregationInput, nodeIndexer cache.Indexer) (*aggregationProcess, error) {
-	return initAggregationProcessWithClock(input, clock.RealClock{}, nodeIndexer)
+func InitAggregationProcess(input AggregationInput) (*aggregationProcess, error) {
+	return initAggregationProcessWithClock(input, clock.RealClock{})
 }
 
 func (a *aggregationProcess) Start() {
-	go a.fromExternalAggregator.Run(a.fromExternalAggregator.stopCh)
+	go a.fromExternalAggregator.Run(a.fromExternalStopCh)
 	a.mutex.Lock()
 	for i := 0; i < a.workerNum; i++ {
 		w := createWorker(i, a.recordChan, a.aggregateRecordByFlowKey)
@@ -112,7 +115,7 @@ func (a *aggregationProcess) Stop() {
 		worker.stop()
 	}
 	a.mutex.Unlock()
-	a.fromExternalAggregator.stop()
+	close(a.fromExternalStopCh)
 	a.stopChan <- true
 }
 
@@ -323,13 +326,29 @@ func (a *aggregationProcess) addOrUpdateRecordInMap(flowKey *FlowKey, record *fl
 	a.mutex.Lock()
 	defer a.mutex.Unlock()
 
+	originalRecord := record
 	flowKey, record = a.fromExternalAggregator.correlateOrStore(flowKey, record)
 	if flowKey == nil {
+		// correlateOrStore stored a FROM_EXTERNAL source-node flow in fromExternalStore and
+		// signalled that we should attempt a merge against flowKeyRecordMap now.
+		// Use originalRecord because correlateOrStore returns (nil, nil) for source-node flows.
+		a.attemptFromExternalFlowsMerge(originalRecord, isIPv4)
 		return
 	}
+	// For destination-node INTER_NODE flows, after they are stored in flowKeyRecordMap, probe
+	// fromExternalStore for a waiting FROM_EXTERNAL source-node flow and merge if found.
+	defer func() {
+		if isDestinationNodeFromExternalFlow(record) {
+			key := generateFromExternalStoreKey(record)
+			if sourceNode := a.fromExternalAggregator.popSourceNodeFlow(key); sourceNode != nil {
+				if stored, ok := a.flowKeyRecordMap[*flowKey]; ok {
+					a.mergeFromExternalFlowsInPlace(flowKey, stored.Record, sourceNode)
+				}
+			}
+		}
+	}()
 
 	correlationRequired := isCorrelationRequired(record)
-
 	currTime := a.clock.Now()
 	aggregationRecord, exist := a.flowKeyRecordMap[*flowKey]
 	if exist {
@@ -413,6 +432,69 @@ func (a *aggregationProcess) addOrUpdateRecordInMap(flowKey *FlowKey, record *fl
 		heap.Push(&a.expirePriorityQueue, pqItem)
 	}
 	a.flowKeyRecordMap[*flowKey] = aggregationRecord
+}
+
+// attemptFromExternalMerge is called when a FROM_EXTERNAL source-node flow was stored in
+// fromExternalStore. It looks up flowKeyRecordMap using the correlation key and, if the
+// destination-node entry exists, pops the source-node flow from fromExternalStore and
+// merges in-place.
+// If the destination-node flow has not arrived yet, the source-node flow stays in
+// fromExternalStore; the defer in addOrUpdateRecordInMap will complete the merge when the
+// destination-node flow arrives.
+// Must be called with a.mutex held.
+func (a *aggregationProcess) attemptFromExternalFlowsMerge(sourceNodeFlow *flowpb.Flow, isIPv4 bool) {
+	correlationKey := FlowKey{
+		SourceAddress:      flowrecord.IpAddressAsString(sourceNodeFlow.ProxySnatIp),
+		DestinationAddress: flowrecord.IpAddressAsString(sourceNodeFlow.Ip.Destination),
+		Protocol:           uint8(sourceNodeFlow.Transport.ProtocolNumber),
+		SourcePort:         uint16(sourceNodeFlow.ProxySnatPort),
+		DestinationPort:    uint16(sourceNodeFlow.Transport.DestinationPort),
+	}
+	aggRecord, exists := a.flowKeyRecordMap[correlationKey]
+	if !exists {
+		klog.V(4).InfoS("FROM_EXTERNAL source-node flow stored; destination-node INTER_NODE flow not yet in map")
+		return
+	}
+	// Guard against key collisions: only merge if the existing entry is actually a
+	// destination-node INTER_NODE flow. Other flow types (e.g. a node-to-pod FROM_EXTERNAL
+	// flow whose src IP happens to equal the gateway SNAT IP) must not be re-keyed.
+	if !isDestinationNodeFromExternalFlow(aggRecord.Record) {
+		klog.V(4).InfoS("Existing map entry is not adestination-node INTER_NODE flow, keeping source-node flow in store")
+		return
+	}
+	// Destination-node entry confirmed: pop source from store and merge in-place.
+	crossKey := generateFromExternalStoreKey(sourceNodeFlow)
+	a.fromExternalAggregator.popSourceNodeFlow(crossKey)
+	a.mergeFromExternalFlowsInPlace(&correlationKey, aggRecord.Record, sourceNodeFlow)
+}
+
+// mergeFromExternalInPlace merges sourceNode into the destination-node record that is stored
+// in flowKeyRecordMap under oldKey. After merging, the entry is re-keyed to the correlated
+// FlowKey (externalIP, clientPort, ...) and ReadyToSend is set to true.
+// Must be called with a.mutex held.
+func (a *aggregationProcess) mergeFromExternalFlowsInPlace(oldKey *FlowKey, destRecord *flowpb.Flow, sourceNode *flowpb.Flow) {
+	mergeExternalFlows(sourceNode, destRecord)
+	// The record has been mutated in-place: Ip.Source and Transport.SourcePort now reflect the
+	// real external client. Derive the new FlowKey from the updated record.
+	newFlowKey, _ := getFlowKeyFromRecord(destRecord)
+
+	// Re-key the flowKeyRecordMap entry.
+	aggRecord := a.flowKeyRecordMap[*oldKey]
+	delete(a.flowKeyRecordMap, *oldKey)
+	a.flowKeyRecordMap[*newFlowKey] = aggRecord
+
+	// Update the priority queue item to point at the new key and mark ready to send.
+	aggRecord.ReadyToSend = true
+	aggRecord.areCorrelatedFieldsFilled = true
+	a.expirePriorityQueue.Update(
+		aggRecord.PriorityQueueItem,
+		newFlowKey,
+		aggRecord,
+		a.clock.Now(), // export immediately
+		aggRecord.PriorityQueueItem.inactiveExpireTime,
+	)
+	klog.V(4).InfoS("FROM_EXTERNAL correlation complete: re-keyed entry and marked ready to send",
+		"oldKey", oldKey, "newKey", newFlowKey)
 }
 
 // correlateRecords correlate the incomingRecord with existingRecord using correlation
@@ -750,4 +832,15 @@ func getFlowKeyFromRecord(record *flowpb.Flow) (*FlowKey, bool) {
 		DestinationPort:    uint16(record.Transport.DestinationPort),
 	}
 	return flowKey, record.Ip.Version == flowpb.IPVersion_IP_VERSION_4
+}
+
+// isCorrelationRequired returns true for InterNode flowType when
+// either the egressNetworkPolicyRuleAction is not deny (drop/reject) or
+// the ingressNetworkPolicyRuleAction is not reject.
+func isCorrelationRequired(record *flowpb.Flow) bool {
+	flowType := record.K8S.FlowType
+	return flowType == flowpb.FlowType_FLOW_TYPE_INTER_NODE &&
+		record.K8S.EgressNetworkPolicyRuleAction != flowpb.NetworkPolicyRuleAction_NETWORK_POLICY_RULE_ACTION_DROP &&
+		record.K8S.EgressNetworkPolicyRuleAction != flowpb.NetworkPolicyRuleAction_NETWORK_POLICY_RULE_ACTION_REJECT &&
+		record.K8S.IngressNetworkPolicyRuleAction != flowpb.NetworkPolicyRuleAction_NETWORK_POLICY_RULE_ACTION_REJECT
 }

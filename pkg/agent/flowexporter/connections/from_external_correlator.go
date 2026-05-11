@@ -27,57 +27,44 @@ import (
 )
 
 const (
+	// DefaultZone is the conntrack zone used for pre-NAT (default/zone-0) flows.
+	DefaultZone = 0
 	// defaultTTL is the threshold for expiring connections in the FromExternalCorrelator.
 	defaultTTL = time.Minute
 	// defaultCleanUpInterval is how often the background cleanup runs.
 	defaultCleanUpInterval = 5 * time.Second
 )
 
-// ExternalCorrelator correlates default-zone (zone 0) conntrack with Antrea-zone flows for
-// external-to-pod export. The concrete type is *FromExternalCorrelator; use NewFakeExternalCorrelator
-// when correlation should be disabled (e.g. in unit tests that do not need correlator lifecycle).
+// ExternalCorrelator correlates default-zone conntrack with Antrea-zone flows for
+// external-to-pod export.
 type ExternalCorrelator interface {
-	IngestZoneZero(conn *connection.Connection)
+	IngestDefaultZoneFlow(conn *connection.Connection)
 	CorrelateIfExternal(conn *connection.Connection) bool
-	RemoveStaleZoneZero(conn *connection.Connection)
+	RemoveStaleDefaultZoneFlow(conn *connection.Connection)
 }
 
-type fakeExternalCorrelator struct{}
-
-func (fakeExternalCorrelator) IngestZoneZero(*connection.Connection) {}
-
-func (fakeExternalCorrelator) CorrelateIfExternal(*connection.Connection) bool { return false }
-
-func (fakeExternalCorrelator) RemoveStaleZoneZero(*connection.Connection) {}
-
-// NewFakeExternalCorrelator returns an ExternalCorrelator that does not correlate (no-op methods).
-func NewFakeExternalCorrelator() ExternalCorrelator {
-	return fakeExternalCorrelator{}
-}
-
-// FromExternalCorrelator correlates zone-0 (pre-Antrea DNAT/SNAT) connections with Antrea-zone
-// connections so external client IP information can be preserved on exported flows.
+// FromExternalCorrelator correlates default-zone (pre-Antrea DNAT/SNAT) connections with
+// Antrea-zone connections so external client IP information can be preserved on exported flows.
 type FromExternalCorrelator struct {
 	proxier         proxy.ProxyQuerier
 	connections     map[correlatorKey]connectionItem
-	stopCh          chan struct{}
-	stopOnce        sync.Once
 	lock            sync.Mutex
 	ttl             time.Duration
 	cleanUpInterval time.Duration
 }
 
 // correlatorKey identifies a flow by the Pod (or endpoint) IP and the masquerade reply port used
-// to match zone-0 tuples to Antrea-zone tuples.
+// to match default-zone tuples to Antrea-zone tuples.
 type correlatorKey struct {
 	dstIP netip.Addr
 	port  uint16
 }
 
-// zoneZeroSnapshot holds only the zone-0 fields needed to patch the Antrea-zone connection during
-// correlation. We do not retain a *connection.Connection here to avoid pinning the large
-// connection struct (and its string/slice fields) for every in-flight external flow.
-type zoneZeroSnapshot struct {
+// defaultZoneSnapshot holds only the default-zone fields needed to patch the Antrea-zone
+// connection during correlation. We do not retain a *connection.Connection here to avoid
+// pinning the large connection struct (and its string/slice fields) for every in-flight
+// external flow.
+type defaultZoneSnapshot struct {
 	sourceIP                netip.Addr
 	sourcePort              uint16
 	proxySnatIP             netip.Addr
@@ -86,8 +73,8 @@ type zoneZeroSnapshot struct {
 	originalDestinationPort uint16
 }
 
-func zoneZeroSnapshotFromConn(conn *connection.Connection) zoneZeroSnapshot {
-	return zoneZeroSnapshot{
+func defaultZoneSnapshotFromConn(conn *connection.Connection) defaultZoneSnapshot {
+	return defaultZoneSnapshot{
 		sourceIP:                conn.FlowKey.SourceAddress,
 		sourcePort:              conn.FlowKey.SourcePort,
 		proxySnatIP:             conn.ProxySnatIP,
@@ -97,49 +84,39 @@ func zoneZeroSnapshotFromConn(conn *connection.Connection) zoneZeroSnapshot {
 	}
 }
 
-// connectionItem stores a compact snapshot and expiry metadata for a zone-0 flow.
+// connectionItem stores a compact snapshot and expiry metadata for a default-zone flow.
 type connectionItem struct {
-	snapshot  zoneZeroSnapshot
+	snapshot  defaultZoneSnapshot
 	timestamp time.Time
 }
 
 // NewFromExternalCorrelator returns a FromExternalCorrelator with its internal map initialized.
-// proxier is used for GetServiceByIP during IngestZoneZero; if nil, every zone-0 flow is retained
-// without Service lookup.
-// The caller should run the cleanup loop with go correlator.Run() (e.g. alongside other flow
-// exporter workers) and call StopCleanUp when shutting down.
+// proxier is used for GetServiceByIP during IngestDefaultZoneFlow; if nil, every default-zone flow is
+// retained without Service lookup.
+// Note: The caller should run the cleanup loop with go correlator.Run(stopCh) and close stopCh to stop.
+// NodePortLocal flows are not handled by the correlator since the per-Pod node port is not
+// registered in the proxier's service map.
 func NewFromExternalCorrelator(proxier proxy.ProxyQuerier) *FromExternalCorrelator {
-	stopCh := make(chan struct{})
 	return &FromExternalCorrelator{
 		proxier:         proxier,
 		connections:     map[correlatorKey]connectionItem{},
-		stopCh:          stopCh,
 		ttl:             defaultTTL,
 		cleanUpInterval: defaultCleanUpInterval,
 	}
 }
 
-// Run runs the TTL cleanup loop until StopCleanUp closes the internal stop channel.
-func (c *FromExternalCorrelator) Run() {
-	c.cleanUpLoop(c.stopCh)
+// Run runs the TTL cleanup loop until stopCh is closed.
+func (c *FromExternalCorrelator) Run(stopCh <-chan struct{}) {
+	c.cleanUpLoop(stopCh)
 }
 
-// StopCleanUp stops the background cleanup goroutine. It is safe to call more than once.
-func (c *FromExternalCorrelator) StopCleanUp() {
-	c.stopOnce.Do(func() {
-		if c.stopCh != nil {
-			close(c.stopCh)
-		}
-	})
-}
-
-// keyFromZoneZeroConn builds the correlator key for a zone-0 connection.
-// For asymmetric NAT (e.g. standard kube-proxy NodePort masquerade) ProxySnatPort is set by
+// keyFromDefaultZoneConn builds the correlator key for a default-zone connection.
+// For SNAT flows (e.g. standard kube-proxy NodePort masquerade) ProxySnatPort is set by
 // NetlinkFlowToAntreaConnection to the SNAT port, which equals the Antrea-zone FlowKey.SourcePort.
-// For symmetric conntrack (e.g. NodePort with externalTrafficPolicy=Local hitting a local endpoint)
+// For flows without SNAT (e.g. NodePort with externalTrafficPolicy=Local hitting a local endpoint)
 // ProxySnatPort is 0; in that case we key by the real client source port so the key matches what
 // keyFromAntreaZoneConn will produce for the Antrea-zone counterpart.
-func keyFromZoneZeroConn(conn *connection.Connection) correlatorKey {
+func keyFromDefaultZoneConn(conn *connection.Connection) correlatorKey {
 	port := conn.ProxySnatPort
 	if port == 0 {
 		port = conn.FlowKey.SourcePort
@@ -151,28 +128,28 @@ func keyFromAntreaZoneConn(conn *connection.Connection) correlatorKey {
 	return correlatorKey{dstIP: conn.FlowKey.DestinationAddress, port: conn.FlowKey.SourcePort}
 }
 
-// IngestZoneZero stores zone-0 connections that may later pair with Antrea-zone connections.
+// IngestDefaultZoneFlow stores default-zone connections that may later pair with Antrea-zone connections.
 // Only connections that map to a Service (when proxier is non-nil) are retained.
-func (c *FromExternalCorrelator) IngestZoneZero(conn *connection.Connection) {
-	if conn == nil || conn.Zone != 0 {
+func (c *FromExternalCorrelator) IngestDefaultZoneFlow(conn *connection.Connection) {
+	if conn == nil || conn.Zone != DefaultZone {
 		return
 	}
 	// Original destination may be ClusterIP, NodePort, LoadBalancer IP, or ExternalIP.
 	// GetServiceByIP looks up the proxier's ipToServiceMap built from watched Kubernetes Service
 	// objects: it registers ClusterIP:servicePort, nodeIP:NodePort, LB/External IPs, etc.
 	// NodePort traffic (including externalTrafficPolicy=Local, which are handled by
-	// kube-proxy/iptables on the node) can still resolve here if the zone-0 tuple's
+	// kube-proxy/iptables on the node) can still resolve here if the default-zone tuple's
 	// OriginalDestinationAddress/OriginalDestinationPort matches a map key (e.g.
 	// node IP + NodePort, or ClusterIP + service port).
 	svcIP := conn.OriginalDestinationAddress.String()
 	svcPort := conn.OriginalDestinationPort
 	protocol, err := lookupServiceProtocol(conn.FlowKey.Protocol)
 	if err != nil {
-		klog.InfoS("Could not retrieve Service protocol", "error", err, "conn", conn)
+		klog.V(4).InfoS("Could not retrieve Service protocol for default-zone connection, skipping", "protocol", conn.FlowKey.Protocol)
 		return
 	}
-	// With no proxier, retain every zone-0 flow (no Service lookup). With proxier, only retain
-	// when GetServiceByIP matches.
+	// With no proxier, retain every default-zone flow (no Service lookup). With proxier, only
+	// retain when GetServiceByIP matches.
 	shouldStore := true
 	if c.proxier != nil {
 		serviceStr := fmt.Sprintf("%s:%d/%s", svcIP, svcPort, protocol)
@@ -183,18 +160,18 @@ func (c *FromExternalCorrelator) IngestZoneZero(conn *connection.Connection) {
 	}
 }
 
-// CorrelateIfExternal returns true if it correlates the connection to its zone-zero counterpart
+// CorrelateIfExternal returns true if it correlates the connection to its default-zone counterpart
 // to preserve the SNAT'd source IP. The correlator map only ever contains entries that were
-// stored by IngestZoneZero (which itself only keeps Service flows).
+// stored by IngestDefaultZoneFlow (which itself only keeps Service flows).
 func (c *FromExternalCorrelator) CorrelateIfExternal(conn *connection.Connection) bool {
 	if conn == nil {
 		return false
 	}
-	zoneZero, ok := c.popMatching(conn)
+	snapshot, ok := c.popMatching(conn)
 	if !ok {
 		return false
 	}
-	correlateExternal(zoneZero, conn)
+	correlateExternal(snapshot, conn)
 	return true
 }
 
@@ -226,36 +203,36 @@ func (c *FromExternalCorrelator) cleanup(ttl time.Duration) {
 	}
 }
 
-// add stores the given zone-zero connection.
+// add stores the given default-zone connection.
 func (c *FromExternalCorrelator) add(conn *connection.Connection) {
-	key := keyFromZoneZeroConn(conn)
+	key := keyFromDefaultZoneConn(conn)
 	c.lock.Lock()
 	defer c.lock.Unlock()
 
 	c.connections[key] = connectionItem{
-		snapshot:  zoneZeroSnapshotFromConn(conn),
+		snapshot:  defaultZoneSnapshotFromConn(conn),
 		timestamp: time.Now(),
 	}
 }
 
-// popMatching removes and returns the zone-zero snapshot that pairs with this Antrea-zone
+// popMatching removes and returns the default-zone snapshot that pairs with this Antrea-zone
 // connection, if any.
-func (c *FromExternalCorrelator) popMatching(conn *connection.Connection) (zoneZeroSnapshot, bool) {
+func (c *FromExternalCorrelator) popMatching(conn *connection.Connection) (defaultZoneSnapshot, bool) {
 	key := keyFromAntreaZoneConn(conn)
 	c.lock.Lock()
 	defer c.lock.Unlock()
 
 	record, exists := c.connections[key]
 	if !exists {
-		return zoneZeroSnapshot{}, false
+		return defaultZoneSnapshot{}, false
 	}
 	delete(c.connections, key)
 	return record.snapshot, true
 }
 
-// RemoveStaleZoneZero deletes the zone-zero entry left in the map when the Antrea-zone flow
+// RemoveStaleDefaultZoneFlow deletes the default-zone entry left in the map when the Antrea-zone flow
 // expires before correlation.
-func (c *FromExternalCorrelator) RemoveStaleZoneZero(conn *connection.Connection) {
+func (c *FromExternalCorrelator) RemoveStaleDefaultZoneFlow(conn *connection.Connection) {
 	key := keyFromAntreaZoneConn(conn)
 	c.lock.Lock()
 	defer c.lock.Unlock()
@@ -263,12 +240,12 @@ func (c *FromExternalCorrelator) RemoveStaleZoneZero(conn *connection.Connection
 	delete(c.connections, key)
 }
 
-// correlateExternal copies correlation fields from the zone-0 snapshot onto the Antrea-zone connection.
-func correlateExternal(zoneZero zoneZeroSnapshot, antreaZone *connection.Connection) {
-	antreaZone.FlowKey.SourcePort = zoneZero.sourcePort
-	antreaZone.FlowKey.SourceAddress = zoneZero.sourceIP
-	antreaZone.ProxySnatIP = zoneZero.proxySnatIP
-	antreaZone.ProxySnatPort = zoneZero.proxySnatPort
-	antreaZone.OriginalDestinationAddress = zoneZero.originalDestinationIP
-	antreaZone.OriginalDestinationPort = zoneZero.originalDestinationPort
+// correlateExternal copies correlation fields from the default-zone snapshot onto the Antrea-zone connection.
+func correlateExternal(snap defaultZoneSnapshot, antreaZone *connection.Connection) {
+	antreaZone.FlowKey.SourcePort = snap.sourcePort
+	antreaZone.FlowKey.SourceAddress = snap.sourceIP
+	antreaZone.ProxySnatIP = snap.proxySnatIP
+	antreaZone.ProxySnatPort = snap.proxySnatPort
+	antreaZone.OriginalDestinationAddress = snap.originalDestinationIP
+	antreaZone.OriginalDestinationPort = snap.originalDestinationPort
 }

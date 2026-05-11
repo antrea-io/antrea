@@ -78,7 +78,6 @@ func run(configFile string) error {
 		nodeStore,
 		serviceStore,
 		configFile,
-		nodeInformer,
 	)
 	if err != nil {
 		return err

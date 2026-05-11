@@ -159,14 +159,14 @@ func TestInitAggregationProcess(t *testing.T) {
 	t.Run("no input channel", func(t *testing.T) {
 		_, err := InitAggregationProcess(AggregationInput{
 			WorkerNum: 2,
-		}, nil)
+		})
 		assert.Error(t, err)
 	})
 	t.Run("input channel", func(t *testing.T) {
 		aggregationProcess, err := InitAggregationProcess(AggregationInput{
 			RecordChan: make(chan *flowpb.Flow),
 			WorkerNum:  2,
-		}, nil)
+		})
 		require.NoError(t, err)
 		assert.Equal(t, 2, aggregationProcess.workerNum)
 	})
@@ -178,7 +178,7 @@ func TestGetTupleRecordMap(t *testing.T) {
 		RecordChan: recordChan,
 		WorkerNum:  2,
 	}
-	aggregationProcess, _ := InitAggregationProcess(input, nil)
+	aggregationProcess, _ := InitAggregationProcess(input)
 	assert.Equal(t, aggregationProcess.flowKeyRecordMap, aggregationProcess.flowKeyRecordMap)
 }
 
@@ -190,7 +190,7 @@ func TestAggregateRecordByFlowKey(t *testing.T) {
 		ActiveExpiryTimeout:   testActiveExpiry,
 		InactiveExpiryTimeout: testInactiveExpiry,
 	}
-	aggregationProcess, _ := InitAggregationProcess(input, nil)
+	aggregationProcess, _ := InitAggregationProcess(input)
 	record := createFlowRecordForSrc(false, flowpb.FlowType_FLOW_TYPE_INTER_NODE, false, flowpb.NetworkPolicyRuleAction_NETWORK_POLICY_RULE_ACTION_NO_ACTION)
 	require.NoError(t, aggregationProcess.aggregateRecordByFlowKey(record))
 	assert.NotZero(t, uint64(1), aggregationProcess.GetNumFlows())
@@ -224,7 +224,7 @@ func TestAggregationProcess(t *testing.T) {
 		RecordChan: recordChan,
 		WorkerNum:  2,
 	}
-	aggregationProcess, _ := InitAggregationProcess(input, nil)
+	aggregationProcess, _ := InitAggregationProcess(input)
 	record := createFlowRecordForSrc(false, flowpb.FlowType_FLOW_TYPE_INTER_NODE, false, flowpb.NetworkPolicyRuleAction_NETWORK_POLICY_RULE_ACTION_NO_ACTION)
 	go func() {
 		recordChan <- record
@@ -249,7 +249,7 @@ func BenchmarkAggregateRecordByFlowKey(b *testing.B) {
 			RecordChan: recordChan,
 			WorkerNum:  1, // not relevant for this benchmark (not calling Start)
 		}
-		ap, err := InitAggregationProcess(input, nil)
+		ap, err := InitAggregationProcess(input)
 		require.NoError(b, err)
 		record1 := createFlowRecordForSrc(isIPv6, flowpb.FlowType_FLOW_TYPE_INTER_NODE, false, flowpb.NetworkPolicyRuleAction_NETWORK_POLICY_RULE_ACTION_NO_ACTION)
 		record2 := createFlowRecordForDst(isIPv6, flowpb.FlowType_FLOW_TYPE_INTER_NODE, false, flowpb.NetworkPolicyRuleAction_NETWORK_POLICY_RULE_ACTION_NO_ACTION)
@@ -274,7 +274,7 @@ func TestCorrelateRecordsForInterNodeFlow(t *testing.T) {
 		InactiveExpiryTimeout: testInactiveExpiry,
 	}
 	clock := clocktesting.NewFakeClock(time.Now())
-	ap, _ := initAggregationProcessWithClock(input, clock, nil)
+	ap, _ := initAggregationProcessWithClock(input, clock)
 	// Test IPv4 fields.
 	// Test the scenario, where record1 is added first and then record2.
 	record1 := createFlowRecordForSrc(false, flowpb.FlowType_FLOW_TYPE_INTER_NODE, false, flowpb.NetworkPolicyRuleAction_NETWORK_POLICY_RULE_ACTION_NO_ACTION)
@@ -316,7 +316,7 @@ func TestCorrelateRecordsForInterNodeDenyFlow(t *testing.T) {
 		WorkerNum:  2,
 	}
 	clock := clocktesting.NewFakeClock(time.Now())
-	ap, _ := initAggregationProcessWithClock(input, clock, nil)
+	ap, _ := initAggregationProcessWithClock(input, clock)
 	// Test the scenario, where src record has egress deny rule
 	record1 := createFlowRecordForSrc(false, flowpb.FlowType_FLOW_TYPE_INTER_NODE, false, flowpb.NetworkPolicyRuleAction_NETWORK_POLICY_RULE_ACTION_DROP)
 	runCorrelationAndCheckResult(t, ap, clock, record1, nil, false, flowpb.FlowType_FLOW_TYPE_INTER_NODE, false)
@@ -347,7 +347,7 @@ func TestCorrelateRecordsForIntraNodeFlow(t *testing.T) {
 		InactiveExpiryTimeout: testInactiveExpiry,
 	}
 	clock := clocktesting.NewFakeClock(time.Now())
-	ap, _ := initAggregationProcessWithClock(input, clock, nil)
+	ap, _ := initAggregationProcessWithClock(input, clock)
 	// Test IPv4 fields.
 	record1 := createFlowRecordForSrc(false, flowpb.FlowType_FLOW_TYPE_INTRA_NODE, false, flowpb.NetworkPolicyRuleAction_NETWORK_POLICY_RULE_ACTION_NO_ACTION)
 	runCorrelationAndCheckResult(t, ap, clock, record1, nil, false, flowpb.FlowType_FLOW_TYPE_INTRA_NODE, false)
@@ -370,7 +370,7 @@ func TestAggregateRecordsForInterNodeFlow(t *testing.T) {
 		InactiveExpiryTimeout: testInactiveExpiry,
 	}
 	clock := clocktesting.NewFakeClock(time.Now())
-	ap, _ := initAggregationProcessWithClock(input, clock, nil)
+	ap, _ := initAggregationProcessWithClock(input, clock)
 
 	// Test the scenario (added in order): srcRecord, dstRecord, record1_updated, record2_updated
 	srcRecord := createFlowRecordForSrc(false, flowpb.FlowType_FLOW_TYPE_INTER_NODE, false, flowpb.NetworkPolicyRuleAction_NETWORK_POLICY_RULE_ACTION_NO_ACTION)
@@ -420,7 +420,7 @@ func TestDeleteFlowKeyFromMapWithLock(t *testing.T) {
 		RecordChan: recordChan,
 		WorkerNum:  2,
 	}
-	aggregationProcess, _ := InitAggregationProcess(input, nil)
+	aggregationProcess, _ := InitAggregationProcess(input)
 	record := createFlowRecordForSrc(false, flowpb.FlowType_FLOW_TYPE_INTER_NODE, false, flowpb.NetworkPolicyRuleAction_NETWORK_POLICY_RULE_ACTION_NO_ACTION)
 	flowKey1 := FlowKey{"10.0.0.1", "10.0.0.2", 6, 1234, 5678}
 	flowKey2 := FlowKey{"2001:0:3238:dfe1:63::fefb", "2001:0:3238:dfe1:63::fefc", 6, 1234, 5678}
@@ -486,7 +486,7 @@ func TestGetRecords(t *testing.T) {
 		ActiveExpiryTimeout:   testActiveExpiry,
 		InactiveExpiryTimeout: testInactiveExpiry,
 	}
-	ap, _ := InitAggregationProcess(input, nil)
+	ap, _ := InitAggregationProcess(input)
 
 	// Add records with IPv4 fields.
 	recordIPv4Src := createFlowRecordForSrc(false, flowpb.FlowType_FLOW_TYPE_INTER_NODE, false, flowpb.NetworkPolicyRuleAction_NETWORK_POLICY_RULE_ACTION_NO_ACTION)
@@ -553,7 +553,7 @@ func TestForAllExpiredFlowRecordsDo(t *testing.T) {
 		ActiveExpiryTimeout:   testActiveExpiry,
 		InactiveExpiryTimeout: testInactiveExpiry,
 	}
-	ap, _ := InitAggregationProcess(input, nil)
+	ap, _ := InitAggregationProcess(input)
 	// Add records with IPv4 fields.
 	recordIPv4Src := createFlowRecordForSrc(false, flowpb.FlowType_FLOW_TYPE_INTER_NODE, false, flowpb.NetworkPolicyRuleAction_NETWORK_POLICY_RULE_ACTION_NO_ACTION)
 	recordIPv4Dst := createFlowRecordForDst(false, flowpb.FlowType_FLOW_TYPE_INTER_NODE, false, flowpb.NetworkPolicyRuleAction_NETWORK_POLICY_RULE_ACTION_NO_ACTION)
