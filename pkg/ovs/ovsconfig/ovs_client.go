@@ -148,7 +148,7 @@ func (br *OVSBridge) Create() Error {
 		// Surface the failure instead of swallowing it. Logging then
 		// returning nil left isHardwareOffloadEnabled in an unknown
 		// state and downstream components proceeded as if the bridge
-		// was fully initialised — see #7978.
+		// was fully initialised, see #7978.
 		klog.ErrorS(err, "Failed to get hardware offload")
 		return err
 	}
