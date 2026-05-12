@@ -210,6 +210,65 @@ func Test_noHostNetworkPod(t *testing.T) {
 	}, 100*time.Millisecond, 10*time.Millisecond, "host-network Pods should be filtered out by informer")
 }
 
+// Test_podTerminationExcludesFromStore validates that when a running Pod transitions to a
+// terminal phase (Succeeded/Failed), the update event causes it to be treated as a deletion
+// by the FilteringResourceEventHandler, setting a DeletionTimestamp in the store and making
+// GetPodByIPAndTime no longer return it.
+func Test_podTerminationExcludesFromStore(t *testing.T) {
+	const testPodIP = "10.1.2.3"
+	runningPod := &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:              "job-pod",
+			Namespace:         "default",
+			UID:               "job-pod-uid",
+			CreationTimestamp: metav1.Time{Time: refTime2},
+		},
+		Status: corev1.PodStatus{
+			PodIPs: []corev1.PodIP{{IP: testPodIP}},
+			Phase:  corev1.PodRunning,
+		},
+	}
+
+	k8sClient := fake.NewSimpleClientset()
+	podInformer := getPodInformer(k8sClient)
+	podStore := NewPodStore(podInformer)
+	stopCh := make(chan struct{})
+	defer close(stopCh)
+
+	go podInformer.Run(stopCh)
+	cache.WaitForCacheSync(stopCh, podInformer.HasSynced)
+
+	// Step 1: create the running Pod and verify it is indexed.
+	// The Pod's CreationTimestamp is refTime2; we query slightly after that so the
+	// timestamp filter passes while the Pod is still running.
+	_, err := k8sClient.CoreV1().Pods(runningPod.Namespace).Create(context.TODO(), runningPod, metav1.CreateOptions{})
+	require.NoError(t, err)
+	assert.EventuallyWithT(t, func(t *assert.CollectT) {
+		pod, ok := podStore.GetPodByIPAndTime(testPodIP, refTime2.Add(time.Second))
+		if assert.True(t, ok, "running Pod should be found by IP lookup") {
+			assert.Equal(t, runningPod.UID, pod.UID)
+		}
+	}, 1*time.Second, 10*time.Millisecond)
+
+	// Step 2: update the same Pod to Succeeded.
+	succeededPod := runningPod.DeepCopy()
+	succeededPod.Status.Phase = corev1.PodSucceeded
+	_, err = k8sClient.CoreV1().Pods(succeededPod.Namespace).UpdateStatus(context.TODO(), succeededPod, metav1.UpdateOptions{})
+	require.NoError(t, err)
+
+	// Step 3: verify the Pod is no longer returned even while it is still the only entry
+	// in the indexer (during the 5-minute grace period before complete removal from store).
+	// The FilteringResourceEventHandler translates the filter transition
+	// (older passed FilterFunc, newer does not) into onObjectDelete(), which
+	// records DeletionTimestamp = time.Now(). The single-object fast-path in
+	// GetObjectByIndexAndTime now honors DeletionTimestamp, so querying at a time after
+	// the deletion must return nothing.
+	assert.EventuallyWithT(t, func(t *assert.CollectT) {
+		_, ok := podStore.GetPodByIPAndTime(testPodIP, time.Now())
+		assert.False(t, ok, "terminated pod should not be returned by GetPodByIPAndTime after phase transition")
+	}, 1*time.Second, 10*time.Millisecond)
+}
+
 /*
 Sample output:
 goos: darwin
@@ -349,4 +408,87 @@ func generatePod() *corev1.Pod {
 
 func getRandomIP() string {
 	return fmt.Sprintf("%d.%d.%d.%d", rand.Intn(256), rand.Intn(256), rand.Intn(256), rand.Intn(256))
+}
+
+// Test_GetPodByIPAndTime_IPReuse_CompletedJobPod validates that when a Job Pod completes and
+// its IP is reused by a new running Pod, GetPodByIPAndTime correctly returns only the new Pod.
+func Test_GetPodByIPAndTime_IPReuse_CompletedJobPod(t *testing.T) {
+	const reusedPodIP = "10.0.0.100"
+
+	jobPod := &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:              "job-pod",
+			Namespace:         "ns-a",
+			UID:               "job-pod-uid",
+			CreationTimestamp: metav1.Time{Time: refTime2},
+		},
+		Status: corev1.PodStatus{
+			PodIPs: []corev1.PodIP{{IP: reusedPodIP}},
+			Phase:  corev1.PodRunning,
+		},
+	}
+	newPod := &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:              "new-running-pod",
+			Namespace:         "ns-b",
+			UID:               "new-running-uid",
+			CreationTimestamp: metav1.Time{Time: refTime},
+		},
+		Status: corev1.PodStatus{
+			PodIPs: []corev1.PodIP{{IP: reusedPodIP}},
+			Phase:  corev1.PodRunning,
+		},
+	}
+
+	stopCh := make(chan struct{})
+	defer close(stopCh)
+	k8sClient := fake.NewSimpleClientset()
+	podInformer := getPodInformer(k8sClient)
+	podStore := NewPodStore(podInformer)
+	go podInformer.Run(stopCh)
+	cache.WaitForCacheSync(stopCh, podInformer.HasSynced)
+
+	// Step 1: create the job Pod while it is still running.
+	_, err := k8sClient.CoreV1().Pods(jobPod.Namespace).Create(context.TODO(), jobPod, metav1.CreateOptions{})
+	require.NoError(t, err)
+	assert.EventuallyWithT(t, func(t *assert.CollectT) {
+		podStore.mutex.RLock()
+		defer podStore.mutex.RUnlock()
+		assert.Contains(t, podStore.timestampMap, jobPod.UID)
+	}, 1*time.Second, 10*time.Millisecond)
+
+	// Step 2: job Pod transitions to Succeeded; the store treats this as a deletion.
+	succeededJobPod := jobPod.DeepCopy()
+	succeededJobPod.Status.Phase = corev1.PodSucceeded
+	_, err = k8sClient.CoreV1().Pods(succeededJobPod.Namespace).UpdateStatus(context.TODO(), succeededJobPod, metav1.UpdateOptions{})
+	require.NoError(t, err)
+
+	assert.EventuallyWithT(t, func(t *assert.CollectT) {
+		podStore.mutex.RLock()
+		defer podStore.mutex.RUnlock()
+		ts, exists := podStore.timestampMap[jobPod.UID]
+		assert.True(t, exists)
+		assert.NotNil(t, ts.DeletionTimestamp, "job pod should have a DeletionTimestamp after transitioning to Succeeded")
+	}, 1*time.Second, 10*time.Millisecond)
+	// Read the actual DeletionTimestamp recorded by the store (set to time.Now() by the
+	// store's own clock when the phase transition was processed). queryTime must be after
+	// this value to guarantee the completed job pod is excluded by the timestamp filter.
+	podStore.mutex.RLock()
+	jobPodDeletionTimestamp := *podStore.timestampMap[jobPod.UID].DeletionTimestamp
+	podStore.mutex.RUnlock()
+
+	// Step 3: a new Pod is assigned the same IP. Create the Pod in the informer's indexer.
+	_, err = k8sClient.CoreV1().Pods(newPod.Namespace).Create(context.TODO(), newPod, metav1.CreateOptions{})
+	require.NoError(t, err)
+	assert.EventuallyWithT(t, func(t *assert.CollectT) {
+		podStore.mutex.RLock()
+		defer podStore.mutex.RUnlock()
+		assert.Contains(t, podStore.timestampMap, newPod.UID)
+	}, 1*time.Second, 10*time.Millisecond)
+
+	// Step 4: GetPodByIPAndTime must return the new running Pod and the new Pod only.
+	queryTime := jobPodDeletionTimestamp.Add(time.Second)
+	pod, found := podStore.GetPodByIPAndTime(reusedPodIP, queryTime)
+	require.True(t, found, "should find a pod for the reused IP")
+	assert.Equal(t, newPod.UID, pod.UID, "should return the new running pod, not the completed job pod")
 }
