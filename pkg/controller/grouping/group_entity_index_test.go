@@ -97,6 +97,9 @@ func newPod(namespace, name string, labels map[string]string) *v1.Pod {
 			Name:      name,
 			Labels:    labels,
 		},
+		Status: v1.PodStatus{
+			PodIPs: []v1.PodIP{{IP: "1.2.3.4"}},
+		},
 	}
 }
 
@@ -188,7 +191,20 @@ func TestGroupEntityIndexGetEntities(t *testing.T) {
 
 func TestGroupEntityIndexGetGroups(t *testing.T) {
 	index := NewGroupEntityIndex()
-	pods := []*v1.Pod{podFoo1, podFoo2, podBar1, podFoo1InOtherNamespace}
+	// excluded Pods: added to the index but should never return groups
+	hostNetworkPod := copyAndMutatePod(podFoo1, func(pod *v1.Pod) {
+		pod.Name = "host-network-pod"
+		pod.Spec.HostNetwork = true
+	})
+	terminatedPod := copyAndMutatePod(podFoo1, func(pod *v1.Pod) {
+		pod.Name = "terminated-pod"
+		pod.Status.Phase = v1.PodSucceeded
+	})
+	noIPPod := copyAndMutatePod(podFoo1, func(pod *v1.Pod) {
+		pod.Name = "no-ip-pod"
+		pod.Status.PodIPs = nil
+	})
+	pods := []*v1.Pod{podFoo1, podFoo2, podBar1, podFoo1InOtherNamespace, hostNetworkPod, terminatedPod, noIPPod}
 	externalEntities := []*v1alpha2.ExternalEntity{eeFoo1, eeFoo2, eeBar1, eeFoo1InOtherNamespace}
 	namespaces := []*v1.Namespace{nsDefault, nsOther}
 	groups := []*group{groupPodFooType1, groupPodFooType2, groupPodFooAllNamespaceType1, groupEEFooType1, groupEEFooType2, groupEEFooAllNamespaceType1}
@@ -255,6 +271,33 @@ func TestGroupEntityIndexGetGroups(t *testing.T) {
 			}),
 			expectedFound:  false,
 			expectedGroups: nil,
+		},
+		{
+			name: "Host network Pod excluded",
+			inputEntity: copyAndMutatePod(podFoo1, func(pod *v1.Pod) {
+				pod.Name = "host-network-pod"
+				pod.Spec.HostNetwork = true
+			}),
+			expectedFound:  true,
+			expectedGroups: map[GroupType][]string{},
+		},
+		{
+			name: "Terminated Pod excluded",
+			inputEntity: copyAndMutatePod(podFoo1, func(pod *v1.Pod) {
+				pod.Name = "terminated-pod"
+				pod.Status.Phase = v1.PodSucceeded
+			}),
+			expectedFound:  true,
+			expectedGroups: map[GroupType][]string{},
+		},
+		{
+			name: "Pod without IP excluded",
+			inputEntity: copyAndMutatePod(podFoo1, func(pod *v1.Pod) {
+				pod.Name = "no-ip-pod"
+				pod.Status.PodIPs = nil
+			}),
+			expectedFound:  true,
+			expectedGroups: map[GroupType][]string{},
 		},
 	}
 	for _, tt := range tests {

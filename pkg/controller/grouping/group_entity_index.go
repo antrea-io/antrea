@@ -68,6 +68,9 @@ type Interface interface {
 	// GetEntities returns the selected Pods or ExternalEntities for the given group.
 	GetEntities(groupType GroupType, name string) ([]*v1.Pod, []*v1alpha2.ExternalEntity)
 	// GetGroupsForPod returns the groups that select the given Pod.
+	// If the Pod does not exist, it returns (nil, false). Host network Pods, terminated Pods,
+	// and Pods without IP addresses are excluded from group association lookups. If such a Pod
+	// exists, this method returns an empty map and true.
 	GetGroupsForPod(namespace, name string) (map[GroupType][]string, bool)
 	// GetGroupsForExternalEntity returns the groups that select the given ExternalEntity.
 	GetGroupsForExternalEntity(namespace, name string) (map[GroupType][]string, bool)
@@ -255,7 +258,29 @@ func (i *GroupEntityIndex) GetEntities(groupType GroupType, name string) ([]*v1.
 }
 
 func (i *GroupEntityIndex) GetGroupsForPod(namespace, name string) (map[GroupType][]string, bool) {
-	return i.getGroups(podEntityType, namespace, name)
+	// Before looking up groups, check if this Pod should be excluded from network policy
+	// enforcement. This mirrors the filtering in getMemberSetForGroupType and ensures callers
+	// never see group associations for Pods that can never be selected for policy processing:
+	// - Host-network Pods (https://github.com/antrea-io/antrea/issues/3078)
+	// - Terminated Pods (their IPs can be recycled and reused)
+	// - Pods without IP addresses
+	eKey := getEntityItemKeyByName(podEntityType, namespace, name)
+
+	i.lock.RLock()
+	defer i.lock.RUnlock()
+
+	eItem, exists := i.entityItems[eKey]
+	if !exists {
+		return nil, false
+	}
+	if pod, ok := eItem.entity.(*v1.Pod); ok {
+		if pod.Spec.HostNetwork || k8s.IsPodTerminated(pod) || len(pod.Status.PodIPs) == 0 {
+			// The Pod exists but is excluded from network policy enforcement.
+			// Return an empty map (no group associations) with exists=true.
+			return map[GroupType][]string{}, true
+		}
+	}
+	return i.getGroupsLocked(eItem)
 }
 
 func (i *GroupEntityIndex) GetGroupsForExternalEntity(namespace, name string) (map[GroupType][]string, bool) {
@@ -273,7 +298,12 @@ func (i *GroupEntityIndex) getGroups(entityType entityType, namespace, name stri
 	if !exists {
 		return nil, false
 	}
+	return i.getGroupsLocked(eItem)
+}
 
+// getGroupsLocked returns the groups associated with the given entityItem.
+// It must be called with the GroupEntityIndex read lock held.
+func (i *GroupEntityIndex) getGroupsLocked(eItem *entityItem) (map[GroupType][]string, bool) {
 	groups := map[GroupType][]string{}
 	lItem := i.labelItems[eItem.labelItemKey]
 	// Get the keys of the selectorItems the labelItem matches.

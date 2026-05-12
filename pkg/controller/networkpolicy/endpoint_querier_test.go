@@ -59,6 +59,9 @@ var pods = []*corev1.Pod{
 				},
 			},
 			PodIP: "1.2.3.4",
+			PodIPs: []corev1.PodIP{
+				{IP: "1.2.3.4"},
+			},
 		},
 	},
 	{
@@ -81,6 +84,9 @@ var pods = []*corev1.Pod{
 				},
 			},
 			PodIP: "1.2.3.4",
+			PodIPs: []corev1.PodIP{
+				{IP: "1.2.3.4"},
+			},
 		},
 	},
 }
@@ -321,7 +327,6 @@ func TestQueryNetworkPolicyRules(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
 			endpointQuerier := makeControllerAndEndpointQuerier(tc.objs...)
 			response, err := endpointQuerier.QueryNetworkPolicyRules(tc.podNamespace, tc.podName)
 			require.NoErrorf(t, err, "Expected QueryNetworkPolicies to succeed")
@@ -593,6 +598,131 @@ func TestQueryNetworkPolicyEvaluation(t *testing.T) {
 				assert.ErrorContains(t, err, tc.expectedErr)
 			}
 
+		})
+	}
+}
+
+func TestQueryNetworkPolicyRulesPodsExclusion(t *testing.T) {
+	// Test that host network pods are excluded from policy evaluation
+	hostNetworkPod := &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "kube-apiserver",
+			Namespace: "kube-system",
+			Labels:    map[string]string{"component": "kube-apiserver", "tier": "control-plane"},
+		},
+		Spec: corev1.PodSpec{
+			HostNetwork: true,
+			Containers:  []corev1.Container{{Name: "kube-apiserver"}},
+			NodeName:    "master",
+		},
+		Status: corev1.PodStatus{
+			Phase: corev1.PodRunning,
+			PodIP: "192.168.1.100",
+			PodIPs: []corev1.PodIP{
+				{IP: "192.168.1.100"},
+			},
+		},
+	}
+	// Test that terminated pods are excluded from policy evaluation
+	terminatedPod := &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "terminated-pod",
+			Namespace: "default",
+			Labels:    map[string]string{"app": "test"},
+		},
+		Spec: corev1.PodSpec{
+			Containers: []corev1.Container{{Name: "test-container"}},
+			NodeName:   "worker",
+		},
+		Status: corev1.PodStatus{
+			Phase: corev1.PodSucceeded,
+			PodIP: "10.244.0.1",
+			PodIPs: []corev1.PodIP{
+				{IP: "10.244.0.1"},
+			},
+		},
+	}
+	// Test that pods without IPs are excluded from policy evaluation
+	podWithoutIP := &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "pending-pod",
+			Namespace: "default",
+			Labels:    map[string]string{"app": "test"},
+		},
+		Spec: corev1.PodSpec{
+			Containers: []corev1.Container{{Name: "test-container"}},
+			NodeName:   "worker",
+		},
+		Status: corev1.PodStatus{
+			Phase:  corev1.PodPending,
+			PodIPs: []corev1.PodIP{},
+		},
+	}
+
+	kubeSystemNS := &corev1.Namespace{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:   "kube-system",
+			Labels: map[string]string{"kubernetes.io/metadata.name": "kube-system"},
+		},
+	}
+	defaultNS := &corev1.Namespace{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:   "default",
+			Labels: map[string]string{"kubernetes.io/metadata.name": "default"},
+		},
+	}
+
+	testCases := []struct {
+		name             string
+		objs             []runtime.Object
+		podNamespace     string
+		podName          string
+		expectedResponse *antreatypes.EndpointNetworkPolicyRules
+	}{
+		{
+			name:         "Host network pod returns empty rules",
+			objs:         []runtime.Object{kubeSystemNS, hostNetworkPod},
+			podNamespace: "kube-system",
+			podName:      "kube-apiserver",
+			expectedResponse: &antreatypes.EndpointNetworkPolicyRules{
+				Namespace: "kube-system",
+				Name:      "kube-apiserver",
+			},
+		},
+		{
+			name:         "Terminated pod returns empty rules",
+			objs:         []runtime.Object{defaultNS, terminatedPod},
+			podNamespace: "default",
+			podName:      "terminated-pod",
+			expectedResponse: &antreatypes.EndpointNetworkPolicyRules{
+				Namespace: "default",
+				Name:      "terminated-pod",
+			},
+		},
+		{
+			name:         "Pod without IP returns empty rules",
+			objs:         []runtime.Object{defaultNS, podWithoutIP},
+			podNamespace: "default",
+			podName:      "pending-pod",
+			expectedResponse: &antreatypes.EndpointNetworkPolicyRules{
+				Namespace: "default",
+				Name:      "pending-pod",
+			},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			endpointQuerier := makeControllerAndEndpointQuerier(tc.objs...)
+			response, err := endpointQuerier.QueryNetworkPolicyRules(tc.podNamespace, tc.podName)
+			require.NoError(t, err)
+			require.NotNil(t, response, "excluded pod should return non-nil response, not a 404")
+			assert.Equal(t, tc.expectedResponse.Namespace, response.Namespace)
+			assert.Equal(t, tc.expectedResponse.Name, response.Name)
+			assert.Empty(t, response.AppliedPolicies)
+			assert.Empty(t, response.EndpointAsIngressSrcRules)
+			assert.Empty(t, response.EndpointAsEgressDstRules)
 		})
 	}
 }
