@@ -38,9 +38,322 @@ var (
 	testICMPMsgEcho             = intstr.FromString(string(crdv1alpha1.ICMPMsgTypeEcho))
 	testICMPMsgEchoReply        = intstr.FromString(string(crdv1alpha1.ICMPMsgTypeEchoReply))
 
-	testICMPv6MsgEcho      = intstr.FromString(string(crdv1alpha1.ICMPv6MsgTypeEcho))
-	testICMPv6MsgEchoReply = intstr.FromString(string(crdv1alpha1.ICMPv6MsgTypeEchoReply))
+	testICMPv6MsgDstUnreach = intstr.FromString(string(crdv1alpha1.ICMPv6MsgTypeDstUnreach))
+	testICMPv6MsgEcho       = intstr.FromString(string(crdv1alpha1.ICMPv6MsgTypeEcho))
+	testICMPv6MsgEchoReply  = intstr.FromString(string(crdv1alpha1.ICMPv6MsgTypeEchoReply))
 )
+
+func TestCalculateIPv4InstructionsSize(t *testing.T) {
+	tt := []struct {
+		name      string
+		srcIP     net.IP
+		dstIP     net.IP
+		packet    *crdv1alpha1.Packet
+		count     int
+		direction crdv1alpha1.CaptureDirection
+	}{
+		{
+			name:  "proto and host and port",
+			srcIP: net.ParseIP("127.0.0.1"),
+			dstIP: net.ParseIP("127.0.0.2"),
+			packet: &crdv1alpha1.Packet{
+				Protocol: &testTCPProtocol,
+				TransportHeader: crdv1alpha1.TransportHeader{
+					TCP: &crdv1alpha1.TCPHeader{
+						SrcPort: &testSrcPort,
+						DstPort: &testDstPort,
+					},
+				},
+			},
+			count:     17,
+			direction: crdv1alpha1.CaptureDirectionSourceToDestination,
+		},
+		{
+			name:  "proto and src host only and port",
+			srcIP: net.ParseIP("127.0.0.1"),
+			dstIP: nil,
+			packet: &crdv1alpha1.Packet{
+				Protocol: &testTCPProtocol,
+				TransportHeader: crdv1alpha1.TransportHeader{
+					TCP: &crdv1alpha1.TCPHeader{
+						SrcPort: &testSrcPort,
+						DstPort: &testDstPort,
+					},
+				},
+			},
+			count:     15,
+			direction: crdv1alpha1.CaptureDirectionSourceToDestination,
+		},
+		{
+			name:  "proto and dst host only and port",
+			srcIP: nil,
+			dstIP: net.ParseIP("127.0.0.2"),
+			packet: &crdv1alpha1.Packet{
+				Protocol: &testUDPProtocol,
+				TransportHeader: crdv1alpha1.TransportHeader{
+					UDP: &crdv1alpha1.UDPHeader{
+						SrcPort: &testSrcPort,
+						DstPort: &testDstPort,
+					},
+				},
+			},
+			count:     15,
+			direction: crdv1alpha1.CaptureDirectionSourceToDestination,
+		},
+		{
+			name:  "proto and host and port and DestinationToSource",
+			srcIP: net.ParseIP("127.0.0.1"),
+			dstIP: net.ParseIP("127.0.0.2"),
+			packet: &crdv1alpha1.Packet{
+				Protocol: &testTCPProtocol,
+				TransportHeader: crdv1alpha1.TransportHeader{
+					TCP: &crdv1alpha1.TCPHeader{
+						SrcPort: &testSrcPort,
+						DstPort: &testDstPort,
+					},
+				},
+			},
+			count:     17,
+			direction: crdv1alpha1.CaptureDirectionDestinationToSource,
+		},
+		{
+			name:  "proto and host and port and Both",
+			srcIP: net.ParseIP("127.0.0.1"),
+			dstIP: net.ParseIP("127.0.0.2"),
+			packet: &crdv1alpha1.Packet{
+				Protocol: &testTCPProtocol,
+				TransportHeader: crdv1alpha1.TransportHeader{
+					TCP: &crdv1alpha1.TCPHeader{
+						SrcPort: &testSrcPort,
+						DstPort: &testDstPort,
+					},
+				},
+			},
+			count:     29,
+			direction: crdv1alpha1.CaptureDirectionBoth,
+		},
+		{
+			name:  "proto with host",
+			srcIP: net.ParseIP("127.0.0.1"),
+			dstIP: net.ParseIP("127.0.0.2"),
+			packet: &crdv1alpha1.Packet{
+				Protocol: &testTCPProtocol,
+			},
+			count:     10,
+			direction: crdv1alpha1.CaptureDirectionSourceToDestination,
+		},
+		{
+			name:  "proto with src port",
+			srcIP: net.ParseIP("127.0.0.1"),
+			dstIP: net.ParseIP("127.0.0.2"),
+			packet: &crdv1alpha1.Packet{
+				Protocol: &testTCPProtocol,
+				TransportHeader: crdv1alpha1.TransportHeader{
+					TCP: &crdv1alpha1.TCPHeader{
+						SrcPort: &testSrcPort,
+					},
+				},
+			},
+			count:     15,
+			direction: crdv1alpha1.CaptureDirectionSourceToDestination,
+		},
+		{
+			name:  "proto with dst port",
+			srcIP: net.ParseIP("127.0.0.1"),
+			dstIP: net.ParseIP("127.0.0.2"),
+			packet: &crdv1alpha1.Packet{
+				Protocol: &testUDPProtocol,
+				TransportHeader: crdv1alpha1.TransportHeader{
+					UDP: &crdv1alpha1.UDPHeader{
+						DstPort: &testDstPort,
+					},
+				},
+			},
+			count:     15,
+			direction: crdv1alpha1.CaptureDirectionSourceToDestination,
+		},
+		{
+			name:  "proto with dst port and syn or ack flags",
+			srcIP: net.ParseIP("127.0.0.1"),
+			dstIP: net.ParseIP("127.0.0.2"),
+			packet: &crdv1alpha1.Packet{
+				Protocol: &testTCPProtocol,
+				TransportHeader: crdv1alpha1.TransportHeader{
+					TCP: &crdv1alpha1.TCPHeader{
+						DstPort: &testDstPort,
+						Flags: []crdv1alpha1.TCPFlagsMatcher{
+							{Value: 0x2},  // syn
+							{Value: 0x10}, // ack
+						},
+					},
+				},
+			},
+			count:     21,
+			direction: crdv1alpha1.CaptureDirectionSourceToDestination,
+		},
+		{
+			name:  "proto with icmp messages echo and destination unreachable (host unreachable)",
+			srcIP: net.ParseIP("127.0.0.1"),
+			dstIP: net.ParseIP("127.0.0.2"),
+			packet: &crdv1alpha1.Packet{
+				Protocol: &testICMPProtocol,
+				TransportHeader: crdv1alpha1.TransportHeader{
+					ICMP: &crdv1alpha1.ICMPHeader{
+						Messages: []crdv1alpha1.ICMPMsgMatcher{
+							{Type: testICMPMsgDstUnreach, Code: ptr.To(int32(1))},
+							{Type: testICMPMsgEcho},
+						},
+					},
+				},
+			},
+			count:     18,
+			direction: crdv1alpha1.CaptureDirectionSourceToDestination,
+		},
+		{
+			name:      "any proto",
+			srcIP:     net.ParseIP("127.0.0.1"),
+			dstIP:     net.ParseIP("127.0.0.2"),
+			packet:    &crdv1alpha1.Packet{},
+			count:     8,
+			direction: crdv1alpha1.CaptureDirectionSourceToDestination,
+		},
+	}
+
+	for _, item := range tt {
+		t.Run(item.name, func(t *testing.T) {
+			assert.Equal(t, item.count, calculateInstructionsSize(ipv4Handler, item.packet, item.srcIP, item.dstIP, item.direction))
+		})
+	}
+}
+
+func TestCalculateIPv6InstructionsSize(t *testing.T) {
+	tt := []struct {
+		name      string
+		srcIP     net.IP
+		dstIP     net.IP
+		packet    *crdv1alpha1.Packet
+		count     int
+		direction crdv1alpha1.CaptureDirection
+	}{
+		{
+			name:  "ipv6 proto and host and port",
+			srcIP: net.ParseIP("fd00:10:244::1"),
+			dstIP: net.ParseIP("fd00:10:244::2"),
+			packet: &crdv1alpha1.Packet{
+				IPFamily: v1.IPv6Protocol,
+				Protocol: &testTCPProtocol,
+				TransportHeader: crdv1alpha1.TransportHeader{
+					TCP: &crdv1alpha1.TCPHeader{
+						SrcPort: &testSrcPort,
+						DstPort: &testDstPort,
+					},
+				},
+			},
+			count:     26,
+			direction: crdv1alpha1.CaptureDirectionSourceToDestination,
+		},
+		{
+			name:  "ipv6 proto and src host only and port",
+			srcIP: net.ParseIP("fd00:10:244::1"),
+			dstIP: nil,
+			packet: &crdv1alpha1.Packet{
+				IPFamily: v1.IPv6Protocol,
+				Protocol: &testTCPProtocol,
+				TransportHeader: crdv1alpha1.TransportHeader{
+					TCP: &crdv1alpha1.TCPHeader{
+						SrcPort: &testSrcPort,
+						DstPort: &testDstPort,
+					},
+				},
+			},
+			count:     18,
+			direction: crdv1alpha1.CaptureDirectionSourceToDestination,
+		},
+		{
+			name:  "ipv6 proto and host and port and Both",
+			srcIP: net.ParseIP("fd00:10:244::1"),
+			dstIP: net.ParseIP("fd00:10:244::2"),
+			packet: &crdv1alpha1.Packet{
+				IPFamily: v1.IPv6Protocol,
+				Protocol: &testTCPProtocol,
+				TransportHeader: crdv1alpha1.TransportHeader{
+					TCP: &crdv1alpha1.TCPHeader{
+						SrcPort: &testSrcPort,
+						DstPort: &testDstPort,
+					},
+				},
+			},
+			count:     47,
+			direction: crdv1alpha1.CaptureDirectionBoth,
+		},
+		{
+			name:  "ipv6 proto with host",
+			srcIP: net.ParseIP("fd00:10:244::1"),
+			dstIP: net.ParseIP("fd00:10:244::2"),
+			packet: &crdv1alpha1.Packet{
+				IPFamily: v1.IPv6Protocol,
+				Protocol: &testTCPProtocol,
+			},
+			count:     25,
+			direction: crdv1alpha1.CaptureDirectionSourceToDestination,
+		},
+		{
+			name:  "ipv6 proto with dst port and syn or ack flags",
+			srcIP: net.ParseIP("fd00:10:244::1"),
+			dstIP: net.ParseIP("fd00:10:244::2"),
+			packet: &crdv1alpha1.Packet{
+				IPFamily: v1.IPv6Protocol,
+				Protocol: &testTCPProtocol,
+				TransportHeader: crdv1alpha1.TransportHeader{
+					TCP: &crdv1alpha1.TCPHeader{
+						DstPort: &testDstPort,
+						Flags: []crdv1alpha1.TCPFlagsMatcher{
+							{Value: 0x2},  // syn
+							{Value: 0x10}, // ack
+						},
+					},
+				},
+			},
+			count:     30,
+			direction: crdv1alpha1.CaptureDirectionSourceToDestination,
+		},
+		{
+			name:  "ipv6 proto with icmpv6 messages echo and destination unreachable (host unreachable)",
+			srcIP: net.ParseIP("fd00:10:244::1"),
+			dstIP: net.ParseIP("fd00:10:244::2"),
+			packet: &crdv1alpha1.Packet{
+				IPFamily: v1.IPv6Protocol,
+				Protocol: &testICMPv6Protocol,
+				TransportHeader: crdv1alpha1.TransportHeader{
+					ICMPv6: &crdv1alpha1.ICMPv6Header{
+						Messages: []crdv1alpha1.ICMPv6MsgMatcher{
+							{Type: testICMPv6MsgDstUnreach, Code: ptr.To(int32(1))},
+							{Type: testICMPv6MsgEcho},
+						},
+					},
+				},
+			},
+			count:     27,
+			direction: crdv1alpha1.CaptureDirectionSourceToDestination,
+		},
+		{
+			name:  "ipv6 any proto",
+			srcIP: net.ParseIP("fd00:10:244::1"),
+			dstIP: net.ParseIP("fd00:10:244::2"),
+			packet: &crdv1alpha1.Packet{
+				IPFamily: v1.IPv6Protocol,
+			},
+			count:     20,
+			direction: crdv1alpha1.CaptureDirectionSourceToDestination,
+		},
+	}
+
+	for _, item := range tt {
+		t.Run(item.name, func(t *testing.T) {
+			assert.Equal(t, item.count, calculateInstructionsSize(ipv6Handler, item.packet, item.srcIP, item.dstIP, item.direction))
+		})
+	}
+}
 
 func TestPacketCaptureCompileBPF(t *testing.T) {
 	tt := []struct {

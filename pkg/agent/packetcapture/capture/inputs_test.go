@@ -1,4 +1,4 @@
-// Copyright 2026 Antrea Authors.
+// Copyright 2026 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -560,6 +560,49 @@ var BPFTestCases = []BPFTestCase{
 			TransportHeader: crdv1alpha1.TransportHeader{
 				UDP: &crdv1alpha1.UDPHeader{
 					DstPort: &testDstPort,
+				},
+			},
+		},
+		Direction: crdv1alpha1.CaptureDirectionSourceToDestination,
+	},
+
+	// TODO: CaptureDirectionBoth generates structurally different BPF than tcpdump
+	// (an extra ret instruction for simpler code generation). Equivalence testing
+	// for Both direction is tracked separately. The corresponding whitebox tests
+	// remain in bpf_test.go (TestPacketCaptureCompileBPF).
+
+	// --- TCP Flags paths ---
+	{
+		Name:          "IPv4 TCP SYN or ACK flags only",
+		TcpdumpFilter: "ip proto 6 and src host 127.0.0.1 and dst host 127.0.0.2 and ((tcp[tcpflags] & tcp-syn == tcp-syn) or (tcp[tcpflags] & tcp-ack == tcp-ack))",
+		SrcIP:         net.ParseIP("127.0.0.1"),
+		DstIP:         net.ParseIP("127.0.0.2"),
+		Packet: &crdv1alpha1.Packet{
+			Protocol: &testTCPProtocol,
+			TransportHeader: crdv1alpha1.TransportHeader{
+				TCP: &crdv1alpha1.TCPHeader{
+					Flags: []crdv1alpha1.TCPFlagsMatcher{
+						{Value: 0x2},  // SYN
+						{Value: 0x10}, // ACK
+					},
+				},
+			},
+		},
+		Direction: crdv1alpha1.CaptureDirectionSourceToDestination,
+	},
+	{
+		Name:          "IPv4 TCP dst port and SYN+ACK flag",
+		TcpdumpFilter: "ip proto 6 and src host 127.0.0.1 and dst host 127.0.0.2 and dst port 80 and (tcp[tcpflags] & (tcp-syn|tcp-ack) == (tcp-syn|tcp-ack))",
+		SrcIP:         net.ParseIP("127.0.0.1"),
+		DstIP:         net.ParseIP("127.0.0.2"),
+		Packet: &crdv1alpha1.Packet{
+			Protocol: &testTCPProtocol,
+			TransportHeader: crdv1alpha1.TransportHeader{
+				TCP: &crdv1alpha1.TCPHeader{
+					DstPort: &testDstPort,
+					Flags: []crdv1alpha1.TCPFlagsMatcher{
+						{Value: 0x12}, // SYN+ACK
+					},
 				},
 			},
 		},

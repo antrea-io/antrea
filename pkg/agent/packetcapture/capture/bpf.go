@@ -53,9 +53,8 @@ const (
 	ip6TCPFlags                uint32 = 13
 	ip6ICMPv6Type              uint32 = 0
 	ip6ICMPv6Code              uint32 = 1
-	ip6FragmentNextHeader      uint32 = 44                // IPv6 Fragment Extension Header
-	ip6FragExtInnerProtocol    uint32 = ip6L4HeaderOffset // offset of Next Header inside Fragment Ext Header
-	ip6FragExtInstructionCount int    = 3                 // number of extra instructions for fragment header handling
+	ip6FragmentNextHeader      uint32 = 44 // IPv6 Fragment Extension Header
+	ip6FragExtInstructionCount int    = 3  // number of extra instructions for fragment header handling
 )
 
 var (
@@ -263,8 +262,9 @@ func appendProtocolFilters(inst []bpf.Instruction, handler *ipFamilyHandler, pro
 		inst = append(inst, compareProtocol(proto, uint8(ip6FragExtInstructionCount), 0))
 		// If Next Header is NOT Fragment (44), jump to drop.
 		inst = append(inst, bpf.JumpIf{Cond: bpf.JumpEqual, Val: ip6FragmentNextHeader, SkipTrue: 0, SkipFalse: skipToEnd(len(inst))})
-		// Load the inner Next Header from inside the Fragment Extension Header.
-		inst = append(inst, bpf.LoadAbsolute{Off: ip6FragExtInnerProtocol, Size: lengthByte})
+		// Load the protocol from the byte following the Fragment Extension Header,
+		// which is at the same offset as the normal L4 header.
+		inst = append(inst, bpf.LoadAbsolute{Off: ip6L4HeaderOffset, Size: lengthByte})
 		// Check if the inner protocol matches. Jump to drop if not.
 		inst = append(inst, compareProtocol(proto, 0, skipToEnd(len(inst))))
 		return inst
@@ -511,6 +511,9 @@ func compileGenericPacketFilter(handler *ipFamilyHandler, packetSpec *crdv1alpha
 		// defer protocol checks until after IP checks for one-way directions.
 		// This better aligns with tcpdump output ordering for many complex
 		// expressions where L3 constraints are evaluated before protocol checks.
+		// IPv4 does not need this reordering: tcpdump/libpcap always emits
+		// IPv4 protocol checks immediately after the EtherType check,
+		// regardless of filter complexity.
 		deferProtoCheck = handler.etherType == etherTypeIPv6 &&
 			hasTransport &&
 			(srcIP != nil || dstIP != nil) &&

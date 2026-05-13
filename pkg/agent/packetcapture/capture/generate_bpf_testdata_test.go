@@ -1,6 +1,6 @@
 //go:build update_bpf_testdata
 
-// Copyright 2026 Antrea Authors.
+// Copyright 2026 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -92,7 +92,7 @@ func TestUpdateBPFTestdata(t *testing.T) {
 	}
 
 	var b bytes.Buffer
-	fmt.Fprintf(&b, `// Copyright 2026 Antrea Authors.
+	fmt.Fprintf(&b, `// Copyright 2026 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
