@@ -226,20 +226,9 @@ func Test_GetObjectByIndexAndTime(t *testing.T) {
 			expectedResult: testObj2,
 		},
 		{
-			// CreationTimestamp check is skipped for the sole object (clock-skew tolerance),
-			// but DeletionTimestamp is always honored. testObj2 has DeletionTimestamp=refTime,
-			// so querying at refTime+1m (after deletion) must return nothing.
-			name:           "find only one object in the object store - query after deletion",
+			name:           "find only one object in the object store - incorrect startTime",
 			indexedValue:   "5.6.7.8",
 			startTime:      refTime.Add(time.Minute),
-			expectedResult: nil,
-		},
-		{
-			// Clock-skew tolerance: CreationTimestamp check is skipped when there is only
-			// one object and it has not been deleted (DeletionTimestamp == nil).
-			name:           "find only one object in the object store - clock skew tolerance",
-			indexedValue:   "5.6.7.8",
-			startTime:      refTime.Add(-time.Minute * 10),
 			expectedResult: testObj2,
 		},
 		{

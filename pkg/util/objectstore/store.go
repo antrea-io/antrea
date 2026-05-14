@@ -265,15 +265,8 @@ func (s *ObjectStore[T]) GetObjectByIndexAndTime(indexName, indexedValue string,
 		return *new(T), false
 	} else if len(objects) == 1 {
 		object := objects[0].(T)
-		// In case the clocks may be skewed between different Nodes in the cluster, we skip
-		// the CreationTimestamp check when there is only one object in the indexer.
-		// However, DeletionTimestamp is always honored: it is set by the local store when
-		// the object is deleted (not derived from a remote clock), so it is not subject to
-		// clock skew and must not be bypassed.
-		timestamp, ok := s.timestampMap[object.GetUID()]
-		if ok && timestamp.DeletionTimestamp != nil && !time.Before(*timestamp.DeletionTimestamp) {
-			return *new(T), false
-		}
+		// In case the clocks may be skewed between different Nodes in the cluster, we directly return the object if there is only
+		// one object in the indexer. Otherwise, we check the timestamp for objects in the indexer.
 		klog.V(4).InfoS("Matched object to object from indexer", "indexName", indexName, "indexedValue", indexedValue, "obj", klog.KObj(object))
 		return object, true
 	}

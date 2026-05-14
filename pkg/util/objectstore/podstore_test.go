@@ -210,65 +210,6 @@ func Test_noHostNetworkPod(t *testing.T) {
 	}, 100*time.Millisecond, 10*time.Millisecond, "host-network Pods should be filtered out by informer")
 }
 
-// Test_podTerminationExcludesFromStore validates that when a running Pod transitions to a
-// terminal phase (Succeeded/Failed), the update event causes it to be treated as a deletion
-// by the FilteringResourceEventHandler, setting a DeletionTimestamp in the store and making
-// GetPodByIPAndTime no longer return it.
-func Test_podTerminationExcludesFromStore(t *testing.T) {
-	const testPodIP = "10.1.2.3"
-	runningPod := &corev1.Pod{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:              "job-pod",
-			Namespace:         "default",
-			UID:               "job-pod-uid",
-			CreationTimestamp: metav1.Time{Time: refTime2},
-		},
-		Status: corev1.PodStatus{
-			PodIPs: []corev1.PodIP{{IP: testPodIP}},
-			Phase:  corev1.PodRunning,
-		},
-	}
-
-	k8sClient := fake.NewSimpleClientset()
-	podInformer := getPodInformer(k8sClient)
-	podStore := NewPodStore(podInformer)
-	stopCh := make(chan struct{})
-	defer close(stopCh)
-
-	go podInformer.Run(stopCh)
-	cache.WaitForCacheSync(stopCh, podInformer.HasSynced)
-
-	// Step 1: create the running Pod and verify it is indexed.
-	// The Pod's CreationTimestamp is refTime2; we query slightly after that so the
-	// timestamp filter passes while the Pod is still running.
-	_, err := k8sClient.CoreV1().Pods(runningPod.Namespace).Create(context.TODO(), runningPod, metav1.CreateOptions{})
-	require.NoError(t, err)
-	assert.EventuallyWithT(t, func(t *assert.CollectT) {
-		pod, ok := podStore.GetPodByIPAndTime(testPodIP, refTime2.Add(time.Second))
-		if assert.True(t, ok, "running Pod should be found by IP lookup") {
-			assert.Equal(t, runningPod.UID, pod.UID)
-		}
-	}, 1*time.Second, 10*time.Millisecond)
-
-	// Step 2: update the same Pod to Succeeded.
-	succeededPod := runningPod.DeepCopy()
-	succeededPod.Status.Phase = corev1.PodSucceeded
-	_, err = k8sClient.CoreV1().Pods(succeededPod.Namespace).UpdateStatus(context.TODO(), succeededPod, metav1.UpdateOptions{})
-	require.NoError(t, err)
-
-	// Step 3: verify the Pod is no longer returned even while it is still the only entry
-	// in the indexer (during the 5-minute grace period before complete removal from store).
-	// The FilteringResourceEventHandler translates the filter transition
-	// (older passed FilterFunc, newer does not) into onObjectDelete(), which
-	// records DeletionTimestamp = time.Now(). The single-object fast-path in
-	// GetObjectByIndexAndTime now honors DeletionTimestamp, so querying at a time after
-	// the deletion must return nothing.
-	assert.EventuallyWithT(t, func(t *assert.CollectT) {
-		_, ok := podStore.GetPodByIPAndTime(testPodIP, time.Now())
-		assert.False(t, ok, "terminated pod should not be returned by GetPodByIPAndTime after phase transition")
-	}, 1*time.Second, 10*time.Millisecond)
-}
-
 /*
 Sample output:
 goos: darwin
@@ -463,12 +404,15 @@ func Test_GetPodByIPAndTime_IPReuse_CompletedJobPod(t *testing.T) {
 	_, err = k8sClient.CoreV1().Pods(succeededJobPod.Namespace).UpdateStatus(context.TODO(), succeededJobPod, metav1.UpdateOptions{})
 	require.NoError(t, err)
 
+	// The FilteringResourceEventHandler sees (older=pass, newer=fail) and routes the event
+	// to OnDelete, which calls onObjectDelete and records DeletionTimestamp = time.Now().
 	assert.EventuallyWithT(t, func(t *assert.CollectT) {
 		podStore.mutex.RLock()
 		defer podStore.mutex.RUnlock()
 		ts, exists := podStore.timestampMap[jobPod.UID]
-		assert.True(t, exists)
-		assert.NotNil(t, ts.DeletionTimestamp, "job pod should have a DeletionTimestamp after transitioning to Succeeded")
+		if assert.True(t, exists, "job pod should still be in timestampMap during the grace period") {
+			assert.NotNil(t, ts.DeletionTimestamp, "DeletionTimestamp must be set after pod transitions to Succeeded")
+		}
 	}, 1*time.Second, 10*time.Millisecond)
 	// Read the actual DeletionTimestamp recorded by the store (set to time.Now() by the
 	// store's own clock when the phase transition was processed). queryTime must be after
