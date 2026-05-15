@@ -23,3 +23,8 @@ func (c *MRouteClient) parseIGMPMsg(msg []byte) (*parsedIGMPMsg, error) {
 
 func (c *MRouteClient) run(stopCh <-chan struct{}) {
 }
+
+// nolint: unused
+func (c *MRouteClient) detectVIFMode() error {
+	return nil
+}

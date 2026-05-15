@@ -18,7 +18,7 @@ import (
 	"fmt"
 	"runtime"
 
-	"github.com/blang/semver"
+	"golang.org/x/mod/semver"
 )
 
 // These variables are set at build-time.
@@ -35,9 +35,10 @@ var (
 	ReleaseStatus = "unreleased"
 )
 
-func GetVersion() semver.Version {
-	v, _ := semver.Parse(Version[1:])
-	return v
+// GetVersion returns the Antrea version as a canonical semver string (e.g. "v1.2.3").
+// Returns an empty string if the version has not been set at build time or is not valid.
+func GetVersion() string {
+	return semver.Canonical(Version)
 }
 
 func GetGitSHA() string {
