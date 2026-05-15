@@ -471,11 +471,14 @@ func TestRamStoreWatchWithSelector(t *testing.T) {
 	}
 }
 
-// isClosed reports whether the channel ch is already closed (non-blocking check).
+// isClosed reports whether a close-only channel is already closed via a
+// non-blocking check. The channel must never have a value sent on it;
+// isClosed must only be used on channels that are exclusively closed (never
+// written to), so that a successful receive unambiguously means closed.
 func isClosed(ch <-chan struct{}) bool {
 	select {
-	case <-ch:
-		return true
+	case _, ok := <-ch:
+		return !ok
 	default:
 		return false
 	}
@@ -505,7 +508,11 @@ func TestRamStoreWatchTimeout(t *testing.T) {
 				expectedEvent := watch.Event{Type: watch.Added, Object: &v1.Pod{ObjectMeta: metav1.ObjectMeta{Name: fmt.Sprintf("pod%d", i), Labels: map[string]string{"app": "nginx"}}}}
 				assert.Equal(t, expectedEvent, actualEvent, "unexpected event %d", i)
 			}
-			assert.Empty(t, ch, "unexpected excess event in result channel")
+			select {
+			case obj, ok := <-ch:
+				assert.Fail(t, "unexpected excess event", "%#v %t", obj, ok)
+			default:
+			}
 		}()
 
 		// w2 has no consumer for its result chan.
