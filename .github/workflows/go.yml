@@ -75,6 +75,7 @@ jobs:
         with:
           go-version-file: '.go-version'
       - name: Run unit tests
+        shell: bash
         run: make test-unit
       - name: Codecov
         uses: codecov/codecov-action@v6
