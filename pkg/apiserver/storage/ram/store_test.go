@@ -19,9 +19,11 @@ import (
 	"fmt"
 	"reflect"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
@@ -30,7 +32,7 @@ import (
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/apiserver/pkg/storage"
 	"k8s.io/client-go/tools/cache"
-	clocktesting "k8s.io/utils/clock/testing"
+	"k8s.io/utils/clock"
 
 	antreastorage "antrea.io/antrea/v2/pkg/apiserver/storage"
 )
@@ -469,77 +471,70 @@ func TestRamStoreWatchWithSelector(t *testing.T) {
 	}
 }
 
-func TestRamStoreWatchTimeout(t *testing.T) {
-	clock := clocktesting.NewFakeClock(time.Now())
-	store := newStoreWithClock(cache.MetaNamespaceKeyFunc, cache.Indexers{}, testGenEvent, testSelectFunc, func() runtime.Object { return new(v1.Pod) }, clock)
-	// watcherChanSize*2+1 events can fill a watcher's buffer: input channel buffer + result channel buffer + 1 in-flight.
-	maxBuffered := watcherChanSize*2 + 1
-
-	// w1 has consumer for its result chan.
-	w1, err := store.Watch(context.Background(), "", labels.SelectorFromSet(labels.Set{"app": "nginx"}), fields.Everything())
-	if err != nil {
-		t.Errorf("Failed to watch object: %v", err)
-	}
-
-	w1Done := make(chan struct{})
-	go func() {
-		defer close(w1Done)
-		ch := w1.ResultChan()
-		// Skip the bookmark event.
-		<-ch
-		for i := 0; i < maxBuffered+1; i++ {
-			actualEvent := <-ch
-			expectedEvent := watch.Event{Type: watch.Added, Object: &v1.Pod{ObjectMeta: metav1.ObjectMeta{Name: fmt.Sprintf("pod%d", i), Labels: map[string]string{"app": "nginx"}}}}
-			if !reflect.DeepEqual(actualEvent, expectedEvent) {
-				t.Errorf("Unexpected event %d, got %#v, expected %#v ", i, actualEvent, expectedEvent)
-			}
-		}
-		select {
-		case obj, ok := <-ch:
-			t.Errorf("Unexpected excess event: %#v %t", obj, ok)
-		default:
-		}
-	}()
-
-	// w2 has no consumer for its result chan.
-	w2, err := store.Watch(context.Background(), "", labels.SelectorFromSet(labels.Set{"app": "nginx"}), fields.Everything())
-	if err != nil {
-		t.Errorf("Failed to watch object: %v", err)
-	}
-	// Skip the bookmark event.
-	<-w2.ResultChan()
-	assert.Equal(t, 2, store.GetWatchersNum(), "Unexpected watchers number")
-
-	// Generate all events at once: w1 can take all events (eventually) as it has a consumer. w2
-	// will not be able to take the last event as it has no consumer.
-	for i := 0; i < maxBuffered+1; i++ {
-		store.Create(&v1.Pod{ObjectMeta: metav1.ObjectMeta{Name: fmt.Sprintf("pod%d", i), Labels: map[string]string{"app": "nginx"}}})
-	}
-
-	// Give 1s for the consumer for w1 to receive all events. During that time, we do not
-	// advance the fake clock.
+// isClosed reports whether the channel ch is already closed (non-blocking check).
+func isClosed(ch <-chan struct{}) bool {
 	select {
-	case <-w1Done:
-	case <-time.After(1 * time.Second):
-		t.Fatal("w1 consumer has not received all events")
-	}
-
-	// Make sure that w2 is not stopped yet.
-	select {
-	case <-w2.(*storeWatcher).done:
-		t.Fatal("w2 was stopped, expected not stopped")
+	case <-ch:
+		return true
 	default:
+		return false
 	}
+}
 
-	// After advancing the fake clock, w2 should be stopped. Because terminating watchers is
-	// asynchronous, we leave 500ms of reaction time.
-	clock.Step(watcherAddTimeout)
+func TestRamStoreWatchTimeout(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		store := newStoreWithClock(cache.MetaNamespaceKeyFunc, cache.Indexers{}, testGenEvent, testSelectFunc, func() runtime.Object { return new(v1.Pod) }, clock.RealClock{})
+		defer store.Stop()
 
-	select {
-	case <-w2.(*storeWatcher).done:
-	case <-time.After(500 * time.Millisecond):
-		t.Error("w2 was not stopped, expected stopped")
-	}
+		// watcherChanSize*2+1 events can fill a watcher's buffer: input channel buffer + result channel buffer + 1 in-flight.
+		maxBuffered := watcherChanSize*2 + 1
 
-	assert.Equal(t, 1, store.GetWatchersNum(), "Unexpected watchers number")
+		// w1 has consumer for its result chan.
+		w1, err := store.Watch(context.Background(), "", labels.SelectorFromSet(labels.Set{"app": "nginx"}), fields.Everything())
+		require.NoError(t, err)
+		defer w1.Stop()
+
+		w1Done := make(chan struct{})
+		go func() {
+			defer close(w1Done)
+			ch := w1.ResultChan()
+			// Skip the bookmark event.
+			<-ch
+			for i := 0; i < maxBuffered+1; i++ {
+				actualEvent := <-ch
+				expectedEvent := watch.Event{Type: watch.Added, Object: &v1.Pod{ObjectMeta: metav1.ObjectMeta{Name: fmt.Sprintf("pod%d", i), Labels: map[string]string{"app": "nginx"}}}}
+				assert.Equal(t, expectedEvent, actualEvent, "unexpected event %d", i)
+			}
+			assert.Empty(t, ch, "unexpected excess event in result channel")
+		}()
+
+		// w2 has no consumer for its result chan.
+		w2, err := store.Watch(context.Background(), "", labels.SelectorFromSet(labels.Set{"app": "nginx"}), fields.Everything())
+		require.NoError(t, err)
+		// Skip the bookmark event.
+		<-w2.ResultChan()
+		assert.Equal(t, 2, store.GetWatchersNum(), "unexpected watchers number")
+
+		// Generate all events at once: w1 can take all events (eventually) as it has a consumer. w2
+		// will not be able to take the last event as it has no consumer.
+		for i := 0; i < maxBuffered+1; i++ {
+			store.Create(&v1.Pod{ObjectMeta: metav1.ObjectMeta{Name: fmt.Sprintf("pod%d", i), Labels: map[string]string{"app": "nginx"}}})
+		}
+
+		// Wait for all goroutines in the bubble to settle: the w1 consumer goroutine and the
+		// store's dispatchEvents goroutine will drain all events and block. At that point the
+		// fake clock has not advanced, so w2 has not been timed out yet.
+		synctest.Wait()
+		require.True(t, isClosed(w1Done), "w1 consumer has not received all events")
+		require.False(t, isClosed(w2.(*storeWatcher).done), "w2 was stopped, expected not stopped")
+
+		// Advance the synctest fake clock past watcherAddTimeout. The store's internal timer
+		// fires, causing the async watcher-termination path to stop w2. synctest.Wait() lets
+		// those goroutines finish before we check.
+		time.Sleep(watcherAddTimeout)
+		synctest.Wait()
+
+		assert.True(t, isClosed(w2.(*storeWatcher).done), "w2 was not stopped, expected stopped")
+		assert.Equal(t, 1, store.GetWatchersNum(), "unexpected watchers number")
+	})
 }
