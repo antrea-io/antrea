@@ -511,6 +511,7 @@ func TestRamStoreWatchTimeout(t *testing.T) {
 		// w2 has no consumer for its result chan.
 		w2, err := store.Watch(context.Background(), "", labels.SelectorFromSet(labels.Set{"app": "nginx"}), fields.Everything())
 		require.NoError(t, err)
+		defer w2.Stop()
 		// Skip the bookmark event.
 		<-w2.ResultChan()
 		assert.Equal(t, 2, store.GetWatchersNum(), "unexpected watchers number")

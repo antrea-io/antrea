@@ -167,9 +167,11 @@ func TestAllocateNext(t *testing.T) {
 // distinct IPs if ipPoolStatusRetry allows enough conflict retries.
 //
 // synctest.Test is used so that the time.Sleep calls inside retry.RetryOnConflict
-// (driven by ipPoolStatusRetry backoff) use the fake clock. synctest.Wait()
-// advances fake time to drain all sleeping goroutines at once, making the test
-// deterministic and fast regardless of CI runner speed.
+// (driven by ipPoolStatusRetry backoff) use the fake clock instead of the real
+// wall clock. When all worker goroutines are blocked on a backoff sleep, the
+// synctest scheduler automatically advances fake time, so wg.Wait() returns as
+// soon as all retries complete — no real delays, deterministic regardless of CI
+// runner speed.
 func TestConcurrentAllocateNextSharedIPPool(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		stopCh := make(chan struct{})
