@@ -67,12 +67,17 @@ func (s *FlowStreamService) GetFlows(req *flowpb.GetFlowsRequest, stream flowpb.
 	maxCount := int(req.GetMaxCount())
 	follow := req.GetFollow()
 
-	var labelSel labels.Selector
-	if selStr := req.GetFilter().GetPodLabelSelector(); selStr != "" {
-		var err error
-		labelSel, err = labels.Parse(selStr)
-		if err != nil {
-			return status.Errorf(codes.InvalidArgument, "invalid pod_label_selector %q: %v", selStr, err)
+	// Parse label selectors for each filter up front so we can return
+	// InvalidArgument before touching the ring buffer.
+	reqFilters := req.GetFilters()
+	labelSels := make([]labels.Selector, len(reqFilters))
+	for i, f := range reqFilters {
+		if selStr := f.GetPodLabelSelector(); selStr != "" {
+			sel, err := labels.Parse(selStr)
+			if err != nil {
+				return status.Errorf(codes.InvalidArgument, "invalid pod_label_selector in filter %d %q: %v", i, selStr, err)
+			}
+			labelSels[i] = sel
 		}
 	}
 
@@ -80,7 +85,7 @@ func (s *FlowStreamService) GetFlows(req *flowpb.GetFlowsRequest, stream flowpb.
 		"follow", follow,
 		"since", since,
 		"maxCount", maxCount,
-		"filter", req.GetFilter())
+		"filters", reqFilters)
 
 	consumer := s.buffer.NewConsumer(
 		ringbuffer.WithReadFromBeginning(),
@@ -104,7 +109,7 @@ func (s *FlowStreamService) GetFlows(req *flowpb.GetFlowsRequest, stream flowpb.
 			klog.V(4).InfoS("Ring buffer shut down, closing GetFlows stream")
 			return nil
 		} else if n > 0 {
-			filtered := applyFilter(batch[:n], req.GetFilter(), labelSel, since)
+			filtered := applyFilters(batch[:n], reqFilters, labelSels, since)
 
 			if maxCount > 0 && sent+len(filtered) >= maxCount {
 				filtered = filtered[:maxCount-sent]
@@ -135,13 +140,24 @@ func (s *FlowStreamService) GetFlows(req *flowpb.GetFlowsRequest, stream flowpb.
 	}
 }
 
-func applyFilter(flows []*flowpb.Flow, filter *flowpb.FlowFilter, labelSel labels.Selector, since time.Time) []*flowpb.Flow {
+// applyFilters returns the subset of flows that pass the since cutoff and match
+// ALL of the provided filters (AND semantics across filters). labelSels must
+// have the same length as filters; a nil entry means no label selector for that
+// filter. An empty filters slice matches all flows.
+func applyFilters(flows []*flowpb.Flow, filters []*flowpb.FlowFilter, labelSels []labels.Selector, since time.Time) []*flowpb.Flow {
 	filtered := flows[:0]
 	for _, f := range flows {
 		if !since.IsZero() && f.GetEndTs() != nil && f.GetEndTs().AsTime().Before(since) {
 			continue
 		}
-		if filter != nil && !matchFilter(f, filter, labelSel) {
+		match := true
+		for i, filter := range filters {
+			if !matchFilter(f, filter, labelSels[i]) {
+				match = false
+				break
+			}
+		}
+		if !match {
 			continue
 		}
 		filtered = append(filtered, f)

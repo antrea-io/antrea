@@ -33,8 +33,6 @@ message ExportResponse {
 }
 
 // FlowStreamService provides a server-streaming RPC for real-time flow visibility.
-// It is registered on the same gRPC server as FlowExportService, reusing the
-// existing mTLS infrastructure.
 service FlowStreamService {
   // GetFlows streams flow records matching the provided filters.
   // Historical flows (from the ring buffer) are sent first, followed by
@@ -42,8 +40,10 @@ service FlowStreamService {
   rpc GetFlows(GetFlowsRequest) returns (stream GetFlowsResponse);
 }
 
-// FlowFilterDirection changes how namespace and pod_names filters are applied.
-// FLOW_FILTER_DIRECTION_BOTH is the default and matches either source or destination.
+// FlowFilterDirection controls which endpoint of a flow the directional filters
+// (namespaces, pod_names, pod_label_selector, ips) are matched against.
+// FROM applies filters to the source (sender) side, TO applies them to the
+// destination (receiver) side, and BOTH (default) matches either side.
 enum FlowFilterDirection {
   FLOW_FILTER_DIRECTION_BOTH = 0;
   FLOW_FILTER_DIRECTION_FROM = 1;
@@ -69,21 +69,27 @@ message FlowFilter {
   repeated string service_names = 4;
   // Match flows based on their type.
   repeated FlowType flow_types = 5;
-  // Match flows where source or destination IP is in this list.
-  // CIDR notation is supported (e.g. "10.0.0.0/8").
+  // Match flows by IP address (direction semantics are affected by the
+  // direction field). CIDR notation is supported (e.g. "10.0.0.0/8").
   repeated string ips = 6;
-  // Changes the semantics of namespaces and pod_names:
+  // Controls which endpoint of a flow the directional filters (namespaces,
+  // pod_names, pod_label_selector, ips) are matched against.
+  // FROM applies filters to the source (sender) side, TO applies them to the
+  // destination (receiver) side, and BOTH (default) matches either side.
   //   BOTH (default) - match source OR destination
   //   FROM           - match source only
   //   TO             - match destination only
-  // Cannot combine TO with service_names.
+  // Cannot combine FROM with service_names (services are always a
+  // destination-side concept).
   FlowFilterDirection direction = 7;
 }
 
 // GetFlowsRequest is sent once by the client when opening a GetFlows stream.
 message GetFlowsRequest {
-  // Filters to apply server-side. All specified filters are AND-ed.
-  FlowFilter filter = 1;
+  // Filters to apply server-side. All filters are AND-ed together, so a flow
+  // must match every filter to be returned. Each filter is independently
+  // evaluated with its own direction. Providing no filters returns all flows.
+  repeated FlowFilter filters = 1;
   // If set, only flows with end_ts >= since are returned.
   google.protobuf.Timestamp since = 2;
   // Maximum number of flows to return in total. 0 means no limit.

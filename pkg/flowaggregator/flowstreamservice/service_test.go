@@ -121,20 +121,20 @@ func TestApplyFilter_Since(t *testing.T) {
 	oldFlow := newFlowEndTs("old", now.Add(-1*time.Minute), &flowpb.Kubernetes{})
 	recentFlow := newFlowEndTs("recent", now.Add(-5*time.Second), &flowpb.Kubernetes{})
 
-	got := applyFilter([]*flowpb.Flow{oldFlow, recentFlow}, nil, nil, since)
+	got := applyFilters([]*flowpb.Flow{oldFlow, recentFlow}, nil, nil, since)
 	require.Len(t, got, 1)
 	assert.Equal(t, "recent", got[0].GetId())
 }
 
 func TestApplyFilter_ZeroSincePassesAll(t *testing.T) {
 	flows := []*flowpb.Flow{newFlow("a", &flowpb.Kubernetes{}), newFlow("b", &flowpb.Kubernetes{})}
-	got := applyFilter(flows, nil, nil, time.Time{})
+	got := applyFilters(flows, nil, nil, time.Time{})
 	assert.Len(t, got, 2)
 }
 
 func TestApplyFilter_NilFilterPassesAll(t *testing.T) {
 	flows := []*flowpb.Flow{newFlow("a", &flowpb.Kubernetes{}), newFlow("b", &flowpb.Kubernetes{})}
-	got := applyFilter(flows, nil, nil, time.Time{})
+	got := applyFilters(flows, nil, nil, time.Time{})
 	assert.Len(t, got, 2)
 }
 
@@ -200,7 +200,7 @@ func TestMatchFilter_Namespaces(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			f := newFlow("f", newPodK8S(tc.srcNS, "src-pod", tc.dstNS, "dst-pod"))
 			filter := &flowpb.FlowFilter{Namespaces: tc.filter, Direction: tc.direction}
-			got := applyFilter([]*flowpb.Flow{f}, filter, nil, time.Time{})
+			got := applyFilters([]*flowpb.Flow{f}, []*flowpb.FlowFilter{filter}, []labels.Selector{nil}, time.Time{})
 			if tc.want {
 				assert.Len(t, got, 1)
 			} else {
@@ -266,7 +266,7 @@ func TestMatchFilter_PodNames(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			f := newFlow("f", newPodK8S("ns", tc.srcPod, "ns", tc.dstPod))
 			filter := &flowpb.FlowFilter{PodNames: tc.filter, Direction: tc.direction}
-			got := applyFilter([]*flowpb.Flow{f}, filter, nil, time.Time{})
+			got := applyFilters([]*flowpb.Flow{f}, []*flowpb.FlowFilter{filter}, []labels.Selector{nil}, time.Time{})
 			if tc.want {
 				assert.Len(t, got, 1)
 			} else {
@@ -281,7 +281,7 @@ func TestMatchFilter_FlowTypes(t *testing.T) {
 	inter := newFlow("inter", &flowpb.Kubernetes{FlowType: flowpb.FlowType_FLOW_TYPE_INTER_NODE})
 
 	filter := &flowpb.FlowFilter{FlowTypes: []flowpb.FlowType{flowpb.FlowType_FLOW_TYPE_INTRA_NODE}}
-	got := applyFilter([]*flowpb.Flow{intra, inter}, filter, nil, time.Time{})
+	got := applyFilters([]*flowpb.Flow{intra, inter}, []*flowpb.FlowFilter{filter}, []labels.Selector{nil}, time.Time{})
 	require.Len(t, got, 1)
 	assert.Equal(t, "intra", got[0].GetId())
 }
@@ -340,7 +340,7 @@ func TestMatchFilter_ServiceNames(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			f := newFlow("f", &flowpb.Kubernetes{DestinationServicePortName: tc.svcPortName})
 			filter := &flowpb.FlowFilter{ServiceNames: tc.filter}
-			got := applyFilter([]*flowpb.Flow{f}, filter, nil, time.Time{})
+			got := applyFilters([]*flowpb.Flow{f}, []*flowpb.FlowFilter{filter}, []labels.Selector{nil}, time.Time{})
 			if tc.wantMatch {
 				assert.Len(t, got, 1)
 			} else {
@@ -412,7 +412,7 @@ func TestMatchFilter_IPs(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			filter := &flowpb.FlowFilter{Ips: tc.ips, Direction: tc.direction}
-			got := applyFilter([]*flowpb.Flow{f}, filter, nil, time.Time{})
+			got := applyFilters([]*flowpb.Flow{f}, []*flowpb.FlowFilter{filter}, []labels.Selector{nil}, time.Time{})
 			if tc.wantMatch {
 				assert.Len(t, got, 1)
 			} else {
@@ -486,10 +486,10 @@ func TestMatchFilter_LabelSelector(t *testing.T) {
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			got := applyFilter(
+			got := applyFilters(
 				[]*flowpb.Flow{newFlow("f", tc.k8s)},
-				&flowpb.FlowFilter{Direction: tc.direction},
-				sel,
+				[]*flowpb.FlowFilter{{Direction: tc.direction}},
+				[]labels.Selector{sel},
 				time.Time{},
 			)
 			if tc.wantMatch {
@@ -561,8 +561,8 @@ func TestGetFlows_FilterByServiceName(t *testing.T) {
 	svc := newTestService(buf)
 	stream := newFakeStream(context.Background())
 	req := &flowpb.GetFlowsRequest{
-		Follow: false,
-		Filter: &flowpb.FlowFilter{ServiceNames: []string{"frontend"}},
+		Follow:  false,
+		Filters: []*flowpb.FlowFilter{{ServiceNames: []string{"frontend"}}},
 	}
 	require.NoError(t, svc.GetFlows(req, stream))
 
@@ -588,10 +588,10 @@ func TestGetFlows_FilterByNamespace(t *testing.T) {
 	stream := newFakeStream(context.Background())
 	req := &flowpb.GetFlowsRequest{
 		Follow: false,
-		Filter: &flowpb.FlowFilter{
+		Filters: []*flowpb.FlowFilter{{
 			Namespaces: []string{"monitoring"},
 			Direction:  flowpb.FlowFilterDirection_FLOW_FILTER_DIRECTION_FROM,
-		},
+		}},
 	}
 	require.NoError(t, svc.GetFlows(req, stream))
 
@@ -600,6 +600,33 @@ func TestGetFlows_FilterByNamespace(t *testing.T) {
 	for _, f := range got {
 		assert.Equal(t, "monitoring", f.GetK8S().GetSourcePodNamespace())
 	}
+}
+
+func TestGetFlows_MultipleFilters(t *testing.T) {
+	buf := ringbuffer.NewBroadcastBuffer[*flowpb.Flow](64)
+	t.Cleanup(func() { buf.Shutdown() })
+
+	// flows from "frontend" ns to "backend" ns
+	buf.Produce(newFlow("fe-to-backend", newPodK8S("frontend", "pod", "backend", "pod")))
+	// flows from "frontend" ns to "other" ns - should NOT match
+	buf.Produce(newFlow("fe-to-other", newPodK8S("frontend", "pod", "other", "pod")))
+	// flows from "other" ns to "backend" ns - should NOT match
+	buf.Produce(newFlow("other-to-backend", newPodK8S("other", "pod", "backend", "pod")))
+
+	svc := newTestService(buf)
+	stream := newFakeStream(context.Background())
+	req := &flowpb.GetFlowsRequest{
+		Follow: false,
+		Filters: []*flowpb.FlowFilter{
+			{Namespaces: []string{"frontend"}, Direction: flowpb.FlowFilterDirection_FLOW_FILTER_DIRECTION_FROM},
+			{Namespaces: []string{"backend"}, Direction: flowpb.FlowFilterDirection_FLOW_FILTER_DIRECTION_TO},
+		},
+	}
+	require.NoError(t, svc.GetFlows(req, stream))
+
+	got := collectFlows(stream.responses)
+	require.Len(t, got, 1)
+	assert.Equal(t, "fe-to-backend", got[0].GetId())
 }
 
 func TestGetFlows_SinceFilter(t *testing.T) {
@@ -635,7 +662,7 @@ func TestGetFlows_InvalidLabelSelector(t *testing.T) {
 	svc := newTestService(buf)
 	stream := newFakeStream(context.Background())
 	req := &flowpb.GetFlowsRequest{
-		Filter: &flowpb.FlowFilter{PodLabelSelector: "!!!not-valid"},
+		Filters: []*flowpb.FlowFilter{{PodLabelSelector: "!!!not-valid"}},
 	}
 
 	err := svc.GetFlows(req, stream)
