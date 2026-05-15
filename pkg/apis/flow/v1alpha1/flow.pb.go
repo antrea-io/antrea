@@ -762,6 +762,7 @@ type Kubernetes struct {
 	DestinationPodLabels           *Labels                 `protobuf:"bytes,11,opt,name=destination_pod_labels,json=destinationPodLabels,proto3" json:"destination_pod_labels,omitempty"`
 	DestinationNodeName            string                  `protobuf:"bytes,12,opt,name=destination_node_name,json=destinationNodeName,proto3" json:"destination_node_name,omitempty"`
 	DestinationNodeUid             string                  `protobuf:"bytes,13,opt,name=destination_node_uid,json=destinationNodeUid,proto3" json:"destination_node_uid,omitempty"`
+	// Deprecated: use DestinationServiceIp instead.
 	DestinationClusterIp           []byte                  `protobuf:"bytes,14,opt,name=destination_cluster_ip,json=destinationClusterIp,proto3" json:"destination_cluster_ip,omitempty"`
 	DestinationServicePort         uint32                  `protobuf:"varint,15,opt,name=destination_service_port,json=destinationServicePort,proto3" json:"destination_service_port,omitempty"`
 	DestinationServicePortName     string                  `protobuf:"bytes,16,opt,name=destination_service_port_name,json=destinationServicePortName,proto3" json:"destination_service_port_name,omitempty"`
@@ -783,6 +784,7 @@ type Kubernetes struct {
 	EgressNodeName                 string                  `protobuf:"bytes,32,opt,name=egress_node_name,json=egressNodeName,proto3" json:"egress_node_name,omitempty"`
 	EgressNodeUid                  string                  `protobuf:"bytes,33,opt,name=egress_node_uid,json=egressNodeUid,proto3" json:"egress_node_uid,omitempty"`
 	EgressUid                      string                  `protobuf:"bytes,34,opt,name=egress_uid,json=egressUid,proto3" json:"egress_uid,omitempty"`
+	DestinationServiceIp           []byte                  `protobuf:"bytes,35,opt,name=destination_service_ip,json=destinationServiceIp,proto3" json:"destination_service_ip,omitempty"`
 }
 
 func (x *Kubernetes) Reset() {
@@ -1053,6 +1055,13 @@ func (x *Kubernetes) GetEgressUid() string {
 		return x.EgressUid
 	}
 	return ""
+}
+
+func (x *Kubernetes) GetDestinationServiceIp() []byte {
+	if x != nil {
+		return x.DestinationServiceIp
+	}
+	return nil
 }
 
 type App struct {

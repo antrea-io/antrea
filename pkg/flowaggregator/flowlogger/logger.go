@@ -102,6 +102,7 @@ func (fl *FlowLogger) WriteRecord(r *flowrecord.FlowRecord, prettyPrint bool) er
 		r.DestinationPodNamespace,
 		r.DestinationNodeName,
 		r.DestinationClusterIP,
+		r.DestinationServiceIP,
 		fmt.Sprintf("%d", r.DestinationServicePort),
 		r.DestinationServicePortName,
 		r.IngressNetworkPolicyName,

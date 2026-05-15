@@ -155,6 +155,16 @@ func (p *preprocessor) processMsg(msg *entities.Message) {
 				if !ip.Equal(net.IPv6zero) {
 					flow.K8S.DestinationClusterIp = ie.GetIPAddressValue()
 				}
+			case "destinationServiceIPv4":
+				ip := ie.GetIPAddressValue()
+				if !ip.Equal(net.IPv4zero) {
+					flow.K8S.DestinationServiceIp = ie.GetIPAddressValue()
+				}
+			case "destinationServiceIPv6":
+				ip := ie.GetIPAddressValue()
+				if !ip.Equal(net.IPv6zero) {
+					flow.K8S.DestinationServiceIp = ie.GetIPAddressValue()
+				}
 			case "destinationServicePort":
 				flow.K8S.DestinationServicePort = uint32(ie.GetUnsigned16Value())
 			case "destinationServicePortName":

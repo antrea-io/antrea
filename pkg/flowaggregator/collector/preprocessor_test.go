@@ -202,6 +202,10 @@ func createTestElements(isIPv4 bool) []ipfixentities.InfoElementWithValue {
 		destinationClusterIPv4Elem.SetIPAddressValue(netip.MustParseAddr("10.10.1.10").AsSlice())
 		elements = append(elements, destinationClusterIPv4Elem)
 
+		destinationServiceIPv4Elem := createTestElement("destinationServiceIPv4", ipfixregistry.AntreaEnterpriseID)
+		destinationServiceIPv4Elem.SetIPAddressValue(netip.MustParseAddr("10.10.1.10").AsSlice())
+		elements = append(elements, destinationServiceIPv4Elem)
+
 		egressIPElem := createTestElement("egressIP", ipfixregistry.AntreaEnterpriseID)
 		egressIPElem.SetStringValue("172.18.0.1")
 		elements = append(elements, egressIPElem)
@@ -217,6 +221,10 @@ func createTestElements(isIPv4 bool) []ipfixentities.InfoElementWithValue {
 		destinationClusterIPv6Elem := createTestElement("destinationClusterIPv6", ipfixregistry.AntreaEnterpriseID)
 		destinationClusterIPv6Elem.SetIPAddressValue(netip.MustParseAddr("2001:0:3238:dfe1:64::a").AsSlice())
 		elements = append(elements, destinationClusterIPv6Elem)
+
+		destinationServiceIPv6Elem := createTestElement("destinationServiceIPv6", ipfixregistry.AntreaEnterpriseID)
+		destinationServiceIPv6Elem.SetIPAddressValue(netip.MustParseAddr("2001:0:3238:dfe1:64::a").AsSlice())
+		elements = append(elements, destinationServiceIPv6Elem)
 
 		egressIPElem := createTestElement("egressIP", ipfixregistry.AntreaEnterpriseID)
 		egressIPElem.SetStringValue("2001:0:3238:dfe1::ac12:1")
@@ -271,6 +279,7 @@ func createExpectedFlowRecord(isIPv4 bool) *flowpb.Flow {
 			DestinationPodNamespace:        "antrea-test-b",
 			DestinationNodeName:            "k8s-node-control-plane-b",
 			DestinationClusterIp:           destinationClusterIP.AsSlice(),
+			DestinationServiceIp:           destinationClusterIP.AsSlice(),
 			DestinationServicePort:         5202,
 			DestinationServicePortName:     "perftest",
 			IngressNetworkPolicyName:       "test-flow-aggregator-networkpolicy-ingress-allow",

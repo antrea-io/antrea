@@ -337,9 +337,9 @@ func getElemList(ianaIE []string, antreaIE []string) []ipfixentities.InfoElement
 			ie.SetUnsigned8Value(uint8(0))
 		case "sourceIPv4Address", "destinationIPv4Address", "sourceIPv6Address", "destinationIPv6Address":
 			ie.SetIPAddressValue(net.ParseIP(""))
-		case "destinationClusterIPv4":
+		case "destinationClusterIPv4", "destinationServiceIPv4":
 			ie.SetIPAddressValue(net.IP{0, 0, 0, 0})
-		case "destinationClusterIPv6":
+		case "destinationClusterIPv6", "destinationServiceIPv6":
 			ie.SetIPAddressValue(net.ParseIP("::"))
 		case "sourceTransportPort", "destinationTransportPort", "destinationServicePort":
 			ie.SetUnsigned16Value(uint16(0))

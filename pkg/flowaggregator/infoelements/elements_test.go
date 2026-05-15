@@ -150,11 +150,11 @@ func TestAntreaInfoElements(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Run("ipv4", func(t *testing.T) {
-				expectedIEs := append(tc.expectedIEs, "destinationClusterIPv4")
+				expectedIEs := append(tc.expectedIEs, "destinationClusterIPv4", "destinationServiceIPv4")
 				assert.Equal(t, expectedIEs, AntreaInfoElements(tc.includeK8sNames, tc.includeK8sUIDs, false))
 			})
 			t.Run("ipv6", func(t *testing.T) {
-				expectedIEs := append(tc.expectedIEs, "destinationClusterIPv6")
+				expectedIEs := append(tc.expectedIEs, "destinationClusterIPv6", "destinationServiceIPv6")
 				assert.Equal(t, expectedIEs, AntreaInfoElements(tc.includeK8sNames, tc.includeK8sUIDs, true))
 			})
 		})

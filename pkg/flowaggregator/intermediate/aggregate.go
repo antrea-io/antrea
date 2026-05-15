@@ -205,10 +205,12 @@ func (a *aggregationProcess) GetRecords(flowKey *FlowKey) []map[string]interface
 			m["sourceIPv4Address"] = net.IP(f.Ip.Source)
 			m["destinationIPv4Address"] = net.IP(f.Ip.Destination)
 			m["destinationClusterIPv4"] = net.IP(f.K8S.DestinationClusterIp)
+			m["destinationServiceIPv4"] = net.IP(f.K8S.DestinationServiceIp)
 		} else {
 			m["sourceIPv6Address"] = net.IP(f.Ip.Source)
 			m["destinationIPv6Address"] = net.IP(f.Ip.Destination)
 			m["destinationClusterIPv6"] = net.IP(f.K8S.DestinationClusterIp)
+			m["destinationServiceIPv6"] = net.IP(f.K8S.DestinationServiceIp)
 		}
 		return m
 	}
@@ -453,6 +455,9 @@ func (a *aggregationProcess) correlateRecords(incomingRecord, existingRecord *fl
 	}
 	if destinationClusterIP := incomingRecord.K8S.DestinationClusterIp; destinationClusterIP != nil {
 		existingRecord.K8S.DestinationClusterIp = destinationClusterIP
+	}
+	if destinationServiceIP := incomingRecord.K8S.DestinationServiceIp; destinationServiceIP != nil {
+		existingRecord.K8S.DestinationServiceIp = destinationServiceIP
 	}
 	if destinationServicePort := incomingRecord.K8S.DestinationServicePort; destinationServicePort != 0 {
 		existingRecord.K8S.DestinationServicePort = destinationServicePort

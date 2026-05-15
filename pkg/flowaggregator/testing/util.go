@@ -81,6 +81,7 @@ func PrepareTestFlowRecord(isIPv4 bool) *flowpb.Flow {
 			},
 			DestinationNodeName:            "k8s-node-control-plane-b",
 			DestinationClusterIp:           destinationClusterIP.AsSlice(),
+			DestinationServiceIp:           destinationClusterIP.AsSlice(),
 			DestinationServicePort:         5202,
 			DestinationServicePortName:     "perftest",
 			IngressNetworkPolicyName:       "test-flow-aggregator-networkpolicy-ingress-allow",
