@@ -52,3 +52,7 @@ RUN go install k8s.io/code-generator/cmd/client-gen@kubernetes-$K8S_VERSION && \
 
 COPY --from=protoc /tmp/protoc/bin /usr/local/bin
 COPY --from=protoc /tmp/protoc/include /usr/local/include
+
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends tcpdump && \
+    rm -rf /var/lib/apt/lists/*

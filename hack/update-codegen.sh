@@ -28,7 +28,7 @@ ANTREA_ROOT="$( cd "$( dirname "${BASH_SOURCE[0]}" )/../" && pwd )"
 #     -f ${ANTREA_ROOT}/build/images/codegen/Dockerfile --build-arg GO_VERSION="$(head -n1 ${ANTREA_ROOT}/build/images/deps/go-version)" .
 #   export ANTREA_CODEGEN_IMAGE=antrea/codegen:arm64-local
 #   export CODEGEN_DOCKER_PLATFORM=linux/arm64
-IMAGE_NAME="${ANTREA_CODEGEN_IMAGE:-antrea/codegen:kubernetes-1.35.0-build.0}"
+IMAGE_NAME="${ANTREA_CODEGEN_IMAGE:-antrea/codegen:kubernetes-1.35.0-build.1}"
 # Build a platform args array so --platform is safely quoted and applied consistently
 # to both docker pull and docker run.
 DOCKER_PLATFORM_ARGS=()

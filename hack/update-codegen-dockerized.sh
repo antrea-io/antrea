@@ -225,5 +225,8 @@ $GOPATH/bin/go-to-protobuf \
 
 rm -rf vendor
 
+# Regenerate BPF test reference data using tcpdump.
+hack/generate-bpf-testdata.sh
+
 reset_year_change
 copy_generated_code_to_source
