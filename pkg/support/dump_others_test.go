@@ -229,3 +229,93 @@ add ANTREA-POD-IP6 fd00:10:244::/64
 		})
 	}
 }
+
+func TestDumpIPToolInfo(t *testing.T) {
+	successAction := func() ([]byte, []byte, error) {
+		return []byte("output"), nil, nil
+	}
+	errorAction := func() ([]byte, []byte, error) {
+		return nil, nil, fmt.Errorf("exec error")
+	}
+
+	type commandCall struct {
+		cmd  string
+		args []string
+	}
+
+	// wantCalls is the exact sequence of ip sub-commands that dumpIPToolInfo must invoke.
+	// A typo in any command name or argument would cause these assertions to fail.
+	wantCalls := []commandCall{
+		{cmd: "ip", args: []string{"rule"}},
+		{cmd: "ip", args: []string{"route"}},
+		{cmd: "ip", args: []string{"link"}},
+		{cmd: "ip", args: []string{"address"}},
+		{cmd: "ip", args: []string{"route", "show", "table", "all"}},
+	}
+	allFiles := []string{"rule", "route", "link", "address", "route-table-all"}
+
+	tests := []struct {
+		name          string
+		failFirst     bool
+		expectedFiles []string
+		expectedErr   string
+	}{
+		{
+			name:          "all commands succeed",
+			expectedFiles: allFiles,
+		},
+		{
+			name:        "first command fails returns error",
+			failFirst:   true,
+			expectedErr: "error when dumping ip rule",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			fs := afero.NewMemMapFs()
+			fs.MkdirAll(baseDir, os.ModePerm)
+
+			var gotCalls []commandCall
+			var commandScript []testingexec.FakeCommandAction
+			for i := range wantCalls {
+				i := i
+				action := successAction
+				if tc.failFirst && i == 0 {
+					action = errorAction
+				}
+				commandScript = append(commandScript, func(cmd string, args ...string) exec.Cmd {
+					gotCalls = append(gotCalls, commandCall{cmd: cmd, args: args})
+					return &testingexec.FakeCmd{
+						CombinedOutputScript: []testingexec.FakeAction{action},
+					}
+				})
+			}
+
+			fakeExecutor := &testingexec.FakeExec{}
+			fakeExecutor.CommandScript = commandScript
+
+			dumper := &agentDumper{
+				fs:       fs,
+				executor: fakeExecutor,
+			}
+
+			err := dumper.dumpIPToolInfo(baseDir)
+
+			if tc.expectedErr != "" {
+				assert.ErrorContains(t, err, tc.expectedErr)
+				// Only the first command should have been invoked.
+				require.Len(t, gotCalls, 1)
+				assert.Equal(t, wantCalls[0], gotCalls[0])
+			} else {
+				require.NoError(t, err)
+				assert.Equal(t, wantCalls, gotCalls)
+				for _, name := range tc.expectedFiles {
+					ok, err := afero.Exists(fs, filepath.Join(baseDir, name))
+					require.NoError(t, err)
+					assert.True(t, ok, "expected file %q to exist", name)
+				}
+			}
+		})
+	}
+}
