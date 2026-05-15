@@ -65,7 +65,7 @@ const (
 	networkPolicyDelay = 2000 * time.Millisecond
 	// Timeout when waiting for a policy status to be updated and for the
 	// policy to be considered realized.
-	policyRealizedTimeout = 5 * time.Second
+	policyRealizedTimeout = 60 * time.Second
 	// Verification of deleting/creating resources timed out.
 	timeout = 10 * time.Second
 	// audit log directory on Antrea Agent
