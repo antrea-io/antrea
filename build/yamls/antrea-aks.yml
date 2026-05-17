@@ -397,10 +397,13 @@ spec:
                           bridgeName:
                             description: Name of the OVS bridge.
                             type: string
+                            maxLength: 15
+                            pattern: '^[a-zA-Z0-9._-]+$'
                           physicalInterfaces:
                             description: >-
                               Physical interfaces to be connected to this bridge.
                             type: array
+                            maxItems: 8
                             items:
                               type: object
                               required:
@@ -410,6 +413,8 @@ spec:
                                   description: Name of the physical interface.
                                   type: string
                                   minLength: 1
+                                  maxLength: 15
+                                  pattern: '^[a-zA-Z0-9._-]+$'
                                 allowedVLANs:
                                   description: >-
                                     VLAN IDs or VLAN ID ranges (e.g. "100",
