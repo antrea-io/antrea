@@ -475,6 +475,10 @@ spec:
     port: 14739
     protocol: TCP
     targetPort: grpc
+  - name: flow-stream
+    port: 14740
+    protocol: TCP
+    targetPort: flow-stream
 ---
 # Source: flow-aggregator/templates/deployment.yaml
 apiVersion: apps/v1
@@ -555,6 +559,9 @@ spec:
             protocol: TCP
           - name: grpc
             containerPort: 14739
+            protocol: TCP
+          - name: flow-stream
+            containerPort: 14740
             protocol: TCP
         volumeMounts:
         - mountPath: /etc/flow-aggregator

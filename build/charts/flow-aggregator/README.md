@@ -19,7 +19,7 @@ Kubernetes: `>= 1.23.0-0`
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
 | activeFlowRecordTimeout | string | `"60s"` | Provide the active flow record timeout as a duration string. Valid time units are "ns", "us" (or "µs"), "ms", "s", "m", "h". Values under 1s are not supported; they will be rounded up to 1s. |
-| aggregatorTransportProtocol | string | `"tls"` | Provide the transport protocol for the flow aggregator collecting process, which must be one of "tls", "tcp", "udp" or "none". Note that this only applies to the IPFIX collector. The gRPC collector will always run (and always use mTLS), regardless of this configuration. When using "none", the IPFIX collector will be disabled. |
+| aggregatorTransportProtocol | string | `"tls"` | Provide the transport protocol for the flow aggregator collecting process, which must be one of "tls", "tcp", "udp" or "none". Note that this only applies to the IPFIX collector. The gRPC collector (port 14739, mTLS) always runs for receiving flow records from Antrea Agents. The FlowStreamService (port 14740, plaintext) always runs for streaming flows to consumers such as antrea-ui. When using "none", the IPFIX collector will be disabled. |
 | antreaNamespace | string | `"kube-system"` | Namespace in which Antrea was installed. |
 | apiServer.apiPort | int | `10348` | The port for the Flow Aggregator APIServer to serve on. |
 | apiServer.tlsCipherSuites | string | `""` | Comma-separated list of cipher suites that will be used by the Flow Aggregator APIservers. If empty, the default Go Cipher Suites will be used. |
