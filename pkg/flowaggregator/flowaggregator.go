@@ -229,7 +229,7 @@ func (fa *flowAggregator) initCollectors() error {
 	defer fa.collectorMutex.Unlock()
 
 	caCert, serverCert, serverKey := fa.certificateProvider.GetTLSConfig()
-	grpcCollector, err := collector.NewGRPCCollector(fa.recordCh, fa.flowStreamService, caCert, serverKey, serverCert)
+	grpcCollector, err := collector.NewGRPCCollector(fa.recordCh, caCert, serverKey, serverCert)
 	if err != nil {
 		return fmt.Errorf("failed to create gRPC collector: %w", err)
 	}
@@ -328,6 +328,14 @@ func (fa *flowAggregator) Run(stopCh <-chan struct{}) {
 			fa.certificateProvider.Run(stopCh)
 		}()
 	}
+
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		if err := fa.flowStreamService.Run(stopCh); err != nil {
+			klog.ErrorS(err, "FlowStreamService failed to start")
+		}
+	}()
 
 	wg.Add(1)
 	go func() {

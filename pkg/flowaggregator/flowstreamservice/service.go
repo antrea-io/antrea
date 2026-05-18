@@ -18,11 +18,15 @@
 package flowstreamservice
 
 import (
+	"fmt"
+	"net"
 	"net/netip"
 	"slices"
 	"strings"
+	"sync"
 	"time"
 
+	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"k8s.io/apimachinery/pkg/labels"
@@ -35,6 +39,8 @@ import (
 const (
 	internalBatchSize       = 100
 	defaultConsumerDeadline = 500 * time.Millisecond
+	// FlowStreamPort is the port on which the FlowStreamService gRPC server listens.
+	FlowStreamPort = 14740
 )
 
 // FlowStreamService implements flowpb.FlowStreamServiceServer. Each client
@@ -49,6 +55,34 @@ type FlowStreamService struct {
 // NewFlowStreamService creates a FlowStreamService backed by the given buffer.
 func NewFlowStreamService(buffer ringbuffer.BroadcastBuffer[*flowpb.Flow]) *FlowStreamService {
 	return &FlowStreamService{buffer: buffer, consumerDeadline: defaultConsumerDeadline}
+}
+
+// Run starts a dedicated gRPC server for the FlowStreamService on FlowStreamPort.
+// The server uses plaintext (no TLS) for now; authentication will be added in a
+// follow-up PR. Run blocks until stopCh is closed.
+func (s *FlowStreamService) Run(stopCh <-chan struct{}) error {
+	addr := fmt.Sprintf("0.0.0.0:%d", FlowStreamPort)
+	// #nosec G102: binding to all network interfaces is intentional
+	lis, err := net.Listen("tcp", addr)
+	if err != nil {
+		return fmt.Errorf("failed to listen on %s: %w", addr, err)
+	}
+	server := grpc.NewServer()
+	flowpb.RegisterFlowStreamServiceServer(server, s)
+
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		klog.InfoS("Starting FlowStreamService gRPC server", "addr", addr)
+		if err := server.Serve(lis); err != nil {
+			klog.ErrorS(err, "FlowStreamService gRPC server failed to start")
+		}
+	}()
+	<-stopCh
+	server.GracefulStop()
+	wg.Wait()
+	return nil
 }
 
 // GetFlows is the server-streaming RPC handler. The gRPC framework spawns a

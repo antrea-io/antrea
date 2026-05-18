@@ -106,6 +106,9 @@ spec:
           - name: grpc
             containerPort: 14739
             protocol: TCP
+          - name: flow-stream
+            containerPort: 14740
+            protocol: TCP
         volumeMounts:
         - mountPath: /etc/flow-aggregator
           name: flow-aggregator-config
