@@ -481,8 +481,24 @@ func compilePacketFilter(packetSpec *crdv1alpha1.Packet, srcIP, dstIP net.IP, di
 // compileGenericPacketFilter compiles the CRD spec to BPF instructions using a
 // protocol-specific handler to manage differences between IPv4 and IPv6.
 func compileGenericPacketFilter(handler *ipFamilyHandler, packetSpec *crdv1alpha1.Packet, srcIP, dstIP net.IP, direction crdv1alpha1.CaptureDirection) []bpf.Instruction {
-	size := uint8(calculateInstructionsSize(handler, packetSpec, srcIP, dstIP, direction))
+	firstPass := doCompileGenericPacketFilter(handler, packetSpec, srcIP, dstIP, direction, 255)
+	size := uint8(len(firstPass))
+	return doCompileGenericPacketFilter(handler, packetSpec, srcIP, dstIP, direction, size)
+}
 
+func getCommonPrefixChunks(handler *ipFamilyHandler, a, b net.IP) int {
+	if a == nil || b == nil {
+		return 0
+	}
+	for i := 0; i < handler.addressChunks; i++ {
+		if handler.getAddressChunk(a, i) != handler.getAddressChunk(b, i) {
+			return i
+		}
+	}
+	return handler.addressChunks
+}
+
+func doCompileGenericPacketFilter(handler *ipFamilyHandler, packetSpec *crdv1alpha1.Packet, srcIP, dstIP net.IP, direction crdv1alpha1.CaptureDirection, size uint8) []bpf.Instruction {
 	// Start with checking the EtherType.
 	inst := []bpf.Instruction{loadEtherKind}
 	// skip means how many instructions we need to skip if the compare fails.
@@ -507,21 +523,14 @@ func compileGenericPacketFilter(handler *ipFamilyHandler, packetSpec *crdv1alpha
 			proto = ProtocolMap[strings.ToUpper(packetSpec.Protocol.StrVal)]
 		}
 
-		// For IPv6 with transport-level filters and at least one IP filter,
-		// defer protocol checks until after IP checks for one-way directions.
-		// This better aligns with tcpdump output ordering for many complex
-		// expressions where L3 constraints are evaluated before protocol checks.
-		// IPv4 does not need this reordering: tcpdump/libpcap always emits
-		// IPv4 protocol checks immediately after the EtherType check,
-		// regardless of filter complexity.
 		deferProtoCheck = handler.etherType == etherTypeIPv6 &&
 			hasTransport &&
-			(srcIP != nil || dstIP != nil) &&
-			(direction == crdv1alpha1.CaptureDirectionSourceToDestination ||
-				direction == crdv1alpha1.CaptureDirectionDestinationToSource)
+			(srcIP != nil || dstIP != nil)
 
 		if !deferProtoCheck {
 			inst = appendProtocolFilters(inst, handler, proto, hasTransport, size)
+		} else if direction == crdv1alpha1.CaptureDirectionBoth {
+			inst = appendProtocolFilters(inst, handler, proto, false, size)
 		}
 	}
 
@@ -593,29 +602,189 @@ func compileGenericPacketFilter(handler *ipFamilyHandler, packetSpec *crdv1alpha
 		}
 	}
 
+	skipToDrop := func(curInsts int) uint8 { return size - uint8(curInsts) - 2 }
+
 	switch direction {
 	case crdv1alpha1.CaptureDirectionSourceToDestination:
 		inst = append(inst, compileIPFilters(handler, srcIP, dstIP, size, uint8(len(inst)), 0, false)...)
 		if hasProtocol && deferProtoCheck {
 			inst = appendProtocolFilters(inst, handler, proto, hasTransport, size)
 		}
+		inst = append(inst, compileTransportFilters(handler, size, uint8(len(inst)), &transport)...)
 	case crdv1alpha1.CaptureDirectionDestinationToSource:
 		transport.srcPort, transport.dstPort = transport.dstPort, transport.srcPort
 		inst = append(inst, compileIPFilters(handler, dstIP, srcIP, size, uint8(len(inst)), 0, false)...)
 		if hasProtocol && deferProtoCheck {
 			inst = appendProtocolFilters(inst, handler, proto, hasTransport, size)
 		}
-	default:
-		skipFalse := calculateSkipFalse(handler, srcIP, dstIP, &transport)
-		inst = append(inst, compileIPFilters(handler, srcIP, dstIP, size, uint8(len(inst)), skipFalse, true)...)
 		inst = append(inst, compileTransportFilters(handler, size, uint8(len(inst)), &transport)...)
-		transport.srcPort, transport.dstPort = transport.dstPort, transport.srcPort
-		inst = append(inst, compileIPFilters(handler, dstIP, srcIP, size, uint8(len(inst)), 0, false)...)
+	default:
+		var bothProto uint32
+		if hasProtocol && deferProtoCheck {
+			bothProto = proto
+		}
+		inst = compileBothDirectionFilters(inst, handler, srcIP, dstIP, size, &transport, skipToDrop, bothProto)
 	}
-	inst = append(inst, compileTransportFilters(handler, size, uint8(len(inst)), &transport)...)
 
 	// return (drop)
 	inst = append(inst, returnDrop)
+
+	return inst
+}
+
+func compileBothDirectionFilters(inst []bpf.Instruction, handler *ipFamilyHandler, srcIP, dstIP net.IP, size uint8, transport *transportFilters, skipToDrop func(int) uint8, proto uint32) []bpf.Instruction {
+	common := getCommonPrefixChunks(handler, srcIP, dstIP)
+
+	sharedFlags := transport.tcpFlags
+	transportNoFlags := *transport
+	transportNoFlags.tcpFlags = nil
+
+	diffJumpIdx := -1
+	if srcIP != nil {
+		for i := 0; i < handler.addressChunks; i++ {
+			offset := uint32(i * 4)
+			addrA := handler.getAddressChunk(srcIP, i)
+			inst = append(inst, bpf.LoadAbsolute{Off: handler.sourceAddrOffset + offset, Size: lengthWord})
+			if i < common {
+				inst = append(inst, bpf.JumpIf{Cond: bpf.JumpEqual, Val: addrA, SkipTrue: 0, SkipFalse: skipToDrop(len(inst))})
+			} else if i == common {
+				diffJumpIdx = len(inst)
+				inst = append(inst, bpf.JumpIf{Cond: bpf.JumpEqual, Val: addrA, SkipTrue: 0, SkipFalse: 0})
+			} else {
+				inst = append(inst, bpf.JumpIf{Cond: bpf.JumpEqual, Val: addrA, SkipTrue: 0, SkipFalse: skipToDrop(len(inst))})
+			}
+		}
+	}
+
+	var dstOnlyJumps []int
+	if dstIP != nil {
+		for i := 0; i < handler.addressChunks; i++ {
+			offset := uint32(i * 4)
+			addrVal := handler.getAddressChunk(dstIP, i)
+			inst = append(inst, bpf.LoadAbsolute{Off: handler.destinationAddrOffset + offset, Size: lengthWord})
+			if srcIP == nil {
+				idx := len(inst)
+				dstOnlyJumps = append(dstOnlyJumps, idx)
+				inst = append(inst, bpf.JumpIf{Cond: bpf.JumpEqual, Val: addrVal, SkipTrue: 0, SkipFalse: 0})
+			} else {
+				inst = append(inst, bpf.JumpIf{Cond: bpf.JumpEqual, Val: addrVal, SkipTrue: 0, SkipFalse: skipToDrop(len(inst))})
+			}
+		}
+	}
+
+	dstOnlyPatchStart := len(inst)
+
+	if proto > 0 && handler.etherType == etherTypeIPv6 {
+		inst = append(inst, handler.loadProtocol)
+		inst = append(inst, compareProtocol(proto, 0, skipToDrop(len(inst))))
+	}
+
+	transA := compileTransportFilters(handler, size, uint8(len(inst)), &transportNoFlags)
+	transA = transA[:len(transA)-1]
+	inst = append(inst, transA...)
+
+	if diffJumpIdx >= 0 {
+		origJmp := inst[diffJumpIdx].(bpf.JumpIf)
+		origJmp.SkipFalse = uint8(len(inst) - diffJumpIdx - 1)
+		inst[diffJumpIdx] = origJmp
+	}
+
+	if srcIP == nil && dstIP != nil {
+		pathBStart := len(inst)
+		for _, idx := range dstOnlyJumps {
+			origJmp := inst[idx].(bpf.JumpIf)
+			origJmp.SkipFalse = uint8(pathBStart - idx - 1)
+			inst[idx] = origJmp
+		}
+		for idx := dstOnlyPatchStart; idx < len(inst); idx++ {
+			if jmp, ok := inst[idx].(bpf.JumpIf); ok {
+				if jmp.Cond == bpf.JumpBitsSet && jmp.SkipTrue > 0 {
+					jmp.SkipTrue = uint8(pathBStart - idx - 1)
+					inst[idx] = jmp
+				} else if jmp.SkipFalse > 0 {
+					jmp.SkipFalse = uint8(pathBStart - idx - 1)
+					inst[idx] = jmp
+				}
+			}
+		}
+	}
+
+	if srcIP != nil && dstIP == nil {
+		pathBStart := len(inst)
+		for idx := dstOnlyPatchStart; idx < len(inst); idx++ {
+			if jmp, ok := inst[idx].(bpf.JumpIf); ok {
+				if jmp.Cond == bpf.JumpBitsSet && jmp.SkipTrue > 0 {
+					jmp.SkipTrue = uint8(pathBStart - idx - 1)
+					inst[idx] = jmp
+				} else if jmp.SkipFalse > 0 {
+					jmp.SkipFalse = uint8(pathBStart - idx - 1)
+					inst[idx] = jmp
+				}
+			}
+		}
+	}
+
+	lastTransAIdx := len(inst) - 1
+
+	if srcIP != nil {
+		if dstIP != nil {
+			for i := common; i < handler.addressChunks; i++ {
+				addrB := handler.getAddressChunk(dstIP, i)
+				if i != common {
+					offset := uint32(i * 4)
+					inst = append(inst, bpf.LoadAbsolute{Off: handler.sourceAddrOffset + offset, Size: lengthWord})
+				}
+				inst = append(inst, bpf.JumpIf{Cond: bpf.JumpEqual, Val: addrB, SkipTrue: 0, SkipFalse: skipToDrop(len(inst))})
+			}
+		}
+
+		for i := 0; i < handler.addressChunks; i++ {
+			offset := uint32(i * 4)
+			addrVal := handler.getAddressChunk(srcIP, i)
+			inst = append(inst, bpf.LoadAbsolute{Off: handler.destinationAddrOffset + offset, Size: lengthWord})
+			inst = append(inst, bpf.JumpIf{Cond: bpf.JumpEqual, Val: addrVal, SkipTrue: 0, SkipFalse: skipToDrop(len(inst))})
+		}
+	} else if dstIP != nil {
+		for i := 0; i < handler.addressChunks; i++ {
+			offset := uint32(i * 4)
+			addrVal := handler.getAddressChunk(dstIP, i)
+			inst = append(inst, bpf.LoadAbsolute{Off: handler.sourceAddrOffset + offset, Size: lengthWord})
+			inst = append(inst, bpf.JumpIf{Cond: bpf.JumpEqual, Val: addrVal, SkipTrue: 0, SkipFalse: skipToDrop(len(inst))})
+		}
+	}
+
+	if proto > 0 && handler.etherType == etherTypeIPv6 {
+		inst = append(inst, handler.loadProtocol)
+		inst = append(inst, compareProtocol(proto, 0, skipToDrop(len(inst))))
+	}
+
+	transportB := transportFilters{
+		srcPort: transportNoFlags.dstPort,
+		dstPort: transportNoFlags.srcPort,
+		icmp:    transportNoFlags.icmp,
+	}
+	transB := compileTransportFilters(handler, size, uint8(len(inst)), &transportB)
+	transB = transB[:len(transB)-1]
+	inst = append(inst, transB...)
+
+	if len(sharedFlags) > 0 {
+		if jmpA, ok := inst[lastTransAIdx].(bpf.JumpIf); ok {
+			jmpA.SkipTrue = uint8(len(inst) - lastTransAIdx - 1)
+			inst[lastTransAIdx] = jmpA
+		}
+		for _, f := range sharedFlags {
+			inst = append(inst, handler.loadTCPFlags)
+			inst = append(inst, bpf.ALUOpConstant{Op: bpf.ALUOpAnd, Val: f.mask})
+			inst = append(inst, bpf.JumpIf{Cond: bpf.JumpEqual, Val: f.flag, SkipTrue: 0, SkipFalse: skipToDrop(len(inst))})
+		}
+	} else {
+		if jmpA, ok := inst[lastTransAIdx].(bpf.JumpIf); ok {
+			jmpA.SkipTrue = uint8(len(inst) - lastTransAIdx - 1)
+			inst[lastTransAIdx] = jmpA
+		}
+	}
+
+	inst = append(inst, returnKeep)
 
 	return inst
 }
