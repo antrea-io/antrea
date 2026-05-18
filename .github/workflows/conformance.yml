@@ -1,11 +1,14 @@
 name: Run upstream conformance tests on Linux
-run-name: Run ${{ inputs.test-suite }} test with Antrea ${{ inputs.antrea-version }} and K8s ${{ inputs.k8s-version }}
+run-name: "Run ${{ inputs.test-suite }} test with Antrea ${{ inputs.pr-number != '' && format('PR #{0}', inputs.pr-number) || inputs.antrea-version }} and K8s ${{ inputs.k8s-version }}"
 
 on:
   workflow_dispatch:
     inputs:
+      pr-number:
+        description: The PR number to test (e.g. 1234). When set, antrea-version is ignored and the PR head commit is checked out.
+        required: false
       antrea-version:
-        description: The Antrea version to test. It could be a SHA-1 value, a branch, or a tag (e.g. a7b012b, release-1.12, v1.12.0). The main branch will be used if empty.
+        description: The Antrea version to test. It could be a SHA-1 value, a branch, or a tag (e.g. a7b012b, release-1.12, v1.12.0). The main branch will be used if empty. Ignored when pr-number is set.
         required: false
       antrea-values:
         description: The Antrea Chart values. Multiple values can be separated with commas (e.g. key1=val1,key2=val2). Default configuration will be tested if empty.
@@ -61,7 +64,7 @@ jobs:
           df -h
       - uses: actions/checkout@v6
         with:
-          ref: ${{ inputs.antrea-version }}
+          ref: ${{ inputs.pr-number != '' && format('refs/pull/{0}/head', inputs.pr-number) || inputs.antrea-version }}
           fetch-depth: 0
           show-progress: false
       # Docker 29+ defaults to the containerd image store, which breaks kind load docker-image.
@@ -69,7 +72,10 @@ jobs:
       - name: Check if it is a released version
         id: check-release
         run: |
-          if git show-ref --tags --verify --quiet refs/tags/${{ inputs.antrea-version }}; then
+          if [ -n "${{ inputs.pr-number }}" ]; then
+            echo "released=false" >> $GITHUB_OUTPUT
+            echo "image-tag=latest" >> $GITHUB_OUTPUT
+          elif git show-ref --tags --verify --quiet refs/tags/${{ inputs.antrea-version }}; then
             echo "released=true" >> $GITHUB_OUTPUT
             echo "image-tag=${{ inputs.antrea-version }}" >> $GITHUB_OUTPUT
           else
@@ -139,7 +145,7 @@ jobs:
           kubectl rollout status -n kube-system ds/antrea-agent --timeout=5m
       - name: Run e2e tests
         run: |
-          ./ci/run-k8s-e2e-tests.sh "--e2e-${{ inputs.test-suite }}"
+          ./ci/run-k8s-e2e-tests.sh "--e2e-${{ inputs.test-suite }}" --kubernetes-version auto
       - name: Upload test log
         uses: actions/upload-artifact@v7
         if: ${{ failure() || inputs.always-upload-logs }}
