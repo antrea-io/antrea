@@ -30,7 +30,7 @@ import (
 	"github.com/cheggaaa/pb/v3"
 	"github.com/spf13/afero"
 	"github.com/spf13/cobra"
-	"go.yaml.in/yaml/v3"
+	"go.yaml.in/yaml/v4"
 	"golang.org/x/sync/errgroup"
 	"golang.org/x/time/rate"
 
