@@ -21,56 +21,57 @@ import (
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/watch"
 	k8stesting "k8s.io/client-go/testing"
 
 	crdv1b1 "antrea.io/antrea/v2/pkg/apis/crd/v1beta1"
 	fakeversioned "antrea.io/antrea/v2/pkg/client/clientset/versioned/fake"
 )
 
-// Simple client is not sufficient for pool allocator testing,
-// since pool allocator relies on both crd client and pool informer
-// to work in sync. This client extension mimics the real client in
-// conflict handling functionality - pool update will return conflict
-// error unless ResourceVersion for the updated pool reflect the version
-// stored in the client.
+// IPPoolClientset extends the generated fake clientset to simulate optimistic
+// concurrency for IPPool updates: an update is rejected with a conflict error
+// unless the ResourceVersion in the request matches what is stored.
+// Use NewIPPoolClient to construct it; use the standard Create API to register
+// pools (the create reactor assigns ResourceVersion automatically).
 type IPPoolClientset struct {
-	fakeversioned.Clientset
+	*fakeversioned.Clientset
 	// store latest ResourceVersion for given pool
 	poolVersion sync.Map
-	watcher     *watch.RaceFreeFakeWatcher
-}
-
-func (c *IPPoolClientset) InitPool(pool *crdv1b1.IPPool) {
-	pool.ResourceVersion = uuid.New().String()
-	c.poolVersion.Store(pool.Name, pool.ResourceVersion)
-
-	c.watcher.Add(pool)
 }
 
 func NewIPPoolClient() *IPPoolClientset {
+	// NewSimpleClientset provides a working object tracker that handles list,
+	// get, create, and update for all resource types via its default reactors.
+	// The tracker also sends watch events (Added/Modified) so no custom watcher
+	// is needed.
+	crdClient := &IPPoolClientset{
+		Clientset:   fakeversioned.NewSimpleClientset(),
+		poolVersion: sync.Map{},
+	}
 
-	crdClient := &IPPoolClientset{watcher: watch.NewRaceFreeFake(),
-		poolVersion: sync.Map{}}
+	// Intercept create to assign ResourceVersion and register it for conflict
+	// detection, then let the tracker handle the actual storage and watch event.
+	crdClient.PrependReactor("create", "ippools", func(action k8stesting.Action) (bool, runtime.Object, error) {
+		pool := action.(k8stesting.CreateAction).GetObject().(*crdv1b1.IPPool)
+		pool.ResourceVersion = uuid.New().String()
+		crdClient.poolVersion.Store(pool.Name, pool.ResourceVersion)
+		return false, pool, nil
+	})
 
-	crdClient.AddReactor("update", "ippools", func(action k8stesting.Action) (bool, runtime.Object, error) {
+	// Intercept update to enforce optimistic concurrency, then let the tracker
+	// handle the actual storage and watch event.
+	crdClient.PrependReactor("update", "ippools", func(action k8stesting.Action) (bool, runtime.Object, error) {
 		updatedPool := action.(k8stesting.UpdateAction).GetObject().(*crdv1b1.IPPool)
 		obj, exists := crdClient.poolVersion.Load(updatedPool.Name)
 		if !exists {
 			return false, nil, nil
 		}
-		storedPoolVersion := obj.(string)
-		if storedPoolVersion != updatedPool.ResourceVersion {
+		if obj.(string) != updatedPool.ResourceVersion {
 			return true, nil, &errors.StatusError{ErrStatus: metav1.Status{Reason: metav1.StatusReasonConflict, Message: "pool status update conflict"}}
 		}
-
 		updatedPool.ResourceVersion = uuid.New().String()
 		crdClient.poolVersion.Store(updatedPool.Name, updatedPool.ResourceVersion)
-		crdClient.watcher.Modify(updatedPool)
-		return true, updatedPool, nil
+		return false, updatedPool, nil
 	})
-
-	crdClient.AddWatchReactor("ippools", k8stesting.DefaultWatchReactor(crdClient.watcher, nil))
 
 	return crdClient
 }
