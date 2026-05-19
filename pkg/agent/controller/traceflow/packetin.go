@@ -300,7 +300,13 @@ func (c *Controller) parsePacketIn(pktIn *ofctrl.PacketIn) (*crdv1beta1.Traceflo
 		}
 		gwPort := c.nodeConfig.GatewayConfig.OFPort
 		tunPort := c.nodeConfig.TunnelOFPort
-		if c.networkConfig.TrafficEncapMode.SupportsEncap() && outputPort == tunPort {
+		// The tunnel port does not always exist: in noEncap mode it is only created when Egress is
+		// enabled. tunPort is 0 when there is none, and it must not be compared against outputPort,
+		// which is also 0 when the output register is unset. A packet output to a port which is the
+		// tunnel port left the Node through the tunnel whatever the traffic encapsulation mode is, so
+		// the mode is not checked here.
+		switch {
+		case tunPort != 0 && outputPort == tunPort:
 			var isRemoteEgress uint32
 			if match := getMatchRegField(matchers, openflow.RemoteSNATRegMark.GetField()); match != nil {
 				isRemoteEgress, err = getRegValue(match, openflow.RemoteSNATRegMark.GetField().GetRange().ToNXRange())
@@ -318,81 +324,82 @@ func (c *Controller) parsePacketIn(pktIn *ofctrl.PacketIn) (*crdv1beta1.Traceflo
 			}
 			ob.TunnelDstIP = tunnelDstIP
 			ob.Action = crdv1beta1.ActionForwarded
-		} else if ipDst == gatewayIP.String() && outputPort == gwPort {
-			ob.Action = crdv1beta1.ActionDelivered
-		} else if c.networkConfig.TrafficEncapMode.SupportsEncap() && outputPort == gwPort { // encap or hybrid
-			var pktMark uint32
-			if match := getMatchPktMarkField(matchers); match != nil {
-				pktMark, err = getMarkValue(match)
-				if err != nil {
-					return nil, nil, nil, err
-				}
-			}
-			if pktMark != 0 { // Egress packet on Egress Node
-				egressName, egressIP, egressNode := "", "", ""
-				if tunnelDstIP == "" { // Egress Node is Source Node of this Egress packet
-					egressConfig, err := c.egressQuerier.GetEgress(ns, srcPod)
-					if err != nil {
-						return nil, nil, nil, err
-					}
-					egressName = egressConfig.Name
-					egressIP = egressConfig.EgressIP
-					egressNode = egressConfig.EgressNode
-				} else {
-					egressIP, err = c.egressQuerier.GetEgressIPByMark(pktMark)
+		case outputPort == gwPort:
+			switch {
+			case ipDst == gatewayIP.String():
+				ob.Action = crdv1beta1.ActionDelivered
+			case !c.networkConfig.TrafficEncapMode.IsNetworkPolicyOnly(): // encap, noEncap, or hybrid
+				// noEncap used to have a case of its own, which reported the packet as forwarded or as
+				// forwarded out of the network but knew nothing about Egress. Now that Egress is supported
+				// in noEncap mode, it shares this case, which reports both, and that case is gone.
+				var pktMark uint32
+				if match := getMatchPktMarkField(matchers); match != nil {
+					pktMark, err = getMarkValue(match)
 					if err != nil {
 						return nil, nil, nil, err
 					}
 				}
-				obEgress := getEgressObservation(true, egressIP, egressName, egressNode)
-				obs = append(obs, *obEgress)
-			}
+				if pktMark != 0 { // Egress packet on Egress Node
+					egressName, egressIP, egressNode := "", "", ""
+					if tunnelDstIP == "" { // Egress Node is Source Node of this Egress packet
+						egressConfig, err := c.egressQuerier.GetEgress(ns, srcPod)
+						if err != nil {
+							return nil, nil, nil, err
+						}
+						egressName = egressConfig.Name
+						egressIP = egressConfig.EgressIP
+						egressNode = egressConfig.EgressNode
+					} else {
+						egressIP, err = c.egressQuerier.GetEgressIPByMark(pktMark)
+						if err != nil {
+							return nil, nil, nil, err
+						}
+					}
+					obEgress := getEgressObservation(true, egressIP, egressName, egressNode)
+					obs = append(obs, *obEgress)
+				}
 
-			ob.Action = crdv1beta1.ActionForwardedOutOfNetwork
-			netAddrDst, isValidIP := netip.AddrFromSlice(netIPDst)
-			if pktMark == 0 && isValidIP && c.nodeRouteQuerier != nil {
-				if c.networkConfig.TrafficEncryptionMode == config.TrafficEncryptionModeWireGuard {
-					// WireGuard sends cross-Node Pod traffic through the gateway port. Resolve the destination Pod IP
-					// through NodeRoute to distinguish it from traffic leaving the cluster and report the peer Node IP.
-					if peerNodeIP, ok := c.nodeRouteQuerier.GetNodeIPForPodIP(netAddrDst); ok {
-						ob.Action = crdv1beta1.ActionForwarded
-						ob.TunnelDstIP = peerNodeIP.String()
-					}
-				} else if c.networkConfig.TrafficEncapMode == config.TrafficEncapModeHybrid {
-					isPodIP, _ := c.nodeRouteQuerier.LookupIPInPodSubnets(netAddrDst)
-					if isPodIP {
-						ob.Action = crdv1beta1.ActionForwarded
+				ob.Action = crdv1beta1.ActionForwardedOutOfNetwork
+				netAddrDst, isValidIP := netip.AddrFromSlice(netIPDst)
+				if pktMark == 0 && isValidIP && c.nodeRouteQuerier != nil {
+					if c.networkConfig.TrafficEncryptionMode == config.TrafficEncryptionModeWireGuard {
+						// WireGuard sends cross-Node Pod traffic through the gateway port. Resolve the destination Pod IP
+						// through NodeRoute to distinguish it from traffic leaving the cluster and report the peer Node IP.
+						if peerNodeIP, ok := c.nodeRouteQuerier.GetNodeIPForPodIP(netAddrDst); ok {
+							ob.Action = crdv1beta1.ActionForwarded
+							ob.TunnelDstIP = peerNodeIP.String()
+						}
+					} else if c.networkConfig.TrafficEncapMode == config.TrafficEncapModeNoEncap ||
+						c.networkConfig.TrafficEncapMode == config.TrafficEncapModeHybrid {
+						// In noEncap and hybrid modes, packets destined for remote Pod IPs can be forwarded via Antrea
+						// gateway port. Check if the destination is a Pod IP to distinguish it from traffic leaving
+						// the cluster.
+						isPodIP, _ := c.nodeRouteQuerier.LookupIPInPodSubnets(netAddrDst)
+						if isPodIP {
+							ob.Action = crdv1beta1.ActionForwarded
+						}
 					}
 				}
-			}
-		} else if c.networkConfig.TrafficEncapMode == config.TrafficEncapModeNetworkPolicyOnly && outputPort == gwPort { // networkPolicyOnly
-			isPodIP := false
-			for _, podCIDR := range c.podCIDRs {
-				if podCIDR.Contains(netIPDst) {
-					isPodIP = true
-					break
+			default: // networkPolicyOnly
+				isPodIP := false
+				for _, podCIDR := range c.podCIDRs {
+					if podCIDR.Contains(netIPDst) {
+						isPodIP = true
+						break
+					}
+				}
+				if isPodIP {
+					ob.Action = crdv1beta1.ActionForwarded
+				} else {
+					ob.Action = crdv1beta1.ActionForwardedOutOfNetwork
 				}
 			}
-			if isPodIP {
-				ob.Action = crdv1beta1.ActionForwarded
-			} else {
-				ob.Action = crdv1beta1.ActionForwardedOutOfNetwork
-			}
-		} else if c.networkConfig.TrafficEncapMode == config.TrafficEncapModeNoEncap && outputPort == gwPort { // noEncap
-			// TODO: update this and above case if noEncap mode supports Egress feature
-			isPodIP := false
-			if c.nodeRouteQuerier != nil {
-				netAddrDst, _ := netip.AddrFromSlice(netIPDst)
-				isPodIP, _ = c.nodeRouteQuerier.LookupIPInPodSubnets(netAddrDst)
-			}
-			if isPodIP {
-				ob.Action = crdv1beta1.ActionForwarded
-			} else {
-				ob.Action = crdv1beta1.ActionForwardedOutOfNetwork
-			}
-		} else {
-			// Output port is Pod port, packet is delivered.
+		case outputPort != 0:
+			// The output port is a Pod port, the packet is delivered.
 			ob.Action = crdv1beta1.ActionDelivered
+		default:
+			// The output register was not set, so where the packet went is unknown. Reporting it
+			// as delivered to a Pod would be wrong, so no action is reported.
 		}
 		ob.ComponentInfo = openflow.OutputTable.GetName()
 		ob.Component = crdv1beta1.ComponentForwarding
