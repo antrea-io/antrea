@@ -2423,8 +2423,8 @@ func Test_client_InstallTrafficControlMarkFlows(t *testing.T) {
 			direction: v1alpha2.DirectionEgress,
 			action:    v1alpha2.ActionMirror,
 			expectedFlows: []string{
-				"cookie=0x1010000000000, table=TrafficControl, priority=200,in_port=50 actions=set_field:0xc8->reg9,set_field:0x400000/0xc00000->reg4,goto_table:IngressSecurityClassifier",
-				"cookie=0x1010000000000, table=TrafficControl, priority=200,in_port=100 actions=set_field:0xc8->reg9,set_field:0x400000/0xc00000->reg4,goto_table:IngressSecurityClassifier",
+				"cookie=0x1010000000000, table=PipelineIPClassifier, priority=200,in_port=50 actions=set_field:0xc8->reg9,set_field:0x400000/0xc00000->reg4,output:200,goto_table:UnSNAT",
+				"cookie=0x1010000000000, table=PipelineIPClassifier, priority=200,in_port=100 actions=set_field:0xc8->reg9,set_field:0x400000/0xc00000->reg4,output:200,goto_table:UnSNAT",
 			},
 		},
 		{
@@ -2442,9 +2442,9 @@ func Test_client_InstallTrafficControlMarkFlows(t *testing.T) {
 			action:    v1alpha2.ActionMirror,
 			expectedFlows: []string{
 				"cookie=0x1010000000000, table=TrafficControl, priority=200,reg1=0x32 actions=set_field:0xc8->reg9,set_field:0x400000/0xc00000->reg4,goto_table:IngressSecurityClassifier",
-				"cookie=0x1010000000000, table=TrafficControl, priority=200,in_port=50 actions=set_field:0xc8->reg9,set_field:0x400000/0xc00000->reg4,goto_table:IngressSecurityClassifier",
+				"cookie=0x1010000000000, table=PipelineIPClassifier, priority=200,in_port=50 actions=set_field:0xc8->reg9,set_field:0x400000/0xc00000->reg4,output:200,goto_table:UnSNAT",
 				"cookie=0x1010000000000, table=TrafficControl, priority=200,reg1=0x64 actions=set_field:0xc8->reg9,set_field:0x400000/0xc00000->reg4,goto_table:IngressSecurityClassifier",
-				"cookie=0x1010000000000, table=TrafficControl, priority=200,in_port=100 actions=set_field:0xc8->reg9,set_field:0x400000/0xc00000->reg4,goto_table:IngressSecurityClassifier",
+				"cookie=0x1010000000000, table=PipelineIPClassifier, priority=200,in_port=100 actions=set_field:0xc8->reg9,set_field:0x400000/0xc00000->reg4,output:200,goto_table:UnSNAT",
 			},
 		},
 		{
@@ -2452,8 +2452,8 @@ func Test_client_InstallTrafficControlMarkFlows(t *testing.T) {
 			direction: v1alpha2.DirectionEgress,
 			action:    v1alpha2.ActionRedirect,
 			expectedFlows: []string{
-				"cookie=0x1010000000000, table=TrafficControl, priority=200,in_port=50 actions=set_field:0xc8->reg9,set_field:0x800000/0xc00000->reg4,goto_table:IngressSecurityClassifier",
-				"cookie=0x1010000000000, table=TrafficControl, priority=200,in_port=100 actions=set_field:0xc8->reg9,set_field:0x800000/0xc00000->reg4,goto_table:IngressSecurityClassifier",
+				"cookie=0x1010000000000, table=PipelineIPClassifier, priority=200,in_port=50 actions=output:200",
+				"cookie=0x1010000000000, table=PipelineIPClassifier, priority=200,in_port=100 actions=output:200",
 			},
 		},
 		{
@@ -2471,9 +2471,9 @@ func Test_client_InstallTrafficControlMarkFlows(t *testing.T) {
 			action:    v1alpha2.ActionRedirect,
 			expectedFlows: []string{
 				"cookie=0x1010000000000, table=TrafficControl, priority=200,reg1=0x32 actions=set_field:0xc8->reg9,set_field:0x800000/0xc00000->reg4,goto_table:IngressSecurityClassifier",
-				"cookie=0x1010000000000, table=TrafficControl, priority=200,in_port=50 actions=set_field:0xc8->reg9,set_field:0x800000/0xc00000->reg4,goto_table:IngressSecurityClassifier",
+				"cookie=0x1010000000000, table=PipelineIPClassifier, priority=200,in_port=50 actions=output:200",
 				"cookie=0x1010000000000, table=TrafficControl, priority=200,reg1=0x64 actions=set_field:0xc8->reg9,set_field:0x800000/0xc00000->reg4,goto_table:IngressSecurityClassifier",
-				"cookie=0x1010000000000, table=TrafficControl, priority=200,in_port=100 actions=set_field:0xc8->reg9,set_field:0x800000/0xc00000->reg4,goto_table:IngressSecurityClassifier",
+				"cookie=0x1010000000000, table=PipelineIPClassifier, priority=200,in_port=100 actions=output:200",
 			},
 		},
 	}
@@ -2512,7 +2512,7 @@ func Test_client_InstallTrafficControlReturnPortFlow(t *testing.T) {
 
 	returnOFPort := uint32(200)
 	expectedFlows := []string{
-		"cookie=0x1010000000000, table=Classifier, priority=200,in_port=200 actions=set_field:0x6/0xf->reg0,goto_table:L3Forwarding",
+		"cookie=0x1010000000000, table=Classifier, priority=200,in_port=200 actions=set_field:0x6/0xf->reg0,goto_table:UnSNAT",
 	}
 
 	m.EXPECT().AddAll(gomock.Any()).Return(nil).Times(1)

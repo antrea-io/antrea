@@ -235,27 +235,48 @@ func (f *featurePodConnectivity) trafficControlMarkFlows(sourceOFPorts []uint32,
 		}
 		// This generates the flow to mark the packets sourced from a provided port.
 		if direction == v1alpha2.DirectionEgress || direction == v1alpha2.DirectionBoth {
-			flows = append(flows, TrafficControlTable.ofTable.BuildFlow(priority).
-				Cookie(cookieID).
-				MatchInPort(port).
-				Action().LoadToRegField(TrafficControlTargetOFPortField, targetOFPort).
-				Action().LoadRegMark(actionRegMark).
-				Action().NextTable().
-				Done())
+			// Egress traffic control flows are installed in PipelineIPClassifierTable, because we want to redirect
+			// the packets before they are processed by ConntrackTable or L3ForwardingTable.
+			// Ideally, we should redirect the packets before DNAT so the traffic control target can see the original
+			// destination IP. However, since the Service load balancing is done in stagePreRouting, we cannot Redirect
+			// the Service traffic before DNAT. But for the return traffic, we can redirect it before UnSNAT so the
+			// traffic control target can see the Service IP as the source IP.
+			// For non-Service traffic, since there is no NAT, providing the packets before ConntrackTable is sufficient.
+			if action == v1alpha2.ActionRedirect {
+				// For redirect action, output the packet to the target port directly.
+				// No need to load reg marks since the packet is output immediately and won't reach OutputTable.
+				flows = append(flows, PipelineIPClassifierTable.ofTable.BuildFlow(priority).
+					Cookie(cookieID).
+					MatchInPort(port).
+					Action().Output(targetOFPort).
+					Done())
+			} else {
+				// For mirror action, output the packet to the target port and forward a copy to stageConntrackState.
+				// The original packet continues through the pipeline and reaches OutputTable, which needs
+				// TrafficControlMirrorRegMark to output to both the original destination and the mirror target.
+				flows = append(flows, PipelineIPClassifierTable.ofTable.BuildFlow(priority).
+					Cookie(cookieID).
+					MatchInPort(port).
+					Action().LoadToRegField(TrafficControlTargetOFPortField, targetOFPort).
+					Action().LoadRegMark(actionRegMark).
+					Action().Output(targetOFPort).
+					Action().GotoStage(stageConntrackState).
+					Done())
+			}
 		}
 	}
 	return flows
 }
 
 // trafficControlReturnClassifierFlow generates the flow to mark the packets from traffic control return port and forward
-// the packets to stageRouting directly. Note that, for the packets which are originally to be output to a tunnel port,
+// the packets to stageConntrackState directly. Note that, for the packets which are originally to be output to a tunnel port,
 // value of NXM_NX_TUN_IPV4_DST for the returned packets needs to be loaded in stageRouting.
 func (f *featurePodConnectivity) trafficControlReturnClassifierFlow(returnOFPort uint32) binding.Flow {
 	return ClassifierTable.ofTable.BuildFlow(priorityNormal).
 		Cookie(f.cookieAllocator.Request(f.category).Raw()).
 		MatchInPort(returnOFPort).
 		Action().LoadRegMark(FromTCReturnRegMark).
-		Action().GotoStage(stageRouting).
+		Action().GotoStage(stageConntrackState).
 		Done()
 }
 
