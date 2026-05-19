@@ -1187,9 +1187,9 @@ func (data *TestData) deployFlowAggregator(
 		}
 	}
 
-	rc, stdout, stderr, err := data.provider.RunCommandOnNode(controlPlaneNodeName(), fmt.Sprintf("kubectl apply -f %s", flowAggYaml))
+	rc, _, _, err := data.provider.RunCommandOnNode(controlPlaneNodeName(), fmt.Sprintf("kubectl apply -f %s", flowAggYaml))
 	if err != nil || rc != 0 {
-		return fmt.Errorf("error when deploying the Flow Aggregator; kubectl apply -f %s failed (rc=%d): stdout=%q stderr=%q err=%v", flowAggYaml, rc, stdout, stderr, err)
+		return fmt.Errorf("error when deploying the Flow Aggregator; %s not available on the control-plane Node", flowAggYaml)
 	}
 	// clickhouse-ca Secret is created in the flow-visibility Namespace. In order to make it accessible to the Flow Aggregator,
 	// we copy it from Namespace flow-visibility to Namespace flow-aggregator when databaseSecureConnection is true.
