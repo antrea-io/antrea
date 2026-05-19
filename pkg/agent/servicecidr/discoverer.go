@@ -17,6 +17,7 @@ package servicecidr
 import (
 	"fmt"
 	"net"
+	"slices"
 	"sync"
 	"time"
 
@@ -29,7 +30,6 @@ import (
 	"k8s.io/client-go/util/workqueue"
 	"k8s.io/klog/v2"
 	utilnet "k8s.io/utils/net"
-	"k8s.io/utils/strings/slices"
 
 	"antrea.io/antrea/v2/pkg/agent/util"
 )

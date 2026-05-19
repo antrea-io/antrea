@@ -18,6 +18,7 @@ package v1alpha1
 
 import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 )
 
 // Precedence defines the precedence of Node IP type.
@@ -91,5 +92,8 @@ type ControllerHealth struct {
 }
 
 func init() {
-	SchemeBuilder.Register(&MultiClusterConfig{})
+	SchemeBuilder.Register(func(s *runtime.Scheme) error {
+		s.AddKnownTypes(SchemeGroupVersion, &MultiClusterConfig{})
+		return nil
+	})
 }

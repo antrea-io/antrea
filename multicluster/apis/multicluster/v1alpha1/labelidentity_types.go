@@ -16,7 +16,10 @@ limitations under the License.
 
 package v1alpha1
 
-import metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+import (
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
+)
 
 // +genclient
 // +genclient:nonNamespaced
@@ -54,8 +57,8 @@ type LabelIdentityList struct {
 }
 
 func init() {
-	SchemeBuilder.Register(
-		&LabelIdentity{},
-		&LabelIdentityList{},
-	)
+	SchemeBuilder.Register(func(s *runtime.Scheme) error {
+		s.AddKnownTypes(SchemeGroupVersion, &LabelIdentity{}, &LabelIdentityList{})
+		return nil
+	})
 }

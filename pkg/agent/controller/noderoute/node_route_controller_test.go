@@ -784,6 +784,8 @@ func TestInitialListHasSynced(t *testing.T) {
 	c.informerFactory.Start(stopCh)
 	c.informerFactory.WaitForCacheSync(stopCh)
 
+	c.hasProcessedInitialList.UpstreamHasSynced()
+
 	require.Error(t, c.flowRestoreCompleteWait.WaitWithTimeout(100*time.Millisecond))
 
 	c.ofClient.EXPECT().InstallNodeFlows("node1", gomock.Any(), &dsIPs1, uint32(0), nil).Times(1)
