@@ -19,7 +19,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/google/uuid"
+	"github.com/gofrs/uuid/v5"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -75,7 +75,7 @@ func (a *ClusterIdentityAllocator) updateConfigMapIfNeeded() error {
 
 	clusterUUIDStr, ok := configMap.Data[uuidConfigMapKey]
 	if ok && clusterUUIDStr != "" {
-		clusterUUID, err := uuid.Parse(clusterUUIDStr)
+		clusterUUID, err := uuid.FromString(clusterUUIDStr)
 		if err != nil {
 			return fmt.Errorf("cluster already has UUID '%s' but it is not valid: %v", clusterUUIDStr, err)
 		}
@@ -83,7 +83,7 @@ func (a *ClusterIdentityAllocator) updateConfigMapIfNeeded() error {
 		return nil
 	}
 
-	generatedClusterUUID := uuid.New().String()
+	generatedClusterUUID := uuid.Must(uuid.NewV4()).String()
 	configMap.Data = map[string]string{
 		uuidConfigMapKey: generatedClusterUUID,
 	}
@@ -181,7 +181,7 @@ func (p *clusterIdentityProvider) Get() (ClusterIdentity, time.Time, error) {
 		if !ok || clusterUUIDStr == "" {
 			return fmt.Errorf("cluster UUID has not been set yet")
 		}
-		clusterUUID, err := uuid.Parse(clusterUUIDStr)
+		clusterUUID, err := uuid.FromString(clusterUUIDStr)
 		if err != nil {
 			return fmt.Errorf("cluster UUID cannot be parsed")
 		}

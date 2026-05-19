@@ -24,7 +24,7 @@ import (
 
 	cnitypes "github.com/containernetworking/cni/pkg/types"
 	current "github.com/containernetworking/cni/pkg/types/100"
-	"github.com/google/uuid"
+	"github.com/gofrs/uuid/v5"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
@@ -60,7 +60,7 @@ func TestValidatePrevResult(t *testing.T) {
 
 	prevResult, _ := cniServer.parsePrevResultFromRequest(networkCfg)
 	containerIface := &current.Interface{Name: ifname, Sandbox: netns}
-	containerID := uuid.New().String()
+	containerID := uuid.Must(uuid.NewV4()).String()
 	hostIfaceName := util.GenerateContainerInterfaceName(testPodNameA, testPodNamespace, containerID)
 	hostIface := &current.Interface{Name: hostIfaceName}
 	prevResult.Interfaces = []*current.Interface{hostIface, containerIface}
@@ -134,10 +134,10 @@ func TestRemoveInterface(t *testing.T) {
 	var fakePortUUID string
 
 	newContainerConfig := func(name string) *interfacestore.InterfaceConfig {
-		containerID = uuid.New().String()
+		containerID = uuid.Must(uuid.NewV4()).String()
 		podName = name
 		hostIfaceName = util.GenerateContainerInterfaceName(podName, testPodNamespace, containerID)
-		fakePortUUID = uuid.New().String()
+		fakePortUUID = uuid.Must(uuid.NewV4()).String()
 
 		containerConfig := interfacestore.NewContainerInterface(
 			hostIfaceName,

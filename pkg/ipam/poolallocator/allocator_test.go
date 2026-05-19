@@ -23,7 +23,7 @@ import (
 	"testing/synctest"
 	"time"
 
-	"github.com/google/uuid"
+	"github.com/gofrs/uuid/v5"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -44,7 +44,7 @@ var fakePodOwner = crdv1b1.IPAddressOwner{
 	Pod: &crdv1b1.PodOwner{
 		Name:        "fakePod",
 		Namespace:   testNamespace,
-		ContainerID: uuid.New().String(),
+		ContainerID: uuid.Must(uuid.NewV4()).String(),
 	},
 }
 
@@ -81,7 +81,7 @@ func validateAllocationSequence(t *testing.T, allocator *IPPoolAllocator, subnet
 			Pod: &crdv1b1.PodOwner{
 				Name:        fmt.Sprintf("fakePod%d", i),
 				Namespace:   testNamespace,
-				ContainerID: uuid.New().String(),
+				ContainerID: uuid.Must(uuid.NewV4()).String(),
 			},
 		}
 		ip, returnInfo, err := allocator.AllocateNext(crdv1b1.IPAddressPhaseAllocated, owner)
@@ -96,7 +96,7 @@ func TestAllocateIP(t *testing.T) {
 	stopCh := make(chan struct{})
 	defer close(stopCh)
 
-	poolName := uuid.New().String()
+	poolName := uuid.Must(uuid.NewV4()).String()
 	ipRange := crdv1b1.IPRange{
 		Start: "10.2.2.100",
 		End:   "10.2.2.120",
@@ -181,7 +181,7 @@ func TestConcurrentAllocateNextSharedIPPool(t *testing.T) {
 		// concurrent status writers; keep headroom in the range.
 		const concurrency = 36
 
-		poolName := uuid.New().String()
+		poolName := uuid.Must(uuid.NewV4()).String()
 		ipRange := crdv1b1.IPRange{
 			Start: "10.2.2.10",
 			End:   "10.2.2.99", // 90 addresses
@@ -212,7 +212,7 @@ func TestConcurrentAllocateNextSharedIPPool(t *testing.T) {
 					Pod: &crdv1b1.PodOwner{
 						Name:        fmt.Sprintf("concurrent-pod-%d", idx),
 						Namespace:   testNamespace,
-						ContainerID: uuid.New().String(),
+						ContainerID: uuid.Must(uuid.NewV4()).String(),
 						IFName:      "net1",
 					},
 				}
@@ -252,7 +252,7 @@ func TestAllocateNextMultiRange(t *testing.T) {
 	stopCh := make(chan struct{})
 	defer close(stopCh)
 
-	poolName := uuid.New().String()
+	poolName := uuid.Must(uuid.NewV4()).String()
 	ipRange1 := crdv1b1.IPRange{
 		Start: "10.2.2.100",
 		End:   "10.2.2.101",
@@ -281,7 +281,7 @@ func TestAllocateNextMultiRangeExhausted(t *testing.T) {
 	stopCh := make(chan struct{})
 	defer close(stopCh)
 
-	poolName := uuid.New().String()
+	poolName := uuid.Must(uuid.NewV4()).String()
 	ipRange1 := crdv1b1.IPRange{
 		Start: "10.2.2.100",
 		End:   "10.2.2.101",
@@ -317,7 +317,7 @@ func TestAllocateReleaseSequence(t *testing.T) {
 	stopCh := make(chan struct{})
 	defer close(stopCh)
 
-	poolName := uuid.New().String()
+	poolName := uuid.Must(uuid.NewV4()).String()
 	ipRange1 := crdv1b1.IPRange{
 		Start: "2001::1000",
 		End:   "2001::1000",
@@ -382,7 +382,7 @@ func TestReleaseResource(t *testing.T) {
 	stopCh := make(chan struct{})
 	defer close(stopCh)
 
-	poolName := uuid.New().String()
+	poolName := uuid.Must(uuid.NewV4()).String()
 	ipRange1 := crdv1b1.IPRange{
 		Start: "2001::1000",
 		End:   "2001::1000",
@@ -428,7 +428,7 @@ func TestHas(t *testing.T) {
 			IFName:      "eth1",
 		},
 	}
-	poolName := uuid.New().String()
+	poolName := uuid.Must(uuid.NewV4()).String()
 	ipRange1 := crdv1b1.IPRange{
 		Start: "2001::1000",
 		End:   "2001::1000",
@@ -473,7 +473,7 @@ func TestAllocateReleaseStatefulSet(t *testing.T) {
 	stopCh := make(chan struct{})
 	defer close(stopCh)
 
-	poolName := uuid.New().String()
+	poolName := uuid.Must(uuid.NewV4()).String()
 	setName := "fakeSet"
 	ipRange := crdv1b1.IPRange{
 		Start: "10.2.2.100",

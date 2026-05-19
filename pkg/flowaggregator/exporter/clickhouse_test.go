@@ -19,7 +19,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/google/uuid"
+	"github.com/gofrs/uuid/v5"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -52,7 +52,7 @@ func TestClickHouse_NewClickHouseExporter(t *testing.T) {
 		ClickHouseCommitInterval: 8 * time.Second,
 	}
 	chConfig := buildClickHouseConfig(opt)
-	exporter, err := NewClickHouseExporter(uuid.New(), opt)
+	exporter, err := NewClickHouseExporter(uuid.Must(uuid.NewV4()), opt)
 	require.NoError(t, err)
 	require.NotNil(t, exporter)
 	assert.Equal(t, chConfig, *exporter.chConfig)
