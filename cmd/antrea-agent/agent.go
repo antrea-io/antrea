@@ -246,6 +246,7 @@ func run(o *Options) error {
 		},
 		EnableMulticlusterGW:          enableMulticlusterGW,
 		MulticlusterEncryptionMode:    multiclusterEncryptionMode,
+		EnableEgress:                  o.enableEgress,
 		EnableHostNetworkAcceleration: *o.config.HostNetworkAcceleration.Enable,
 		HostNetworkMode:               hostNetworkMode,
 	}
