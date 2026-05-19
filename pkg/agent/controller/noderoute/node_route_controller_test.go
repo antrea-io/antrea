@@ -29,6 +29,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes/fake"
+	"k8s.io/client-go/tools/cache"
 
 	"antrea.io/antrea/v2/pkg/agent/config"
 	"antrea.io/antrea/v2/pkg/agent/interfacestore"
@@ -802,6 +803,9 @@ func TestInitialListHasSyncedStopChClosedEarly(t *testing.T) {
 	stopCh := make(chan struct{})
 	c.informerFactory.Start(stopCh)
 	c.informerFactory.WaitForCacheSync(stopCh)
+	// Also wait for the event handler registration to sync, so that
+	// WaitForNamedCacheSync in Run() succeeds even after stopCh is closed.
+	require.True(t, cache.WaitForCacheSync(stopCh, c.eventHandlerRegistration.HasSynced))
 
 	c.routeClient.EXPECT().Reconcile([]string{podCIDR1.String(), podCIDR1v6.String()})
 
