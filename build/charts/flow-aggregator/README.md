@@ -19,7 +19,7 @@ Kubernetes: `>= 1.23.0-0`
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
 | activeFlowRecordTimeout | string | `"60s"` | Provide the active flow record timeout as a duration string. Valid time units are "ns", "us" (or "µs"), "ms", "s", "m", "h". Values under 1s are not supported; they will be rounded up to 1s. |
-| aggregatorTransportProtocol | string | `"tls"` | Provide the transport protocol for the flow aggregator collecting process, which must be one of "tls", "tcp", "udp" or "none". Note that this only applies to the IPFIX collector. The gRPC collector (port 14739, mTLS) always runs for receiving flow records from Antrea Agents. The FlowStreamService (port 14740, plaintext) always runs for streaming flows to consumers such as antrea-ui. When using "none", the IPFIX collector will be disabled. |
+| aggregatorTransportProtocol | string | `"tls"` | Provide the transport protocol for the flow aggregator collecting process, which must be one of "tls", "tcp", "udp" or "none". Note that this only applies to the IPFIX collector. The gRPC collector (port 14739, mTLS) always runs for receiving flow records from Antrea Agents. When using "none", the IPFIX collector will be disabled. |
 | antreaNamespace | string | `"kube-system"` | Namespace in which Antrea was installed. |
 | apiServer.apiPort | int | `10348` | The port for the Flow Aggregator APIServer to serve on. |
 | apiServer.tlsCipherSuites | string | `""` | Comma-separated list of cipher suites that will be used by the Flow Aggregator APIservers. If empty, the default Go Cipher Suites will be used. |
@@ -63,6 +63,7 @@ Kubernetes: `>= 1.23.0-0`
 | flowLogger.path | string | `"/tmp/antrea-flows.log"` | Path is the path to the local log file. |
 | flowLogger.prettyPrint | bool | `true` | PrettyPrint enables conversion of some numeric fields to a more meaningful string representation. |
 | flowLogger.recordFormat | string | `"CSV"` | RecordFormat defines the format of the flow records logged to file. Only "CSV" is supported at the moment. |
+| flowStreamService.enable | bool | `false` | Enable is the switch to enable the FlowStreamService gRPC server (port 14740, plaintext). Client authentication is not yet implemented, so the server should only be enabled in trusted environments. Disabled by default. |
 | fullnameOverride | string | `""` | Override the full name of the chart. |
 | hostAliases | list | `[]` | HostAliases to be injected into the Pod's hosts file. For example: `[{"ip": "8.8.8.8", "hostnames": ["clickhouse.example.com"]}]` |
 | hostNetwork | bool | `false` | Run the flow-aggregator Pod in the host network. With hostNetwork enabled, it is usually necessary to set dnsPolicy to ClusterFirstWithHostNet. |

@@ -37,9 +37,8 @@ activeFlowRecordTimeout: 60s
 inactiveFlowRecordTimeout: 90s
 # -- Provide the transport protocol for the flow aggregator collecting process, which must be one of
 # "tls", "tcp", "udp" or "none". Note that this only applies to the IPFIX collector. The gRPC
-# collector (port 14739, mTLS) always runs for receiving flow records from Antrea Agents. The
-# FlowStreamService (port 14740, plaintext) always runs for streaming flows to consumers such
-# as antrea-ui. When using "none", the IPFIX collector will be disabled.
+# collector (port 14739, mTLS) always runs for receiving flow records from Antrea Agents.
+# When using "none", the IPFIX collector will be disabled.
 aggregatorTransportProtocol: "tls"
 # -- Provide an extra DNS name or IP address of flow aggregator for generating TLS certificate.
 flowAggregatorAddress: ""
@@ -197,6 +196,13 @@ flowLogger:
   filters: []
   # -- PrettyPrint enables conversion of some numeric fields to a more meaningful string representation.
   prettyPrint: true
+# flowStreamService contains configuration options for the FlowStreamService gRPC server,
+# which streams flow records to consumers such as antrea-ui.
+flowStreamService:
+  # -- Enable is the switch to enable the FlowStreamService gRPC server (port 14740, plaintext).
+  # Client authentication is not yet implemented, so the server should only be enabled in trusted
+  # environments. Disabled by default.
+  enable: false
 testing:
   # -- Enable code coverage measurement (used when testing Flow Aggregator only).
   coverage: false

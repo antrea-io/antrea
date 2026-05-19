@@ -106,7 +106,7 @@ spec:
           - name: grpc
             containerPort: 14739
             protocol: TCP
-          - name: flow-stream
+          - name: flow-stream-grpc
             containerPort: 14740
             protocol: TCP
         volumeMounts:

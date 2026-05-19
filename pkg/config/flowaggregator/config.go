@@ -70,6 +70,9 @@ type FlowAggregatorConfig struct {
 	S3Uploader S3UploaderConfig `yaml:"s3Uploader,omitempty"`
 	// FlowLogger contains configuration options for writing flow records to a local log file.
 	FlowLogger FlowLoggerConfig `yaml:"flowLogger,omitempty"`
+	// FlowStreamService contains configuration options for the FlowStreamService gRPC server,
+	// which streams flow records to consumers such as antrea-ui.
+	FlowStreamService FlowStreamServiceConfig `yaml:"flowStreamService,omitempty"`
 	// RecordBufferSize is the number of entries in the ring buffer used to distribute
 	// flow records to exporters. Each exporter independently consumes from the buffer.
 	// Defaults to 8192.
@@ -237,6 +240,14 @@ type FlowLoggerConfig struct {
 	// PrettyPrint enables conversion of some numeric fields to a more meaningful string
 	// representation.
 	PrettyPrint *bool `yaml:"prettyPrint,omitempty"`
+}
+
+type FlowStreamServiceConfig struct {
+	// Enable is the switch to enable the FlowStreamService gRPC server. The server streams
+	// flow records to consumers such as antrea-ui. Client authentication is not yet
+	// implemented, so the server should only be enabled in trusted environments.
+	// Defaults to false.
+	Enable bool `yaml:"enable,omitempty"`
 }
 
 type NetworkPolicyRuleAction string

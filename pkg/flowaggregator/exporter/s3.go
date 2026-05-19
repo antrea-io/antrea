@@ -54,11 +54,11 @@ func NewS3Exporter(clusterUUID uuid.UUID, opt *options.Options) (*S3Exporter, er
 // Run consumes flow records from the ring buffer and uploads them to S3.
 // It blocks until ctx is cancelled or the consumer signals shutdown.
 func (e *S3Exporter) Run(ctx context.Context, buf ringbuffer.BroadcastBuffer[*flowpb.Flow]) {
-	consumer := buf.NewConsumer(ringbuffer.WithMaxConsumeDeadline(consumeDeadline))
+	consumer := buf.NewConsumer(ringbuffer.WithMaxConsumeDeadline(ConsumeDeadline))
 	e.s3UploadProcess.Start()
 	defer e.s3UploadProcess.Stop()
 
-	records := make([]*flowpb.Flow, consumeMultipleBatchSize)
+	records := make([]*flowpb.Flow, ConsumeMultipleBatchSize)
 	for {
 		n, _, shutdown := consumer.ConsumeMultiple(records)
 		for _, record := range records[:n] {

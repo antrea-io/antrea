@@ -21,7 +21,7 @@ spec:
     port: 14739
     protocol: TCP
     targetPort: grpc
-  - name: flow-stream
+  - name: flow-stream-grpc
     port: 14740
     protocol: TCP
-    targetPort: flow-stream
+    targetPort: flow-stream-grpc

@@ -195,7 +195,9 @@ func NewFlowAggregator(
 		certificateProvider:         newCertificateProvider(k8sClient, opt.Config.FlowAggregatorAddress),
 		certificateUpdateCh:         make(chan struct{}, 1),
 	}
-	fa.flowStreamService = flowstreamservice.NewFlowStreamService(fa.recordBuffer)
+	if opt.Config.FlowStreamService.Enable {
+		fa.flowStreamService = flowstreamservice.NewFlowStreamService(fa.recordBuffer)
+	}
 
 	if opt.AggregatorMode == flowaggregatorconfig.AggregatorModeAggregate {
 		if err := fa.InitAggregationProcess(); err != nil {
@@ -329,13 +331,15 @@ func (fa *flowAggregator) Run(stopCh <-chan struct{}) {
 		}()
 	}
 
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		if err := fa.flowStreamService.Run(stopCh); err != nil {
-			klog.ErrorS(err, "FlowStreamService failed to start")
-		}
-	}()
+	if fa.flowStreamService != nil {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			if err := fa.flowStreamService.Run(stopCh); err != nil {
+				klog.ErrorS(err, "FlowStreamService failed to start")
+			}
+		}()
+	}
 
 	wg.Add(1)
 	go func() {

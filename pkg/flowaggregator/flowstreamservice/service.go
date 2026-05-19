@@ -33,12 +33,12 @@ import (
 	"k8s.io/klog/v2"
 
 	flowpb "antrea.io/antrea/v2/pkg/apis/flow/v1alpha1"
+	"antrea.io/antrea/v2/pkg/flowaggregator/exporter"
 	"antrea.io/antrea/v2/pkg/flowaggregator/ringbuffer"
 )
 
 const (
-	internalBatchSize       = 100
-	defaultConsumerDeadline = 500 * time.Millisecond
+	internalBatchSize = exporter.ConsumeMultipleBatchSize
 	// FlowStreamPort is the port on which the FlowStreamService gRPC server listens.
 	FlowStreamPort = 14740
 )
@@ -48,13 +48,12 @@ const (
 // fully decoupled and a slow client never stalls faster ones.
 type FlowStreamService struct {
 	flowpb.UnimplementedFlowStreamServiceServer
-	buffer           ringbuffer.BroadcastBuffer[*flowpb.Flow]
-	consumerDeadline time.Duration
+	buffer ringbuffer.BroadcastBuffer[*flowpb.Flow]
 }
 
 // NewFlowStreamService creates a FlowStreamService backed by the given buffer.
 func NewFlowStreamService(buffer ringbuffer.BroadcastBuffer[*flowpb.Flow]) *FlowStreamService {
-	return &FlowStreamService{buffer: buffer, consumerDeadline: defaultConsumerDeadline}
+	return &FlowStreamService{buffer: buffer}
 }
 
 // Run starts a dedicated gRPC server for the FlowStreamService on FlowStreamPort.
@@ -80,6 +79,10 @@ func (s *FlowStreamService) Run(stopCh <-chan struct{}) error {
 		}
 	}()
 	<-stopCh
+	// GracefulStop waits for all active GetFlows RPCs to return before shutting
+	// down. Active streams will drain naturally because the ring buffer shutdown
+	// (triggered by the flow aggregator) causes every consumer's ConsumeMultiple
+	// to return shutdown=true, which triggers GetFlows to return nil promptly.
 	server.GracefulStop()
 	wg.Wait()
 	return nil
@@ -101,18 +104,16 @@ func (s *FlowStreamService) GetFlows(req *flowpb.GetFlowsRequest, stream flowpb.
 	maxCount := int(req.GetMaxCount())
 	follow := req.GetFollow()
 
-	// Parse label selectors for each filter up front so we can return
+	// Parse label selectors and IP filters for each filter upfront so we can return
 	// InvalidArgument before touching the ring buffer.
 	reqFilters := req.GetFilters()
-	labelSels := make([]labels.Selector, len(reqFilters))
+	parsedFilters := make([]flowFilter, len(reqFilters))
 	for i, f := range reqFilters {
-		if selStr := f.GetPodLabelSelector(); selStr != "" {
-			sel, err := labels.Parse(selStr)
-			if err != nil {
-				return status.Errorf(codes.InvalidArgument, "invalid pod_label_selector in filter %d %q: %v", i, selStr, err)
-			}
-			labelSels[i] = sel
+		pf, err := parseFlowFilter(f)
+		if err != nil {
+			return status.Errorf(codes.InvalidArgument, "invalid filter %d: %v", i, err)
 		}
+		parsedFilters[i] = pf
 	}
 
 	klog.InfoS("Client connected to FlowStreamService",
@@ -123,7 +124,7 @@ func (s *FlowStreamService) GetFlows(req *flowpb.GetFlowsRequest, stream flowpb.
 
 	consumer := s.buffer.NewConsumer(
 		ringbuffer.WithReadFromBeginning(),
-		ringbuffer.WithMaxConsumeDeadline(s.consumerDeadline),
+		ringbuffer.WithMaxConsumeDeadline(exporter.ConsumeDeadline),
 	)
 
 	sent := 0
@@ -132,7 +133,7 @@ func (s *FlowStreamService) GetFlows(req *flowpb.GetFlowsRequest, stream flowpb.
 
 	for {
 		if err := ctx.Err(); err != nil {
-			klog.V(4).InfoS("Client context done, stopping GetFlows", "err", err)
+			klog.InfoS("Client disconnected from FlowStreamService", "err", err)
 			return status.FromContextError(err).Err()
 		}
 
@@ -140,10 +141,10 @@ func (s *FlowStreamService) GetFlows(req *flowpb.GetFlowsRequest, stream flowpb.
 		totalDropped += dropped
 
 		if shutdown {
-			klog.V(4).InfoS("Ring buffer shut down, closing GetFlows stream")
+			klog.InfoS("Ring buffer shut down, closing GetFlows stream")
 			return nil
 		} else if n > 0 {
-			filtered := applyFilters(batch[:n], reqFilters, labelSels, since)
+			filtered := applyFilters(batch[:n], parsedFilters, since)
 
 			if maxCount > 0 && sent+len(filtered) >= maxCount {
 				filtered = filtered[:maxCount-sent]
@@ -155,38 +156,90 @@ func (s *FlowStreamService) GetFlows(req *flowpb.GetFlowsRequest, stream flowpb.
 					DroppedCount: uint64(totalDropped),
 				}
 				if err := stream.Send(resp); err != nil {
-					klog.V(4).InfoS("Send to client failed, stopping GetFlows", "err", err)
+					klog.InfoS("Send to client failed, closing GetFlows stream", "err", err)
 					return err
 				}
 				sent += len(filtered)
 			}
 
 			if maxCount > 0 && sent >= maxCount {
-				klog.V(4).InfoS("Reached max_count, closing GetFlows stream", "sent", sent)
+				klog.InfoS("Reached max_count, closing GetFlows stream", "sent", sent)
 				return nil
 			}
 		}
 
 		if !follow && n == 0 {
-			klog.V(4).InfoS("Caught up to ring buffer tail, closing non-follow stream")
+			klog.InfoS("Caught up to ring buffer tail, closing non-follow stream")
 			return nil
 		}
 	}
 }
 
+// flowFilter holds the pre-parsed form of a FlowFilter proto, so that
+// expensive operations (label selector parsing, IP/prefix parsing) happen once
+// per stream rather than once per flow.
+type flowFilter struct {
+	proto            *flowpb.FlowFilter
+	podLabelSelector labels.Selector
+	// parsedIPs contains either netip.Addr or netip.Prefix entries for each
+	// element of proto.GetIps().
+	parsedIPs []any
+}
+
+// parseFlowFilter parses and validates a FlowFilter proto, returning a flowFilter
+// with all expensive-to-parse fields pre-computed. Returns an error if any field
+// contains an invalid value (e.g. bad label selector or unparseable IP).
+func parseFlowFilter(f *flowpb.FlowFilter) (flowFilter, error) {
+	pf := flowFilter{proto: f}
+
+	if selStr := f.GetPodLabelSelector(); selStr != "" {
+		sel, err := labels.Parse(selStr)
+		if err != nil {
+			return flowFilter{}, fmt.Errorf("invalid pod_label_selector %q: %w", selStr, err)
+		}
+		pf.podLabelSelector = sel
+	}
+
+	if len(f.GetServiceNames()) > 0 {
+		dir := f.GetDirection()
+		if dir == flowpb.FlowFilterDirection_FLOW_FILTER_DIRECTION_FROM {
+			return flowFilter{}, fmt.Errorf("service_names filter does not support FROM direction")
+		}
+	}
+
+	for _, ipStr := range f.GetIps() {
+		if strings.Contains(ipStr, "/") {
+			prefix, err := netip.ParsePrefix(ipStr)
+			if err != nil {
+				return flowFilter{}, fmt.Errorf("invalid IP prefix %q: %w", ipStr, err)
+			}
+			pf.parsedIPs = append(pf.parsedIPs, prefix)
+		} else {
+			addr, err := netip.ParseAddr(ipStr)
+			if err != nil {
+				return flowFilter{}, fmt.Errorf("invalid IP address %q: %w", ipStr, err)
+			}
+			pf.parsedIPs = append(pf.parsedIPs, addr)
+		}
+	}
+
+	return pf, nil
+}
+
 // applyFilters returns the subset of flows that pass the since cutoff and match
-// ALL of the provided filters (AND semantics across filters). labelSels must
-// have the same length as filters; a nil entry means no label selector for that
-// filter. An empty filters slice matches all flows.
-func applyFilters(flows []*flowpb.Flow, filters []*flowpb.FlowFilter, labelSels []labels.Selector, since time.Time) []*flowpb.Flow {
+// ALL of the provided filters (AND semantics across filters). An empty filters
+// slice matches all flows. Note: this function mutates the contents of the
+// flows slice (it uses the slice header as a write target for in-place
+// filtering to avoid allocation).
+func applyFilters(flows []*flowpb.Flow, filters []flowFilter, since time.Time) []*flowpb.Flow {
 	filtered := flows[:0]
 	for _, f := range flows {
 		if !since.IsZero() && f.GetEndTs() != nil && f.GetEndTs().AsTime().Before(since) {
 			continue
 		}
 		match := true
-		for i, filter := range filters {
-			if !matchFilter(f, filter, labelSels[i]) {
+		for i := range filters {
+			if !matchFilter(f, &filters[i]) {
 				match = false
 				break
 			}
@@ -199,7 +252,8 @@ func applyFilters(flows []*flowpb.Flow, filters []*flowpb.FlowFilter, labelSels 
 	return filtered
 }
 
-func matchFilter(f *flowpb.Flow, filter *flowpb.FlowFilter, labelSel labels.Selector) bool {
+func matchFilter(f *flowpb.Flow, pf *flowFilter) bool {
+	filter := pf.proto
 	k8s := f.GetK8S()
 	direction := filter.GetDirection()
 
@@ -213,8 +267,8 @@ func matchFilter(f *flowpb.Flow, filter *flowpb.FlowFilter, labelSel labels.Sele
 			return false
 		}
 	}
-	if labelSel != nil {
-		if !matchLabelSelector(k8s, labelSel, direction) {
+	if pf.podLabelSelector != nil {
+		if !matchLabelSelector(k8s, pf.podLabelSelector, direction) {
 			return false
 		}
 	}
@@ -232,8 +286,8 @@ func matchFilter(f *flowpb.Flow, filter *flowpb.FlowFilter, labelSel labels.Sele
 			return false
 		}
 	}
-	if len(filter.GetIps()) > 0 {
-		if !matchIPs(f, filter.GetIps(), direction) {
+	if len(pf.parsedIPs) > 0 {
+		if !matchParsedIPs(f, pf.parsedIPs, direction) {
 			return false
 		}
 	}
@@ -246,15 +300,11 @@ func matchLabelSelector(k8s *flowpb.Kubernetes, sel labels.Selector, direction f
 	}
 	checkSrc := direction != flowpb.FlowFilterDirection_FLOW_FILTER_DIRECTION_TO
 	checkDst := direction != flowpb.FlowFilterDirection_FLOW_FILTER_DIRECTION_FROM
-	if checkSrc {
-		if sel.Matches(labelsFromProto(k8s.GetSourcePodLabels())) {
-			return true
-		}
+	if checkSrc && sel.Matches(labelsFromProto(k8s.GetSourcePodLabels())) {
+		return true
 	}
-	if checkDst {
-		if sel.Matches(labelsFromProto(k8s.GetDestinationPodLabels())) {
-			return true
-		}
+	if checkDst && sel.Matches(labelsFromProto(k8s.GetDestinationPodLabels())) {
+		return true
 	}
 	return false
 }
@@ -312,7 +362,7 @@ func matchPodNames(k8s *flowpb.Kubernetes, podNames []string, direction flowpb.F
 	return false
 }
 
-func matchIPs(f *flowpb.Flow, ips []string, direction flowpb.FlowFilterDirection) bool {
+func matchParsedIPs(f *flowpb.Flow, parsedIPs []any, direction flowpb.FlowFilterDirection) bool {
 	ip := f.GetIp()
 	if ip == nil {
 		return false
@@ -323,27 +373,20 @@ func matchIPs(f *flowpb.Flow, ips []string, direction flowpb.FlowFilterDirection
 	checkSrc := direction != flowpb.FlowFilterDirection_FLOW_FILTER_DIRECTION_TO
 	checkDst := direction != flowpb.FlowFilterDirection_FLOW_FILTER_DIRECTION_FROM
 
-	for _, ipStr := range ips {
-		if strings.Contains(ipStr, "/") {
-			prefix, err := netip.ParsePrefix(ipStr)
-			if err != nil {
-				continue
-			}
-			if checkSrc && srcOK && prefix.Contains(srcAddr) {
+	for _, entry := range parsedIPs {
+		switch v := entry.(type) {
+		case netip.Prefix:
+			if checkSrc && srcOK && v.Contains(srcAddr) {
 				return true
 			}
-			if checkDst && dstOK && prefix.Contains(dstAddr) {
+			if checkDst && dstOK && v.Contains(dstAddr) {
 				return true
 			}
-		} else {
-			addr, err := netip.ParseAddr(ipStr)
-			if err != nil {
-				continue
-			}
-			if checkSrc && srcOK && srcAddr == addr {
+		case netip.Addr:
+			if checkSrc && srcOK && srcAddr == v {
 				return true
 			}
-			if checkDst && dstOK && dstAddr == addr {
+			if checkDst && dstOK && dstAddr == v {
 				return true
 			}
 		}

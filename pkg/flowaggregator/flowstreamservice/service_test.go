@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"net/netip"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/stretchr/testify/assert"
@@ -27,9 +28,9 @@ import (
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/timestamppb"
-	"k8s.io/apimachinery/pkg/labels"
 
 	flowpb "antrea.io/antrea/v2/pkg/apis/flow/v1alpha1"
+	"antrea.io/antrea/v2/pkg/flowaggregator/exporter"
 	"antrea.io/antrea/v2/pkg/flowaggregator/ringbuffer"
 )
 
@@ -53,9 +54,7 @@ func (f *fakeStream) SendMsg(any) error            { return nil }
 func (f *fakeStream) RecvMsg(any) error            { return nil }
 
 func newTestService(buf ringbuffer.BroadcastBuffer[*flowpb.Flow]) *FlowStreamService {
-	svc := NewFlowStreamService(buf)
-	svc.consumerDeadline = 5 * time.Millisecond
-	return svc
+	return NewFlowStreamService(buf)
 }
 
 func collectFlows(responses []*flowpb.GetFlowsResponse) []*flowpb.Flow {
@@ -114,6 +113,19 @@ func TestDestinationServiceName(t *testing.T) {
 	}
 }
 
+// mustParseFilters parses proto FlowFilters into flowFilters, panicking on error.
+func mustParseFilters(protos ...*flowpb.FlowFilter) []flowFilter {
+	out := make([]flowFilter, len(protos))
+	for i, p := range protos {
+		f, err := parseFlowFilter(p)
+		if err != nil {
+			panic(err)
+		}
+		out[i] = f
+	}
+	return out
+}
+
 func TestApplyFilter_Since(t *testing.T) {
 	now := time.Now()
 	since := now.Add(-30 * time.Second)
@@ -121,20 +133,20 @@ func TestApplyFilter_Since(t *testing.T) {
 	oldFlow := newFlowEndTs("old", now.Add(-1*time.Minute), &flowpb.Kubernetes{})
 	recentFlow := newFlowEndTs("recent", now.Add(-5*time.Second), &flowpb.Kubernetes{})
 
-	got := applyFilters([]*flowpb.Flow{oldFlow, recentFlow}, nil, nil, since)
+	got := applyFilters([]*flowpb.Flow{oldFlow, recentFlow}, nil, since)
 	require.Len(t, got, 1)
 	assert.Equal(t, "recent", got[0].GetId())
 }
 
 func TestApplyFilter_ZeroSincePassesAll(t *testing.T) {
 	flows := []*flowpb.Flow{newFlow("a", &flowpb.Kubernetes{}), newFlow("b", &flowpb.Kubernetes{})}
-	got := applyFilters(flows, nil, nil, time.Time{})
+	got := applyFilters(flows, nil, time.Time{})
 	assert.Len(t, got, 2)
 }
 
 func TestApplyFilter_NilFilterPassesAll(t *testing.T) {
 	flows := []*flowpb.Flow{newFlow("a", &flowpb.Kubernetes{}), newFlow("b", &flowpb.Kubernetes{})}
-	got := applyFilters(flows, nil, nil, time.Time{})
+	got := applyFilters(flows, nil, time.Time{})
 	assert.Len(t, got, 2)
 }
 
@@ -200,7 +212,7 @@ func TestMatchFilter_Namespaces(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			f := newFlow("f", newPodK8S(tc.srcNS, "src-pod", tc.dstNS, "dst-pod"))
 			filter := &flowpb.FlowFilter{Namespaces: tc.filter, Direction: tc.direction}
-			got := applyFilters([]*flowpb.Flow{f}, []*flowpb.FlowFilter{filter}, []labels.Selector{nil}, time.Time{})
+			got := applyFilters([]*flowpb.Flow{f}, mustParseFilters(filter), time.Time{})
 			if tc.want {
 				assert.Len(t, got, 1)
 			} else {
@@ -266,7 +278,7 @@ func TestMatchFilter_PodNames(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			f := newFlow("f", newPodK8S("ns", tc.srcPod, "ns", tc.dstPod))
 			filter := &flowpb.FlowFilter{PodNames: tc.filter, Direction: tc.direction}
-			got := applyFilters([]*flowpb.Flow{f}, []*flowpb.FlowFilter{filter}, []labels.Selector{nil}, time.Time{})
+			got := applyFilters([]*flowpb.Flow{f}, mustParseFilters(filter), time.Time{})
 			if tc.want {
 				assert.Len(t, got, 1)
 			} else {
@@ -281,7 +293,7 @@ func TestMatchFilter_FlowTypes(t *testing.T) {
 	inter := newFlow("inter", &flowpb.Kubernetes{FlowType: flowpb.FlowType_FLOW_TYPE_INTER_NODE})
 
 	filter := &flowpb.FlowFilter{FlowTypes: []flowpb.FlowType{flowpb.FlowType_FLOW_TYPE_INTRA_NODE}}
-	got := applyFilters([]*flowpb.Flow{intra, inter}, []*flowpb.FlowFilter{filter}, []labels.Selector{nil}, time.Time{})
+	got := applyFilters([]*flowpb.Flow{intra, inter}, mustParseFilters(filter), time.Time{})
 	require.Len(t, got, 1)
 	assert.Equal(t, "intra", got[0].GetId())
 }
@@ -340,7 +352,7 @@ func TestMatchFilter_ServiceNames(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			f := newFlow("f", &flowpb.Kubernetes{DestinationServicePortName: tc.svcPortName})
 			filter := &flowpb.FlowFilter{ServiceNames: tc.filter}
-			got := applyFilters([]*flowpb.Flow{f}, []*flowpb.FlowFilter{filter}, []labels.Selector{nil}, time.Time{})
+			got := applyFilters([]*flowpb.Flow{f}, mustParseFilters(filter), time.Time{})
 			if tc.wantMatch {
 				assert.Len(t, got, 1)
 			} else {
@@ -412,7 +424,7 @@ func TestMatchFilter_IPs(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			filter := &flowpb.FlowFilter{Ips: tc.ips, Direction: tc.direction}
-			got := applyFilters([]*flowpb.Flow{f}, []*flowpb.FlowFilter{filter}, []labels.Selector{nil}, time.Time{})
+			got := applyFilters([]*flowpb.Flow{f}, mustParseFilters(filter), time.Time{})
 			if tc.wantMatch {
 				assert.Len(t, got, 1)
 			} else {
@@ -423,9 +435,6 @@ func TestMatchFilter_IPs(t *testing.T) {
 }
 
 func TestMatchFilter_LabelSelector(t *testing.T) {
-	sel, err := labels.Parse("app=frontend")
-	require.NoError(t, err)
-
 	srcMatch := &flowpb.Labels{Labels: map[string]string{"app": "frontend"}}
 	noMatch := &flowpb.Labels{Labels: map[string]string{"app": "backend"}}
 
@@ -488,8 +497,7 @@ func TestMatchFilter_LabelSelector(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			got := applyFilters(
 				[]*flowpb.Flow{newFlow("f", tc.k8s)},
-				[]*flowpb.FlowFilter{{Direction: tc.direction}},
-				[]labels.Selector{sel},
+				mustParseFilters(&flowpb.FlowFilter{Direction: tc.direction, PodLabelSelector: "app=frontend"}),
 				time.Time{},
 			)
 			if tc.wantMatch {
@@ -502,162 +510,207 @@ func TestMatchFilter_LabelSelector(t *testing.T) {
 }
 
 func TestGetFlows_ReceivesAllFlows(t *testing.T) {
-	buf := ringbuffer.NewBroadcastBuffer[*flowpb.Flow](64)
-	t.Cleanup(func() { buf.Shutdown() })
+	synctest.Test(t, func(t *testing.T) {
+		buf := ringbuffer.NewBroadcastBuffer[*flowpb.Flow](64)
+		t.Cleanup(func() { buf.Shutdown() })
 
-	const n = 5
-	wantIDs := make([]string, n)
-	for i := range n {
-		id := fmt.Sprintf("flow-%d", i)
-		wantIDs[i] = id
-		buf.Produce(newFlow(id, &flowpb.Kubernetes{}))
-	}
+		const n = 5
+		wantIDs := make([]string, n)
+		for i := range n {
+			id := fmt.Sprintf("flow-%d", i)
+			wantIDs[i] = id
+			buf.Produce(newFlow(id, &flowpb.Kubernetes{}))
+		}
 
-	svc := newTestService(buf)
-	stream := newFakeStream(context.Background())
-	require.NoError(t, svc.GetFlows(&flowpb.GetFlowsRequest{Follow: false}, stream))
+		svc := newTestService(buf)
+		stream := newFakeStream(t.Context())
 
-	got := collectFlows(stream.responses)
-	gotIDs := make([]string, len(got))
-	for i, f := range got {
-		gotIDs[i] = f.GetId()
-	}
-	assert.ElementsMatch(t, wantIDs, gotIDs)
+		errCh := make(chan error, 1)
+		go func() { errCh <- svc.GetFlows(&flowpb.GetFlowsRequest{Follow: false}, stream) }()
+
+		// Advance fake time past ConsumeDeadline so that after all buffered flows
+		// are consumed, ConsumeMultiple returns n==0 and the non-follow stream exits.
+		time.Sleep(2 * exporter.ConsumeDeadline)
+		synctest.Wait()
+
+		require.NoError(t, <-errCh)
+		got := collectFlows(stream.responses)
+		gotIDs := make([]string, len(got))
+		for i, f := range got {
+			gotIDs[i] = f.GetId()
+		}
+		assert.ElementsMatch(t, wantIDs, gotIDs)
+	})
 }
 
 func TestGetFlows_MaxCount(t *testing.T) {
-	buf := ringbuffer.NewBroadcastBuffer[*flowpb.Flow](64)
-	t.Cleanup(func() { buf.Shutdown() })
+	synctest.Test(t, func(t *testing.T) {
+		buf := ringbuffer.NewBroadcastBuffer[*flowpb.Flow](64)
+		t.Cleanup(func() { buf.Shutdown() })
 
-	for i := range 10 {
-		buf.Produce(newFlow(fmt.Sprintf("flow-%d", i), &flowpb.Kubernetes{}))
-	}
+		for i := range 10 {
+			buf.Produce(newFlow(fmt.Sprintf("flow-%d", i), &flowpb.Kubernetes{}))
+		}
 
-	svc := newTestService(buf)
-	stream := newFakeStream(context.Background())
-	req := &flowpb.GetFlowsRequest{Follow: false, MaxCount: 3}
-	require.NoError(t, svc.GetFlows(req, stream))
+		svc := newTestService(buf)
+		stream := newFakeStream(t.Context())
+		req := &flowpb.GetFlowsRequest{Follow: false, MaxCount: 3}
 
-	got := collectFlows(stream.responses)
-	assert.Len(t, got, 3)
-	assert.Equal(t, "flow-0", got[0].GetId())
-	assert.Equal(t, "flow-1", got[1].GetId())
-	assert.Equal(t, "flow-2", got[2].GetId())
+		errCh := make(chan error, 1)
+		go func() { errCh <- svc.GetFlows(req, stream) }()
+		synctest.Wait()
+
+		require.NoError(t, <-errCh)
+		got := collectFlows(stream.responses)
+		assert.Len(t, got, 3)
+		assert.Equal(t, "flow-0", got[0].GetId())
+		assert.Equal(t, "flow-1", got[1].GetId())
+		assert.Equal(t, "flow-2", got[2].GetId())
+	})
 }
 
 func TestGetFlows_FilterByServiceName(t *testing.T) {
-	buf := ringbuffer.NewBroadcastBuffer[*flowpb.Flow](64)
-	t.Cleanup(func() { buf.Shutdown() })
+	synctest.Test(t, func(t *testing.T) {
+		buf := ringbuffer.NewBroadcastBuffer[*flowpb.Flow](64)
+		t.Cleanup(func() { buf.Shutdown() })
 
-	for i := range 3 {
-		buf.Produce(newFlow(fmt.Sprintf("fe-%d", i), &flowpb.Kubernetes{
-			DestinationServicePortName: "default/frontend:http",
-		}))
-		buf.Produce(newFlow(fmt.Sprintf("be-%d", i), &flowpb.Kubernetes{
-			DestinationServicePortName: "default/backend:http",
-		}))
-	}
+		for i := range 3 {
+			buf.Produce(newFlow(fmt.Sprintf("fe-%d", i), &flowpb.Kubernetes{
+				DestinationServicePortName: "default/frontend:http",
+			}))
+			buf.Produce(newFlow(fmt.Sprintf("be-%d", i), &flowpb.Kubernetes{
+				DestinationServicePortName: "default/backend:http",
+			}))
+		}
 
-	svc := newTestService(buf)
-	stream := newFakeStream(context.Background())
-	req := &flowpb.GetFlowsRequest{
-		Follow:  false,
-		Filters: []*flowpb.FlowFilter{{ServiceNames: []string{"frontend"}}},
-	}
-	require.NoError(t, svc.GetFlows(req, stream))
+		svc := newTestService(buf)
+		stream := newFakeStream(t.Context())
+		req := &flowpb.GetFlowsRequest{
+			Follow:  false,
+			Filters: []*flowpb.FlowFilter{{ServiceNames: []string{"frontend"}}},
+		}
 
-	got := collectFlows(stream.responses)
-	assert.Len(t, got, 3)
-	for _, f := range got {
-		assert.Equal(t, "default/frontend:http", f.GetK8S().GetDestinationServicePortName())
-	}
+		errCh := make(chan error, 1)
+		go func() { errCh <- svc.GetFlows(req, stream) }()
+		time.Sleep(2 * exporter.ConsumeDeadline)
+		synctest.Wait()
+
+		require.NoError(t, <-errCh)
+		got := collectFlows(stream.responses)
+		assert.Len(t, got, 3)
+		for _, f := range got {
+			assert.Equal(t, "default/frontend:http", f.GetK8S().GetDestinationServicePortName())
+		}
+	})
 }
 
 func TestGetFlows_FilterByNamespace(t *testing.T) {
-	buf := ringbuffer.NewBroadcastBuffer[*flowpb.Flow](64)
-	t.Cleanup(func() { buf.Shutdown() })
+	synctest.Test(t, func(t *testing.T) {
+		buf := ringbuffer.NewBroadcastBuffer[*flowpb.Flow](64)
+		t.Cleanup(func() { buf.Shutdown() })
 
-	for i := range 4 {
-		buf.Produce(newFlow(fmt.Sprintf("def-%d", i), newPodK8S("default", "pod", "other", "pod")))
-	}
-	for i := range 2 {
-		buf.Produce(newFlow(fmt.Sprintf("mon-%d", i), newPodK8S("monitoring", "pod", "other", "pod")))
-	}
+		for i := range 4 {
+			buf.Produce(newFlow(fmt.Sprintf("def-%d", i), newPodK8S("default", "pod", "other", "pod")))
+		}
+		for i := range 2 {
+			buf.Produce(newFlow(fmt.Sprintf("mon-%d", i), newPodK8S("monitoring", "pod", "other", "pod")))
+		}
 
-	svc := newTestService(buf)
-	stream := newFakeStream(context.Background())
-	req := &flowpb.GetFlowsRequest{
-		Follow: false,
-		Filters: []*flowpb.FlowFilter{{
-			Namespaces: []string{"monitoring"},
-			Direction:  flowpb.FlowFilterDirection_FLOW_FILTER_DIRECTION_FROM,
-		}},
-	}
-	require.NoError(t, svc.GetFlows(req, stream))
+		svc := newTestService(buf)
+		stream := newFakeStream(t.Context())
+		req := &flowpb.GetFlowsRequest{
+			Follow: false,
+			Filters: []*flowpb.FlowFilter{{
+				Namespaces: []string{"monitoring"},
+				Direction:  flowpb.FlowFilterDirection_FLOW_FILTER_DIRECTION_FROM,
+			}},
+		}
 
-	got := collectFlows(stream.responses)
-	assert.Len(t, got, 2)
-	for _, f := range got {
-		assert.Equal(t, "monitoring", f.GetK8S().GetSourcePodNamespace())
-	}
+		errCh := make(chan error, 1)
+		go func() { errCh <- svc.GetFlows(req, stream) }()
+		time.Sleep(2 * exporter.ConsumeDeadline)
+		synctest.Wait()
+
+		require.NoError(t, <-errCh)
+		got := collectFlows(stream.responses)
+		assert.Len(t, got, 2)
+		for _, f := range got {
+			assert.Equal(t, "monitoring", f.GetK8S().GetSourcePodNamespace())
+		}
+	})
 }
 
 func TestGetFlows_MultipleFilters(t *testing.T) {
-	buf := ringbuffer.NewBroadcastBuffer[*flowpb.Flow](64)
-	t.Cleanup(func() { buf.Shutdown() })
+	synctest.Test(t, func(t *testing.T) {
+		buf := ringbuffer.NewBroadcastBuffer[*flowpb.Flow](64)
+		t.Cleanup(func() { buf.Shutdown() })
 
-	// flows from "frontend" ns to "backend" ns
-	buf.Produce(newFlow("fe-to-backend", newPodK8S("frontend", "pod", "backend", "pod")))
-	// flows from "frontend" ns to "other" ns - should NOT match
-	buf.Produce(newFlow("fe-to-other", newPodK8S("frontend", "pod", "other", "pod")))
-	// flows from "other" ns to "backend" ns - should NOT match
-	buf.Produce(newFlow("other-to-backend", newPodK8S("other", "pod", "backend", "pod")))
+		// flows from "frontend" ns to "backend" ns
+		buf.Produce(newFlow("fe-to-backend", newPodK8S("frontend", "pod", "backend", "pod")))
+		// flows from "frontend" ns to "other" ns - should NOT match
+		buf.Produce(newFlow("fe-to-other", newPodK8S("frontend", "pod", "other", "pod")))
+		// flows from "other" ns to "backend" ns - should NOT match
+		buf.Produce(newFlow("other-to-backend", newPodK8S("other", "pod", "backend", "pod")))
 
-	svc := newTestService(buf)
-	stream := newFakeStream(context.Background())
-	req := &flowpb.GetFlowsRequest{
-		Follow: false,
-		Filters: []*flowpb.FlowFilter{
-			{Namespaces: []string{"frontend"}, Direction: flowpb.FlowFilterDirection_FLOW_FILTER_DIRECTION_FROM},
-			{Namespaces: []string{"backend"}, Direction: flowpb.FlowFilterDirection_FLOW_FILTER_DIRECTION_TO},
-		},
-	}
-	require.NoError(t, svc.GetFlows(req, stream))
+		svc := newTestService(buf)
+		stream := newFakeStream(t.Context())
+		req := &flowpb.GetFlowsRequest{
+			Follow: false,
+			Filters: []*flowpb.FlowFilter{
+				{Namespaces: []string{"frontend"}, Direction: flowpb.FlowFilterDirection_FLOW_FILTER_DIRECTION_FROM},
+				{Namespaces: []string{"backend"}, Direction: flowpb.FlowFilterDirection_FLOW_FILTER_DIRECTION_TO},
+			},
+		}
 
-	got := collectFlows(stream.responses)
-	require.Len(t, got, 1)
-	assert.Equal(t, "fe-to-backend", got[0].GetId())
+		errCh := make(chan error, 1)
+		go func() { errCh <- svc.GetFlows(req, stream) }()
+		time.Sleep(2 * exporter.ConsumeDeadline)
+		synctest.Wait()
+
+		require.NoError(t, <-errCh)
+		got := collectFlows(stream.responses)
+		require.Len(t, got, 1)
+		assert.Equal(t, "fe-to-backend", got[0].GetId())
+	})
 }
 
 func TestGetFlows_SinceFilter(t *testing.T) {
-	buf := ringbuffer.NewBroadcastBuffer[*flowpb.Flow](64)
-	t.Cleanup(func() { buf.Shutdown() })
+	synctest.Test(t, func(t *testing.T) {
+		buf := ringbuffer.NewBroadcastBuffer[*flowpb.Flow](64)
+		t.Cleanup(func() { buf.Shutdown() })
 
-	now := time.Now()
-	since := now.Add(-30 * time.Second)
+		// Use a fixed reference time relative to the synctest fake clock epoch.
+		now := time.Now()
+		since := now.Add(-30 * time.Second)
 
-	buf.Produce(newFlowEndTs("old-1", now.Add(-2*time.Minute), &flowpb.Kubernetes{}))
-	buf.Produce(newFlowEndTs("old-2", now.Add(-45*time.Second), &flowpb.Kubernetes{}))
-	buf.Produce(newFlowEndTs("recent-1", now.Add(-10*time.Second), &flowpb.Kubernetes{}))
-	buf.Produce(newFlowEndTs("recent-2", now.Add(-1*time.Second), &flowpb.Kubernetes{}))
+		buf.Produce(newFlowEndTs("old-1", now.Add(-2*time.Minute), &flowpb.Kubernetes{}))
+		buf.Produce(newFlowEndTs("old-2", now.Add(-45*time.Second), &flowpb.Kubernetes{}))
+		buf.Produce(newFlowEndTs("recent-1", now.Add(-10*time.Second), &flowpb.Kubernetes{}))
+		buf.Produce(newFlowEndTs("recent-2", now.Add(-1*time.Second), &flowpb.Kubernetes{}))
 
-	svc := newTestService(buf)
-	stream := newFakeStream(context.Background())
-	req := &flowpb.GetFlowsRequest{
-		Follow: false,
-		Since:  timestamppb.New(since),
-	}
-	require.NoError(t, svc.GetFlows(req, stream))
+		svc := newTestService(buf)
+		stream := newFakeStream(t.Context())
+		req := &flowpb.GetFlowsRequest{
+			Follow: false,
+			Since:  timestamppb.New(since),
+		}
 
-	got := collectFlows(stream.responses)
-	require.Len(t, got, 2)
-	gotIDs := []string{got[0].GetId(), got[1].GetId()}
-	assert.ElementsMatch(t, []string{"recent-1", "recent-2"}, gotIDs)
+		errCh := make(chan error, 1)
+		go func() { errCh <- svc.GetFlows(req, stream) }()
+		time.Sleep(2 * exporter.ConsumeDeadline)
+		synctest.Wait()
+
+		require.NoError(t, <-errCh)
+		got := collectFlows(stream.responses)
+		require.Len(t, got, 2)
+		gotIDs := []string{got[0].GetId(), got[1].GetId()}
+		assert.ElementsMatch(t, []string{"recent-1", "recent-2"}, gotIDs)
+	})
 }
 
 func TestGetFlows_InvalidLabelSelector(t *testing.T) {
 	buf := ringbuffer.NewBroadcastBuffer[*flowpb.Flow](64)
-	t.Cleanup(func() { buf.Shutdown() })
+	t.Cleanup(func() { buf.Shutdown() }) // only needed for cleanup, GetFlows returns before consuming
 
 	svc := newTestService(buf)
 	stream := newFakeStream(context.Background())
@@ -673,26 +726,69 @@ func TestGetFlows_InvalidLabelSelector(t *testing.T) {
 	assert.Empty(t, stream.responses)
 }
 
-func TestGetFlows_FollowContextCancelled(t *testing.T) {
+func TestGetFlows_InvalidIP(t *testing.T) {
 	buf := ringbuffer.NewBroadcastBuffer[*flowpb.Flow](64)
 	t.Cleanup(func() { buf.Shutdown() })
 
-	ctx, cancel := context.WithCancel(context.Background())
 	svc := newTestService(buf)
-	stream := newFakeStream(ctx)
-
-	errCh := make(chan error, 1)
-	go func() { errCh <- svc.GetFlows(&flowpb.GetFlowsRequest{Follow: true}, stream) }()
-
-	time.Sleep(20 * time.Millisecond)
-	cancel()
-
-	select {
-	case err := <-errCh:
-		st, ok := status.FromError(err)
-		require.True(t, ok)
-		assert.Equal(t, codes.Canceled, st.Code())
-	case <-time.After(500 * time.Millisecond):
-		t.Fatal("GetFlows did not return after context cancellation")
+	stream := newFakeStream(context.Background())
+	req := &flowpb.GetFlowsRequest{
+		Filters: []*flowpb.FlowFilter{{Ips: []string{"not-an-ip"}}},
 	}
+
+	err := svc.GetFlows(req, stream)
+	require.Error(t, err)
+	st, ok := status.FromError(err)
+	require.True(t, ok)
+	assert.Equal(t, codes.InvalidArgument, st.Code())
+	assert.Empty(t, stream.responses)
+}
+
+func TestGetFlows_ServiceNamesWithFromDirection(t *testing.T) {
+	buf := ringbuffer.NewBroadcastBuffer[*flowpb.Flow](64)
+	t.Cleanup(func() { buf.Shutdown() })
+
+	svc := newTestService(buf)
+	stream := newFakeStream(context.Background())
+	req := &flowpb.GetFlowsRequest{
+		Filters: []*flowpb.FlowFilter{{
+			ServiceNames: []string{"frontend"},
+			Direction:    flowpb.FlowFilterDirection_FLOW_FILTER_DIRECTION_FROM,
+		}},
+	}
+
+	err := svc.GetFlows(req, stream)
+	require.Error(t, err)
+	st, ok := status.FromError(err)
+	require.True(t, ok)
+	assert.Equal(t, codes.InvalidArgument, st.Code())
+}
+
+func TestGetFlows_FollowContextCancelled(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		buf := ringbuffer.NewBroadcastBuffer[*flowpb.Flow](64)
+		t.Cleanup(func() { buf.Shutdown() })
+
+		ctx, cancel := context.WithCancel(t.Context())
+		svc := newTestService(buf)
+		stream := newFakeStream(ctx)
+
+		errCh := make(chan error, 1)
+		go func() { errCh <- svc.GetFlows(&flowpb.GetFlowsRequest{Follow: true}, stream) }()
+
+		// Cancel the context and advance fake time past ConsumeDeadline so the
+		// consumer wakes up and checks ctx.Err() on the next iteration.
+		cancel()
+		time.Sleep(2 * exporter.ConsumeDeadline)
+		synctest.Wait()
+
+		select {
+		case err := <-errCh:
+			st, ok := status.FromError(err)
+			require.True(t, ok)
+			assert.Equal(t, codes.Canceled, st.Code())
+		default:
+			t.Fatal("GetFlows did not return after context cancellation")
+		}
+	})
 }
