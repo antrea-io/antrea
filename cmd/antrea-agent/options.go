@@ -553,12 +553,22 @@ func (o *Options) setK8sNodeDefaultOptions() {
 	}
 }
 
-func (o *Options) validateEgressConfig(encapMode config.TrafficEncapModeType) error {
+func (o *Options) validateEgressConfig(encapMode config.TrafficEncapModeType, encryptionMode config.TrafficEncryptionModeType) error {
 	if !features.DefaultFeatureGate.Enabled(features.Egress) {
 		return nil
 	}
-	if !encapMode.SupportsEncap() {
-		klog.InfoS("The Egress feature gate is enabled, but it won't work because it requires either encap or hybrid mode")
+
+	if encapMode == config.TrafficEncapModeEncap &&
+		encryptionMode != config.TrafficEncryptionModeNone &&
+		encryptionMode != config.TrafficEncryptionModeWireGuard {
+		klog.InfoS("The Egress feature gate is enabled, but it doesn't work with the current encryption mode", "encryptionMode", encryptionMode)
+		return nil
+	}
+
+	if encapMode != config.TrafficEncapModeEncap &&
+		encapMode != config.TrafficEncapModeHybrid &&
+		encapMode != config.TrafficEncapModeNoEncap {
+		klog.InfoS("The Egress feature gate is enabled, but it won't work because it is only applicable to the encap, hybrid, and noEncap modes")
 		return nil
 	}
 	for _, cidr := range o.config.Egress.ExceptCIDRs {
@@ -658,7 +668,7 @@ func (o *Options) validateK8sNodeOptions() error {
 	if err := o.validateMulticastConfig(encapMode, encryptionMode); err != nil {
 		return fmt.Errorf("failed to validate multicast config: %v", err)
 	}
-	if err := o.validateEgressConfig(encapMode); err != nil {
+	if err := o.validateEgressConfig(encapMode, encryptionMode); err != nil {
 		return fmt.Errorf("failed to validate egress config: %v", err)
 	}
 	if err := o.validateMulticlusterConfig(encapMode, encryptionMode); err != nil {

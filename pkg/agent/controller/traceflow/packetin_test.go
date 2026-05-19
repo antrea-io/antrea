@@ -221,6 +221,7 @@ func getTestPacketBytes(dstIP string) []byte {
 }
 
 func TestParsePacketIn(t *testing.T) {
+	prepareMockTables()
 	xreg0 := make([]byte, 8)
 	binary.BigEndian.PutUint32(xreg0[0:4], openflow.RemoteSNATRegMark.GetValue()<<openflow.RemoteSNATRegMark.GetField().GetRange().Offset()) // RemoteSNATRegMark in 32bit reg0
 	binary.BigEndian.PutUint32(xreg0[4:8], 2)                                                                                                // outputPort in 32bit reg1
@@ -275,7 +276,36 @@ func TestParsePacketIn(t *testing.T) {
 	pktBytesPodToIP := getTestPacketBytes(dstIPv4)
 	pktBytesPodToPod := getTestPacketBytes(pod2IPv4)
 
-	tests := []struct {
+	makePodToIPv4TF := func() *crdv1beta1.Traceflow {
+		return &crdv1beta1.Traceflow{
+			ObjectMeta: metav1.ObjectMeta{Name: "traceflow-pod-to-ipv4"},
+			Spec: crdv1beta1.TraceflowSpec{
+				Source:      crdv1beta1.Source{Namespace: pod1.Namespace, Pod: pod1.Name},
+				Destination: crdv1beta1.Destination{IP: dstIPv4},
+			},
+			Status: crdv1beta1.TraceflowStatus{Phase: crdv1beta1.Running, DataplaneTag: 1},
+		}
+	}
+	makeNodeConfig := func(tunPort, gwPort uint32) *config.NodeConfig {
+		return &config.NodeConfig{
+			TunnelOFPort:  tunPort,
+			GatewayConfig: &config.GatewayConfig{OFPort: gwPort},
+		}
+	}
+	egressConfig := types.EgressConfig{Name: egressName, EgressIP: egressIP, EgressNode: egressNode}
+
+	type trafficMode struct {
+		name          string
+		networkConfig *config.NetworkConfig
+	}
+	trafficModes := []trafficMode{
+		{"encap", &config.NetworkConfig{TrafficEncapMode: config.TrafficEncapModeEncap}},
+		{"noEncap", &config.NetworkConfig{TrafficEncapMode: config.TrafficEncapModeNoEncap}},
+		{"hybrid", &config.NetworkConfig{TrafficEncapMode: config.TrafficEncapModeHybrid}},
+		{"WireGuard", &config.NetworkConfig{TrafficEncapMode: config.TrafficEncapModeEncap, TrafficEncryptionMode: config.TrafficEncryptionModeWireGuard}},
+	}
+
+	type testCase struct {
 		name               string
 		networkConfig      *config.NetworkConfig
 		nodeConfig         *config.NodeConfig
@@ -284,218 +314,8 @@ func TestParsePacketIn(t *testing.T) {
 		expectedCalls      func(*queriertest.MockAgentNetworkPolicyInfoQuerier, *queriertest.MockEgressQuerier)
 		expectedTf         *crdv1beta1.Traceflow
 		expectedNodeResult *crdv1beta1.NodeResult
-	}{
-		{
-			name: "packet at source Node for local Egress",
-			networkConfig: &config.NetworkConfig{
-				TrafficEncapMode: 0,
-			},
-			nodeConfig: &config.NodeConfig{
-				TunnelOFPort: 1,
-				GatewayConfig: &config.GatewayConfig{
-					OFPort: 2,
-				},
-			},
-			tfState: &traceflowState{
-				name:     "traceflow-pod-to-ipv4",
-				tag:      1,
-				isSender: true,
-			},
-			pktIn: &ofctrl.PacketIn{
-				PacketIn: &openflow15.PacketIn{
-					TableId: openflow.OutputTable.GetID(),
-					Match: openflow15.Match{
-						Fields: []openflow15.MatchField{*matchOutPort, *matchPktMark, *matchCTSrc},
-					},
-					Data: util.NewBuffer(pktBytesPodToIP),
-				},
-			},
-			expectedCalls: func(npQuerierq *queriertest.MockAgentNetworkPolicyInfoQuerier, egressQuerier *queriertest.MockEgressQuerier) {
-				egressQuerier.EXPECT().GetEgress(pod1.Namespace, pod1.Name).Return(types.EgressConfig{
-					Name:       egressName,
-					EgressIP:   egressIP,
-					EgressNode: egressNode,
-				}, nil)
-			},
-			expectedTf: &crdv1beta1.Traceflow{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: "traceflow-pod-to-ipv4",
-				},
-				Spec: crdv1beta1.TraceflowSpec{
-					Source: crdv1beta1.Source{
-						Namespace: pod1.Namespace,
-						Pod:       pod1.Name,
-					},
-					Destination: crdv1beta1.Destination{
-						IP: dstIPv4,
-					},
-				},
-				Status: crdv1beta1.TraceflowStatus{
-					Phase:        crdv1beta1.Running,
-					DataplaneTag: 1,
-				},
-			},
-			expectedNodeResult: &crdv1beta1.NodeResult{
-				Observations: []crdv1beta1.Observation{
-					{
-						Component: crdv1beta1.ComponentSpoofGuard,
-						Action:    crdv1beta1.ActionForwarded,
-						SrcPodIP:  pod1IPv4,
-					},
-					{
-						Component:  crdv1beta1.ComponentEgress,
-						Action:     crdv1beta1.ActionMarkedForSNAT,
-						Egress:     egressName,
-						EgressIP:   egressIP,
-						EgressNode: egressNode,
-					},
-					{
-						Component:     crdv1beta1.ComponentForwarding,
-						ComponentInfo: openflow.OutputTable.GetName(),
-						Action:        crdv1beta1.ActionForwardedOutOfNetwork,
-					},
-				},
-			},
-		},
-		{
-			name: "packet at source Node for remote Egress",
-			networkConfig: &config.NetworkConfig{
-				TrafficEncapMode: 0,
-			},
-			nodeConfig: &config.NodeConfig{
-				TunnelOFPort: 2,
-				GatewayConfig: &config.GatewayConfig{
-					OFPort: 1,
-				},
-			},
-			tfState: &traceflowState{
-				name:     "traceflow-pod-to-ipv4",
-				tag:      1,
-				isSender: true,
-			},
-			pktIn: &ofctrl.PacketIn{
-				PacketIn: &openflow15.PacketIn{
-					TableId: openflow.OutputTable.GetID(),
-					Match: openflow15.Match{
-						// We are omitting matchCTSrc intentionally here to test
-						// the case where there is no valid ct_nw_src match in the packet metadata.
-						Fields: []openflow15.MatchField{*matchTunDst, *matchOutPort},
-					},
-					Data: util.NewBuffer(pktBytesPodToIP),
-				},
-			},
-			expectedCalls: func(npQuerierq *queriertest.MockAgentNetworkPolicyInfoQuerier, egressQuerier *queriertest.MockEgressQuerier) {
-				egressQuerier.EXPECT().GetEgress(pod1.Namespace, pod1.Name).Return(types.EgressConfig{
-					Name:       egressName,
-					EgressIP:   egressIP,
-					EgressNode: egressNode,
-				}, nil)
-			},
-			expectedTf: &crdv1beta1.Traceflow{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: "traceflow-pod-to-ipv4",
-				},
-				Spec: crdv1beta1.TraceflowSpec{
-					Source: crdv1beta1.Source{
-						Namespace: pod1.Namespace,
-						Pod:       pod1.Name,
-					},
-					Destination: crdv1beta1.Destination{
-						IP: dstIPv4,
-					},
-				},
-				Status: crdv1beta1.TraceflowStatus{
-					Phase:        crdv1beta1.Running,
-					DataplaneTag: 1,
-				},
-			},
-			expectedNodeResult: &crdv1beta1.NodeResult{
-				Observations: []crdv1beta1.Observation{
-					{
-						Component: crdv1beta1.ComponentSpoofGuard,
-						Action:    crdv1beta1.ActionForwarded,
-						SrcPodIP:  pod1IPv4,
-					},
-					{
-						Component:  crdv1beta1.ComponentEgress,
-						Action:     crdv1beta1.ActionForwardedToEgressNode,
-						Egress:     egressName,
-						EgressIP:   egressIP,
-						EgressNode: egressNode,
-					},
-					{
-						Component:     crdv1beta1.ComponentForwarding,
-						ComponentInfo: openflow.OutputTable.GetName(),
-						Action:        crdv1beta1.ActionForwarded,
-						TunnelDstIP:   egressIP,
-					},
-				},
-			},
-		},
-		{
-			name: "packet at remote Node for remote Egress",
-			networkConfig: &config.NetworkConfig{
-				TrafficEncapMode: 0,
-			},
-			nodeConfig: &config.NodeConfig{
-				TunnelOFPort: 1,
-				GatewayConfig: &config.GatewayConfig{
-					OFPort: 2,
-				},
-			},
-			tfState: &traceflowState{
-				name: "traceflow-pod-to-ipv4",
-				tag:  1,
-			},
-			pktIn: &ofctrl.PacketIn{
-				PacketIn: &openflow15.PacketIn{
-					TableId: openflow.OutputTable.GetID(),
-					Match: openflow15.Match{
-						Fields: []openflow15.MatchField{*matchOutPort, *matchTunDst, *matchPktMark},
-					},
-					Data: util.NewBuffer(pktBytesPodToIP),
-				},
-			},
-			expectedCalls: func(npQuerierq *queriertest.MockAgentNetworkPolicyInfoQuerier, egressQuerier *queriertest.MockEgressQuerier) {
-				egressQuerier.EXPECT().GetEgressIPByMark(uint32(1)).Return(egressIP, nil)
-			},
-			expectedTf: &crdv1beta1.Traceflow{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: "traceflow-pod-to-ipv4",
-				},
-				Spec: crdv1beta1.TraceflowSpec{
-					Source: crdv1beta1.Source{
-						Namespace: pod1.Namespace,
-						Pod:       pod1.Name,
-					},
-					Destination: crdv1beta1.Destination{
-						IP: dstIPv4,
-					},
-				},
-				Status: crdv1beta1.TraceflowStatus{
-					Phase:        crdv1beta1.Running,
-					DataplaneTag: 1,
-				},
-			},
-			expectedNodeResult: &crdv1beta1.NodeResult{
-				Observations: []crdv1beta1.Observation{
-					{
-						Component: crdv1beta1.ComponentForwarding,
-						Action:    crdv1beta1.ActionReceived,
-					},
-					{
-						Component: crdv1beta1.ComponentEgress,
-						Action:    crdv1beta1.ActionMarkedForSNAT,
-						EgressIP:  egressIP,
-					},
-					{
-						Component:     crdv1beta1.ComponentForwarding,
-						ComponentInfo: openflow.OutputTable.GetName(),
-						Action:        crdv1beta1.ActionForwardedOutOfNetwork,
-					},
-				},
-			},
-		},
+	}
+	tests := []testCase{
 		{
 			name:       "packet at source Node forwarded by acnp egress rule",
 			nodeConfig: &config.NodeConfig{},
@@ -690,126 +510,114 @@ func TestParsePacketIn(t *testing.T) {
 				},
 			},
 		},
-		{
-			name: "packet at source Node to external NoEncap",
-			networkConfig: &config.NetworkConfig{
-				TrafficEncapMode: 1,
+	}
+	for _, mode := range trafficModes {
+		tests = append(tests, testCase{
+			name:          "packet at source Node for local Egress " + mode.name,
+			networkConfig: mode.networkConfig,
+			nodeConfig:    makeNodeConfig(1, 2),
+			tfState:       &traceflowState{name: "traceflow-pod-to-ipv4", tag: 1, isSender: true},
+			pktIn: &ofctrl.PacketIn{PacketIn: &openflow15.PacketIn{
+				TableId: openflow.OutputTable.GetID(),
+				Match:   openflow15.Match{Fields: []openflow15.MatchField{*matchOutPort, *matchPktMark, *matchCTSrc}},
+				Data:    util.NewBuffer(pktBytesPodToIP),
+			}},
+			expectedCalls: func(_ *queriertest.MockAgentNetworkPolicyInfoQuerier, eq *queriertest.MockEgressQuerier) {
+				eq.EXPECT().GetEgress(pod1.Namespace, pod1.Name).Return(egressConfig, nil)
 			},
-			nodeConfig: &config.NodeConfig{
-				TunnelOFPort: 1,
-				GatewayConfig: &config.GatewayConfig{
-					OFPort: 2,
-				},
+			expectedTf: makePodToIPv4TF(),
+			expectedNodeResult: &crdv1beta1.NodeResult{Observations: []crdv1beta1.Observation{
+				{Component: crdv1beta1.ComponentSpoofGuard, Action: crdv1beta1.ActionForwarded, SrcPodIP: pod1IPv4},
+				{Component: crdv1beta1.ComponentEgress, Action: crdv1beta1.ActionMarkedForSNAT, Egress: egressName, EgressIP: egressIP, EgressNode: egressNode},
+				{Component: crdv1beta1.ComponentForwarding, ComponentInfo: openflow.OutputTable.GetName(), Action: crdv1beta1.ActionForwardedOutOfNetwork},
+			}},
+		})
+	}
+	for _, mode := range trafficModes {
+		tests = append(tests, testCase{
+			name:          "packet at source Node for remote Egress " + mode.name,
+			networkConfig: mode.networkConfig,
+			nodeConfig:    makeNodeConfig(2, 1),
+			tfState:       &traceflowState{name: "traceflow-pod-to-ipv4", tag: 1, isSender: true},
+			pktIn: &ofctrl.PacketIn{PacketIn: &openflow15.PacketIn{
+				TableId: openflow.OutputTable.GetID(),
+				Match:   openflow15.Match{Fields: []openflow15.MatchField{*matchTunDst, *matchOutPort}},
+				Data:    util.NewBuffer(pktBytesPodToIP),
+			}},
+			expectedCalls: func(_ *queriertest.MockAgentNetworkPolicyInfoQuerier, eq *queriertest.MockEgressQuerier) {
+				eq.EXPECT().GetEgress(pod1.Namespace, pod1.Name).Return(egressConfig, nil)
 			},
-			tfState: &traceflowState{
-				name:     "traceflow-pod-to-ipv4",
-				tag:      1,
-				isSender: true,
+			expectedTf: makePodToIPv4TF(),
+			expectedNodeResult: &crdv1beta1.NodeResult{Observations: []crdv1beta1.Observation{
+				{Component: crdv1beta1.ComponentSpoofGuard, Action: crdv1beta1.ActionForwarded, SrcPodIP: pod1IPv4},
+				{Component: crdv1beta1.ComponentEgress, Action: crdv1beta1.ActionForwardedToEgressNode, Egress: egressName, EgressIP: egressIP, EgressNode: egressNode},
+				{Component: crdv1beta1.ComponentForwarding, ComponentInfo: openflow.OutputTable.GetName(), Action: crdv1beta1.ActionForwarded, TunnelDstIP: egressIP},
+			}},
+		})
+	}
+	for _, mode := range trafficModes {
+		tests = append(tests, testCase{
+			name:          "packet at remote Node for remote Egress " + mode.name,
+			networkConfig: mode.networkConfig,
+			nodeConfig:    makeNodeConfig(1, 2),
+			tfState:       &traceflowState{name: "traceflow-pod-to-ipv4", tag: 1},
+			pktIn: &ofctrl.PacketIn{PacketIn: &openflow15.PacketIn{
+				TableId: openflow.OutputTable.GetID(),
+				Match:   openflow15.Match{Fields: []openflow15.MatchField{*matchOutPort, *matchTunDst, *matchPktMark}},
+				Data:    util.NewBuffer(pktBytesPodToIP),
+			}},
+			expectedCalls: func(_ *queriertest.MockAgentNetworkPolicyInfoQuerier, eq *queriertest.MockEgressQuerier) {
+				eq.EXPECT().GetEgressIPByMark(uint32(1)).Return(egressIP, nil)
 			},
-			pktIn: &ofctrl.PacketIn{
-				PacketIn: &openflow15.PacketIn{
-					TableId: openflow.OutputTable.GetID(),
-					Match: openflow15.Match{
-						Fields: []openflow15.MatchField{*matchOutPort, *matchCTSrc},
-					},
-					Data: util.NewBuffer(pktBytesPodToIP),
-				},
-			},
-			expectedCalls: func(npQuerierq *queriertest.MockAgentNetworkPolicyInfoQuerier, egressQuerier *queriertest.MockEgressQuerier) {
-			},
-			expectedTf: &crdv1beta1.Traceflow{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: "traceflow-pod-to-ipv4",
-				},
-				Spec: crdv1beta1.TraceflowSpec{
-					Source: crdv1beta1.Source{
-						Namespace: pod1.Namespace,
-						Pod:       pod1.Name,
-					},
-					Destination: crdv1beta1.Destination{
-						IP: dstIPv4,
-					},
-				},
-				Status: crdv1beta1.TraceflowStatus{
-					Phase:        crdv1beta1.Running,
-					DataplaneTag: 1,
-				},
-			},
-			expectedNodeResult: &crdv1beta1.NodeResult{
-				Observations: []crdv1beta1.Observation{
-					{
-						Component: crdv1beta1.ComponentSpoofGuard,
-						Action:    crdv1beta1.ActionForwarded,
-						SrcPodIP:  pod1IPv4,
-					},
-					{
-						Component:     crdv1beta1.ComponentForwarding,
-						ComponentInfo: openflow.OutputTable.GetName(),
-						Action:        crdv1beta1.ActionForwardedOutOfNetwork,
-					},
-				},
-			},
-		},
-		{
-			name: "packet at source Node to remote Pod NoEncap",
-			networkConfig: &config.NetworkConfig{
-				TrafficEncapMode: 1,
-			},
-			nodeConfig: &config.NodeConfig{
-				TunnelOFPort: 1,
-				GatewayConfig: &config.GatewayConfig{
-					OFPort: 2,
-				},
-			},
-			tfState: &traceflowState{
-				name:     "traceflow-pod-to-ipv4",
-				tag:      1,
-				isSender: true,
-			},
-			pktIn: &ofctrl.PacketIn{
-				PacketIn: &openflow15.PacketIn{
-					TableId: openflow.OutputTable.GetID(),
-					Match: openflow15.Match{
-						Fields: []openflow15.MatchField{*matchOutPort, *matchCTSrc},
-					},
-					Data: util.NewBuffer(pktBytesPodToPod),
-				},
-			},
-			expectedCalls: func(npQuerierq *queriertest.MockAgentNetworkPolicyInfoQuerier, egressQuerier *queriertest.MockEgressQuerier) {
-			},
-			expectedTf: &crdv1beta1.Traceflow{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: "traceflow-pod-to-ipv4",
-				},
-				Spec: crdv1beta1.TraceflowSpec{
-					Source: crdv1beta1.Source{
-						Namespace: pod1.Namespace,
-						Pod:       pod1.Name,
-					},
-					Destination: crdv1beta1.Destination{
-						IP: dstIPv4,
-					},
-				},
-				Status: crdv1beta1.TraceflowStatus{
-					Phase:        crdv1beta1.Running,
-					DataplaneTag: 1,
-				},
-			},
-			expectedNodeResult: &crdv1beta1.NodeResult{
-				Observations: []crdv1beta1.Observation{
-					{
-						Component: crdv1beta1.ComponentSpoofGuard,
-						Action:    crdv1beta1.ActionForwarded,
-						SrcPodIP:  pod1IPv4,
-					},
-					{
-						Component:     crdv1beta1.ComponentForwarding,
-						ComponentInfo: openflow.OutputTable.GetName(),
-						Action:        crdv1beta1.ActionForwarded,
-					},
-				},
-			},
-		},
+			expectedTf: makePodToIPv4TF(),
+			expectedNodeResult: &crdv1beta1.NodeResult{Observations: []crdv1beta1.Observation{
+				{Component: crdv1beta1.ComponentForwarding, Action: crdv1beta1.ActionReceived},
+				{Component: crdv1beta1.ComponentEgress, Action: crdv1beta1.ActionMarkedForSNAT, EgressIP: egressIP},
+				{Component: crdv1beta1.ComponentForwarding, ComponentInfo: openflow.OutputTable.GetName(), Action: crdv1beta1.ActionForwardedOutOfNetwork},
+			}},
+		})
+	}
+	for _, mode := range trafficModes {
+		tests = append(tests, testCase{
+			name:          "packet at source Node to external " + mode.name,
+			networkConfig: mode.networkConfig,
+			nodeConfig:    makeNodeConfig(1, 2),
+			tfState:       &traceflowState{name: "traceflow-pod-to-ipv4", tag: 1, isSender: true},
+			pktIn: &ofctrl.PacketIn{PacketIn: &openflow15.PacketIn{
+				TableId: openflow.OutputTable.GetID(),
+				Match:   openflow15.Match{Fields: []openflow15.MatchField{*matchOutPort, *matchCTSrc}},
+				Data:    util.NewBuffer(pktBytesPodToIP),
+			}},
+			expectedCalls: func(_ *queriertest.MockAgentNetworkPolicyInfoQuerier, _ *queriertest.MockEgressQuerier) {},
+			expectedTf:    makePodToIPv4TF(),
+			expectedNodeResult: &crdv1beta1.NodeResult{Observations: []crdv1beta1.Observation{
+				{Component: crdv1beta1.ComponentSpoofGuard, Action: crdv1beta1.ActionForwarded, SrcPodIP: pod1IPv4},
+				{Component: crdv1beta1.ComponentForwarding, ComponentInfo: openflow.OutputTable.GetName(), Action: crdv1beta1.ActionForwardedOutOfNetwork},
+			}},
+		})
+	}
+	for _, mode := range trafficModes {
+		podRouteAction := crdv1beta1.ActionForwarded
+		if mode.networkConfig.TrafficEncapMode == config.TrafficEncapModeEncap && mode.networkConfig.TrafficEncryptionMode == config.TrafficEncryptionModeNone {
+			podRouteAction = crdv1beta1.ActionForwardedOutOfNetwork
+		}
+		tests = append(tests, testCase{
+			name:          "packet at source Node to remote Pod " + mode.name,
+			networkConfig: mode.networkConfig,
+			nodeConfig:    makeNodeConfig(1, 2),
+			tfState:       &traceflowState{name: "traceflow-pod-to-ipv4", tag: 1, isSender: true},
+			pktIn: &ofctrl.PacketIn{PacketIn: &openflow15.PacketIn{
+				TableId: openflow.OutputTable.GetID(),
+				Match:   openflow15.Match{Fields: []openflow15.MatchField{*matchOutPort, *matchCTSrc}},
+				Data:    util.NewBuffer(pktBytesPodToPod),
+			}},
+			expectedCalls: func(_ *queriertest.MockAgentNetworkPolicyInfoQuerier, _ *queriertest.MockEgressQuerier) {},
+			expectedTf:    makePodToIPv4TF(),
+			expectedNodeResult: &crdv1beta1.NodeResult{Observations: []crdv1beta1.Observation{
+				{Component: crdv1beta1.ComponentSpoofGuard, Action: crdv1beta1.ActionForwarded, SrcPodIP: pod1IPv4},
+				{Component: crdv1beta1.ComponentForwarding, ComponentInfo: openflow.OutputTable.GetName(), Action: podRouteAction},
+			}},
+		})
 	}
 
 	for _, tt := range tests {
@@ -832,7 +640,7 @@ func TestParsePacketIn(t *testing.T) {
 
 func TestParsePacketInLiveDuplicates(t *testing.T) {
 	networkConfig := &config.NetworkConfig{
-		TrafficEncapMode: 0,
+		TrafficEncapMode: config.TrafficEncapModeEncap,
 	}
 	nodeConfig := &config.NodeConfig{
 		TunnelOFPort: 1,

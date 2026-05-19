@@ -1259,7 +1259,8 @@ func (i *Initializer) getInterfaceMTU(transportInterface *net.Interface) (int, e
 
 	isIPv6 := i.nodeConfig.NodeIPv6Addr != nil
 	mtu -= i.networkConfig.CalculateMTUDeduction(isIPv6)
-	if i.networkConfig.TrafficEncapMode.SupportsEncap() {
+	if i.networkConfig.TrafficEncapMode.SupportsEncap() ||
+		i.networkConfig.TrafficEncapMode == config.TrafficEncapModeNoEncap && i.networkConfig.EnableEgress {
 		// See comment for ovsTunnelMaxMTU constant above.
 		mtu = min(mtu, ovsTunnelMaxMTU)
 	}
