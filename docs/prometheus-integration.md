@@ -142,9 +142,8 @@ Below is a list of metrics, provided by the components and by 3rd parties.
 #### Antrea Agent Metrics
 
 - **antrea_agent_conntrack_antrea_connection_count:** Number of connections
-in the Antrea ZoneID of the conntrack table. This metric gets updated at
-an interval specified by flowPollInterval, a configuration parameter for
-the Agent.
+in the Antrea ZoneID of the conntrack table. This metric gets updated at an
+interval specified by flowPollInterval, a configuration parameter for the Agent.
 - **antrea_agent_conntrack_max_connection_count:** Size of the conntrack
 table. This metric gets updated at an interval specified by flowPollInterval,
 a configuration parameter for the Agent.
@@ -226,6 +225,12 @@ updates received by Antrea Proxy
 
 - **aggregator_discovery_aggregation_count_total:** Counter of number of
 times discovery was aggregated
+- **aggregator_discovery_nopeer_requests_total:** Counter of number of times
+no-peer (non peer-aggregated) discovery was requested
+- **aggregator_discovery_peer_aggregated_cache_hits_total:** Counter of
+number of times discovery was served from peer-aggregated cache
+- **aggregator_discovery_peer_aggregated_cache_misses_total:** Counter of
+number of times discovery was aggregated across all API servers
 
 #### Apiserver Metrics
 
@@ -290,10 +295,10 @@ times declarative validation has panicked during validation.
 duplicate validation errors during validation.
 - **apiserver_watch_events_sizes:** Watch event size distribution in bytes
 - **apiserver_watch_events_total:** Number of events sent in watch clients
-- **apiserver_webhooks_x509_insecure_sha1_total:** Counts the number of
-requests to servers with insecure SHA1 signatures in their serving certificate
-OR the number of connection failures due to the insecure SHA1 signatures
-(either/or, based on the runtime environment)
+- **apiserver_webhooks_x509_insecure_sha1_total:** Counts the number of requests
+to servers with insecure SHA1 signatures in their serving certificate OR the
+number of connection failures due to the insecure SHA1 signatures (either/or,
+based on the runtime environment)
 - **apiserver_webhooks_x509_missing_san_total:** Counts the number of requests
 to servers missing SAN extension in their serving certificate OR the number
 of connection failures due to the lack of x509 certificate SAN extension
