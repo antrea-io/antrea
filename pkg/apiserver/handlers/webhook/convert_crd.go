@@ -22,7 +22,6 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/munnerz/goautoneg"
 	v1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	"k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1beta1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -31,6 +30,8 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/serializer/json"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/klog/v2"
+
+	"antrea.io/antrea/v2/third_party/goautoneg"
 )
 
 // convertFunc is the user defined function for any conversion. The code in this file is a
@@ -226,13 +227,12 @@ func getOutputSerializer(accept string) runtime.Serializer {
 	if len(accept) == 0 {
 		return serializers[mediaType{"application", "json"}]
 	}
-	clauses := goautoneg.ParseAccept(accept)
-	for _, clause := range clauses {
+	for _, clause := range goautoneg.ParseAccept(accept) {
+		if clause.Type == "*" && clause.SubType == "*" {
+			return serializers[mediaType{"application", "json"}]
+		}
 		for k, v := range serializers {
-			switch {
-			case clause.Type == k.Type && clause.SubType == k.SubType,
-				clause.Type == k.Type && clause.SubType == "*",
-				clause.Type == "*" && clause.SubType == "*":
+			if clause.Type == k.Type && (clause.SubType == k.SubType || clause.SubType == "*") {
 				return v
 			}
 		}

@@ -28,10 +28,7 @@ import (
 	flowpb "antrea.io/antrea/v2/pkg/apis/flow/v1alpha1"
 )
 
-var (
-	MaxRetries    = 2
-	MinExpiryTime = 100 * time.Millisecond
-)
+var MaxRetries = 2
 
 type aggregationProcess struct {
 	// flowKeyRecordMap maps each connection (5-tuple) with its records
@@ -153,27 +150,6 @@ func (a *aggregationProcess) deleteFlowKeyFromMapWithoutLock(flowKey FlowKey) er
 	}
 	delete(a.flowKeyRecordMap, flowKey)
 	return nil
-}
-
-// GetExpiryFromExpirePriorityQueue returns the earliest timestamp (active expiry
-// or inactive expiry) from expire priority queue.
-func (a *aggregationProcess) GetExpiryFromExpirePriorityQueue() time.Duration {
-	a.mutex.Lock()
-	defer a.mutex.Unlock()
-
-	currTime := a.clock.Now()
-	if a.expirePriorityQueue.Len() > 0 {
-		// Get the minExpireTime of the top item in expirePriorityQueue.
-		expiryDuration := MinExpiryTime + a.expirePriorityQueue.minExpireTime(0).Sub(currTime)
-		if expiryDuration < 0 {
-			return MinExpiryTime
-		}
-		return expiryDuration
-	}
-	if a.activeExpiryTimeout < a.inactiveExpiryTimeout {
-		return a.activeExpiryTimeout
-	}
-	return a.inactiveExpiryTimeout
 }
 
 // GetRecords returns map format flow records given a flow key.
@@ -301,15 +277,20 @@ func (a *aggregationProcess) ForAllExpiredFlowRecordsDo(callback FlowKeyRecordMa
 		if err != nil {
 			return fmt.Errorf("callback execution failed for popped flow record with key: %v, record: %v, error: %v", pqItem.flowKey, pqItem.flowRecord, err)
 		}
+
+		// We need to use !expireTime.After(currTime) and not expireTime.Before(currTime) to account for the
+		// equality case (expireTime == currTime) and match the if statement at the beginning of the for loop
+		// (which determines whether the item is expired or not).
+
 		// Delete the flow record if it is expired because of inactive expiry timeout.
-		if pqItem.inactiveExpireTime.Before(currTime) {
+		if !pqItem.inactiveExpireTime.After(currTime) {
 			if err = a.deleteFlowKeyFromMapWithoutLock(*pqItem.flowKey); err != nil {
 				return fmt.Errorf("error while deleting flow record after inactive expiry: %v", err)
 			}
 			continue
 		}
 		// Reset the expireTime for the popped item and push it to the priority queue.
-		if pqItem.activeExpireTime.Before(currTime) {
+		if !pqItem.activeExpireTime.After(currTime) {
 			// Reset the active expire timeout and push the record into priority
 			// queue.
 			pqItem.activeExpireTime = currTime.Add(a.activeExpiryTimeout)
@@ -355,10 +336,11 @@ func (a *aggregationProcess) addOrUpdateRecordInMap(flowKey *FlowKey, record *fl
 	currTime := a.clock.Now()
 	aggregationRecord, exist := a.flowKeyRecordMap[*flowKey]
 	if exist {
+		readyToSend := aggregationRecord.ReadyToSend
 		if correlationRequired {
 			// Do correlation of records if record belongs to inter-node flow and
 			// records from source and destination node are not received.
-			if !aggregationRecord.ReadyToSend && !areRecordsFromSameNode(record, aggregationRecord.Record) {
+			if !readyToSend && !areRecordsFromSameNode(record, aggregationRecord.Record) {
 				a.correlateRecords(record, aggregationRecord.Record)
 				aggregationRecord.ReadyToSend = true
 				aggregationRecord.areCorrelatedFieldsFilled = true
@@ -375,10 +357,14 @@ func (a *aggregationProcess) addOrUpdateRecordInMap(flowKey *FlowKey, record *fl
 			// flow record with existing record by updating the stats and flow timestamps.
 			a.aggregateRecords(record, aggregationRecord.Record, true, true)
 		}
-		// Reset the inactive expiry time in the queue item with updated aggregate
-		// record.
-		a.expirePriorityQueue.Update(aggregationRecord.PriorityQueueItem,
-			flowKey, aggregationRecord, aggregationRecord.PriorityQueueItem.activeExpireTime, currTime.Add(a.inactiveExpiryTimeout))
+		// Reset the inactive expiry time in the queue item with updated aggregate record.
+		// If this is the first time we have a "complete" record (ReadyToSend becomes true),
+		// export it right away by setting activeExpireTime to now.
+		activeExpireTime := aggregationRecord.PriorityQueueItem.activeExpireTime
+		if !readyToSend && aggregationRecord.ReadyToSend {
+			activeExpireTime = currTime
+		}
+		a.expirePriorityQueue.Update(aggregationRecord.PriorityQueueItem, flowKey, aggregationRecord, activeExpireTime, currTime.Add(a.inactiveExpiryTimeout))
 	} else {
 		record.Aggregation = &flowpb.Aggregation{}
 		// Add all the new stat fields and initialize them.
@@ -420,7 +406,12 @@ func (a *aggregationProcess) addOrUpdateRecordInMap(flowKey *FlowKey, record *fl
 		aggregationRecord.PriorityQueueItem = pqItem
 
 		pqItem.flowRecord = aggregationRecord
-		pqItem.activeExpireTime = currTime.Add(a.activeExpiryTimeout)
+		// If no correlation is required and the record is ReadyToSend, export it right away.
+		if aggregationRecord.ReadyToSend {
+			pqItem.activeExpireTime = currTime
+		} else {
+			pqItem.activeExpireTime = currTime.Add(a.activeExpiryTimeout)
+		}
 		pqItem.inactiveExpireTime = currTime.Add(a.inactiveExpiryTimeout)
 		heap.Push(&a.expirePriorityQueue, pqItem)
 	}

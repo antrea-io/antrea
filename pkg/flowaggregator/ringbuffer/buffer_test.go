@@ -730,12 +730,48 @@ func runBenchConsumer(
 	}
 }
 
-func benchmarkSingleProduce(b *testing.B, newHandler func() batchHandler) {
+func runBenchConsumerSingle(
+	c Consumer[*foo],
+	id int,
+	progress *consumerProgress,
+	stats *consumeStats,
+	handler batchHandler,
+) {
+	out := make([]*foo, 0, benchBatchSize)
+
+	for {
+		out = out[:0]
+		var shutdown bool
+		for range benchBatchSize {
+			val, n, lost, s := c.Consume()
+			if lost > 0 {
+				panic(fmt.Sprintf("consumer %d: lost %d items", id, lost))
+			}
+			if n > 0 {
+				out = append(out, val)
+			}
+			if s {
+				shutdown = true
+				break
+			}
+		}
+		stats.record(len(out))
+		if len(out) > 0 {
+			handler(out)
+			progress.add(id, len(out))
+		}
+		if shutdown {
+			return
+		}
+	}
+}
+
+func benchmarkSingleProduceConsumeMultiple(b *testing.B, newHandler func() batchHandler) {
 	items := generateItems(benchTotalItems)
 	var stats consumeStats
 	b.ResetTimer()
 
-	for iter := 0; iter < b.N; iter++ {
+	for b.Loop() {
 		buf := NewBroadcastBuffer[*foo](benchBufSize)
 		progress := newConsumerProgress(benchNumConsumers)
 
@@ -770,12 +806,12 @@ func benchmarkSingleProduce(b *testing.B, newHandler func() batchHandler) {
 	b.Logf("avg ConsumeMultiple batch size: %.1f", stats.avgBatchSize())
 }
 
-func benchmarkBatchProduce(b *testing.B, newHandler func() batchHandler) {
+func benchmarkBatchProduceConsumeMultiple(b *testing.B, newHandler func() batchHandler) {
 	items := generateItems(benchTotalItems)
 	var stats consumeStats
 	b.ResetTimer()
 
-	for iter := 0; iter < b.N; iter++ {
+	for b.Loop() {
 		buf := NewBroadcastBuffer[*foo](benchBufSize)
 		progress := newConsumerProgress(benchNumConsumers)
 
@@ -815,22 +851,127 @@ func benchmarkBatchProduce(b *testing.B, newHandler func() batchHandler) {
 	b.Logf("avg ConsumeMultiple batch size: %.1f", stats.avgBatchSize())
 }
 
+func benchmarkSingleProduceConsumeSingle(b *testing.B, newHandler func() batchHandler) {
+	items := generateItems(benchTotalItems)
+	var stats consumeStats
+	b.ResetTimer()
+
+	for b.Loop() {
+		buf := NewBroadcastBuffer[*foo](benchBufSize)
+		progress := newConsumerProgress(benchNumConsumers)
+
+		var wg sync.WaitGroup
+		for ci := 0; ci < benchNumConsumers; ci++ {
+			wg.Add(1)
+			c := buf.NewConsumer(WithMaxConsumeDeadline(benchConsumerDeadline))
+			id := ci
+			handler := newHandler()
+			go func() {
+				defer wg.Done()
+				runBenchConsumerSingle(c, id, progress, &stats, handler)
+			}()
+		}
+
+		produced := 0
+		for produced < benchTotalItems {
+			minConsumed := progress.minConsumed()
+			pending := int64(produced) - minConsumed
+			if pending >= benchBackpressure {
+				runtime.Gosched()
+				continue
+			}
+			buf.Produce(items[produced])
+			produced++
+		}
+		buf.Shutdown()
+
+		wg.Wait()
+	}
+
+	b.Logf("avg Consume batch size: %.1f", stats.avgBatchSize())
+}
+
+func benchmarkBatchProduceConsumeSingle(b *testing.B, newHandler func() batchHandler) {
+	items := generateItems(benchTotalItems)
+	var stats consumeStats
+	b.ResetTimer()
+
+	for b.Loop() {
+		buf := NewBroadcastBuffer[*foo](benchBufSize)
+		progress := newConsumerProgress(benchNumConsumers)
+
+		var wg sync.WaitGroup
+		for ci := 0; ci < benchNumConsumers; ci++ {
+			wg.Add(1)
+			c := buf.NewConsumer(WithMaxConsumeDeadline(benchConsumerDeadline))
+			id := ci
+			handler := newHandler()
+			go func() {
+				defer wg.Done()
+				runBenchConsumerSingle(c, id, progress, &stats, handler)
+			}()
+		}
+
+		produced := 0
+		for produced < benchTotalItems {
+			minConsumed := progress.minConsumed()
+			pending := int64(produced) - minConsumed
+			if pending >= benchBackpressure {
+				runtime.Gosched()
+				continue
+			}
+			end := produced + benchBatchSize
+			if end > benchTotalItems {
+				end = benchTotalItems
+			}
+			batch := items[produced:end]
+			buf.ProduceMultiple(batch)
+			produced += len(batch)
+		}
+		buf.Shutdown()
+
+		wg.Wait()
+	}
+
+	b.Logf("avg Consume batch size: %.1f", stats.avgBatchSize())
+}
+
 // ---------------------------------------------------------------------------
 // Benchmark entry points
 // ---------------------------------------------------------------------------
 
-func BenchmarkSingleProduceJSON(b *testing.B) {
-	benchmarkSingleProduce(b, jsonBatchHandler)
+// ConsumeMultiple-based consumers.
+
+func BenchmarkSingleProduceConsumeMultipleJSON(b *testing.B) {
+	benchmarkSingleProduceConsumeMultiple(b, jsonBatchHandler)
 }
 
-func BenchmarkBatchProduceJSON(b *testing.B) {
-	benchmarkBatchProduce(b, jsonBatchHandler)
+func BenchmarkBatchProduceConsumeMultipleJSON(b *testing.B) {
+	benchmarkBatchProduceConsumeMultiple(b, jsonBatchHandler)
 }
 
-func BenchmarkSingleProduceNoop(b *testing.B) {
-	benchmarkSingleProduce(b, noopBatchHandler)
+func BenchmarkSingleProduceConsumeMultipleNoop(b *testing.B) {
+	benchmarkSingleProduceConsumeMultiple(b, noopBatchHandler)
 }
 
-func BenchmarkBatchProduceNoop(b *testing.B) {
-	benchmarkBatchProduce(b, noopBatchHandler)
+func BenchmarkBatchProduceConsumeMultipleNoop(b *testing.B) {
+	benchmarkBatchProduceConsumeMultiple(b, noopBatchHandler)
+}
+
+// Consume-based consumers (benchBatchSize calls per handler invocation).
+
+func BenchmarkSingleProduceConsumeJSON(b *testing.B) {
+	benchmarkSingleProduceConsumeSingle(b, jsonBatchHandler)
+}
+
+func BenchmarkBatchProduceConsumeJSON(b *testing.B) {
+	benchmarkBatchProduceConsumeSingle(b, jsonBatchHandler)
+}
+
+func BenchmarkSingleProduceConsumeNoop(b *testing.B) {
+	benchmarkSingleProduceConsumeSingle(b, noopBatchHandler)
+}
+
+func BenchmarkBatchProduceConsumeNoop(b *testing.B) {
+	benchmarkBatchProduceConsumeSingle(b, noopBatchHandler)
 }

@@ -27,6 +27,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/aws"
 	awsconfig "github.com/aws/aws-sdk-go-v2/config"
 	s3manager "github.com/aws/aws-sdk-go-v2/feature/s3/manager"
+	"github.com/aws/aws-sdk-go-v2/feature/s3/transfermanager"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"k8s.io/klog/v2"
 
@@ -77,8 +78,8 @@ type S3UploadProcess struct {
 	gzipWriter      *gzip.Writer
 	// awsS3Client is used to initialize awsS3Uploader
 	awsS3Client *s3.Client
-	// awsS3Uploader makes the real call to aws-sdk Upload() method to upload an object to S3
-	awsS3Uploader *s3manager.Uploader
+	// awsS3Uploader makes the real call to aws-sdk UploadObject() method to upload an object to S3
+	awsS3Uploader *transfermanager.Client
 	// s3UploaderAPI wraps the call made by awsS3Uploader
 	s3UploaderAPI S3UploaderAPI
 	clusterUUID   string
@@ -91,15 +92,15 @@ type S3Input struct {
 
 // Define a wrapper interface S3UploaderAPI to assist unit testing.
 type S3UploaderAPI interface {
-	Upload(ctx context.Context, input *s3.PutObjectInput, awsS3Uploader *s3manager.Uploader, opts ...func(*s3manager.Uploader)) (
-		*s3manager.UploadOutput, error,
+	Upload(ctx context.Context, input *transfermanager.UploadObjectInput, awsS3Uploader *transfermanager.Client, opts ...func(*transfermanager.Options)) (
+		*transfermanager.UploadObjectOutput, error,
 	)
 }
 
 type S3Uploader struct{}
 
-func (u *S3Uploader) Upload(ctx context.Context, input *s3.PutObjectInput, awsS3Uploader *s3manager.Uploader, opts ...func(*s3manager.Uploader)) (*s3manager.UploadOutput, error) {
-	return awsS3Uploader.Upload(ctx, input, opts...)
+func (u *S3Uploader) Upload(ctx context.Context, input *transfermanager.UploadObjectInput, awsS3Uploader *transfermanager.Client, opts ...func(*transfermanager.Options)) (*transfermanager.UploadObjectOutput, error) {
+	return awsS3Uploader.UploadObject(ctx, input, opts...)
 }
 
 // getBucketRegion determines the exact region in which the bucket is
@@ -131,7 +132,7 @@ func NewS3UploadProcess(input S3Input, clusterUUID string) (*S3UploadProcess, er
 		return nil, fmt.Errorf("error when loading AWS config: %w", err)
 	}
 	awsS3Client := s3.NewFromConfig(awsCfg)
-	awsS3Uploader := s3manager.NewUploader(awsS3Client)
+	awsS3Uploader := transfermanager.New(awsS3Client)
 
 	buf := &bytes.Buffer{}
 
@@ -196,7 +197,7 @@ func (p *S3UploadProcess) UpdateS3Uploader(bucketName, bucketPrefix, region stri
 		}
 		p.region = region
 		p.awsS3Client = s3.NewFromConfig(cfg)
-		p.awsS3Uploader = s3manager.NewUploader(p.awsS3Client)
+		p.awsS3Uploader = transfermanager.New(p.awsS3Client)
 	}
 	return nil
 }
@@ -345,7 +346,7 @@ func (p *S3UploadProcess) uploadFile(ctx context.Context, reader *bytes.Reader) 
 	if p.bucketPrefix != "" {
 		key = fmt.Sprintf("%s/%s", p.bucketPrefix, fileName)
 	}
-	if _, err := p.s3UploaderAPI.Upload(ctx, &s3.PutObjectInput{
+	if _, err := p.s3UploaderAPI.Upload(ctx, &transfermanager.UploadObjectInput{
 		Bucket: aws.String(p.bucketName),
 		Key:    aws.String(key),
 		Body:   reader,

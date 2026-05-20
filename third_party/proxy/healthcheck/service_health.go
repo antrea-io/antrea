@@ -49,7 +49,6 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/lithammer/dedent"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
@@ -249,16 +248,16 @@ func (h hcHandler) ServeHTTP(resp http.ResponseWriter, req *http.Request) {
 	} else {
 		resp.WriteHeader(http.StatusServiceUnavailable)
 	}
-	fmt.Fprint(resp, strings.Trim(dedent.Dedent(fmt.Sprintf(`
-		{
-			"service": {
-				"namespace": %q,
-				"name": %q
-			},
-			"localEndpoints": %d,
-			"serviceProxyHealthy": %v
-		}
-		`, h.name.Namespace, h.name.Name, count, kubeProxyHealthy)), "\n"))
+	fmt.Fprint(resp, strings.TrimSpace(fmt.Sprintf(`
+{
+	"service": {
+		"namespace": %q,
+		"name": %q
+	},
+	"localEndpoints": %d,
+	"serviceProxyHealthy": %v
+}
+`, h.name.Namespace, h.name.Name, count, kubeProxyHealthy)))
 }
 
 func (hcs *server) SyncEndpoints(newEndpoints map[types.NamespacedName]int) error {

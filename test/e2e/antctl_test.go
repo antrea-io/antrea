@@ -208,7 +208,6 @@ func testAntctlVerboseMode(t *testing.T, data *TestData) {
 		{name: "CommandNonVerbose", hasStderr: false, commands: []string{"antctl", "version"}},
 		{name: "CommandVerbose", hasStderr: true, commands: []string{"antctl", "-v", "version"}},
 	} {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 			t.Logf("Running command `%s` on pod %s", tc.commands, podName)

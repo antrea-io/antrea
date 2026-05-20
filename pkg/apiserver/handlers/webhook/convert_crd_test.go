@@ -142,6 +142,69 @@ func TestDoConversionV1(t *testing.T) {
 	}
 }
 
+func TestGetOutputSerializer(t *testing.T) {
+	testCases := []struct {
+		name       string
+		accept     string
+		expectNil  bool
+		expectYAML bool
+		expectJSON bool
+	}{
+		{
+			name:       "empty accept defaults to JSON",
+			accept:     "",
+			expectJSON: true,
+		},
+		{
+			name:       "explicit JSON",
+			accept:     "application/json",
+			expectJSON: true,
+		},
+		{
+			name:       "explicit YAML",
+			accept:     "application/yaml",
+			expectYAML: true,
+		},
+		{
+			name:       "wildcard defaults to JSON",
+			accept:     "*/*",
+			expectJSON: true,
+		},
+		{
+			name:       "YAML preferred over JSON via q-value",
+			accept:     "application/json;q=0.5, application/yaml;q=0.9",
+			expectYAML: true,
+		},
+		{
+			name:       "JSON preferred via q-value",
+			accept:     "application/json;q=0.9, application/yaml;q=0.5",
+			expectJSON: true,
+		},
+		{
+			name:      "unsupported media type",
+			accept:    "text/html",
+			expectNil: true,
+		},
+	}
+	jsonSerializer := serializers[mediaType{"application", "json"}]
+	yamlSerializer := serializers[mediaType{"application", "yaml"}]
+	for _, tt := range testCases {
+		t.Run(tt.name, func(t *testing.T) {
+			got := getOutputSerializer(tt.accept)
+			switch {
+			case tt.expectNil:
+				assert.Nil(t, got)
+			case tt.expectYAML:
+				assert.Equal(t, yamlSerializer, got)
+			case tt.expectJSON:
+				assert.Equal(t, jsonSerializer, got)
+			default:
+				assert.Contains(t, []runtime.Serializer{jsonSerializer, yamlSerializer}, got)
+			}
+		})
+	}
+}
+
 func newTestConversionReview(data []byte) *apiextensionsv1.ConversionReview {
 	return &apiextensionsv1.ConversionReview{
 		TypeMeta: metav1.TypeMeta{

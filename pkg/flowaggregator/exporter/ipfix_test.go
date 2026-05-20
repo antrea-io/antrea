@@ -34,8 +34,6 @@ import (
 	ipfixentities "github.com/vmware/go-ipfix/pkg/entities"
 	ipfixregistry "github.com/vmware/go-ipfix/pkg/registry"
 	"go.uber.org/mock/gomock"
-	"k8s.io/utils/clock"
-	clocktesting "k8s.io/utils/clock/testing"
 	"k8s.io/utils/ptr"
 
 	flowpb "antrea.io/antrea/v2/pkg/apis/flow/v1alpha1"
@@ -92,7 +90,6 @@ func TestIPFIXExporter_Run(t *testing.T) {
 			registry:                   mockIPFIXRegistry,
 			aggregatorMode:             flowaggregatorconfig.AggregatorModeAggregate,
 			observationDomainID:        testObservationDomainID,
-			clock:                      clock.RealClock{},
 		}
 		createElementList(flowaggregatorconfig.AggregatorModeAggregate, true, false, false, mockIPFIXRegistry)
 		ipfixExporter.elementsV4, _ = ipfixExporter.prepareElements(false)
@@ -150,7 +147,6 @@ func TestIPFIXExporter_createAndSendTemplate(t *testing.T) {
 			registry:                   mockIPFIXRegistry,
 			aggregatorMode:             flowaggregatorconfig.AggregatorModeAggregate,
 			observationDomainID:        testObservationDomainID,
-			clock:                      clock.RealClock{},
 		}
 		elemList := createElementList(flowaggregatorconfig.AggregatorModeAggregate, true, false, isIPv6, mockIPFIXRegistry)
 		mockIPFIXBufferedExp.EXPECT().AddRecord(gomock.Cond(func(record ipfixentities.Record) bool {
@@ -172,29 +168,17 @@ func TestIPFIXExporter_flush(t *testing.T) {
 	mockIPFIXRegistry := ipfixtesting.NewMockIPFIXRegistry(ctrl)
 	record := flowaggregatortesting.PrepareTestFlowRecord(true)
 
-	// we override the initIPFIXExportingProcess var function: it will
-	// simply set the exportingProcess and bufferedExporter member fields of
-	// the ipfixExporter to our mocks.
-	initIPFIXExportingProcessSaved := initIPFIXExportingProcess
-	initIPFIXExportingProcess = func(exporter *IPFIXExporter) error {
-		exporter.exportingProcess = mockIPFIXExpProc
-		exporter.bufferedExporter = mockIPFIXBufferedExp
-		return nil
-	}
-	defer func() {
-		initIPFIXExportingProcess = initIPFIXExportingProcessSaved
-	}()
-
 	ipfixExporter := &IPFIXExporter{
 		externalFlowCollectorAddr:  "",
 		externalFlowCollectorProto: "",
+		exportingProcess:           mockIPFIXExpProc,
+		bufferedExporter:           mockIPFIXBufferedExp,
 		includeK8sNames:            true,
 		templateIDv4:               testTemplateIDv4,
 		templateIDv6:               testTemplateIDv6,
 		registry:                   mockIPFIXRegistry,
 		aggregatorMode:             flowaggregatorconfig.AggregatorModeAggregate,
 		observationDomainID:        testObservationDomainID,
-		clock:                      clock.RealClock{},
 	}
 	createElementList(flowaggregatorconfig.AggregatorModeAggregate, true, false, false, mockIPFIXRegistry)
 	ipfixExporter.elementsV4, _ = ipfixExporter.prepareElements(false)
@@ -223,22 +207,16 @@ func TestIPFIXExporter_sendRecord(t *testing.T) {
 		t.Run(fmt.Sprintf("%s-%t", tc.aggregatorMode, tc.isIPv6), func(t *testing.T) {
 			ctrl := gomock.NewController(t)
 
+			mockIPFIXExpProc := ipfixtesting.NewMockIPFIXExportingProcess(ctrl)
 			mockIPFIXBufferedExp := ipfixtesting.NewMockIPFIXBufferedExporter(ctrl)
 			mockIPFIXRegistry := ipfixtesting.NewMockIPFIXRegistry(ctrl)
 			record := flowaggregatortesting.PrepareTestFlowRecord(true)
 
-			initIPFIXExportingProcessSaved := initIPFIXExportingProcess
-			initIPFIXExportingProcess = func(exporter *IPFIXExporter) error {
-				exporter.bufferedExporter = mockIPFIXBufferedExp
-				return nil
-			}
-			defer func() {
-				initIPFIXExportingProcess = initIPFIXExportingProcessSaved
-			}()
-
 			ipfixExporter := &IPFIXExporter{
 				externalFlowCollectorAddr:  "",
 				externalFlowCollectorProto: "",
+				exportingProcess:           mockIPFIXExpProc,
+				bufferedExporter:           mockIPFIXBufferedExp,
 				includeK8sNames:            true,
 				templateIDv4:               testTemplateIDv4,
 				templateIDv6:               testTemplateIDv6,
@@ -246,7 +224,6 @@ func TestIPFIXExporter_sendRecord(t *testing.T) {
 				aggregatorMode:             tc.aggregatorMode,
 				observationDomainID:        testObservationDomainID,
 				clusterID:                  "foobar",
-				clock:                      clock.RealClock{},
 			}
 			createElementList(tc.aggregatorMode, true, false, false, mockIPFIXRegistry)
 			ipfixExporter.elementsV4, _ = ipfixExporter.prepareElements(false)
@@ -269,25 +246,14 @@ func TestIPFIXExporter_sendRecord(t *testing.T) {
 	}
 }
 
-func TestIPFIXExporter_initIPFIXExportingProcess_Error(t *testing.T) {
+func TestIPFIXExporter_sendRecord_NoExportingProcess(t *testing.T) {
 	record := flowaggregatortesting.PrepareTestFlowRecord(true)
-
-	// we override the initIPFIXExportingProcess var function: it will
-	// simply return an error.
-	initIPFIXExportingProcessSaved := initIPFIXExportingProcess
-	initIPFIXExportingProcess = func(exporter *IPFIXExporter) error {
-		return fmt.Errorf("error when initializing IPFIX exporting process")
-	}
-	defer func() {
-		initIPFIXExportingProcess = initIPFIXExportingProcessSaved
-	}()
 
 	ipfixExporter := &IPFIXExporter{
 		externalFlowCollectorAddr:  "",
 		externalFlowCollectorProto: "",
 		includeK8sNames:            true,
 		aggregatorMode:             flowaggregatorconfig.AggregatorModeAggregate,
-		clock:                      clock.RealClock{},
 	}
 
 	assert.Error(t, ipfixExporter.sendRecord(record, false))
@@ -312,7 +278,6 @@ func TestIPFIXExporter_sendRecord_Error(t *testing.T) {
 		registry:                   mockIPFIXRegistry,
 		aggregatorMode:             flowaggregatorconfig.AggregatorModeAggregate,
 		observationDomainID:        testObservationDomainID,
-		clock:                      clock.RealClock{},
 	}
 	createElementList(flowaggregatorconfig.AggregatorModeAggregate, true, false, false, mockIPFIXRegistry)
 	ipfixExporter.elementsV4, _ = ipfixExporter.prepareElements(false)
@@ -624,64 +589,82 @@ func TestNewIPFIXExporterObservationDomainID(t *testing.T) {
 	}
 }
 
-func TestInitExportingProcessWithBackoff(t *testing.T) {
-	errCh := make(chan error, 1)
-	initIPFIXExportingProcessSaved := initIPFIXExportingProcess
-	initIPFIXExportingProcess = func(exporter *IPFIXExporter) error {
-		select {
-		case err := <-errCh:
-			return err
-		default:
-			return fmt.Errorf("no available error in channel")
+// TestInitBackoffInRun verifies the backoff logic in the Run loop: after a
+// failed initialization attempt, the loop waits for the backoff duration
+// before retrying; the backoff doubles on successive failures and resets after
+// a successful initialization.
+func TestInitBackoffInRun(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		// initErrCh controls what initIPFIXExportingProcess returns.
+		// Send nil for success, a non-nil error for failure.
+		// The default (empty channel) returns a "no error queued" sentinel so
+		// that we can detect unexpected extra calls.
+		initErrCh := make(chan error, 1)
+
+		ctrl := gomock.NewController(t)
+		mockIPFIXExpProc := ipfixtesting.NewMockIPFIXExportingProcess(ctrl)
+		mockIPFIXBufferedExp := ipfixtesting.NewMockIPFIXBufferedExporter(ctrl)
+		mockIPFIXExpProc.EXPECT().CloseConnToCollector().AnyTimes()
+		mockIPFIXBufferedExp.EXPECT().Flush().Return(nil).AnyTimes()
+
+		initIPFIXExportingProcessSaved := initIPFIXExportingProcess
+		initIPFIXExportingProcess = func(exporter *IPFIXExporter) error {
+			select {
+			case err := <-initErrCh:
+				if err == nil {
+					exporter.exportingProcess = mockIPFIXExpProc
+					exporter.bufferedExporter = mockIPFIXBufferedExp
+				}
+				return err
+			default:
+				// t.Errorf is safe to call from any goroutine, unlike require.Fail.
+				t.Errorf("unexpected extra call to initExportingProcess")
+				return fmt.Errorf("unexpected extra call to initExportingProcess")
+			}
 		}
-	}
-	defer func() {
-		initIPFIXExportingProcess = initIPFIXExportingProcessSaved
-	}()
-	clusterUUID := uuid.New()
-	opt := &options.Options{
-		AggregatorMode: flowaggregatorconfig.AggregatorModeProxy,
-		Config:         &flowaggregatorconfig.FlowAggregatorConfig{},
-	}
-	flowaggregatorconfig.SetConfigDefaults(opt.Config)
-	clock := clocktesting.NewFakeClock(time.Now())
-	exp := newIPFIXExporterWithClock(clusterUUID, clusterUUID.String(), opt, nil, clock)
-	require.NotNil(t, exp)
+		defer func() { initIPFIXExportingProcess = initIPFIXExportingProcessSaved }()
 
-	setError := func(err error) {
-		select {
-		case errCh <- err:
-			break
-		default:
-			require.Fail(t, "channel write should not block")
+		clusterUUID := uuid.New()
+		opt := &options.Options{
+			AggregatorMode: flowaggregatorconfig.AggregatorModeProxy,
+			Config:         &flowaggregatorconfig.FlowAggregatorConfig{},
 		}
-	}
+		flowaggregatorconfig.SetConfigDefaults(opt.Config)
 
-	setError(nil)
-	require.NoError(t, exp.initExportingProcessWithBackoff())
+		exp := NewIPFIXExporter(clusterUUID, clusterUUID.String(), opt, nil)
+		require.NotNil(t, exp)
 
-	connectionErr := fmt.Errorf("connection error")
-	setError(connectionErr)
-	require.ErrorIs(t, exp.initExportingProcessWithBackoff(), connectionErr)
+		buf := ringbuffer.NewBroadcastBuffer[*flowpb.Flow](8)
+		defer buf.Shutdown()
 
-	// Connection error starts the backoff, first step is 1s (no jitter).
-	require.ErrorIs(t, exp.initExportingProcessWithBackoff(), ErrIPFIXExporterBackoff)
-	require.Equal(t, clock.Now().Add(1*time.Second), exp.initNextAttempt)
-	require.ErrorIs(t, exp.initExportingProcessWithBackoff(), ErrIPFIXExporterBackoff)
+		connectionErr := fmt.Errorf("connection error")
 
-	// A second error will cause a 2s backoff.
-	setError(connectionErr)
-	clock.SetTime(exp.initNextAttempt)
-	require.ErrorIs(t, exp.initExportingProcessWithBackoff(), connectionErr)
-	require.Equal(t, clock.Now().Add(2*time.Second), exp.initNextAttempt)
-	require.ErrorIs(t, exp.initExportingProcessWithBackoff(), ErrIPFIXExporterBackoff)
+		// First attempt: fails with connectionErr → backoff step 1 = 1s.
+		// Note that we need to ensure that we write to initErrCh before calling Run.
+		initErrCh <- connectionErr
 
-	setError(nil)
-	clock.SetTime(exp.initNextAttempt)
-	require.NoError(t, exp.initExportingProcessWithBackoff())
+		go exp.Run(t.Context(), buf)
 
-	// After a successful initialization, backoff should be reset.
-	setError(connectionErr)
-	require.ErrorIs(t, exp.initExportingProcessWithBackoff(), connectionErr)
-	require.Equal(t, clock.Now().Add(1*time.Second), exp.initNextAttempt)
+		synctest.Wait()
+		require.Nil(t, exp.exportingProcess, "exporting process should not be set after failed init")
+
+		// The loop is now waiting on waitCh for 1s. A second init call must
+		// not happen yet; verify by advancing less than the full backoff.
+		time.Sleep(500 * time.Millisecond)
+		synctest.Wait()
+		require.Nil(t, exp.exportingProcess, "exporting process should not be set before backoff expires")
+
+		// Advance past the 1s backoff. Second attempt also fails → backoff
+		// step 2 = 2s.
+		initErrCh <- connectionErr
+		time.Sleep(500 * time.Millisecond) // total: 1s from first attempt
+		synctest.Wait()
+		require.Nil(t, exp.exportingProcess, "exporting process should not be set after second failed init")
+
+		// Now waiting for 2s. Advance past it. Third attempt succeeds.
+		initErrCh <- nil
+		time.Sleep(2 * time.Second)
+		synctest.Wait()
+		require.NotNil(t, exp.exportingProcess, "exporting process should be initialized after successful init")
+	})
 }

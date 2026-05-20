@@ -31,7 +31,6 @@ import (
 
 func init() {
 	MaxRetries = 1
-	MinExpiryTime = 0
 }
 
 const (
@@ -431,51 +430,6 @@ func TestDeleteFlowKeyFromMapWithLock(t *testing.T) {
 	assert.Empty(t, aggregationProcess.flowKeyRecordMap)
 }
 
-func TestGetExpiryFromExpirePriorityQueue(t *testing.T) {
-	recordChan := make(chan *flowpb.Flow)
-	input := AggregationInput{
-		RecordChan:            recordChan,
-		WorkerNum:             2,
-		ActiveExpiryTimeout:   testActiveExpiry,
-		InactiveExpiryTimeout: testInactiveExpiry,
-	}
-	ap, _ := InitAggregationProcess(input)
-	// Add records with IPv4 fields.
-	recordIPv4Src := createFlowRecordForSrc(false, flowpb.FlowType_FLOW_TYPE_INTER_NODE, false, flowpb.NetworkPolicyRuleAction_NETWORK_POLICY_RULE_ACTION_NO_ACTION)
-	recordIPv4Dst := createFlowRecordForDst(false, flowpb.FlowType_FLOW_TYPE_INTER_NODE, false, flowpb.NetworkPolicyRuleAction_NETWORK_POLICY_RULE_ACTION_NO_ACTION)
-	// Add records with IPv6 fields.
-	recordIPv6Src := createFlowRecordForSrc(true, flowpb.FlowType_FLOW_TYPE_INTER_NODE, false, flowpb.NetworkPolicyRuleAction_NETWORK_POLICY_RULE_ACTION_NO_ACTION)
-	recordIPv6Dst := createFlowRecordForDst(true, flowpb.FlowType_FLOW_TYPE_INTER_NODE, false, flowpb.NetworkPolicyRuleAction_NETWORK_POLICY_RULE_ACTION_NO_ACTION)
-	testCases := []struct {
-		name    string
-		records []*flowpb.Flow
-	}{
-		{
-			"empty queue",
-			nil,
-		},
-		{
-			"One aggregation record",
-			[]*flowpb.Flow{recordIPv4Src, recordIPv4Dst},
-		},
-		{
-			"Two aggregation records",
-			[]*flowpb.Flow{recordIPv4Src, recordIPv4Dst, recordIPv6Src, recordIPv6Dst},
-		},
-	}
-
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			for _, record := range tc.records {
-				flowKey, isIPv4 := getFlowKeyFromRecord(record)
-				ap.addOrUpdateRecordInMap(flowKey, record, isIPv4)
-			}
-			expiryTime := ap.GetExpiryFromExpirePriorityQueue()
-			assert.LessOrEqualf(t, expiryTime.Nanoseconds(), testActiveExpiry.Nanoseconds(), "incorrect expiry time")
-		})
-	}
-}
-
 func assertElementMap(t *testing.T, record map[string]interface{}, ipv6 bool) {
 	if ipv6 {
 		assert.Equal(t, net.ParseIP("2001:0:3238:dfe1:63::fefb"), record["sourceIPv6Address"])
@@ -683,13 +637,19 @@ func TestForAllExpiredFlowRecordsDo(t *testing.T) {
 }
 
 func runCorrelationAndCheckResult(t *testing.T, ap *aggregationProcess, clock *clocktesting.FakeClock, record1, record2 *flowpb.Flow, isIPv6 bool, flowType flowpb.FlowType, needsCorrelation bool) {
+	const recordDelay = 10 * time.Millisecond
 	flowKey1, isIPv4 := getFlowKeyFromRecord(record1)
 	ap.addOrUpdateRecordInMap(flowKey1, record1, isIPv4)
 	item := ap.expirePriorityQueue.Peek()
-	oldActiveExpiryTime := item.activeExpireTime
-	oldInactiveExpiryTime := item.inactiveExpireTime
-	if flowType != flowpb.FlowType_FLOW_TYPE_INTRA_NODE && needsCorrelation {
-		clock.Step(10 * time.Millisecond)
+	if !needsCorrelation {
+		// no correlation needed, immediate export requested
+		assert.Equal(t, clock.Now(), item.activeExpireTime)
+	} else {
+		assert.Equal(t, clock.Now().Add(ap.activeExpiryTimeout), item.activeExpireTime)
+	}
+	assert.Equal(t, clock.Now().Add(ap.inactiveExpiryTimeout), item.inactiveExpireTime)
+	if needsCorrelation {
+		clock.Step(recordDelay)
 		flowKey2, isIPv4 := getFlowKeyFromRecord(record2)
 		assert.Equalf(t, *flowKey1, *flowKey2, "flow keys should be equal.")
 		ap.addOrUpdateRecordInMap(flowKey2, record2, isIPv4)
@@ -699,9 +659,9 @@ func runCorrelationAndCheckResult(t *testing.T, ap *aggregationProcess, clock *c
 	aggRecord := ap.flowKeyRecordMap[*flowKey1]
 	item = ap.expirePriorityQueue.Peek()
 	assert.Equal(t, *aggRecord, *item.flowRecord)
-	assert.Equal(t, oldActiveExpiryTime, item.activeExpireTime)
-	if flowType != flowpb.FlowType_FLOW_TYPE_INTRA_NODE && needsCorrelation {
-		assert.Equal(t, oldInactiveExpiryTime.Add(10*time.Millisecond), item.inactiveExpireTime)
+	assert.Equal(t, clock.Now().Add(ap.inactiveExpiryTimeout), item.inactiveExpireTime)
+	if needsCorrelation {
+		assert.Equal(t, clock.Now(), item.activeExpireTime)
 		assert.True(t, ap.AreCorrelatedFieldsFilled(*aggRecord))
 	}
 	if flowType == flowpb.FlowType_FLOW_TYPE_INTRA_NODE || needsCorrelation {
@@ -726,22 +686,27 @@ func runCorrelationAndCheckResult(t *testing.T, ap *aggregationProcess, clock *c
 }
 
 func runAggregationAndCheckResult(t *testing.T, ap *aggregationProcess, clock *clocktesting.FakeClock, srcRecord, dstRecord, srcRecordLatest, dstRecordLatest *flowpb.Flow, isIntraNode bool) {
+	const recordDelay = 10 * time.Millisecond
 	flowKey, isIPv4 := getFlowKeyFromRecord(srcRecord)
+	var lastUpdatedTime time.Time
 	addOrUpdateRecordInMap := func(record *flowpb.Flow) {
 		ap.addOrUpdateRecordInMap(flowKey, record, isIPv4)
-		clock.Step(10 * time.Millisecond)
+		lastUpdatedTime = clock.Now()
 	}
 
 	addOrUpdateRecordInMap(srcRecord)
 	item := ap.expirePriorityQueue.Peek()
-	oldActiveExpiryTime := item.activeExpireTime
-	oldInactiveExpiryTime := item.inactiveExpireTime
+	assert.Equal(t, clock.Now().Add(ap.inactiveExpiryTimeout), item.inactiveExpireTime)
 
 	if !isIntraNode {
+		clock.Step(recordDelay)
 		addOrUpdateRecordInMap(dstRecord)
 	}
+	readyToSendTime := clock.Now()
+	clock.Step(recordDelay)
 	addOrUpdateRecordInMap(srcRecordLatest)
 	if !isIntraNode {
+		clock.Step(recordDelay)
 		addOrUpdateRecordInMap(dstRecordLatest)
 	}
 	assert.Equal(t, int64(1), ap.GetNumFlows())
@@ -749,10 +714,8 @@ func runAggregationAndCheckResult(t *testing.T, ap *aggregationProcess, clock *c
 	aggRecord := ap.flowKeyRecordMap[*flowKey]
 	item = ap.expirePriorityQueue.Peek()
 	assert.Equal(t, *aggRecord, *item.flowRecord)
-	assert.Equal(t, oldActiveExpiryTime, item.activeExpireTime)
-	if !isIntraNode {
-		assert.NotEqual(t, oldInactiveExpiryTime, item.inactiveExpireTime)
-	}
+	assert.Equal(t, readyToSendTime, item.activeExpireTime)
+	assert.Equal(t, lastUpdatedTime.Add(ap.inactiveExpiryTimeout), item.inactiveExpireTime)
 	assert.Equal(t, "pod1", aggRecord.Record.K8S.SourcePodName)
 	assert.Equal(t, "pod2", aggRecord.Record.K8S.DestinationPodName)
 	assert.Equal(t, netip.MustParseAddr("192.168.0.1").AsSlice(), aggRecord.Record.K8S.DestinationClusterIp)

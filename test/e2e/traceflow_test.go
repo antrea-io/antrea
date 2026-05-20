@@ -18,12 +18,10 @@ import (
 	"context"
 	"fmt"
 	"net"
-	"reflect"
 	"strings"
 	"testing"
 	"time"
 
-	"github.com/davecgh/go-spew/spew"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
@@ -304,7 +302,6 @@ func testTraceflowIntraNodeANNP(t *testing.T, data *TestData) {
 	}
 	t.Run("traceflowANNPGroupTest", func(t *testing.T) {
 		for _, tc := range testcases {
-			tc := tc
 			t.Run(tc.name, func(t *testing.T) {
 				t.Parallel()
 				runTestTraceflow(t, data, tc)
@@ -1123,7 +1120,6 @@ func testTraceflowIntraNode(t *testing.T, data *TestData) {
 
 	t.Run("traceflowGroupTest", func(t *testing.T) {
 		for _, tc := range testcases {
-			tc := tc
 			t.Run(tc.name, func(t *testing.T) {
 				t.Parallel()
 				runTestTraceflow(t, data, tc)
@@ -2041,7 +2037,6 @@ func testTraceflowInterNode(t *testing.T, data *TestData) {
 
 	t.Run("traceflowGroupTest", func(t *testing.T) {
 		for _, tc := range testcases {
-			tc := tc
 			t.Run(tc.name, func(t *testing.T) {
 				// Run test cases in sequential on Windows environment to verify the first packet issue is worked around.
 				// TODO: Run test cases in parallel after Windows OVS fixes the issue (openvswitch/ovs-issues#253) that
@@ -2362,7 +2357,6 @@ func testTraceflowValidation(t *testing.T, data *TestData) {
 	}
 
 	for _, tc := range testCases {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			tf := &v1beta1.Traceflow{
 				Spec: tc.spec,
@@ -2626,12 +2620,11 @@ func runTestTraceflow(t *testing.T, data *TestData, tc testcase) {
 	}
 	if tc.expectedPktCap != nil {
 		pktCap := tf.Status.CapturedPacket
+		require.NotNil(t, pktCap, "Expected packet capture, but got nil")
 		if tc.expectedPktCap.TransportHeader.ICMP != nil {
 			// We cannot predict ICMP echo ID and sequence number.
 			pktCap.TransportHeader.ICMP = &v1beta1.ICMPEchoRequestHeader{}
 		}
-		if !reflect.DeepEqual(tc.expectedPktCap, pktCap) {
-			t.Fatalf("Captured packet should be: %s, but got: %s", spew.Sdump(tc.expectedPktCap), spew.Sdump(tf.Status.CapturedPacket))
-		}
+		require.Equal(t, tc.expectedPktCap, pktCap, "captured packet mismatch")
 	}
 }

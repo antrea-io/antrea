@@ -162,7 +162,19 @@ func (c *Controller) updateTraceflow(_, curObj interface{}) {
 }
 
 func (c *Controller) deleteTraceflow(old interface{}) {
-	tf := old.(*crdv1beta1.Traceflow)
+	tf, ok := old.(*crdv1beta1.Traceflow)
+	if !ok {
+		tombstone, ok := old.(cache.DeletedFinalStateUnknown)
+		if !ok {
+			klog.V(2).InfoS("Unexpected object type when deleting Traceflow", "object", old)
+			return
+		}
+		tf, ok = tombstone.Obj.(*crdv1beta1.Traceflow)
+		if !ok {
+			klog.V(2).InfoS("Unexpected object type in tombstone when deleting Traceflow", "object", tombstone.Obj)
+			return
+		}
+	}
 	klog.Infof("Processing Traceflow %s DELETE event", tf.Name)
 	c.deallocateTagForTF(tf)
 }

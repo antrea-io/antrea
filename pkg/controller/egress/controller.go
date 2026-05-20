@@ -459,7 +459,19 @@ func (c *EgressController) updateEgress(old, cur interface{}) {
 
 // deleteEgress processes Egress DELETE events and deletes corresponding EgressGroup.
 func (c *EgressController) deleteEgress(obj interface{}) {
-	egress := obj.(*egressv1beta1.Egress)
+	egress, ok := obj.(*egressv1beta1.Egress)
+	if !ok {
+		tombstone, ok := obj.(cache.DeletedFinalStateUnknown)
+		if !ok {
+			klog.V(2).InfoS("Error decoding object when deleting Egress, invalid type", "object", obj)
+			return
+		}
+		egress, ok = tombstone.Obj.(*egressv1beta1.Egress)
+		if !ok {
+			klog.V(2).InfoS("Error decoding object tombstone when deleting Egress, invalid type", "object", tombstone.Obj)
+			return
+		}
+	}
 	klog.InfoS("Processing Egress DELETE event", "egress", egress.Name)
 	c.egressGroupStore.Delete(egress.Name)
 	// Unregister the group from the grouping interface.

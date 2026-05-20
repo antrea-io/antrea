@@ -15,6 +15,7 @@
 package openflow
 
 import (
+	"errors"
 	"fmt"
 	"net"
 	"strconv"
@@ -34,6 +35,13 @@ import (
 	binding "antrea.io/antrea/v2/pkg/ovs/openflow"
 	thirdpartynp "antrea.io/antrea/v2/third_party/networkpolicy"
 )
+
+// errSkipNetworkPolicyMetricFlow means the OpenFlow dump line is not a valid
+// NetworkPolicy metric flow (for example a stale routing flow after a pipeline table ID shift).
+var errSkipNetworkPolicyMetricFlow = errors.New("not a valid network policy metric flow")
+
+// errSkipMulticastMetricFlow means the OpenFlow dump line is not a valid multicast metric flow.
+var errSkipMulticastMetricFlow = errors.New("not a valid multicast metric flow")
 
 var (
 	MatchDstIP          = types.NewMatchKey(binding.ProtocolIP, types.IPAddr, "nw_dst")
@@ -1837,7 +1845,7 @@ func (f *featureNetworkPolicy) calculateFlowUpdates(updates map[uint16]uint16, t
 			conj := conjObj.(*policyRuleConjunction)
 			// Only re-assign flow priorities for flows in the table specified.
 			if conj.ruleTableID != table {
-				klog.V(4).Infof("Conjunction %v with the same actionFlow priority is from a different table %v", conj.id, conj.ruleTableID)
+				klog.V(4).InfoS("Conjunction with the same actionFlow priority is from a different table", "conjunctionID", conj.id, "tableID", conj.ruleTableID)
 				continue
 			}
 			for _, actionFlow := range conj.actionFlows {
@@ -1902,17 +1910,28 @@ func parseMulticastEgressPodFlow(flowMap map[string]string) (string, types.RuleM
 	return nwSrc, m
 }
 
-func parseMulticastMetricFlow(flowMap map[string]string) (uint32, types.RuleMetric) {
+func parseMulticastMetricFlow(flowMap map[string]string) (uint32, types.RuleMetric, error) {
 	// example MulticastEgressMetric allow flow format:
 	// table=MulticastEgressMetric, n_packets=11, n_bytes=1562, priority=200,reg0=0x400/0x400,reg3=0x4 actions=goto_table:MulticastEgressPodMetric
 	// example MulticastEgressMetric drop flow format:
 	// table=MulticastEgressMetric, n_packets=230, n_bytes=32660, priority=200,reg0=0x400/0x400,reg3=0x3 actions=drop
 	// example MulticastIngressMetric allow flow format:
 	// table=MulticastIngressMetric, n_packets=18, n_bytes=780, priority=200,reg0=0x400/0x400,reg3=0x3 actions=resubmit(,MulticastOutput)
+	//
+	// Valid flows always match APConjIDField (reg3). Stale non-multicast flows can share the same
+	// table id and priority=200 after a pipeline shift; they lack a usable conjunction id and must
+	// not be attributed as multicast policy metrics (cookie filtering also skips wrong categories).
 	m := parseFlowMetric(flowMap)
-	conjID := flowMap["reg3"]
-	id, _ := strconv.ParseUint(conjID, 0, 32)
-	return uint32(id), m
+	conjID, ok := flowMap["reg3"]
+	conjID = strings.TrimSpace(conjID)
+	if !ok || conjID == "" {
+		return 0, types.RuleMetric{}, errSkipMulticastMetricFlow
+	}
+	id, err := strconv.ParseUint(conjID, 0, 32)
+	if err != nil || id == 0 {
+		return 0, types.RuleMetric{}, errSkipMulticastMetricFlow
+	}
+	return uint32(id), m, nil
 }
 
 func parseFlowMetric(flowMap map[string]string) types.RuleMetric {
@@ -1924,26 +1943,49 @@ func parseFlowMetric(flowMap map[string]string) types.RuleMetric {
 	return m
 }
 
-func parseDropFlow(flowMap map[string]string) (uint32, types.RuleMetric) {
+func parseDropFlow(flowMap map[string]string) (uint32, types.RuleMetric, error) {
+	// Deny metric flows match reg0 (deny mark) and encode the conjunction id in reg3; see denyRuleMetricFlow.
 	m := parseFlowMetric(flowMap)
 	m.Sessions = m.Packets
-	reg3 := flowMap["reg3"]
-	id, _ := strconv.ParseUint(reg3, 0, 32)
-	return uint32(id), m
+	reg3, ok := flowMap["reg3"]
+	reg3 = strings.TrimSpace(reg3)
+	if !ok || reg3 == "" {
+		return 0, types.RuleMetric{}, errSkipNetworkPolicyMetricFlow
+	}
+	id, err := strconv.ParseUint(reg3, 0, 32)
+	if err != nil || id == 0 {
+		return 0, types.RuleMetric{}, errSkipNetworkPolicyMetricFlow
+	}
+	return uint32(id), m, nil
 }
 
-func parseAllowFlow(flowMap map[string]string) (uint32, types.RuleMetric) {
+func parseAllowFlow(flowMap map[string]string) (uint32, types.RuleMetric, error) {
+	// A valid allow metric flow must have ct_label, which encodes the rule ID.
+	// Flows without ct_label are not metric flows — they may be stale flows from a
+	// prior agent version that occupied the same table ID after a pipeline table shift
+	// (e.g., L3 routing flows from an old pipeline that now share the EgressMetricTable
+	// ID after a new table was inserted earlier in the pipeline). Skip them to avoid
+	// misinterpreting non-metric flows as NetworkPolicy statistics.
+	if _, ok := flowMap["ct_label"]; !ok {
+		return 0, types.RuleMetric{}, errSkipNetworkPolicyMetricFlow
+	}
 	m := parseFlowMetric(flowMap)
 	if strings.Contains(flowMap["ct_state"], "+") { // ct_state=+new
 		m.Sessions = m.Packets
 	}
-	ct_label := flowMap["ct_label"]
-	idRaw := ct_label[strings.Index(ct_label, "0x")+2 : strings.Index(ct_label, "/")]
+	ctLabel := flowMap["ct_label"]
+	hexIdx := strings.Index(ctLabel, "0x")
+	slashIdx := strings.Index(ctLabel, "/")
+	if hexIdx == -1 || slashIdx == -1 || slashIdx <= hexIdx+2 {
+		// ct_label is absent or malformed; this is not a valid allow metric flow.
+		return 0, types.RuleMetric{}, errSkipNetworkPolicyMetricFlow
+	}
+	idRaw := ctLabel[hexIdx+2 : slashIdx]
 	if len(idRaw) > 8 { // only 32 bits are valid.
 		idRaw = idRaw[:len(idRaw)-8]
 	}
 	id, _ := strconv.ParseUint(idRaw, 16, 32)
-	return uint32(id), m
+	return uint32(id), m, nil
 }
 
 func parseFlowToMap(flow string) map[string]string {
@@ -1968,7 +2010,7 @@ func parseFlowToMap(flow string) map[string]string {
 	return flowMap
 }
 
-func parseMetricFlow(flowMap map[string]string) (uint32, types.RuleMetric) {
+func parseMetricFlow(flowMap map[string]string) (uint32, types.RuleMetric, error) {
 	dropIdentifier := "reg0"
 	// example allow flow format:
 	// table=101, n_packets=0, n_bytes=0, priority=200,ct_state=-new,ct_label=0x1/0xffffffff,ip actions=goto_table:105
@@ -1980,11 +2022,28 @@ func parseMetricFlow(flowMap map[string]string) (uint32, types.RuleMetric) {
 	return parseAllowFlow(flowMap)
 }
 
+// metricFlowsDumpFilter builds ovs-ofctl dump-flows FLOW match text for Antrea metric flows: exact
+// cookie for the agent round and category. This excludes stale flows from prior rounds and flows
+// from other feature categories (e.g. PodConnectivity, Traceflow) that may share the same table ID
+// after a pipeline table shift. Note: "priority=N" is not a valid ovs-ofctl dump-flows keyword and
+// must not be included; priority-based filtering is handled by parseMetricFlow and its callers.
+func (c *client) metricFlowsDumpFilter(wantCategory cookie.Category) string {
+	round := c.roundInfo.RoundNum % (1 << cookie.BitwidthRound)
+	raw := cookie.NewAllocator(round).Request(wantCategory).Raw()
+	return fmt.Sprintf("cookie=0x%x/0x%x", raw, ^uint64(0))
+}
+
 func (c *client) MulticastIngressPodMetrics() map[uint32]*types.RuleMetric {
 	result := map[uint32]*types.RuleMetric{}
-	ingressFlows, _ := c.ovsctlClient.DumpTableFlows(MulticastIngressPodMetricTable.ofTable.GetID())
+	ingressFlows, err := c.ovsctlClient.DumpTableFlows(
+		MulticastIngressPodMetricTable.ofTable.GetID(), c.metricFlowsDumpFilter(cookie.Multicast))
+	if err != nil {
+		klog.ErrorS(err, "Failed to dump multicast ingress pod metrics", "table", MulticastIngressPodMetricTable.ofTable.GetName(), "wantCategory", cookie.Multicast)
+		return result
+	}
 	for _, flow := range ingressFlows {
 		if !strings.Contains(flow, metricFlowIdentifier) {
+			klog.V(4).InfoS("Skipping non-metric flow", "flow", flow)
 			continue
 		}
 		flowMap := parseFlowToMap(flow)
@@ -2008,9 +2067,15 @@ func (c *client) MulticastIngressPodMetricsByOFPort(ofPort int32) *types.RuleMet
 
 func (c *client) MulticastEgressPodMetrics() map[string]*types.RuleMetric {
 	result := map[string]*types.RuleMetric{}
-	ingressFlows, _ := c.ovsctlClient.DumpTableFlows(MulticastEgressPodMetricTable.ofTable.GetID())
+	ingressFlows, err := c.ovsctlClient.DumpTableFlows(
+		MulticastEgressPodMetricTable.ofTable.GetID(), c.metricFlowsDumpFilter(cookie.Multicast))
+	if err != nil {
+		klog.ErrorS(err, "Failed to dump multicast egress pod metrics", "table", MulticastEgressPodMetricTable.ofTable.GetName(), "wantCategory", cookie.Multicast)
+		return result
+	}
 	for _, flow := range ingressFlows {
 		if !strings.Contains(flow, metricFlowIdentifier) {
+			klog.V(4).InfoS("Skipping non-metric flow", "flow", flow)
 			continue
 		}
 		flowMap := parseFlowToMap(flow)
@@ -2034,14 +2099,24 @@ func (c *client) MulticastEgressPodMetricsByIP(ip net.IP) *types.RuleMetric {
 
 func (c *client) NetworkPolicyMetrics() map[uint32]*types.RuleMetric {
 	result := map[uint32]*types.RuleMetric{}
-	collectMetricsFromFlows := func(table *Table, getMetricAndID func(flowMap map[string]string) (uint32, types.RuleMetric)) {
-		dumpedFlows, _ := c.ovsctlClient.DumpTableFlows(table.ofTable.GetID())
+	collectMetricsFromFlows := func(table *Table, wantCategory cookie.Category, getMetricAndID func(flowMap map[string]string) (uint32, types.RuleMetric, error)) {
+		dumpedFlows, err := c.ovsctlClient.DumpTableFlows(
+			table.ofTable.GetID(), c.metricFlowsDumpFilter(wantCategory))
+		if err != nil {
+			klog.ErrorS(err, "Failed to dump network policy metrics", "table", table.ofTable.GetName(), "wantCategory", wantCategory)
+			return
+		}
 		for _, flow := range dumpedFlows {
 			if !strings.Contains(flow, metricFlowIdentifier) {
+				klog.V(4).InfoS("Skipping non-metric flow", "flow", flow)
 				continue
 			}
 			flowMap := parseFlowToMap(flow)
-			ruleID, metric := getMetricAndID(flowMap)
+			ruleID, metric, err := getMetricAndID(flowMap)
+			if err != nil {
+				klog.V(4).InfoS("Failed to parse metric flow", "flow", flow, "table", table.ofTable.GetName(), "error", err)
+				continue
+			}
 			if accMetric, ok := result[ruleID]; ok {
 				accMetric.Merge(&metric)
 			} else {
@@ -2050,9 +2125,11 @@ func (c *client) NetworkPolicyMetrics() map[uint32]*types.RuleMetric {
 		}
 	}
 	if c.enableMulticast {
-		// We need to collect NP statistics matching IGMP query messages and egress multicast traffic.
-		collectMetricsFromFlows(MulticastIngressMetricTable, parseMulticastMetricFlow)
-		collectMetricsFromFlows(MulticastEgressMetricTable, parseMulticastMetricFlow)
+		// Multicast ANP metric flows are installed by featureNetworkPolicy and use the same cookie
+		// category as unicast ANP metrics (NetworkPolicy), not cookie.Multicast (used by the multicast
+		// feature for IGMP / pod tables). Use NetworkPolicy in the dump filter or those flows are never matched.
+		collectMetricsFromFlows(MulticastIngressMetricTable, cookie.NetworkPolicy, parseMulticastMetricFlow)
+		collectMetricsFromFlows(MulticastEgressMetricTable, cookie.NetworkPolicy, parseMulticastMetricFlow)
 	}
 	// We have two flows for each allow rule. One matches 'ct_state=+new'
 	// and counts the number of first packets, which is also the number
@@ -2060,8 +2137,8 @@ func (c *client) NetworkPolicyMetrics() map[uint32]*types.RuleMetric {
 	// matches 'ct_state=-new' and is used to count all subsequent
 	// packets in the session. We need to merge metrics from these 2
 	// flows to get the correct number of total packets.
-	collectMetricsFromFlows(EgressMetricTable, parseMetricFlow)
-	collectMetricsFromFlows(IngressMetricTable, parseMetricFlow)
+	collectMetricsFromFlows(EgressMetricTable, cookie.NetworkPolicy, parseMetricFlow)
+	collectMetricsFromFlows(IngressMetricTable, cookie.NetworkPolicy, parseMetricFlow)
 	return result
 }
 

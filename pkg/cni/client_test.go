@@ -134,7 +134,6 @@ func TestRpcErrorsCheck(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.cniCode.String(), func(t *testing.T) {
-			tc := tc
 			enableTestClient(t, tc.behavior, normal, normal)
 			defer disableTestClient()
 

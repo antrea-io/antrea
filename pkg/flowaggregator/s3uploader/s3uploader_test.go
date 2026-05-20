@@ -21,7 +21,7 @@ import (
 	"testing"
 	"time"
 
-	s3manager "github.com/aws/aws-sdk-go-v2/feature/s3/manager"
+	"github.com/aws/aws-sdk-go-v2/feature/s3/transfermanager"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -178,7 +178,7 @@ func TestFlowRecordPeriodicCommit(t *testing.T) {
 	mockS3Uploader := s3uploadertesting.NewMockS3UploaderAPI(ctrl)
 	waitCh := make(chan struct{})
 	mockS3Uploader.EXPECT().Upload(gomock.Any(), gomock.Any(), nil).DoAndReturn(
-		func(arg0, arg1, arg2 interface{}, arg3 ...interface{}) (*s3manager.UploadOutput, error) {
+		func(arg0, arg1, arg2 interface{}, arg3 ...interface{}) (*transfermanager.UploadObjectOutput, error) {
 			close(waitCh)
 			return nil, nil
 		},

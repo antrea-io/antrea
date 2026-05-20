@@ -18,6 +18,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"net/netip"
 	"strings"
 	"sync"
 
@@ -101,13 +102,15 @@ func (as *assignee) assign(ip net.IP, subnetInfo *crdv1b1.SubnetInfo) error {
 		}
 	}
 
-	if utilnet.IsIPv4(ip) && as.arpResponder != nil {
-		if err := as.arpResponder.AddIP(ip); err != nil {
+	addr, _ := netip.AddrFromSlice(ip)
+	addr = addr.Unmap()
+	if addr.Is4() && as.arpResponder != nil {
+		if err := as.arpResponder.AddIP(addr); err != nil {
 			return fmt.Errorf("failed to assign IP %v to ARP responder: %v", ip, err)
 		}
 	}
-	if utilnet.IsIPv6(ip) && as.ndpResponder != nil {
-		if err := as.ndpResponder.AddIP(ip); err != nil {
+	if addr.Is6() && as.ndpResponder != nil {
+		if err := as.ndpResponder.AddIP(addr); err != nil {
 			return fmt.Errorf("failed to assign IP %v to NDP responder: %v", ip, err)
 		}
 	}
@@ -145,13 +148,15 @@ func (as *assignee) unassign(ip net.IP, subnetInfo *crdv1b1.SubnetInfo) error {
 		klog.InfoS("Deleted IP from interface", "ip", ip, "interface", as.link.Attrs().Name)
 	}
 
-	if utilnet.IsIPv4(ip) && as.arpResponder != nil {
-		if err := as.arpResponder.RemoveIP(ip); err != nil {
+	addr, _ := netip.AddrFromSlice(ip)
+	addr = addr.Unmap()
+	if addr.Is4() && as.arpResponder != nil {
+		if err := as.arpResponder.RemoveIP(addr); err != nil {
 			return fmt.Errorf("failed to remove IP %v from ARP responder: %v", ip, err)
 		}
 	}
-	if utilnet.IsIPv6(ip) && as.ndpResponder != nil {
-		if err := as.ndpResponder.RemoveIP(ip); err != nil {
+	if addr.Is6() && as.ndpResponder != nil {
+		if err := as.ndpResponder.RemoveIP(addr); err != nil {
 			return fmt.Errorf("failed to remove IP %v from NDP responder: %v", ip, err)
 		}
 	}

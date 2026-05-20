@@ -181,7 +181,7 @@ flow-aggregator-instr-binary:
 ifeq ($(UNAME_S),Linux)
 test-unit: .linux-test-unit
 test-integration: .linux-test-integration
-else ifneq (,$(findstring MSYS_NT-,$(UNAME_S)))
+else ifneq (,$(or $(findstring MSYS_NT-,$(UNAME_S)),$(findstring MINGW,$(UNAME_S))))
 test-unit: .windows-test-unit
 test-integration:
 	$(error Cannot use target 'test-integration' on Windows, but you can run integration tests with 'docker-test-integration')

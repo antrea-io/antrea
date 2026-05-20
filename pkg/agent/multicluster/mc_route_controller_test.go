@@ -23,6 +23,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/tools/cache"
@@ -482,6 +483,118 @@ func TestRemoveWireGuardRouteAndPeer(t *testing.T) {
 	wgClient.EXPECT().DeletePeer(ciImport.Name)
 	err := c.removeWireGuardRouteAndPeer(ciImport)
 	assert.NoError(t, err)
+}
+
+func TestSyncWireGuardPeerUpdateByClusterInfoImportChange(t *testing.T) {
+	testCases := []struct {
+		name             string
+		installedPeer    *mcv1alpha1.ClusterInfoImport
+		currentPeer      *mcv1alpha1.ClusterInfoImport
+		expectPeerUpdate bool
+	}{
+		{
+			name:             "unchanged ClusterInfoImport is skipped",
+			installedPeer:    clusterInfoImport3.DeepCopy(),
+			currentPeer:      clusterInfoImport3.DeepCopy(),
+			expectPeerUpdate: false,
+		},
+		{
+			name:             "new ClusterInfoImport is updated",
+			installedPeer:    nil,
+			currentPeer:      clusterInfoImport3.DeepCopy(),
+			expectPeerUpdate: true,
+		},
+		{
+			name:          "changed ServiceCIDR is updated",
+			installedPeer: clusterInfoImport3.DeepCopy(),
+			currentPeer: func() *mcv1alpha1.ClusterInfoImport {
+				ci := clusterInfoImport3.DeepCopy()
+				ci.Spec.ServiceCIDR = "10.200.0.0/16"
+				return ci
+			}(),
+			expectPeerUpdate: true,
+		},
+		{
+			name:          "changed PublicKey is updated",
+			installedPeer: clusterInfoImport3.DeepCopy(),
+			currentPeer: func() *mcv1alpha1.ClusterInfoImport {
+				ci := clusterInfoImport3.DeepCopy()
+				ci.Spec.WireGuard.PublicKey = "key-updated"
+				return ci
+			}(),
+			expectPeerUpdate: true,
+		},
+		{
+			name:          "changed GatewayIP is updated",
+			installedPeer: clusterInfoImport3.DeepCopy(),
+			currentPeer: func() *mcv1alpha1.ClusterInfoImport {
+				ci := clusterInfoImport3.DeepCopy()
+				ci.Spec.GatewayInfos[0].GatewayIP = "12.13.0.11"
+				return ci
+			}(),
+			expectPeerUpdate: true,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			mockRouteClient := routemock.NewMockInterface(ctrl)
+			wgClient := wgtest.NewMockInterface(ctrl)
+
+			c := newMCDefaultRouteController(t,
+				&config.NodeConfig{
+					Name:        "node-4",
+					PodIPv4CIDR: &net.IPNet{IP: net.ParseIP("10.10.0.0")},
+				},
+				&config.NetworkConfig{},
+				agent.WireGuardConfig{},
+				mockRouteClient,
+				"wireGuard",
+				wgClient,
+			)
+			defer c.queue.ShutDown()
+
+			c.wireGuardInitialized = true
+			c.wireGuardClient = wgClient
+
+			gw := gateway4.DeepCopy()
+			_, err := c.mcClient.MulticlusterV1alpha1().Gateways(gw.GetNamespace()).
+				Create(context.TODO(), gw, metav1.CreateOptions{})
+			require.NoError(t, err)
+
+			currentCIImport := tc.currentPeer.DeepCopy()
+			_, err = c.mcClient.MulticlusterV1alpha1().ClusterInfoImports(currentCIImport.GetNamespace()).
+				Create(context.TODO(), currentCIImport, metav1.CreateOptions{})
+			require.NoError(t, err)
+
+			stopCh := make(chan struct{})
+			defer close(stopCh)
+			c.informerFactory.Start(stopCh)
+			c.informerFactory.WaitForCacheSync(stopCh)
+
+			if tc.installedPeer != nil {
+				c.installedWireGuardPeers[currentCIImport.Name] = tc.installedPeer.DeepCopy()
+			}
+
+			if tc.expectPeerUpdate {
+				wgClient.EXPECT().UpdatePeer(currentCIImport.Name, currentCIImport.Spec.WireGuard.PublicKey,
+					net.ParseIP(currentCIImport.Spec.GatewayInfos[0].GatewayIP), gomock.Any()).Times(1)
+				mockRouteClient.EXPECT().AddRouteForLink(gomock.Any(), c.wireGuardConfig.LinkIndex).Times(1)
+			}
+
+			err = c.syncWireGuard()
+			require.NoError(t, err)
+
+			cachedPeer, exists := c.installedWireGuardPeers[currentCIImport.Name]
+			require.True(t, exists)
+			assert.Equal(t, currentCIImport.Spec.ServiceCIDR, cachedPeer.Spec.ServiceCIDR)
+			assert.Equal(t, currentCIImport.Spec.GatewayInfos, cachedPeer.Spec.GatewayInfos)
+			if currentCIImport.Spec.WireGuard != nil {
+				assert.Equal(t, currentCIImport.Spec.WireGuard.PublicKey, cachedPeer.Spec.WireGuard.PublicKey)
+			}
+		})
+	}
 }
 
 func TestEnqueueGateway(t *testing.T) {

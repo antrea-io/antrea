@@ -20,6 +20,8 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/client-go/tools/cache"
+
+	"antrea.io/antrea/v2/pkg/util/k8s"
 )
 
 const podIPIndex = "podIP"
@@ -44,7 +46,7 @@ func NewPodStore(podInformer cache.SharedIndexInformer) *podStore {
 		DeleteQueueName: "podStorePodsToDelete",
 		Indexers:        cache.Indexers{podIPIndex: podIPIndexFunc},
 		FilterFunc: func(pod *corev1.Pod) bool {
-			return !pod.Spec.HostNetwork
+			return !pod.Spec.HostNetwork && !k8s.IsPodTerminated(pod)
 		},
 		GetObjectCreationTimestamp: func(pod *corev1.Pod, now time.Time) time.Time {
 			if pod.Status.Phase == corev1.PodPending {

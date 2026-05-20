@@ -17,7 +17,6 @@ package exporter
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"hash/fnv"
 	"net"
@@ -31,7 +30,6 @@ import (
 	ipfixregistry "github.com/vmware/go-ipfix/pkg/registry"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/klog/v2"
-	"k8s.io/utils/clock"
 
 	flowpb "antrea.io/antrea/v2/pkg/apis/flow/v1alpha1"
 	flowaggregatorconfig "antrea.io/antrea/v2/pkg/config/flowaggregator"
@@ -57,8 +55,6 @@ const (
 	flushInterval = 1 * time.Second
 )
 
-var ErrIPFIXExporterBackoff = errors.New("backoff needed")
-
 type IPFIXExporter struct {
 	config                     flowaggregatorconfig.FlowCollectorConfig
 	externalFlowCollectorAddr  string
@@ -80,11 +76,6 @@ type IPFIXExporter struct {
 	clusterID                  string
 	maxIPFIXMsgSize            int
 	tls                        ipfixExporterTLSConfig
-	// initBackoff is used to enforce some minimum delay between initialization attempts.
-	initBackoff wait.Backoff
-	// initNextAttempt is the time after which the next initialization can be attempted.
-	initNextAttempt time.Time
-	clock           clock.Clock
 }
 
 type ipfixExporterTLSConfig struct {
@@ -140,16 +131,6 @@ func NewIPFIXExporter(
 	opt *options.Options,
 	registry ipfix.IPFIXRegistry,
 ) *IPFIXExporter {
-	return newIPFIXExporterWithClock(clusterUUID, clusterID, opt, registry, clock.RealClock{})
-}
-
-func newIPFIXExporterWithClock(
-	clusterUUID uuid.UUID,
-	clusterID string,
-	opt *options.Options,
-	registry ipfix.IPFIXRegistry,
-	clock clock.Clock,
-) *IPFIXExporter {
 	var sendJSONRecord bool
 	if opt.Config.FlowCollector.RecordFormat == "JSON" {
 		sendJSONRecord = true
@@ -165,7 +146,7 @@ func newIPFIXExporterWithClock(
 	}
 	klog.InfoS("Flow aggregator Observation Domain ID", "domainID", observationDomainID)
 
-	exporter := &IPFIXExporter{
+	return &IPFIXExporter{
 		config:                     opt.Config.FlowCollector,
 		externalFlowCollectorAddr:  opt.ExternalFlowCollectorAddr,
 		externalFlowCollectorProto: opt.ExternalFlowCollectorProto,
@@ -180,12 +161,7 @@ func newIPFIXExporterWithClock(
 		clusterID:                  clusterID,
 		maxIPFIXMsgSize:            int(opt.Config.FlowCollector.MaxIPFIXMsgSize),
 		tls:                        newIPFIXExporterTLSConfig(opt.Config.FlowCollector.TLS),
-		initBackoff:                newInitBackoff(),
-		initNextAttempt:            clock.Now(),
-		clock:                      clock,
 	}
-
-	return exporter
 }
 
 func (e *IPFIXExporter) reset() {
@@ -205,40 +181,80 @@ func (e *IPFIXExporter) Run(ctx context.Context, buf ringbuffer.BroadcastBuffer[
 		}
 	}()
 
-	// consumeDeadline must be <= flushInterval so that ConsumeMultiple returns
-	// often enough for the flush ticker to be checked promptly.
+	// consumeDeadline must be <= flushInterval so that Consume returns often
+	// enough for the flush ticker to be checked promptly.
 	consumer := buf.NewConsumer(ringbuffer.WithMaxConsumeDeadline(consumeDeadline))
 	flushTicker := time.NewTicker(flushInterval)
 	defer flushTicker.Stop()
 
-	records := make([]*flowpb.Flow, consumeMultipleBatchSize)
+	waitCh := make(chan struct{})
+	close(waitCh)
+	var waitTimer *time.Timer
+	waitFor := func(d time.Duration) {
+		// Using AfterFunc makes more sense than After: we want to use a custom
+		// channel and close it when we need the <- waitCh case to act as a
+		// "default" case in the select statement below.
+		waitCh = make(chan struct{})
+		ch := waitCh
+		waitTimer = time.AfterFunc(d, func() {
+			close(ch)
+		})
+	}
+
+	// initBackoff is used to enforce some minimum delay between initialization attempts.
+	initBackoff := newInitBackoff()
+	// initNextAttempt is the time after which the next initialization can be attempted.
+	initNextAttempt := time.Now()
+
 	for {
 		select {
 		case <-ctx.Done():
+			if waitTimer != nil {
+				waitTimer.Stop()
+			}
 			return
 		case <-flushTicker.C:
+			// Note that e.flush() will be a no-op and return nil if the exporting
+			// process is not initialized.
 			if err := e.flush(); err != nil {
 				klog.ErrorS(err, "Error when flushing IPFIX exporter")
 			}
-		default:
+		case <-waitCh: // if waitCh is closed, this case acts as a "default" case
+			break
 		}
 
-		n, _, shutdown := consumer.ConsumeMultiple(records)
-		for _, record := range records[:n] {
+		if e.exportingProcess == nil {
+			now := time.Now()
+			// Safety net: in the normal flow waitFor() is always called with the
+			// exact remaining duration before scheduling the next attempt, so
+			// this branch should not be reached. It protects against any future
+			// code path that reaches the init block without having waited.
+			if initNextAttempt.After(now) {
+				waitFor(initNextAttempt.Sub(now))
+				continue
+			}
+			initNextAttempt = now.Add(initBackoff.Step())
+			if err := e.initExportingProcess(); err != nil {
+				klog.ErrorS(err, "Error when initializing IPFIX exporting process", "nextAttempt", initNextAttempt)
+				waitFor(initNextAttempt.Sub(now))
+				continue
+			}
+			klog.InfoS("Successfully initialized IPFIX exporting process")
+			initBackoff = newInitBackoff()
+			initNextAttempt = now
+		}
+
+		record, n, _, shutdown := consumer.Consume()
+		if n > 0 {
 			isIPv6 := record.Ip.Version == flowpb.IPVersion_IP_VERSION_6
 			if err := e.sendRecord(record, isIPv6); err != nil {
+				// In case of error, we drop the current record and reset the
+				// exporting process. The next iteration of the loop will be
+				// responsible for re-initializing the exporting process.
+				klog.ErrorS(err, "Error when sending IPFIX record")
 				if e.exportingProcess != nil {
 					e.reset()
 				}
-				if errors.Is(err, ErrIPFIXExporterBackoff) {
-					// The exporting process is not ready yet (backoff period). Drop
-					// the current record and all remaining records in the batch. This
-					// matches the previous per-record behaviour in both Aggregate mode
-					// (the flow export loop retries after activeFlowRecordTimeout) and
-					// Proxy mode (the next proxied record triggers a new attempt).
-					break
-				}
-				klog.ErrorS(err, "Error when sending IPFIX record")
 			}
 		}
 		if shutdown {
@@ -488,13 +504,10 @@ func (e *IPFIXExporter) makeIPFIXRecord(flow *flowpb.Flow, isIPv6 bool) ipfixent
 }
 
 func (e *IPFIXExporter) sendRecord(flow *flowpb.Flow, isRecordIPv6 bool) error {
+	// Run() always initializes the exporting process before calling sendRecord,
+	// so this guard should never be triggered in practice.
 	if e.exportingProcess == nil {
-		if err := e.initExportingProcessWithBackoff(); err != nil {
-			// in case of error:
-			// in Aggregate mode: the FlowAggregator flowExportLoop will retry after activeFlowRecordTimeout
-			// in Proxy mode: the FlowAggregator flowExportLoop will retry the next time a record is proxied
-			return fmt.Errorf("error when initializing IPFIX exporting process: %w", err)
-		}
+		return fmt.Errorf("exporting process is not initialized")
 	}
 	record := e.makeIPFIXRecord(flow, isRecordIPv6)
 	if err := e.bufferedExporter.AddRecord(record); err != nil {
@@ -550,21 +563,6 @@ func (e *IPFIXExporter) prepareExportingProcessTLSClientConfig() (*exporter.Expo
 
 func (e *IPFIXExporter) initExportingProcess() error {
 	return initIPFIXExportingProcess(e)
-}
-
-func (e *IPFIXExporter) initExportingProcessWithBackoff() error {
-	now := e.clock.Now()
-	if e.initNextAttempt.After(now) {
-		return ErrIPFIXExporterBackoff
-	}
-	e.initNextAttempt = now.Add(e.initBackoff.Step())
-	if err := e.initExportingProcess(); err != nil {
-		return err
-	}
-	// Reset backoff after a successful initialization.
-	e.initBackoff = newInitBackoff()
-	e.initNextAttempt = now
-	return nil
 }
 
 func (e *IPFIXExporter) initExportingProcessImpl() error {

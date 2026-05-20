@@ -16,10 +16,12 @@ package agent
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net"
 	"strings"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/google/uuid"
@@ -39,6 +41,7 @@ import (
 	"antrea.io/antrea/v2/pkg/agent/cniserver"
 	"antrea.io/antrea/v2/pkg/agent/config"
 	"antrea.io/antrea/v2/pkg/agent/interfacestore"
+	openflowtest "antrea.io/antrea/v2/pkg/agent/openflow/testing"
 	"antrea.io/antrea/v2/pkg/agent/types"
 	crdv1alpha1 "antrea.io/antrea/v2/pkg/apis/crd/v1alpha1"
 	fakeversioned "antrea.io/antrea/v2/pkg/client/clientset/versioned/fake"
@@ -1045,4 +1048,91 @@ func TestValidateSupportedDPFeatures(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestDeleteStaleFlowsWithRetry(t *testing.T) {
+	testErr := errors.New("delete stale flows error")
+
+	t.Run("succeeds on first attempt", func(t *testing.T) {
+		synctest.Test(t, func(t *testing.T) {
+			ctrl := mock.NewController(t)
+			mockOFClient := openflowtest.NewMockClient(ctrl)
+			mockOFClient.EXPECT().DeleteStaleFlows().Return(nil)
+
+			initializer := &Initializer{
+				ofClient: mockOFClient,
+				stopCh:   make(chan struct{}),
+			}
+
+			result := initializer.deleteStaleFlowsWithRetry()
+			assert.True(t, result)
+		})
+	})
+
+	t.Run("succeeds after transient failures", func(t *testing.T) {
+		synctest.Test(t, func(t *testing.T) {
+			ctrl := mock.NewController(t)
+			mockOFClient := openflowtest.NewMockClient(ctrl)
+			mock.InOrder(
+				mockOFClient.EXPECT().DeleteStaleFlows().Return(testErr),
+				mockOFClient.EXPECT().DeleteStaleFlows().Return(testErr),
+				mockOFClient.EXPECT().DeleteStaleFlows().Return(nil),
+			)
+
+			initializer := &Initializer{
+				ofClient: mockOFClient,
+				stopCh:   make(chan struct{}),
+			}
+
+			var result bool
+			done := make(chan struct{})
+			go func() {
+				defer close(done)
+				result = initializer.deleteStaleFlowsWithRetry()
+			}()
+
+			// Let the retry loop block on time.After, then advance the fake clock
+			// through each retry interval.
+			synctest.Wait()
+			time.Sleep(staleFlowDeleteRetryInterval)
+			synctest.Wait()
+			select {
+			case <-done:
+				t.Fatal("deleteStaleFlowsWithRetry should not return until after the third DeleteStaleFlows succeeds")
+			default:
+			}
+			time.Sleep(staleFlowDeleteRetryInterval)
+			synctest.Wait()
+
+			<-done
+			assert.True(t, result)
+		})
+	})
+
+	t.Run("stops retrying when stopCh is closed", func(t *testing.T) {
+		synctest.Test(t, func(t *testing.T) {
+			ctrl := mock.NewController(t)
+			mockOFClient := openflowtest.NewMockClient(ctrl)
+			mockOFClient.EXPECT().DeleteStaleFlows().Return(testErr).AnyTimes()
+
+			stopCh := make(chan struct{})
+			initializer := &Initializer{
+				ofClient: mockOFClient,
+				stopCh:   stopCh,
+			}
+
+			var result bool
+			done := make(chan struct{})
+			go func() {
+				defer close(done)
+				result = initializer.deleteStaleFlowsWithRetry()
+			}()
+
+			synctest.Wait()
+			close(stopCh)
+
+			<-done
+			assert.False(t, result)
+		})
+	})
 }

@@ -39,7 +39,7 @@ func NewARPResponder(transportInterfaceName string, linkMonitor linkmonitor.Inte
 	}
 	a := &arpResponder{
 		linkName:    transportInterfaceName,
-		assignedIPs: sets.New[string](),
+		assignedIPs: sets.New[netip.Addr](),
 		linkEventCh: make(chan struct{}, 1),
 	}
 	if linkMonitor != nil {

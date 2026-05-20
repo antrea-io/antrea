@@ -116,7 +116,19 @@ func (c *Controller) addLabelIdentity(obj interface{}) {
 }
 
 func (c *Controller) deleteLabelIdentity(obj interface{}) {
-	labelIdentity := obj.(*mcv1alpha1.LabelIdentity)
+	labelIdentity, ok := obj.(*mcv1alpha1.LabelIdentity)
+	if !ok {
+		tombstone, ok := obj.(cache.DeletedFinalStateUnknown)
+		if !ok {
+			klog.V(2).InfoS("Error decoding object when deleting LabelIdentity, invalid type", "object", obj)
+			return
+		}
+		labelIdentity, ok = tombstone.Obj.(*mcv1alpha1.LabelIdentity)
+		if !ok {
+			klog.V(2).InfoS("Error decoding object tombstone when deleting LabelIdentity, invalid type", "object", tombstone.Obj)
+			return
+		}
+	}
 	klog.InfoS("Processing LabelIdentity DELETE event", "label", labelIdentity.Spec.Label)
 	c.labelIdentityIndex.DeleteLabelIdentity(labelIdentity.Spec.Label)
 }

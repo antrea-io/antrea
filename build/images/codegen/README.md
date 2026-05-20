@@ -22,6 +22,7 @@ Here is the table of codegen images that have been uploaded:
 
 | Tag                       | Change                                                                        |
 | :------------------------ | ----------------------------------------------------------------------------- |
+| kubernetes-1.35.0-build.1 | Add tcpdump                                                                   |
 | kubernetes-1.35.0-build.0 | Upgraded Go to v1.26                                                          |
 | kubernetes-1.35.0         | Upgraded K8s libs to v1.35.0                                                  |
 | kubernetes-1.35.0-alpha.1 | Upgraded Go to v1.25, K8s libs to v1.35.0-alpha.1, mockgen to v0.6.0          |
