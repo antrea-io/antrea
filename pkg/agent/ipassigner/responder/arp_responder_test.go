@@ -15,7 +15,9 @@
 package responder
 
 import (
+	"fmt"
 	"net"
+	"net/netip"
 	"testing"
 
 	"github.com/mdlayher/arp"
@@ -32,9 +34,30 @@ func newFakeARPClient(iface *net.Interface, conn *nettest.PacketConn) (*arp.Clie
 	return arp.New(iface, conn)
 }
 
-func newFakeNetworkInterface(hardwareAddr []byte) *net.Interface {
+// loopbackIndex returns the OS interface index of the first loopback interface.
+// net.Interface.Addrs() queries the OS by Index, so pointing the fake interface
+// at the loopback index makes Addrs() return a valid IPv4 address, satisfying
+// arp.New (since commit 6706a29) without borrowing an entirely separate struct.
+func loopbackIndex() (int, error) {
+	ifaces, err := net.Interfaces()
+	if err != nil {
+		return 0, fmt.Errorf("failed to list network interfaces: %w", err)
+	}
+	for _, iface := range ifaces {
+		if iface.Flags&net.FlagLoopback != 0 {
+			return iface.Index, nil
+		}
+	}
+	return 0, fmt.Errorf("no loopback interface found")
+}
+
+// newFakeNetworkInterface creates a fake net.Interface with the given index and
+// hardware address. Callers that pass the interface to arp.New must supply a
+// valid OS interface index (e.g. from loopbackIndex); callers that only need
+// the interface for its name or hardware address can use any non-zero index.
+func newFakeNetworkInterface(index int, hardwareAddr []byte) *net.Interface {
 	return &net.Interface{
-		Index:        0,
+		Index:        index,
 		MTU:          1500,
 		Name:         "eth0",
 		HardwareAddr: hardwareAddr,
@@ -54,33 +77,40 @@ func getEthernetForARPPacket(p *arp.Packet, addr net.HardwareAddr) []byte {
 }
 
 func TestARPResponder_HandleARPRequest(t *testing.T) {
-	// The "local" endpoint is the one running the ARPRespondder.
+	// arp.New calls iface.Addrs() internally; a real OS interface index is
+	// required so that the OS can resolve addresses for the interface.
+	loopbackIdx, err := loopbackIndex()
+	if err != nil {
+		t.Skipf("Skipping test: loopback interface not available: %v", err)
+	}
+
+	// The "local" endpoint is the one running the ARPResponder.
 	// The "remote" endpoint is the one sending ARP requests to the "local" endpoint.
 	localHWAddr := net.HardwareAddr{0x00, 0x01, 0x02, 0x03, 0x04, 0x05}
 	remoteHWAddr := net.HardwareAddr{0x00, 0x11, 0x22, 0x33, 0x44, 0x55}
-	localIP := net.ParseIP("192.168.10.1")
-	remoteIP := net.ParseIP("192.168.10.2")
+	localIPAddr := netip.MustParseAddr("192.168.10.1")
+	remoteIPAddr := netip.MustParseAddr("192.168.10.2")
 
 	tests := []struct {
 		name          string
-		assignedIPs   []net.IP
+		assignedIPs   []netip.Addr
 		replyExpected bool
 	}{
 		{
 			name:          "Response for assigned IP",
-			assignedIPs:   []net.IP{localIP},
+			assignedIPs:   []netip.Addr{localIPAddr},
 			replyExpected: true,
 		},
 		{
 			name:          "Response for not assigned IP",
-			assignedIPs:   []net.IP{net.ParseIP("192.168.10.3")},
+			assignedIPs:   []netip.Addr{netip.MustParseAddr("192.168.10.3")},
 			replyExpected: false,
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			localIface := newFakeNetworkInterface(localHWAddr)
-			remoteIface := newFakeNetworkInterface(remoteHWAddr)
+			localIface := newFakeNetworkInterface(loopbackIdx, localHWAddr)
+			remoteIface := newFakeNetworkInterface(loopbackIdx, remoteHWAddr)
 			localAddr := &packet.Addr{
 				HardwareAddr: localHWAddr,
 			}
@@ -92,19 +122,15 @@ func TestARPResponder_HandleARPRequest(t *testing.T) {
 			require.NoError(t, err)
 			remoteARPClient, err := newFakeARPClient(remoteIface, remoteConn)
 			require.NoError(t, err)
-			request, err := arp.NewPacket(arp.OperationRequest, remoteHWAddr, remoteIP, ethernet.Broadcast, localIP)
+			request, err := arp.NewPacket(arp.OperationRequest, remoteHWAddr, remoteIPAddr, ethernet.Broadcast, localIPAddr)
 			require.NoError(t, err)
-			expectedReply, err := arp.NewPacket(arp.OperationReply, localHWAddr, localIP, remoteHWAddr, remoteIP)
+			expectedReply, err := arp.NewPacket(arp.OperationReply, localHWAddr, localIPAddr, remoteHWAddr, remoteIPAddr)
 			require.NoError(t, err)
 			expectedBytes := getEthernetForARPPacket(expectedReply, remoteHWAddr)
 			require.NoError(t, remoteARPClient.WriteTo(request, localAddr.HardwareAddr))
-			assignedIPs := sets.New[string]()
-			for _, ip := range tt.assignedIPs {
-				assignedIPs.Insert(ip.String())
-			}
 			r := arpResponder{
 				linkName:    localIface.Name,
-				assignedIPs: sets.New[string](),
+				assignedIPs: sets.New[netip.Addr](),
 			}
 			for _, ip := range tt.assignedIPs {
 				r.AddIP(ip)
@@ -126,32 +152,32 @@ func TestARPResponder_HandleARPRequest(t *testing.T) {
 
 func Test_arpResponder_addIP(t *testing.T) {
 	hwAddr := []byte{0x00, 0x11, 0x22, 0x33, 0x44, 0x55}
-	iface := newFakeNetworkInterface(hwAddr)
+	iface := newFakeNetworkInterface(1, hwAddr)
 
 	tests := []struct {
 		name                string
-		ip                  net.IP
-		assignedIPs         sets.Set[string]
+		ip                  netip.Addr
+		assignedIPs         sets.Set[netip.Addr]
 		expectedError       bool
-		expectedAssignedIPs sets.Set[string]
+		expectedAssignedIPs sets.Set[netip.Addr]
 	}{
 		{
 			name:                "Add new IP",
-			ip:                  net.ParseIP("2.0.2.2"),
-			assignedIPs:         sets.New[string](),
-			expectedAssignedIPs: sets.New[string]("2.0.2.2"),
+			ip:                  netip.MustParseAddr("2.0.2.2"),
+			assignedIPs:         sets.New[netip.Addr](),
+			expectedAssignedIPs: sets.New[netip.Addr](netip.MustParseAddr("2.0.2.2")),
 		},
 		{
 			name:                "Add new IP with some IPs added",
-			ip:                  net.ParseIP("2.0.2.2"),
-			assignedIPs:         sets.New[string]("2.0.2.1"),
-			expectedAssignedIPs: sets.New[string]("2.0.2.1", "2.0.2.2"),
+			ip:                  netip.MustParseAddr("2.0.2.2"),
+			assignedIPs:         sets.New[netip.Addr](netip.MustParseAddr("2.0.2.1")),
+			expectedAssignedIPs: sets.New[netip.Addr](netip.MustParseAddr("2.0.2.1"), netip.MustParseAddr("2.0.2.2")),
 		},
 		{
 			name:                "Add invalid IP",
-			ip:                  net.ParseIP("2022::abcd"),
-			assignedIPs:         sets.New[string]("2.0.2.1"),
-			expectedAssignedIPs: sets.New[string]("2.0.2.1"),
+			ip:                  netip.MustParseAddr("2022::abcd"),
+			assignedIPs:         sets.New[netip.Addr](netip.MustParseAddr("2.0.2.1")),
+			expectedAssignedIPs: sets.New[netip.Addr](netip.MustParseAddr("2.0.2.1")),
 			expectedError:       true,
 		},
 	}
@@ -174,32 +200,32 @@ func Test_arpResponder_addIP(t *testing.T) {
 
 func Test_arpResponder_removeIP(t *testing.T) {
 	hwAddr := []byte{0x00, 0x11, 0x22, 0x33, 0x44, 0x55}
-	iface := newFakeNetworkInterface(hwAddr)
+	iface := newFakeNetworkInterface(1, hwAddr)
 
 	tests := []struct {
 		name                string
-		ip                  net.IP
-		assignedIPs         sets.Set[string]
+		ip                  netip.Addr
+		assignedIPs         sets.Set[netip.Addr]
 		expectedError       bool
-		expectedAssignedIPs sets.Set[string]
+		expectedAssignedIPs sets.Set[netip.Addr]
 	}{
 		{
 			name:                "Remove existing IP",
-			ip:                  net.ParseIP("2.0.2.2"),
-			assignedIPs:         sets.New[string]("2.0.2.2"),
-			expectedAssignedIPs: sets.New[string](),
+			ip:                  netip.MustParseAddr("2.0.2.2"),
+			assignedIPs:         sets.New[netip.Addr](netip.MustParseAddr("2.0.2.2")),
+			expectedAssignedIPs: sets.New[netip.Addr](),
 		},
 		{
 			name:                "Remove non-existent IP",
-			ip:                  net.ParseIP("2.0.2.2"),
-			assignedIPs:         sets.New[string]("2.0.2.1"),
-			expectedAssignedIPs: sets.New[string]("2.0.2.1"),
+			ip:                  netip.MustParseAddr("2.0.2.2"),
+			assignedIPs:         sets.New[netip.Addr](netip.MustParseAddr("2.0.2.1")),
+			expectedAssignedIPs: sets.New[netip.Addr](netip.MustParseAddr("2.0.2.1")),
 		},
 		{
 			name:                "Remove invalid IP",
-			ip:                  net.ParseIP("2022::abcd"),
-			assignedIPs:         sets.New[string]("2.0.2.1"),
-			expectedAssignedIPs: sets.New[string]("2.0.2.1"),
+			ip:                  netip.MustParseAddr("2022::abcd"),
+			assignedIPs:         sets.New[netip.Addr](netip.MustParseAddr("2.0.2.1")),
+			expectedAssignedIPs: sets.New[netip.Addr](netip.MustParseAddr("2.0.2.1")),
 			expectedError:       true,
 		},
 	}
