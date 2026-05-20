@@ -103,7 +103,7 @@ func (eq *EndpointQuerierImpl) QueryNetworkPolicyRules(namespace, podName string
 	if namespace == "" {
 		namespace = "default"
 	}
-	groups, exists := eq.networkPolicyController.groupingInterface.GetGroupsForPod(namespace, podName)
+	groups, exists := eq.networkPolicyController.groupingInterface.GetGroupsForPod(namespace, podName, NetworkPolicyExcludedPodFilter)
 	if !exists {
 		return nil, nil
 	}

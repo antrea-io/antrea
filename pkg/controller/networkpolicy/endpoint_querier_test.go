@@ -327,6 +327,7 @@ func TestQueryNetworkPolicyRules(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			endpointQuerier := makeControllerAndEndpointQuerier(tc.objs...)
 			response, err := endpointQuerier.QueryNetworkPolicyRules(tc.podNamespace, tc.podName)
 			require.NoErrorf(t, err, "Expected QueryNetworkPolicies to succeed")
@@ -612,15 +613,9 @@ func TestQueryNetworkPolicyRulesPodsExclusion(t *testing.T) {
 		},
 		Spec: corev1.PodSpec{
 			HostNetwork: true,
-			Containers:  []corev1.Container{{Name: "kube-apiserver"}},
-			NodeName:    "master",
 		},
 		Status: corev1.PodStatus{
-			Phase: corev1.PodRunning,
-			PodIP: "192.168.1.100",
-			PodIPs: []corev1.PodIP{
-				{IP: "192.168.1.100"},
-			},
+			PodIPs: []corev1.PodIP{{IP: "192.168.1.100"}},
 		},
 	}
 	// Test that terminated pods are excluded from policy evaluation
@@ -630,16 +625,9 @@ func TestQueryNetworkPolicyRulesPodsExclusion(t *testing.T) {
 			Namespace: "default",
 			Labels:    map[string]string{"app": "test"},
 		},
-		Spec: corev1.PodSpec{
-			Containers: []corev1.Container{{Name: "test-container"}},
-			NodeName:   "worker",
-		},
 		Status: corev1.PodStatus{
-			Phase: corev1.PodSucceeded,
-			PodIP: "10.244.0.1",
-			PodIPs: []corev1.PodIP{
-				{IP: "10.244.0.1"},
-			},
+			Phase:  corev1.PodSucceeded,
+			PodIPs: []corev1.PodIP{{IP: "10.244.0.1"}},
 		},
 	}
 	// Test that pods without IPs are excluded from policy evaluation
@@ -648,14 +636,6 @@ func TestQueryNetworkPolicyRulesPodsExclusion(t *testing.T) {
 			Name:      "pending-pod",
 			Namespace: "default",
 			Labels:    map[string]string{"app": "test"},
-		},
-		Spec: corev1.PodSpec{
-			Containers: []corev1.Container{{Name: "test-container"}},
-			NodeName:   "worker",
-		},
-		Status: corev1.PodStatus{
-			Phase:  corev1.PodPending,
-			PodIPs: []corev1.PodIP{},
 		},
 	}
 
@@ -717,7 +697,7 @@ func TestQueryNetworkPolicyRulesPodsExclusion(t *testing.T) {
 			endpointQuerier := makeControllerAndEndpointQuerier(tc.objs...)
 			response, err := endpointQuerier.QueryNetworkPolicyRules(tc.podNamespace, tc.podName)
 			require.NoError(t, err)
-			require.NotNil(t, response, "excluded pod should return non-nil response, not a 404")
+			require.NotNil(t, response)
 			assert.Equal(t, tc.expectedResponse.Namespace, response.Namespace)
 			assert.Equal(t, tc.expectedResponse.Name, response.Name)
 			assert.Empty(t, response.AppliedPolicies)

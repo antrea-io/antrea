@@ -68,10 +68,11 @@ type Interface interface {
 	// GetEntities returns the selected Pods or ExternalEntities for the given group.
 	GetEntities(groupType GroupType, name string) ([]*v1.Pod, []*v1alpha2.ExternalEntity)
 	// GetGroupsForPod returns the groups that select the given Pod.
-	// If the Pod does not exist, it returns (nil, false). Host network Pods, terminated Pods,
-	// and Pods without IP addresses are excluded from group association lookups. If such a Pod
-	// exists, this method returns an empty map and true.
-	GetGroupsForPod(namespace, name string) (map[GroupType][]string, bool)
+	// If the Pod does not exist, it returns (nil, false). If a non-nil podExcludeFilter is
+	// provided and it returns true for the Pod, the Pod is treated as having no group
+	// associations: an empty map and true are returned so callers can distinguish "pod not
+	// found" from "pod found but excluded".
+	GetGroupsForPod(namespace, name string, podExcludeFilter func(*v1.Pod) bool) (map[GroupType][]string, bool)
 	// GetGroupsForExternalEntity returns the groups that select the given ExternalEntity.
 	GetGroupsForExternalEntity(namespace, name string) (map[GroupType][]string, bool)
 	// AddPod adds or updates a Pod to the index. If any existing groups are affected, eventHandlers will be called with
@@ -257,13 +258,7 @@ func (i *GroupEntityIndex) GetEntities(groupType GroupType, name string) ([]*v1.
 	return pods, externalEntities
 }
 
-func (i *GroupEntityIndex) GetGroupsForPod(namespace, name string) (map[GroupType][]string, bool) {
-	// Before looking up groups, check if this Pod should be excluded from network policy
-	// enforcement. This mirrors the filtering in getMemberSetForGroupType and ensures callers
-	// never see group associations for Pods that can never be selected for policy processing:
-	// - Host-network Pods (https://github.com/antrea-io/antrea/issues/3078)
-	// - Terminated Pods (their IPs can be recycled and reused)
-	// - Pods without IP addresses
+func (i *GroupEntityIndex) GetGroupsForPod(namespace, name string, podExcludeFilter func(*v1.Pod) bool) (map[GroupType][]string, bool) {
 	eKey := getEntityItemKeyByName(podEntityType, namespace, name)
 
 	i.lock.RLock()
@@ -273,10 +268,11 @@ func (i *GroupEntityIndex) GetGroupsForPod(namespace, name string) (map[GroupTyp
 	if !exists {
 		return nil, false
 	}
-	if pod, ok := eItem.entity.(*v1.Pod); ok {
-		if pod.Spec.HostNetwork || k8s.IsPodTerminated(pod) || len(pod.Status.PodIPs) == 0 {
-			// The Pod exists but is excluded from network policy enforcement.
-			// Return an empty map (no group associations) with exists=true.
+	if podExcludeFilter != nil {
+		if pod, ok := eItem.entity.(*v1.Pod); ok && podExcludeFilter(pod) {
+			// The Pod exists but the caller's filter excludes it.
+			// Return an empty map with exists=true so callers can distinguish
+			// "pod not found" from "pod found but excluded".
 			return map[GroupType][]string{}, true
 		}
 	}
