@@ -397,20 +397,13 @@ func (a *aggregationProcess) addOrUpdateRecordInMap(flowKey *FlowKey, record *fl
 		}
 
 		if !correlationRequired {
-			// Source-node FROM_EXTERNAL flows are stored pending their destination-node
-			// counterpart — do not mark them ready to send until merged.
-			if isSourceNodeFromExternalFlow(record) {
-				aggregationRecord.ReadyToSend = false
+			// Regular flows that need no cross-node correlation (IntraNode, ToExternal,
+			// single-node FromExternal) are complete as-is and ready to export immediately.
+			aggregationRecord.ReadyToSend = true
+			if record.K8S.FlowType == flowpb.FlowType_FLOW_TYPE_INTER_NODE {
+				aggregationRecord.areCorrelatedFieldsFilled = false
 			} else {
-				aggregationRecord.ReadyToSend = true
-				// If no correlation is required for an Inter-Node record, K8s metadata is
-				// expected to be not completely filled. For Intra-Node flows and ToExternal
-				// flows, areCorrelatedFieldsFilled is set to true by default.
-				if record.K8S.FlowType == flowpb.FlowType_FLOW_TYPE_INTER_NODE {
-					aggregationRecord.areCorrelatedFieldsFilled = false
-				} else {
-					aggregationRecord.areCorrelatedFieldsFilled = true
-				}
+				aggregationRecord.areCorrelatedFieldsFilled = true
 			}
 		}
 		aggregationRecord.areExternalFieldsFilled = false
@@ -857,6 +850,9 @@ func (a *aggregationProcess) updateFlowEndSecondsFromNodes(incomingRecord, exist
 
 // isRecordFromSrc returns true if record belongs to inter-node flow and from source node.
 func isRecordFromSrc(record *flowpb.Flow) bool {
+	if isSourceNodeFromExternalFlow(record) {
+		return true
+	}
 	return record.K8S.SourcePodName != "" && record.K8S.DestinationPodName == ""
 }
 
@@ -896,7 +892,7 @@ func getFlowKeyFromRecord(record *flowpb.Flow) (*FlowKey, bool) {
 // the ingressNetworkPolicyRuleAction is not reject.
 func isCorrelationRequired(record *flowpb.Flow) bool {
 	flowType := record.K8S.FlowType
-	return flowType == flowpb.FlowType_FLOW_TYPE_INTER_NODE &&
+	return (flowType == flowpb.FlowType_FLOW_TYPE_INTER_NODE || isSourceNodeFromExternalFlow(record)) &&
 		record.K8S.EgressNetworkPolicyRuleAction != flowpb.NetworkPolicyRuleAction_NETWORK_POLICY_RULE_ACTION_DROP &&
 		record.K8S.EgressNetworkPolicyRuleAction != flowpb.NetworkPolicyRuleAction_NETWORK_POLICY_RULE_ACTION_REJECT &&
 		record.K8S.IngressNetworkPolicyRuleAction != flowpb.NetworkPolicyRuleAction_NETWORK_POLICY_RULE_ACTION_REJECT
