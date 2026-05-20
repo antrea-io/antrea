@@ -387,12 +387,12 @@ function run_multicluster_e2e {
 
     wait_for_multicluster_controller_ready
 
-    docker pull "${DOCKER_REGISTRY}"/antrea/nginx:1.21.6-alpine
+    docker pull --platform linux/amd64 "${DOCKER_REGISTRY}"/antrea/nginx:1.21.6-alpine
     docker save "${DOCKER_REGISTRY}"/antrea/nginx:1.21.6-alpine -o nginx.tar
 
     # Use the same agnhost image which is defined as 'agnhostImage' in antrea/test/e2e/framework.go to
     # avoid pulling the image again when running Multi-cluster e2e tests.
-    docker pull "registry.k8s.io/e2e-test-images/agnhost:2.40"
+    docker pull --platform linux/amd64 "registry.k8s.io/e2e-test-images/agnhost:2.40"
     docker save "registry.k8s.io/e2e-test-images/agnhost:2.40" -o agnhost.tar
 
     if [[ ${KIND} == "true" ]]; then
@@ -400,8 +400,8 @@ function run_multicluster_e2e {
             if [[ "${name}" == "leader" ]];then
                 continue
             fi
-            kind load docker-image "${DOCKER_REGISTRY}"/antrea/nginx:1.21.6-alpine --name ${name}
-            kind load docker-image "registry.k8s.io/e2e-test-images/agnhost:2.40" --name ${name}
+            kind load image-archive nginx.tar --name ${name} || true
+            kind load image-archive agnhost.tar --name ${name} || true
         done
     else
         for kubeconfig in "${membercluster_kubeconfigs[@]}"; do
