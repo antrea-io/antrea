@@ -41,8 +41,8 @@ import (
 
 const (
 	internalBatchSize = exporter.ConsumeMultipleBatchSize
-	// FlowStreamPort is the port on which the FlowStreamService gRPC server listens.
-	FlowStreamPort = 14740
+	// flowStreamPort is the port on which the FlowStreamService gRPC server listens.
+	flowStreamPort = 14740
 )
 
 // FlowStreamService implements flowpb.FlowStreamServiceServer. Each client
@@ -70,7 +70,7 @@ func (s *FlowStreamService) Run(serverCertPEM, serverKeyPEM []byte, stopCh <-cha
 		Certificates: []tls.Certificate{cert},
 		MinVersion:   tls.VersionTLS12,
 	}
-	addr := fmt.Sprintf("0.0.0.0:%d", FlowStreamPort)
+	addr := fmt.Sprintf("0.0.0.0:%d", flowStreamPort)
 	// #nosec G102: binding to all network interfaces is intentional
 	lis, err := net.Listen("tcp", addr)
 	if err != nil {
@@ -138,7 +138,7 @@ func (s *FlowStreamService) GetFlows(req *flowpb.GetFlowsRequest, stream flowpb.
 	)
 
 	sent := 0
-	var totalDropped int64
+	var totalDropped uint64
 	batch := make([]*flowpb.Flow, internalBatchSize)
 
 	for {
@@ -148,7 +148,7 @@ func (s *FlowStreamService) GetFlows(req *flowpb.GetFlowsRequest, stream flowpb.
 		}
 
 		n, dropped, shutdown := consumer.ConsumeMultiple(batch)
-		totalDropped += dropped
+		totalDropped += uint64(dropped)
 
 		if shutdown {
 			klog.InfoS("Ring buffer shut down, closing GetFlows stream")
@@ -163,7 +163,7 @@ func (s *FlowStreamService) GetFlows(req *flowpb.GetFlowsRequest, stream flowpb.
 			if len(filtered) > 0 || dropped > 0 {
 				resp := &flowpb.GetFlowsResponse{
 					Flows:        filtered,
-					DroppedCount: uint64(totalDropped),
+					DroppedCount: totalDropped,
 				}
 				if err := stream.Send(resp); err != nil {
 					klog.InfoS("Send to client failed, closing GetFlows stream", "err", err)

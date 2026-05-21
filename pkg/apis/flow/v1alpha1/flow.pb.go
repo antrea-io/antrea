@@ -765,7 +765,6 @@ type Kubernetes struct {
 	EgressNodeName                 string                  `protobuf:"bytes,32,opt,name=egress_node_name,json=egressNodeName,proto3" json:"egress_node_name,omitempty"`
 	EgressNodeUid                  string                  `protobuf:"bytes,33,opt,name=egress_node_uid,json=egressNodeUid,proto3" json:"egress_node_uid,omitempty"`
 	EgressUid                      string                  `protobuf:"bytes,34,opt,name=egress_uid,json=egressUid,proto3" json:"egress_uid,omitempty"`
-	DestinationServiceIp           []byte                  `protobuf:"bytes,35,opt,name=destination_service_ip,json=destinationServiceIp,proto3" json:"destination_service_ip,omitempty"`
 	unknownFields                  protoimpl.UnknownFields
 	sizeCache                      protoimpl.SizeCache
 }
@@ -1038,13 +1037,6 @@ func (x *Kubernetes) GetEgressUid() string {
 	return ""
 }
 
-func (x *Kubernetes) GetDestinationServiceIp() []byte {
-	if x != nil {
-		return x.DestinationServiceIp
-	}
-	return nil
-}
-
 type App struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	ProtocolName  string                 `protobuf:"bytes,1,opt,name=protocol_name,json=protocolName,proto3" json:"protocol_name,omitempty"`
@@ -1248,8 +1240,6 @@ type Flow struct {
 	App           *App          `protobuf:"bytes,11,opt,name=app,proto3" json:"app,omitempty"`
 	FlowDirection FlowDirection `protobuf:"varint,12,opt,name=flow_direction,json=flowDirection,proto3,enum=antrea_io.antrea.pkg.apis.flow.v1alpha1.FlowDirection" json:"flow_direction,omitempty"`
 	Aggregation   *Aggregation  `protobuf:"bytes,13,opt,name=aggregation,proto3" json:"aggregation,omitempty"`
-	ProxySnatIp   []byte        `protobuf:"bytes,14,opt,name=proxy_snat_ip,json=proxySnatIp,proto3" json:"proxy_snat_ip,omitempty"`
-	ProxySnatPort uint32        `protobuf:"varint,15,opt,name=proxy_snat_port,json=proxySnatPort,proto3" json:"proxy_snat_port,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1376,20 +1366,6 @@ func (x *Flow) GetAggregation() *Aggregation {
 	return nil
 }
 
-func (x *Flow) GetProxySnatIp() []byte {
-	if x != nil {
-		return x.ProxySnatIp
-	}
-	return nil
-}
-
-func (x *Flow) GetProxySnatPort() uint32 {
-	if x != nil {
-		return x.ProxySnatPort
-	}
-	return 0
-}
-
 var File_pkg_apis_flow_v1alpha1_flow_proto protoreflect.FileDescriptor
 
 const file_pkg_apis_flow_v1alpha1_flow_proto_rawDesc = "" +
@@ -1426,7 +1402,7 @@ const file_pkg_apis_flow_v1alpha1_flow_proto_rawDesc = "" +
 	"\x06labels\x18\x01 \x03(\v2;.antrea_io.antrea.pkg.apis.flow.v1alpha1.Labels.LabelsEntryR\x06labels\x1a9\n" +
 	"\vLabelsEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\xe8\x11\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\xb2\x11\n" +
 	"\n" +
 	"Kubernetes\x12N\n" +
 	"\tflow_type\x18\x01 \x01(\x0e21.antrea_io.antrea.pkg.apis.flow.v1alpha1.FlowTypeR\bflowType\x120\n" +
@@ -1465,8 +1441,7 @@ const file_pkg_apis_flow_v1alpha1_flow_proto_rawDesc = "" +
 	"\x10egress_node_name\x18  \x01(\tR\x0eegressNodeName\x12&\n" +
 	"\x0fegress_node_uid\x18! \x01(\tR\regressNodeUid\x12\x1d\n" +
 	"\n" +
-	"egress_uid\x18\" \x01(\tR\tegressUid\x124\n" +
-	"\x16destination_service_ip\x18# \x01(\fR\x14destinationServiceIp\"G\n" +
+	"egress_uid\x18\" \x01(\tR\tegressUid\"G\n" +
 	"\x03App\x12#\n" +
 	"\rprotocol_name\x18\x01 \x01(\tR\fprotocolName\x12\x1b\n" +
 	"\thttp_vals\x18\x02 \x01(\fR\bhttpVals\"\xa4\a\n" +
@@ -1485,7 +1460,7 @@ const file_pkg_apis_flow_v1alpha1_flow_proto_rawDesc = "" +
 	"\n" +
 	"throughput\x18\v \x01(\x04R\n" +
 	"throughput\x12-\n" +
-	"\x12reverse_throughput\x18\f \x01(\x04R\x11reverseThroughput\"\xd5\a\n" +
+	"\x12reverse_throughput\x18\f \x01(\x04R\x11reverseThroughput\"\x89\a\n" +
 	"\x04Flow\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12D\n" +
 	"\x05ipfix\x18\x02 \x01(\v2..antrea_io.antrea.pkg.apis.flow.v1alpha1.IPFIXR\x05ipfix\x125\n" +
@@ -1501,9 +1476,7 @@ const file_pkg_apis_flow_v1alpha1_flow_proto_rawDesc = "" +
 	" \x01(\v2..antrea_io.antrea.pkg.apis.flow.v1alpha1.StatsR\freverseStats\x12B\n" +
 	"\x03app\x18\v \x01(\v2,.antrea_io.antrea.pkg.apis.flow.v1alpha1.AppB\x02\x18\x01R\x03app\x12]\n" +
 	"\x0eflow_direction\x18\f \x01(\x0e26.antrea_io.antrea.pkg.apis.flow.v1alpha1.FlowDirectionR\rflowDirection\x12V\n" +
-	"\vaggregation\x18\r \x01(\v24.antrea_io.antrea.pkg.apis.flow.v1alpha1.AggregationR\vaggregation\x12\"\n" +
-	"\rproxy_snat_ip\x18\x0e \x01(\fR\vproxySnatIp\x12&\n" +
-	"\x0fproxy_snat_port\x18\x0f \x01(\rR\rproxySnatPort*\xde\x01\n" +
+	"\vaggregation\x18\r \x01(\v24.antrea_io.antrea.pkg.apis.flow.v1alpha1.AggregationR\vaggregation*\xde\x01\n" +
 	"\rFlowEndReason\x12\x1f\n" +
 	"\x1bFLOW_END_REASON_UNSPECIFIED\x10\x00\x12 \n" +
 	"\x1cFLOW_END_REASON_IDLE_TIMEOUT\x10\x01\x12\"\n" +
