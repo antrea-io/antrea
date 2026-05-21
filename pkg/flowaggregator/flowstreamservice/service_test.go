@@ -138,6 +138,15 @@ func TestApplyFilter_Since(t *testing.T) {
 	assert.Equal(t, "recent", got[0].GetId())
 }
 
+func TestApplyFilter_SinceExcludesNilEndTs(t *testing.T) {
+	// A flow with no EndTs should be treated as having end_ts == zero time,
+	// which is before any non-zero since value, so it must be excluded.
+	since := time.Now().Add(-30 * time.Second)
+	nilEndTsFlow := &flowpb.Flow{Id: "nil-ts", K8S: &flowpb.Kubernetes{}}
+	got := applyFilters([]*flowpb.Flow{nilEndTsFlow}, nil, since)
+	assert.Empty(t, got)
+}
+
 func TestApplyFilter_ZeroSincePassesAll(t *testing.T) {
 	flows := []*flowpb.Flow{newFlow("a", &flowpb.Kubernetes{}), newFlow("b", &flowpb.Kubernetes{})}
 	got := applyFilters(flows, nil, time.Time{})

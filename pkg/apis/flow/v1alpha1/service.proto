@@ -58,6 +58,8 @@ message FlowFilter {
   // (direction semantics are affected by the direction field).
   repeated string namespaces = 1;
   // Match flows where source or destination Pod name is in this list.
+  // The match is on the bare Pod name without a namespace prefix; to restrict
+  // to a specific namespace, combine this filter with the namespaces field.
   repeated string pod_names = 2;
   // Match flows where source or destination Pod labels match this selector.
   // Uses the same syntax as Kubernetes label selectors (e.g. "app=frontend").

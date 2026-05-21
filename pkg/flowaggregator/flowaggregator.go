@@ -112,6 +112,10 @@ type flowAggregator struct {
 	// separately by the buffer itself) and proxyRecord no longer returns an error.
 	// Kept for API/metrics compatibility.
 	numRecordsDropped atomic.Int64
+	// stopped is set to 1 before the certificate update channels are closed. Once
+	// set, CertificateUpdated() becomes a no-op so that any in-flight worker
+	// goroutine inside certificateProvider cannot send on a closed channel.
+	stopped           atomic.Bool
 	updateCh          chan *options.Options
 	configFile        string
 	configWatcher     *fsnotify.Watcher
@@ -267,6 +271,11 @@ func (fa *flowAggregator) InitAggregationProcess() error {
 }
 
 func (fa *flowAggregator) CertificateUpdated() {
+	// If shutdown has begun the channels are about to be (or have already been) closed.
+	// Sending on a closed channel panics, so we drop the notification instead.
+	if fa.stopped.Load() {
+		return
+	}
 	select {
 	case fa.certificateUpdateCh <- struct{}{}:
 	default:
@@ -312,11 +321,34 @@ func (fa *flowAggregator) runCollectors(stopCh <-chan struct{}) {
 }
 
 // runFlowStreamService runs the FlowStreamService with server-side TLS, restarting
-// it whenever the TLS certificate is rotated. It mirrors the structure of runCollectors.
+// it whenever the TLS certificate is rotated. It mirrors the structure of runCollectors:
+// the loop starts with a select so that the server is not started until the certificate
+// provider has populated cert material (signalled via the first CertificateUpdated call).
 func (fa *flowAggregator) runFlowStreamService(stopCh <-chan struct{}) {
 	var svcWg sync.WaitGroup
 	svcStopCh := make(chan struct{})
 	for {
+		// Wait for a certificate update (or shutdown) before (re-)starting the server.
+		// On the initial startup this blocks until the cert provider has synced, ensuring
+		// we never start the server with empty PEM bytes.
+		select {
+		case <-stopCh:
+			close(svcStopCh)
+			svcWg.Wait()
+			return
+		case <-fa.flowStreamSvcUpdateCh:
+		}
+
+		// Also check stopCh before starting a brand-new server, so that if both
+		// channels are ready we don't bind the port only to immediately tear it down.
+		select {
+		case <-stopCh:
+			close(svcStopCh)
+			svcWg.Wait()
+			return
+		default:
+		}
+
 		_, serverCert, serverKey := fa.certificateProvider.GetTLSConfig()
 		svcWg.Add(1)
 		go func() {
@@ -409,13 +441,19 @@ func (fa *flowAggregator) Run(stopCh <-chan struct{}) {
 	}
 	fa.recordBuffer.Shutdown()
 	fa.stopAllExporters()
+	wg.Wait()
+	// Mark the aggregator as stopped before closing the channels. The certificate
+	// provider's worker goroutine runs independently of stopCh and may still be
+	// in-flight even after Run() has returned and wg.Done() fired. Setting stopped
+	// causes CertificateUpdated() to become a no-op so those callbacks cannot send
+	// on a closed channel and panic.
+	fa.stopped.Store(true)
 	if fa.certificateUpdateCh != nil {
 		close(fa.certificateUpdateCh)
 	}
 	if fa.flowStreamSvcUpdateCh != nil {
 		close(fa.flowStreamSvcUpdateCh)
 	}
-	wg.Wait()
 }
 
 // initExporters reads the initial configuration and launches exporter

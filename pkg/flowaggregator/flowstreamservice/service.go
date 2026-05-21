@@ -245,7 +245,10 @@ func parseFlowFilter(f *flowpb.FlowFilter) (flowFilter, error) {
 func applyFilters(flows []*flowpb.Flow, filters []flowFilter, since time.Time) []*flowpb.Flow {
 	filtered := flows[:0]
 	for _, f := range flows {
-		if !since.IsZero() && f.GetEndTs() != nil && f.GetEndTs().AsTime().Before(since) {
+		// (*timestamppb.Timestamp).AsTime() is nil-safe and returns the zero time,
+		// which is before any non-zero since value, so flows with a nil EndTs are
+		// correctly excluded when a since cutoff is active.
+		if !since.IsZero() && f.GetEndTs().AsTime().Before(since) {
 			continue
 		}
 		match := true

@@ -178,6 +178,8 @@ type FlowFilter struct {
 	// (direction semantics are affected by the direction field).
 	Namespaces []string `protobuf:"bytes,1,rep,name=namespaces,proto3" json:"namespaces,omitempty"`
 	// Match flows where source or destination Pod name is in this list.
+	// The match is on the bare Pod name without a namespace prefix; to restrict
+	// to a specific namespace, combine this filter with the namespaces field.
 	PodNames []string `protobuf:"bytes,2,rep,name=pod_names,json=podNames,proto3" json:"pod_names,omitempty"`
 	// Match flows where source or destination Pod labels match this selector.
 	// Uses the same syntax as Kubernetes label selectors (e.g. "app=frontend").
