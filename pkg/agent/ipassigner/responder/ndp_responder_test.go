@@ -19,7 +19,7 @@ import (
 	"net/netip"
 	"testing"
 
-	"github.com/mdlayher/ndp"
+	"antrea.io/ndp"
 	"github.com/stretchr/testify/assert"
 	"golang.org/x/net/ipv6"
 	"k8s.io/apimachinery/pkg/util/sets"

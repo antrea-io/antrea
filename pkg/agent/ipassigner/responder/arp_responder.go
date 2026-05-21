@@ -21,7 +21,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/mdlayher/arp"
+	"antrea.io/arp"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/klog/v2"
