@@ -243,11 +243,11 @@ type FlowLoggerConfig struct {
 }
 
 type FlowStreamServiceConfig struct {
-	// Enable is the switch to enable the FlowStreamService gRPC server. The server streams
-	// flow records to consumers such as antrea-ui. Client authentication is not yet
-	// implemented, so the server should only be enabled in trusted environments.
+	// Enable is the switch to enable the FlowStreamService gRPC server (port 14740). The
+	// server streams flow records to consumers such as antrea-ui. It uses server-side TLS
+	// (the same self-signed certificate as the gRPC collector) but no client authentication.
 	// Defaults to false.
-	Enable bool `yaml:"enable,omitempty"`
+	Enable *bool `yaml:"enable,omitempty"`
 }
 
 type NetworkPolicyRuleAction string

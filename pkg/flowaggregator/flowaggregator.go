@@ -92,6 +92,7 @@ type flowAggregator struct {
 	aggregatorTransportProtocol flowaggregatorconfig.AggregatorTransportProtocol
 	collectorMutex              sync.Mutex
 	certificateUpdateCh         chan struct{}
+	flowStreamSvcUpdateCh       chan struct{}
 	ipfixCollector              collector.Interface
 	grpcCollector               collector.Interface
 	aggregationProcess          intermediate.AggregationProcess
@@ -195,8 +196,9 @@ func NewFlowAggregator(
 		certificateProvider:         newCertificateProvider(k8sClient, opt.Config.FlowAggregatorAddress),
 		certificateUpdateCh:         make(chan struct{}, 1),
 	}
-	if opt.Config.FlowStreamService.Enable {
+	if *opt.Config.FlowStreamService.Enable {
 		fa.flowStreamService = flowstreamservice.NewFlowStreamService(fa.recordBuffer)
+		fa.flowStreamSvcUpdateCh = make(chan struct{}, 1)
 	}
 
 	if opt.AggregatorMode == flowaggregatorconfig.AggregatorModeAggregate {
@@ -269,6 +271,12 @@ func (fa *flowAggregator) CertificateUpdated() {
 	case fa.certificateUpdateCh <- struct{}{}:
 	default:
 	}
+	if fa.flowStreamSvcUpdateCh != nil {
+		select {
+		case fa.flowStreamSvcUpdateCh <- struct{}{}:
+		default:
+		}
+	}
 }
 
 func (fa *flowAggregator) runCollectors(stopCh <-chan struct{}) {
@@ -299,6 +307,34 @@ func (fa *flowAggregator) runCollectors(stopCh <-chan struct{}) {
 			collectorWg.Go(func() {
 				fa.ipfixCollector.Run(collectorStopCh)
 			})
+		}
+	}
+}
+
+// runFlowStreamService runs the FlowStreamService with server-side TLS, restarting
+// it whenever the TLS certificate is rotated. It mirrors the structure of runCollectors.
+func (fa *flowAggregator) runFlowStreamService(stopCh <-chan struct{}) {
+	var svcWg sync.WaitGroup
+	svcStopCh := make(chan struct{})
+	for {
+		_, serverCert, serverKey := fa.certificateProvider.GetTLSConfig()
+		svcWg.Add(1)
+		go func() {
+			defer svcWg.Done()
+			if err := fa.flowStreamService.Run(serverCert, serverKey, svcStopCh); err != nil {
+				klog.ErrorS(err, "FlowStreamService failed to start")
+			}
+		}()
+
+		select {
+		case <-stopCh:
+			close(svcStopCh)
+			svcWg.Wait()
+			return
+		case <-fa.flowStreamSvcUpdateCh:
+			close(svcStopCh)
+			svcWg.Wait()
+			svcStopCh = make(chan struct{})
 		}
 	}
 }
@@ -335,9 +371,7 @@ func (fa *flowAggregator) Run(stopCh <-chan struct{}) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			if err := fa.flowStreamService.Run(stopCh); err != nil {
-				klog.ErrorS(err, "FlowStreamService failed to start")
-			}
+			fa.runFlowStreamService(stopCh)
 		}()
 	}
 
@@ -377,6 +411,9 @@ func (fa *flowAggregator) Run(stopCh <-chan struct{}) {
 	fa.stopAllExporters()
 	if fa.certificateUpdateCh != nil {
 		close(fa.certificateUpdateCh)
+	}
+	if fa.flowStreamSvcUpdateCh != nil {
+		close(fa.flowStreamSvcUpdateCh)
 	}
 	wg.Wait()
 }

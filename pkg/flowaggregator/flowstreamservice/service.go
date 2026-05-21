@@ -18,6 +18,7 @@
 package flowstreamservice
 
 import (
+	"crypto/tls"
 	"fmt"
 	"net"
 	"net/netip"
@@ -28,6 +29,7 @@ import (
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/status"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/klog/v2"
@@ -56,17 +58,25 @@ func NewFlowStreamService(buffer ringbuffer.BroadcastBuffer[*flowpb.Flow]) *Flow
 	return &FlowStreamService{buffer: buffer}
 }
 
-// Run starts a dedicated gRPC server for the FlowStreamService on FlowStreamPort.
-// The server uses plaintext (no TLS) for now; authentication will be added in a
-// follow-up PR. Run blocks until stopCh is closed.
-func (s *FlowStreamService) Run(stopCh <-chan struct{}) error {
+// Run starts a dedicated TLS gRPC server for the FlowStreamService on FlowStreamPort.
+// serverCertPEM and serverKeyPEM are the PEM-encoded server certificate and private key;
+// only server-side TLS is used (no client authentication). Run blocks until stopCh is closed.
+func (s *FlowStreamService) Run(serverCertPEM, serverKeyPEM []byte, stopCh <-chan struct{}) error {
+	cert, err := tls.X509KeyPair(serverCertPEM, serverKeyPEM)
+	if err != nil {
+		return fmt.Errorf("failed to parse server TLS key pair: %w", err)
+	}
+	tlsConfig := &tls.Config{
+		Certificates: []tls.Certificate{cert},
+		MinVersion:   tls.VersionTLS12,
+	}
 	addr := fmt.Sprintf("0.0.0.0:%d", FlowStreamPort)
 	// #nosec G102: binding to all network interfaces is intentional
 	lis, err := net.Listen("tcp", addr)
 	if err != nil {
 		return fmt.Errorf("failed to listen on %s: %w", addr, err)
 	}
-	server := grpc.NewServer()
+	server := grpc.NewServer(grpc.Creds(credentials.NewTLS(tlsConfig)))
 	flowpb.RegisterFlowStreamServiceServer(server, s)
 
 	var wg sync.WaitGroup
@@ -181,9 +191,10 @@ func (s *FlowStreamService) GetFlows(req *flowpb.GetFlowsRequest, stream flowpb.
 type flowFilter struct {
 	proto            *flowpb.FlowFilter
 	podLabelSelector labels.Selector
-	// parsedIPs contains either netip.Addr or netip.Prefix entries for each
-	// element of proto.GetIps().
-	parsedIPs []any
+	// parsedAddrs holds exact IP addresses from proto.GetIps().
+	parsedAddrs []netip.Addr
+	// parsedPrefixes holds CIDR prefixes from proto.GetIps().
+	parsedPrefixes []netip.Prefix
 }
 
 // parseFlowFilter parses and validates a FlowFilter proto, returning a flowFilter
@@ -213,13 +224,13 @@ func parseFlowFilter(f *flowpb.FlowFilter) (flowFilter, error) {
 			if err != nil {
 				return flowFilter{}, fmt.Errorf("invalid IP prefix %q: %w", ipStr, err)
 			}
-			pf.parsedIPs = append(pf.parsedIPs, prefix)
+			pf.parsedPrefixes = append(pf.parsedPrefixes, prefix)
 		} else {
 			addr, err := netip.ParseAddr(ipStr)
 			if err != nil {
 				return flowFilter{}, fmt.Errorf("invalid IP address %q: %w", ipStr, err)
 			}
-			pf.parsedIPs = append(pf.parsedIPs, addr)
+			pf.parsedAddrs = append(pf.parsedAddrs, addr)
 		}
 	}
 
@@ -286,8 +297,8 @@ func matchFilter(f *flowpb.Flow, pf *flowFilter) bool {
 			return false
 		}
 	}
-	if len(pf.parsedIPs) > 0 {
-		if !matchParsedIPs(f, pf.parsedIPs, direction) {
+	if len(pf.parsedAddrs) > 0 || len(pf.parsedPrefixes) > 0 {
+		if !matchParsedIPs(f, pf.parsedAddrs, pf.parsedPrefixes, direction) {
 			return false
 		}
 	}
@@ -362,7 +373,7 @@ func matchPodNames(k8s *flowpb.Kubernetes, podNames []string, direction flowpb.F
 	return false
 }
 
-func matchParsedIPs(f *flowpb.Flow, parsedIPs []any, direction flowpb.FlowFilterDirection) bool {
+func matchParsedIPs(f *flowpb.Flow, addrs []netip.Addr, prefixes []netip.Prefix, direction flowpb.FlowFilterDirection) bool {
 	ip := f.GetIp()
 	if ip == nil {
 		return false
@@ -373,22 +384,20 @@ func matchParsedIPs(f *flowpb.Flow, parsedIPs []any, direction flowpb.FlowFilter
 	checkSrc := direction != flowpb.FlowFilterDirection_FLOW_FILTER_DIRECTION_TO
 	checkDst := direction != flowpb.FlowFilterDirection_FLOW_FILTER_DIRECTION_FROM
 
-	for _, entry := range parsedIPs {
-		switch v := entry.(type) {
-		case netip.Prefix:
-			if checkSrc && srcOK && v.Contains(srcAddr) {
-				return true
-			}
-			if checkDst && dstOK && v.Contains(dstAddr) {
-				return true
-			}
-		case netip.Addr:
-			if checkSrc && srcOK && srcAddr == v {
-				return true
-			}
-			if checkDst && dstOK && dstAddr == v {
-				return true
-			}
+	for _, v := range addrs {
+		if checkSrc && srcOK && srcAddr == v {
+			return true
+		}
+		if checkDst && dstOK && dstAddr == v {
+			return true
+		}
+	}
+	for _, v := range prefixes {
+		if checkSrc && srcOK && v.Contains(srcAddr) {
+			return true
+		}
+		if checkDst && dstOK && v.Contains(dstAddr) {
+			return true
 		}
 	}
 	return false

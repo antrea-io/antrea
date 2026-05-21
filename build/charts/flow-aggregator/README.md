@@ -63,7 +63,7 @@ Kubernetes: `>= 1.23.0-0`
 | flowLogger.path | string | `"/tmp/antrea-flows.log"` | Path is the path to the local log file. |
 | flowLogger.prettyPrint | bool | `true` | PrettyPrint enables conversion of some numeric fields to a more meaningful string representation. |
 | flowLogger.recordFormat | string | `"CSV"` | RecordFormat defines the format of the flow records logged to file. Only "CSV" is supported at the moment. |
-| flowStreamService.enable | bool | `false` | Enable is the switch to enable the FlowStreamService gRPC server (port 14740, plaintext). Client authentication is not yet implemented, so the server should only be enabled in trusted environments. Disabled by default. |
+| flowStreamService.enable | bool | `false` | Enable is the switch to enable the FlowStreamService gRPC server (port 14740). The server uses server-side TLS (same self-signed certificate as the gRPC collector) but no client authentication. Disabled by default. |
 | fullnameOverride | string | `""` | Override the full name of the chart. |
 | hostAliases | list | `[]` | HostAliases to be injected into the Pod's hosts file. For example: `[{"ip": "8.8.8.8", "hostnames": ["clickhouse.example.com"]}]` |
 | hostNetwork | bool | `false` | Run the flow-aggregator Pod in the host network. With hostNetwork enabled, it is usually necessary to set dnsPolicy to ClusterFirstWithHostNet. |
