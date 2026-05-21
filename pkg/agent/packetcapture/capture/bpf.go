@@ -729,6 +729,20 @@ func compileBothDirectionFilters(inst []bpf.Instruction, handler *ipFamilyHandle
 		}
 	}
 
+	if srcIP == nil && dstIP == nil {
+		pathBStart := len(inst)
+		patched := false
+		for idx := dstOnlyPatchStart; idx < len(inst); idx++ {
+			if jmp, ok := inst[idx].(bpf.JumpIf); ok {
+				if jmp.Cond == bpf.JumpEqual && !patched {
+					jmp.SkipFalse = uint8(pathBStart - idx - 1)
+					inst[idx] = jmp
+					patched = true
+				}
+			}
+		}
+	}
+
 	lastTransAIdx := len(inst) - 1
 
 	if srcIP != nil {
@@ -767,7 +781,19 @@ func compileBothDirectionFilters(inst []bpf.Instruction, handler *ipFamilyHandle
 		srcPort: transportNoFlagsICMP.dstPort,
 		dstPort: transportNoFlagsICMP.srcPort,
 	}
-	transB := compileTransportFilters(handler, size, uint8(len(inst)), &transportB)
+	sliceStart := 0
+	if srcIP == nil && dstIP == nil {
+		if handler.etherType == etherTypeIPv4 && hasPorts {
+			sliceStart += 3
+		}
+		if transportNoFlagsICMP.srcPort > 0 && transportNoFlagsICMP.dstPort > 0 {
+			sliceStart += 1
+		}
+	}
+	transB := compileTransportFilters(handler, size, uint8(len(inst)-sliceStart), &transportB)
+	if sliceStart > 0 && len(transB) >= sliceStart {
+		transB = transB[sliceStart:]
+	}
 	transB = transB[:len(transB)-1]
 	inst = append(inst, transB...)
 
@@ -1044,7 +1070,28 @@ func calculateInstructionsSize(handler *ipFamilyHandler, packet *crdv1alpha1.Pac
 				count += handler.addressChunks * 2
 			}
 
-			count += portFiltersSize
+			backwardPortFiltersSize := portFiltersSize
+			if srcIP == nil && dstIP == nil {
+				hasPorts := false
+				if transport.TCP != nil {
+					hasPorts = transport.TCP.SrcPort != nil || transport.TCP.DstPort != nil
+				} else if transport.UDP != nil {
+					hasPorts = transport.UDP.SrcPort != nil || transport.UDP.DstPort != nil
+				}
+				if handler.etherType == etherTypeIPv4 && hasPorts {
+					backwardPortFiltersSize -= 3
+				}
+				var srcPortValue, dstPortValue *int32
+				if transport.TCP != nil {
+					srcPortValue, dstPortValue = transport.TCP.SrcPort, transport.TCP.DstPort
+				} else if transport.UDP != nil {
+					srcPortValue, dstPortValue = transport.UDP.SrcPort, transport.UDP.DstPort
+				}
+				if srcPortValue != nil && dstPortValue != nil {
+					backwardPortFiltersSize -= 1
+				}
+			}
+			count += backwardPortFiltersSize
 		}
 	}
 

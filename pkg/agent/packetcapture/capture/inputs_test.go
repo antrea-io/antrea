@@ -905,4 +905,83 @@ var BPFTestCases = []BPFTestCase{
 		},
 		Direction: crdv1alpha1.CaptureDirectionBoth,
 	},
+	{
+		Name:          "IPv6 ICMPv6 multiple messages both direction",
+		TcpdumpFilter: "icmp6 and ((src host fd00:10:244::1 and dst host fd00:10:244::2 and ((icmp6[0]=1 and icmp6[1]=1) or icmp6[0]=128)) or (src host fd00:10:244::2 and dst host fd00:10:244::1 and ((icmp6[0]=1 and icmp6[1]=1) or icmp6[0]=128)))",
+		SrcIP:         net.ParseIP("fd00:10:244::1"),
+		DstIP:         net.ParseIP("fd00:10:244::2"),
+		Packet: &crdv1alpha1.Packet{
+			IPFamily: v1.IPv6Protocol,
+			Protocol: &testICMPv6Protocol,
+			TransportHeader: crdv1alpha1.TransportHeader{
+				ICMPv6: &crdv1alpha1.ICMPv6Header{
+					Messages: []crdv1alpha1.ICMPv6MsgMatcher{
+						{Type: testICMPv6MsgDstUnreach, Code: ptr.To[int32](1)},
+						{Type: testICMPv6MsgEcho},
+					},
+				},
+			},
+		},
+		Direction: crdv1alpha1.CaptureDirectionBoth,
+	},
+	{
+		Name:          "IPv6 ICMPv6 multiple messages with code",
+		TcpdumpFilter: "icmp6 and ((icmp6[0]=1 and icmp6[1]=1) or icmp6[0]=128)",
+		Packet: &crdv1alpha1.Packet{
+			IPFamily: v1.IPv6Protocol,
+			Protocol: &testICMPv6Protocol,
+			TransportHeader: crdv1alpha1.TransportHeader{
+				ICMPv6: &crdv1alpha1.ICMPv6Header{
+					Messages: []crdv1alpha1.ICMPv6MsgMatcher{
+						{Type: testICMPv6MsgDstUnreach, Code: ptr.To[int32](1)},
+						{Type: testICMPv6MsgEcho},
+					},
+				},
+			},
+		},
+		Direction: crdv1alpha1.CaptureDirectionSourceToDestination,
+	},
+	{
+		Name:          "IPv4 TCP ports Both (no IPs)",
+		TcpdumpFilter: "ip proto 6 and ((tcp src port 12345 and tcp dst port 80) or (tcp src port 80 and tcp dst port 12345))",
+		Packet: &crdv1alpha1.Packet{
+			Protocol: &testTCPProtocol,
+			TransportHeader: crdv1alpha1.TransportHeader{
+				TCP: &crdv1alpha1.TCPHeader{
+					SrcPort: &testSrcPort,
+					DstPort: &testDstPort,
+				},
+			},
+		},
+		Direction: crdv1alpha1.CaptureDirectionBoth,
+	},
+	{
+		Name:          "IPv6 TCP ports Both (no IPs)",
+		TcpdumpFilter: "ip6 proto 6 and ((tcp src port 12345 and tcp dst port 80) or (tcp src port 80 and tcp dst port 12345))",
+		Packet: &crdv1alpha1.Packet{
+			IPFamily: v1.IPv6Protocol,
+			Protocol: &testTCPProtocol,
+			TransportHeader: crdv1alpha1.TransportHeader{
+				TCP: &crdv1alpha1.TCPHeader{
+					SrcPort: &testSrcPort,
+					DstPort: &testDstPort,
+				},
+			},
+		},
+		Direction: crdv1alpha1.CaptureDirectionBoth,
+	},
+	{
+		Name:          "IPv4 UDP ports Both (no IPs)",
+		TcpdumpFilter: "ip proto 17 and ((udp src port 12345 and udp dst port 80) or (udp src port 80 and udp dst port 12345))",
+		Packet: &crdv1alpha1.Packet{
+			Protocol: &testUDPProtocol,
+			TransportHeader: crdv1alpha1.TransportHeader{
+				UDP: &crdv1alpha1.UDPHeader{
+					SrcPort: &testSrcPort,
+					DstPort: &testDstPort,
+				},
+			},
+		},
+		Direction: crdv1alpha1.CaptureDirectionBoth,
+	},
 }
