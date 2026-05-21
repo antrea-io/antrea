@@ -461,7 +461,6 @@ func compileTransportFilters(handler *ipFamilyHandler, size, curLen uint8, trans
 		}
 	}
 
-	// return (accept)
 	inst = append(inst, returnKeep)
 
 	return inst
@@ -636,10 +635,12 @@ func compileBothDirectionFilters(inst []bpf.Instruction, handler *ipFamilyHandle
 	common := getCommonPrefixChunks(handler, srcIP, dstIP)
 
 	sharedFlags := transport.tcpFlags
-	transportNoFlags := *transport
-	transportNoFlags.tcpFlags = nil
+	sharedICMP := transport.icmp
+	transportNoFlagsICMP := *transport
+	transportNoFlagsICMP.tcpFlags = nil
+	transportNoFlagsICMP.icmp = nil
 
-	diffJumpIdx := -1
+	diffJumpIdxs := make([]int, 0, handler.addressChunks)
 	if srcIP != nil {
 		for i := 0; i < handler.addressChunks; i++ {
 			offset := uint32(i * 4)
@@ -647,11 +648,9 @@ func compileBothDirectionFilters(inst []bpf.Instruction, handler *ipFamilyHandle
 			inst = append(inst, bpf.LoadAbsolute{Off: handler.sourceAddrOffset + offset, Size: lengthWord})
 			if i < common {
 				inst = append(inst, bpf.JumpIf{Cond: bpf.JumpEqual, Val: addrA, SkipTrue: 0, SkipFalse: skipToDrop(len(inst))})
-			} else if i == common {
-				diffJumpIdx = len(inst)
-				inst = append(inst, bpf.JumpIf{Cond: bpf.JumpEqual, Val: addrA, SkipTrue: 0, SkipFalse: 0})
 			} else {
-				inst = append(inst, bpf.JumpIf{Cond: bpf.JumpEqual, Val: addrA, SkipTrue: 0, SkipFalse: skipToDrop(len(inst))})
+				diffJumpIdxs = append(diffJumpIdxs, len(inst))
+				inst = append(inst, bpf.JumpIf{Cond: bpf.JumpEqual, Val: addrA, SkipTrue: 0, SkipFalse: 0})
 			}
 		}
 	}
@@ -674,19 +673,20 @@ func compileBothDirectionFilters(inst []bpf.Instruction, handler *ipFamilyHandle
 
 	dstOnlyPatchStart := len(inst)
 
-	if proto > 0 && handler.etherType == etherTypeIPv6 {
+	hasPorts := transportNoFlagsICMP.srcPort > 0 || transportNoFlagsICMP.dstPort > 0
+	if proto > 0 && handler.etherType == etherTypeIPv6 && (hasPorts || len(sharedFlags) > 0) {
 		inst = append(inst, handler.loadProtocol)
 		inst = append(inst, compareProtocol(proto, 0, skipToDrop(len(inst))))
 	}
 
-	transA := compileTransportFilters(handler, size, uint8(len(inst)), &transportNoFlags)
+	transA := compileTransportFilters(handler, size, uint8(len(inst)), &transportNoFlagsICMP)
 	transA = transA[:len(transA)-1]
 	inst = append(inst, transA...)
 
-	if diffJumpIdx >= 0 {
-		origJmp := inst[diffJumpIdx].(bpf.JumpIf)
-		origJmp.SkipFalse = uint8(len(inst) - diffJumpIdx - 1)
-		inst[diffJumpIdx] = origJmp
+	for _, idx := range diffJumpIdxs {
+		origJmp := inst[idx].(bpf.JumpIf)
+		origJmp.SkipFalse = uint8(len(inst) - idx - 1)
+		inst[idx] = origJmp
 	}
 
 	if srcIP == nil && dstIP != nil {
@@ -711,6 +711,11 @@ func compileBothDirectionFilters(inst []bpf.Instruction, handler *ipFamilyHandle
 
 	if srcIP != nil && dstIP == nil {
 		pathBStart := len(inst)
+		for _, idx := range diffJumpIdxs {
+			origJmp := inst[idx].(bpf.JumpIf)
+			origJmp.SkipFalse = uint8(pathBStart - idx - 1)
+			inst[idx] = origJmp
+		}
 		for idx := dstOnlyPatchStart; idx < len(inst); idx++ {
 			if jmp, ok := inst[idx].(bpf.JumpIf); ok {
 				if jmp.Cond == bpf.JumpBitsSet && jmp.SkipTrue > 0 {
@@ -753,39 +758,83 @@ func compileBothDirectionFilters(inst []bpf.Instruction, handler *ipFamilyHandle
 		}
 	}
 
-	if proto > 0 && handler.etherType == etherTypeIPv6 {
+	if proto > 0 && handler.etherType == etherTypeIPv6 && (hasPorts || len(sharedFlags) > 0) {
 		inst = append(inst, handler.loadProtocol)
 		inst = append(inst, compareProtocol(proto, 0, skipToDrop(len(inst))))
 	}
 
 	transportB := transportFilters{
-		srcPort: transportNoFlags.dstPort,
-		dstPort: transportNoFlags.srcPort,
-		icmp:    transportNoFlags.icmp,
+		srcPort: transportNoFlagsICMP.dstPort,
+		dstPort: transportNoFlagsICMP.srcPort,
 	}
 	transB := compileTransportFilters(handler, size, uint8(len(inst)), &transportB)
 	transB = transB[:len(transB)-1]
 	inst = append(inst, transB...)
 
-	if len(sharedFlags) > 0 {
-		if jmpA, ok := inst[lastTransAIdx].(bpf.JumpIf); ok {
-			jmpA.SkipTrue = uint8(len(inst) - lastTransAIdx - 1)
-			inst[lastTransAIdx] = jmpA
+	if jmpA, ok := inst[lastTransAIdx].(bpf.JumpIf); ok {
+		jmpA.SkipTrue = uint8(len(inst) - lastTransAIdx - 1)
+		inst[lastTransAIdx] = jmpA
+	}
+
+	if len(sharedFlags) > 0 || len(sharedICMP) > 0 {
+		if handler.etherType == etherTypeIPv4 && !hasPorts && (len(sharedICMP) > 0 || len(sharedFlags) > 0) {
+			skipTrue := skipToDrop(len(inst)) - 1
+			inst = append(inst, loadIPv4HeaderOffset(skipTrue)...)
 		}
-		for _, f := range sharedFlags {
+		if proto > 0 && handler.etherType == etherTypeIPv6 {
+			inst = append(inst, handler.loadProtocol)
+			inst = append(inst, compareProtocol(proto, 0, skipToDrop(len(inst))))
+		}
+		icmpInsts := 0
+		if len(sharedICMP) > 0 {
+			icmpInsts = 1 // loadICMPType
+			for _, f := range sharedICMP {
+				icmpInsts++ // jeq type
+				if f.icmpCode != nil {
+					icmpInsts += 2 // loadCode + jeqCode
+				}
+			}
+		}
+		for i, f := range sharedFlags {
 			inst = append(inst, handler.loadTCPFlags)
 			inst = append(inst, bpf.ALUOpConstant{Op: bpf.ALUOpAnd, Val: f.mask})
-			inst = append(inst, bpf.JumpIf{Cond: bpf.JumpEqual, Val: f.flag, SkipTrue: 0, SkipFalse: skipToDrop(len(inst))})
+			skipTrue := uint8((len(sharedFlags)-1-i)*3 + icmpInsts)
+			var skipFalse uint8
+			if i == len(sharedFlags)-1 {
+				skipFalse = 1
+			}
+			inst = append(inst, bpf.JumpIf{Cond: bpf.JumpEqual, Val: f.flag, SkipTrue: skipTrue, SkipFalse: skipFalse})
 		}
-	} else {
-		if jmpA, ok := inst[lastTransAIdx].(bpf.JumpIf); ok {
-			jmpA.SkipTrue = uint8(len(inst) - lastTransAIdx - 1)
-			inst[lastTransAIdx] = jmpA
+		if len(sharedICMP) > 0 {
+			inst = append(inst, handler.loadICMPType)
+			for i, f := range sharedICMP {
+				var skipTrue, skipFalse uint8
+				if f.icmpCode != nil {
+					if i != len(sharedICMP)-1 {
+						skipFalse = 2
+					} else {
+						skipFalse = skipToDrop(len(inst))
+					}
+				} else {
+					if i != len(sharedICMP)-1 {
+						skipTrue, skipFalse = skipToDrop(len(inst))-1, 0
+					} else {
+						skipTrue, skipFalse = 0, skipToDrop(len(inst))
+					}
+				}
+				inst = append(inst, bpf.JumpIf{Cond: bpf.JumpEqual, Val: f.icmpType, SkipTrue: skipTrue, SkipFalse: skipFalse})
+				if f.icmpCode != nil {
+					inst = append(inst, handler.loadICMPCode)
+					inst = append(inst, bpf.JumpIf{Cond: bpf.JumpEqual, Val: *f.icmpCode, SkipTrue: skipToDrop(len(inst)) - 1, SkipFalse: skipToDrop(len(inst))})
+				}
+			}
 		}
+
+		inst = append(inst, returnKeep)
+		return inst
 	}
 
 	inst = append(inst, returnKeep)
-
 	return inst
 }
 

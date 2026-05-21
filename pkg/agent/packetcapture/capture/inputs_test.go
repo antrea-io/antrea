@@ -748,4 +748,161 @@ var BPFTestCases = []BPFTestCase{
 		},
 		Direction: crdv1alpha1.CaptureDirectionBoth,
 	},
+	{
+		Name:          "IPv6 TCP srcOnly IP and src+dst ports Both",
+		TcpdumpFilter: "ip6 proto 6 and ((src host fd00:10:244::1 and tcp src port 12345 and tcp dst port 80) or (dst host fd00:10:244::1 and tcp src port 80 and tcp dst port 12345))",
+		SrcIP:         net.ParseIP("fd00:10:244::1"),
+		Packet: &crdv1alpha1.Packet{
+			IPFamily: v1.IPv6Protocol,
+			Protocol: &testTCPProtocol,
+			TransportHeader: crdv1alpha1.TransportHeader{
+				TCP: &crdv1alpha1.TCPHeader{SrcPort: &testSrcPort, DstPort: &testDstPort},
+			},
+		},
+		Direction: crdv1alpha1.CaptureDirectionBoth,
+	},
+	{
+		Name:          "IPv4 ICMP src+dst IP Both (echo and echo-reply)",
+		TcpdumpFilter: "ip proto 1 and ((src host 127.0.0.1 and dst host 127.0.0.2 and (icmp[0]=8 or icmp[0]=0)) or (src host 127.0.0.2 and dst host 127.0.0.1 and (icmp[0]=8 or icmp[0]=0)))",
+		SrcIP:         net.ParseIP("127.0.0.1"),
+		DstIP:         net.ParseIP("127.0.0.2"),
+		Packet: &crdv1alpha1.Packet{
+			Protocol: &testICMPProtocol,
+			TransportHeader: crdv1alpha1.TransportHeader{
+				ICMP: &crdv1alpha1.ICMPHeader{
+					Messages: []crdv1alpha1.ICMPMsgMatcher{
+						{Type: testICMPMsgEcho},
+						{Type: testICMPMsgEchoReply},
+					},
+				},
+			},
+		},
+		Direction: crdv1alpha1.CaptureDirectionBoth,
+	},
+	{
+		Name:          "IPv6 ICMPv6 src+dst IP Both (echo and echo-reply)",
+		TcpdumpFilter: "ip6 proto 58 and ((src host fd00:10:244::1 and dst host fd00:10:244::2 and (icmp6[0]=128 or icmp6[0]=129)) or (src host fd00:10:244::2 and dst host fd00:10:244::1 and (icmp6[0]=128 or icmp6[0]=129)))",
+		SrcIP:         net.ParseIP("fd00:10:244::1"),
+		DstIP:         net.ParseIP("fd00:10:244::2"),
+		Packet: &crdv1alpha1.Packet{
+			IPFamily: v1.IPv6Protocol,
+			Protocol: &testICMPv6Protocol,
+			TransportHeader: crdv1alpha1.TransportHeader{
+				ICMPv6: &crdv1alpha1.ICMPv6Header{
+					Messages: []crdv1alpha1.ICMPv6MsgMatcher{
+						{Type: testICMPv6MsgEcho},
+						{Type: testICMPv6MsgEchoReply},
+					},
+				},
+			},
+		},
+		Direction: crdv1alpha1.CaptureDirectionBoth,
+	},
+	{
+		Name:          "IPv4 TCP src+dst IP multiple flags Both (SYN or ACK)",
+		TcpdumpFilter: "ip proto 6 and ((src host 127.0.0.1 and dst host 127.0.0.2 and src port 12345 and dst port 80 and ((tcp[tcpflags] & tcp-syn == tcp-syn) or (tcp[tcpflags] & tcp-ack == tcp-ack))) or (src host 127.0.0.2 and dst host 127.0.0.1 and src port 80 and dst port 12345 and ((tcp[tcpflags] & tcp-syn == tcp-syn) or (tcp[tcpflags] & tcp-ack == tcp-ack))))",
+		SrcIP:         net.ParseIP("127.0.0.1"),
+		DstIP:         net.ParseIP("127.0.0.2"),
+		Packet: &crdv1alpha1.Packet{
+			Protocol: &testTCPProtocol,
+			TransportHeader: crdv1alpha1.TransportHeader{
+				TCP: &crdv1alpha1.TCPHeader{
+					SrcPort: &testSrcPort,
+					DstPort: &testDstPort,
+					Flags: []crdv1alpha1.TCPFlagsMatcher{
+						{Value: 0x2},
+						{Value: 0x10},
+					},
+				},
+			},
+		},
+		Direction: crdv1alpha1.CaptureDirectionBoth,
+	},
+	{
+		Name:          "IPv6 TCP srcOnly IP only Both (no ports)",
+		TcpdumpFilter: "ip6 proto 6 and ((src host fd00:10:244::1) or (dst host fd00:10:244::1))",
+		SrcIP:         net.ParseIP("fd00:10:244::1"),
+		Packet: &crdv1alpha1.Packet{
+			IPFamily: v1.IPv6Protocol,
+			Protocol: &testTCPProtocol,
+		},
+		Direction: crdv1alpha1.CaptureDirectionBoth,
+	},
+	{
+		Name:          "IPv4 TCP proto-only Both (no IPs, no ports)",
+		TcpdumpFilter: "ip proto 6",
+		Packet: &crdv1alpha1.Packet{
+			Protocol: &testTCPProtocol,
+		},
+		Direction: crdv1alpha1.CaptureDirectionBoth,
+	},
+	{
+		Name:          "IPv4 ICMP src+dst IP type+code Both",
+		TcpdumpFilter: "ip proto 1 and ((src host 127.0.0.1 and dst host 127.0.0.2 and icmp[0]=8 and icmp[1]=0) or (src host 127.0.0.2 and dst host 127.0.0.1 and icmp[0]=8 and icmp[1]=0))",
+		SrcIP:         net.ParseIP("127.0.0.1"),
+		DstIP:         net.ParseIP("127.0.0.2"),
+		Packet: &crdv1alpha1.Packet{
+			Protocol: &testICMPProtocol,
+			TransportHeader: crdv1alpha1.TransportHeader{
+				ICMP: &crdv1alpha1.ICMPHeader{
+					Messages: []crdv1alpha1.ICMPMsgMatcher{
+						{Type: testICMPMsgEcho, Code: ptr.To[int32](0)},
+					},
+				},
+			},
+		},
+		Direction: crdv1alpha1.CaptureDirectionBoth,
+	},
+	{
+		Name:          "IPv4 ICMP multiple messages with code",
+		TcpdumpFilter: "ip proto 1 and ((icmp[0]=3 and icmp[1]=1) or icmp[0]=8)",
+		Packet: &crdv1alpha1.Packet{
+			Protocol: &testICMPProtocol,
+			TransportHeader: crdv1alpha1.TransportHeader{
+				ICMP: &crdv1alpha1.ICMPHeader{
+					Messages: []crdv1alpha1.ICMPMsgMatcher{
+						{Type: testICMPMsgDstUnreach, Code: ptr.To[int32](1)},
+						{Type: testICMPMsgEcho},
+					},
+				},
+			},
+		},
+		Direction: crdv1alpha1.CaptureDirectionSourceToDestination,
+	},
+	{
+		Name:          "IPv4 ICMP multiple messages both direction",
+		TcpdumpFilter: "ip proto 1 and ((src host 127.0.0.1 and dst host 127.0.0.2 and ((icmp[0]=3 and icmp[1]=1) or icmp[0]=8)) or (src host 127.0.0.2 and dst host 127.0.0.1 and ((icmp[0]=3 and icmp[1]=1) or icmp[0]=8)))",
+		SrcIP:         net.ParseIP("127.0.0.1"),
+		DstIP:         net.ParseIP("127.0.0.2"),
+		Packet: &crdv1alpha1.Packet{
+			Protocol: &testICMPProtocol,
+			TransportHeader: crdv1alpha1.TransportHeader{
+				ICMP: &crdv1alpha1.ICMPHeader{
+					Messages: []crdv1alpha1.ICMPMsgMatcher{
+						{Type: testICMPMsgDstUnreach, Code: ptr.To[int32](1)},
+						{Type: testICMPMsgEcho},
+					},
+				},
+			},
+		},
+		Direction: crdv1alpha1.CaptureDirectionBoth,
+	},
+	{
+		Name:          "IPv4 TCP src+dst IP multiple flags Both (SYN or ACK) no ports",
+		TcpdumpFilter: "ip proto 6 and ((src host 127.0.0.1 and dst host 127.0.0.2 and ((tcp[tcpflags] & tcp-syn == tcp-syn) or (tcp[tcpflags] & tcp-ack == tcp-ack))) or (src host 127.0.0.2 and dst host 127.0.0.1 and ((tcp[tcpflags] & tcp-syn == tcp-syn) or (tcp[tcpflags] & tcp-ack == tcp-ack))))",
+		SrcIP:         net.ParseIP("127.0.0.1"),
+		DstIP:         net.ParseIP("127.0.0.2"),
+		Packet: &crdv1alpha1.Packet{
+			Protocol: &testTCPProtocol,
+			TransportHeader: crdv1alpha1.TransportHeader{
+				TCP: &crdv1alpha1.TCPHeader{
+					Flags: []crdv1alpha1.TCPFlagsMatcher{
+						{Value: 0x2},
+						{Value: 0x10},
+					},
+				},
+			},
+		},
+		Direction: crdv1alpha1.CaptureDirectionBoth,
+	},
 }
