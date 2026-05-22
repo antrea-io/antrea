@@ -25,10 +25,7 @@ WORKDIR=$DEFAULT_WORKDIR
 TESTCASE=""
 TEST_FAILURE=false
 DOCKER_REGISTRY=$(head -n1 "${WORKSPACE}/ci/docker-registry")
-MULTICLUSTER_KUBECONFIG_PATH=$WORKDIR/.kube
-LEADER_CLUSTER_CONFIG="--kubeconfig=$MULTICLUSTER_KUBECONFIG_PATH/leader"
-EAST_CLUSTER_CONFIG="--kubeconfig=$MULTICLUSTER_KUBECONFIG_PATH/east"
-WEST_CLUSTER_CONFIG="--kubeconfig=$MULTICLUSTER_KUBECONFIG_PATH/west"
+MULTICLUSTER_KUBECONFIG_PATH=""
 CLUSTER_NAMES=("leader" "east" "west")
 ENABLE_MC_GATEWAY=false
 IS_CONTAINERD=false
@@ -36,10 +33,6 @@ CODECOV_TOKEN=""
 COVERAGE=false
 KIND=false
 DEBUG=false
-GOLANG_RELEASE_DIR=${WORKDIR}/golang-releases
-
-multicluster_kubeconfigs=($EAST_CLUSTER_CONFIG $LEADER_CLUSTER_CONFIG $WEST_CLUSTER_CONFIG)
-membercluster_kubeconfigs=($EAST_CLUSTER_CONFIG $WEST_CLUSTER_CONFIG)
 
 CLEAN_STALE_IMAGES="docker system prune --force --all --filter until=4h"
 PRINT_DOCKER_STATUS="docker system df -v"
@@ -118,6 +111,16 @@ case $key in
     ;;
 esac
 done
+
+# Recompute path-derived variables now that WORKDIR and MULTICLUSTER_KUBECONFIG_PATH
+# have their final values (--workdir and --kubeconfigs-path may have changed them).
+GOLANG_RELEASE_DIR=${WORKDIR}/golang-releases
+MULTICLUSTER_KUBECONFIG_PATH=${MULTICLUSTER_KUBECONFIG_PATH:-$WORKDIR/.kube}
+LEADER_CLUSTER_CONFIG="--kubeconfig=$MULTICLUSTER_KUBECONFIG_PATH/leader"
+EAST_CLUSTER_CONFIG="--kubeconfig=$MULTICLUSTER_KUBECONFIG_PATH/east"
+WEST_CLUSTER_CONFIG="--kubeconfig=$MULTICLUSTER_KUBECONFIG_PATH/west"
+multicluster_kubeconfigs=($EAST_CLUSTER_CONFIG $LEADER_CLUSTER_CONFIG $WEST_CLUSTER_CONFIG)
+membercluster_kubeconfigs=($EAST_CLUSTER_CONFIG $WEST_CLUSTER_CONFIG)
 
 function clean_tmp() {
     echo "===== Clean up stale files & folders older than 7 days under /tmp ====="
@@ -431,7 +434,12 @@ function run_multicluster_e2e {
     fi
 
     set -x
-    go test -v -timeout=15m antrea.io/antrea/v2/multicluster/test/e2e --logs-export-dir `pwd`/antrea-multicluster-test-logs $options
+    go test -v -timeout=15m antrea.io/antrea/v2/multicluster/test/e2e \
+        --logs-export-dir `pwd`/antrea-multicluster-test-logs \
+        --leader-cluster-kubeconfig-path ${MULTICLUSTER_KUBECONFIG_PATH}/leader \
+        --east-cluster-kubeconfig-path ${MULTICLUSTER_KUBECONFIG_PATH}/east \
+        --west-cluster-kubeconfig-path ${MULTICLUSTER_KUBECONFIG_PATH}/west \
+        $options
     if [[ "$?" != "0" ]]; then
         TEST_FAILURE=true
     fi
@@ -474,6 +482,7 @@ if [[ ${KIND} == "true" ]]; then
     # Preparing a ClusterSet contains three Kind clusters.
     SERVICE_CIDRS=("10.96.10.0/24" "10.96.20.0/24" "10.96.30.0/24")
     POD_CIDRS=("10.244.0.0/20" "10.244.16.0/20" "10.244.32.0/20")
+    mkdir -p ${MULTICLUSTER_KUBECONFIG_PATH}
     for i in {0..2}; do
         ./ci/kind/kind-setup.sh create ${CLUSTER_NAMES[$i]} --service-cidr ${SERVICE_CIDRS[$i]} --pod-cidr ${POD_CIDRS[$i]} --num-workers 1
     done
