@@ -43,18 +43,17 @@ var (
 	}
 )
 
-// NetworkPolicyExcludedPodFilter is the canonical filter used by the NetworkPolicy controller
-// when deciding which Pods are subject to network policy enforcement. It returns true (exclude)
-// for any Pod that are:
-//   - Host-network Pods, which share the Node's network namespace, and the address can only be
-//     selected by nodeSelectors.
+// AddressGroupExcludedPodFilter returns true for Pods that are excluded from network policy
+// enforcement as address-group or internal-group members, and from group-association queries.
+// It excludes:
+//   - Host-network Pods, which share the Node's network namespace; their address can only be
+//     selected via nodeSelector, not podSelector.
 //   - Terminated Pods, whose IPs may be recycled and reassigned to new Pods.
 //   - Pods that have not yet received an IP address.
 //
-// The same filter is applied consistently across:
-//   - Group-membership computation (getMemberSetForGroupType)
-//   - Group-association queries (GetGroupsForPod via QueryNetworkPolicyRules and GetAssociatedGroups)
-var NetworkPolicyExcludedPodFilter = func(pod *v1.Pod) bool {
+// Note: AppliedToGroup membership uses a different filter (see syncAppliedToGroup) that also
+// excludes unscheduled Pods (NodeName == "") but does not check PodIPs.
+var AddressGroupExcludedPodFilter = func(pod *v1.Pod) bool {
 	return pod.Spec.HostNetwork || k8s.IsPodTerminated(pod) || len(pod.Status.PodIPs) == 0
 }
 

@@ -1201,7 +1201,7 @@ func (n *NetworkPolicyController) getMemberSetForGroupType(groupType grouping.Gr
 	groupMemberSet := controlplane.GroupMemberSet{}
 	pods, externalEntities := n.groupingInterface.GetEntities(groupType, name)
 	for _, pod := range pods {
-		if NetworkPolicyExcludedPodFilter(pod) {
+		if AddressGroupExcludedPodFilter(pod) {
 			continue
 		}
 		groupMemberSet.Insert(podToGroupMember(pod, true))

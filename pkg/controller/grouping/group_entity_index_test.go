@@ -260,39 +260,39 @@ func TestGroupEntityIndexGetGroups(t *testing.T) {
 			expectedGroups: nil,
 		},
 	}
-	// podExclude filter tests: verify the filter parameter is honored.
+	// excludePod filter tests: verify the filter parameter is honored.
 	podExcludeTests := []struct {
-		name             string
-		inputPod         *v1.Pod
-		podExcludeFilter func(*v1.Pod) bool
-		expectedFound    bool
-		expectedGroups   map[GroupType][]string
+		name           string
+		inputPod       *v1.Pod
+		excludePod     func(*v1.Pod) bool
+		expectedFound  bool
+		expectedGroups map[GroupType][]string
 	}{
 		{
-			name:             "nil filter returns normal groups",
-			inputPod:         podFoo1,
-			podExcludeFilter: nil,
-			expectedFound:    true,
-			expectedGroups:   map[GroupType][]string{groupType1: {groupPodFooType1.groupName, groupPodFooAllNamespaceType1.groupName}, groupType2: {groupPodFooType2.groupName}},
+			name:           "nil filter returns normal groups",
+			inputPod:       podFoo1,
+			excludePod:     nil,
+			expectedFound:  true,
+			expectedGroups: map[GroupType][]string{groupType1: {groupPodFooType1.groupName, groupPodFooAllNamespaceType1.groupName}, groupType2: {groupPodFooType2.groupName}},
 		},
 		{
-			name:             "matching filter returns empty groups but pod found",
-			inputPod:         podFoo1,
-			podExcludeFilter: func(*v1.Pod) bool { return true },
-			expectedFound:    true,
-			expectedGroups:   map[GroupType][]string{},
+			name:           "matching filter returns nil groups but pod found",
+			inputPod:       podFoo1,
+			excludePod:     func(*v1.Pod) bool { return true },
+			expectedFound:  true,
+			expectedGroups: nil,
 		},
 		{
-			name:             "non-matching filter returns normal groups",
-			inputPod:         podFoo1,
-			podExcludeFilter: func(*v1.Pod) bool { return false },
-			expectedFound:    true,
-			expectedGroups:   map[GroupType][]string{groupType1: {groupPodFooType1.groupName, groupPodFooAllNamespaceType1.groupName}, groupType2: {groupPodFooType2.groupName}},
+			name:           "non-matching filter returns normal groups",
+			inputPod:       podFoo1,
+			excludePod:     func(*v1.Pod) bool { return false },
+			expectedFound:  true,
+			expectedGroups: map[GroupType][]string{groupType1: {groupPodFooType1.groupName, groupPodFooAllNamespaceType1.groupName}, groupType2: {groupPodFooType2.groupName}},
 		},
 	}
 	for _, tt := range podExcludeTests {
 		t.Run(tt.name, func(t *testing.T) {
-			actualGroups, actualFound := index.GetGroupsForPod(tt.inputPod.GetNamespace(), tt.inputPod.GetName(), tt.podExcludeFilter)
+			actualGroups, actualFound := index.GetGroupsForPod(tt.inputPod.GetNamespace(), tt.inputPod.GetName(), tt.excludePod)
 			assert.Equal(t, tt.expectedFound, actualFound)
 			assert.Equal(t, len(tt.expectedGroups), len(actualGroups))
 			for groupType, expected := range tt.expectedGroups {

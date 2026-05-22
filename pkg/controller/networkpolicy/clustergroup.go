@@ -400,7 +400,7 @@ func (c *NetworkPolicyController) GetAssociatedGroups(name, namespace string) []
 		}
 	} else {
 		// Try Pod first, then ExternalEntity.
-		groups, _ = c.groupingInterface.GetGroupsForPod(namespace, name, NetworkPolicyExcludedPodFilter)
+		groups, _ = c.groupingInterface.GetGroupsForPod(namespace, name, AddressGroupExcludedPodFilter)
 		if len(groups) == 0 {
 			groups, _ = c.groupingInterface.GetGroupsForExternalEntity(namespace, name)
 			if len(groups) == 0 {

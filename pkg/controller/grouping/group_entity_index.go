@@ -68,11 +68,11 @@ type Interface interface {
 	// GetEntities returns the selected Pods or ExternalEntities for the given group.
 	GetEntities(groupType GroupType, name string) ([]*v1.Pod, []*v1alpha2.ExternalEntity)
 	// GetGroupsForPod returns the groups that select the given Pod.
-	// If the Pod does not exist, it returns (nil, false). If a non-nil podExcludeFilter is
+	// If the Pod does not exist, it returns (nil, false). If a non-nil excludePod filter is
 	// provided and it returns true for the Pod, the Pod is treated as having no group
-	// associations: an empty map and true are returned so callers can distinguish "pod not
-	// found" from "pod found but excluded".
-	GetGroupsForPod(namespace, name string, podExcludeFilter func(*v1.Pod) bool) (map[GroupType][]string, bool)
+	// associations: (nil, true) is returned so callers can distinguish "pod not found" from
+	// "pod found but excluded".
+	GetGroupsForPod(namespace, name string, excludePod func(*v1.Pod) bool) (map[GroupType][]string, bool)
 	// GetGroupsForExternalEntity returns the groups that select the given ExternalEntity.
 	GetGroupsForExternalEntity(namespace, name string) (map[GroupType][]string, bool)
 	// AddPod adds or updates a Pod to the index. If any existing groups are affected, eventHandlers will be called with
@@ -258,7 +258,7 @@ func (i *GroupEntityIndex) GetEntities(groupType GroupType, name string) ([]*v1.
 	return pods, externalEntities
 }
 
-func (i *GroupEntityIndex) GetGroupsForPod(namespace, name string, podExcludeFilter func(*v1.Pod) bool) (map[GroupType][]string, bool) {
+func (i *GroupEntityIndex) GetGroupsForPod(namespace, name string, excludePod func(*v1.Pod) bool) (map[GroupType][]string, bool) {
 	eKey := getEntityItemKeyByName(podEntityType, namespace, name)
 
 	i.lock.RLock()
@@ -268,12 +268,12 @@ func (i *GroupEntityIndex) GetGroupsForPod(namespace, name string, podExcludeFil
 	if !exists {
 		return nil, false
 	}
-	if podExcludeFilter != nil {
-		if pod, ok := eItem.entity.(*v1.Pod); ok && podExcludeFilter(pod) {
+	if excludePod != nil {
+		if pod, ok := eItem.entity.(*v1.Pod); ok && excludePod(pod) {
 			// The Pod exists but the caller's filter excludes it.
-			// Return an empty map with exists=true so callers can distinguish
-			// "pod not found" from "pod found but excluded".
-			return map[GroupType][]string{}, true
+			// Return (nil, true) so callers can distinguish "pod not found"
+			// from "pod found but excluded".
+			return nil, true
 		}
 	}
 	return i.getGroupsLocked(eItem)
