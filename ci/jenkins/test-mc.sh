@@ -33,6 +33,11 @@ CODECOV_TOKEN=""
 COVERAGE=false
 KIND=false
 DEBUG=false
+USE_SYSTEM_GO=false
+GOLANG_RELEASE_DIR=${WORKDIR}/golang-releases
+
+multicluster_kubeconfigs=($EAST_CLUSTER_CONFIG $LEADER_CLUSTER_CONFIG $WEST_CLUSTER_CONFIG)
+membercluster_kubeconfigs=($EAST_CLUSTER_CONFIG $WEST_CLUSTER_CONFIG)
 
 CLEAN_STALE_IMAGES="docker system prune --force --all --filter until=4h"
 PRINT_DOCKER_STATUS="docker system df -v"
@@ -41,7 +46,7 @@ CLEAN_STALE_IMAGES_CONTAINERD="crictl rmi --prune"
 PRINT_CONTAINERD_STATUS="crictl ps --state Exited"
 
 _usage="Usage: $0 [--kubeconfigs-path <KubeconfigSavePath>] [--workdir <HomePath>]
-                  [--testcase <e2e>] [--mc-gateway] [--codecov-token] [--coverage] [--kind] [--debug]
+                  [--testcase <e2e>] [--mc-gateway] [--codecov-token] [--coverage] [--kind] [--use-system-go] [--debug]
 
 Run Antrea multi-cluster e2e tests on a remote (Jenkins) Linux Cluster Set.
 
@@ -53,6 +58,7 @@ Run Antrea multi-cluster e2e tests on a remote (Jenkins) Linux Cluster Set.
         --codecov-token               Token used to upload coverage report(s) to Codecov.
         --coverage                    Run e2e with coverage.
         --kind                        Run e2e on Kind clusters.
+        --use-system-go               Use the Go toolchain already available in PATH.
         --debug                       Do not clean up Kind clusters when --kind is set."
 
 function print_usage {
@@ -95,6 +101,10 @@ case $key in
     ;;
     --kind)
     KIND=true
+    shift
+    ;;
+    --use-system-go)
+    USE_SYSTEM_GO=true
     shift
     ;;
     --debug)
@@ -474,7 +484,9 @@ function collect_coverage {
 
 trap clean_multicluster EXIT
 source $WORKSPACE/ci/jenkins/utils.sh
-check_and_upgrade_golang
+if [[ ${USE_SYSTEM_GO} != "true" ]]; then
+    check_and_upgrade_golang
+fi
 clean_tmp
 clean_images
 
@@ -508,9 +520,11 @@ set -e
 if [[ ${TESTCASE} =~ "e2e" ]]; then
     export GO111MODULE=on
     export GOPATH=${WORKDIR}/go
-    export GOROOT=${GOLANG_RELEASE_DIR}/go
     export GOCACHE=${WORKDIR}/.cache/go-build
-    export PATH=$GOROOT/bin:$PATH
+    if [[ ${USE_SYSTEM_GO} != "true" ]]; then
+        export GOROOT=${GOLANG_RELEASE_DIR}/go
+        export PATH=$GOROOT/bin:$PATH
+    fi
 
     deliver_antrea_multicluster
     modify_config
@@ -522,9 +536,13 @@ if [[ ${TESTCASE} =~ "e2e" ]]; then
       mkdir -p mc-e2e-coverage
       collect_coverage ${CURRENT_DIR}/mc-e2e-coverage
       # Backup coverage files for later analysis
-      set +e;find ${DEFAULT_WORKDIR}/mc-e2e-coverage -maxdepth 1 -mtime +1 -type f | xargs -n 1 rm;set -e; # Clean up backup files older than one day.
-      cp -r mc-e2e-coverage ${DEFAULT_WORKDIR}
-      run_codecov "e2e-tests" "*antrea-mc*" "${CURRENT_DIR}/mc-e2e-coverage"
+      if [[ -d ${DEFAULT_WORKDIR} && -w ${DEFAULT_WORKDIR} ]]; then
+        set +e;find ${DEFAULT_WORKDIR}/mc-e2e-coverage -maxdepth 1 -mtime +1 -type f | xargs -n 1 rm;set -e; # Clean up backup files older than one day.
+        cp -r mc-e2e-coverage ${DEFAULT_WORKDIR}
+      fi
+      if [[ -n ${CODECOV_TOKEN} ]]; then
+        run_codecov "e2e-tests" "*antrea-mc*" "${CURRENT_DIR}/mc-e2e-coverage"
+      fi
     fi
 fi
 
