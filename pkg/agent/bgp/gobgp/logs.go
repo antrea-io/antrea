@@ -15,66 +15,53 @@
 package gobgp
 
 import (
-	"maps"
+	"context"
+	"log/slog"
 	"slices"
 
-	gobgplog "github.com/osrg/gobgp/v3/pkg/log"
+	"github.com/go-logr/logr"
 	"k8s.io/klog/v2"
 )
 
-// goBGPLogger implements https://github.com/osrg/gobgp/blob/master/pkg/log/logger.go interface.
-type goBGPLogger struct {
+type klogHandler struct {
+	inner    slog.Handler // logr.ToSlogHandler(klog.NewKlogr())
 	routerID string
+	attrs    []slog.Attr
 }
 
-func newGoBGPLogger(routerID string) *goBGPLogger {
-	return &goBGPLogger{
+func (h *klogHandler) Enabled(ctx context.Context, l slog.Level) bool {
+	return h.inner.Enabled(ctx, l)
+}
+
+func (h *klogHandler) Handle(ctx context.Context, r slog.Record) error {
+	r = r.Clone() // preserves r.PC, so klog still reports the gobgp call site
+	r.AddAttrs(slog.String("routerID", h.routerID))
+	r.AddAttrs(h.attrs...) // re-inject attrs klog's slog sink would otherwise drop
+	return h.inner.Handle(ctx, r)
+}
+
+func (h *klogHandler) WithAttrs(a []slog.Attr) slog.Handler {
+	return &klogHandler{
+		inner:    h.inner,
+		routerID: h.routerID,
+		attrs:    append(slices.Clone(h.attrs), a...),
+	}
+}
+
+func (h *klogHandler) WithGroup(name string) slog.Handler {
+	return &klogHandler{
+		inner:    h.inner.WithGroup(name),
+		routerID: h.routerID,
+		attrs:    slices.Clone(h.attrs),
+	}
+}
+
+func newGoBGPLogger(routerID string) (*slog.Logger, *slog.LevelVar) {
+	levelVar := &slog.LevelVar{}
+	levelVar.Set(slog.LevelDebug) // only consulted by gobgp's unused SetLogLevel RPC
+	h := &klogHandler{
+		inner:    logr.ToSlogHandler(klog.NewKlogr()),
 		routerID: routerID,
 	}
-}
-
-// We use a depth of 1 for all log messages to get more useful source information.
-// Otherwise, the reported source location would be the line where the klog function is invoked.
-
-func (g *goBGPLogger) Panic(msg string, fields gobgplog.Fields) {
-	klog.ErrorSDepth(1, nil, msg, g.logFieldsToKeysAndValues(fields)...)
-}
-
-func (g *goBGPLogger) Fatal(msg string, fields gobgplog.Fields) {
-	klog.ErrorSDepth(1, nil, msg, g.logFieldsToKeysAndValues(fields)...)
-}
-
-func (g *goBGPLogger) Error(msg string, fields gobgplog.Fields) {
-	klog.ErrorSDepth(1, nil, msg, g.logFieldsToKeysAndValues(fields)...)
-}
-
-func (g *goBGPLogger) Warn(msg string, fields gobgplog.Fields) {
-	klog.V(0).InfoSDepth(1, msg, g.logFieldsToKeysAndValues(fields)...)
-}
-
-func (g *goBGPLogger) Info(msg string, fields gobgplog.Fields) {
-	klog.V(0).InfoSDepth(1, msg, g.logFieldsToKeysAndValues(fields)...)
-}
-
-func (g *goBGPLogger) Debug(msg string, fields gobgplog.Fields) {
-	klog.V(4).InfoSDepth(1, msg, g.logFieldsToKeysAndValues(fields)...)
-}
-
-// This should never be used in Antrea.
-func (g *goBGPLogger) SetLevel(level gobgplog.LogLevel) {
-}
-
-// This should never be used in Antrea.
-func (g *goBGPLogger) GetLevel() gobgplog.LogLevel {
-	return gobgplog.LogLevel(0)
-}
-
-func (g *goBGPLogger) logFieldsToKeysAndValues(fields gobgplog.Fields) []interface{} {
-	keysAndValues := make([]interface{}, 0, (len(fields)+1)*2)
-	// Add routerID to all log messages for more context.
-	keysAndValues = append(keysAndValues, "routerID", g.routerID)
-	for _, key := range slices.Sorted(maps.Keys(fields)) {
-		keysAndValues = append(keysAndValues, key, fields[key])
-	}
-	return keysAndValues
+	return slog.New(h), levelVar
 }
