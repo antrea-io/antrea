@@ -640,6 +640,17 @@ func compileBothDirectionFilters(inst []bpf.Instruction, handler *ipFamilyHandle
 	transportNoFlagsICMP.tcpFlags = nil
 	transportNoFlagsICMP.icmp = nil
 
+	// When exactly one IP is present (srcOnly/dstOnly), tcpdump inlines
+	// ICMP/flags per-branch rather than factoring them into a shared suffix.
+	// Keep them in the per-direction transport filters for those cases.
+	inlineICMPFlags := (srcIP == nil) != (dstIP == nil)
+	if inlineICMPFlags {
+		sharedFlags = nil
+		sharedICMP = nil
+		transportNoFlagsICMP.tcpFlags = transport.tcpFlags
+		transportNoFlagsICMP.icmp = transport.icmp
+	}
+
 	diffJumpIdxs := make([]int, 0, handler.addressChunks)
 	if srcIP != nil {
 		for i := 0; i < handler.addressChunks; i++ {
@@ -778,8 +789,10 @@ func compileBothDirectionFilters(inst []bpf.Instruction, handler *ipFamilyHandle
 	}
 
 	transportB := transportFilters{
-		srcPort: transportNoFlagsICMP.dstPort,
-		dstPort: transportNoFlagsICMP.srcPort,
+		srcPort:  transportNoFlagsICMP.dstPort,
+		dstPort:  transportNoFlagsICMP.srcPort,
+		tcpFlags: transportNoFlagsICMP.tcpFlags,
+		icmp:     transportNoFlagsICMP.icmp,
 	}
 	sliceStart := 0
 	if srcIP == nil && dstIP == nil {
