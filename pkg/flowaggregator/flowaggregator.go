@@ -69,6 +69,12 @@ var (
 	}
 )
 
+// flowStreamProvider is the interface used by flowAggregator to start and stop
+// the FlowStreamService.
+type flowStreamProvider interface {
+	Run(serverCertPEM, serverKeyPEM []byte, stopCh <-chan struct{}) error
+}
+
 // exporterHandle tracks the lifecycle of a running exporter goroutine.
 type exporterHandle struct {
 	exporter exporter.Runner
@@ -125,7 +131,7 @@ type flowAggregator struct {
 	recordCh          chan *flowpb.Flow
 
 	recordBuffer        ringbuffer.BroadcastBuffer[*flowpb.Flow]
-	flowStreamService   *flowstreamservice.FlowStreamService
+	flowStreamService   flowStreamProvider
 	ipfixHandle         *exporterHandle
 	clickHouseHandle    *exporterHandle
 	s3Handle            *exporterHandle

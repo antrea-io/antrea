@@ -1247,3 +1247,210 @@ func TestFillServiceUID(t *testing.T) {
 		})
 	}
 }
+
+// fakeFlowStreamService is a test implementation of flowStreamProvider. Run blocks
+// until stopCh is closed or an optional error is injected.
+type fakeFlowStreamService struct {
+	// errOnRun, if non-nil, is returned immediately from Run without blocking.
+	errOnRun error
+	// runStarted is closed when Run is entered.
+	runStarted chan struct{}
+	// runDone is closed when Run returns.
+	runDone chan struct{}
+}
+
+func newFakeFlowStreamService(errOnRun error) *fakeFlowStreamService {
+	return &fakeFlowStreamService{
+		errOnRun:   errOnRun,
+		runStarted: make(chan struct{}),
+		runDone:    make(chan struct{}),
+	}
+}
+
+func (f *fakeFlowStreamService) Run(_, _ []byte, stopCh <-chan struct{}) error {
+	close(f.runStarted)
+	defer close(f.runDone)
+	if f.errOnRun != nil {
+		return f.errOnRun
+	}
+	<-stopCh
+	return nil
+}
+
+// TestFlowAggregator_CertificateUpdated verifies that CertificateUpdated fans out
+// to both update channels and becomes a no-op once stopped is set.
+func TestFlowAggregator_CertificateUpdated(t *testing.T) {
+	certCh := make(chan struct{}, 1)
+	fssCh := make(chan struct{}, 1)
+	fa := &flowAggregator{
+		certificateUpdateCh:   certCh,
+		flowStreamSvcUpdateCh: fssCh,
+	}
+
+	// Before shutdown: both channels should receive.
+	fa.CertificateUpdated()
+	assert.Len(t, certCh, 1, "certificateUpdateCh should have one entry")
+	assert.Len(t, fssCh, 1, "flowStreamSvcUpdateCh should have one entry")
+
+	// Drain.
+	<-certCh
+	<-fssCh
+
+	// Channels already full — subsequent calls should not block (default branch).
+	fa.CertificateUpdated()
+	fa.CertificateUpdated() // both channels already full, second call is dropped
+
+	assert.Len(t, certCh, 1)
+	assert.Len(t, fssCh, 1)
+
+	// After stopped is set, CertificateUpdated must be a no-op.
+	<-certCh
+	<-fssCh
+	fa.stopped.Store(true)
+	fa.CertificateUpdated()
+	assert.Empty(t, certCh, "no send after stopped")
+	assert.Empty(t, fssCh, "no send after stopped")
+}
+
+// TestFlowAggregator_CertificateUpdated_NoFSSChannel verifies that CertificateUpdated
+// works correctly when flowStreamSvcUpdateCh is nil (FlowStreamService disabled).
+func TestFlowAggregator_CertificateUpdated_NoFSSChannel(t *testing.T) {
+	certCh := make(chan struct{}, 1)
+	fa := &flowAggregator{
+		certificateUpdateCh:   certCh,
+		flowStreamSvcUpdateCh: nil,
+	}
+	// Must not panic when flowStreamSvcUpdateCh is nil.
+	fa.CertificateUpdated()
+	assert.Len(t, certCh, 1)
+}
+
+// TestFlowAggregator_runFlowStreamService verifies that runFlowStreamService:
+//  1. Blocks until the first update signal before starting the server.
+//  2. Starts the server once the cert signal arrives.
+//  3. Stops cleanly when stopCh is closed.
+func TestFlowAggregator_runFlowStreamService(t *testing.T) {
+	fakeRunner := newFakeFlowStreamService(nil)
+	fssCh := make(chan struct{}, 1)
+
+	fa := &flowAggregator{
+		flowStreamService:     fakeRunner,
+		flowStreamSvcUpdateCh: fssCh,
+		certificateProvider:   certificate.NewProvider(fake.NewSimpleClientset(), ""),
+	}
+
+	stopCh := make(chan struct{})
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		fa.runFlowStreamService(stopCh)
+	}()
+
+	// Before any cert update, Run should NOT have been entered yet.
+	select {
+	case <-fakeRunner.runStarted:
+		t.Fatal("Run started before cert update signal")
+	case <-time.After(50 * time.Millisecond):
+	}
+
+	// Send the cert-ready signal.
+	fssCh <- struct{}{}
+
+	// Run should start shortly.
+	select {
+	case <-fakeRunner.runStarted:
+	case <-time.After(time.Second):
+		t.Fatal("Run did not start after cert update signal")
+	}
+
+	// Closing stopCh should shut everything down cleanly.
+	close(stopCh)
+	select {
+	case <-done:
+	case <-time.After(time.Second):
+		t.Fatal("runFlowStreamService did not return after stopCh closed")
+	}
+}
+
+// TestFlowAggregator_runFlowStreamService_StopBeforeCert verifies that if stopCh
+// is closed before a cert update, the function returns immediately without starting
+// the server.
+func TestFlowAggregator_runFlowStreamService_StopBeforeCert(t *testing.T) {
+	fakeRunner := newFakeFlowStreamService(nil)
+	fssCh := make(chan struct{}, 1)
+
+	fa := &flowAggregator{
+		flowStreamService:     fakeRunner,
+		flowStreamSvcUpdateCh: fssCh,
+		certificateProvider:   certificate.NewProvider(fake.NewSimpleClientset(), ""),
+	}
+
+	stopCh := make(chan struct{})
+	close(stopCh) // stop immediately
+
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		fa.runFlowStreamService(stopCh)
+	}()
+
+	select {
+	case <-done:
+	case <-time.After(time.Second):
+		t.Fatal("runFlowStreamService did not return after stopCh pre-closed")
+	}
+
+	// Run should never have been called.
+	select {
+	case <-fakeRunner.runStarted:
+		t.Fatal("Run should not have been called when stopped before cert")
+	default:
+	}
+}
+
+// TestFlowAggregator_runFlowStreamService_CertRotation verifies that a second cert
+// update causes the running server to be replaced.
+func TestFlowAggregator_runFlowStreamService_CertRotation(t *testing.T) {
+	// First runner blocks; second runner also blocks (we replace it on rotation).
+	firstRunner := newFakeFlowStreamService(nil)
+	fssCh := make(chan struct{}, 1)
+
+	fa := &flowAggregator{
+		flowStreamService:     firstRunner,
+		flowStreamSvcUpdateCh: fssCh,
+		certificateProvider:   certificate.NewProvider(fake.NewSimpleClientset(), ""),
+	}
+
+	stopCh := make(chan struct{})
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		fa.runFlowStreamService(stopCh)
+	}()
+
+	// Trigger first start.
+	fssCh <- struct{}{}
+	select {
+	case <-firstRunner.runStarted:
+	case <-time.After(time.Second):
+		t.Fatal("first Run did not start")
+	}
+
+	// Send a cert-rotation signal — this should stop the first runner and loop.
+	fssCh <- struct{}{}
+
+	// The first runner's stopCh should be closed, causing its Run to return.
+	select {
+	case <-firstRunner.runDone:
+	case <-time.After(time.Second):
+		t.Fatal("first Run did not stop after cert rotation")
+	}
+
+	// Shut down cleanly.
+	close(stopCh)
+	select {
+	case <-done:
+	case <-time.After(time.Second):
+		t.Fatal("runFlowStreamService did not return after stopCh closed")
+	}
+}
