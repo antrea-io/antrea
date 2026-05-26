@@ -20,9 +20,10 @@
 package antreanodeconfig
 
 import (
+	"cmp"
 	"fmt"
 	"reflect"
-	"sort"
+	"slices"
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
@@ -141,9 +142,9 @@ func (c *Controller) getLocalNodeFromLister() (*corev1.Node, error) {
 	return nil, err
 }
 
-// CurrentSnapshot returns a deep-copied snapshot of the local Node and the
-// oldest AntreaNodeConfig that matches this Node's labels. It returns nil if
-// informers are not synced yet.
+// CurrentSnapshot returns a deep-copied snapshot of the oldest AntreaNodeConfig
+// that matches this Node's labels. It returns nil if informers are not synced or
+// the local Node is not yet available.
 func (c *Controller) CurrentSnapshot() *Snapshot {
 	if !c.InformersSynced() {
 		return nil
@@ -153,9 +154,12 @@ func (c *Controller) CurrentSnapshot() *Snapshot {
 		klog.ErrorS(err, "Failed to get local Node from lister for snapshot", "node", c.nodeName)
 		return nil
 	}
+	if node == nil {
+		return nil
+	}
 	all, err := c.ancLister.List(labels.Everything())
 	effective := antreaNodeConfigForSnapshot(node, all, err)
-	return NewSnapshot(node, effective, err)
+	return NewSnapshot(effective, err)
 }
 
 // Run waits for the AntreaNodeConfig and Node informer caches to sync, enqueues one
@@ -201,18 +205,25 @@ func (c *Controller) processNextWorkItem() bool {
 }
 
 // syncSnapshot builds a snapshot from informer listers and notifies subscribers
-// when it differs from lastNotified. It is intended to run only from the workqueue worker.
+// when it differs from lastNotified. It returns an error when the local Node is not
+// available so the workqueue retries; a published snapshot always reflects a ready
+// controller.
 func (c *Controller) syncSnapshot(key string) error {
 	_ = key
 	node, err := c.getLocalNodeFromLister()
 	if err != nil {
 		return err
 	}
+	if node == nil {
+		return fmt.Errorf("local Node %q not found in lister", c.nodeName)
+	}
 
 	all, listErr := c.ancLister.List(labels.Everything())
 	effective := antreaNodeConfigForSnapshot(node, all, listErr)
-	next := NewSnapshot(node, effective, listErr)
+	next := NewSnapshot(effective, listErr)
 
+	// Deep-copy before notify so subscriber mutations cannot corrupt lastNotified,
+	// which is reused for deduplication on the next reconciliation.
 	payload := next.DeepCopy()
 	if c.lastNotified != nil && reflect.DeepEqual(c.lastNotified, payload) {
 		return nil
@@ -301,13 +312,14 @@ func SelectAntreaNodeConfigsForNode(node *corev1.Node, configs []*crdv1alpha1.An
 			matching = append(matching, cfg)
 		}
 	}
-	sort.Slice(matching, func(i, j int) bool {
-		ti := matching[i].CreationTimestamp
-		tj := matching[j].CreationTimestamp
-		if ti.Equal(&tj) {
-			return matching[i].Name < matching[j].Name
+	slices.SortFunc(matching, func(a, b *crdv1alpha1.AntreaNodeConfig) int {
+		if a.CreationTimestamp.Before(&b.CreationTimestamp) {
+			return -1
 		}
-		return ti.Before(&tj)
+		if b.CreationTimestamp.Before(&a.CreationTimestamp) {
+			return 1
+		}
+		return cmp.Compare(a.Name, b.Name)
 	})
 	return matching
 }

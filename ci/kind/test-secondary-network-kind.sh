@@ -47,11 +47,10 @@ TIMEOUT="5m"
 ANTREA_LOG_DIR="${ANTREA_LOG_DIR:-${PWD}/log}"
 mkdir -p "$ANTREA_LOG_DIR"
 TEST_OPTIONS=(--logs-export-dir="$ANTREA_LOG_DIR" --deploy-antrea=false)
-EXTRA_NETWORK="20.20.20.0/24"
+# Subnets for extra Docker bridge networks: eth1 (static bridge), eth2 & eth3 (VLAN-tagged bridges).
+EXTRA_NETWORKS="20.20.20.0/24 20.20.21.0/24 20.20.22.0/24"
 
-# One control-plane plus this many workers (total nodes = NUM_WORKERS + 1).
 NUM_WORKERS=3
-# Label the first two and last two nodes (sorted by name) for pool scheduling tests.
 NODEPOOL_LABEL_KEY="antrea.io/node-pool"
 
 setup_only=false
@@ -105,7 +104,7 @@ if [[ $cleanup_only == "true" ]];then
   exit 0
 fi
 
-# trap "quit" INT EXIT
+trap "quit" INT EXIT
 
 IMAGE_LIST=("antrea/toolbox:1.5-1" \
             "antrea/antrea-agent-ubuntu:latest" \
@@ -131,28 +130,17 @@ function docker_bridge_for_network {
   echo "br-${nid:0:12}"
 }
 
-# Docker 28+: --gw-priority (highest wins default GW). Use negative on secondary nets so Kind eth0 stays default.
-function docker_network_connect_lab_iface {
-  local ifname="$1" net="$2" node="$3"
-  local -a args=(--driver-opt=com.docker.network.endpoint.ifname="$ifname")
-  if docker network connect --help 2>&1 | grep -q '[[:space:]]--gw-priority[[:space:]]'; then
-    args+=(--gw-priority -1000)
-  fi
-  docker network connect "${args[@]}" "$net" "$node"
-}
-
 # List interface names enslaved to a Linux bridge (same view as /sys/class/net/<br>/brif).
 function kind_linux_bridge_port_names {
   local br="$1"
   ip link show master "$br" 2>/dev/null | sed -n 's/^[0-9]\+: \([^@[:space:]]\+\)@.*/\1/p'
 }
 
-# After Kind nodes are connected: program bridge self and each slave port for lab VLAN IDs.
-# First VLAN in the list is the port PVID: untagged Docker / host RX maps to that VLAN (pvid).
-# Do not use "untagged" on the PVID: that adds "Egress Untagged" in bridge vlan show and makes the
-# lab VLAN egress untagged on the veth; we want trunk-style egress (tagged) while still classifying
-# untagged RX to the lab VID. Remaining VLANs are tagged trunks only.
-function kind_bridge_apply_lab_vlans {
+# Apply VLAN configuration to the bridge device and every slave port.
+# The first VLAN ID is the PVID (untagged ingress); remaining VLANs are tagged trunks.
+# VID 1 is removed unless it is the PVID, since the kernel leaves it as egress-untagged
+# by default even after vlan_filtering is enabled.
+function kind_bridge_apply_vlans {
   local br="$1"
   shift
   local -a vids=("$@")
@@ -160,36 +148,29 @@ function kind_bridge_apply_lab_vlans {
     return 0
   fi
   local pvid="${vids[0]}"
-  local vid port
+  local vid dev self_flag
 
-  bridge vlan add dev "$br" vid "$pvid" pvid self 2>/dev/null || true
-  for vid in "${vids[@]}"; do
-    [[ "$vid" == "$pvid" ]] && continue
-    bridge vlan add dev "$br" vid "$vid" self 2>/dev/null || true
-  done
-  while IFS= read -r port; do
-    [[ -n "$port" ]] || continue
-    bridge vlan add dev "$port" vid "$pvid" pvid 2>/dev/null || true
+  for dev in "$br" $(kind_linux_bridge_port_names "$br"); do
+    [[ -n "$dev" ]] || continue
+    if [[ "$dev" == "$br" ]]; then
+      self_flag="self"
+    else
+      self_flag=""
+    fi
+    sudo bridge vlan add dev "$dev" vid "$pvid" pvid $self_flag 2>/dev/null || true
     for vid in "${vids[@]}"; do
       [[ "$vid" == "$pvid" ]] && continue
-      bridge vlan add dev "$port" vid "$vid" 2>/dev/null || true
+      sudo bridge vlan add dev "$dev" vid "$vid" $self_flag 2>/dev/null || true
     done
-  done < <(kind_linux_bridge_port_names "$br")
-
-  # With vlan_filtering enabled, the kernel / Docker typically leaves VID 1 as egress-untagged on
-  # bridge ports even after we set the lab PVID (100/300). Remove VID 1 when the lab PVID is not 1.
-  if [[ "$pvid" -ne 1 ]]; then
-    bridge vlan del dev "$br" vid 1 self 2>/dev/null || true
-    while IFS= read -r port; do
-      [[ -n "$port" ]] || continue
-      bridge vlan del dev "$port" vid 1 2>/dev/null || true
-    done < <(kind_linux_bridge_port_names "$br")
-  fi
+    if [[ "$pvid" -ne 1 ]]; then
+      sudo bridge vlan del dev "$dev" vid 1 $self_flag 2>/dev/null || true
+    fi
+  done
 }
 
 function prepare_cluster_nodes {
-  # This is for testing AntreaNodeConfigs with label selector support.
-  echo "Removing control-plane NoSchedule taint so Pods can schedule on control-plane Nodes"
+  # Allow Pods to schedule on control-plane Nodes for pool testing.
+  echo "Removing control-plane NoSchedule taint"
   for n in $(kubectl get nodes -l node-role.kubernetes.io/control-plane -o jsonpath='{.items[*].metadata.name}' 2>/dev/null); do
     kubectl taint nodes "$n" node-role.kubernetes.io/control-plane:NoSchedule- 2>/dev/null || true
     kubectl taint nodes "$n" node-role.kubernetes.io/master:NoSchedule- 2>/dev/null || true
@@ -230,68 +211,29 @@ function run_test {
   run_test_with_antrenodeconfigs
 }
 
-# Lab-style VLAN-aware bridges: create Docker bridge networks (Docker owns the Linux bridge), enable
-# vlan_filtering on those bridges, connect every Kind node container with fixed interface names eth2/eth3,
-# then program bridge VLAN on bridge self and each veth. Requires root for ip/bridge;
-# Assumes eth2/eth3 are free inside nodes (single antrea-<cluster>-0 extra net → only eth1 in use).
-function kind_extra_network_with_vlan_awareness_bridges {
-  # Union of VLAN IDs referenced in test/e2e-secondary-network/infra/antrea-node-configs-nodepools.yml
-  # (pool1 eth2: 100,101; pool1 eth3: 300; pool2 eth2: 100; pool2 eth3: 400).
-  KIND_EXTRA_BRIDGE_1_VLAN_IDS=(100 101) # eth2
-  KIND_EXTRA_BRIDGE_2_VLAN_IDS=(300 400) # eth3
-  # Kind cluster name passed to kind-setup.sh create (must match docker networks antrea-<name>-<idx>).
-  KIND_CLUSTER_NAME="${KIND_CLUSTER_NAME:-kind}"
+# VLAN bridge configuration: configure_extra_networks (kind-setup.sh) has already created
+# Docker bridge networks antrea-<cluster>-1 (eth2) and antrea-<cluster>-2 (eth3) and connected
+# every Kind node.  This function enables vlan_filtering on the underlying Linux bridges and
+# programs per-port VLANs so that the ANC-per-interface allowedVLANs test exercises real
+# VLAN filtering.  Requires root (sudo ip link / bridge).
+function configure_vlan_bridges {
+  local cluster_name="${KIND_CLUSTER_NAME:-kind}"
+  local net_eth2="antrea-${cluster_name}-1"
+  local net_eth3="antrea-${cluster_name}-2"
 
-  if [[ "$(id -u)" -ne 0 ]]; then
-    echoerr "kind_extra_network_with_vlan_awareness_bridges requires root (sudo)."
-    return 1
-  fi
-
-  local net_eth2="kind-vlan-lab-eth2"
-  local net_eth3="kind-vlan-lab-eth3"
-
-  if ! docker network inspect "$net_eth2" &>/dev/null; then
-    docker network create -d bridge \
-      --subnet="20.20.21.0/24" \
-      --gateway="20.20.21.1" \
-      "$net_eth2"
-  fi
-  if ! docker network inspect "$net_eth3" &>/dev/null; then
-    docker network create -d bridge \
-      --subnet="20.20.22.0/24" \
-      --gateway="20.20.22.1" \
-      "$net_eth3"
-  fi
 
   local br_eth2 br_eth3
   br_eth2="$(docker_bridge_for_network "$net_eth2")"
   br_eth3="$(docker_bridge_for_network "$net_eth3")"
-  
-  ip link set "$br_eth2" up 2>/dev/null
-  ip link set "$br_eth3" up 2>/dev/null
-  ip link set "$br_eth2" type bridge vlan_filtering 1
-  ip link set "$br_eth3" type bridge vlan_filtering 1
 
-  local node node_nets
-  for node in $(kind get nodes --name "$KIND_CLUSTER_NAME"); do
-    node_nets="$(docker inspect "$node" --format '{{range $k,$v := .NetworkSettings.Networks}}{{$k}} {{end}}' 2>/dev/null || true)"
-    if [[ " ${node_nets} " != *" ${net_eth2} "* ]]; then
-      docker_network_connect_lab_iface eth2 "$net_eth2" "$node"
-      echo "connected $node to Docker network $net_eth2 as eth2"
-    else
-      echo "$node already on $net_eth2"
-    fi
-    node_nets="$(docker inspect "$node" --format '{{range $k,$v := .NetworkSettings.Networks}}{{$k}} {{end}}' 2>/dev/null || true)"
-    if [[ " ${node_nets} " != *" ${net_eth3} "* ]]; then
-      docker_network_connect_lab_iface eth3 "$net_eth3" "$node"
-      echo "connected $node to Docker network $net_eth3 as eth3"
-    else
-      echo "$node already on $net_eth3"
-    fi
-  done
+  sudo ip link set "$br_eth2" type bridge vlan_filtering 1
+  sudo ip link set "$br_eth3" type bridge vlan_filtering 1
 
-  kind_bridge_apply_lab_vlans "$br_eth2" "${KIND_EXTRA_BRIDGE_1_VLAN_IDS[@]}"
-  kind_bridge_apply_lab_vlans "$br_eth3" "${KIND_EXTRA_BRIDGE_2_VLAN_IDS[@]}"
+  # VLAN IDs from antrea-node-configs-nodepools.yml:
+  #   pool1 eth2: 100,101; pool1 eth3: 300
+  #   pool2 eth2: 100;     pool2 eth3: 400
+  kind_bridge_apply_vlans "$br_eth2" 100 101
+  kind_bridge_apply_vlans "$br_eth3" 300 400
 }
 
 function run_test_with_antrenodeconfigs {
@@ -303,7 +245,7 @@ function run_test_with_antrenodeconfigs {
   echo "Clean up the previous AntreaNodeConfig"
   kubectl delete -f "$ANTREA_NODE_CONFIGS_LINUX_YAML"
   sleep 5
-  kind_extra_network_with_vlan_awareness_bridges
+  configure_vlan_bridges
   echo "Apply new AntreaNodeConfigs for NodePool 1 and NodePool 2 nodes"
   kubectl apply -f "$ANTREA_NODE_CONFIGS_NODEPOOL_YAML"
   sleep 5
@@ -314,7 +256,7 @@ function run_test_with_antrenodeconfigs {
 echo "======== Testing Antrea-native secondary network support =========="
 if [[ "$test_only" == "false" ]];then
   cleanup_stale_kind
-  setup_cluster "--extra-networks \"$EXTRA_NETWORK\" --images \"$IMAGES\" --num-workers $NUM_WORKERS"
+  setup_cluster "--extra-networks \"$EXTRA_NETWORKS\" --images \"$IMAGES\" --num-workers $NUM_WORKERS"
 fi
 prepare_cluster_nodes
 run_test

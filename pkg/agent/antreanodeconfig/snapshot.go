@@ -15,17 +15,14 @@
 package antreanodeconfig
 
 import (
-	corev1 "k8s.io/api/core/v1"
-
 	crdv1alpha1 "antrea.io/antrea/v2/pkg/apis/crd/v1alpha1"
 )
 
-// Snapshot is an immutable view of the local Node and the AntreaNodeConfig that
-// applies to this Node (nodeSelector match, oldest creationTimestamp wins), as
-// computed by the AntreaNodeConfig controller. Subscribers use it together with
-// feature-specific static configuration.
+// Snapshot is an immutable view of the AntreaNodeConfig that applies to this Node
+// (nodeSelector match, oldest creationTimestamp wins), as computed by the
+// AntreaNodeConfig controller. Subscribers use it together with feature-specific
+// static configuration.
 type Snapshot struct {
-	Node *corev1.Node
 	// AntreaNodeConfig is a deep copy of the effective AntreaNodeConfig for this
 	// Node at snapshot build time, or nil when none matches or the list failed.
 	AntreaNodeConfig *crdv1alpha1.AntreaNodeConfig
@@ -35,13 +32,10 @@ type Snapshot struct {
 
 // NewSnapshot returns a snapshot with deep-copied API objects suitable for
 // passing to subscribers and for reflect.DeepEqual deduplication.
-func NewSnapshot(node *corev1.Node, antreaNodeConfig *crdv1alpha1.AntreaNodeConfig, listErr error) *Snapshot {
+func NewSnapshot(antreaNodeConfig *crdv1alpha1.AntreaNodeConfig, listErr error) *Snapshot {
 	s := &Snapshot{}
 	if listErr != nil {
 		s.AntreaNodeConfigListError = listErr.Error()
-	}
-	if node != nil {
-		s.Node = node.DeepCopy()
 	}
 	if antreaNodeConfig != nil {
 		s.AntreaNodeConfig = antreaNodeConfig.DeepCopy()
@@ -55,9 +49,6 @@ func (s *Snapshot) DeepCopy() *Snapshot {
 		return nil
 	}
 	out := &Snapshot{AntreaNodeConfigListError: s.AntreaNodeConfigListError}
-	if s.Node != nil {
-		out.Node = s.Node.DeepCopy()
-	}
 	if s.AntreaNodeConfig != nil {
 		out.AntreaNodeConfig = s.AntreaNodeConfig.DeepCopy()
 	}

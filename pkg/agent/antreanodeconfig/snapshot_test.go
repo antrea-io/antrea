@@ -19,7 +19,6 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	crdv1alpha1 "antrea.io/antrea/v2/pkg/apis/crd/v1alpha1"
@@ -31,15 +30,11 @@ func TestSnapshotDeepCopy(t *testing.T) {
 		assert.Nil(t, s.DeepCopy())
 	})
 
-	t.Run("node and AntreaNodeConfig", func(t *testing.T) {
-		node := &corev1.Node{ObjectMeta: metav1.ObjectMeta{Name: "n1", Labels: map[string]string{"k": "v"}}}
+	t.Run("AntreaNodeConfig", func(t *testing.T) {
 		anc := &crdv1alpha1.AntreaNodeConfig{ObjectMeta: metav1.ObjectMeta{Name: "a1"}}
-		s := NewSnapshot(node, anc, nil)
+		s := NewSnapshot(anc, nil)
 		cp := s.DeepCopy()
 		require.NotNil(t, cp)
-		assert.NotSame(t, s.Node, cp.Node)
 		assert.NotSame(t, s.AntreaNodeConfig, cp.AntreaNodeConfig)
-		cp.Node.Labels["k"] = "mutated"
-		assert.Equal(t, "v", s.Node.Labels["k"])
 	})
 }

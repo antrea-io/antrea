@@ -47,8 +47,7 @@ type fakeANCController struct {
 	crdInformerFactory  crdinformers.SharedInformerFactory
 	kubeInformerFactory informers.SharedInformerFactory
 
-	stopCh      chan struct{}
-	fixtureNode *corev1.Node
+	stopCh chan struct{}
 }
 
 // newANCBridgeTestNotifier mirrors cniserver.newAsyncWaiter: a SubscribableChannel implements
@@ -88,13 +87,11 @@ func newFakeANCController(t *testing.T, node *corev1.Node, ancObjs []*crdv1alpha
 		crdInformerFactory:  crdFactory,
 		kubeInformerFactory: kubeFactory,
 		stopCh:              stopCh,
-		fixtureNode:         node,
 	}
 }
 
 // start starts informer factories, runs the AntreaNodeConfig controller, and waits until
-// CurrentSnapshot reflects fixtureNode (non-nil Node object in API → non-nil snap.Node;
-// nil fixture node → snap.Node nil after Run).
+// the first snapshot is published.
 func (f *fakeANCController) start(t *testing.T) {
 	t.Helper()
 	f.kubeInformerFactory.Start(f.stopCh)
@@ -116,14 +113,7 @@ func (f *fakeANCController) start(t *testing.T) {
 	})
 
 	require.Eventually(t, func() bool {
-		snap := f.CurrentSnapshot()
-		if snap == nil {
-			return false
-		}
-		if f.fixtureNode != nil {
-			return snap.Node != nil
-		}
-		return snap.Node == nil
+		return f.CurrentSnapshot() != nil
 	}, 5*time.Second, 10*time.Millisecond, "controller should expose snapshot after Run")
 }
 
@@ -211,13 +201,6 @@ func TestEffectiveSecondaryOVSBridge(t *testing.T) {
 			staticCfg:  staticCfg,
 			wantBridge: nil,
 		},
-		{
-			name:       "nil node returns nil when ANC enabled — do not prefer static over CR",
-			node:       nil,
-			ancObjs:    []*crdv1alpha1.AntreaNodeConfig{ancMatchingWithBridge},
-			staticCfg:  staticCfg,
-			wantBridge: nil,
-		},
 	}
 
 	for _, tc := range tests {
@@ -248,8 +231,7 @@ func TestEffectiveOVSBridgeFromSnapshot_ListErrorFallsBackToStatic(t *testing.T)
 			{BridgeName: "br-static", PhysicalInterfaces: []string{"eth0"}},
 		},
 	}
-	node := &corev1.Node{ObjectMeta: metav1.ObjectMeta{Name: ancBridgeTestLocalNodeName}}
-	snap := antreanodeconfig.NewSnapshot(node, nil, errors.New("informer list failed"))
+	snap := antreanodeconfig.NewSnapshot(nil, errors.New("informer list failed"))
 	got := EffectiveSecondaryOVSBridgeFromSnapshot(snap, staticCfg)
 	require.NotNil(t, got)
 	assert.Equal(t, "br-static", got.BridgeName)

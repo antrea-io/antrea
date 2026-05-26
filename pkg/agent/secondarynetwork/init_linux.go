@@ -270,14 +270,16 @@ func (c *Controller) clearBridgeState() {
 
 // deleteAndDisconnectBridge deletes the OVS bridge for cfg, notifies the pod controller that
 // no secondary bridge is in use, and clears controller state. cfg may be nil (no-op delete).
+// Controller state is cleared immediately after the bridge is deleted so that a retry (if
+// UpdateOVSBridge fails below) does not call Delete() on an already-gone bridge.
 func (c *Controller) deleteAndDisconnectBridge(cfg *agenttypes.OVSBridgeConfig) error {
 	if err := c.deleteBridge(cfg); err != nil {
 		return err
 	}
+	c.clearBridgeState()
 	if err := c.podController.UpdateOVSBridge(nil); err != nil {
 		return err
 	}
-	c.clearBridgeState()
 	return nil
 }
 

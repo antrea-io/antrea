@@ -35,16 +35,13 @@ func EffectiveSecondaryOVSBridgeFromStatic(staticCfg *agentconfig.SecondaryNetwo
 // immutable *antreanodeconfig.Snapshot (for example the payload on the AntreaNodeConfig notify
 // channel) merged with static agent ConfigMap settings.
 //
-// When snap is nil or snap.Node is nil, nil is returned (no bridge from this snapshot).
+// When snap is nil, nil is returned (no bridge from this snapshot).
 //
 // When the snapshot records a non-empty AntreaNodeConfigListError, staticCfg is used
 // after logging. Otherwise, when the oldest matching AntreaNodeConfig specifies secondary
 // network settings, those override staticCfg; when it does not, staticCfg is used.
 func EffectiveSecondaryOVSBridgeFromSnapshot(snap *antreanodeconfig.Snapshot, staticCfg *agentconfig.SecondaryNetworkConfig) *agenttypes.OVSBridgeConfig {
 	if snap == nil {
-		return nil
-	}
-	if snap.Node == nil {
 		return nil
 	}
 	if snap.AntreaNodeConfigListError != "" {

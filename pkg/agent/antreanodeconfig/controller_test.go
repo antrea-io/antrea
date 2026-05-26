@@ -268,8 +268,6 @@ func TestRecomputeAndNotifyOnLabelChange(t *testing.T) {
 		"label change should trigger another notify")
 	last, ok := env.Rec.Last().(*Snapshot)
 	require.True(t, ok)
-	require.NotNil(t, last.Node)
-	assert.Equal(t, "other", last.Node.Labels["role"], "snapshot should reflect updated Node labels")
 	assert.Nil(t, last.AntreaNodeConfig, "ANC matched worker role only; labels no longer match")
 }
 
@@ -362,7 +360,6 @@ func TestRecomputeNotifyFailureSkipsLastNotifiedUpdate(t *testing.T) {
 	rec.fail = false
 	require.NoError(t, env.C.syncSnapshot(snapshotQueueKey))
 	require.NotNil(t, env.C.lastNotified)
-	require.NotNil(t, env.C.lastNotified.Node)
 	assert.Empty(t, env.C.lastNotified.AntreaNodeConfigListError)
 }
 

@@ -119,9 +119,13 @@ func NewPodController(
 	ipPoolLister crdlisters.IPPoolLister,
 ) (*PodController, error) {
 	ifaceStore := interfacestore.NewInterfaceStore()
-	interfaceConfigurator, err := cniserver.NewSecondaryInterfaceConfigurator(ovsBridgeClient, ifaceStore)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create SecondaryInterfaceConfigurator: %v", err)
+	var interfaceConfigurator InterfaceConfigurator
+	if ovsBridgeClient != nil {
+		var err error
+		interfaceConfigurator, err = cniserver.NewSecondaryInterfaceConfigurator(ovsBridgeClient, ifaceStore)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create SecondaryInterfaceConfigurator: %v", err)
+		}
 	}
 	podLister := corelisters.NewPodLister(podInformer.GetIndexer())
 	pc := PodController{
@@ -345,7 +349,12 @@ func (pc *PodController) removeInterfaces(interfaces []*interfacestore.Interface
 		// interface type by checking interfaceConfig.OVSPortConfig is set or not.
 		if interfaceConfig.OVSPortConfig != nil {
 			if configurator == nil {
-				err = fmt.Errorf("OVS bridge not available, cannot delete VLAN interface")
+				// Bridge is gone — OVS ports no longer exist. Delete the
+				// stale record and proceed to IPAM release; this is not an
+				// error since the interface is already gone.
+				pc.interfaceStore.DeleteInterface(interfaceConfig)
+				klog.V(2).InfoS("Bridge not available, interface record removed",
+					"Pod", klog.KRef(podNamespace, podName), "interface", interfaceConfig.IFDev)
 			} else {
 				err = configurator.DeleteVLANSecondaryInterface(interfaceConfig)
 			}
@@ -834,9 +843,10 @@ func (pc *PodController) UpdateOVSBridge(newClient ovsconfig.OVSBridgeClient) er
 	pc.mu.Unlock()
 
 	if newClient == nil {
-		// Bridge is gone — drop any stale interface records.
-		pc.interfaceStore.Initialize(nil)
-		klog.InfoS("Secondary OVS bridge removed, interface store cleared")
+		// Bridge is gone — discard all stale interface records so that
+		// subsequent lookups do not return interfaces that no longer exist.
+		pc.interfaceStore.Reset()
+		klog.InfoS("Secondary OVS bridge removed, interface store reset")
 		return nil
 	}
 
