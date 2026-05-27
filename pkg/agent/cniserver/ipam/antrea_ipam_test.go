@@ -72,14 +72,14 @@ func createIPPools(crdClient *fakepoolclient.IPPoolClientset) {
 		PrefixLength: 24,
 	}
 
-	crdClient.InitPool(&crdv1b1.IPPool{
+	crdClient.CrdV1beta1().IPPools().Create(context.Background(), &crdv1b1.IPPool{
 		ObjectMeta: metav1.ObjectMeta{Name: testApple,
 			UID: k8suuid.NewUUID()},
 		Spec: crdv1b1.IPPoolSpec{
 			IPRanges:   []crdv1b1.IPRange{ipRangeApple},
 			SubnetInfo: subnetInfoApple,
 		},
-	})
+	}, metav1.CreateOptions{})
 
 	ipRangeOrange := crdv1b1.IPRange{
 		Start: "20::2",
@@ -91,20 +91,20 @@ func createIPPools(crdClient *fakepoolclient.IPPoolClientset) {
 		PrefixLength: 64,
 	}
 
-	crdClient.InitPool(&crdv1b1.IPPool{
+	crdClient.CrdV1beta1().IPPools().Create(context.Background(), &crdv1b1.IPPool{
 		ObjectMeta: metav1.ObjectMeta{Name: testOrange,
 			UID: k8suuid.NewUUID()},
 		Spec: crdv1b1.IPPoolSpec{
 			IPRanges:   []crdv1b1.IPRange{ipRangeOrange},
 			SubnetInfo: subnetInfoOrange,
 		},
-	})
+	}, metav1.CreateOptions{})
 
 	// Dedicated Pools for unit tests:
 	// - testMultiV4 references two IPv4 Pools and should receive a single IPv4 address.
 	// - testExhaustV4 references a single IPv4 Pool with only one available IP; the
 	//   second allocation should fail.
-	crdClient.InitPool(&crdv1b1.IPPool{
+	crdClient.CrdV1beta1().IPPools().Create(context.Background(), &crdv1b1.IPPool{
 		ObjectMeta: metav1.ObjectMeta{Name: "multiv4-pool-a"},
 		Spec: crdv1b1.IPPoolSpec{
 			IPRanges: []crdv1b1.IPRange{{
@@ -116,8 +116,8 @@ func createIPPools(crdClient *fakepoolclient.IPPoolClientset) {
 				PrefixLength: 24,
 			},
 		},
-	})
-	crdClient.InitPool(&crdv1b1.IPPool{
+	}, metav1.CreateOptions{})
+	crdClient.CrdV1beta1().IPPools().Create(context.Background(), &crdv1b1.IPPool{
 		ObjectMeta: metav1.ObjectMeta{Name: "multiv4-pool-b"},
 		Spec: crdv1b1.IPPoolSpec{
 			IPRanges: []crdv1b1.IPRange{{
@@ -129,8 +129,8 @@ func createIPPools(crdClient *fakepoolclient.IPPoolClientset) {
 				PrefixLength: 24,
 			},
 		},
-	})
-	crdClient.InitPool(&crdv1b1.IPPool{
+	}, metav1.CreateOptions{})
+	crdClient.CrdV1beta1().IPPools().Create(context.Background(), &crdv1b1.IPPool{
 		ObjectMeta: metav1.ObjectMeta{Name: "exhaustv4-pool"},
 		Spec: crdv1b1.IPPoolSpec{
 			IPRanges: []crdv1b1.IPRange{{
@@ -142,11 +142,11 @@ func createIPPools(crdClient *fakepoolclient.IPPoolClientset) {
 				PrefixLength: 24,
 			},
 		},
-	})
+	}, metav1.CreateOptions{})
 
 	// testFallbackV4: two IPv4 Pools with 1 IP each. When the first Pool
 	// is exhausted a second Pod should fall back to the second Pool.
-	crdClient.InitPool(&crdv1b1.IPPool{
+	crdClient.CrdV1beta1().IPPools().Create(context.Background(), &crdv1b1.IPPool{
 		ObjectMeta: metav1.ObjectMeta{Name: "fallbackv4-pool-a"},
 		Spec: crdv1b1.IPPoolSpec{
 			IPRanges: []crdv1b1.IPRange{{
@@ -158,8 +158,8 @@ func createIPPools(crdClient *fakepoolclient.IPPoolClientset) {
 				PrefixLength: 24,
 			},
 		},
-	})
-	crdClient.InitPool(&crdv1b1.IPPool{
+	}, metav1.CreateOptions{})
+	crdClient.CrdV1beta1().IPPools().Create(context.Background(), &crdv1b1.IPPool{
 		ObjectMeta: metav1.ObjectMeta{Name: "fallbackv4-pool-b"},
 		Spec: crdv1b1.IPPoolSpec{
 			IPRanges: []crdv1b1.IPRange{{
@@ -171,7 +171,7 @@ func createIPPools(crdClient *fakepoolclient.IPPoolClientset) {
 				PrefixLength: 24,
 			},
 		},
-	})
+	}, metav1.CreateOptions{})
 
 	ipRangePear := crdv1b1.IPRange{
 		Start: "10.2.3.100",
@@ -182,7 +182,7 @@ func createIPPools(crdClient *fakepoolclient.IPPoolClientset) {
 		PrefixLength: 24,
 		VLAN:         100,
 	}
-	crdClient.InitPool(&crdv1b1.IPPool{
+	crdClient.CrdV1beta1().IPPools().Create(context.Background(), &crdv1b1.IPPool{
 		ObjectMeta: metav1.ObjectMeta{Name: testPear},
 		Spec: crdv1b1.IPPoolSpec{
 			IPRanges:   []crdv1b1.IPRange{ipRangePear},
@@ -220,7 +220,7 @@ func createIPPools(crdClient *fakepoolclient.IPPoolClientset) {
 					ContainerID: "pear10-container",
 				}},
 		}}},
-	})
+	}, metav1.CreateOptions{})
 }
 
 func initTestClients() (*fake.Clientset, *fakepoolclient.IPPoolClientset) {
@@ -1052,7 +1052,7 @@ func TestSecondaryNetworkAdd(t *testing.T) {
 				)
 				require.NoError(t, err, "Expected no error in initialization for Antrea IPAM Controller")
 				createIPPools(crdClient)
-				crdClient.InitPool(&crdv1b1.IPPool{
+				crdClient.CrdV1beta1().IPPools().Create(context.Background(), &crdv1b1.IPPool{
 					ObjectMeta: metav1.ObjectMeta{Name: "vlan200-pool"},
 					Spec: crdv1b1.IPPoolSpec{
 						IPRanges: []crdv1b1.IPRange{{
@@ -1065,7 +1065,7 @@ func TestSecondaryNetworkAdd(t *testing.T) {
 							VLAN:         200,
 						},
 					},
-				})
+				}, metav1.CreateOptions{})
 
 				go antreaIPAMController.Run(stopCh)
 				crdInformerFactory.Start(stopCh)

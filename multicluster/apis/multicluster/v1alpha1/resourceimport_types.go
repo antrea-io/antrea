@@ -19,6 +19,7 @@ package v1alpha1
 import (
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 	mcs "sigs.k8s.io/mcs-api/pkg/apis/v1alpha1"
 
 	"antrea.io/antrea/v2/pkg/apis/crd/v1alpha2"
@@ -129,8 +130,8 @@ type ResourceImportList struct {
 }
 
 func init() {
-	SchemeBuilder.Register(
-		&ResourceImport{},
-		&ResourceImportList{},
-	)
+	SchemeBuilder.Register(func(s *runtime.Scheme) error {
+		s.AddKnownTypes(SchemeGroupVersion, &ResourceImport{}, &ResourceImportList{})
+		return nil
+	})
 }
