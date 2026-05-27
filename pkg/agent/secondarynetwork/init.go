@@ -50,16 +50,12 @@ const (
 	maxRetryDelay = 300 * time.Second
 )
 
-var (
-	newOVSBridgeFn = ovsconfig.NewOVSBridge
-)
-
 // podControllerInterface is the subset of podwatch.PodController used by Controller.
 // Defined as an interface to allow test injection.
 type podControllerInterface interface {
 	Run(stopCh <-chan struct{})
 	AllowCNIDelete(podName, podNamespace string) bool
-	UpdateOVSBridge(newClient ovsconfig.OVSBridgeClient) error
+	UpdateOVSBridgeClient(newClient ovsconfig.OVSBridgeClient) error
 }
 
 // Controller manages secondary network resources for a Node.
@@ -109,30 +105,27 @@ func NewController(
 	ipPoolLister crdlisters.IPPoolLister,
 	ancUpdateSubscriber channel.Subscriber,
 ) (*Controller, error) {
-	dynamic := ancUpdateSubscriber != nil
 	c := &Controller{
-		ovsBridgeClient:        nil,
-		secNetConfig:           secNetConfig,
-		podController:          nil,
-		nodeName:               nodeConfig.Name,
-		ovsdbConn:              ovsdbConn,
-		dynamicBridgeReconcile: dynamic,
-		queue: workqueue.NewTypedRateLimitingQueueWithConfig(
+		secNetConfig: secNetConfig,
+		nodeName:     nodeConfig.Name,
+		ovsdbConn:    ovsdbConn,
+	}
+
+	if ancUpdateSubscriber != nil {
+		c.dynamicBridgeReconcile = true
+		c.ancFirstSnapshotCh = make(chan struct{})
+		c.queue = workqueue.NewTypedRateLimitingQueueWithConfig(
 			workqueue.NewTypedItemExponentialFailureRateLimiter[string](minRetryDelay, maxRetryDelay),
 			workqueue.TypedRateLimitingQueueConfig[string]{Name: "secondaryNetworkBridge"},
-		),
-	}
-	if dynamic {
-		c.ancFirstSnapshotCh = make(chan struct{})
+		)
 	}
 
 	var effectiveBridgeCfg *agenttypes.OVSBridgeConfig
 	var ovsBridgeClient ovsconfig.OVSBridgeClient
 	var err error
-	if dynamic {
-		effectiveBridgeCfg, ovsBridgeClient = nil, nil
-	} else {
-		effectiveBridgeCfg, ovsBridgeClient, err = resolveAndCreateOVSBridge(c.effectiveOVSBridge, ovsdbConn)
+
+	if !c.dynamicBridgeReconcile {
+		effectiveBridgeCfg, ovsBridgeClient, err = resolveAndCreateOVSBridge(c.effectiveOVSBridge, c.ovsdbConn)
 		if err != nil {
 			return nil, err
 		}
@@ -151,7 +144,6 @@ func NewController(
 	}
 
 	c.ovsBridgeClient = ovsBridgeClient
-	c.secNetConfig = secNetConfig
 	c.effectiveBridgeCfg = effectiveBridgeCfg
 	c.podController = podWatchController
 
@@ -185,83 +177,12 @@ func (c *Controller) effectiveOVSBridge() *agenttypes.OVSBridgeConfig {
 	if c.dynamicBridgeReconcile {
 		return EffectiveSecondaryOVSBridgeFromSnapshot(c.latestANCSnapshot.Load(), c.secNetConfig)
 	}
-	return EffectiveSecondaryOVSBridgeFromStatic(c.secNetConfig)
-}
-
-// WaitForInitialANCSnapshotAndEnsureBridge blocks until the AntreaNodeConfig controller
-// publishes the first *Snapshot after Node and ANC informers have synced (the same
-// notify path as later updates). That snapshot may carry nil AntreaNodeConfig when no
-// CR matches this Node. It then creates the OVS bridge if needed and updates the pod
-// watcher.
-//
-// The agent calls this once before Initialize when AntreaNodeConfig drives the bridge;
-// on error the agent exits and restarts, so this path does not retry or support
-// concurrent callers.
-func (c *Controller) WaitForInitialANCSnapshotAndEnsureBridge(stopCh <-chan struct{}) error {
-	if !c.dynamicBridgeReconcile {
-		return nil
-	}
-	select {
-	case <-c.ancFirstSnapshotCh:
-	case <-stopCh:
-		return fmt.Errorf("interrupted while waiting for initial AntreaNodeConfig snapshot")
-	}
-	effectiveBridgeCfg, ovsBridgeClient, err := resolveAndCreateOVSBridge(c.effectiveOVSBridge, c.ovsdbConn)
-	if err != nil {
-		return err
-	}
-	c.mu.Lock()
-	c.effectiveBridgeCfg = effectiveBridgeCfg
-	c.ovsBridgeClient = ovsBridgeClient
-	c.mu.Unlock()
-	if err := c.podController.UpdateOVSBridge(ovsBridgeClient); err != nil {
-		return err
-	}
-	klog.InfoS("Secondary network bridge bootstrapped from initial AntreaNodeConfig snapshot")
-	return nil
+	return EffectiveSecondaryOVSBridgeFromAgentConfig(c.secNetConfig)
 }
 
 // enqueue adds the single reconciliation key to the work queue.
 func (c *Controller) enqueue() {
 	c.queue.Add(reconcileKey)
-}
-
-// Run starts the secondary network controller. When AntreaNodeConfig is
-// enabled, the agent must have called WaitForInitialANCSnapshotAndEnsureBridge before
-// Initialize; a bridge reconciliation worker then processes items enqueued by the ANC
-// SubscribableChannel. When ANC is off, the bridge is static and no worker is started.
-func (c *Controller) Run(stopCh <-chan struct{}) {
-	defer c.queue.ShutDown()
-
-	klog.InfoS("Starting secondary network controller")
-	defer klog.InfoS("Shutting down secondary network controller")
-
-	if c.dynamicBridgeReconcile {
-		go func() {
-			for c.processNextItem() {
-			}
-		}()
-	}
-
-	go c.podController.Run(stopCh)
-
-	<-stopCh
-}
-
-func (c *Controller) processNextItem() bool {
-	key, quit := c.queue.Get()
-	if quit {
-		return false
-	}
-	defer c.queue.Done(key)
-
-	if err := c.reconcileBridge(); err != nil {
-		c.queue.AddRateLimited(key)
-		klog.ErrorS(err, "Failed to reconcile secondary network bridge, requeuing")
-	} else {
-		c.queue.Forget(key)
-	}
-	return true
 }
 
 func (c *Controller) AllowCNIDelete(podName, podNamespace string) bool {
@@ -280,37 +201,4 @@ func createNetworkAttachDefClient(cfg componentbaseconfig.ClientConnectionConfig
 		return nil, err
 	}
 	return netAttachDefClient, nil
-}
-
-// createOVSBridgeClient creates a new OVS bridge with the given name and
-// multicast-snooping setting, returning the client for the newly created bridge.
-func createOVSBridgeClient(bridgeName string, enableMulticastSnooping bool, ovsdbConn *ovsdb.OVSDB) (ovsconfig.OVSBridgeClient, error) {
-	var options []ovsconfig.OVSBridgeOption
-	if enableMulticastSnooping {
-		options = append(options, ovsconfig.WithMcastSnooping())
-	}
-	client := newOVSBridgeFn(bridgeName, ovsconfig.OVSDatapathSystem, ovsdbConn, options...)
-	if err := client.Create(); err != nil {
-		return nil, fmt.Errorf("failed to create OVS bridge %s: %v", bridgeName, err)
-	}
-	klog.InfoS("OVS bridge created", "bridge", bridgeName)
-	return client, nil
-}
-
-// resolveAndCreateOVSBridge evaluates effectiveBridge() and creates the OVS bridge.
-// Returns the effective OVSBridgeConfig (nil when no bridge is configured), the
-// corresponding OVSBridgeClient, and any error.
-func resolveAndCreateOVSBridge(
-	effectiveBridge func() *agenttypes.OVSBridgeConfig,
-	ovsdbConn *ovsdb.OVSDB,
-) (*agenttypes.OVSBridgeConfig, ovsconfig.OVSBridgeClient, error) {
-	effectiveBridgeCfg := effectiveBridge()
-	if effectiveBridgeCfg == nil {
-		return nil, nil, nil
-	}
-	ovsBridgeClient, err := createOVSBridgeClient(effectiveBridgeCfg.BridgeName, effectiveBridgeCfg.EnableMulticastSnooping, ovsdbConn)
-	if err != nil {
-		return nil, nil, err
-	}
-	return effectiveBridgeCfg, ovsBridgeClient, nil
 }

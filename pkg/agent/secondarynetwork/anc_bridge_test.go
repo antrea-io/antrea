@@ -207,7 +207,7 @@ func TestEffectiveSecondaryOVSBridge(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			var got *agenttypes.OVSBridgeConfig
 			if tc.noANCController {
-				got = EffectiveSecondaryOVSBridgeFromStatic(tc.staticCfg)
+				got = EffectiveSecondaryOVSBridgeFromAgentConfig(tc.staticCfg)
 			} else {
 				fc := newFakeANCController(t, tc.node, tc.ancObjs)
 				fc.start(t)

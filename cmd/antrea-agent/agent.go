@@ -995,13 +995,10 @@ func run(o *Options) error {
 	}
 	// secondaryNetworkController Initialize must be run after FlowRestoreComplete for the case that Node
 	// IPs are moved to the secondary OVS bridge. When AntreaNodeConfig drives the secondary bridge,
-	// wait for the first ANC snapshot before Initialize so the effective bridge is known.
+	// Initialize waits for the first ANC snapshot before setting up the bridge.
 	if features.DefaultFeatureGate.Enabled(features.SecondaryNetwork) {
-		if err := secondaryNetworkController.WaitForInitialANCSnapshotAndEnsureBridge(stopCh); err != nil {
-			return fmt.Errorf("failed to wait for AntreaNodeConfig snapshot for secondary network: %w", err)
-		}
 		defer secondaryNetworkController.Restore()
-		if err = secondaryNetworkController.Initialize(); err != nil {
+		if err = secondaryNetworkController.Initialize(stopCh); err != nil {
 			return fmt.Errorf("failed to initialize secondary network: %v", err)
 		}
 		go secondaryNetworkController.Run(stopCh)

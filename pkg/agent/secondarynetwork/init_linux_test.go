@@ -334,7 +334,7 @@ func TestInitialize(t *testing.T) {
 				ovsBridgeClient:    mockOVSBridgeClient,
 				effectiveBridgeCfg: tc.bridgeCfg,
 			}
-			err := c.Initialize()
+			err := c.Initialize(nil)
 			if tc.expectedErr != "" {
 				assert.ErrorContains(t, err, tc.expectedErr)
 			} else {
@@ -353,7 +353,7 @@ const (
 
 // TestReconcileBridge tests the reconcileBridge function with various transitions.
 // fakePodController implements podControllerInterface for unit tests.
-// It records calls to UpdateOVSBridge so tests can assert on them.
+// It records calls to UpdateOVSBridgeClient so tests can assert on them.
 type fakePodController struct {
 	updateBridgeCalls []ovsconfig.OVSBridgeClient
 	updateBridgeErr   error
@@ -363,7 +363,7 @@ func (f *fakePodController) Run(_ <-chan struct{}) {}
 
 func (f *fakePodController) AllowCNIDelete(_, _ string) bool { return true }
 
-func (f *fakePodController) UpdateOVSBridge(c ovsconfig.OVSBridgeClient) error {
+func (f *fakePodController) UpdateOVSBridgeClient(c ovsconfig.OVSBridgeClient) error {
 	f.updateBridgeCalls = append(f.updateBridgeCalls, c)
 	return f.updateBridgeErr
 }
@@ -377,8 +377,8 @@ func TestReconcileBridge(t *testing.T) {
 		desiredCfg          *agenttypes.OVSBridgeConfig // returned by effectiveBridge() in production
 		expectedCalls       func(old, new *ovsconfigtest.MockOVSBridgeClient)
 		wantNewClient       bool // whether c.ovsBridgeClient should be the "new" mock after reconcile
-		wantUpdateBridgeN   int  // expected number of UpdateOVSBridge calls on the podController
-		wantUpdateBridgeNil bool // whether the last UpdateOVSBridge call should pass nil
+		wantUpdateBridgeN   int  // expected number of UpdateOVSBridgeClient calls on the podController
+		wantUpdateBridgeNil bool // whether the last UpdateOVSBridgeClient call should pass nil
 		// wantRestoreCalls lists the (bridge, iface) pairs that restoreHostInterfaceConfigFn
 		// must be called with, in order, when an interface is removed from the config.
 		wantRestoreCalls []struct{ bridge, iface string }
@@ -471,7 +471,7 @@ func TestReconcileBridge(t *testing.T) {
 				}, nil).Times(1)
 			},
 			wantNewClient: true,
-			// UpdateOVSBridge(nil) after old bridge deleted, then UpdateOVSBridge(new) from createAndConnectBridge.
+			// UpdateOVSBridgeClient(nil) after old bridge deleted, then UpdateOVSBridgeClient(new) from createAndConnectBridge.
 			wantUpdateBridgeN: 2,
 		},
 		{
@@ -497,7 +497,7 @@ func TestReconcileBridge(t *testing.T) {
 				}, nil).Times(1)
 			},
 			wantNewClient: true,
-			// UpdateOVSBridge(nil) after old bridge deleted, then UpdateOVSBridge(new) from createAndConnectBridge.
+			// UpdateOVSBridgeClient(nil) after old bridge deleted, then UpdateOVSBridgeClient(new) from createAndConnectBridge.
 			wantUpdateBridgeN: 2,
 		},
 		{
@@ -517,7 +517,7 @@ func TestReconcileBridge(t *testing.T) {
 					{Name: eth1, IFName: eth1, Trunks: nil},
 				}, nil).Times(1)
 			},
-			// No UpdateOVSBridge: same bridge, client unchanged.
+			// No UpdateOVSBridgeClient: same bridge, client unchanged.
 		},
 		{
 			name:       "rule 3: same bridge name — remove old interface",
@@ -535,7 +535,7 @@ func TestReconcileBridge(t *testing.T) {
 					{Name: eth1, IFName: eth1, Trunks: nil},
 				}, nil).Times(1)
 			},
-			// No UpdateOVSBridge: same bridge, client unchanged.
+			// No UpdateOVSBridgeClient: same bridge, client unchanged.
 		},
 		{
 			name:    "rule 3: same bridge, add interface with VLANs (rule 5)",
@@ -555,7 +555,7 @@ func TestReconcileBridge(t *testing.T) {
 					{Name: eth1, IFName: eth1, Trunks: nil},
 				}, nil).Times(1)
 			},
-			// No UpdateOVSBridge: same bridge, client unchanged.
+			// No UpdateOVSBridgeClient: same bridge, client unchanged.
 		},
 		{
 			// Regression test: existing port gains AllowedVLANs (e.g. ANC CR applied after
@@ -574,7 +574,7 @@ func TestReconcileBridge(t *testing.T) {
 				old.EXPECT().GetOFPort(eth1, false).Return(int32(uplinkOFPort), nil)
 				old.EXPECT().SetPortTrunks(eth1, []string{"100", "300"}).Return(nil)
 			},
-			// No UpdateOVSBridge: same bridge, client unchanged.
+			// No UpdateOVSBridgeClient: same bridge, client unchanged.
 		},
 		{
 			// Regression test: existing trunk ports have AllowedVLANs cleared (e.g. ANC CR
@@ -603,7 +603,7 @@ func TestReconcileBridge(t *testing.T) {
 				old.EXPECT().SetPortTrunks(eth1, nil).Return(nil)
 				old.EXPECT().SetPortTrunks(eth2, nil).Return(nil)
 			},
-			// No UpdateOVSBridge: same bridge, client unchanged.
+			// No UpdateOVSBridgeClient: same bridge, client unchanged.
 		},
 		{
 			// Regression: eth1 loses AllowedVLANs AND eth2 has a stale trunk 300 that
@@ -634,7 +634,7 @@ func TestReconcileBridge(t *testing.T) {
 				old.EXPECT().SetPortTrunks(eth1, nil).Return(nil)
 				old.EXPECT().SetPortTrunks(eth2, nil).Return(nil)
 			},
-			// No UpdateOVSBridge: same bridge, client unchanged.
+			// No UpdateOVSBridgeClient: same bridge, client unchanged.
 		},
 		{
 			// anc.yaml → anc1.yaml: eth1 had allowedVLANs:["100"] and eth2 had
@@ -673,7 +673,7 @@ func TestReconcileBridge(t *testing.T) {
 				old.EXPECT().SetPortTrunks(eth1, nil).Return(nil)
 				old.EXPECT().SetPortTrunks(eth2, nil).Return(nil)
 			},
-			// No UpdateOVSBridge: same bridge, client unchanged.
+			// No UpdateOVSBridgeClient: same bridge, client unchanged.
 		},
 		{
 			// Regression: eth1 was connected via PrepareHostInterfaceConnection (single-interface
@@ -753,15 +753,15 @@ func TestReconcileBridge(t *testing.T) {
 					assert.Equal(t, newMock, c.ovsBridgeClient)
 				}
 				c.mu.RUnlock()
-				// Verify UpdateOVSBridge was called the expected number of times.
+				// Verify UpdateOVSBridgeClient was called the expected number of times.
 				assert.Len(t, fakePc.updateBridgeCalls, tc.wantUpdateBridgeN,
-					"unexpected number of UpdateOVSBridge calls")
+					"unexpected number of UpdateOVSBridgeClient calls")
 				if tc.wantUpdateBridgeN > 0 {
 					last := fakePc.updateBridgeCalls[len(fakePc.updateBridgeCalls)-1]
 					if tc.wantUpdateBridgeNil {
-						assert.Nil(t, last, "expected UpdateOVSBridge(nil) for bridge deletion")
+						assert.Nil(t, last, "expected UpdateOVSBridgeClient(nil) for bridge deletion")
 					} else {
-						assert.Equal(t, newMock, last, "expected UpdateOVSBridge(newMock) for bridge creation")
+						assert.Equal(t, newMock, last, "expected UpdateOVSBridgeClient(newMock) for bridge creation")
 					}
 				}
 				// Verify restoreHostInterfaceConfigFn calls.

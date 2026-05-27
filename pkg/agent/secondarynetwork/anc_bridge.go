@@ -25,9 +25,9 @@ import (
 	agentconfig "antrea.io/antrea/v2/pkg/config/agent"
 )
 
-// EffectiveSecondaryOVSBridgeFromStatic returns the secondary OVS bridge from agent static
-// ConfigMap settings only. Used when AntreaNodeConfig does not drive the secondary bridge.
-func EffectiveSecondaryOVSBridgeFromStatic(staticCfg *agentconfig.SecondaryNetworkConfig) *agenttypes.OVSBridgeConfig {
+// EffectiveSecondaryOVSBridgeFromAgentConfig returns the secondary OVS bridge from the
+// agent ConfigMap settings only. Used when AntreaNodeConfig does not drive the secondary bridge.
+func EffectiveSecondaryOVSBridgeFromAgentConfig(staticCfg *agentconfig.SecondaryNetworkConfig) *agenttypes.OVSBridgeConfig {
 	return ovsBridgeFromStatic(staticCfg)
 }
 

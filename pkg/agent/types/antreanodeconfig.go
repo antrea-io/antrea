@@ -69,34 +69,3 @@ func (b *OVSBridgeConfig) DeepCopy() *OVSBridgeConfig {
 	}
 	return cp
 }
-
-// WithoutInterface returns a new OVSBridgeConfig that is identical to b except
-// that the interface with the given name is removed from PhysicalInterfaces.
-func (b *OVSBridgeConfig) WithoutInterface(name string) *OVSBridgeConfig {
-	cp := b.DeepCopy()
-	filtered := cp.PhysicalInterfaces[:0]
-	for _, pi := range cp.PhysicalInterfaces {
-		if pi.Name != name {
-			filtered = append(filtered, pi)
-		}
-	}
-	cp.PhysicalInterfaces = filtered
-	return cp
-}
-
-// WithClearedTrunks returns a new OVSBridgeConfig where AllowedVLANs is
-// cleared for any interface whose entry in desired has no AllowedVLANs.  This
-// reflects the state after clearStaleTrunks has run successfully.
-func (b *OVSBridgeConfig) WithClearedTrunks(desired []PhysicalInterfaceConfig) *OVSBridgeConfig {
-	desiredMap := make(map[string]PhysicalInterfaceConfig, len(desired))
-	for _, pi := range desired {
-		desiredMap[pi.Name] = pi
-	}
-	cp := b.DeepCopy()
-	for i, pi := range cp.PhysicalInterfaces {
-		if d, ok := desiredMap[pi.Name]; ok && len(d.AllowedVLANs) == 0 {
-			cp.PhysicalInterfaces[i].AllowedVLANs = nil
-		}
-	}
-	return cp
-}

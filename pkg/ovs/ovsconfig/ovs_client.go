@@ -436,7 +436,7 @@ func (br *OVSBridge) CreateInternalPort(name string, ofPortRequest int32, mac st
 	if ofPortRequest < 0 || ofPortRequest > ofPortRequestMax {
 		return "", newInvalidArgumentsError(fmt.Sprint("invalid ofPortRequest value: ", ofPortRequest))
 	}
-	return br.createPort(name, name, "internal", ofPortRequest, 0, mac, externalIDs, nil)
+	return br.createPort(name, name, "internal", ofPortRequest, 0, mac, externalIDs, nil, nil)
 }
 
 // CreateTunnelPort creates a tunnel port with the specified name and type on
@@ -524,7 +524,7 @@ func (br *OVSBridge) createTunnelPort(
 		options["csum"] = "true"
 	}
 
-	return br.createPort(name, name, string(tunnelType), ofPortRequest, 0, "", externalIDs, options)
+	return br.createPort(name, name, string(tunnelType), ofPortRequest, 0, "", externalIDs, options, nil)
 }
 
 // GetInterfaceOptions returns the options of the provided interface.
@@ -600,7 +600,7 @@ func ParseTunnelInterfaceOptions(portData *OVSPortData) (net.IP, net.IP, int32, 
 
 // CreateUplinkPort creates uplink port.
 func (br *OVSBridge) CreateUplinkPort(name string, ofPortRequest int32, externalIDs map[string]interface{}) (string, Error) {
-	return br.createPort(name, name, "", ofPortRequest, 0, "", externalIDs, nil)
+	return br.createPort(name, name, "", ofPortRequest, 0, "", externalIDs, nil, nil)
 }
 
 // parseVLANSpecs converts VLAN specifications such as "100" or "200-300" into
@@ -646,72 +646,7 @@ func (br *OVSBridge) CreateTrunkPort(name string, ofPortRequest int32, vlanSpecs
 	if err != nil {
 		return "", newInvalidArgumentsError(fmt.Sprintf("invalid VLAN specs for port %q: %v", name, err))
 	}
-
-	var externalIDMap []interface{}
-	if externalIDs != nil {
-		externalIDMap = helpers.MakeOVSDBMap(externalIDs)
-	}
-
-	for _, id := range br.requiredPortExternalIDs {
-		if _, ok := externalIDs[id]; !ok {
-			return "", newInvalidArgumentsError(fmt.Sprintf("missing required externalID '%s' for port '%s'", id, name))
-		}
-	}
-
-	tx := br.ovsdb.Transaction(openvSwitchSchema)
-
-	interf := Interface{
-		Name:          name,
-		OFPortRequest: ofPortRequest,
-	}
-	ifNamedUUID := tx.Insert(dbtransaction.Insert{
-		Table: "Interface",
-		Row:   interf,
-	})
-
-	port := Port{
-		Name: name,
-		Interfaces: helpers.MakeOVSDBSet(map[string]interface{}{
-			"named-uuid": []string{ifNamedUUID},
-		}),
-		ExternalIDs: externalIDMap,
-	}
-
-	var portRow interface{}
-	if len(vlanIDs) > 0 {
-		ids := make([]interface{}, len(vlanIDs))
-		for i, v := range vlanIDs {
-			ids[i] = v
-		}
-		portRow = TrunkPort{
-			Port:   port,
-			Trunks: []interface{}{"set", ids},
-		}
-	} else {
-		portRow = port
-	}
-
-	portNamedUUID := tx.Insert(dbtransaction.Insert{
-		Table: "Port",
-		Row:   portRow,
-	})
-
-	mutateSet := helpers.MakeOVSDBSet(map[string]interface{}{
-		"named-uuid": []string{portNamedUUID},
-	})
-	tx.Mutate(dbtransaction.Mutate{
-		Table:     "Bridge",
-		Mutations: [][]interface{}{{"ports", "insert", mutateSet}},
-		Where:     [][]interface{}{{"name", "==", br.name}},
-	})
-
-	res, err, temporary := tx.Commit()
-	if err != nil {
-		klog.Error("Transaction failed: ", err)
-		return "", NewTransactionError(err, temporary)
-	}
-
-	return res[1].UUID[1], nil
+	return br.createPort(name, name, "", ofPortRequest, 0, "", externalIDs, nil, vlanIDs)
 }
 
 // CreatePort creates a port with the specified name on the bridge, and connects
@@ -719,7 +654,7 @@ func (br *OVSBridge) CreateTrunkPort(name string, ofPortRequest int32, vlanSpecs
 // If externalIDs is not empty, the map key/value pairs will be set to the
 // port's external_ids.
 func (br *OVSBridge) CreatePort(name, ifDev string, externalIDs map[string]interface{}) (string, Error) {
-	return br.createPort(name, ifDev, "", 0, 0, "", externalIDs, nil)
+	return br.createPort(name, ifDev, "", 0, 0, "", externalIDs, nil, nil)
 }
 
 // CreateAccessPort creates a port with the specified name and VLAN ID on the bridge, and connects
@@ -728,10 +663,10 @@ func (br *OVSBridge) CreatePort(name, ifDev string, externalIDs map[string]inter
 // port's external_ids.
 // vlanID=0 will perform same behavior as CreatePort.
 func (br *OVSBridge) CreateAccessPort(name, ifDev string, externalIDs map[string]interface{}, vlanID uint16) (string, Error) {
-	return br.createPort(name, ifDev, "", 0, vlanID, "", externalIDs, nil)
+	return br.createPort(name, ifDev, "", 0, vlanID, "", externalIDs, nil, nil)
 }
 
-func (br *OVSBridge) createPort(name, ifName, ifType string, ofPortRequest int32, vlanID uint16, mac string, externalIDs, options map[string]interface{}) (string, Error) {
+func (br *OVSBridge) createPort(name, ifName, ifType string, ofPortRequest int32, vlanID uint16, mac string, externalIDs, options map[string]interface{}, trunks []uint16) (string, Error) {
 	var externalIDMap []interface{}
 	var optionMap []interface{}
 
@@ -770,9 +705,16 @@ func (br *OVSBridge) createPort(name, ifName, ifType string, ofPortRequest int32
 		ExternalIDs: externalIDMap,
 	}
 	var portInterface interface{}
-	portInterface = port
-	if vlanID > 0 {
+	if trunks != nil {
+		ids := make([]interface{}, len(trunks))
+		for i, v := range trunks {
+			ids[i] = v
+		}
+		portInterface = TrunkPort{Port: port, Trunks: []interface{}{"set", ids}}
+	} else if vlanID > 0 {
 		portInterface = AccessPort{Port: port, Tag: uint32(vlanID)}
+	} else {
+		portInterface = port
 	}
 	portNamedUUID := tx.Insert(dbtransaction.Insert{
 		Table: "Port",

@@ -820,14 +820,14 @@ func (pc *PodController) loadOVSInterfaceStore(client ovsconfig.OVSBridgeClient)
 	return nil
 }
 
-// UpdateOVSBridge replaces the OVS bridge client and interface configurator used by the
+// UpdateOVSBridgeClient replaces the OVS bridge client and interface configurator used by the
 // PodController. It is called by the secondary network controller whenever the effective
 // bridge configuration changes (e.g. a new AntreaNodeConfig takes effect):
 //   - newClient == nil: the bridge was deleted; clear the client and configurator and purge the
 //     interface store so future Pod events are handled with no bridge.
 //   - newClient != nil: a new (or replacement) bridge was created; install the new client and a
 //     fresh configurator, then reload the interface store from the new bridge.
-func (pc *PodController) UpdateOVSBridge(newClient ovsconfig.OVSBridgeClient) error {
+func (pc *PodController) UpdateOVSBridgeClient(newClient ovsconfig.OVSBridgeClient) error {
 	var newConfigurator InterfaceConfigurator
 	if newClient != nil {
 		var err error

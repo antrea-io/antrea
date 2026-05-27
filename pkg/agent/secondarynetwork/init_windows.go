@@ -17,7 +17,14 @@
 
 package secondarynetwork
 
-func (c *Controller) Initialize() error {
+import (
+	"github.com/TomCodeLV/OVSDB-golang-lib/pkg/ovsdb"
+
+	agenttypes "antrea.io/antrea/v2/pkg/agent/types"
+	"antrea.io/antrea/v2/pkg/ovs/ovsconfig"
+)
+
+func (c *Controller) Initialize(stopCh <-chan struct{}) error {
 	return nil
 }
 
@@ -28,4 +35,15 @@ func (c *Controller) Restore() {
 func (c *Controller) reconcileBridge() error {
 	// Not supported on Windows.
 	return nil
+}
+
+func (c *Controller) Run(stopCh <-chan struct{}) {
+	return
+}
+
+func resolveAndCreateOVSBridge(
+	effectiveBridge func() *agenttypes.OVSBridgeConfig,
+	ovsdbConn *ovsdb.OVSDB,
+) (*agenttypes.OVSBridgeConfig, ovsconfig.OVSBridgeClient, error) {
+	return nil, nil, nil
 }
