@@ -328,29 +328,31 @@ func (fa *flowAggregator) runCollectors(stopCh <-chan struct{}) {
 
 // runFlowStreamService runs the FlowStreamService with server-side TLS, restarting
 // it whenever the TLS certificate is rotated. It mirrors the structure of runCollectors:
-// the loop starts with a select so that the server is not started until the certificate
-// provider has populated cert material (signalled via the first CertificateUpdated call).
+// on the first iteration the loop blocks until the certificate provider signals readiness;
+// on subsequent iterations (cert rotation) it restarts the server immediately.
 func (fa *flowAggregator) runFlowStreamService(stopCh <-chan struct{}) {
 	var svcWg sync.WaitGroup
 	svcStopCh := make(chan struct{})
 	for {
-		// Wait for a certificate update (or shutdown) before (re-)starting the server.
-		// On the initial startup this blocks until the cert provider has synced, ensuring
-		// we never start the server with empty PEM bytes.
 		select {
 		case <-stopCh:
 			close(svcStopCh)
 			svcWg.Wait()
 			return
 		case <-fa.flowStreamSvcUpdateCh:
+			close(svcStopCh)
+			svcWg.Wait()
 		}
+		// The previous svcStopCh was closed to stop the old server (or was
+		// never used on the first iteration). Create a fresh one for the
+		// next server instance.
+		svcStopCh = make(chan struct{})
 
-		// Also check stopCh before starting a brand-new server, so that if both
-		// channels are ready we don't bind the port only to immediately tear it down.
+		// Check stopCh before starting a new server so that if both channels
+		// are ready we don't bind the port only to immediately tear it down.
 		select {
 		case <-stopCh:
 			close(svcStopCh)
-			svcWg.Wait()
 			return
 		default:
 		}
@@ -363,17 +365,6 @@ func (fa *flowAggregator) runFlowStreamService(stopCh <-chan struct{}) {
 				klog.ErrorS(err, "FlowStreamService failed to start")
 			}
 		}()
-
-		select {
-		case <-stopCh:
-			close(svcStopCh)
-			svcWg.Wait()
-			return
-		case <-fa.flowStreamSvcUpdateCh:
-			close(svcStopCh)
-			svcWg.Wait()
-			svcStopCh = make(chan struct{})
-		}
 	}
 }
 

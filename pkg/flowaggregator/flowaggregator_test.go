@@ -21,7 +21,9 @@ import (
 	"os"
 	"path/filepath"
 	"sync"
+	"sync/atomic"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/fsnotify/fsnotify"
@@ -1248,31 +1250,14 @@ func TestFillServiceUID(t *testing.T) {
 	}
 }
 
-// fakeFlowStreamService is a test implementation of flowStreamProvider. Run blocks
-// until stopCh is closed or an optional error is injected.
+// fakeFlowStreamService is a test implementation of flowStreamProvider.
+// Run blocks until stopCh is closed.
 type fakeFlowStreamService struct {
-	// errOnRun, if non-nil, is returned immediately from Run without blocking.
-	errOnRun error
-	// runStarted is closed when Run is entered.
-	runStarted chan struct{}
-	// runDone is closed when Run returns.
-	runDone chan struct{}
-}
-
-func newFakeFlowStreamService(errOnRun error) *fakeFlowStreamService {
-	return &fakeFlowStreamService{
-		errOnRun:   errOnRun,
-		runStarted: make(chan struct{}),
-		runDone:    make(chan struct{}),
-	}
+	runCount atomic.Int64
 }
 
 func (f *fakeFlowStreamService) Run(_, _ []byte, stopCh <-chan struct{}) error {
-	close(f.runStarted)
-	defer close(f.runDone)
-	if f.errOnRun != nil {
-		return f.errOnRun
-	}
+	f.runCount.Add(1)
 	<-stopCh
 	return nil
 }
@@ -1330,127 +1315,83 @@ func TestFlowAggregator_CertificateUpdated_NoFSSChannel(t *testing.T) {
 //  2. Starts the server once the cert signal arrives.
 //  3. Stops cleanly when stopCh is closed.
 func TestFlowAggregator_runFlowStreamService(t *testing.T) {
-	fakeRunner := newFakeFlowStreamService(nil)
-	fssCh := make(chan struct{}, 1)
+	// Create the certificate provider outside the synctest bubble because
+	// its internal work queues spawn background goroutines.
+	certProvider := certificate.NewProvider(fake.NewSimpleClientset(), "")
+	synctest.Test(t, func(t *testing.T) {
+		fakeRunner := &fakeFlowStreamService{}
+		fssCh := make(chan struct{}, 1)
+		fa := &flowAggregator{
+			flowStreamService:     fakeRunner,
+			flowStreamSvcUpdateCh: fssCh,
+			certificateProvider:   certProvider,
+		}
 
-	fa := &flowAggregator{
-		flowStreamService:     fakeRunner,
-		flowStreamSvcUpdateCh: fssCh,
-		certificateProvider:   certificate.NewProvider(fake.NewSimpleClientset(), ""),
-	}
+		stopCh := make(chan struct{})
+		defer close(stopCh)
+		go fa.runFlowStreamService(stopCh)
 
-	stopCh := make(chan struct{})
-	done := make(chan struct{})
-	go func() {
-		defer close(done)
-		fa.runFlowStreamService(stopCh)
-	}()
+		// Before any cert update, Run should NOT have been entered.
+		synctest.Wait()
+		assert.Equal(t, int64(0), fakeRunner.runCount.Load(), "Run should not start before cert update signal")
 
-	// Before any cert update, Run should NOT have been entered yet.
-	select {
-	case <-fakeRunner.runStarted:
-		t.Fatal("Run started before cert update signal")
-	case <-time.After(50 * time.Millisecond):
-	}
-
-	// Send the cert-ready signal.
-	fssCh <- struct{}{}
-
-	// Run should start shortly.
-	select {
-	case <-fakeRunner.runStarted:
-	case <-time.After(time.Second):
-		t.Fatal("Run did not start after cert update signal")
-	}
-
-	// Closing stopCh should shut everything down cleanly.
-	close(stopCh)
-	select {
-	case <-done:
-	case <-time.After(time.Second):
-		t.Fatal("runFlowStreamService did not return after stopCh closed")
-	}
+		// Send the cert-ready signal.
+		fssCh <- struct{}{}
+		synctest.Wait()
+		assert.Equal(t, int64(1), fakeRunner.runCount.Load(), "Run should start after cert update signal")
+	})
 }
 
 // TestFlowAggregator_runFlowStreamService_StopBeforeCert verifies that if stopCh
 // is closed before a cert update, the function returns immediately without starting
 // the server.
 func TestFlowAggregator_runFlowStreamService_StopBeforeCert(t *testing.T) {
-	fakeRunner := newFakeFlowStreamService(nil)
-	fssCh := make(chan struct{}, 1)
+	certProvider := certificate.NewProvider(fake.NewSimpleClientset(), "")
+	synctest.Test(t, func(t *testing.T) {
+		fakeRunner := &fakeFlowStreamService{}
+		fssCh := make(chan struct{}, 1)
+		fa := &flowAggregator{
+			flowStreamService:     fakeRunner,
+			flowStreamSvcUpdateCh: fssCh,
+			certificateProvider:   certProvider,
+		}
 
-	fa := &flowAggregator{
-		flowStreamService:     fakeRunner,
-		flowStreamSvcUpdateCh: fssCh,
-		certificateProvider:   certificate.NewProvider(fake.NewSimpleClientset(), ""),
-	}
+		stopCh := make(chan struct{})
+		close(stopCh)
 
-	stopCh := make(chan struct{})
-	close(stopCh) // stop immediately
+		go fa.runFlowStreamService(stopCh)
+		synctest.Wait()
 
-	done := make(chan struct{})
-	go func() {
-		defer close(done)
-		fa.runFlowStreamService(stopCh)
-	}()
-
-	select {
-	case <-done:
-	case <-time.After(time.Second):
-		t.Fatal("runFlowStreamService did not return after stopCh pre-closed")
-	}
-
-	// Run should never have been called.
-	select {
-	case <-fakeRunner.runStarted:
-		t.Fatal("Run should not have been called when stopped before cert")
-	default:
-	}
+		assert.Equal(t, int64(0), fakeRunner.runCount.Load(), "Run should not be called when stopped before cert")
+	})
 }
 
 // TestFlowAggregator_runFlowStreamService_CertRotation verifies that a second cert
-// update causes the running server to be replaced.
+// update stops the running server and restarts it with new cert material.
 func TestFlowAggregator_runFlowStreamService_CertRotation(t *testing.T) {
-	// First runner blocks; second runner also blocks (we replace it on rotation).
-	firstRunner := newFakeFlowStreamService(nil)
-	fssCh := make(chan struct{}, 1)
+	certProvider := certificate.NewProvider(fake.NewSimpleClientset(), "")
+	synctest.Test(t, func(t *testing.T) {
+		fakeRunner := &fakeFlowStreamService{}
+		fssCh := make(chan struct{}, 1)
+		fa := &flowAggregator{
+			flowStreamService:     fakeRunner,
+			flowStreamSvcUpdateCh: fssCh,
+			certificateProvider:   certProvider,
+		}
 
-	fa := &flowAggregator{
-		flowStreamService:     firstRunner,
-		flowStreamSvcUpdateCh: fssCh,
-		certificateProvider:   certificate.NewProvider(fake.NewSimpleClientset(), ""),
-	}
+		stopCh := make(chan struct{})
+		defer close(stopCh)
+		go fa.runFlowStreamService(stopCh)
 
-	stopCh := make(chan struct{})
-	done := make(chan struct{})
-	go func() {
-		defer close(done)
-		fa.runFlowStreamService(stopCh)
-	}()
+		// Trigger first start.
+		fssCh <- struct{}{}
+		synctest.Wait()
+		assert.Equal(t, int64(1), fakeRunner.runCount.Load(), "first Run should have started")
 
-	// Trigger first start.
-	fssCh <- struct{}{}
-	select {
-	case <-firstRunner.runStarted:
-	case <-time.After(time.Second):
-		t.Fatal("first Run did not start")
-	}
-
-	// Send a cert-rotation signal — this should stop the first runner and loop.
-	fssCh <- struct{}{}
-
-	// The first runner's stopCh should be closed, causing its Run to return.
-	select {
-	case <-firstRunner.runDone:
-	case <-time.After(time.Second):
-		t.Fatal("first Run did not stop after cert rotation")
-	}
-
-	// Shut down cleanly.
-	close(stopCh)
-	select {
-	case <-done:
-	case <-time.After(time.Second):
-		t.Fatal("runFlowStreamService did not return after stopCh closed")
-	}
+		// Send a cert-rotation signal — this should stop the first server
+		// and restart with the new certs.
+		fssCh <- struct{}{}
+		synctest.Wait()
+		assert.Equal(t, int64(2), fakeRunner.runCount.Load(), "Run should be called again after cert rotation")
+	})
 }
