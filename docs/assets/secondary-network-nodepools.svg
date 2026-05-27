@@ -1,0 +1,245 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Copyright 2026 Antrea Authors
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License. -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 810" width="800" height="810">
+  <title>AntreaNodeConfig NodePool VLAN Network Topology</title>
+  <defs>
+    <marker id="arr" markerWidth="7" markerHeight="7" refX="3.5" refY="3.5" orient="auto">
+      <path d="M 0,0 L 7,3.5 L 0,7 Z" fill="#666"/>
+    </marker>
+  </defs>
+
+  <!-- Physical Network -->
+  <rect x="20" y="10" width="760" height="66" fill="#f5f5f5" stroke="#555" stroke-width="1.5" rx="3"/>
+  <text x="400" y="28" font-size="13" font-weight="600" text-anchor="middle"
+        font-family="'Oswald', Arial, sans-serif" fill="#1a1a1a">
+    Physical Network (VLAN-aware, shared by all nodes)
+  </text>
+  <text x="50" y="46" font-size="11" font-family="'Oswald', Arial, sans-serif" fill="#333">
+    eth2: VLAN trunk 100, 101   (subnet 20.20.21.0/24)
+  </text>
+  <text x="50" y="62" font-size="11" font-family="'Oswald', Arial, sans-serif" fill="#333">
+    eth3: VLAN trunk 300, 400   (subnet 20.20.22.0/24)
+  </text>
+
+  <!-- Arrow: Physical Network -> NodePools -->
+  <line x1="400" y1="76" x2="400" y2="96" stroke="#666" stroke-width="1.5" marker-end="url(#arr)"/>
+  <text x="410" y="91" font-size="9" font-family="'Oswald', Arial, sans-serif" fill="#888">all 4 nodes</text>
+
+  <!-- NodePool pool1 -->
+  <rect x="20" y="99" width="760" height="282" fill="#eef4fb" stroke="#2d6a9f" stroke-width="2" rx="4"/>
+  <text x="400" y="117" font-size="13" font-weight="600" text-anchor="middle"
+        font-family="'Oswald', Arial, sans-serif" fill="#1a3a5c">
+    NodePool &#x201C;pool1&#x201D;   (antrea.io/node-pool=pool1)
+  </text>
+  <text x="40" y="132" font-size="11" font-family="'Oswald', Arial, sans-serif" fill="#1a3a5c">
+    AntreaNodeConfig: secondary-network-pool1
+  </text>
+  <text x="40" y="147" font-size="10" font-family="'Oswald', Arial, sans-serif" fill="#1a3a5c">
+    br1:  eth2 &#x2192; VLAN 100, 101 (trunk)   |   eth3 &#x2192; VLAN 300 (trunk)
+  </text>
+
+  <!-- pool1-node-0 -->
+  <rect x="30" y="154" width="365" height="220" fill="white" stroke="#333" stroke-width="1.2" rx="2"/>
+  <text x="45" y="170" font-size="11" font-weight="600"
+        font-family="'Oswald', Arial, sans-serif" fill="#1a1a1a">pool1-node-0</text>
+
+  <!-- Pod: pod1-vlan300 -->
+  <rect x="45" y="177" width="150" height="40" fill="white" stroke="#333" stroke-width="1"/>
+  <text x="120" y="193" font-size="10" font-weight="600" text-anchor="middle"
+        font-family="'Oswald', Arial, sans-serif" fill="#1a1a1a">pod1-vlan300</text>
+  <text x="120" y="208" font-size="9" text-anchor="middle"
+        font-family="'Oswald', Arial, sans-serif" fill="#666">VLAN 300 (eth3)</text>
+
+  <!-- Pod: pod1-vlan100 -->
+  <rect x="210" y="177" width="150" height="40" fill="white" stroke="#333" stroke-width="1"/>
+  <text x="285" y="193" font-size="10" font-weight="600" text-anchor="middle"
+        font-family="'Oswald', Arial, sans-serif" fill="#1a1a1a">pod1-vlan100</text>
+  <text x="285" y="208" font-size="9" text-anchor="middle"
+        font-family="'Oswald', Arial, sans-serif" fill="#666">VLAN 100 (eth2)</text>
+
+  <!-- Connections: pods -> OVS bridge -->
+  <line x1="120" y1="217" x2="120" y2="237" stroke="#666" stroke-width="1" stroke-dasharray="4,2"/>
+  <line x1="285" y1="217" x2="285" y2="237" stroke="#666" stroke-width="1" stroke-dasharray="4,2"/>
+
+  <!-- OVS Bridge: br1 (pool1-node-0) -->
+  <rect x="45" y="237" width="335" height="48" fill="#f0f4f8" stroke="#333" stroke-width="1.2"/>
+  <text x="212" y="257" font-size="11" font-weight="600" text-anchor="middle"
+        font-family="'Oswald', Arial, sans-serif" fill="#1a1a1a">OVS Bridge: br1</text>
+  <text x="212" y="272" font-size="9" text-anchor="middle"
+        font-family="'Oswald', Arial, sans-serif" fill="#777">secondary network bridge</text>
+
+  <!-- Connections: bridge -> uplink interfaces (pool1-node-0) -->
+  <line x1="105" y1="285" x2="105" y2="299" stroke="#555" stroke-width="1"/>
+  <line x1="295" y1="285" x2="295" y2="299" stroke="#555" stroke-width="1"/>
+
+  <!-- Uplink interfaces (pool1-node-0) -->
+  <rect x="70" y="299" width="70" height="26" fill="white" stroke="#666" stroke-width="0.8"/>
+  <text x="105" y="316" font-size="10" text-anchor="middle"
+        font-family="'Oswald', Arial, sans-serif" fill="#1a1a1a">eth2</text>
+  <rect x="260" y="299" width="70" height="26" fill="white" stroke="#666" stroke-width="0.8"/>
+  <text x="295" y="316" font-size="10" text-anchor="middle"
+        font-family="'Oswald', Arial, sans-serif" fill="#1a1a1a">eth3</text>
+
+  <!-- pool1-node-1 -->
+  <rect x="405" y="154" width="365" height="220" fill="white" stroke="#333" stroke-width="1.2" rx="2"/>
+  <text x="420" y="170" font-size="11" font-weight="600"
+        font-family="'Oswald', Arial, sans-serif" fill="#1a1a1a">pool1-node-1</text>
+
+  <!-- Pod: pod2-vlan300 -->
+  <rect x="420" y="177" width="150" height="40" fill="white" stroke="#333" stroke-width="1"/>
+  <text x="495" y="193" font-size="10" font-weight="600" text-anchor="middle"
+        font-family="'Oswald', Arial, sans-serif" fill="#1a1a1a">pod2-vlan300</text>
+  <text x="495" y="208" font-size="9" text-anchor="middle"
+        font-family="'Oswald', Arial, sans-serif" fill="#666">VLAN 300 (eth3)</text>
+
+  <!-- Connection: pod -> OVS bridge (pool1-node-1) -->
+  <line x1="495" y1="217" x2="495" y2="237" stroke="#666" stroke-width="1" stroke-dasharray="4,2"/>
+
+  <!-- OVS Bridge: br1 (pool1-node-1) -->
+  <rect x="420" y="237" width="335" height="48" fill="#f0f4f8" stroke="#333" stroke-width="1.2"/>
+  <text x="587" y="257" font-size="11" font-weight="600" text-anchor="middle"
+        font-family="'Oswald', Arial, sans-serif" fill="#1a1a1a">OVS Bridge: br1</text>
+  <text x="587" y="272" font-size="9" text-anchor="middle"
+        font-family="'Oswald', Arial, sans-serif" fill="#777">secondary network bridge</text>
+
+  <!-- Connections: bridge -> uplink interfaces (pool1-node-1) -->
+  <line x1="480" y1="285" x2="480" y2="299" stroke="#555" stroke-width="1"/>
+  <line x1="670" y1="285" x2="670" y2="299" stroke="#555" stroke-width="1"/>
+
+  <!-- Uplink interfaces (pool1-node-1) -->
+  <rect x="445" y="299" width="70" height="26" fill="white" stroke="#666" stroke-width="0.8"/>
+  <text x="480" y="316" font-size="10" text-anchor="middle"
+        font-family="'Oswald', Arial, sans-serif" fill="#1a1a1a">eth2</text>
+  <rect x="635" y="299" width="70" height="26" fill="white" stroke="#666" stroke-width="0.8"/>
+  <text x="670" y="316" font-size="10" text-anchor="middle"
+        font-family="'Oswald', Arial, sans-serif" fill="#1a1a1a">eth3</text>
+
+  <!-- NodePool pool2 -->
+  <rect x="20" y="391" width="760" height="282" fill="#edf8f0" stroke="#1e7a4a" stroke-width="2" rx="4"/>
+  <text x="400" y="409" font-size="13" font-weight="600" text-anchor="middle"
+        font-family="'Oswald', Arial, sans-serif" fill="#0e4a28">
+    NodePool &#x201C;pool2&#x201D;   (antrea.io/node-pool=pool2)
+  </text>
+  <text x="40" y="424" font-size="11" font-family="'Oswald', Arial, sans-serif" fill="#0e4a28">
+    AntreaNodeConfig: secondary-network-pool2
+  </text>
+  <text x="40" y="439" font-size="10" font-family="'Oswald', Arial, sans-serif" fill="#0e4a28">
+    br1:  eth2 &#x2192; VLAN 100 (trunk)   |   eth3 &#x2192; VLAN 400 (trunk)
+  </text>
+
+  <!-- pool2-node-0 -->
+  <rect x="30" y="446" width="365" height="220" fill="white" stroke="#333" stroke-width="1.2" rx="2"/>
+  <text x="45" y="462" font-size="11" font-weight="600"
+        font-family="'Oswald', Arial, sans-serif" fill="#1a1a1a">pool2-node-0</text>
+
+  <!-- Pod: pod1-vlan400 -->
+  <rect x="45" y="469" width="150" height="40" fill="white" stroke="#333" stroke-width="1"/>
+  <text x="120" y="485" font-size="10" font-weight="600" text-anchor="middle"
+        font-family="'Oswald', Arial, sans-serif" fill="#1a1a1a">pod1-vlan400</text>
+  <text x="120" y="500" font-size="9" text-anchor="middle"
+        font-family="'Oswald', Arial, sans-serif" fill="#666">VLAN 400 (eth3)</text>
+
+  <!-- Pod: pod2-vlan100 -->
+  <rect x="210" y="469" width="150" height="40" fill="white" stroke="#333" stroke-width="1"/>
+  <text x="285" y="485" font-size="10" font-weight="600" text-anchor="middle"
+        font-family="'Oswald', Arial, sans-serif" fill="#1a1a1a">pod2-vlan100</text>
+  <text x="285" y="500" font-size="9" text-anchor="middle"
+        font-family="'Oswald', Arial, sans-serif" fill="#666">VLAN 100 (eth2)</text>
+
+  <!-- Connections: pods -> OVS bridge (pool2-node-0) -->
+  <line x1="120" y1="509" x2="120" y2="529" stroke="#666" stroke-width="1" stroke-dasharray="4,2"/>
+  <line x1="285" y1="509" x2="285" y2="529" stroke="#666" stroke-width="1" stroke-dasharray="4,2"/>
+
+  <!-- OVS Bridge: br1 (pool2-node-0) -->
+  <rect x="45" y="529" width="335" height="48" fill="#f0f4f8" stroke="#333" stroke-width="1.2"/>
+  <text x="212" y="549" font-size="11" font-weight="600" text-anchor="middle"
+        font-family="'Oswald', Arial, sans-serif" fill="#1a1a1a">OVS Bridge: br1</text>
+  <text x="212" y="564" font-size="9" text-anchor="middle"
+        font-family="'Oswald', Arial, sans-serif" fill="#777">secondary network bridge</text>
+
+  <!-- Connections: bridge -> uplink interfaces (pool2-node-0) -->
+  <line x1="105" y1="577" x2="105" y2="591" stroke="#555" stroke-width="1"/>
+  <line x1="295" y1="577" x2="295" y2="591" stroke="#555" stroke-width="1"/>
+
+  <!-- Uplink interfaces (pool2-node-0) -->
+  <rect x="70" y="591" width="70" height="26" fill="white" stroke="#666" stroke-width="0.8"/>
+  <text x="105" y="608" font-size="10" text-anchor="middle"
+        font-family="'Oswald', Arial, sans-serif" fill="#1a1a1a">eth2</text>
+  <rect x="260" y="591" width="70" height="26" fill="white" stroke="#666" stroke-width="0.8"/>
+  <text x="295" y="608" font-size="10" text-anchor="middle"
+        font-family="'Oswald', Arial, sans-serif" fill="#1a1a1a">eth3</text>
+
+  <!-- pool2-node-1 -->
+  <rect x="405" y="446" width="365" height="220" fill="white" stroke="#333" stroke-width="1.2" rx="2"/>
+  <text x="420" y="462" font-size="11" font-weight="600"
+        font-family="'Oswald', Arial, sans-serif" fill="#1a1a1a">pool2-node-1</text>
+
+  <!-- Pod: pod2-vlan400 -->
+  <rect x="420" y="469" width="150" height="40" fill="white" stroke="#333" stroke-width="1"/>
+  <text x="495" y="485" font-size="10" font-weight="600" text-anchor="middle"
+        font-family="'Oswald', Arial, sans-serif" fill="#1a1a1a">pod2-vlan400</text>
+  <text x="495" y="500" font-size="9" text-anchor="middle"
+        font-family="'Oswald', Arial, sans-serif" fill="#666">VLAN 400 (eth3)</text>
+
+  <!-- Connection: pod -> OVS bridge (pool2-node-1) -->
+  <line x1="495" y1="509" x2="495" y2="529" stroke="#666" stroke-width="1" stroke-dasharray="4,2"/>
+
+  <!-- OVS Bridge: br1 (pool2-node-1) -->
+  <rect x="420" y="529" width="335" height="48" fill="#f0f4f8" stroke="#333" stroke-width="1.2"/>
+  <text x="587" y="549" font-size="11" font-weight="600" text-anchor="middle"
+        font-family="'Oswald', Arial, sans-serif" fill="#1a1a1a">OVS Bridge: br1</text>
+  <text x="587" y="564" font-size="9" text-anchor="middle"
+        font-family="'Oswald', Arial, sans-serif" fill="#777">secondary network bridge</text>
+
+  <!-- Connections: bridge -> uplink interfaces (pool2-node-1) -->
+  <line x1="480" y1="577" x2="480" y2="591" stroke="#555" stroke-width="1"/>
+  <line x1="670" y1="577" x2="670" y2="591" stroke="#555" stroke-width="1"/>
+
+  <!-- Uplink interfaces (pool2-node-1) -->
+  <rect x="445" y="591" width="70" height="26" fill="white" stroke="#666" stroke-width="0.8"/>
+  <text x="480" y="608" font-size="10" text-anchor="middle"
+        font-family="'Oswald', Arial, sans-serif" fill="#1a1a1a">eth2</text>
+  <rect x="635" y="591" width="70" height="26" fill="white" stroke="#666" stroke-width="0.8"/>
+  <text x="670" y="608" font-size="10" text-anchor="middle"
+        font-family="'Oswald', Arial, sans-serif" fill="#1a1a1a">eth3</text>
+
+  <!-- Connectivity Legend -->
+  <rect x="20" y="690" width="760" height="110" fill="#fffef0" stroke="#aaa" stroke-width="1" rx="3"/>
+  <text x="40" y="708" font-size="12" font-weight="600"
+        font-family="'Oswald', Arial, sans-serif" fill="#1a1a1a">Pod Connectivity</text>
+
+  <!-- VLAN 300: pool1-exclusive -->
+  <line x1="40" y1="727" x2="95" y2="727" stroke="#c0392b" stroke-width="2.5"/>
+  <text x="105" y="731" font-size="10" font-family="'Oswald', Arial, sans-serif" fill="#333">
+    VLAN 300 (pool1-exclusive, eth3):  pod1-vlan300 (pool1-node-0) &#x2194; pod2-vlan300 (pool1-node-1)
+  </text>
+
+  <!-- VLAN 400: pool2-exclusive -->
+  <line x1="40" y1="750" x2="95" y2="750" stroke="#8e44ad" stroke-width="2.5"/>
+  <text x="105" y="754" font-size="10" font-family="'Oswald', Arial, sans-serif" fill="#333">
+    VLAN 400 (pool2-exclusive, eth3):  pod1-vlan400 (pool2-node-0) &#x2194; pod2-vlan400 (pool2-node-1)
+  </text>
+
+  <!-- VLAN 100: cross-pool -->
+  <line x1="40" y1="773" x2="95" y2="773" stroke="#2980b9" stroke-width="2.5" stroke-dasharray="8,3"/>
+  <text x="105" y="777" font-size="10" font-family="'Oswald', Arial, sans-serif" fill="#333">
+    VLAN 100 (cross-pool, eth2):  pod1-vlan100 (pool1-node-0) &#x2194; pod2-vlan100 (pool2-node-0)
+  </text>
+
+  <!-- Note -->
+  <text x="40" y="795" font-size="9" font-family="'Oswald', Arial, sans-serif" fill="#777">
+    VLAN 300 and VLAN 400 are pool-exclusive: pods in different pools cannot reach each other via these VLANs.
+  </text>
+</svg>
