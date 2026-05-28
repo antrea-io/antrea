@@ -16,6 +16,7 @@ package traceflow
 
 import (
 	"context"
+	"fmt"
 	"testing"
 	"time"
 
@@ -228,4 +229,75 @@ func TestDeleteTraceflow_Tombstone(t *testing.T) {
 	_, exists := tfc.runningTraceflows[uint8(tf.Status.DataplaneTag)]
 	tfc.runningTraceflowsMutex.Unlock()
 	assert.False(t, exists, "expected tag to be deallocated after tombstone delete")
+}
+
+func TestCheckTraceflowStatus_TagRetainedOnUpdateFailure(t *testing.T) {
+	updateErr := fmt.Errorf("injected update error")
+
+	tests := []struct {
+		name string
+		tf   *crdv1beta1.Traceflow
+	}{
+		{
+			name: "succeeded traceflow",
+			tf: &crdv1beta1.Traceflow{
+				ObjectMeta: metav1.ObjectMeta{Name: "tf1", UID: "uid1"},
+				Spec: crdv1beta1.TraceflowSpec{
+					Source:      crdv1beta1.Source{Namespace: "ns1", Pod: "pod1"},
+					Destination: crdv1beta1.Destination{Namespace: "ns2", Pod: "pod2"},
+				},
+				Status: crdv1beta1.TraceflowStatus{
+					Phase:        crdv1beta1.Running,
+					DataplaneTag: int8(minTagNum),
+					Results: []crdv1beta1.NodeResult{
+						{Observations: []crdv1beta1.Observation{{Component: crdv1beta1.ComponentSpoofGuard}}},
+						{Observations: []crdv1beta1.Observation{{Action: crdv1beta1.ActionDelivered}}},
+					},
+				},
+			},
+		},
+		{
+			name: "timed out traceflow",
+			tf: func() *crdv1beta1.Traceflow {
+				startTime := metav1.NewTime(time.Now().Add(-2 * defaultTimeoutDuration))
+				return &crdv1beta1.Traceflow{
+					ObjectMeta: metav1.ObjectMeta{Name: "tf2", UID: "uid2"},
+					Spec: crdv1beta1.TraceflowSpec{
+						Source:      crdv1beta1.Source{Namespace: "ns1", Pod: "pod1"},
+						Destination: crdv1beta1.Destination{Namespace: "ns2", Pod: "pod2"},
+					},
+					Status: crdv1beta1.TraceflowStatus{
+						Phase:        crdv1beta1.Running,
+						DataplaneTag: int8(minTagNum),
+						StartTime:    &startTime,
+					},
+				}
+			}(),
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tfc := newController()
+			// Inject a reactor that fails all UpdateStatus calls.
+			tfc.client.(*fakeversioned.Clientset).PrependReactor("update", "traceflows", func(action k8stesting.Action) (bool, runtime.Object, error) {
+				return true, nil, updateErr
+			})
+
+			// Simulate the tag being tracked as running.
+			tag := uint8(tt.tf.Status.DataplaneTag)
+			tfc.runningTraceflowsMutex.Lock()
+			tfc.runningTraceflows[tag] = tt.tf.Name
+			tfc.runningTraceflowsMutex.Unlock()
+
+			err := tfc.checkTraceflowStatus(tt.tf)
+
+			// The update failed, so the tag must still be allocated.
+			assert.ErrorIs(t, err, updateErr)
+			tfc.runningTraceflowsMutex.Lock()
+			_, exists := tfc.runningTraceflows[tag]
+			tfc.runningTraceflowsMutex.Unlock()
+			assert.True(t, exists, "tag must remain allocated when status update fails")
+		})
+	}
 }

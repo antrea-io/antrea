@@ -316,8 +316,11 @@ func (c *Controller) checkTraceflowStatus(tf *crdv1beta1.Traceflow) error {
 		succeeded = (sender && receiver) || (receiver && tf.Spec.Source.Pod == "")
 	}
 	if succeeded {
+		if err := c.updateTraceflowStatus(tf, crdv1beta1.Succeeded, "", 0); err != nil {
+			return err
+		}
 		c.deallocateTagForTF(tf)
-		return c.updateTraceflowStatus(tf, crdv1beta1.Succeeded, "", 0)
+		return nil
 	}
 
 	var timeout time.Duration
@@ -336,8 +339,11 @@ func (c *Controller) checkTraceflowStatus(tf *crdv1beta1.Traceflow) error {
 		startTime = tf.CreationTimestamp.Time
 	}
 	if startTime.Add(timeout).Before(time.Now()) {
+		if err := c.updateTraceflowStatus(tf, crdv1beta1.Failed, traceflowTimeout, 0); err != nil {
+			return err
+		}
 		c.deallocateTagForTF(tf)
-		return c.updateTraceflowStatus(tf, crdv1beta1.Failed, traceflowTimeout, 0)
+		return nil
 	}
 	return nil
 }
