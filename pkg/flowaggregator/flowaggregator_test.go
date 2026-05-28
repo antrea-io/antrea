@@ -29,7 +29,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
-	"go.yaml.in/yaml/v2"
+	"go.yaml.in/yaml/v3"
 	"google.golang.org/protobuf/testing/protocmp"
 	timestamppb "google.golang.org/protobuf/types/known/timestamppb"
 	v1 "k8s.io/api/core/v1"
@@ -1138,6 +1138,9 @@ func TestNewFlowAggregator(t *testing.T) {
 			// FlowAggregator when instantiating exporters.
 			mockExporters(t, ctrl, &clusterUUID, &clusterID)
 			b, err := yaml.Marshal(tc.config)
+			require.NoError(t, err)
+			require.NoError(t, f.Truncate(0))
+			_, err = f.Seek(0, 0)
 			require.NoError(t, err)
 			_, err = f.Write(b)
 			require.NoError(t, err)

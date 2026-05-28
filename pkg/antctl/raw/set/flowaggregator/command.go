@@ -15,6 +15,7 @@
 package flowaggregator
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"os"
@@ -23,7 +24,7 @@ import (
 	"time"
 
 	"github.com/spf13/cobra"
-	"go.yaml.in/yaml/v2"
+	"go.yaml.in/yaml/v3"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
@@ -136,10 +137,13 @@ func updateRunE(cmd *cobra.Command, args []string) error {
 		}
 	}
 	// marshal back the changed parameters to configmap
-	b, err := yaml.Marshal(&flowAggregatorConf)
-	if err != nil {
+	var buf bytes.Buffer
+	enc := yaml.NewEncoder(&buf)
+	enc.SetIndent(2)
+	if err := enc.Encode(&flowAggregatorConf); err != nil {
 		return err
 	}
+	b := buf.Bytes()
 
 	if configMap.Data == nil {
 		configMap.Data = make(map[string]string)
