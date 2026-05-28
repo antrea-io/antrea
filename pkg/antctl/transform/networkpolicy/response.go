@@ -19,13 +19,13 @@ import (
 	"io"
 	"math"
 	"reflect"
+	"slices"
 	"sort"
 	"strconv"
 
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/kubectl/pkg/cmd/get"
 	"k8s.io/kubectl/pkg/scheme"
-	"k8s.io/utils/strings/slices"
 
 	"antrea.io/antrea/pkg/antctl/transform"
 	"antrea.io/antrea/pkg/antctl/transform/common"

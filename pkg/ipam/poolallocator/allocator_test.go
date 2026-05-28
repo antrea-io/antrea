@@ -57,7 +57,7 @@ func newTestIPPoolAllocator(pool *crdv1b1.IPPool, stopCh <-chan struct{}) *IPPoo
 
 	go crdInformerFactory.Start(stopCh)
 
-	crdClient.InitPool(pool)
+	crdClient.CrdV1beta1().IPPools().Create(context.Background(), pool, metav1.CreateOptions{})
 	cache.WaitForCacheSync(stopCh, poolInformer.HasSynced)
 
 	var allocator *IPPoolAllocator

@@ -1,4 +1,4 @@
-// Copyright 2025 Antrea Authors
+// Copyright 2026 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -60,6 +60,25 @@ func NewMockCommonArea(ctrl *gomock.Controller) *MockCommonArea {
 // EXPECT returns an object that allows the caller to indicate expected use.
 func (m *MockCommonArea) EXPECT() *MockCommonAreaMockRecorder {
 	return m.recorder
+}
+
+// Apply mocks base method.
+func (m *MockCommonArea) Apply(ctx context.Context, obj runtime.ApplyConfiguration, opts ...client.ApplyOption) error {
+	m.ctrl.T.Helper()
+	varargs := []any{ctx, obj}
+	for _, a := range opts {
+		varargs = append(varargs, a)
+	}
+	ret := m.ctrl.Call(m, "Apply", varargs...)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// Apply indicates an expected call of Apply.
+func (mr *MockCommonAreaMockRecorder) Apply(ctx, obj any, opts ...any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	varargs := append([]any{ctx, obj}, opts...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Apply", reflect.TypeOf((*MockCommonArea)(nil).Apply), varargs...)
 }
 
 // Create mocks base method.
@@ -343,6 +362,25 @@ func (m *MockRemoteCommonArea) AddImportReconciler(reconciler ImportReconciler) 
 func (mr *MockRemoteCommonAreaMockRecorder) AddImportReconciler(reconciler any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddImportReconciler", reflect.TypeOf((*MockRemoteCommonArea)(nil).AddImportReconciler), reconciler)
+}
+
+// Apply mocks base method.
+func (m *MockRemoteCommonArea) Apply(ctx context.Context, obj runtime.ApplyConfiguration, opts ...client.ApplyOption) error {
+	m.ctrl.T.Helper()
+	varargs := []any{ctx, obj}
+	for _, a := range opts {
+		varargs = append(varargs, a)
+	}
+	ret := m.ctrl.Call(m, "Apply", varargs...)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// Apply indicates an expected call of Apply.
+func (mr *MockRemoteCommonAreaMockRecorder) Apply(ctx, obj any, opts ...any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	varargs := append([]any{ctx, obj}, opts...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Apply", reflect.TypeOf((*MockRemoteCommonArea)(nil).Apply), varargs...)
 }
 
 // Create mocks base method.

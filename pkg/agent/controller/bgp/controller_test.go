@@ -237,6 +237,16 @@ func (c *fakeController) startInformers(stopCh chan struct{}) {
 	c.informerFactory.WaitForCacheSync(stopCh)
 	c.crdInformerFactory.Start(stopCh)
 	c.crdInformerFactory.WaitForCacheSync(stopCh)
+	// WaitForCacheSync only guarantees that the informer store is populated
+	// from the initial list; it does not guarantee that event handlers have
+	// been called for those objects. Register a no-op handler and wait for
+	// its HasSynced to return true, which is only the case once all
+	// initial-list ADD notifications have been delivered to all handlers.
+	// Without this, test cases that inspect the work queue after
+	// startInformers may see stale state because the bgpPolicy event handler
+	// has not yet been called for all initial BGPPolicy objects.
+	registration, _ := c.bgpPolicyInformer.AddEventHandler(cache.ResourceEventHandlerFuncs{})
+	cache.WaitForCacheSync(stopCh, registration.HasSynced)
 }
 
 func newFakeController(t *testing.T, objects []runtime.Object, crdObjects []runtime.Object, ipv4Enabled, ipv6Enabled bool) *fakeController {

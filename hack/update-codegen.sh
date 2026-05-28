@@ -22,7 +22,19 @@ function echoerr {
 }
 
 ANTREA_ROOT="$( cd "$( dirname "${BASH_SOURCE[0]}" )/../" && pwd )"
-IMAGE_NAME="antrea/codegen:kubernetes-1.35.0-build.0"
+# Allow overriding the codegen image via environment variable (useful for ARM64 hosts).
+# To build a native ARM64 image and avoid Docker emulation issues:
+#   docker build --platform linux/arm64 -t antrea/codegen:arm64-local \
+#     -f ${ANTREA_ROOT}/build/images/codegen/Dockerfile --build-arg GO_VERSION="$(head -n1 ${ANTREA_ROOT}/build/images/deps/go-version)" .
+#   export ANTREA_CODEGEN_IMAGE=antrea/codegen:arm64-local
+#   export CODEGEN_DOCKER_PLATFORM=linux/arm64
+IMAGE_NAME="${ANTREA_CODEGEN_IMAGE:-antrea/codegen:kubernetes-1.36.1}"
+# Build a platform args array so --platform is safely quoted and applied consistently
+# to both docker pull and docker run.
+DOCKER_PLATFORM_ARGS=()
+if [ -n "${CODEGEN_DOCKER_PLATFORM}" ]; then
+  DOCKER_PLATFORM_ARGS=(--platform "${CODEGEN_DOCKER_PLATFORM}")
+fi
 
 # We will use git clone to make a working copy of the repository into a
 # temporary directory. This requires that all changes have been committed
@@ -48,7 +60,7 @@ fi
 function docker_run() {
   # Silence CLI suggestions.
   export DOCKER_CLI_HINTS=false
-  [ -n "$NO_PULL" ] || docker pull ${IMAGE_NAME}
+  [ -n "$NO_PULL" ] || docker pull "${IMAGE_NAME}"
   set -x
   ANTREA_SRC_PATH="/mnt/antrea"
   # The .git directory in ANTREA_SRC_PATH must be marked as "safe".
@@ -56,6 +68,7 @@ function docker_run() {
   # previously introduced in v2.30.3 were extended to cover cloning local
   # repositories, which is what we do in update-codegen-dockerized.sh.
   docker run --rm \
+		"${DOCKER_PLATFORM_ARGS[@]}" \
 		-e GOPROXY=${GOPROXY} \
 		-e HTTP_PROXY=${HTTP_PROXY} \
 		-e HTTPS_PROXY=${HTTPS_PROXY} \
