@@ -148,16 +148,17 @@ func TestGetOutputSerializer(t *testing.T) {
 		accept     string
 		expectNil  bool
 		expectYAML bool
+		expectJSON bool
 	}{
 		{
 			name:       "empty accept defaults to JSON",
 			accept:     "",
-			expectYAML: false,
+			expectJSON: true,
 		},
 		{
 			name:       "explicit JSON",
 			accept:     "application/json",
-			expectYAML: false,
+			expectJSON: true,
 		},
 		{
 			name:       "explicit YAML",
@@ -165,9 +166,9 @@ func TestGetOutputSerializer(t *testing.T) {
 			expectYAML: true,
 		},
 		{
-			name:      "wildcard matches first serializer",
-			accept:    "*/*",
-			expectNil: false,
+			name:       "wildcard defaults to JSON",
+			accept:     "*/*",
+			expectJSON: true,
 		},
 		{
 			name:       "YAML preferred over JSON via q-value",
@@ -177,7 +178,7 @@ func TestGetOutputSerializer(t *testing.T) {
 		{
 			name:       "JSON preferred via q-value",
 			accept:     "application/json;q=0.9, application/yaml;q=0.5",
-			expectYAML: false,
+			expectJSON: true,
 		},
 		{
 			name:      "unsupported media type",
@@ -190,12 +191,15 @@ func TestGetOutputSerializer(t *testing.T) {
 	for _, tt := range testCases {
 		t.Run(tt.name, func(t *testing.T) {
 			got := getOutputSerializer(tt.accept)
-			if tt.expectNil {
+			switch {
+			case tt.expectNil:
 				assert.Nil(t, got)
-			} else if tt.expectYAML {
+			case tt.expectYAML:
 				assert.Equal(t, yamlSerializer, got)
-			} else {
+			case tt.expectJSON:
 				assert.Equal(t, jsonSerializer, got)
+			default:
+				assert.Contains(t, []runtime.Serializer{jsonSerializer, yamlSerializer}, got)
 			}
 		})
 	}
