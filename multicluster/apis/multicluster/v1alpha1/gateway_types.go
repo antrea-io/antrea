@@ -18,6 +18,7 @@ package v1alpha1
 
 import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 )
 
 // GatewayInfo includes information of a Gateway.
@@ -73,5 +74,8 @@ type GatewayList struct {
 }
 
 func init() {
-	SchemeBuilder.Register(&Gateway{}, &GatewayList{})
+	SchemeBuilder.Register(func(s *runtime.Scheme) error {
+		s.AddKnownTypes(SchemeGroupVersion, &Gateway{}, &GatewayList{})
+		return nil
+	})
 }

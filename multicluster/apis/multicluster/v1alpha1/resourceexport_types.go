@@ -19,6 +19,7 @@ package v1alpha1
 import (
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 
 	"antrea.io/antrea/pkg/apis/crd/v1alpha2"
 	"antrea.io/antrea/pkg/apis/crd/v1beta1"
@@ -135,5 +136,8 @@ type ResourceExportList struct {
 }
 
 func init() {
-	SchemeBuilder.Register(&ResourceExport{}, &ResourceExportList{})
+	SchemeBuilder.Register(func(s *runtime.Scheme) error {
+		s.AddKnownTypes(SchemeGroupVersion, &ResourceExport{}, &ResourceExportList{})
+		return nil
+	})
 }

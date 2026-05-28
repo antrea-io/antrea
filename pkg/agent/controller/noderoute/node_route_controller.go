@@ -96,8 +96,11 @@ type Controller struct {
 	flowRestoreCompleteWait *utilwait.Group
 	// hasProcessedInitialList keeps track of whether the initial informer list has been
 	// processed by workers.
-	// See https://github.com/kubernetes/apiserver/blob/v0.30.1/pkg/admission/plugin/policy/internal/generic/controller.go
-	hasProcessedInitialList synctrack.AsyncTracker[string]
+	// See https://github.com/kubernetes/apiserver/blob/v0.36.1/pkg/admission/plugin/policy/internal/generic/controller.go
+	hasProcessedInitialList *synctrack.AsyncTracker[string]
+	// eventHandlerRegistration.HasSynced will be used to track whether even handlers have been
+	// called for the initial list.
+	eventHandlerRegistration cache.ResourceEventHandlerRegistration
 }
 
 // NewNodeRouteController instantiates a new Controller object which will process Node events
@@ -137,6 +140,7 @@ func NewNodeRouteController(
 		wireGuardClient:         wireguardClient,
 		ipsecCertificateManager: ipsecCertificateManager,
 		flowRestoreCompleteWait: flowRestoreCompleteWait.Increment(),
+		hasProcessedInitialList: synctrack.NewAsyncTracker[string](controllerName),
 	}
 	if nodeConfig.PodIPv4CIDR != nil {
 		prefix, _ := cidrToPrefix(nodeConfig.PodIPv4CIDR)
@@ -162,9 +166,7 @@ func NewNodeRouteController(
 		},
 		nodeResyncPeriod,
 	)
-	// UpstreamHasSynced is used by hasProcessedInitialList to determine whether even handlers
-	// have been called for the initial list.
-	controller.hasProcessedInitialList.UpstreamHasSynced = registration.HasSynced
+	controller.eventHandlerRegistration = registration
 	return controller
 }
 
@@ -384,9 +386,14 @@ func (c *Controller) Run(stopCh <-chan struct{}) {
 		c.networkConfig.IPsecConfig.AuthenticationMode == config.IPsecAuthenticationModeCert {
 		cacheSynced = append(cacheSynced, c.ipsecCertificateManager.HasSynced)
 	}
+	cacheSynced = append(cacheSynced, c.eventHandlerRegistration.HasSynced)
 	if !cache.WaitForNamedCacheSync(controllerName, stopCh, cacheSynced...) {
 		return
 	}
+
+	// After eventHandlerRegistration.HasSynced is true, we need to let hasProcessedInitialList
+	// known that the source (upstream) is synced.
+	c.hasProcessedInitialList.UpstreamHasSynced()
 
 	if err := c.reconcile(); err != nil {
 		klog.ErrorS(err, "Error during reconciliation", "controller", controllerName)

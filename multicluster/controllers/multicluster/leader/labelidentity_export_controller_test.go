@@ -21,9 +21,11 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -186,52 +188,59 @@ func TestLabelIdentityResourceExportReconclie(t *testing.T) {
 	}
 }
 
+// synctest.Test is used so that the time.Sleep calls inside wait.Until
+// (the 1-second period between labelQueueWorker invocations) use the fake
+// clock instead of the real wall clock. Once all 40 queue items have been
+// processed, every worker goroutine will be blocked on labelQueue.Get()
+// waiting for new work. At that point synctest.Wait() returns and the
+// assertions can be made synchronously, with no real delays and no
+// assert.Eventually polling.
 func TestConcurrentProcessLabelForResourceImport(t *testing.T) {
-	existingResImpList := &mcsv1alpha1.ResourceImportList{
-		Items: []mcsv1alpha1.ResourceImport{*labelIdentityResImp},
-	}
-	stopCh := make(chan struct{})
-	defer close(stopCh)
-	fakeClient := fake.NewClientBuilder().WithScheme(common.TestScheme).WithLists(existingResImpList).Build()
-	r := NewLabelIdentityExportReconciler(fakeClient, common.TestScheme, common.LeaderNamespace)
-	r.hashToLabels = map[string]string{
-		labelHash: normalizedLabel,
-	}
-	r.labelQueue.Add(labelHash)
-	for i := 2; i <= 40; i++ {
-		l := normalizedLabel + strconv.Itoa(i)
-		lHash := common.HashLabelIdentity(l)
-		r.labelQueue.Add(lHash)
-		// Simulate 20 LabelIdentity ResourceImport add events and 20 delete events
-		if i <= 20 {
-			// When label hash is present in the reconciler, it means the corresponding
-			// ResourceExport exists.
-			r.hashToLabels[lHash] = l
+	synctest.Test(t, func(t *testing.T) {
+		existingResImpList := &mcsv1alpha1.ResourceImportList{
+			Items: []mcsv1alpha1.ResourceImport{*labelIdentityResImp},
 		}
-	}
-	// Mock the state of the reconciler where id 1 was allocated for labelHash
-	r.labelsToID.Store(labelHash, uint32(1))
-	r.allocator.setAllocated(1)
-	// Spin off more workers to bump up concurrency
-	r.numWorkers = common.DefaultWorkerCount * 2
-	go r.Run(stopCh)
+		fakeClient := fake.NewClientBuilder().WithScheme(common.TestScheme).WithLists(existingResImpList).Build()
+		r := NewLabelIdentityExportReconciler(fakeClient, common.TestScheme, common.LeaderNamespace)
+		r.hashToLabels = map[string]string{
+			labelHash: normalizedLabel,
+		}
+		r.labelQueue.Add(labelHash)
+		for i := 2; i <= 40; i++ {
+			l := normalizedLabel + strconv.Itoa(i)
+			lHash := common.HashLabelIdentity(l)
+			r.labelQueue.Add(lHash)
+			// Simulate 20 LabelIdentity ResourceImport add events and 20 delete events
+			if i <= 20 {
+				// When label hash is present in the reconciler, it means the corresponding
+				// ResourceExport exists.
+				r.hashToLabels[lHash] = l
+			}
+		}
+		// Mock the state of the reconciler where id 1 was allocated for labelHash
+		r.labelsToID.Store(labelHash, uint32(1))
+		r.allocator.setAllocated(1)
+		go r.Run(t.Context().Done())
 
-	// The ResourceImport corresponding to label 21-40 should be deleted as the mocked hashToLabels
-	// map indicates its ResourceExport has been deleted. ResourceImport for label1 should not change
-	// and ResourceImport for label 2-20 should be created.
-	assert.Eventually(t, func() bool {
+		// Wait until all worker goroutines are durably blocked — this happens
+		// once all 40 queue items have been processed and every worker is
+		// waiting for new work on labelQueue.Get().
+		synctest.Wait()
+
+		// The ResourceImport corresponding to label 21-40 should be deleted as
+		// the mocked hashToLabels map indicates its ResourceExport has been
+		// deleted. ResourceImport for label1 should not change and ResourceImport
+		// for label 2-20 should be created.
 		actLabelIdentityResImpList := &mcsv1alpha1.ResourceImportList{}
-		fakeClient.List(common.TestCtx, actLabelIdentityResImpList)
-		if len(actLabelIdentityResImpList.Items) != 20 {
-			return false
-		}
+		require.NoError(t, fakeClient.List(common.TestCtx, actLabelIdentityResImpList))
+		require.Len(t, actLabelIdentityResImpList.Items, 20, "Unexpected number of ResourceImport after test is executed")
 		for _, resImp := range actLabelIdentityResImpList.Items {
 			id, ok := r.labelsToID.Load(resImp.Name)
 			assert.Truef(t, ok, "ResourceImport's label hash should be stored")
 			assert.Equalf(t, id, resImp.Spec.LabelIdentity.ID, "Cached ID for label should match")
 		}
-		return true
-	}, time.Millisecond*200, time.Millisecond*10, "Unexpected number of ResourceImport after test is executed")
+
+	})
 }
 
 func TestIDAllocatorBasic(t *testing.T) {

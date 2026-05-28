@@ -22,6 +22,7 @@ import (
 	"hash/fnv"
 	"net"
 	"reflect"
+	"slices"
 	"sync"
 	"time"
 
@@ -43,7 +44,6 @@ import (
 	"k8s.io/klog/v2"
 	utilnet "k8s.io/utils/net"
 	"k8s.io/utils/ptr"
-	"k8s.io/utils/strings/slices"
 
 	"antrea.io/antrea/pkg/agent/bgp"
 	"antrea.io/antrea/pkg/agent/bgp/gobgp"
