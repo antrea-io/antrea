@@ -69,7 +69,7 @@ const (
 	osType         = "linux"
 	pingCount      = 5
 	pingSize       = 40
-	defaultTimeout = 10 * time.Second
+	defaultTimeout = 30 * time.Second
 	sriovReqName   = "intel.com/intel_sriov_netdevice"
 	sriovResNum    = 1
 )
