@@ -19,7 +19,7 @@ import (
 	"net"
 	"net/netip"
 
-	"github.com/mdlayher/ndp"
+	"antrea.io/ndp"
 )
 
 // GratuitousNDPOverIface sends a gratuitous NDP from 'iface' using 'srcIP' as the source IP.

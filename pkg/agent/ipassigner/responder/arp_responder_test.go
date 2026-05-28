@@ -20,9 +20,9 @@ import (
 	"net/netip"
 	"testing"
 
-	"github.com/mdlayher/arp"
-	"github.com/mdlayher/ethernet"
-	"github.com/mdlayher/packet"
+	"antrea.io/arp"
+	"antrea.io/ethernet"
+	"antrea.io/packet"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"k8s.io/apimachinery/pkg/util/sets"
