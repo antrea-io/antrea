@@ -67,6 +67,9 @@ func (c *MRouteClient) Initialize() error {
 		return err
 	}
 	c.externalInterfaceVIFs = externalInterfaceVIFs
+	if err := c.detectVIFMode(); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -84,6 +87,9 @@ type MRouteClient struct {
 	internalInterfaceVIF      uint16
 	externalInterfaceVIFs     []uint16
 	flexibleIPAMEnabled       bool
+	// vif16bit is true on kernels >= 5.10 where the VIF field in igmpmsg
+	// is 16 bits wide; false on older kernels where it is 8 bits wide.
+	vif16bit bool
 }
 
 // multicastInterfacesJoinMgroup allows multicast interfaces to join multicast group,

@@ -18,7 +18,6 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/blang/semver"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -28,32 +27,32 @@ func TestParseKernelVersion(t *testing.T) {
 		// input
 		kernelString string
 		// expectations
-		expectedKernelVersion semver.Version
+		expectedKernelVersion string
 		expectedError         error
 	}{
 		{
 			kernelString:          "4.10",
-			expectedKernelVersion: semver.MustParse("4.10.0"),
+			expectedKernelVersion: "v4.10.0",
 			expectedError:         nil,
 		},
 		{
 			kernelString:          "4.10.3",
-			expectedKernelVersion: semver.MustParse("4.10.3"),
+			expectedKernelVersion: "v4.10.3",
 			expectedError:         nil,
 		},
 		{
 			kernelString:          "4.12.17-040917-generic",
-			expectedKernelVersion: semver.MustParse("4.12.17-040917-generic"),
+			expectedKernelVersion: "v4.12.17-040917-generic",
 			expectedError:         nil,
 		},
 		{
 			kernelString:          "4.13.18-300.el7.x86_64",
-			expectedKernelVersion: semver.MustParse("4.13.18-300"),
+			expectedKernelVersion: "v4.13.18-300",
 			expectedError:         nil,
 		},
 		{
 			kernelString:          "5",
-			expectedKernelVersion: semver.Version{},
+			expectedKernelVersion: "",
 			expectedError:         fmt.Errorf("unable to get kernel version from \"5\""),
 		},
 	}

@@ -23,6 +23,7 @@ import (
 	"syscall"
 	"time"
 
+	"golang.org/x/mod/semver"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/klog/v2"
 
@@ -48,12 +49,9 @@ func (c *MRouteClient) parseIGMPMsg(msg []byte) (*parsedIGMPMsg, error) {
 	if msg[9] != 0 {
 		return nil, fmt.Errorf("invalid igmpmsg message: im_mbz must be zero")
 	}
-	kernelVersion, err := runtime.GetKernelVersion()
-	if err != nil {
-		return nil, err
-	}
 	var vif uint16
-	if kernelVersion.Major >= 5 && kernelVersion.Minor > 9 {
+	// Kernels >= 5.10 use a 16-bit VIF field (two bytes), whereas older kernels use 8 bits.
+	if c.vif16bit {
 		vif = uint16(msg[10]) + (uint16(msg[11]) << uint16(8))
 	} else {
 		vif = uint16(msg[10])
@@ -63,6 +61,18 @@ func (c *MRouteClient) parseIGMPMsg(msg []byte) (*parsedIGMPMsg, error) {
 		Src: net.IPv4(msg[12], msg[13], msg[14], msg[15]),
 		Dst: net.IPv4(msg[16], msg[17], msg[18], msg[19]),
 	}, nil
+}
+
+// detectVIFMode detects once whether the running kernel uses a 16-bit VIF
+// field in igmpmsg (kernels >= 5.10) or the legacy 8-bit field, and caches
+// the result in c.vif16bit for use in parseIGMPMsg.
+func (c *MRouteClient) detectVIFMode() error {
+	kernelVersion, err := runtime.GetKernelVersion()
+	if err != nil {
+		return err
+	}
+	c.vif16bit = semver.Compare(kernelVersion, "v5.10.0") >= 0
+	return nil
 }
 
 func (c *MRouteClient) run(stopCh <-chan struct{}) {
