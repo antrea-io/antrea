@@ -16,7 +16,6 @@ require (
 	github.com/aws/aws-sdk-go-v2/feature/s3/transfermanager v0.1.20
 	github.com/aws/aws-sdk-go-v2/service/ec2 v1.301.0
 	github.com/aws/aws-sdk-go-v2/service/s3 v1.101.0
-	github.com/blang/semver v3.5.1+incompatible
 	github.com/cheggaaa/pb/v3 v3.1.7
 	github.com/containernetworking/cni v1.3.0
 	github.com/containernetworking/plugins v1.9.1

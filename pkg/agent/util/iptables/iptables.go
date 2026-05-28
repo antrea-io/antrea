@@ -24,8 +24,8 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/blang/semver"
 	"github.com/coreos/go-iptables/iptables"
+	"golang.org/x/mod/semver"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/klog/v2"
 
@@ -86,10 +86,10 @@ const (
 	ProtocolICMPv6 = "icmp6"
 )
 
-var (
+const (
 	// https://netfilter.org/projects/iptables/files/changes-iptables-1.6.2.txt:
 	// iptables-restore: support acquiring the lock.
-	restoreWaitSupportedMinVersion = semver.Version{Major: 1, Minor: 6, Patch: 2}
+	restoreWaitSupportedMinVersion = "v1.6.2"
 
 	// https://netfilter.org/projects/iptables/files/changes-iptables-1.6.0.txt:
 	// iptables: snat: add randomize-full support
@@ -97,7 +97,7 @@ var (
 	// iptables: masquerade: add randomize-full support
 	// In our case, we do not differentiate between SNAT and MASQUERADE support for the option,
 	// and we use 1.6.2 as the common minimum version number.
-	randomFullySupportedMinVersion = semver.Version{Major: 1, Minor: 6, Patch: 2}
+	randomFullySupportedMinVersion = "v1.6.2"
 )
 
 type Interface interface {
@@ -184,8 +184,8 @@ func New(enableIPV4, enableIPV6 bool) (*Client, error) {
 
 func isRestoreWaitSupported(ipt *iptables.IPTables) bool {
 	major, minor, patch := ipt.GetIptablesVersion()
-	version := semver.Version{Major: uint64(major), Minor: uint64(minor), Patch: uint64(patch)}
-	return version.GE(restoreWaitSupportedMinVersion)
+	version := fmt.Sprintf("v%d.%d.%d", major, minor, patch)
+	return semver.Compare(version, restoreWaitSupportedMinVersion) >= 0
 }
 
 func isRandomFullySupported(ipt *iptables.IPTables) bool {
@@ -195,8 +195,8 @@ func isRandomFullySupported(ipt *iptables.IPTables) bool {
 	// consistent with how K8s checks for --random-fully support:
 	// https://github.com/kubernetes/kubernetes/blob/60c4c2b2521fb454ce69dee737e3eb91a25e0535/pkg/util/iptables/iptables.go#L239
 	major, minor, patch := ipt.GetIptablesVersion()
-	version := semver.Version{Major: uint64(major), Minor: uint64(minor), Patch: uint64(patch)}
-	return version.GE(randomFullySupportedMinVersion)
+	version := fmt.Sprintf("v%d.%d.%d", major, minor, patch)
+	return semver.Compare(version, randomFullySupportedMinVersion) >= 0
 }
 
 // EnsureChain checks if target chain already exists, creates it if not.
