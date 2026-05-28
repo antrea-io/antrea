@@ -268,7 +268,7 @@ func TestDumpInterfaceConfigs(t *testing.T) {
 			Name: "antrea-gw0",
 		},
 	}).AnyTimes()
-	dumper := NewAgentDumper(fs, nil, nil, q, nil, "7s", true, true)
+	dumper := &agentDumper{fs: fs, aq: q, v4Enabled: true, v6Enabled: true}
 	err := dumper.dumpInterfaceConfigs(baseDir)
 	require.NoError(t, err)
 	ok, err := afero.Exists(fs, filepath.Join(baseDir, "interface-config"))
