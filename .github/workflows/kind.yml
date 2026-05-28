@@ -601,6 +601,40 @@ jobs:
         path: log.tar.gz
         retention-days: 30
 
+  test-e2e-conformance:
+    name: K8s e2e conformance tests
+    needs: build-antrea-coverage-image
+    runs-on: [ubuntu-latest]
+    steps:
+    - uses: actions/checkout@v6
+      with:
+        show-progress: false
+    - uses: ./.github/actions/setup-kind-test
+      with:
+        setup-go: 'false'
+        tag-coverage-images: 'true'
+    - name: Create K8s cluster
+      run: |
+        ./ci/kind/kind-setup.sh create kind
+    - name: Install Antrea
+      run: |
+        helm_args=()
+        helm_repo="./build/charts/antrea"
+        helm_args+=(--set controllerImage.repository="antrea/antrea-controller-ubuntu")
+        helm_args+=(--set agentImage.repository="antrea/antrea-agent-ubuntu")
+        helm install --namespace kube-system antrea ${helm_repo} "${helm_args[@]}"
+        kubectl rollout status -n kube-system ds/antrea-agent --timeout=5m
+    - name: Run e2e conformance tests
+      run: |
+        ./ci/run-k8s-e2e-tests.sh --e2e-conformance
+    - name: Upload test log
+      uses: actions/upload-artifact@v7
+      if: ${{ failure() }}
+      with:
+        name: sonobuoy-conformance.tar.gz
+        path: "*_sonobuoy_*.tar.gz"
+        retention-days: 7
+
   test-upgrade-from-N-1:
     name: Upgrade from Antrea version N-1
     needs: build-antrea-coverage-image
@@ -765,6 +799,7 @@ jobs:
     - test-e2e-hybrid-non-default
     - test-e2e-ipv6-only
     - test-e2e-ipv6-ds
+    - test-e2e-ipam-feature-enabled
     - test-upgrade-from-N-1
     - test-upgrade-from-N-2
     - test-compatible-N-1
@@ -772,6 +807,8 @@ jobs:
     - validate-prometheus-metrics-doc
     - test-e2e-flow-visibility
     - test-network-policy-conformance-encap
+    - test-secondary-network
+    - test-e2e-conformance
     - run-installation-checks
     runs-on: [ubuntu-latest]
     steps:
