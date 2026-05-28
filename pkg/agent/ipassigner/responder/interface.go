@@ -14,16 +14,16 @@
 
 package responder
 
-import "net"
+import "net/netip"
 
 // Responder is an interface to handle ARP (IPv4)/NS (IPv6) queries using raw sockets.
 type Responder interface {
 	// InterfaceName returns the name of the network interface which the raw sockets binds on.
 	InterfaceName() string
 	// AddIP assigns the IP to the responder.
-	AddIP(net.IP) error
+	AddIP(netip.Addr) error
 	// RemoveIP removes the IP from the responder.
-	RemoveIP(net.IP) error
+	RemoveIP(netip.Addr) error
 	// Run starts the responder.
 	Run(<-chan struct{})
 }

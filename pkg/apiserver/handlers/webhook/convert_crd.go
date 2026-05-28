@@ -228,11 +228,11 @@ func getOutputSerializer(accept string) runtime.Serializer {
 		return serializers[mediaType{"application", "json"}]
 	}
 	for _, clause := range goautoneg.ParseAccept(accept) {
+		if clause.Type == "*" && clause.SubType == "*" {
+			return serializers[mediaType{"application", "json"}]
+		}
 		for k, v := range serializers {
-			switch {
-			case clause.Type == k.Type && clause.SubType == k.SubType,
-				clause.Type == k.Type && clause.SubType == "*",
-				clause.Type == "*" && clause.SubType == "*":
+			if clause.Type == k.Type && (clause.SubType == k.SubType || clause.SubType == "*") {
 				return v
 			}
 		}
