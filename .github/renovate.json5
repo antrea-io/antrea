@@ -98,12 +98,18 @@
         "antrea.io/ofnet",
         "antrea.io/libOpenflow",
         "github.com/ClickHouse/clickhouse-go/v2", // auto-upgrade involves dependency conflicts
-        "github.com/aws/", // Updates are too frequent
-         // Update requires using netip.Addr instead of net.IP in Antrea, we may have it
-         // updated in a mentorship project in the future.
-        "github.com/mdlayher/arp",
       ],
       enabled: false,
+    },
+
+    // Group all aws-sdk-go-v2 modules into a single PR since they are released together
+    {
+      matchManagers: ["gomod"],
+      matchPackagePrefixes: ["github.com/aws/aws-sdk-go-v2"],
+      groupName: "AWS SDK Go v2",
+      groupSlug: "aws-sdk-go-v2",
+      matchBaseBranches: ["main"],
+      addLabels: ["go"],
     },
 
     // Only allow patch updates for these dependencies
