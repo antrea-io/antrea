@@ -37,7 +37,7 @@ import (
 	"github.com/containernetworking/plugins/pkg/ip"
 	"github.com/google/uuid"
 	log "github.com/sirupsen/logrus"
-	"go.yaml.in/yaml/v2"
+	"go.yaml.in/yaml/v3"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
@@ -2351,9 +2351,11 @@ func (data *TestData) createAgnhostLoadBalancerService(serviceName string, affin
 	for idx, ingressIP := range ingressIPs {
 		ingress[idx].IP = ingressIP
 	}
-	updatedSvc := svc.DeepCopy()
-	updatedSvc.Status.LoadBalancer.Ingress = ingress
-	patchData, err := json.Marshal(updatedSvc)
+	patchData, err := json.Marshal(&corev1.Service{
+		Status: corev1.ServiceStatus{
+			LoadBalancer: corev1.LoadBalancerStatus{Ingress: ingress},
+		},
+	})
 	if err != nil {
 		return svc, err
 	}
@@ -2369,9 +2371,11 @@ func (data *TestData) createNginxLoadBalancerService(affinity bool, ingressIPs [
 	for idx, ingressIP := range ingressIPs {
 		ingress[idx].IP = ingressIP
 	}
-	updatedSvc := svc.DeepCopy()
-	updatedSvc.Status.LoadBalancer.Ingress = ingress
-	patchData, err := json.Marshal(updatedSvc)
+	patchData, err := json.Marshal(&corev1.Service{
+		Status: corev1.ServiceStatus{
+			LoadBalancer: corev1.LoadBalancerStatus{Ingress: ingress},
+		},
+	})
 	if err != nil {
 		return svc, err
 	}
