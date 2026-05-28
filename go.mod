@@ -3,8 +3,12 @@ module antrea.io/antrea
 go 1.26.0
 
 require (
+	antrea.io/arp v0.0.0-20260520024042-c5afcf686f2f
+	antrea.io/ethernet v0.0.0-20260520021600-167b4cbe358b
 	antrea.io/libOpenflow v0.17.0
+	antrea.io/ndp v0.0.0-20260520020856-5015f7fd30ea
 	antrea.io/ofnet v0.15.0
+	antrea.io/packet v0.0.0-20260515064457-4eaabd67893f
 	github.com/ClickHouse/clickhouse-go/v2 v2.46.0
 	github.com/DATA-DOG/go-sqlmock v1.5.2
 	github.com/Microsoft/go-winio v0.6.2
@@ -33,10 +37,6 @@ require (
 	github.com/k8snetworkplumbingwg/network-attachment-definition-client v1.7.7
 	github.com/k8snetworkplumbingwg/sriovnet v1.2.0
 	github.com/kevinburke/ssh_config v1.6.0
-	github.com/mdlayher/arp v0.0.0-20220512170110-6706a2966875
-	github.com/mdlayher/ethernet v0.0.0-20220221185849-529eae5b6118
-	github.com/mdlayher/ndp v1.1.0
-	github.com/mdlayher/packet v1.1.2
 	github.com/miekg/dns v1.1.72
 	github.com/onsi/ginkgo/v2 v2.28.3
 	github.com/onsi/gomega v1.40.0
@@ -252,6 +252,3 @@ require (
 	sigs.k8s.io/randfill v1.0.0 // indirect
 	sigs.k8s.io/structured-merge-diff/v6 v6.3.2 // indirect
 )
-
-// remove this when https://github.com/mdlayher/ndp/pull/32 gets merged
-replace github.com/mdlayher/ndp => github.com/antrea-io/ndp v0.0.0-20241107040829-6f35f2e50f4c

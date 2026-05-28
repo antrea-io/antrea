@@ -21,7 +21,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/mdlayher/ndp"
+	"antrea.io/ndp"
 	"golang.org/x/net/ipv6"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/util/wait"
