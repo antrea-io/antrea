@@ -153,29 +153,30 @@ func (s *FlowStreamService) GetFlows(req *flowpb.GetFlowsRequest, stream flowpb.
 		if shutdown {
 			klog.InfoS("Ring buffer shut down, closing GetFlows stream")
 			return nil
-		} else if n > 0 {
-			filtered := applyFilters(batch[:n], parsedFilters, since)
+		}
 
+		var filtered []*flowpb.Flow
+		if n > 0 {
+			filtered = applyFilters(batch[:n], parsedFilters, since)
 			if maxCount > 0 && sent+len(filtered) >= maxCount {
 				filtered = filtered[:maxCount-sent]
 			}
-
-			if len(filtered) > 0 || dropped > 0 {
-				resp := &flowpb.GetFlowsResponse{
-					Flows:        filtered,
-					DroppedCount: totalDropped,
-				}
-				if err := stream.Send(resp); err != nil {
-					klog.InfoS("Send to client failed, closing GetFlows stream", "err", err)
-					return err
-				}
-				sent += len(filtered)
+		}
+		if len(filtered) > 0 || dropped > 0 {
+			resp := &flowpb.GetFlowsResponse{
+				Flows:        filtered,
+				DroppedCount: totalDropped,
 			}
-
-			if maxCount > 0 && sent >= maxCount {
-				klog.InfoS("Reached max_count, closing GetFlows stream", "sent", sent)
-				return nil
+			if err := stream.Send(resp); err != nil {
+				klog.InfoS("Send to client failed, closing GetFlows stream", "err", err)
+				return err
 			}
+			sent += len(filtered)
+		}
+
+		if maxCount > 0 && sent >= maxCount {
+			klog.InfoS("Reached max_count, closing GetFlows stream", "sent", sent)
+			return nil
 		}
 
 		if !follow && n == 0 {

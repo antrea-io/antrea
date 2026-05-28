@@ -1263,7 +1263,7 @@ func (f *fakeFlowStreamService) Run(_, _ []byte, stopCh <-chan struct{}) error {
 }
 
 // TestFlowAggregator_CertificateUpdated verifies that CertificateUpdated fans out
-// to both update channels and becomes a no-op once stopped is set.
+// to both update channels and does not block when a channel is already full.
 func TestFlowAggregator_CertificateUpdated(t *testing.T) {
 	certCh := make(chan struct{}, 1)
 	fssCh := make(chan struct{}, 1)
@@ -1272,29 +1272,15 @@ func TestFlowAggregator_CertificateUpdated(t *testing.T) {
 		flowStreamSvcUpdateCh: fssCh,
 	}
 
-	// Before shutdown: both channels should receive.
+	// Both channels should receive.
 	fa.CertificateUpdated()
 	assert.Len(t, certCh, 1, "certificateUpdateCh should have one entry")
 	assert.Len(t, fssCh, 1, "flowStreamSvcUpdateCh should have one entry")
 
-	// Drain.
-	<-certCh
-	<-fssCh
-
 	// Channels already full — subsequent calls should not block (default branch).
 	fa.CertificateUpdated()
-	fa.CertificateUpdated() // both channels already full, second call is dropped
-
 	assert.Len(t, certCh, 1)
 	assert.Len(t, fssCh, 1)
-
-	// After stopped is set, CertificateUpdated must be a no-op.
-	<-certCh
-	<-fssCh
-	fa.stopped.Store(true)
-	fa.CertificateUpdated()
-	assert.Empty(t, certCh, "no send after stopped")
-	assert.Empty(t, fssCh, "no send after stopped")
 }
 
 // TestFlowAggregator_CertificateUpdated_NoFSSChannel verifies that CertificateUpdated

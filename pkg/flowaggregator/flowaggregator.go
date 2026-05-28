@@ -118,10 +118,6 @@ type flowAggregator struct {
 	// separately by the buffer itself) and proxyRecord no longer returns an error.
 	// Kept for API/metrics compatibility.
 	numRecordsDropped atomic.Int64
-	// stopped is set to 1 before the certificate update channels are closed. Once
-	// set, CertificateUpdated() becomes a no-op so that any in-flight worker
-	// goroutine inside certificateProvider cannot send on a closed channel.
-	stopped           atomic.Bool
 	updateCh          chan *options.Options
 	configFile        string
 	configWatcher     *fsnotify.Watcher
@@ -277,11 +273,6 @@ func (fa *flowAggregator) InitAggregationProcess() error {
 }
 
 func (fa *flowAggregator) CertificateUpdated() {
-	// If shutdown has begun the channels are about to be (or have already been) closed.
-	// Sending on a closed channel panics, so we drop the notification instead.
-	if fa.stopped.Load() {
-		return
-	}
 	select {
 	case fa.certificateUpdateCh <- struct{}{}:
 	default:
@@ -348,11 +339,12 @@ func (fa *flowAggregator) runFlowStreamService(stopCh <-chan struct{}) {
 		// next server instance.
 		svcStopCh = make(chan struct{})
 
-		// Check stopCh before starting a new server so that if both channels
-		// are ready we don't bind the port only to immediately tear it down.
+		// Shrink the window in which stopCh may close between here and the
+		// Run() call: if both stopCh and the update channel were ready in
+		// the select above, we avoid starting a server that would be torn
+		// down almost immediately on the next iteration.
 		select {
 		case <-stopCh:
-			close(svcStopCh)
 			return
 		default:
 		}
@@ -438,19 +430,13 @@ func (fa *flowAggregator) Run(stopCh <-chan struct{}) {
 	}
 	fa.recordBuffer.Shutdown()
 	fa.stopAllExporters()
+	// certificateUpdateCh and flowStreamSvcUpdateCh are not closed on purpose.
+	// Their consumers (runCollectors, runFlowStreamService) exit via stopCh and
+	// are joined by wg.Wait(). Closing the channels would race with the
+	// certificate provider's worker goroutine, which can outlive stopCh and call
+	// CertificateUpdated() concurrently — sending on a closed channel and panic.
+	// The channels are garbage collected together with the flowAggregator struct.
 	wg.Wait()
-	// Mark the aggregator as stopped before closing the channels. The certificate
-	// provider's worker goroutine runs independently of stopCh and may still be
-	// in-flight even after Run() has returned and wg.Done() fired. Setting stopped
-	// causes CertificateUpdated() to become a no-op so those callbacks cannot send
-	// on a closed channel and panic.
-	fa.stopped.Store(true)
-	if fa.certificateUpdateCh != nil {
-		close(fa.certificateUpdateCh)
-	}
-	if fa.flowStreamSvcUpdateCh != nil {
-		close(fa.flowStreamSvcUpdateCh)
-	}
 }
 
 // initExporters reads the initial configuration and launches exporter
@@ -1006,6 +992,10 @@ func (fa *flowAggregator) updateFlowAggregator(opt *options.Options) {
 	}
 	if opt.Config.FlowAggregatorAddress != fa.flowAggregatorAddress {
 		unsupportedUpdates = append(unsupportedUpdates, "flowAggregatorAddress")
+	}
+	flowStreamEnabled := opt.Config.FlowStreamService.Enable != nil && *opt.Config.FlowStreamService.Enable
+	if flowStreamEnabled != (fa.flowStreamService != nil) {
+		unsupportedUpdates = append(unsupportedUpdates, "flowStreamService")
 	}
 	if len(unsupportedUpdates) > 0 {
 		klog.ErrorS(nil, "Ignoring unsupported configuration updates, please restart FlowAggregator", "keys", unsupportedUpdates)
