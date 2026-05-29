@@ -22,6 +22,7 @@ RUN yum clean all -y && yum -y install wget git yum-utils python3 rpm-build && \
     sed -i 's/enabled=.*/enabled=1/g' /etc/yum.repos.d/centos.repo
 
 COPY apply-patches.sh /
+COPY patches/ /patches/
 COPY charon-logging.conf /tmp
 COPY CentOS.repo /tmp
 
@@ -34,7 +35,7 @@ RUN cd /tmp/openvswitch* && \
     ./configure --prefix=/usr --localstatedir=/var --sysconfdir=/etc && \
     # logrotate needs to run as the same user as OVS to get the proper permissions of log files.
     # As Antrea runs OVS as root, we disable libcapng to make logrotate also run as root.
-    # See https://github.com/openvswitch/ovs/blob/v2.17.7/rhel/openvswitch-fedora.spec.in#L26-L27.
+    # See https://github.com/openvswitch/ovs/blob/v2.17.12/rhel/openvswitch-fedora.spec.in#L26-L27.
     RPMBUILD_OPT="--without libcapng --without check" make rpm-fedora && mkdir -p /tmp/ovs-rpms && \
     mv /tmp/openvswitch-$OVS_VERSION/rpm/rpmbuild/RPMS/*/*.rpm  /tmp/ovs-rpms && \
     rm -rf /tmp/openvswitch*

@@ -27,6 +27,7 @@ RUN apt-get update && \
             libunbound-dev
 
 COPY apply-patches.sh /
+COPY patches/ /patches/
 
 # Download OVS source code and build debs
 RUN wget -q -O - https://www.openvswitch.org/releases/openvswitch-$OVS_VERSION.tar.gz  | tar xz -C /tmp && \

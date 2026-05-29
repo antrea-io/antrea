@@ -20,6 +20,8 @@
 
 set -eo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
 function echoerr {
     >&2 echo "$@"
 }
@@ -42,8 +44,8 @@ function apply_patch() {
         git apply "$@"
 }
 
-if version_lt "$OVS_VERSION" "2.13.0" || version_gt "$OVS_VERSION" "2.17.7"; then
-    echoerr "OVS_VERSION $OVS_VERSION is not supported (must be >= 2.13.0 and <= 2.17.7)"
+if version_lt "$OVS_VERSION" "2.13.0" || version_gt "$OVS_VERSION" "2.17.12"; then
+    echoerr "OVS_VERSION $OVS_VERSION is not supported (must be >= 2.13.0 and <= 2.17.12)"
     exit 1
 fi
 
@@ -95,8 +97,13 @@ fi
 # This patch fixes a log file leak in OVS.
 # See https://github.com/antrea-io/antrea/issues/2003
 # It is fixed in the OVS master branch and will be included starting with OVS 2.18.
-if version_lt "$OVS_VERSION" "2.18.0" ; then
+# The original patch does not apply cleanly to OVS >= 2.17.12 because of a code
+# change in lib/vlog.c (close(log_fd) and async_append_destroy(log_writer) were
+# reordered), so we use an adapted version of the patch for those versions.
+if version_lt "$OVS_VERSION" "2.17.12" ; then
     apply_patch "78ff3961ca9fb012eaaca3d3af1e8186fe1827e7"
+elif version_lt "$OVS_VERSION" "2.18.0" ; then
+    git apply "$SCRIPT_DIR/patches/78ff3961-v2.17.12.patch"
 fi
 
 # This patch fixes the issue that TCP port matching and TCP flags matching can't
@@ -108,7 +115,8 @@ if version_get "$OVS_VERSION" "2.13.0" && version_let "$OVS_VERSION" "2.17.5" ; 
 fi
 
 # These patches are necessary to avoid build errors on Ubuntu 24.04 (when generating manpages).
-if version_lt "$OVS_VERSION" "3.3.0"; then
+# They have been backported to OVS 2.17.12 so they are not needed for that version or later.
+if version_lt "$OVS_VERSION" "2.17.12"; then
     # https://github.com/openvswitch/ovs/commit/6180fefa835c7cad36e89f77f3d9de13c680fb88
     apply_patch "6180fefa835c7cad36e89f77f3d9de13c680fb88"
     # https://github.com/openvswitch/ovs/commit/d542f0ea8587f9ae1cad1f9610b6f3ce62dc3b7a
