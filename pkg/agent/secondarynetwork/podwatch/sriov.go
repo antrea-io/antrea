@@ -65,9 +65,6 @@ func getPodContainerDeviceIDs(podName string, podNamespace string) (map[string][
 	defer conn.Close()
 
 	client := podresourcesv1alpha1.NewPodResourcesListerClient(conn)
-	if client == nil {
-		return nil, fmt.Errorf("error getting the lister client for Pod resources")
-	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), listTimeout)
 	defer cancel()

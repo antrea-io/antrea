@@ -168,18 +168,23 @@ func (mr *MockOVSCtlClientMockRecorder) DumpPortsDesc() *gomock.Call {
 }
 
 // DumpTableFlows mocks base method.
-func (m *MockOVSCtlClient) DumpTableFlows(table uint8) ([]string, error) {
+func (m *MockOVSCtlClient) DumpTableFlows(table uint8, filters ...string) ([]string, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "DumpTableFlows", table)
+	varargs := []any{table}
+	for _, a := range filters {
+		varargs = append(varargs, a)
+	}
+	ret := m.ctrl.Call(m, "DumpTableFlows", varargs...)
 	ret0, _ := ret[0].([]string)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // DumpTableFlows indicates an expected call of DumpTableFlows.
-func (mr *MockOVSCtlClientMockRecorder) DumpTableFlows(table any) *gomock.Call {
+func (mr *MockOVSCtlClientMockRecorder) DumpTableFlows(table any, filters ...any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DumpTableFlows", reflect.TypeOf((*MockOVSCtlClient)(nil).DumpTableFlows), table)
+	varargs := append([]any{table}, filters...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DumpTableFlows", reflect.TypeOf((*MockOVSCtlClient)(nil).DumpTableFlows), varargs...)
 }
 
 // GetDPFeatures mocks base method.

@@ -299,14 +299,7 @@ func TestOfCtl(t *testing.T) {
 		mockOVSOfctlRunner.EXPECT().RunOfctlCmd("dump-flows", "--names").Return(DumpFlows())
 		got, err := client.DumpFlows()
 		require.NoError(err)
-		expectedFlows := []string{
-			"table=0, priority=200, n_packets=143, n_bytes=6006, idle_age=15512, hard_age=65534,arp actions=resubmit(,1)",
-			"table=1, priority=200, n_packets=12, n_bytes=504, idle_age=17282, hard_age=65534,arp,in_port=32769,arp_spa=192.168.1.1,arp_sha=16:92:82:a4:69:50 actions=resubmit(,2)",
-			"table=2, priority=0, n_packets=0, n_bytes=0, idle_age=65534, hard_age=65534, actions=drop",
-			"table=3, priority=200, n_packets=29233419, n_bytes=2703471860, idle_age=8, hard_age=65534,in_port=32769 actions=load:0x2->NXM_NX_REG0[0..3],resubmit(,4)",
-			"table=3, priority=200, n_packets=0, n_bytes=0, idle_age=65534, hard_age=65534,in_port=32768 actions=load:0x1->reg0",
-		}
-		assert.Equal(expectedFlows, got)
+		assert.Equal(testDumpFlows, got)
 	})
 	t.Run("Dump Flows Without Table Names", func(t *testing.T) {
 		ctrl := gomock.NewController(t)
@@ -321,12 +314,7 @@ func TestOfCtl(t *testing.T) {
 		mockOVSOfctlRunner.EXPECT().RunOfctlCmd("dump-flows", "--no-names").Return(DumpFlowsWithoutTableNames())
 		got, err := client.DumpFlowsWithoutTableNames()
 		require.NoError(err)
-		expectedFlows := []string{
-			"table=0, priority=200, n_packets=143, n_bytes=6006, idle_age=15512, hard_age=65534,arp actions=resubmit(,1)",
-			"table=1, priority=200, n_packets=12, n_bytes=504, idle_age=17282, hard_age=65534,arp,in_port=32769,arp_spa=192.168.1.1,arp_sha=16:92:82:a4:69:50 actions=resubmit(,2)",
-			"table=3, priority=200, n_packets=29233419, n_bytes=2703471860, idle_age=8, hard_age=65534,in_port=32769 actions=load:0x2->NXM_NX_REG0[0..3],resubmit(,4)",
-		}
-		assert.Equal(expectedFlows, got)
+		assert.Equal(testDumpFlowsWithoutTableNames, got)
 	})
 	t.Run("Dump Matched Flow", func(t *testing.T) {
 		ctrl := gomock.NewController(t)
@@ -342,8 +330,7 @@ func TestOfCtl(t *testing.T) {
 		mockOVSOfctlRunner.EXPECT().RunOfctlCmd("dump-flows", matchFlow, "--names").Return(DumpMatchedFlow())
 		out, err := client.DumpMatchedFlow(matchFlow)
 		require.NoError(err)
-		expectedFlow := "table=2, priority=0, n_packets=0, n_bytes=0, idle_age=65534, hard_age=65534, actions=drop"
-		assert.Equal(expectedFlow, out)
+		assert.Equal(testDumpFlows[2], out)
 
 	})
 	t.Run("Dump Table Flows", func(t *testing.T) {
@@ -365,14 +352,37 @@ func TestOfCtl(t *testing.T) {
 			}
 			return x, nil
 		}
-		mockOVSOfctlRunner.EXPECT().RunOfctlCmd("dump-flows", []string{"table=3", "--names"}).Return(DumpTableFlows())
+		mockOVSOfctlRunner.EXPECT().RunOfctlCmd("dump-flows", "table=3", "--names").Return(DumpTableFlows())
 		out, err := client.DumpTableFlows(uint8(3))
 		require.NoError(err)
-		expectedFlows := []string{
-			"table=3, priority=200, n_packets=29233419, n_bytes=2703471860, idle_age=8, hard_age=65534,in_port=32769 actions=load:0x2->NXM_NX_REG0[0..3],resubmit(,4)",
-			"table=3, priority=200, n_packets=0, n_bytes=0, idle_age=65534, hard_age=65534,in_port=32768 actions=load:0x1->reg0",
+		assert.Equal([]string{testDumpFlows[3], testDumpFlows[4]}, out)
+	})
+	t.Run("Dump Table Flows With Filters", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		mockOVSOfctlRunner := NewMockOVSOfctlRunner(ctrl)
+		client := &ovsCtlClient{
+			bridge:         "br-int",
+			ovsOfctlRunner: mockOVSOfctlRunner,
 		}
-		assert.Equal(expectedFlows, out)
+		DumpTableFlowsFiltered := func() ([]byte, error) {
+			var x = []byte{}
+			table := "table=3"
+			cookie := "cookie=0xa010000000000"
+			for i := 0; i < len(testDumpFlows); i++ {
+				if !strings.Contains(testDumpFlows[i], table) || !strings.Contains(testDumpFlows[i], cookie) {
+					continue
+				}
+				x = append(x, []byte(testDumpFlows[i])...)
+				x = append(x, "\n"...)
+			}
+			return x, nil
+		}
+		match := fmt.Sprintf("table=3,cookie=0xa010000000000/0x%x", ^uint64(0))
+		mockOVSOfctlRunner.EXPECT().RunOfctlCmd("dump-flows", match, "--names").Return(DumpTableFlowsFiltered())
+		filter := fmt.Sprintf("cookie=0xa010000000000/0x%x", ^uint64(0))
+		out, err := client.DumpTableFlows(3, filter)
+		require.NoError(err)
+		assert.Equal([]string{testDumpFlows[3], testDumpFlows[4]}, out)
 	})
 	t.Run("Dump Groups", func(t *testing.T) {
 		ctrl := gomock.NewController(t)
