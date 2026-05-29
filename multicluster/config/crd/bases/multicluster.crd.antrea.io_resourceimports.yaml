@@ -2678,12 +2678,31 @@ spec:
                   spec:
                     description: spec defines the behavior of a ServiceImport.
                     properties:
+                      internalTrafficPolicy:
+                        description: |-
+                          InternalTrafficPolicy describes how nodes distribute service traffic they
+                          receive on the ClusterIP. If set to "Local", the proxy will assume that pods
+                          only want to talk to endpoints of the service on the same node as the pod,
+                          dropping the traffic if there are no local endpoints. The default value,
+                          "Cluster", uses the standard behavior of routing to all endpoints evenly
+                          (possibly modified by topology and other features).
+                        type: string
+                      ipFamilies:
+                        description: IPFamilies identifies all the IPFamilies assigned
+                          for this ServiceImport.
+                        items:
+                          description: |-
+                            IPFamily represents the IP Family (IPv4 or IPv6). This type is used
+                            to express the family of an IP expressed by a type (e.g. service.spec.ipFamilies).
+                          type: string
+                        maxItems: 2
+                        type: array
                       ips:
                         description: ip will be used as the VIP for this service when
                           type is ClusterSetIP.
                         items:
                           type: string
-                        maxItems: 1
+                        maxItems: 2
                         type: array
                       ports:
                         items:
@@ -2693,10 +2712,17 @@ spec:
                             appProtocol:
                               description: |-
                                 The application protocol for this port.
+                                This is used as a hint for implementations to offer richer behavior for protocols that they understand.
                                 This field follows standard Kubernetes label syntax.
-                                Un-prefixed names are reserved for IANA standard service names (as per
-                                RFC-6335 and http://www.iana.org/assignments/service-names).
-                                Non-standard protocols should use prefixed names such as
+                                Valid values are either:
+
+                                * Un-prefixed protocol names - reserved for IANA standard service names (as per
+                                RFC-6335 and https://www.iana.org/assignments/service-names).
+
+                                * Kubernetes-defined prefixed names:
+                                  * 'kubernetes.io/h2c' - HTTP/2 over cleartext as described in https://www.rfc-editor.org/rfc/rfc7540
+
+                                * Other protocols should use implementation-defined prefixed names such as
                                 mycompany.com/my-custom-protocol.
                                 Field can be enabled with ServiceAppProtocol feature gate.
                               type: string
@@ -2748,6 +2774,15 @@ spec:
                                 type: integer
                             type: object
                         type: object
+                      trafficDistribution:
+                        description: |-
+                          TrafficDistribution offers a way to express preferences for how traffic
+                          is distributed to Service endpoints. Implementations can use this field
+                          as a hint, but are not required to guarantee strict adherence. If the
+                          field is not set, the implementation will apply its default routing
+                          strategy. If set to "PreferClose", implementations should prioritize
+                          endpoints that are in the same zone.
+                        type: string
                       type:
                         description: |-
                           type defines the type of this service.
@@ -2784,6 +2819,66 @@ spec:
                         type: array
                         x-kubernetes-list-map-keys:
                         - cluster
+                        x-kubernetes-list-type: map
+                      conditions:
+                        items:
+                          description: Condition contains details for one aspect of
+                            the current state of this API Resource.
+                          properties:
+                            lastTransitionTime:
+                              description: |-
+                                lastTransitionTime is the last time the condition transitioned from one status to another.
+                                This should be when the underlying condition changed.  If that is not known, then using the time when the API field changed is acceptable.
+                              format: date-time
+                              type: string
+                            message:
+                              description: |-
+                                message is a human readable message indicating details about the transition.
+                                This may be an empty string.
+                              maxLength: 32768
+                              type: string
+                            observedGeneration:
+                              description: |-
+                                observedGeneration represents the .metadata.generation that the condition was set based upon.
+                                For instance, if .metadata.generation is currently 12, but the .status.conditions[x].observedGeneration is 9, the condition is out of date
+                                with respect to the current state of the instance.
+                              format: int64
+                              minimum: 0
+                              type: integer
+                            reason:
+                              description: |-
+                                reason contains a programmatic identifier indicating the reason for the condition's last transition.
+                                Producers of specific condition types may define expected values and meanings for this field,
+                                and whether the values are considered a guaranteed API.
+                                The value should be a CamelCase string.
+                                This field may not be empty.
+                              maxLength: 1024
+                              minLength: 1
+                              pattern: ^[A-Za-z]([A-Za-z0-9_,:]*[A-Za-z0-9_])?$
+                              type: string
+                            status:
+                              description: status of the condition, one of True, False,
+                                Unknown.
+                              enum:
+                              - "True"
+                              - "False"
+                              - Unknown
+                              type: string
+                            type:
+                              description: type of condition in CamelCase or in foo.example.com/CamelCase.
+                              maxLength: 316
+                              pattern: ^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*/)?(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])$
+                              type: string
+                          required:
+                          - lastTransitionTime
+                          - message
+                          - reason
+                          - status
+                          - type
+                          type: object
+                        type: array
+                        x-kubernetes-list-map-keys:
+                        - type
                         x-kubernetes-list-type: map
                     type: object
                 type: object
