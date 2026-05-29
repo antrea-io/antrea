@@ -34,10 +34,6 @@ COVERAGE=false
 KIND=false
 DEBUG=false
 USE_SYSTEM_GO=false
-GOLANG_RELEASE_DIR=${WORKDIR}/golang-releases
-
-multicluster_kubeconfigs=($EAST_CLUSTER_CONFIG $LEADER_CLUSTER_CONFIG $WEST_CLUSTER_CONFIG)
-membercluster_kubeconfigs=($EAST_CLUSTER_CONFIG $WEST_CLUSTER_CONFIG)
 
 CLEAN_STALE_IMAGES="docker system prune --force --all --filter until=4h"
 PRINT_DOCKER_STATUS="docker system df -v"
@@ -444,7 +440,12 @@ function run_multicluster_e2e {
     fi
 
     set -x
-    go test -v -timeout=15m antrea.io/antrea/multicluster/test/e2e --logs-export-dir `pwd`/antrea-multicluster-test-logs $options
+    go test -v -timeout=15m antrea.io/antrea/multicluster/test/e2e \
+        --logs-export-dir `pwd`/antrea-multicluster-test-logs \
+        --leader-cluster-kubeconfig-path ${MULTICLUSTER_KUBECONFIG_PATH}/leader \
+        --east-cluster-kubeconfig-path ${MULTICLUSTER_KUBECONFIG_PATH}/east \
+        --west-cluster-kubeconfig-path ${MULTICLUSTER_KUBECONFIG_PATH}/west \
+        $options
     if [[ "$?" != "0" ]]; then
         TEST_FAILURE=true
     fi
@@ -489,6 +490,7 @@ if [[ ${KIND} == "true" ]]; then
     # Preparing a ClusterSet contains three Kind clusters.
     SERVICE_CIDRS=("10.96.10.0/24" "10.96.20.0/24" "10.96.30.0/24")
     POD_CIDRS=("10.244.0.0/20" "10.244.16.0/20" "10.244.32.0/20")
+    mkdir -p ${MULTICLUSTER_KUBECONFIG_PATH}
     for i in {0..2}; do
         ./ci/kind/kind-setup.sh create ${CLUSTER_NAMES[$i]} --service-cidr ${SERVICE_CIDRS[$i]} --pod-cidr ${POD_CIDRS[$i]} --num-workers 1
     done

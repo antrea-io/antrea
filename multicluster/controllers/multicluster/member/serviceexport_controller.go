@@ -434,54 +434,63 @@ func (r *ServiceExportReconciler) updateSvcExportStatus(ctx context.Context, req
 	if err != nil {
 		return client.IgnoreNotFound(err)
 	}
-	now := metav1.Now()
-	newCondition := k8smcsv1alpha1.ServiceExportCondition{
-		Type:               k8smcsv1alpha1.ServiceExportValid,
-		Status:             corev1.ConditionFalse,
-		LastTransitionTime: &now,
+	newCondition := metav1.Condition{
+		Type:   string(k8smcsv1alpha1.ServiceExportConditionValid),
+		Status: metav1.ConditionFalse,
+		// When updating ServiceExportStatus.Conditions, LastTransitionTime is always set to metav1.Now().
+		// This means it will change even when the condition’s Status remains the same and only Reason/Message
+		// changes, which breaks the intended semantics of LastTransitionTime (time of status transition).
+		// In future, we will consider preserving the existing LastTransitionTime when Status is unchanged,
+		// or switching to the standard helper (e.g. api/meta SetStatusCondition) which handles LastTransitionTime
+		// updates correctly. Also, since metav1.Condition includes ObservedGeneration, it should be set
+		// (typically to svcExport.Generation) so consumers can tell which generation the condition
+		// corresponds to.
+		LastTransitionTime: metav1.Now(),
 	}
 
 	switch cause {
 	case serviceNotFound:
-		newCondition.Reason = getStringPointer("ServiceNotFound")
-		newCondition.Message = getStringPointer("Service does not exist")
+		newCondition.Reason = "ServiceNotFound"
+		newCondition.Message = "Service does not exist"
 	case serviceNotSupported:
-		newCondition.Reason = getStringPointer("ServiceTypeNotSupported")
-		newCondition.Message = getStringPointer("Service of ExternalName type is not supported")
+		newCondition.Reason = "ServiceTypeNotSupported"
+		newCondition.Message = "Service of ExternalName type is not supported"
 	case serviceNoClusterIP:
-		newCondition.Reason = getStringPointer("ServiceNoClusterIP")
-		newCondition.Message = getStringPointer("Service does not have a valid ClusterIP")
+		newCondition.Reason = "ServiceNoClusterIP"
+		newCondition.Message = "Service does not have a valid ClusterIP"
 	case serviceWithoutEndpoints:
-		newCondition.Reason = getStringPointer("ServiceWithoutEndpoints")
-		newCondition.Message = getStringPointer("Service has no Endpoints")
+		newCondition.Reason = "ServiceWithoutEndpoints"
+		newCondition.Message = "Service has no Endpoints"
 	case isImportedService:
-		newCondition.Reason = getStringPointer("ImportedService")
-		newCondition.Message = getStringPointer("The Service is imported, not allowed to export")
+		newCondition.Reason = "ImportedService"
+		newCondition.Message = "The Service is imported, not allowed to export"
 	case serviceExported:
-		newCondition.Status = corev1.ConditionTrue
-		newCondition.Reason = getStringPointer("Succeed")
-		newCondition.Message = getStringPointer("The Service is exported successfully")
+		newCondition.Status = metav1.ConditionTrue
+		newCondition.Reason = "Succeed"
+		newCondition.Message = "The Service is exported successfully"
 	}
 
 	svcExportConditions := svcExport.Status.DeepCopy().Conditions
-	var existingCondition k8smcsv1alpha1.ServiceExportCondition
+	var existingCondition metav1.Condition
+	existingConditionFound := false
 	matchedConditionIdx := 0
 	for n, c := range svcExportConditions {
-		if c.Type == k8smcsv1alpha1.ServiceExportValid {
+		if c.Type == string(k8smcsv1alpha1.ServiceExportConditionValid) {
 			existingCondition = c
+			existingConditionFound = true
 			matchedConditionIdx = n
 			break
 		}
 	}
 
-	if existingCondition != (k8smcsv1alpha1.ServiceExportCondition{}) {
-		if newCondition.Reason != nil && *existingCondition.Reason == *newCondition.Reason {
+	if existingConditionFound {
+		if existingCondition.Reason == newCondition.Reason {
 			// No need to update the ServiceExport when there is no status change.
 			return nil
 		}
 	}
 
-	if existingCondition != (k8smcsv1alpha1.ServiceExportCondition{}) {
+	if existingConditionFound {
 		svcExportConditions[matchedConditionIdx] = newCondition
 	} else {
 		svcExportConditions = append(svcExportConditions, newCondition)
@@ -815,10 +824,6 @@ func ipsToEndpointAddresses(ips []string) []corev1.EndpointAddress {
 
 func getResourceExportName(clusterID string, req ctrl.Request, kind string) string {
 	return clusterID + "-" + req.Namespace + "-" + req.Name + "-" + kind
-}
-
-func getStringPointer(str string) *string {
-	return &str
 }
 
 func getEndpointSliceLabelSelector(svcName string) labels.Selector {

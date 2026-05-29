@@ -107,7 +107,7 @@ var (
 func init() {
 	utilruntime.Must(mcsv1alpha1.AddToScheme(TestScheme))
 	utilruntime.Must(mcsv1alpha2.AddToScheme(TestScheme))
-	utilruntime.Must(k8smcsapi.AddToScheme(TestScheme))
+	utilruntime.Must(k8smcsapi.Install(TestScheme))
 	utilruntime.Must(k8sscheme.AddToScheme(TestScheme))
 	utilruntime.Must(crdv1beta1.AddToScheme(TestScheme))
 	utilruntime.Must(networkingv1.AddToScheme(TestScheme))
