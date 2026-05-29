@@ -108,7 +108,7 @@ func (e *LogExporter) applyFilters(r *flowrecord.FlowRecord) bool {
 // Run consumes flow records from the ring buffer and writes them to a local log file.
 // It blocks until ctx is cancelled or the consumer signals shutdown.
 func (e *LogExporter) Run(ctx context.Context, buf ringbuffer.BroadcastBuffer[*flowpb.Flow]) {
-	consumer := buf.NewConsumer(ringbuffer.WithMaxConsumeDeadline(consumeDeadline))
+	consumer := buf.NewConsumer(ringbuffer.WithMaxConsumeDeadline(ConsumeDeadline))
 	e.stopCh = make(chan struct{})
 	e.flowLogger = flowlogger.NewFlowLogger(
 		e.config.Path,
@@ -130,7 +130,7 @@ func (e *LogExporter) Run(ctx context.Context, buf ringbuffer.BroadcastBuffer[*f
 		e.flowLogger = nil
 	}()
 
-	records := make([]*flowpb.Flow, consumeMultipleBatchSize)
+	records := make([]*flowpb.Flow, ConsumeMultipleBatchSize)
 	for {
 		n, _, shutdown := consumer.ConsumeMultiple(records)
 		for _, record := range records[:n] {

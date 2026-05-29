@@ -181,9 +181,9 @@ func (e *IPFIXExporter) Run(ctx context.Context, buf ringbuffer.BroadcastBuffer[
 		}
 	}()
 
-	// consumeDeadline must be <= flushInterval so that Consume returns often
+	// ConsumeDeadline must be <= flushInterval so that Consume returns often
 	// enough for the flush ticker to be checked promptly.
-	consumer := buf.NewConsumer(ringbuffer.WithMaxConsumeDeadline(consumeDeadline))
+	consumer := buf.NewConsumer(ringbuffer.WithMaxConsumeDeadline(ConsumeDeadline))
 	flushTicker := time.NewTicker(flushInterval)
 	defer flushTicker.Stop()
 

@@ -126,4 +126,7 @@ func SetConfigDefaults(flowAggregatorConf *FlowAggregatorConfig) {
 	if flowAggregatorConf.RecordBufferSize == 0 {
 		flowAggregatorConf.RecordBufferSize = DefaultRecordBufferSize
 	}
+	if flowAggregatorConf.FlowStreamService.Enable == nil {
+		flowAggregatorConf.FlowStreamService.Enable = ptr.To(false)
+	}
 }
