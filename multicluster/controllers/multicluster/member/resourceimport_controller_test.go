@@ -496,6 +496,112 @@ func TestResourceImportReconciler_handleUpdateEvent(t *testing.T) {
 	}
 }
 
+func TestResourceImportReconciler_skipImportForNonTargetCluster(t *testing.T) {
+	nonTargetSvcResImport := svcResImport.DeepCopy()
+	nonTargetSvcResImport.Spec.ClusterIDs = []string{"cluster-b"}
+
+	fakeClient := fake.NewClientBuilder().WithScheme(common.TestScheme).Build()
+	fakeRemoteClient := fake.NewClientBuilder().WithScheme(common.TestScheme).WithObjects(nonTargetSvcResImport).Build()
+	remoteCluster := commonarea.NewFakeRemoteCommonArea(fakeRemoteClient, "leader-cluster", localClusterID, "default", nil)
+
+	r := newResourceImportReconciler(fakeClient, localClusterID, "default", remoteCluster)
+	_, err := r.Reconcile(ctx, svcImportReq)
+	require.NoError(t, err)
+
+	svc := &corev1.Service{}
+	err = fakeClient.Get(ctx, types.NamespacedName{Namespace: "default", Name: "antrea-mc-nginx"}, svc)
+	require.True(t, apierrors.IsNotFound(err), "Service should not be imported for non-target cluster")
+
+	svcImp := &k8smcsapi.ServiceImport{}
+	err = fakeClient.Get(ctx, types.NamespacedName{Namespace: "default", Name: "nginx"}, svcImp)
+	require.True(t, apierrors.IsNotFound(err), "ServiceImport should not be imported for non-target cluster")
+
+	_, exists, err := r.installedResImports.GetByKey(svcImportReq.NamespacedName.String())
+	require.NoError(t, err)
+	require.False(t, exists, "ResourceImport should not be added to installed cache")
+}
+
+func TestResourceImportReconciler_cleanupUsesCachedInstalledObject(t *testing.T) {
+	installedSvcResImport := svcResImport.DeepCopy()
+	installedSvcResImport.Spec.ClusterIDs = []string{localClusterID}
+
+	nonTargetUpdatedResImport := svcResImport.DeepCopy()
+	nonTargetUpdatedResImport.Spec.ClusterIDs = []string{"cluster-b"}
+	nonTargetUpdatedResImport.Spec.Kind = "Endpoints"
+	nonTargetUpdatedResImport.Spec.Endpoints = &mcv1alpha1.EndpointsImport{Subsets: epSubset}
+	nonTargetUpdatedResImport.Spec.ServiceImport = nil
+
+	existingImportedSvc := &corev1.Service{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace: "default",
+			Name:      "antrea-mc-nginx",
+		},
+	}
+	existingImportedSvcImp := &k8smcsapi.ServiceImport{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace: "default",
+			Name:      "nginx",
+		},
+	}
+
+	fakeClient := fake.NewClientBuilder().WithScheme(common.TestScheme).WithObjects(existingImportedSvc, existingImportedSvcImp).Build()
+	fakeRemoteClient := fake.NewClientBuilder().WithScheme(common.TestScheme).WithObjects(nonTargetUpdatedResImport).Build()
+	remoteCluster := commonarea.NewFakeRemoteCommonArea(fakeRemoteClient, "leader-cluster", localClusterID, "default", nil)
+
+	r := newResourceImportReconciler(fakeClient, localClusterID, "default", remoteCluster)
+	r.installedResImports.Add(*installedSvcResImport)
+
+	_, err := r.Reconcile(ctx, svcImportReq)
+	require.NoError(t, err)
+
+	svc := &corev1.Service{}
+	err = fakeClient.Get(ctx, types.NamespacedName{Namespace: "default", Name: "antrea-mc-nginx"}, svc)
+	require.True(t, apierrors.IsNotFound(err), "Service should be cleaned up when ResourceImport no longer targets local cluster")
+
+	svcImp := &k8smcsapi.ServiceImport{}
+	err = fakeClient.Get(ctx, types.NamespacedName{Namespace: "default", Name: "nginx"}, svcImp)
+	require.True(t, apierrors.IsNotFound(err), "ServiceImport should be cleaned up when ResourceImport no longer targets local cluster")
+
+	_, exists, err := r.installedResImports.GetByKey(svcImportReq.NamespacedName.String())
+	require.NoError(t, err)
+	require.False(t, exists, "ResourceImport should be removed from installed cache after cleanup")
+}
+
+func TestResourceImportReconciler_cleanupWithoutCachedInstalledObject(t *testing.T) {
+	nonTargetSvcResImport := svcResImport.DeepCopy()
+	nonTargetSvcResImport.Spec.ClusterIDs = []string{"cluster-b"}
+
+	existingImportedSvc := &corev1.Service{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace: "default",
+			Name:      "antrea-mc-nginx",
+		},
+	}
+	existingImportedSvcImp := &k8smcsapi.ServiceImport{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace: "default",
+			Name:      "nginx",
+		},
+	}
+
+	fakeClient := fake.NewClientBuilder().WithScheme(common.TestScheme).WithObjects(existingImportedSvc, existingImportedSvcImp).Build()
+	fakeRemoteClient := fake.NewClientBuilder().WithScheme(common.TestScheme).WithObjects(nonTargetSvcResImport).Build()
+	remoteCluster := commonarea.NewFakeRemoteCommonArea(fakeRemoteClient, "leader-cluster", localClusterID, "default", nil)
+
+	r := newResourceImportReconciler(fakeClient, localClusterID, "default", remoteCluster)
+
+	_, err := r.Reconcile(ctx, svcImportReq)
+	require.NoError(t, err)
+
+	svc := &corev1.Service{}
+	err = fakeClient.Get(ctx, types.NamespacedName{Namespace: "default", Name: "antrea-mc-nginx"}, svc)
+	require.True(t, apierrors.IsNotFound(err), "Service should be cleaned up for non-target cluster even when installed cache is empty")
+
+	svcImp := &k8smcsapi.ServiceImport{}
+	err = fakeClient.Get(ctx, types.NamespacedName{Namespace: "default", Name: "nginx"}, svcImp)
+	require.True(t, apierrors.IsNotFound(err), "ServiceImport should be cleaned up for non-target cluster even when installed cache is empty")
+}
+
 // fakeManager is a fake K8s controller manager which simulates a burst of ResourceImport events
 // from the leader's apiServer and triggers the LabelIdentityResourceImportReconciler's main
 // Reconcile loop. Once the fakeManager is run, all ResourceImports in the queue will be added
