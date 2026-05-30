@@ -1157,4 +1157,46 @@ var BPFTestCases = []BPFTestCase{
 		},
 		Direction: crdv1alpha1.CaptureDirectionBoth,
 	},
+	{
+		Name:          "IPv4 TCP srcOnly IP SYN flag Both",
+		TcpdumpFilter: "ip proto 6 and ((src host 127.0.0.1 and (tcp[tcpflags] & tcp-syn == tcp-syn)) or (dst host 127.0.0.1 and (tcp[tcpflags] & tcp-syn == tcp-syn)))",
+		SrcIP:         net.ParseIP("127.0.0.1"),
+		Packet: &crdv1alpha1.Packet{
+			Protocol: &testTCPProtocol,
+			TransportHeader: crdv1alpha1.TransportHeader{
+				TCP: &crdv1alpha1.TCPHeader{Flags: []crdv1alpha1.TCPFlagsMatcher{{Value: 0x2}}},
+			},
+		},
+		Direction: crdv1alpha1.CaptureDirectionBoth,
+	},
+	{
+		Name:          "IPv4 ICMP srcOnly IP type+code Both",
+		TcpdumpFilter: "ip proto 1 and ((src host 127.0.0.1 and icmp[0]=3 and icmp[1]=1) or (dst host 127.0.0.1 and icmp[0]=3 and icmp[1]=1))",
+		SrcIP:         net.ParseIP("127.0.0.1"),
+		Packet: &crdv1alpha1.Packet{
+			Protocol: &testICMPProtocol,
+			TransportHeader: crdv1alpha1.TransportHeader{
+				ICMP: &crdv1alpha1.ICMPHeader{
+					Messages: []crdv1alpha1.ICMPMsgMatcher{
+						{Type: testICMPMsgDstUnreach, Code: ptr.To[int32](1)},
+					},
+				},
+			},
+		},
+		Direction: crdv1alpha1.CaptureDirectionBoth,
+	},
+	{
+		Name:          "IPv6 TCP src+dst IP SYN flag Both",
+		TcpdumpFilter: "ip6 proto 6 and ((src host fd00:10:244::1 and dst host fd00:10:244::2 and (ip6[40+13] & tcp-syn == tcp-syn)) or (src host fd00:10:244::2 and dst host fd00:10:244::1 and (ip6[40+13] & tcp-syn == tcp-syn)))",
+		SrcIP:         net.ParseIP("fd00:10:244::1"),
+		DstIP:         net.ParseIP("fd00:10:244::2"),
+		Packet: &crdv1alpha1.Packet{
+			IPFamily: v1.IPv6Protocol,
+			Protocol: &testTCPProtocol,
+			TransportHeader: crdv1alpha1.TransportHeader{
+				TCP: &crdv1alpha1.TCPHeader{Flags: []crdv1alpha1.TCPFlagsMatcher{{Value: 0x2}}},
+			},
+		},
+		Direction: crdv1alpha1.CaptureDirectionBoth,
+	},
 }
