@@ -53,7 +53,7 @@ var (
 //
 // Note: AppliedToGroup membership uses a different filter (see syncAppliedToGroup) that also
 // excludes unscheduled Pods (NodeName == "") but does not check PodIPs.
-var AddressGroupExcludedPodFilter = func(pod *v1.Pod) bool {
+func AddressGroupExcludedPodFilter(pod *v1.Pod) bool {
 	return pod.Spec.HostNetwork || k8s.IsPodTerminated(pod) || len(pod.Status.PodIPs) == 0
 }
 
