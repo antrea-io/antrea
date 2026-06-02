@@ -245,6 +245,86 @@ var BPFTestCases = []BPFTestCase{
 		Direction: crdv1alpha1.CaptureDirectionSourceToDestination,
 	},
 	{
+		Name:          "IPv4 TCP flags cleared (SYN cleared)",
+		TcpdumpFilter: "ip proto 6 and (tcp[tcpflags] & tcp-syn == 0)",
+		Packet: &crdv1alpha1.Packet{
+			Protocol: &testTCPProtocol,
+			TransportHeader: crdv1alpha1.TransportHeader{
+				TCP: &crdv1alpha1.TCPHeader{
+					Flags: []crdv1alpha1.TCPFlagsMatcher{
+						{Value: 0, Mask: ptr.To[int32](2)},
+					},
+				},
+			},
+		},
+		Direction: crdv1alpha1.CaptureDirectionSourceToDestination,
+	},
+	{
+		Name:          "IPv4 TCP multiple flags cleared (SYN or ACK cleared)",
+		TcpdumpFilter: "ip proto 6 and (tcp[tcpflags] & tcp-syn == 0 or tcp[tcpflags] & tcp-ack == 0)",
+		Packet: &crdv1alpha1.Packet{
+			Protocol: &testTCPProtocol,
+			TransportHeader: crdv1alpha1.TransportHeader{
+				TCP: &crdv1alpha1.TCPHeader{
+					Flags: []crdv1alpha1.TCPFlagsMatcher{
+						{Value: 0, Mask: ptr.To[int32](2)},
+						{Value: 0, Mask: ptr.To[int32](16)},
+					},
+				},
+			},
+		},
+		Direction: crdv1alpha1.CaptureDirectionSourceToDestination,
+	},
+	{
+		Name:          "IPv4 TCP mixed flags set then cleared",
+		TcpdumpFilter: "ip proto 6 and (tcp[tcpflags] & tcp-syn == tcp-syn or tcp[tcpflags] & tcp-ack == 0)",
+		Packet: &crdv1alpha1.Packet{
+			Protocol: &testTCPProtocol,
+			TransportHeader: crdv1alpha1.TransportHeader{
+				TCP: &crdv1alpha1.TCPHeader{
+					Flags: []crdv1alpha1.TCPFlagsMatcher{
+						{Value: 0x2},
+						{Value: 0, Mask: ptr.To[int32](16)},
+					},
+				},
+			},
+		},
+		Direction: crdv1alpha1.CaptureDirectionSourceToDestination,
+	},
+	{
+		Name:          "IPv4 TCP mixed flags cleared then set",
+		TcpdumpFilter: "ip proto 6 and (tcp[tcpflags] & tcp-syn == 0 or tcp[tcpflags] & tcp-ack == tcp-ack)",
+		Packet: &crdv1alpha1.Packet{
+			Protocol: &testTCPProtocol,
+			TransportHeader: crdv1alpha1.TransportHeader{
+				TCP: &crdv1alpha1.TCPHeader{
+					Flags: []crdv1alpha1.TCPFlagsMatcher{
+						{Value: 0, Mask: ptr.To[int32](2)},
+						{Value: 0x10},
+					},
+				},
+			},
+		},
+		Direction: crdv1alpha1.CaptureDirectionSourceToDestination,
+	},
+	{
+		Name:          "IPv4 TCP three flags cleared",
+		TcpdumpFilter: "ip proto 6 and (tcp[tcpflags] & tcp-syn == 0 or tcp[tcpflags] & tcp-ack == 0 or tcp[tcpflags] & tcp-rst == 0)",
+		Packet: &crdv1alpha1.Packet{
+			Protocol: &testTCPProtocol,
+			TransportHeader: crdv1alpha1.TransportHeader{
+				TCP: &crdv1alpha1.TCPHeader{
+					Flags: []crdv1alpha1.TCPFlagsMatcher{
+						{Value: 0, Mask: ptr.To[int32](2)},
+						{Value: 0, Mask: ptr.To[int32](16)},
+						{Value: 0, Mask: ptr.To[int32](4)},
+					},
+				},
+			},
+		},
+		Direction: crdv1alpha1.CaptureDirectionSourceToDestination,
+	},
+	{
 		Name:          "IPv4 TCP exact strict flags (SYN+ACK only) with IP and Port",
 		TcpdumpFilter: "ip proto 6 and src host 1.2.3.4 and dst port 443 and (tcp[tcpflags] & (tcp-syn|tcp-fin|tcp-rst|tcp-push|tcp-ack) == (tcp-syn|tcp-ack))",
 		SrcIP:         net.ParseIP("1.2.3.4"),

@@ -373,13 +373,28 @@ func compileTransportFilters(handler *ipFamilyHandler, size, curLen uint8, trans
 
 		// tcp flags
 		if len(transport.tcpFlags) > 0 {
+			flagsLoaded := false
 			for i, f := range transport.tcpFlags {
-				inst = append(inst, handler.loadTCPFlags)
-				inst = append(inst, bpf.ALUOpConstant{Op: bpf.ALUOpAnd, Val: f.mask})
-				if i == len(transport.tcpFlags)-1 { // last flag match condition
-					inst = append(inst, bpf.JumpIf{Cond: bpf.JumpEqual, Val: f.flag, SkipTrue: 0, SkipFalse: skipToEnd()})
+				if !flagsLoaded {
+					inst = append(inst, handler.loadTCPFlags)
+					flagsLoaded = true
+				}
+				if f.flag == 0 {
+					// Optimization: when f.flag is 0 (i.e. we check if all bits in f.mask are cleared),
+					// libpcap/tcpdump uses a single BPF_JSET instruction with swapped branches.
+					if i == len(transport.tcpFlags)-1 { // last flag match condition
+						inst = append(inst, bpf.JumpIf{Cond: bpf.JumpBitsSet, Val: f.mask, SkipTrue: skipToEnd(), SkipFalse: 0})
+					} else {
+						inst = append(inst, bpf.JumpIf{Cond: bpf.JumpBitsSet, Val: f.mask, SkipTrue: 0, SkipFalse: skipToEnd() - 1})
+					}
 				} else {
-					inst = append(inst, bpf.JumpIf{Cond: bpf.JumpEqual, Val: f.flag, SkipTrue: skipToEnd() - 1, SkipFalse: 0})
+					inst = append(inst, bpf.ALUOpConstant{Op: bpf.ALUOpAnd, Val: f.mask})
+					flagsLoaded = false                 // ALU operation overwrites/mutates the accumulator
+					if i == len(transport.tcpFlags)-1 { // last flag match condition
+						inst = append(inst, bpf.JumpIf{Cond: bpf.JumpEqual, Val: f.flag, SkipTrue: 0, SkipFalse: skipToEnd()})
+					} else {
+						inst = append(inst, bpf.JumpIf{Cond: bpf.JumpEqual, Val: f.flag, SkipTrue: skipToEnd() - 1, SkipFalse: 0})
+					}
 				}
 			}
 		}
@@ -506,11 +521,10 @@ func doCompileGenericPacketFilter(handler *ipFamilyHandler, packetSpec *crdv1alp
 					if f.Mask != nil {
 						m = *f.Mask
 					}
-					// Note: when Value is 0 and Mask is non-zero ("flag cleared"
-					// check), libpcap optimizes this into a single jset instruction
-					// with swapped branches. Antrea instead emits ld/and/jeq
-					// (3 insns), which is semantically identical but one instruction
-					// longer. This is an accepted divergence.
+					// When Value is 0 and Mask is non-zero ("flag cleared" check),
+					// libpcap/tcpdump optimizes this into a single BPF_JSET instruction
+					// with swapped branches. Antrea mimics this optimization to achieve
+					// byte-for-byte bytecode parity with tcpdump.
 					transport.tcpFlags = append(transport.tcpFlags, tcpFlagsFilter{
 						flag: uint32(f.Value),
 						mask: uint32(m),
