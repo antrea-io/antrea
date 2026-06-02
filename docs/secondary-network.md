@@ -179,21 +179,19 @@ network IPAM configuration, please refer to the [Antrea IPAM document](antrea-ip
 
 #### Per-Node OVS bridge configuration with AntreaNodeConfig
 
-As an alternative to the static `antrea-agent.conf` approach, the
-`AntreaNodeConfig` CRD provides a dynamic, per-Node or per-NodePool way to
-configure the secondary network OVS bridge. When a matching `AntreaNodeConfig`
-CR exists, its configuration takes precedence over the static one. If the CR is
-deleted or no CR matches a Node, the agent falls back to the static configuration
-from `antrea-agent.conf`. Changes to a CR take effect immediately without
-restarting the agent.
+As an alternative to the static configuration with `antrea-agent.conf`, the
+AntreaNodeConfig CRD provides a dynamic, per-Node or per-Node-Pool way to
+configure the secondary network OVS bridge. When a matching AntreaNodeConfig
+CR exists, its configuration takes precedence over the `antrea-agent.conf` configuration.
+If the CR is deleted or no CR matches the Node, the agent falls back to using the static configuration from `antrea-agent.conf`. Changes to a CR take effect immediately without
+requiring restarting the agent.
 
-The `AntreaNodeConfig` feature gate is `Beta` and enabled by default; it controls
-this functionality. The CRD is included in the standard Antrea installation
-manifests.
+The `AntreaNodeConfig` feature gate is `Beta` and enabled by default; The AntreaNodeConfig
+CRD is included in the standard Antrea installation manifests.
 
 The CRD has the following spec fields:
 
-- `nodeSelector` - standard Kubernetes `LabelSelector`; selects the Nodes to
+- `nodeSelector` - standard Kubernetes `LabelSelector`, which selects the Nodes to
   which this configuration applies. Required.
 - `secondaryNetwork.ovsBridges[]` - list of OVS bridge configurations; at most
   one bridge is currently supported. Each entry has:
@@ -208,8 +206,8 @@ The CRD has the following spec fields:
   - `enableMulticastSnooping` - enable multicast snooping on the bridge
     (defaults to `false`).
 
-**Selection precedence**: if multiple `AntreaNodeConfig` CRs match a Node, the
-oldest one (by `creationTimestamp`, with `name` as a tiebreaker) takes effect.
+**Selection precedence**: if multiple AntreaNodeConfig CRs match a Node, the
+oldest one (determined by `creationTimestamp`, with `name` as a tiebreaker) takes effect.
 
 **Example 1** — apply a single-interface bridge to all Linux Nodes:
 
@@ -275,19 +273,18 @@ different VLAN IDs per interface, so `pool1` Nodes trunk VLANs 100/101 on
 `eth2` and VLAN 300 on `eth3`, while `pool2` Nodes trunk VLAN 100 on `eth2`
 and VLAN 400 on `eth3`.
 
-The following topology diagram shows the result when both AntreaNodeConfig CRs
-above are active with two Nodes per pool and sample Pods scheduled on each pool.
-The cluster has 4 worker Nodes: the first two (sorted by name) are labelled
-`pool1`, the last two `pool2`. Every Node is connected to the shared VLAN-aware
-physical networks on `eth2` and `eth3`.
+The following topology diagram shows the resulted bridges when both AntreaNodeConfig
+CRs above match two Node Pools respectively; each pool has two Nodes with sample Pods
+scheduled on them. The example cluster has 4 worker Nodes: the first two (sorted by name)
+are labelled `pool1` and the last two are labelled with `pool2`. Every Node is connected
+to the shared VLAN-aware physical networks via `eth2` and `eth3`.
 
 ![Secondary Network NodePool Topology](assets/secondary-network-nodepools.svg)
 
 To attach Pods to one of those pool-specific networks, first define the
-corresponding `NetworkAttachmentDefinition` CRs and `IPPool` resources, then
-schedule Pods onto the matching Node pool. The following example creates two
-Pods that use VLAN 300 on `pool1` Nodes and VLAN 400 on `pool2` Nodes
-respectively:
+corresponding `NetworkAttachmentDefinition` and `IPPool` CRs, then
+schedule Pods onto the matching Node Pools. The following example creates
+one Pod that uses VLAN 300 on a `pool1` node and another Pod that uses VLAN 400 on a `pool2` node:
 
 ```yaml
 # NetworkAttachmentDefinition + IPPool for pool1 VLAN 300 (via eth3)
@@ -370,7 +367,7 @@ spec:
 ```
 
 The `nodeSelector` on each Pod ensures it is scheduled onto a Node that has the
-matching `AntreaNodeConfig` applied, so the `br1` bridge with the correct trunk
+matching AntreaNodeConfig applied, so the `br1` bridge with the correct trunk
 configuration is already in place when the Pod starts.
 
 #### Pod secondary interface configuration
