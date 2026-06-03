@@ -25,10 +25,7 @@ WORKDIR=$DEFAULT_WORKDIR
 TESTCASE=""
 TEST_FAILURE=false
 DOCKER_REGISTRY=$(head -n1 "${WORKSPACE}/ci/docker-registry")
-MULTICLUSTER_KUBECONFIG_PATH=$WORKDIR/.kube
-LEADER_CLUSTER_CONFIG="--kubeconfig=$MULTICLUSTER_KUBECONFIG_PATH/leader"
-EAST_CLUSTER_CONFIG="--kubeconfig=$MULTICLUSTER_KUBECONFIG_PATH/east"
-WEST_CLUSTER_CONFIG="--kubeconfig=$MULTICLUSTER_KUBECONFIG_PATH/west"
+MULTICLUSTER_KUBECONFIG_PATH=""
 CLUSTER_NAMES=("leader" "east" "west")
 ENABLE_MC_GATEWAY=false
 IS_CONTAINERD=false
@@ -36,7 +33,7 @@ CODECOV_TOKEN=""
 COVERAGE=false
 KIND=false
 DEBUG=false
-GOLANG_RELEASE_DIR=${WORKDIR}/golang-releases
+USE_SYSTEM_GO=false
 
 multicluster_kubeconfigs=($EAST_CLUSTER_CONFIG $LEADER_CLUSTER_CONFIG $WEST_CLUSTER_CONFIG)
 membercluster_kubeconfigs=($EAST_CLUSTER_CONFIG $WEST_CLUSTER_CONFIG)
@@ -48,7 +45,7 @@ CLEAN_STALE_IMAGES_CONTAINERD="crictl rmi --prune"
 PRINT_CONTAINERD_STATUS="crictl ps --state Exited"
 
 _usage="Usage: $0 [--kubeconfigs-path <KubeconfigSavePath>] [--workdir <HomePath>]
-                  [--testcase <e2e>] [--mc-gateway] [--codecov-token] [--coverage] [--kind] [--debug]
+                  [--testcase <e2e>] [--mc-gateway] [--codecov-token] [--coverage] [--kind] [--use-system-go] [--debug]
 
 Run Antrea multi-cluster e2e tests on a remote (Jenkins) Linux Cluster Set.
 
@@ -60,6 +57,7 @@ Run Antrea multi-cluster e2e tests on a remote (Jenkins) Linux Cluster Set.
         --codecov-token               Token used to upload coverage report(s) to Codecov.
         --coverage                    Run e2e with coverage.
         --kind                        Run e2e on Kind clusters.
+        --use-system-go               Use the Go toolchain already available in PATH.
         --debug                       Do not clean up Kind clusters when --kind is set."
 
 function print_usage {
@@ -104,6 +102,10 @@ case $key in
     KIND=true
     shift
     ;;
+    --use-system-go)
+    USE_SYSTEM_GO=true
+    shift
+    ;;
     --debug)
     DEBUG=true
     shift
@@ -118,6 +120,15 @@ case $key in
     ;;
 esac
 done
+
+# Recompute path-derived variables now that WORKDIR and MULTICLUSTER_KUBECONFIG_PATH
+# have their final values (--workdir and --kubeconfigs-path may have changed them).
+MULTICLUSTER_KUBECONFIG_PATH=${MULTICLUSTER_KUBECONFIG_PATH:-$WORKDIR/.kube}
+LEADER_CLUSTER_CONFIG="--kubeconfig=$MULTICLUSTER_KUBECONFIG_PATH/leader"
+EAST_CLUSTER_CONFIG="--kubeconfig=$MULTICLUSTER_KUBECONFIG_PATH/east"
+WEST_CLUSTER_CONFIG="--kubeconfig=$MULTICLUSTER_KUBECONFIG_PATH/west"
+multicluster_kubeconfigs=($EAST_CLUSTER_CONFIG $LEADER_CLUSTER_CONFIG $WEST_CLUSTER_CONFIG)
+membercluster_kubeconfigs=($EAST_CLUSTER_CONFIG $WEST_CLUSTER_CONFIG)
 
 function clean_tmp() {
     echo "===== Clean up stale files & folders older than 7 days under /tmp ====="
@@ -284,10 +295,6 @@ EOF
 
 function deliver_antrea_multicluster {
     echo "====== Building Antrea for the Following Commit ======"
-    export GO111MODULE=on
-    export GOPATH=${WORKDIR}/go
-    export GOROOT=${GOLANG_RELEASE_DIR}/go
-    export PATH=${GOROOT}/bin:$PATH
 
     git show --numstat
     make clean
@@ -324,10 +331,6 @@ function deliver_antrea_multicluster {
 
 function deliver_multicluster_controller {
     echo "====== Build Antrea Multiple Cluster Controller and YAMLs ======"
-    export GO111MODULE=on
-    export GOPATH=${WORKDIR}/go
-    export GOROOT=${GOLANG_RELEASE_DIR}/go
-    export PATH=${GOROOT}/bin:$PATH
 
     DEFAULT_IMAGE=antrea/antrea-mc-controller:latest
     if $COVERAGE;then
@@ -388,11 +391,6 @@ function deliver_multicluster_controller {
 
 function run_multicluster_e2e {
     echo "====== Running Multicluster e2e Tests ======"
-    export GO111MODULE=on
-    export GOPATH=${WORKDIR}/go
-    export GOROOT=${GOLANG_RELEASE_DIR}/go
-    export GOCACHE=${WORKDIR}/.cache/go-build
-    export PATH=$GOROOT/bin:$PATH
 
     wait_for_antrea_multicluster_pods_ready "${LEADER_CLUSTER_CONFIG}"
     wait_for_antrea_multicluster_pods_ready "${EAST_CLUSTER_CONFIG}"
@@ -444,7 +442,12 @@ function run_multicluster_e2e {
     fi
 
     set -x
-    go test -v -timeout=15m antrea.io/antrea/multicluster/test/e2e --logs-export-dir `pwd`/antrea-multicluster-test-logs $options
+    go test -v -timeout=15m antrea.io/antrea/multicluster/test/e2e \
+        --logs-export-dir `pwd`/antrea-multicluster-test-logs \
+        --leader-cluster-kubeconfig-path ${MULTICLUSTER_KUBECONFIG_PATH}/leader \
+        --east-cluster-kubeconfig-path ${MULTICLUSTER_KUBECONFIG_PATH}/east \
+        --west-cluster-kubeconfig-path ${MULTICLUSTER_KUBECONFIG_PATH}/west \
+        $options
     if [[ "$?" != "0" ]]; then
         TEST_FAILURE=true
     fi
@@ -479,7 +482,9 @@ function collect_coverage {
 
 trap clean_multicluster EXIT
 source $WORKSPACE/ci/jenkins/utils.sh
-check_and_upgrade_golang
+if [[ ${USE_SYSTEM_GO} != "true" ]]; then
+    check_and_upgrade_golang
+fi
 clean_tmp
 clean_images
 
@@ -487,6 +492,7 @@ if [[ ${KIND} == "true" ]]; then
     # Preparing a ClusterSet contains three Kind clusters.
     SERVICE_CIDRS=("10.96.10.0/24" "10.96.20.0/24" "10.96.30.0/24")
     POD_CIDRS=("10.244.0.0/20" "10.244.16.0/20" "10.244.32.0/20")
+    mkdir -p ${MULTICLUSTER_KUBECONFIG_PATH}
     for i in {0..2}; do
         ./ci/kind/kind-setup.sh create ${CLUSTER_NAMES[$i]} --service-cidr ${SERVICE_CIDRS[$i]} --pod-cidr ${POD_CIDRS[$i]} --num-workers 1
     done
@@ -510,6 +516,12 @@ fi
 set -e
 
 if [[ ${TESTCASE} =~ "e2e" ]]; then
+    export GO111MODULE=on
+    export GOPATH=${WORKDIR}/go
+    export GOCACHE=${WORKDIR}/.cache/go-build
+    if [[ ${USE_SYSTEM_GO} != "true" ]]; then
+        export PATH=$GOROOT/bin:$PATH
+    fi
     deliver_antrea_multicluster
     modify_config
     deliver_multicluster_controller
@@ -520,9 +532,13 @@ if [[ ${TESTCASE} =~ "e2e" ]]; then
       mkdir -p mc-e2e-coverage
       collect_coverage ${CURRENT_DIR}/mc-e2e-coverage
       # Backup coverage files for later analysis
-      set +e;find ${DEFAULT_WORKDIR}/mc-e2e-coverage -maxdepth 1 -mtime +1 -type f | xargs -n 1 rm;set -e; # Clean up backup files older than one day.
-      cp -r mc-e2e-coverage ${DEFAULT_WORKDIR}
-      run_codecov "e2e-tests" "*antrea-mc*" "${CURRENT_DIR}/mc-e2e-coverage"
+      if [[ -d ${DEFAULT_WORKDIR} && -w ${DEFAULT_WORKDIR} ]]; then
+        set +e;find ${DEFAULT_WORKDIR}/mc-e2e-coverage -maxdepth 1 -mtime +1 -type f | xargs -n 1 rm;set -e; # Clean up backup files older than one day.
+        cp -r mc-e2e-coverage ${DEFAULT_WORKDIR}
+      fi
+      if [[ -n ${CODECOV_TOKEN} ]]; then
+        run_codecov "e2e-tests" "*antrea-mc*" "${CURRENT_DIR}/mc-e2e-coverage"
+      fi
     fi
 fi
 
