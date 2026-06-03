@@ -23,6 +23,7 @@ package v1alpha1
 import (
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
+	timestamppb "google.golang.org/protobuf/types/known/timestamppb"
 	reflect "reflect"
 	sync "sync"
 	unsafe "unsafe"
@@ -34,6 +35,59 @@ const (
 	// Verify that runtime/protoimpl is sufficiently up-to-date.
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
+
+// FlowFilterDirection controls which endpoint of a flow the directional filters
+// (namespaces, pod_names, pod_label_selector, ips) are matched against.
+// FROM applies filters to the source (sender) side, TO applies them to the
+// destination (receiver) side, and BOTH (default) matches either side.
+type FlowFilterDirection int32
+
+const (
+	FlowFilterDirection_FLOW_FILTER_DIRECTION_BOTH FlowFilterDirection = 0
+	FlowFilterDirection_FLOW_FILTER_DIRECTION_FROM FlowFilterDirection = 1
+	FlowFilterDirection_FLOW_FILTER_DIRECTION_TO   FlowFilterDirection = 2
+)
+
+// Enum value maps for FlowFilterDirection.
+var (
+	FlowFilterDirection_name = map[int32]string{
+		0: "FLOW_FILTER_DIRECTION_BOTH",
+		1: "FLOW_FILTER_DIRECTION_FROM",
+		2: "FLOW_FILTER_DIRECTION_TO",
+	}
+	FlowFilterDirection_value = map[string]int32{
+		"FLOW_FILTER_DIRECTION_BOTH": 0,
+		"FLOW_FILTER_DIRECTION_FROM": 1,
+		"FLOW_FILTER_DIRECTION_TO":   2,
+	}
+)
+
+func (x FlowFilterDirection) Enum() *FlowFilterDirection {
+	p := new(FlowFilterDirection)
+	*p = x
+	return p
+}
+
+func (x FlowFilterDirection) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (FlowFilterDirection) Descriptor() protoreflect.EnumDescriptor {
+	return file_pkg_apis_flow_v1alpha1_service_proto_enumTypes[0].Descriptor()
+}
+
+func (FlowFilterDirection) Type() protoreflect.EnumType {
+	return &file_pkg_apis_flow_v1alpha1_service_proto_enumTypes[0]
+}
+
+func (x FlowFilterDirection) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use FlowFilterDirection.Descriptor instead.
+func (FlowFilterDirection) EnumDescriptor() ([]byte, []int) {
+	return file_pkg_apis_flow_v1alpha1_service_proto_rawDescGZIP(), []int{0}
+}
 
 type ExportRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
@@ -115,16 +169,294 @@ func (*ExportResponse) Descriptor() ([]byte, []int) {
 	return file_pkg_apis_flow_v1alpha1_service_proto_rawDescGZIP(), []int{1}
 }
 
+// FlowFilter specifies optional criteria to narrow which flows are returned.
+// All specified filters are AND-ed; values within a repeated field are OR-ed.
+// An absent or fully-empty filter matches all flows.
+type FlowFilter struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Match flows where source or destination Pod namespace is in this list
+	// (direction semantics are affected by the direction field).
+	Namespaces []string `protobuf:"bytes,1,rep,name=namespaces,proto3" json:"namespaces,omitempty"`
+	// Match flows where source or destination Pod name is in this list.
+	// The match is on the bare Pod name without a namespace prefix; to restrict
+	// to a specific namespace, combine this filter with the namespaces field.
+	PodNames []string `protobuf:"bytes,2,rep,name=pod_names,json=podNames,proto3" json:"pod_names,omitempty"`
+	// Match flows where source or destination Pod labels match this selector.
+	// Uses the same syntax as Kubernetes label selectors (e.g. "app=frontend").
+	PodLabelSelector string `protobuf:"bytes,3,opt,name=pod_label_selector,json=podLabelSelector,proto3" json:"pod_label_selector,omitempty"`
+	// Match flows where the destination Service name is in this list.
+	// Provide the plain Service name without a namespace prefix (e.g. "frontend",
+	// not "default/frontend"). The match is exact on the name only; to restrict
+	// to a specific namespace combine this filter with the namespaces field.
+	ServiceNames []string `protobuf:"bytes,4,rep,name=service_names,json=serviceNames,proto3" json:"service_names,omitempty"`
+	// Match flows based on their type.
+	FlowTypes []FlowType `protobuf:"varint,5,rep,packed,name=flow_types,json=flowTypes,proto3,enum=antrea_io.antrea.pkg.apis.flow.v1alpha1.FlowType" json:"flow_types,omitempty"`
+	// Match flows by IP address (direction semantics are affected by the
+	// direction field). CIDR notation is supported (e.g. "10.0.0.0/8").
+	Ips []string `protobuf:"bytes,6,rep,name=ips,proto3" json:"ips,omitempty"`
+	// Controls which endpoint of a flow the directional filters (namespaces,
+	// pod_names, pod_label_selector, ips) are matched against.
+	// FROM applies filters to the source (sender) side, TO applies them to the
+	// destination (receiver) side, and BOTH (default) matches either side.
+	//
+	//	BOTH (default) - match source OR destination
+	//	FROM           - match source only
+	//	TO             - match destination only
+	//
+	// Cannot combine FROM with service_names (services are always a
+	// destination-side concept).
+	Direction     FlowFilterDirection `protobuf:"varint,7,opt,name=direction,proto3,enum=antrea_io.antrea.pkg.apis.flow.v1alpha1.FlowFilterDirection" json:"direction,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *FlowFilter) Reset() {
+	*x = FlowFilter{}
+	mi := &file_pkg_apis_flow_v1alpha1_service_proto_msgTypes[2]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *FlowFilter) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*FlowFilter) ProtoMessage() {}
+
+func (x *FlowFilter) ProtoReflect() protoreflect.Message {
+	mi := &file_pkg_apis_flow_v1alpha1_service_proto_msgTypes[2]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use FlowFilter.ProtoReflect.Descriptor instead.
+func (*FlowFilter) Descriptor() ([]byte, []int) {
+	return file_pkg_apis_flow_v1alpha1_service_proto_rawDescGZIP(), []int{2}
+}
+
+func (x *FlowFilter) GetNamespaces() []string {
+	if x != nil {
+		return x.Namespaces
+	}
+	return nil
+}
+
+func (x *FlowFilter) GetPodNames() []string {
+	if x != nil {
+		return x.PodNames
+	}
+	return nil
+}
+
+func (x *FlowFilter) GetPodLabelSelector() string {
+	if x != nil {
+		return x.PodLabelSelector
+	}
+	return ""
+}
+
+func (x *FlowFilter) GetServiceNames() []string {
+	if x != nil {
+		return x.ServiceNames
+	}
+	return nil
+}
+
+func (x *FlowFilter) GetFlowTypes() []FlowType {
+	if x != nil {
+		return x.FlowTypes
+	}
+	return nil
+}
+
+func (x *FlowFilter) GetIps() []string {
+	if x != nil {
+		return x.Ips
+	}
+	return nil
+}
+
+func (x *FlowFilter) GetDirection() FlowFilterDirection {
+	if x != nil {
+		return x.Direction
+	}
+	return FlowFilterDirection_FLOW_FILTER_DIRECTION_BOTH
+}
+
+// GetFlowsRequest is sent once by the client when opening a GetFlows stream.
+type GetFlowsRequest struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Filters to apply server-side. All filters are AND-ed together, so a flow
+	// must match every filter to be returned. Each filter is independently
+	// evaluated with its own direction. Providing no filters returns all flows.
+	Filters []*FlowFilter `protobuf:"bytes,1,rep,name=filters,proto3" json:"filters,omitempty"`
+	// If set, only flows with end_ts >= since are returned.
+	Since *timestamppb.Timestamp `protobuf:"bytes,2,opt,name=since,proto3" json:"since,omitempty"`
+	// Maximum number of flows to return in total. 0 means no limit.
+	MaxCount uint32 `protobuf:"varint,3,opt,name=max_count,json=maxCount,proto3" json:"max_count,omitempty"`
+	// If true, keep the stream open and push new flows as they arrive after
+	// historical flows have been sent. If false, close after historical flows.
+	Follow        bool `protobuf:"varint,4,opt,name=follow,proto3" json:"follow,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetFlowsRequest) Reset() {
+	*x = GetFlowsRequest{}
+	mi := &file_pkg_apis_flow_v1alpha1_service_proto_msgTypes[3]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetFlowsRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetFlowsRequest) ProtoMessage() {}
+
+func (x *GetFlowsRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_pkg_apis_flow_v1alpha1_service_proto_msgTypes[3]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetFlowsRequest.ProtoReflect.Descriptor instead.
+func (*GetFlowsRequest) Descriptor() ([]byte, []int) {
+	return file_pkg_apis_flow_v1alpha1_service_proto_rawDescGZIP(), []int{3}
+}
+
+func (x *GetFlowsRequest) GetFilters() []*FlowFilter {
+	if x != nil {
+		return x.Filters
+	}
+	return nil
+}
+
+func (x *GetFlowsRequest) GetSince() *timestamppb.Timestamp {
+	if x != nil {
+		return x.Since
+	}
+	return nil
+}
+
+func (x *GetFlowsRequest) GetMaxCount() uint32 {
+	if x != nil {
+		return x.MaxCount
+	}
+	return 0
+}
+
+func (x *GetFlowsRequest) GetFollow() bool {
+	if x != nil {
+		return x.Follow
+	}
+	return false
+}
+
+// GetFlowsResponse carries a batch of flow records from the server.
+type GetFlowsResponse struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// The matching flow records.
+	Flows []*Flow `protobuf:"bytes,1,rep,name=flows,proto3" json:"flows,omitempty"`
+	// Number of flows dropped because the consumer fell behind and the ring
+	// buffer wrapped around. Cumulative since the start of the stream.
+	DroppedCount  uint64 `protobuf:"varint,2,opt,name=dropped_count,json=droppedCount,proto3" json:"dropped_count,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetFlowsResponse) Reset() {
+	*x = GetFlowsResponse{}
+	mi := &file_pkg_apis_flow_v1alpha1_service_proto_msgTypes[4]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetFlowsResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetFlowsResponse) ProtoMessage() {}
+
+func (x *GetFlowsResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_pkg_apis_flow_v1alpha1_service_proto_msgTypes[4]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetFlowsResponse.ProtoReflect.Descriptor instead.
+func (*GetFlowsResponse) Descriptor() ([]byte, []int) {
+	return file_pkg_apis_flow_v1alpha1_service_proto_rawDescGZIP(), []int{4}
+}
+
+func (x *GetFlowsResponse) GetFlows() []*Flow {
+	if x != nil {
+		return x.Flows
+	}
+	return nil
+}
+
+func (x *GetFlowsResponse) GetDroppedCount() uint64 {
+	if x != nil {
+		return x.DroppedCount
+	}
+	return 0
+}
+
 var File_pkg_apis_flow_v1alpha1_service_proto protoreflect.FileDescriptor
 
 const file_pkg_apis_flow_v1alpha1_service_proto_rawDesc = "" +
 	"\n" +
-	"$pkg/apis/flow/v1alpha1/service.proto\x12'antrea_io.antrea.pkg.apis.flow.v1alpha1\x1a!pkg/apis/flow/v1alpha1/flow.proto\"T\n" +
+	"$pkg/apis/flow/v1alpha1/service.proto\x12'antrea_io.antrea.pkg.apis.flow.v1alpha1\x1a!pkg/apis/flow/v1alpha1/flow.proto\x1a\x1fgoogle/protobuf/timestamp.proto\"T\n" +
 	"\rExportRequest\x12C\n" +
 	"\x05flows\x18\x01 \x03(\v2-.antrea_io.antrea.pkg.apis.flow.v1alpha1.FlowR\x05flows\"\x10\n" +
-	"\x0eExportResponse2\x90\x01\n" +
+	"\x0eExportResponse\"\xdc\x02\n" +
+	"\n" +
+	"FlowFilter\x12\x1e\n" +
+	"\n" +
+	"namespaces\x18\x01 \x03(\tR\n" +
+	"namespaces\x12\x1b\n" +
+	"\tpod_names\x18\x02 \x03(\tR\bpodNames\x12,\n" +
+	"\x12pod_label_selector\x18\x03 \x01(\tR\x10podLabelSelector\x12#\n" +
+	"\rservice_names\x18\x04 \x03(\tR\fserviceNames\x12P\n" +
+	"\n" +
+	"flow_types\x18\x05 \x03(\x0e21.antrea_io.antrea.pkg.apis.flow.v1alpha1.FlowTypeR\tflowTypes\x12\x10\n" +
+	"\x03ips\x18\x06 \x03(\tR\x03ips\x12Z\n" +
+	"\tdirection\x18\a \x01(\x0e2<.antrea_io.antrea.pkg.apis.flow.v1alpha1.FlowFilterDirectionR\tdirection\"\xc7\x01\n" +
+	"\x0fGetFlowsRequest\x12M\n" +
+	"\afilters\x18\x01 \x03(\v23.antrea_io.antrea.pkg.apis.flow.v1alpha1.FlowFilterR\afilters\x120\n" +
+	"\x05since\x18\x02 \x01(\v2\x1a.google.protobuf.TimestampR\x05since\x12\x1b\n" +
+	"\tmax_count\x18\x03 \x01(\rR\bmaxCount\x12\x16\n" +
+	"\x06follow\x18\x04 \x01(\bR\x06follow\"|\n" +
+	"\x10GetFlowsResponse\x12C\n" +
+	"\x05flows\x18\x01 \x03(\v2-.antrea_io.antrea.pkg.apis.flow.v1alpha1.FlowR\x05flows\x12#\n" +
+	"\rdropped_count\x18\x02 \x01(\x04R\fdroppedCount*s\n" +
+	"\x13FlowFilterDirection\x12\x1e\n" +
+	"\x1aFLOW_FILTER_DIRECTION_BOTH\x10\x00\x12\x1e\n" +
+	"\x1aFLOW_FILTER_DIRECTION_FROM\x10\x01\x12\x1c\n" +
+	"\x18FLOW_FILTER_DIRECTION_TO\x10\x022\x90\x01\n" +
 	"\x11FlowExportService\x12{\n" +
-	"\x06Export\x126.antrea_io.antrea.pkg.apis.flow.v1alpha1.ExportRequest\x1a7.antrea_io.antrea.pkg.apis.flow.v1alpha1.ExportResponse(\x01B\x18Z\x16pkg/apis/flow/v1alpha1b\x06proto3"
+	"\x06Export\x126.antrea_io.antrea.pkg.apis.flow.v1alpha1.ExportRequest\x1a7.antrea_io.antrea.pkg.apis.flow.v1alpha1.ExportResponse(\x012\x97\x01\n" +
+	"\x11FlowStreamService\x12\x81\x01\n" +
+	"\bGetFlows\x128.antrea_io.antrea.pkg.apis.flow.v1alpha1.GetFlowsRequest\x1a9.antrea_io.antrea.pkg.apis.flow.v1alpha1.GetFlowsResponse0\x01B\x18Z\x16pkg/apis/flow/v1alpha1b\x06proto3"
 
 var (
 	file_pkg_apis_flow_v1alpha1_service_proto_rawDescOnce sync.Once
@@ -138,21 +470,35 @@ func file_pkg_apis_flow_v1alpha1_service_proto_rawDescGZIP() []byte {
 	return file_pkg_apis_flow_v1alpha1_service_proto_rawDescData
 }
 
-var file_pkg_apis_flow_v1alpha1_service_proto_msgTypes = make([]protoimpl.MessageInfo, 2)
+var file_pkg_apis_flow_v1alpha1_service_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
+var file_pkg_apis_flow_v1alpha1_service_proto_msgTypes = make([]protoimpl.MessageInfo, 5)
 var file_pkg_apis_flow_v1alpha1_service_proto_goTypes = []any{
-	(*ExportRequest)(nil),  // 0: antrea_io.antrea.pkg.apis.flow.v1alpha1.ExportRequest
-	(*ExportResponse)(nil), // 1: antrea_io.antrea.pkg.apis.flow.v1alpha1.ExportResponse
-	(*Flow)(nil),           // 2: antrea_io.antrea.pkg.apis.flow.v1alpha1.Flow
+	(FlowFilterDirection)(0),      // 0: antrea_io.antrea.pkg.apis.flow.v1alpha1.FlowFilterDirection
+	(*ExportRequest)(nil),         // 1: antrea_io.antrea.pkg.apis.flow.v1alpha1.ExportRequest
+	(*ExportResponse)(nil),        // 2: antrea_io.antrea.pkg.apis.flow.v1alpha1.ExportResponse
+	(*FlowFilter)(nil),            // 3: antrea_io.antrea.pkg.apis.flow.v1alpha1.FlowFilter
+	(*GetFlowsRequest)(nil),       // 4: antrea_io.antrea.pkg.apis.flow.v1alpha1.GetFlowsRequest
+	(*GetFlowsResponse)(nil),      // 5: antrea_io.antrea.pkg.apis.flow.v1alpha1.GetFlowsResponse
+	(*Flow)(nil),                  // 6: antrea_io.antrea.pkg.apis.flow.v1alpha1.Flow
+	(FlowType)(0),                 // 7: antrea_io.antrea.pkg.apis.flow.v1alpha1.FlowType
+	(*timestamppb.Timestamp)(nil), // 8: google.protobuf.Timestamp
 }
 var file_pkg_apis_flow_v1alpha1_service_proto_depIdxs = []int32{
-	2, // 0: antrea_io.antrea.pkg.apis.flow.v1alpha1.ExportRequest.flows:type_name -> antrea_io.antrea.pkg.apis.flow.v1alpha1.Flow
-	0, // 1: antrea_io.antrea.pkg.apis.flow.v1alpha1.FlowExportService.Export:input_type -> antrea_io.antrea.pkg.apis.flow.v1alpha1.ExportRequest
-	1, // 2: antrea_io.antrea.pkg.apis.flow.v1alpha1.FlowExportService.Export:output_type -> antrea_io.antrea.pkg.apis.flow.v1alpha1.ExportResponse
-	2, // [2:3] is the sub-list for method output_type
-	1, // [1:2] is the sub-list for method input_type
-	1, // [1:1] is the sub-list for extension type_name
-	1, // [1:1] is the sub-list for extension extendee
-	0, // [0:1] is the sub-list for field type_name
+	6, // 0: antrea_io.antrea.pkg.apis.flow.v1alpha1.ExportRequest.flows:type_name -> antrea_io.antrea.pkg.apis.flow.v1alpha1.Flow
+	7, // 1: antrea_io.antrea.pkg.apis.flow.v1alpha1.FlowFilter.flow_types:type_name -> antrea_io.antrea.pkg.apis.flow.v1alpha1.FlowType
+	0, // 2: antrea_io.antrea.pkg.apis.flow.v1alpha1.FlowFilter.direction:type_name -> antrea_io.antrea.pkg.apis.flow.v1alpha1.FlowFilterDirection
+	3, // 3: antrea_io.antrea.pkg.apis.flow.v1alpha1.GetFlowsRequest.filters:type_name -> antrea_io.antrea.pkg.apis.flow.v1alpha1.FlowFilter
+	8, // 4: antrea_io.antrea.pkg.apis.flow.v1alpha1.GetFlowsRequest.since:type_name -> google.protobuf.Timestamp
+	6, // 5: antrea_io.antrea.pkg.apis.flow.v1alpha1.GetFlowsResponse.flows:type_name -> antrea_io.antrea.pkg.apis.flow.v1alpha1.Flow
+	1, // 6: antrea_io.antrea.pkg.apis.flow.v1alpha1.FlowExportService.Export:input_type -> antrea_io.antrea.pkg.apis.flow.v1alpha1.ExportRequest
+	4, // 7: antrea_io.antrea.pkg.apis.flow.v1alpha1.FlowStreamService.GetFlows:input_type -> antrea_io.antrea.pkg.apis.flow.v1alpha1.GetFlowsRequest
+	2, // 8: antrea_io.antrea.pkg.apis.flow.v1alpha1.FlowExportService.Export:output_type -> antrea_io.antrea.pkg.apis.flow.v1alpha1.ExportResponse
+	5, // 9: antrea_io.antrea.pkg.apis.flow.v1alpha1.FlowStreamService.GetFlows:output_type -> antrea_io.antrea.pkg.apis.flow.v1alpha1.GetFlowsResponse
+	8, // [8:10] is the sub-list for method output_type
+	6, // [6:8] is the sub-list for method input_type
+	6, // [6:6] is the sub-list for extension type_name
+	6, // [6:6] is the sub-list for extension extendee
+	0, // [0:6] is the sub-list for field type_name
 }
 
 func init() { file_pkg_apis_flow_v1alpha1_service_proto_init() }
@@ -166,13 +512,14 @@ func file_pkg_apis_flow_v1alpha1_service_proto_init() {
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_pkg_apis_flow_v1alpha1_service_proto_rawDesc), len(file_pkg_apis_flow_v1alpha1_service_proto_rawDesc)),
-			NumEnums:      0,
-			NumMessages:   2,
+			NumEnums:      1,
+			NumMessages:   5,
 			NumExtensions: 0,
-			NumServices:   1,
+			NumServices:   2,
 		},
 		GoTypes:           file_pkg_apis_flow_v1alpha1_service_proto_goTypes,
 		DependencyIndexes: file_pkg_apis_flow_v1alpha1_service_proto_depIdxs,
+		EnumInfos:         file_pkg_apis_flow_v1alpha1_service_proto_enumTypes,
 		MessageInfos:      file_pkg_apis_flow_v1alpha1_service_proto_msgTypes,
 	}.Build()
 	File_pkg_apis_flow_v1alpha1_service_proto = out.File

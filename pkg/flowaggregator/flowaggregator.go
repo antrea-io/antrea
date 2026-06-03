@@ -38,6 +38,7 @@ import (
 	"antrea.io/antrea/v2/pkg/flowaggregator/certificate"
 	"antrea.io/antrea/v2/pkg/flowaggregator/collector"
 	"antrea.io/antrea/v2/pkg/flowaggregator/exporter"
+	"antrea.io/antrea/v2/pkg/flowaggregator/flowstreamservice"
 	"antrea.io/antrea/v2/pkg/flowaggregator/intermediate"
 	"antrea.io/antrea/v2/pkg/flowaggregator/options"
 	"antrea.io/antrea/v2/pkg/flowaggregator/querier"
@@ -68,6 +69,12 @@ var (
 	}
 )
 
+// flowStreamProvider is the interface used by flowAggregator to start and stop
+// the FlowStreamService.
+type flowStreamProvider interface {
+	Run(serverCertPEM, serverKeyPEM []byte, stopCh <-chan struct{}) error
+}
+
 // exporterHandle tracks the lifecycle of a running exporter goroutine.
 type exporterHandle struct {
 	exporter exporter.Runner
@@ -91,6 +98,7 @@ type flowAggregator struct {
 	aggregatorTransportProtocol flowaggregatorconfig.AggregatorTransportProtocol
 	collectorMutex              sync.Mutex
 	certificateUpdateCh         chan struct{}
+	flowStreamSvcUpdateCh       chan struct{}
 	ipfixCollector              collector.Interface
 	grpcCollector               collector.Interface
 	aggregationProcess          intermediate.AggregationProcess
@@ -119,6 +127,7 @@ type flowAggregator struct {
 	recordCh          chan *flowpb.Flow
 
 	recordBuffer        ringbuffer.BroadcastBuffer[*flowpb.Flow]
+	flowStreamService   flowStreamProvider
 	ipfixHandle         *exporterHandle
 	clickHouseHandle    *exporterHandle
 	s3Handle            *exporterHandle
@@ -193,6 +202,11 @@ func NewFlowAggregator(
 		certificateProvider:         newCertificateProvider(k8sClient, opt.Config.FlowAggregatorAddress),
 		certificateUpdateCh:         make(chan struct{}, 1),
 	}
+	if *opt.Config.FlowStreamService.Enable {
+		fa.flowStreamService = flowstreamservice.NewFlowStreamService(fa.recordBuffer)
+		fa.flowStreamSvcUpdateCh = make(chan struct{}, 1)
+	}
+
 	if opt.AggregatorMode == flowaggregatorconfig.AggregatorModeAggregate {
 		if err := fa.InitAggregationProcess(); err != nil {
 			return nil, fmt.Errorf("error when creating aggregation process: %w", err)
@@ -263,6 +277,12 @@ func (fa *flowAggregator) CertificateUpdated() {
 	case fa.certificateUpdateCh <- struct{}{}:
 	default:
 	}
+	if fa.flowStreamSvcUpdateCh != nil {
+		select {
+		case fa.flowStreamSvcUpdateCh <- struct{}{}:
+		default:
+		}
+	}
 }
 
 func (fa *flowAggregator) runCollectors(stopCh <-chan struct{}) {
@@ -297,6 +317,49 @@ func (fa *flowAggregator) runCollectors(stopCh <-chan struct{}) {
 	}
 }
 
+// runFlowStreamService runs the FlowStreamService with server-side TLS, restarting
+// it whenever the TLS certificate is rotated. It mirrors the structure of runCollectors:
+// on the first iteration the loop blocks until the certificate provider signals readiness;
+// on subsequent iterations (cert rotation) it restarts the server immediately.
+func (fa *flowAggregator) runFlowStreamService(stopCh <-chan struct{}) {
+	var svcWg sync.WaitGroup
+	svcStopCh := make(chan struct{})
+	for {
+		select {
+		case <-stopCh:
+			close(svcStopCh)
+			svcWg.Wait()
+			return
+		case <-fa.flowStreamSvcUpdateCh:
+			close(svcStopCh)
+			svcWg.Wait()
+		}
+		// The previous svcStopCh was closed to stop the old server (or was
+		// never used on the first iteration). Create a fresh one for the
+		// next server instance.
+		svcStopCh = make(chan struct{})
+
+		// Shrink the window in which stopCh may close between here and the
+		// Run() call: if both stopCh and the update channel were ready in
+		// the select above, we avoid starting a server that would be torn
+		// down almost immediately on the next iteration.
+		select {
+		case <-stopCh:
+			return
+		default:
+		}
+
+		_, serverCert, serverKey := fa.certificateProvider.GetTLSConfig()
+		svcWg.Add(1)
+		go func() {
+			defer svcWg.Done()
+			if err := fa.flowStreamService.Run(serverCert, serverKey, svcStopCh); err != nil {
+				klog.ErrorS(err, "FlowStreamService failed to start")
+			}
+		}()
+	}
+}
+
 func (fa *flowAggregator) Run(stopCh <-chan struct{}) {
 	var wg sync.WaitGroup
 
@@ -322,6 +385,14 @@ func (fa *flowAggregator) Run(stopCh <-chan struct{}) {
 		go func() {
 			defer wg.Done()
 			fa.certificateProvider.Run(stopCh)
+		}()
+	}
+
+	if fa.flowStreamService != nil {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			fa.runFlowStreamService(stopCh)
 		}()
 	}
 
@@ -359,9 +430,12 @@ func (fa *flowAggregator) Run(stopCh <-chan struct{}) {
 	}
 	fa.recordBuffer.Shutdown()
 	fa.stopAllExporters()
-	if fa.certificateUpdateCh != nil {
-		close(fa.certificateUpdateCh)
-	}
+	// certificateUpdateCh and flowStreamSvcUpdateCh are not closed on purpose.
+	// Their consumers (runCollectors, runFlowStreamService) exit via stopCh and
+	// are joined by wg.Wait(). Closing the channels would race with the
+	// certificate provider's worker goroutine, which can outlive stopCh and call
+	// CertificateUpdated() concurrently — sending on a closed channel and panic.
+	// The channels are garbage collected together with the flowAggregator struct.
 	wg.Wait()
 }
 
@@ -918,6 +992,10 @@ func (fa *flowAggregator) updateFlowAggregator(opt *options.Options) {
 	}
 	if opt.Config.FlowAggregatorAddress != fa.flowAggregatorAddress {
 		unsupportedUpdates = append(unsupportedUpdates, "flowAggregatorAddress")
+	}
+	flowStreamEnabled := opt.Config.FlowStreamService.Enable != nil && *opt.Config.FlowStreamService.Enable
+	if flowStreamEnabled != (fa.flowStreamService != nil) {
+		unsupportedUpdates = append(unsupportedUpdates, "flowStreamService")
 	}
 	if len(unsupportedUpdates) > 0 {
 		klog.ErrorS(nil, "Ignoring unsupported configuration updates, please restart FlowAggregator", "keys", unsupportedUpdates)

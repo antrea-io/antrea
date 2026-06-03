@@ -21,3 +21,9 @@ spec:
     port: 14739
     protocol: TCP
     targetPort: grpc
+  {{- if .Values.flowStreamService.enable }}
+  - name: flowstream-grpc
+    port: 14740
+    protocol: TCP
+    targetPort: flowstream-grpc
+  {{- end }}

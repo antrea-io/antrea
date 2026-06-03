@@ -90,11 +90,11 @@ func NewClickHouseExporter(clusterUUID uuid.UUID, opt *options.Options) (*ClickH
 // Run consumes flow records from the ring buffer and writes them to ClickHouse.
 // It blocks until ctx is cancelled or the consumer signals shutdown.
 func (e *ClickHouseExporter) Run(ctx context.Context, buf ringbuffer.BroadcastBuffer[*flowpb.Flow]) {
-	consumer := buf.NewConsumer(ringbuffer.WithMaxConsumeDeadline(consumeDeadline))
+	consumer := buf.NewConsumer(ringbuffer.WithMaxConsumeDeadline(ConsumeDeadline))
 	e.chExportProcess.Start()
 	defer e.chExportProcess.Stop()
 
-	records := make([]*flowpb.Flow, consumeMultipleBatchSize)
+	records := make([]*flowpb.Flow, ConsumeMultipleBatchSize)
 	for {
 		n, _, shutdown := consumer.ConsumeMultiple(records)
 		for _, record := range records[:n] {

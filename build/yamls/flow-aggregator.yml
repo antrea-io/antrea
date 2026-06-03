@@ -284,6 +284,14 @@ data:
     # Defaults to 8192.
     recordBufferSize: 8192
 
+    # flowStreamService contains configuration options for the FlowStreamService gRPC server,
+    # which streams flow records to consumers such as antrea-ui.
+    flowStreamService:
+      # Enable is the switch to enable the FlowStreamService gRPC server (port 14740). The server
+      # uses server-side TLS (same self-signed certificate as the gRPC collector) but no client
+      # authentication. Disabled by default.
+      enable: false
+
     # Provide a clusterID to be added to records. By default this ID is an auto-generated UUID which
     # can be found in the antrea-cluster-identity ConfigMap. Currently this is only consumed by the
     # flowCollector (IPFIX) exporter.
@@ -494,7 +502,7 @@ spec:
       annotations:
         # Automatically restart Pod if the ConfigMap changes
         # See https://helm.sh/docs/howto/charts_tips_and_tricks/#automatically-roll-deployments
-        checksum/config: b754d61f2a19c5b221897f568384a711a96fbd96e50fff9770821c8ace477ef8
+        checksum/config: ed62168da05afbc792870d32ef80dcab8c1828ff45a1e0b538b80a0a728abf28
       labels:
         app: flow-aggregator
     spec:

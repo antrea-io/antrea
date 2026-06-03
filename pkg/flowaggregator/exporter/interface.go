@@ -23,15 +23,15 @@ import (
 )
 
 const (
-	// consumeDeadline is the maximum time ConsumeMultiple will block before
-	// returning with n==0, giving the Run loop a chance to check ctx
-	// cancellation. Keeping this at 1s bounds shutdown latency for all
-	// exporters regardless of their internal commit/upload intervals.
-	consumeDeadline = 1 * time.Second
+	// ConsumeDeadline is the maximum time ConsumeMultiple will block before
+	// returning with n==0, giving the consumer loop a chance to check for
+	// cancellation or shutdown. Keeping this at 1s bounds shutdown latency for
+	// all exporters regardless of their internal commit/upload intervals.
+	ConsumeDeadline = 1 * time.Second
 
-	// consumeMultipleBatchSize is the maximum number of records fetched in a
+	// ConsumeMultipleBatchSize is the maximum number of records fetched in a
 	// single ConsumeMultiple call. The slice is pre-allocated and reused.
-	consumeMultipleBatchSize = 100
+	ConsumeMultipleBatchSize = 100
 )
 
 // Runner is the interface that all supported exporters must implement.
