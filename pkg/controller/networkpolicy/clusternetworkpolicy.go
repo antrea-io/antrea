@@ -1,4 +1,4 @@
-// Copyright 2025 Antrea Authors
+// Copyright 2026 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -154,20 +154,18 @@ func (n *NetworkPolicyController) toAntreaEgressPeerForCNP(peers []v1alpha2.Clus
 	var fqdns []string
 	var ipBlocks []controlplane.IPBlock
 	for _, peer := range peers {
-		if peer.Pods != nil {
-			addressGroup := n.createAddressGroup("", &peer.Pods.PodSelector, &peer.Pods.NamespaceSelector, nil, nil)
-			addressGroups = append(addressGroups, addressGroup)
-		} else if peer.Namespaces != nil {
-			addressGroup := n.createAddressGroup("", nil, peer.Namespaces, nil, nil)
-			addressGroups = append(addressGroups, addressGroup)
-		} else if peer.Nodes != nil {
-			addressGroup := n.createAddressGroup("", nil, nil, nil, peer.Nodes)
-			addressGroups = append(addressGroups, addressGroup)
-		} else if peer.DomainNames != nil {
+		switch {
+		case peer.Pods != nil:
+			addressGroups = append(addressGroups, n.createAddressGroup("", &peer.Pods.PodSelector, &peer.Pods.NamespaceSelector, nil, nil))
+		case peer.Namespaces != nil:
+			addressGroups = append(addressGroups, n.createAddressGroup("", nil, peer.Namespaces, nil, nil))
+		case peer.Nodes != nil:
+			addressGroups = append(addressGroups, n.createAddressGroup("", nil, nil, nil, peer.Nodes))
+		case len(peer.DomainNames) > 0:
 			for _, domainName := range peer.DomainNames {
 				fqdns = append(fqdns, string(domainName))
 			}
-		} else if peer.Networks != nil {
+		case len(peer.Networks) > 0:
 			ipBlocks = append(ipBlocks, toAntreaIPBlocksForCNPNetworks(peer.Networks)...)
 		}
 	}
@@ -226,38 +224,36 @@ func (n *NetworkPolicyController) processClusterNetworkPolicy(cnp *v1alpha2.Clus
 		if len(cnpIngressRule.Protocols) > 0 {
 			services = toAntreaServicesForCNPProtocols(cnpIngressRule.Protocols)
 		}
-		if len(cnpIngressRule.From) > 0 {
-			peer, ags := n.toAntreaIngressPeerForCNP(cnpIngressRule.From)
-			rule := controlplane.NetworkPolicyRule{
-				Direction: controlplane.DirectionIn,
-				From:      *peer,
-				Services:  services,
-				Name:      cnpIngressRule.Name,
-				Action:    cnpActionToCRDAction(cnpIngressRule.Action),
-				Priority:  int32(idx),
-			}
-			rules = append(rules, rule)
-			addressGroups = mergeAddressGroups(addressGroups, ags...)
+		// From is required by the CRD to contain at least one peer.
+		peer, ags := n.toAntreaIngressPeerForCNP(cnpIngressRule.From)
+		rule := controlplane.NetworkPolicyRule{
+			Direction: controlplane.DirectionIn,
+			From:      *peer,
+			Services:  services,
+			Name:      cnpIngressRule.Name,
+			Action:    cnpActionToCRDAction(cnpIngressRule.Action),
+			Priority:  int32(idx),
 		}
+		rules = append(rules, rule)
+		addressGroups = mergeAddressGroups(addressGroups, ags...)
 	}
 	for idx, cnpEgressRule := range cnp.Spec.Egress {
 		var services []controlplane.Service
 		if len(cnpEgressRule.Protocols) > 0 {
 			services = toAntreaServicesForCNPProtocols(cnpEgressRule.Protocols)
 		}
-		if len(cnpEgressRule.To) > 0 {
-			peer, ags := n.toAntreaEgressPeerForCNP(cnpEgressRule.To)
-			rule := controlplane.NetworkPolicyRule{
-				Direction: controlplane.DirectionOut,
-				To:        *peer,
-				Services:  services,
-				Name:      cnpEgressRule.Name,
-				Action:    cnpActionToCRDAction(cnpEgressRule.Action),
-				Priority:  int32(idx),
-			}
-			rules = append(rules, rule)
-			addressGroups = mergeAddressGroups(addressGroups, ags...)
+		// To is required by the CRD to contain at least one peer.
+		peer, ags := n.toAntreaEgressPeerForCNP(cnpEgressRule.To)
+		rule := controlplane.NetworkPolicyRule{
+			Direction: controlplane.DirectionOut,
+			To:        *peer,
+			Services:  services,
+			Name:      cnpEgressRule.Name,
+			Action:    cnpActionToCRDAction(cnpEgressRule.Action),
+			Priority:  int32(idx),
 		}
+		rules = append(rules, rule)
+		addressGroups = mergeAddressGroups(addressGroups, ags...)
 	}
 	// Convert int32 priority to float64 for internal representation
 	priority := float64(cnp.Spec.Priority)

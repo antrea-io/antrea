@@ -135,7 +135,6 @@ func run(o *Options) error {
 	informerFactory := informers.NewSharedInformerFactoryWithOptions(client, informerDefaultResync, informers.WithTransform(k8s.NewTrimmer(k8s.TrimPod)))
 	crdInformerFactory := crdinformers.NewSharedInformerFactoryWithOptions(crdClient, informerDefaultResync, crdinformers.WithTransform(k8s.NewTrimmer()))
 	policyInformerFactory := policyinformers.NewSharedInformerFactory(policyClient, informerDefaultResync)
-	policyInformerFactoryV1Alpha2 := policyinformers.NewSharedInformerFactory(policyClient, informerDefaultResync)
 	podInformer := informerFactory.Core().V1().Pods()
 	namespaceInformer := informerFactory.Core().V1().Namespaces()
 	serviceInformer := informerFactory.Core().V1().Services()
@@ -155,7 +154,7 @@ func run(o *Options) error {
 	ipPoolInformer := crdInformerFactory.Crd().V1beta1().IPPools()
 	adminNPInformer := policyInformerFactory.Policy().V1alpha1().AdminNetworkPolicies()
 	banpInformer := policyInformerFactory.Policy().V1alpha1().BaselineAdminNetworkPolicies()
-	cnpInformer := policyInformerFactoryV1Alpha2.Policy().V1alpha2().ClusterNetworkPolicies()
+	cnpInformer := policyInformerFactory.Policy().V1alpha2().ClusterNetworkPolicies()
 
 	// Add IP-Pod index. Each Pod has no more than 2 IPs, the extra overhead is constant and acceptable.
 	// @tnqn evaluated the performance without/with IP index is 3us vs 4us per pod, i.e. 300ms vs 400ms for 100k Pods.
@@ -343,16 +342,13 @@ func run(o *Options) error {
 
 	informerFactory.Start(stopCh)
 	crdInformerFactory.Start(stopCh)
-	if features.DefaultFeatureGate.Enabled(features.AdminNetworkPolicy) {
-		// TODO(yang): Remove once the AdminNetworkPolicy feature gate is fully deprecated.
-		policyInformerFactory.Start(stopCh)
-	}
-	if features.DefaultFeatureGate.Enabled(features.ClusterNetworkPolicy) {
-		// TODO(yang): When ClusterNetworkPolicy graduates to Beta, we need a better mechanism in Antrea controller
-		//  so that 1. the policyInformerFactoryV1Alpha2 is only started if the ClusterNetworkPolicy CRD is
+	if features.DefaultFeatureGate.Enabled(features.AdminNetworkPolicy) || features.DefaultFeatureGate.Enabled(features.ClusterNetworkPolicy) {
+		// TODO(yang): Remove first condition once the AdminNetworkPolicy feature gate is fully deprecated.
+		//  When ClusterNetworkPolicy graduates to Beta, we need a better mechanism in Antrea controller
+		//  so that 1. the policyInformerFactory is only started if the ClusterNetworkPolicy CRD is
 		//  installed in the cluster 2. It retries periodically so that when the CRDs are installed, the
-		//  policyInformerFactoryV1Alpha2 starts watching and properly handles policy events.
-		policyInformerFactoryV1Alpha2.Start(stopCh)
+		//  policyInformerFactory starts watching and properly handles policy events.
+		policyInformerFactory.Start(stopCh)
 	}
 
 	go clusterIdentityAllocator.Run(stopCh)

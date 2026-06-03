@@ -110,8 +110,9 @@ IMAGE_LIST=("registry.k8s.io/e2e-test-images/agnhost:2.43" \
             "antrea/antrea-agent-ubuntu:latest" \
             "antrea/antrea-controller-ubuntu:latest")
 
-# Kubernetes 1.31+ provides isCIDR CEL validation used by ClusterNetworkPolicy CRDs (network-policy-api v0.2.0).
-K8S_VERSION="v1.34.0"
+# Kubernetes version needs to be 1.31+ for isCIDR CEL validation used by ClusterNetworkPolicy CRDs
+# (network-policy-api v0.2.0).
+K8S_VERSION="v1.35.0"
 printf -v IMAGES "%s " "${IMAGE_LIST[@]}"
 
 function setup_cluster {
