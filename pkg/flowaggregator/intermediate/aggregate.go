@@ -26,7 +26,6 @@ import (
 	"k8s.io/utils/clock"
 
 	flowpb "antrea.io/antrea/v2/pkg/apis/flow/v1alpha1"
-	"antrea.io/antrea/v2/pkg/flowaggregator/flowrecord"
 )
 
 var MaxRetries = 2
@@ -74,16 +73,16 @@ func initAggregationProcessWithClock(input AggregationInput, clock clock.Clock) 
 		return nil, fmt.Errorf("worker number cannot be <= 0")
 	}
 	return &aggregationProcess{
-		flowKeyRecordMap:      make(map[FlowKey]*AggregationFlowRecord),
-		expirePriorityQueue:   make(TimeToExpirePriorityQueue, 0),
-		mutex:                 sync.RWMutex{},
-		recordChan:            input.RecordChan,
-		workerNum:             input.WorkerNum,
-		workerList:            make([]aggregationWorker, 0),
-		activeExpiryTimeout:   input.ActiveExpiryTimeout,
-		inactiveExpiryTimeout: input.InactiveExpiryTimeout,
-		stopChan:              make(chan bool),
-		clock:                 clock,
+		make(map[FlowKey]*AggregationFlowRecord),
+		make(TimeToExpirePriorityQueue, 0),
+		sync.RWMutex{},
+		input.RecordChan,
+		input.WorkerNum,
+		make([]aggregationWorker, 0),
+		input.ActiveExpiryTimeout,
+		input.InactiveExpiryTimeout,
+		make(chan bool),
+		clock,
 	}, nil
 }
 
@@ -121,6 +120,20 @@ func (a *aggregationProcess) GetNumFlows() int64 {
 func (a *aggregationProcess) aggregateRecordByFlowKey(record *flowpb.Flow) error {
 	flowKey, isIPv4 := getFlowKeyFromRecord(record)
 	a.addOrUpdateRecordInMap(flowKey, record, isIPv4)
+	return nil
+}
+
+// ForAllRecordsDo takes in callback function to process the operations to flowkey->records pairs in the map
+func (a *aggregationProcess) ForAllRecordsDo(callback FlowKeyRecordMapCallBack) error {
+	a.mutex.Lock()
+	defer a.mutex.Unlock()
+	for k, v := range a.flowKeyRecordMap {
+		err := callback(k, v)
+		if err != nil {
+			klog.Errorf("Callback execution failed for flow with key: %v, records: %v, error: %v", k, v, err)
+			return err
+		}
+	}
 	return nil
 }
 
@@ -309,14 +322,6 @@ func (a *aggregationProcess) IsAggregatedRecordIPv4(record AggregationFlowRecord
 
 // addOrUpdateRecordInMap either adds the record to flowKeyMap or updates the record in
 // flowKeyMap by doing correlation or updating the stats.
-//
-// For inter-node FROM_EXTERNAL flows, both halves are stored under the same correlation key:
-//   - Source-node (FROM_EXTERNAL): stored under (ProxySnatIp, ProxySnatPort, dstIP, dstPort)
-//   - Destination-node (INTER_NODE from srcIsGw branch): stored under its natural FlowKey
-//     (gatewayIP, snatPort, dstIP, dstPort) which is equal to the correlation key above.
-//
-// When both halves are present, they are merged in-place and the entry is re-keyed to the
-// final (externalIP, clientPort, dstIP, dstPort).
 func (a *aggregationProcess) addOrUpdateRecordInMap(flowKey *FlowKey, record *flowpb.Flow, isIPv4 bool) {
 	if record.EndTs == nil || record.StartTs == nil {
 		klog.V(4).InfoS("Dropping flow record with nil timestamps", "record", record)
@@ -326,30 +331,15 @@ func (a *aggregationProcess) addOrUpdateRecordInMap(flowKey *FlowKey, record *fl
 	a.mutex.Lock()
 	defer a.mutex.Unlock()
 
-	// getCorrelationKey returns whether cross-node correlation is required for this record,
-	// and the FlowKey to use as the map key. For source-node FROM_EXTERNAL flows the original
-	// key (externalIP + clientPort) is replaced with the correlation key
-	// (ProxySnatIp + ProxySnatPort), so that both halves of an inter-node FROM_EXTERNAL
-	// connection land under the same map entry.
-	correlationRequired, flowKey := getCorrelationKey(record, flowKey)
+	correlationRequired := isCorrelationRequired(record.K8S.FlowType, record)
+
 	currTime := a.clock.Now()
 	aggregationRecord, exist := a.flowKeyRecordMap[*flowKey]
 	if exist {
 		readyToSend := aggregationRecord.ReadyToSend
 		if correlationRequired {
-			// For inter-node FROM_EXTERNAL flows: when both halves have arrived,
-			// tryMergeFromExternalFlows applies the FROM_EXTERNAL-specific transform
-			// (IP fields, FlowType, service metadata) and re-keys the map entry.
-			// It also sets ReadyToSend=true on the merged record so the regular
-			// correlation check below is skipped (both sides are already unified).
-			// Stats aggregation continues through the shared aggregateRecords path.
-			flowKey = a.tryMergeFromExternalFlows(flowKey, record, aggregationRecord)
-
 			// Do correlation of records if record belongs to inter-node flow and
-			// records from source and destination node have not yet been received.
-			// Note: for FROM_EXTERNAL flows tryMergeFromExternalFlows has already
-			// set ReadyToSend=true and areCorrelatedFieldsFilled=true when a merge
-			// occurred, so this block is skipped.
+			// records from source and destination node are not received.
 			if !readyToSend && !areRecordsFromSameNode(record, aggregationRecord.Record) {
 				a.correlateRecords(record, aggregationRecord.Record)
 				aggregationRecord.ReadyToSend = true
@@ -380,15 +370,15 @@ func (a *aggregationProcess) addOrUpdateRecordInMap(flowKey *FlowKey, record *fl
 		// Add all the new stat fields and initialize them.
 		if correlationRequired {
 			if isRecordFromSrc(record) {
-				addFieldsForStatsAggregation(record, true, false)
-				a.addFieldsForThroughputCalculation(record, record, true, false)
+				a.addFieldsForStatsAggregation(record, true, false)
+				a.addFieldsForThroughputCalculation(record, true, false)
 			} else {
-				addFieldsForStatsAggregation(record, false, true)
-				a.addFieldsForThroughputCalculation(record, record, false, true)
+				a.addFieldsForStatsAggregation(record, false, true)
+				a.addFieldsForThroughputCalculation(record, false, true)
 			}
 		} else {
-			addFieldsForStatsAggregation(record, true, true)
-			a.addFieldsForThroughputCalculation(record, record, true, true)
+			a.addFieldsForStatsAggregation(record, true, true)
+			a.addFieldsForThroughputCalculation(record, true, true)
 		}
 		aggregationRecord = &AggregationFlowRecord{
 			Record:                    record,
@@ -398,9 +388,10 @@ func (a *aggregationProcess) addOrUpdateRecordInMap(flowKey *FlowKey, record *fl
 		}
 
 		if !correlationRequired {
-			// Regular flows that need no cross-node correlation (IntraNode, ToExternal,
-			// single-node FromExternal) are complete as-is and ready to export immediately.
 			aggregationRecord.ReadyToSend = true
+			// If no correlation is required for an Inter-Node record, K8s metadata is
+			// expected to be not completely filled. For Intra-Node flows and ToExternal
+			// flows, areCorrelatedFieldsFilled is set to true by default.
 			if record.K8S.FlowType == flowpb.FlowType_FLOW_TYPE_INTER_NODE {
 				aggregationRecord.areCorrelatedFieldsFilled = false
 			} else {
@@ -427,124 +418,10 @@ func (a *aggregationProcess) addOrUpdateRecordInMap(flowKey *FlowKey, record *fl
 	a.flowKeyRecordMap[*flowKey] = aggregationRecord
 }
 
-// tryMergeFromExternalFlows checks whether the incoming record and the existing record under
-// flowKey are the two halves of an inter-node FROM_EXTERNAL connection (one is source-node
-// FROM_EXTERNAL, the other is destination-node INTER_NODE). If so, it applies the
-// FROM_EXTERNAL-specific transform (IP fields, FlowType, service metadata via mergeExternalFlows)
-// and re-keys the map entry. Stats aggregation, ReadyToSend, and PQ updates are NOT handled here
-// — they fall through to the shared correlationRequired path in addOrUpdateRecordInMap, exactly
-// as for regular INTER_NODE flows.
-//
-// Returns the (possibly new) flowKey; returns the original key unchanged if no merge occurred.
-// Must be called with a.mutex held.
-func (a *aggregationProcess) tryMergeFromExternalFlows(flowKey *FlowKey, incomingRecord *flowpb.Flow, existingAggRecord *AggregationFlowRecord) *FlowKey {
-	existingRecord := existingAggRecord.Record
-
-	switch {
-	case isSourceNodeFromExternalFlow(incomingRecord) && isDestinationNodeFromExternalFlow(existingRecord):
-		// Incoming = source-node, existing = destination-node.
-		// Apply FROM_EXTERNAL transform to the existing (destination-node) record in-place.
-		// The incoming record's stats are merged into the existing by the shared aggregation path.
-		mergeExternalFlows(incomingRecord, existingRecord)
-	case isDestinationNodeFromExternalFlow(incomingRecord) && isSourceNodeFromExternalFlow(existingRecord):
-		// Incoming = destination-node, existing = source-node.
-		// Apply FROM_EXTERNAL transform to the incoming record, then promote it to be the
-		// canonical record in the aggregation entry (it carries the Pod's metadata).
-		mergeExternalFlows(existingRecord, incomingRecord)
-		existingAggRecord.Record = incomingRecord
-	default:
-		return flowKey
-	}
-
-	// Re-key from the correlation key (gatewayIP, snatPort, ...) to the final key
-	// (externalIP, clientPort, ...) derived from the now-merged canonical record.
-	newFlowKey, _ := getFlowKeyFromRecord(existingAggRecord.Record)
-	delete(a.flowKeyRecordMap, *flowKey)
-	a.flowKeyRecordMap[*newFlowKey] = existingAggRecord
-
-	existingAggRecord.ReadyToSend = true
-	existingAggRecord.areCorrelatedFieldsFilled = true
-	klog.V(4).InfoS("FROM_EXTERNAL correlation: merged and re-keyed",
-		"oldKey", flowKey, "newKey", newFlowKey)
-	return newFlowKey
-}
-
-// getExternalCorrelationFlowKey returns the FlowKey under which a source-node FROM_EXTERNAL flow
-// should be stored in flowKeyRecordMap so that it collides with the destination-node INTER_NODE
-// flow's natural FlowKey. The key uses ProxySnatIp/Port as source instead of the real external IP.
-func getExternalCorrelationFlowKey(record *flowpb.Flow) *FlowKey {
-	return &FlowKey{
-		SourceAddress:      flowrecord.IpAddressAsString(record.ProxySnatIp),
-		DestinationAddress: flowrecord.IpAddressAsString(record.Ip.Destination),
-		Protocol:           uint8(record.Transport.ProtocolNumber),
-		SourcePort:         uint16(record.ProxySnatPort),
-		DestinationPort:    uint16(record.Transport.DestinationPort),
-	}
-}
-
-// isSourceNodeFromExternalFlow returns true for the source-node half of an inter-node
-// FROM_EXTERNAL connection: FlowType=FROM_EXTERNAL and DestinationPodName is empty (the pod is
-// on the remote destination node, so the agent could not resolve it).
-func isSourceNodeFromExternalFlow(record *flowpb.Flow) bool {
-	return record.K8S != nil &&
-		record.K8S.FlowType == flowpb.FlowType_FLOW_TYPE_FROM_EXTERNAL &&
-		record.K8S.DestinationPodName == ""
-}
-
-// isDestinationNodeFromExternalFlow returns true for the destination-node half of an inter-node
-// FROM_EXTERNAL connection: FlowType=INTER_NODE (exported from the agent's srcIsGw branch),
-// DestinationPodName set (pod is local), SourcePodName empty (source is the remote gateway, not
-// a Pod), ProxySnatIp unset (conntrack is symmetric at this hop).
-func isDestinationNodeFromExternalFlow(record *flowpb.Flow) bool {
-	return record.K8S != nil &&
-		record.K8S.FlowType == flowpb.FlowType_FLOW_TYPE_INTER_NODE &&
-		record.K8S.DestinationPodName != "" &&
-		record.K8S.SourcePodName == "" &&
-		len(record.ProxySnatIp) == 0
-}
-
-// mergeExternalFlows merges the source-node FROM_EXTERNAL record into the destination-node
-// INTER_NODE record. The destination-node record is mutated in-place with the real external
-// client IP, original source port, service metadata, and FlowType=FROM_EXTERNAL. ProxySnatIp/Port
-// are cleared. It also ensures Stats/ReverseStats/Aggregation are initialized on the destination
-// record so that the shared stats aggregation path can run without nil-pointer panics.
-func mergeExternalFlows(sourceNodeFlow, destinationNodeFlow *flowpb.Flow) {
-	destinationNodeFlow.Ip.Source = sourceNodeFlow.Ip.Source
-	destinationNodeFlow.Transport.SourcePort = sourceNodeFlow.Transport.SourcePort
-	if destinationNodeFlow.K8S != nil && sourceNodeFlow.K8S != nil {
-		destinationNodeFlow.K8S.DestinationServiceIp = sourceNodeFlow.K8S.DestinationServiceIp
-		destinationNodeFlow.K8S.DestinationServicePortName = sourceNodeFlow.K8S.DestinationServicePortName
-		destinationNodeFlow.K8S.DestinationServicePort = sourceNodeFlow.K8S.DestinationServicePort
-		destinationNodeFlow.K8S.DestinationClusterIp = sourceNodeFlow.K8S.DestinationClusterIp
-		destinationNodeFlow.K8S.FlowType = flowpb.FlowType_FLOW_TYPE_FROM_EXTERNAL
-	}
-	destinationNodeFlow.ProxySnatIp = nil
-	destinationNodeFlow.ProxySnatPort = 0
-	// Ensure fields required by the shared aggregation path are initialized.
-	// This is necessary when destinationNodeFlow is the incoming record that has not yet
-	// gone through the new-record initialization path in addOrUpdateRecordInMap.
-	if destinationNodeFlow.Stats == nil {
-		destinationNodeFlow.Stats = &flowpb.Stats{}
-	}
-	if destinationNodeFlow.ReverseStats == nil {
-		destinationNodeFlow.ReverseStats = &flowpb.Stats{}
-	}
-	if destinationNodeFlow.Aggregation == nil {
-		destinationNodeFlow.Aggregation = &flowpb.Aggregation{}
-		// Initialize the Aggregation timestamp and stats sub-fields that aggregateRecords
-		// expects to be non-nil. We cannot call addFieldsForStatsAggregation/
-		// addFieldsForThroughputCalculation here (no receiver), so we initialize directly.
-		destinationNodeFlow.Aggregation.EndTsFromSource = &timestamppb.Timestamp{}
-		destinationNodeFlow.Aggregation.EndTsFromDestination = &timestamppb.Timestamp{}
-		destinationNodeFlow.Aggregation.StatsFromSource = &flowpb.Stats{}
-		destinationNodeFlow.Aggregation.ReverseStatsFromSource = &flowpb.Stats{}
-		destinationNodeFlow.Aggregation.StatsFromDestination = &flowpb.Stats{}
-		destinationNodeFlow.Aggregation.ReverseStatsFromDestination = &flowpb.Stats{}
-	}
-}
-
-// correlateRecords correlate the incomingRecord with existingRecord using correlation
-// fields. This is called for records whose flowType is InterNode.
+// correlateRecords correlate the incomingRecord with existingRecord using correlation fields.
+// This is called for the two halves of an inter-Node flow (regular inter-Node flows, as well as
+// inter-Node "from external" flows). Each field is copied only when set on the incoming record,
+// so the two halves can be correlated regardless of the order in which they are received.
 func (a *aggregationProcess) correlateRecords(incomingRecord, existingRecord *flowpb.Flow) {
 	if sourcePodName := incomingRecord.K8S.SourcePodName; sourcePodName != "" {
 		existingRecord.K8S.SourcePodName = sourcePodName
@@ -578,6 +455,9 @@ func (a *aggregationProcess) correlateRecords(incomingRecord, existingRecord *fl
 	}
 	if destinationClusterIP := incomingRecord.K8S.DestinationClusterIp; destinationClusterIP != nil {
 		existingRecord.K8S.DestinationClusterIp = destinationClusterIP
+	}
+	if destinationServiceIP := incomingRecord.K8S.DestinationServiceIp; destinationServiceIP != nil {
+		existingRecord.K8S.DestinationServiceIp = destinationServiceIP
 	}
 	if destinationServicePort := incomingRecord.K8S.DestinationServicePort; destinationServicePort != 0 {
 		existingRecord.K8S.DestinationServicePort = destinationServicePort
@@ -620,6 +500,19 @@ func (a *aggregationProcess) correlateRecords(incomingRecord, existingRecord *fl
 	}
 	if egressNetworkPolicyRuleName := incomingRecord.K8S.EgressNetworkPolicyRuleName; egressNetworkPolicyRuleName != "" {
 		existingRecord.K8S.EgressNetworkPolicyRuleName = egressNetworkPolicyRuleName
+	}
+	// For an inter-Node "from external" flow, the external client's address/port, the gateway
+	// ProxySnat address/port, and FlowType=FROM_EXTERNAL only live on the ingress-Node record
+	// (see isSourceNodeFromExternalFlow). When that record is the incoming one, restore these
+	// fields on the correlated record so the exported flow reports the external client as the
+	// source. When the records arrive in the opposite order, the correlated record is already
+	// the ingress-Node record and these fields are unchanged.
+	if isSourceNodeFromExternalFlow(incomingRecord) {
+		existingRecord.Ip.Source = incomingRecord.Ip.Source
+		existingRecord.Transport.SourcePort = incomingRecord.Transport.SourcePort
+		existingRecord.ProxySnatIp = incomingRecord.ProxySnatIp
+		existingRecord.ProxySnatPort = incomingRecord.ProxySnatPort
+		existingRecord.K8S.FlowType = flowpb.FlowType_FLOW_TYPE_FROM_EXTERNAL
 	}
 }
 
@@ -742,17 +635,11 @@ func (a *aggregationProcess) ResetStatAndThroughputElementsInRecord(record *flow
 	// TotalCount statistic elements should not be reset to zeroes as they are used in the
 	// throughput calculation.
 	resetDeltaStats := func(stats *flowpb.Stats) {
-		if stats == nil {
-			return
-		}
 		stats.PacketDeltaCount = 0
 		stats.OctetDeltaCount = 0
 	}
 	resetDeltaStats(record.Stats)
 	resetDeltaStats(record.ReverseStats)
-	if record.Aggregation == nil {
-		return nil
-	}
 	resetDeltaStats(record.Aggregation.StatsFromSource)
 	resetDeltaStats(record.Aggregation.ReverseStatsFromSource)
 	resetDeltaStats(record.Aggregation.StatsFromDestination)
@@ -768,49 +655,40 @@ func (a *aggregationProcess) ResetStatAndThroughputElementsInRecord(record *flow
 	return nil
 }
 
-func copyStats(from, to *flowpb.Stats) {
-	if from == nil {
-		return
+func (a *aggregationProcess) addFieldsForStatsAggregation(record *flowpb.Flow, fillSrcStats, fillDstStats bool) {
+	record.Aggregation.StatsFromSource = &flowpb.Stats{}
+	record.Aggregation.ReverseStatsFromSource = &flowpb.Stats{}
+	record.Aggregation.StatsFromDestination = &flowpb.Stats{}
+	record.Aggregation.ReverseStatsFromDestination = &flowpb.Stats{}
+	copyStats := func(from, to *flowpb.Stats) {
+		to.PacketTotalCount = from.PacketTotalCount
+		to.PacketDeltaCount = from.PacketDeltaCount
+		to.OctetTotalCount = from.OctetTotalCount
+		to.OctetDeltaCount = from.OctetDeltaCount
 	}
-	to.PacketTotalCount = from.PacketTotalCount
-	to.PacketDeltaCount = from.PacketDeltaCount
-	to.OctetTotalCount = from.OctetTotalCount
-	to.OctetDeltaCount = from.OctetDeltaCount
-}
-
-func addFieldsForStatsAggregation(flow *flowpb.Flow, fillSrcStats, fillDstStats bool) {
-	copyFieldsForStatsAggregation(flow, flow, fillSrcStats, fillDstStats)
-}
-
-func copyFieldsForStatsAggregation(from, to *flowpb.Flow, fillSrcStats, fillDstStats bool) {
-	to.Aggregation.StatsFromSource = &flowpb.Stats{}
-	to.Aggregation.ReverseStatsFromSource = &flowpb.Stats{}
-	to.Aggregation.StatsFromDestination = &flowpb.Stats{}
-	to.Aggregation.ReverseStatsFromDestination = &flowpb.Stats{}
 	if fillSrcStats {
-		copyStats(from.Stats, to.Aggregation.StatsFromSource)
-		copyStats(from.ReverseStats, to.Aggregation.ReverseStatsFromSource)
+		copyStats(record.Stats, record.Aggregation.StatsFromSource)
+		copyStats(record.ReverseStats, record.Aggregation.ReverseStatsFromSource)
 	}
-
 	if fillDstStats {
-		copyStats(from.Stats, to.Aggregation.StatsFromDestination)
-		copyStats(from.ReverseStats, to.Aggregation.ReverseStatsFromDestination)
+		copyStats(record.Stats, record.Aggregation.StatsFromDestination)
+		copyStats(record.ReverseStats, record.Aggregation.ReverseStatsFromDestination)
 	}
 }
 
-func (a *aggregationProcess) addFieldsForThroughputCalculation(from, to *flowpb.Flow, fillSrcStats, fillDstStats bool) {
-	timeStart := from.StartTs.Seconds
-	timeEnd := from.EndTs.Seconds
-	byteCount := from.Stats.OctetTotalCount
-	reverseByteCount := from.ReverseStats.OctetTotalCount
+func (a *aggregationProcess) addFieldsForThroughputCalculation(record *flowpb.Flow, fillSrcStats, fillDstStats bool) {
+	timeStart := record.StartTs.Seconds
+	timeEnd := record.EndTs.Seconds
+	byteCount := record.Stats.OctetTotalCount
+	reverseByteCount := record.ReverseStats.OctetTotalCount
 
-	to.Aggregation.EndTsFromSource = &timestamppb.Timestamp{}
+	record.Aggregation.EndTsFromSource = &timestamppb.Timestamp{}
 	if fillSrcStats {
-		to.Aggregation.EndTsFromSource.Seconds = timeEnd
+		record.Aggregation.EndTsFromSource.Seconds = timeEnd
 	}
-	to.Aggregation.EndTsFromDestination = &timestamppb.Timestamp{}
+	record.Aggregation.EndTsFromDestination = &timestamppb.Timestamp{}
 	if fillDstStats {
-		to.Aggregation.EndTsFromDestination.Seconds = timeEnd
+		record.Aggregation.EndTsFromDestination.Seconds = timeEnd
 	}
 
 	// Initialize the throughput elements.
@@ -821,15 +699,15 @@ func (a *aggregationProcess) addFieldsForThroughputCalculation(from, to *flowpb.
 		throughput = byteCount * 8 / uint64(timeEnd-timeStart)
 		reverseThroughput = reverseByteCount * 8 / uint64(timeEnd-timeStart)
 	}
-	to.Aggregation.Throughput = throughput
-	to.Aggregation.ReverseThroughput = reverseThroughput
+	record.Aggregation.Throughput = throughput
+	record.Aggregation.ReverseThroughput = reverseThroughput
 	if fillSrcStats {
-		to.Aggregation.ThroughputFromSource = throughput
-		to.Aggregation.ReverseThroughputFromSource = reverseThroughput
+		record.Aggregation.ThroughputFromSource = throughput
+		record.Aggregation.ReverseThroughputFromSource = reverseThroughput
 	}
 	if fillDstStats {
-		to.Aggregation.ThroughputFromDestination = throughput
-		to.Aggregation.ReverseThroughputFromDestination = reverseThroughput
+		record.Aggregation.ThroughputFromDestination = throughput
+		record.Aggregation.ReverseThroughputFromDestination = reverseThroughput
 	}
 }
 
@@ -853,8 +731,23 @@ func (a *aggregationProcess) updateFlowEndSecondsFromNodes(incomingRecord, exist
 	return existingVal
 }
 
+// isSourceNodeFromExternalFlow returns true for the ingress-Node half of an inter-Node
+// "from external" flow. This record is exported by the Node that received the connection from an
+// external client and source-NAT'd it towards a Pod running on another (destination) Node: its
+// FlowType is FROM_EXTERNAL, it carries the ProxySnat address/port applied by the gateway, and
+// its destination Pod is empty because the Pod is local to the destination Node. A single-Node
+// "from external" flow (the Pod is local) has its destination Pod set and is not matched here.
+func isSourceNodeFromExternalFlow(record *flowpb.Flow) bool {
+	return record.K8S != nil &&
+		record.K8S.FlowType == flowpb.FlowType_FLOW_TYPE_FROM_EXTERNAL &&
+		record.K8S.DestinationPodName == "" &&
+		len(record.ProxySnatIp) > 0
+}
+
 // isRecordFromSrc returns true if record belongs to inter-node flow and from source node.
 func isRecordFromSrc(record *flowpb.Flow) bool {
+	// The ingress Node is the "source" Node of an inter-Node "from external" flow, even though
+	// the source is an external client rather than a Pod.
 	if isSourceNodeFromExternalFlow(record) {
 		return true
 	}
@@ -878,37 +771,41 @@ func areRecordsFromSameNode(record1, record2 *flowpb.Flow) bool {
 	return false
 }
 
-// getFlowKeyFromRecord returns 5-tuple from data record
+// getFlowKeyFromRecord returns the 5-tuple used to correlate and aggregate records for a flow.
+// For most flows this is (sourceIP, sourcePort, destinationIP, destinationPort, protocol).
+// The ingress-Node half of an inter-Node "from external" flow is special: the destination Node
+// observes the connection after source NAT (the external client's address/port are replaced with
+// the gateway's ProxySnat address/port), so the two Nodes only agree on the post-SNAT 5-tuple. We
+// therefore key the ingress-Node record on its ProxySnat address/port rather than the external
+// client's address/port, so that both halves land under the same key. The external client's
+// address/port are restored on the merged record by correlateRecords.
 func getFlowKeyFromRecord(record *flowpb.Flow) (*FlowKey, bool) {
 	source := net.IP(record.Ip.Source).String()
-	destination := net.IP(record.Ip.Destination).String()
+	sourcePort := uint16(record.Transport.SourcePort)
+	if isSourceNodeFromExternalFlow(record) {
+		source = net.IP(record.ProxySnatIp).String()
+		sourcePort = uint16(record.ProxySnatPort)
+	}
 	flowKey := &FlowKey{
 		SourceAddress:      source,
-		DestinationAddress: destination,
+		DestinationAddress: net.IP(record.Ip.Destination).String(),
 		Protocol:           uint8(record.Transport.ProtocolNumber),
-		SourcePort:         uint16(record.Transport.SourcePort),
+		SourcePort:         sourcePort,
 		DestinationPort:    uint16(record.Transport.DestinationPort),
 	}
 	return flowKey, record.Ip.Version == flowpb.IPVersion_IP_VERSION_4
 }
 
-// getCorrelationKey returns whether cross-node correlation is required for this record, and
-// the FlowKey to use as the map key. For source-node FROM_EXTERNAL flows the original key
-// (externalIP + clientPort) is replaced with the correlation key (ProxySnatIp + ProxySnatPort),
-// so that both halves of an inter-node FROM_EXTERNAL connection land under the same entry.
-// For all other flows the provided key is returned unchanged.
-func getCorrelationKey(record *flowpb.Flow, originalKey *FlowKey) (bool, *FlowKey) {
-	notDenied := record.K8S.EgressNetworkPolicyRuleAction != flowpb.NetworkPolicyRuleAction_NETWORK_POLICY_RULE_ACTION_DROP &&
-		record.K8S.EgressNetworkPolicyRuleAction != flowpb.NetworkPolicyRuleAction_NETWORK_POLICY_RULE_ACTION_REJECT &&
-		record.K8S.IngressNetworkPolicyRuleAction != flowpb.NetworkPolicyRuleAction_NETWORK_POLICY_RULE_ACTION_REJECT
-	if !notDenied {
-		return false, originalKey
+// isCorrelationRequired returns true when the record is one half of a flow whose two halves are
+// observed on different Nodes and must be correlated: a regular inter-Node flow, or the
+// ingress-Node half of an inter-Node "from external" flow (see isSourceNodeFromExternalFlow).
+// It returns false when the flow was dropped or rejected by a network policy rule, as the two
+// halves are then not expected to correlate.
+func isCorrelationRequired(flowType flowpb.FlowType, record *flowpb.Flow) bool {
+	if record.K8S.EgressNetworkPolicyRuleAction == flowpb.NetworkPolicyRuleAction_NETWORK_POLICY_RULE_ACTION_DROP ||
+		record.K8S.EgressNetworkPolicyRuleAction == flowpb.NetworkPolicyRuleAction_NETWORK_POLICY_RULE_ACTION_REJECT ||
+		record.K8S.IngressNetworkPolicyRuleAction == flowpb.NetworkPolicyRuleAction_NETWORK_POLICY_RULE_ACTION_REJECT {
+		return false
 	}
-	if isSourceNodeFromExternalFlow(record) && record.Ip != nil {
-		return true, getExternalCorrelationFlowKey(record)
-	}
-	if record.K8S.FlowType == flowpb.FlowType_FLOW_TYPE_INTER_NODE {
-		return true, originalKey
-	}
-	return false, originalKey
+	return flowType == flowpb.FlowType_FLOW_TYPE_INTER_NODE || isSourceNodeFromExternalFlow(record)
 }
