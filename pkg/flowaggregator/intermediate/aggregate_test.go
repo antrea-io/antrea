@@ -27,7 +27,6 @@ import (
 	clocktesting "k8s.io/utils/clock/testing"
 
 	flowpb "antrea.io/antrea/v2/pkg/apis/flow/v1alpha1"
-	"antrea.io/antrea/v2/pkg/flowaggregator/flowrecord"
 )
 
 func init() {
@@ -473,21 +472,23 @@ func TestCorrelateRecordsForFromExternalFlow(t *testing.T) {
 	destinationNodeRecord, destinationNodeRecordFlowKey := generateDestinationNodeFlowAndFlowKey()
 	ap.addOrUpdateRecordInMap(destinationNodeRecordFlowKey, destinationNodeRecord, false)
 
+	// Both halves are stored under the same correlation key: the ingress-Node record is keyed on
+	// its ProxySnat address/port, which equals the destination-Node record's natural FlowKey.
+	require.Equal(t, destinationNodeRecordFlowKey, sourceNodeRecordFlowKey, "Both halves must share the same correlation key")
 	flowKey := destinationNodeRecordFlowKey
-	flowKey.SourceAddress = flowrecord.IpAddressAsString(sourceNodeRecord.Ip.Source)
-	flowKey.SourcePort = uint16(sourceNodeRecord.Transport.SourcePort)
 	assert.Equal(t, 1, ap.expirePriorityQueue.Len(), "Expected flow to be correlated and added to queue")
 	item := ap.expirePriorityQueue.Peek()
-	got := item.flowKey
-	assert.Equal(t, flowKey, got, "Expected flow to be correlated and added to queue")
+	assert.Equal(t, flowKey, item.flowKey, "Expected correlated flow to be stored under the correlation key")
 
 	record, exists := ap.flowKeyRecordMap[*flowKey]
-	assert.True(t, exists, "Expected correlated flow to be added to flowKeyRecordMap")
+	require.True(t, exists, "Expected correlated flow to be added to flowKeyRecordMap")
 	assert.True(t, item.flowRecord.ReadyToSend, "Expected correlated flow to be marked ready to send for export")
 	correlatedFlow := record.Record
-	assert.NotNil(t, correlatedFlow, "Expected stored flow to not be nil")
+	require.NotNil(t, correlatedFlow, "Expected stored flow to not be nil")
+	assert.Equal(t, flowpb.FlowType_FLOW_TYPE_FROM_EXTERNAL, correlatedFlow.K8S.FlowType, "Expected correlated flow to be FROM_EXTERNAL")
 	assert.Equal(t, externalIP, correlatedFlow.Ip.Source, "Expected correlated flow to have original source IP")
 	assert.Equal(t, sourceNodeRecord.Transport.SourcePort, correlatedFlow.Transport.SourcePort, "Expected correlated flow to have the original client source port")
+	assert.Equal(t, "nginx-deployment-HASH", correlatedFlow.K8S.DestinationPodName, "Expected correlated flow to have the destination Pod name")
 	assert.Equal(t, nodeIP, correlatedFlow.K8S.DestinationServiceIp, "Expected correlated flow to have node IP")
 	assert.Equal(t, nodeIP, correlatedFlow.K8S.DestinationClusterIp, "Expected correlated flow to have node IP")
 	assert.Equal(t, containerPort, correlatedFlow.K8S.DestinationServicePort, "Expected correlated flow to have the container port")
@@ -550,44 +551,13 @@ func TestIsSourceNodeFromExternalFlow(t *testing.T) {
 	}
 }
 
-func TestIsDestinationNodeFromExternalFlow(t *testing.T) {
-	sourceNodeFlow, _ := generateSourceNodeFlowAndFlowKey()
-	destinationNodeFlow, _ := generateDestinationNodeFlowAndFlowKey()
-	testCases := []struct {
-		name     string
-		flow     *flowpb.Flow
-		expected bool
-	}{
-		{"k8s nil flow", &flowpb.Flow{}, false},
-		{"FROM_EXTERNAL source-node flow", sourceNodeFlow, false},
-		{
-			"INTER_NODE with SourcePodName set (regular inter-node)",
-			&flowpb.Flow{
-				K8S: &flowpb.Kubernetes{FlowType: flowpb.FlowType_FLOW_TYPE_INTER_NODE, SourcePodName: "source-pod", DestinationPodName: "dst-pod"},
-			},
-			false,
-		},
-		{
-			"INTER_NODE with ProxySnatIp set",
-			&flowpb.Flow{
-				K8S:         &flowpb.Kubernetes{FlowType: flowpb.FlowType_FLOW_TYPE_INTER_NODE, DestinationPodName: "pod"},
-				ProxySnatIp: gatewayIP,
-			},
-			false,
-		},
-		{"destination-node INTER_NODE flow (from srcIsGw branch)", destinationNodeFlow, true},
-	}
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			assert.Equal(t, tc.expected, isDestinationNodeFromExternalFlow(tc.flow))
-		})
-	}
-}
-
-func TestGetExternalCorrelationFlowKey(t *testing.T) {
+func TestGetFlowKeyForSourceNodeFromExternalFlow(t *testing.T) {
 	sourceNodeFlow, _ := generateSourceNodeFlowAndFlowKey()
 	_, destFlowKey := generateDestinationNodeFlowAndFlowKey()
-	correlationKey := getExternalCorrelationFlowKey(sourceNodeFlow)
+	// The ingress-Node record is keyed on its ProxySnat address/port, which must equal the
+	// destination-Node record's natural FlowKey so that both halves are correlated under the
+	// same map entry.
+	correlationKey, _ := getFlowKeyFromRecord(sourceNodeFlow)
 	assert.Equal(t, destFlowKey, correlationKey, "Correlation key for source-node flow should match destination-node FlowKey")
 }
 
@@ -603,19 +573,15 @@ func TestAddOrUpdateRecordInMap_FromExternalMerge(t *testing.T) {
 		ap.addOrUpdateRecordInMap(destNodeFlowKey, destinationNodeRecord, false)
 		assert.Equal(t, 1, len(ap.flowKeyRecordMap), "Should still have 1 entry after merge")
 
-		finalKey := &FlowKey{
-			SourceAddress:      flowrecord.IpAddressAsString(externalIP),
-			DestinationAddress: flowrecord.IpAddressAsString(podIP),
-			Protocol:           6,
-			SourcePort:         uint16(sourceNodeRecord.Transport.SourcePort),
-			DestinationPort:    80,
-		}
-		record, exists := ap.flowKeyRecordMap[*finalKey]
-		require.True(t, exists, "Expected merged record under final FlowKey (externalIP, clientPort, ...)")
+		// Both halves are stored under the same correlation key (the ProxySnat-based key, which
+		// equals the destination-Node record's natural FlowKey).
+		record, exists := ap.flowKeyRecordMap[*destNodeFlowKey]
+		require.True(t, exists, "Expected merged record under the correlation FlowKey")
 		assert.True(t, record.ReadyToSend, "Merged record should be ReadyToSend")
 		assert.Equal(t, flowpb.FlowType_FLOW_TYPE_FROM_EXTERNAL, record.Record.K8S.FlowType)
 		assert.Equal(t, externalIP, record.Record.Ip.Source)
 		assert.Equal(t, sourceNodeRecord.Transport.SourcePort, record.Record.Transport.SourcePort)
+		assert.Equal(t, "nginx-deployment-HASH", record.Record.K8S.DestinationPodName)
 		assert.Equal(t, nodeIP, record.Record.K8S.DestinationServiceIp)
 		assert.Equal(t, destinationServicePortName, record.Record.K8S.DestinationServicePortName)
 	})
@@ -631,18 +597,13 @@ func TestAddOrUpdateRecordInMap_FromExternalMerge(t *testing.T) {
 		ap.addOrUpdateRecordInMap(sourceNodeFlowKey, sourceNodeRecord, false)
 		assert.Equal(t, 1, len(ap.flowKeyRecordMap), "Should still have 1 entry after merge")
 
-		finalKey := &FlowKey{
-			SourceAddress:      flowrecord.IpAddressAsString(externalIP),
-			DestinationAddress: flowrecord.IpAddressAsString(podIP),
-			Protocol:           6,
-			SourcePort:         uint16(sourceNodeRecord.Transport.SourcePort),
-			DestinationPort:    80,
-		}
-		record, exists := ap.flowKeyRecordMap[*finalKey]
-		require.True(t, exists, "Expected merged record under final FlowKey (externalIP, clientPort, ...)")
+		record, exists := ap.flowKeyRecordMap[*destNodeFlowKey]
+		require.True(t, exists, "Expected merged record under the correlation FlowKey")
 		assert.True(t, record.ReadyToSend, "Merged record should be ReadyToSend")
 		assert.Equal(t, flowpb.FlowType_FLOW_TYPE_FROM_EXTERNAL, record.Record.K8S.FlowType)
 		assert.Equal(t, externalIP, record.Record.Ip.Source)
+		assert.Equal(t, sourceNodeRecord.Transport.SourcePort, record.Record.Transport.SourcePort)
+		assert.Equal(t, "nginx-deployment-HASH", record.Record.K8S.DestinationPodName)
 		assert.Equal(t, nodeIP, record.Record.K8S.DestinationServiceIp)
 		assert.Equal(t, destinationServicePortName, record.Record.K8S.DestinationServicePortName)
 	})
