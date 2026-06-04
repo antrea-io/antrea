@@ -606,6 +606,76 @@ jobs:
           path: log.tar.gz
           retention-days: 30
 
+  test-multicluster-e2e:
+    name: Multi-cluster e2e tests on Kind clusters
+    needs: [check-changes]
+    if: ${{ needs.check-changes.outputs.has_changes == 'yes' }}
+    runs-on: [ubuntu-latest-8-cores]
+    timeout-minutes: 150
+    env:
+      GIT_COMMIT: ${{ github.sha }}
+      WORKSPACE: ${{ github.workspace }}
+    steps:
+    - name: Free disk space (extended)
+      # Multi-cluster e2e builds Antrea and the multi-cluster controller, then runs three Kind clusters.
+      run: |
+        sudo apt-get clean
+        sudo rm -rf /usr/share/dotnet
+        sudo rm -rf /opt/ghc
+        sudo rm -rf "/usr/local/share/boost"
+        sudo rm -rf "$AGENT_TOOLSDIRECTORY"
+        sudo rm -rf "/usr/local/lib/android"
+        df -h
+    - uses: actions/checkout@v6
+      with:
+        show-progress: false
+    - uses: actions/setup-go@v6
+      with:
+        go-version-file: '.go-version'
+    - uses: ./.github/actions/setup-docker-classic
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v4
+      with:
+        driver: docker
+    - uses: ./.github/actions/setup-kind
+    - name: Run multi-cluster e2e tests
+      run: |
+        mkdir -p "$HOME/.kube"
+        ./ci/jenkins/test-mc.sh \
+          --testcase e2e \
+          --registry "$(head -n1 ci/docker-registry)" \
+          --mc-gateway \
+          --coverage \
+          --kind \
+          --use-system-go \
+          --workdir "$GITHUB_WORKSPACE" \
+          --kubeconfigs-path "$HOME/.kube"
+    - name: Tar coverage files
+      run: tar -czf mc-e2e-coverage.tar.gz mc-e2e-coverage
+    - name: Upload coverage for test-multicluster-e2e
+      uses: actions/upload-artifact@v7
+      with:
+        name: test-multicluster-e2e-coverage
+        path: mc-e2e-coverage.tar.gz
+        retention-days: 30
+    - name: Codecov
+      uses: codecov/codecov-action@v6
+      with:
+        token: ${{ secrets.CODECOV_TOKEN }}
+        files: '**/*.cov.out'
+        disable_search: true
+        flags: kind-e2e-tests
+        name: codecov-test-multicluster-e2e
+        directory: mc-e2e-coverage
+        fail_ci_if_error: ${{ github.event_name == 'push' }}
+    - name: Upload test log
+      uses: actions/upload-artifact@v7
+      if: ${{ failure() }}
+      with:
+        name: multicluster-e2e-kind.tar.gz
+        path: antrea-test-logs.tar.gz
+        retention-days: 30
+
   test-network-policy-conformance-encap:
     name: NetworkPolicy conformance tests on a Kind cluster on Linux
     needs: [build-antrea-coverage-image]
@@ -867,6 +937,7 @@ jobs:
     - test-network-policy-conformance-encap
     - test-secondary-network
     - test-e2e-conformance
+    - test-multicluster-e2e
     - run-installation-checks
     runs-on: [ubuntu-latest]
     steps:
