@@ -349,14 +349,20 @@ func (c *Controller) parsePacketIn(pktIn *ofctrl.PacketIn) (*crdv1beta1.Traceflo
 			}
 
 			ob.Action = crdv1beta1.ActionForwardedOutOfNetwork
-			// In hybrid mode or WireGuard mode, packets to Pod IPs in the same subnet are forwarded
-			// directly without encapsulation. Check if the destination is a Pod IP to determine
-			// the correct action (Forwarded vs ForwardedOutOfNetwork).
-			if (c.networkConfig.TrafficEncapMode == config.TrafficEncapModeHybrid || c.networkConfig.TrafficEncryptionMode == config.TrafficEncryptionModeWireGuard) && c.podSubnetChecker != nil {
-				netAddrDst, _ := netip.AddrFromSlice(netIPDst)
-				isPodIP, _ := c.podSubnetChecker.LookupIPInPodSubnets(netAddrDst)
-				if isPodIP {
-					ob.Action = crdv1beta1.ActionForwarded
+			netAddrDst, isValidIP := netip.AddrFromSlice(netIPDst)
+			if pktMark == 0 && isValidIP && c.nodeRouteQuerier != nil {
+				if c.networkConfig.TrafficEncryptionMode == config.TrafficEncryptionModeWireGuard {
+					// WireGuard sends cross-Node Pod traffic through the gateway port. Resolve the destination Pod IP
+					// through NodeRoute to distinguish it from traffic leaving the cluster and report the peer Node IP.
+					if peerNodeIP, ok := c.nodeRouteQuerier.GetNodeIPForPodIP(netAddrDst); ok {
+						ob.Action = crdv1beta1.ActionForwarded
+						ob.TunnelDstIP = peerNodeIP.String()
+					}
+				} else if c.networkConfig.TrafficEncapMode == config.TrafficEncapModeHybrid {
+					isPodIP, _ := c.nodeRouteQuerier.LookupIPInPodSubnets(netAddrDst)
+					if isPodIP {
+						ob.Action = crdv1beta1.ActionForwarded
+					}
 				}
 			}
 		} else if c.networkConfig.TrafficEncapMode == config.TrafficEncapModeNetworkPolicyOnly && outputPort == gwPort { // networkPolicyOnly
@@ -375,9 +381,9 @@ func (c *Controller) parsePacketIn(pktIn *ofctrl.PacketIn) (*crdv1beta1.Traceflo
 		} else if c.networkConfig.TrafficEncapMode == config.TrafficEncapModeNoEncap && outputPort == gwPort { // noEncap
 			// TODO: update this and above case if noEncap mode supports Egress feature
 			isPodIP := false
-			if c.podSubnetChecker != nil {
+			if c.nodeRouteQuerier != nil {
 				netAddrDst, _ := netip.AddrFromSlice(netIPDst)
-				isPodIP, _ = c.podSubnetChecker.LookupIPInPodSubnets(netAddrDst)
+				isPodIP, _ = c.nodeRouteQuerier.LookupIPInPodSubnets(netAddrDst)
 			}
 			if isPodIP {
 				ob.Action = crdv1beta1.ActionForwarded
