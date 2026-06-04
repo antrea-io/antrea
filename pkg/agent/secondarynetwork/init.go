@@ -15,30 +15,17 @@
 package secondarynetwork
 
 import (
-	"errors"
-	"fmt"
 	"sync"
 	"sync/atomic"
 	"time"
 
 	"github.com/TomCodeLV/OVSDB-golang-lib/pkg/ovsdb"
-	netdefclient "github.com/k8snetworkplumbingwg/network-attachment-definition-client/pkg/client/clientset/versioned/typed/k8s.cni.cncf.io/v1"
-	clientset "k8s.io/client-go/kubernetes"
-	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/util/workqueue"
-	componentbaseconfig "k8s.io/component-base/config"
-	"k8s.io/klog/v2"
 
 	"antrea.io/antrea/v2/pkg/agent/antreanodeconfig"
-	"antrea.io/antrea/v2/pkg/agent/config"
-	"antrea.io/antrea/v2/pkg/agent/interfacestore"
-	"antrea.io/antrea/v2/pkg/agent/secondarynetwork/podwatch"
 	agenttypes "antrea.io/antrea/v2/pkg/agent/types"
-	crdlisters "antrea.io/antrea/v2/pkg/client/listers/crd/v1beta1"
 	agentconfig "antrea.io/antrea/v2/pkg/config/agent"
 	"antrea.io/antrea/v2/pkg/ovs/ovsconfig"
-	"antrea.io/antrea/v2/pkg/util/channel"
-	"antrea.io/antrea/v2/pkg/util/k8s"
 )
 
 const (
@@ -92,81 +79,6 @@ type Controller struct {
 	queue workqueue.TypedRateLimitingInterface[string]
 }
 
-func NewController(
-	clientConnectionConfig componentbaseconfig.ClientConnectionConfiguration,
-	kubeAPIServerOverride string,
-	k8sClient clientset.Interface,
-	podInformer cache.SharedIndexInformer,
-	podUpdateSubscriber channel.Subscriber,
-	primaryInterfaceStore interfacestore.InterfaceStore,
-	nodeConfig *config.NodeConfig,
-	secNetConfig *agentconfig.SecondaryNetworkConfig,
-	ovsdbConn *ovsdb.OVSDB,
-	ipPoolLister crdlisters.IPPoolLister,
-	ancUpdateSubscriber channel.Subscriber,
-) (*Controller, error) {
-	c := &Controller{
-		secNetConfig: secNetConfig,
-		nodeName:     nodeConfig.Name,
-		ovsdbConn:    ovsdbConn,
-	}
-
-	if ancUpdateSubscriber != nil {
-		c.dynamicBridgeReconcile = true
-		c.ancFirstSnapshotCh = make(chan struct{})
-		c.queue = workqueue.NewTypedRateLimitingQueueWithConfig(
-			workqueue.NewTypedItemExponentialFailureRateLimiter[string](minRetryDelay, maxRetryDelay),
-			workqueue.TypedRateLimitingQueueConfig[string]{Name: "secondaryNetworkBridge"},
-		)
-	}
-
-	var effectiveBridgeCfg *agenttypes.OVSBridgeConfig
-	var ovsBridgeClient ovsconfig.OVSBridgeClient
-	var err error
-
-	if !c.dynamicBridgeReconcile {
-		effectiveBridgeCfg, ovsBridgeClient, err = resolveAndCreateOVSBridge(c.effectiveOVSBridge, c.ovsdbConn)
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	netAttachDefClient, err := createNetworkAttachDefClient(clientConnectionConfig, kubeAPIServerOverride)
-	if err != nil {
-		return nil, fmt.Errorf("NetworkAttachmentDefinition client creation failed: %v", err)
-	}
-
-	podWatchController, err := podwatch.NewPodController(
-		k8sClient, netAttachDefClient, podInformer,
-		podUpdateSubscriber, primaryInterfaceStore, nodeConfig, ovsBridgeClient, ipPoolLister)
-	if err != nil {
-		return nil, err
-	}
-
-	c.ovsBridgeClient = ovsBridgeClient
-	c.effectiveBridgeCfg = effectiveBridgeCfg
-	c.podController = podWatchController
-
-	if c.dynamicBridgeReconcile {
-		ancUpdateSubscriber.Subscribe(func(p interface{}) {
-			snap, ok := p.(*antreanodeconfig.Snapshot)
-			if !ok {
-				klog.ErrorS(errors.New("unexpected notify payload"), "AntreaNodeConfig notify payload", "type", fmt.Sprintf("%T", p))
-				return
-			}
-			if snap == nil {
-				klog.ErrorS(errors.New("nil snapshot from notifier"), "AntreaNodeConfig notify payload")
-				return
-			}
-			c.latestANCSnapshot.Store(snap)
-			c.signalFirstANC.Do(func() { close(c.ancFirstSnapshotCh) })
-			c.enqueue()
-		})
-	}
-
-	return c, nil
-}
-
 // effectiveOVSBridge returns the desired OVS bridge for this node. When AntreaNodeConfig
 // drives the bridge, only snapshots delivered on the notify channel are used.
 // When ANC is disabled, only static agent config is consulted.
@@ -187,18 +99,4 @@ func (c *Controller) enqueue() {
 
 func (c *Controller) AllowCNIDelete(podName, podNamespace string) bool {
 	return c.podController.AllowCNIDelete(podName, podNamespace)
-}
-
-// CreateNetworkAttachDefClient creates net-attach-def client handle from the given config.
-func createNetworkAttachDefClient(cfg componentbaseconfig.ClientConnectionConfiguration, kubeAPIServerOverride string) (netdefclient.K8sCniCncfIoV1Interface, error) {
-	kubeConfig, err := k8s.CreateRestConfig(cfg, kubeAPIServerOverride)
-	if err != nil {
-		return nil, err
-	}
-
-	netAttachDefClient, err := netdefclient.NewForConfig(kubeConfig)
-	if err != nil {
-		return nil, err
-	}
-	return netAttachDefClient, nil
 }

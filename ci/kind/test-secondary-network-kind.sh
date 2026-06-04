@@ -242,9 +242,19 @@ function run_test_with_antrenodeconfigs {
   kubectl apply -f "$ANTREA_NODE_CONFIGS_LINUX_YAML"
   sleep 5
   go test -v -timeout="$TIMEOUT" antrea.io/antrea/v2/test/e2e-secondary-network -run=TestVLANNetwork -provider=kind "${TEST_OPTIONS[@]}"
+
+  echo "Modifying multicast-snooping under the same bridge name"
+  kubectl patch antreanodeconfig secondary-network-node-pool-all-linux --type=merge -p '{"spec":{"secondaryNetwork":{"ovsBridges":[{"bridgeName":"br1","enableMulticastSnooping":true,"physicalInterfaces":[{"name":"eth1"}]}]}}}'
+  sleep 5
+  go test -v -timeout="$TIMEOUT" antrea.io/antrea/v2/test/e2e-secondary-network -run=TestVLANNetwork -provider=kind "${TEST_OPTIONS[@]}"
+
   echo "Clean up the previous AntreaNodeConfig"
   kubectl delete -f "$ANTREA_NODE_CONFIGS_LINUX_YAML"
   sleep 5
+
+  echo "Verifying fallback to static config after AntreaNodeConfig deletion"
+  go test -v -timeout="$TIMEOUT" antrea.io/antrea/v2/test/e2e-secondary-network -run=TestVLANNetwork -provider=kind "${TEST_OPTIONS[@]}"
+
   configure_vlan_bridges
   echo "Apply new AntreaNodeConfigs for NodePool 1 and NodePool 2 nodes"
   kubectl apply -f "$ANTREA_NODE_CONFIGS_NODEPOOL_YAML"

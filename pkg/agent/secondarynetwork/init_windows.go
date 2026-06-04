@@ -19,10 +19,34 @@ package secondarynetwork
 
 import (
 	"github.com/TomCodeLV/OVSDB-golang-lib/pkg/ovsdb"
+	clientset "k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/tools/cache"
+	componentbaseconfig "k8s.io/component-base/config"
 
+	"antrea.io/antrea/v2/pkg/agent/interfacestore"
 	agenttypes "antrea.io/antrea/v2/pkg/agent/types"
+	crdlisters "antrea.io/antrea/v2/pkg/client/listers/crd/v1beta1"
+	"antrea.io/antrea/v2/pkg/agent/config"
+	agentconfig "antrea.io/antrea/v2/pkg/config/agent"
 	"antrea.io/antrea/v2/pkg/ovs/ovsconfig"
+	"antrea.io/antrea/v2/pkg/util/channel"
 )
+
+func NewController(
+	clientConnectionConfig componentbaseconfig.ClientConnectionConfiguration,
+	kubeAPIServerOverride string,
+	k8sClient clientset.Interface,
+	podInformer cache.SharedIndexInformer,
+	podUpdateSubscriber channel.Subscriber,
+	primaryInterfaceStore interfacestore.InterfaceStore,
+	nodeConfig *config.NodeConfig,
+	secNetConfig *agentconfig.SecondaryNetworkConfig,
+	ovsdbConn *ovsdb.OVSDB,
+	ipPoolLister crdlisters.IPPoolLister,
+	ancUpdateSubscriber channel.Subscriber,
+) (*Controller, error) {
+	return nil, nil
+}
 
 func (c *Controller) Initialize(stopCh <-chan struct{}) error {
 	return nil
@@ -32,14 +56,7 @@ func (c *Controller) Restore() {
 	// Not supported on Windows.
 }
 
-func (c *Controller) reconcileBridge() error {
-	// Not supported on Windows.
-	return nil
-}
-
-func (c *Controller) Run(stopCh <-chan struct{}) {
-	return
-}
+func (c *Controller) Run(stopCh <-chan struct{}) {}
 
 func resolveAndCreateOVSBridge(
 	effectiveBridge func() *agenttypes.OVSBridgeConfig,

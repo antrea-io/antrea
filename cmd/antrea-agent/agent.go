@@ -652,7 +652,9 @@ func run(o *Options) error {
 		if err != nil {
 			return fmt.Errorf("failed to create secondary network controller: %w", err)
 		}
-		cniDeleteChecker = secondaryNetworkController
+		if secondaryNetworkController != nil {
+			cniDeleteChecker = secondaryNetworkController
+		}
 	}
 
 	if o.nodeType == config.K8sNode {
@@ -996,7 +998,7 @@ func run(o *Options) error {
 	// secondaryNetworkController Initialize must be run after FlowRestoreComplete for the case that Node
 	// IPs are moved to the secondary OVS bridge. When AntreaNodeConfig drives the secondary bridge,
 	// Initialize waits for the first ANC snapshot before setting up the bridge.
-	if features.DefaultFeatureGate.Enabled(features.SecondaryNetwork) {
+	if features.DefaultFeatureGate.Enabled(features.SecondaryNetwork) && secondaryNetworkController != nil {
 		defer secondaryNetworkController.Restore()
 		if err = secondaryNetworkController.Initialize(stopCh); err != nil {
 			return fmt.Errorf("failed to initialize secondary network: %v", err)

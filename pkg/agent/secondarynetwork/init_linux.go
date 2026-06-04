@@ -18,35 +18,138 @@
 package secondarynetwork
 
 import (
+	"errors"
 	"fmt"
 	"net"
-	"reflect"
 
 	"github.com/TomCodeLV/OVSDB-golang-lib/pkg/ovsdb"
+	netdefclient "github.com/k8snetworkplumbingwg/network-attachment-definition-client/pkg/client/clientset/versioned/typed/k8s.cni.cncf.io/v1"
+	clientset "k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/tools/cache"
+	"k8s.io/client-go/util/workqueue"
+	componentbaseconfig "k8s.io/component-base/config"
 	"k8s.io/klog/v2"
 
+	"antrea.io/antrea/v2/pkg/agent/antreanodeconfig"
+	"antrea.io/antrea/v2/pkg/agent/config"
 	"antrea.io/antrea/v2/pkg/agent/interfacestore"
+	"antrea.io/antrea/v2/pkg/agent/secondarynetwork/podwatch"
 	agenttypes "antrea.io/antrea/v2/pkg/agent/types"
 	"antrea.io/antrea/v2/pkg/agent/util"
+	crdlisters "antrea.io/antrea/v2/pkg/client/listers/crd/v1beta1"
+	agentconfig "antrea.io/antrea/v2/pkg/config/agent"
 	"antrea.io/antrea/v2/pkg/ovs/ovsconfig"
+	"antrea.io/antrea/v2/pkg/util/channel"
+	"antrea.io/antrea/v2/pkg/util/k8s"
 )
 
 var (
 	// Funcs which will be overridden with mock funcs in tests.
-	interfaceByNameFn            = net.InterfaceByName
-	restoreHostInterfaceConfigFn = util.RestoreHostInterfaceConfiguration // func(brName, ifName string) error
-	newOVSBridgeFn               = ovsconfig.NewOVSBridge
+	interfaceByNameFn = net.InterfaceByName
+	// func(bridge, ifName, ifOFPort, externalIDs, mtu) (bridgedName, alreadyExists, error)
+	prepareHostInterfaceConnectionFn = util.PrepareHostInterfaceConnection
+	restoreHostInterfaceConfigFn     = util.RestoreHostInterfaceConfiguration // func(brName, ifName string) error
+	newOVSBridgeFn                   = ovsconfig.NewOVSBridge
 )
+
+func NewController(
+	clientConnectionConfig componentbaseconfig.ClientConnectionConfiguration,
+	kubeAPIServerOverride string,
+	k8sClient clientset.Interface,
+	podInformer cache.SharedIndexInformer,
+	podUpdateSubscriber channel.Subscriber,
+	primaryInterfaceStore interfacestore.InterfaceStore,
+	nodeConfig *config.NodeConfig,
+	secNetConfig *agentconfig.SecondaryNetworkConfig,
+	ovsdbConn *ovsdb.OVSDB,
+	ipPoolLister crdlisters.IPPoolLister,
+	ancUpdateSubscriber channel.Subscriber,
+) (*Controller, error) {
+	c := &Controller{
+		secNetConfig: secNetConfig,
+		nodeName:     nodeConfig.Name,
+		ovsdbConn:    ovsdbConn,
+	}
+
+	if ancUpdateSubscriber != nil {
+		c.dynamicBridgeReconcile = true
+		c.ancFirstSnapshotCh = make(chan struct{})
+		c.queue = workqueue.NewTypedRateLimitingQueueWithConfig(
+			workqueue.NewTypedItemExponentialFailureRateLimiter[string](minRetryDelay, maxRetryDelay),
+			workqueue.TypedRateLimitingQueueConfig[string]{Name: "secondaryNetworkBridge"},
+		)
+	}
+
+	var effectiveBridgeCfg *agenttypes.OVSBridgeConfig
+	var ovsBridgeClient ovsconfig.OVSBridgeClient
+	var err error
+
+	if !c.dynamicBridgeReconcile {
+		effectiveBridgeCfg, ovsBridgeClient, err = resolveAndCreateOVSBridge(c.effectiveOVSBridge, c.ovsdbConn)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	netAttachDefClient, err := createNetworkAttachDefClient(clientConnectionConfig, kubeAPIServerOverride)
+	if err != nil {
+		return nil, fmt.Errorf("NetworkAttachmentDefinition client creation failed: %v", err)
+	}
+
+	podWatchController, err := podwatch.NewPodController(
+		k8sClient, netAttachDefClient, podInformer,
+		podUpdateSubscriber, primaryInterfaceStore, nodeConfig, ovsBridgeClient, ipPoolLister)
+	if err != nil {
+		return nil, err
+	}
+
+	c.ovsBridgeClient = ovsBridgeClient
+	c.effectiveBridgeCfg = effectiveBridgeCfg
+	c.podController = podWatchController
+
+	if c.dynamicBridgeReconcile {
+		ancUpdateSubscriber.Subscribe(func(p interface{}) {
+			snap, ok := p.(*antreanodeconfig.Snapshot)
+			if !ok {
+				klog.ErrorS(errors.New("unexpected notify payload"), "AntreaNodeConfig notify payload", "type", fmt.Sprintf("%T", p))
+				return
+			}
+			if snap == nil {
+				klog.ErrorS(errors.New("nil snapshot from notifier"), "AntreaNodeConfig notify payload")
+				return
+			}
+			c.latestANCSnapshot.Store(snap)
+			c.signalFirstANC.Do(func() { close(c.ancFirstSnapshotCh) })
+			c.enqueue()
+		})
+	}
+
+	return c, nil
+}
+
+// CreateNetworkAttachDefClient creates net-attach-def client handle from the given config.
+func createNetworkAttachDefClient(cfg componentbaseconfig.ClientConnectionConfiguration, kubeAPIServerOverride string) (netdefclient.K8sCniCncfIoV1Interface, error) {
+	kubeConfig, err := k8s.CreateRestConfig(cfg, kubeAPIServerOverride)
+	if err != nil {
+		return nil, err
+	}
+
+	netAttachDefClient, err := netdefclient.NewForConfig(kubeConfig)
+	if err != nil {
+		return nil, err
+	}
+	return netAttachDefClient, nil
+}
 
 // Initialize sets up OVS bridges at agent start-up.
 // When AntreaNodeConfig drives the bridge, it first waits for the initial ANC snapshot,
 // creates the effective bridge, and then reconciles physical interfaces.
 // It reconciles the current OVS bridge state with the effective bridge config:
-//   - rule 1: if the effective bridge has the same name as the previous bridge,
+//   - if the effective bridge has the same name as the previous bridge,
 //     keep the bridge and update the physical interfaces (add/remove ports).
-//   - rule 2: if the effective bridge name differs from the previous bridge,
+//   - if the effective bridge name differs from the previous bridge,
 //     delete the old bridge and recreate with the new config.
-//   - rule 3: when allowedVLANs are set on a physical interface, configure the
+//   - when allowedVLANs are set on a physical interface, configure the
 //     OVS port in trunk mode with the specified VLAN IDs.
 func (c *Controller) Initialize(stopCh <-chan struct{}) error {
 	if c.dynamicBridgeReconcile {
@@ -75,7 +178,7 @@ func (c *Controller) Initialize(stopCh <-chan struct{}) error {
 	// Only single-interface host-connection migration is supported.
 	if len(bridgeCfg.PhysicalInterfaces) == 1 {
 		iface := bridgeCfg.PhysicalInterfaces[0]
-		bridgedName, _, err := util.PrepareHostInterfaceConnection(
+		bridgedName, _, err := prepareHostInterfaceConnectionFn(
 			c.ovsBridgeClient,
 			iface.Name,
 			0,
@@ -293,9 +396,9 @@ func resolveAndCreateOVSBridge(
 // controller signals a change (or on retries). It re-computes the desired
 // bridge configuration and reconciles the OVS state accordingly:
 //
-//   - rule 1: same bridge name as current → keep bridge, update physical interfaces.
-//   - rule 2: different bridge name → delete old bridge first, then create the new bridge.
-//   - rule 3: interfaces with allowedVLANs are configured as OVS trunk ports.
+//   - same bridge name as current → keep bridge, update physical interfaces.
+//   - different bridge name → delete old bridge first, then create the new bridge.
+//   - interfaces with allowedVLANs are configured as OVS trunk ports.
 //
 // State-update discipline: after any destructive operation (bridge deletion) the controller
 // state is immediately cleared under the mutex so that a subsequent retry does not attempt to
@@ -310,11 +413,6 @@ func (c *Controller) reconcileBridge() error {
 	if prev == nil && desired == nil {
 		return nil
 	}
-	// No change — nothing to do.
-	if prev != nil && desired != nil && reflect.DeepEqual(*prev, *desired) {
-		return nil
-	}
-
 	klog.InfoS("Reconciling secondary network bridge configuration",
 		"previous", bridgeName(prev), "desired", bridgeName(desired))
 
@@ -328,7 +426,7 @@ func (c *Controller) reconcileBridge() error {
 		return c.createAndConnectBridge(desired)
 	}
 
-	// Case: bridge name changed (rule 2).
+	// Case: bridge name changed.
 	// The old bridge MUST be deleted before the new one is created.  State is
 	// cleared under the mutex immediately after the deletion succeeds so that if
 	// createAndConnectBridge subsequently fails the next retry starts from a clean
@@ -342,12 +440,12 @@ func (c *Controller) reconcileBridge() error {
 		return c.createAndConnectBridge(desired)
 	}
 
-	// Case: same bridge name (rule 1) — update physical interfaces in-place.
-	// effectiveBridgeCfg is updated incrementally inside updatePhysicalInterfaces
-	// after each mutating step, so a retry always sees accurate state.
+	// Case: same bridge name — update physical interfaces in-place.
+	// effectiveBridgeCfg is updated only after all same-bridge mutations succeed,
+	// so a retry does not skip partially-applied host-connection changes.
 	klog.InfoS("Secondary OVS bridge name unchanged, updating physical interfaces",
 		"bridge", desired.BridgeName)
-	return c.updatePhysicalInterfaces(prev, desired)
+	return c.updatePhysicalInterfaces(desired)
 }
 
 func (c *Controller) clearBridgeState() {
@@ -407,7 +505,7 @@ func (c *Controller) createAndConnectBridge(desired *agenttypes.OVSBridgeConfig)
 
 	physInterfaces := desired.PhysicalInterfaces
 	if len(physInterfaces) == 1 {
-		bridgedName, _, err := util.PrepareHostInterfaceConnection(
+		bridgedName, _, err := prepareHostInterfaceConnectionFn(
 			newClient,
 			physInterfaces[0].Name,
 			0,
@@ -440,24 +538,25 @@ func (c *Controller) createAndConnectBridge(desired *agenttypes.OVSBridgeConfig)
 		return err
 	}
 
+	// Notify PodController of the new bridge so it uses the correct OVS client
+	// for future Pod interface operations and reloads its interface store.
+	if err := c.podController.UpdateOVSBridgeClient(newClient); err != nil {
+		return err
+	}
+
 	c.mu.Lock()
 	c.ovsBridgeClient = newClient
 	c.effectiveBridgeCfg = desired
 	c.mu.Unlock()
-
-	// Notify PodController of the new bridge so it uses the correct OVS client
-	// for future Pod interface operations and reloads its interface store.
-	return c.podController.UpdateOVSBridgeClient(newClient)
+	return nil
 }
 
 // updatePhysicalInterfaces reconciles OVS ports on an existing bridge to match the
 // desired config. effectiveBridgeCfg is updated under a lock so that concurrent
 // podwatch events see a consistent state.
-func (c *Controller) updatePhysicalInterfaces(prev, desired *agenttypes.OVSBridgeConfig) error {
-	// Build a set of desired interface names.
-	desiredIfaces := make(map[string]agenttypes.PhysicalInterfaceConfig, len(desired.PhysicalInterfaces))
-	for _, pi := range desired.PhysicalInterfaces {
-		desiredIfaces[pi.Name] = pi
+func (c *Controller) updatePhysicalInterfaces(desired *agenttypes.OVSBridgeConfig) error {
+	if _, err := createOVSBridgeClient(desired.BridgeName, desired.EnableMulticastSnooping, c.ovsdbConn); err != nil {
+		return err
 	}
 
 	// Build a map of currently present ports on the bridge: interface name → UUID,
@@ -473,53 +572,36 @@ func (c *Controller) updatePhysicalInterfaces(prev, desired *agenttypes.OVSBridg
 		existingIFTypes[p.IFName] = p.IFType
 	}
 
-	// Step 1: remove ports that were in the previous config but are no longer desired.
-	//
-	// When an interface was connected via PrepareHostInterfaceConnection (single-interface
-	// host-connection path), the kernel interface was renamed eth1 → eth1~, an internal
-	// OVS port "eth1" was created, and an uplink port "eth1~" was added.  In that case
-	// prev records the original name "eth1", but the bridge holds TWO ports: "eth1"
-	// (internal) and "eth1~" (uplink).  Simply deleting the "eth1" port via DeletePorts
-	// would leave "eth1~" orphaned on the bridge and the host kernel interface stranded
-	// under the renamed name.  We must call RestoreHostInterfaceConfiguration instead,
-	// which removes both ports and renames eth1~ back to eth1 on the host.
-	//
-	// For plain uplink ports (no sibling) the normal DeletePorts path is used.  Those
-	// are batched into a single OVSDB transaction for atomicity.
+	if err := c.restoreStaleHostConnections(desired, portList, existingPorts, existingIFTypes); err != nil {
+		return err
+	}
+
+	bridgePhysInterfaces, prepareErr := c.prepareBridgePhysicalInterfaces(desired, existingPorts, existingIFTypes)
+	if prepareErr != nil {
+		return prepareErr
+	}
+
+	desiredBridgeIfaces := make(map[string]struct{}, len(bridgePhysInterfaces))
+	for _, pi := range bridgePhysInterfaces {
+		desiredBridgeIfaces[pi.Name] = struct{}{}
+	}
+
+	// Step 1: remove Antrea-managed uplink ports observed in OVSDB but no longer desired.
+	// Host-connection pairs are restored above instead of being deleted as raw OVS ports.
 	var toRemoveUUIDs []string
 	var toRemoveNames []string
-	for _, pi := range prev.PhysicalInterfaces {
-		if _, ok := desiredIfaces[pi.Name]; ok {
+	for _, p := range portList {
+		if _, stillExists := existingPorts[p.IFName]; !stillExists {
 			continue
 		}
-		bridgedName := util.GenerateUplinkInterfaceName(pi.Name)
-		if existingIFTypes[pi.Name] == "internal" {
-			if _, siblingExists := existingPorts[bridgedName]; siblingExists {
-				// Host-connection pair: restore via the utility that removes both
-				// OVS ports and renames the kernel interface back.
-				klog.InfoS("Restoring host interface before removing from bridge",
-					"device", pi.Name, "bridge", desired.BridgeName)
-				if err := restoreHostInterfaceConfigFn(desired.BridgeName, pi.Name); err != nil {
-					return fmt.Errorf("failed to restore host interface %s on bridge %s: %w",
-						pi.Name, desired.BridgeName, err)
-				}
-				// Keep existingPorts in sync so Step 3 does not skip re-adding
-				// an interface that was just restored (remove-then-re-add scenario).
-				delete(existingPorts, pi.Name)
-				delete(existingPorts, bridgedName)
-				continue
-			}
+		if p.ExternalIDs[interfacestore.AntreaInterfaceTypeKey] != interfacestore.AntreaUplink {
+			continue
 		}
-		if uuid, exists := existingPorts[pi.Name]; exists {
-			toRemoveUUIDs = append(toRemoveUUIDs, uuid)
-			toRemoveNames = append(toRemoveNames, pi.Name)
+		if _, desired := desiredBridgeIfaces[p.IFName]; desired {
+			continue
 		}
-		// Also remove the sibling uplink port if present (e.g. eth1~ left over from
-		// a partially-restored host-connection setup).
-		if uuid, exists := existingPorts[bridgedName]; exists {
-			toRemoveUUIDs = append(toRemoveUUIDs, uuid)
-			toRemoveNames = append(toRemoveNames, bridgedName)
-		}
+		toRemoveUUIDs = append(toRemoveUUIDs, p.UUID)
+		toRemoveNames = append(toRemoveNames, p.IFName)
 	}
 	if len(toRemoveUUIDs) > 0 {
 		if err := c.ovsBridgeClient.DeletePorts(toRemoveUUIDs); err != nil {
@@ -533,24 +615,11 @@ func (c *Controller) updatePhysicalInterfaces(prev, desired *agenttypes.OVSBridg
 			delete(existingPorts, name)
 		}
 	}
-	// Build the post-deletion effective config: drop all interfaces not in desired
-	// (whether just deleted or already absent) so the next retry does not re-attempt them.
-	current := prev.DeepCopy()
-	kept := current.PhysicalInterfaces[:0]
-	for _, pi := range current.PhysicalInterfaces {
-		if _, ok := desiredIfaces[pi.Name]; ok {
-			kept = append(kept, pi)
-		}
-	}
-	current.PhysicalInterfaces = kept
-	c.mu.Lock()
-	c.effectiveBridgeCfg = current
-	c.mu.Unlock()
 
 	// Step 2: clear trunk VLANs on existing ports whose desired config has no AllowedVLANs.
 	// clearStaleTrunks reads the actual OVS port state and only calls SetPortTrunks
 	// when the port genuinely has trunks set, so it is safe to call unconditionally.
-	if err := clearStaleTrunks(c.ovsBridgeClient, desired.PhysicalInterfaces); err != nil {
+	if err := clearStaleTrunks(c.ovsBridgeClient, bridgePhysInterfaces); err != nil {
 		return err
 	}
 
@@ -559,7 +628,7 @@ func (c *Controller) updatePhysicalInterfaces(prev, desired *agenttypes.OVSBridg
 	// does not yet exist, and calls SetPortTrunks when it does and AllowedVLANs is
 	// non-empty.
 	var toConnect []agenttypes.PhysicalInterfaceConfig
-	for _, pi := range desired.PhysicalInterfaces {
+	for _, pi := range bridgePhysInterfaces {
 		if _, alreadyExists := existingPorts[pi.Name]; !alreadyExists || len(pi.AllowedVLANs) > 0 {
 			toConnect = append(toConnect, pi)
 		}
@@ -576,9 +645,104 @@ func (c *Controller) updatePhysicalInterfaces(prev, desired *agenttypes.OVSBridg
 	return nil
 }
 
+func (c *Controller) restoreStaleHostConnections(
+	desired *agenttypes.OVSBridgeConfig,
+	portList []ovsconfig.OVSPortData,
+	existingPorts map[string]string,
+	existingIFTypes map[string]string,
+) error {
+	desiredIfaces := make(map[string]struct{}, len(desired.PhysicalInterfaces))
+	for _, pi := range desired.PhysicalInterfaces {
+		desiredIfaces[pi.Name] = struct{}{}
+	}
+	keepSingleHostConnection := len(desired.PhysicalInterfaces) == 1
+
+	for _, p := range portList {
+		bridgedName := util.GenerateUplinkInterfaceName(p.IFName)
+		if existingIFTypes[p.IFName] != "internal" {
+			continue
+		}
+		if _, siblingExists := existingPorts[bridgedName]; !siblingExists {
+			continue
+		}
+		_, desiredIface := desiredIfaces[p.IFName]
+		if keepSingleHostConnection && desiredIface {
+			continue
+		}
+		klog.InfoS("Restoring host interface before reconciling secondary OVS bridge uplinks",
+			"device", p.IFName, "bridge", desired.BridgeName)
+		if err := restoreHostInterfaceConfigFn(desired.BridgeName, p.IFName); err != nil {
+			return fmt.Errorf("failed to restore host interface %s on bridge %s: %w",
+				p.IFName, desired.BridgeName, err)
+		}
+		delete(existingPorts, p.IFName)
+		delete(existingPorts, bridgedName)
+		delete(existingIFTypes, p.IFName)
+		delete(existingIFTypes, bridgedName)
+	}
+	return nil
+}
+
+// prepareBridgePhysicalInterfaces returns the physical OVS port configs that should be used for
+// trunk reconciliation and port connection on the bridge.
+//
+// AntreaNodeConfig records the original host interface name, but a single-uplink bridge does not
+// use that original name as the physical uplink port. PrepareHostInterfaceConnection renames the
+// host NIC from ethX to ethX~, creates ethX as an internal OVS port for host networking, and uses
+// ethX~ as the real physical uplink. Therefore same-bridge updates must apply AllowedVLANs and
+// stale-trunk clearing to ethX~, not to the internal ethX port.
+//
+// This helper normalizes desired.PhysicalInterfaces into the actual bridge-side physical ports.
+// For single-uplink configs it prepares or reuses the host-connection setup and returns the
+// generated ethX~ uplink. For multi-uplink configs, stale host-connection pairs have already
+// been restored from observed OVSDB state, so the original interfaces are returned unchanged.
+func (c *Controller) prepareBridgePhysicalInterfaces(
+	desired *agenttypes.OVSBridgeConfig,
+	existingPorts map[string]string,
+	existingIFTypes map[string]string,
+) ([]agenttypes.PhysicalInterfaceConfig, error) {
+	if len(desired.PhysicalInterfaces) == 1 {
+		iface := desired.PhysicalInterfaces[0]
+		bridgedName := util.GenerateUplinkInterfaceName(iface.Name)
+		if _, exists := existingPorts[bridgedName]; exists {
+			return []agenttypes.PhysicalInterfaceConfig{
+				{Name: bridgedName, AllowedVLANs: iface.AllowedVLANs},
+			}, nil
+		}
+		if uuid, exists := existingPorts[iface.Name]; exists && existingIFTypes[iface.Name] != "internal" {
+			if err := c.ovsBridgeClient.DeletePorts([]string{uuid}); err != nil {
+				return nil, fmt.Errorf("failed to remove OVS port %s from bridge %s before host connection setup: %v",
+					iface.Name, desired.BridgeName, err)
+			}
+			delete(existingPorts, iface.Name)
+			delete(existingIFTypes, iface.Name)
+			klog.InfoS("Physical interface removed from secondary OVS bridge before host connection setup",
+				"device", iface.Name, "bridge", desired.BridgeName)
+		}
+
+		bridgedName, _, err := prepareHostInterfaceConnectionFn(
+			c.ovsBridgeClient,
+			iface.Name,
+			0,
+			map[string]interface{}{
+				interfacestore.AntreaInterfaceTypeKey: interfacestore.AntreaHost,
+			},
+			0,
+		)
+		if err != nil {
+			return nil, err
+		}
+		return []agenttypes.PhysicalInterfaceConfig{
+			{Name: bridgedName, AllowedVLANs: iface.AllowedVLANs},
+		}, nil
+	}
+
+	return desired.PhysicalInterfaces, nil
+}
+
 // connectPhyInterfacesToOVSBridge adds each physical interface to the OVS bridge
 // as an uplink port.  When AllowedVLANs is set the port is created or updated in
-// trunk mode with those VLAN IDs (rule 3); otherwise a plain uplink port is created.
+// trunk mode with those VLAN IDs; otherwise a plain uplink port is created.
 // If the port already exists and AllowedVLANs is non-empty, the trunk VLAN list is
 // always updated to match the desired config.
 func connectPhyInterfacesToOVSBridge(ovsBridgeClient ovsconfig.OVSBridgeClient, phyInterfaces []agenttypes.PhysicalInterfaceConfig) error {
