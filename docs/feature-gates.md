@@ -56,7 +56,8 @@ edit the Agent configuration in the
 | `ExternalNode`                  | Agent              | `false` | Alpha      | v1.8          | N/A          | N/A        | Yes                |                                                        |
 | `SupportBundleCollection`       | Agent + Controller | `false` | Alpha      | v1.10         | N/A          | N/A        | Yes                |                                                        |
 | `L7NetworkPolicy`               | Agent + Controller | `false` | Alpha      | v1.10         | N/A          | N/A        | Yes                |                                                        |
-| `AdminNetworkPolicy`            | Controller         | `false` | Alpha      | v1.13         | N/A          | N/A        | Yes                |                                                        |
+| `AdminNetworkPolicy`            | Controller         | `false` | Alpha      | v1.13         | N/A          | N/A        | Yes                | **Deprecated**: Use `ClusterNetworkPolicy` instead     |
+| `ClusterNetworkPolicy`          | Controller         | `false` | Alpha      | v2.7          | N/A          | N/A        | Yes                | Successor to `AdminNetworkPolicy`                      |
 | `EgressTrafficShaping`          | Agent              | `false` | Alpha      | v1.14         | N/A          | N/A        | Yes                | OVS meters should be supported                         |
 | `EgressSeparateSubnet`          | Agent              | `true`  | Beta       | v1.15         | v2.3         | N/A        | No                 |                                                        |
 | `NodeNetworkPolicy`             | Agent              | `false` | Alpha      | v1.15         | N/A          | N/A        | Yes                |                                                        |
@@ -430,8 +431,28 @@ this [document](antrea-l7-network-policy.md#prerequisites) for more information 
 
 ### AdminNetworkPolicy
 
-The `AdminNetworkPolicy` API (which currently includes the AdminNetworkPolicy and BaselineAdminNetworkPolicy objects)
-complements the Antrea-native policies and help cluster administrators to set security postures in a portable manner.
+**DEPRECATED**: The `AdminNetworkPolicy` feature gate is deprecated and will be removed in two releases after v2.7.
+Users should migrate to the `ClusterNetworkPolicy` feature gate.
+
+The `AdminNetworkPolicy` feature gate enables support for the deprecated v1alpha1 AdminNetworkPolicy and
+BaselineAdminNetworkPolicy APIs from the Kubernetes network-policy-api project. These APIs have been deprecated
+upstream in favor of the unified v1alpha2 ClusterNetworkPolicy API.
+
+**Migration Path**: Users should migrate their existing AdminNetworkPolicy and BaselineAdminNetworkPolicy resources
+to the new ClusterNetworkPolicy type. See [ClusterNetworkPolicy API Support in Antrea](cluster-network-policy.md) and the
+[ClusterNetworkPolicy](#clusternetworkpolicy) section below.
+
+### ClusterNetworkPolicy
+
+The `ClusterNetworkPolicy` feature gate enables support for the v1alpha2 ClusterNetworkPolicy API from the Kubernetes
+network-policy-api project. This API provides a unified, portable way for cluster administrators to set security
+postures across the cluster, replacing the deprecated v1alpha1 AdminNetworkPolicy and BaselineAdminNetworkPolicy APIs.
+
+The v1alpha2 ClusterNetworkPolicy combines the functionality of both AdminNetworkPolicy and BaselineAdminNetworkPolicy
+into a single resource type with improved semantics.
+
+See [ClusterNetworkPolicy API Support in Antrea](cluster-network-policy.md) for prerequisites, examples, and how these
+policies interact with Antrea-native tiers.
 
 ### NodeNetworkPolicy
 
