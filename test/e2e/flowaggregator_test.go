@@ -26,7 +26,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/google/uuid"
+	"github.com/gofrs/uuid/v5"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	ipfixregistry "github.com/vmware/go-ipfix/pkg/registry"
@@ -380,7 +380,7 @@ func getPodUID(t *testing.T, data *TestData, namespace, name string) string {
 }
 
 func k8sUIDAsHexString(uid string) string {
-	v := uuid.MustParse(uid)
+	v := uuid.Must(uuid.FromString(uid))
 	return hex.EncodeToString(v[:])
 }
 

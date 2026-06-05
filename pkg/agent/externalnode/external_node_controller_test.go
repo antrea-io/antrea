@@ -21,7 +21,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/google/uuid"
+	"github.com/gofrs/uuid/v5"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
@@ -49,10 +49,10 @@ var (
 	uplinkName      = "uplinkName"
 	entityName      = "entityName"
 	entityNamespace = "entityNamespace"
-	ifaceUUID1      = uuid.NewString()
-	ifaceUUID2      = uuid.NewString()
-	portUUID1       = uuid.NewString()
-	portUUID2       = uuid.NewString()
+	ifaceUUID1      = uuid.Must(uuid.NewV4()).String()
+	ifaceUUID2      = uuid.Must(uuid.NewV4()).String()
+	portUUID1       = uuid.Must(uuid.NewV4()).String()
+	portUUID2       = uuid.Must(uuid.NewV4()).String()
 	_, cidr1, _     = net.ParseCIDR("10.20.30.40")
 	intf1           = interfacestore.InterfaceConfig{
 		InterfaceName: ifaceName1,
@@ -105,8 +105,8 @@ func TestCreateOVSPortsAndFlowsFailure(t *testing.T) {
 		HardwareAddr: net.HardwareAddr{0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88},
 		MTU:          1500,
 	}
-	uplinkUUID := uuid.NewString()
-	hostIfUUID := uuid.NewString()
+	uplinkUUID := uuid.Must(uuid.NewV4()).String()
+	hostIfUUID := uuid.Must(uuid.NewV4()).String()
 	hostOFPort := int32(3)
 	uplinkOFPort := int32(4)
 	hostIfName := "hostIfName"
@@ -216,8 +216,8 @@ func TestParseProtocol(t *testing.T) {
 }
 
 func TestParseHostInterfaceConfig(t *testing.T) {
-	randomUUID := uuid.NewString()
-	portUUID := uuid.NewString()
+	randomUUID := uuid.Must(uuid.NewV4()).String()
+	portUUID := uuid.Must(uuid.NewV4()).String()
 
 	for _, tt := range []struct {
 		name                  string
@@ -501,7 +501,7 @@ func TestGetHostInterfaceName(t *testing.T) {
 }
 
 func TestGetOVSAttachInfo(t *testing.T) {
-	uplinkUUID := uuid.NewString()
+	uplinkUUID := uuid.Must(uuid.NewV4()).String()
 
 	ips := []string{"10.20.30.40"}
 	info := GetOVSAttachInfo(uplinkName, uplinkUUID, entityName, entityNamespace, ips)

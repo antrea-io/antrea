@@ -24,7 +24,7 @@ import (
 	"reflect"
 	"time"
 
-	"github.com/google/uuid"
+	"github.com/gofrs/uuid/v5"
 	"github.com/spf13/afero"
 	ipfixentities "github.com/vmware/go-ipfix/pkg/entities"
 	"github.com/vmware/go-ipfix/pkg/exporter"
@@ -285,7 +285,7 @@ func (e *IPFIXExporter) makeIPFIXRecord(flow *flowpb.Flow, isIPv6 bool) ipfixent
 			next().SetOctetArrayValue(uuid.Nil[:])
 			return
 		}
-		v, err := uuid.Parse(uid)
+		v, err := uuid.FromString(uid)
 		if err != nil {
 			klog.ErrorS(err, "Error when parsing UID string", "uid", uid)
 			next().SetOctetArrayValue(uuid.Nil[:])
