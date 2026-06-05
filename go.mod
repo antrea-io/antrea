@@ -252,3 +252,5 @@ require (
 	sigs.k8s.io/randfill v1.0.0 // indirect
 	sigs.k8s.io/structured-merge-diff/v6 v6.3.2 // indirect
 )
+
+replace gopkg.in/natefinch/lumberjack.v2 => github.com/antrea-io/lumberjack v0.0.0-20260603202205-2fb47fcd712a
