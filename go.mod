@@ -32,7 +32,7 @@ require (
 	github.com/google/btree v1.1.3
 	github.com/google/gnostic-models v0.7.1
 	github.com/google/go-cmp v0.7.0
-	github.com/gopacket/gopacket v1.6.0
+	github.com/gopacket/gopacket v1.6.1
 	github.com/hashicorp/memberlist v0.5.4
 	github.com/k8snetworkplumbingwg/network-attachment-definition-client v1.7.7
 	github.com/k8snetworkplumbingwg/sriovnet v1.2.0
