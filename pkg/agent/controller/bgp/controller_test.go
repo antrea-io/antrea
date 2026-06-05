@@ -17,9 +17,7 @@ package bgp
 import (
 	"context"
 	"fmt"
-	"reflect"
 	"testing"
-	"testing/synctest"
 	"time"
 
 	"github.com/stretchr/testify/assert"
@@ -28,12 +26,10 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	discovery "k8s.io/api/discovery/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/rand"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/client-go/informers"
-	coreinformers "k8s.io/client-go/informers/core/v1"
 	"k8s.io/client-go/kubernetes/fake"
 	"k8s.io/client-go/tools/cache"
 	utilnet "k8s.io/utils/net"
@@ -232,23 +228,6 @@ type fakeController struct {
 	informerFactory    informers.SharedInformerFactory
 }
 
-func (c *fakeController) startInformers(stopCh chan struct{}) {
-	c.informerFactory.Start(stopCh)
-	c.informerFactory.WaitForCacheSync(stopCh)
-	c.crdInformerFactory.Start(stopCh)
-	c.crdInformerFactory.WaitForCacheSync(stopCh)
-	// WaitForCacheSync only guarantees that the informer store is populated
-	// from the initial list; it does not guarantee that event handlers have
-	// been called for those objects. Register a no-op handler and wait for
-	// its HasSynced to return true, which is only the case once all
-	// initial-list ADD notifications have been delivered to all handlers.
-	// Without this, test cases that inspect the work queue after
-	// startInformers may see stale state because the bgpPolicy event handler
-	// has not yet been called for all initial BGPPolicy objects.
-	registration, _ := c.bgpPolicyInformer.AddEventHandler(cache.ResourceEventHandlerFuncs{})
-	cache.WaitForCacheSync(stopCh, registration.HasSynced)
-}
-
 func newFakeController(t *testing.T, objects []runtime.Object, crdObjects []runtime.Object, ipv4Enabled, ipv6Enabled bool) *fakeController {
 	ctrl := gomock.NewController(t)
 	mockBGPServer := bgptest.NewMockInterface(ctrl)
@@ -280,6 +259,26 @@ func newFakeController(t *testing.T, objects []runtime.Object, crdObjects []runt
 	bgpController.egressEnabled = true
 	bgpController.newBGPServerFn = func(_ *bgp.GlobalConfig) bgp.Interface {
 		return mockBGPServer
+	}
+
+	// Populate indexers directly - no informer goroutines needed
+	for _, obj := range objects {
+		switch o := obj.(type) {
+		case *corev1.Node:
+			require.NoError(t, nodeInformer.Informer().GetIndexer().Add(o))
+		case *corev1.Service:
+			require.NoError(t, serviceInformer.Informer().GetIndexer().Add(o))
+		case *discovery.EndpointSlice:
+			require.NoError(t, endpointSliceInformer.Informer().GetIndexer().Add(o))
+		}
+	}
+	for _, obj := range crdObjects {
+		switch o := obj.(type) {
+		case *v1alpha1.BGPPolicy:
+			require.NoError(t, bgpPolicyInformer.Informer().GetIndexer().Add(o))
+		case *crdv1b1.Egress:
+			require.NoError(t, egressInformer.Informer().GetIndexer().Add(o))
+		}
 	}
 
 	return &fakeController{
@@ -591,10 +590,7 @@ func TestBGPPolicyAdd(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			c := newFakeController(t, tt.objects, append(tt.crdObjects, tt.policiesToAdd...), tt.ipv4Enabled, tt.ipv6Enabled)
 
-			stopCh := make(chan struct{})
-			defer close(stopCh)
 			ctx := context.Background()
-			c.startInformers(stopCh)
 
 			// Fake the BGPPolicy state and the passwords of BGP peers.
 			c.bgpPolicyState = tt.existingState
@@ -603,8 +599,6 @@ func TestBGPPolicyAdd(t *testing.T) {
 			}
 			c.bgpPeerPasswords = bgpPeerPasswords
 
-			// Wait for the dummy event triggered by BGPPolicy add events.
-			waitAndGetDummyEvent(t, c)
 			if tt.expectedCalls != nil {
 				tt.expectedCalls(c.mockBGPServer.EXPECT())
 			}
@@ -613,8 +607,6 @@ func TestBGPPolicyAdd(t *testing.T) {
 			} else {
 				assert.NoError(t, c.syncBGPPolicy(ctx))
 			}
-			// Done with the dummy event.
-			doneDummyEvent(t, c)
 			checkBGPPolicyState(t, tt.expectedState, c.bgpPolicyState)
 		})
 	}
@@ -1172,15 +1164,7 @@ func TestBGPPolicyUpdate(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			c := newFakeController(t, objects, crdObjects, true, true)
 
-			stopCh := make(chan struct{})
-			defer close(stopCh)
 			ctx := context.Background()
-			c.startInformers(stopCh)
-
-			// Wait for the dummy event triggered by BGPPolicy add events, and mark it done directly
-			// since we fake the expected state.
-			waitAndGetDummyEvent(t, c)
-			doneDummyEvent(t, c)
 
 			// Fake the BGPPolicy state the passwords of BGP peers.
 			c.bgpPolicyState = deepCopyBGPPolicyState(effectivePolicyState)
@@ -1188,11 +1172,7 @@ func TestBGPPolicyUpdate(t *testing.T) {
 			c.bgpPeerPasswords = bgpPeerPasswords
 
 			tt.policyToUpdate.Generation += 1
-			_, err := c.crdClient.CrdV1alpha1().BGPPolicies().Update(context.TODO(), tt.policyToUpdate, metav1.UpdateOptions{})
-			require.NoError(t, err)
-
-			// Wait for the dummy event triggered by BGPPolicy update events.
-			waitAndGetDummyEvent(t, c)
+			require.NoError(t, c.bgpPolicyInformer.GetIndexer().Update(tt.policyToUpdate))
 
 			if tt.expectedCalls != nil {
 				tt.expectedCalls(c.mockBGPServer.EXPECT())
@@ -1202,8 +1182,6 @@ func TestBGPPolicyUpdate(t *testing.T) {
 			} else {
 				assert.NoError(t, c.syncBGPPolicy(ctx))
 			}
-			// Done with the dummy event.
-			doneDummyEvent(t, c)
 			checkBGPPolicyState(t, tt.expectedState, c.bgpPolicyState)
 		})
 	}
@@ -1356,32 +1334,24 @@ func TestBGPPolicyDelete(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			c := newFakeController(t, objects, tt.crdObjects, true, true)
 
-			stopCh := make(chan struct{})
-			defer close(stopCh)
 			ctx := context.Background()
-			c.startInformers(stopCh)
-
-			// Wait for the dummy event triggered by BGPPolicy add events, and mark it done.
-			waitAndGetDummyEvent(t, c)
-			doneDummyEvent(t, c)
 
 			// Fake the BGPPolicy state and the passwords of BGP peers.
 			c.bgpPolicyState = tt.existingState
 			c.bgpPolicyState.bgpServer = c.mockBGPServer
 			c.bgpPeerPasswords = bgpPeerPasswords
 
-			err := c.crdClient.CrdV1alpha1().BGPPolicies().Delete(context.TODO(), tt.policyToDelete, metav1.DeleteOptions{})
-			require.NoError(t, err)
-
-			// Wait for the dummy event triggered by BGPPolicy delete events.
-			waitAndGetDummyEvent(t, c)
+			for _, obj := range tt.crdObjects {
+				if p, ok := obj.(*v1alpha1.BGPPolicy); ok && p.Name == tt.policyToDelete {
+					require.NoError(t, c.bgpPolicyInformer.GetIndexer().Delete(p))
+					break
+				}
+			}
 
 			if tt.expectedCalls != nil {
 				tt.expectedCalls(c.mockBGPServer.EXPECT())
 			}
 			assert.NoError(t, c.syncBGPPolicy(ctx))
-			// Done with the dummy event.
-			doneDummyEvent(t, c)
 			checkBGPPolicyState(t, tt.expectedState, c.bgpPolicyState)
 		})
 	}
@@ -1604,39 +1574,31 @@ func TestNodeUpdate(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			c := newFakeController(t, nil, crdObjects, tt.ipv4Enabled, tt.ipv6Enabled)
 
-			stopCh := make(chan struct{})
-			defer close(stopCh)
 			ctx := context.Background()
-			c.startInformers(stopCh)
 
 			// Fake the passwords of BGP peers.
 			c.bgpPeerPasswords = bgpPeerPasswords
 
-			// Initializing BGPPolicy objects will not trigger a dummy event because the local Node object has not been
-			// initialized and synced yet. The dummy event will be trigger by adding the local Node object.
+			// Add the initial node directly to indexer
+			require.NoError(t, c.nodeInformer.GetIndexer().Add(tt.node))
+			// Also create in fake client so Update below doesn't fail with "not found"
 			_, err := c.client.CoreV1().Nodes().Create(context.TODO(), tt.node, metav1.CreateOptions{})
 			require.NoError(t, err)
-
-			// Wait for the dummy event triggered by Node add event.
-			waitAndGetDummyEvent(t, c)
-			doneDummyEvent(t, c)
 
 			// Fake the BGPPolicy state.
 			c.bgpPolicyState = tt.existingState
 			c.bgpPolicyState.bgpServer = c.mockBGPServer
 
+			// Update the node in both indexer and fake client
+			// (fake client still needed for the annotation check at the end)
+			require.NoError(t, c.nodeInformer.GetIndexer().Update(tt.updatedNode))
 			_, err = c.client.CoreV1().Nodes().Update(context.TODO(), tt.updatedNode, metav1.UpdateOptions{})
 			require.NoError(t, err)
-
-			// Wait for the dummy event triggered by Node update events.
-			waitAndGetDummyEvent(t, c)
 
 			if tt.expectedCalls != nil {
 				tt.expectedCalls(c.mockBGPServer.EXPECT())
 			}
 			assert.NoError(t, c.syncBGPPolicy(ctx))
-			// Done with the dummy event.
-			doneDummyEvent(t, c)
 			checkBGPPolicyState(t, tt.expectedState, c.bgpPolicyState)
 			if !tt.ipv4Enabled && tt.ipv6Enabled {
 				updatedNode, err := c.client.CoreV1().Nodes().Get(context.TODO(), localNodeName, metav1.GetOptions{})
@@ -1661,128 +1623,97 @@ func TestServiceLifecycle(t *testing.T) {
 		false,
 		[]v1alpha1.BGPPeer{ipv4Peer1},
 		nil)
-	c := newFakeController(t, []runtime.Object{node}, []runtime.Object{policy}, true, false)
+	c := newFakeController(t, nil, nil, true, false)
 	mockBGPServer := c.mockBGPServer
 
-	stopCh := make(chan struct{})
-	defer close(stopCh)
 	ctx := context.Background()
-	c.startInformers(stopCh)
+
+	// Populate indexers directly - no goroutines
+	require.NoError(t, c.nodeInformer.GetIndexer().Add(node))
+	require.NoError(t, c.bgpPolicyInformer.GetIndexer().Add(policy))
 
 	// Fake the passwords of BGP peers.
 	c.bgpPeerPasswords = bgpPeerPasswords
 
-	// Wait for the dummy event triggered by BGPPolicy add events.
-	waitAndGetDummyEvent(t, c)
 	mockBGPServer.EXPECT().Start(gomock.Any())
 	mockBGPServer.EXPECT().AddPeer(gomock.Any(), ipv4Peer1Config)
 	require.NoError(t, c.syncBGPPolicy(ctx))
-	// Done with the dummy event.
-	doneDummyEvent(t, c)
 
 	// Create a Service configured with both `internalTrafficPolicy` and `externalTrafficPolicy` set to `Local`.
 	loadBalancer := generateService(ipv4LoadBalancerName, corev1.ServiceTypeLoadBalancer, "10.96.10.10", "192.168.77.100", "192.168.77.150", true, true)
-	_, err := c.client.CoreV1().Services(namespaceDefault).Create(context.TODO(), loadBalancer, metav1.CreateOptions{})
-	require.NoError(t, err)
+	require.NoError(t, c.serviceInformer.GetIndexer().Add(loadBalancer))
 
-	// Wait for event to be generated for Service before creating the EndpointSlice. This is to
-	// avoid undeterministic behavior of the test: without this barrier, the Service event and
-	// the EndpointSlice event would either be processed as a single queue item or as two queue items.
-	waitAndGetDummyEvent(t, c)
 	require.NoError(t, c.syncBGPPolicy(ctx))
-	doneDummyEvent(t, c)
 
 	// Add an EndpointSlice without Endpoint IP for the Service.
 	endpointSlice := generateEndpointSlice(ipv4LoadBalancerName, endpointSliceSuffix, true, false, "")
-	_, err = c.client.DiscoveryV1().EndpointSlices(namespaceDefault).Create(context.TODO(), endpointSlice, metav1.CreateOptions{})
-	require.NoError(t, err)
+	require.NoError(t, c.endpointSliceInformer.GetIndexer().Add(endpointSlice))
 
 	// Since both `internalTrafficPolicy` and `externalTrafficPolicy` are `Local` and no local Endpoint, no Service IP
 	// will be advertised.
-	waitAndGetDummyEvent(t, c)
 	require.NoError(t, c.syncBGPPolicy(ctx))
-	doneDummyEvent(t, c)
 
 	// Update the EndpointSlice with a local Endpoint IP.
 	endpointSlice = generateEndpointSlice(ipv4LoadBalancerName, endpointSliceSuffix, true, false, "10.10.0.2")
-	_, err = c.client.DiscoveryV1().EndpointSlices(namespaceDefault).Update(context.TODO(), endpointSlice, metav1.UpdateOptions{})
-	require.NoError(t, err)
+	require.NoError(t, c.endpointSliceInformer.GetIndexer().Update(endpointSlice))
 
 	// Since there is a local Endpoint IP and both `internalTrafficPolicy` and `externalTrafficPolicy` are `Local`, the
 	// ClusterIP, externalIP, and LoadBalancerIP will be advertised.
-	waitAndGetDummyEvent(t, c)
 	mockBGPServer.EXPECT().AdvertiseRoutes(gomock.Any(), []bgp.Route{{Prefix: "10.96.10.10/32"}})
 	mockBGPServer.EXPECT().AdvertiseRoutes(gomock.Any(), []bgp.Route{{Prefix: "192.168.77.100/32"}})
 	mockBGPServer.EXPECT().AdvertiseRoutes(gomock.Any(), []bgp.Route{{Prefix: "192.168.77.150/32"}})
 	require.NoError(t, c.syncBGPPolicy(ctx))
-	doneDummyEvent(t, c)
 
 	// Update externalIP and LoadBalancerIP of the Service. Additionally, update both `externalTrafficPolicy` and
 	// `internalTrafficPolicy` to `Cluster`.
 	updatedLoadBalancer := generateService(ipv4LoadBalancerName, corev1.ServiceTypeLoadBalancer, "10.96.10.10", "192.168.77.101", "192.168.77.151", false, false)
-	_, err = c.client.CoreV1().Services(namespaceDefault).Update(context.TODO(), updatedLoadBalancer, metav1.UpdateOptions{})
-	require.NoError(t, err)
+	require.NoError(t, c.serviceInformer.GetIndexer().Update(updatedLoadBalancer))
 
 	// The stale externalIP and LoadBalancerIP will be withdrawn. The new externalIP and LoadBalancerIP will be advertised.
-	waitAndGetDummyEvent(t, c)
 	mockBGPServer.EXPECT().AdvertiseRoutes(gomock.Any(), []bgp.Route{{Prefix: "192.168.77.151/32"}})
 	mockBGPServer.EXPECT().AdvertiseRoutes(gomock.Any(), []bgp.Route{{Prefix: "192.168.77.101/32"}})
 	mockBGPServer.EXPECT().WithdrawRoutes(gomock.Any(), []bgp.Route{{Prefix: "192.168.77.100/32"}})
 	mockBGPServer.EXPECT().WithdrawRoutes(gomock.Any(), []bgp.Route{{Prefix: "192.168.77.150/32"}})
 	require.NoError(t, c.syncBGPPolicy(ctx))
-	doneDummyEvent(t, c)
 
 	// Update `externalTrafficPolicy` of the Service from `Cluster` to `Local`.
 	updatedLoadBalancer = generateService(ipv4LoadBalancerName, corev1.ServiceTypeLoadBalancer, "10.96.10.10", "192.168.77.101", "192.168.77.151", false, true)
-	_, err = c.client.CoreV1().Services(namespaceDefault).Update(context.TODO(), updatedLoadBalancer, metav1.UpdateOptions{})
-	require.NoError(t, err)
+	require.NoError(t, c.serviceInformer.GetIndexer().Update(updatedLoadBalancer))
 
 	// Update the EndpointSlice with a remote Endpoint.
 	endpointSlice = generateEndpointSlice(ipv4LoadBalancerName, endpointSliceSuffix, false, false, "10.10.0.3")
-	_, err = c.client.DiscoveryV1().EndpointSlices(namespaceDefault).Update(context.TODO(), endpointSlice, metav1.UpdateOptions{})
-	require.NoError(t, err)
+	require.NoError(t, c.endpointSliceInformer.GetIndexer().Update(endpointSlice))
 
 	// Since there is no local Endpoint and `externalTrafficPolicy` is `Local`, the externalIP and LoadBalancerIP will be
 	// withdrawn.
-	waitAndGetDummyEvent(t, c)
 	mockBGPServer.EXPECT().WithdrawRoutes(gomock.Any(), []bgp.Route{{Prefix: "192.168.77.101/32"}})
 	mockBGPServer.EXPECT().WithdrawRoutes(gomock.Any(), []bgp.Route{{Prefix: "192.168.77.151/32"}})
 	require.NoError(t, c.syncBGPPolicy(ctx))
-	doneDummyEvent(t, c)
 
 	// Update `internalTrafficPolicy` of the Service from `Cluster` to `Local`.
 	updatedLoadBalancer = generateService(ipv4LoadBalancerName, corev1.ServiceTypeLoadBalancer, "10.96.10.10", "192.168.77.101", "192.168.77.151", true, true)
-	_, err = c.client.CoreV1().Services(namespaceDefault).Update(context.TODO(), updatedLoadBalancer, metav1.UpdateOptions{})
-	require.NoError(t, err)
+	require.NoError(t, c.serviceInformer.GetIndexer().Update(updatedLoadBalancer))
 
 	// Since there is no local Endpoint and `internalTrafficPolicy` is `Local`, the ClusterIP will be withdrawn.
-	waitAndGetDummyEvent(t, c)
 	mockBGPServer.EXPECT().WithdrawRoutes(gomock.Any(), []bgp.Route{{Prefix: "10.96.10.10/32"}})
 	require.NoError(t, c.syncBGPPolicy(ctx))
-	doneDummyEvent(t, c)
 
 	// Update `externalTrafficPolicy` of the Service from `Local` to `Cluster`.
 	updatedLoadBalancer = generateService(ipv4LoadBalancerName, corev1.ServiceTypeLoadBalancer, "10.96.10.10", "192.168.77.101", "192.168.77.151", true, false)
-	_, err = c.client.CoreV1().Services(namespaceDefault).Update(context.TODO(), updatedLoadBalancer, metav1.UpdateOptions{})
-	require.NoError(t, err)
+	require.NoError(t, c.serviceInformer.GetIndexer().Update(updatedLoadBalancer))
 
 	// Since `externalTrafficPolicy` is `Cluster`, the ClusterIP will be advertised even if there is no local Endpoint.
-	waitAndGetDummyEvent(t, c)
 	mockBGPServer.EXPECT().AdvertiseRoutes(gomock.Any(), []bgp.Route{{Prefix: "192.168.77.101/32"}})
 	mockBGPServer.EXPECT().AdvertiseRoutes(gomock.Any(), []bgp.Route{{Prefix: "192.168.77.151/32"}})
 	require.NoError(t, c.syncBGPPolicy(ctx))
-	doneDummyEvent(t, c)
 
 	// Delete the Service.
-	err = c.client.CoreV1().Services(namespaceDefault).Delete(context.TODO(), updatedLoadBalancer.Name, metav1.DeleteOptions{})
-	require.NoError(t, err)
+	require.NoError(t, c.serviceInformer.GetIndexer().Delete(updatedLoadBalancer))
 
 	// Since the Service is deleted, all corresponding Service IPs will be withdrawn.
-	waitAndGetDummyEvent(t, c)
 	mockBGPServer.EXPECT().WithdrawRoutes(gomock.Any(), []bgp.Route{{Prefix: "192.168.77.101/32"}})
 	mockBGPServer.EXPECT().WithdrawRoutes(gomock.Any(), []bgp.Route{{Prefix: "192.168.77.151/32"}})
 	require.NoError(t, c.syncBGPPolicy(ctx))
-	doneDummyEvent(t, c)
 }
 
 func TestEgressLifecycle(t *testing.T) {
@@ -1798,74 +1729,56 @@ func TestEgressLifecycle(t *testing.T) {
 		false,
 		[]v1alpha1.BGPPeer{ipv4Peer1},
 		nil)
-	c := newFakeController(t, []runtime.Object{node}, []runtime.Object{policy}, true, false)
+	c := newFakeController(t, nil, nil, true, false)
 	mockBGPServer := c.mockBGPServer
 
-	stopCh := make(chan struct{})
-	defer close(stopCh)
 	ctx := context.Background()
-	c.startInformers(stopCh)
 
 	// Fake the passwords of BGP peers.
 	c.bgpPeerPasswords = bgpPeerPasswords
 
-	// Wait for the dummy event triggered by BGPPolicy add events,.
-	waitAndGetDummyEvent(t, c)
+	// Populate indexers directly — no goroutines
+	require.NoError(t, c.nodeInformer.GetIndexer().Add(node))
+	require.NoError(t, c.bgpPolicyInformer.GetIndexer().Add(policy))
+
 	mockBGPServer.EXPECT().Start(gomock.Any())
 	mockBGPServer.EXPECT().AddPeer(gomock.Any(), ipv4Peer1Config)
 	require.NoError(t, c.syncBGPPolicy(ctx))
-	// Done with the dummy event.
-	doneDummyEvent(t, c)
 
 	// Create an Egress.
 	egress := generateEgress("eg1-4", "192.168.77.200", localNodeName)
-	_, err := c.crdClient.CrdV1beta1().Egresses().Create(context.TODO(), egress, metav1.CreateOptions{})
-	require.NoError(t, err)
+	require.NoError(t, c.egressInformer.GetIndexer().Add(egress))
 
-	waitAndGetDummyEvent(t, c)
 	mockBGPServer.EXPECT().AdvertiseRoutes(gomock.Any(), gomock.InAnyOrder([]bgp.Route{{Prefix: "192.168.77.200/32"}}))
 	require.NoError(t, c.syncBGPPolicy(ctx))
-	doneDummyEvent(t, c)
 
 	// Update the Egress.
 	updatedEgress := generateEgress("eg1-4", "192.168.77.201", localNodeName)
-	_, err = c.crdClient.CrdV1beta1().Egresses().Update(context.TODO(), updatedEgress, metav1.UpdateOptions{})
-	require.NoError(t, err)
+	require.NoError(t, c.egressInformer.GetIndexer().Update(updatedEgress))
 
-	waitAndGetDummyEvent(t, c)
 	mockBGPServer.EXPECT().AdvertiseRoutes(gomock.Any(), gomock.InAnyOrder([]bgp.Route{{Prefix: "192.168.77.201/32"}}))
 	mockBGPServer.EXPECT().WithdrawRoutes(gomock.Any(), gomock.InAnyOrder([]bgp.Route{{Prefix: "192.168.77.200/32"}}))
 	require.NoError(t, c.syncBGPPolicy(ctx))
-	doneDummyEvent(t, c)
 
 	// Update the Egress.
 	updatedEgress = generateEgress("eg1-4", "192.168.77.201", "remote")
-	_, err = c.crdClient.CrdV1beta1().Egresses().Update(context.TODO(), updatedEgress, metav1.UpdateOptions{})
-	require.NoError(t, err)
+	require.NoError(t, c.egressInformer.GetIndexer().Update(updatedEgress))
 
-	waitAndGetDummyEvent(t, c)
 	mockBGPServer.EXPECT().WithdrawRoutes(gomock.Any(), gomock.InAnyOrder([]bgp.Route{{Prefix: "192.168.77.201/32"}}))
 	require.NoError(t, c.syncBGPPolicy(ctx))
-	doneDummyEvent(t, c)
 
 	// Update the Egress.
 	updatedEgress = generateEgress("eg1-4", "192.168.77.201", localNodeName)
-	_, err = c.crdClient.CrdV1beta1().Egresses().Update(context.TODO(), updatedEgress, metav1.UpdateOptions{})
-	require.NoError(t, err)
+	require.NoError(t, c.egressInformer.GetIndexer().Update(updatedEgress))
 
-	waitAndGetDummyEvent(t, c)
 	mockBGPServer.EXPECT().AdvertiseRoutes(gomock.Any(), gomock.InAnyOrder([]bgp.Route{{Prefix: "192.168.77.201/32"}}))
 	require.NoError(t, c.syncBGPPolicy(ctx))
-	doneDummyEvent(t, c)
 
 	// Delete the Egress.
-	err = c.crdClient.CrdV1beta1().Egresses().Delete(context.TODO(), updatedEgress.Name, metav1.DeleteOptions{})
-	require.NoError(t, err)
+	require.NoError(t, c.egressInformer.GetIndexer().Delete(updatedEgress))
 
-	waitAndGetDummyEvent(t, c)
 	mockBGPServer.EXPECT().WithdrawRoutes(gomock.Any(), gomock.InAnyOrder([]bgp.Route{{Prefix: "192.168.77.201/32"}}))
 	require.NoError(t, c.syncBGPPolicy(ctx))
-	doneDummyEvent(t, c)
 }
 
 func TestBGPPasswordUpdate(t *testing.T) {
@@ -1881,49 +1794,25 @@ func TestBGPPasswordUpdate(t *testing.T) {
 		true,
 		[]v1alpha1.BGPPeer{ipv4Peer1, ipv4Peer2, ipv4Peer3},
 		nil)
-	c := newFakeController(t, []runtime.Object{node}, []runtime.Object{policy}, true, false)
-
-	c.secretInformer = coreinformers.NewFilteredSecretInformer(c.client,
-		namespaceKubeSystem,
-		resyncPeriod,
-		cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc},
-		func(options *metav1.ListOptions) {
-			options.FieldSelector = fields.OneTermEqualSelector("metadata.name", types.BGPPolicySecretName).String()
-		})
-	c.secretInformer.AddEventHandler(cache.ResourceEventHandlerFuncs{
-		AddFunc:    c.addSecret,
-		UpdateFunc: c.updateSecret,
-		DeleteFunc: c.deleteSecret,
-	})
+	c := newFakeController(t, nil, nil, true, false)
 	mockBGPServer := c.mockBGPServer
-
-	stopCh := make(chan struct{})
-	defer close(stopCh)
 	ctx := context.Background()
-	c.startInformers(stopCh)
-	go c.secretInformer.Run(stopCh)
 
-	// Create the Secret.
+	// Populate indexers directly — no goroutines
+	require.NoError(t, c.nodeInformer.GetIndexer().Add(node))
+	require.NoError(t, c.bgpPolicyInformer.GetIndexer().Add(policy))
+
+	// Create the Secret by calling the handler directly — no goroutine needed
 	secret := generateSecret(bgpPeerPasswords)
-	_, err := c.client.CoreV1().Secrets(namespaceKubeSystem).Create(context.TODO(), secret, metav1.CreateOptions{})
-	require.NoError(t, err)
+	c.addSecret(secret)
+	assert.Equal(t, bgpPeerPasswords, c.bgpPeerPasswords)
 
-	require.Eventually(t, func() bool {
-		c.bgpPeerPasswordsMutex.RLock()
-		defer c.bgpPeerPasswordsMutex.RUnlock()
-		return reflect.DeepEqual(c.bgpPeerPasswords, bgpPeerPasswords)
-	}, 5*time.Second, 10*time.Millisecond)
-
-	// Wait for the dummy event triggered by BGPPolicy add events.
-	waitAndGetDummyEvent(t, c)
 	mockBGPServer.EXPECT().Start(gomock.Any())
 	mockBGPServer.EXPECT().AddPeer(gomock.Any(), ipv4Peer1Config)
 	mockBGPServer.EXPECT().AddPeer(gomock.Any(), ipv4Peer2Config)
 	mockBGPServer.EXPECT().AddPeer(gomock.Any(), ipv4Peer3Config)
 	mockBGPServer.EXPECT().AdvertiseRoutes(gomock.Any(), []bgp.Route{podIPv4CIDRRoute})
 	require.NoError(t, c.syncBGPPolicy(ctx))
-	// Done with the dummy event.
-	doneDummyEvent(t, c)
 
 	// Update the Secret.
 	updatedBGPPeerPasswords := map[string]string{
@@ -1932,16 +1821,9 @@ func TestBGPPasswordUpdate(t *testing.T) {
 		generateBGPPeerKey(ipv4Peer3Addr, peer3ASN): "updated-" + peer3AuthPassword,
 	}
 	updatedSecret := generateSecret(updatedBGPPeerPasswords)
-	_, err = c.client.CoreV1().Secrets(namespaceKubeSystem).Update(context.TODO(), updatedSecret, metav1.UpdateOptions{})
-	require.NoError(t, err)
-	require.Eventually(t, func() bool {
-		c.bgpPeerPasswordsMutex.RLock()
-		defer c.bgpPeerPasswordsMutex.RUnlock()
-		return reflect.DeepEqual(c.bgpPeerPasswords, updatedBGPPeerPasswords)
-	}, 5*time.Second, 10*time.Millisecond)
+	c.updateSecret(secret, updatedSecret)
+	assert.Equal(t, updatedBGPPeerPasswords, c.bgpPeerPasswords)
 
-	// Wait for the dummy event triggered by Secret update event, and mark it done.
-	waitAndGetDummyEvent(t, c)
 	expectedIPv4Peer1Config := ipv4Peer1Config
 	expectedIPv4Peer3Config := ipv4Peer3Config
 	expectedIPv4Peer1Config.Password = "updated-" + peer1AuthPassword
@@ -1949,14 +1831,11 @@ func TestBGPPasswordUpdate(t *testing.T) {
 	mockBGPServer.EXPECT().UpdatePeer(gomock.Any(), expectedIPv4Peer1Config)
 	mockBGPServer.EXPECT().UpdatePeer(gomock.Any(), expectedIPv4Peer3Config)
 	require.NoError(t, c.syncBGPPolicy(ctx))
-	// Done with the dummy event.
-	doneDummyEvent(t, c)
 
 	// Delete the Secret.
-	err = c.client.CoreV1().Secrets(namespaceKubeSystem).Delete(context.TODO(), secret.Name, metav1.DeleteOptions{})
-	require.NoError(t, err)
-	// Wait for the dummy event triggered by Secret delete event, and mark it done.
-	waitAndGetDummyEvent(t, c)
+	c.deleteSecret(secret)
+	assert.Empty(t, c.bgpPeerPasswords)
+
 	expectedIPv4Peer1Config = ipv4Peer1Config
 	expectedIPv4Peer2Config := ipv4Peer2Config
 	expectedIPv4Peer3Config = ipv4Peer3Config
@@ -1967,8 +1846,6 @@ func TestBGPPasswordUpdate(t *testing.T) {
 	mockBGPServer.EXPECT().UpdatePeer(gomock.Any(), expectedIPv4Peer2Config)
 	mockBGPServer.EXPECT().UpdatePeer(gomock.Any(), expectedIPv4Peer3Config)
 	require.NoError(t, c.syncBGPPolicy(ctx))
-	// Done with the dummy event.
-	doneDummyEvent(t, c)
 }
 
 func TestSyncBGPPolicyFailures(t *testing.T) {
@@ -2020,30 +1897,22 @@ func TestSyncBGPPolicyFailures(t *testing.T) {
 		false,
 		[]v1alpha1.BGPPeer{updatedIPv4Peer2},
 		nil)
-	objects := []runtime.Object{
-		ipv4LoadBalancer,
-		ipv4LoadBalancerEps,
-		ipv6LoadBalancer,
-		ipv6LoadBalancerEps,
-		node,
-	}
-	crdObjects := []runtime.Object{
-		policy1,
-		policy2,
-		policy3,
-		policy4,
-	}
 
-	c := newFakeController(t, objects, crdObjects, true, false)
+	c := newFakeController(t, nil, nil, true, false)
 	mockBGPServer := c.mockBGPServer
 
-	stopCh := make(chan struct{})
-	defer close(stopCh)
 	ctx := context.Background()
-	c.startInformers(stopCh)
 
-	// Wait for the dummy event triggered by BGPPolicy ADD events.
-	waitAndGetDummyEvent(t, c)
+	// Populate all indexers directly
+	require.NoError(t, c.nodeInformer.GetIndexer().Add(node))
+	require.NoError(t, c.serviceInformer.GetIndexer().Add(ipv4LoadBalancer))
+	require.NoError(t, c.serviceInformer.GetIndexer().Add(ipv6LoadBalancer))
+	require.NoError(t, c.endpointSliceInformer.GetIndexer().Add(ipv4LoadBalancerEps))
+	require.NoError(t, c.endpointSliceInformer.GetIndexer().Add(ipv6LoadBalancerEps))
+	require.NoError(t, c.bgpPolicyInformer.GetIndexer().Add(policy1))
+	require.NoError(t, c.bgpPolicyInformer.GetIndexer().Add(policy2))
+	require.NoError(t, c.bgpPolicyInformer.GetIndexer().Add(policy3))
+	require.NoError(t, c.bgpPolicyInformer.GetIndexer().Add(policy4))
 
 	// Fake the passwords of BGP peers.
 	c.bgpPeerPasswords = bgpPeerPasswords
@@ -2052,8 +1921,6 @@ func TestSyncBGPPolicyFailures(t *testing.T) {
 	mockBGPServer.EXPECT().AddPeer(gomock.Any(), ipv4Peer2Config)
 	mockBGPServer.EXPECT().AdvertiseRoutes(gomock.Any(), []bgp.Route{loadBalancerIPv4Route})
 	require.NoError(t, c.syncBGPPolicy(ctx))
-	// Done with the dummy event.
-	doneDummyEvent(t, c)
 
 	checkBGPPolicyState(t, generateBGPPolicyState(bgpPolicyName1,
 		179,
@@ -2065,9 +1932,7 @@ func TestSyncBGPPolicyFailures(t *testing.T) {
 		c.bgpPolicyState)
 
 	// Delete the effective BGPPolicy policy1, and BGPPolicy policy2 will be the effective one.
-	require.NoError(t, c.crdClient.CrdV1alpha1().BGPPolicies().Delete(context.TODO(), policy1.Name, metav1.DeleteOptions{}))
-
-	waitAndGetDummyEvent(t, c)
+	require.NoError(t, c.bgpPolicyInformer.GetIndexer().Delete(policy1))
 
 	// The local ASN of BGPPolicy policy2 is different from BGPPolicy policy1, and the current BGP server should be stopped.
 	// Mock that failing in stopping the current BGP server.
@@ -2103,8 +1968,7 @@ func TestSyncBGPPolicyFailures(t *testing.T) {
 	mockBGPServer.EXPECT().AddPeer(gomock.Any(), ipv4Peer1Config)
 	mockBGPServer.EXPECT().AdvertiseRoutes(gomock.Any(), []bgp.Route{podIPv4CIDRRoute}).Return(fmt.Errorf("failed to advertise routes"))
 	require.EqualError(t, c.syncBGPPolicy(ctx), "failed to advertise routes")
-	// Done with the dummy event.
-	doneDummyEvent(t, c)
+
 	checkBGPPolicyState(t, generateBGPPolicyState(bgpPolicyName2,
 		1179,
 		65000,
@@ -2116,15 +1980,13 @@ func TestSyncBGPPolicyFailures(t *testing.T) {
 
 	// Delete the effective BGPPolicy policy2, and BGPPolicy policy3 will be the effective one. The BGP server doesn't need to
 	// be updated. The peers and routes will be reconciled according to the existing BGPPolicy state.
-	require.NoError(t, c.crdClient.CrdV1alpha1().BGPPolicies().Delete(context.TODO(), policy2.Name, metav1.DeleteOptions{}))
+	require.NoError(t, c.bgpPolicyInformer.GetIndexer().Delete(policy2))
 
-	waitAndGetDummyEvent(t, c)
 	mockBGPServer.EXPECT().AddPeer(gomock.Any(), ipv4Peer2Config)
 	mockBGPServer.EXPECT().RemovePeer(gomock.Any(), ipv4Peer1Config)
 	mockBGPServer.EXPECT().AdvertiseRoutes(gomock.Any(), []bgp.Route{externalIPv4Route2})
 
 	require.NoError(t, c.syncBGPPolicy(ctx))
-	doneDummyEvent(t, c)
 	checkBGPPolicyState(t, generateBGPPolicyState(bgpPolicyName3,
 		1179,
 		65000,
@@ -2136,15 +1998,12 @@ func TestSyncBGPPolicyFailures(t *testing.T) {
 
 	// Delete the effective BGPPolicy policy3, and BGPPolicy policy4 will be the effective one. The BGP server doesn't need to
 	// be updated. The peers and routes will be reconciled according to the existing BGPPolicy state.
-	require.NoError(t, c.crdClient.CrdV1alpha1().BGPPolicies().Delete(context.TODO(), policy3.Name, metav1.DeleteOptions{}))
-
-	waitAndGetDummyEvent(t, c)
+	require.NoError(t, c.bgpPolicyInformer.GetIndexer().Delete(policy3))
 	mockBGPServer.EXPECT().UpdatePeer(gomock.Any(), updatedIPv4Peer2Config)
 	mockBGPServer.EXPECT().WithdrawRoutes(gomock.Any(), []bgp.Route{externalIPv4Route2})
 	mockBGPServer.EXPECT().AdvertiseRoutes(gomock.Any(), []bgp.Route{loadBalancerIPv4Route})
 
 	require.NoError(t, c.syncBGPPolicy(ctx))
-	doneDummyEvent(t, c)
 	checkBGPPolicyState(t, generateBGPPolicyState(bgpPolicyName4,
 		1179,
 		65000,
@@ -2434,15 +2293,6 @@ func ipStrToPrefix(ipStr string) string {
 	return ""
 }
 
-func waitAndGetDummyEvent(t *testing.T, c *fakeController) {
-	require.Eventually(t, func() bool {
-		return c.queue.Len() == 1
-	}, 5*time.Second, 10*time.Millisecond)
-	c.queue.Get()
-}
-func doneDummyEvent(t *testing.T, c *fakeController) {
-	c.queue.Done(dummyKey)
-}
 func getServiceName(name string) string {
 	return namespaceDefault + "/" + name
 }
@@ -2716,38 +2566,17 @@ func TestDeleteHandlerTombstone(t *testing.T) {
 
 	for _, tt := range testCases {
 		t.Run(tt.name, func(t *testing.T) {
-			synctest.Test(t, func(t *testing.T) {
-				// Create the controller inside the bubble so that all goroutines
-				// it spawns (e.g. workqueue's waitingLoop) use the bubble's fake
-				// clock and are correctly tracked by synctest.Wait().
-				c := newFakeController(t, tt.objects, tt.crdObjects, true, true)
-				ctx := t.Context()
-				stopCh := ctx.Done()
-				t.Cleanup(c.queue.ShutDown)
-				// Start informers inside the bubble so their goroutines are tracked
-				// by synctest. Do not call WaitForCacheSync here; synctest.Wait()
-				// blocks until all goroutines are idle, which guarantees all startup
-				// ADD events have been delivered to the queue.
-				c.informerFactory.Start(stopCh)
-				c.crdInformerFactory.Start(stopCh)
-				synctest.Wait()
-				// Drain any startup ADD events so the queue is empty before the tombstone test.
-				for c.queue.Len() > 0 {
-					item, _ := c.queue.Get()
-					c.queue.Done(item)
-				}
-
-				tombstone := cache.DeletedFinalStateUnknown{Key: "test/tombstone-key", Obj: tt.tombstoneObj}
-				// This must not panic regardless of the inner object type.
-				tt.handler(c.Controller, tombstone)
-				synctest.Wait()
-
-				if tt.expectEnqueue {
-					assert.Equal(t, 1, c.queue.Len(), "expected handler to enqueue an event via tombstone")
-				} else {
-					assert.Equal(t, 0, c.queue.Len(), "expected handler to not enqueue an event for invalid tombstone inner type")
-				}
-			})
+			// newFakeController pre-populates all informer indexers directly,
+			// so there is no need to start informers or drain startup events.
+			c := newFakeController(t, tt.objects, tt.crdObjects, true, true)
+			tombstone := cache.DeletedFinalStateUnknown{Key: "test/tombstone-key", Obj: tt.tombstoneObj}
+			// This must not panic regardless of the inner object type.
+			tt.handler(c.Controller, tombstone)
+			if tt.expectEnqueue {
+				assert.Equal(t, 1, c.queue.Len(), "expected handler to enqueue an event via tombstone")
+			} else {
+				assert.Equal(t, 0, c.queue.Len(), "expected handler to not enqueue an event for invalid tombstone inner type")
+			}
 		})
 	}
 }
