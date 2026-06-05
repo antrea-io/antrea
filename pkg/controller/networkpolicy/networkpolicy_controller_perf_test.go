@@ -26,7 +26,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/google/uuid"
+	"github.com/gofrs/uuid/v5"
 	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -401,7 +401,7 @@ func newPod(namespace, name string, labels map[string]string) *corev1.Pod {
 	}
 	podIP := getRandomIP()
 	pod := &corev1.Pod{
-		ObjectMeta: metav1.ObjectMeta{Namespace: namespace, Name: name, UID: types.UID(uuid.New().String()), Labels: labels},
+		ObjectMeta: metav1.ObjectMeta{Namespace: namespace, Name: name, UID: types.UID(uuid.Must(uuid.NewV4()).String()), Labels: labels},
 		Spec: corev1.PodSpec{
 			NodeName:    getRandomNodeName(),
 			HostNetwork: false,
@@ -416,7 +416,7 @@ func newExternalEntity(namespace, name string, labels map[string]string) *v1alph
 		name = "ee-" + rand.String(8)
 	}
 	externalEntity := &v1alpha2.ExternalEntity{
-		ObjectMeta: metav1.ObjectMeta{Namespace: namespace, Name: name, UID: types.UID(uuid.New().String()), Labels: labels},
+		ObjectMeta: metav1.ObjectMeta{Namespace: namespace, Name: name, UID: types.UID(uuid.Must(uuid.NewV4()).String()), Labels: labels},
 		Spec: v1alpha2.ExternalEntitySpec{
 			Endpoints: []v1alpha2.Endpoint{
 				{
@@ -439,7 +439,7 @@ func newNetworkPolicy(namespace, name string, podSelector, ingressPodSelector, i
 		name = "np-" + rand.String(8)
 	}
 	policy := &networkingv1.NetworkPolicy{
-		ObjectMeta: metav1.ObjectMeta{Namespace: namespace, Name: name, UID: types.UID(uuid.New().String())},
+		ObjectMeta: metav1.ObjectMeta{Namespace: namespace, Name: name, UID: types.UID(uuid.Must(uuid.NewV4()).String())},
 		Spec: networkingv1.NetworkPolicySpec{
 			PodSelector: metav1.LabelSelector{MatchLabels: podSelector},
 			PolicyTypes: []networkingv1.PolicyType{networkingv1.PolicyTypeIngress, networkingv1.PolicyTypeEgress},
@@ -473,7 +473,7 @@ func newANNPAppliedToExternalEntity(namespace, name string, externalEntitySelect
 		name = "annp-" + rand.String(8)
 	}
 	annp := &v1beta1.NetworkPolicy{
-		ObjectMeta: metav1.ObjectMeta{Namespace: namespace, Name: name, UID: types.UID(uuid.New().String())},
+		ObjectMeta: metav1.ObjectMeta{Namespace: namespace, Name: name, UID: types.UID(uuid.Must(uuid.NewV4()).String())},
 		Spec: v1beta1.NetworkPolicySpec{
 			AppliedTo: []v1beta1.AppliedTo{
 				{
