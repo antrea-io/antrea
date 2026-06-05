@@ -19,7 +19,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/google/uuid"
+	"github.com/gofrs/uuid/v5"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -50,7 +50,7 @@ func TestS3_NewS3Exporter(t *testing.T) {
 		},
 		S3UploadInterval: 8 * time.Second,
 	}
-	exporter, err := NewS3Exporter(uuid.New(), opt)
+	exporter, err := NewS3Exporter(uuid.Must(uuid.NewV4()), opt)
 	require.NoError(t, err)
 	require.NotNil(t, exporter)
 	assert.Equal(t, "defaultBucketName", exporter.s3UploadProcess.GetBucketName())

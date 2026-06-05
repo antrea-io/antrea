@@ -22,7 +22,7 @@ import (
 
 	"antrea.io/libOpenflow/openflow15"
 	"antrea.io/ofnet/ofctrl"
-	"github.com/google/uuid"
+	"github.com/gofrs/uuid/v5"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	k8stypes "k8s.io/apimachinery/pkg/types"
@@ -144,7 +144,7 @@ func TestPublishDenyConnection(t *testing.T) {
 		SourceAddress:      sourceAddr,
 		DestinationAddress: destinationAddr,
 	}
-	policyUID := uuid.New().String()
+	policyUID := uuid.Must(uuid.NewV4()).String()
 
 	dropCNPDispositionData := []byte{0x11, 0x00, 0x0c, 0x11}
 	dispositionMatch := generateRegMatch(openflow.APDispositionField.GetRegID(), dropCNPDispositionData)

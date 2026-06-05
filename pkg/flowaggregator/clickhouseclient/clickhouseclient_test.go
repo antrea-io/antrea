@@ -23,7 +23,7 @@ import (
 
 	"github.com/ClickHouse/clickhouse-go/v2"
 	"github.com/DATA-DOG/go-sqlmock"
-	"github.com/google/uuid"
+	"github.com/gofrs/uuid/v5"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -32,7 +32,7 @@ import (
 	flowaggregatortesting "antrea.io/antrea/v2/pkg/flowaggregator/testing"
 )
 
-var fakeClusterUUID = uuid.New().String()
+var fakeClusterUUID = uuid.Must(uuid.NewV4()).String()
 
 func TestCacheRecord(t *testing.T) {
 	chExportProc := &ClickHouseExportProcess{

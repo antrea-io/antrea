@@ -27,7 +27,7 @@ import (
 	"time"
 
 	"github.com/fsnotify/fsnotify"
-	"github.com/google/uuid"
+	"github.com/gofrs/uuid/v5"
 	"google.golang.org/protobuf/proto"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/kubernetes"

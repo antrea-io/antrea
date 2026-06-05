@@ -18,7 +18,7 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/google/uuid"
+	"github.com/gofrs/uuid/v5"
 	"github.com/spf13/afero"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -109,7 +109,7 @@ func TestFileStore(t *testing.T) {
 }
 
 func BenchmarkFileStoreAddNetworkPolicy(b *testing.B) {
-	policy := newNetworkPolicy("policy1", types.UID(uuid.New().String()), []string{uuid.New().String()}, nil, []string{uuid.New().String()}, nil)
+	policy := newNetworkPolicy("policy1", types.UID(uuid.Must(uuid.NewV4()).String()), []string{uuid.Must(uuid.NewV4()).String()}, nil, []string{uuid.Must(uuid.NewV4()).String()}, nil)
 	s := newFakeFileStore(b, networkPoliciesDir)
 	b.ResetTimer()
 	b.ReportAllocs()
@@ -123,7 +123,7 @@ func BenchmarkFileStoreAddAppliedToGroup(b *testing.B) {
 	for i := 0; i < 100; i++ {
 		members = append(members, *newAppliedToGroupMemberPod(fmt.Sprintf("pod-%d", i), "namespace"))
 	}
-	atg := newAppliedToGroup(uuid.New().String(), members)
+	atg := newAppliedToGroup(uuid.Must(uuid.NewV4()).String(), members)
 	s := newFakeFileStore(b, appliedToGroupsDir)
 	b.ResetTimer()
 	b.ReportAllocs()
@@ -137,7 +137,7 @@ func BenchmarkFileStoreAddAddressGroup(b *testing.B) {
 	for i := 0; i < 1000; i++ {
 		members = append(members, *newAddressGroupPodMember(fmt.Sprintf("pod-%d", i), "namespace", "192.168.0.1"))
 	}
-	ag := newAddressGroup(uuid.New().String(), members)
+	ag := newAddressGroup(uuid.Must(uuid.NewV4()).String(), members)
 	s := newFakeFileStore(b, addressGroupsDir)
 	b.ResetTimer()
 	b.ReportAllocs()
@@ -151,9 +151,9 @@ func BenchmarkFileStoreReplaceAll(b *testing.B) {
 	atgs := make([]runtime.Object, 0, 1000)
 	ags := make([]runtime.Object, 0, 1000)
 	for i := 0; i < 1000; i++ {
-		policyName := uuid.New().String()
-		addressGroupName := uuid.New().String()
-		appliedToGroupName := uuid.New().String()
+		policyName := uuid.Must(uuid.NewV4()).String()
+		addressGroupName := uuid.Must(uuid.NewV4()).String()
+		appliedToGroupName := uuid.Must(uuid.NewV4()).String()
 		nps = append(nps, newNetworkPolicy(policyName, types.UID(policyName), []string{addressGroupName}, nil, []string{appliedToGroupName}, nil))
 
 		var atgMembers []v1beta2.GroupMember

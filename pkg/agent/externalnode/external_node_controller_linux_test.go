@@ -19,7 +19,7 @@ import (
 	"net"
 	"testing"
 
-	"github.com/google/uuid"
+	"github.com/gofrs/uuid/v5"
 	"github.com/stretchr/testify/assert"
 	"github.com/vishvananda/netlink"
 	"go.uber.org/mock/gomock"
@@ -390,8 +390,8 @@ func TestCreateOVSPortsAndFlowsSuccess(t *testing.T) {
 		HardwareAddr: net.HardwareAddr{0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88},
 		MTU:          1500,
 	}
-	uplinkUUID := uuid.NewString()
-	hostIfUUID := uuid.NewString()
+	uplinkUUID := uuid.Must(uuid.NewV4()).String()
+	hostIfUUID := uuid.Must(uuid.NewV4()).String()
 	hostOFPort := int32(3)
 	uplinkOFPort := int32(4)
 	ipAddrs := []string{"10.20.30.40"}
