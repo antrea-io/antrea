@@ -19,7 +19,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/google/uuid"
+	"github.com/gofrs/uuid/v5"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -51,7 +51,7 @@ func TestS3_UpdateOptions(t *testing.T) {
 		S3UploadInterval: 8 * time.Second,
 	}
 	s3Input := buildS3Input(opt)
-	s3UploadProcess, err := s3uploader.NewS3UploadProcess(s3Input, uuid.New().String())
+	s3UploadProcess, err := s3uploader.NewS3UploadProcess(s3Input, uuid.Must(uuid.NewV4()).String())
 	require.NoError(t, err)
 	s3Exporter := S3Exporter{s3Input: &s3Input, s3UploadProcess: s3UploadProcess}
 	s3Exporter.Start()

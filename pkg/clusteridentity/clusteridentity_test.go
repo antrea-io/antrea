@@ -19,7 +19,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/google/uuid"
+	"github.com/gofrs/uuid/v5"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
@@ -33,7 +33,7 @@ const (
 )
 
 var (
-	clusterUUID = uuid.New()
+	clusterUUID = uuid.Must(uuid.NewV4())
 
 	// First release of Antrea (v0.1.0) at KubeCon NA 2019 (San Diego) :)
 	sanDiegoLocation, _        = time.LoadLocation("America/Los_Angeles")

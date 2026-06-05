@@ -21,7 +21,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/google/uuid"
+	"github.com/gofrs/uuid/v5"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	appsv1 "k8s.io/api/apps/v1"
@@ -76,7 +76,7 @@ func newFakeAntreaIPAMController(pool *crdv1b1.IPPool, namespace *corev1.Namespa
 func initTestObjects(annotateNamespace bool, annotateStatefulSet bool, replicas int32) (*corev1.Namespace, *crdv1b1.IPPool, *appsv1.StatefulSet) {
 	namespace := &corev1.Namespace{
 		ObjectMeta: metav1.ObjectMeta{
-			Name: uuid.New().String(),
+			Name: uuid.Must(uuid.NewV4()).String(),
 		},
 	}
 	ipRange := crdv1b1.IPRange{
@@ -90,7 +90,7 @@ func initTestObjects(annotateNamespace bool, annotateStatefulSet bool, replicas 
 	}
 
 	pool := &crdv1b1.IPPool{
-		ObjectMeta: metav1.ObjectMeta{Name: uuid.New().String()},
+		ObjectMeta: metav1.ObjectMeta{Name: uuid.Must(uuid.NewV4()).String()},
 		Spec: crdv1b1.IPPoolSpec{
 			IPRanges:   []crdv1b1.IPRange{ipRange},
 			SubnetInfo: subnetInfo,
@@ -103,7 +103,7 @@ func initTestObjects(annotateNamespace bool, annotateStatefulSet bool, replicas 
 
 	statefulSet := &appsv1.StatefulSet{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      uuid.New().String(),
+			Name:      uuid.Must(uuid.NewV4()).String(),
 			Namespace: namespace.Name,
 		},
 		Spec: appsv1.StatefulSetSpec{
@@ -215,12 +215,12 @@ func TestReleaseStaleAddresses(t *testing.T) {
 	}
 
 	staleSetOwner := crdv1b1.StatefulSetOwner{
-		Name:      uuid.New().String(),
+		Name:      uuid.Must(uuid.NewV4()).String(),
 		Namespace: namespace.Name,
 	}
 
 	stalePodOwner := crdv1b1.PodOwner{
-		Name:      uuid.New().String(),
+		Name:      uuid.Must(uuid.NewV4()).String(),
 		Namespace: namespace.Name,
 	}
 
@@ -260,7 +260,7 @@ func TestReleaseStaleAddresses(t *testing.T) {
 
 	terminatedPod := &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      uuid.New().String(),
+			Name:      uuid.Must(uuid.NewV4()).String(),
 			Namespace: namespace.Name,
 		},
 		Status: corev1.PodStatus{
