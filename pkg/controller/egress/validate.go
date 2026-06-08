@@ -18,6 +18,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net"
+	"slices"
 
 	admv1 "k8s.io/api/admission/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -61,6 +62,13 @@ func (c *EgressController) validateDualStackEgress(egress *crdv1beta1.Egress) (b
 		if ok, msg := c.isCorrectFamilyPool(poolName, isIPv6); !ok {
 			return false, msg
 		}
+	}
+	seenPools := make(map[string]struct{}, lenPools)
+	for i, poolName := range egress.Spec.ExternalIPPools {
+		if _, exists := seenPools[poolName]; exists {
+			return false, fmt.Sprintf("spec.externalIPPools[%d] duplicates ExternalIPPool %s", i, poolName)
+		}
+		seenPools[poolName] = struct{}{}
 	}
 
 	// When both IPs and pools are specified, validate each IP belongs to its corresponding pool.
@@ -222,8 +230,14 @@ func (c *EgressController) ValidateEgress(review *admv1.AdmissionReview) *admv1.
 			if newEgress.Spec.EgressIP != "" || newEgress.Spec.ExternalIPPool != "" {
 				return false, "{spec.egressIPs, spec.externalIPPools} and {spec.egressIP, spec.externalIPPool} are mutually exclusive"
 			}
-			if allowed, msg := c.validateDualStackEgress(newEgress); !allowed {
-				return false, msg
+			// Allow the controller to clear allocated dual-stack EgressIPs after a referenced ExternalIPPool is deleted.
+			// This aligns with the single-stack cleanup path, which skips pool validation when spec.egressIP is empty.
+			dualStackEgressIPsCleanup := len(oldEgress.Spec.EgressIPs) > 0 && len(newEgress.Spec.EgressIPs) == 0 &&
+				slices.Equal(oldEgress.Spec.ExternalIPPools, newEgress.Spec.ExternalIPPools)
+			if !dualStackEgressIPsCleanup {
+				if allowed, msg := c.validateDualStackEgress(newEgress); !allowed {
+					return false, msg
+				}
 			}
 		}
 		if allowed, msg := c.validateNoSingleStackDualStackEgressIPOverlap(newEgress); !allowed {

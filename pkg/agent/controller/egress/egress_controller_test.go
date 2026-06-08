@@ -71,8 +71,8 @@ const (
 
 	fakeLocalEgressIPv4  = "10.0.0.1"
 	fakeLocalEgressIPv6  = "fd00::1"
-	fakeLocalEgressIPv42 = "10.0.0.2"
-	fakeLocalEgressIPv62 = "fd00::2"
+	fakeLocalEgressIPv4a = "10.0.0.2"
+	fakeLocalEgressIPv6a = "fd00::2"
 	fakeRemoteEgressIPv4 = "10.0.0.3"
 	fakeRemoteEgressIPv6 = "fd00::3"
 )
@@ -193,7 +193,7 @@ func newFakeController(t *testing.T, initObjects []runtime.Object) *fakeControll
 	k8sClient := fake.NewSimpleClientset()
 	informerFactory := informers.NewSharedInformerFactory(k8sClient, 0)
 	nodeInformer := informerFactory.Core().V1().Nodes()
-	localIPDetector := &fakeLocalIPDetector{localIPs: sets.New(fakeLocalEgressIP1, fakeLocalEgressIP2, fakeLocalEgressIPv4, fakeLocalEgressIPv6, fakeLocalEgressIPv42, fakeLocalEgressIPv62)}
+	localIPDetector := &fakeLocalIPDetector{localIPs: sets.New(fakeLocalEgressIP1, fakeLocalEgressIP2, fakeLocalEgressIPv4, fakeLocalEgressIPv6, fakeLocalEgressIPv4a, fakeLocalEgressIPv6a)}
 
 	ifaceStore := interfacestore.NewInterfaceStore()
 	addPodInterface(ifaceStore, "ns1", "pod1", 1)
@@ -1320,7 +1320,7 @@ func TestSyncEgress(t *testing.T) {
 			},
 			newEgress: &crdv1b1.Egress{
 				ObjectMeta: metav1.ObjectMeta{Name: "egressA", UID: "uidA"},
-				Spec:       crdv1b1.EgressSpec{EgressIPs: []string{fakeLocalEgressIPv42, fakeLocalEgressIPv62}},
+				Spec:       crdv1b1.EgressSpec{EgressIPs: []string{fakeLocalEgressIPv4a, fakeLocalEgressIPv6a}},
 			},
 			existingEgressGroup: &cpv1b2.EgressGroup{
 				ObjectMeta: metav1.ObjectMeta{Name: "egressA", UID: "uidA"},
@@ -1337,8 +1337,8 @@ func TestSyncEgress(t *testing.T) {
 			expectedEgresses: []*crdv1b1.Egress{
 				{
 					ObjectMeta: metav1.ObjectMeta{Name: "egressA", UID: "uidA"},
-					Spec:       crdv1b1.EgressSpec{EgressIPs: []string{fakeLocalEgressIPv42, fakeLocalEgressIPv62}},
-					Status:     crdv1b1.EgressStatus{EgressIP: fakeLocalEgressIPv42, EgressIPs: []string{fakeLocalEgressIPv42, fakeLocalEgressIPv62}, EgressNode: fakeNode},
+					Spec:       crdv1b1.EgressSpec{EgressIPs: []string{fakeLocalEgressIPv4a, fakeLocalEgressIPv6a}},
+					Status:     crdv1b1.EgressStatus{EgressIP: fakeLocalEgressIPv4a, EgressIPs: []string{fakeLocalEgressIPv4a, fakeLocalEgressIPv6a}, EgressNode: fakeNode},
 				},
 			},
 			expectedCalls: func(mockOFClient *openflowtest.MockClient, mockRouteClient *routetest.MockInterface, mockIPAssigner *ipassignertest.MockIPAssigner) {
@@ -1360,16 +1360,16 @@ func TestSyncEgress(t *testing.T) {
 				mockIPAssigner.EXPECT().UnassignIP(fakeLocalEgressIPv6).Return(false, nil).Times(2)
 
 				// Install with new IPs and a fresh mark (mark 1 was released, re-allocated).
-				mockOFClient.EXPECT().InstallSNATMarkFlows(net.ParseIP(fakeLocalEgressIPv42), uint32(1))
-				mockOFClient.EXPECT().InstallSNATMarkFlows(net.ParseIP(fakeLocalEgressIPv62), uint32(1))
-				mockRouteClient.EXPECT().AddSNATRule(net.ParseIP(fakeLocalEgressIPv42), uint32(1))
-				mockRouteClient.EXPECT().AddSNATRule(net.ParseIP(fakeLocalEgressIPv62), uint32(1))
-				mockOFClient.EXPECT().InstallPodSNATFlows(uint32(1), net.ParseIP(fakeLocalEgressIPv42), uint32(1))
-				mockOFClient.EXPECT().InstallPodSNATFlows(uint32(1), net.ParseIP(fakeLocalEgressIPv62), uint32(1))
+				mockOFClient.EXPECT().InstallSNATMarkFlows(net.ParseIP(fakeLocalEgressIPv4a), uint32(1))
+				mockOFClient.EXPECT().InstallSNATMarkFlows(net.ParseIP(fakeLocalEgressIPv6a), uint32(1))
+				mockRouteClient.EXPECT().AddSNATRule(net.ParseIP(fakeLocalEgressIPv4a), uint32(1))
+				mockRouteClient.EXPECT().AddSNATRule(net.ParseIP(fakeLocalEgressIPv6a), uint32(1))
+				mockOFClient.EXPECT().InstallPodSNATFlows(uint32(1), net.ParseIP(fakeLocalEgressIPv4a), uint32(1))
+				mockOFClient.EXPECT().InstallPodSNATFlows(uint32(1), net.ParseIP(fakeLocalEgressIPv6a), uint32(1))
 
 				// New IPs: UnassignIP called during second sync + idempotent third sync.
-				mockIPAssigner.EXPECT().UnassignIP(fakeLocalEgressIPv42).Return(false, nil).Times(2)
-				mockIPAssigner.EXPECT().UnassignIP(fakeLocalEgressIPv62).Return(false, nil).Times(2)
+				mockIPAssigner.EXPECT().UnassignIP(fakeLocalEgressIPv4a).Return(false, nil).Times(2)
+				mockIPAssigner.EXPECT().UnassignIP(fakeLocalEgressIPv6a).Return(false, nil).Times(2)
 			},
 		},
 	}
@@ -1466,6 +1466,43 @@ func TestSyncEgress(t *testing.T) {
 			}, 2*time.Second, 200*time.Millisecond)
 		})
 	}
+}
+
+func TestSyncDualStackEgressSkipsAssignmentWhenPoolMissing(t *testing.T) {
+	fakeExternalIPPoolV4 := "pool-v4"
+	fakeExternalIPPoolV6 := "pool-v6"
+	egress := &crdv1b1.Egress{
+		ObjectMeta: metav1.ObjectMeta{Name: "egressDS", UID: "uidDS"},
+		Spec: crdv1b1.EgressSpec{
+			EgressIPs:       []string{fakeLocalEgressIPv4, fakeLocalEgressIPv6},
+			ExternalIPPools: []string{fakeExternalIPPoolV4, fakeExternalIPPoolV6},
+		},
+	}
+	c := newFakeController(t, []runtime.Object{
+		egress,
+		&crdv1b1.ExternalIPPool{
+			ObjectMeta: metav1.ObjectMeta{Name: fakeExternalIPPoolV4, UID: "pool-v4-uid"},
+			Spec:       crdv1b1.ExternalIPPoolSpec{SubnetInfo: &crdv1b1.SubnetInfo{Gateway: fakeGatewayIP, PrefixLength: 24}},
+		},
+	})
+	stopCh := make(chan struct{})
+	defer close(stopCh)
+	c.crdInformerFactory.Start(stopCh)
+	c.informerFactory.Start(stopCh)
+	c.crdInformerFactory.WaitForCacheSync(stopCh)
+	c.informerFactory.WaitForCacheSync(stopCh)
+
+	c.egressIPScheduler.schedule()
+	err := c.syncEgress(egress.Name)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), fakeExternalIPPoolV6)
+
+	c.egressIPStatesMutex.Lock()
+	_, v4Exists := c.egressIPStates[fakeLocalEgressIPv4]
+	_, v6Exists := c.egressIPStates[fakeLocalEgressIPv6]
+	c.egressIPStatesMutex.Unlock()
+	assert.False(t, v4Exists)
+	assert.False(t, v6Exists)
 }
 
 func TestPodUpdateShouldSyncEgress(t *testing.T) {
@@ -1654,7 +1691,7 @@ func TestSyncOverlappingEgress(t *testing.T) {
 		_, err := c.egressLister.Get(egress1.Name)
 		return err != nil
 	}, time.Second, time.Millisecond*100)
-	checkQueueItemExistence(t, c.queue, egress1.Name)
+	checkQueueContainsAndDrain(t, c.queue, egress1.Name)
 	c.mockIPAssigner.EXPECT().UnassignIP(fakeLocalEgressIP1)
 	err = c.syncEgress(egress1.Name)
 	assert.NoError(t, err)
@@ -1780,7 +1817,7 @@ func TestSyncOverlappingDualStackEgress(t *testing.T) {
 		_, err := c.egressLister.Get(egress1.Name)
 		return err != nil
 	}, time.Second, time.Millisecond*100)
-	checkQueueItemExistence(t, c.queue, egress1.Name)
+	checkQueueContainsAndDrain(t, c.queue, egress1.Name)
 	c.mockIPAssigner.EXPECT().UnassignIP(fakeLocalEgressIPv4)
 	c.mockIPAssigner.EXPECT().UnassignIP(fakeLocalEgressIPv6)
 	err = c.syncEgress(egress1.Name)
@@ -2178,6 +2215,81 @@ func TestGetEgressIPByMark(t *testing.T) {
 	}
 }
 
+func TestRealizeDualStackEgressIPsRollsBackSNATRulesOnFailure(t *testing.T) {
+	c := newFakeController(t, nil)
+	ruleErr := fmt.Errorf("install SNAT rule failed")
+
+	gomock.InOrder(
+		c.mockOFClient.EXPECT().InstallSNATMarkFlows(net.ParseIP(fakeLocalEgressIPv4), uint32(1)),
+		c.mockOFClient.EXPECT().InstallSNATMarkFlows(net.ParseIP(fakeLocalEgressIPv6), uint32(1)),
+		c.mockRouteClient.EXPECT().AddSNATRule(net.ParseIP(fakeLocalEgressIPv4), uint32(1)),
+		c.mockRouteClient.EXPECT().AddSNATRule(net.ParseIP(fakeLocalEgressIPv6), uint32(1)).Return(ruleErr),
+		c.mockRouteClient.EXPECT().DeleteSNATRule(uint32(1)),
+	)
+
+	_, err := c.realizeDualStackEgressIPs("egressA", []string{fakeLocalEgressIPv4, fakeLocalEgressIPv6}, []*crdv1b1.SubnetInfo{nil, nil})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "error installing SNAT rules")
+
+	for _, egressIP := range []string{fakeLocalEgressIPv4, fakeLocalEgressIPv6} {
+		ipState, ok := c.egressIPStates[egressIP]
+		require.True(t, ok)
+		assert.False(t, ipState.ruleInstalled)
+	}
+}
+
+func TestRealizeDualStackEgressIPsMirrorsExistingSharedMark(t *testing.T) {
+	c := newFakeController(t, nil)
+	sharedMark, err := c.markAllocator.allocate()
+	require.NoError(t, err)
+	c.egressIPStates[fakeLocalEgressIPv4] = &egressIPState{
+		egressIP:    net.ParseIP(fakeLocalEgressIPv4),
+		egressNames: sets.New[string](),
+		mark:        sharedMark,
+	}
+	c.egressIPStates[fakeLocalEgressIPv6] = &egressIPState{
+		egressIP:    net.ParseIP(fakeLocalEgressIPv6),
+		egressNames: sets.New[string](),
+	}
+
+	gomock.InOrder(
+		c.mockOFClient.EXPECT().InstallSNATMarkFlows(net.ParseIP(fakeLocalEgressIPv4), sharedMark),
+		c.mockOFClient.EXPECT().InstallSNATMarkFlows(net.ParseIP(fakeLocalEgressIPv6), sharedMark),
+		c.mockRouteClient.EXPECT().AddSNATRule(net.ParseIP(fakeLocalEgressIPv4), sharedMark),
+		c.mockRouteClient.EXPECT().AddSNATRule(net.ParseIP(fakeLocalEgressIPv6), sharedMark),
+	)
+
+	gotMark, err := c.realizeDualStackEgressIPs("egressA", []string{fakeLocalEgressIPv4, fakeLocalEgressIPv6}, []*crdv1b1.SubnetInfo{nil, nil})
+	require.NoError(t, err)
+	assert.Equal(t, sharedMark, gotMark)
+	assert.Equal(t, sharedMark, c.egressIPStates[fakeLocalEgressIPv4].mark)
+	assert.Equal(t, sharedMark, c.egressIPStates[fakeLocalEgressIPv6].mark)
+}
+
+func TestRealizeDualStackEgressIPsFailsOnInconsistentMarks(t *testing.T) {
+	c := newFakeController(t, nil)
+	mark1, err := c.markAllocator.allocate()
+	require.NoError(t, err)
+	mark2, err := c.markAllocator.allocate()
+	require.NoError(t, err)
+	c.egressIPStates[fakeLocalEgressIPv4] = &egressIPState{
+		egressIP:    net.ParseIP(fakeLocalEgressIPv4),
+		egressNames: sets.New[string](),
+		mark:        mark1,
+	}
+	c.egressIPStates[fakeLocalEgressIPv6] = &egressIPState{
+		egressIP:    net.ParseIP(fakeLocalEgressIPv6),
+		egressNames: sets.New[string](),
+		mark:        mark2,
+	}
+
+	_, err = c.realizeDualStackEgressIPs("egressA", []string{fakeLocalEgressIPv4, fakeLocalEgressIPv6}, []*crdv1b1.SubnetInfo{nil, nil})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "inconsistent marks for dual-stack IPs")
+	assert.Equal(t, mark1, c.egressIPStates[fakeLocalEgressIPv4].mark)
+	assert.Equal(t, mark2, c.egressIPStates[fakeLocalEgressIPv6].mark)
+}
+
 func TestGetDualStackEgressIPByMark(t *testing.T) {
 	egress := &crdv1b1.Egress{
 		ObjectMeta: metav1.ObjectMeta{Name: "egressA", UID: "uidA"},
@@ -2267,6 +2379,20 @@ func checkQueueItemExistence[T comparable](t *testing.T, queue workqueue.TypedRa
 		queue.Done(key)
 	}
 	assert.Equal(t, expectedItems, actualItems)
+}
+
+func checkQueueContainsAndDrain[T comparable](t *testing.T, queue workqueue.TypedRateLimitingInterface[T], items ...T) {
+	t.Logf("queue len %d", queue.Len())
+	expectedItems := sets.New(items...)
+	actualItems := sets.New[T]()
+	require.Eventually(t, func() bool {
+		for queue.Len() > 0 {
+			key, _ := queue.Get()
+			actualItems.Insert(key)
+			queue.Done(key)
+		}
+		return actualItems.IsSuperset(expectedItems)
+	}, time.Second, 10*time.Millisecond, "Didn't find expected items in the queue")
 }
 
 func TestCompareEgressStatus(t *testing.T) {
@@ -2519,4 +2645,39 @@ func TestEgressControllerReplaceEgressIPsDualStack(t *testing.T) {
 	// Remote dual-stack Egress should not have state.
 	_, existRemote := c.getEgressState("egressDSRemote")
 	assert.False(t, existRemote)
+}
+
+func TestEgressControllerReplaceEgressIPsDualStackSkipsMissingPool(t *testing.T) {
+	fakeExternalIPPoolV4 := "pool-v4"
+	fakeExternalIPPoolV6 := "pool-v6"
+	c := newFakeController(t, []runtime.Object{
+		&crdv1b1.Egress{
+			ObjectMeta: metav1.ObjectMeta{Name: "egressDS", UID: "uidDS"},
+			Spec: crdv1b1.EgressSpec{
+				EgressIPs:       []string{fakeLocalEgressIPv4, fakeLocalEgressIPv6},
+				ExternalIPPools: []string{fakeExternalIPPoolV4, fakeExternalIPPoolV6},
+			},
+			Status: crdv1b1.EgressStatus{
+				EgressNode: fakeNode,
+				EgressIPs:  []string{fakeLocalEgressIPv4, fakeLocalEgressIPv6},
+			},
+		},
+		&crdv1b1.ExternalIPPool{
+			ObjectMeta: metav1.ObjectMeta{Name: fakeExternalIPPoolV4, UID: "pool-v4-uid"},
+			Spec:       crdv1b1.ExternalIPPoolSpec{SubnetInfo: &crdv1b1.SubnetInfo{Gateway: fakeGatewayIP, PrefixLength: 24}},
+		},
+	})
+	stopCh := make(chan struct{})
+	defer close(stopCh)
+	go c.podUpdateChannel.Run(stopCh)
+	c.crdInformerFactory.Start(stopCh)
+	c.informerFactory.Start(stopCh)
+	c.crdInformerFactory.WaitForCacheSync(stopCh)
+	c.informerFactory.WaitForCacheSync(stopCh)
+
+	c.mockIPAssigner.EXPECT().InitIPs(map[string]*crdv1b1.SubnetInfo{})
+	require.NoError(t, c.replaceEgressIPs())
+
+	_, exist := c.getEgressState("egressDS")
+	assert.False(t, exist)
 }

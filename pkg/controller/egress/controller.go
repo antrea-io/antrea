@@ -60,10 +60,6 @@ const (
 	egressGroupType grouping.GroupType = "egressGroup"
 
 	externalIPPoolIndex = "externalIPPool"
-
-	// effectiveDualStackCount is the number of IPs (one IPv4 + one IPv6) that the current
-	// implementation actually realizes on the datapath for a dual-stack Egress.
-	effectiveDualStackCount = 2
 )
 
 // ipAllocation contains the IP and the IP Pool which allocates it.
@@ -188,11 +184,7 @@ func (c *EgressController) getPoolToIPMapping(egress *egressv1beta1.Egress) map[
 		return mapping
 	}
 
-	pools := egress.Spec.ExternalIPPools
-	if len(pools) > effectiveDualStackCount {
-		pools = pools[:effectiveDualStackCount]
-	}
-	for i, pool := range pools {
+	for i, pool := range egress.Spec.ExternalIPPools {
 		if i >= len(egress.Spec.EgressIPs) {
 			break
 		}
@@ -235,22 +227,21 @@ func (c *EgressController) restoreIPAllocations(egresses []*egressv1beta1.Egress
 			continue
 		}
 
-		effectivePools := egress.Spec.ExternalIPPools
+		// Restore all allocations recorded in spec.egressIPs/spec.externalIPPools. The
+		// agent controller still limits datapath realization to the first IPv4/IPv6 pair.
+		pools := egress.Spec.ExternalIPPools
 		if egress.Spec.ExternalIPPool != "" {
-			effectivePools = []string{egress.Spec.ExternalIPPool}
-		}
-		if len(effectivePools) > effectiveDualStackCount {
-			effectivePools = effectivePools[:effectiveDualStackCount]
+			pools = []string{egress.Spec.ExternalIPPool}
 		}
 
 		existing, _ := c.getIPAllocation(egressName)
 		if existing == nil {
 			existing = &multipleIPAllocation{
-				allocs: make([]*ipAllocation, len(effectivePools)),
+				allocs: make([]*ipAllocation, len(pools)),
 			}
 		}
 		a := c.newIPAllocation(alloc.IP, alloc.IPPoolName)
-		for idx, pool := range effectivePools {
+		for idx, pool := range pools {
 			if pool == alloc.IPPoolName {
 				existing.allocs[idx] = a
 				break
@@ -420,13 +411,10 @@ func (c *EgressController) syncEgressIPs(egress *egressv1beta1.Egress) ([]net.IP
 		}
 	}
 
-	// Limit to effectiveDualStackCount for now (can support more in the future)
-	if len(effectivePools) > effectiveDualStackCount {
-		effectivePools = effectivePools[:effectiveDualStackCount]
-	}
-	if len(effectiveSpecIPs) > effectiveDualStackCount {
-		effectiveSpecIPs = effectiveSpecIPs[:effectiveDualStackCount]
-	}
+	// Keep allocations aligned with the full spec.externalIPPools list so that
+	// auto-allocation patches spec.egressIPs with the same length and remains
+	// valid for admission. The agent controller still caps the effective datapath
+	// and status EgressIPs to the first IPv4/IPv6 pair.
 
 	prevAlloc, exists := c.getIPAllocation(egress.Name)
 	forceAutoAllocation := false
@@ -518,7 +506,7 @@ func (c *EgressController) syncEgressIPs(egress *egressv1beta1.Egress) ([]net.IP
 				for j := 0; j < i; j++ {
 					c.externalIPAllocator.ReleaseIP(effectivePools[j], allocatedIPs[j])
 				}
-				return nil, egress, err
+				return nil, egress, fmt.Errorf("error when allocating IP %v for Egress %s from ExternalIPPool %s: %w", ip, egress.Name, effectivePools[i], err)
 			}
 			allocs = append(allocs, c.newIPAllocation(ip, effectivePools[i]))
 			allocatedIPs = append(allocatedIPs, ip)
@@ -531,7 +519,7 @@ func (c *EgressController) syncEgressIPs(egress *egressv1beta1.Egress) ([]net.IP
 				for j := 0; j < i; j++ {
 					c.externalIPAllocator.ReleaseIP(effectivePools[j], allocatedIPs[j])
 				}
-				return nil, egress, err
+				return nil, egress, fmt.Errorf("error when allocating IP for Egress %s from ExternalIPPool %s: %w", egress.Name, poolName, err)
 			}
 			allocatedIPs = append(allocatedIPs, ip)
 			allocs = append(allocs, c.newIPAllocation(ip, poolName))
@@ -759,6 +747,11 @@ func (c *EgressController) updateEgressAllocatedCondition(egress *egressv1beta1.
 	var desiredCondition *egressv1beta1.EgressCondition
 	if egress.Spec.ExternalIPPool != "" || len(egress.Spec.ExternalIPPools) > 0 {
 		msg := "EgressIP is successfully allocated"
+		errMsg := "Cannot allocate EgressIP from ExternalIPPool"
+		if len(egress.Spec.ExternalIPPools) > 0 {
+			msg = "EgressIPs are successfully allocated"
+			errMsg = "Cannot allocate EgressIPs from ExternalIPPools"
+		}
 		if err == nil {
 			desiredCondition = &egressv1beta1.EgressCondition{
 				Type:               egressv1beta1.IPAllocated,
@@ -772,7 +765,7 @@ func (c *EgressController) updateEgressAllocatedCondition(egress *egressv1beta1.
 				Type:               egressv1beta1.IPAllocated,
 				Status:             v1.ConditionFalse,
 				Reason:             "AllocationError",
-				Message:            fmt.Sprintf("Cannot allocate EgressIP from ExternalIPPool: %v", err),
+				Message:            fmt.Sprintf("%s: %v", errMsg, err),
 				LastTransitionTime: metav1.Now(),
 			}
 		}

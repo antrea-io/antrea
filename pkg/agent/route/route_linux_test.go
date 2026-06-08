@@ -2220,6 +2220,45 @@ func TestAddSNATRule(t *testing.T) {
 	}
 }
 
+func TestAddSNATRuleDuplicate(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	mockIPTables := iptablestest.NewMockInterface(ctrl)
+	c := &Client{
+		iptables: mockIPTables,
+		nodeConfig: &config.NodeConfig{
+			GatewayConfig: &config.GatewayConfig{Name: "antrea-gw0"},
+		},
+	}
+	snatIP := net.ParseIP("1.1.1.1")
+	mark := uint32(10)
+	c.markToSNATIPs.Store(mark, []net.IP{snatIP})
+	mockIPTables.EXPECT().InsertRule(iptables.ProtocolIPv4, iptables.NATTable, antreaPostRoutingChain, c.snatRuleSpec(snatIP, mark))
+
+	assert.NoError(t, c.AddSNATRule(snatIP, mark))
+	value, ok := c.markToSNATIPs.Load(mark)
+	require.True(t, ok)
+	assert.Equal(t, []net.IP{snatIP}, value.([]net.IP))
+}
+
+func TestAddSNATRuleFailureDoesNotUpdateCache(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	mockIPTables := iptablestest.NewMockInterface(ctrl)
+	c := &Client{
+		iptables: mockIPTables,
+		nodeConfig: &config.NodeConfig{
+			GatewayConfig: &config.GatewayConfig{Name: "antrea-gw0"},
+		},
+	}
+	snatIP := net.ParseIP("1.1.1.1")
+	mark := uint32(10)
+	insertErr := fmt.Errorf("insert failed")
+	mockIPTables.EXPECT().InsertRule(iptables.ProtocolIPv4, iptables.NATTable, antreaPostRoutingChain, c.snatRuleSpec(snatIP, mark)).Return(insertErr)
+
+	assert.ErrorIs(t, c.AddSNATRule(snatIP, mark), insertErr)
+	_, ok := c.markToSNATIPs.Load(mark)
+	assert.False(t, ok)
+}
+
 func TestDeleteSNATRule(t *testing.T) {
 	tests := []struct {
 		name                  string
@@ -2312,6 +2351,32 @@ func TestDeleteSNATRule(t *testing.T) {
 			assert.NoError(t, c.DeleteSNATRule(tt.mark))
 		})
 	}
+}
+
+func TestDeleteSNATRuleFailureKeepsCachedIPs(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	mockIPTables := iptablestest.NewMockInterface(ctrl)
+	c := &Client{
+		iptables: mockIPTables,
+		nodeConfig: &config.NodeConfig{
+			GatewayConfig: &config.GatewayConfig{Name: "antrea-gw0"},
+		},
+	}
+	snatIPv4 := net.ParseIP("1.1.1.1")
+	snatIPv6 := net.ParseIP("fd00::1")
+	mark := uint32(10)
+	deleteErr := fmt.Errorf("delete failed")
+	c.markToSNATIPs.Store(mark, []net.IP{snatIPv4, snatIPv6})
+
+	gomock.InOrder(
+		mockIPTables.EXPECT().DeleteRule(iptables.ProtocolIPv4, iptables.NATTable, antreaPostRoutingChain, c.snatRuleSpec(snatIPv4, mark)),
+		mockIPTables.EXPECT().DeleteRule(iptables.ProtocolIPv6, iptables.NATTable, antreaPostRoutingChain, c.snatRuleSpec(snatIPv6, mark)).Return(deleteErr),
+	)
+
+	assert.ErrorIs(t, c.DeleteSNATRule(mark), deleteErr)
+	value, ok := c.markToSNATIPs.Load(mark)
+	require.True(t, ok)
+	assert.Equal(t, []net.IP{snatIPv4, snatIPv6}, value.([]net.IP))
 }
 
 func TestAddNodePortConfigs(t *testing.T) {
