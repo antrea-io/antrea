@@ -874,10 +874,11 @@ func testEgressUpdateBandwidth(t *testing.T, data *TestData) {
 			t.Fatalf("Error when running iperf3 client: %v", err)
 		}
 		stdout = strings.TrimSpace(stdout)
-		actualBandwidth, _ := strconv.ParseFloat(strings.TrimSpace(stdout), 64)
+		actualBandwidth, err := strconv.ParseFloat(stdout, 64)
+		require.NoErrorf(t, err, "Failed to parse iperf3 bandwidth output %q", stdout)
 		t.Logf("Actual bandwidth: %v Mbits/sec", actualBandwidth)
 		// Allow a certain deviation.
-		assert.InEpsilon(t, actualBandwidth, expectedBandwidth, 0.2)
+		assert.InEpsilon(t, float64(expectedBandwidth), actualBandwidth, 0.2)
 	}
 
 	runIperf([]string{"bash", "-c", "iperf3 -c 1.1.1.1 -f m -t 1|grep sender|awk '{print $7}'"}, transMap[bandwidth.Rate]+transMap[bandwidth.Burst])
@@ -1127,11 +1128,11 @@ func (data *TestData) checkDualStackEgressState(t *testing.T, egressName, expect
 	t.Helper()
 	var egress *v1beta1.Egress
 	pollErr := wait.PollUntilContextTimeout(context.Background(), 200*time.Millisecond, timeout, true, func(ctx context.Context) (bool, error) {
-		var err error
-		egress, err = data.CRDClient.CrdV1beta1().Egresses().Get(context.TODO(), egressName, metav1.GetOptions{})
+		updatedEgress, err := data.CRDClient.CrdV1beta1().Egresses().Get(context.TODO(), egressName, metav1.GetOptions{})
 		if err != nil {
 			return false, err
 		}
+		egress = updatedEgress
 		if egress.Status.EgressNode == "" {
 			return false, nil
 		}
@@ -1142,7 +1143,7 @@ func (data *TestData) checkDualStackEgressState(t *testing.T, egressName, expect
 		for _, ip := range []string{expectedIPv4, expectedIPv6} {
 			ok, err := hasIP(data, egress.Status.EgressNode, ip)
 			if err != nil {
-				return false, nil
+				return false, err
 			}
 			if !ok {
 				return false, nil
@@ -1151,6 +1152,10 @@ func (data *TestData) checkDualStackEgressState(t *testing.T, egressName, expect
 		return true, nil
 	})
 	if pollErr != nil {
+		if egress == nil {
+			return nil, fmt.Errorf("dual-stack egress %s did not reach expected state (ipv4=%s ipv6=%s): %v, got nil Egress",
+				egressName, expectedIPv4, expectedIPv6, pollErr)
+		}
 		return egress, fmt.Errorf("dual-stack egress %s did not reach expected state (ipv4=%s ipv6=%s): %v, got status=%+v",
 			egressName, expectedIPv4, expectedIPv6, pollErr, egress.Status)
 	}
@@ -1160,10 +1165,11 @@ func (data *TestData) checkDualStackEgressState(t *testing.T, egressName, expect
 func (data *TestData) waitForDualStackEgressRealized(egress *v1beta1.Egress) (*v1beta1.Egress, error) {
 	err := wait.PollUntilContextTimeout(context.Background(), 200*time.Millisecond, waitEgressDualStackRealizedTimeout, true,
 		func(ctx context.Context) (done bool, err error) {
-			egress, err = data.CRDClient.CrdV1beta1().Egresses().Get(context.TODO(), egress.Name, metav1.GetOptions{})
+			updatedEgress, err := data.CRDClient.CrdV1beta1().Egresses().Get(context.TODO(), egress.Name, metav1.GetOptions{})
 			if err != nil {
 				return false, err
 			}
+			egress = updatedEgress
 			if egress.Status.EgressNode == "" || len(egress.Status.EgressIPs) < 2 {
 				return false, nil
 			}
@@ -1262,10 +1268,11 @@ func testDualStackEgressClientIP(t *testing.T, data *TestData) {
 			var err error
 			err = wait.PollUntilContextTimeout(context.Background(), time.Millisecond*100, time.Second*5, false,
 				func(ctx context.Context) (bool, error) {
-					egress, err = data.CRDClient.CrdV1beta1().Egresses().Get(context.TODO(), egress.Name, metav1.GetOptions{})
-					if err != nil {
-						return false, err
+					updatedEgress, getErr := data.CRDClient.CrdV1beta1().Egresses().Get(context.TODO(), egress.Name, metav1.GetOptions{})
+					if getErr != nil {
+						return false, getErr
 					}
+					egress = updatedEgress
 					return egress.Status.EgressNode == egressNode, nil
 				})
 			assert.NoError(t, err, "Dual-stack Egress failed to set EgressNode in status")
@@ -1383,11 +1390,11 @@ func testDualStackEgressCRUD(t *testing.T, data *TestData) {
 
 			var gotEgress *v1beta1.Egress
 			err := wait.PollUntilContextTimeout(context.Background(), 500*time.Millisecond, 10*time.Second, false, func(ctx context.Context) (bool, error) {
-				var e error
-				gotEgress, e = data.CRDClient.CrdV1beta1().Egresses().Get(context.TODO(), egress.Name, metav1.GetOptions{})
+				updatedEgress, e := data.CRDClient.CrdV1beta1().Egresses().Get(context.TODO(), egress.Name, metav1.GetOptions{})
 				if e != nil {
 					return false, e
 				}
+				gotEgress = updatedEgress
 				if tt.noNodeExpected {
 					specIPs := sets.New[string](gotEgress.Spec.EgressIPs...)
 					if !specIPs.Has(tt.expectedIPv4) || !specIPs.Has(tt.expectedIPv6) {
@@ -1405,6 +1412,11 @@ func testDualStackEgressCRUD(t *testing.T, data *TestData) {
 				}
 				return tt.expectedNodes.Has(gotEgress.Status.EgressNode), nil
 			})
+			if gotEgress == nil {
+				require.NoError(t, err, "Dual-stack Egress did not reach expected state: ipv4=%s ipv6=%s nodes=%v, got nil Egress",
+					tt.expectedIPv4, tt.expectedIPv6, sets.List(tt.expectedNodes))
+				require.NotNil(t, gotEgress, "Dual-stack Egress poll completed with nil Egress")
+			}
 			require.NoError(t, err, "Dual-stack Egress did not reach expected state: ipv4=%s ipv6=%s nodes=%v, got=Spec.EgressIPs=%v Status=%+v",
 				tt.expectedIPv4, tt.expectedIPv6, sets.List(tt.expectedNodes), gotEgress.Spec.EgressIPs, gotEgress.Status)
 
@@ -1439,7 +1451,7 @@ func testDualStackEgressCRUD(t *testing.T, data *TestData) {
 						func(ctx context.Context) (bool, error) {
 							exists, e := hasIP(data, gotEgress.Status.EgressNode, ip)
 							if e != nil {
-								return false, nil
+								return false, e
 							}
 							return !exists, nil
 						})
@@ -1534,7 +1546,11 @@ func testDualStackEgressUpdateEgressIPs(t *testing.T, data *TestData) {
 				toUpdate.Spec.EgressIPs = []string{tt.newIPv4, tt.newIPv6}
 				_, e := data.CRDClient.CrdV1beta1().Egresses().Update(context.TODO(), toUpdate, metav1.UpdateOptions{})
 				if e != nil && errors.IsConflict(e) {
-					toUpdate, _ = data.CRDClient.CrdV1beta1().Egresses().Get(context.TODO(), egress.Name, metav1.GetOptions{})
+					updatedEgress, getErr := data.CRDClient.CrdV1beta1().Egresses().Get(context.TODO(), egress.Name, metav1.GetOptions{})
+					if getErr != nil {
+						return getErr
+					}
+					toUpdate = updatedEgress
 				}
 				return e
 			})
@@ -1549,7 +1565,7 @@ func testDualStackEgressUpdateEgressIPs(t *testing.T, data *TestData) {
 					func(ctx context.Context) (bool, error) {
 						exists, e := hasIP(data, tt.originalNode, ip)
 						if e != nil {
-							return false, nil
+							return false, e
 						}
 						return !exists, nil
 					})
@@ -1629,7 +1645,8 @@ func testDualStackEgressUpdateNodeSelector(t *testing.T, data *TestData) {
 	// Both IPs must appear on toNode and not on fromNode.
 	_, err = data.checkDualStackEgressState(t, egress.Name, allocatedIPv4, allocatedIPv6, 3*time.Second)
 	require.NoError(t, err)
-	updatedEgress, _ := data.CRDClient.CrdV1beta1().Egresses().Get(context.TODO(), egress.Name, metav1.GetOptions{})
+	updatedEgress, err := data.CRDClient.CrdV1beta1().Egresses().Get(context.TODO(), egress.Name, metav1.GetOptions{})
+	require.NoError(t, err)
 	assert.Equal(t, toNode, updatedEgress.Status.EgressNode, "EgressNode did not migrate to expected node")
 
 	for _, ip := range []string{allocatedIPv4, allocatedIPv6} {
@@ -1644,7 +1661,8 @@ func testDualStackEgressUpdateNodeSelector(t *testing.T, data *TestData) {
 
 	_, err = data.checkDualStackEgressState(t, egress.Name, allocatedIPv4, allocatedIPv6, 3*time.Second)
 	require.NoError(t, err)
-	restoredEgress, _ := data.CRDClient.CrdV1beta1().Egresses().Get(context.TODO(), egress.Name, metav1.GetOptions{})
+	restoredEgress, err := data.CRDClient.CrdV1beta1().Egresses().Get(context.TODO(), egress.Name, metav1.GetOptions{})
+	require.NoError(t, err)
 	assert.Equal(t, fromNode, restoredEgress.Status.EgressNode, "EgressNode did not migrate back to original node")
 }
 
@@ -1746,14 +1764,14 @@ func testDualStackEgressNodeFailure(t *testing.T, data *TestData) {
 			var ipErr error
 			expectedNodeHasIPv4, ipErr = hasIP(data, expectedNode, allocatedIPv4)
 			if ipErr != nil {
-				return false, nil
+				return false, ipErr
 			}
 			if !expectedNodeHasIPv4 {
 				return false, nil
 			}
 			expectedNodeHasIPv6, ipErr = hasIP(data, expectedNode, allocatedIPv6)
 			if ipErr != nil {
-				return false, nil
+				return false, ipErr
 			}
 			if !expectedNodeHasIPv6 {
 				return false, nil
@@ -1846,10 +1864,11 @@ func testDualStackEgressUpdateBandwidth(t *testing.T, data *TestData) {
 
 	err = wait.PollUntilContextTimeout(context.Background(), 200*time.Millisecond, waitEgressRealizedTimeout, true,
 		func(ctx context.Context) (bool, error) {
-			egress, err = data.CRDClient.CrdV1beta1().Egresses().Get(context.TODO(), egress.Name, metav1.GetOptions{})
-			if err != nil {
-				return false, err
+			updatedEgress, getErr := data.CRDClient.CrdV1beta1().Egresses().Get(context.TODO(), egress.Name, metav1.GetOptions{})
+			if getErr != nil {
+				return false, getErr
 			}
+			egress = updatedEgress
 			return egress.Status.EgressNode != "", nil
 		})
 	require.NoError(t, err, "Dual-stack Egress did not set EgressNode, status=%+v", egress.Status)
@@ -1860,9 +1879,10 @@ func testDualStackEgressUpdateBandwidth(t *testing.T, data *TestData) {
 			t.Fatalf("Error when running iperf3 client: %v", err)
 		}
 		stdout = strings.TrimSpace(stdout)
-		actualBandwidth, _ := strconv.ParseFloat(strings.TrimSpace(stdout), 64)
+		actualBandwidth, err := strconv.ParseFloat(stdout, 64)
+		require.NoErrorf(t, err, "Failed to parse iperf3 bandwidth output %q", stdout)
 		t.Logf("Actual bandwidth: %v Mbits/sec", actualBandwidth)
-		assert.InEpsilon(t, actualBandwidth, expectedBandwidth, 0.2)
+		assert.InEpsilon(t, float64(expectedBandwidth), actualBandwidth, 0.2)
 	}
 
 	// Verify IPv4 traffic is shaped.

@@ -3840,7 +3840,7 @@ func schema_pkg_apis_crd_v1beta1_EgressStatus(ref common.ReferenceCallback) comm
 					},
 					"egressIP": {
 						SchemaProps: spec.SchemaProps{
-							Description: "EgressIP indicates the effective Egress IP for the selected workloads. It will always be the first element of the EgressIPs list when EgressIPs is not empty, and will be empty if no Egress IP is assigned to any Node.",
+							Description: "EgressIP indicates the effective Egress IP for the selected workloads. For compatibility with existing consumers, it is set to the first element of EgressIPs when EgressIPs is not empty. It will be empty if no Egress IP is assigned to any Node.",
 							Default:     "",
 							Type:        []string{"string"},
 							Format:      "",
@@ -3848,7 +3848,7 @@ func schema_pkg_apis_crd_v1beta1_EgressStatus(ref common.ReferenceCallback) comm
 					},
 					"egressIPs": {
 						SchemaProps: spec.SchemaProps{
-							Description: "EgressIPs indicates all effective Egress IPs for the selected workloads. When multiple IPs are configured for an Egress, this list contains one entry for each effective IP.",
+							Description: "EgressIPs indicates all effective Egress IPs for the selected workloads. For single-stack Egresses, it contains the same IP as EgressIP so EgressIP can be deprecated in the future.",
 							Type:        []string{"array"},
 							Items: &spec.SchemaOrArray{
 								Schema: &spec.Schema{

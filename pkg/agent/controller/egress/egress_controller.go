@@ -772,6 +772,23 @@ func (c *EgressController) realizeEgressIP(egressName, egressIP string, subnetIn
 	return ipState.mark, nil
 }
 
+func consistentDualStackMark(ipStates []*egressIPState) (uint32, error) {
+	var sharedMark uint32
+	for _, s := range ipStates {
+		if s.mark == 0 {
+			continue
+		}
+		if sharedMark == 0 {
+			sharedMark = s.mark
+			continue
+		}
+		if sharedMark != s.mark {
+			return 0, fmt.Errorf("inconsistent marks for dual-stack IPs: IP %s has mark %d, expected %d", s.egressIP, s.mark, sharedMark)
+		}
+	}
+	return sharedMark, nil
+}
+
 // realizeDualStackEgressIPs realizes a pair of dual-stack Egress IPs under a single shared mark.
 // Compared with calling realizeEgressIP twice, this function is collision-safe:
 //   - The mark is allocated once and mirrored to both ipStates.
@@ -814,17 +831,25 @@ func (c *EgressController) realizeDualStackEgressIPs(egressName string, egressIP
 		ipStates[i] = ipState
 	}
 
-	// All IPs share one mark.
-	if isLocalIP && ipStates[0].mark == 0 {
+	sharedMark, err := consistentDualStackMark(ipStates)
+	if err != nil {
+		return 0, err
+	}
+	if isLocalIP && sharedMark == 0 {
 		mark, err := c.markAllocator.allocate()
 		if err != nil {
 			return 0, fmt.Errorf("error allocating mark for dual-stack IPs: %v", err)
 		}
+		sharedMark = mark
+	}
+	// All IPs share one mark. If one IP state already has the mark and another
+	// one is missing it, mirror the existing mark before installing or cleaning
+	// up datapath state.
+	if sharedMark != 0 {
 		for _, s := range ipStates {
-			s.mark = mark
+			s.mark = sharedMark
 		}
 	}
-	sharedMark := ipStates[0].mark
 
 	if isLocalIP {
 		allFlowsInstalled := true
@@ -848,6 +873,12 @@ func (c *EgressController) realizeDualStackEgressIPs(egressName string, egressIP
 		if !allRulesInstalled {
 			for _, s := range ipStates {
 				if err := c.routeClient.AddSNATRule(s.egressIP, sharedMark); err != nil {
+					if cleanupErr := c.routeClient.DeleteSNATRule(sharedMark); cleanupErr != nil {
+						return 0, fmt.Errorf("error installing SNAT rules for IP %v: %v; rollback failed: %v", s.egressIP, err, cleanupErr)
+					}
+					for _, state := range ipStates {
+						state.ruleInstalled = false
+					}
 					return 0, fmt.Errorf("error installing SNAT rules for IP %v: %v", s.egressIP, err)
 				}
 				s.ruleInstalled = true
@@ -1030,7 +1061,15 @@ func (c *EgressController) unrealizeDualStackEgressIPs(egressName string, egress
 		}
 	}
 
-	sharedMark := ipStates[0].mark
+	sharedMark, err := consistentDualStackMark(ipStates)
+	if err != nil {
+		return err
+	}
+	if sharedMark != 0 {
+		for _, s := range ipStates {
+			s.mark = sharedMark
+		}
+	}
 
 	if sharedMark != 0 {
 		for _, s := range ipStates {

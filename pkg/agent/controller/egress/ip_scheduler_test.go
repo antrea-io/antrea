@@ -230,8 +230,8 @@ func TestSchedule(t *testing.T) {
 
 // TestScheduleDualStackEgress verifies that for dual-stack Egresses the scheduler only counts
 // the first IPv4/IPv6 pair against Node capacity, matching what is actually realized on the
-// datapath (firstDualStackPair / syncDualStackEgress) and what the central controller allocates
-// from ExternalIPPools.
+// datapath (firstDualStackPair / syncDualStackEgress), even when spec.egressIPs contains more
+// pairs to stay aligned with spec.externalIPPools.
 func TestScheduleDualStackEgress(t *testing.T) {
 	tests := []struct {
 		name                string

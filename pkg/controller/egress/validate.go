@@ -62,6 +62,13 @@ func (c *EgressController) validateDualStackEgress(egress *crdv1beta1.Egress) (b
 			return false, msg
 		}
 	}
+	seenPools := make(map[string]struct{}, lenPools)
+	for i, poolName := range egress.Spec.ExternalIPPools {
+		if _, exists := seenPools[poolName]; exists {
+			return false, fmt.Sprintf("spec.externalIPPools[%d] duplicates ExternalIPPool %s", i, poolName)
+		}
+		seenPools[poolName] = struct{}{}
+	}
 
 	// When both IPs and pools are specified, validate each IP belongs to its corresponding pool.
 	if lenIPs > 0 && lenPools > 0 {

@@ -1048,6 +1048,8 @@ func (c *Client) syncIPTables(cleanupStaleJumpRules bool) error {
 		}
 	}
 
+	// Keep SNAT rule Add/Delete operations serialized with both the cache snapshot and iptables-restore below.
+	// Otherwise a rule added or deleted after the snapshot could be overwritten by a stale restore payload.
 	c.markToSNATIPsMutex.Lock()
 	defer c.markToSNATIPsMutex.Unlock()
 
@@ -2279,12 +2281,14 @@ func (c *Client) AddSNATRule(snatIP net.IP, mark uint32) error {
 			break
 		}
 	}
+	if err := c.iptables.InsertRule(protocol, iptables.NATTable, antreaPostRoutingChain, c.snatRuleSpec(snatIP, mark)); err != nil {
+		return err
+	}
 	if !found {
 		newIPs := append(append([]net.IP(nil), ips...), snatIP)
 		c.markToSNATIPs.Store(mark, newIPs)
 	}
-
-	return c.iptables.InsertRule(protocol, iptables.NATTable, antreaPostRoutingChain, c.snatRuleSpec(snatIP, mark))
+	return nil
 }
 
 func (c *Client) DeleteSNATRule(mark uint32) error {
@@ -2297,9 +2301,7 @@ func (c *Client) DeleteSNATRule(mark uint32) error {
 	}
 
 	ips := value.([]net.IP)
-	c.markToSNATIPs.Delete(mark)
 
-	var firstErr error
 	for _, ip := range ips {
 		if ip == nil {
 			continue
@@ -2308,12 +2310,16 @@ func (c *Client) DeleteSNATRule(mark uint32) error {
 		if ip.To4() == nil {
 			protocol = iptables.ProtocolIPv6
 		}
-		if err := c.iptables.DeleteRule(protocol, iptables.NATTable, antreaPostRoutingChain, c.snatRuleSpec(ip, mark)); err != nil && firstErr == nil {
-			firstErr = err
+		if err := c.iptables.DeleteRule(protocol, iptables.NATTable, antreaPostRoutingChain, c.snatRuleSpec(ip, mark)); err != nil {
+			// Keep the cached IP list unchanged on failure. The caller only knows deletion failed for
+			// the mark, so retaining the full list keeps the cache aligned with the caller's
+			// ruleInstalled state and lets the next iptables sync restore any rule already deleted.
+			return err
 		}
 	}
 
-	return firstErr
+	c.markToSNATIPs.Delete(mark)
+	return nil
 }
 
 func (c *Client) AddEgressRoutes(tableID uint32, dev int, gateway net.IP, prefixLength int) error {

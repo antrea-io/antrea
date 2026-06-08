@@ -1780,7 +1780,7 @@ func TestSyncOverlappingDualStackEgress(t *testing.T) {
 		_, err := c.egressLister.Get(egress1.Name)
 		return err != nil
 	}, time.Second, time.Millisecond*100)
-	checkQueueItemExistence(t, c.queue, egress1.Name)
+	checkQueueContainsAndDrain(t, c.queue, egress1.Name)
 	c.mockIPAssigner.EXPECT().UnassignIP(fakeLocalEgressIPv4)
 	c.mockIPAssigner.EXPECT().UnassignIP(fakeLocalEgressIPv6)
 	err = c.syncEgress(egress1.Name)
@@ -2178,6 +2178,81 @@ func TestGetEgressIPByMark(t *testing.T) {
 	}
 }
 
+func TestRealizeDualStackEgressIPsRollsBackSNATRulesOnFailure(t *testing.T) {
+	c := newFakeController(t, nil)
+	ruleErr := fmt.Errorf("install SNAT rule failed")
+
+	gomock.InOrder(
+		c.mockOFClient.EXPECT().InstallSNATMarkFlows(net.ParseIP(fakeLocalEgressIPv4), uint32(1)),
+		c.mockOFClient.EXPECT().InstallSNATMarkFlows(net.ParseIP(fakeLocalEgressIPv6), uint32(1)),
+		c.mockRouteClient.EXPECT().AddSNATRule(net.ParseIP(fakeLocalEgressIPv4), uint32(1)),
+		c.mockRouteClient.EXPECT().AddSNATRule(net.ParseIP(fakeLocalEgressIPv6), uint32(1)).Return(ruleErr),
+		c.mockRouteClient.EXPECT().DeleteSNATRule(uint32(1)),
+	)
+
+	_, err := c.realizeDualStackEgressIPs("egressA", []string{fakeLocalEgressIPv4, fakeLocalEgressIPv6}, []*crdv1b1.SubnetInfo{nil, nil})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "error installing SNAT rules")
+
+	for _, egressIP := range []string{fakeLocalEgressIPv4, fakeLocalEgressIPv6} {
+		ipState, ok := c.egressIPStates[egressIP]
+		require.True(t, ok)
+		assert.False(t, ipState.ruleInstalled)
+	}
+}
+
+func TestRealizeDualStackEgressIPsMirrorsExistingSharedMark(t *testing.T) {
+	c := newFakeController(t, nil)
+	sharedMark, err := c.markAllocator.allocate()
+	require.NoError(t, err)
+	c.egressIPStates[fakeLocalEgressIPv4] = &egressIPState{
+		egressIP:    net.ParseIP(fakeLocalEgressIPv4),
+		egressNames: sets.New[string](),
+		mark:        sharedMark,
+	}
+	c.egressIPStates[fakeLocalEgressIPv6] = &egressIPState{
+		egressIP:    net.ParseIP(fakeLocalEgressIPv6),
+		egressNames: sets.New[string](),
+	}
+
+	gomock.InOrder(
+		c.mockOFClient.EXPECT().InstallSNATMarkFlows(net.ParseIP(fakeLocalEgressIPv4), sharedMark),
+		c.mockOFClient.EXPECT().InstallSNATMarkFlows(net.ParseIP(fakeLocalEgressIPv6), sharedMark),
+		c.mockRouteClient.EXPECT().AddSNATRule(net.ParseIP(fakeLocalEgressIPv4), sharedMark),
+		c.mockRouteClient.EXPECT().AddSNATRule(net.ParseIP(fakeLocalEgressIPv6), sharedMark),
+	)
+
+	gotMark, err := c.realizeDualStackEgressIPs("egressA", []string{fakeLocalEgressIPv4, fakeLocalEgressIPv6}, []*crdv1b1.SubnetInfo{nil, nil})
+	require.NoError(t, err)
+	assert.Equal(t, sharedMark, gotMark)
+	assert.Equal(t, sharedMark, c.egressIPStates[fakeLocalEgressIPv4].mark)
+	assert.Equal(t, sharedMark, c.egressIPStates[fakeLocalEgressIPv6].mark)
+}
+
+func TestRealizeDualStackEgressIPsFailsOnInconsistentMarks(t *testing.T) {
+	c := newFakeController(t, nil)
+	mark1, err := c.markAllocator.allocate()
+	require.NoError(t, err)
+	mark2, err := c.markAllocator.allocate()
+	require.NoError(t, err)
+	c.egressIPStates[fakeLocalEgressIPv4] = &egressIPState{
+		egressIP:    net.ParseIP(fakeLocalEgressIPv4),
+		egressNames: sets.New[string](),
+		mark:        mark1,
+	}
+	c.egressIPStates[fakeLocalEgressIPv6] = &egressIPState{
+		egressIP:    net.ParseIP(fakeLocalEgressIPv6),
+		egressNames: sets.New[string](),
+		mark:        mark2,
+	}
+
+	_, err = c.realizeDualStackEgressIPs("egressA", []string{fakeLocalEgressIPv4, fakeLocalEgressIPv6}, []*crdv1b1.SubnetInfo{nil, nil})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "inconsistent marks for dual-stack IPs")
+	assert.Equal(t, mark1, c.egressIPStates[fakeLocalEgressIPv4].mark)
+	assert.Equal(t, mark2, c.egressIPStates[fakeLocalEgressIPv6].mark)
+}
+
 func TestGetDualStackEgressIPByMark(t *testing.T) {
 	egress := &crdv1b1.Egress{
 		ObjectMeta: metav1.ObjectMeta{Name: "egressA", UID: "uidA"},
@@ -2267,6 +2342,20 @@ func checkQueueItemExistence[T comparable](t *testing.T, queue workqueue.TypedRa
 		queue.Done(key)
 	}
 	assert.Equal(t, expectedItems, actualItems)
+}
+
+func checkQueueContainsAndDrain[T comparable](t *testing.T, queue workqueue.TypedRateLimitingInterface[T], items ...T) {
+	t.Logf("queue len %d", queue.Len())
+	expectedItems := sets.New(items...)
+	actualItems := sets.New[T]()
+	require.Eventually(t, func() bool {
+		for queue.Len() > 0 {
+			key, _ := queue.Get()
+			actualItems.Insert(key)
+			queue.Done(key)
+		}
+		return actualItems.IsSuperset(expectedItems)
+	}, time.Second, 10*time.Millisecond, "Didn't find expected items in the queue")
 }
 
 func TestCompareEgressStatus(t *testing.T) {
