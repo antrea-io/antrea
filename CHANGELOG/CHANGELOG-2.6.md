@@ -1,5 +1,28 @@
 # Changelog 2.6
 
+## 2.6.2 - 2026-06-12
+
+### Changed
+
+- Migrate UUID library from google/uuid to gofrs/uuid/v5. ([#8053](https://github.com/antrea-io/antrea/pull/8055), [@hangyan])
+- Update lumberjack dependency to use the Antrea fork. ([#8053](https://github.com/antrea-io/antrea/pull/8053), [@hangyan])
+- Upgrade Kubernetes dependencies to 1.36.1 and regenerate code. ([#8057](https://github.com/antrea-io/antrea/pull/8057), [@antoninbas])
+- Update AWS SDK Go v2 dependencies and migrate the S3 uploader to the transfer manager API. ([#7983](https://github.com/antrea-io/antrea/pull/7983), [#8036](https://github.com/antrea-io/antrea/pull/8036), [@antoninbas] [@luolanzone])
+- Update multiple dependencies, including ClickHouse, fsnotify, mdlayher, miekg/dns, Ginkgo, Gomega, Prometheus, logrus, golang.org/x, gRPC, klog, and knftables. ([#8035](https://github.com/antrea-io/antrea/pull/8035), [@luolanzone])
+- Update mdlayher dependencies to use Antrea forks. ([#8046](https://github.com/antrea-io/antrea/pull/8046), [@hangyan])
+- Update sigs.k8s.io/mcs-api to v0.5.0. ([#8054](https://github.com/antrea-io/antrea/pull/8054), [@luolanzone])
+- Migrate YAML dependencies from gopkg.in to go.yaml.in and update YAML handling to v3. ([#7956](https://github.com/antrea-io/antrea/pull/7956), [#7984](https://github.com/antrea-io/antrea/pull/7984), [@SharanRP])
+- Remove a few unmaintained dependencies, including lithammer/dedent, davecgh/go-spew, and github.com/munnerz/goautoneg. ([#8032](https://github.com/antrea-io/antrea/pull/8032), [@luolanzone])
+- Replace blang/semver with golang.org/x/mod/semver in Antrea code. ([#8031](https://github.com/antrea-io/antrea/pull/8031), [@luolanzone])
+
+### Fixed
+
+- Fix NetworkPolicy stats panic caused by stale OpenFlow flows after pipeline table changes. ([#7952](https://github.com/antrea-io/antrea/pull/7952), [@luolanzone])
+- Fix NetworkPolicyEvaluation to exclude host-network and terminated Pods from applicable policy results. ([#8042](https://github.com/antrea-io/antrea/pull/8042), [@Dyanngg])
+- Fix WireGuard tunnel destination metadata in Traceflow observations for remote Pod forwarding. ([#8090](https://github.com/antrea-io/antrea/pull/8090), [@xliuxu])
+- Strengthen IPPool status update retries to reduce failures under concurrent updates. ([#7996](https://github.com/antrea-io/antrea/pull/7996), [@wenqiq])
+- Fix wrong bitmap index in IPPool AllocateRange, which could cause double allocation. ([#7945](https://github.com/antrea-io/antrea/pull/7945), [@OmAmbole009])
+
 ## 2.6.1 - 2026-03-31
 
 ### Fixed
@@ -64,14 +87,17 @@
 [@Ady0333]: https://github.com/Ady0333
 [@Denyme24]: https://github.com/Denyme24
 [@Dyanngg]: https://github.com/Dyanngg
+[@OmAmbole009]: https://github.com/OmAmbole009
 [@SharanRP]: https://github.com/SharanRP
 [@andrew-su]: https://github.com/andrew-su
 [@aniskhalfallah]: https://github.com/aniskhalfallah
 [@antoninbas]: https://github.com/antoninbas
+[@hangyan]: https://github.com/hangyan
 [@hongliangl]: https://github.com/hongliangl
 [@kartikangiras]: https://github.com/kartikangiras
 [@luolanzone]: https://github.com/luolanzone
 [@molegit9]: https://github.com/molegit9
 [@petertran-avgo]: https://github.com/petertran-avgo
 [@renovatebot]: https://github.com/renovatebot
+[@wenqiq]: https://github.com/wenqiq
 [@xliuxu]: https://github.com/xliuxu
