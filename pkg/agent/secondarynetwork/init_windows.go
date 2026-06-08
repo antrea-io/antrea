@@ -23,14 +23,14 @@ import (
 	"k8s.io/client-go/tools/cache"
 	componentbaseconfig "k8s.io/component-base/config"
 
-	"antrea.io/antrea/v2/pkg/agent/interfacestore"
-	agenttypes "antrea.io/antrea/v2/pkg/agent/types"
-	crdlisters "antrea.io/antrea/v2/pkg/client/listers/crd/v1beta1"
 	"antrea.io/antrea/v2/pkg/agent/config"
+	"antrea.io/antrea/v2/pkg/agent/interfacestore"
+	crdlisters "antrea.io/antrea/v2/pkg/client/listers/crd/v1beta1"
 	agentconfig "antrea.io/antrea/v2/pkg/config/agent"
-	"antrea.io/antrea/v2/pkg/ovs/ovsconfig"
 	"antrea.io/antrea/v2/pkg/util/channel"
 )
+
+type secondaryNetworkControllerQueue interface{} //nolint:unused // Used by the shared Controller shape; Linux provides the concrete queue type.
 
 func NewController(
 	clientConnectionConfig componentbaseconfig.ClientConnectionConfiguration,
@@ -57,10 +57,3 @@ func (c *Controller) Restore() {
 }
 
 func (c *Controller) Run(stopCh <-chan struct{}) {}
-
-func resolveAndCreateOVSBridge(
-	effectiveBridge func() *agenttypes.OVSBridgeConfig,
-	ovsdbConn *ovsdb.OVSDB,
-) (*agenttypes.OVSBridgeConfig, ovsconfig.OVSBridgeClient, error) {
-	return nil, nil, nil
-}

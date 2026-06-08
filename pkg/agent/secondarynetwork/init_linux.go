@@ -21,6 +21,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"time"
 
 	"github.com/TomCodeLV/OVSDB-golang-lib/pkg/ovsdb"
 	netdefclient "github.com/k8snetworkplumbingwg/network-attachment-definition-client/pkg/client/clientset/versioned/typed/k8s.cni.cncf.io/v1"
@@ -43,6 +44,15 @@ import (
 	"antrea.io/antrea/v2/pkg/util/k8s"
 )
 
+const (
+	// reconcileKey is the single key used in the work queue. Any change that
+	// may affect the effective bridge configuration enqueues this key.
+	reconcileKey = "reconcile"
+
+	minRetryDelay = 5 * time.Second
+	maxRetryDelay = 300 * time.Second
+)
+
 var (
 	// Funcs which will be overridden with mock funcs in tests.
 	interfaceByNameFn = net.InterfaceByName
@@ -51,6 +61,26 @@ var (
 	restoreHostInterfaceConfigFn     = util.RestoreHostInterfaceConfiguration // func(brName, ifName string) error
 	newOVSBridgeFn                   = ovsconfig.NewOVSBridge
 )
+
+type secondaryNetworkControllerQueue = workqueue.TypedRateLimitingInterface[string]
+
+// effectiveOVSBridge returns the desired OVS bridge for this node. When AntreaNodeConfig
+// drives the bridge, only snapshots delivered on the notify channel are used.
+// When ANC is disabled, only static agent config is consulted.
+func (c *Controller) effectiveOVSBridge() *agenttypes.OVSBridgeConfig {
+	if c.effectiveBridgeOverride != nil {
+		return c.effectiveBridgeOverride()
+	}
+	if c.dynamicBridgeReconcile {
+		return EffectiveSecondaryOVSBridgeFromSnapshot(c.latestANCSnapshot.Load(), c.secNetConfig)
+	}
+	return EffectiveSecondaryOVSBridgeFromAgentConfig(c.secNetConfig)
+}
+
+// enqueue adds the single reconciliation key to the work queue.
+func (c *Controller) enqueue() {
+	c.queue.Add(reconcileKey)
+}
 
 func NewController(
 	clientConnectionConfig componentbaseconfig.ClientConnectionConfiguration,
