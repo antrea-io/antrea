@@ -810,7 +810,7 @@ func testExternalIPAccess(t *testing.T, data *TestData) {
 					}
 
 					// Create a pod in a different netns with the same subnet of the external IP to mock as another Node in the same subnet.
-					cmd, netns := getCommandInFakeExternalNetwork("sleep 3600", tt.clientIPMaskLen, tt.clientIP, tt.localIP)
+					cmd, netns := getCommandInFakeExternalNetwork("sleep 3600", tt.clientIPMaskLen, tt.clientIP, tt.localIP, utilnet.IsIPv6String(tt.clientIP))
 
 					baseURL := getHTTPURLFromIPPort(externalIP, port)
 

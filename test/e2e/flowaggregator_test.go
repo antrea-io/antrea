@@ -20,7 +20,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"net"
-	"net/http"
 	"slices"
 	"strconv"
 	"strings"
@@ -1468,6 +1467,24 @@ func assertIPFIXRecordProxySnatUnset(t *testing.T, record string) {
 	}
 }
 
+// assertIPFIXRecordProxySnatSet checks that the IPFIX record carries a non-zero proxy SNAT
+// address and port. For NodePort traffic with externalTrafficPolicy Cluster, the gateway applies
+// SNAT so these fields should be populated on the exported record.
+func assertIPFIXRecordProxySnatSet(t *testing.T, record string, isIPv6 bool) {
+	t.Helper()
+	for _, line := range strings.Split(record, "\n") {
+		s := strings.TrimSpace(line)
+		switch {
+		case !isIPv6 && strings.HasPrefix(s, "proxySnatIPv4:"):
+			assert.NotContains(t, s, "0.0.0.0", "proxySnatIPv4 should be set for SNAT flows, line: %s", line)
+		case isIPv6 && strings.HasPrefix(s, "proxySnatIPv6:"):
+			assert.NotContains(t, s, "::", "proxySnatIPv6 should be set for SNAT flows, line: %s", line)
+		case strings.HasPrefix(s, "proxySnatPort:"):
+			assert.NotRegexp(t, `proxySnatPort:\s*0\b`, s, "proxySnatPort should be non-zero for SNAT flows, line: %s", line)
+		}
+	}
+}
+
 // getCollectorOutput polls the output of go-ipfix collector and checks if we have
 // received all the expected records for a given flow with source IP, destination IP
 // and source port. We send source port to ignore the control flows during the
@@ -1991,52 +2008,85 @@ func getAndCheckFlowAggregatorMetrics(t *testing.T, data *TestData, withClickHou
 	return nil
 }
 
-// Create a connection to the given service via the given nodeIndex's IP and return the source IP and source Port.
-// If the connection fails, retry 2 more times with a 1 second wait in between.
-func createExternalToPodConnection(t *testing.T, service *corev1.Service, nodeIndex int, isIPv6 bool) (string, string) {
-	var sourceIP string
-	var sourcePort string
-	var addr string
+// createExternalToPodConnection simulates an external client connecting to the given NodePort
+// Service. It creates a privileged host-network Pod on the target Node with a fake external
+// network namespace (via getCommandInFakeExternalNetwork), then curls the NodePort on the node's
+// own IP from within that namespace. The pod runs on the same node as the NodePort target, so the
+// node's IP is always reachable from the host network namespace via its own interfaces.
+// Returns the unique fake source IP and the actual source port used by curl.
+func createExternalToPodConnection(t *testing.T, data *TestData, service *corev1.Service, nodeIndex int, isIPv6 bool) (string, string) {
+	t.Helper()
+	targetNode := nodeName(nodeIndex)
+
+	// Use a random tag to derive unique subnet addresses and a unique pod name per call.
+	// This avoids overlapping host routes across sequential invocations: overlapping routes
+	// cause the kernel to forward replies via the wrong veth (breaking TCP handshakes), and
+	// duplicate addresses cause "ip addr add" to fail with EEXIST (breaking pod startup).
+	//
+	// All 5 chars of tag are encoded into the subnet index (26^5 ≈ 11.9M combinations),
+	// making collisions between the handful of pods in a single test run essentially impossible.
+	tag := randSeq(5)
+	// Compute a 20-bit subnet index from all 5 tag characters (each in [0,25]).
+	subnetIdx := 0
+	for _, c := range tag {
+		subnetIdx = subnetIdx*26 + int(c-'a')
+	}
+
+	var srcIP, localIP, nodeIP string
+	var prefixLen int
 	if isIPv6 {
-		addr = clusterInfo.nodes[nodeIndex].ipv6Addr
+		// Use fd00:ea2e:<hi16>:<lo16>::/64, spreading subnetIdx across two 16-bit groups
+		// so the address is always valid regardless of subnetIdx magnitude (26^5-1 = 0xB54B9F,
+		// which exceeds 16 bits and would be invalid in a single group).
+		// The /64 never overlaps with the pod subnet (fd00:10:244::/56) or the service subnet.
+		// srcIP is the fake external client address; localIP is the host-side veth gateway.
+		hi16 := (subnetIdx >> 16) & 0xFFFF
+		lo16 := subnetIdx & 0xFFFF
+		srcIP = fmt.Sprintf("fd00:ea2e:%x:%x::1", hi16, lo16)
+		localIP = fmt.Sprintf("fd00:ea2e:%x:%x::fe", hi16, lo16)
+		prefixLen = 64
+		nodeIP = clusterInfo.nodes[nodeIndex].ipv6Addr
 	} else {
-		addr = clusterInfo.nodes[nodeIndex].ipv4Addr
+		// Use 100.64.<hi8>.<lo8*4+{1,2}>/30 from the Shared Address Space (100.64.0.0/10,
+		// RFC 6598). This range is reserved for carrier-grade NAT and is never used by
+		// Docker, Kind, or cloud metadata services, so it cannot conflict with existing
+		// node addresses. hi8 uses bits [13:6] of subnetIdx (256 values) and lo8 uses bits
+		// [5:0] (64 values), giving 16384 distinct /30 subnets — enough to avoid collisions.
+		hi8 := (subnetIdx >> 6) & 0xFF
+		lo8 := subnetIdx & 0x3F // [0,63] → lo8*4+3 ≤ 255
+		srcIP = fmt.Sprintf("100.64.%d.%d", hi8, lo8*4+1)
+		localIP = fmt.Sprintf("100.64.%d.%d", hi8, lo8*4+2)
+		prefixLen = 30
+		nodeIP = clusterInfo.nodes[nodeIndex].ipv4Addr
 	}
+	require.NotEmptyf(t, nodeIP, "Node %d has no IP address for isIPv6=%v", nodeIndex, isIPv6)
 
-	portStr := strconv.Itoa(int(service.Spec.Ports[0].NodePort))
-	hostAndPort := net.JoinHostPort(addr, portStr)
+	setupCmd, netns := getCommandInFakeExternalNetwork("sleep 3600", prefixLen, srcIP, localIP, isIPv6)
+	podName := fmt.Sprintf("ext-client-%s-%d", tag, nodeIndex)
+	err := NewPodBuilder(podName, data.testNamespace, ToolboxImage).
+		OnNode(targetNode).
+		WithCommand([]string{"sh", "-c", setupCmd}).
+		InHostNetwork().
+		Privileged().
+		Create(data)
+	require.NoErrorf(t, err, "Failed to create fake external client Pod %s", podName)
+	t.Cleanup(func() {
+		deletePodWrapper(t, data, data.testNamespace, podName)
+	})
+	require.NoErrorf(t, data.podWaitForRunning(defaultTimeout, podName, data.testNamespace),
+		"Fake external client Pod %s did not become Running", podName)
 
-	url := fmt.Sprintf("http://%s", hostAndPort)
-	transport := &http.Transport{
-		DialContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
-			conn, err := net.DialTimeout(network, addr, 10*time.Second)
-			if err != nil {
-				return nil, err
-			}
-			localAddr := conn.LocalAddr().(*net.TCPAddr)
-			sourceIP = localAddr.IP.String()
-			sourcePort = strconv.Itoa(localAddr.Port)
+	nodePort := strconv.Itoa(int(service.Spec.Ports[0].NodePort))
+	hostAndPort := net.JoinHostPort(nodeIP, nodePort)
+	// -sS: silent (no progress meter) but still show errors on stderr; -o /dev/null: discard
+	// body; -w: print source port to stdout.
+	curlCmd := fmt.Sprintf("ip netns exec %s curl -sS -o /dev/null -w '%%{local_port}' --connect-timeout 5 --retry 3 --retry-connrefused http://%s",
+		netns, hostAndPort)
+	stdout, stderr, err := data.RunCommandFromPod(data.testNamespace, podName, "toolbox", []string{"sh", "-c", curlCmd})
+	require.NoErrorf(t, err, "curl from fake external client Pod %s failed; stdout: %s, stderr: %s", podName, stdout, stderr)
 
-			return conn, nil
-		},
-	}
-	client := &http.Client{
-		Transport: transport,
-	}
-	maxAttempts := 3
-	for i := range maxAttempts {
-		resp, err := client.Get(url)
-		if err == nil {
-			defer resp.Body.Close()
-			break
-		}
-		if i+1 != maxAttempts {
-			time.Sleep(time.Second)
-		} else {
-			t.Fatalf("Failed to reach pod: %v", err)
-		}
-	}
-	return sourceIP, sourcePort
+	sourcePort := strings.TrimSpace(stdout)
+	return srcIP, sourcePort
 }
 
 func testExternalToPodFlows(t *testing.T, data *TestData, isIPv6 bool) {
@@ -2056,11 +2106,6 @@ func testExternalToPodFlows(t *testing.T, data *TestData, isIPv6 bool) {
 		t.Fatalf("Failed to create service %s: %v", nodePortService, err)
 	}
 
-	// Trigger FlowAggregator's ipfixExporter process to start
-	createExternalToPodConnection(t, service, 0, isIPv6)
-	time.Sleep(time.Second * 5)
-	flushFlowsFromCollector(t, data, isIPv6)
-
 	tc := []struct {
 		name string
 		node int
@@ -2070,7 +2115,7 @@ func testExternalToPodFlows(t *testing.T, data *TestData, isIPv6 bool) {
 	}
 	for _, tc := range tc {
 		t.Run(tc.name, func(t *testing.T) {
-			sourceIP, _ := createExternalToPodConnection(t, service, tc.node, isIPv6)
+			sourceIP, _ := createExternalToPodConnection(t, data, service, tc.node, isIPv6)
 			var dstIP string
 			if isIPv6 {
 				dstIP = nginxIP.IPv6.String()
@@ -2085,6 +2130,7 @@ func testExternalToPodFlows(t *testing.T, data *TestData, isIPv6 bool) {
 				assert.Contains(record, nginxPodName, "Aggregated Record does not have Destination Pod name")
 				assert.Contains(record, nodePortService, "Aggregated Record does not have service information")
 				assert.Contains(record, strconv.Itoa(int(containerPort)), "Aggregated Record does not have the service port")
+				assertIPFIXRecordProxySnatSet(t, record, isIPv6)
 			}
 			flushFlowsFromCollector(t, data, isIPv6)
 		})
@@ -2102,10 +2148,7 @@ func testExternalToPodFlows(t *testing.T, data *TestData, isIPv6 bool) {
 		t.Cleanup(func() {
 			_ = data.clientset.CoreV1().Services(data.testNamespace).Delete(context.Background(), svcLocalName, metav1.DeleteOptions{})
 		})
-		createExternalToPodConnection(t, svcETPLocal, destinationNodeIndex, isIPv6)
-		time.Sleep(5 * time.Second)
-		flushFlowsFromCollector(t, data, isIPv6)
-		sourceIP, sourcePort := createExternalToPodConnection(t, svcETPLocal, destinationNodeIndex, isIPv6)
+		sourceIP, sourcePort := createExternalToPodConnection(t, data, svcETPLocal, destinationNodeIndex, isIPv6)
 		var dstIP string
 		if isIPv6 {
 			dstIP = nginxIP.IPv6.String()
