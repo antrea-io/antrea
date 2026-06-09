@@ -22,7 +22,7 @@ import (
 	"net"
 	"testing"
 
-	"github.com/TomCodeLV/OVSDB-golang-lib/pkg/ovsdb"
+	"github.com/ovn-kubernetes/libovsdb/client"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	mock "go.uber.org/mock/gomock"
@@ -181,7 +181,7 @@ func mockInterfaceByName(t *testing.T) {
 
 func mockNewOVSBridge(t *testing.T, brClient ovsconfig.OVSBridgeClient) {
 	prevFunc := newOVSBridgeFn
-	newOVSBridgeFn = func(bridgeName string, ovsDatapathType ovsconfig.OVSDatapathType, ovsdb *ovsdb.OVSDB, options ...ovsconfig.OVSBridgeOption) ovsconfig.OVSBridgeClient {
+	newOVSBridgeFn = func(bridgeName string, ovsDatapathType ovsconfig.OVSDatapathType, ovsdbClient client.Client, options ...ovsconfig.OVSBridgeOption) ovsconfig.OVSBridgeClient {
 		return brClient
 	}
 	t.Cleanup(func() { newOVSBridgeFn = prevFunc })

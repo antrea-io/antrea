@@ -28,7 +28,7 @@ override:
 # License detected as Apache-2.0 + ImageMagick for some reason. License is just
 # Apache-2.0. Note that ImageMagick is nearly identical to Apache-2.0.
 # see https://spdx.org/licenses/ImageMagick.html
-- path: "github.com/TomCodeLV/OVSDB-golang-lib"
+- path: "github.com/ovn-kubernetes/libovsdb"
   licenses: ["Apache-2.0"]
 
 exceptions:
