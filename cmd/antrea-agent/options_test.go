@@ -179,23 +179,57 @@ func TestOptionsValidateAntreaProxyConfig(t *testing.T) {
 
 func TestOptionsValidateEgressConfig(t *testing.T) {
 	tests := []struct {
-		name                 string
-		featureGateValue     bool
-		trafficEncapMode     config.TrafficEncapModeType
-		egressConfig         agentconfig.EgressConfig
-		expectedErr          string
-		expectedEnableEgress bool
+		name                  string
+		featureGateValue      bool
+		trafficEncapMode      config.TrafficEncapModeType
+		trafficEncryptionMode config.TrafficEncryptionModeType
+		egressConfig          agentconfig.EgressConfig
+		expectedErr           string
+		expectedEnableEgress  bool
 	}{
 		{
-			name:                 "enabled",
+			name:                 "feature gate disabled",
+			featureGateValue:     false,
+			trafficEncapMode:     config.TrafficEncapModeEncap,
+			expectedEnableEgress: false,
+		},
+		{
+			name:                 "encap mode",
 			featureGateValue:     true,
 			trafficEncapMode:     config.TrafficEncapModeEncap,
 			expectedEnableEgress: true,
 		},
 		{
-			name:                 "unsupported encap mode",
+			name:                  "encap mode with WireGuard",
+			featureGateValue:      true,
+			trafficEncapMode:      config.TrafficEncapModeEncap,
+			trafficEncryptionMode: config.TrafficEncryptionModeWireGuard,
+			expectedEnableEgress:  true,
+		},
+		{
+			// Egress cannot forward traffic via the encap tunnel when IPSec is enabled.
+			name:                  "encap mode with IPSec",
+			featureGateValue:      true,
+			trafficEncapMode:      config.TrafficEncapModeEncap,
+			trafficEncryptionMode: config.TrafficEncryptionModeIPSec,
+			expectedEnableEgress:  false,
+		},
+		{
+			name:                 "hybrid mode",
+			featureGateValue:     true,
+			trafficEncapMode:     config.TrafficEncapModeHybrid,
+			expectedEnableEgress: true,
+		},
+		{
+			name:                 "noEncap mode",
 			featureGateValue:     true,
 			trafficEncapMode:     config.TrafficEncapModeNoEncap,
+			expectedEnableEgress: true,
+		},
+		{
+			name:                 "unsupported encap mode (networkPolicyOnly)",
+			featureGateValue:     true,
+			trafficEncapMode:     config.TrafficEncapModeNetworkPolicyOnly,
 			expectedEnableEgress: false,
 		},
 		{
@@ -226,7 +260,7 @@ func TestOptionsValidateEgressConfig(t *testing.T) {
 			o := &Options{config: &agentconfig.AgentConfig{
 				Egress: tt.egressConfig,
 			}}
-			err := o.validateEgressConfig(tt.trafficEncapMode)
+			err := o.validateEgressConfig(tt.trafficEncapMode, tt.trafficEncryptionMode)
 			if tt.expectedErr == "" {
 				require.NoError(t, err)
 			} else {

@@ -20,7 +20,7 @@ const (
 	HostLocalSourceBit = 31
 
 	// EgressNoEncapReturnToRemoteBit is the bit of the iptables fwmark space to mark the reply Egress packets whose request
-	// packets are from remote Pods.
+	// packets are from remote Pods. It is used in hybrid, noEncap, and WireGuard encryption modes.
 	EgressNoEncapReturnToRemoteBit = 30
 )
 
@@ -43,6 +43,6 @@ const (
 	MinRequestEgressRouteTable = 101
 	MaxRequestEgressRouteTable = 120
 
-	// ReplyEgressRouteTable is the route table ID which is used to add policy routing rules in hybrid mode.
+	// ReplyEgressRouteTable is the route table ID which is used to add policy routing rules in hybrid, noEncap, and WireGuard encryption modes.
 	ReplyEgressRouteTable = 141
 )
