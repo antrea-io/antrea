@@ -132,22 +132,19 @@ func TestServiceExportReconciler_CheckExportStatus(t *testing.T) {
 
 	nginx1Svc := common.SvcNginx.DeepCopy()
 	nginx1Svc.Name = "nginx1"
-	now := metav1.Now()
-	reason := "service_without_endpoints"
-	message := "the Service has no Endpoints, failed to export"
 	nginx1SvcExportWithStatus := &k8smcv1alpha1.ServiceExport{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: "default",
 			Name:      "nginx1",
 		},
 		Status: k8smcv1alpha1.ServiceExportStatus{
-			Conditions: []k8smcv1alpha1.ServiceExportCondition{
+			Conditions: []metav1.Condition{
 				{
-					Type:               k8smcv1alpha1.ServiceExportValid,
-					Status:             corev1.ConditionFalse,
-					LastTransitionTime: &now,
-					Reason:             &reason,
-					Message:            &message,
+					Type:               string(k8smcv1alpha1.ServiceExportConditionValid),
+					Status:             metav1.ConditionFalse,
+					LastTransitionTime: metav1.Now(),
+					Reason:             "ServiceWithoutEndpoints",
+					Message:            "the Service has no Endpoints, failed to export",
 				},
 			},
 		},
@@ -165,8 +162,7 @@ func TestServiceExportReconciler_CheckExportStatus(t *testing.T) {
 	nginx2Svc.Name = "nginx2"
 	nginx2SvcExportWithStatus := nginx1SvcExportWithStatus.DeepCopy()
 	nginx2SvcExportWithStatus.Name = "nginx2"
-	existingMessage := "the Service has no related Endpoints"
-	nginx2SvcExportWithStatus.Status.Conditions[0].Message = &existingMessage
+	nginx2SvcExportWithStatus.Status.Conditions[0].Message = "the Service has no related Endpoints"
 
 	nginx3Svc := common.SvcNginx.DeepCopy()
 	nginx3Svc.Name = "nginx3"
@@ -263,7 +259,7 @@ func TestServiceExportReconciler_CheckExportStatus(t *testing.T) {
 		{
 			name:            "skip update status",
 			expectedReason:  "ServiceWithoutEndpoints",
-			expectedMessage: "Service has no Endpoints",
+			expectedMessage: "the Service has no related Endpoints",
 			req: ctrl.Request{NamespacedName: types.NamespacedName{
 				Namespace: "default",
 				Name:      "nginx2",
@@ -291,12 +287,16 @@ func TestServiceExportReconciler_CheckExportStatus(t *testing.T) {
 				if err != nil {
 					t.Errorf("ServiceExport Reconciler should get new ServiceExport successfully but got error = %v", err)
 				} else {
-					reason := newSvcExport.Status.Conditions[0].Reason
-					if reason != nil && *reason != tt.expectedReason {
-						t.Errorf("Expected ServiceExport status should be %s but got %v", tt.expectedReason, *reason)
-					}
-					if tt.expectedMessage != "" && tt.expectedMessage != *newSvcExport.Status.Conditions[0].Message {
-						t.Errorf("Expected message %s but got %s", tt.expectedMessage, *newSvcExport.Status.Conditions[0].Message)
+					if len(newSvcExport.Status.Conditions) == 0 {
+						t.Errorf("Expected at least one condition but got none")
+					} else {
+						reason := newSvcExport.Status.Conditions[0].Reason
+						if reason != tt.expectedReason {
+							t.Errorf("Expected ServiceExport status reason should be %s but got %v", tt.expectedReason, reason)
+						}
+						if tt.expectedMessage != "" && tt.expectedMessage != newSvcExport.Status.Conditions[0].Message {
+							t.Errorf("Expected message %s but got %s", tt.expectedMessage, newSvcExport.Status.Conditions[0].Message)
+						}
 					}
 				}
 			}
@@ -377,7 +377,7 @@ func TestServiceExportReconciler_handleServiceExportCreateEvent(t *testing.T) {
 					t.Errorf("Should get ServiceExport successfully but got error = %v", err)
 				} else {
 					status := newSvcExport.Status.Conditions[0].Status
-					if status != "True" {
+					if status != metav1.ConditionTrue {
 						t.Errorf("Expected ServiceExport status should be True but got %v", status)
 					}
 				}

@@ -76,7 +76,7 @@ var (
 
 func init() {
 	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
-	utilruntime.Must(k8smcsv1alpha1.AddToScheme(scheme))
+	utilruntime.Must(k8smcsv1alpha1.Install(scheme))
 	utilruntime.Must(mcv1alpha1.AddToScheme(scheme))
 	utilruntime.Must(mcv1alpha2.AddToScheme(scheme))
 	utilruntime.Must(antreacrdv1alpha1.AddToScheme(scheme))
