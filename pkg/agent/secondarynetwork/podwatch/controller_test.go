@@ -415,6 +415,7 @@ func TestPodControllerRun(t *testing.T) {
 
 	interfaceConfigurator.EXPECT().DeleteSriovSecondaryInterface(containerConfig).
 		Do(func(*interfacestore.InterfaceConfig) {
+			interfaceStore.DeleteInterface(containerConfig)
 			atomic.AddInt32(&interfaceConfigured, -1)
 		})
 	mockIPAM.EXPECT().SecondaryNetworkRelease(podOwner)
@@ -427,24 +428,11 @@ func TestPodControllerRun(t *testing.T) {
 	_, exists = podController.vfDeviceIDUsageMap.Load(podKey)
 	assert.False(t, exists)
 
-	interfaceConfigurator.EXPECT().DeleteSriovSecondaryInterface(containerConfig).
-		Do(func(*interfacestore.InterfaceConfig) {
-			atomic.AddInt32(&interfaceConfigured, -1)
-		})
-	mockIPAM.EXPECT().SecondaryNetworkRelease(podOwner)
 	// CNI Del event.
 	event.IsAdd = false
-	// Interface is not deleted from the interface store, so CNI Del should trigger interface
-	// deletion again.
 	podController.processCNIUpdate(event)
 	_, exists = cniCache.Load(podKey)
 	assert.False(t, exists)
-	assert.Eventually(t, func() bool {
-		return atomic.LoadInt32(&interfaceConfigured) == 0
-	}, 1*time.Second, 10*time.Millisecond)
-
-	interfaceStore.DeleteInterface(containerConfig)
-	podController.processCNIUpdate(event)
 
 	close(stopCh)
 	wg.Wait()
@@ -1097,6 +1085,49 @@ func TestPodControllerAddPod(t *testing.T) {
 		interfaceConfigurator.EXPECT().DeleteVLANSecondaryInterface(containerConfig2)
 
 		deletePodFn(podController, pod.Name)
+		assert.NoError(t, podController.syncPod(podKey))
+	})
+
+	t.Run("CNI delete removes residual interface", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		podController, mockIPAM, interfaceConfigurator, _ := testPodController(ctrl)
+		_, cniConfig := testPod(podName, containerID, podIP, netdefv1.NetworkSelectionElement{
+			Name:             networkName,
+			InterfaceRequest: interfaceName,
+		})
+		podOwner := &crdv1beta1.PodOwner{
+			Name:        podName,
+			Namespace:   testNamespace,
+			ContainerID: containerID,
+			IFName:      interfaceName,
+		}
+		containerConfig := interfacestore.NewContainerInterface(
+			interfaceName,
+			containerID,
+			podName,
+			testNamespace,
+			interfaceName,
+			cniConfig.netNS,
+			nil,
+			nil,
+			0)
+
+		// Leave the interface in the store to emulate an earlier delete path that did not
+		// update the local store. CNI DEL should still trigger the residual cleanup.
+		podController.interfaceStore.AddInterface(containerConfig)
+		podController.cniCache.Store(podKey, cniConfig)
+		interfaceConfigurator.EXPECT().DeleteSriovSecondaryInterface(containerConfig)
+		mockIPAM.EXPECT().SecondaryNetworkRelease(podOwner)
+
+		podController.processCNIUpdate(types.PodUpdate{
+			IsAdd:        false,
+			PodName:      podName,
+			PodNamespace: testNamespace,
+			ContainerID:  containerID,
+			NetNS:        cniConfig.netNS,
+		})
+		_, exists := podController.cniCache.Load(podKey)
+		assert.False(t, exists)
 		assert.NoError(t, podController.syncPod(podKey))
 	})
 
