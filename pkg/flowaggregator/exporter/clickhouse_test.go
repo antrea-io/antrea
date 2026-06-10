@@ -19,7 +19,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/google/uuid"
+	"github.com/gofrs/uuid/v5"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -52,7 +52,7 @@ func TestClickHouse_UpdateOptions(t *testing.T) {
 		ClickHouseCommitInterval: 8 * time.Second,
 	}
 	chConfig := buildClickHouseConfig(opt)
-	chExportProcess, err := clickhouseclient.NewClickHouseClient(chConfig, uuid.New().String())
+	chExportProcess, err := clickhouseclient.NewClickHouseClient(chConfig, uuid.Must(uuid.NewV4()).String())
 	require.NoError(t, err)
 	clickHouseExporter := ClickHouseExporter{chConfig: &chConfig, chExportProcess: chExportProcess}
 	clickHouseExporter.Start()

@@ -15,7 +15,7 @@
 package exporter
 
 import (
-	"github.com/google/uuid"
+	"github.com/gofrs/uuid/v5"
 	"k8s.io/klog/v2"
 
 	flowpb "antrea.io/antrea/pkg/apis/flow/v1alpha1"

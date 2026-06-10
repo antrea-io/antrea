@@ -24,8 +24,8 @@ import (
 	"time"
 
 	"github.com/fsnotify/fsnotify"
+	"github.com/gofrs/uuid/v5"
 	"github.com/google/go-cmp/cmp"
-	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
@@ -1129,7 +1129,7 @@ func TestNewFlowAggregator(t *testing.T) {
 			mockPodStore := objectstoretest.NewMockPodStore(ctrl)
 			mockNodeStore := objectstoretest.NewMockNodeStore(ctrl)
 			mockServiceStore := objectstoretest.NewMockServiceStore(ctrl)
-			clusterUUID := uuid.New()
+			clusterUUID := uuid.Must(uuid.NewV4())
 			clusterID := tc.config.ClusterID
 			if clusterID == "" {
 				clusterID = clusterUUID.String()

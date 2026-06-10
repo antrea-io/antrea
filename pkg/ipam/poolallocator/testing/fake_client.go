@@ -18,7 +18,7 @@ import (
 	"context"
 	"sync"
 
-	"github.com/google/uuid"
+	"github.com/gofrs/uuid/v5"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -60,7 +60,7 @@ func NewIPPoolClient() *IPPoolClientset {
 	// detection, then let the tracker handle the actual storage and watch event.
 	crdClient.PrependReactor("create", "ippools", func(action k8stesting.Action) (bool, runtime.Object, error) {
 		pool := action.(k8stesting.CreateAction).GetObject().(*crdv1b1.IPPool)
-		pool.ResourceVersion = uuid.New().String()
+		pool.ResourceVersion = uuid.Must(uuid.NewV4()).String()
 		crdClient.poolVersion.Store(pool.Name, pool.ResourceVersion)
 		return false, pool, nil
 	})
@@ -76,7 +76,7 @@ func NewIPPoolClient() *IPPoolClientset {
 		if obj.(string) != updatedPool.ResourceVersion {
 			return true, nil, &errors.StatusError{ErrStatus: metav1.Status{Reason: metav1.StatusReasonConflict, Message: "pool status update conflict"}}
 		}
-		updatedPool.ResourceVersion = uuid.New().String()
+		updatedPool.ResourceVersion = uuid.Must(uuid.NewV4()).String()
 		crdClient.poolVersion.Store(updatedPool.Name, updatedPool.ResourceVersion)
 		return false, updatedPool, nil
 	})

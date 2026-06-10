@@ -25,7 +25,7 @@ import (
 	"github.com/containernetworking/cni/pkg/invoke"
 	cnitypes "github.com/containernetworking/cni/pkg/types"
 	current "github.com/containernetworking/cni/pkg/types/100"
-	"github.com/google/uuid"
+	"github.com/gofrs/uuid/v5"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
@@ -347,7 +347,7 @@ func TestAntreaIPAMDriver(t *testing.T) {
 		re := regexp.MustCompile("(-sts-)*[0-9]*$")
 		namespace := re.ReplaceAllString(test, "")
 		args := argtypes.K8sArgs{}
-		cnitypes.LoadArgs(cniservertest.GenerateCNIArgs(test, namespace, uuid.New().String()), &args)
+		cnitypes.LoadArgs(cniservertest.GenerateCNIArgs(test, namespace, uuid.Must(uuid.NewV4()).String()), &args)
 		k8sArgsMap[test] = &args
 		cniArgsMap[test] = &invoke.Args{
 			ContainerID: fmt.Sprintf("%s-container", test),
@@ -512,7 +512,7 @@ func TestAntreaIPAMDriver(t *testing.T) {
 
 	// Make sure Del call with irrelevant container ID is ignored
 	cniArgsBadContainer := &invoke.Args{
-		ContainerID: uuid.New().String(),
+		ContainerID: uuid.Must(uuid.NewV4()).String(),
 	}
 
 	owns, err = testDriver.Del(cniArgsBadContainer, k8sArgsMap["orange1"], networkConfig)

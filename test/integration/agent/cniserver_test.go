@@ -36,7 +36,7 @@ import (
 	"github.com/containernetworking/plugins/pkg/testutils"
 	"github.com/containernetworking/plugins/plugins/ipam/host-local/backend/allocator"
 	"github.com/containernetworking/plugins/plugins/ipam/host-local/backend/disk"
-	"github.com/google/uuid"
+	"github.com/gofrs/uuid/v5"
 	"github.com/prometheus/client_golang/prometheus/testutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -614,7 +614,7 @@ func cmdAddDelCheckTest(testNS ns.NetNS, tc testCase, dataDir string) {
 
 	// Mock ovs output while get ovs port external configuration
 	ovsPortname := util.GenerateContainerInterfaceName(testPod, testPodNamespace, ContainerID)
-	ovsPortUUID := uuid.New().String()
+	ovsPortUUID := uuid.Must(uuid.NewV4()).String()
 	ovsServiceMock.EXPECT().CreatePort(ovsPortname, ovsPortname, mock.Any()).Return(ovsPortUUID, nil).AnyTimes()
 	ovsServiceMock.EXPECT().GetOFPort(ovsPortname, false).Return(int32(10), nil).AnyTimes()
 	ofServiceMock.EXPECT().InstallPodFlows(ovsPortname, mock.Any(), mock.Any(), mock.Any(), uint16(0), nil).Return(nil)
@@ -824,7 +824,7 @@ func TestCNIServerChaining(t *testing.T) {
 
 		// test cmdAdd
 		ovsPortname := hostVeth.Name
-		ovsPortUUID := uuid.New().String()
+		ovsPortUUID := uuid.Must(uuid.NewV4()).String()
 		podIP, _, err := net.ParseCIDR(tc.Subnet)
 		testRequire.Nil(err)
 		containerIntf, err := util.GetNSDevInterface(netNS.Path(), IFName)

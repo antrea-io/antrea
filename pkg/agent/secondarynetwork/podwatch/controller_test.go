@@ -32,7 +32,7 @@ import (
 	"time"
 
 	current "github.com/containernetworking/cni/pkg/types/100"
-	"github.com/google/uuid"
+	"github.com/gofrs/uuid/v5"
 	netdefv1 "github.com/k8snetworkplumbingwg/network-attachment-definition-client/pkg/apis/k8s.cni.cncf.io/v1"
 	netdefclientfake "github.com/k8snetworkplumbingwg/network-attachment-definition-client/pkg/client/clientset/versioned/fake"
 	netdefutils "github.com/k8snetworkplumbingwg/network-attachment-definition-client/pkg/utils"
@@ -251,7 +251,7 @@ func TestPodControllerRun(t *testing.T) {
 	}
 
 	pool := &crdv1beta1.IPPool{
-		ObjectMeta: metav1.ObjectMeta{Name: uuid.New().String()},
+		ObjectMeta: metav1.ObjectMeta{Name: uuid.Must(uuid.NewV4()).String()},
 		Spec: crdv1beta1.IPPoolSpec{
 			IPRanges: []crdv1beta1.IPRange{
 				{
@@ -1279,10 +1279,10 @@ func convertExternalIDMap(in map[string]interface{}) map[string]string {
 }
 
 func createTestInterfaces() ([]ovsconfig.OVSPortData, []*interfacestore.InterfaceConfig) {
-	uuid1 := uuid.New().String()
-	uuid2 := uuid.New().String()
-	uuid3 := uuid.New().String()
-	uuid4 := uuid.New().String()
+	uuid1 := uuid.Must(uuid.NewV4()).String()
+	uuid2 := uuid.Must(uuid.NewV4()).String()
+	uuid3 := uuid.Must(uuid.NewV4()).String()
+	uuid4 := uuid.Must(uuid.NewV4()).String()
 
 	p1MAC, p1IP := "11:22:33:44:55:66", "192.168.1.10"
 	p2MAC, p2IP := "11:22:33:44:55:77", "192.168.1.11"
