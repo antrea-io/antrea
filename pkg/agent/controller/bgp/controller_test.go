@@ -1645,7 +1645,7 @@ func TestServiceLifecycle(t *testing.T) {
 
 	// Update the EndpointSlice with a local Endpoint IP.
 	endpointSlice = generateEndpointSlice(ipv4LoadBalancerName, endpointSliceSuffix, true, false, "10.10.0.2")
-	c.endpointSliceInformer.GetIndexer().Update(endpointSlice)
+	require.NoError(t, c.endpointSliceInformer.GetIndexer().Update(endpointSlice))
 
 	// Since there is a local Endpoint IP and both `internalTrafficPolicy` and `externalTrafficPolicy` are `Local`, the
 	// ClusterIP, externalIP, and LoadBalancerIP will be advertised.
@@ -1657,7 +1657,7 @@ func TestServiceLifecycle(t *testing.T) {
 	// Update externalIP and LoadBalancerIP of the Service. Additionally, update both `externalTrafficPolicy` and
 	// `internalTrafficPolicy` to `Cluster`.
 	updatedLoadBalancer := generateService(ipv4LoadBalancerName, corev1.ServiceTypeLoadBalancer, "10.96.10.10", "192.168.77.101", "192.168.77.151", false, false)
-	c.serviceInformer.GetIndexer().Update(updatedLoadBalancer)
+	require.NoError(t, c.serviceInformer.GetIndexer().Update(updatedLoadBalancer))
 
 	// The stale externalIP and LoadBalancerIP will be withdrawn. The new externalIP and LoadBalancerIP will be advertised.
 	mockBGPServer.EXPECT().AdvertiseRoutes(gomock.Any(), []bgp.Route{{Prefix: "192.168.77.151/32"}})
@@ -1668,11 +1668,11 @@ func TestServiceLifecycle(t *testing.T) {
 
 	// Update `externalTrafficPolicy` of the Service from `Cluster` to `Local`.
 	updatedLoadBalancer = generateService(ipv4LoadBalancerName, corev1.ServiceTypeLoadBalancer, "10.96.10.10", "192.168.77.101", "192.168.77.151", false, true)
-	c.serviceInformer.GetIndexer().Update(updatedLoadBalancer)
+	require.NoError(t, c.serviceInformer.GetIndexer().Update(updatedLoadBalancer))
 
 	// Update the EndpointSlice with a remote Endpoint.
 	endpointSlice = generateEndpointSlice(ipv4LoadBalancerName, endpointSliceSuffix, false, false, "10.10.0.3")
-	c.endpointSliceInformer.GetIndexer().Update(endpointSlice)
+	require.NoError(t, c.endpointSliceInformer.GetIndexer().Update(endpointSlice))
 
 	// Since there is no local Endpoint and `externalTrafficPolicy` is `Local`, the externalIP and LoadBalancerIP will be
 	// withdrawn.
@@ -1682,7 +1682,7 @@ func TestServiceLifecycle(t *testing.T) {
 
 	// Update `internalTrafficPolicy` of the Service from `Cluster` to `Local`.
 	updatedLoadBalancer = generateService(ipv4LoadBalancerName, corev1.ServiceTypeLoadBalancer, "10.96.10.10", "192.168.77.101", "192.168.77.151", true, true)
-	c.serviceInformer.GetIndexer().Update(updatedLoadBalancer)
+	require.NoError(t, c.serviceInformer.GetIndexer().Update(updatedLoadBalancer))
 
 	// Since there is no local Endpoint and `internalTrafficPolicy` is `Local`, the ClusterIP will be withdrawn.
 	mockBGPServer.EXPECT().WithdrawRoutes(gomock.Any(), []bgp.Route{{Prefix: "10.96.10.10/32"}})
@@ -1690,7 +1690,7 @@ func TestServiceLifecycle(t *testing.T) {
 
 	// Update `externalTrafficPolicy` of the Service from `Local` to `Cluster`.
 	updatedLoadBalancer = generateService(ipv4LoadBalancerName, corev1.ServiceTypeLoadBalancer, "10.96.10.10", "192.168.77.101", "192.168.77.151", true, false)
-	c.serviceInformer.GetIndexer().Update(updatedLoadBalancer)
+	require.NoError(t, c.serviceInformer.GetIndexer().Update(updatedLoadBalancer))
 
 	// Since `externalTrafficPolicy` is `Cluster`, the ClusterIP will be advertised even if there is no local Endpoint.
 	mockBGPServer.EXPECT().AdvertiseRoutes(gomock.Any(), []bgp.Route{{Prefix: "192.168.77.101/32"}})
@@ -1698,7 +1698,7 @@ func TestServiceLifecycle(t *testing.T) {
 	require.NoError(t, c.syncBGPPolicy(ctx))
 
 	// Delete the Service.
-	c.serviceInformer.GetIndexer().Delete(updatedLoadBalancer)
+	require.NoError(t, c.serviceInformer.GetIndexer().Delete(updatedLoadBalancer))
 
 	// Since the Service is deleted, all corresponding Service IPs will be withdrawn.
 	mockBGPServer.EXPECT().WithdrawRoutes(gomock.Any(), []bgp.Route{{Prefix: "192.168.77.101/32"}})
@@ -1740,7 +1740,7 @@ func TestEgressLifecycle(t *testing.T) {
 
 	// Update the Egress.
 	updatedEgress := generateEgress("eg1-4", "192.168.77.201", localNodeName)
-	c.egressInformer.GetIndexer().Update(updatedEgress)
+	require.NoError(t, c.egressInformer.GetIndexer().Update(updatedEgress))
 
 	mockBGPServer.EXPECT().AdvertiseRoutes(gomock.Any(), gomock.InAnyOrder([]bgp.Route{{Prefix: "192.168.77.201/32"}}))
 	mockBGPServer.EXPECT().WithdrawRoutes(gomock.Any(), gomock.InAnyOrder([]bgp.Route{{Prefix: "192.168.77.200/32"}}))
@@ -1748,20 +1748,20 @@ func TestEgressLifecycle(t *testing.T) {
 
 	// Update the Egress.
 	updatedEgress = generateEgress("eg1-4", "192.168.77.201", "remote")
-	c.egressInformer.GetIndexer().Update(updatedEgress)
+	require.NoError(t, c.egressInformer.GetIndexer().Update(updatedEgress))
 
 	mockBGPServer.EXPECT().WithdrawRoutes(gomock.Any(), gomock.InAnyOrder([]bgp.Route{{Prefix: "192.168.77.201/32"}}))
 	require.NoError(t, c.syncBGPPolicy(ctx))
 
 	// Update the Egress.
 	updatedEgress = generateEgress("eg1-4", "192.168.77.201", localNodeName)
-	c.egressInformer.GetIndexer().Update(updatedEgress)
+	require.NoError(t, c.egressInformer.GetIndexer().Update(updatedEgress))
 
 	mockBGPServer.EXPECT().AdvertiseRoutes(gomock.Any(), gomock.InAnyOrder([]bgp.Route{{Prefix: "192.168.77.201/32"}}))
 	require.NoError(t, c.syncBGPPolicy(ctx))
 
 	// Delete the Egress.
-	c.egressInformer.GetIndexer().Delete(updatedEgress)
+	require.NoError(t, c.egressInformer.GetIndexer().Delete(updatedEgress))
 
 	mockBGPServer.EXPECT().WithdrawRoutes(gomock.Any(), gomock.InAnyOrder([]bgp.Route{{Prefix: "192.168.77.201/32"}}))
 	require.NoError(t, c.syncBGPPolicy(ctx))
