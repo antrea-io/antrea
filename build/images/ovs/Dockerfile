@@ -21,20 +21,18 @@ ARG OVS_VERSION
 # Install dependencies for building OVS deb packages
 # We only install python3 packages and we only support building OVS >= 2.13.0.
 RUN apt-get update && \
-    DEBIAN_FRONTEND="noninteractive" apt-get install -y --no-install-recommends wget curl git ca-certificates build-essential fakeroot \
-            bzip2 autoconf automake debhelper dh-python dh-autoreconf libssl-dev libtool openssl procps \
-            python3-all python3-twisted python3-zope.interface python3-sphinx \
+    DEBIAN_FRONTEND="noninteractive" apt-get install -y --no-install-recommends wget ca-certificates build-essential fakeroot \
+            bzip2 autoconf automake debhelper dh-exec dh-python dh-autoreconf libssl-dev libtool openssl pkg-config procps \
+            python3-all-dev python3-setuptools python3-twisted python3-zope.interface python3-sphinx \
             libunbound-dev
-
-COPY apply-patches.sh /
 
 # Download OVS source code and build debs
 RUN wget -q -O - https://www.openvswitch.org/releases/openvswitch-$OVS_VERSION.tar.gz  | tar xz -C /tmp && \
     cd /tmp/openvswitch* && \
-    /apply-patches.sh && \
-    DEB_BUILD_OPTIONS='parallel=8 nocheck' fakeroot debian/rules binary && \
+    grep -v '^# DPDK_NETDEV' debian/control.in > debian/control && \
+    DEB_BUILD_OPTIONS='parallel=8 nocheck nodpdk' fakeroot debian/rules binary && \
     cd /tmp && mkdir ovs-debs && \
-    mv libopenvswitch_*.deb openvswitch-common_*.deb openvswitch-switch_*.deb python*-openvswitch_*.deb \
+    mv openvswitch-common_*.deb openvswitch-switch_*.deb python*-openvswitch_*.deb \
        openvswitch-ipsec_*.deb ovs-debs/ && \
     cd / && rm -rf /tmp/openvswitch*
 
