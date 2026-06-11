@@ -197,6 +197,11 @@ func TestParseVLANSpecs(t *testing.T) {
 			wantIDs: []uint16{5, 10, 11},
 		},
 		{
+			name:    "maximum VLAN ID",
+			specs:   []string{"4094"},
+			wantIDs: []uint16{4094},
+		},
+		{
 			name:        "invalid single",
 			specs:       []string{"abc"},
 			expectedErr: "invalid VLAN ID",
@@ -205,6 +210,31 @@ func TestParseVLANSpecs(t *testing.T) {
 			name:        "inverted range",
 			specs:       []string{"200-100"},
 			expectedErr: "VLAN range start",
+		},
+		{
+			name:        "single VLAN above maximum",
+			specs:       []string{"4095"},
+			expectedErr: "greater than maximum VLAN ID",
+		},
+		{
+			name:        "range end above maximum",
+			specs:       []string{"4094-4095"},
+			expectedErr: "greater than maximum VLAN ID",
+		},
+		{
+			name:        "duplicate single VLAN",
+			specs:       []string{"100", "100"},
+			expectedErr: "specified more than once",
+		},
+		{
+			name:        "overlapping range and single VLAN",
+			specs:       []string{"100-102", "101"},
+			expectedErr: "specified more than once",
+		},
+		{
+			name:        "overlapping ranges",
+			specs:       []string{"100-102", "102-103"},
+			expectedErr: "specified more than once",
 		},
 	}
 	for _, tc := range tests {

@@ -195,11 +195,11 @@ func TestEffectiveSecondaryOVSBridge(t *testing.T) {
 			},
 		},
 		{
-			name:       "rule 2: matching ANC with no bridge yields nil",
+			name:       "rule 2: matching ANC with no bridge falls back to static config",
 			node:       workerNode,
 			ancObjs:    []*crdv1alpha1.AntreaNodeConfig{ancMatchingNoBridge},
 			staticCfg:  staticCfg,
-			wantBridge: nil,
+			wantBridge: wantStaticBridge,
 		},
 	}
 
@@ -322,13 +322,13 @@ func TestConvertCRDSecondaryNetwork(t *testing.T) {
 		name                 string
 		in                   *crdv1alpha1.SecondaryNetworkConfig
 		antreaNodeConfigName string
-		want                 agenttypes.SecondaryNetworkConfig
+		want                 *agenttypes.SecondaryNetworkConfig
 	}{
 		{
 			name:                 "empty bridges yields nil OVSBridge",
 			in:                   &crdv1alpha1.SecondaryNetworkConfig{},
 			antreaNodeConfigName: testANCName,
-			want:                 agenttypes.SecondaryNetworkConfig{},
+			want:                 nil,
 		},
 		{
 			name: "empty bridge name yields nil OVSBridge",
@@ -338,7 +338,7 @@ func TestConvertCRDSecondaryNetwork(t *testing.T) {
 				},
 			},
 			antreaNodeConfigName: "anc-empty-bridge-name",
-			want:                 agenttypes.SecondaryNetworkConfig{},
+			want:                 nil,
 		},
 		{
 			name: "interface without AllowedVLANs has nil AllowedVLANs in output",
@@ -348,7 +348,7 @@ func TestConvertCRDSecondaryNetwork(t *testing.T) {
 				},
 			},
 			antreaNodeConfigName: testANCName,
-			want: agenttypes.SecondaryNetworkConfig{
+			want: &agenttypes.SecondaryNetworkConfig{
 				OVSBridge: &agenttypes.OVSBridgeConfig{
 					BridgeName: "br0",
 					PhysicalInterfaces: []agenttypes.PhysicalInterfaceConfig{
@@ -365,7 +365,7 @@ func TestConvertCRDSecondaryNetwork(t *testing.T) {
 				},
 			},
 			antreaNodeConfigName: testANCName,
-			want: agenttypes.SecondaryNetworkConfig{
+			want: &agenttypes.SecondaryNetworkConfig{
 				OVSBridge: &agenttypes.OVSBridgeConfig{
 					BridgeName: "br0",
 					PhysicalInterfaces: []agenttypes.PhysicalInterfaceConfig{
@@ -378,16 +378,29 @@ func TestConvertCRDSecondaryNetwork(t *testing.T) {
 			name: "multicast snooping flag is preserved",
 			in: &crdv1alpha1.SecondaryNetworkConfig{
 				OVSBridges: []crdv1alpha1.OVSBridgeConfig{
-					makeBridge("br0", true),
+					makeBridge("br0", true, makeIface("eth0")),
 				},
 			},
 			antreaNodeConfigName: testANCName,
-			want: agenttypes.SecondaryNetworkConfig{
+			want: &agenttypes.SecondaryNetworkConfig{
 				OVSBridge: &agenttypes.OVSBridgeConfig{
 					BridgeName:              "br0",
 					EnableMulticastSnooping: true,
+					PhysicalInterfaces: []agenttypes.PhysicalInterfaceConfig{
+						{Name: "eth0"},
+					},
 				},
 			},
+		},
+		{
+			name: "bridge with no physical interfaces yields nil",
+			in: &crdv1alpha1.SecondaryNetworkConfig{
+				OVSBridges: []crdv1alpha1.OVSBridgeConfig{
+					makeBridge("br0", false),
+				},
+			},
+			antreaNodeConfigName: testANCName,
+			want:                 nil,
 		},
 		{
 			name: "bridge with multiple interfaces",
@@ -397,7 +410,7 @@ func TestConvertCRDSecondaryNetwork(t *testing.T) {
 				},
 			},
 			antreaNodeConfigName: testANCName,
-			want: agenttypes.SecondaryNetworkConfig{
+			want: &agenttypes.SecondaryNetworkConfig{
 				OVSBridge: &agenttypes.OVSBridgeConfig{
 					BridgeName: "br0",
 					PhysicalInterfaces: []agenttypes.PhysicalInterfaceConfig{
@@ -411,7 +424,13 @@ func TestConvertCRDSecondaryNetwork(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			got := convertCRDSecondaryNetwork(tc.in, tc.antreaNodeConfigName)
+			cfg := &crdv1alpha1.AntreaNodeConfig{
+				ObjectMeta: metav1.ObjectMeta{Name: tc.antreaNodeConfigName},
+				Spec: crdv1alpha1.AntreaNodeConfigSpec{
+					SecondaryNetwork: tc.in,
+				},
+			}
+			got := ApplySecondaryNetworkConfig(cfg)
 			assert.Equal(t, tc.want, got)
 		})
 	}

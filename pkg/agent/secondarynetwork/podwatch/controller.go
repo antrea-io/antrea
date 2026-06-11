@@ -850,8 +850,9 @@ func (pc *PodController) UpdateOVSBridgeClient(newClient ovsconfig.OVSBridgeClie
 		return nil
 	}
 
-	// Re-populate the interface store from the new bridge so that existing Pod
-	// interfaces are tracked correctly.
+	// Discard records from the previous bridge before re-populating the store
+	// from the new bridge so stale interfaces do not survive a bridge switch.
+	pc.interfaceStore.Reset()
 	if err := pc.loadOVSInterfaceStore(newClient); err != nil {
 		return err
 	}

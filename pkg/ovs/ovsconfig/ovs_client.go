@@ -63,7 +63,9 @@ const (
 	openflowProtoVersion15 = "OpenFlow15"
 	// Maximum allowed value of ofPortRequest.
 	ofPortRequestMax = 65279
-	hardwareOffload  = "hw-offload"
+	// Maximum VLAN ID supported by OVS and Antrea.
+	maxVLANID       = 4094
+	hardwareOffload = "hw-offload"
 )
 
 // NewOVSDBConnectionUDS connects to the OVSDB server on the UNIX domain socket
@@ -608,6 +610,7 @@ func (br *OVSBridge) CreateUplinkPort(name string, ofPortRequest int32, external
 // only supports discrete integer elements (no native range type).
 func parseVLANSpecs(specs []string) ([]uint16, error) {
 	var ids []uint16
+	seen := make(map[uint16]string)
 	for _, spec := range specs {
 		spec = strings.TrimSpace(spec)
 		if idx := strings.IndexByte(spec, '-'); idx >= 0 {
@@ -623,15 +626,31 @@ func parseVLANSpecs(specs []string) ([]uint16, error) {
 			if start > end {
 				return nil, fmt.Errorf("VLAN range start %d is greater than end %d", start, end)
 			}
+			if end > maxVLANID {
+				return nil, fmt.Errorf("VLAN range end %d is greater than maximum VLAN ID %d", end, maxVLANID)
+			}
 			for v := start; v <= end; v++ {
-				ids = append(ids, uint16(v))
+				id := uint16(v)
+				if prev, ok := seen[id]; ok {
+					return nil, fmt.Errorf("VLAN ID %d is specified more than once in %q and %q", id, prev, spec)
+				}
+				seen[id] = spec
+				ids = append(ids, id)
 			}
 		} else {
 			v, err := strconv.ParseUint(spec, 10, 16)
 			if err != nil {
 				return nil, fmt.Errorf("invalid VLAN ID %q: %v", spec, err)
 			}
-			ids = append(ids, uint16(v))
+			if v > maxVLANID {
+				return nil, fmt.Errorf("VLAN ID %d is greater than maximum VLAN ID %d", v, maxVLANID)
+			}
+			id := uint16(v)
+			if prev, ok := seen[id]; ok {
+				return nil, fmt.Errorf("VLAN ID %d is specified more than once in %q and %q", id, prev, spec)
+			}
+			seen[id] = spec
+			ids = append(ids, id)
 		}
 	}
 	return ids, nil

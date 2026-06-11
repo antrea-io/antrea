@@ -75,13 +75,16 @@ func ovsBridgeFromStatic(staticCfg *agentconfig.SecondaryNetworkConfig) *agentty
 
 // ApplySecondaryNetworkConfig derives the effective SecondaryNetworkConfig from the
 // AntreaNodeConfig carried in the snapshot (the oldest matching object for the Node).
-// It returns nil when cfg is nil or does not specify SecondaryNetwork, so static
-// agent config stays in effect.
+// It returns nil when cfg is nil or does not specify a valid SecondaryNetwork bridge,
+// so static agent config stays in effect.
 func ApplySecondaryNetworkConfig(cfg *crdv1alpha1.AntreaNodeConfig) *agenttypes.SecondaryNetworkConfig {
 	if cfg == nil || cfg.Spec.SecondaryNetwork == nil {
 		return nil
 	}
 	converted := convertCRDSecondaryNetwork(cfg.Spec.SecondaryNetwork, cfg.ObjectMeta.Name)
+	if converted.OVSBridge == nil {
+		return nil
+	}
 	return &converted
 }
 
@@ -95,6 +98,10 @@ func convertCRDSecondaryNetwork(in *crdv1alpha1.SecondaryNetworkConfig, antreaNo
 	b := in.OVSBridges[0]
 	if b.BridgeName == "" {
 		klog.ErrorS(errors.New("empty OVS bridge name"), "Ignoring AntreaNodeConfig secondary network config with empty bridge name", "antreaNodeConfig", antreaNodeConfigName)
+		return agenttypes.SecondaryNetworkConfig{}
+	}
+	if len(b.PhysicalInterfaces) == 0 {
+		klog.ErrorS(errors.New("empty physicalInterfaces"), "Ignoring AntreaNodeConfig secondary network config with no physical interfaces", "antreaNodeConfig", antreaNodeConfigName, "bridge", b.BridgeName)
 		return agenttypes.SecondaryNetworkConfig{}
 	}
 	bridge := &agenttypes.OVSBridgeConfig{

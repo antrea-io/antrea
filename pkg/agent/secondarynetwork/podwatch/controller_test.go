@@ -1440,6 +1440,28 @@ func TestInitializeOVSSecondaryInterfaceStore(t *testing.T) {
 	assert.False(t, found, "Unknown interface type should not be stored")
 }
 
+func TestUpdateOVSBridgeClientResetsInterfaceStoreBeforeReload(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	pc, _, _, _ := testPodController(ctrl)
+	ovsPorts, interfaces := createTestInterfaces()
+
+	staleInterface := interfaces[3]
+	pc.interfaceStore.AddInterface(staleInterface)
+
+	newOVSBridgeClient := ovsconfigtest.NewMockOVSBridgeClient(ctrl)
+	newOVSBridgeClient.EXPECT().GetPortList().Return(ovsPorts[:1], nil)
+
+	err := pc.UpdateOVSBridgeClient(newOVSBridgeClient)
+	require.NoError(t, err)
+
+	_, found := pc.interfaceStore.GetContainerInterface(staleInterface.ContainerID)
+	assert.False(t, found, "stale interface from the previous bridge should be removed")
+
+	_, found = pc.interfaceStore.GetContainerInterface(ovsPorts[0].UUID)
+	assert.True(t, found, "interface from the new bridge should be loaded")
+	require.Equal(t, 1, pc.interfaceStore.Len())
+}
+
 func TestReconcileSecondaryInterfaces(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	pc, mockIPAM, interfaceConfigurator, _ := testPodController(ctrl)
