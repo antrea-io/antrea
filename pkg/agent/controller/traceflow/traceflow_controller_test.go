@@ -103,10 +103,17 @@ var (
 	}
 )
 
-type fakePodSubnetChecker struct{}
+type fakeNodeRouteQuerier struct{}
 
-func (f *fakePodSubnetChecker) LookupIPInPodSubnets(ip netip.Addr) (bool, bool) {
+func (f *fakeNodeRouteQuerier) LookupIPInPodSubnets(ip netip.Addr) (bool, bool) {
 	return podCIDR1IPv4.Contains(ip) || podCIDR2IPv4.Contains(ip), false
+}
+
+func (f *fakeNodeRouteQuerier) GetNodeIPForPodIP(ip netip.Addr) (net.IP, bool) {
+	if podCIDR2IPv4.Contains(ip) {
+		return net.ParseIP("192.168.77.77"), true
+	}
+	return nil, false
 }
 
 type fakeTraceflowController struct {
@@ -150,7 +157,7 @@ func newFakeTraceflowController(t *testing.T, initObjects []runtime.Object, netw
 		ofClient:              mockOFClient,
 		networkPolicyQuerier:  npQuerier,
 		egressQuerier:         egressQuerier,
-		podSubnetChecker:      &fakePodSubnetChecker{},
+		nodeRouteQuerier:      &fakeNodeRouteQuerier{},
 		interfaceStore:        ifaceStore,
 		networkConfig:         networkConfig,
 		nodeConfig:            nodeConfig,

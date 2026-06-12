@@ -98,7 +98,7 @@ type Controller struct {
 	ofClient               openflow.Client
 	networkPolicyQuerier   querier.AgentNetworkPolicyInfoQuerier
 	egressQuerier          querier.EgressQuerier
-	podSubnetChecker       PodSubnetChecker
+	nodeRouteQuerier       NodeRouteQuerier
 	interfaceStore         interfacestore.InterfaceStore
 	networkConfig          *config.NetworkConfig
 	nodeConfig             *config.NodeConfig
@@ -122,7 +122,7 @@ func NewTraceflowController(
 	client openflow.Client,
 	npQuerier querier.AgentNetworkPolicyInfoQuerier,
 	egressQuerier querier.EgressQuerier,
-	podSubnetChecker PodSubnetChecker,
+	nodeRouteQuerier NodeRouteQuerier,
 	interfaceStore interfacestore.InterfaceStore,
 	networkConfig *config.NetworkConfig,
 	nodeConfig *config.NodeConfig,
@@ -138,7 +138,7 @@ func NewTraceflowController(
 		ofClient:              client,
 		networkPolicyQuerier:  npQuerier,
 		egressQuerier:         egressQuerier,
-		podSubnetChecker:      podSubnetChecker,
+		nodeRouteQuerier:      nodeRouteQuerier,
 		interfaceStore:        interfaceStore,
 		networkConfig:         networkConfig,
 		nodeConfig:            nodeConfig,
@@ -615,9 +615,12 @@ func (c *Controller) cleanupTraceflow(tfName string) {
 	}
 }
 
-type PodSubnetChecker interface {
+// NodeRouteQuerier provides PodCIDR and peer Node information to Traceflow.
+type NodeRouteQuerier interface {
 	// LookupIPInPodSubnets returns two boolean values. The first one indicates whether the IP can be
 	// found in a PodCIDR for one of the cluster Nodes. The second one indicates whether the IP is used
 	// as a gateway IP. The second boolean value can only be true if the first one is true.
 	LookupIPInPodSubnets(ip netip.Addr) (isFound bool, isGWIP bool)
+	// GetNodeIPForPodIP returns the transport IP of the remote Node whose PodCIDR contains the IP.
+	GetNodeIPForPodIP(ip netip.Addr) (net.IP, bool)
 }

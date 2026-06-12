@@ -846,6 +846,26 @@ func (c *Controller) LookupIPInPodSubnets(ip netip.Addr) (bool, bool) {
 	return ok, ip == util.GetGatewayIPForPodPrefix(prefix)
 }
 
+// GetNodeIPForPodIP returns the transport IP of the remote Node whose PodCIDR contains the IP.
+func (c *Controller) GetNodeIPForPodIP(ip netip.Addr) (net.IP, bool) {
+	prefix, ok := c.findPodSubnetForIP(ip)
+	if !ok {
+		return nil, false
+	}
+	nodeRouteInfos, err := c.installedNodes.ByIndex(nodeRouteInfoPodCIDRIndexName, prefix.String())
+	if err != nil || len(nodeRouteInfos) != 1 {
+		return nil, false
+	}
+	nodeIPs := nodeRouteInfos[0].(*nodeRouteInfo).nodeIPs
+	if ip.Is4() && nodeIPs.IPv4 != nil {
+		return nodeIPs.IPv4, true
+	}
+	if ip.Is6() && nodeIPs.IPv6 != nil {
+		return nodeIPs.IPv6, true
+	}
+	return nil, false
+}
+
 // getNodeMAC gets Node's br-int MAC from its annotation. It is only for Windows Noencap mode.
 func getNodeMAC(node *corev1.Node) (net.HardwareAddr, error) {
 	macStr := node.Annotations[types.NodeMACAddressAnnotationKey]
