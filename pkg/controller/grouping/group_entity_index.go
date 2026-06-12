@@ -68,7 +68,11 @@ type Interface interface {
 	// GetEntities returns the selected Pods or ExternalEntities for the given group.
 	GetEntities(groupType GroupType, name string) ([]*v1.Pod, []*v1alpha2.ExternalEntity)
 	// GetGroupsForPod returns the groups that select the given Pod.
-	GetGroupsForPod(namespace, name string) (map[GroupType][]string, bool)
+	// If the Pod does not exist, it returns (nil, false). If a non-nil excludePod filter is
+	// provided and it returns true for the Pod, the Pod is treated as having no group
+	// associations: (nil, true) is returned so callers can distinguish "pod not found" from
+	// "pod found but excluded".
+	GetGroupsForPod(namespace, name string, excludePod func(*v1.Pod) bool) (map[GroupType][]string, bool)
 	// GetGroupsForExternalEntity returns the groups that select the given ExternalEntity.
 	GetGroupsForExternalEntity(namespace, name string) (map[GroupType][]string, bool)
 	// AddPod adds or updates a Pod to the index. If any existing groups are affected, eventHandlers will be called with
@@ -254,8 +258,25 @@ func (i *GroupEntityIndex) GetEntities(groupType GroupType, name string) ([]*v1.
 	return pods, externalEntities
 }
 
-func (i *GroupEntityIndex) GetGroupsForPod(namespace, name string) (map[GroupType][]string, bool) {
-	return i.getGroups(podEntityType, namespace, name)
+func (i *GroupEntityIndex) GetGroupsForPod(namespace, name string, excludePod func(*v1.Pod) bool) (map[GroupType][]string, bool) {
+	eKey := getEntityItemKeyByName(podEntityType, namespace, name)
+
+	i.lock.RLock()
+	defer i.lock.RUnlock()
+
+	eItem, exists := i.entityItems[eKey]
+	if !exists {
+		return nil, false
+	}
+	if excludePod != nil {
+		if pod, ok := eItem.entity.(*v1.Pod); ok && excludePod(pod) {
+			// The Pod exists but the caller's filter excludes it.
+			// Return (nil, true) so callers can distinguish "pod not found"
+			// from "pod found but excluded".
+			return nil, true
+		}
+	}
+	return i.getGroupsLocked(eItem)
 }
 
 func (i *GroupEntityIndex) GetGroupsForExternalEntity(namespace, name string) (map[GroupType][]string, bool) {
@@ -273,7 +294,12 @@ func (i *GroupEntityIndex) getGroups(entityType entityType, namespace, name stri
 	if !exists {
 		return nil, false
 	}
+	return i.getGroupsLocked(eItem)
+}
 
+// getGroupsLocked returns the groups associated with the given entityItem.
+// It must be called with the GroupEntityIndex read lock held.
+func (i *GroupEntityIndex) getGroupsLocked(eItem *entityItem) (map[GroupType][]string, bool) {
 	groups := map[GroupType][]string{}
 	lItem := i.labelItems[eItem.labelItemKey]
 	// Get the keys of the selectorItems the labelItem matches.
