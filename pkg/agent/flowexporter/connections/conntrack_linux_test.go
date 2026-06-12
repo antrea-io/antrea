@@ -292,6 +292,42 @@ func TestNetLinkFlowToAntreaConnection(t *testing.T) {
 	assert.Equalf(t, expectedAntreaFlow, antreaFlow, "both flows should be equal")
 }
 
+// TestNetlinkFlowToAntreaConnection_NoProxySnatWhenSymmetricReply documents that when conntrack reply
+// tuples are symmetric (TupleReply destination matches TupleOrig source), we do not populate
+// ProxySnatIP/ProxySnatPort. That matches many NodePort paths with externalTrafficPolicy Local where
+// traffic does not traverse a kube-proxy/Antrea proxy masquerade hop.
+func TestNetlinkFlowToAntreaConnection_NoProxySnatWhenSymmetricReply(t *testing.T) {
+	netlinkFlow := &conntrack.Flow{
+		TupleOrig: conntrackFlowTuple, TupleReply: conntrackFlowTupleReply, TupleMaster: conntrackFlowTuple,
+		Timeout: 123, Status: conntrack.StatusAssured, Mark: 0x1234, Zone: 2,
+		Timestamp: conntrack.Timestamp{Start: time.Date(2020, 7, 25, 8, 40, 8, 959000000, time.UTC)},
+	}
+	antreaFlow := NetlinkFlowToAntreaConnection(netlinkFlow)
+	assert.False(t, antreaFlow.ProxySnatIP.IsValid(), "symmetric reply tuple should not set proxy SNAT IP")
+	assert.Equal(t, uint16(0), antreaFlow.ProxySnatPort, "symmetric reply tuple should not set proxy SNAT port")
+}
+
+func TestNetlinkFlowToAntreaConnection_ProxySnatWhenMasquerade(t *testing.T) {
+	snatIP := netip.MustParseAddr("10.244.0.1")
+	netlinkFlow := &conntrack.Flow{
+		TupleOrig: conntrackFlowTuple,
+		TupleReply: conntrack.Tuple{
+			IP: conntrack.IPTuple{
+				SourceAddress:      conntrackFlowTupleReply.IP.SourceAddress,
+				DestinationAddress: snatIP,
+			},
+			Proto: conntrackFlowTupleReply.Proto,
+		},
+		TupleMaster: conntrackFlowTuple,
+		Timeout:     123, Status: conntrack.StatusAssured, Mark: 0x1234, Zone: 2,
+		Timestamp: conntrack.Timestamp{Start: time.Date(2020, 7, 25, 8, 40, 8, 959000000, time.UTC)},
+	}
+	antreaFlow := NetlinkFlowToAntreaConnection(netlinkFlow)
+	assert.True(t, antreaFlow.ProxySnatIP.IsValid())
+	assert.Equal(t, snatIP, antreaFlow.ProxySnatIP)
+	assert.Equal(t, conntrackFlowTupleReply.Proto.DestinationPort, antreaFlow.ProxySnatPort)
+}
+
 func TestStateToString(t *testing.T) {
 	for _, tc := range []struct {
 		state          uint8

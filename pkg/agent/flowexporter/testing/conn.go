@@ -65,6 +65,7 @@ func GetConnection(isIPv6 bool, isPresent bool, statusFlag uint32, protoID uint8
 		EgressName:                     "my-egress",
 		EgressUID:                      uuid.Must(uuid.NewV4()).String(),
 		EgressNodeName:                 "egress-node",
+		Zone:                           65520,
 	}
 	return conn
 }

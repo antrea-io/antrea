@@ -430,7 +430,7 @@ func TestNodePortAndEgressWithTheSameBackendPod(t *testing.T) {
 
 	// Create another netns to fake an external network on the host network Pod.
 	testPod := "test-client"
-	cmd, testNetns := getCommandInFakeExternalNetwork("sleep 3600", 24, "1.1.1.1", "1.1.1.254")
+	cmd, testNetns := getCommandInFakeExternalNetwork("sleep 3600", 24, "1.1.1.1", "1.1.1.254", false)
 	if err := NewPodBuilder(testPod, data.testNamespace, agnhostImage).OnNode(controlPlaneNodeName()).WithCommand([]string{"sh", "-c", cmd}).InHostNetwork().Privileged().Create(data); err != nil {
 		t.Fatalf("Failed to create client Pod: %v", err)
 	}
@@ -1153,7 +1153,7 @@ func TestProxyLoadBalancerModeDSR(t *testing.T) {
 
 			// Create another netns to fake an external network on the host network Pod.
 			externalClient := randName("external-client-")
-			cmd, externalNetns := getCommandInFakeExternalNetwork("sleep infinity", externalIPPrefix, externalClientIP, externalClientGateway)
+			cmd, externalNetns := getCommandInFakeExternalNetwork("sleep infinity", externalIPPrefix, externalClientIP, externalClientGateway, false)
 			err := NewPodBuilder(externalClient, data.testNamespace, ToolboxImage).OnNode(ingressNode).WithCommand([]string{"sh", "-c", cmd}).InHostNetwork().Privileged().Create(data)
 			require.NoError(t, err, "Failed to create external client")
 			defer deletePodWrapper(t, data, data.testNamespace, externalClient)

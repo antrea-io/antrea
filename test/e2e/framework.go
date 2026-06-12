@@ -75,6 +75,7 @@ var AntreaConfigMap *corev1.ConfigMap
 var (
 	errConnectionLost = fmt.Errorf("http2: client connection lost")
 	errNoAggregators  = fmt.Errorf("no flow aggregators found")
+	containerPort     = int32(80)
 )
 
 const (
@@ -1829,7 +1830,7 @@ func (data *TestData) createNginxPodOnNode(name string, ns string, nodeName stri
 	return NewPodBuilder(name, ns, image).OnNode(nodeName).WithPorts([]corev1.ContainerPort{
 		{
 			Name:          "http",
-			ContainerPort: 80,
+			ContainerPort: containerPort,
 			Protocol:      corev1.ProtocolTCP,
 		},
 	}).WithHostNetwork(hostNetwork).Create(data)
@@ -3481,9 +3482,14 @@ func getPingCommand(count int, size int, os string, ip *net.IP, dontFragment boo
 	return cmd
 }
 
-// getCommandInFakeExternalNetwork fakes executing a command from external network by creating a netns and link the netns
-// with the host network.
-func getCommandInFakeExternalNetwork(cmd string, prefixLength int, externalIP string, localIP string, otherLocalIPs ...string) (string, string) {
+// getCommandInFakeExternalNetwork fakes executing a command from external network by creating a
+// netns and linking it with the host network.
+//
+// When isIPv6 is true, IPv6 DAD is disabled on both veth ends before assigning addresses
+// (net.ipv6.conf.<iface>.accept_dad=0). Without this, freshly assigned IPv6 addresses remain
+// tentative for ~1 second and the kernel rejects packets with a tentative source (ENETUNREACH).
+// The default route inside the netns is also set with "ip -6 route" for IPv6.
+func getCommandInFakeExternalNetwork(cmd string, prefixLength int, externalIP string, localIP string, isIPv6 bool, otherLocalIPs ...string) (string, string) {
 	// Create another netns to fake an external network on the host network Pod.
 	suffix := randSeq(5)
 	netns := fmt.Sprintf("ext-%s", suffix)
@@ -3493,11 +3499,24 @@ func getCommandInFakeExternalNetwork(cmd string, prefixLength int, externalIP st
 		fmt.Sprintf("ip netns add %s", netns),
 		fmt.Sprintf("ip link add dev %s type veth peer name %s", linkInHost, linkInNetns),
 		fmt.Sprintf("ip link set dev %s netns %s", linkInNetns, netns),
+	}
+	if isIPv6 {
+		// Disable DAD on both veth ends before assigning addresses so they are immediately usable.
+		cmds = append(cmds,
+			fmt.Sprintf("sysctl -w net.ipv6.conf.%s.accept_dad=0", linkInHost),
+			fmt.Sprintf("ip netns exec %s sysctl -w net.ipv6.conf.%s.accept_dad=0", netns, linkInNetns),
+		)
+	}
+	cmds = append(cmds,
 		fmt.Sprintf("ip addr add %s/%d dev %s", localIP, prefixLength, linkInHost),
 		fmt.Sprintf("ip link set dev %s up", linkInHost),
 		fmt.Sprintf("ip netns exec %s ip addr add %s/%d dev %s", netns, externalIP, prefixLength, linkInNetns),
 		fmt.Sprintf("ip netns exec %s ip link set dev %s up", netns, linkInNetns),
-		fmt.Sprintf("ip netns exec %s ip route replace default via %s", netns, localIP),
+	)
+	if isIPv6 {
+		cmds = append(cmds, fmt.Sprintf("ip netns exec %s ip -6 route replace default via %s dev %s", netns, localIP, linkInNetns))
+	} else {
+		cmds = append(cmds, fmt.Sprintf("ip netns exec %s ip route replace default via %s dev %s", netns, localIP, linkInNetns))
 	}
 	for _, ip := range otherLocalIPs {
 		cmds = append(cmds, fmt.Sprintf("ip addr add %s/%d dev %s", ip, prefixLength, linkInHost))
