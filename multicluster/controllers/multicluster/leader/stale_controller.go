@@ -28,6 +28,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/klog/v2"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 
@@ -50,15 +51,18 @@ var getResourceExportsByClusterIDFunc = getResourceExportsByClusterID
 type StaleResCleanupController struct {
 	client.Client
 	Scheme *runtime.Scheme
+	cache  cache.Cache
 }
 
 func NewStaleResCleanupController(
 	Client client.Client,
 	Scheme *runtime.Scheme,
+	cache cache.Cache,
 ) *StaleResCleanupController {
 	reconciler := &StaleResCleanupController{
 		Client: Client,
 		Scheme: Scheme,
+		cache:  cache,
 	}
 	return reconciler
 }
@@ -98,6 +102,12 @@ func (c *StaleResCleanupController) Run(stopCh <-chan struct{}) {
 	defer klog.InfoS("Shutting down StaleResCleanupController")
 
 	ctx := wait.ContextForChannel(stopCh)
+	if !c.cache.WaitForCacheSync(ctx) {
+		klog.ErrorS(nil, "Failed to wait for cache sync")
+		return
+	}
+	klog.InfoS("Cache synced, starting periodic cleanup")
+
 	go wait.UntilWithContext(ctx, c.cleanUpExpiredMemberClusterAnnounces, memberClusterAnnounceStaleTime/2)
 	<-stopCh
 }
