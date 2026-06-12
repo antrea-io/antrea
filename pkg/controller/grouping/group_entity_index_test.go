@@ -97,6 +97,9 @@ func newPod(namespace, name string, labels map[string]string) *v1.Pod {
 			Name:      name,
 			Labels:    labels,
 		},
+		Status: v1.PodStatus{
+			PodIPs: []v1.PodIP{{IP: "1.2.3.4"}},
+		},
 	}
 }
 
@@ -257,12 +260,53 @@ func TestGroupEntityIndexGetGroups(t *testing.T) {
 			expectedGroups: nil,
 		},
 	}
+	// excludePod filter tests: verify the filter parameter is honored.
+	podExcludeTests := []struct {
+		name           string
+		inputPod       *v1.Pod
+		excludePod     func(*v1.Pod) bool
+		expectedFound  bool
+		expectedGroups map[GroupType][]string
+	}{
+		{
+			name:           "nil filter returns normal groups",
+			inputPod:       podFoo1,
+			excludePod:     nil,
+			expectedFound:  true,
+			expectedGroups: map[GroupType][]string{groupType1: {groupPodFooType1.groupName, groupPodFooAllNamespaceType1.groupName}, groupType2: {groupPodFooType2.groupName}},
+		},
+		{
+			name:           "matching filter returns nil groups but pod found",
+			inputPod:       podFoo1,
+			excludePod:     func(*v1.Pod) bool { return true },
+			expectedFound:  true,
+			expectedGroups: nil,
+		},
+		{
+			name:           "non-matching filter returns normal groups",
+			inputPod:       podFoo1,
+			excludePod:     func(*v1.Pod) bool { return false },
+			expectedFound:  true,
+			expectedGroups: map[GroupType][]string{groupType1: {groupPodFooType1.groupName, groupPodFooAllNamespaceType1.groupName}, groupType2: {groupPodFooType2.groupName}},
+		},
+	}
+	for _, tt := range podExcludeTests {
+		t.Run(tt.name, func(t *testing.T) {
+			actualGroups, actualFound := index.GetGroupsForPod(tt.inputPod.GetNamespace(), tt.inputPod.GetName(), tt.excludePod)
+			assert.Equal(t, tt.expectedFound, actualFound)
+			assert.Equal(t, len(tt.expectedGroups), len(actualGroups))
+			for groupType, expected := range tt.expectedGroups {
+				assert.ElementsMatch(t, expected, actualGroups[groupType])
+			}
+		})
+	}
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			var actualGroups map[GroupType][]string
 			var actualFound bool
 			if _, ok := tt.inputEntity.(*v1.Pod); ok {
-				actualGroups, actualFound = index.GetGroupsForPod(tt.inputEntity.GetNamespace(), tt.inputEntity.GetName())
+				actualGroups, actualFound = index.GetGroupsForPod(tt.inputEntity.GetNamespace(), tt.inputEntity.GetName(), nil)
 			} else {
 				actualGroups, actualFound = index.GetGroupsForExternalEntity(tt.inputEntity.GetNamespace(), tt.inputEntity.GetName())
 			}
@@ -290,7 +334,7 @@ func TestGroupEntityIndexUpdateGroup(t *testing.T) {
 		index.AddNamespace(ns)
 	}
 	index.AddGroup(groupType1, "group1", types.NewGroupSelector("default", &metav1.LabelSelector{MatchLabels: map[string]string{"app": "foo"}}, nil, nil, nil))
-	actualGroups, _ := index.GetGroupsForPod(podFoo1.Namespace, podFoo1.Name)
+	actualGroups, _ := index.GetGroupsForPod(podFoo1.Namespace, podFoo1.Name, nil)
 	assert.Equal(t, map[GroupType][]string{groupType1: {"group1"}}, actualGroups)
 	actualGroups, _ = index.GetGroupsForExternalEntity(eeFoo1.Namespace, eeFoo1.Name)
 	assert.Equal(t, map[GroupType][]string{}, actualGroups)
@@ -299,7 +343,7 @@ func TestGroupEntityIndexUpdateGroup(t *testing.T) {
 	assert.ElementsMatch(t, []*v1alpha2.ExternalEntity{}, actualExternalEntities)
 
 	index.AddGroup(groupType1, "group1", types.NewGroupSelector("default", nil, nil, &metav1.LabelSelector{MatchLabels: map[string]string{"app": "foo"}}, nil))
-	actualGroups, _ = index.GetGroupsForPod(podFoo1.Namespace, podFoo1.Name)
+	actualGroups, _ = index.GetGroupsForPod(podFoo1.Namespace, podFoo1.Name, nil)
 	assert.Equal(t, map[GroupType][]string{}, actualGroups)
 	actualGroups, _ = index.GetGroupsForExternalEntity(eeFoo1.Namespace, eeFoo1.Name)
 	assert.Equal(t, map[GroupType][]string{groupType1: {"group1"}}, actualGroups)
@@ -327,13 +371,13 @@ func TestGroupEntityIndexDeleteGroup(t *testing.T) {
 		index.AddGroup(group.groupType, group.groupName, group.groupSelector)
 	}
 
-	actualGroups, _ := index.GetGroupsForPod(podFoo1.Namespace, podFoo1.Name)
+	actualGroups, _ := index.GetGroupsForPod(podFoo1.Namespace, podFoo1.Name, nil)
 	assert.Equal(t, map[GroupType][]string{groupType1: {groupPodFooType1.groupName}, groupType2: {groupPodFooType2.groupName}}, actualGroups)
 	index.DeleteGroup(groupPodFooType1.groupType, groupPodFooType1.groupName)
-	actualGroups, _ = index.GetGroupsForPod(podFoo1.Namespace, podFoo1.Name)
+	actualGroups, _ = index.GetGroupsForPod(podFoo1.Namespace, podFoo1.Name, nil)
 	assert.Equal(t, map[GroupType][]string{groupType2: {groupPodFooType2.groupName}}, actualGroups)
 	index.DeleteGroup(groupPodFooType2.groupType, groupPodFooType2.groupName)
-	actualGroups, _ = index.GetGroupsForPod(podFoo1.Namespace, podFoo1.Name)
+	actualGroups, _ = index.GetGroupsForPod(podFoo1.Namespace, podFoo1.Name, nil)
 	assert.Equal(t, map[GroupType][]string{}, actualGroups)
 
 	actualGroups, _ = index.GetGroupsForExternalEntity(eeFoo1.Namespace, eeFoo1.Name)

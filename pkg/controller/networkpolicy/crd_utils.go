@@ -19,6 +19,7 @@ import (
 	"strings"
 	"time"
 
+	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/conversion"
 	"k8s.io/apimachinery/pkg/types"
@@ -41,6 +42,20 @@ var (
 		NamespaceSelector: &metav1.LabelSelector{},
 	}
 )
+
+// AddressGroupExcludedPodFilter returns true for Pods that are excluded from network policy
+// enforcement as address-group or internal-group members, and from group-association queries.
+// It excludes:
+//   - Host-network Pods, which share the Node's network namespace; their address can only be
+//     selected via nodeSelector, not podSelector.
+//   - Terminated Pods, whose IPs may be recycled and reassigned to new Pods.
+//   - Pods that have not yet received an IP address.
+//
+// Note: AppliedToGroup membership uses a different filter (see syncAppliedToGroup) that also
+// excludes unscheduled Pods (NodeName == "") but does not check PodIPs.
+func AddressGroupExcludedPodFilter(pod *v1.Pod) bool {
+	return pod.Spec.HostNetwork || k8s.IsPodTerminated(pod) || len(pod.Status.PodIPs) == 0
+}
 
 // semanticIgnoreLastTransitionTime does semantic deep equality checks for
 // NetworkPolicyCondition but excludes LastTransitionTime. They are used when

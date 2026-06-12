@@ -59,6 +59,9 @@ var pods = []*corev1.Pod{
 				},
 			},
 			PodIP: "1.2.3.4",
+			PodIPs: []corev1.PodIP{
+				{IP: "1.2.3.4"},
+			},
 		},
 	},
 	{
@@ -81,6 +84,9 @@ var pods = []*corev1.Pod{
 				},
 			},
 			PodIP: "1.2.3.4",
+			PodIPs: []corev1.PodIP{
+				{IP: "1.2.3.4"},
+			},
 		},
 	},
 }
@@ -593,6 +599,125 @@ func TestQueryNetworkPolicyEvaluation(t *testing.T) {
 				assert.ErrorContains(t, err, tc.expectedErr)
 			}
 
+		})
+	}
+}
+
+func TestQueryNetworkPolicyRulesPodsExclusion(t *testing.T) {
+	// Each pod has a matching NetworkPolicy in its namespace so that removing the exclusion
+	// filter would produce non-empty results. The tests validate that the filter excludes
+	// those results for host-network, terminated, and no-IP Pods respectively.
+	hostNetworkPod := &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "kube-apiserver",
+			Namespace: "kube-system",
+			Labels:    map[string]string{"component": "kube-apiserver"},
+		},
+		Spec: corev1.PodSpec{
+			HostNetwork: true,
+		},
+		Status: corev1.PodStatus{
+			PodIPs: []corev1.PodIP{{IP: "192.168.1.100"}},
+		},
+	}
+	terminatedPod := &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "terminated-pod",
+			Namespace: "default",
+			Labels:    map[string]string{"app": "test"},
+		},
+		Status: corev1.PodStatus{
+			Phase:  corev1.PodSucceeded,
+			PodIPs: []corev1.PodIP{{IP: "10.244.0.1"}},
+		},
+	}
+	podWithoutIP := &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "pending-pod",
+			Namespace: "default",
+			Labels:    map[string]string{"app": "test"},
+		},
+	}
+
+	kubeSystemNS := &corev1.Namespace{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:   "kube-system",
+			Labels: map[string]string{"kubernetes.io/metadata.name": "kube-system"},
+		},
+	}
+	defaultNS := &corev1.Namespace{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:   "default",
+			Labels: map[string]string{"kubernetes.io/metadata.name": "default"},
+		},
+	}
+
+	// policySelectingKubeSystemPod selects the host-network Pod's labels.
+	policySelectingKubeSystemPod := &networkingv1.NetworkPolicy{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "select-kube-apiserver",
+			Namespace: "kube-system",
+			UID:       types.UID("uid-hn"),
+		},
+		Spec: networkingv1.NetworkPolicySpec{
+			PodSelector: metav1.LabelSelector{
+				MatchLabels: map[string]string{"component": "kube-apiserver"},
+			},
+			PolicyTypes: []networkingv1.PolicyType{networkingv1.PolicyTypeIngress},
+		},
+	}
+	// policySelectingDefaultPod selects the terminated/no-IP Pod's labels.
+	policySelectingDefaultPod := &networkingv1.NetworkPolicy{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "select-test-pod",
+			Namespace: "default",
+			UID:       types.UID("uid-def"),
+		},
+		Spec: networkingv1.NetworkPolicySpec{
+			PodSelector: metav1.LabelSelector{
+				MatchLabels: map[string]string{"app": "test"},
+			},
+			PolicyTypes: []networkingv1.PolicyType{networkingv1.PolicyTypeIngress},
+		},
+	}
+
+	testCases := []struct {
+		name         string
+		objs         []runtime.Object
+		podNamespace string
+		podName      string
+	}{
+		{
+			name:         "Host network pod returns empty rules",
+			objs:         []runtime.Object{kubeSystemNS, hostNetworkPod, policySelectingKubeSystemPod},
+			podNamespace: "kube-system",
+			podName:      "kube-apiserver",
+		},
+		{
+			name:         "Terminated pod returns empty rules",
+			objs:         []runtime.Object{defaultNS, terminatedPod, policySelectingDefaultPod},
+			podNamespace: "default",
+			podName:      "terminated-pod",
+		},
+		{
+			name:         "Pod without IP returns empty rules",
+			objs:         []runtime.Object{defaultNS, podWithoutIP, policySelectingDefaultPod},
+			podNamespace: "default",
+			podName:      "pending-pod",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			endpointQuerier := makeControllerAndEndpointQuerier(tc.objs...)
+			response, err := endpointQuerier.QueryNetworkPolicyRules(tc.podNamespace, tc.podName)
+			require.NoError(t, err)
+			require.NotNil(t, response)
+			assert.Equal(t, tc.podNamespace, response.Namespace)
+			assert.Equal(t, tc.podName, response.Name)
+			assert.Empty(t, response.AppliedPolicies)
+			assert.Empty(t, response.EndpointAsIngressSrcRules)
+			assert.Empty(t, response.EndpointAsEgressDstRules)
 		})
 	}
 }
