@@ -527,6 +527,7 @@ COMMIT
 -A ANTREA-OUTPUT -m comment --comment "Antrea: allow proxy health check reply packets" -p tcp --sport 10256 -j ACCEPT
 -A ANTREA-OUTPUT -m comment --comment "Antrea: allow Agent APIServer reply packets" -p tcp --sport 10350 -j ACCEPT
 -A ANTREA-OUTPUT -m comment --comment "Antrea: allow Agent cluster memberships output packets" -p tcp --dport 10351 -j ACCEPT
+-A ANTREA-OUTPUT -m comment --comment "Antrea: allow Agent cluster memberships TCP reply packets" -p tcp --sport 10351 -j ACCEPT
 -A ANTREA-OUTPUT -m comment --comment "Antrea: allow Agent cluster memberships output packets" -p udp --dport 10351 -j ACCEPT
 -A ANTREA-OUTPUT -m comment --comment "Antrea: jump to static egress NodeNetworkPolicy rules" -j ANTREA-POL-PRE-EGRESS-RULES
 -A ANTREA-OUTPUT -m comment --comment "Antrea: jump to egress NodeNetworkPolicy rules" -j ANTREA-POL-EGRESS-RULES
@@ -593,6 +594,7 @@ COMMIT
 -A ANTREA-OUTPUT -m comment --comment "Antrea: allow proxy health check reply packets" -p tcp --sport 10256 -j ACCEPT
 -A ANTREA-OUTPUT -m comment --comment "Antrea: allow Agent APIServer reply packets" -p tcp --sport 10350 -j ACCEPT
 -A ANTREA-OUTPUT -m comment --comment "Antrea: allow Agent cluster memberships output packets" -p tcp --dport 10351 -j ACCEPT
+-A ANTREA-OUTPUT -m comment --comment "Antrea: allow Agent cluster memberships TCP reply packets" -p tcp --sport 10351 -j ACCEPT
 -A ANTREA-OUTPUT -m comment --comment "Antrea: allow Agent cluster memberships output packets" -p udp --dport 10351 -j ACCEPT
 -A ANTREA-OUTPUT -m comment --comment "Antrea: jump to static egress NodeNetworkPolicy rules" -j ANTREA-POL-PRE-EGRESS-RULES
 -A ANTREA-OUTPUT -m comment --comment "Antrea: jump to egress NodeNetworkPolicy rules" -j ANTREA-POL-EGRESS-RULES
@@ -708,6 +710,7 @@ COMMIT
 -A ANTREA-OUTPUT -m comment --comment "Antrea: allow WireGuard output packets" -p udp --dport 51820 -j ACCEPT
 -A ANTREA-OUTPUT -m comment --comment "Antrea: allow Agent APIServer reply packets" -p tcp --sport 10350 -j ACCEPT
 -A ANTREA-OUTPUT -m comment --comment "Antrea: allow Agent cluster memberships output packets" -p tcp --dport 10351 -j ACCEPT
+-A ANTREA-OUTPUT -m comment --comment "Antrea: allow Agent cluster memberships TCP reply packets" -p tcp --sport 10351 -j ACCEPT
 -A ANTREA-OUTPUT -m comment --comment "Antrea: allow Agent cluster memberships output packets" -p udp --dport 10351 -j ACCEPT
 COMMIT
 *nat
@@ -747,6 +750,7 @@ COMMIT
 -A ANTREA-OUTPUT -m comment --comment "Antrea: allow WireGuard output packets" -p udp --dport 51820 -j ACCEPT
 -A ANTREA-OUTPUT -m comment --comment "Antrea: allow Agent APIServer reply packets" -p tcp --sport 10350 -j ACCEPT
 -A ANTREA-OUTPUT -m comment --comment "Antrea: allow Agent cluster memberships output packets" -p tcp --dport 10351 -j ACCEPT
+-A ANTREA-OUTPUT -m comment --comment "Antrea: allow Agent cluster memberships TCP reply packets" -p tcp --sport 10351 -j ACCEPT
 -A ANTREA-OUTPUT -m comment --comment "Antrea: allow Agent cluster memberships output packets" -p udp --dport 10351 -j ACCEPT
 COMMIT
 *nat
@@ -881,6 +885,7 @@ COMMIT
 -A ANTREA-OUTPUT -o antrea-gw0 -p icmp --icmp-type 0 -m comment --comment "Antrea: allow ICMP probes from NodeLatencyMonitor" -j ACCEPT
 -A ANTREA-OUTPUT -m comment --comment "Antrea: allow Agent APIServer reply packets" -p tcp --sport 10350 -j ACCEPT
 -A ANTREA-OUTPUT -m comment --comment "Antrea: allow Agent cluster memberships output packets" -p tcp --dport 10351 -j ACCEPT
+-A ANTREA-OUTPUT -m comment --comment "Antrea: allow Agent cluster memberships TCP reply packets" -p tcp --sport 10351 -j ACCEPT
 -A ANTREA-OUTPUT -m comment --comment "Antrea: allow Agent cluster memberships output packets" -p udp --dport 10351 -j ACCEPT
 -A ANTREA-OUTPUT -m comment --comment "Antrea: jump to static egress NodeNetworkPolicy rules" -j ANTREA-POL-PRE-EGRESS-RULES
 -A ANTREA-OUTPUT -m comment --comment "Antrea: jump to egress NodeNetworkPolicy rules" -j ANTREA-POL-EGRESS-RULES
@@ -945,6 +950,7 @@ COMMIT
 -A ANTREA-OUTPUT -o antrea-gw0 -p icmpv6 --icmpv6-type 129 -m comment --comment "Antrea: allow ICMP probes from NodeLatencyMonitor" -j ACCEPT
 -A ANTREA-OUTPUT -m comment --comment "Antrea: allow Agent APIServer reply packets" -p tcp --sport 10350 -j ACCEPT
 -A ANTREA-OUTPUT -m comment --comment "Antrea: allow Agent cluster memberships output packets" -p tcp --dport 10351 -j ACCEPT
+-A ANTREA-OUTPUT -m comment --comment "Antrea: allow Agent cluster memberships TCP reply packets" -p tcp --sport 10351 -j ACCEPT
 -A ANTREA-OUTPUT -m comment --comment "Antrea: allow Agent cluster memberships output packets" -p udp --dport 10351 -j ACCEPT
 -A ANTREA-OUTPUT -m comment --comment "Antrea: jump to static egress NodeNetworkPolicy rules" -j ANTREA-POL-PRE-EGRESS-RULES
 -A ANTREA-OUTPUT -m comment --comment "Antrea: jump to egress NodeNetworkPolicy rules" -j ANTREA-POL-EGRESS-RULES
@@ -1048,6 +1054,7 @@ COMMIT
 -A ANTREA-OUTPUT -m comment --comment "Antrea: allow tunnel output packets" -p udp --dport 4790 -j ACCEPT
 -A ANTREA-OUTPUT -m comment --comment "Antrea: allow Agent APIServer reply packets" -p tcp --sport 10350 -j ACCEPT
 -A ANTREA-OUTPUT -m comment --comment "Antrea: allow Agent cluster memberships output packets" -p tcp --dport 10351 -j ACCEPT
+-A ANTREA-OUTPUT -m comment --comment "Antrea: allow Agent cluster memberships TCP reply packets" -p tcp --sport 10351 -j ACCEPT
 -A ANTREA-OUTPUT -m comment --comment "Antrea: allow Agent cluster memberships output packets" -p udp --dport 10351 -j ACCEPT
 COMMIT
 *nat
@@ -1086,6 +1093,7 @@ COMMIT
 -A ANTREA-OUTPUT -m comment --comment "Antrea: allow tunnel output packets" -p udp --dport 4790 -j ACCEPT
 -A ANTREA-OUTPUT -m comment --comment "Antrea: allow Agent APIServer reply packets" -p tcp --sport 10350 -j ACCEPT
 -A ANTREA-OUTPUT -m comment --comment "Antrea: allow Agent cluster memberships output packets" -p tcp --dport 10351 -j ACCEPT
+-A ANTREA-OUTPUT -m comment --comment "Antrea: allow Agent cluster memberships TCP reply packets" -p tcp --sport 10351 -j ACCEPT
 -A ANTREA-OUTPUT -m comment --comment "Antrea: allow Agent cluster memberships output packets" -p udp --dport 10351 -j ACCEPT
 COMMIT
 *nat
@@ -1165,6 +1173,7 @@ COMMIT
 -A ANTREA-OUTPUT -m comment --comment "Antrea: allow tunnel output packets" -p udp --dport 6081 -j ACCEPT
 -A ANTREA-OUTPUT -m comment --comment "Antrea: allow Agent APIServer reply packets" -p tcp --sport 10350 -j ACCEPT
 -A ANTREA-OUTPUT -m comment --comment "Antrea: allow Agent cluster memberships output packets" -p tcp --dport 10351 -j ACCEPT
+-A ANTREA-OUTPUT -m comment --comment "Antrea: allow Agent cluster memberships TCP reply packets" -p tcp --sport 10351 -j ACCEPT
 -A ANTREA-OUTPUT -m comment --comment "Antrea: allow Agent cluster memberships output packets" -p udp --dport 10351 -j ACCEPT
 COMMIT
 *nat
@@ -1200,6 +1209,7 @@ COMMIT
 -A ANTREA-OUTPUT -m comment --comment "Antrea: allow tunnel output packets" -p udp --dport 6081 -j ACCEPT
 -A ANTREA-OUTPUT -m comment --comment "Antrea: allow Agent APIServer reply packets" -p tcp --sport 10350 -j ACCEPT
 -A ANTREA-OUTPUT -m comment --comment "Antrea: allow Agent cluster memberships output packets" -p tcp --dport 10351 -j ACCEPT
+-A ANTREA-OUTPUT -m comment --comment "Antrea: allow Agent cluster memberships TCP reply packets" -p tcp --sport 10351 -j ACCEPT
 -A ANTREA-OUTPUT -m comment --comment "Antrea: allow Agent cluster memberships output packets" -p udp --dport 10351 -j ACCEPT
 COMMIT
 *nat
@@ -1288,6 +1298,7 @@ COMMIT
 -A ANTREA-INPUT -m comment --comment "Antrea: allow Agent cluster memberships input packets" -p udp --dport 10351 -j ACCEPT
 -A ANTREA-OUTPUT -m comment --comment "Antrea: allow Agent APIServer reply packets" -p tcp --sport 10350 -j ACCEPT
 -A ANTREA-OUTPUT -m comment --comment "Antrea: allow Agent cluster memberships output packets" -p tcp --dport 10351 -j ACCEPT
+-A ANTREA-OUTPUT -m comment --comment "Antrea: allow Agent cluster memberships TCP reply packets" -p tcp --sport 10351 -j ACCEPT
 -A ANTREA-OUTPUT -m comment --comment "Antrea: allow Agent cluster memberships output packets" -p udp --dport 10351 -j ACCEPT
 COMMIT
 *nat

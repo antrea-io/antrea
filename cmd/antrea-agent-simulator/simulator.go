@@ -71,6 +71,7 @@ func run() error {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
+	go antreaServiceEndpointResolver.Run(stopCh)
 	go antreaClientProvider.Run(ctx)
 
 	// Add loop to check whether client is ready

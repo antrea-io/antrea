@@ -397,6 +397,28 @@ func (c *Client) Initialize(nodeConfig *config.NodeConfig, done func()) error {
 	}
 
 	c.iptablesCache = newIPTablesCache()
+
+	// Build static iptables rules for NodeNetworkPolicy.
+	if c.nodeNetworkPolicyEnabled {
+		c.initNodeNetworkPolicy()
+	}
+	if c.networkConfig.TrafficEncryptionMode == config.TrafficEncryptionModeWireGuard {
+		c.initWireguardHostNetworkFilterRules()
+	}
+	if c.networkConfig.TrafficEncapMode.SupportsEncap() {
+		c.initTunnelHostNetworkFilterRules()
+	}
+	if c.nodeLatencyMonitorEnabled {
+		c.initNodeLatencyHostNetworkFilterRules()
+	}
+	if c.proxyAll {
+		c.initProxyHealthCheckHostNetworkFilterRules()
+	}
+	if c.egressEnabled {
+		c.initAgentClusterMembershipHostNetworkFilterRules()
+	}
+	c.initAgentAPIServerHostNetworkFilterRules()
+
 	// Sets up the iptables infrastructure required to route packets in host network.
 	// It's called in a goroutine because xtables lock may not be acquired immediately.
 	go func() {
@@ -486,27 +508,6 @@ func (c *Client) Initialize(nodeConfig *config.NodeConfig, done func()) error {
 	if c.endpointResolver != nil {
 		c.endpointResolver.AddListener(c)
 	}
-
-	// Build static iptables rules for NodeNetworkPolicy.
-	if c.nodeNetworkPolicyEnabled {
-		c.initNodeNetworkPolicy()
-	}
-	if c.networkConfig.TrafficEncryptionMode == config.TrafficEncryptionModeWireGuard {
-		c.initWireguardHostNetworkFilterRules()
-	}
-	if c.networkConfig.TrafficEncapMode.SupportsEncap() {
-		c.initTunnelHostNetworkFilterRules()
-	}
-	if c.nodeLatencyMonitorEnabled {
-		c.initNodeLatencyHostNetworkFilterRules()
-	}
-	if c.proxyAll {
-		c.initProxyHealthCheckHostNetworkFilterRules()
-	}
-	if c.egressEnabled {
-		c.initAgentClusterMembershipHostNetworkFilterRules()
-	}
-	c.initAgentAPIServerHostNetworkFilterRules()
 
 	return nil
 }
@@ -1780,6 +1781,13 @@ func (c *Client) initAgentClusterMembershipHostNetworkFilterRules() {
 	}
 	antreaOutputChainRules := []string{
 		buildAllowHostEgressPortRule(iptables.ProtocolTCP, &agentClusterMembershipPort, "Antrea: allow Agent cluster memberships output packets"),
+		iptables.NewRuleBuilder(antreaOutputChain).
+			SetComment("Antrea: allow Agent cluster memberships TCP reply packets").
+			MatchTransProtocol(iptables.ProtocolTCP).
+			MatchPortSrc(&port, nil).
+			SetTarget(iptables.AcceptTarget).
+			Done().
+			GetRule(),
 		buildAllowHostEgressPortRule(iptables.ProtocolUDP, &agentClusterMembershipPort, "Antrea: allow Agent cluster memberships output packets"),
 	}
 	if c.networkConfig.IPv6Enabled {

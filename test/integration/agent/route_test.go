@@ -357,6 +357,7 @@ func TestInitialize(t *testing.T) {
 			}
 			expectedIPTables["filter"] += `-A ANTREA-OUTPUT -p tcp -m comment --comment "Antrea: allow Agent APIServer reply packets" -m tcp --sport 10350 -j ACCEPT
 -A ANTREA-OUTPUT -p tcp -m comment --comment "Antrea: allow Agent cluster memberships output packets" -m tcp --dport 10351 -j ACCEPT
+-A ANTREA-OUTPUT -p tcp -m comment --comment "Antrea: allow Agent cluster memberships TCP reply packets" -m tcp --sport 10351 -j ACCEPT
 -A ANTREA-OUTPUT -p udp -m comment --comment "Antrea: allow Agent cluster memberships output packets" -m udp --dport 10351 -j ACCEPT
 `
 
@@ -516,6 +517,7 @@ func TestIpTablesSync(t *testing.T) {
 		{Table: "filter", Cmd: "-A", Chain: "ANTREA-INPUT", RuleSpec: "-p tcp -m comment --comment \"Antrea: allow Agent cluster memberships input packets\" -m tcp --dport 10351 -j ACCEPT"},
 		{Table: "filter", Cmd: "-A", Chain: "ANTREA-OUTPUT", RuleSpec: "-p udp -m comment --comment \"Antrea: allow tunnel output packets\" -m udp --dport 6081 -j ACCEPT"},
 		{Table: "filter", Cmd: "-A", Chain: "ANTREA-OUTPUT", RuleSpec: "-p tcp -m comment --comment \"Antrea: allow Agent cluster memberships output packets\" -m tcp --dport 10351 -j ACCEPT"},
+		{Table: "filter", Cmd: "-A", Chain: "ANTREA-OUTPUT", RuleSpec: "-p tcp -m comment --comment \"Antrea: allow Agent cluster memberships TCP reply packets\" -m tcp --sport 10351 -j ACCEPT"},
 		{Table: "filter", Cmd: "-A", Chain: "ANTREA-OUTPUT", RuleSpec: "-p tcp -m comment --comment \"Antrea: allow Agent APIServer reply packets\" -m tcp --sport 10350 -j ACCEPT"},
 		{Table: "nat", Cmd: "-A", Chain: "ANTREA-POSTROUTING", RuleSpec: fmt.Sprintf("! -o antrea-gw0 -m comment --comment \"Antrea: SNAT Pod to external packets\" -m mark --mark %#x/0xff -j SNAT --to-source %s", mark, snatIP)},
 	}
