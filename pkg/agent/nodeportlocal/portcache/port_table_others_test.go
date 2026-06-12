@@ -193,6 +193,24 @@ func TestAddRule(t *testing.T) {
 			assert.Empty(t, portTable.PortTableCache.List())
 		})
 
+		t.Run("iptables error with socket close error", func(t *testing.T) {
+			mockCtrl := gomock.NewController(t)
+			mockIPTables := rulestesting.NewMockPodPortRules(mockCtrl)
+			mockPortOpener := portcachetesting.NewMockLocalPortOpener(mockCtrl)
+			portTable := newPortTable(mockIPTables, mockPortOpener, isIPv6)
+
+			closer := &mockCloser{closeErr: fmt.Errorf("socket close error")}
+			mockPortOpener.EXPECT().OpenLocalPort(startPort, protocol, isIPv6).Return(closer, nil)
+			mockIPTables.EXPECT().AddRule(startPort, podIP, podPort, protocol).
+				Return(fmt.Errorf("iptables error"))
+
+			_, err := portTable.AddRule(podKey, podPort, protocol, podIP)
+			// Ensure it still returns the original iptables error.
+			require.ErrorContains(t, err, "iptables error")
+			assert.True(t, closer.closed)
+			assert.Empty(t, portTable.PortTableCache.List())
+		})
+
 		t.Run("duplicate entry", func(t *testing.T) {
 			mockCtrl := gomock.NewController(t)
 			mockIPTables := rulestesting.NewMockPodPortRules(mockCtrl)
