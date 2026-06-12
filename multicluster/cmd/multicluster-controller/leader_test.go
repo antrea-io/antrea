@@ -32,6 +32,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 	"sigs.k8s.io/controller-runtime/pkg/config"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
+	webhookconversion "sigs.k8s.io/controller-runtime/pkg/webhook/conversion"
 
 	"antrea.io/antrea/v2/multicluster/controllers/multicluster/common"
 	"antrea.io/antrea/v2/multicluster/test/mocks"
@@ -58,6 +59,8 @@ func initMockManager(mockManager *mocks.MockManager) {
 	mockManager.EXPECT().GetConfig().Return(&rest.Config{}).AnyTimes()
 	mockManager.EXPECT().GetRESTMapper().Return(&meta.DefaultRESTMapper{}).AnyTimes()
 	mockManager.EXPECT().GetFieldIndexer().Return(&informertest.FakeInformers{}).AnyTimes()
+	mockManager.EXPECT().GetConverterRegistry().Return(webhookconversion.NewRegistry()).AnyTimes()
+	mockManager.EXPECT().GetEventRecorder(gomock.Any()).Return(nil).AnyTimes()
 }
 
 func TestRunLeader(t *testing.T) {
