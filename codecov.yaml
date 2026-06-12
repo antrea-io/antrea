@@ -31,6 +31,8 @@ coverage:
       default:
         # `auto` will use the coverage from the base commit (pull request base or parent commit) coverage to compare against.
         target: auto
+        flags:
+          - unit-tests
       antrea-unit-tests:
         target: auto
         # Flags are a list of user defined Flags, and the impact on their coverage.
@@ -40,7 +42,7 @@ coverage:
 
 flag_management:
   default_rules:
-    carryforward: true
+    carryforward: false
 
 # Exclude files from being collected by Codecov. Ignored files will be skipped during processing.
 ignore:
