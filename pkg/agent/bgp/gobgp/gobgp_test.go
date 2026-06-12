@@ -18,8 +18,9 @@ import (
 	"testing"
 	"time"
 
-	gobgpapi "github.com/osrg/gobgp/v3/api"
+	gobgpapi "github.com/osrg/gobgp/v4/api"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/types/known/timestamppb"
 	"k8s.io/utils/ptr"
 
@@ -55,7 +56,7 @@ func TestConvertGoBGPPeerToPeerStatus(t *testing.T) {
 					RestartTime: 120,
 				},
 				State: &gobgpapi.PeerState{
-					SessionState: gobgpapi.PeerState_ESTABLISHED,
+					SessionState: gobgpapi.PeerState_SESSION_STATE_ESTABLISHED,
 				},
 				Timers: &gobgpapi.Timers{
 					State: &gobgpapi.TimersState{
@@ -84,7 +85,7 @@ func TestConvertGoBGPPeerToPeerStatus(t *testing.T) {
 					RemotePort: 179,
 				},
 				State: &gobgpapi.PeerState{
-					SessionState: gobgpapi.PeerState_IDLE,
+					SessionState: gobgpapi.PeerState_SESSION_STATE_IDLE,
 				},
 			},
 
@@ -105,62 +106,32 @@ func TestConvertGoBGPPeerToPeerStatus(t *testing.T) {
 	}
 }
 
-func TestConvertGoBGPDestinationToRoute(t *testing.T) {
-	tests := []struct {
-		name        string
-		destination *gobgpapi.Destination
-		expected    *bgp.Route
-	}{
-		{
-			name:        "Nil destination",
-			destination: nil,
-			expected:    nil,
-		},
-		{
-			name: "Valid destination",
-			destination: &gobgpapi.Destination{
-				Prefix: "192.168.1.0/24",
-			},
-			expected: &bgp.Route{
-				Prefix: "192.168.1.0/24",
-			},
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			actual := convertGoBGPDestinationToRoute(tt.destination)
-			assert.Equal(t, tt.expected, actual)
-		})
-	}
-}
-
 func TestConvertRouteTypeToGoBGPTableType(t *testing.T) {
 	tableType := convertRouteTypeToGoBGPTableType(bgp.RouteAdvertised)
-	assert.Equal(t, gobgpapi.TableType_ADJ_OUT, tableType)
+	assert.Equal(t, gobgpapi.TableType_TABLE_TYPE_ADJ_OUT, tableType)
 
 	tableType = convertRouteTypeToGoBGPTableType(bgp.RouteReceived)
-	assert.Equal(t, gobgpapi.TableType_ADJ_IN, tableType)
+	assert.Equal(t, gobgpapi.TableType_TABLE_TYPE_ADJ_IN, tableType)
 }
 
-func TestConvertRouteToGoBGPPath(t *testing.T) {
+func TestConvertRouteToNativePath(t *testing.T) {
 	route4 := &bgp.Route{Prefix: "192.168.0.0/24"}
-	path4 := convertRouteToGoBGPPath(route4)
+	path4, err := convertRouteToNativePath(route4)
+	require.NoError(t, err)
 
-	ipAddressPrefix4 := &gobgpapi.IPAddressPrefix{}
-	assert.NoError(t, path4.GetNlri().UnmarshalTo(ipAddressPrefix4))
-	assert.Equal(t, "192.168.0.0", ipAddressPrefix4.Prefix)
-	assert.Equal(t, uint32(24), ipAddressPrefix4.PrefixLen)
-	assert.Equal(t, gobgpapi.Family_AFI_IP, path4.GetFamily().Afi)
+	assert.Equal(t, "192.168.0.0/24", path4.Nlri.String())
+	assert.Equal(t, uint16(gobgpapi.Family_AFI_IP), path4.Family.Afi())
 
 	route6 := &bgp.Route{Prefix: "2001:db8::/64"}
-	path6 := convertRouteToGoBGPPath(route6)
+	path6, err := convertRouteToNativePath(route6)
+	require.NoError(t, err)
 
-	ipAddressPrefix6 := &gobgpapi.IPAddressPrefix{}
-	assert.NoError(t, path6.GetNlri().UnmarshalTo(ipAddressPrefix6))
-	assert.Equal(t, "2001:db8::", ipAddressPrefix6.Prefix)
-	assert.Equal(t, uint32(64), ipAddressPrefix6.PrefixLen)
-	assert.Equal(t, gobgpapi.Family_AFI_IP6, path6.GetFamily().Afi)
+	assert.Equal(t, "2001:db8::/64", path6.Nlri.String())
+	assert.Equal(t, uint16(gobgpapi.Family_AFI_IP6), path6.Family.Afi())
+
+	_, err = convertRouteToNativePath(&bgp.Route{Prefix: "invalid"})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "invalid route prefix")
 }
 
 func TestConvertPeerConfigToGoBGPPeer(t *testing.T) {
@@ -191,13 +162,13 @@ func TestConvertGoBGPSessionStateToSessionState(t *testing.T) {
 		input    gobgpapi.PeerState_SessionState
 		expected bgp.SessionState
 	}{
-		{gobgpapi.PeerState_UNKNOWN, bgp.SessionUnknown},
-		{gobgpapi.PeerState_IDLE, bgp.SessionIdle},
-		{gobgpapi.PeerState_CONNECT, bgp.SessionConnect},
-		{gobgpapi.PeerState_ACTIVE, bgp.SessionActive},
-		{gobgpapi.PeerState_OPENSENT, bgp.SessionOpenSent},
-		{gobgpapi.PeerState_OPENCONFIRM, bgp.SessionOpenConfirm},
-		{gobgpapi.PeerState_ESTABLISHED, bgp.SessionEstablished},
+		{gobgpapi.PeerState_SESSION_STATE_UNSPECIFIED, bgp.SessionUnknown},
+		{gobgpapi.PeerState_SESSION_STATE_IDLE, bgp.SessionIdle},
+		{gobgpapi.PeerState_SESSION_STATE_CONNECT, bgp.SessionConnect},
+		{gobgpapi.PeerState_SESSION_STATE_ACTIVE, bgp.SessionActive},
+		{gobgpapi.PeerState_SESSION_STATE_OPENSENT, bgp.SessionOpenSent},
+		{gobgpapi.PeerState_SESSION_STATE_OPENCONFIRM, bgp.SessionOpenConfirm},
+		{gobgpapi.PeerState_SESSION_STATE_ESTABLISHED, bgp.SessionEstablished},
 		{gobgpapi.PeerState_SessionState(999), bgp.SessionUnknown},
 	}
 

@@ -20,9 +20,10 @@ import (
 	"net/netip"
 	"time"
 
-	gobgpapi "github.com/osrg/gobgp/v3/api"
-	"github.com/osrg/gobgp/v3/pkg/server"
-	"google.golang.org/protobuf/types/known/anypb"
+	gobgpapi "github.com/osrg/gobgp/v4/api"
+	"github.com/osrg/gobgp/v4/pkg/apiutil"
+	gobgp "github.com/osrg/gobgp/v4/pkg/packet/bgp"
+	"github.com/osrg/gobgp/v4/pkg/server"
 	"k8s.io/utils/net"
 
 	"antrea.io/antrea/v2/pkg/agent/bgp"
@@ -39,8 +40,9 @@ type Server struct {
 }
 
 func NewGoBGPServer(globalConfig *bgp.GlobalConfig) *Server {
+	logger, levelVar := newGoBGPLogger(globalConfig.RouterID)
 	s := &Server{
-		server: server.NewBgpServer(server.LoggerOption(newGoBGPLogger(globalConfig.RouterID))),
+		server: server.NewBgpServer(server.LoggerOption(logger, levelVar)),
 		globalConfig: &gobgpapi.Global{
 			Asn:             globalConfig.ASN,
 			RouterId:        globalConfig.RouterID,
@@ -122,8 +124,17 @@ func (s *Server) GetPeers(ctx context.Context) ([]bgp.PeerStatus, error) {
 
 func (s *Server) AdvertiseRoutes(ctx context.Context, routes []bgp.Route) error {
 	for i := range routes {
-		request := &gobgpapi.AddPathRequest{Path: convertRouteToGoBGPPath(&routes[i])}
-		if _, err := s.server.AddPath(ctx, request); err != nil {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		path, err := convertRouteToNativePath(&routes[i])
+		if err != nil {
+			return err
+		}
+		request := apiutil.AddPathRequest{
+			Paths: []*apiutil.Path{path},
+		}
+		if _, err := s.server.AddPath(request); err != nil {
 			return err
 		}
 	}
@@ -132,8 +143,17 @@ func (s *Server) AdvertiseRoutes(ctx context.Context, routes []bgp.Route) error 
 
 func (s *Server) WithdrawRoutes(ctx context.Context, routes []bgp.Route) error {
 	for i := range routes {
-		request := &gobgpapi.DeletePathRequest{Path: convertRouteToGoBGPPath(&routes[i])}
-		if err := s.server.DeletePath(ctx, request); err != nil {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		path, err := convertRouteToNativePath(&routes[i])
+		if err != nil {
+			return err
+		}
+		request := apiutil.DeletePathRequest{
+			Paths: []*apiutil.Path{path},
+		}
+		if err := s.server.DeletePath(request); err != nil {
 			return err
 		}
 	}
@@ -141,22 +161,22 @@ func (s *Server) WithdrawRoutes(ctx context.Context, routes []bgp.Route) error {
 }
 
 func (s *Server) GetRoutes(ctx context.Context, routeType bgp.RouteType, peerAddress string) ([]bgp.Route, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	if !isValidIPString(peerAddress) {
 		return nil, fmt.Errorf("invalid peer address: %s", peerAddress)
 	}
 	var routes []bgp.Route
-	fn := func(destination *gobgpapi.Destination) {
-		route := convertGoBGPDestinationToRoute(destination)
-		if route != nil {
-			routes = append(routes, *route)
-		}
+	fn := func(prefix gobgp.NLRI, paths []*apiutil.Path) {
+		routes = append(routes, bgp.Route{Prefix: prefix.String()})
 	}
-	request := &gobgpapi.ListPathRequest{
+	request := apiutil.ListPathRequest{
 		TableType: convertRouteTypeToGoBGPTableType(routeType),
-		Family:    &gobgpapi.Family{Afi: convertToGoBGPFamilyAfi(net.IsIPv6String(peerAddress)), Safi: gobgpapi.Family_SAFI_UNICAST},
+		Family:    gobgp.NewFamily(uint16(convertToGoBGPFamilyAfi(net.IsIPv6String(peerAddress))), uint8(gobgpapi.Family_SAFI_UNICAST)),
 		Name:      peerAddress,
 	}
-	if err := s.server.ListPath(ctx, request, fn); err != nil {
+	if err := s.server.ListPath(request, fn); err != nil {
 		return nil, err
 	}
 	return routes, nil
@@ -167,8 +187,6 @@ func convertGoBGPPeerToPeerStatus(peer *gobgpapi.Peer) *bgp.PeerStatus {
 		return nil
 	}
 	peerStatus := &bgp.PeerStatus{}
-	// According to the gobgp code, all pointer fields in `peer *gobgpapi.Peer` used below should be set and non-nil
-	// when peers are listed. It's safe and harmless to keep the nil checks.
 	if transport := peer.GetTransport(); transport != nil {
 		peerStatus.Port = int32(transport.GetRemotePort())
 	}
@@ -195,53 +213,47 @@ func convertGoBGPPeerToPeerStatus(peer *gobgpapi.Peer) *bgp.PeerStatus {
 	return peerStatus
 }
 
-func convertGoBGPDestinationToRoute(destination *gobgpapi.Destination) *bgp.Route {
-	if destination == nil {
-		return nil
-	}
-	route := &bgp.Route{Prefix: destination.GetPrefix()}
-	return route
-}
-
 func convertRouteTypeToGoBGPTableType(routeType bgp.RouteType) gobgpapi.TableType {
 	if routeType == bgp.RouteAdvertised {
-		return gobgpapi.TableType_ADJ_OUT
+		return gobgpapi.TableType_TABLE_TYPE_ADJ_OUT
 	}
-	return gobgpapi.TableType_ADJ_IN
+	return gobgpapi.TableType_TABLE_TYPE_ADJ_IN
 }
 
-func convertRouteToGoBGPPath(route *bgp.Route) *gobgpapi.Path {
+func convertRouteToNativePath(route *bgp.Route) (*apiutil.Path, error) {
 	isIPv6 := net.IsIPv6CIDRString(route.Prefix)
-	goBGPIPFamily := convertToGoBGPFamilyAfi(isIPv6)
-	prefix, _ := netip.ParsePrefix(route.Prefix)
-	nlri, _ := anypb.New(&gobgpapi.IPAddressPrefix{
-		Prefix:    prefix.Addr().String(),
-		PrefixLen: uint32(prefix.Bits()),
-	})
+	prefix, err := netip.ParsePrefix(route.Prefix)
+	if err != nil {
+		return nil, fmt.Errorf("invalid route prefix %q: %w", route.Prefix, err)
+	}
+	nlri, err := gobgp.NewIPAddrPrefix(prefix)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create NLRI for prefix %q: %w", route.Prefix, err)
+	}
 
-	var attrs []*anypb.Any
-	a1, _ := anypb.New(&gobgpapi.OriginAttribute{
-		Origin: 0,
-	})
-	var a2 *anypb.Any
+	attrs := []gobgp.PathAttributeInterface{
+		gobgp.NewPathAttributeOrigin(0),
+	}
+	family := gobgp.NewFamily(uint16(convertToGoBGPFamilyAfi(isIPv6)), uint8(gobgpapi.Family_SAFI_UNICAST))
 	if isIPv6 {
-		a2, _ = anypb.New(&gobgpapi.MpReachNLRIAttribute{
-			Family:   &gobgpapi.Family{Afi: goBGPIPFamily, Safi: gobgpapi.Family_SAFI_UNICAST},
-			NextHops: []string{ipv6AllZero},
-			Nlris:    []*anypb.Any{nlri},
-		})
+		mpreach, err := gobgp.NewPathAttributeMpReachNLRI(family, []gobgp.PathNLRI{{NLRI: nlri}}, netip.MustParseAddr(ipv6AllZero))
+		if err != nil {
+			return nil, fmt.Errorf("failed to create MP_REACH_NLRI attribute for prefix %q: %w", route.Prefix, err)
+		}
+		attrs = append(attrs, mpreach)
 	} else {
-		a2, _ = anypb.New(&gobgpapi.NextHopAttribute{
-			NextHop: ipv4AllZero,
-		})
+		nh, err := gobgp.NewPathAttributeNextHop(netip.MustParseAddr(ipv4AllZero))
+		if err != nil {
+			return nil, fmt.Errorf("failed to create NEXT_HOP attribute for prefix %q: %w", route.Prefix, err)
+		}
+		attrs = append(attrs, nh)
 	}
-	attrs = append(attrs, a1, a2)
 
-	return &gobgpapi.Path{
-		Family: &gobgpapi.Family{Afi: goBGPIPFamily, Safi: gobgpapi.Family_SAFI_UNICAST},
+	return &apiutil.Path{
+		Family: family,
 		Nlri:   nlri,
-		Pattrs: attrs,
-	}
+		Attrs:  attrs,
+	}, nil
 }
 
 func convertToGoBGPFamilyAfi(isIPv6 bool) gobgpapi.Family_Afi {
@@ -252,8 +264,6 @@ func convertToGoBGPFamilyAfi(isIPv6 bool) gobgpapi.Family_Afi {
 }
 
 func convertPeerConfigToGoBGPPeer(peerConfig bgp.PeerConfig) (*gobgpapi.Peer, error) {
-	// The following fields are required and are validated when the corresponding BGPPolicy is created.
-	// Nonetheless, it is both safe and prudent to check them here as an additional safeguard.
 	if !isValidIPString(peerConfig.Address) {
 		return nil, fmt.Errorf("invalid peer address: %s", peerConfig.Address)
 	}
@@ -290,8 +300,6 @@ func convertPeerConfigToGoBGPPeer(peerConfig bgp.PeerConfig) (*gobgpapi.Peer, er
 	if peerConfig.ConnectionMode == bgp.ConnectionModePassive {
 		peer.Transport.PassiveMode = true
 	}
-	// The following pointer fields are set to default values when the corresponding BGPPolicy is created, so they
-	// should not be nil. However, it is safe and harmless to include nil checks.
 	if peerConfig.Port != nil {
 		peer.Transport.RemotePort = uint32(*peerConfig.Port)
 	}
@@ -312,19 +320,19 @@ func convertPeerConfigToGoBGPPeer(peerConfig bgp.PeerConfig) (*gobgpapi.Peer, er
 
 func convertGoBGPSessionStateToSessionState(s gobgpapi.PeerState_SessionState) bgp.SessionState {
 	switch s {
-	case gobgpapi.PeerState_UNKNOWN:
+	case gobgpapi.PeerState_SESSION_STATE_UNSPECIFIED:
 		return bgp.SessionUnknown
-	case gobgpapi.PeerState_IDLE:
+	case gobgpapi.PeerState_SESSION_STATE_IDLE:
 		return bgp.SessionIdle
-	case gobgpapi.PeerState_CONNECT:
+	case gobgpapi.PeerState_SESSION_STATE_CONNECT:
 		return bgp.SessionConnect
-	case gobgpapi.PeerState_ACTIVE:
+	case gobgpapi.PeerState_SESSION_STATE_ACTIVE:
 		return bgp.SessionActive
-	case gobgpapi.PeerState_OPENSENT:
+	case gobgpapi.PeerState_SESSION_STATE_OPENSENT:
 		return bgp.SessionOpenSent
-	case gobgpapi.PeerState_OPENCONFIRM:
+	case gobgpapi.PeerState_SESSION_STATE_OPENCONFIRM:
 		return bgp.SessionOpenConfirm
-	case gobgpapi.PeerState_ESTABLISHED:
+	case gobgpapi.PeerState_SESSION_STATE_ESTABLISHED:
 		return bgp.SessionEstablished
 	default:
 		return bgp.SessionUnknown
