@@ -266,6 +266,61 @@ func TestLookupIPInPodSubnets(t *testing.T) {
 	}
 }
 
+func TestGetNodeIPForPodIP(t *testing.T) {
+	c := newController(t, &config.NetworkConfig{})
+	defer c.queue.ShutDown()
+
+	nodeIPv6 := net.ParseIP("2001:db8::10")
+	require.NoError(t, c.installedNodes.Add(&nodeRouteInfo{
+		nodeName: "node1",
+		podCIDRs: []*net.IPNet{podCIDR1, podCIDR1v6},
+		nodeIPs: &utilip.DualStackIPs{
+			IPv4: nodeIP1,
+			IPv6: nodeIPv6,
+		},
+	}))
+	for _, podCIDR := range []*net.IPNet{podCIDR1, podCIDR1v6} {
+		prefix, _ := cidrToPrefix(podCIDR)
+		c.podSubnets.Insert(prefix)
+	}
+
+	testCases := []struct {
+		name       string
+		podIP      string
+		expectedIP net.IP
+		found      bool
+	}{
+		{
+			name:       "remote IPv4 Pod",
+			podIP:      "1.1.1.101",
+			expectedIP: nodeIP1,
+			found:      true,
+		},
+		{
+			name:       "remote IPv6 Pod",
+			podIP:      "2001:4860:0001::101",
+			expectedIP: nodeIPv6,
+			found:      true,
+		},
+		{
+			name:  "local Pod",
+			podIP: "1.1.0.101",
+		},
+		{
+			name:  "unknown IP",
+			podIP: "1.1.10.101",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			nodeIP, found := c.Controller.GetNodeIPForPodIP(netip.MustParseAddr(tc.podIP))
+			assert.Equal(t, tc.found, found)
+			assert.Equal(t, tc.expectedIP, nodeIP)
+		})
+	}
+}
+
 func BenchmarkLookupIPInPodSubnets(b *testing.B) {
 	c := newController(b, &config.NetworkConfig{})
 	defer c.queue.ShutDown()
