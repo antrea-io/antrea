@@ -1,0 +1,35 @@
+apiVersion: crd.antrea.io/v1alpha1
+kind: AntreaNodeConfig
+metadata:
+  name: secondary-network-node-pool-1
+spec:
+  nodeSelector:
+    matchLabels:
+      antrea.io/node-pool: "pool1"
+  secondaryNetwork:
+    ovsBridges:
+      - bridgeName: br1
+        physicalInterfaces:
+          - name: eth2
+            allowedVLANs: ["100", "101"]
+          - name: eth3
+            allowedVLANs: ["300"]
+        enableMulticastSnooping: false
+---
+apiVersion: crd.antrea.io/v1alpha1
+kind: AntreaNodeConfig
+metadata:
+  name: secondary-network-node-pool-2
+spec:
+  nodeSelector:
+    matchLabels:
+      antrea.io/node-pool: "pool2"
+  secondaryNetwork:
+    ovsBridges:
+      - bridgeName: br1
+        physicalInterfaces:
+          - name: eth2
+            allowedVLANs: ["100"]
+          - name: eth3
+            allowedVLANs: ["400"]
+        enableMulticastSnooping: false

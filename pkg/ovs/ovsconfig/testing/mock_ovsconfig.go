@@ -1,4 +1,4 @@
-// Copyright 2024 Antrea Authors
+// Copyright 2026 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -142,6 +142,21 @@ func (m *MockOVSBridgeClient) CreatePort(name, ifDev string, externalIDs map[str
 func (mr *MockOVSBridgeClientMockRecorder) CreatePort(name, ifDev, externalIDs any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreatePort", reflect.TypeOf((*MockOVSBridgeClient)(nil).CreatePort), name, ifDev, externalIDs)
+}
+
+// CreateTrunkPort mocks base method.
+func (m *MockOVSBridgeClient) CreateTrunkPort(name string, ofPortRequest int32, vlanSpecs []string, externalIDs map[string]any) (string, ovsconfig.Error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "CreateTrunkPort", name, ofPortRequest, vlanSpecs, externalIDs)
+	ret0, _ := ret[0].(string)
+	ret1, _ := ret[1].(ovsconfig.Error)
+	return ret0, ret1
+}
+
+// CreateTrunkPort indicates an expected call of CreateTrunkPort.
+func (mr *MockOVSBridgeClientMockRecorder) CreateTrunkPort(name, ofPortRequest, vlanSpecs, externalIDs any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateTrunkPort", reflect.TypeOf((*MockOVSBridgeClient)(nil).CreateTrunkPort), name, ofPortRequest, vlanSpecs, externalIDs)
 }
 
 // CreateTunnelPort mocks base method.
@@ -518,6 +533,20 @@ func (m *MockOVSBridgeClient) SetPortExternalIDs(portName string, externalIDs ma
 func (mr *MockOVSBridgeClientMockRecorder) SetPortExternalIDs(portName, externalIDs any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetPortExternalIDs", reflect.TypeOf((*MockOVSBridgeClient)(nil).SetPortExternalIDs), portName, externalIDs)
+}
+
+// SetPortTrunks mocks base method.
+func (m *MockOVSBridgeClient) SetPortTrunks(portName string, vlanSpecs []string) ovsconfig.Error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "SetPortTrunks", portName, vlanSpecs)
+	ret0, _ := ret[0].(ovsconfig.Error)
+	return ret0
+}
+
+// SetPortTrunks indicates an expected call of SetPortTrunks.
+func (mr *MockOVSBridgeClientMockRecorder) SetPortTrunks(portName, vlanSpecs any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetPortTrunks", reflect.TypeOf((*MockOVSBridgeClient)(nil).SetPortTrunks), portName, vlanSpecs)
 }
 
 // UpdateOVSOtherConfig mocks base method.

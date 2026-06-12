@@ -619,6 +619,7 @@ type OVSBridgeConfig struct {
 	// +required
 	BridgeName string `json:"bridgeName"`
 	// PhysicalInterfaces is a list of physical interfaces to be connected to this bridge.
+	// At least one interface must be specified.
 	// +optional
 	PhysicalInterfaces []OVSPhysicalInterfaceConfig `json:"physicalInterfaces,omitempty"`
 	// EnableMulticastSnooping enables multicast snooping on the bridge, allowing the bridge
