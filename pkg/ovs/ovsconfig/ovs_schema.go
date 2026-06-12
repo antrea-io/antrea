@@ -15,27 +15,55 @@
 package ovsconfig
 
 type Bridge struct {
-	Name                string        `json:"name"`
-	Protocols           []interface{} `json:"protocols,omitempty"`
-	DatapathType        string        `json:"datapath_type,omitempty"`
-	McastSnoopingEnable bool          `json:"mcast_snooping_enable,omitempty"`
+	UUID                string            `ovsdb:"_uuid"`
+	Name                string            `ovsdb:"name"`
+	Protocols           []string          `ovsdb:"protocols"`
+	DatapathType        string            `ovsdb:"datapath_type"`
+	DatapathID          *string           `ovsdb:"datapath_id"`
+	DatapathVersion     string            `ovsdb:"datapath_version"`
+	McastSnoopingEnable bool              `ovsdb:"mcast_snooping_enable"`
+	OtherConfig         map[string]string `ovsdb:"other_config"`
+	ExternalIDs         map[string]string `ovsdb:"external_ids"`
+	Ports               []string          `ovsdb:"ports"`
+	Status              map[string]string `ovsdb:"status"`
 }
 
 type Port struct {
-	Name        string        `json:"name"`
-	Interfaces  []interface{} `json:"interfaces"`
-	ExternalIDs []interface{} `json:"external_ids,omitempty"`
+	UUID            string            `ovsdb:"_uuid"`
+	Name            string            `ovsdb:"name"`
+	Interfaces      []string          `ovsdb:"interfaces"`
+	ExternalIDs     map[string]string `ovsdb:"external_ids"`
+	Tag             *int              `ovsdb:"tag"`
+	Statistics      map[string]int    `ovsdb:"statistics"`
+	Status          map[string]string `ovsdb:"status"`
+	BondActiveSlave *string           `ovsdb:"bond_active_slave"`
 }
 
-type AccessPort struct {
-	Port
-	Tag uint32 `json:"tag"`
+type OpenvSwitch struct {
+	UUID        string            `ovsdb:"_uuid"`
+	OvsVersion  *string           `ovsdb:"ovs_version"`
+	OtherConfig map[string]string `ovsdb:"other_config"`
+	Bridges     []string          `ovsdb:"bridges"`
 }
 
 type Interface struct {
-	Name          string        `json:"name"`
-	Type          string        `json:"type,omitempty"`
-	OFPortRequest int32         `json:"ofport_request,omitempty"`
-	Options       []interface{} `json:"options,omitempty"`
-	MAC           string        `json:"mac,omitempty"`
+	UUID          string            `ovsdb:"_uuid"`
+	Name          string            `ovsdb:"name"`
+	Type          string            `ovsdb:"type"`
+	OFPortRequest *int              `ovsdb:"ofport_request"`
+	Options       map[string]string `ovsdb:"options"`
+	MAC           *string           `ovsdb:"mac"`
+	OFPort        *int              `ovsdb:"ofport"`
+	MTURequest    *int              `ovsdb:"mtu_request"`
+	AdminState    *string           `ovsdb:"admin_state"`
+	Duplex        *string           `ovsdb:"duplex"`
+	Error         *string           `ovsdb:"error"`
+	Ifindex       *int              `ovsdb:"ifindex"`
+	LinkResets    *int              `ovsdb:"link_resets"`
+	LinkSpeed     *int              `ovsdb:"link_speed"`
+	LinkState     *string           `ovsdb:"link_state"`
+	MacInUse      *string           `ovsdb:"mac_in_use"`
+	MTU           *int              `ovsdb:"mtu"`
+	Statistics    map[string]int    `ovsdb:"statistics"`
+	Status        map[string]string `ovsdb:"status"`
 }

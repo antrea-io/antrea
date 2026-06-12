@@ -17,8 +17,8 @@ package secondarynetwork
 import (
 	"fmt"
 
-	"github.com/TomCodeLV/OVSDB-golang-lib/pkg/ovsdb"
 	netdefclient "github.com/k8snetworkplumbingwg/network-attachment-definition-client/pkg/client/clientset/versioned/typed/k8s.cni.cncf.io/v1"
+	"github.com/ovn-kubernetes/libovsdb/client"
 	clientset "k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/cache"
 	componentbaseconfig "k8s.io/component-base/config"
@@ -52,10 +52,10 @@ func NewController(
 	podUpdateSubscriber channel.Subscriber,
 	primaryInterfaceStore interfacestore.InterfaceStore,
 	nodeConfig *config.NodeConfig,
-	secNetConfig *agentconfig.SecondaryNetworkConfig, ovsdb *ovsdb.OVSDB,
+	secNetConfig *agentconfig.SecondaryNetworkConfig, ovsdbClient client.Client,
 	ipPoolLister crdlisters.IPPoolLister,
 ) (*Controller, error) {
-	ovsBridgeClient, err := createOVSBridge(secNetConfig.OVSBridges, ovsdb)
+	ovsBridgeClient, err := createOVSBridge(secNetConfig.OVSBridges, ovsdbClient)
 	if err != nil {
 		return nil, err
 	}
@@ -104,7 +104,7 @@ func createNetworkAttachDefClient(config componentbaseconfig.ClientConnectionCon
 	return netAttachDefClient, nil
 }
 
-func createOVSBridge(bridges []agentconfig.OVSBridgeConfig, ovsdb *ovsdb.OVSDB) (ovsconfig.OVSBridgeClient, error) {
+func createOVSBridge(bridges []agentconfig.OVSBridgeConfig, ovsdbClient client.Client) (ovsconfig.OVSBridgeClient, error) {
 	if len(bridges) == 0 {
 		return nil, nil
 	}
@@ -114,7 +114,7 @@ func createOVSBridge(bridges []agentconfig.OVSBridgeConfig, ovsdb *ovsdb.OVSDB) 
 	if bridgeConfig.EnableMulticastSnooping {
 		options = append(options, ovsconfig.WithMcastSnooping())
 	}
-	ovsBridgeClient := newOVSBridgeFn(bridgeConfig.BridgeName, ovsconfig.OVSDatapathSystem, ovsdb, options...)
+	ovsBridgeClient := newOVSBridgeFn(bridgeConfig.BridgeName, ovsconfig.OVSDatapathSystem, ovsdbClient, options...)
 	if err := ovsBridgeClient.Create(); err != nil {
 		return nil, fmt.Errorf("failed to create OVS bridge %s: %v", bridgeConfig.BridgeName, err)
 	}

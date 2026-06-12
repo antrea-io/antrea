@@ -113,6 +113,13 @@ var ipv4Localhost = net.ParseIP("127.0.0.1")
 func run(o *Options) error {
 	klog.InfoS("Starting Antrea Agent", "version", version.GetFullVersion())
 
+	// Set up signal capture: the first SIGTERM / SIGINT signal is handled gracefully and will
+	// cause the stopCh channel to be closed; if another signal is received before the program
+	// exits, we will force exit.
+	stopCh := signals.RegisterSignalHandlers()
+	// Generate a context for functions which require one (instead of stopCh).
+	ctx := wait.ContextForChannel(stopCh)
+
 	// Create K8s Clientset, CRD Clientset, Multicluster CRD Clientset and SharedInformerFactory for the given config.
 	k8sClient, _, crdClient, _, mcClient, _, err := k8s.CreateClients(o.config.ClientConnection, o.config.KubeAPIServerOverride)
 	if err != nil {
@@ -146,7 +153,7 @@ func run(o *Options) error {
 	}
 	// Create ovsdb and openflow clients.
 	ovsdbAddress := ovsconfig.GetConnAddress(o.config.OVSRunDir)
-	ovsdbConnection, err := ovsconfig.NewOVSDBConnectionUDS(ovsdbAddress)
+	ovsdbConnection, err := ovsconfig.NewOVSDBConnectionUDS(ctx, ovsdbAddress)
 	if err != nil {
 		// TODO: ovsconfig.NewOVSDBConnectionUDS might return timeout in the future, need to add retry
 		return fmt.Errorf("error connecting OVSDB: %v", err)
@@ -284,13 +291,6 @@ func run(o *Options) error {
 	// staleFlowsDeletedWait starts with one pending unit (Increment); the stale-flow cleanup
 	// goroutine calls Done when deletion completes.
 	staleFlowsDeletedWait := utilwait.NewGroup().Increment()
-
-	// set up signal capture: the first SIGTERM / SIGINT signal is handled gracefully and will
-	// cause the stopCh channel to be closed; if another signal is received before the program
-	// exits, we will force exit.
-	stopCh := signals.RegisterSignalHandlers()
-	// Generate a context for functions which require one (instead of stopCh).
-	ctx := wait.ContextForChannel(stopCh)
 
 	if o.nodeType == config.K8sNode {
 		// Must start after registering all event handlers.
