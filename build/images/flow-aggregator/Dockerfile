@@ -44,6 +44,7 @@ RUN apt-get update \
     && apt-get install -y --no-install-recommends ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
+COPY --from=flow-aggregator-build /antrea/LICENSE /LICENSE
 COPY --from=flow-aggregator-build /antrea/bin/flow-aggregator /
 COPY --from=flow-aggregator-build /antrea/bin/antctl /usr/local/bin/
 
