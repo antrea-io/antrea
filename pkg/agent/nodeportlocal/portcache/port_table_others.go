@@ -95,8 +95,6 @@ func (pt *PortTable) AddRule(podKey string, podPort int, protocol string, podIP 
 			if closeErr := protocolData.socket.Close(); closeErr != nil {
 				klog.ErrorS(closeErr, "Failed to close local port after iptables rule addition failure",
 					"port", nodePort, "protocol", protocol)
-			} else {
-				protocolData.socket = nil
 			}
 			return 0, err
 		}
