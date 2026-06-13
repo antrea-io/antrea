@@ -17,6 +17,7 @@ package capture
 import (
 	"encoding/binary"
 	"net"
+	"reflect"
 	"strings"
 
 	"golang.org/x/net/bpf"
@@ -453,6 +454,11 @@ const sizeSentinel = 255
 // protocol-specific handler to manage differences between IPv4 and IPv6.
 func compileGenericPacketFilter(handler *ipFamilyHandler, packetSpec *crdv1alpha1.Packet, srcIP, dstIP net.IP, direction crdv1alpha1.CaptureDirection) []bpf.Instruction {
 	firstPass := doCompileGenericPacketFilter(handler, packetSpec, srcIP, dstIP, direction, sizeSentinel)
+	// Guard against the unlikely case where the generated program exceeds 255
+	// instructions, which would cause silent uint8 truncation on the second pass.
+	if len(firstPass) > int(sizeSentinel) {
+		panic("BPF program exceeds maximum instruction count (255)")
+	}
 	size := uint8(len(firstPass))
 	return doCompileGenericPacketFilter(handler, packetSpec, srcIP, dstIP, direction, size)
 }
@@ -764,23 +770,32 @@ func compileBothDirectionFilters(inst []bpf.Instruction, handler *ipFamilyHandle
 	}
 	// When no IPs are present, path B can reuse certain instructions from
 	// path A (fragment-offset load and shared-port load), so we skip those
-	// leading instructions to avoid duplication. The counts below mirror the
-	// output of compileTransportFilters:
-	//   - IPv4 fragment offset handling: 3 instructions (ldh, jset, ldxb)
-	//   - shared port load (when both srcPort and dstPort are present): 1 instruction
+	// leading instructions to avoid duplication.
+	//
+	// Rather than hardcoding instruction counts (which drift if
+	// compileTransportFilters changes), we measure the shared prefix
+	// dynamically: compile both paths with the sentinel size and count how
+	// many leading instructions are structurally identical.
 	sliceStart := 0
 	if srcIP == nil && dstIP == nil {
-		if handler.etherType == etherTypeIPv4 && hasPorts {
-			sliceStart += 3
-		}
-		if transportNoFlagsICMP.srcPort > 0 && transportNoFlagsICMP.dstPort > 0 {
-			sliceStart += 1
+		transARef := compileTransportFilters(handler, sizeSentinel, 0, &transportNoFlagsICMP)
+		transBRef := compileTransportFilters(handler, sizeSentinel, 0, &transportB)
+		// Count matching leading instructions, but never include the trailing
+		// returnKeep (last element) in the shared prefix — it must always be
+		// present in transB so we can strip it after the slice.
+		maxPrefix := len(transBRef) - 1
+		for sliceStart < len(transARef) && sliceStart < maxPrefix {
+			if !reflect.DeepEqual(transARef[sliceStart], transBRef[sliceStart]) {
+				break
+			}
+			sliceStart++
 		}
 	}
 	transB := compileTransportFilters(handler, size, uint8(len(inst)-sliceStart), &transportB)
 	if sliceStart > 0 && len(transB) >= sliceStart {
 		transB = transB[sliceStart:]
 	}
+	// Strip the trailing returnKeep from path B (shared with path A).
 	transB = transB[:len(transB)-1]
 	inst = append(inst, transB...)
 
@@ -813,16 +828,71 @@ func compileBothDirectionFilters(inst []bpf.Instruction, handler *ipFamilyHandle
 				}
 			}
 		}
-		for i, f := range sharedFlags {
-			inst = append(inst, handler.loadTCPFlags)
-			inst = append(inst, bpf.ALUOpConstant{Op: bpf.ALUOpAnd, Val: f.mask})
-			skipTrue := uint8((len(sharedFlags)-1-i)*3 + icmpInsts)
-			var skipFalse uint8
-			if i == len(sharedFlags)-1 {
-				skipFalse = 1
+		// Pre-build the flag instructions into a temporary slice so we can
+		// compute skipTrue dynamically from actual instruction counts, avoiding
+		// the fragile assumption that every check is exactly 3 instructions
+		// (which breaks when the BPF_JSET optimization emits only 2).
+		var flagInsts []bpf.Instruction
+		flagsLoaded := false
+		for _, f := range sharedFlags {
+			if !flagsLoaded {
+				flagInsts = append(flagInsts, handler.loadTCPFlags)
+				flagsLoaded = true
 			}
-			inst = append(inst, bpf.JumpIf{Cond: bpf.JumpEqual, Val: f.flag, SkipTrue: skipTrue, SkipFalse: skipFalse})
+			if f.flag == 0 {
+				// BPF_JSET optimization: checking if bits are cleared uses a
+				// single jset instruction with swapped branches (2 insns total
+				// including the load, or 1 insn if load was already shared).
+				// Placeholder jump offsets; will be patched below.
+				flagInsts = append(flagInsts, bpf.JumpIf{Cond: bpf.JumpBitsSet, Val: f.mask})
+			} else {
+				flagInsts = append(flagInsts, bpf.ALUOpConstant{Op: bpf.ALUOpAnd, Val: f.mask})
+				flagsLoaded = false // ALU operation overwrites the accumulator
+				// Placeholder; will be patched below.
+				flagInsts = append(flagInsts, bpf.JumpIf{Cond: bpf.JumpEqual, Val: f.flag})
+			}
 		}
+		// Total instructions that follow the flag block (ICMP checks + returnKeep).
+		trailingInsts := icmpInsts + 1 // +1 for returnKeep
+		// Patch each jump with accurate offsets now that we know flagInsts sizes.
+		fi := 0
+		for _, f := range sharedFlags {
+			// Advance fi past the optional load instruction.
+			if _, isLoad := flagInsts[fi].(bpf.LoadAbsolute); isLoad {
+				fi++
+			} else if _, isLoad := flagInsts[fi].(bpf.LoadIndirect); isLoad {
+				fi++
+			}
+			// Number of flag instructions remaining after this check.
+			if f.flag == 0 {
+				// jset: if bits ARE set → flag is not cleared → drop (skipTrue to drop).
+				// if bits are NOT set → flag is cleared → OR match succeeded → keep.
+				instsAfter := len(flagInsts) - fi - 1              // instructions after this jset in flag block
+				skipFalse := uint8(instsAfter + trailingInsts - 1) // jump to returnKeep (before trailing drop)
+				skipTrue := uint8(0)                               // fall through to next flag or drop
+				if instsAfter == 0 {
+					// Last flag: drop path is the next instruction after returnKeep.
+					skipTrue = 1
+					skipFalse = 0
+				}
+				flagInsts[fi] = bpf.JumpIf{Cond: bpf.JumpBitsSet, Val: f.mask, SkipTrue: skipTrue, SkipFalse: skipFalse}
+				fi++
+			} else {
+				// and+jeq: skip ALU instruction.
+				fi++ // past the ALUOpConstant
+				instsAfter := len(flagInsts) - fi - 1
+				skipTrue := uint8(instsAfter + trailingInsts - 1) // jump to returnKeep
+				var skipFalse uint8
+				if instsAfter == 0 {
+					// Last flag: set skipFalse to jump past returnKeep to returnDrop.
+					skipTrue = uint8(trailingInsts - 1)
+					skipFalse = 1
+				}
+				flagInsts[fi] = bpf.JumpIf{Cond: bpf.JumpEqual, Val: f.flag, SkipTrue: skipTrue, SkipFalse: skipFalse}
+				fi++
+			}
+		}
+		inst = append(inst, flagInsts...)
 		if len(sharedICMP) > 0 {
 			inst = append(inst, handler.loadICMPType)
 			for i, f := range sharedICMP {
