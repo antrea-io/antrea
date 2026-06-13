@@ -83,6 +83,7 @@ type ExternalIPAllocator interface {
 	AllocateIPFromPool(externalIPPool string) (net.IP, error)
 	// IPPoolExists checks whether the IP pool exists.
 	IPPoolExists(externalIPPool string) bool
+	IPPoolIsIPv6(poolName string) (bool, error)
 	// IPPoolHasIP checks whether the IP pool contains the given IP.
 	IPPoolHasIP(externalIPPool string, ip net.IP) bool
 	// UpdateIPAllocation marks the IP in the specified ExternalIPPool as occupied.
@@ -364,6 +365,39 @@ func (c *ExternalIPPoolController) IPPoolHasIP(poolName string, ip net.IP) bool 
 func (c *ExternalIPPoolController) IPPoolExists(pool string) bool {
 	_, exists := c.getIPAllocator(pool)
 	return exists
+}
+
+func (c *ExternalIPPoolController) IPPoolIsIPv6(poolName string) (bool, error) {
+	pool, err := c.externalIPPoolLister.Get(poolName)
+	if err != nil {
+		return false, fmt.Errorf("ExternalIPPool %s not found: %w", poolName, err)
+	}
+	if len(pool.Spec.IPRanges) == 0 {
+		return false, fmt.Errorf("ExternalIPPool %s has no IP ranges", poolName)
+	}
+	var isIPv6 bool
+	var poolIP net.IP
+	for i, ipRange := range pool.Spec.IPRanges {
+		if ipRange.CIDR != "" {
+			poolIP, _, err = net.ParseCIDR(ipRange.CIDR)
+			if err != nil {
+				return false, fmt.Errorf("invalid CIDR %s in ExternalIPPool %s: %w", ipRange.CIDR, poolName, err)
+			}
+		} else if ipRange.Start != "" {
+			poolIP = net.ParseIP(ipRange.Start)
+			if poolIP == nil {
+				return false, fmt.Errorf("invalid start IP %s in ExternalIPPool %s", ipRange.Start, poolName)
+			}
+		} else {
+			return false, fmt.Errorf("invalid IP range in ExternalIPPool %s", poolName)
+		}
+		if i == 0 {
+			isIPv6 = (poolIP.To4() == nil)
+		} else if isIPv6 != (poolIP.To4() == nil) {
+			return false, fmt.Errorf("ExternalIPPool %s contains mixed IPv4 and IPv6 ranges, which is not supported", poolName)
+		}
+	}
+	return isIPv6, nil
 }
 
 func (c *ExternalIPPoolController) worker() {
