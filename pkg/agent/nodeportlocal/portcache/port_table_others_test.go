@@ -84,10 +84,12 @@ func TestRestoreRules(t *testing.T) {
 }
 
 type mockCloser struct {
+	closed   bool
 	closeErr error
 }
 
 func (m *mockCloser) Close() error {
+	m.closed = true
 	return m.closeErr
 }
 
@@ -138,6 +140,96 @@ func TestDeleteRule(t *testing.T) {
 		assert.NoError(t, portTable.DeleteRule(podKey, podPort, protocol))
 	}
 
+	t.Run("IPv4", func(t *testing.T) { runTest(t, false) })
+	t.Run("IPv6", func(t *testing.T) { runTest(t, true) })
+}
+
+func TestAddRule(t *testing.T) {
+	runTest := func(t *testing.T, isIPv6 bool) {
+		const (
+			podPort  = 1001
+			protocol = "tcp"
+		)
+
+		t.Run("success", func(t *testing.T) {
+			mockCtrl := gomock.NewController(t)
+			mockIPTables := rulestesting.NewMockPodPortRules(mockCtrl)
+			mockPortOpener := portcachetesting.NewMockLocalPortOpener(mockCtrl)
+			portTable := newPortTable(mockIPTables, mockPortOpener, isIPv6)
+
+			closer := &mockCloser{}
+			mockPortOpener.EXPECT().OpenLocalPort(startPort, protocol, isIPv6).Return(closer, nil)
+			mockIPTables.EXPECT().AddRule(startPort, podIP, podPort, protocol).Return(nil)
+
+			gotPort, err := portTable.AddRule(podKey, podPort, protocol, podIP)
+			require.NoError(t, err)
+			assert.Equal(t, startPort, gotPort)
+			// Socket must NOT be closed on success - it is kept open to hold the port.
+			assert.False(t, closer.closed)
+			// Entry must be in the cache.
+			assert.Len(t, portTable.PortTableCache.List(), 1)
+		})
+
+		t.Run("iptables error closes socket", func(t *testing.T) {
+			// Regression test for socket/port leak:
+			// When PodPortRules.AddRule fails after getFreePort has opened a local
+			// socket, the socket must be closed to release the OS file descriptor
+			// and unblock the port for future use.
+			mockCtrl := gomock.NewController(t)
+			mockIPTables := rulestesting.NewMockPodPortRules(mockCtrl)
+			mockPortOpener := portcachetesting.NewMockLocalPortOpener(mockCtrl)
+			portTable := newPortTable(mockIPTables, mockPortOpener, isIPv6)
+
+			closer := &mockCloser{}
+			mockPortOpener.EXPECT().OpenLocalPort(startPort, protocol, isIPv6).Return(closer, nil)
+			mockIPTables.EXPECT().AddRule(startPort, podIP, podPort, protocol).
+				Return(fmt.Errorf("iptables error"))
+
+			_, err := portTable.AddRule(podKey, podPort, protocol, podIP)
+			require.ErrorContains(t, err, "iptables error")
+			// The socket MUST be closed to avoid leaking the FD and blocking the port.
+			assert.True(t, closer.closed, "socket must be closed after iptables failure to prevent FD/port leak")
+			// The cache must be empty; no unusable entry should be left behind.
+			assert.Empty(t, portTable.PortTableCache.List())
+		})
+
+		t.Run("iptables error with socket close error", func(t *testing.T) {
+			mockCtrl := gomock.NewController(t)
+			mockIPTables := rulestesting.NewMockPodPortRules(mockCtrl)
+			mockPortOpener := portcachetesting.NewMockLocalPortOpener(mockCtrl)
+			portTable := newPortTable(mockIPTables, mockPortOpener, isIPv6)
+
+			closer := &mockCloser{closeErr: fmt.Errorf("socket close error")}
+			mockPortOpener.EXPECT().OpenLocalPort(startPort, protocol, isIPv6).Return(closer, nil)
+			mockIPTables.EXPECT().AddRule(startPort, podIP, podPort, protocol).
+				Return(fmt.Errorf("iptables error"))
+
+			_, err := portTable.AddRule(podKey, podPort, protocol, podIP)
+			// Ensure it still returns the original iptables error.
+			require.ErrorContains(t, err, "iptables error")
+			assert.True(t, closer.closed)
+			assert.Empty(t, portTable.PortTableCache.List())
+		})
+
+		t.Run("duplicate entry", func(t *testing.T) {
+			mockCtrl := gomock.NewController(t)
+			mockIPTables := rulestesting.NewMockPodPortRules(mockCtrl)
+			mockPortOpener := portcachetesting.NewMockLocalPortOpener(mockCtrl)
+			portTable := newPortTable(mockIPTables, mockPortOpener, isIPv6)
+
+			closer := &mockCloser{}
+			mockPortOpener.EXPECT().OpenLocalPort(startPort, protocol, isIPv6).Return(closer, nil)
+			mockIPTables.EXPECT().AddRule(startPort, podIP, podPort, protocol).Return(nil)
+
+			_, err := portTable.AddRule(podKey, podPort, protocol, podIP)
+			require.NoError(t, err)
+
+			// Second call for the same podKey/podPort/protocol must fail without
+			// opening a new socket or touching iptables.
+			_, err = portTable.AddRule(podKey, podPort, protocol, podIP)
+			require.ErrorContains(t, err, "existing Linux Nodeport entry")
+		})
+	}
 	t.Run("IPv4", func(t *testing.T) { runTest(t, false) })
 	t.Run("IPv6", func(t *testing.T) { runTest(t, true) })
 }
