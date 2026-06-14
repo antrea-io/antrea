@@ -460,7 +460,7 @@ func ServiceAddressToDNS(address string) (string, error) {
 
 	ns, name := k8sutil.SplitNamespacedName(host)
 	if ns == "" {
-		return "", nil
+		return "", fmt.Errorf("address %q host %q is not a namespaced Kubernetes Service (expected namespace/name format)", address, host)
 	}
 
 	return fmt.Sprintf("%s.%s.svc", name, ns), nil
@@ -512,9 +512,16 @@ func createStaticDestinationResFromOptions(o *options.FlowExporterOptions) (*api
 	feProtocol := api.FlowExporterProtocol{}
 	var feTLSConfig *api.FlowExporterTLSConfig
 
+	// Resolve the service address to a DNS name if possible (namespace/name format).
+	// Fall back to the raw host for non-namespaced addresses (e.g. plain IP or FQDN).
 	dnsName, err := ServiceAddressToDNS(o.FlowCollectorAddr)
 	if err != nil {
-		return nil, fmt.Errorf("unable to determine transform service address to DNS name: %w", err)
+		// Not a namespaced K8s Service address — extract raw host for use as ServerName.
+		host, _, splitErr := net.SplitHostPort(o.FlowCollectorAddr)
+		if splitErr != nil {
+			return nil, fmt.Errorf("unable to parse flow collector address: %w", splitErr)
+		}
+		dnsName = host
 	}
 
 	if o.FlowCollectorProto == "grpc" {

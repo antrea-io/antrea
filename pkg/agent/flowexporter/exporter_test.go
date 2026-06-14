@@ -190,7 +190,7 @@ func Test_createDestinationResFromOptions(t *testing.T) {
 					ActiveFlowExportTimeoutSeconds: 5,
 					IdleFlowExportTimeoutSeconds:   2,
 					TLSConfig: &api.FlowExporterTLSConfig{
-						ServerName:    "",
+						ServerName:    "foo.example.com",
 						MinTLSVersion: "",
 						CAConfigMap: api.NamespacedName{
 							Name:      "flow-aggregator-ca",
@@ -210,6 +210,47 @@ func Test_createDestinationResFromOptions(t *testing.T) {
 			dest, err := createStaticDestinationResFromOptions(tt.o)
 			require.NoError(t, err)
 			assert.Equal(t, tt.want, dest)
+		})
+	}
+}
+
+func TestServiceAddressToDNS(t *testing.T) {
+	tests := []struct {
+		name        string
+		address     string
+		wantDNS     string
+		wantErrStr  string
+	}{
+		{
+			name:    "namespaced service address",
+			address: "ns1/svc1:5678",
+			wantDNS: "svc1.ns1.svc",
+		},
+		{
+			name:       "plain IP address - not a K8s service",
+			address:    "1.2.3.4:5678",
+			wantErrStr: "is not a namespaced Kubernetes Service",
+		},
+		{
+			name:       "plain DNS name - not a K8s service",
+			address:    "foo.example.com:5678",
+			wantErrStr: "is not a namespaced Kubernetes Service",
+		},
+		{
+			name:       "invalid address - missing port",
+			address:    "foo.example.com",
+			wantErrStr: "missing port",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			dns, err := ServiceAddressToDNS(tt.address)
+			if tt.wantErrStr != "" {
+				require.ErrorContains(t, err, tt.wantErrStr)
+			} else {
+				require.NoError(t, err)
+				assert.Equal(t, tt.wantDNS, dns)
+			}
 		})
 	}
 }
