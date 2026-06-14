@@ -492,28 +492,28 @@ func (i *Initializer) Initialize(ctx context.Context) error {
 			return err
 		}
 	}
-	klog.Infof("Agent initialized NodeConfig=%v, NetworkConfig=%v", i.nodeConfig, i.networkConfig)
+	klog.InfoS("Agent initialized", "nodeConfig", i.nodeConfig, "networkConfig", i.networkConfig)
 	return nil
 }
 
 // persistRoundNum will save the provided round number to OVSDB as an external ID. To account for
 // transient failures, this (synchronous) function includes a retry mechanism.
 func persistRoundNum(num uint64, bridgeClient ovsconfig.OVSBridgeClient, interval time.Duration, maxRetries int) {
-	klog.Infof("Persisting round number %d to OVSDB", num)
+	klog.InfoS("Persisting round number to OVSDB", "roundNum", num)
 	retry := 0
 	for {
 		err := saveRoundNum(num, bridgeClient)
 		if err == nil {
-			klog.Infof("Round number %d was persisted to OVSDB", num)
+			klog.InfoS("Round number was persisted to OVSDB", "roundNum", num)
 			return // success
 		}
-		klog.Errorf("Error when writing round number to OVSDB: %v", err)
+		klog.ErrorS(err, "Error when writing round number to OVSDB")
 		if retry >= maxRetries {
 			break
 		}
 		time.Sleep(interval)
 	}
-	klog.Errorf("Unable to persist round number %d to OVSDB after %d tries", num, maxRetries+1)
+	klog.ErrorS(nil, "Unable to persist round number to OVSDB", "roundNum", num, "tries", maxRetries+1)
 }
 
 // deleteStaleFlowsWithRetry calls DeleteStaleFlows until it succeeds or stopCh is closed
@@ -558,7 +558,7 @@ func (i *Initializer) initOpenFlowPipeline() error {
 	// Set up all basic flows.
 	ofConnCh, err := i.ofClient.Initialize(roundInfo, i.nodeConfig, i.networkConfig, i.egressConfig, i.serviceConfig, i.l7NetworkPolicyConfig)
 	if err != nil {
-		klog.Errorf("Failed to initialize openflow client: %v", err)
+		klog.ErrorS(err, "Failed to initialize openflow client")
 		return err
 	}
 
@@ -623,7 +623,7 @@ func (i *Initializer) initOpenFlowPipeline() error {
 			// This shouldn't happen unless OVS is disconnected again after replaying flows. If it happens, we will try
 			// to clean up the config again so an error log should be fine.
 			if err != nil {
-				klog.Errorf("Failed to clean up flow-restore-wait config: %v", err)
+				klog.ErrorS(err, "Failed to clean up flow-restore-wait config")
 			}
 		}
 	}()
@@ -701,7 +701,7 @@ func (i *Initializer) setupGatewayInterface() error {
 	// Create host Gateway port if it does not exist
 	gatewayIface, portExists := i.ifaceStore.GetInterface(i.hostGateway)
 	if !portExists {
-		klog.V(2).Infof("Creating gateway port %s on OVS bridge", i.hostGateway)
+		klog.V(2).InfoS("Creating gateway port on OVS bridge", "port", i.hostGateway)
 		externalIDs := map[string]interface{}{
 			interfacestore.AntreaInterfaceTypeKey: interfacestore.AntreaGateway,
 		}
@@ -727,7 +727,7 @@ func (i *Initializer) setupGatewayInterface() error {
 	// Idempotent operation to set the gateway's MTU: we perform this operation regardless of
 	// whether the gateway interface already exists, as the desired MTU may change across
 	// restarts.
-	klog.V(4).Infof("Setting gateway interface %s MTU to %d", i.hostGateway, i.networkConfig.InterfaceMTU)
+	klog.V(4).InfoS("Setting gateway interface MTU", "interface", i.hostGateway, "mtu", i.networkConfig.InterfaceMTU)
 
 	if err := i.configureGatewayInterface(gatewayIface); err != nil {
 		return err
@@ -762,7 +762,7 @@ func (i *Initializer) configureGatewayInterface(gatewayIface *interfacestore.Int
 			break
 		}
 		if _, ok := err.(util.LinkNotFound); ok {
-			klog.V(2).Infof("Not found host link for gateway %s, retry after 1s", i.hostGateway)
+			klog.V(2).InfoS("Not found host link for gateway, retrying", "gateway", i.hostGateway)
 			time.Sleep(1 * time.Second)
 			continue
 		}
@@ -770,7 +770,7 @@ func (i *Initializer) configureGatewayInterface(gatewayIface *interfacestore.Int
 	}
 
 	if err != nil {
-		klog.Errorf("Failed to find host link for gateway %s: %v", i.hostGateway, err)
+		klog.ErrorS(err, "Failed to find host link for gateway", "gateway", i.hostGateway)
 		return err
 	}
 	// Persist the MAC configured in the network interface when the gatewayIface.MAC is not set. This may
@@ -869,9 +869,9 @@ func (i *Initializer) setupDefaultTunnelInterface() error {
 			if createTunnelInterface {
 				return fmt.Errorf("failed to remove tunnel port %s with wrong tunnel type: %s", tunnelPortName, err)
 			}
-			klog.Errorf("Failed to remove tunnel port %s in NoEncapMode: %v", tunnelPortName, err)
+			klog.ErrorS(err, "Failed to remove tunnel port in NoEncapMode", "port", tunnelPortName)
 		} else {
-			klog.Infof("Removed tunnel port %s with tunnel type: %s", tunnelPortName, tunnelIface.TunnelInterfaceConfig.Type)
+			klog.InfoS("Removed tunnel port", "port", tunnelPortName, "tunnelType", tunnelIface.TunnelInterfaceConfig.Type)
 			i.ifaceStore.DeleteInterface(tunnelIface)
 		}
 	}
@@ -1141,7 +1141,7 @@ func (i *Initializer) waitForIPsecMonitorDaemon() error {
 	defer ticker.Stop()
 	for {
 		if _, err := defaultFs.Stat(ovsMonitorIPSecPID); err == nil {
-			klog.V(2).Infof("OVS IPsec monitor seems to be present")
+			klog.V(2).InfoS("OVS IPsec monitor seems to be present")
 			break
 		}
 		select {
@@ -1192,7 +1192,7 @@ func (i *Initializer) readIPSecPSK() error {
 	}
 
 	// Usually one does not want to log the secret data.
-	klog.V(4).Infof("IPsec PSK value: %s", i.networkConfig.IPsecConfig.PSK)
+	klog.V(4).InfoS("IPsec PSK value", "psk", i.networkConfig.IPsecConfig.PSK)
 	return nil
 }
 
@@ -1229,7 +1229,7 @@ func getRoundInfo(bridgeClient ovsconfig.OVSBridgeClient) types.RoundInfo {
 	roundInfo := types.RoundInfo{}
 	num, err := getLastRoundNum(bridgeClient)
 	if err != nil {
-		klog.Infof("No round number found in OVSDB, using %v", initialRoundNum)
+		klog.InfoS("No round number found in OVSDB, using initial value", "roundNum", initialRoundNum)
 		// We use a fixed value instead of a randomly-generated value to ensure that stale
 		// flows can be properly deleted in case of multiple rapid restarts when the agent
 		// is first deployed to a Node.
@@ -1241,7 +1241,7 @@ func getRoundInfo(bridgeClient ovsconfig.OVSBridgeClient) types.RoundInfo {
 	}
 
 	num %= 1 << cookie.BitwidthRound
-	klog.Infof("Using round number %d", num)
+	klog.InfoS("Using round number", "roundNum", num)
 	roundInfo.RoundNum = num
 
 	return roundInfo
@@ -1293,7 +1293,7 @@ func (i *Initializer) allocateGatewayAddresses(localSubnets []*net.IPNet, gatewa
 	// Terminate when stopCh is closed.
 	go wait.Until(func() {
 		if err := configureLinkAddresses(i.nodeConfig.GatewayConfig.LinkIndex, gwIPs); err != nil {
-			klog.Errorf("Failed to check IP configuration of the gateway: %v", err)
+			klog.ErrorS(err, "Failed to check IP configuration of the gateway")
 		}
 	}, 60*time.Second, i.stopCh)
 
