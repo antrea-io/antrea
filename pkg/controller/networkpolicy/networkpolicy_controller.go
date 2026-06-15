@@ -43,8 +43,8 @@ import (
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/util/workqueue"
 	"k8s.io/klog/v2"
-	policyinformers "sigs.k8s.io/network-policy-api/pkg/client/informers/externalversions/apis/v1alpha1"
-	policylisters "sigs.k8s.io/network-policy-api/pkg/client/listers/apis/v1alpha1"
+	policyinformers "sigs.k8s.io/network-policy-api/pkg/client/informers/externalversions/apis/v1alpha2"
+	policylisters "sigs.k8s.io/network-policy-api/pkg/client/listers/apis/v1alpha2"
 
 	"antrea.io/antrea/v2/pkg/apis/controlplane"
 	"antrea.io/antrea/v2/pkg/apis/crd/v1alpha2"
@@ -204,19 +204,12 @@ type NetworkPolicyController struct {
 	// once.
 	grpListerSynced cache.InformerSynced
 
-	adminNetworkPolicyInformer policyinformers.AdminNetworkPolicyInformer
-	// adminNetworkPolicyLister is able to list/get AdminNetworkPolicy objects.
-	adminNetworkPolicyLister policylisters.AdminNetworkPolicyLister
-	// AdminNetworkPolicySynced is a function which returns true if the AdminNetworkPolicy shared informer has
+	cnpInformer policyinformers.ClusterNetworkPolicyInformer
+	// cnpLister is able to list/get ClusterNetworkPolicy objects.
+	cnpLister policylisters.ClusterNetworkPolicyLister
+	// cnpListerSynced is a function which returns true if the ClusterNetworkPolicy shared informer has
 	// been synced at least once.
-	adminNetworkPolicyListerSynced cache.InformerSynced
-
-	banpInformer policyinformers.BaselineAdminNetworkPolicyInformer
-	// banpLister is able to list/get BaselineAdminNetworkPolicy objects.
-	banpLister policylisters.BaselineAdminNetworkPolicyLister
-	// banpListerSynced is a function which returns true if the BaselineAdminNetworkPolicy shared informer has
-	// been synced at least once.
-	banpListerSynced cache.InformerSynced
+	cnpListerSynced cache.InformerSynced
 
 	// addressGroupStore is the storage where the populated Address Groups are stored.
 	addressGroupStore storage.Interface
@@ -404,8 +397,7 @@ func NewNetworkPolicyController(kubeClient clientset.Interface,
 	nodeInformer coreinformers.NodeInformer,
 	acnpInformer crdv1b1informers.ClusterNetworkPolicyInformer,
 	annpInformer crdv1b1informers.NetworkPolicyInformer,
-	adminNPInformer policyinformers.AdminNetworkPolicyInformer,
-	banpInformer policyinformers.BaselineAdminNetworkPolicyInformer,
+	cnpInformer policyinformers.ClusterNetworkPolicyInformer,
 	tierInformer crdv1b1informers.TierInformer,
 	cgInformer crdv1b1informers.ClusterGroupInformer,
 	grpInformer crdv1b1informers.GroupInformer,
@@ -415,21 +407,18 @@ func NewNetworkPolicyController(kubeClient clientset.Interface,
 	internalGroupStore storage.Interface,
 	stretchedNPEnabled bool) *NetworkPolicyController {
 	n := &NetworkPolicyController{
-		kubeClient:                     kubeClient,
-		crdClient:                      crdClient,
-		networkPolicyInformer:          networkPolicyInformer,
-		networkPolicyLister:            networkPolicyInformer.Lister(),
-		networkPolicyListerSynced:      networkPolicyInformer.Informer().HasSynced,
-		adminNetworkPolicyInformer:     adminNPInformer,
-		adminNetworkPolicyLister:       adminNPInformer.Lister(),
-		adminNetworkPolicyListerSynced: adminNPInformer.Informer().HasSynced,
-		banpInformer:                   banpInformer,
-		banpLister:                     banpInformer.Lister(),
-		banpListerSynced:               banpInformer.Informer().HasSynced,
-		addressGroupStore:              addressGroupStore,
-		appliedToGroupStore:            appliedToGroupStore,
-		internalNetworkPolicyStore:     internalNetworkPolicyStore,
-		internalGroupStore:             internalGroupStore,
+		kubeClient:                 kubeClient,
+		crdClient:                  crdClient,
+		networkPolicyInformer:      networkPolicyInformer,
+		networkPolicyLister:        networkPolicyInformer.Lister(),
+		networkPolicyListerSynced:  networkPolicyInformer.Informer().HasSynced,
+		cnpInformer:                cnpInformer,
+		cnpLister:                  cnpInformer.Lister(),
+		cnpListerSynced:            cnpInformer.Informer().HasSynced,
+		addressGroupStore:          addressGroupStore,
+		appliedToGroupStore:        appliedToGroupStore,
+		internalNetworkPolicyStore: internalNetworkPolicyStore,
+		internalGroupStore:         internalGroupStore,
 		appliedToGroupQueue: workqueue.NewTypedRateLimitingQueueWithConfig(
 			workqueue.NewTypedItemExponentialFailureRateLimiter[string](minRetryDelay, maxRetryDelay),
 			workqueue.TypedRateLimitingQueueConfig[string]{
@@ -476,20 +465,12 @@ func NewNetworkPolicyController(kubeClient clientset.Interface,
 		},
 		resyncPeriod,
 	)
-	if features.DefaultFeatureGate.Enabled(features.AdminNetworkPolicy) {
-		adminNPInformer.Informer().AddEventHandlerWithResyncPeriod(
+	if features.DefaultFeatureGate.Enabled(features.K8sClusterNetworkPolicy) {
+		cnpInformer.Informer().AddEventHandlerWithResyncPeriod(
 			cache.ResourceEventHandlerFuncs{
-				AddFunc:    n.addAdminNP,
-				UpdateFunc: n.updateAdminNP,
-				DeleteFunc: n.deleteAdminNP,
-			},
-			resyncPeriod,
-		)
-		banpInformer.Informer().AddEventHandlerWithResyncPeriod(
-			cache.ResourceEventHandlerFuncs{
-				AddFunc:    n.addBANP,
-				UpdateFunc: n.updateBANP,
-				DeleteFunc: n.deleteBANP,
+				AddFunc:    n.addK8sCNP,
+				UpdateFunc: n.updateK8sCNP,
+				DeleteFunc: n.deleteK8sCNP,
 			},
 			resyncPeriod,
 		)
@@ -1540,20 +1521,13 @@ func (n *NetworkPolicyController) syncInternalNetworkPolicy(key *controlplane.Ne
 			return nil
 		}
 		newInternalNetworkPolicy, newAppliedToGroups, newAddressGroups = n.processNetworkPolicy(knp)
-	case controlplane.AdminNetworkPolicy:
-		anp, err := n.adminNetworkPolicyLister.Get(key.Name)
-		if err != nil || anp.UID != key.UID {
+	case controlplane.K8sClusterNetworkPolicy:
+		cnp, err := n.cnpLister.Get(key.Name)
+		if err != nil || cnp.UID != key.UID {
 			n.deleteInternalNetworkPolicy(internalNetworkPolicyName)
 			return nil
 		}
-		newInternalNetworkPolicy, newAppliedToGroups, newAddressGroups = n.processAdminNetworkPolicy(anp)
-	case controlplane.BaselineAdminNetworkPolicy:
-		banp, err := n.banpLister.Get(key.Name)
-		if err != nil || banp.UID != key.UID {
-			n.deleteInternalNetworkPolicy(internalNetworkPolicyName)
-			return nil
-		}
-		newInternalNetworkPolicy, newAppliedToGroups, newAddressGroups = n.processBaselineAdminNetworkPolicy(banp)
+		newInternalNetworkPolicy, newAppliedToGroups, newAddressGroups = n.processK8sClusterNetworkPolicy(cnp)
 	}
 
 	// The NetworkPolicy must subscribe to the updates of AppliedToGroups before calculating span based on them,

@@ -201,12 +201,6 @@ func TestGetFeatureGates(t *testing.T) {
 		},
 		{
 			"component": "controller",
-			"name": "AdminNetworkPolicy",
-			"status": "Disabled",
-			"version": "ALPHA"
-		},
-		{
-			"component": "controller",
 			"name": "AntreaIPAM",
 			"status": "Disabled",
 			"version": "ALPHA"
@@ -226,6 +220,12 @@ func TestGetFeatureGates(t *testing.T) {
 		{
 			"component": "controller",
 			"name": "IPsecCertAuth",
+			"status": "Disabled",
+			"version": "ALPHA"
+		},
+		{
+			"component": "controller",
+			"name": "K8sClusterNetworkPolicy",
 			"status": "Disabled",
 			"version": "ALPHA"
 		},
@@ -603,12 +603,6 @@ func TestGetFeatureGates(t *testing.T) {
 		},
 		{
 			"component": "controller",
-			"name": "AdminNetworkPolicy",
-			"status": "Disabled",
-			"version": "ALPHA"
-		},
-		{
-			"component": "controller",
 			"name": "AntreaIPAM",
 			"status": "Disabled",
 			"version": "ALPHA"
@@ -628,6 +622,12 @@ func TestGetFeatureGates(t *testing.T) {
 		{
 			"component": "controller",
 			"name": "IPsecCertAuth",
+			"status": "Disabled",
+			"version": "ALPHA"
+		},
+		{
+			"component": "controller",
+			"name": "K8sClusterNetworkPolicy",
 			"status": "Disabled",
 			"version": "ALPHA"
 		},
@@ -719,11 +719,11 @@ TrafficControl                  Disabled     ALPHA
 
 Antrea Controller Feature Gates
 FEATUREGATE                 STATUS       VERSION
-AdminNetworkPolicy          Disabled     ALPHA
 AntreaIPAM                  Disabled     ALPHA
 AntreaPolicy                Enabled      BETA
 Egress                      Enabled      BETA
 IPsecCertAuth               Disabled     ALPHA
+K8sClusterNetworkPolicy     Disabled     ALPHA
 L7NetworkPolicy             Disabled     ALPHA
 Multicast                   Enabled      BETA
 Multicluster                Disabled     ALPHA
@@ -793,11 +793,11 @@ TrafficControl                  Disabled     ALPHA
 
 Antrea Controller Feature Gates
 FEATUREGATE                 STATUS       VERSION
-AdminNetworkPolicy          Disabled     ALPHA
 AntreaIPAM                  Disabled     ALPHA
 AntreaPolicy                Enabled      BETA
 Egress                      Enabled      BETA
 IPsecCertAuth               Disabled     ALPHA
+K8sClusterNetworkPolicy     Disabled     ALPHA
 L7NetworkPolicy             Disabled     ALPHA
 Multicast                   Enabled      BETA
 Multicluster                Disabled     ALPHA
@@ -852,11 +852,11 @@ TrafficControl              Disabled     ALPHA
 
 Antrea Controller Feature Gates
 FEATUREGATE                 STATUS       VERSION
-AdminNetworkPolicy          Disabled     ALPHA
 AntreaIPAM                  Disabled     ALPHA
 AntreaPolicy                Enabled      BETA
 Egress                      Enabled      BETA
 IPsecCertAuth               Disabled     ALPHA
+K8sClusterNetworkPolicy     Disabled     ALPHA
 L7NetworkPolicy             Disabled     ALPHA
 Multicast                   Enabled      BETA
 Multicluster                Disabled     ALPHA

@@ -32,7 +32,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/validation"
 	"k8s.io/apiserver/pkg/authentication/serviceaccount"
 	"k8s.io/klog/v2"
-	"sigs.k8s.io/network-policy-api/apis/v1alpha1"
+	policyv1alpha2 "sigs.k8s.io/network-policy-api/apis/v1alpha2"
 
 	crdv1beta1 "antrea.io/antrea/v2/pkg/apis/crd/v1beta1"
 	"antrea.io/antrea/v2/pkg/controller/networkpolicy/store"
@@ -71,8 +71,9 @@ type tierValidator resourceValidator
 // groupValidator implements the validator interface for the ClusterGroup resource.
 type groupValidator resourceValidator
 
-// adminPolicyValidator implements the validator interface for the AdminNetworkPolicy resource.
-type adminPolicyValidator resourceValidator
+// k8sCNPValidator implements the validator interface for the network-policy-api
+// ClusterNetworkPolicy resource.
+type k8sCNPValidator resourceValidator
 
 var (
 	// reservedTierPriorities stores the reserved priority range from 251, 252, 254 and 255.
@@ -109,8 +110,8 @@ func (v *NetworkPolicyValidator) RegisterGroupValidator(g validator) {
 	v.groupValidators = append(v.groupValidators, g)
 }
 
-func (v *NetworkPolicyValidator) RegisterAdminNetworkPolicyValidator(a validator) {
-	v.adminNPValidators = append(v.adminNPValidators, a)
+func (v *NetworkPolicyValidator) RegisterK8sCNPValidator(a validator) {
+	v.k8sCNPValidators = append(v.k8sCNPValidators, a)
 }
 
 // NetworkPolicyValidator maintains list of validator objects which validate
@@ -125,9 +126,10 @@ type NetworkPolicyValidator struct {
 	// groupValidators maintains a list of validator objects which
 	// implement the validator interface for ClusterGroup resources.
 	groupValidators []validator
-	// adminNPValidators maintains a list of validator objects which
-	// implement the validator interface for ANP and BANP resources.
-	adminNPValidators []validator
+	// k8sCNPValidators maintains a list of validator objects which
+	// implement the validator interface for network-policy-api
+	// ClusterNetworkPolicy resources.
+	k8sCNPValidators []validator
 }
 
 // NewNetworkPolicyValidator returns a new *NetworkPolicyValidator.
@@ -149,13 +151,13 @@ func NewNetworkPolicyValidator(networkPolicyController *NetworkPolicyController)
 	gv := groupValidator{
 		networkPolicyController: networkPolicyController,
 	}
-	av := adminPolicyValidator{
+	av := k8sCNPValidator{
 		networkPolicyController: networkPolicyController,
 	}
 	vr.RegisterAntreaPolicyValidator(&apv)
 	vr.RegisterTierValidator(&tv)
 	vr.RegisterGroupValidator(&gv)
-	vr.RegisterAdminNetworkPolicyValidator(&av)
+	vr.RegisterK8sCNPValidator(&av)
 	return &vr
 }
 
@@ -228,6 +230,27 @@ func (v *NetworkPolicyValidator) Validate(ar *admv1.AdmissionReview) *admv1.Admi
 		}
 		warnings, msg, allowed = v.validateAntreaGroup(&curG, &oldG, op, ui)
 	case "ClusterNetworkPolicy":
+		// The Kind "ClusterNetworkPolicy" is shared by the Antrea-native
+		// ClusterNetworkPolicy (crd.antrea.io) and the upstream network-policy-api
+		// ClusterNetworkPolicy (policy.networking.k8s.io); disambiguate by group.
+		if ar.Request.Kind.Group == policyv1alpha2.GroupName {
+			klog.V(2).Info("Validating ClusterNetworkPolicy CRD")
+			var curCNP, oldCNP policyv1alpha2.ClusterNetworkPolicy
+			if curRaw != nil {
+				if err := json.Unmarshal(curRaw, &curCNP); err != nil {
+					klog.Errorf("Error de-serializing current ClusterNetworkPolicy")
+					return GetAdmissionResponseForErr(err)
+				}
+			}
+			if oldRaw != nil {
+				if err := json.Unmarshal(oldRaw, &oldCNP); err != nil {
+					klog.Errorf("Error de-serializing old ClusterNetworkPolicy")
+					return GetAdmissionResponseForErr(err)
+				}
+			}
+			warnings, msg, allowed = v.validateK8sClusterNetworkPolicy(&curCNP, &oldCNP, op, ui)
+			break
+		}
 		klog.V(2).Info("Validating Antrea ClusterNetworkPolicy CRD")
 		var curACNP, oldACNP crdv1beta1.ClusterNetworkPolicy
 		if curRaw != nil {
@@ -259,38 +282,6 @@ func (v *NetworkPolicyValidator) Validate(ar *admv1.AdmissionReview) *admv1.Admi
 			}
 		}
 		warnings, msg, allowed = v.validateAntreaPolicy(&curANNP, &oldANNP, op, ui)
-	case "AdminNetworkPolicy":
-		klog.V(2).Info("Validating AdminNetworkPolicy CRD")
-		var curANP, oldANP v1alpha1.AdminNetworkPolicy
-		if curRaw != nil {
-			if err := json.Unmarshal(curRaw, &curANP); err != nil {
-				klog.Errorf("Error de-serializing current AdminNetworkPolicy")
-				return GetAdmissionResponseForErr(err)
-			}
-		}
-		if oldRaw != nil {
-			if err := json.Unmarshal(oldRaw, &oldANP); err != nil {
-				klog.Errorf("Error de-serializing old AdminNetworkPolicy")
-				return GetAdmissionResponseForErr(err)
-			}
-		}
-		warnings, msg, allowed = v.validateAdminNetworkPolicy(&curANP, &oldANP, op, ui)
-	case "BaselineAdminNetworkPolicy":
-		klog.V(2).Info("Validating BaselineAdminNetworkPolicy CRD")
-		var curBANP, oldBANP v1alpha1.BaselineAdminNetworkPolicy
-		if curRaw != nil {
-			if err := json.Unmarshal(curRaw, &curBANP); err != nil {
-				klog.Errorf("Error de-serializing current BaselineAdminNetworkPolicy")
-				return GetAdmissionResponseForErr(err)
-			}
-		}
-		if oldRaw != nil {
-			if err := json.Unmarshal(oldRaw, &oldBANP); err != nil {
-				klog.Errorf("Error de-serializing old BaselineAdminNetworkPolicy")
-				return GetAdmissionResponseForErr(err)
-			}
-		}
-		warnings, msg, allowed = v.validateAdminNetworkPolicy(&curBANP, &oldBANP, op, ui)
 	}
 	if msg != "" {
 		result = &metav1.Status{
@@ -337,27 +328,27 @@ func (v *NetworkPolicyValidator) validateAntreaPolicy(curObj, oldObj interface{}
 	return warnings, reason, allowed
 }
 
-func (v *NetworkPolicyValidator) validateAdminNetworkPolicy(curObj, oldObj interface{}, op admv1.Operation, userInfo authenticationv1.UserInfo) ([]string, string, bool) {
+func (v *NetworkPolicyValidator) validateK8sClusterNetworkPolicy(curObj, oldObj interface{}, op admv1.Operation, userInfo authenticationv1.UserInfo) ([]string, string, bool) {
 	allowed := true
 	reason := ""
 	var warnings []string
 	switch op {
 	case admv1.Create:
-		for _, val := range v.adminNPValidators {
+		for _, val := range v.k8sCNPValidators {
 			warnings, reason, allowed = val.createValidate(curObj, userInfo)
 			if !allowed {
 				return warnings, reason, allowed
 			}
 		}
 	case admv1.Update:
-		for _, val := range v.adminNPValidators {
+		for _, val := range v.k8sCNPValidators {
 			warnings, reason, allowed = val.updateValidate(curObj, oldObj, userInfo)
 			if !allowed {
 				return warnings, reason, allowed
 			}
 		}
 	case admv1.Delete:
-		for _, val := range v.adminNPValidators {
+		for _, val := range v.k8sCNPValidators {
 			reason, allowed = val.deleteValidate(oldObj, userInfo)
 			if !allowed {
 				return warnings, reason, allowed
@@ -1198,36 +1189,33 @@ func (g *groupValidator) deleteValidate(oldObj interface{}, userInfo authenticat
 	return "", true
 }
 
-func (a *adminPolicyValidator) validateAdminNP(anp *v1alpha1.AdminNetworkPolicy) (string, bool) {
-	if anpHasNamespaceLabelRule(anp) {
-		return "SameLabels and NotSameLabels namespace selection are not yet supported by Antrea", false
+// validateK8sCNP validates a network-policy-api ClusterNetworkPolicy. The
+// experimental Nodes and DomainNames egress peers are not supported by Antrea
+// and are rejected so that they are never silently ignored.
+func (a *k8sCNPValidator) validateK8sCNP(cnp *policyv1alpha2.ClusterNetworkPolicy) (string, bool) {
+	for _, egressRule := range cnp.Spec.Egress {
+		for _, peer := range egressRule.To {
+			if peer.Nodes != nil || len(peer.DomainNames) > 0 {
+				return "Nodes and DomainNames egress peers are not supported by Antrea", false
+			}
+		}
 	}
 	return "", true
 }
 
-func (a *adminPolicyValidator) validateBANP(banp *v1alpha1.BaselineAdminNetworkPolicy) (string, bool) {
-	if banpHasNamespaceLabelRule(banp) {
-		return "SameLabels and NotSameLabels namespace selection are not yet supported by Antrea", false
+func (a *k8sCNPValidator) createValidate(curObj interface{}, userInfo authenticationv1.UserInfo) ([]string, string, bool) {
+	cnp, ok := curObj.(*policyv1alpha2.ClusterNetworkPolicy)
+	if !ok {
+		return nil, "", true
 	}
-	return "", true
-}
-
-func (a *adminPolicyValidator) createValidate(curObj interface{}, userInfo authenticationv1.UserInfo) ([]string, string, bool) {
-	var reason string
-	var allowed bool
-	switch curObj := curObj.(type) {
-	case *v1alpha1.AdminNetworkPolicy:
-		reason, allowed = a.validateAdminNP(curObj)
-	case *v1alpha1.BaselineAdminNetworkPolicy:
-		reason, allowed = a.validateBANP(curObj)
-	}
+	reason, allowed := a.validateK8sCNP(cnp)
 	return nil, reason, allowed
 }
 
-func (a *adminPolicyValidator) updateValidate(curObj, oldObj interface{}, userInfo authenticationv1.UserInfo) ([]string, string, bool) {
+func (a *k8sCNPValidator) updateValidate(curObj, oldObj interface{}, userInfo authenticationv1.UserInfo) ([]string, string, bool) {
 	return a.createValidate(curObj, userInfo)
 }
 
-func (a *adminPolicyValidator) deleteValidate(oldObj interface{}, userInfo authenticationv1.UserInfo) (string, bool) {
+func (a *k8sCNPValidator) deleteValidate(oldObj interface{}, userInfo authenticationv1.UserInfo) (string, bool) {
 	return "", true
 }

@@ -94,7 +94,7 @@ var (
 		UID:  "uid1",
 	}
 	anp1 = v1beta2.NetworkPolicyReference{
-		Type: v1beta2.AdminNetworkPolicy,
+		Type: v1beta2.K8sClusterNetworkPolicy,
 		Name: "anp1",
 		UID:  "uid2",
 	}

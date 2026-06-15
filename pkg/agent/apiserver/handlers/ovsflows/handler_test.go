@@ -217,10 +217,10 @@ func TestNetworkPolicyFlowsSuccess(t *testing.T) {
 			expectedStatus:     http.StatusOK,
 		},
 		{
-			testName:       "Existing ANP",
-			name:           "anp1",
-			policyType:     cpv1beta.AdminNetworkPolicy,
-			query:          "?networkpolicy=anp1&type=ANP",
+			testName:       "Existing K8s ClusterNetworkPolicy",
+			name:           "cnp1",
+			policyType:     cpv1beta.K8sClusterNetworkPolicy,
+			query:          "?networkpolicy=cnp1&type=K8SCNP",
 			expectedStatus: http.StatusOK,
 		},
 	}

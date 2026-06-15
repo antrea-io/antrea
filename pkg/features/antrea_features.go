@@ -156,10 +156,11 @@ const (
 	// Allow users to specify the load balancer mode as DSR (Direct Server Return).
 	LoadBalancerModeDSR featuregate.Feature = "LoadBalancerModeDSR"
 
-	// alpha: v1.13
-	// Enable the AdminNetworkPolicy APIs
+	// alpha: v2.7
+	// Enable support for the network-policy-api ClusterNetworkPolicy API
+	// (which superseded the AdminNetworkPolicy/BaselineAdminNetworkPolicy APIs).
 	// https://github.com/kubernetes-sigs/network-policy-api
-	AdminNetworkPolicy featuregate.Feature = "AdminNetworkPolicy"
+	K8sClusterNetworkPolicy featuregate.Feature = "K8sClusterNetworkPolicy"
 
 	// alpha: v1.14
 	// Enable Egress traffic shaping.
@@ -229,7 +230,7 @@ var (
 		SupportBundleCollection:       {Default: false, PreRelease: featuregate.Alpha},
 		L7NetworkPolicy:               {Default: false, PreRelease: featuregate.Alpha},
 		LoadBalancerModeDSR:           {Default: false, PreRelease: featuregate.Alpha},
-		AdminNetworkPolicy:            {Default: false, PreRelease: featuregate.Alpha},
+		K8sClusterNetworkPolicy:       {Default: false, PreRelease: featuregate.Alpha},
 		EgressTrafficShaping:          {Default: false, PreRelease: featuregate.Alpha},
 		EgressSeparateSubnet:          {Default: true, PreRelease: featuregate.Beta},
 		NodeNetworkPolicy:             {Default: false, PreRelease: featuregate.Alpha},
@@ -274,7 +275,7 @@ var (
 	// ControllerGates consists of all known feature gates for the Antrea Controller.
 	// When adding a new feature gate that applies to the Antrea Controller, please also add it here.
 	ControllerGates = sets.New[featuregate.Feature](
-		AdminNetworkPolicy,
+		K8sClusterNetworkPolicy,
 		AntreaIPAM,
 		AntreaPolicy,
 		Egress,
@@ -332,7 +333,7 @@ var (
 		NetworkPolicyStats:      {},
 		SupportBundleCollection: {},
 		L7NetworkPolicy:         {},
-		AdminNetworkPolicy:      {},
+		K8sClusterNetworkPolicy: {},
 	}
 )
 

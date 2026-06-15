@@ -43,7 +43,7 @@ import (
 	"k8s.io/client-go/util/workqueue"
 	"k8s.io/utils/ptr"
 	fakepolicyversioned "sigs.k8s.io/network-policy-api/pkg/client/clientset/versioned/fake"
-	policyv1a1informers "sigs.k8s.io/network-policy-api/pkg/client/informers/externalversions"
+	npainformers "sigs.k8s.io/network-policy-api/pkg/client/informers/externalversions"
 
 	fakemcsversioned "antrea.io/antrea/v2/multicluster/pkg/client/clientset/versioned/fake"
 	mcsinformers "antrea.io/antrea/v2/multicluster/pkg/client/informers/externalversions"
@@ -91,8 +91,7 @@ type networkPolicyController struct {
 	networkPolicyStore         cache.Store
 	acnpStore                  cache.Store
 	annpStore                  cache.Store
-	anpStore                   cache.Store
-	banpStore                  cache.Store
+	cnpStore                   cache.Store
 	tierStore                  cache.Store
 	cgStore                    cache.Store
 	gStore                     cache.Store
@@ -114,7 +113,7 @@ func newController(k8sObjects, crdObjects []runtime.Object) (*fake.Clientset, *n
 	informerFactory := informers.NewSharedInformerFactory(client, informerDefaultResync)
 	crdInformerFactory := crdinformers.NewSharedInformerFactory(crdClient, informerDefaultResync)
 	mcsInformerFactory := mcsinformers.NewSharedInformerFactory(mcsClient, informerDefaultResync)
-	policyInformerFactory := policyv1a1informers.NewSharedInformerFactory(policyClient, informerDefaultResync)
+	policyInformerFactory := npainformers.NewSharedInformerFactory(policyClient, informerDefaultResync)
 	appliedToGroupStore := store.NewAppliedToGroupStore()
 	addressGroupStore := store.NewAddressGroupStore()
 	internalNetworkPolicyStore := store.NewNetworkPolicyStore()
@@ -140,8 +139,7 @@ func newController(k8sObjects, crdObjects []runtime.Object) (*fake.Clientset, *n
 		informerFactory.Core().V1().Nodes(),
 		crdInformerFactory.Crd().V1beta1().ClusterNetworkPolicies(),
 		crdInformerFactory.Crd().V1beta1().NetworkPolicies(),
-		policyInformerFactory.Policy().V1alpha1().AdminNetworkPolicies(),
-		policyInformerFactory.Policy().V1alpha1().BaselineAdminNetworkPolicies(),
+		policyInformerFactory.Policy().V1alpha2().ClusterNetworkPolicies(),
 		crdInformerFactory.Crd().V1beta1().Tiers(),
 		cgInformer,
 		gInformer,
@@ -168,8 +166,7 @@ func newController(k8sObjects, crdObjects []runtime.Object) (*fake.Clientset, *n
 		informerFactory.Networking().V1().NetworkPolicies().Informer().GetStore(),
 		crdInformerFactory.Crd().V1beta1().ClusterNetworkPolicies().Informer().GetStore(),
 		crdInformerFactory.Crd().V1beta1().NetworkPolicies().Informer().GetStore(),
-		policyInformerFactory.Policy().V1alpha1().AdminNetworkPolicies().Informer().GetStore(),
-		policyInformerFactory.Policy().V1alpha1().BaselineAdminNetworkPolicies().Informer().GetStore(),
+		policyInformerFactory.Policy().V1alpha2().ClusterNetworkPolicies().Informer().GetStore(),
 		crdInformerFactory.Crd().V1beta1().Tiers().Informer().GetStore(),
 		crdInformerFactory.Crd().V1beta1().ClusterGroups().Informer().GetStore(),
 		crdInformerFactory.Crd().V1beta1().Groups().Informer().GetStore(),
@@ -191,7 +188,7 @@ func newControllerWithoutEventHandler(k8sObjects, crdObjects []runtime.Object) (
 	policyClient := fakepolicyversioned.NewSimpleClientset()
 	informerFactory := informers.NewSharedInformerFactory(client, informerDefaultResync)
 	crdInformerFactory := crdinformers.NewSharedInformerFactory(crdClient, informerDefaultResync)
-	policyInformerFactory := policyv1a1informers.NewSharedInformerFactory(policyClient, informerDefaultResync)
+	policyInformerFactory := npainformers.NewSharedInformerFactory(policyClient, informerDefaultResync)
 	appliedToGroupStore := store.NewAppliedToGroupStore()
 	addressGroupStore := store.NewAddressGroupStore()
 	internalNetworkPolicyStore := store.NewNetworkPolicyStore()
@@ -201,8 +198,7 @@ func newControllerWithoutEventHandler(k8sObjects, crdObjects []runtime.Object) (
 	tierInformer := crdInformerFactory.Crd().V1beta1().Tiers()
 	acnpInformer := crdInformerFactory.Crd().V1beta1().ClusterNetworkPolicies()
 	annpInformer := crdInformerFactory.Crd().V1beta1().NetworkPolicies()
-	anpInformer := policyInformerFactory.Policy().V1alpha1().AdminNetworkPolicies()
-	banpInformer := policyInformerFactory.Policy().V1alpha1().BaselineAdminNetworkPolicies()
+	cnpInformer := policyInformerFactory.Policy().V1alpha2().ClusterNetworkPolicies()
 	cgInformer := crdInformerFactory.Crd().V1beta1().ClusterGroups()
 	groupInformer := crdInformerFactory.Crd().V1beta1().Groups()
 	groupEntityIndex := grouping.NewGroupEntityIndex()
@@ -222,6 +218,9 @@ func newControllerWithoutEventHandler(k8sObjects, crdObjects []runtime.Object) (
 		annpInformer:               annpInformer,
 		annpLister:                 annpInformer.Lister(),
 		annpListerSynced:           annpInformer.Informer().HasSynced,
+		cnpInformer:                cnpInformer,
+		cnpLister:                  cnpInformer.Lister(),
+		cnpListerSynced:            cnpInformer.Informer().HasSynced,
 		cgInformer:                 cgInformer,
 		cgLister:                   cgInformer.Lister(),
 		cgListerSynced:             cgInformer.Informer().HasSynced,
@@ -266,8 +265,7 @@ func newControllerWithoutEventHandler(k8sObjects, crdObjects []runtime.Object) (
 		informerFactory.Networking().V1().NetworkPolicies().Informer().GetStore(),
 		acnpInformer.Informer().GetStore(),
 		annpInformer.Informer().GetStore(),
-		anpInformer.Informer().GetStore(),
-		banpInformer.Informer().GetStore(),
+		cnpInformer.Informer().GetStore(),
 		tierInformer.Informer().GetStore(),
 		cgInformer.Informer().GetStore(),
 		groupInformer.Informer().GetStore(),

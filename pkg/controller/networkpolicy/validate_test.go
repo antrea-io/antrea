@@ -24,7 +24,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/component-base/featuregate"
 	featuregatetesting "k8s.io/component-base/featuregate/testing"
-	"sigs.k8s.io/network-policy-api/apis/v1alpha1"
+	policyv1alpha2 "sigs.k8s.io/network-policy-api/apis/v1alpha2"
 
 	crdv1beta1 "antrea.io/antrea/v2/pkg/apis/crd/v1beta1"
 	"antrea.io/antrea/v2/pkg/features"
@@ -2891,7 +2891,7 @@ func TestValidateTier(t *testing.T) {
 	}
 }
 
-func TestValidateAdminNetworkPolicy(t *testing.T) {
+func TestValidateK8sClusterNetworkPolicy(t *testing.T) {
 	tests := []struct {
 		name           string
 		policy         metav1.Object
@@ -2899,194 +2899,103 @@ func TestValidateAdminNetworkPolicy(t *testing.T) {
 		expectedReason string
 	}{
 		{
-			name: "anp-has-same-labels-rule",
-			policy: &v1alpha1.AdminNetworkPolicy{
-				ObjectMeta: metav1.ObjectMeta{Name: "anpA", UID: "uidA"},
-				Spec: v1alpha1.AdminNetworkPolicySpec{
-					Subject: v1alpha1.AdminNetworkPolicySubject{
+			name: "cnp-networks-egress-valid",
+			policy: &policyv1alpha2.ClusterNetworkPolicy{
+				ObjectMeta: metav1.ObjectMeta{Name: "cnpA", UID: "uidA"},
+				Spec: policyv1alpha2.ClusterNetworkPolicySpec{
+					Tier:     policyv1alpha2.AdminTier,
+					Priority: 10,
+					Subject: policyv1alpha2.ClusterNetworkPolicySubject{
 						Namespaces: &selectorA,
 					},
-					Priority: 10,
-					Ingress: []v1alpha1.AdminNetworkPolicyIngressRule{
+					Egress: []policyv1alpha2.ClusterNetworkPolicyEgressRule{
 						{
-							Action: v1alpha1.AdminNetworkPolicyRuleActionAllow,
-							From: []v1alpha1.AdminNetworkPolicyPeer{
-								{
-									Namespaces: &v1alpha1.NamespacedPeer{
-										SameLabels: []string{"labelA"},
-									},
-								},
-							},
-						},
-					},
-					Egress: []v1alpha1.AdminNetworkPolicyEgressRule{
-						{
-							Action: v1alpha1.AdminNetworkPolicyRuleActionAllow,
-							To: []v1alpha1.AdminNetworkPolicyPeer{
-								{
-									Pods: &v1alpha1.NamespacedPodPeer{
-										Namespaces: v1alpha1.NamespacedPeer{
-											NamespaceSelector: &selectorC,
-										},
-										PodSelector: selectorB,
-									},
-								},
+							Action: policyv1alpha2.ClusterNetworkPolicyRuleActionDeny,
+							To: []policyv1alpha2.ClusterNetworkPolicyEgressPeer{
+								{Networks: []policyv1alpha2.CIDR{"10.0.0.0/8"}},
 							},
 						},
 					},
 				},
 			},
 			operation:      admv1.Create,
-			expectedReason: "SameLabels and NotSameLabels namespace selection are not yet supported by Antrea",
+			expectedReason: "",
 		},
 		{
-			name: "anp-update-to-same-labels-rule",
-			policy: &v1alpha1.AdminNetworkPolicy{
-				ObjectMeta: metav1.ObjectMeta{Name: "anpA", UID: "uidA"},
-				Spec: v1alpha1.AdminNetworkPolicySpec{
-					Subject: v1alpha1.AdminNetworkPolicySubject{
+			name: "cnp-domain-names-egress-unsupported",
+			policy: &policyv1alpha2.ClusterNetworkPolicy{
+				ObjectMeta: metav1.ObjectMeta{Name: "cnpA", UID: "uidA"},
+				Spec: policyv1alpha2.ClusterNetworkPolicySpec{
+					Tier:     policyv1alpha2.AdminTier,
+					Priority: 10,
+					Subject: policyv1alpha2.ClusterNetworkPolicySubject{
 						Namespaces: &selectorA,
 					},
-					Priority: 10,
-					Egress: []v1alpha1.AdminNetworkPolicyEgressRule{
+					Egress: []policyv1alpha2.ClusterNetworkPolicyEgressRule{
 						{
-							Action: v1alpha1.AdminNetworkPolicyRuleActionAllow,
-							To: []v1alpha1.AdminNetworkPolicyPeer{
-								{
-									Namespaces: &v1alpha1.NamespacedPeer{
-										SameLabels: []string{"labelA"},
-									},
-								},
+							Action: policyv1alpha2.ClusterNetworkPolicyRuleActionAccept,
+							To: []policyv1alpha2.ClusterNetworkPolicyEgressPeer{
+								{DomainNames: []policyv1alpha2.DomainName{"example.com"}},
+							},
+						},
+					},
+				},
+			},
+			operation:      admv1.Create,
+			expectedReason: "Nodes and DomainNames egress peers are not supported by Antrea",
+		},
+		{
+			name: "cnp-nodes-egress-unsupported",
+			policy: &policyv1alpha2.ClusterNetworkPolicy{
+				ObjectMeta: metav1.ObjectMeta{Name: "cnpA", UID: "uidA"},
+				Spec: policyv1alpha2.ClusterNetworkPolicySpec{
+					Tier:     policyv1alpha2.AdminTier,
+					Priority: 10,
+					Subject: policyv1alpha2.ClusterNetworkPolicySubject{
+						Namespaces: &selectorA,
+					},
+					Egress: []policyv1alpha2.ClusterNetworkPolicyEgressRule{
+						{
+							Action: policyv1alpha2.ClusterNetworkPolicyRuleActionDeny,
+							To: []policyv1alpha2.ClusterNetworkPolicyEgressPeer{
+								{Nodes: &selectorB},
+							},
+						},
+					},
+				},
+			},
+			operation:      admv1.Create,
+			expectedReason: "Nodes and DomainNames egress peers are not supported by Antrea",
+		},
+		{
+			name: "cnp-baseline-tier-valid",
+			policy: &policyv1alpha2.ClusterNetworkPolicy{
+				ObjectMeta: metav1.ObjectMeta{Name: "cnpB", UID: "uidB"},
+				Spec: policyv1alpha2.ClusterNetworkPolicySpec{
+					Tier:     policyv1alpha2.BaselineTier,
+					Priority: 5,
+					Subject: policyv1alpha2.ClusterNetworkPolicySubject{
+						Namespaces: &selectorA,
+					},
+					Ingress: []policyv1alpha2.ClusterNetworkPolicyIngressRule{
+						{
+							Action: policyv1alpha2.ClusterNetworkPolicyRuleActionDeny,
+							From: []policyv1alpha2.ClusterNetworkPolicyIngressPeer{
+								{Namespaces: &selectorB},
 							},
 						},
 					},
 				},
 			},
 			operation:      admv1.Update,
-			expectedReason: "SameLabels and NotSameLabels namespace selection are not yet supported by Antrea",
-		},
-		{
-			name: "anp-has-not-same-labels-rule",
-			policy: &v1alpha1.AdminNetworkPolicy{
-				ObjectMeta: metav1.ObjectMeta{Name: "anpA", UID: "uidA"},
-				Spec: v1alpha1.AdminNetworkPolicySpec{
-					Subject: v1alpha1.AdminNetworkPolicySubject{
-						Namespaces: &selectorA,
-					},
-					Priority: 10,
-					Ingress: []v1alpha1.AdminNetworkPolicyIngressRule{
-						{
-							Action: v1alpha1.AdminNetworkPolicyRuleActionAllow,
-							From: []v1alpha1.AdminNetworkPolicyPeer{
-								{
-									Namespaces: &v1alpha1.NamespacedPeer{
-										NotSameLabels: []string{"labelA", "labelB"},
-									},
-								},
-							},
-						},
-					},
-				},
-			},
-			operation:      admv1.Create,
-			expectedReason: "SameLabels and NotSameLabels namespace selection are not yet supported by Antrea",
-		},
-		{
-			name: "banp-has-same-labels-rule",
-			policy: &v1alpha1.BaselineAdminNetworkPolicy{
-				ObjectMeta: metav1.ObjectMeta{Name: "anpA", UID: "uidA"},
-				Spec: v1alpha1.BaselineAdminNetworkPolicySpec{
-					Subject: v1alpha1.AdminNetworkPolicySubject{
-						Namespaces: &selectorA,
-					},
-					Ingress: []v1alpha1.BaselineAdminNetworkPolicyIngressRule{
-						{
-							Action: v1alpha1.BaselineAdminNetworkPolicyRuleActionAllow,
-							From: []v1alpha1.AdminNetworkPolicyPeer{
-								{
-									Namespaces: &v1alpha1.NamespacedPeer{
-										SameLabels: []string{"labelA"},
-									},
-								},
-							},
-						},
-					},
-					Egress: []v1alpha1.BaselineAdminNetworkPolicyEgressRule{
-						{
-							Action: v1alpha1.BaselineAdminNetworkPolicyRuleActionAllow,
-							To: []v1alpha1.AdminNetworkPolicyPeer{
-								{
-									Pods: &v1alpha1.NamespacedPodPeer{
-										Namespaces: v1alpha1.NamespacedPeer{
-											NamespaceSelector: &selectorC,
-										},
-										PodSelector: selectorB,
-									},
-								},
-							},
-						},
-					},
-				},
-			},
-			operation:      admv1.Create,
-			expectedReason: "SameLabels and NotSameLabels namespace selection are not yet supported by Antrea",
-		},
-		{
-			name: "banp-update-to-same-labels-rule",
-			policy: &v1alpha1.BaselineAdminNetworkPolicy{
-				ObjectMeta: metav1.ObjectMeta{Name: "anpA", UID: "uidA"},
-				Spec: v1alpha1.BaselineAdminNetworkPolicySpec{
-					Subject: v1alpha1.AdminNetworkPolicySubject{
-						Namespaces: &selectorA,
-					},
-					Egress: []v1alpha1.BaselineAdminNetworkPolicyEgressRule{
-						{
-							Action: v1alpha1.BaselineAdminNetworkPolicyRuleActionAllow,
-							To: []v1alpha1.AdminNetworkPolicyPeer{
-								{
-									Namespaces: &v1alpha1.NamespacedPeer{
-										SameLabels: []string{"labelA"},
-									},
-								},
-							},
-						},
-					},
-				},
-			},
-			operation:      admv1.Update,
-			expectedReason: "SameLabels and NotSameLabels namespace selection are not yet supported by Antrea",
-		},
-		{
-			name: "banp-has-not-same-labels-rule",
-			policy: &v1alpha1.BaselineAdminNetworkPolicy{
-				ObjectMeta: metav1.ObjectMeta{Name: "anpA", UID: "uidA"},
-				Spec: v1alpha1.BaselineAdminNetworkPolicySpec{
-					Subject: v1alpha1.AdminNetworkPolicySubject{
-						Namespaces: &selectorA,
-					},
-					Ingress: []v1alpha1.BaselineAdminNetworkPolicyIngressRule{
-						{
-							Action: v1alpha1.BaselineAdminNetworkPolicyRuleActionAllow,
-							From: []v1alpha1.AdminNetworkPolicyPeer{
-								{
-									Namespaces: &v1alpha1.NamespacedPeer{
-										NotSameLabels: []string{"labelA", "labelB"},
-									},
-								},
-							},
-						},
-					},
-				},
-			},
-			operation:      admv1.Create,
-			expectedReason: "SameLabels and NotSameLabels namespace selection are not yet supported by Antrea",
+			expectedReason: "",
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			_, controller := newController(nil, nil)
 			validator := NewNetworkPolicyValidator(controller.NetworkPolicyController)
-			_, actualReason, allowed := validator.validateAdminNetworkPolicy(tt.policy, "", tt.operation, authenticationv1.UserInfo{})
+			_, actualReason, allowed := validator.validateK8sClusterNetworkPolicy(tt.policy, "", tt.operation, authenticationv1.UserInfo{})
 			assert.Equal(t, tt.expectedReason, actualReason)
 			if tt.expectedReason == "" {
 				assert.True(t, allowed)

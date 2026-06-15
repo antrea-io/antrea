@@ -200,8 +200,11 @@ const (
 	K8sNetworkPolicy           NetworkPolicyType = "K8sNetworkPolicy"
 	AntreaClusterNetworkPolicy NetworkPolicyType = "AntreaClusterNetworkPolicy"
 	AntreaNetworkPolicy        NetworkPolicyType = "AntreaNetworkPolicy"
-	AdminNetworkPolicy         NetworkPolicyType = "AdminNetworkPolicy"
-	BaselineAdminNetworkPolicy NetworkPolicyType = "BaselineAdminNetworkPolicy"
+	// K8sClusterNetworkPolicy is the internal type for the upstream
+	// network-policy-api ClusterNetworkPolicy resource. A single
+	// ClusterNetworkPolicy covers both the Admin and Baseline tiers
+	// (selected via its spec.tier field).
+	K8sClusterNetworkPolicy NetworkPolicyType = "K8sClusterNetworkPolicy"
 )
 
 type NetworkPolicyReference struct {

@@ -296,8 +296,7 @@ rules:
   - apiGroups:
       - policy.networking.k8s.io
     resources:
-      - adminnetworkpolicies
-      - baselineadminnetworkpolicies
+      - clusternetworkpolicies
     verbs:
       - get
       - list

@@ -51,31 +51,17 @@ webhooks:
     admissionReviewVersions: ["v1", "v1beta1"]
     sideEffects: None
     timeoutSeconds: 5
-  - name: "anpvalidator.antrea.io"
+  - name: "cnpvalidator.antrea.io"
     clientConfig:
       service:
         name: "antrea"
         namespace: {{ .Release.Namespace }}
-        path: "/validate/anp"
+        path: "/validate/cnp"
     rules:
       - operations: ["CREATE", "UPDATE"]
         apiGroups: ["policy.networking.k8s.io"]
-        apiVersions: ["v1alpha1"]
-        resources: ["adminnetworkpolicies"]
-    admissionReviewVersions: ["v1", "v1beta1"]
-    sideEffects: None
-    timeoutSeconds: 5
-  - name: "banpvalidator.antrea.io"
-    clientConfig:
-      service:
-        name: "antrea"
-        namespace: {{ .Release.Namespace }}
-        path: "/validate/banp"
-    rules:
-      - operations: ["CREATE", "UPDATE"]
-        apiGroups: ["policy.networking.k8s.io"]
-        apiVersions: ["v1alpha1"]
-        resources: ["baselineadminnetworkpolicies"]
+        apiVersions: ["v1alpha2"]
+        resources: ["clusternetworkpolicies"]
     admissionReviewVersions: ["v1", "v1beta1"]
     sideEffects: None
     timeoutSeconds: 5

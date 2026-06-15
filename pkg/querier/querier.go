@@ -127,11 +127,10 @@ type NetworkPolicyQueryFilter struct {
 
 // From user shorthand input to cpv1beta1.NetworkPolicyType
 var NetworkPolicyTypeMap = map[string]cpv1beta.NetworkPolicyType{
-	"K8SNP": cpv1beta.K8sNetworkPolicy,
-	"ACNP":  cpv1beta.AntreaClusterNetworkPolicy,
-	"ANNP":  cpv1beta.AntreaNetworkPolicy,
-	"ANP":   cpv1beta.AdminNetworkPolicy,
-	"BANP":  cpv1beta.BaselineAdminNetworkPolicy,
+	"K8SNP":  cpv1beta.K8sNetworkPolicy,
+	"ACNP":   cpv1beta.AntreaClusterNetworkPolicy,
+	"ANNP":   cpv1beta.AntreaNetworkPolicy,
+	"K8SCNP": cpv1beta.K8sClusterNetworkPolicy,
 }
 
 func GetNetworkPolicyTypeShorthands() []string {

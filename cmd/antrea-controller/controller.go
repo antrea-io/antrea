@@ -38,7 +38,7 @@ import (
 	"k8s.io/klog/v2"
 	aggregatorclientset "k8s.io/kube-aggregator/pkg/client/clientset_generated/clientset"
 	netutils "k8s.io/utils/net"
-	policyv1a1informers "sigs.k8s.io/network-policy-api/pkg/client/informers/externalversions"
+	npainformers "sigs.k8s.io/network-policy-api/pkg/client/informers/externalversions"
 
 	mcinformers "antrea.io/antrea/v2/multicluster/pkg/client/informers/externalversions"
 	"antrea.io/antrea/v2/pkg/apis"
@@ -103,13 +103,11 @@ var allowedPaths = []string{
 	"/readyz",
 	"/mutate/acnp",
 	"/mutate/annp",
-	"/mutate/anp",
 	"/mutate/namespace",
 	"/validate/tier",
 	"/validate/acnp",
 	"/validate/annp",
-	"/validate/anp",
-	"/validate/banp",
+	"/validate/cnp",
 	"/validate/clustergroup",
 	"/validate/externalippool",
 	"/validate/egress",
@@ -134,7 +132,7 @@ func run(o *Options) error {
 	k8s.OverrideKubeAPIServer(o.config.KubeAPIServerOverride)
 	informerFactory := informers.NewSharedInformerFactoryWithOptions(client, informerDefaultResync, informers.WithTransform(k8s.NewTrimmer(k8s.TrimPod)))
 	crdInformerFactory := crdinformers.NewSharedInformerFactoryWithOptions(crdClient, informerDefaultResync, crdinformers.WithTransform(k8s.NewTrimmer()))
-	policyInformerFactory := policyv1a1informers.NewSharedInformerFactory(policyClient, informerDefaultResync)
+	policyInformerFactory := npainformers.NewSharedInformerFactory(policyClient, informerDefaultResync)
 	podInformer := informerFactory.Core().V1().Pods()
 	namespaceInformer := informerFactory.Core().V1().Namespaces()
 	serviceInformer := informerFactory.Core().V1().Services()
@@ -152,8 +150,7 @@ func run(o *Options) error {
 	externalIPPoolInformer := crdInformerFactory.Crd().V1beta1().ExternalIPPools()
 	externalNodeInformer := crdInformerFactory.Crd().V1alpha1().ExternalNodes()
 	ipPoolInformer := crdInformerFactory.Crd().V1beta1().IPPools()
-	adminNPInformer := policyInformerFactory.Policy().V1alpha1().AdminNetworkPolicies()
-	banpInformer := policyInformerFactory.Policy().V1alpha1().BaselineAdminNetworkPolicies()
+	cnpInformer := policyInformerFactory.Policy().V1alpha2().ClusterNetworkPolicies()
 
 	// Add IP-Pod index. Each Pod has no more than 2 IPs, the extra overhead is constant and acceptable.
 	// @tnqn evaluated the performance without/with IP index is 3us vs 4us per pod, i.e. 300ms vs 400ms for 100k Pods.
@@ -191,8 +188,7 @@ func run(o *Options) error {
 		nodeInformer,
 		acnpInformer,
 		annpInformer,
-		adminNPInformer,
-		banpInformer,
+		cnpInformer,
 		tierInformer,
 		cgInformer,
 		grpInformer,
@@ -340,11 +336,11 @@ func run(o *Options) error {
 
 	informerFactory.Start(stopCh)
 	crdInformerFactory.Start(stopCh)
-	if features.DefaultFeatureGate.Enabled(features.AdminNetworkPolicy) {
-		// TODO(yang): When the AdminNetworkPolicy graduates to Beta, we need a better mechanism in Antrea controller
-		//  so that 1. the policyInformerFactory is only started if the AdminNetworkPolicy CRD types are installed in
-		//  the cluster 2. It retries periodically so that when the CRDs are installed, the policyInformerFactory starts
-		//  watching and handles policy events.
+	if features.DefaultFeatureGate.Enabled(features.K8sClusterNetworkPolicy) {
+		// TODO(yang): When the ClusterNetworkPolicy support graduates to Beta, we need a better mechanism in Antrea
+		//  controller so that 1. the policyInformerFactory is only started if the ClusterNetworkPolicy CRD type is
+		//  installed in the cluster 2. It retries periodically so that when the CRD is installed, the
+		//  policyInformerFactory starts watching and handles policy events.
 		policyInformerFactory.Start(stopCh)
 	}
 

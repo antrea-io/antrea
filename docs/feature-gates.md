@@ -56,7 +56,7 @@ edit the Agent configuration in the
 | `ExternalNode`                  | Agent              | `false` | Alpha      | v1.8          | N/A          | N/A        | Yes                |                                                        |
 | `SupportBundleCollection`       | Agent + Controller | `false` | Alpha      | v1.10         | N/A          | N/A        | Yes                |                                                        |
 | `L7NetworkPolicy`               | Agent + Controller | `false` | Alpha      | v1.10         | N/A          | N/A        | Yes                |                                                        |
-| `AdminNetworkPolicy`            | Controller         | `false` | Alpha      | v1.13         | N/A          | N/A        | Yes                |                                                        |
+| `K8sClusterNetworkPolicy`       | Controller         | `false` | Alpha      | v2.7          | N/A          | N/A        | Yes                |                                                        |
 | `EgressTrafficShaping`          | Agent              | `false` | Alpha      | v1.14         | N/A          | N/A        | Yes                | OVS meters should be supported                         |
 | `EgressSeparateSubnet`          | Agent              | `true`  | Beta       | v1.15         | v2.3         | N/A        | No                 |                                                        |
 | `NodeNetworkPolicy`             | Agent              | `false` | Alpha      | v1.15         | N/A          | N/A        | Yes                |                                                        |
@@ -428,10 +428,13 @@ transport protocol, and port. Refer to this [document](antrea-l7-network-policy.
 This feature is currently only supported for Nodes running Linux, and TX checksum offloading must be disabled. Refer to
 this [document](antrea-l7-network-policy.md#prerequisites) for more information and how it can be configured.
 
-### AdminNetworkPolicy
+### K8sClusterNetworkPolicy
 
-The `AdminNetworkPolicy` API (which currently includes the AdminNetworkPolicy and BaselineAdminNetworkPolicy objects)
-complements the Antrea-native policies and help cluster administrators to set security postures in a portable manner.
+The `K8sClusterNetworkPolicy` feature gate enables support for the upstream
+[network-policy-api](https://github.com/kubernetes-sigs/network-policy-api) `ClusterNetworkPolicy` API. This single
+resource (which supersedes the previously separate AdminNetworkPolicy and BaselineAdminNetworkPolicy objects, and
+selects its tier via the `spec.tier` field) complements the Antrea-native policies and helps cluster administrators to
+set security postures in a portable manner.
 
 ### NodeNetworkPolicy
 
