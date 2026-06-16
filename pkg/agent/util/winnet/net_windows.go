@@ -399,11 +399,12 @@ func (h *Handle) AddNetNat(netNatName string, subnetCIDR *net.IPNet) error {
 			return fmt.Errorf("failed to check the existing netnat '%s': %w", netNatName, err)
 		}
 	} else {
+		internalNet = strings.TrimSpace(internalNet)
 		if strings.Contains(internalNet, subnetCIDR.String()) {
-			klog.V(4).InfoS("The existing netnat matched the subnet CIDR", "name", internalNet, "subnetCIDR", subnetCIDR.String())
+			klog.V(4).InfoS("The existing netnat matched the subnet CIDR", "name", netNatName, "internalIPInterfaceAddressPrefix", internalNet, "subnetCIDR", subnetCIDR.String())
 			return nil
 		}
-		klog.InfoS("Removing the existing NetNat", "name", netNatName, "internalIPInterfaceAddressPrefix", internalNet)
+		klog.InfoS("Removing the existing NetNat", "name", netNatName, "internalIPInterfaceAddressPrefix", internalNet, "subnetCIDR", subnetCIDR.String())
 		cmd = fmt.Sprintf("Remove-NetNat -Name %s -Confirm:$false", netNatName)
 		if _, err := runCommand(cmd); err != nil {
 			return fmt.Errorf("failed to remove the existing netnat '%s' with internalIPInterfaceAddressPrefix '%s': %w", netNatName, internalNet, err)
