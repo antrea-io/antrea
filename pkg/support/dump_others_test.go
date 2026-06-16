@@ -74,11 +74,11 @@ func TestDumpNFTables(t *testing.T) {
 	})
 
 	tests := []struct {
-		name           string
-		commandActions []testingexec.FakeCommandAction
+		name            string
+		commandActions  []testingexec.FakeCommandAction
 		expectedContent string
-		expectFile     bool
-		expectedErr    string
+		expectFile      bool
+		expectedErr     string
 	}{
 		{
 			name: "dump succeeds and writes nftables file",
@@ -141,11 +141,11 @@ func TestDumpIPSet(t *testing.T) {
 add ANTREA-POD-IP 10.244.0.0/24
 `
 	tests := []struct {
-		name          string
-		expectedCalls func(mockIPSet *ipsettest.MockInterfaceMockRecorder)
+		name            string
+		expectedCalls   func(mockIPSet *ipsettest.MockInterfaceMockRecorder)
 		expectedContent string
-		expectFile    bool
-		expectedErr   string
+		expectFile      bool
+		expectedErr     string
 	}{
 		{
 			name: "dump succeeds",
