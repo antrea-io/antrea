@@ -23,16 +23,17 @@ import (
 	"path/filepath"
 	"testing"
 
-	ipsettest "antrea.io/antrea/v2/pkg/agent/util/ipset/testing"
-	"antrea.io/antrea/v2/pkg/util/logdir"
-	agentconfig "antrea.io/antrea/v2/pkg/agent/config"
-	aqtest "antrea.io/antrea/v2/pkg/agent/querier/testing"
 	"github.com/spf13/afero"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 	"k8s.io/utils/exec"
 	testingexec "k8s.io/utils/exec/testing"
+
+	agentconfig "antrea.io/antrea/v2/pkg/agent/config"
+	aqtest "antrea.io/antrea/v2/pkg/agent/querier/testing"
+	ipsettest "antrea.io/antrea/v2/pkg/agent/util/ipset/testing"
+	"antrea.io/antrea/v2/pkg/util/logdir"
 )
 
 func TestDumpLog(t *testing.T) {
