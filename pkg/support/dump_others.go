@@ -168,7 +168,7 @@ func (d *agentDumper) dumpInterfaceConfigs(basedir string) error {
 				klog.ErrorS(err, "Failed to get sysctl value", "interface", iface.Name, "param", param)
 				continue
 			}
-			output.WriteString(fmt.Sprintf("%s=%d\n", param, value))
+			fmt.Fprintf(&output, "%s=%d\n", param, value)
 		}
 		output.WriteString("\n")
 	}
