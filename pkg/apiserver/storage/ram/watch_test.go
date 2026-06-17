@@ -62,6 +62,13 @@ func (e *emptyInternalEvent) GetResourceVersion() uint64 {
 	return 0
 }
 
+func bookmarkPod(resourceVersion string) watch.Event {
+	return watch.Event{
+		Type:   watch.Bookmark,
+		Object: &v1.Pod{ObjectMeta: metav1.ObjectMeta{ResourceVersion: resourceVersion}},
+	}
+}
+
 func TestEvents(t *testing.T) {
 	testCases := []struct {
 		initEvents  []storage.InternalEvent
@@ -89,7 +96,7 @@ func TestEvents(t *testing.T) {
 				},
 			},
 			expected: []watch.Event{
-				testutil.ExpectedInitBookmark(t, &v1.Pod{}, "0"),
+				bookmarkPod("0"),
 				{Type: watch.Added, Object: &v1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "pod1"}}},
 				{Type: watch.Modified, Object: &v1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "pod2"}}},
 				{Type: watch.Deleted, Object: &v1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "pod3"}}},
@@ -118,7 +125,7 @@ func TestEvents(t *testing.T) {
 			},
 			expected: []watch.Event{
 				{Type: watch.Added, Object: &v1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "pod1"}}},
-				testutil.ExpectedInitBookmark(t, &v1.Pod{}, "0"),
+				bookmarkPod("0"),
 				{Type: watch.Modified, Object: &v1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "pod2"}}},
 				{Type: watch.Deleted, Object: &v1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "pod3"}}},
 			},
@@ -143,7 +150,7 @@ func TestEvents(t *testing.T) {
 			},
 			expected: []watch.Event{
 				{Type: watch.Added, Object: &v1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "pod1"}}},
-				testutil.ExpectedInitBookmark(t, &v1.Pod{}, "0"),
+				bookmarkPod("0"),
 				{Type: watch.Deleted, Object: &v1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "pod3"}}},
 			},
 		},
@@ -172,17 +179,36 @@ func TestEvents(t *testing.T) {
 	}
 }
 
+func TestEventsWithInitialEventsEndBookmarkAnnotation(t *testing.T) {
+	w := newStoreWatcher(10, &storage.Selectors{}, func() {}, func() runtime.Object { return new(v1.Pod) })
+	go w.process(storage.WithInitialEventsEndBookmarkAnnotation(context.Background()), nil, 7)
+
+	actualEvent := <-w.ResultChan()
+	assert.Equal(t, testutil.ExpectedInitBookmark(t, &v1.Pod{}, "7"), actualEvent)
+	w.Stop()
+}
+
 func TestBookmarkEventToWatchEvent(t *testing.T) {
 	b := &bookmarkEvent{resourceVersion: 5, object: &v1.Pod{}}
 
-	// The bookmark marking the end of the initial events carries the resourceVersion and the
-	// initial-events-end annotation.
+	// A plain init bookmark carries the resourceVersion but must not be labeled as a Kubernetes
+	// watch-list completion bookmark.
 	initEvent := b.ToWatchEvent(&storage.Selectors{}, true)
 	assert.Equal(t, watch.Bookmark, initEvent.Type)
 	initMeta, err := meta.Accessor(initEvent.Object)
 	require.NoError(t, err)
 	assert.Equal(t, "5", initMeta.GetResourceVersion())
-	assert.Equal(t, map[string]string{metav1.InitialEventsAnnotationKey: "true"}, initMeta.GetAnnotations())
+	assert.NotContains(t, initMeta.GetAnnotations(), metav1.InitialEventsAnnotationKey)
+
+	// When requested for a watch-list, the bookmark marking the end of the initial events carries
+	// the initial-events-end annotation.
+	annotatedInit := &bookmarkEvent{resourceVersion: 6, object: &v1.Pod{}, annotateInitialEventsEndBookmark: true}
+	annotatedInitEvent := annotatedInit.ToWatchEvent(&storage.Selectors{}, true)
+	assert.Equal(t, watch.Bookmark, annotatedInitEvent.Type)
+	annotatedInitMeta, err := meta.Accessor(annotatedInitEvent.Object)
+	require.NoError(t, err)
+	assert.Equal(t, "6", annotatedInitMeta.GetResourceVersion())
+	assert.Equal(t, map[string]string{metav1.InitialEventsAnnotationKey: "true"}, annotatedInitMeta.GetAnnotations())
 
 	// A non-init bookmark carries the resourceVersion but must not be labeled as the end of the
 	// initial events, otherwise clients would prematurely consider their cache synced.
@@ -200,15 +226,6 @@ func TestBookmarkEventToWatchEvent(t *testing.T) {
 	assert.Empty(t, storedMeta.GetResourceVersion())
 	assert.Empty(t, storedMeta.GetAnnotations())
 
-	// Even if the bookmark object already carries the initial-events-end annotation, a non-init
-	// bookmark must have it stripped so clients don't mistake it for the end of the initial events.
-	annotated := &bookmarkEvent{resourceVersion: 7, object: &v1.Pod{ObjectMeta: metav1.ObjectMeta{
-		Annotations: map[string]string{metav1.InitialEventsAnnotationKey: "true"},
-	}}}
-	annotatedEvent := annotated.ToWatchEvent(&storage.Selectors{}, false)
-	annotatedMeta, err := meta.Accessor(annotatedEvent.Object)
-	require.NoError(t, err)
-	assert.NotContains(t, annotatedMeta.GetAnnotations(), metav1.InitialEventsAnnotationKey)
 }
 
 func TestAddTimeout(t *testing.T) {

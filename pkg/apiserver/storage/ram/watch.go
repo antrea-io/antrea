@@ -31,8 +31,9 @@ import (
 )
 
 type bookmarkEvent struct {
-	resourceVersion uint64
-	object          runtime.Object
+	resourceVersion                  uint64
+	object                           runtime.Object
+	annotateInitialEventsEndBookmark bool
 }
 
 func (b *bookmarkEvent) ToWatchEvent(selectors *storage.Selectors, isInitEvent bool) *watch.Event {
@@ -52,7 +53,7 @@ func (b *bookmarkEvent) ToWatchEvent(selectors *storage.Selectors, isInitEvent b
 	}
 	objMeta.SetResourceVersion(strconv.FormatUint(b.resourceVersion, 10))
 	annotations := objMeta.GetAnnotations()
-	if isInitEvent {
+	if isInitEvent && b.annotateInitialEventsEndBookmark {
 		// Mark the bookmark that signals the end of the initial set of events with the
 		// "k8s.io/initial-events-end" annotation. This follows the Kubernetes watch-list
 		// (streaming list) contract so that client-go watch-list informers can detect the
@@ -134,6 +135,7 @@ func (w *storeWatcher) add(event storage.InternalEvent, timer clock.Timer) bool 
 // process first sends initEvents and then keeps sending events got from channel input
 // if they are newer than the specified resourceVersion.
 func (w *storeWatcher) process(ctx context.Context, initEvents []storage.InternalEvent, resourceVersion uint64) {
+	annotateInitialEventsEndBookmark := storage.ShouldAnnotateInitialEventsEndBookmarkFromContext(ctx)
 	for _, event := range initEvents {
 		w.sendWatchEvent(event, true)
 	}
@@ -144,7 +146,7 @@ func (w *storeWatcher) process(ctx context.Context, initEvents []storage.Interna
 	// communicate to clients what the initial set of objects is, so that
 	// stale objects whose delete events were missed by the client (because
 	// the watch was down) can be deleted.
-	w.sendWatchEvent(&bookmarkEvent{resourceVersion, w.newFunc()}, true)
+	w.sendWatchEvent(&bookmarkEvent{resourceVersion: resourceVersion, object: w.newFunc(), annotateInitialEventsEndBookmark: annotateInitialEventsEndBookmark}, true)
 	defer close(w.result)
 	for {
 		select {

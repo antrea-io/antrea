@@ -29,7 +29,6 @@ import (
 
 	"antrea.io/antrea/v2/pkg/apis/controlplane"
 	"antrea.io/antrea/v2/pkg/apiserver/storage"
-	"antrea.io/antrea/v2/pkg/apiserver/storage/testutil"
 	"antrea.io/antrea/v2/pkg/controller/types"
 )
 
@@ -79,7 +78,7 @@ func TestWatchEgressGroupEvent(t *testing.T) {
 				store.Create(eg1)
 			},
 			expectedEvents: []watch.Event{
-				testutil.ExpectedInitBookmark(t, &controlplane.EgressGroup{}, "0"),
+				{Type: watch.Bookmark, Object: &controlplane.EgressGroup{ObjectMeta: metav1.ObjectMeta{ResourceVersion: "0"}}},
 				{Type: watch.Added, Object: &controlplane.EgressGroup{
 					TypeMeta: metav1.TypeMeta{},
 					ObjectMeta: metav1.ObjectMeta{
@@ -98,7 +97,7 @@ func TestWatchEgressGroupEvent(t *testing.T) {
 				store.Update(eg2)
 			},
 			expectedEvents: []watch.Event{
-				testutil.ExpectedInitBookmark(t, &controlplane.EgressGroup{}, "0"),
+				{Type: watch.Bookmark, Object: &controlplane.EgressGroup{ObjectMeta: metav1.ObjectMeta{ResourceVersion: "0"}}},
 				{Type: watch.Added, Object: &controlplane.EgressGroup{
 					TypeMeta: metav1.TypeMeta{},
 					ObjectMeta: metav1.ObjectMeta{
@@ -127,7 +126,7 @@ func TestWatchEgressGroupEvent(t *testing.T) {
 				store.Update(eg3)
 			},
 			expectedEvents: []watch.Event{
-				testutil.ExpectedInitBookmark(t, &controlplane.EgressGroup{}, "0"),
+				{Type: watch.Bookmark, Object: &controlplane.EgressGroup{ObjectMeta: metav1.ObjectMeta{ResourceVersion: "0"}}},
 				{Type: watch.Added, Object: &controlplane.EgressGroup{
 					TypeMeta: metav1.TypeMeta{},
 					ObjectMeta: metav1.ObjectMeta{
@@ -155,7 +154,7 @@ func TestWatchEgressGroupEvent(t *testing.T) {
 				store.Update(eg3)
 			},
 			expectedEvents: []watch.Event{
-				testutil.ExpectedInitBookmark(t, &controlplane.EgressGroup{}, "0"),
+				{Type: watch.Bookmark, Object: &controlplane.EgressGroup{ObjectMeta: metav1.ObjectMeta{ResourceVersion: "0"}}},
 				{Type: watch.Added, Object: &controlplane.EgressGroup{
 					TypeMeta: metav1.TypeMeta{},
 					ObjectMeta: metav1.ObjectMeta{

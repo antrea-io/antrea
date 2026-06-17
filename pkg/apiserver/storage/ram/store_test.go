@@ -35,7 +35,6 @@ import (
 	"k8s.io/utils/clock"
 
 	antreastorage "antrea.io/antrea/v2/pkg/apiserver/storage"
-	"antrea.io/antrea/v2/pkg/apiserver/storage/testutil"
 )
 
 // testEvent implements InternalEvent.
@@ -297,7 +296,7 @@ func TestRamStoreWatchAll(t *testing.T) {
 				store.Update(&v1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "pod1", Labels: map[string]string{"app": "nginx2"}}})
 			},
 			expected: []watch.Event{
-				testutil.ExpectedInitBookmark(t, &v1.Pod{}, "0"),
+				bookmarkPod("0"),
 				{Type: watch.Added, Object: &v1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "pod1", Labels: map[string]string{"app": "nginx1"}}}},
 				{Type: watch.Modified, Object: &v1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "pod1", Labels: map[string]string{"app": "nginx2"}}}},
 			},
@@ -308,7 +307,7 @@ func TestRamStoreWatchAll(t *testing.T) {
 				store.Delete("pod1")
 			},
 			expected: []watch.Event{
-				testutil.ExpectedInitBookmark(t, &v1.Pod{}, "0"),
+				bookmarkPod("0"),
 				{Type: watch.Added, Object: &v1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "pod1", Labels: map[string]string{"app": "nginx1"}}}},
 				{Type: watch.Deleted, Object: &v1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "pod1", Labels: map[string]string{"app": "nginx1"}}}},
 			},
@@ -358,7 +357,7 @@ func TestRamStoreWatchWithInitOperations(t *testing.T) {
 			},
 			expected: []watch.Event{
 				{Type: watch.Added, Object: &v1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "pod1", Labels: map[string]string{"app": "nginx3"}}}},
-				testutil.ExpectedInitBookmark(t, &v1.Pod{}, "3"),
+				bookmarkPod("3"),
 				{Type: watch.Added, Object: &v1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "pod2", Labels: map[string]string{"app": "nginx2"}}}},
 				{Type: watch.Modified, Object: &v1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "pod2", Labels: map[string]string{"app": "nginx3"}}}},
 			},
@@ -374,7 +373,7 @@ func TestRamStoreWatchWithInitOperations(t *testing.T) {
 			},
 			expected: []watch.Event{
 				{Type: watch.Added, Object: &v1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "pod1", Labels: map[string]string{"app": "nginx1"}}}},
-				testutil.ExpectedInitBookmark(t, &v1.Pod{}, "3"),
+				bookmarkPod("3"),
 				{Type: watch.Deleted, Object: &v1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "pod1", Labels: map[string]string{"app": "nginx1"}}}},
 			},
 		},
@@ -419,7 +418,7 @@ func TestRamStoreWatchWithSelector(t *testing.T) {
 			},
 			labelSelector: labels.SelectorFromSet(labels.Set{"app": "nginx1"}),
 			expected: []watch.Event{
-				testutil.ExpectedInitBookmark(t, &v1.Pod{}, "0"),
+				bookmarkPod("0"),
 				{Type: watch.Added, Object: &v1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "pod1", Labels: map[string]string{"app": "nginx1"}}}},
 				{Type: watch.Deleted, Object: &v1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "pod1", Labels: map[string]string{"app": "nginx1"}}}},
 			},
@@ -431,7 +430,7 @@ func TestRamStoreWatchWithSelector(t *testing.T) {
 			},
 			labelSelector: labels.SelectorFromSet(labels.Set{"app": "nginx2"}),
 			expected: []watch.Event{
-				testutil.ExpectedInitBookmark(t, &v1.Pod{}, "0"),
+				bookmarkPod("0"),
 				{Type: watch.Added, Object: &v1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "pod1", Labels: map[string]string{"app": "nginx2"}}}},
 			},
 		},
@@ -444,7 +443,7 @@ func TestRamStoreWatchWithSelector(t *testing.T) {
 			},
 			labelSelector: labels.SelectorFromSet(labels.Set{"app": "nginx1"}),
 			expected: []watch.Event{
-				testutil.ExpectedInitBookmark(t, &v1.Pod{}, "0"),
+				bookmarkPod("0"),
 				{Type: watch.Added, Object: &v1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "pod1", Labels: map[string]string{"app": "nginx1"}}}},
 				{Type: watch.Deleted, Object: &v1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "pod1", Labels: map[string]string{"app": "nginx1"}}}},
 			},
