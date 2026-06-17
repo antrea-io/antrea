@@ -16,18 +16,8 @@ package sets
 
 import "k8s.io/apimachinery/pkg/util/sets"
 
-// MergeInt32 merges the src sets into dst and returns dst.
-// This assumes that dst is non-nil.
-// For example:
-// s1 = {a1, a2, a3}
-// s2 = {a1, a2, a4, a5}
-// MergeInt32(s1, s2) = {a1, a2, a3, a4, a5}
-// s1 = {a1, a2, a3, a4, a5}
-//
-// It supersedes s1.Union(s2) when constructing a new set is not the intention.
+// Deprecated: MergeInt32 is a type-specific version of Merge.
+// Use Merge instead.
 func MergeInt32(dst, src sets.Set[int32]) sets.Set[int32] {
-	for item := range src {
-		dst.Insert(item)
-	}
-	return dst
+	return Merge(dst, src)
 }

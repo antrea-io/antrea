@@ -277,7 +277,7 @@ func (c *Controller) updatePod(oldObj interface{}, obj interface{}) {
 	}
 	oldAffectedTCs := c.filterAffectedTCsByPod(oldPod)
 	nowAffectedTCs := c.filterAffectedTCsByPod(pod)
-	affectedTCs := utilsets.SymmetricDifferenceString(oldAffectedTCs, nowAffectedTCs)
+	affectedTCs := utilsets.SymmetricDifference(oldAffectedTCs, nowAffectedTCs)
 	if len(affectedTCs) == 0 {
 		return
 	}
@@ -343,7 +343,7 @@ func (c *Controller) updateNamespace(oldObj, obj interface{}) {
 	}
 	oldAffectedTCs := c.filterAffectedTCsByNS(oldNS)
 	nowAffectedTCs := c.filterAffectedTCsByNS(ns)
-	affectedTCs := utilsets.SymmetricDifferenceString(oldAffectedTCs, nowAffectedTCs)
+	affectedTCs := utilsets.SymmetricDifference(oldAffectedTCs, nowAffectedTCs)
 	if len(affectedTCs) == 0 {
 		return
 	}
