@@ -19,13 +19,17 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	v1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/utils/clock"
 
 	"antrea.io/antrea/v2/pkg/apiserver/storage"
+	"antrea.io/antrea/v2/pkg/apiserver/storage/testutil"
 )
 
 // simpleInternalEvent simply construct watch.Event based on the provided Type and Object
@@ -85,7 +89,7 @@ func TestEvents(t *testing.T) {
 				},
 			},
 			expected: []watch.Event{
-				{Type: watch.Bookmark, Object: &v1.Pod{}},
+				testutil.ExpectedInitBookmark(t, &v1.Pod{}, "0"),
 				{Type: watch.Added, Object: &v1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "pod1"}}},
 				{Type: watch.Modified, Object: &v1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "pod2"}}},
 				{Type: watch.Deleted, Object: &v1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "pod3"}}},
@@ -114,7 +118,7 @@ func TestEvents(t *testing.T) {
 			},
 			expected: []watch.Event{
 				{Type: watch.Added, Object: &v1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "pod1"}}},
-				{Type: watch.Bookmark, Object: &v1.Pod{}},
+				testutil.ExpectedInitBookmark(t, &v1.Pod{}, "0"),
 				{Type: watch.Modified, Object: &v1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "pod2"}}},
 				{Type: watch.Deleted, Object: &v1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "pod3"}}},
 			},
@@ -139,7 +143,7 @@ func TestEvents(t *testing.T) {
 			},
 			expected: []watch.Event{
 				{Type: watch.Added, Object: &v1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "pod1"}}},
-				{Type: watch.Bookmark, Object: &v1.Pod{}},
+				testutil.ExpectedInitBookmark(t, &v1.Pod{}, "0"),
 				{Type: watch.Deleted, Object: &v1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "pod3"}}},
 			},
 		},
@@ -166,6 +170,45 @@ func TestEvents(t *testing.T) {
 		}
 		w.Stop()
 	}
+}
+
+func TestBookmarkEventToWatchEvent(t *testing.T) {
+	b := &bookmarkEvent{resourceVersion: 5, object: &v1.Pod{}}
+
+	// The bookmark marking the end of the initial events carries the resourceVersion and the
+	// initial-events-end annotation.
+	initEvent := b.ToWatchEvent(&storage.Selectors{}, true)
+	assert.Equal(t, watch.Bookmark, initEvent.Type)
+	initMeta, err := meta.Accessor(initEvent.Object)
+	require.NoError(t, err)
+	assert.Equal(t, "5", initMeta.GetResourceVersion())
+	assert.Equal(t, map[string]string{metav1.InitialEventsAnnotationKey: "true"}, initMeta.GetAnnotations())
+
+	// A non-init bookmark carries the resourceVersion but must not be labeled as the end of the
+	// initial events, otherwise clients would prematurely consider their cache synced.
+	nonInitEvent := b.ToWatchEvent(&storage.Selectors{}, false)
+	assert.Equal(t, watch.Bookmark, nonInitEvent.Type)
+	nonInitMeta, err := meta.Accessor(nonInitEvent.Object)
+	require.NoError(t, err)
+	assert.Equal(t, "5", nonInitMeta.GetResourceVersion())
+	assert.NotContains(t, nonInitMeta.GetAnnotations(), metav1.InitialEventsAnnotationKey)
+
+	// The InternalEvent must remain immutable during its conversion: the stored object should not
+	// have been mutated by either conversion above.
+	storedMeta, err := meta.Accessor(b.object)
+	require.NoError(t, err)
+	assert.Empty(t, storedMeta.GetResourceVersion())
+	assert.Empty(t, storedMeta.GetAnnotations())
+
+	// Even if the bookmark object already carries the initial-events-end annotation, a non-init
+	// bookmark must have it stripped so clients don't mistake it for the end of the initial events.
+	annotated := &bookmarkEvent{resourceVersion: 7, object: &v1.Pod{ObjectMeta: metav1.ObjectMeta{
+		Annotations: map[string]string{metav1.InitialEventsAnnotationKey: "true"},
+	}}}
+	annotatedEvent := annotated.ToWatchEvent(&storage.Selectors{}, false)
+	annotatedMeta, err := meta.Accessor(annotatedEvent.Object)
+	require.NoError(t, err)
+	assert.NotContains(t, annotatedMeta.GetAnnotations(), metav1.InitialEventsAnnotationKey)
 }
 
 func TestAddTimeout(t *testing.T) {

@@ -30,6 +30,7 @@ import (
 	"k8s.io/apimachinery/pkg/watch"
 
 	"antrea.io/antrea/v2/pkg/apis/controlplane"
+	"antrea.io/antrea/v2/pkg/apiserver/storage/testutil"
 	"antrea.io/antrea/v2/pkg/controller/networkpolicy/store"
 	"antrea.io/antrea/v2/pkg/controller/types"
 )
@@ -154,7 +155,7 @@ func TestRESTWatch(t *testing.T) {
 			name:          "nodeName selecting nothing",
 			fieldSelector: fields.OneTermEqualSelector("nodeName", "foo"),
 			expectedEvents: []watch.Event{
-				{Type: watch.Bookmark, Object: &controlplane.NetworkPolicy{}},
+				testutil.ExpectedInitBookmark(t, &controlplane.NetworkPolicy{}, "1"),
 			},
 		},
 		{
@@ -162,7 +163,7 @@ func TestRESTWatch(t *testing.T) {
 			fieldSelector: fields.OneTermEqualSelector("nodeName", "node1"),
 			expectedEvents: []watch.Event{
 				{Type: watch.Added, Object: &controlplane.NetworkPolicy{ObjectMeta: v1.ObjectMeta{Name: "networkPolicy1"}}},
-				{Type: watch.Bookmark, Object: &controlplane.NetworkPolicy{}},
+				testutil.ExpectedInitBookmark(t, &controlplane.NetworkPolicy{}, "1"),
 			},
 		},
 		{
@@ -170,7 +171,7 @@ func TestRESTWatch(t *testing.T) {
 			fieldSelector: nil,
 			expectedEvents: []watch.Event{
 				{Type: watch.Added, Object: &controlplane.NetworkPolicy{ObjectMeta: v1.ObjectMeta{Name: "networkPolicy1"}}},
-				{Type: watch.Bookmark, Object: &controlplane.NetworkPolicy{}},
+				testutil.ExpectedInitBookmark(t, &controlplane.NetworkPolicy{}, "1"),
 			},
 		},
 	}

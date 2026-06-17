@@ -16,8 +16,12 @@ package ram
 
 import (
 	"context"
+	"fmt"
+	"strconv"
 	"sync"
 
+	"k8s.io/apimachinery/pkg/api/meta"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/klog/v2"
@@ -32,7 +36,34 @@ type bookmarkEvent struct {
 }
 
 func (b *bookmarkEvent) ToWatchEvent(selectors *storage.Selectors, isInitEvent bool) *watch.Event {
-	return &watch.Event{Type: watch.Bookmark, Object: b.object}
+	// Copy the object before mutating it: an InternalEvent is expected to be immutable during
+	// its conversion to a *watch.Event (ToWatchEvent may be called once per interested watcher).
+	object := b.object.DeepCopyObject()
+	// meta.Accessor is the upstream pattern (see k8s.io/apiserver/pkg/storage.AnnotateInitialEventsEndBookmark)
+	// for setting metadata on a bookmark object regardless of its concrete type.
+	objMeta, err := meta.Accessor(object)
+	if err != nil {
+		// This is not expected for the controlplane resources served from this storage, as they all
+		// embed ObjectMeta. Surface it so a contract violation (a bookmark on which the
+		// resourceVersion and the initial-events-end annotation could not be set, which breaks
+		// watch-list clients) is visible at runtime instead of failing silently.
+		klog.ErrorS(err, "Failed to access bookmark object metadata, unable to set resourceVersion and initial-events-end annotation on bookmark", "objectType", fmt.Sprintf("%T", object))
+		return &watch.Event{Type: watch.Bookmark, Object: object}
+	}
+	objMeta.SetResourceVersion(strconv.FormatUint(b.resourceVersion, 10))
+	annotations := objMeta.GetAnnotations()
+	if isInitEvent {
+		// Mark the bookmark that signals the end of the initial set of events with the
+		// "k8s.io/initial-events-end" annotation. This follows the Kubernetes watch-list
+		// (streaming list) contract so that client-go watch-list informers can detect the
+		// end of the initial events and complete their synchronization.
+		if annotations == nil {
+			annotations = map[string]string{}
+		}
+		annotations[metav1.InitialEventsAnnotationKey] = "true"
+		objMeta.SetAnnotations(annotations)
+	}
+	return &watch.Event{Type: watch.Bookmark, Object: object}
 }
 
 func (b *bookmarkEvent) GetResourceVersion() uint64 {
