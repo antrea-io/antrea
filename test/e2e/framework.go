@@ -1162,13 +1162,16 @@ func (data *TestData) deployFlowAggregator(
 			ObjectMeta: metav1.ObjectMeta{
 				Name: flowAggregatorIPFIXClientTLSSecretName,
 			},
-			Immutable: ptr.To(true),
 			Data: map[string][]byte{
 				"tls.crt": ipfixClientCert,
 				"tls.key": ipfixClientKey,
 			},
 		}
-		if _, err := data.clientset.CoreV1().Secrets(namespace).Create(context.TODO(), clientCertSecret, metav1.CreateOptions{}); err != nil {
+		_, err := data.clientset.CoreV1().Secrets(namespace).Create(context.TODO(), clientCertSecret, metav1.CreateOptions{})
+		if apierrors.IsAlreadyExists(err) {
+			_, err = data.clientset.CoreV1().Secrets(namespace).Update(context.TODO(), clientCertSecret, metav1.UpdateOptions{})
+		}
+		if err != nil {
 			return fmt.Errorf("failed to create Secret for IPFIX client certificate: %w", err)
 		}
 	}
@@ -1178,12 +1181,15 @@ func (data *TestData) deployFlowAggregator(
 			ObjectMeta: metav1.ObjectMeta{
 				Name: flowAggregatorIPFIXCASecretName,
 			},
-			Immutable: ptr.To(true),
 			Data: map[string][]byte{
 				"ca.crt": ipfixServerCA,
 			},
 		}
-		if _, err := data.clientset.CoreV1().Secrets(namespace).Create(context.TODO(), serverCASecret, metav1.CreateOptions{}); err != nil {
+		_, err := data.clientset.CoreV1().Secrets(namespace).Create(context.TODO(), serverCASecret, metav1.CreateOptions{})
+		if apierrors.IsAlreadyExists(err) {
+			_, err = data.clientset.CoreV1().Secrets(namespace).Update(context.TODO(), serverCASecret, metav1.UpdateOptions{})
+		}
+		if err != nil {
 			return fmt.Errorf("failed to create Secret for IPFIX server CA certificate: %w", err)
 		}
 	}

@@ -53,11 +53,34 @@ type FromExternalCorrelator struct {
 	cleanUpInterval time.Duration
 }
 
-// correlatorKey identifies a flow by the Pod (or endpoint) IP and the masquerade reply port used
-// to match default-zone tuples to Antrea-zone tuples.
+// correlatorKey is the four-tuple used to match a default-zone (pre-NAT) conntrack entry to its
+// Antrea-zone counterpart.
+//
+// SNAT case (standard NodePort masquerade):
+//   - Zone-0 tuple:       src=<externalClientIP>:<clientPort>  dst=<podIP>:<podPort>  proto=<P>
+//     ProxySnatPort is set to the masquerade ephemeral port allocated by kube-proxy/iptables.
+//   - Antrea-zone tuple:  src=<nodeIP>:<snatPort>  dst=<podIP>:<podPort>  proto=<P>
+//     The source address is the node's gateway IP and the source port equals ProxySnatPort.
+//   - Matching logic: zone-0 is indexed by (dstIP=podIP, dstPort=podPort, proto=P, port=snatPort);
+//     the Antrea-zone connection is looked up by (dstIP=podIP, dstPort=podPort, proto=P,
+//     port=FlowKey.SourcePort=snatPort). In most cases, snatPort + dstIP is sufficient to uniquely
+//     identify/match flows across the two zones. However, in rare cases where two concurrent flows
+//     share the same ephemeral SNAT port and connect to the same Pod IP on different ports / under
+//     different protocols, dstPort and protocol are used to differentiate between these flows.
+//
+// Non-SNAT case (externalTrafficPolicy=Local):
+//   - Zone-0 tuple:        src=<externalClientIP>:<clientPort>  dst=<podIP>:<podPort>  proto=<P>
+//     ProxySnatPort is 0 because no masquerade is applied.
+//   - Antrea-zone tuple:   src=<gatewayIP>:<clientPort>  dst=<podIP>:<podPort>  proto=<P>
+//     The source port is unchanged (equals the real client port) because no SNAT occurred.
+//   - Matching logic: zone-0 is indexed by (dstIP=podIP, dstPort=podPort, proto=P,
+//     port=FlowKey.SourcePort=clientPort); the Antrea-zone connection is looked up by the same
+//     four-tuple as the case above.
 type correlatorKey struct {
-	dstIP netip.Addr
-	port  uint16
+	dstIP    netip.Addr
+	dstPort  uint16
+	protocol uint8
+	port     uint16
 }
 
 // defaultZoneSnapshot holds only the default-zone fields needed to patch the Antrea-zone
@@ -121,11 +144,21 @@ func keyFromDefaultZoneConn(conn *connection.Connection) correlatorKey {
 	if port == 0 {
 		port = conn.FlowKey.SourcePort
 	}
-	return correlatorKey{dstIP: conn.FlowKey.DestinationAddress, port: port}
+	return correlatorKey{
+		dstIP:    conn.FlowKey.DestinationAddress,
+		dstPort:  conn.FlowKey.DestinationPort,
+		protocol: conn.FlowKey.Protocol,
+		port:     port,
+	}
 }
 
 func keyFromAntreaZoneConn(conn *connection.Connection) correlatorKey {
-	return correlatorKey{dstIP: conn.FlowKey.DestinationAddress, port: conn.FlowKey.SourcePort}
+	return correlatorKey{
+		dstIP:    conn.FlowKey.DestinationAddress,
+		dstPort:  conn.FlowKey.DestinationPort,
+		protocol: conn.FlowKey.Protocol,
+		port:     conn.FlowKey.SourcePort,
+	}
 }
 
 // IngestDefaultZoneFlow stores default-zone connections that may later pair with Antrea-zone connections.
@@ -148,8 +181,8 @@ func (c *FromExternalCorrelator) IngestDefaultZoneFlow(conn *connection.Connecti
 		klog.V(4).InfoS("Could not retrieve Service protocol for default-zone connection, skipping", "protocol", conn.FlowKey.Protocol)
 		return
 	}
-	// With no proxier, retain every default-zone flow (no Service lookup). With proxier, only
-	// retain when GetServiceByIP matches.
+	// With no proxier, retain every default-zone flow (no Service lookup).
+	// With proxier, only retain when GetServiceByIP matches.
 	shouldStore := true
 	if c.proxier != nil {
 		serviceStr := fmt.Sprintf("%s:%d/%s", svcIP, svcPort, protocol)
@@ -164,7 +197,7 @@ func (c *FromExternalCorrelator) IngestDefaultZoneFlow(conn *connection.Connecti
 // to preserve the SNAT'd source IP. The correlator map only ever contains entries that were
 // stored by IngestDefaultZoneFlow (which itself only keeps Service flows).
 func (c *FromExternalCorrelator) CorrelateIfExternal(conn *connection.Connection) bool {
-	if conn == nil {
+	if conn == nil || conn.IsFromExternal {
 		return false
 	}
 	snapshot, ok := c.popMatching(conn)

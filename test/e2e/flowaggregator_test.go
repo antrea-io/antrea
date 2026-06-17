@@ -200,6 +200,11 @@ func setupFlowAggregatorTest(t *testing.T, options flowVisibilityTestOptions) (*
 		t.Fatalf("Error when setting up test: %v", err)
 	}
 	teardownFuncs = append(teardownFuncs, func() { teardownTest(t, data) })
+	// Execute teardownFlowAggregator after teardownTest to ensure that the logs of Flow
+	// Aggregator have been exported. Register it before calling setupFlowAggregator so that
+	// cleanup always runs even if setup or the metrics check fails, preventing stale
+	// flow-aggregator namespace and secrets from leaking into the next subtest.
+	teardownFuncs = append(teardownFuncs, func() { teardownFlowAggregator(t, data) })
 	// Make sure that antreaClusterUUID is set if this function is called for the first time.
 	if antreaClusterUUID == "" {
 		if uuid, err := data.getAntreaClusterUUID(10 * time.Second); err != nil {
@@ -217,9 +222,6 @@ func setupFlowAggregatorTest(t *testing.T, options flowVisibilityTestOptions) (*
 		t.Fatalf("Error when checking metrics of Flow Aggregator: %v", err)
 	}
 
-	// Execute teardownFlowAggregator later than teardownTest to ensure that the logs of Flow
-	// Aggregator has been exported.
-	teardownFuncs = append(teardownFuncs, func() { teardownFlowAggregator(t, data) })
 	return data, isIPv4Enabled(), isIPv6Enabled()
 }
 
@@ -2115,15 +2117,15 @@ func testExternalToPodFlows(t *testing.T, data *TestData, isIPv6 bool) {
 	}
 	for _, tc := range tc {
 		t.Run(tc.name, func(t *testing.T) {
-			sourceIP, _ := createExternalToPodConnection(t, data, service, tc.node, isIPv6)
+			sourceIP, sourcePort := createExternalToPodConnection(t, data, service, tc.node, isIPv6)
 			var dstIP string
 			if isIPv6 {
 				dstIP = nginxIP.IPv6.String()
 			} else {
 				dstIP = nginxIP.IPv4.String()
 			}
-
-			records := getCollectorOutput(t, sourceIP, dstIP, "", false, false, isIPv6, data, "", getCollectorOutputDefaultTimeout)
+			srcPortFilter := "sourceTransportPort: " + sourcePort
+			records := getCollectorOutput(t, sourceIP, dstIP, srcPortFilter, false, false, isIPv6, data, "", getCollectorOutputDefaultTimeout)
 			assert.NotEmpty(t, records, "Expected flows from ipfix collector to include source IP %s and destination ip %s", sourceIP, dstIP)
 			for _, record := range records {
 				assert := assert.New(t)
@@ -2132,7 +2134,6 @@ func testExternalToPodFlows(t *testing.T, data *TestData, isIPv6 bool) {
 				assert.Contains(record, strconv.Itoa(int(containerPort)), "Aggregated Record does not have the service port")
 				assertIPFIXRecordProxySnatSet(t, record, isIPv6)
 			}
-			flushFlowsFromCollector(t, data, isIPv6)
 		})
 	}
 
@@ -2164,20 +2165,6 @@ func testExternalToPodFlows(t *testing.T, data *TestData, isIPv6 bool) {
 			assertIPFIXRecordProxySnatUnset(t, record)
 		}
 	})
-}
-
-func flushFlowsFromCollector(t *testing.T, data *TestData, isIPv6 bool) {
-	ipfixCollectorIP, err := data.podWaitForIPs(defaultTimeout, "ipfix-collector", data.testNamespace)
-	require.NoErrorf(t, err, "Should be able to get IP from IPFIX collector Pod")
-	require.NotEmpty(t, ipfixCollectorIP.IPStrings, "IPFIX collector Pod should have at least one IP")
-	var cmd string
-	if !isIPv6 {
-		cmd = fmt.Sprintf("curl http://%s:8080/reset", ipfixCollectorIP.IPv4.String())
-	} else {
-		cmd = fmt.Sprintf("curl http://[%s]:8080/reset", ipfixCollectorIP.IPv6.String())
-	}
-	_, _, _, err = data.RunCommandOnNode(controlPlaneNodeName(), cmd)
-	require.NoErrorf(t, err, "failed to reach the ipfix collector's '/reset' endpoint to flush its cache of flows")
 }
 
 type ClickHouseFullRow struct {

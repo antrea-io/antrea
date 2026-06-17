@@ -351,14 +351,14 @@ func (e *ipfixExporter) addConnToSet(conn *connection.Connection) error {
 				// Sending dummy IP as IPFIX collector expects constant length of data for IP field.
 				// We should probably think of better approach as this involves customization of IPFIX collector to ignore
 				// this dummy IP address.
-				ie.SetIPAddressValue(net.IP{0, 0, 0, 0})
+				ie.SetIPAddressValue(net.IPv4zero)
 			}
 		case "destinationClusterIPv6":
 			if conn.DestinationServicePortName != "" {
 				ie.SetIPAddressValue(conn.OriginalDestinationAddress.AsSlice())
 			} else {
 				// Same as destinationClusterIPv4.
-				ie.SetIPAddressValue(net.ParseIP("::"))
+				ie.SetIPAddressValue(net.IPv6zero)
 			}
 		case "destinationServicePort":
 			if conn.DestinationServicePortName != "" {
@@ -402,25 +402,25 @@ func (e *ipfixExporter) addConnToSet(conn *connection.Connection) error {
 			if conn.DestinationServicePortName != "" {
 				ie.SetIPAddressValue(conn.OriginalDestinationAddress.AsSlice())
 			} else {
-				ie.SetIPAddressValue(net.IP{0, 0, 0, 0})
+				ie.SetIPAddressValue(net.IPv4zero)
 			}
 		case "destinationServiceIPv6":
 			if conn.DestinationServicePortName != "" {
 				ie.SetIPAddressValue(conn.OriginalDestinationAddress.AsSlice())
 			} else {
-				ie.SetIPAddressValue(net.ParseIP("::"))
+				ie.SetIPAddressValue(net.IPv6zero)
 			}
 		case "proxySnatIPv4":
 			if conn.ProxySnatIP.IsValid() {
 				ie.SetIPAddressValue(conn.ProxySnatIP.AsSlice())
 			} else {
-				ie.SetIPAddressValue(net.IP{0, 0, 0, 0})
+				ie.SetIPAddressValue(net.IPv4zero)
 			}
 		case "proxySnatIPv6":
 			if conn.ProxySnatIP.IsValid() {
 				ie.SetIPAddressValue(conn.ProxySnatIP.AsSlice())
 			} else {
-				ie.SetIPAddressValue(net.ParseIP("::"))
+				ie.SetIPAddressValue(net.IPv6zero)
 			}
 		case "proxySnatPort":
 			ie.SetUnsigned16Value(conn.ProxySnatPort)
