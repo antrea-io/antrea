@@ -47,6 +47,7 @@ func TestProcessClusterNetworkPolicy(t *testing.T) {
 	selGateway := metav1.LabelSelector{MatchLabels: map[string]string{"role": "gateway"}}
 	emptyNSSel := metav1.LabelSelector{}
 	selTeam := metav1.LabelSelector{MatchLabels: map[string]string{"team": "a"}}
+	selNodes := metav1.LabelSelector{MatchLabels: map[string]string{"node-role.kubernetes.io/worker": ""}}
 
 	port80 := intstr.FromInt32(80)
 	port443 := intstr.FromInt32(443)
@@ -286,6 +287,413 @@ func TestProcessClusterNetworkPolicy(t *testing.T) {
 			expectedAddressGroups:   0,
 		},
 		{
+			name: "egress-to-nodes-peer",
+			inputPolicy: &v1alpha2.ClusterNetworkPolicy{
+				ObjectMeta: metav1.ObjectMeta{Name: "cnp-egress-nodes", UID: "uid-nodes"},
+				Spec: v1alpha2.ClusterNetworkPolicySpec{
+					Tier:     v1alpha2.AdminTier,
+					Priority: 10,
+					Subject: v1alpha2.ClusterNetworkPolicySubject{
+						Pods: &v1alpha2.NamespacedPod{
+							NamespaceSelector: selEnv,
+							PodSelector:       selApp,
+						},
+					},
+					Egress: []v1alpha2.ClusterNetworkPolicyEgressRule{
+						{
+							Name:   "to-workers",
+							Action: v1alpha2.ClusterNetworkPolicyRuleActionAccept,
+							To: []v1alpha2.ClusterNetworkPolicyEgressPeer{
+								{Nodes: &selNodes},
+							},
+						},
+					},
+				},
+			},
+			expectedPolicy: &antreatypes.NetworkPolicy{
+				UID:  "uid-nodes",
+				Name: "uid-nodes",
+				SourceRef: &controlplane.NetworkPolicyReference{
+					Type: controlplane.ClusterNetworkPolicy,
+					Name: "cnp-egress-nodes",
+					UID:  "uid-nodes",
+				},
+				Priority:         ptr.To(float64(10)),
+				TierPriority:     ptr.To(adminTierPriority),
+				AppliedToPerRule: false,
+				Rules: []controlplane.NetworkPolicyRule{
+					{
+						Direction: controlplane.DirectionOut,
+						To: controlplane.NetworkPolicyPeer{
+							AddressGroups: []string{getNormalizedUID(antreatypes.NewGroupSelector("", nil, nil, nil, &selNodes).NormalizedName)},
+						},
+						Name:     "to-workers",
+						Action:   &allow,
+						Priority: 0,
+					},
+				},
+				AppliedToGroups: []string{getNormalizedUID(antreatypes.NewGroupSelector("", &selApp, &selEnv, nil, nil).NormalizedName)},
+			},
+			expectedAppliedToGroups: 1,
+			expectedAddressGroups:   1,
+		},
+		{
+			name: "egress-to-domain-names-peer",
+			inputPolicy: &v1alpha2.ClusterNetworkPolicy{
+				ObjectMeta: metav1.ObjectMeta{Name: "cnp-egress-fqdn", UID: "uid-fqdn"},
+				Spec: v1alpha2.ClusterNetworkPolicySpec{
+					Tier:     v1alpha2.AdminTier,
+					Priority: 10,
+					Subject: v1alpha2.ClusterNetworkPolicySubject{
+						Pods: &v1alpha2.NamespacedPod{
+							NamespaceSelector: selEnv,
+							PodSelector:       selApp,
+						},
+					},
+					Egress: []v1alpha2.ClusterNetworkPolicyEgressRule{
+						{
+							Name:   "to-api",
+							Action: v1alpha2.ClusterNetworkPolicyRuleActionAccept,
+							To: []v1alpha2.ClusterNetworkPolicyEgressPeer{
+								{
+									DomainNames: []v1alpha2.DomainName{
+										"api.example.com", "*.cdn.example.com",
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			expectedPolicy: &antreatypes.NetworkPolicy{
+				UID:  "uid-fqdn",
+				Name: "uid-fqdn",
+				SourceRef: &controlplane.NetworkPolicyReference{
+					Type: controlplane.ClusterNetworkPolicy,
+					Name: "cnp-egress-fqdn",
+					UID:  "uid-fqdn",
+				},
+				Priority:         ptr.To(float64(10)),
+				TierPriority:     ptr.To(adminTierPriority),
+				AppliedToPerRule: false,
+				Rules: []controlplane.NetworkPolicyRule{
+					{
+						Direction: controlplane.DirectionOut,
+						To: controlplane.NetworkPolicyPeer{
+							FQDNs: []string{"api.example.com", "*.cdn.example.com"},
+						},
+						Name:     "to-api",
+						Action:   &allow,
+						Priority: 0,
+					},
+				},
+				AppliedToGroups: []string{getNormalizedUID(antreatypes.NewGroupSelector("", &selApp, &selEnv, nil, nil).NormalizedName)},
+			},
+			expectedAppliedToGroups: 1,
+			expectedAddressGroups:   0,
+		},
+		{
+			// Simulate a future CRD version that adds an unknown field to ClusterNetworkPolicyEgressPeer.
+			// With a Deny action the fail-closed behavior must return matchAllPeer.
+			name: "egress-unknown-peer-field-deny-action-fails-closed-with-matchAllPeer",
+			inputPolicy: &v1alpha2.ClusterNetworkPolicy{
+				ObjectMeta: metav1.ObjectMeta{Name: "cnp-unknown-egress-deny", UID: "uid-fc1"},
+				Spec: v1alpha2.ClusterNetworkPolicySpec{
+					Tier:     v1alpha2.AdminTier,
+					Priority: 10,
+					Subject: v1alpha2.ClusterNetworkPolicySubject{
+						Pods: &v1alpha2.NamespacedPod{
+							NamespaceSelector: selEnv,
+							PodSelector:       selApp,
+						},
+					},
+					Egress: []v1alpha2.ClusterNetworkPolicyEgressRule{
+						{
+							Name:   "deny-unknown",
+							Action: v1alpha2.ClusterNetworkPolicyRuleActionDeny,
+							// Empty peer: no known field is set, simulating an unknown future field.
+							To: []v1alpha2.ClusterNetworkPolicyEgressPeer{{}},
+						},
+					},
+				},
+			},
+			expectedPolicy: &antreatypes.NetworkPolicy{
+				UID:  "uid-fc1",
+				Name: "uid-fc1",
+				SourceRef: &controlplane.NetworkPolicyReference{
+					Type: controlplane.ClusterNetworkPolicy,
+					Name: "cnp-unknown-egress-deny",
+					UID:  "uid-fc1",
+				},
+				Priority:         ptr.To(float64(10)),
+				TierPriority:     ptr.To(adminTierPriority),
+				AppliedToPerRule: false,
+				Rules: []controlplane.NetworkPolicyRule{
+					{
+						Direction: controlplane.DirectionOut,
+						To:        matchAllPeer,
+						Name:      "deny-unknown",
+						Action:    &drop,
+						Priority:  0,
+					},
+				},
+				AppliedToGroups: []string{getNormalizedUID(antreatypes.NewGroupSelector("", &selApp, &selEnv, nil, nil).NormalizedName)},
+			},
+			expectedAppliedToGroups: 1,
+			expectedAddressGroups:   0,
+		},
+		{
+			// Simulate a future CRD version that adds an unknown field to ClusterNetworkPolicyEgressPeer.
+			// With a Pass action the fail-closed behavior means: treat the rule as matching no traffic
+			// (empty peer). This lets traffic fall through to underlying rules (e.g. a deny-all),
+			// achieving a safe deny-all net effect without inadvertently bypassing those rules.
+			name: "egress-unknown-peer-field-pass-action-fails-closed-with-empty-peer",
+			inputPolicy: &v1alpha2.ClusterNetworkPolicy{
+				ObjectMeta: metav1.ObjectMeta{Name: "cnp-unknown-egress-pass", UID: "uid-fc2"},
+				Spec: v1alpha2.ClusterNetworkPolicySpec{
+					Tier:     v1alpha2.AdminTier,
+					Priority: 10,
+					Subject: v1alpha2.ClusterNetworkPolicySubject{
+						Pods: &v1alpha2.NamespacedPod{
+							NamespaceSelector: selEnv,
+							PodSelector:       selApp,
+						},
+					},
+					Egress: []v1alpha2.ClusterNetworkPolicyEgressRule{
+						{
+							Name:   "pass-unknown",
+							Action: v1alpha2.ClusterNetworkPolicyRuleActionPass,
+							To:     []v1alpha2.ClusterNetworkPolicyEgressPeer{{}},
+						},
+					},
+				},
+			},
+			expectedPolicy: &antreatypes.NetworkPolicy{
+				UID:  "uid-fc2",
+				Name: "uid-fc2",
+				SourceRef: &controlplane.NetworkPolicyReference{
+					Type: controlplane.ClusterNetworkPolicy,
+					Name: "cnp-unknown-egress-pass",
+					UID:  "uid-fc2",
+				},
+				Priority:         ptr.To(float64(10)),
+				TierPriority:     ptr.To(adminTierPriority),
+				AppliedToPerRule: false,
+				Rules: []controlplane.NetworkPolicyRule{
+					{
+						Direction: controlplane.DirectionOut,
+						To:        controlplane.NetworkPolicyPeer{},
+						Name:      "pass-unknown",
+						Action:    &pass,
+						Priority:  0,
+					},
+				},
+				AppliedToGroups: []string{getNormalizedUID(antreatypes.NewGroupSelector("", &selApp, &selEnv, nil, nil).NormalizedName)},
+			},
+			expectedAppliedToGroups: 1,
+			expectedAddressGroups:   0,
+		},
+		{
+			// Simulate a future CRD version that adds an unknown field to ClusterNetworkPolicyEgressPeer.
+			// With an Accept action the fail-closed behavior means: treat the rule as matching no traffic
+			// (skip the peer), resulting in an empty peer.
+			name: "egress-unknown-peer-field-accept-action-fails-closed-with-empty-peer",
+			inputPolicy: &v1alpha2.ClusterNetworkPolicy{
+				ObjectMeta: metav1.ObjectMeta{Name: "cnp-unknown-egress-accept", UID: "uid-fc3"},
+				Spec: v1alpha2.ClusterNetworkPolicySpec{
+					Tier:     v1alpha2.AdminTier,
+					Priority: 10,
+					Subject: v1alpha2.ClusterNetworkPolicySubject{
+						Pods: &v1alpha2.NamespacedPod{
+							NamespaceSelector: selEnv,
+							PodSelector:       selApp,
+						},
+					},
+					Egress: []v1alpha2.ClusterNetworkPolicyEgressRule{
+						{
+							Name:   "accept-unknown",
+							Action: v1alpha2.ClusterNetworkPolicyRuleActionAccept,
+							To:     []v1alpha2.ClusterNetworkPolicyEgressPeer{{}},
+						},
+					},
+				},
+			},
+			expectedPolicy: &antreatypes.NetworkPolicy{
+				UID:  "uid-fc3",
+				Name: "uid-fc3",
+				SourceRef: &controlplane.NetworkPolicyReference{
+					Type: controlplane.ClusterNetworkPolicy,
+					Name: "cnp-unknown-egress-accept",
+					UID:  "uid-fc3",
+				},
+				Priority:         ptr.To(float64(10)),
+				TierPriority:     ptr.To(adminTierPriority),
+				AppliedToPerRule: false,
+				Rules: []controlplane.NetworkPolicyRule{
+					{
+						Direction: controlplane.DirectionOut,
+						To:        controlplane.NetworkPolicyPeer{},
+						Name:      "accept-unknown",
+						Action:    &allow,
+						Priority:  0,
+					},
+				},
+				AppliedToGroups: []string{getNormalizedUID(antreatypes.NewGroupSelector("", &selApp, &selEnv, nil, nil).NormalizedName)},
+			},
+			expectedAppliedToGroups: 1,
+			expectedAddressGroups:   0,
+		},
+		{
+			// Simulate a future CRD version that adds an unknown field to ClusterNetworkPolicyIngressPeer.
+			// With a Deny action the fail-closed behavior must return matchAllPeer.
+			name: "ingress-unknown-peer-field-deny-action-fails-closed-with-matchAllPeer",
+			inputPolicy: &v1alpha2.ClusterNetworkPolicy{
+				ObjectMeta: metav1.ObjectMeta{Name: "cnp-unknown-ingress-deny", UID: "uid-fc4"},
+				Spec: v1alpha2.ClusterNetworkPolicySpec{
+					Tier:     v1alpha2.AdminTier,
+					Priority: 10,
+					Subject: v1alpha2.ClusterNetworkPolicySubject{
+						Pods: &v1alpha2.NamespacedPod{
+							NamespaceSelector: selEnv,
+							PodSelector:       selApp,
+						},
+					},
+					Ingress: []v1alpha2.ClusterNetworkPolicyIngressRule{
+						{
+							Name:   "deny-unknown",
+							Action: v1alpha2.ClusterNetworkPolicyRuleActionDeny,
+							From:   []v1alpha2.ClusterNetworkPolicyIngressPeer{{}},
+						},
+					},
+				},
+			},
+			expectedPolicy: &antreatypes.NetworkPolicy{
+				UID:  "uid-fc4",
+				Name: "uid-fc4",
+				SourceRef: &controlplane.NetworkPolicyReference{
+					Type: controlplane.ClusterNetworkPolicy,
+					Name: "cnp-unknown-ingress-deny",
+					UID:  "uid-fc4",
+				},
+				Priority:         ptr.To(float64(10)),
+				TierPriority:     ptr.To(adminTierPriority),
+				AppliedToPerRule: false,
+				Rules: []controlplane.NetworkPolicyRule{
+					{
+						Direction: controlplane.DirectionIn,
+						From:      matchAllPeer,
+						Name:      "deny-unknown",
+						Action:    &drop,
+						Priority:  0,
+					},
+				},
+				AppliedToGroups: []string{getNormalizedUID(antreatypes.NewGroupSelector("", &selApp, &selEnv, nil, nil).NormalizedName)},
+			},
+			expectedAppliedToGroups: 1,
+			expectedAddressGroups:   0,
+		},
+		{
+			// Simulate a future CRD version that adds an unknown field to ClusterNetworkPolicyIngressPeer.
+			// With an Accept action the fail-closed behavior means: treat the rule as matching no traffic
+			// (skip the peer), resulting in an empty peer.
+			name: "ingress-unknown-peer-field-accept-action-fails-closed-with-empty-peer",
+			inputPolicy: &v1alpha2.ClusterNetworkPolicy{
+				ObjectMeta: metav1.ObjectMeta{Name: "cnp-unknown-ingress-accept", UID: "uid-fc5"},
+				Spec: v1alpha2.ClusterNetworkPolicySpec{
+					Tier:     v1alpha2.AdminTier,
+					Priority: 10,
+					Subject: v1alpha2.ClusterNetworkPolicySubject{
+						Pods: &v1alpha2.NamespacedPod{
+							NamespaceSelector: selEnv,
+							PodSelector:       selApp,
+						},
+					},
+					Ingress: []v1alpha2.ClusterNetworkPolicyIngressRule{
+						{
+							Name:   "accept-unknown",
+							Action: v1alpha2.ClusterNetworkPolicyRuleActionAccept,
+							From:   []v1alpha2.ClusterNetworkPolicyIngressPeer{{}},
+						},
+					},
+				},
+			},
+			expectedPolicy: &antreatypes.NetworkPolicy{
+				UID:  "uid-fc5",
+				Name: "uid-fc5",
+				SourceRef: &controlplane.NetworkPolicyReference{
+					Type: controlplane.ClusterNetworkPolicy,
+					Name: "cnp-unknown-ingress-accept",
+					UID:  "uid-fc5",
+				},
+				Priority:         ptr.To(float64(10)),
+				TierPriority:     ptr.To(adminTierPriority),
+				AppliedToPerRule: false,
+				Rules: []controlplane.NetworkPolicyRule{
+					{
+						Direction: controlplane.DirectionIn,
+						From:      controlplane.NetworkPolicyPeer{},
+						Name:      "accept-unknown",
+						Action:    &allow,
+						Priority:  0,
+					},
+				},
+				AppliedToGroups: []string{getNormalizedUID(antreatypes.NewGroupSelector("", &selApp, &selEnv, nil, nil).NormalizedName)},
+			},
+			expectedAppliedToGroups: 1,
+			expectedAddressGroups:   0,
+		},
+		{
+			// Simulate a future CRD version that adds an unknown field to ClusterNetworkPolicyIngressPeer.
+			// With a Pass action the fail-closed behavior means: treat the rule as matching no traffic
+			// (empty peer). This lets traffic fall through to underlying rules (e.g. a deny-all),
+			// achieving a safe deny-all net effect without inadvertently bypassing those rules.
+			name: "ingress-unknown-peer-field-pass-action-fails-closed-with-empty-peer",
+			inputPolicy: &v1alpha2.ClusterNetworkPolicy{
+				ObjectMeta: metav1.ObjectMeta{Name: "cnp-unknown-ingress-pass", UID: "uid-fc6"},
+				Spec: v1alpha2.ClusterNetworkPolicySpec{
+					Tier:     v1alpha2.AdminTier,
+					Priority: 10,
+					Subject: v1alpha2.ClusterNetworkPolicySubject{
+						Pods: &v1alpha2.NamespacedPod{
+							NamespaceSelector: selEnv,
+							PodSelector:       selApp,
+						},
+					},
+					Ingress: []v1alpha2.ClusterNetworkPolicyIngressRule{
+						{
+							Name:   "pass-unknown",
+							Action: v1alpha2.ClusterNetworkPolicyRuleActionPass,
+							From:   []v1alpha2.ClusterNetworkPolicyIngressPeer{{}},
+						},
+					},
+				},
+			},
+			expectedPolicy: &antreatypes.NetworkPolicy{
+				UID:  "uid-fc6",
+				Name: "uid-fc6",
+				SourceRef: &controlplane.NetworkPolicyReference{
+					Type: controlplane.ClusterNetworkPolicy,
+					Name: "cnp-unknown-ingress-pass",
+					UID:  "uid-fc6",
+				},
+				Priority:         ptr.To(float64(10)),
+				TierPriority:     ptr.To(adminTierPriority),
+				AppliedToPerRule: false,
+				Rules: []controlplane.NetworkPolicyRule{
+					{
+						Direction: controlplane.DirectionIn,
+						From:      controlplane.NetworkPolicyPeer{},
+						Name:      "pass-unknown",
+						Action:    &pass,
+						Priority:  0,
+					},
+				},
+				AppliedToGroups: []string{getNormalizedUID(antreatypes.NewGroupSelector("", &selApp, &selEnv, nil, nil).NormalizedName)},
+			},
+			expectedAppliedToGroups: 1,
+			expectedAddressGroups:   0,
+		},
+		{
 			name: "two-ingress-rules-distinct-peers",
 			inputPolicy: &v1alpha2.ClusterNetworkPolicy{
 				ObjectMeta: metav1.ObjectMeta{Name: "cnp-multi-in", UID: "uid-5"},
@@ -425,4 +833,108 @@ func TestDeleteCNP(t *testing.T) {
 	key, done := npc.internalNetworkPolicyQueue.Get()
 	assert.Equal(t, *getCNPReference(cnp), key)
 	assert.False(t, done)
+}
+
+func TestToAntreaServicesForCNPProtocols(t *testing.T) {
+	protoTCP := controlplane.ProtocolTCP
+	protoUDP := controlplane.ProtocolUDP
+	protoSCTP := controlplane.ProtocolSCTP
+	port80 := intstr.FromInt32(80)
+	port53 := intstr.FromInt32(53)
+	port8080 := intstr.FromInt32(8080)
+	port9000 := intstr.FromInt32(9000)
+	end9999 := int32(9999)
+	portHTTP := intstr.FromString("http")
+
+	tests := []struct {
+		name      string
+		protocols []v1alpha2.ClusterNetworkPolicyProtocol
+		expected  []controlplane.Service
+	}{
+		{
+			name: "tcp-with-destination-port",
+			protocols: []v1alpha2.ClusterNetworkPolicyProtocol{
+				{TCP: &v1alpha2.ClusterNetworkPolicyProtocolTCP{DestinationPort: &v1alpha2.Port{Number: 80}}},
+			},
+			expected: []controlplane.Service{
+				{Protocol: &protoTCP, Port: &port80},
+			},
+		},
+		{
+			// DestinationPort is optional; nil means "any port for this protocol".
+			name: "tcp-without-destination-port-matches-any-port",
+			protocols: []v1alpha2.ClusterNetworkPolicyProtocol{
+				{TCP: &v1alpha2.ClusterNetworkPolicyProtocolTCP{}},
+			},
+			expected: []controlplane.Service{
+				{Protocol: &protoTCP},
+			},
+		},
+		{
+			name: "udp-without-destination-port-matches-any-port",
+			protocols: []v1alpha2.ClusterNetworkPolicyProtocol{
+				{UDP: &v1alpha2.ClusterNetworkPolicyProtocolUDP{}},
+			},
+			expected: []controlplane.Service{
+				{Protocol: &protoUDP},
+			},
+		},
+		{
+			name: "sctp-without-destination-port-matches-any-port",
+			protocols: []v1alpha2.ClusterNetworkPolicyProtocol{
+				{SCTP: &v1alpha2.ClusterNetworkPolicyProtocolSCTP{}},
+			},
+			expected: []controlplane.Service{
+				{Protocol: &protoSCTP},
+			},
+		},
+		{
+			name: "udp-with-destination-port",
+			protocols: []v1alpha2.ClusterNetworkPolicyProtocol{
+				{UDP: &v1alpha2.ClusterNetworkPolicyProtocolUDP{DestinationPort: &v1alpha2.Port{Number: 53}}},
+			},
+			expected: []controlplane.Service{
+				{Protocol: &protoUDP, Port: &port53},
+			},
+		},
+		{
+			name: "tcp-port-range",
+			protocols: []v1alpha2.ClusterNetworkPolicyProtocol{
+				{TCP: &v1alpha2.ClusterNetworkPolicyProtocolTCP{
+					DestinationPort: &v1alpha2.Port{Range: &v1alpha2.PortRange{Start: 9000, End: 9999}},
+				}},
+			},
+			expected: []controlplane.Service{
+				{Protocol: &protoTCP, Port: &port9000, EndPort: &end9999},
+			},
+		},
+		{
+			name: "named-port",
+			protocols: []v1alpha2.ClusterNetworkPolicyProtocol{
+				{DestinationNamedPort: "http"},
+			},
+			expected: []controlplane.Service{
+				{Port: &portHTTP},
+			},
+		},
+		{
+			// Mix: one entry with port, one without (any-port).
+			name: "multiple-protocols-mixed",
+			protocols: []v1alpha2.ClusterNetworkPolicyProtocol{
+				{TCP: &v1alpha2.ClusterNetworkPolicyProtocolTCP{DestinationPort: &v1alpha2.Port{Number: 8080}}},
+				{UDP: &v1alpha2.ClusterNetworkPolicyProtocolUDP{}},
+			},
+			expected: []controlplane.Service{
+				{Protocol: &protoTCP, Port: &port8080},
+				{Protocol: &protoUDP},
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := toAntreaServicesForCNPProtocols(tt.protocols)
+			assert.Equal(t, tt.expected, got)
+		})
+	}
 }

@@ -88,8 +88,12 @@ func (n *NetworkPolicyController) deleteCNP(old interface{}) {
 }
 
 // appendCNPPortToServices appends Antrea Services for a v1alpha2 Port and the given IP protocol.
+// port may be nil, which means "any port for this protocol".
 func appendCNPPortToServices(services *[]controlplane.Service, p *v1alpha2.Port, proto v1.Protocol) {
 	if p == nil {
+		*services = append(*services, controlplane.Service{
+			Protocol: toAntreaProtocol(&proto),
+		})
 		return
 	}
 	if p.Range != nil {
@@ -110,6 +114,8 @@ func appendCNPPortToServices(services *[]controlplane.Service, p *v1alpha2.Port,
 }
 
 // toAntreaServicesForCNPProtocols translates v1alpha2 ClusterNetworkPolicy rule protocols to Antrea Services.
+// DestinationPort is optional within each TCP/UDP/SCTP entry; a nil DestinationPort means "any port for
+// that protocol".
 func toAntreaServicesForCNPProtocols(protocols []v1alpha2.ClusterNetworkPolicyProtocol) []controlplane.Service {
 	var antreaServices []controlplane.Service
 	for _, cnpProto := range protocols {
@@ -120,11 +126,11 @@ func toAntreaServicesForCNPProtocols(protocols []v1alpha2.ClusterNetworkPolicyPr
 			antreaServices = append(antreaServices, controlplane.Service{
 				Port: &port,
 			})
-		case cnpProto.TCP != nil && cnpProto.TCP.DestinationPort != nil:
+		case cnpProto.TCP != nil:
 			appendCNPPortToServices(&antreaServices, cnpProto.TCP.DestinationPort, v1.ProtocolTCP)
-		case cnpProto.UDP != nil && cnpProto.UDP.DestinationPort != nil:
+		case cnpProto.UDP != nil:
 			appendCNPPortToServices(&antreaServices, cnpProto.UDP.DestinationPort, v1.ProtocolUDP)
-		case cnpProto.SCTP != nil && cnpProto.SCTP.DestinationPort != nil:
+		case cnpProto.SCTP != nil:
 			appendCNPPortToServices(&antreaServices, cnpProto.SCTP.DestinationPort, v1.ProtocolSCTP)
 		}
 	}
@@ -132,15 +138,30 @@ func toAntreaServicesForCNPProtocols(protocols []v1alpha2.ClusterNetworkPolicyPr
 }
 
 // toAntreaIngressPeerForCNP processes v1alpha2 ClusterNetworkPolicyIngressPeers and yields Antrea NetworkPolicyPeers.
-func (n *NetworkPolicyController) toAntreaIngressPeerForCNP(peers []v1alpha2.ClusterNetworkPolicyIngressPeer) (*controlplane.NetworkPolicyPeer, []*antreatypes.AddressGroup) {
+// The processing is required to implement fail-closed semantics: if a peer has no recognized fields set (e.g.
+// because the deployed CRD uses a field added in a newer API version), the rule action determines the behavior.
+// For "Accept" and "Pass" rules the peer is treated as matching no traffic (empty peer). For "Deny" rules the
+// entire peer list is replaced with matchAllPeer so all traffic is denied.
+//
+// Note: for "Pass", matching nothing (rather than everything) is the correct fail-closed behavior. A Pass rule
+// that fires on nothing lets traffic fall through to underlying rules (e.g. a deny-all), achieving a safe
+// deny-all net effect without inadvertently bypassing those rules. Same logic applies to Egress rules.
+func (n *NetworkPolicyController) toAntreaIngressPeerForCNP(rule v1alpha2.ClusterNetworkPolicyIngressRule) (*controlplane.NetworkPolicyPeer, []*antreatypes.AddressGroup) {
 	var addressGroups []*antreatypes.AddressGroup
-	for _, peer := range peers {
-		if peer.Pods != nil {
-			addressGroup := n.createAddressGroup("", &peer.Pods.PodSelector, &peer.Pods.NamespaceSelector, nil, nil)
-			addressGroups = append(addressGroups, addressGroup)
-		} else if peer.Namespaces != nil {
-			addressGroup := n.createAddressGroup("", nil, peer.Namespaces, nil, nil)
-			addressGroups = append(addressGroups, addressGroup)
+	for _, peer := range rule.From {
+		switch {
+		case peer.Pods != nil:
+			addressGroups = append(addressGroups, n.createAddressGroup("", &peer.Pods.PodSelector, &peer.Pods.NamespaceSelector, nil, nil))
+		case peer.Namespaces != nil:
+			addressGroups = append(addressGroups, n.createAddressGroup("", nil, peer.Namespaces, nil, nil))
+		default:
+			// No recognized field is set: the CRD may have been updated with a new peer type
+			// that this implementation does not understand yet. Apply fail-closed semantics.
+			if rule.Action == v1alpha2.ClusterNetworkPolicyRuleActionDeny {
+				klog.InfoS("ClusterNetworkPolicy ingress peer has no recognized fields; failing closed with matchAllPeer for Deny rule", "ruleName", rule.Name, "action", rule.Action)
+				return &matchAllPeer, nil
+			}
+			klog.InfoS("ClusterNetworkPolicy ingress peer has no recognized fields; failing closed with empty peer", "ruleName", rule.Name, "action", rule.Action)
 		}
 	}
 	return &controlplane.NetworkPolicyPeer{
@@ -149,11 +170,15 @@ func (n *NetworkPolicyController) toAntreaIngressPeerForCNP(peers []v1alpha2.Clu
 }
 
 // toAntreaEgressPeerForCNP processes v1alpha2 ClusterNetworkPolicyEgressPeers and yields Antrea NetworkPolicyPeers.
-func (n *NetworkPolicyController) toAntreaEgressPeerForCNP(peers []v1alpha2.ClusterNetworkPolicyEgressPeer) (*controlplane.NetworkPolicyPeer, []*antreatypes.AddressGroup) {
+// The processing is required to implement fail-closed semantics: if a peer has no recognized fields set (e.g.
+// because the deployed CRD uses a field added in a newer API version), the rule action determines the behavior.
+// For "Accept" and "Pass" rules the peer is treated as matching no traffic (empty peer). For "Deny" rules the
+// entire peer list is replaced with matchAllPeer so all traffic is denied.
+func (n *NetworkPolicyController) toAntreaEgressPeerForCNP(rule v1alpha2.ClusterNetworkPolicyEgressRule) (*controlplane.NetworkPolicyPeer, []*antreatypes.AddressGroup) {
 	var addressGroups []*antreatypes.AddressGroup
 	var fqdns []string
 	var ipBlocks []controlplane.IPBlock
-	for _, peer := range peers {
+	for _, peer := range rule.To {
 		switch {
 		case peer.Pods != nil:
 			addressGroups = append(addressGroups, n.createAddressGroup("", &peer.Pods.PodSelector, &peer.Pods.NamespaceSelector, nil, nil))
@@ -167,6 +192,14 @@ func (n *NetworkPolicyController) toAntreaEgressPeerForCNP(peers []v1alpha2.Clus
 			}
 		case len(peer.Networks) > 0:
 			ipBlocks = append(ipBlocks, toAntreaIPBlocksForCNPNetworks(peer.Networks)...)
+		default:
+			// No recognized field is set: the CRD may have been updated with a new peer type
+			// that this implementation does not understand yet. Apply fail-closed semantics.
+			if rule.Action == v1alpha2.ClusterNetworkPolicyRuleActionDeny {
+				klog.InfoS("ClusterNetworkPolicy egress peer has no recognized fields; failing closed with matchAllPeer for Deny rule", "ruleName", rule.Name, "action", rule.Action)
+				return &matchAllPeer, nil
+			}
+			klog.InfoS("ClusterNetworkPolicy egress peer has no recognized fields; failing closed with empty peer", "ruleName", rule.Name, "action", rule.Action)
 		}
 	}
 	return &controlplane.NetworkPolicyPeer{
@@ -225,7 +258,7 @@ func (n *NetworkPolicyController) processClusterNetworkPolicy(cnp *v1alpha2.Clus
 			services = toAntreaServicesForCNPProtocols(cnpIngressRule.Protocols)
 		}
 		// From is required by the CRD to contain at least one peer.
-		peer, ags := n.toAntreaIngressPeerForCNP(cnpIngressRule.From)
+		peer, ags := n.toAntreaIngressPeerForCNP(cnpIngressRule)
 		rule := controlplane.NetworkPolicyRule{
 			Direction: controlplane.DirectionIn,
 			From:      *peer,
@@ -243,7 +276,7 @@ func (n *NetworkPolicyController) processClusterNetworkPolicy(cnp *v1alpha2.Clus
 			services = toAntreaServicesForCNPProtocols(cnpEgressRule.Protocols)
 		}
 		// To is required by the CRD to contain at least one peer.
-		peer, ags := n.toAntreaEgressPeerForCNP(cnpEgressRule.To)
+		peer, ags := n.toAntreaEgressPeerForCNP(cnpEgressRule)
 		rule := controlplane.NetworkPolicyRule{
 			Direction: controlplane.DirectionOut,
 			To:        *peer,
