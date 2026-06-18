@@ -16,7 +16,7 @@ jobs:
     name: Check whether tests need to be run based on diff
     runs-on: [ubuntu-latest]
     steps:
-    - uses: actions/checkout@v6
+    - uses: actions/checkout@v7
       with:
         fetch-depth: 0
         show-progress: false
@@ -37,7 +37,7 @@ jobs:
       run: |
         sudo apt-get clean
         df -h
-    - uses: actions/checkout@v6
+    - uses: actions/checkout@v7
       with:
         show-progress: false
     # Docker 29+ defaults to the containerd image store, which breaks kind load docker-image.

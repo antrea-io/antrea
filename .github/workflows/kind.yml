@@ -20,7 +20,7 @@ jobs:
     name: Check whether tests need to be run based on diff
     runs-on: [ubuntu-latest]
     steps:
-    - uses: actions/checkout@v6
+    - uses: actions/checkout@v7
       with:
         fetch-depth: 0
         show-progress: false
@@ -37,7 +37,7 @@ jobs:
     if: ${{ needs.check-changes.outputs.has_changes == 'yes' }}
     runs-on: [ubuntu-latest]
     steps:
-    - uses: actions/checkout@v6
+    - uses: actions/checkout@v7
       with:
         show-progress: false
     - name: Set up Docker Buildx
@@ -62,7 +62,7 @@ jobs:
     if: ${{ needs.check-changes.outputs.has_changes == 'yes' }}
     runs-on: [ ubuntu-latest ]
     steps:
-    - uses: actions/checkout@v6
+    - uses: actions/checkout@v7
       with:
         show-progress: false
     - run: make flow-aggregator-ubuntu-coverage
@@ -80,7 +80,7 @@ jobs:
     needs: [build-antrea-coverage-image]
     runs-on: [ubuntu-latest]
     steps:
-    - uses: actions/checkout@v6
+    - uses: actions/checkout@v7
       with:
         show-progress: false
     - uses: ./.github/actions/setup-kind-test
@@ -123,7 +123,7 @@ jobs:
     needs: [build-antrea-coverage-image]
     runs-on: [ubuntu-latest]
     steps:
-    - uses: actions/checkout@v6
+    - uses: actions/checkout@v7
       with:
         show-progress: false
     - uses: ./.github/actions/setup-kind-test
@@ -173,7 +173,7 @@ jobs:
     needs: [build-antrea-coverage-image]
     runs-on: [ubuntu-latest]
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           show-progress: false
       - uses: ./.github/actions/setup-kind-test
@@ -225,7 +225,7 @@ jobs:
     needs: [build-antrea-coverage-image]
     runs-on: [oracle-vm-4cpu-16gb-x86-64]
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           show-progress: false
       - uses: ./.github/actions/setup-kind-test
@@ -276,7 +276,7 @@ jobs:
     needs: [build-antrea-coverage-image]
     runs-on: [ubuntu-latest]
     steps:
-    - uses: actions/checkout@v6
+    - uses: actions/checkout@v7
       with:
         show-progress: false
     - uses: ./.github/actions/setup-kind-test
@@ -319,7 +319,7 @@ jobs:
     needs: [build-antrea-coverage-image]
     runs-on: [ubuntu-latest]
     steps:
-    - uses: actions/checkout@v6
+    - uses: actions/checkout@v7
       with:
         show-progress: false
     - uses: ./.github/actions/setup-kind-test
@@ -362,7 +362,7 @@ jobs:
     needs: [build-antrea-coverage-image]
     runs-on: [ubuntu-latest]
     steps:
-    - uses: actions/checkout@v6
+    - uses: actions/checkout@v7
       with:
         show-progress: false
     - uses: ./.github/actions/setup-kind-test
@@ -416,7 +416,7 @@ jobs:
     needs: [build-antrea-coverage-image]
     runs-on: [ubuntu-latest]
     steps:
-    - uses: actions/checkout@v6
+    - uses: actions/checkout@v7
       with:
         show-progress: false
     - uses: ./.github/actions/setup-kind-test
@@ -459,7 +459,7 @@ jobs:
     needs: [build-antrea-coverage-image]
     runs-on: [ubuntu-latest]
     steps:
-    - uses: actions/checkout@v6
+    - uses: actions/checkout@v7
       with:
         show-progress: false
     - uses: ./.github/actions/setup-kind-test
@@ -502,7 +502,7 @@ jobs:
     needs: [ build-antrea-coverage-image ]
     runs-on: [ ubuntu-latest ]
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           show-progress: false
       - uses: ./.github/actions/setup-kind-test
@@ -565,7 +565,7 @@ jobs:
           sudo rm -rf "$AGENT_TOOLSDIRECTORY"
           sudo rm -rf "/usr/local/lib/android"
           df -h
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           show-progress: false
       - uses: ./.github/actions/setup-kind-test
@@ -626,7 +626,7 @@ jobs:
         sudo rm -rf "$AGENT_TOOLSDIRECTORY"
         sudo rm -rf "/usr/local/lib/android"
         df -h
-    - uses: actions/checkout@v6
+    - uses: actions/checkout@v7
       with:
         show-progress: false
     - uses: actions/setup-go@v6
@@ -681,7 +681,7 @@ jobs:
     needs: [build-antrea-coverage-image]
     runs-on: [ubuntu-latest]
     steps:
-    - uses: actions/checkout@v6
+    - uses: actions/checkout@v7
       with:
         show-progress: false
     - uses: ./.github/actions/setup-kind-test
@@ -707,7 +707,7 @@ jobs:
     needs: [build-antrea-coverage-image]
     runs-on: [ubuntu-latest]
     steps:
-    - uses: actions/checkout@v6
+    - uses: actions/checkout@v7
       with:
         show-progress: false
     - uses: ./.github/actions/setup-kind-test
@@ -733,7 +733,7 @@ jobs:
     needs: build-antrea-coverage-image
     runs-on: [ubuntu-latest]
     steps:
-    - uses: actions/checkout@v6
+    - uses: actions/checkout@v7
       with:
         show-progress: false
     - uses: ./.github/actions/setup-kind-test
@@ -767,7 +767,7 @@ jobs:
     needs: build-antrea-coverage-image
     runs-on: [ubuntu-latest]
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           show-progress: false
       - uses: ./.github/actions/setup-kind-test
@@ -793,7 +793,7 @@ jobs:
     needs: build-antrea-coverage-image
     runs-on: [ubuntu-latest]
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           show-progress: false
       - uses: ./.github/actions/setup-kind-test
@@ -819,7 +819,7 @@ jobs:
     needs: build-antrea-coverage-image
     runs-on: [ubuntu-latest]
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           show-progress: false
       - uses: ./.github/actions/setup-kind-test
@@ -845,7 +845,7 @@ jobs:
     needs: build-antrea-coverage-image
     runs-on: [ubuntu-latest]
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           show-progress: false
       - uses: ./.github/actions/setup-kind-test
@@ -871,7 +871,7 @@ jobs:
     needs: [ build-antrea-coverage-image ]
     runs-on: [ ubuntu-latest ]
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           show-progress: false
       - uses: ./.github/actions/setup-kind-test
@@ -898,7 +898,7 @@ jobs:
     needs: build-antrea-coverage-image
     runs-on: [ubuntu-latest]
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           show-progress: false
       - uses: ./.github/actions/setup-kind-test

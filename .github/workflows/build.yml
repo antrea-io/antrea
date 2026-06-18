@@ -21,7 +21,7 @@ jobs:
     name: Compute outputs for use by other jobs
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v6
+    - uses: actions/checkout@v7
       with:
         fetch-depth: 0
         show-progress: false
@@ -68,7 +68,7 @@ jobs:
     env:
       DOCKER_TAG: latest
     steps:
-    - uses: actions/checkout@v6
+    - uses: actions/checkout@v7
       with:
         show-progress: false
     - name: Set up Docker Buildx
@@ -247,7 +247,7 @@ jobs:
       run: |
         sudo apt-get clean
         df -h
-    - uses: actions/checkout@v6
+    - uses: actions/checkout@v7
       with:
         show-progress: false
     - name: Set up Docker Buildx
@@ -277,7 +277,7 @@ jobs:
     if: ${{ needs.check-env.outputs.has_changes == 'yes' || github.event_name == 'push' }}
     runs-on: [ubuntu-latest]
     steps:
-    - uses: actions/checkout@v6
+    - uses: actions/checkout@v7
       with:
         show-progress: false
     - name: Build Antrea Agent Simulator Docker image
@@ -296,7 +296,7 @@ jobs:
     if: ${{ needs.check-env.outputs.has_changes == 'yes' || github.event_name == 'push' }}
     runs-on: [ubuntu-latest]
     steps:
-    - uses: actions/checkout@v6
+    - uses: actions/checkout@v7
       with:
         show-progress: false
     - name: Build Antrea Windows Docker image
@@ -317,7 +317,7 @@ jobs:
     if: ${{ needs.check-env.outputs.has_changes == 'yes' || github.event_name == 'push' }}
     runs-on: [ubuntu-latest]
     steps:
-    - uses: actions/checkout@v6
+    - uses: actions/checkout@v7
       with:
         show-progress: false
     - name: Build antrea-mc-controller Docker image
@@ -353,7 +353,7 @@ jobs:
     env:
       DOCKER_TAG: latest
     steps:
-    - uses: actions/checkout@v6
+    - uses: actions/checkout@v7
       with:
         show-progress: false
     - name: Set up Docker Buildx
@@ -397,7 +397,7 @@ jobs:
     if: ${{ needs.check-env.outputs.has_changes == 'yes' || github.event_name == 'push' }}
     runs-on: [ubuntu-latest]
     steps:
-    - uses: actions/checkout@v6
+    - uses: actions/checkout@v7
       with:
         show-progress: false
     - name: Build antrea-migrator Docker image
