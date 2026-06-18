@@ -422,12 +422,12 @@ func PrepareHostInterfaceConnection(
 	bridge ovsconfig.OVSBridgeClient,
 	ifaceName string,
 	ifaceOFPort int32,
-	externalIDs map[string]interface{},
+	externalIDs map[string]string,
 	mtu int,
 ) (string, bool, error) {
 	bridgedName := GenerateUplinkInterfaceName(ifaceName)
 	// If the port already exists, just return.
-	if ofPort, err := bridge.GetOFPort(bridgedName, false); err == nil {
+	if ofPort, err := bridge.GetOFPort(bridgedName); err == nil {
 		klog.InfoS("Port already exists, skip the configuration", "port", bridgedName, "ofPort", ofPort)
 		return bridgedName, true, nil
 	}

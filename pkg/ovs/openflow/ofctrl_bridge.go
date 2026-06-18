@@ -223,13 +223,13 @@ func (b *OFBridge) NewGroup(id GroupIDType) Group {
 }
 
 func (b *OFBridge) newGroupWithType(id GroupIDType, groupType ofctrl.GroupType) Group {
-	ofctrlGroup := ofctrl.NewGroup(uint32(id), groupType, b.ofSwitch)
+	ofctrlGroup := ofctrl.NewGroup(uint32(id), groupType, b.getOFSwitch())
 	g := &ofGroup{bridge: b, ofctrl: ofctrlGroup}
 	return g
 }
 
 func (b *OFBridge) NewMeter(id MeterIDType, flags ofctrl.MeterFlag) Meter {
-	ofctrlMeter := ofctrl.NewMeter(uint32(id), flags, b.ofSwitch)
+	ofctrlMeter := ofctrl.NewMeter(uint32(id), flags, b.getOFSwitch())
 	m := &ofMeter{bridge: b, ofctrl: ofctrlMeter}
 	return m
 }
@@ -238,14 +238,14 @@ func (b *OFBridge) DeleteMeterAll() error {
 	meterMod := openflow15.NewMeterMod()
 	meterMod.MeterId = openflow15.M_ALL
 	meterMod.Command = openflow15.MC_DELETE
-	return b.ofSwitch.Send(meterMod)
+	return b.getOFSwitch().Send(meterMod)
 }
 
 func (b *OFBridge) DeleteGroupAll() error {
 	groupMod := openflow15.NewGroupMod()
 	groupMod.GroupId = openflow15.OFPG_ALL
 	groupMod.Command = openflow15.OFPGC_DELETE
-	return b.ofSwitch.Send(groupMod)
+	return b.getOFSwitch().Send(groupMod)
 }
 
 func (b *OFBridge) GetMeterStats(handleMeterStatsReply func(meterID int, packetCount int64)) error {
@@ -271,7 +271,7 @@ func (b *OFBridge) GetMeterStats(handleMeterStatsReply func(meterID int, packetC
 			klog.InfoS("Timeout waiting for OVS MeterStats reply")
 		}
 	}()
-	return b.ofSwitch.Send(mpMeterStatsReq)
+	return b.getOFSwitch().Send(mpMeterStatsReq)
 }
 
 func (b *OFBridge) NewTable(table Table, next uint8, missAction MissActionType) Table {
@@ -337,7 +337,7 @@ func (b *OFBridge) SwitchConnected(sw *ofctrl.OFSwitch) {
 	klog.Infof("OFSwitch is connected: %v", sw.DPID())
 	b.SetOFSwitch(sw)
 	b.setPacketInFormatTo2()
-	b.ofSwitch.EnableMonitor()
+	b.getOFSwitch().EnableMonitor()
 	// initialize tables.
 	b.Initialize()
 	b.queryTableFeatures()
@@ -348,6 +348,12 @@ func (b *OFBridge) SwitchConnected(sw *ofctrl.OFSwitch) {
 		}
 		b.connCh <- struct{}{}
 	}()
+}
+
+func (b *OFBridge) getOFSwitch() *ofctrl.OFSwitch {
+	b.ofSwitchMutex.RLock()
+	defer b.ofSwitchMutex.RUnlock()
+	return b.ofSwitch
 }
 
 func (b *OFBridge) SetOFSwitch(sw *ofctrl.OFSwitch) {
@@ -388,7 +394,7 @@ func (b *OFBridge) Initialize() {
 	defer b.Unlock()
 
 	for id, table := range b.tableCache {
-		table.Table = ofctrl.NewTable(id, b.ofSwitch)
+		table.Table = ofctrl.NewTable(id, b.getOFSwitch())
 		// reset flow counts, which is needed for reconnections
 		table.ResetStatus()
 	}
@@ -431,7 +437,7 @@ func (b *OFBridge) Disconnect() error {
 // DumpFlows queries the Openflow entries from OFSwitch, the filter of the query is Openflow cookieID. The result is
 // a map from flow cookieID to FlowStates.
 func (b *OFBridge) DumpFlows(cookieID, cookieMask uint64) (map[uint64]*FlowStates, error) {
-	ofStats, err := b.ofSwitch.DumpFlowStats(cookieID, &cookieMask, nil, nil)
+	ofStats, err := b.getOFSwitch().DumpFlowStats(cookieID, &cookieMask, nil, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -450,15 +456,11 @@ func (b *OFBridge) DeleteFlowsByCookie(cookieID, cookieMask uint64) error {
 	flowMod.OutPort = openflow15.P_ANY
 	flowMod.OutGroup = openflow15.OFPG_ANY
 	flowMod.TableId = openflow15.OFPTT_ALL
-	return b.ofSwitch.Send(flowMod)
+	return b.getOFSwitch().Send(flowMod)
 }
 
 func (b *OFBridge) IsConnected() bool {
-	sw := func() *ofctrl.OFSwitch {
-		b.ofSwitchMutex.RLock()
-		defer b.ofSwitchMutex.RUnlock()
-		return b.ofSwitch
-	}()
+	sw := b.getOFSwitch()
 	if sw == nil {
 		return false
 	}
@@ -472,7 +474,7 @@ func (b *OFBridge) AddFlowsInBundle(addflows, modFlows, delFlows []*openflow15.F
 		return nil
 	}
 	// Create a new transaction.
-	tx := b.ofSwitch.NewTransaction(ofctrl.Atomic)
+	tx := b.getOFSwitch().NewTransaction(ofctrl.Atomic)
 	// Open a bundle on the OFSwitch.
 	if err := tx.Begin(); err != nil {
 		return err
@@ -575,7 +577,7 @@ func (b *OFBridge) AddOFEntriesInBundle(addEntries []OFEntry, modEntries []OFEnt
 
 	// Create a new transaction. Use ofctrl.Ordered to ensure the messages are realized on OVS in the order of adding
 	// messages. This type could ensure Group entry is realized on OVS in advance of Flow entry.
-	tx := b.ofSwitch.NewTransaction(ofctrl.Ordered)
+	tx := b.getOFSwitch().NewTransaction(ofctrl.Ordered)
 	// Open a bundle on the OFSwitch.
 	if err := tx.Begin(); err != nil {
 		return err
@@ -713,11 +715,11 @@ func (b *OFBridge) SubscribePacketIn(category uint8, pktInQueue *PacketInQueue) 
 }
 
 func (b *OFBridge) SendPacketOut(packetOut *ofctrl.PacketOut) error {
-	return b.ofSwitch.Send(packetOut.GetMessage())
+	return b.getOFSwitch().Send(packetOut.GetMessage())
 }
 
 func (b *OFBridge) ResumePacket(packetIn *ofctrl.PacketIn) error {
-	return b.ofSwitch.ResumePacket(packetIn)
+	return b.getOFSwitch().ResumePacket(packetIn)
 }
 
 func (b *OFBridge) BuildPacketOut() PacketOutBuilder {
@@ -763,7 +765,7 @@ func (b *OFBridge) SubscribePortStatusConsumer(statusCh chan *openflow15.PortSta
 }
 
 func (b *OFBridge) setPacketInFormatTo2() {
-	b.ofSwitch.SetPacketInFormat(openflow15.OFPUTIL_PACKET_IN_NXT2)
+	b.getOFSwitch().SetPacketInFormat(openflow15.OFPUTIL_PACKET_IN_NXT2)
 }
 
 func (b *OFBridge) queryTableFeatures() {
@@ -784,7 +786,7 @@ func (b *OFBridge) queryTableFeatures() {
 		defer b.unregisterMpReplyCh(mpartRequest.Xid)
 		b.processTableFeatures(tableFeatureCh)
 	}()
-	b.ofSwitch.Send(mpartRequest)
+	b.getOFSwitch().Send(mpartRequest)
 }
 
 func (b *OFBridge) processTableFeatures(ch chan *openflow15.MultipartReply) {
@@ -814,7 +816,7 @@ func (b *OFBridge) processTableFeatures(ch chan *openflow15.MultipartReply) {
 			request.Body = append(request.Body, tableFeature)
 		}
 		request.Length = request.Len()
-		b.ofSwitch.Send(request)
+		b.getOFSwitch().Send(request)
 		// OVS uses "Flags=0" in the last MultipartReply message to indicate all tables' features have been sent.
 		// Here use this mark to identify all related messages are received and complete the loop.
 		if rpl.Flags == 0 {

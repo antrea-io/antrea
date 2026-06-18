@@ -464,12 +464,8 @@ func (i *Initializer) Initialize(ctx context.Context) error {
 				klog.ErrorS(err, "Failed to delete unused IPsec private key", "file", configs["private_key"])
 			}
 		}
-		toDelete := make(map[string]interface{})
-		for _, key := range otherConfigKeysForIPsecCertificates {
-			toDelete[key] = ""
-		}
 		// Clean up stale configs in OVS database.
-		if err := i.ovsBridgeClient.DeleteOVSOtherConfig(toDelete); err != nil {
+		if err := i.ovsBridgeClient.DeleteOVSOtherConfig(otherConfigKeysForIPsecCertificates); err != nil {
 			return fmt.Errorf("failed to clean up OVS other configs: %w", err)
 		}
 	}
@@ -677,7 +673,7 @@ func (i *Initializer) FlowRestoreComplete() error {
 		//    so existing connections can achieve 0 downtime during OVS restart.
 		// As a result, we remove the config here after restoring necessary flows.
 		klog.Info("Cleaning up flow-restore-wait config")
-		if err := i.ovsBridgeClient.DeleteOVSOtherConfig(map[string]interface{}{"flow-restore-wait": "true"}); err != nil {
+		if err := i.ovsBridgeClient.DeleteOVSOtherConfig([]string{"flow-restore-wait"}); err != nil {
 			return fmt.Errorf("error when cleaning up flow-restore-wait config: %v", err)
 		}
 		flowRestoreWait, err := getFlowRestoreWait()
@@ -702,7 +698,7 @@ func (i *Initializer) setupGatewayInterface() error {
 	gatewayIface, portExists := i.ifaceStore.GetInterface(i.hostGateway)
 	if !portExists {
 		klog.V(2).Infof("Creating gateway port %s on OVS bridge", i.hostGateway)
-		externalIDs := map[string]interface{}{
+		externalIDs := map[string]string{
 			interfacestore.AntreaInterfaceTypeKey: interfacestore.AntreaGateway,
 		}
 		mac := util.GenerateRandomMAC()
@@ -711,7 +707,7 @@ func (i *Initializer) setupGatewayInterface() error {
 			klog.ErrorS(err, "Failed to create gateway port on OVS bridge", "port", i.hostGateway)
 			return err
 		}
-		gwPort, err := i.ovsBridgeClient.GetOFPort(i.hostGateway, false)
+		gwPort, err := i.ovsBridgeClient.GetOFPort(i.hostGateway)
 		if err != nil {
 			klog.ErrorS(err, "Failed to get gateway ofport", "port", i.hostGateway)
 			return err
@@ -884,10 +880,10 @@ func (i *Initializer) setupDefaultTunnelInterface() error {
 			tunnelPortName = defaultTunInterfaceName
 			i.nodeConfig.DefaultTunName = tunnelPortName
 		}
-		externalIDs := map[string]interface{}{
+		externalIDs := map[string]string{
 			interfacestore.AntreaInterfaceTypeKey: interfacestore.AntreaTunnel,
 		}
-		extraOptions := map[string]interface{}{}
+		extraOptions := map[string]string{}
 		if i.networkConfig.TunnelPort != 0 {
 			extraOptions["dst_port"] = strconv.Itoa(int(i.networkConfig.TunnelPort))
 		}
@@ -897,7 +893,7 @@ func (i *Initializer) setupDefaultTunnelInterface() error {
 			klog.ErrorS(err, "Failed to create tunnel port on OVS bridge", "port", tunnelPortName, "type", i.networkConfig.TunnelType)
 			return err
 		}
-		tunPort, err := i.ovsBridgeClient.GetOFPort(tunnelPortName, false)
+		tunPort, err := i.ovsBridgeClient.GetOFPort(tunnelPortName)
 		if err != nil {
 			klog.ErrorS(err, "Failed to get tunnel ofport on OVS bridge", "port", tunnelPortName, "type", i.networkConfig.TunnelType)
 			return err
@@ -917,7 +913,7 @@ func (i *Initializer) setTunnelCsum(tunnelPortName string, enable bool) error {
 		return fmt.Errorf("error getting interface options: %w", err)
 	}
 
-	updatedOptions := make(map[string]interface{})
+	updatedOptions := make(map[string]string)
 	for k, v := range options {
 		updatedOptions[k] = v
 	}
@@ -1217,7 +1213,7 @@ func saveRoundNum(num uint64, bridgeClient ovsconfig.OVSBridgeClient) error {
 	if ovsCfgErr != nil {
 		return fmt.Errorf("error getting external IDs: %w", ovsCfgErr)
 	}
-	updatedExtIDs := make(map[string]interface{})
+	updatedExtIDs := make(map[string]string)
 	for k, v := range extIDs {
 		updatedExtIDs[k] = v
 	}

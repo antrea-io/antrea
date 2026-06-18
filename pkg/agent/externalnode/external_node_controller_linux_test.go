@@ -108,7 +108,7 @@ func TestUpdateExternalNode(t *testing.T) {
 						ovsExternalIDIPs:             "10.5.6.8",
 					},
 				}
-				expectedAttachInfo := map[string]interface{}{
+				expectedAttachInfo := map[string]string{
 					"uplink-name":      intf3.InterfaceName,
 					"entity-name":      externalNode2.Name,
 					"antrea-type":      "host",
@@ -163,7 +163,7 @@ func TestUpdateExternalNode(t *testing.T) {
 					},
 				}
 				mockOVSBridgeClient.EXPECT().GetPortData(intf2.PortUUID, intf2.InterfaceName).Return(returnedPortData, nil).Times(1)
-				expectedAttachInfo := map[string]interface{}{
+				expectedAttachInfo := map[string]string{
 					"uplink-name":      intf2.InterfaceName,
 					"entity-name":      externalNode2.Name,
 					"antrea-type":      "host",
@@ -249,7 +249,7 @@ func TestAddInterface(t *testing.T) {
 			preIPs:     []string{"10.20.30.50"},
 			preEEName:  "externalEntity",
 			expectedCalls: func(mockOFClient *openflowtest.MockClient, mockOVSBridgeClient *ovsconfigtest.MockOVSBridgeClient, mockIfaceStore *interfacestoretest.MockInterfaceStore, mockOVSCtlClient *ovsctltest.MockOVSCtlClient) {
-				expectedAttachInfo := map[string]interface{}{
+				expectedAttachInfo := map[string]string{
 					"uplink-name":      intf1.InterfaceName,
 					"entity-name":      eeName,
 					"antrea-type":      "host",
@@ -324,9 +324,9 @@ func TestAddInterface(t *testing.T) {
 				mockOVSBridgeClient.EXPECT().CreatePort(
 					uplinkName,
 					uplinkName,
-					map[string]interface{}{interfacestore.AntreaInterfaceTypeKey: interfacestore.AntreaUplink},
+					map[string]string{interfacestore.AntreaInterfaceTypeKey: interfacestore.AntreaUplink},
 				).Return(intf1.UplinkPort.PortUUID, nil).Times(1)
-				expectedAttachInfo := map[string]interface{}{
+				expectedAttachInfo := map[string]string{
 					"uplink-name":      intf1.InterfaceName + "~",
 					"entity-name":      eeName,
 					"antrea-type":      "host",
@@ -346,8 +346,8 @@ func TestAddInterface(t *testing.T) {
 					},
 				}
 				mockOVSBridgeClient.EXPECT().CreateInternalPort(intf1.InterfaceName, int32(0), net.HardwareAddr{0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88}.String(), expectedAttachInfo).Return(intf1.PortUUID, nil)
-				mockOVSBridgeClient.EXPECT().GetOFPort(intf1.InterfaceName, false).Times(1).Return(intf1.OFPort, nil)
-				mockOVSBridgeClient.EXPECT().GetOFPort(uplinkName, false).Times(1).Return(intf1.UplinkPort.OFPort, nil)
+				mockOVSBridgeClient.EXPECT().GetOFPort(intf1.InterfaceName).Times(1).Return(intf1.OFPort, nil)
+				mockOVSBridgeClient.EXPECT().GetOFPort(uplinkName).Times(1).Return(intf1.UplinkPort.OFPort, nil)
 				mockOFClient.EXPECT().InstallVMUplinkFlows(intf1.InterfaceName, intf1.OFPort, intf1.UplinkPort.OFPort).Times(1)
 				mockIfaceStore.EXPECT().AddInterface(expectedAddInterface).Times(1)
 			},
@@ -395,7 +395,7 @@ func TestCreateOVSPortsAndFlowsSuccess(t *testing.T) {
 	hostOFPort := int32(3)
 	uplinkOFPort := int32(4)
 	ipAddrs := []string{"10.20.30.40"}
-	expectedInfo := map[string]interface{}{
+	expectedInfo := map[string]string{
 		"uplink-name":      uplinkName,
 		"entity-name":      entityName,
 		"antrea-type":      "host",
@@ -413,12 +413,12 @@ func TestCreateOVSPortsAndFlowsSuccess(t *testing.T) {
 	defer mockLinkSetMTU(nil)()
 	defer mockLinkByName(t, 2)()
 
-	mockOVSBridgeClient.EXPECT().CreatePort(uplinkName, uplinkName, map[string]interface{}{
+	mockOVSBridgeClient.EXPECT().CreatePort(uplinkName, uplinkName, map[string]string{
 		interfacestore.AntreaInterfaceTypeKey: interfacestore.AntreaUplink,
 	}).Return(uplinkUUID, nil)
 	mockOVSBridgeClient.EXPECT().CreateInternalPort(hostIfName, int32(0), "22:33:44:55:66:77:88", expectedInfo).Return(hostIfUUID, nil)
-	mockOVSBridgeClient.EXPECT().GetOFPort(uplinkName, false).Times(1).Return(uplinkOFPort, nil)
-	mockOVSBridgeClient.EXPECT().GetOFPort(hostIfName, false).Times(1).Return(hostOFPort, nil)
+	mockOVSBridgeClient.EXPECT().GetOFPort(uplinkName).Times(1).Return(uplinkOFPort, nil)
+	mockOVSBridgeClient.EXPECT().GetOFPort(hostIfName).Times(1).Return(hostOFPort, nil)
 	mockOFClient.EXPECT().InstallVMUplinkFlows(hostIfName, hostOFPort, uplinkOFPort).Times(1)
 
 	ips := make([]net.IP, 0, len(ipAddrs))

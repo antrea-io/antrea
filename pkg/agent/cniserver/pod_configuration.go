@@ -168,8 +168,8 @@ func buildContainerConfig(
 
 // BuildOVSPortExternalIDs parses OVS port external_ids from InterfaceConfig.
 // external_ids are used to compare and sync container interface configuration.
-func BuildOVSPortExternalIDs(containerConfig *interfacestore.InterfaceConfig) map[string]interface{} {
-	externalIDs := make(map[string]interface{})
+func BuildOVSPortExternalIDs(containerConfig *interfacestore.InterfaceConfig) map[string]string {
+	externalIDs := make(map[string]string)
 	externalIDs[interfacestore.AntreaInterfaceTypeKey] = interfacestore.AntreaContainer
 	externalIDs[ovsExternalIDMAC] = containerConfig.MAC.String()
 	externalIDs[ovsExternalIDContainerID] = containerConfig.ContainerID
@@ -294,7 +294,7 @@ func (pc *podConfigurator) configureInterfacesCommon(
 	return nil
 }
 
-func (pc *podConfigurator) createOVSPort(ovsPortName string, ovsAttachInfo map[string]interface{}, vlanID uint16) (string, error) {
+func (pc *podConfigurator) createOVSPort(ovsPortName string, ovsAttachInfo map[string]string, vlanID uint16) (string, error) {
 	var portUUID string
 	var err error
 

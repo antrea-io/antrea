@@ -127,7 +127,7 @@ var (
 	actionMirror     = v1alpha2.ActionMirror
 	actionRedirect   = v1alpha2.ActionRedirect
 
-	externalIDs = map[string]interface{}{interfacestore.AntreaInterfaceTypeKey: interfacestore.AntreaTrafficControl}
+	externalIDs = map[string]string{interfacestore.AntreaInterfaceTypeKey: interfacestore.AntreaTrafficControl}
 )
 
 func newFakeController(t *testing.T, objects []runtime.Object, initObjects []runtime.Object, interfaces []*interfacestore.InterfaceConfig) *fakeController {
@@ -329,7 +329,7 @@ func TestTrafficControlAdd(t *testing.T) {
 				mockOVSBridgeClient *ovsconfigtest.MockOVSBridgeClient,
 				mockOVSCtlClient *ovsctltest.MockOVSCtlClient) {
 				mockOVSBridgeClient.EXPECT().CreatePort(networkDeviceName, networkDeviceName, externalIDs)
-				mockOVSBridgeClient.EXPECT().GetOFPort(networkDeviceName, false)
+				mockOVSBridgeClient.EXPECT().GetOFPort(networkDeviceName)
 				mockOVSCtlClient.EXPECT().SetPortNoFlood(0)
 				mockOFClient.EXPECT().InstallTrafficControlMarkFlows(tc1Name, gomock.InAnyOrder([]uint32{pod1OFPort, pod3OFPort}), gomock.Any(), directionIngress, actionMirror, types.TrafficControlFlowPriorityMedium)
 			},
@@ -340,10 +340,10 @@ func TestTrafficControlAdd(t *testing.T) {
 			expectedCalls: func(mockOFClient *openflowtest.MockClient,
 				mockOVSBridgeClient *ovsconfigtest.MockOVSBridgeClient,
 				mockOVSCtlClient *ovsctltest.MockOVSCtlClient) {
-				extraOptions := map[string]interface{}{"key": strconv.Itoa(int(vni)), "dst_port": strconv.Itoa(int(destinationPort))}
+				extraOptions := map[string]string{"key": strconv.Itoa(int(vni)), "dst_port": strconv.Itoa(int(destinationPort))}
 
 				mockOVSBridgeClient.EXPECT().CreateTunnelPortExt(gomock.Any(), ovsconfig.TunnelType(ovsconfig.VXLANTunnel), int32(0), false, "", remoteIP, "", "", extraOptions, externalIDs)
-				mockOVSBridgeClient.EXPECT().GetOFPort(gomock.Any(), false)
+				mockOVSBridgeClient.EXPECT().GetOFPort(gomock.Any())
 				mockOVSCtlClient.EXPECT().SetPortNoFlood(gomock.Any())
 				mockOFClient.EXPECT().InstallTrafficControlMarkFlows(tc1Name, gomock.InAnyOrder([]uint32{pod1OFPort, pod3OFPort}), gomock.Any(), directionIngress, actionMirror, types.TrafficControlFlowPriorityMedium)
 			},
@@ -354,10 +354,10 @@ func TestTrafficControlAdd(t *testing.T) {
 			expectedCalls: func(mockOFClient *openflowtest.MockClient,
 				mockOVSBridgeClient *ovsconfigtest.MockOVSBridgeClient,
 				mockOVSCtlClient *ovsctltest.MockOVSCtlClient) {
-				extraOptions := map[string]interface{}{"key": strconv.Itoa(int(vni)), "dst_port": strconv.Itoa(int(destinationPort))}
+				extraOptions := map[string]string{"key": strconv.Itoa(int(vni)), "dst_port": strconv.Itoa(int(destinationPort))}
 
 				mockOVSBridgeClient.EXPECT().CreateTunnelPortExt(gomock.Any(), ovsconfig.TunnelType(ovsconfig.GeneveTunnel), int32(0), false, "", remoteIP, "", "", extraOptions, externalIDs)
-				mockOVSBridgeClient.EXPECT().GetOFPort(gomock.Any(), false)
+				mockOVSBridgeClient.EXPECT().GetOFPort(gomock.Any())
 				mockOVSCtlClient.EXPECT().SetPortNoFlood(gomock.Any())
 				mockOFClient.EXPECT().InstallTrafficControlMarkFlows(tc1Name, gomock.InAnyOrder([]uint32{pod1OFPort, pod3OFPort}), gomock.Any(), directionIngress, actionMirror, types.TrafficControlFlowPriorityMedium)
 			},
@@ -368,10 +368,10 @@ func TestTrafficControlAdd(t *testing.T) {
 			expectedCalls: func(mockOFClient *openflowtest.MockClient,
 				mockOVSBridgeClient *ovsconfigtest.MockOVSBridgeClient,
 				mockOVSCtlClient *ovsctltest.MockOVSCtlClient) {
-				extraOptions := map[string]interface{}{"key": strconv.Itoa(int(greKey))}
+				extraOptions := map[string]string{"key": strconv.Itoa(int(greKey))}
 
 				mockOVSBridgeClient.EXPECT().CreateTunnelPortExt(gomock.Any(), ovsconfig.TunnelType(ovsconfig.GRETunnel), int32(0), false, "", remoteIP, "", "", extraOptions, externalIDs)
-				mockOVSBridgeClient.EXPECT().GetOFPort(gomock.Any(), false)
+				mockOVSBridgeClient.EXPECT().GetOFPort(gomock.Any())
 				mockOVSCtlClient.EXPECT().SetPortNoFlood(gomock.Any())
 				mockOFClient.EXPECT().InstallTrafficControlMarkFlows(tc1Name, gomock.InAnyOrder([]uint32{pod1OFPort, pod3OFPort}), gomock.Any(), directionIngress, actionMirror, types.TrafficControlFlowPriorityMedium)
 			},
@@ -382,10 +382,10 @@ func TestTrafficControlAdd(t *testing.T) {
 			expectedCalls: func(mockOFClient *openflowtest.MockClient,
 				mockOVSBridgeClient *ovsconfigtest.MockOVSBridgeClient,
 				mockOVSCtlClient *ovsctltest.MockOVSCtlClient) {
-				extraOptions := map[string]interface{}{"erspan_ver": "2", "erspan_dir": strconv.Itoa(int(erspanDir)), "erspan_hwid": strconv.Itoa(int(erspanHwID))}
+				extraOptions := map[string]string{"erspan_ver": "2", "erspan_dir": strconv.Itoa(int(erspanDir)), "erspan_hwid": strconv.Itoa(int(erspanHwID))}
 
 				mockOVSBridgeClient.EXPECT().CreateTunnelPortExt(gomock.Any(), ovsconfig.TunnelType(ovsconfig.ERSPANTunnel), int32(0), false, "", remoteIP, "", "", extraOptions, externalIDs)
-				mockOVSBridgeClient.EXPECT().GetOFPort(gomock.Any(), false)
+				mockOVSBridgeClient.EXPECT().GetOFPort(gomock.Any())
 				mockOVSCtlClient.EXPECT().SetPortNoFlood(gomock.Any())
 				mockOFClient.EXPECT().InstallTrafficControlMarkFlows(tc1Name, gomock.InAnyOrder([]uint32{pod1OFPort, pod3OFPort}), gomock.Any(), directionIngress, actionMirror, types.TrafficControlFlowPriorityMedium)
 			},
@@ -517,7 +517,7 @@ func TestTrafficControlUpdate(t *testing.T) {
 				mockOVSCtlClient *ovsctltest.MockOVSCtlClient) {
 				mockOVSBridgeClient.EXPECT().DeletePort(gomock.Any())
 				mockOVSBridgeClient.EXPECT().CreatePort(targetPort2Name, targetPort2Name, externalIDs)
-				mockOVSBridgeClient.EXPECT().GetOFPort(targetPort2Name, false)
+				mockOVSBridgeClient.EXPECT().GetOFPort(targetPort2Name)
 				mockOVSCtlClient.EXPECT().SetPortNoFlood(gomock.Any())
 				mockOFClient.EXPECT().InstallTrafficControlMarkFlows(tc1Name, gomock.InAnyOrder([]uint32{pod1OFPort, pod3OFPort}), gomock.Any(), directionIngress, actionMirror, types.TrafficControlFlowPriorityMedium)
 			},
@@ -530,7 +530,7 @@ func TestTrafficControlUpdate(t *testing.T) {
 				mockOVSBridgeClient *ovsconfigtest.MockOVSBridgeClient,
 				mockOVSCtlClient *ovsctltest.MockOVSCtlClient) {
 				mockOVSBridgeClient.EXPECT().CreatePort(returnPort1Name, returnPort1Name, externalIDs)
-				mockOVSBridgeClient.EXPECT().GetOFPort(returnPort1Name, false)
+				mockOVSBridgeClient.EXPECT().GetOFPort(returnPort1Name)
 				mockOVSCtlClient.EXPECT().SetPortNoFlood(gomock.Any())
 				mockOFClient.EXPECT().InstallTrafficControlReturnPortFlow(gomock.Any())
 				mockOFClient.EXPECT().InstallTrafficControlMarkFlows(tc1Name, gomock.InAnyOrder([]uint32{pod1OFPort, pod3OFPort}), targetPort1OFPort, directionIngress, actionRedirect, types.TrafficControlFlowPriorityMedium)
@@ -633,7 +633,7 @@ func TestSharedTargetPort(t *testing.T) {
 
 	// Target port is expected to be crated if it doesn't exist.
 	c.mockOVSBridgeClient.EXPECT().CreatePort(targetPort1Name, targetPort1Name, externalIDs)
-	c.mockOVSBridgeClient.EXPECT().GetOFPort(targetPort1Name, false).Times(1)
+	c.mockOVSBridgeClient.EXPECT().GetOFPort(targetPort1Name).Times(1)
 	c.mockOVSCtlClient.EXPECT().SetPortNoFlood(gomock.Any())
 	// Mark flows for TrafficControl tc1 and tc2 are expected to be installed.
 	c.mockOFClient.EXPECT().InstallTrafficControlMarkFlows(tc1Name, gomock.InAnyOrder([]uint32{pod1OFPort, pod3OFPort}), gomock.Any(), directionIngress, actionMirror, types.TrafficControlFlowPriorityMedium)

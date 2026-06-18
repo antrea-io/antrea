@@ -19,51 +19,34 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"k8s.io/utils/ptr"
 )
-
-func TestOVSClient(t *testing.T) {
-	_, err := parseOvsVersion(nil)
-	assert.Error(t, err)
-
-	// raw strings are not accepted, we want to make sure the function doesn't panic and returns an error
-	_, err = parseOvsVersion("ovs_version")
-	assert.Error(t, err)
-
-	m1 := map[string]string{"ovs_version": "1"}
-	_, err = parseOvsVersion(m1)
-	assert.NoError(t, err)
-
-	m2 := map[string]interface{}{"ovs_version": "1.2.3.4.5"}
-	_, err = parseOvsVersion(m2)
-	assert.NoError(t, err)
-
-}
 
 func TestBuildPortDataCommon(t *testing.T) {
 	macStr := "9a:23:45:23:22:41"
 	intfMAC, _ := net.ParseMAC(macStr)
 	for _, tc := range []struct {
 		name     string
-		port     map[string]interface{}
-		intf     map[string]interface{}
+		port     *Port
+		intf     *Interface
 		portData *OVSPortData
 	}{
 		{
 			name: "gw-port",
-			port: map[string]interface{}{"name": "antrea-gw0", "external_ids": []interface{}{"map", []interface{}{[]interface{}{"antrea-type", "gateway"}}}},
-			intf: map[string]interface{}{"name": "antrea-gw0", "mac": macStr, "type": "internal", "ofport": float64(2), "options": []interface{}{""}},
+			port: &Port{Name: "antrea-gw0", ExternalIDs: map[string]string{"antrea-type": "gateway"}},
+			intf: &Interface{Name: "antrea-gw0", MAC: ptr.To(macStr), Type: "internal", OFPort: ptr.To(2)},
 			portData: &OVSPortData{
 				Name:        "antrea-gw0",
 				ExternalIDs: map[string]string{"antrea-type": "gateway"},
-				Options:     map[string]string{},
+				Options:     nil,
 				IFType:      "internal",
 				OFPort:      2,
 				MAC:         intfMAC,
 			},
 		}, {
 			name: "tun-port",
-			port: map[string]interface{}{"name": "antrea-tun0", "external_ids": []interface{}{"map", []interface{}{[]interface{}{"antrea-type", "tunnel"}}}},
-			intf: map[string]interface{}{"name": "antrea-tun0", "mac": macStr, "type": "geneve", "ofport": float64(1), "options": []interface{}{"map", []interface{}{[]interface{}{"key", "flow"}, []interface{}{"remote_ip", "flow"}}}},
+			port: &Port{Name: "antrea-tun0", ExternalIDs: map[string]string{"antrea-type": "tunnel"}},
+			intf: &Interface{Name: "antrea-tun0", MAC: ptr.To(macStr), Type: "geneve", OFPort: ptr.To(1), Options: map[string]string{"key": "flow", "remote_ip": "flow"}},
 			portData: &OVSPortData{
 				Name:        "antrea-tun0",
 				ExternalIDs: map[string]string{"antrea-type": "tunnel"},
@@ -74,24 +57,24 @@ func TestBuildPortDataCommon(t *testing.T) {
 			},
 		}, {
 			name: "general-port",
-			port: map[string]interface{}{"name": "p0", "external_ids": []interface{}{"map", []interface{}{[]interface{}{"antrea-type", "container"}, []interface{}{"ip", "1.2.3.4"}}}},
-			intf: map[string]interface{}{"name": "p0", "mac": []interface{}{macStr}, "type": "", "ofport": float64(3), "options": []interface{}{""}},
+			port: &Port{Name: "p0", ExternalIDs: map[string]string{"antrea-type": "container", "ip": "1.2.3.4"}},
+			intf: &Interface{Name: "p0", MAC: ptr.To(macStr), Type: "", OFPort: ptr.To(3)},
 			portData: &OVSPortData{
 				Name:        "p0",
 				ExternalIDs: map[string]string{"antrea-type": "container", "ip": "1.2.3.4"},
-				Options:     map[string]string{},
+				Options:     nil,
 				IFType:      "",
 				OFPort:      3,
 				MAC:         intfMAC,
 			},
 		}, {
 			name: "access-port",
-			port: map[string]interface{}{"name": "p1", "tag": float64(10), "external_ids": []interface{}{"map", []interface{}{[]interface{}{"antrea-type", "container"}, []interface{}{"ip", "1.2.3.5"}}}},
-			intf: map[string]interface{}{"name": "p1", "mac": macStr, "type": "", "ofport": float64(3), "options": []interface{}{""}},
+			port: &Port{Name: "p1", Tag: ptr.To(10), ExternalIDs: map[string]string{"antrea-type": "container", "ip": "1.2.3.5"}},
+			intf: &Interface{Name: "p1", MAC: ptr.To(macStr), Type: "", OFPort: ptr.To(3)},
 			portData: &OVSPortData{
 				Name:        "p1",
 				ExternalIDs: map[string]string{"antrea-type": "container", "ip": "1.2.3.5"},
-				Options:     map[string]string{},
+				Options:     nil,
 				IFType:      "",
 				OFPort:      3,
 				VLANID:      10,
@@ -99,12 +82,12 @@ func TestBuildPortDataCommon(t *testing.T) {
 			},
 		}, {
 			name: "no-mac-port",
-			port: map[string]interface{}{"name": "p2", "external_ids": []interface{}{"map", []interface{}{[]interface{}{"antrea-type", "container"}, []interface{}{"ip", "1.2.3.5"}}}},
-			intf: map[string]interface{}{"name": "p2", "mac": []interface{}{}, "type": "", "ofport": float64(4), "options": []interface{}{""}},
+			port: &Port{Name: "p2", ExternalIDs: map[string]string{"antrea-type": "container", "ip": "1.2.3.5"}},
+			intf: &Interface{Name: "p2", MAC: nil, Type: "", OFPort: ptr.To(4)},
 			portData: &OVSPortData{
 				Name:        "p2",
 				ExternalIDs: map[string]string{"antrea-type": "container", "ip": "1.2.3.5"},
-				Options:     map[string]string{},
+				Options:     nil,
 				IFType:      "",
 				OFPort:      4,
 			},
