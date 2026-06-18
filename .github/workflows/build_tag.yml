@@ -51,7 +51,7 @@ jobs:
     env:
       DOCKER_TAG: ${{ needs.get-version.outputs.version }}
     steps:
-    - uses: actions/checkout@v6
+    - uses: actions/checkout@v7
       with:
         ref: ${{ needs.get-version.outputs.antrea_ref }}
         show-progress: false
@@ -183,7 +183,7 @@ jobs:
     runs-on: [ubuntu-latest]
     needs: get-version
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           ref: ${{ needs.get-version.outputs.antrea_ref }}
           show-progress: false
@@ -206,7 +206,7 @@ jobs:
     runs-on: [ubuntu-latest]
     needs: get-version
     steps:
-    - uses: actions/checkout@v6
+    - uses: actions/checkout@v7
       with:
         ref: ${{ needs.get-version.outputs.antrea_ref }}
         show-progress: false
@@ -224,7 +224,7 @@ jobs:
     runs-on: [ubuntu-latest]
     needs: get-version
     steps:
-    - uses: actions/checkout@v6
+    - uses: actions/checkout@v7
       with:
         ref: ${{ needs.get-version.outputs.antrea_ref }}
         show-progress: false
@@ -259,7 +259,7 @@ jobs:
     env:
       DOCKER_TAG: ${{ needs.get-version.outputs.version }}
     steps:
-    - uses: actions/checkout@v6
+    - uses: actions/checkout@v7
       with:
         ref: ${{ needs.get-version.outputs.antrea_ref }}
         show-progress: false

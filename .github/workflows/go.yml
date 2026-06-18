@@ -20,7 +20,7 @@ jobs:
     name: Check whether tests need to be run based on diff
     runs-on: [ubuntu-latest]
     steps:
-    - uses: actions/checkout@v6
+    - uses: actions/checkout@v7
       with:
         fetch-depth: 0
         show-progress: false
@@ -41,7 +41,7 @@ jobs:
     runs-on: [ubuntu-latest]
     steps:
     - name: Check-out code
-      uses: actions/checkout@v6
+      uses: actions/checkout@v7
       with:
         show-progress: false
     - name: Set up Go using version from .go-version
@@ -67,7 +67,7 @@ jobs:
     runs-on: [windows-2022]
     steps:
       - name: Check-out code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           show-progress: false
       - name: Set up Go using version from .go-version
@@ -94,7 +94,7 @@ jobs:
     runs-on: [ubuntu-latest]
     steps:
       - name: Check-out code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           show-progress: false
       - name: Set up Go using version from .go-version
@@ -129,7 +129,7 @@ jobs:
     runs-on: [ubuntu-latest]
     steps:
     - name: Check-out code
-      uses: actions/checkout@v6
+      uses: actions/checkout@v7
       with:
         show-progress: false
     - name: Set up Go using version from .go-version
@@ -146,7 +146,7 @@ jobs:
     runs-on: [macos-latest]
     steps:
       - name: Check-out code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           show-progress: false
       - name: Set up Go using version from .go-version
@@ -163,7 +163,7 @@ jobs:
     runs-on: [ubuntu-latest]
     steps:
     - name: Check-out code
-      uses: actions/checkout@v6
+      uses: actions/checkout@v7
       with:
         show-progress: false
     - name: Set up Go using version from .go-version
@@ -200,7 +200,7 @@ jobs:
     runs-on: [ubuntu-latest]
     steps:
     - name: Check-out code
-      uses: actions/checkout@v6
+      uses: actions/checkout@v7
       with:
         show-progress: false
     - name: Set up Go using version from .go-version
@@ -217,7 +217,7 @@ jobs:
     runs-on: [ubuntu-latest]
     steps:
     - name: Check-out code
-      uses: actions/checkout@v6
+      uses: actions/checkout@v7
       with:
         show-progress: false
     - name: Set up Go using version from .go-version
@@ -239,7 +239,7 @@ jobs:
     runs-on: [ubuntu-latest]
     steps:
     - name: Check-out code
-      uses: actions/checkout@v6
+      uses: actions/checkout@v7
       with:
         show-progress: false
     - name: Set up Go using version from .go-version
@@ -277,7 +277,7 @@ jobs:
     runs-on: [ubuntu-latest]
     steps:
       - name: Check-out code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           show-progress: false
       - name: Set up Go using version from .go-version
