@@ -24,6 +24,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/google/uuid"
@@ -267,6 +268,12 @@ type NetworkPolicyController struct {
 	// Enable Stretched Networkpolicy feature which allows Antrea-native policies to select peer
 	// from other clusters in a ClusterSet.
 	stretchNPEnabled bool
+	// cnpCreationAllowed is an atomic flag that reflects whether upstream ClusterNetworkPolicy (v1alpha2)
+	// creation is currently allowed.  It is true when the ClusterNetworkPolicy feature gate is enabled AND
+	// no user-created Tier at cnpAdminTierPriority (220) exists. The admission webhook reads this flag to
+	// gate CNP CREATE requests, and the Tier CREATE webhook uses it to block new Tiers at that priority
+	// once the feature gate is enabled and there is no pre-existing conflict.
+	cnpCreationAllowed atomic.Bool
 	// heartbeatCh is an internal channel for testing. It's used to know whether all tasks have been
 	// processed, and to count executions of each function.
 	heartbeatCh chan heartbeat
@@ -490,34 +497,6 @@ func NewNetworkPolicyController(kubeClient clientset.Interface,
 		},
 		resyncPeriod,
 	)
-	if features.DefaultFeatureGate.Enabled(features.AdminNetworkPolicy) {
-		adminNPInformer.Informer().AddEventHandlerWithResyncPeriod(
-			cache.ResourceEventHandlerFuncs{
-				AddFunc:    n.addAdminNP,
-				UpdateFunc: n.updateAdminNP,
-				DeleteFunc: n.deleteAdminNP,
-			},
-			resyncPeriod,
-		)
-		banpInformer.Informer().AddEventHandlerWithResyncPeriod(
-			cache.ResourceEventHandlerFuncs{
-				AddFunc:    n.addBANP,
-				UpdateFunc: n.updateBANP,
-				DeleteFunc: n.deleteBANP,
-			},
-			resyncPeriod,
-		)
-	}
-	if features.DefaultFeatureGate.Enabled(features.ClusterNetworkPolicy) {
-		cnpInformer.Informer().AddEventHandlerWithResyncPeriod(
-			cache.ResourceEventHandlerFuncs{
-				AddFunc:    n.addCNP,
-				UpdateFunc: n.updateCNP,
-				DeleteFunc: n.deleteCNP,
-			},
-			resyncPeriod,
-		)
-	}
 	// Register Informer and add handlers for AntreaPolicy events only if the feature is enabled.
 	if features.DefaultFeatureGate.Enabled(features.AntreaPolicy) {
 		n.serviceInformer = serviceInformer
@@ -604,6 +583,43 @@ func NewNetworkPolicyController(kubeClient clientset.Interface,
 			},
 			resyncPeriod,
 		)
+		if features.DefaultFeatureGate.Enabled(features.AdminNetworkPolicy) {
+			adminNPInformer.Informer().AddEventHandlerWithResyncPeriod(
+				cache.ResourceEventHandlerFuncs{
+					AddFunc:    n.addAdminNP,
+					UpdateFunc: n.updateAdminNP,
+					DeleteFunc: n.deleteAdminNP,
+				},
+				resyncPeriod,
+			)
+			banpInformer.Informer().AddEventHandlerWithResyncPeriod(
+				cache.ResourceEventHandlerFuncs{
+					AddFunc:    n.addBANP,
+					UpdateFunc: n.updateBANP,
+					DeleteFunc: n.deleteBANP,
+				},
+				resyncPeriod,
+			)
+		}
+		if features.DefaultFeatureGate.Enabled(features.ClusterNetworkPolicy) {
+			cnpInformer.Informer().AddEventHandlerWithResyncPeriod(
+				cache.ResourceEventHandlerFuncs{
+					AddFunc:    n.addCNP,
+					UpdateFunc: n.updateCNP,
+					DeleteFunc: n.deleteCNP,
+				},
+				resyncPeriod,
+			)
+			// Watch Tier ADD/DELETE to keep cnpCreationAllowed in sync.
+			// A user-created Tier at cnpAdminTierPriority blocks CNP creation.
+			tierInformer.Informer().AddEventHandlerWithResyncPeriod(
+				cache.ResourceEventHandlerFuncs{
+					AddFunc:    n.onTierAddForCNP,
+					DeleteFunc: n.onTierDeleteForCNP,
+				},
+				resyncPeriod,
+			)
+		}
 	}
 	return n
 }
@@ -992,8 +1008,16 @@ func (n *NetworkPolicyController) Run(stopCh <-chan struct{}) {
 	if features.DefaultFeatureGate.Enabled(features.AntreaPolicy) {
 		cacheSyncs = append(cacheSyncs, n.acnpListerSynced, n.annpListerSynced, n.cgListerSynced)
 	}
+	if features.DefaultFeatureGate.Enabled(features.ClusterNetworkPolicy) {
+		cacheSyncs = append(cacheSyncs, n.cnpListerSynced, n.tierListerSynced)
+	}
 	if !cache.WaitForNamedCacheSync(controllerName, stopCh, cacheSyncs...) {
 		return
+	}
+	// After caches are synced, set the initial value of cnpCreationAllowed based
+	// on whether a conflicting Tier already exists at cnpAdminTierPriority.
+	if features.DefaultFeatureGate.Enabled(features.ClusterNetworkPolicy) {
+		n.syncCNPCreationAllowed()
 	}
 
 	for i := 0; i < defaultWorkers; i++ {

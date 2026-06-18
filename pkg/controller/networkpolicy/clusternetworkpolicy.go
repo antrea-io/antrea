@@ -16,6 +16,7 @@ package networkpolicy
 
 import (
 	"errors"
+	"strconv"
 
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
@@ -29,9 +30,21 @@ import (
 	antreatypes "antrea.io/antrea/v2/pkg/controller/types"
 )
 
+const (
+	// cnpAdminTierPriority is the fixed Tier priority reserved for upstream
+	// (v1alpha2) ClusterNetworkPolicy admin-tier rules. It sits between the
+	// default Antrea-native Application Tier (250) and the Platform Tier (200),
+	// ensuring that administrator-created CNPs are evaluated after
+	// administrative Tiers but before application Tier.
+	cnpAdminTierPriority = int32(220)
+	// cnpBaselineTierPriority is the fixed Tier priority for the Baseline tier
+	// of upstream ClusterNetworkPolicies, evaluated after all other policies.
+	cnpBaselineTierPriority = int32(254)
+)
+
 var (
-	adminTierPriority    = int32(251)
-	baselineTierPriority = int32(254)
+	adminTierPriority    = cnpAdminTierPriority
+	baselineTierPriority = cnpBaselineTierPriority
 
 	cnpActionToAntreaActionMap = map[v1alpha2.ClusterNetworkPolicyRuleAction]antreacrd.RuleAction{
 		v1alpha2.ClusterNetworkPolicyRuleActionAccept: antreacrd.RuleActionAllow,
@@ -85,6 +98,61 @@ func (n *NetworkPolicyController) deleteCNP(old interface{}) {
 	defer n.heartbeat("deleteCNP")
 	klog.InfoS("Processing ClusterNetworkPolicy DELETE event", "cnp", cnp.Name)
 	n.enqueueInternalNetworkPolicy(getCNPReference(cnp))
+}
+
+// syncCNPCreationAllowed checks whether any user created custom Tier at
+// cnpAdminTierPriority exists and sets n.cnpCreationAllowed accordingly.
+// It must be called after the tier informer cache has been synced.
+func (n *NetworkPolicyController) syncCNPCreationAllowed() {
+	priorityKey := strconv.FormatInt(int64(cnpAdminTierPriority), 10)
+	tiers, err := n.tierInformer.Informer().GetIndexer().ByIndex(PriorityIndex, priorityKey)
+	if err != nil {
+		klog.ErrorS(err, "Failed to query Tier index for CNP creation check")
+		n.cnpCreationAllowed.Store(false)
+		return
+	}
+	if len(tiers) > 0 {
+		klog.InfoS("A Tier already exists at cnpAdminTierPriority; upstream ClusterNetworkPolicy creation is blocked until the conflicting Tier is removed",
+			"priority", cnpAdminTierPriority)
+		n.cnpCreationAllowed.Store(false)
+	} else {
+		n.cnpCreationAllowed.Store(true)
+	}
+}
+
+// onTierAddForCNP is called when a Tier is created. If the new Tier's priority
+// matches cnpAdminTierPriority, CNP creation is blocked.
+// This should only be possible during upgrade case when there are existing user
+// created Tier at cnpAdminTierPriority, or when the feature gate is not enabled.
+func (n *NetworkPolicyController) onTierAddForCNP(obj interface{}) {
+	tier, ok := obj.(*antreacrd.Tier)
+	if !ok {
+		return
+	}
+	if tier.Spec.Priority == cnpAdminTierPriority {
+		klog.InfoS("A Tier was created at cnpAdminTierPriority; blocking upstream ClusterNetworkPolicy creation",
+			"tier", tier.Name, "priority", cnpAdminTierPriority)
+		n.cnpCreationAllowed.Store(false)
+	}
+}
+
+// onTierDeleteForCNP is called when a Tier is deleted. If the deleted Tier's
+// priority was cnpAdminTierPriority, CNP creation may be enabled.
+func (n *NetworkPolicyController) onTierDeleteForCNP(obj interface{}) {
+	tier, ok := obj.(*antreacrd.Tier)
+	if !ok {
+		tombstone, ok := obj.(cache.DeletedFinalStateUnknown)
+		if !ok {
+			return
+		}
+		tier, ok = tombstone.Obj.(*antreacrd.Tier)
+		if !ok {
+			return
+		}
+	}
+	if tier.Spec.Priority == cnpAdminTierPriority {
+		n.syncCNPCreationAllowed()
+	}
 }
 
 // appendCNPPortToServices appends Antrea Services for a v1alpha2 Port and the given IP protocol.

@@ -75,6 +75,9 @@ var (
 	// The priority 250 is reserved for default Tier but not part of this set in order to be
 	// able to create the Tier by Antrea. Same for priority 253 which is reserved for the
 	// baseline tier.
+	// cnpAdminTierPriority (220) is also NOT in this set because upgrade compatibility requires
+	// that pre-existing Tiers at that priority must remain deletable.
+	// The ClusterNetworkPolicy webhook enforces it dynamically based on n.cnpCreationAllowed.
 	reservedTierPriorities = sets.New[int32](int32(251), int32(252), int32(254), int32(255))
 	// reservedTierNames stores the set of Tier names which cannot be deleted
 	// since they are created by Antrea.
@@ -108,6 +111,7 @@ func (v *NetworkPolicyValidator) RegisterGroupValidator(g validator) {
 // NetworkPolicyValidator maintains list of validator objects which validate
 // the Antrea-native policy related resources.
 type NetworkPolicyValidator struct {
+	networkPolicyController *NetworkPolicyController
 	// antreaPolicyValidators maintains a list of validator objects which
 	// implement the validator interface for Antrea-native policies.
 	antreaPolicyValidators []validator
@@ -123,7 +127,9 @@ type NetworkPolicyValidator struct {
 func NewNetworkPolicyValidator(networkPolicyController *NetworkPolicyController) *NetworkPolicyValidator {
 	// initialize the validator registry with the default validators that need to
 	// be called.
-	vr := NetworkPolicyValidator{}
+	vr := NetworkPolicyValidator{
+		networkPolicyController: networkPolicyController,
+	}
 	// apv is an instance of antreaPolicyValidator to validate Antrea-native
 	// policy events.
 	apv := antreaPolicyValidator{
@@ -922,6 +928,17 @@ func (t *tierValidator) createValidate(curObj interface{}, userInfo authenticati
 	if reservedTierPriorities.Has(curTier.Spec.Priority) {
 		return nil, fmt.Sprintf("tier %s priority %d is reserved", curTier.Name, curTier.Spec.Priority), false
 	}
+	// When the ClusterNetworkPolicy feature gate is enabled, block any new Tier
+	// from taking the cnpAdminTierPriority. If a conflict already existed before the
+	// feature gate was enabled (upgrade case), we allow the Tier to persist
+	// so that it can be migrated; only new Tiers are blocked.
+	if features.DefaultFeatureGate.Enabled(features.ClusterNetworkPolicy) &&
+		curTier.Spec.Priority == cnpAdminTierPriority {
+		return nil, fmt.Sprintf(
+			"tier %s priority %d is reserved for upstream ClusterNetworkPolicy when the "+
+				"ClusterNetworkPolicy feature gate is enabled; choose a different priority",
+			curTier.Name, curTier.Spec.Priority), false
+	}
 	// Tier priority must not overlap existing tier's priority
 	trs, err := t.networkPolicyController.tierInformer.Informer().GetIndexer().ByIndex(PriorityIndex, strconv.FormatInt(int64(curTier.Spec.Priority), 10))
 	if err != nil || len(trs) > 0 {
@@ -1119,4 +1136,28 @@ func (g *groupValidator) validateGroup(curObj interface{}) ([]string, string, bo
 // deleteValidate validates the DELETE events of Group, ClusterGroup resources.
 func (g *groupValidator) deleteValidate(oldObj interface{}, userInfo authenticationv1.UserInfo) (string, bool) {
 	return "", true
+}
+
+// ValidateUpstreamCNP is the admission webhook handler for upstream
+// (policy.networking.k8s.io/v1alpha2) ClusterNetworkPolicy CREATE requests.
+// CREATE is gated on cnpCreationAllowed: if a user-created Tier at cnpAdminTierPriority already
+// exists the request is denied until that Tier is removed.
+func (v *NetworkPolicyValidator) ValidateUpstreamCNP(ar *admv1.AdmissionReview) *admv1.AdmissionResponse {
+	klog.V(2).Info("Validating ClusterNetworkPolicy")
+	var result *metav1.Status
+	allowed := true
+	if ar.Request.Operation == admv1.Create && !v.networkPolicyController.cnpCreationAllowed.Load() {
+		allowed = false
+		result = &metav1.Status{
+			Message: fmt.Sprintf(
+				"ClusterNetworkPolicy creation is blocked: a user-created Tier at "+
+					"priority %d (cnpAdminTierPriority) already exists; the Tier and its associated policies "+
+					"must be deleted/migrated first before a ClusterNetworkPolicy can be created",
+				cnpAdminTierPriority),
+		}
+	}
+	return &admv1.AdmissionResponse{
+		Allowed: allowed,
+		Result:  result,
+	}
 }

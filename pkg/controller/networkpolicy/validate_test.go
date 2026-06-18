@@ -2889,3 +2889,107 @@ func TestValidateTier(t *testing.T) {
 		})
 	}
 }
+
+func TestValidateTierCNPPriority(t *testing.T) {
+	tests := []struct {
+		name              string
+		cnpFeatureEnabled bool
+		curTier           *crdv1beta1.Tier
+		operation         admv1.Operation
+		user              authenticationv1.UserInfo
+		expectedReason    string
+	}{
+		{
+			name:              "create-tier-at-cnp-priority-blocked-when-cnp-enabled",
+			cnpFeatureEnabled: true,
+			curTier: &crdv1beta1.Tier{
+				ObjectMeta: metav1.ObjectMeta{Name: "tier-priority-220"},
+				Spec:       crdv1beta1.TierSpec{Priority: cnpAdminTierPriority},
+			},
+			operation: admv1.Create,
+			user:      authenticationv1.UserInfo{Username: "default"},
+			expectedReason: fmt.Sprintf(
+				"tier tier-priority-220 priority %d is reserved for upstream ClusterNetworkPolicy when the "+
+					"ClusterNetworkPolicy feature gate is enabled; choose a different priority",
+				cnpAdminTierPriority),
+		},
+		{
+			name:              "create-tier-at-cnp-priority-allowed-when-cnp-feature-disabled",
+			cnpFeatureEnabled: false,
+			curTier: &crdv1beta1.Tier{
+				ObjectMeta: metav1.ObjectMeta{Name: "tier-priority-220"},
+				Spec:       crdv1beta1.TierSpec{Priority: cnpAdminTierPriority},
+			},
+			operation:      admv1.Create,
+			user:           authenticationv1.UserInfo{Username: "default"},
+			expectedReason: "",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			featuregatetesting.SetFeatureGateDuringTest(t, features.DefaultFeatureGate, features.ClusterNetworkPolicy, tt.cnpFeatureEnabled)
+			_, controller := newController(nil, nil)
+			validator := NewNetworkPolicyValidator(controller.NetworkPolicyController)
+			_, actualReason, allowed := validator.validateTier(tt.curTier, nil, tt.operation, tt.user)
+			assert.Equal(t, tt.expectedReason, actualReason)
+			if tt.expectedReason == "" {
+				assert.True(t, allowed)
+			} else {
+				assert.False(t, allowed)
+			}
+		})
+	}
+}
+
+func TestValidateCNP(t *testing.T) {
+	tests := []struct {
+		name               string
+		cnpCreationAllowed bool
+		operation          admv1.Operation
+		expectedAllowed    bool
+		expectedReason     string
+	}{
+		{
+			name:               "create-cnp-allowed",
+			cnpCreationAllowed: true,
+			operation:          admv1.Create,
+			expectedAllowed:    true,
+		},
+		{
+			name:               "create-cnp-blocked-due-to-tier-conflict",
+			cnpCreationAllowed: false,
+			operation:          admv1.Create,
+			expectedAllowed:    false,
+			expectedReason: fmt.Sprintf(
+				"ClusterNetworkPolicy creation is blocked: a user-created Tier at "+
+					"priority %d (cnpAdminTierPriority) already exists; the Tier and its associated policies "+
+					"must be deleted/migrated first before a ClusterNetworkPolicy can be created",
+				cnpAdminTierPriority),
+		},
+		{
+			name:               "update-cnp-always-allowed",
+			cnpCreationAllowed: false,
+			operation:          admv1.Update,
+			expectedAllowed:    true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, controller := newController(nil, nil)
+			controller.cnpCreationAllowed.Store(tt.cnpCreationAllowed)
+			validator := NewNetworkPolicyValidator(controller.NetworkPolicyController)
+			ar := &admv1.AdmissionReview{
+				Request: &admv1.AdmissionRequest{
+					Operation: tt.operation,
+				},
+			}
+			resp := validator.ValidateUpstreamCNP(ar)
+			assert.Equal(t, tt.expectedAllowed, resp.Allowed)
+			if !tt.expectedAllowed {
+				assert.Equal(t, tt.expectedReason, resp.Result.Message)
+			}
+		})
+	}
+}

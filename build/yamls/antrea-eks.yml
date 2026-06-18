@@ -6506,3 +6506,18 @@ webhooks:
     admissionReviewVersions: ["v1", "v1beta1"]
     sideEffects: None
     timeoutSeconds: 5
+  - name: "cnpvalidator.antrea.io"
+    clientConfig:
+      service:
+        name: "antrea"
+        namespace: kube-system
+        path: "/validate/cnp"
+    rules:
+      - operations: ["CREATE"]
+        apiGroups: ["policy.networking.k8s.io"]
+        apiVersions: ["v1alpha2"]
+        resources: ["clusternetworkpolicies"]
+        scope: "Cluster"
+    admissionReviewVersions: ["v1", "v1beta1"]
+    sideEffects: None
+    timeoutSeconds: 5
