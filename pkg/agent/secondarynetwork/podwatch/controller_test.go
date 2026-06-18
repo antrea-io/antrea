@@ -1383,14 +1383,6 @@ func testPodControllerStart(ctrl *gomock.Controller) (
 	return podController, mockIPAM, interfaceConfigurator
 }
 
-func convertExternalIDMap(in map[string]interface{}) map[string]string {
-	out := make(map[string]string, len(in))
-	for k, v := range in {
-		out[k] = v.(string)
-	}
-	return out
-}
-
 func createTestInterfaces() ([]ovsconfig.OVSPortData, []*interfacestore.InterfaceConfig) {
 	uuid1 := uuid.Must(uuid.NewV4()).String()
 	uuid2 := uuid.Must(uuid.NewV4()).String()
@@ -1423,18 +1415,18 @@ func createTestInterfaces() ([]ovsconfig.OVSPortData, []*interfacestore.Interfac
 
 	ovsPort1 := ovsconfig.OVSPortData{
 		UUID: uuid1, Name: "p1", OFPort: 11,
-		ExternalIDs: convertExternalIDMap(cniserver.BuildOVSPortExternalIDs(
-			containerConfig1))}
+		ExternalIDs: cniserver.BuildOVSPortExternalIDs(
+			containerConfig1)}
 
 	ovsPort2 := ovsconfig.OVSPortData{
 		UUID: uuid2, Name: "p2", OFPort: 12,
-		ExternalIDs: convertExternalIDMap(cniserver.BuildOVSPortExternalIDs(
-			containerConfig2))}
+		ExternalIDs: cniserver.BuildOVSPortExternalIDs(
+			containerConfig2)}
 
 	ovsPort3 := ovsconfig.OVSPortData{
 		UUID: uuid3, Name: "p3", OFPort: -1,
-		ExternalIDs: convertExternalIDMap(cniserver.BuildOVSPortExternalIDs(
-			containerConfig3))}
+		ExternalIDs: cniserver.BuildOVSPortExternalIDs(
+			containerConfig3)}
 
 	ovsPort4 := ovsconfig.OVSPortData{
 		UUID:   uuid4,

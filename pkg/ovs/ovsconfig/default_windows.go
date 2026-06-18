@@ -23,10 +23,7 @@ import (
 const (
 	DefaultOVSRunDir = `C:\openvswitch\var\run\openvswitch`
 
-	// We use "winpipe" here because it is hardcoded as the socket value that is parsed in
-	// our openvswitch db library, https://github.com/TomCodeLV/OVSDB-golang-lib/tree/master/pkg/ovsdb.
-	defaultConnNetwork = "winpipe"
-	namedPipePrefix    = `\\.\pipe\`
+	namedPipePrefix = `\\.\pipe\`
 	// Wait up to 5 seconds when getting port.
 	defaultGetPortTimeout    = 5 * time.Second
 	defaultOvsVersionMessage = "OVS version not found in ovsdb.  You might try running 'ovs-vsctl --no-wait set Open_vSwitch . ovs_version=$OVS_VERSION'"

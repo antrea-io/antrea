@@ -43,7 +43,6 @@ import (
 	"antrea.io/antrea/v2/pkg/agent/util"
 	winnettest "antrea.io/antrea/v2/pkg/agent/util/winnet/testing"
 	cnipb "antrea.io/antrea/v2/pkg/apis/cni/v1beta1"
-	"antrea.io/antrea/v2/pkg/ovs/ovsconfig"
 	ovsconfigtest "antrea.io/antrea/v2/pkg/ovs/ovsconfig/testing"
 	"antrea.io/antrea/v2/pkg/util/channel"
 	utilip "antrea.io/antrea/v2/pkg/util/ip"
@@ -415,7 +414,7 @@ func TestCmdAdd(t *testing.T) {
 				portStatusCh := server.podConfigurator.statusCh
 				mockOVSBridgeClient.EXPECT().CreatePort(ovsPortName, ovsPortName, gomock.Any()).Return(ovsPortID, nil).Times(1)
 				mockOVSBridgeClient.EXPECT().SetInterfaceType(ovsPortName, "internal").Return(nil).Times(1).Do(
-					func(name, ifType string) ovsconfig.Error {
+					func(name, ifType string) error {
 						go func() {
 							time.Sleep(time.Millisecond * 50)
 							// Simulate OVS successfully connects to the vNIC, then a PortStatus message is
@@ -779,7 +778,7 @@ func TestReconcile(t *testing.T) {
 	// Re-connect to Pod4
 	hostIfaces.Store(fmt.Sprintf("vEthernet (%s)", unconnectedInterface.InterfaceName), true)
 	mockOVSBridgeClient.EXPECT().SetInterfaceType(unconnectedInterface.InterfaceName, "internal").Return(nil).Times(1).Do(
-		func(name, ifType string) ovsconfig.Error {
+		func(name, ifType string) error {
 			// Simulate OVS successfully connects to the vNIC, then a PortStatus message is
 			// supposed to receive.
 			time.Sleep(time.Millisecond * 50)

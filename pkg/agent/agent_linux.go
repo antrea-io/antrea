@@ -82,13 +82,13 @@ func (i *Initializer) prepareOVSBridgeForK8sNode() error {
 		return fmt.Errorf("failed to set datapath_id %s: err=%w", datapathID, err)
 	}
 
-	if hostOFPort, err := i.ovsBridgeClient.GetOFPort(uplinkNetConfig.Name, false); err == nil {
+	if hostOFPort, err := i.ovsBridgeClient.GetOFPort(uplinkNetConfig.Name); err == nil {
 		klog.InfoS("OVS bridge local port already exists", "name", uplinkNetConfig.Name)
 		i.nodeConfig.HostInterfaceOFPort = uint32(hostOFPort)
 		// If local port exists, get the real uplink interface.
 		// This branch is used when antrea-agent had a hard restart (e.g. SIGKILL)
 		bridgedUplinkName := util.GenerateUplinkInterfaceName(uplinkNetConfig.Name)
-		if uplinkOFPort, err := i.ovsBridgeClient.GetOFPort(bridgedUplinkName, false); err != nil {
+		if uplinkOFPort, err := i.ovsBridgeClient.GetOFPort(bridgedUplinkName); err != nil {
 			return fmt.Errorf("cannot find uplink port %s: err=%w", bridgedUplinkName, err)
 		} else {
 			uplinkNetConfig.OFPort = uint32(uplinkOFPort)
@@ -127,7 +127,7 @@ func (i *Initializer) ConnectUplinkToOVSBridge() error {
 	var err error
 	uplinkNetConfig := i.nodeConfig.UplinkNetConfig
 
-	externalIDs := map[string]interface{}{
+	externalIDs := map[string]string{
 		interfacestore.AntreaInterfaceTypeKey: interfacestore.AntreaHost,
 	}
 	// We request the same MTU for the bridge interface as for the uplink adapter. If we don't,
@@ -149,13 +149,13 @@ func (i *Initializer) ConnectUplinkToOVSBridge() error {
 	}
 
 	// Create uplink port.
-	uplinkPortUUID, err := i.ovsBridgeClient.CreateUplinkPort(bridgedUplinkName, int32(uplinkNetConfig.OFPort), map[string]interface{}{interfacestore.AntreaInterfaceTypeKey: interfacestore.AntreaUplink})
+	uplinkPortUUID, err := i.ovsBridgeClient.CreateUplinkPort(bridgedUplinkName, int32(uplinkNetConfig.OFPort), map[string]string{interfacestore.AntreaInterfaceTypeKey: interfacestore.AntreaUplink})
 	if err != nil {
 		return fmt.Errorf("failed to add uplink port %s: err=%w", bridgedUplinkName, err)
 	}
 	// Add newly created uplinkInterface to interface cache.
 	uplinkInterface := interfacestore.NewUplinkInterface(bridgedUplinkName)
-	uplinkOFPort, err := i.ovsBridgeClient.GetOFPort(bridgedUplinkName, false)
+	uplinkOFPort, err := i.ovsBridgeClient.GetOFPort(bridgedUplinkName)
 	if err != nil {
 		return fmt.Errorf("failed to get uplink ofport %s: err=%w", bridgedUplinkName, err)
 	}
@@ -203,7 +203,7 @@ func (i *Initializer) installVMInitialFlows() error {
 // prepareL7EngineInterfaces creates two OVS internal ports. An application-aware engine will connect to OVS
 // through these two ports.
 func (i *Initializer) prepareL7EngineInterfaces() error {
-	trafficControlPortExternalIDs := map[string]interface{}{
+	trafficControlPortExternalIDs := map[string]string{
 		interfacestore.AntreaInterfaceTypeKey: interfacestore.AntreaTrafficControl,
 	}
 
@@ -229,7 +229,7 @@ func (i *Initializer) prepareL7EngineInterfaces() error {
 			return pollErr
 		}
 
-		ofPort, err := i.ovsBridgeClient.GetOFPort(portName, false)
+		ofPort, err := i.ovsBridgeClient.GetOFPort(portName)
 		if err != nil {
 			return err
 		}

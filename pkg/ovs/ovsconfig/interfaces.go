@@ -50,38 +50,34 @@ const (
 )
 
 type OVSBridgeClient interface {
-	Create() Error
-	Delete() Error
-	GetExternalIDs() (map[string]string, Error)
-	SetExternalIDs(externalIDs map[string]interface{}) Error
-	GetDatapathID() (string, Error)
-	WaitForDatapathID(timeout time.Duration) (string, Error)
-	SetDatapathID(datapathID string) Error
-	GetInterfaceOptions(name string) (map[string]string, Error)
-	SetInterfaceOptions(name string, options map[string]interface{}) Error
-	CreatePort(name, ifDev string, externalIDs map[string]interface{}) (string, Error)
-	CreateAccessPort(name, ifDev string, externalIDs map[string]interface{}, vlanID uint16) (string, Error)
-	CreateInternalPort(name string, ofPortRequest int32, mac string, externalIDs map[string]interface{}) (string, Error)
-	CreateTunnelPort(name string, tunnelType TunnelType, ofPortRequest int32) (string, Error)
-	CreateTunnelPortExt(name string, tunnelType TunnelType, ofPortRequest int32, csum bool, localIP string, remoteIP string, remoteName string, psk string, extraOptions, externalIDs map[string]interface{}) (string, Error)
-	CreateUplinkPort(name string, ofPortRequest int32, externalIDs map[string]interface{}) (string, Error)
-	DeletePort(portUUID string) Error
-	DeletePorts(portUUIDList []string) Error
-	GetOFPort(ifName string, waitUntilValid bool) (int32, Error)
-	GetPortData(portUUID, ifName string) (*OVSPortData, Error)
-	GetPortList() ([]OVSPortData, Error)
+	Create() error
+	Delete() error
+	GetExternalIDs() (map[string]string, error)
+	SetExternalIDs(externalIDs map[string]string) error
+	GetDatapathID() (string, error)
+	WaitForDatapathID(timeout time.Duration) (string, error)
+	SetDatapathID(datapathID string) error
+	GetInterfaceOptions(name string) (map[string]string, error)
+	SetInterfaceOptions(name string, options map[string]string) error
+	CreatePort(name, ifDev string, externalIDs map[string]string) (string, error)
+	CreateAccessPort(name, ifDev string, externalIDs map[string]string, vlanID uint16) (string, error)
+	CreateInternalPort(name string, ofPortRequest int32, mac string, externalIDs map[string]string) (string, error)
+	CreateTunnelPortExt(name string, tunnelType TunnelType, ofPortRequest int32, csum bool, localIP string, remoteIP string, remoteName string, psk string, extraOptions map[string]string, externalIDs map[string]string) (string, error)
+	CreateUplinkPort(name string, ofPortRequest int32, externalIDs map[string]string) (string, error)
+	DeletePort(portUUID string) error
+	GetOFPort(ifName string) (int32, error)
+	GetPortData(portUUID, ifName string) (*OVSPortData, error)
+	GetPortList() ([]OVSPortData, error)
 	SetInterfaceMTU(name string, MTU int) error
-	GetOVSVersion() (string, Error)
-	AddOVSOtherConfig(configs map[string]interface{}) Error
-	GetOVSOtherConfig() (map[string]string, Error)
-	UpdateOVSOtherConfig(configs map[string]interface{}) Error
-	DeleteOVSOtherConfig(configs map[string]interface{}) Error
-	AddBridgeOtherConfig(configs map[string]interface{}) Error
+	GetOVSVersion() (string, error)
+	GetOVSOtherConfig() (map[string]string, error)
+	UpdateOVSOtherConfig(configs map[string]string) error
+	DeleteOVSOtherConfig(keys []string) error
 	GetBridgeName() string
 	IsHardwareOffloadEnabled() bool
 	GetOVSDatapathType() OVSDatapathType
-	SetInterfaceType(name, ifType string) Error
-	SetPortExternalIDs(portName string, externalIDs map[string]interface{}) Error
-	GetPortExternalIDs(portName string) (map[string]string, Error)
-	SetInterfaceMAC(name string, mac net.HardwareAddr) Error
+	SetInterfaceType(name, ifType string) error
+	SetPortExternalIDs(portName string, externalIDs map[string]string) error
+	GetPortExternalIDs(portName string) (map[string]string, error)
+	SetInterfaceMAC(name string, mac net.HardwareAddr) error
 }

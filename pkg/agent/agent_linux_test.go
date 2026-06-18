@@ -26,7 +26,6 @@ import (
 
 	"antrea.io/antrea/v2/pkg/agent/config"
 	"antrea.io/antrea/v2/pkg/agent/interfacestore"
-	"antrea.io/antrea/v2/pkg/ovs/ovsconfig"
 	ovsconfigtest "antrea.io/antrea/v2/pkg/ovs/ovsconfig/testing"
 )
 
@@ -69,7 +68,7 @@ func TestPrepareOVSBridgeForK8sNode(t *testing.T) {
 			name:                  "failed to set datapath_id",
 			connectUplinkToBridge: true,
 			expectedCalls: func(m *ovsconfigtest.MockOVSBridgeClient) {
-				m.EXPECT().SetDatapathID(datapathID).Return(ovsconfig.InvalidArgumentsError("unable to set datapath_id"))
+				m.EXPECT().SetDatapathID(datapathID).Return(fmt.Errorf("unable to set datapath_id"))
 			},
 			expectedErr: fmt.Sprintf("failed to set datapath_id %s: err=unable to set datapath_id", datapathID),
 		},
@@ -78,7 +77,7 @@ func TestPrepareOVSBridgeForK8sNode(t *testing.T) {
 			connectUplinkToBridge: true,
 			expectedCalls: func(m *ovsconfigtest.MockOVSBridgeClient) {
 				m.EXPECT().SetDatapathID(datapathID).Return(nil)
-				m.EXPECT().GetOFPort(ipDevice.Name, false).Return(int32(0), ovsconfig.InvalidArgumentsError("interface not found"))
+				m.EXPECT().GetOFPort(ipDevice.Name).Return(int32(0), fmt.Errorf("interface not found"))
 			},
 		},
 		{
@@ -87,8 +86,8 @@ func TestPrepareOVSBridgeForK8sNode(t *testing.T) {
 			expectedCalls: func(m *ovsconfigtest.MockOVSBridgeClient) {
 				m.EXPECT().SetDatapathID(datapathID).Return(nil)
 				mock.InOrder(
-					m.EXPECT().GetOFPort(ipDevice.Name, false).Return(int32(config.DefaultHostInterfaceOFPort), nil),
-					m.EXPECT().GetOFPort(ipDevice.Name+"~", false).Return(int32(config.DefaultUplinkOFPort), nil),
+					m.EXPECT().GetOFPort(ipDevice.Name).Return(int32(config.DefaultHostInterfaceOFPort), nil),
+					m.EXPECT().GetOFPort(ipDevice.Name+"~").Return(int32(config.DefaultUplinkOFPort), nil),
 				)
 			},
 		},

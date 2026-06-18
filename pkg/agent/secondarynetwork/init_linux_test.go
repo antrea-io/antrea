@@ -19,10 +19,11 @@ package secondarynetwork
 
 import (
 	"errors"
+	"fmt"
 	"net"
 	"testing"
 
-	"github.com/TomCodeLV/OVSDB-golang-lib/pkg/ovsdb"
+	"github.com/ovn-kubernetes/libovsdb/client"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	mock "go.uber.org/mock/gomock"
@@ -66,7 +67,7 @@ func TestCreateOVSBridge(t *testing.T) {
 			ovsBridges:  []string{"br1", "br2"},
 			expectedErr: "create error",
 			expectedCalls: func(m *ovsconfigtest.MockOVSBridgeClient) {
-				m.EXPECT().Create().Return(ovsconfig.InvalidArgumentsError("create error"))
+				m.EXPECT().Create().Return(fmt.Errorf("create error"))
 			},
 		},
 	}
@@ -111,25 +112,25 @@ func TestConnectPhyInterfacesToOVSBridge(t *testing.T) {
 			name:               "one interface",
 			physicalInterfaces: []string{"eth0~"},
 			expectedCalls: func(m *ovsconfigtest.MockOVSBridgeClient) {
-				m.EXPECT().GetOFPort("eth0~", false).Return(int32(firstUplinkOFPort), ovsconfig.InvalidArgumentsError("port not found"))
-				m.EXPECT().CreateUplinkPort("eth0~", int32(firstUplinkOFPort), map[string]interface{}{"antrea-type": "uplink"}).Return("", nil)
+				m.EXPECT().GetOFPort("eth0~").Return(int32(firstUplinkOFPort), fmt.Errorf("port not found"))
+				m.EXPECT().CreateUplinkPort("eth0~", int32(firstUplinkOFPort), map[string]string{"antrea-type": "uplink"}).Return("", nil)
 			},
 		},
 		{
 			name:               "two interfaces",
 			physicalInterfaces: []string{"eth1", "eth2"},
 			expectedCalls: func(m *ovsconfigtest.MockOVSBridgeClient) {
-				m.EXPECT().GetOFPort("eth1", false).Return(int32(firstUplinkOFPort), ovsconfig.InvalidArgumentsError("port not found"))
-				m.EXPECT().CreateUplinkPort("eth1", int32(firstUplinkOFPort), map[string]interface{}{"antrea-type": "uplink"}).Return("", nil)
-				m.EXPECT().GetOFPort("eth2", false).Return(int32(firstUplinkOFPort+1), ovsconfig.InvalidArgumentsError("port not found"))
-				m.EXPECT().CreateUplinkPort("eth2", int32(firstUplinkOFPort+1), map[string]interface{}{"antrea-type": "uplink"}).Return("", nil)
+				m.EXPECT().GetOFPort("eth1").Return(int32(firstUplinkOFPort), fmt.Errorf("port not found"))
+				m.EXPECT().CreateUplinkPort("eth1", int32(firstUplinkOFPort), map[string]string{"antrea-type": "uplink"}).Return("", nil)
+				m.EXPECT().GetOFPort("eth2").Return(int32(firstUplinkOFPort+1), fmt.Errorf("port not found"))
+				m.EXPECT().CreateUplinkPort("eth2", int32(firstUplinkOFPort+1), map[string]string{"antrea-type": "uplink"}).Return("", nil)
 			},
 		},
 		{
 			name:               "interface already attached",
 			physicalInterfaces: []string{"eth1"},
 			expectedCalls: func(m *ovsconfigtest.MockOVSBridgeClient) {
-				m.EXPECT().GetOFPort("eth1", false).Return(int32(firstUplinkOFPort), nil)
+				m.EXPECT().GetOFPort("eth1").Return(int32(firstUplinkOFPort), nil)
 			},
 		},
 		{
@@ -142,8 +143,8 @@ func TestConnectPhyInterfacesToOVSBridge(t *testing.T) {
 			physicalInterfaces: []string{"eth1"},
 			expectedErr:        "create error",
 			expectedCalls: func(m *ovsconfigtest.MockOVSBridgeClient) {
-				m.EXPECT().GetOFPort("eth1", false).Return(int32(firstUplinkOFPort), ovsconfig.InvalidArgumentsError("port not found"))
-				m.EXPECT().CreateUplinkPort("eth1", int32(firstUplinkOFPort), map[string]interface{}{"antrea-type": "uplink"}).Return("", ovsconfig.InvalidArgumentsError("create error"))
+				m.EXPECT().GetOFPort("eth1").Return(int32(firstUplinkOFPort), fmt.Errorf("port not found"))
+				m.EXPECT().CreateUplinkPort("eth1", int32(firstUplinkOFPort), map[string]string{"antrea-type": "uplink"}).Return("", fmt.Errorf("create error"))
 			},
 		},
 	}
@@ -181,7 +182,7 @@ func mockInterfaceByName(t *testing.T) {
 
 func mockNewOVSBridge(t *testing.T, brClient ovsconfig.OVSBridgeClient) {
 	prevFunc := newOVSBridgeFn
-	newOVSBridgeFn = func(bridgeName string, ovsDatapathType ovsconfig.OVSDatapathType, ovsdb *ovsdb.OVSDB, options ...ovsconfig.OVSBridgeOption) ovsconfig.OVSBridgeClient {
+	newOVSBridgeFn = func(bridgeName string, ovsDatapathType ovsconfig.OVSDatapathType, ovsdbClient client.Client, options ...ovsconfig.OVSBridgeOption) ovsconfig.OVSBridgeClient {
 		return brClient
 	}
 	t.Cleanup(func() { newOVSBridgeFn = prevFunc })
