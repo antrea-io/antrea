@@ -90,13 +90,6 @@ jobs:
           docker push ${registry}/${namespace}/antrea-agent-ubuntu-${{ matrix.suffix }}:"${DOCKER_TAG}"
           docker push ${registry}/${namespace}/antrea-controller-ubuntu-${{ matrix.suffix }}:"${DOCKER_TAG}"
         done
-    # Same repository workflow dispatch to run conformance tests
-    - name: Run conformance tests
-      uses: benc-uk/workflow-dispatch@v1
-      with:
-        workflow: .github/workflows/conformance.yml
-        inputs: ${{ format('{{ "antrea-version":"{0}", "antrea-image-distro":"ubuntu", "test-suite":"conformance", "runner":"{1}", "antrea-image-platform":"{2}", "always-upload-logs":true }}', github.ref, matrix.runner, matrix.platform) }}
-
   push-manifest:
     needs: [get-version, build]
     permissions:
