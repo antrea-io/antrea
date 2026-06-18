@@ -4,7 +4,7 @@
 
 ### Changed
 
-- Migrate UUID library from google/uuid to gofrs/uuid/v5. ([#8053](https://github.com/antrea-io/antrea/pull/8055), [@hangyan])
+- Migrate UUID library from google/uuid to gofrs/uuid/v5. ([#8055](https://github.com/antrea-io/antrea/pull/8055), [@hangyan])
 - Update lumberjack dependency to use the Antrea fork. ([#8053](https://github.com/antrea-io/antrea/pull/8053), [@hangyan])
 - Upgrade Kubernetes dependencies to 1.36.1 and regenerate code. ([#8057](https://github.com/antrea-io/antrea/pull/8057), [@antoninbas])
 - Update AWS SDK Go v2 dependencies and migrate the S3 uploader to the transfer manager API. ([#7983](https://github.com/antrea-io/antrea/pull/7983), [#8036](https://github.com/antrea-io/antrea/pull/8036), [@antoninbas] [@luolanzone])
