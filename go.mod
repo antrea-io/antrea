@@ -40,7 +40,7 @@ require (
 	github.com/miekg/dns v1.1.72
 	github.com/onsi/ginkgo/v2 v2.28.3
 	github.com/onsi/gomega v1.40.0
-	github.com/osrg/gobgp/v4 v4.5.0
+	github.com/osrg/gobgp/v4 v4.6.0
 	github.com/pkg/sftp v1.13.10
 	github.com/prometheus/client_golang v1.23.2
 	github.com/prometheus/common v0.69.0
