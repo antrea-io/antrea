@@ -53,30 +53,34 @@ type FromExternalCorrelator struct {
 	cleanUpInterval time.Duration
 }
 
-// correlatorKey is the four-tuple used to match a default-zone (pre-NAT) conntrack entry to its
+// correlatorKey is the five-tuple used to match a default-zone (pre-NAT) conntrack entry to its
 // Antrea-zone counterpart.
 //
-// SNAT case (standard NodePort masquerade):
-//   - Zone-0 tuple:       src=<externalClientIP>:<clientPort>  dst=<podIP>:<podPort>  proto=<P>
-//     ProxySnatPort is set to the masquerade ephemeral port allocated by kube-proxy/iptables.
-//   - Antrea-zone tuple:  src=<nodeIP>:<snatPort>  dst=<podIP>:<podPort>  proto=<P>
-//     The source address is the node's gateway IP and the source port equals ProxySnatPort.
-//   - Matching logic: zone-0 is indexed by (dstIP=podIP, dstPort=podPort, proto=P, port=snatPort);
-//     the Antrea-zone connection is looked up by (dstIP=podIP, dstPort=podPort, proto=P,
-//     port=FlowKey.SourcePort=snatPort). In most cases, snatPort + dstIP is sufficient to uniquely
-//     identify/match flows across the two zones. However, in rare cases where two concurrent flows
-//     share the same ephemeral SNAT port and connect to the same Pod IP on different ports / under
-//     different protocols, dstPort and protocol are used to differentiate between these flows.
+// SNAT case (standard NodePort):
+//   - Zone-0 tuple:      src=<externalClientIP>:<clientPort>  dst=<podIP>:<podPort>  proto=P
+//     ProxySnatIP/Port are set to the masquerade (gateway) IP and ephemeral port.
+//   - Antrea-zone tuple: src=<gatewayIP>:<snatPort>           dst=<podIP>:<podPort>  proto=P
+//     After masquerade, TupleOrig.src becomes the gateway IP, so FlowKey.SourceAddress ==
+//     ProxySnatIP and FlowKey.SourcePort == ProxySnatPort.
+//   - Key: srcIP=gatewayIP, port=snatPort, dstIP, dstPort, protocol — identical on both sides.
 //
 // Non-SNAT case (externalTrafficPolicy=Local):
-//   - Zone-0 tuple:        src=<externalClientIP>:<clientPort>  dst=<podIP>:<podPort>  proto=<P>
-//     ProxySnatPort is 0 because no masquerade is applied.
-//   - Antrea-zone tuple:   src=<gatewayIP>:<clientPort>  dst=<podIP>:<podPort>  proto=<P>
-//     The source port is unchanged (equals the real client port) because no SNAT occurred.
-//   - Matching logic: zone-0 is indexed by (dstIP=podIP, dstPort=podPort, proto=P,
-//     port=FlowKey.SourcePort=clientPort); the Antrea-zone connection is looked up by the same
-//     four-tuple as the case above.
+//   - Zone-0 tuple:      src=<externalClientIP>:<clientPort>  dst=<podIP>:<podPort>  proto=P
+//     ProxySnatIP/Port are both zero because no masquerade is applied.
+//   - Antrea-zone tuple: src=<externalClientIP>:<clientPort>  dst=<podIP>:<podPort>  proto=P
+//     DNAT only rewrites the destination; TupleOrig.src is the external client IP in both zones.
+//   - Key: srcIP=externalClientIP, port=clientPort, dstIP, dstPort, protocol — identical on both
+//     sides.
+//
+// In both cases srcIP and port are populated with the same conditional:
+//   - keyFromDefaultZoneConn: srcIP=ProxySnatIP, port=ProxySnatPort when SNAT is present;
+//     srcIP=FlowKey.SourceAddress, port=FlowKey.SourcePort otherwise.
+//   - keyFromAntreaZoneConn: srcIP=ProxySnatIP, port=FlowKey.SourcePort when SNAT is present;
+//     srcIP=FlowKey.SourceAddress, port=FlowKey.SourcePort otherwise.
+//     (ProxySnatPort == FlowKey.SourcePort for SNAT connections so using FlowKey.SourcePort is
+//     equivalent and avoids a separate field lookup.)
 type correlatorKey struct {
+	srcIP    netip.Addr
 	dstIP    netip.Addr
 	dstPort  uint16
 	protocol uint8
@@ -134,17 +138,17 @@ func (c *FromExternalCorrelator) Run(stopCh <-chan struct{}) {
 }
 
 // keyFromDefaultZoneConn builds the correlator key for a default-zone connection.
-// For SNAT flows (e.g. standard kube-proxy NodePort masquerade) ProxySnatPort is set by
-// NetlinkFlowToAntreaConnection to the SNAT port, which equals the Antrea-zone FlowKey.SourcePort.
-// For flows without SNAT (e.g. NodePort with externalTrafficPolicy=Local hitting a local endpoint)
-// ProxySnatPort is 0; in that case we key by the real client source port so the key matches what
-// keyFromAntreaZoneConn will produce for the Antrea-zone counterpart.
+// For SNAT flows ProxySnatIP/Port hold the gateway IP and port after SNAT; for non-SNAT flows
+// they are zero and FlowKey.SourceAddress/SourcePort (the real external client IP/port) are used.
 func keyFromDefaultZoneConn(conn *connection.Connection) correlatorKey {
+	srcIP := conn.ProxySnatIP
 	port := conn.ProxySnatPort
 	if port == 0 {
+		srcIP = conn.FlowKey.SourceAddress
 		port = conn.FlowKey.SourcePort
 	}
 	return correlatorKey{
+		srcIP:    srcIP,
 		dstIP:    conn.FlowKey.DestinationAddress,
 		dstPort:  conn.FlowKey.DestinationPort,
 		protocol: conn.FlowKey.Protocol,
@@ -152,8 +156,17 @@ func keyFromDefaultZoneConn(conn *connection.Connection) correlatorKey {
 	}
 }
 
+// keyFromAntreaZoneConn builds the correlator key for an Antrea-zone connection.
+// For SNAT flows ProxySnatIP is the gateway IP (the masquerade source that also appears in the
+// zone-0 key); for non-SNAT flows ProxySnatIP is zero and FlowKey.SourceAddress is the real
+// external client IP, matching what keyFromDefaultZoneConn stored for the zone-0 entry.
 func keyFromAntreaZoneConn(conn *connection.Connection) correlatorKey {
+	srcIP := conn.ProxySnatIP
+	if !srcIP.IsValid() {
+		srcIP = conn.FlowKey.SourceAddress
+	}
 	return correlatorKey{
+		srcIP:    srcIP,
 		dstIP:    conn.FlowKey.DestinationAddress,
 		dstPort:  conn.FlowKey.DestinationPort,
 		protocol: conn.FlowKey.Protocol,

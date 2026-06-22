@@ -82,7 +82,7 @@ func TestFromExternalCorrelator(t *testing.T) {
 					SourcePort:         28392,
 					DestinationPort:    80},
 				Mark:          openflow.ServiceCTMark.GetValue(),
-				ProxySnatIP:   netip.MustParseAddr("10.244.2.1"),
+				ProxySnatIP:   netip.MustParseAddr("172.18.0.2"),
 				ProxySnatPort: uint16(28392),
 			}
 			store.add(defaultZoneConn)
@@ -106,6 +106,7 @@ func TestFromExternalCorrelator(t *testing.T) {
 				ProxySnatIP:   netip.MustParseAddr("172.18.0.2"),
 				ProxySnatPort: uint16(28392),
 			}
+			// Different source port — should not match.
 			antreaZeroConn := &connection.Connection{
 				StartTime: refTime,
 				StopTime:  refTime,
@@ -116,7 +117,7 @@ func TestFromExternalCorrelator(t *testing.T) {
 					SourcePort:         55555,
 					DestinationPort:    80},
 				Mark:          openflow.ServiceCTMark.GetValue(),
-				ProxySnatIP:   netip.MustParseAddr("10.244.2.1"),
+				ProxySnatIP:   netip.MustParseAddr("172.18.0.2"),
 				ProxySnatPort: uint16(28392),
 			}
 			store.add(defaultZoneConn)
@@ -303,6 +304,7 @@ func TestCorrelateIfExternal(t *testing.T) {
 		ProxySnatPort: uint16(28392),
 	}
 	gatewayIP := netip.MustParseAddr("10.244.2.1")
+	snatIP := netip.MustParseAddr("172.18.0.2")
 	antreaZoneConn := connection.Connection{
 		OriginalDestinationAddress: netip.MustParseAddr("10.244.2.2"),
 		OriginalDestinationPort:    80,
@@ -317,7 +319,7 @@ func TestCorrelateIfExternal(t *testing.T) {
 			DestinationPort:    80},
 		Mark:                    openflow.ServiceCTMark.GetValue(),
 		Labels:                  []byte{0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x1},
-		ProxySnatIP:             netip.MustParseAddr("10.244.2.1"),
+		ProxySnatIP:             snatIP,
 		ProxySnatPort:           uint16(28392),
 		Zone:                    65520,
 		OriginalPackets:         0xfff,
@@ -418,7 +420,9 @@ func TestFromExternalCorrelator_DefaultZoneKeyWithoutProxySNAT(t *testing.T) {
 	key := keyFromDefaultZoneConn(conn)
 	_, exists := correlator.connections[key]
 	assert.True(t, exists, "zone-0 entry should be stored when Service lookup succeeds")
-	// Key must use the real client source port (not 0) so it matches keyFromAntreaZoneConn.
+	// Non-SNAT: key uses the real client source IP and port so they match what
+	// keyFromAntreaZoneConn produces from the Antrea-zone FlowKey.
+	assert.Equal(t, extClient, key.srcIP)
 	assert.Equal(t, clientPort, key.port)
 	assert.Equal(t, conn.FlowKey.DestinationPort, key.dstPort)
 	assert.Equal(t, conn.FlowKey.Protocol, key.protocol)
@@ -450,13 +454,12 @@ func TestFromExternalCorrelator_SingleNodeCorrelation(t *testing.T) {
 		Mark:                       openflow.ServiceCTMark.GetValue(),
 	}
 
-	// Antrea-zone connection: source is the gateway, source port is the real client port
-	// (unchanged because no SNAT was applied).
-	gatewayIP := netip.MustParseAddr("10.244.2.1")
+	// Antrea-zone connection: no SNAT means TupleOrig.src is unchanged — the real external
+	// client IP. ProxySnatIP/Port are both zero (no masquerade).
 	antreaZoneConn := &connection.Connection{
 		Zone: 65520,
 		FlowKey: connection.Tuple{
-			SourceAddress:      gatewayIP,
+			SourceAddress:      extClient,
 			DestinationAddress: podIP,
 			Protocol:           6,
 			SourcePort:         clientPort,
@@ -530,7 +533,10 @@ func TestFromExternalCorrelator_NoCollisionOnSamePort(t *testing.T) {
 	correlator.add(defaultZoneB)
 	assert.Len(t, correlator.connections, 2, "flows with different dstPorts must occupy separate map entries")
 
-	// Antrea-zone counterpart for flow A (TCP/80).
+	snatIP := netip.MustParseAddr("172.18.0.2")
+
+	// Antrea-zone counterpart for flow A (TCP/80): ProxySnatIP is the masquerade IP, which is
+	// used as srcIP in the correlator key.
 	antreaZoneA := &connection.Connection{
 		FlowKey: connection.Tuple{
 			SourceAddress:      netip.MustParseAddr("10.244.2.1"),
@@ -539,6 +545,8 @@ func TestFromExternalCorrelator_NoCollisionOnSamePort(t *testing.T) {
 			SourcePort:         snatPort,
 			DestinationPort:    80,
 		},
+		ProxySnatIP:   snatIP,
+		ProxySnatPort: snatPort,
 	}
 
 	// Antrea-zone counterpart for flow B (TCP/443).
@@ -550,6 +558,8 @@ func TestFromExternalCorrelator_NoCollisionOnSamePort(t *testing.T) {
 			SourcePort:         snatPort,
 			DestinationPort:    443,
 		},
+		ProxySnatIP:   snatIP,
+		ProxySnatPort: snatPort,
 	}
 
 	corrA := correlator.CorrelateIfExternal(antreaZoneA)
@@ -561,4 +571,85 @@ func TestFromExternalCorrelator_NoCollisionOnSamePort(t *testing.T) {
 	assert.Equal(t, extClientB, antreaZoneB.FlowKey.SourceAddress, "flow B must resolve to its own external client IP")
 
 	assert.Len(t, correlator.connections, 0, "both entries should be consumed after correlation")
+}
+
+// TestFromExternalCorrelator_NoCollisionNonSNATDifferentClients verifies that two concurrent non-SNAT
+// flows from different external clients to the same Pod IP that happen to share the same source port are
+// stored and correlated independently. Without srcIP in the key they would collide.
+func TestFromExternalCorrelator_NoCollisionNonSNATDifferentClients(t *testing.T) {
+	podIP := netip.MustParseAddr("10.244.2.2")
+	nodeIP := netip.MustParseAddr("172.18.0.111")
+	extClientA := netip.MustParseAddr("203.0.113.1")
+	extClientB := netip.MustParseAddr("203.0.113.2")
+	// Both external clients happen to use the same source port.
+	clientPort := uint16(40000)
+
+	defaultZoneA := &connection.Connection{
+		Zone: 0,
+		FlowKey: connection.Tuple{
+			SourceAddress:      extClientA,
+			DestinationAddress: podIP,
+			Protocol:           6,
+			SourcePort:         clientPort,
+			DestinationPort:    80,
+		},
+		OriginalDestinationAddress: nodeIP,
+		OriginalDestinationPort:    12345,
+		ProxySnatIP:                netip.Addr{},
+		ProxySnatPort:              0,
+		Mark:                       openflow.ServiceCTMark.GetValue(),
+	}
+
+	defaultZoneB := &connection.Connection{
+		Zone: 0,
+		FlowKey: connection.Tuple{
+			SourceAddress:      extClientB,
+			DestinationAddress: podIP,
+			Protocol:           6,
+			SourcePort:         clientPort,
+			DestinationPort:    80,
+		},
+		OriginalDestinationAddress: nodeIP,
+		OriginalDestinationPort:    12345,
+		ProxySnatIP:                netip.Addr{},
+		ProxySnatPort:              0,
+		Mark:                       openflow.ServiceCTMark.GetValue(),
+	}
+
+	correlator := NewFromExternalCorrelator(nil)
+	correlator.add(defaultZoneA)
+	correlator.add(defaultZoneB)
+	assert.Len(t, correlator.connections, 2, "non-SNAT flows from different clients must occupy separate map entries")
+
+	// Antrea-zone counterpart for flow A: no SNAT, so FlowKey.SourceAddress is the real external
+	// client IP and ProxySnatIP is zero.
+	antreaZoneA := &connection.Connection{
+		FlowKey: connection.Tuple{
+			SourceAddress:      extClientA,
+			DestinationAddress: podIP,
+			Protocol:           6,
+			SourcePort:         clientPort,
+			DestinationPort:    80,
+		},
+	}
+
+	antreaZoneB := &connection.Connection{
+		FlowKey: connection.Tuple{
+			SourceAddress:      extClientB,
+			DestinationAddress: podIP,
+			Protocol:           6,
+			SourcePort:         clientPort,
+			DestinationPort:    80,
+		},
+	}
+
+	corrA := correlator.CorrelateIfExternal(antreaZoneA)
+	assert.True(t, corrA, "non-SNAT flow A should correlate")
+	assert.Equal(t, extClientA, antreaZoneA.FlowKey.SourceAddress, "flow A source IP must remain the external client IP after correlation")
+
+	corrB := correlator.CorrelateIfExternal(antreaZoneB)
+	assert.True(t, corrB, "non-SNAT flow B should correlate")
+	assert.Equal(t, extClientB, antreaZoneB.FlowKey.SourceAddress, "flow B source IP must remain the external client IP after correlation")
+
+	assert.Len(t, correlator.connections, 0, "both non-SNAT entries should be consumed after correlation")
 }

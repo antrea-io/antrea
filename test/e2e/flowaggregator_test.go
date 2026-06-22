@@ -19,7 +19,9 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"math/rand/v2"
 	"net"
+	"net/netip"
 	"slices"
 	"strconv"
 	"strings"
@@ -200,11 +202,6 @@ func setupFlowAggregatorTest(t *testing.T, options flowVisibilityTestOptions) (*
 		t.Fatalf("Error when setting up test: %v", err)
 	}
 	teardownFuncs = append(teardownFuncs, func() { teardownTest(t, data) })
-	// Execute teardownFlowAggregator after teardownTest to ensure that the logs of Flow
-	// Aggregator have been exported. Register it before calling setupFlowAggregator so that
-	// cleanup always runs even if setup or the metrics check fails, preventing stale
-	// flow-aggregator namespace and secrets from leaking into the next subtest.
-	teardownFuncs = append(teardownFuncs, func() { teardownFlowAggregator(t, data) })
 	// Make sure that antreaClusterUUID is set if this function is called for the first time.
 	if antreaClusterUUID == "" {
 		if uuid, err := data.getAntreaClusterUUID(10 * time.Second); err != nil {
@@ -213,6 +210,11 @@ func setupFlowAggregatorTest(t *testing.T, options flowVisibilityTestOptions) (*
 			antreaClusterUUID = uuid.String()
 		}
 	}
+	// Execute teardownFlowAggregator after teardownTest to ensure that the logs of Flow
+	// Aggregator have been exported. Register it before calling setupFlowAggregator so that
+	// cleanup always runs even if setup or the metrics check fails, preventing stale
+	// flow-aggregator namespace and secrets from leaking into the next subtest.
+	teardownFuncs = append(teardownFuncs, func() { teardownFlowAggregator(t, data) })
 	if err := setupFlowAggregator(t, data, options); err != nil {
 		t.Fatalf("Error when setting up FlowAggregator: %v", err)
 	}
@@ -2010,6 +2012,34 @@ func getAndCheckFlowAggregatorMetrics(t *testing.T, data *TestData, withClickHou
 	return nil
 }
 
+// randExternalSubnet returns a randomly chosen subnet for simulating external traffic.
+// For IPv4, it picks a /30 within 100.64.0.0/10 (RFC 6598 Shared Address Space, ~1M possible
+// subnets) by varying both the second and third octets. For IPv6, it picks a /64 within
+// fd00:ea2e::/32, which never overlaps the Pod subnet (fd00:10:244::/56) or the service subnet.
+func randExternalSubnet(isIPv6 bool) netip.Prefix {
+	if isIPv6 {
+		// #nosec G404: random number generator not used for security purposes
+		hi16 := rand.IntN(0x10000)
+		// #nosec G404: random number generator not used for security purposes
+		lo16 := rand.IntN(0x10000)
+		var b [16]byte
+		b[0], b[1] = 0xfd, 0x00
+		b[2], b[3] = 0xea, 0x2e
+		b[4], b[5] = byte(hi16>>8), byte(hi16)
+		b[6], b[7] = byte(lo16>>8), byte(lo16)
+		return netip.PrefixFrom(netip.AddrFrom16(b), 64)
+	}
+	// 100.64.0.0/10 has 2^22 addresses; pick a random /30 block (2^20 ≈ 1M possible subnets).
+	// #nosec G404: random number generator not used for security purposes
+	idx := rand.IntN(1 << 20)
+	return netip.PrefixFrom(netip.AddrFrom4([4]byte{
+		100,
+		byte(64 + idx>>14),
+		byte(idx >> 6),
+		byte((idx & 0x3f) << 2),
+	}), 30)
+}
+
 // createExternalToPodConnection simulates an external client connecting to the given NodePort
 // Service. It creates a privileged host-network Pod on the target Node with a fake external
 // network namespace (via getCommandInFakeExternalNetwork), then curls the NodePort on the node's
@@ -2020,45 +2050,21 @@ func createExternalToPodConnection(t *testing.T, data *TestData, service *corev1
 	t.Helper()
 	targetNode := nodeName(nodeIndex)
 
-	// Use a random tag to derive unique subnet addresses and a unique pod name per call.
+	// Use a random tag for a unique pod name and random subnet addresses per call.
 	// This avoids overlapping host routes across sequential invocations: overlapping routes
 	// cause the kernel to forward replies via the wrong veth (breaking TCP handshakes), and
 	// duplicate addresses cause "ip addr add" to fail with EEXIST (breaking pod startup).
-	//
-	// All 5 chars of tag are encoded into the subnet index (26^5 ≈ 11.9M combinations),
-	// making collisions between the handful of pods in a single test run essentially impossible.
 	tag := randSeq(5)
-	// Compute a 20-bit subnet index from all 5 tag characters (each in [0,25]).
-	subnetIdx := 0
-	for _, c := range tag {
-		subnetIdx = subnetIdx*26 + int(c-'a')
-	}
 
-	var srcIP, localIP, nodeIP string
-	var prefixLen int
+	subnet := randExternalSubnet(isIPv6)
+	srcAddr := subnet.Addr().Next()
+	localAddr := srcAddr.Next()
+	srcIP, localIP := srcAddr.String(), localAddr.String()
+	prefixLen := subnet.Bits()
+	var nodeIP string
 	if isIPv6 {
-		// Use fd00:ea2e:<hi16>:<lo16>::/64, spreading subnetIdx across two 16-bit groups
-		// so the address is always valid regardless of subnetIdx magnitude (26^5-1 = 0xB54B9F,
-		// which exceeds 16 bits and would be invalid in a single group).
-		// The /64 never overlaps with the pod subnet (fd00:10:244::/56) or the service subnet.
-		// srcIP is the fake external client address; localIP is the host-side veth gateway.
-		hi16 := (subnetIdx >> 16) & 0xFFFF
-		lo16 := subnetIdx & 0xFFFF
-		srcIP = fmt.Sprintf("fd00:ea2e:%x:%x::1", hi16, lo16)
-		localIP = fmt.Sprintf("fd00:ea2e:%x:%x::fe", hi16, lo16)
-		prefixLen = 64
 		nodeIP = clusterInfo.nodes[nodeIndex].ipv6Addr
 	} else {
-		// Use 100.64.<hi8>.<lo8*4+{1,2}>/30 from the Shared Address Space (100.64.0.0/10,
-		// RFC 6598). This range is reserved for carrier-grade NAT and is never used by
-		// Docker, Kind, or cloud metadata services, so it cannot conflict with existing
-		// node addresses. hi8 uses bits [13:6] of subnetIdx (256 values) and lo8 uses bits
-		// [5:0] (64 values), giving 16384 distinct /30 subnets — enough to avoid collisions.
-		hi8 := (subnetIdx >> 6) & 0xFF
-		lo8 := subnetIdx & 0x3F // [0,63] → lo8*4+3 ≤ 255
-		srcIP = fmt.Sprintf("100.64.%d.%d", hi8, lo8*4+1)
-		localIP = fmt.Sprintf("100.64.%d.%d", hi8, lo8*4+2)
-		prefixLen = 30
 		nodeIP = clusterInfo.nodes[nodeIndex].ipv4Addr
 	}
 	require.NotEmptyf(t, nodeIP, "Node %d has no IP address for isIPv6=%v", nodeIndex, isIPv6)
