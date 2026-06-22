@@ -175,7 +175,7 @@ var _ = BeforeSuite(func() {
 		clusterSetReconciler,
 	)
 
-	go staleController.Run(stopCh)
+	go staleController.Start(ctx)
 	// Fake the commonAreaCreation event since the ClusterSet creation is only triggered one time
 	// when the ClusterSet is created, but the stale controller test is not running yet.
 	go wait.UntilWithContext(ctx, func(ctx context.Context) {

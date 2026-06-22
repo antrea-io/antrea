@@ -93,13 +93,18 @@ func (c *StaleResCleanupController) cleanUpExpiredMemberClusterAnnounces(ctx con
 	}
 }
 
-func (c *StaleResCleanupController) Run(stopCh <-chan struct{}) {
+// Start starts the StaleResCleanupController and blocks until ctx is canceled. It implements
+// the controller-runtime Runnable interface, so the controller can be added to the Manager via
+// mgr.Add. The Manager only starts Runnables after the cache has been synced, which guarantees
+// that the first call to cleanUpExpiredMemberClusterAnnounces won't fail with
+// "the cache is not started, can not read objects" (see antrea-io/antrea#6152).
+func (c *StaleResCleanupController) Start(ctx context.Context) error {
 	klog.InfoS("Starting StaleResCleanupController")
 	defer klog.InfoS("Shutting down StaleResCleanupController")
 
-	ctx := wait.ContextForChannel(stopCh)
 	go wait.UntilWithContext(ctx, c.cleanUpExpiredMemberClusterAnnounces, memberClusterAnnounceStaleTime/2)
-	<-stopCh
+	<-ctx.Done()
+	return nil
 }
 
 func (c *StaleResCleanupController) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {

@@ -141,8 +141,12 @@ func runMember(o *Options) error {
 		env.GetPodNamespace(),
 		commonAreaGetter,
 	)
-
-	go staleController.Run(stopCh)
+	// Add the StaleResCleanupController as a Runnable to the Manager so it is started
+	// only after the cache has been synced, avoiding a spurious "the cache is not started"
+	// error on startup (see antrea-io/antrea#6152).
+	if err := mgr.Add(staleController); err != nil {
+		return fmt.Errorf("error adding StaleResCleanupController to Manager: %v", err)
+	}
 
 	// Member runs ResourceImportReconciler from RemoteCommonArea only
 
