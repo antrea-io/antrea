@@ -111,6 +111,7 @@ var allowedPaths = []string{
 	"/validate/anp",
 	"/validate/banp",
 	"/validate/clustergroup",
+	"/validate/cnp",
 	"/validate/externalippool",
 	"/validate/egress",
 	"/validate/group",

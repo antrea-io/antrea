@@ -148,12 +148,12 @@ func (p *preprocessor) processMsg(msg *entities.Message) {
 				// but for the protobuf message we prefer using the default value (nil).
 				ip := ie.GetIPAddressValue()
 				if !ip.Equal(net.IPv4zero) {
-					flow.K8S.DestinationClusterIp = ie.GetIPAddressValue()
+					flow.K8S.DestinationClusterIp = ip
 				}
 			case "destinationClusterIPv6":
 				ip := ie.GetIPAddressValue()
 				if !ip.Equal(net.IPv6zero) {
-					flow.K8S.DestinationClusterIp = ie.GetIPAddressValue()
+					flow.K8S.DestinationClusterIp = ip
 				}
 			case "destinationServicePort":
 				flow.K8S.DestinationServicePort = uint32(ie.GetUnsigned16Value())
@@ -204,6 +204,28 @@ func (p *preprocessor) processMsg(msg *entities.Message) {
 				}
 			case "egressNodeName":
 				flow.K8S.EgressNodeName = ie.GetStringValue()
+			case "destinationServiceIPv4":
+				ip := ie.GetIPAddressValue()
+				if !ip.Equal(net.IPv4zero) {
+					flow.K8S.DestinationServiceIp = ip
+				}
+			case "destinationServiceIPv6":
+				ip := ie.GetIPAddressValue()
+				if !ip.Equal(net.IPv6zero) {
+					flow.K8S.DestinationServiceIp = ip
+				}
+			case "proxySnatIPv4":
+				ip := ie.GetIPAddressValue()
+				if !ip.Equal(net.IPv4zero) {
+					flow.ProxySnatIp = ip
+				}
+			case "proxySnatIPv6":
+				ip := ie.GetIPAddressValue()
+				if !ip.Equal(net.IPv6zero) {
+					flow.ProxySnatIp = ip
+				}
+			case "proxySnatPort":
+				flow.ProxySnatPort = uint32(ie.GetUnsigned16Value())
 			}
 		}
 

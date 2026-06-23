@@ -123,7 +123,7 @@ func testEgressClientIP(t *testing.T, data *TestData) {
 				egressNodeIP = controlPlaneNodeIPv4()
 			}
 
-			cmd, _ := getCommandInFakeExternalNetwork("/agnhost netexec", tt.ipMaskLen, tt.serverIP, tt.localIP0, tt.localIP1)
+			cmd, _ := getCommandInFakeExternalNetwork("/agnhost netexec", tt.ipMaskLen, tt.serverIP, tt.localIP0, utilnet.IsIPv6String(tt.localIP0), tt.localIP1)
 			if err := NewPodBuilder(tt.fakeServer, data.testNamespace, agnhostImage).OnNode(egressNode).WithCommand([]string{"sh", "-c", cmd}).InHostNetwork().Privileged().Create(data); err != nil {
 				t.Fatalf("Failed to create server Pod: %v", err)
 			}
@@ -820,7 +820,7 @@ func testEgressUpdateBandwidth(t *testing.T, data *TestData) {
 	// Create another netns to fake an external network on the host network Pod.
 	fakeExternalName := "fake-external"
 	fakeExternalCmd := "iperf3 -s"
-	cmd, _ := getCommandInFakeExternalNetwork(fakeExternalCmd, 24, "1.1.1.1", "1.1.1.254")
+	cmd, _ := getCommandInFakeExternalNetwork(fakeExternalCmd, 24, "1.1.1.1", "1.1.1.254", false)
 
 	err := NewPodBuilder(fakeExternalName, data.testNamespace, ToolboxImage).OnNode(egressNode).WithCommand([]string{"bash", "-c", cmd}).InHostNetwork().Privileged().Create(data)
 	require.NoError(t, err, "Failed to create fake external Pod")

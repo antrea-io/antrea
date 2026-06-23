@@ -44,6 +44,9 @@ type ConntrackConnectionStore struct {
 	connectionStore
 }
 
+// NewConntrackConnectionStore creates a connection store. External correlation (default-zone to
+// Antrea-zone) is performed by the poller before connections are delivered here, so no correlator
+// parameter is needed.
 func NewConntrackConnectionStore(
 	npQuerier querier.AgentNetworkPolicyInfoQuerier,
 	podStore objectstore.PodStore,
@@ -57,6 +60,8 @@ func NewConntrackConnectionStore(
 	}
 }
 
+// AddOrUpdateConns merges one poll of Antrea-zone conntrack connections into the store.
+// Zone-0 ingestion is performed by the poller.
 func (cs *ConntrackConnectionStore) AddOrUpdateConns(conns []*connection.Connection) error {
 	klog.V(2).InfoS("Updating connection store")
 	// Reset IsPresent flag for all connections in connection map before updating
@@ -93,7 +98,6 @@ func (cs *ConntrackConnectionStore) AddOrUpdateConns(conns []*connection.Connect
 		return err
 	}
 
-	// Update only the Connection store. IPFIX records are generated based on Connection store.
 	for _, conn := range conns {
 		cs.AddOrUpdateConn(conn)
 	}
@@ -104,15 +108,17 @@ func (cs *ConntrackConnectionStore) AddOrUpdateConns(conns []*connection.Connect
 }
 
 // AddOrUpdateConn updates the connection if it is already present, i.e., update timestamp, counters etc.,
-// or adds a new connection with the resolved K8s metadata.
+// or adds a new connection with the resolved K8s metadata. Zone 0 flows are not added here.
 func (cs *ConntrackConnectionStore) AddOrUpdateConn(conn *connection.Connection) {
 	if !cs.protocolFilter.Allow(conn.FlowKey.Protocol) {
 		return
 	}
 
 	conn.IsPresent = true
-	connKey := connection.NewConnectionKey(conn)
+	// External correlation (default-zone → Antrea-zone) is performed by the poller before
+	// connections are delivered here.
 
+	connKey := connection.NewConnectionKey(conn)
 	existingConn, exists := cs.connections[connKey]
 	if exists {
 		existingConn.IsPresent = conn.IsPresent
@@ -145,20 +151,21 @@ func (cs *ConntrackConnectionStore) AddOrUpdateConn(conn *connection.Connection)
 		connCopy := *conn
 		conn := &connCopy
 		cs.fillPodInfo(conn)
-		if conn.SourcePodName == "" && conn.DestinationPodName == "" {
+		if !conn.IsFromExternal && conn.SourcePodName == "" && conn.DestinationPodName == "" {
 			// We don't add connections to connection map or expirePriorityQueue if we can't find the pod
-			// information for both srcPod and dstPod
+			// information for both srcPod and dstPod except for from external flows.
+
 			klog.V(5).InfoS("Skip this connection as we cannot map any of the connection IPs to a local Pod", "srcIP", conn.FlowKey.SourceAddress.String(), "dstIP", conn.FlowKey.DestinationAddress.String())
 			return
 		}
-		if conn.Mark&openflow.ServiceCTMark.GetRange().ToNXRange().ToUint32Mask() == openflow.ServiceCTMark.GetValue() {
-			clusterIP := conn.OriginalDestinationAddress.String()
+		if conn.Mark&openflow.ServiceCTMark.GetRange().ToNXRange().ToUint32Mask() == openflow.ServiceCTMark.GetValue() || conn.IsFromExternal {
+			serviceIP := conn.OriginalDestinationAddress.String()
 			svcPort := conn.OriginalDestinationPort
 			protocol, err := lookupServiceProtocol(conn.FlowKey.Protocol)
 			if err != nil {
 				klog.InfoS("Could not retrieve Service protocol", "error", err)
 			} else {
-				serviceStr := fmt.Sprintf("%s:%d/%s", clusterIP, svcPort, protocol)
+				serviceStr := fmt.Sprintf("%s:%d/%s", serviceIP, svcPort, protocol)
 				cs.fillServiceInfo(conn, serviceStr)
 			}
 		}
@@ -185,7 +192,7 @@ func (cs *ConntrackConnectionStore) AddOrUpdateConn(conn *connection.Connection)
 func (cs *ConntrackConnectionStore) GetExpiredConns(expiredConns []connection.Connection, currTime time.Time, maxSize int) ([]connection.Connection, time.Duration) {
 	cs.AcquireConnStoreLock()
 	defer cs.ReleaseConnStoreLock()
-	for i := 0; i < maxSize; i++ {
+	for range maxSize {
 		pqItem := cs.connectionStore.expirePriorityQueue.GetTopExpiredItem(currTime)
 		if pqItem == nil {
 			break

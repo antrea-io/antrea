@@ -418,8 +418,10 @@ func (a *aggregationProcess) addOrUpdateRecordInMap(flowKey *FlowKey, record *fl
 	a.flowKeyRecordMap[*flowKey] = aggregationRecord
 }
 
-// correlateRecords correlate the incomingRecord with existingRecord using correlation
-// fields. This is called for records whose flowType is InterNode.
+// correlateRecords correlate the incomingRecord with existingRecord using correlation fields.
+// This is called for the two halves of an inter-Node flow (regular inter-Node flows, as well as
+// inter-Node "from external" flows). Each field is copied only when set on the incoming record,
+// so the two halves can be correlated regardless of the order in which they are received.
 func (a *aggregationProcess) correlateRecords(incomingRecord, existingRecord *flowpb.Flow) {
 	if sourcePodName := incomingRecord.K8S.SourcePodName; sourcePodName != "" {
 		existingRecord.K8S.SourcePodName = sourcePodName
@@ -453,6 +455,9 @@ func (a *aggregationProcess) correlateRecords(incomingRecord, existingRecord *fl
 	}
 	if destinationClusterIP := incomingRecord.K8S.DestinationClusterIp; destinationClusterIP != nil {
 		existingRecord.K8S.DestinationClusterIp = destinationClusterIP
+	}
+	if destinationServiceIP := incomingRecord.K8S.DestinationServiceIp; destinationServiceIP != nil {
+		existingRecord.K8S.DestinationServiceIp = destinationServiceIP
 	}
 	if destinationServicePort := incomingRecord.K8S.DestinationServicePort; destinationServicePort != 0 {
 		existingRecord.K8S.DestinationServicePort = destinationServicePort
@@ -495,6 +500,19 @@ func (a *aggregationProcess) correlateRecords(incomingRecord, existingRecord *fl
 	}
 	if egressNetworkPolicyRuleName := incomingRecord.K8S.EgressNetworkPolicyRuleName; egressNetworkPolicyRuleName != "" {
 		existingRecord.K8S.EgressNetworkPolicyRuleName = egressNetworkPolicyRuleName
+	}
+	// For an inter-Node "from external" flow, the external client's address/port, the gateway
+	// ProxySnat address/port, and FlowType=FROM_EXTERNAL only live on the ingress-Node record
+	// (see isSourceNodeFromExternalFlow). When that record is the incoming one, restore these
+	// fields on the correlated record so the exported flow reports the external client as the
+	// source. When the records arrive in the opposite order, the correlated record is already
+	// the ingress-Node record and these fields are unchanged.
+	if isSourceNodeFromExternalFlow(incomingRecord) {
+		existingRecord.Ip.Source = incomingRecord.Ip.Source
+		existingRecord.Transport.SourcePort = incomingRecord.Transport.SourcePort
+		existingRecord.ProxySnatIp = incomingRecord.ProxySnatIp
+		existingRecord.ProxySnatPort = incomingRecord.ProxySnatPort
+		existingRecord.K8S.FlowType = flowpb.FlowType_FLOW_TYPE_FROM_EXTERNAL
 	}
 }
 
@@ -713,8 +731,26 @@ func (a *aggregationProcess) updateFlowEndSecondsFromNodes(incomingRecord, exist
 	return existingVal
 }
 
+// isSourceNodeFromExternalFlow returns true for the ingress-Node half of an inter-Node
+// "from external" flow. This record is exported by the Node that received the connection from an
+// external client and source-NAT'd it towards a Pod running on another (destination) Node: its
+// FlowType is FROM_EXTERNAL, it carries the ProxySnat address/port applied by the gateway, and
+// its destination Pod is empty because the Pod is local to the destination Node. A single-Node
+// "from external" flow (the Pod is local) has its destination Pod set and is not matched here.
+func isSourceNodeFromExternalFlow(record *flowpb.Flow) bool {
+	return record.K8S != nil &&
+		record.K8S.FlowType == flowpb.FlowType_FLOW_TYPE_FROM_EXTERNAL &&
+		record.K8S.DestinationPodName == "" &&
+		len(record.ProxySnatIp) > 0
+}
+
 // isRecordFromSrc returns true if record belongs to inter-node flow and from source node.
 func isRecordFromSrc(record *flowpb.Flow) bool {
+	// The ingress Node is the "source" Node of an inter-Node "from external" flow, even though
+	// the source is an external client rather than a Pod.
+	if isSourceNodeFromExternalFlow(record) {
+		return true
+	}
 	return record.K8S.SourcePodName != "" && record.K8S.DestinationPodName == ""
 }
 
@@ -735,26 +771,41 @@ func areRecordsFromSameNode(record1, record2 *flowpb.Flow) bool {
 	return false
 }
 
-// getFlowKeyFromRecord returns 5-tuple from data record
+// getFlowKeyFromRecord returns the 5-tuple used to correlate and aggregate records for a flow.
+// For most flows this is (sourceIP, sourcePort, destinationIP, destinationPort, protocol).
+// The ingress-Node half of an inter-Node "from external" flow is special: the destination Node
+// observes the connection after source NAT (the external client's address/port are replaced with
+// the gateway's ProxySnat address/port), so the two Nodes only agree on the post-SNAT 5-tuple. We
+// therefore key the ingress-Node record on its ProxySnat address/port rather than the external
+// client's address/port, so that both halves land under the same key. The external client's
+// address/port are restored on the merged record by correlateRecords.
 func getFlowKeyFromRecord(record *flowpb.Flow) (*FlowKey, bool) {
 	source := net.IP(record.Ip.Source).String()
-	destination := net.IP(record.Ip.Destination).String()
+	sourcePort := uint16(record.Transport.SourcePort)
+	if isSourceNodeFromExternalFlow(record) {
+		source = net.IP(record.ProxySnatIp).String()
+		sourcePort = uint16(record.ProxySnatPort)
+	}
 	flowKey := &FlowKey{
 		SourceAddress:      source,
-		DestinationAddress: destination,
+		DestinationAddress: net.IP(record.Ip.Destination).String(),
 		Protocol:           uint8(record.Transport.ProtocolNumber),
-		SourcePort:         uint16(record.Transport.SourcePort),
+		SourcePort:         sourcePort,
 		DestinationPort:    uint16(record.Transport.DestinationPort),
 	}
 	return flowKey, record.Ip.Version == flowpb.IPVersion_IP_VERSION_4
 }
 
-// isCorrelationRequired returns true for InterNode flowType when
-// either the egressNetworkPolicyRuleAction is not deny (drop/reject) or
-// the ingressNetworkPolicyRuleAction is not reject.
+// isCorrelationRequired returns true when the record is one half of a flow whose two halves are
+// observed on different Nodes and must be correlated: a regular inter-Node flow, or the
+// ingress-Node half of an inter-Node "from external" flow (see isSourceNodeFromExternalFlow).
+// It returns false when the flow was dropped or rejected by a network policy rule, as the two
+// halves are then not expected to correlate.
 func isCorrelationRequired(flowType flowpb.FlowType, record *flowpb.Flow) bool {
-	return flowType == flowpb.FlowType_FLOW_TYPE_INTER_NODE &&
-		record.K8S.EgressNetworkPolicyRuleAction != flowpb.NetworkPolicyRuleAction_NETWORK_POLICY_RULE_ACTION_DROP &&
-		record.K8S.EgressNetworkPolicyRuleAction != flowpb.NetworkPolicyRuleAction_NETWORK_POLICY_RULE_ACTION_REJECT &&
-		record.K8S.IngressNetworkPolicyRuleAction != flowpb.NetworkPolicyRuleAction_NETWORK_POLICY_RULE_ACTION_REJECT
+	if record.K8S.EgressNetworkPolicyRuleAction == flowpb.NetworkPolicyRuleAction_NETWORK_POLICY_RULE_ACTION_DROP ||
+		record.K8S.EgressNetworkPolicyRuleAction == flowpb.NetworkPolicyRuleAction_NETWORK_POLICY_RULE_ACTION_REJECT ||
+		record.K8S.IngressNetworkPolicyRuleAction == flowpb.NetworkPolicyRuleAction_NETWORK_POLICY_RULE_ACTION_REJECT {
+		return false
+	}
+	return flowType == flowpb.FlowType_FLOW_TYPE_INTER_NODE || isSourceNodeFromExternalFlow(record)
 }
