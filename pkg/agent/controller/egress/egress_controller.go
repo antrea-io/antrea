@@ -566,6 +566,10 @@ func (c *EgressController) replaceEgressIPs() error {
 		if isEgressSchedulable(egress) && egress.Status.EgressNode == c.nodeName && egress.Status.EgressIP != "" {
 			pool, err := c.externalIPPoolLister.Get(egress.Spec.ExternalIPPool)
 			if err != nil {
+				klog.V(4).InfoS("Failed to get ExternalIPPool while restoring EgressIP, skipping Egress",
+					"egress", klog.KObj(egress),
+					"externalIPPool", egress.Spec.ExternalIPPool,
+					"err", err)
 				continue
 			}
 			desiredLocalEgressIPs[egress.Status.EgressIP] = pool.Spec.SubnetInfo
@@ -574,23 +578,27 @@ func (c *EgressController) replaceEgressIPs() error {
 		// Also restore dual-stack Egress IPs (only the first pair takes effect).
 		if isDualStackEgressSchedulable(egress) && egress.Status.EgressNode == c.nodeName && len(egress.Status.EgressIPs) >= effectiveDualStackCount {
 			effectiveStatusIPs := firstDualStackPair(egress.Status.EgressIPs)
+			if len(egress.Spec.ExternalIPPools) < len(effectiveStatusIPs) {
+				continue
+			}
 			subnetInfos := make([]*crdv1b1.SubnetInfo, len(effectiveStatusIPs))
-			skipEgress := false
+			skipDualStackEgress := false
 			// Restore the effective dual-stack pair atomically. If one referenced pool is missing,
 			// skip the whole Egress to avoid restoring only one address family on agent restart.
 			for i := range effectiveStatusIPs {
-				if i >= len(egress.Spec.ExternalIPPools) {
-					skipEgress = true
-					break
-				}
-				pool, err := c.externalIPPoolLister.Get(egress.Spec.ExternalIPPools[i])
+				poolName := egress.Spec.ExternalIPPools[i]
+				pool, err := c.externalIPPoolLister.Get(poolName)
 				if err != nil {
-					skipEgress = true
+					klog.V(4).InfoS("Failed to get ExternalIPPool while restoring dual-stack EgressIPs, skipping Egress",
+						"egress", klog.KObj(egress),
+						"externalIPPool", poolName,
+						"err", err)
+					skipDualStackEgress = true
 					break
 				}
 				subnetInfos[i] = pool.Spec.SubnetInfo
 			}
-			if skipEgress {
+			if skipDualStackEgress {
 				continue
 			}
 			for i, ip := range effectiveStatusIPs {
@@ -851,14 +859,12 @@ func (c *EgressController) realizeDualStackEgressIPs(egressName string, egressIP
 		return 0, fmt.Errorf("expected exactly %d dual-stack IPs, got %d", effectiveDualStackCount, lenIPs)
 	}
 
-	// Verify all IPs have consistent locality.
-	isLocalIP := c.localIPDetector.IsLocalIP(egressIPs[0])
-	for i := 1; i < lenIPs; i++ {
-		if c.localIPDetector.IsLocalIP(egressIPs[i]) != isLocalIP {
-			return 0, fmt.Errorf("dual-stack IPs have inconsistent locality: %s isLocal=%v, %s isLocal=%v",
-				egressIPs[0], isLocalIP, egressIPs[i], c.localIPDetector.IsLocalIP(egressIPs[i]))
-		}
-	}
+	// Netlink reports IPv4 and IPv6 address changes independently, so a dual-stack
+	// Egress can temporarily have mixed locality while the local IP detector is
+	// catching up. Treat that transient state as non-local instead of returning an
+	// error and forcing the workqueue into backoff; the next address update will
+	// enqueue the Egress again and install local datapath state once both IPs are local.
+	isLocalIP := c.allEgressIPsLocal(egressIPs)
 
 	c.egressIPStatesMutex.Lock()
 	defer c.egressIPStatesMutex.Unlock()
@@ -995,6 +1001,7 @@ func (c *EgressController) realizeDualStackEgressIPs(egressName string, egressIP
 			for _, s := range ipStates {
 				s.mark = 0
 			}
+			sharedMark = 0
 		}
 	}
 	return sharedMark, nil
@@ -1258,30 +1265,30 @@ func (c *EgressController) unbindPodEgress(pod, egress string) (string, bool) {
 	return "", false
 }
 
-func (c *EgressController) reconcileEgressIPAssignment(egress *crdv1b1.Egress, egressIP string, subnetInfo *crdv1b1.SubnetInfo, desiredNode string) error {
+func (c *EgressController) reconcileEgressIPAssignment(egress *crdv1b1.Egress, egressIP string, subnetInfo *crdv1b1.SubnetInfo, desiredNode string) (bool, error) {
 	if desiredNode == c.nodeName {
 		// Ensure the Egress IP is assigned to the system. Force advertising the IP if it was previously assigned to
 		// another Node in the Egress API. This could force refreshing other peers' neighbor cache when the Egress IP is
 		// obtained by this Node and another Node at the same time in some situations, e.g. split brain.
 		assigned, err := c.ipAssigner.AssignIP(egressIP, subnetInfo, egress.Status.EgressNode != c.nodeName)
 		if err != nil {
-			return err
+			return false, err
 		}
 		if assigned {
 			c.record.Eventf(egress, nil, corev1.EventTypeNormal, "IPAssigned", "NodeAssignment", "Assigned Egress %s with IP %s on Node %s", egress.Name, egressIP, desiredNode)
 		}
-		return nil
+		return assigned, nil
 	}
 
 	// Unassign the Egress IP from the local Node if it was assigned by the agent.
 	unassigned, err := c.ipAssigner.UnassignIP(egressIP)
 	if err != nil {
-		return err
+		return false, err
 	}
 	if unassigned {
 		c.record.Eventf(egress, nil, corev1.EventTypeNormal, "IPUnassigned", "NodeAssignment", "Unassigned Egress %s with IP %s from Node %s", egress.Name, egressIP, c.nodeName)
 	}
-	return nil
+	return unassigned, nil
 }
 
 func (c *EgressController) reconcileEgressMark(egressName string, eState *egressState, mark uint32) error {
@@ -1458,12 +1465,13 @@ type egressIPInfo struct {
 	scheduleErr error
 }
 
-func (c *EgressController) getEgressIPInfo(egressName string, egress *crdv1b1.Egress) egressIPInfo {
-	ipInfo := egressIPInfo{dualStack: isDualStackEgress(egress)}
-	if ipInfo.dualStack {
+func (c *EgressController) getEgressIPInfo(egress *crdv1b1.Egress) egressIPInfo {
+	isDualStack := isDualStackEgress(egress)
+	ipInfo := egressIPInfo{dualStack: isDualStack}
+	if isDualStack {
 		var egressIPs []string
 		if isDualStackEgressSchedulable(egress) {
-			desiredIPs, egressNode, err, scheduled := c.egressIPScheduler.GetDualStackEgressIPsAndNode(egressName)
+			desiredIPs, egressNode, err, scheduled := c.egressIPScheduler.GetDualStackEgressIPsAndNode(egress.Name)
 			if scheduled {
 				egressIPs = desiredIPs
 				ipInfo.egressNode = egressNode
@@ -1483,7 +1491,7 @@ func (c *EgressController) getEgressIPInfo(egressName string, egress *crdv1b1.Eg
 	// Only check whether the Egress IP should be assigned to this Node when the Egress is schedulable.
 	// Otherwise, users are responsible for assigning the Egress IP to Nodes.
 	if isEgressSchedulable(egress) {
-		egressIP, egressNode, err, scheduled := c.egressIPScheduler.GetEgressIPAndNode(egressName)
+		egressIP, egressNode, err, scheduled := c.egressIPScheduler.GetEgressIPAndNode(egress.Name)
 		if scheduled {
 			if egressIP != "" {
 				ipInfo.egressIPs = []string{egressIP}
@@ -1542,13 +1550,26 @@ func (c *EgressController) resolveEgressSubnetInfos(egress *crdv1b1.Egress, ipIn
 }
 
 func (c *EgressController) reconcileEgressIPAssignments(egress *crdv1b1.Egress, ipInfo egressIPInfo, subnetInfos []*crdv1b1.SubnetInfo) error {
+	var newlyAssignedIPs []string
 	for i, egressIP := range ipInfo.egressIPs {
 		var subnetInfo *crdv1b1.SubnetInfo
 		if ipInfo.egressNode == c.nodeName {
 			subnetInfo = subnetInfos[i]
 		}
-		if err := c.reconcileEgressIPAssignment(egress, egressIP, subnetInfo, ipInfo.egressNode); err != nil {
+		assigned, err := c.reconcileEgressIPAssignment(egress, egressIP, subnetInfo, ipInfo.egressNode)
+		if err != nil {
+			if ipInfo.dualStack && ipInfo.egressNode == c.nodeName {
+				for i := len(newlyAssignedIPs) - 1; i >= 0; i-- {
+					assignedIP := newlyAssignedIPs[i]
+					if _, rollbackErr := c.reconcileEgressIPAssignment(egress, assignedIP, nil, ""); rollbackErr != nil {
+						return fmt.Errorf("%w; failed to roll back Egress IP %s: %v", err, assignedIP, rollbackErr)
+					}
+				}
+			}
 			return err
+		}
+		if ipInfo.dualStack && ipInfo.egressNode == c.nodeName && assigned {
+			newlyAssignedIPs = append(newlyAssignedIPs, egressIP)
 		}
 	}
 	return nil
@@ -1595,7 +1616,7 @@ func (c *EgressController) syncEgress(egressName string) error {
 		return err
 	}
 
-	ipInfo := c.getEgressIPInfo(egressName, egress)
+	ipInfo := c.getEgressIPInfo(egress)
 	eState, exist := c.getEgressState(egressName)
 	// If the effective Egress IPs change, uninstall this Egress first.
 	if exist && !egressStateMatchesIPInfo(eState, ipInfo) {
@@ -1645,11 +1666,8 @@ func (c *EgressController) syncEgress(egressName string) error {
 }
 
 func (c *EgressController) updateDualStackEgressStatus(egress *crdv1b1.Egress, egressIPs []string, scheduleErr error) error {
-	isLocal := false
 	lenIPs := len(egressIPs)
-	if lenIPs > 0 {
-		isLocal = c.localIPDetector.IsLocalIP(egressIPs[0])
-	}
+	isLocal := c.allEgressIPsLocal(egressIPs)
 
 	desiredStatus := &crdv1b1.EgressStatus{}
 	if isLocal {

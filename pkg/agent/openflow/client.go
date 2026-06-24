@@ -1087,7 +1087,6 @@ func (c *client) UninstallSNATMarkFlows(mark uint32) error {
 	cacheKeys := []string{
 		fmt.Sprintf("s%x-v4", mark),
 		fmt.Sprintf("s%x-v6", mark),
-		fmt.Sprintf("s%x", mark), // For backward compatibility
 	}
 
 	c.replayMutex.RLock()

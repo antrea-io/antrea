@@ -672,11 +672,17 @@ func (c *Controller) addEgressRoutes(allRoutes map[bgp.Route]RouteMetadata) {
 		if eg.Status.EgressNode != c.nodeName {
 			continue
 		}
-		ip := eg.Status.EgressIP
-		if c.enabledIPv4 && utilnet.IsIPv4String(ip) {
-			addRoutes(allRoutes, ip+ipv4Suffix, eg.Name, EgressIP)
-		} else if c.enabledIPv6 && utilnet.IsIPv6String(ip) {
-			addRoutes(allRoutes, ip+ipv6Suffix, eg.Name, EgressIP)
+		egressIPs := eg.Status.EgressIPs
+		if len(egressIPs) == 0 {
+			// Fall back to EgressIP for Egress status written by older versions.
+			egressIPs = []string{eg.Status.EgressIP}
+		}
+		for _, ip := range egressIPs {
+			if c.enabledIPv4 && utilnet.IsIPv4String(ip) {
+				addRoutes(allRoutes, ip+ipv4Suffix, eg.Name, EgressIP)
+			} else if c.enabledIPv6 && utilnet.IsIPv6String(ip) {
+				addRoutes(allRoutes, ip+ipv6Suffix, eg.Name, EgressIP)
+			}
 		}
 	}
 }
@@ -973,7 +979,10 @@ func (c *Controller) updateEgress(oldObj, obj interface{}) {
 	if oldEg.Status.EgressNode != c.nodeName && eg.Status.EgressNode != c.nodeName {
 		return
 	}
-	if oldEg.Status.EgressIP == eg.Status.EgressIP && oldEg.Status.EgressNode == eg.Status.EgressNode {
+	// Changes to EgressIPs must trigger a sync because it is the source of dual-stack BGP routes.
+	if oldEg.Status.EgressIP == eg.Status.EgressIP &&
+		slices.Equal(oldEg.Status.EgressIPs, eg.Status.EgressIPs) &&
+		oldEg.Status.EgressNode == eg.Status.EgressNode {
 		return
 	}
 	if c.hasAffectedPolicyByEgress() {

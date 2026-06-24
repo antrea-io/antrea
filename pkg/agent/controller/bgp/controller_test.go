@@ -2610,6 +2610,66 @@ func TestGetBGPRoutes(t *testing.T) {
 	}
 }
 
+func TestAddEgressRoutes(t *testing.T) {
+	legacyEgress := generateEgress("legacy-egress", ipv4EgressIP1, localNodeName)
+	dualStackEgress := generateEgress("dual-stack-egress", "192.168.77.250", localNodeName)
+	dualStackEgress.Status.EgressIPs = []string{ipv4EgressIP2, ipv6EgressIP2}
+	remoteEgress := generateEgress("remote-egress", "192.168.77.202", "remote-node")
+	remoteEgress.Status.EgressIPs = []string{"192.168.77.202", "fec0::192:168:77:202"}
+
+	c := newFakeController(t, nil, nil, true, true)
+	for _, egress := range []*crdv1b1.Egress{legacyEgress, dualStackEgress, remoteEgress} {
+		require.NoError(t, c.egressInformer.GetStore().Add(egress))
+	}
+
+	routes := make(map[bgp.Route]RouteMetadata)
+	c.addEgressRoutes(routes)
+
+	expectedRoutes := map[bgp.Route]RouteMetadata{
+		{Prefix: ipStrToPrefix(ipv4EgressIP1)}: {
+			Type:      EgressIP,
+			K8sObjRef: legacyEgress.Name,
+		},
+		{Prefix: ipStrToPrefix(ipv4EgressIP2)}: {
+			Type:      EgressIP,
+			K8sObjRef: dualStackEgress.Name,
+		},
+		{Prefix: ipStrToPrefix(ipv6EgressIP2)}: {
+			Type:      EgressIP,
+			K8sObjRef: dualStackEgress.Name,
+		},
+	}
+	assert.Equal(t, expectedRoutes, routes)
+}
+
+func TestUpdateEgressStatusEgressIPsChange(t *testing.T) {
+	policy := generateBGPPolicy(
+		bgpPolicyName1,
+		creationTimestamp,
+		nodeLabels1,
+		179,
+		65000,
+		false,
+		false,
+		false,
+		true,
+		false,
+		nil,
+		nil,
+	)
+	c := newFakeController(t, nil, nil, true, true)
+	require.NoError(t, c.nodeInformer.GetStore().Add(node))
+	require.NoError(t, c.bgpPolicyInformer.GetStore().Add(policy))
+
+	oldEgress := generateEgress("dual-stack-egress", ipv4EgressIP1, localNodeName)
+	newEgress := oldEgress.DeepCopy()
+	newEgress.Status.EgressIPs = []string{ipv4EgressIP1, ipv6EgressIP1}
+
+	c.updateEgress(oldEgress, newEgress)
+
+	assert.Equal(t, 1, c.queue.Len())
+}
+
 // TestDeleteHandlerTombstone verifies that all delete event handlers correctly handle
 // cache.DeletedFinalStateUnknown (tombstone) objects, which are delivered by the informer
 // when a watch reconnects and the original DELETE event was missed.

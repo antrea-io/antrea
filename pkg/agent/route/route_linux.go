@@ -197,9 +197,9 @@ type Client struct {
 	// It is used for both single-stack and dual-stack Egress so that all address families
 	// sharing the same mark can be tracked together.
 	markToSNATIPs sync.Map
-	// markToSNATIPsMutex serializes read-modify-write operations on markToSNATIPs and the matching SNAT rule
-	// updates.
-	markToSNATIPsMutex sync.Mutex
+	// iptablesRestoreMutex serializes Egress SNAT rule updates with the iptables cache snapshot and restore
+	// performed by syncIPTables.
+	iptablesRestoreMutex sync.Mutex
 	// iptablesInitialized is used to notify when iptables initialization is done.
 	iptablesInitialized chan struct{}
 	proxyAll            bool
@@ -1050,8 +1050,8 @@ func (c *Client) syncIPTables(cleanupStaleJumpRules bool) error {
 
 	// Keep SNAT rule Add/Delete operations serialized with both the cache snapshot and iptables-restore below.
 	// Otherwise a rule added or deleted after the snapshot could be overwritten by a stale restore payload.
-	c.markToSNATIPsMutex.Lock()
-	defer c.markToSNATIPsMutex.Unlock()
+	c.iptablesRestoreMutex.Lock()
+	defer c.iptablesRestoreMutex.Unlock()
 
 	snatMarkToIPv4 := map[uint32]net.IP{}
 	snatMarkToIPv6 := map[uint32]net.IP{}
@@ -2265,8 +2265,8 @@ func (c *Client) AddSNATRule(snatIP net.IP, mark uint32) error {
 		protocol = iptables.ProtocolIPv6
 	}
 
-	c.markToSNATIPsMutex.Lock()
-	defer c.markToSNATIPsMutex.Unlock()
+	c.iptablesRestoreMutex.Lock()
+	defer c.iptablesRestoreMutex.Unlock()
 
 	var ips []net.IP
 	if existing, ok := c.markToSNATIPs.Load(mark); ok {
@@ -2292,8 +2292,8 @@ func (c *Client) AddSNATRule(snatIP net.IP, mark uint32) error {
 }
 
 func (c *Client) DeleteSNATRule(mark uint32) error {
-	c.markToSNATIPsMutex.Lock()
-	defer c.markToSNATIPsMutex.Unlock()
+	c.iptablesRestoreMutex.Lock()
+	defer c.iptablesRestoreMutex.Unlock()
 
 	value, ok := c.markToSNATIPs.Load(mark)
 	if !ok {

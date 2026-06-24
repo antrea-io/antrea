@@ -29,11 +29,15 @@ type EgressConfig struct {
 }
 
 func (e EgressConfig) EgressIPByFamily(isIPv6 bool) string {
-	for _, ipStr := range e.EgressIPs {
+	candidates := e.EgressIPs
+	if len(candidates) == 0 {
+		candidates = []string{e.EgressIP}
+	}
+	for _, ipStr := range candidates {
 		ip := net.ParseIP(ipStr)
 		if ip != nil && (ip.To4() == nil) == isIPv6 {
 			return ipStr
 		}
 	}
-	return e.EgressIP
+	return ""
 }

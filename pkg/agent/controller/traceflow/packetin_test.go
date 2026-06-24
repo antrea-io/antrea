@@ -203,14 +203,63 @@ func TestParseCapturedPacket(t *testing.T) {
 }
 
 func TestGetEgressIPByFamily(t *testing.T) {
-	egressConfig := types.EgressConfig{
-		EgressIP:  "192.168.100.100",
-		EgressIPs: []string{"192.168.100.100", "fd00::100"},
+	tests := []struct {
+		name         string
+		egressConfig types.EgressConfig
+		isIPv6       bool
+		expected     string
+	}{
+		{
+			name: "dual-stack IPv4",
+			egressConfig: types.EgressConfig{
+				EgressIP:  "192.168.100.100",
+				EgressIPs: []string{"192.168.100.100", "fd00::100"},
+			},
+			expected: "192.168.100.100",
+		},
+		{
+			name: "dual-stack IPv6",
+			egressConfig: types.EgressConfig{
+				EgressIP:  "192.168.100.100",
+				EgressIPs: []string{"192.168.100.100", "fd00::100"},
+			},
+			isIPv6:   true,
+			expected: "fd00::100",
+		},
+		{
+			name:         "single-stack IPv4",
+			egressConfig: types.EgressConfig{EgressIP: "192.168.100.100"},
+			expected:     "192.168.100.100",
+		},
+		{
+			name:         "IPv6 absent from single-stack IPv4",
+			egressConfig: types.EgressConfig{EgressIP: "192.168.100.100"},
+			isIPv6:       true,
+		},
+		{
+			name:         "single-stack IPv6",
+			egressConfig: types.EgressConfig{EgressIP: "fd00::100"},
+			isIPv6:       true,
+			expected:     "fd00::100",
+		},
+		{
+			name:         "IPv4 absent from single-stack IPv6",
+			egressConfig: types.EgressConfig{EgressIP: "fd00::100"},
+		},
+		{
+			name: "EgressIPs takes precedence over legacy EgressIP",
+			egressConfig: types.EgressConfig{
+				EgressIP:  "192.168.100.100",
+				EgressIPs: []string{"fd00::100"},
+			},
+		},
 	}
 
-	assert.Equal(t, "192.168.100.100", egressConfig.EgressIPByFamily(false))
-	assert.Equal(t, "fd00::100", egressConfig.EgressIPByFamily(true))
-	assert.Equal(t, "192.168.100.100", types.EgressConfig{EgressIP: "192.168.100.100"}.EgressIPByFamily(true))
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.expected, tt.egressConfig.EgressIPByFamily(tt.isIPv6))
+		})
+	}
 }
 
 func getTestPacketBytes(dstIP string) []byte {

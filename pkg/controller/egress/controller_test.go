@@ -202,6 +202,100 @@ func newController(objects, crdObjects []runtime.Object) *egressController {
 	}
 }
 
+func TestGetRequestedIPAllocations(t *testing.T) {
+	objectReference := v1.ObjectReference{Name: "egressA", Kind: "Egress"}
+	tests := []struct {
+		name     string
+		spec     v1beta1.EgressSpec
+		expected []externalippool.IPAllocation
+	}{
+		{
+			name: "single-stack",
+			spec: v1beta1.EgressSpec{
+				EgressIP:       "192.168.1.10",
+				ExternalIPPool: "pool-v4",
+			},
+			expected: []externalippool.IPAllocation{
+				{ObjectReference: objectReference, IPPoolName: "pool-v4", IP: net.ParseIP("192.168.1.10")},
+			},
+		},
+		{
+			name: "multiple IPs",
+			spec: v1beta1.EgressSpec{
+				EgressIPs:       []string{"192.168.1.10", "fd00::10"},
+				ExternalIPPools: []string{"pool-v4", "pool-v6"},
+			},
+			expected: []externalippool.IPAllocation{
+				{ObjectReference: objectReference, IPPoolName: "pool-v4", IP: net.ParseIP("192.168.1.10")},
+				{ObjectReference: objectReference, IPPoolName: "pool-v6", IP: net.ParseIP("fd00::10")},
+			},
+		},
+		{
+			name: "single-stack fields take precedence",
+			spec: v1beta1.EgressSpec{
+				EgressIP:        "192.168.1.10",
+				ExternalIPPool:  "pool-v4",
+				EgressIPs:       []string{"192.168.2.10", "fd00::10"},
+				ExternalIPPools: []string{"other-pool-v4", "pool-v6"},
+			},
+			expected: []externalippool.IPAllocation{
+				{ObjectReference: objectReference, IPPoolName: "pool-v4", IP: net.ParseIP("192.168.1.10")},
+			},
+		},
+		{
+			name: "empty and invalid IPs",
+			spec: v1beta1.EgressSpec{
+				EgressIPs:       []string{"", "invalid"},
+				ExternalIPPools: []string{"pool-v4", "pool-v6"},
+			},
+		},
+		{
+			name: "unpaired pools are ignored",
+			spec: v1beta1.EgressSpec{
+				EgressIPs:       []string{"192.168.1.10"},
+				ExternalIPPools: []string{"pool-v4", "pool-v6"},
+			},
+			expected: []externalippool.IPAllocation{
+				{ObjectReference: objectReference, IPPoolName: "pool-v4", IP: net.ParseIP("192.168.1.10")},
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			egress := &v1beta1.Egress{
+				TypeMeta:   metav1.TypeMeta{Kind: "Egress"},
+				ObjectMeta: metav1.ObjectMeta{Name: "egressA"},
+				Spec:       tt.spec,
+			}
+			assert.Equal(t, tt.expected, getRequestedIPAllocations(egress))
+		})
+	}
+}
+
+func TestEquivalentIPRepresentationsMatchAllocation(t *testing.T) {
+	stopCh := make(chan struct{})
+	defer close(stopCh)
+
+	pool := newExternalIPPool("pool-v6", "fd00::/64", "", "")
+	controller := newController(nil, []runtime.Object{pool})
+	controller.crdInformerFactory.Start(stopCh)
+	go controller.externalIPAllocator.Run(stopCh)
+	require.True(t, cache.WaitForCacheSync(stopCh, controller.externalIPAllocator.HasSynced))
+
+	ip := net.ParseIP("fd00::10")
+	alloc := &multipleIPAllocation{
+		allocs: []*ipAllocation{
+			{ip: ip, ipPool: pool.Name},
+		},
+	}
+	pools := []string{pool.Name}
+	specIPs := []string{"fd00:0:0:0:0:0:0:10"}
+
+	assert.True(t, controller.ipAllocationsValid(pools, specIPs, alloc))
+	assert.True(t, sameSpecAllocation(pools, specIPs, alloc))
+}
+
 func TestAddEgress(t *testing.T) {
 	podSucceeded := newPod("default", "succeeded-pod", map[string]string{"app": "foo"}, node1, "1.1.5.1", false)
 	podSucceeded.Status.Phase = v1.PodSucceeded
@@ -579,11 +673,11 @@ func TestRecreateExternalIPPoolWithNewRange(t *testing.T) {
 	require.True(t, controller.externalIPAllocator.IPPoolExists(eipFoo1.Name))
 	egressIPs, egress, err := controller.syncEgressIPs(egress)
 	require.NoError(t, err)
-	var getEgressIP net.IP
+	var actualEgressIP net.IP
 	if len(egressIPs) > 0 {
-		getEgressIP = egressIPs[0]
+		actualEgressIP = egressIPs[0]
 	}
-	assert.Equal(t, net.ParseIP("1.1.1.1"), getEgressIP)
+	assert.Equal(t, net.ParseIP("1.1.1.1"), actualEgressIP)
 
 	// Delete and recreate the ExternalIPPool immediately with a different IP range. We do not
 	// call syncEgressIP in-between, so the Egress controller doesn't have a chance to process
@@ -602,9 +696,9 @@ func TestRecreateExternalIPPoolWithNewRange(t *testing.T) {
 	egressIPs, _, err = controller.syncEgressIPs(egress)
 	require.NoError(t, err)
 	if len(egressIPs) > 0 {
-		getEgressIP = egressIPs[0]
+		actualEgressIP = egressIPs[0]
 	}
-	assert.Equal(t, net.ParseIP("1.1.2.1"), getEgressIP)
+	assert.Equal(t, net.ParseIP("1.1.2.1"), actualEgressIP)
 }
 
 func TestSyncEgressIP(t *testing.T) {
@@ -849,11 +943,11 @@ func TestSyncEgressIP(t *testing.T) {
 			} else {
 				assert.NoError(t, err)
 			}
-			var getEgressIP net.IP
+			var actualEgressIP net.IP
 			if len(egressIPs) > 0 {
-				getEgressIP = egressIPs[0]
+				actualEgressIP = egressIPs[0]
 			}
-			assert.Equal(t, net.ParseIP(tt.expectedEgressIP), getEgressIP)
+			assert.Equal(t, net.ParseIP(tt.expectedEgressIP), actualEgressIP)
 			checkExternalIPPoolUsed(t, controller, tt.existingExternalIPPool.Name, tt.expectedExternalIPPoolUsed)
 		})
 	}

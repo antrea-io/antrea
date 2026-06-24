@@ -1211,14 +1211,14 @@ func testDualStackEgressClientIP(t *testing.T, data *TestData) {
 			egressNodeIPv4 := controlPlaneNodeIPv4()
 			egressNodeIPv6 := controlPlaneNodeIPv6()
 
-			cmdIPv4, _ := getCommandInFakeExternalNetwork("/agnhost netexec", 24, tt.serverIPv4, tt.localIP0v4, tt.localIP1v4)
+			cmdIPv4, _ := getCommandInFakeExternalNetwork("/agnhost netexec", 24, tt.serverIPv4, tt.localIP0v4, false, tt.localIP1v4)
 			if err := NewPodBuilder(tt.fakeV4Name, data.testNamespace, agnhostImage).OnNode(egressNode).
 				WithCommand([]string{"sh", "-c", cmdIPv4}).InHostNetwork().Privileged().Create(data); err != nil {
 				t.Fatalf("Failed to create IPv4 fake server Pod: %v", err)
 			}
 			defer deletePodWrapper(t, data, data.testNamespace, tt.fakeV4Name)
 
-			cmdIPv6, _ := getCommandInFakeExternalNetwork("/agnhost netexec", 120, tt.serverIPv6, tt.localIP0v6, tt.localIP1v6)
+			cmdIPv6, _ := getCommandInFakeExternalNetwork("/agnhost netexec", 120, tt.serverIPv6, tt.localIP0v6, true, tt.localIP1v6)
 			if err := NewPodBuilder(tt.fakeV6Name, data.testNamespace, agnhostImage).OnNode(egressNode).
 				WithCommand([]string{"sh", "-c", cmdIPv6}).InHostNetwork().Privileged().Create(data); err != nil {
 				t.Fatalf("Failed to create IPv6 fake server Pod: %v", err)
@@ -1818,7 +1818,7 @@ func testDualStackEgressUpdateBandwidth(t *testing.T, data *TestData) {
 	fakeIPv4Name := "ds-bw-fake-v4"
 	fakeIPv4ServerIP := "1.1.3.20"
 	fakeIPv4LocalIP := "1.1.3.10"
-	cmdIPv4, _ := getCommandInFakeExternalNetwork("iperf3 -s", 24, fakeIPv4ServerIP, fakeIPv4LocalIP)
+	cmdIPv4, _ := getCommandInFakeExternalNetwork("iperf3 -s", 24, fakeIPv4ServerIP, fakeIPv4LocalIP, false)
 	err := NewPodBuilder(fakeIPv4Name, data.testNamespace, ToolboxImage).OnNode(egressNode).
 		WithCommand([]string{"bash", "-c", cmdIPv4}).InHostNetwork().Privileged().Create(data)
 	require.NoError(t, err, "Failed to create IPv4 iperf server Pod")
@@ -1828,7 +1828,7 @@ func testDualStackEgressUpdateBandwidth(t *testing.T, data *TestData) {
 	fakeIPv6Name := "ds-bw-fake-v6"
 	fakeIPv6ServerIP := "2021:60::aa14"
 	fakeIPv6LocalIP := "2021:60::aa0a"
-	cmdIPv6, _ := getCommandInFakeExternalNetwork("iperf3 -s", 120, fakeIPv6ServerIP, fakeIPv6LocalIP)
+	cmdIPv6, _ := getCommandInFakeExternalNetwork("iperf3 -s", 120, fakeIPv6ServerIP, fakeIPv6LocalIP, true)
 	err = NewPodBuilder(fakeIPv6Name, data.testNamespace, ToolboxImage).OnNode(egressNode).
 		WithCommand([]string{"bash", "-c", cmdIPv6}).InHostNetwork().Privileged().Create(data)
 	require.NoError(t, err, "Failed to create IPv6 iperf server Pod")

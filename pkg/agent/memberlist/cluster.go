@@ -575,7 +575,8 @@ func (c *Cluster) SelectNodeForIP(ip, externalIPPool string, filters ...func(str
 }
 
 // For dual-stack IPs, we select the closest item based on the IPv4 IP among the nodes which both ipv4pool and ipv6pool contains.
-func (c *Cluster) SelectNodeForDualStackIPs(ipv4, ipv4pool, ipv6, ipv6pool string, filters ...func(string) bool) (string, error) {
+// The IPv6 IP is not used as a hash key.
+func (c *Cluster) SelectNodeForDualStackIPs(ipv4, ipv4pool, _, ipv6pool string, filters ...func(string) bool) (string, error) {
 	c.consistentHashRWMutex.RLock()
 	defer c.consistentHashRWMutex.RUnlock()
 
