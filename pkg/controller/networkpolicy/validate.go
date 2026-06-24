@@ -1141,7 +1141,7 @@ func (g *groupValidator) deleteValidate(oldObj interface{}, userInfo authenticat
 // ValidateUpstreamCNP is the admission webhook handler for upstream
 // (policy.networking.k8s.io/v1alpha2) ClusterNetworkPolicy CREATE requests.
 // CREATE is gated on cnpCreationAllowed: if a user-created Tier at cnpAdminTierPriority already
-// exists the request is denied until that Tier is removed.
+// exists, the request is denied until that Tier is removed.
 func (v *NetworkPolicyValidator) ValidateUpstreamCNP(ar *admv1.AdmissionReview) *admv1.AdmissionResponse {
 	klog.V(2).Info("Validating ClusterNetworkPolicy")
 	var result *metav1.Status

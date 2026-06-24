@@ -213,7 +213,7 @@ func (n *NetworkPolicyController) toAntreaEgressPeerForAdminPolicyCRD(peers []v1
 }
 
 // toAntreaEgressPeerForBaselineAdminPolicyCRD processes BaselineAdminNetworkPolicyEgressPeers and yield Antrea NetworkPolicyPeers.
-// This function will be deprecated once the two policy resource types are merged to a single ClusterNetworkPolicy
+// This function will be deprecated once the two policy resource types are merged to a single ClusterNetworkPolicy.
 func (n *NetworkPolicyController) toAntreaEgressPeerForBaselineAdminPolicyCRD(peers []v1alpha1.BaselineAdminNetworkPolicyEgressPeer) (*controlplane.NetworkPolicyPeer, []*antreatypes.AddressGroup) {
 	var addressGroups []*antreatypes.AddressGroup
 	var ipBlocks []controlplane.IPBlock

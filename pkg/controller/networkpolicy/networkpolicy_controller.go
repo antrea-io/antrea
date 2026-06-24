@@ -498,6 +498,10 @@ func NewNetworkPolicyController(kubeClient clientset.Interface,
 		resyncPeriod,
 	)
 	// Register Informer and add handlers for AntreaPolicy events only if the feature is enabled.
+	// The upstream AdminNetworkPolicy/BaselineAdminNetworkPolicy and ClusterNetworkPolicy handlers
+	// (and the Tier indexer/lister wiring they depend on) are nested in this block on purpose: those
+	// APIs reuse the Antrea-native policy machinery, so their feature gates require AntreaPolicy to be
+	// enabled (enforced at controller startup).
 	if features.DefaultFeatureGate.Enabled(features.AntreaPolicy) {
 		n.serviceInformer = serviceInformer
 		n.serviceLister = serviceInformer.Lister()
@@ -1007,16 +1011,22 @@ func (n *NetworkPolicyController) Run(stopCh <-chan struct{}) {
 	// Only wait for acnpListerSynced and annpListerSynced when AntreaPolicy feature gate is enabled.
 	if features.DefaultFeatureGate.Enabled(features.AntreaPolicy) {
 		cacheSyncs = append(cacheSyncs, n.acnpListerSynced, n.annpListerSynced, n.cgListerSynced)
-	}
-	if features.DefaultFeatureGate.Enabled(features.ClusterNetworkPolicy) {
-		cacheSyncs = append(cacheSyncs, n.cnpListerSynced, n.tierListerSynced)
+		// The ClusterNetworkPolicy feature gate requires AntreaPolicy to be enabled. We wait for the
+		// Tier cache (an Antrea CRD that is always installed) so that the initial
+		// syncCNPCreationAllowed() check below observes any existing Tiers. We intentionally do NOT
+		// block on cnpListerSynced: the upstream network-policy-api ClusterNetworkPolicy CRD is not
+		// bundled with Antrea and may be absent even when the feature gate is enabled. Blocking on
+		// it would stall the entire controller and prevent all NetworkPolicies from being enforced.
+		if features.DefaultFeatureGate.Enabled(features.ClusterNetworkPolicy) {
+			cacheSyncs = append(cacheSyncs, n.tierListerSynced)
+		}
 	}
 	if !cache.WaitForNamedCacheSync(controllerName, stopCh, cacheSyncs...) {
 		return
 	}
 	// After caches are synced, set the initial value of cnpCreationAllowed based
 	// on whether a conflicting Tier already exists at cnpAdminTierPriority.
-	if features.DefaultFeatureGate.Enabled(features.ClusterNetworkPolicy) {
+	if features.DefaultFeatureGate.Enabled(features.AntreaPolicy) && features.DefaultFeatureGate.Enabled(features.ClusterNetworkPolicy) {
 		n.syncCNPCreationAllowed()
 	}
 

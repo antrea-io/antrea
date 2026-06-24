@@ -319,10 +319,11 @@ func installHandlers(c *ExtraConfig, s *genericapiserver.GenericAPIServer) {
 		s.Handler.NonGoRestfulMux.HandleFunc("/validate/tier", webhook.HandlerForValidateFunc(v.Validate))
 		s.Handler.NonGoRestfulMux.HandleFunc("/validate/acnp", webhook.HandlerForValidateFunc(v.Validate))
 		s.Handler.NonGoRestfulMux.HandleFunc("/validate/annp", webhook.HandlerForValidateFunc(v.Validate))
-		s.Handler.NonGoRestfulMux.HandleFunc("/validate/anp", webhook.HandlerForValidateFunc(v.Validate))
-		s.Handler.NonGoRestfulMux.HandleFunc("/validate/banp", webhook.HandlerForValidateFunc(v.Validate))
 		s.Handler.NonGoRestfulMux.HandleFunc("/validate/clustergroup", webhook.HandlerForValidateFunc(v.Validate))
 		s.Handler.NonGoRestfulMux.HandleFunc("/validate/group", webhook.HandlerForValidateFunc(v.Validate))
+		// Upstream ClusterNetworkPolicy reuses the Antrea-native policy machinery, so the
+		// ClusterNetworkPolicy feature gate requires AntreaPolicy to be enabled (enforced at
+		// controller startup).
 		if features.DefaultFeatureGate.Enabled(features.ClusterNetworkPolicy) {
 			s.Handler.NonGoRestfulMux.HandleFunc("/validate/cnp", webhook.HandlerForValidateFunc(v.ValidateUpstreamCNP))
 		}

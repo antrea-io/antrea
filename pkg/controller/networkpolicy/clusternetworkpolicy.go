@@ -113,7 +113,7 @@ func (n *NetworkPolicyController) syncCNPCreationAllowed() {
 	}
 	if len(tiers) > 0 {
 		klog.InfoS("A Tier already exists at cnpAdminTierPriority; upstream ClusterNetworkPolicy creation is blocked until the conflicting Tier is removed",
-			"priority", cnpAdminTierPriority)
+			"priority", cnpAdminTierPriority, "tier", tiers[0])
 		n.cnpCreationAllowed.Store(false)
 	} else {
 		n.cnpCreationAllowed.Store(true)
@@ -311,7 +311,11 @@ func (n *NetworkPolicyController) processCNPSubject(subject v1alpha2.ClusterNetw
 }
 
 func cnpActionToCRDAction(action v1alpha2.ClusterNetworkPolicyRuleAction) *antreacrd.RuleAction {
-	antreaAction := cnpActionToAntreaActionMap[action]
+	antreaAction, ok := cnpActionToAntreaActionMap[action]
+	if !ok {
+		klog.InfoS("Unknown ClusterNetworkPolicy action; defaulting to Drop", "action", action)
+		antreaAction = antreacrd.RuleActionDrop
+	}
 	return &antreaAction
 }
 

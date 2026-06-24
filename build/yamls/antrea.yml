@@ -4926,11 +4926,13 @@ data:
 
     # DEPRECATED: Enable the deprecated v1alpha1 AdminNetworkPolicy and BaselineAdminNetworkPolicy APIs from the
     # network-policy-api project. Users should migrate to the new ClusterNetworkPolicy feature.
+    # This feature requires the AntreaPolicy feature gate to be enabled.
     #  AdminNetworkPolicy: false
 
     # Enable the ClusterNetworkPolicy API from the network-policy-api project
     # (https://network-policy-api.sigs.k8s.io/api-overview)
     # This is the successor to the deprecated AdminNetworkPolicy APIs.
+    # This feature requires the AntreaPolicy feature gate to be enabled.
     #  ClusterNetworkPolicy: false
 
     # The port for the antrea-controller APIServer to serve on.
@@ -5892,7 +5894,7 @@ spec:
         kubectl.kubernetes.io/default-container: antrea-agent
         # Automatically restart Pods with a RollingUpdate if the ConfigMap changes
         # See https://helm.sh/docs/howto/charts_tips_and_tricks/#automatically-roll-deployments
-        checksum/config: 0bcba58364c715076016f12d6373881cc99b83bd831943de561caacc5df65696
+        checksum/config: db2905aed3043896f9781712af83a5ffdf472d1db08bbed2f030d2ac4df7515e
       labels:
         app: antrea
         component: antrea-agent
@@ -6138,7 +6140,7 @@ spec:
       annotations:
         # Automatically restart Pod if the ConfigMap changes
         # See https://helm.sh/docs/howto/charts_tips_and_tricks/#automatically-roll-deployments
-        checksum/config: 0bcba58364c715076016f12d6373881cc99b83bd831943de561caacc5df65696
+        checksum/config: db2905aed3043896f9781712af83a5ffdf472d1db08bbed2f030d2ac4df7515e
       labels:
         app: antrea
         component: antrea-controller

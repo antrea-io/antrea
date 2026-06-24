@@ -1447,7 +1447,7 @@ func (c *policyRuleConjunction) calculateClauses(rule *types.PolicyRule) (uint8,
 		nClause++
 		toID = nClause
 	}
-	if len(rule.Service) > 0 {
+	if rule.Service != nil {
 		nClause++
 		serviceID = nClause
 	}
@@ -1470,7 +1470,7 @@ func (c *policyRuleConjunction) calculateClauses(rule *types.PolicyRule) (uint8,
 		}
 		c.toClause = c.newClause(toID, nClause, ruleTable, defaultTable)
 	}
-	if len(rule.Service) > 0 {
+	if rule.Service != nil {
 		c.serviceClause = c.newClause(serviceID, nClause, ruleTable, nil)
 	}
 	return nClause, ruleTable, dropTable
