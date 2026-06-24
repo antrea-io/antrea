@@ -246,6 +246,64 @@ func TestEgressControllerValidateDualStackEgressIPsCleanupWithDeletedPool(t *tes
 	assert.Equal(t, &admv1.AdmissionResponse{Allowed: true}, gotResponse)
 }
 
+func TestEgressControllerValidateDualStackEgressUnchangedPoolsWithDeletedPool(t *testing.T) {
+	oldEgress := newEgress("egress-a", "", "", nil, nil, nil)
+	oldEgress.Spec.EgressIPs = []string{"10.10.10.1", "fd00::1"}
+	oldEgress.Spec.ExternalIPPools = []string{"pool-v4", "pool-v6"}
+	newEgress := oldEgress.DeepCopy()
+	newEgress.Spec.AppliedTo.PodSelector = &metav1.LabelSelector{
+		MatchLabels: map[string]string{"app": "updated"},
+	}
+
+	stopCh := make(chan struct{})
+	defer close(stopCh)
+	controller := newController(nil, nil)
+	controller.informerFactory.Start(stopCh)
+	controller.crdInformerFactory.Start(stopCh)
+	controller.informerFactory.WaitForCacheSync(stopCh)
+	controller.crdInformerFactory.WaitForCacheSync(stopCh)
+	go controller.externalIPAllocator.Run(stopCh)
+	require.True(t, cache.WaitForCacheSync(stopCh, controller.externalIPAllocator.HasSynced))
+	controller.externalIPAllocator.RestoreIPAllocations(nil)
+
+	gotResponse := controller.ValidateEgress(&admv1.AdmissionReview{
+		Request: &admv1.AdmissionRequest{
+			Name:      newEgress.Name,
+			Operation: admv1.Update,
+			OldObject: runtime.RawExtension{Raw: marshal(oldEgress)},
+			Object:    runtime.RawExtension{Raw: marshal(newEgress)},
+		},
+	})
+
+	assert.Equal(t, &admv1.AdmissionResponse{Allowed: true}, gotResponse)
+}
+
+func TestEgressControllerValidateDualStackPoolOnlyEgressWithMissingPools(t *testing.T) {
+	egress := newEgress("egress-a", "", "", nil, nil, nil)
+	egress.Spec.ExternalIPPools = []string{"pool-v4", "pool-v6"}
+
+	stopCh := make(chan struct{})
+	defer close(stopCh)
+	controller := newController(nil, nil)
+	controller.informerFactory.Start(stopCh)
+	controller.crdInformerFactory.Start(stopCh)
+	controller.informerFactory.WaitForCacheSync(stopCh)
+	controller.crdInformerFactory.WaitForCacheSync(stopCh)
+	go controller.externalIPAllocator.Run(stopCh)
+	require.True(t, cache.WaitForCacheSync(stopCh, controller.externalIPAllocator.HasSynced))
+	controller.externalIPAllocator.RestoreIPAllocations(nil)
+
+	gotResponse := controller.ValidateEgress(&admv1.AdmissionReview{
+		Request: &admv1.AdmissionRequest{
+			Name:      egress.Name,
+			Operation: admv1.Create,
+			Object:    runtime.RawExtension{Raw: marshal(egress)},
+		},
+	})
+
+	assert.Equal(t, &admv1.AdmissionResponse{Allowed: true}, gotResponse)
+}
+
 func TestEgressControllerValidateDualStackEgressPartialOverlap(t *testing.T) {
 	newDualStackEgress := func(name string, egressIPs ...string) *crdv1beta1.Egress {
 		egress := newEgress(name, "", "", nil, nil, nil)
@@ -373,8 +431,10 @@ func TestEgressControllerValidateDualStackEgressValidationBranches(t *testing.T)
 			expectedMessage: "spec.egressIPs[0] must be IPv4 but got fd00::1 (IPv6)",
 		},
 		{
-			name:            "ExternalIPPools must be ordered as IPv4 then IPv6",
-			egress:          newDualStackEgress("egress-a", nil, []string{"pool-v6", "pool-v4"}),
+			name: "ExternalIPPools must be ordered as IPv4 then IPv6 when EgressIPs are specified",
+			egress: newDualStackEgress("egress-a",
+				[]string{"10.10.10.1", "fd00::1"},
+				[]string{"pool-v6", "pool-v4"}),
 			expectedMessage: "expected IPv4 pool but pool-v6 is not",
 		},
 		{

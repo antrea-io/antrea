@@ -57,22 +57,30 @@ func (c *EgressController) validateDualStackEgress(egress *crdv1beta1.Egress) (b
 			return false, msg
 		}
 	}
-	for i, poolName := range egress.Spec.ExternalIPPools {
-		isIPv6 := (i%2 == 1)
-		if ok, msg := c.isCorrectFamilyPool(poolName, isIPv6); !ok {
-			return false, msg
-		}
-	}
 	seenPools := make(map[string]struct{}, lenPools)
 	for i, poolName := range egress.Spec.ExternalIPPools {
+		if poolName == "" {
+			return false, "empty pool name"
+		}
 		if _, exists := seenPools[poolName]; exists {
 			return false, fmt.Sprintf("spec.externalIPPools[%d] duplicates ExternalIPPool %s", i, poolName)
 		}
 		seenPools[poolName] = struct{}{}
 	}
 
-	// When both IPs and pools are specified, validate each IP belongs to its corresponding pool.
+	// Pool-only dual-stack Egress follows the same auto-allocation behavior as
+	// single-stack Egress: it can be created before the referenced ExternalIPPools
+	// exist, and the controller will validate the pools later when allocating IPs.
+	// Once explicit EgressIPs are present, admission must validate pool existence,
+	// pool family order, and IP membership because the user is binding concrete IPs
+	// to concrete pools.
 	if lenIPs > 0 && lenPools > 0 {
+		for i, poolName := range egress.Spec.ExternalIPPools {
+			isIPv6 := (i%2 == 1)
+			if ok, msg := c.isCorrectFamilyPool(poolName, isIPv6); !ok {
+				return false, msg
+			}
+		}
 		for i := 0; i < lenIPs; i++ {
 			ipStr := egress.Spec.EgressIPs[i]
 			poolName := egress.Spec.ExternalIPPools[i]
@@ -230,11 +238,17 @@ func (c *EgressController) ValidateEgress(review *admv1.AdmissionReview) *admv1.
 			if newEgress.Spec.EgressIP != "" || newEgress.Spec.ExternalIPPool != "" {
 				return false, "{spec.egressIPs, spec.externalIPPools} and {spec.egressIP, spec.externalIPPool} are mutually exclusive"
 			}
+			// Allow updates that do not change the dual-stack EgressIP / ExternalIPPool fields.
+			// Referenced ExternalIPPools may have been deleted already, and in that case validating
+			// their family or membership again would make unrelated Egress spec fields impossible
+			// to edit. This mirrors the single-stack shortcut below.
+			dualStackEgressIPFieldsUnchanged := slices.Equal(oldEgress.Spec.EgressIPs, newEgress.Spec.EgressIPs) &&
+				slices.Equal(oldEgress.Spec.ExternalIPPools, newEgress.Spec.ExternalIPPools)
 			// Allow the controller to clear allocated dual-stack EgressIPs after a referenced ExternalIPPool is deleted.
 			// This aligns with the single-stack cleanup path, which skips pool validation when spec.egressIP is empty.
 			dualStackEgressIPsCleanup := len(oldEgress.Spec.EgressIPs) > 0 && len(newEgress.Spec.EgressIPs) == 0 &&
 				slices.Equal(oldEgress.Spec.ExternalIPPools, newEgress.Spec.ExternalIPPools)
-			if !dualStackEgressIPsCleanup {
+			if !dualStackEgressIPFieldsUnchanged && !dualStackEgressIPsCleanup {
 				if allowed, msg := c.validateDualStackEgress(newEgress); !allowed {
 					return false, msg
 				}

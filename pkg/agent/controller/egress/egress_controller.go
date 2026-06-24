@@ -800,6 +800,20 @@ func consistentDualStackMark(ipStates []*egressIPState) (uint32, error) {
 	return sharedMark, nil
 }
 
+// allEgressIPsLocal returns true only when every effective Egress IP is present
+// on this Node according to the local IP detector.
+func (c *EgressController) allEgressIPsLocal(egressIPs []string) bool {
+	if len(egressIPs) == 0 {
+		return false
+	}
+	for _, egressIP := range egressIPs {
+		if !c.localIPDetector.IsLocalIP(egressIP) {
+			return false
+		}
+	}
+	return true
+}
+
 // realizeDualStackEgressIPs realizes a pair of dual-stack Egress IPs under a single shared mark.
 // Compared with calling realizeEgressIP twice, this function is collision-safe:
 //   - The mark is allocated once and mirrored to both ipStates.
@@ -815,14 +829,12 @@ func (c *EgressController) realizeDualStackEgressIPs(egressName string, egressIP
 		return 0, fmt.Errorf("expected exactly %d dual-stack IPs, got %d", effectiveDualStackCount, lenIPs)
 	}
 
-	// Verify all IPs have consistent locality.
-	isLocalIP := c.localIPDetector.IsLocalIP(egressIPs[0])
-	for i := 1; i < lenIPs; i++ {
-		if c.localIPDetector.IsLocalIP(egressIPs[i]) != isLocalIP {
-			return 0, fmt.Errorf("dual-stack IPs have inconsistent locality: %s isLocal=%v, %s isLocal=%v",
-				egressIPs[0], isLocalIP, egressIPs[i], c.localIPDetector.IsLocalIP(egressIPs[i]))
-		}
-	}
+	// Netlink reports IPv4 and IPv6 address changes independently, so a dual-stack
+	// Egress can temporarily have mixed locality while the local IP detector is
+	// catching up. Treat that transient state as non-local instead of returning an
+	// error and forcing the workqueue into backoff; the next address update will
+	// enqueue the Egress again and install local datapath state once both IPs are local.
+	isLocalIP := c.allEgressIPsLocal(egressIPs)
 
 	c.egressIPStatesMutex.Lock()
 	defer c.egressIPStatesMutex.Unlock()
@@ -939,6 +951,7 @@ func (c *EgressController) realizeDualStackEgressIPs(egressName string, egressIP
 			for _, s := range ipStates {
 				s.mark = 0
 			}
+			sharedMark = 0
 		}
 	}
 	return sharedMark, nil
@@ -1589,11 +1602,8 @@ func (c *EgressController) syncEgress(egressName string) error {
 }
 
 func (c *EgressController) updateDualStackEgressStatus(egress *crdv1b1.Egress, egressIPs []string, scheduleErr error) error {
-	isLocal := false
 	lenIPs := len(egressIPs)
-	if lenIPs > 0 {
-		isLocal = c.localIPDetector.IsLocalIP(egressIPs[0])
-	}
+	isLocal := c.allEgressIPsLocal(egressIPs)
 
 	desiredStatus := &crdv1b1.EgressStatus{}
 	if isLocal {
