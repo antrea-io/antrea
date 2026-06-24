@@ -720,7 +720,18 @@ func (n *NetworkPolicyController) processNetworkPolicy(np *networkingv1.NetworkP
 	enableLogging := false
 	namespace, err := n.namespaceLister.Get(np.Namespace)
 	if err == nil {
-		enableLogging, _ = strconv.ParseBool(namespace.Annotations[EnableNPLoggingAnnotationKey])
+		// Only parse the annotation when it is present: an absent annotation is the common case and
+		// must not be reported as an error, while a present but invalid value should be surfaced
+		// instead of being silently ignored.
+		if value, exists := namespace.Annotations[EnableNPLoggingAnnotationKey]; exists {
+			parsed, parseErr := strconv.ParseBool(value)
+			if parseErr != nil {
+				klog.ErrorS(parseErr, "The Namespace's enable-logging annotation was invalid, NetworkPolicy logging will not be enabled",
+					"Namespace", np.Namespace, "annotation", EnableNPLoggingAnnotationKey, "value", value)
+			} else {
+				enableLogging = parsed
+			}
+		}
 	}
 	var ingressRuleExists, egressRuleExists bool
 	// Compute NetworkPolicyRule for Ingress Rule.
