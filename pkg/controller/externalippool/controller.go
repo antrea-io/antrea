@@ -370,10 +370,10 @@ func (c *ExternalIPPoolController) IPPoolExists(pool string) bool {
 func (c *ExternalIPPoolController) IPPoolIsIPv6(poolName string) (bool, error) {
 	pool, err := c.externalIPPoolLister.Get(poolName)
 	if err != nil {
-		return false, fmt.Errorf("ExternalIPPool %s not found: %w", poolName, err)
+		return false, fmt.Errorf("externalIPPool %s not found: %w", poolName, err)
 	}
 	if len(pool.Spec.IPRanges) == 0 {
-		return false, fmt.Errorf("ExternalIPPool %s has no IP ranges", poolName)
+		return false, fmt.Errorf("externalIPPool %s has no IP ranges", poolName)
 	}
 	var isIPv6 bool
 	var poolIP net.IP
@@ -394,7 +394,7 @@ func (c *ExternalIPPoolController) IPPoolIsIPv6(poolName string) (bool, error) {
 		if i == 0 {
 			isIPv6 = (poolIP.To4() == nil)
 		} else if isIPv6 != (poolIP.To4() == nil) {
-			return false, fmt.Errorf("ExternalIPPool %s contains mixed IPv4 and IPv6 ranges, which is not supported", poolName)
+			return false, fmt.Errorf("externalIPPool %s contains mixed IPv4 and IPv6 ranges, which is not supported", poolName)
 		}
 	}
 	return isIPv6, nil
