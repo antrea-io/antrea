@@ -2945,6 +2945,7 @@ func TestValidateTierCNPPriority(t *testing.T) {
 func TestValidateCNP(t *testing.T) {
 	tests := []struct {
 		name               string
+		cnpGateEnabled     bool
 		cnpCreationAllowed bool
 		operation          admv1.Operation
 		expectedAllowed    bool
@@ -2952,12 +2953,14 @@ func TestValidateCNP(t *testing.T) {
 	}{
 		{
 			name:               "create-cnp-allowed",
+			cnpGateEnabled:     true,
 			cnpCreationAllowed: true,
 			operation:          admv1.Create,
 			expectedAllowed:    true,
 		},
 		{
 			name:               "create-cnp-blocked-due-to-tier-conflict",
+			cnpGateEnabled:     true,
 			cnpCreationAllowed: false,
 			operation:          admv1.Create,
 			expectedAllowed:    false,
@@ -2969,14 +2972,23 @@ func TestValidateCNP(t *testing.T) {
 		},
 		{
 			name:               "update-cnp-always-allowed",
+			cnpGateEnabled:     true,
 			cnpCreationAllowed: false,
 			operation:          admv1.Update,
 			expectedAllowed:    true,
+		},
+		{
+			name:            "create-cnp-rejected-when-feature-gate-disabled",
+			cnpGateEnabled:  false,
+			operation:       admv1.Create,
+			expectedAllowed: false,
+			expectedReason:  "ClusterNetworkPolicy is not supported: the ClusterNetworkPolicy feature gate is not enabled",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			featuregatetesting.SetFeatureGateDuringTest(t, features.DefaultFeatureGate, features.ClusterNetworkPolicy, tt.cnpGateEnabled)
 			_, controller := newController(nil, nil)
 			controller.cnpCreationAllowed.Store(tt.cnpCreationAllowed)
 			validator := NewNetworkPolicyValidator(controller.NetworkPolicyController)

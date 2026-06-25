@@ -23,6 +23,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/klog/v2"
+	"k8s.io/utils/ptr"
 	"sigs.k8s.io/network-policy-api/apis/v1alpha2"
 
 	"antrea.io/antrea/v2/pkg/apis/controlplane"
@@ -165,19 +166,16 @@ func appendCNPPortToServices(services *[]controlplane.Service, p *v1alpha2.Port,
 		return
 	}
 	if p.Range != nil {
-		portStart := intstr.FromInt32(p.Range.Start)
-		end := p.Range.End
 		*services = append(*services, controlplane.Service{
 			Protocol: toAntreaProtocol(&proto),
-			Port:     &portStart,
-			EndPort:  &end,
+			Port:     ptr.To(intstr.FromInt32(p.Range.Start)),
+			EndPort:  &p.Range.End,
 		})
 		return
 	}
-	port := intstr.FromInt32(p.Number)
 	*services = append(*services, controlplane.Service{
 		Protocol: toAntreaProtocol(&proto),
-		Port:     &port,
+		Port:     ptr.To(intstr.FromInt32(p.Number)),
 	})
 }
 
@@ -189,10 +187,9 @@ func toAntreaServicesForCNPProtocols(protocols []v1alpha2.ClusterNetworkPolicyPr
 	for _, cnpProto := range protocols {
 		switch {
 		case cnpProto.DestinationNamedPort != "":
-			port := intstr.FromString(cnpProto.DestinationNamedPort)
 			// Leave Protocol unset so the agent matches on port name only.
 			antreaServices = append(antreaServices, controlplane.Service{
-				Port: &port,
+				Port: ptr.To(intstr.FromString(cnpProto.DestinationNamedPort)),
 			})
 		case cnpProto.TCP != nil:
 			appendCNPPortToServices(&antreaServices, cnpProto.TCP.DestinationPort, v1.ProtocolTCP)
