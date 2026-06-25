@@ -154,7 +154,7 @@ func TestRESTWatch(t *testing.T) {
 			name:          "nodeName selecting nothing",
 			fieldSelector: fields.OneTermEqualSelector("nodeName", "foo"),
 			expectedEvents: []watch.Event{
-				{Type: watch.Bookmark, Object: &controlplane.AppliedToGroup{}},
+				{Type: watch.Bookmark, Object: &controlplane.AppliedToGroup{ObjectMeta: v1.ObjectMeta{ResourceVersion: "1"}}},
 			},
 		},
 		{
@@ -162,7 +162,7 @@ func TestRESTWatch(t *testing.T) {
 			fieldSelector: fields.OneTermEqualSelector("nodeName", "node1"),
 			expectedEvents: []watch.Event{
 				{Type: watch.Added, Object: &controlplane.AppliedToGroup{ObjectMeta: v1.ObjectMeta{Name: "appliedToGroup1"}}},
-				{Type: watch.Bookmark, Object: &controlplane.AppliedToGroup{}},
+				{Type: watch.Bookmark, Object: &controlplane.AppliedToGroup{ObjectMeta: v1.ObjectMeta{ResourceVersion: "1"}}},
 			},
 		},
 		{
@@ -170,7 +170,7 @@ func TestRESTWatch(t *testing.T) {
 			fieldSelector: nil,
 			expectedEvents: []watch.Event{
 				{Type: watch.Added, Object: &controlplane.AppliedToGroup{ObjectMeta: v1.ObjectMeta{Name: "appliedToGroup1"}}},
-				{Type: watch.Bookmark, Object: &controlplane.AppliedToGroup{}},
+				{Type: watch.Bookmark, Object: &controlplane.AppliedToGroup{ObjectMeta: v1.ObjectMeta{ResourceVersion: "1"}}},
 			},
 		},
 	}

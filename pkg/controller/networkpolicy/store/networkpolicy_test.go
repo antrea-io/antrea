@@ -90,7 +90,7 @@ func TestWatchNetworkPolicyEvent(t *testing.T) {
 				store.Update(policyV2)
 			},
 			expected: []watch.Event{
-				{Type: watch.Bookmark, Object: &controlplane.NetworkPolicy{}},
+				{Type: watch.Bookmark, Object: &controlplane.NetworkPolicy{ObjectMeta: metav1.ObjectMeta{ResourceVersion: "0"}}},
 				{Type: watch.Added, Object: &controlplane.NetworkPolicy{
 					ObjectMeta:      metav1.ObjectMeta{Name: "bar"},
 					SourceRef:       &npRef,
@@ -119,7 +119,7 @@ func TestWatchNetworkPolicyEvent(t *testing.T) {
 				store.Update(policyV1)
 			},
 			expected: []watch.Event{
-				{Type: watch.Bookmark, Object: &controlplane.NetworkPolicy{}},
+				{Type: watch.Bookmark, Object: &controlplane.NetworkPolicy{ObjectMeta: metav1.ObjectMeta{ResourceVersion: "0"}}},
 				{Type: watch.Added, Object: &controlplane.NetworkPolicy{
 					ObjectMeta:      metav1.ObjectMeta{Name: "bar"},
 					SourceRef:       &npRef,
