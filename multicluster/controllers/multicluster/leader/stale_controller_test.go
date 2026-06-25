@@ -28,6 +28,7 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
+	"sigs.k8s.io/controller-runtime/pkg/manager"
 
 	mcv1alpha1 "antrea.io/antrea/v2/multicluster/apis/multicluster/v1alpha1"
 	mcv1alpha2 "antrea.io/antrea/v2/multicluster/apis/multicluster/v1alpha2"
@@ -240,5 +241,37 @@ func TestStaleController_CleanUpMemberClusterAnnounces(t *testing.T) {
 
 			assert.Equal(t, tt.exceptMemberClusterAnnounceNumber, len(memberClusterAnnounceList.Items))
 		})
+	}
+}
+
+// TestStart verifies that Start implements the controller-runtime Runnable contract: it blocks
+// until the context is canceled and then returns nil. This guarantees the controller can be
+// added to a Manager via mgr.Add, which only starts Runnables after the cache is synced
+// (see antrea-io/antrea#6152).
+func TestStart(t *testing.T) {
+	// Compile-time check that StaleResCleanupController satisfies manager.Runnable.
+	var _ manager.Runnable = &StaleResCleanupController{}
+
+	fakeClient := fake.NewClientBuilder().WithScheme(common.TestScheme).Build()
+	c := NewStaleResCleanupController(fakeClient, common.TestScheme)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan error, 1)
+	go func() {
+		done <- c.Start(ctx)
+	}()
+
+	select {
+	case err := <-done:
+		t.Fatalf("Start should block until ctx is canceled, but it returned early with err = %v", err)
+	case <-time.After(200 * time.Millisecond):
+	}
+
+	cancel()
+	select {
+	case err := <-done:
+		require.NoError(t, err, "Start should return nil after ctx is canceled")
+	case <-time.After(2 * time.Second):
+		t.Fatalf("Start did not return after ctx was canceled")
 	}
 }

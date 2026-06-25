@@ -587,7 +587,7 @@ func TestStaleControllerNoRaceWithResourceImportReconciler(t *testing.T) {
 	go mgr.Run(stopCh)
 	// The staleController should not erroneously delete any LabelIdentities while the reconciliation
 	// of newly added ResourceImports are in-flight.
-	go c.Run(stopCh)
+	go c.Start(wait.ContextForChannel(stopCh))
 	time.Sleep(1 * time.Second)
 	actLabelIdentities := &mcv1alpha1.LabelIdentityList{}
 	err := fakeClient.List(ctx, actLabelIdentities)

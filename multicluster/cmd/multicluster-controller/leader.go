@@ -123,7 +123,12 @@ func runLeader(o *Options) error {
 	if err = staleController.SetupWithManager(mgr); err != nil {
 		return fmt.Errorf("error creating StaleResCleanupController: %v", err)
 	}
-	go staleController.Run(stopCh)
+	// Add the StaleResCleanupController as a Runnable to the Manager so it is started
+	// only after the cache has been synced, avoiding a spurious "the cache is not started"
+	// error on startup (see antrea-io/antrea#6152).
+	if err = mgr.Add(staleController); err != nil {
+		return fmt.Errorf("error adding StaleResCleanupController to Manager: %v", err)
+	}
 
 	klog.InfoS("Leader MC Controller Starting Manager")
 	if err := mgr.Start(ctrl.SetupSignalHandler()); err != nil {

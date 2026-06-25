@@ -24,7 +24,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/util/retry"
 	"k8s.io/klog/v2"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -361,12 +360,14 @@ func (c *StaleResCleanupController) cleanUpClusterInfoResourceExports(ctx contex
 	return nil
 }
 
-// Run starts the StaleResCleanupController and blocks until stopCh is closed.
-func (c *StaleResCleanupController) Run(stopCh <-chan struct{}) {
+// Start starts the StaleResCleanupController and blocks until ctx is canceled. It implements
+// the controller-runtime Runnable interface, so the controller can be added to the Manager via
+// mgr.Add. The Manager only starts Runnables after the cache has been synced, which guarantees
+// that the first call to CleanUp won't fail with "the cache is not started, can not read objects"
+// (see antrea-io/antrea#6152).
+func (c *StaleResCleanupController) Start(ctx context.Context) error {
 	klog.InfoS("Starting StaleResCleanupController")
 	defer klog.InfoS("Shutting down StaleResCleanupController")
-
-	ctx := wait.ContextForChannel(stopCh)
 
 	go func() {
 		retry.OnError(common.CleanUpRetry, func(err error) bool { return true },
@@ -375,15 +376,23 @@ func (c *StaleResCleanupController) Run(stopCh <-chan struct{}) {
 			})
 	}()
 
-	for range c.commonAreaCreationCh {
-		retry.OnError(common.CleanUpRetry, func(err error) bool { return true },
-			func() error {
-				if err := c.cleanUpStaleResources(ctx); err != nil {
-					klog.ErrorS(err, "Failed to clean up stale resources after a ClusterSet is created, will retry later")
-					return err
-				}
+	for {
+		select {
+		case <-ctx.Done():
+			return nil
+		case _, ok := <-c.commonAreaCreationCh:
+			if !ok {
 				return nil
-			})
+			}
+			retry.OnError(common.CleanUpRetry, func(err error) bool { return true },
+				func() error {
+					if err := c.cleanUpStaleResources(ctx); err != nil {
+						klog.ErrorS(err, "Failed to clean up stale resources after a ClusterSet is created, will retry later")
+						return err
+					}
+					return nil
+				})
+		}
 	}
 }
 
