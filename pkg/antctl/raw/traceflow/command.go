@@ -53,6 +53,7 @@ var (
 		droppedOnly bool
 		timeout     time.Duration
 		nowait      bool
+		tree        bool
 	}{}
 	getClients = getK8sClient
 )
@@ -113,6 +114,7 @@ func init() {
 	Command.Flags().BoolVarP(&option.liveTraffic, "live-traffic", "L", false, "if set, the Traceflow will trace the first packet of the matched live traffic flow")
 	Command.Flags().BoolVarP(&option.droppedOnly, "dropped-only", "", false, "if set, capture only the dropped packet in a live-traffic Traceflow")
 	Command.Flags().BoolVarP(&option.nowait, "nowait", "", false, "if set, command returns without retrieving results")
+	Command.Flags().BoolVarP(&option.tree, "tree", "", false, "display traceflow in a hierarchical tree format")
 }
 
 func getK8sClient(cmd *cobra.Command) (kubernetes.Interface, antrea.Interface, error) {
@@ -202,6 +204,13 @@ func runE(cmd *cobra.Command, _ []string) error {
 		}
 	} else if err != nil {
 		return fmt.Errorf("error when retrieving Traceflow: %w", err)
+	}
+
+	if option.tree {
+		if err := renderTree(res, cmd.OutOrStdout()); err != nil {
+			return fmt.Errorf("error when outputting result in tree format: %w", err)
+		}
+		return nil
 	}
 
 	if err := output(res, cmd.OutOrStdout()); err != nil {
