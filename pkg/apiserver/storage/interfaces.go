@@ -17,6 +17,7 @@ package storage
 import (
 	"context"
 
+	metainternalversion "k8s.io/apimachinery/pkg/apis/meta/internalversion"
 	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/watch"
@@ -53,6 +54,34 @@ type GenEventFunc func(key string, prevObj, obj interface{}, resourceVersion uin
 
 // SelectFunc checks whether an object match the provided selectors.
 type SelectFunc func(selectors *Selectors, key string, obj interface{}) bool
+
+type initialEventsEndBookmarkAnnotationKey struct{}
+
+// WithInitialEventsEndBookmarkAnnotation returns a Context that requests annotation of Antrea's
+// end-of-initial-events bookmark for Kubernetes watch-list clients.
+func WithInitialEventsEndBookmarkAnnotation(ctx context.Context) context.Context {
+	return context.WithValue(ctx, initialEventsEndBookmarkAnnotationKey{}, true)
+}
+
+// WithInitialEventsEndBookmarkAnnotationFromListOptions returns a Context that requests annotation
+// of Antrea's end-of-initial-events bookmark when the ListOptions describe a watch-list request.
+func WithInitialEventsEndBookmarkAnnotationFromListOptions(ctx context.Context, options *metainternalversion.ListOptions) context.Context {
+	if shouldAnnotateInitialEventsEndBookmark(options) {
+		return WithInitialEventsEndBookmarkAnnotation(ctx)
+	}
+	return ctx
+}
+
+// ShouldAnnotateInitialEventsEndBookmarkFromContext reports whether the Context requests the
+// Kubernetes watch-list end-of-initial-events annotation on Antrea's init bookmark.
+func ShouldAnnotateInitialEventsEndBookmarkFromContext(ctx context.Context) bool {
+	annotate, _ := ctx.Value(initialEventsEndBookmarkAnnotationKey{}).(bool)
+	return annotate
+}
+
+func shouldAnnotateInitialEventsEndBookmark(options *metainternalversion.ListOptions) bool {
+	return options != nil && options.SendInitialEvents != nil && *options.SendInitialEvents && options.AllowWatchBookmarks
+}
 
 // Interface offers a common storage interface for runtime.Object.
 // It's provided for Network Policy controller to store the translated Network Policy resources, then Antrea apiserver can
