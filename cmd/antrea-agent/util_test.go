@@ -109,12 +109,22 @@ func TestParsePortRange(t *testing.T) {
 			portRangeStr: "6100-6100",
 			expectedErr:  "start port must be smaller than end port: 6100-6100",
 		},
+		{
+			name:         "port range start is out of bounds",
+			portRangeStr: "0-6100",
+			expectedErr:  "start port is invalid",
+		},
+		{
+			name:         "port range end is out of bounds",
+			portRangeStr: "6100-70000",
+			expectedErr:  "end port is invalid",
+		},
 	}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			start, end, err := parsePortRange(tc.portRangeStr)
 			if tc.expectedErr != "" {
-				assert.EqualError(t, err, tc.expectedErr)
+				assert.ErrorContains(t, err, tc.expectedErr)
 			} else {
 				assert.NoError(t, err)
 			}
