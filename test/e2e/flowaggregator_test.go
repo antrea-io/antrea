@@ -40,6 +40,7 @@ import (
 	"k8s.io/utils/ptr"
 
 	"antrea.io/antrea/v2/pkg/agent/config"
+	nplTypes "antrea.io/antrea/v2/pkg/agent/nodeportlocal/types"
 	"antrea.io/antrea/v2/pkg/antctl"
 	"antrea.io/antrea/v2/pkg/antctl/runtime"
 	secv1beta1 "antrea.io/antrea/v2/pkg/apis/crd/v1beta1"
@@ -2097,6 +2098,45 @@ func createExternalToPodConnection(t *testing.T, data *TestData, service *corev1
 	return srcIP, sourcePort
 }
 
+// createNPLConnection dials nodeIP:nplPort directly (bypassing Kubernetes service proxy) from a
+// fake external host-network Pod, and returns the source IP and source port of the connection.
+// It follows the same approach as createExternalToPodConnection so the source IP is an external
+// address that the flow exporter will classify as FROM_EXTERNAL.
+func createNPLConnection(t *testing.T, data *TestData, nodeIndex int, nodeIP string, nplPort int, isIPv6 bool) (string, string) {
+	t.Helper()
+
+	tag := randSeq(5)
+	subnet := randExternalSubnet(isIPv6)
+	srcAddr := subnet.Addr().Next()
+	localAddr := srcAddr.Next()
+	srcIP, localIP := srcAddr.String(), localAddr.String()
+	prefixLen := subnet.Bits()
+
+	setupCmd, netns := getCommandInFakeExternalNetwork("sleep 3600", prefixLen, srcIP, localIP, isIPv6)
+	podName := fmt.Sprintf("npl-client-%s-%d", tag, nodeIndex)
+	err := NewPodBuilder(podName, data.testNamespace, ToolboxImage).
+		OnNode(nodeName(nodeIndex)).
+		WithCommand([]string{"sh", "-c", setupCmd}).
+		InHostNetwork().
+		Privileged().
+		Create(data)
+	require.NoErrorf(t, err, "Failed to create fake NPL client Pod %s", podName)
+	t.Cleanup(func() {
+		deletePodWrapper(t, data, data.testNamespace, podName)
+	})
+	require.NoErrorf(t, data.podWaitForRunning(defaultTimeout, podName, data.testNamespace),
+		"Fake NPL client Pod %s did not become Running", podName)
+
+	hostAndPort := net.JoinHostPort(nodeIP, strconv.Itoa(nplPort))
+	curlCmd := fmt.Sprintf("ip netns exec %s curl -sS -o /dev/null -w '%%{local_port}' --connect-timeout 5 --retry 3 --retry-connrefused http://%s",
+		netns, hostAndPort)
+	stdout, stderr, err := data.RunCommandFromPod(data.testNamespace, podName, "toolbox", []string{"sh", "-c", curlCmd})
+	require.NoErrorf(t, err, "curl from fake NPL client Pod %s failed; stdout: %s, stderr: %s", podName, stdout, stderr)
+
+	sourcePort := strings.TrimSpace(stdout)
+	return srcIP, sourcePort
+}
+
 func testExternalToPodFlows(t *testing.T, data *TestData, isIPv6 bool) {
 	destinationNodeIndex := 1
 	nodeName := nodeName(destinationNodeIndex)
@@ -2168,6 +2208,74 @@ func testExternalToPodFlows(t *testing.T, data *TestData, isIPv6 bool) {
 		for _, record := range records {
 			assert.Contains(t, record, nginxPodName, "Record should include destination Pod name")
 			assert.Contains(t, record, svcLocalName, "Record should include Service name for ExternalTrafficPolicy Local flow")
+			assertIPFIXRecordProxySnatUnset(t, record)
+		}
+	})
+
+	// NodePortLocal: exported flows should carry the real source IP (no SNAT), the destination
+	// pod name, and the NPL-backed Service name in DestinationServicePortName.
+	t.Run("NodePortLocal", func(t *testing.T) {
+		skipIfNodePortLocalDisabled(t)
+		agentConf, nplConfErr := data.GetAntreaAgentConf()
+		if nplConfErr != nil {
+			t.Fatalf("Failed to get Antrea agent config: %v", nplConfErr)
+		}
+		if !agentConf.NodePortLocal.Enable {
+			t.Skip("Skipping test because NodePortLocal is not enabled in the Antrea Agent config")
+		}
+		nplSvcName := "npl-service"
+		if isIPv6 {
+			nplSvcName += "v6"
+		}
+		nplAnnotations := map[string]string{
+			"nodeportlocal.antrea.io/enabled": "true",
+		}
+		_, err := data.CreateServiceWithAnnotations(nplSvcName, data.testNamespace, 80, containerPort, corev1.ProtocolTCP, map[string]string{"app": "nginx"}, false, false, corev1.ServiceTypeClusterIP, &ipFamily, nplAnnotations)
+		require.NoError(t, err, "Failed to create NPL service %s", nplSvcName)
+		t.Cleanup(func() {
+			_ = data.clientset.CoreV1().Services(data.testNamespace).Delete(context.Background(), nplSvcName, metav1.DeleteOptions{})
+		})
+
+		// Wait for the NPL annotation to appear on the nginx Pod on the destination node,
+		// then parse nodeIP and nplPort from the annotation.
+		r := require.New(t)
+		nplAnns, _ := getNPLAnnotations(t, data, r, nginxPodName, func(anns []nplTypes.NPLAnnotation) bool {
+			return len(anns) > 0
+		})
+		require.NotEmpty(t, nplAnns, "NPL annotation not found on Pod %s", nginxPodName)
+
+		// Pick the annotation matching the desired IP family.
+		var nplNodeIP string
+		var nplNodePort int
+		for _, ann := range nplAnns {
+			if isIPv6 && ann.IPFamily == nplTypes.IPFamilyIPv6 {
+				nplNodeIP = ann.NodeIP
+				nplNodePort = ann.NodePort
+				break
+			} else if !isIPv6 && (ann.IPFamily == nplTypes.IPFamilyIPv4 || ann.IPFamily == "") {
+				nplNodeIP = ann.NodeIP
+				nplNodePort = ann.NodePort
+				break
+			}
+		}
+		require.NotEmpty(t, nplNodeIP, "No NPL annotation found for the correct IP family")
+
+		// Each connection uses a fresh ephemeral source port, so the sourceTransportPort filter
+		// below isolates this connection's records (consistent with the sibling subtests above);
+		// no collector flush is needed.
+		sourceIP, sourcePort := createNPLConnection(t, data, destinationNodeIndex, nplNodeIP, nplNodePort, isIPv6)
+		var dstIP string
+		if isIPv6 {
+			dstIP = nginxIP.IPv6.String()
+		} else {
+			dstIP = nginxIP.IPv4.String()
+		}
+		srcPortFilter := "sourceTransportPort: " + sourcePort
+		records := getCollectorOutput(t, sourceIP, dstIP, srcPortFilter, false, false, isIPv6, data, "", getCollectorOutputDefaultTimeout)
+		require.NotEmpty(t, records, "Expected IPFIX records for NPL flow (src=%s dst=%s srcPort=%s)", sourceIP, dstIP, sourcePort)
+		for _, record := range records {
+			assert.Contains(t, record, nginxPodName, "Record should include destination Pod name for NPL flow")
+			assert.Contains(t, record, nplSvcName, "Record should include the NPL-backed Service name in DestinationServicePortName")
 			assertIPFIXRecordProxySnatUnset(t, record)
 		}
 	})
