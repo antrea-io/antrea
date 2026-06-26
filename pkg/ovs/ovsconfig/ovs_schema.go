@@ -19,6 +19,7 @@ type Bridge struct {
 	Protocols           []interface{} `json:"protocols,omitempty"`
 	DatapathType        string        `json:"datapath_type,omitempty"`
 	McastSnoopingEnable bool          `json:"mcast_snooping_enable,omitempty"`
+	ExternalIDs         []interface{} `json:"external_ids,omitempty"`
 }
 
 type Port struct {
@@ -30,6 +31,13 @@ type Port struct {
 type AccessPort struct {
 	Port
 	Tag uint32 `json:"tag"`
+}
+
+// TrunkPort is an OVS port in trunk mode, allowing only the specified VLAN IDs.
+// When Trunks is empty, all VLANs are allowed (OVS default trunk behavior).
+type TrunkPort struct {
+	Port
+	Trunks []interface{} `json:"trunks,omitempty"`
 }
 
 type Interface struct {

@@ -65,6 +65,7 @@ type OVSBridgeClient interface {
 	CreateTunnelPort(name string, tunnelType TunnelType, ofPortRequest int32) (string, Error)
 	CreateTunnelPortExt(name string, tunnelType TunnelType, ofPortRequest int32, csum bool, localIP string, remoteIP string, remoteName string, psk string, extraOptions, externalIDs map[string]interface{}) (string, Error)
 	CreateUplinkPort(name string, ofPortRequest int32, externalIDs map[string]interface{}) (string, Error)
+	CreateTrunkPort(name string, ofPortRequest int32, vlanSpecs []string, externalIDs map[string]interface{}) (string, Error)
 	DeletePort(portUUID string) Error
 	DeletePorts(portUUIDList []string) Error
 	GetOFPort(ifName string, waitUntilValid bool) (int32, Error)
@@ -83,5 +84,6 @@ type OVSBridgeClient interface {
 	SetInterfaceType(name, ifType string) Error
 	SetPortExternalIDs(portName string, externalIDs map[string]interface{}) Error
 	GetPortExternalIDs(portName string) (map[string]string, Error)
+	SetPortTrunks(portName string, vlanSpecs []string) Error
 	SetInterfaceMAC(name string, mac net.HardwareAddr) Error
 }

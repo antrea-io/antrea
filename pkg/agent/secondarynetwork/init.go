@@ -15,109 +15,57 @@
 package secondarynetwork
 
 import (
-	"fmt"
+	"sync"
+	"sync/atomic"
 
 	"github.com/TomCodeLV/OVSDB-golang-lib/pkg/ovsdb"
-	netdefclient "github.com/k8snetworkplumbingwg/network-attachment-definition-client/pkg/client/clientset/versioned/typed/k8s.cni.cncf.io/v1"
-	clientset "k8s.io/client-go/kubernetes"
-	"k8s.io/client-go/tools/cache"
-	componentbaseconfig "k8s.io/component-base/config"
-	"k8s.io/klog/v2"
 
-	"antrea.io/antrea/v2/pkg/agent/config"
-	"antrea.io/antrea/v2/pkg/agent/interfacestore"
-	"antrea.io/antrea/v2/pkg/agent/secondarynetwork/podwatch"
-	crdlisters "antrea.io/antrea/v2/pkg/client/listers/crd/v1beta1"
+	"antrea.io/antrea/v2/pkg/agent/antreanodeconfig"
+	agenttypes "antrea.io/antrea/v2/pkg/agent/types"
 	agentconfig "antrea.io/antrea/v2/pkg/config/agent"
 	"antrea.io/antrea/v2/pkg/ovs/ovsconfig"
-	"antrea.io/antrea/v2/pkg/util/channel"
-	"antrea.io/antrea/v2/pkg/util/k8s"
 )
 
-var (
-	newOVSBridgeFn = ovsconfig.NewOVSBridge
-)
+// podControllerInterface is the subset of podwatch.PodController used by Controller.
+// Defined as an interface to allow test injection.
+type podControllerInterface interface {
+	Run(stopCh <-chan struct{})
+	AllowCNIDelete(podName, podNamespace string) bool
+	UpdateOVSBridgeClient(newClient ovsconfig.OVSBridgeClient) error
+}
 
+// Controller manages secondary network resources for a Node.
 type Controller struct {
-	ovsBridgeClient ovsconfig.OVSBridgeClient
-	secNetConfig    *agentconfig.SecondaryNetworkConfig
-	podController   *podwatch.PodController
-}
+	ovsBridgeClient ovsconfig.OVSBridgeClient           //nolint:unused // Used by Linux-only secondary bridge reconciliation.
+	secNetConfig    *agentconfig.SecondaryNetworkConfig //nolint:unused // Used by Linux-only secondary bridge reconciliation.
+	podController   podControllerInterface
+	nodeName        string       //nolint:unused // Used by Linux-only secondary bridge reconciliation.
+	ovsdbConn       *ovsdb.OVSDB //nolint:unused // Used by Linux-only secondary bridge reconciliation.
 
-func NewController(
-	clientConnectionConfig componentbaseconfig.ClientConnectionConfiguration,
-	kubeAPIServerOverride string,
-	k8sClient clientset.Interface,
-	podInformer cache.SharedIndexInformer,
-	podUpdateSubscriber channel.Subscriber,
-	primaryInterfaceStore interfacestore.InterfaceStore,
-	nodeConfig *config.NodeConfig,
-	secNetConfig *agentconfig.SecondaryNetworkConfig, ovsdb *ovsdb.OVSDB,
-	ipPoolLister crdlisters.IPPoolLister,
-) (*Controller, error) {
-	ovsBridgeClient, err := createOVSBridge(secNetConfig.OVSBridges, ovsdb)
-	if err != nil {
-		return nil, err
-	}
+	// latestANCSnapshot is the last *antreanodeconfig.Snapshot received on the ANC
+	// notify channel.
+	latestANCSnapshot atomic.Pointer[antreanodeconfig.Snapshot] //nolint:unused // Used by Linux-only secondary bridge reconciliation.
+	// effectiveBridgeOverride is set only by unit tests to stub desired bridge resolution.
+	effectiveBridgeOverride func() *agenttypes.OVSBridgeConfig //nolint:unused // Used by Linux-only secondary bridge tests.
 
-	// Create the NetworkAttachmentDefinition client, which handles access to secondary network object
-	// definition from the API Server.
-	netAttachDefClient, err := createNetworkAttachDefClient(clientConnectionConfig, kubeAPIServerOverride)
-	if err != nil {
-		return nil, fmt.Errorf("NetworkAttachmentDefinition client creation failed: %v", err)
-	}
+	// ancFirstSnapshotCh is closed when the first *Snapshot is delivered after ANC
+	// informers have synced (including the no-ANC case: non-nil *Snapshot with nil
+	// AntreaNodeConfig). Only used when dynamicBridgeReconcile is true.
+	ancFirstSnapshotCh chan struct{} //nolint:unused // Used by Linux-only secondary bridge reconciliation.
+	signalFirstANC     sync.Once     //nolint:unused // Used by Linux-only secondary bridge reconciliation.
 
-	// Create podController to handle secondary network configuration for Pods with
-	// k8s.v1.cni.cncf.io/networks Annotation defined.
-	podWatchController, err := podwatch.NewPodController(
-		k8sClient, netAttachDefClient, podInformer,
-		podUpdateSubscriber, primaryInterfaceStore, nodeConfig, ovsBridgeClient, ipPoolLister)
-	if err != nil {
-		return nil, err
-	}
-	return &Controller{
-		ovsBridgeClient: ovsBridgeClient,
-		secNetConfig:    secNetConfig,
-		podController:   podWatchController}, nil
-}
+	// mu protects effectiveBridgeCfg for atomic point-in-time reads and writes.
+	// It must never be held across blocking OVS calls.
+	mu                 sync.RWMutex                    //nolint:unused // Used by Linux-only secondary bridge reconciliation.
+	effectiveBridgeCfg *agenttypes.OVSBridgeConfig     //nolint:unused // Used by Linux-only secondary bridge reconciliation.
+	queue              secondaryNetworkControllerQueue //nolint:unused // Used by Linux-only secondary bridge reconciliation.
 
-// Run starts the Pod controller for secondary networks.
-func (c *Controller) Run(stopCh <-chan struct{}) {
-	c.podController.Run(stopCh)
+	// dynamicBridgeReconcile is true when AntreaNodeConfig is enabled: bridge
+	// updates are driven by the AntreaNodeConfig channel after the AntreaNodeConfig
+	// controller has synced informers and published the first snapshot.
+	dynamicBridgeReconcile bool //nolint:unused // Used by Linux-only secondary bridge reconciliation.
 }
 
 func (c *Controller) AllowCNIDelete(podName, podNamespace string) bool {
 	return c.podController.AllowCNIDelete(podName, podNamespace)
-}
-
-// CreateNetworkAttachDefClient creates net-attach-def client handle from the given config.
-func createNetworkAttachDefClient(config componentbaseconfig.ClientConnectionConfiguration, kubeAPIServerOverride string) (netdefclient.K8sCniCncfIoV1Interface, error) {
-	kubeConfig, err := k8s.CreateRestConfig(config, kubeAPIServerOverride)
-	if err != nil {
-		return nil, err
-	}
-
-	netAttachDefClient, err := netdefclient.NewForConfig(kubeConfig)
-	if err != nil {
-		return nil, err
-	}
-	return netAttachDefClient, nil
-}
-
-func createOVSBridge(bridges []agentconfig.OVSBridgeConfig, ovsdb *ovsdb.OVSDB) (ovsconfig.OVSBridgeClient, error) {
-	if len(bridges) == 0 {
-		return nil, nil
-	}
-	// Only one OVS bridge is supported.
-	bridgeConfig := bridges[0]
-	var options []ovsconfig.OVSBridgeOption
-	if bridgeConfig.EnableMulticastSnooping {
-		options = append(options, ovsconfig.WithMcastSnooping())
-	}
-	ovsBridgeClient := newOVSBridgeFn(bridgeConfig.BridgeName, ovsconfig.OVSDatapathSystem, ovsdb, options...)
-	if err := ovsBridgeClient.Create(); err != nil {
-		return nil, fmt.Errorf("failed to create OVS bridge %s: %v", bridgeConfig.BridgeName, err)
-	}
-	klog.InfoS("OVS bridge created", "bridge", bridgeConfig.BridgeName)
-	return ovsBridgeClient, nil
 }

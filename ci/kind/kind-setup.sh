@@ -310,6 +310,14 @@ function configure_extra_networks {
   fi
   echo "Configuring extra networks"
 
+  # Extra Docker networks must not become the container default gateway (Docker picks the
+  # highest --gw-priority; the Kind cluster network stays at implicit 0 on eth0). Without this,
+  # names like antrea-<cluster>-0 can win over network "kind" and default via eth1.
+  local -a extra_gw_priority=()
+  if [[ -n "${docker_version:-}" ]] && version_ge "$docker_version" "28.0.0"; then
+    extra_gw_priority=(--gw-priority -1000)
+  fi
+
   # create new bridge networks
   i=0
   networks=()
@@ -324,12 +332,12 @@ function configure_extra_networks {
   nodes="$(kind get nodes --name $cluster_name)"
   for node in $nodes; do
     i=1
-    for network in $networks; do
+    for network in "${networks[@]}"; do
       ifname="eth$i"
-      docker network connect --driver-opt=com.docker.network.endpoint.ifname=$ifname $network $node
+      docker network connect "${extra_gw_priority[@]}" --driver-opt=com.docker.network.endpoint.ifname=$ifname "$network" "$node"
       echo "connected worker $node to network $network"
+      i=$((i+1))
     done
-    i=$((i+1))
   done
 }
 
