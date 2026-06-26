@@ -93,13 +93,12 @@ func (c *StaleResCleanupController) cleanUpExpiredMemberClusterAnnounces(ctx con
 	}
 }
 
-func (c *StaleResCleanupController) Run(stopCh <-chan struct{}) {
+func (c *StaleResCleanupController) Start(ctx context.Context) error {
 	klog.InfoS("Starting StaleResCleanupController")
 	defer klog.InfoS("Shutting down StaleResCleanupController")
 
-	ctx := wait.ContextForChannel(stopCh)
-	go wait.UntilWithContext(ctx, c.cleanUpExpiredMemberClusterAnnounces, memberClusterAnnounceStaleTime/2)
-	<-stopCh
+	wait.UntilWithContext(ctx, c.cleanUpExpiredMemberClusterAnnounces, memberClusterAnnounceStaleTime/2)
+	return nil
 }
 
 func (c *StaleResCleanupController) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
@@ -146,6 +145,11 @@ func (c *StaleResCleanupController) SetupWithManager(mgr ctrl.Manager) error {
 		return []string{resExport.Spec.ClusterID}
 	}); err != nil {
 		klog.ErrorS(err, "Failed to create the index")
+		return err
+	}
+
+	if err := mgr.Add(c); err != nil {
+		klog.ErrorS(err, "Failed to register StaleResCleanupController with the Manager")
 		return err
 	}
 
