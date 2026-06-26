@@ -18,9 +18,11 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	featuregatetesting "k8s.io/component-base/featuregate/testing"
 
 	"antrea.io/antrea/v2/pkg/apis"
 	controllerconfig "antrea.io/antrea/v2/pkg/config/controller"
+	"antrea.io/antrea/v2/pkg/features"
 )
 
 func TestNewOptions(t *testing.T) {
@@ -70,6 +72,65 @@ func TestOptions(t *testing.T) {
 				config: &controllerconfig.ControllerConfig{
 					APIPort:               tt.apiPort,
 					KubeAPIServerOverride: tt.kubeAPIServerOverride},
+			}
+			err := op.validate(nil)
+			if tt.expectedErr == "" {
+				assert.NoError(t, err)
+			} else {
+				assert.ErrorContains(t, err, tt.expectedErr)
+			}
+		})
+	}
+}
+
+func TestValidatePolicyFeatureGateDependencies(t *testing.T) {
+	tests := []struct {
+		name                 string
+		antreaPolicy         bool
+		clusterNetworkPolicy bool
+		adminNetworkPolicy   bool
+		expectedErr          string
+	}{
+		{
+			name:                 "AntreaPolicy enabled with ClusterNetworkPolicy",
+			antreaPolicy:         true,
+			clusterNetworkPolicy: true,
+			expectedErr:          "",
+		},
+		{
+			name:               "AntreaPolicy enabled with AdminNetworkPolicy",
+			antreaPolicy:       true,
+			adminNetworkPolicy: true,
+			expectedErr:        "",
+		},
+		{
+			name:         "AntreaPolicy disabled with no dependent gates",
+			antreaPolicy: false,
+			expectedErr:  "",
+		},
+		{
+			name:                 "AntreaPolicy disabled with ClusterNetworkPolicy",
+			antreaPolicy:         false,
+			clusterNetworkPolicy: true,
+			expectedErr:          "the ClusterNetworkPolicy feature gate requires the AntreaPolicy feature gate to be enabled",
+		},
+		{
+			name:               "AntreaPolicy disabled with AdminNetworkPolicy",
+			antreaPolicy:       false,
+			adminNetworkPolicy: true,
+			expectedErr:        "the AdminNetworkPolicy feature gate requires the AntreaPolicy feature gate to be enabled",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			featuregatetesting.SetFeatureGateDuringTest(t, features.DefaultFeatureGate, features.AntreaPolicy, tt.antreaPolicy)
+			featuregatetesting.SetFeatureGateDuringTest(t, features.DefaultFeatureGate, features.ClusterNetworkPolicy, tt.clusterNetworkPolicy)
+			featuregatetesting.SetFeatureGateDuringTest(t, features.DefaultFeatureGate, features.AdminNetworkPolicy, tt.adminNetworkPolicy)
+			op := &Options{
+				config: &controllerconfig.ControllerConfig{
+					APIPort: apis.AntreaControllerAPIPort,
+				},
 			}
 			err := op.validate(nil)
 			if tt.expectedErr == "" {

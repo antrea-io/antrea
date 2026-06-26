@@ -222,20 +222,6 @@ func (mr *MockManagerMockRecorder) GetConverterRegistry() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetConverterRegistry", reflect.TypeOf((*MockManager)(nil).GetConverterRegistry))
 }
 
-// GetEventRecorder mocks base method.
-func (m *MockManager) GetEventRecorder(name string) events.EventRecorder {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetEventRecorder", name)
-	ret0, _ := ret[0].(events.EventRecorder)
-	return ret0
-}
-
-// GetEventRecorder indicates an expected call of GetEventRecorder.
-func (mr *MockManagerMockRecorder) GetEventRecorder(name any) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetEventRecorder", reflect.TypeOf((*MockManager)(nil).GetEventRecorder), name)
-}
-
 // GetEventRecorderFor mocks base method.
 func (m *MockManager) GetEventRecorderFor(name string) record.EventRecorder {
 	m.ctrl.T.Helper()
@@ -248,6 +234,20 @@ func (m *MockManager) GetEventRecorderFor(name string) record.EventRecorder {
 func (mr *MockManagerMockRecorder) GetEventRecorderFor(name any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetEventRecorderFor", reflect.TypeOf((*MockManager)(nil).GetEventRecorderFor), name)
+}
+
+// GetEventRecorder mocks base method.
+func (m *MockManager) GetEventRecorder(name string) events.EventRecorder {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetEventRecorder", name)
+	ret0, _ := ret[0].(events.EventRecorder)
+	return ret0
+}
+
+// GetEventRecorder indicates an expected call of GetEventRecorder.
+func (mr *MockManagerMockRecorder) GetEventRecorder(name any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetEventRecorder", reflect.TypeOf((*MockManager)(nil).GetEventRecorder), name)
 }
 
 // GetFieldIndexer mocks base method.

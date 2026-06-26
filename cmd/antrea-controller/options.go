@@ -105,6 +105,20 @@ func (o *Options) validate(args []string) error {
 		klog.InfoS("Multicluster feature gate is disabled. Multicluster.EnableStretchedNetworkPolicy is ignored")
 	}
 
+	// The upstream ClusterNetworkPolicy and the deprecated AdminNetworkPolicy/BaselineAdminNetworkPolicy
+	// APIs are translated into Antrea-internal NetworkPolicies and rely entirely on the AntreaPolicy
+	// machinery for enforcement: the controller's Tier handling and the Agent's multi-tier OVS pipeline.
+	// They cannot work when AntreaPolicy is disabled, so fail closed here instead of silently dropping
+	// the policies.
+	if !features.DefaultFeatureGate.Enabled(features.AntreaPolicy) {
+		if features.DefaultFeatureGate.Enabled(features.ClusterNetworkPolicy) {
+			return fmt.Errorf("the ClusterNetworkPolicy feature gate requires the AntreaPolicy feature gate to be enabled")
+		}
+		if features.DefaultFeatureGate.Enabled(features.AdminNetworkPolicy) {
+			return fmt.Errorf("the AdminNetworkPolicy feature gate requires the AntreaPolicy feature gate to be enabled")
+		}
+	}
+
 	return nil
 }
 
