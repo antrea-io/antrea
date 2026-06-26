@@ -428,8 +428,10 @@ case.
   you want to set different capacities for Nodes, the
   `node.antrea.io/max-egress-ips` annotation of Node objects can be used to
   specify different values for different Nodes, taking priority over the value
-  configured in the config file. The option and the annotation were added in
-  Antrea v1.11.0.
+  configured in the config file. Like the configuration option, the annotation
+  value must be an integer between 0 and 255; an invalid value is ignored and
+  the Node falls back to the value from the config file. The option and the
+  annotation were added in Antrea v1.11.0.
 
 ## Reverse Path Filtering (rp_filter) Requirements
 
