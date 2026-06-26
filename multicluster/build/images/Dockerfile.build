@@ -35,4 +35,5 @@ LABEL description="The Docker image to deploy the Antrea Multi-cluster Controlle
 
 USER root
 
+COPY --from=antrea-build /antrea/LICENSE /LICENSE
 COPY --from=antrea-build /antrea/multicluster/bin/antrea-mc-controller /

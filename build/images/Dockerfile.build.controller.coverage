@@ -34,6 +34,7 @@ LABEL description="The Docker image to deploy the antrea-controller with code co
 
 USER root
 
+COPY --from=antrea-build /antrea/LICENSE /LICENSE
 COPY --from=antrea-build /antrea/bin/antrea-controller-coverage /usr/local/bin/antrea-controller
 COPY --from=antrea-build /antrea/bin/antctl-coverage /usr/local/bin/antctl
 COPY --from=antrea-build /antrea/test/e2e/utils/run_cov_binary.sh /
