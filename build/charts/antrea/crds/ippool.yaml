@@ -140,6 +140,8 @@ spec:
                 - subnetInfo
               type: object
               properties:
+                allocateFullCIDR:
+                  type: boolean
                 ipRanges:
                   items:
                     oneOf:
