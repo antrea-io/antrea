@@ -33,6 +33,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/util/workqueue"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/cache/informertest"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 	k8smcsapi "sigs.k8s.io/mcs-api/pkg/apis/v1alpha1"
 
@@ -546,7 +547,7 @@ func TestStaleControllerNoRaceWithResourceImportReconciler(t *testing.T) {
 
 	mcReconciler := NewMemberClusterSetReconciler(fakeClient, common.TestScheme, "default", true, false, make(chan struct{}))
 	mcReconciler.SetRemoteCommonArea(ca)
-	c := NewStaleResCleanupController(fakeClient, common.TestScheme, make(chan struct{}), "default", mcReconciler)
+	c := NewStaleResCleanupController(fakeClient, common.TestScheme, make(chan struct{}), "default", mcReconciler, &informertest.FakeInformers{})
 	go func() {
 		c.commonAreaCreationCh <- struct{}{}
 	}()

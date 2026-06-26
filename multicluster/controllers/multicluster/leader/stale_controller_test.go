@@ -26,6 +26,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/cache/informertest"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
@@ -123,7 +124,7 @@ func TestReconcile(t *testing.T) {
 			}()
 			fakeClient := fake.NewClientBuilder().WithScheme(common.TestScheme).WithLists(tt.existingResExports).
 				WithObjects(tt.existingMemberAnnounce).WithStatusSubresource(tt.existingMemberAnnounce).Build()
-			c := NewStaleResCleanupController(fakeClient, common.TestScheme)
+			c := NewStaleResCleanupController(fakeClient, common.TestScheme, &informertest.FakeInformers{})
 			ctx := context.Background()
 			_, err := c.Reconcile(ctx, ctrl.Request{
 				NamespacedName: types.NamespacedName{
@@ -230,7 +231,7 @@ func TestStaleController_CleanUpMemberClusterAnnounces(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			fakeClient := fake.NewClientBuilder().WithScheme(common.TestScheme).WithLists(tt.memberClusterAnnounceList).WithLists(tt.clusterSet).Build()
-			c := NewStaleResCleanupController(fakeClient, common.TestScheme)
+			c := NewStaleResCleanupController(fakeClient, common.TestScheme, &informertest.FakeInformers{})
 			c.cleanUpExpiredMemberClusterAnnounces(ctx)
 
 			memberClusterAnnounceList := &mcv1alpha1.MemberClusterAnnounceList{}
