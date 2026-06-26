@@ -213,8 +213,15 @@ because when the CIDR represents a traditional subnet, the first IP is typically
 the "network IP". Additionally, for IPv4, the last IP in the CIDR, which
 traditionally represents the "broadcast IP", will also be excluded. As a result,
 providing a /32 CIDR or a /31 CIDR will yield an empty pool of IP addresses. A
-/28 CIDR will yield 14 allocatable IP addresses. In the future we may make this
-behavior configurable, so that the full CIDR can be used if desired.
+/28 CIDR will yield 14 allocatable IP addresses.
+
+If the CIDRs do not represent traditional subnets (for example, a provider hands
+out a /29 "subnet" that is really just a range of usable IPs inside a larger
+subnet), set `allowNetworkAndBroadcast: true` in the pool spec. When enabled, the
+first and last IP of every CIDR range in the pool become allocatable, so a /32
+yields 1 IP, a /31 yields 2 IPs and a /28 yields 16 IPs. The field defaults to
+`false` to preserve the exclusion behavior described above, and it has no effect
+on ranges defined with `start` and `end` IPs.
 
 ### SubnetInfo
 

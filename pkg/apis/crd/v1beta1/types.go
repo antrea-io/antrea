@@ -243,6 +243,9 @@ type ExternalIPPoolSpec struct {
 	SubnetInfo *SubnetInfo `json:"subnetInfo,omitempty"`
 	// The Nodes that the external IPs can be assigned to. If empty, it means all Nodes.
 	NodeSelector metav1.LabelSelector `json:"nodeSelector"`
+	// AllowNetworkAndBroadcast determines whether the network address and broadcast
+	// address of each CIDR range in this pool are allocatable.
+	AllowNetworkAndBroadcast bool `json:"allowNetworkAndBroadcast,omitempty"`
 }
 
 // IPRange is a set of contiguous IP addresses, represented by a CIDR or a pair of start and end IPs.
@@ -310,6 +313,9 @@ type IPPoolSpec struct {
 	IPRanges []IPRange `json:"ipRanges"`
 	// The Subnet info of this IP pool. All the IP ranges in the IP pool should share the same subnet attributes.
 	SubnetInfo SubnetInfo `json:"subnetInfo"`
+	// AllowNetworkAndBroadcast determines whether the network address (first IP) and broadcast
+	// address (last IP) of each CIDR range in this pool are allocatable.
+	AllowNetworkAndBroadcast bool `json:"allowNetworkAndBroadcast,omitempty"`
 }
 
 type IPPoolStatus struct {

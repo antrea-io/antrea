@@ -228,12 +228,12 @@ func (c *ExternalIPPoolController) createOrUpdateIPAllocator(ipPool *antreacrds.
 				if existingIPRanges.Has(ipNet.String()) {
 					return nil, nil
 				}
-				// Don't use the IPv4 network's broadcast address.
+				// Don't use the IPv4 network's broadcast address unless explicitly allowed.
 				var reservedIPs []net.IP
-				if utilnet.IsIPv4CIDR(ipNet) {
+				if !ipPool.Spec.AllowNetworkAndBroadcast && utilnet.IsIPv4CIDR(ipNet) {
 					reservedIPs = append(reservedIPs, iputil.GetLocalBroadcastIP(ipNet))
 				}
-				return ipallocator.NewCIDRAllocator(ipNet, reservedIPs)
+				return ipallocator.NewCIDRAllocator(ipNet, reservedIPs, ipPool.Spec.AllowNetworkAndBroadcast)
 			} else {
 				if existingIPRanges.Has(fmt.Sprintf("%s-%s", ipRange.Start, ipRange.End)) {
 					return nil, nil

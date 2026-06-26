@@ -521,6 +521,14 @@ will of course always be excluded. On the other hand, when using a range with a
 start and end IP address, both of these IPs will be allocatable (except if one
 of them corresponds to the gateway).
 
+If the CIDRs in a pool do not represent traditional subnets (for example, a
+provider hands out a `/29` "subnet" that is really just a range of usable IPs
+inside a larger subnet), set `allowNetworkAndBroadcast: true` in the pool spec.
+When enabled, the first and last IP of every CIDR range in the pool become
+allocatable. The field defaults to `false` to preserve the exclusion behavior
+described above, and it has no effect on ranges defined with start and end IPs.
+The gateway IP is still excluded regardless of this setting.
+
 ```yaml
 apiVersion: "crd.antrea.io/v1beta1"
 kind: IPPool
