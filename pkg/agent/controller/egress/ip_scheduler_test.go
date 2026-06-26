@@ -24,6 +24,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -350,7 +351,20 @@ func TestRun(t *testing.T) {
 	// Set node1's max-egress-ips annotation to invalid value, nothing should happen.
 	updatedNode1 := node1.DeepCopy()
 	updatedNode1.Annotations[agenttypes.NodeMaxEgressIPsAnnotationKey] = "invalid-value"
-	clientset.CoreV1().Nodes().Update(ctx, updatedNode1, metav1.UpdateOptions{})
+	_, err := clientset.CoreV1().Nodes().Update(ctx, updatedNode1, metav1.UpdateOptions{})
+	require.NoError(t, err)
+	assertReceivedItems(t, egressUpdates, sets.New[string]())
+	// Set node1's max-egress-ips annotation to a negative value, nothing should happen.
+	updatedNode1 = node1.DeepCopy()
+	updatedNode1.Annotations[agenttypes.NodeMaxEgressIPsAnnotationKey] = "-1"
+	_, err = clientset.CoreV1().Nodes().Update(ctx, updatedNode1, metav1.UpdateOptions{})
+	require.NoError(t, err)
+	assertReceivedItems(t, egressUpdates, sets.New[string]())
+	// Set node1's max-egress-ips annotation to a value greater than 255, nothing should happen.
+	updatedNode1 = node1.DeepCopy()
+	updatedNode1.Annotations[agenttypes.NodeMaxEgressIPsAnnotationKey] = "300"
+	_, err = clientset.CoreV1().Nodes().Update(ctx, updatedNode1, metav1.UpdateOptions{})
+	require.NoError(t, err)
 	assertReceivedItems(t, egressUpdates, sets.New[string]())
 	// Set node1's max-egress-ips annotation to 1, egressD should be moved to node2.
 	updatedNode1 = node1.DeepCopy()
