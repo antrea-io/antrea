@@ -22,6 +22,8 @@ spec:
                 - ipRanges
                 - nodeSelector
               properties:
+                allowNetworkAndBroadcast:
+                  type: boolean
                 ipRanges:
                   type: array
                   items:
