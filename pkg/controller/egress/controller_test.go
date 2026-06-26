@@ -518,7 +518,7 @@ func TestUpdateEgress(t *testing.T) {
 	// Delete the IPPool in use. The EgressIP should be released.
 	controller.crdClient.CrdV1beta1().ExternalIPPools().Delete(context.TODO(), eipFoo2.Name, metav1.DeleteOptions{})
 	assert.Eventually(t, func() bool {
-		_, _, exists := controller.getIPAllocation(egress.Name)
+		_, exists := controller.getIPAllocation(egress.Name)
 		if exists {
 			return false
 		}
@@ -529,7 +529,7 @@ func TestUpdateEgress(t *testing.T) {
 	// Recreate the ExternalIPPool. An EgressIP should be allocated.
 	controller.crdClient.CrdV1beta1().ExternalIPPools().Create(context.TODO(), eipFoo2, metav1.CreateOptions{})
 	assert.Eventually(t, func() bool {
-		_, _, exists := controller.getIPAllocation(egress.Name)
+		_, exists := controller.getIPAllocation(egress.Name)
 		return exists
 	}, time.Second, 50*time.Millisecond, "IP was not allocated after the ExternalIPPool was created")
 	checkExternalIPPoolUsed(t, controller, eipFoo2.Name, 1)
@@ -537,7 +537,7 @@ func TestUpdateEgress(t *testing.T) {
 	// Delete the Egress. The EgressIP should be released.
 	controller.crdClient.CrdV1beta1().Egresses().Delete(context.TODO(), egress.Name, metav1.DeleteOptions{})
 	assert.Eventually(t, func() bool {
-		_, _, exists := controller.getIPAllocation(egress.Name)
+		_, exists := controller.getIPAllocation(egress.Name)
 		return !exists
 	}, time.Second, 50*time.Millisecond, "IP allocation was not deleted after the Egress was deleted")
 	checkExternalIPPoolUsed(t, controller, eipFoo2.Name, 0)
@@ -577,8 +577,12 @@ func TestRecreateExternalIPPoolWithNewRange(t *testing.T) {
 	controller.restoreIPAllocations([]*v1beta1.Egress{egress})
 
 	require.True(t, controller.externalIPAllocator.IPPoolExists(eipFoo1.Name))
-	getEgressIP, egress, err := controller.syncEgressIP(egress)
+	egressIPs, egress, err := controller.syncEgressIPs(egress)
 	require.NoError(t, err)
+	var getEgressIP net.IP
+	if len(egressIPs) > 0 {
+		getEgressIP = egressIPs[0]
+	}
 	assert.Equal(t, net.ParseIP("1.1.1.1"), getEgressIP)
 
 	// Delete and recreate the ExternalIPPool immediately with a different IP range. We do not
@@ -595,8 +599,11 @@ func TestRecreateExternalIPPoolWithNewRange(t *testing.T) {
 		assert.True(t, controller.externalIPAllocator.IPPoolExists(eipFoo1.Name))
 	}, 1*time.Second, 10*time.Millisecond)
 
-	getEgressIP, _, err = controller.syncEgressIP(egress)
+	egressIPs, _, err = controller.syncEgressIPs(egress)
 	require.NoError(t, err)
+	if len(egressIPs) > 0 {
+		getEgressIP = egressIPs[0]
+	}
 	assert.Equal(t, net.ParseIP("1.1.2.1"), getEgressIP)
 }
 
@@ -609,6 +616,7 @@ func TestSyncEgressIP(t *testing.T) {
 		expectedEgressIP           string
 		expectedExternalIPPoolUsed int
 		expectErr                  bool
+		expectedErrContains        string
 	}{
 		{
 			name: "Egress with empty EgressIP and existing ExternalIPPool",
@@ -641,6 +649,35 @@ func TestSyncEgressIP(t *testing.T) {
 			expectedEgressIP:           "1.1.2.10",
 			expectedExternalIPPoolUsed: 3,
 			expectErr:                  false,
+		},
+		{
+			name: "Egress with empty EgressIP and exhausted ExternalIPPool",
+			existingEgresses: []*v1beta1.Egress{
+				{
+					ObjectMeta: metav1.ObjectMeta{Name: "egressA", UID: "uidA"},
+					Spec: v1beta1.EgressSpec{
+						EgressIP:       "1.1.1.1",
+						ExternalIPPool: "ipPoolA",
+					},
+				},
+				{
+					ObjectMeta: metav1.ObjectMeta{Name: "egressB", UID: "uidB"},
+					Spec: v1beta1.EgressSpec{
+						EgressIP:       "1.1.1.2",
+						ExternalIPPool: "ipPoolA",
+					},
+				},
+			},
+			existingExternalIPPool: newExternalIPPool("ipPoolA", "1.1.1.0/30", "", ""),
+			inputEgress: &v1beta1.Egress{
+				ObjectMeta: metav1.ObjectMeta{Name: "egressC", UID: "uidC"},
+				Spec: v1beta1.EgressSpec{
+					ExternalIPPool: "ipPoolA",
+				},
+			},
+			expectedExternalIPPoolUsed: 2,
+			expectErr:                  true,
+			expectedErrContains:        "error when allocating IP for Egress egressC from ExternalIPPool ipPoolA",
 		},
 		{
 			name:                   "Egress with empty EgressIP and non-existing ExternalIPPool",
@@ -803,15 +840,68 @@ func TestSyncEgressIP(t *testing.T) {
 			go controller.externalIPAllocator.Run(stopCh)
 			require.True(t, cache.WaitForCacheSync(stopCh, controller.externalIPAllocator.HasSynced))
 			controller.restoreIPAllocations(tt.existingEgresses)
-			getEgressIP, _, err := controller.syncEgressIP(tt.inputEgress)
+			egressIPs, _, err := controller.syncEgressIPs(tt.inputEgress)
 			if tt.expectErr {
 				assert.Error(t, err)
+				if tt.expectedErrContains != "" {
+					assert.Contains(t, err.Error(), tt.expectedErrContains)
+				}
 			} else {
 				assert.NoError(t, err)
+			}
+			var getEgressIP net.IP
+			if len(egressIPs) > 0 {
+				getEgressIP = egressIPs[0]
 			}
 			assert.Equal(t, net.ParseIP(tt.expectedEgressIP), getEgressIP)
 			checkExternalIPPoolUsed(t, controller, tt.existingExternalIPPool.Name, tt.expectedExternalIPPoolUsed)
 		})
+	}
+}
+
+func TestSyncEgressIPsMultipleExternalIPPoolsAllocatesAllSpecIPs(t *testing.T) {
+	externalIPPools := []*v1beta1.ExternalIPPool{
+		newExternalIPPool("pool-v4-a", "10.10.10.0/24", "", ""),
+		newExternalIPPool("pool-v6-a", "fd00:10:10::/64", "", ""),
+		newExternalIPPool("pool-v4-b", "10.10.20.0/24", "", ""),
+		newExternalIPPool("pool-v6-b", "fd00:10:20::/64", "", ""),
+	}
+	poolNames := []string{"pool-v4-a", "pool-v6-a", "pool-v4-b", "pool-v6-b"}
+	egress := &v1beta1.Egress{
+		ObjectMeta: metav1.ObjectMeta{Name: "egressA", UID: "uidA"},
+		Spec: v1beta1.EgressSpec{
+			ExternalIPPools: poolNames,
+		},
+	}
+
+	stopCh := make(chan struct{})
+	defer close(stopCh)
+	fakeObjects := []runtime.Object{egress}
+	for _, pool := range externalIPPools {
+		fakeObjects = append(fakeObjects, pool)
+	}
+	controller := newController(nil, fakeObjects)
+	controller.informerFactory.Start(stopCh)
+	controller.crdInformerFactory.Start(stopCh)
+	controller.informerFactory.WaitForCacheSync(stopCh)
+	controller.crdInformerFactory.WaitForCacheSync(stopCh)
+	go controller.externalIPAllocator.Run(stopCh)
+	require.True(t, cache.WaitForCacheSync(stopCh, controller.externalIPAllocator.HasSynced))
+	controller.restoreIPAllocations(nil)
+
+	allocatedIPs, updatedEgress, err := controller.syncEgressIPs(egress)
+	require.NoError(t, err)
+	require.Len(t, allocatedIPs, len(poolNames))
+	assert.Equal(t, poolNames, updatedEgress.Spec.ExternalIPPools)
+	require.Len(t, updatedEgress.Spec.EgressIPs, len(poolNames))
+
+	// The controller keeps spec.egressIPs aligned with all pools so the API
+	// object remains valid. The agent controller still realizes only the first
+	// IPv4/IPv6 pair as the effective datapath and status EgressIPs.
+	for i, ip := range allocatedIPs {
+		assert.Equal(t, ip.String(), updatedEgress.Spec.EgressIPs[i])
+		assert.True(t, controller.externalIPAllocator.IPPoolHasIP(poolNames[i], ip))
+		checkExternalIPPoolUsed(t, controller, poolNames[i], 1)
 	}
 }
 
@@ -863,6 +953,36 @@ func TestUpdateEgressAllocatedCondition(t *testing.T) {
 			expectedStatus: v1beta1.EgressStatus{
 				Conditions: []v1beta1.EgressCondition{
 					{Type: v1beta1.IPAllocated, Status: v1.ConditionFalse, Reason: "AllocationError", Message: "Cannot allocate EgressIP from ExternalIPPool: no available IP"},
+				},
+			},
+		},
+		{
+			name: "allocating dual-stack IPs succeeds",
+			inputEgress: &v1beta1.Egress{
+				ObjectMeta: metav1.ObjectMeta{Name: "egressA", UID: "uidA"},
+				Spec: v1beta1.EgressSpec{
+					EgressIPs:       []string{"1.1.1.1", "fd00::1"},
+					ExternalIPPools: []string{"pool-v4", "pool-v6"},
+				},
+			},
+			expectedStatus: v1beta1.EgressStatus{
+				Conditions: []v1beta1.EgressCondition{
+					{Type: v1beta1.IPAllocated, Status: v1.ConditionTrue, Reason: "Allocated", Message: "EgressIPs are successfully allocated"},
+				},
+			},
+		},
+		{
+			name: "allocating dual-stack IPs fails",
+			inputEgress: &v1beta1.Egress{
+				ObjectMeta: metav1.ObjectMeta{Name: "egressA", UID: "uidA"},
+				Spec: v1beta1.EgressSpec{
+					ExternalIPPools: []string{"pool-v4", "pool-v6"},
+				},
+			},
+			inputErr: fmt.Errorf("no available IP"),
+			expectedStatus: v1beta1.EgressStatus{
+				Conditions: []v1beta1.EgressCondition{
+					{Type: v1beta1.IPAllocated, Status: v1.ConditionFalse, Reason: "AllocationError", Message: "Cannot allocate EgressIPs from ExternalIPPools: no available IP"},
 				},
 			},
 		},
