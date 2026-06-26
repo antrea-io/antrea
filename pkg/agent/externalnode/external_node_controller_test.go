@@ -107,11 +107,10 @@ func TestCreateOVSPortsAndFlowsFailure(t *testing.T) {
 	}
 	uplinkUUID := uuid.Must(uuid.NewV4()).String()
 	hostIfUUID := uuid.Must(uuid.NewV4()).String()
-	hostOFPort := int32(3)
 	uplinkOFPort := int32(4)
 	hostIfName := "hostIfName"
 	ipAddrs := []string{"10.20.30.40"}
-	expectedInfo := map[string]interface{}{
+	expectedInfo := map[string]string{
 		"uplink-name":      uplinkName,
 		"entity-name":      entityName,
 		"antrea-type":      "host",
@@ -122,16 +121,16 @@ func TestCreateOVSPortsAndFlowsFailure(t *testing.T) {
 	defer mockRenameInterface(nil)()
 	defer mockGetInterfaceConfig([]mockGetInterfaceConfigParam{{iface, []*net.IPNet{cidr1}, nil}})()
 
-	mockOVSBridgeClient.EXPECT().CreatePort(uplinkName, uplinkName, map[string]interface{}{
+	mockOVSBridgeClient.EXPECT().CreatePort(uplinkName, uplinkName, map[string]string{
 		interfacestore.AntreaInterfaceTypeKey: interfacestore.AntreaUplink,
 	}).Return(uplinkUUID, nil)
 	mockOVSBridgeClient.EXPECT().CreateInternalPort(hostIfName, int32(0), "22:33:44:55:66:77:88", expectedInfo).Return(hostIfUUID, nil).Times(1)
-	mockOVSBridgeClient.EXPECT().GetOFPort(uplinkName, false).Return(uplinkOFPort, nil).Times(1)
-	mockOVSBridgeClient.EXPECT().GetOFPort(hostIfName, false).Return(hostOFPort, ovsconfig.NewTransactionError(fmt.Errorf("interface %s not found", hostIfName), false)).Times(1)
+	mockOVSBridgeClient.EXPECT().GetOFPort(uplinkName).Return(uplinkOFPort, nil).Times(1)
+	mockOVSBridgeClient.EXPECT().GetOFPort(hostIfName).Return(int32(0), fmt.Errorf("interface %s not found", hostIfName)).Times(1)
 	mockOVSBridgeClient.EXPECT().DeletePort(uplinkUUID).Times(1)
 	mockOVSBridgeClient.EXPECT().DeletePort(hostIfUUID).Times(1)
 	hostIFConfig, err := c.createOVSPortsAndFlows(uplinkName, hostIfName, entityNamespace, entityName, ipAddrs)
-	assert.Equal(t, ovsconfig.NewTransactionError(fmt.Errorf("interface %s not found", hostIfName), false), err)
+	assert.Equal(t, fmt.Errorf("interface %s not found", hostIfName), err)
 	assert.Nil(t, hostIFConfig)
 }
 
@@ -145,7 +144,7 @@ func TestUpdateOVSPortsData(t *testing.T) {
 	interfaceConfig := &intf1
 	eeName := "eeName"
 	ips := []string{"10.20.30.40"}
-	attachInfo := map[string]interface{}{
+	attachInfo := map[string]string{
 		"antrea-type":      "host",
 		"entity-name":      "eeName",
 		"entity-namespace": "externalEntityNamespace",
@@ -242,9 +241,9 @@ func TestParseHostInterfaceConfig(t *testing.T) {
 			},
 			portConfig:            &interfacestore.OVSPortConfig{PortUUID: portUUID, OFPort: 3},
 			uplinkPortData:        nil,
-			getPortDataErr:        ovsconfig.NewTransactionError(fmt.Errorf("port %s not found", portUUID), false),
+			getPortDataErr:        fmt.Errorf("port %s not found", portUUID),
 			expectInterfaceConfig: nil,
-			expectedErr:           ovsconfig.NewTransactionError(fmt.Errorf("port %s not found", portUUID), false),
+			expectedErr:           fmt.Errorf("port %s not found", portUUID),
 		},
 		{
 			name: "ParseHostInterfaceConfig and return interfaceConfig",
@@ -348,7 +347,7 @@ func TestAddExternalNode(t *testing.T) {
 	}
 	mockIfaceStore.EXPECT().GetInterfaceByName("intf1").Return(&intf1, true)
 	mockOVSBridgeClient.EXPECT().GetPortData(portUUID1, "intf1").Return(portData1, nil)
-	expectedInfo := map[string]interface{}{
+	expectedInfo := map[string]string{
 		"uplink-name":      "uplinkName",
 		"entity-name":      "eeName",
 		"antrea-type":      "host",
@@ -505,7 +504,7 @@ func TestGetOVSAttachInfo(t *testing.T) {
 
 	ips := []string{"10.20.30.40"}
 	info := GetOVSAttachInfo(uplinkName, uplinkUUID, entityName, entityNamespace, ips)
-	expectedInfo := map[string]interface{}{
+	expectedInfo := map[string]string{
 		"uplink-name":      uplinkName,
 		"uplink-port":      uplinkUUID,
 		"antrea-type":      "host",

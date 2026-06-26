@@ -41,7 +41,6 @@ import (
 	typestest "antrea.io/antrea/v2/pkg/agent/types/testing"
 	"antrea.io/antrea/v2/pkg/agent/util"
 	cnipb "antrea.io/antrea/v2/pkg/apis/cni/v1beta1"
-	"antrea.io/antrea/v2/pkg/ovs/ovsconfig"
 	ovsconfigtest "antrea.io/antrea/v2/pkg/ovs/ovsconfig/testing"
 	"antrea.io/antrea/v2/pkg/util/channel"
 )
@@ -171,7 +170,7 @@ func TestRemoveInterface(t *testing.T) {
 		containerCfg := newContainerConfig("test2")
 		ifaceStore.AddInterface(containerCfg)
 
-		mockOVSBridgeClient.EXPECT().DeletePort(fakePortUUID).Return(ovsconfig.NewTransactionError(fmt.Errorf("error while deleting OVS port"), true))
+		mockOVSBridgeClient.EXPECT().DeletePort(fakePortUUID).Return(fmt.Errorf("error while deleting OVS port"))
 		mockOFClient.EXPECT().UninstallPodFlows(hostIfaceName).Return(nil)
 
 		err := podConfigurator.removeInterfaces(containerID)
@@ -336,7 +335,7 @@ func TestCmdAdd(t *testing.T) {
 			ovsPortID := generateUUID()
 			if tc.connectOVS {
 				mockOVSBridgeClient.EXPECT().CreatePort(hostInterfaceName, gomock.Any(), gomock.Any()).Return(ovsPortID, nil).Times(1)
-				mockOVSBridgeClient.EXPECT().GetOFPort(hostInterfaceName, false).Return(int32(100), nil).Times(1)
+				mockOVSBridgeClient.EXPECT().GetOFPort(hostInterfaceName).Return(int32(100), nil).Times(1)
 				mockOFClient.EXPECT().InstallPodFlows(hostInterfaceName, gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil)
 			}
 			if tc.addLocalIPAMRouteError != nil {
@@ -439,7 +438,7 @@ func TestCmdDel(t *testing.T) {
 			enableSecondaryNetworkIPAM: false,
 			isChaining:                 false,
 			disconnectOVS:              true,
-			disconnectOVSErr:           ovsconfig.NewTransactionError(fmt.Errorf("failed to delete port"), true),
+			disconnectOVSErr:           fmt.Errorf("failed to delete port"),
 			ipamDel:                    false,
 			delLocalIPAMRoute:          false,
 			response: &cnipb.CniCmdResponse{

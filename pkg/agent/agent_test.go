@@ -58,19 +58,11 @@ func newAgentInitializer(ovsBridgeClient ovsconfig.OVSBridgeClient, ifaceStore i
 	return &Initializer{ovsBridgeClient: ovsBridgeClient, ifaceStore: ifaceStore, hostGateway: "antrea-gw0"}
 }
 
-func convertExternalIDMap(in map[string]interface{}) map[string]string {
-	out := make(map[string]string, len(in))
-	for k, v := range in {
-		out[k] = v.(string)
-	}
-	return out
-}
-
 func TestInitInterfaceStore(t *testing.T) {
 	controller := mock.NewController(t)
 	mockOVSBridgeClient := ovsconfigtest.NewMockOVSBridgeClient(controller)
 
-	mockOVSBridgeClient.EXPECT().GetPortList().Return(nil, ovsconfig.NewTransactionError(fmt.Errorf("Failed to list OVS ports"), true))
+	mockOVSBridgeClient.EXPECT().GetPortList().Return(nil, fmt.Errorf("Failed to list OVS ports"))
 
 	store := interfacestore.NewInterfaceStore()
 	initializer := newAgentInitializer(mockOVSBridgeClient, store)
@@ -92,12 +84,12 @@ func TestInitInterfaceStore(t *testing.T) {
 	p2NetIP := net.ParseIP(p2IP)
 
 	ovsPort1 := ovsconfig.OVSPortData{UUID: uuid1, Name: "p1", IFName: "p1", OFPort: 11,
-		ExternalIDs: convertExternalIDMap(cniserver.BuildOVSPortExternalIDs(
-			interfacestore.NewContainerInterface("p1", uuid1, "pod1", "ns1", "eth0", "netns1", p1NetMAC, []net.IP{p1NetIP}, 0)))}
+		ExternalIDs: cniserver.BuildOVSPortExternalIDs(
+			interfacestore.NewContainerInterface("p1", uuid1, "pod1", "ns1", "eth0", "netns1", p1NetMAC, []net.IP{p1NetIP}, 0))}
 	ovsPort2 := ovsconfig.OVSPortData{UUID: uuid2, Name: "p2", IFName: "p2", OFPort: 12,
-		ExternalIDs: convertExternalIDMap(cniserver.BuildOVSPortExternalIDs(
+		ExternalIDs: cniserver.BuildOVSPortExternalIDs(
 			interfacestore.NewContainerInterface("p2", uuid2, "pod2", "ns2", "eth0", "netns2", p2NetMAC, []net.IP{p2NetIP}, 0),
-		)),
+		),
 	}
 	uuid3 := uuid.Must(uuid.NewV4()).String()
 	ovsPortUplinkInternal := ovsconfig.OVSPortData{UUID: uuid3, Name: "eth-antrea-test-1", IFName: "eth-antrea-test-1", OFPort: 100,
@@ -107,7 +99,7 @@ func TestInitInterfaceStore(t *testing.T) {
 	}
 	initOVSPorts := []ovsconfig.OVSPortData{ovsPort1, ovsPort2, ovsPortUplinkInternal}
 
-	mockOVSBridgeClient.EXPECT().GetPortList().Return(initOVSPorts, ovsconfig.NewTransactionError(fmt.Errorf("Failed to list OVS ports"), true))
+	mockOVSBridgeClient.EXPECT().GetPortList().Return(initOVSPorts, fmt.Errorf("Failed to list OVS ports"))
 	initializer.initInterfaceStore()
 	if store.Len() != 0 {
 		t.Errorf("Failed to load OVS port in store")
@@ -138,11 +130,11 @@ func TestPersistRoundNum(t *testing.T) {
 	controller := mock.NewController(t)
 	mockOVSBridgeClient := ovsconfigtest.NewMockOVSBridgeClient(controller)
 
-	transactionError := ovsconfig.NewTransactionError(fmt.Errorf("Failed to get external IDs"), true)
+	transactionError := fmt.Errorf("Failed to get external IDs")
 	firstCall := mockOVSBridgeClient.EXPECT().GetExternalIDs().Return(nil, transactionError)
 	externalIDs := make(map[string]string)
 	mockOVSBridgeClient.EXPECT().GetExternalIDs().Return(externalIDs, nil).After(firstCall)
-	newExternalIDs := make(map[string]interface{})
+	newExternalIDs := make(map[string]string)
 	newExternalIDs[roundNumKey] = fmt.Sprint(roundNum)
 	mockOVSBridgeClient.EXPECT().SetExternalIDs(mock.Eq(newExternalIDs)).Times(1)
 
@@ -156,7 +148,7 @@ func TestGetRoundInfo(t *testing.T) {
 	controller := mock.NewController(t)
 	mockOVSBridgeClient := ovsconfigtest.NewMockOVSBridgeClient(controller)
 
-	mockOVSBridgeClient.EXPECT().GetExternalIDs().Return(nil, ovsconfig.NewTransactionError(fmt.Errorf("Failed to get external IDs"), true))
+	mockOVSBridgeClient.EXPECT().GetExternalIDs().Return(nil, fmt.Errorf("Failed to get external IDs"))
 	roundInfo := getRoundInfo(mockOVSBridgeClient)
 	assert.Equal(t, uint64(initialRoundNum), roundInfo.RoundNum, "Unexpected round number")
 	externalIDs := make(map[string]string)
@@ -541,9 +533,9 @@ func TestSetupDefaultTunnelInterface(t *testing.T) {
 					"",
 					"",
 					"",
-					map[string]interface{}{},
-					map[string]interface{}{interfacestore.AntreaInterfaceTypeKey: interfacestore.AntreaTunnel})
-				client.GetOFPort(defaultTunInterfaceName, false)
+					map[string]string{},
+					map[string]string{interfacestore.AntreaInterfaceTypeKey: interfacestore.AntreaTunnel})
+				client.GetOFPort(defaultTunInterfaceName)
 			},
 		},
 		{
@@ -560,7 +552,7 @@ func TestSetupDefaultTunnelInterface(t *testing.T) {
 			existingTunnelInterface: interfacestore.NewTunnelInterface(defaultTunInterfaceName, ovsconfig.GeneveTunnel, 0, tunnelPortLocalIP, true, &interfacestore.OVSPortConfig{OFPort: config.DefaultTunOFPort}),
 			expectedOVSCalls: func(client *ovsconfigtest.MockOVSBridgeClientMockRecorder) {
 				client.GetInterfaceOptions(defaultTunInterfaceName).Return(map[string]string{"csum": "true"}, nil)
-				client.SetInterfaceOptions(defaultTunInterfaceName, map[string]interface{}{"csum": "false"})
+				client.SetInterfaceOptions(defaultTunInterfaceName, map[string]string{"csum": "false"})
 			},
 		},
 		{
@@ -588,9 +580,9 @@ func TestSetupDefaultTunnelInterface(t *testing.T) {
 					"",
 					"",
 					"",
-					map[string]interface{}{"dst_port": "9999"},
-					map[string]interface{}{interfacestore.AntreaInterfaceTypeKey: interfacestore.AntreaTunnel})
-				client.GetOFPort(defaultTunInterfaceName, false)
+					map[string]string{"dst_port": "9999"},
+					map[string]string{interfacestore.AntreaInterfaceTypeKey: interfacestore.AntreaTunnel})
+				client.GetOFPort(defaultTunInterfaceName)
 			},
 		},
 		{
@@ -691,7 +683,7 @@ func TestSetupGatewayInterface(t *testing.T) {
 	ofport := int32(config.DefaultHostGatewayOFPort)
 	mockOVSBridgeClient.EXPECT().CreateInternalPort(initializer.hostGateway, ofport, mock.Any(), mock.Any()).Return(portUUID, nil)
 	mockOVSBridgeClient.EXPECT().SetInterfaceMAC(initializer.hostGateway, fakeMAC).Return(nil)
-	mockOVSBridgeClient.EXPECT().GetOFPort(initializer.hostGateway, false).Return(ofport, nil)
+	mockOVSBridgeClient.EXPECT().GetOFPort(initializer.hostGateway).Return(ofport, nil)
 	mockOVSBridgeClient.EXPECT().SetInterfaceMTU(initializer.hostGateway, networkConfig.InterfaceMTU).Return(nil)
 	err := initializer.setupGatewayInterface()
 	assert.NoError(t, err)
@@ -796,7 +788,7 @@ func TestSetOVSDatapath(t *testing.T) {
 		{
 			name: "fail to read OVS bridge other_config",
 			expectedCalls: func(m *ovsconfigtest.MockOVSBridgeClient) {
-				m.EXPECT().GetOVSOtherConfig().Return(nil, ovsconfig.NewTransactionError(fmt.Errorf("failed to read OVS bridge other_config"), true))
+				m.EXPECT().GetOVSOtherConfig().Return(nil, fmt.Errorf("failed to read OVS bridge other_config"))
 			},
 			expectedErr: "failed to read OVS bridge other_config",
 		},
@@ -804,7 +796,7 @@ func TestSetOVSDatapath(t *testing.T) {
 			name: "fail to set OVS bridge datapath_id",
 			expectedCalls: func(m *ovsconfigtest.MockOVSBridgeClient) {
 				m.EXPECT().GetOVSOtherConfig().Return(map[string]string{}, nil)
-				m.EXPECT().SetDatapathID(mock.Any()).Return(ovsconfig.NewTransactionError(fmt.Errorf("failed to set OVS bridge datapath_id"), true))
+				m.EXPECT().SetDatapathID(mock.Any()).Return(fmt.Errorf("failed to set OVS bridge datapath_id"))
 			},
 			expectedErr: "failed to set OVS bridge datapath_id",
 		},

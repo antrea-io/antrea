@@ -419,7 +419,7 @@ func (c *ExternalNodeController) createOVSPortsAndFlows(uplinkName, hostIFName, 
 	}()
 
 	// Create uplink port in OVS.
-	uplinkExternalIDs := map[string]interface{}{
+	uplinkExternalIDs := map[string]string{
 		interfacestore.AntreaInterfaceTypeKey: interfacestore.AntreaUplink,
 	}
 	uplinkUUID, ovsErr := c.ovsBridgeClient.CreatePort(uplinkName, uplinkName, uplinkExternalIDs)
@@ -433,7 +433,7 @@ func (c *ExternalNodeController) createOVSPortsAndFlows(uplinkName, hostIFName, 
 			}
 		}
 	}()
-	uplinkOFPort, ovsErr := c.ovsBridgeClient.GetOFPort(uplinkName, false)
+	uplinkOFPort, ovsErr := c.ovsBridgeClient.GetOFPort(uplinkName)
 	if ovsErr != nil {
 		return nil, ovsErr
 	}
@@ -452,7 +452,7 @@ func (c *ExternalNodeController) createOVSPortsAndFlows(uplinkName, hostIFName, 
 			}
 		}
 	}()
-	hostOFPort, ovsErr := c.ovsBridgeClient.GetOFPort(hostIFName, false)
+	hostOFPort, ovsErr := c.ovsBridgeClient.GetOFPort(hostIFName)
 	if ovsErr != nil {
 		return nil, ovsErr
 	}
@@ -491,8 +491,8 @@ func (c *ExternalNodeController) createOVSPortsAndFlows(uplinkName, hostIFName, 
 	return hostIFConfig, nil
 }
 
-func GetOVSAttachInfo(uplinkName, uplinkUUID, entityName, entityNamespace string, ips []string) map[string]interface{} {
-	attachInfo := map[string]interface{}{
+func GetOVSAttachInfo(uplinkName, uplinkUUID, entityName, entityNamespace string, ips []string) map[string]string {
+	attachInfo := map[string]string{
 		interfacestore.AntreaInterfaceTypeKey: interfacestore.AntreaHost,
 	}
 	if uplinkName != "" {
@@ -515,7 +515,7 @@ func GetOVSAttachInfo(uplinkName, uplinkUUID, entityName, entityNamespace string
 }
 
 func (c *ExternalNodeController) updateOVSPortsData(interfaceConfig *interfacestore.InterfaceConfig, portData *ovsconfig.OVSPortData, eeName string, ips []string) (*interfacestore.InterfaceConfig, error) {
-	attachInfo := map[string]interface{}{
+	attachInfo := map[string]string{
 		ovsExternalIDUplinkName:               portData.ExternalIDs[ovsExternalIDUplinkName],
 		ovsExternalIDUplinkPort:               portData.ExternalIDs[ovsExternalIDUplinkPort],
 		ovsExternalIDEntityName:               eeName,

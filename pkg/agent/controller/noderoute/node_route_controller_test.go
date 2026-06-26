@@ -459,20 +459,20 @@ func TestCreateIPSecTunnelPortPSK(t *testing.T) {
 	c.ovsClient.EXPECT().CreateTunnelPortExt(
 		node1PortName, ovsconfig.TunnelType("vxlan"), int32(0),
 		false, "", nodeIP1.String(), "", "changeme", nil,
-		map[string]interface{}{ovsExternalIDNodeName: "xyz-k8s-0-1",
+		map[string]string{ovsExternalIDNodeName: "xyz-k8s-0-1",
 			interfacestore.AntreaInterfaceTypeKey: interfacestore.AntreaIPsecTunnel,
 		}).Times(1)
 	c.ovsClient.EXPECT().CreateTunnelPortExt(
 		node2PortName, ovsconfig.TunnelType("vxlan"), int32(0),
 		false, "", nodeIP2.String(), "", "changeme", nil,
-		map[string]interface{}{ovsExternalIDNodeName: "xyz-k8s-0-2",
+		map[string]string{ovsExternalIDNodeName: "xyz-k8s-0-2",
 			interfacestore.AntreaInterfaceTypeKey: interfacestore.AntreaIPsecTunnel,
 		}).Times(1)
-	c.ovsClient.EXPECT().GetOFPort(node1PortName, false).Return(int32(1), nil)
+	c.ovsClient.EXPECT().GetOFPort(node1PortName).Return(int32(1), nil)
 	c.ovsCtlClient.EXPECT().SetPortNoFlood(1)
-	c.ovsClient.EXPECT().GetOFPort(node2PortName, false).Return(int32(2), nil)
+	c.ovsClient.EXPECT().GetOFPort(node2PortName).Return(int32(2), nil)
 	c.ovsCtlClient.EXPECT().SetPortNoFlood(2)
-	c.ovsClient.EXPECT().GetOFPort(node3PortName, false).Return(int32(5), nil)
+	c.ovsClient.EXPECT().GetOFPort(node3PortName).Return(int32(5), nil)
 	c.ovsCtlClient.EXPECT().SetPortNoFlood(5)
 	c.ovsClient.EXPECT().DeletePort("123").Times(1)
 
@@ -529,10 +529,10 @@ func TestCreateIPSecTunnelPortCert(t *testing.T) {
 	c.ovsClient.EXPECT().CreateTunnelPortExt(
 		node1PortName, ovsconfig.TunnelType("vxlan"), int32(0),
 		false, "", nodeIP1.String(), "xyz-k8s-0-1", "", nil,
-		map[string]interface{}{ovsExternalIDNodeName: "xyz-k8s-0-1",
+		map[string]string{ovsExternalIDNodeName: "xyz-k8s-0-1",
 			interfacestore.AntreaInterfaceTypeKey: interfacestore.AntreaIPsecTunnel,
 		}).Times(1)
-	c.ovsClient.EXPECT().GetOFPort(node1PortName, false).Return(int32(1), nil)
+	c.ovsClient.EXPECT().GetOFPort(node1PortName).Return(int32(1), nil)
 	c.ovsCtlClient.EXPECT().SetPortNoFlood(1)
 
 	tests := []struct {

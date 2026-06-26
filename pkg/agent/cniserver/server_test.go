@@ -684,8 +684,7 @@ func TestBuildOVSPortExternalIDs(t *testing.T) {
 	_, existed := externalIDs[ovsExternalIDIFDev]
 	assert.False(t, existed, "External IDs should not include interface name eth0")
 	parsedIP, existed := externalIDs[ovsExternalIDIP]
-	parsedIPStr := parsedIP.(string)
-	if !existed || !strings.Contains(parsedIPStr, "10.1.2.100") || !strings.Contains(parsedIPStr, "2001:fd1a::2") {
+	if !existed || !strings.Contains(parsedIP, "10.1.2.100") || !strings.Contains(parsedIP, "2001:fd1a::2") {
 		t.Errorf("Failed to store IPs to external IDs")
 	}
 	parsedMAC := externalIDs[ovsExternalIDMAC]
@@ -698,8 +697,7 @@ func TestBuildOVSPortExternalIDs(t *testing.T) {
 	testConfigParsingFn := func() {
 		portExternalIDs := make(map[string]string)
 		for k, v := range externalIDs {
-			val := v.(string)
-			portExternalIDs[k] = val
+			portExternalIDs[k] = v
 		}
 		mockPort := &ovsconfig.OVSPortData{
 			Name:        "testPort",
@@ -732,7 +730,7 @@ func TestBuildOVSPortExternalIDs(t *testing.T) {
 	parsedIFDev := externalIDs[ovsExternalIDIFDev]
 	assert.Equal(t, "eth1", parsedIFDev)
 	parsedIP, existed = externalIDs[ovsExternalIDIP]
-	assert.True(t, existed && parsedIP.(string) == "")
+	assert.True(t, existed && parsedIP == "")
 	testConfigParsingFn()
 
 }
