@@ -124,11 +124,25 @@ The feature gates of Antrea Controller and Agent can be shown using the `antctl 
 The command can run locally inside the `antrea-controller` or `antrea-agent` container or out-of-cluster,
 when it is running out-of-cluster or in Controller Pod, it will print both Controller and Agent's feature gates list.
 
-The following command prints the current feature gates:
+The following command prints all current feature gates:
 
 ```bash
 antctl get featuregates
 ```
+
+To get information about a specific feature gate including its prerequisites, you can specify the feature gate name:
+
+```bash
+antctl get featuregates <FeatureName>
+```
+
+For example, to get information about the AntreaIPAM feature gate:
+
+```bash
+antctl get featuregates AntreaIPAM
+```
+
+This will display detailed information about the feature gate, including its status, version, and any prerequisites required for the feature to work as designed.
 
 ### Performing checks to facilitate installation process
 
@@ -175,6 +189,28 @@ Run the following command to discover more options:
 ```bash
 antctl check installation --help
 ```
+
+### Feature Gates and Prerequisites
+
+Antrea supports various feature gates that can be enabled or disabled. Some feature gates have prerequisites that must be met for the feature to work correctly. You can view all available feature gates and their status using:
+
+```bash
+antctl get featuregates
+```
+
+To view detailed information about a specific feature gate, including its prerequisites:
+
+```bash
+antctl get featuregates <FEATURE_GATE_NAME>
+```
+
+For example:
+
+```bash
+antctl get featuregates AntreaIPAM
+```
+
+This will display the status, version, and any prerequisites required for the feature gate to function properly.
 
 ### Collecting support information
 
