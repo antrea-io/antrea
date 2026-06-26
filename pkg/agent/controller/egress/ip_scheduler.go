@@ -15,6 +15,7 @@
 package egress
 
 import (
+	"fmt"
 	"sort"
 	"strconv"
 	"sync"
@@ -117,6 +118,8 @@ func NewEgressIPScheduler(cluster memberlist.Interface, egressInformer crdinform
 	return s
 }
 
+const maxEgressIPsAnnotationValue = 255
+
 func getMaxEgressIPsFromAnnotation(node *corev1.Node) (int, bool, error) {
 	maxEgressIPsStr, exists := node.Annotations[types.NodeMaxEgressIPsAnnotationKey]
 	if !exists {
@@ -125,6 +128,9 @@ func getMaxEgressIPsFromAnnotation(node *corev1.Node) (int, bool, error) {
 	maxEgressIPs, err := strconv.Atoi(maxEgressIPsStr)
 	if err != nil {
 		return 0, false, err
+	}
+	if maxEgressIPs < 0 || maxEgressIPs > maxEgressIPsAnnotationValue {
+		return 0, false, fmt.Errorf("max-egress-ips annotation value %d is out of range [0, %d]", maxEgressIPs, maxEgressIPsAnnotationValue)
 	}
 	return maxEgressIPs, true, nil
 }
