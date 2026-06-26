@@ -211,7 +211,7 @@ func (n *NetworkPolicyController) updateNamespace(oldObj, curObj interface{}) {
 	if !labels.Equals(oldNamespace.Labels, curNamespace.Labels) {
 		affectedACNPsByOldLabels := n.filterPerNamespaceRuleACNPsByNSLabels(oldNamespace.Labels)
 		affectedACNPsByCurLabels := n.filterPerNamespaceRuleACNPsByNSLabels(curNamespace.Labels)
-		affectedACNPs := utilsets.SymmetricDifferenceString(affectedACNPsByOldLabels, affectedACNPsByCurLabels)
+		affectedACNPs := utilsets.SymmetricDifference(affectedACNPsByOldLabels, affectedACNPsByCurLabels)
 		// Any ACNPs that has Namespace label rules that refers to the label key set that has
 		// changed during the Namespace update will need to be re-processed.
 		acnpsWithRulesMatchingNSLabelKeys := n.getACNPsWithRulesMatchingAnyUpdatedLabels(oldNamespace.Labels, curNamespace.Labels)
@@ -343,9 +343,9 @@ func (c *NetworkPolicyController) updateNode(oldObj, newObj interface{}) {
 	if labelsChanged {
 		oldAGs := c.filterAGsFromNodeLabels(oldNode)
 		if ipChanged {
-			affectedAGs = utilsets.MergeString(affectedAGs, oldAGs)
+			affectedAGs = utilsets.Merge(affectedAGs, oldAGs)
 		} else {
-			affectedAGs = utilsets.SymmetricDifferenceString(affectedAGs, oldAGs)
+			affectedAGs = utilsets.SymmetricDifference(affectedAGs, oldAGs)
 		}
 	}
 	for ag := range affectedAGs {

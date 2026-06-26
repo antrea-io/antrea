@@ -1129,7 +1129,7 @@ func (n *NetworkPolicyController) syncAddressGroup(key string) error {
 	addrGroupNodeNames := sets.Set[string]{}
 	for _, internalNPObj := range nps {
 		internalNP := internalNPObj.(*antreatypes.NetworkPolicy)
-		utilsets.MergeString(addrGroupNodeNames, internalNP.SpanMeta.NodeNames)
+		utilsets.Merge(addrGroupNodeNames, internalNP.SpanMeta.NodeNames)
 	}
 	memberSet := n.getAddressGroupMemberSet(addressGroup)
 	updatedAddressGroup := &antreatypes.AddressGroup{
@@ -1589,7 +1589,7 @@ func (n *NetworkPolicyController) syncInternalNetworkPolicy(key *controlplane.Ne
 			if appGroup.SyncError != nil {
 				return nil, appGroup.SyncError
 			}
-			utilsets.MergeString(nodeNames, appGroup.SpanMeta.NodeNames)
+			utilsets.Merge(nodeNames, appGroup.SpanMeta.NodeNames)
 		}
 		return nodeNames, nil
 	}()
@@ -1679,7 +1679,7 @@ func (n *NetworkPolicyController) syncInternalNetworkPolicy(key *controlplane.Ne
 		addressGroupsToSync = oldAddressGroupNames.Union(newAddressGroupNames)
 		klog.V(4).InfoS("Internal NetworkPolicy's Node span changed, enqueuing all related AddressGroups", "NetworkPolicy", key, "AddressGroups", addressGroupsToSync)
 	} else {
-		addressGroupsToSync = utilsets.SymmetricDifferenceString(oldAddressGroupNames, newAddressGroupNames)
+		addressGroupsToSync = utilsets.SymmetricDifference(oldAddressGroupNames, newAddressGroupNames)
 		klog.V(4).InfoS("Internal NetworkPolicy's Node span did not change, enqueuing all changed AddressGroups", "NetworkPolicy", key, "AddressGroups", addressGroupsToSync)
 	}
 	for addressGroup := range addressGroupsToSync {

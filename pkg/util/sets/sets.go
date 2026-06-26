@@ -1,4 +1,4 @@
-// Copyright 2021 Antrea Authors
+// Copyright 2025 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -16,18 +16,41 @@ package sets
 
 import "k8s.io/apimachinery/pkg/util/sets"
 
-// MergeInt32 merges the src sets into dst and returns dst.
+// Merge merges the src set into dst and returns dst.
 // This assumes that dst is non-nil.
 // For example:
 // s1 = {a1, a2, a3}
 // s2 = {a1, a2, a4, a5}
-// MergeInt32(s1, s2) = {a1, a2, a3, a4, a5}
+// Merge(s1, s2) = {a1, a2, a3, a4, a5}
 // s1 = {a1, a2, a3, a4, a5}
 //
 // It supersedes s1.Union(s2) when constructing a new set is not the intention.
-func MergeInt32(dst, src sets.Set[int32]) sets.Set[int32] {
+func Merge[T comparable](dst, src sets.Set[T]) sets.Set[T] {
 	for item := range src {
 		dst.Insert(item)
 	}
 	return dst
+}
+
+// SymmetricDifference returns the symmetric difference of two sets.
+// For example:
+// s1 = {a1, a2, a3}
+// s2 = {a1, a2, a4, a5}
+// SymmetricDifference(s1, s2) = {a3, a4, a5}
+//
+// It supersedes s1.Difference(s2).Union(s2.Difference(s1)) which is a little complicated and always builds several
+// unnecessary intermediate sets.
+func SymmetricDifference[T comparable](s1, s2 sets.Set[T]) sets.Set[T] {
+	result := sets.New[T]()
+	for key := range s1 {
+		if !s2.Has(key) {
+			result.Insert(key)
+		}
+	}
+	for key := range s2 {
+		if !s1.Has(key) {
+			result.Insert(key)
+		}
+	}
+	return result
 }

@@ -315,11 +315,11 @@ func (f *fqdnController) updateRuleSelectedPods(ruleID string, podOFAddrs sets.S
 	defer f.fqdnRuleToPodsMutex.Unlock()
 	originalPodSet, newPodSet := sets.Set[int32]{}, sets.Set[int32]{}
 	for _, pods := range f.fqdnRuleToSelectedPods {
-		utilsets.MergeInt32(originalPodSet, pods)
+		utilsets.Merge(originalPodSet, pods)
 	}
 	f.fqdnRuleToSelectedPods[ruleID] = podOFAddrs
 	for _, pods := range f.fqdnRuleToSelectedPods {
-		utilsets.MergeInt32(newPodSet, pods)
+		utilsets.Merge(newPodSet, pods)
 	}
 	addedPods, removedPods := newPodSet.Difference(originalPodSet), originalPodSet.Difference(newPodSet)
 	if len(addedPods) > 0 {
@@ -398,11 +398,11 @@ func (f *fqdnController) deleteRuleSelectedPods(ruleID string) error {
 	}
 	originalPodSet, newPodSet := sets.Set[int32]{}, sets.Set[int32]{}
 	for _, pods := range f.fqdnRuleToSelectedPods {
-		utilsets.MergeInt32(originalPodSet, pods)
+		utilsets.Merge(originalPodSet, pods)
 	}
 	delete(f.fqdnRuleToSelectedPods, ruleID)
 	for _, pods := range f.fqdnRuleToSelectedPods {
-		utilsets.MergeInt32(newPodSet, pods)
+		utilsets.Merge(newPodSet, pods)
 	}
 	removedPods := originalPodSet.Difference(newPodSet)
 	if len(removedPods) > 0 {
@@ -536,7 +536,7 @@ func (f *fqdnController) syncDirtyRules(fqdn string, waitCh chan error, addressU
 	}
 	dirtyRules := sets.New[string]()
 	for selectorItem := range f.fqdnToSelectorItem[fqdn] {
-		utilsets.MergeString(dirtyRules, f.selectorItemToRuleIDs[selectorItem])
+		utilsets.Merge(dirtyRules, f.selectorItemToRuleIDs[selectorItem])
 	}
 	if waitCh == nil {
 		if addressUpdate {
