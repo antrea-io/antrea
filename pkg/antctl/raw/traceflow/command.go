@@ -108,7 +108,7 @@ func init() {
 
 	Command.Flags().StringVarP(&option.source, "source", "S", "", "source of the Traceflow: Namespace/Pod, Pod, or IP")
 	Command.Flags().StringVarP(&option.destination, "destination", "D", "", "destination of the Traceflow: Namespace/Pod, Pod, Namespace/Service, Service or IP")
-	Command.Flags().StringVarP(&option.outputType, "output", "o", "yaml", "output type: yaml (default), json")
+	Command.Flags().StringVarP(&option.outputType, "output", "o", "yaml", "output type: yaml (default), json, tree")
 	Command.Flags().StringVarP(&option.flow, "flow", "f", "", "specify the flow (packet headers) of the Traceflow packet, including tcp_src, tcp_dst, tcp_flags, udp_src, udp_dst, ipv6")
 	Command.Flags().BoolVarP(&option.liveTraffic, "live-traffic", "L", false, "if set, the Traceflow will trace the first packet of the matched live traffic flow")
 	Command.Flags().BoolVarP(&option.droppedOnly, "dropped-only", "", false, "if set, capture only the dropped packet in a live-traffic Traceflow")
@@ -429,8 +429,12 @@ func output(tf *v1beta1.Traceflow, writer io.Writer) error {
 		if err := yamlOutput(&r, writer); err != nil {
 			return fmt.Errorf("error when converting output to yaml: %w", err)
 		}
+	case "tree":
+		if err := treeOutput(&r, writer); err != nil {
+			return fmt.Errorf("error when converting output to tree: %w", err)
+		}
 	default:
-		return fmt.Errorf("output types should be yaml or json")
+		return fmt.Errorf("output types should be yaml, json, or tree")
 	}
 	return nil
 }
@@ -461,6 +465,110 @@ func jsonOutput(r *Response, writer io.Writer) error {
 		return fmt.Errorf("error when outputing in json format: %w", err)
 	}
 	return nil
+}
+
+func treeOutput(r *Response, writer io.Writer) error {
+	fmt.Fprintf(writer, "Traceflow: %s\n", r.Name)
+	fmt.Fprintf(writer, "Phase: %s\n", r.Phase)
+	if r.Reason != "" {
+		fmt.Fprintf(writer, "Reason: %s\n", r.Reason)
+	}
+	fmt.Fprintf(writer, "Source: %s\n", r.Source)
+	fmt.Fprintf(writer, "Destination: %s\n", r.Destination)
+	fmt.Fprintf(writer, "\nPacket Flow:\n")
+
+	for i, nodeResult := range r.NodeResults {
+		isLastNode := i == len(r.NodeResults)-1
+		nodePrefix := "├──"
+		if isLastNode {
+			nodePrefix = "└──"
+		}
+
+		fmt.Fprintf(writer, "%s Node: %s", nodePrefix, nodeResult.Node)
+		if nodeResult.Role != "" {
+			fmt.Fprintf(writer, " (%s)", nodeResult.Role)
+		}
+		fmt.Fprintf(writer, "\n")
+
+		for j, obs := range nodeResult.Observations {
+			isLastObs := j == len(nodeResult.Observations)-1
+			var obsPrefix, linePrefix string
+			if isLastNode {
+				if isLastObs {
+					obsPrefix = "    └──"
+					linePrefix = "       "
+				} else {
+					obsPrefix = "    ├──"
+					linePrefix = "    │  "
+				}
+			} else {
+				if isLastObs {
+					obsPrefix = "│   └──"
+					linePrefix = "│      "
+				} else {
+					obsPrefix = "│   ├──"
+					linePrefix = "│   │  "
+				}
+			}
+
+			actionSymbol := getActionSymbol(obs.Action)
+			fmt.Fprintf(writer, "%s %s [%s] %s\n", obsPrefix, actionSymbol, obs.Component, obs.Action)
+
+			if obs.ComponentInfo != "" {
+				fmt.Fprintf(writer, "%s Info: %s\n", linePrefix, obs.ComponentInfo)
+			}
+			if obs.Pod != "" {
+				fmt.Fprintf(writer, "%s Pod: %s\n", linePrefix, obs.Pod)
+			}
+			if obs.NetworkPolicy != "" {
+				fmt.Fprintf(writer, "%s Policy: %s", linePrefix, obs.NetworkPolicy)
+				if obs.NetworkPolicyRule != "" {
+					fmt.Fprintf(writer, " (Rule: %s)", obs.NetworkPolicyRule)
+				}
+				fmt.Fprintf(writer, "\n")
+			}
+			if obs.TunnelDstIP != "" {
+				fmt.Fprintf(writer, "%s Tunnel: %s\n", linePrefix, obs.TunnelDstIP)
+			}
+			if obs.TranslatedSrcIP != "" {
+				fmt.Fprintf(writer, "%s Translated Src: %s\n", linePrefix, obs.TranslatedSrcIP)
+			}
+			if obs.TranslatedDstIP != "" {
+				fmt.Fprintf(writer, "%s Translated Dst: %s\n", linePrefix, obs.TranslatedDstIP)
+			}
+			if obs.EgressIP != "" {
+				fmt.Fprintf(writer, "%s Egress IP: %s\n", linePrefix, obs.EgressIP)
+			}
+			if obs.EgressNode != "" {
+				fmt.Fprintf(writer, "%s Egress Node: %s\n", linePrefix, obs.EgressNode)
+			}
+		}
+	}
+
+	return nil
+}
+
+func getActionSymbol(action v1beta1.TraceflowAction) string {
+	switch action {
+	case v1beta1.ActionDelivered:
+		return "✓"
+	case v1beta1.ActionReceived:
+		return "←"
+	case v1beta1.ActionForwarded:
+		return "→"
+	case v1beta1.ActionDropped:
+		return "✗"
+	case v1beta1.ActionRejected:
+		return "✗"
+	case v1beta1.ActionForwardedOutOfNetwork:
+		return "⇉"
+	case v1beta1.ActionMarkedForSNAT:
+		return "⊙"
+	case v1beta1.ActionForwardedToEgressNode:
+		return "⇨"
+	default:
+		return "•"
+	}
 }
 
 func getTFName(prefix string) string {
