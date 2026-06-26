@@ -274,6 +274,12 @@ type NetworkPolicyController struct {
 	// gate CNP CREATE requests, and the Tier CREATE webhook uses it to block new Tiers at that priority
 	// once the feature gate is enabled and there is no pre-existing conflict.
 	cnpCreationAllowed atomic.Bool
+	// cnpCreationAllowedMutex serializes concurrent calls to syncCNPCreationAllowed to prevent a
+	// stale query result from overwriting a more recent store. Run() and onTierDeleteForCNP both
+	// call syncCNPCreationAllowed from different goroutines; without this mutex the sequence
+	// (add-tier, query, delete-tier+sync→true, sync→false) would leave cnpCreationAllowed=false
+	// even though no conflicting Tier exists.
+	cnpCreationAllowedMutex sync.Mutex
 	// heartbeatCh is an internal channel for testing. It's used to know whether all tasks have been
 	// processed, and to count executions of each function.
 	heartbeatCh chan heartbeat

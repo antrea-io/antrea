@@ -15,6 +15,7 @@
 package networkpolicy
 
 import (
+	"sync"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -100,7 +101,7 @@ func TestProcessClusterNetworkPolicy(t *testing.T) {
 					UID:  "uid-1",
 				},
 				Priority:         &p100,
-				TierPriority:     ptr.To(adminTierPriority),
+				TierPriority:     ptr.To(cnpAdminTierPriority),
 				AppliedToPerRule: false,
 				Rules: []controlplane.NetworkPolicyRule{
 					{
@@ -157,7 +158,7 @@ func TestProcessClusterNetworkPolicy(t *testing.T) {
 					UID:  "uid-2",
 				},
 				Priority:         &p50,
-				TierPriority:     ptr.To(baselineTierPriority),
+				TierPriority:     ptr.To(cnpBaselineTierPriority),
 				AppliedToPerRule: false,
 				Rules: []controlplane.NetworkPolicyRule{
 					{
@@ -216,7 +217,7 @@ func TestProcessClusterNetworkPolicy(t *testing.T) {
 					UID:  "uid-3",
 				},
 				Priority:         ptr.To(float64(10)),
-				TierPriority:     ptr.To(adminTierPriority),
+				TierPriority:     ptr.To(cnpAdminTierPriority),
 				AppliedToPerRule: false,
 				Rules: []controlplane.NetworkPolicyRule{
 					{
@@ -268,7 +269,7 @@ func TestProcessClusterNetworkPolicy(t *testing.T) {
 					UID:  "uid-4",
 				},
 				Priority:         ptr.To(float64(200)),
-				TierPriority:     ptr.To(adminTierPriority),
+				TierPriority:     ptr.To(cnpAdminTierPriority),
 				AppliedToPerRule: false,
 				Rules: []controlplane.NetworkPolicyRule{
 					{
@@ -319,7 +320,7 @@ func TestProcessClusterNetworkPolicy(t *testing.T) {
 					UID:  "uid-nodes",
 				},
 				Priority:         ptr.To(float64(10)),
-				TierPriority:     ptr.To(adminTierPriority),
+				TierPriority:     ptr.To(cnpAdminTierPriority),
 				AppliedToPerRule: false,
 				Rules: []controlplane.NetworkPolicyRule{
 					{
@@ -374,7 +375,7 @@ func TestProcessClusterNetworkPolicy(t *testing.T) {
 					UID:  "uid-fqdn",
 				},
 				Priority:         ptr.To(float64(10)),
-				TierPriority:     ptr.To(adminTierPriority),
+				TierPriority:     ptr.To(cnpAdminTierPriority),
 				AppliedToPerRule: false,
 				Rules: []controlplane.NetworkPolicyRule{
 					{
@@ -426,7 +427,7 @@ func TestProcessClusterNetworkPolicy(t *testing.T) {
 					UID:  "uid-fc1",
 				},
 				Priority:         ptr.To(float64(10)),
-				TierPriority:     ptr.To(adminTierPriority),
+				TierPriority:     ptr.To(cnpAdminTierPriority),
 				AppliedToPerRule: false,
 				Rules: []controlplane.NetworkPolicyRule{
 					{
@@ -477,7 +478,7 @@ func TestProcessClusterNetworkPolicy(t *testing.T) {
 					UID:  "uid-fc2",
 				},
 				Priority:         ptr.To(float64(10)),
-				TierPriority:     ptr.To(adminTierPriority),
+				TierPriority:     ptr.To(cnpAdminTierPriority),
 				AppliedToPerRule: false,
 				Rules: []controlplane.NetworkPolicyRule{
 					{
@@ -527,7 +528,7 @@ func TestProcessClusterNetworkPolicy(t *testing.T) {
 					UID:  "uid-fc3",
 				},
 				Priority:         ptr.To(float64(10)),
-				TierPriority:     ptr.To(adminTierPriority),
+				TierPriority:     ptr.To(cnpAdminTierPriority),
 				AppliedToPerRule: false,
 				Rules: []controlplane.NetworkPolicyRule{
 					{
@@ -576,7 +577,7 @@ func TestProcessClusterNetworkPolicy(t *testing.T) {
 					UID:  "uid-fc4",
 				},
 				Priority:         ptr.To(float64(10)),
-				TierPriority:     ptr.To(adminTierPriority),
+				TierPriority:     ptr.To(cnpAdminTierPriority),
 				AppliedToPerRule: false,
 				Rules: []controlplane.NetworkPolicyRule{
 					{
@@ -626,7 +627,7 @@ func TestProcessClusterNetworkPolicy(t *testing.T) {
 					UID:  "uid-fc5",
 				},
 				Priority:         ptr.To(float64(10)),
-				TierPriority:     ptr.To(adminTierPriority),
+				TierPriority:     ptr.To(cnpAdminTierPriority),
 				AppliedToPerRule: false,
 				Rules: []controlplane.NetworkPolicyRule{
 					{
@@ -677,7 +678,7 @@ func TestProcessClusterNetworkPolicy(t *testing.T) {
 					UID:  "uid-fc6",
 				},
 				Priority:         ptr.To(float64(10)),
-				TierPriority:     ptr.To(adminTierPriority),
+				TierPriority:     ptr.To(cnpAdminTierPriority),
 				AppliedToPerRule: false,
 				Rules: []controlplane.NetworkPolicyRule{
 					{
@@ -733,7 +734,7 @@ func TestProcessClusterNetworkPolicy(t *testing.T) {
 					UID:  "uid-5",
 				},
 				Priority:         ptr.To(float64(30)),
-				TierPriority:     ptr.To(adminTierPriority),
+				TierPriority:     ptr.To(cnpAdminTierPriority),
 				AppliedToPerRule: false,
 				Rules: []controlplane.NetworkPolicyRule{
 					{
@@ -937,4 +938,31 @@ func TestToAntreaServicesForCNPProtocols(t *testing.T) {
 			assert.Equal(t, tt.expected, got)
 		})
 	}
+}
+
+// TestSyncCNPCreationAllowedConcurrent exercises the race between Run()'s initial
+// syncCNPCreationAllowed call and the onTierDeleteForCNP event handler calling it
+// concurrently. The race detector will catch any missing locking.
+func TestSyncCNPCreationAllowedConcurrent(t *testing.T) {
+	_, npc := newController(nil, nil)
+	conflictingTier := &crdv1beta1.Tier{
+		ObjectMeta: metav1.ObjectMeta{Name: "conflict"},
+		Spec:       crdv1beta1.TierSpec{Priority: cnpAdminTierPriority},
+	}
+	npc.tierInformer.Informer().GetStore().Add(conflictingTier)
+
+	// Launch N concurrent callers to verify the mutex prevents a stale query
+	// from overwriting a more recent store (the documented race scenario).
+	const goroutines = 20
+	var wg sync.WaitGroup
+	wg.Add(goroutines)
+	for i := 0; i < goroutines; i++ {
+		go func() {
+			defer wg.Done()
+			npc.syncCNPCreationAllowed()
+		}()
+	}
+	wg.Wait()
+	// The tier is still in the store, so creation must be blocked.
+	assert.False(t, npc.cnpCreationAllowed.Load())
 }

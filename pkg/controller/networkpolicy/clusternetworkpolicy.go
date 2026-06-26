@@ -44,9 +44,6 @@ const (
 )
 
 var (
-	adminTierPriority    = cnpAdminTierPriority
-	baselineTierPriority = cnpBaselineTierPriority
-
 	cnpActionToAntreaActionMap = map[v1alpha2.ClusterNetworkPolicyRuleAction]antreacrd.RuleAction{
 		v1alpha2.ClusterNetworkPolicyRuleActionAccept: antreacrd.RuleActionAllow,
 		v1alpha2.ClusterNetworkPolicyRuleActionDeny:   antreacrd.RuleActionDrop,
@@ -104,7 +101,11 @@ func (n *NetworkPolicyController) deleteCNP(old interface{}) {
 // syncCNPCreationAllowed checks whether any user created custom Tier at
 // cnpAdminTierPriority exists and sets n.cnpCreationAllowed accordingly.
 // It must be called after the tier informer cache has been synced.
+// cnpCreationAllowedMutex is held for the entire query+store to prevent a concurrent
+// caller from interleaving a stale query result with a more recent store.
 func (n *NetworkPolicyController) syncCNPCreationAllowed() {
+	n.cnpCreationAllowedMutex.Lock()
+	defer n.cnpCreationAllowedMutex.Unlock()
 	priorityKey := strconv.FormatInt(int64(cnpAdminTierPriority), 10)
 	tiers, err := n.tierInformer.Informer().GetIndexer().ByIndex(PriorityIndex, priorityKey)
 	if err != nil {
@@ -156,27 +157,25 @@ func (n *NetworkPolicyController) onTierDeleteForCNP(obj interface{}) {
 	}
 }
 
-// appendCNPPortToServices appends Antrea Services for a v1alpha2 Port and the given IP protocol.
+// cnpPortToService converts a v1alpha2 Port and IP protocol to an Antrea Service.
 // port may be nil, which means "any port for this protocol".
-func appendCNPPortToServices(services *[]controlplane.Service, p *v1alpha2.Port, proto v1.Protocol) {
+func cnpPortToService(p *v1alpha2.Port, proto v1.Protocol) controlplane.Service {
 	if p == nil {
-		*services = append(*services, controlplane.Service{
+		return controlplane.Service{
 			Protocol: toAntreaProtocol(&proto),
-		})
-		return
+		}
 	}
 	if p.Range != nil {
-		*services = append(*services, controlplane.Service{
+		return controlplane.Service{
 			Protocol: toAntreaProtocol(&proto),
 			Port:     ptr.To(intstr.FromInt32(p.Range.Start)),
 			EndPort:  &p.Range.End,
-		})
-		return
+		}
 	}
-	*services = append(*services, controlplane.Service{
+	return controlplane.Service{
 		Protocol: toAntreaProtocol(&proto),
 		Port:     ptr.To(intstr.FromInt32(p.Number)),
-	})
+	}
 }
 
 // toAntreaServicesForCNPProtocols translates v1alpha2 ClusterNetworkPolicy rule protocols to Antrea Services.
@@ -185,19 +184,21 @@ func appendCNPPortToServices(services *[]controlplane.Service, p *v1alpha2.Port,
 func toAntreaServicesForCNPProtocols(protocols []v1alpha2.ClusterNetworkPolicyProtocol) []controlplane.Service {
 	var antreaServices []controlplane.Service
 	for _, cnpProto := range protocols {
+		var service controlplane.Service
 		switch {
 		case cnpProto.DestinationNamedPort != "":
 			// Leave Protocol unset so the agent matches on port name only.
-			antreaServices = append(antreaServices, controlplane.Service{
+			service = controlplane.Service{
 				Port: ptr.To(intstr.FromString(cnpProto.DestinationNamedPort)),
-			})
+			}
 		case cnpProto.TCP != nil:
-			appendCNPPortToServices(&antreaServices, cnpProto.TCP.DestinationPort, v1.ProtocolTCP)
+			service = cnpPortToService(cnpProto.TCP.DestinationPort, v1.ProtocolTCP)
 		case cnpProto.UDP != nil:
-			appendCNPPortToServices(&antreaServices, cnpProto.UDP.DestinationPort, v1.ProtocolUDP)
+			service = cnpPortToService(cnpProto.UDP.DestinationPort, v1.ProtocolUDP)
 		case cnpProto.SCTP != nil:
-			appendCNPPortToServices(&antreaServices, cnpProto.SCTP.DestinationPort, v1.ProtocolSCTP)
+			service = cnpPortToService(cnpProto.SCTP.DestinationPort, v1.ProtocolSCTP)
 		}
+		antreaServices = append(antreaServices, service)
 	}
 	return antreaServices
 }
@@ -363,13 +364,13 @@ func (n *NetworkPolicyController) processClusterNetworkPolicy(cnp *v1alpha2.Clus
 	var tierPriority int32
 	switch cnp.Spec.Tier {
 	case v1alpha2.AdminTier:
-		tierPriority = adminTierPriority
+		tierPriority = cnpAdminTierPriority
 	case v1alpha2.BaselineTier:
-		tierPriority = baselineTierPriority
+		tierPriority = cnpBaselineTierPriority
 	default:
 		// The API restricts tier to Admin or Baseline; treat anything else as Admin and surface a log line.
 		klog.InfoS("Unexpected ClusterNetworkPolicy tier value, defaulting to Admin tier priority", "tier", cnp.Spec.Tier, "cnp", cnp.Name)
-		tierPriority = adminTierPriority
+		tierPriority = cnpAdminTierPriority
 	}
 
 	appliedToGroups = mergeAppliedToGroups(appliedToGroups, n.processCNPSubject(cnp.Spec.Subject)...)
