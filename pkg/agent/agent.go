@@ -481,16 +481,11 @@ func (i *Initializer) Initialize(ctx context.Context) error {
 		if err := i.routeClient.Initialize(i.nodeConfig, i.podNetworkWait.Done); err != nil {
 			return err
 		}
+	}
 
-		// Install OpenFlow entries on OVS bridge.
-		if err := i.initOpenFlowPipeline(); err != nil {
-			return err
-		}
-	} else {
-		// Install OpenFlow entries on OVS bridge.
-		if err := i.initOpenFlowPipeline(); err != nil {
-			return err
-		}
+	// Install OpenFlow entries on OVS bridge.
+	if err := i.initOpenFlowPipeline(); err != nil {
+		return err
 	}
 	klog.Infof("Agent initialized NodeConfig=%v, NetworkConfig=%v", i.nodeConfig, i.networkConfig)
 	return nil

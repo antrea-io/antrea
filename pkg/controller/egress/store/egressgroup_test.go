@@ -78,7 +78,7 @@ func TestWatchEgressGroupEvent(t *testing.T) {
 				store.Create(eg1)
 			},
 			expectedEvents: []watch.Event{
-				{Type: watch.Bookmark, Object: &controlplane.EgressGroup{}},
+				{Type: watch.Bookmark, Object: &controlplane.EgressGroup{ObjectMeta: metav1.ObjectMeta{ResourceVersion: "0"}}},
 				{Type: watch.Added, Object: &controlplane.EgressGroup{
 					TypeMeta: metav1.TypeMeta{},
 					ObjectMeta: metav1.ObjectMeta{
@@ -97,7 +97,7 @@ func TestWatchEgressGroupEvent(t *testing.T) {
 				store.Update(eg2)
 			},
 			expectedEvents: []watch.Event{
-				{Type: watch.Bookmark, Object: &controlplane.EgressGroup{}},
+				{Type: watch.Bookmark, Object: &controlplane.EgressGroup{ObjectMeta: metav1.ObjectMeta{ResourceVersion: "0"}}},
 				{Type: watch.Added, Object: &controlplane.EgressGroup{
 					TypeMeta: metav1.TypeMeta{},
 					ObjectMeta: metav1.ObjectMeta{
@@ -126,7 +126,7 @@ func TestWatchEgressGroupEvent(t *testing.T) {
 				store.Update(eg3)
 			},
 			expectedEvents: []watch.Event{
-				{Type: watch.Bookmark, Object: &controlplane.EgressGroup{}},
+				{Type: watch.Bookmark, Object: &controlplane.EgressGroup{ObjectMeta: metav1.ObjectMeta{ResourceVersion: "0"}}},
 				{Type: watch.Added, Object: &controlplane.EgressGroup{
 					TypeMeta: metav1.TypeMeta{},
 					ObjectMeta: metav1.ObjectMeta{
@@ -154,7 +154,7 @@ func TestWatchEgressGroupEvent(t *testing.T) {
 				store.Update(eg3)
 			},
 			expectedEvents: []watch.Event{
-				{Type: watch.Bookmark, Object: &controlplane.EgressGroup{}},
+				{Type: watch.Bookmark, Object: &controlplane.EgressGroup{ObjectMeta: metav1.ObjectMeta{ResourceVersion: "0"}}},
 				{Type: watch.Added, Object: &controlplane.EgressGroup{
 					TypeMeta: metav1.TypeMeta{},
 					ObjectMeta: metav1.ObjectMeta{

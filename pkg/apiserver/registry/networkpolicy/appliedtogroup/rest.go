@@ -99,6 +99,7 @@ func (r *REST) NamespaceScoped() bool {
 
 func (r *REST) Watch(ctx context.Context, options *internalversion.ListOptions) (watch.Interface, error) {
 	key, label, field := networkpolicy.GetSelectors(options)
+	ctx = storage.WithInitialEventsEndBookmarkAnnotationFromListOptions(ctx, options)
 	return r.appliedToGroupStore.Watch(ctx, key, label, field)
 }
 
