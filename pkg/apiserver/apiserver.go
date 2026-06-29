@@ -63,6 +63,7 @@ import (
 	"antrea.io/antrea/v2/pkg/apiserver/registry/system/supportbundle"
 	"antrea.io/antrea/v2/pkg/apiserver/storage"
 	crdv1a2informers "antrea.io/antrea/v2/pkg/client/informers/externalversions/crd/v1alpha2"
+	"antrea.io/antrea/v2/pkg/controller/antreanodeconfig"
 	"antrea.io/antrea/v2/pkg/controller/egress"
 	"antrea.io/antrea/v2/pkg/controller/externalippool"
 	"antrea.io/antrea/v2/pkg/controller/ipam"
@@ -355,6 +356,8 @@ func installHandlers(c *ExtraConfig, s *genericapiserver.GenericAPIServer) {
 	if features.DefaultFeatureGate.Enabled(features.Traceflow) {
 		s.Handler.NonGoRestfulMux.HandleFunc("/validate/traceflow", webhook.HandlerForValidateFunc(c.traceflowController.Validate))
 	}
+
+	s.Handler.NonGoRestfulMux.HandleFunc("/validate/antreanodeconfig", webhook.HandlerForValidateFunc(antreanodeconfig.Validate))
 }
 
 func DefaultCAConfig() *certificate.CAConfig {
