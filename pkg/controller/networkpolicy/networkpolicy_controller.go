@@ -269,17 +269,18 @@ type NetworkPolicyController struct {
 	// from other clusters in a ClusterSet.
 	stretchNPEnabled bool
 	// cnpCreationAllowed is an atomic flag that reflects whether upstream ClusterNetworkPolicy (v1alpha2)
-	// creation is currently allowed.  It is true when the ClusterNetworkPolicy feature gate is enabled AND
+	// creation is currently allowed. It is true when the ClusterNetworkPolicy feature gate is enabled AND
 	// no user-created Tier at cnpAdminTierPriority (220) exists. The admission webhook reads this flag to
 	// gate CNP CREATE requests, and the Tier CREATE webhook uses it to block new Tiers at that priority
-	// once the feature gate is enabled and there is no pre-existing conflict.
+	// once the feature gate is enabled and there is no pre-existing conflict. It is written only by the
+	// single syncCNPCreationAllowed goroutine and read by the admission webhooks, ensuring atomicity.
 	cnpCreationAllowed atomic.Bool
-	// cnpCreationAllowedMutex serializes concurrent calls to syncCNPCreationAllowed to prevent a
-	// stale query result from overwriting a more recent store. Run() and onTierDeleteForCNP both
-	// call syncCNPCreationAllowed from different goroutines; without this mutex the sequence
-	// (add-tier, query, delete-tier+sync→true, sync→false) would leave cnpCreationAllowed=false
-	// even though no conflicting Tier exists.
-	cnpCreationAllowedMutex sync.Mutex
+	// syncCNPCreationAllowedCh triggers a re-computation of cnpCreationAllowed. It is signaled by the Tier
+	// add/delete event handlers and by the initial sync in Run(). A single goroutine (syncCNPCreationAllowed)
+	// consumes it and re-queries the Tier index, so all updates to cnpCreationAllowed are serialized and
+	// always reflect the current Tier state. This avoids the race of computing the flag from a stale query
+	// result concurrently with a Tier event.
+	syncCNPCreationAllowedCh chan struct{}
 	// heartbeatCh is an internal channel for testing. It's used to know whether all tasks have been
 	// processed, and to count executions of each function.
 	heartbeatCh chan heartbeat
@@ -481,11 +482,12 @@ func NewNetworkPolicyController(kubeClient clientset.Interface,
 				Name: "internalGroup",
 			},
 		),
-		groupingInterface:       groupingInterface,
-		groupingInterfaceSynced: groupingInterface.HasSynced,
-		labelIdentityInterface:  labelIdentityInterface,
-		stretchNPEnabled:        stretchedNPEnabled,
-		appliedToGroupNotifier:  newNotifier(),
+		groupingInterface:        groupingInterface,
+		groupingInterfaceSynced:  groupingInterface.HasSynced,
+		labelIdentityInterface:   labelIdentityInterface,
+		stretchNPEnabled:         stretchedNPEnabled,
+		appliedToGroupNotifier:   newNotifier(),
+		syncCNPCreationAllowedCh: make(chan struct{}, 1),
 	}
 	n.groupingInterface.AddEventHandler(appliedToGroupType, n.enqueueAppliedToGroup)
 	n.groupingInterface.AddEventHandler(addressGroupType, n.enqueueAddressGroup)
@@ -1018,11 +1020,11 @@ func (n *NetworkPolicyController) Run(stopCh <-chan struct{}) {
 	if features.DefaultFeatureGate.Enabled(features.AntreaPolicy) {
 		cacheSyncs = append(cacheSyncs, n.acnpListerSynced, n.annpListerSynced, n.cgListerSynced)
 		// The ClusterNetworkPolicy feature gate requires AntreaPolicy to be enabled. We wait for the
-		// Tier cache (an Antrea CRD that is always installed) so that the initial
-		// syncCNPCreationAllowed() check below observes any existing Tiers. We intentionally do NOT
-		// block on cnpListerSynced: the upstream network-policy-api ClusterNetworkPolicy CRD is not
-		// bundled with Antrea and may be absent even when the feature gate is enabled. Blocking on
-		// it would stall the entire controller and prevent all NetworkPolicies from being enforced.
+		// Tier cache (an Antrea CRD that is always installed) so that the initial cnpCreationAllowed
+		// sync below observes any existing Tiers. We intentionally do NOT block on cnpListerSynced:
+		// the upstream network-policy-api ClusterNetworkPolicy CRD is not bundled with Antrea and may
+		// be absent even when the feature gate is enabled. Blocking on it would stall the entire
+		// controller and prevent all NetworkPolicies from being enforced.
 		if features.DefaultFeatureGate.Enabled(features.ClusterNetworkPolicy) {
 			cacheSyncs = append(cacheSyncs, n.tierListerSynced)
 		}
@@ -1030,10 +1032,12 @@ func (n *NetworkPolicyController) Run(stopCh <-chan struct{}) {
 	if !cache.WaitForNamedCacheSync(controllerName, stopCh, cacheSyncs...) {
 		return
 	}
-	// After caches are synced, set the initial value of cnpCreationAllowed based
-	// on whether a conflicting Tier already exists at cnpAdminTierPriority.
+	// Start the single goroutine that owns cnpCreationAllowed, and trigger an initial computation
+	// now that the Tier cache is synced. All subsequent updates are driven by Tier add/delete events
+	// through the same goroutine, so the flag is always consistent with the current Tier state.
 	if features.DefaultFeatureGate.Enabled(features.AntreaPolicy) && features.DefaultFeatureGate.Enabled(features.ClusterNetworkPolicy) {
-		n.syncCNPCreationAllowed()
+		go n.syncCNPCreationAllowed(stopCh)
+		n.triggerCNPCreationAllowedSync()
 	}
 
 	for i := 0; i < defaultWorkers; i++ {

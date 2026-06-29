@@ -2994,10 +2994,11 @@ func TestValidateCNP(t *testing.T) {
 			validator := NewNetworkPolicyValidator(controller.NetworkPolicyController)
 			ar := &admv1.AdmissionReview{
 				Request: &admv1.AdmissionRequest{
+					Kind:      kindUpstreamCNP,
 					Operation: tt.operation,
 				},
 			}
-			resp := validator.ValidateUpstreamCNP(ar)
+			resp := validator.Validate(ar)
 			assert.Equal(t, tt.expectedAllowed, resp.Allowed)
 			if !tt.expectedAllowed {
 				assert.Equal(t, tt.expectedReason, resp.Result.Message)

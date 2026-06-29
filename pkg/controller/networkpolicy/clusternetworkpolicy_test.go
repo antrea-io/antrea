@@ -15,8 +15,8 @@
 package networkpolicy
 
 import (
-	"sync"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -940,29 +940,54 @@ func TestToAntreaServicesForCNPProtocols(t *testing.T) {
 	}
 }
 
-// TestSyncCNPCreationAllowedConcurrent exercises the race between Run()'s initial
-// syncCNPCreationAllowed call and the onTierDeleteForCNP event handler calling it
-// concurrently. The race detector will catch any missing locking.
-func TestSyncCNPCreationAllowedConcurrent(t *testing.T) {
+// TestUpdateCNPCreationAllowed verifies that updateCNPCreationAllowed sets the flag based on
+// whether a Tier at cnpAdminTierPriority currently exists in the indexer.
+func TestUpdateCNPCreationAllowed(t *testing.T) {
 	_, npc := newController(nil, nil)
 	conflictingTier := &crdv1beta1.Tier{
 		ObjectMeta: metav1.ObjectMeta{Name: "conflict"},
 		Spec:       crdv1beta1.TierSpec{Priority: cnpAdminTierPriority},
 	}
-	npc.tierInformer.Informer().GetStore().Add(conflictingTier)
 
-	// Launch N concurrent callers to verify the mutex prevents a stale query
-	// from overwriting a more recent store (the documented race scenario).
-	const goroutines = 20
-	var wg sync.WaitGroup
-	wg.Add(goroutines)
-	for i := 0; i < goroutines; i++ {
-		go func() {
-			defer wg.Done()
-			npc.syncCNPCreationAllowed()
-		}()
-	}
-	wg.Wait()
-	// The tier is still in the store, so creation must be blocked.
+	// No conflicting Tier: creation allowed.
+	npc.updateCNPCreationAllowed()
+	assert.True(t, npc.cnpCreationAllowed.Load())
+
+	// Conflicting Tier present: creation blocked.
+	require.NoError(t, npc.tierInformer.Informer().GetStore().Add(conflictingTier))
+	npc.updateCNPCreationAllowed()
 	assert.False(t, npc.cnpCreationAllowed.Load())
+
+	// Conflicting Tier removed: creation allowed again.
+	require.NoError(t, npc.tierInformer.Informer().GetStore().Delete(conflictingTier))
+	npc.updateCNPCreationAllowed()
+	assert.True(t, npc.cnpCreationAllowed.Load())
+}
+
+// TestSyncCNPCreationAllowed verifies the end-to-end flow: the single goroutine recomputes the flag
+// when the Tier event handlers signal it. Running under -race additionally guards against the flag
+// being written from more than one goroutine.
+func TestSyncCNPCreationAllowed(t *testing.T) {
+	_, npc := newController(nil, nil)
+	conflictingTier := &crdv1beta1.Tier{
+		ObjectMeta: metav1.ObjectMeta{Name: "conflict"},
+		Spec:       crdv1beta1.TierSpec{Priority: cnpAdminTierPriority},
+	}
+	stopCh := make(chan struct{})
+	defer close(stopCh)
+	go npc.syncCNPCreationAllowed(stopCh)
+
+	// Initial trigger with no conflicting Tier: creation becomes allowed.
+	npc.triggerCNPCreationAllowedSync()
+	assert.Eventually(t, npc.cnpCreationAllowed.Load, time.Second, 10*time.Millisecond)
+
+	// A Tier added at cnpAdminTierPriority blocks creation.
+	require.NoError(t, npc.tierInformer.Informer().GetStore().Add(conflictingTier))
+	npc.onTierAddForCNP(conflictingTier)
+	assert.Eventually(t, func() bool { return !npc.cnpCreationAllowed.Load() }, time.Second, 10*time.Millisecond)
+
+	// Deleting the Tier re-allows creation.
+	require.NoError(t, npc.tierInformer.Informer().GetStore().Delete(conflictingTier))
+	npc.onTierDeleteForCNP(conflictingTier)
+	assert.Eventually(t, npc.cnpCreationAllowed.Load, time.Second, 10*time.Millisecond)
 }

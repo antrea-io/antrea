@@ -321,7 +321,7 @@ func installHandlers(c *ExtraConfig, s *genericapiserver.GenericAPIServer) {
 		s.Handler.NonGoRestfulMux.HandleFunc("/validate/annp", webhook.HandlerForValidateFunc(v.Validate))
 		s.Handler.NonGoRestfulMux.HandleFunc("/validate/clustergroup", webhook.HandlerForValidateFunc(v.Validate))
 		s.Handler.NonGoRestfulMux.HandleFunc("/validate/group", webhook.HandlerForValidateFunc(v.Validate))
-		s.Handler.NonGoRestfulMux.HandleFunc("/validate/cnp", webhook.HandlerForValidateFunc(v.ValidateUpstreamCNP))
+		s.Handler.NonGoRestfulMux.HandleFunc("/validate/cnp", webhook.HandlerForValidateFunc(v.Validate))
 
 		// Install a post start hook to initialize Tiers on start-up
 		s.AddPostStartHook("initialize-tiers", func(context genericapiserver.PostStartHookContext) error {

@@ -98,14 +98,26 @@ func (n *NetworkPolicyController) deleteCNP(old interface{}) {
 	n.enqueueInternalNetworkPolicy(getCNPReference(cnp))
 }
 
-// syncCNPCreationAllowed checks whether any user created custom Tier at
-// cnpAdminTierPriority exists and sets n.cnpCreationAllowed accordingly.
-// It must be called after the tier informer cache has been synced.
-// cnpCreationAllowedMutex is held for the entire query+store to prevent a concurrent
-// caller from interleaving a stale query result with a more recent store.
-func (n *NetworkPolicyController) syncCNPCreationAllowed() {
-	n.cnpCreationAllowedMutex.Lock()
-	defer n.cnpCreationAllowedMutex.Unlock()
+// syncCNPCreationAllowed is a long-running goroutine that owns the cnpCreationAllowed flag. It
+// recomputes the flag whenever signaled through syncCNPCreationAllowedCh (by the Tier add/delete
+// event handlers or by the initial trigger in Run). Because it is the only writer of
+// cnpCreationAllowed and always re-queries the current Tier state, updates are serialized and
+// race-free: there is no window where a stale query result can overwrite a newer one.
+func (n *NetworkPolicyController) syncCNPCreationAllowed(stopCh <-chan struct{}) {
+	for {
+		select {
+		case <-n.syncCNPCreationAllowedCh:
+			n.updateCNPCreationAllowed()
+		case <-stopCh:
+			return
+		}
+	}
+}
+
+// updateCNPCreationAllowed checks whether any user-created Tier at cnpAdminTierPriority exists and
+// sets cnpCreationAllowed accordingly. It must only be called from the syncCNPCreationAllowed
+// goroutine, and after the Tier informer cache has been synced.
+func (n *NetworkPolicyController) updateCNPCreationAllowed() {
 	priorityKey := strconv.FormatInt(int64(cnpAdminTierPriority), 10)
 	tiers, err := n.tierInformer.Informer().GetIndexer().ByIndex(PriorityIndex, priorityKey)
 	if err != nil {
@@ -122,6 +134,16 @@ func (n *NetworkPolicyController) syncCNPCreationAllowed() {
 	}
 }
 
+// triggerCNPCreationAllowedSync signals the syncCNPCreationAllowed goroutine to recompute the
+// cnpCreationAllowed flag. The signal is non-blocking and coalescing: if a recomputation is already
+// pending, the signal is dropped because the goroutine will read the latest Tier state anyway.
+func (n *NetworkPolicyController) triggerCNPCreationAllowedSync() {
+	select {
+	case n.syncCNPCreationAllowedCh <- struct{}{}:
+	default:
+	}
+}
+
 // onTierAddForCNP is called when a Tier is created. If the new Tier's priority
 // matches cnpAdminTierPriority, CNP creation is blocked.
 // This should only be possible during upgrade case when there are existing user
@@ -132,9 +154,7 @@ func (n *NetworkPolicyController) onTierAddForCNP(obj interface{}) {
 		return
 	}
 	if tier.Spec.Priority == cnpAdminTierPriority {
-		klog.InfoS("A Tier was created at cnpAdminTierPriority; blocking upstream ClusterNetworkPolicy creation",
-			"tier", tier.Name, "priority", cnpAdminTierPriority)
-		n.cnpCreationAllowed.Store(false)
+		n.triggerCNPCreationAllowedSync()
 	}
 }
 
@@ -153,7 +173,7 @@ func (n *NetworkPolicyController) onTierDeleteForCNP(obj interface{}) {
 		}
 	}
 	if tier.Spec.Priority == cnpAdminTierPriority {
-		n.syncCNPCreationAllowed()
+		n.triggerCNPCreationAllowedSync()
 	}
 }
 
