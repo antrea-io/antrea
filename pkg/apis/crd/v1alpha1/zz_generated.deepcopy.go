@@ -157,6 +157,21 @@ func (in *BGPPeer) DeepCopyInto(out *BGPPeer) {
 		*out = new(int32)
 		**out = **in
 	}
+	if in.HoldTimeSeconds != nil {
+		in, out := &in.HoldTimeSeconds, &out.HoldTimeSeconds
+		*out = new(int32)
+		**out = **in
+	}
+	if in.KeepaliveTimeSeconds != nil {
+		in, out := &in.KeepaliveTimeSeconds, &out.KeepaliveTimeSeconds
+		*out = new(int32)
+		**out = **in
+	}
+	if in.ConnectRetryTimeSeconds != nil {
+		in, out := &in.ConnectRetryTimeSeconds, &out.ConnectRetryTimeSeconds
+		*out = new(int32)
+		**out = **in
+	}
 	return
 }
 
