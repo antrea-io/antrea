@@ -38,6 +38,11 @@ func TestSupportedOnWindows(t *testing.T) {
 			expected: false,
 		},
 		{
+			name:     "AntreaNodeConfig unsupported on Windows Node",
+			feature:  AntreaNodeConfig,
+			expected: false,
+		},
+		{
 			name:     "Feature does not exist",
 			feature:  "Unsupported",
 			expected: false,
@@ -66,6 +71,11 @@ func TestSupportedOnExternalNode(t *testing.T) {
 		{
 			name:     "Feature unsupported on External Node",
 			feature:  NodePortLocal,
+			expected: false,
+		},
+		{
+			name:     "AntreaNodeConfig unsupported on External Node",
+			feature:  AntreaNodeConfig,
 			expected: false,
 		},
 		{

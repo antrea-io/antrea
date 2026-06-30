@@ -17,10 +17,45 @@
 
 package secondarynetwork
 
-func (c *Controller) Initialize() error {
+import (
+	"github.com/TomCodeLV/OVSDB-golang-lib/pkg/ovsdb"
+	clientset "k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/tools/cache"
+	componentbaseconfig "k8s.io/component-base/config"
+	"k8s.io/klog/v2"
+
+	"antrea.io/antrea/v2/pkg/agent/config"
+	"antrea.io/antrea/v2/pkg/agent/interfacestore"
+	crdlisters "antrea.io/antrea/v2/pkg/client/listers/crd/v1beta1"
+	agentconfig "antrea.io/antrea/v2/pkg/config/agent"
+	"antrea.io/antrea/v2/pkg/util/channel"
+)
+
+type secondaryNetworkControllerQueue interface{} //nolint:unused // Used by the shared Controller shape; Linux provides the concrete queue type.
+
+func NewController(
+	clientConnectionConfig componentbaseconfig.ClientConnectionConfiguration,
+	kubeAPIServerOverride string,
+	k8sClient clientset.Interface,
+	podInformer cache.SharedIndexInformer,
+	podUpdateSubscriber channel.Subscriber,
+	primaryInterfaceStore interfacestore.InterfaceStore,
+	nodeConfig *config.NodeConfig,
+	secNetConfig *agentconfig.SecondaryNetworkConfig,
+	ovsdbConn *ovsdb.OVSDB,
+	ipPoolLister crdlisters.IPPoolLister,
+	ancUpdateSubscriber channel.Subscriber,
+) (*Controller, error) {
+	klog.V(2).InfoS("Secondary network controller is not supported on Windows")
+	return nil, nil
+}
+
+func (c *Controller) Initialize(stopCh <-chan struct{}) error {
 	return nil
 }
 
 func (c *Controller) Restore() {
 	// Not supported on Windows.
 }
+
+func (c *Controller) Run(stopCh <-chan struct{}) {}

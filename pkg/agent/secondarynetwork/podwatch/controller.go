@@ -87,13 +87,16 @@ type podCNIInfo struct {
 }
 
 type PodController struct {
-	kubeClient            clientset.Interface
-	netAttachDefClient    netdefclient.K8sCniCncfIoV1Interface
-	queue                 workqueue.TypedRateLimitingInterface[string]
-	podInformer           cache.SharedIndexInformer
-	podLister             corelisters.PodLister
-	ipPoolLister          crdlisters.IPPoolLister
-	podUpdateSubscriber   channel.Subscriber
+	kubeClient          clientset.Interface
+	netAttachDefClient  netdefclient.K8sCniCncfIoV1Interface
+	queue               workqueue.TypedRateLimitingInterface[string]
+	podInformer         cache.SharedIndexInformer
+	podLister           corelisters.PodLister
+	ipPoolLister        crdlisters.IPPoolLister
+	podUpdateSubscriber channel.Subscriber
+	// mu protects ovsBridgeClient and interfaceConfigurator, which are replaced atomically
+	// when the effective OVS bridge changes (e.g. a new AntreaNodeConfig takes effect).
+	mu                    sync.RWMutex
 	ovsBridgeClient       ovsconfig.OVSBridgeClient
 	interfaceStore        interfacestore.InterfaceStore
 	primaryInterfaceStore interfacestore.InterfaceStore
@@ -116,9 +119,13 @@ func NewPodController(
 	ipPoolLister crdlisters.IPPoolLister,
 ) (*PodController, error) {
 	ifaceStore := interfacestore.NewInterfaceStore()
-	interfaceConfigurator, err := cniserver.NewSecondaryInterfaceConfigurator(ovsBridgeClient, ifaceStore)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create SecondaryInterfaceConfigurator: %v", err)
+	var interfaceConfigurator InterfaceConfigurator
+	if ovsBridgeClient != nil {
+		var err error
+		interfaceConfigurator, err = cniserver.NewSecondaryInterfaceConfigurator(ovsBridgeClient, ifaceStore)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create SecondaryInterfaceConfigurator: %v", err)
+		}
 	}
 	podLister := corelisters.NewPodLister(podInformer.GetIndexer())
 	pc := PodController{
@@ -326,6 +333,12 @@ func (pc *PodController) updatePodNetworkStatusAnnotation(netStatus []netdefv1.N
 }
 
 func (pc *PodController) removeInterfaces(interfaces []*interfacestore.InterfaceConfig) error {
+	pc.mu.RLock()
+	defer pc.mu.RUnlock()
+	return pc.removeInterfacesWithConfigurator(interfaces, pc.interfaceConfigurator)
+}
+
+func (pc *PodController) removeInterfacesWithConfigurator(interfaces []*interfacestore.InterfaceConfig, configurator InterfaceConfigurator) error {
 	var savedErr error
 	for _, interfaceConfig := range interfaces {
 		podName := interfaceConfig.PodName
@@ -337,7 +350,15 @@ func (pc *PodController) removeInterfaces(interfaces []*interfacestore.Interface
 		// Since only VLAN and SR-IOV interfaces are supported by now, we judge the
 		// interface type by checking interfaceConfig.OVSPortConfig is set or not.
 		if interfaceConfig.OVSPortConfig != nil {
-			err = pc.interfaceConfigurator.DeleteVLANSecondaryInterface(interfaceConfig)
+			if configurator == nil {
+				// Bridge is gone — OVS ports no longer exist. Skip OVS operations
+				// and proceed to IPAM release; the interface store record is removed
+				// only after IPAM release succeeds so a failure can be retried.
+				klog.V(2).InfoS("Bridge not available, skipping OVS interface deletion",
+					"Pod", klog.KRef(podNamespace, podName), "interface", interfaceConfig.IFDev)
+			} else {
+				err = configurator.DeleteVLANSecondaryInterface(interfaceConfig)
+			}
 		} else {
 			err = pc.deleteSriovSecondaryInterface(interfaceConfig)
 		}
@@ -357,6 +378,10 @@ func (pc *PodController) removeInterfaces(interfaces []*interfacestore.Interface
 			klog.ErrorS(err, "Error when releasing IPAM allocation",
 				"Pod", klog.KRef(podNamespace, podName), "interface", interfaceConfig.IFDev)
 			savedErr = err
+			continue
+		}
+		if interfaceConfig.OVSPortConfig != nil {
+			pc.interfaceStore.DeleteInterface(interfaceConfig)
 		}
 	}
 	return savedErr
@@ -461,16 +486,24 @@ func (pc *PodController) configureSecondaryInterface(
 		ipamResult = &ipam.IPAMResult{}
 	}
 
+	pc.mu.RLock()
+	defer pc.mu.RUnlock()
+	configurator := pc.interfaceConfigurator
+
 	switch networkConfig.NetworkType {
 	case sriovNetworkType:
 		ifConfigErr = pc.configureSriovAsSecondaryInterface(pod, network, resourceName, podCNIInfo, networkConfig.MTU, &ipamResult.Result)
 	case vlanNetworkType:
+		if configurator == nil {
+			ifConfigErr = fmt.Errorf("OVS bridge not available, cannot configure VLAN interface")
+			break
+		}
 		if networkConfig.VLAN > 0 {
 			// Let VLAN ID in the CNI network configuration override the IPPool subnet
 			// VLAN.
 			ipamResult.VLANID = uint16(networkConfig.VLAN)
 		}
-		ifConfigErr = pc.interfaceConfigurator.ConfigureVLANSecondaryInterface(
+		ifConfigErr = configurator.ConfigureVLANSecondaryInterface(
 			pod.Name, pod.Namespace,
 			podCNIInfo.containerID, podCNIInfo.netNS, network.InterfaceRequest,
 			networkConfig.MTU, ipamResult, mac)
@@ -751,7 +784,12 @@ func (pc *PodController) initializeOVSSecondaryInterfaceStore() error {
 	if pc.ovsBridgeClient == nil {
 		return nil
 	}
-	ovsPorts, err := pc.ovsBridgeClient.GetPortList()
+	return pc.loadOVSInterfaceStore(pc.ovsBridgeClient)
+}
+
+// loadOVSInterfaceStore populates the interface store from the current ports on the given bridge.
+func (pc *PodController) loadOVSInterfaceStore(client ovsconfig.OVSBridgeClient) error {
+	ovsPorts, err := client.GetPortList()
 	if err != nil {
 		return fmt.Errorf("failed to list OVS ports for the secondary bridge: %w", err)
 	}
@@ -784,6 +822,70 @@ func (pc *PodController) initializeOVSSecondaryInterfaceStore() error {
 	pc.interfaceStore.Initialize(ifaceList)
 	klog.InfoS("Successfully initialized the secondary bridge interface store")
 
+	return nil
+}
+
+func ovsBackedInterfaces(interfaces []*interfacestore.InterfaceConfig) []*interfacestore.InterfaceConfig {
+	var ovsInterfaces []*interfacestore.InterfaceConfig
+	for _, intf := range interfaces {
+		if intf.OVSPortConfig != nil {
+			ovsInterfaces = append(ovsInterfaces, intf)
+		}
+	}
+	return ovsInterfaces
+}
+
+// UpdateOVSBridgeClient replaces the OVS bridge client and interface configurator used by the
+// PodController. It is called by the secondary network controller whenever the effective
+// bridge configuration changes (e.g. a new AntreaNodeConfig takes effect):
+//   - newClient == nil: the bridge was deleted; clear the client and configurator and purge the
+//     OVS-backed interface records so future Pod events are handled with no bridge.
+//   - newClient != nil: a new (or replacement) bridge was created; keep the client unavailable
+//     while reloading the interface store, then publish the new client and configurator.
+func (pc *PodController) UpdateOVSBridgeClient(newClient ovsconfig.OVSBridgeClient) error {
+	var newConfigurator InterfaceConfigurator
+	if newClient != nil {
+		var err error
+		newConfigurator, err = cniserver.NewSecondaryInterfaceConfigurator(newClient, pc.interfaceStore)
+		if err != nil {
+			return fmt.Errorf("failed to create SecondaryInterfaceConfigurator for new bridge: %v", err)
+		}
+	}
+
+	pc.mu.Lock()
+	defer pc.mu.Unlock()
+
+	ovsIfaces := ovsBackedInterfaces(pc.interfaceStore.ListInterfaces())
+	if newClient == nil {
+		pc.ovsBridgeClient = nil
+		pc.interfaceConfigurator = nil
+
+		// Release IPAM allocations before discarding OVS-backed records.
+		// Without this, subsequent Pod delete events find nothing via
+		// GetContainerInterfacesByPod, so removeInterfaces is never called.
+		if len(ovsIfaces) > 0 {
+			if err := pc.removeInterfacesWithConfigurator(ovsIfaces, nil); err != nil {
+				return fmt.Errorf("failed to clean up secondary interfaces during bridge removal: %w", err)
+			}
+		}
+		klog.InfoS("Secondary OVS bridge removed, OVS-backed interface records cleared")
+		return nil
+	}
+
+	// Discard records from the previous bridge before re-populating the store
+	// from the new bridge so stale interfaces do not survive a bridge switch.
+	pc.ovsBridgeClient = nil
+	pc.interfaceConfigurator = nil
+
+	for _, intf := range ovsIfaces {
+		pc.interfaceStore.DeleteInterface(intf)
+	}
+	if err := pc.loadOVSInterfaceStore(newClient); err != nil {
+		return err
+	}
+	pc.ovsBridgeClient = newClient
+	pc.interfaceConfigurator = newConfigurator
+	klog.InfoS("Secondary OVS bridge updated, interface store reloaded")
 	return nil
 }
 
