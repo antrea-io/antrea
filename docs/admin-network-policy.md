@@ -64,9 +64,17 @@ Refer to [this document](https://network-policy-api.sigs.k8s.io/getting-started/
 resources to the v1alpha2 `ClusterNetworkPolicy` resource. For prerequisites, sample policies, and precedence with
 Antrea-native policies, read [ClusterNetworkPolicy API Support in Antrea](cluster-network-policy.md).
 
+**No automatic migration**: Antrea does **not** automatically convert or migrate v1alpha1 `AdminNetworkPolicy` and
+`BaselineAdminNetworkPolicy` objects to v1alpha2 `ClusterNetworkPolicy`. You must manually create the equivalent
+`ClusterNetworkPolicy` resources and delete the old ones. The two feature gates (`AdminNetworkPolicy` and
+`ClusterNetworkPolicy`) are independent; you can run both APIs simultaneously during a migration window to avoid a
+policy enforcement gap.
+
 To migrate:
 
-1. **Enable the new feature gate**: Update your `antrea-controller.conf` to enable the `ClusterNetworkPolicy` feature gate:
+1. **Enable the new feature gate**: Update your `antrea-controller.conf` to enable the `ClusterNetworkPolicy` feature
+   gate. You may keep the `AdminNetworkPolicy` gate enabled during migration so that existing policies continue to be
+   enforced while you create the equivalent `ClusterNetworkPolicy` resources.
 
    ```yaml
    apiVersion: v1
@@ -77,26 +85,30 @@ To migrate:
    data:
      antrea-controller.conf: |
        featureGates:
-         ClusterNetworkPolicy: true
+         ClusterNetworkPolicy: true   # enable the new API
+         AdminNetworkPolicy: true     # keep during migration; can be remove once migration is complete
    ```
 
 2. **Install v1alpha2 CRDs**: Ensure the v1alpha2 `ClusterNetworkPolicy` CRDs are installed in your cluster.
-   Refer to the [network-policy-api documentation](https://network-policy-api.sigs.k8s.io/) for installation instructions.
+   Refer to the [network-policy-api documentation](https://network-policy-api.sigs.k8s.io/getting-started/) for installation instructions.
 
-3. **Convert your policies**: The v1alpha2 `ClusterNetworkPolicy` API unifies the functionality of `AdminNetworkPolicy`
+3. **Rewrite your policies**: The v1alpha2 `ClusterNetworkPolicy` API unifies the functionality of `AdminNetworkPolicy`
    and `BaselineAdminNetworkPolicy`. Key differences include:
-   - Single resource type for both admin and baseline policies
-   - Simplified tier-based priority system (Admin tier or Baseline tier)
-   - Updated field names and structure
+   - Single resource type for both admin and baseline policies: use `spec.tier: Admin` for admin posture and
+     `spec.tier: Baseline` for baseline posture (replaces the singleton `BaselineAdminNetworkPolicy` named `default`).
+   - Updated field names and structure; see the
+     [Key differences section in the ClusterNetworkPolicy doc](cluster-network-policy.md#key-differences-from-v1alpha1-adminnetworkpolicy-apis).
 
    Refer to the [network-policy-api v1alpha2 specification](https://network-policy-api.sigs.k8s.io/reference/spec/)
-   for detailed information on the new API structure.
+   for the full API structure.
 
-4. **Test and validate**: Test your converted policies in a non-production environment before rolling out to production.
+4. **Test and validate**: Create the equivalent `ClusterNetworkPolicy` resources and verify they behave as expected
+   in a non-production environment before removing the old policies in production.
 
-5. **Remove old policies**: Once you've verified the new `ClusterNetworkPolicy` resources work correctly, you can:
-   - Delete the old v1alpha1 `AdminNetworkPolicy` and `BaselineAdminNetworkPolicy` resources
-   - Disable the deprecated `AdminNetworkPolicy` feature gate
+5. **Remove old policies and disable the deprecated gate**: Once you have verified the new `ClusterNetworkPolicy`
+   resources work correctly:
+   - Delete the old v1alpha1 `AdminNetworkPolicy` and `BaselineAdminNetworkPolicy` resources.
+   - [Optional] Remove or set `AdminNetworkPolicy: false` in your `antrea-controller.conf` and restart Antrea controler.
 
 **Timeline**: The `AdminNetworkPolicy` feature gate will be removed in two releases after Antrea v2.7.
 
