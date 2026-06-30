@@ -14,9 +14,9 @@
 
 // Package antreanodeconfig watches AntreaNodeConfig resources and the local Node,
 // and publishes immutable snapshots (Node plus the oldest matching AntreaNodeConfig)
-// to channel subscribers when relevant state
-// changes. Feature packages (for example secondary network) consume those
-// snapshots and merge them with their own static configuration.
+// to channel subscribers when relevant state changes. Feature packages (for
+// example secondary network) consume those snapshots and merge them with their
+// own static configuration.
 package antreanodeconfig
 
 import (
@@ -48,12 +48,6 @@ const (
 	// SubscribableChannel delivery before reconciling AntreaNodeConfig-derived
 	// state from the informer cache again.
 	ancInformerResyncPeriod = 5 * time.Minute
-
-	// snapshotQueueKey is the sole workqueue item: one worker reconciles the full
-	// snapshot from Node + AntreaNodeConfig listers whenever any relevant object changes.
-	snapshotQueueKey = "snapshot"
-
-	defaultWorkers = 1
 
 	minRetryDelay = 5 * time.Millisecond
 	maxRetryDelay = 30 * time.Second
@@ -119,7 +113,9 @@ func NewController(
 }
 
 func (c *Controller) enqueueSnapshot() {
-	c.queue.Add(snapshotQueueKey)
+	// The queue uses a single key because any relevant event reconciles the full
+	// snapshot from Node + AntreaNodeConfig listers.
+	c.queue.Add("snapshot")
 }
 
 // InformersSynced reports whether both the Node and AntreaNodeConfig informer caches
@@ -179,12 +175,10 @@ func (c *Controller) Run(stopCh <-chan struct{}) {
 	}
 	c.enqueueSnapshot()
 
-	for i := 0; i < defaultWorkers; i++ {
-		go wait.Until(func() {
-			for c.processNextWorkItem() {
-			}
-		}, time.Second, stopCh)
-	}
+	go wait.Until(func() {
+		for c.processNextWorkItem() {
+		}
+	}, time.Second, stopCh)
 	<-stopCh
 }
 
@@ -195,7 +189,7 @@ func (c *Controller) processNextWorkItem() bool {
 	}
 	defer c.queue.Done(key)
 
-	if err := c.syncSnapshot(key); err != nil {
+	if err := c.syncSnapshot(); err != nil {
 		c.queue.AddRateLimited(key)
 		klog.ErrorS(err, "Failed to sync AntreaNodeConfig snapshot", "key", key)
 		return true
@@ -208,8 +202,7 @@ func (c *Controller) processNextWorkItem() bool {
 // when it differs from lastNotified. It returns an error when the local Node is not
 // available so the workqueue retries; a published snapshot always reflects a ready
 // controller.
-func (c *Controller) syncSnapshot(key string) error {
-	_ = key
+func (c *Controller) syncSnapshot() error {
 	node, err := c.getLocalNodeFromLister()
 	if err != nil {
 		return err

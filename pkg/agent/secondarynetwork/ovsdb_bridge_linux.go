@@ -61,11 +61,9 @@ func adoptSecondaryBridge(bridgeCfg *agenttypes.OVSBridgeConfig, ovsdbClient cli
 		return "", nil
 	}
 
-	updatedExternalIDs := make(map[string]string, len(externalIDs)+1)
-	for k, v := range externalIDs {
-		updatedExternalIDs[k] = v
-	}
-	updatedExternalIDs[interfacestore.AntreaInterfaceTypeKey] = interfacestore.AntreaSecondaryBridge
+	updatedExternalIDs := ovsconfig.MergeExternalIDs(externalIDs, map[string]string{
+		interfacestore.AntreaInterfaceTypeKey: interfacestore.AntreaSecondaryBridge,
+	})
 	if err := ovsconfig.SetOVSBridgeExternalIDs(ovsdbClient, bridgeCfg.BridgeName, updatedExternalIDs); err != nil {
 		return "", fmt.Errorf("failed to mark OVS bridge %s as an Antrea-managed secondary bridge: %w", bridgeCfg.BridgeName, err)
 	}

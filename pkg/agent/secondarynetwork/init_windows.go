@@ -22,6 +22,7 @@ import (
 	clientset "k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/cache"
 	componentbaseconfig "k8s.io/component-base/config"
+	"k8s.io/klog/v2"
 
 	"antrea.io/antrea/v2/pkg/agent/config"
 	"antrea.io/antrea/v2/pkg/agent/interfacestore"
@@ -45,6 +46,7 @@ func NewController(
 	ipPoolLister crdlisters.IPPoolLister,
 	ancUpdateSubscriber channel.Subscriber,
 ) (*Controller, error) {
+	klog.V(2).InfoS("Secondary network controller is not supported on Windows")
 	return nil, nil
 }
 

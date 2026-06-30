@@ -1043,7 +1043,6 @@ func TestPodControllerAddPod(t *testing.T) {
 		createPodFn(podController, pod)
 		podController.primaryInterfaceStore.AddInterface(primaryInterface)
 		assert.NoError(t, podController.syncPod(podKey))
-		podController.interfaceStore.DeleteInterface(staleConfig1)
 		podController.interfaceStore.DeleteInterface(staleConfig2)
 
 		interfaceConfigurator.EXPECT().ConfigureSriovSecondaryInterface(
@@ -1465,6 +1464,7 @@ func TestInitializeOVSSecondaryInterfaceStore(t *testing.T) {
 
 func TestUpdateOVSBridgeClient(t *testing.T) {
 	releaseErr := errors.New("ipam release failed")
+	reloadErr := errors.New("reload failed")
 	tests := []struct {
 		name         string
 		updateClient bool
@@ -1473,30 +1473,55 @@ func TestUpdateOVSBridgeClient(t *testing.T) {
 		verify       func(*testing.T, *PodController, []ovsconfig.OVSPortData, []*interfacestore.InterfaceConfig)
 	}{
 		{
-			name:         "reload new bridge removes stale records",
+			name:         "reload new bridge removes stale OVS records",
 			updateClient: true,
 			setup: func(pc *PodController, _ *podwatchtesting.MockIPAMAllocator, newOVSBridgeClient *ovsconfigtest.MockOVSBridgeClient, ovsPorts []ovsconfig.OVSPortData, interfaces []*interfacestore.InterfaceConfig) {
+				pc.interfaceStore.AddInterface(interfaces[1])
 				pc.interfaceStore.AddInterface(interfaces[3])
 				newOVSBridgeClient.EXPECT().GetPortList().Return(ovsPorts[:1], nil)
 			},
 			verify: func(t *testing.T, pc *PodController, ovsPorts []ovsconfig.OVSPortData, interfaces []*interfacestore.InterfaceConfig) {
-				_, found := pc.interfaceStore.GetContainerInterface(interfaces[3].ContainerID)
-				assert.False(t, found, "stale interface from the previous bridge should be removed")
+				_, found := pc.interfaceStore.GetContainerInterface(interfaces[1].ContainerID)
+				assert.False(t, found, "stale OVS interface from the previous bridge should be removed")
 				_, found = pc.interfaceStore.GetContainerInterface(ovsPorts[0].UUID)
 				assert.True(t, found, "interface from the new bridge should be loaded")
+				_, found = pc.interfaceStore.GetContainerInterface(interfaces[3].ContainerID)
+				assert.True(t, found, "SR-IOV interface should be preserved")
+				assert.Equal(t, 2, pc.interfaceStore.Len())
+			},
+		},
+		{
+			name:         "reload failure keeps new bridge unavailable",
+			updateClient: true,
+			expectedErr:  reloadErr,
+			setup: func(pc *PodController, _ *podwatchtesting.MockIPAMAllocator, newOVSBridgeClient *ovsconfigtest.MockOVSBridgeClient, _ []ovsconfig.OVSPortData, interfaces []*interfacestore.InterfaceConfig) {
+				pc.interfaceStore.AddInterface(interfaces[1])
+				pc.interfaceStore.AddInterface(interfaces[3])
+				newOVSBridgeClient.EXPECT().GetPortList().Return(nil, reloadErr)
+			},
+			verify: func(t *testing.T, pc *PodController, _ []ovsconfig.OVSPortData, interfaces []*interfacestore.InterfaceConfig) {
+				assert.Nil(t, pc.ovsBridgeClient)
+				assert.Nil(t, pc.interfaceConfigurator)
+				_, found := pc.interfaceStore.GetContainerInterface(interfaces[1].ContainerID)
+				assert.False(t, found, "stale OVS interface from the previous bridge should be removed")
+				_, found = pc.interfaceStore.GetContainerInterface(interfaces[3].ContainerID)
+				assert.True(t, found, "SR-IOV interface should be preserved")
 				assert.Equal(t, 1, pc.interfaceStore.Len())
 			},
 		},
 		{
-			name: "nil bridge releases IPAM before reset",
+			name: "nil bridge releases IPAM for OVS interfaces",
 			setup: func(pc *PodController, mockIPAM *podwatchtesting.MockIPAMAllocator, _ *ovsconfigtest.MockOVSBridgeClient, _ []ovsconfig.OVSPortData, interfaces []*interfacestore.InterfaceConfig) {
 				pc.interfaceStore.AddInterface(interfaces[0])
 				pc.interfaceStore.AddInterface(interfaces[1])
+				pc.interfaceStore.AddInterface(interfaces[3])
 				mockIPAM.EXPECT().SecondaryNetworkRelease(podOwnerForInterface(interfaces[0])).Return(nil)
 				mockIPAM.EXPECT().SecondaryNetworkRelease(podOwnerForInterface(interfaces[1])).Return(nil)
 			},
-			verify: func(t *testing.T, pc *PodController, _ []ovsconfig.OVSPortData, _ []*interfacestore.InterfaceConfig) {
-				assert.Equal(t, 0, pc.interfaceStore.Len())
+			verify: func(t *testing.T, pc *PodController, _ []ovsconfig.OVSPortData, interfaces []*interfacestore.InterfaceConfig) {
+				_, found := pc.interfaceStore.GetContainerInterface(interfaces[3].ContainerID)
+				assert.True(t, found, "SR-IOV interface should be preserved")
+				assert.Equal(t, 1, pc.interfaceStore.Len())
 			},
 		},
 		{
@@ -1543,6 +1568,21 @@ func podOwnerForInterface(interfaceConfig *interfacestore.InterfaceConfig) *crdv
 		ContainerID: interfaceConfig.ContainerID,
 		IFName:      interfaceConfig.IFDev,
 	}
+}
+
+func TestRemoveInterfacesDeletesVLANInterfaceStoreRecord(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	pc, mockIPAM, interfaceConfigurator, _ := testPodController(ctrl)
+	_, containerConfigs := createTestInterfaces()
+	vlanInterface := containerConfigs[1]
+	pc.interfaceStore.AddInterface(vlanInterface)
+
+	interfaceConfigurator.EXPECT().DeleteVLANSecondaryInterface(vlanInterface).Return(nil)
+	mockIPAM.EXPECT().SecondaryNetworkRelease(podOwnerForInterface(vlanInterface)).Return(nil)
+
+	require.NoError(t, pc.removeInterfaces([]*interfacestore.InterfaceConfig{vlanInterface}))
+	_, found := pc.interfaceStore.GetContainerInterface(vlanInterface.ContainerID)
+	assert.False(t, found, "VLAN secondary interface should be removed from interfaceStore after successful deletion")
 }
 
 func TestReconcileSecondaryInterfaces(t *testing.T) {

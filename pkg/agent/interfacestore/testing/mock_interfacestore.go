@@ -279,18 +279,6 @@ func (mr *MockInterfaceStoreMockRecorder) ListInterfaces() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListInterfaces", reflect.TypeOf((*MockInterfaceStore)(nil).ListInterfaces))
 }
 
-// Reset mocks base method.
-func (m *MockInterfaceStore) Reset() {
-	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "Reset")
-}
-
-// Reset indicates an expected call of Reset.
-func (mr *MockInterfaceStoreMockRecorder) Reset() *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Reset", reflect.TypeOf((*MockInterfaceStore)(nil).Reset))
-}
-
 // UpdateInterface mocks base method.
 func (m *MockInterfaceStore) UpdateInterface(interfaceConfig *interfacestore.InterfaceConfig) {
 	m.ctrl.T.Helper()

@@ -974,6 +974,11 @@ func TestDeleteAndDisconnectBridgeClearsStateAfterPodControllerUpdate(t *testing
 	ctrl := mock.NewController(t)
 	oldMock := ovsconfigtest.NewMockOVSBridgeClient(ctrl)
 
+	mockInterfaceByName(t)
+	mockNewOVSBridgeByName(t, map[string]ovsconfig.OVSBridgeClient{
+		brOld: oldMock,
+	})
+
 	updateErr := errors.New("interface store reload failed")
 	fakePc := &fakePodController{updateBridgeErr: updateErr}
 	prevCfg := &agenttypes.OVSBridgeConfig{
@@ -982,8 +987,6 @@ func TestDeleteAndDisconnectBridgeClearsStateAfterPodControllerUpdate(t *testing
 	}
 	desiredCfg := (*agenttypes.OVSBridgeConfig)(nil)
 
-	// Mock findManagedSecondaryBridgeFn: first call returns brOld (bridge exists),
-	// second call returns "" (bridge deleted from OVSDB by the first reconcile).
 	callCount := 0
 	origFindManaged := findManagedSecondaryBridgeFn
 	findManagedSecondaryBridgeFn = func(ovsdbClient client.Client) (string, error) {
@@ -1000,8 +1003,6 @@ func TestDeleteAndDisconnectBridgeClearsStateAfterPodControllerUpdate(t *testing
 	}
 	t.Cleanup(func() { adoptSecondaryBridgeFn = origAdoptStatic })
 
-	// deleteBridge calls GetPortList before Delete. Called once — on the second
-	// reconcile OVSDB shows no bridge so deleteBridge is not re-entered.
 	oldMock.EXPECT().Create().Return(nil).Times(1)
 	oldMock.EXPECT().GetPortList().Return([]ovsconfig.OVSPortData{}, nil).Times(1)
 	oldMock.EXPECT().Delete().Return(nil).Times(1)
@@ -1015,29 +1016,23 @@ func TestDeleteAndDisconnectBridgeClearsStateAfterPodControllerUpdate(t *testing
 		podController:           fakePc,
 	}
 
-	// First reconcile: delete succeeds, clearBridgeState runs, but
-	// UpdateOVSBridgeClient(nil) fails → error returned.
 	err := c.reconcileBridge()
 	require.ErrorIs(t, err, updateErr)
 	assert.Len(t, fakePc.updateBridgeCalls, 1)
 	assert.Nil(t, fakePc.updateBridgeCalls[0])
-	// State is cleared before UpdateOVSBridgeClient, so it is already nil.
 	c.mu.RLock()
-	assert.Nil(t, c.effectiveBridgeCfg, "effectiveBridgeCfg should be cleared after bridge deletion")
-	assert.Nil(t, c.ovsBridgeClient, "ovsBridgeClient should be cleared after bridge deletion")
+	assert.NotNil(t, c.effectiveBridgeCfg, "effectiveBridgeCfg should be preserved when UpdateOVSBridgeClient fails")
+	assert.NotNil(t, c.ovsBridgeClient, "ovsBridgeClient should be preserved when UpdateOVSBridgeClient fails")
 	c.mu.RUnlock()
 
-	// Second reconcile: OVSDB shows no bridge, desired is nil → no-op.
-	// The PodController still has a stale client, but it will be overwritten
-	// when a new bridge is created.
 	fakePc.updateBridgeErr = nil
 	err = c.reconcileBridge()
 	require.NoError(t, err)
-	// No additional UpdateOVSBridgeClient call because reconcile is a no-op.
-	assert.Len(t, fakePc.updateBridgeCalls, 1)
+	assert.Len(t, fakePc.updateBridgeCalls, 2)
+	assert.Nil(t, fakePc.updateBridgeCalls[1])
 	c.mu.RLock()
-	assert.Nil(t, c.effectiveBridgeCfg, "effectiveBridgeCfg should remain nil after successful no-op reconcile")
-	assert.Nil(t, c.ovsBridgeClient, "ovsBridgeClient should remain nil after successful no-op reconcile")
+	assert.Nil(t, c.effectiveBridgeCfg, "effectiveBridgeCfg should be cleared after PodController update succeeds")
+	assert.Nil(t, c.ovsBridgeClient, "ovsBridgeClient should be cleared after PodController update succeeds")
 	c.mu.RUnlock()
 }
 

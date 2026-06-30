@@ -17,7 +17,6 @@ package antreanodeconfig
 import (
 	"encoding/json"
 	"fmt"
-	"strconv"
 	"strings"
 
 	admv1 "k8s.io/api/admission/v1"
@@ -25,14 +24,8 @@ import (
 	"k8s.io/klog/v2"
 
 	crdv1alpha1 "antrea.io/antrea/v2/pkg/apis/crd/v1alpha1"
+	"antrea.io/antrea/v2/pkg/util/vlan"
 )
-
-const maxVLANID = 4094
-
-type vlanIDRange struct {
-	start uint16
-	end   uint16
-}
 
 // Validate validates AntreaNodeConfig admission requests.
 func Validate(review *admv1.AdmissionReview) *admv1.AdmissionResponse {
@@ -84,47 +77,15 @@ func newAdmissionResponseForErr(err error) *admv1.AdmissionResponse {
 	}
 }
 
-func parseVLANSpec(spec string) (vlanIDRange, error) {
-	spec = strings.TrimSpace(spec)
-	if idx := strings.IndexByte(spec, '-'); idx >= 0 {
-		startStr, endStr := spec[:idx], spec[idx+1:]
-		start, err := strconv.ParseUint(startStr, 10, 16)
-		if err != nil {
-			return vlanIDRange{}, fmt.Errorf("invalid VLAN range start %q: %v", startStr, err)
-		}
-		end, err := strconv.ParseUint(endStr, 10, 16)
-		if err != nil {
-			return vlanIDRange{}, fmt.Errorf("invalid VLAN range end %q: %v", endStr, err)
-		}
-		return vlanIDRange{start: uint16(start), end: uint16(end)}, nil
-	}
-
-	v, err := strconv.ParseUint(spec, 10, 16)
-	if err != nil {
-		return vlanIDRange{}, fmt.Errorf("invalid VLAN ID %q: %v", spec, err)
-	}
-	return vlanIDRange{start: uint16(v), end: uint16(v)}, nil
-}
-
 func validateVLANSpecs(specs []string) error {
 	seen := make(map[uint16]string)
 	for _, rawSpec := range specs {
 		spec := strings.TrimSpace(rawSpec)
-		r, err := parseVLANSpec(spec)
+		r, err := vlan.ParseSpec(spec)
 		if err != nil {
 			return err
 		}
-		if strings.Contains(spec, "-") {
-			if r.start > r.end {
-				return fmt.Errorf("VLAN range start %d is greater than end %d", r.start, r.end)
-			}
-			if r.end > maxVLANID {
-				return fmt.Errorf("VLAN range end %d is greater than maximum VLAN ID %d", r.end, maxVLANID)
-			}
-		} else if r.start > maxVLANID {
-			return fmt.Errorf("VLAN ID %d is greater than maximum VLAN ID %d", r.start, maxVLANID)
-		}
-		for id := r.start; id <= r.end; id++ {
+		for id := r.Start; id <= r.End; id++ {
 			if prev, ok := seen[id]; ok {
 				return fmt.Errorf("VLAN ID %d is specified more than once in %q and %q", id, prev, spec)
 			}

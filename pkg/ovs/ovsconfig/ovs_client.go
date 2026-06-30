@@ -32,6 +32,8 @@ import (
 	"github.com/ovn-kubernetes/libovsdb/ovsdb"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/klog/v2"
+
+	"antrea.io/antrea/v2/pkg/util/vlan"
 )
 
 const (
@@ -82,9 +84,7 @@ const (
 	openflowProtoVersion15 = "OpenFlow15"
 	// Maximum allowed value of ofPortRequest.
 	ofPortRequestMax = 65279
-	// Maximum VLAN ID supported by OVS and Antrea.
-	maxVLANID       = 4094
-	hardwareOffload = "hw-offload"
+	hardwareOffload  = "hw-offload"
 )
 
 // NewOVSDBConnectionUDS connects to the OVSDB server on the UNIX domain socket
@@ -248,7 +248,11 @@ func (br *OVSBridge) updateBridgeConfiguration(ctx context.Context) error {
 	}
 	fields := []interface{}{&update.Protocols, &update.DatapathType, &update.McastSnoopingEnable}
 	if br.externalIDs != nil {
-		update.ExternalIDs = br.externalIDs
+		currentExternalIDs, err := br.GetExternalIDs()
+		if err != nil {
+			return err
+		}
+		update.ExternalIDs = MergeExternalIDs(currentExternalIDs, br.externalIDs)
 		fields = append(fields, &update.ExternalIDs)
 	}
 
@@ -262,6 +266,18 @@ func (br *OVSBridge) updateBridgeConfiguration(ctx context.Context) error {
 	}
 	_, err = br.transact(ctx, ops, "update bridge configuration")
 	return err
+}
+
+// MergeExternalIDs returns a copy of current external IDs with desired external IDs overlaid.
+func MergeExternalIDs(current, desired map[string]string) map[string]string {
+	merged := make(map[string]string, len(current)+len(desired))
+	for k, v := range current {
+		merged[k] = v
+	}
+	for k, v := range desired {
+		merged[k] = v
+	}
+	return merged
 }
 
 func (br *OVSBridge) create(ctx context.Context) error {
@@ -811,39 +827,7 @@ func (br *OVSBridge) createPort(ctx context.Context,
 // a flat slice of uint16 VLAN IDs suitable for the OVSDB trunks set, which
 // only supports discrete integer elements (no native range type).
 func parseVLANSpecs(specs []string) ([]uint16, error) {
-	var ids []uint16
-	for _, spec := range specs {
-		spec = strings.TrimSpace(spec)
-		if idx := strings.IndexByte(spec, '-'); idx >= 0 {
-			start, err := strconv.ParseUint(spec[:idx], 10, 16)
-			if err != nil {
-				return nil, fmt.Errorf("invalid VLAN range start %q: %v", spec[:idx], err)
-			}
-			end, err := strconv.ParseUint(spec[idx+1:], 10, 16)
-			if err != nil {
-				return nil, fmt.Errorf("invalid VLAN range end %q: %v", spec[idx+1:], err)
-			}
-			if start > end {
-				return nil, fmt.Errorf("VLAN range start %d is greater than end %d", start, end)
-			}
-			if end > maxVLANID {
-				return nil, fmt.Errorf("VLAN range end %d is greater than maximum VLAN ID %d", end, maxVLANID)
-			}
-			for id := int(start); id <= int(end); id++ {
-				ids = append(ids, uint16(id))
-			}
-		} else {
-			id, err := strconv.ParseUint(spec, 10, 16)
-			if err != nil {
-				return nil, fmt.Errorf("invalid VLAN ID %q: %v", spec, err)
-			}
-			if id > maxVLANID {
-				return nil, fmt.Errorf("VLAN ID %d is greater than maximum VLAN ID %d", id, maxVLANID)
-			}
-			ids = append(ids, uint16(id))
-		}
-	}
-	return ids, nil
+	return vlan.ExpandSpecs(specs)
 }
 
 func uint16sToInts(ids []uint16) []int {

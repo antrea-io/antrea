@@ -369,10 +369,10 @@ func TestRecomputeNotifyFailureSkipsLastNotifiedUpdate(t *testing.T) {
 	env := newControllerTestEnv(t, rec, testWorkerNode())
 
 	assert.Nil(t, env.C.lastNotified, "lastNotified should reflect last successful notify only")
-	require.Error(t, env.C.syncSnapshot(snapshotQueueKey))
+	require.Error(t, env.C.syncSnapshot())
 
 	rec.fail = false
-	require.NoError(t, env.C.syncSnapshot(snapshotQueueKey))
+	require.NoError(t, env.C.syncSnapshot())
 	require.NotNil(t, env.C.lastNotified)
 	assert.Empty(t, env.C.lastNotified.AntreaNodeConfigListError)
 }

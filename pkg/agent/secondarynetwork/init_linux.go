@@ -25,6 +25,7 @@ import (
 
 	netdefclient "github.com/k8snetworkplumbingwg/network-attachment-definition-client/pkg/client/clientset/versioned/typed/k8s.cni.cncf.io/v1"
 	"github.com/ovn-kubernetes/libovsdb/client"
+	"k8s.io/apimachinery/pkg/util/wait"
 	clientset "k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/util/workqueue"
@@ -135,7 +136,7 @@ func NewController(
 
 	netAttachDefClient, err := createNetworkAttachDefClient(clientConnectionConfig, kubeAPIServerOverride)
 	if err != nil {
-		return nil, fmt.Errorf("NetworkAttachmentDefinition client creation failed: %v", err)
+		return nil, fmt.Errorf("network attachment definition client creation failed: %w", err)
 	}
 
 	podWatchController, err := podwatch.NewPodController(
@@ -368,10 +369,10 @@ func (c *Controller) Run(stopCh <-chan struct{}) {
 
 	if c.dynamicBridgeReconcile {
 		defer c.queue.ShutDown()
-		go func() {
+		go wait.Until(func() {
 			for c.processNextItem() {
 			}
-		}()
+		}, time.Second, stopCh)
 	}
 
 	go c.podController.Run(stopCh)
@@ -451,9 +452,10 @@ func resolveAndCreateOVSBridge(
 //   - different bridge name → delete old bridge first, then create the new bridge.
 //   - interfaces with allowedVLANs are configured as OVS trunk ports.
 //
-// State-update discipline: after any destructive operation (bridge deletion) the controller
-// state is immediately cleared under the mutex so that a subsequent retry does not attempt to
-// delete an already-deleted bridge.
+// State-update discipline: after any destructive operation (bridge deletion), the
+// controller state is cleared only after the PodController has been disconnected
+// successfully. If the PodController update fails, the retained state lets a retry
+// finish the disconnect without deleting the already-deleted bridge again.
 func (c *Controller) reconcileBridge() error {
 	staticBridge := EffectiveSecondaryOVSBridgeFromAgentConfig(c.secNetConfig)
 	desired := c.effectiveOVSBridge()
@@ -469,20 +471,30 @@ func (c *Controller) reconcileBridge() error {
 		}
 	}
 
-	if currentBrName == "" && desired == nil {
-		return nil
+	if currentBrName == "" {
+		// No managed bridge in OVSDB. If the controller still holds
+		// state from a previous bridge, deletion succeeded but
+		// PodController cleanup failed. Finish that cleanup before
+		// either returning to the no-bridge steady state or creating
+		// a new bridge, so old secondary IPAM allocations are not
+		// dropped by a later store reset.
+		if c.ovsBridgeClient != nil {
+			if err := c.disconnectBridge(); err != nil {
+				return err
+			}
+		}
+		if desired == nil {
+			return nil
+		}
 	}
-	desiredBrName := ""
-	if desired != nil {
-		desiredBrName = desired.BridgeName
-	}
-	klog.InfoS("Reconciling secondary network bridge configuration",
-		"current", bridgeName(currentBrName), "desired", bridgeName(desiredBrName))
 
 	// Case: no bridge desired — delete the existing one.
 	if desired == nil {
 		return c.deleteAndDisconnectBridge(currentBrName)
 	}
+
+	klog.InfoS("Reconciling secondary network bridge configuration",
+		"current", currentBrName, "desired", desired.BridgeName)
 
 	// Case: new bridge desired when no managed bridge exists in OVSDB.
 	if currentBrName == "" {
@@ -490,10 +502,7 @@ func (c *Controller) reconcileBridge() error {
 	}
 
 	// Case: bridge name changed.
-	// The old bridge MUST be deleted before the new one is created.  State is
-	// cleared under the mutex immediately after the deletion succeeds so that if
-	// createAndConnectBridge subsequently fails the next retry starts from a clean
-	// "no bridge" state rather than trying to delete the already-gone old bridge.
+	// The old bridge MUST be deleted before the new one is created.
 	if currentBrName != desired.BridgeName {
 		klog.InfoS("Secondary OVS bridge name changed, deleting old bridge before creating new one",
 			"old", currentBrName, "new", desired.BridgeName)
@@ -511,27 +520,28 @@ func (c *Controller) reconcileBridge() error {
 	return c.updatePhysicalInterfaces(desired)
 }
 
-func (c *Controller) clearBridgeState() {
+func (c *Controller) disconnectBridge() error {
+	if err := c.podController.UpdateOVSBridgeClient(nil); err != nil {
+		return err
+	}
 	c.mu.Lock()
 	c.effectiveBridgeCfg = nil
 	c.ovsBridgeClient = nil
 	c.mu.Unlock()
+	return nil
 }
 
-// deleteAndDisconnectBridge deletes the OVS bridge named brName, clears controller state,
-// and notifies the pod controller that no secondary bridge is in use. An empty brName is a
-// no-op. Controller state is cleared before updating the PodController so that when the
-// update fails the next reconcile (which queries OVSDB) correctly sees no bridge and does
-// not re-attempt deletion.
+// deleteAndDisconnectBridge deletes the OVS bridge named brName, notifies the pod
+// controller that no secondary bridge is in use, and clears controller state.
+// State is cleared only after the PodController update succeeds: if the update
+// fails, the retained ovsBridgeClient allows the no-current-bridge path in
+// reconcileBridge to detect the stale state on retry and re-attempt the
+// PodController update without re-running bridge deletion.
 func (c *Controller) deleteAndDisconnectBridge(brName string) error {
 	if err := c.deleteBridge(brName); err != nil {
 		return err
 	}
-	c.clearBridgeState()
-	if err := c.podController.UpdateOVSBridgeClient(nil); err != nil {
-		return err
-	}
-	return nil
+	return c.disconnectBridge()
 }
 
 // deleteBridge tears down any host-connection interfaces found on the bridge (derived from
@@ -869,12 +879,4 @@ func connectPhyInterfacesToOVSBridge(ovsBridgeClient ovsconfig.OVSBridgeClient, 
 		}
 	}
 	return nil
-}
-
-// bridgeName returns the bridge name, or "<none>" for empty.
-func bridgeName(name string) string {
-	if name == "" {
-		return "<none>"
-	}
-	return name
 }
