@@ -1463,6 +1463,88 @@ func TestInitializeOVSSecondaryInterfaceStore(t *testing.T) {
 	assert.False(t, found, "Unknown interface type should not be stored")
 }
 
+func TestUpdateOVSBridgeClient(t *testing.T) {
+	releaseErr := errors.New("ipam release failed")
+	tests := []struct {
+		name         string
+		updateClient bool
+		setup        func(*PodController, *podwatchtesting.MockIPAMAllocator, *ovsconfigtest.MockOVSBridgeClient, []ovsconfig.OVSPortData, []*interfacestore.InterfaceConfig)
+		expectedErr  error
+		verify       func(*testing.T, *PodController, []ovsconfig.OVSPortData, []*interfacestore.InterfaceConfig)
+	}{
+		{
+			name:         "reload new bridge removes stale records",
+			updateClient: true,
+			setup: func(pc *PodController, _ *podwatchtesting.MockIPAMAllocator, newOVSBridgeClient *ovsconfigtest.MockOVSBridgeClient, ovsPorts []ovsconfig.OVSPortData, interfaces []*interfacestore.InterfaceConfig) {
+				pc.interfaceStore.AddInterface(interfaces[3])
+				newOVSBridgeClient.EXPECT().GetPortList().Return(ovsPorts[:1], nil)
+			},
+			verify: func(t *testing.T, pc *PodController, ovsPorts []ovsconfig.OVSPortData, interfaces []*interfacestore.InterfaceConfig) {
+				_, found := pc.interfaceStore.GetContainerInterface(interfaces[3].ContainerID)
+				assert.False(t, found, "stale interface from the previous bridge should be removed")
+				_, found = pc.interfaceStore.GetContainerInterface(ovsPorts[0].UUID)
+				assert.True(t, found, "interface from the new bridge should be loaded")
+				assert.Equal(t, 1, pc.interfaceStore.Len())
+			},
+		},
+		{
+			name: "nil bridge releases IPAM before reset",
+			setup: func(pc *PodController, mockIPAM *podwatchtesting.MockIPAMAllocator, _ *ovsconfigtest.MockOVSBridgeClient, _ []ovsconfig.OVSPortData, interfaces []*interfacestore.InterfaceConfig) {
+				pc.interfaceStore.AddInterface(interfaces[0])
+				pc.interfaceStore.AddInterface(interfaces[1])
+				mockIPAM.EXPECT().SecondaryNetworkRelease(podOwnerForInterface(interfaces[0])).Return(nil)
+				mockIPAM.EXPECT().SecondaryNetworkRelease(podOwnerForInterface(interfaces[1])).Return(nil)
+			},
+			verify: func(t *testing.T, pc *PodController, _ []ovsconfig.OVSPortData, _ []*interfacestore.InterfaceConfig) {
+				assert.Equal(t, 0, pc.interfaceStore.Len())
+			},
+		},
+		{
+			name:        "nil bridge keeps records on IPAM release failure",
+			expectedErr: releaseErr,
+			setup: func(pc *PodController, mockIPAM *podwatchtesting.MockIPAMAllocator, _ *ovsconfigtest.MockOVSBridgeClient, _ []ovsconfig.OVSPortData, interfaces []*interfacestore.InterfaceConfig) {
+				pc.interfaceStore.AddInterface(interfaces[0])
+				mockIPAM.EXPECT().SecondaryNetworkRelease(podOwnerForInterface(interfaces[0])).Return(releaseErr)
+			},
+			verify: func(t *testing.T, pc *PodController, _ []ovsconfig.OVSPortData, interfaces []*interfacestore.InterfaceConfig) {
+				_, found := pc.interfaceStore.GetContainerInterface(interfaces[0].ContainerID)
+				assert.True(t, found, "interface record should remain so IPAM release can be retried")
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			pc, mockIPAM, _, _ := testPodController(ctrl)
+			ovsPorts, interfaces := createTestInterfaces()
+			newOVSBridgeClient := ovsconfigtest.NewMockOVSBridgeClient(ctrl)
+			tt.setup(pc, mockIPAM, newOVSBridgeClient, ovsPorts, interfaces)
+
+			var updateClient ovsconfig.OVSBridgeClient
+			if tt.updateClient {
+				updateClient = newOVSBridgeClient
+			}
+			err := pc.UpdateOVSBridgeClient(updateClient)
+			if tt.expectedErr != nil {
+				require.ErrorIs(t, err, tt.expectedErr)
+			} else {
+				require.NoError(t, err)
+			}
+			tt.verify(t, pc, ovsPorts, interfaces)
+		})
+	}
+}
+
+func podOwnerForInterface(interfaceConfig *interfacestore.InterfaceConfig) *crdv1beta1.PodOwner {
+	return &crdv1beta1.PodOwner{
+		Name:        interfaceConfig.PodName,
+		Namespace:   interfaceConfig.PodNamespace,
+		ContainerID: interfaceConfig.ContainerID,
+		IFName:      interfaceConfig.IFDev,
+	}
+}
+
 func TestReconcileSecondaryInterfaces(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	pc, mockIPAM, interfaceConfigurator, _ := testPodController(ctrl)

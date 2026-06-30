@@ -1,4 +1,4 @@
-// Copyright 2026 Antrea Authors
+// Copyright YEAR Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -116,6 +116,21 @@ func (mr *MockOVSBridgeClientMockRecorder) CreatePort(name, ifDev, externalIDs a
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreatePort", reflect.TypeOf((*MockOVSBridgeClient)(nil).CreatePort), name, ifDev, externalIDs)
 }
 
+// CreateTrunkPort mocks base method.
+func (m *MockOVSBridgeClient) CreateTrunkPort(name string, ofPortRequest int32, vlanSpecs []string, externalIDs map[string]string) (string, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "CreateTrunkPort", name, ofPortRequest, vlanSpecs, externalIDs)
+	ret0, _ := ret[0].(string)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// CreateTrunkPort indicates an expected call of CreateTrunkPort.
+func (mr *MockOVSBridgeClientMockRecorder) CreateTrunkPort(name, ofPortRequest, vlanSpecs, externalIDs any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateTrunkPort", reflect.TypeOf((*MockOVSBridgeClient)(nil).CreateTrunkPort), name, ofPortRequest, vlanSpecs, externalIDs)
+}
+
 // CreateTunnelPortExt mocks base method.
 func (m *MockOVSBridgeClient) CreateTunnelPortExt(name string, tunnelType ovsconfig.TunnelType, ofPortRequest int32, csum bool, localIP, remoteIP, remoteName, psk string, extraOptions, externalIDs map[string]string) (string, error) {
 	m.ctrl.T.Helper()
@@ -186,6 +201,20 @@ func (m *MockOVSBridgeClient) DeletePort(portUUID string) error {
 func (mr *MockOVSBridgeClientMockRecorder) DeletePort(portUUID any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeletePort", reflect.TypeOf((*MockOVSBridgeClient)(nil).DeletePort), portUUID)
+}
+
+// DeletePorts mocks base method.
+func (m *MockOVSBridgeClient) DeletePorts(portUUIDList []string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "DeletePorts", portUUIDList)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// DeletePorts indicates an expected call of DeletePorts.
+func (mr *MockOVSBridgeClientMockRecorder) DeletePorts(portUUIDList any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeletePorts", reflect.TypeOf((*MockOVSBridgeClient)(nil).DeletePorts), portUUIDList)
 }
 
 // GetBridgeName mocks base method.
@@ -461,6 +490,20 @@ func (m *MockOVSBridgeClient) SetPortExternalIDs(portName string, externalIDs ma
 func (mr *MockOVSBridgeClientMockRecorder) SetPortExternalIDs(portName, externalIDs any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetPortExternalIDs", reflect.TypeOf((*MockOVSBridgeClient)(nil).SetPortExternalIDs), portName, externalIDs)
+}
+
+// SetPortTrunks mocks base method.
+func (m *MockOVSBridgeClient) SetPortTrunks(portName string, vlanSpecs []string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "SetPortTrunks", portName, vlanSpecs)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// SetPortTrunks indicates an expected call of SetPortTrunks.
+func (mr *MockOVSBridgeClientMockRecorder) SetPortTrunks(portName, vlanSpecs any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetPortTrunks", reflect.TypeOf((*MockOVSBridgeClient)(nil).SetPortTrunks), portName, vlanSpecs)
 }
 
 // UpdateOVSOtherConfig mocks base method.

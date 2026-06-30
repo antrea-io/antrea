@@ -46,6 +46,7 @@ const (
 	AntreaHost             = "host"
 	AntreaTrafficControl   = "traffic-control"
 	AntreaIPsecTunnel      = "ipsec-tunnel"
+	AntreaSecondaryBridge  = "secondary-bridge"
 	AntreaUnset            = ""
 )
 
@@ -118,6 +119,7 @@ type InterfaceConfig struct {
 // Support add/delete/get operations
 type InterfaceStore interface {
 	Initialize(interfaces []*InterfaceConfig)
+	Reset()
 	AddInterface(interfaceConfig *InterfaceConfig)
 	UpdateInterface(interfaceConfig *InterfaceConfig)
 	ListInterfaces() []*InterfaceConfig

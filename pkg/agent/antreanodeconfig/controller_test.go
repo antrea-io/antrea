@@ -23,19 +23,18 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/informers"
 	corev1informers "k8s.io/client-go/informers/core/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/kubernetes/fake"
-	"k8s.io/client-go/tools/cache"
 
 	crdv1alpha1 "antrea.io/antrea/v2/pkg/apis/crd/v1alpha1"
 	fakeversioned "antrea.io/antrea/v2/pkg/client/clientset/versioned/fake"
 	crdinformers "antrea.io/antrea/v2/pkg/client/informers/externalversions"
 	crdv1a1inf "antrea.io/antrea/v2/pkg/client/informers/externalversions/crd/v1alpha1"
-	agentconfig "antrea.io/antrea/v2/pkg/config/agent"
 )
 
 const (
@@ -83,16 +82,6 @@ func testNode(name string, labels map[string]string) *corev1.Node {
 		ObjectMeta: metav1.ObjectMeta{
 			Name:   name,
 			Labels: labels,
-		},
-	}
-}
-
-func testStaticSecondaryNet() *agentconfig.AgentConfig {
-	return &agentconfig.AgentConfig{
-		SecondaryNetwork: agentconfig.SecondaryNetworkConfig{
-			OVSBridges: []agentconfig.OVSBridgeConfig{
-				{BridgeName: "br-static", PhysicalInterfaces: []string{"eth0"}},
-			},
 		},
 	}
 }
@@ -167,35 +156,54 @@ func newControllerTestEnv(t *testing.T, rec *notifyRecorder, node *corev1.Node, 
 	}
 	stopCh, ancInf, nodeInf, kube := startTestInformers(t, node, ancObjs...)
 	t.Cleanup(func() { close(stopCh) })
-	c := NewController(ancInf, nodeInf, testLocalNodeName, testStaticSecondaryNet(), rec)
+	c := NewController(ancInf, nodeInf, testLocalNodeName, rec)
 	return &controllerTestEnv{t: t, C: c, Rec: rec, Kube: kube}
 }
 
+// drainQueue processes all work items currently queued by informer handlers (for example
+// the initial sync after registering handlers on already-synced caches).
+func (e *controllerTestEnv) drainQueue() {
+	e.t.Helper()
+	require.Eventually(e.t, func() bool {
+		if e.C.queue.Len() == 0 {
+			return true
+		}
+		if !e.C.processNextWorkItem() {
+			return e.C.queue.Len() == 0
+		}
+		return false
+	}, 3*time.Second, 5*time.Millisecond, "workqueue should drain")
+}
+
+// loadLocalNode drains queued snapshot work so tests start from a quiet baseline.
 func (e *controllerTestEnv) loadLocalNode() {
 	e.t.Helper()
-	e.C.loadLocalNodeFromLister()
+	e.drainQueue()
 }
 
 func (e *controllerTestEnv) recompute() {
 	e.t.Helper()
-	e.C.recomputeAndNotify()
+	e.C.enqueueSnapshot()
+	require.True(e.t, e.C.processNextWorkItem())
 }
 
-func assertEffectiveSnapshotBridge(t *testing.T, snap *EffectiveSnapshot, bridgeName string) {
+func assertSnapshotBridge(t *testing.T, snap *Snapshot, bridgeName string) {
 	t.Helper()
 	require.NotNil(t, snap)
-	require.NotNil(t, snap.SecondaryOVSBridge)
-	assert.Equal(t, bridgeName, snap.SecondaryOVSBridge.BridgeName)
+	require.NotNil(t, snap.AntreaNodeConfig)
+	require.NotNil(t, snap.AntreaNodeConfig.Spec.SecondaryNetwork)
+	require.Len(t, snap.AntreaNodeConfig.Spec.SecondaryNetwork.OVSBridges, 1)
+	assert.Equal(t, bridgeName, snap.AntreaNodeConfig.Spec.SecondaryNetwork.OVSBridges[0].BridgeName)
 }
 
-func lastEffectiveSnapshot(t *testing.T, rec *notifyRecorder) *EffectiveSnapshot {
+func lastSnapshot(t *testing.T, rec *notifyRecorder) *Snapshot {
 	t.Helper()
-	snap, ok := rec.Last().(*EffectiveSnapshot)
+	snap, ok := rec.Last().(*Snapshot)
 	require.True(t, ok)
 	return snap
 }
 
-func TestLoadLocalNodeFromLister(t *testing.T) {
+func TestLocalNodeFromLister(t *testing.T) {
 	tests := []struct {
 		name    string
 		node    *corev1.Node
@@ -207,13 +215,13 @@ func TestLoadLocalNodeFromLister(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			env := newControllerTestEnv(t, nil, tc.node)
-			env.loadLocalNode()
-			env.C.mu.RLock()
-			got := env.C.node
-			env.C.mu.RUnlock()
+			env.drainQueue()
+			got, err := env.C.nodeLister.Get(testLocalNodeName)
 			if tc.wantNil {
-				assert.Nil(t, got)
+				require.Error(t, err)
+				assert.True(t, apierrors.IsNotFound(err))
 			} else {
+				require.NoError(t, err)
 				require.NotNil(t, got)
 				assert.Equal(t, testLocalNodeName, got.Name)
 			}
@@ -221,26 +229,24 @@ func TestLoadLocalNodeFromLister(t *testing.T) {
 	}
 }
 
-func TestEffectiveSecondaryOVSBridgeReturnsNilBeforeInformerSync(t *testing.T) {
+func TestCurrentSnapshotNilBeforeInformerSync(t *testing.T) {
 	rec := &notifyRecorder{}
 	kube := fake.NewClientset(testWorkerNode())
 	nodeInf := informers.NewSharedInformerFactory(kube, 0).Core().V1().Nodes()
 	crdClient := fakeversioned.NewSimpleClientset(testANC("a1", "br-anc"))
 	crdInf := crdinformers.NewSharedInformerFactory(crdClient, 0).Crd().V1alpha1().AntreaNodeConfigs()
 
-	c := NewController(crdInf, nodeInf, testLocalNodeName, testStaticSecondaryNet(), rec)
-	// Informers are not started: caches are unsynced. Static secondary config
-	// must not be used while AntreaNodeConfig objects are not yet visible.
-	assert.Nil(t, c.EffectiveSecondaryOVSBridge())
+	c := NewController(crdInf, nodeInf, testLocalNodeName, rec)
+	// Informers are not started: caches are unsynced.
+	assert.Nil(t, c.CurrentSnapshot())
 }
 
-func TestEffectiveSecondaryOVSBridgeUsesInformerCaches(t *testing.T) {
+func TestCurrentSnapshotUsesInformerCaches(t *testing.T) {
 	env := newControllerTestEnv(t, nil, testWorkerNode(), ancAsRuntime(testANC("a1", "br-anc"))...)
-	env.loadLocalNode()
+	env.drainQueue()
 
-	br := env.C.EffectiveSecondaryOVSBridge()
-	require.NotNil(t, br)
-	assert.Equal(t, "br-anc", br.BridgeName)
+	snap := env.C.CurrentSnapshot()
+	assertSnapshotBridge(t, snap, "br-anc")
 }
 
 func TestRecomputeAndNotifyDedup(t *testing.T) {
@@ -263,18 +269,28 @@ func TestRecomputeAndNotifyOnLabelChange(t *testing.T) {
 	_, err := env.Kube.CoreV1().Nodes().Update(context.Background(), newNode, metav1.UpdateOptions{})
 	require.NoError(t, err)
 
-	require.Eventually(t, func() bool { return env.Rec.Len() >= 2 }, 2*time.Second, 10*time.Millisecond,
+	require.Eventually(t, func() bool {
+		n, e := env.C.nodeLister.Get(testLocalNodeName)
+		if e != nil || n.Labels["role"] != "other" {
+			return false
+		}
+		for env.C.queue.Len() > 0 {
+			if !env.C.processNextWorkItem() {
+				break
+			}
+		}
+		return env.Rec.Len() >= 2
+	}, 2*time.Second, 10*time.Millisecond,
 		"label change should trigger another notify")
-	assertEffectiveSnapshotBridge(t, lastEffectiveSnapshot(t, env.Rec), "br-static")
+	assert.Nil(t, lastSnapshot(t, env.Rec).AntreaNodeConfig, "ANC matched worker role only; labels no longer match")
 }
 
 func TestNodeEventHandlersNoExtraNotify(t *testing.T) {
 	otherNode := func() *corev1.Node {
 		return testNode("other-node", map[string]string{"a": "b"})
 	}
-	// These handlers either no-op before touching the local Node or update c.node
-	// without calling recomputeAndNotifyAsync (same labels). All paths are
-	// synchronous — no synctest / sleep needed.
+	// Handlers either no-op or enqueue a snapshot reconcile. Drain after each act
+	// so queue-driven notifies are applied before asserting counts.
 	tests := []struct {
 		name string
 		act  func(t *testing.T, c *Controller)
@@ -311,18 +327,6 @@ func TestNodeEventHandlersNoExtraNotify(t *testing.T) {
 			},
 		},
 		{
-			name: "OnNodeDelete wrong type ignored",
-			act: func(t *testing.T, c *Controller) {
-				c.onNodeDelete("not-a-node")
-			},
-		},
-		{
-			name: "OnNodeDelete different node ignored",
-			act: func(t *testing.T, c *Controller) {
-				c.onNodeDelete(testNode("other-node", nil))
-			},
-		},
-		{
 			name: "OnNodeAdd wrong type ignored",
 			act: func(t *testing.T, c *Controller) {
 				c.onNodeAdd("not-a-node")
@@ -336,6 +340,7 @@ func TestNodeEventHandlersNoExtraNotify(t *testing.T) {
 			env.recompute()
 			require.Equal(t, 1, env.Rec.Len())
 			tc.act(t, env.C)
+			env.drainQueue()
 			assert.Equal(t, 1, env.Rec.Len())
 		})
 	}
@@ -352,41 +357,24 @@ func TestRunReturnsWhenStopClosedWhileCachesNeverSynced(t *testing.T) {
 	_ = nodeInf.Informer()
 	_ = ancInf.Informer()
 	// Intentionally do not Start factories: HasSynced stays false.
-	c := NewController(ancInf, nodeInf, testLocalNodeName, testStaticSecondaryNet(), rec)
+	c := NewController(ancInf, nodeInf, testLocalNodeName, rec)
 	runStop := make(chan struct{})
 	close(runStop)
 	c.Run(runStop)
 	assert.Equal(t, 0, rec.Len(), "Run should exit when stopCh is closed before caches sync")
 }
 
-func TestOnNodeDeleteTombstone(t *testing.T) {
-	env := newControllerTestEnv(t, nil, testWorkerNode(), ancAsRuntime(testANC("a1", "br-anc"))...)
-	env.loadLocalNode()
-	env.recompute()
-	require.Equal(t, 1, env.Rec.Len())
-
-	env.C.onNodeDelete(cache.DeletedFinalStateUnknown{
-		Key: testLocalNodeName,
-		Obj: testWorkerNode(),
-	})
-
-	require.Eventually(t, func() bool { return env.Rec.Len() >= 2 }, 2*time.Second, 10*time.Millisecond)
-	env.C.mu.RLock()
-	n := env.C.node
-	env.C.mu.RUnlock()
-	assert.Nil(t, n)
-}
-
-func TestRecomputeNotifyFailureStillStoresLastNotified(t *testing.T) {
+func TestRecomputeNotifyFailureSkipsLastNotifiedUpdate(t *testing.T) {
 	rec := &notifyRecorder{fail: true}
 	env := newControllerTestEnv(t, rec, testWorkerNode())
-	env.loadLocalNode()
-	env.recompute()
 
-	env.C.mu.RLock()
-	ln := env.C.lastNotified
-	env.C.mu.RUnlock()
-	assertEffectiveSnapshotBridge(t, ln, "br-static")
+	assert.Nil(t, env.C.lastNotified, "lastNotified should reflect last successful notify only")
+	require.Error(t, env.C.syncSnapshot(snapshotQueueKey))
+
+	rec.fail = false
+	require.NoError(t, env.C.syncSnapshot(snapshotQueueKey))
+	require.NotNil(t, env.C.lastNotified)
+	assert.Empty(t, env.C.lastNotified.AntreaNodeConfigListError)
 }
 
 func TestControllerRunPublishesInitialSnapshot(t *testing.T) {
@@ -400,8 +388,140 @@ func TestControllerRunPublishesInitialSnapshot(t *testing.T) {
 	}()
 
 	require.Eventually(t, func() bool { return env.Rec.Len() >= 1 }, 3*time.Second, 10*time.Millisecond)
-	assertEffectiveSnapshotBridge(t, lastEffectiveSnapshot(t, env.Rec), "br-run")
+	assertSnapshotBridge(t, lastSnapshot(t, env.Rec), "br-run")
 
 	close(runStop)
 	wg.Wait()
+}
+
+func TestCurrentSnapshotOldestMatchWhenMultipleANC(t *testing.T) {
+	olderTS := metav1.NewTime(time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC))
+	newerTS := metav1.NewTime(time.Date(2026, 6, 1, 0, 0, 0, 0, time.UTC))
+	older := testANC("a-older", "br-old")
+	older.CreationTimestamp = olderTS
+	newer := testANC("a-newer", "br-new")
+	newer.CreationTimestamp = newerTS
+
+	env := newControllerTestEnv(t, nil, testWorkerNode(), ancAsRuntime(newer, older)...)
+	env.drainQueue()
+	snap := env.C.CurrentSnapshot()
+	require.NotNil(t, snap)
+	require.NotNil(t, snap.AntreaNodeConfig)
+	assert.Equal(t, "a-older", snap.AntreaNodeConfig.Name)
+	assertSnapshotBridge(t, snap, "br-old")
+}
+
+func testANCWithSelector(name string, ts time.Time, nodeSelector map[string]string) *crdv1alpha1.AntreaNodeConfig {
+	return &crdv1alpha1.AntreaNodeConfig{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:              name,
+			CreationTimestamp: metav1.NewTime(ts),
+		},
+		Spec: crdv1alpha1.AntreaNodeConfigSpec{
+			NodeSelector: metav1.LabelSelector{
+				MatchLabels: nodeSelector,
+			},
+		},
+	}
+}
+
+func TestSelectAntreaNodeConfigsForNode(t *testing.T) {
+	node := testNode("node1", map[string]string{"role": "worker", "zone": "us-east"})
+	t0 := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	t1 := t0.Add(time.Minute)
+	t2 := t0.Add(2 * time.Minute)
+
+	anc1 := testANCWithSelector("anc1", t0, map[string]string{"role": "worker"})
+	anc2 := testANCWithSelector("anc2", t1, map[string]string{"role": "control-plane"})
+	anc3 := testANCWithSelector("anc3", t2, map[string]string{"zone": "us-east"})
+	ancTieZ := testANCWithSelector("zzz", t0, map[string]string{"role": "worker"})
+	ancTieA := testANCWithSelector("aaa", t0, map[string]string{"role": "worker"})
+	ancInvalidSel := &crdv1alpha1.AntreaNodeConfig{
+		ObjectMeta: metav1.ObjectMeta{Name: "invalid"},
+		Spec: crdv1alpha1.AntreaNodeConfigSpec{
+			NodeSelector: metav1.LabelSelector{
+				MatchExpressions: []metav1.LabelSelectorRequirement{
+					{Key: "x", Operator: "BadOp", Values: []string{"v"}},
+				},
+			},
+		},
+	}
+
+	tests := []struct {
+		name      string
+		node      *corev1.Node
+		configs   []*crdv1alpha1.AntreaNodeConfig
+		wantNames []string
+	}{
+		{
+			name:    "nil node",
+			configs: []*crdv1alpha1.AntreaNodeConfig{anc1},
+		},
+		{
+			name: "no configs",
+			node: node,
+		},
+		{
+			name:      "one matching",
+			node:      node,
+			configs:   []*crdv1alpha1.AntreaNodeConfig{anc1},
+			wantNames: []string{"anc1"},
+		},
+		{
+			name:    "one non-matching",
+			node:    node,
+			configs: []*crdv1alpha1.AntreaNodeConfig{anc2},
+		},
+		{
+			name:      "matching configs sorted oldest first",
+			node:      node,
+			configs:   []*crdv1alpha1.AntreaNodeConfig{anc3, anc1},
+			wantNames: []string{"anc1", "anc3"},
+		},
+		{
+			name:      "name breaks timestamp ties",
+			node:      node,
+			configs:   []*crdv1alpha1.AntreaNodeConfig{ancTieZ, ancTieA},
+			wantNames: []string{"aaa", "zzz"},
+		},
+		{
+			name:      "invalid selector is skipped",
+			node:      node,
+			configs:   []*crdv1alpha1.AntreaNodeConfig{ancInvalidSel, anc1},
+			wantNames: []string{"anc1"},
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got := SelectAntreaNodeConfigsForNode(tc.node, tc.configs)
+			assert.Equal(t, tc.wantNames, ancNames(got))
+		})
+	}
+}
+
+func ancNames(configs []*crdv1alpha1.AntreaNodeConfig) []string {
+	if len(configs) == 0 {
+		return nil
+	}
+	names := make([]string, 0, len(configs))
+	for _, cfg := range configs {
+		names = append(names, cfg.Name)
+	}
+	return names
+}
+
+func TestOldestMatchingAntreaNodeConfigForNode(t *testing.T) {
+	node := testNode("node1", map[string]string{"role": "worker"})
+	t0 := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	t1 := t0.Add(time.Hour)
+	ancOld := testANCWithSelector("old", t0, map[string]string{"role": "worker"})
+	ancYoung := testANCWithSelector("young", t1, map[string]string{"role": "worker"})
+
+	assert.Nil(t, OldestMatchingAntreaNodeConfigForNode(nil, []*crdv1alpha1.AntreaNodeConfig{ancOld}))
+	assert.Nil(t, OldestMatchingAntreaNodeConfigForNode(node, nil))
+
+	got := OldestMatchingAntreaNodeConfigForNode(node, []*crdv1alpha1.AntreaNodeConfig{ancYoung, ancOld})
+	require.NotNil(t, got)
+	assert.Equal(t, "old", got.Name)
 }

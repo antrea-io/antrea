@@ -50,6 +50,7 @@ type OVSBridge struct {
 	mcastSnoopingEnable      bool
 	uuid                     string
 	isHardwareOffloadEnabled bool
+	externalIDs              map[string]string
 	requiredPortExternalIDs  []string
 }
 
@@ -57,6 +58,9 @@ type OVSPortData struct {
 	UUID   string
 	Name   string
 	VLANID uint16
+	// Trunks contains the allowed VLAN IDs when the port is in trunk mode.
+	// It is empty when no trunk VLAN restriction is configured (all VLANs allowed).
+	Trunks []uint16
 	// Interface type.
 	IFType      string
 	IFName      string
@@ -78,7 +82,9 @@ const (
 	openflowProtoVersion15 = "OpenFlow15"
 	// Maximum allowed value of ofPortRequest.
 	ofPortRequestMax = 65279
-	hardwareOffload  = "hw-offload"
+	// Maximum VLAN ID supported by OVS and Antrea.
+	maxVLANID       = 4094
+	hardwareOffload = "hw-offload"
 )
 
 // NewOVSDBConnectionUDS connects to the OVSDB server on the UNIX domain socket
@@ -170,6 +176,14 @@ func WithMcastSnooping() OVSBridgeOption {
 	}
 }
 
+// WithExternalIDs sets bridge-level external IDs when the OVS bridge is created
+// or when an existing OVS bridge is updated by Create.
+func WithExternalIDs(externalIDs map[string]string) OVSBridgeOption {
+	return func(br *OVSBridge) {
+		br.externalIDs = maps.Clone(externalIDs)
+	}
+}
+
 // NewOVSBridge creates and returns a new OVSBridge struct.
 func NewOVSBridge(bridgeName string, ovsDatapathType OVSDatapathType, ovsdb client.Client, options ...OVSBridgeOption) OVSBridgeClient {
 	br := &OVSBridge{
@@ -232,12 +246,15 @@ func (br *OVSBridge) updateBridgeConfiguration(ctx context.Context) error {
 		DatapathType:        string(br.datapathType),
 		McastSnoopingEnable: br.mcastSnoopingEnable,
 	}
+	fields := []interface{}{&update.Protocols, &update.DatapathType, &update.McastSnoopingEnable}
+	if br.externalIDs != nil {
+		update.ExternalIDs = br.externalIDs
+		fields = append(fields, &update.ExternalIDs)
+	}
 
 	ops, err := br.ovsdb.Where(bridgeWithUUID(br.uuid)).Update(
 		update,
-		&update.Protocols,
-		&update.DatapathType,
-		&update.McastSnoopingEnable,
+		fields...,
 	)
 	if err != nil {
 		klog.ErrorS(err, "Failed to construct update operations for bridge", "bridge", br.name)
@@ -257,6 +274,9 @@ func (br *OVSBridge) create(ctx context.Context) error {
 		Protocols:           []string{openflowProtoVersion10, openflowProtoVersion15},
 		DatapathType:        string(br.datapathType),
 		McastSnoopingEnable: br.mcastSnoopingEnable,
+	}
+	if br.externalIDs != nil {
+		bridge.ExternalIDs = maps.Clone(br.externalIDs)
 	}
 	ops, err := br.ovsdb.Create(bridge)
 	if err != nil {
@@ -481,6 +501,17 @@ func (br *OVSBridge) DeletePort(portUUID string) error {
 	return err
 }
 
+// DeletePorts deletes the ports with the provided port UUIDs.
+// If a port does not exist no change will be done.
+func (br *OVSBridge) DeletePorts(portUUIDList []string) error {
+	for _, portUUID := range portUUIDList {
+		if err := br.DeletePort(portUUID); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // CreateInternalPort creates an internal port with the specified name on the
 // bridge.
 // If externalIDs is not empty, the map key/value pairs will be set to the
@@ -493,7 +524,7 @@ func (br *OVSBridge) CreateInternalPort(name string, ofPortRequest int32, mac st
 	if ofPortRequest < 0 || ofPortRequest > ofPortRequestMax {
 		return "", fmt.Errorf("invalid ofPortRequest value: %v", ofPortRequest)
 	}
-	return br.createPort(ctx, name, name, "internal", ofPortRequest, 0, mac, externalIDs, nil)
+	return br.createPort(ctx, name, name, "internal", ofPortRequest, 0, nil, mac, externalIDs, nil)
 }
 
 // CreateTunnelPortExt creates a tunnel port with the specified name and type
@@ -587,7 +618,7 @@ func (br *OVSBridge) createTunnelPort(
 		options["csum"] = "true"
 	}
 
-	return br.createPort(ctx, name, name, string(tunnelType), ofPortRequest, 0, "", externalIDs, options)
+	return br.createPort(ctx, name, name, string(tunnelType), ofPortRequest, 0, nil, "", externalIDs, options)
 }
 
 // GetInterfaceOptions returns the options of the provided interface.
@@ -651,7 +682,17 @@ func ParseTunnelInterfaceOptions(portData *OVSPortData) (net.IP, net.IP, int32, 
 func (br *OVSBridge) CreateUplinkPort(name string, ofPortRequest int32, externalIDs map[string]string) (string, error) {
 	// TODO: use ctx from parent context
 	ctx := context.TODO()
-	return br.createPort(ctx, name, name, "", ofPortRequest, 0, "", externalIDs, nil)
+	return br.createPort(ctx, name, name, "", ofPortRequest, 0, nil, "", externalIDs, nil)
+}
+
+// CreateTrunkPort creates an OVS port in trunk mode for the physical interface
+// identified by name. vlanSpecs lists the allowed VLANs as individual IDs or
+// ranges (e.g. "100", "200-300"); an empty slice means all VLANs are allowed
+// (standard OVS trunk default).
+func (br *OVSBridge) CreateTrunkPort(name string, ofPortRequest int32, vlanSpecs []string, externalIDs map[string]string) (string, error) {
+	// TODO: use ctx from parent context
+	ctx := context.TODO()
+	return br.createPort(ctx, name, name, "", ofPortRequest, 0, vlanSpecs, "", externalIDs, nil)
 }
 
 // CreatePort creates a port with the specified name on the bridge, and connects
@@ -661,7 +702,7 @@ func (br *OVSBridge) CreateUplinkPort(name string, ofPortRequest int32, external
 func (br *OVSBridge) CreatePort(name, ifDev string, externalIDs map[string]string) (string, error) {
 	// TODO: use ctx from parent context
 	ctx := context.TODO()
-	return br.createPort(ctx, name, ifDev, "", 0, 0, "", externalIDs, nil)
+	return br.createPort(ctx, name, ifDev, "", 0, 0, nil, "", externalIDs, nil)
 }
 
 // CreateAccessPort creates a port with the specified name and VLAN ID on the bridge, and connects
@@ -672,7 +713,7 @@ func (br *OVSBridge) CreatePort(name, ifDev string, externalIDs map[string]strin
 func (br *OVSBridge) CreateAccessPort(name, ifDev string, externalIDs map[string]string, vlanID uint16) (string, error) {
 	// TODO: use ctx from parent context
 	ctx := context.TODO()
-	return br.createPort(ctx, name, ifDev, "", 0, vlanID, "", externalIDs, nil)
+	return br.createPort(ctx, name, ifDev, "", 0, vlanID, nil, "", externalIDs, nil)
 }
 
 func (br *OVSBridge) createPort(ctx context.Context,
@@ -681,6 +722,7 @@ func (br *OVSBridge) createPort(ctx context.Context,
 	ifType string,
 	ofPortRequest int32,
 	vlanID uint16,
+	vlanSpecs []string,
 	mac string,
 	externalIDs map[string]string,
 	options map[string]string) (string, error) {
@@ -726,6 +768,13 @@ func (br *OVSBridge) createPort(ctx context.Context,
 		tag := int(vlanID)
 		port.Tag = &tag
 	}
+	if len(vlanSpecs) > 0 {
+		trunks, err := parseVLANSpecs(vlanSpecs)
+		if err != nil {
+			return "", err
+		}
+		port.Trunks = uint16sToInts(trunks)
+	}
 
 	// Construct a create operation for the new Port, linking it to the Interface.
 	ops2, err := br.ovsdb.Create(port)
@@ -756,6 +805,53 @@ func (br *OVSBridge) createPort(ctx context.Context,
 	}
 
 	return res[1].UUID.GoUUID, nil
+}
+
+// parseVLANSpecs converts VLAN specifications such as "100" or "200-300" into
+// a flat slice of uint16 VLAN IDs suitable for the OVSDB trunks set, which
+// only supports discrete integer elements (no native range type).
+func parseVLANSpecs(specs []string) ([]uint16, error) {
+	var ids []uint16
+	for _, spec := range specs {
+		spec = strings.TrimSpace(spec)
+		if idx := strings.IndexByte(spec, '-'); idx >= 0 {
+			start, err := strconv.ParseUint(spec[:idx], 10, 16)
+			if err != nil {
+				return nil, fmt.Errorf("invalid VLAN range start %q: %v", spec[:idx], err)
+			}
+			end, err := strconv.ParseUint(spec[idx+1:], 10, 16)
+			if err != nil {
+				return nil, fmt.Errorf("invalid VLAN range end %q: %v", spec[idx+1:], err)
+			}
+			if start > end {
+				return nil, fmt.Errorf("VLAN range start %d is greater than end %d", start, end)
+			}
+			if end > maxVLANID {
+				return nil, fmt.Errorf("VLAN range end %d is greater than maximum VLAN ID %d", end, maxVLANID)
+			}
+			for id := int(start); id <= int(end); id++ {
+				ids = append(ids, uint16(id))
+			}
+		} else {
+			id, err := strconv.ParseUint(spec, 10, 16)
+			if err != nil {
+				return nil, fmt.Errorf("invalid VLAN ID %q: %v", spec, err)
+			}
+			if id > maxVLANID {
+				return nil, fmt.Errorf("VLAN ID %d is greater than maximum VLAN ID %d", id, maxVLANID)
+			}
+			ids = append(ids, uint16(id))
+		}
+	}
+	return ids, nil
+}
+
+func uint16sToInts(ids []uint16) []int {
+	out := make([]int, 0, len(ids))
+	for _, id := range ids {
+		out = append(out, int(id))
+	}
+	return out
 }
 
 // GetOFPort retrieves the ofport value of an interface given its name.
@@ -841,6 +937,9 @@ func buildPortDataCommon(port *Port, intf *Interface, portData *OVSPortData) {
 	portData.ExternalIDs = maps.Clone(port.ExternalIDs)
 	if port.Tag != nil {
 		portData.VLANID = uint16(*port.Tag)
+	}
+	for _, trunk := range port.Trunks {
+		portData.Trunks = append(portData.Trunks, uint16(trunk))
 	}
 	portData.Options = maps.Clone(intf.Options)
 	portData.IFType = intf.Type
@@ -1144,6 +1243,29 @@ func (br *OVSBridge) GetPortExternalIDs(portName string) (map[string]string, err
 	}
 
 	return maps.Clone(port.ExternalIDs), nil
+}
+
+func (br *OVSBridge) SetPortTrunks(portName string, vlanSpecs []string) error {
+	// TODO: use ctx from parent context
+	ctx := context.TODO()
+
+	port, err := br.getPort(ctx, portName, "")
+	if err != nil {
+		return err
+	}
+	trunks, err := parseVLANSpecs(vlanSpecs)
+	if err != nil {
+		return err
+	}
+
+	updatePort := &Port{Trunks: uint16sToInts(trunks)}
+	ops, err := br.ovsdb.Where(&Port{UUID: port.UUID}).Update(updatePort, &updatePort.Trunks)
+	if err != nil {
+		klog.ErrorS(err, "Failed to construct update operation for Port", "port", portName)
+		return err
+	}
+	_, err = br.transact(ctx, ops, "set port trunks")
+	return err
 }
 
 func (br *OVSBridge) SetInterfaceMTU(name string, MTU int) error {
