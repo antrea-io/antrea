@@ -27,8 +27,8 @@ The Network Policy API working group (subproject of Kubernetes SIG-Network) has 
 [AdminNetworkPolicy APIs](https://network-policy-api.sigs.k8s.io/api-overview/) which aims to solve the cluster admin
 policy usecases.
 
-Starting with v1.13, Antrea supported the v1alpha1 `AdminNetworkPolicy` and `BaselineAdminNetworkPolicy` API types,
-except for advanced Namespace selection mechanisms (namely `sameLabels` and `notSameLabels` rules) which were still in the
+Starting with v1.13, Antrea supports the `AdminNetworkPolicy` and `BaselineAdminNetworkPolicy` API types, except for
+advanced Namespace selection mechanisms (namely `sameLabels` and `notSameLabels` rules) which are still in the
 experimental phase and not required as part of conformance.
 
 **The v1alpha1 APIs have been deprecated upstream and replaced with the v1alpha2 `ClusterNetworkPolicy` API.** Users
@@ -86,13 +86,18 @@ To migrate:
      antrea-controller.conf: |
        featureGates:
          ClusterNetworkPolicy: true   # enable the new API
-         AdminNetworkPolicy: true     # keep during migration; can be remove once migration is complete
+         AdminNetworkPolicy: true     # keep during migration; can be removed once migration is complete
    ```
 
 2. **Install v1alpha2 CRDs**: Ensure the v1alpha2 `ClusterNetworkPolicy` CRDs are installed in your cluster.
    Refer to the [network-policy-api documentation](https://network-policy-api.sigs.k8s.io/getting-started/) for installation instructions.
 
-3. **Rewrite your policies**: The v1alpha2 `ClusterNetworkPolicy` API unifies the functionality of `AdminNetworkPolicy`
+3. **Ensure no custom Tiers are present at priority 220**: ClusterNetworkPolicies with `tier: Admin` are created in
+   Antrea Tier priority 220, which must not be occupied by a custom Tier. See the
+   [Tier Priority Reservation and Conflict Handling section](cluster-network-policy.md#tier-priority-reservation-and-conflict-handling)
+   for more details.
+
+4. **Rewrite your policies**: The v1alpha2 `ClusterNetworkPolicy` API unifies the functionality of `AdminNetworkPolicy`
    and `BaselineAdminNetworkPolicy`. Key differences include:
    - Single resource type for both admin and baseline policies: use `spec.tier: Admin` for admin posture and
      `spec.tier: Baseline` for baseline posture (replaces the singleton `BaselineAdminNetworkPolicy` named `default`).
@@ -102,13 +107,13 @@ To migrate:
    Refer to the [network-policy-api v1alpha2 specification](https://network-policy-api.sigs.k8s.io/reference/spec/)
    for the full API structure.
 
-4. **Test and validate**: Create the equivalent `ClusterNetworkPolicy` resources and verify they behave as expected
+5. **Test and validate**: Create the equivalent `ClusterNetworkPolicy` resources and verify they behave as expected
    in a non-production environment before removing the old policies in production.
 
-5. **Remove old policies and disable the deprecated gate**: Once you have verified the new `ClusterNetworkPolicy`
+6. **Remove old policies and disable the deprecated gate**: Once you have verified the new `ClusterNetworkPolicy`
    resources work correctly:
    - Delete the old v1alpha1 `AdminNetworkPolicy` and `BaselineAdminNetworkPolicy` resources.
-   - [Optional] Remove or set `AdminNetworkPolicy: false` in your `antrea-controller.conf` and restart Antrea controler.
+   - [Optional] Remove or set `AdminNetworkPolicy: false` in your `antrea-controller.conf` and restart Antrea controller.
 
 **Timeline**: The `AdminNetworkPolicy` feature gate will be removed in two releases after Antrea v2.7.
 

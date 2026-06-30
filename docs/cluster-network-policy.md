@@ -81,8 +81,9 @@ ways:
 
 Upstream `ClusterNetworkPolicy` objects and Antrea-native policies can co-exist in the same cluster. Upstream policies
 provide portable, CNI-agnostic guardrails; Antrea-native `AntreaClusterNetworkPolicy` and `AntreaNetworkPolicy` offer a
-richer feature set (for example FQDN rules beyond upstream domain peer types, node selectors, and L7 rules). See
-[Antrea Network Policy CRDs](antrea-network-policy.md) and [L7 policy](antrea-l7-network-policy.md) for details.
+richer feature set (for example FQDN rules beyond upstream domain peer types, node selectors, user-defined tiers and
+L7 rules). See [Antrea Network Policy CRDs](antrea-network-policy.md) and [L7 policy](antrea-l7-network-policy.md) for
+details.
 
 Both upstream `ClusterNetworkPolicy` and Antrea-native policies use a `priority` field within a tier to order rules.
 The following diagram summarizes how Antrea orders **upstream** `ClusterNetworkPolicy` tiers relative to Antrea-native
@@ -128,7 +129,8 @@ Two enforcement mechanisms protect priority 220:
 
 ### Enabling the Feature Gate When a Custom Tier Exists at Priority 220
 
-If you already have a custom Antrea Tier at priority 220 when you enable the `ClusterNetworkPolicy` feature gate,
+If you already have a custom Antrea Tier at priority 220 when you enable the `ClusterNetworkPolicy` feature gate
+(you can check via `kubectl get tier`, which will display all the current Tiers and their respective priorities),
 Antrea detects the conflict on startup and immediately blocks all new ClusterNetworkPolicy `CREATE` requests (via the
 webhook above). Existing Antrea-native policies (ACNPs/ANNPs) in that Tier are **unaffected** — they continue to be
 enforced.
