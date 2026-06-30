@@ -36,6 +36,10 @@ type vlanIDRange struct {
 
 // Validate validates AntreaNodeConfig admission requests.
 func Validate(review *admv1.AdmissionReview) *admv1.AdmissionResponse {
+	if review == nil || review.Request == nil {
+		return newAdmissionResponseForErr(fmt.Errorf("invalid AdmissionReview: nil request"))
+	}
+
 	var result *metav1.Status
 	var msg string
 	allowed := true
@@ -47,6 +51,9 @@ func Validate(review *admv1.AdmissionReview) *admv1.AdmissionResponse {
 			klog.ErrorS(err, "Error de-serializing current AntreaNodeConfig")
 			return newAdmissionResponseForErr(err)
 		}
+	}
+	if review.Request.Operation != admv1.Delete && review.Request.Object.Raw == nil {
+		return newAdmissionResponseForErr(fmt.Errorf("missing object in AdmissionReview"))
 	}
 
 	switch review.Request.Operation {
@@ -64,7 +71,6 @@ func Validate(review *admv1.AdmissionReview) *admv1.AdmissionResponse {
 		}
 	case admv1.Delete:
 		// This should not happen with the webhook configuration included in Antrea manifests.
-		klog.V(2).InfoS("Validating DELETE request for AntreaNodeConfig", "name", newObj.Name)
 	}
 
 	if msg != "" {
@@ -107,7 +113,6 @@ func parseVLANSpec(spec string) (vlanIDRange, error) {
 }
 
 func validateVLANSpecs(specs []string) error {
-	seen := make(map[uint16]string)
 	for _, rawSpec := range specs {
 		spec := strings.TrimSpace(rawSpec)
 		r, err := parseVLANSpec(spec)
@@ -119,16 +124,10 @@ func validateVLANSpecs(specs []string) error {
 				return fmt.Errorf("VLAN range start %d is greater than end %d", r.start, r.end)
 			}
 			if r.end > maxVLANID {
-				return fmt.Errorf("VLAN range end %d is greater than maximum VLAN ID %d", r.end, maxVLANID)
+				return fmt.Errorf("VLAN range end %d is greater than the maximum VLAN ID %d", r.end, maxVLANID)
 			}
 		} else if r.start > maxVLANID {
-			return fmt.Errorf("VLAN ID %d is greater than maximum VLAN ID %d", r.start, maxVLANID)
-		}
-		for id := r.start; id <= r.end; id++ {
-			if prev, ok := seen[id]; ok {
-				return fmt.Errorf("VLAN ID %d is specified more than once in %q and %q", id, prev, spec)
-			}
-			seen[id] = spec
+			return fmt.Errorf("VLAN ID %d is greater than the maximum VLAN ID %d", r.start, maxVLANID)
 		}
 	}
 	return nil
