@@ -1,11 +1,19 @@
-# AdminNetworkPolicy API Support in Antrea
+# AdminNetworkPolicy API Support in Antrea (deprecated)
+
+**DEPRECATED**: This page documents the legacy v1alpha1 `AdminNetworkPolicy` and `BaselineAdminNetworkPolicy` APIs only.
+Antrea support for these APIs is deprecated.
+
+For the supported upstream cluster admin policy API, see
+[ClusterNetworkPolicy API Support in Antrea](cluster-network-policy.md) (v1alpha2 `ClusterNetworkPolicy`, enabled by the
+`ClusterNetworkPolicy` feature gate).
 
 ## Table of Contents
 
 <!-- toc -->
 - [Introduction](#introduction)
 - [Prerequisites](#prerequisites)
-- [Usage](#usage)
+- [Migration to ClusterNetworkPolicy](#migration-to-clusternetworkpolicy)
+- [Legacy usage](#legacy-usage)
   - [Sample specs for AdminNetworkPolicy and BaselineAdminNetworkPolicy](#sample-specs-for-adminnetworkpolicy-and-baselineadminnetworkpolicy)
   - [Relationship with Antrea-native Policies](#relationship-with-antrea-native-policies)
 <!-- /toc -->
@@ -23,10 +31,14 @@ Starting with v1.13, Antrea supports the `AdminNetworkPolicy` and `BaselineAdmin
 advanced Namespace selection mechanisms (namely `sameLabels` and `notSameLabels` rules) which are still in the
 experimental phase and not required as part of conformance.
 
+**The v1alpha1 APIs have been deprecated upstream and replaced with the v1alpha2 `ClusterNetworkPolicy` API.** Users
+should migrate to the new API; see [ClusterNetworkPolicy API Support in Antrea](cluster-network-policy.md).
+
 ## Prerequisites
 
-AdminNetworkPolicy was introduced in v1.13 as an alpha feature and is disabled by default. A feature gate,
-`AdminNetworkPolicy`, must be enabled in antrea-controller.conf in the `antrea-config` ConfigMap when Antrea is deployed:
+**Legacy configuration only.** AdminNetworkPolicy was introduced in v1.13 as an alpha feature and is disabled by default.
+Feature gate `AdminNetworkPolicy` must be enabled in antrea-controller.conf in the `antrea-config` ConfigMap when Antrea
+is deployed:
 
 ```yaml
 apiVersion: v1
@@ -46,7 +58,69 @@ enabled by default since Antrea v1.0.
 In addition, the AdminNetworkPolicy CRD types need to be installed in the K8s cluster.
 Refer to [this document](https://network-policy-api.sigs.k8s.io/getting-started/) for more information.
 
-## Usage
+## Migration to ClusterNetworkPolicy
+
+**Action Required**: Users should migrate from the deprecated v1alpha1 `AdminNetworkPolicy` and `BaselineAdminNetworkPolicy`
+resources to the v1alpha2 `ClusterNetworkPolicy` resource. For prerequisites, sample policies, and precedence with
+Antrea-native policies, read [ClusterNetworkPolicy API Support in Antrea](cluster-network-policy.md).
+
+**No automatic migration**: Antrea does **not** automatically convert or migrate v1alpha1 `AdminNetworkPolicy` and
+`BaselineAdminNetworkPolicy` objects to v1alpha2 `ClusterNetworkPolicy`. You must manually create the equivalent
+`ClusterNetworkPolicy` resources and delete the old ones. The two feature gates (`AdminNetworkPolicy` and
+`ClusterNetworkPolicy`) are independent; you can run both APIs simultaneously during a migration window to avoid a
+policy enforcement gap.
+
+To migrate:
+
+1. **Enable the new feature gate**: Update your `antrea-controller.conf` to enable the `ClusterNetworkPolicy` feature
+   gate. You may keep the `AdminNetworkPolicy` gate enabled during migration so that existing policies continue to be
+   enforced while you create the equivalent `ClusterNetworkPolicy` resources.
+
+   ```yaml
+   apiVersion: v1
+   kind: ConfigMap
+   metadata:
+     name: antrea-config
+     namespace: kube-system
+   data:
+     antrea-controller.conf: |
+       featureGates:
+         ClusterNetworkPolicy: true   # enable the new API
+         AdminNetworkPolicy: true     # keep during migration; can be remove once migration is complete
+   ```
+
+2. **Install v1alpha2 CRDs**: Ensure the v1alpha2 `ClusterNetworkPolicy` CRDs are installed in your cluster.
+   Refer to the [network-policy-api documentation](https://network-policy-api.sigs.k8s.io/getting-started/) for installation instructions.
+
+3. **Ensure no custom Tiers are present at priority 220**: ClusterNetworkPolicies with `tier: Admin` are created in
+   Antrea Tier priority 220, which must not be occupied by a custom Tier. See the
+   [Tier Priority Reservation and Conflict Handling section](cluster-network-policy.md#tier-priority-reservation-and-conflict-handling)
+   for more details.
+
+4. **Rewrite your policies**: The v1alpha2 `ClusterNetworkPolicy` API unifies the functionality of `AdminNetworkPolicy`
+   and `BaselineAdminNetworkPolicy`. Key differences include:
+   - Single resource type for both admin and baseline policies: use `spec.tier: Admin` for admin posture and
+     `spec.tier: Baseline` for baseline posture (replaces the singleton `BaselineAdminNetworkPolicy` named `default`).
+   - Updated field names and structure; see the
+     [Key differences section in the ClusterNetworkPolicy doc](cluster-network-policy.md#key-differences-from-v1alpha1-adminnetworkpolicy-apis).
+
+   Refer to the [network-policy-api v1alpha2 specification](https://network-policy-api.sigs.k8s.io/reference/spec/)
+   for the full API structure.
+
+5. **Test and validate**: Create the equivalent `ClusterNetworkPolicy` resources and verify they behave as expected
+   in a non-production environment before removing the old policies in production.
+
+6. **Remove old policies and disable the deprecated gate**: Once you have verified the new `ClusterNetworkPolicy`
+   resources work correctly:
+   - Delete the old v1alpha1 `AdminNetworkPolicy` and `BaselineAdminNetworkPolicy` resources.
+   - [Optional] Remove or set `AdminNetworkPolicy: false` in your `antrea-controller.conf` and restart Antrea controler.
+
+**Timeline**: The `AdminNetworkPolicy` feature gate will be removed in two releases after Antrea v2.7.
+
+## Legacy usage
+
+The following applies only if you still run the deprecated v1alpha1 APIs with the `AdminNetworkPolicy` feature gate
+enabled.
 
 ### Sample specs for AdminNetworkPolicy and BaselineAdminNetworkPolicy
 
@@ -105,7 +179,7 @@ compared to other policy objects. The following diagram describes the relative p
 API types and Antrea-native policy types:
 
 ```text
-Antrea-native Policies (tier != baseline) > 
+Antrea-native Policies (tier != baseline) >
 AdminNetworkPolicies                      >
 K8s NetworkPolicies                       >
 Antrea-native Policies (tier == baseline) >
