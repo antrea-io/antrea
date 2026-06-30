@@ -86,7 +86,7 @@ func TestValidate(t *testing.T) {
 			expectedResponse: &admv1.AdmissionResponse{
 				Allowed: false,
 				Result: &metav1.Status{
-					Message: "spec.secondaryNetwork.ovsBridges[0].physicalInterfaces[0].allowedVLANs is invalid: VLAN ID 4095 is greater than maximum VLAN ID 4094",
+					Message: "spec.secondaryNetwork.ovsBridges[0].physicalInterfaces[0].allowedVLANs is invalid: VLAN ID 4095 is greater than the maximum VLAN ID 4094",
 				},
 			},
 		},
@@ -97,30 +97,16 @@ func TestValidate(t *testing.T) {
 			expectedResponse: &admv1.AdmissionResponse{
 				Allowed: false,
 				Result: &metav1.Status{
-					Message: "spec.secondaryNetwork.ovsBridges[0].physicalInterfaces[0].allowedVLANs is invalid: VLAN range end 4095 is greater than maximum VLAN ID 4094",
+					Message: "spec.secondaryNetwork.ovsBridges[0].physicalInterfaces[0].allowedVLANs is invalid: VLAN range end 4095 is greater than the maximum VLAN ID 4094",
 				},
 			},
 		},
 		{
-			name:      "duplicate VLAN ID",
-			operation: admv1.Create,
-			anc:       newAntreaNodeConfig([]string{"100", "100"}),
-			expectedResponse: &admv1.AdmissionResponse{
-				Allowed: false,
-				Result: &metav1.Status{
-					Message: `spec.secondaryNetwork.ovsBridges[0].physicalInterfaces[0].allowedVLANs is invalid: VLAN ID 100 is specified more than once in "100" and "100"`,
-				},
-			},
-		},
-		{
-			name:      "overlapping VLAN range",
+			name:      "overlapping VLAN ranges are allowed (OVSDB deduplicates)",
 			operation: admv1.Update,
 			anc:       newAntreaNodeConfig([]string{"100-200", "150"}),
 			expectedResponse: &admv1.AdmissionResponse{
-				Allowed: false,
-				Result: &metav1.Status{
-					Message: `spec.secondaryNetwork.ovsBridges[0].physicalInterfaces[0].allowedVLANs is invalid: VLAN ID 150 is specified more than once in "100-200" and "150"`,
-				},
+				Allowed: true,
 			},
 		},
 		{
@@ -138,6 +124,24 @@ func TestValidate(t *testing.T) {
 				ObjectMeta: metav1.ObjectMeta{Name: "anc"},
 				Spec: crdv1alpha1.AntreaNodeConfigSpec{
 					NodeSelector: metav1.LabelSelector{MatchLabels: map[string]string{"role": "worker"}},
+				},
+			},
+			expectedResponse: &admv1.AdmissionResponse{
+				Allowed: true,
+			},
+		},
+		{
+			name:      "bridge without physical interfaces allowed",
+			operation: admv1.Create,
+			anc: &crdv1alpha1.AntreaNodeConfig{
+				ObjectMeta: metav1.ObjectMeta{Name: "anc"},
+				Spec: crdv1alpha1.AntreaNodeConfigSpec{
+					NodeSelector: metav1.LabelSelector{MatchLabels: map[string]string{"role": "worker"}},
+					SecondaryNetwork: &crdv1alpha1.SecondaryNetworkConfig{
+						OVSBridges: []crdv1alpha1.OVSBridgeConfig{
+							{BridgeName: "br-secondary"},
+						},
+					},
 				},
 			},
 			expectedResponse: &admv1.AdmissionResponse{

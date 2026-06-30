@@ -384,7 +384,6 @@ spec:
                         type: object
                         required:
                           - bridgeName
-                          - physicalInterfaces
                         properties:
                           bridgeName:
                             description: Name of the OVS bridge.
@@ -396,7 +395,6 @@ spec:
                             description: >-
                               Physical interfaces to be connected to this bridge.
                             type: array
-                            minItems: 1
                             maxItems: 8
                             x-kubernetes-list-type: map
                             x-kubernetes-list-map-keys:
