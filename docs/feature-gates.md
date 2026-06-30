@@ -11,6 +11,8 @@ In particular:
 * a feature in the Beta stage will be enabled by default but can be disabled by editing the appropriate `.conf` entry in
   the Antrea manifest.
 * a feature in the GA stage will be enabled by default and cannot be disabled.
+* a feature in the Deprecated stage will be disabled by default and will be removed in two major releases after its
+  initial deprecation notice. 
 
 Some features are specific to the Agent, others are specific to the Controller, and some apply to both and should be
 enabled / disabled consistently in both
@@ -56,7 +58,7 @@ edit the Agent configuration in the
 | `ExternalNode`                  | Agent              | `false` | Alpha      | v1.8          | N/A          | N/A        | Yes                |                                                        |
 | `SupportBundleCollection`       | Agent + Controller | `false` | Alpha      | v1.10         | N/A          | N/A        | Yes                |                                                        |
 | `L7NetworkPolicy`               | Agent + Controller | `false` | Alpha      | v1.10         | N/A          | N/A        | Yes                |                                                        |
-| `AdminNetworkPolicy`            | Controller         | `false` | Alpha      | v1.13         | N/A          | N/A        | Yes                | **Deprecated**: Use `ClusterNetworkPolicy` instead     |
+| `AdminNetworkPolicy`            | Controller         | `false` | Deprecated | v1.13         | N/A          | N/A        | Yes                | **Deprecated**: Use `ClusterNetworkPolicy` instead     |
 | `ClusterNetworkPolicy`          | Controller         | `false` | Alpha      | v2.7          | N/A          | N/A        | Yes                | Successor to `AdminNetworkPolicy`                      |
 | `EgressTrafficShaping`          | Agent              | `false` | Alpha      | v1.14         | N/A          | N/A        | Yes                | OVS meters should be supported                         |
 | `EgressSeparateSubnet`          | Agent              | `true`  | Beta       | v1.15         | v2.3         | N/A        | No                 |                                                        |
