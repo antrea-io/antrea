@@ -49,6 +49,8 @@ func ListOVSBridges(ovsdbConn *ovsdb.OVSDB) ([]OVSBridgeData, Error) {
 		bridge, ok := ovsBridgeDataFromRow(row)
 		if ok {
 			bridges = append(bridges, bridge)
+		} else {
+			klog.InfoS("Skipping malformed OVSDB Bridge row", "row", row)
 		}
 	}
 	return bridges, nil

@@ -79,16 +79,6 @@ func (c *interfaceCache) Initialize(interfaces []*InterfaceConfig) {
 	}
 }
 
-// Reset removes all entries from the store. It is used when the backing
-// infrastructure (e.g. OVS bridge) is torn down and stale records must be
-// discarded so that subsequent lookups do not return interfaces that no
-// longer exist.
-func (c *interfaceCache) Reset() {
-	for _, obj := range c.cache.List() {
-		c.DeleteInterface(obj.(*InterfaceConfig))
-	}
-}
-
 // getInterfaceKey returns the key to access interfaceConfig from the cache.
 // It implements cache.KeyFunc.
 func getInterfaceKey(obj interface{}) (string, error) {

@@ -18,13 +18,14 @@ import (
 	"fmt"
 	"net"
 	"strconv"
-	"strings"
 	"time"
 
 	"github.com/TomCodeLV/OVSDB-golang-lib/pkg/dbtransaction"
 	"github.com/TomCodeLV/OVSDB-golang-lib/pkg/helpers"
 	"github.com/TomCodeLV/OVSDB-golang-lib/pkg/ovsdb"
 	"k8s.io/klog/v2"
+
+	"antrea.io/antrea/v2/pkg/util/vlan"
 )
 
 const defaultOVSDBFile = "db.sock"
@@ -64,9 +65,7 @@ const (
 	openflowProtoVersion15 = "OpenFlow15"
 	// Maximum allowed value of ofPortRequest.
 	ofPortRequestMax = 65279
-	// Maximum VLAN ID supported by OVS and Antrea.
-	maxVLANID       = 4094
-	hardwareOffload = "hw-offload"
+	hardwareOffload  = "hw-offload"
 )
 
 // NewOVSDBConnectionUDS connects to the OVSDB server on the UNIX domain socket
@@ -187,12 +186,16 @@ func (br *OVSBridge) lookupByName() (bool, Error) {
 }
 
 func (br *OVSBridge) updateBridgeConfiguration() Error {
+	row, ovsErr := br.bridgeUpdateRow()
+	if ovsErr != nil {
+		return ovsErr
+	}
 	tx := br.ovsdb.Transaction(openvSwitchSchema)
 	// Use Openflow protocol version 1.0 and 1.5.
 	tx.Update(dbtransaction.Update{
 		Table: "Bridge",
 		Where: [][]interface{}{{"name", "==", br.name}},
-		Row:   br.bridgeUpdateRow(),
+		Row:   row,
 	})
 	_, err, temporary := tx.Commit()
 	if err != nil {
@@ -202,7 +205,7 @@ func (br *OVSBridge) updateBridgeConfiguration() Error {
 	return nil
 }
 
-func (br *OVSBridge) bridgeUpdateRow() map[string]interface{} {
+func (br *OVSBridge) bridgeUpdateRow() (map[string]interface{}, Error) {
 	row := map[string]interface{}{
 		"protocols": makeOVSDBSetFromList([]string{openflowProtoVersion10,
 			openflowProtoVersion15}),
@@ -210,9 +213,25 @@ func (br *OVSBridge) bridgeUpdateRow() map[string]interface{} {
 		"mcast_snooping_enable": br.mcastSnoopingEnable,
 	}
 	if br.externalIDs != nil {
-		row["external_ids"] = helpers.MakeOVSDBMap(br.externalIDs)
+		currentExternalIDs, err := br.GetExternalIDs()
+		if err != nil {
+			return nil, err
+		}
+		row["external_ids"] = helpers.MakeOVSDBMap(MergeExternalIDs(currentExternalIDs, br.externalIDs))
 	}
-	return row
+	return row, nil
+}
+
+// MergeExternalIDs returns a copy of current external IDs with desired external IDs overlaid.
+func MergeExternalIDs(current map[string]string, desired map[string]interface{}) map[string]interface{} {
+	merged := make(map[string]interface{}, len(current)+len(desired))
+	for k, v := range current {
+		merged[k] = v
+	}
+	for k, v := range desired {
+		merged[k] = v
+	}
+	return merged
 }
 
 func (br *OVSBridge) create() Error {
@@ -629,39 +648,7 @@ func (br *OVSBridge) CreateUplinkPort(name string, ofPortRequest int32, external
 // a flat slice of uint16 VLAN IDs suitable for the OVSDB trunks set, which
 // only supports discrete integer elements (no native range type).
 func parseVLANSpecs(specs []string) ([]uint16, error) {
-	var ids []uint16
-	for _, spec := range specs {
-		spec = strings.TrimSpace(spec)
-		if idx := strings.IndexByte(spec, '-'); idx >= 0 {
-			start, err := strconv.ParseUint(spec[:idx], 10, 16)
-			if err != nil {
-				return nil, fmt.Errorf("invalid VLAN range start %q: %v", spec[:idx], err)
-			}
-			end, err := strconv.ParseUint(spec[idx+1:], 10, 16)
-			if err != nil {
-				return nil, fmt.Errorf("invalid VLAN range end %q: %v", spec[idx+1:], err)
-			}
-			if start > end {
-				return nil, fmt.Errorf("VLAN range start %d is greater than end %d", start, end)
-			}
-			if end > maxVLANID {
-				return nil, fmt.Errorf("VLAN range end %d is greater than maximum VLAN ID %d", end, maxVLANID)
-			}
-			for id := int(start); id <= int(end); id++ {
-				ids = append(ids, uint16(id))
-			}
-		} else {
-			id, err := strconv.ParseUint(spec, 10, 16)
-			if err != nil {
-				return nil, fmt.Errorf("invalid VLAN ID %q: %v", spec, err)
-			}
-			if id > maxVLANID {
-				return nil, fmt.Errorf("VLAN ID %d is greater than maximum VLAN ID %d", id, maxVLANID)
-			}
-			ids = append(ids, uint16(id))
-		}
-	}
-	return ids, nil
+	return vlan.ExpandSpecs(specs)
 }
 
 // CreateTrunkPort creates an OVS port in trunk mode for the physical interface

@@ -334,9 +334,11 @@ func (pc *PodController) updatePodNetworkStatusAnnotation(netStatus []netdefv1.N
 
 func (pc *PodController) removeInterfaces(interfaces []*interfacestore.InterfaceConfig) error {
 	pc.mu.RLock()
-	configurator := pc.interfaceConfigurator
-	pc.mu.RUnlock()
+	defer pc.mu.RUnlock()
+	return pc.removeInterfacesWithConfigurator(interfaces, pc.interfaceConfigurator)
+}
 
+func (pc *PodController) removeInterfacesWithConfigurator(interfaces []*interfacestore.InterfaceConfig, configurator InterfaceConfigurator) error {
 	var savedErr error
 	for _, interfaceConfig := range interfaces {
 		podName := interfaceConfig.PodName
@@ -352,7 +354,7 @@ func (pc *PodController) removeInterfaces(interfaces []*interfacestore.Interface
 				// Bridge is gone — OVS ports no longer exist. Skip OVS operations
 				// and proceed to IPAM release; the interface store record is removed
 				// only after IPAM release succeeds so a failure can be retried.
-				klog.V(2).InfoS("Bridge not available, interface record removed",
+				klog.V(2).InfoS("Bridge not available, skipping OVS interface deletion",
 					"Pod", klog.KRef(podNamespace, podName), "interface", interfaceConfig.IFDev)
 			} else {
 				err = configurator.DeleteVLANSecondaryInterface(interfaceConfig)
@@ -378,7 +380,7 @@ func (pc *PodController) removeInterfaces(interfaces []*interfacestore.Interface
 			savedErr = err
 			continue
 		}
-		if configurator == nil && interfaceConfig.OVSPortConfig != nil {
+		if interfaceConfig.OVSPortConfig != nil {
 			pc.interfaceStore.DeleteInterface(interfaceConfig)
 		}
 	}
@@ -485,8 +487,8 @@ func (pc *PodController) configureSecondaryInterface(
 	}
 
 	pc.mu.RLock()
+	defer pc.mu.RUnlock()
 	configurator := pc.interfaceConfigurator
-	pc.mu.RUnlock()
 
 	switch networkConfig.NetworkType {
 	case sriovNetworkType:
@@ -823,13 +825,23 @@ func (pc *PodController) loadOVSInterfaceStore(client ovsconfig.OVSBridgeClient)
 	return nil
 }
 
+func ovsBackedInterfaces(interfaces []*interfacestore.InterfaceConfig) []*interfacestore.InterfaceConfig {
+	var ovsInterfaces []*interfacestore.InterfaceConfig
+	for _, intf := range interfaces {
+		if intf.OVSPortConfig != nil {
+			ovsInterfaces = append(ovsInterfaces, intf)
+		}
+	}
+	return ovsInterfaces
+}
+
 // UpdateOVSBridgeClient replaces the OVS bridge client and interface configurator used by the
 // PodController. It is called by the secondary network controller whenever the effective
 // bridge configuration changes (e.g. a new AntreaNodeConfig takes effect):
 //   - newClient == nil: the bridge was deleted; clear the client and configurator and purge the
-//     interface store so future Pod events are handled with no bridge.
-//   - newClient != nil: a new (or replacement) bridge was created; install the new client and a
-//     fresh configurator, then reload the interface store from the new bridge.
+//     OVS-backed interface records so future Pod events are handled with no bridge.
+//   - newClient != nil: a new (or replacement) bridge was created; keep the client unavailable
+//     while reloading the interface store, then publish the new client and configurator.
 func (pc *PodController) UpdateOVSBridgeClient(newClient ovsconfig.OVSBridgeClient) error {
 	var newConfigurator InterfaceConfigurator
 	if newClient != nil {
@@ -841,34 +853,38 @@ func (pc *PodController) UpdateOVSBridgeClient(newClient ovsconfig.OVSBridgeClie
 	}
 
 	pc.mu.Lock()
-	pc.ovsBridgeClient = newClient
-	pc.interfaceConfigurator = newConfigurator
-	pc.mu.Unlock()
+	defer pc.mu.Unlock()
 
+	ovsIfaces := ovsBackedInterfaces(pc.interfaceStore.ListInterfaces())
 	if newClient == nil {
-		// Release IPAM allocations and clean up all interfaces before
-		// discarding records. removeInterfaces handles the nil-configurator
-		// case: VLAN interfaces skip OVS operations and just release IPAM;
-		// SR-IOV interfaces recover VF names before releasing IPAM.
-		// Without this, Reset() drops records directly and subsequent Pod
-		// delete events find nothing via GetContainerInterfacesByPod, so
-		// removeInterfaces (which releases IPAM) is never called.
-		if allIfaces := pc.interfaceStore.ListInterfaces(); len(allIfaces) > 0 {
-			if err := pc.removeInterfaces(allIfaces); err != nil {
+		pc.ovsBridgeClient = nil
+		pc.interfaceConfigurator = nil
+
+		// Release IPAM allocations before discarding OVS-backed records.
+		// Without this, subsequent Pod delete events find nothing via
+		// GetContainerInterfacesByPod, so removeInterfaces is never called.
+		if len(ovsIfaces) > 0 {
+			if err := pc.removeInterfacesWithConfigurator(ovsIfaces, nil); err != nil {
 				return fmt.Errorf("failed to clean up secondary interfaces during bridge removal: %w", err)
 			}
 		}
-		pc.interfaceStore.Reset()
-		klog.InfoS("Secondary OVS bridge removed, interface store reset")
+		klog.InfoS("Secondary OVS bridge removed, OVS-backed interface records cleared")
 		return nil
 	}
 
 	// Discard records from the previous bridge before re-populating the store
 	// from the new bridge so stale interfaces do not survive a bridge switch.
-	pc.interfaceStore.Reset()
+	pc.ovsBridgeClient = nil
+	pc.interfaceConfigurator = nil
+
+	for _, intf := range ovsIfaces {
+		pc.interfaceStore.DeleteInterface(intf)
+	}
 	if err := pc.loadOVSInterfaceStore(newClient); err != nil {
 		return err
 	}
+	pc.ovsBridgeClient = newClient
+	pc.interfaceConfigurator = newConfigurator
 	klog.InfoS("Secondary OVS bridge updated, interface store reloaded")
 	return nil
 }

@@ -40,6 +40,23 @@ func TestOVSClient(t *testing.T) {
 
 }
 
+func TestMergeExternalIDs(t *testing.T) {
+	current := map[string]string{
+		"antrea-type": "old",
+		"user-key":    "user-value",
+	}
+	desired := map[string]interface{}{
+		"antrea-type": "secondary-bridge",
+		"new-key":     "new-value",
+	}
+
+	assert.Equal(t, map[string]interface{}{
+		"antrea-type": "secondary-bridge",
+		"user-key":    "user-value",
+		"new-key":     "new-value",
+	}, MergeExternalIDs(current, desired))
+}
+
 func TestBuildPortDataCommon(t *testing.T) {
 	macStr := "9a:23:45:23:22:41"
 	intfMAC, _ := net.ParseMAC(macStr)

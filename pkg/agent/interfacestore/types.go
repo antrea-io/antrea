@@ -119,7 +119,6 @@ type InterfaceConfig struct {
 // Support add/delete/get operations
 type InterfaceStore interface {
 	Initialize(interfaces []*InterfaceConfig)
-	Reset()
 	AddInterface(interfaceConfig *InterfaceConfig)
 	UpdateInterface(interfaceConfig *InterfaceConfig)
 	ListInterfaces() []*InterfaceConfig

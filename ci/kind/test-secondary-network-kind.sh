@@ -168,6 +168,10 @@ function kind_bridge_apply_vlans {
   done
 }
 
+function warn_test_only_cluster_requirements {
+  echoerr "Warning: --test-only reuses the current cluster. If it was not created by this script, it may lack the required extra Docker networks and Node interfaces for secondary network tests, causing the tests to fail."
+}
+
 function prepare_cluster_nodes {
   # Allow Pods to schedule on control-plane Nodes for pool testing.
   echo "Removing control-plane NoSchedule taint"
@@ -267,6 +271,8 @@ echo "======== Testing Antrea-native secondary network support =========="
 if [[ "$test_only" == "false" ]];then
   cleanup_stale_kind
   setup_cluster "--extra-networks \"$EXTRA_NETWORKS\" --images \"$IMAGES\" --num-workers $NUM_WORKERS"
+else
+  warn_test_only_cluster_requirements
 fi
 prepare_cluster_nodes
 run_test

@@ -204,6 +204,7 @@ spec:
       "cniVersion": "0.3.0",
       "type": "antrea",
       "networkType": "vlan",
+      "vlan": 300,
       "ipam": {
         "type": "antrea",
         "ippools": ["secnet-ipv4-pool1-vlan300", "secnet-ipv6-pool1-vlan300"]
