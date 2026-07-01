@@ -28,12 +28,14 @@ func PrepareTestFlowRecord(isIPv4 bool) *flowpb.Flow {
 	source := netip.MustParseAddr("10.10.0.79")
 	destination := netip.MustParseAddr("10.10.0.80")
 	destinationClusterIP := netip.MustParseAddr("10.10.1.10")
+	destinationServiceIP := netip.MustParseAddr("10.10.2.10")
 	egressIP := netip.MustParseAddr("172.18.0.1")
 	if !isIPv4 {
 		ipVersion = flowpb.IPVersion_IP_VERSION_6
 		source = netip.MustParseAddr("2001:0:3238:dfe1:63::fefb")
 		destination = netip.MustParseAddr("2001:0:3238:dfe1:63::fefc")
 		destinationClusterIP = netip.MustParseAddr("2001:0:3238:dfe1:64::a")
+		destinationServiceIP = netip.MustParseAddr("2001:0:3238:dfe1:65::a")
 		egressIP = netip.MustParseAddr("2001:0:3238:dfe1::ac12:1")
 	}
 	return &flowpb.Flow{
@@ -81,6 +83,7 @@ func PrepareTestFlowRecord(isIPv4 bool) *flowpb.Flow {
 			},
 			DestinationNodeName:            "k8s-node-control-plane-b",
 			DestinationClusterIp:           destinationClusterIP.AsSlice(),
+			DestinationServiceIp:           destinationServiceIP.AsSlice(),
 			DestinationServicePort:         5202,
 			DestinationServicePortName:     "perftest",
 			IngressNetworkPolicyName:       "test-flow-aggregator-networkpolicy-ingress-allow",
