@@ -200,9 +200,10 @@ func Test_getControllerGatesResponse(t *testing.T) {
 		{
 			name: "good path",
 			want: []apis.FeatureGateResponse{
-				{Component: "controller", Name: "AdminNetworkPolicy", Status: "Disabled", Version: "ALPHA"},
+				{Component: "controller", Name: "AdminNetworkPolicy", Status: "Disabled", Version: "DEPRECATED"},
 				{Component: "controller", Name: "AntreaIPAM", Status: "Disabled", Version: "ALPHA"},
 				{Component: "controller", Name: "AntreaPolicy", Status: "Enabled", Version: "BETA"},
+				{Component: "controller", Name: "ClusterNetworkPolicy", Status: "Disabled", Version: "ALPHA"},
 				{Component: "controller", Name: "Egress", Status: egressStatus, Version: "BETA"},
 				{Component: "controller", Name: "IPsecCertAuth", Status: "Disabled", Version: "ALPHA"},
 				{Component: "controller", Name: "L7NetworkPolicy", Status: "Disabled", Version: "ALPHA"},

@@ -157,9 +157,18 @@ const (
 	LoadBalancerModeDSR featuregate.Feature = "LoadBalancerModeDSR"
 
 	// alpha: v1.13
-	// Enable the AdminNetworkPolicy APIs
+	// deprecated: v2.7
+	// The upstream v1alpha1 AdminNetworkPolicy and BaselineAdminNetworkPolicy APIs are deprecated.
+	// This feature gate will be removed in two releases from v2.7.
+	// Users should migrate to the v1alpha2 ClusterNetworkPolicy API.
 	// https://github.com/kubernetes-sigs/network-policy-api
 	AdminNetworkPolicy featuregate.Feature = "AdminNetworkPolicy"
+
+	// alpha: v2.7
+	// Enable the v1alpha2 ClusterNetworkPolicy API from the network-policy-api project.
+	// This is the successor to the deprecated v1alpha1 AdminNetworkPolicy and BaselineAdminNetworkPolicy APIs.
+	// https://github.com/kubernetes-sigs/network-policy-api
+	ClusterNetworkPolicy featuregate.Feature = "ClusterNetworkPolicy"
 
 	// alpha: v1.14
 	// Enable Egress traffic shaping.
@@ -229,7 +238,8 @@ var (
 		SupportBundleCollection:       {Default: false, PreRelease: featuregate.Alpha},
 		L7NetworkPolicy:               {Default: false, PreRelease: featuregate.Alpha},
 		LoadBalancerModeDSR:           {Default: false, PreRelease: featuregate.Alpha},
-		AdminNetworkPolicy:            {Default: false, PreRelease: featuregate.Alpha},
+		AdminNetworkPolicy:            {Default: false, PreRelease: featuregate.Deprecated},
+		ClusterNetworkPolicy:          {Default: false, PreRelease: featuregate.Alpha},
 		EgressTrafficShaping:          {Default: false, PreRelease: featuregate.Alpha},
 		EgressSeparateSubnet:          {Default: true, PreRelease: featuregate.Beta},
 		NodeNetworkPolicy:             {Default: false, PreRelease: featuregate.Alpha},
@@ -277,6 +287,7 @@ var (
 		AdminNetworkPolicy,
 		AntreaIPAM,
 		AntreaPolicy,
+		ClusterNetworkPolicy,
 		Egress,
 		IPsecCertAuth,
 		L7NetworkPolicy,

@@ -32,7 +32,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/validation"
 	"k8s.io/apiserver/pkg/authentication/serviceaccount"
 	"k8s.io/klog/v2"
-	"sigs.k8s.io/network-policy-api/apis/v1alpha1"
+	"sigs.k8s.io/network-policy-api/apis/v1alpha2"
 
 	crdv1beta1 "antrea.io/antrea/v2/pkg/apis/crd/v1beta1"
 	"antrea.io/antrea/v2/pkg/controller/networkpolicy/store"
@@ -71,14 +71,14 @@ type tierValidator resourceValidator
 // groupValidator implements the validator interface for the ClusterGroup resource.
 type groupValidator resourceValidator
 
-// adminPolicyValidator implements the validator interface for the AdminNetworkPolicy resource.
-type adminPolicyValidator resourceValidator
-
 var (
 	// reservedTierPriorities stores the reserved priority range from 251, 252, 254 and 255.
 	// The priority 250 is reserved for default Tier but not part of this set in order to be
 	// able to create the Tier by Antrea. Same for priority 253 which is reserved for the
 	// baseline tier.
+	// cnpAdminTierPriority (220) is also NOT in this set because upgrade compatibility requires
+	// that pre-existing Tiers at that priority must remain deletable.
+	// The ClusterNetworkPolicy webhook enforces it dynamically based on n.cnpCreationAllowed.
 	reservedTierPriorities = sets.New[int32](int32(251), int32(252), int32(254), int32(255))
 	// reservedTierNames stores the set of Tier names which cannot be deleted
 	// since they are created by Antrea.
@@ -86,6 +86,13 @@ var (
 	// allowedFQDNChars validates that the matchPattern field contains only valid DNS characters
 	// and the wildcard '*' character.
 	allowedFQDNChars = regexp.MustCompile("^[-0-9a-zA-Z.*]+$")
+
+	kindAntreaTier  = metav1.GroupVersionKind{Group: "crd.antrea.io", Version: "v1beta1", Kind: "Tier"}
+	kindAntreaACNP  = metav1.GroupVersionKind{Group: "crd.antrea.io", Version: "v1beta1", Kind: "ClusterNetworkPolicy"}
+	kindAntreaANNP  = metav1.GroupVersionKind{Group: "crd.antrea.io", Version: "v1beta1", Kind: "NetworkPolicy"}
+	kindAntreaCG    = metav1.GroupVersionKind{Group: "crd.antrea.io", Version: "v1beta1", Kind: "ClusterGroup"}
+	kindAntreaGroup = metav1.GroupVersionKind{Group: "crd.antrea.io", Version: "v1beta1", Kind: "Group"}
+	kindUpstreamCNP = metav1.GroupVersionKind{Group: "policy.networking.k8s.io", Version: "v1alpha2", Kind: "ClusterNetworkPolicy"}
 )
 
 // RegisterAntreaPolicyValidator registers an Antrea-native policy validator
@@ -109,13 +116,10 @@ func (v *NetworkPolicyValidator) RegisterGroupValidator(g validator) {
 	v.groupValidators = append(v.groupValidators, g)
 }
 
-func (v *NetworkPolicyValidator) RegisterAdminNetworkPolicyValidator(a validator) {
-	v.adminNPValidators = append(v.adminNPValidators, a)
-}
-
 // NetworkPolicyValidator maintains list of validator objects which validate
 // the Antrea-native policy related resources.
 type NetworkPolicyValidator struct {
+	networkPolicyController *NetworkPolicyController
 	// antreaPolicyValidators maintains a list of validator objects which
 	// implement the validator interface for Antrea-native policies.
 	antreaPolicyValidators []validator
@@ -125,16 +129,15 @@ type NetworkPolicyValidator struct {
 	// groupValidators maintains a list of validator objects which
 	// implement the validator interface for ClusterGroup resources.
 	groupValidators []validator
-	// adminNPValidators maintains a list of validator objects which
-	// implement the validator interface for ANP and BANP resources.
-	adminNPValidators []validator
 }
 
 // NewNetworkPolicyValidator returns a new *NetworkPolicyValidator.
 func NewNetworkPolicyValidator(networkPolicyController *NetworkPolicyController) *NetworkPolicyValidator {
 	// initialize the validator registry with the default validators that need to
 	// be called.
-	vr := NetworkPolicyValidator{}
+	vr := NetworkPolicyValidator{
+		networkPolicyController: networkPolicyController,
+	}
 	// apv is an instance of antreaPolicyValidator to validate Antrea-native
 	// policy events.
 	apv := antreaPolicyValidator{
@@ -149,13 +152,9 @@ func NewNetworkPolicyValidator(networkPolicyController *NetworkPolicyController)
 	gv := groupValidator{
 		networkPolicyController: networkPolicyController,
 	}
-	av := adminPolicyValidator{
-		networkPolicyController: networkPolicyController,
-	}
 	vr.RegisterAntreaPolicyValidator(&apv)
 	vr.RegisterTierValidator(&tv)
 	vr.RegisterGroupValidator(&gv)
-	vr.RegisterAdminNetworkPolicyValidator(&av)
 	return &vr
 }
 
@@ -169,12 +168,9 @@ func (v *NetworkPolicyValidator) Validate(ar *admv1.AdmissionReview) *admv1.Admi
 	ui := ar.Request.UserInfo
 	curRaw := ar.Request.Object.Raw
 	oldRaw := ar.Request.OldObject.Raw
-	switch ar.Request.Kind.Kind {
-	case "Tier":
+	switch ar.Request.Kind {
+	case kindAntreaTier:
 		klog.V(2).Info("Validating Tier CRD")
-		// Current serving versions of Tier are v1alpha1 and v1beta1. They have the same
-		// schema and the same validating logic, and we only store v1beta1 in the etcd. So
-		// we unmarshal both of them into a v1beta1 object to do validation.
 		var curTier, oldTier crdv1beta1.Tier
 		if curRaw != nil {
 			if err := json.Unmarshal(curRaw, &curTier); err != nil {
@@ -189,11 +185,8 @@ func (v *NetworkPolicyValidator) Validate(ar *admv1.AdmissionReview) *admv1.Admi
 			}
 		}
 		warnings, msg, allowed = v.validateTier(&curTier, &oldTier, op, ui)
-	case "ClusterGroup":
+	case kindAntreaCG:
 		klog.V(2).Info("Validating ClusterGroup CRD")
-		// Current serving versions of ClusterGroup are v1alpha3 and v1beta1. They have
-		// the same schema and the same validating logic, and we only store v1beta1 in
-		// the etcd. So we unmarshal both of them into a v1beta1 object to do validation.
 		var curCG, oldCG crdv1beta1.ClusterGroup
 		if curRaw != nil {
 			if err := json.Unmarshal(curRaw, &curCG); err != nil {
@@ -208,11 +201,8 @@ func (v *NetworkPolicyValidator) Validate(ar *admv1.AdmissionReview) *admv1.Admi
 			}
 		}
 		warnings, msg, allowed = v.validateAntreaGroup(&curCG, &oldCG, op, ui)
-	case "Group":
+	case kindAntreaGroup:
 		klog.V(2).Info("Validating Group CRD")
-		// Current serving versions of Group are v1alpha3 and v1beta1. They have the same
-		// schema and the same validating logic, and we only store v1beta1 in the etcd. So
-		// we unmarshal both of them into a v1beta1 object to do validation.
 		var curG, oldG crdv1beta1.Group
 		if curRaw != nil {
 			if err := json.Unmarshal(curRaw, &curG); err != nil {
@@ -227,7 +217,7 @@ func (v *NetworkPolicyValidator) Validate(ar *admv1.AdmissionReview) *admv1.Admi
 			}
 		}
 		warnings, msg, allowed = v.validateAntreaGroup(&curG, &oldG, op, ui)
-	case "ClusterNetworkPolicy":
+	case kindAntreaACNP:
 		klog.V(2).Info("Validating Antrea ClusterNetworkPolicy CRD")
 		var curACNP, oldACNP crdv1beta1.ClusterNetworkPolicy
 		if curRaw != nil {
@@ -243,7 +233,7 @@ func (v *NetworkPolicyValidator) Validate(ar *admv1.AdmissionReview) *admv1.Admi
 			}
 		}
 		warnings, msg, allowed = v.validateAntreaPolicy(&curACNP, &oldACNP, op, ui)
-	case "NetworkPolicy":
+	case kindAntreaANNP:
 		klog.V(2).Info("Validating Antrea NetworkPolicy CRD")
 		var curANNP, oldANNP crdv1beta1.NetworkPolicy
 		if curRaw != nil {
@@ -259,38 +249,22 @@ func (v *NetworkPolicyValidator) Validate(ar *admv1.AdmissionReview) *admv1.Admi
 			}
 		}
 		warnings, msg, allowed = v.validateAntreaPolicy(&curANNP, &oldANNP, op, ui)
-	case "AdminNetworkPolicy":
-		klog.V(2).Info("Validating AdminNetworkPolicy CRD")
-		var curANP, oldANP v1alpha1.AdminNetworkPolicy
+	case kindUpstreamCNP:
+		klog.V(2).Info("Validating upstream ClusterNetworkPolicy")
+		var curCNP, oldCNP v1alpha2.ClusterNetworkPolicy
 		if curRaw != nil {
-			if err := json.Unmarshal(curRaw, &curANP); err != nil {
-				klog.Errorf("Error de-serializing current AdminNetworkPolicy")
+			if err := json.Unmarshal(curRaw, &curCNP); err != nil {
+				klog.Errorf("Error de-serializing current upstream ClusterNetworkPolicy")
 				return GetAdmissionResponseForErr(err)
 			}
 		}
 		if oldRaw != nil {
-			if err := json.Unmarshal(oldRaw, &oldANP); err != nil {
-				klog.Errorf("Error de-serializing old AdminNetworkPolicy")
+			if err := json.Unmarshal(oldRaw, &oldCNP); err != nil {
+				klog.Errorf("Error de-serializing old upstream ClusterNetworkPolicy")
 				return GetAdmissionResponseForErr(err)
 			}
 		}
-		warnings, msg, allowed = v.validateAdminNetworkPolicy(&curANP, &oldANP, op, ui)
-	case "BaselineAdminNetworkPolicy":
-		klog.V(2).Info("Validating BaselineAdminNetworkPolicy CRD")
-		var curBANP, oldBANP v1alpha1.BaselineAdminNetworkPolicy
-		if curRaw != nil {
-			if err := json.Unmarshal(curRaw, &curBANP); err != nil {
-				klog.Errorf("Error de-serializing current BaselineAdminNetworkPolicy")
-				return GetAdmissionResponseForErr(err)
-			}
-		}
-		if oldRaw != nil {
-			if err := json.Unmarshal(oldRaw, &oldBANP); err != nil {
-				klog.Errorf("Error de-serializing old BaselineAdminNetworkPolicy")
-				return GetAdmissionResponseForErr(err)
-			}
-		}
-		warnings, msg, allowed = v.validateAdminNetworkPolicy(&curBANP, &oldBANP, op, ui)
+		warnings, msg, allowed = v.validateUpstreamClusterNetworkPolicy(op)
 	}
 	if msg != "" {
 		result = &metav1.Status{
@@ -328,36 +302,6 @@ func (v *NetworkPolicyValidator) validateAntreaPolicy(curObj, oldObj interface{}
 		// Delete of Antrea Policies have no validation. This will be an
 		// empty for loop.
 		for _, val := range v.antreaPolicyValidators {
-			reason, allowed = val.deleteValidate(oldObj, userInfo)
-			if !allowed {
-				return warnings, reason, allowed
-			}
-		}
-	}
-	return warnings, reason, allowed
-}
-
-func (v *NetworkPolicyValidator) validateAdminNetworkPolicy(curObj, oldObj interface{}, op admv1.Operation, userInfo authenticationv1.UserInfo) ([]string, string, bool) {
-	allowed := true
-	reason := ""
-	var warnings []string
-	switch op {
-	case admv1.Create:
-		for _, val := range v.adminNPValidators {
-			warnings, reason, allowed = val.createValidate(curObj, userInfo)
-			if !allowed {
-				return warnings, reason, allowed
-			}
-		}
-	case admv1.Update:
-		for _, val := range v.adminNPValidators {
-			warnings, reason, allowed = val.updateValidate(curObj, oldObj, userInfo)
-			if !allowed {
-				return warnings, reason, allowed
-			}
-		}
-	case admv1.Delete:
-		for _, val := range v.adminNPValidators {
 			reason, allowed = val.deleteValidate(oldObj, userInfo)
 			if !allowed {
 				return warnings, reason, allowed
@@ -496,6 +440,22 @@ func (v *NetworkPolicyValidator) validateTier(curTier, oldTier *crdv1beta1.Tier,
 		}
 	}
 	return warnings, reason, allowed
+}
+
+// validateUpstreamClusterNetworkPolicy validates the admission of an upstream
+// (policy.networking.k8s.io/v1alpha2) ClusterNetworkPolicy resource.
+func (v *NetworkPolicyValidator) validateUpstreamClusterNetworkPolicy(op admv1.Operation) ([]string, string, bool) {
+	if !features.DefaultFeatureGate.Enabled(features.ClusterNetworkPolicy) {
+		return nil, "ClusterNetworkPolicy is not supported: the ClusterNetworkPolicy feature gate is not enabled", false
+	}
+	if op == admv1.Create && !v.networkPolicyController.cnpCreationAllowed.Load() {
+		return nil, fmt.Sprintf(
+			"ClusterNetworkPolicy creation is blocked: a user-created Tier at "+
+				"priority %d (cnpAdminTierPriority) already exists; the Tier and its associated policies "+
+				"must be deleted/migrated first before a ClusterNetworkPolicy can be created",
+			cnpAdminTierPriority), false
+	}
+	return nil, "", true
 }
 
 func (v *antreaPolicyValidator) tierExists(name string) bool {
@@ -999,6 +959,17 @@ func (t *tierValidator) createValidate(curObj interface{}, userInfo authenticati
 	if reservedTierPriorities.Has(curTier.Spec.Priority) {
 		return nil, fmt.Sprintf("tier %s priority %d is reserved", curTier.Name, curTier.Spec.Priority), false
 	}
+	// When the ClusterNetworkPolicy feature gate is enabled, block any new Tier
+	// from taking the cnpAdminTierPriority. If a conflict already existed before the
+	// feature gate was enabled (upgrade case), we allow the Tier to persist
+	// so that it can be migrated; only new Tiers are blocked.
+	if features.DefaultFeatureGate.Enabled(features.ClusterNetworkPolicy) &&
+		curTier.Spec.Priority == cnpAdminTierPriority {
+		return nil, fmt.Sprintf(
+			"tier %s priority %d is reserved for upstream ClusterNetworkPolicy when the "+
+				"ClusterNetworkPolicy feature gate is enabled; choose a different priority",
+			curTier.Name, curTier.Spec.Priority), false
+	}
 	// Tier priority must not overlap existing tier's priority
 	trs, err := t.networkPolicyController.tierInformer.Informer().GetIndexer().ByIndex(PriorityIndex, strconv.FormatInt(int64(curTier.Spec.Priority), 10))
 	if err != nil || len(trs) > 0 {
@@ -1195,39 +1166,5 @@ func (g *groupValidator) validateGroup(curObj interface{}) ([]string, string, bo
 
 // deleteValidate validates the DELETE events of Group, ClusterGroup resources.
 func (g *groupValidator) deleteValidate(oldObj interface{}, userInfo authenticationv1.UserInfo) (string, bool) {
-	return "", true
-}
-
-func (a *adminPolicyValidator) validateAdminNP(anp *v1alpha1.AdminNetworkPolicy) (string, bool) {
-	if anpHasNamespaceLabelRule(anp) {
-		return "SameLabels and NotSameLabels namespace selection are not yet supported by Antrea", false
-	}
-	return "", true
-}
-
-func (a *adminPolicyValidator) validateBANP(banp *v1alpha1.BaselineAdminNetworkPolicy) (string, bool) {
-	if banpHasNamespaceLabelRule(banp) {
-		return "SameLabels and NotSameLabels namespace selection are not yet supported by Antrea", false
-	}
-	return "", true
-}
-
-func (a *adminPolicyValidator) createValidate(curObj interface{}, userInfo authenticationv1.UserInfo) ([]string, string, bool) {
-	var reason string
-	var allowed bool
-	switch curObj := curObj.(type) {
-	case *v1alpha1.AdminNetworkPolicy:
-		reason, allowed = a.validateAdminNP(curObj)
-	case *v1alpha1.BaselineAdminNetworkPolicy:
-		reason, allowed = a.validateBANP(curObj)
-	}
-	return nil, reason, allowed
-}
-
-func (a *adminPolicyValidator) updateValidate(curObj, oldObj interface{}, userInfo authenticationv1.UserInfo) ([]string, string, bool) {
-	return a.createValidate(curObj, userInfo)
-}
-
-func (a *adminPolicyValidator) deleteValidate(oldObj interface{}, userInfo authenticationv1.UserInfo) (string, bool) {
 	return "", true
 }

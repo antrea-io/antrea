@@ -1290,9 +1290,9 @@ func resolveService(service *v1beta2.Service, member *v1beta2.GroupMember) *v1be
 	for idx := range member.Ports {
 		port := &member.Ports[idx]
 		// For K8s NetworkPolicy and Antrea-native policies, the Service.Protocol field will never be nil since TCP
-		// will be filled as default. However, for AdminNetworkPolicy and BaselineAdminNetworkPolicy, the Protocol
-		// field will be nil for ports written as named ports. In that case, the member port will match as long
-		// as the port name is matched.
+		// will be filled as default. For upstream network-policy-api resources, the controller leaves Protocol unset
+		// for named ports so the agent can derive the protocol from the Pod. In that case, the member port matches
+		// when the port name matches (and when Protocol is set, it must match too).
 		if port.Name == service.Port.StrVal && (service.Protocol == nil || port.Protocol == *service.Protocol) {
 			resolvedPort := intstr.FromInt(int(port.Port))
 			resolvedProtocol := service.Protocol

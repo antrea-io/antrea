@@ -24,6 +24,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/gofrs/uuid/v5"
@@ -44,7 +45,9 @@ import (
 	"k8s.io/client-go/util/workqueue"
 	"k8s.io/klog/v2"
 	policyinformers "sigs.k8s.io/network-policy-api/pkg/client/informers/externalversions/apis/v1alpha1"
+	policyv1a2informers "sigs.k8s.io/network-policy-api/pkg/client/informers/externalversions/apis/v1alpha2"
 	policylisters "sigs.k8s.io/network-policy-api/pkg/client/listers/apis/v1alpha1"
+	policyv1a2listers "sigs.k8s.io/network-policy-api/pkg/client/listers/apis/v1alpha2"
 
 	"antrea.io/antrea/v2/pkg/apis/controlplane"
 	"antrea.io/antrea/v2/pkg/apis/crd/v1alpha2"
@@ -218,6 +221,13 @@ type NetworkPolicyController struct {
 	// been synced at least once.
 	banpListerSynced cache.InformerSynced
 
+	cnpInformer policyv1a2informers.ClusterNetworkPolicyInformer
+	// cnpLister is able to list/get v1alpha2 ClusterNetworkPolicy objects.
+	cnpLister policyv1a2listers.ClusterNetworkPolicyLister
+	// cnpListerSynced is a function which returns true if the v1alpha2 ClusterNetworkPolicy shared informer has
+	// been synced at least once.
+	cnpListerSynced cache.InformerSynced
+
 	// addressGroupStore is the storage where the populated Address Groups are stored.
 	addressGroupStore storage.Interface
 	// appliedToGroupStore is the storage where the populated AppliedTo Groups are stored.
@@ -257,6 +267,19 @@ type NetworkPolicyController struct {
 	// Enable Stretched Networkpolicy feature which allows Antrea-native policies to select peer
 	// from other clusters in a ClusterSet.
 	stretchNPEnabled bool
+	// cnpCreationAllowed is an atomic flag that reflects whether upstream ClusterNetworkPolicy (v1alpha2)
+	// creation is currently allowed. It is true when the ClusterNetworkPolicy feature gate is enabled AND
+	// no user-created Tier at cnpAdminTierPriority (220) exists. The admission webhook reads this flag to
+	// gate CNP CREATE requests, and the Tier CREATE webhook uses it to block new Tiers at that priority
+	// once the feature gate is enabled and there is no pre-existing conflict. It is written only by the
+	// single syncCNPCreationAllowed goroutine and read by the admission webhooks, ensuring atomicity.
+	cnpCreationAllowed atomic.Bool
+	// syncCNPCreationAllowedCh triggers a re-computation of cnpCreationAllowed. It is signaled by the Tier
+	// add/delete event handlers and by the initial sync in Run(). A single goroutine (syncCNPCreationAllowed)
+	// consumes it and re-queries the Tier index, so all updates to cnpCreationAllowed are serialized and
+	// always reflect the current Tier state. This avoids the race of computing the flag from a stale query
+	// result concurrently with a Tier event.
+	syncCNPCreationAllowedCh chan struct{}
 	// heartbeatCh is an internal channel for testing. It's used to know whether all tasks have been
 	// processed, and to count executions of each function.
 	heartbeatCh chan heartbeat
@@ -406,6 +429,7 @@ func NewNetworkPolicyController(kubeClient clientset.Interface,
 	annpInformer crdv1b1informers.NetworkPolicyInformer,
 	adminNPInformer policyinformers.AdminNetworkPolicyInformer,
 	banpInformer policyinformers.BaselineAdminNetworkPolicyInformer,
+	cnpInformer policyv1a2informers.ClusterNetworkPolicyInformer,
 	tierInformer crdv1b1informers.TierInformer,
 	cgInformer crdv1b1informers.ClusterGroupInformer,
 	grpInformer crdv1b1informers.GroupInformer,
@@ -426,6 +450,9 @@ func NewNetworkPolicyController(kubeClient clientset.Interface,
 		banpInformer:                   banpInformer,
 		banpLister:                     banpInformer.Lister(),
 		banpListerSynced:               banpInformer.Informer().HasSynced,
+		cnpInformer:                    cnpInformer,
+		cnpLister:                      cnpInformer.Lister(),
+		cnpListerSynced:                cnpInformer.Informer().HasSynced,
 		addressGroupStore:              addressGroupStore,
 		appliedToGroupStore:            appliedToGroupStore,
 		internalNetworkPolicyStore:     internalNetworkPolicyStore,
@@ -454,11 +481,12 @@ func NewNetworkPolicyController(kubeClient clientset.Interface,
 				Name: "internalGroup",
 			},
 		),
-		groupingInterface:       groupingInterface,
-		groupingInterfaceSynced: groupingInterface.HasSynced,
-		labelIdentityInterface:  labelIdentityInterface,
-		stretchNPEnabled:        stretchedNPEnabled,
-		appliedToGroupNotifier:  newNotifier(),
+		groupingInterface:        groupingInterface,
+		groupingInterfaceSynced:  groupingInterface.HasSynced,
+		labelIdentityInterface:   labelIdentityInterface,
+		stretchNPEnabled:         stretchedNPEnabled,
+		appliedToGroupNotifier:   newNotifier(),
+		syncCNPCreationAllowedCh: make(chan struct{}, 1),
 	}
 	n.groupingInterface.AddEventHandler(appliedToGroupType, n.enqueueAppliedToGroup)
 	n.groupingInterface.AddEventHandler(addressGroupType, n.enqueueAddressGroup)
@@ -476,25 +504,11 @@ func NewNetworkPolicyController(kubeClient clientset.Interface,
 		},
 		resyncPeriod,
 	)
-	if features.DefaultFeatureGate.Enabled(features.AdminNetworkPolicy) {
-		adminNPInformer.Informer().AddEventHandlerWithResyncPeriod(
-			cache.ResourceEventHandlerFuncs{
-				AddFunc:    n.addAdminNP,
-				UpdateFunc: n.updateAdminNP,
-				DeleteFunc: n.deleteAdminNP,
-			},
-			resyncPeriod,
-		)
-		banpInformer.Informer().AddEventHandlerWithResyncPeriod(
-			cache.ResourceEventHandlerFuncs{
-				AddFunc:    n.addBANP,
-				UpdateFunc: n.updateBANP,
-				DeleteFunc: n.deleteBANP,
-			},
-			resyncPeriod,
-		)
-	}
 	// Register Informer and add handlers for AntreaPolicy events only if the feature is enabled.
+	// The upstream AdminNetworkPolicy/BaselineAdminNetworkPolicy and ClusterNetworkPolicy handlers
+	// (and the Tier indexer/lister wiring they depend on) are nested in this block on purpose: those
+	// APIs reuse the Antrea-native policy machinery, so their feature gates require AntreaPolicy to be
+	// enabled (enforced at controller startup).
 	if features.DefaultFeatureGate.Enabled(features.AntreaPolicy) {
 		n.serviceInformer = serviceInformer
 		n.serviceLister = serviceInformer.Lister()
@@ -547,9 +561,9 @@ func NewNetworkPolicyController(kubeClient clientset.Interface,
 		acnpInformer.Informer().AddIndexers(acnpIndexers)
 		acnpInformer.Informer().AddEventHandlerWithResyncPeriod(
 			cache.ResourceEventHandlerFuncs{
-				AddFunc:    n.addCNP,
-				UpdateFunc: n.updateCNP,
-				DeleteFunc: n.deleteCNP,
+				AddFunc:    n.addACNP,
+				UpdateFunc: n.updateACNP,
+				DeleteFunc: n.deleteACNP,
 			},
 			resyncPeriod,
 		)
@@ -580,6 +594,43 @@ func NewNetworkPolicyController(kubeClient clientset.Interface,
 			},
 			resyncPeriod,
 		)
+		if features.DefaultFeatureGate.Enabled(features.AdminNetworkPolicy) {
+			adminNPInformer.Informer().AddEventHandlerWithResyncPeriod(
+				cache.ResourceEventHandlerFuncs{
+					AddFunc:    n.addAdminNP,
+					UpdateFunc: n.updateAdminNP,
+					DeleteFunc: n.deleteAdminNP,
+				},
+				resyncPeriod,
+			)
+			banpInformer.Informer().AddEventHandlerWithResyncPeriod(
+				cache.ResourceEventHandlerFuncs{
+					AddFunc:    n.addBANP,
+					UpdateFunc: n.updateBANP,
+					DeleteFunc: n.deleteBANP,
+				},
+				resyncPeriod,
+			)
+		}
+		if features.DefaultFeatureGate.Enabled(features.ClusterNetworkPolicy) {
+			cnpInformer.Informer().AddEventHandlerWithResyncPeriod(
+				cache.ResourceEventHandlerFuncs{
+					AddFunc:    n.addCNP,
+					UpdateFunc: n.updateCNP,
+					DeleteFunc: n.deleteCNP,
+				},
+				resyncPeriod,
+			)
+			// Watch Tier ADD/DELETE to keep cnpCreationAllowed in sync.
+			// A user-created Tier at cnpAdminTierPriority blocks CNP creation.
+			tierInformer.Informer().AddEventHandlerWithResyncPeriod(
+				cache.ResourceEventHandlerFuncs{
+					AddFunc:    n.onTierAddForCNP,
+					DeleteFunc: n.onTierDeleteForCNP,
+				},
+				resyncPeriod,
+			)
+		}
 	}
 	return n
 }
@@ -978,9 +1029,25 @@ func (n *NetworkPolicyController) Run(stopCh <-chan struct{}) {
 	// Only wait for acnpListerSynced and annpListerSynced when AntreaPolicy feature gate is enabled.
 	if features.DefaultFeatureGate.Enabled(features.AntreaPolicy) {
 		cacheSyncs = append(cacheSyncs, n.acnpListerSynced, n.annpListerSynced, n.cgListerSynced)
+		// The ClusterNetworkPolicy feature gate requires AntreaPolicy to be enabled. We wait for the
+		// Tier cache (an Antrea CRD that is always installed) so that the initial cnpCreationAllowed
+		// sync below observes any existing Tiers. We intentionally do NOT block on cnpListerSynced:
+		// the upstream network-policy-api ClusterNetworkPolicy CRD is not bundled with Antrea and may
+		// be absent even when the feature gate is enabled. Blocking on it would stall the entire
+		// controller and prevent all NetworkPolicies from being enforced.
+		if features.DefaultFeatureGate.Enabled(features.ClusterNetworkPolicy) {
+			cacheSyncs = append(cacheSyncs, n.tierListerSynced)
+		}
 	}
 	if !cache.WaitForNamedCacheSync(controllerName, stopCh, cacheSyncs...) {
 		return
+	}
+	// Start the single goroutine that owns cnpCreationAllowed, and trigger an initial computation
+	// now that the Tier cache is synced. All subsequent updates are driven by Tier add/delete events
+	// through the same goroutine, so the flag is always consistent with the current Tier state.
+	if features.DefaultFeatureGate.Enabled(features.AntreaPolicy) && features.DefaultFeatureGate.Enabled(features.ClusterNetworkPolicy) {
+		go n.syncCNPCreationAllowed(stopCh)
+		n.triggerCNPCreationAllowedSync()
 	}
 
 	for i := 0; i < defaultWorkers; i++ {
@@ -1536,7 +1603,7 @@ func (n *NetworkPolicyController) syncInternalNetworkPolicy(key *controlplane.Ne
 			n.deleteInternalNetworkPolicy(internalNetworkPolicyName)
 			return nil
 		}
-		newInternalNetworkPolicy, newAppliedToGroups, newAddressGroups = n.processClusterNetworkPolicy(acnp)
+		newInternalNetworkPolicy, newAppliedToGroups, newAddressGroups = n.processAntreaClusterNetworkPolicy(acnp)
 	case controlplane.AntreaNetworkPolicy:
 		annp, err := n.annpLister.NetworkPolicies(key.Namespace).Get(key.Name)
 		if err != nil || annp.UID != key.UID {
@@ -1565,6 +1632,13 @@ func (n *NetworkPolicyController) syncInternalNetworkPolicy(key *controlplane.Ne
 			return nil
 		}
 		newInternalNetworkPolicy, newAppliedToGroups, newAddressGroups = n.processBaselineAdminNetworkPolicy(banp)
+	case controlplane.ClusterNetworkPolicy:
+		cnp, err := n.cnpLister.Get(key.Name)
+		if err != nil || cnp.UID != key.UID {
+			n.deleteInternalNetworkPolicy(internalNetworkPolicyName)
+			return nil
+		}
+		newInternalNetworkPolicy, newAppliedToGroups, newAddressGroups = n.processClusterNetworkPolicy(cnp)
 	}
 
 	// The NetworkPolicy must subscribe to the updates of AppliedToGroups before calculating span based on them,

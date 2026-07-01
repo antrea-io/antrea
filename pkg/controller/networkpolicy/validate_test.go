@@ -24,7 +24,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/component-base/featuregate"
 	featuregatetesting "k8s.io/component-base/featuregate/testing"
-	"sigs.k8s.io/network-policy-api/apis/v1alpha1"
 
 	crdv1beta1 "antrea.io/antrea/v2/pkg/apis/crd/v1beta1"
 	"antrea.io/antrea/v2/pkg/features"
@@ -2891,207 +2890,118 @@ func TestValidateTier(t *testing.T) {
 	}
 }
 
-func TestValidateAdminNetworkPolicy(t *testing.T) {
+func TestValidateTierCNPPriority(t *testing.T) {
 	tests := []struct {
-		name           string
-		policy         metav1.Object
-		operation      admv1.Operation
-		expectedReason string
+		name              string
+		cnpFeatureEnabled bool
+		curTier           *crdv1beta1.Tier
+		operation         admv1.Operation
+		user              authenticationv1.UserInfo
+		expectedReason    string
 	}{
 		{
-			name: "anp-has-same-labels-rule",
-			policy: &v1alpha1.AdminNetworkPolicy{
-				ObjectMeta: metav1.ObjectMeta{Name: "anpA", UID: "uidA"},
-				Spec: v1alpha1.AdminNetworkPolicySpec{
-					Subject: v1alpha1.AdminNetworkPolicySubject{
-						Namespaces: &selectorA,
-					},
-					Priority: 10,
-					Ingress: []v1alpha1.AdminNetworkPolicyIngressRule{
-						{
-							Action: v1alpha1.AdminNetworkPolicyRuleActionAllow,
-							From: []v1alpha1.AdminNetworkPolicyPeer{
-								{
-									Namespaces: &v1alpha1.NamespacedPeer{
-										SameLabels: []string{"labelA"},
-									},
-								},
-							},
-						},
-					},
-					Egress: []v1alpha1.AdminNetworkPolicyEgressRule{
-						{
-							Action: v1alpha1.AdminNetworkPolicyRuleActionAllow,
-							To: []v1alpha1.AdminNetworkPolicyPeer{
-								{
-									Pods: &v1alpha1.NamespacedPodPeer{
-										Namespaces: v1alpha1.NamespacedPeer{
-											NamespaceSelector: &selectorC,
-										},
-										PodSelector: selectorB,
-									},
-								},
-							},
-						},
-					},
-				},
+			name:              "create-tier-at-cnp-priority-blocked-when-cnp-enabled",
+			cnpFeatureEnabled: true,
+			curTier: &crdv1beta1.Tier{
+				ObjectMeta: metav1.ObjectMeta{Name: "tier-priority-220"},
+				Spec:       crdv1beta1.TierSpec{Priority: cnpAdminTierPriority},
+			},
+			operation: admv1.Create,
+			user:      authenticationv1.UserInfo{Username: "default"},
+			expectedReason: fmt.Sprintf(
+				"tier tier-priority-220 priority %d is reserved for upstream ClusterNetworkPolicy when the "+
+					"ClusterNetworkPolicy feature gate is enabled; choose a different priority",
+				cnpAdminTierPriority),
+		},
+		{
+			name:              "create-tier-at-cnp-priority-allowed-when-cnp-feature-disabled",
+			cnpFeatureEnabled: false,
+			curTier: &crdv1beta1.Tier{
+				ObjectMeta: metav1.ObjectMeta{Name: "tier-priority-220"},
+				Spec:       crdv1beta1.TierSpec{Priority: cnpAdminTierPriority},
 			},
 			operation:      admv1.Create,
-			expectedReason: "SameLabels and NotSameLabels namespace selection are not yet supported by Antrea",
-		},
-		{
-			name: "anp-update-to-same-labels-rule",
-			policy: &v1alpha1.AdminNetworkPolicy{
-				ObjectMeta: metav1.ObjectMeta{Name: "anpA", UID: "uidA"},
-				Spec: v1alpha1.AdminNetworkPolicySpec{
-					Subject: v1alpha1.AdminNetworkPolicySubject{
-						Namespaces: &selectorA,
-					},
-					Priority: 10,
-					Egress: []v1alpha1.AdminNetworkPolicyEgressRule{
-						{
-							Action: v1alpha1.AdminNetworkPolicyRuleActionAllow,
-							To: []v1alpha1.AdminNetworkPolicyPeer{
-								{
-									Namespaces: &v1alpha1.NamespacedPeer{
-										SameLabels: []string{"labelA"},
-									},
-								},
-							},
-						},
-					},
-				},
-			},
-			operation:      admv1.Update,
-			expectedReason: "SameLabels and NotSameLabels namespace selection are not yet supported by Antrea",
-		},
-		{
-			name: "anp-has-not-same-labels-rule",
-			policy: &v1alpha1.AdminNetworkPolicy{
-				ObjectMeta: metav1.ObjectMeta{Name: "anpA", UID: "uidA"},
-				Spec: v1alpha1.AdminNetworkPolicySpec{
-					Subject: v1alpha1.AdminNetworkPolicySubject{
-						Namespaces: &selectorA,
-					},
-					Priority: 10,
-					Ingress: []v1alpha1.AdminNetworkPolicyIngressRule{
-						{
-							Action: v1alpha1.AdminNetworkPolicyRuleActionAllow,
-							From: []v1alpha1.AdminNetworkPolicyPeer{
-								{
-									Namespaces: &v1alpha1.NamespacedPeer{
-										NotSameLabels: []string{"labelA", "labelB"},
-									},
-								},
-							},
-						},
-					},
-				},
-			},
-			operation:      admv1.Create,
-			expectedReason: "SameLabels and NotSameLabels namespace selection are not yet supported by Antrea",
-		},
-		{
-			name: "banp-has-same-labels-rule",
-			policy: &v1alpha1.BaselineAdminNetworkPolicy{
-				ObjectMeta: metav1.ObjectMeta{Name: "anpA", UID: "uidA"},
-				Spec: v1alpha1.BaselineAdminNetworkPolicySpec{
-					Subject: v1alpha1.AdminNetworkPolicySubject{
-						Namespaces: &selectorA,
-					},
-					Ingress: []v1alpha1.BaselineAdminNetworkPolicyIngressRule{
-						{
-							Action: v1alpha1.BaselineAdminNetworkPolicyRuleActionAllow,
-							From: []v1alpha1.AdminNetworkPolicyPeer{
-								{
-									Namespaces: &v1alpha1.NamespacedPeer{
-										SameLabels: []string{"labelA"},
-									},
-								},
-							},
-						},
-					},
-					Egress: []v1alpha1.BaselineAdminNetworkPolicyEgressRule{
-						{
-							Action: v1alpha1.BaselineAdminNetworkPolicyRuleActionAllow,
-							To: []v1alpha1.AdminNetworkPolicyPeer{
-								{
-									Pods: &v1alpha1.NamespacedPodPeer{
-										Namespaces: v1alpha1.NamespacedPeer{
-											NamespaceSelector: &selectorC,
-										},
-										PodSelector: selectorB,
-									},
-								},
-							},
-						},
-					},
-				},
-			},
-			operation:      admv1.Create,
-			expectedReason: "SameLabels and NotSameLabels namespace selection are not yet supported by Antrea",
-		},
-		{
-			name: "banp-update-to-same-labels-rule",
-			policy: &v1alpha1.BaselineAdminNetworkPolicy{
-				ObjectMeta: metav1.ObjectMeta{Name: "anpA", UID: "uidA"},
-				Spec: v1alpha1.BaselineAdminNetworkPolicySpec{
-					Subject: v1alpha1.AdminNetworkPolicySubject{
-						Namespaces: &selectorA,
-					},
-					Egress: []v1alpha1.BaselineAdminNetworkPolicyEgressRule{
-						{
-							Action: v1alpha1.BaselineAdminNetworkPolicyRuleActionAllow,
-							To: []v1alpha1.AdminNetworkPolicyPeer{
-								{
-									Namespaces: &v1alpha1.NamespacedPeer{
-										SameLabels: []string{"labelA"},
-									},
-								},
-							},
-						},
-					},
-				},
-			},
-			operation:      admv1.Update,
-			expectedReason: "SameLabels and NotSameLabels namespace selection are not yet supported by Antrea",
-		},
-		{
-			name: "banp-has-not-same-labels-rule",
-			policy: &v1alpha1.BaselineAdminNetworkPolicy{
-				ObjectMeta: metav1.ObjectMeta{Name: "anpA", UID: "uidA"},
-				Spec: v1alpha1.BaselineAdminNetworkPolicySpec{
-					Subject: v1alpha1.AdminNetworkPolicySubject{
-						Namespaces: &selectorA,
-					},
-					Ingress: []v1alpha1.BaselineAdminNetworkPolicyIngressRule{
-						{
-							Action: v1alpha1.BaselineAdminNetworkPolicyRuleActionAllow,
-							From: []v1alpha1.AdminNetworkPolicyPeer{
-								{
-									Namespaces: &v1alpha1.NamespacedPeer{
-										NotSameLabels: []string{"labelA", "labelB"},
-									},
-								},
-							},
-						},
-					},
-				},
-			},
-			operation:      admv1.Create,
-			expectedReason: "SameLabels and NotSameLabels namespace selection are not yet supported by Antrea",
+			user:           authenticationv1.UserInfo{Username: "default"},
+			expectedReason: "",
 		},
 	}
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			featuregatetesting.SetFeatureGateDuringTest(t, features.DefaultFeatureGate, features.ClusterNetworkPolicy, tt.cnpFeatureEnabled)
 			_, controller := newController(nil, nil)
 			validator := NewNetworkPolicyValidator(controller.NetworkPolicyController)
-			_, actualReason, allowed := validator.validateAdminNetworkPolicy(tt.policy, "", tt.operation, authenticationv1.UserInfo{})
+			_, actualReason, allowed := validator.validateTier(tt.curTier, nil, tt.operation, tt.user)
 			assert.Equal(t, tt.expectedReason, actualReason)
 			if tt.expectedReason == "" {
 				assert.True(t, allowed)
 			} else {
 				assert.False(t, allowed)
+			}
+		})
+	}
+}
+
+func TestValidateCNP(t *testing.T) {
+	tests := []struct {
+		name               string
+		cnpGateEnabled     bool
+		cnpCreationAllowed bool
+		operation          admv1.Operation
+		expectedAllowed    bool
+		expectedReason     string
+	}{
+		{
+			name:               "create-cnp-allowed",
+			cnpGateEnabled:     true,
+			cnpCreationAllowed: true,
+			operation:          admv1.Create,
+			expectedAllowed:    true,
+		},
+		{
+			name:               "create-cnp-blocked-due-to-tier-conflict",
+			cnpGateEnabled:     true,
+			cnpCreationAllowed: false,
+			operation:          admv1.Create,
+			expectedAllowed:    false,
+			expectedReason: fmt.Sprintf(
+				"ClusterNetworkPolicy creation is blocked: a user-created Tier at "+
+					"priority %d (cnpAdminTierPriority) already exists; the Tier and its associated policies "+
+					"must be deleted/migrated first before a ClusterNetworkPolicy can be created",
+				cnpAdminTierPriority),
+		},
+		{
+			name:               "update-cnp-always-allowed",
+			cnpGateEnabled:     true,
+			cnpCreationAllowed: false,
+			operation:          admv1.Update,
+			expectedAllowed:    true,
+		},
+		{
+			name:            "create-cnp-rejected-when-feature-gate-disabled",
+			cnpGateEnabled:  false,
+			operation:       admv1.Create,
+			expectedAllowed: false,
+			expectedReason:  "ClusterNetworkPolicy is not supported: the ClusterNetworkPolicy feature gate is not enabled",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			featuregatetesting.SetFeatureGateDuringTest(t, features.DefaultFeatureGate, features.ClusterNetworkPolicy, tt.cnpGateEnabled)
+			_, controller := newController(nil, nil)
+			controller.cnpCreationAllowed.Store(tt.cnpCreationAllowed)
+			validator := NewNetworkPolicyValidator(controller.NetworkPolicyController)
+			ar := &admv1.AdmissionReview{
+				Request: &admv1.AdmissionRequest{
+					Kind:      kindUpstreamCNP,
+					Operation: tt.operation,
+				},
+			}
+			resp := validator.Validate(ar)
+			assert.Equal(t, tt.expectedAllowed, resp.Allowed)
+			if !tt.expectedAllowed {
+				assert.Equal(t, tt.expectedReason, resp.Result.Message)
 			}
 		})
 	}
