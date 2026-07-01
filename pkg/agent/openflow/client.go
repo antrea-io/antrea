@@ -1073,32 +1073,49 @@ func (c *client) InstallSNATBypassServiceFlows(serviceCIDRs []*net.IPNet) error 
 
 func (c *client) InstallSNATMarkFlows(snatIP net.IP, mark uint32) error {
 	flow := c.featureEgress.snatIPFromTunnelFlow(snatIP, mark)
-	cacheKey := fmt.Sprintf("s%x", mark)
+	suffix := "v4"
+	if snatIP.To4() == nil {
+		suffix = "v6"
+	}
+	cacheKey := fmt.Sprintf("s%x-%s", mark, suffix)
 	c.replayMutex.RLock()
 	defer c.replayMutex.RUnlock()
 	return c.addFlows(c.featureEgress.cachedFlows, cacheKey, []binding.Flow{flow})
 }
 
 func (c *client) UninstallSNATMarkFlows(mark uint32) error {
-	cacheKey := fmt.Sprintf("s%x", mark)
+	cacheKeys := []string{
+		fmt.Sprintf("s%x-v4", mark),
+		fmt.Sprintf("s%x-v6", mark),
+		fmt.Sprintf("s%x", mark), // For backward compatibility
+	}
+
 	c.replayMutex.RLock()
 	defer c.replayMutex.RUnlock()
-	return c.deleteFlows(c.featureEgress.cachedFlows, cacheKey)
+
+	return c.deleteFlowsWithMultipleKeys(c.featureEgress.cachedFlows, cacheKeys)
 }
 
 func (c *client) InstallPodSNATFlows(ofPort uint32, snatIP net.IP, snatMark uint32) error {
 	flows := []binding.Flow{c.featureEgress.snatRuleFlow(ofPort, snatIP, snatMark, c.nodeConfig.GatewayConfig.MAC)}
-	cacheKey := fmt.Sprintf("p%x", ofPort)
+	suffix := "v4"
+	if snatIP.To4() == nil {
+		suffix = "v6"
+	}
+	cacheKey := fmt.Sprintf("p%x-%s", ofPort, suffix)
 	c.replayMutex.RLock()
 	defer c.replayMutex.RUnlock()
 	return c.addFlows(c.featureEgress.cachedFlows, cacheKey, flows)
 }
 
 func (c *client) UninstallPodSNATFlows(ofPort uint32) error {
-	cacheKey := fmt.Sprintf("p%x", ofPort)
+	cacheKeys := []string{
+		fmt.Sprintf("p%x-v4", ofPort),
+		fmt.Sprintf("p%x-v6", ofPort),
+	}
 	c.replayMutex.RLock()
 	defer c.replayMutex.RUnlock()
-	return c.deleteFlows(c.featureEgress.cachedFlows, cacheKey)
+	return c.deleteFlowsWithMultipleKeys(c.featureEgress.cachedFlows, cacheKeys)
 }
 
 func (c *client) InstallEgressQoS(meterID, rate, burst uint32) error {

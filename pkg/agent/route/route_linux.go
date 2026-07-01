@@ -193,8 +193,13 @@ type Client struct {
 	nodeRoutes sync.Map
 	// nodeNeighbors caches IPv6 Neighbors to remote host gateway
 	nodeNeighbors sync.Map
-	// markToSNATIP caches marks to SNAT IPs. It's used in Egress feature.
-	markToSNATIP sync.Map
+	// markToSNATIPs caches marks to SNAT IP slices ([]net.IP).
+	// It is used for both single-stack and dual-stack Egress so that all address families
+	// sharing the same mark can be tracked together.
+	markToSNATIPs sync.Map
+	// markToSNATIPsMutex serializes read-modify-write operations on markToSNATIPs and the matching SNAT rule
+	// updates.
+	markToSNATIPsMutex sync.Mutex
 	// iptablesInitialized is used to notify when iptables initialization is done.
 	iptablesInitialized chan struct{}
 	proxyAll            bool
@@ -1043,15 +1048,25 @@ func (c *Client) syncIPTables(cleanupStaleJumpRules bool) error {
 		}
 	}
 
+	// Keep SNAT rule Add/Delete operations serialized with both the cache snapshot and iptables-restore below.
+	// Otherwise a rule added or deleted after the snapshot could be overwritten by a stale restore payload.
+	c.markToSNATIPsMutex.Lock()
+	defer c.markToSNATIPsMutex.Unlock()
+
 	snatMarkToIPv4 := map[uint32]net.IP{}
 	snatMarkToIPv6 := map[uint32]net.IP{}
-	c.markToSNATIP.Range(func(key, value interface{}) bool {
+	c.markToSNATIPs.Range(func(key, value interface{}) bool {
 		snatMark := key.(uint32)
-		snatIP := value.(net.IP)
-		if snatIP.To4() != nil {
-			snatMarkToIPv4[snatMark] = snatIP
-		} else {
-			snatMarkToIPv6[snatMark] = snatIP
+		ips := value.([]net.IP)
+		for _, ip := range ips {
+			if ip == nil {
+				continue
+			}
+			if ip.To4() != nil {
+				snatMarkToIPv4[snatMark] = ip
+			} else {
+				snatMarkToIPv6[snatMark] = ip
+			}
 		}
 		return true
 	})
@@ -2249,23 +2264,62 @@ func (c *Client) AddSNATRule(snatIP net.IP, mark uint32) error {
 	if snatIP.To4() == nil {
 		protocol = iptables.ProtocolIPv6
 	}
-	c.markToSNATIP.Store(mark, snatIP)
-	return c.iptables.InsertRule(protocol, iptables.NATTable, antreaPostRoutingChain, c.snatRuleSpec(snatIP, mark))
+
+	c.markToSNATIPsMutex.Lock()
+	defer c.markToSNATIPsMutex.Unlock()
+
+	var ips []net.IP
+	if existing, ok := c.markToSNATIPs.Load(mark); ok {
+		ips = existing.([]net.IP)
+	}
+
+	// Avoid duplicates
+	found := false
+	for _, ip := range ips {
+		if ip.Equal(snatIP) {
+			found = true
+			break
+		}
+	}
+	if err := c.iptables.InsertRule(protocol, iptables.NATTable, antreaPostRoutingChain, c.snatRuleSpec(snatIP, mark)); err != nil {
+		return err
+	}
+	if !found {
+		newIPs := append(append([]net.IP(nil), ips...), snatIP)
+		c.markToSNATIPs.Store(mark, newIPs)
+	}
+	return nil
 }
 
 func (c *Client) DeleteSNATRule(mark uint32) error {
-	value, ok := c.markToSNATIP.Load(mark)
+	c.markToSNATIPsMutex.Lock()
+	defer c.markToSNATIPsMutex.Unlock()
+
+	value, ok := c.markToSNATIPs.Load(mark)
 	if !ok {
-		klog.InfoS("Didn't find SNAT rule with mark", "mark", fmt.Sprintf("%#x", mark))
 		return nil
 	}
-	c.markToSNATIP.Delete(mark)
-	snatIP := value.(net.IP)
-	protocol := iptables.ProtocolIPv4
-	if snatIP.To4() == nil {
-		protocol = iptables.ProtocolIPv6
+
+	ips := value.([]net.IP)
+
+	for _, ip := range ips {
+		if ip == nil {
+			continue
+		}
+		protocol := iptables.ProtocolIPv4
+		if ip.To4() == nil {
+			protocol = iptables.ProtocolIPv6
+		}
+		if err := c.iptables.DeleteRule(protocol, iptables.NATTable, antreaPostRoutingChain, c.snatRuleSpec(ip, mark)); err != nil {
+			// Keep the cached IP list unchanged on failure. The caller only knows deletion failed for
+			// the mark, so retaining the full list keeps the cache aligned with the caller's
+			// ruleInstalled state and lets the next iptables sync restore any rule already deleted.
+			return err
+		}
 	}
-	return c.iptables.DeleteRule(protocol, iptables.NATTable, antreaPostRoutingChain, c.snatRuleSpec(snatIP, mark))
+
+	c.markToSNATIPs.Delete(mark)
+	return nil
 }
 
 func (c *Client) AddEgressRoutes(tableID uint32, dev int, gateway net.IP, prefixLength int) error {

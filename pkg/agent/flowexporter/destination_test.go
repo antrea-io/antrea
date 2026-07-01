@@ -256,6 +256,8 @@ func TestDestination_fillEgressInfo(t *testing.T) {
 		name                   string
 		sourcePodNamespace     string
 		sourcePodName          string
+		destinationAddress     netip.Addr
+		egressIPs              []string
 		expectedEgressName     string
 		expectedEgressUID      string
 		expectedEgressIP       string
@@ -266,9 +268,21 @@ func TestDestination_fillEgressInfo(t *testing.T) {
 			name:                   "EgressName, EgressIP and EgressNodeName filled",
 			sourcePodNamespace:     "namespaceA",
 			sourcePodName:          "podA",
+			destinationAddress:     netip.MustParseAddr("8.8.8.8"),
 			expectedEgressName:     "test-egress",
 			expectedEgressUID:      "test-egress-uid",
 			expectedEgressIP:       "172.18.0.1",
+			expectedEgressNodeName: "test-egress-node",
+		},
+		{
+			name:                   "IPv6 EgressIP selected for IPv6 flow",
+			sourcePodNamespace:     "namespaceA",
+			sourcePodName:          "podA",
+			destinationAddress:     netip.MustParseAddr("2001:4860:4860::8888"),
+			egressIPs:              []string{"172.18.0.1", "fd00::1"},
+			expectedEgressName:     "test-egress",
+			expectedEgressUID:      "test-egress-uid",
+			expectedEgressIP:       "fd00::1",
 			expectedEgressNodeName: "test-egress-node",
 		},
 		{
@@ -288,12 +302,14 @@ func TestDestination_fillEgressInfo(t *testing.T) {
 			conn := connection.Connection{
 				SourcePodNamespace: tc.sourcePodNamespace,
 				SourcePodName:      tc.sourcePodName,
+				FlowKey:            connection.Tuple{DestinationAddress: tc.destinationAddress},
 			}
 			if tc.expectedEgressName != "" {
 				egressQuerier.EXPECT().GetEgress(conn.SourcePodNamespace, conn.SourcePodName).Return(agenttypes.EgressConfig{
 					Name:       tc.expectedEgressName,
 					UID:        types.UID(tc.expectedEgressUID),
-					EgressIP:   tc.expectedEgressIP,
+					EgressIP:   "172.18.0.1",
+					EgressIPs:  tc.egressIPs,
 					EgressNode: tc.expectedEgressNodeName,
 				}, nil)
 			} else {
