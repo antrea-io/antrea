@@ -344,7 +344,7 @@ func (e *ipfixExporter) addConnToSet(conn *connection.Connection) error {
 			} else {
 				ie.SetStringValue("")
 			}
-		case "destinationClusterIPv4":
+		case "destinationClusterIPv4", "destinationServiceIPv4":
 			if conn.DestinationServicePortName != "" {
 				ie.SetIPAddressValue(conn.OriginalDestinationAddress.AsSlice())
 			} else {
@@ -353,7 +353,7 @@ func (e *ipfixExporter) addConnToSet(conn *connection.Connection) error {
 				// this dummy IP address.
 				ie.SetIPAddressValue(net.IPv4zero)
 			}
-		case "destinationClusterIPv6":
+		case "destinationClusterIPv6", "destinationServiceIPv6":
 			if conn.DestinationServicePortName != "" {
 				ie.SetIPAddressValue(conn.OriginalDestinationAddress.AsSlice())
 			} else {
@@ -398,18 +398,6 @@ func (e *ipfixExporter) addConnToSet(conn *connection.Connection) error {
 			ie.SetStringValue(conn.EgressIP)
 		case "egressNodeName":
 			ie.SetStringValue(conn.EgressNodeName)
-		case "destinationServiceIPv4":
-			if conn.DestinationServicePortName != "" {
-				ie.SetIPAddressValue(conn.OriginalDestinationAddress.AsSlice())
-			} else {
-				ie.SetIPAddressValue(net.IPv4zero)
-			}
-		case "destinationServiceIPv6":
-			if conn.DestinationServicePortName != "" {
-				ie.SetIPAddressValue(conn.OriginalDestinationAddress.AsSlice())
-			} else {
-				ie.SetIPAddressValue(net.IPv6zero)
-			}
 		case "proxySnatIPv4":
 			if conn.ProxySnatIP.IsValid() {
 				ie.SetIPAddressValue(conn.ProxySnatIP.AsSlice())

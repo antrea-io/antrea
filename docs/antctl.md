@@ -732,6 +732,7 @@ $ antctl get flowrecords --srcip 10.10.0.1 --srcport 50497 -o json
     "destinationNodeName": "k8s-node-worker-1",
     "destinationPodName": "coredns-78fcd69978-x2twv",
     "destinationPodNamespace": "kube-system",
+    "destinationServiceIPv4": "0.0.0.0",
     "destinationServicePort": 0,
     "destinationServicePortName": "",
     "destinationTransportPort": 53,
