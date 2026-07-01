@@ -350,6 +350,11 @@ type MulticastConfig struct {
 	IGMPQueryVersions []int `yaml:"igmpQueryVersions"`
 }
 
+// MaxEgressIPsPerNodeUpperBound is the maximum value allowed for EgressConfig.MaxEgressIPsPerNode and
+// for the node.antrea.io/max-egress-ips Node annotation. It is also used as the default value for
+// MaxEgressIPsPerNode when the option is not set.
+const MaxEgressIPsPerNodeUpperBound = 255
+
 type EgressConfig struct {
 	ExceptCIDRs []string `yaml:"exceptCIDRs,omitempty"`
 	// The maximum number of Egress IPs that can be assigned to a Node. It's useful when the Node network restricts
