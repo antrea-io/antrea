@@ -44,7 +44,7 @@ func (c *Controller) Initialize() error {
 				c.ovsBridgeClient,
 				phyInterfaces[0],
 				0,
-				map[string]interface{}{
+				map[string]string{
 					interfacestore.AntreaInterfaceTypeKey: interfacestore.AntreaHost,
 				},
 				0, // do not request a specific MTU
@@ -75,11 +75,11 @@ func connectPhyInterfacesToOVSBridge(ovsBridgeClient ovsconfig.OVSBridgeClient, 
 		}
 	}
 
-	externalIDs := map[string]interface{}{
+	externalIDs := map[string]string{
 		interfacestore.AntreaInterfaceTypeKey: interfacestore.AntreaUplink,
 	}
 	for i, phyInterface := range phyInterfaces {
-		if _, err := ovsBridgeClient.GetOFPort(phyInterface, false); err == nil {
+		if _, err := ovsBridgeClient.GetOFPort(phyInterface); err == nil {
 			klog.V(2).InfoS("Physical interface already connected to secondary OVS bridge, skip the configuration", "device", phyInterface)
 			continue
 		}

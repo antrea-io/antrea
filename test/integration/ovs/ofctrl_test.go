@@ -450,7 +450,7 @@ func TestBundleErrorWhenOVSRestart(t *testing.T) {
 		"message is canceled because of disconnection from the Switch": true,
 	}
 
-	var failCount, successCount int
+	var failCount, successCount int32
 	loop := 10000
 	var wg sync.WaitGroup
 	wg.Add(loop)
@@ -463,19 +463,19 @@ func TestBundleErrorWhenOVSRestart(t *testing.T) {
 			if !bridge.IsConnected() {
 				return
 			}
-			ch := make(chan struct{})
+			ch := make(chan struct{}, 1)
 			go func() {
 				flows := []binding.Flow{table.BuildFlow(priorityNormal).MatchProtocol(binding.ProtocolIP).
 					Cookie(getCookieID()).
 					MatchInPort(uint32(count + 1)).
 					Action().NextTable().
 					Done()}
-				err = bridge.AddFlowsInBundle(openflow.GetFlowModMessages(flows, binding.AddMessage), nil, nil)
+				err := bridge.AddFlowsInBundle(openflow.GetFlowModMessages(flows, binding.AddMessage), nil, nil)
 				if err != nil {
 					errMsg := err.Error()
 					_, found := expectedErrorMsgs[errMsg]
 					// Check if the bundle message is canceled or the Bundle reply is timeout.
-					require.True(t, found, errMsg)
+					assert.True(t, found, errMsg)
 				}
 				ch <- struct{}{}
 			}()
@@ -483,16 +483,16 @@ func TestBundleErrorWhenOVSRestart(t *testing.T) {
 			select {
 			// Wait for Bundle timeout or canceled.
 			case <-time.After(15 * time.Second):
-				failCount++
+				atomic.AddInt32(&failCount, 1)
 			case <-ch:
-				successCount++
+				atomic.AddInt32(&successCount, 1)
 			}
 		}()
 		i++
 	}
 
 	wg.Wait()
-	require.Equal(t, 0, failCount, "No fail case expected")
+	require.Equal(t, int32(0), atomic.LoadInt32(&failCount), "No fail case expected")
 }
 
 // TestReconnectOFSwitch verifies that the OpenFlow connection to OVS can be restored, even when OVS is down for a long
@@ -505,17 +505,19 @@ func TestReconnectOFSwitch(t *testing.T) {
 
 	bridge := newOFBridge(br)
 	reconnectCh := make(chan struct{})
-	var connectCount int
+	var connectCount int32
 	go func() {
 		for range reconnectCh {
-			connectCount++
+			atomic.AddInt32(&connectCount, 1)
 		}
 	}()
 	err = bridge.Connect(maxRetry, reconnectCh)
 	require.NoError(t, err, "Failed to start OFService")
 	defer bridge.Disconnect()
 
-	require.Equal(t, connectCount, 1)
+	require.Eventually(t, func() bool {
+		return atomic.LoadInt32(&connectCount) == 1
+	}, 2*time.Second, 100*time.Millisecond)
 	// The max delay for the initial connection is 5s. Here we assume the OVS is stopped then started after 8s, and
 	// check that we can re-connect to it after that delay.
 	go func() {
@@ -528,7 +530,9 @@ func TestReconnectOFSwitch(t *testing.T) {
 	err = DeleteOVSBridge(br)
 	require.NoError(t, err, "Failed to delete bridge")
 	time.Sleep(12 * time.Second)
-	require.Equal(t, 2, connectCount)
+	require.Eventually(t, func() bool {
+		return atomic.LoadInt32(&connectCount) == 2
+	}, 5*time.Second, 100*time.Millisecond)
 }
 
 // Verify install/uninstall Flow and its dependent Group in the same Bundle.

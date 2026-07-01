@@ -390,7 +390,7 @@ func loadCertificate(certPath string) ([]*x509.Certificate, error) {
 }
 
 func (c *Controller) syncOVSConfigurations(certPath, keyPath, caPath string) error {
-	ovsConfig := map[string]interface{}{
+	ovsConfig := map[string]string{
 		ovsConfigCertificateKey:   certPath,
 		ovsConfigPrivateKeyKey:    keyPath,
 		ovsConfigCACertificateKey: caPath,

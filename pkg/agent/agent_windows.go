@@ -241,12 +241,12 @@ func (i *Initializer) prepareOVSBridgeOnHNSNetwork() error {
 
 	// Create local port.
 	brName := i.ovsBridgeClient.GetBridgeName()
-	if _, err = i.ovsBridgeClient.GetOFPort(brName, false); err == nil {
+	if _, err = i.ovsBridgeClient.GetOFPort(brName); err == nil {
 		klog.InfoS("OVS bridge local port already exists, skip the configuration", "name", brName)
 	} else {
 		// OVS does not receive "ofport_request" param when creating local port, so here use
 		// ovsconfig.AutoAssignedOFPort (0).
-		externalIDs := map[string]interface{}{
+		externalIDs := map[string]string{
 			interfacestore.AntreaInterfaceTypeKey: interfacestore.AntreaHost,
 		}
 		if _, err = i.ovsBridgeClient.CreateInternalPort(brName, ovsconfig.AutoAssignedOFPort, "", externalIDs); err != nil {
@@ -257,7 +257,7 @@ func (i *Initializer) prepareOVSBridgeOnHNSNetwork() error {
 	// If uplink already exists, return early.
 	uplinkNetConfig := i.nodeConfig.UplinkNetConfig
 	uplink := uplinkNetConfig.Name
-	if ofport, err := i.ovsBridgeClient.GetOFPort(uplink, false); err == nil {
+	if ofport, err := i.ovsBridgeClient.GetOFPort(uplink); err == nil {
 		klog.InfoS("Uplink already exists, skip the configuration", "uplink", uplink, "ofPort", ofport)
 		i.nodeConfig.UplinkNetConfig.OFPort = uint32(ofport)
 		i.nodeConfig.HostInterfaceOFPort = ovsconfig.BridgeOFPort
@@ -277,7 +277,7 @@ func (i *Initializer) prepareOVSBridgeOnHNSNetwork() error {
 		}
 		// Add missing external ID.
 		// A copy is required because of the type mismatch.
-		updatedExternalIDs := make(map[string]interface{})
+		updatedExternalIDs := make(map[string]string)
 		for k, v := range externalIDs {
 			updatedExternalIDs[k] = v
 		}
@@ -291,7 +291,7 @@ func (i *Initializer) prepareOVSBridgeOnHNSNetwork() error {
 	// Create uplink port.
 	const uplinkOFPort = config.DefaultUplinkOFPort
 	var uplinkPortUUID string
-	uplinkPortUUID, err = i.ovsBridgeClient.CreateUplinkPort(uplink, uplinkOFPort, map[string]interface{}{interfacestore.AntreaInterfaceTypeKey: interfacestore.AntreaUplink})
+	uplinkPortUUID, err = i.ovsBridgeClient.CreateUplinkPort(uplink, uplinkOFPort, map[string]string{interfacestore.AntreaInterfaceTypeKey: interfacestore.AntreaUplink})
 	if err != nil {
 		klog.ErrorS(err, "Failed to add uplink port", "uplink", uplink)
 		return err
@@ -337,7 +337,7 @@ func (i *Initializer) prepareOVSBridgeForVM() error {
 	}
 
 	success := false
-	uplinkExternalIDs := map[string]interface{}{
+	uplinkExternalIDs := map[string]string{
 		interfacestore.AntreaInterfaceTypeKey: interfacestore.AntreaUplink,
 	}
 	// TODO: Have a separate function for creation of pair ports
@@ -359,7 +359,7 @@ func (i *Initializer) prepareOVSBridgeForVM() error {
 	}()
 
 	// Query the uplink port to check if its created
-	uplinkOFPort, ovsErr := i.ovsBridgeClient.GetOFPort(uplinkIFName, false)
+	uplinkOFPort, ovsErr := i.ovsBridgeClient.GetOFPort(uplinkIFName)
 	if ovsErr != nil {
 		return fmt.Errorf("failed to get ofport on OVS for uplink interface %s: %v", uplinkIFName, ovsErr)
 	}
@@ -384,7 +384,7 @@ func (i *Initializer) prepareOVSBridgeForVM() error {
 	}()
 
 	// Query the host port to check if its created
-	hostOFPort, ovsErr := i.ovsBridgeClient.GetOFPort(hostIFName, false)
+	hostOFPort, ovsErr := i.ovsBridgeClient.GetOFPort(hostIFName)
 	if ovsErr != nil {
 		return fmt.Errorf("failed to get ofport for host interface %s: %v", hostIFName, ovsErr)
 	}

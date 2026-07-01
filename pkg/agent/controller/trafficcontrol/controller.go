@@ -74,7 +74,7 @@ const (
 )
 
 var (
-	trafficControlPortExternalIDs = map[string]interface{}{
+	trafficControlPortExternalIDs = map[string]string{
 		interfacestore.AntreaInterfaceTypeKey: interfacestore.AntreaTrafficControl,
 	}
 )
@@ -605,7 +605,7 @@ func (c *Controller) createOVSInternalPort(portName string) (string, error) {
 }
 
 func (c *Controller) createUDPTunnelPort(portName string, tunnelType ovsconfig.TunnelType, tunnelConfig *v1alpha2.UDPTunnel) (string, error) {
-	extraOptions := map[string]interface{}{}
+	extraOptions := make(map[string]string)
 	if tunnelConfig.DestinationPort != nil {
 		extraOptions["dst_port"] = strconv.Itoa(int(*tunnelConfig.DestinationPort))
 	}
@@ -626,7 +626,7 @@ func (c *Controller) createUDPTunnelPort(portName string, tunnelType ovsconfig.T
 }
 
 func (c *Controller) createGREPort(portName string, tunnelConfig *v1alpha2.GRETunnel) (string, error) {
-	extraOptions := map[string]interface{}{}
+	extraOptions := make(map[string]string)
 	if tunnelConfig.Key != nil {
 		extraOptions["key"] = strconv.Itoa(int(*tunnelConfig.Key))
 	}
@@ -644,7 +644,7 @@ func (c *Controller) createGREPort(portName string, tunnelConfig *v1alpha2.GRETu
 }
 
 func (c *Controller) createERSPANPort(portName string, tunnelConfig *v1alpha2.ERSPANTunnel) (string, error) {
-	extraOptions := make(map[string]interface{})
+	extraOptions := make(map[string]string)
 	extraOptions["erspan_ver"] = strconv.Itoa(int(tunnelConfig.Version))
 	if tunnelConfig.SessionID != nil {
 		extraOptions["key"] = strconv.Itoa(int(*tunnelConfig.SessionID))
@@ -748,7 +748,7 @@ func (c *Controller) getOrCreateTrafficControlPort(port *v1alpha2.TrafficControl
 		return 0, err
 	}
 
-	ofPort, err := c.ovsBridgeClient.GetOFPort(portName, false)
+	ofPort, err := c.ovsBridgeClient.GetOFPort(portName)
 	if err != nil {
 		return 0, err
 	}

@@ -60,7 +60,7 @@ func (pc *podConfigurator) connectInterfaceToOVS(
 	// Not needed for a secondary network interface.
 	if !pc.isSecondaryNetwork {
 		// GetOFPort will wait for up to 1 second for OVSDB to report the OFPort number.
-		ofPort, err = pc.ovsBridgeClient.GetOFPort(ovsPortName, false)
+		ofPort, err = pc.ovsBridgeClient.GetOFPort(ovsPortName)
 		if err != nil {
 			return nil, fmt.Errorf("failed to get of_port of OVS port %s: %v", ovsPortName, err)
 		}

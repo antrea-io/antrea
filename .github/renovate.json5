@@ -94,7 +94,7 @@
         "sigs.k8s.io/",
         "github.com/containernetworking/",
         "github.com/vmware/go-ipfix",
-        "github.com/TomCodeLV/OVSDB-golang-lib",
+        "github.com/ovn-kubernetes/libovsdb",
         "antrea.io/ofnet",
         "antrea.io/libOpenflow",
         "github.com/ClickHouse/clickhouse-go/v2", // auto-upgrade involves dependency conflicts

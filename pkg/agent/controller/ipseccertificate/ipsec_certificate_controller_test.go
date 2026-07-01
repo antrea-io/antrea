@@ -239,7 +239,7 @@ func TestController_syncConfigurations(t *testing.T) {
 			return pair, nil
 		}
 		// should configure OVS properly in syncConfigurations()
-		expectedOVSConfig := map[string]interface{}{
+		expectedOVSConfig := map[string]string{
 			"certificate": newCertDst,
 			"private_key": newKeyDst,
 			"ca_cert":     caCertificatePath,
