@@ -95,6 +95,7 @@ func TestBatchCommitAll(t *testing.T) {
 			"antrea-test-b",
 			"k8s-node-control-plane-b",
 			"10.10.1.10",
+			"10.10.1.10",
 			5202,
 			"perftest",
 			"test-flow-aggregator-networkpolicy-ingress-allow",

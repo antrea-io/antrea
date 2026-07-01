@@ -177,8 +177,10 @@ func AntreaInfoElements(includeK8sNames, includeK8sUIDs, isIPv6 bool) []string {
 	}
 	if isIPv6 {
 		ies = append(ies, "destinationClusterIPv6")
+		ies = append(ies, "destinationServiceIPv6")
 	} else {
 		ies = append(ies, "destinationClusterIPv4")
+		ies = append(ies, "destinationServiceIPv4")
 	}
 	return ies
 }
