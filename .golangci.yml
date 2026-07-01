@@ -58,6 +58,12 @@ linters:
         text: "SA1019: (v1|corev1).EndpointSubset is deprecated"
       - linters:
           - staticcheck
+        # DestinationClusterIp is deprecated in favor of DestinationServiceIp,
+        # but we still need to populate it for backward compatibility until it
+        # is removed.
+        text: "SA1019: .*\\.DestinationClusterIp is deprecated"
+      - linters:
+          - staticcheck
         # NewSimpleClientset is marked as deprecated, with the documentation
         # suggesting NewClientset as a direct replacement. However, NewClientset
         # is only available when apply configurations are generated (e.g. via

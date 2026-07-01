@@ -48,6 +48,7 @@ func PrepareTestFlowRecord() *flowrecord.FlowRecord {
 		DestinationPodNamespace:              "antrea-test-b",
 		DestinationNodeName:                  "k8s-node-control-plane-b",
 		DestinationClusterIP:                 "10.10.1.10",
+		DestinationServiceIP:                 "10.10.1.10",
 		DestinationServicePort:               5202,
 		DestinationServicePortName:           "perftest",
 		IngressNetworkPolicyName:             "test-flow-aggregator-networkpolicy-ingress-allow",

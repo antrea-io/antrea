@@ -202,6 +202,10 @@ func createTestElements(isIPv4 bool) []ipfixentities.InfoElementWithValue {
 		destinationClusterIPv4Elem.SetIPAddressValue(netip.MustParseAddr("10.10.1.10").AsSlice())
 		elements = append(elements, destinationClusterIPv4Elem)
 
+		destinationServiceIPv4Elem := createTestElement("destinationServiceIPv4", ipfixregistry.AntreaEnterpriseID)
+		destinationServiceIPv4Elem.SetIPAddressValue(netip.MustParseAddr("10.10.1.10").AsSlice())
+		elements = append(elements, destinationServiceIPv4Elem)
+
 		egressIPElem := createTestElement("egressIP", ipfixregistry.AntreaEnterpriseID)
 		egressIPElem.SetStringValue("172.18.0.1")
 		elements = append(elements, egressIPElem)
@@ -218,6 +222,10 @@ func createTestElements(isIPv4 bool) []ipfixentities.InfoElementWithValue {
 		destinationClusterIPv6Elem.SetIPAddressValue(netip.MustParseAddr("2001:0:3238:dfe1:64::a").AsSlice())
 		elements = append(elements, destinationClusterIPv6Elem)
 
+		destinationServiceIPv6Elem := createTestElement("destinationServiceIPv6", ipfixregistry.AntreaEnterpriseID)
+		destinationServiceIPv6Elem.SetIPAddressValue(netip.MustParseAddr("2001:0:3238:dfe1:64::a").AsSlice())
+		elements = append(elements, destinationServiceIPv6Elem)
+
 		egressIPElem := createTestElement("egressIP", ipfixregistry.AntreaEnterpriseID)
 		egressIPElem.SetStringValue("2001:0:3238:dfe1::ac12:1")
 		elements = append(elements, egressIPElem)
@@ -230,13 +238,13 @@ func createExpectedFlowRecord(isIPv4 bool) *flowpb.Flow {
 	ipVersion := flowpb.IPVersion_IP_VERSION_4
 	source := netip.MustParseAddr("10.10.0.79")
 	destination := netip.MustParseAddr("10.10.0.80")
-	destinationClusterIP := netip.MustParseAddr("10.10.1.10")
+	destinationServiceIP := netip.MustParseAddr("10.10.1.10")
 	egressIP := netip.MustParseAddr("172.18.0.1")
 	if !isIPv4 {
 		ipVersion = flowpb.IPVersion_IP_VERSION_6
 		source = netip.MustParseAddr("2001:0:3238:dfe1:63::fefb")
 		destination = netip.MustParseAddr("2001:0:3238:dfe1:63::fefc")
-		destinationClusterIP = netip.MustParseAddr("2001:0:3238:dfe1:64::a")
+		destinationServiceIP = netip.MustParseAddr("2001:0:3238:dfe1:64::a")
 		egressIP = netip.MustParseAddr("2001:0:3238:dfe1::ac12:1")
 	}
 	return &flowpb.Flow{
@@ -270,7 +278,8 @@ func createExpectedFlowRecord(isIPv4 bool) *flowpb.Flow {
 			DestinationPodName:             "perftest-b",
 			DestinationPodNamespace:        "antrea-test-b",
 			DestinationNodeName:            "k8s-node-control-plane-b",
-			DestinationClusterIp:           destinationClusterIP.AsSlice(),
+			DestinationClusterIp:           destinationServiceIP.AsSlice(),
+			DestinationServiceIp:           destinationServiceIP.AsSlice(),
 			DestinationServicePort:         5202,
 			DestinationServicePortName:     "perftest",
 			IngressNetworkPolicyName:       "test-flow-aggregator-networkpolicy-ingress-allow",

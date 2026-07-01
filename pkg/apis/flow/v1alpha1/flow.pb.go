@@ -730,20 +730,21 @@ func (x *Labels) GetLabels() map[string]string {
 }
 
 type Kubernetes struct {
-	state                          protoimpl.MessageState  `protogen:"open.v1"`
-	FlowType                       FlowType                `protobuf:"varint,1,opt,name=flow_type,json=flowType,proto3,enum=antrea_io.antrea.pkg.apis.flow.v1alpha1.FlowType" json:"flow_type,omitempty"`
-	SourcePodNamespace             string                  `protobuf:"bytes,2,opt,name=source_pod_namespace,json=sourcePodNamespace,proto3" json:"source_pod_namespace,omitempty"`
-	SourcePodName                  string                  `protobuf:"bytes,3,opt,name=source_pod_name,json=sourcePodName,proto3" json:"source_pod_name,omitempty"`
-	SourcePodUid                   string                  `protobuf:"bytes,4,opt,name=source_pod_uid,json=sourcePodUid,proto3" json:"source_pod_uid,omitempty"`
-	SourcePodLabels                *Labels                 `protobuf:"bytes,5,opt,name=source_pod_labels,json=sourcePodLabels,proto3" json:"source_pod_labels,omitempty"`
-	SourceNodeName                 string                  `protobuf:"bytes,6,opt,name=source_node_name,json=sourceNodeName,proto3" json:"source_node_name,omitempty"`
-	SourceNodeUid                  string                  `protobuf:"bytes,7,opt,name=source_node_uid,json=sourceNodeUid,proto3" json:"source_node_uid,omitempty"`
-	DestinationPodNamespace        string                  `protobuf:"bytes,8,opt,name=destination_pod_namespace,json=destinationPodNamespace,proto3" json:"destination_pod_namespace,omitempty"`
-	DestinationPodName             string                  `protobuf:"bytes,9,opt,name=destination_pod_name,json=destinationPodName,proto3" json:"destination_pod_name,omitempty"`
-	DestinationPodUid              string                  `protobuf:"bytes,10,opt,name=destination_pod_uid,json=destinationPodUid,proto3" json:"destination_pod_uid,omitempty"`
-	DestinationPodLabels           *Labels                 `protobuf:"bytes,11,opt,name=destination_pod_labels,json=destinationPodLabels,proto3" json:"destination_pod_labels,omitempty"`
-	DestinationNodeName            string                  `protobuf:"bytes,12,opt,name=destination_node_name,json=destinationNodeName,proto3" json:"destination_node_name,omitempty"`
-	DestinationNodeUid             string                  `protobuf:"bytes,13,opt,name=destination_node_uid,json=destinationNodeUid,proto3" json:"destination_node_uid,omitempty"`
+	state                   protoimpl.MessageState `protogen:"open.v1"`
+	FlowType                FlowType               `protobuf:"varint,1,opt,name=flow_type,json=flowType,proto3,enum=antrea_io.antrea.pkg.apis.flow.v1alpha1.FlowType" json:"flow_type,omitempty"`
+	SourcePodNamespace      string                 `protobuf:"bytes,2,opt,name=source_pod_namespace,json=sourcePodNamespace,proto3" json:"source_pod_namespace,omitempty"`
+	SourcePodName           string                 `protobuf:"bytes,3,opt,name=source_pod_name,json=sourcePodName,proto3" json:"source_pod_name,omitempty"`
+	SourcePodUid            string                 `protobuf:"bytes,4,opt,name=source_pod_uid,json=sourcePodUid,proto3" json:"source_pod_uid,omitempty"`
+	SourcePodLabels         *Labels                `protobuf:"bytes,5,opt,name=source_pod_labels,json=sourcePodLabels,proto3" json:"source_pod_labels,omitempty"`
+	SourceNodeName          string                 `protobuf:"bytes,6,opt,name=source_node_name,json=sourceNodeName,proto3" json:"source_node_name,omitempty"`
+	SourceNodeUid           string                 `protobuf:"bytes,7,opt,name=source_node_uid,json=sourceNodeUid,proto3" json:"source_node_uid,omitempty"`
+	DestinationPodNamespace string                 `protobuf:"bytes,8,opt,name=destination_pod_namespace,json=destinationPodNamespace,proto3" json:"destination_pod_namespace,omitempty"`
+	DestinationPodName      string                 `protobuf:"bytes,9,opt,name=destination_pod_name,json=destinationPodName,proto3" json:"destination_pod_name,omitempty"`
+	DestinationPodUid       string                 `protobuf:"bytes,10,opt,name=destination_pod_uid,json=destinationPodUid,proto3" json:"destination_pod_uid,omitempty"`
+	DestinationPodLabels    *Labels                `protobuf:"bytes,11,opt,name=destination_pod_labels,json=destinationPodLabels,proto3" json:"destination_pod_labels,omitempty"`
+	DestinationNodeName     string                 `protobuf:"bytes,12,opt,name=destination_node_name,json=destinationNodeName,proto3" json:"destination_node_name,omitempty"`
+	DestinationNodeUid      string                 `protobuf:"bytes,13,opt,name=destination_node_uid,json=destinationNodeUid,proto3" json:"destination_node_uid,omitempty"`
+	// Deprecated: Marked as deprecated in pkg/apis/flow/v1alpha1/flow.proto.
 	DestinationClusterIp           []byte                  `protobuf:"bytes,14,opt,name=destination_cluster_ip,json=destinationClusterIp,proto3" json:"destination_cluster_ip,omitempty"`
 	DestinationServicePort         uint32                  `protobuf:"varint,15,opt,name=destination_service_port,json=destinationServicePort,proto3" json:"destination_service_port,omitempty"`
 	DestinationServicePortName     string                  `protobuf:"bytes,16,opt,name=destination_service_port_name,json=destinationServicePortName,proto3" json:"destination_service_port_name,omitempty"`
@@ -891,6 +892,7 @@ func (x *Kubernetes) GetDestinationNodeUid() string {
 	return ""
 }
 
+// Deprecated: Marked as deprecated in pkg/apis/flow/v1alpha1/flow.proto.
 func (x *Kubernetes) GetDestinationClusterIp() []byte {
 	if x != nil {
 		return x.DestinationClusterIp
@@ -1426,7 +1428,7 @@ const file_pkg_apis_flow_v1alpha1_flow_proto_rawDesc = "" +
 	"\x06labels\x18\x01 \x03(\v2;.antrea_io.antrea.pkg.apis.flow.v1alpha1.Labels.LabelsEntryR\x06labels\x1a9\n" +
 	"\vLabelsEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\xe8\x11\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\xec\x11\n" +
 	"\n" +
 	"Kubernetes\x12N\n" +
 	"\tflow_type\x18\x01 \x01(\x0e21.antrea_io.antrea.pkg.apis.flow.v1alpha1.FlowTypeR\bflowType\x120\n" +
@@ -1442,8 +1444,8 @@ const file_pkg_apis_flow_v1alpha1_flow_proto_rawDesc = "" +
 	" \x01(\tR\x11destinationPodUid\x12e\n" +
 	"\x16destination_pod_labels\x18\v \x01(\v2/.antrea_io.antrea.pkg.apis.flow.v1alpha1.LabelsR\x14destinationPodLabels\x122\n" +
 	"\x15destination_node_name\x18\f \x01(\tR\x13destinationNodeName\x120\n" +
-	"\x14destination_node_uid\x18\r \x01(\tR\x12destinationNodeUid\x124\n" +
-	"\x16destination_cluster_ip\x18\x0e \x01(\fR\x14destinationClusterIp\x128\n" +
+	"\x14destination_node_uid\x18\r \x01(\tR\x12destinationNodeUid\x128\n" +
+	"\x16destination_cluster_ip\x18\x0e \x01(\fB\x02\x18\x01R\x14destinationClusterIp\x128\n" +
 	"\x18destination_service_port\x18\x0f \x01(\rR\x16destinationServicePort\x12A\n" +
 	"\x1ddestination_service_port_name\x18\x10 \x01(\tR\x1adestinationServicePortName\x126\n" +
 	"\x17destination_service_uid\x18\x11 \x01(\tR\x15destinationServiceUid\x12y\n" +

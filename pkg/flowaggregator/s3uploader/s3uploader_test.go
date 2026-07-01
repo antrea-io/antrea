@@ -34,8 +34,8 @@ import (
 var (
 	timestampStr    = fmt.Sprint(time.Now().Unix())
 	fakeClusterUUID = uuid.Must(uuid.NewV4()).String()
-	recordStrIPv4   = "1637706961,1637706973,1637706974,1637706975,3,10.10.0.79,10.10.0.80,44752,5201,6,823188,30472817041,241333,8982624938,471111,24500996,136211,7083284,perftest-a,antrea-test,k8s-node-control-plane,perftest-b,antrea-test-b,k8s-node-control-plane-b,10.10.1.10,5202,perftest,test-flow-aggregator-networkpolicy-ingress-allow,antrea-test-ns,test-flow-aggregator-networkpolicy-rule,2,1,test-flow-aggregator-networkpolicy-egress-allow,antrea-test-ns-e,test-flow-aggregator-networkpolicy-rule-e,1,3,TIME_WAIT,2,'{\"antrea-e2e\":\"perftest-a\",\"app\":\"iperf\"}','{\"antrea-e2e\":\"perftest-b\",\"app\":\"iperf\"}',15902813472,12381344,15902813473,15902813474,12381345,12381346," + fakeClusterUUID + "," + timestampStr + ",test-egress,172.18.0.1,test-egress-node"
-	recordStrIPv6   = "1637706961,1637706973,1637706974,1637706975,3,2001:0:3238:dfe1:63::fefb,2001:0:3238:dfe1:63::fefc,44752,5201,6,823188,30472817041,241333,8982624938,471111,24500996,136211,7083284,perftest-a,antrea-test,k8s-node-control-plane,perftest-b,antrea-test-b,k8s-node-control-plane-b,2001:0:3238:dfe1:64::a,5202,perftest,test-flow-aggregator-networkpolicy-ingress-allow,antrea-test-ns,test-flow-aggregator-networkpolicy-rule,2,1,test-flow-aggregator-networkpolicy-egress-allow,antrea-test-ns-e,test-flow-aggregator-networkpolicy-rule-e,1,3,TIME_WAIT,2,'{\"antrea-e2e\":\"perftest-a\",\"app\":\"iperf\"}','{\"antrea-e2e\":\"perftest-b\",\"app\":\"iperf\"}',15902813472,12381344,15902813473,15902813474,12381345,12381346," + fakeClusterUUID + "," + timestampStr + ",test-egress,2001:0:3238:dfe1::ac12:1,test-egress-node"
+	recordStrIPv4   = "1637706961,1637706973,1637706974,1637706975,3,10.10.0.79,10.10.0.80,44752,5201,6,823188,30472817041,241333,8982624938,471111,24500996,136211,7083284,perftest-a,antrea-test,k8s-node-control-plane,perftest-b,antrea-test-b,k8s-node-control-plane-b,10.10.1.10,10.10.2.10,5202,perftest,test-flow-aggregator-networkpolicy-ingress-allow,antrea-test-ns,test-flow-aggregator-networkpolicy-rule,2,1,test-flow-aggregator-networkpolicy-egress-allow,antrea-test-ns-e,test-flow-aggregator-networkpolicy-rule-e,1,3,TIME_WAIT,2,'{\"antrea-e2e\":\"perftest-a\",\"app\":\"iperf\"}','{\"antrea-e2e\":\"perftest-b\",\"app\":\"iperf\"}',15902813472,12381344,15902813473,15902813474,12381345,12381346," + fakeClusterUUID + "," + timestampStr + ",test-egress,172.18.0.1,test-egress-node"
+	recordStrIPv6   = "1637706961,1637706973,1637706974,1637706975,3,2001:0:3238:dfe1:63::fefb,2001:0:3238:dfe1:63::fefc,44752,5201,6,823188,30472817041,241333,8982624938,471111,24500996,136211,7083284,perftest-a,antrea-test,k8s-node-control-plane,perftest-b,antrea-test-b,k8s-node-control-plane-b,2001:0:3238:dfe1:64::a,2001:0:3238:dfe1:65::a,5202,perftest,test-flow-aggregator-networkpolicy-ingress-allow,antrea-test-ns,test-flow-aggregator-networkpolicy-rule,2,1,test-flow-aggregator-networkpolicy-egress-allow,antrea-test-ns-e,test-flow-aggregator-networkpolicy-rule-e,1,3,TIME_WAIT,2,'{\"antrea-e2e\":\"perftest-a\",\"app\":\"iperf\"}','{\"antrea-e2e\":\"perftest-b\",\"app\":\"iperf\"}',15902813472,12381344,15902813473,15902813474,12381345,12381346," + fakeClusterUUID + "," + timestampStr + ",test-egress,2001:0:3238:dfe1::ac12:1,test-egress-node"
 )
 
 func TestUpdateS3Uploader(t *testing.T) {
@@ -75,7 +75,7 @@ func TestCacheRecord(t *testing.T) {
 	require.Equal(t, int32(1), s3UploadProc.cachedRecordCount)
 	currentBuffer := s3UploadProc.currentBuffer.String()
 	fields := getFields(currentBuffer)
-	fields[50] = timestampStr // Overwrite timestamp with fixed value used for test flow record.
+	fields[51] = timestampStr // Overwrite timestamp with fixed value used for test flow record.
 	assert.Equal(t, getFields(recordStrIPv4), fields)
 
 	// Second call, reach currentBuffer max size, add the currentBuffer to bufferQueue.
@@ -86,7 +86,7 @@ func TestCacheRecord(t *testing.T) {
 	records := strings.Fields(buf.String())
 	require.Len(t, records, 2)
 	fields = getFields(records[1])
-	fields[50] = timestampStr
+	fields[51] = timestampStr
 	assert.Equal(t, getFields(recordStrIPv6), fields)
 	assert.EqualValues(t, 0, s3UploadProc.cachedRecordCount)
 	assert.Equal(t, 0, s3UploadProc.currentBuffer.Len())
