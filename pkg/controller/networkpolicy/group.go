@@ -92,7 +92,6 @@ func (n *NetworkPolicyController) updateGroup(oldObj, curObj interface{}) {
 // deleteGroup is responsible for processing the DELETE event of a Group resource.
 func (n *NetworkPolicyController) deleteGroup(oldObj interface{}) {
 	og, ok := oldObj.(*crdv1beta1.Group)
-	klog.V(2).InfoS("Processing DELETE event for Group", "Group", internalGroupKeyFunc(og))
 	if !ok {
 		tombstone, ok := oldObj.(cache.DeletedFinalStateUnknown)
 		if !ok {
@@ -105,6 +104,7 @@ func (n *NetworkPolicyController) deleteGroup(oldObj interface{}) {
 			return
 		}
 	}
+	klog.V(2).InfoS("Processing DELETE event for Group", "Group", internalGroupKeyFunc(og))
 	key := internalGroupKeyFunc(og)
 	klog.V(2).InfoS("Deleting internal Group", "Group", key)
 	err := n.internalGroupStore.Delete(key)
