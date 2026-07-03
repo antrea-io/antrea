@@ -28,10 +28,11 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 
 	flowpb "antrea.io/antrea/v2/pkg/apis/flow/v1alpha1"
+	antreaipfix "antrea.io/antrea/v2/pkg/ipfix"
 )
 
 func init() {
-	ipfixregistry.LoadRegistry()
+	antreaipfix.NewIPFIXRegistry().LoadRegistry()
 }
 
 func createTestElement(name string, enterpriseID uint32) ipfixentities.InfoElementWithValue {
@@ -205,6 +206,10 @@ func createTestElements(isIPv4 bool) []ipfixentities.InfoElementWithValue {
 		egressIPElem := createTestElement("egressIP", ipfixregistry.AntreaEnterpriseID)
 		egressIPElem.SetStringValue("172.18.0.1")
 		elements = append(elements, egressIPElem)
+
+		nodeSnatIPv4Elem := createTestElement("nodeSnatIPv4", ipfixregistry.AntreaEnterpriseID)
+		nodeSnatIPv4Elem.SetIPAddressValue(netip.MustParseAddr("172.18.0.10").AsSlice())
+		elements = append(elements, nodeSnatIPv4Elem)
 	} else {
 		sourceIPv6Elem := createTestElement("sourceIPv6Address", ipfixregistry.IANAEnterpriseID)
 		sourceIPv6Elem.SetIPAddressValue(netip.MustParseAddr("2001:0:3238:dfe1:63::fefb").AsSlice())
@@ -221,7 +226,15 @@ func createTestElements(isIPv4 bool) []ipfixentities.InfoElementWithValue {
 		egressIPElem := createTestElement("egressIP", ipfixregistry.AntreaEnterpriseID)
 		egressIPElem.SetStringValue("2001:0:3238:dfe1::ac12:1")
 		elements = append(elements, egressIPElem)
+
+		nodeSnatIPv6Elem := createTestElement("nodeSnatIPv6", ipfixregistry.AntreaEnterpriseID)
+		nodeSnatIPv6Elem.SetIPAddressValue(netip.MustParseAddr("2001:0:3238:dfe1:99::10").AsSlice())
+		elements = append(elements, nodeSnatIPv6Elem)
 	}
+
+	nodeSnatPortElem := createTestElement("nodeSnatPort", ipfixregistry.AntreaEnterpriseID)
+	nodeSnatPortElem.SetUnsigned16Value(uint16(40000))
+	elements = append(elements, nodeSnatPortElem)
 
 	return elements
 }
@@ -232,6 +245,12 @@ func createExpectedFlowRecord(isIPv4 bool) *flowpb.Flow {
 	destination := netip.MustParseAddr("10.10.0.80")
 	destinationClusterIP := netip.MustParseAddr("10.10.1.10")
 	egressIP := netip.MustParseAddr("172.18.0.1")
+	var nodeSnatIP netip.Addr
+	if isIPv4 {
+		nodeSnatIP = netip.MustParseAddr("172.18.0.10")
+	} else {
+		nodeSnatIP = netip.MustParseAddr("2001:0:3238:dfe1:99::10")
+	}
 	if !isIPv4 {
 		ipVersion = flowpb.IPVersion_IP_VERSION_6
 		source = netip.MustParseAddr("2001:0:3238:dfe1:63::fefb")
@@ -252,6 +271,8 @@ func createExpectedFlowRecord(isIPv4 bool) *flowpb.Flow {
 			Source:      source.AsSlice(),
 			Destination: destination.AsSlice(),
 		},
+		NodeSnatIp:   nodeSnatIP.AsSlice(),
+		NodeSnatPort: 40000,
 		Transport: &flowpb.Transport{
 			SourcePort:      44752,
 			DestinationPort: 5201,

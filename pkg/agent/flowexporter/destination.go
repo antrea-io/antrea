@@ -83,6 +83,7 @@ type Destination struct {
 
 	nodeRouteController podSubnetChecker
 	egressQuerier       querier.EgressQuerier
+	nodeSnatCorrelator  *connections.NodeSnatCorrelator
 
 	exp       exporter.Interface
 	connected bool
@@ -101,6 +102,7 @@ func NewDestination(
 	npQuerier querier.AgentNetworkPolicyInfoQuerier,
 	proxier proxy.ProxyQuerier,
 	egressQuerier querier.EgressQuerier,
+	nodeSnatCorrelator *connections.NodeSnatCorrelator,
 	networkPolicyReadyTime time.Time,
 	destinationConfig DestinationConfig,
 ) *Destination {
@@ -128,6 +130,7 @@ func NewDestination(
 
 		nodeRouteController: nodeRouteController,
 		egressQuerier:       egressQuerier,
+		nodeSnatCorrelator:  nodeSnatCorrelator,
 
 		exp:         exporter,
 		exportConns: make([]connection.Connection, 0, maxConnsToExport*2),
@@ -300,6 +303,18 @@ func (d *Destination) exportConn(conn *connection.Connection) error {
 	if conn.FlowType == utils.FlowTypeToExternal {
 		if conn.SourcePodNamespace != "" && conn.SourcePodName != "" {
 			d.fillEgressInfo(conn)
+			// Reset NodeSnatIP/NodeSnatPort on every export cycle to avoid leaking values
+			// from a previous cycle (e.g. when an Egress SNAT policy is added or removed
+			// mid-stream). Connections are updated in place across poll cycles, only
+			// specific fields are refreshed, so flows that should have empty NodeSnat
+			// fields could otherwise keep stale values.
+			conn.NodeSnatIP = netip.Addr{}
+			conn.NodeSnatPort = 0
+			// If no Egress SNAT is applied, populate the Node SNAT IP and port from
+			// the default conntrack zone correlation.
+			if conn.EgressName == "" && d.nodeSnatCorrelator != nil {
+				conn.NodeSnatIP, conn.NodeSnatPort = d.nodeSnatCorrelator.LookupSnat(conn)
+			}
 		} else {
 			// Skip exporting the Pod-to-External connection at the Egress Node if it's different from the Source Node
 			return nil

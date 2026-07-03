@@ -1250,6 +1250,8 @@ type Flow struct {
 	Aggregation   *Aggregation  `protobuf:"bytes,13,opt,name=aggregation,proto3" json:"aggregation,omitempty"`
 	ProxySnatIp   []byte        `protobuf:"bytes,14,opt,name=proxy_snat_ip,json=proxySnatIp,proto3" json:"proxy_snat_ip,omitempty"`
 	ProxySnatPort uint32        `protobuf:"varint,15,opt,name=proxy_snat_port,json=proxySnatPort,proto3" json:"proxy_snat_port,omitempty"`
+	NodeSnatIp    []byte        `protobuf:"bytes,16,opt,name=node_snat_ip,json=nodeSnatIp,proto3" json:"node_snat_ip,omitempty"`
+	NodeSnatPort  uint32        `protobuf:"varint,17,opt,name=node_snat_port,json=nodeSnatPort,proto3" json:"node_snat_port,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1386,6 +1388,20 @@ func (x *Flow) GetProxySnatIp() []byte {
 func (x *Flow) GetProxySnatPort() uint32 {
 	if x != nil {
 		return x.ProxySnatPort
+	}
+	return 0
+}
+
+func (x *Flow) GetNodeSnatIp() []byte {
+	if x != nil {
+		return x.NodeSnatIp
+	}
+	return nil
+}
+
+func (x *Flow) GetNodeSnatPort() uint32 {
+	if x != nil {
+		return x.NodeSnatPort
 	}
 	return 0
 }

@@ -106,6 +106,15 @@ type Connection struct {
 	// matched against a default-zone entry. It is set regardless of whether SNAT was applied
 	// (ProxySnatIP may be zero for ExternalTrafficPolicy=Local).
 	IsFromExternal bool
+	// NodeSnatIP is the SNAT IP used for Pod-to-External flows when the default Node SNAT
+	// (MASQUERADE) is applied. It is populated from the default conntrack zone (zone 0),
+	// where the reply tuple reveals the post-SNAT source IP. This field is empty/zero for:
+	// 1) non Pod-to-External flows, 2) flows using Egress SNAT, 3) flows where noSNAT is true.
+	NodeSnatIP netip.Addr
+	// NodeSnatPort is the post-SNAT source port used for Pod-to-External flows when default
+	// Node SNAT is applied. Like NodeSnatIP, it is retrieved from the default conntrack zone's
+	// reply destination port.
+	NodeSnatPort uint16
 }
 
 // NewConnectionKey creates 5-tuple of flow as connection key

@@ -148,6 +148,8 @@ func (e *grpcExporter) createMessage(conn *connection.Connection) *flowpb.Flow {
 		},
 		ProxySnatIp:   conn.ProxySnatIP.AsSlice(),
 		ProxySnatPort: uint32(conn.ProxySnatPort),
+		NodeSnatIp:    conn.NodeSnatIP.AsSlice(),
+		NodeSnatPort:  uint32(conn.NodeSnatPort),
 	}
 	if utils.IsConnectionDying(conn) {
 		flow.EndReason = flowpb.FlowEndReason_FLOW_END_REASON_END_OF_FLOW

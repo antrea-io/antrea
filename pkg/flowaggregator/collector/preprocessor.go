@@ -226,6 +226,18 @@ func (p *preprocessor) processMsg(msg *entities.Message) {
 				}
 			case "proxySnatPort":
 				flow.ProxySnatPort = uint32(ie.GetUnsigned16Value())
+			case "nodeSnatIPv4":
+				ip := ie.GetIPAddressValue()
+				if !ip.Equal(net.IPv4zero) {
+					flow.NodeSnatIp = ip
+				}
+			case "nodeSnatIPv6":
+				ip := ie.GetIPAddressValue()
+				if !ip.Equal(net.IPv6zero) {
+					flow.NodeSnatIp = ip
+				}
+			case "nodeSnatPort":
+				flow.NodeSnatPort = uint32(ie.GetUnsigned16Value())
 			}
 		}
 
