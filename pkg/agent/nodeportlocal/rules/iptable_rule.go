@@ -62,15 +62,17 @@ func NewIPTableRules(isIPv6 bool) *iptablesRules {
 
 // Init initializes IPTABLES rules for NPL. Currently it deletes existing rules to ensure that no stale entries are present.
 func (ipt *iptablesRules) Init() error {
-	iptInstance, err := iptables.New(!ipt.isIPv6, ipt.isIPv6)
-	if err != nil {
-		return fmt.Errorf("error creating IPTables instance for NPL: %v", err)
-	}
-	ipt.table = iptInstance
-	if err := ipt.initRules(); err != nil {
-		return fmt.Errorf("initialization of NPL iptables rules failed: %v", err)
-	}
-	return nil
+    if ipt.table == nil {
+        iptInstance, err := iptables.New(!ipt.isIPv6, ipt.isIPv6)
+        if err != nil {
+            return fmt.Errorf("error creating IPTables instance for NPL: %w", err)
+        }
+        ipt.table = iptInstance
+    }
+    if err := ipt.initRules(); err != nil {
+        return fmt.Errorf("initialization of NPL iptables rules failed: %w", err)
+    }
+    return nil
 }
 
 // initRules creates the NPL chain and links it to the PREROUTING (for incoming
