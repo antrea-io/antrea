@@ -214,10 +214,10 @@ func TestDownloadREST(t *testing.T) {
 		},
 	}
 	d := &downloadREST{supportBundle: bundle}
+	defer d.Destroy()
 	assert.Equal(t, &system.SupportBundle{}, d.New())
 	assert.Equal(t, []string{"application/tar+gz"}, d.ProducesMIMETypes(""))
 	assert.Equal(t, "", d.ProducesObject(""))
-	d.Destroy()
 
 	obj, err := d.Get(context.TODO(), "", nil)
 	require.NoError(t, err)
@@ -254,7 +254,7 @@ func TestBundleStreamInputStream(t *testing.T) {
 	assert.True(t, flush)
 	assert.Equal(t, "application/tar+gz", mimeType)
 
-	_, err = (&bundleStream{cache: &system.SupportBundle{Filepath: "missing.tar.gz"}}).InputStream(context.TODO(), "", "")
+	_, _, _, err = (&bundleStream{cache: &system.SupportBundle{Filepath: "missing.tar.gz"}}).InputStream(context.TODO(), "", "")
 	assert.Error(t, err)
 }
 
