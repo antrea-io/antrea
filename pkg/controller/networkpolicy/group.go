@@ -104,8 +104,8 @@ func (n *NetworkPolicyController) deleteGroup(oldObj interface{}) {
 			return
 		}
 	}
-	klog.V(2).InfoS("Processing DELETE event for Group", "Group", internalGroupKeyFunc(og))
 	key := internalGroupKeyFunc(og)
+	klog.V(2).InfoS("Processing DELETE event for Group", "Group", key)
 	klog.V(2).InfoS("Deleting internal Group", "Group", key)
 	err := n.internalGroupStore.Delete(key)
 	if err != nil {
