@@ -350,6 +350,12 @@ func (b *OFBridge) SwitchConnected(sw *ofctrl.OFSwitch) {
 	}()
 }
 
+// getOFSwitch returns the current OFSwitch pointer. It may be nil until the first SwitchConnected
+// callback sets it.
+// Callers must not invoke OFBridge methods which dereference the returned switch until Connect has
+// returned successfully (IsConnected is the only helper which tolerates a nil switch). After the
+// first connection, the pointer is kept while disconnected and replaced on reconnect; the lock
+// protects concurrent reads and updates of the pointer.
 func (b *OFBridge) getOFSwitch() *ofctrl.OFSwitch {
 	b.ofSwitchMutex.RLock()
 	defer b.ofSwitchMutex.RUnlock()
