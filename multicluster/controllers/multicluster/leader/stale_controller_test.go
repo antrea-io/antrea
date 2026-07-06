@@ -144,6 +144,14 @@ func TestReconcile(t *testing.T) {
 	}
 }
 
+func TestStaleController_Start(t *testing.T) {
+	fakeClient := fake.NewClientBuilder().WithScheme(common.TestScheme).Build()
+	c := NewStaleResCleanupController(fakeClient, common.TestScheme)
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	assert.NoError(t, c.Start(ctx))
+}
+
 func TestStaleController_CleanUpMemberClusterAnnounces(t *testing.T) {
 	tests := []struct {
 		name                              string
