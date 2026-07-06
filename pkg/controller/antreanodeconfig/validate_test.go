@@ -97,7 +97,7 @@ func TestValidate(t *testing.T) {
 			expectedResponse: &admv1.AdmissionResponse{
 				Allowed: false,
 				Result: &metav1.Status{
-					Message: "spec.secondaryNetwork.ovsBridges[0].physicalInterfaces[0].allowedVLANs is invalid: VLAN range end 4095 is greater than the maximum VLAN ID 4094",
+					Message: "spec.secondaryNetwork.ovsBridges[0].physicalInterfaces[0].allowedVLANs is invalid: VLAN ID 4095 is greater than the maximum VLAN ID 4094",
 				},
 			},
 		},

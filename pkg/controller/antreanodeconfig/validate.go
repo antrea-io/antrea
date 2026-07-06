@@ -92,42 +92,36 @@ func newAdmissionResponseForErr(err error) *admv1.AdmissionResponse {
 
 func parseVLANSpec(spec string) (vlanIDRange, error) {
 	spec = strings.TrimSpace(spec)
-	if idx := strings.IndexByte(spec, '-'); idx >= 0 {
-		startStr, endStr := spec[:idx], spec[idx+1:]
+	if startStr, endStr, ok := strings.Cut(spec, "-"); ok {
 		start, err := strconv.ParseUint(startStr, 10, 16)
 		if err != nil {
-			return vlanIDRange{}, fmt.Errorf("invalid VLAN range start %q: %v", startStr, err)
+			return vlanIDRange{}, fmt.Errorf("invalid VLAN range start %q: %w", startStr, err)
 		}
 		end, err := strconv.ParseUint(endStr, 10, 16)
 		if err != nil {
-			return vlanIDRange{}, fmt.Errorf("invalid VLAN range end %q: %v", endStr, err)
+			return vlanIDRange{}, fmt.Errorf("invalid VLAN range end %q: %w", endStr, err)
 		}
 		return vlanIDRange{start: uint16(start), end: uint16(end)}, nil
 	}
 
 	v, err := strconv.ParseUint(spec, 10, 16)
 	if err != nil {
-		return vlanIDRange{}, fmt.Errorf("invalid VLAN ID %q: %v", spec, err)
+		return vlanIDRange{}, fmt.Errorf("invalid VLAN ID %q: %w", spec, err)
 	}
 	return vlanIDRange{start: uint16(v), end: uint16(v)}, nil
 }
 
 func validateVLANSpecs(specs []string) error {
-	for _, rawSpec := range specs {
-		spec := strings.TrimSpace(rawSpec)
+	for _, spec := range specs {
 		r, err := parseVLANSpec(spec)
 		if err != nil {
 			return err
 		}
-		if strings.Contains(spec, "-") {
-			if r.start > r.end {
-				return fmt.Errorf("VLAN range start %d is greater than end %d", r.start, r.end)
-			}
-			if r.end > maxVLANID {
-				return fmt.Errorf("VLAN range end %d is greater than the maximum VLAN ID %d", r.end, maxVLANID)
-			}
-		} else if r.start > maxVLANID {
-			return fmt.Errorf("VLAN ID %d is greater than the maximum VLAN ID %d", r.start, maxVLANID)
+		if r.start > r.end {
+			return fmt.Errorf("VLAN range start %d is greater than end %d", r.start, r.end)
+		}
+		if r.end > maxVLANID {
+			return fmt.Errorf("VLAN ID %d is greater than the maximum VLAN ID %d", r.end, maxVLANID)
 		}
 	}
 	return nil
