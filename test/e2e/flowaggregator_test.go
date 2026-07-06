@@ -2142,6 +2142,12 @@ func testExternalToPodFlows(t *testing.T, data *TestData, isIPv6 bool) {
 	nodeName := nodeName(destinationNodeIndex)
 	nginxPodName, nginxIP, cleanupFunc := createAndWaitForPod(t, data, data.createNginxPodOnNode, "external-to-pod-flows", nodeName, data.testNamespace, false)
 	defer cleanupFunc()
+	var dstIP string
+	if isIPv6 {
+		dstIP = nginxIP.IPv6.String()
+	} else {
+		dstIP = nginxIP.IPv4.String()
+	}
 
 	nodePortService := "node-port-service"
 	ipFamily := corev1.IPv4Protocol
@@ -2164,12 +2170,6 @@ func testExternalToPodFlows(t *testing.T, data *TestData, isIPv6 bool) {
 	for _, tc := range tc {
 		t.Run(tc.name, func(t *testing.T) {
 			sourceIP, sourcePort := createExternalToPodConnection(t, data, service, tc.node, isIPv6)
-			var dstIP string
-			if isIPv6 {
-				dstIP = nginxIP.IPv6.String()
-			} else {
-				dstIP = nginxIP.IPv4.String()
-			}
 			srcPortFilter := "sourceTransportPort: " + sourcePort
 			records := getCollectorOutput(t, sourceIP, dstIP, srcPortFilter, false, false, isIPv6, data, "", getCollectorOutputDefaultTimeout)
 			assert.NotEmpty(t, records, "Expected flows from ipfix collector to include source IP %s and destination ip %s", sourceIP, dstIP)
@@ -2196,12 +2196,6 @@ func testExternalToPodFlows(t *testing.T, data *TestData, isIPv6 bool) {
 			_ = data.clientset.CoreV1().Services(data.testNamespace).Delete(context.Background(), svcLocalName, metav1.DeleteOptions{})
 		})
 		sourceIP, sourcePort := createExternalToPodConnection(t, data, svcETPLocal, destinationNodeIndex, isIPv6)
-		var dstIP string
-		if isIPv6 {
-			dstIP = nginxIP.IPv6.String()
-		} else {
-			dstIP = nginxIP.IPv4.String()
-		}
 		srcPortFilter := "sourceTransportPort: " + sourcePort
 		records := getCollectorOutput(t, sourceIP, dstIP, srcPortFilter, false, false, isIPv6, data, "", getCollectorOutputDefaultTimeout)
 		require.NotEmpty(t, records, "Expected flows for NodePort with ExternalTrafficPolicy Local")
@@ -2218,7 +2212,7 @@ func testExternalToPodFlows(t *testing.T, data *TestData, isIPv6 bool) {
 		skipIfNodePortLocalDisabled(t)
 		agentConf, nplConfErr := data.GetAntreaAgentConf()
 		if nplConfErr != nil {
-			t.Fatalf("Failed to get Antrea agent config: %v", nplConfErr)
+			require.NoError(t, nplConfErr, "Failed to get Antrea agent config: %v", nplConfErr)
 		}
 		if !agentConf.NodePortLocal.Enable {
 			t.Skip("Skipping test because NodePortLocal is not enabled in the Antrea Agent config")
@@ -2264,23 +2258,17 @@ func testExternalToPodFlows(t *testing.T, data *TestData, isIPv6 bool) {
 		// below isolates this connection's records (consistent with the sibling subtests above);
 		// no collector flush is needed.
 		sourceIP, sourcePort := createNPLConnection(t, data, destinationNodeIndex, nplNodeIP, nplNodePort, isIPv6)
-		var dstIP string
-		if isIPv6 {
-			dstIP = nginxIP.IPv6.String()
-		} else {
-			dstIP = nginxIP.IPv4.String()
-		}
 		srcPortFilter := "sourceTransportPort: " + sourcePort
 		records := getCollectorOutput(t, sourceIP, dstIP, srcPortFilter, false, false, isIPv6, data, "", getCollectorOutputDefaultTimeout)
 		require.NotEmpty(t, records, "Expected IPFIX records for NPL flow (src=%s dst=%s srcPort=%s)", sourceIP, dstIP, sourcePort)
-		wantDstClusterField := fmt.Sprintf("destinationClusterIPv4: %s", nplNodeIP)
+		wantDstServiceIPField := fmt.Sprintf("destinationServiceIPv4: %s", nplNodeIP)
 		if isIPv6 {
-			wantDstClusterField = fmt.Sprintf("destinationClusterIPv6: %s", nplNodeIP)
+			wantDstServiceIPField = fmt.Sprintf("destinationServiceIPv6: %s", nplNodeIP)
 		}
 		for _, record := range records {
 			assert.Contains(t, record, nginxPodName, "Record should include destination Pod name for NPL flow")
 			assert.Contains(t, record, nplSvcName, "Record should include the NPL-backed Service name in DestinationServicePortName")
-			assert.Contains(t, record, wantDstClusterField, "Record should include destinationClusterIP as the NPL node IP")
+			assert.Contains(t, record, wantDstServiceIPField, "Record should include destinationServiceIP as the NPL node IP")
 			assert.Contains(t, record, fmt.Sprintf("destinationServicePort: %d", nplNodePort), "Record should include destinationServicePort as the NPL node port")
 			assertIPFIXRecordProxySnatUnset(t, record)
 		}

@@ -99,7 +99,6 @@ type FlowExporter struct {
 	proxier             proxy.ProxyQuerier
 	egressQuerier       querier.EgressQuerier
 	npQuerier           querier.AgentNetworkPolicyInfoQuerier
-	nplQuerier          portcache.NPLQuerier
 
 	// networkPolicyWait is used to determine when NetworkPolicy flows have been installed and
 	// when the mapping from flow ID to NetworkPolicy rule is available. We will ignore
@@ -202,7 +201,6 @@ func NewFlowExporter(
 		proxier:             proxier,
 		egressQuerier:       egressQuerier,
 		npQuerier:           npQuerier,
-		nplQuerier:          nplQuerier,
 		networkPolicyWait:   networkPolicyWait,
 
 		poller:                 poller,
@@ -517,7 +515,6 @@ func (fe *FlowExporter) createDestinationFromResource(res *api.FlowExporterDesti
 		fe.egressQuerier,
 		fe.networkPolicyReadyTime,
 		config,
-		fe.nplQuerier,
 	), nil
 }
 

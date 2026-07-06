@@ -18,9 +18,12 @@ package portcache
 // to resolve NPL node ports to Kubernetes Service names for IPFIX export.
 // It is implemented by the NodePortLocal controller (see pkg/agent/nodeportlocal/k8s).
 type NPLQuerier interface {
-	// GetServiceForNPLPort returns the namespaced Service name string
-	// (e.g. "default/mysvc") for the given NPL node port, protocol, and IP family,
-	// or "" if no mapping exists or the mapping has no associated Service.
-	// isIPv6 selects the IPv6 port table when true; IPv4 otherwise.
-	GetServiceForNPLPort(nodePort int, protocol string, isIPv6 bool) string
+	// GetServiceForNPLPort returns the namespaced Service name string (e.g. "default/mysvc") for
+	// the given destination IP, NPL node port, and protocol, or "" if destIP is not this Node's IP
+	// for the selected family, no mapping exists, or the mapping has no associated Service.
+	// Node IP check avoids matching unrelated traffic that happens to use the same port number on
+	// a different destination (e.g. another Node's NPL port, or a Pod's egress connection to an
+	// arbitrary server listening in the NPL port range).
+	// isIPv6 selects the IPv6 Node IP/port table when true; IPv4 otherwise.
+	GetServiceForNPLPort(destIP string, nodePort int, protocol string, isIPv6 bool) string
 }

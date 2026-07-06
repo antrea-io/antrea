@@ -255,7 +255,7 @@ func TestConntrackConnectionStore_AddOrUpdateConn(t *testing.T) {
 			mockProxier := proxytest.NewMockProxyQuerier(ctrl)
 			npQuerier := queriertest.NewMockAgentNetworkPolicyInfoQuerier(ctrl)
 
-			conntrackConnStore := NewConntrackConnectionStore(npQuerier, mockPodStore, mockProxier, testFlowExporterOptions, nil)
+			conntrackConnStore := NewConntrackConnectionStore(npQuerier, mockPodStore, mockProxier, testFlowExporterOptions)
 			// Set the networkPolicyReadyTime to simulate that NetworkPolicies are ready
 			conntrackConnStore.networkPolicyReadyTime = networkPolicyReadyTime
 
@@ -403,7 +403,7 @@ func TestConntrackConnectionStore_AddOrUpdateConn_FromExternalConns(t *testing.T
 	mockPodStore := objectstoretest.NewMockPodStore(ctrl)
 	mockProxier := proxytest.NewMockProxyQuerier(ctrl)
 	npQuerier := queriertest.NewMockAgentNetworkPolicyInfoQuerier(ctrl)
-	conntrackConnStore := NewConntrackConnectionStore(npQuerier, mockPodStore, mockProxier, testFlowExporterOptions, nil)
+	conntrackConnStore := NewConntrackConnectionStore(npQuerier, mockPodStore, mockProxier, testFlowExporterOptions)
 	conntrackConnStore.networkPolicyReadyTime = networkPolicyReadyTime
 
 	// Simulate what the poller does before fan-out: correlate both Antrea-zone connections
@@ -503,7 +503,7 @@ func TestConnectionStore_DeleteConnectionByKey(t *testing.T) {
 	metrics.TotalAntreaConnectionsInConnTrackTable.Set(float64(len(testFlows)))
 	// Create connectionStore
 	mockPodStore := objectstoretest.NewMockPodStore(ctrl)
-	connStore := NewConntrackConnectionStore(nil, mockPodStore, nil, testFlowExporterOptions, nil)
+	connStore := NewConntrackConnectionStore(nil, mockPodStore, nil, testFlowExporterOptions)
 	// Add flows to the connection store.
 	for i, flow := range testFlows {
 		connStore.connections[*testFlowKeys[i]] = flow
@@ -521,7 +521,7 @@ func TestConnectionStore_DeleteConnectionByKey(t *testing.T) {
 func TestConntrackConnectionStore_DeleteAllConnections(t *testing.T) {
 	metrics.TotalAntreaConnectionsInConnTrackTable.Set(0)
 
-	cs := NewConntrackConnectionStore(nil, nil, nil, testFlowExporterOptions, nil)
+	cs := NewConntrackConnectionStore(nil, nil, nil, testFlowExporterOptions)
 
 	conns := []*connection.Connection{
 		{
@@ -615,7 +615,7 @@ func TestConntrackConnectionStore_AddOrUpdateConns(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			cs := NewConntrackConnectionStore(nil, nil, nil, testFlowExporterOptions, nil)
+			cs := NewConntrackConnectionStore(nil, nil, nil, testFlowExporterOptions)
 
 			require.NotNil(t, tt.oldConn)
 			addConnToStore(cs, tt.oldConn)
@@ -675,7 +675,7 @@ func TestConntrackConnectionStore_AddOrUpdateConns_DefaultZoneFlow(t *testing.T)
 	stopCh := make(chan struct{})
 	t.Cleanup(func() { close(stopCh) })
 	go fe.Run(stopCh)
-	cs := NewConntrackConnectionStore(nil, nil, nil, testFlowExporterOptions, nil)
+	cs := NewConntrackConnectionStore(nil, nil, nil, testFlowExporterOptions)
 
 	// Default-zone snapshots live in the correlator (poller calls IngestDefaultZoneFlow in production).
 	fe.IngestDefaultZoneFlow(defaultZoneConn)
