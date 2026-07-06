@@ -100,6 +100,12 @@ type defaultZoneSnapshot struct {
 	proxySnatPort           uint16
 	originalDestinationIP   netip.Addr
 	originalDestinationPort uint16
+	// nplServicePortName is the namespaced Service name resolved for NodePortLocal flows at ingest
+	// time (empty for non-NPL flows). It is carried here so the connection store does not need to
+	// repeat the NPL node-port lookup when the Antrea-zone half is correlated. This is the only
+	// string retained for NPL flows, so it does not meaningfully affect the compact-snapshot goal
+	// described above.
+	nplServicePortName string
 }
 
 func defaultZoneSnapshotFromConn(conn *connection.Connection) defaultZoneSnapshot {
@@ -200,6 +206,9 @@ func (c *FromExternalCorrelator) IngestDefaultZoneFlow(conn *connection.Connecti
 	// With no proxier, retain every default-zone flow (no Service lookup).
 	// With proxier, only retain when GetServiceByIP matches.
 	shouldStore := true
+	// nplServicePortName is resolved here (for NPL flows) and carried in the snapshot, so that the
+	// connection store does not need to repeat the lookup when the Antrea-zone half is correlated.
+	var nplServicePortName string
 	if c.proxier != nil {
 		serviceStr := fmt.Sprintf("%s:%d/%s", svcIP, svcPort, protocol)
 		_, shouldStore = c.proxier.GetServiceByIP(serviceStr)
@@ -207,12 +216,16 @@ func (c *FromExternalCorrelator) IngestDefaultZoneFlow(conn *connection.Connecti
 		// in the proxier's Service map, so they are not matched above. Retain the default-zone
 		// flow when its original destination is an NPL node port, so the Antrea-zone half can be
 		// correlated and its OriginalDestination restored to the node IP/port the client targeted.
+		// GetServiceForNPLPort also validates svcIP against this Node's own IP, since the NPL port
+		// table is keyed by port number alone and would otherwise match unrelated traffic that
+		// happens to target the same port number on a different destination.
 		if !shouldStore && c.nplQuerier != nil {
-			shouldStore = c.nplQuerier.GetServiceForNPLPort(int(svcPort), string(protocol), conn.OriginalDestinationAddress.Is6()) != ""
+			nplServicePortName = c.nplQuerier.GetServiceForNPLPort(svcIP, int(svcPort), string(protocol), conn.OriginalDestinationAddress.Is6())
+			shouldStore = nplServicePortName != ""
 		}
 	}
 	if shouldStore {
-		c.add(conn)
+		c.add(conn, nplServicePortName)
 	}
 }
 
@@ -259,14 +272,17 @@ func (c *FromExternalCorrelator) cleanup(ttl time.Duration) {
 	}
 }
 
-// add stores the given default-zone connection.
-func (c *FromExternalCorrelator) add(conn *connection.Connection) {
+// add stores the given default-zone connection along with the NPL Service name resolved for it (if
+// any; empty for non-NPL flows).
+func (c *FromExternalCorrelator) add(conn *connection.Connection, nplServicePortName string) {
 	key := keyFromDefaultZoneConn(conn)
 	c.lock.Lock()
 	defer c.lock.Unlock()
 
+	snapshot := defaultZoneSnapshotFromConn(conn)
+	snapshot.nplServicePortName = nplServicePortName
 	c.connections[key] = connectionItem{
-		snapshot:  defaultZoneSnapshotFromConn(conn),
+		snapshot:  snapshot,
 		timestamp: time.Now(),
 	}
 }
@@ -289,7 +305,9 @@ func (c *FromExternalCorrelator) popMatching(conn *connection.Connection) (defau
 // correlateExternal copies correlation fields from the default-zone snapshot onto the Antrea-zone
 // connection and marks it as from-external. IsFromExternal is set to true unconditionally so that
 // ETP=Local flows (where ProxySnatIP is zero) are still correctly identified as from-external
-// connections downstream.
+// connections downstream. For NodePortLocal flows the Service name was resolved at ingest time and
+// is carried here so the connection store can export destination_service_ip/port without repeating
+// the NPL node-port lookup.
 func correlateExternal(snap defaultZoneSnapshot, antreaZone *connection.Connection) {
 	antreaZone.FlowKey.SourcePort = snap.sourcePort
 	antreaZone.FlowKey.SourceAddress = snap.sourceIP
@@ -298,4 +316,7 @@ func correlateExternal(snap defaultZoneSnapshot, antreaZone *connection.Connecti
 	antreaZone.OriginalDestinationAddress = snap.originalDestinationIP
 	antreaZone.OriginalDestinationPort = snap.originalDestinationPort
 	antreaZone.IsFromExternal = true
+	if snap.nplServicePortName != "" {
+		antreaZone.DestinationServicePortName = snap.nplServicePortName
+	}
 }

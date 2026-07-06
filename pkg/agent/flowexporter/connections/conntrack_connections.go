@@ -26,7 +26,6 @@ import (
 	"antrea.io/antrea/v2/pkg/agent/flowexporter/priorityqueue"
 	"antrea.io/antrea/v2/pkg/agent/flowexporter/utils"
 	"antrea.io/antrea/v2/pkg/agent/metrics"
-	"antrea.io/antrea/v2/pkg/agent/nodeportlocal/portcache"
 	"antrea.io/antrea/v2/pkg/agent/openflow"
 	"antrea.io/antrea/v2/pkg/agent/proxy"
 	"antrea.io/antrea/v2/pkg/querier"
@@ -43,25 +42,22 @@ type ConntrackConnectionStore struct {
 	networkPolicyReadyTime time.Time
 	protocolFilter         filter.ProtocolFilter
 	connectionStore
-	nplQuerier portcache.NPLQuerier
 }
 
 // NewConntrackConnectionStore creates a connection store. External correlation (default-zone to
 // Antrea-zone) is performed by the poller before connections are delivered here, so no correlator
-// parameter is needed. nplQuerier is used to resolve NodePortLocal node ports to Service names for
-// IPFIX export; it may be nil.
+// parameter is needed. NodePortLocal Service names for from-external flows are resolved by the
+// FromExternalCorrelator and carried in the connection, so no NPL querier is needed here.
 func NewConntrackConnectionStore(
 	npQuerier querier.AgentNetworkPolicyInfoQuerier,
 	podStore objectstore.PodStore,
 	proxier proxy.ProxyQuerier,
 	cfg ConnectionStoreConfig,
-	nplQuerier portcache.NPLQuerier,
 ) *ConntrackConnectionStore {
 	return &ConntrackConnectionStore{
 		connectionStore:        NewConnectionStore(npQuerier, podStore, proxier, cfg),
 		protocolFilter:         filter.NewProtocolFilter(cfg.AllowedProtocols),
 		networkPolicyReadyTime: cfg.NetworkPolicyReadyTime,
-		nplQuerier:             nplQuerier,
 	}
 }
 
@@ -163,31 +159,7 @@ func (cs *ConntrackConnectionStore) AddOrUpdateConn(conn *connection.Connection)
 			klog.V(5).InfoS("Skip this connection as we cannot map any of the connection IPs to a local Pod", "srcIP", conn.FlowKey.SourceAddress.String(), "dstIP", conn.FlowKey.DestinationAddress.String())
 			return
 		}
-		if conn.Mark&openflow.ServiceCTMark.GetRange().ToNXRange().ToUint32Mask() == openflow.ServiceCTMark.GetValue() || conn.IsFromExternal {
-			serviceIP := conn.OriginalDestinationAddress.String()
-			svcPort := conn.OriginalDestinationPort
-			protocol, err := lookupServiceProtocol(conn.FlowKey.Protocol)
-			if err != nil {
-				klog.InfoS("Could not retrieve Service protocol", "error", err)
-			} else {
-				serviceStr := fmt.Sprintf("%s:%d/%s", serviceIP, svcPort, protocol)
-				cs.fillServiceInfo(conn, serviceStr)
-			}
-		}
-		// NodePortLocal flows bypass Antrea proxy (no ServiceCTMark), so the block above does not
-		// resolve a Service for them. For these flows the FromExternalCorrelator has already
-		// correlated the Antrea-zone connection with its default-zone counterpart, restoring
-		// OriginalDestinationAddress/Port to the node IP and NPL node port the external client
-		// targeted. Use the NPL querier to resolve that node port to the owning Service name so it
-		// (and the node IP/port) are included in the exported IPFIX record.
-		if conn.IsFromExternal && conn.DestinationServicePortName == "" && conn.DestinationPodName != "" && cs.nplQuerier != nil {
-			protocol, err := lookupServiceProtocol(conn.FlowKey.Protocol)
-			if err == nil {
-				if svcPortName := cs.nplQuerier.GetServiceForNPLPort(int(conn.OriginalDestinationPort), string(protocol), conn.FlowKey.DestinationAddress.Is6()); svcPortName != "" {
-					conn.DestinationServicePortName = svcPortName
-				}
-			}
-		}
+		cs.resolveDestinationService(conn)
 		// This should only happen if we failed to set net.netfilter.nf_conntrack_timestamp
 		if conn.StartTime.IsZero() {
 			conn.StartTime = time.Now()
@@ -206,6 +178,30 @@ func (cs *ConntrackConnectionStore) AddOrUpdateConn(conn *connection.Connection)
 		cs.expirePriorityQueue.WriteItemToQueue(connKey, conn)
 		klog.V(4).InfoS("New Antrea flow added", "connection", conn)
 	}
+}
+
+// resolveDestinationService fills conn.DestinationServicePortName for Service-marked and
+// from-external flows. Antrea-proxied Services (and standard NodePort/LoadBalancer) resolve via the
+// proxier keyed on the connection's OriginalDestination IP:port. NodePortLocal flows bypass Antrea
+// proxy and are not registered in the proxier's Service map; their Service name is resolved by the
+// FromExternalCorrelator (which owns the node-port context) and already carried in the connection.
+func (cs *ConntrackConnectionStore) resolveDestinationService(conn *connection.Connection) {
+	if conn.DestinationServicePortName != "" {
+		// For NodePortLocal flows the Service info is already filled at correlation time through
+		// nplQuerier lookup.
+		return
+	}
+	isServiceMarked := conn.Mark&openflow.ServiceCTMark.GetRange().ToNXRange().ToUint32Mask() == openflow.ServiceCTMark.GetValue()
+	if !isServiceMarked && !conn.IsFromExternal {
+		return
+	}
+	protocol, err := lookupServiceProtocol(conn.FlowKey.Protocol)
+	if err != nil {
+		klog.InfoS("Could not retrieve Service protocol", "error", err)
+		return
+	}
+	serviceStr := fmt.Sprintf("%s:%d/%s", conn.OriginalDestinationAddress, conn.OriginalDestinationPort, protocol)
+	cs.fillServiceInfo(conn, serviceStr)
 }
 
 func (cs *ConntrackConnectionStore) GetExpiredConns(expiredConns []connection.Connection, currTime time.Time, maxSize int) ([]connection.Connection, time.Duration) {

@@ -215,6 +215,23 @@ func (pt *PortTable) getEntryByPodKeyPortProto(podKey string, port int, protocol
 	return data
 }
 
+// SetServiceForPodPort backfills the Service name and namespace for an existing NPL rule. This is
+// needed because rules restored from a Pod's NPL annotation at Agent startup (see RestoreRules) do
+// not have Service information, as the annotation does not carry it.
+func (pt *PortTable) SetServiceForPodPort(podKey string, podPort int, protocol string, service types.NamespacedName) {
+	pt.tableLock.Lock()
+	defer pt.tableLock.Unlock()
+
+	data := pt.getEntryByPodKeyPortProto(podKey, podPort, protocol)
+	if data == nil {
+		return
+	}
+	// ServiceName and ServiceNamespace do not participate in indexing, so modifying them
+	// in-place is thread-safe because of pt.tableLock.
+	data.ServiceName = service.Name
+	data.ServiceNamespace = service.Namespace
+}
+
 func (pt *PortTable) RuleExists(podKey string, podPort int, protocol string) bool {
 	pt.tableLock.RLock()
 	defer pt.tableLock.RUnlock()
@@ -227,22 +244,24 @@ func NodePortProtoFormat(nodeport int, protocol string) string {
 	return fmt.Sprintf("%d:%s", nodeport, protocol)
 }
 
-// GetDataForNodePort returns the NPL mapping for a given node port and protocol,
-// or (nil, false) if no mapping exists. The protocol is normalized to lower case because
-// the port table is keyed with the lower-case protocol (see util.BuildPortProto), while
-// callers (e.g. the flow exporter) may pass an upper-case corev1.Protocol such as "TCP".
-func (pt *PortTable) GetDataForNodePort(nodePort int, protocol string) (*NodePortData, bool) {
-	pt.tableLock.RLock()
-	defer pt.tableLock.RUnlock()
-	return pt.getPortTableCacheFromNodePortIndex(NodePortProtoFormat(nodePort, strings.ToLower(protocol)))
-}
-
 // GetServiceForNPLPort returns the namespaced Service name (e.g. "default/mysvc")
 // for the given NPL node port and protocol, or "" if no mapping exists or the mapping
-// has no associated Service name.
+// has no associated Service name. The protocol is normalized to lower case because
+// the port table is keyed with the lower-case protocol (see util.BuildPortProto), while
+// callers (e.g. the flow exporter) may pass an upper-case corev1.Protocol such as "TCP".
 func (pt *PortTable) GetServiceForNPLPort(nodePort int, protocol string) string {
-	data, ok := pt.GetDataForNodePort(nodePort, protocol)
-	if !ok || data.ServiceName == "" {
+	pt.tableLock.RLock()
+	defer pt.tableLock.RUnlock()
+
+	data, ok := pt.getPortTableCacheFromNodePortIndex(NodePortProtoFormat(nodePort, strings.ToLower(protocol)))
+	if !ok {
+		return ""
+	}
+	if data.ServiceName == "" {
+		// This could happen transiently for a rule restored from a Pod's NPL annotation at agent
+		// startup (see RestoreRules), before the next reconciliation backfills the Service
+		// information via SetServiceForPodPort.
+		klog.InfoS("NodePortLocal rule has no associated Service", "nodePort", nodePort, "protocol", protocol, "podKey", data.PodKey)
 		return ""
 	}
 	return types.NamespacedName{Namespace: data.ServiceNamespace, Name: data.ServiceName}.String()

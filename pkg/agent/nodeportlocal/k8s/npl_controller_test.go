@@ -32,6 +32,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/runtime"
+	k8stypes "k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/client-go/informers"
 	coreinformers "k8s.io/client-go/informers/core/v1"
@@ -1338,8 +1339,9 @@ func TestDualStack(t *testing.T) {
 }
 
 // TestGetServiceForNPLPort verifies that NPLController.GetServiceForNPLPort returns the correct
-// namespaced Service name for an allocated NPL node port and delegates to the right IP-family
-// port table (IPv4 vs IPv6).
+// namespaced Service name for an allocated NPL node port, delegates to the right IP-family port
+// table (IPv4 vs IPv6), and rejects destination IPs that are not this Node's own IP for the
+// selected family (NPL node ports are only meaningful for traffic destined to this Node).
 func TestGetServiceForNPLPort(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		testData, _, _ := setUpWithTestServiceAndPod(t, newTestConfig(), nil)
@@ -1347,16 +1349,25 @@ func TestGetServiceForNPLPort(t *testing.T) {
 		nplData := testData.portTable.GetEntry(defaultPodKey, defaultPort, protocolTCP)
 		require.NotNil(t, nplData)
 		nodePort := nplData.NodePort
+		// External IPv6 address set on the test Node in setUp; the IPv6 port table is nil in this
+		// test config (ipv6Enabled defaults to false), but nodeIPv6 is still populated from the
+		// Node object independently of that flag.
+		nodeIPv6 := "fd12:3456:789a:1::1"
 
 		want := defaultNS + "/" + defaultSvcName
 		// Upper-case protocol must be accepted (corev1.ProtocolTCP).
-		assert.Equal(t, want, testData.nplController.GetServiceForNPLPort(nodePort, "TCP", false))
+		assert.Equal(t, want, testData.nplController.GetServiceForNPLPort(defaultHostIP, nodePort, "TCP", false))
 		// Lower-case protocol must also resolve (the port table normalizes case internally).
-		assert.Equal(t, want, testData.nplController.GetServiceForNPLPort(nodePort, "tcp", false))
-		// Wrong IP family (IPv6 table is nil in this test config) returns "".
-		assert.Empty(t, testData.nplController.GetServiceForNPLPort(nodePort, "TCP", true))
+		assert.Equal(t, want, testData.nplController.GetServiceForNPLPort(defaultHostIP, nodePort, "tcp", false))
+		// Destination IP that is not this Node's own IP returns "", even though the node port and
+		// protocol match — e.g. another Node's IP, or a Pod's egress destination that happens to
+		// reuse the same port number.
+		assert.Empty(t, testData.nplController.GetServiceForNPLPort("1.2.3.4", nodePort, "TCP", false))
+		// Wrong IP family (IPv6 table is nil in this test config) returns "", even with the correct
+		// Node IPv6 address.
+		assert.Empty(t, testData.nplController.GetServiceForNPLPort(nodeIPv6, nodePort, "TCP", true))
 		// Unknown node port returns "".
-		assert.Empty(t, testData.nplController.GetServiceForNPLPort(defaultEndPort+1, "TCP", false))
+		assert.Empty(t, testData.nplController.GetServiceForNPLPort(defaultHostIP, defaultEndPort+1, "TCP", false))
 	})
 }
 
@@ -1378,6 +1389,37 @@ func TestServiceNameStoredWithNamedPort(t *testing.T) {
 
 		nplData := testData.portTable.GetEntry(defaultPodKey, defaultPort, protocolTCP)
 		require.NotNil(t, nplData, "Expected NPL rule to be created for named port")
+		assert.Equal(t, defaultSvcName, nplData.ServiceName)
+		assert.Equal(t, defaultNS, nplData.ServiceNamespace)
+	})
+}
+
+// TestServiceNameBackfilledAfterRestore verifies that when an NPL rule already exists in the port
+// table without Service information (as happens when the rule is restored from the Pod's NPL
+// annotation at Agent startup, since the annotation does not carry Service identity), the next
+// reconciliation of the Pod backfills the Service name and Namespace.
+func TestServiceNameBackfilledAfterRestore(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		testData, _, testPod := setUpWithTestServiceAndPod(t, newTestConfig(), nil)
+
+		nplData := testData.portTable.GetEntry(defaultPodKey, defaultPort, protocolTCP)
+		require.NotNil(t, nplData)
+		assert.Equal(t, defaultSvcName, nplData.ServiceName)
+
+		// Simulate a rule restored from the Pod's NPL annotation at Agent startup.
+		testData.portTable.SetServiceForPodPort(defaultPodKey, defaultPort, protocolTCP, k8stypes.NamespacedName{})
+		nplData = testData.portTable.GetEntry(defaultPodKey, defaultPort, protocolTCP)
+		require.NotNil(t, nplData)
+		assert.Empty(t, nplData.ServiceName)
+
+		// Trigger another reconciliation of the Pod, without changing anything relevant to NPL.
+		testPod.Labels["unrelated"] = "true"
+		testData.updatePodOrFail(testPod)
+
+		synctest.Wait()
+
+		nplData = testData.portTable.GetEntry(defaultPodKey, defaultPort, protocolTCP)
+		require.NotNil(t, nplData)
 		assert.Equal(t, defaultSvcName, nplData.ServiceName)
 		assert.Equal(t, defaultNS, nplData.ServiceNamespace)
 	})

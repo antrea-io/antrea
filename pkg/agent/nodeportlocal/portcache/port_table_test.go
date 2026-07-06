@@ -19,6 +19,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/tools/cache"
 
 	"antrea.io/antrea/v2/pkg/agent/nodeportlocal/rules"
@@ -85,4 +86,23 @@ func TestGetServiceForNPLPort(t *testing.T) {
 
 	// Unknown node port does not resolve.
 	assert.Empty(t, pt.GetServiceForNPLPort(endPort, "TCP"))
+}
+
+func TestSetServiceForPodPort(t *testing.T) {
+	pt := newPortTable(nil, nil, false)
+	require.NoError(t, pt.addPortTableCache(&NodePortData{
+		PodKey:   podKey,
+		NodePort: nodePort1,
+		PodPort:  1001,
+		PodIP:    podIP,
+		Protocol: ProtocolSocketData{Protocol: "tcp"},
+	}))
+
+	// Backfilling Service information for an existing rule updates the cache entry.
+	pt.SetServiceForPodPort(podKey, 1001, "tcp", types.NamespacedName{Namespace: "myns", Name: "mysvc"})
+	assert.Equal(t, "myns/mysvc", pt.GetServiceForNPLPort(nodePort1, "TCP"))
+
+	// Backfilling for a rule that does not exist is a no-op.
+	pt.SetServiceForPodPort(podKey, 1002, "tcp", types.NamespacedName{Namespace: "myns", Name: "mysvc"})
+	assert.Empty(t, pt.GetServiceForNPLPort(nodePort2, "TCP"))
 }
