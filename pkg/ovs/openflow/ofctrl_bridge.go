@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"strconv"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"antrea.io/libOpenflow/openflow15"
@@ -185,9 +186,8 @@ type OFBridge struct {
 	// tableCache is used to cache ofTables.
 	tableCache map[uint8]*ofTable
 
-	ofSwitchMutex sync.RWMutex
 	// ofSwitch is the target OFSwitch.
-	ofSwitch *ofctrl.OFSwitch
+	ofSwitch atomic.Pointer[ofctrl.OFSwitch]
 	// controller helps maintain connections to remote OFSwitch.
 	controller *ofctrl.Controller
 	// retryInterval is the interval for retry connection.
@@ -354,18 +354,13 @@ func (b *OFBridge) SwitchConnected(sw *ofctrl.OFSwitch) {
 // callback sets it.
 // Callers must not invoke OFBridge methods which dereference the returned switch until Connect has
 // returned successfully (IsConnected is the only helper which tolerates a nil switch). After the
-// first connection, the pointer is kept while disconnected and replaced on reconnect; the lock
-// protects concurrent reads and updates of the pointer.
+// first connection, the pointer is kept while disconnected and replaced on reconnect.
 func (b *OFBridge) getOFSwitch() *ofctrl.OFSwitch {
-	b.ofSwitchMutex.RLock()
-	defer b.ofSwitchMutex.RUnlock()
-	return b.ofSwitch
+	return b.ofSwitch.Load()
 }
 
 func (b *OFBridge) SetOFSwitch(sw *ofctrl.OFSwitch) {
-	b.ofSwitchMutex.Lock()
-	defer b.ofSwitchMutex.Unlock()
-	b.ofSwitch = sw
+	b.ofSwitch.Store(sw)
 }
 
 // MultipartReply is a callback when multipartReply message is received on ofctrl.OFSwitch is connected.

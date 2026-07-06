@@ -112,7 +112,7 @@ func TestDeleteGroup(t *testing.T) {
 		},
 	} {
 		t.Run(m.name, func(t *testing.T) {
-			b.ofSwitch = newFakeOFSwitch(b)
+			b.SetOFSwitch(newFakeOFSwitch(b))
 			b.NewGroup(m.existingGroupID)
 		})
 	}
