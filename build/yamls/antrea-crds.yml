@@ -388,6 +388,7 @@ spec:
                           bridgeName:
                             description: Name of the OVS bridge.
                             type: string
+                            minLength: 1
                             maxLength: 15
                             pattern: '^[a-zA-Z0-9._-]+$'
                           physicalInterfaces:
@@ -395,6 +396,9 @@ spec:
                               Physical interfaces to be connected to this bridge.
                             type: array
                             maxItems: 8
+                            x-kubernetes-list-type: map
+                            x-kubernetes-list-map-keys:
+                              - name
                             items:
                               type: object
                               required:
@@ -412,6 +416,7 @@ spec:
                                     "200-300") allowed on this interface.
                                     If not specified, all VLANs are allowed.
                                   type: array
+                                  x-kubernetes-list-type: set
                                   items:
                                     type: string
                                     pattern: '^((?:[0-9]{1,3}|[1-3][0-9]{3}|40[0-8][0-9]|409[0-4])|(?:[0-9]{1,3}|[1-3][0-9]{3}|40[0-8][0-9]|409[0-4])-(?:[0-9]{1,3}|[1-3][0-9]{3}|40[0-8][0-9]|409[0-4]))$'
