@@ -254,19 +254,19 @@ metadata:
 
 ##### Specifying fixed Pod IPs
 
-The `ipam.antrea.io/pod-ips` annotation specifies fixed IPs for a Pod. The
-annotation is valid only when a single Pod is created from that template (for
-example, `replicas: 1`); see the StatefulSet examples above.
+The `ipam.antrea.io/pod-ips` annotation specifies fixed IPs for a Pod.
+When applied to a `PodTemplate` (e.g., in a StatefulSet), the annotation
+is valid only if a single Pod is created from that template (for example,
+`replicas: 1`); see the StatefulSet examples above.
 
-The following restrictions apply when you use `ipam.antrea.io/pod-ips`:
+The following restrictions apply when using `ipam.antrea.io/pod-ips`:
 
 - At most one IPv4 address and one IPv6 address can be specified. If the
   `ipam.antrea.io/pod-ips` annotation contains more than one address of the
-  same IP family, the request is **rejected** (it is not valid to list
-  duplicates and have the rest ignored).
+  same IP family, the request will be **rejected**.
 - For each address family in which a static IP is requested, the effective
   `ipam.antrea.io/ippools` list (on the Pod or inherited from the Namespace) must
-  name **at most one** IPPool of that family. If a static IPv4 is requested, you
+  contain **at most one** IPPool of that family. If a static IPv4 is requested, you
   cannot list two IPv4 IPPools; the same applies to IPv6 when a static IPv6 is
   requested. (You can still list one IPv4 pool and one IPv6 pool for dual-stack
   static addresses.)
