@@ -34,7 +34,7 @@ type ofGroup struct {
 
 // Reset updates ofctrl.Group.Switch with the updated ofSwitch.
 func (g *ofGroup) Reset() {
-	g.ofctrl.Switch = g.bridge.ofSwitch
+	g.ofctrl.Switch = g.bridge.getOFSwitch()
 }
 
 func (g *ofGroup) Add() error {

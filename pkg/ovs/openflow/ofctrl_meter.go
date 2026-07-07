@@ -26,7 +26,7 @@ type ofMeter struct {
 }
 
 func (m *ofMeter) Reset() {
-	m.ofctrl.Switch = m.bridge.ofSwitch
+	m.ofctrl.Switch = m.bridge.getOFSwitch()
 }
 
 // Note: use OFSwitch to directly send MeterModification message rather than bundle message is because the
