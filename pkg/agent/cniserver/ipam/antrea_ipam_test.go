@@ -1294,7 +1294,7 @@ func TestGetPoolAllocatorsByPod_RequestedIPPoolFamilyValidation(t *testing.T) {
 	createIPPools(crdClient)
 
 	// Extra IPv6 pools for cases that combine one IPv4 pool with multiple IPv6 pools.
-	crdClient.InitPool(&crdv1b1.IPPool{
+	crdClient.CrdV1beta1().IPPools().Create(context.Background(), &crdv1b1.IPPool{
 		ObjectMeta: metav1.ObjectMeta{Name: "ippool-family-val-ipv6-a"},
 		Spec: crdv1b1.IPPoolSpec{
 			IPRanges: []crdv1b1.IPRange{{
@@ -1306,8 +1306,8 @@ func TestGetPoolAllocatorsByPod_RequestedIPPoolFamilyValidation(t *testing.T) {
 				PrefixLength: 64,
 			},
 		},
-	})
-	crdClient.InitPool(&crdv1b1.IPPool{
+	}, metav1.CreateOptions{})
+	crdClient.CrdV1beta1().IPPools().Create(context.Background(), &crdv1b1.IPPool{
 		ObjectMeta: metav1.ObjectMeta{Name: "ippool-family-val-ipv6-b"},
 		Spec: crdv1b1.IPPoolSpec{
 			IPRanges: []crdv1b1.IPRange{{
@@ -1319,7 +1319,7 @@ func TestGetPoolAllocatorsByPod_RequestedIPPoolFamilyValidation(t *testing.T) {
 				PrefixLength: 64,
 			},
 		},
-	})
+	}, metav1.CreateOptions{})
 
 	cases := []struct {
 		name             string
