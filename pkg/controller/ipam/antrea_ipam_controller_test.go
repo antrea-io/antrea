@@ -343,6 +343,13 @@ func TestAntreaIPAMController_getIPPoolsForStatefulSet(t *testing.T) {
 			},
 			wantErrSubstr: fmt.Sprintf("multiple IPv4 addresses in %s annotation", annotation.AntreaIPAMPodIPAnnotationKey),
 		},
+		{
+			name: "duplicate ipv6",
+			prepareFunc: func(sts *appsv1.StatefulSet) {
+				sts.Spec.Template.Annotations[annotation.AntreaIPAMPodIPAnnotationKey] = "fd00::1,fd00::2"
+			},
+			wantErrSubstr: fmt.Sprintf("multiple IPv6 addresses in %s annotation", annotation.AntreaIPAMPodIPAnnotationKey),
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
