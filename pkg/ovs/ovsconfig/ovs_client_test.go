@@ -15,9 +15,11 @@
 package ovsconfig
 
 import (
+	"errors"
 	"net"
 	"testing"
 
+	"github.com/ovn-kubernetes/libovsdb/client"
 	"github.com/stretchr/testify/assert"
 	"k8s.io/utils/ptr"
 )
@@ -104,13 +106,14 @@ func TestBuildPortDataCommon(t *testing.T) {
 
 func TestFindBridgeInterfaceByName(t *testing.T) {
 	tests := []struct {
-		name      string
-		bridge    *Bridge
-		ports     []Port
-		intfs     []Interface
-		ifName    string
-		wantUUID  string
-		wantError string
+		name           string
+		bridge         *Bridge
+		ports          []Port
+		intfs          []Interface
+		ifName         string
+		wantUUID       string
+		wantError      string
+		wantIsNotFound bool
 	}{
 		{
 			bridge: &Bridge{Name: "br-test", Ports: []string{"port-on-bridge"}},
@@ -136,8 +139,9 @@ func TestFindBridgeInterfaceByName(t *testing.T) {
 			intfs: []Interface{
 				{UUID: "stale-if", Name: "eth1", OFPort: ptr.To(2)},
 			},
-			ifName:    "eth1",
-			wantError: "interface eth1 not found on bridge br-test",
+			ifName:         "eth1",
+			wantError:      "interface eth1 not found on bridge br-test",
+			wantIsNotFound: true,
 		},
 		{
 			bridge: &Bridge{Name: "br-test", Ports: []string{"port-on-bridge", "port-on-bridge-2"}},
@@ -159,7 +163,8 @@ func TestFindBridgeInterfaceByName(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			intf, err := findBridgeInterfaceByName(tc.bridge, tc.ports, tc.intfs, tc.ifName)
 			if tc.wantError != "" {
-				assert.EqualError(t, err, tc.wantError)
+				assert.ErrorContains(t, err, tc.wantError)
+				assert.Equal(t, tc.wantIsNotFound, errors.Is(err, client.ErrNotFound))
 				return
 			}
 			assert.NoError(t, err)

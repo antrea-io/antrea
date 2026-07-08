@@ -857,7 +857,7 @@ func findBridgeInterfaceByName(bridge *Bridge, ports []Port, intfs []Interface, 
 		matched = &intfs[i]
 	}
 	if matched == nil {
-		return nil, fmt.Errorf("interface %s not found on bridge %s", ifName, bridge.Name)
+		return nil, fmt.Errorf("interface %s not found on bridge %s: %w", ifName, bridge.Name, client.ErrNotFound)
 	}
 	return matched, nil
 }
@@ -1265,10 +1265,13 @@ func (br *OVSBridge) getOpenvSwitch(ctx context.Context) (*OpenvSwitch, error) {
 // It logs an error and returns it if the bridge cannot be found or another error occurs.
 func (br *OVSBridge) getBridge(ctx context.Context) (*Bridge, error) {
 	bridge := &Bridge{Name: br.name}
+	if br.uuid != "" {
+		bridge = &Bridge{UUID: br.uuid}
+	}
 	err := br.ovsdb.Get(ctx, bridge)
 	if err != nil {
 		if !errors.Is(err, client.ErrNotFound) {
-			klog.ErrorS(err, "Failed to get bridge", "bridge", br.name)
+			klog.ErrorS(err, "Failed to get bridge", "bridge", br.name, "uuid", br.uuid)
 		}
 		return nil, err
 	}
