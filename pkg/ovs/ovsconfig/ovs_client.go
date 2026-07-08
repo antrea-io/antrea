@@ -770,7 +770,7 @@ func (br *OVSBridge) GetOFPort(ifName string) (int32, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultGetPortTimeout)
 	defer cancel()
 
-	intf, err := br.getInterface(ctx, ifName)
+	intf, err := br.getBridgeInterface(ctx, ifName)
 	if err != nil {
 		return 0, err
 	}
@@ -794,14 +794,14 @@ func (br *OVSBridge) GetOFPort(ifName string) (int32, error) {
 	// We use WaitConditionNotEqual to wait for the ofport to be assigned by OVS (including invalid value -1).
 	// We wait for the ofport to become NotEqual to empty set (nil). This guarantees the wait completes immediately when
 	// OVS assigns a valid port number (>0), or fails the port creation and assigns an error value (<0, e.g., -1).
-	ops, err := br.ovsdb.Where(interfaceWithName(ifName)).Wait(ovsdb.WaitConditionNotEqual, &timeoutMs, mIntf, &mIntf.OFPort)
+	ops, err := br.ovsdb.Where(interfaceWithUUID(intf.UUID)).Wait(ovsdb.WaitConditionNotEqual, &timeoutMs, mIntf, &mIntf.OFPort)
 	if err != nil {
 		return 0, err
 	}
 
 	// Append a select operation to return the updated row atomically.
 	// This prevents cache synchronization race conditions (RAW: read-after-write) and ensures consistency.
-	ops = append(ops, newSelectOperation(interfaceTable, "name", ifName, "ofport"))
+	ops = append(ops, newSelectOperation(interfaceTable, "_uuid", ovsdb.UUID{GoUUID: intf.UUID}, "ofport"))
 
 	results, err := br.transact(ctx, ops, "wait for ofport")
 	if err != nil {
@@ -834,6 +834,32 @@ func (br *OVSBridge) GetOFPort(ifName string) (int32, error) {
 	}
 
 	return 0, fmt.Errorf("failed to parse a valid ofport from OVSDB result for interface %s", ifName)
+}
+
+func findBridgeInterfaceByName(bridge *Bridge, ports []Port, intfs []Interface, ifName string) (*Interface, error) {
+	portUUIDs := sets.New(bridge.Ports...)
+	ifUUIDs := sets.New[string]()
+	for i := range ports {
+		if !portUUIDs.Has(ports[i].UUID) {
+			continue
+		}
+		ifUUIDs.Insert(ports[i].Interfaces...)
+	}
+
+	var matched *Interface
+	for i := range intfs {
+		if intfs[i].Name != ifName || !ifUUIDs.Has(intfs[i].UUID) {
+			continue
+		}
+		if matched != nil {
+			return nil, fmt.Errorf("found multiple interfaces named %s on bridge %s", ifName, bridge.Name)
+		}
+		matched = &intfs[i]
+	}
+	if matched == nil {
+		return nil, fmt.Errorf("interface %s not found on bridge %s", ifName, bridge.Name)
+	}
+	return matched, nil
 }
 
 func buildPortDataCommon(port *Port, intf *Interface, portData *OVSPortData) {
@@ -1277,6 +1303,38 @@ func (br *OVSBridge) getInterface(ctx context.Context, name string) (*Interface,
 	return intf, nil
 }
 
+// getBridgeInterface fetches the Interface record with the given name only when
+// it is attached to one of this bridge's ports.
+func (br *OVSBridge) getBridgeInterface(ctx context.Context, ifName string) (*Interface, error) {
+	bridge, err := br.getBridge(ctx)
+	if err != nil {
+		return nil, err
+	}
+	portUUIDs := sets.New[string](bridge.Ports...)
+
+	var ports []Port
+	if err := br.ovsdb.WhereCache(func(p *Port) bool {
+		return portUUIDs.Has(p.UUID)
+	}).List(ctx, &ports); err != nil {
+		klog.ErrorS(err, "Failed to list Port table", "bridge", br.name)
+		return nil, err
+	}
+
+	ifUUIDs := sets.New[string]()
+	for i := range ports {
+		ifUUIDs.Insert(ports[i].Interfaces...)
+	}
+	var intfs []Interface
+	if err := br.ovsdb.WhereCache(func(i *Interface) bool {
+		return i.Name == ifName && ifUUIDs.Has(i.UUID)
+	}).List(ctx, &intfs); err != nil {
+		klog.ErrorS(err, "Failed to list Interface table", "bridge", br.name, "interface", ifName)
+		return nil, err
+	}
+
+	return findBridgeInterfaceByName(bridge, ports, intfs, ifName)
+}
+
 // transact is a helper function to execute an OVSDB transaction and log any error
 // with the provided action description.
 func (br *OVSBridge) transact(ctx context.Context, ops []ovsdb.Operation, action string) ([]ovsdb.OperationResult, error) {
@@ -1332,4 +1390,5 @@ func newSelectOperation(table, column string, value interface{}, returnColumns .
 
 func bridgeWithUUID(uuid string) *Bridge       { return &Bridge{UUID: uuid} }
 func interfaceWithName(name string) *Interface { return &Interface{Name: name} }
+func interfaceWithUUID(uuid string) *Interface { return &Interface{UUID: uuid} }
 func OVSWithUUID(uuid string) *OpenvSwitch     { return &OpenvSwitch{UUID: uuid} }
