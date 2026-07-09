@@ -203,27 +203,30 @@ func (c *FromExternalCorrelator) IngestDefaultZoneFlow(conn *connection.Connecti
 		klog.V(4).InfoS("Could not retrieve Service protocol for default-zone connection, skipping", "protocol", conn.FlowKey.Protocol)
 		return
 	}
-	// With no proxier, retain every default-zone flow (no Service lookup).
-	// With proxier, only retain when GetServiceByIP matches.
-	shouldStore := true
-	// nplServicePortName is resolved here (for NPL flows) and carried in the snapshot, so that the
-	// connection store does not need to repeat the lookup when the Antrea-zone half is correlated.
-	var nplServicePortName string
+	// serviceResolved indicates the destination matched a Service registered in the proxier's map
+	// (ClusterIP:port, nodeIP:NodePort, LB/External IP:port, etc). With no proxier, this stays
+	// false and every default-zone flow is retained below regardless.
+	serviceResolved := false
 	if c.proxier != nil {
 		serviceStr := fmt.Sprintf("%s:%d/%s", svcIP, svcPort, protocol)
-		_, shouldStore = c.proxier.GetServiceByIP(serviceStr)
-		// NodePortLocal node ports are allocated per-Pod by the NPL agent and are not registered
-		// in the proxier's Service map, so they are not matched above. Retain the default-zone
-		// flow when its original destination is an NPL node port, so the Antrea-zone half can be
-		// correlated and its OriginalDestination restored to the node IP/port the client targeted.
-		// GetServiceForNPLPort also validates svcIP against this Node's own IP, since the NPL port
-		// table is keyed by port number alone and would otherwise match unrelated traffic that
-		// happens to target the same port number on a different destination.
-		if !shouldStore && c.nplQuerier != nil {
-			nplServicePortName = c.nplQuerier.GetServiceForNPLPort(svcIP, int(svcPort), string(protocol), conn.OriginalDestinationAddress.Is6())
-			shouldStore = nplServicePortName != ""
-		}
+		_, serviceResolved = c.proxier.GetServiceByIP(serviceStr)
 	}
+	// NodePortLocal node ports are allocated per-Pod by the NPL agent and are not registered in the
+	// proxier's Service map, so they are not matched above. This lookup runs whenever the proxier
+	// didn't already resolve a Service, independent of whether a proxier is configured.
+	// GetServiceForNPLPort also validates svcIP against this Node's own IP, since the NPL port table
+	// is keyed by port number alone and would otherwise match unrelated traffic that happens to target
+	// the same port number on a different destination.
+	// nplServicePortName, if resolved, is carried in the snapshot, so that the connection store does
+	// not need to repeat the lookup when the Antrea-zone half is correlated.
+	// This means the name reflects the NPL port's owning Service as of the default-zone half, and
+	// could be stale if the port's owning Service changes before the Antrea-zone half is
+	// correlated; this window is negligible in practice.
+	var nplServicePortName string
+	if !serviceResolved && c.nplQuerier != nil {
+		nplServicePortName = c.nplQuerier.GetServiceForNPLPort(svcIP, int(svcPort), string(protocol), conn.OriginalDestinationAddress.Is6())
+	}
+	shouldStore := c.proxier == nil || serviceResolved || nplServicePortName != ""
 	if shouldStore {
 		c.add(conn, nplServicePortName)
 	}

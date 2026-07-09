@@ -1389,8 +1389,7 @@ func TestServiceNameStoredWithNamedPort(t *testing.T) {
 
 		nplData := testData.portTable.GetEntry(defaultPodKey, defaultPort, protocolTCP)
 		require.NotNil(t, nplData, "Expected NPL rule to be created for named port")
-		assert.Equal(t, defaultSvcName, nplData.ServiceName)
-		assert.Equal(t, defaultNS, nplData.ServiceNamespace)
+		assert.Equal(t, []k8stypes.NamespacedName{{Namespace: defaultNS, Name: defaultSvcName}}, nplData.Services)
 	})
 }
 
@@ -1404,13 +1403,13 @@ func TestServiceNameBackfilledAfterRestore(t *testing.T) {
 
 		nplData := testData.portTable.GetEntry(defaultPodKey, defaultPort, protocolTCP)
 		require.NotNil(t, nplData)
-		assert.Equal(t, defaultSvcName, nplData.ServiceName)
+		assert.Equal(t, []k8stypes.NamespacedName{{Namespace: defaultNS, Name: defaultSvcName}}, nplData.Services)
 
 		// Simulate a rule restored from the Pod's NPL annotation at Agent startup.
-		testData.portTable.SetServiceForPodPort(defaultPodKey, defaultPort, protocolTCP, k8stypes.NamespacedName{})
+		testData.portTable.SetServiceForPodPort(defaultPodKey, defaultPort, protocolTCP, nil)
 		nplData = testData.portTable.GetEntry(defaultPodKey, defaultPort, protocolTCP)
 		require.NotNil(t, nplData)
-		assert.Empty(t, nplData.ServiceName)
+		assert.Empty(t, nplData.Services)
 
 		// Trigger another reconciliation of the Pod, without changing anything relevant to NPL.
 		testPod.Labels["unrelated"] = "true"
@@ -1420,7 +1419,66 @@ func TestServiceNameBackfilledAfterRestore(t *testing.T) {
 
 		nplData = testData.portTable.GetEntry(defaultPodKey, defaultPort, protocolTCP)
 		require.NotNil(t, nplData)
-		assert.Equal(t, defaultSvcName, nplData.ServiceName)
-		assert.Equal(t, defaultNS, nplData.ServiceNamespace)
+		assert.Equal(t, []k8stypes.NamespacedName{{Namespace: defaultNS, Name: defaultSvcName}}, nplData.Services)
+	})
+}
+
+// TestServiceNameUpdatedAfterOwningServiceReplaced verifies that when the Service owning an
+// existing NPL rule is deleted and replaced by another Service selecting the same Pod on the same
+// port/protocol, the rule's stored Service name and Namespace are updated to reflect the new
+// owner, instead of continuing to reference the deleted Service indefinitely.
+func TestServiceNameUpdatedAfterOwningServiceReplaced(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		testData, testSvc, _ := setUpWithTestServiceAndPod(t, newTestConfig(), nil)
+
+		nplData := testData.portTable.GetEntry(defaultPodKey, defaultPort, protocolTCP)
+		require.NotNil(t, nplData)
+		assert.Equal(t, []k8stypes.NamespacedName{{Namespace: defaultNS, Name: defaultSvcName}}, nplData.Services)
+
+		// Delete the original Service and replace it with another Service selecting the same
+		// Pod on the same target port/protocol.
+		err := testData.k8sClient.CoreV1().Services(defaultNS).Delete(t.Context(), testSvc.Name, metav1.DeleteOptions{})
+		require.NoError(t, err, "Service deletion failed")
+		newSvc := getTestSvc()
+		newSvc.Name = "new-svc"
+		newSvc.ResourceVersion = ""
+		_, err = testData.k8sClient.CoreV1().Services(defaultNS).Create(t.Context(), newSvc, metav1.CreateOptions{})
+		require.NoError(t, err, "Service creation failed")
+
+		synctest.Wait()
+
+		// The rule must still exist (the required port/protocol has not changed) but must now
+		// be attributed to the new Service.
+		require.True(t, testData.portTable.RuleExists(defaultPodKey, defaultPort, protocolTCP))
+		nplData = testData.portTable.GetEntry(defaultPodKey, defaultPort, protocolTCP)
+		require.NotNil(t, nplData)
+		assert.Equal(t, []k8stypes.NamespacedName{{Namespace: defaultNS, Name: newSvc.Name}}, nplData.Services)
+	})
+}
+
+// TestServiceNameSharedByMultipleServices verifies that when more than one NPL-enabled Service
+// selects the same Pod on the same target port/protocol, the rule records all of them (sorted for
+// determinism), and GetServiceForNPLPort joins their namespaced names with "|".
+func TestServiceNameSharedByMultipleServices(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		testSvc1 := getTestSvc()
+		testPod := getTestPod()
+		testSvc2 := getTestSvc()
+		testSvc2.Name = "z-svc"
+		testData := setUp(t, newTestConfig(), testSvc1, testSvc2, testPod)
+
+		synctest.Wait()
+
+		nplData := testData.portTable.GetEntry(defaultPodKey, defaultPort, protocolTCP)
+		require.NotNil(t, nplData)
+		// Sorted by namespaced name (defaultSvcName == "test-svc" sorts before "z-svc").
+		assert.Equal(t, []k8stypes.NamespacedName{
+			{Namespace: defaultNS, Name: defaultSvcName},
+			{Namespace: defaultNS, Name: testSvc2.Name},
+		}, nplData.Services)
+
+		nodePort := nplData.NodePort
+		assert.Equal(t, defaultNS+"/"+defaultSvcName+"|"+defaultNS+"/"+testSvc2.Name,
+			testData.nplController.GetServiceForNPLPort(defaultHostIP, nodePort, "TCP", false))
 	})
 }

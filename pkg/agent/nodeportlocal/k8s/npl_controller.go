@@ -19,6 +19,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"reflect"
+	"slices"
+	"sort"
 	"sync"
 	"time"
 
@@ -458,11 +460,15 @@ func (c *NPLController) getPodsFromService(svc *corev1.Service) []string {
 // getTargetPortsForServicesOfPod returns target ports and IP families needed for NPL mappings.
 // It returns two maps for IP families (one for numeric target ports, one for named target ports,
 // both mapping portProto -> set of IP families), and one map for the owning Service identity.
-func (c *NPLController) getTargetPortsForServicesOfPod(pod *corev1.Pod) (map[string]ipFamilies, map[string]ipFamilies, map[string]k8stypes.NamespacedName) {
+func (c *NPLController) getTargetPortsForServicesOfPod(pod *corev1.Pod) (map[string]ipFamilies, map[string]ipFamilies, map[string][]k8stypes.NamespacedName) {
 	targetPortsInt := make(map[string]ipFamilies)
 	targetPortsStr := make(map[string]ipFamilies)
-	// Map for portProto to the NamespacedName of the Service owning this NPL port mapping.
-	portToService := make(map[string]k8stypes.NamespacedName)
+	// Map for portProto to the NamespacedNames of the Services owning this NPL port mapping. More
+	// than one NPL-enabled Service can select the same Pod on the same target port/protocol (e.g.
+	// during a Service migration); this is a pre-existing ambiguity of NPL, since mappings are
+	// keyed by node port rather than by Service. In that case, all matching Services are recorded,
+	// sorted for deterministic output, and the port is considered to be served by all of them.
+	portToService := make(map[string][]k8stypes.NamespacedName)
 	// If the Pod is already terminated, its NodePortLocal ports should be released.
 	if k8s.IsPodTerminated(pod) {
 		return targetPortsInt, targetPortsStr, portToService
@@ -471,6 +477,13 @@ func (c *NPLController) getTargetPortsForServicesOfPod(pod *corev1.Pod) (map[str
 	if err != nil {
 		klog.Errorf("Got error while listing Services with annotation %s: %v", types.NPLEnabledAnnotationKey, err)
 		return targetPortsInt, targetPortsStr, portToService
+	}
+
+	addServiceForPortProto := func(portProto string, svcKey k8stypes.NamespacedName) {
+		if slices.Contains(portToService[portProto], svcKey) {
+			return
+		}
+		portToService[portProto] = append(portToService[portProto], svcKey)
 	}
 
 	for _, service := range services {
@@ -497,21 +510,22 @@ func (c *NPLController) getTargetPortsForServicesOfPod(pod *corev1.Pod) (map[str
 					for _, ipFamily := range svcIPFamilies {
 						targetPortsInt[portProto] = targetPortsInt[portProto].add(ipFamily)
 					}
-					if _, exists := portToService[portProto]; !exists {
-						portToService[portProto] = svcKey
-					}
+					addServiceForPortProto(portProto, svcKey)
 				case intstr.String:
 					portProto := util.BuildPortProto(port.TargetPort.StrVal, string(port.Protocol))
 					klog.V(4).InfoS("Added target port in targetPortsStr map", "portProto", portProto, "ipFamilies", svcIPFamilies)
 					for _, ipFamily := range svcIPFamilies {
 						targetPortsStr[portProto] = targetPortsStr[portProto].add(ipFamily)
 					}
-					if _, exists := portToService[portProto]; !exists {
-						portToService[portProto] = svcKey
-					}
+					addServiceForPortProto(portProto, svcKey)
 				}
 			}
 		}
+	}
+	for _, svcs := range portToService {
+		sort.Slice(svcs, func(i, j int) bool {
+			return svcs[i].String() < svcs[j].String()
+		})
 	}
 	return targetPortsInt, targetPortsStr, portToService
 }
@@ -626,8 +640,8 @@ func (c *NPLController) handleAddUpdatePod(key string, obj interface{}) error {
 					targetPortsInt[portProtoInt] = targetPortsInt[portProtoInt].union(ipFamilies)
 					// Propagate service identity from named-port entry to numeric-port entry if not already set.
 					if _, exists := portToService[portProtoInt]; !exists {
-						if svcKey, ok := portToService[portProtoStr]; ok {
-							portToService[portProtoInt] = svcKey
+						if svcs, ok := portToService[portProtoStr]; ok {
+							portToService[portProtoInt] = svcs
 						}
 					}
 				}
@@ -698,20 +712,22 @@ func (c *NPLController) handleAddUpdatePod(key string, obj interface{}) error {
 				if hport, ok := hostPorts[targetPortProto]; ok {
 					nodePort = hport
 				} else {
-					svc := portToService[targetPortProto]
-					klog.InfoS("Adding NodePortLocal rule", "pod", klog.KObj(pod), "podIP", podIP, "port", port, "protocol", protocol, "ipFamily", ipFamily, "service", svc)
-					nodePort, err = portTable.AddRule(key, port, protocol, podIP, svc)
+					svcs := portToService[targetPortProto]
+					klog.InfoS("Adding NodePortLocal rule", "pod", klog.KObj(pod), "podIP", podIP, "port", port, "protocol", protocol, "ipFamily", ipFamily, "service", svcs)
+					nodePort, err = portTable.AddRule(key, port, protocol, podIP, svcs)
 					if err != nil {
 						return fmt.Errorf("failed to add rule for Pod %s: %w", key, err)
 					}
 				}
 			} else {
 				nodePort = portData.NodePort
-				// Backfill Service information for rules that were restored from the Pod's
-				// NPL annotation at Agent startup, which does not include Service identity.
-				if portData.ServiceName == "" {
-					if svc, ok := portToService[targetPortProto]; ok {
-						portTable.SetServiceForPodPort(key, port, protocol, svc)
+				// Update Service information if it is missing (e.g., for rules that were restored from the Pod's NPL
+				// annotation at Agent startup, which does not include Service identity) or if the owning Service(s)
+				// have changed (e.g., the previous Service was deleted and replaced by another Service selecting the
+				// same Pod on the same port/protocol).
+				if svcs, ok := portToService[targetPortProto]; ok {
+					if !slices.Equal(portData.Services, svcs) {
+						portTable.SetServiceForPodPort(key, port, protocol, svcs)
 					}
 				}
 			}

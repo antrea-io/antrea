@@ -20,7 +20,10 @@ package portcache
 type NPLQuerier interface {
 	// GetServiceForNPLPort returns the namespaced Service name string (e.g. "default/mysvc") for
 	// the given destination IP, NPL node port, and protocol, or "" if destIP is not this Node's IP
-	// for the selected family, no mapping exists, or the mapping has no associated Service.
+	// for the selected family, no mapping exists, or the mapping has no associated Service. If more
+	// than one Service owns the mapping (a pre-existing NPL ambiguity, since mappings are keyed by
+	// node port rather than by Service), their namespaced names are joined with "|" (e.g.
+	// "default/mysvc1|default/mysvc2").
 	// Node IP check avoids matching unrelated traffic that happens to use the same port number on
 	// a different destination (e.g. another Node's NPL port, or a Pod's egress connection to an
 	// arbitrary server listening in the NPL port range).
