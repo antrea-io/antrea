@@ -23,7 +23,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
-	"k8s.io/apimachinery/pkg/types"
 
 	portcachetesting "antrea.io/antrea/v2/pkg/agent/nodeportlocal/portcache/testing"
 	"antrea.io/antrea/v2/pkg/agent/nodeportlocal/rules"
@@ -96,11 +95,11 @@ func TestAddRule(t *testing.T) {
 
 	// Adding the rule the first time should succeed.
 	mockPortRules.EXPECT().AddRule(startPort, podIP, podPort, "udp")
-	gotNodePort, err := portTable.AddRule(podKey, podPort, "udp", podIP, types.NamespacedName{})
+	gotNodePort, err := portTable.AddRule(podKey, podPort, "udp", podIP, nil)
 	require.NoError(t, err)
 	assert.Equal(t, startPort, gotNodePort)
 
 	// Add the same rule the second time should fail.
-	_, err = portTable.AddRule(podKey, podPort, "udp", podIP, types.NamespacedName{})
+	_, err = portTable.AddRule(podKey, podPort, "udp", podIP, nil)
 	assert.ErrorContains(t, err, "existing Windows Nodeport entry for")
 }

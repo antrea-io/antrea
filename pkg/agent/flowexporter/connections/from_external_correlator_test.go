@@ -357,6 +357,48 @@ func TestFromExternalCorrelator_NodePortLocal(t *testing.T) {
 	assert.Len(t, correlator.connections, 0, "Expected the default-zone flow to be consumed by correlation")
 }
 
+// TestFromExternalCorrelator_NodePortLocal_NilProxier verifies that the NPL Service name is still
+// resolved when AntreaProxy is disabled (proxier is nil).
+func TestFromExternalCorrelator_NodePortLocal_NilProxier(t *testing.T) {
+	const nplNodePort = 40000
+	clientIP := netip.MustParseAddr("172.18.0.1")
+	nodeIP := netip.MustParseAddr("172.18.0.5")
+	podIP := netip.MustParseAddr("10.244.2.2")
+	npl := mockNPLQuerier{nodeIP: nodeIP.String(), nodePort: nplNodePort, protocol: "TCP", service: "default/npl-svc"}
+	correlator := NewFromExternalCorrelator(nil, npl)
+
+	defaultZoneConn := &connection.Connection{
+		Zone:                       DefaultZone,
+		OriginalDestinationAddress: nodeIP,
+		OriginalDestinationPort:    nplNodePort,
+		FlowKey: connection.Tuple{
+			SourceAddress:      clientIP,
+			DestinationAddress: podIP,
+			Protocol:           6,
+			SourcePort:         52142,
+			DestinationPort:    8080,
+		},
+	}
+	correlator.IngestDefaultZoneFlow(defaultZoneConn)
+	assert.Len(t, correlator.connections, 1, "Expected NPL default-zone flow to be retained even without a proxier")
+
+	antreaZoneConn := connection.Connection{
+		Zone:                       65520,
+		OriginalDestinationAddress: podIP,
+		OriginalDestinationPort:    8080,
+		FlowKey: connection.Tuple{
+			SourceAddress:      clientIP,
+			DestinationAddress: podIP,
+			Protocol:           6,
+			SourcePort:         52142,
+			DestinationPort:    8080,
+		},
+	}
+	got := correlator.CorrelateIfExternal(&antreaZoneConn)
+	assert.True(t, got, "Expected the NPL Antrea-zone flow to be correlated even without a proxier")
+	assert.Equal(t, "default/npl-svc", antreaZoneConn.DestinationServicePortName, "Expected the NPL Service name to be resolved even without a proxier")
+}
+
 // TestFromExternalCorrelator_NodePortLocal_WrongDstIP verifies that a default-zone flow whose
 // destination port happens to equal an allocated NPL node port, but whose destination IP is NOT
 // this Node's IP, is not mistaken for NPL traffic and retained. The NPL port table is keyed by port

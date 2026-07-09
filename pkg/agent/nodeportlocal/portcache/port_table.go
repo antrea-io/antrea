@@ -46,10 +46,13 @@ type NodePortData struct {
 	PodPort  int
 	PodIP    string
 	Protocol ProtocolSocketData
-	// ServiceName is the name of the Kubernetes Service that owns this NPL mapping.
-	ServiceName string
-	// ServiceNamespace is the namespace of the Kubernetes Service that owns this NPL mapping.
-	ServiceNamespace string
+	// Services holds the namespaced names of the Kubernetes Services that own this NPL mapping.
+	// Normally this is a single Service, but more than one NPL-enabled Service can select the same
+	// Pod on the same target port/protocol (e.g. during a Service migration); in that case, the
+	// mapping is considered to be shared by all of them. The caller (the NPL controller) is
+	// responsible for providing entries in a deterministic order, so that the string returned by
+	// GetServiceForNPLPort is stable.
+	Services []types.NamespacedName
 	// defunct is used to indicate that a rule has been partially deleted: it is no longer
 	// usable and deletion needs to be re-attempted.
 	defunct bool
@@ -84,6 +87,13 @@ func GetPortTableKey(obj interface{}) (string, error) {
 
 func (pt *PortTable) addPortTableCache(npData *NodePortData) error {
 	if err := pt.PortTableCache.Add(npData); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (pt *PortTable) updatePortTableCache(npData *NodePortData) error {
+	if err := pt.PortTableCache.Update(npData); err != nil {
 		return err
 	}
 	return nil
@@ -215,10 +225,12 @@ func (pt *PortTable) getEntryByPodKeyPortProto(podKey string, port int, protocol
 	return data
 }
 
-// SetServiceForPodPort backfills the Service name and namespace for an existing NPL rule. This is
-// needed because rules restored from a Pod's NPL annotation at Agent startup (see RestoreRules) do
-// not have Service information, as the annotation does not carry it.
-func (pt *PortTable) SetServiceForPodPort(podKey string, podPort int, protocol string, service types.NamespacedName) {
+// SetServiceForPodPort sets the owning Service(s) for an existing NPL rule. This is needed both to
+// backfill Service information for rules restored from a Pod's NPL annotation at Agent startup
+// (see RestoreRules), which does not carry Service identity, and to update it when the set of
+// Services owning the mapping changes (e.g. the previous Service is deleted and replaced by
+// another Service selecting the same Pod on the same port/protocol).
+func (pt *PortTable) SetServiceForPodPort(podKey string, podPort int, protocol string, services []types.NamespacedName) {
 	pt.tableLock.Lock()
 	defer pt.tableLock.Unlock()
 
@@ -226,10 +238,9 @@ func (pt *PortTable) SetServiceForPodPort(podKey string, podPort int, protocol s
 	if data == nil {
 		return
 	}
-	// ServiceName and ServiceNamespace do not participate in indexing, so modifying them
-	// in-place is thread-safe because of pt.tableLock.
-	data.ServiceName = service.Name
-	data.ServiceNamespace = service.Namespace
+	updated := *data
+	updated.Services = services
+	pt.updatePortTableCache(&updated)
 }
 
 func (pt *PortTable) RuleExists(podKey string, podPort int, protocol string) bool {
@@ -244,11 +255,12 @@ func NodePortProtoFormat(nodeport int, protocol string) string {
 	return fmt.Sprintf("%d:%s", nodeport, protocol)
 }
 
-// GetServiceForNPLPort returns the namespaced Service name (e.g. "default/mysvc")
-// for the given NPL node port and protocol, or "" if no mapping exists or the mapping
-// has no associated Service name. The protocol is normalized to lower case because
-// the port table is keyed with the lower-case protocol (see util.BuildPortProto), while
-// callers (e.g. the flow exporter) may pass an upper-case corev1.Protocol such as "TCP".
+// GetServiceForNPLPort returns the namespaced Service name (e.g. "default/mysvc") for the given
+// NPL node port and protocol, or "" if no mapping exists or the mapping has no associated Service.
+// If more than one Service owns the mapping (see NodePortData.Services), their namespaced names
+// are joined with "|" (e.g. "default/mysvc1|default/mysvc2"). The protocol is normalized to lower
+// case because the port table is keyed with the lower-case protocol (see util.BuildPortProto),
+// while callers (e.g. the flow exporter) may pass an upper-case corev1.Protocol such as "TCP".
 func (pt *PortTable) GetServiceForNPLPort(nodePort int, protocol string) string {
 	pt.tableLock.RLock()
 	defer pt.tableLock.RUnlock()
@@ -257,14 +269,18 @@ func (pt *PortTable) GetServiceForNPLPort(nodePort int, protocol string) string 
 	if !ok {
 		return ""
 	}
-	if data.ServiceName == "" {
+	if len(data.Services) == 0 {
 		// This could happen transiently for a rule restored from a Pod's NPL annotation at agent
 		// startup (see RestoreRules), before the next reconciliation backfills the Service
 		// information via SetServiceForPodPort.
-		klog.InfoS("NodePortLocal rule has no associated Service", "nodePort", nodePort, "protocol", protocol, "podKey", data.PodKey)
+		klog.V(4).InfoS("NodePortLocal rule has no associated Service", "nodePort", nodePort, "protocol", protocol, "podKey", data.PodKey)
 		return ""
 	}
-	return types.NamespacedName{Namespace: data.ServiceNamespace, Name: data.ServiceName}.String()
+	names := make([]string, len(data.Services))
+	for i, svc := range data.Services {
+		names[i] = svc.String()
+	}
+	return strings.Join(names, "|")
 }
 
 // openLocalPort binds to the provided port.
