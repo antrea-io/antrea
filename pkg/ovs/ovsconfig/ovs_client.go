@@ -770,7 +770,7 @@ func (br *OVSBridge) GetOFPort(ifName string) (int32, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultGetPortTimeout)
 	defer cancel()
 
-	intf, err := br.getBridgeInterface(ctx, ifName)
+	intf, err := br.getInterfaceOnBridge(ctx, ifName)
 	if err != nil {
 		return 0, err
 	}
@@ -1306,9 +1306,9 @@ func (br *OVSBridge) getInterface(ctx context.Context, name string) (*Interface,
 	return intf, nil
 }
 
-// getBridgeInterface fetches the Interface record with the given name only when
-// it is attached to one of this bridge's ports.
-func (br *OVSBridge) getBridgeInterface(ctx context.Context, ifName string) (*Interface, error) {
+// getInterfaceOnBridge fetches the Interface record with the given name only when
+// it is attached to the specified bridge.
+func (br *OVSBridge) getInterfaceOnBridge(ctx context.Context, ifName string) (*Interface, error) {
 	bridge, err := br.getBridge(ctx)
 	if err != nil {
 		return nil, err
@@ -1319,7 +1319,9 @@ func (br *OVSBridge) getBridgeInterface(ctx context.Context, ifName string) (*In
 	if err := br.ovsdb.WhereCache(func(p *Port) bool {
 		return portUUIDs.Has(p.UUID)
 	}).List(ctx, &ports); err != nil {
-		klog.ErrorS(err, "Failed to list Port table", "bridge", br.name)
+		if !errors.Is(err, client.ErrNotFound) {
+			klog.ErrorS(err, "Failed to list Port table", "bridge", br.name)
+		}
 		return nil, err
 	}
 
@@ -1331,7 +1333,9 @@ func (br *OVSBridge) getBridgeInterface(ctx context.Context, ifName string) (*In
 	if err := br.ovsdb.WhereCache(func(i *Interface) bool {
 		return i.Name == ifName && ifUUIDs.Has(i.UUID)
 	}).List(ctx, &intfs); err != nil {
-		klog.ErrorS(err, "Failed to list Interface table", "bridge", br.name, "interface", ifName)
+		if !errors.Is(err, client.ErrNotFound) {
+			klog.ErrorS(err, "Failed to list Interface table", "bridge", br.name, "interface", ifName)
+		}
 		return nil, err
 	}
 
