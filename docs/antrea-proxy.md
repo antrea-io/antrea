@@ -226,7 +226,7 @@ each Node. DNS queries are intercepted by a local instance of CoreDNS, which
 forwards the requests to CoreDNS (cluster local queries) or the upstream DNS
 server in case of a cache miss.
 
-The way it works (normally) is by assigning the the kube-dns ClusterIP to a
+The way it works (normally) is by assigning the kube-dns ClusterIP to a
 local "dummy" interface, and installing iptables rules to disable connection
 tracking for the queries and bypass kube-proxy. The local CoreDNS instance is
 configured to bind to that address and can therefore intercept queries. In case
