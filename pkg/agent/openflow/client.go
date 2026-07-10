@@ -174,6 +174,10 @@ type Client interface {
 	// IP in a single address family (IPv4 or IPv6).
 	InstallPodSNATFlows(ofPort uint32, snatIP net.IP, snatMark uint32) error
 
+	// InstallPodSteerSNATFlows installs the Steer SNAT flows for a local Pod.
+	// It is used in noEncap mode with direct routing to steer the traffic to the egress node.
+	InstallPodSteerSNATFlows(ofPort uint32, snatIP net.IP, steerMark uint32) error
+
 	// UninstallPodSNATFlows removes the SNAT flows for the local Pod.
 	UninstallPodSNATFlows(ofPort uint32) error
 
@@ -1086,6 +1090,14 @@ func (c *client) UninstallSNATMarkFlows(mark uint32) error {
 	c.replayMutex.RLock()
 	defer c.replayMutex.RUnlock()
 	return c.deleteFlows(c.featureEgress.cachedFlows, cacheKey)
+}
+
+func (c *client) InstallPodSteerSNATFlows(ofPort uint32, snatIP net.IP, steerMark uint32) error {
+	flows := []binding.Flow{c.featureEgress.steerSNATRuleFlow(ofPort, snatIP, steerMark)}
+	cacheKey := fmt.Sprintf("p%x", ofPort)
+	c.replayMutex.RLock()
+	defer c.replayMutex.RUnlock()
+	return c.addFlows(c.featureEgress.cachedFlows, cacheKey, flows)
 }
 
 func (c *client) InstallPodSNATFlows(ofPort uint32, snatIP net.IP, snatMark uint32) error {

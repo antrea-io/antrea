@@ -2253,6 +2253,25 @@ func (f *featureEgress) snatIPFromTunnelFlow(snatIP net.IP, mark uint32) binding
 // snatRuleFlow generates the flow that applies the SNAT rule for a local Pod. If the SNAT IP exists on the local Node,
 // it sets the packet mark with the ID of the SNAT IP, for the traffic from local Pods to external; if the SNAT IP is
 // on a remote Node, it tunnels the packets to the remote Node.
+func (f *featureEgress) steerSNATRuleFlow(ofPort uint32, snatIP net.IP, steerMark uint32) binding.Flow {
+	cookieID := f.cookieAllocator.Request(f.category).Raw()
+	ipProtocol := getIPProtocol(snatIP)
+
+	fb := EgressMarkTable.ofTable.BuildFlow(priorityNormal).
+		Cookie(cookieID).
+		MatchProtocol(ipProtocol).
+		MatchCTStateTrk(true).
+		MatchInPort(ofPort).
+		Action().LoadPktMarkRange(steerMark, snatPktMarkRange).
+		Action().LoadRegMark(ToGatewayRegMark)
+	if f.enableEgressTrafficShaping {
+		fb = fb.Action().GotoTable(EgressQoSTable.GetID())
+	} else {
+		fb = fb.Action().GotoStage(stageSwitching)
+	}
+	return fb.Done()
+}
+
 func (f *featureEgress) snatRuleFlow(ofPort uint32, snatIP net.IP, snatMark uint32, localGatewayMAC net.HardwareAddr) binding.Flow {
 	cookieID := f.cookieAllocator.Request(f.category).Raw()
 	ipProtocol := getIPProtocol(snatIP)

@@ -165,6 +165,10 @@ const (
 	// Enable Egress traffic shaping.
 	EgressTrafficShaping featuregate.Feature = "EgressTrafficShaping"
 
+	// alpha: vX.Y
+	// Allow users to use direct routing for Egress in noEncap mode.
+	EgressDirectRouting featuregate.Feature = "EgressDirectRouting"
+
 	// alpha: v1.15
 	// beta: v2.3
 	// Allow users to allocate Egress IPs from a different subnet from the default Node subnet.
@@ -231,6 +235,7 @@ var (
 		LoadBalancerModeDSR:           {Default: false, PreRelease: featuregate.Alpha},
 		AdminNetworkPolicy:            {Default: false, PreRelease: featuregate.Alpha},
 		EgressTrafficShaping:          {Default: false, PreRelease: featuregate.Alpha},
+		EgressDirectRouting:           {Default: false, PreRelease: featuregate.Alpha},
 		EgressSeparateSubnet:          {Default: true, PreRelease: featuregate.Beta},
 		NodeNetworkPolicy:             {Default: false, PreRelease: featuregate.Alpha},
 		NodeLatencyMonitor:            {Default: false, PreRelease: featuregate.Alpha},
@@ -266,6 +271,7 @@ var (
 		PreferSameTrafficDistribution,
 		TrafficControl,
 		EgressTrafficShaping,
+		EgressDirectRouting,
 		EgressSeparateSubnet,
 		NodeNetworkPolicy,
 		NodeLatencyMonitor,
@@ -316,6 +322,7 @@ var (
 		LoadBalancerModeDSR:         {},
 		CleanupStaleUDPSvcConntrack: {},
 		EgressTrafficShaping:        {},
+		EgressDirectRouting:         {},
 		EgressSeparateSubnet:        {},
 		NodeNetworkPolicy:           {},
 		FlowExporter:                {},

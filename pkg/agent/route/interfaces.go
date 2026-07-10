@@ -62,6 +62,24 @@ type Interface interface {
 	// DeleteSNATRule should delete rule to SNAT outgoing traffic with the mark.
 	DeleteSNATRule(mark uint32) error
 
+	// AddEgressSNATIPSetRule creates the ipset and adds a rule to SNAT traffic from the ipset.
+	AddEgressSNATIPSetRule(egressIP net.IP, ipsetName string, isIPv6 bool) error
+
+	// DeleteEgressSNATIPSetRule deletes the SNAT rule for the ipset and deletes the ipset.
+	DeleteEgressSNATIPSetRule(egressIP net.IP, ipsetName string, isIPv6 bool) error
+
+	// AddEgressSNATIPSetMember adds a Pod IP to the egress ipset.
+	AddEgressSNATIPSetMember(ipsetName string, podIP string) error
+
+	// DeleteEgressSNATIPSetMember removes a Pod IP from the egress ipset.
+	DeleteEgressSNATIPSetMember(ipsetName string, podIP string) error
+
+	// AddEgressSteerMasqueradeBypass adds a masquerade bypass rule for the steer mark.
+	AddEgressSteerMasqueradeBypass(mark uint32, isIPv6 bool) error
+
+	// DeleteEgressSteerMasqueradeBypass deletes the masquerade bypass rule for the steer mark.
+	DeleteEgressSteerMasqueradeBypass(mark uint32, isIPv6 bool) error
+
 	// RestoreEgressRoutesAndRules restores the routes and rules configured on the system for Egresses to the cache.
 	RestoreEgressRoutesAndRules(minTableID, maxTableID int) error
 

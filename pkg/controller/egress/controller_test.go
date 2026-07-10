@@ -190,7 +190,7 @@ func newController(objects, crdObjects []runtime.Object) *egressController {
 		informerFactory.Core().V1().Pods(),
 		informerFactory.Core().V1().Namespaces(),
 		crdInformerFactory.Crd().V1alpha2().ExternalEntities())
-	controller := NewEgressController(crdClient, groupEntityIndex, egressInformer, externalIPAllocator, egressGroupStore)
+	controller := NewEgressController(crdClient, groupEntityIndex, egressInformer, crdInformerFactory.Crd().V1beta1().ExternalIPPools(), externalIPAllocator, egressGroupStore, informerFactory.Core().V1().Nodes())
 	return &egressController{
 		controller,
 		client,

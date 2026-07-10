@@ -33,6 +33,8 @@ var (
 
 	// SNATIPMarkMask is the bits of packet mark that stores the ID of the
 	// SNAT IP for a "Pod -> external" egress packet, that is to be SNAT'd.
+	// Steer marks also reuse the 0-7 SNATIPMarkMask space because they use
+	// the same per-Node allocator, ensuring no collisions.
 	SNATIPMarkMask = uint32(0xFF)
 )
 
@@ -45,4 +47,9 @@ const (
 
 	// ReplyEgressRouteTable is the route table ID which is used to add policy routing rules in hybrid, noEncap, and WireGuard encryption modes.
 	ReplyEgressRouteTable = 141
+
+	// MinEgressSteerRouteTable to MaxEgressSteerRouteTable are the route table IDs used for steer routes
+	// in pure noEncap mode for direct routing.
+	MinEgressSteerRouteTable = 121
+	MaxEgressSteerRouteTable = 140
 )

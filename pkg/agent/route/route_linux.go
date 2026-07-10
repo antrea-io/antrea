@@ -195,6 +195,10 @@ type Client struct {
 	nodeNeighbors sync.Map
 	// markToSNATIP caches marks to SNAT IPs. It's used in Egress feature.
 	markToSNATIP sync.Map
+	// steerBypassMarks caches steer marks used for Egress bypass.
+	steerBypassMarks sync.Map
+	// egressSNATIPSets caches ipset names to SNAT IPs.
+	egressSNATIPSets sync.Map
 	// iptablesInitialized is used to notify when iptables initialization is done.
 	iptablesInitialized chan struct{}
 	proxyAll            bool
@@ -1057,6 +1061,32 @@ func (c *Client) syncIPTables(cleanupStaleJumpRules bool) error {
 		return true
 	})
 
+	steerBypassMarksIPv4 := map[uint32]struct{}{}
+	steerBypassMarksIPv6 := map[uint32]struct{}{}
+	c.steerBypassMarks.Range(func(key, value interface{}) bool {
+		mark := key.(uint32)
+		isIPv6 := value.(bool)
+		if !isIPv6 {
+			steerBypassMarksIPv4[mark] = struct{}{}
+		} else {
+			steerBypassMarksIPv6[mark] = struct{}{}
+		}
+		return true
+	})
+
+	egressSNATIPSetsIPv4 := map[string]net.IP{}
+	egressSNATIPSetsIPv6 := map[string]net.IP{}
+	c.egressSNATIPSets.Range(func(key, value interface{}) bool {
+		ipsetName := key.(string)
+		egressIP := value.(net.IP)
+		if egressIP.To4() != nil {
+			egressSNATIPSetsIPv4[ipsetName] = egressIP
+		} else {
+			egressSNATIPSetsIPv6[ipsetName] = egressIP
+		}
+		return true
+	})
+
 	addFilterRulesToChain := func(iptablesRulesByChain map[string][]string, m *sync.Map) {
 		m.Range(func(key, value interface{}) bool {
 			chain := key.(string)
@@ -1091,6 +1121,8 @@ func (c *Client) syncIPTables(cleanupStaleJumpRules bool) error {
 			config.VirtualNodePortDNATIPv4,
 			config.VirtualServiceIPv4,
 			snatMarkToIPv4,
+			steerBypassMarksIPv4,
+			egressSNATIPSetsIPv4,
 			iptablesFilterRulesByChainV4,
 			false)
 
@@ -1111,6 +1143,8 @@ func (c *Client) syncIPTables(cleanupStaleJumpRules bool) error {
 			config.VirtualNodePortDNATIPv6,
 			config.VirtualServiceIPv6,
 			snatMarkToIPv6,
+			steerBypassMarksIPv6,
+			egressSNATIPSetsIPv6,
 			iptablesFilterRulesByChainV6,
 			true)
 		// Setting --noflush to keep the previous contents (i.e. non antrea managed chains) of the tables.
@@ -1166,6 +1200,8 @@ func (c *Client) restoreIptablesData(podCIDR *net.IPNet,
 	nodePortDNATVirtualIP,
 	serviceVirtualIP net.IP,
 	snatMarkToIP map[uint32]net.IP,
+	steerBypassMarks map[uint32]struct{},
+	egressSNATIPSets map[string]net.IP,
 	iptablesFiltersRuleByChain map[string][]string,
 	isIPv6 bool) *bytes.Buffer {
 	// Create required rules in the antrea chains.
@@ -1436,6 +1472,14 @@ func (c *Client) restoreIptablesData(podCIDR *net.IPNet,
 		if c.egressSNATRandomFully {
 			rule = append(rule, "--random-fully")
 		}
+		writeLine(iptablesData, rule...)
+	}
+	for mark := range steerBypassMarks {
+		rule := append([]string{"-A", antreaPostRoutingChain}, c.steerMasqueradeBypassRuleSpec(mark)...)
+		writeLine(iptablesData, rule...)
+	}
+	for ipsetName, egressIP := range egressSNATIPSets {
+		rule := append([]string{"-A", antreaPostRoutingChain}, c.egressSNATIPSetRuleSpec(egressIP, ipsetName)...)
 		writeLine(iptablesData, rule...)
 	}
 	if !c.noSNAT {
@@ -2270,6 +2314,76 @@ func (c *Client) DeleteSNATRule(mark uint32) error {
 		protocol = iptables.ProtocolIPv6
 	}
 	return c.iptables.DeleteRule(protocol, iptables.NATTable, antreaPostRoutingChain, c.snatRuleSpec(snatIP, mark))
+}
+
+func (c *Client) steerMasqueradeBypassRuleSpec(mark uint32) []string {
+	return []string{
+		"-o", c.nodeConfig.NodeTransportInterfaceName,
+		"-m", "mark", "--mark", fmt.Sprintf("%#08x/%#08x", mark, types.SNATIPMarkMask),
+		"-j", "RETURN",
+	}
+}
+
+func (c *Client) AddEgressSteerMasqueradeBypass(mark uint32, isIPv6 bool) error {
+	protocol := iptables.ProtocolIPv4
+	if isIPv6 {
+		protocol = iptables.ProtocolIPv6
+	}
+	c.steerBypassMarks.Store(mark, isIPv6)
+	return c.iptables.InsertRule(protocol, iptables.NATTable, antreaPostRoutingChain, c.steerMasqueradeBypassRuleSpec(mark))
+}
+
+func (c *Client) DeleteEgressSteerMasqueradeBypass(mark uint32, isIPv6 bool) error {
+	protocol := iptables.ProtocolIPv4
+	if isIPv6 {
+		protocol = iptables.ProtocolIPv6
+	}
+	c.steerBypassMarks.Delete(mark)
+	return c.iptables.DeleteRule(protocol, iptables.NATTable, antreaPostRoutingChain, c.steerMasqueradeBypassRuleSpec(mark))
+}
+
+func (c *Client) egressSNATIPSetRuleSpec(egressIP net.IP, ipsetName string) []string {
+	rule := []string{
+		"-o", c.nodeConfig.NodeTransportInterfaceName,
+		"-m", "set", "--match-set", ipsetName, "src",
+		"-j", iptables.SNATTarget, "--to", egressIP.String(),
+	}
+	if c.egressSNATRandomFully {
+		rule = append(rule, "--random-fully")
+	}
+	return rule
+}
+
+func (c *Client) AddEgressSNATIPSetRule(egressIP net.IP, ipsetName string, isIPv6 bool) error {
+	if err := c.ipset.CreateIPSet(ipsetName, ipset.HashIP, isIPv6); err != nil {
+		return err
+	}
+	c.egressSNATIPSets.Store(ipsetName, egressIP)
+	protocol := iptables.ProtocolIPv4
+	if isIPv6 {
+		protocol = iptables.ProtocolIPv6
+	}
+	return c.iptables.InsertRule(protocol, iptables.NATTable, antreaPostRoutingChain, c.egressSNATIPSetRuleSpec(egressIP, ipsetName))
+}
+
+func (c *Client) DeleteEgressSNATIPSetRule(egressIP net.IP, ipsetName string, isIPv6 bool) error {
+	c.egressSNATIPSets.Delete(ipsetName)
+	protocol := iptables.ProtocolIPv4
+	if isIPv6 {
+		protocol = iptables.ProtocolIPv6
+	}
+	if err := c.iptables.DeleteRule(protocol, iptables.NATTable, antreaPostRoutingChain, c.egressSNATIPSetRuleSpec(egressIP, ipsetName)); err != nil {
+		klog.ErrorS(err, "Failed to delete Egress SNAT ipset rule", "ipsetName", ipsetName)
+	}
+	return c.ipset.DestroyIPSet(ipsetName)
+}
+
+func (c *Client) AddEgressSNATIPSetMember(ipsetName string, podIP string) error {
+	return c.ipset.AddEntry(ipsetName, podIP)
+}
+
+func (c *Client) DeleteEgressSNATIPSetMember(ipsetName string, podIP string) error {
+	return c.ipset.DelEntry(ipsetName, podIP)
 }
 
 func (c *Client) AddEgressRoutes(tableID uint32, dev int, gateway net.IP, prefixLength int) error {

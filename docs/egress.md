@@ -532,6 +532,10 @@ This feature is currently supported for Nodes running Linux and "encap" / "hybri
 / "noEncap" / WireGuard encryption mode. The support for Windows and other traffic
 modes will be added in the future.
 
+Note that for pure "noEncap" mode, direct routing via the `EgressDirectRouting`
+feature gate (Alpha) is required, and is currently only supported when the egress Node
+and the Pod's Node are in the same subnet (cross-subnet `noEncap` Egress is not supported).
+
 The previous implementation of Antrea Egress before Antrea v1.7.0 does not work
 with the `strictARP` configuration of `kube-proxy` IPVS mode. The `strictARP`
 configuration is required by some Service load balancing solutions including:

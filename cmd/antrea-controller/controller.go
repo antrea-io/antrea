@@ -252,7 +252,7 @@ func run(o *Options) error {
 	}
 
 	if features.DefaultFeatureGate.Enabled(features.Egress) {
-		egressController = egress.NewEgressController(crdClient, groupEntityIndex, egressInformer, externalIPPoolController, egressGroupStore)
+		egressController = egress.NewEgressController(crdClient, groupEntityIndex, egressInformer, externalIPPoolInformer, externalIPPoolController, egressGroupStore, nodeInformer)
 	}
 
 	if features.DefaultFeatureGate.Enabled(features.ServiceExternalIP) {

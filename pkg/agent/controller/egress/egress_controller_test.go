@@ -48,6 +48,7 @@ import (
 	routetest "antrea.io/antrea/v2/pkg/agent/route/testing"
 	servicecidrtest "antrea.io/antrea/v2/pkg/agent/servicecidr/testing"
 	"antrea.io/antrea/v2/pkg/agent/types"
+	"antrea.io/antrea/v2/pkg/agent/config"
 	"antrea.io/antrea/v2/pkg/agent/util"
 	cpv1b2 "antrea.io/antrea/v2/pkg/apis/controlplane/v1beta2"
 	crdv1b1 "antrea.io/antrea/v2/pkg/apis/crd/v1beta1"
@@ -207,6 +208,8 @@ func newFakeController(t *testing.T, initObjects []runtime.Object) *fakeControll
 		true,
 		nil,
 		true,
+		&config.NodeConfig{Name: fakeNode, NodeTransportIPv4Addr: &net.IPNet{IP: net.ParseIP("192.168.1.1"), Mask: net.CIDRMask(24, 32)}, NodeTransportInterfaceName: "eth0"},
+		&config.NetworkConfig{TrafficEncapMode: config.TrafficEncapModeNoEncap},
 	)
 	egressController.localIPDetector = localIPDetector
 	return &fakeController{

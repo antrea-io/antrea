@@ -33,6 +33,8 @@ import (
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/util/retry"
 	"k8s.io/client-go/util/workqueue"
+	coreinformers "k8s.io/client-go/informers/core/v1"
+	corelisters "k8s.io/client-go/listers/core/v1"
 	"k8s.io/klog/v2"
 
 	"antrea.io/antrea/v2/pkg/apis/controlplane"
@@ -40,10 +42,11 @@ import (
 	"antrea.io/antrea/v2/pkg/apiserver/storage"
 	clientset "antrea.io/antrea/v2/pkg/client/clientset/versioned"
 	egressinformers "antrea.io/antrea/v2/pkg/client/informers/externalversions/crd/v1beta1"
-	egresslisters "antrea.io/antrea/v2/pkg/client/listers/crd/v1beta1"
+	crdlisters "antrea.io/antrea/v2/pkg/client/listers/crd/v1beta1"
 	"antrea.io/antrea/v2/pkg/controller/externalippool"
 	"antrea.io/antrea/v2/pkg/controller/grouping"
 	antreatypes "antrea.io/antrea/v2/pkg/controller/types"
+	"antrea.io/antrea/v2/pkg/features"
 	"antrea.io/antrea/v2/pkg/util/k8s"
 )
 
@@ -80,10 +83,16 @@ type EgressController struct {
 	ipAllocationMutex sync.RWMutex
 
 	egressInformer egressinformers.EgressInformer
-	egressLister   egresslisters.EgressLister
+	egressLister   crdlisters.EgressLister
 	egressIndexer  cache.Indexer
 	// egressListerSynced is a function which returns true if the Egresses shared informer has been synced at least once.
 	egressListerSynced cache.InformerSynced
+	externalIPPoolLister       crdlisters.ExternalIPPoolLister
+	externalIPPoolListerSynced cache.InformerSynced
+	// nodeLister is used to list Nodes for resolving Egress nodeSelectors.
+	nodeLister corelisters.NodeLister
+	// nodeListerSynced is a function which returns true if the Node shared informer has been synced at least once.
+	nodeListerSynced cache.InformerSynced
 	// egressGroupStore is the storage where the EgressGroups are stored.
 	egressGroupStore storage.Interface
 	// queue maintains the EgressGroup objects that need to be synced.
@@ -98,13 +107,19 @@ type EgressController struct {
 func NewEgressController(crdClient clientset.Interface,
 	groupingInterface grouping.Interface,
 	egressInformer egressinformers.EgressInformer,
+	externalIPPoolInformer egressinformers.ExternalIPPoolInformer,
 	externalIPAllocator externalippool.ExternalIPAllocator,
-	egressGroupStore storage.Interface) *EgressController {
+	egressGroupStore storage.Interface,
+	nodeInformer coreinformers.NodeInformer) *EgressController {
 	c := &EgressController{
-		crdClient:          crdClient,
-		egressInformer:     egressInformer,
-		egressLister:       egressInformer.Lister(),
-		egressListerSynced: egressInformer.Informer().HasSynced,
+		crdClient:                  crdClient,
+		egressInformer:             egressInformer,
+		egressLister:               egressInformer.Lister(),
+		egressListerSynced:         egressInformer.Informer().HasSynced,
+		externalIPPoolLister:       externalIPPoolInformer.Lister(),
+		externalIPPoolListerSynced: externalIPPoolInformer.Informer().HasSynced,
+		nodeLister:                 nodeInformer.Lister(),
+		nodeListerSynced:   nodeInformer.Informer().HasSynced,
 		egressIndexer:      egressInformer.Informer().GetIndexer(),
 		egressGroupStore:   egressGroupStore,
 		queue: workqueue.NewTypedRateLimitingQueueWithConfig(
@@ -158,7 +173,7 @@ func (c *EgressController) Run(stopCh <-chan struct{}) {
 	klog.InfoS("Starting", "controller", controllerName)
 	defer klog.InfoS("Shutting down", "controller", controllerName)
 
-	cacheSyncs := []cache.InformerSynced{c.egressListerSynced, c.groupingInterfaceSynced, c.externalIPAllocator.HasSynced}
+	cacheSyncs := []cache.InformerSynced{c.egressListerSynced, c.externalIPPoolListerSynced, c.nodeListerSynced, c.groupingInterfaceSynced, c.externalIPAllocator.HasSynced}
 	if !cache.WaitForNamedCacheSync(controllerName, stopCh, cacheSyncs...) {
 		return
 	}
@@ -409,6 +424,22 @@ func (c *EgressController) syncEgress(key string) error {
 		// Update the NodeNames in order to set the SpanMeta for EgressGroup.
 		nodeNames.Insert(pod.Spec.NodeName)
 	}
+
+	if features.DefaultFeatureGate.Enabled(features.EgressDirectRouting) && egress.Spec.ExternalIPPool != "" {
+		pool, err := c.externalIPPoolLister.Get(egress.Spec.ExternalIPPool)
+		if err == nil {
+			selector, _ := metav1.LabelSelectorAsSelector(&pool.Spec.NodeSelector)
+			if selector != nil {
+				nodes, err := c.nodeLister.List(selector)
+				if err == nil {
+					for _, node := range nodes {
+						nodeNames.Insert(node.Name)
+					}
+				}
+			}
+		}
+	}
+
 	updatedEgressGroup := &antreatypes.EgressGroup{
 		UID:               egressGroup.UID,
 		Name:              egressGroup.Name,

@@ -33,6 +33,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/apimachinery/pkg/watch"
 	coreinformers "k8s.io/client-go/informers/core/v1"
+	corelisters "k8s.io/client-go/listers/core/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/tools/events"
@@ -41,6 +42,7 @@ import (
 	"k8s.io/klog/v2"
 
 	"antrea.io/antrea/v2/pkg/agent/client"
+	"antrea.io/antrea/v2/pkg/agent/config"
 	"antrea.io/antrea/v2/pkg/agent/interfacestore"
 	"antrea.io/antrea/v2/pkg/agent/ipassigner"
 	"antrea.io/antrea/v2/pkg/agent/ipassigner/linkmonitor"
@@ -56,6 +58,7 @@ import (
 	crdinformers "antrea.io/antrea/v2/pkg/client/informers/externalversions/crd/v1beta1"
 	crdlisters "antrea.io/antrea/v2/pkg/client/listers/crd/v1beta1"
 	"antrea.io/antrea/v2/pkg/controller/metrics"
+	"antrea.io/antrea/v2/pkg/features"
 	"antrea.io/antrea/v2/pkg/util/channel"
 	"antrea.io/antrea/v2/pkg/util/k8s"
 )
@@ -131,6 +134,10 @@ type egressIPState struct {
 	flowsInstalled bool
 	// Whether its iptables rule has been installed.
 	ruleInstalled bool
+	// The routing table ID for a steer route, used for non local IPs in direct routing mode.
+	steerTable uint32
+	// The SNAT IP set name for local Egress IP in direct routing mode.
+	ipsetName string
 	// The subnet the Egress IP is associated with.
 	subnetInfo *crdv1b1.SubnetInfo
 }
@@ -156,6 +163,9 @@ type EgressController struct {
 	k8sClient            kubernetes.Interface
 	crdClient            clientsetversioned.Interface
 	antreaClientProvider client.AntreaClientProvider
+	nodeConfig           *config.NodeConfig
+	networkConfig        *config.NetworkConfig
+	nodeLister           corelisters.NodeLister
 
 	egressInformer     cache.SharedIndexInformer
 	egressLister       crdlisters.EgressLister
@@ -170,6 +180,7 @@ type EgressController struct {
 	ifaceStore      interfacestore.InterfaceStore
 	nodeName        string
 	markAllocator   *idAllocator
+	steerTableAllocator *idAllocator
 
 	egressGroups      map[string]sets.Set[string]
 	egressGroupsMutex sync.RWMutex
@@ -229,6 +240,8 @@ func NewEgressController(
 	supportSeparateSubnet bool,
 	linkMonitor linkmonitor.Interface,
 	uniqueMACForSubInterfaces bool,
+	nodeConfig *config.NodeConfig,
+	networkConfig *config.NetworkConfig,
 ) (*EgressController, error) {
 	if trafficShapingEnabled && !openflow.OVSMetersAreSupported() {
 		klog.Info("EgressTrafficShaping feature gate is enabled, but it is ignored because OVS meters are not supported.")
@@ -262,7 +275,11 @@ func NewEgressController(
 		egressBindings:       map[string]*egressBinding{},
 		localIPDetector:      ipassigner.NewLocalIPDetector(),
 		markAllocator:        newIDAllocator(minEgressMark, maxEgressMark),
+		steerTableAllocator:  newIDAllocator(types.MinEgressSteerRouteTable, types.MaxEgressSteerRouteTable),
 		cluster:              cluster,
+		nodeLister:           nodeInformers.Lister(),
+		nodeConfig:           nodeConfig,
+		networkConfig:        networkConfig,
 		serviceCIDRInterface: serviceCIDRInterface,
 		// One buffer is enough as we just use it to ensure the target handler is executed once.
 		serviceCIDRUpdateCh:         make(chan struct{}, 1),
@@ -517,6 +534,9 @@ func (c *EgressController) Run(stopCh <-chan struct{}) {
 	if err := c.routeClient.RestoreEgressRoutesAndRules(types.MinRequestEgressRouteTable, types.MaxRequestEgressRouteTable); err != nil {
 		klog.ErrorS(err, "Failed to restore Egress routes and rules")
 	}
+	if err := c.routeClient.RestoreEgressRoutesAndRules(types.MinEgressSteerRouteTable, types.MaxEgressSteerRouteTable); err != nil {
+		klog.ErrorS(err, "Failed to restore Egress steer routes and rules")
+	}
 
 	go wait.NonSlidingUntil(c.watchEgressGroup, 5*time.Second, stopCh)
 
@@ -655,6 +675,15 @@ func (c *EgressController) uninstallPolicyRoute(ipState *egressIPState) error {
 		delete(c.egressRouteTables, *ipState.subnetInfo)
 	}
 	ipState.subnetInfo = nil
+	if ipState.steerTable != 0 {
+		c.routeClient.DeleteEgressRule(ipState.steerTable, ipState.mark, ipState.egressIP.To4() == nil)
+		c.routeClient.DeleteEgressRoutes(ipState.steerTable)
+		c.steerTableAllocator.release(ipState.steerTable)
+		ipState.steerTable = 0
+	}
+	if ipState.mark != 0 {
+		c.routeClient.DeleteEgressSteerMasqueradeBypass(ipState.mark, ipState.egressIP.To4() == nil)
+	}
 	return nil
 }
 
@@ -662,8 +691,8 @@ func (c *EgressController) uninstallPolicyRoute(ipState *egressIPState) error {
 // If it's called the first time for a local Egress IP, it allocates a locally-unique mark for the IP and installs flows
 // and iptables rule for this IP and the mark.
 // If the Egress IP is changed from local to non local, it uninstalls flows and iptables rule and releases the mark.
-// The method returns the mark on success. Non local Egresses use 0 as the mark.
-func (c *EgressController) realizeEgressIP(egressName, egressIP string, subnetInfo *crdv1b1.SubnetInfo) (uint32, error) {
+// The method returns the mark on success. Non local Egresses use 0 as the mark, unless direct routing is used.
+func (c *EgressController) realizeEgressIP(egressName, egressIP string, subnetInfo *crdv1b1.SubnetInfo, egressNode string) (uint32, error) {
 	isLocalIP := c.localIPDetector.IsLocalIP(egressIP)
 
 	c.egressIPStatesMutex.Lock()
@@ -706,6 +735,15 @@ func (c *EgressController) realizeEgressIP(egressName, egressIP string, subnetIn
 		if err := c.installPolicyRoute(ipState, subnetInfo); err != nil {
 			return 0, fmt.Errorf("error installing policy route for IP %s: %v", ipState.egressIP, err)
 		}
+		if features.DefaultFeatureGate.Enabled(features.EgressDirectRouting) && c.networkConfig.TrafficEncapMode == config.TrafficEncapModeNoEncap {
+			if ipState.ipsetName == "" {
+				ipsetName := fmt.Sprintf("antrea-egress-%s", ipState.egressIP.String())
+				if err := c.routeClient.AddEgressSNATIPSetRule(ipState.egressIP, ipsetName, ipState.egressIP.To4() == nil); err != nil {
+					return 0, fmt.Errorf("error installing egress SNAT ipset rule for IP %s: %v", ipState.egressIP, err)
+				}
+				ipState.ipsetName = ipsetName
+			}
+		}
 	} else {
 		// Ensure datapath is uninstalled properly.
 		if err := c.uninstallPolicyRoute(ipState); err != nil {
@@ -717,18 +755,87 @@ func (c *EgressController) realizeEgressIP(egressName, egressIP string, subnetIn
 			}
 			ipState.ruleInstalled = false
 		}
+		if ipState.ipsetName != "" {
+			if err := c.routeClient.DeleteEgressSNATIPSetRule(ipState.egressIP, ipState.ipsetName, ipState.egressIP.To4() == nil); err != nil {
+				klog.ErrorS(err, "Error uninstalling egress SNAT ipset rule", "ip", ipState.egressIP)
+			}
+			ipState.ipsetName = ""
+		}
 		if ipState.flowsInstalled {
 			if err := c.ofClient.UninstallSNATMarkFlows(ipState.mark); err != nil {
 				return 0, fmt.Errorf("error uninstalling SNAT mark flows for IP %s: %v", ipState.egressIP, err)
 			}
 			ipState.flowsInstalled = false
 		}
-		if ipState.mark != 0 {
-			err := c.markAllocator.release(ipState.mark)
-			if err != nil {
-				return 0, fmt.Errorf("error releasing mark for IP %s: %v", egressIP, err)
+		if features.DefaultFeatureGate.Enabled(features.EgressDirectRouting) && c.networkConfig.TrafficEncapMode == config.TrafficEncapModeNoEncap && egressNode != "" {
+			// Direct routing to a remote Egress Node in noEncap mode.
+			nodeObj, err := c.nodeLister.Get(egressNode)
+			var transportIP net.IP
+			if err == nil {
+				if addrs, err := k8s.GetNodeTransportAddrs(nodeObj); err == nil && addrs != nil {
+					if ipState.egressIP.To4() != nil {
+						transportIP = addrs.IPv4
+					} else {
+						transportIP = addrs.IPv6
+					}
+				}
 			}
-			ipState.mark = 0
+			if transportIP != nil {
+				var subnet *net.IPNet
+				if ipState.egressIP.To4() != nil {
+					subnet = c.nodeConfig.NodeTransportIPv4Addr
+				} else {
+					subnet = c.nodeConfig.NodeTransportIPv6Addr
+				}
+				if subnet != nil && subnet.Contains(transportIP) {
+					if ipState.mark == 0 {
+						ipState.mark, err = c.markAllocator.allocate()
+						if err != nil {
+							return 0, fmt.Errorf("error allocating mark for IP %s: %v", egressIP, err)
+						}
+					}
+					if ipState.steerTable == 0 {
+						tableID, err := c.steerTableAllocator.allocate()
+						if err != nil {
+							return 0, fmt.Errorf("error allocating steer table for IP %s: %v", egressIP, err)
+						}
+						ipState.steerTable = tableID
+					}
+					iface, err := net.InterfaceByName(c.nodeConfig.NodeTransportInterfaceName)
+					if err != nil {
+						return 0, fmt.Errorf("error getting interface %s: %v", c.nodeConfig.NodeTransportInterfaceName, err)
+					}
+					prefixLen, _ := subnet.Mask.Size()
+					if err := c.routeClient.AddEgressRoutes(ipState.steerTable, iface.Index, transportIP, prefixLen); err != nil {
+						return 0, fmt.Errorf("error adding steer routes: %v", err)
+					}
+					if err := c.routeClient.AddEgressRule(ipState.steerTable, ipState.mark, ipState.egressIP.To4() == nil); err != nil {
+						return 0, fmt.Errorf("error adding steer rule: %v", err)
+					}
+					if err := c.routeClient.AddEgressSteerMasqueradeBypass(ipState.mark, ipState.egressIP.To4() == nil); err != nil {
+						return 0, fmt.Errorf("error adding steer bypass: %v", err)
+					}
+				} else {
+					klog.Warningf("Transport IP %v of egress node %s is not in same subnet as local node, direct routing unsupported", transportIP, egressNode)
+					if ipState.mark != 0 {
+						c.markAllocator.release(ipState.mark)
+						ipState.mark = 0
+					}
+				}
+			} else {
+				if ipState.mark != 0 {
+					c.markAllocator.release(ipState.mark)
+					ipState.mark = 0
+				}
+			}
+		} else {
+			if ipState.mark != 0 {
+				err := c.markAllocator.release(ipState.mark)
+				if err != nil {
+					return 0, fmt.Errorf("error releasing mark for IP %s: %v", egressIP, err)
+				}
+				ipState.mark = 0
+			}
 		}
 	}
 	return ipState.mark, nil
@@ -1079,7 +1186,7 @@ func (c *EgressController) syncEgress(egressName string) error {
 	}
 
 	// Realize the latest EgressIP and get the desired mark.
-	mark, err := c.realizeEgressIP(egressName, desiredEgressIP, subnetInfo)
+	mark, err := c.realizeEgressIP(egressName, desiredEgressIP, subnetInfo, desiredNode)
 	if err != nil {
 		return err
 	}
@@ -1138,12 +1245,36 @@ func (c *EgressController) syncEgress(egressName string) error {
 		}
 
 		ofPort := ifaces[0].OFPort
+
+		ipState, ok := c.egressIPStates[eState.egressIP]
+		var ipsetName string
+		var steerTable uint32
+		if ok && ipState != nil {
+			ipsetName = ipState.ipsetName
+			steerTable = ipState.steerTable
+		}
+
 		if eState.ofPorts.Has(ofPort) {
 			staleOFPorts.Delete(ofPort)
+			// Ensure it's in the IP set if we are using IP sets for SNAT selection
+			if ipsetName != "" && len(ifaces[0].IPs) > 0 {
+				c.routeClient.AddEgressSNATIPSetMember(ipsetName, ifaces[0].IPs[0].String())
+			}
 			continue
 		}
-		if err := c.ofClient.InstallPodSNATFlows(uint32(ofPort), egressIP, mark); err != nil {
-			return err
+
+		if ipsetName != "" && len(ifaces[0].IPs) > 0 {
+			c.routeClient.AddEgressSNATIPSetMember(ipsetName, ifaces[0].IPs[0].String())
+		}
+
+		if steerTable != 0 {
+			if err := c.ofClient.InstallPodSteerSNATFlows(uint32(ofPort), egressIP, mark); err != nil {
+				return err
+			}
+		} else {
+			if err := c.ofClient.InstallPodSNATFlows(uint32(ofPort), egressIP, mark); err != nil {
+				return err
+			}
 		}
 		eState.ofPorts.Insert(ofPort)
 	}
@@ -1184,11 +1315,21 @@ func (c *EgressController) uninstallEgress(egressName string, eState *egressStat
 }
 
 func (c *EgressController) uninstallPodFlows(egressName string, egressState *egressState, ofPorts sets.Set[int32], pods sets.Set[string]) error {
+	ipState, ok := c.egressIPStates[egressState.egressIP]
+	ipsetName := ""
+	if ok {
+		ipsetName = ipState.ipsetName
+	}
 	for ofPort := range ofPorts {
 		if err := c.ofClient.UninstallPodSNATFlows(uint32(ofPort)); err != nil {
 			return err
 		}
 		egressState.ofPorts.Delete(ofPort)
+	}
+	for podIP := range pods {
+		if ipsetName != "" {
+			c.routeClient.DeleteEgressSNATIPSetMember(ipsetName, podIP)
+		}
 	}
 
 	// Remove Pods from the Egress state after uninstalling Pod's flows to avoid overlapping. Otherwise another Egress

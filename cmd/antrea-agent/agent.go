@@ -593,6 +593,8 @@ func run(o *Options) error {
 			features.DefaultFeatureGate.Enabled(features.EgressSeparateSubnet),
 			linkMonitor,
 			*o.config.Egress.UniqueMACForSubInterfaces,
+			nodeConfig,
+			networkConfig,
 		)
 		if err != nil {
 			return fmt.Errorf("error creating new Egress controller: %v", err)
