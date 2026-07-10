@@ -82,7 +82,7 @@ antctl mc deploy leadercluster -n antrea-multicluster --antrea-version $TAG
 antctl mc deploy membercluster -n kube-system --antrea-version $TAG
 ```
 
-You can run the following command to verify the the leader and member
+You can run the following command to verify the leader and member
 `antrea-mc-controller` Pods are deployed and running:
 
 ```bash
