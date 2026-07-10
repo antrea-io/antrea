@@ -1,4 +1,4 @@
-// Copyright 2025 Antrea Authors
+// Copyright 2026 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -85,6 +85,48 @@ func (m *MockInterface) AddEgressRule(tableID, mark uint32, isIPv6 bool) error {
 func (mr *MockInterfaceMockRecorder) AddEgressRule(tableID, mark, isIPv6 any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddEgressRule", reflect.TypeOf((*MockInterface)(nil).AddEgressRule), tableID, mark, isIPv6)
+}
+
+// AddEgressSNATIPSetMember mocks base method.
+func (m *MockInterface) AddEgressSNATIPSetMember(ipsetName, podIP string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "AddEgressSNATIPSetMember", ipsetName, podIP)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// AddEgressSNATIPSetMember indicates an expected call of AddEgressSNATIPSetMember.
+func (mr *MockInterfaceMockRecorder) AddEgressSNATIPSetMember(ipsetName, podIP any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddEgressSNATIPSetMember", reflect.TypeOf((*MockInterface)(nil).AddEgressSNATIPSetMember), ipsetName, podIP)
+}
+
+// AddEgressSNATIPSetRule mocks base method.
+func (m *MockInterface) AddEgressSNATIPSetRule(egressIP net.IP, ipsetName string, isIPv6 bool) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "AddEgressSNATIPSetRule", egressIP, ipsetName, isIPv6)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// AddEgressSNATIPSetRule indicates an expected call of AddEgressSNATIPSetRule.
+func (mr *MockInterfaceMockRecorder) AddEgressSNATIPSetRule(egressIP, ipsetName, isIPv6 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddEgressSNATIPSetRule", reflect.TypeOf((*MockInterface)(nil).AddEgressSNATIPSetRule), egressIP, ipsetName, isIPv6)
+}
+
+// AddEgressSteerMasqueradeBypass mocks base method.
+func (m *MockInterface) AddEgressSteerMasqueradeBypass(mark uint32, isIPv6 bool) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "AddEgressSteerMasqueradeBypass", mark, isIPv6)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// AddEgressSteerMasqueradeBypass indicates an expected call of AddEgressSteerMasqueradeBypass.
+func (mr *MockInterfaceMockRecorder) AddEgressSteerMasqueradeBypass(mark, isIPv6 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddEgressSteerMasqueradeBypass", reflect.TypeOf((*MockInterface)(nil).AddEgressSteerMasqueradeBypass), mark, isIPv6)
 }
 
 // AddExternalIPConfigs mocks base method.
@@ -239,6 +281,48 @@ func (m *MockInterface) DeleteEgressRule(tableID, mark uint32, isIPv6 bool) erro
 func (mr *MockInterfaceMockRecorder) DeleteEgressRule(tableID, mark, isIPv6 any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteEgressRule", reflect.TypeOf((*MockInterface)(nil).DeleteEgressRule), tableID, mark, isIPv6)
+}
+
+// DeleteEgressSNATIPSetMember mocks base method.
+func (m *MockInterface) DeleteEgressSNATIPSetMember(ipsetName, podIP string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "DeleteEgressSNATIPSetMember", ipsetName, podIP)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// DeleteEgressSNATIPSetMember indicates an expected call of DeleteEgressSNATIPSetMember.
+func (mr *MockInterfaceMockRecorder) DeleteEgressSNATIPSetMember(ipsetName, podIP any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteEgressSNATIPSetMember", reflect.TypeOf((*MockInterface)(nil).DeleteEgressSNATIPSetMember), ipsetName, podIP)
+}
+
+// DeleteEgressSNATIPSetRule mocks base method.
+func (m *MockInterface) DeleteEgressSNATIPSetRule(egressIP net.IP, ipsetName string, isIPv6 bool) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "DeleteEgressSNATIPSetRule", egressIP, ipsetName, isIPv6)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// DeleteEgressSNATIPSetRule indicates an expected call of DeleteEgressSNATIPSetRule.
+func (mr *MockInterfaceMockRecorder) DeleteEgressSNATIPSetRule(egressIP, ipsetName, isIPv6 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteEgressSNATIPSetRule", reflect.TypeOf((*MockInterface)(nil).DeleteEgressSNATIPSetRule), egressIP, ipsetName, isIPv6)
+}
+
+// DeleteEgressSteerMasqueradeBypass mocks base method.
+func (m *MockInterface) DeleteEgressSteerMasqueradeBypass(mark uint32, isIPv6 bool) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "DeleteEgressSteerMasqueradeBypass", mark, isIPv6)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// DeleteEgressSteerMasqueradeBypass indicates an expected call of DeleteEgressSteerMasqueradeBypass.
+func (mr *MockInterfaceMockRecorder) DeleteEgressSteerMasqueradeBypass(mark, isIPv6 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteEgressSteerMasqueradeBypass", reflect.TypeOf((*MockInterface)(nil).DeleteEgressSteerMasqueradeBypass), mark, isIPv6)
 }
 
 // DeleteExternalIPConfigs mocks base method.

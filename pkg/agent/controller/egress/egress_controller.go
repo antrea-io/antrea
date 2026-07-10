@@ -651,38 +651,34 @@ func (c *EgressController) installPolicyRoute(ipState *egressIPState, subnetInfo
 
 // uninstallPolicyRoute deletes the policy route of the Egress IP.
 func (c *EgressController) uninstallPolicyRoute(ipState *egressIPState) error {
-	if !c.supportSeparateSubnet {
-		return nil
-	}
-	if ipState.subnetInfo == nil {
-		return nil
-	}
-	rt, exists := c.egressRouteTables[*ipState.subnetInfo]
-	if !exists {
-		return nil
-	}
-	subnetGateway := net.ParseIP(ipState.subnetInfo.Gateway)
-	if err := c.routeClient.DeleteEgressRule(rt.tableID, ipState.mark, subnetGateway.To4() == nil); err != nil {
-		return fmt.Errorf("error deleting ip rule for mark %v: %w", ipState.mark, err)
-	}
-	rt.marks.Delete(ipState.mark)
-	// Delete the route table if it is not used by any Egress.
-	if rt.marks.Len() == 0 {
-		if err := c.routeClient.DeleteEgressRoutes(rt.tableID); err != nil {
-			return fmt.Errorf("error deleting route table for subnet %v: %w", ipState.subnetInfo, err)
+	if ipState.subnetInfo != nil {
+		subnetInfo := *ipState.subnetInfo
+		ipState.subnetInfo = nil
+
+		if c.supportSeparateSubnet {
+			rt, exists := c.egressRouteTables[subnetInfo]
+			if !exists {
+				klog.Warningf("Failed to find egress route table for %v", subnetInfo)
+			} else {
+				rt.marks.Delete(ipState.mark)
+
+				subnetGw := net.ParseIP(subnetInfo.Gateway)
+				if err := c.routeClient.DeleteEgressRule(rt.tableID, ipState.mark, subnetGw.To4() == nil); err != nil {
+					return err
+				}
+
+				if rt.marks.Len() == 0 {
+					if err := c.routeClient.DeleteEgressRoutes(rt.tableID); err != nil {
+						return err
+					}
+					err := c.tableAllocator.release(rt.tableID)
+					if err != nil {
+						return err
+					}
+					delete(c.egressRouteTables, subnetInfo)
+				}
+			}
 		}
-		c.tableAllocator.release(rt.tableID)
-		delete(c.egressRouteTables, *ipState.subnetInfo)
-	}
-	ipState.subnetInfo = nil
-	if ipState.steerTable != 0 {
-		c.routeClient.DeleteEgressRule(ipState.steerTable, ipState.mark, ipState.egressIP.To4() == nil)
-		c.routeClient.DeleteEgressRoutes(ipState.steerTable)
-		c.steerTableAllocator.release(ipState.steerTable)
-		ipState.steerTable = 0
-	}
-	if ipState.mark != 0 {
-		c.routeClient.DeleteEgressSteerMasqueradeBypass(ipState.mark, ipState.egressIP.To4() == nil)
 	}
 	return nil
 }
@@ -754,6 +750,13 @@ func (c *EgressController) realizeEgressIP(egressName, egressIP string, subnetIn
 				return 0, fmt.Errorf("error uninstalling SNAT rule for IP %s: %v", ipState.egressIP, err)
 			}
 			ipState.ruleInstalled = false
+		}
+		if ipState.steerTable != 0 {
+			c.routeClient.DeleteEgressRule(ipState.steerTable, ipState.mark, ipState.egressIP.To4() == nil)
+			c.routeClient.DeleteEgressRoutes(ipState.steerTable)
+			c.routeClient.DeleteEgressSteerMasqueradeBypass(ipState.mark, ipState.egressIP.To4() == nil)
+			c.steerTableAllocator.release(ipState.steerTable)
+			ipState.steerTable = 0
 		}
 		if ipState.ipsetName != "" {
 			if err := c.routeClient.DeleteEgressSNATIPSetRule(ipState.egressIP, ipState.ipsetName, ipState.egressIP.To4() == nil); err != nil {

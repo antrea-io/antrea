@@ -464,6 +464,20 @@ func (mr *MockClientMockRecorder) InstallPodSNATFlows(ofPort, snatIP, snatMark a
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "InstallPodSNATFlows", reflect.TypeOf((*MockClient)(nil).InstallPodSNATFlows), ofPort, snatIP, snatMark)
 }
 
+// InstallPodSteerSNATFlows mocks base method.
+func (m *MockClient) InstallPodSteerSNATFlows(ofPort uint32, snatIP net.IP, steerMark uint32) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "InstallPodSteerSNATFlows", ofPort, snatIP, steerMark)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// InstallPodSteerSNATFlows indicates an expected call of InstallPodSteerSNATFlows.
+func (mr *MockClientMockRecorder) InstallPodSteerSNATFlows(ofPort, snatIP, steerMark any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "InstallPodSteerSNATFlows", reflect.TypeOf((*MockClient)(nil).InstallPodSteerSNATFlows), ofPort, snatIP, steerMark)
+}
+
 // InstallPolicyBypassFlows mocks base method.
 func (m *MockClient) InstallPolicyBypassFlows(arg0 openflow0.Protocol, ipNet *net.IPNet, port uint16, isIngress bool) error {
 	m.ctrl.T.Helper()
