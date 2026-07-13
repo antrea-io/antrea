@@ -1314,12 +1314,13 @@ func checkRecordsForDenyFlowsClickHouse(t *testing.T, data *TestData, testFlow1,
 		var srcPodName, dstPodName string
 		var svcIP string
 		var checkSrcNodeInfo bool
-		if record.SourceIP == testFlow1.srcIP && (record.DestinationIP == testFlow1.dstIP || record.DestinationServiceIP == testFlow1.dstIP) {
+		// TODO(yang) use DestinationServiceIP once the ClickHouse schema is updated
+		if record.SourceIP == testFlow1.srcIP && (record.DestinationIP == testFlow1.dstIP || record.DestinationClusterIP == testFlow1.dstIP) {
 			srcPodName = testFlow1.srcPodName
 			dstPodName = testFlow1.dstPodName
 			svcIP = testFlow1.svcIP
 			checkSrcNodeInfo = !testFlow1.srcNodeInfoNotAvailable
-		} else if record.SourceIP == testFlow2.srcIP && (record.DestinationIP == testFlow2.dstIP || record.DestinationServiceIP == testFlow2.dstIP) {
+		} else if record.SourceIP == testFlow2.srcIP && (record.DestinationIP == testFlow2.dstIP || record.DestinationClusterIP == testFlow2.dstIP) {
 			srcPodName = testFlow2.srcPodName
 			dstPodName = testFlow2.dstPodName
 			svcIP = testFlow2.svcIP
@@ -1562,7 +1563,8 @@ func getClickHouseOutput(t *testing.T, data *TestData, srcIP, dstIP, srcPort str
 
 	query := fmt.Sprintf("SELECT * FROM flows WHERE (sourceIP = '%s') AND (destinationIP = '%s') AND (octetDeltaCount != 0)", srcIP, dstIP)
 	if isDstService {
-		query = fmt.Sprintf("SELECT * FROM flows WHERE (sourceIP = '%s') AND (destinationServiceIP = '%s') AND (octetDeltaCount != 0)", srcIP, dstIP)
+		// TODO(yang) use DestinationServiceIP once the ClickHouse schema is updated
+		query = fmt.Sprintf("SELECT * FROM flows WHERE (sourceIP = '%s') AND (destinationClusterIP = '%s') AND (octetDeltaCount != 0)", srcIP, dstIP)
 	}
 	if len(srcPort) > 0 {
 		query = fmt.Sprintf("%s AND (sourceTransportPort = %s)", query, srcPort)
@@ -2200,7 +2202,6 @@ type ClickHouseFullRow struct {
 	DestinationPodNamespace              string    `json:"destinationPodNamespace"`
 	DestinationNodeName                  string    `json:"destinationNodeName"`
 	DestinationClusterIP                 string    `json:"destinationClusterIP"`
-	DestinationServiceIP                 string    `json:"destinationServiceIP"`
 	DestinationServicePort               uint16    `json:"destinationServicePort"`
 	DestinationServicePortName           string    `json:"destinationServicePortName"`
 	IngressNetworkPolicyName             string    `json:"ingressNetworkPolicyName"`

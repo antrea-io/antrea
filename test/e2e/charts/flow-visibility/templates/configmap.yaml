@@ -51,7 +51,6 @@ data:
             destinationPodNamespace String,
             destinationNodeName String,
             destinationClusterIP String,
-            destinationServiceIP String,
             destinationServicePort UInt16,
             destinationServicePortName String,
             ingressNetworkPolicyName String,

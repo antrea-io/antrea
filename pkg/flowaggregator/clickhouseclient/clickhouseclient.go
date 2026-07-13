@@ -63,7 +63,6 @@ const (
                    destinationPodNamespace,
                    destinationNodeName,
                    destinationClusterIP,
-                   destinationServiceIP,
                    destinationServicePort,
                    destinationServicePortName,
                    ingressNetworkPolicyName,
@@ -90,9 +89,9 @@ const (
                    egressName,
                    egressIP,
                    egressNodeName)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 
                            ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
-                           ?, ?, ?, ?)`
+                           ?, ?, ?, ?, ?)`
 )
 
 // PrepareClickHouseConnection is used for unit testing
@@ -307,7 +306,6 @@ func (ch *ClickHouseExportProcess) batchCommitAll(ctx context.Context) (int, err
 			record.DestinationPodNamespace,
 			record.DestinationNodeName,
 			record.DestinationClusterIP,
-			record.DestinationServiceIP,
 			record.DestinationServicePort,
 			record.DestinationServicePortName,
 			record.IngressNetworkPolicyName,
