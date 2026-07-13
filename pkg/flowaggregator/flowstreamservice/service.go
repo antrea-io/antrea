@@ -48,19 +48,34 @@ const (
 // FlowStreamService implements flowpb.FlowStreamServiceServer. Each client
 // connection gets its own independent ring-buffer Consumer, so clients are
 // fully decoupled and a slow client never stalls faster ones.
+//
+// Connecting clients must present a valid Kubernetes bearer token (e.g. a
+// ServiceAccount token) in the "authorization" gRPC metadata header, formatted
+// as "Bearer <token>" (matching the HTTP Authorization header convention).
+// The token is validated against the Kubernetes API server via the
+// TokenReview API; the call is rejected with codes.Unauthenticated if the
+// header is missing, malformed, or the token does not authenticate. This
+// applies whenever the service is constructed with a non-nil
+// StreamServerAuthenticator.
 type FlowStreamService struct {
 	flowpb.UnimplementedFlowStreamServiceServer
-	buffer ringbuffer.BroadcastBuffer[*flowpb.Flow]
+	buffer        ringbuffer.BroadcastBuffer[*flowpb.Flow]
+	authenticator *StreamServerAuthenticator
 }
 
 // NewFlowStreamService creates a FlowStreamService backed by the given buffer.
-func NewFlowStreamService(buffer ringbuffer.BroadcastBuffer[*flowpb.Flow]) *FlowStreamService {
-	return &FlowStreamService{buffer: buffer}
+// authenticator authenticates clients using a Kubernetes bearer token before
+// GetFlows runs; nil authenticator accepts any client.
+func NewFlowStreamService(buffer ringbuffer.BroadcastBuffer[*flowpb.Flow], authenticator *StreamServerAuthenticator) *FlowStreamService {
+	return &FlowStreamService{buffer: buffer, authenticator: authenticator}
 }
 
 // Run starts a dedicated TLS gRPC server for the FlowStreamService on FlowStreamPort.
-// serverCertPEM and serverKeyPEM are the PEM-encoded server certificate and private key;
-// only server-side TLS is used (no client authentication). Run blocks until stopCh is closed.
+// serverCertPEM and serverKeyPEM are the PEM-encoded server certificate and private key.
+// Only server-side TLS is used (no client certificate authentication); when the service
+// was constructed with a non-nil authenticator, clients must additionally present a valid
+// Kubernetes bearer token, or the call is rejected before GetFlows runs. Run blocks until
+// stopCh is closed.
 func (s *FlowStreamService) Run(serverCertPEM, serverKeyPEM []byte, stopCh <-chan struct{}) error {
 	cert, err := tls.X509KeyPair(serverCertPEM, serverKeyPEM)
 	if err != nil {
@@ -76,7 +91,11 @@ func (s *FlowStreamService) Run(serverCertPEM, serverKeyPEM []byte, stopCh <-cha
 	if err != nil {
 		return fmt.Errorf("failed to listen on %s: %w", addr, err)
 	}
-	server := grpc.NewServer(grpc.Creds(credentials.NewTLS(tlsConfig)))
+	serverOpts := []grpc.ServerOption{grpc.Creds(credentials.NewTLS(tlsConfig))}
+	if s.authenticator != nil {
+		serverOpts = append(serverOpts, grpc.StreamInterceptor(s.authenticator.StreamInterceptor))
+	}
+	server := grpc.NewServer(serverOpts...)
 	flowpb.RegisterFlowStreamServiceServer(server, s)
 
 	var wg sync.WaitGroup

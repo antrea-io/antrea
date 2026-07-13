@@ -203,7 +203,7 @@ func NewFlowAggregator(
 		certificateUpdateCh:         make(chan struct{}, 1),
 	}
 	if *opt.Config.FlowStreamService.Enable {
-		fa.flowStreamService = flowstreamservice.NewFlowStreamService(fa.recordBuffer)
+		fa.flowStreamService = flowstreamservice.NewFlowStreamService(fa.recordBuffer, flowstreamservice.NewStreamServerAuthenticator(k8sClient))
 		fa.flowStreamSvcUpdateCh = make(chan struct{}, 1)
 	}
 
