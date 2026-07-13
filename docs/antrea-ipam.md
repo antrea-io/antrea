@@ -259,10 +259,9 @@ When applied to a `PodTemplate` (e.g., in a StatefulSet), the annotation
 is valid only if a single Pod is created from that template (for example,
 `replicas: 1`); see the StatefulSet examples above.
 
-**Note:** Starting from Antrea v2.7, requesting multiple IPs of the same address family (e.g.,
-two IPv4 addresses) for a single Pod is strictly validated and will cause the IP allocation to
-fail. In previous versions, Antrea would silently ignore the extra IPs of the same family. Ensure
-that your configurations do not request more than one IP per address family.
+**Note:** Starting from Antrea v2.7, providing multiple IPs of the same address family (e.g.,
+two IPv4 addresses) for a single Pod is strictly validated and the request will be rejected.
+In previous versions, Antrea would silently ignore the extra IPs of the same family.
 
 The following restrictions apply when using `ipam.antrea.io/pod-ips`:
 
