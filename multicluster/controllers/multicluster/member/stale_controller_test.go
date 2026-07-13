@@ -785,3 +785,19 @@ func TestCleanUpGateway(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, 0, len(actualGWList.Items))
 }
+
+// TestStart verifies that Start implements the controller-runtime Runnable contract: it
+// returns nil once ctx is done, so the controller can be added to a Manager via mgr.Add
+// (see antrea-io/antrea#6152). Start's behavior while running is already covered by
+// TestStaleControllerNoRaceWithResourceImportReconciler in resourceimport_controller_test.go.
+func TestStart(t *testing.T) {
+	fakeClient := fake.NewClientBuilder().WithScheme(common.TestScheme).WithObjects(clusterSet).Build()
+	commonArea := commonarea.NewFakeRemoteCommonArea(fakeClient, "leader-cluster", common.LocalClusterID, "default", nil)
+	mcReconciler := NewMemberClusterSetReconciler(fakeClient, common.TestScheme, "default", false, false, make(chan struct{}))
+	mcReconciler.SetRemoteCommonArea(commonArea)
+	c := NewStaleResCleanupController(fakeClient, common.TestScheme, make(chan struct{}), "default", mcReconciler)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	assert.NoError(t, c.Start(ctx))
+}

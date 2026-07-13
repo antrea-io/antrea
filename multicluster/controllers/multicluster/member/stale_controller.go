@@ -25,7 +25,6 @@ import (
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/wait"
-	"k8s.io/client-go/util/retry"
 	"k8s.io/klog/v2"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	k8smcv1alpha1 "sigs.k8s.io/mcs-api/pkg/apis/v1alpha1"
@@ -361,29 +360,46 @@ func (c *StaleResCleanupController) cleanUpClusterInfoResourceExports(ctx contex
 	return nil
 }
 
-// Run starts the StaleResCleanupController and blocks until stopCh is closed.
-func (c *StaleResCleanupController) Run(stopCh <-chan struct{}) {
+// Start starts the StaleResCleanupController and blocks until ctx is canceled. It implements
+// the controller-runtime Runnable interface, so the controller can be added to the Manager via
+// mgr.Add. The Manager only starts Runnables after the cache has been synced, which guarantees
+// that the first call to CleanUp won't fail with "the cache is not started, can not read objects"
+// (see antrea-io/antrea#6152).
+func (c *StaleResCleanupController) Start(ctx context.Context) error {
 	klog.InfoS("Starting StaleResCleanupController")
 	defer klog.InfoS("Shutting down StaleResCleanupController")
 
-	ctx := wait.ContextForChannel(stopCh)
-
 	go func() {
-		retry.OnError(common.CleanUpRetry, func(err error) bool { return true },
-			func() error {
-				return c.CleanUp(ctx)
-			})
+		// wait.ExponentialBackoffWithContext, unlike retry.OnError, stops retrying as soon as
+		// ctx is canceled instead of running the full backoff (which can take tens of minutes
+		// given common.CleanUpRetry's Steps/Duration/Factor).
+		_ = wait.ExponentialBackoffWithContext(ctx, common.CleanUpRetry, func(ctx context.Context) (bool, error) {
+			if err := c.CleanUp(ctx); err != nil {
+				return false, nil
+			}
+			return true, nil
+		})
 	}()
 
-	for range c.commonAreaCreationCh {
-		retry.OnError(common.CleanUpRetry, func(err error) bool { return true },
-			func() error {
+	for {
+		select {
+		case <-ctx.Done():
+			return nil
+		case _, ok := <-c.commonAreaCreationCh:
+			if !ok {
+				return nil
+			}
+			// See the comment above on why ExponentialBackoffWithContext is used instead of
+			// retry.OnError: it must not block this select loop from observing ctx.Done()
+			// for the entire retry duration.
+			_ = wait.ExponentialBackoffWithContext(ctx, common.CleanUpRetry, func(ctx context.Context) (bool, error) {
 				if err := c.cleanUpStaleResources(ctx); err != nil {
 					klog.ErrorS(err, "Failed to clean up stale resources after a ClusterSet is created, will retry later")
-					return err
+					return false, nil
 				}
-				return nil
+				return true, nil
 			})
+		}
 	}
 }
 
