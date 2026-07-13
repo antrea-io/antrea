@@ -15,11 +15,9 @@
 package ovsconfig
 
 import (
-	"errors"
 	"net"
 	"testing"
 
-	"github.com/ovn-kubernetes/libovsdb/client"
 	"github.com/stretchr/testify/assert"
 	"k8s.io/utils/ptr"
 )
@@ -102,73 +100,4 @@ func TestBuildPortDataCommon(t *testing.T) {
 		})
 	}
 
-}
-
-func TestFindBridgeInterfaceByName(t *testing.T) {
-	tests := []struct {
-		name           string
-		bridge         *Bridge
-		ports          []Port
-		intfs          []Interface
-		ifName         string
-		wantUUID       string
-		wantError      string
-		wantIsNotFound bool
-	}{
-		{
-			bridge: &Bridge{Name: "br-test", Ports: []string{"port-on-bridge"}},
-			ports: []Port{
-				{UUID: "port-on-bridge", Interfaces: []string{"if-on-bridge"}},
-				{UUID: "stale-port", Interfaces: []string{"stale-if"}},
-			},
-			name: "interface attached to bridge",
-			intfs: []Interface{
-				{UUID: "if-on-bridge", Name: "eth1", OFPort: ptr.To(1)},
-				{UUID: "stale-if", Name: "eth1", OFPort: ptr.To(2)},
-			},
-			ifName:   "eth1",
-			wantUUID: "if-on-bridge",
-		},
-		{
-			bridge: &Bridge{Name: "br-test", Ports: []string{"port-on-bridge"}},
-			ports: []Port{
-				{UUID: "port-on-bridge", Interfaces: []string{"if-on-bridge"}},
-				{UUID: "stale-port", Interfaces: []string{"stale-if"}},
-			},
-			name: "same-name interface not attached to bridge ignored",
-			intfs: []Interface{
-				{UUID: "stale-if", Name: "eth1", OFPort: ptr.To(2)},
-			},
-			ifName:         "eth1",
-			wantError:      "interface eth1 not found on bridge br-test",
-			wantIsNotFound: true,
-		},
-		{
-			bridge: &Bridge{Name: "br-test", Ports: []string{"port-on-bridge", "port-on-bridge-2"}},
-			ports: []Port{
-				{UUID: "port-on-bridge", Interfaces: []string{"if-on-bridge"}},
-				{UUID: "port-on-bridge-2", Interfaces: []string{"if-on-bridge-2"}},
-			},
-			name: "duplicate interfaces attached to bridge",
-			intfs: []Interface{
-				{UUID: "if-on-bridge", Name: "eth1", OFPort: ptr.To(1)},
-				{UUID: "if-on-bridge-2", Name: "eth1", OFPort: ptr.To(2)},
-			},
-			ifName:    "eth1",
-			wantError: "found multiple interfaces named eth1 on bridge br-test",
-		},
-	}
-
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			intf, err := findBridgeInterfaceByName(tc.bridge, tc.ports, tc.intfs, tc.ifName)
-			if tc.wantError != "" {
-				assert.ErrorContains(t, err, tc.wantError)
-				assert.Equal(t, tc.wantIsNotFound, errors.Is(err, client.ErrNotFound))
-				return
-			}
-			assert.NoError(t, err)
-			assert.Equal(t, tc.wantUUID, intf.UUID)
-		})
-	}
 }

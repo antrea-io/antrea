@@ -836,32 +836,6 @@ func (br *OVSBridge) GetOFPort(ifName string) (int32, error) {
 	return 0, fmt.Errorf("failed to parse a valid ofport from OVSDB result for interface %s", ifName)
 }
 
-func findBridgeInterfaceByName(bridge *Bridge, ports []Port, intfs []Interface, ifName string) (*Interface, error) {
-	portUUIDs := sets.New(bridge.Ports...)
-	ifUUIDs := sets.New[string]()
-	for i := range ports {
-		if !portUUIDs.Has(ports[i].UUID) {
-			continue
-		}
-		ifUUIDs.Insert(ports[i].Interfaces...)
-	}
-
-	var matched *Interface
-	for i := range intfs {
-		if intfs[i].Name != ifName || !ifUUIDs.Has(intfs[i].UUID) {
-			continue
-		}
-		if matched != nil {
-			return nil, fmt.Errorf("found multiple interfaces named %s on bridge %s", ifName, bridge.Name)
-		}
-		matched = &intfs[i]
-	}
-	if matched == nil {
-		return nil, fmt.Errorf("interface %s not found on bridge %s: %w", ifName, bridge.Name, client.ErrNotFound)
-	}
-	return matched, nil
-}
-
 func buildPortDataCommon(port *Port, intf *Interface, portData *OVSPortData) {
 	portData.Name = port.Name
 	portData.ExternalIDs = maps.Clone(port.ExternalIDs)
@@ -1308,38 +1282,35 @@ func (br *OVSBridge) getInterface(ctx context.Context, name string) (*Interface,
 
 // getInterfaceOnBridge fetches the Interface record with the given name only when
 // it is attached to the specified bridge.
+// In antrea-agent, OVS Port and its Interface share the same name, so we can look
+// them up directly by name instead of scanning all ports and interfaces on the bridge.
 func (br *OVSBridge) getInterfaceOnBridge(ctx context.Context, ifName string) (*Interface, error) {
 	bridge, err := br.getBridge(ctx)
 	if err != nil {
 		return nil, err
 	}
-	portUUIDs := sets.New[string](bridge.Ports...)
 
-	var ports []Port
-	if err := br.ovsdb.WhereCache(func(p *Port) bool {
-		return portUUIDs.Has(p.UUID)
-	}).List(ctx, &ports); err != nil {
-		if !errors.Is(err, client.ErrNotFound) {
-			klog.ErrorS(err, "Failed to list Port table", "bridge", br.name)
-		}
+	port, err := br.getPort(ctx, ifName, "")
+	if err != nil {
 		return nil, err
 	}
 
-	ifUUIDs := sets.New[string]()
-	for i := range ports {
-		ifUUIDs.Insert(ports[i].Interfaces...)
+	portUUIDs := sets.New(bridge.Ports...)
+	if !portUUIDs.Has(port.UUID) {
+		return nil, fmt.Errorf("port %s not found on bridge %s", ifName, bridge.Name)
 	}
-	var intfs []Interface
-	if err := br.ovsdb.WhereCache(func(i *Interface) bool {
-		return i.Name == ifName && ifUUIDs.Has(i.UUID)
-	}).List(ctx, &intfs); err != nil {
-		if !errors.Is(err, client.ErrNotFound) {
-			klog.ErrorS(err, "Failed to list Interface table", "bridge", br.name, "interface", ifName)
-		}
+
+	intf, err := br.getInterface(ctx, ifName)
+	if err != nil {
 		return nil, err
 	}
 
-	return findBridgeInterfaceByName(bridge, ports, intfs, ifName)
+	ifUUIDs := sets.New(port.Interfaces...)
+	if !ifUUIDs.Has(intf.UUID) {
+		return nil, fmt.Errorf("interface %s not attached to port %s on bridge %s", ifName, port.Name, bridge.Name)
+	}
+
+	return intf, nil
 }
 
 // transact is a helper function to execute an OVSDB transaction and log any error
