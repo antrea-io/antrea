@@ -770,7 +770,7 @@ func (br *OVSBridge) GetOFPort(ifName string) (int32, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultGetPortTimeout)
 	defer cancel()
 
-	intf, err := br.getInterface(ctx, ifName)
+	intf, err := br.getInterfaceOnBridge(ctx, ifName)
 	if err != nil {
 		return 0, err
 	}
@@ -794,14 +794,14 @@ func (br *OVSBridge) GetOFPort(ifName string) (int32, error) {
 	// We use WaitConditionNotEqual to wait for the ofport to be assigned by OVS (including invalid value -1).
 	// We wait for the ofport to become NotEqual to empty set (nil). This guarantees the wait completes immediately when
 	// OVS assigns a valid port number (>0), or fails the port creation and assigns an error value (<0, e.g., -1).
-	ops, err := br.ovsdb.Where(interfaceWithName(ifName)).Wait(ovsdb.WaitConditionNotEqual, &timeoutMs, mIntf, &mIntf.OFPort)
+	ops, err := br.ovsdb.Where(interfaceWithUUID(intf.UUID)).Wait(ovsdb.WaitConditionNotEqual, &timeoutMs, mIntf, &mIntf.OFPort)
 	if err != nil {
 		return 0, err
 	}
 
 	// Append a select operation to return the updated row atomically.
 	// This prevents cache synchronization race conditions (RAW: read-after-write) and ensures consistency.
-	ops = append(ops, newSelectOperation(interfaceTable, "name", ifName, "ofport"))
+	ops = append(ops, newSelectOperation(interfaceTable, "_uuid", ovsdb.UUID{GoUUID: intf.UUID}, "ofport"))
 
 	results, err := br.transact(ctx, ops, "wait for ofport")
 	if err != nil {
@@ -1239,10 +1239,13 @@ func (br *OVSBridge) getOpenvSwitch(ctx context.Context) (*OpenvSwitch, error) {
 // It logs an error and returns it if the bridge cannot be found or another error occurs.
 func (br *OVSBridge) getBridge(ctx context.Context) (*Bridge, error) {
 	bridge := &Bridge{Name: br.name}
+	if br.uuid != "" {
+		bridge = &Bridge{UUID: br.uuid}
+	}
 	err := br.ovsdb.Get(ctx, bridge)
 	if err != nil {
 		if !errors.Is(err, client.ErrNotFound) {
-			klog.ErrorS(err, "Failed to get bridge", "bridge", br.name)
+			klog.ErrorS(err, "Failed to get bridge", "bridge", br.name, "uuid", br.uuid)
 		}
 		return nil, err
 	}
@@ -1274,6 +1277,39 @@ func (br *OVSBridge) getInterface(ctx context.Context, name string) (*Interface,
 		}
 		return nil, err
 	}
+	return intf, nil
+}
+
+// getInterfaceOnBridge fetches the Interface record with the given name only when
+// it is attached to the specified bridge.
+// In antrea-agent, OVS Port and its Interface share the same name, so we can look
+// them up directly by name instead of scanning all ports and interfaces on the bridge.
+func (br *OVSBridge) getInterfaceOnBridge(ctx context.Context, ifName string) (*Interface, error) {
+	bridge, err := br.getBridge(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	port, err := br.getPort(ctx, ifName, "")
+	if err != nil {
+		return nil, err
+	}
+
+	portUUIDs := sets.New(bridge.Ports...)
+	if !portUUIDs.Has(port.UUID) {
+		return nil, fmt.Errorf("port %s not found on bridge %s", ifName, bridge.Name)
+	}
+
+	intf, err := br.getInterface(ctx, ifName)
+	if err != nil {
+		return nil, err
+	}
+
+	ifUUIDs := sets.New(port.Interfaces...)
+	if !ifUUIDs.Has(intf.UUID) {
+		return nil, fmt.Errorf("interface %s not attached to port %s on bridge %s", ifName, port.Name, bridge.Name)
+	}
+
 	return intf, nil
 }
 
@@ -1332,4 +1368,5 @@ func newSelectOperation(table, column string, value interface{}, returnColumns .
 
 func bridgeWithUUID(uuid string) *Bridge       { return &Bridge{UUID: uuid} }
 func interfaceWithName(name string) *Interface { return &Interface{Name: name} }
+func interfaceWithUUID(uuid string) *Interface { return &Interface{UUID: uuid} }
 func OVSWithUUID(uuid string) *OpenvSwitch     { return &OpenvSwitch{UUID: uuid} }
