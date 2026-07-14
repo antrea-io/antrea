@@ -259,11 +259,7 @@ When applied to a `PodTemplate` (e.g., in a StatefulSet), the annotation
 is valid only if a single Pod is created from that template (for example,
 `replicas: 1`); see the StatefulSet examples above.
 
-**Note:** Starting from Antrea v2.7, providing multiple IPs of the same address family (e.g.,
-two IPv4 addresses) for a single Pod is strictly validated and the request will be rejected.
-In previous versions, Antrea would silently ignore the extra IPs of the same family.
-
-The following restrictions apply when using `ipam.antrea.io/pod-ips`:
+Starting with Antrea v2.7, the following restrictions apply when using `ipam.antrea.io/pod-ips`:
 
 - At most one IPv4 address and one IPv6 address can be specified. If the
   `ipam.antrea.io/pod-ips` annotation contains more than one address of the
@@ -274,6 +270,9 @@ The following restrictions apply when using `ipam.antrea.io/pod-ips`:
   cannot list two IPv4 IPPools; the same applies to IPv6 when a static IPv6 is
   requested. (You can still list one IPv4 pool and one IPv6 pool for dual-stack
   static addresses.)
+
+**Note:** these two restrictions were introduced in Antrea v2.7. Previous versions
+of Antrea silently ignore the extra IP addresses and pools of the same family.
 
 #### Persistent IP for StatefulSet Pod (available since Antrea 1.5)
 
