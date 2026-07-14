@@ -91,6 +91,17 @@ func TestValidate(t *testing.T) {
 			},
 		},
 		{
+			name:      "single VLAN below minimum",
+			operation: admv1.Create,
+			anc:       newAntreaNodeConfig([]string{"0"}),
+			expectedResponse: &admv1.AdmissionResponse{
+				Allowed: false,
+				Result: &metav1.Status{
+					Message: "spec.secondaryNetwork.ovsBridges[0].physicalInterfaces[0].allowedVLANs is invalid: VLAN ID 0 is less than the minimum VLAN ID 1",
+				},
+			},
+		},
+		{
 			name:      "range end above maximum",
 			operation: admv1.Create,
 			anc:       newAntreaNodeConfig([]string{"4094-4095"}),

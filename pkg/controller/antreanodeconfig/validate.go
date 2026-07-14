@@ -27,7 +27,10 @@ import (
 	crdv1alpha1 "antrea.io/antrea/v2/pkg/apis/crd/v1alpha1"
 )
 
-const maxVLANID = 4094
+const (
+	minVLANID = 1
+	maxVLANID = 4094
+)
 
 type vlanIDRange struct {
 	start uint16
@@ -119,6 +122,9 @@ func validateVLANSpecs(specs []string) error {
 		}
 		if r.start > r.end {
 			return fmt.Errorf("VLAN range start %d is greater than end %d", r.start, r.end)
+		}
+		if r.start < minVLANID {
+			return fmt.Errorf("VLAN ID %d is less than the minimum VLAN ID %d", r.start, minVLANID)
 		}
 		if r.end > maxVLANID {
 			return fmt.Errorf("VLAN ID %d is greater than the maximum VLAN ID %d", r.end, maxVLANID)
