@@ -93,28 +93,28 @@ func TestNextFreePortCandidate(t *testing.T) {
 
 func TestAdvancePortSearchStart(t *testing.T) {
 	tests := []struct {
-		name          string
+		name            string
 		portSearchStart int
-		port          int
-		wantNext      int
+		port            int
+		wantNext        int
 	}{
 		{
-			name:          "mid-range: bumps by 1",
+			name:            "mid-range: bumps by 1",
 			portSearchStart: 61000,
-			port:          61001,
-			wantNext:      61002,
+			port:            61001,
+			wantNext:        61002,
 		},
 		{
-			name:          "at EndPort: wraps to StartPort",
+			name:            "at EndPort: wraps to StartPort",
 			portSearchStart: 61000,
-			port:          65000,
-			wantNext:      61000,
+			port:            65000,
+			wantNext:        61000,
 		},
 		{
-			name:          "one before EndPort: no wrap",
+			name:            "one before EndPort: no wrap",
 			portSearchStart: 61000,
-			port:          64999,
-			wantNext:      65000,
+			port:            64999,
+			wantNext:        65000,
 		},
 	}
 
@@ -142,4 +142,3 @@ func TestNewNodePortData(t *testing.T) {
 	assert.Equal(t, protocol, got.Protocol)
 	assert.False(t, got.Defunct(), "newly created NodePortData must not be defunct")
 }
-

@@ -241,13 +241,13 @@ func (pt *PortTable) advancePortSearchStart(port int) {
 }
 
 // newNodePortData constructs a NodePortData value for the given parameters.
-func newNodePortData(podKey string, nodePort int, podIP string, podPort int, protocol ProtocolSocketData) *NodePortData {
+func newNodePortData(podKey string, nodePort int, podIP string, podPort int, protocolData ProtocolSocketData) *NodePortData {
 	return &NodePortData{
 		PodKey:   podKey,
 		NodePort: nodePort,
 		PodIP:    podIP,
 		PodPort:  podPort,
-		Protocol: protocol,
+		Protocol: protocolData,
 	}
 }
 
