@@ -514,7 +514,8 @@ func (pc *podConfigurator) reconcile(pods []corev1.Pod, containerAccess *contain
 				containerConfig.VLANID,
 				nil,
 			); err != nil {
-				klog.ErrorS(err, "Error when re-installing flows for Pod", "Pod", klog.KRef(namespace, name))
+				klog.ErrorS(err, "Error when re-installing flows for Pod, will retry in the background", "Pod", klog.KRef(namespace, name))
+				pc.retryInstallPodFlows(containerID, name, namespace, containerAccess)
 			}
 		}(containerConfig.ContainerID, name, namespace)
 	}
@@ -533,6 +534,37 @@ func (pc *podConfigurator) reconcile(pods []corev1.Pod, containerAccess *contain
 	}
 
 	return nil
+}
+
+// retryInstallPodFlows retries flow installation for a Pod until it succeeds or the Pod is removed.
+func (pc *podConfigurator) retryInstallPodFlows(containerID, podName, podNamespace string, containerAccess *containerAccessArbitrator) {
+	go func() {
+		for {
+			time.Sleep(retryInterval)
+			containerAccess.lockContainer(containerID)
+			containerConfig, exists := pc.ifaceStore.GetContainerInterface(containerID)
+			if !exists {
+				containerAccess.unlockContainer(containerID)
+				klog.InfoS("The container interface had been deleted, stop retrying Pod flow installation", "Pod", klog.KRef(podNamespace, podName), "containerID", containerID)
+				return
+			}
+			err := pc.ofClient.InstallPodFlows(
+				containerConfig.InterfaceName,
+				containerConfig.IPs,
+				containerConfig.MAC,
+				uint32(containerConfig.OFPort),
+				containerConfig.VLANID,
+				nil,
+			)
+			containerAccess.unlockContainer(containerID)
+
+			if err == nil {
+				klog.InfoS("Successfully re-installed flows for Pod after retry", "Pod", klog.KRef(podNamespace, podName))
+				return
+			}
+			klog.ErrorS(err, "Retry failed to re-install flows for Pod, will retry again", "Pod", klog.KRef(podNamespace, podName))
+		}
+	}()
 }
 
 // disconnectInterfaceFromOVS disconnects an existing interface from ovs br-int.

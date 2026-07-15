@@ -676,3 +676,47 @@ func TestReconcile(t *testing.T) {
 		t.Errorf("InstallPodFlows for %s should be called but was not", normalInterface.InterfaceName)
 	}
 }
+
+// TestReconcileRetriesOnInstallPodFlowsFailure verifies flows are retried in the background
+// when InstallPodFlows fails during reconcile.
+func TestReconcileRetriesOnInstallPodFlowsFailure(t *testing.T) {
+	oriRetryInterval := retryInterval
+	retryInterval = 10 * time.Millisecond
+	defer func() {
+		retryInterval = oriRetryInterval
+	}()
+
+	controller := gomock.NewController(t)
+	kubeClient := fakeclientset.NewClientset(pod1)
+	mockOVSBridgeClient = ovsconfigtest.NewMockOVSBridgeClient(controller)
+	mockOFClient = openflowtest.NewMockClient(controller)
+	ifaceStore = interfacestore.NewInterfaceStore()
+	mockRoute = routetest.NewMockInterface(controller)
+	cniServer := newCNIServer(t)
+	cniServer.routeClient = mockRoute
+	cniServer.podConfigurator, _ = newPodConfigurator(nil, mockOVSBridgeClient, mockOFClient, mockRoute, ifaceStore, gwMAC, "system", false, false, channel.NewSubscribableChannel("PodUpdate", 100), nil, nil)
+	cniServer.podConfigurator.ifConfigurator = newTestInterfaceConfigurator()
+	cniServer.nodeConfig = &config.NodeConfig{
+		Name: nodeName,
+	}
+	cniServer.kubeClient = kubeClient
+	ifaceStore.AddInterface(normalInterface)
+
+	podFlowsInstalled := make(chan struct{})
+	gomock.InOrder(
+		mockOFClient.EXPECT().InstallPodFlows(normalInterface.InterfaceName, normalInterface.IPs, normalInterface.MAC, uint32(normalInterface.OFPort), uint16(0), nil).
+			Return(fmt.Errorf("transient OVS error")).Times(1),
+		mockOFClient.EXPECT().InstallPodFlows(normalInterface.InterfaceName, normalInterface.IPs, normalInterface.MAC, uint32(normalInterface.OFPort), uint16(0), nil).
+			Do(func(_ string, _ []net.IP, _ net.HardwareAddr, _ uint32, _ uint16, _ *uint32) {
+				close(podFlowsInstalled)
+			}).Return(nil).Times(1),
+	)
+	err := cniServer.reconcile()
+	assert.NoError(t, err)
+
+	select {
+	case <-podFlowsInstalled:
+	case <-time.After(2 * time.Second):
+		t.Errorf("InstallPodFlows for %s should have been retried and succeeded but was not", normalInterface.InterfaceName)
+	}
+}
