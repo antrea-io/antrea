@@ -1341,9 +1341,9 @@ func TestDualStack(t *testing.T) {
 // does not race with concurrent writes from the node informer.
 //
 // Before the fix, Run() accessed c.nodeIPv4 and c.nodeIPv6 directly at the log line
-// after PollUntilContextCancel, without holding nodeIPMutex. The node informer goroutine
-// can concurrently call updateNodeIPs() which writes those fields under a write lock.
-// This test, when run with "go test -race", will detect that race in unpatched code.
+// after PollUntilContextCancel, without holding nodeIPMutex, which could race with
+// concurrent updateNodeIPs() writes from the Node informer.
+// Running this test with "go test -race" is intended to help catch regressions of that issue.
 //
 // After the fix, Run() calls getNodeIPs() which acquires the read lock, eliminating the race.
 func TestNodeIPsReadyNoDataRace(t *testing.T) {
