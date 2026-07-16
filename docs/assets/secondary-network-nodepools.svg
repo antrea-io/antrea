@@ -47,7 +47,7 @@
     AntreaNodeConfig: secondary-network-pool1
   </text>
   <text x="40" y="147" font-size="10" font-family="'Oswald', Arial, sans-serif" fill="#1a3a5c">
-    br1:  eth2 &#x2192; VLAN 100, 101 (trunk)   |   eth3 &#x2192; VLAN 300 (trunk)
+    br1:  eth2 &#x2192; VLAN 100, 101 (trunk)   |   eth3 &#x2192; VLAN 300
   </text>
 
   <!-- pool1-node-0 -->
@@ -136,7 +136,7 @@
     AntreaNodeConfig: secondary-network-pool2
   </text>
   <text x="40" y="439" font-size="10" font-family="'Oswald', Arial, sans-serif" fill="#0e4a28">
-    br1:  eth2 &#x2192; VLAN 100 (trunk)   |   eth3 &#x2192; VLAN 400 (trunk)
+    br1:  eth2 &#x2192; VLAN 100   |   eth3 &#x2192; VLAN 400
   </text>
 
   <!-- pool2-node-0 -->
