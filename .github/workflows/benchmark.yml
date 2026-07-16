@@ -24,7 +24,7 @@ jobs:
           show-progress: false
 
       - name: Set up Go using version from .go-version
-        uses: actions/setup-go@v6
+        uses: actions/setup-go@v7
         with:
           go-version-file: '.go-version'
 
