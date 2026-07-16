@@ -540,12 +540,16 @@ func (pc *podConfigurator) reconcile(pods []corev1.Pod, containerAccess *contain
 func (pc *podConfigurator) retryInstallPodFlows(containerID, podName, podNamespace string, containerAccess *containerAccessArbitrator) {
 	go func() {
 		for {
-			time.Sleep(retryInterval)
+			sleepDuration := retryInterval
+			if sleepDuration <= 0 {
+				sleepDuration = time.Second
+			}
+			time.Sleep(sleepDuration)
 			containerAccess.lockContainer(containerID)
 			containerConfig, exists := pc.ifaceStore.GetContainerInterface(containerID)
 			if !exists {
 				containerAccess.unlockContainer(containerID)
-				klog.InfoS("The container interface had been deleted, stop retrying Pod flow installation", "Pod", klog.KRef(podNamespace, podName), "containerID", containerID)
+				klog.InfoS("The container interface has been deleted, stop retrying Pod flow installation", "Pod", klog.KRef(podNamespace, podName), "containerID", containerID)
 				return
 			}
 			err := pc.ofClient.InstallPodFlows(
