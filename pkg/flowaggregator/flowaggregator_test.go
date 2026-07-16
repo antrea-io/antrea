@@ -39,6 +39,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/kubernetes/fake"
+	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/klog/v2"
 	"k8s.io/utils/ptr"
@@ -1169,7 +1170,7 @@ func TestNewFlowAggregator(t *testing.T) {
 			require.NoError(t, err)
 			_, err = f.Write(b)
 			require.NoError(t, err)
-			fa, err := NewFlowAggregator(client, clusterUUID, mockPodStore, mockNodeStore, mockServiceStore, fileName)
+			fa, err := NewFlowAggregator(client, &rest.Config{}, clusterUUID, mockPodStore, mockNodeStore, mockServiceStore, fileName)
 			require.NoError(t, err)
 			assert.Equal(t, clusterUUID, fa.clusterUUID)
 			assert.Equal(t, clusterID, fa.clusterID)

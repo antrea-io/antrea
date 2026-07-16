@@ -49,14 +49,13 @@ const (
 // connection gets its own independent ring-buffer Consumer, so clients are
 // fully decoupled and a slow client never stalls faster ones.
 //
-// Connecting clients must present a valid Kubernetes bearer token (e.g. a
-// ServiceAccount token) in the "authorization" gRPC metadata header, formatted
-// as "Bearer <token>" (matching the HTTP Authorization header convention).
-// The token is validated against the Kubernetes API server via the
-// TokenReview API; the call is rejected with codes.Unauthenticated if the
-// header is missing, malformed, or the token does not authenticate. This
-// applies whenever the service is constructed with a non-nil
-// StreamServerAuthenticator.
+// Connecting clients must present valid Kubernetes credentials in gRPC metadata.
+// Supported credentials are either:
+//   - a bearer token in the "authorization" header formatted as "Bearer <token>" (validated via TokenReview), or
+//   - a PEM client certificate+key in the "client-cert-bin"/"client-key-bin" headers (validated via SelfSubjectReview).
+//
+// The call is rejected with codes.Unauthenticated if credentials are missing, malformed, or do not authenticate.
+// This applies whenever the service is constructed with a non-nil StreamServerAuthenticator.
 type FlowStreamService struct {
 	flowpb.UnimplementedFlowStreamServiceServer
 	buffer        ringbuffer.BroadcastBuffer[*flowpb.Flow]
@@ -64,8 +63,8 @@ type FlowStreamService struct {
 }
 
 // NewFlowStreamService creates a FlowStreamService backed by the given buffer.
-// authenticator authenticates clients using a Kubernetes bearer token before
-// GetFlows runs; nil authenticator accepts any client.
+// authenticator authenticates clients (bearer token or client cert/key metadata)
+// before GetFlows runs; nil authenticator accepts any client.
 func NewFlowStreamService(buffer ringbuffer.BroadcastBuffer[*flowpb.Flow], authenticator *StreamServerAuthenticator) *FlowStreamService {
 	return &FlowStreamService{buffer: buffer, authenticator: authenticator}
 }
