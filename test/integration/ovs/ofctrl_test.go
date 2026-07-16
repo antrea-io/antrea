@@ -444,10 +444,14 @@ func TestBundleErrorWhenOVSRestart(t *testing.T) {
 	}()
 
 	expectedErrorMsgs := map[string]bool{
-		"bundle reply is timeout": true,
-		"bundle reply is canceled because of disconnection from the Switch": true,
-		"message is timeout": true,
-		"message is canceled because of disconnection from the Switch": true,
+		"bundle reply is timeout on open":                                             true,
+		"bundle reply is canceled because of disconnection from the Switch on open":   true,
+		"bundle reply is timeout on commit":                                           true,
+		"bundle reply is canceled because of disconnection from the Switch on commit": true,
+		"bundle reply is timeout on close":                                            true,
+		"bundle reply is canceled because of disconnection from the Switch on close":  true,
+		"message send timeout":                                                        true,
+		"message is canceled because of disconnection from the Switch":                true,
 	}
 
 	var failCount, successCount int32
