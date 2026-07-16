@@ -7,7 +7,7 @@ require (
 	antrea.io/ethernet v0.0.0-20260520021600-167b4cbe358b
 	antrea.io/libOpenflow v0.17.0
 	antrea.io/ndp v0.0.0-20260520020856-5015f7fd30ea
-	antrea.io/ofnet v0.15.0
+	antrea.io/ofnet v0.15.1
 	antrea.io/packet v0.0.0-20260515064457-4eaabd67893f
 	github.com/ClickHouse/clickhouse-go/v2 v2.46.0
 	github.com/DATA-DOG/go-sqlmock v1.5.2
