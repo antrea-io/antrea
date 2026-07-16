@@ -1152,6 +1152,70 @@ func Test_client_InstallServiceGroup(t *testing.T) {
 	}
 }
 
+func Test_client_InstallServiceGroupFailure(t *testing.T) {
+	groupID := binding.GroupIDType(100)
+	endpoints := []proxy.Endpoint{
+		proxy.NewBaseEndpointInfo("10.10.0.100", 80, false, true, false, false, nil, nil),
+	}
+	opError := ofctrl.ErrBundleReplyTimeout
+	otherError := fmt.Errorf("some other error")
+
+	testCases := []struct {
+		name        string
+		installed   bool
+		addError    error
+		modifyError error
+		wantCached  bool
+		wantDeleted bool
+	}{
+		{
+			name:        "ADD times out, the group is deleted for cleanup",
+			addError:    opError,
+			wantCached:  false,
+			wantDeleted: true,
+		},
+		{
+			name:        "ADD fails with a real error, the group is not deleted",
+			addError:    otherError,
+			wantCached:  false,
+			wantDeleted: false,
+		},
+		{
+			name:        "MODIFY fails, the group is not deleted",
+			installed:   true,
+			modifyError: opError,
+			wantCached:  true,
+			wantDeleted: false,
+		},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			m := opstest.NewMockOFEntryOperations(ctrl)
+
+			fc := newFakeClient(m, true, true, config.K8sNode, config.TrafficEncapModeEncap)
+			defer resetPipelines()
+
+			if tc.installed {
+				// A successful install first, so the group is cached and the next install uses MODIFY.
+				m.EXPECT().AddOFEntries(gomock.Any()).Return(nil).Times(1)
+				require.NoError(t, fc.InstallServiceGroup(groupID, false, endpoints))
+				m.EXPECT().ModifyOFEntries(gomock.Any()).Return(tc.modifyError).Times(1)
+			} else {
+				m.EXPECT().AddOFEntries(gomock.Any()).Return(tc.addError).Times(1)
+				if tc.wantDeleted {
+					// The cleanup delete is best-effort; the code ignores its result, but logs it.
+					m.EXPECT().DeleteOFEntries(gomock.Any()).Return(nil).Times(1)
+				}
+			}
+
+			assert.Error(t, fc.InstallServiceGroup(groupID, false, endpoints))
+			_, ok := fc.featureService.groupCache.Load(groupID)
+			assert.Equal(t, tc.wantCached, ok)
+		})
+	}
+}
+
 func Test_client_InstallEndpointFlows(t *testing.T) {
 	ep1IPv4 := "10.10.0.100"
 	ep2IPv4 := "10.10.0.101"
@@ -2600,6 +2664,69 @@ func Test_client_InstallMulticastGroup(t *testing.T) {
 				_, ok = fc.featureMulticast.groupCache.Load(groupID)
 				require.True(t, ok)
 			}
+		})
+	}
+}
+
+func Test_client_InstallMulticastGroupFailure(t *testing.T) {
+	groupID := binding.GroupIDType(101)
+	localReceivers := []uint32{50, 100}
+	remoteNodeReceivers := []net.IP{net.ParseIP("192.168.77.101"), net.ParseIP("192.168.77.102")}
+	opError := ofctrl.ErrBundleReplyTimeout
+	otherError := fmt.Errorf("some other error")
+
+	testCases := []struct {
+		name        string
+		installed   bool
+		addError    error
+		modifyError error
+		wantCached  bool
+		wantDeleted bool
+	}{
+		{
+			name:        "ADD times out, the group is deleted for cleanup",
+			addError:    opError,
+			wantCached:  false,
+			wantDeleted: true,
+		},
+		{
+			name:        "ADD fails with a real error, the group is not deleted",
+			addError:    otherError,
+			wantCached:  false,
+			wantDeleted: false,
+		},
+		{
+			name:        "MODIFY fails, the group is not deleted",
+			installed:   true,
+			modifyError: opError,
+			wantCached:  true,
+			wantDeleted: false,
+		},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			m := opstest.NewMockOFEntryOperations(ctrl)
+
+			fc := newFakeClient(m, true, true, config.K8sNode, config.TrafficEncapModeEncap, enableMulticast)
+			defer resetPipelines()
+
+			if tc.installed {
+				// A successful install first, so the group is cached and the next install uses MODIFY.
+				m.EXPECT().AddOFEntries(gomock.Any()).Return(nil).Times(1)
+				require.NoError(t, fc.InstallMulticastGroup(groupID, localReceivers, remoteNodeReceivers))
+				m.EXPECT().ModifyOFEntries(gomock.Any()).Return(tc.modifyError).Times(1)
+			} else {
+				m.EXPECT().AddOFEntries(gomock.Any()).Return(tc.addError).Times(1)
+				if tc.wantDeleted {
+					// The cleanup delete is best-effort; the code ignores its result, but logs it.
+					m.EXPECT().DeleteOFEntries(gomock.Any()).Return(nil).Times(1)
+				}
+			}
+
+			assert.Error(t, fc.InstallMulticastGroup(groupID, localReceivers, remoteNodeReceivers))
+			_, ok := fc.featureMulticast.groupCache.Load(groupID)
+			assert.Equal(t, tc.wantCached, ok)
 		})
 	}
 }
