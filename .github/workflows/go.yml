@@ -45,7 +45,7 @@ jobs:
       with:
         show-progress: false
     - name: Set up Go using version from .go-version
-      uses: actions/setup-go@v6
+      uses: actions/setup-go@v7
       with:
         go-version-file: '.go-version'
     - name: Run unit tests
@@ -71,7 +71,7 @@ jobs:
         with:
           show-progress: false
       - name: Set up Go using version from .go-version
-        uses: actions/setup-go@v6
+        uses: actions/setup-go@v7
         with:
           go-version-file: '.go-version'
       - name: Run unit tests
@@ -98,7 +98,7 @@ jobs:
         with:
           show-progress: false
       - name: Set up Go using version from .go-version
-        uses: actions/setup-go@v6
+        uses: actions/setup-go@v7
         with:
           go-version-file: '.go-version'
       - name: Run integration tests
@@ -133,7 +133,7 @@ jobs:
       with:
         show-progress: false
     - name: Set up Go using version from .go-version
-      uses: actions/setup-go@v6
+      uses: actions/setup-go@v7
       with:
         go-version-file: '.go-version'
     - name: Run golangci-lint
@@ -150,7 +150,7 @@ jobs:
         with:
           show-progress: false
       - name: Set up Go using version from .go-version
-        uses: actions/setup-go@v6
+        uses: actions/setup-go@v7
         with:
           go-version-file: '.go-version'
       - name: Run golangci-lint
@@ -167,7 +167,7 @@ jobs:
       with:
         show-progress: false
     - name: Set up Go using version from .go-version
-      uses: actions/setup-go@v6
+      uses: actions/setup-go@v7
       with:
         go-version-file: '.go-version'
     - name: Build Antrea binaries for amd64
@@ -204,7 +204,7 @@ jobs:
       with:
         show-progress: false
     - name: Set up Go using version from .go-version
-      uses: actions/setup-go@v6
+      uses: actions/setup-go@v7
       with:
         go-version-file: '.go-version'
     - name: Build Antrea windows binaries
@@ -221,7 +221,7 @@ jobs:
       with:
         show-progress: false
     - name: Set up Go using version from .go-version
-      uses: actions/setup-go@v6
+      uses: actions/setup-go@v7
       with:
         go-version-file: '.go-version'
     # tidy check need to be run before code generation which will regenerate codes.
@@ -243,7 +243,7 @@ jobs:
       with:
         show-progress: false
     - name: Set up Go using version from .go-version
-      uses: actions/setup-go@v6
+      uses: actions/setup-go@v7
       with:
         go-version-file: '.go-version'
     - name: Run verify scripts
@@ -281,7 +281,7 @@ jobs:
         with:
           show-progress: false
       - name: Set up Go using version from .go-version
-        uses: actions/setup-go@v6
+        uses: actions/setup-go@v7
         with:
           go-version-file: '.go-version'
       - name: Run Go benchmark test

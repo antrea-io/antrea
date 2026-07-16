@@ -12,7 +12,7 @@ jobs:
     steps:
     - uses: actions/checkout@v7
     - name: Set up Go using version from .go-version
-      uses: actions/setup-go@v6
+      uses: actions/setup-go@v7
       with:
         go-version-file: '.go-version'
         # make sure the latest patch version is used for building release assets, and not a version
