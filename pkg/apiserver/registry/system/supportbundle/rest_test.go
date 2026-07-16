@@ -107,7 +107,7 @@ func TestClean(t *testing.T) {
 			}
 			assert.EventuallyWithT(t, func(c *assert.CollectT) {
 				exist, err := afero.Exists(defaultFS, f.Name())
-				require.NoError(t, err)
+				require.NoError(c, err)
 				assert.False(c, exist)
 			}, 1*time.Second, 10*time.Millisecond, "Supportbundle file was not deleted")
 			assert.Equal(t, system.SupportBundleStatusNone, storage.SupportBundle.cache.Status)
@@ -167,11 +167,11 @@ func TestControllerStorage(t *testing.T) {
 	require.NoError(t, err)
 
 	var collectedBundle *system.SupportBundle
-	assert.Eventually(t, func() bool {
+	assert.EventuallyWithT(t, func(c *assert.CollectT) {
 		object, err := storage.SupportBundle.Get(context.TODO(), modeController, nil)
-		require.NoError(t, err)
+		require.NoError(c, err)
 		collectedBundle = object.(*system.SupportBundle)
-		return collectedBundle.Status == system.SupportBundleStatusCollected
+		assert.Equal(c, system.SupportBundleStatusCollected, collectedBundle.Status)
 	}, time.Second*2, time.Millisecond*100)
 	filePath := collectedBundle.Filepath
 	require.NotEmpty(t, filePath)
@@ -198,10 +198,10 @@ func TestControllerStorage(t *testing.T) {
 		ObjectMeta: metav1.ObjectMeta{Name: modeController},
 		Status:     system.SupportBundleStatusNone,
 	}, object)
-	assert.Eventuallyf(t, func() bool {
+	assert.EventuallyWithT(t, func(c *assert.CollectT) {
 		exist, err := afero.Exists(defaultFS, filePath)
-		require.NoError(t, err)
-		return !exist
+		require.NoError(c, err)
+		assert.False(c, exist)
 	}, time.Second*2, time.Millisecond*100, "Supportbundle file %s was not deleted after deleting the Supportbundle object", filePath)
 }
 
@@ -277,11 +277,11 @@ func TestAgentStorage(t *testing.T) {
 	require.NoError(t, err)
 
 	var collectedBundle *system.SupportBundle
-	assert.Eventually(t, func() bool {
+	assert.EventuallyWithT(t, func(c *assert.CollectT) {
 		object, err := storage.SupportBundle.Get(ctx, modeAgent, nil)
-		require.NoError(t, err)
+		require.NoError(c, err)
 		collectedBundle = object.(*system.SupportBundle)
-		return collectedBundle.Status == system.SupportBundleStatusCollected
+		assert.Equal(c, system.SupportBundleStatusCollected, collectedBundle.Status)
 	}, time.Second*2, time.Millisecond*100)
 	require.NotEmpty(t, collectedBundle.Filepath)
 	filePath := collectedBundle.Filepath
@@ -301,10 +301,10 @@ func TestAgentStorage(t *testing.T) {
 		ObjectMeta: metav1.ObjectMeta{Name: modeAgent},
 		Status:     system.SupportBundleStatusNone,
 	}, object)
-	assert.Eventuallyf(t, func() bool {
+	assert.EventuallyWithT(t, func(c *assert.CollectT) {
 		exist, err := afero.Exists(defaultFS, filePath)
-		require.NoError(t, err)
-		return !exist
+		require.NoError(c, err)
+		assert.False(c, exist)
 	}, time.Second*2, time.Millisecond*100, "Supportbundle file %s was not deleted after deleting the Supportbundle object", filePath)
 }
 
@@ -337,11 +337,11 @@ func TestAgentStorageFailure(t *testing.T) {
 	require.NoError(t, err)
 
 	var collectedBundle *system.SupportBundle
-	assert.Eventually(t, func() bool {
+	assert.EventuallyWithT(t, func(c *assert.CollectT) {
 		object, err := storage.SupportBundle.Get(ctx, modeAgent, nil)
-		require.NoError(t, err)
+		require.NoError(c, err)
 		collectedBundle = object.(*system.SupportBundle)
-		return collectedBundle.Status == system.SupportBundleStatusNone
+		assert.Equal(c, system.SupportBundleStatusNone, collectedBundle.Status)
 	}, time.Second*2, time.Millisecond*100)
 	assert.Empty(t, collectedBundle.Filepath)
 	assert.Empty(t, collectedBundle.Sum)
