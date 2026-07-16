@@ -31,6 +31,7 @@ import (
 	"google.golang.org/protobuf/proto"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/rest"
 	"k8s.io/klog/v2"
 
 	flowpb "antrea.io/antrea/v2/pkg/apis/flow/v1alpha1"
@@ -138,6 +139,7 @@ type flowAggregator struct {
 
 func NewFlowAggregator(
 	k8sClient kubernetes.Interface,
+	baseConfig *rest.Config,
 	clusterUUID uuid.UUID,
 	podStore objectstore.PodStore,
 	nodeStore objectstore.NodeStore,
@@ -203,7 +205,7 @@ func NewFlowAggregator(
 		certificateUpdateCh:         make(chan struct{}, 1),
 	}
 	if *opt.Config.FlowStreamService.Enable {
-		fa.flowStreamService = flowstreamservice.NewFlowStreamService(fa.recordBuffer, flowstreamservice.NewStreamServerAuthenticator(k8sClient))
+		fa.flowStreamService = flowstreamservice.NewFlowStreamService(fa.recordBuffer, flowstreamservice.NewStreamServerAuthenticator(k8sClient, baseConfig))
 		fa.flowStreamSvcUpdateCh = make(chan struct{}, 1)
 	}
 
