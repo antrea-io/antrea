@@ -1737,6 +1737,13 @@ func TestServiceLifecycle(t *testing.T) {
 	_, err = c.client.CoreV1().Services(namespaceDefault).Update(context.TODO(), updatedLoadBalancer, metav1.UpdateOptions{})
 	require.NoError(t, err)
 
+	// Wait for the Service event to be processed before updating the EndpointSlice. Otherwise, the two events may be
+	// processed as separate queue items and leave an extra item in the queue for the next test step. Since there is still
+	// a local Endpoint, no route needs to be withdrawn yet.
+	waitAndGetDummyEvent(t, c)
+	require.NoError(t, c.syncBGPPolicy(ctx))
+	doneDummyEvent(t, c)
+
 	// Update the EndpointSlice with a remote Endpoint.
 	endpointSlice = generateEndpointSlice(ipv4LoadBalancerName, endpointSliceSuffix, false, false, "10.10.0.3")
 	_, err = c.client.DiscoveryV1().EndpointSlices(namespaceDefault).Update(context.TODO(), endpointSlice, metav1.UpdateOptions{})
