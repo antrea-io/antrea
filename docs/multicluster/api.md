@@ -1,6 +1,6 @@
 # Antrea Multi-cluster API
 
-This document lists all the API resource versions currently supported by Antrea Mulit-cluster.
+This document lists all the API resource versions currently supported by Antrea Multi-cluster.
 
 Antrea Multi-cluster is supported since v1.5.0. Most Custom Resource Definitions (CRDs)
 used by Antrea Multi-cluster are in the API group `multicluster.crd.antrea.io`, and
