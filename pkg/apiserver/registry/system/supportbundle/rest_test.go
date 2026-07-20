@@ -105,7 +105,7 @@ func TestClean(t *testing.T) {
 			} else {
 				fakeClock.Step(tc.duration)
 			}
-			assert.EventuallyWithT(t, func(c *assert.CollectT) {
+			require.EventuallyWithT(t, func(c *assert.CollectT) {
 				exist, err := afero.Exists(defaultFS, f.Name())
 				require.NoError(c, err)
 				assert.False(c, exist)
@@ -167,7 +167,7 @@ func TestControllerStorage(t *testing.T) {
 	require.NoError(t, err)
 
 	var collectedBundle *system.SupportBundle
-	assert.EventuallyWithT(t, func(c *assert.CollectT) {
+	require.EventuallyWithT(t, func(c *assert.CollectT) {
 		object, err := storage.SupportBundle.Get(context.TODO(), modeController, nil)
 		require.NoError(c, err)
 		collectedBundle = object.(*system.SupportBundle)
@@ -198,7 +198,7 @@ func TestControllerStorage(t *testing.T) {
 		ObjectMeta: metav1.ObjectMeta{Name: modeController},
 		Status:     system.SupportBundleStatusNone,
 	}, object)
-	assert.EventuallyWithT(t, func(c *assert.CollectT) {
+	require.EventuallyWithT(t, func(c *assert.CollectT) {
 		exist, err := afero.Exists(defaultFS, filePath)
 		require.NoError(c, err)
 		assert.False(c, exist)
@@ -277,7 +277,7 @@ func TestAgentStorage(t *testing.T) {
 	require.NoError(t, err)
 
 	var collectedBundle *system.SupportBundle
-	assert.EventuallyWithT(t, func(c *assert.CollectT) {
+	require.EventuallyWithT(t, func(c *assert.CollectT) {
 		object, err := storage.SupportBundle.Get(ctx, modeAgent, nil)
 		require.NoError(c, err)
 		collectedBundle = object.(*system.SupportBundle)
@@ -301,7 +301,7 @@ func TestAgentStorage(t *testing.T) {
 		ObjectMeta: metav1.ObjectMeta{Name: modeAgent},
 		Status:     system.SupportBundleStatusNone,
 	}, object)
-	assert.EventuallyWithT(t, func(c *assert.CollectT) {
+	require.EventuallyWithT(t, func(c *assert.CollectT) {
 		exist, err := afero.Exists(defaultFS, filePath)
 		require.NoError(c, err)
 		assert.False(c, exist)
@@ -337,7 +337,7 @@ func TestAgentStorageFailure(t *testing.T) {
 	require.NoError(t, err)
 
 	var collectedBundle *system.SupportBundle
-	assert.EventuallyWithT(t, func(c *assert.CollectT) {
+	require.EventuallyWithT(t, func(c *assert.CollectT) {
 		object, err := storage.SupportBundle.Get(ctx, modeAgent, nil)
 		require.NoError(c, err)
 		collectedBundle = object.(*system.SupportBundle)

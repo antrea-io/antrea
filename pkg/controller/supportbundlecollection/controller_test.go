@@ -1612,7 +1612,7 @@ func TestUpdateStatus(t *testing.T) {
 			Type:   v1alpha1.CollectionCompleted,
 			Status: metav1.ConditionTrue,
 		}))
-		assert.EventuallyWithT(t, func(c *assert.CollectT) {
+		require.EventuallyWithT(t, func(c *assert.CollectT) {
 			err := controller.syncSupportBundleCollection(collectionName)
 			assert.NoError(c, err)
 			_, exists, err := controller.supportBundleCollectionStore.Get(collectionName)

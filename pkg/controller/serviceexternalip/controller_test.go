@@ -204,7 +204,7 @@ func TestAddService(t *testing.T) {
 			require.NoError(t, err)
 			var svcUpdated *corev1.Service
 			var externalIP string
-			assert.EventuallyWithT(t, func(c *assert.CollectT) {
+			require.EventuallyWithT(t, func(c *assert.CollectT) {
 				var err error
 				svcUpdated, err = controller.client.CoreV1().Services(tt.service.Namespace).Get(context.TODO(), tt.service.Name, metav1.GetOptions{})
 				require.NoError(c, err)
@@ -487,7 +487,7 @@ func TestSyncService(t *testing.T) {
 
 func checkForServiceExternalIP(t *testing.T, controller *loadBalancerController, name, namespace, expectedExternalIP string) {
 	t.Helper()
-	assert.EventuallyWithT(t, func(c *assert.CollectT) {
+	require.EventuallyWithT(t, func(c *assert.CollectT) {
 		serviceUpdated, err := controller.client.CoreV1().Services(namespace).Get(context.TODO(), name, metav1.GetOptions{})
 		require.NoError(c, err)
 		externalIP := getServiceExternalIP(serviceUpdated)
@@ -499,7 +499,7 @@ func checkExternalIPPoolUsed(t *testing.T, controller *loadBalancerController, p
 	t.Helper()
 	exists := controller.externalIPAllocator.IPPoolExists(poolName)
 	require.True(t, exists)
-	assert.EventuallyWithT(t, func(c *assert.CollectT) {
+	require.EventuallyWithT(t, func(c *assert.CollectT) {
 		eip, err := controller.crdClient.CrdV1beta1().ExternalIPPools().Get(context.TODO(), poolName, metav1.GetOptions{})
 		require.NoError(c, err)
 		t.Logf("current status %#v", eip.Status)
