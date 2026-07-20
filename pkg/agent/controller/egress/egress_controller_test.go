@@ -2319,13 +2319,15 @@ func TestRealizeDualStackEgressIPsMirrorsExistingSharedMark(t *testing.T) {
 	sharedMark, err := c.markAllocator.allocate()
 	require.NoError(t, err)
 	c.egressIPStates[fakeLocalEgressIPv4] = &egressIPState{
-		egressIP:    net.ParseIP(fakeLocalEgressIPv4),
-		egressNames: sets.New[string](),
-		mark:        sharedMark,
+		egressIP:      net.ParseIP(fakeLocalEgressIPv4),
+		dualStackPeer: fakeLocalEgressIPv6,
+		egressNames:   sets.New[string](),
+		mark:          sharedMark,
 	}
 	c.egressIPStates[fakeLocalEgressIPv6] = &egressIPState{
-		egressIP:    net.ParseIP(fakeLocalEgressIPv6),
-		egressNames: sets.New[string](),
+		egressIP:      net.ParseIP(fakeLocalEgressIPv6),
+		dualStackPeer: fakeLocalEgressIPv4,
+		egressNames:   sets.New[string](),
 	}
 
 	gomock.InOrder(
@@ -2349,14 +2351,16 @@ func TestRealizeDualStackEgressIPsFailsOnInconsistentMarks(t *testing.T) {
 	mark2, err := c.markAllocator.allocate()
 	require.NoError(t, err)
 	c.egressIPStates[fakeLocalEgressIPv4] = &egressIPState{
-		egressIP:    net.ParseIP(fakeLocalEgressIPv4),
-		egressNames: sets.New[string](),
-		mark:        mark1,
+		egressIP:      net.ParseIP(fakeLocalEgressIPv4),
+		dualStackPeer: fakeLocalEgressIPv6,
+		egressNames:   sets.New[string](),
+		mark:          mark1,
 	}
 	c.egressIPStates[fakeLocalEgressIPv6] = &egressIPState{
-		egressIP:    net.ParseIP(fakeLocalEgressIPv6),
-		egressNames: sets.New[string](),
-		mark:        mark2,
+		egressIP:      net.ParseIP(fakeLocalEgressIPv6),
+		dualStackPeer: fakeLocalEgressIPv4,
+		egressNames:   sets.New[string](),
+		mark:          mark2,
 	}
 
 	_, err = c.realizeDualStackEgressIPs("egressA", []string{fakeLocalEgressIPv4, fakeLocalEgressIPv6}, []*crdv1b1.SubnetInfo{nil, nil})
@@ -2364,6 +2368,66 @@ func TestRealizeDualStackEgressIPsFailsOnInconsistentMarks(t *testing.T) {
 	assert.Contains(t, err.Error(), "inconsistent marks for dual-stack IPs")
 	assert.Equal(t, mark1, c.egressIPStates[fakeLocalEgressIPv4].mark)
 	assert.Equal(t, mark2, c.egressIPStates[fakeLocalEgressIPv6].mark)
+}
+
+func TestDualStackPeerIPs(t *testing.T) {
+	peerIPs, err := dualStackPeerIPs([]string{"10.0.0.1", "fd00::1", "10.0.0.2", "fd00::2"})
+	require.NoError(t, err)
+	assert.Equal(t, []string{"fd00::1", "10.0.0.1", "fd00::2", "10.0.0.2"}, peerIPs)
+
+	_, err = dualStackPeerIPs([]string{"10.0.0.1"})
+	require.EqualError(t, err, "expected one or more dual-stack IP pairs, got 1 IP entries")
+}
+
+func TestRealizeDualStackEgressIPsRejectsPartialOverlap(t *testing.T) {
+	c := newFakeController(t, nil)
+	c.egressIPStates[fakeLocalEgressIPv4] = &egressIPState{
+		egressIP:      net.ParseIP(fakeLocalEgressIPv4),
+		dualStackPeer: fakeLocalEgressIPv6,
+		egressNames:   sets.New("egressA"),
+		mark:          1,
+	}
+	c.egressIPStates[fakeLocalEgressIPv6] = &egressIPState{
+		egressIP:      net.ParseIP(fakeLocalEgressIPv6),
+		dualStackPeer: fakeLocalEgressIPv4,
+		egressNames:   sets.New("egressA"),
+		mark:          1,
+	}
+
+	_, err := c.realizeDualStackEgressIPs("egressB", []string{fakeLocalEgressIPv4, fakeLocalEgressIPv6a}, []*crdv1b1.SubnetInfo{nil, nil})
+	require.EqualError(t, err, "EgressIP 10.0.0.1 is already paired with fd00::1")
+	assert.NotContains(t, c.egressIPStates, fakeLocalEgressIPv6a)
+	assert.False(t, c.egressIPStates[fakeLocalEgressIPv4].egressNames.Has("egressB"))
+}
+
+func TestEgressIPStateRejectsSingleStackDualStackOverlap(t *testing.T) {
+	t.Run("dual-stack realization rejects an existing single-stack IP", func(t *testing.T) {
+		c := newFakeController(t, nil)
+		c.egressIPStates[fakeLocalEgressIPv4] = &egressIPState{
+			egressIP:    net.ParseIP(fakeLocalEgressIPv4),
+			egressNames: sets.New("egressA"),
+			mark:        1,
+		}
+
+		_, err := c.realizeDualStackEgressIPs("egressB", []string{fakeLocalEgressIPv4, fakeLocalEgressIPv6}, []*crdv1b1.SubnetInfo{nil, nil})
+		require.EqualError(t, err, "EgressIP 10.0.0.1 is already used by a single-stack Egress")
+		assert.NotContains(t, c.egressIPStates, fakeLocalEgressIPv6)
+		assert.False(t, c.egressIPStates[fakeLocalEgressIPv4].egressNames.Has("egressB"))
+	})
+
+	t.Run("single-stack realization rejects an existing dual-stack IP", func(t *testing.T) {
+		c := newFakeController(t, nil)
+		c.egressIPStates[fakeLocalEgressIPv4] = &egressIPState{
+			egressIP:      net.ParseIP(fakeLocalEgressIPv4),
+			dualStackPeer: fakeLocalEgressIPv6,
+			egressNames:   sets.New("egressA"),
+			mark:          1,
+		}
+
+		_, err := c.realizeEgressIP("egressB", fakeLocalEgressIPv4, nil)
+		require.EqualError(t, err, "EgressIP 10.0.0.1 is already used by dual-stack pair (10.0.0.1, fd00::1)")
+		assert.False(t, c.egressIPStates[fakeLocalEgressIPv4].egressNames.Has("egressB"))
+	})
 }
 
 func TestGetDualStackEgressIPByMark(t *testing.T) {

@@ -148,6 +148,9 @@ func (r *rateLimitMeter) Equals(rateLimit *rateLimitMeter) bool {
 // multiple Egresses can share an EgressIP.
 type egressIPState struct {
 	egressIP net.IP
+	// dualStackPeer is the other IP in the dual-stack pair. It is empty for a
+	// single-stack Egress IP.
+	dualStackPeer string
 	// The names of the Egresses that are currently referring to it.
 	egressNames sets.Set[string]
 	// The datapath mark of this Egress IP. 0 if this is not a local IP.
@@ -726,6 +729,13 @@ func (c *EgressController) realizeEgressIP(egressName, egressIP string, subnetIn
 			egressNames: sets.New(egressName),
 		}
 		c.egressIPStates[egressIP] = ipState
+	} else if ipState.dualStackPeer != "" {
+		return 0, fmt.Errorf(
+			"EgressIP %s is already used by dual-stack pair (%s, %s)",
+			egressIP,
+			egressIP,
+			ipState.dualStackPeer,
+		)
 	} else if !ipState.egressNames.Has(egressName) {
 		ipState.egressNames.Insert(egressName)
 	}
@@ -800,6 +810,18 @@ func consistentDualStackMark(ipStates []*egressIPState) (uint32, error) {
 	return sharedMark, nil
 }
 
+func dualStackPeerIPs(egressIPs []string) ([]string, error) {
+	if len(egressIPs) == 0 || len(egressIPs)%2 != 0 {
+		return nil, fmt.Errorf("expected one or more dual-stack IP pairs, got %d IP entries", len(egressIPs))
+	}
+	peerIPs := make([]string, len(egressIPs))
+	for i := 0; i+1 < len(egressIPs); i += 2 {
+		peerIPs[i] = egressIPs[i+1]
+		peerIPs[i+1] = egressIPs[i]
+	}
+	return peerIPs, nil
+}
+
 // allEgressIPsLocal returns true only when every effective Egress IP is present
 // on this Node according to the local IP detector.
 func (c *EgressController) allEgressIPsLocal(egressIPs []string) bool {
@@ -839,19 +861,35 @@ func (c *EgressController) realizeDualStackEgressIPs(egressName string, egressIP
 	c.egressIPStatesMutex.Lock()
 	defer c.egressIPStatesMutex.Unlock()
 
+	peerIPs, err := dualStackPeerIPs(egressIPs)
+	if err != nil {
+		return 0, err
+	}
 	ipStates := make([]*egressIPState, lenIPs)
 	for i, ipStr := range egressIPs {
 		ipState, exists := c.egressIPStates[ipStr]
 		if !exists {
-			ipState = &egressIPState{
-				egressIP:    net.ParseIP(ipStr),
-				egressNames: sets.New(egressName),
-			}
-			c.egressIPStates[ipStr] = ipState
-		} else if !ipState.egressNames.Has(egressName) {
-			ipState.egressNames.Insert(egressName)
+			continue
 		}
 		ipStates[i] = ipState
+		if ipState.dualStackPeer == "" {
+			return 0, fmt.Errorf("EgressIP %s is already used by a single-stack Egress", ipStr)
+		}
+		if ipState.dualStackPeer != peerIPs[i] {
+			return 0, fmt.Errorf("EgressIP %s is already paired with %s", ipStr, ipState.dualStackPeer)
+		}
+	}
+
+	// Only mutate state after every existing IP has been validated. This closes
+	// the race left by admission's eventually-consistent informer cache.
+	for i, ipStr := range egressIPs {
+		if ipStates[i] == nil {
+			ipStates[i] = &egressIPState{
+				egressIP:      net.ParseIP(ipStr),
+				dualStackPeer: peerIPs[i],
+				egressNames:   sets.New[string](),
+			}
+		}
 	}
 
 	sharedMark, err := consistentDualStackMark(ipStates)
@@ -872,6 +910,10 @@ func (c *EgressController) realizeDualStackEgressIPs(egressName string, egressIP
 		for _, s := range ipStates {
 			s.mark = sharedMark
 		}
+	}
+	for i, s := range ipStates {
+		c.egressIPStates[egressIPs[i]] = s
+		s.egressNames.Insert(egressName)
 	}
 
 	if isLocalIP {
