@@ -468,7 +468,7 @@ For example, once you export the `default/nginx` Service in member cluster
 `test-cluster-west`, it will be automatically imported in member cluster
 `test-cluster-east`. A Service and an Endpoints with name
 `default/antrea-mc-nginx` will be created in `test-cluster-east`, as well as
-a ServcieImport CR with name `default/nginx`. Now, Pods in `test-cluster-east`
+a ServiceImport CR with name `default/nginx`. Now, Pods in `test-cluster-east`
 can access the imported Service using its ClusterIP, and the requests will be
 routed to the backend `nginx` Pods in `test-cluster-west`. You can check the
 imported Service and ServiceImport with commands:
@@ -618,7 +618,7 @@ data:
     featureGates:
       Multicluster: true
     multicluster:
-      enableStretchedNetworkPolicy: true # required by both egress and ingres rules
+      enableStretchedNetworkPolicy: true # required by both egress and ingress rules
   antrea-agent.conf: |
     featureGates:
       Multicluster: true

@@ -22,7 +22,7 @@ Multi-cluster feature is still in Alpha version, and the API is not stable yet. 
 is always to upgrade Antrea Multi-cluster to the same version for a ClusterSet.
 
 - **Antrea Leader Controller**: must be upgraded first
-- **Antrea Member Controller**: must the same version as the **Antrea Leader Controller**.
+- **Antrea Member Controller**: must be the same version as the **Antrea Leader Controller**.
 - **Antctl**: must not be newer than the **Antrea Leader/Member Controller**. Please
   notice Antctl for Multi-cluster is added since v1.6.0.
 

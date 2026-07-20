@@ -27,7 +27,7 @@ including the leader and member clusters information.
 
 The MemberClusterAnnounce CRD declares a member cluster configuration to the leader cluster.
 
-The Common Area is an abstraction in the Antrea Multi-cluster implementation provides a storage
+The Common Area is an abstraction in the Antrea Multi-cluster implementation that provides a storage
 interface for resource export/import that can be read/written by all member and leader clusters
 in the ClusterSet. The Common Area is implemented with a Namespace in the leader cluster for a
 given ClusterSet.
@@ -137,7 +137,7 @@ The Multi-cluster Gateway implementation introduces two new CRDs `Gateway` and
 information including: `internalIP` for tunnels to local Nodes, and `gatewayIP`
 for tunnels to remote cluster Gateways. `ClusterInfoImport` includes Gateway
 and network information of member clusters, including Gateway IPs and Service
-CIDRs. The existing esource export/import pipeline is leveraged to exchange
+CIDRs. The existing resource export/import pipeline is leveraged to exchange
 the cluster network information among member clusters, generating
 ClusterInfoImports in each member cluster.
 
