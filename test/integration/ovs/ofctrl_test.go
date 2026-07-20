@@ -244,7 +244,7 @@ func TestOFctrlFlow(t *testing.T) {
 		require.EventuallyWithT(t, func(c *assert.CollectT) {
 			flowList, err := OfctlDumpTableFlowsWithoutName(ovsCtlClient, myTable.GetID())
 			require.NoError(c, err)
-			assert.Len(c, flowList, 0)
+			assert.Empty(c, flowList)
 		}, time.Second, time.Millisecond*100, "Failed to delete flows by CookieID")
 	}
 }
@@ -347,7 +347,7 @@ func TestOFctrlGroup(t *testing.T) {
 			require.EventuallyWithT(t, func(c *assert.CollectT) {
 				groups, err := OfCtlDumpGroups(ovsCtlClient)
 				require.NoError(c, err)
-				assert.Len(c, groups, 0)
+				assert.Empty(c, groups)
 			}, openFlowCheckTimeout, openFlowCheckInterval, "Failed to delete group")
 		})
 		id++
