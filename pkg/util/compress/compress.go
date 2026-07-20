@@ -90,15 +90,18 @@ func UnpackReader(fs afero.Fs, file io.Reader, useGzip bool, targetDir string) e
 			if err != nil {
 				return err
 			}
-			defer outFile.Close()
 			for {
 				// to resolve G110: Potential DoS vulnerability via decompression bomb
 				if _, err := io.CopyN(outFile, tarReader, 1024); err != nil {
 					if err == io.EOF {
 						break
 					}
+					outFile.Close()
 					return err
 				}
+			}
+			if err := outFile.Close(); err != nil {
+				return err
 			}
 		default:
 			// Note in particular that we do not handle symlinks.
