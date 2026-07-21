@@ -29,6 +29,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/util/sets"
 	clientset "k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/kubernetes/scheme"
 	v1 "k8s.io/client-go/listers/core/v1"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/tools/events"
@@ -69,7 +70,8 @@ const (
 )
 
 var (
-	getNSPath = util.GetNSPath
+	getNSPath  = util.GetNSPath
+	workerName = "podConfigurator"
 	// retryInterval is the interval to re-install Pod OpenFlow entries if any error happened.
 	// Note, using a variable rather than constant for retryInterval because we may use a shorter time in the
 	// test code.
@@ -132,6 +134,36 @@ func newPodConfigurator(
 	// Initiate the PortStatus message listener. This function is a no-op except on Windows.
 	pc.initPortStatusMonitor(podInformer)
 	return pc, nil
+}
+
+// initUnreadyPortQueue sets up the workqueue, Pod lister and event recorder shared by
+// updateUnreadyPod / processNextWorkItem, which (re)install a Pod's OpenFlow entries in the
+// background, retrying with rate limiting until it succeeds or the Pod is removed.
+// podInformer is nil for a podConfigurator instance that only configures Pod secondary network
+// interfaces; such an instance never reconciles and has nothing to feed into the queue.
+func (pc *podConfigurator) initUnreadyPortQueue(podInformer cache.SharedIndexInformer) {
+	if podInformer == nil {
+		return
+	}
+	pc.podLister = v1.NewPodLister(podInformer.GetIndexer())
+	pc.podListerSynced = podInformer.HasSynced
+	pc.unreadyPortQueue = workqueue.NewTypedDelayingQueueWithConfig[string](
+		workqueue.TypedDelayingQueueConfig[string]{
+			Name: workerName,
+		},
+	)
+	eventBroadcaster := events.NewBroadcaster(&events.EventSinkImpl{
+		Interface: pc.kubeClient.EventsV1(),
+	})
+	pc.eventBroadcaster = eventBroadcaster
+	pc.recorder = eventBroadcaster.NewRecorder(scheme.Scheme, "AntreaPodConfigurator")
+}
+
+// worker is a long-running function that will continually call the processNextWorkItem function in
+// order to read and process a message on the workqueue.
+func (pc *podConfigurator) worker() {
+	for pc.processNextWorkItem() {
+	}
 }
 
 func parseContainerIPs(ipcs []*current.IPConfig) ([]net.IP, error) {
@@ -514,8 +546,8 @@ func (pc *podConfigurator) reconcile(pods []corev1.Pod, containerAccess *contain
 				containerConfig.VLANID,
 				nil,
 			); err != nil {
-				klog.ErrorS(err, "Error when re-installing flows for Pod, will retry in the background", "Pod", klog.KRef(namespace, name))
-				pc.retryInstallPodFlows(containerID, name, namespace, containerAccess)
+				klog.ErrorS(err, "Error when re-installing flows for Pod, will retry", "Pod", klog.KRef(namespace, name))
+				pc.unreadyPortQueue.Add(containerConfig.InterfaceName)
 			}
 		}(containerConfig.ContainerID, name, namespace)
 	}
@@ -534,41 +566,6 @@ func (pc *podConfigurator) reconcile(pods []corev1.Pod, containerAccess *contain
 	}
 
 	return nil
-}
-
-// retryInstallPodFlows retries flow installation for a Pod until it succeeds or the Pod is removed.
-func (pc *podConfigurator) retryInstallPodFlows(containerID, podName, podNamespace string, containerAccess *containerAccessArbitrator) {
-	go func() {
-		for {
-			sleepDuration := retryInterval
-			if sleepDuration <= 0 {
-				sleepDuration = time.Second
-			}
-			time.Sleep(sleepDuration)
-			containerAccess.lockContainer(containerID)
-			containerConfig, exists := pc.ifaceStore.GetContainerInterface(containerID)
-			if !exists {
-				containerAccess.unlockContainer(containerID)
-				klog.InfoS("The container interface has been deleted, stop retrying Pod flow installation", "Pod", klog.KRef(podNamespace, podName), "containerID", containerID)
-				return
-			}
-			err := pc.ofClient.InstallPodFlows(
-				containerConfig.InterfaceName,
-				containerConfig.IPs,
-				containerConfig.MAC,
-				uint32(containerConfig.OFPort),
-				containerConfig.VLANID,
-				nil,
-			)
-			containerAccess.unlockContainer(containerID)
-
-			if err == nil {
-				klog.InfoS("Successfully re-installed flows for Pod after retry", "Pod", klog.KRef(podNamespace, podName))
-				return
-			}
-			klog.ErrorS(err, "Retry failed to re-install flows for Pod, will retry again", "Pod", klog.KRef(podNamespace, podName))
-		}
-	}()
 }
 
 // disconnectInterfaceFromOVS disconnects an existing interface from ovs br-int.

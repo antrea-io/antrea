@@ -677,29 +677,34 @@ func TestReconcile(t *testing.T) {
 	}
 }
 
-// TestReconcileRetriesOnInstallPodFlowsFailure verifies flows are retried in the background
-// when InstallPodFlows fails during reconcile.
+// TestReconcileRetriesOnInstallPodFlowsFailure verifies that when InstallPodFlows fails during
+// reconcile, the Pod's interface is fed into unreadyPortQueue and the existing queue worker
+// (processNextWorkItem / updateUnreadyPod) retries and succeeds, instead of the Pod being left
+// without a working dataplane.
 func TestReconcileRetriesOnInstallPodFlowsFailure(t *testing.T) {
-	oriRetryInterval := retryInterval
-	retryInterval = 10 * time.Millisecond
-	defer func() {
-		retryInterval = oriRetryInterval
-	}()
-
 	controller := gomock.NewController(t)
-	kubeClient := fakeclientset.NewClientset(pod1)
 	mockOVSBridgeClient = ovsconfigtest.NewMockOVSBridgeClient(controller)
 	mockOFClient = openflowtest.NewMockClient(controller)
 	ifaceStore = interfacestore.NewInterfaceStore()
 	mockRoute = routetest.NewMockInterface(controller)
 	cniServer := newCNIServer(t)
 	cniServer.routeClient = mockRoute
-	cniServer.podConfigurator, _ = newPodConfigurator(nil, mockOVSBridgeClient, mockOFClient, mockRoute, ifaceStore, gwMAC, "system", false, false, channel.NewSubscribableChannel("PodUpdate", 100), nil, nil)
+
+	clients := newMockClients(controller, nodeName, pod1)
+	stopCh := make(chan struct{})
+	defer close(stopCh)
+	clients.startInformers(stopCh)
+	cniServer.kubeClient = clients.kubeClient
+
+	cniServer.podConfigurator, _ = newPodConfigurator(
+		clients.kubeClient, mockOVSBridgeClient, mockOFClient, mockRoute, ifaceStore, gwMAC, "system", false, false,
+		channel.NewSubscribableChannel("PodUpdate", 100), clients.localPodInformer, cniServer.containerAccess)
 	cniServer.podConfigurator.ifConfigurator = newTestInterfaceConfigurator()
+	go cniServer.podConfigurator.Run(stopCh)
+
 	cniServer.nodeConfig = &config.NodeConfig{
 		Name: nodeName,
 	}
-	cniServer.kubeClient = kubeClient
 	ifaceStore.AddInterface(normalInterface)
 
 	podFlowsInstalled := make(chan struct{})
@@ -717,6 +722,6 @@ func TestReconcileRetriesOnInstallPodFlowsFailure(t *testing.T) {
 	select {
 	case <-podFlowsInstalled:
 	case <-time.After(2 * time.Second):
-		t.Errorf("InstallPodFlows for %s should have been retried and succeeded but was not", normalInterface.InterfaceName)
+		t.Errorf("InstallPodFlows for %s should have been retried via unreadyPortQueue but was not", normalInterface.InterfaceName)
 	}
 }
