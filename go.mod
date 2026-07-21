@@ -26,7 +26,7 @@ require (
 	github.com/fatih/color v1.19.0
 	github.com/fsnotify/fsnotify v1.10.1
 	github.com/gammazero/deque v1.2.1
-	github.com/go-logr/logr v1.4.3
+	github.com/go-logr/logr v1.4.4
 	github.com/gofrs/uuid/v5 v5.4.0
 	github.com/google/btree v1.1.3
 	github.com/google/gnostic-models v0.7.1
