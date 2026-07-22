@@ -614,6 +614,23 @@ func TestTrafficControlUpdate(t *testing.T) {
 	}
 }
 
+func TestTrafficControlDeleteTombstone(t *testing.T) {
+	tc1 := generateTrafficControl(tc1Name, nil, labels1, directionIngress, actionMirror, targetPort1, false, nil)
+	c := newFakeController(t, nil, nil, nil)
+
+	// A tombstone wrapping a TrafficControl should enqueue the TrafficControl.
+	c.deleteTC(cache.DeletedFinalStateUnknown{Key: tc1Name, Obj: tc1})
+	require.Equal(t, 1, c.queue.Len())
+	item, _ := c.queue.Get()
+	assert.Equal(t, tc1Name, item)
+	c.queue.Done(item)
+
+	// A tombstone wrapping an unexpected type and a plain unexpected object should be ignored.
+	c.deleteTC(cache.DeletedFinalStateUnknown{Key: tc1Name, Obj: pod1})
+	c.deleteTC(pod1)
+	assert.Equal(t, 0, c.queue.Len())
+}
+
 func TestSharedTargetPort(t *testing.T) {
 	tc1 := generateTrafficControl(tc1Name, nil, labels1, directionIngress, actionMirror, targetPort1, false, nil)
 	tc2 := generateTrafficControl(tc2Name, nil, labels2, directionIngress, actionMirror, targetPort1, false, nil)
@@ -738,6 +755,33 @@ func TestPodUpdateFromCNIServer(t *testing.T) {
 	// After syncing, verify the state of TrafficControl tc1.
 	expectedState = generateTrafficControlState(directionIngress, actionMirror, targetPort1Name, targetPort1OFPort, "", sets.New[int32](int32(pod1OFPort)), sets.New[string](pod1NN))
 	require.Equal(t, expectedState, c.tcStates[tc1Name])
+}
+
+func TestPodDeleteTombstone(t *testing.T) {
+	tc1 := generateTrafficControl(tc1Name, nil, labels1, directionIngress, actionMirror, targetPort1, false, nil)
+	c := newFakeController(t, nil, []runtime.Object{tc1}, nil)
+
+	stopCh := make(chan struct{})
+	defer close(stopCh)
+
+	c.startInformers(stopCh)
+
+	// Ignore the TrafficControl ADD event for TrafficControl tc1.
+	waitEvents(t, 1, c)
+	item, _ := c.queue.Get()
+	c.queue.Done(item)
+
+	// A tombstone wrapping a Pod should enqueue the affected TrafficControls.
+	c.deletePod(cache.DeletedFinalStateUnknown{Key: pod1NN, Obj: pod1})
+	require.Equal(t, 1, c.queue.Len())
+	item, _ = c.queue.Get()
+	assert.Equal(t, tc1Name, item)
+	c.queue.Done(item)
+
+	// A tombstone wrapping an unexpected type and a plain unexpected object should be ignored.
+	c.deletePod(cache.DeletedFinalStateUnknown{Key: pod1NN, Obj: tc1})
+	c.deletePod(tc1)
+	assert.Equal(t, 0, c.queue.Len())
 }
 
 func TestPodLabelsUpdate(t *testing.T) {
