@@ -182,41 +182,68 @@ func (p *proxier) isInitialized() bool {
 }
 
 // removeStaleServices removes all the configurations of expired Services and their associated Endpoints.
-func (p *proxier) removeStaleServices() {
+// It returns true if any stale Service could not be fully removed. Like installServices, each failure is
+// already logged by the step that hit it, and a failed Service stays in serviceInstalledMap so it is
+// retried on the next sync; the returned flag lets syncProxyRules ask the runner to retry soon rather than
+// waiting for the next event or the maxInterval resync.
+func (p *proxier) removeStaleServices() bool {
+	var syncFailed bool
 	for svcPortName, svcPort := range p.serviceInstalledMap {
-		if _, ok := p.serviceMap[svcPortName]; ok {
-			continue
+		if !p.removeStaleService(svcPortName, svcPort) {
+			syncFailed = true
 		}
-		svcInfo := svcPort.(*types.ServiceInfo)
-		svcInfoStr := svcInfo.String()
-		klog.V(2).InfoS("Removing stale Service", "ServicePortName", svcPortName, "ServiceInfo", svcInfoStr)
-		if !p.removeServiceFlows(svcInfo) {
-			continue
-		}
-		// Remove Service group which has only local Endpoints.
-		if !p.removeServiceGroup(svcPortName, true) {
-			continue
-		}
-		// Remove Service group which has all Endpoints.
-		if !p.removeServiceGroup(svcPortName, false) {
-			continue
-		}
-		// Remove associated Endpoints flows.
-		if endpoints, ok := p.endpointsInstalledMap[svcPortName]; ok {
-			if !p.removeStaleEndpoints(svcPortName, svcInfo.OFProtocol, endpoints) {
-				continue
-			}
-			delete(p.endpointsInstalledMap, svcPortName)
-		}
-		if p.cleanupStaleUDPSvcConntrack && needClearConntrackEntries(svcInfo.OFProtocol) {
-			if !p.removeStaleServiceConntrackEntries(svcPortName, svcInfo) {
-				continue
-			}
-		}
-
-		delete(p.serviceInstalledMap, svcPortName)
-		p.ipToServiceMap.delete(svcInfo)
 	}
+	return syncFailed
+}
+
+// removeStaleService removes the data path configuration of a single expired Service. It returns false if
+// the Service could not be fully removed, in which case it stays in serviceInstalledMap and the next sync
+// retries. A Service that is not stale (still present in serviceMap) is a no-op and returns true.
+func (p *proxier) removeStaleService(svcPortName k8sproxy.ServicePortName, svcPort k8sproxy.ServicePort) bool {
+	if _, ok := p.serviceMap[svcPortName]; ok {
+		// Not a stale Service, nothing to remove.
+		return true
+	}
+	svcInfo := svcPort.(*types.ServiceInfo)
+	svcInfoStr := svcInfo.String()
+	klog.V(2).InfoS("Removing stale Service", "ServicePortName", svcPortName, "ServiceInfo", svcInfoStr)
+	if !p.removeServiceFlows(svcInfo) {
+		return false
+	}
+	// Remove Service group which has only local Endpoints.
+	if !p.removeServiceGroup(svcPortName, true) {
+		return false
+	}
+	// Remove Service group which has all Endpoints.
+	if !p.removeServiceGroup(svcPortName, false) {
+		return false
+	}
+	// Uninstall the Service's Endpoint flows. The installed-Endpoint state is not updated here but at the
+	// end, together with serviceInstalledMap, so that a failure in a later step leaves both maps consistent
+	// (the Service stays fully recorded) and the next sync retries from a clean slate. We capture the
+	// Endpoints now because updateEndpointsStates below both reads and empties this entry.
+	endpoints, hasEndpoints := p.endpointsInstalledMap[svcPortName]
+	if hasEndpoints {
+		if !p.removeStaleEndpoints(svcPortName, svcInfo.OFProtocol, endpoints) {
+			return false
+		}
+	}
+
+	if p.cleanupStaleUDPSvcConntrack && needClearConntrackEntries(svcInfo.OFProtocol) {
+		if !p.removeStaleServiceConntrackEntries(svcPortName, svcInfo) {
+			return false
+		}
+	}
+
+	// The Service has been fully torn down in OVS. Commit the removal: release the Endpoints' reference
+	// counters and drop the installed-Endpoint and installed-Service entries together.
+	if hasEndpoints {
+		p.updateEndpointsStates(svcPortName, svcInfo.OFProtocol, nil, endpoints)
+		delete(p.endpointsInstalledMap, svcPortName)
+	}
+	delete(p.serviceInstalledMap, svcPortName)
+	p.ipToServiceMap.delete(svcInfo)
+	return true
 }
 
 func (p *proxier) removeServiceFlows(svcInfo *types.ServiceInfo) bool {
@@ -285,12 +312,11 @@ func (p *proxier) removeServiceGroup(svcPortName k8sproxy.ServicePortName, local
 	return true
 }
 
-// removeStaleEndpoints removes flows for the given Endpoints from the data path if these flows are no longer
-// needed by any Service. Endpoints from different Services can have the same characteristics and thus
-// can share the same flows. removeStaleEndpoints must be called whenever Endpoints are no longer used by a
-// given Service. If the Endpoints are still referenced by any other Services, no flow will be removed.
-// The method only returns an error if a data path operation fails. If the flows are successfully
-// removed from the data path, the method returns nil.
+// removeStaleEndpoints uninstalls the data path flows for the given stale Endpoints. Endpoints from
+// different Services can share the same flows, so a flow is only removed once no Service references the
+// Endpoint any more (reference count 1). It only touches OVS and returns false if a data path operation
+// fails; the caller updates the installed-Endpoint state via updateEndpointsStates after the Service's
+// data path changes have all succeeded.
 func (p *proxier) removeStaleEndpoints(svcPortName k8sproxy.ServicePortName, protocol binding.Protocol, staleEndpoints map[string]k8sproxy.Endpoint) bool {
 	var endpointsToRemove []k8sproxy.Endpoint
 
@@ -312,8 +338,28 @@ func (p *proxier) removeStaleEndpoints(svcPortName k8sproxy.ServicePortName, pro
 		}
 	}
 
-	// Update the reference counter of Endpoints and remove them from the installed Endpoints of the ServicePortName.
-	for _, endpoint := range staleEndpoints {
+	return true
+}
+
+// updateEndpointsStates records the result of a successful Endpoint change into the in-memory state: it
+// adds the given Endpoints to, and removes the given ones from, endpointsInstalledMap, and updates their
+// shared reference counters accordingly.
+//
+// It must be called at exactly one point per sync path, after the caller has successfully applied the
+// Service's data path changes: an install/update at the end of installServices, or a full teardown at the
+// end of removeStaleServices. This mirrors how serviceInstalledMap is updated, and keeps the
+// installed-Endpoint state from ever running ahead of what is actually programmed in OVS. If it ran early
+// (as it used to, when these updates were side effects buried inside addNewEndpoints/removeStaleEndpoints),
+// a failure partway through would leave the state "converged" while OVS stayed stale, so the next sync
+// would compute an empty diff and never retry the failed step, leaving the Service routed to stale
+// Endpoints indefinitely.
+func (p *proxier) updateEndpointsStates(svcPortName k8sproxy.ServicePortName, protocol binding.Protocol, added, removed map[string]k8sproxy.Endpoint) {
+	for _, endpoint := range added {
+		p.endpointsInstalledMap[svcPortName][endpoint.String()] = endpoint
+		key := endpointKey(endpoint, protocol)
+		p.endpointReferenceCounter[key] = p.endpointReferenceCounter[key] + 1
+	}
+	for _, endpoint := range removed {
 		key := endpointKey(endpoint, protocol)
 		count := p.endpointReferenceCounter[key]
 		if count == 1 {
@@ -325,8 +371,6 @@ func (p *proxier) removeStaleEndpoints(svcPortName k8sproxy.ServicePortName, pro
 		}
 		delete(p.endpointsInstalledMap[svcPortName], endpoint.String())
 	}
-
-	return true
 }
 
 func (p *proxier) removeStaleServiceConntrackEntries(svcPortName k8sproxy.ServicePortName, svcInfo *types.ServiceInfo) bool {
@@ -460,6 +504,9 @@ func (p *proxier) removeStaleConntrackEntries(svcPortName k8sproxy.ServicePortNa
 	return true
 }
 
+// addNewEndpoints installs the data path flows for the given new Endpoints. It only touches OVS and
+// returns false if a data path operation fails; the caller updates the installed-Endpoint state via
+// updateEndpointsStates after the Service's data path changes have all succeeded.
 func (p *proxier) addNewEndpoints(svcPortName k8sproxy.ServicePortName, protocol binding.Protocol, newEndpoints map[string]k8sproxy.Endpoint) bool {
 	var endpointsToAdd []k8sproxy.Endpoint
 
@@ -481,12 +528,6 @@ func (p *proxier) addNewEndpoints(svcPortName k8sproxy.ServicePortName, protocol
 		}
 	}
 
-	// Update the reference counter of Endpoints.
-	for _, endpoint := range newEndpoints {
-		p.endpointsInstalledMap[svcPortName][endpoint.String()] = endpoint
-		key := endpointKey(endpoint, protocol)
-		p.endpointReferenceCounter[key] = p.endpointReferenceCounter[key] + 1
-	}
 	return true
 }
 
@@ -677,132 +718,154 @@ func (p *proxier) uninstallLoadBalancerService(svcInfoStr string, loadBalancerIP
 	return nil
 }
 
-func (p *proxier) installServices() {
+// installServices installs/updates the data path for all Services. It returns true if any Service could
+// not be fully installed. The details of each failure are already logged by the step that hit it; the
+// returned flag is only a signal for syncProxyRules to ask the runner to retry soon.
+func (p *proxier) installServices() bool {
+	var syncFailed bool
 	for svcPortName, svcPort := range p.serviceMap {
-		svcInfo := svcPort.(*types.ServiceInfo)
-		p.ipToServiceMap.add(svcInfo, svcPortName)
-		endpointsInstalled, ok := p.endpointsInstalledMap[svcPortName]
-		if !ok {
-			endpointsInstalled = map[string]k8sproxy.Endpoint{}
-			p.endpointsInstalledMap[svcPortName] = endpointsInstalled
+		if !p.installService(svcPortName, svcPort) {
+			syncFailed = true
 		}
-		endpointsToInstall := p.endpointsMap[svcPortName]
-
-		installedSvcPort, ok := p.serviceInstalledMap[svcPortName]
-		var pSvcInfo *types.ServiceInfo
-		var needUpdateServiceExternalAddresses, needUpdateService, needUpdateEndpoints bool
-		var needCleanupStaleUDPServiceConntrack bool
-		if ok { // Need to update.
-			pSvcInfo = installedSvcPort.(*types.ServiceInfo)
-			// The changes to serviceIdentity, session affinity config, and traffic policies affect all Service
-			// flows while the changes to external addresses (NodePort and LoadBalancerIPs) affect external Service
-			// flows only.
-			needUpdateService = serviceIdentityChanged(svcInfo, pSvcInfo) ||
-				svcInfo.SessionAffinityType() != pSvcInfo.SessionAffinityType() || // All Service flows use it.
-				svcInfo.StickyMaxAgeSeconds() != pSvcInfo.StickyMaxAgeSeconds() || // All Service flows use it.
-				svcInfo.ExternalPolicyLocal() != pSvcInfo.ExternalPolicyLocal() || // It affects the group ID used by external Service flows.
-				svcInfo.InternalPolicyLocal() != pSvcInfo.InternalPolicyLocal() || // It affects the group ID used by internal Service flows.
-				svcInfo.LoadBalancerMode != pSvcInfo.LoadBalancerMode
-			needUpdateServiceExternalAddresses = serviceExternalAddressesChanged(svcInfo, pSvcInfo)
-			needUpdateEndpoints = pSvcInfo.SessionAffinityType() != svcInfo.SessionAffinityType() ||
-				pSvcInfo.ExternalPolicyLocal() != svcInfo.ExternalPolicyLocal() ||
-				pSvcInfo.InternalPolicyLocal() != svcInfo.InternalPolicyLocal()
-			if p.cleanupStaleUDPSvcConntrack && needClearConntrackEntries(pSvcInfo.OFProtocol) {
-				// We clean the UDP conntrack entries for the following Service update cases:
-				// - Service port changed, clean the conntrack entries matched by each of the current clusterIP / externalIPs
-				//   / loadBalancerIPs and the stale Service port.
-				// - ClusterIP changed, clean the conntrack entries matched by the clusterIP and the Service port.
-				// - Some externalIPs / loadBalancerIPs are removed, clean the conntrack entries matched by each of the
-				//   removed Service IPs and the current Service port.
-				// - Service nodePort changed, clean the conntrack entries matched by each of the Node IPs / the virtual
-				//   NodePort DNAT IP and the stale Service nodePort.
-				// However, we DO NOT clean the UDP conntrack entries related to remote Endpoints that are still
-				// referenced by the Service but are no longer selectable Endpoints for the corresponding Service IPs
-				// (for externalTrafficPolicy, these IPs are loadBalancerIPs, externalIPs and NodeIPs; for
-				// internalTrafficPolicy, these IPs clusterIPs) when externalTrafficPolicy or internalTrafficPolicy is
-				// changed from Cluster to Local. Consequently, the connections, which are supposed to select local
-				// Endpoints, will continue to send packets to remote Endpoints due to the existing UDP conntrack entries
-				// until timeout.
-				needCleanupStaleUDPServiceConntrack = svcInfo.Port() != pSvcInfo.Port() ||
-					svcInfo.ClusterIP().String() != pSvcInfo.ClusterIP().String() ||
-					needUpdateServiceExternalAddresses
-			}
-		} else { // Need to install.
-			needUpdateService = true
-			// We need to ensure a group is created for a new Service even if there is no available Endpoints,
-			// otherwise it would fail to install Service flows because the group doesn't exist.
-			needUpdateEndpoints = true
-		}
-
-		clusterEndpoints, localEndpoints, allReachableEndpoints := p.categorizeEndpoints(endpointsToInstall, svcInfo, p.hostname, p.topologyLabels)
-		// Get the stale Endpoints and new Endpoints based on the diff of endpointsInstalled and allReachableEndpoints.
-		staleEndpoints, newEndpoints := compareEndpoints(endpointsInstalled, allReachableEndpoints)
-		if len(staleEndpoints) > 0 || len(newEndpoints) > 0 {
-			needUpdateEndpoints = true
-		}
-		// We also clean the conntrack entries related to the stale Endpoints for a UDP Service. Conntrack entries
-		// matched by each of stale Endpoint IPs and each of the remaining Service IPs and ports will be deleted.
-		if len(staleEndpoints) > 0 && needClearConntrackEntries(svcInfo.OFProtocol) {
-			needCleanupStaleUDPServiceConntrack = true
-		}
-
-		if needUpdateEndpoints {
-			if !p.addNewEndpoints(svcPortName, svcInfo.OFProtocol, newEndpoints) {
-				continue
-			}
-			if !p.removeStaleEndpoints(svcPortName, svcInfo.OFProtocol, staleEndpoints) {
-				continue
-			}
-		}
-
-		withSessionAffinity := svcInfo.SessionAffinityType() == corev1.ServiceAffinityClientIP
-		var localGroupID, clusterGroupID binding.GroupIDType
-		// categorizeEndpoints has checked if localGroup and clusterGroup should exist. We just create the group if its
-		// Endpoints is not nil.
-		// Note that nil represents the group should not exist and empty represents the group should exist but there is
-		// no available Endpoints.
-		if localEndpoints != nil {
-			if localGroupID, ok = p.installServiceGroup(svcPortName, needUpdateEndpoints, true, withSessionAffinity, localEndpoints); !ok {
-				continue
-			}
-		} else {
-			if !p.removeServiceGroup(svcPortName, true) {
-				continue
-			}
-		}
-		if clusterEndpoints != nil {
-			if clusterGroupID, ok = p.installServiceGroup(svcPortName, needUpdateEndpoints, false, withSessionAffinity, clusterEndpoints); !ok {
-				continue
-			}
-		} else {
-			if !p.removeServiceGroup(svcPortName, false) {
-				continue
-			}
-		}
-
-		if needUpdateService {
-			// Delete previous flows.
-			if pSvcInfo != nil {
-				if !p.removeServiceFlows(pSvcInfo) {
-					continue
-				}
-			}
-			if !p.installServiceFlows(svcInfo, localGroupID, clusterGroupID) {
-				continue
-			}
-		} else if needUpdateServiceExternalAddresses {
-			if !p.updateServiceExternalAddresses(pSvcInfo, svcInfo, localGroupID, clusterGroupID) {
-				continue
-			}
-		}
-		if needCleanupStaleUDPServiceConntrack {
-			if !p.removeStaleConntrackEntries(svcPortName, pSvcInfo, svcInfo, staleEndpoints) {
-				continue
-			}
-		}
-
-		p.serviceInstalledMap[svcPortName] = svcPort
 	}
+	return syncFailed
+}
+
+// installService installs/updates the data path for a single Service. It returns false if the Service
+// could not be fully installed, in which case none of the installed-Endpoint/Service state is updated, so
+// the next sync recomputes the diff and retries. Each failure is logged by the step that hit it.
+func (p *proxier) installService(svcPortName k8sproxy.ServicePortName, svcPort k8sproxy.ServicePort) bool {
+	svcInfo := svcPort.(*types.ServiceInfo)
+	p.ipToServiceMap.add(svcInfo, svcPortName)
+	endpointsInstalled, ok := p.endpointsInstalledMap[svcPortName]
+	if !ok {
+		endpointsInstalled = map[string]k8sproxy.Endpoint{}
+		p.endpointsInstalledMap[svcPortName] = endpointsInstalled
+	}
+	endpointsToInstall := p.endpointsMap[svcPortName]
+
+	installedSvcPort, ok := p.serviceInstalledMap[svcPortName]
+	var pSvcInfo *types.ServiceInfo
+	var needUpdateServiceExternalAddresses, needUpdateService, needUpdateEndpoints bool
+	var needCleanupStaleUDPServiceConntrack bool
+	if ok { // Need to update.
+		pSvcInfo = installedSvcPort.(*types.ServiceInfo)
+		// The changes to serviceIdentity, session affinity config, and traffic policies affect all Service
+		// flows while the changes to external addresses (NodePort and LoadBalancerIPs) affect external Service
+		// flows only.
+		needUpdateService = serviceIdentityChanged(svcInfo, pSvcInfo) ||
+			svcInfo.SessionAffinityType() != pSvcInfo.SessionAffinityType() || // All Service flows use it.
+			svcInfo.StickyMaxAgeSeconds() != pSvcInfo.StickyMaxAgeSeconds() || // All Service flows use it.
+			svcInfo.ExternalPolicyLocal() != pSvcInfo.ExternalPolicyLocal() || // It affects the group ID used by external Service flows.
+			svcInfo.InternalPolicyLocal() != pSvcInfo.InternalPolicyLocal() || // It affects the group ID used by internal Service flows.
+			svcInfo.LoadBalancerMode != pSvcInfo.LoadBalancerMode
+		needUpdateServiceExternalAddresses = serviceExternalAddressesChanged(svcInfo, pSvcInfo)
+		needUpdateEndpoints = pSvcInfo.SessionAffinityType() != svcInfo.SessionAffinityType() ||
+			pSvcInfo.ExternalPolicyLocal() != svcInfo.ExternalPolicyLocal() ||
+			pSvcInfo.InternalPolicyLocal() != svcInfo.InternalPolicyLocal()
+		if p.cleanupStaleUDPSvcConntrack && needClearConntrackEntries(pSvcInfo.OFProtocol) {
+			// We clean the UDP conntrack entries for the following Service update cases:
+			// - Service port changed, clean the conntrack entries matched by each of the current clusterIP / externalIPs
+			//   / loadBalancerIPs and the stale Service port.
+			// - ClusterIP changed, clean the conntrack entries matched by the clusterIP and the Service port.
+			// - Some externalIPs / loadBalancerIPs are removed, clean the conntrack entries matched by each of the
+			//   removed Service IPs and the current Service port.
+			// - Service nodePort changed, clean the conntrack entries matched by each of the Node IPs / the virtual
+			//   NodePort DNAT IP and the stale Service nodePort.
+			// However, we DO NOT clean the UDP conntrack entries related to remote Endpoints that are still
+			// referenced by the Service but are no longer selectable Endpoints for the corresponding Service IPs
+			// (for externalTrafficPolicy, these IPs are loadBalancerIPs, externalIPs and NodeIPs; for
+			// internalTrafficPolicy, these IPs clusterIPs) when externalTrafficPolicy or internalTrafficPolicy is
+			// changed from Cluster to Local. Consequently, the connections, which are supposed to select local
+			// Endpoints, will continue to send packets to remote Endpoints due to the existing UDP conntrack entries
+			// until timeout.
+			needCleanupStaleUDPServiceConntrack = svcInfo.Port() != pSvcInfo.Port() ||
+				svcInfo.ClusterIP().String() != pSvcInfo.ClusterIP().String() ||
+				needUpdateServiceExternalAddresses
+		}
+	} else { // Need to install.
+		needUpdateService = true
+		// We need to ensure a group is created for a new Service even if there is no available Endpoints,
+		// otherwise it would fail to install Service flows because the group doesn't exist.
+		needUpdateEndpoints = true
+	}
+
+	clusterEndpoints, localEndpoints, allReachableEndpoints := p.categorizeEndpoints(endpointsToInstall, svcInfo, p.hostname, p.topologyLabels)
+	// Get the stale Endpoints and new Endpoints based on the diff of endpointsInstalled and allReachableEndpoints.
+	staleEndpoints, newEndpoints := compareEndpoints(endpointsInstalled, allReachableEndpoints)
+	if len(staleEndpoints) > 0 || len(newEndpoints) > 0 {
+		needUpdateEndpoints = true
+	}
+	// We also clean the conntrack entries related to the stale Endpoints for a UDP Service. Conntrack entries
+	// matched by each of stale Endpoint IPs and each of the remaining Service IPs and ports will be deleted.
+	if len(staleEndpoints) > 0 && needClearConntrackEntries(svcInfo.OFProtocol) {
+		needCleanupStaleUDPServiceConntrack = true
+	}
+
+	if needUpdateEndpoints {
+		// These only program OVS; the installed-Endpoint state is updated once at the end of this function,
+		// so a failure in the groups/flows below leaves it untouched and the next sync retries.
+		if !p.addNewEndpoints(svcPortName, svcInfo.OFProtocol, newEndpoints) {
+			return false
+		}
+		if !p.removeStaleEndpoints(svcPortName, svcInfo.OFProtocol, staleEndpoints) {
+			return false
+		}
+	}
+
+	withSessionAffinity := svcInfo.SessionAffinityType() == corev1.ServiceAffinityClientIP
+	var localGroupID, clusterGroupID binding.GroupIDType
+	// categorizeEndpoints has checked if localGroup and clusterGroup should exist. We just create the group if its
+	// Endpoints is not nil.
+	// Note that nil represents the group should not exist and empty represents the group should exist but there is
+	// no available Endpoints.
+	if localEndpoints != nil {
+		if localGroupID, ok = p.installServiceGroup(svcPortName, needUpdateEndpoints, true, withSessionAffinity, localEndpoints); !ok {
+			return false
+		}
+	} else {
+		if !p.removeServiceGroup(svcPortName, true) {
+			return false
+		}
+	}
+	if clusterEndpoints != nil {
+		if clusterGroupID, ok = p.installServiceGroup(svcPortName, needUpdateEndpoints, false, withSessionAffinity, clusterEndpoints); !ok {
+			return false
+		}
+	} else {
+		if !p.removeServiceGroup(svcPortName, false) {
+			return false
+		}
+	}
+
+	if needUpdateService {
+		// Delete previous flows.
+		if pSvcInfo != nil {
+			if !p.removeServiceFlows(pSvcInfo) {
+				return false
+			}
+		}
+		if !p.installServiceFlows(svcInfo, localGroupID, clusterGroupID) {
+			return false
+		}
+	} else if needUpdateServiceExternalAddresses {
+		if !p.updateServiceExternalAddresses(pSvcInfo, svcInfo, localGroupID, clusterGroupID) {
+			return false
+		}
+	}
+	if needCleanupStaleUDPServiceConntrack {
+		if !p.removeStaleConntrackEntries(svcPortName, pSvcInfo, svcInfo, staleEndpoints) {
+			return false
+		}
+	}
+
+	// The Service and all of its Endpoints, groups and flows have been installed successfully. Update the
+	// installed Endpoints and Service together, at this single point, so the recorded state never runs
+	// ahead of OVS: if any step above had failed and returned false, none of it is recorded and the next
+	// sync recomputes the diff and retries.
+	p.updateEndpointsStates(svcPortName, svcInfo.OFProtocol, newEndpoints, staleEndpoints)
+	p.serviceInstalledMap[svcPortName] = svcPort
+	return true
 }
 
 // getLoadBalancerMode returns the default load balancer mode if the Service doesn't have the annotation overriding it.
@@ -1001,8 +1064,14 @@ func (p *proxier) syncProxyRules() error {
 	p.endpointsChanges.Update(p.endpointsMap)
 	p.serviceChanges.Update(p.serviceMap)
 
-	p.removeStaleServices()
-	p.installServices()
+	// Both steps program the OVS data path and can fail transiently (e.g. a bundle reply timing out). Each
+	// reports whether any Service could not be fully synced; we aggregate that and turn it into an error at
+	// the end of syncProxyRules so the runner retries sooner (retryInterval), instead of leaving the
+	// affected Services stale until the next Service/Endpoint event or the maxInterval resync. Both are
+	// always run; a failure in one must not skip the other.
+	removeFailed := p.removeStaleServices()
+	installFailed := p.installServices()
+	syncFailed := removeFailed || installFailed
 
 	if p.healthzServer != nil {
 		p.healthzServer.Updated(p.ipFamily)
@@ -1028,10 +1097,20 @@ func (p *proxier) syncProxyRules() error {
 		metrics.EndpointsInstalledTotal.Set(float64(counter))
 	}
 
+	// syncedOnce is a best-effort readiness signal, set once a sync pass has run, even if some Services
+	// failed. It only means "the proxier has made its first attempt", not "every Service is programmed":
+	// the agent uses it to gate Service-dependent components at startup, and gating that on every Service
+	// succeeding would let a single persistently-failing Service block agent startup indefinitely. Any
+	// Service that failed here is retried by the runner via the error returned below.
 	p.syncedOnceMutex.Lock()
 	defer p.syncedOnceMutex.Unlock()
 	p.syncedOnce = true
 
+	if syncFailed {
+		// The specific failures were already logged by removeStaleServices/installServices; this only
+		// triggers the retry.
+		return fmt.Errorf("one or more Services could not be fully synced")
+	}
 	return nil
 }
 

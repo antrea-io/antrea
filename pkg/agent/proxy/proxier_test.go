@@ -4154,3 +4154,105 @@ func TestIPToServiceMap(t *testing.T) {
 	m.delete(nodePortServiceInfo)
 	verifyIPToServiceMap(t, m, []net.IP{}, nodeIPs, nodePortPort, corev1.ProtocolTCP, nodePortServicePortName)
 }
+
+func TestServiceSyncRetriesAfterTransientFailure(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	mockOFClient, mockRouteClient := getMockClients(ctrl)
+	groupAllocator := openflow.NewGroupAllocator()
+	fp := newFakeProxier(mockRouteClient, mockOFClient, nil, groupAllocator, false)
+
+	svcIP := svc1IP(false)
+	ep1 := ep1IP(false)
+	ep2 := ep2IP(false)
+	// endpointsInstalledMap is keyed by Endpoint.String(), which is "IP:port".
+	epKey := func(ip net.IP) string { return fmt.Sprintf("%s:%d", ip.String(), svcPort) }
+	internalTrafficPolicy := corev1.ServiceInternalTrafficPolicyCluster
+	svc := makeTestClusterIPService(&svcPortName, svcIP, nil, int32(svcPort), corev1.ProtocolTCP, nil, &internalTrafficPolicy, false, nil)
+	makeServiceMap(fp, svc)
+
+	ep1EP, epPort := makeTestEndpointSliceEndpointAndPort(&svcPortName, ep1, int32(svcPort), corev1.ProtocolTCP, false)
+	ep2EP, _ := makeTestEndpointSliceEndpointAndPort(&svcPortName, ep2, int32(svcPort), corev1.ProtocolTCP, false)
+	// Reuse the same EndpointSlice (same name) so the second update replaces ep1 with ep2 instead of
+	// being treated as a separate slice (makeTestEndpointSlice randomizes the name).
+	slice := makeTestEndpointSlice(svcPortName.Namespace, svcPortName.Name, []discovery.Endpoint{*ep1EP}, []discovery.EndpointPort{*epPort}, false)
+	sliceEp2 := slice.DeepCopy()
+	sliceEp2.Endpoints = []discovery.Endpoint{*ep2EP}
+
+	// The Endpoint flows and Service flows are not the subject of this test; allow them freely.
+	mockOFClient.EXPECT().InstallEndpointFlows(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+	mockOFClient.EXPECT().UninstallEndpointFlows(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+	mockOFClient.EXPECT().InstallServiceFlows(gomock.Any()).Return(nil).AnyTimes()
+	// The cluster group is (re)installed on every sync; the second one (the update to ep2) fails.
+	gomock.InOrder(
+		mockOFClient.EXPECT().InstallServiceGroup(binding.GroupIDType(1), false, gomock.Any()).Return(nil),                                   // initial install with ep1
+		mockOFClient.EXPECT().InstallServiceGroup(binding.GroupIDType(1), false, gomock.Any()).Return(fmt.Errorf("bundle reply is timeout")), // update to ep2 fails
+		mockOFClient.EXPECT().InstallServiceGroup(binding.GroupIDType(1), false, gomock.Any()).Return(nil),                                   // retry succeeds
+	)
+
+	// Initial install with ep1 succeeds.
+	makeEndpointSliceMap(fp, slice)
+	require.NoError(t, fp.syncProxyRules())
+	require.Contains(t, fp.endpointsInstalledMap[svcPortName], epKey(ep1))
+
+	// Endpoints change ep1 -> ep2, but the group update fails. syncProxyRules must report the error, and
+	// the installed-Endpoint state must NOT advance (still ep1), so the next sync recomputes the diff.
+	fp.endpointsChanges.OnEndpointSliceUpdate(sliceEp2, false)
+	err := fp.syncProxyRules()
+	assert.Error(t, err, "a transient group failure must be reported so the runner retries")
+	assert.Contains(t, fp.endpointsInstalledMap[svcPortName], epKey(ep1), "installed state must not advance on failure")
+	assert.NotContains(t, fp.endpointsInstalledMap[svcPortName], epKey(ep2), "installed state must not advance on failure")
+
+	// Next sync (OVS recovered): the persisted diff is retried and the Service converges to ep2.
+	err = fp.syncProxyRules()
+	assert.NoError(t, err)
+	assert.Contains(t, fp.endpointsInstalledMap[svcPortName], epKey(ep2), "the Service must converge to the new Endpoint after recovery")
+	assert.NotContains(t, fp.endpointsInstalledMap[svcPortName], epKey(ep1))
+}
+
+// TestStaleServiceRemovalRetriesAfterTransientFailure verifies the mirror case: when uninstalling an
+// expired Service transiently fails, syncProxyRules reports the error and the Service stays recorded so it
+// is retried, then is fully removed once the operation succeeds.
+func TestStaleServiceRemovalRetriesAfterTransientFailure(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	mockOFClient, mockRouteClient := getMockClients(ctrl)
+	groupAllocator := openflow.NewGroupAllocator()
+	fp := newFakeProxier(mockRouteClient, mockOFClient, nil, groupAllocator, false)
+
+	svcIP := svc1IP(false)
+	epIP := ep1IP(false)
+	internalTrafficPolicy := corev1.ServiceInternalTrafficPolicyCluster
+	svc := makeTestClusterIPService(&svcPortName, svcIP, nil, int32(svcPort), corev1.ProtocolTCP, nil, &internalTrafficPolicy, false, nil)
+	makeServiceMap(fp, svc)
+	ep, port := makeTestEndpointSliceEndpointAndPort(&svcPortName, epIP, int32(svcPort), corev1.ProtocolTCP, false)
+	eps := makeTestEndpointSlice(svcPortName.Namespace, svcPortName.Name, []discovery.Endpoint{*ep}, []discovery.EndpointPort{*port}, false)
+	makeEndpointSliceMap(fp, eps)
+
+	mockOFClient.EXPECT().InstallEndpointFlows(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+	mockOFClient.EXPECT().InstallServiceGroup(gomock.Any(), false, gomock.Any()).Return(nil).AnyTimes()
+	mockOFClient.EXPECT().InstallServiceFlows(gomock.Any()).Return(nil).AnyTimes()
+	mockOFClient.EXPECT().UninstallEndpointFlows(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+	mockOFClient.EXPECT().UninstallServiceGroup(gomock.Any()).Return(nil).AnyTimes()
+	// The ClusterIP flow uninstall fails the first time, then succeeds.
+	gomock.InOrder(
+		mockOFClient.EXPECT().UninstallServiceFlows(svcIP, uint16(svcPort), gomock.Any()).Return(fmt.Errorf("bundle reply is timeout")),
+		mockOFClient.EXPECT().UninstallServiceFlows(svcIP, uint16(svcPort), gomock.Any()).Return(nil),
+	)
+
+	// Install the Service.
+	require.NoError(t, fp.syncProxyRules())
+	require.Contains(t, fp.serviceInstalledMap, svcPortName)
+
+	// Delete the Service, but the removal transiently fails. The error must be reported, and the Service
+	// must stay in serviceInstalledMap so removeStaleServices retries it.
+	fp.serviceChanges.OnServiceUpdate(svc, nil)
+	fp.endpointsChanges.OnEndpointSliceUpdate(eps, true)
+	err := fp.syncProxyRules()
+	assert.Error(t, err, "a transient removal failure must be reported so the runner retries")
+	assert.Contains(t, fp.serviceInstalledMap, svcPortName, "a Service that failed to be removed must stay recorded for retry")
+
+	// Next sync: the removal is retried and succeeds.
+	err = fp.syncProxyRules()
+	assert.NoError(t, err)
+	assert.NotContains(t, fp.serviceInstalledMap, svcPortName, "the Service must be fully removed after recovery")
+	assert.NotContains(t, fp.endpointsInstalledMap, svcPortName)
+}
