@@ -204,12 +204,12 @@ func TestAddService(t *testing.T) {
 			require.NoError(t, err)
 			var svcUpdated *corev1.Service
 			var externalIP string
-			assert.Eventually(t, func() bool {
+			require.EventuallyWithT(t, func(c *assert.CollectT) {
 				var err error
 				svcUpdated, err = controller.client.CoreV1().Services(tt.service.Namespace).Get(context.TODO(), tt.service.Name, metav1.GetOptions{})
-				require.NoError(t, err)
+				require.NoError(c, err)
 				externalIP = getServiceExternalIP(svcUpdated)
-				return externalIP == tt.expectedExternalIP
+				assert.Equal(c, tt.expectedExternalIP, externalIP)
 			}, 500*time.Millisecond, 100*time.Millisecond)
 			ipPool := svcUpdated.Annotations[antreaagenttypes.ServiceExternalIPPoolAnnotationKey]
 			assert.NotEmpty(t, ipPool)
@@ -487,11 +487,11 @@ func TestSyncService(t *testing.T) {
 
 func checkForServiceExternalIP(t *testing.T, controller *loadBalancerController, name, namespace, expectedExternalIP string) {
 	t.Helper()
-	assert.Eventually(t, func() bool {
+	require.EventuallyWithT(t, func(c *assert.CollectT) {
 		serviceUpdated, err := controller.client.CoreV1().Services(namespace).Get(context.TODO(), name, metav1.GetOptions{})
-		require.NoError(t, err)
+		require.NoError(c, err)
 		externalIP := getServiceExternalIP(serviceUpdated)
-		return externalIP == expectedExternalIP
+		assert.Equal(c, expectedExternalIP, externalIP)
 	}, 500*time.Millisecond, 100*time.Millisecond)
 }
 
@@ -499,10 +499,10 @@ func checkExternalIPPoolUsed(t *testing.T, controller *loadBalancerController, p
 	t.Helper()
 	exists := controller.externalIPAllocator.IPPoolExists(poolName)
 	require.True(t, exists)
-	assert.Eventually(t, func() bool {
+	require.EventuallyWithT(t, func(c *assert.CollectT) {
 		eip, err := controller.crdClient.CrdV1beta1().ExternalIPPools().Get(context.TODO(), poolName, metav1.GetOptions{})
-		require.NoError(t, err)
+		require.NoError(c, err)
 		t.Logf("current status %#v", eip.Status)
-		return eip.Status.Usage.Used == used
+		assert.Equal(c, used, eip.Status.Usage.Used)
 	}, 500*time.Millisecond, 100*time.Millisecond)
 }

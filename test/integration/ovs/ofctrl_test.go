@@ -241,10 +241,10 @@ func TestOFctrlFlow(t *testing.T) {
 		if err != nil {
 			t.Errorf("Failed to DeleteFlowsByCookie: %v", err)
 		}
-		require.Eventually(t, func() bool {
+		require.EventuallyWithT(t, func(c *assert.CollectT) {
 			flowList, err := OfctlDumpTableFlowsWithoutName(ovsCtlClient, myTable.GetID())
-			require.NoError(t, err)
-			return len(flowList) == 0
+			require.NoError(c, err)
+			assert.Empty(c, flowList)
 		}, time.Second, time.Millisecond*100, "Failed to delete flows by CookieID")
 	}
 }
@@ -344,10 +344,10 @@ func TestOFctrlGroup(t *testing.T) {
 			}
 			// Check if the group could be deleted.
 			require.NoError(t, group.Delete())
-			require.Eventually(t, func() bool {
+			require.EventuallyWithT(t, func(c *assert.CollectT) {
 				groups, err := OfCtlDumpGroups(ovsCtlClient)
-				require.NoError(t, err)
-				return len(groups) == 0
+				require.NoError(c, err)
+				assert.Empty(c, groups)
 			}, openFlowCheckTimeout, openFlowCheckInterval, "Failed to delete group")
 		})
 		id++
