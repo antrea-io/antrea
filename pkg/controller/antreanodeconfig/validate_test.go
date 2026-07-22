@@ -102,7 +102,7 @@ func TestValidate(t *testing.T) {
 			},
 		},
 		{
-			name:      "overlapping VLAN ranges are allowed (OVSDB deduplicates)",
+			name:      "overlapping VLAN ranges are allowed",
 			operation: admv1.Update,
 			anc:       newAntreaNodeConfig([]string{"100-200", "150"}),
 			expectedResponse: &admv1.AdmissionResponse{

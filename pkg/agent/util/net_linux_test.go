@@ -20,6 +20,7 @@ package util
 import (
 	"fmt"
 	"net"
+	"os/exec"
 	"testing"
 
 	"github.com/containernetworking/plugins/pkg/ns"
@@ -30,6 +31,27 @@ import (
 
 	netlinktest "antrea.io/antrea/v2/pkg/agent/util/netlink/testing"
 )
+
+func TestDeleteOVSPortsUsesSingleTransaction(t *testing.T) {
+	originalExecCommand := execCommand
+	t.Cleanup(func() { execCommand = originalExecCommand })
+
+	var command string
+	var args []string
+	execCommand = func(name string, commandArgs ...string) *exec.Cmd {
+		command = name
+		args = append([]string(nil), commandArgs...)
+		return exec.Command("true")
+	}
+
+	require.NoError(t, deleteOVSPorts("br-secondary", "eth1", "eth1~"))
+	assert.Equal(t, "ovs-vsctl", command)
+	assert.Equal(t, []string{
+		"--if-exists", "del-port", "br-secondary", "eth1",
+		"--",
+		"--if-exists", "del-port", "br-secondary", "eth1~",
+	}, args)
+}
 
 type mockLink struct {
 	index        int

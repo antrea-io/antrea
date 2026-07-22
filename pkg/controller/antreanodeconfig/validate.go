@@ -17,22 +17,14 @@ package antreanodeconfig
 import (
 	"encoding/json"
 	"fmt"
-	"strconv"
-	"strings"
 
 	admv1 "k8s.io/api/admission/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/klog/v2"
 
 	crdv1alpha1 "antrea.io/antrea/v2/pkg/apis/crd/v1alpha1"
+	"antrea.io/antrea/v2/pkg/util/vlan"
 )
-
-const maxVLANID = 4094
-
-type vlanIDRange struct {
-	start uint16
-	end   uint16
-}
 
 // Validate validates AntreaNodeConfig admission requests.
 func Validate(review *admv1.AdmissionReview) *admv1.AdmissionResponse {
@@ -90,38 +82,10 @@ func newAdmissionResponseForErr(err error) *admv1.AdmissionResponse {
 	}
 }
 
-func parseVLANSpec(spec string) (vlanIDRange, error) {
-	spec = strings.TrimSpace(spec)
-	if startStr, endStr, ok := strings.Cut(spec, "-"); ok {
-		start, err := strconv.ParseUint(startStr, 10, 16)
-		if err != nil {
-			return vlanIDRange{}, fmt.Errorf("invalid VLAN range start %q: %w", startStr, err)
-		}
-		end, err := strconv.ParseUint(endStr, 10, 16)
-		if err != nil {
-			return vlanIDRange{}, fmt.Errorf("invalid VLAN range end %q: %w", endStr, err)
-		}
-		return vlanIDRange{start: uint16(start), end: uint16(end)}, nil
-	}
-
-	v, err := strconv.ParseUint(spec, 10, 16)
-	if err != nil {
-		return vlanIDRange{}, fmt.Errorf("invalid VLAN ID %q: %w", spec, err)
-	}
-	return vlanIDRange{start: uint16(v), end: uint16(v)}, nil
-}
-
 func validateVLANSpecs(specs []string) error {
 	for _, spec := range specs {
-		r, err := parseVLANSpec(spec)
-		if err != nil {
+		if _, err := vlan.ParseSpec(spec); err != nil {
 			return err
-		}
-		if r.start > r.end {
-			return fmt.Errorf("VLAN range start %d is greater than end %d", r.start, r.end)
-		}
-		if r.end > maxVLANID {
-			return fmt.Errorf("VLAN ID %d is greater than the maximum VLAN ID %d", r.end, maxVLANID)
 		}
 	}
 	return nil

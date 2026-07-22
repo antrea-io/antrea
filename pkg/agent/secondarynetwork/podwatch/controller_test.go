@@ -493,6 +493,7 @@ func TestConfigurePodSecondaryNetwork(t *testing.T) {
 		mtu                        int
 		vlan                       int
 		noIPAM                     bool
+		draining                   bool
 		doNotCreateNetwork         bool
 		expectedNetworkStatusAnnot []netdefv1.NetworkStatus
 		expectedErr                string
@@ -521,6 +522,16 @@ func TestConfigurePodSecondaryNetwork(t *testing.T) {
 				IPs:  []string{"148.14.24.100"},
 				DNS:  netdefv1.DNS{},
 			}, primaryNetworkStatus},
+		},
+		{
+			name:        "VLAN network rejected while bridge is draining",
+			networkType: vlanNetworkType,
+			draining:    true,
+			expectedCalls: func(mockIPAM *podwatchtesting.MockIPAMAllocator, mockIC *podwatchtesting.MockInterfaceConfigurator) {
+				mockIPAM.EXPECT().SecondaryNetworkAllocate(podOwner, gomock.Any()).Return(testIPAMResult("148.14.24.100/24", 0), nil)
+				mockIPAM.EXPECT().SecondaryNetworkRelease(podOwner).Return(nil)
+			},
+			expectedErr: "OVS bridge br-old is draining",
 		},
 		{
 			name:        "VLAN in IPPool",
@@ -822,6 +833,10 @@ func TestConfigurePodSecondaryNetwork(t *testing.T) {
 
 			pod, cniInfo := testPod(podName, containerID, podIP, *element)
 			pc, mockIPAM, interfaceConfigurator := testPodControllerStart(ctrl)
+			if tc.draining {
+				pc.ovsBridgeDraining = true
+				pc.drainingOVSBridgeName = "br-old"
+			}
 			_, err := pc.kubeClient.CoreV1().Pods(pod.Namespace).Create(context.TODO(), pod, metav1.CreateOptions{})
 			require.NoError(t, err)
 
@@ -1033,19 +1048,16 @@ func TestPodControllerAddPod(t *testing.T) {
 
 		podController.interfaceStore.AddInterface(staleConfig1)
 		podController.interfaceStore.AddInterface(staleConfig2)
+		deleteInterface := deleteInterfaceFromStore(podController.interfaceStore)
 		// Stale interfaces in the interface store should be deleted first.
 		mockIPAM.EXPECT().SecondaryNetworkRelease(stalePodOwner1)
 		mockIPAM.EXPECT().SecondaryNetworkRelease(stalePodOwner2)
-		interfaceConfigurator.EXPECT().DeleteVLANSecondaryInterface(staleConfig1)
-		interfaceConfigurator.EXPECT().DeleteSriovSecondaryInterface(staleConfig2)
+		interfaceConfigurator.EXPECT().DeleteVLANSecondaryInterface(staleConfig1).DoAndReturn(deleteInterface)
+		interfaceConfigurator.EXPECT().DeleteSriovSecondaryInterface(staleConfig2).DoAndReturn(deleteInterface)
 
 		podController.cniCache.Store(podKey, cniConfig)
 		createPodFn(podController, pod)
 		podController.primaryInterfaceStore.AddInterface(primaryInterface)
-		assert.NoError(t, podController.syncPod(podKey))
-		podController.interfaceStore.DeleteInterface(staleConfig1)
-		podController.interfaceStore.DeleteInterface(staleConfig2)
-
 		interfaceConfigurator.EXPECT().ConfigureSriovSecondaryInterface(
 			podName,
 			testNamespace,
@@ -1081,8 +1093,8 @@ func TestPodControllerAddPod(t *testing.T) {
 		podController.interfaceStore.AddInterface(containerConfig2)
 		mockIPAM.EXPECT().SecondaryNetworkRelease(podOwner1)
 		mockIPAM.EXPECT().SecondaryNetworkRelease(podOwner2)
-		interfaceConfigurator.EXPECT().DeleteSriovSecondaryInterface(containerConfig1)
-		interfaceConfigurator.EXPECT().DeleteVLANSecondaryInterface(containerConfig2)
+		interfaceConfigurator.EXPECT().DeleteSriovSecondaryInterface(containerConfig1).DoAndReturn(deleteInterface)
+		interfaceConfigurator.EXPECT().DeleteVLANSecondaryInterface(containerConfig2).DoAndReturn(deleteInterface)
 
 		deletePodFn(podController, pod.Name)
 		assert.NoError(t, podController.syncPod(podKey))
@@ -1116,7 +1128,7 @@ func TestPodControllerAddPod(t *testing.T) {
 		// update the local store. CNI DEL should still trigger the residual cleanup.
 		podController.interfaceStore.AddInterface(containerConfig)
 		podController.cniCache.Store(podKey, cniConfig)
-		interfaceConfigurator.EXPECT().DeleteSriovSecondaryInterface(containerConfig)
+		interfaceConfigurator.EXPECT().DeleteSriovSecondaryInterface(containerConfig).DoAndReturn(deleteInterfaceFromStore(podController.interfaceStore))
 		mockIPAM.EXPECT().SecondaryNetworkRelease(podOwner)
 
 		podController.processCNIUpdate(types.PodUpdate{
@@ -1463,6 +1475,434 @@ func TestInitializeOVSSecondaryInterfaceStore(t *testing.T) {
 	assert.False(t, found, "Unknown interface type should not be stored")
 }
 
+func TestUpdateOVSBridgeClient(t *testing.T) {
+	reloadErr := errors.New("reload failed")
+	tests := []struct {
+		name        string
+		setup       func(*PodController, *ovsconfigtest.MockOVSBridgeClient, []ovsconfig.OVSPortData, []*interfacestore.InterfaceConfig)
+		expectedErr error
+		verify      func(*testing.T, *PodController, []ovsconfig.OVSPortData, []*interfacestore.InterfaceConfig)
+	}{
+		{
+			name: "reload new bridge preserves SR-IOV records",
+			setup: func(pc *PodController, newOVSBridgeClient *ovsconfigtest.MockOVSBridgeClient, ovsPorts []ovsconfig.OVSPortData, interfaces []*interfacestore.InterfaceConfig) {
+				pc.interfaceStore.AddInterface(interfaces[3])
+				newOVSBridgeClient.EXPECT().GetPortList().Return(ovsPorts[:1], nil)
+			},
+			verify: func(t *testing.T, pc *PodController, ovsPorts []ovsconfig.OVSPortData, interfaces []*interfacestore.InterfaceConfig) {
+				_, found := pc.interfaceStore.GetContainerInterface(ovsPorts[0].UUID)
+				assert.True(t, found, "interface from the new bridge should be loaded")
+				_, found = pc.interfaceStore.GetContainerInterface(interfaces[3].ContainerID)
+				assert.True(t, found, "SR-IOV interface should be preserved")
+				assert.Equal(t, 2, pc.interfaceStore.Len())
+			},
+		},
+		{
+			name:        "reload failure keeps new bridge unavailable",
+			expectedErr: reloadErr,
+			setup: func(pc *PodController, newOVSBridgeClient *ovsconfigtest.MockOVSBridgeClient, _ []ovsconfig.OVSPortData, interfaces []*interfacestore.InterfaceConfig) {
+				pc.interfaceStore.AddInterface(interfaces[3])
+				newOVSBridgeClient.EXPECT().GetPortList().Return(nil, reloadErr)
+			},
+			verify: func(t *testing.T, pc *PodController, _ []ovsconfig.OVSPortData, interfaces []*interfacestore.InterfaceConfig) {
+				assert.Nil(t, pc.ovsBridgeClient)
+				assert.Nil(t, pc.interfaceConfigurator)
+				_, found := pc.interfaceStore.GetContainerInterface(interfaces[3].ContainerID)
+				assert.True(t, found, "SR-IOV interface should be preserved")
+				assert.Equal(t, 1, pc.interfaceStore.Len())
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			pc, _, _, _ := testPodController(ctrl)
+			ovsPorts, interfaces := createTestInterfaces()
+			newOVSBridgeClient := ovsconfigtest.NewMockOVSBridgeClient(ctrl)
+			tt.setup(pc, newOVSBridgeClient, ovsPorts, interfaces)
+
+			err := pc.UpdateOVSBridgeClient(newOVSBridgeClient)
+			if tt.expectedErr != nil {
+				require.ErrorIs(t, err, tt.expectedErr)
+			} else {
+				require.NoError(t, err)
+			}
+			tt.verify(t, pc, ovsPorts, interfaces)
+		})
+	}
+
+	t.Run("nil client is rejected", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		pc, _, _, oldOVSBridgeClient := testPodController(ctrl)
+
+		err := pc.UpdateOVSBridgeClient(nil)
+		require.ErrorContains(t, err, "cannot activate a nil OVS bridge client")
+		assert.Equal(t, oldOVSBridgeClient, pc.ovsBridgeClient)
+	})
+}
+
+func TestDrainOVSBridge(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	pc, mockIPAM, interfaceConfigurator, oldOVSBridgeClient := testPodController(ctrl)
+	_, interfaces := createTestInterfaces()
+	ovsInterface := interfaces[0]
+	pc.interfaceStore.AddInterface(ovsInterface)
+
+	require.NoError(t, pc.StartOVSBridgeDrain("br-old", oldOVSBridgeClient))
+	assert.True(t, pc.ovsBridgeDraining)
+	err := pc.DeleteOVSBridgeIfDrained(func() error {
+		t.Fatal("bridge deletion must not be attempted before Pod interfaces are drained")
+		return nil
+	})
+	var notDrainedErr *BridgeNotDrainedError
+	require.ErrorAs(t, err, &notDrainedErr)
+	assert.Equal(t, []string{"nsA/Pod1/eth0"}, notDrainedErr.Interfaces)
+	assert.Equal(t, oldOVSBridgeClient, pc.ovsBridgeClient)
+
+	deleteInterface := deleteInterfaceFromStore(pc.interfaceStore)
+	interfaceConfigurator.EXPECT().DeleteVLANSecondaryInterface(ovsInterface).DoAndReturn(deleteInterface)
+	mockIPAM.EXPECT().SecondaryNetworkRelease(podOwnerForInterface(ovsInterface)).Return(nil)
+	require.NoError(t, pc.removeInterfaces([]*interfacestore.InterfaceConfig{ovsInterface}))
+
+	require.NoError(t, pc.DeleteOVSBridgeIfDrained(func() error {
+		if pc.mu.TryRLock() {
+			pc.mu.RUnlock()
+			t.Error("bridge deletion callback must run while pc.mu is write-locked")
+		}
+		return nil
+	}))
+	assert.Nil(t, pc.ovsBridgeClient)
+	assert.False(t, pc.ovsBridgeDraining)
+	_, found := pc.interfaceStore.GetContainerInterface(ovsInterface.ContainerID)
+	assert.False(t, found)
+}
+
+func TestDeleteOVSBridgeRequiresDrain(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	pc, _, _, oldOVSBridgeClient := testPodController(ctrl)
+
+	err := pc.DeleteOVSBridgeIfDrained(func() error {
+		t.Fatal("bridge deletion must not be attempted before drain starts")
+		return nil
+	})
+	require.ErrorContains(t, err, "secondary OVS bridge is not draining")
+	assert.Equal(t, oldOVSBridgeClient, pc.ovsBridgeClient)
+}
+
+func TestCancelOVSBridgeDrain(t *testing.T) {
+	t.Run("current bridge", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		pc, _, _, oldOVSBridgeClient := testPodController(ctrl)
+		require.NoError(t, pc.StartOVSBridgeDrain("br-old", oldOVSBridgeClient))
+
+		err := pc.CancelOVSBridgeDrain("br-other", oldOVSBridgeClient)
+		require.ErrorContains(t, err, "cannot cancel drain of OVS bridge br-old with bridge br-other")
+		assert.True(t, pc.ovsBridgeDraining)
+
+		require.NoError(t, pc.CancelOVSBridgeDrain("br-old", oldOVSBridgeClient))
+		assert.False(t, pc.ovsBridgeDraining)
+		assert.Empty(t, pc.drainingOVSBridgeName)
+		assert.Equal(t, oldOVSBridgeClient, pc.ovsBridgeClient)
+	})
+
+	t.Run("recreated bridge waits for stale records", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		pc, mockIPAM, _, recreatedOVSBridgeClient := testPodController(ctrl)
+		_, interfaces := createTestInterfaces()
+		ovsInterface := interfaces[0]
+		pc.ovsBridgeClient = nil
+		pc.interfaceConfigurator = nil
+		pc.interfaceStore.AddInterface(ovsInterface)
+		require.NoError(t, pc.StartOVSBridgeDrain("br-old", nil))
+
+		err := pc.CancelOVSBridgeDrain("br-old", recreatedOVSBridgeClient)
+		var notDrainedErr *BridgeNotDrainedError
+		require.ErrorAs(t, err, &notDrainedErr)
+		assert.True(t, pc.ovsBridgeDraining)
+
+		mockIPAM.EXPECT().SecondaryNetworkRelease(podOwnerForInterface(ovsInterface)).Return(nil)
+		require.NoError(t, pc.removeInterfaces([]*interfacestore.InterfaceConfig{ovsInterface}))
+		recreatedOVSBridgeClient.EXPECT().GetPortList().Return(nil, nil)
+		require.NoError(t, pc.CancelOVSBridgeDrain("br-old", recreatedOVSBridgeClient))
+		assert.False(t, pc.ovsBridgeDraining)
+		assert.Equal(t, recreatedOVSBridgeClient, pc.ovsBridgeClient)
+	})
+}
+
+func TestStartOVSBridgeDrainLoadsPortsAfterRestart(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	pc, _, _, oldOVSBridgeClient := testPodController(ctrl)
+	ovsPorts, interfaces := createTestInterfaces()
+	pc.ovsBridgeClient = nil
+	pc.interfaceConfigurator = nil
+	oldOVSBridgeClient.EXPECT().GetPortList().Return(ovsPorts[:1], nil)
+
+	require.NoError(t, pc.StartOVSBridgeDrain("br-old", oldOVSBridgeClient))
+	assert.True(t, pc.ovsBridgeDraining)
+	assert.Equal(t, oldOVSBridgeClient, pc.ovsBridgeClient)
+	_, found := pc.interfaceStore.GetContainerInterface(interfaces[0].ContainerID)
+	assert.True(t, found, "old bridge Pod interface should be loaded for draining")
+	assert.Equal(t, 1, pc.queue.Len(), "loaded interface owner should be enqueued")
+
+	key, quit := pc.queue.Get()
+	require.False(t, quit)
+	pc.queue.Done(key)
+	pc.queue.Forget(key)
+	pc.addPendingIPRelease("pending", podOwnerForInterface(interfaces[1]))
+	require.NoError(t, pc.StartOVSBridgeDrain("br-old", oldOVSBridgeClient))
+	assert.Zero(t, pc.queue.Len(), "repeated drain should not scan and enqueue owners again")
+}
+
+func TestStartOVSBridgeDrainLoadFailurePreservesState(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	pc, _, _, oldOVSBridgeClient := testPodController(ctrl)
+	ovsPorts, interfaces := createTestInterfaces()
+	pc.ovsBridgeClient = nil
+	pc.interfaceConfigurator = nil
+	loadErr := errors.New("failed to load OVS ports")
+	gomock.InOrder(
+		oldOVSBridgeClient.EXPECT().GetPortList().Return(nil, loadErr),
+		oldOVSBridgeClient.EXPECT().GetPortList().Return(ovsPorts[:1], nil),
+	)
+
+	err := pc.StartOVSBridgeDrain("br-old", oldOVSBridgeClient)
+	require.ErrorIs(t, err, loadErr)
+	assert.False(t, pc.ovsBridgeDraining)
+	assert.Empty(t, pc.drainingOVSBridgeName)
+	assert.Nil(t, pc.ovsBridgeClient)
+	assert.Nil(t, pc.interfaceConfigurator)
+	assert.Zero(t, pc.interfaceStore.Len())
+
+	require.NoError(t, pc.StartOVSBridgeDrain("br-old", oldOVSBridgeClient))
+	assert.True(t, pc.ovsBridgeDraining)
+	assert.Equal(t, oldOVSBridgeClient, pc.ovsBridgeClient)
+	_, found := pc.interfaceStore.GetContainerInterface(interfaces[0].ContainerID)
+	assert.True(t, found)
+}
+
+func TestDrainWaitsForPendingIPRelease(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	pc, mockIPAM, interfaceConfigurator, oldOVSBridgeClient := testPodController(ctrl)
+	_, interfaces := createTestInterfaces()
+	ovsInterface := interfaces[0]
+	pc.interfaceStore.AddInterface(ovsInterface)
+	require.NoError(t, pc.StartOVSBridgeDrain("br-old", oldOVSBridgeClient))
+
+	releaseErr := errors.New("IPAM release failed")
+	deleteInterface := deleteInterfaceFromStore(pc.interfaceStore)
+	interfaceConfigurator.EXPECT().DeleteVLANSecondaryInterface(ovsInterface).DoAndReturn(deleteInterface)
+	gomock.InOrder(
+		mockIPAM.EXPECT().SecondaryNetworkRelease(podOwnerForInterface(ovsInterface)).Return(releaseErr),
+		mockIPAM.EXPECT().SecondaryNetworkRelease(podOwnerForInterface(ovsInterface)).Return(nil),
+	)
+	require.ErrorIs(t, pc.removeInterfaces([]*interfacestore.InterfaceConfig{ovsInterface}), releaseErr)
+
+	err := pc.DeleteOVSBridgeIfDrained(nil)
+	var notDrainedErr *BridgeNotDrainedError
+	require.ErrorAs(t, err, &notDrainedErr)
+
+	require.NoError(t, pc.syncPod(podKeyGet(ovsInterface.PodName, ovsInterface.PodNamespace)))
+	require.NoError(t, pc.DeleteOVSBridgeIfDrained(nil))
+	assert.False(t, pc.ovsBridgeDraining)
+}
+
+func TestReleasePendingIPsForPodContinuesAfterError(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	pc, mockIPAM, _, _ := testPodController(ctrl)
+	releaseErr := errors.New("IPAM release failed")
+	failedOwner := &crdv1beta1.PodOwner{
+		Name: podName, Namespace: testNamespace, ContainerID: "container-1", IFName: "eth1",
+	}
+	successfulOwner := &crdv1beta1.PodOwner{
+		Name: podName, Namespace: testNamespace, ContainerID: "container-1", IFName: "eth2",
+	}
+	pc.addPendingIPRelease("failed", failedOwner)
+	pc.addPendingIPRelease("successful", successfulOwner)
+	mockIPAM.EXPECT().SecondaryNetworkRelease(failedOwner).Return(releaseErr)
+	mockIPAM.EXPECT().SecondaryNetworkRelease(successfulOwner).Return(nil)
+
+	err := pc.releasePendingIPsForPod(podName, testNamespace)
+	require.ErrorIs(t, err, releaseErr)
+	pc.pendingIPReleaseMutex.Lock()
+	defer pc.pendingIPReleaseMutex.Unlock()
+	assert.Contains(t, pc.pendingIPReleases, "failed")
+	assert.NotContains(t, pc.pendingIPReleases, "successful")
+}
+
+func TestReleasePendingIPsForPodAllowsConcurrentUpdate(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	pc, mockIPAM, _, _ := testPodController(ctrl)
+	originalOwner := &crdv1beta1.PodOwner{
+		Name: podName, Namespace: testNamespace, ContainerID: "container-1", IFName: "eth1",
+	}
+	replacementOwner := &crdv1beta1.PodOwner{
+		Name: podName, Namespace: testNamespace, ContainerID: "container-2", IFName: "eth1",
+	}
+	pc.addPendingIPRelease("pending", originalOwner)
+
+	releaseStarted := make(chan struct{})
+	allowRelease := make(chan struct{})
+	mockIPAM.EXPECT().SecondaryNetworkRelease(originalOwner).DoAndReturn(func(*crdv1beta1.PodOwner) error {
+		close(releaseStarted)
+		<-allowRelease
+		return nil
+	})
+	releaseDone := make(chan error, 1)
+	go func() {
+		releaseDone <- pc.releasePendingIPsForPod(podName, testNamespace)
+	}()
+	select {
+	case <-releaseStarted:
+	case <-time.After(time.Second):
+		t.Fatal("IPAM release did not start")
+	}
+
+	updateDone := make(chan struct{})
+	go func() {
+		pc.addPendingIPRelease("pending", replacementOwner)
+		close(updateDone)
+	}()
+	select {
+	case <-updateDone:
+	case <-time.After(time.Second):
+		close(allowRelease)
+		<-releaseDone
+		t.Fatal("pending IP release update blocked while IPAM release was in progress")
+	}
+
+	close(allowRelease)
+	require.NoError(t, <-releaseDone)
+	pc.pendingIPReleaseMutex.Lock()
+	defer pc.pendingIPReleaseMutex.Unlock()
+	assert.Equal(t, *replacementOwner, pc.pendingIPReleases["pending"])
+}
+
+func podOwnerForInterface(interfaceConfig *interfacestore.InterfaceConfig) *crdv1beta1.PodOwner {
+	return &crdv1beta1.PodOwner{
+		Name:        interfaceConfig.PodName,
+		Namespace:   interfaceConfig.PodNamespace,
+		ContainerID: interfaceConfig.ContainerID,
+		IFName:      interfaceConfig.IFDev,
+	}
+}
+
+func deleteInterfaceFromStore(store interfacestore.InterfaceStore) func(*interfacestore.InterfaceConfig) error {
+	return func(interfaceConfig *interfacestore.InterfaceConfig) error {
+		store.DeleteInterface(interfaceConfig)
+		return nil
+	}
+}
+
+func TestRemoveInterfaces(t *testing.T) {
+	releaseErr := errors.New("IPAM release failed")
+	tests := []struct {
+		name            string
+		bridgeAvailable bool
+		includeVLAN     bool
+		includeSRIOV    bool
+		vlanReleaseErr  error
+		wantVLANRecord  bool
+	}{
+		{
+			name:            "delete VLAN interface",
+			bridgeAvailable: true,
+			includeVLAN:     true,
+		},
+		{
+			name:            "delete SR-IOV interface",
+			bridgeAvailable: true,
+			includeSRIOV:    true,
+		},
+		{
+			name:         "release VLAN and delete SR-IOV without bridge",
+			includeVLAN:  true,
+			includeSRIOV: true,
+		},
+		{
+			name:           "preserve VLAN record when IPAM release fails without bridge",
+			includeVLAN:    true,
+			vlanReleaseErr: releaseErr,
+			wantVLANRecord: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			pc, mockIPAM, interfaceConfigurator, _ := testPodController(ctrl)
+			_, containerConfigs := createTestInterfaces()
+			vlanInterface := containerConfigs[1]
+			sriovInterface := containerConfigs[3]
+			var interfaces []*interfacestore.InterfaceConfig
+			if !tt.bridgeAvailable {
+				pc.ovsBridgeClient = nil
+			}
+
+			deleteInterface := deleteInterfaceFromStore(pc.interfaceStore)
+			if tt.includeVLAN {
+				interfaces = append(interfaces, vlanInterface)
+				pc.interfaceStore.AddInterface(vlanInterface)
+				if tt.bridgeAvailable {
+					interfaceConfigurator.EXPECT().DeleteVLANSecondaryInterface(vlanInterface).DoAndReturn(deleteInterface)
+				}
+				mockIPAM.EXPECT().SecondaryNetworkRelease(podOwnerForInterface(vlanInterface)).Return(tt.vlanReleaseErr)
+			}
+			if tt.includeSRIOV {
+				interfaces = append(interfaces, sriovInterface)
+				pc.interfaceStore.AddInterface(sriovInterface)
+				interfaceConfigurator.EXPECT().DeleteSriovSecondaryInterface(sriovInterface).DoAndReturn(deleteInterface)
+				mockIPAM.EXPECT().SecondaryNetworkRelease(podOwnerForInterface(sriovInterface)).Return(nil)
+			}
+
+			err := pc.removeInterfaces(interfaces)
+			if tt.vlanReleaseErr != nil {
+				require.ErrorIs(t, err, tt.vlanReleaseErr)
+			} else {
+				require.NoError(t, err)
+			}
+			if tt.includeVLAN {
+				storedInterface, found := pc.interfaceStore.GetContainerInterface(vlanInterface.ContainerID)
+				assert.Equal(t, tt.wantVLANRecord, found)
+				if tt.wantVLANRecord {
+					assert.Same(t, vlanInterface, storedInterface)
+				}
+			}
+			if tt.includeSRIOV {
+				_, found := pc.interfaceStore.GetContainerInterface(sriovInterface.ContainerID)
+				assert.False(t, found, "SR-IOV interface should be removed from interfaceStore")
+			}
+		})
+	}
+}
+
+func TestRemoveInterfacesRevalidatesInterfaceStore(t *testing.T) {
+	for _, tc := range []struct {
+		name            string
+		bridgeAvailable bool
+	}{
+		{name: "without bridge"},
+		{name: "with replacement bridge", bridgeAvailable: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			pc, _, _, _ := testPodController(ctrl)
+			if !tc.bridgeAvailable {
+				pc.ovsBridgeClient = nil
+			}
+			_, containerConfigs := createTestInterfaces()
+			staleInterface := containerConfigs[1]
+			currentInterface := *staleInterface
+			pc.interfaceStore.AddInterface(&currentInterface)
+
+			require.NoError(t, pc.removeInterfaces([]*interfacestore.InterfaceConfig{staleInterface}))
+			storedInterface, found := pc.interfaceStore.GetContainerInterface(currentInterface.ContainerID)
+			require.True(t, found, "Current interface record should not be removed for a stale snapshot")
+			assert.Same(t, &currentInterface, storedInterface)
+		})
+	}
+}
+
 func TestReconcileSecondaryInterfaces(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	pc, mockIPAM, interfaceConfigurator, _ := testPodController(ctrl)
@@ -1481,9 +1921,10 @@ func TestReconcileSecondaryInterfaces(t *testing.T) {
 	// SR-IOV interface without a primary interface.
 	pc.interfaceStore.AddInterface(containerConfigs[3])
 
-	interfaceConfigurator.EXPECT().DeleteVLANSecondaryInterface(containerConfigs[1]).Return(nil).Times(1)
-	interfaceConfigurator.EXPECT().DeleteVLANSecondaryInterface(containerConfigs[2]).Return(nil).Times(1)
-	interfaceConfigurator.EXPECT().DeleteSriovSecondaryInterface(containerConfigs[3]).Return(nil).Times(1)
+	deleteInterface := deleteInterfaceFromStore(pc.interfaceStore)
+	interfaceConfigurator.EXPECT().DeleteVLANSecondaryInterface(containerConfigs[1]).DoAndReturn(deleteInterface).Times(1)
+	interfaceConfigurator.EXPECT().DeleteVLANSecondaryInterface(containerConfigs[2]).DoAndReturn(deleteInterface).Times(1)
+	interfaceConfigurator.EXPECT().DeleteSriovSecondaryInterface(containerConfigs[3]).DoAndReturn(deleteInterface).Times(1)
 	mockIPAM.EXPECT().SecondaryNetworkRelease(gomock.Any()).Return(nil).Times(3)
 
 	pc.initializeCNICache()
@@ -1501,8 +1942,9 @@ func TestReconcileSecondaryInterfaces(t *testing.T) {
 		t.Helper()
 		key := fmt.Sprintf("%s/%s", config.PodNamespace, config.PodName)
 		value, foundPod := pc.cniCache.Load(key)
-		podCNIInfo := value.(*podCNIInfo)
-		assert.True(t, foundPod, "CNI cache should contain "+key)
+		require.True(t, foundPod, "CNI cache should contain "+key)
+		podCNIInfo, ok := value.(*podCNIInfo)
+		require.True(t, ok, "CNI cache entry should contain podCNIInfo")
 		assert.Equal(t, config.ContainerID, podCNIInfo.containerID)
 		assert.Equal(t, config.NetNS, podCNIInfo.netNS)
 	}

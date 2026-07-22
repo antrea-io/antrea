@@ -46,6 +46,7 @@ const (
 	AntreaHost             = "host"
 	AntreaTrafficControl   = "traffic-control"
 	AntreaIPsecTunnel      = "ipsec-tunnel"
+	AntreaSecondaryBridge  = "secondary-bridge"
 	AntreaUnset            = ""
 )
 

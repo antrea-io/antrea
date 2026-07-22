@@ -48,6 +48,7 @@ var (
 	netNSClose         = ns.NetNS.Close
 	getVethPeerIfindex = ip.GetVethPeerIfindex
 	netlinkAttrs       = netlink.Link.Attrs
+	execCommand        = exec.Command
 )
 
 // GetNSPeerDevBridge returns peer device and its attached bridge (if applicable)
@@ -240,10 +241,17 @@ func SetAdapterMACAddress(adapterName string, macConfig *net.HardwareAddr) error
 	return netlinkUtil.LinkSetHardwareAddr(link, *macConfig)
 }
 
-// deleteOVSPort deletes specific OVS port. This function calls ovs-vsctl command to bypass
-// OVS bridge client to work when agent exiting.
-func deleteOVSPort(brName, portName string) error {
-	cmd := exec.Command("ovs-vsctl", "--if-exists", "del-port", brName, portName)
+// deleteOVSPorts deletes the specified OVS Ports in one OVSDB transaction. It calls ovs-vsctl
+// directly because the OVS bridge client may already be shutting down when the Agent exits.
+func deleteOVSPorts(brName string, portNames ...string) error {
+	args := make([]string, 0, len(portNames)*5)
+	for i, portName := range portNames {
+		if i > 0 {
+			args = append(args, "--")
+		}
+		args = append(args, "--if-exists", "del-port", brName, portName)
+	}
+	cmd := execCommand("ovs-vsctl", args...)
 	return cmd.Run()
 }
 
@@ -497,14 +505,17 @@ func PrepareHostInterfaceConnection(
 	return bridgedName, false, nil
 }
 
-// RestoreHostInterfaceConfiguration restore the configuration from bridge back to host interface, reverting the
-// actions taken in PrepareHostInterfaceConnection.
-func RestoreHostInterfaceConfiguration(brName string, interfaceName string) {
+// RestoreHostInterfaceConfiguration restores the configuration from the bridge back to the host
+// interface, reverting the actions taken in PrepareHostInterfaceConnection. It returns an error
+// when the host and uplink OVS Ports cannot be deleted atomically. All subsequent sub-step
+// failures (IP/route restore and rename) are logged but do not cause a return error, since they
+// represent best-effort cleanup after the point of no return.
+func RestoreHostInterfaceConfiguration(brName string, interfaceName string) error {
 	klog.V(4).InfoS("Restoring bridge config to host interface")
 	bridgedName := GenerateUplinkInterfaceName(interfaceName)
 	// restore only when interface eth0~ exists
 	if !HostInterfaceExists(bridgedName) {
-		return
+		return nil
 	}
 
 	// get interface config
@@ -516,41 +527,39 @@ func RestoreHostInterfaceConfiguration(brName string, interfaceName string) {
 		if err != nil {
 			klog.ErrorS(err, "Failed to get interface config", "interface", interfaceName)
 		}
-
-		// delete internal port (eth0)
-		if err = deleteOVSPort(brName, interfaceName); err != nil {
-			klog.ErrorS(err, "Delete OVS port failed", "port", bridgedName)
-		}
 	}
-	// remove host interface (eth0~) from bridge
-	if err = deleteOVSPort(brName, bridgedName); err != nil {
-		klog.ErrorS(err, "Delete OVS port failed", "port", bridgedName)
-		return
+	// Delete the internal and uplink Ports in one transaction. Running two ovs-vsctl commands
+	// can leave only the internal Port deleted if the Agent is terminated between commands;
+	// the next Agent then sees the uplink and incorrectly assumes the host connection is intact.
+	if err = deleteOVSPorts(brName, interfaceName, bridgedName); err != nil {
+		return fmt.Errorf("failed to delete OVS host and uplink ports %s and %s from bridge %s: %w",
+			interfaceName, bridgedName, brName, err)
 	}
 
 	// rename host interface(eth0~ -> eth0)
 	if err = RenameInterface(bridgedName, interfaceName); err != nil {
 		klog.ErrorS(err, "Restore host interface name failed", "from", bridgedName, "to", interfaceName)
-		return
+		return nil
 	}
 	var link netlink.Link
 	if link, err = netlink.LinkByName(interfaceName); err != nil {
 		klog.ErrorS(err, "Failed to get link", "interface", interfaceName)
-		return
+		return nil
 	}
 	if len(interfaceIPs) > 0 {
 		// restore IPs to eth0
 		if err = ConfigureLinkAddresses(link.Attrs().Index, interfaceIPs); err != nil {
 			klog.ErrorS(err, "Restore IPs to host interface failed", "interface", interfaceName)
-			return
+			return nil
 		}
 	}
 	if len(interfaceRoutes) > 0 {
 		// restore routes to eth0
 		if err = ConfigureLinkRoutes(link, interfaceRoutes); err != nil {
 			klog.ErrorS(err, "Restore routes to host interface failed", "interface", interfaceName)
-			return
+			return nil
 		}
 	}
 	klog.V(2).InfoS("Finished restoring bridge config to host interface", "interface", interfaceName, "bridge", brName)
+	return nil
 }

@@ -143,11 +143,7 @@ func TestOVSBridge(t *testing.T) {
 
 	checkPorts(5)
 
-	testDeletePort(t, data.br, uuid1)
-	testDeletePort(t, data.br, uuid2)
-	testDeletePort(t, data.br, uuid3)
-	testDeletePort(t, data.br, uuid4)
-	testDeletePort(t, data.br, uuid5)
+	require.NoError(t, data.br.DeletePorts([]string{uuid1, "", uuid2, uuid2, uuid3, uuid4, uuid5}))
 
 	checkPorts(0)
 
