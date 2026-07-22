@@ -141,8 +141,16 @@ func run(o *Options) error {
 	nodeLatencyMonitorInformer := crdInformerFactory.Crd().V1alpha1().NodeLatencyMonitors()
 	flowExporterDestinationInformer := crdInformerFactory.Crd().V1alpha1().FlowExporterDestinations()
 
+	var antreaServiceEndpointResolver *client.EndpointResolver
+	if len(o.config.AntreaClientConnection.Kubeconfig) == 0 {
+		antreaServiceEndpointResolver, err = client.NewAntreaServiceEndpointResolver(k8sClient)
+		if err != nil {
+			return fmt.Errorf("error creating Antrea Service Endpoint resolver: %w", err)
+		}
+	}
+
 	// Create Antrea Clientset for the given config.
-	antreaClientProvider, err := client.NewAntreaClientProvider(o.config.AntreaClientConnection, k8sClient)
+	antreaClientProvider, err := client.NewAntreaClientProvider(o.config.AntreaClientConnection, k8sClient, antreaServiceEndpointResolver)
 	if err != nil {
 		return fmt.Errorf("failed to create Antrea client provider: %w", err)
 	}
@@ -169,6 +177,7 @@ func run(o *Options) error {
 	_, multiclusterEncryptionMode := config.GetTrafficEncryptionModeFromStr(o.config.Multicluster.TrafficEncryptionMode)
 	enableMulticlusterNP := features.DefaultFeatureGate.Enabled(features.Multicluster) && o.config.Multicluster.EnableStretchedNetworkPolicy
 	enableFlowExporter := features.DefaultFeatureGate.Enabled(features.FlowExporter)
+	serviceExternalIPEnabled := features.DefaultFeatureGate.Enabled(features.ServiceExternalIP)
 	var nodeIPTracker *nodeip.Tracker
 	if o.nodeType == config.K8sNode {
 		nodeIPTracker = nodeip.NewTracker(nodeInformer)
@@ -255,6 +264,14 @@ func run(o *Options) error {
 		proxyHealthCheckPort, _ = strconv.ParseInt(proxyHealthCheckPortStr, 10, 32)
 	}
 
+	hostNetworkPortRules := route.NewHostNetworkPortRules().
+		Allow(int32(o.config.APIPort), "AgentAPIServer").
+		Allow(int32(o.config.ClusterMembershipPort), "AgentClusterMembership").
+		Allow(int32(o.config.WireGuard.Port), "Wireguard")
+	if proxyHealthCheckPort != 0 {
+		hostNetworkPortRules = hostNetworkPortRules.Allow(int32(proxyHealthCheckPort), "ProxyHealthCheck")
+	}
+
 	routeClient, err := route.NewClient(networkConfig,
 		o.config.NoSNAT,
 		o.config.AntreaProxy.ProxyAll,
@@ -263,11 +280,12 @@ func run(o *Options) error {
 		nodeLatencyMonitorEnabled,
 		multicastEnabled,
 		o.enableEgress,
+		serviceExternalIPEnabled,
 		o.config.SNATFullyRandomPorts,
 		*o.config.Egress.SNATFullyRandomPorts,
 		serviceCIDRProvider,
-		int32(wireguardConfig.Port),
-		int32(proxyHealthCheckPort),
+		antreaServiceEndpointResolver,
+		hostNetworkPortRules,
 	)
 	if err != nil {
 		return fmt.Errorf("error creating route client: %v", err)
@@ -562,7 +580,7 @@ func run(o *Options) error {
 	var memberlistCluster *memberlist.Cluster
 	var linkMonitor linkmonitor.Interface
 
-	if o.enableEgress || features.DefaultFeatureGate.Enabled(features.ServiceExternalIP) {
+	if o.enableEgress || serviceExternalIPEnabled {
 		externalIPPoolController = externalippool.NewExternalIPPoolController(
 			crdClient, externalIPPoolInformer,
 		)
@@ -595,7 +613,7 @@ func run(o *Options) error {
 			return fmt.Errorf("error creating new Egress controller: %v", err)
 		}
 	}
-	if features.DefaultFeatureGate.Enabled(features.ServiceExternalIP) {
+	if serviceExternalIPEnabled {
 		externalIPController, err = serviceexternalip.NewServiceExternalIPController(
 			nodeConfig.Name,
 			nodeConfig.NodeTransportInterfaceName,
@@ -778,6 +796,9 @@ func run(o *Options) error {
 	}
 
 	go antreaClientProvider.Run(ctx)
+	if antreaServiceEndpointResolver != nil {
+		go antreaServiceEndpointResolver.Run(ctx)
+	}
 
 	// Initialize the NPL agent.
 	if o.enableNodePortLocal {
@@ -857,12 +878,12 @@ func run(o *Options) error {
 	informerFactory.Start(stopCh)
 	crdInformerFactory.Start(stopCh)
 
-	if o.enableEgress || features.DefaultFeatureGate.Enabled(features.ServiceExternalIP) {
+	if o.enableEgress || serviceExternalIPEnabled {
 		go externalIPPoolController.Run(stopCh)
 		go memberlistCluster.Run(stopCh)
 	}
 
-	if features.DefaultFeatureGate.Enabled(features.ServiceExternalIP) {
+	if serviceExternalIPEnabled {
 		go externalIPController.Run(stopCh)
 	}
 
