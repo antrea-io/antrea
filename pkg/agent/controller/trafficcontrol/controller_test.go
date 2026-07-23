@@ -105,6 +105,7 @@ var (
 	pod3OFPort        = uint32(3)
 	pod4OFPort        = uint32(4)
 	targetPort1OFPort = uint32(5)
+	returnPort1OFPort = uint32(6)
 	targetPort2OFPort = uint32(7)
 	returnPort2OFPort = uint32(8)
 	targetPort3OFPort = uint32(9)
@@ -114,6 +115,7 @@ var (
 	podInterface3    = newPodInterface("ns2", "pod3", int32(pod3OFPort))
 	podInterface4    = newPodInterface("ns2", "pod4", int32(pod4OFPort))
 	targetInterface1 = newTrafficControlInterface(targetPort1Name, int32(targetPort1OFPort))
+	returnInterface1 = newTrafficControlInterface(returnPort1Name, int32(returnPort1OFPort))
 	targetInterface2 = newTrafficControlInterface(targetPort2Name, int32(targetPort2OFPort))
 	returnInterface2 = newTrafficControlInterface(returnPort2Name, int32(returnPort2OFPort))
 	targetInterface3 = newTrafficControlInterface(targetPort3Name, int32(targetPort3OFPort))
@@ -612,6 +614,76 @@ func TestTrafficControlUpdate(t *testing.T) {
 			require.Equal(t, tt.expectedState, c.tcStates[tc1Name])
 		})
 	}
+}
+
+// TestTrafficControlUpdateReturnPort verifies that updating a TrafficControl's ReturnPort releases the stale
+// return port, rather than trying to release the not-yet-created new one, which would leak the stale port.
+func TestTrafficControlUpdateReturnPort(t *testing.T) {
+	tc1 := generateTrafficControl(tc1Name, nil, labels1, directionIngress, actionMirror, targetPort1, false, returnPort1)
+	interfaces := []*interfacestore.InterfaceConfig{
+		podInterface1,
+		podInterface2,
+		podInterface3,
+		podInterface4,
+		targetInterface1,
+		returnInterface1,
+	}
+
+	c := newFakeController(t, []runtime.Object{ns1, ns2, pod1, pod2, pod3, pod4}, []runtime.Object{tc1}, interfaces)
+
+	stopCh := make(chan struct{})
+	defer close(stopCh)
+
+	c.startInformers(stopCh)
+
+	// Fake the status after TrafficControl tc1 is added with returnPort1 as its return port.
+	c.portToTCBindings = map[string]*portToTCBinding{
+		targetPort1Name: {targetInterface1, sets.New[string](tc1Name)},
+		returnPort1Name: {returnInterface1, sets.New[string](tc1Name)},
+	}
+	c.tcStates = map[string]*trafficControlState{
+		tc1Name: {
+			targetPortName: targetPort1Name,
+			targetOFPort:   targetPort1OFPort,
+			returnPortName: returnPort1Name,
+			action:         actionMirror,
+			direction:      directionIngress,
+			ofPorts:        sets.New[int32](int32(pod1OFPort), int32(pod3OFPort)),
+			pods:           sets.New[string](pod1NN, pod3NN),
+		},
+	}
+	c.podToTCBindings = map[string]*podToTCBinding{
+		pod1NN: {effectiveTC: tc1Name, alternativeTCs: sets.New[string]()},
+		pod3NN: {effectiveTC: tc1Name, alternativeTCs: sets.New[string]()},
+	}
+
+	// Ignore the TrafficControl ADD event for TrafficControl tc1.
+	waitEvents(t, 1, c)
+	item, _ := c.queue.Get()
+	c.queue.Done(item)
+
+	updatedTrafficControl := generateTrafficControl(tc1Name, nil, labels1, directionIngress, actionMirror, targetPort1, false, returnPort2)
+	updatedTrafficControl.Generation += 1
+	_, err := c.crdClient.CrdV1alpha2().TrafficControls().Update(context.TODO(), updatedTrafficControl, metav1.UpdateOptions{})
+	require.NoError(t, err)
+
+	// The stale return port (returnPort1) must be released, not the new one (returnPort2), which doesn't exist yet.
+	c.mockOVSBridgeClient.EXPECT().DeletePort(returnInterface1.PortUUID)
+	c.mockOFClient.EXPECT().UninstallTrafficControlReturnPortFlow(returnPort1OFPort)
+	c.mockOVSBridgeClient.EXPECT().CreatePort(returnPort2Name, returnPort2Name, externalIDs)
+	c.mockOVSBridgeClient.EXPECT().GetOFPort(returnPort2Name)
+	c.mockOVSCtlClient.EXPECT().SetPortNoFlood(gomock.Any())
+	c.mockOFClient.EXPECT().InstallTrafficControlReturnPortFlow(gomock.Any())
+	// InstallTrafficControlMarkFlows is not expected to be called here: only the return port changed, while the
+	// target port's OFPort, action, direction, and the set of Pod OFPorts are all unchanged.
+
+	waitEvents(t, 1, c)
+	require.NoError(t, c.syncTrafficControl(tc1Name))
+
+	assert.Equal(t, returnPort2Name, c.tcStates[tc1Name].returnPortName)
+	// The stale return port binding must be cleaned up, not leaked.
+	assert.NotContains(t, c.portToTCBindings, returnPort1Name)
+	assert.Contains(t, c.portToTCBindings, returnPort2Name)
 }
 
 func TestSharedTargetPort(t *testing.T) {
