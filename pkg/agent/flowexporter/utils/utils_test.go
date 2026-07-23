@@ -93,6 +93,7 @@ func TestPolicyTypeToUint8(t *testing.T) {
 		{v1beta2.K8sNetworkPolicy, 1},
 		{v1beta2.AntreaNetworkPolicy, 2},
 		{v1beta2.AntreaClusterNetworkPolicy, 3},
+		{v1beta2.ClusterNetworkPolicy, 4},
 	} {
 		result := PolicyTypeToUint8(tc.policyType)
 		assert.Equal(t, tc.expectedResult, result)

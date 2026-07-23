@@ -83,6 +83,7 @@ enum NetworkPolicyType {
   NETWORK_POLICY_TYPE_K8S = 1;
   NETWORK_POLICY_TYPE_ANP = 2;
   NETWORK_POLICY_TYPE_ACNP = 3;
+  NETWORK_POLICY_TYPE_CNP = 4;
 }
 
 enum NetworkPolicyRuleAction {

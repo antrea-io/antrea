@@ -132,6 +132,7 @@ var NetworkPolicyTypeMap = map[string]cpv1beta.NetworkPolicyType{
 	"ANNP":  cpv1beta.AntreaNetworkPolicy,
 	"ANP":   cpv1beta.AdminNetworkPolicy,
 	"BANP":  cpv1beta.BaselineAdminNetworkPolicy,
+	"CNP":   cpv1beta.ClusterNetworkPolicy,
 }
 
 func GetNetworkPolicyTypeShorthands() []string {

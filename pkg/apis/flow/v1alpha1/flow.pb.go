@@ -205,6 +205,7 @@ const (
 	NetworkPolicyType_NETWORK_POLICY_TYPE_K8S         NetworkPolicyType = 1
 	NetworkPolicyType_NETWORK_POLICY_TYPE_ANP         NetworkPolicyType = 2
 	NetworkPolicyType_NETWORK_POLICY_TYPE_ACNP        NetworkPolicyType = 3
+	NetworkPolicyType_NETWORK_POLICY_TYPE_CNP         NetworkPolicyType = 4
 )
 
 // Enum value maps for NetworkPolicyType.
@@ -214,12 +215,14 @@ var (
 		1: "NETWORK_POLICY_TYPE_K8S",
 		2: "NETWORK_POLICY_TYPE_ANP",
 		3: "NETWORK_POLICY_TYPE_ACNP",
+		4: "NETWORK_POLICY_TYPE_CNP",
 	}
 	NetworkPolicyType_value = map[string]int32{
 		"NETWORK_POLICY_TYPE_UNSPECIFIED": 0,
 		"NETWORK_POLICY_TYPE_K8S":         1,
 		"NETWORK_POLICY_TYPE_ANP":         2,
 		"NETWORK_POLICY_TYPE_ACNP":        3,
+		"NETWORK_POLICY_TYPE_CNP":         4,
 	}
 )
 
@@ -1520,12 +1523,13 @@ const file_pkg_apis_flow_v1alpha1_flow_proto_rawDesc = "" +
 	"\x14FLOW_TYPE_INTRA_NODE\x10\x01\x12\x18\n" +
 	"\x14FLOW_TYPE_INTER_NODE\x10\x02\x12\x19\n" +
 	"\x15FLOW_TYPE_TO_EXTERNAL\x10\x03\x12\x1b\n" +
-	"\x17FLOW_TYPE_FROM_EXTERNAL\x10\x04*\x90\x01\n" +
+	"\x17FLOW_TYPE_FROM_EXTERNAL\x10\x04*\xad\x01\n" +
 	"\x11NetworkPolicyType\x12#\n" +
 	"\x1fNETWORK_POLICY_TYPE_UNSPECIFIED\x10\x00\x12\x1b\n" +
 	"\x17NETWORK_POLICY_TYPE_K8S\x10\x01\x12\x1b\n" +
 	"\x17NETWORK_POLICY_TYPE_ANP\x10\x02\x12\x1c\n" +
-	"\x18NETWORK_POLICY_TYPE_ACNP\x10\x03*\xb5\x01\n" +
+	"\x18NETWORK_POLICY_TYPE_ACNP\x10\x03\x12\x1b\n" +
+	"\x17NETWORK_POLICY_TYPE_CNP\x10\x04*\xb5\x01\n" +
 	"\x17NetworkPolicyRuleAction\x12(\n" +
 	"$NETWORK_POLICY_RULE_ACTION_NO_ACTION\x10\x00\x12$\n" +
 	" NETWORK_POLICY_RULE_ACTION_ALLOW\x10\x01\x12#\n" +
