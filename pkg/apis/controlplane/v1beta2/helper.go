@@ -19,7 +19,7 @@ import (
 )
 
 func (r *NetworkPolicyReference) ToString() string {
-	if r.Type == AntreaClusterNetworkPolicy {
+	if r.Type == AntreaClusterNetworkPolicy || r.Type == K8sClusterNetworkPolicy {
 		return fmt.Sprintf("%s:%s", r.Type, r.Name)
 	}
 	return fmt.Sprintf("%s:%s/%s", r.Type, r.Namespace, r.Name)
