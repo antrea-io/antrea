@@ -366,7 +366,7 @@ func (b *bundleStream) GetObjectKind() schema.ObjectKind {
 }
 
 func (b *bundleStream) DeepCopyObject() runtime.Object {
-	panic("bundleStream does not have DeepCopyObject")
+	return &bundleStream{cache: b.cache}
 }
 
 func (b *bundleStream) InputStream(_ context.Context, _, _ string) (stream io.ReadCloser, flush bool, mimeType string, err error) {
