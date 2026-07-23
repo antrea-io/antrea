@@ -116,6 +116,10 @@ type FlowExporter struct {
 	// all destinations see the same already-correlated connection state. FlowExporter.Run starts
 	// its cleanup loop via Run(stopCh).
 	fromExternalCorrelator *connections.FromExternalCorrelator
+	// nodeSnatCorrelator is owned by FlowExporter and wired into the poller. It correlates
+	// Antrea-zone Pod-to-External connections with default-zone entries to extract the Node
+	// SNAT IP. FlowExporter.Run starts its cleanup loop.
+	nodeSnatCorrelator *connections.NodeSnatCorrelator
 
 	// staticDestinationRes is set in NewFlowExporter when static export is enabled. Run() clears
 	// it if createDestinationFromResource fails; if still non-nil at shutdown, static destination
@@ -156,8 +160,9 @@ func NewFlowExporter(
 	ctConnsUpdateChannel := channel.NewSubscribableChannel("Conntrack Connections", ctConnsUpdateChannelBufferSize)
 	denyConnUpdateChannel := channel.NewSubscribableChannel("Deny Connections", denyConnUpdateChannelBufferSize)
 	fromExternalCorrelator := connections.NewFromExternalCorrelator(proxier)
+	nodeSnatCorrelator := connections.NewNodeSnatCorrelator()
 	connTrackDumper := connections.InitializeConnTrackDumper(nodeConfig, serviceCIDRNet, serviceCIDRNetv6, ovsDatapathType, proxyEnabled)
-	poller := connections.NewPoller(connTrackDumper, ctConnsUpdateChannel, fromExternalCorrelator, o.PollInterval, v4Enabled, v6Enabled, o.ConnectUplinkToBridge)
+	poller := connections.NewPoller(connTrackDumper, ctConnsUpdateChannel, fromExternalCorrelator, nodeSnatCorrelator, o.PollInterval, v4Enabled, v6Enabled, o.ConnectUplinkToBridge)
 
 	if nodeRouteController == nil {
 		klog.InfoS("NodeRouteController is nil, will not be able to determine flow type for connections")
@@ -205,6 +210,7 @@ func NewFlowExporter(
 		ctConnUpdateChannel:    ctConnsUpdateChannel,
 		denyConnUpdateChannel:  denyConnUpdateChannel,
 		fromExternalCorrelator: fromExternalCorrelator,
+		nodeSnatCorrelator:     nodeSnatCorrelator,
 
 		staticDestinationRes: staticDestination,
 		destinations:         make(map[string]destinationObj),
@@ -342,6 +348,9 @@ func (exp *FlowExporter) Run(stopCh <-chan struct{}) {
 	go exp.denyConnUpdateChannel.Run(stopCh)
 	if exp.fromExternalCorrelator != nil {
 		go exp.fromExternalCorrelator.Run(stopCh)
+	}
+	if exp.nodeSnatCorrelator != nil {
+		go exp.nodeSnatCorrelator.Run(stopCh)
 	}
 
 	for range defaultWorkers {
@@ -511,6 +520,7 @@ func (fe *FlowExporter) createDestinationFromResource(res *api.FlowExporterDesti
 		fe.npQuerier,
 		fe.proxier,
 		fe.egressQuerier,
+		fe.nodeSnatCorrelator,
 		fe.networkPolicyReadyTime,
 		config,
 	), nil

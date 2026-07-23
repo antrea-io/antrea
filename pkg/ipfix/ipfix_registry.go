@@ -19,6 +19,7 @@ import (
 
 	ipfixentities "github.com/vmware/go-ipfix/pkg/entities"
 	ipfixregistry "github.com/vmware/go-ipfix/pkg/registry"
+	"k8s.io/klog/v2"
 )
 
 var (
@@ -26,6 +27,19 @@ var (
 
 	loadRegistry = sync.OnceFunc(func() {
 		ipfixregistry.LoadRegistry()
+		// Register Information Elements that are not yet in the go-ipfix library.
+		// nodeSnatIPv4 (ID 173): SNAT IP for Pod-to-External flows using default Node SNAT.
+		if err := ipfixregistry.PutInfoElement(*ipfixentities.NewInfoElement("nodeSnatIPv4", 173, 18, ipfixregistry.AntreaEnterpriseID, 4), ipfixregistry.AntreaEnterpriseID); err != nil {
+			klog.ErrorS(err, "Failed to register nodeSnatIPv4 IE")
+		}
+		// nodeSnatIPv6 (ID 174): IPv6 variant.
+		if err := ipfixregistry.PutInfoElement(*ipfixentities.NewInfoElement("nodeSnatIPv6", 174, 19, ipfixregistry.AntreaEnterpriseID, 16), ipfixregistry.AntreaEnterpriseID); err != nil {
+			klog.ErrorS(err, "Failed to register nodeSnatIPv6 IE")
+		}
+		// nodeSnatPort (ID 175): SNAT port for Pod-to-External flows using default Node SNAT.
+		if err := ipfixregistry.PutInfoElement(*ipfixentities.NewInfoElement("nodeSnatPort", 175, 2, ipfixregistry.AntreaEnterpriseID, 2), ipfixregistry.AntreaEnterpriseID); err != nil {
+			klog.ErrorS(err, "Failed to register nodeSnatPort IE")
+		}
 	})
 )
 

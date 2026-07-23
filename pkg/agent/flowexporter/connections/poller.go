@@ -35,14 +35,15 @@ type Poller struct {
 
 	notifier           channel.Notifier
 	externalCorrelator ExternalCorrelator
+	nodeSnatCorrelator *NodeSnatCorrelator
 
 	zones []uint16
 }
 
-// NewPoller creates a conntrack poller. externalCorrelator may be nil; default-zone dumps are
-// never delivered to subscribers—when externalCorrelator is non-nil they are ingested here. Only
-// Antrea-zone dumps are passed to the notifier.
-func NewPoller(ctDumper ConnTrackDumper, notifier channel.Notifier, externalCorrelator ExternalCorrelator, pollInterval time.Duration, v4Enabled, v6Enabled, connectUplinkToBridge bool) *Poller {
+// NewPoller creates a conntrack poller. externalCorrelator and nodeSnatCorrelator may be nil;
+// default-zone dumps are never delivered to subscribers—when these correlators are non-nil they
+// are ingested here. Only Antrea-zone dumps are passed to the notifier.
+func NewPoller(ctDumper ConnTrackDumper, notifier channel.Notifier, externalCorrelator ExternalCorrelator, nodeSnatCorrelator *NodeSnatCorrelator, pollInterval time.Duration, v4Enabled, v6Enabled, connectUplinkToBridge bool) *Poller {
 	// The default zone is polled first so correlator state exists before Antrea-zones are polled.
 	zones := []uint16{DefaultZone}
 	if v4Enabled {
@@ -65,6 +66,7 @@ func NewPoller(ctDumper ConnTrackDumper, notifier channel.Notifier, externalCorr
 		zones:                 zones,
 		notifier:              notifier,
 		externalCorrelator:    externalCorrelator,
+		nodeSnatCorrelator:    nodeSnatCorrelator,
 		pollInterval:          pollInterval,
 		v4Enabled:             v4Enabled,
 		v6Enabled:             v6Enabled,
@@ -125,10 +127,13 @@ func (p *Poller) Poll() ([]*connection.Connection, []int, error) {
 		totalConns += totalConnsPerZone
 		connsLens = append(connsLens, len(filteredConnsListPerZone))
 		if zone == DefaultZone {
-			if p.externalCorrelator != nil {
-				for _, conn := range filteredConnsListPerZone {
-					if conn != nil {
+			for _, conn := range filteredConnsListPerZone {
+				if conn != nil {
+					if p.externalCorrelator != nil {
 						p.externalCorrelator.IngestDefaultZoneFlow(conn)
+					}
+					if p.nodeSnatCorrelator != nil {
+						p.nodeSnatCorrelator.IngestDefaultZoneFlow(conn)
 					}
 				}
 			}

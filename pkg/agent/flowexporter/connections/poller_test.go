@@ -60,7 +60,7 @@ func TestPoller_Poll(t *testing.T) {
 			mockDumper.EXPECT().DumpFlows(gomock.Not(uint16(0))).Return(tt.conns, len(tt.conns), nil)
 			mockDumper.EXPECT().GetMaxConnections().Return(maxConnections, nil)
 
-			p := NewPoller(mockDumper, nil, nil, 0, true, false, false)
+			p := NewPoller(mockDumper, nil, nil, nil, 0, true, false, false)
 			antreaConns, connsLens, err := p.Poll()
 			require.NoError(t, err)
 			assert.ElementsMatch(t, tt.conns, antreaConns)
@@ -83,7 +83,7 @@ func TestPoller_Poll_zoneZeroNotForwardedWhenCorrelatorNil(t *testing.T) {
 	mockDumper.EXPECT().DumpFlows(gomock.Not(uint16(0))).Return([]*connection.Connection{antrea}, 1, nil)
 	mockDumper.EXPECT().GetMaxConnections().Return(100000, nil)
 
-	p := NewPoller(mockDumper, nil, nil, 0, true, false, false)
+	p := NewPoller(mockDumper, nil, nil, nil, 0, true, false, false)
 	out, lens, err := p.Poll()
 	require.NoError(t, err)
 	assert.Equal(t, []int{1, 1}, lens, "per-zone lengths should include the default zone")

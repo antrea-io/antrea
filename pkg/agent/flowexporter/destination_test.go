@@ -747,3 +747,137 @@ func TestFlowExporter_resolveCollectorAddress(t *testing.T) {
 		})
 	}
 }
+
+func TestDestination_exportConn_NodeSnat(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	mockExporter := exportertesting.NewMockInterface(ctrl)
+
+	podIP := netip.MustParseAddr("10.10.0.2")
+	externalIP := netip.MustParseAddr("8.8.8.8")
+	nodeSnatIP := netip.MustParseAddr("172.18.0.10")
+
+	checker := &fakePodSubnetChecker{
+		results: map[netip.Addr]struct{ isPod, isGw bool }{
+			podIP: {isPod: true, isGw: false},
+		},
+	}
+
+	correlator := connections.NewNodeSnatCorrelator()
+	correlator.IngestDefaultZoneFlow(&connection.Connection{
+		Zone: connections.DefaultZone,
+		FlowKey: connection.Tuple{
+			SourceAddress:      podIP,
+			DestinationAddress: externalIP,
+			Protocol:           6,
+			SourcePort:         12345,
+			DestinationPort:    80,
+		},
+		ProxySnatIP:   nodeSnatIP,
+		ProxySnatPort: 40000,
+	})
+
+	tests := []struct {
+		name                 string
+		egressConfig         *agenttypes.EgressConfig
+		egressError          error
+		expectedNodeSnatIP   netip.Addr
+		expectedNodeSnatPort uint16
+	}{
+		{
+			name:                 "No Egress SNAT applied - NodeSnatIP populated",
+			egressError:          fmt.Errorf("no Egress applied"),
+			expectedNodeSnatIP:   nodeSnatIP,
+			expectedNodeSnatPort: 40000,
+		},
+		{
+			name: "Egress SNAT applied - NodeSnatIP empty",
+			egressConfig: &agenttypes.EgressConfig{
+				Name:       "egress-snat",
+				UID:        "egress-uid",
+				EgressIP:   "1.2.3.4",
+				EgressNode: "nodeA",
+			},
+			expectedNodeSnatIP:   netip.Addr{},
+			expectedNodeSnatPort: 0,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			egressQuerier := queriertest.NewMockEgressQuerier(ctrl)
+			d := &Destination{
+				nodeRouteController: checker,
+				nodeSnatCorrelator:  correlator,
+				egressQuerier:       egressQuerier,
+				exp:                 mockExporter,
+			}
+
+			conn := &connection.Connection{
+				SourcePodNamespace: "ns",
+				SourcePodName:      "pod",
+				FlowKey: connection.Tuple{
+					SourceAddress:      podIP,
+					DestinationAddress: externalIP,
+					Protocol:           6,
+					SourcePort:         12345,
+					DestinationPort:    80,
+				},
+			}
+
+			if tc.egressConfig != nil {
+				egressQuerier.EXPECT().GetEgress(conn.SourcePodNamespace, conn.SourcePodName).Return(*tc.egressConfig, nil)
+			} else {
+				egressQuerier.EXPECT().GetEgress(conn.SourcePodNamespace, conn.SourcePodName).Return(agenttypes.EgressConfig{}, tc.egressError)
+			}
+
+			mockExporter.EXPECT().Export(conn).Return(nil)
+
+			err := d.exportConn(conn)
+			assert.NoError(t, err)
+			assert.Equal(t, tc.expectedNodeSnatIP, conn.NodeSnatIP)
+			assert.Equal(t, tc.expectedNodeSnatPort, conn.NodeSnatPort)
+		})
+	}
+
+	// Regression test: when an Egress SNAT policy is applied to a Pod that previously
+	// had only the default Node SNAT, the previously-populated NodeSnatIP/Port must be
+	// cleared on the next export cycle so they're not exported as stale values.
+	t.Run("Stale NodeSnat cleared after Egress SNAT added", func(t *testing.T) {
+		egressQuerier := queriertest.NewMockEgressQuerier(ctrl)
+		d := &Destination{
+			nodeRouteController: checker,
+			nodeSnatCorrelator:  correlator,
+			egressQuerier:       egressQuerier,
+			exp:                 mockExporter,
+		}
+		// Use a 5-tuple the correlator has stored.
+		conn := &connection.Connection{
+			SourcePodNamespace: "ns",
+			SourcePodName:      "pod",
+			FlowKey: connection.Tuple{
+				SourceAddress:      podIP,
+				DestinationAddress: externalIP,
+				Protocol:           6,
+				SourcePort:         12345,
+				DestinationPort:    80,
+			},
+			// Stale values from a previous export cycle when no Egress SNAT was applied.
+			NodeSnatIP:   nodeSnatIP,
+			NodeSnatPort: 40000,
+		}
+		// EgressQuerier returns an Egress config, meaning Egress SNAT is now active.
+		egressQuerier.EXPECT().GetEgress(conn.SourcePodNamespace, conn.SourcePodName).Return(agenttypes.EgressConfig{
+			Name:       "egress-snat",
+			UID:        "egress-uid",
+			EgressIP:   "1.2.3.4",
+			EgressNode: "nodeA",
+		}, nil)
+		mockExporter.EXPECT().Export(conn).Return(nil)
+
+		err := d.exportConn(conn)
+		assert.NoError(t, err)
+		// Stale SNAT data must be cleared, even though the correlator has a matching entry.
+		assert.Equal(t, netip.Addr{}, conn.NodeSnatIP, "stale NodeSnatIP must be cleared when Egress SNAT is active")
+		assert.Equal(t, uint16(0), conn.NodeSnatPort, "stale NodeSnatPort must be cleared when Egress SNAT is active")
+	})
+}

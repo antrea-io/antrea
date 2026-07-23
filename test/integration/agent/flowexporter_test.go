@@ -228,7 +228,7 @@ func BenchmarkConntrackConnectionStorePoll(b *testing.B) {
 	}
 	serviceCIDRv4 := netip.MustParsePrefix("10.96.0.0/12")
 	connDumper := connections.NewConnTrackSystem(nodeConfig, serviceCIDRv4, netip.Prefix{}, false)
-	poller := connections.NewPoller(connDumper, nil, nil, testPollInterval, true, false, false)
+	poller := connections.NewPoller(connDumper, nil, nil, nil, testPollInterval, true, false, false)
 
 	ctrl := mock.NewController(b)
 	npQuerier := queriertest.NewMockAgentNetworkPolicyInfoQuerier(ctrl)

@@ -29,6 +29,7 @@ import (
 
 	"antrea.io/antrea/v2/pkg/agent/flowexporter/connection"
 	flowexportertesting "antrea.io/antrea/v2/pkg/agent/flowexporter/testing"
+	"antrea.io/antrea/v2/pkg/ipfix"
 	ipfixtest "antrea.io/antrea/v2/pkg/ipfix/testing"
 )
 
@@ -40,7 +41,7 @@ const (
 )
 
 func init() {
-	ipfixregistry.LoadRegistry()
+	ipfix.NewIPFIXRegistry().LoadRegistry()
 }
 
 func TestIPFIXExporter_sendTemplateSet(t *testing.T) {
@@ -337,11 +338,11 @@ func getElemList(ianaIE []string, antreaIE []string) []ipfixentities.InfoElement
 			ie.SetUnsigned8Value(uint8(0))
 		case "sourceIPv4Address", "destinationIPv4Address", "sourceIPv6Address", "destinationIPv6Address":
 			ie.SetIPAddressValue(net.ParseIP(""))
-		case "destinationClusterIPv4":
+		case "destinationClusterIPv4", "nodeSnatIPv4":
 			ie.SetIPAddressValue(net.IP{0, 0, 0, 0})
-		case "destinationClusterIPv6":
+		case "destinationClusterIPv6", "nodeSnatIPv6":
 			ie.SetIPAddressValue(net.ParseIP("::"))
-		case "sourceTransportPort", "destinationTransportPort", "destinationServicePort":
+		case "sourceTransportPort", "destinationTransportPort", "destinationServicePort", "nodeSnatPort":
 			ie.SetUnsigned16Value(uint16(0))
 		case "protocolIdentifier":
 			ie.SetUnsigned8Value(uint8(0))

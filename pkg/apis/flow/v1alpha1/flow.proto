@@ -203,4 +203,12 @@ message Flow {
 
   bytes proxy_snat_ip = 14;
   uint32 proxy_snat_port = 15;
+
+  // node_snat_ip is the SNAT IP used for Pod-to-External flows when the default
+  // Node SNAT (MASQUERADE) is applied. It is empty for flows using Egress SNAT
+  // or when noSNAT is enabled.
+  bytes node_snat_ip = 16;
+  // node_snat_port is the post-SNAT source port used for Pod-to-External flows
+  // when default Node SNAT is applied.
+  uint32 node_snat_port = 17;
 }

@@ -92,3 +92,45 @@ func TestGRPCExporterCreateMessage(t *testing.T) {
 	msg.Ipfix.ExportTime = nil // need to reset this field as createMessage will use the current time from the system clock
 	assert.Empty(t, cmp.Diff(expectedMsg, msg, protocmp.Transform()))
 }
+
+// TestGRPCExporterCreateMessage_NodeSnat verifies that the gRPC exporter correctly
+// propagates the NodeSnatIP and NodeSnatPort fields from the Connection to the gRPC
+// Flow protobuf message.
+func TestGRPCExporterCreateMessage_NodeSnat(t *testing.T) {
+	conn := flowexportertesting.GetConnection(false, true, 302, 6, "ESTABLISHED")
+	exp := &grpcExporter{
+		nodeName:    "this-node",
+		obsDomainID: 0xabcd,
+	}
+	// Set the NodeSnatIP and NodeSnatPort as the destination.go code would after
+	// looking them up from the NodeSnatCorrelator.
+	expectedIP := netip.MustParseAddr("172.18.0.10")
+	expectedPort := uint16(40000)
+	conn.NodeSnatIP = expectedIP
+	conn.NodeSnatPort = expectedPort
+
+	msg := exp.createMessage(conn)
+
+	assert.Equal(t, expectedIP.AsSlice(), msg.NodeSnatIp,
+		"gRPC Flow protobuf should contain the NodeSnatIp value")
+	assert.Equal(t, uint32(expectedPort), msg.NodeSnatPort,
+		"gRPC Flow protobuf should contain the NodeSnatPort value")
+}
+
+// TestGRPCExporterCreateMessage_NodeSnatEmpty verifies that when NodeSnatIP/Port
+// are not set, the protobuf fields are empty/zero.
+func TestGRPCExporterCreateMessage_NodeSnatEmpty(t *testing.T) {
+	conn := flowexportertesting.GetConnection(false, true, 302, 6, "ESTABLISHED")
+	// Do NOT set NodeSnatIP and NodeSnatPort - leave them at zero value.
+
+	exp := &grpcExporter{
+		nodeName:    "this-node",
+		obsDomainID: 0xabcd,
+	}
+	msg := exp.createMessage(conn)
+
+	assert.Empty(t, msg.NodeSnatIp,
+		"gRPC Flow protobuf should have empty NodeSnatIp when not set")
+	assert.Equal(t, uint32(0), msg.NodeSnatPort,
+		"gRPC Flow protobuf should have zero NodeSnatPort when not set")
+}
