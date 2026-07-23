@@ -457,6 +457,7 @@ func ConnectClickHouse(config *ClickHouseConfig) (*sql.DB, error) {
 		}
 		connect = clickhouse.OpenDB(&opt)
 		if err := connect.Ping(); err != nil {
+			connect.Close()
 			if exception, ok := err.(*clickhouse.Exception); ok {
 				connErr = fmt.Errorf("failed to ping ClickHouse: %v", exception.Message)
 			} else {
