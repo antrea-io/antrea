@@ -1408,7 +1408,7 @@ func (br *OVSBridge) getInterfaceOnBridge(ctx context.Context, ifName string) (*
 
 	portUUIDs := sets.New(bridge.Ports...)
 	if !portUUIDs.Has(port.UUID) {
-		return nil, fmt.Errorf("port %s not found on bridge %s", ifName, bridge.Name)
+		return nil, fmt.Errorf("port %s not found on bridge %s: %w", ifName, bridge.Name, client.ErrNotFound)
 	}
 
 	intf, err := br.getInterface(ctx, ifName)
@@ -1418,7 +1418,8 @@ func (br *OVSBridge) getInterfaceOnBridge(ctx context.Context, ifName string) (*
 
 	ifUUIDs := sets.New(port.Interfaces...)
 	if !ifUUIDs.Has(intf.UUID) {
-		return nil, fmt.Errorf("interface %s not attached to port %s on bridge %s", ifName, port.Name, bridge.Name)
+		return nil, fmt.Errorf("interface %s not attached to port %s on bridge %s: %w",
+			ifName, port.Name, bridge.Name, client.ErrNotFound)
 	}
 
 	return intf, nil

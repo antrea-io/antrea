@@ -95,7 +95,7 @@ func (c *Controller) effectiveOVSBridge() *agenttypes.OVSBridgeConfig {
 	if c.dynamicBridgeReconcile {
 		return EffectiveSecondaryOVSBridgeFromSnapshot(c.latestANCSnapshot.Load(), c.secNetConfig)
 	}
-	return EffectiveSecondaryOVSBridgeFromAgentConfig(c.secNetConfig)
+	return ovsBridgeFromStatic(c.secNetConfig)
 }
 
 // enqueue adds the single reconciliation key to the work queue.
@@ -222,7 +222,13 @@ func (c *Controller) Initialize(stopCh <-chan struct{}) error {
 				c.queue.AddAfter(reconcileKey, bridgeInUseRetryDelay)
 				return nil
 			}
-			return err
+			// AntreaNodeConfig-driven bridge reconciliation is eventually consistent.
+			// Do not make a transient secondary-network failure prevent the Agent from
+			// serving the primary network. The worker will retry and install the bridge
+			// client in PodController after reconciliation succeeds.
+			klog.ErrorS(err, "Failed to reconcile secondary network bridge during initialization, requeuing")
+			c.queue.AddRateLimited(reconcileKey)
+			return nil
 		}
 		klog.InfoS("Secondary network bridge reconciled from initial AntreaNodeConfig snapshot")
 		return nil
@@ -489,10 +495,10 @@ func resolveAndCreateOVSBridge(
 //
 // State-update discipline: the controller retains the old bridge state while
 // Pod-owned resources are draining. It clears that state only after draining
-// completes and, when the bridge still exists, bridge deletion succeeds. This
-// lets Pod reconciliation continue cleaning up interfaces and IPAM allocations.
+// completes and bridge deletion succeeds. This lets Pod reconciliation continue
+// cleaning up Pod-owned interfaces from the old bridge.
 func (c *Controller) reconcileBridge() error {
-	staticBridge := EffectiveSecondaryOVSBridgeFromAgentConfig(c.secNetConfig)
+	staticBridge := ovsBridgeFromStatic(c.secNetConfig)
 	desired := c.effectiveOVSBridge()
 	if desired != nil {
 		if err := validateSecondaryBridgeName(desired.BridgeName, c.primaryOVSBridgeName); err != nil {
@@ -500,6 +506,7 @@ func (c *Controller) reconcileBridge() error {
 		}
 	}
 
+	// Discover the existing Antrea-managed secondary bridge from OVSDB.
 	currentBrName, err := findManagedSecondaryBridgeFn(c.ovsdbClient)
 	if err != nil {
 		return fmt.Errorf("failed to find managed secondary bridge: %w", err)
@@ -531,7 +538,28 @@ func (c *Controller) reconcileBridge() error {
 		// so a retry does not skip partially-applied host-connection changes.
 		klog.InfoS("Secondary OVS bridge name unchanged, updating physical interfaces",
 			"bridge", desired.BridgeName)
-		return c.updatePhysicalInterfaces(desired)
+		c.mu.RLock()
+		updatePodController := c.ovsBridgeClient == nil
+		c.mu.RUnlock()
+
+		client, err := c.updatePhysicalInterfaces(desired)
+		if err != nil {
+			return err
+		}
+		if updatePodController {
+			if err := c.podController.UpdateOVSBridgeClient(client); err != nil {
+				return err
+			}
+		} else if err := c.podController.CancelOVSBridgeDrain(desired.BridgeName); err != nil {
+			return bridgeDrainError(desired.BridgeName, err)
+		}
+		c.mu.Lock()
+		c.ovsBridgeClient = client
+		c.effectiveBridgeCfg = desired
+		c.mu.Unlock()
+		klog.InfoS("Secondary OVS bridge reconciliation completed",
+			"bridge", desired.BridgeName, "physicalInterfaces", desired.PhysicalInterfaces)
+		return nil
 	}
 
 	if currentBrName != "" {
@@ -541,32 +569,27 @@ func (c *Controller) reconcileBridge() error {
 		if err != nil {
 			return err
 		}
-		if err := c.podController.StartOVSBridgeDrain(currentBrName, currentClient); err != nil {
-			return err
-		}
-		if err := c.podController.DeleteOVSBridgeIfDrained(func() error {
+		if err := c.podController.DrainAndDeleteOVSBridge(currentBrName, currentClient, func() error {
 			return c.deleteBridgeWithClient(currentBrName, currentClient)
 		}); err != nil {
 			return bridgeDrainError(currentBrName, err)
 		}
 		c.clearBridgeState()
-	} else if c.ovsBridgeClient != nil {
-		// OVSDB no longer has the bridge while the controller still holds its
-		// client. Drain any records loaded before the bridge disappeared before
-		// activating another bridge.
-		c.mu.RLock()
-		trackedBridgeName := bridgeName(c.effectiveBridgeCfg)
-		c.mu.RUnlock()
-		if err := c.podController.StartOVSBridgeDrain(trackedBridgeName, nil); err != nil {
-			return err
-		}
-		if err := c.podController.DeleteOVSBridgeIfDrained(nil); err != nil {
-			return bridgeDrainError(trackedBridgeName, err)
-		}
-		c.clearBridgeState()
 	}
 	if desired != nil {
-		return c.createAndConnectBridge(desired)
+		newClient, err := c.createAndConnectBridge(desired)
+		if err != nil {
+			return err
+		}
+		if err := c.podController.UpdateOVSBridgeClient(newClient); err != nil {
+			return err
+		}
+		c.mu.Lock()
+		c.ovsBridgeClient = newClient
+		c.effectiveBridgeCfg = desired
+		c.mu.Unlock()
+		klog.InfoS("Secondary OVS bridge transition completed",
+			"previousBridge", currentBrName, "currentBridge", desired.BridgeName)
 	}
 	return nil
 }
@@ -643,7 +666,7 @@ func (c *Controller) deleteBridgeWithClient(brName string, client ovsconfig.OVSB
 		}
 	}
 	if err := client.Delete(); err != nil {
-		return fmt.Errorf("failed to delete OVS bridge %s: %v", brName, err)
+		return fmt.Errorf("failed to delete OVS bridge %s: %w", brName, err)
 	}
 	klog.InfoS("OVS bridge deleted", "bridge", brName)
 	return nil
@@ -657,25 +680,29 @@ func bridgeDrainError(bridgeName string, err error) error {
 	return err
 }
 
-// createAndConnectBridge creates or attaches to the OVS bridge for the desired config,
-// connects physical interfaces, clears stale trunks, and updates the controller state.
+// createAndConnectBridge creates or attaches to the OVS bridge for the desired config
+// and reconciles its physical interfaces.
 // Create() reuses an existing bridge with the same name, so this path mirrors
 // Initialize: multi-interface configs run restoreStaleHostConnections before connect, and
 // clearStaleTrunks runs after connect for all interface counts.
-func (c *Controller) createAndConnectBridge(desired *agenttypes.OVSBridgeConfig) error {
+func (c *Controller) createAndConnectBridge(desired *agenttypes.OVSBridgeConfig) (ovsconfig.OVSBridgeClient, error) {
 	if err := validateSecondaryBridgeName(desired.BridgeName, c.primaryOVSBridgeName); err != nil {
-		return err
+		return nil, err
 	}
 	newClient, err := createOVSBridgeClient(desired.BridgeName, desired.EnableMulticastSnooping, c.ovsdbClient)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	physInterfaces := desired.PhysicalInterfaces
 	if len(physInterfaces) == 1 {
-		bridgedName, _, err := prepareHostInterfaceConnectionFn(
+		interfaceName := physInterfaces[0].Name
+		klog.InfoS("Preparing host interface connection for secondary OVS bridge",
+			"bridge", desired.BridgeName, "interface", interfaceName,
+			"uplink", util.GenerateUplinkInterfaceName(interfaceName))
+		bridgedName, alreadyExists, err := prepareHostInterfaceConnectionFn(
 			newClient,
-			physInterfaces[0].Name,
+			interfaceName,
 			0,
 			map[string]string{
 				interfacestore.AntreaInterfaceTypeKey: interfacestore.AntreaHost,
@@ -683,8 +710,12 @@ func (c *Controller) createAndConnectBridge(desired *agenttypes.OVSBridgeConfig)
 			0,
 		)
 		if err != nil {
-			return err
+			return nil, fmt.Errorf("failed to prepare host interface %s for secondary OVS bridge %s: %w",
+				interfaceName, desired.BridgeName, err)
 		}
+		klog.InfoS("Prepared host interface connection for secondary OVS bridge",
+			"bridge", desired.BridgeName, "interface", interfaceName,
+			"uplink", bridgedName, "alreadyExists", alreadyExists)
 		physInterfaces = []agenttypes.PhysicalInterfaceConfig{
 			{Name: bridgedName, AllowedVLANs: desired.PhysicalInterfaces[0].AllowedVLANs},
 		}
@@ -692,69 +723,64 @@ func (c *Controller) createAndConnectBridge(desired *agenttypes.OVSBridgeConfig)
 		// The OVS bridge may already exist (Create is a no-op) with stale host-connection
 		// ports from a prior single-interface config - same as Initialize.
 		if err := restoreStaleHostConnections(newClient, desired); err != nil {
-			return err
+			return nil, err
 		}
 	}
 
+	klog.InfoS("Reconciling physical uplinks on secondary OVS bridge",
+		"bridge", desired.BridgeName, "interfaces", physInterfaces)
 	if err := connectPhyInterfacesToOVSBridge(newClient, physInterfaces); err != nil {
-		return err
+		return nil, fmt.Errorf("failed to connect physical uplinks to secondary OVS bridge %s: %w",
+			desired.BridgeName, err)
 	}
+	klog.InfoS("Reconciled physical uplinks on secondary OVS bridge",
+		"bridge", desired.BridgeName, "interfaces", physInterfaces)
 	// Pre-existing ports may still carry trunk VLANs from an old config while the new
 	// desired config has no AllowedVLANs; connectPhyInterfacesToOVSBridge skips plain
 	// uplinks that are already present (unlike Initialize / updatePhysicalInterfaces).
 	if err := clearStaleTrunks(newClient, physInterfaces); err != nil {
-		return err
+		return nil, fmt.Errorf("failed to reconcile trunk configuration on secondary OVS bridge %s: %w",
+			desired.BridgeName, err)
 	}
-
-	// Notify PodController of the new bridge so it uses the correct OVS client
-	// for future Pod interface operations and reloads its interface store.
-	if err := c.podController.UpdateOVSBridgeClient(newClient); err != nil {
-		return err
-	}
-
-	c.mu.Lock()
-	c.ovsBridgeClient = newClient
-	c.effectiveBridgeCfg = desired
-	c.mu.Unlock()
-	return nil
+	return newClient, nil
 }
 
-// updatePhysicalInterfaces reconciles OVS ports on an existing bridge to match the
-// desired config. effectiveBridgeCfg is updated under a lock so that concurrent
-// podwatch events see a consistent state.
-func (c *Controller) updatePhysicalInterfaces(desired *agenttypes.OVSBridgeConfig) error {
+// updatePhysicalInterfaces reconciles physical OVS Ports on an existing bridge
+// and returns the bridge client. The caller activates the client in PodController
+// and commits the effective bridge state after reconciliation succeeds.
+func (c *Controller) updatePhysicalInterfaces(desired *agenttypes.OVSBridgeConfig) (ovsconfig.OVSBridgeClient, error) {
 	if err := validateSecondaryBridgeName(desired.BridgeName, c.primaryOVSBridgeName); err != nil {
-		return err
+		return nil, err
 	}
-	c.mu.RLock()
-	updatePodController := c.ovsBridgeClient == nil
-	c.mu.RUnlock()
 
 	client, err := createOVSBridgeClient(desired.BridgeName, desired.EnableMulticastSnooping, c.ovsdbClient)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	// Build a map of currently present ports on the bridge: interface name → UUID,
 	// and a map of IFName → IFType for the host-connection sibling check below.
 	portList, err := client.GetPortList()
 	if err != nil {
-		return fmt.Errorf("failed to list OVS ports on bridge %s: %v", desired.BridgeName, err)
+		return nil, fmt.Errorf("failed to list OVS ports on bridge %s: %v", desired.BridgeName, err)
 	}
 	existingPorts := make(map[string]string, len(portList))   // IFName → UUID
 	existingIFTypes := make(map[string]string, len(portList)) // IFName → IFType
+	existingAntreaTypes := make(map[string]string, len(portList))
 	for _, p := range portList {
 		existingPorts[p.IFName] = p.UUID
 		existingIFTypes[p.IFName] = p.IFType
+		existingAntreaTypes[p.IFName] = p.ExternalIDs[interfacestore.AntreaInterfaceTypeKey]
 	}
 
 	if err := c.restoreStaleHostConnections(desired, portList, existingPorts, existingIFTypes); err != nil {
-		return err
+		return nil, err
 	}
 
-	bridgePhysInterfaces, prepareErr := c.prepareBridgePhysicalInterfaces(client, desired, existingPorts, existingIFTypes)
+	bridgePhysInterfaces, prepareErr := c.prepareBridgePhysicalInterfaces(
+		client, desired, existingPorts, existingIFTypes, existingAntreaTypes)
 	if prepareErr != nil {
-		return prepareErr
+		return nil, prepareErr
 	}
 
 	desiredBridgeIfaces := make(map[string]struct{}, len(bridgePhysInterfaces))
@@ -781,7 +807,7 @@ func (c *Controller) updatePhysicalInterfaces(desired *agenttypes.OVSBridgeConfi
 	}
 	if len(toRemoveUUIDs) > 0 {
 		if err := client.DeletePorts(toRemoveUUIDs); err != nil {
-			return fmt.Errorf("failed to remove OVS ports %v from bridge %s: %v",
+			return nil, fmt.Errorf("failed to remove OVS ports %v from bridge %s: %v",
 				toRemoveNames, desired.BridgeName, err)
 		}
 		for _, name := range toRemoveNames {
@@ -796,7 +822,8 @@ func (c *Controller) updatePhysicalInterfaces(desired *agenttypes.OVSBridgeConfi
 	// clearStaleTrunks reads the actual OVS port state and only calls SetPortTrunks
 	// when the port genuinely has trunks set, so it is safe to call unconditionally.
 	if err := clearStaleTrunks(client, bridgePhysInterfaces); err != nil {
-		return err
+		return nil, fmt.Errorf("failed to reconcile trunk configuration on secondary OVS bridge %s: %w",
+			desired.BridgeName, err)
 	}
 
 	// Step 3: add new ports and update the trunk VLAN list on existing ports that
@@ -810,23 +837,16 @@ func (c *Controller) updatePhysicalInterfaces(desired *agenttypes.OVSBridgeConfi
 		}
 	}
 	if len(toConnect) > 0 {
+		klog.InfoS("Reconciling physical uplinks on secondary OVS bridge",
+			"bridge", desired.BridgeName, "interfaces", toConnect)
 		if err := connectPhyInterfacesToOVSBridge(client, toConnect); err != nil {
-			return err
+			return nil, fmt.Errorf("failed to connect physical uplinks to secondary OVS bridge %s: %w",
+				desired.BridgeName, err)
 		}
+		klog.InfoS("Reconciled physical uplinks on secondary OVS bridge",
+			"bridge", desired.BridgeName, "interfaces", toConnect)
 	}
-	if updatePodController {
-		if err := c.podController.UpdateOVSBridgeClient(client); err != nil {
-			return err
-		}
-	} else if err := c.podController.CancelOVSBridgeDrain(desired.BridgeName, client); err != nil {
-		return bridgeDrainError(desired.BridgeName, err)
-	}
-	// All steps succeeded; record the fully-desired config.
-	c.mu.Lock()
-	c.ovsBridgeClient = client
-	c.effectiveBridgeCfg = desired
-	c.mu.Unlock()
-	return nil
+	return client, nil
 }
 
 func (c *Controller) restoreStaleHostConnections(
@@ -878,6 +898,7 @@ func (c *Controller) prepareBridgePhysicalInterfaces(
 	desired *agenttypes.OVSBridgeConfig,
 	existingPorts map[string]string,
 	existingIFTypes map[string]string,
+	existingAntreaTypes map[string]string,
 ) ([]agenttypes.PhysicalInterfaceConfig, error) {
 	if len(desired.PhysicalInterfaces) == 1 {
 		iface := desired.PhysicalInterfaces[0]
@@ -886,6 +907,22 @@ func (c *Controller) prepareBridgePhysicalInterfaces(
 			return []agenttypes.PhysicalInterfaceConfig{
 				{Name: bridgedName, AllowedVLANs: iface.AllowedVLANs},
 			}, nil
+		}
+		// PrepareHostInterfaceConnection creates the internal host Port before the
+		// physical uplink Port is added to OVS. A failure between these operations
+		// leaves a valid host connection with the renamed kernel uplink but no OVS
+		// uplink Port. Resume from that state instead of trying to rename the host
+		// interface a second time.
+		if existingIFTypes[iface.Name] == "internal" &&
+			existingAntreaTypes[iface.Name] == interfacestore.AntreaHost {
+			if _, err := interfaceByNameFn(bridgedName); err == nil {
+				klog.InfoS("Resuming incomplete host interface connection",
+					"bridge", desired.BridgeName, "interface", iface.Name, "uplink", bridgedName,
+					"internalPortPresent", true, "kernelUplinkPresent", true, "ovsUplinkPortPresent", false)
+				return []agenttypes.PhysicalInterfaceConfig{
+					{Name: bridgedName, AllowedVLANs: iface.AllowedVLANs},
+				}, nil
+			}
 		}
 		if uuid, exists := existingPorts[iface.Name]; exists && existingIFTypes[iface.Name] != "internal" {
 			if err := ovsBridgeClient.DeletePorts([]string{uuid}); err != nil {
@@ -901,7 +938,9 @@ func (c *Controller) prepareBridgePhysicalInterfaces(
 				"device", iface.Name, "bridge", desired.BridgeName)
 		}
 
-		bridgedName, _, err := prepareHostInterfaceConnectionFn(
+		klog.InfoS("Preparing host interface connection for secondary OVS bridge",
+			"bridge", desired.BridgeName, "interface", iface.Name, "uplink", bridgedName)
+		bridgedName, alreadyExists, err := prepareHostInterfaceConnectionFn(
 			ovsBridgeClient,
 			iface.Name,
 			0,
@@ -911,8 +950,12 @@ func (c *Controller) prepareBridgePhysicalInterfaces(
 			0,
 		)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("failed to prepare host interface %s for secondary OVS bridge %s: %w",
+				iface.Name, desired.BridgeName, err)
 		}
+		klog.InfoS("Prepared host interface connection for secondary OVS bridge",
+			"bridge", desired.BridgeName, "interface", iface.Name,
+			"uplink", bridgedName, "alreadyExists", alreadyExists)
 		return []agenttypes.PhysicalInterfaceConfig{
 			{Name: bridgedName, AllowedVLANs: iface.AllowedVLANs},
 		}, nil
@@ -929,7 +972,7 @@ func (c *Controller) prepareBridgePhysicalInterfaces(
 func connectPhyInterfacesToOVSBridge(ovsBridgeClient ovsconfig.OVSBridgeClient, phyInterfaces []agenttypes.PhysicalInterfaceConfig) error {
 	for _, pi := range phyInterfaces {
 		if _, err := interfaceByNameFn(pi.Name); err != nil {
-			return fmt.Errorf("failed to get interface %s: %v", pi.Name, err)
+			return fmt.Errorf("failed to get interface %s: %w", pi.Name, err)
 		}
 	}
 
@@ -937,30 +980,34 @@ func connectPhyInterfacesToOVSBridge(ovsBridgeClient ovsconfig.OVSBridgeClient, 
 		interfacestore.AntreaInterfaceTypeKey: interfacestore.AntreaUplink,
 	}
 	for _, pi := range phyInterfaces {
-		_, notConnected := ovsBridgeClient.GetOFPort(pi.Name)
+		_, err := ovsBridgeClient.GetOFPort(pi.Name)
+		if err != nil && !errors.Is(err, client.ErrNotFound) {
+			return fmt.Errorf("failed to get OFPort for interface %s: %w", pi.Name, err)
+		}
+		notConnected := errors.Is(err, client.ErrNotFound)
 
 		if len(pi.AllowedVLANs) > 0 {
-			if notConnected != nil {
+			if notConnected {
 				// Pass ofPortRequest=0 so OVS auto-assign the OF port number.
 				// Pinning a number derived from the loop index would collide across
 				// reconciliation cycles when the interface list is a filtered subset.
 				if _, err := ovsBridgeClient.CreateTrunkPort(pi.Name, 0, pi.AllowedVLANs, externalIDs); err != nil {
-					return fmt.Errorf("failed to create OVS trunk port %s: %v", pi.Name, err)
+					return fmt.Errorf("failed to create OVS trunk port %s: %w", pi.Name, err)
 				}
 				klog.InfoS("Physical interface added to secondary OVS bridge in trunk mode", "device", pi.Name, "vlanIDs", pi.AllowedVLANs)
 			} else {
 				if err := ovsBridgeClient.SetPortTrunks(pi.Name, pi.AllowedVLANs); err != nil {
-					return fmt.Errorf("failed to update trunk VLANs for OVS port %s: %v", pi.Name, err)
+					return fmt.Errorf("failed to update trunk VLANs for OVS port %s: %w", pi.Name, err)
 				}
 				klog.InfoS("Updated trunk VLAN list on secondary OVS bridge port", "device", pi.Name, "vlanIDs", pi.AllowedVLANs)
 			}
 			continue
 		}
 
-		if notConnected != nil {
+		if notConnected {
 			// Pass ofPortRequest=0 so OVS auto-assign the OF port number.
 			if _, err := ovsBridgeClient.CreateUplinkPort(pi.Name, 0, externalIDs); err != nil {
-				return fmt.Errorf("failed to create OVS uplink port %s: %v", pi.Name, err)
+				return fmt.Errorf("failed to create OVS uplink port %s: %w", pi.Name, err)
 			}
 			klog.InfoS("Physical interface added to secondary OVS bridge", "device", pi.Name)
 		} else {

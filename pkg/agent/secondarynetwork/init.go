@@ -32,9 +32,8 @@ import (
 type podControllerInterface interface {
 	Run(stopCh <-chan struct{})
 	AllowCNIDelete(podName, podNamespace string) bool
-	StartOVSBridgeDrain(bridgeName string, client ovsconfig.OVSBridgeClient) error
-	CancelOVSBridgeDrain(bridgeName string, client ovsconfig.OVSBridgeClient) error
-	DeleteOVSBridgeIfDrained(deleteBridge func() error) error
+	DrainAndDeleteOVSBridge(bridgeName string, client ovsconfig.OVSBridgeClient, deleteBridge func() error) error
+	CancelOVSBridgeDrain(bridgeName string) error
 	UpdateOVSBridgeClient(newClient ovsconfig.OVSBridgeClient) error
 }
 

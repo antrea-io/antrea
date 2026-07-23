@@ -290,13 +290,13 @@ func RenameInterface(from, to string) error {
 		func(ctx context.Context) (done bool, err error) {
 			renameErr = renameHostInterface(from, to)
 			if renameErr != nil {
-				klog.InfoS("Unable to rename host interface name with error, retrying", "oldName", from, "newName", to, "err", renameErr)
+				klog.V(4).InfoS("Unable to rename host interface, retrying", "oldName", from, "newName", to, "err", renameErr)
 				return false, nil
 			}
 			return true, nil
 		})
 	if pollErr != nil {
-		return fmt.Errorf("failed to rename host interface name %s to %s", from, to)
+		return fmt.Errorf("failed to rename host interface name %s to %s: %w", from, to, renameErr)
 	}
 	// Fix for the issue https://github.com/antrea-io/antrea/issues/6301.
 	// In some new Linux versions which support AltName, if the only valid altname of the interface is the same as the
@@ -511,10 +511,13 @@ func PrepareHostInterfaceConnection(
 // failures (IP/route restore and rename) are logged but do not cause a return error, since they
 // represent best-effort cleanup after the point of no return.
 func RestoreHostInterfaceConfiguration(brName string, interfaceName string) error {
-	klog.V(4).InfoS("Restoring bridge config to host interface")
 	bridgedName := GenerateUplinkInterfaceName(interfaceName)
+	klog.InfoS("Restoring host interface from secondary OVS bridge",
+		"bridge", brName, "interface", interfaceName, "uplink", bridgedName)
 	// restore only when interface eth0~ exists
 	if !HostInterfaceExists(bridgedName) {
+		klog.InfoS("Skipping host interface restoration because the uplink interface does not exist",
+			"bridge", brName, "interface", interfaceName, "uplink", bridgedName)
 		return nil
 	}
 
@@ -535,12 +538,16 @@ func RestoreHostInterfaceConfiguration(brName string, interfaceName string) erro
 		return fmt.Errorf("failed to delete OVS host and uplink ports %s and %s from bridge %s: %w",
 			interfaceName, bridgedName, brName, err)
 	}
-
+	klog.InfoS("Deleted host and uplink Ports from secondary OVS bridge",
+		"bridge", brName, "interface", interfaceName, "uplink", bridgedName)
 	// rename host interface(eth0~ -> eth0)
 	if err = RenameInterface(bridgedName, interfaceName); err != nil {
-		klog.ErrorS(err, "Restore host interface name failed", "from", bridgedName, "to", interfaceName)
+		klog.ErrorS(err, "Failed to restore physical interface name",
+			"bridge", brName, "oldName", bridgedName, "newName", interfaceName)
 		return nil
 	}
+	klog.InfoS("Restored physical interface name",
+		"bridge", brName, "oldName", bridgedName, "newName", interfaceName)
 	var link netlink.Link
 	if link, err = netlink.LinkByName(interfaceName); err != nil {
 		klog.ErrorS(err, "Failed to get link", "interface", interfaceName)
@@ -560,6 +567,7 @@ func RestoreHostInterfaceConfiguration(brName string, interfaceName string) erro
 			return nil
 		}
 	}
-	klog.V(2).InfoS("Finished restoring bridge config to host interface", "interface", interfaceName, "bridge", brName)
+	klog.InfoS("Finished restoring host interface from secondary OVS bridge",
+		"interface", interfaceName, "bridge", brName)
 	return nil
 }

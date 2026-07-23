@@ -580,7 +580,7 @@ func TestGetInterfaceConfig(t *testing.T) {
 }
 
 func TestRenameInterface(t *testing.T) {
-	renameFailErr := fmt.Errorf("failed to rename host interface name test1 to test2")
+	renameFailErr := fmt.Errorf("failed to rename host interface name test1 to test2: %w", errTestInvalid)
 	removeAltNameFailErr := fmt.Errorf("failed to remove AltName test1 on interface test2: %w", errTestInvalid)
 	tests := []struct {
 		name          string

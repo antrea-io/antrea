@@ -101,7 +101,7 @@ func TestEffectiveSecondaryOVSBridge(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			var got *agenttypes.OVSBridgeConfig
 			if tc.snapshot == nil {
-				got = EffectiveSecondaryOVSBridgeFromAgentConfig(tc.staticCfg)
+				got = ovsBridgeFromStatic(tc.staticCfg)
 			} else {
 				got = EffectiveSecondaryOVSBridgeFromSnapshot(tc.snapshot, tc.staticCfg)
 			}
