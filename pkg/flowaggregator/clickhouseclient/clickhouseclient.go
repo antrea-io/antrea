@@ -259,9 +259,11 @@ func (ch *ClickHouseExportProcess) batchCommitAll(ctx context.Context) (int, err
 
 	// start new connection
 	tx, err := ch.db.BeginTx(ctx, nil)
-	if err == nil {
-		stmt, err = tx.PrepareContext(ctx, insertQuery)
+	if err != nil {
+		klog.ErrorS(err, "Error when starting transaction")
+		return 0, err
 	}
+	stmt, err = tx.PrepareContext(ctx, insertQuery)
 	if err != nil {
 		klog.ErrorS(err, "Error when preparing insert statement")
 		_ = tx.Rollback()
