@@ -31,6 +31,7 @@ import (
 	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/kubernetes/fake"
+	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/util/workqueue"
 	"k8s.io/klog/v2"
 	"k8s.io/utils/ptr"
@@ -967,6 +968,23 @@ func TestProcessTraceflowItem(t *testing.T) {
 	tfc.enqueueTraceflow(tc.tf)
 	got := tfc.processTraceflowItem()
 	assert.Equal(t, tc.expected, got)
+}
+
+func TestDeleteTraceflow_Tombstone(t *testing.T) {
+	tf := &crdv1beta1.Traceflow{
+		ObjectMeta: metav1.ObjectMeta{Name: "tf1", UID: "uid1"},
+	}
+	tfc := newFakeTraceflowController(t, []runtime.Object{tf}, nil, nil)
+
+	// Deliver the delete as a tombstone, as the informer does after a watch reconnect.
+	tfc.deleteTraceflow(cache.DeletedFinalStateUnknown{
+		Key: tf.Name,
+		Obj: tf,
+	})
+
+	require.Equal(t, 1, tfc.queue.Len(), "expected Traceflow to be enqueued from the tombstone delete")
+	key, _ := tfc.queue.Get()
+	assert.Equal(t, tf.Name, key)
 }
 
 func TestValidateTraceflow(t *testing.T) {
