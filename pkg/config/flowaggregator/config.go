@@ -245,7 +245,11 @@ type FlowLoggerConfig struct {
 type FlowStreamServiceConfig struct {
 	// Enable is the switch to enable the FlowStreamService gRPC server (port 14740). The
 	// server streams flow records to consumers such as antrea-ui. It uses server-side TLS
-	// (the same self-signed certificate as the gRPC collector) but no client authentication.
+	// (the same self-signed certificate as the gRPC collector). Clients must additionally
+	// present a valid Kubernetes authorization (either a bearer token as
+	// "authorization: Bearer <token>" gRPC metadata, or a PEM client cert+key pair in the
+	// client-cert-bin/client-key-bin headers), which is validated via the TokenReview API
+	// (in the case of bearer token) or SelfSubjectReview API (for cert and key pair).
 	// Defaults to false.
 	Enable *bool `yaml:"enable,omitempty"`
 }
