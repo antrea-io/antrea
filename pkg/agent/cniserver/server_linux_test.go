@@ -676,3 +676,52 @@ func TestReconcile(t *testing.T) {
 		t.Errorf("InstallPodFlows for %s should be called but was not", normalInterface.InterfaceName)
 	}
 }
+
+// TestReconcileRetriesOnInstallPodFlowsFailure verifies that when InstallPodFlows fails during
+// reconcile, the Pod's interface is fed into unreadyPortQueue and the existing queue worker
+// (processNextWorkItem / updateUnreadyPod) retries and succeeds, instead of the Pod being left
+// without a working dataplane.
+func TestReconcileRetriesOnInstallPodFlowsFailure(t *testing.T) {
+	controller := gomock.NewController(t)
+	mockOVSBridgeClient = ovsconfigtest.NewMockOVSBridgeClient(controller)
+	mockOFClient = openflowtest.NewMockClient(controller)
+	ifaceStore = interfacestore.NewInterfaceStore()
+	mockRoute = routetest.NewMockInterface(controller)
+	cniServer := newCNIServer(t)
+	cniServer.routeClient = mockRoute
+
+	clients := newMockClients(controller, nodeName, pod1)
+	stopCh := make(chan struct{})
+	defer close(stopCh)
+	clients.startInformers(stopCh)
+	cniServer.kubeClient = clients.kubeClient
+
+	cniServer.podConfigurator, _ = newPodConfigurator(
+		clients.kubeClient, mockOVSBridgeClient, mockOFClient, mockRoute, ifaceStore, gwMAC, "system", false, false,
+		channel.NewSubscribableChannel("PodUpdate", 100), clients.localPodInformer, cniServer.containerAccess)
+	cniServer.podConfigurator.ifConfigurator = newTestInterfaceConfigurator()
+	go cniServer.podConfigurator.Run(stopCh)
+
+	cniServer.nodeConfig = &config.NodeConfig{
+		Name: nodeName,
+	}
+	ifaceStore.AddInterface(normalInterface)
+
+	podFlowsInstalled := make(chan struct{})
+	gomock.InOrder(
+		mockOFClient.EXPECT().InstallPodFlows(normalInterface.InterfaceName, normalInterface.IPs, normalInterface.MAC, uint32(normalInterface.OFPort), uint16(0), nil).
+			Return(fmt.Errorf("transient OVS error")).Times(1),
+		mockOFClient.EXPECT().InstallPodFlows(normalInterface.InterfaceName, normalInterface.IPs, normalInterface.MAC, uint32(normalInterface.OFPort), uint16(0), nil).
+			Do(func(_ string, _ []net.IP, _ net.HardwareAddr, _ uint32, _ uint16, _ *uint32) {
+				close(podFlowsInstalled)
+			}).Return(nil).Times(1),
+	)
+	err := cniServer.reconcile()
+	assert.NoError(t, err)
+
+	select {
+	case <-podFlowsInstalled:
+	case <-time.After(2 * time.Second):
+		t.Errorf("InstallPodFlows for %s should have been retried via unreadyPortQueue but was not", normalInterface.InterfaceName)
+	}
+}
