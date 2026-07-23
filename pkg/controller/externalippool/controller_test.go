@@ -280,6 +280,25 @@ func TestCreateOrUpdateIPAllocator(t *testing.T) {
 	assert.Equal(t, 29, allocator.Total())
 }
 
+func TestCreateOrUpdateIPAllocatorAllocateFullCIDR(t *testing.T) {
+	stopCh := make(chan struct{})
+	defer close(stopCh)
+	controller := newController(nil)
+	controller.crdInformerFactory.Start(stopCh)
+	controller.crdInformerFactory.WaitForCacheSync(stopCh)
+
+	ipPool := newExternalIPPool("ipPoolA", "1.1.1.0/30", "", "")
+	ipPool.Spec.AllocateFullCIDR = true
+	changed := controller.createOrUpdateIPAllocator(ipPool)
+	assert.True(t, changed)
+	allocator, exists := controller.getIPAllocator(ipPool.Name)
+	require.True(t, exists)
+	assert.Equal(t, 1, len(allocator))
+	assert.Equal(t, 4, allocator.Total())
+	assert.True(t, allocator.Has(net.ParseIP("1.1.1.0")))
+	assert.True(t, allocator.Has(net.ParseIP("1.1.1.3")))
+}
+
 func TestIPPoolEvents(t *testing.T) {
 	stopCh := make(chan struct{})
 	defer close(stopCh)

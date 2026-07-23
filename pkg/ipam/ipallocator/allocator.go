@@ -57,27 +57,30 @@ type SingleIPAllocator struct {
 	reservedIPs []net.IP
 }
 
-// NewCIDRAllocator creates an IPAllocator based on the provided CIDR.
+// NewCIDRAllocator creates an IPAllocator based on the provided CIDR. Allocation starts
+// from the first IP in the CIDR. Exclude addresses (e.g. the network or broadcast address)
+// by passing them in reservedIPs. Large ranges are capped at 65536 IPs.
 func NewCIDRAllocator(cidr *net.IPNet, reservedIPs []net.IP) (*SingleIPAllocator, error) {
 	base := utilnet.BigForIP(cidr.IP)
-	// Start from "x.x.x.1".
-	base.Add(base, big.NewInt(1))
-	max := utilnet.RangeSize(cidr) - 1
-	if max < 0 {
-		return nil, fmt.Errorf("no available IP in %s", cidr.String())
-	}
+	max := utilnet.RangeSize(cidr)
 	// In case a big range occupies too much memory, allow at most 65536 IP for each IP range.
 	if max > 65536 {
 		max = 65536
 	}
 
 	allocator := &SingleIPAllocator{
-		ipRangeStr:  cidr.String(),
-		base:        base,
-		max:         int(max),
-		allocated:   big.NewInt(0),
-		count:       0,
-		reservedIPs: reservedIPs,
+		ipRangeStr: cidr.String(),
+		base:       base,
+		max:        int(max),
+		allocated:  big.NewInt(0),
+		count:      0,
+	}
+
+	// Only keep reserved IPs that fall within the allocatable range [base, base+max).
+	for _, ip := range reservedIPs {
+		if offset := allocator.getOffset(ip); offset >= 0 && offset < allocator.max {
+			allocator.reservedIPs = append(allocator.reservedIPs, ip)
+		}
 	}
 	return allocator, nil
 }

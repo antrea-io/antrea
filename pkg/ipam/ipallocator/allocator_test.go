@@ -22,8 +22,19 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+// newCIDRAllocator creates an allocator that reserves the network address, matching the
+// pre-AllocateFullCIDR default behavior.
 func newCIDRAllocator(cidr string, reservedIPs []string) *SingleIPAllocator {
 	_, ipNet, _ := net.ParseCIDR(cidr)
+	return newCIDRAllocatorWithReservedIPs(ipNet, append([]string{ipNet.IP.String()}, reservedIPs...))
+}
+
+func newFullCIDRAllocator(cidr string, reservedIPs []string) *SingleIPAllocator {
+	_, ipNet, _ := net.ParseCIDR(cidr)
+	return newCIDRAllocatorWithReservedIPs(ipNet, reservedIPs)
+}
+
+func newCIDRAllocatorWithReservedIPs(ipNet *net.IPNet, reservedIPs []string) *SingleIPAllocator {
 	var parsedIPs []net.IP
 	for _, ip := range reservedIPs {
 		parsedIPs = append(parsedIPs, net.ParseIP(ip))
@@ -59,6 +70,27 @@ func TestAllocateNext(t *testing.T) {
 			wantNum:     3,
 			wantFirst:   net.ParseIP("10.10.10.129"),
 			wantLast:    net.ParseIP("10.10.10.131"),
+		},
+		{
+			name:        "IPv4-CIDR-prefix-24-allocateFullCIDR",
+			ipAllocator: newFullCIDRAllocator("10.10.10.0/24", nil),
+			wantNum:     256,
+			wantFirst:   net.ParseIP("10.10.10.0"),
+			wantLast:    net.ParseIP("10.10.10.255"),
+		},
+		{
+			name:        "IPv4-CIDR-prefix-30-allocateFullCIDR",
+			ipAllocator: newFullCIDRAllocator("10.10.10.128/30", nil),
+			wantNum:     4,
+			wantFirst:   net.ParseIP("10.10.10.128"),
+			wantLast:    net.ParseIP("10.10.10.131"),
+		},
+		{
+			name:        "IPv4-CIDR-prefix-31-allocateFullCIDR",
+			ipAllocator: newFullCIDRAllocator("10.10.10.128/31", nil),
+			wantNum:     2,
+			wantFirst:   net.ParseIP("10.10.10.128"),
+			wantLast:    net.ParseIP("10.10.10.129"),
 		},
 		{
 			name:        "IPv4-range",
@@ -199,7 +231,7 @@ func TestHas(t *testing.T) {
 			name:        "IPv4-single",
 			ipAllocator: newCIDRAllocator("10.10.10.0/24", nil),
 			ip:          net.ParseIP("10.10.10.0"),
-			expectedHas: false,
+			expectedHas: true,
 		},
 		{
 			name:        "IPv4-multiple",
@@ -318,4 +350,29 @@ func TestNameAndTotal(t *testing.T) {
 	ma := MultiIPAllocator{newIPRangeAllocator("1.1.1.10", "1.1.1.20"), newCIDRAllocator("10.10.10.128/30", nil)}
 	assert.Equal(t, []string{"1.1.1.10-1.1.1.20", "10.10.10.128/30"}, ma.Names())
 	assert.Equal(t, 14, ma.Total())
+}
+
+func TestAllocateFullCIDRTotal(t *testing.T) {
+	assert.Equal(t, 3, newCIDRAllocator("10.10.10.128/30", nil).Total())
+	assert.Equal(t, 4, newFullCIDRAllocator("10.10.10.128/30", nil).Total())
+	assert.Equal(t, 0, newCIDRAllocator("10.10.10.42/32", nil).Total())
+
+	a := newFullCIDRAllocator("10.10.10.42/32", nil)
+	assert.Equal(t, 1, a.Total())
+
+	ip, err := a.AllocateNext()
+	require.NoError(t, err)
+	assert.Equal(t, net.ParseIP("10.10.10.42"), ip)
+}
+
+func TestReservedIPsOutsideRangeIgnored(t *testing.T) {
+	a := newFullCIDRAllocator("10.10.10.128/30", []string{"10.10.10.1"})
+	assert.Equal(t, 4, a.Total())
+
+	for i := 0; i < 4; i++ {
+		_, err := a.AllocateNext()
+		require.NoError(t, err)
+	}
+	_, err := a.AllocateNext()
+	require.Error(t, err)
 }
