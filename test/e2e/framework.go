@@ -139,7 +139,7 @@ const (
 	mcjoinImage         = "antrea/mcjoin:v2.9"
 	nginxImage          = "antrea/nginx:1.21.6-alpine"
 	iisImage            = "mcr.microsoft.com/windows/servercore/iis"
-	ipfixCollectorImage = "antrea/ipfix-collector:v0.16.0"
+	ipfixCollectorImage = "antrea/ipfix-collector:v0.17.0"
 
 	nginxLBService = "nginx-loadbalancer"
 

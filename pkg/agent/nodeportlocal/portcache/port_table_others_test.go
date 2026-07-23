@@ -161,7 +161,7 @@ func TestAddRule(t *testing.T) {
 			mockPortOpener.EXPECT().OpenLocalPort(startPort, protocol, isIPv6).Return(closer, nil)
 			mockIPTables.EXPECT().AddRule(startPort, podIP, podPort, protocol).Return(nil)
 
-			gotPort, err := portTable.AddRule(podKey, podPort, protocol, podIP)
+			gotPort, err := portTable.AddRule(podKey, podPort, protocol, podIP, nil)
 			require.NoError(t, err)
 			assert.Equal(t, startPort, gotPort)
 			// Socket must NOT be closed on success - it is kept open to hold the port.
@@ -185,7 +185,7 @@ func TestAddRule(t *testing.T) {
 			mockIPTables.EXPECT().AddRule(startPort, podIP, podPort, protocol).
 				Return(fmt.Errorf("iptables error"))
 
-			_, err := portTable.AddRule(podKey, podPort, protocol, podIP)
+			_, err := portTable.AddRule(podKey, podPort, protocol, podIP, nil)
 			require.ErrorContains(t, err, "iptables error")
 			// The socket MUST be closed to avoid leaking the FD and blocking the port.
 			assert.True(t, closer.closed, "socket must be closed after iptables failure to prevent FD/port leak")
@@ -204,7 +204,7 @@ func TestAddRule(t *testing.T) {
 			mockIPTables.EXPECT().AddRule(startPort, podIP, podPort, protocol).
 				Return(fmt.Errorf("iptables error"))
 
-			_, err := portTable.AddRule(podKey, podPort, protocol, podIP)
+			_, err := portTable.AddRule(podKey, podPort, protocol, podIP, nil)
 			// Ensure it still returns the original iptables error.
 			require.ErrorContains(t, err, "iptables error")
 			assert.True(t, closer.closed)
@@ -221,12 +221,12 @@ func TestAddRule(t *testing.T) {
 			mockPortOpener.EXPECT().OpenLocalPort(startPort, protocol, isIPv6).Return(closer, nil)
 			mockIPTables.EXPECT().AddRule(startPort, podIP, podPort, protocol).Return(nil)
 
-			_, err := portTable.AddRule(podKey, podPort, protocol, podIP)
+			_, err := portTable.AddRule(podKey, podPort, protocol, podIP, nil)
 			require.NoError(t, err)
 
 			// Second call for the same podKey/podPort/protocol must fail without
 			// opening a new socket or touching iptables.
-			_, err = portTable.AddRule(podKey, podPort, protocol, podIP)
+			_, err = portTable.AddRule(podKey, podPort, protocol, podIP, nil)
 			require.ErrorContains(t, err, "existing Linux Nodeport entry")
 		})
 	}

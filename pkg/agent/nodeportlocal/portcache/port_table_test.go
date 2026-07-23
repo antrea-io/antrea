@@ -15,6 +15,11 @@
 package portcache
 
 import (
+	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/tools/cache"
 
 	"antrea.io/antrea/v2/pkg/agent/nodeportlocal/rules"
@@ -43,4 +48,76 @@ func newPortTable(mockIPTables rules.PodPortRules, mockPortOpener LocalPortOpene
 		LocalPortOpener: mockPortOpener,
 		IsIPv6:          isIPv6,
 	}
+}
+
+func TestGetServiceForNPLPort(t *testing.T) {
+	pt := newPortTable(nil, nil, false)
+	// The NPL controller stores the protocol in lower case (see util.BuildPortProto).
+	require.NoError(t, pt.addPortTableCache(&NodePortData{
+		PodKey:   podKey,
+		NodePort: nodePort1,
+		PodPort:  1001,
+		PodIP:    podIP,
+		Protocol: ProtocolSocketData{Protocol: "tcp"},
+		Services: []types.NamespacedName{{Namespace: "myns", Name: "mysvc"}},
+	}))
+	// An NPL mapping with no associated Service (e.g. a container hostPort rule).
+	require.NoError(t, pt.addPortTableCache(&NodePortData{
+		PodKey:   podKey,
+		NodePort: nodePort2,
+		PodPort:  1002,
+		PodIP:    podIP,
+		Protocol: ProtocolSocketData{Protocol: "tcp"},
+	}))
+
+	// The flow exporter passes an upper-case corev1.Protocol ("TCP"); the lookup must be
+	// case-insensitive because the table is keyed with the lower-case protocol.
+	assert.Equal(t, "myns/mysvc", pt.GetServiceForNPLPort(nodePort1, "TCP"))
+
+	// Lower-case protocol resolves too.
+	assert.Equal(t, "myns/mysvc", pt.GetServiceForNPLPort(nodePort1, "tcp"))
+
+	// Mapping without a Service name does not resolve.
+	assert.Empty(t, pt.GetServiceForNPLPort(nodePort2, "TCP"))
+
+	// Wrong protocol does not resolve.
+	assert.Empty(t, pt.GetServiceForNPLPort(nodePort1, "UDP"))
+
+	// Unknown node port does not resolve.
+	assert.Empty(t, pt.GetServiceForNPLPort(endPort, "TCP"))
+}
+
+func TestGetServiceForNPLPortMultipleServices(t *testing.T) {
+	pt := newPortTable(nil, nil, false)
+	// Two NPL-enabled Services can select the same Pod on the same target port/protocol; the
+	// mapping is then considered to be shared by all of them.
+	require.NoError(t, pt.addPortTableCache(&NodePortData{
+		PodKey:   podKey,
+		NodePort: nodePort1,
+		PodPort:  1001,
+		PodIP:    podIP,
+		Protocol: ProtocolSocketData{Protocol: "tcp"},
+		Services: []types.NamespacedName{{Namespace: "myns1", Name: "mysvc1"}, {Namespace: "myns2", Name: "mysvc2"}},
+	}))
+
+	assert.Equal(t, "myns1/mysvc1|myns2/mysvc2", pt.GetServiceForNPLPort(nodePort1, "TCP"))
+}
+
+func TestSetServiceForPodPort(t *testing.T) {
+	pt := newPortTable(nil, nil, false)
+	require.NoError(t, pt.addPortTableCache(&NodePortData{
+		PodKey:   podKey,
+		NodePort: nodePort1,
+		PodPort:  1001,
+		PodIP:    podIP,
+		Protocol: ProtocolSocketData{Protocol: "tcp"},
+	}))
+
+	// Backfilling Service information for an existing rule updates the cache entry.
+	pt.SetServiceForPodPort(podKey, 1001, "tcp", []types.NamespacedName{{Namespace: "myns", Name: "mysvc"}})
+	assert.Equal(t, "myns/mysvc", pt.GetServiceForNPLPort(nodePort1, "TCP"))
+
+	// Backfilling for a rule that does not exist is a no-op.
+	pt.SetServiceForPodPort(podKey, 1002, "tcp", []types.NamespacedName{{Namespace: "myns", Name: "mysvc"}})
+	assert.Empty(t, pt.GetServiceForNPLPort(nodePort2, "TCP"))
 }

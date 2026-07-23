@@ -671,7 +671,7 @@ func TestConntrackConnectionStore_AddOrUpdateConns_DefaultZoneFlow(t *testing.T)
 		IsPresent:                  true,
 	}
 
-	fe := NewFromExternalCorrelator(nil)
+	fe := NewFromExternalCorrelator(nil, nil)
 	stopCh := make(chan struct{})
 	t.Cleanup(func() { close(stopCh) })
 	go fe.Run(stopCh)

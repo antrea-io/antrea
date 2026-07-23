@@ -32,6 +32,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/runtime"
+	k8stypes "k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/client-go/informers"
 	coreinformers "k8s.io/client-go/informers/core/v1"
@@ -1334,5 +1335,150 @@ func TestDualStack(t *testing.T) {
 		testData.assertExpectedNPLAnnotations(testPod.Name, expectedAnnotations)
 		assert.True(t, testData.portTable.RuleExists(defaultPodKey, defaultPort, protocolTCP))
 		assert.True(t, testData.portTableIPv6.RuleExists(defaultPodKey, defaultPort, protocolTCP))
+	})
+}
+
+// TestGetServiceForNPLPort verifies that NPLController.GetServiceForNPLPort returns the correct
+// namespaced Service name for an allocated NPL node port, delegates to the right IP-family port
+// table (IPv4 vs IPv6), and rejects destination IPs that are not this Node's own IP for the
+// selected family (NPL node ports are only meaningful for traffic destined to this Node).
+func TestGetServiceForNPLPort(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		testData, _, _ := setUpWithTestServiceAndPod(t, newTestConfig(), nil)
+
+		nplData := testData.portTable.GetEntry(defaultPodKey, defaultPort, protocolTCP)
+		require.NotNil(t, nplData)
+		nodePort := nplData.NodePort
+		// External IPv6 address set on the test Node in setUp; the IPv6 port table is nil in this
+		// test config (ipv6Enabled defaults to false), but nodeIPv6 is still populated from the
+		// Node object independently of that flag.
+		nodeIPv6 := "fd12:3456:789a:1::1"
+
+		want := defaultNS + "/" + defaultSvcName
+		// Upper-case protocol must be accepted (corev1.ProtocolTCP).
+		assert.Equal(t, want, testData.nplController.GetServiceForNPLPort(defaultHostIP, nodePort, "TCP", false))
+		// Lower-case protocol must also resolve (the port table normalizes case internally).
+		assert.Equal(t, want, testData.nplController.GetServiceForNPLPort(defaultHostIP, nodePort, "tcp", false))
+		// Destination IP that is not this Node's own IP returns "", even though the node port and
+		// protocol match — e.g. another Node's IP, or a Pod's egress destination that happens to
+		// reuse the same port number.
+		assert.Empty(t, testData.nplController.GetServiceForNPLPort("1.2.3.4", nodePort, "TCP", false))
+		// Wrong IP family (IPv6 table is nil in this test config) returns "", even with the correct
+		// Node IPv6 address.
+		assert.Empty(t, testData.nplController.GetServiceForNPLPort(nodeIPv6, nodePort, "TCP", true))
+		// Unknown node port returns "".
+		assert.Empty(t, testData.nplController.GetServiceForNPLPort(defaultHostIP, defaultEndPort+1, "TCP", false))
+	})
+}
+
+// TestServiceNameStoredWithNamedPort verifies that when a Service targets a named container port,
+// the NPL controller correctly propagates the Service identity from the string-keyed portToService
+// entry to the numeric-port entry, so the port table stores the owning Service name.
+func TestServiceNameStoredWithNamedPort(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		portName := "http"
+		testSvc := getTestSvcWithPortName(portName)
+		testPod := getTestPod()
+		testPod.Spec.Containers[0].Ports = append(
+			testPod.Spec.Containers[0].Ports,
+			corev1.ContainerPort{ContainerPort: int32(defaultPort), Name: portName, Protocol: corev1.ProtocolTCP},
+		)
+		testData := setUp(t, newTestConfig(), testSvc, testPod)
+
+		synctest.Wait()
+
+		nplData := testData.portTable.GetEntry(defaultPodKey, defaultPort, protocolTCP)
+		require.NotNil(t, nplData, "Expected NPL rule to be created for named port")
+		assert.Equal(t, []k8stypes.NamespacedName{{Namespace: defaultNS, Name: defaultSvcName}}, nplData.Services)
+	})
+}
+
+// TestServiceNameBackfilledAfterRestore verifies that when an NPL rule already exists in the port
+// table without Service information (as happens when the rule is restored from the Pod's NPL
+// annotation at Agent startup, since the annotation does not carry Service identity), the next
+// reconciliation of the Pod backfills the Service name and Namespace.
+func TestServiceNameBackfilledAfterRestore(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		testData, _, testPod := setUpWithTestServiceAndPod(t, newTestConfig(), nil)
+
+		nplData := testData.portTable.GetEntry(defaultPodKey, defaultPort, protocolTCP)
+		require.NotNil(t, nplData)
+		assert.Equal(t, []k8stypes.NamespacedName{{Namespace: defaultNS, Name: defaultSvcName}}, nplData.Services)
+
+		// Simulate a rule restored from the Pod's NPL annotation at Agent startup.
+		testData.portTable.SetServiceForPodPort(defaultPodKey, defaultPort, protocolTCP, nil)
+		nplData = testData.portTable.GetEntry(defaultPodKey, defaultPort, protocolTCP)
+		require.NotNil(t, nplData)
+		assert.Empty(t, nplData.Services)
+
+		// Trigger another reconciliation of the Pod, without changing anything relevant to NPL.
+		testPod.Labels["unrelated"] = "true"
+		testData.updatePodOrFail(testPod)
+
+		synctest.Wait()
+
+		nplData = testData.portTable.GetEntry(defaultPodKey, defaultPort, protocolTCP)
+		require.NotNil(t, nplData)
+		assert.Equal(t, []k8stypes.NamespacedName{{Namespace: defaultNS, Name: defaultSvcName}}, nplData.Services)
+	})
+}
+
+// TestServiceNameUpdatedAfterOwningServiceReplaced verifies that when the Service owning an
+// existing NPL rule is deleted and replaced by another Service selecting the same Pod on the same
+// port/protocol, the rule's stored Service name and Namespace are updated to reflect the new
+// owner, instead of continuing to reference the deleted Service indefinitely.
+func TestServiceNameUpdatedAfterOwningServiceReplaced(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		testData, testSvc, _ := setUpWithTestServiceAndPod(t, newTestConfig(), nil)
+
+		nplData := testData.portTable.GetEntry(defaultPodKey, defaultPort, protocolTCP)
+		require.NotNil(t, nplData)
+		assert.Equal(t, []k8stypes.NamespacedName{{Namespace: defaultNS, Name: defaultSvcName}}, nplData.Services)
+
+		// Delete the original Service and replace it with another Service selecting the same
+		// Pod on the same target port/protocol.
+		err := testData.k8sClient.CoreV1().Services(defaultNS).Delete(t.Context(), testSvc.Name, metav1.DeleteOptions{})
+		require.NoError(t, err, "Service deletion failed")
+		newSvc := getTestSvc()
+		newSvc.Name = "new-svc"
+		newSvc.ResourceVersion = ""
+		_, err = testData.k8sClient.CoreV1().Services(defaultNS).Create(t.Context(), newSvc, metav1.CreateOptions{})
+		require.NoError(t, err, "Service creation failed")
+
+		synctest.Wait()
+
+		// The rule must still exist (the required port/protocol has not changed) but must now
+		// be attributed to the new Service.
+		require.True(t, testData.portTable.RuleExists(defaultPodKey, defaultPort, protocolTCP))
+		nplData = testData.portTable.GetEntry(defaultPodKey, defaultPort, protocolTCP)
+		require.NotNil(t, nplData)
+		assert.Equal(t, []k8stypes.NamespacedName{{Namespace: defaultNS, Name: newSvc.Name}}, nplData.Services)
+	})
+}
+
+// TestServiceNameSharedByMultipleServices verifies that when more than one NPL-enabled Service
+// selects the same Pod on the same target port/protocol, the rule records all of them (sorted for
+// determinism), and GetServiceForNPLPort joins their namespaced names with "|".
+func TestServiceNameSharedByMultipleServices(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		testSvc1 := getTestSvc()
+		testPod := getTestPod()
+		testSvc2 := getTestSvc()
+		testSvc2.Name = "z-svc"
+		testData := setUp(t, newTestConfig(), testSvc1, testSvc2, testPod)
+
+		synctest.Wait()
+
+		nplData := testData.portTable.GetEntry(defaultPodKey, defaultPort, protocolTCP)
+		require.NotNil(t, nplData)
+		// Sorted by namespaced name (defaultSvcName == "test-svc" sorts before "z-svc").
+		assert.Equal(t, []k8stypes.NamespacedName{
+			{Namespace: defaultNS, Name: defaultSvcName},
+			{Namespace: defaultNS, Name: testSvc2.Name},
+		}, nplData.Services)
+
+		nodePort := nplData.NodePort
+		assert.Equal(t, defaultNS+"/"+defaultSvcName+"|"+defaultNS+"/"+testSvc2.Name,
+			testData.nplController.GetServiceForNPLPort(defaultHostIP, nodePort, "TCP", false))
 	})
 }

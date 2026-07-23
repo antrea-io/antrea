@@ -23,6 +23,7 @@ import (
 	"k8s.io/klog/v2"
 
 	"antrea.io/antrea/v2/pkg/agent/flowexporter/connection"
+	"antrea.io/antrea/v2/pkg/agent/nodeportlocal/portcache"
 	"antrea.io/antrea/v2/pkg/agent/proxy"
 )
 
@@ -47,6 +48,7 @@ type ExternalCorrelator interface {
 // Antrea-zone connections so external client IP information can be preserved on exported flows.
 type FromExternalCorrelator struct {
 	proxier         proxy.ProxyQuerier
+	nplQuerier      portcache.NPLQuerier
 	connections     map[correlatorKey]connectionItem
 	lock            sync.Mutex
 	ttl             time.Duration
@@ -98,6 +100,12 @@ type defaultZoneSnapshot struct {
 	proxySnatPort           uint16
 	originalDestinationIP   netip.Addr
 	originalDestinationPort uint16
+	// nplServicePortName is the namespaced Service name resolved for NodePortLocal flows at ingest
+	// time (empty for non-NPL flows). It is carried here so the connection store does not need to
+	// repeat the NPL node-port lookup when the Antrea-zone half is correlated. This is the only
+	// string retained for NPL flows, so it does not meaningfully affect the compact-snapshot goal
+	// described above.
+	nplServicePortName string
 }
 
 func defaultZoneSnapshotFromConn(conn *connection.Connection) defaultZoneSnapshot {
@@ -120,12 +128,13 @@ type connectionItem struct {
 // NewFromExternalCorrelator returns a FromExternalCorrelator with its internal map initialized.
 // proxier is used for GetServiceByIP during IngestDefaultZoneFlow; if nil, every default-zone flow is
 // retained without Service lookup.
+// nplQuerier is used to retain default-zone flows whose original destination is a NodePortLocal
+// node port (these are not registered in the proxier's Service map); it may be nil.
 // Note: The caller should run the cleanup loop with go correlator.Run(stopCh) and close stopCh to stop.
-// NodePortLocal flows are not handled by the correlator since the per-Pod node port is not
-// registered in the proxier's service map.
-func NewFromExternalCorrelator(proxier proxy.ProxyQuerier) *FromExternalCorrelator {
+func NewFromExternalCorrelator(proxier proxy.ProxyQuerier, nplQuerier portcache.NPLQuerier) *FromExternalCorrelator {
 	return &FromExternalCorrelator{
 		proxier:         proxier,
+		nplQuerier:      nplQuerier,
 		connections:     map[correlatorKey]connectionItem{},
 		ttl:             defaultTTL,
 		cleanUpInterval: defaultCleanUpInterval,
@@ -194,15 +203,32 @@ func (c *FromExternalCorrelator) IngestDefaultZoneFlow(conn *connection.Connecti
 		klog.V(4).InfoS("Could not retrieve Service protocol for default-zone connection, skipping", "protocol", conn.FlowKey.Protocol)
 		return
 	}
-	// With no proxier, retain every default-zone flow (no Service lookup).
-	// With proxier, only retain when GetServiceByIP matches.
-	shouldStore := true
+	// serviceResolved indicates the destination matched a Service registered in the proxier's map
+	// (ClusterIP:port, nodeIP:NodePort, LB/External IP:port, etc). With no proxier, this stays
+	// false and every default-zone flow is retained below regardless.
+	serviceResolved := false
 	if c.proxier != nil {
 		serviceStr := fmt.Sprintf("%s:%d/%s", svcIP, svcPort, protocol)
-		_, shouldStore = c.proxier.GetServiceByIP(serviceStr)
+		_, serviceResolved = c.proxier.GetServiceByIP(serviceStr)
 	}
+	// NodePortLocal node ports are allocated per-Pod by the NPL agent and are not registered in the
+	// proxier's Service map, so they are not matched above. This lookup runs whenever the proxier
+	// didn't already resolve a Service, independent of whether a proxier is configured.
+	// GetServiceForNPLPort also validates svcIP against this Node's own IP, since the NPL port table
+	// is keyed by port number alone and would otherwise match unrelated traffic that happens to target
+	// the same port number on a different destination.
+	// nplServicePortName, if resolved, is carried in the snapshot, so that the connection store does
+	// not need to repeat the lookup when the Antrea-zone half is correlated.
+	// This means the name reflects the NPL port's owning Service as of the default-zone half, and
+	// could be stale if the port's owning Service changes before the Antrea-zone half is
+	// correlated; this window is negligible in practice.
+	var nplServicePortName string
+	if !serviceResolved && c.nplQuerier != nil {
+		nplServicePortName = c.nplQuerier.GetServiceForNPLPort(svcIP, int(svcPort), string(protocol), conn.OriginalDestinationAddress.Is6())
+	}
+	shouldStore := c.proxier == nil || serviceResolved || nplServicePortName != ""
 	if shouldStore {
-		c.add(conn)
+		c.add(conn, nplServicePortName)
 	}
 }
 
@@ -249,14 +275,17 @@ func (c *FromExternalCorrelator) cleanup(ttl time.Duration) {
 	}
 }
 
-// add stores the given default-zone connection.
-func (c *FromExternalCorrelator) add(conn *connection.Connection) {
+// add stores the given default-zone connection along with the NPL Service name resolved for it (if
+// any; empty for non-NPL flows).
+func (c *FromExternalCorrelator) add(conn *connection.Connection, nplServicePortName string) {
 	key := keyFromDefaultZoneConn(conn)
 	c.lock.Lock()
 	defer c.lock.Unlock()
 
+	snapshot := defaultZoneSnapshotFromConn(conn)
+	snapshot.nplServicePortName = nplServicePortName
 	c.connections[key] = connectionItem{
-		snapshot:  defaultZoneSnapshotFromConn(conn),
+		snapshot:  snapshot,
 		timestamp: time.Now(),
 	}
 }
@@ -279,7 +308,9 @@ func (c *FromExternalCorrelator) popMatching(conn *connection.Connection) (defau
 // correlateExternal copies correlation fields from the default-zone snapshot onto the Antrea-zone
 // connection and marks it as from-external. IsFromExternal is set to true unconditionally so that
 // ETP=Local flows (where ProxySnatIP is zero) are still correctly identified as from-external
-// connections downstream.
+// connections downstream. For NodePortLocal flows the Service name was resolved at ingest time and
+// is carried here so the connection store can export destination_service_ip/port without repeating
+// the NPL node-port lookup.
 func correlateExternal(snap defaultZoneSnapshot, antreaZone *connection.Connection) {
 	antreaZone.FlowKey.SourcePort = snap.sourcePort
 	antreaZone.FlowKey.SourceAddress = snap.sourceIP
@@ -288,4 +319,7 @@ func correlateExternal(snap defaultZoneSnapshot, antreaZone *connection.Connecti
 	antreaZone.OriginalDestinationAddress = snap.originalDestinationIP
 	antreaZone.OriginalDestinationPort = snap.originalDestinationPort
 	antreaZone.IsFromExternal = true
+	if snap.nplServicePortName != "" {
+		antreaZone.DestinationServicePortName = snap.nplServicePortName
+	}
 }

@@ -432,6 +432,8 @@ func writeRecord(w io.Writer, r *flowrecord.FlowRecord, clusterUUID string) {
 	io.WriteString(w, ",")
 	io.WriteString(w, r.DestinationClusterIP)
 	io.WriteString(w, ",")
+	io.WriteString(w, r.DestinationServiceIP)
+	io.WriteString(w, ",")
 	io.WriteString(w, fmt.Sprintf("%d", r.DestinationServicePort))
 	io.WriteString(w, ",")
 	io.WriteString(w, r.DestinationServicePortName)
