@@ -237,6 +237,49 @@ func TestOptionsValidateEgressConfig(t *testing.T) {
 	}
 }
 
+func TestOptionsValidateNodePortLocalConfig(t *testing.T) {
+	tests := []struct {
+		name         string
+		portRange    string
+		expectedErr  string
+		expectedFrom int
+		expectedTo   int
+	}{
+		{
+			name:         "valid range",
+			portRange:    "61000-62000",
+			expectedFrom: 61000,
+			expectedTo:   62000,
+		},
+		{
+			name:        "out of range port",
+			portRange:   "70000-71000",
+			expectedErr: "NodePortLocal portRange is not valid: start port is invalid",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			o := &Options{config: &agentconfig.AgentConfig{
+				NodePortLocal: agentconfig.NodePortLocalConfig{
+					Enable:    true,
+					PortRange: tt.portRange,
+				},
+			}}
+
+			err := o.validateNodePortLocalConfig()
+			if tt.expectedErr != "" {
+				require.ErrorContains(t, err, tt.expectedErr)
+				return
+			}
+
+			require.NoError(t, err)
+			assert.Equal(t, tt.expectedFrom, o.nplStartPort)
+			assert.Equal(t, tt.expectedTo, o.nplEndPort)
+		})
+	}
+}
+
 func TestOptionsValidateMulticastConfig(t *testing.T) {
 	tests := []struct {
 		name              string
