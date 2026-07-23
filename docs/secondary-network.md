@@ -9,6 +9,7 @@
   - [VLAN](#vlan)
     - [OVS bridge configuration](#ovs-bridge-configuration)
     - [Secondary VLAN network configuration](#secondary-vlan-network-configuration)
+    - [Per-Node OVS bridge configuration with AntreaNodeConfig](#per-node-ovs-bridge-configuration-with-antreanodeconfig)
     - [Pod secondary interface configuration](#pod-secondary-interface-configuration)
   - [SR-IOV](#sr-iov)
     - [Creating network functions](#creating-network-functions)
@@ -175,6 +176,203 @@ the VLAN in IPPool(s) if both are set.
 * `ipam` - it is optional. If not set, the secondary interfaces created for the
 network won't have an IP address allocated. For more information about secondary
 network IPAM configuration, please refer to the [Antrea IPAM document](antrea-ipam.md#ipam-for-secondary-network).
+
+#### Per-Node OVS bridge configuration with AntreaNodeConfig
+
+As an alternative to static configuration via `antrea-agent.conf`, the
+AntreaNodeConfig CRD provides a dynamic, per-Node or per-Node-Pool mechanism to
+configure the secondary network OVS bridge. This feature is controlled by the
+`AntreaNodeConfig` feature gate, which is in `Beta` and enabled by default.
+When a matching AntreaNodeConfig CR exists, its configuration takes precedence
+over the `antrea-agent.conf` configuration. If no CR matches the Node, Antrea
+Agent falls back to using the static configuration from `antrea-agent.conf`.
+Changes to a CR take effect immediately without requiring an agent restart.
+
+**Note:** If you have already configured a secondary bridge via `AntreaNodeConfig`
+and created Pods with secondary interfaces, deleting or changing the
+`AntreaNodeConfig` to reconfigure the bridge will not automatically migrate the
+existing Pods. You must recreate these Pods to connect their secondary network
+interfaces to the newly configured bridge.
+
+The AntreaNodeConfig CRD spec includes the following fields:
+
+- `nodeSelector` - standard Kubernetes `LabelSelector` that selects the Nodes to
+  which this configuration applies. Required.
+- `secondaryNetwork.ovsBridges[]` - list of OVS bridge configurations; at most
+  one bridge is currently supported. Each entry has:
+  - `bridgeName` - name of the OVS bridge. Required.
+  - `physicalInterfaces[]` - physical interfaces to connect to the bridge. Each
+    entry has:
+    - `name` - interface name. Required.
+    - `allowedVLANs` - optional list of VLAN IDs or ranges (e.g. `"100"`,
+      `"200-300"`) that are permitted on this interface. When set, the port is
+      configured as a trunk port (carrying traffic for multiple VLANs),
+      restricted to the listed VLANs. When omitted, all VLANs are allowed.
+  - `enableMulticastSnooping` - enable multicast snooping on the bridge
+    (defaults to `false`).
+
+**Selection precedence**: if multiple AntreaNodeConfig CRs match a Node, the
+oldest one (determined by `creationTimestamp`, with `name` as a tiebreaker) takes effect.
+
+**Example 1** — apply a single-interface bridge to all Linux Nodes:
+
+```yaml
+apiVersion: crd.antrea.io/v1alpha1
+kind: AntreaNodeConfig
+metadata:
+  name: secondary-network-all-linux
+spec:
+  nodeSelector:
+    matchLabels:
+      kubernetes.io/os: "linux"
+  secondaryNetwork:
+    ovsBridges:
+      - bridgeName: br-secondary
+        physicalInterfaces:
+          - name: eth1
+```
+
+**Example 2** — different configuration per NodePool with VLAN filtering:
+
+```yaml
+apiVersion: crd.antrea.io/v1alpha1
+kind: AntreaNodeConfig
+metadata:
+  name: secondary-network-pool1
+spec:
+  nodeSelector:
+    matchLabels:
+      antrea.io/node-pool: "pool1"
+  secondaryNetwork:
+    ovsBridges:
+      - bridgeName: br1
+        physicalInterfaces:
+          - name: eth2
+            allowedVLANs: ["100", "101"]
+          - name: eth3
+            allowedVLANs: ["300"]
+        enableMulticastSnooping: false
+---
+apiVersion: crd.antrea.io/v1alpha1
+kind: AntreaNodeConfig
+metadata:
+  name: secondary-network-pool2
+spec:
+  nodeSelector:
+    matchLabels:
+      antrea.io/node-pool: "pool2"
+  secondaryNetwork:
+    ovsBridges:
+      - bridgeName: br1
+        physicalInterfaces:
+          - name: eth2
+            allowedVLANs: ["100"]
+          - name: eth3
+            allowedVLANs: ["400"]
+        enableMulticastSnooping: false
+```
+
+In this example the two node pools share the same bridge name `br1` but restrict
+different VLANs on physical interfaces - `pool1` Nodes configure VLAN 100 and 101 on
+`eth2`, and VLAN 300 on `eth3`; while `pool2` Nodes configure VLAN 100 on `eth2`
+and VLAN 400 on `eth3`.
+
+The following topology diagram shows the resulting bridges when the two AntreaNodeConfig
+CRs above match two node pools respectively. The example cluster has 4 worker Nodes:
+the first two (sorted by name) are labelled `pool1` and the other two are labelled
+with `pool2`. Every Node is connected to the shared VLAN-aware physical networks
+via `eth2` and `eth3`.
+
+![Secondary Network NodePool Topology](assets/secondary-network-nodepools.svg)
+
+To attach Pods to one of those pool-specific networks, first define the corresponding
+`NetworkAttachmentDefinition` and `IPPool` CRs, then schedule Pods onto the matching
+node pools. The following example creates one Pod that uses VLAN 300 on a `pool1` node
+and another Pod that uses VLAN 400 on a `pool2` node:
+
+```yaml
+# NetworkAttachmentDefinition + IPPool for pool1 VLAN 300 (via eth3)
+apiVersion: crd.antrea.io/v1beta1
+kind: IPPool
+metadata:
+  name: pool1-vlan300-ipv4
+spec:
+  ipRanges:
+    - cidr: "10.10.30.0/24"
+  subnetInfo:
+    gateway: "10.10.30.1"
+    prefixLength: 24
+---
+apiVersion: k8s.cni.cncf.io/v1
+kind: NetworkAttachmentDefinition
+metadata:
+  name: vlan-pool1-300
+spec:
+  config: '{
+      "cniVersion": "0.3.0",
+      "type": "antrea",
+      "networkType": "vlan",
+      "vlan": 300,
+      "ipam": {"type": "antrea", "ippools": ["pool1-vlan300-ipv4"]}
+    }'
+---
+# NetworkAttachmentDefinition + IPPool for pool2 VLAN 400 (via eth3)
+apiVersion: crd.antrea.io/v1beta1
+kind: IPPool
+metadata:
+  name: pool2-vlan400-ipv4
+spec:
+  ipRanges:
+    - cidr: "10.10.40.0/24"
+  subnetInfo:
+    gateway: "10.10.40.1"
+    prefixLength: 24
+---
+apiVersion: k8s.cni.cncf.io/v1
+kind: NetworkAttachmentDefinition
+metadata:
+  name: vlan-pool2-400
+spec:
+  config: '{
+      "cniVersion": "0.3.0",
+      "type": "antrea",
+      "networkType": "vlan",
+      "vlan": 400,
+      "ipam": {"type": "antrea", "ippools": ["pool2-vlan400-ipv4"]}
+    }'
+---
+# Pod on pool1 — secondary interface on VLAN 300
+apiVersion: v1
+kind: Pod
+metadata:
+  name: pod-pool1-vlan300
+  annotations:
+    k8s.v1.cni.cncf.io/networks: '[{"name": "vlan-pool1-300", "interface": "eth1"}]'
+spec:
+  nodeSelector:
+    antrea.io/node-pool: "pool1"
+  containers:
+    - name: toolbox
+      image: antrea/toolbox:latest
+---
+# Pod on pool2 — secondary interface on VLAN 400
+apiVersion: v1
+kind: Pod
+metadata:
+  name: pod-pool2-vlan400
+  annotations:
+    k8s.v1.cni.cncf.io/networks: '[{"name": "vlan-pool2-400", "interface": "eth1"}]'
+spec:
+  nodeSelector:
+    antrea.io/node-pool: "pool2"
+  containers:
+    - name: toolbox
+      image: antrea/toolbox:latest
+```
+
+The `nodeSelector` on each Pod ensures it is scheduled onto a Node that has the
+matching AntreaNodeConfig applied, so the `br1` bridge with the correct VLAN
+configuration is already in place when the Pod starts.
 
 #### Pod secondary interface configuration
 
