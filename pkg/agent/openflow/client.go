@@ -15,9 +15,11 @@
 package openflow
 
 import (
+	"errors"
 	"fmt"
 	"math/rand/v2"
 	"net"
+	"sync"
 
 	"antrea.io/libOpenflow/openflow15"
 	"antrea.io/libOpenflow/protocol"
@@ -731,22 +733,38 @@ func (c *client) GetPodFlowKeys(interfaceName string) []string {
 	return c.getFlowKeysFromCache(c.featurePodConnectivity.podCachedFlows, interfaceName)
 }
 
+func (c *client) installGroup(cache *sync.Map, groupID binding.GroupIDType, group binding.Group) error {
+	entry := []binding.OFEntry{group}
+	_, installed := cache.Load(groupID)
+	if !installed {
+		if err := c.ofEntryOperations.AddOFEntries(entry); err != nil {
+			if errors.Is(err, ofctrl.ErrBundleReplyTimeout) || errors.Is(err, ofctrl.ErrBundleReplyCanceled) {
+				// A timed-out commit may have created the group on OVS anyway.
+				// Delete it so the next sync re-adds it from a clean state.
+				if errDelete := c.ofEntryOperations.DeleteOFEntries(entry); errDelete != nil {
+					klog.ErrorS(errDelete, "Failed to clean up group after failed commit", "groupID", groupID)
+				}
+			}
+			return err
+		}
+	} else {
+		if err := c.ofEntryOperations.ModifyOFEntries(entry); err != nil {
+			return err
+		}
+	}
+	// Update the cache only after a successful Add or Modify
+	cache.Store(groupID, group)
+	return nil
+}
+
 func (c *client) InstallServiceGroup(groupID binding.GroupIDType, withSessionAffinity bool, endpoints []proxy.Endpoint) error {
 	c.replayMutex.RLock()
 	defer c.replayMutex.RUnlock()
 
 	group := c.featureService.serviceEndpointGroup(groupID, withSessionAffinity, endpoints...)
-	_, installed := c.featureService.groupCache.Load(groupID)
-	if !installed {
-		if err := c.ofEntryOperations.AddOFEntries([]binding.OFEntry{group}); err != nil {
-			return fmt.Errorf("error when installing Service Endpoints Group %d: %w", groupID, err)
-		}
-	} else {
-		if err := c.ofEntryOperations.ModifyOFEntries([]binding.OFEntry{group}); err != nil {
-			return fmt.Errorf("error when modifying Service Endpoints Group %d: %w", groupID, err)
-		}
+	if err := c.installGroup(&c.featureService.groupCache, groupID, group); err != nil {
+		return fmt.Errorf("error when syncing Service Endpoints Group %d: %w", groupID, err)
 	}
-	c.featureService.groupCache.Store(groupID, group)
 	return nil
 }
 
@@ -1570,17 +1588,9 @@ func (c *client) InstallMulticastGroup(groupID binding.GroupIDType, localReceive
 	}
 
 	group := c.featureMulticast.multicastReceiversGroup(groupID, nextTable, localReceivers, remoteNodeReceivers)
-	_, installed := c.featureMulticast.groupCache.Load(groupID)
-	if !installed {
-		if err := c.ofEntryOperations.AddOFEntries([]binding.OFEntry{group}); err != nil {
-			return fmt.Errorf("error when installing Multicast receiver Group %d: %w", groupID, err)
-		}
-	} else {
-		if err := c.ofEntryOperations.ModifyOFEntries([]binding.OFEntry{group}); err != nil {
-			return fmt.Errorf("error when modifying Multicast receiver Group %d: %w", groupID, err)
-		}
+	if err := c.installGroup(&c.featureMulticast.groupCache, groupID, group); err != nil {
+		return fmt.Errorf("error when syncing Multicast receiver Group %d: %w", groupID, err)
 	}
-	c.featureMulticast.groupCache.Store(groupID, group)
 	return nil
 }
 
