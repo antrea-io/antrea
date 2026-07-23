@@ -460,6 +460,8 @@ cni:
     bandwidth: true
   # -- Installation path of CNI binaries on the host.
   hostBinPath: "/opt/cni/bin"
+  # -- Path of CNI configuration on the host.
+  hostConfPath: "/etc/cni/net.d"
   # -- CNI binaries shipped with Antrea for which installation should be
   # skipped.
   skipBinaries: []
