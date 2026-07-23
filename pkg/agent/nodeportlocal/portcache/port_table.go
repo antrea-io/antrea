@@ -221,6 +221,36 @@ func NodePortProtoFormat(nodeport int, protocol string) string {
 	return fmt.Sprintf("%d:%s", nodeport, protocol)
 }
 
+// nextFreePortCandidate returns the port number for the i-th search iteration,
+// applying wrap-around so that the result always stays within [StartPort, EndPort].
+func (pt *PortTable) nextFreePortCandidate(i int) int {
+	port := pt.PortSearchStart + i
+	if port > pt.EndPort {
+		port -= pt.EndPort - pt.StartPort + 1
+	}
+	return port
+}
+
+// advancePortSearchStart bumps PortSearchStart past the given port, wrapping
+// back to StartPort when the end of the range is exceeded.
+func (pt *PortTable) advancePortSearchStart(port int) {
+	pt.PortSearchStart = port + 1
+	if pt.PortSearchStart > pt.EndPort {
+		pt.PortSearchStart = pt.StartPort
+	}
+}
+
+// newNodePortData constructs a NodePortData value for the given parameters.
+func newNodePortData(podKey string, nodePort int, podIP string, podPort int, protocolData ProtocolSocketData) *NodePortData {
+	return &NodePortData{
+		PodKey:   podKey,
+		NodePort: nodePort,
+		PodIP:    podIP,
+		PodPort:  podPort,
+		Protocol: protocolData,
+	}
+}
+
 // openLocalPort binds to the provided port.
 // This is inspired by the openLocalPort function in kube-proxy:
 // https://github.com/kubernetes/kubernetes/blob/86f8c3ee91b6faec437f97e3991107747d7fc5e8/pkg/proxy/iptables/proxier.go#L1664
