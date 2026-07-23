@@ -473,6 +473,42 @@ func TestUpdateGroup(t *testing.T) {
 	}
 }
 
+// TestUpdateGroupIPBlocksOnlyChange guards against a regression where ipBlocksUpdated() returned
+// whether the old and new IPBlocks were equal instead of whether they differed, causing updateGroup
+// to mistake an IPBlocks-only change for no change and skip updating the internal Group store.
+func TestUpdateGroupIPBlocksOnlyChange(t *testing.T) {
+	cidr1 := "10.0.0.0/24"
+	cidr2 := "10.0.1.0/24"
+	controlplaneIPNet2, _ := cidrStrToIPNet(cidr2)
+	_, ipNet2, _ := net.ParseCIDR(cidr2)
+	testG := crdv1beta1.Group{
+		ObjectMeta: metav1.ObjectMeta{Namespace: "nsA", Name: "gA", UID: "uidA"},
+		Spec: crdv1beta1.GroupSpec{
+			IPBlocks: []crdv1beta1.IPBlock{
+				{CIDR: cidr1},
+			},
+		},
+	}
+	updatedG := &crdv1beta1.Group{
+		ObjectMeta: metav1.ObjectMeta{Namespace: "nsA", Name: "gA", UID: "uidA"},
+		Spec: crdv1beta1.GroupSpec{
+			IPBlocks: []crdv1beta1.IPBlock{
+				{CIDR: cidr2},
+			},
+		},
+	}
+	_, npc := newController(nil, nil)
+	npc.addGroup(&testG)
+	key := fmt.Sprintf("%s/%s", testG.Namespace, testG.Name)
+
+	npc.updateGroup(&testG, updatedG)
+
+	actualGroupObj, _, _ := npc.internalGroupStore.Get(key)
+	actualGroup := actualGroupObj.(*antreatypes.Group)
+	assert.Equal(t, []controlplane.IPBlock{{CIDR: *controlplaneIPNet2}}, actualGroup.IPBlocks, "internal Group's IPBlocks should reflect the update")
+	assert.Equal(t, []*net.IPNet{ipNet2}, actualGroup.IPNets, "internal Group's IPNets should reflect the update")
+}
+
 func TestDeleteG(t *testing.T) {
 	selectorA := metav1.LabelSelector{MatchLabels: map[string]string{"foo1": "bar1"}}
 	testG := crdv1beta1.Group{
