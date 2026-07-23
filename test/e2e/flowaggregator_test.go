@@ -1314,6 +1314,7 @@ func checkRecordsForDenyFlowsClickHouse(t *testing.T, data *TestData, testFlow1,
 		var srcPodName, dstPodName string
 		var svcIP string
 		var checkSrcNodeInfo bool
+		// TODO(yang) use DestinationServiceIP once the ClickHouse schema is updated
 		if record.SourceIP == testFlow1.srcIP && (record.DestinationIP == testFlow1.dstIP || record.DestinationClusterIP == testFlow1.dstIP) {
 			srcPodName = testFlow1.srcPodName
 			dstPodName = testFlow1.dstPodName
@@ -1562,6 +1563,7 @@ func getClickHouseOutput(t *testing.T, data *TestData, srcIP, dstIP, srcPort str
 
 	query := fmt.Sprintf("SELECT * FROM flows WHERE (sourceIP = '%s') AND (destinationIP = '%s') AND (octetDeltaCount != 0)", srcIP, dstIP)
 	if isDstService {
+		// TODO(yang) use DestinationServiceIP once the ClickHouse schema is updated
 		query = fmt.Sprintf("SELECT * FROM flows WHERE (sourceIP = '%s') AND (destinationClusterIP = '%s') AND (octetDeltaCount != 0)", srcIP, dstIP)
 	}
 	if len(srcPort) > 0 {
@@ -1940,13 +1942,13 @@ func matchSrcAndDstAddress(srcIP string, dstIP string, isDstService bool, isIPv6
 	srcField := fmt.Sprintf("sourceIPv4Address: %s", srcIP)
 	dstField := fmt.Sprintf("destinationIPv4Address: %s", dstIP)
 	if isDstService {
-		dstField = fmt.Sprintf("destinationClusterIPv4: %s", dstIP)
+		dstField = fmt.Sprintf("destinationServiceIPv4: %s", dstIP)
 	}
 	if isIPv6 {
 		srcField = fmt.Sprintf("sourceIPv6Address: %s", srcIP)
 		dstField = fmt.Sprintf("destinationIPv6Address: %s", dstIP)
 		if isDstService {
-			dstField = fmt.Sprintf("destinationClusterIPv6: %s", dstIP)
+			dstField = fmt.Sprintf("destinationServiceIPv6: %s", dstIP)
 		}
 	}
 	return srcField, dstField

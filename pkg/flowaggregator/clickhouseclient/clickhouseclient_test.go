@@ -17,7 +17,6 @@ package clickhouseclient
 import (
 	"database/sql/driver"
 	"fmt"
-	"reflect"
 	"testing"
 	"time"
 
@@ -33,6 +32,10 @@ import (
 )
 
 var fakeClusterUUID = uuid.Must(uuid.NewV4()).String()
+
+// clickhouseFieldCount is the number of columns in the "flows" table INSERT query in
+// clickhouseclient.go. Refer to `insertQuery` in clickhouseclient.go.
+const clickhouseFieldCount = 51
 
 func TestCacheRecord(t *testing.T) {
 	chExportProc := &ClickHouseExportProcess{
@@ -141,8 +144,7 @@ func TestBatchCommitAllMultiRecord(t *testing.T) {
 		queueSize: maxQueueSize,
 	}
 	recordRow := flowrecord.FlowRecord{}
-	fieldCount := reflect.TypeOf(recordRow).NumField() + 1
-	argList := make([]driver.Value, fieldCount)
+	argList := make([]driver.Value, clickhouseFieldCount)
 	for i := 0; i < len(argList); i++ {
 		argList[i] = sqlmock.AnyArg()
 	}
@@ -173,8 +175,7 @@ func TestBatchCommitAllError(t *testing.T) {
 	}
 	recordRow := flowrecord.FlowRecord{}
 	chExportProc.deque.PushBack(&recordRow)
-	fieldCount := reflect.TypeOf(recordRow).NumField() + 1
-	argList := make([]driver.Value, fieldCount)
+	argList := make([]driver.Value, clickhouseFieldCount)
 	for i := 0; i < len(argList); i++ {
 		argList[i] = sqlmock.AnyArg()
 	}
