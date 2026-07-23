@@ -184,6 +184,14 @@ func (c *NPLController) getNodeIPForFamily(ipFamily corev1.IPFamily) string {
 	return c.nodeIPv4
 }
 
+// getNodeIPs returns both cached Node IPs under the read lock so callers
+// receive a consistent snapshot without two separate lock acquisitions.
+func (c *NPLController) getNodeIPs() (string, string) {
+	c.nodeIPMutex.RLock()
+	defer c.nodeIPMutex.RUnlock()
+	return c.nodeIPv4, c.nodeIPv6
+}
+
 func (c *NPLController) getPortTableForFamily(ipFamily corev1.IPFamily) *portcache.PortTable {
 	if ipFamily == corev1.IPv6Protocol {
 		return c.portTableIPv6
@@ -264,7 +272,8 @@ func (c *NPLController) Run(stopCh <-chan struct{}) {
 		klog.ErrorS(err, "Failed to determine Node IPs")
 		return
 	}
-	klog.InfoS("Node IPs are ready", "IPv4", c.nodeIPv4, "IPv6", c.nodeIPv6)
+	nodeIPv4, nodeIPv6 := c.getNodeIPs()
+	klog.InfoS("Node IPs are ready", "IPv4", nodeIPv4, "IPv6", nodeIPv6)
 
 	if err := c.waitForRulesInitialization(wait.ContextForChannel(stopCh)); err != nil {
 		klog.ErrorS(err, "Failed to initialize NodePortLocal rules")

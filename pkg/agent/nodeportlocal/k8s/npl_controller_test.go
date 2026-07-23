@@ -1336,3 +1336,42 @@ func TestDualStack(t *testing.T) {
 		assert.True(t, testData.portTableIPv6.RuleExists(defaultPodKey, defaultPort, protocolTCP))
 	})
 }
+
+// TestNodeIPsReadyNoDataRace verifies that reading Node IPs after the poll loop in Run()
+// does not race with concurrent writes from the node informer.
+//
+// Before the fix, Run() accessed c.nodeIPv4 and c.nodeIPv6 directly at the log line
+// after PollUntilContextCancel, without holding nodeIPMutex, which could race with
+// concurrent updateNodeIPs() writes from the Node informer.
+// Running this test with "go test -race" is intended to help catch regressions of that issue.
+//
+// After the fix, Run() calls getNodeIPs() which acquires the read lock, eliminating the race.
+func TestNodeIPsReadyNoDataRace(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		testSvc := getTestSvc()
+		testPod := getTestPod()
+		// setUp starts Run() and the node informer concurrently; with -race this exercises
+		// the previously-unprotected read of nodeIPv4/nodeIPv6 right after the poll loop.
+		testData := setUp(t, newTestConfig(), testSvc, testPod)
+
+		synctest.Wait()
+
+		// Trigger a Node IP update to exercise concurrent writes to nodeIPv4/nodeIPv6
+		// while Run() may be logging them.
+		newNodeIP := "10.10.10.99"
+		node, err := testData.k8sClient.CoreV1().Nodes().Get(t.Context(), defaultNodeName, metav1.GetOptions{})
+		require.NoError(t, err)
+		node.Status.Addresses = []corev1.NodeAddress{
+			{Type: corev1.NodeExternalIP, Address: newNodeIP},
+			{Type: corev1.NodeInternalIP, Address: "10.0.0.1"},
+		}
+		_, err = testData.k8sClient.CoreV1().Nodes().UpdateStatus(t.Context(), node, metav1.UpdateOptions{})
+		require.NoError(t, err)
+
+		synctest.Wait()
+
+		// Verify the annotation is updated — this also confirms the controller is still healthy.
+		expectedAnnotations := newExpectedNPLAnnotations().Add(types.IPFamilyIPv4, &newNodeIP, nil, defaultPort, protocolTCP)
+		testData.assertExpectedNPLAnnotations(testPod.Name, expectedAnnotations)
+	})
+}
