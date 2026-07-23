@@ -191,6 +191,28 @@ func TestBatchCommitAllError(t *testing.T) {
 	assert.NoError(t, mock.ExpectationsWereMet(), "unfulfilled expectations for db sql operation")
 }
 
+func TestBatchCommitAllBeginTxError(t *testing.T) {
+	db, mock, err := sqlmock.New(sqlmock.QueryMatcherOption(sqlmock.QueryMatcherEqual))
+	require.NoError(t, err, "error when opening a stub database connection")
+	defer db.Close()
+
+	chExportProc := &ClickHouseExportProcess{
+		db:        db,
+		queueSize: maxQueueSize,
+	}
+	recordRow := flowrecord.FlowRecord{}
+	chExportProc.deque.PushBack(&recordRow)
+
+	beginErr := fmt.Errorf("connection refused")
+	mock.ExpectBegin().WillReturnError(beginErr)
+
+	count, err := chExportProc.batchCommitAll(t.Context())
+	assert.ErrorIs(t, err, beginErr)
+	assert.Equal(t, 0, count)
+	assert.Equal(t, 1, chExportProc.deque.Len())
+	assert.NoError(t, mock.ExpectationsWereMet(), "unfulfilled expectations for db sql operation")
+}
+
 func TestPushRecordsToFrontOfQueue(t *testing.T) {
 	chExportProc := &ClickHouseExportProcess{
 		queueSize: 4,
