@@ -42,6 +42,7 @@ type featureService struct {
 	snatCtZones            map[binding.Protocol]int
 	gatewayMAC             net.HardwareAddr
 	nodePortAddresses      map[binding.Protocol][]net.IP
+	podCIDRs               map[binding.Protocol]*net.IPNet
 	serviceCIDRs           map[binding.Protocol]net.IPNet
 	networkConfig          *config.NetworkConfig
 	gatewayPort            uint32
@@ -79,6 +80,7 @@ func newFeatureService(
 	dnatCtZones := make(map[binding.Protocol]int)
 	snatCtZones := make(map[binding.Protocol]int)
 	nodePortAddresses := make(map[binding.Protocol][]net.IP)
+	podCIDRs := make(map[binding.Protocol]*net.IPNet)
 	serviceCIDRs := make(map[binding.Protocol]net.IPNet)
 	for _, ipProtocol := range ipProtocols {
 		switch ipProtocol {
@@ -89,6 +91,7 @@ func newFeatureService(
 			dnatCtZones[ipProtocol] = CtZone
 			snatCtZones[ipProtocol] = SNATCtZone
 			nodePortAddresses[ipProtocol] = serviceConfig.NodePortAddressesIPv4
+			podCIDRs[ipProtocol] = nodeConfig.PodIPv4CIDR
 			if serviceConfig.ServiceCIDR != nil {
 				serviceCIDRs[ipProtocol] = *serviceConfig.ServiceCIDR
 			}
@@ -99,6 +102,7 @@ func newFeatureService(
 			dnatCtZones[ipProtocol] = CtZoneV6
 			snatCtZones[ipProtocol] = SNATCtZoneV6
 			nodePortAddresses[ipProtocol] = serviceConfig.NodePortAddressesIPv6
+			podCIDRs[ipProtocol] = nodeConfig.PodIPv6CIDR
 			if serviceConfig.ServiceCIDRv6 != nil {
 				serviceCIDRs[ipProtocol] = *serviceConfig.ServiceCIDRv6
 			}
@@ -118,6 +122,7 @@ func newFeatureService(
 		dnatCtZones:            dnatCtZones,
 		snatCtZones:            snatCtZones,
 		nodePortAddresses:      nodePortAddresses,
+		podCIDRs:               podCIDRs,
 		serviceCIDRs:           serviceCIDRs,
 		gatewayMAC:             nodeConfig.GatewayConfig.MAC,
 		gatewayPort:            nodeConfig.GatewayConfig.OFPort,
