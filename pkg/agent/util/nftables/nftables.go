@@ -30,6 +30,17 @@ type Client struct {
 	IPv6 knftables.Interface
 }
 
+type options struct {
+	withFlowtableCheck bool
+}
+
+type OptionsFn func(*options)
+
+// WithFlowtableCheck enables the dry-run that verifies kernel flow offload (flowtable) support.
+func WithFlowtableCheck(o *options) {
+	o.withFlowtableCheck = true
+}
+
 func (c *Client) All() iter.Seq2[knftables.Family, knftables.Interface] {
 	return func(yield func(knftables.Family, knftables.Interface) bool) {
 		if c.IPv4 != nil {
@@ -45,17 +56,22 @@ func (c *Client) All() iter.Seq2[knftables.Family, knftables.Interface] {
 	}
 }
 
-func New(enableIPv4, enableIPv6 bool) (*Client, error) {
+func New(enableIPv4, enableIPv6 bool, optionFns ...OptionsFn) (*Client, error) {
+	o := &options{}
+	for _, fn := range optionFns {
+		fn(o)
+	}
+
 	client := &Client{}
 	if enableIPv4 {
-		nft, err := newNFTables(knftables.IPv4Family)
+		nft, err := newNFTables(knftables.IPv4Family, o.withFlowtableCheck)
 		if err != nil {
 			return nil, fmt.Errorf("error creating nftables instance: %v", err)
 		}
 		client.IPv4 = nft
 	}
 	if enableIPv6 {
-		nft, err := newNFTables(knftables.IPv6Family)
+		nft, err := newNFTables(knftables.IPv6Family, o.withFlowtableCheck)
 		if err != nil {
 			return nil, fmt.Errorf("error creating nftables instance: %v", err)
 		}
@@ -64,7 +80,7 @@ func New(enableIPv4, enableIPv6 bool) (*Client, error) {
 	return client, nil
 }
 
-func newNFTables(ipFamily knftables.Family) (knftables.Interface, error) {
+func newNFTables(ipFamily knftables.Family, withFlowtableCheck bool) (knftables.Interface, error) {
 	// knftables.New validates:
 	//  - nft binary is available
 	//  - sufficient permissions
@@ -76,25 +92,27 @@ func newNFTables(ipFamily knftables.Family) (knftables.Interface, error) {
 	}
 
 	// Verify nft_flow_offload support with a dry-run.
-	tx := nft.NewTransaction()
-	tx.Add(&knftables.Table{})
-	tx.Add(&knftables.Flowtable{
-		Name:     "test_flowtable",
-		Priority: ptr.To(knftables.FilterIngressPriority),
-		Devices:  []string{"lo"},
-	})
-	tx.Add(&knftables.Chain{
-		Name:     "test_chain",
-		Type:     ptr.To(knftables.FilterType),
-		Hook:     ptr.To(knftables.ForwardHook),
-		Priority: ptr.To(knftables.FilterPriority),
-	})
-	tx.Add(&knftables.Rule{
-		Chain: "test_chain",
-		Rule:  knftables.Concat("flow", "add", "@", "test_flowtable"),
-	})
-	if err := nft.Check(context.TODO(), tx); err != nil {
-		return nil, fmt.Errorf("nftables flowtable is not supported: %w", err)
+	if withFlowtableCheck {
+		tx := nft.NewTransaction()
+		tx.Add(&knftables.Table{})
+		tx.Add(&knftables.Flowtable{
+			Name:     "test_flowtable",
+			Priority: ptr.To(knftables.FilterIngressPriority),
+			Devices:  []string{"lo"},
+		})
+		tx.Add(&knftables.Chain{
+			Name:     "test_chain",
+			Type:     ptr.To(knftables.FilterType),
+			Hook:     ptr.To(knftables.ForwardHook),
+			Priority: ptr.To(knftables.FilterPriority),
+		})
+		tx.Add(&knftables.Rule{
+			Chain: "test_chain",
+			Rule:  knftables.Concat("flow", "add", "@", "test_flowtable"),
+		})
+		if err := nft.Check(context.TODO(), tx); err != nil {
+			return nil, fmt.Errorf("nftables flowtable is not supported: %w", err)
+		}
 	}
 
 	return nft, nil
