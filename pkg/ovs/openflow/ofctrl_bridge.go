@@ -620,7 +620,7 @@ func (b *OFBridge) AddOFEntriesInBundle(addEntries []OFEntry, modEntries []OFEnt
 		groupSet, flowSet,
 	} {
 		if err := addMessage(entries); err != nil {
-			return nil
+			return err
 		}
 	}
 
