@@ -19,7 +19,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"net"
-	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -87,16 +86,6 @@ type podCNIInfo struct {
 	netNS       string
 }
 
-// BridgeNotDrainedError indicates that Pod-owned resources from the draining
-// OVS bridge still need to be cleaned up before the bridge can be deleted.
-type BridgeNotDrainedError struct {
-	Interfaces []string
-}
-
-func (e *BridgeNotDrainedError) Error() string {
-	return fmt.Sprintf("secondary OVS bridge is still draining interfaces: %v", e.Interfaces)
-}
-
 type PodController struct {
 	kubeClient          clientset.Interface
 	netAttachDefClient  netdefclient.K8sCniCncfIoV1Interface
@@ -106,13 +95,12 @@ type PodController struct {
 	ipPoolLister        crdlisters.IPPoolLister
 	podUpdateSubscriber channel.Subscriber
 	// bridgeMutex protects the OVS bridge lifecycle state, ovsBridgeClient, and
-	// interfaceConfigurator. VLAN interface creation and interface deletion hold a
-	// read lock so they can run concurrently with each other, but not while bridge
-	// reconciliation drains, deletes, or replaces the bridge and reloads OVS-backed
-	// interface records.
+	// interfaceConfigurator. VLAN operations and interface deletion hold a read lock
+	// while using bridge state. SR-IOV creation only snapshots interfaceConfigurator
+	// under the read lock because it does not depend on the OVS bridge.
 	bridgeMutex           sync.RWMutex
 	ovsBridgeClient       ovsconfig.OVSBridgeClient
-	drainingOVSBridgeName string
+	ovsBridgeDraining     bool
 	interfaceStore        interfacestore.InterfaceStore
 	primaryInterfaceStore interfacestore.InterfaceStore
 	interfaceConfigurator InterfaceConfigurator
@@ -368,34 +356,24 @@ func (pc *PodController) removeInterfaces(interfaces []*interfacestore.Interface
 			savedErr = err
 			continue
 		}
-		ownersToRelease = append(ownersToRelease, newPodOwnerForInterface(interfaceConfig))
+		ownersToRelease = append(ownersToRelease, &crdv1b1.PodOwner{
+			Name:        interfaceConfig.PodName,
+			Namespace:   interfaceConfig.PodNamespace,
+			ContainerID: interfaceConfig.ContainerID,
+			IFName:      interfaceConfig.IFDev,
+		})
 	}
 	pc.bridgeMutex.RUnlock()
 
 	for _, podOwner := range ownersToRelease {
-		if err := pc.releaseIP(podOwner); err != nil {
-			savedErr = err
+		// The interface record has already been removed, so a Pod retry cannot
+		// retry the release. Periodic cleanup will reclaim any stale allocation.
+		if err := pc.ipamAllocator.SecondaryNetworkRelease(podOwner); err != nil {
+			klog.ErrorS(err, "Error when releasing IPAM allocation",
+				"Pod", klog.KRef(podOwner.Namespace, podOwner.Name), "interface", podOwner.IFName)
 		}
 	}
 	return savedErr
-}
-
-func newPodOwnerForInterface(interfaceConfig *interfacestore.InterfaceConfig) *crdv1b1.PodOwner {
-	return &crdv1b1.PodOwner{
-		Name:        interfaceConfig.PodName,
-		Namespace:   interfaceConfig.PodNamespace,
-		ContainerID: interfaceConfig.ContainerID,
-		IFName:      interfaceConfig.IFDev,
-	}
-}
-
-func (pc *PodController) releaseIP(podOwner *crdv1b1.PodOwner) error {
-	if err := pc.ipamAllocator.SecondaryNetworkRelease(podOwner); err != nil {
-		klog.ErrorS(err, "Error when releasing IPAM allocation",
-			"Pod", klog.KRef(podOwner.Namespace, podOwner.Name), "interface", podOwner.IFName)
-		return err
-	}
-	return nil
 }
 
 func (pc *PodController) syncPod(key string) error {
@@ -505,8 +483,8 @@ func (pc *PodController) configureSecondaryInterface(
 		pc.bridgeMutex.RLock()
 		defer pc.bridgeMutex.RUnlock()
 
-		if pc.drainingOVSBridgeName != "" {
-			ifConfigErr = fmt.Errorf("OVS bridge %s is draining, cannot configure VLAN interface", pc.drainingOVSBridgeName)
+		if pc.ovsBridgeDraining {
+			ifConfigErr = fmt.Errorf("OVS bridge %s is draining, cannot configure VLAN interface", pc.ovsBridgeClient.GetBridgeName())
 			break
 		}
 		if pc.ovsBridgeClient == nil {
@@ -842,111 +820,82 @@ func (pc *PodController) loadOVSInterfaceStore(client ovsconfig.OVSBridgeClient)
 	return nil
 }
 
-// DrainAndDeleteOVSBridge switches the current OVS bridge to draining mode and
-// deletes it once all Pod interfaces have been removed. Existing Pod interfaces
-// can still be deleted while new VLAN interfaces are rejected. When no bridge
-// client is installed, for example after an Agent restart, existing container
-// Ports are loaded into the interface store. On the first transition, all known
-// interface owners are enqueued so stale records do not depend on a new Pod event
-// for cleanup. The final drain check, bridge deletion, and lifecycle state update
-// are serialized with Pod interface operations.
-func (pc *PodController) DrainAndDeleteOVSBridge(
-	bridgeName string,
-	client ovsconfig.OVSBridgeClient,
-	deleteBridge func() error,
-) error {
+// DrainOVSBridge switches the current OVS bridge to draining mode and reports
+// whether all Pod interfaces have been removed. Existing Pod interfaces can
+// still be deleted while new VLAN interfaces are rejected. When no bridge client
+// is installed, for example after an Agent restart, existing container Ports are
+// loaded into the interface store. On the first transition, all known interface
+// owners are enqueued so stale records do not depend on a new Pod event for cleanup.
+func (pc *PodController) DrainOVSBridge(client ovsconfig.OVSBridgeClient) (bool, error) {
+	if client == nil {
+		return false, fmt.Errorf("cannot drain OVS bridge with a nil client")
+	}
+	bridgeName := client.GetBridgeName()
 	podKeys := sets.New[string]()
 	pc.bridgeMutex.Lock()
-	if pc.drainingOVSBridgeName != "" {
-		if pc.drainingOVSBridgeName != bridgeName {
-			err := fmt.Errorf("cannot start drain of OVS bridge %s while bridge %s is draining", bridgeName, pc.drainingOVSBridgeName)
-			pc.bridgeMutex.Unlock()
-			return err
-		}
-	} else {
-		if client == nil {
-			pc.bridgeMutex.Unlock()
-			return fmt.Errorf("cannot drain OVS bridge %s with a nil client", bridgeName)
-		}
+	defer pc.bridgeMutex.Unlock()
+	if !pc.ovsBridgeDraining {
 		if pc.ovsBridgeClient == nil {
 			newConfigurator, err := cniserver.NewSecondaryInterfaceConfigurator(client, pc.interfaceStore)
 			if err != nil {
-				pc.bridgeMutex.Unlock()
-				return fmt.Errorf("failed to create SecondaryInterfaceConfigurator for draining bridge: %v", err)
+				return false, fmt.Errorf("failed to create SecondaryInterfaceConfigurator for draining bridge: %v", err)
 			}
 			if err := pc.loadOVSInterfaceStore(client); err != nil {
-				pc.bridgeMutex.Unlock()
-				return err
+				return false, err
 			}
 			pc.ovsBridgeClient = client
 			pc.interfaceConfigurator = newConfigurator
 		}
-		pc.drainingOVSBridgeName = bridgeName
+		pc.ovsBridgeDraining = true
 		for _, interfaceConfig := range pc.interfaceStore.ListInterfaces() {
 			if interfaceConfig.OVSPortConfig != nil {
 				podKeys.Insert(podKeyGet(interfaceConfig.PodName, interfaceConfig.PodNamespace))
 			}
 		}
 	}
-	blockers := pc.drainBlockersLocked()
-	if len(blockers) > 0 {
-		pc.bridgeMutex.Unlock()
+	if !pc.isBridgeDrained() {
 		for key := range podKeys {
 			pc.queue.Add(key)
 		}
-		return &BridgeNotDrainedError{Interfaces: blockers}
+		klog.InfoS("Waiting for Pod interfaces to be removed before deleting secondary bridge",
+			"bridge", bridgeName)
+		return false, nil
 	}
-	if err := deleteBridge(); err != nil {
-		pc.bridgeMutex.Unlock()
-		return err
-	}
+	return true, nil
+}
+
+// CompleteOVSBridgeDrain clears the bridge lifecycle state after the bridge has
+// been deleted successfully.
+func (pc *PodController) CompleteOVSBridgeDrain() {
+	pc.bridgeMutex.Lock()
+	defer pc.bridgeMutex.Unlock()
 	pc.ovsBridgeClient = nil
-	pc.interfaceConfigurator = nil
-	pc.drainingOVSBridgeName = ""
-	pc.bridgeMutex.Unlock()
-	return nil
+	pc.ovsBridgeDraining = false
 }
 
 // CancelOVSBridgeDrain makes the current bridge active again when its deletion
 // is no longer desired. Existing interfaces are left unchanged for normal Pod
 // reconciliation.
-func (pc *PodController) CancelOVSBridgeDrain(bridgeName string) error {
+func (pc *PodController) CancelOVSBridgeDrain() {
 	pc.bridgeMutex.Lock()
 	defer pc.bridgeMutex.Unlock()
-	if pc.drainingOVSBridgeName == "" {
-		return nil
-	}
-	if pc.drainingOVSBridgeName != bridgeName {
-		// Fail closed if the bridge lifecycle state is inconsistent. Activating a
-		// different bridge here could leave the old bridge and its Pod Ports
-		// unmanaged.
-		return fmt.Errorf("cannot cancel drain of OVS bridge %s with bridge %s", pc.drainingOVSBridgeName, bridgeName)
-	}
-	pc.drainingOVSBridgeName = ""
-	return nil
+	pc.ovsBridgeDraining = false
 }
 
-func (pc *PodController) drainBlockersLocked() []string {
-	var blockers []string
+func (pc *PodController) isBridgeDrained() bool {
 	for _, interfaceConfig := range pc.interfaceStore.ListInterfaces() {
 		if interfaceConfig.OVSPortConfig != nil {
-			blockers = append(blockers, podInterfaceReference(
-				interfaceConfig.PodName, interfaceConfig.PodNamespace, interfaceConfig.IFDev))
+			return false
 		}
 	}
-	sort.Strings(blockers)
-	return blockers
-}
-
-func podInterfaceReference(podName, podNamespace, ifName string) string {
-	return fmt.Sprintf("%s/%s/%s", podNamespace, podName, ifName)
+	return true
 }
 
 // UpdateOVSBridgeClient replaces the OVS bridge client and interface configurator used by the
 // PodController. It is called by the secondary network controller whenever the effective
 // bridge configuration changes (e.g. a new AntreaNodeConfig takes effect):
-// A non-nil client identifies a new (or replacement) bridge. The client remains
-// unavailable while the interface store is loaded, then the bridge becomes active.
+// A non-nil client identifies a new (or replacement) bridge. The new client and
+// configurator are installed only after the interface store is loaded successfully.
 func (pc *PodController) UpdateOVSBridgeClient(newClient ovsconfig.OVSBridgeClient) error {
 	if newClient == nil {
 		return fmt.Errorf("cannot activate a nil OVS bridge client")
@@ -958,14 +907,12 @@ func (pc *PodController) UpdateOVSBridgeClient(newClient ovsconfig.OVSBridgeClie
 
 	pc.bridgeMutex.Lock()
 	defer pc.bridgeMutex.Unlock()
-	pc.ovsBridgeClient = nil
-	pc.interfaceConfigurator = nil
 	if err := pc.loadOVSInterfaceStore(newClient); err != nil {
 		return err
 	}
 	pc.ovsBridgeClient = newClient
 	pc.interfaceConfigurator = newConfigurator
-	pc.drainingOVSBridgeName = ""
+	pc.ovsBridgeDraining = false
 	klog.InfoS("Secondary OVS bridge updated, interface store reloaded")
 	return nil
 }

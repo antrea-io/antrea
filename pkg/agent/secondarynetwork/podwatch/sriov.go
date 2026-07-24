@@ -185,7 +185,10 @@ func (pc *PodController) configureSriovAsSecondaryInterface(
 	if err != nil {
 		return err
 	}
-	if err = pc.interfaceConfigurator.ConfigureSriovSecondaryInterface(
+	pc.bridgeMutex.RLock()
+	interfaceConfigurator := pc.interfaceConfigurator
+	pc.bridgeMutex.RUnlock()
+	if err = interfaceConfigurator.ConfigureSriovSecondaryInterface(
 		pod.Name, pod.Namespace, podCNIInfo.containerID, podCNIInfo.netNS,
 		network.InterfaceRequest, mtu, podSriovVFDeviceID, result); err != nil {
 		return fmt.Errorf("SRIOV Interface creation failed: %v", err)
