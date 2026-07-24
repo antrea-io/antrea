@@ -19,6 +19,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net"
+	"sort"
 	"strings"
 	"testing"
 	"time"
@@ -34,6 +35,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/rest"
 
 	"antrea.io/antrea/v2/pkg/agent/cniserver"
 	antreae2e "antrea.io/antrea/v2/test/e2e"
@@ -62,7 +64,14 @@ const (
 	// Namespace of NetworkAttachmentDefinition CRs.
 	attachDefNamespace = "default"
 	ipPoolNamespace    = "default"
-	secondaryOVSBridge = "br-secondary"
+	// nodePoolLabelKey matches ci/kind/test-secondary-network-kind.sh NODEPOOL_LABEL_KEY.
+	nodePoolLabelKey = "antrea.io/node-pool"
+	// ovsPrimaryBridge is Antrea's default primary OVS bridge; all other OVS bridges on the
+	// Node are treated as secondary for list-ports.
+	ovsPrimaryBridge             = "br-int"
+	secondaryBridgeNoUplink      = "br-no-uplink"
+	antreaInterfaceTypeUplink    = "uplink"
+	antreaInterfaceTypeContainer = "container"
 
 	containerName  = "toolbox"
 	podApp         = "secondaryTest"
@@ -452,16 +461,114 @@ func (data *testData) checkIPReleased(ipPools map[string][]string, ifacesIPv4 ma
 	})
 }
 
-func (data *testData) getOVSPortsOnSecondaryBridge(t *testing.T, nodeName string) ([]string, error) {
-	cmd := []string{"ovs-vsctl", "list-ports", secondaryOVSBridge}
-
-	stdout, stderr, err := data.e2eTestData.RunCommandFromAntreaPodOnNode(nodeName, cmd)
+// getSecondaryOVSBridgeName returns the OVS bridge used for native secondary networks by listing
+// bridges and excluding ovsPrimaryBridge (br-int). When AntreaNodeConfig sets bridgeName to
+// br1 (or any single non-integration bridge), that name is returned.
+func (data *testData) getSecondaryOVSBridgeName(nodeName string) (string, error) {
+	stdout, stderr, err := data.e2eTestData.RunCommandFromAntreaPodOnNode(nodeName, []string{"ovs-vsctl", "list-br"})
 	if err != nil {
-		return nil, fmt.Errorf("failed to run ovs-vsctl on node %s: %v\nstderr: %s", nodeName, err, stderr)
+		return "", fmt.Errorf("failed to list OVS bridges on node %s: %w\nstderr: %s", nodeName, err, stderr)
+	}
+	var candidates []string
+	for _, name := range strings.Fields(stdout) {
+		if name == "" || name == ovsPrimaryBridge {
+			continue
+		}
+		candidates = append(candidates, name)
+	}
+	switch len(candidates) {
+	case 0:
+		return "", fmt.Errorf("no secondary OVS bridge on node %s (no bridge besides %s)", nodeName, ovsPrimaryBridge)
+	case 1:
+		return candidates[0], nil
+	default:
+		return "", fmt.Errorf("multiple secondary OVS bridges on node %s: %v; configure a single secondary bridge",
+			nodeName, candidates)
+	}
+}
+
+func (data *testData) getOVSPortsOnSecondaryBridge(t *testing.T, nodeName string) ([]string, error) {
+	bridgeName, err := data.getSecondaryOVSBridgeName(nodeName)
+	if err != nil {
+		return nil, err
+	}
+	stdout, stderr, err := data.e2eTestData.RunCommandFromAntreaPodOnNode(nodeName, []string{"ovs-vsctl", "list-ports", bridgeName})
+	if err != nil {
+		return nil, fmt.Errorf("failed to list ports on OVS bridge %s for node %s: %w\nstderr: %s", bridgeName, nodeName, err, stderr)
+	}
+	return strings.Fields(stdout), nil
+}
+
+func (data *testData) waitForOVSBridge(nodeName, bridgeName string) error {
+	return wait.PollUntilContextTimeout(context.Background(), time.Second, defaultTimeout, true, func(ctx context.Context) (bool, error) {
+		_, _, err := data.e2eTestData.RunCommandFromAntreaPodOnNode(
+			nodeName, []string{"ovs-vsctl", "br-exists", bridgeName})
+		return err == nil, nil
+	})
+}
+
+// verifySecondaryBridgeHasNoUplink verifies that the secondary OVS bridge contains
+// exactly the expected number of Pod ports and no physical uplink port.
+func (data *testData) verifySecondaryBridgeHasNoUplink(nodeName string, expectedPodPorts int) error {
+	stdout, stderr, err := data.e2eTestData.RunCommandFromAntreaPodOnNode(
+		nodeName, []string{"ovs-vsctl", "list-ports", secondaryBridgeNoUplink})
+	if err != nil {
+		return fmt.Errorf("failed to list ports on OVS bridge %s for node %s: %w\nstderr: %s",
+			secondaryBridgeNoUplink, nodeName, err, stderr)
+	}
+	ports := strings.Fields(stdout)
+	if len(ports) != expectedPodPorts {
+		return fmt.Errorf("expected %d Pod ports on OVS bridge %s, got %d: %v",
+			expectedPodPorts, secondaryBridgeNoUplink, len(ports), ports)
 	}
 
-	ovsPorts := strings.Fields(stdout)
-	return ovsPorts, nil
+	for _, port := range ports {
+		stdout, stderr, err := data.e2eTestData.RunCommandFromAntreaPodOnNode(nodeName,
+			[]string{"ovs-vsctl", "get", "Port", port, "external_ids:antrea-type"})
+		if err != nil {
+			return fmt.Errorf("failed to get Antrea interface type for OVS port %s: %w\nstderr: %s", port, err, stderr)
+		}
+		interfaceType := strings.Trim(strings.TrimSpace(stdout), "\"")
+		if interfaceType == antreaInterfaceTypeUplink {
+			return fmt.Errorf("unexpected uplink port %s on OVS bridge %s", port, secondaryBridgeNoUplink)
+		}
+		if interfaceType != antreaInterfaceTypeContainer {
+			return fmt.Errorf("expected OVS port %s on bridge %s to be a Pod container port, got type %q",
+				port, secondaryBridgeNoUplink, interfaceType)
+		}
+	}
+	return nil
+}
+
+// pickPodForAgentRestartReconciliation chooses a pod and its secondary interface names for the
+// post-restart delete / IPPool release checks. Prefers the pod with the most secondary attachments
+// (e.g. eth1+eth2 in TestVLANNetwork); when several tie, the later pod in data.pods wins so behavior
+// matches the historical choice of pods[1] for two-interface pods. Node pool tests attach only
+// eth1 per pod; all tie on attachment count and the last pod is selected.
+func (data *testData) pickPodForAgentRestartReconciliation() (*testPodInfo, []string, error) {
+	var best *testPodInfo
+	bestIdx := -1
+	bestCount := -1
+	for i, p := range data.pods {
+		n := len(p.interfaceNetworks)
+		if n == 0 {
+			continue
+		}
+		if n > bestCount || (n == bestCount && i > bestIdx) {
+			bestCount = n
+			bestIdx = i
+			best = p
+		}
+	}
+	if best == nil {
+		return nil, nil, fmt.Errorf("no pod with secondary network interfaces")
+	}
+	ifaceNames := make([]string, 0, len(best.interfaceNetworks))
+	for k := range best.interfaceNetworks {
+		ifaceNames = append(ifaceNames, k)
+	}
+	sort.Strings(ifaceNames)
+	return best, ifaceNames, nil
 }
 
 // reconcilationAfterAgentRestart verifies OVS Ports cleanup and IP release.
@@ -510,8 +617,11 @@ func (data *testData) reconcilationAfterAgentRestart(t *testing.T) error {
 			"Pod: %s, IPv6 addresses mismatch after agent restart", podName)
 	}
 
-	vlanPod := data.pods[1]
-	ifaces := []string{"eth1", "eth2"}
+	// Remove Pod and check IP released or not. Derive interfaces from the chosen pod so NodePool
+	// workloads (eth1 only; NAD mapped to eth2/eth3 on the Node in AntreaNodeConfig) keep backward
+	// compatibility with TestVLANNetwork (eth1 + eth2).
+	vlanPod, ifaces, err := data.pickPodForAgentRestartReconciliation()
+	require.NoError(t, err)
 	ifacesIPv4, ifacesIPv6, _, err := data.listPodAddresses(vlanPod)
 	require.NoError(t, err, "Failed to get IPs of Interfaces")
 
@@ -531,13 +641,33 @@ func (data *testData) reconcilationAfterAgentRestart(t *testing.T) error {
 	return data.checkIPReleased(ipPools, ifacesIPv4, ifacesIPv6, ifaces)
 }
 
+// nodeNamesWithNodePool returns sorted Node names that carry the node pool label (see AntreaNodeConfig tests).
+func nodeNamesWithNodePool(t *testing.T, kubeConfig *rest.Config, pool string) []string {
+	t.Helper()
+	cs, err := kubernetes.NewForConfig(kubeConfig)
+	require.NoError(t, err)
+	nl, err := cs.CoreV1().Nodes().List(context.TODO(), metav1.ListOptions{
+		LabelSelector: nodePoolLabelKey + "=" + pool,
+	})
+	require.NoError(t, err)
+	names := make([]string, 0, len(nl.Items))
+	for i := range nl.Items {
+		names = append(names, nl.Items[i].Name)
+	}
+	sort.Strings(names)
+	return names
+}
+
 func testSecondaryNetwork(t *testing.T, networkType string, pods []*testPodInfo) {
 	e2eTestData, err := antreae2e.SetupTest(t)
 	if err != nil {
 		t.Fatalf("Error when setting up test: %v", err)
 	}
 	defer antreae2e.TeardownTest(t, e2eTestData)
+	runSecondaryNetworkTestSteps(t, e2eTestData, networkType, pods)
+}
 
+func runSecondaryNetworkTestSteps(t *testing.T, e2eTestData *antreae2e.TestData, networkType string, pods []*testPodInfo) {
 	testData := &testData{e2eTestData: e2eTestData, networkType: networkType, pods: pods}
 
 	ns := e2eTestData.GetTestNamespace()
@@ -602,6 +732,132 @@ func TestVLANNetwork(t *testing.T) {
 		},
 	}
 	testSecondaryNetwork(t, networkTypeVLAN, pods)
+}
+
+// TestVLANNetworkNoUplink verifies that two Pods on the same Node can communicate
+// over their secondary interfaces when the secondary OVS bridge has no physical uplink.
+// The test runner applies infra/antrea-node-config-no-uplink.yml before running this test.
+func TestVLANNetworkNoUplink(t *testing.T) {
+	if antreae2e.NodeCount() < 1 {
+		t.Fatal("The test requires at least one Node")
+	}
+	e2eTestData, err := antreae2e.SetupTest(t)
+	require.NoError(t, err)
+	defer antreae2e.TeardownTest(t, e2eTestData)
+
+	nodeName := antreae2e.NodeName(0)
+	pods := []*testPodInfo{
+		{
+			podName:           "vlan-no-uplink-pod1",
+			nodeName:          nodeName,
+			interfaceNetworks: map[string]string{"eth1": "vlan-net1"},
+			macAddresses:      map[string]string{"eth1": "aa:bb:cc:dd:ef:01"},
+		},
+		{
+			podName:           "vlan-no-uplink-pod2",
+			nodeName:          nodeName,
+			interfaceNetworks: map[string]string{"eth1": "vlan-net1"},
+			macAddresses:      map[string]string{"eth1": "aa:bb:cc:dd:ef:02"},
+		},
+	}
+	testData := &testData{e2eTestData: e2eTestData, networkType: networkTypeVLAN, pods: pods}
+	require.NoError(t, testData.waitForOVSBridge(nodeName, secondaryBridgeNoUplink),
+		"Timed out waiting for secondary OVS bridge %s on node %s", secondaryBridgeNoUplink, nodeName)
+	require.NoError(t, testData.createPods(t, e2eTestData.GetTestNamespace()))
+
+	t.Run("IPv4Connectivity", func(t *testing.T) {
+		antreae2e.SkipIfNotIPv4Cluster(t)
+		require.NoError(t, testData.verifySecondaryInterfaces(t, ipFamilyIPv4))
+	})
+
+	t.Run("IPv6Connectivity", func(t *testing.T) {
+		antreae2e.SkipIfNotIPv6Cluster(t)
+		require.NoError(t, testData.verifySecondaryInterfaces(t, ipFamilyIPv6))
+	})
+
+	t.Run("NoUplinkPort", func(t *testing.T) {
+		require.NoError(t, testData.verifySecondaryBridgeHasNoUplink(nodeName, len(pods)))
+	})
+}
+
+func TestSecondaryOVSBridgeMulticastSnooping(t *testing.T) {
+	e2eTestData, err := antreae2e.SetupTest(t)
+	if err != nil {
+		t.Fatalf("Error when setting up test: %v", err)
+	}
+	defer antreae2e.TeardownTest(t, e2eTestData)
+
+	testData := &testData{e2eTestData: e2eTestData}
+	for i := 0; i < antreae2e.NodeCount(); i++ {
+		nodeName := antreae2e.NodeName(i)
+		bridgeName, err := testData.getSecondaryOVSBridgeName(nodeName)
+		require.NoError(t, err, "Failed to get secondary OVS bridge name on node %s", nodeName)
+		stdout, stderr, err := e2eTestData.RunCommandFromAntreaPodOnNode(nodeName, []string{"ovs-vsctl", "get", "bridge", bridgeName, "mcast_snooping_enable"})
+		require.NoError(t, err, "Failed to get multicast snooping setting for bridge %s on node %s: %s", bridgeName, nodeName, stderr)
+		assert.Equal(t, "true", strings.TrimSpace(stdout), "Unexpected multicast snooping setting for bridge %s on node %s", bridgeName, nodeName)
+	}
+}
+
+// TestVLANNetworkNodePools exercises VLAN secondary networks when Nodes are labeled
+// antrea.io/node-pool=pool1|pool2 (see antrea-node-configs-nodepools.yml and ci/kind/test-secondary-network-kind.sh).
+// Each pod uses eth1 as its first (and only) secondary interface; Antrea maps NADs to Node uplinks eth2/eth3
+// per AntreaNodeConfig, not by matching pod vs host interface names.
+// It expects NADs/IPPools from secondary-networks.yml including vlan-net-pool1-eth3-300, vlan-net-pool2-eth3-400,
+// and vlan-net-cross-pool-eth2-vlan100. Skips if fewer than two Nodes exist per pool.
+func TestNodePoolsVLANNetwork(t *testing.T) {
+	if antreae2e.NodeCount() < 4 {
+		t.Skipf("Requires at least 4 nodes (two per pool), got %d", antreae2e.NodeCount())
+	}
+	e2eTestData, err := antreae2e.SetupTest(t)
+	require.NoError(t, err)
+	defer antreae2e.TeardownTest(t, e2eTestData)
+
+	pool1 := nodeNamesWithNodePool(t, e2eTestData.KubeConfig, "pool1")
+	pool2 := nodeNamesWithNodePool(t, e2eTestData.KubeConfig, "pool2")
+	if len(pool1) < 2 || len(pool2) < 2 {
+		t.Skipf("Need at least 2 nodes labeled %s=pool1 and 2 with pool2; got pool1=%v pool2=%v",
+			nodePoolLabelKey, pool1, pool2)
+	}
+
+	pods := []*testPodInfo{
+		{
+			podName:           "pod1-vlan300",
+			nodeName:          pool1[0],
+			interfaceNetworks: map[string]string{"eth1": "vlan-net-pool1-eth3-300"},
+			macAddresses:      map[string]string{"eth1": "aa:bb:cc:dd:e0:01"},
+		},
+		{
+			podName:           "pod2-vlan300",
+			nodeName:          pool1[1],
+			interfaceNetworks: map[string]string{"eth1": "vlan-net-pool1-eth3-300"},
+			macAddresses:      map[string]string{"eth1": "aa:bb:cc:dd:e0:02"},
+		},
+		{
+			podName:           "pod1-vlan400",
+			nodeName:          pool2[0],
+			interfaceNetworks: map[string]string{"eth1": "vlan-net-pool2-eth3-400"},
+			macAddresses:      map[string]string{"eth1": "aa:bb:cc:dd:e0:03"},
+		},
+		{
+			podName:           "pod2-vlan400",
+			nodeName:          pool2[1],
+			interfaceNetworks: map[string]string{"eth1": "vlan-net-pool2-eth3-400"},
+			macAddresses:      map[string]string{"eth1": "aa:bb:cc:dd:e0:04"},
+		},
+		{
+			podName:           "pod1-vlan100",
+			nodeName:          pool1[0],
+			interfaceNetworks: map[string]string{"eth1": "vlan-net-cross-pool-eth2-vlan100"},
+			macAddresses:      map[string]string{"eth1": "aa:bb:cc:dd:e0:05"},
+		},
+		{
+			podName:           "pod2-vlan100",
+			nodeName:          pool2[0],
+			interfaceNetworks: map[string]string{"eth1": "vlan-net-cross-pool-eth2-vlan100"},
+			macAddresses:      map[string]string{"eth1": "aa:bb:cc:dd:e0:06"},
+		},
+	}
+	runSecondaryNetworkTestSteps(t, e2eTestData, networkTypeVLAN, pods)
 }
 
 func (data *testData) assignIP(clientset *kubernetes.Clientset) error {

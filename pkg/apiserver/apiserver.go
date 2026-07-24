@@ -357,7 +357,9 @@ func installHandlers(c *ExtraConfig, s *genericapiserver.GenericAPIServer) {
 		s.Handler.NonGoRestfulMux.HandleFunc("/validate/traceflow", webhook.HandlerForValidateFunc(c.traceflowController.Validate))
 	}
 
-	s.Handler.NonGoRestfulMux.HandleFunc("/validate/antreanodeconfig", webhook.HandlerForValidateFunc(antreanodeconfig.Validate))
+	if features.DefaultFeatureGate.Enabled(features.AntreaNodeConfig) {
+		s.Handler.NonGoRestfulMux.HandleFunc("/validate/antreanodeconfig", webhook.HandlerForValidateFunc(antreanodeconfig.Validate))
+	}
 }
 
 func DefaultCAConfig() *certificate.CAConfig {

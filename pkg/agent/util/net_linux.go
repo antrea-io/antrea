@@ -48,6 +48,7 @@ var (
 	netNSClose         = ns.NetNS.Close
 	getVethPeerIfindex = ip.GetVethPeerIfindex
 	netlinkAttrs       = netlink.Link.Attrs
+	execCommand        = exec.Command
 )
 
 // GetNSPeerDevBridge returns peer device and its attached bridge (if applicable)
@@ -240,10 +241,17 @@ func SetAdapterMACAddress(adapterName string, macConfig *net.HardwareAddr) error
 	return netlinkUtil.LinkSetHardwareAddr(link, *macConfig)
 }
 
-// deleteOVSPort deletes specific OVS port. This function calls ovs-vsctl command to bypass
-// OVS bridge client to work when agent exiting.
-func deleteOVSPort(brName, portName string) error {
-	cmd := exec.Command("ovs-vsctl", "--if-exists", "del-port", brName, portName)
+// deleteOVSPorts deletes the specified OVS Ports in one OVSDB transaction. It calls ovs-vsctl
+// directly because the OVS bridge client may already be shutting down when the Agent exits.
+func deleteOVSPorts(brName string, portNames ...string) error {
+	args := make([]string, 0, len(portNames)*5)
+	for i, portName := range portNames {
+		if i > 0 {
+			args = append(args, "--")
+		}
+		args = append(args, "--if-exists", "del-port", brName, portName)
+	}
+	cmd := execCommand("ovs-vsctl", args...)
 	return cmd.Run()
 }
 
@@ -282,13 +290,13 @@ func RenameInterface(from, to string) error {
 		func(ctx context.Context) (done bool, err error) {
 			renameErr = renameHostInterface(from, to)
 			if renameErr != nil {
-				klog.InfoS("Unable to rename host interface name with error, retrying", "oldName", from, "newName", to, "err", renameErr)
+				klog.V(4).InfoS("Unable to rename host interface, retrying", "oldName", from, "newName", to, "err", renameErr)
 				return false, nil
 			}
 			return true, nil
 		})
 	if pollErr != nil {
-		return fmt.Errorf("failed to rename host interface name %s to %s", from, to)
+		return fmt.Errorf("failed to rename host interface name %s to %s: %w", from, to, renameErr)
 	}
 	// Fix for the issue https://github.com/antrea-io/antrea/issues/6301.
 	// In some new Linux versions which support AltName, if the only valid altname of the interface is the same as the
@@ -497,14 +505,20 @@ func PrepareHostInterfaceConnection(
 	return bridgedName, false, nil
 }
 
-// RestoreHostInterfaceConfiguration restore the configuration from bridge back to host interface, reverting the
-// actions taken in PrepareHostInterfaceConnection.
-func RestoreHostInterfaceConfiguration(brName string, interfaceName string) {
-	klog.V(4).InfoS("Restoring bridge config to host interface")
+// RestoreHostInterfaceConfiguration restores the configuration from the bridge back to the host
+// interface, reverting the actions taken in PrepareHostInterfaceConnection. It returns an error
+// when the host and uplink OVS Ports cannot be deleted atomically. All subsequent sub-step
+// failures (IP/route restore and rename) are logged but do not cause a return error, since they
+// represent best-effort cleanup after the point of no return.
+func RestoreHostInterfaceConfiguration(brName string, interfaceName string) error {
 	bridgedName := GenerateUplinkInterfaceName(interfaceName)
+	klog.InfoS("Restoring host interface from secondary OVS bridge",
+		"bridge", brName, "interface", interfaceName, "uplink", bridgedName)
 	// restore only when interface eth0~ exists
 	if !HostInterfaceExists(bridgedName) {
-		return
+		klog.InfoS("Skipping host interface restoration because the uplink interface does not exist",
+			"bridge", brName, "interface", interfaceName, "uplink", bridgedName)
+		return nil
 	}
 
 	// get interface config
@@ -516,41 +530,44 @@ func RestoreHostInterfaceConfiguration(brName string, interfaceName string) {
 		if err != nil {
 			klog.ErrorS(err, "Failed to get interface config", "interface", interfaceName)
 		}
-
-		// delete internal port (eth0)
-		if err = deleteOVSPort(brName, interfaceName); err != nil {
-			klog.ErrorS(err, "Delete OVS port failed", "port", bridgedName)
-		}
 	}
-	// remove host interface (eth0~) from bridge
-	if err = deleteOVSPort(brName, bridgedName); err != nil {
-		klog.ErrorS(err, "Delete OVS port failed", "port", bridgedName)
-		return
+	// Delete the internal and uplink Ports in one transaction. Running two ovs-vsctl commands
+	// can leave only the internal Port deleted if the Agent is terminated between commands;
+	// the next Agent then sees the uplink and incorrectly assumes the host connection is intact.
+	if err = deleteOVSPorts(brName, interfaceName, bridgedName); err != nil {
+		return fmt.Errorf("failed to delete OVS host and uplink ports %s and %s from bridge %s: %w",
+			interfaceName, bridgedName, brName, err)
 	}
-
+	klog.InfoS("Deleted host and uplink Ports from secondary OVS bridge",
+		"bridge", brName, "interface", interfaceName, "uplink", bridgedName)
 	// rename host interface(eth0~ -> eth0)
 	if err = RenameInterface(bridgedName, interfaceName); err != nil {
-		klog.ErrorS(err, "Restore host interface name failed", "from", bridgedName, "to", interfaceName)
-		return
+		klog.ErrorS(err, "Failed to restore physical interface name",
+			"bridge", brName, "oldName", bridgedName, "newName", interfaceName)
+		return nil
 	}
+	klog.InfoS("Restored physical interface name",
+		"bridge", brName, "oldName", bridgedName, "newName", interfaceName)
 	var link netlink.Link
 	if link, err = netlink.LinkByName(interfaceName); err != nil {
 		klog.ErrorS(err, "Failed to get link", "interface", interfaceName)
-		return
+		return nil
 	}
 	if len(interfaceIPs) > 0 {
 		// restore IPs to eth0
 		if err = ConfigureLinkAddresses(link.Attrs().Index, interfaceIPs); err != nil {
 			klog.ErrorS(err, "Restore IPs to host interface failed", "interface", interfaceName)
-			return
+			return nil
 		}
 	}
 	if len(interfaceRoutes) > 0 {
 		// restore routes to eth0
 		if err = ConfigureLinkRoutes(link, interfaceRoutes); err != nil {
 			klog.ErrorS(err, "Restore routes to host interface failed", "interface", interfaceName)
-			return
+			return nil
 		}
 	}
-	klog.V(2).InfoS("Finished restoring bridge config to host interface", "interface", interfaceName, "bridge", brName)
+	klog.InfoS("Finished restoring host interface from secondary OVS bridge",
+		"interface", interfaceName, "bridge", brName)
+	return nil
 }
