@@ -626,6 +626,20 @@
           branches:
           - '*/main'
           included_regions: []
+      - '{name}-{test_name}-for-gc':
+          test_name: cloud-clusters
+          node: 'antrea-cloud'
+          description: 'This is for deleting residual EKS and GKE clusters.'
+          builders:
+            - builder-cloud-clusters-gc
+          timed: 'H 0 * * *'
+          branches:
+          - '*/main'
+          included_regions: []
+          wrappers: []
+          publishers:
+          - email:
+              recipients: projectantrea-dev@googlegroups.com
       - '{name}-{test_name}-for-pull-request':
           test_name: list-tests
           node: null
