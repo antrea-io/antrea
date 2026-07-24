@@ -106,6 +106,12 @@ func (m *Map) Get(key string) string {
 	return m.GetWithFilters(key)
 }
 
+// Has gets whether the given key exists in the hash ring.
+func (m *Map) Has(key string) bool {
+	_, exists := m.keys[key]
+	return exists
+}
+
 // GetWithFilters gets the closest item in the hash to which passes all filters.
 func (m *Map) GetWithFilters(key string, filters ...func(string) bool) string {
 	if m.IsEmpty() {
