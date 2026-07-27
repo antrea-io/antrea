@@ -467,7 +467,7 @@ function ConfigOVS() {
     # Create and start ovsdb-server service.
     $OVSUsrSbinPath = $(Get-Item $installUsrSbinDir).FullName
     Log "Create and start ovsdb-server service"
-    sc.exe create ovsdb-server binPath= "$OVSUsrSbinPath\ovsdb-server.exe $OVS_DB_PATH  -vfile:info --remote=punix:db.sock  --remote=ptcp:6640  --log-file=$OVSLogDir\ovsdb-server.log  --pidfile --service" start= auto
+    sc.exe create ovsdb-server binPath= "$OVSUsrSbinPath\ovsdb-server.exe $OVS_DB_PATH  -vfile:info --remote=punix:db.sock  --remote=ptcp:6640:127.0.0.1  --log-file=$OVSLogDir\ovsdb-server.log  --pidfile --service" start= auto
     sc.exe failure ovsdb-server reset= 0 actions= restart/0/restart/0/restart/0
     Start-Service ovsdb-server
     # Create and start ovs-vswitchd service.
