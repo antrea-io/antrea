@@ -349,6 +349,9 @@ func parseIGMPPacket(ipPacket *protocol.IPv4) (protocol.IGMPMessage, error) {
 		return nil, errors.New("not IGMP packet")
 	}
 	data, _ := ipPacket.Data.MarshalBinary()
+	if len(data) < 8 {
+		return nil, errors.New("IGMP payload too short")
+	}
 	igmpLength := ipPacket.Length - uint16(4*ipPacket.IHL)
 	if igmpLength == 8 {
 		igmp := new(protocol.IGMPv1or2)
