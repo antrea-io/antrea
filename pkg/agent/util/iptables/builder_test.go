@@ -151,6 +151,28 @@ func TestBuilders(t *testing.T) {
 			},
 			expected: `-A PREROUTING -s 192.168.77.100 -d 10.96.0.10 -p tcp --dport 8080 -j DNAT --to-destination 10.10.0.2:40000`,
 		},
+		{
+			name:  "Comment with quotes and newlines is neutralized",
+			chain: InputChain,
+			buildFunc: func(builder IPTablesRuleBuilder) IPTablesRule {
+				return builder.MatchTransProtocol(ProtocolTCP).
+					SetComment("pwn\"\n-A INPUT -j DROP\r").
+					SetTarget(AcceptTarget).
+					Done()
+			},
+			expected: `-A INPUT -p tcp -m comment --comment "pwn-A INPUT -j DROP" -j ACCEPT`,
+		},
+		{
+			name:  "Log prefix with quotes and newlines is neutralized",
+			chain: ForwardChain,
+			buildFunc: func(builder IPTablesRuleBuilder) IPTablesRule {
+				return builder.MatchInputInterface(eth0).
+					SetTarget(LOGTarget).
+					SetLogPrefix("pwn\"\n-A INPUT -j DROP\r").
+					Done()
+			},
+			expected: `-A FORWARD -i eth0 -j LOG --log-prefix "pwn-A INPUT -j DROP"`,
+		},
 	}
 
 	for _, tc := range testCases {
