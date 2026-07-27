@@ -488,6 +488,9 @@ func (c *Controller) preparePacket(tf *crdv1beta1.Traceflow, intf *interfacestor
 			return nil, errors.New("destination Service does not have a ClusterIP")
 		}
 		packet.DestinationIP = net.ParseIP(dstSvc.Spec.ClusterIP)
+		if packet.DestinationIP == nil {
+			return nil, errors.New("destination Service does not have a valid ClusterIP")
+		}
 		if !packet.IsIPv6 {
 			packet.DestinationIP = packet.DestinationIP.To4()
 			if packet.DestinationIP == nil {
@@ -497,6 +500,9 @@ func (c *Controller) preparePacket(tf *crdv1beta1.Traceflow, intf *interfacestor
 			return nil, errors.New("destination Service does not have an IPv6 ClusterIP")
 		}
 		if !liveTraffic {
+			if len(dstSvc.Spec.Ports) == 0 {
+				return nil, errors.New("destination Service does not have any ports")
+			}
 			switch dstSvc.Spec.Ports[0].Protocol {
 			case corev1.ProtocolTCP:
 				packet.IPProto = protocol.Type_TCP
