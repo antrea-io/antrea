@@ -101,6 +101,29 @@ var (
 			ClusterIP: svc1IPv4,
 		},
 	}
+	// svc2 is a headless Service with no ports. Its ClusterIP is "None",
+	// which does not parse as a valid IP address.
+	svc2 = v1.Service{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "svc-2",
+			Namespace: "default",
+		},
+		Spec: v1.ServiceSpec{
+			Type:      v1.ServiceTypeClusterIP,
+			ClusterIP: "None",
+		},
+	}
+	// svc3 has a valid IPv6 ClusterIP but no ports.
+	svc3 = v1.Service{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "svc-3",
+			Namespace: "default",
+		},
+		Spec: v1.ServiceSpec{
+			Type:      v1.ServiceTypeClusterIP,
+			ClusterIP: "fd00:10:96::1",
+		},
+	}
 )
 
 type fakeNodeRouteQuerier struct{}
@@ -130,7 +153,7 @@ type fakeTraceflowController struct {
 
 func newFakeTraceflowController(t *testing.T, initObjects []runtime.Object, networkConfig *config.NetworkConfig, nodeConfig *config.NodeConfig) *fakeTraceflowController {
 	controller := gomock.NewController(t)
-	kubeClient := fake.NewSimpleClientset(&pod1, &pod2, &pod3, &svc1)
+	kubeClient := fake.NewSimpleClientset(&pod1, &pod2, &pod3, &svc1, &svc2, &svc3)
 	informerFactory := informers.NewSharedInformerFactory(kubeClient, 0)
 	serviceInformer := informerFactory.Core().V1().Services()
 	mockOFClient := openflowtest.NewMockClient(controller)
@@ -581,6 +604,60 @@ func TestPreparePacket(t *testing.T) {
 				IPProto:         protocol.Type_UDP,
 				TTL:             64,
 			},
+		},
+		{
+			// A headless Service has ClusterIP "None", which does not parse
+			// as a valid IP. On the IPv6 path the ClusterIP check does not
+			// catch this, so preparePacket used to fall through to an
+			// unguarded dstSvc.Spec.Ports[0] access and panic.
+			name: "IPv6 Pod-to-headless-service with no ClusterIP",
+			tf: &crdv1beta1.Traceflow{
+				ObjectMeta: metav1.ObjectMeta{Name: "tf15", UID: "uid15"},
+				Spec: crdv1beta1.TraceflowSpec{
+					Source: crdv1beta1.Source{
+						Namespace: pod1.Namespace,
+						Pod:       pod1.Name,
+					},
+					Destination: crdv1beta1.Destination{
+						Namespace: svc2.Namespace,
+						Service:   svc2.Name,
+					},
+					Packet: crdv1beta1.Packet{
+						IPv6Header: &crdv1beta1.IPv6Header{},
+					},
+				},
+			},
+			intf: &interfacestore.InterfaceConfig{
+				IPs: []net.IP{net.ParseIP("fd00:10:244:1::10")},
+				MAC: pod1MAC,
+			},
+			expectedErr: "destination Service does not have a valid ClusterIP",
+		},
+		{
+			// A Service with a valid IPv6 ClusterIP but no ports must not
+			// panic on the unguarded dstSvc.Spec.Ports[0] access.
+			name: "IPv6 Pod-to-service with no ports",
+			tf: &crdv1beta1.Traceflow{
+				ObjectMeta: metav1.ObjectMeta{Name: "tf16", UID: "uid16"},
+				Spec: crdv1beta1.TraceflowSpec{
+					Source: crdv1beta1.Source{
+						Namespace: pod1.Namespace,
+						Pod:       pod1.Name,
+					},
+					Destination: crdv1beta1.Destination{
+						Namespace: svc3.Namespace,
+						Service:   svc3.Name,
+					},
+					Packet: crdv1beta1.Packet{
+						IPv6Header: &crdv1beta1.IPv6Header{},
+					},
+				},
+			},
+			intf: &interfacestore.InterfaceConfig{
+				IPs: []net.IP{net.ParseIP("fd00:10:244:1::10")},
+				MAC: pod1MAC,
+			},
+			expectedErr: "destination Service does not have any ports",
 		},
 	}
 
