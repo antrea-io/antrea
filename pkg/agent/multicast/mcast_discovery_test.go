@@ -120,6 +120,17 @@ func TestParseIGMPPacket(t *testing.T) {
 			err: errors.New("unknown IGMP packet"),
 		},
 		{
+			name: "short IGMP payload",
+			packet: protocol.Ethernet{
+				Ethertype: protocol.IPv4_MSG,
+				Data: &protocol.IPv4{
+					Protocol: 2,
+					Data:     util.NewBuffer([]byte{}),
+				},
+			},
+			err: errors.New("IGMP payload too short"),
+		},
+		{
 			name: "correct IGMP packet",
 			packet: protocol.Ethernet{
 				Ethertype: protocol.IPv4_MSG,
