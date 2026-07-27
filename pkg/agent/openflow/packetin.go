@@ -24,6 +24,7 @@ import (
 	"antrea.io/libOpenflow/util"
 	"antrea.io/ofnet/ofctrl"
 	"golang.org/x/time/rate"
+	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/klog/v2"
 
 	"antrea.io/antrea/v2/pkg/ovs/openflow"
@@ -138,11 +139,22 @@ func (c *client) parsePacketIn(featurePacketIn *featureStartPacketIn) {
 		// Use corresponding handler subscribed to the category to handle packetIn
 		if handler, ok := c.packetInHandlers[featurePacketIn.category]; ok {
 			klog.V(2).InfoS("Received packetIn", "category", featurePacketIn.category)
-			if err := handler.HandlePacketIn(pktIn); err != nil {
-				klog.ErrorS(err, "PacketIn handler failed to process packet", "category", featurePacketIn.category)
+			if err := c.dispatchPacketIn(handler, pktIn); err != nil {
+				klog.ErrorS(err, "Failed to process PacketIn", "category", featurePacketIn.category)
 			}
 		}
 	}
+}
+
+// dispatchPacketIn invokes the handler for a single packetIn. A malformed
+// packet must never be able to take down the whole agent process, so recover
+// from any panic in the handler (returning it as an error, with a stack trace)
+// so the loop can continue. utilruntime.RecoverFromPanic is used rather than
+// HandleCrash because HandleCrash re-panics by default (ReallyCrash), which
+// would still crash the agent.
+func (c *client) dispatchPacketIn(handler PacketInHandler, pktIn *ofctrl.PacketIn) (err error) {
+	defer utilruntime.RecoverFromPanic(&err)
+	return handler.HandlePacketIn(pktIn)
 }
 
 func GetMatchFieldByRegID(matchers *ofctrl.Matchers, regID int) *ofctrl.MatchField {
