@@ -75,7 +75,7 @@ function CreateStartOVSDB() {
     if ($(Test-Path $OVS_DB_SCHEMA_PATH) -and !$(Test-Path $OVS_DB_PATH)) {
         ovsdb-tool create "$OVS_DB_PATH" "$OVS_DB_SCHEMA_PATH"
     }
-    sc.exe create ovsdb-server binPath= "$OVSInstallDir\usr\sbin\ovsdb-server.exe $OVSInstallDir\etc\openvswitch\conf.db  -vfile:info --remote=punix:db.sock  --remote=ptcp:6640  --log-file  --pidfile --service" start= auto
+    sc.exe create ovsdb-server binPath= "$OVSInstallDir\usr\sbin\ovsdb-server.exe $OVSInstallDir\etc\openvswitch\conf.db  -vfile:info --remote=punix:db.sock  --remote=ptcp:6640:127.0.0.1  --log-file  --pidfile --service" start= auto
     sc.exe failure ovsdb-server reset= 0 actions= restart/0/restart/0/restart/0
     Start-Service ovsdb-server
 }
