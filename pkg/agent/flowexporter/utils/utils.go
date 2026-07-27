@@ -56,6 +56,7 @@ const (
 	PolicyTypeK8sNetworkPolicy           = uint8(flowpb.NetworkPolicyType_NETWORK_POLICY_TYPE_K8S)
 	PolicyTypeAntreaNetworkPolicy        = uint8(flowpb.NetworkPolicyType_NETWORK_POLICY_TYPE_ANP)
 	PolicyTypeAntreaClusterNetworkPolicy = uint8(flowpb.NetworkPolicyType_NETWORK_POLICY_TYPE_ACNP)
+	PolicyTypeK8sClusterNetworkPolicy    = uint8(flowpb.NetworkPolicyType_NETWORK_POLICY_TYPE_K8SCNP)
 )
 
 const (
@@ -116,6 +117,8 @@ func PolicyTypeToUint8(policyType v1beta2.NetworkPolicyType) uint8 {
 		return PolicyTypeAntreaNetworkPolicy
 	case v1beta2.AntreaClusterNetworkPolicy:
 		return PolicyTypeAntreaClusterNetworkPolicy
+	case v1beta2.K8sClusterNetworkPolicy:
+		return PolicyTypeK8sClusterNetworkPolicy
 	default:
 		return PolicyTypeUnspecified
 	}
