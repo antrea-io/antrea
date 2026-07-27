@@ -69,11 +69,17 @@ func (b *iptablesRuleBuilder) MatchCIDRDst(cidr string) IPTablesRuleBuilder {
 	return b
 }
 
+// sanitizeRestoreArg strips characters that could break out of a quoted
+// argument or start a new directive when the rule is fed to iptables-restore.
+func sanitizeRestoreArg(s string) string {
+	return strings.NewReplacer("\"", "", "\n", "", "\r", "").Replace(s)
+}
+
 func (b *iptablesRuleBuilder) SetLogPrefix(prefix string) IPTablesRuleBuilder {
 	if prefix == "" {
 		return b
 	}
-	matchStr := fmt.Sprintf("--log-prefix \"%s\"", prefix)
+	matchStr := fmt.Sprintf("--log-prefix \"%s\"", sanitizeRestoreArg(prefix))
 	b.writeSpec(matchStr)
 	return b
 }
@@ -227,7 +233,7 @@ func (b *iptablesRuleBuilder) SetComment(comment string) IPTablesRuleBuilder {
 		return b
 	}
 
-	commentStr := fmt.Sprintf("-m comment --comment \"%s\"", comment)
+	commentStr := fmt.Sprintf("-m comment --comment \"%s\"", sanitizeRestoreArg(comment))
 	b.writeSpec(commentStr)
 	return b
 }
