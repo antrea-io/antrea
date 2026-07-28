@@ -264,7 +264,9 @@ func (ch *ClickHouseExportProcess) batchCommitAll(ctx context.Context) (int, err
 	}
 	if err != nil {
 		klog.ErrorS(err, "Error when preparing insert statement")
-		_ = tx.Rollback()
+		if tx != nil {
+			_ = tx.Rollback()
+		}
 		return 0, err
 	}
 
