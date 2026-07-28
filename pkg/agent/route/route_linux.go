@@ -60,6 +60,9 @@ const (
 	vxlanPort  = 4789
 	genevePort = 6081
 
+	// syncDebounceDuration is how long the iptables sync loop waits after being notified, to batch updates.
+	syncDebounceDuration = 100 * time.Millisecond
+
 	// Antrea managed ipset.
 	// antreaPodIPSet contains all Per-Node IPAM Pod CIDRs of this cluster.
 	antreaPodIPSet = "ANTREA-POD-IP"
@@ -241,6 +244,9 @@ type Client struct {
 	nodeNetworkPolicyIPSetsIPv6 sync.Map
 	// iptablesCache caches all existing iptables chains and rules for the features relying on it.
 	iptablesCache *iptablesCache
+	// iptablesSyncTrigger notifies the iptables sync loop that the iptables caches have been updated. It has a
+	// buffer of 1, as a pending notification makes another one redundant.
+	iptablesSyncTrigger chan struct{}
 	// podCIDRNFTablesSetIPv4 caches all existing IPv4 Pod CIDRs stored in antreaNFTablesSetPeerPodCIDR.
 	podCIDRNFTablesSetIPv4 sync.Map
 	// podCIDRNFTablesSetIPv6 caches all existing IPv6 Pod CIDRs stored in antreaNFTablesSetPeerPodCIDR.
@@ -288,6 +294,7 @@ func NewClient(networkConfig *config.NetworkConfig,
 		serviceExternalIPReferences: make(map[string]sets.Set[string]),
 		wireguardPort:               wireguardPort,
 		proxyHealthCheckPort:        proxyHealthCheckPort,
+		iptablesSyncTrigger:         make(chan struct{}, 1),
 	}, nil
 }
 
@@ -444,20 +451,58 @@ func (c *Client) Initialize(nodeConfig *config.NodeConfig, done func()) error {
 func (c *Client) Run(ctx context.Context) {
 	<-c.iptablesInitialized
 	klog.InfoS("Starting host network configuration sync", "interval", SyncInterval)
+	// The loop only waits for notifications, the periodic reconciliation is driven by syncNetworkConfig.
+	go c.runSyncLoop(ctx, c.iptablesSyncTrigger, func() error { return c.syncIPTables(false) })
 	wait.UntilWithContext(ctx, c.syncNetworkConfig, SyncInterval)
+}
+
+// triggerIPTablesSync notifies the iptables sync loop that the iptables caches have been updated. It never blocks: a
+// pending notification already causes a sync that takes the latest caches into account.
+func (c *Client) triggerIPTablesSync() {
+	select {
+	case c.iptablesSyncTrigger <- struct{}{}:
+	default:
+		// A sync is already pending, nothing to do.
+	}
+}
+
+// runSyncLoop syncs the iptables rules to the datapath when it is notified. Concentrating the writes here matters
+// because a sync rewrites the whole state from the caches, undoing anything applied concurrently. It returns when ctx
+// is cancelled.
+func (c *Client) runSyncLoop(ctx context.Context, trigger chan struct{}, sync func() error) {
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-trigger:
+			// Batch the updates occurring in quick succession into a single sync.
+			timer := time.NewTimer(syncDebounceDuration)
+			select {
+			case <-ctx.Done():
+				timer.Stop()
+				return
+			case <-timer.C:
+			}
+			// The sync below reads the caches after this point, so it covers these notifications.
+			select {
+			case <-trigger:
+			default:
+			}
+			if err := sync(); err != nil {
+				klog.ErrorS(err, "Failed to sync iptables rules")
+			}
+		}
+	}
 }
 
 // syncNetworkConfig is idempotent and can be safely called on every sync operation.
 func (c *Client) syncNetworkConfig(ctx context.Context) {
-	// Sync ipset before syncing iptables rules
+	// Sync the ipsets first: iptables-restore fails as a whole if a referenced ipset is missing.
 	if err := c.syncIPSet(); err != nil {
 		klog.ErrorS(err, "Failed to sync ipset")
 		return
 	}
-	if err := c.syncIPTables(false); err != nil {
-		klog.ErrorS(err, "Failed to sync iptables")
-		return
-	}
+	c.triggerIPTablesSync()
 	if c.nftables != nil {
 		if err := c.syncNFTables(ctx); err != nil {
 			klog.ErrorS(err, "Failed to sync nftables")
@@ -1421,10 +1466,11 @@ func (c *Client) restoreIptablesData(podCIDR *net.IPNet,
 	}
 	// Egress rules must be inserted before the default masquerade rule.
 	for snatMark, snatIP := range snatMarkToIP {
-		// Cannot reuse snatRuleSpec to generate the rule as it doesn't have "`" in the comment.
 		rule := []string{
 			"-A", antreaPostRoutingChain,
 			"-m", "comment", "--comment", `"Antrea: SNAT Pod to external packets"`,
+			// The condition is needed to prevent the rule from being applied to local out packets destined
+			// for Pods, which have "0x1/0x1" mark.
 			"!", "-o", c.nodeConfig.GatewayConfig.Name,
 			"-m", "mark", "--mark", fmt.Sprintf("%#08x/%#08x", snatMark, types.SNATIPMarkMask),
 			"-j", iptables.SNATTarget, "--to", snatIP.String(),
@@ -2229,43 +2275,23 @@ func (c *Client) UnMigrateRoutesFromGw(route *net.IPNet, linkName string) error 
 	return nil
 }
 
-func (c *Client) snatRuleSpec(snatIP net.IP, snatMark uint32) []string {
-	rule := []string{
-		"-m", "comment", "--comment", "Antrea: SNAT Pod to external packets",
-		// The condition is needed to prevent the rule from being applied to local out packets destined for Pods, which
-		// have "0x1/0x1" mark.
-		"!", "-o", c.nodeConfig.GatewayConfig.Name,
-		"-m", "mark", "--mark", fmt.Sprintf("%#08x/%#08x", snatMark, types.SNATIPMarkMask),
-		"-j", iptables.SNATTarget, "--to", snatIP.String(),
-	}
-	if c.egressSNATRandomFully {
-		rule = append(rule, "--random-fully")
-	}
-	return rule
-}
-
+// AddSNATRule caches the SNAT IP and notifies the sync loop, which installs the rule. Installing it here would race
+// with the sync, which could overwrite it.
 func (c *Client) AddSNATRule(snatIP net.IP, mark uint32) error {
-	protocol := iptables.ProtocolIPv4
-	if snatIP.To4() == nil {
-		protocol = iptables.ProtocolIPv6
-	}
 	c.markToSNATIP.Store(mark, snatIP)
-	return c.iptables.InsertRule(protocol, iptables.NATTable, antreaPostRoutingChain, c.snatRuleSpec(snatIP, mark))
+	c.triggerIPTablesSync()
+	return nil
 }
 
+// DeleteSNATRule uncaches the SNAT IP and notifies the sync loop, which uninstalls the rule.
 func (c *Client) DeleteSNATRule(mark uint32) error {
-	value, ok := c.markToSNATIP.Load(mark)
-	if !ok {
+	if _, ok := c.markToSNATIP.Load(mark); !ok {
 		klog.InfoS("Didn't find SNAT rule with mark", "mark", fmt.Sprintf("%#x", mark))
 		return nil
 	}
 	c.markToSNATIP.Delete(mark)
-	snatIP := value.(net.IP)
-	protocol := iptables.ProtocolIPv4
-	if snatIP.To4() == nil {
-		protocol = iptables.ProtocolIPv6
-	}
-	return c.iptables.DeleteRule(protocol, iptables.NATTable, antreaPostRoutingChain, c.snatRuleSpec(snatIP, mark))
+	c.triggerIPTablesSync()
+	return nil
 }
 
 func (c *Client) AddEgressRoutes(tableID uint32, dev int, gateway net.IP, prefixLength int) error {
