@@ -532,7 +532,6 @@ func TestIpTablesSync(t *testing.T) {
 
 	snatIP := net.ParseIP("1.1.1.1")
 	mark := uint32(1)
-	assert.NoError(t, routeClient.AddSNATRule(snatIP, mark))
 
 	tcs := []struct {
 		RuleSpec, Cmd, Table, Chain string
@@ -549,7 +548,27 @@ func TestIpTablesSync(t *testing.T) {
 		{Table: "filter", Cmd: "-A", Chain: "ANTREA-OUTPUT", RuleSpec: "-p tcp -m comment --comment \"Antrea: allow Agent APIServer reply packets\" -m tcp --sport 10350 -m conntrack --ctstate ESTABLISHED -j ACCEPT"},
 		{Table: "nat", Cmd: "-A", Chain: "ANTREA-POSTROUTING", RuleSpec: fmt.Sprintf("! -o antrea-gw0 -m comment --comment \"Antrea: SNAT Pod to external packets\" -m mark --mark %#x/0xff -j SNAT --to-source %s", mark, snatIP)},
 	}
-	// we delete some rules, start the sync goroutine, wait for sync operation to restore them.
+	assertRulesInstalled := func(c *assert.CollectT) {
+		for _, tc := range tcs {
+			saveCmd := fmt.Sprintf("iptables-save -t %s | grep -e '%s %s'", tc.Table, tc.Cmd, tc.Chain)
+			// #nosec G204: ignore in test code
+			actualData, err := exec.Command("bash", "-c", saveCmd).Output()
+			assert.NoError(c, err, "error executing iptables-save cmd")
+			contains := fmt.Sprintf("%s %s %s", tc.Cmd, tc.Chain, tc.RuleSpec)
+			assert.Contains(c, string(actualData), contains, "%s command's output did not contain rule: %s", saveCmd, contains)
+		}
+	}
+
+	// The SNAT rule is applied by the sync loop, which is started by Run.
+	route.SyncInterval = 2 * time.Second
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	go routeClient.Run(ctx)
+
+	assert.NoError(t, routeClient.AddSNATRule(snatIP, mark))
+	assert.EventuallyWithT(t, assertRulesInstalled, 5*time.Second, 100*time.Millisecond, "iptables rules were not installed")
+
+	// we delete some rules, and wait for the sync operation to restore them.
 	for _, tc := range tcs {
 		delCmd := fmt.Sprintf("iptables -t %s -D %s  %s", tc.Table, tc.Chain, tc.RuleSpec)
 		// #nosec G204: ignore in test code
@@ -557,19 +576,7 @@ func TestIpTablesSync(t *testing.T) {
 		assert.NoError(t, err, "error executing iptables cmd: %s", delCmd)
 		assert.Equal(t, "", string(actualData), "failed to remove iptables rule for %v", tc)
 	}
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	route.SyncInterval = 2 * time.Second
-	go routeClient.Run(ctx)
-	time.Sleep(route.SyncInterval) // wait for one iteration of sync operation.
-	for _, tc := range tcs {
-		saveCmd := fmt.Sprintf("iptables-save -t %s | grep -e '%s %s'", tc.Table, tc.Cmd, tc.Chain)
-		// #nosec G204: ignore in test code
-		actualData, err := exec.Command("bash", "-c", saveCmd).Output()
-		assert.NoError(t, err, "error executing iptables-save cmd")
-		contains := fmt.Sprintf("%s %s %s", tc.Cmd, tc.Chain, tc.RuleSpec)
-		assert.Contains(t, string(actualData), contains, "%s command's output did not contain rule: %s", saveCmd, contains)
-	}
+	assert.EventuallyWithT(t, assertRulesInstalled, 5*time.Second, 100*time.Millisecond, "iptables rules were not restored")
 }
 
 func TestNFTablesSync(t *testing.T) {
@@ -647,22 +654,31 @@ func TestAddAndDeleteSNATRule(t *testing.T) {
 	assert.NoError(t, err)
 	<-inited // Node network initialized
 
+	// The SNAT rules are applied by the sync loop, which is started by Run.
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	go routeClient.Run(ctx)
+
 	snatIP := net.ParseIP("1.1.1.1")
 	mark := uint32(1)
 	expectedRule := fmt.Sprintf("! -o antrea-gw0 -m comment --comment \"Antrea: SNAT Pod to external packets\" -m mark --mark %#x/0xff -j SNAT --to-source %s", mark, snatIP)
+	saveCmd := "iptables-save -t nat | grep ANTREA-POSTROUTING"
+	getRules := func(c *assert.CollectT) string {
+		// #nosec G204: ignore in test code
+		actualData, err := exec.Command("bash", "-c", saveCmd).Output()
+		assert.NoError(c, err, "error executing iptables-save cmd")
+		return string(actualData)
+	}
 
 	assert.NoError(t, routeClient.AddSNATRule(snatIP, mark))
-	saveCmd := "iptables-save -t nat | grep ANTREA-POSTROUTING"
-	// #nosec G204: ignore in test code
-	actualData, err := exec.Command("bash", "-c", saveCmd).Output()
-	assert.NoError(t, err, "error executing iptables-save cmd")
-	assert.Contains(t, string(actualData), expectedRule)
+	assert.EventuallyWithT(t, func(c *assert.CollectT) {
+		assert.Contains(c, getRules(c), expectedRule)
+	}, 5*time.Second, 100*time.Millisecond, "SNAT rule was not installed")
 
 	assert.NoError(t, routeClient.DeleteSNATRule(mark))
-	// #nosec G204: ignore in test code
-	actualData, err = exec.Command("bash", "-c", saveCmd).Output()
-	assert.NoError(t, err, "error executing iptables-save cmd")
-	assert.NotContains(t, string(actualData), expectedRule)
+	assert.EventuallyWithT(t, func(c *assert.CollectT) {
+		assert.NotContains(c, getRules(c), expectedRule)
+	}, 5*time.Second, 100*time.Millisecond, "SNAT rule was not uninstalled")
 }
 
 func TestAddAndDeleteRoutes(t *testing.T) {
