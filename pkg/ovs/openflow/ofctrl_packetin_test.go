@@ -231,6 +231,70 @@ func TestParsePacketIn(t *testing.T) {
 	}
 }
 
+// TestParsePacketInICMPv6NonEcho is a regression test: libOpenflow decodes any
+// ICMPv6 type outside Echo/MLD (here Type=1, Destination Unreachable) into a
+// *util.Buffer rather than *protocol.ICMPv6EchoReqRpl. Before the fix, the
+// unconditional type assertion in getICMPHeaderData panicked on such a packet,
+// and with no recover in the packet-in dispatch chain this crashed the whole
+// antrea-agent process.
+func TestParsePacketInICMPv6NonEcho(t *testing.T) {
+	testMac1, _ := net.ParseMAC("00:00:5e:00:53:01")
+	testMac2, _ := net.ParseMAC("00:00:5e:00:53:00")
+	testIP1 := net.ParseIP("2001:db8::68")
+	testIP2 := net.ParseIP("2001:db8::69")
+	// 8-byte non-echo ICMPv6 body: Type=1 (Destination Unreachable), Code=0.
+	icmp6 := util.NewBuffer([]byte{1, 0, 0, 0, 0, 0, 0, 0})
+	ethPkt := protocol.NewEthernet()
+	ethPkt.HWDst = testMac1
+	ethPkt.HWSrc = testMac2
+	ethPkt.Ethertype = protocol.IPv6_MSG
+	ethPkt.Data = util.Message(&protocol.IPv6{
+		Length:     8,
+		NextHeader: protocol.Type_IPv6ICMP,
+		HopLimit:   64,
+		NWSrc:      testIP1,
+		NWDst:      testIP2,
+		Data:       icmp6,
+	})
+	pktBytes, err := ethPkt.MarshalBinary()
+	require.NoError(t, err)
+
+	pktIn := &ofctrl.PacketIn{
+		PacketIn: &openflow15.PacketIn{
+			Data: util.NewBuffer(pktBytes),
+		},
+	}
+
+	require.NotPanics(t, func() {
+		packet, err := ParsePacketIn(pktIn)
+		require.NoError(t, err)
+		require.NotNil(t, packet)
+		assert.True(t, packet.IsIPv6)
+		assert.Equal(t, uint8(protocol.Type_IPv6ICMP), packet.IPProto)
+		// A non-echo ICMPv6 message carries no echo Identifier/SeqNum.
+		assert.Zero(t, packet.ICMPEchoID)
+		assert.Zero(t, packet.ICMPEchoSeq)
+	})
+}
+
+// TestGetICMPHeaderDataICMPv6NonEcho asserts that a non-echo ICMPv6 payload
+// (decoded by libOpenflow into a *util.Buffer) still yields the correct
+// Type/Code, even though it carries no echo Identifier/SeqNum.
+func TestGetICMPHeaderDataICMPv6NonEcho(t *testing.T) {
+	ipv6Pkt := &protocol.IPv6{
+		NextHeader: protocol.Type_IPv6ICMP,
+		// Type=1 (Destination Unreachable), Code=3 (Address Unreachable).
+		Data: util.NewBuffer([]byte{1, 3, 0, 0, 0, 0, 0, 0}),
+	}
+
+	icmpType, icmpCode, icmpEchoID, icmpEchoSeq, err := getICMPHeaderData(ipv6Pkt)
+	require.NoError(t, err)
+	assert.Equal(t, uint8(1), icmpType)
+	assert.Equal(t, uint8(3), icmpCode)
+	assert.Zero(t, icmpEchoID)
+	assert.Zero(t, icmpEchoSeq)
+}
+
 func TestGetTCPDNSData(t *testing.T) {
 	type args struct {
 		tcp          protocol.TCP
