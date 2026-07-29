@@ -23,6 +23,7 @@ import (
 	"math"
 	"time"
 
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/klog/v2"
 
@@ -73,7 +74,7 @@ func (pt *PortTable) getFreePort(podIP string, podPort int, protocol string) (in
 	return 0, ProtocolSocketData{}, fmt.Errorf("no free port found")
 }
 
-func (pt *PortTable) AddRule(podKey string, podPort int, protocol string, podIP string) (int, error) {
+func (pt *PortTable) AddRule(podKey string, podPort int, protocol string, podIP string, services []types.NamespacedName) (int, error) {
 	pt.tableLock.Lock()
 	defer pt.tableLock.Unlock()
 	npData := pt.getEntryByPodKeyPortProto(podKey, podPort, protocol)
@@ -89,6 +90,7 @@ func (pt *PortTable) AddRule(podKey string, podPort int, protocol string, podIP 
 			PodIP:    podIP,
 			PodPort:  podPort,
 			Protocol: protocolData,
+			Services: services,
 		}
 		nodePort = npData.NodePort
 		if err := pt.PodPortRules.AddRule(nodePort, podIP, podPort, protocol); err != nil {
