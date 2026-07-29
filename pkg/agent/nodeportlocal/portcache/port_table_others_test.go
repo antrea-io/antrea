@@ -227,7 +227,7 @@ func TestAddRule(t *testing.T) {
 			// Second call for the same podKey/podPort/protocol must fail without
 			// opening a new socket or touching iptables.
 			_, err = portTable.AddRule(podKey, podPort, protocol, podIP)
-			require.ErrorContains(t, err, "existing Linux Nodeport entry")
+			require.ErrorContains(t, err, "existing Nodeport entry")
 		})
 	}
 	t.Run("IPv4", func(t *testing.T) { runTest(t, false) })

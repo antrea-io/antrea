@@ -45,11 +45,7 @@ func (pt *PortTable) addRuleforFreePort(podIP string, podPort int, protocol stri
 	klog.V(2).InfoS("Looking for free Node port on Windows", "podIP", podIP, "podPort", podPort, "protocol", protocol)
 	numPorts := pt.EndPort - pt.StartPort + 1
 	for i := 0; i < numPorts; i++ {
-		port := pt.PortSearchStart + i
-		if port > pt.EndPort {
-			// handle wrap around
-			port = port - numPorts
-		}
+		port := pt.nextFreePortCandidate(i)
 		if _, ok := pt.getPortTableCacheFromNodePortIndex(NodePortProtoFormat(port, protocol)); ok {
 			// protocol port is already taken
 			continue
@@ -61,10 +57,7 @@ func (pt *PortTable) addRuleforFreePort(podIP string, podPort int, protocol stri
 			continue
 		}
 
-		pt.PortSearchStart = port + 1
-		if pt.PortSearchStart > pt.EndPort {
-			pt.PortSearchStart = pt.StartPort
-		}
+		pt.advancePortSearchStart(port)
 		return port, protocolData, nil
 	}
 	return 0, ProtocolSocketData{}, fmt.Errorf("no free port found")
@@ -81,18 +74,11 @@ func (pt *PortTable) AddRule(podKey string, podPort int, protocol string, podIP 
 		if err != nil {
 			return 0, err
 		}
-		npData = &NodePortData{
-			PodKey:   podKey,
-			NodePort: nodePort,
-			PodIP:    podIP,
-			PodPort:  podPort,
-			Protocol: protocolData,
-		}
-
+		npData = newNodePortData(podKey, nodePort, podIP, podPort, protocolData)
 		pt.addPortTableCache(npData)
 	} else {
 		// Only add rules if the entry does not exist.
-		return 0, fmt.Errorf("existing Windows Nodeport entry for %s:%d:%s", podIP, podPort, protocol)
+		return 0, fmt.Errorf("existing Nodeport entry for %s:%d:%s", podIP, podPort, protocol)
 	}
 	return npData.NodePort, nil
 }
@@ -111,14 +97,7 @@ func (pt *PortTable) RestoreRules(ctx context.Context, allNPLPorts []rules.PodNo
 			continue
 		}
 
-		npData := &NodePortData{
-			PodKey:   nplPort.PodKey,
-			NodePort: nplPort.NodePort,
-			PodPort:  nplPort.PodPort,
-			PodIP:    nplPort.PodIP,
-			Protocol: protocolData,
-		}
-		pt.addPortTableCache(npData)
+		pt.addPortTableCache(newNodePortData(nplPort.PodKey, nplPort.NodePort, nplPort.PodIP, nplPort.PodPort, protocolData))
 	}
 }
 

@@ -101,5 +101,5 @@ func TestAddRule(t *testing.T) {
 
 	// Add the same rule the second time should fail.
 	_, err = portTable.AddRule(podKey, podPort, "udp", podIP)
-	assert.ErrorContains(t, err, "existing Windows Nodeport entry for")
+	assert.ErrorContains(t, err, "existing Nodeport entry for")
 }
