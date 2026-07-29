@@ -25,6 +25,7 @@ import (
 
 	"antrea.io/antrea/v2/pkg/agent/util"
 	k8sutil "antrea.io/antrea/v2/pkg/util/k8s"
+	"antrea.io/antrea/v2/pkg/util/validation"
 )
 
 var (
@@ -94,6 +95,12 @@ func parsePortRange(portRangeStr string) (start, end int, err error) {
 		return 0, 0, err
 	}
 
+	if err := validation.ValidatePort(start); err != nil {
+		return 0, 0, fmt.Errorf("start port is invalid: %w", err)
+	}
+	if err := validation.ValidatePort(end); err != nil {
+		return 0, 0, fmt.Errorf("end port is invalid: %w", err)
+	}
 	if end <= start {
 		return 0, 0, fmt.Errorf("start port must be smaller than end port: %s", portRangeStr)
 	}
