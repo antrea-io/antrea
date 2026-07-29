@@ -53,6 +53,8 @@ func addKnownTypes(scheme *runtime.Scheme) error {
 		&AntreaNodeConfigList{},
 		&ExternalNode{},
 		&ExternalNodeList{},
+		&FlowAccessControl{},
+		&FlowAccessControlList{},
 		&FlowExporterDestination{},
 		&FlowExporterDestinationList{},
 		&SupportBundleCollection{},

@@ -32,6 +32,10 @@ type ExternalNodeListerExpansion interface{}
 // ExternalNodeNamespaceLister.
 type ExternalNodeNamespaceListerExpansion interface{}
 
+// FlowAccessControlListerExpansion allows custom methods to be added to
+// FlowAccessControlLister.
+type FlowAccessControlListerExpansion interface{}
+
 // FlowExporterDestinationListerExpansion allows custom methods to be added to
 // FlowExporterDestinationLister.
 type FlowExporterDestinationListerExpansion interface{}

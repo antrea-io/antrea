@@ -6,6 +6,98 @@ metadata:
     app: flow-aggregator
   name: flow-aggregator
 ---
+# Source: flow-aggregator/crds/flowaccesscontrol.yaml
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: flowaccesscontrols.crd.antrea.io
+  labels:
+    app: flow-aggregator
+spec:
+  group: crd.antrea.io
+  versions:
+    - name: v1alpha1
+      served: true
+      storage: true
+      schema:
+        openAPIV3Schema:
+          type: object
+          required:
+            - spec
+          properties:
+            spec:
+              type: object
+              required:
+                - subjects
+              properties:
+                subjects:
+                  type: array
+                  minItems: 1
+                  description: >
+                    The Kubernetes Users or Groups this policy grants flow visibility to.
+                  items:
+                    type: object
+                    required:
+                      - kind
+                      - name
+                    properties:
+                      kind:
+                        type: string
+                        enum:
+                          - User
+                          - Group
+                      name:
+                        type: string
+                        minLength: 1
+                namespaceSelectors:
+                  type: array
+                  description: >
+                    Selects the Namespaces whose flows the subjects are allowed to observe. The
+                    allowed set of Namespaces is the union of the matches of every selector in
+                    this list, and is re-evaluated whenever a Namespace's labels change. To grant
+                    access to specific Namespaces by name, match on the
+                    'kubernetes.io/metadata.name' label, which Kubernetes sets automatically on
+                    every Namespace.
+
+                    If this field is omitted or empty, or if any selector in the list is an empty
+                    (wildcard) selector matching all Namespaces, the subjects are granted
+                    cluster-wide flow visibility, and per-Namespace checks are skipped.
+                  items:
+                    type: object
+                    properties:
+                      matchExpressions:
+                        items:
+                          properties:
+                            key:
+                              type: string
+                            operator:
+                              enum:
+                                - In
+                                - NotIn
+                                - Exists
+                                - DoesNotExist
+                              type: string
+                            values:
+                              items:
+                                type: string
+                                pattern: "^(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])?$"
+                              type: array
+                          type: object
+                        type: array
+                      matchLabels:
+                        additionalProperties:
+                          type: string
+                          pattern: "^(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])?$"
+                        type: object
+  scope: Cluster
+  names:
+    plural: flowaccesscontrols
+    singular: flowaccesscontrol
+    kind: FlowAccessControl
+    shortNames:
+      - fac
+
+---
 # Source: flow-aggregator/templates/serviceaccount.yaml
 apiVersion: v1
 kind: ServiceAccount
@@ -306,7 +398,10 @@ metadata:
   name: flow-aggregator-role
 rules:
   - apiGroups: [""]
-    resources: ["pods", "nodes", "services"]
+    resources: ["pods", "nodes", "services", "namespaces"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["crd.antrea.io"]
+    resources: ["flowaccesscontrols"]
     verbs: ["get", "list", "watch"]
 ---
 # Source: flow-aggregator/templates/clusterrolebindings.yaml

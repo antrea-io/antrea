@@ -780,3 +780,71 @@ type FlowExporterDestinationList struct {
 
 	Items []FlowExporterDestination `json:"items"`
 }
+
+// +genclient
+// +genclient:nonNamespaced
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+
+// FlowAccessControl grants a Kubernetes User or Group subject visibility into flow records
+// for a set of Namespaces, via the flow-aggregator's FlowStreamService.
+type FlowAccessControl struct {
+	metav1.TypeMeta `json:",inline"`
+	// +optional
+	metav1.ObjectMeta `json:"metadata,omitempty"`
+
+	// +required
+	Spec FlowAccessControlSpec `json:"spec,omitempty"`
+}
+
+// FlowAccessControlSpec defines the desired state of a FlowAccessControl.
+type FlowAccessControlSpec struct {
+	// Subjects are the Kubernetes Users or Groups this policy grants flow visibility to.
+	// +required
+	Subjects []FlowAccessSubject `json:"subjects"`
+
+	// NamespaceSelectors select the Namespaces whose flows the Subjects are allowed to observe.
+	// The allowed set of Namespaces is the union of the matches of every selector in this list,
+	// and is re-evaluated whenever a Namespace's labels change. To grant access to specific
+	// Namespaces by name, match on the "kubernetes.io/metadata.name" label, which Kubernetes sets
+	// automatically on every Namespace.
+	// If this field is omitted or empty, or if any selector in the list is an empty (wildcard)
+	// selector matching all Namespaces, the Subjects are granted cluster-wide flow visibility,
+	// and per-Namespace checks are skipped.
+	// +optional
+	NamespaceSelectors []metav1.LabelSelector `json:"namespaceSelectors,omitempty"`
+}
+
+// FlowAccessSubjectKind defines the kind of FlowAccessSubject.
+type FlowAccessSubjectKind string
+
+const (
+	// FlowAccessSubjectKindUser refers to an individual Kubernetes user, as resolved from a
+	// client credential (a plain username, or a ServiceAccount's
+	// "system:serviceaccount:<namespace>:<name>" identity).
+	FlowAccessSubjectKindUser FlowAccessSubjectKind = "User"
+	// FlowAccessSubjectKindGroup refers to a Kubernetes group a resolved identity belongs to.
+	FlowAccessSubjectKindGroup FlowAccessSubjectKind = "Group"
+)
+
+// FlowAccessSubject identifies a Kubernetes User or Group that a FlowAccessControl grants
+// visibility to.
+type FlowAccessSubject struct {
+	// Kind of this subject. Must be "User" or "Group".
+	// +required
+	Kind FlowAccessSubjectKind `json:"kind"`
+	// Name of the user or group, exactly as it will be resolved from the client's credential
+	// (e.g. the TokenReview/SelfSubjectReview username or groups).
+	// +required
+	Name string `json:"name"`
+}
+
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+
+// FlowAccessControlList contains a list of FlowAccessControl resources.
+type FlowAccessControlList struct {
+	metav1.TypeMeta `json:",inline"`
+	// +optional
+	metav1.ListMeta `json:"metadata,omitempty"`
+
+	Items []FlowAccessControl `json:"items"`
+}

@@ -231,7 +231,7 @@ EOF
 
 # Suppress potential Helm warnings about invalid permissions for Kubeconfig file
 # by throwing away related warnings.
-$HELM template \
+$HELM template --include-crds \
     --release-name "$RELEASE_NAME" \
     --namespace "$NAMESPACE" \
     $HELM_VALUES_OPTION \
