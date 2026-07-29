@@ -16,12 +16,8 @@ package flowstreamservice
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"fmt"
 	"strings"
-	"sync"
-	"time"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -37,14 +33,6 @@ import (
 )
 
 const (
-	// credentialCacheTTL bounds how long a successful authentication outcome
-	// (TokenReview or SelfSubjectReview) is cached before the credential is
-	// re-validated against the Kubernetes API server. This keeps a long-lived
-	// or frequently reconnecting client from generating an API call on every
-	// request while still picking up revocation (e.g. ServiceAccount deletion,
-	// cert expiry) within a bounded time.
-	credentialCacheTTL = 30 * time.Second
-
 	// authorizationMetadataKey is the gRPC metadata key clients must set to
 	// carry their bearer token, mirroring the HTTP Authorization header.
 	// gRPC metadata keys are matched case-insensitively.
@@ -80,26 +68,6 @@ type clientCredential struct {
 	keyPEM  []byte
 }
 
-// cacheKey returns the key under which this credential's resolved identity is cached. Both Bearer tokens
-// and client certs are cached by a digest of the token or cert+key, to prevent data be exposed via heap
-// dumps etc.
-func (c *clientCredential) cacheKey() string {
-	h := sha256.New()
-	if c.token != "" {
-		h.Write([]byte(c.token))
-		return "token:" + hex.EncodeToString(h.Sum(nil))
-	}
-	h.Write(c.certPEM)
-	h.Write(c.keyPEM)
-	return "cert:" + hex.EncodeToString(h.Sum(nil))
-}
-
-// credentialCacheEntry is a cached authentication result for a clientCredential.
-type credentialCacheEntry struct {
-	user      user.Info
-	expiresAt time.Time
-}
-
 // StreamServerAuthenticator is a gRPC stream server interceptor that authenticates FlowStreamService clients.
 // Clients present either a Kubernetes bearer token (validated via TokenReview) or a short-lived X.509
 // client certificate (validated via SelfSubjectReview against the API server), both carried as gRPC metadata.
@@ -112,16 +80,12 @@ type StreamServerAuthenticator struct {
 	// strips flow-aggregator's own credentials first (see authenticateCert), keeping only the Host/CA
 	// fields needed to reach and verify the real API server.
 	baseConfig *rest.Config
-
-	cacheMutex sync.Mutex
-	cache      map[string]credentialCacheEntry
 }
 
 func NewStreamServerAuthenticator(k8sClient kubernetes.Interface, baseConfig *rest.Config) *StreamServerAuthenticator {
 	return &StreamServerAuthenticator{
 		k8sClient:  k8sClient,
 		baseConfig: baseConfig,
-		cache:      make(map[string]credentialCacheEntry),
 	}
 }
 
@@ -175,27 +139,14 @@ func credentialFromContext(ctx context.Context) (*clientCredential, error) {
 	return nil, fmt.Errorf("missing authorization header or client certificate metadata")
 }
 
-// authenticate resolves cred to an identity, returning a cached outcome when
-// available.
+// authenticate resolves cred to an identity. It is called once per stream, when the stream is opened,
+// so the credential is always validated against the Kubernetes API server: a revoked or expired
+// credential can never be used to open a new stream.
 func (a *StreamServerAuthenticator) authenticate(ctx context.Context, cred *clientCredential) (user.Info, error) {
-	cacheKey := cred.cacheKey()
-	if u, ok := a.getCachedUser(cacheKey); ok {
-		return u, nil
-	}
-
-	var u *user.DefaultInfo
-	var err error
 	if cred.token != "" {
-		u, err = a.authenticateToken(ctx, cred.token)
-	} else {
-		u, err = a.authenticateCert(ctx, cred.certPEM, cred.keyPEM)
+		return a.authenticateToken(ctx, cred.token)
 	}
-	if err != nil {
-		return nil, err
-	}
-
-	a.cacheUser(cacheKey, u)
-	return u, nil
+	return a.authenticateCert(ctx, cred.certPEM, cred.keyPEM)
 }
 
 // authenticateToken validates token via the TokenReview API.
@@ -275,37 +226,6 @@ func convertExtra(extra map[string]authenticationv1.ExtraValue) map[string][]str
 		out[k] = v
 	}
 	return out
-}
-
-func (a *StreamServerAuthenticator) getCachedUser(key string) (user.Info, bool) {
-	a.cacheMutex.Lock()
-	defer a.cacheMutex.Unlock()
-
-	entry, ok := a.cache[key]
-	if !ok {
-		return nil, false
-	}
-	if time.Now().After(entry.expiresAt) {
-		delete(a.cache, key)
-		return nil, false
-	}
-	return entry.user, true
-}
-
-func (a *StreamServerAuthenticator) cacheUser(key string, u user.Info) {
-	a.cacheMutex.Lock()
-	defer a.cacheMutex.Unlock()
-
-	// Opportunistically evict expired entries so that a client rotating
-	// through many short-lived credentials over time does not grow the cache
-	// unboundedly.
-	now := time.Now()
-	for k, e := range a.cache {
-		if now.After(e.expiresAt) {
-			delete(a.cache, k)
-		}
-	}
-	a.cache[key] = credentialCacheEntry{user: u, expiresAt: now.Add(credentialCacheTTL)}
 }
 
 // authenticatedServerStream wraps a grpc.ServerStream to override Context(),
