@@ -1458,27 +1458,64 @@ func TestServiceNameUpdatedAfterOwningServiceReplaced(t *testing.T) {
 
 // TestServiceNameSharedByMultipleServices verifies that when more than one NPL-enabled Service
 // selects the same Pod on the same target port/protocol, the rule records all of them (sorted for
-// determinism), and GetServiceForNPLPort joins their namespaced names with "|".
+// determinism), and GetServiceForNPLPort joins their namespaced names with "|". It covers two
+// ways the second Service can resolve to the same target port as the first: numerically, and via
+// a named target port that resolves to the same number.
 func TestServiceNameSharedByMultipleServices(t *testing.T) {
-	synctest.Test(t, func(t *testing.T) {
-		testSvc1 := getTestSvc()
-		testPod := getTestPod()
-		testSvc2 := getTestSvc()
-		testSvc2.Name = "z-svc"
-		testData := setUp(t, newTestConfig(), testSvc1, testSvc2, testPod)
+	testCases := []struct {
+		name      string
+		newSvc2   func() *corev1.Service
+		modifyPod func(pod *corev1.Pod)
+	}{
+		{
+			name: "both Services use numeric target ports",
+			newSvc2: func() *corev1.Service {
+				svc := getTestSvc()
+				svc.Name = "z-svc"
+				return svc
+			},
+		},
+		{
+			name: "second Service uses a named target port resolving to the same numeric port",
+			newSvc2: func() *corev1.Service {
+				svc := getTestSvcWithPortName("abcPort")
+				svc.Name = "z-svc"
+				return svc
+			},
+			modifyPod: func(pod *corev1.Pod) {
+				pod.Spec.Containers[0].Ports = append(
+					pod.Spec.Containers[0].Ports,
+					corev1.ContainerPort{ContainerPort: int32(defaultPort), Name: "abcPort", Protocol: corev1.ProtocolTCP},
+				)
+			},
+		},
+	}
 
-		synctest.Wait()
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			synctest.Test(t, func(t *testing.T) {
+				testSvc1 := getTestSvc()
+				testSvc2 := tc.newSvc2()
+				testPod := getTestPod()
+				if tc.modifyPod != nil {
+					tc.modifyPod(testPod)
+				}
+				testData := setUp(t, newTestConfig(), testSvc1, testSvc2, testPod)
 
-		nplData := testData.portTable.GetEntry(defaultPodKey, defaultPort, protocolTCP)
-		require.NotNil(t, nplData)
-		// Sorted by namespaced name (defaultSvcName == "test-svc" sorts before "z-svc").
-		assert.Equal(t, []k8stypes.NamespacedName{
-			{Namespace: defaultNS, Name: defaultSvcName},
-			{Namespace: defaultNS, Name: testSvc2.Name},
-		}, nplData.Services)
+				synctest.Wait()
 
-		nodePort := nplData.NodePort
-		assert.Equal(t, defaultNS+"/"+defaultSvcName+"|"+defaultNS+"/"+testSvc2.Name,
-			testData.nplController.GetServiceForNPLPort(defaultHostIP, nodePort, "TCP", false))
-	})
+				nplData := testData.portTable.GetEntry(defaultPodKey, defaultPort, protocolTCP)
+				require.NotNil(t, nplData)
+				// Sorted by namespaced name (defaultSvcName == "test-svc" sorts before "z-svc").
+				assert.Equal(t, []k8stypes.NamespacedName{
+					{Namespace: defaultNS, Name: defaultSvcName},
+					{Namespace: defaultNS, Name: testSvc2.Name},
+				}, nplData.Services)
+
+				nodePort := nplData.NodePort
+				assert.Equal(t, defaultNS+"/"+defaultSvcName+"|"+defaultNS+"/"+testSvc2.Name,
+					testData.nplController.GetServiceForNPLPort(defaultHostIP, nodePort, "TCP", false))
+			})
+		})
+	}
 }

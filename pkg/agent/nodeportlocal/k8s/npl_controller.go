@@ -530,6 +530,30 @@ func (c *NPLController) getTargetPortsForServicesOfPod(pod *corev1.Pod) (map[str
 	return targetPortsInt, targetPortsStr, portToService
 }
 
+// mergeServiceForPortProto merges the Services owning the src portProto entry into the dst
+// portProto entry, keeping the result deduped and sorted. This is used to propagate Service
+// identity from a named-port entry to the numeric-port entry it resolves to; a plain overwrite
+// would drop Services already recorded against dst when more than one Service selects the same
+// Pod/port via different target port representations (numeric vs. named).
+func mergeServiceForPortProto(portToService map[string][]k8stypes.NamespacedName, dst, src string) {
+	svcs, ok := portToService[src]
+	if !ok {
+		return
+	}
+	changed := false
+	for _, svcKey := range svcs {
+		if !slices.Contains(portToService[dst], svcKey) {
+			portToService[dst] = append(portToService[dst], svcKey)
+			changed = true
+		}
+	}
+	if changed {
+		sort.Slice(portToService[dst], func(i, j int) bool {
+			return portToService[dst][i].String() < portToService[dst][j].String()
+		})
+	}
+}
+
 // matchSvcSelectorPodLabels verifies that all key/value pairs present in Service's selector
 // are also present in Pod's labels.
 func matchSvcSelectorPodLabels(svcSelector, podLabel map[string]string) bool {
@@ -638,12 +662,8 @@ func (c *NPLController) handleAddUpdatePod(key string, obj interface{}) error {
 				if ipFamilies, exists := targetPortsStr[portProtoStr]; exists {
 					// When resolving named ports, add them to targetPortsInt with the IP families from the named port
 					targetPortsInt[portProtoInt] = targetPortsInt[portProtoInt].union(ipFamilies)
-					// Propagate service identity from named-port entry to numeric-port entry if not already set.
-					if _, exists := portToService[portProtoInt]; !exists {
-						if svcs, ok := portToService[portProtoStr]; ok {
-							portToService[portProtoInt] = svcs
-						}
-					}
+					// Merge the named-port entry's owning Services into the numeric-port entry.
+					mergeServiceForPortProto(portToService, portProtoInt, portProtoStr)
 				}
 			}
 		}
