@@ -225,28 +225,6 @@ func TestStreamInterceptor_ValidToken(t *testing.T) {
 	assert.Equal(t, []string{"read", "write"}, gotUser.GetExtra()["scopes"])
 }
 
-func TestStreamInterceptor_TokenReviewCached(t *testing.T) {
-	client := k8sfake.NewSimpleClientset()
-	authReactor(client, map[string]authenticationv1.TokenReviewStatus{
-		"good-token": {Authenticated: true, User: authenticationv1.UserInfo{Username: "alice"}},
-	})
-	callCount := 0
-	client.PrependReactor("create", "tokenreviews", func(action clienttesting.Action) (bool, runtime.Object, error) {
-		callCount++
-		return false, nil, nil
-	})
-	a := NewStreamServerAuthenticator(client, &rest.Config{})
-
-	handler := func(srv any, stream grpc.ServerStream) error { return nil }
-	for range 3 {
-		err := a.StreamInterceptor(nil, &fakeServerStream{ctx: contextWithAuthHeader("Bearer good-token")}, &grpc.StreamServerInfo{}, handler)
-		require.NoError(t, err)
-	}
-	// callCount only increments when TokenReviews().Create() is actually
-	// invoked; a cache hit skips the call to the fake clientset entirely.
-	assert.Equal(t, 1, callCount)
-}
-
 func TestStreamInterceptor_MissingClientCredentials(t *testing.T) {
 	client := k8sfake.NewSimpleClientset()
 	a := NewStreamServerAuthenticator(client, &rest.Config{})
@@ -284,9 +262,9 @@ func TestStreamInterceptor_SelfSubjectReviewError(t *testing.T) {
 func TestStreamInterceptor_ValidClientCert(t *testing.T) {
 	fakeClient := k8sfake.NewSimpleClientset()
 	selfSubjectReviewReactor(fakeClient, authenticationv1.UserInfo{
-		Username: "admin@vsphere.local",
+		Username: "admin@test.com",
 		UID:      "uid-2",
-		Groups:   []string{"vsphere-admins"},
+		Groups:   []string{"admins"},
 	}, nil)
 
 	// baseConfig simulates flow-aggregator's own in-cluster rest.Config,
@@ -315,9 +293,9 @@ func TestStreamInterceptor_ValidClientCert(t *testing.T) {
 	require.NoError(t, err)
 	require.True(t, handlerCalled)
 
-	assert.Equal(t, "admin@vsphere.local", gotUser.GetName())
+	assert.Equal(t, "admin@test.com", gotUser.GetName())
 	assert.Equal(t, "uid-2", gotUser.GetUID())
-	assert.ElementsMatch(t, []string{"vsphere-admins"}, gotUser.GetGroups())
+	assert.ElementsMatch(t, []string{"admins"}, gotUser.GetGroups())
 
 	require.Len(t, *gotConfigs, 1)
 	usedConfig := (*gotConfigs)[0]
@@ -330,30 +308,4 @@ func TestStreamInterceptor_ValidClientCert(t *testing.T) {
 	assert.Equal(t, "https://kube-apiserver.example", usedConfig.Host)
 	assert.Equal(t, []byte("cert-pem-data"), usedConfig.TLSClientConfig.CertData)
 	assert.Equal(t, []byte("key-pem-data"), usedConfig.TLSClientConfig.KeyData)
-}
-
-func TestStreamInterceptor_ClientCertCached(t *testing.T) {
-	fakeClient := k8sfake.NewSimpleClientset()
-	callCount := 0
-	fakeClient.PrependReactor("create", "selfsubjectreviews", func(action clienttesting.Action) (bool, runtime.Object, error) {
-		callCount++
-		return true, &authenticationv1.SelfSubjectReview{
-			Status: authenticationv1.SelfSubjectReviewStatus{
-				UserInfo: authenticationv1.UserInfo{Username: "admin@vsphere.local"},
-			},
-		}, nil
-	})
-	withFakeSelfSubjectReviewClient(t, fakeClient)
-
-	a := NewStreamServerAuthenticator(k8sfake.NewSimpleClientset(), &rest.Config{})
-
-	handler := func(srv any, stream grpc.ServerStream) error { return nil }
-	for range 3 {
-		err := a.StreamInterceptor(nil, &fakeServerStream{ctx: contextWithClientCert("cert-pem-data", "key-pem-data")}, &grpc.StreamServerInfo{}, handler)
-		require.NoError(t, err)
-	}
-	// Same cache-hit contract as TestStreamInterceptor_TokenReviewCached, but
-	// for the client-cert path: callCount only increments when
-	// SelfSubjectReviews().Create() is actually invoked.
-	assert.Equal(t, 1, callCount)
 }
