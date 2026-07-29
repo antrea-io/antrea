@@ -84,11 +84,20 @@ func SendRejectPacketOut(ofClient Client,
 		icmpCode = icmpv6DstAdminProhibitedCode
 		ipHdrLen = ipv6HdrLen
 	}
-	ipHdr, _ := ethernetPkt.Data.MarshalBinary()
-	icmpData := make([]byte, int(icmpUnusedHdrLen+ipHdrLen+8))
+	ipHdr, err := ethernetPkt.Data.MarshalBinary()
+	if err != nil {
+		return err
+	}
+	// As per RFC 792, an ICMP Destination Unreachable message includes a copy of the IP header
+	// of the original datagram, plus its first 64 bits (8 bytes), which is enough for the
+	// receiver to identify the transport ports and match the error to a connection. The length
+	// is bounded by the marshaled packet length, so that a short non-TCP packet (e.g. IPv6
+	// NextHeader=59 with no payload) cannot trigger a slice-bounds panic.
+	origPacketCopyLen := min(int(ipHdrLen)+8, len(ipHdr))
+	icmpData := make([]byte, int(icmpUnusedHdrLen)+origPacketCopyLen)
 	// Put ICMP unused header in Data prop and set it to zero.
 	binary.BigEndian.PutUint32(icmpData[:icmpUnusedHdrLen], 0)
-	copy(icmpData[icmpUnusedHdrLen:], ipHdr[:ipHdrLen+8])
+	copy(icmpData[icmpUnusedHdrLen:], ipHdr[:origPacketCopyLen])
 	return ofClient.SendICMPPacketOut(
 		srcMAC,
 		dstMAC,
