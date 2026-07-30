@@ -39,6 +39,7 @@ import (
 	"k8s.io/utils/ptr"
 
 	capture "antrea.io/antrea/v2/pkg/agent/packetcapture/capture"
+	"antrea.io/antrea/v2/pkg/apis"
 	crdv1alpha1 "antrea.io/antrea/v2/pkg/apis/crd/v1alpha1"
 	"antrea.io/antrea/v2/pkg/features"
 	sftptesting "antrea.io/antrea/v2/pkg/util/sftp/testing"
@@ -102,8 +103,7 @@ func TestPacketCapture(t *testing.T) {
 
 	sec := &v1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
-			// #nosec G101
-			Name:      "antrea-packetcapture-fileserver-auth",
+			Name:      apis.AntreaPacketCaptureFileServerAuthSecretName,
 			Namespace: "kube-system",
 		},
 		Data: map[string][]byte{
