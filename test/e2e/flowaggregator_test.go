@@ -367,9 +367,28 @@ func TestFlowAggregatorProxyMode(t *testing.T) {
 		if v4Enabled {
 			t.Run("IPv4", func(t *testing.T) { testHelperProxyMode(t, data, false, k8sUIDsInsteadOfNames) })
 		}
-
 		if v6Enabled {
 			t.Run("IPv6", func(t *testing.T) { testHelperProxyMode(t, data, true, k8sUIDsInsteadOfNames) })
+		}
+
+		// ExternalToPodFlows exercises the proxySnat and destinationServiceIP IEs specifically. In
+		// Proxy mode, records are never merged across Nodes; most K8s fields missing from a single
+		// Node's record are instead backfilled independently via live IP-based lookups (see
+		// fillK8sMetadata). proxySnat/destinationServiceIP have no such lookup: they only exist
+		// because the exporting agent captured them from its own conntrack observation, so the
+		// FlowAggregator must pass them through unchanged, or an external collector loses the only
+		// signal that could let it correlate the two Node-local legs of an inter-Node "from
+		// external" flow itself. This is orthogonal to the collector TLS setup that the other
+		// subtests vary, so it only needs to run once (plaintext, names instead of UIDs).
+		if !tls && !k8sUIDsInsteadOfNames {
+			t.Run("ExternalToPodFlows", func(t *testing.T) {
+				if v4Enabled {
+					t.Run("IPv4", func(t *testing.T) { testExternalToPodFlows(t, data, false, true) })
+				}
+				if v6Enabled {
+					t.Run("IPv6", func(t *testing.T) { testExternalToPodFlows(t, data, true, true) })
+				}
+			})
 		}
 	}
 
@@ -919,7 +938,7 @@ func testHelper(t *testing.T, data *TestData, isIPv6 bool) {
 
 	// ExternalToPod flows tests the case where connections are made to pods from outside the cluster and their flow information is exported
 	// while maintaining the original source IP.
-	t.Run("ExternalToPodFlows", func(t *testing.T) { testExternalToPodFlows(t, data, isIPv6) })
+	t.Run("ExternalToPodFlows", func(t *testing.T) { testExternalToPodFlows(t, data, isIPv6, false) })
 }
 
 func checkAntctlGetFlowRecordsJson(t *testing.T, data *TestData, podName string, podAIPs, podBIPs *PodIPs, isIPv6 bool) {
@@ -1454,22 +1473,43 @@ func getUint64FieldFromRecord(t require.TestingT, record string, field string) u
 	return 0
 }
 
+// ipfixRecordFieldValue returns the value of the named field in the IPFIX collector's text
+// representation of a record, and whether the field was present at all. Lines look like
+// "    proxySnatIPv6: fd00:10:244::1 ".
+func ipfixRecordFieldValue(record, field string) (string, bool) {
+	for _, line := range strings.Split(record, "\n") {
+		if v, ok := strings.CutPrefix(strings.TrimSpace(line), field+":"); ok {
+			return strings.TrimSpace(v), true
+		}
+	}
+	return "", false
+}
+
+// proxySnatIPField returns the name of the proxy SNAT address IE for the given IP family, along
+// with the unspecified address it is set to when no SNAT was applied. Note that these values must
+// be compared for equality rather than as substrings: a *set* IPv6 address legitimately contains
+// "::" when it is written with zero compression (e.g. "fd00:10:244::1").
+func proxySnatIPField(isIPv6 bool) (string, string) {
+	if isIPv6 {
+		return "proxySnatIPv6", "::"
+	}
+	return "proxySnatIPv4", "0.0.0.0"
+}
+
 // assertIPFIXRecordProxySnatUnset checks IPFIX collector text for proxy SNAT info elements. For
 // NodePort traffic with externalTrafficPolicy Local hitting a local endpoint, conntrack is
 // symmetric so the agent should not export a non-zero proxy SNAT (see NetlinkFlowToAntreaConnection
 // and correlateExternal).
-func assertIPFIXRecordProxySnatUnset(t *testing.T, record string) {
+func assertIPFIXRecordProxySnatUnset(t *testing.T, record string, isIPv6 bool) {
 	t.Helper()
-	for _, line := range strings.Split(record, "\n") {
-		s := strings.TrimSpace(line)
-		switch {
-		case strings.HasPrefix(s, "proxySnatIPv4:"):
-			assert.Contains(t, s, "0.0.0.0", "proxySnatIPv4 should be unset for symmetric/local-endpoint flows, line: %s", line)
-		case strings.HasPrefix(s, "proxySnatIPv6:"):
-			assert.Contains(t, s, "::", "proxySnatIPv6 should be unset (::), line: %s", line)
-		case strings.HasPrefix(s, "proxySnatPort:"):
-			assert.Regexp(t, `proxySnatPort:\s*0\b`, s, "proxySnatPort should be 0, line: %s", line)
-		}
+	field, unspecified := proxySnatIPField(isIPv6)
+	// Assert presence as well as value: if the IE ever drops out of the FlowAggregator template
+	// again, these checks would otherwise silently pass without ever comparing anything.
+	if v, ok := ipfixRecordFieldValue(record, field); assert.Truef(t, ok, "record has no %s field, record: %s", field, record) {
+		assert.Equalf(t, unspecified, v, "%s should be unset for symmetric/local-endpoint flows, record: %s", field, record)
+	}
+	if v, ok := ipfixRecordFieldValue(record, "proxySnatPort"); assert.Truef(t, ok, "record has no proxySnatPort field, record: %s", record) {
+		assert.Equalf(t, "0", v, "proxySnatPort should be 0 for symmetric/local-endpoint flows, record: %s", record)
 	}
 }
 
@@ -1478,16 +1518,12 @@ func assertIPFIXRecordProxySnatUnset(t *testing.T, record string) {
 // SNAT so these fields should be populated on the exported record.
 func assertIPFIXRecordProxySnatSet(t *testing.T, record string, isIPv6 bool) {
 	t.Helper()
-	for _, line := range strings.Split(record, "\n") {
-		s := strings.TrimSpace(line)
-		switch {
-		case !isIPv6 && strings.HasPrefix(s, "proxySnatIPv4:"):
-			assert.NotContains(t, s, "0.0.0.0", "proxySnatIPv4 should be set for SNAT flows, line: %s", line)
-		case isIPv6 && strings.HasPrefix(s, "proxySnatIPv6:"):
-			assert.NotContains(t, s, "::", "proxySnatIPv6 should be set for SNAT flows, line: %s", line)
-		case strings.HasPrefix(s, "proxySnatPort:"):
-			assert.NotRegexp(t, `proxySnatPort:\s*0\b`, s, "proxySnatPort should be non-zero for SNAT flows, line: %s", line)
-		}
+	field, unspecified := proxySnatIPField(isIPv6)
+	if v, ok := ipfixRecordFieldValue(record, field); assert.Truef(t, ok, "record has no %s field, record: %s", field, record) {
+		assert.NotEqualf(t, unspecified, v, "%s should be set for SNAT flows, record: %s", field, record)
+	}
+	if v, ok := ipfixRecordFieldValue(record, "proxySnatPort"); assert.Truef(t, ok, "record has no proxySnatPort field, record: %s", record) {
+		assert.NotEqualf(t, "0", v, "proxySnatPort should be non-zero for SNAT flows, record: %s", record)
 	}
 }
 
@@ -2139,7 +2175,11 @@ func createNPLConnection(t *testing.T, data *TestData, nodeIndex int, nodeIP str
 	return srcIP, sourcePort
 }
 
-func testExternalToPodFlows(t *testing.T, data *TestData, isIPv6 bool) {
+// testExternalToPodFlows verifies the flow records exported for connections that reach a Pod from
+// outside the cluster. proxyMode selects the FlowAggregator mode the cluster is running in: in
+// Proxy mode each Node's record is exported as-is, without the cross-Node merge that Aggregate mode
+// performs, which changes what a single record can be expected to carry (see below).
+func testExternalToPodFlows(t *testing.T, data *TestData, isIPv6 bool, proxyMode bool) {
 	destinationNodeIndex := 1
 	nodeName := nodeName(destinationNodeIndex)
 	nginxPodName, nginxIP, cleanupFunc := createAndWaitForPod(t, data, data.createNginxPodOnNode, "external-to-pod-flows", nodeName, data.testNamespace, false)
@@ -2175,11 +2215,22 @@ func testExternalToPodFlows(t *testing.T, data *TestData, isIPv6 bool) {
 			srcPortFilter := "sourceTransportPort: " + sourcePort
 			records := getCollectorOutput(t, sourceIP, dstIP, srcPortFilter, false, false, isIPv6, data, "", getCollectorOutputDefaultTimeout)
 			assert.NotEmpty(t, records, "Expected flows from ipfix collector to include source IP %s and destination ip %s", sourceIP, dstIP)
+			// The records matched above are the ones whose source is the external client, i.e.
+			// those exported by the Node the connection entered through. That Node only knows
+			// the destination Pod when the Pod runs on it: otherwise the Pod is remote and the
+			// destination Pod fields are empty. Aggregate mode fills them in by merging this
+			// record with the destination Node's record (keyed on the proxySnat address/port),
+			// but Proxy mode exports each Node's record unmerged, and proxyRecord only calls
+			// fillK8sMetadata for INTER_NODE flows, not FROM_EXTERNAL ones. So expect the
+			// destination Pod name only in Aggregate mode or on the destination Node.
+			expectDestinationPod := !proxyMode || tc.node == destinationNodeIndex
 			for _, record := range records {
 				assert := assert.New(t)
-				assert.Contains(record, nginxPodName, "Aggregated Record does not have Destination Pod name")
-				assert.Contains(record, nodePortService, "Aggregated Record does not have service information")
-				assert.Contains(record, strconv.Itoa(int(containerPort)), "Aggregated Record does not have the service port")
+				if expectDestinationPod {
+					assert.Contains(record, nginxPodName, "Record does not have Destination Pod name")
+				}
+				assert.Contains(record, nodePortService, "Record does not have service information")
+				assert.Contains(record, strconv.Itoa(int(containerPort)), "Record does not have the service port")
 				assertIPFIXRecordProxySnatSet(t, record, isIPv6)
 			}
 		})
@@ -2204,7 +2255,7 @@ func testExternalToPodFlows(t *testing.T, data *TestData, isIPv6 bool) {
 		for _, record := range records {
 			assert.Contains(t, record, nginxPodName, "Record should include destination Pod name")
 			assert.Contains(t, record, svcLocalName, "Record should include Service name for ExternalTrafficPolicy Local flow")
-			assertIPFIXRecordProxySnatUnset(t, record)
+			assertIPFIXRecordProxySnatUnset(t, record, isIPv6)
 		}
 	})
 
@@ -2272,7 +2323,7 @@ func testExternalToPodFlows(t *testing.T, data *TestData, isIPv6 bool) {
 			assert.Contains(t, record, nplSvcName, "Record should include the NPL-backed Service name in DestinationServicePortName")
 			assert.Contains(t, record, wantDstServiceIPField, "Record should include destinationServiceIP as the NPL node IP")
 			assert.Contains(t, record, fmt.Sprintf("destinationServicePort: %d", nplNodePort), "Record should include destinationServicePort as the NPL node port")
-			assertIPFIXRecordProxySnatUnset(t, record)
+			assertIPFIXRecordProxySnatUnset(t, record, isIPv6)
 		}
 	})
 }

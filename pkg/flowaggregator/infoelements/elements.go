@@ -175,11 +175,14 @@ func AntreaInfoElements(includeK8sNames, includeK8sUIDs, isIPv6 bool) []string {
 	if includeK8sUIDs {
 		ies = append(ies, "egressNodeUUID")
 	}
+	ies = append(ies, "proxySnatPort")
 	if isIPv6 {
 		ies = append(ies, "destinationClusterIPv6")
+		ies = append(ies, "proxySnatIPv6")
 		ies = append(ies, "destinationServiceIPv6")
 	} else {
 		ies = append(ies, "destinationClusterIPv4")
+		ies = append(ies, "proxySnatIPv4")
 		ies = append(ies, "destinationServiceIPv4")
 	}
 	return ies
