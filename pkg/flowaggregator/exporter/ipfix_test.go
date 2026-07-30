@@ -17,6 +17,7 @@ package exporter
 import (
 	"crypto/tls"
 	"crypto/x509"
+	"encoding/json"
 	"fmt"
 	"io"
 	"net"
@@ -36,6 +37,7 @@ import (
 	clocktesting "k8s.io/utils/clock/testing"
 	"k8s.io/utils/ptr"
 
+	flowpb "antrea.io/antrea/pkg/apis/flow/v1alpha1"
 	flowaggregatorconfig "antrea.io/antrea/pkg/config/flowaggregator"
 	"antrea.io/antrea/pkg/flowaggregator/infoelements"
 	"antrea.io/antrea/pkg/flowaggregator/options"
@@ -295,12 +297,15 @@ func TestIPFIXExporter_AddRecord(t *testing.T) {
 				testTemplateID = testTemplateIDv6
 			}
 
-			mockIPFIXBufferedExp.EXPECT().AddRecord(gomock.Cond(func(record ipfixentities.Record) bool {
-				elems := record.GetOrderedElementList()
-				// We make sure that all elements have been set by checking the last element.
-				// TODO: also validate record contents?
-				return record.GetTemplateID() == testTemplateID && !elems[len(elems)-1].IsValueEmpty()
-			})).Return(nil)
+			mockIPFIXBufferedExp.EXPECT().AddRecord(gomock.Any()).DoAndReturn(func(ipfixRecord ipfixentities.Record) error {
+				assert.Equal(t, testTemplateID, ipfixRecord.GetTemplateID())
+				// Validated by name, not position: this is what actually catches a
+				// template/value ordering mismatch between prepareElements and
+				// makeIPFIXRecord, where two same-typed fields could silently swap values
+				// without tripping go-ipfix's own type checking.
+				assertRecordMatchesFlow(t, ipfixRecord.GetOrderedElementList(), record, ipfixExporter.clusterID, tc.isIPv6)
+				return nil
+			})
 			assert.NoError(t, ipfixExporter.AddRecord(record, tc.isIPv6))
 		})
 	}
@@ -411,6 +416,195 @@ func createElementList(mode flowaggregatorconfig.AggregatorMode, includeK8sNames
 		}
 	}
 	return elemList
+}
+
+// assertRecordMatchesFlow validates every element in elems against the corresponding field of
+// record, by IE name rather than position. Assumes includeK8sNames=true, includeK8sUIDs=false
+// (the only combination TestIPFIXExporter_sendRecord exercises).
+func assertRecordMatchesFlow(t *testing.T, elems []ipfixentities.InfoElementWithValue, record *flowpb.Flow, clusterID string, isIPv6 bool) {
+	wantIPOrZero := func(b []byte) net.IP {
+		if len(b) > 0 {
+			return net.IP(b)
+		}
+		if isIPv6 {
+			return net.IPv6zero
+		}
+		return net.IPv4zero
+	}
+	assertLabels := func(name string, want *flowpb.Labels, got string) {
+		if want == nil {
+			assert.Emptyf(t, got, "unexpected value for %s", name)
+			return
+		}
+		var gotLabels map[string]string
+		if got != "" && got != "{}" {
+			require.NoErrorf(t, json.Unmarshal([]byte(got), &gotLabels), "%s is not valid JSON: %s", name, got)
+		}
+		assert.Equalf(t, want.GetLabels(), gotLabels, "unexpected value for %s", name)
+	}
+
+	for _, e := range elems {
+		name := e.GetName()
+		switch name {
+		case "flowStartSeconds":
+			assert.Equal(t, uint32(record.StartTs.Seconds), e.GetUnsigned32Value(), name)
+		case "flowEndSeconds":
+			assert.Equal(t, uint32(record.EndTs.Seconds), e.GetUnsigned32Value(), name)
+		case "flowEndReason":
+			assert.Equal(t, uint8(record.EndReason), e.GetUnsigned8Value(), name)
+		case "sourceTransportPort":
+			assert.Equal(t, uint16(record.Transport.SourcePort), e.GetUnsigned16Value(), name)
+		case "destinationTransportPort":
+			assert.Equal(t, uint16(record.Transport.DestinationPort), e.GetUnsigned16Value(), name)
+		case "protocolIdentifier":
+			assert.Equal(t, uint8(record.Transport.ProtocolNumber), e.GetUnsigned8Value(), name)
+		case "packetTotalCount":
+			assert.Equal(t, record.Stats.PacketTotalCount, e.GetUnsigned64Value(), name)
+		case "octetTotalCount":
+			assert.Equal(t, record.Stats.OctetTotalCount, e.GetUnsigned64Value(), name)
+		case "packetDeltaCount":
+			assert.Equal(t, record.Stats.PacketDeltaCount, e.GetUnsigned64Value(), name)
+		case "octetDeltaCount":
+			assert.Equal(t, record.Stats.OctetDeltaCount, e.GetUnsigned64Value(), name)
+		case "sourceIPv4Address", "sourceIPv6Address":
+			assert.Truef(t, net.IP(record.Ip.Source).Equal(e.GetIPAddressValue()), "unexpected value for %s", name)
+		case "destinationIPv4Address", "destinationIPv6Address":
+			assert.Truef(t, net.IP(record.Ip.Destination).Equal(e.GetIPAddressValue()), "unexpected value for %s", name)
+		case "reversePacketTotalCount":
+			assert.Equal(t, record.ReverseStats.PacketTotalCount, e.GetUnsigned64Value(), name)
+		case "reverseOctetTotalCount":
+			assert.Equal(t, record.ReverseStats.OctetTotalCount, e.GetUnsigned64Value(), name)
+		case "reversePacketDeltaCount":
+			assert.Equal(t, record.ReverseStats.PacketDeltaCount, e.GetUnsigned64Value(), name)
+		case "reverseOctetDeltaCount":
+			assert.Equal(t, record.ReverseStats.OctetDeltaCount, e.GetUnsigned64Value(), name)
+		case "sourcePodName":
+			assert.Equal(t, record.K8S.SourcePodName, e.GetStringValue(), name)
+		case "sourcePodNamespace":
+			assert.Equal(t, record.K8S.SourcePodNamespace, e.GetStringValue(), name)
+		case "sourceNodeName":
+			assert.Equal(t, record.K8S.SourceNodeName, e.GetStringValue(), name)
+		case "destinationPodName":
+			assert.Equal(t, record.K8S.DestinationPodName, e.GetStringValue(), name)
+		case "destinationPodNamespace":
+			assert.Equal(t, record.K8S.DestinationPodNamespace, e.GetStringValue(), name)
+		case "destinationNodeName":
+			assert.Equal(t, record.K8S.DestinationNodeName, e.GetStringValue(), name)
+		case "destinationServicePort":
+			assert.Equal(t, uint16(record.K8S.DestinationServicePort), e.GetUnsigned16Value(), name)
+		case "destinationServicePortName":
+			assert.Equal(t, record.K8S.DestinationServicePortName, e.GetStringValue(), name)
+		case "ingressNetworkPolicyName":
+			assert.Equal(t, record.K8S.IngressNetworkPolicyName, e.GetStringValue(), name)
+		case "ingressNetworkPolicyNamespace":
+			assert.Equal(t, record.K8S.IngressNetworkPolicyNamespace, e.GetStringValue(), name)
+		case "ingressNetworkPolicyType":
+			assert.Equal(t, uint8(record.K8S.IngressNetworkPolicyType), e.GetUnsigned8Value(), name)
+		case "ingressNetworkPolicyRuleName":
+			assert.Equal(t, record.K8S.IngressNetworkPolicyRuleName, e.GetStringValue(), name)
+		case "ingressNetworkPolicyRuleAction":
+			assert.Equal(t, uint8(record.K8S.IngressNetworkPolicyRuleAction), e.GetUnsigned8Value(), name)
+		case "egressNetworkPolicyName":
+			assert.Equal(t, record.K8S.EgressNetworkPolicyName, e.GetStringValue(), name)
+		case "egressNetworkPolicyNamespace":
+			assert.Equal(t, record.K8S.EgressNetworkPolicyNamespace, e.GetStringValue(), name)
+		case "egressNetworkPolicyType":
+			assert.Equal(t, uint8(record.K8S.EgressNetworkPolicyType), e.GetUnsigned8Value(), name)
+		case "egressNetworkPolicyRuleName":
+			assert.Equal(t, record.K8S.EgressNetworkPolicyRuleName, e.GetStringValue(), name)
+		case "egressNetworkPolicyRuleAction":
+			assert.Equal(t, uint8(record.K8S.EgressNetworkPolicyRuleAction), e.GetUnsigned8Value(), name)
+		case "tcpState":
+			assert.Equal(t, record.Transport.GetTCP().GetStateName(), e.GetStringValue(), name)
+		case "flowType":
+			assert.Equal(t, uint8(record.K8S.FlowType), e.GetUnsigned8Value(), name)
+		case "egressName":
+			assert.Equal(t, record.K8S.EgressName, e.GetStringValue(), name)
+		case "egressIP":
+			want := ""
+			if record.K8S.EgressIp != nil {
+				want = net.IP(record.K8S.EgressIp).String()
+			}
+			assert.Equal(t, want, e.GetStringValue(), name)
+		case "egressNodeName":
+			assert.Equal(t, record.K8S.EgressNodeName, e.GetStringValue(), name)
+		case "destinationClusterIPv4", "destinationClusterIPv6":
+			assert.Truef(t, wantIPOrZero(record.K8S.DestinationClusterIp).Equal(e.GetIPAddressValue()), "unexpected value for %s", name)
+		case "octetDeltaCountFromSourceNode":
+			assert.Equal(t, record.Aggregation.StatsFromSource.OctetDeltaCount, e.GetUnsigned64Value(), name)
+		case "octetTotalCountFromSourceNode":
+			assert.Equal(t, record.Aggregation.StatsFromSource.OctetTotalCount, e.GetUnsigned64Value(), name)
+		case "packetDeltaCountFromSourceNode":
+			assert.Equal(t, record.Aggregation.StatsFromSource.PacketDeltaCount, e.GetUnsigned64Value(), name)
+		case "packetTotalCountFromSourceNode":
+			assert.Equal(t, record.Aggregation.StatsFromSource.PacketTotalCount, e.GetUnsigned64Value(), name)
+		case "reverseOctetDeltaCountFromSourceNode":
+			assert.Equal(t, record.Aggregation.ReverseStatsFromSource.OctetDeltaCount, e.GetUnsigned64Value(), name)
+		case "reverseOctetTotalCountFromSourceNode":
+			assert.Equal(t, record.Aggregation.ReverseStatsFromSource.OctetTotalCount, e.GetUnsigned64Value(), name)
+		case "reversePacketDeltaCountFromSourceNode":
+			assert.Equal(t, record.Aggregation.ReverseStatsFromSource.PacketDeltaCount, e.GetUnsigned64Value(), name)
+		case "reversePacketTotalCountFromSourceNode":
+			assert.Equal(t, record.Aggregation.ReverseStatsFromSource.PacketTotalCount, e.GetUnsigned64Value(), name)
+		case "octetDeltaCountFromDestinationNode":
+			assert.Equal(t, record.Aggregation.StatsFromDestination.OctetDeltaCount, e.GetUnsigned64Value(), name)
+		case "octetTotalCountFromDestinationNode":
+			assert.Equal(t, record.Aggregation.StatsFromDestination.OctetTotalCount, e.GetUnsigned64Value(), name)
+		case "packetDeltaCountFromDestinationNode":
+			assert.Equal(t, record.Aggregation.StatsFromDestination.PacketDeltaCount, e.GetUnsigned64Value(), name)
+		case "packetTotalCountFromDestinationNode":
+			assert.Equal(t, record.Aggregation.StatsFromDestination.PacketTotalCount, e.GetUnsigned64Value(), name)
+		case "reverseOctetDeltaCountFromDestinationNode":
+			assert.Equal(t, record.Aggregation.ReverseStatsFromDestination.OctetDeltaCount, e.GetUnsigned64Value(), name)
+		case "reverseOctetTotalCountFromDestinationNode":
+			assert.Equal(t, record.Aggregation.ReverseStatsFromDestination.OctetTotalCount, e.GetUnsigned64Value(), name)
+		case "reversePacketDeltaCountFromDestinationNode":
+			assert.Equal(t, record.Aggregation.ReverseStatsFromDestination.PacketDeltaCount, e.GetUnsigned64Value(), name)
+		case "reversePacketTotalCountFromDestinationNode":
+			assert.Equal(t, record.Aggregation.ReverseStatsFromDestination.PacketTotalCount, e.GetUnsigned64Value(), name)
+		case "flowEndSecondsFromSourceNode":
+			assert.Equal(t, uint32(record.Aggregation.EndTsFromSource.Seconds), e.GetUnsigned32Value(), name)
+		case "flowEndSecondsFromDestinationNode":
+			assert.Equal(t, uint32(record.Aggregation.EndTsFromDestination.Seconds), e.GetUnsigned32Value(), name)
+		case "throughput":
+			assert.Equal(t, record.Aggregation.Throughput, e.GetUnsigned64Value(), name)
+		case "reverseThroughput":
+			assert.Equal(t, record.Aggregation.ReverseThroughput, e.GetUnsigned64Value(), name)
+		case "throughputFromSourceNode":
+			assert.Equal(t, record.Aggregation.ThroughputFromSource, e.GetUnsigned64Value(), name)
+		case "reverseThroughputFromSourceNode":
+			assert.Equal(t, record.Aggregation.ReverseThroughputFromSource, e.GetUnsigned64Value(), name)
+		case "throughputFromDestinationNode":
+			assert.Equal(t, record.Aggregation.ThroughputFromDestination, e.GetUnsigned64Value(), name)
+		case "reverseThroughputFromDestinationNode":
+			assert.Equal(t, record.Aggregation.ReverseThroughputFromDestination, e.GetUnsigned64Value(), name)
+		case "sourcePodLabels":
+			assertLabels(name, record.K8S.SourcePodLabels, e.GetStringValue())
+		case "destinationPodLabels":
+			assertLabels(name, record.K8S.DestinationPodLabels, e.GetStringValue())
+		case "clusterId":
+			assert.Equal(t, clusterID, e.GetStringValue(), name)
+		case "originalObservationDomainId":
+			assert.Equal(t, record.Ipfix.ObservationDomainId, e.GetUnsigned32Value(), name)
+		case "originalExporterIPv4Address":
+			want := net.IPv4zero
+			if ip := net.ParseIP(record.Ipfix.ExporterIp).To4(); ip != nil {
+				want = ip
+			}
+			assert.Truef(t, want.Equal(e.GetIPAddressValue()), "unexpected value for %s", name)
+		case "originalExporterIPv6Address":
+			ip := net.ParseIP(record.Ipfix.ExporterIp)
+			want := net.IP(nil)
+			if ip == nil || ip.To4() == nil {
+				want = ip
+			}
+			assert.Truef(t, want.Equal(e.GetIPAddressValue()), "unexpected value for %s", name)
+		case "flowDirection":
+			assert.Equal(t, uint8(record.FlowDirection), e.GetUnsigned8Value(), name)
+		default:
+			t.Errorf("unexpected IE %q in record; add a case to assertRecordMatchesFlow", name)
+		}
+	}
 }
 
 func generateLocalhostCert(t *testing.T, isClient bool) ([]byte, []byte) {
