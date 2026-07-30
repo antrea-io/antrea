@@ -1,7 +1,7 @@
 antrea.io/libOpenflow v0.17.0 h1:w2Rs9lZLfgs+L+893fu33sIk5Fab2YiqQEAOKwM2q6M=
 antrea.io/libOpenflow v0.17.0/go.mod h1:8xGveJuRt13TzvHhXmCPcDoGtdWSOV6U0Xv6L8ZY8QI=
-antrea.io/ofnet v0.15.0 h1:VQqw77JXj7k+zSQ+jSp4qBz+H0iun+I+JNfaGVKH/DA=
-antrea.io/ofnet v0.15.0/go.mod h1:bBQvoJMUDrrWSOSC/sqBHooffSAJpjkR5f0JiXsaVbA=
+antrea.io/ofnet v0.15.1 h1:Rokg5q2rSjpKpB+BfgpCWiuWb2T//loOei2qu9xigW4=
+antrea.io/ofnet v0.15.1/go.mod h1:bBQvoJMUDrrWSOSC/sqBHooffSAJpjkR5f0JiXsaVbA=
 cel.dev/expr v0.25.1 h1:1KrZg61W6TWSxuNZ37Xy49ps13NUovb66QLprthtwi4=
 cel.dev/expr v0.25.1/go.mod h1:hrXvqGP6G6gyx8UAHSHJ5RGk//1Oj5nXQ2NI02Nrsg4=
 cloud.google.com/go v0.26.0/go.mod h1:aQUYkXzVsufM+DwF1aE+0xfcU+56JwCaLick0ClmMTw=
