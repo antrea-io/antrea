@@ -47,6 +47,7 @@ import (
 	"antrea.io/antrea/pkg/agent/interfacestore"
 	"antrea.io/antrea/pkg/agent/packetcapture/capture"
 	"antrea.io/antrea/pkg/agent/util"
+	"antrea.io/antrea/pkg/apis"
 	crdv1alpha1 "antrea.io/antrea/pkg/apis/crd/v1alpha1"
 	clientsetversioned "antrea.io/antrea/pkg/client/clientset/versioned"
 	crdinformers "antrea.io/antrea/pkg/client/informers/externalversions/crd/v1alpha1"
@@ -75,9 +76,6 @@ const (
 	// marked as Pending until they can be processed.
 	maxConcurrentCaptures     = 16
 	captureStatusUpdatePeriod = 10 * time.Second
-	// PacketCapture uses a dedicated Secret object to store authentication information for a file server.
-	// #nosec G101
-	fileServerAuthSecretName = "antrea-packetcapture-fileserver-auth"
 
 	// max packet size we can capture.
 	snapLen = 65536
@@ -626,7 +624,7 @@ func (c *Controller) uploadPackets(ctx context.Context, pc *crdv1alpha1.PacketCa
 		return fmt.Errorf("failed to upload to the file server while setting offset: %v", err)
 	}
 	authSecret := v1.SecretReference{
-		Name:      fileServerAuthSecretName,
+		Name:      apis.AntreaPacketCaptureFileServerAuthSecretName,
 		Namespace: env.GetAntreaNamespace(),
 	}
 	serverAuth, err := auth.GetAuthConfigurationFromSecret(ctx, auth.BasicAuthenticationType, &authSecret, c.kubeClient)

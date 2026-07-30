@@ -67,11 +67,13 @@ import (
 	"antrea.io/antrea/pkg/controller/externalippool"
 	"antrea.io/antrea/pkg/controller/ipam"
 	controllernetworkpolicy "antrea.io/antrea/pkg/controller/networkpolicy"
+	controllerpacketcapture "antrea.io/antrea/pkg/controller/packetcapture"
 	"antrea.io/antrea/pkg/controller/querier"
 	"antrea.io/antrea/pkg/controller/stats"
 	controllerbundlecollection "antrea.io/antrea/pkg/controller/supportbundlecollection"
 	"antrea.io/antrea/pkg/controller/traceflow"
 	"antrea.io/antrea/pkg/features"
+	"antrea.io/antrea/pkg/util/env"
 )
 
 var (
@@ -353,6 +355,16 @@ func installHandlers(c *ExtraConfig, s *genericapiserver.GenericAPIServer) {
 	if features.DefaultFeatureGate.Enabled(features.Traceflow) {
 		s.Handler.NonGoRestfulMux.HandleFunc("/validate/traceflow", webhook.HandlerForValidateFunc(c.traceflowController.Validate))
 	}
+
+	// Unlike the validators above, this one is registered unconditionally, even though
+	// PacketCapture is a feature gate. PacketCapture is an Agent-only feature gate: it is not
+	// part of ControllerGates and is never set in the antrea-controller configuration, so
+	// gating on it here would leave the handler permanently unregistered. Because the
+	// ValidatingWebhookConfiguration is always installed and its failurePolicy defaults to
+	// Fail, that would reject every PacketCapture CREATE / UPDATE request. The validator only
+	// needs the K8s client, which is always available, so there is nothing to gate on.
+	pcValidator := controllerpacketcapture.NewValidator(c.k8sClient, env.GetAntreaNamespace())
+	s.Handler.NonGoRestfulMux.HandleFunc("/validate/packetcapture", webhook.HandlerForValidateFunc(pcValidator.Validate))
 }
 
 func DefaultCAConfig() *certificate.CAConfig {
