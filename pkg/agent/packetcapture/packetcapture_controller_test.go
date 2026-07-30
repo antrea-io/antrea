@@ -43,6 +43,7 @@ import (
 
 	"antrea.io/antrea/v2/pkg/agent/interfacestore"
 	"antrea.io/antrea/v2/pkg/agent/util"
+	"antrea.io/antrea/v2/pkg/apis"
 	crdv1alpha1 "antrea.io/antrea/v2/pkg/apis/crd/v1alpha1"
 	fakeversioned "antrea.io/antrea/v2/pkg/client/clientset/versioned/fake"
 	crdinformers "antrea.io/antrea/v2/pkg/client/informers/externalversions"
@@ -111,7 +112,7 @@ var (
 
 	secret1 = v1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      fileServerAuthSecretName,
+			Name:      apis.AntreaPacketCaptureFileServerAuthSecretName,
 			Namespace: "kube-system",
 		},
 		Data: map[string][]byte{

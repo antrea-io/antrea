@@ -26,6 +26,14 @@ const (
 	// AntreaServiceName is the name of the Service that exposes antrea-controller.
 	AntreaServiceName = "antrea"
 
+	// AntreaPacketCaptureFileServerAuthSecretName is the name of the Secret that holds the
+	// credentials used to authenticate to the file server a PacketCapture uploads to. The
+	// antrea-agent reads it to perform the upload, and the antrea-controller validating webhook
+	// checks that the requester is allowed to read it before admitting a PacketCapture which
+	// sets spec.fileServer.
+	// #nosec G101: this is a Secret name, not a credential
+	AntreaPacketCaptureFileServerAuthSecretName = "antrea-packetcapture-fileserver-auth"
+
 	// CAConfigMapKey is the key that holds the CA certificate.
 	CAConfigMapKey = "ca.crt"
 )

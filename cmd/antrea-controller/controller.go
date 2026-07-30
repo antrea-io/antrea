@@ -117,6 +117,7 @@ var allowedPaths = []string{
 	"/validate/ippool",
 	"/validate/supportbundlecollection",
 	"/validate/traceflow",
+	"/validate/packetcapture",
 	"/validate/antreanodeconfig",
 	"/convert/clustergroup",
 	"/convert/ippool",
