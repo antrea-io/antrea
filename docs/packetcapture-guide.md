@@ -47,6 +47,12 @@ You can also create the Secret using the following `kubectl` command:
 kubectl create secret generic antrea-packetcapture-fileserver-auth -n kube-system --from-literal=username='<username>' --from-literal=password='<password>'
 ```
 
+Note that the user creating a `PacketCapture` CR with a `fileServer` must be allowed to `get`
+that Secret: the request is rejected by the antrea-controller validating webhook otherwise.
+This prevents a user from having the antrea-agent read the Secret on their behalf, and send its
+contents to a file server of their choosing. Only requests which set or change `fileServer` are
+checked, so an update which leaves it untouched does not require that permission.
+
 If no `fileServer` field is present in the CR, the captured packets file will be saved in the
 antrea-agent Pod (the one on the same Node with the source or destination Pod in the CR). The result
 path information will be available in `.status.FilePath`.
