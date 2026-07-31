@@ -367,28 +367,9 @@ func TestFlowAggregatorProxyMode(t *testing.T) {
 		if v4Enabled {
 			t.Run("IPv4", func(t *testing.T) { testHelperProxyMode(t, data, false, k8sUIDsInsteadOfNames) })
 		}
+
 		if v6Enabled {
 			t.Run("IPv6", func(t *testing.T) { testHelperProxyMode(t, data, true, k8sUIDsInsteadOfNames) })
-		}
-
-		// ExternalToPodFlows exercises the proxySnat and destinationServiceIP IEs specifically. In
-		// Proxy mode, records are never merged across Nodes; most K8s fields missing from a single
-		// Node's record are instead backfilled independently via live IP-based lookups (see
-		// fillK8sMetadata). proxySnat/destinationServiceIP have no such lookup: they only exist
-		// because the exporting agent captured them from its own conntrack observation, so the
-		// FlowAggregator must pass them through unchanged, or an external collector loses the only
-		// signal that could let it correlate the two Node-local legs of an inter-Node "from
-		// external" flow itself. This is orthogonal to the collector TLS setup that the other
-		// subtests vary, so it only needs to run once (plaintext, names instead of UIDs).
-		if !tls && !k8sUIDsInsteadOfNames {
-			t.Run("ExternalToPodFlows", func(t *testing.T) {
-				if v4Enabled {
-					t.Run("IPv4", func(t *testing.T) { testExternalToPodFlows(t, data, false, true) })
-				}
-				if v6Enabled {
-					t.Run("IPv6", func(t *testing.T) { testExternalToPodFlows(t, data, true, true) })
-				}
-			})
 		}
 	}
 
@@ -938,7 +919,7 @@ func testHelper(t *testing.T, data *TestData, isIPv6 bool) {
 
 	// ExternalToPod flows tests the case where connections are made to pods from outside the cluster and their flow information is exported
 	// while maintaining the original source IP.
-	t.Run("ExternalToPodFlows", func(t *testing.T) { testExternalToPodFlows(t, data, isIPv6, false) })
+	t.Run("ExternalToPodFlows", func(t *testing.T) { testExternalToPodFlows(t, data, isIPv6) })
 }
 
 func checkAntctlGetFlowRecordsJson(t *testing.T, data *TestData, podName string, podAIPs, podBIPs *PodIPs, isIPv6 bool) {
@@ -2175,11 +2156,7 @@ func createNPLConnection(t *testing.T, data *TestData, nodeIndex int, nodeIP str
 	return srcIP, sourcePort
 }
 
-// testExternalToPodFlows verifies the flow records exported for connections that reach a Pod from
-// outside the cluster. proxyMode selects the FlowAggregator mode the cluster is running in: in
-// Proxy mode each Node's record is exported as-is, without the cross-Node merge that Aggregate mode
-// performs, which changes what a single record can be expected to carry (see below).
-func testExternalToPodFlows(t *testing.T, data *TestData, isIPv6 bool, proxyMode bool) {
+func testExternalToPodFlows(t *testing.T, data *TestData, isIPv6 bool) {
 	destinationNodeIndex := 1
 	nodeName := nodeName(destinationNodeIndex)
 	nginxPodName, nginxIP, cleanupFunc := createAndWaitForPod(t, data, data.createNginxPodOnNode, "external-to-pod-flows", nodeName, data.testNamespace, false)
@@ -2215,22 +2192,11 @@ func testExternalToPodFlows(t *testing.T, data *TestData, isIPv6 bool, proxyMode
 			srcPortFilter := "sourceTransportPort: " + sourcePort
 			records := getCollectorOutput(t, sourceIP, dstIP, srcPortFilter, false, false, isIPv6, data, "", getCollectorOutputDefaultTimeout)
 			assert.NotEmpty(t, records, "Expected flows from ipfix collector to include source IP %s and destination ip %s", sourceIP, dstIP)
-			// The records matched above are the ones whose source is the external client, i.e.
-			// those exported by the Node the connection entered through. That Node only knows
-			// the destination Pod when the Pod runs on it: otherwise the Pod is remote and the
-			// destination Pod fields are empty. Aggregate mode fills them in by merging this
-			// record with the destination Node's record (keyed on the proxySnat address/port),
-			// but Proxy mode exports each Node's record unmerged, and proxyRecord only calls
-			// fillK8sMetadata for INTER_NODE flows, not FROM_EXTERNAL ones. So expect the
-			// destination Pod name only in Aggregate mode or on the destination Node.
-			expectDestinationPod := !proxyMode || tc.node == destinationNodeIndex
 			for _, record := range records {
 				assert := assert.New(t)
-				if expectDestinationPod {
-					assert.Contains(record, nginxPodName, "Record does not have Destination Pod name")
-				}
-				assert.Contains(record, nodePortService, "Record does not have service information")
-				assert.Contains(record, strconv.Itoa(int(containerPort)), "Record does not have the service port")
+				assert.Contains(record, nginxPodName, "Aggregated Record does not have Destination Pod name")
+				assert.Contains(record, nodePortService, "Aggregated Record does not have service information")
+				assert.Contains(record, strconv.Itoa(int(containerPort)), "Aggregated Record does not have the service port")
 				assertIPFIXRecordProxySnatSet(t, record, isIPv6)
 			}
 		})

@@ -414,8 +414,8 @@ func (e *IPFIXExporter) makeIPFIXRecord(flow *flowpb.Flow, isIPv6 bool) ipfixent
 		setUUID(flow.K8S.EgressNodeUid)
 	}
 	next().SetUnsigned16Value(uint16(flow.ProxySnatPort))
-	setIPAddress(flow.K8S.DestinationClusterIp)
 	setIPAddress(flow.ProxySnatIp)
+	setIPAddress(flow.K8S.DestinationClusterIp)
 	setIPAddress(flow.K8S.DestinationServiceIp)
 	if e.aggregatorMode == flowaggregatorconfig.AggregatorModeAggregate {
 		// The element order here must match prepareElements: per metric (octetDelta,
