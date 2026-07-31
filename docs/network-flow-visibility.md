@@ -151,7 +151,7 @@ parameters.
 
 ### IPFIX Information Elements (IEs) in a Flow Record
 
-There are 34 IPFIX IEs in each exported flow record, which are defined in the
+There are 43 IPFIX IEs in each exported flow record, which are defined in the
 IANA-assigned IE registry, the Reverse IANA-assigned IE registry and the Antrea
 IE registry. The reverse IEs are used to provide bi-directional information about
 the flow. The Enterprise ID is 0 for IANA-assigned IE registry, 29305 for reverse
@@ -200,6 +200,9 @@ Flow Exporter are listed below:
 | destinationClusterIPv6         | 107      | ipv6Address | DEPRECATED in favor of destinationServiceIPv6.                                                                                                                              |
 | destinationServiceIPv4         | 168      | ipv4Address |                                                                                                                                                                             |
 | destinationServiceIPv6         | 169      | ipv6Address |                                                                                                                                                                             |
+| proxySnatIPv4                  | 170      | ipv4Address | The IPv4 SNAT address (e.g. by the Antrea gateway for an inter-Node "from external" flow). Unset (0.0.0.0) if the connection was not SNAT'd.                                |
+| proxySnatIPv6                  | 171      | ipv6Address | Same as proxySnatIPv4, for IPv6. Unset (::) if the connection was not SNAT'd.                                                                                               |
+| proxySnatPort                  | 172      | unsigned16  | The port the connection's source was translated to via SNAT, alongside proxySnatIPv4 / proxySnatIPv6. Unset (0) if the connection was not SNAT'd.                           |
 | destinationServicePort         | 108      | unsigned16  |                                                                                                                                                                             |
 | destinationServicePortName     | 109      | string      |                                                                                                                                                                             |
 | ingressNetworkPolicyName       | 110      | string      | Name of the ingress network policy applied to the destination Pod for this flow.                                                                                            |
@@ -214,6 +217,9 @@ Flow Exporter are listed below:
 | egressNetworkPolicyRuleAction  | 140      | unsigned8   |                                                                                                                                                                             |
 | tcpState                       | 136      | string      | The state of the TCP connection. The states are: LISTEN, SYN-SENT, SYN-RECEIVED, ESTABLISHED, FIN-WAIT-1, FIN-WAIT-2, CLOSE-WAIT, CLOSING, LAST-ACK, TIME-WAIT, and CLOSED. |
 | flowType                       | 137      | unsigned8   | 1 stands for Intra-Node. 2 stands for Inter-Node. 3 stands for To External. 4 stands for From External.                                                                     |
+| egressName                     | 153      | string      | Name of the Egress applied to this flow, if any.                                                                                                                            |
+| egressIP                       | 154      | string      | SNAT IP address used for the Egress applied to this flow.                                                                                                                   |
+| egressNodeName                 | 157      | string      | Name of the Node that currently holds the Egress IP for the Egress applied to this flow.                                                                                    |
 
 ### Supported Capabilities
 

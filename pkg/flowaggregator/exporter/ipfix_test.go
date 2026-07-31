@@ -454,8 +454,12 @@ func assertRecordMatchesFlow(t *testing.T, elems []ipfixentities.InfoElementWith
 			assert.Equal(t, want, e.GetStringValue(), name)
 		case "egressNodeName":
 			assert.Equal(t, record.K8S.EgressNodeName, e.GetStringValue(), name)
+		case "proxySnatPort":
+			assert.Equal(t, uint16(record.ProxySnatPort), e.GetUnsigned16Value(), name)
 		case "destinationClusterIPv4", "destinationClusterIPv6":
 			assert.Truef(t, wantIPOrZero(record.K8S.DestinationClusterIp).Equal(e.GetIPAddressValue()), "unexpected value for %s", name)
+		case "proxySnatIPv4", "proxySnatIPv6":
+			assert.Truef(t, wantIPOrZero(record.ProxySnatIp).Equal(e.GetIPAddressValue()), "unexpected value for %s", name)
 		case "destinationServiceIPv4", "destinationServiceIPv6":
 			assert.Truef(t, wantIPOrZero(record.K8S.DestinationServiceIp).Equal(e.GetIPAddressValue()), "unexpected value for %s", name)
 		case "octetDeltaCountFromSourceNode":

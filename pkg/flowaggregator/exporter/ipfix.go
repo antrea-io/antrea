@@ -413,6 +413,8 @@ func (e *IPFIXExporter) makeIPFIXRecord(flow *flowpb.Flow, isIPv6 bool) ipfixent
 	if e.includeK8sUIDs {
 		setUUID(flow.K8S.EgressNodeUid)
 	}
+	next().SetUnsigned16Value(uint16(flow.ProxySnatPort))
+	setIPAddress(flow.ProxySnatIp)
 	setIPAddress(flow.K8S.DestinationClusterIp)
 	setIPAddress(flow.K8S.DestinationServiceIp)
 	if e.aggregatorMode == flowaggregatorconfig.AggregatorModeAggregate {
