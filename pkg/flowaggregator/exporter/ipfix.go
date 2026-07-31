@@ -393,33 +393,35 @@ func (e *IPFIXExporter) makeIPFIXRecord(flow *flowpb.Flow, isIPv6 bool) ipfixent
 	}
 	setIPAddress(flow.K8S.DestinationClusterIp)
 	if e.aggregatorMode == flowaggregatorconfig.AggregatorModeAggregate {
-		// Add Antrea source stats fields
-		next().SetUnsigned64Value(flow.Aggregation.StatsFromSource.PacketTotalCount)
-		next().SetUnsigned64Value(flow.Aggregation.StatsFromSource.OctetTotalCount)
-		next().SetUnsigned64Value(flow.Aggregation.StatsFromSource.PacketDeltaCount)
+		// The element order here must match prepareElements: per metric (octetDelta,
+		// octetTotal, packetDelta, packetTotal, then the four "reverse" variants), source
+		// node before destination node.
 		next().SetUnsigned64Value(flow.Aggregation.StatsFromSource.OctetDeltaCount)
-		next().SetUnsigned64Value(flow.Aggregation.ReverseStatsFromSource.PacketTotalCount)
-		next().SetUnsigned64Value(flow.Aggregation.ReverseStatsFromSource.OctetTotalCount)
-		next().SetUnsigned64Value(flow.Aggregation.ReverseStatsFromSource.PacketDeltaCount)
-		next().SetUnsigned64Value(flow.Aggregation.ReverseStatsFromSource.OctetDeltaCount)
-		// Add Antrea destination stats fields
-		next().SetUnsigned64Value(flow.Aggregation.StatsFromDestination.PacketTotalCount)
-		next().SetUnsigned64Value(flow.Aggregation.StatsFromDestination.OctetTotalCount)
-		next().SetUnsigned64Value(flow.Aggregation.StatsFromDestination.PacketDeltaCount)
 		next().SetUnsigned64Value(flow.Aggregation.StatsFromDestination.OctetDeltaCount)
-		next().SetUnsigned64Value(flow.Aggregation.ReverseStatsFromDestination.PacketTotalCount)
-		next().SetUnsigned64Value(flow.Aggregation.ReverseStatsFromDestination.OctetTotalCount)
-		next().SetUnsigned64Value(flow.Aggregation.ReverseStatsFromDestination.PacketDeltaCount)
+		next().SetUnsigned64Value(flow.Aggregation.StatsFromSource.OctetTotalCount)
+		next().SetUnsigned64Value(flow.Aggregation.StatsFromDestination.OctetTotalCount)
+		next().SetUnsigned64Value(flow.Aggregation.StatsFromSource.PacketDeltaCount)
+		next().SetUnsigned64Value(flow.Aggregation.StatsFromDestination.PacketDeltaCount)
+		next().SetUnsigned64Value(flow.Aggregation.StatsFromSource.PacketTotalCount)
+		next().SetUnsigned64Value(flow.Aggregation.StatsFromDestination.PacketTotalCount)
+		next().SetUnsigned64Value(flow.Aggregation.ReverseStatsFromSource.OctetDeltaCount)
 		next().SetUnsigned64Value(flow.Aggregation.ReverseStatsFromDestination.OctetDeltaCount)
+		next().SetUnsigned64Value(flow.Aggregation.ReverseStatsFromSource.OctetTotalCount)
+		next().SetUnsigned64Value(flow.Aggregation.ReverseStatsFromDestination.OctetTotalCount)
+		next().SetUnsigned64Value(flow.Aggregation.ReverseStatsFromSource.PacketDeltaCount)
+		next().SetUnsigned64Value(flow.Aggregation.ReverseStatsFromDestination.PacketDeltaCount)
+		next().SetUnsigned64Value(flow.Aggregation.ReverseStatsFromSource.PacketTotalCount)
+		next().SetUnsigned64Value(flow.Aggregation.ReverseStatsFromDestination.PacketTotalCount)
 		// Add Antrea flow end seconds fields
 		next().SetUnsigned32Value(uint32(flow.Aggregation.EndTsFromSource.Seconds))
 		next().SetUnsigned32Value(uint32(flow.Aggregation.EndTsFromDestination.Seconds))
-		// Add common throughput fields
+		// Add common throughput fields. Order must match prepareElements: common, then
+		// source node, then destination node, for each of throughput and reverseThroughput.
 		next().SetUnsigned64Value(flow.Aggregation.Throughput)
-		next().SetUnsigned64Value(flow.Aggregation.ReverseThroughput)
 		next().SetUnsigned64Value(flow.Aggregation.ThroughputFromSource)
-		next().SetUnsigned64Value(flow.Aggregation.ReverseThroughputFromSource)
 		next().SetUnsigned64Value(flow.Aggregation.ThroughputFromDestination)
+		next().SetUnsigned64Value(flow.Aggregation.ReverseThroughput)
+		next().SetUnsigned64Value(flow.Aggregation.ReverseThroughputFromSource)
 		next().SetUnsigned64Value(flow.Aggregation.ReverseThroughputFromDestination)
 	}
 
