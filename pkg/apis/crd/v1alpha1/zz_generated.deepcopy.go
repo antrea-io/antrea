@@ -594,12 +594,10 @@ func (in *FlowAccessControlSpec) DeepCopyInto(out *FlowAccessControlSpec) {
 		*out = make([]FlowAccessSubject, len(*in))
 		copy(*out, *in)
 	}
-	if in.NamespaceSelectors != nil {
-		in, out := &in.NamespaceSelectors, &out.NamespaceSelectors
-		*out = make([]v1.LabelSelector, len(*in))
-		for i := range *in {
-			(*in)[i].DeepCopyInto(&(*out)[i])
-		}
+	if in.NamespaceSelector != nil {
+		in, out := &in.NamespaceSelector, &out.NamespaceSelector
+		*out = new(v1.LabelSelector)
+		(*in).DeepCopyInto(*out)
 	}
 	return
 }

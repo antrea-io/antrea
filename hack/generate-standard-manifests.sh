@@ -33,7 +33,9 @@ In 'dev' mode, environment variables AGENT_IMG_NAME & CONTROLLER_IMG_NAME can be
 This tool uses Helm 3 (https://helm.sh/) to generate the \"standard\" manifests for Antrea. These
 are the manifests that are checked-in into the Antrea source tree, and that are uploaded as release
 assets for each new Antrea release. This script looks for all the Helm values YAML files under
-/build/yamls/chart-values/, and generates the corresponding manifest for each one.
+/build/yamls/chart-values/, and generates the corresponding manifest for each one. It also
+generates a CRDs-only manifest for each chart which defines CRDs (antrea-crds.yml and
+flow-aggregator-crds.yml), which Helm users need in order to upgrade CRDs.
 
 You can set the HELM environment variable to the path of the helm binary you want us to
 use. Otherwise we will download the appropriate version of the helm binary and use it (this is the
@@ -139,12 +141,19 @@ EOF
   fi
 done
 
-# We also generate a manifest which only includes CRD resources (all of them).
-# This is useful for Antrea upgrades when using Helm.
-CRD_FILES=$(cd $ANTREA_CHART/crds && find * -type f -name "*.yaml" | sort)
-CRD_OUTPUT_FILE="$OUTPUT_DIR/antrea-crds.yml"
-rm -f "$CRD_OUTPUT_FILE"
-for crd in $CRD_FILES; do
-    echo "---" >> "$CRD_OUTPUT_FILE"
-    cat "$ANTREA_CHART/crds/$crd" >> "$CRD_OUTPUT_FILE"
-done
+# We also generate, for each chart which defines CRDs, a manifest which only includes its CRD
+# resources (all of them). This is useful for upgrades when using Helm, as Helm never upgrades the
+# CRDs in a chart's crds/ directory itself. See docs/helm.md.
+function generate_crds_manifest {
+    local chart_dir="$1"
+    local output_file="$2"
+    local crd_files=$(cd "$chart_dir/crds" && find * -type f -name "*.yaml" | sort)
+    rm -f "$output_file"
+    for crd in $crd_files; do
+        echo "---" >> "$output_file"
+        cat "$chart_dir/crds/$crd" >> "$output_file"
+    done
+}
+
+generate_crds_manifest "$ANTREA_CHART" "$OUTPUT_DIR/antrea-crds.yml"
+generate_crds_manifest "$THIS_DIR/../build/charts/flow-aggregator" "$OUTPUT_DIR/flow-aggregator-crds.yml"

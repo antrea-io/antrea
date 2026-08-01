@@ -785,33 +785,40 @@ type FlowExporterDestinationList struct {
 // +genclient:nonNamespaced
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
-// FlowAccessControl grants a Kubernetes User or Group subject visibility into flow records
-// for a set of Namespaces, via the flow-aggregator's FlowStreamService.
+// FlowAccessControl grants Kubernetes User, Group or ServiceAccount subjects visibility into flow
+// records for a set of Namespaces, via the flow-aggregator's FlowStreamService.
 type FlowAccessControl struct {
 	metav1.TypeMeta `json:",inline"`
 	// +optional
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 
 	// +required
-	Spec FlowAccessControlSpec `json:"spec,omitempty"`
+	Spec FlowAccessControlSpec `json:"spec"`
 }
 
 // FlowAccessControlSpec defines the desired state of a FlowAccessControl.
 type FlowAccessControlSpec struct {
-	// Subjects are the Kubernetes Users or Groups this policy grants flow visibility to.
+	// Subjects are the Kubernetes identities this policy grants flow visibility to.
 	// +required
 	Subjects []FlowAccessSubject `json:"subjects"`
 
-	// NamespaceSelectors select the Namespaces whose flows the Subjects are allowed to observe.
-	// The allowed set of Namespaces is the union of the matches of every selector in this list,
-	// and is re-evaluated whenever a Namespace's labels change. To grant access to specific
+	// NamespaceSelector selects the Namespaces whose flows the Subjects are allowed to observe.
+	// It is re-evaluated whenever a Namespace's labels change. To grant access to specific
 	// Namespaces by name, match on the "kubernetes.io/metadata.name" label, which Kubernetes sets
 	// automatically on every Namespace.
-	// If this field is omitted or empty, or if any selector in the list is an empty (wildcard)
-	// selector matching all Namespaces, the Subjects are granted cluster-wide flow visibility,
-	// and per-Namespace checks are skipped.
-	// +optional
-	NamespaceSelectors []metav1.LabelSelector `json:"namespaceSelectors,omitempty"`
+	//
+	// A null selector and an empty selector are NOT equivalent, and the difference is between
+	// granting nothing and granting everything:
+	//   - null (the field is omitted) selects no Namespace at all, and the Subjects are granted
+	//     no flow visibility. This is the fail-closed default.
+	//   - {} (an empty selector) selects every Namespace, and the Subjects are granted
+	//     cluster-wide flow visibility, including flows that are not associated with any
+	//     Namespace. Per-Namespace checks are skipped entirely for such Subjects.
+	//
+	// Note that several FlowAccessControl objects may select the same Subject, in which case that
+	// Subject may observe the union of the Namespaces their selectors match.
+	// +required
+	NamespaceSelector *metav1.LabelSelector `json:"namespaceSelector"`
 }
 
 // FlowAccessSubjectKind defines the kind of FlowAccessSubject.
@@ -819,23 +826,32 @@ type FlowAccessSubjectKind string
 
 const (
 	// FlowAccessSubjectKindUser refers to an individual Kubernetes user, as resolved from a
-	// client credential (a plain username, or a ServiceAccount's
-	// "system:serviceaccount:<namespace>:<name>" identity).
+	// client credential. To grant access to a ServiceAccount, prefer
+	// FlowAccessSubjectKindServiceAccount over spelling out its
+	// "system:serviceaccount:<namespace>:<name>" identity here.
 	FlowAccessSubjectKindUser FlowAccessSubjectKind = "User"
 	// FlowAccessSubjectKindGroup refers to a Kubernetes group a resolved identity belongs to.
 	FlowAccessSubjectKindGroup FlowAccessSubjectKind = "Group"
+	// FlowAccessSubjectKindServiceAccount refers to a ServiceAccount, identified by Namespace and
+	// name.
+	FlowAccessSubjectKindServiceAccount FlowAccessSubjectKind = "ServiceAccount"
 )
 
-// FlowAccessSubject identifies a Kubernetes User or Group that a FlowAccessControl grants
-// visibility to.
+// FlowAccessSubject identifies a Kubernetes identity that a FlowAccessControl grants visibility to.
 type FlowAccessSubject struct {
-	// Kind of this subject. Must be "User" or "Group".
+	// Kind of this subject. Must be "User", "Group" or "ServiceAccount".
 	// +required
 	Kind FlowAccessSubjectKind `json:"kind"`
-	// Name of the user or group, exactly as it will be resolved from the client's credential
-	// (e.g. the TokenReview/SelfSubjectReview username or groups).
+	// Name of the subject. For User and Group, this is matched exactly against the username or
+	// group names resolved from the client's credential (e.g. the TokenReview/SelfSubjectReview
+	// username or groups). For ServiceAccount, this is the ServiceAccount's name. No wildcards
+	// are supported: a Name of "*" matches a subject literally named "*", and nothing else.
 	// +required
 	Name string `json:"name"`
+	// Namespace of the ServiceAccount. Required when Kind is "ServiceAccount", and must not be
+	// set for any other Kind.
+	// +optional
+	Namespace string `json:"namespace,omitempty"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object

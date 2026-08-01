@@ -18,8 +18,10 @@
 package flowaccesscontrol
 
 import (
+	"maps"
 	"reflect"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	v1 "k8s.io/api/core/v1"
@@ -28,6 +30,7 @@ import (
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/util/wait"
+	"k8s.io/apiserver/pkg/authentication/serviceaccount"
 	coreinformers "k8s.io/client-go/informers/core/v1"
 	corelisters "k8s.io/client-go/listers/core/v1"
 	"k8s.io/client-go/tools/cache"
@@ -71,10 +74,10 @@ var facResync = workItem{isFACResync: true}
 // subjectState is the cached state for one subject (a username or a group name), aggregated across
 // every FlowAccessControl object that names that subject.
 type subjectState struct {
-	// selectors is the flattened list of parsed Namespace selectors from every FlowAccessControl
-	// naming this subject. A Namespace is visible to the subject if any of them matches it, so
-	// selectors from different objects can be flattened into a single list: the union across
-	// objects and the union within one object's namespaceSelectors are both an OR.
+	// selectors is the list of parsed Namespace selectors from every FlowAccessControl naming this
+	// subject. Each object contributes at most one selector, but several objects may name the same
+	// subject, and a Namespace is visible to the subject if any of them matches it. That is why
+	// this stays a list even though the API takes a single selector per object.
 	// Selectors are parsed once per FlowAccessControl change, so Namespace events never re-parse.
 	selectors []labels.Selector
 	// allowAll indicates cluster-wide visibility, i.e. per-Namespace checks are skipped entirely.
@@ -98,16 +101,102 @@ func (s *subjectState) matches(nsLabels labels.Set) bool {
 // Interface is implemented by Controller and provides read-only, thread-safe access to the
 // FlowAccessControl index, for use on the flow authorization path.
 type Interface interface {
-	// AllowedNamespaces returns the set of Namespaces whose flows the given user (identified by
-	// username and the groups it belongs to) is allowed to observe, and whether the user has
-	// cluster-wide (allowAll) visibility, in which case namespaces is nil and per-Namespace
-	// checks should be skipped.
-	AllowedNamespaces(username string, groups []string) (namespaces sets.Set[string], allowAll bool)
+	// HasSynced reports whether the index has been built at least once from a synced cache. Until
+	// it returns true, every VisibilityChecker denies everything, which is indistinguishable from a
+	// subject that simply has no grant. Callers must therefore check this before serving a stream,
+	// and fail the request (e.g. with Unavailable) rather than silently serving no flows while the
+	// flow-aggregator is still starting up.
+	HasSynced() bool
+	// VisibilityCheckerFor returns a VisibilityChecker bound to the given user, identified by its
+	// username and the groups it belongs to. It is meant to be called once per flow stream, when the
+	// stream's identity has been authenticated.
+	VisibilityCheckerFor(username string, groups []string) VisibilityChecker
+}
+
+// VisibilityChecker authorizes one user's view of the flow stream. It is obtained once per stream and
+// then consulted per flow record.
+//
+// A VisibilityChecker is a live view of the index, deliberately not a snapshot of it. Every call
+// reads the current state, so revoking a grant — by editing or deleting a FlowAccessControl, or by
+// relabeling a Namespace so it no longer matches — stops the affected flows from reaching an
+// already-established stream.
+//
+// This is a stricter contract than the one the stream's identity has: identity is authenticated
+// once at stream start and not re-validated mid-stream. The two are separate concerns. Identity is
+// established at connection time, whereas visibility is administrator policy that is expected to be
+// enforceable while a stream is open.
+type VisibilityChecker interface {
+	// AllowsAll reports whether the user has cluster-wide visibility. Callers need this for flow
+	// records that carry no Namespace at all, which only such a user may observe.
+	AllowsAll() bool
+	// AllowsNamespace reports whether the user may observe flows involving the given Namespace.
+	AllowsNamespace(namespace string) bool
+}
+
+// checker is the Controller-backed VisibilityChecker. It holds only the user's identity, so that every check
+// resolves against the index as it currently stands.
+type checker struct {
+	c        *Controller
+	username string
+	// groups is retained, not copied, and must not be mutated by the caller. It comes from the
+	// authenticated user info, which is not modified after authentication.
+	groups []string
+}
+
+// HasSynced implements Interface.
+func (c *Controller) HasSynced() bool {
+	return c.synced.Load()
+}
+
+// VisibilityCheckerFor implements Interface.
+func (c *Controller) VisibilityCheckerFor(username string, groups []string) VisibilityChecker {
+	return &checker{c: c, username: username, groups: groups}
+}
+
+func (ck *checker) AllowsAll() bool {
+	ck.c.mu.RLock()
+	defer ck.c.mu.RUnlock()
+
+	return ck.c.anySubjectState(ck.username, ck.groups, func(state *subjectState) bool {
+		return state.allowAll
+	})
+}
+
+func (ck *checker) AllowsNamespace(namespace string) bool {
+	ck.c.mu.RLock()
+	defer ck.c.mu.RUnlock()
+
+	return ck.c.anySubjectState(ck.username, ck.groups, func(state *subjectState) bool {
+		return state.allowAll || state.namespaces.Has(namespace)
+	})
+}
+
+// anySubjectState reports whether pred holds for the cached state of any FlowAccessControl subject
+// that applies to the given user. Grants are OR-ed across the user's own subject and its groups'
+// subjects, so the first match settles the answer.
+//
+// This is the per-flow-record hot path: it allocates nothing and only ever does map lookups, since
+// the Namespace sets it reads are kept up to date by the Namespace event handlers rather than
+// being recomputed here.
+//
+// Callers must hold c.mu for reading. The cached sets are patched in place by syncNamespace and
+// removeNamespace, so pred must not retain anything it is given.
+func (c *Controller) anySubjectState(username string, groups []string, pred func(state *subjectState) bool) bool {
+	if state, ok := c.byUser[username]; ok && pred(state) {
+		return true
+	}
+	for _, group := range groups {
+		if state, ok := c.byGroup[group]; ok && pred(state) {
+			return true
+		}
+	}
+	return false
 }
 
 // Controller watches FlowAccessControl objects and Namespaces, and maintains an in-memory
-// "username/group -> allowed Namespace set" index, re-evaluating namespaceSelectors whenever a
-// Namespace's labels change.
+// "username/group -> allowed Namespace set" index, re-evaluating their namespaceSelector whenever a
+// Namespace's labels change. Keeping the index current is what lets a VisibilityChecker answer from
+// it directly, so that an established flow stream sees a grant change without having to reconnect.
 type Controller struct {
 	facInformer     cache.SharedIndexInformer
 	facLister       crdlisters.FlowAccessControlLister
@@ -119,12 +208,19 @@ type Controller struct {
 
 	queue workqueue.TypedRateLimitingInterface[workItem]
 
+	// synced is set once Run has built the index from a synced cache, and reported by HasSynced.
+	// It is never cleared: the index is only ever replaced by a newer one from that point on.
+	synced atomic.Bool
+
 	// mu guards byUser and byGroup, including the subjectState values they point to, which are
-	// mutated in place by syncNamespace.
+	// mutated in place by syncNamespace and removeNamespace. It is taken for reading on the
+	// per-flow-record authorization path, so the write side is kept short.
 	mu      sync.RWMutex
 	byUser  map[string]*subjectState
 	byGroup map[string]*subjectState
 }
+
+var _ Interface = (*Controller)(nil)
 
 // NewController creates a new Controller.
 func NewController(facInformer crdinformers.FlowAccessControlInformer, namespaceInformer coreinformers.NamespaceInformer) *Controller {
@@ -161,30 +257,6 @@ func NewController(facInformer crdinformers.FlowAccessControlInformer, namespace
 		resyncPeriod,
 	)
 	return c
-}
-
-// AllowedNamespaces implements Interface.
-func (c *Controller) AllowedNamespaces(username string, groups []string) (sets.Set[string], bool) {
-	c.mu.RLock()
-	defer c.mu.RUnlock()
-
-	// The returned set must be a copy, as the cached sets are patched in place by syncNamespace.
-	result := sets.New[string]()
-	if state, ok := c.byUser[username]; ok {
-		if state.allowAll {
-			return nil, true
-		}
-		result = result.Union(state.namespaces)
-	}
-	for _, group := range groups {
-		if state, ok := c.byGroup[group]; ok {
-			if state.allowAll {
-				return nil, true
-			}
-			result = result.Union(state.namespaces)
-		}
-	}
-	return result, false
 }
 
 func (c *Controller) addFlowAccessControl(obj interface{}) {
@@ -231,10 +303,11 @@ func (c *Controller) addNamespace(obj interface{}) {
 func (c *Controller) updateNamespace(oldObj, obj interface{}) {
 	oldNS := oldObj.(*v1.Namespace)
 	ns := obj.(*v1.Namespace)
-	// A Namespace's labels are the only thing that can change which namespaceSelectors match it,
+	// A Namespace's labels are the only thing that can change which namespaceSelector matches it,
 	// so skip updates to any other field. Namespaces are updated far more often than
-	// FlowAccessControl objects change, which makes this the most valuable early return here.
-	if reflect.DeepEqual(oldNS.GetLabels(), ns.GetLabels()) {
+	// FlowAccessControl objects change, which makes this the most valuable early return here, and
+	// the reason it compares the label maps directly instead of reaching for reflection.
+	if maps.Equal(oldNS.GetLabels(), ns.GetLabels()) {
 		return
 	}
 	klog.V(2).InfoS("Processing Namespace UPDATE event", "namespace", klog.KObj(ns))
@@ -269,8 +342,26 @@ func (c *Controller) Run(stopCh <-chan struct{}) {
 	if !cache.WaitForNamedCacheSync(controllerName, stopCh, c.facListerSynced, c.namespaceListerSynced) {
 		return
 	}
-	// A single worker keeps index updates serialized, which is what lets syncNamespace patch the
-	// index in place without coordinating with a concurrent rebuild.
+	// Build the index once, synchronously, before reporting HasSynced. A VisibilityChecker denies
+	// everything while the index is empty, which a consumer cannot tell apart from a subject with
+	// no grant, so gating on HasSynced is what lets it fail a request outright rather than serve a
+	// silently empty flow stream to a client that connects during startup.
+	for {
+		err := c.syncFlowAccessControls()
+		if err == nil {
+			break
+		}
+		klog.ErrorS(err, "Building the initial FlowAccessControl index failed, retrying")
+		select {
+		case <-stopCh:
+			return
+		case <-time.After(minRetryDelay):
+		}
+	}
+	c.synced.Store(true)
+
+	// A single worker keeps index updates serialized, which is what lets the Namespace handlers
+	// patch the index in place without coordinating with a concurrent rebuild.
 	go wait.Until(c.worker, time.Second, stopCh)
 
 	<-stopCh
@@ -305,9 +396,9 @@ func (c *Controller) processNextWorkItem() bool {
 			klog.ErrorS(err, "Getting Namespace failed, requeue", "namespace", item.namespace)
 			return true
 		}
-		c.onNamespaceDelete(item.namespace)
+		c.removeNamespace(item.namespace)
 	} else {
-		c.onNamespaceAdd(ns)
+		c.syncNamespace(ns)
 	}
 	c.queue.Forget(item)
 	return true
@@ -330,29 +421,44 @@ func (c *Controller) syncFlowAccessControls() error {
 	byUser := map[string]*subjectState{}
 	byGroup := map[string]*subjectState{}
 	for _, fac := range facs {
-		selectors, allowAll := parseNamespaceSelectors(fac)
+		selector, allowAll := parseNamespaceSelector(fac)
 		for _, subject := range fac.Spec.Subjects {
 			var index map[string]*subjectState
+			key := subject.Name
 			switch subject.Kind {
 			case crdv1alpha1.FlowAccessSubjectKindUser:
 				index = byUser
 			case crdv1alpha1.FlowAccessSubjectKindGroup:
 				index = byGroup
+			case crdv1alpha1.FlowAccessSubjectKindServiceAccount:
+				if subject.Namespace == "" {
+					// The CRD schema rejects this, but x-kubernetes-validations only became
+					// enabled by default in Kubernetes 1.25 and we support 1.23+, so adding
+					// a defensive check here.
+					klog.ErrorS(nil, "ServiceAccount subject without a Namespace, ignoring", "flowAccessControl", klog.KObj(fac), "name", subject.Name)
+					continue
+				}
+				// A ServiceAccount is authenticated as a user, so it is indexed as one: this is
+				// exactly the identity the authenticator produces, which also means a
+				// ServiceAccount subject and a User subject spelling out the same identity
+				// collapse into one entry and union like any other duplicate grant.
+				index = byUser
+				key = serviceaccount.MakeUsername(subject.Namespace, subject.Name)
 			default:
 				klog.ErrorS(nil, "Unknown FlowAccessControl subject kind, ignoring", "flowAccessControl", klog.KObj(fac), "kind", subject.Kind)
 				continue
 			}
-			state, ok := index[subject.Name]
+			state, ok := index[key]
 			if !ok {
 				state = &subjectState{}
-				index[subject.Name] = state
+				index[key] = state
 			}
 			if allowAll {
 				// One cluster-wide grant makes every other grant for this subject redundant.
 				state.allowAll = true
 				state.selectors = nil
 			} else if !state.allowAll {
-				state.selectors = append(state.selectors, selectors...)
+				state.selectors = append(state.selectors, selector)
 			}
 		}
 	}
@@ -364,7 +470,7 @@ func (c *Controller) syncFlowAccessControls() error {
 			}
 			state.namespaces = sets.New[string]()
 			for _, ns := range namespaces {
-				if state.matches(labels.Set(ns.Labels)) {
+				if state.matches(ns.Labels) {
 					state.namespaces.Insert(ns.Name)
 				}
 			}
@@ -380,13 +486,14 @@ func (c *Controller) syncFlowAccessControls() error {
 	return nil
 }
 
-// onNamespaceAdd re-evaluates a single Namespace against the cached selectors of every subject and
-// patches the index in place. It never lists Namespaces or FlowAccessControls, so its cost is
+// syncNamespace re-evaluates a single Namespace against the cached selectors of every subject and
+// patches the index in place, adding the Namespace to the subjects it now matches and removing it
+// from those it no longer matches. It never lists Namespaces or FlowAccessControls, so its cost is
 // independent of the number of Namespaces in the cluster. Recomputing this Namespace's membership
 // from the subject's cached selectors also means no reference counting is needed when several
 // FlowAccessControl objects grant the same Namespace to the same subject: if one of them stops
 // matching while another still matches, the Namespace correctly stays visible.
-func (c *Controller) onNamespaceAdd(ns *v1.Namespace) {
+func (c *Controller) syncNamespace(ns *v1.Namespace) {
 	nsLabels := labels.Set(ns.Labels)
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -399,9 +506,9 @@ func (c *Controller) onNamespaceAdd(ns *v1.Namespace) {
 	})
 }
 
-// onNamespaceDelete drops a deleted Namespace from every subject's visible set. No selector
+// removeNamespace drops a deleted Namespace from every subject's visible set. No selector
 // evaluation is needed: a Namespace that no longer exists is visible to nobody.
-func (c *Controller) onNamespaceDelete(name string) {
+func (c *Controller) removeNamespace(name string) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.forEachTrackedSubject(func(state *subjectState) {
@@ -427,27 +534,29 @@ func (c *Controller) forEachTrackedSubject(fn func(state *subjectState)) {
 	}
 }
 
-// parseNamespaceSelectors parses a FlowAccessControl's namespaceSelectors, so that Namespace events
-// only ever have to run already-parsed selectors. It reports allowAll when the object grants
-// cluster-wide visibility: either it specifies no selectors at all, or one of its selectors is
-// empty and therefore matches every Namespace.
-func parseNamespaceSelectors(fac *crdv1alpha1.FlowAccessControl) ([]labels.Selector, bool) {
-	if len(fac.Spec.NamespaceSelectors) == 0 {
+// parseNamespaceSelector parses a FlowAccessControl's namespaceSelector once, so that Namespace
+// events only ever have to run an already-parsed selector. It reports allowAll when the object
+// grants cluster-wide visibility, in which case the returned selector is nil and per-Namespace
+// checks are skipped for its subjects.
+//
+// The null-vs-empty distinction the API documents is exactly what metav1.LabelSelectorAsSelector
+// already implements, so the pointer is passed straight through:
+//   - a null selector becomes labels.Nothing(), which matches no Namespace and is not Empty(), so
+//     the object grants nothing. Admission rejects such an object, so this only comes up for
+//     objects created before that validation existed.
+//   - an empty selector ({}) becomes labels.Everything(), which is Empty(), so the object grants
+//     cluster-wide visibility.
+func parseNamespaceSelector(fac *crdv1alpha1.FlowAccessControl) (labels.Selector, bool) {
+	selector, err := metav1.LabelSelectorAsSelector(fac.Spec.NamespaceSelector)
+	if err != nil {
+		// An unparseable selector grants nothing, which is the fail-closed direction. Other
+		// FlowAccessControl objects naming the same subjects are unaffected, since grants are
+		// OR-ed across objects.
+		klog.ErrorS(err, "Invalid namespaceSelector in FlowAccessControl, granting nothing for it", "flowAccessControl", klog.KObj(fac))
+		return labels.Nothing(), false
+	}
+	if selector.Empty() {
 		return nil, true
 	}
-	selectors := make([]labels.Selector, 0, len(fac.Spec.NamespaceSelectors))
-	for i := range fac.Spec.NamespaceSelectors {
-		selector, err := metav1.LabelSelectorAsSelector(&fac.Spec.NamespaceSelectors[i])
-		if err != nil {
-			// Drop only the invalid selector: since selectors are OR-ed, that can only narrow the
-			// granted set, which is the fail-closed direction.
-			klog.ErrorS(err, "Invalid namespaceSelector in FlowAccessControl, ignoring it", "flowAccessControl", klog.KObj(fac), "index", i)
-			continue
-		}
-		if selector.Empty() {
-			return nil, true
-		}
-		selectors = append(selectors, selector)
-	}
-	return selectors, false
+	return selector, false
 }
