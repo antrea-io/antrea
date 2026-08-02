@@ -17,6 +17,7 @@
 - [Multi-cluster Gateway Configuration](#multi-cluster-gateway-configuration)
   - [Multi-cluster WireGuard Encryption](#multi-cluster-wireguard-encryption)
 - [Multi-cluster Service](#multi-cluster-service)
+  - [Restricting Service Exports](#restricting-service-exports)
   - [Member Cluster Service CIDR Discovery](#member-cluster-service-cidr-discovery)
 - [Multi-cluster Pod-to-Pod Connectivity](#multi-cluster-pod-to-pod-connectivity)
 - [Multi-cluster NetworkPolicy](#multi-cluster-networkpolicy)
@@ -536,6 +537,59 @@ The table below lists the supported configurations.
 | Yes                                 | No              | PodIP            |
 | No                                  | Yes             | PodIP/ClusterIP  |
 | Yes                                 | Yes             | PodIP/ClusterIP  |
+
+### Restricting Service Exports
+
+Creating a `ServiceExport` is a privileged operation. By design, multi-cluster Services assume
+["namespace sameness"](https://github.com/kubernetes/enhancements/tree/master/keps/sig-multicluster/1645-multi-cluster-services-api#namespace-sameness),
+meaning a Namespace with a given name is considered to be the same Namespace across all clusters in
+a ClusterSet. Therefore, an exported Service in one cluster will be imported into the same-named
+Namespace in all other member clusters in which that Namespace exists. A ClusterSet must not span
+independently-administered clusters.
+
+Because an export in any member cluster results in an import into the same-named Namespace in every
+other member cluster, cluster administrators should use RBAC to control who may create
+`ServiceExport`s, and in which Namespaces. It is highly recommended to prevent exports from
+`kube-system` and `default` unless there is a clear use case, and otherwise to grant `ServiceExport`
+permissions only in the specific Namespaces participating in the ClusterSet. These restrictions must
+be applied in every member cluster: an export permitted in any one member propagates to all of them.
+Note that RBAC rules are permissive rather than restrictive, so it is also worth auditing existing
+ClusterRoles and ClusterRoleBindings for grants on the `multicluster.x-k8s.io` API group that would
+defeat the intent.
+
+Below is a concrete RBAC `ClusterRole` example, which should be bound with a `RoleBinding` (and
+**not** a `ClusterRoleBinding`, which would grant permission across all Namespaces) to grant
+permission to manage `ServiceExport`s only within a specific Namespace:
+
+```yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: serviceexport-admin
+rules:
+- apiGroups: ["multicluster.x-k8s.io"]
+  resources: ["serviceexports"]
+  verbs: ["create", "get", "list", "watch", "update", "patch", "delete"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: serviceexport-admin
+  namespace: participating-namespace
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: serviceexport-admin
+subjects:
+- kind: User
+  name: some-user
+  apiGroup: rbac.authorization.k8s.io
+```
+
+> **Note**: These RBAC rules only constrain *users* of a member cluster. They do not protect against
+> a member cluster that has itself been compromised and is acting maliciously as a whole. Therefore,
+> leader cluster credentials should be treated as highly sensitive and rotated immediately upon
+> suspicion of a compromise.
 
 ### Member Cluster Service CIDR Discovery
 
