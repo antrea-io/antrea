@@ -36,9 +36,6 @@ DEBUG=false
 USE_SYSTEM_GO=false
 GOLANG_RELEASE_DIR=${WORKDIR}/golang-releases
 
-multicluster_kubeconfigs=($EAST_CLUSTER_CONFIG $LEADER_CLUSTER_CONFIG $WEST_CLUSTER_CONFIG)
-membercluster_kubeconfigs=($EAST_CLUSTER_CONFIG $WEST_CLUSTER_CONFIG)
-
 CLEAN_STALE_IMAGES="docker system prune --force --all --filter until=4h"
 PRINT_DOCKER_STATUS="docker system df -v"
 
@@ -183,7 +180,7 @@ function clean_multicluster {
         if [[ $DEBUG != "true" ]]; then
             echo "====== Cleanup Kind clusters ======"
             for name in ${CLUSTER_NAMES[*]}; do
-                ./ci/kind/kind-setup.sh destroy ${name}
+                $WORKSPACE/ci/kind/kind-setup.sh destroy ${name}
             done
         fi
     else
@@ -299,7 +296,7 @@ EOF
 function deliver_antrea_multicluster {
     echo "====== Building Antrea for the Following Commit ======"
 
-    git show --numstat
+    git --no-pager show --numstat
     make clean
 
     # Ensure that files in the Docker context have the correct permissions, or Docker caching cannot

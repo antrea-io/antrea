@@ -238,7 +238,7 @@ function setup_gke() {
 
 function deliver_antrea_to_gke() {
     echo "====== Building Antrea for the Following Commit ======"
-    git show --numstat
+    git --no-pager show --numstat
 
     export GO111MODULE=on
     export GOROOT=/usr/local/go

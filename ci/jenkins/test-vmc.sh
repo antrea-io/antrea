@@ -347,7 +347,7 @@ function run_codecov { (set -e
 
 function deliver_antrea {
     echo "====== Building Antrea for the Following Commit ======"
-    git show --numstat
+    git --no-pager show --numstat
 
     export GO111MODULE=on
     export GOPATH=$WORKDIR/go
