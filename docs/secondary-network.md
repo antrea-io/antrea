@@ -180,24 +180,19 @@ network IPAM configuration, please refer to the [Antrea IPAM document](antrea-ip
 #### Per-Node OVS bridge configuration with AntreaNodeConfig
 
 **Starting with Antrea v2.7.0, the secondary network OVS bridge can be
-configured per Node or Node Pool with AntreaNodeConfig.**
+configured with different settings per Node or Node Pool.**
 
 As an alternative to static configuration via `antrea-agent.conf`, the
 AntreaNodeConfig CRD provides a dynamic, per-Node or per-Node-Pool mechanism to
 configure the secondary network OVS bridge. This feature is controlled by the
 `AntreaNodeConfig` feature gate, which is in `Beta` and enabled by default.
 
-Static secondary bridge configuration in `antrea-agent.conf` always takes
-precedence over AntreaNodeConfig. An AntreaNodeConfig secondary bridge is used
-only when `secondaryNetwork.ovsBridges` in the Agent configuration is empty. If
-the `AntreaNodeConfig` feature gate is disabled, AntreaNodeConfig objects are
-ignored and static secondary bridge configuration continues to work normally.
-When static bridge configuration is empty and no AntreaNodeConfig matches the
-Node, no secondary OVS bridge is configured.
-
-Changes to the effective AntreaNodeConfig are reconciled dynamically without an
-Agent restart. This does not apply while static bridge configuration is present,
-because the static configuration remains effective.
+The secondary bridge configuration in an AntreaNodeConfig takes effect only when
+`secondaryNetwork.ovsBridges` in the Agent configuration is not set. Static
+secondary bridge configuration in `antrea-agent.conf` always takes precedence
+over AntreaNodeConfig. If the `AntreaNodeConfig` feature gate is disabled,
+AntreaNodeConfig objects are ignored. Changes to the effective AntreaNodeConfig
+are reconciled dynamically without an Agent restart.
 
 **Important:** When upgrading an existing installation, applying an
 AntreaNodeConfig does not override an existing static secondary bridge
@@ -207,14 +202,14 @@ configuration. To migrate from static configuration to AntreaNodeConfig:
 2. Remove the static `secondaryNetwork.ovsBridges` configuration, or set it to
    an empty list.
 3. Roll out the `antrea-agent` Pods so that they load the updated Agent
-   configuration. A Helm upgrade triggers this rollout automatically; after
-   editing the Antrea ConfigMap directly, restart the `antrea-agent` DaemonSet.
+   configuration. After editing the Antrea ConfigMap directly, restart the
+   `antrea-agent` DaemonSet. A Helm upgrade triggers this rollout automatically.
 
 The `bridgeName` of an existing AntreaNodeConfig bridge is immutable. To use a
 different bridge name, delete and recreate the AntreaNodeConfig. If the
 effective bridge configuration changes, existing Pods are not automatically
 migrated to the new bridge. Recreate the affected Pods so their secondary
-network interfaces connect to the effective bridge.
+network interfaces can connect to the new bridge.
 
 The AntreaNodeConfig CRD spec includes the following fields:
 
