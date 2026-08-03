@@ -135,7 +135,7 @@ function deliver_antrea {
     export GOCACHE="${WORKSPACE}/../gocache"
     export PATH=${GOROOT}/bin:$PATH
 
-    git show --numstat
+    git --no-pager show --numstat
     make clean
     ${CLEAN_STALE_IMAGES}
     check_and_upgrade_golang

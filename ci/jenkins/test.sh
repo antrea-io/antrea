@@ -351,7 +351,7 @@ function prepare_env {
     export GOCACHE=${WORKSPACE}/../gocache
     export PATH=${GOROOT}/bin:$PATH
 
-    git show --numstat
+    git --no-pager show --numstat
     make clean
 }
 
@@ -529,7 +529,7 @@ function deliver_antrea {
     export GOCACHE="${WORKSPACE}/../gocache"
     export PATH=${GOROOT}/bin:$PATH
 
-    git show --numstat
+    git --no-pager show --numstat
     make clean
     ${CLEAN_STALE_IMAGES}
     ${PRINT_DOCKER_STATUS}
