@@ -628,6 +628,10 @@ spec:
                         type: string
                       status:
                         type: string
+                      reason:
+                        type: string
+                      message:
+                        type: string
                       lastTransitionTime:
                         type: string
       subresources:
@@ -2128,6 +2132,10 @@ spec:
                       type:
                         type: string
                       status:
+                        type: string
+                      reason:
+                        type: string
+                      message:
                         type: string
                       lastTransitionTime:
                         type: string

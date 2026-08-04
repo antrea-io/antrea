@@ -1106,6 +1106,15 @@ func validateGroupIPBlocks(ipbs []crdv1beta1.IPBlock) (string, bool) {
 
 func (g *groupValidator) validateChildClusterGroup(s *crdv1beta1.ClusterGroup) (string, bool) {
 	if len(s.Spec.ChildGroups) > 0 {
+		// A self-reference nests the ClusterGroup infinitely deep. Unlike the checks below, this
+		// one only looks at the object being validated, so it cannot be defeated by a stale
+		// informer cache: on CREATE the object is not in the cache yet, and on UPDATE the cache
+		// still holds the previous version, which is why the checks below let it through.
+		for _, groupName := range s.Spec.ChildGroups {
+			if string(groupName) == s.Name {
+				return fmt.Sprintf("cannot set ClusterGroup %s as its own childGroup", s.Name), false
+			}
+		}
 		parentGrps, err := g.networkPolicyController.internalGroupStore.GetByIndex(store.ChildGroupIndex, s.Name)
 		if err != nil {
 			return fmt.Sprintf("error retrieving parents of ClusterGroup %s: %v", s.Name, err), false
@@ -1131,6 +1140,13 @@ func (g *groupValidator) validateChildClusterGroup(s *crdv1beta1.ClusterGroup) (
 
 func (g *groupValidator) validateChildGroup(s *crdv1beta1.Group) (string, bool) {
 	if len(s.Spec.ChildGroups) > 0 {
+		// See the comment in validateChildClusterGroup. childGroups of a Group always refer to
+		// Groups in the same Namespace, so comparing names is enough to detect a self-reference.
+		for _, groupName := range s.Spec.ChildGroups {
+			if string(groupName) == s.Name {
+				return fmt.Sprintf("cannot set Group %s/%s as its own childGroup", s.Namespace, s.Name), false
+			}
+		}
 		parentGrps, err := g.networkPolicyController.internalGroupStore.GetByIndex(store.ChildGroupIndex, s.Namespace+"/"+s.Name)
 		if err != nil {
 			return fmt.Sprintf("error retrieving parents of Group %s/%s: %v", s.Namespace, s.Name, err), false
