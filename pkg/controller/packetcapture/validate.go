@@ -15,29 +15,20 @@
 package packetcapture
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"reflect"
-	"time"
 
 	admv1 "k8s.io/api/admission/v1"
 	authenticationv1 "k8s.io/api/authentication/v1"
-	authorizationv1 "k8s.io/api/authorization/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/klog/v2"
 
 	"antrea.io/antrea/v2/pkg/apis"
 	crdv1alpha1 "antrea.io/antrea/v2/pkg/apis/crd/v1alpha1"
+	"antrea.io/antrea/v2/pkg/controller/validation"
 )
-
-// authorizationTimeout bounds the SubjectAccessReview call made when validating the fileServer
-// field. It must stay below the timeoutSeconds configured for the packetcapturevalidator webhook
-// (see the ValidatingWebhookConfiguration in
-// build/charts/antrea/templates/webhooks/validating/crdvalidator.yaml), so that a slow
-// kube-apiserver causes an explicit denial here rather than an admission timeout.
-const authorizationTimeout = 3 * time.Second
 
 // Validator validates PacketCapture admission requests.
 type Validator struct {
@@ -102,41 +93,14 @@ func (v *Validator) validate(pc, oldPC *crdv1alpha1.PacketCapture, userInfo auth
 	if oldPC != nil && reflect.DeepEqual(oldPC.Spec.FileServer, pc.Spec.FileServer) {
 		return nil
 	}
-	var extra map[string]authorizationv1.ExtraValue
-	if len(userInfo.Extra) > 0 {
-		extra = make(map[string]authorizationv1.ExtraValue, len(userInfo.Extra))
-		for k, val := range userInfo.Extra {
-			extra[k] = authorizationv1.ExtraValue(val)
-		}
-	}
-	sar := &authorizationv1.SubjectAccessReview{
-		Spec: authorizationv1.SubjectAccessReviewSpec{
-			ResourceAttributes: &authorizationv1.ResourceAttributes{
-				Namespace: v.fileServerAuthNamespace,
-				Verb:      "get",
-				Resource:  "secrets",
-				Name:      apis.AntreaPacketCaptureFileServerAuthSecretName,
-			},
-			User:   userInfo.Username,
-			Groups: userInfo.Groups,
-			UID:    userInfo.UID,
-			Extra:  extra,
-		},
-	}
-	// The admission request's own context is not available here: the validateFunc signature
-	// shared by all the CRD webhook handlers does not carry one. authorizationTimeout therefore
-	// bounds the call independently, and is kept below the webhook's own timeoutSeconds so that
-	// the call cannot outlive the admission request.
-	ctx, cancel := context.WithTimeout(context.Background(), authorizationTimeout)
-	defer cancel()
-	resp, err := v.client.AuthorizationV1().SubjectAccessReviews().Create(ctx, sar, metav1.CreateOptions{})
+	status, err := validation.AuthorizeSecretGet(v.client, userInfo, v.fileServerAuthNamespace, apis.AntreaPacketCaptureFileServerAuthSecretName)
 	if err != nil {
 		return fmt.Errorf("failed to authorize access to file server authentication Secret %s/%s: %w", v.fileServerAuthNamespace, apis.AntreaPacketCaptureFileServerAuthSecretName, err)
 	}
-	if !resp.Status.Allowed {
+	if !status.Allowed {
 		klog.InfoS("Rejecting PacketCapture: requester cannot read the file server authentication Secret",
 			"user", userInfo.Username, "secret", klog.KRef(v.fileServerAuthNamespace, apis.AntreaPacketCaptureFileServerAuthSecretName),
-			"reason", resp.Status.Reason, "evaluationError", resp.Status.EvaluationError)
+			"reason", status.Reason, "evaluationError", status.EvaluationError)
 		return fmt.Errorf("user %q is not authorized to get Secret %s/%s used to authenticate to the file server", userInfo.Username, v.fileServerAuthNamespace, apis.AntreaPacketCaptureFileServerAuthSecretName)
 	}
 	return nil
