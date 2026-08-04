@@ -59,10 +59,28 @@ func TestControllerValidateExternalIPPool(t *testing.T) {
 				Name:      "foo",
 				Operation: "CREATE",
 				Object: runtime.RawExtension{Raw: marshal(mutateExternalIPPool(newExternalIPPool("foo", "10.10.10.0/24", "", ""), func(pool *crdv1b1.ExternalIPPool) {
-					pool.Spec.SubnetInfo = &crdv1b1.SubnetInfo{
+					pool.Spec.SubnetInfo = &crdv1b1.ExternalIPPoolSubnetInfo{
 						Gateway:      "10.10.0.1",
 						PrefixLength: 16,
 						VLAN:         2,
+					}
+				}))},
+			},
+			expectedResponse: &admv1.AdmissionResponse{Allowed: true},
+		},
+		{
+			name: "CREATE operation with valid dual-stack SubnetInfo should be allowed",
+			request: &admv1.AdmissionRequest{
+				Name:      "foo",
+				Operation: "CREATE",
+				Object: runtime.RawExtension{Raw: marshal(mutateExternalIPPool(newExternalIPPool("foo", "10.10.10.0/24", "", ""), func(pool *crdv1b1.ExternalIPPool) {
+					pool.Spec.IPRanges = append(pool.Spec.IPRanges, crdv1b1.IPRange{CIDR: "2001:db8:10::/64"})
+					pool.Spec.SubnetInfo = &crdv1b1.ExternalIPPoolSubnetInfo{
+						Gateways: []crdv1b1.SubnetGateway{
+							{Gateway: "10.10.10.1", PrefixLength: 24},
+							{Gateway: "2001:db8:10::1", PrefixLength: 64},
+						},
+						VLAN: 100,
 					}
 				}))},
 			},
@@ -75,7 +93,7 @@ func TestControllerValidateExternalIPPool(t *testing.T) {
 				Operation: "UPDATE",
 				OldObject: runtime.RawExtension{Raw: marshal(newExternalIPPool("foo", "10.10.10.0/24", "10.10.20.1", "10.10.20.2"))},
 				Object: runtime.RawExtension{Raw: marshal(mutateExternalIPPool(newExternalIPPool("foo", "10.10.10.0/24", "10.10.20.1", "10.10.20.2"), func(pool *crdv1b1.ExternalIPPool) {
-					pool.Spec.SubnetInfo = &crdv1b1.SubnetInfo{
+					pool.Spec.SubnetInfo = &crdv1b1.ExternalIPPoolSubnetInfo{
 						Gateway:      "10.10.0.1",
 						PrefixLength: 16,
 						VLAN:         2,
@@ -108,6 +126,65 @@ func TestControllerValidateExternalIPPool(t *testing.T) {
 				Object:    runtime.RawExtension{Raw: marshal(newExternalIPPool("foo", "10.10.10.0/24", "10.10.20.1", "10.10.20.2"))},
 			},
 			expectedResponse: &admv1.AdmissionResponse{Allowed: true},
+		},
+		{
+			name: "Adding the first IPv4 range to an empty pool should be allowed",
+			request: &admv1.AdmissionRequest{
+				Name:      "foo",
+				Operation: "UPDATE",
+				OldObject: runtime.RawExtension{Raw: marshal(mutateExternalIPPool(newExternalIPPool("foo", "", "", ""), func(pool *crdv1b1.ExternalIPPool) {
+					pool.Spec.IPRanges = []crdv1b1.IPRange{}
+				}))},
+				Object: runtime.RawExtension{Raw: marshal(newExternalIPPool("foo", "10.10.10.0/24", "", ""))},
+			},
+			expectedResponse: &admv1.AdmissionResponse{Allowed: true},
+		},
+		{
+			name: "Adding the first IPv6 range to an empty pool should be allowed",
+			request: &admv1.AdmissionRequest{
+				Name:      "foo",
+				Operation: "UPDATE",
+				OldObject: runtime.RawExtension{Raw: marshal(mutateExternalIPPool(newExternalIPPool("foo", "", "", ""), func(pool *crdv1b1.ExternalIPPool) {
+					pool.Spec.IPRanges = []crdv1b1.IPRange{}
+				}))},
+				Object: runtime.RawExtension{Raw: marshal(newExternalIPPool("foo", "2001:db8:10::/64", "", ""))},
+			},
+			expectedResponse: &admv1.AdmissionResponse{Allowed: true},
+		},
+		{
+			name: "Adding the first dual-stack ranges to an empty pool should be allowed",
+			request: &admv1.AdmissionRequest{
+				Name:      "foo",
+				Operation: "UPDATE",
+				OldObject: runtime.RawExtension{Raw: marshal(mutateExternalIPPool(newExternalIPPool("foo", "", "", ""), func(pool *crdv1b1.ExternalIPPool) {
+					pool.Spec.IPRanges = []crdv1b1.IPRange{}
+				}))},
+				Object: runtime.RawExtension{Raw: marshal(mutateExternalIPPool(newExternalIPPool("foo", "10.10.10.0/24", "", ""), func(pool *crdv1b1.ExternalIPPool) {
+					pool.Spec.IPRanges = append(pool.Spec.IPRanges, crdv1b1.IPRange{CIDR: "2001:db8:10::/64"})
+					pool.Spec.SubnetInfo = &crdv1b1.ExternalIPPoolSubnetInfo{Gateways: []crdv1b1.SubnetGateway{
+						{Gateway: "10.10.10.1", PrefixLength: 24},
+						{Gateway: "2001:db8:10::1", PrefixLength: 64},
+					}}
+				}))},
+			},
+			expectedResponse: &admv1.AdmissionResponse{Allowed: true},
+		},
+		{
+			name: "Adding an IP family should not be allowed",
+			request: &admv1.AdmissionRequest{
+				Name:      "foo",
+				Operation: "UPDATE",
+				OldObject: runtime.RawExtension{Raw: marshal(newExternalIPPool("foo", "10.10.10.0/24", "", ""))},
+				Object: runtime.RawExtension{Raw: marshal(mutateExternalIPPool(newExternalIPPool("foo", "10.10.10.0/24", "", ""), func(pool *crdv1b1.ExternalIPPool) {
+					pool.Spec.IPRanges = append(pool.Spec.IPRanges, crdv1b1.IPRange{CIDR: "2001:db8:10::/64"})
+				}))},
+			},
+			expectedResponse: &admv1.AdmissionResponse{
+				Allowed: false,
+				Result: &metav1.Status{
+					Message: "IP families are immutable (old: [IPv4], new: [IPv4 IPv6])",
+				},
+			},
 		},
 		{
 			name: "DELETE operation should be allowed",
@@ -147,7 +224,7 @@ func TestValidateIPRangesAndSubnetInfo(t *testing.T) {
 		{
 			name: "invalid gateway address",
 			externalIPPool: mutateExternalIPPool(newExternalIPPool("foo", "10.10.10.0/24", "10.10.20.1", "10.10.20.2"), func(pool *crdv1b1.ExternalIPPool) {
-				pool.Spec.SubnetInfo = &crdv1b1.SubnetInfo{
+				pool.Spec.SubnetInfo = &crdv1b1.ExternalIPPoolSubnetInfo{
 					Gateway:      "10.10.0",
 					PrefixLength: 16,
 					VLAN:         2,
@@ -158,7 +235,7 @@ func TestValidateIPRangesAndSubnetInfo(t *testing.T) {
 		{
 			name: "invalid ipv4 prefix",
 			externalIPPool: mutateExternalIPPool(newExternalIPPool("foo", "10.10.10.0/24", "", ""), func(pool *crdv1b1.ExternalIPPool) {
-				pool.Spec.SubnetInfo = &crdv1b1.SubnetInfo{
+				pool.Spec.SubnetInfo = &crdv1b1.ExternalIPPoolSubnetInfo{
 					Gateway:      "10.10.0.1",
 					PrefixLength: 42,
 					VLAN:         2,
@@ -169,7 +246,7 @@ func TestValidateIPRangesAndSubnetInfo(t *testing.T) {
 		{
 			name: "invalid ipv6 prefix",
 			externalIPPool: mutateExternalIPPool(newExternalIPPool("foo", "10.10.10.0/24", "", ""), func(pool *crdv1b1.ExternalIPPool) {
-				pool.Spec.SubnetInfo = &crdv1b1.SubnetInfo{
+				pool.Spec.SubnetInfo = &crdv1b1.ExternalIPPoolSubnetInfo{
 					Gateway:      "2001:d00::",
 					PrefixLength: 130,
 					VLAN:         2,
@@ -190,7 +267,7 @@ func TestValidateIPRangesAndSubnetInfo(t *testing.T) {
 		{
 			name: "start-end range must be within subnet info",
 			externalIPPool: mutateExternalIPPool(newExternalIPPool("foo", "", "10.10.20.10", "10.10.20.40"), func(pool *crdv1b1.ExternalIPPool) {
-				pool.Spec.SubnetInfo = &crdv1b1.SubnetInfo{
+				pool.Spec.SubnetInfo = &crdv1b1.ExternalIPPoolSubnetInfo{
 					Gateway:      "10.10.10.0",
 					PrefixLength: 24,
 					VLAN:         2,
@@ -201,7 +278,7 @@ func TestValidateIPRangesAndSubnetInfo(t *testing.T) {
 		{
 			name: "cidr must be within subnet info",
 			externalIPPool: mutateExternalIPPool(newExternalIPPool("foo", "10.20.0.0/16", "", ""), func(pool *crdv1b1.ExternalIPPool) {
-				pool.Spec.SubnetInfo = &crdv1b1.SubnetInfo{
+				pool.Spec.SubnetInfo = &crdv1b1.ExternalIPPoolSubnetInfo{
 					Gateway:      "10.20.0.0",
 					PrefixLength: 24,
 					VLAN:         2,
@@ -212,7 +289,7 @@ func TestValidateIPRangesAndSubnetInfo(t *testing.T) {
 		{
 			name: "valid subnet info 1",
 			externalIPPool: mutateExternalIPPool(newExternalIPPool("foo", "", "10.10.20.10", "10.10.20.20"), func(pool *crdv1b1.ExternalIPPool) {
-				pool.Spec.SubnetInfo = &crdv1b1.SubnetInfo{
+				pool.Spec.SubnetInfo = &crdv1b1.ExternalIPPoolSubnetInfo{
 					Gateway:      "10.10.20.0",
 					PrefixLength: 24,
 					VLAN:         2,
@@ -222,7 +299,7 @@ func TestValidateIPRangesAndSubnetInfo(t *testing.T) {
 		{
 			name: "valid subnet info 2",
 			externalIPPool: mutateExternalIPPool(newExternalIPPool("foo", "fd00:10:96::/112", "", ""), func(pool *crdv1b1.ExternalIPPool) {
-				pool.Spec.SubnetInfo = &crdv1b1.SubnetInfo{
+				pool.Spec.SubnetInfo = &crdv1b1.ExternalIPPoolSubnetInfo{
 					Gateway:      "fd00:10:96::",
 					PrefixLength: 96,
 					VLAN:         2,

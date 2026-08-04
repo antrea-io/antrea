@@ -321,16 +321,10 @@ func NewEgressController(
 				if !ok {
 					return nil, fmt.Errorf("obj is not Egress: %+v", obj)
 				}
-				var pools []string
-				if egress.Spec.ExternalIPPool != "" {
-					pools = append(pools, egress.Spec.ExternalIPPool)
+				if egress.Spec.ExternalIPPool == "" {
+					return nil, nil
 				}
-				for _, pool := range egress.Spec.ExternalIPPools {
-					if pool != "" {
-						pools = append(pools, pool)
-					}
-				}
-				return pools, nil
+				return []string{egress.Spec.ExternalIPPool}, nil
 			},
 		})
 	c.egressInformer.AddEventHandlerWithResyncPeriod(
@@ -461,7 +455,7 @@ func (c *EgressController) updateExternalIPPool(old, cur interface{}) {
 	oldPool := old.(*crdv1b1.ExternalIPPool)
 	curPool := cur.(*crdv1b1.ExternalIPPool)
 	// We only care about SubnetInfo here.
-	if crdv1b1.CompareSubnetInfo(oldPool.Spec.SubnetInfo, curPool.Spec.SubnetInfo, false) {
+	if crdv1b1.CompareExternalIPPoolSubnetInfo(oldPool.Spec.SubnetInfo, curPool.Spec.SubnetInfo, false) {
 		return
 	}
 	c.onExternalIPPoolUpdated(curPool.Name)
@@ -474,6 +468,36 @@ func (c *EgressController) onExternalIPPoolUpdated(pool string) {
 		egress := obj.(*crdv1b1.Egress)
 		c.queue.Add(egress.Name)
 	}
+}
+
+func subnetInfoForIP(subnetInfo *crdv1b1.ExternalIPPoolSubnetInfo, ip string) (*crdv1b1.SubnetInfo, error) {
+	if subnetInfo == nil {
+		return nil, nil
+	}
+	if subnetInfo.Gateways == nil {
+		return &crdv1b1.SubnetInfo{
+			Gateway:      subnetInfo.Gateway,
+			PrefixLength: subnetInfo.PrefixLength,
+			VLAN:         subnetInfo.VLAN,
+		}, nil
+	}
+
+	parsedIP := net.ParseIP(ip)
+	if parsedIP == nil {
+		return nil, fmt.Errorf("invalid IP address %s", ip)
+	}
+	for _, gateway := range subnetInfo.Gateways {
+		parsedGateway := net.ParseIP(gateway.Gateway)
+		if parsedGateway == nil || (parsedGateway.To4() == nil) != (parsedIP.To4() == nil) {
+			continue
+		}
+		return &crdv1b1.SubnetInfo{
+			Gateway:      gateway.Gateway,
+			PrefixLength: gateway.PrefixLength,
+			VLAN:         subnetInfo.VLAN,
+		}, nil
+	}
+	return nil, fmt.Errorf("no subnet gateway for IP address %s", ip)
 }
 
 func (c *EgressController) onLocalIPUpdate(ip string, added bool) {
@@ -541,7 +565,11 @@ func (c *EgressController) replaceEgressIPs() error {
 			if err != nil {
 				continue
 			}
-			desiredLocalEgressIPs[egress.Status.EgressIP] = pool.Spec.SubnetInfo
+			subnetInfo, err := subnetInfoForIP(pool.Spec.SubnetInfo, egress.Status.EgressIP)
+			if err != nil {
+				return fmt.Errorf("failed to get subnet information for Egress IP %s: %w", egress.Status.EgressIP, err)
+			}
+			desiredLocalEgressIPs[egress.Status.EgressIP] = subnetInfo
 			// Record the Egress's state as we assign their IPs to this Node in the following call. It makes sure these
 			// Egress IPs will be unassigned when the Egresses are deleted.
 			c.newEgressState(egress.Name, egress.Status.EgressIP)
@@ -1053,8 +1081,8 @@ func (c *EgressController) syncEgress(egressName string) error {
 		if c.supportSeparateSubnet && egress.Spec.ExternalIPPool != "" {
 			if pool, err := c.externalIPPoolLister.Get(egress.Spec.ExternalIPPool); err != nil {
 				return err
-			} else {
-				subnetInfo = pool.Spec.SubnetInfo
+			} else if subnetInfo, err = subnetInfoForIP(pool.Spec.SubnetInfo, desiredEgressIP); err != nil {
+				return err
 			}
 		}
 		// Ensure the Egress IP is assigned to the system. Force advertising the IP if it was previously assigned to
