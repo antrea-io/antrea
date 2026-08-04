@@ -18,14 +18,148 @@ import (
 	"encoding/json"
 	"fmt"
 	"net"
+	"slices"
 
 	admv1 "k8s.io/api/admission/v1"
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/klog/v2"
 
 	crdv1beta1 "antrea.io/antrea/v2/pkg/apis/crd/v1beta1"
 )
+
+type specifiedEgressIP struct {
+	value string
+	ip    net.IP
+}
+
+func ipFamilyForIP(ip net.IP) corev1.IPFamily {
+	if ip.To4() != nil {
+		return corev1.IPv4Protocol
+	}
+	return corev1.IPv6Protocol
+}
+
+func parseSpecifiedEgressIPs(spec *crdv1beta1.EgressSpec) ([]specifiedEgressIP, sets.Set[corev1.IPFamily], error) {
+	if spec.EgressIP != "" && len(spec.EgressIPs) > 0 {
+		return nil, nil, fmt.Errorf("spec.egressIP and spec.egressIPs are mutually exclusive")
+	}
+	if len(spec.EgressIPs) > 0 && len(spec.EgressIPs) != 2 {
+		return nil, nil, fmt.Errorf("spec.egressIPs must contain exactly two addresses, one for each IP family")
+	}
+
+	values := spec.EgressIPs
+	if spec.EgressIP != "" {
+		values = []string{spec.EgressIP}
+	}
+	parsed := make([]specifiedEgressIP, 0, len(values))
+	families := sets.New[corev1.IPFamily]()
+	for _, value := range values {
+		ip := net.ParseIP(value)
+		if ip == nil {
+			return nil, nil, fmt.Errorf("IP %s is not valid", value)
+		}
+		family := ipFamilyForIP(ip)
+		if families.Has(family) {
+			return nil, nil, fmt.Errorf("spec.egressIPs contains multiple addresses for IP family %s", family)
+		}
+		families.Insert(family)
+		parsed = append(parsed, specifiedEgressIP{value: value, ip: ip})
+	}
+	return parsed, families, nil
+}
+
+func requestedIPFamilies(ipFamilies []corev1.IPFamily) (sets.Set[corev1.IPFamily], error) {
+	if len(ipFamilies) > 2 {
+		return nil, fmt.Errorf("spec.ipFamilies may contain at most two entries")
+	}
+	families := sets.New[corev1.IPFamily]()
+	for _, family := range ipFamilies {
+		if family != corev1.IPv4Protocol && family != corev1.IPv6Protocol {
+			return nil, fmt.Errorf("spec.ipFamilies contains invalid IP family %s", family)
+		}
+		if families.Has(family) {
+			return nil, fmt.Errorf("spec.ipFamilies contains duplicate IP family %s", family)
+		}
+		families.Insert(family)
+	}
+	return families, nil
+}
+
+func egressIPConfigurationEqual(oldSpec, newSpec *crdv1beta1.EgressSpec) bool {
+	return oldSpec.EgressIP == newSpec.EgressIP &&
+		slices.Equal(oldSpec.EgressIPs, newSpec.EgressIPs) &&
+		oldSpec.ExternalIPPool == newSpec.ExternalIPPool &&
+		slices.Equal(oldSpec.IPFamilies, newSpec.IPFamilies)
+}
+
+func (c *EgressController) validateEgressIPConfiguration(oldEgress, newEgress *crdv1beta1.Egress) error {
+	specifiedIPs, specifiedFamilies, err := parseSpecifiedEgressIPs(&newEgress.Spec)
+	if err != nil {
+		return err
+	}
+	requestedFamilies, err := requestedIPFamilies(newEgress.Spec.IPFamilies)
+	if err != nil {
+		return err
+	}
+	if newEgress.Spec.EgressIP != "" && requestedFamilies.Len() > 1 {
+		return fmt.Errorf("spec.egressIP is only supported for a single-stack Egress")
+	}
+	if requestedFamilies.Len() > 0 && specifiedFamilies.Difference(requestedFamilies).Len() > 0 {
+		return fmt.Errorf("the IP families of the specified Egress IPs %v must be included in spec.ipFamilies %v",
+			sets.List(specifiedFamilies), sets.List(requestedFamilies))
+	}
+
+	if newEgress.Spec.ExternalIPPool == "" {
+		if len(specifiedIPs) == 0 {
+			return fmt.Errorf("an Egress IP or ExternalIPPool must be specified")
+		}
+		if requestedFamilies.Len() > 0 && !specifiedFamilies.Equal(requestedFamilies) {
+			return fmt.Errorf("an Egress IP must be specified for every requested IP family when externalIPPool is empty")
+		}
+		return nil
+	}
+
+	// Allow unrelated updates when the referenced pool has already been deleted.
+	if egressIPConfigurationEqual(&oldEgress.Spec, &newEgress.Spec) {
+		return nil
+	}
+	poolName := newEgress.Spec.ExternalIPPool
+	if !c.externalIPAllocator.IPPoolExists(poolName) {
+		return fmt.Errorf("ExternalIPPool %s does not exist", poolName)
+	}
+	poolFamilyList, err := c.externalIPAllocator.IPPoolIPFamilies(poolName)
+	if err != nil {
+		return fmt.Errorf("failed to determine IP families for ExternalIPPool %s: %w", poolName, err)
+	}
+	poolFamilies := sets.New(poolFamilyList...)
+	if poolFamilies.Len() == 0 {
+		return fmt.Errorf("ExternalIPPool %s does not contain any IP ranges", poolName)
+	}
+
+	if requestedFamilies.Len() == 0 {
+		switch {
+		case specifiedFamilies.Len() > 0:
+			requestedFamilies = specifiedFamilies.Clone()
+		case poolFamilies.Len() == 1:
+			requestedFamilies = poolFamilies.Clone()
+		default:
+			return fmt.Errorf("spec.ipFamilies must be specified when dual-stack ExternalIPPool %s is used without an explicit Egress IP", poolName)
+		}
+	}
+	if requestedFamilies.Difference(poolFamilies).Len() > 0 {
+		return fmt.Errorf("requested IP families %v are not all available in ExternalIPPool %s (available: %v)",
+			sets.List(requestedFamilies), poolName, sets.List(poolFamilies))
+	}
+	for _, specifiedIP := range specifiedIPs {
+		if !c.externalIPAllocator.IPPoolHasIP(poolName, specifiedIP.ip) {
+			return fmt.Errorf("IP %s is not within the IP range", specifiedIP.value)
+		}
+	}
+	return nil
+}
 
 func (c *EgressController) ValidateEgress(review *admv1.AdmissionReview) *admv1.AdmissionResponse {
 	var result *metav1.Status
@@ -48,12 +182,6 @@ func (c *EgressController) ValidateEgress(review *admv1.AdmissionReview) *admv1.
 	}
 
 	shouldAllow := func(oldEgress, newEgress *crdv1beta1.Egress) (bool, string) {
-		if len(newEgress.Spec.EgressIPs) > 0 {
-			return false, "spec.egressIPs is not supported yet"
-		}
-		if len(newEgress.Spec.ExternalIPPools) > 0 {
-			return false, "spec.externalIPPools is not supported yet"
-		}
 		// Validate Egress trafficShaping
 		if newEgress.Spec.Bandwidth != nil {
 			_, err := resource.ParseQuantity(newEgress.Spec.Bandwidth.Rate)
@@ -65,23 +193,8 @@ func (c *EgressController) ValidateEgress(review *admv1.AdmissionReview) *admv1.
 				return false, fmt.Sprintf("Burst %s in Egress %s is invalid: %v", newEgress.Spec.Bandwidth.Burst, newEgress.Name, err)
 			}
 		}
-		// Allow it if EgressIP and ExternalIPPool don't change.
-		if newEgress.Spec.EgressIP == oldEgress.Spec.EgressIP && newEgress.Spec.ExternalIPPool == oldEgress.Spec.ExternalIPPool {
-			return true, ""
-		}
-		// Only validate whether the specified Egress IP is in the Pool when they are both set.
-		if newEgress.Spec.EgressIP == "" || newEgress.Spec.ExternalIPPool == "" {
-			return true, ""
-		}
-		ip := net.ParseIP(newEgress.Spec.EgressIP)
-		if ip == nil {
-			return false, fmt.Sprintf("IP %s is not valid", newEgress.Spec.EgressIP)
-		}
-		if !c.externalIPAllocator.IPPoolExists(newEgress.Spec.ExternalIPPool) {
-			return false, fmt.Sprintf("ExternalIPPool %s does not exist", newEgress.Spec.ExternalIPPool)
-		}
-		if !c.externalIPAllocator.IPPoolHasIP(newEgress.Spec.ExternalIPPool, ip) {
-			return false, fmt.Sprintf("IP %s is not within the IP range", newEgress.Spec.EgressIP)
+		if err := c.validateEgressIPConfiguration(oldEgress, newEgress); err != nil {
+			return false, err.Error()
 		}
 		return true, ""
 	}

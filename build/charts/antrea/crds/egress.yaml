@@ -20,17 +20,16 @@ spec:
               type: object
               required:
               - appliedTo
-              oneOf:
-              - anyOf:
-                - required:
-                  - egressIP
-                - required:
-                  - externalIPPool
-              - anyOf:
-                - required:
-                  - egressIPs
-                - required:
-                  - externalIPPools
+              anyOf:
+              - required:
+                - egressIP
+              - required:
+                - egressIPs
+              - required:
+                - externalIPPool
+              x-kubernetes-validations:
+              - message: egressIP and egressIPs are mutually exclusive
+                rule: "!(has(self.egressIP) && has(self.egressIPs))"
               properties:
                 appliedTo:
                   type: object
@@ -96,18 +95,30 @@ spec:
                   - format: ipv6
                 egressIPs:
                   type: array
+                  minItems: 2
+                  maxItems: 2
+                  x-kubernetes-validations:
+                  - message: egressIPs must not contain duplicate IP families
+                    rule: "self.size() < 2 || self[0].contains(':') != self[1].contains(':')"
                   items:
                     type: string
                     oneOf:
-                    - maxLength: 0
                     - format: ipv4
                     - format: ipv6
                 externalIPPool:
                   type: string
-                externalIPPools:
+                ipFamilies:
                   type: array
+                  minItems: 1
+                  maxItems: 2
+                  x-kubernetes-validations:
+                  - message: ipFamilies must not contain duplicate entries
+                    rule: "self.size() < 2 || self[0] != self[1]"
                   items:
                     type: string
+                    enum:
+                    - IPv4
+                    - IPv6
                 bandwidth:
                   type: object
                   required:

@@ -21,6 +21,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	admv1 "k8s.io/api/admission/v1"
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/tools/cache"
@@ -31,6 +32,17 @@ import (
 func marshal(object runtime.Object) []byte {
 	raw, _ := json.Marshal(object)
 	return raw
+}
+
+func mutateEgress(egress *crdv1beta1.Egress, mutate func(*crdv1beta1.Egress)) *crdv1beta1.Egress {
+	mutate(egress)
+	return egress
+}
+
+func newDualStackExternalIPPool(name string) *crdv1beta1.ExternalIPPool {
+	pool := newExternalIPPool(name, "10.10.10.0/24", "", "")
+	pool.Spec.IPRanges = append(pool.Spec.IPRanges, crdv1beta1.IPRange{CIDR: "2001:db8:10::/64"})
+	return pool
 }
 
 func TestEgressControllerValidateEgress(t *testing.T) {
@@ -93,6 +105,230 @@ func TestEgressControllerValidateEgress(t *testing.T) {
 				Object:    runtime.RawExtension{Raw: marshal(newEgress("foo", "10.10.10.1", "bar", nil, nil, nil))},
 			},
 			expectedResponse: &admv1.AdmissionResponse{Allowed: true},
+		},
+		{
+			name:                   "Requesting explicit dual-stack IPs should be allowed",
+			existingExternalIPPool: newDualStackExternalIPPool("dual-stack"),
+			request: &admv1.AdmissionRequest{
+				Name:      "foo",
+				Operation: "CREATE",
+				Object: runtime.RawExtension{Raw: marshal(mutateEgress(newEgress("foo", "", "dual-stack", nil, nil, nil), func(egress *crdv1beta1.Egress) {
+					egress.Spec.EgressIPs = []string{"10.10.10.1", "2001:db8:10::1"}
+					egress.Spec.IPFamilies = []corev1.IPFamily{corev1.IPv4Protocol, corev1.IPv6Protocol}
+				}))},
+			},
+			expectedResponse: &admv1.AdmissionResponse{Allowed: true},
+		},
+		{
+			name:                   "Reverse dual-stack IP and family ordering should be allowed",
+			existingExternalIPPool: newDualStackExternalIPPool("dual-stack"),
+			request: &admv1.AdmissionRequest{
+				Name:      "foo",
+				Operation: "CREATE",
+				Object: runtime.RawExtension{Raw: marshal(mutateEgress(newEgress("foo", "", "dual-stack", nil, nil, nil), func(egress *crdv1beta1.Egress) {
+					egress.Spec.EgressIPs = []string{"2001:db8:10::1", "10.10.10.1"}
+					egress.Spec.IPFamilies = []corev1.IPFamily{corev1.IPv6Protocol, corev1.IPv4Protocol}
+				}))},
+			},
+			expectedResponse: &admv1.AdmissionResponse{Allowed: true},
+		},
+		{
+			name:                   "Requesting automatic dual-stack allocation should be allowed",
+			existingExternalIPPool: newDualStackExternalIPPool("dual-stack"),
+			request: &admv1.AdmissionRequest{
+				Name:      "foo",
+				Operation: "CREATE",
+				Object: runtime.RawExtension{Raw: marshal(mutateEgress(newEgress("foo", "", "dual-stack", nil, nil, nil), func(egress *crdv1beta1.Egress) {
+					egress.Spec.IPFamilies = []corev1.IPFamily{corev1.IPv4Protocol, corev1.IPv6Protocol}
+				}))},
+			},
+			expectedResponse: &admv1.AdmissionResponse{Allowed: true},
+		},
+		{
+			name:                   "Selecting one family from a dual-stack pool should be allowed",
+			existingExternalIPPool: newDualStackExternalIPPool("dual-stack"),
+			request: &admv1.AdmissionRequest{
+				Name:      "foo",
+				Operation: "CREATE",
+				Object: runtime.RawExtension{Raw: marshal(mutateEgress(newEgress("foo", "", "dual-stack", nil, nil, nil), func(egress *crdv1beta1.Egress) {
+					egress.Spec.IPFamilies = []corev1.IPFamily{corev1.IPv6Protocol}
+				}))},
+			},
+			expectedResponse: &admv1.AdmissionResponse{Allowed: true},
+		},
+		{
+			name:                   "Legacy explicit IP selects one family from a dual-stack pool",
+			existingExternalIPPool: newDualStackExternalIPPool("dual-stack"),
+			request: &admv1.AdmissionRequest{
+				Name:      "foo",
+				Operation: "CREATE",
+				Object:    runtime.RawExtension{Raw: marshal(newEgress("foo", "2001:db8:10::1", "dual-stack", nil, nil, nil))},
+			},
+			expectedResponse: &admv1.AdmissionResponse{Allowed: true},
+		},
+		{
+			name:                   "Dual-stack pool without family selection should not be allowed",
+			existingExternalIPPool: newDualStackExternalIPPool("dual-stack"),
+			request: &admv1.AdmissionRequest{
+				Name:      "foo",
+				Operation: "CREATE",
+				Object:    runtime.RawExtension{Raw: marshal(newEgress("foo", "", "dual-stack", nil, nil, nil))},
+			},
+			expectedResponse: &admv1.AdmissionResponse{
+				Allowed: false,
+				Result: &metav1.Status{
+					Message: "spec.ipFamilies must be specified when dual-stack ExternalIPPool dual-stack is used without an explicit Egress IP",
+				},
+			},
+		},
+		{
+			name:                   "Single-stack pool without family selection should be allowed",
+			existingExternalIPPool: newExternalIPPool("bar", "10.10.10.0/24", "", ""),
+			request: &admv1.AdmissionRequest{
+				Name:      "foo",
+				Operation: "CREATE",
+				Object:    runtime.RawExtension{Raw: marshal(newEgress("foo", "", "bar", nil, nil, nil))},
+			},
+			expectedResponse: &admv1.AdmissionResponse{Allowed: true},
+		},
+		{
+			name: "Non-existing ExternalIPPool without an explicit IP should not be allowed",
+			request: &admv1.AdmissionRequest{
+				Name:      "foo",
+				Operation: "CREATE",
+				Object:    runtime.RawExtension{Raw: marshal(newEgress("foo", "", "nonExistingPool", nil, nil, nil))},
+			},
+			expectedResponse: &admv1.AdmissionResponse{
+				Allowed: false,
+				Result: &metav1.Status{
+					Message: "ExternalIPPool nonExistingPool does not exist",
+				},
+			},
+		},
+		{
+			name:                   "egressIP and egressIPs should be mutually exclusive",
+			existingExternalIPPool: newDualStackExternalIPPool("dual-stack"),
+			request: &admv1.AdmissionRequest{
+				Name:      "foo",
+				Operation: "CREATE",
+				Object: runtime.RawExtension{Raw: marshal(mutateEgress(newEgress("foo", "10.10.10.1", "dual-stack", nil, nil, nil), func(egress *crdv1beta1.Egress) {
+					egress.Spec.EgressIPs = []string{"2001:db8:10::1"}
+				}))},
+			},
+			expectedResponse: &admv1.AdmissionResponse{
+				Allowed: false,
+				Result:  &metav1.Status{Message: "spec.egressIP and spec.egressIPs are mutually exclusive"},
+			},
+		},
+		{
+			name: "egressIPs with duplicate families should not be allowed",
+			request: &admv1.AdmissionRequest{
+				Name:      "foo",
+				Operation: "CREATE",
+				Object: runtime.RawExtension{Raw: marshal(mutateEgress(newEgress("foo", "", "", nil, nil, nil), func(egress *crdv1beta1.Egress) {
+					egress.Spec.EgressIPs = []string{"10.10.10.1", "10.10.10.2"}
+				}))},
+			},
+			expectedResponse: &admv1.AdmissionResponse{
+				Allowed: false,
+				Result:  &metav1.Status{Message: "spec.egressIPs contains multiple addresses for IP family IPv4"},
+			},
+		},
+		{
+			name: "Duplicate ipFamilies should not be allowed",
+			request: &admv1.AdmissionRequest{
+				Name:      "foo",
+				Operation: "CREATE",
+				Object: runtime.RawExtension{Raw: marshal(mutateEgress(newEgress("foo", "", "", nil, nil, nil), func(egress *crdv1beta1.Egress) {
+					egress.Spec.IPFamilies = []corev1.IPFamily{corev1.IPv4Protocol, corev1.IPv4Protocol}
+				}))},
+			},
+			expectedResponse: &admv1.AdmissionResponse{
+				Allowed: false,
+				Result:  &metav1.Status{Message: "spec.ipFamilies contains duplicate IP family IPv4"},
+			},
+		},
+		{
+			name: "Explicit IP family must be requested",
+			request: &admv1.AdmissionRequest{
+				Name:      "foo",
+				Operation: "CREATE",
+				Object: runtime.RawExtension{Raw: marshal(mutateEgress(newEgress("foo", "2001:db8:10::1", "", nil, nil, nil), func(egress *crdv1beta1.Egress) {
+					egress.Spec.IPFamilies = []corev1.IPFamily{corev1.IPv4Protocol}
+				}))},
+			},
+			expectedResponse: &admv1.AdmissionResponse{
+				Allowed: false,
+				Result:  &metav1.Status{Message: "the IP families of the specified Egress IPs [IPv6] must be included in spec.ipFamilies [IPv4]"},
+			},
+		},
+		{
+			name:                   "Requested family must exist in pool",
+			existingExternalIPPool: newExternalIPPool("bar", "10.10.10.0/24", "", ""),
+			request: &admv1.AdmissionRequest{
+				Name:      "foo",
+				Operation: "CREATE",
+				Object: runtime.RawExtension{Raw: marshal(mutateEgress(newEgress("foo", "", "bar", nil, nil, nil), func(egress *crdv1beta1.Egress) {
+					egress.Spec.IPFamilies = []corev1.IPFamily{corev1.IPv6Protocol}
+				}))},
+			},
+			expectedResponse: &admv1.AdmissionResponse{
+				Allowed: false,
+				Result:  &metav1.Status{Message: "requested IP families [IPv6] are not all available in ExternalIPPool bar (available: [IPv4])"},
+			},
+		},
+		{
+			name: "Reverse dual-stack explicit IP ordering without a pool should be allowed",
+			request: &admv1.AdmissionRequest{
+				Name:      "foo",
+				Operation: "CREATE",
+				Object: runtime.RawExtension{Raw: marshal(mutateEgress(newEgress("foo", "", "", nil, nil, nil), func(egress *crdv1beta1.Egress) {
+					egress.Spec.EgressIPs = []string{"2001:db8:10::1", "10.10.10.1"}
+				}))},
+			},
+			expectedResponse: &admv1.AdmissionResponse{Allowed: true},
+		},
+		{
+			name: "A single address in egressIPs should not be allowed",
+			request: &admv1.AdmissionRequest{
+				Name:      "foo",
+				Operation: "CREATE",
+				Object: runtime.RawExtension{Raw: marshal(mutateEgress(newEgress("foo", "", "", nil, nil, nil), func(egress *crdv1beta1.Egress) {
+					egress.Spec.EgressIPs = []string{"10.10.10.1"}
+				}))},
+			},
+			expectedResponse: &admv1.AdmissionResponse{
+				Allowed: false,
+				Result:  &metav1.Status{Message: "spec.egressIPs must contain exactly two addresses, one for each IP family"},
+			},
+		},
+		{
+			name: "More than two addresses in egressIPs should not be allowed",
+			request: &admv1.AdmissionRequest{
+				Name:      "foo",
+				Operation: "CREATE",
+				Object: runtime.RawExtension{Raw: marshal(mutateEgress(newEgress("foo", "", "", nil, nil, nil), func(egress *crdv1beta1.Egress) {
+					egress.Spec.EgressIPs = []string{"10.10.10.1", "2001:db8:10::1", "10.10.10.2"}
+				}))},
+			},
+			expectedResponse: &admv1.AdmissionResponse{
+				Allowed: false,
+				Result:  &metav1.Status{Message: "spec.egressIPs must contain exactly two addresses, one for each IP family"},
+			},
+		},
+		{
+			name: "Legacy egressIP cannot request dual-stack",
+			request: &admv1.AdmissionRequest{
+				Name:      "foo",
+				Operation: "CREATE",
+				Object: runtime.RawExtension{Raw: marshal(mutateEgress(newEgress("foo", "10.10.10.1", "", nil, nil, nil), func(egress *crdv1beta1.Egress) {
+					egress.Spec.IPFamilies = []corev1.IPFamily{corev1.IPv4Protocol, corev1.IPv6Protocol}
+				}))},
+			},
+			expectedResponse: &admv1.AdmissionResponse{
+				Allowed: false,
+				Result:  &metav1.Status{Message: "spec.egressIP is only supported for a single-stack Egress"},
+			},
 		},
 		{
 			name:                   "Updating EgressIP to invalid one should not be allowed",

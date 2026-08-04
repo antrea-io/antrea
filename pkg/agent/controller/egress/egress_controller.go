@@ -143,6 +143,29 @@ type egressRouteTable struct {
 	marks sets.Set[uint32]
 }
 
+type egressRouteTableKey struct {
+	gateway       string
+	prefixLength  int32
+	familySubnets [2]crdv1b1.IPFamilySubnetInfo
+	vlan          int32
+}
+
+func getEgressRouteTableKey(subnetInfo *crdv1b1.SubnetInfo) egressRouteTableKey {
+	key := egressRouteTableKey{
+		gateway:      subnetInfo.Gateway,
+		prefixLength: subnetInfo.PrefixLength,
+		vlan:         subnetInfo.VLAN,
+	}
+	for _, subnet := range subnetInfo.IPFamilySubnets {
+		index := 0
+		if gateway := net.ParseIP(subnet.Gateway); gateway != nil && gateway.To4() == nil {
+			index = 1
+		}
+		key.familySubnets[index] = subnet
+	}
+	return key
+}
+
 // egressBinding keeps the Egresses applying to a Pod.
 // There is one effective Egress for a Pod at any given time.
 type egressBinding struct {
@@ -204,7 +227,7 @@ type EgressController struct {
 	// Used to allocate route table ID.
 	tableAllocator *idAllocator
 	// Each subnet has its own route table.
-	egressRouteTables map[crdv1b1.SubnetInfo]*egressRouteTable
+	egressRouteTables map[egressRouteTableKey]*egressRouteTable
 
 	linkMonitor linkmonitor.Interface
 }
@@ -279,7 +302,7 @@ func NewEgressController(
 		linkMonitor:                linkMonitor,
 	}
 	if supportSeparateSubnet {
-		c.egressRouteTables = map[crdv1b1.SubnetInfo]*egressRouteTable{}
+		c.egressRouteTables = map[egressRouteTableKey]*egressRouteTable{}
 		c.tableAllocator = newIDAllocator(types.MinRequestEgressRouteTable, types.MaxRequestEgressRouteTable)
 		externalIPPoolInformer.Informer().AddEventHandlerWithResyncPeriod(
 			cache.ResourceEventHandlerFuncs{
@@ -321,16 +344,10 @@ func NewEgressController(
 				if !ok {
 					return nil, fmt.Errorf("obj is not Egress: %+v", obj)
 				}
-				var pools []string
-				if egress.Spec.ExternalIPPool != "" {
-					pools = append(pools, egress.Spec.ExternalIPPool)
+				if egress.Spec.ExternalIPPool == "" {
+					return nil, nil
 				}
-				for _, pool := range egress.Spec.ExternalIPPools {
-					if pool != "" {
-						pools = append(pools, pool)
-					}
-				}
-				return pools, nil
+				return []string{egress.Spec.ExternalIPPool}, nil
 			},
 		})
 	c.egressInformer.AddEventHandlerWithResyncPeriod(
@@ -599,7 +616,8 @@ func (c *EgressController) installPolicyRoute(ipState *egressIPState, subnetInfo
 
 	subnetGateway := net.ParseIP(subnetInfo.Gateway)
 	// Get or create a route table for this subnet.
-	rt, exists := c.egressRouteTables[*subnetInfo]
+	subnetKey := getEgressRouteTableKey(subnetInfo)
+	rt, exists := c.egressRouteTables[subnetKey]
 	if !exists {
 		tableID, err := c.tableAllocator.allocate()
 		if err != nil {
@@ -616,7 +634,7 @@ func (c *EgressController) installPolicyRoute(ipState *egressIPState, subnetInfo
 			return fmt.Errorf("error creating route table for subnet %v: %w", subnetInfo, err)
 		}
 		rt = &egressRouteTable{tableID: tableID, marks: sets.New[uint32]()}
-		c.egressRouteTables[*subnetInfo] = rt
+		c.egressRouteTables[subnetKey] = rt
 	}
 	// Add an IP rule to make the marked Egress traffic look up the table.
 	if err := c.routeClient.AddEgressRule(rt.tableID, ipState.mark, subnetGateway.To4() == nil); err != nil {
@@ -637,7 +655,8 @@ func (c *EgressController) uninstallPolicyRoute(ipState *egressIPState) error {
 	if ipState.subnetInfo == nil {
 		return nil
 	}
-	rt, exists := c.egressRouteTables[*ipState.subnetInfo]
+	subnetKey := getEgressRouteTableKey(ipState.subnetInfo)
+	rt, exists := c.egressRouteTables[subnetKey]
 	if !exists {
 		return nil
 	}
@@ -652,7 +671,7 @@ func (c *EgressController) uninstallPolicyRoute(ipState *egressIPState) error {
 			return fmt.Errorf("error deleting route table for subnet %v: %w", ipState.subnetInfo, err)
 		}
 		c.tableAllocator.release(rt.tableID)
-		delete(c.egressRouteTables, *ipState.subnetInfo)
+		delete(c.egressRouteTables, subnetKey)
 	}
 	ipState.subnetInfo = nil
 	return nil

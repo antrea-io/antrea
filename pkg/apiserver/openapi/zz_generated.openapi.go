@@ -119,6 +119,7 @@ func GetOpenAPIDefinitions(ref common.ReferenceCallback) map[string]common.OpenA
 		v1beta1.IPAddressOwner{}.OpenAPIModelName():                       schema_pkg_apis_crd_v1beta1_IPAddressOwner(ref),
 		v1beta1.IPAddressState{}.OpenAPIModelName():                       schema_pkg_apis_crd_v1beta1_IPAddressState(ref),
 		v1beta1.IPBlock{}.OpenAPIModelName():                              schema_pkg_apis_crd_v1beta1_IPBlock(ref),
+		v1beta1.IPFamilySubnetInfo{}.OpenAPIModelName():                   schema_pkg_apis_crd_v1beta1_IPFamilySubnetInfo(ref),
 		v1beta1.IPHeader{}.OpenAPIModelName():                             schema_pkg_apis_crd_v1beta1_IPHeader(ref),
 		v1beta1.IPPool{}.OpenAPIModelName():                               schema_pkg_apis_crd_v1beta1_IPPool(ref),
 		v1beta1.IPPoolList{}.OpenAPIModelName():                           schema_pkg_apis_crd_v1beta1_IPPoolList(ref),
@@ -3766,14 +3767,14 @@ func schema_pkg_apis_crd_v1beta1_EgressSpec(ref common.ReferenceCallback) common
 					},
 					"egressIP": {
 						SchemaProps: spec.SchemaProps{
-							Description: "EgressIP specifies the SNAT IP address for the selected workloads. If ExternalIPPool is empty, it must be specified manually. If ExternalIPPool is non-empty, it can be empty and will be assigned by Antrea automatically. If both ExternalIPPool and EgressIP are non-empty, the IP must be in the pool.",
+							Description: "EgressIP is the legacy field that specifies one SNAT IP address for the selected workloads. If ExternalIPPool is empty, an address must be specified manually in EgressIP or EgressIPs. If ExternalIPPool is non-empty, it can be empty and will be assigned by Antrea automatically. If both ExternalIPPool and EgressIP are non-empty, the IP must be in the pool.",
 							Type:        []string{"string"},
 							Format:      "",
 						},
 					},
 					"egressIPs": {
 						SchemaProps: spec.SchemaProps{
-							Description: "EgressIPs specifies multiple SNAT IP addresses for the selected workloads. Cannot be set with EgressIP.",
+							Description: "EgressIPs specifies the IPv4 and IPv6 SNAT IP addresses for the selected workloads. It must contain exactly two addresses, one for each IP family. It cannot be set with EgressIP.",
 							Type:        []string{"array"},
 							Items: &spec.SchemaOrArray{
 								Schema: &spec.Schema{
@@ -3793,9 +3794,9 @@ func schema_pkg_apis_crd_v1beta1_EgressSpec(ref common.ReferenceCallback) common
 							Format:      "",
 						},
 					},
-					"externalIPPools": {
+					"ipFamilies": {
 						SchemaProps: spec.SchemaProps{
-							Description: "ExternalIPPools specifies multiple unique IP Pools that the EgressIPs should be allocated from. Entries with the same index in EgressIPs and ExternalIPPools are correlated. Cannot be set with ExternalIPPool.",
+							Description: "IPFamilies specifies the IP families for which Egress IPs should be allocated. At most one entry is allowed for each IP family. It may be omitted for a single-stack ExternalIPPool or when EgressIP or EgressIPs is specified.",
 							Type:        []string{"array"},
 							Items: &spec.SchemaOrArray{
 								Schema: &spec.Schema{
@@ -3803,6 +3804,7 @@ func schema_pkg_apis_crd_v1beta1_EgressSpec(ref common.ReferenceCallback) common
 										Default: "",
 										Type:    []string{"string"},
 										Format:  "",
+										Enum:    []interface{}{"", "IPv4", "IPv6"},
 									},
 								},
 							},
@@ -4467,6 +4469,36 @@ func schema_pkg_apis_crd_v1beta1_IPBlock(ref common.ReferenceCallback) common.Op
 					},
 				},
 				Required: []string{"cidr"},
+			},
+		},
+	}
+}
+
+func schema_pkg_apis_crd_v1beta1_IPFamilySubnetInfo(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "IPFamilySubnetInfo specifies subnet attributes for one IP family. The IP family is inferred from Gateway.",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"gateway": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Gateway is the gateway IP for this subnet, e.g. 10.10.1.1.",
+							Default:     "",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"prefixLength": {
+						SchemaProps: spec.SchemaProps{
+							Description: "PrefixLength is the prefix length for this subnet, e.g. 24.",
+							Default:     0,
+							Type:        []string{"integer"},
+							Format:      "int32",
+						},
+					},
+				},
+				Required: []string{"gateway", "prefixLength"},
 			},
 		},
 	}
@@ -5909,36 +5941,49 @@ func schema_pkg_apis_crd_v1beta1_SubnetInfo(ref common.ReferenceCallback) common
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{
-				Description: "SubnetInfo specifies subnet attributes for IP Range.",
+				Description: "SubnetInfo specifies subnet attributes for IP ranges.",
 				Type:        []string{"object"},
 				Properties: map[string]spec.Schema{
 					"gateway": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Gateway IP for this subnet, e.g. 10.10.1.1.",
-							Default:     "",
+							Description: "Gateway is the gateway IP for a single-stack subnet, e.g. 10.10.1.1. It cannot be set together with IPFamilySubnets.",
 							Type:        []string{"string"},
 							Format:      "",
 						},
 					},
 					"prefixLength": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Prefix length for the subnet, e.g. 24.",
-							Default:     0,
+							Description: "PrefixLength is the prefix length for a single-stack subnet, e.g. 24. It cannot be set together with IPFamilySubnets.",
 							Type:        []string{"integer"},
 							Format:      "int32",
 						},
 					},
+					"ipFamilySubnets": {
+						SchemaProps: spec.SchemaProps{
+							Description: "IPFamilySubnets specifies subnet attributes by IP family. At most one entry is allowed for each IP family. It cannot be set together with Gateway or PrefixLength.",
+							Type:        []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Default: map[string]interface{}{},
+										Ref:     ref(v1beta1.IPFamilySubnetInfo{}.OpenAPIModelName()),
+									},
+								},
+							},
+						},
+					},
 					"vlan": {
 						SchemaProps: spec.SchemaProps{
-							Description: "VLAN ID for this subnet. Default is 0. Valid value is 0~4094.",
+							Description: "VLAN is the VLAN ID shared by all subnets. Default is 0. Valid value is 0~4094.",
 							Type:        []string{"integer"},
 							Format:      "int32",
 						},
 					},
 				},
-				Required: []string{"gateway", "prefixLength"},
 			},
 		},
+		Dependencies: []string{
+			v1beta1.IPFamilySubnetInfo{}.OpenAPIModelName()},
 	}
 }
 

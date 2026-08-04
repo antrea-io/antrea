@@ -14,6 +14,8 @@
 
 package v1beta1
 
+import utilnet "k8s.io/utils/net"
+
 func GetEgressCondition(conditions []EgressCondition, conditionType EgressConditionType) *EgressCondition {
 	for idx := range conditions {
 		c := &conditions[idx]
@@ -36,5 +38,23 @@ func CompareSubnetInfo(a, b *SubnetInfo, ignoringGateway bool) bool {
 			return false
 		}
 	}
-	return a.VLAN == b.VLAN && a.PrefixLength == b.PrefixLength
+	if a.VLAN != b.VLAN || a.PrefixLength != b.PrefixLength || len(a.IPFamilySubnets) != len(b.IPFamilySubnets) {
+		return false
+	}
+	for _, subnetA := range a.IPFamilySubnets {
+		found := false
+		for _, subnetB := range b.IPFamilySubnets {
+			if utilnet.IPFamilyOfString(subnetA.Gateway) != utilnet.IPFamilyOfString(subnetB.Gateway) {
+				continue
+			}
+			if subnetA.PrefixLength == subnetB.PrefixLength && (ignoringGateway || subnetA.Gateway == subnetB.Gateway) {
+				found = true
+				break
+			}
+		}
+		if !found {
+			return false
+		}
+	}
+	return true
 }
