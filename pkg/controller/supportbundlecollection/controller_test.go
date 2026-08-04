@@ -85,6 +85,7 @@ type bundleConfig struct {
 	authType        v1alpha1.BundleServerAuthType
 	secretName      string
 	secretNamespace string
+	fileServerURL   string
 	hostPublicKey   []byte
 	conditions      []v1alpha1.SupportBundleCollectionCondition
 	phase           bundlePhase
@@ -1862,6 +1863,10 @@ func prepareBundleCollections(bundleConfigs []bundleConfig) []runtime.Object {
 }
 
 func generateSupportBundleResource(b bundleConfig) *v1alpha1.SupportBundleCollection {
+	fileServerURL := b.fileServerURL
+	if fileServerURL == "" {
+		fileServerURL = "https://1.1.1.1:443/supportbundles/upload"
+	}
 	bundle := &v1alpha1.SupportBundleCollection{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:              b.name,
@@ -1869,7 +1874,7 @@ func generateSupportBundleResource(b bundleConfig) *v1alpha1.SupportBundleCollec
 		},
 		Spec: v1alpha1.SupportBundleCollectionSpec{
 			FileServer: v1alpha1.BundleFileServer{
-				URL:           "https://1.1.1.1:443/supportbundles/upload",
+				URL:           fileServerURL,
 				HostPublicKey: b.hostPublicKey,
 			},
 			ExpirationMinutes: 60,
@@ -1907,10 +1912,14 @@ func generateSupportBundleResource(b bundleConfig) *v1alpha1.SupportBundleCollec
 	}
 	bundle.Spec.Authentication = v1alpha1.BundleServerAuthConfiguration{
 		AuthType: b.authType,
-		AuthSecret: &corev1.SecretReference{
+	}
+	// Only reference a Secret when the config asks for one, so that configs which do not
+	// set secretName produce a nil AuthSecret rather than an empty reference.
+	if b.secretName != "" || b.secretNamespace != "" {
+		bundle.Spec.Authentication.AuthSecret = &corev1.SecretReference{
 			Namespace: b.secretNamespace,
 			Name:      b.secretName,
-		},
+		}
 	}
 	bundle.Status = v1alpha1.SupportBundleCollectionStatus{
 		Conditions: b.conditions,
