@@ -135,4 +135,21 @@ type Group struct {
 	ServiceReference *controlplane.ServiceReference
 	// ChildGroups is the list of Group names that belong to this Group.
 	ChildGroups []string
+	// ChildGroupsNestingExceeded is true if this Group's childGroups were nested deeper than
+	// maxGroupNestingLevel when it was last synced. Antrea only supports a single level of
+	// nesting, and admission validation rejects deeper hierarchies, but that validation can be
+	// raced and does not apply to objects already in etcd, so the condition is detected here as
+	// well. Such a Group is not realized: it resolves to no member and selects no workload, and
+	// triggerParentGroupUpdates does not enqueue it as the parent of a Group that is itself
+	// flagged, which is what stops a ChildGroups cycle - a special case of exceeded nesting, in
+	// which every member is flagged - from re-enqueueing itself forever. A Group that is not
+	// flagged still enqueues a flagged parent, so that the parent can observe the event that
+	// fixes the hierarchy.
+	// It is derived state rather than a property of the source object: processGroup and
+	// processClusterGroup do not carry it over, so every ADD/UPDATE event resets it to false and
+	// the sync that those events enqueue is what recomputes it. It is therefore only guaranteed
+	// accurate for a Group that has just been synced, which is why the recursive traversals in
+	// processInternalGroupForRule and getInternalGroupMembers enforce maxGroupNestingLevel
+	// themselves rather than relying on this field for termination.
+	ChildGroupsNestingExceeded bool
 }
