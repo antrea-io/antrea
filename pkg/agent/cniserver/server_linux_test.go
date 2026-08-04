@@ -28,6 +28,9 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
+	v1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/sets"
 	fakeclientset "k8s.io/client-go/kubernetes/fake"
 
 	"antrea.io/antrea/v2/pkg/agent/cniserver/ipam"
@@ -43,9 +46,47 @@ import (
 	cnipb "antrea.io/antrea/v2/pkg/apis/cni/v1beta1"
 	ovsconfigtest "antrea.io/antrea/v2/pkg/ovs/ovsconfig/testing"
 	"antrea.io/antrea/v2/pkg/util/channel"
+	utilip "antrea.io/antrea/v2/pkg/util/ip"
 )
 
 var mockCNIDeleteChecker *typestest.MockCNIDeleteChecker
+
+var (
+	// pod4 reports an IP in its status, but has no corresponding interface in the interface
+	// store.
+	pod4 = &v1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "p4",
+			Namespace: testPodNamespace,
+		},
+		Spec: v1.PodSpec{
+			NodeName: nodeName,
+		},
+		Status: v1.PodStatus{
+			PodIPs: []v1.PodIP{
+				{IP: "1.1.1.3"},
+			},
+		},
+	}
+	// undeletableInterface corresponds to a Pod which no longer exists, but which cannot be
+	// removed from the interface store because deleting the OVS port fails.
+	undeletableInterface = &interfacestore.InterfaceConfig{
+		InterfaceName: "iface5",
+		Type:          interfacestore.ContainerInterface,
+		IPs:           []net.IP{net.ParseIP("1.1.1.4")},
+		MAC:           utilip.MustParseMAC("00:11:22:33:44:03"),
+		OVSPortConfig: &interfacestore.OVSPortConfig{
+			PortUUID: generateUUID(),
+			OFPort:   int32(5),
+		},
+		ContainerInterfaceConfig: &interfacestore.ContainerInterfaceConfig{
+			PodName:      "another-non-existing-pod",
+			PodNamespace: testPodNamespace,
+			ContainerID:  generateUUID(),
+			NetNS:        "netns4",
+		},
+	}
+)
 
 func TestValidatePrevResult(t *testing.T) {
 	cniServer := newCNIServer(t)
@@ -638,7 +679,7 @@ func TestCmdCheck(t *testing.T) {
 
 func TestReconcile(t *testing.T) {
 	controller := gomock.NewController(t)
-	kubeClient := fakeclientset.NewClientset(pod1, pod2, pod3)
+	kubeClient := fakeclientset.NewClientset(pod1, pod2, pod3, pod4)
 	mockOVSBridgeClient = ovsconfigtest.NewMockOVSBridgeClient(controller)
 	mockOFClient = openflowtest.NewMockClient(controller)
 	ifaceStore = interfacestore.NewInterfaceStore()
@@ -651,7 +692,7 @@ func TestReconcile(t *testing.T) {
 		Name: nodeName,
 	}
 	cniServer.kubeClient = kubeClient
-	for _, containerIface := range []*interfacestore.InterfaceConfig{normalInterface, staleInterface, unconnectedInterface} {
+	for _, containerIface := range []*interfacestore.InterfaceConfig{normalInterface, staleInterface, unconnectedInterface, undeletableInterface} {
 		ifaceStore.AddInterface(containerIface)
 	}
 	podFlowsInstalled := make(chan struct{})
@@ -661,15 +702,34 @@ func TestReconcile(t *testing.T) {
 		}).Times(1)
 	mockOFClient.EXPECT().UninstallPodFlows(staleInterface.InterfaceName).Return(nil).Times(1)
 	mockOFClient.EXPECT().UninstallPodFlows(unconnectedInterface.InterfaceName).Return(nil).Times(1)
+	mockOFClient.EXPECT().UninstallPodFlows(undeletableInterface.InterfaceName).Return(nil).Times(1)
 	mockOVSBridgeClient.EXPECT().DeletePort(staleInterface.PortUUID).Return(nil).Times(1)
 	mockOVSBridgeClient.EXPECT().DeletePort(unconnectedInterface.PortUUID).Return(nil).Times(1)
+	mockOVSBridgeClient.EXPECT().DeletePort(undeletableInterface.PortUUID).Return(fmt.Errorf("transaction error")).Times(1)
 	mockRoute.EXPECT().DeleteLocalAntreaFlexibleIPAMPodRule(gomock.Any()).Return(nil).Times(2)
+	var gcIPs sets.Set[string]
+	oriGarbageCollectContainerIPs := garbageCollectContainerIPs
+	garbageCollectContainerIPs = func(network string, ipsInUse sets.Set[string]) error {
+		gcIPs = ipsInUse
+		return nil
+	}
+	t.Cleanup(func() {
+		garbageCollectContainerIPs = oriGarbageCollectContainerIPs
+	})
 	err := cniServer.reconcile()
 	assert.NoError(t, err)
+	// pod1 does not report an IP in its status: its IP is only protected from garbage
+	// collection because normalInterface is present in the interface store. pod4 reports an IP
+	// in its status but has no interface. The IP of undeletableInterface is protected because
+	// that interface could not be removed from the interface store. The IP of
+	// unconnectedInterface is not protected, as that interface is deleted during reconciliation.
+	assert.Equal(t, sets.New[string]("1.1.1.1", "1.1.1.3", "1.1.1.4"), gcIPs)
 	_, exists := ifaceStore.GetInterfaceByName(staleInterface.InterfaceName)
 	assert.False(t, exists)
 	_, exists = ifaceStore.GetInterfaceByName(unconnectedInterface.InterfaceName)
 	assert.False(t, exists)
+	_, exists = ifaceStore.GetInterfaceByName(undeletableInterface.InterfaceName)
+	assert.True(t, exists)
 	select {
 	case <-podFlowsInstalled:
 	case <-time.After(500 * time.Millisecond):
