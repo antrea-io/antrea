@@ -73,6 +73,9 @@ subjects:
     namespace: kube-system
 ```
 
+The users who will create SupportBundleCollection CRs referencing these Secrets
+need the same permission: see [Applying SupportBundleCollection CR](#applying-supportbundlecollection-cr).
+
 ## The SupportBundleCollection CRD
 
 SupportBundleCollection CRD is introduced to supplement the `antctl` command
@@ -106,6 +109,14 @@ or deploy one by yourself.
 
 A Secret needs to be created in advance with the username and password of the SFTP
 Server. The Secret will be referred as `authSecret` in the following YAML examples.
+
+Note that the user creating the SupportBundleCollection CR must be allowed to `get`
+the referenced Secret: the request is rejected by the antrea-controller validating
+webhook otherwise. This prevents a user from having the antrea-controller read a
+Secret on their behalf, and upload its contents to a file server of their choosing.
+The same applies to a user updating an existing CR to change `authSecret` or `fileServer`:
+changing the file server sends the Secret's credentials to a new destination, so it
+requires that permission as well. An update which leaves both fields untouched does not.
 
 ```bash
 # Set username and password with `--from-literal=username='foo' --from-literal=password='pass'`
@@ -143,7 +154,7 @@ spec:
     authType: "BasicAuthentication"
     authSecret:
       name: support-bundle-secret
-      namespace: default # antrea-controller must be given the permission to read Secrets in "default" Namespace. 
+      namespace: default # both the antrea-controller and the user creating this CR must be given the permission to read Secrets in "default" Namespace.
 EOF
 ```
 
@@ -171,7 +182,7 @@ spec:
     authType: "BasicAuthentication"
     authSecret:
       name: support-bundle-secret
-      namespace: default # antrea-controller must be given the permission to read Secrets in "default" Namespace.
+      namespace: default # both the antrea-controller and the user creating this CR must be given the permission to read Secrets in "default" Namespace.
 EOF
 ```
 
