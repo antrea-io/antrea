@@ -15,10 +15,12 @@
 package networkpolicy
 
 import (
+	"fmt"
 	"net"
 	"strings"
 	"time"
 
+	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/conversion"
 	"k8s.io/apimachinery/pkg/types"
@@ -33,6 +35,15 @@ import (
 	"antrea.io/antrea/pkg/util/ip"
 	"antrea.io/antrea/pkg/util/k8s"
 )
+
+// maxGroupNestingLevel is the maximum number of Group levels that Antrea supports: a Group
+// listing childGroups is at level 1, and its children, at level 2, must not have childGroups of
+// their own. Reaching level 3 means the definition is invalid, and admission validation rejects
+// it (see validateChildGroup/validateChildClusterGroup).
+//
+// Raising it would also invalidate the assumption triggerParentGroupUpdates documents, that a
+// Group having children cannot have parents.
+const maxGroupNestingLevel = 2
 
 var (
 	// matchAllPodsPeerCrd is a crdv1beta1.NetworkPolicyPeer matching all
@@ -62,12 +73,40 @@ func NetworkPolicyStatusEqual(oldStatus, newStatus crdv1beta1.NetworkPolicyStatu
 
 // groupMembersComputedConditionEqual checks whether the condition status for GroupMembersComputed condition
 // is same. Returns true if equal, otherwise returns false. It disregards the lastTransitionTime field.
+//
+// Reason and Message are compared as well, so that a change of reason at an unchanged status is
+// still reported. If the antrea-controller is upgraded ahead of the CRDs, the API server prunes
+// those two fields and this never matches for a condition that sets them, which means one
+// redundant UpdateStatus call per sync of the affected Group. That is bounded: the informers are
+// created with no resync period, and update{Cluster,}Group ignores an event that changes nothing
+// but the status, so the write cannot feed itself.
 func groupMembersComputedConditionEqual(conds []crdv1beta1.GroupCondition, condition crdv1beta1.GroupCondition) bool {
 	for _, c := range conds {
 		if c.Type == crdv1beta1.GroupMembersComputed {
-			if c.Status == condition.Status {
+			if c.Status == condition.Status && c.Reason == condition.Reason && c.Message == condition.Message {
 				return true
 			}
+		}
+	}
+	return false
+}
+
+// groupMembersComputedReportsNestingExceeded returns true if the GroupMembersComputed condition
+// currently reported by the source object blames the nesting level. A Group that stops being
+// over-nested without becoming fully realized - because one of its childGroups does not exist, or
+// is not realized yet - takes neither of the two branches that write a status, so the reason has
+// to be cleared explicitly or it would keep pointing at a definition that has already been fixed.
+//
+// The callers check the internal Group's ChildGroupsNestingExceeded first, which is the same
+// transition observed in memory: it is accurate as soon as the sync that clears the flag runs,
+// while the conditions read here come from the informer cache and lag a watch round-trip behind
+// the UpdateStatus call that set them. This is the fallback for the cases in which the in-memory
+// signal is gone, i.e. after an antrea-controller restart, or after an ADD/UPDATE event on the
+// Group itself reset the flag.
+func groupMembersComputedReportsNestingExceeded(conds []crdv1beta1.GroupCondition) bool {
+	for _, c := range conds {
+		if c.Type == crdv1beta1.GroupMembersComputed {
+			return c.Reason == crdv1beta1.ChildGroupsNestingExceeded
 		}
 	}
 	return false
@@ -396,6 +435,11 @@ func getNormalizedNameForSelector(sel *antreatypes.GroupSelector) string {
 func (n *NetworkPolicyController) syncInternalGroup(key string) error {
 	defer n.triggerANNPUpdates(key)
 	defer n.triggerCNPUpdates(key)
+	// triggerParentGroupUpdates reads ChildGroupsNestingExceeded from internalGroupStore, which
+	// the syncInternal{Cluster,Namespaced}Group call below computes and persists synchronously,
+	// before any deferred call unwinds. Preserve that ordering: a Group that references itself
+	// is its own parent, so reading the flag before the sync refreshes it reintroduces the CPU
+	// spin that a ChildGroups cycle causes.
 	defer n.triggerParentGroupUpdates(key)
 	defer n.triggerDerivedGroupUpdates(key)
 	// Retrieve the internal Group corresponding to this key.
@@ -411,4 +455,89 @@ func (n *NetworkPolicyController) syncInternalGroup(key string) error {
 		return n.syncInternalNamespacedGroup(grp)
 	}
 	return n.syncInternalClusterGroup(grp)
+}
+
+// groupMembersComputedCondition returns a GroupMembersComputed condition with the given status
+// and no reason: a status of True needs no explanation, and members that are merely not computed
+// yet are reported as before, by the absence of a True condition.
+func groupMembersComputedCondition(status v1.ConditionStatus) crdv1beta1.GroupCondition {
+	return crdv1beta1.GroupCondition{
+		Type:   crdv1beta1.GroupMembersComputed,
+		Status: status,
+	}
+}
+
+// childGroupsNestingExceededCondition returns the GroupMembersComputed condition reported for a
+// Group or ClusterGroup that is not realized because of its nesting level. kind is the Kind of
+// the source object, so that the message names what the user is looking at.
+func childGroupsNestingExceededCondition(kind string) crdv1beta1.GroupCondition {
+	return crdv1beta1.GroupCondition{
+		Type:   crdv1beta1.GroupMembersComputed,
+		Status: v1.ConditionFalse,
+		Reason: crdv1beta1.ChildGroupsNestingExceeded,
+		Message: fmt.Sprintf("The childGroups of this %s must not have childGroups of their own. "+
+			"Its members cannot be computed and it is not realized: fix its definition, or the "+
+			"definition of one of its childGroups.", kind),
+	}
+}
+
+// childGroupsNestingExceeded returns true if resolving the given internal Group's childGroups
+// reaches a level deeper than maxGroupNestingLevel, i.e. if one of its children has childGroups
+// of its own. Such a Group is not realized, and it is excluded from parent Group updates.
+//
+// Admission validation is meant to make this impossible: it rejects a Group that references
+// itself, and it rejects a Group whose child has children, or whose parent has a parent. Those
+// two checks read the informer cache and the internal Group store though, so concurrent requests
+// can race past them, and a hierarchy created before this validation existed is reloaded from
+// etcd on restart without being validated.
+//
+// A ChildGroups cycle is one way to exceed the limit, and it is the dangerous one: every member
+// of a cycle is its own ancestor, so it is nested infinitely deep. The check does not need to
+// identify cycles as such, and it does not need a visited set: it never walks deeper than
+// maxGroupNestingLevel, so it terminates on any graph.
+func (n *NetworkPolicyController) childGroupsNestingExceeded(group *antreatypes.Group) bool {
+	// A Group with no childGroups is at level 1 with nothing below it, and this is the common case.
+	if len(group.ChildGroups) == 0 {
+		return false
+	}
+	groups := []*antreatypes.Group{group}
+	for level := 1; level < maxGroupNestingLevel; level++ {
+		var nextLevel []*antreatypes.Group
+		// Expand each Group of the next level once, however many times it is referenced: a
+		// childGroup listed twice, or reachable through two parents, has the same childGroups
+		// either way, so it expands to the same Groups and answers the leaf question below
+		// identically. This bounds each level by the size of the store instead of letting
+		// duplicates and diamonds multiply the frontier from one level to the next. The set is
+		// deliberately per level and not shared across levels: the same Group appearing at two
+		// levels must still be tested at the deepest one.
+		expanded := sets.New[string]()
+		for _, grp := range groups {
+			for _, childName := range grp.ChildGroups {
+				// childName is the name of a child ClusterGroup, or the name of a child Group
+				// in the same Namespace as its parent.
+				childKey := k8s.NamespacedName(grp.SourceReference.Namespace, childName)
+				if expanded.Has(childKey) {
+					continue
+				}
+				expanded.Insert(childKey)
+				childObj, found, _ := n.internalGroupStore.Get(childKey)
+				if !found {
+					// The child does not exist yet: it contributes no members, and the Group
+					// will be synced again when it is created.
+					continue
+				}
+				nextLevel = append(nextLevel, childObj.(*antreatypes.Group))
+			}
+		}
+		groups = nextLevel
+	}
+	// Any Group at the deepest supported level must be a leaf. Note that this is evaluated on the
+	// Group's own childGroups list, not on the children it resolves to, so the answer does not
+	// change when a child that is referenced but does not exist yet is created.
+	for _, grp := range groups {
+		if len(grp.ChildGroups) > 0 {
+			return true
+		}
+	}
+	return false
 }

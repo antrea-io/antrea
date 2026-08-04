@@ -15,11 +15,13 @@
 package clustergroupmember
 
 import (
+	"fmt"
 	"net"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apiserver/pkg/endpoints/request"
@@ -142,6 +144,56 @@ func TestREST(t *testing.T) {
 	r := NewREST(nil)
 	assert.Equal(t, &controlplane.ClusterGroupMembers{}, r.New())
 	assert.False(t, r.NamespaceScoped())
+}
+
+// erroringQuerier reports the error the controller returns for a Group whose childGroups are
+// nested too deeply.
+type erroringQuerier struct {
+	err error
+}
+
+func (q erroringQuerier) GetGroupMembers(uid string) (controlplane.GroupMemberSet, []controlplane.IPBlock, error) {
+	return nil, nil, q.err
+}
+
+// TestRESTGetQuerierError verifies that an error the querier already reports as an API status
+// error, such as the BadRequest returned for a Group that is not realized because of its nesting
+// level, reaches the client as-is instead of being reported as an internal error. A plain error
+// is still a 500.
+func TestRESTGetQuerierError(t *testing.T) {
+	tests := []struct {
+		name             string
+		err              error
+		expectedBadReq   bool
+		expectedInternal bool
+	}{
+		{
+			name:           "api status error is passed through",
+			err:            errors.NewBadRequest("no member can be computed for cgA"),
+			expectedBadReq: true,
+		},
+		{
+			// GetPaginatedMembers uses errors.As rather than a type assertion, so a status
+			// error that a caller has annotated is still reported with its own status.
+			name:           "wrapped api status error is passed through",
+			err:            fmt.Errorf("querying cgA: %w", errors.NewBadRequest("no member can be computed for cgA")),
+			expectedBadReq: true,
+		},
+		{
+			name:             "plain error is an internal error",
+			err:              fmt.Errorf("no internal Group with name cgA is found"),
+			expectedInternal: true,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			r := NewREST(erroringQuerier{err: tt.err})
+			_, err := r.Get(request.NewDefaultContext(), "cgA", &controlplane.PaginationGetOptions{})
+			require.Error(t, err)
+			assert.Equal(t, tt.expectedBadReq, errors.IsBadRequest(err))
+			assert.Equal(t, tt.expectedInternal, errors.IsInternalError(err))
+		})
+	}
 }
 
 func TestRESTGetBasic(t *testing.T) {

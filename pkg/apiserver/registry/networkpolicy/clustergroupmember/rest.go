@@ -16,10 +16,11 @@ package clustergroupmember
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sort"
 
-	"k8s.io/apimachinery/pkg/api/errors"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apiserver/pkg/registry/rest"
 
@@ -77,12 +78,20 @@ func (r *REST) GetSingularName() string {
 func GetPaginatedMembers(querier GroupMembershipQuerier, name string, options runtime.Object) (members []controlplane.GroupMember, ipNets []controlplane.IPNet, totalMembers, totalPages, currentPage int64, err error) {
 	groupMembers, ipBlocks, err := querier.GetGroupMembers(name)
 	if err != nil {
-		return nil, nil, 0, 0, 0, errors.NewInternalError(err)
+		// The querier reports a user error, such as a Group whose childGroups are nested too
+		// deeply, as an API status error already: pass it through instead of turning every
+		// failure into a 500. errors.As rather than a type assertion, so that a wrapped status
+		// error is not downgraded to an internal error.
+		var statusErr apierrors.APIStatus
+		if errors.As(err, &statusErr) {
+			return nil, nil, 0, 0, 0, err
+		}
+		return nil, nil, 0, 0, 0, apierrors.NewInternalError(err)
 	}
 	// Retrieve options used for pagination.
 	getOptions, ok := options.(*controlplane.PaginationGetOptions)
 	if !ok || getOptions == nil {
-		return nil, nil, 0, 0, 0, errors.NewInternalError(fmt.Errorf("received error while retrieving options for pagination"))
+		return nil, nil, 0, 0, 0, apierrors.NewInternalError(fmt.Errorf("received error while retrieving options for pagination"))
 	}
 	if len(ipBlocks) > 0 {
 		ipNets = make([]controlplane.IPNet, 0, len(ipBlocks))
@@ -109,9 +118,9 @@ func GetPaginatedMembers(querier GroupMembershipQuerier, name string, options ru
 // An error is returned for invalid options, and an empty list is returned for a page number out of the pages range.
 func PaginateMemberList(effectiveMembers *[]controlplane.GroupMember, pageInfo *controlplane.PaginationGetOptions) (int64, int64, error) {
 	if pageInfo.Limit < 0 {
-		return 0, 0, errors.NewBadRequest(fmt.Sprintf("received invalid page limit %d for pagination", pageInfo.Limit))
+		return 0, 0, apierrors.NewBadRequest(fmt.Sprintf("received invalid page limit %d for pagination", pageInfo.Limit))
 	} else if pageInfo.Page < 0 {
-		return 0, 0, errors.NewBadRequest(fmt.Sprintf("received invalid page number %d for pagination", pageInfo.Page))
+		return 0, 0, apierrors.NewBadRequest(fmt.Sprintf("received invalid page number %d for pagination", pageInfo.Page))
 	}
 	if len(*effectiveMembers) == 0 {
 		return 0, 0, nil

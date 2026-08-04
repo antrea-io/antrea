@@ -22,6 +22,7 @@ import (
 	admv1 "k8s.io/api/admission/v1"
 	authenticationv1 "k8s.io/api/authentication/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/component-base/featuregate"
 	featuregatetesting "k8s.io/component-base/featuregate/testing"
 	"sigs.k8s.io/network-policy-api/apis/v1alpha1"
@@ -3075,6 +3076,106 @@ func TestValidateAdminNetworkPolicy(t *testing.T) {
 			} else {
 				assert.False(t, allowed)
 			}
+		})
+	}
+}
+
+func TestValidateChildGroupSelfReference(t *testing.T) {
+	tests := []struct {
+		name string
+		// existingObj is added to the informer cache before validating, to cover the UPDATE
+		// case in which the cache still holds the previous version of the object.
+		existingObj     runtime.Object
+		obj             interface{}
+		expectedAllowed bool
+		expectedReason  string
+	}{
+		{
+			name: "cluster group referencing itself on create",
+			obj: &crdv1beta1.ClusterGroup{
+				ObjectMeta: metav1.ObjectMeta{Name: "cgA"},
+				Spec:       crdv1beta1.GroupSpec{ChildGroups: []crdv1beta1.ClusterGroupReference{"cgA"}},
+			},
+			expectedAllowed: false,
+			expectedReason:  "cannot set ClusterGroup cgA as its own childGroup",
+		},
+		{
+			name: "cluster group referencing itself among other childGroups",
+			obj: &crdv1beta1.ClusterGroup{
+				ObjectMeta: metav1.ObjectMeta{Name: "cgA"},
+				Spec:       crdv1beta1.GroupSpec{ChildGroups: []crdv1beta1.ClusterGroupReference{"cgB", "cgA"}},
+			},
+			expectedAllowed: false,
+			expectedReason:  "cannot set ClusterGroup cgA as its own childGroup",
+		},
+		{
+			name: "cluster group adding a self reference on update",
+			existingObj: &crdv1beta1.ClusterGroup{
+				ObjectMeta: metav1.ObjectMeta{Name: "cgA"},
+				Spec:       crdv1beta1.GroupSpec{PodSelector: &metav1.LabelSelector{}},
+			},
+			obj: &crdv1beta1.ClusterGroup{
+				ObjectMeta: metav1.ObjectMeta{Name: "cgA"},
+				Spec:       crdv1beta1.GroupSpec{ChildGroups: []crdv1beta1.ClusterGroupReference{"cgA"}},
+			},
+			expectedAllowed: false,
+			expectedReason:  "cannot set ClusterGroup cgA as its own childGroup",
+		},
+		{
+			name: "cluster group referencing another group",
+			obj: &crdv1beta1.ClusterGroup{
+				ObjectMeta: metav1.ObjectMeta{Name: "cgA"},
+				Spec:       crdv1beta1.GroupSpec{ChildGroups: []crdv1beta1.ClusterGroupReference{"cgB"}},
+			},
+			expectedAllowed: true,
+		},
+		{
+			name: "group referencing itself on create",
+			obj: &crdv1beta1.Group{
+				ObjectMeta: metav1.ObjectMeta{Namespace: "nsA", Name: "gA"},
+				Spec:       crdv1beta1.GroupSpec{ChildGroups: []crdv1beta1.ClusterGroupReference{"gA"}},
+			},
+			expectedAllowed: false,
+			expectedReason:  "cannot set Group nsA/gA as its own childGroup",
+		},
+		{
+			name: "group adding a self reference on update",
+			existingObj: &crdv1beta1.Group{
+				ObjectMeta: metav1.ObjectMeta{Namespace: "nsA", Name: "gA"},
+				Spec:       crdv1beta1.GroupSpec{PodSelector: &metav1.LabelSelector{}},
+			},
+			obj: &crdv1beta1.Group{
+				ObjectMeta: metav1.ObjectMeta{Namespace: "nsA", Name: "gA"},
+				Spec:       crdv1beta1.GroupSpec{ChildGroups: []crdv1beta1.ClusterGroupReference{"gA"}},
+			},
+			expectedAllowed: false,
+			expectedReason:  "cannot set Group nsA/gA as its own childGroup",
+		},
+		{
+			name: "group referencing a group with the same name in another Namespace is not a self reference",
+			obj: &crdv1beta1.Group{
+				ObjectMeta: metav1.ObjectMeta{Namespace: "nsA", Name: "gA"},
+				Spec:       crdv1beta1.GroupSpec{ChildGroups: []crdv1beta1.ClusterGroupReference{"gB"}},
+			},
+			expectedAllowed: true,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var crdObjects []runtime.Object
+			if tt.existingObj != nil {
+				crdObjects = append(crdObjects, tt.existingObj)
+			}
+			stopCh := make(chan struct{})
+			defer close(stopCh)
+			_, controller := newController(nil, crdObjects)
+			controller.crdInformerFactory.Start(stopCh)
+			controller.crdInformerFactory.WaitForCacheSync(stopCh)
+			v := &groupValidator{networkPolicyController: controller.NetworkPolicyController}
+
+			_, reason, allowed := v.validateGroup(tt.obj)
+			assert.Equal(t, tt.expectedAllowed, allowed)
+			assert.Equal(t, tt.expectedReason, reason)
 		})
 	}
 }

@@ -20,6 +20,7 @@ import (
 	"net"
 
 	v1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/client-go/tools/cache"
@@ -202,6 +203,13 @@ func (c *NetworkPolicyController) syncInternalClusterGroup(grp *antreatypes.Grou
 	// Retrieve the ClusterGroup corresponding to this key.
 	cg, err := c.cgLister.Get(grp.SourceReference.ToGroupName())
 	if err != nil {
+		// grp.ChildGroupsNestingExceeded, if set, is left unrefreshed here. The lister no longer
+		// has the ClusterGroup, but internalGroupStore still does, so this sync was enqueued
+		// before the delete and deleteClusterGroup has not removed the internal Group yet. That
+		// delete removes it independently of this sync path, and the sync it enqueues finds no
+		// internal Group at all, so triggerParentGroupUpdates then treats this ClusterGroup as
+		// not flagged and notifies its parents unconditionally, which is what lets a parent
+		// that was over-nested through it recover.
 		klog.InfoS("Didn't find ClusterGroup, skip processing of internal group", "ClusterGroup", grp.SourceReference.ToTypedString())
 		return nil
 	}
@@ -212,13 +220,25 @@ func (c *NetworkPolicyController) syncInternalClusterGroup(grp *antreatypes.Grou
 		c.groupingInterface.DeleteGroup(internalGroupType, grp.SourceReference.ToGroupName())
 	}
 
+	nestingExceeded := c.childGroupsNestingExceeded(grp)
+	if nestingExceeded && !grp.ChildGroupsNestingExceeded {
+		// Logged only on the sync that observes the transition, as this ClusterGroup can be
+		// synced frequently. Note that an ADD/UPDATE event resets ChildGroupsNestingExceeded,
+		// so editing an over-nested ClusterGroup logs this again even if it stays over-nested.
+		klog.InfoS("ClusterGroup will not be realized, its childGroups are nested too deeply", "ClusterGroup", cg.Name)
+	}
+
 	membersComputed, membersComputedStatus := true, v1.ConditionFalse
 	// Update the ClusterGroup status to Realized as Antrea has recognized the Group and
 	// processed its group members. The ClusterGroup is considered realized if:
 	//   1. It does not have child groups. The group members are immediately considered
 	//      computed during syncInternalGroup, as the group selector is finalized.
 	//   2. All its child groups are created and realized.
-	if len(grp.ChildGroups) > 0 {
+	// A ClusterGroup whose childGroups are nested too deeply is never realized: its members
+	// cannot be computed, and the user has to fix its definition.
+	if nestingExceeded {
+		membersComputed = false
+	} else if len(grp.ChildGroups) > 0 {
 		for _, cgName := range grp.ChildGroups {
 			internalGroup, found, _ := c.internalGroupStore.Get(cgName)
 			if !found || internalGroup.(*antreatypes.Group).MembersComputed != v1.ConditionTrue {
@@ -229,24 +249,41 @@ func (c *NetworkPolicyController) syncInternalClusterGroup(grp *antreatypes.Grou
 	}
 	if membersComputed {
 		klog.V(4).InfoS("Updating GroupMembersComputed Status for ClusterGroup", "ClusterGroup", cg.Name)
-		err = c.updateClusterGroupStatus(cg, v1.ConditionTrue)
+		err = c.updateClusterGroupStatus(cg, groupMembersComputedCondition(v1.ConditionTrue))
 		if err != nil {
 			klog.Errorf("Failed to update ClusterGroup %s GroupMembersComputed condition to %s: %v", cg.Name, v1.ConditionTrue, err)
 		} else {
 			membersComputedStatus = v1.ConditionTrue
 		}
+	} else if nestingExceeded {
+		// Report why this ClusterGroup is not realized. The other reason for members not being
+		// computed - a child that is not realized yet - is transient and resolves on its own,
+		// so it keeps being reported by the absence of a True condition, as before.
+		err = c.updateClusterGroupStatus(cg, childGroupsNestingExceededCondition("ClusterGroup"))
+		if err != nil {
+			klog.Errorf("Failed to update ClusterGroup %s GroupMembersComputed condition to %s: %v", cg.Name, v1.ConditionFalse, err)
+		}
+	} else if grp.ChildGroupsNestingExceeded || groupMembersComputedReportsNestingExceeded(cg.Status.Conditions) {
+		// The nesting level was fixed, but the members are not computed yet. Drop the reason
+		// that no longer applies rather than leave it pointing at a definition the user has
+		// already corrected, and report the transient case as before.
+		err = c.updateClusterGroupStatus(cg, groupMembersComputedCondition(v1.ConditionFalse))
+		if err != nil {
+			klog.Errorf("Failed to update ClusterGroup %s GroupMembersComputed condition to %s: %v", cg.Name, v1.ConditionFalse, err)
+		}
 	}
-	if selectorUpdated || membersComputedStatus != originalMembersComputedStatus {
+	if selectorUpdated || membersComputedStatus != originalMembersComputedStatus || nestingExceeded != grp.ChildGroupsNestingExceeded {
 		// Update the internal Group object in the store with the new selector and status.
 		updatedGrp := &antreatypes.Group{
-			UID:              grp.UID,
-			SourceReference:  grp.SourceReference,
-			MembersComputed:  membersComputedStatus,
-			Selector:         grp.Selector,
-			IPBlocks:         grp.IPBlocks,
-			IPNets:           grp.IPNets,
-			ServiceReference: grp.ServiceReference,
-			ChildGroups:      grp.ChildGroups,
+			UID:                        grp.UID,
+			SourceReference:            grp.SourceReference,
+			MembersComputed:            membersComputedStatus,
+			Selector:                   grp.Selector,
+			IPBlocks:                   grp.IPBlocks,
+			IPNets:                     grp.IPNets,
+			ServiceReference:           grp.ServiceReference,
+			ChildGroups:                grp.ChildGroups,
+			ChildGroupsNestingExceeded: nestingExceeded,
 		}
 		klog.V(2).InfoS("Updating existing internal Group", "internalGroup", grp.SourceReference.ToGroupName())
 		c.internalGroupStore.Update(updatedGrp)
@@ -264,14 +301,44 @@ func getClusterGroupSourceRef(cg *crdv1beta1.ClusterGroup) *controlplane.GroupRe
 
 func (c *NetworkPolicyController) triggerParentGroupUpdates(grp string) {
 	// TODO: if the max supported group nesting level increases, a Group having children
-	//  will no longer be a valid indication that it cannot have parents.
+	//  will no longer be a valid indication that it cannot have parents. maxGroupNestingLevel,
+	//  which childGroupsNestingExceeded enforces, has to be kept in sync with this assumption.
 	parentGroupObjs, err := c.internalGroupStore.GetByIndex(store.ChildGroupIndex, grp)
 	if err != nil {
 		klog.Errorf("Error retrieving parents of ClusterGroup %s: %v", grp, err)
 		return
 	}
+	// A pair of Groups that both exceed the supported nesting level have nothing to tell each
+	// other: neither is realized, and neither can stop being over-nested because of the other's
+	// sync alone. Skipping that pair is what stops a ChildGroups cycle from spinning the
+	// controller: every member of a cycle is one of its own ancestors, so enqueueing parents
+	// unconditionally would enqueue the cycle again on every sync, and the internalGroup
+	// workqueue is not rate limited on this path (enqueueInternalGroup calls Add, and a
+	// successful sync calls Forget).
+	//
+	// It has to be a pair, and not the parent alone. Gating on the parent alone would leave a
+	// flagged parent with no way back: the event that fixes the hierarchy - a childGroup losing
+	// its own childGroups, or being deleted - is observed by the child, and the child would
+	// never enqueue its flagged parent again, so the parent would stay unrealized until it was
+	// itself edited or the controller restarted. Gating on grp alone has the symmetric problem
+	// on the way in: a Group synced while its cyclic child does not exist yet is not flagged,
+	// and the child, flagged on its own first sync, would never enqueue it back, so it would
+	// keep reporting no reason for its members not being computed.
+	//
+	// Requiring both still terminates. Every member of a ChildGroups cycle has childGroups, and
+	// so does its successor in the cycle, so every member of a cycle is flagged and the gate is
+	// always active inside one. Outside a cycle the chain of parents is finite. More generally,
+	// ChildGroupsNestingExceeded only ever changes when an ADD/UPDATE event changes some Group's
+	// childGroups, so between two such events each Group flips at most once.
+	syncedObj, found, _ := c.internalGroupStore.Get(grp)
+	// A Group that is no longer in the store was just deleted, which is precisely an event its
+	// parents need to see, so treat it as not flagged.
+	syncedExceeded := found && syncedObj.(*antreatypes.Group).ChildGroupsNestingExceeded
 	for _, p := range parentGroupObjs {
 		parentGrp := p.(*antreatypes.Group)
+		if syncedExceeded && parentGrp.ChildGroupsNestingExceeded {
+			continue
+		}
 		c.enqueueInternalGroup(parentGrp.SourceReference.ToGroupName())
 	}
 }
@@ -305,12 +372,9 @@ func (c *NetworkPolicyController) triggerCNPUpdates(cg string) {
 	}
 }
 
-// updateClusterGroupStatus updates the Status subresource for a ClusterGroup.
-func (c *NetworkPolicyController) updateClusterGroupStatus(cg *crdv1beta1.ClusterGroup, cStatus v1.ConditionStatus) error {
-	condStatus := crdv1beta1.GroupCondition{
-		Status: cStatus,
-		Type:   crdv1beta1.GroupMembersComputed,
-	}
+// updateClusterGroupStatus updates the Status subresource for a ClusterGroup. Use
+// groupMembersComputedCondition or childGroupsNestingExceededCondition to build condStatus.
+func (c *NetworkPolicyController) updateClusterGroupStatus(cg *crdv1beta1.ClusterGroup, condStatus crdv1beta1.GroupCondition) error {
 	if groupMembersComputedConditionEqual(cg.Status.Conditions, condStatus) {
 		// There is no change in conditions.
 		return nil
@@ -425,6 +489,13 @@ func (c *NetworkPolicyController) GetGroupMembers(name string) (controlplane.Gro
 	groupObj, found, _ := c.internalGroupStore.Get(name)
 	if found {
 		group := groupObj.(*antreatypes.Group)
+		if group.ChildGroupsNestingExceeded {
+			// getInternalGroupMembers would return an empty set here, which is
+			// indistinguishable from a Group that legitimately selects nothing. Report why
+			// instead: this is a user error, so it is a BadRequest rather than the
+			// InternalError that GetPaginatedMembers wraps a plain error into.
+			return nil, nil, apierrors.NewBadRequest(fmt.Sprintf("no member can be computed for %s: its childGroups must not have childGroups of their own", name))
+		}
 		member, ipb := c.getInternalGroupMembers(group)
 		return member, ipb, nil
 	}
