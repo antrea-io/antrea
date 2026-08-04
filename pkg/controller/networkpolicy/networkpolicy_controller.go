@@ -1249,7 +1249,21 @@ func (n *NetworkPolicyController) getAddressGroupMemberSet(g *antreatypes.Addres
 // getInternalGroupMembers knows how to construct a GroupMemberSet and ipBlocks that contains
 // all the entities selected by an internal Group. For internal Groups that has childGroups,
 // the members are computed as the union of all its childGroup's members.
+//
+// An empty result (e.g. from an unresolved childGroups reference, or from a Group that is not
+// realized because of its nesting level) still means the AddressGroup built from it matches
+// nothing, not everything. See the equivalent note on processInternalGroupForRule.
 func (n *NetworkPolicyController) getInternalGroupMembers(group *antreatypes.Group) (controlplane.GroupMemberSet, []controlplane.IPBlock) {
+	return n.getInternalGroupMembersAtLevel(group, 1)
+}
+
+// getInternalGroupMembersAtLevel is the recursive implementation of getInternalGroupMembers. It
+// bounds the traversal by nesting level; see processInternalGroupForRuleAtLevel for the full
+// rationale, which applies unchanged here.
+func (n *NetworkPolicyController) getInternalGroupMembersAtLevel(group *antreatypes.Group, level int) (controlplane.GroupMemberSet, []controlplane.IPBlock) {
+	if level > maxGroupNestingLevel || group.ChildGroupsNestingExceeded {
+		return nil, nil
+	}
 	if len(group.IPBlocks) > 0 {
 		return nil, group.IPBlocks
 	} else if group.Selector != nil && group.Selector.NodeSelector != nil {
@@ -1264,7 +1278,7 @@ func (n *NetworkPolicyController) getInternalGroupMembers(group *antreatypes.Gro
 		childGroup, found, _ := n.internalGroupStore.Get(childName)
 		if found {
 			child := childGroup.(*antreatypes.Group)
-			members, ipb := n.getInternalGroupMembers(child)
+			members, ipb := n.getInternalGroupMembersAtLevel(child, level+1)
 			ipBlocks = append(ipBlocks, ipb...)
 			groupMemberSet.Merge(members)
 		}
@@ -1511,7 +1525,22 @@ func (n *NetworkPolicyController) getAppliedToWorkloads(g *antreatypes.AppliedTo
 
 // getInternalGroupWorkloads returns a list of workloads (Pods and ExternalEntities) selected by a ClusterGroup.
 // For ClusterGroup that has childGroups, the workloads are computed as the union of all its childGroup's workloads.
+//
+// A Group that is not realized because of its nesting level selects no workload, so a policy that
+// uses it as its appliedTo applies to nothing. Selecting the part of the hierarchy that happens to
+// fit within the level would be worse: the same Group already contributes no address when it is
+// used as a rule peer, and a policy realized on an arbitrary subset of what its appliedTo names is
+// harder to notice than one that is realized on nothing and says why in the Group status.
+//
+// Unlike the traversals in processInternalGroupForRule and getInternalGroupMembers, this one only
+// ever expands a single level, so it cannot recurse forever and needs no level bound. It relies on
+// the same ChildGroupsNestingExceeded flag as those two, which is what keeps all three consistent
+// with each other, including during the window in which an ADD/UPDATE event has reset the flag and
+// the Group has not been synced again yet.
 func (n *NetworkPolicyController) getInternalGroupWorkloads(group *antreatypes.Group) ([]*v1.Pod, []*v1alpha2.ExternalEntity, error) {
+	if group.ChildGroupsNestingExceeded {
+		return nil, nil, nil
+	}
 	validateNamespace := func(pods []*v1.Pod, ees []*v1alpha2.ExternalEntity) bool {
 		// ClusterGroup can select entities in all Namespaces when used as AppliedTo.
 		if group.SourceReference.Namespace == "" {

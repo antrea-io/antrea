@@ -4100,6 +4100,20 @@ func schema_pkg_apis_crd_v1beta1_GroupCondition(ref common.ReferenceCallback) co
 							Format:  "",
 						},
 					},
+					"reason": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Reason is a machine-readable explanation for the condition's Status.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"message": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Message is a human-readable message giving more details about the condition's Status.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
 					"lastTransitionTime": {
 						SchemaProps: spec.SchemaProps{
 							Ref: ref(metav1.Time{}.OpenAPIModelName()),

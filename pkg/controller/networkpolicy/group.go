@@ -160,6 +160,8 @@ func (n *NetworkPolicyController) syncInternalNamespacedGroup(grp *antreatypes.G
 	// Retrieve the Group corresponding to this key.
 	g, err := n.grpLister.Groups(grp.SourceReference.Namespace).Get(grp.SourceReference.Name)
 	if err != nil {
+		// As in syncInternalClusterGroup, grp.ChildGroupsNestingExceeded is left unrefreshed
+		// here: deleteGroup removes the internal Group independently of this sync path.
 		klog.InfoS("Didn't find Group, skip processing of internal group", "Group", grp.SourceReference.ToTypedString())
 		return nil
 	}
@@ -171,13 +173,25 @@ func (n *NetworkPolicyController) syncInternalNamespacedGroup(grp *antreatypes.G
 		n.groupingInterface.DeleteGroup(internalGroupType, key)
 	}
 
+	nestingExceeded := n.childGroupsNestingExceeded(grp)
+	if nestingExceeded && !grp.ChildGroupsNestingExceeded {
+		// Logged only on the sync that observes the transition, as this Group can be synced
+		// frequently. Note that an ADD/UPDATE event resets ChildGroupsNestingExceeded, so
+		// editing an over-nested Group logs this again even if it stays over-nested.
+		klog.InfoS("Group will not be realized, its childGroups are nested too deeply", "Group", key)
+	}
+
 	membersComputed, membersComputedStatus := true, v1.ConditionFalse
 	// Update the Group status to Realized as Antrea has recognized the Group and
 	// processed its group members. The Group is considered realized if:
 	//   1. It does not have child groups. The group members are immediately considered
 	//      computed during syncInternalGroup, as the group selector is finalized.
 	//   2. All its child groups are created and realized.
-	if len(grp.ChildGroups) > 0 {
+	// A Group whose childGroups are nested too deeply is never realized: its members cannot be
+	// computed, and the user has to fix its definition.
+	if nestingExceeded {
+		membersComputed = false
+	} else if len(grp.ChildGroups) > 0 {
 		for _, cgName := range grp.ChildGroups {
 			internalGroup, found, _ := n.internalGroupStore.Get(k8s.NamespacedName(grp.SourceReference.Namespace, cgName))
 			if !found || internalGroup.(*antreatypes.Group).MembersComputed != v1.ConditionTrue {
@@ -188,24 +202,41 @@ func (n *NetworkPolicyController) syncInternalNamespacedGroup(grp *antreatypes.G
 	}
 	if membersComputed {
 		klog.V(4).InfoS("Updating GroupMembersComputed Status for Group", "Group", key)
-		err = n.updateGroupStatus(g, v1.ConditionTrue)
+		err = n.updateGroupStatus(g, groupMembersComputedCondition(v1.ConditionTrue))
 		if err != nil {
 			klog.Errorf("Failed to update Group %s/%s GroupMembersComputed condition to %s: %v", g.Namespace, g.Name, v1.ConditionTrue, err)
 		} else {
 			membersComputedStatus = v1.ConditionTrue
 		}
+	} else if nestingExceeded {
+		// Report why this Group is not realized. The other reason for members not being
+		// computed - a child that is not realized yet - is transient and resolves on its own,
+		// so it keeps being reported by the absence of a True condition, as before.
+		err = n.updateGroupStatus(g, childGroupsNestingExceededCondition("Group"))
+		if err != nil {
+			klog.Errorf("Failed to update Group %s/%s GroupMembersComputed condition to %s: %v", g.Namespace, g.Name, v1.ConditionFalse, err)
+		}
+	} else if grp.ChildGroupsNestingExceeded || groupMembersComputedReportsNestingExceeded(g.Status.Conditions) {
+		// The nesting level was fixed, but the members are not computed yet. Drop the reason
+		// that no longer applies rather than leave it pointing at a definition the user has
+		// already corrected, and report the transient case as before.
+		err = n.updateGroupStatus(g, groupMembersComputedCondition(v1.ConditionFalse))
+		if err != nil {
+			klog.Errorf("Failed to update Group %s/%s GroupMembersComputed condition to %s: %v", g.Namespace, g.Name, v1.ConditionFalse, err)
+		}
 	}
-	if selectorUpdated || membersComputedStatus != originalMembersComputedStatus {
+	if selectorUpdated || membersComputedStatus != originalMembersComputedStatus || nestingExceeded != grp.ChildGroupsNestingExceeded {
 		// Update the internal Group object in the store with the new selector and status.
 		updatedGrp := &antreatypes.Group{
-			UID:              grp.UID,
-			SourceReference:  grp.SourceReference,
-			MembersComputed:  membersComputedStatus,
-			Selector:         grp.Selector,
-			IPBlocks:         grp.IPBlocks,
-			IPNets:           grp.IPNets,
-			ServiceReference: grp.ServiceReference,
-			ChildGroups:      grp.ChildGroups,
+			UID:                        grp.UID,
+			SourceReference:            grp.SourceReference,
+			MembersComputed:            membersComputedStatus,
+			Selector:                   grp.Selector,
+			IPBlocks:                   grp.IPBlocks,
+			IPNets:                     grp.IPNets,
+			ServiceReference:           grp.ServiceReference,
+			ChildGroups:                grp.ChildGroups,
+			ChildGroupsNestingExceeded: nestingExceeded,
 		}
 		klog.V(2).InfoS("Updating existing internal Group", "internalGroup", grp.SourceReference.ToGroupName())
 		n.internalGroupStore.Update(updatedGrp)
@@ -222,12 +253,9 @@ func (n *NetworkPolicyController) triggerANNPUpdates(g string) {
 	}
 }
 
-// updateGroupStatus updates the Status subresource for a Group.
-func (n *NetworkPolicyController) updateGroupStatus(g *crdv1beta1.Group, cStatus v1.ConditionStatus) error {
-	condStatus := crdv1beta1.GroupCondition{
-		Status: cStatus,
-		Type:   crdv1beta1.GroupMembersComputed,
-	}
+// updateGroupStatus updates the Status subresource for a Group. Use
+// groupMembersComputedCondition or childGroupsNestingExceededCondition to build condStatus.
+func (n *NetworkPolicyController) updateGroupStatus(g *crdv1beta1.Group, condStatus crdv1beta1.GroupCondition) error {
 	if groupMembersComputedConditionEqual(g.Status.Conditions, condStatus) {
 		// There is no change in conditions.
 		return nil
