@@ -427,10 +427,22 @@ type GroupConditionType string
 
 const GroupMembersComputed GroupConditionType = "GroupMembersComputed"
 
+// ChildGroupsNestingExceeded is the GroupCondition Reason reported for a Group whose
+// childGroups are nested deeper than the single level that Antrea supports. Such a Group is not
+// realized: it contributes no members to the policies that select it, until its definition is
+// fixed.
+const ChildGroupsNestingExceeded string = "ChildGroupsNestingExceeded"
+
 type GroupCondition struct {
-	Type               GroupConditionType     `json:"type"`
-	Status             corev1.ConditionStatus `json:"status"`
-	LastTransitionTime metav1.Time            `json:"lastTransitionTime,omitempty"`
+	Type   GroupConditionType     `json:"type"`
+	Status corev1.ConditionStatus `json:"status"`
+	// Reason is a machine-readable explanation for the condition's Status.
+	// +optional
+	Reason string `json:"reason,omitempty"`
+	// Message is a human-readable message giving more details about the condition's Status.
+	// +optional
+	Message            string      `json:"message,omitempty"`
+	LastTransitionTime metav1.Time `json:"lastTransitionTime,omitempty"`
 }
 
 // GroupStatus represents information about the status of a Group.

@@ -1746,7 +1746,16 @@ status of the group.
 
 - **groupMembersComputed**: The "GroupMembersComputed" condition is set to "True"
   when the controller has calculated all the corresponding workloads that match the
-  selectors set in the group.
+  selectors set in the group. It is set to "False" with the reason
+  "ChildGroupsNestingExceeded" when the group's `childGroups` are nested deeper than
+  the one level of nesting that is supported: such a group is not realized, it
+  contributes no address to the policies that select it as a peer, and a policy that
+  uses it as its `appliedTo` applies to nothing. Fixing the definition of the group
+  itself, or removing the `childGroups` of one of its childGroups (or deleting that
+  childGroup), clears the condition without the group having to be edited again.
+  Querying the members of such a group, with `kubectl get clustergroupmembers` or
+  `kubectl get groupmembers`, reports the same error rather than an empty list.
+  This condition applies to Groups as well as ClusterGroups.
 
 ### *kubectl* commands for ClusterGroup
 
