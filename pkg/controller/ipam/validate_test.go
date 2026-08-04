@@ -191,7 +191,7 @@ func TestEgressControllerValidateExternalIPPool(t *testing.T) {
 			expectedResponse: &admv1.AdmissionResponse{
 				Allowed: false,
 				Result: &metav1.Status{
-					Message: "range [10:2400::0/96] must be a strict subset of the subnet 192.168.3.1/24",
+					Message: "range [10:2400::0/96] has no subnet configuration for IP family IPv6",
 				},
 			},
 		},

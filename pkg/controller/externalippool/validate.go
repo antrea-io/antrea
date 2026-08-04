@@ -68,6 +68,24 @@ func (c *ExternalIPPoolController) ValidateExternalIPPool(review *admv1.Admissio
 			allowed = false
 			break
 		}
+		oldIPFamilies, err := validation.IPFamiliesForRanges(oldObj.Spec.IPRanges)
+		if err != nil {
+			msg = err.Error()
+			allowed = false
+			break
+		}
+		newIPFamilies, err := validation.IPFamiliesForRanges(newObj.Spec.IPRanges)
+		if err != nil {
+			msg = err.Error()
+			allowed = false
+			break
+		}
+		// Allow an empty pool to establish its IP families when its first ranges are added.
+		if oldIPFamilies.Len() > 0 && !oldIPFamilies.Equal(newIPFamilies) {
+			allowed = false
+			msg = fmt.Sprintf("IP families are immutable (old: %v, new: %v)", sets.List(oldIPFamilies), sets.List(newIPFamilies))
+			break
+		}
 		oldIPRangeSet := validation.GetIPRangeSet(oldObj.Spec.IPRanges)
 		newIPRangeSet := validation.GetIPRangeSet(newObj.Spec.IPRanges)
 		deletedIPRanges := oldIPRangeSet.Difference(newIPRangeSet)
@@ -104,7 +122,7 @@ func newAdmissionResponseForErr(err error) *admv1.AdmissionResponse {
 func validateIPRangesAndSubnetInfoForExternalIPPool(externalIPPool *crdv1beta1.ExternalIPPool, existingExternalIPPools []*crdv1beta1.ExternalIPPool) error {
 	ipRanges := externalIPPool.Spec.IPRanges
 	subnetInfo := externalIPPool.Spec.SubnetInfo
-	currentNormalizedIPRanges, err := validation.ValidateIPRangesAndSubnetInfo(subnetInfo, ipRanges)
+	currentNormalizedIPRanges, err := validation.ValidateExternalIPPoolIPRangesAndSubnetInfo(subnetInfo, ipRanges)
 	if err != nil {
 		return err
 	}

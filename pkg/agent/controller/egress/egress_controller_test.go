@@ -225,6 +225,69 @@ func newFakeController(t *testing.T, initObjects []runtime.Object) *fakeControll
 	}
 }
 
+func TestSubnetInfoForIP(t *testing.T) {
+	dualStackSubnetInfo := &crdv1b1.ExternalIPPoolSubnetInfo{
+		Gateways: []crdv1b1.SubnetGateway{
+			{Gateway: "192.168.1.1", PrefixLength: 24},
+			{Gateway: "2001:db8::1", PrefixLength: 64},
+		},
+		VLAN: 10,
+	}
+	tests := []struct {
+		name        string
+		subnetInfo  *crdv1b1.ExternalIPPoolSubnetInfo
+		ip          string
+		expected    *crdv1b1.SubnetInfo
+		expectedErr string
+	}{
+		{
+			name: "no subnet info",
+			ip:   "192.168.1.10",
+		},
+		{
+			name:       "legacy subnet info",
+			subnetInfo: &crdv1b1.ExternalIPPoolSubnetInfo{Gateway: "192.168.1.1", PrefixLength: 24, VLAN: 10},
+			ip:         "192.168.1.10",
+			expected:   &crdv1b1.SubnetInfo{Gateway: "192.168.1.1", PrefixLength: 24, VLAN: 10},
+		},
+		{
+			name:       "IPv4 gateway",
+			subnetInfo: dualStackSubnetInfo,
+			ip:         "192.168.1.10",
+			expected:   &crdv1b1.SubnetInfo{Gateway: "192.168.1.1", PrefixLength: 24, VLAN: 10},
+		},
+		{
+			name:       "IPv6 gateway",
+			subnetInfo: dualStackSubnetInfo,
+			ip:         "2001:db8::10",
+			expected:   &crdv1b1.SubnetInfo{Gateway: "2001:db8::1", PrefixLength: 64, VLAN: 10},
+		},
+		{
+			name:        "missing gateway family",
+			subnetInfo:  &crdv1b1.ExternalIPPoolSubnetInfo{Gateways: dualStackSubnetInfo.Gateways[:1]},
+			ip:          "2001:db8::10",
+			expectedErr: "no subnet gateway for IP address 2001:db8::10",
+		},
+		{
+			name:        "invalid IP",
+			subnetInfo:  dualStackSubnetInfo,
+			ip:          "invalid",
+			expectedErr: "invalid IP address invalid",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			actual, err := subnetInfoForIP(tt.subnetInfo, tt.ip)
+			if tt.expectedErr != "" {
+				assert.EqualError(t, err, tt.expectedErr)
+				return
+			}
+			require.NoError(t, err)
+			assert.Equal(t, tt.expected, actual)
+		})
+	}
+}
+
 func TestSyncEgress(t *testing.T) {
 	tests := []struct {
 		name                   string
@@ -881,7 +944,7 @@ func TestSyncEgress(t *testing.T) {
 				ObjectMeta: metav1.ObjectMeta{Name: fakeExternalIPPool, UID: "pool-uid"},
 				Spec: crdv1b1.ExternalIPPoolSpec{
 					IPRanges:   []crdv1b1.IPRange{{Start: fakeLocalEgressIP1, End: fakeRemoteEgressIP1}},
-					SubnetInfo: &crdv1b1.SubnetInfo{Gateway: fakeGatewayIP, PrefixLength: 16, VLAN: 10},
+					SubnetInfo: &crdv1b1.ExternalIPPoolSubnetInfo{Gateway: fakeGatewayIP, PrefixLength: 16, VLAN: 10},
 				},
 			},
 			newEgress: &crdv1b1.Egress{
@@ -930,7 +993,7 @@ func TestSyncEgress(t *testing.T) {
 				ObjectMeta: metav1.ObjectMeta{Name: fakeExternalIPPool, UID: "pool-uid"},
 				Spec: crdv1b1.ExternalIPPoolSpec{
 					IPRanges:   []crdv1b1.IPRange{{Start: fakeLocalEgressIP1, End: fakeRemoteEgressIP1}},
-					SubnetInfo: &crdv1b1.SubnetInfo{Gateway: fakeGatewayIP, PrefixLength: 16, VLAN: 10},
+					SubnetInfo: &crdv1b1.ExternalIPPoolSubnetInfo{Gateway: fakeGatewayIP, PrefixLength: 16, VLAN: 10},
 				},
 			},
 			existingEgress: &crdv1b1.Egress{
@@ -941,7 +1004,7 @@ func TestSyncEgress(t *testing.T) {
 				ObjectMeta: metav1.ObjectMeta{Name: fakeExternalIPPool, UID: "pool-uid"},
 				Spec: crdv1b1.ExternalIPPoolSpec{
 					IPRanges:   []crdv1b1.IPRange{{Start: fakeLocalEgressIP1, End: fakeRemoteEgressIP1}},
-					SubnetInfo: &crdv1b1.SubnetInfo{Gateway: fakeGatewayIP2, PrefixLength: 16},
+					SubnetInfo: &crdv1b1.ExternalIPPoolSubnetInfo{Gateway: fakeGatewayIP2, PrefixLength: 16},
 				},
 			},
 			newEgress: &crdv1b1.Egress{
@@ -995,7 +1058,7 @@ func TestSyncEgress(t *testing.T) {
 				ObjectMeta: metav1.ObjectMeta{Name: fakeExternalIPPool, UID: "pool-uid"},
 				Spec: crdv1b1.ExternalIPPoolSpec{
 					IPRanges:   []crdv1b1.IPRange{{Start: fakeLocalEgressIP1, End: fakeRemoteEgressIP1}},
-					SubnetInfo: &crdv1b1.SubnetInfo{Gateway: fakeGatewayIP, PrefixLength: 16, VLAN: 10},
+					SubnetInfo: &crdv1b1.ExternalIPPoolSubnetInfo{Gateway: fakeGatewayIP, PrefixLength: 16, VLAN: 10},
 				},
 			},
 			existingEgress: &crdv1b1.Egress{
@@ -1068,7 +1131,7 @@ func TestSyncEgress(t *testing.T) {
 				ObjectMeta: metav1.ObjectMeta{Name: fakeExternalIPPool, UID: "pool-uid"},
 				Spec: crdv1b1.ExternalIPPoolSpec{
 					IPRanges:   []crdv1b1.IPRange{{Start: fakeLocalEgressIP1, End: fakeRemoteEgressIP1}},
-					SubnetInfo: &crdv1b1.SubnetInfo{Gateway: fakeGatewayIP, PrefixLength: 16, VLAN: 10},
+					SubnetInfo: &crdv1b1.ExternalIPPoolSubnetInfo{Gateway: fakeGatewayIP, PrefixLength: 16, VLAN: 10},
 				},
 			},
 			newEgress: &crdv1b1.Egress{
@@ -1294,7 +1357,7 @@ func TestExternalIPPoolUpdateShouldSyncEgress(t *testing.T) {
 	// Creating the pool with subnetInfo should trigger Egress sync.
 	externalIPPool := &crdv1b1.ExternalIPPool{
 		ObjectMeta: metav1.ObjectMeta{Name: fakeExternalIPPool, UID: "pool-uidA"},
-		Spec:       crdv1b1.ExternalIPPoolSpec{SubnetInfo: &crdv1b1.SubnetInfo{Gateway: fakeGatewayIP, PrefixLength: 16, VLAN: 2}},
+		Spec:       crdv1b1.ExternalIPPoolSpec{SubnetInfo: &crdv1b1.ExternalIPPoolSubnetInfo{Gateway: fakeGatewayIP, PrefixLength: 16, VLAN: 2}},
 	}
 	c.crdClient.CrdV1beta1().ExternalIPPools().Create(context.TODO(), externalIPPool, metav1.CreateOptions{})
 	assertItemsInQueue(egress1.Name, egress2.Name)
@@ -2010,7 +2073,7 @@ func TestEgressControllerReplaceEgressIPs(t *testing.T) {
 		},
 		&crdv1b1.ExternalIPPool{
 			ObjectMeta: metav1.ObjectMeta{Name: fakeExternalIPPool, UID: "pool-uidA"},
-			Spec:       crdv1b1.ExternalIPPoolSpec{SubnetInfo: &crdv1b1.SubnetInfo{Gateway: fakeGatewayIP, PrefixLength: 16, VLAN: 2}},
+			Spec:       crdv1b1.ExternalIPPoolSpec{SubnetInfo: &crdv1b1.ExternalIPPoolSubnetInfo{Gateway: fakeGatewayIP, PrefixLength: 16, VLAN: 2}},
 		},
 		&crdv1b1.ExternalIPPool{
 			ObjectMeta: metav1.ObjectMeta{Name: "other-pool", UID: "pool-uidB"},

@@ -21,9 +21,11 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	admv1 "k8s.io/api/admission/v1"
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/tools/cache"
+	"k8s.io/utils/ptr"
 
 	crdv1beta1 "antrea.io/antrea/v2/pkg/apis/crd/v1beta1"
 )
@@ -31,6 +33,25 @@ import (
 func marshal(object runtime.Object) []byte {
 	raw, _ := json.Marshal(object)
 	return raw
+}
+
+func newEgressWithIPFamilyPolicy(name, egressIP, externalIPPool string, policy *corev1.IPFamilyPolicy) *crdv1beta1.Egress {
+	egress := newEgress(name, egressIP, externalIPPool, nil, nil, nil)
+	egress.Spec.IPFamilyPolicy = policy
+	return egress
+}
+
+func newDualStackEgress(name, externalIPPool string, egressIPs []string, policy *corev1.IPFamilyPolicy) *crdv1beta1.Egress {
+	egress := newEgress(name, "", externalIPPool, nil, nil, nil)
+	egress.Spec.EgressIPs = egressIPs
+	egress.Spec.IPFamilyPolicy = policy
+	return egress
+}
+
+func newDualStackExternalIPPool(name string) *crdv1beta1.ExternalIPPool {
+	pool := newExternalIPPool(name, "10.10.10.0/24", "", "")
+	pool.Spec.IPRanges = append(pool.Spec.IPRanges, crdv1beta1.IPRange{CIDR: "2001:db8:10::/64"})
+	return pool
 }
 
 func TestEgressControllerValidateEgress(t *testing.T) {
@@ -48,6 +69,8 @@ func TestEgressControllerValidateEgress(t *testing.T) {
 			Burst: "10b",
 		}
 	)
+	egressWithBothIPFields := newDualStackEgress("foo", "dual-stack", []string{"2001:db8:10::1"}, nil)
+	egressWithBothIPFields.Spec.EgressIP = "10.10.10.1"
 	tests := []struct {
 		name                   string
 		existingExternalIPPool *crdv1beta1.ExternalIPPool
@@ -93,6 +116,214 @@ func TestEgressControllerValidateEgress(t *testing.T) {
 				Object:    runtime.RawExtension{Raw: marshal(newEgress("foo", "10.10.10.1", "bar", nil, nil, nil))},
 			},
 			expectedResponse: &admv1.AdmissionResponse{Allowed: true},
+		},
+		{
+			name:                   "Requesting explicit dual-stack IPs should be allowed",
+			existingExternalIPPool: newDualStackExternalIPPool("dual-stack"),
+			request: &admv1.AdmissionRequest{
+				Name:      "foo",
+				Operation: "CREATE",
+				Object: runtime.RawExtension{Raw: marshal(newDualStackEgress("foo", "dual-stack",
+					[]string{"10.10.10.1", "2001:db8:10::1"},
+					ptr.To(corev1.IPFamilyPolicyRequireDualStack)))},
+			},
+			expectedResponse: &admv1.AdmissionResponse{Allowed: true},
+		},
+		{
+			name:                   "Reverse dual-stack IP ordering should be allowed",
+			existingExternalIPPool: newDualStackExternalIPPool("dual-stack"),
+			request: &admv1.AdmissionRequest{
+				Name:      "foo",
+				Operation: "CREATE",
+				Object: runtime.RawExtension{Raw: marshal(newDualStackEgress("foo", "dual-stack",
+					[]string{"2001:db8:10::1", "10.10.10.1"}, nil))},
+			},
+			expectedResponse: &admv1.AdmissionResponse{Allowed: true},
+		},
+		{
+			name:                   "PreferDualStack allocation from a dual-stack pool should be allowed",
+			existingExternalIPPool: newDualStackExternalIPPool("dual-stack"),
+			request: &admv1.AdmissionRequest{
+				Name:      "foo",
+				Operation: "CREATE",
+				Object: runtime.RawExtension{Raw: marshal(newEgressWithIPFamilyPolicy("foo", "", "dual-stack",
+					ptr.To(corev1.IPFamilyPolicyPreferDualStack)))},
+			},
+			expectedResponse: &admv1.AdmissionResponse{Allowed: true},
+		},
+		{
+			name:                   "SingleStack allocation from a dual-stack pool should be allowed",
+			existingExternalIPPool: newDualStackExternalIPPool("dual-stack"),
+			request: &admv1.AdmissionRequest{
+				Name:      "foo",
+				Operation: "CREATE",
+				Object: runtime.RawExtension{Raw: marshal(newEgressWithIPFamilyPolicy("foo", "", "dual-stack",
+					ptr.To(corev1.IPFamilyPolicySingleStack)))},
+			},
+			expectedResponse: &admv1.AdmissionResponse{Allowed: true},
+		},
+		{
+			name:                   "Legacy explicit IP selects one family from a dual-stack pool",
+			existingExternalIPPool: newDualStackExternalIPPool("dual-stack"),
+			request: &admv1.AdmissionRequest{
+				Name:      "foo",
+				Operation: "CREATE",
+				Object:    runtime.RawExtension{Raw: marshal(newEgress("foo", "2001:db8:10::1", "dual-stack", nil, nil, nil))},
+			},
+			expectedResponse: &admv1.AdmissionResponse{Allowed: true},
+		},
+		{
+			name:                   "Dual-stack pool without a policy should default to dual-stack allocation",
+			existingExternalIPPool: newDualStackExternalIPPool("dual-stack"),
+			request: &admv1.AdmissionRequest{
+				Name:      "foo",
+				Operation: "CREATE",
+				Object:    runtime.RawExtension{Raw: marshal(newEgress("foo", "", "dual-stack", nil, nil, nil))},
+			},
+			expectedResponse: &admv1.AdmissionResponse{Allowed: true},
+		},
+		{
+			name:                   "Single-stack pool without family selection should be allowed",
+			existingExternalIPPool: newExternalIPPool("bar", "10.10.10.0/24", "", ""),
+			request: &admv1.AdmissionRequest{
+				Name:      "foo",
+				Operation: "CREATE",
+				Object:    runtime.RawExtension{Raw: marshal(newEgress("foo", "", "bar", nil, nil, nil))},
+			},
+			expectedResponse: &admv1.AdmissionResponse{Allowed: true},
+		},
+		{
+			name: "Non-existing ExternalIPPool without an explicit IP should not be allowed",
+			request: &admv1.AdmissionRequest{
+				Name:      "foo",
+				Operation: "CREATE",
+				Object:    runtime.RawExtension{Raw: marshal(newEgress("foo", "", "nonExistingPool", nil, nil, nil))},
+			},
+			expectedResponse: &admv1.AdmissionResponse{
+				Allowed: false,
+				Result: &metav1.Status{
+					Message: "ExternalIPPool nonExistingPool does not exist",
+				},
+			},
+		},
+		{
+			name:                   "egressIP and egressIPs should be mutually exclusive",
+			existingExternalIPPool: newDualStackExternalIPPool("dual-stack"),
+			request: &admv1.AdmissionRequest{
+				Name:      "foo",
+				Operation: "CREATE",
+				Object:    runtime.RawExtension{Raw: marshal(egressWithBothIPFields)},
+			},
+			expectedResponse: &admv1.AdmissionResponse{
+				Allowed: false,
+				Result:  &metav1.Status{Message: "spec.egressIP and spec.egressIPs are mutually exclusive"},
+			},
+		},
+		{
+			name: "egressIPs with duplicate families should not be allowed",
+			request: &admv1.AdmissionRequest{
+				Name:      "foo",
+				Operation: "CREATE",
+				Object: runtime.RawExtension{Raw: marshal(newDualStackEgress("foo", "",
+					[]string{"10.10.10.1", "10.10.10.2"}, nil))},
+			},
+			expectedResponse: &admv1.AdmissionResponse{
+				Allowed: false,
+				Result:  &metav1.Status{Message: "spec.egressIPs contains multiple addresses for IP family IPv4"},
+			},
+		},
+		{
+			name: "Invalid ipFamilyPolicy should not be allowed",
+			request: &admv1.AdmissionRequest{
+				Name:      "foo",
+				Operation: "CREATE",
+				Object: runtime.RawExtension{Raw: marshal(newEgressWithIPFamilyPolicy("foo", "", "",
+					ptr.To(corev1.IPFamilyPolicy("Invalid"))))},
+			},
+			expectedResponse: &admv1.AdmissionResponse{
+				Allowed: false,
+				Result: &metav1.Status{
+					Message: "spec.ipFamilyPolicy must be one of SingleStack, PreferDualStack, or RequireDualStack",
+				},
+			},
+		},
+		{
+			name: "egressIPs cannot use SingleStack policy",
+			request: &admv1.AdmissionRequest{
+				Name:      "foo",
+				Operation: "CREATE",
+				Object: runtime.RawExtension{Raw: marshal(newDualStackEgress("foo", "",
+					[]string{"10.10.10.1", "2001:db8:10::1"}, ptr.To(corev1.IPFamilyPolicySingleStack)))},
+			},
+			expectedResponse: &admv1.AdmissionResponse{
+				Allowed: false,
+				Result:  &metav1.Status{Message: "spec.egressIPs cannot be used with ipFamilyPolicy SingleStack"},
+			},
+		},
+		{
+			name:                   "RequireDualStack cannot use a single-stack pool",
+			existingExternalIPPool: newExternalIPPool("bar", "10.10.10.0/24", "", ""),
+			request: &admv1.AdmissionRequest{
+				Name:      "foo",
+				Operation: "CREATE",
+				Object: runtime.RawExtension{Raw: marshal(newEgressWithIPFamilyPolicy("foo", "", "bar",
+					ptr.To(corev1.IPFamilyPolicyRequireDualStack)))},
+			},
+			expectedResponse: &admv1.AdmissionResponse{
+				Allowed: false,
+				Result: &metav1.Status{
+					Message: "ExternalIPPool bar does not support required dual-stack allocation",
+				},
+			},
+		},
+		{
+			name: "Reverse dual-stack explicit IP ordering without a pool should be allowed",
+			request: &admv1.AdmissionRequest{
+				Name:      "foo",
+				Operation: "CREATE",
+				Object: runtime.RawExtension{Raw: marshal(newDualStackEgress("foo", "",
+					[]string{"2001:db8:10::1", "10.10.10.1"}, nil))},
+			},
+			expectedResponse: &admv1.AdmissionResponse{Allowed: true},
+		},
+		{
+			name: "A single address in egressIPs should not be allowed",
+			request: &admv1.AdmissionRequest{
+				Name:      "foo",
+				Operation: "CREATE",
+				Object: runtime.RawExtension{Raw: marshal(newDualStackEgress("foo", "",
+					[]string{"10.10.10.1"}, nil))},
+			},
+			expectedResponse: &admv1.AdmissionResponse{
+				Allowed: false,
+				Result:  &metav1.Status{Message: "spec.egressIPs must contain exactly two addresses, one for each IP family"},
+			},
+		},
+		{
+			name: "More than two addresses in egressIPs should not be allowed",
+			request: &admv1.AdmissionRequest{
+				Name:      "foo",
+				Operation: "CREATE",
+				Object: runtime.RawExtension{Raw: marshal(newDualStackEgress("foo", "",
+					[]string{"10.10.10.1", "2001:db8:10::1", "10.10.10.2"}, nil))},
+			},
+			expectedResponse: &admv1.AdmissionResponse{
+				Allowed: false,
+				Result:  &metav1.Status{Message: "spec.egressIPs must contain exactly two addresses, one for each IP family"},
+			},
+		},
+		{
+			name: "egressIP cannot use RequireDualStack policy",
+			request: &admv1.AdmissionRequest{
+				Name:      "foo",
+				Operation: "CREATE",
+				Object: runtime.RawExtension{Raw: marshal(newEgressWithIPFamilyPolicy("foo", "10.10.10.1", "",
+					ptr.To(corev1.IPFamilyPolicyRequireDualStack)))},
+			},
+			expectedResponse: &admv1.AdmissionResponse{
+				Allowed: false,
+				Result:  &metav1.Status{Message: "spec.egressIP cannot be used with ipFamilyPolicy RequireDualStack"},
+			},
 		},
 		{
 			name:                   "Updating EgressIP to invalid one should not be allowed",
