@@ -15,12 +15,14 @@
 package networkpolicy
 
 import (
+	"context"
 	"net"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
@@ -940,6 +942,16 @@ func TestGetAssociatedGroups(t *testing.T) {
 	}
 }
 
+// Create the given groups onto the controller
+func createGroups(npc *networkPolicyController, groups []antreatypes.Group) {
+	for _, g := range groups {
+		npc.internalGroupStore.Create(&g)
+		if g.Selector != nil {
+			npc.groupingInterface.AddGroup(internalGroupType, g.SourceReference.Name, g.Selector)
+		}
+	}
+}
+
 func TestGetClusterGroupMembers(t *testing.T) {
 	pod1MemberSet := controlplane.GroupMemberSet{}
 	pod1MemberSet.Insert(podToGroupMember(testPods[0], true))
@@ -983,6 +995,28 @@ func TestGetClusterGroupMembers(t *testing.T) {
 			assert.Equal(t, tt.expectedMembers, members)
 		})
 	}
+}
+
+// TestGetClusterGroupMembersNestingExceeded verifies that querying the members of a Group that is
+// not realized because of its nesting level says so, instead of returning the empty member list
+// that getInternalGroupMembers computes for it, which a user cannot tell apart from a Group that
+// legitimately selects nothing. It has to be a BadRequest, since GetPaginatedMembers turns any
+// other error into a 500 and this is a user error.
+func TestGetClusterGroupMembersNestingExceeded(t *testing.T) {
+	overNested := antreatypes.Group{
+		UID:                        "uidOverNested",
+		SourceReference:            &controlplane.GroupReference{Name: "cgOverNested", UID: "uidOverNested"},
+		ChildGroups:                []string{"cgChild"},
+		ChildGroupsNestingExceeded: true,
+	}
+	_, npc := newController(nil, nil)
+	npc.internalGroupStore.Create(&overNested)
+
+	members, ipBlocks, err := npc.GetGroupMembers("cgOverNested")
+	assert.Nil(t, members)
+	assert.Nil(t, ipBlocks)
+	require.Error(t, err)
+	assert.True(t, apierrors.IsBadRequest(err), "expected a BadRequest, got %v", err)
 }
 
 func TestSyncInternalGroup(t *testing.T) {
@@ -1295,6 +1329,805 @@ func TestGetAssociatedIPBlockGroups(t *testing.T) {
 				groupNames = append(groupNames, g.SourceReference.ToGroupName())
 			}
 			assert.ElementsMatch(t, groupNames, tt.expectedGroups)
+		})
+	}
+}
+
+// TestChildGroupsNestingExceeded verifies which Groups are reported as nested too deeply.
+// Antrea supports a single level of nesting: a Group with childGroups, whose children must be
+// leaves. A Group that reaches a third level is not realized, whether it does so through a
+// ChildGroups cycle or not.
+func TestChildGroupsNestingExceeded(t *testing.T) {
+	groups := []*antreatypes.Group{
+		{
+			SourceReference: &controlplane.GroupReference{Name: "cgLeaf", UID: "uidLeaf"},
+		},
+		{
+			SourceReference: &controlplane.GroupReference{Name: "cgParent", UID: "uidParent"},
+			ChildGroups:     []string{"cgLeaf"},
+		},
+		{
+			SourceReference: &controlplane.GroupReference{Name: "cgDuplicate", UID: "uidDuplicate"},
+			ChildGroups:     []string{"cgLeaf", "cgLeaf"},
+		},
+		{
+			SourceReference: &controlplane.GroupReference{Name: "cgGrandParent", UID: "uidGrandParent"},
+			ChildGroups:     []string{"cgParent"},
+		},
+		{
+			SourceReference: &controlplane.GroupReference{Name: "cgMissingChild", UID: "uidMissingChild"},
+			ChildGroups:     []string{"cgDoesNotExist"},
+		},
+		// cgMissingGrandChild's child exists and declares a childGroup of its own, which does
+		// not exist yet. The hierarchy is already invalid, and reporting it now means the
+		// answer does not change when cgDoesNotExist is created.
+		{
+			SourceReference: &controlplane.GroupReference{Name: "cgDeclaresMissingChild", UID: "uidDeclaresMissingChild"},
+			ChildGroups:     []string{"cgDoesNotExist"},
+		},
+		{
+			SourceReference: &controlplane.GroupReference{Name: "cgMissingGrandChild", UID: "uidMissingGrandChild"},
+			ChildGroups:     []string{"cgDeclaresMissingChild"},
+		},
+		{
+			SourceReference: &controlplane.GroupReference{Name: "cgCycle1", UID: "uidCycle1"},
+			ChildGroups:     []string{"cgCycle2"},
+		},
+		{
+			SourceReference: &controlplane.GroupReference{Name: "cgCycle2", UID: "uidCycle2"},
+			ChildGroups:     []string{"cgCycle1"},
+		},
+		// cgOutside is not itself part of the cgCycle1/cgCycle2 cycle, but it reaches it, which
+		// makes it exceed the nesting level too.
+		{
+			SourceReference: &controlplane.GroupReference{Name: "cgOutside", UID: "uidOutside"},
+			ChildGroups:     []string{"cgCycle1"},
+		},
+		// A Namespaced Group whose childGroups are resolved within its own Namespace.
+		{
+			SourceReference: &controlplane.GroupReference{Namespace: "nsA", Name: "gSelfLoop", UID: "uidGSelfLoop"},
+			ChildGroups:     []string{"gSelfLoop"},
+		},
+	}
+	_, npc := newController(nil, nil)
+	for _, grp := range groups {
+		npc.internalGroupStore.Create(grp)
+	}
+
+	tests := []struct {
+		groupName string
+		expected  bool
+	}{
+		{groupName: "cgLeaf", expected: false},
+		{groupName: "cgParent", expected: false},
+		// A childGroup listed twice is legitimate, and adds no nesting level.
+		{groupName: "cgDuplicate", expected: false},
+		{groupName: "cgGrandParent", expected: true},
+		{groupName: "cgMissingChild", expected: false},
+		{groupName: "cgMissingGrandChild", expected: true},
+		{groupName: "cgCycle1", expected: true},
+		{groupName: "cgCycle2", expected: true},
+		{groupName: "cgOutside", expected: true},
+		{groupName: "nsA/gSelfLoop", expected: true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.groupName, func(t *testing.T) {
+			obj, found, _ := npc.internalGroupStore.Get(tt.groupName)
+			require.True(t, found)
+			assert.Equal(t, tt.expected, npc.childGroupsNestingExceeded(obj.(*antreatypes.Group)))
+		})
+	}
+}
+
+// TestChildGroupsCycleTerminates verifies that a ChildGroups cycle in the internalGroupStore
+// does not cause unbounded recursion. Before the nesting level was enforced in the traversals,
+// processing such a cycle recursed forever and crashed antrea-controller with an unrecoverable
+// "fatal error: stack overflow" (which no recover() can catch, so this test asserts on the
+// returned values: reaching them at all proves termination).
+//
+// The traversals are called on Groups whose ChildGroupsNestingExceeded is false, which is what
+// an ADD/UPDATE event leaves behind until the Group is synced again: termination must not
+// depend on that flag.
+//
+// The self-loop is the case that admission validation used to let through deterministically,
+// with no race: on CREATE the object is not in the informer cache yet, and on UPDATE the cache
+// still holds the previous version, so neither nesting check saw the self reference.
+func TestChildGroupsCycleTerminates(t *testing.T) {
+	tests := []struct {
+		name   string
+		groups []*antreatypes.Group
+	}{
+		{
+			name: "self loop",
+			groups: []*antreatypes.Group{
+				{
+					UID:             "uidA",
+					SourceReference: &controlplane.GroupReference{Name: "cgA", UID: "uidA"},
+					ChildGroups:     []string{"cgA"},
+				},
+			},
+		},
+		{
+			name: "mutual cycle",
+			groups: []*antreatypes.Group{
+				{
+					UID:             "uidA",
+					SourceReference: &controlplane.GroupReference{Name: "cgA", UID: "uidA"},
+					ChildGroups:     []string{"cgB"},
+				},
+				{
+					UID:             "uidB",
+					SourceReference: &controlplane.GroupReference{Name: "cgB", UID: "uidB"},
+					ChildGroups:     []string{"cgA"},
+				},
+			},
+		},
+		{
+			name: "cycle of three",
+			groups: []*antreatypes.Group{
+				{
+					UID:             "uidA",
+					SourceReference: &controlplane.GroupReference{Name: "cgA", UID: "uidA"},
+					ChildGroups:     []string{"cgB"},
+				},
+				{
+					UID:             "uidB",
+					SourceReference: &controlplane.GroupReference{Name: "cgB", UID: "uidB"},
+					ChildGroups:     []string{"cgC"},
+				},
+				{
+					UID:             "uidC",
+					SourceReference: &controlplane.GroupReference{Name: "cgC", UID: "uidC"},
+					ChildGroups:     []string{"cgA"},
+				},
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, npc := newController(nil, nil)
+			for _, grp := range tt.groups {
+				npc.internalGroupStore.Create(grp)
+			}
+			cgA := tt.groups[0]
+
+			// No Group in the cycle contributes selectors or ipBlocks, so the cycle resolves
+			// to no AddressGroup and no ipBlocks, same as the existing "childGroup not found"
+			// path.
+			createAddrGroup, ipBlocks := npc.processInternalGroupForRule(cgA)
+			assert.False(t, createAddrGroup)
+			assert.Empty(t, ipBlocks)
+
+			members, ipBlocks := npc.getInternalGroupMembers(cgA)
+			assert.Empty(t, members)
+			assert.Empty(t, ipBlocks)
+
+			// Every Group in the cycle must be detected, so that none of them re-enqueues the
+			// next one and spins the internalGroup workers.
+			for _, grp := range tt.groups {
+				assert.True(t, npc.childGroupsNestingExceeded(grp), "expected %s to be reported as nested too deeply", grp.SourceReference.ToGroupName())
+			}
+		})
+	}
+}
+
+// TestOverNestedGroupNotRealized verifies that a Group nested deeper than the supported level
+// contributes nothing to the policies that select it, instead of being realized with whatever
+// part of the hierarchy fits within the level. Both a Group that has already been synced
+// (ChildGroupsNestingExceeded set) and one that has not (flag still false) are covered.
+//
+// An empty result is not a fail-open: a rule whose only peer resolves to no member and no
+// ipBlock is never satisfied at the OpenFlow layer, so an Allow rule grants nothing and a
+// Drop/Reject rule blocks nothing. See the comment on processInternalGroupForRule.
+func TestOverNestedGroupNotRealized(t *testing.T) {
+	ipBlock := controlplane.IPBlock{CIDR: controlplane.IPNet{IP: controlplane.IPAddress(net.ParseIP("10.0.0.0")), PrefixLength: 24}}
+	leafPods := antreatypes.Group{
+		UID:             "uidLeafPods",
+		SourceReference: &controlplane.GroupReference{Name: "cgLeafPods", UID: "uidLeafPods"},
+		Selector:        antreatypes.NewGroupSelector("test-ns", &metav1.LabelSelector{MatchLabels: map[string]string{"app": "foo"}}, nil, nil, nil),
+	}
+	leafIPBlock := antreatypes.Group{
+		UID:             "uidLeafIPBlock",
+		SourceReference: &controlplane.GroupReference{Name: "cgLeafIPBlock", UID: "uidLeafIPBlock"},
+		IPBlocks:        []controlplane.IPBlock{ipBlock},
+	}
+	parent := antreatypes.Group{
+		UID:             "uidParent",
+		SourceReference: &controlplane.GroupReference{Name: "cgParent", UID: "uidParent"},
+		ChildGroups:     []string{"cgLeafPods", "cgLeafIPBlock"},
+	}
+	// grandParent is one level too deep, and has not been synced since it was last updated.
+	grandParent := antreatypes.Group{
+		UID:             "uidGrandParent",
+		SourceReference: &controlplane.GroupReference{Name: "cgGrandParent", UID: "uidGrandParent"},
+		ChildGroups:     []string{"cgParent"},
+	}
+	// syncedGrandParent is the same hierarchy, as it looks after being synced.
+	syncedGrandParent := antreatypes.Group{
+		UID:                        "uidSyncedGrandParent",
+		SourceReference:            &controlplane.GroupReference{Name: "cgSyncedGrandParent", UID: "uidSyncedGrandParent"},
+		ChildGroups:                []string{"cgParent"},
+		ChildGroupsNestingExceeded: true,
+	}
+
+	_, npc := newController(nil, nil)
+	for i := range testPods {
+		npc.groupingInterface.AddPod(testPods[i])
+	}
+	createGroups(npc, []antreatypes.Group{leafPods, leafIPBlock, parent, grandParent, syncedGrandParent})
+
+	tests := []struct {
+		name  string
+		group antreatypes.Group
+	}{
+		{"not synced yet", grandParent},
+		{"synced", syncedGrandParent},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			createAddrGroup, ipBlocks := npc.processInternalGroupForRule(&tt.group)
+			assert.False(t, createAddrGroup)
+			assert.Empty(t, ipBlocks)
+
+			members, ipBlocks := npc.getInternalGroupMembers(&tt.group)
+			assert.Empty(t, members)
+			assert.Empty(t, ipBlocks)
+		})
+	}
+
+	// The parent is a valid hierarchy on its own, and is realized as before.
+	t.Run("supported nesting level", func(t *testing.T) {
+		expectedMembers := controlplane.GroupMemberSet{}
+		expectedMembers.Insert(podToGroupMember(testPods[0], true))
+
+		createAddrGroup, ipBlocks := npc.processInternalGroupForRule(&parent)
+		assert.True(t, createAddrGroup)
+		assert.Equal(t, []controlplane.IPBlock{ipBlock}, ipBlocks)
+
+		members, ipBlocks := npc.getInternalGroupMembers(&parent)
+		assert.Equal(t, expectedMembers, members)
+		assert.Equal(t, []controlplane.IPBlock{ipBlock}, ipBlocks)
+	})
+}
+
+// TestChildGroupsDuplicateChildMembersPreserved verifies that enforcing the nesting level in
+// the ChildGroups traversals does not drop the members or ipBlocks of a childGroup that is
+// legitimately listed more than once.
+func TestChildGroupsDuplicateChildMembersPreserved(t *testing.T) {
+	ipBlock := controlplane.IPBlock{CIDR: controlplane.IPNet{IP: controlplane.IPAddress(net.ParseIP("10.0.0.0")), PrefixLength: 24}}
+	// Leaf selecting testPods[0] via its "app: foo" label.
+	leafPods := antreatypes.Group{
+		UID:             "uidLeafPods",
+		SourceReference: &controlplane.GroupReference{Name: "cgLeafPods", UID: "uidLeafPods"},
+		Selector:        antreatypes.NewGroupSelector("test-ns", &metav1.LabelSelector{MatchLabels: map[string]string{"app": "foo"}}, nil, nil, nil),
+	}
+	leafIPBlock := antreatypes.Group{
+		UID:             "uidLeafIPBlock",
+		SourceReference: &controlplane.GroupReference{Name: "cgLeafIPBlock", UID: "uidLeafIPBlock"},
+		IPBlocks:        []controlplane.IPBlock{ipBlock},
+	}
+	// Lists both leaves twice, so each is reached twice from the same parent.
+	duplicateChild := antreatypes.Group{
+		UID:             "uidDuplicate",
+		SourceReference: &controlplane.GroupReference{Name: "cgDuplicate", UID: "uidDuplicate"},
+		ChildGroups:     []string{"cgLeafPods", "cgLeafIPBlock", "cgLeafPods", "cgLeafIPBlock"},
+	}
+
+	_, npc := newController(nil, nil)
+	for i := range testPods {
+		npc.groupingInterface.AddPod(testPods[i])
+	}
+	createGroups(npc, []antreatypes.Group{leafPods, leafIPBlock, duplicateChild})
+
+	expectedMembers := controlplane.GroupMemberSet{}
+	expectedMembers.Insert(podToGroupMember(testPods[0], true))
+
+	// An AddressGroup is still required for the selector-based leaf, and the ipBlock is
+	// reported once per reference, as it was before.
+	createAddrGroup, ipBlocks := npc.processInternalGroupForRule(&duplicateChild)
+	assert.True(t, createAddrGroup)
+	assert.Equal(t, []controlplane.IPBlock{ipBlock, ipBlock}, ipBlocks)
+
+	members, ipBlocks := npc.getInternalGroupMembers(&duplicateChild)
+	assert.Equal(t, expectedMembers, members)
+	assert.Equal(t, []controlplane.IPBlock{ipBlock, ipBlock}, ipBlocks)
+}
+
+// TestTriggerParentGroupUpdatesNestingExceeded pins the gate that decides whether a parent is
+// enqueued: only a pair in which both the Group being synced and the parent are already known to
+// be nested too deeply is skipped.
+//
+// Skipping that pair is what avoids the CPU spin. Every member of a ChildGroups cycle is also one
+// of its own ancestors, and every member of a cycle is flagged (its cycle successor has
+// childGroups), so without it the internalGroup workqueue would re-enqueue the cycle on every
+// sync and spin the workers at 100% CPU for as long as the cycle exists.
+//
+// The other three combinations must all enqueue:
+//   - an unflagged parent has to be enqueued so that it gets a chance to detect the excessive
+//     nesting itself, whatever order the Groups were created in (see
+//     TestSyncInternalGroupCycleConverges);
+//   - an unflagged child has to enqueue even a flagged parent, because a child losing its own
+//     childGroups is exactly the event that lets that parent stop being over-nested (see
+//     TestSyncInternalGroupNestingRecovers). Gating on the parent alone would leave the parent
+//     unrealized for good.
+func TestTriggerParentGroupUpdatesNestingExceeded(t *testing.T) {
+	tests := []struct {
+		name                  string
+		childNestingExceeded  bool
+		parentNestingExceeded bool
+		expectedEnqueue       int
+	}{
+		{name: "both over-nested, parent is not enqueued", childNestingExceeded: true, parentNestingExceeded: true, expectedEnqueue: 0},
+		{name: "over-nested parent, child within the level", childNestingExceeded: false, parentNestingExceeded: true, expectedEnqueue: 1},
+		{name: "over-nested child, parent within the level", childNestingExceeded: true, parentNestingExceeded: false, expectedEnqueue: 1},
+		{name: "neither over-nested", childNestingExceeded: false, parentNestingExceeded: false, expectedEnqueue: 1},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cgChild := &antreatypes.Group{
+				UID:                        "uidChild",
+				SourceReference:            &controlplane.GroupReference{Name: "cgChild", UID: "uidChild"},
+				ChildGroupsNestingExceeded: tt.childNestingExceeded,
+			}
+			// cgParent is the parent of cgChild, and is flagged as over-nested or not.
+			cgParent := &antreatypes.Group{
+				UID:                        "uidParent",
+				SourceReference:            &controlplane.GroupReference{Name: "cgParent", UID: "uidParent"},
+				ChildGroups:                []string{"cgChild"},
+				ChildGroupsNestingExceeded: tt.parentNestingExceeded,
+			}
+			_, npc := newController(nil, nil)
+			npc.internalGroupStore.Create(cgChild)
+			npc.internalGroupStore.Create(cgParent)
+
+			npc.triggerParentGroupUpdates("cgChild")
+			assert.Equal(t, tt.expectedEnqueue, npc.internalGroupQueue.Len())
+		})
+	}
+
+	// A Group that has been deleted from the store is not in the store to be read back, and its
+	// parents must still be notified: the delete is what lets an over-nested parent recover.
+	t.Run("deleted child enqueues its over-nested parent", func(t *testing.T) {
+		cgParent := &antreatypes.Group{
+			UID:                        "uidParent",
+			SourceReference:            &controlplane.GroupReference{Name: "cgParent", UID: "uidParent"},
+			ChildGroups:                []string{"cgChild"},
+			ChildGroupsNestingExceeded: true,
+		}
+		_, npc := newController(nil, nil)
+		npc.internalGroupStore.Create(cgParent)
+
+		npc.triggerParentGroupUpdates("cgChild")
+		assert.Equal(t, 1, npc.internalGroupQueue.Len())
+	})
+}
+
+// TestOverNestedGroupNotAppliedTo verifies that a Group nested deeper than the supported level
+// selects no workload when it is used as the appliedTo of a policy, instead of applying the
+// policy to whatever part of its hierarchy fits within the level. This mirrors what
+// TestOverNestedGroupNotRealized covers for the two rule-peer traversals.
+func TestOverNestedGroupNotAppliedTo(t *testing.T) {
+	// testPods[0] carries the "app: foo" label in the "test-ns" Namespace.
+	leafPods := antreatypes.Group{
+		UID:             "uidLeafPods",
+		SourceReference: &controlplane.GroupReference{Name: "cgLeafPods", UID: "uidLeafPods"},
+		Selector:        antreatypes.NewGroupSelector("test-ns", &metav1.LabelSelector{MatchLabels: map[string]string{"app": "foo"}}, nil, nil, nil),
+	}
+	childWithChildren := antreatypes.Group{
+		UID:             "uidChildWithChildren",
+		SourceReference: &controlplane.GroupReference{Name: "cgChildWithChildren", UID: "uidChildWithChildren"},
+		ChildGroups:     []string{"cgLeafPods"},
+	}
+	// parent mixes a leaf, whose workloads the single-level appliedTo traversal does resolve,
+	// with a child that has childGroups of its own, which is what puts it over the level. Without
+	// the check, it would be applied to the leaf's Pods only: realized, but on an arbitrary
+	// subset of what it names.
+	parent := antreatypes.Group{
+		UID:                        "uidParent",
+		SourceReference:            &controlplane.GroupReference{Name: "cgParent", UID: "uidParent"},
+		ChildGroups:                []string{"cgLeafPods", "cgChildWithChildren"},
+		ChildGroupsNestingExceeded: true,
+	}
+	validParent := antreatypes.Group{
+		UID:             "uidValidParent",
+		SourceReference: &controlplane.GroupReference{Name: "cgValidParent", UID: "uidValidParent"},
+		ChildGroups:     []string{"cgLeafPods"},
+	}
+
+	_, npc := newController(nil, nil)
+	for i := range testPods {
+		npc.groupingInterface.AddPod(testPods[i])
+	}
+	createGroups(npc, []antreatypes.Group{leafPods, childWithChildren, parent, validParent})
+
+	pods, ees, err := npc.getInternalGroupWorkloads(&parent)
+	require.NoError(t, err)
+	assert.Empty(t, pods)
+	assert.Empty(t, ees)
+
+	// The valid hierarchy underneath it still selects its Pods.
+	pods, ees, err = npc.getInternalGroupWorkloads(&validParent)
+	require.NoError(t, err)
+	assert.Equal(t, []*corev1.Pod{testPods[0]}, pods)
+	assert.Empty(t, ees)
+}
+
+// TestSyncInternalGroupCycleConverges verifies that both members of a ChildGroups cycle end up
+// flagged even when the first one was synced before the second one existed, which is the order a
+// user creating them one at a time produces.
+//
+// At that first sync, cgA's only childGroup does not resolve, so cgA is not over-nested yet. It
+// is cgB's creation that makes it so, and cgB - flagged on its own first sync - is what has to
+// enqueue cgA again. That is why triggerParentGroupUpdates gates on the parent rather than
+// returning early for a Group that is itself flagged: with the latter, cgA would keep an
+// out-of-date flag and report no reason for its members not being computed.
+func TestSyncInternalGroupCycleConverges(t *testing.T) {
+	cgA := &crdv1beta1.ClusterGroup{
+		ObjectMeta: metav1.ObjectMeta{Name: "cgA", UID: "uidA"},
+		Spec:       crdv1beta1.GroupSpec{ChildGroups: []crdv1beta1.ClusterGroupReference{"cgB"}},
+	}
+	cgB := &crdv1beta1.ClusterGroup{
+		ObjectMeta: metav1.ObjectMeta{Name: "cgB", UID: "uidB"},
+		Spec:       crdv1beta1.GroupSpec{ChildGroups: []crdv1beta1.ClusterGroupReference{"cgA"}},
+	}
+	_, npc := newControllerWithoutEventHandler(nil, []runtime.Object{cgA, cgB})
+	stopCh := make(chan struct{})
+	defer close(stopCh)
+	npc.crdInformerFactory.Start(stopCh)
+	npc.crdInformerFactory.WaitForCacheSync(stopCh)
+
+	nestingExceeded := func(key string) bool {
+		obj, found, _ := npc.internalGroupStore.Get(key)
+		require.True(t, found)
+		return obj.(*antreatypes.Group).ChildGroupsNestingExceeded
+	}
+	// drainQueue syncs everything the queue holds, and returns how many syncs that took. It is
+	// bounded so that a regression that reintroduces the spin fails the test instead of hanging
+	// it.
+	drainQueue := func() int {
+		for synced := 0; ; synced++ {
+			require.Less(t, synced, 100, "internalGroup workqueue is not draining, the ChildGroups cycle is spinning")
+			if npc.internalGroupQueue.Len() == 0 {
+				return synced
+			}
+			key, _ := npc.internalGroupQueue.Get()
+			require.NoError(t, npc.syncInternalGroup(key))
+			npc.internalGroupQueue.Done(key)
+		}
+	}
+
+	// cgA is created first, while cgB does not exist yet: its childGroups do not resolve to
+	// anything, so nothing is over-nested.
+	npc.addClusterGroup(cgA)
+	drainQueue()
+	assert.False(t, nestingExceeded("cgA"))
+
+	// cgB closes the cycle. Its own sync flags it, and must also enqueue cgA so that cgA
+	// recomputes its now out-of-date flag.
+	npc.addClusterGroup(cgB)
+	drainQueue()
+	assert.True(t, nestingExceeded("cgA"), "expected cgA to be flagged once cgB closed the cycle")
+	assert.True(t, nestingExceeded("cgB"))
+
+	// Both are flagged, so neither enqueues the other any more: the queue stays empty.
+	npc.triggerParentGroupUpdates("cgA")
+	npc.triggerParentGroupUpdates("cgB")
+	assert.Equal(t, 0, npc.internalGroupQueue.Len())
+
+	// Both report why they are not realized.
+	for _, name := range []string{"cgA", "cgB"} {
+		cg, err := npc.crdClient.CrdV1beta1().ClusterGroups().Get(context.TODO(), name, metav1.GetOptions{})
+		require.NoError(t, err)
+		require.Len(t, cg.Status.Conditions, 1, "ClusterGroup %s", name)
+		assert.Equal(t, corev1.ConditionFalse, cg.Status.Conditions[0].Status, "ClusterGroup %s", name)
+		assert.Equal(t, crdv1beta1.ChildGroupsNestingExceeded, cg.Status.Conditions[0].Reason, "ClusterGroup %s", name)
+	}
+}
+
+// groupNestingFixture drives TestSyncInternalGroupNestingRecovers against both a ClusterGroup
+// hierarchy and a Namespaced Group one. clustergroup.go and group.go implement the same status
+// logic independently, so a ClusterGroup-only test would not catch the two copies diverging.
+//
+// Every fixture is a parent -> child -> grandChild chain, which is one level too deep, so the
+// parent is not realized while the child and the grandChild are fine.
+type groupNestingFixture struct {
+	name string
+	// objects seeds the fake CRD client and the informer caches.
+	objects []runtime.Object
+	// parentKey and childKey are the internal Group keys of the parent and of the child.
+	parentKey string
+	childKey  string
+	// addAll replays the ADD events for the three source objects.
+	addAll func(npc *networkPolicyController)
+	// fixChild replaces the child's childGroups with a selector, which is what a user following
+	// the status message would do.
+	fixChild func(npc *networkPolicyController)
+	// deleteChild deletes the child.
+	deleteChild func(npc *networkPolicyController)
+	// parent returns the parent source object as the fake CRD client holds it, i.e. carrying the
+	// status the controller last wrote, along with its conditions.
+	parent func(npc *networkPolicyController) (runtime.Object, []crdv1beta1.GroupCondition)
+	// cacheParent writes a parent source object into the informer cache, so that the lister
+	// reports its status without waiting for a watch round-trip.
+	cacheParent func(npc *networkPolicyController, parent runtime.Object)
+}
+
+// TestSyncInternalGroupNestingRecovers verifies that an over-nested Group or ClusterGroup goes
+// back to being realized once the childGroup responsible for the excessive nesting is fixed or
+// deleted, without the Group itself being edited.
+//
+// This is the counterpart of TestSyncInternalGroupCycleConverges, and the reason
+// triggerParentGroupUpdates requires both the Group being synced and the parent to be flagged
+// before it skips the parent. The event that fixes a hierarchy is always observed by the child,
+// so gating on the parent alone would make the flag a one-way door: the status message tells the
+// user to fix the definition of the Group "or the definition of one of its childGroups", and only
+// the former would actually work.
+func TestSyncInternalGroupNestingRecovers(t *testing.T) {
+	// cgA -> cgB -> cgC is one level too deep, so cgA is not realized. cgB and cgC are fine.
+	cgA := &crdv1beta1.ClusterGroup{
+		ObjectMeta: metav1.ObjectMeta{Name: "cgA", UID: "uidA"},
+		Spec:       crdv1beta1.GroupSpec{ChildGroups: []crdv1beta1.ClusterGroupReference{"cgB"}},
+	}
+	cgB := &crdv1beta1.ClusterGroup{
+		ObjectMeta: metav1.ObjectMeta{Name: "cgB", UID: "uidB"},
+		Spec:       crdv1beta1.GroupSpec{ChildGroups: []crdv1beta1.ClusterGroupReference{"cgC"}},
+	}
+	cgC := &crdv1beta1.ClusterGroup{
+		ObjectMeta: metav1.ObjectMeta{Name: "cgC", UID: "uidC"},
+		Spec:       crdv1beta1.GroupSpec{NamespaceSelector: &metav1.LabelSelector{}},
+	}
+	// cgBFixed is cgB with its childGroups replaced by a selector.
+	cgBFixed := &crdv1beta1.ClusterGroup{
+		ObjectMeta: metav1.ObjectMeta{Name: "cgB", UID: "uidB"},
+		Spec:       crdv1beta1.GroupSpec{NamespaceSelector: &metav1.LabelSelector{}},
+	}
+	// gA -> gB -> gC is the same chain, with Namespaced Groups: the childGroups of a Group are
+	// always resolved within its own Namespace.
+	gA := &crdv1beta1.Group{
+		ObjectMeta: metav1.ObjectMeta{Namespace: "nsA", Name: "gA", UID: "uidGA"},
+		Spec:       crdv1beta1.GroupSpec{ChildGroups: []crdv1beta1.ClusterGroupReference{"gB"}},
+	}
+	gB := &crdv1beta1.Group{
+		ObjectMeta: metav1.ObjectMeta{Namespace: "nsA", Name: "gB", UID: "uidGB"},
+		Spec:       crdv1beta1.GroupSpec{ChildGroups: []crdv1beta1.ClusterGroupReference{"gC"}},
+	}
+	gC := &crdv1beta1.Group{
+		ObjectMeta: metav1.ObjectMeta{Namespace: "nsA", Name: "gC", UID: "uidGC"},
+		Spec:       crdv1beta1.GroupSpec{PodSelector: &metav1.LabelSelector{}},
+	}
+	gBFixed := &crdv1beta1.Group{
+		ObjectMeta: metav1.ObjectMeta{Namespace: "nsA", Name: "gB", UID: "uidGB"},
+		Spec:       crdv1beta1.GroupSpec{PodSelector: &metav1.LabelSelector{}},
+	}
+	fixtures := []groupNestingFixture{
+		{
+			name:      "ClusterGroup",
+			objects:   []runtime.Object{cgA, cgB, cgC},
+			parentKey: internalGroupKeyFunc(cgA),
+			childKey:  internalGroupKeyFunc(cgB),
+			addAll: func(npc *networkPolicyController) {
+				npc.addClusterGroup(cgC)
+				npc.addClusterGroup(cgB)
+				npc.addClusterGroup(cgA)
+			},
+			fixChild: func(npc *networkPolicyController) {
+				npc.crdInformerFactory.Crd().V1beta1().ClusterGroups().Informer().GetStore().Update(cgBFixed)
+				npc.updateClusterGroup(cgB, cgBFixed)
+			},
+			deleteChild: func(npc *networkPolicyController) {
+				npc.crdInformerFactory.Crd().V1beta1().ClusterGroups().Informer().GetStore().Delete(cgB)
+				npc.deleteClusterGroup(cgB)
+			},
+			parent: func(npc *networkPolicyController) (runtime.Object, []crdv1beta1.GroupCondition) {
+				cg, err := npc.crdClient.CrdV1beta1().ClusterGroups().Get(context.TODO(), cgA.Name, metav1.GetOptions{})
+				require.NoError(t, err)
+				return cg, cg.Status.Conditions
+			},
+			cacheParent: func(npc *networkPolicyController, parent runtime.Object) {
+				npc.crdInformerFactory.Crd().V1beta1().ClusterGroups().Informer().GetStore().Update(parent)
+			},
+		},
+		{
+			name:      "Group",
+			objects:   []runtime.Object{gA, gB, gC},
+			parentKey: internalGroupKeyFunc(gA),
+			childKey:  internalGroupKeyFunc(gB),
+			addAll: func(npc *networkPolicyController) {
+				npc.addGroup(gC)
+				npc.addGroup(gB)
+				npc.addGroup(gA)
+			},
+			fixChild: func(npc *networkPolicyController) {
+				npc.crdInformerFactory.Crd().V1beta1().Groups().Informer().GetStore().Update(gBFixed)
+				npc.updateGroup(gB, gBFixed)
+			},
+			deleteChild: func(npc *networkPolicyController) {
+				npc.crdInformerFactory.Crd().V1beta1().Groups().Informer().GetStore().Delete(gB)
+				npc.deleteGroup(gB)
+			},
+			parent: func(npc *networkPolicyController) (runtime.Object, []crdv1beta1.GroupCondition) {
+				g, err := npc.crdClient.CrdV1beta1().Groups(gA.Namespace).Get(context.TODO(), gA.Name, metav1.GetOptions{})
+				require.NoError(t, err)
+				return g, g.Status.Conditions
+			},
+			cacheParent: func(npc *networkPolicyController, parent runtime.Object) {
+				npc.crdInformerFactory.Crd().V1beta1().Groups().Informer().GetStore().Update(parent)
+			},
+		},
+	}
+	tests := []struct {
+		name string
+		// fix applies the event that is expected to let the parent recover.
+		fix func(f groupNestingFixture, npc *networkPolicyController)
+		// resetFlag clears the parent's in-memory ChildGroupsNestingExceeded before the fix is
+		// applied, which is what an ADD/UPDATE event on the parent, or an antrea-controller
+		// restart, leaves behind. Clearing the stale reason then has nothing to go on but the
+		// condition the source object reports, i.e. it exercises the
+		// groupMembersComputedReportsNestingExceeded fallback rather than the in-memory signal.
+		resetFlag bool
+		// expectedStatus is what the parent reports afterwards. Deleting the child leaves the
+		// parent referencing a childGroup that does not exist, which is the pre-existing "not
+		// computed yet" case, so it stays False - but with no reason, since the nesting is no
+		// longer the problem.
+		expectedStatus corev1.ConditionStatus
+	}{
+		{
+			name:           "childGroup no longer has childGroups of its own",
+			fix:            func(f groupNestingFixture, npc *networkPolicyController) { f.fixChild(npc) },
+			expectedStatus: corev1.ConditionTrue,
+		},
+		{
+			name:           "childGroup is deleted",
+			fix:            func(f groupNestingFixture, npc *networkPolicyController) { f.deleteChild(npc) },
+			expectedStatus: corev1.ConditionFalse,
+		},
+		{
+			name:           "childGroup is deleted after the in-memory flag was reset",
+			fix:            func(f groupNestingFixture, npc *networkPolicyController) { f.deleteChild(npc) },
+			resetFlag:      true,
+			expectedStatus: corev1.ConditionFalse,
+		},
+	}
+	for _, f := range fixtures {
+		for _, tt := range tests {
+			t.Run(f.name+"/"+tt.name, func(t *testing.T) {
+				_, npc := newControllerWithoutEventHandler(nil, f.objects)
+				stopCh := make(chan struct{})
+				defer close(stopCh)
+				npc.crdInformerFactory.Start(stopCh)
+				npc.crdInformerFactory.WaitForCacheSync(stopCh)
+
+				nestingExceeded := func(key string) bool {
+					obj, found, _ := npc.internalGroupStore.Get(key)
+					require.True(t, found)
+					return obj.(*antreatypes.Group).ChildGroupsNestingExceeded
+				}
+				// drainQueue is bounded, so a regression that reintroduces the spin fails the
+				// test instead of hanging it.
+				drainQueue := func() {
+					for synced := 0; npc.internalGroupQueue.Len() > 0; synced++ {
+						require.Less(t, synced, 100, "internalGroup workqueue is not draining")
+						key, _ := npc.internalGroupQueue.Get()
+						require.NoError(t, npc.syncInternalGroup(key))
+						npc.internalGroupQueue.Done(key)
+					}
+				}
+
+				f.addAll(npc)
+				drainQueue()
+				require.True(t, nestingExceeded(f.parentKey), "%s nests one level too deep through %s", f.parentKey, f.childKey)
+				require.False(t, nestingExceeded(f.childKey))
+				parentObj, conditions := f.parent(npc)
+				require.Len(t, conditions, 1)
+				require.Equal(t, crdv1beta1.ChildGroupsNestingExceeded, conditions[0].Reason)
+
+				if tt.resetFlag {
+					// Make the lister report that status without waiting for a watch
+					// round-trip, then drop the in-memory flag.
+					f.cacheParent(npc, parentObj)
+					obj, found, _ := npc.internalGroupStore.Get(f.parentKey)
+					require.True(t, found)
+					unflagged := *obj.(*antreatypes.Group)
+					unflagged.ChildGroupsNestingExceeded = false
+					npc.internalGroupStore.Update(&unflagged)
+				}
+
+				tt.fix(f, npc)
+				drainQueue()
+
+				// The parent is no longer over-nested, without having been edited itself.
+				assert.False(t, nestingExceeded(f.parentKey), "expected %s to recover once %s was fixed", f.parentKey, f.childKey)
+				_, conditions = f.parent(npc)
+				require.Len(t, conditions, 1)
+				assert.Equal(t, tt.expectedStatus, conditions[0].Status)
+				// The stale reason and message do not survive the transition either way.
+				assert.Empty(t, conditions[0].Reason)
+				assert.Empty(t, conditions[0].Message)
+			})
+		}
+	}
+}
+
+// TestSyncInternalGroupNestingExceeded verifies that the first real sync of a self-referencing
+// ClusterGroup, and of a self-referencing Group, detects the excessive nesting, reports it in
+// the GroupMembersComputed condition, and honors it in the same pass, i.e. that the CPU spin
+// never starts in the first place.
+//
+// This exercises syncInternalGroup end to end instead of presetting ChildGroupsNestingExceeded
+// on the internal Group directly (as TestTriggerParentGroupUpdatesNestingExceeded does),
+// because syncInternalGroup only avoids the spin if childGroupsNestingExceeded is computed and
+// persisted to the internal Group store before the deferred triggerParentGroupUpdates call
+// reads it back. That is a same-function ordering constraint which a preset flag does not
+// exercise, and which a future refactor could silently break with every other test still green.
+func TestSyncInternalGroupNestingExceeded(t *testing.T) {
+	cgA := &crdv1beta1.ClusterGroup{
+		ObjectMeta: metav1.ObjectMeta{Name: "cgA", UID: "uidA"},
+		Spec:       crdv1beta1.GroupSpec{ChildGroups: []crdv1beta1.ClusterGroupReference{"cgA"}},
+	}
+	gA := &crdv1beta1.Group{
+		ObjectMeta: metav1.ObjectMeta{Namespace: "nsA", Name: "gA", UID: "uidGA"},
+		Spec:       crdv1beta1.GroupSpec{ChildGroups: []crdv1beta1.ClusterGroupReference{"gA"}},
+	}
+	tests := []struct {
+		name string
+		key  string
+		add  func(npc *networkPolicyController)
+		// conditions returns the status conditions of the source object, as stored by the
+		// fake CRD client.
+		conditions func(npc *networkPolicyController) []crdv1beta1.GroupCondition
+	}{
+		{
+			name: "ClusterGroup",
+			key:  internalGroupKeyFunc(cgA),
+			add:  func(npc *networkPolicyController) { npc.addClusterGroup(cgA) },
+			conditions: func(npc *networkPolicyController) []crdv1beta1.GroupCondition {
+				cg, err := npc.crdClient.CrdV1beta1().ClusterGroups().Get(context.TODO(), cgA.Name, metav1.GetOptions{})
+				require.NoError(t, err)
+				return cg.Status.Conditions
+			},
+		},
+		{
+			name: "Group",
+			key:  internalGroupKeyFunc(gA),
+			add:  func(npc *networkPolicyController) { npc.addGroup(gA) },
+			conditions: func(npc *networkPolicyController) []crdv1beta1.GroupCondition {
+				g, err := npc.crdClient.CrdV1beta1().Groups(gA.Namespace).Get(context.TODO(), gA.Name, metav1.GetOptions{})
+				require.NoError(t, err)
+				return g.Status.Conditions
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, npc := newControllerWithoutEventHandler(nil, []runtime.Object{cgA, gA})
+			stopCh := make(chan struct{})
+			defer close(stopCh)
+			npc.crdInformerFactory.Start(stopCh)
+			npc.crdInformerFactory.WaitForCacheSync(stopCh)
+
+			tt.add(npc)
+			// Drain the ADD handler's own enqueue, which is unrelated to the cycle: it is what
+			// a real worker's queue.Get() would have consumed before calling syncInternalGroup.
+			key, _ := npc.internalGroupQueue.Get()
+			npc.internalGroupQueue.Done(key)
+			require.Equal(t, 0, npc.internalGroupQueue.Len())
+
+			require.NoError(t, npc.syncInternalGroup(tt.key))
+
+			obj, found, _ := npc.internalGroupStore.Get(tt.key)
+			require.True(t, found)
+			assert.True(t, obj.(*antreatypes.Group).ChildGroupsNestingExceeded)
+			// If this were 1, the Group re-enqueued itself as its own parent: the first sync
+			// detected the excessive nesting too late to prevent triggerParentGroupUpdates
+			// from acting on stale data.
+			assert.Equal(t, 0, npc.internalGroupQueue.Len())
+
+			conditions := tt.conditions(npc)
+			require.Len(t, conditions, 1)
+			assert.Equal(t, crdv1beta1.GroupMembersComputed, conditions[0].Type)
+			assert.Equal(t, corev1.ConditionFalse, conditions[0].Status)
+			assert.Equal(t, crdv1beta1.ChildGroupsNestingExceeded, conditions[0].Reason)
+			assert.NotEmpty(t, conditions[0].Message)
 		})
 	}
 }

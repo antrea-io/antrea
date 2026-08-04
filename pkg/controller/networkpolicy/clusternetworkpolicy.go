@@ -772,7 +772,44 @@ func (n *NetworkPolicyController) getAffectedNamespacesForAppliedTo(appliedTo cr
 // processInternalGroupForRule examines the internal group (and its childGroups if applicable)
 // to determine whether an addressGroup needs to be created, and returns any ipBlocks contained
 // by the internal Group as well.
+//
+// A (false, nil) result, e.g. because the Group has an unresolved childGroups reference or is not
+// realized because of its nesting level, does not mean the rule's peer is unrestricted. A rule
+// whose sole peer never resolves any member becomes permanently unsatisfiable at the OpenFlow
+// layer, not match-all: an Allow rule never grants the access it names, and a Drop/Reject rule
+// never blocks what it names. The agent gets there by a different route per direction:
+//
+//   - ingress: computeOFRulesForAdd builds PolicyRule.From from groupMembersToOFAddresses and
+//     ipBlocksToOFAddresses, which are contracted never to return nil ("Must not return nil as it
+//     means not restricted by addresses in Openflow implementation", in
+//     pkg/agent/controller/networkpolicy/pod_reconciler.go). From is therefore empty but non-nil,
+//     so calculateClauses still counts a From clause, and that clause has no address flows to
+//     satisfy.
+//
+//   - egress: an Antrea policy rule with no resolved member, no ipBlocks, no fqdns and no
+//     toServices produces no PolicyRule at all, so nothing is installed for it. The never-nil
+//     contracts are not what saves this case.
+//
+// Match-all is always represented explicitly (matchAllPeer's 0.0.0.0/0 and ::/0 ipBlocks), never
+// by the absence of addresses.
 func (n *NetworkPolicyController) processInternalGroupForRule(group *antreatypes.Group) (bool, []controlplane.IPBlock) {
+	return n.processInternalGroupForRuleAtLevel(group, 1)
+}
+
+// processInternalGroupForRuleAtLevel is the recursive implementation of
+// processInternalGroupForRule. level is the nesting level of group, starting at 1 for the Group
+// named by the rule.
+//
+// A Group that is nested too deeply is not realized, and contributes no addresses. The level
+// check is what makes the traversal terminate on any graph, including a ChildGroups cycle:
+// ChildGroupsNestingExceeded is derived state that an ADD/UPDATE event resets until the Group is
+// synced again, so it cannot be relied on here. Without the level check, a cycle crashes the
+// whole antrea-controller process with an unrecoverable "fatal error: stack overflow", which no
+// recover() can intercept.
+func (n *NetworkPolicyController) processInternalGroupForRuleAtLevel(group *antreatypes.Group, level int) (bool, []controlplane.IPBlock) {
+	if level > maxGroupNestingLevel || group.ChildGroupsNestingExceeded {
+		return false, nil
+	}
 	if len(group.IPBlocks) > 0 {
 		return false, group.IPBlocks
 	} else if len(group.ChildGroups) == 0 {
@@ -785,7 +822,7 @@ func (n *NetworkPolicyController) processInternalGroupForRule(group *antreatypes
 		childGroup, found, _ := n.internalGroupStore.Get(childName)
 		if found {
 			child := childGroup.(*antreatypes.Group)
-			createChildAG, ipb := n.processInternalGroupForRule(child)
+			createChildAG, ipb := n.processInternalGroupForRuleAtLevel(child, level+1)
 			if createChildAG {
 				createAddrGroup = true
 			}
