@@ -63,8 +63,8 @@ jobs:
   test-unit-windows:
     needs: check-changes
     if: ${{ needs.check-changes.outputs.has_changes == 'yes' }}
-    name: Unit test (windows-2022)
-    runs-on: [windows-2022]
+    name: Unit test (windows-2025)
+    runs-on: [windows-2025]
     steps:
       - name: Check-out code
         uses: actions/checkout@v7
