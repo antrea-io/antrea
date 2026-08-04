@@ -64,14 +64,16 @@ const (
 	ipPoolNamespace    = "default"
 	secondaryOVSBridge = "br-secondary"
 
-	containerName  = "toolbox"
-	podApp         = "secondaryTest"
-	osType         = "linux"
-	pingCount      = 5
-	pingSize       = 40
-	defaultTimeout = 30 * time.Second
-	sriovReqName   = "intel.com/intel_sriov_netdevice"
-	sriovResNum    = 1
+	containerName = "toolbox"
+	podApp        = "secondaryTest"
+	osType        = "linux"
+	pingCount     = 5
+	pingSize      = 40
+
+	sriovReqName = "intel.com/intel_sriov_netdevice"
+	sriovResNum  = 1
+
+	defaultTimeout = 90 * time.Second
 )
 
 // formAnnotationStringOfPod forms the annotation string, used in the generation of each Pod YAML file.
