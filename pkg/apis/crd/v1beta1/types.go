@@ -238,9 +238,9 @@ type ExternalIPPool struct {
 type ExternalIPPoolSpec struct {
 	// The IP ranges of this IP pool, e.g. 10.10.0.0/24, 10.10.10.2-10.10.10.20, 10.10.10.30-10.10.10.30.
 	IPRanges []IPRange `json:"ipRanges"`
-	// The Subnet info of this IP pool. If set, all IP ranges in the IP pool should share the same subnet attributes.
+	// The Subnet info of this IP pool. If set, all IP ranges of the same IP family should share the same subnet attributes.
 	// Currently, it's only used when an IP is allocated from the pool for Egress, and is ignored otherwise.
-	SubnetInfo *SubnetInfo `json:"subnetInfo,omitempty"`
+	SubnetInfo *ExternalIPPoolSubnetInfo `json:"subnetInfo,omitempty"`
 	// The Nodes that the external IPs can be assigned to. If empty, it means all Nodes.
 	NodeSelector metav1.LabelSelector `json:"nodeSelector"`
 }
@@ -253,6 +253,29 @@ type IPRange struct {
 	Start string `json:"start,omitempty"`
 	// The end IP of the range, e.g. 10.10.20.20, inclusive.
 	End string `json:"end,omitempty"`
+}
+
+// ExternalIPPoolSubnetInfo specifies subnet attributes for IP ranges in an ExternalIPPool.
+type ExternalIPPoolSubnetInfo struct {
+	// Gateway is the gateway IP for a single-stack subnet, e.g. 10.10.1.1.
+	// It cannot be set together with Gateways.
+	Gateway string `json:"gateway,omitempty"`
+	// PrefixLength is the prefix length for a single-stack subnet, e.g. 24.
+	// It cannot be set together with Gateways.
+	PrefixLength int32 `json:"prefixLength,omitempty"`
+	// Gateways specifies subnet gateways by IP family. At most one entry is allowed for each IP family.
+	// It cannot be set together with Gateway or PrefixLength.
+	Gateways []SubnetGateway `json:"gateways,omitempty"`
+	// VLAN is the VLAN ID shared by all subnets. Default is 0. Valid value is 0~4094.
+	VLAN int32 `json:"vlan,omitempty"`
+}
+
+// SubnetGateway specifies the gateway and prefix length for one IP family. The IP family is inferred from Gateway.
+type SubnetGateway struct {
+	// Gateway is the gateway IP for this subnet, e.g. 10.10.1.1 or 2001:db8::1.
+	Gateway string `json:"gateway"`
+	// PrefixLength is the prefix length for this subnet, e.g. 24.
+	PrefixLength int32 `json:"prefixLength"`
 }
 
 // SubnetInfo specifies subnet attributes for IP Range.
@@ -1005,23 +1028,20 @@ type EgressCondition struct {
 type EgressSpec struct {
 	// AppliedTo selects Pods to which the Egress will be applied.
 	AppliedTo AppliedTo `json:"appliedTo"`
-	// EgressIP specifies the SNAT IP address for the selected workloads.
-	// If ExternalIPPool is empty, it must be specified manually.
-	// If ExternalIPPool is non-empty, it can be empty and will be assigned by Antrea automatically.
-	// If both ExternalIPPool and EgressIP are non-empty, the IP must be in the pool.
+	// EgressIP specifies a single SNAT IP address for the selected workloads. It is used only for single-stack Egresses.
+	// If ExternalIPPool is not specified, the EgressIP field must be specified manually. If ExternalIPPool is specified,
+	// EgressIP field is optional, and an IP will be automatically assigned by Antrea automatically when it is not specified. If both
+	// ExternalIPPool and EgressIP are specified, the IP must be in the pool.
 	EgressIP string `json:"egressIP,omitempty"`
-	// EgressIPs specifies multiple SNAT IP addresses for the selected workloads.
-	// Cannot be set with EgressIP.
+	// EgressIPs specifies the IPv4 and IPv6 SNAT IP addresses for the selected workloads. It must contain exactly two
+	// addresses, one for each IP family. It cannot be set with EgressIP.
 	EgressIPs []string `json:"egressIPs,omitempty"`
-	// ExternalIPPool specifies the IP Pool that the EgressIP should be allocated from.
-	// If it is empty, the specified EgressIP must be assigned to a Node manually.
-	// If it is non-empty, the EgressIP will be assigned to a Node specified by the pool automatically and will failover
-	// to a different Node when the Node becomes unreachable.
+	// ExternalIPPool specifies the IP Pool that the EgressIP(s) should be allocated from. If it is not set, the specified EgressIP(s)
+	// should be assigned to a Node manually. If it is specified, the EgressIP(s) will be assigned to a Node specified by the pool
+	// automatically and will fail over to a different Node when the Node is down.
 	ExternalIPPool string `json:"externalIPPool,omitempty"`
-	// ExternalIPPools specifies multiple unique IP Pools that the EgressIPs should be allocated from. Entries with the
-	// same index in EgressIPs and ExternalIPPools are correlated.
-	// Cannot be set with ExternalIPPool.
-	ExternalIPPools []string `json:"externalIPPools,omitempty"`
+	// IPFamilyPolicy specifies whether the Egress is single-stack or dual-stack. It defaults to PreferDualStack.
+	IPFamilyPolicy *corev1.IPFamilyPolicy `json:"ipFamilyPolicy,omitempty"`
 	// Bandwidth specifies the rate limit of north-south egress traffic of this Egress.
 	Bandwidth *Bandwidth `json:"bandwidth,omitempty"`
 }

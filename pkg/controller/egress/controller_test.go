@@ -36,6 +36,7 @@ import (
 	"k8s.io/client-go/kubernetes/fake"
 	k8stesting "k8s.io/client-go/testing"
 	"k8s.io/client-go/tools/cache"
+	"k8s.io/utils/ptr"
 
 	"antrea.io/antrea/v2/pkg/apis/controlplane"
 	"antrea.io/antrea/v2/pkg/apis/crd/v1beta1"
@@ -813,6 +814,133 @@ func TestSyncEgressIP(t *testing.T) {
 			checkExternalIPPoolUsed(t, controller, tt.existingExternalIPPool.Name, tt.expectedExternalIPPoolUsed)
 		})
 	}
+}
+
+func TestRequiresDualStackRuntime(t *testing.T) {
+	singleStackPool := newExternalIPPool("single-stack", "10.10.10.0/24", "", "")
+	dualStackPool := newDualStackExternalIPPool("dual-stack")
+	invalidPool := newExternalIPPool("invalid", "invalid-cidr", "", "")
+	controller := newController(nil, []runtime.Object{singleStackPool, dualStackPool, invalidPool})
+	stopCh := make(chan struct{})
+	defer close(stopCh)
+	controller.crdInformerFactory.Start(stopCh)
+	controller.crdInformerFactory.WaitForCacheSync(stopCh)
+
+	tests := []struct {
+		name        string
+		egress      *v1beta1.Egress
+		required    bool
+		expectedErr string
+	}{
+		{
+			name: "explicit dual-stack IPs",
+			egress: &v1beta1.Egress{Spec: v1beta1.EgressSpec{
+				EgressIPs: []string{"10.10.10.1", "2001:db8:10::1"},
+			}},
+			required: true,
+		},
+		{
+			name: "RequireDualStack",
+			egress: &v1beta1.Egress{Spec: v1beta1.EgressSpec{
+				ExternalIPPool: dualStackPool.Name,
+				IPFamilyPolicy: ptr.To(v1.IPFamilyPolicyRequireDualStack),
+			}},
+			required: true,
+		},
+		{
+			name: "PreferDualStack with dual-stack pool",
+			egress: &v1beta1.Egress{Spec: v1beta1.EgressSpec{
+				ExternalIPPool: dualStackPool.Name,
+				IPFamilyPolicy: ptr.To(v1.IPFamilyPolicyPreferDualStack),
+			}},
+			required: true,
+		},
+		{
+			name: "PreferDualStack with single-stack pool",
+			egress: &v1beta1.Egress{Spec: v1beta1.EgressSpec{
+				ExternalIPPool: singleStackPool.Name,
+				IPFamilyPolicy: ptr.To(v1.IPFamilyPolicyPreferDualStack),
+			}},
+		},
+		{
+			name: "PreferDualStack with invalid pool",
+			egress: &v1beta1.Egress{Spec: v1beta1.EgressSpec{
+				ExternalIPPool: invalidPool.Name,
+				IPFamilyPolicy: ptr.To(v1.IPFamilyPolicyPreferDualStack),
+			}},
+			expectedErr: "failed to determine IP families for ExternalIPPool invalid: invalid cidr invalid-cidr",
+		},
+		{
+			name: "SingleStack with dual-stack pool",
+			egress: &v1beta1.Egress{Spec: v1beta1.EgressSpec{
+				ExternalIPPool: dualStackPool.Name,
+				IPFamilyPolicy: ptr.To(v1.IPFamilyPolicySingleStack),
+			}},
+		},
+		{
+			name: "legacy Egress without policy",
+			egress: &v1beta1.Egress{Spec: v1beta1.EgressSpec{
+				ExternalIPPool: dualStackPool.Name,
+			}},
+		},
+		{
+			name: "legacy EgressIP with PreferDualStack",
+			egress: &v1beta1.Egress{Spec: v1beta1.EgressSpec{
+				EgressIP:       "10.10.10.1",
+				ExternalIPPool: dualStackPool.Name,
+				IPFamilyPolicy: ptr.To(v1.IPFamilyPolicyPreferDualStack),
+			}},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			required, err := controller.requiresDualStackEgress(tt.egress)
+			if tt.expectedErr != "" {
+				assert.EqualError(t, err, tt.expectedErr)
+				return
+			}
+			require.NoError(t, err)
+			assert.Equal(t, tt.required, required)
+		})
+	}
+}
+
+func TestSyncEgressSkipsDualStackRuntime(t *testing.T) {
+	dualStackPool := newDualStackExternalIPPool("dual-stack")
+	egress := &v1beta1.Egress{
+		ObjectMeta: metav1.ObjectMeta{Name: "egress-preferred"},
+		Spec: v1beta1.EgressSpec{
+			ExternalIPPool: dualStackPool.Name,
+			IPFamilyPolicy: ptr.To(v1.IPFamilyPolicyPreferDualStack),
+		},
+		Status: v1beta1.EgressStatus{
+			Conditions: []v1beta1.EgressCondition{{
+				Type:    v1beta1.IPAllocated,
+				Status:  v1.ConditionTrue,
+				Reason:  "Allocated",
+				Message: "EgressIP is successfully allocated",
+			}},
+		},
+	}
+	controller := newController(nil, []runtime.Object{dualStackPool, egress})
+	stopCh := make(chan struct{})
+	defer close(stopCh)
+	controller.crdInformerFactory.Start(stopCh)
+	controller.crdInformerFactory.WaitForCacheSync(stopCh)
+	go controller.externalIPAllocator.Run(stopCh)
+	require.True(t, cache.WaitForCacheSync(stopCh, controller.externalIPAllocator.HasSynced))
+	previousIP := net.ParseIP("10.10.10.10")
+	require.NoError(t, controller.externalIPAllocator.UpdateIPAllocation(dualStackPool.Name, previousIP))
+	controller.setIPAllocation(egress.Name, previousIP, dualStackPool.Name)
+
+	require.NoError(t, controller.syncEgress(egress.Name))
+	_, _, allocated := controller.getIPAllocation(egress.Name)
+	assert.False(t, allocated)
+	gotEgress, err := controller.crdClient.CrdV1beta1().Egresses().Get(context.TODO(), egress.Name, metav1.GetOptions{})
+	require.NoError(t, err)
+	assert.Empty(t, gotEgress.Spec.EgressIP)
+	assert.Nil(t, v1beta1.GetEgressCondition(gotEgress.Status.Conditions, v1beta1.IPAllocated))
+	checkExternalIPPoolUsed(t, controller, dualStackPool.Name, 0)
 }
 
 func checkExternalIPPoolUsed(t *testing.T, controller *egressController, poolName string, used int) {
