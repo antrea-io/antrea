@@ -19,6 +19,7 @@ import (
 	"context"
 	"fmt"
 	"net"
+	"net/http"
 	"path"
 	"strconv"
 	"strings"
@@ -104,8 +105,7 @@ func GetControllerCACert(ctx context.Context, client kubernetes.Interface, contr
 }
 
 func CreateAgentClientCfgFromObjects(
-	ctx context.Context,
-	k8sClientset kubernetes.Interface,
+	tokenSource *ServiceAccountTokenSource,
 	kubeconfig *rest.Config,
 	node *corev1.Node,
 	agentInfo *v1beta1.AntreaAgentInfo,
@@ -117,6 +117,40 @@ func CreateAgentClientCfgFromObjects(
 	}
 
 	cfg := rest.CopyConfig(kubeconfig)
+	// The Agent API endpoint (host, port and CA bundle) is self-reported by each Agent
+	// through its AntreaAgentInfo object, which any Agent is able to write. Rather than
+	// copying the caller's kubeconfig credentials into a client that connects to this
+	// self-reported endpoint, strip all authentication material and authenticate with a
+	// short-lived token minted for the dedicated "antctl" ServiceAccount, which is scoped
+	// to the privileges needed to query the Agent API.
+	cfg.BearerToken = ""
+	cfg.BearerTokenFile = ""
+	cfg.Username = ""
+	cfg.Password = ""
+	cfg.CertFile = ""
+	cfg.CertData = nil
+	cfg.KeyFile = ""
+	cfg.KeyData = nil
+	cfg.AuthProvider = nil
+	cfg.ExecProvider = nil
+	cfg.AuthConfigPersister = nil
+	// Impersonation headers identify the caller just like a credential does, and a transport
+	// provided by the caller can carry authentication of its own, so neither is inherited: the
+	// WrapTransport installed below replaces any wrapper coming from the kubeconfig.
+	cfg.Impersonate = rest.ImpersonationConfig{}
+	cfg.Transport = nil
+	// Proxy and Dial are deliberately kept. Neither identifies nor authenticates the caller, and
+	// both are how a private cluster is reached at all: a kubeconfig "proxy-url" is commonly a
+	// SOCKS5 tunnel to a jump host, and the Node IPs we connect to below are only routable
+	// through it. Clearing them would break those users for no security benefit, as the proxy
+	// only ever sees the TLS connection to the Agent.
+	//
+	// The token is obtained per request rather than embedded in the config, so that it can be
+	// renewed when it expires: commands such as "antctl proxy" and "antctl supportbundle" on a
+	// large cluster run for longer than the lifetime of a single token.
+	cfg.WrapTransport = func(rt http.RoundTripper) http.RoundTripper {
+		return &tokenRoundTripper{tokenSource: tokenSource, rt: rt}
+	}
 	cfg.NegotiatedSerializer = scheme.Codecs.WithoutConversion()
 	if insecure {
 		cfg.Insecure = true
@@ -171,7 +205,12 @@ func CreateAgentClientCfg(
 		return nil, fmt.Errorf("AntreaAgentInfo is not ready for Node %s", nodeName)
 	}
 
-	return CreateAgentClientCfgFromObjects(ctx, k8sClientset, kubeconfig, node, agentInfo, insecure)
+	namespace, err := ResolveAntreaNamespace(ctx, k8sClientset)
+	if err != nil {
+		return nil, err
+	}
+	tokenSource := NewServiceAccountTokenSource(k8sClientset, namespace)
+	return CreateAgentClientCfgFromObjects(tokenSource, kubeconfig, node, agentInfo, insecure)
 }
 
 func CreateControllerClientCfg(
