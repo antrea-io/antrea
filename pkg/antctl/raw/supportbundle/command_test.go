@@ -28,6 +28,7 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	appsv1 "k8s.io/api/apps/v1"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -144,6 +145,18 @@ var (
 				{
 					Name: "antrea-controller",
 				},
+			},
+		},
+	}
+	// The antrea-agent DaemonSet is how the Namespace of the "antctl" ServiceAccount is
+	// resolved when creating the Agent clients.
+	agentDaemonSet = &appsv1.DaemonSet{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "antrea-agent",
+			Namespace: "kube-system",
+			Labels: map[string]string{
+				"app":       "antrea",
+				"component": "antrea-agent",
 			},
 		},
 	}
@@ -277,13 +290,13 @@ func TestCreateAgentClients(t *testing.T) {
 	}{
 		{
 			name:            "created both agent clients successfully",
-			k8sClientset:    fake.NewSimpleClientset(&node1, &node3),
+			k8sClientset:    fake.NewSimpleClientset(&node1, &node3, agentDaemonSet),
 			antreaClientset: fakeclientset.NewSimpleClientset(agentInfo1, agentInfo2),
 			expectedClients: []string{"node-1", "node-3"},
 		},
 		{
 			name:            "failure to create one agent client due to error when parsing controller IP",
-			k8sClientset:    fake.NewSimpleClientset(&node2, &node3),
+			k8sClientset:    fake.NewSimpleClientset(&node2, &node3, agentDaemonSet),
 			antreaClientset: fakeclientset.NewSimpleClientset(agentInfo1, agentInfo2),
 			expectedClients: []string{"node-3"},
 		},
