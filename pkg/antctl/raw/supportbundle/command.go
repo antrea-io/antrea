@@ -402,6 +402,13 @@ func createAgentClients(
 			return hit
 		}
 	}
+	antreaNamespace, err := raw.ResolveAntreaNamespace(ctx, k8sClientset)
+	if err != nil {
+		return nil, err
+	}
+	// A single token source is shared by all the Agent clients: tokens are minted lazily and
+	// cached, so we do not issue one TokenRequest per Node.
+	tokenSource := raw.NewServiceAccountTokenSource(k8sClientset, antreaNamespace)
 	for i := range nodeList.Items {
 		node := &nodeList.Items[i]
 		if !matcher(node.Name) {
@@ -411,7 +418,7 @@ func createAgentClients(
 		if !ok {
 			continue
 		}
-		cfg, err := raw.CreateAgentClientCfgFromObjects(ctx, k8sClientset, kubeconfig, node, agentInfo, insecure)
+		cfg, err := raw.CreateAgentClientCfgFromObjects(tokenSource, kubeconfig, node, agentInfo, insecure)
 		if err != nil {
 			klog.ErrorS(err, "Error when creating agent client config", "node", node.Name)
 			continue

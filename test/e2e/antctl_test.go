@@ -372,4 +372,57 @@ func createAntctlServiceAccount(t *testing.T, data *TestData, name string) {
 		err := data.clientset.RbacV1().ClusterRoleBindings().Delete(context.TODO(), name, metav1.DeleteOptions{})
 		assert.NoError(t, err, "Error when deleting ClusterRoleBinding")
 	})
+
+	// The antctl ClusterRole does not grant permission to mint a token for the "antctl"
+	// ServiceAccount: real antctl users are expected to already hold that permission (e.g. as
+	// a cluster-admin) rather than rely solely on the antctl ClusterRole for it. This test
+	// Pod has no such broader identity, so it needs a dedicated Role granting exactly that,
+	// scoped to the antrea Namespace where the real "antctl" ServiceAccount lives.
+	role := &rbacv1.Role{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace: antreaNamespace,
+			Name:      name, // we use the same name as for the ServiceAccount
+		},
+		Rules: []rbacv1.PolicyRule{
+			{
+				APIGroups:     []string{""},
+				Resources:     []string{"serviceaccounts/token"},
+				ResourceNames: []string{"antctl"},
+				Verbs:         []string{"create"},
+			},
+		},
+	}
+	_, err = data.clientset.RbacV1().Roles(antreaNamespace).Create(context.TODO(), role, metav1.CreateOptions{})
+	require.NoErrorf(t, err, "Failed to create Role to allow ServiceAccount '%s/%s' to mint a token for the antctl ServiceAccount", data.testNamespace, name)
+
+	t.Cleanup(func() {
+		err := data.clientset.RbacV1().Roles(antreaNamespace).Delete(context.TODO(), name, metav1.DeleteOptions{})
+		assert.NoError(t, err, "Error when deleting Role")
+	})
+
+	roleBinding := &rbacv1.RoleBinding{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace: antreaNamespace,
+			Name:      name, // we use the same name as for the ServiceAccount
+		},
+		Subjects: []rbacv1.Subject{
+			{
+				Kind:      "ServiceAccount",
+				Name:      name,
+				Namespace: data.testNamespace,
+			},
+		},
+		RoleRef: rbacv1.RoleRef{
+			APIGroup: "rbac.authorization.k8s.io",
+			Kind:     "Role",
+			Name:     name,
+		},
+	}
+	_, err = data.clientset.RbacV1().RoleBindings(antreaNamespace).Create(context.TODO(), roleBinding, metav1.CreateOptions{})
+	require.NoErrorf(t, err, "Failed to create RoleBinding to grant the token-minting Role to ServiceAccount '%s/%s'", data.testNamespace, name)
+
+	t.Cleanup(func() {
+		err := data.clientset.RbacV1().RoleBindings(antreaNamespace).Delete(context.TODO(), name, metav1.DeleteOptions{})
+		assert.NoError(t, err, "Error when deleting RoleBinding")
+	})
 }
