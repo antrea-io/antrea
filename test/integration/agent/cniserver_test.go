@@ -878,6 +878,11 @@ func TestCNIServerGCForHostLocalIPAM(t *testing.T) {
 	usedIPv6 := net.ParseIP("2001:db8:a::1")
 	unusedIPv4 := net.ParseIP("10.0.0.2")
 	unusedIPv6 := net.ParseIP("2001:db8:a::2")
+	// IPs which are in-use by a Pod, but which are missing from the Pod status. This is the case
+	// when the CNI ADD for the Pod completed right before the agent restarted, as kubelet
+	// reports Pod IPs to the K8s API asynchronously.
+	notReportedIPv4 := net.ParseIP("10.0.0.3")
+	notReportedIPv6 := net.ParseIP("2001:db8:a::3")
 
 	pod := &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
@@ -893,6 +898,15 @@ func TestCNIServerGCForHostLocalIPAM(t *testing.T) {
 				{IP: usedIPv4.String()},
 				{IP: usedIPv6.String()},
 			},
+		},
+	}
+	podWithoutStatusIPs := &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-pod-2",
+			Namespace: "default",
+		},
+		Spec: corev1.PodSpec{
+			NodeName: testNodeConfig.Name,
 		},
 	}
 
@@ -919,6 +933,7 @@ func TestCNIServerGCForHostLocalIPAM(t *testing.T) {
 	}
 	reserveIPs("c0", usedIPv4, usedIPv6)
 	reserveIPs("c1", unusedIPv4, unusedIPv6)
+	reserveIPs("c2", notReportedIPv4, notReportedIPv6)
 
 	// create mocks and test CNIServer
 	controller := mock.NewController(t)
@@ -929,9 +944,18 @@ func TestCNIServerGCForHostLocalIPAM(t *testing.T) {
 	ofServiceMock := openflowtest.NewMockClient(controller)
 	routeMock := routetest.NewMockInterface(controller)
 	ifaceStore := interfacestore.NewInterfaceStore()
+	// The interface store is restored from OVSDB on agent restart: it knows about the IPs which
+	// have not been reported to the K8s API yet.
+	notReportedIface := interfacestore.NewContainerInterface(
+		"iface2", "c2", podWithoutStatusIPs.Name, podWithoutStatusIPs.Namespace,
+		IFName, "netns2", nil, []net.IP{notReportedIPv4, notReportedIPv6}, 0)
+	notReportedIface.OVSPortConfig = &interfacestore.OVSPortConfig{PortUUID: "uuid2", OFPort: 10}
+	ifaceStore.AddInterface(notReportedIface)
+	// reconciliation replays the OpenFlow entries for this interface, as the Pod still exists
+	ofServiceMock.EXPECT().InstallPodFlows("iface2", notReportedIface.IPs, nil, uint32(10), uint16(0), nil).Return(nil).Times(1)
 	podNetworkWait := wait.NewGroup()
 	flowRestoreCompleteWait := wait.NewGroup()
-	k8sClient := k8sFake.NewSimpleClientset(pod)
+	k8sClient := k8sFake.NewSimpleClientset(pod, podWithoutStatusIPs)
 	server := cniserver.New(
 		testSock,
 		"",
@@ -945,6 +969,8 @@ func TestCNIServerGCForHostLocalIPAM(t *testing.T) {
 
 	// call Initialize, which will run reconciliation and perform host-local IPAM garbage collection
 	server.Initialize(ovsServiceMock, ofServiceMock, ifaceStore, channel.NewSubscribableChannel("PodUpdate", 100))
+	// wait for the asynchronous part of reconciliation (OpenFlow entries replay) to complete
+	require.NoError(t, flowRestoreCompleteWait.WaitWithTimeout(5*time.Second))
 
 	getIPs := func(cID string) []net.IP {
 		ipamStore, err := disk.New("antrea", "")
@@ -956,6 +982,9 @@ func TestCNIServerGCForHostLocalIPAM(t *testing.T) {
 	}
 	assert.ElementsMatch(t, getIPs("c0"), []net.IP{usedIPv4, usedIPv6})
 	assert.Empty(t, getIPs("c1"))
+	// These IPs must not be released: they are assigned to a Pod interface which is known to
+	// the interface store, even though the Pod status does not report them yet.
+	assert.ElementsMatch(t, getIPs("c2"), []net.IP{notReportedIPv4, notReportedIPv6})
 }
 
 func getTestNodeConfig(dualStack bool) *config.NodeConfig {
