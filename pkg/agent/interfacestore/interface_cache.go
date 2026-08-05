@@ -70,7 +70,8 @@ type interfaceCache struct {
 	cache cache.Indexer
 }
 
-func (c *interfaceCache) Initialize(interfaces []*InterfaceConfig) {
+// AddInterfaces adds multiple interface configurations to the local cache.
+func (c *interfaceCache) AddInterfaces(interfaces []*InterfaceConfig) {
 	for _, intf := range interfaces {
 		c.cache.Add(intf)
 		if intf.Type == ContainerInterface {
