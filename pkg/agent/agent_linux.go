@@ -174,8 +174,10 @@ func (i *Initializer) RestoreOVSBridge() {
 	klog.InfoS("Restoring bridge config to uplink...")
 
 	if i.nodeConfig.UplinkNetConfig.Name != "" {
-		util.RestoreHostInterfaceConfiguration(i.ovsBridge, i.nodeConfig.UplinkNetConfig.Name)
-		klog.InfoS("Finished restoring bridge config to uplink...")
+		if err := util.RestoreHostInterfaceConfiguration(i.ovsBridge, i.nodeConfig.UplinkNetConfig.Name); err != nil {
+			klog.ErrorS(err, "Failed to restore bridge config to uplink",
+				"interface", i.nodeConfig.UplinkNetConfig.Name, "bridge", i.ovsBridge)
+		}
 	}
 }
 

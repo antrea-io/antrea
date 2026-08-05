@@ -585,7 +585,7 @@ func TestConfigureSriovSecondaryInterface(t *testing.T) {
 			ifaceConfigurator := newTestInterfaceConfigurator()
 			ifaceConfigurator.configureContainerLinkError = tc.configureLinkErr
 			ifaceConfigurator.advertiseContainerAddrError = tc.advertiseErr
-			podConfigurator, _ := NewSecondaryInterfaceConfigurator(nil, interfacestore.NewInterfaceStore())
+			podConfigurator, _ := NewSecondaryInterfaceConfigurator(interfacestore.NewInterfaceStore())
 			podConfigurator.ifConfigurator = ifaceConfigurator
 			err := podConfigurator.ConfigureSriovSecondaryInterface(podName, testPodNamespace, containerID, containerNS, containerIfaceName, mtu, tc.podSriovVFDeviceID, &current.Result{})
 			assert.Equal(t, tc.expectedErr, err)
@@ -620,8 +620,9 @@ func TestConfigureVLANSecondaryInterface(t *testing.T) {
 	controller := gomock.NewController(t)
 	mockOVSBridgeClient := ovsconfigtest.NewMockOVSBridgeClient(controller)
 	ifaceStore := interfacestore.NewInterfaceStore()
-	pc, err := NewSecondaryInterfaceConfigurator(mockOVSBridgeClient, ifaceStore)
+	pc, err := NewSecondaryInterfaceConfigurator(ifaceStore)
 	require.NoError(t, err, "No error expected in podConfigurator constructor")
+	pc.SetOVSBridgeClient(mockOVSBridgeClient)
 	testIfaceConfigurator := newTestInterfaceConfigurator()
 	pc.ifConfigurator = testIfaceConfigurator
 
@@ -669,8 +670,9 @@ func TestDeleteVLANSecondaryInterface(t *testing.T) {
 	controller := gomock.NewController(t)
 	mockOVSBridgeClient := ovsconfigtest.NewMockOVSBridgeClient(controller)
 	ifaceStore := interfacestore.NewInterfaceStore()
-	pc, err := NewSecondaryInterfaceConfigurator(mockOVSBridgeClient, ifaceStore)
+	pc, err := NewSecondaryInterfaceConfigurator(ifaceStore)
 	require.Nil(t, err, "No error expected in podConfigurator constructor")
+	pc.SetOVSBridgeClient(mockOVSBridgeClient)
 
 	podName := "pod1"
 	containerID := generateUUID()

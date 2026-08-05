@@ -369,7 +369,9 @@ func installHandlers(c *ExtraConfig, s *genericapiserver.GenericAPIServer) {
 	pcValidator := controllerpacketcapture.NewValidator(c.k8sClient, env.GetAntreaNamespace())
 	s.Handler.NonGoRestfulMux.HandleFunc("/validate/packetcapture", webhook.HandlerForValidateFunc(pcValidator.Validate))
 
-	s.Handler.NonGoRestfulMux.HandleFunc("/validate/antreanodeconfig", webhook.HandlerForValidateFunc(antreanodeconfig.Validate))
+	if features.DefaultFeatureGate.Enabled(features.AntreaNodeConfig) {
+		s.Handler.NonGoRestfulMux.HandleFunc("/validate/antreanodeconfig", webhook.HandlerForValidateFunc(antreanodeconfig.Validate))
+	}
 }
 
 func DefaultCAConfig() *certificate.CAConfig {
