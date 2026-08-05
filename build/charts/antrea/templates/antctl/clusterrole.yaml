@@ -57,8 +57,14 @@ rules:
       - /ovsflows
       - /ovstracing
       - /podinterfaces
+      - /podmulticaststats
       - /featuregates
       - /serviceexternalip
+      - /memberlist
+      - /bgppolicy
+      - /bgppeers
+      - /bgproutes
+      - /fqdncache
       - /metrics
       - /debug/pprof
       - /debug/pprof/*
