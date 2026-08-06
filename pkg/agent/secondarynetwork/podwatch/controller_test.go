@@ -1558,6 +1558,7 @@ func TestDrainOVSBridge(t *testing.T) {
 	drained := pc.DrainOVSBridge()
 	assert.False(t, drained)
 	assert.Equal(t, oldOVSBridgeClient, pc.ovsBridgeClient)
+	assert.True(t, pc.ovsBridgeDraining)
 
 	deleteInterface := deleteInterfaceFromStore(pc.interfaceStore)
 	interfaceConfigurator.EXPECT().DeleteVLANSecondaryInterface(ovsInterface).DoAndReturn(deleteInterface)
@@ -1568,7 +1569,7 @@ func TestDrainOVSBridge(t *testing.T) {
 	drained = pc.DrainOVSBridge()
 	assert.True(t, drained)
 	assert.Nil(t, pc.ovsBridgeClient)
-	assert.False(t, pc.ovsBridgeDraining)
+	assert.True(t, pc.ovsBridgeDraining)
 
 	// A retried drain with no client installed (e.g. bridge deletion failed and
 	// the retry runs again) reports drained and keeps the draining flag set,
@@ -1635,7 +1636,7 @@ func TestDrainDoesNotWaitForIPAMRelease(t *testing.T) {
 		<-removeDone
 		t.Fatal("IPAM release blocked bridge drain")
 	}
-	assert.False(t, pc.ovsBridgeDraining)
+	assert.True(t, pc.ovsBridgeDraining)
 	close(allowRelease)
 	require.NoError(t, <-removeDone)
 }
@@ -1658,10 +1659,11 @@ func deleteInterfaceFromStore(store interfacestore.InterfaceStore) func(*interfa
 
 func TestRemoveInterfaces(t *testing.T) {
 	releaseErr := errors.New("IPAM release failed")
+	deleteErr := errors.New("interface deletion failed")
 	tests := []struct {
 		name           string
+		vlanDeleteErr  error
 		vlanReleaseErr error
-		detachBridge   bool // simulate a drained or deleted bridge client
 	}{
 		{
 			name: "delete VLAN and SR-IOV interfaces",
@@ -1671,8 +1673,8 @@ func TestRemoveInterfaces(t *testing.T) {
 			vlanReleaseErr: releaseErr,
 		},
 		{
-			name:         "VLAN interface removed without bridge client",
-			detachBridge: true,
+			name:          "return deletion error, keep store entry and skip release",
+			vlanDeleteErr: deleteErr,
 		},
 	}
 
@@ -1688,19 +1690,26 @@ func TestRemoveInterfaces(t *testing.T) {
 			pc.interfaceStore.AddInterface(vlanInterface)
 			pc.interfaceStore.AddInterface(sriovInterface)
 			deleteInterface := deleteInterfaceFromStore(pc.interfaceStore)
-			if tt.detachBridge {
-				pc.ovsBridgeClient = nil
+			if tt.vlanDeleteErr != nil {
+				interfaceConfigurator.EXPECT().DeleteVLANSecondaryInterface(vlanInterface).Return(tt.vlanDeleteErr)
 			} else {
 				interfaceConfigurator.EXPECT().DeleteVLANSecondaryInterface(vlanInterface).DoAndReturn(deleteInterface)
+				mockIPAM.EXPECT().SecondaryNetworkRelease(podOwnerForInterface(vlanInterface)).Return(tt.vlanReleaseErr)
 			}
 			interfaceConfigurator.EXPECT().DeleteSriovSecondaryInterface(sriovInterface).DoAndReturn(deleteInterface)
-			mockIPAM.EXPECT().SecondaryNetworkRelease(podOwnerForInterface(vlanInterface)).Return(tt.vlanReleaseErr)
 			mockIPAM.EXPECT().SecondaryNetworkRelease(podOwnerForInterface(sriovInterface)).Return(nil)
 
-			require.NoError(t, pc.removeInterfaces(interfaces))
-			_, found := pc.interfaceStore.GetContainerInterface(vlanInterface.ContainerID)
-			assert.False(t, found, "VLAN interface should be removed from interfaceStore")
-			_, found = pc.interfaceStore.GetContainerInterface(sriovInterface.ContainerID)
+			err := pc.removeInterfaces(interfaces)
+			if tt.vlanDeleteErr != nil {
+				require.ErrorIs(t, err, deleteErr)
+				_, found := pc.interfaceStore.GetContainerInterface(vlanInterface.ContainerID)
+				assert.True(t, found, "VLAN interface should be kept in interfaceStore when deletion fails")
+			} else {
+				require.NoError(t, err)
+				_, found := pc.interfaceStore.GetContainerInterface(vlanInterface.ContainerID)
+				assert.False(t, found, "VLAN interface should be removed from interfaceStore")
+			}
+			_, found := pc.interfaceStore.GetContainerInterface(sriovInterface.ContainerID)
 			assert.False(t, found, "SR-IOV interface should be removed from interfaceStore")
 		})
 	}

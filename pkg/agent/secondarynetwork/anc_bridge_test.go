@@ -109,7 +109,7 @@ func TestEffectiveSecondaryOVSBridge(t *testing.T) {
 			if tc.snapshot == nil {
 				got = ovsBridgeFromStatic(tc.staticCfg)
 			} else {
-				got = EffectiveSecondaryOVSBridgeFromSnapshot(tc.snapshot, tc.staticCfg, "br-int")
+				got = effectiveSecondaryOVSBridgeFromSnapshot(tc.snapshot, tc.staticCfg, "br-int")
 			}
 			assert.Equal(t, tc.wantBridge, got)
 		})
@@ -188,7 +188,7 @@ func TestApplySecondaryNetworkConfig(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			got := ApplySecondaryNetworkConfig(tc.cfg, "br-int")
+			got := applySecondaryNetworkConfig(tc.cfg, "br-int")
 			assert.Equal(t, tc.want, got)
 		})
 	}
@@ -289,7 +289,7 @@ func TestConvertCRDSecondaryNetwork(t *testing.T) {
 					SecondaryNetwork: tc.in,
 				},
 			}
-			got := ApplySecondaryNetworkConfig(cfg, "br-int")
+			got := applySecondaryNetworkConfig(cfg, "br-int")
 			assert.Equal(t, tc.want, got)
 		})
 	}
