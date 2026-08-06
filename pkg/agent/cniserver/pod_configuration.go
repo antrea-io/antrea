@@ -74,6 +74,9 @@ var (
 	// Note, using a variable rather than constant for retryInterval because we may use a shorter time in the
 	// test code.
 	retryInterval = 5 * time.Second
+	// garbageCollectContainerIPs is declared as a variable so that it can be overridden by the
+	// test code.
+	garbageCollectContainerIPs = ipam.GarbageCollectContainerIPs
 )
 
 type podConfigurator struct {
@@ -443,8 +446,23 @@ func (pc *podConfigurator) reconcile(pods []corev1.Pod, containerAccess *contain
 	// desiredPods is the set of Pods that should be present, based on the
 	// current list of Pods got from the Kubernetes API.
 	desiredPods := sets.New[string]()
-	// desiredPodIPs is the set of IPs allocated to desiredPods.
-	desiredPodIPs := sets.New[string]()
+	// ipsInUse is the set of IPs which must not be released by IPAM garbage collection: the union
+	// of the IPs reported in the status of the Pods scheduled to this Node and the IPs assigned to
+	// the Pod interfaces which are not deleted as part of reconciliation.
+	//
+	// Pod IPs are reported to the K8s API asynchronously by kubelet, *after* the CNI ADD has returned,
+	// so an agent restart in that window yields a running Pod with an empty Status.PodIPs even though
+	// its IP is already reserved by host-local. The interface store is restored from OVSDB and does not
+	// have this delay, so including it guarantees that we never release an IP claimed by a live local
+	// Pod interface, which host-local could then assign to a second Pod.
+	//
+	// The interface store only adds reasons to keep an IP: candidate IPs still come exclusively from the
+	// host-local data (one file per allocated IP), so an IP which is in neither the Pod statuses nor the
+	// interface store - e.g. because of an Antrea bug - is still released. Erring on the side of keeping
+	// an IP is the right trade-off, as an IP kept while no longer in use is reclaimed by a later CNI DEL
+	// or agent restart, while an IP released while in-use causes 2 Pods to share an IP until an operator
+	// intervenes.
+	ipsInUse := sets.New[string]()
 	// knownInterfaces is the list of interfaces currently in the local cache.
 	knownInterfaces := pc.ifaceStore.GetInterfacesByType(interfacestore.ContainerInterface)
 
@@ -453,7 +471,7 @@ func (pc *podConfigurator) reconcile(pods []corev1.Pod, containerAccess *contain
 	for _, pod := range pods {
 		desiredPods.Insert(k8s.NamespacedName(pod.Namespace, pod.Name))
 		for _, podIP := range pod.Status.PodIPs {
-			desiredPodIPs.Insert(podIP.IP)
+			ipsInUse.Insert(podIP.IP)
 		}
 	}
 
@@ -462,6 +480,20 @@ func (pc *podConfigurator) reconcile(pods []corev1.Pod, containerAccess *contain
 		namespace := containerConfig.PodNamespace
 		name := containerConfig.PodName
 		namespacedName := k8s.NamespacedName(namespace, name)
+
+		// retainIPs adds the IPs assigned to the interface to ipsInUse, so that they are not
+		// released by IPAM garbage collection. We log these IPs at the Info level, along with
+		// the provided reason, as it is useful information when troubleshooting IPAM issues.
+		retainIPs := func(reason string) {
+			for _, ip := range containerConfig.IPs {
+				ipStr := ip.String()
+				if ipsInUse.Has(ipStr) {
+					continue
+				}
+				klog.InfoS("Excluding IP from IPAM garbage collection", "reason", reason, "IP", ipStr, "Pod", klog.KRef(namespace, name), "container", containerConfig.ContainerID)
+				ipsInUse.Insert(ipStr)
+			}
+		}
 
 		// Find the OVS ports corresponding to Pods which no longer exist. This includes the case that the Pod using the
 		// Namespaced name constructed from OVSDB does not exist in kube-apiserver, and the case that a Pod with the
@@ -472,9 +504,19 @@ func (pc *podConfigurator) reconcile(pods []corev1.Pod, containerAccess *contain
 			klog.V(4).InfoS("Deleting interface", "Pod", klog.KRef(namespace, name), "iface", containerConfig.InterfaceName)
 			if err := pc.removeInterfaces(containerConfig.ContainerID); err != nil {
 				klog.ErrorS(err, "Failed to delete interface", "Pod", klog.KRef(namespace, name), "iface", containerConfig.InterfaceName)
+				// The OVS port may still be present, so we conservatively choose not to
+				// reclaim the IPs assigned to the interface. They will be reclaimed during
+				// a future reconciliation, once the interface is no longer in the
+				// interface store.
+				retainIPs("Interface could not be deleted")
 			}
 			continue
 		}
+
+		// The interface matches an existing Pod, hence the IPs assigned to it are in use and must be
+		// preserved by IPAM garbage collection. An IP missing from the Pod status is not necessarily
+		// an error: this is expected for a Pod whose IP has not been reported to the K8s API yet.
+		retainIPs("IP is assigned to a local Pod interface but is missing from the Pod status")
 
 		// This should only happen on Windows Nodes because if this condition (OFPort is -1) is satisfied on Linux,
 		// the call to isInterfaceInvalid above will return true and the interface will be removed, and this code will
@@ -526,7 +568,7 @@ func (pc *podConfigurator) reconcile(pods []corev1.Pod, containerAccess *contain
 
 	// clean-up IPs that may still be allocated
 	klog.V(4).InfoS("Running IPAM garbage collection for unused Pod IPs")
-	if err := ipam.GarbageCollectContainerIPs(AntreaCNIType, desiredPodIPs); err != nil {
+	if err := garbageCollectContainerIPs(AntreaCNIType, ipsInUse); err != nil {
 		klog.ErrorS(err, "Error when garbage collecting previously-allocated IPs")
 	}
 
