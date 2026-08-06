@@ -78,7 +78,7 @@ type restoredHostConnection struct {
 // When ANC is disabled, only static agent config is consulted.
 func (c *Controller) effectiveOVSBridge() *agenttypes.OVSBridgeConfig {
 	if c.dynamicBridgeReconcile {
-		return EffectiveSecondaryOVSBridgeFromSnapshot(c.latestANCSnapshot.Load(), c.secNetConfig, c.primaryOVSBridgeName)
+		return effectiveSecondaryOVSBridgeFromSnapshot(c.latestANCSnapshot.Load(), c.secNetConfig, c.primaryOVSBridgeName)
 	}
 	return ovsBridgeFromStatic(c.secNetConfig)
 }

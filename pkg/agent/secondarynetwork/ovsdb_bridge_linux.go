@@ -21,7 +21,6 @@ import (
 	"fmt"
 
 	"github.com/ovn-kubernetes/libovsdb/client"
-	"k8s.io/klog/v2"
 
 	"antrea.io/antrea/v2/pkg/agent/interfacestore"
 	"antrea.io/antrea/v2/pkg/ovs/ovsconfig"
@@ -40,29 +39,25 @@ func findStartupSecondaryBridge(ovsdbClient client.Client, desiredBridgeName str
 }
 
 func selectStartupSecondaryBridge(bridges []ovsconfig.OVSBridgeData, desiredBridgeName string) (string, bool, error) {
-	var managedBrNames []string
+	var managedBrName string
 	legacyDesiredExists := false
 	for _, bridge := range bridges {
 		if bridge.ExternalIDs[interfacestore.AntreaInterfaceTypeKey] == interfacestore.AntreaSecondaryBridge {
-			managedBrNames = append(managedBrNames, bridge.Name)
+			if managedBrName != "" {
+				return "", false, fmt.Errorf(
+					"found multiple Antrea-managed secondary OVS bridges: %s and %s",
+					managedBrName,
+					bridge.Name,
+				)
+			}
+			managedBrName = bridge.Name
 		}
 		if bridge.Name == desiredBridgeName {
 			legacyDesiredExists = true
 		}
 	}
-
-	if len(managedBrNames) == 1 {
-		return managedBrNames[0], false, nil
-	}
-	if len(managedBrNames) > 1 {
-		for _, name := range managedBrNames {
-			if name == desiredBridgeName {
-				klog.Warningf("Found multiple Antrea-managed secondary OVS bridges (%v), using %q as it matches the desired bridge name", managedBrNames, desiredBridgeName)
-				return desiredBridgeName, false, nil
-			}
-		}
-		klog.Warningf("Found multiple Antrea-managed secondary OVS bridges (%v) with none matching the desired bridge name %q; not adopting any", managedBrNames, desiredBridgeName)
-		// Fall through to legacy check.
+	if managedBrName != "" {
+		return managedBrName, false, nil
 	}
 	if legacyDesiredExists {
 		return desiredBridgeName, true, nil

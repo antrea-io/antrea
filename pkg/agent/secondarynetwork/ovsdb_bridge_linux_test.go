@@ -21,6 +21,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"antrea.io/antrea/v2/pkg/agent/interfacestore"
 	"antrea.io/antrea/v2/pkg/ovs/ovsconfig"
@@ -36,11 +37,12 @@ func TestSelectStartupSecondaryBridge(t *testing.T) {
 		}
 	}
 	tests := []struct {
-		name               string
-		bridges            []ovsconfig.OVSBridgeData
-		desiredBridgeName  string
-		expectedBridgeName string
-		expectedIsLegacy   bool
+		name                string
+		bridges             []ovsconfig.OVSBridgeData
+		desiredBridgeName   string
+		expectedBridgeName  string
+		expectedIsLegacy    bool
+		expectedErrContains string
 	}{
 		{
 			name:              "no startup bridge",
@@ -66,38 +68,23 @@ func TestSelectStartupSecondaryBridge(t *testing.T) {
 			expectedBridgeName: brOld,
 		},
 		{
-			name: "multiple managed bridges with none matching desired name",
+			name: "multiple managed bridges",
 			bridges: []ovsconfig.OVSBridgeData{
 				managedBridge(brOld),
 				managedBridge(brNew),
 			},
-			// Neither matches "" → no bridge adopted.
-		},
-		{
-			name: "multiple managed bridges with desired matching one of them",
-			bridges: []ovsconfig.OVSBridgeData{
-				managedBridge(brOld),
-				managedBridge(brNew),
-			},
-			desiredBridgeName:  brOld,
-			expectedBridgeName: brOld,
-		},
-		{
-			name: "multiple managed bridges, desired matches a non-managed bridge",
-			bridges: []ovsconfig.OVSBridgeData{
-				managedBridge(brOld),
-				managedBridge(brNew),
-				{Name: "br-other"},
-			},
-			desiredBridgeName:  "br-other",
-			expectedBridgeName: "br-other",
-			expectedIsLegacy:   true,
+			expectedErrContains: "found multiple Antrea-managed secondary OVS bridges",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			bridgeName, isLegacyBridge, _ := selectStartupSecondaryBridge(tt.bridges, tt.desiredBridgeName)
+			bridgeName, isLegacyBridge, err := selectStartupSecondaryBridge(tt.bridges, tt.desiredBridgeName)
+			if tt.expectedErrContains != "" {
+				require.ErrorContains(t, err, tt.expectedErrContains)
+				return
+			}
+			require.NoError(t, err)
 			assert.Equal(t, tt.expectedBridgeName, bridgeName)
 			assert.Equal(t, tt.expectedIsLegacy, isLegacyBridge)
 		})

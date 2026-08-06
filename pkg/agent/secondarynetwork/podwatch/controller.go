@@ -342,16 +342,7 @@ func (pc *PodController) removeInterfaces(interfaces []*interfacestore.Interface
 		// Since only VLAN and SR-IOV interfaces are supported by now, we judge the
 		// interface type by checking interfaceConfig.OVSPortConfig is set or not.
 		if interfaceConfig.OVSPortConfig != nil {
-			if pc.ovsBridgeClient == nil {
-				// The bridge client has been detached (bridge drained or deleted), so
-				// the OVS port cannot be deleted through the configurator. Remove the
-				// stale store entry and release the IPAM allocation below instead.
-				klog.InfoS("OVS bridge client not available, removing stale VLAN interface entry",
-					"Pod", klog.KRef(podNamespace, podName), "interface", interfaceConfig.IFDev)
-				pc.interfaceStore.DeleteInterface(interfaceConfig)
-			} else {
-				err = pc.interfaceConfigurator.DeleteVLANSecondaryInterface(interfaceConfig)
-			}
+			err = pc.interfaceConfigurator.DeleteVLANSecondaryInterface(interfaceConfig)
 		} else {
 			err = pc.deleteSriovSecondaryInterface(interfaceConfig)
 		}
@@ -848,8 +839,8 @@ func (pc *PodController) DrainOVSBridge() bool {
 
 	// Mark the bridge as draining regardless of whether a client is installed,
 	// so the flag stays consistent when DrainOVSBridge is retried after the
-	// client was already detached by an earlier successful drain. It is cleared
-	// when a new bridge client is installed via SetOVSBridgeClient.
+	// client was already detached by an earlier successful drain. The flag is
+	// cleared only when a new bridge client is installed via SetOVSBridgeClient.
 	pc.ovsBridgeDraining = true
 
 	if pc.ovsBridgeClient == nil {
@@ -866,7 +857,6 @@ func (pc *PodController) DrainOVSBridge() bool {
 
 	pc.ovsBridgeClient = nil
 	pc.interfaceConfigurator.SetOVSBridgeClient(nil)
-	pc.ovsBridgeDraining = false
 	return true
 }
 

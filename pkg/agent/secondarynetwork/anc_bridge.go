@@ -26,7 +26,7 @@ import (
 	agentconfig "antrea.io/antrea/v2/pkg/config/agent"
 )
 
-// EffectiveSecondaryOVSBridgeFromSnapshot resolves the desired secondary OVS bridge from an
+// effectiveSecondaryOVSBridgeFromSnapshot resolves the desired secondary OVS bridge from an
 // immutable *antreanodeconfig.Snapshot (for example the payload on the AntreaNodeConfig notify
 // channel) merged with static agent ConfigMap settings.
 //
@@ -41,14 +41,14 @@ import (
 // errors to avoid acting on a partial view) and would return nil — which the caller may interpret
 // as "delete the bridge." To prevent that, callers should skip reconciliation entirely when
 // AntreaNodeConfigListError is non-empty.
-func EffectiveSecondaryOVSBridgeFromSnapshot(snap *antreanodeconfig.Snapshot, staticCfg *agentconfig.SecondaryNetworkConfig, primaryOVSBridgeName string) *agenttypes.OVSBridgeConfig {
+func effectiveSecondaryOVSBridgeFromSnapshot(snap *antreanodeconfig.Snapshot, staticCfg *agentconfig.SecondaryNetworkConfig, primaryOVSBridgeName string) *agenttypes.OVSBridgeConfig {
 	if staticCfg != nil && len(staticCfg.OVSBridges) > 0 {
 		return ovsBridgeFromStatic(staticCfg)
 	}
 	if snap == nil {
 		return nil
 	}
-	effective := ApplySecondaryNetworkConfig(snap.AntreaNodeConfig, primaryOVSBridgeName)
+	effective := applySecondaryNetworkConfig(snap.AntreaNodeConfig, primaryOVSBridgeName)
 	if effective != nil {
 		if effective.OVSBridge != nil {
 			klog.V(2).InfoS("Using AntreaNodeConfig secondary network config", "bridge", effective.OVSBridge.BridgeName)
@@ -77,11 +77,11 @@ func ovsBridgeFromStatic(staticCfg *agentconfig.SecondaryNetworkConfig) *agentty
 	return bridge
 }
 
-// ApplySecondaryNetworkConfig derives the effective SecondaryNetworkConfig from the
+// applySecondaryNetworkConfig derives the effective SecondaryNetworkConfig from the
 // AntreaNodeConfig carried in the snapshot (the oldest matching object for the Node).
 // It returns nil when cfg is nil or does not specify a valid SecondaryNetwork bridge,
 // so static agent config stays in effect.
-func ApplySecondaryNetworkConfig(cfg *crdv1alpha1.AntreaNodeConfig, primaryOVSBridgeName string) *agenttypes.SecondaryNetworkConfig {
+func applySecondaryNetworkConfig(cfg *crdv1alpha1.AntreaNodeConfig, primaryOVSBridgeName string) *agenttypes.SecondaryNetworkConfig {
 	if cfg == nil || cfg.Spec.SecondaryNetwork == nil {
 		return nil
 	}
