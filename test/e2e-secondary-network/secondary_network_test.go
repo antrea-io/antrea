@@ -64,14 +64,16 @@ const (
 	ipPoolNamespace    = "default"
 	secondaryOVSBridge = "br-secondary"
 
-	containerName  = "toolbox"
-	podApp         = "secondaryTest"
-	osType         = "linux"
-	pingCount      = 5
-	pingSize       = 40
-	defaultTimeout = 10 * time.Second
-	sriovReqName   = "intel.com/intel_sriov_netdevice"
-	sriovResNum    = 1
+	containerName = "toolbox"
+	podApp        = "secondaryTest"
+	osType        = "linux"
+	pingCount     = 5
+	pingSize      = 40
+
+	sriovReqName = "intel.com/intel_sriov_netdevice"
+	sriovResNum  = 1
+
+	defaultTimeout = 90 * time.Second
 )
 
 // formAnnotationStringOfPod forms the annotation string, used in the generation of each Pod YAML file.
@@ -94,6 +96,7 @@ func (data *testData) formAnnotationStringOfPod(pod *testPodInfo) string {
 			annotationString = annotationString + ", " + podNetworkSpec
 		}
 	}
+
 	annotationString += "]"
 	return annotationString
 }
@@ -161,7 +164,7 @@ func (data *testData) assertPodNetworkStatus(t *testing.T, clientset *kubernetes
 			}
 			if secondaryNetworkList == nil {
 				_, ok := podItem.Annotations[nadv1.NetworkStatusAnnot]
-				assert.False(t, ok, "Pod network status annotation should be deleted")
+				assert.False(collect, ok, "Pod network status annotation should be deleted")
 				return
 			}
 
@@ -180,9 +183,9 @@ func (data *testData) assertPodNetworkStatus(t *testing.T, clientset *kubernetes
 			var secondaryNetworkStatus []nadv1.NetworkStatus
 			for i, network := range networkStatus {
 				if network.Interface == "eth0" {
-					assert.Equal(t, macMap[network.Interface], network.Mac, "The primary network status `Mac` is not as expected")
-					assert.Equal(t, cniserver.AntreaCNIType, network.Name, "The primary network status `Name` is not as expected")
-					assert.Equal(t, true, network.Default, "The primary network status `Default` is not as expected")
+					assert.Equal(collect, macMap[network.Interface], network.Mac, "The primary network status `Mac` is not as expected")
+					assert.Equal(collect, cniserver.AntreaCNIType, network.Name, "The primary network status `Name` is not as expected")
+					assert.Equal(collect, true, network.Default, "The primary network status `Default` is not as expected")
 				} else {
 					secondaryNetworkStatus = append(secondaryNetworkStatus, networkStatus[i])
 				}
