@@ -162,6 +162,13 @@ NetworkPolicy rules on local Node which are managed by the Antrea Agent.
 between Flow Exporter and flow collector. This metric gets updated whenever the
 connection is re-established between the Flow Exporter and the flow collector
 (e.g. the Flow Aggregator).
+- **antrea_agent_fqdn_cache_eviction_count:** Number of domain names which the
+Antrea Agent stopped tracking to honor its FQDN tracking limits, partitioned by
+the limit which was reached (selector_limit and total_limit). A rule stops
+matching an evicted domain name until a Pod which it selects resolves that name
+again.
+- **antrea_agent_fqdn_cache_size:** Number of domain names which the Antrea
+Agent tracks for the FQDN rules of the NetworkPolicies applied to local Pods.
 - **antrea_agent_ingress_networkpolicy_rule_count:** Number of ingress
 NetworkPolicy rules on local Node which are managed by the Antrea Agent.
 - **antrea_agent_local_pod_count:** Number of Pods on local Node which are

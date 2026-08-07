@@ -27,6 +27,13 @@ const (
 	LabelPacketInMeterNetworkPolicy   = "PacketInMeterNetworkPolicy"
 	LabelPacketInMeterTraceflow       = "PacketInMeterTraceflow"
 	LabelPacketInMeterDNSInterception = "PacketInMeterDNSInterception"
+
+	// LabelFQDNCacheSelectorLimit and LabelFQDNCacheTotalLimit are the values of the
+	// reason label of FQDNCacheEvictionCount: respectively, the limit on the number of
+	// domain names tracked for a single FQDN selector, and the limit on the number
+	// tracked in total.
+	LabelFQDNCacheSelectorLimit = "selector_limit"
+	LabelFQDNCacheTotalLimit    = "total_limit"
 )
 
 var (
@@ -68,6 +75,28 @@ var (
 			Help:           "Number of NetworkPolicies on local Node which are managed by the Antrea Agent.",
 			StabilityLevel: metrics.STABLE,
 		},
+	)
+
+	FQDNCacheSize = metrics.NewGauge(
+		&metrics.GaugeOpts{
+			Namespace:      metricNamespaceAntrea,
+			Subsystem:      metricSubsystemAgent,
+			Name:           "fqdn_cache_size",
+			Help:           "Number of domain names which the Antrea Agent tracks for the FQDN rules of the NetworkPolicies applied to local Pods.",
+			StabilityLevel: metrics.ALPHA,
+		},
+	)
+
+	FQDNCacheEvictionCount = metrics.NewCounterVec(
+		&metrics.CounterOpts{
+			Namespace: metricNamespaceAntrea,
+			Subsystem: metricSubsystemAgent,
+			Name:      "fqdn_cache_eviction_count",
+			Help: "Number of domain names which the Antrea Agent stopped tracking to honor its FQDN tracking limits, partitioned by the limit which was reached " +
+				"(selector_limit and total_limit). A rule stops matching an evicted domain name until a Pod which it selects resolves that name again.",
+			StabilityLevel: metrics.ALPHA,
+		},
+		[]string{"reason"},
 	)
 
 	OVSTotalFlowCount = metrics.NewGauge(&metrics.GaugeOpts{
@@ -223,6 +252,19 @@ func InitializeNetworkPolicyMetrics() {
 
 	if err := legacyregistry.Register(NetworkPolicyCount); err != nil {
 		klog.ErrorS(err, "Failed to register metrics with Prometheus", "metrics", "antrea_agent_networkpolicy_count")
+	}
+
+	if err := legacyregistry.Register(FQDNCacheSize); err != nil {
+		klog.ErrorS(err, "Failed to register metrics with Prometheus", "metrics", "antrea_agent_fqdn_cache_size")
+	}
+
+	if err := legacyregistry.Register(FQDNCacheEvictionCount); err != nil {
+		klog.ErrorS(err, "Failed to register metrics with Prometheus", "metrics", "antrea_agent_fqdn_cache_eviction_count")
+	}
+	// Initialize every series of the counter, so that it is exported as soon as the
+	// Agent starts, rather than only once a domain name has been evicted.
+	for _, reason := range []string{LabelFQDNCacheSelectorLimit, LabelFQDNCacheTotalLimit} {
+		FQDNCacheEvictionCount.WithLabelValues(reason)
 	}
 }
 
