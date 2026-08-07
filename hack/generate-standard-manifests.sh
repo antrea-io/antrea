@@ -147,7 +147,11 @@ done
 function generate_crds_manifest {
     local chart_dir="$1"
     local output_file="$2"
-    local crd_files=$(cd "$chart_dir/crds" && find * -type f -name "*.yaml" | sort)
+    # Declared first and assigned separately: for a "local" declaration the exit status is the
+    # builtin's own, so a combined declaration would mask a failing cd / find and we would go on to
+    # delete the output file below.
+    local crd_files
+    crd_files=$(cd "$chart_dir/crds" && find * -type f -name "*.yaml" | sort)
     rm -f "$output_file"
     for crd in $crd_files; do
         echo "---" >> "$output_file"

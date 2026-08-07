@@ -100,6 +100,9 @@ spec:
                   properties:
                     matchExpressions:
                       items:
+                        required:
+                          - key
+                          - operator
                         properties:
                           key:
                             type: string
@@ -116,6 +119,11 @@ spec:
                               pattern: "^(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])?$"
                             type: array
                         type: object
+                        x-kubernetes-validations:
+                          - rule: "!(self.operator in ['In', 'NotIn']) || (has(self.values) && size(self.values) > 0)"
+                            message: "values must be non-empty when operator is In or NotIn"
+                          - rule: "!(self.operator in ['Exists', 'DoesNotExist']) || !has(self.values) || size(self.values) == 0"
+                            message: "values must be empty when operator is Exists or DoesNotExist"
                       type: array
                     matchLabels:
                       additionalProperties:

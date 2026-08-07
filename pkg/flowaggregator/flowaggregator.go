@@ -211,6 +211,9 @@ func NewFlowAggregator(
 	if *opt.Config.FlowStreamService.Enable {
 		fa.flowStreamService = flowstreamservice.NewFlowStreamService(fa.recordBuffer)
 		fa.flowStreamSvcUpdateCh = make(chan struct{}, 1)
+		// The index this controller maintains has no consumer yet: client authentication and the
+		// per-subject visibility check land in the FlowStreamService in a follow-up. Until then,
+		// FlowAccessControl objects have no effect on what a client receives.
 		fa.flowAccessControlController = flowaccesscontrol.NewController(flowAccessControlInformer, namespaceInformer)
 	}
 

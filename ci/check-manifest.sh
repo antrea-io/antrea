@@ -31,7 +31,9 @@ YAMLS=(
     "build/yamls/antrea-eks.yml"
     "build/yamls/antrea-gke.yml"
     "build/yamls/antrea-aks.yml"
+    "build/yamls/antrea-crds.yml"
     "build/yamls/flow-aggregator.yml"
+    "build/yamls/flow-aggregator-crds.yml"
 )
 
 YAMLS+=($(ls build/yamls/antrea-windows*.yml))
