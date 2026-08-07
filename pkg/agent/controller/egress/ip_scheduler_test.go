@@ -352,6 +352,19 @@ func TestRun(t *testing.T) {
 	updatedNode1.Annotations[agenttypes.NodeMaxEgressIPsAnnotationKey] = "invalid-value"
 	clientset.CoreV1().Nodes().Update(ctx, updatedNode1, metav1.UpdateOptions{})
 	assertReceivedItems(t, egressUpdates, sets.New[string]())
+	assertScheduleResult(t, s, "egressD", "1.1.1.1", "node1", true)
+	// Set node1's max-egress-ips annotation to a negative value, which is invalid, so nothing should happen.
+	updatedNode1 = node1.DeepCopy()
+	updatedNode1.Annotations[agenttypes.NodeMaxEgressIPsAnnotationKey] = "-1"
+	clientset.CoreV1().Nodes().Update(ctx, updatedNode1, metav1.UpdateOptions{})
+	assertReceivedItems(t, egressUpdates, sets.New[string]())
+	assertScheduleResult(t, s, "egressD", "1.1.1.1", "node1", true)
+	// Set node1's max-egress-ips annotation to a value greater than the upper bound (255), which is invalid, so nothing should happen.
+	updatedNode1 = node1.DeepCopy()
+	updatedNode1.Annotations[agenttypes.NodeMaxEgressIPsAnnotationKey] = "300"
+	clientset.CoreV1().Nodes().Update(ctx, updatedNode1, metav1.UpdateOptions{})
+	assertReceivedItems(t, egressUpdates, sets.New[string]())
+	assertScheduleResult(t, s, "egressD", "1.1.1.1", "node1", true)
 	// Set node1's max-egress-ips annotation to 1, egressD should be moved to node2.
 	updatedNode1 = node1.DeepCopy()
 	updatedNode1.Annotations[agenttypes.NodeMaxEgressIPsAnnotationKey] = "1"

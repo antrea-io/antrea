@@ -57,7 +57,6 @@ const (
 	defaultIGMPQueryInterval       = 125 * time.Second
 	defaultStaleConnectionTimeout  = 5 * time.Minute
 	defaultNodeType                = config.K8sNode
-	defaultMaxEgressIPsPerNode     = 255
 	defaultAuditLogsMaxSize        = 500
 	defaultAuditLogsMaxBackups     = 3
 	defaultAuditLogsMaxAge         = 28
@@ -534,7 +533,7 @@ func (o *Options) setK8sNodeDefaultOptions() {
 
 	if features.DefaultFeatureGate.Enabled(features.Egress) {
 		if o.config.Egress.MaxEgressIPsPerNode == 0 {
-			o.config.Egress.MaxEgressIPsPerNode = defaultMaxEgressIPsPerNode
+			o.config.Egress.MaxEgressIPsPerNode = agentconfig.MaxEgressIPsPerNodeUpperBound
 		}
 	}
 
@@ -567,8 +566,8 @@ func (o *Options) validateEgressConfig(encapMode config.TrafficEncapModeType) er
 			return fmt.Errorf("Egress Except CIDR %s is invalid", cidr)
 		}
 	}
-	if o.config.Egress.MaxEgressIPsPerNode > defaultMaxEgressIPsPerNode {
-		return fmt.Errorf("maxEgressIPsPerNode cannot be greater than %d", defaultMaxEgressIPsPerNode)
+	if o.config.Egress.MaxEgressIPsPerNode > agentconfig.MaxEgressIPsPerNodeUpperBound {
+		return fmt.Errorf("maxEgressIPsPerNode cannot be greater than %d", agentconfig.MaxEgressIPsPerNodeUpperBound)
 	}
 	o.enableEgress = true
 	return nil
