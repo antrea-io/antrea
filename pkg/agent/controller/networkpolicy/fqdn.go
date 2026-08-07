@@ -29,7 +29,6 @@ import (
 	"github.com/miekg/dns"
 	"k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apimachinery/pkg/util/sets"
-	"k8s.io/client-go/util/workqueue"
 	"k8s.io/klog/v2"
 	"k8s.io/utils/clock"
 
@@ -62,13 +61,26 @@ func (fs *fqdnSelectorItem) String() string {
 	return "matchName:" + fs.matchName
 }
 
-// matches knows if a FQDN is selected by the fqdnSelectorItem.
-func (fs *fqdnSelectorItem) matches(fqdn string) bool {
-	if fs.matchRegex != "" {
-		matched, _ := regexp.MatchString(fs.matchRegex, fqdn)
-		return matched
+// matches knows if a FQDN is selected by a fqdnSelectorItem. The compiled regex of a selector which
+// selects FQDNs by wildcard expression is cached in selectorItemToRegex, as every DNS response is
+// matched against every fqdnSelectorItem known to the controller.
+// fqdnSelectorMutex must have been acquired by the caller.
+func (f *fqdnController) matches(selectorItem fqdnSelectorItem, fqdn string) bool {
+	if selectorItem.matchRegex == "" {
+		return selectorItem.matchName == fqdn
 	}
-	return fs.matchName == fqdn
+	re, ok := f.selectorItemToRegex[selectorItem]
+	if !ok {
+		var err error
+		// The pattern is built by toRegex from an expression which the antrea-controller validated,
+		// hence this is not expected to fail. A nil regex is cached on failure, so that the
+		// selector consistently matches no FQDN, without the error being logged again.
+		if re, err = regexp.Compile(selectorItem.matchRegex); err != nil {
+			klog.ErrorS(err, "Invalid FQDN selector regex, it will not match any FQDN", "fqdnSelector", &selectorItem)
+		}
+		f.selectorItemToRegex[selectorItem] = re
+	}
+	return re != nil && re.MatchString(fqdn)
 }
 
 // dnsMeta stores the name resolution results of a FQDN,
@@ -133,10 +145,11 @@ type fqdnController struct {
 	dirtyRuleHandler func(string)
 	// A single instance of ruleSyncTracker.
 	ruleSyncTracker *ruleSyncTracker
-	// FQDN names this controller is tracking, with their corresponding dnsMeta.
-	dnsEntryCache map[string]dnsMeta
-	// FQDN names that needs to be re-queried after their respective TTLs.
-	dnsQueryQueue workqueue.TypedRateLimitingInterface[string]
+	// fqdnCache tracks the FQDNs this controller knows about: the IPs they resolve
+	// to, the fqdnSelectorItems which select them, and the DNS query which refreshes
+	// each of them once its records expire. It bounds the number of tracked FQDNs,
+	// globally and per selector, evicting the least recently used ones.
+	fqdnCache *fqdnCache
 	// idAllocator provides interfaces to allocateForRule and release uint32 id.
 	idAllocator *idAllocator
 
@@ -144,15 +157,17 @@ type fqdnController struct {
 	// The mapping between FQDN rule IDs and the Pod's ofPort IDs that the rule selects.
 	fqdnRuleToSelectedPods map[string]sets.Set[int32]
 
-	// Mutex for fqdnToSelectorItem, selectorItemToFQDN and selectorItemToRuleIDs.
+	// fqdnSelectorMutex serializes the compound updates of selectorItemToRuleIDs,
+	// selectorItemToRegex and fqdnCache. The fqdnCache has its own lock, as the
+	// workers making DNS queries access it without holding this one; it must always
+	// be acquired after this one.
 	fqdnSelectorMutex sync.Mutex
-	// fqdnToSelectorItem stores known FQDNSelectorItems that selects the FQDN, for each
-	// FQDN tracked by this controller.
-	fqdnToSelectorItem map[string]sets.Set[fqdnSelectorItem]
-	// selectorItemToFQDN is a reversed map of fqdnToSelectorItem. It stores all known
-	// FQDNs that match the fqdnSelectorItem.
-	selectorItemToFQDN map[fqdnSelectorItem]sets.Set[string]
-	// selectorItemToRuleIDs maps fqdnToSelectorItem to the rules that contains the selector.
+	// selectorItemToRegex caches the compiled regex of the fqdnSelectorItems which select FQDNs by
+	// wildcard expression (see matches). The compiled regex cannot be stored in fqdnSelectorItem
+	// itself, as it is used as a map key and must remain comparable.
+	// fqdnSelectorMutex must be acquired for any access to this map.
+	selectorItemToRegex map[fqdnSelectorItem]*regexp.Regexp
+	// selectorItemToRuleIDs maps each fqdnSelectorItem to the rules that contain the selector.
 	selectorItemToRuleIDs map[fqdnSelectorItem]sets.Set[string]
 	ipv4Enabled           bool
 	ipv6Enabled           bool
@@ -163,21 +178,13 @@ type fqdnController struct {
 
 func newFQDNController(client openflow.Client, allocator *idAllocator, dnsServerOverride string, dirtyRuleHandler func(string), v4Enabled, v6Enabled bool, gwPort uint32, clock clock.WithTicker, fqdnCacheMinTTL uint32) (*fqdnController, error) {
 	controller := &fqdnController{
-		ofClient:         client,
-		dirtyRuleHandler: dirtyRuleHandler,
-		ruleSyncTracker:  &ruleSyncTracker{updateCh: make(chan ruleRealizationUpdate, 1), ruleToSubscribers: map[string][]*subscriber{}, dirtyRules: sets.New[string]()},
-		idAllocator:      allocator,
-		dnsQueryQueue: workqueue.NewTypedRateLimitingQueueWithConfig(
-			workqueue.NewTypedItemExponentialFailureRateLimiter[string](minRetryDelay, maxRetryDelay),
-			workqueue.TypedRateLimitingQueueConfig[string]{
-				Name:  "fqdn",
-				Clock: clock,
-			},
-		),
-		dnsEntryCache:          map[string]dnsMeta{},
+		ofClient:               client,
+		dirtyRuleHandler:       dirtyRuleHandler,
+		ruleSyncTracker:        &ruleSyncTracker{updateCh: make(chan ruleRealizationUpdate, 1), ruleToSubscribers: map[string][]*subscriber{}, dirtyRules: sets.New[string]()},
+		idAllocator:            allocator,
+		fqdnCache:              newFQDNCache(clock, maxTrackedFQDNs, maxFQDNsPerSelector),
 		fqdnRuleToSelectedPods: map[string]sets.Set[int32]{},
-		fqdnToSelectorItem:     map[string]sets.Set[fqdnSelectorItem]{},
-		selectorItemToFQDN:     map[fqdnSelectorItem]sets.Set[string]{},
+		selectorItemToRegex:    map[fqdnSelectorItem]*regexp.Regexp{},
 		selectorItemToRuleIDs:  map[fqdnSelectorItem]sets.Set[string]{},
 		ipv4Enabled:            v4Enabled,
 		ipv6Enabled:            v6Enabled,
@@ -231,20 +238,17 @@ func toRegex(pattern string) string {
 	return "^" + pattern + "$"
 }
 
-// setFQDNMatchSelector records a FQDN and a selectorItem matches.
+// dirtyRulesForSelectors marks the rules using each of the given fqdnSelectorItems
+// as dirty, so that they are realized again. It is used when the set of FQDNs
+// tracked for a selector changed for a reason unrelated to the FQDN being
+// resolved, which is the case when tracking a FQDN evicts another one.
 // fqdnSelectorMutex must have been acquired by the caller.
-func (f *fqdnController) setFQDNMatchSelector(fqdn string, selectorItem fqdnSelectorItem) {
-	matchedSelectorItems, ok := f.fqdnToSelectorItem[fqdn]
-	if !ok {
-		f.fqdnToSelectorItem[fqdn] = sets.New(selectorItem)
-	} else {
-		matchedSelectorItems.Insert(selectorItem)
-	}
-	matchedFQDNs, ok := f.selectorItemToFQDN[selectorItem]
-	if !ok {
-		f.selectorItemToFQDN[selectorItem] = sets.New[string](fqdn)
-	} else {
-		matchedFQDNs.Insert(fqdn)
+func (f *fqdnController) dirtyRulesForSelectors(selectorItems sets.Set[fqdnSelectorItem]) {
+	for selectorItem := range selectorItems {
+		for ruleID := range f.selectorItemToRuleIDs[selectorItem] {
+			klog.V(4).InfoS("Reconciling dirty rule for evicted FQDN addresses", "ruleID", ruleID)
+			f.dirtyRuleHandler(ruleID)
+		}
 	}
 }
 
@@ -256,13 +260,12 @@ func (f *fqdnController) getIPsForFQDNSelectors(fqdns []string) []net.IP {
 	var matchedIPs []net.IP
 	for _, fqdn := range fqdns {
 		fqdnSelectorItem := fqdnToSelectorItem(fqdn)
-		fqdnsMatched, ok := f.selectorItemToFQDN[fqdnSelectorItem]
-		if !ok {
-			klog.ErrorS(nil, "FQDN selector is not known to the controller, cannot get IPs", "fqdnSelector", fqdnSelectorItem)
+		if _, ok := f.selectorItemToRuleIDs[fqdnSelectorItem]; !ok {
+			klog.ErrorS(nil, "FQDN selector is not known to the controller, cannot get IPs", "fqdnSelector", &fqdnSelectorItem)
 			return matchedIPs
 		}
-		for fqdn := range fqdnsMatched {
-			if dnsMeta, ok := f.dnsEntryCache[fqdn]; ok {
+		for _, matchedFQDN := range f.fqdnCache.fqdnsFor(fqdnSelectorItem) {
+			if dnsMeta, _, resolved := f.fqdnCache.meta(matchedFQDN); resolved {
 				for _, ipData := range dnsMeta.responseIPs {
 					matchedIPs = append(matchedIPs, ipData.ip)
 				}
@@ -282,6 +285,10 @@ func (f *fqdnController) addFQDNRule(ruleID string, fqdns []string, podOFAddrs s
 func (f *fqdnController) addFQDNSelector(ruleID string, fqdns []string) {
 	f.fqdnSelectorMutex.Lock()
 	defer f.fqdnSelectorMutex.Unlock()
+	// affectedSelectors accumulates the other fqdnSelectorItems which stopped tracking
+	// some of their FQDNs because tracking the FQDNs of the selectors being added
+	// evicted them.
+	affectedSelectors := sets.New[fqdnSelectorItem]()
 	for _, fqdn := range fqdns {
 		fqdnSelectorItem := fqdnToSelectorItem(fqdn)
 		ruleIDs, exists := f.selectorItemToRuleIDs[fqdnSelectorItem]
@@ -291,21 +298,31 @@ func (f *fqdnController) addFQDNSelector(ruleID string, fqdns []string) {
 			// Existing FQDNs in the cache needs to be matched against this fqdnSelectorItem to update the mapping.
 			if fqdnSelectorItem.matchRegex != "" {
 				// As the selector matches regex, all existing FQDNs can potentially match it.
-				for fqdn := range f.dnsEntryCache {
-					if fqdnSelectorItem.matches(fqdn) {
-						f.setFQDNMatchSelector(fqdn, fqdnSelectorItem)
+				// Note that if more than maxFQDNsPerSelector existing FQDNs match the selector,
+				// which of them the selector ends up tracking depends on the iteration order.
+				// The others will start being tracked for this selector as they are resolved
+				// again by the client Pods (see onDNSResponse).
+				var matchedFQDNs []string
+				for _, resolvedFQDN := range f.fqdnCache.resolvedFQDNs() {
+					if f.matches(fqdnSelectorItem, resolvedFQDN) {
+						matchedFQDNs = append(matchedFQDNs, resolvedFQDN)
 					}
 				}
+				affectedSelectors = affectedSelectors.Union(f.fqdnCache.trackExisting(matchedFQDNs, fqdnSelectorItem))
 			} else {
 				// As the selector matches name, only the FQDN of this name matches it.
-				f.setFQDNMatchSelector(fqdnSelectorItem.matchName, fqdnSelectorItem)
+				affectedSelectors = affectedSelectors.Union(f.fqdnCache.track(fqdnSelectorItem.matchName, fqdnSelectorItem))
 				// Trigger a DNS query immediately for the FQDN.
-				f.dnsQueryQueue.Add(fqdnSelectorItem.matchName)
+				f.fqdnCache.scheduleNow(fqdnSelectorItem.matchName)
 			}
+			// The rules using the selectors being added are realized by the caller, so
+			// they do not need to be reported as dirty here.
+			affectedSelectors.Delete(fqdnSelectorItem)
 		} else {
 			f.selectorItemToRuleIDs[fqdnSelectorItem] = ruleIDs.Insert(ruleID)
 		}
 	}
+	f.dirtyRulesForSelectors(affectedSelectors)
 }
 
 // updateRuleSelectedPods updates the Pod OFAddresses selected by a FQDN rule. Those addresses
@@ -368,20 +385,10 @@ func (f *fqdnController) deleteFQDNSelector(ruleID string, fqdns []string) {
 
 // cleanupFQDNSelectorItem handles a fqdnSelectorItem delete event.
 func (f *fqdnController) cleanupFQDNSelectorItem(fs fqdnSelectorItem) {
-	for fqdn := range f.selectorItemToFQDN[fs] {
-		selectors := f.fqdnToSelectorItem[fqdn]
-		if selectors.Has(fs) {
-			selectors.Delete(fs)
-			if len(selectors) == 0 {
-				// the fqdnSelectorItem being deleted is the last fqdnSelectorItem
-				// that selects this FQDN. Hence this FQDN no longer needs to be
-				// tracked by the fqdnController.
-				delete(f.fqdnToSelectorItem, fqdn)
-				delete(f.dnsEntryCache, fqdn)
-			}
-		}
-	}
-	delete(f.selectorItemToFQDN, fs)
+	// The FQDNs which no other fqdnSelectorItem selects stop being tracked, and the
+	// DNS queries scheduled for them are cancelled.
+	f.fqdnCache.untrackSelector(fs)
+	delete(f.selectorItemToRegex, fs)
 	delete(f.selectorItemToRuleIDs, fs)
 }
 
@@ -443,8 +450,42 @@ func (f *fqdnController) onDNSResponse(
 
 	f.fqdnSelectorMutex.Lock()
 	defer f.fqdnSelectorMutex.Unlock()
-	cachedDNSMeta, exist := f.dnsEntryCache[fqdn]
-	if exist {
+	// startedSelecting accumulates the fqdnSelectorItems which started tracking this
+	// FQDN while this response was processed, and evictedFromSelectors the ones which
+	// stopped tracking another FQDN because tracking this one evicted it. The rules
+	// using either must be realized again, but only the former are allowed to hold the
+	// DNS response: see the end of this function.
+	startedSelecting, evictedFromSelectors := sets.New[fqdnSelectorItem](), sets.New[fqdnSelectorItem]()
+	cachedDNSMeta, tracked, resolved := f.fqdnCache.meta(fqdn)
+	if resolved {
+		if waitCh != nil {
+			// A non-nil waitCh means this resolution was initiated by a client Pod, which is the
+			// only signal the fqdnController has that the FQDN is actually in use. Re-evaluate the
+			// fqdnSelectorItems matching the FQDN: this refreshes its recency for the ones which
+			// already track it, so that a name in use is not evicted as least-recently-used, and
+			// it starts tracking the FQDN again for the ones which previously evicted it.
+			// Re-tracking is required because a FQDN can be evicted from one fqdnSelectorItem
+			// while another one keeps it in the cache: all its subsequent resolutions then
+			// take this branch, which would otherwise never consider it for the first selector
+			// again, permanently excluding it from the rules using that selector.
+			// Resolutions initiated by the fqdnController itself (re-queries after TTL expiration)
+			// are deliberately excluded: every tracked FQDN is re-queried whether any Pod uses it
+			// or not, hence refreshing recency for them would order the cache by TTL length
+			// instead of by usage, and would let FQDNs which no Pod resolves anymore keep
+			// themselves tracked, and re-queried, indefinitely.
+			for selectorItem := range f.selectorItemToRuleIDs {
+				// A fqdnSelectorItem which selects an exact name tracks that one name from the
+				// moment it is added, and never reaches maxFQDNsPerSelector, hence it can neither
+				// evict the FQDN nor need its recency to be refreshed.
+				if selectorItem.matchRegex == "" {
+					continue
+				}
+				if !f.matches(selectorItem, fqdn) {
+					continue
+				}
+				f.trackFQDN(fqdn, selectorItem, startedSelecting, evictedFromSelectors)
+			}
+		}
 		// check for new IPs.
 		for newIPStr, newIPMeta := range newIPsWithExpiration {
 			if _, exist := cachedDNSMeta.responseIPs[newIPStr]; !exist {
@@ -474,17 +515,31 @@ func (f *fqdnController) onDNSResponse(
 		}
 
 	} else {
-		// This domain is being encountered for the first time.
+		// No IPs are cached for this FQDN: either it is being encountered for the first
+		// time, or it is tracked without having been resolved yet, which is the case of the
+		// exact name of a newly added fqdnSelectorItem, whose first DNS query the
+		// fqdnController makes itself.
+		if waitCh == nil && !tracked {
+			// This resolution was initiated by the fqdnController, which only queries the
+			// FQDNs it tracks, hence this one stopped being tracked while the query was in
+			// flight: it was evicted to honor one of the limits of the fqdnCache. Tracking it
+			// again here would resurrect a FQDN which no Pod resolved, which the fqdnController
+			// would then keep re-querying, and which would take the place of a FQDN that is
+			// actually in use, as tracking it refreshes its recency while the FQDN it evicts
+			// keeps the recency it had. Discarding the response leaves this FQDN evicted, which
+			// is what setResolved does with the IPs it carries.
+			klog.V(4).InfoS("FQDN was evicted while the DNS query for it was in flight, discarding the response", "fqdn", fqdn)
+			return
+		}
 		// Check if it should be tracked by matching it against existing selectorItemToRuleIDs.
-
 		addToCache := false
 		for selectorItem := range f.selectorItemToRuleIDs {
 			// Only track the FQDN if there is at least one fqdnSelectorItem matching it.
-			if selectorItem.matches(fqdn) {
+			if f.matches(selectorItem, fqdn) {
 				// A FQDN can have multiple selectorItems mapped, hence we do not break the loop upon a match, but
 				// keep iterating to create mapping of multiple selectorItems against same FQDN.
 				addToCache = true
-				f.setFQDNMatchSelector(fqdn, selectorItem)
+				f.trackFQDN(fqdn, selectorItem, startedSelecting, evictedFromSelectors)
 			}
 		}
 		if addToCache {
@@ -497,13 +552,43 @@ func (f *fqdnController) onDNSResponse(
 
 	// ipWithExpirationMap remains empty and timeToRequery is nil only when FQDN doesn't match any selector.
 	if len(ipWithExpirationMap) > 0 {
-		f.dnsEntryCache[fqdn] = dnsMeta{
-			responseIPs: ipWithExpirationMap,
-		}
-		f.dnsQueryQueue.AddAfter(fqdn, timeToRequery.Sub(currentTime))
+		// This also schedules the DNS query which will refresh the IPs of the FQDN once
+		// the first of them expires.
+		f.fqdnCache.setResolved(fqdn, dnsMeta{responseIPs: ipWithExpirationMap}, *timeToRequery)
 	}
-
+	if len(startedSelecting) > 0 {
+		// Some fqdnSelectorItem started tracking this FQDN, so the addresses matching its
+		// rules changed. These selectors all select this FQDN now, hence syncDirtyRules
+		// picks their rules up on its own, and the client Pod waits for their
+		// realization: they are the rules which must let it reach what it just resolved.
+		addressUpdate = true
+	}
 	f.syncDirtyRules(fqdn, waitCh, addressUpdate)
+	// The rules of the fqdnSelectorItems which lost a FQDN to an eviction must be
+	// realized again as well, as the addresses of that FQDN must stop matching them.
+	// The DNS response is deliberately not held on that realization: these rules have
+	// nothing to do with the FQDN which was resolved, and once the cache is at its
+	// limit an eviction happens for every new name, which would make every such
+	// response wait for the realization of unrelated rules.
+	f.dirtyRulesForSelectors(evictedFromSelectors.Difference(startedSelecting))
+}
+
+// trackFQDN records that selectorItem selects fqdn, and sorts the fqdnSelectorItems
+// whose tracked FQDNs changed as a result into the two sets which onDNSResponse
+// keeps: selectorItem itself if it just started selecting fqdn, and the selectors
+// which stopped tracking another FQDN because tracking this one evicted it.
+// fqdnSelectorMutex must have been acquired by the caller.
+func (f *fqdnController) trackFQDN(fqdn string, selectorItem fqdnSelectorItem, startedSelecting, evictedFromSelectors sets.Set[fqdnSelectorItem]) {
+	for affected := range f.fqdnCache.track(fqdn, selectorItem) {
+		// selectorItem is reported as affected if and only if it just started selecting
+		// fqdn: had it been selecting it already, refreshing its recency would not have
+		// changed the FQDNs tracked for any selector, and nothing would be evicted.
+		if affected == selectorItem {
+			startedSelecting.Insert(affected)
+		} else {
+			evictedFromSelectors.Insert(affected)
+		}
+	}
 }
 
 // onDNSResponseMsg handles a DNS response message intercepted.
@@ -531,7 +616,7 @@ func (f *fqdnController) syncDirtyRules(fqdn string, waitCh chan error, addressU
 		return
 	}
 	dirtyRules := sets.New[string]()
-	for selectorItem := range f.fqdnToSelectorItem[fqdn] {
+	for _, selectorItem := range f.fqdnCache.selectorsFor(fqdn) {
 		utilsets.MergeString(dirtyRules, f.selectorItemToRuleIDs[selectorItem])
 	}
 	if waitCh == nil {
@@ -665,32 +750,26 @@ func (f *fqdnController) parseDNSResponse(msg *dns.Msg) (string, map[string]ipWi
 	return fqdn, responseIPs, nil
 }
 
-func (f *fqdnController) worker() {
-	for f.processNextWorkItem() {
+// worker makes the DNS queries which refresh the IPs of the tracked FQDNs as their
+// records expire, until stopCh is closed. Several workers run concurrently; the
+// fqdnCache hands a given FQDN to only one of them at a time.
+func (f *fqdnController) worker(stopCh <-chan struct{}) {
+	for {
+		entry, ok := f.fqdnCache.nextDue(stopCh)
+		if !ok {
+			return
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), dnsRequestTimeout)
+		err := f.makeDNSRequest(ctx, entry.fqdn)
+		cancel()
+		if err != nil {
+			klog.ErrorS(err, "Error syncing FQDN, retrying", "fqdn", entry.fqdn)
+		}
+		// This reschedules the query on failure, and is a no-op if the FQDN stopped
+		// being tracked while the query was in flight, in which case the query is simply
+		// not made again.
+		f.fqdnCache.doneQuerying(entry, err)
 	}
-}
-
-func (f *fqdnController) processNextWorkItem() bool {
-	key, quit := f.dnsQueryQueue.Get()
-	if quit {
-		return false
-	}
-	defer f.dnsQueryQueue.Done(key)
-
-	ctx, cancel := context.WithTimeout(context.Background(), dnsRequestTimeout)
-	defer cancel()
-	err := f.makeDNSRequest(ctx, key)
-	f.handleErr(err, key)
-	return true
-}
-
-func (f *fqdnController) handleErr(err error, key string) {
-	if err == nil {
-		f.dnsQueryQueue.Forget(key)
-		return
-	}
-	klog.ErrorS(err, "Error syncing FQDN, retrying", "fqdn", key)
-	f.dnsQueryQueue.AddRateLimited(key)
 }
 
 func (f *fqdnController) lookupIP(ctx context.Context, fqdn string) error {

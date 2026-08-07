@@ -36,6 +36,8 @@ import (
 // Agent metrics to validate
 var antreaAgentMetrics = []string{
 	"antrea_agent_egress_networkpolicy_rule_count",
+	"antrea_agent_fqdn_cache_eviction_count",
+	"antrea_agent_fqdn_cache_size",
 	"antrea_agent_ingress_networkpolicy_rule_count",
 	"antrea_agent_local_pod_count",
 	"antrea_agent_networkpolicy_count",
