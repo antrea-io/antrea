@@ -16,14 +16,18 @@ package networkpolicy
 
 import (
 	"fmt"
+	"sync"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	admv1 "k8s.io/api/admission/v1"
 	authenticationv1 "k8s.io/api/authentication/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/component-base/featuregate"
 	featuregatetesting "k8s.io/component-base/featuregate/testing"
+	clocktesting "k8s.io/utils/clock/testing"
 
 	crdv1beta1 "antrea.io/antrea/v2/pkg/apis/crd/v1beta1"
 	"antrea.io/antrea/v2/pkg/features"
@@ -2939,6 +2943,189 @@ func TestValidateTierCNPPriority(t *testing.T) {
 				assert.False(t, allowed)
 			}
 		})
+	}
+}
+
+// TestValidateTierPriorityReservationConflict covers the branch in createValidate where a
+// priority is already reserved by another in-flight CREATE request.
+func TestValidateTierPriorityReservationConflict(t *testing.T) {
+	_, controller := newController(nil, nil)
+	validator := NewNetworkPolicyValidator(controller.NetworkPolicyController)
+	require.True(t, validator.tierValidator.priorityTracker.reservePriorityForValidation(9, "tier-in-flight"))
+
+	curTier := &crdv1beta1.Tier{
+		ObjectMeta: metav1.ObjectMeta{Name: "tier-priority-9"},
+		Spec:       crdv1beta1.TierSpec{Priority: 9},
+	}
+	_, reason, allowed := validator.validateTier(curTier, nil, admv1.Create, authenticationv1.UserInfo{Username: "default"})
+	assert.False(t, allowed)
+	assert.Equal(t, "tier priority 9 is currently being validated by another request, please retry", reason)
+}
+
+func TestTierPriorityTracker(t *testing.T) {
+	t.Run("ReservePriorityForValidation", func(t *testing.T) {
+		tracker := newTierPriorityTracker()
+
+		// Test successful reservation
+		success := tracker.reservePriorityForValidation(100, "tier1")
+		assert.True(t, success, "Should successfully reserve priority 100")
+
+		// Test reservation conflict - same priority should fail
+		success = tracker.reservePriorityForValidation(100, "tier2")
+		assert.False(t, success, "Should fail to reserve already reserved priority 100")
+
+		// Test different priority should succeed
+		success = tracker.reservePriorityForValidation(200, "tier3")
+		assert.True(t, success, "Should successfully reserve different priority 200")
+	})
+
+	t.Run("ReleasePriorityReservation", func(t *testing.T) {
+		tracker := newTierPriorityTracker()
+
+		// Reserve a priority
+		success := tracker.reservePriorityForValidation(100, "tier1")
+		require.True(t, success)
+
+		// Release the reservation
+		tracker.releasePriorityReservation(100, "tier1")
+
+		// Should be able to reserve again
+		success = tracker.reservePriorityForValidation(100, "tier2")
+		assert.True(t, success, "Should be able to reserve priority after release")
+
+		// Test releasing wrong tier name (should not release)
+		tracker.releasePriorityReservation(100, "wrong-tier")
+		success = tracker.reservePriorityForValidation(100, "tier3")
+		assert.False(t, success, "Should not release reservation for wrong tier name")
+	})
+
+	t.Run("CleanupExpiredReservations", func(t *testing.T) {
+		fakeClock := clocktesting.NewFakeClock(time.Now())
+		tracker := newTierPriorityTrackerWithClock(fakeClock)
+		tracker.creationTimeout = 50 * time.Millisecond // Short timeout for testing
+
+		// Reserve a priority
+		success := tracker.reservePriorityForValidation(100, "tier1")
+		require.True(t, success)
+
+		// Step clock past expiration
+		fakeClock.Step(100 * time.Millisecond)
+
+		// Cleanup expired reservations
+		tracker.cleanupExpiredReservations()
+
+		// Should be able to reserve again after cleanup
+		success = tracker.reservePriorityForValidation(100, "tier2")
+		assert.True(t, success, "Should be able to reserve priority after cleanup")
+	})
+
+	t.Run("ConcurrentReservations", func(t *testing.T) {
+		tracker := newTierPriorityTracker()
+
+		var wg sync.WaitGroup
+		var results sync.Map
+
+		// Try to reserve the same priority from multiple goroutines
+		for i := 0; i < 5; i++ {
+			wg.Add(1)
+			go func(id int) {
+				defer wg.Done()
+				tierName := fmt.Sprintf("tier%d", id)
+				success := tracker.reservePriorityForValidation(100, tierName)
+				results.Store(id, success)
+			}(i)
+		}
+
+		wg.Wait()
+
+		// Count successful reservations
+		successCount := 0
+		results.Range(func(key, value interface{}) bool {
+			if value.(bool) {
+				successCount++
+			}
+			return true
+		})
+
+		assert.Equal(t, 1, successCount, "Only one goroutine should successfully reserve the priority")
+	})
+
+	t.Run("TimeoutExpiredReservation", func(t *testing.T) {
+		fakeClock := clocktesting.NewFakeClock(time.Now())
+		tracker := newTierPriorityTrackerWithClock(fakeClock)
+		tracker.creationTimeout = 50 * time.Millisecond
+
+		// Reserve a priority
+		success := tracker.reservePriorityForValidation(100, "tier1")
+		require.True(t, success)
+
+		// Step clock past expiration
+		fakeClock.Step(100 * time.Millisecond)
+
+		// Try to reserve the same priority with a new tier - should succeed due to timeout
+		success = tracker.reservePriorityForValidation(100, "tier2")
+		assert.True(t, success, "Should allow new reservation when existing one has timed out")
+	})
+}
+
+func TestTierValidatorOnTierCreateAndDelete(t *testing.T) {
+	tv := &tierValidator{priorityTracker: newTierPriorityTracker()}
+
+	require.True(t, tv.priorityTracker.reservePriorityForValidation(100, "tierA"))
+	tv.OnTierCreate(&crdv1beta1.Tier{
+		ObjectMeta: metav1.ObjectMeta{Name: "tierA"},
+		Spec:       crdv1beta1.TierSpec{Priority: 100},
+	})
+	assert.True(t, tv.priorityTracker.reservePriorityForValidation(100, "tierB"),
+		"priority should be released after OnTierCreate for the reserving Tier")
+
+	require.True(t, tv.priorityTracker.reservePriorityForValidation(200, "tierC"))
+	tv.OnTierDelete(&crdv1beta1.Tier{
+		ObjectMeta: metav1.ObjectMeta{Name: "tierC"},
+		Spec:       crdv1beta1.TierSpec{Priority: 200},
+	})
+	assert.True(t, tv.priorityTracker.reservePriorityForValidation(200, "tierD"),
+		"priority should be released after OnTierDelete for the reserving Tier")
+
+	// A create/delete event for a Tier that does not hold the current reservation must not
+	// release someone else's reservation.
+	require.True(t, tv.priorityTracker.reservePriorityForValidation(300, "tierE"))
+	tv.OnTierCreate(&crdv1beta1.Tier{
+		ObjectMeta: metav1.ObjectMeta{Name: "tierF"},
+		Spec:       crdv1beta1.TierSpec{Priority: 300},
+	})
+	assert.False(t, tv.priorityTracker.reservePriorityForValidation(300, "tierG"),
+		"a reservation held by a different Tier name must not be released")
+}
+
+func TestNetworkPolicyValidatorRun(t *testing.T) {
+	_, controller := newController(nil, nil)
+	validator := NewNetworkPolicyValidator(controller.NetworkPolicyController)
+	// startCleanupRoutine's ticker uses this real duration directly (not the tracker's
+	// injectable clock), so keep it short to make the test fast.
+	validator.tierValidator.priorityTracker.creationTimeout = 20 * time.Millisecond
+
+	require.True(t, validator.tierValidator.priorityTracker.reservePriorityForValidation(100, "tierA"))
+
+	stopCh := make(chan struct{})
+	done := make(chan struct{})
+	go func() {
+		validator.Run(stopCh)
+		close(done)
+	}()
+
+	require.Eventually(t, func() bool {
+		validator.tierValidator.priorityTracker.mu.Lock()
+		defer validator.tierValidator.priorityTracker.mu.Unlock()
+		_, exists := validator.tierValidator.priorityTracker.pendingPriorities[100]
+		return !exists
+	}, time.Second, 5*time.Millisecond, "expected the periodic cleanup routine to remove the expired reservation")
+
+	close(stopCh)
+	select {
+	case <-done:
+	case <-time.After(time.Second):
+		t.Fatal("Run did not return after stopCh was closed")
 	}
 }
 

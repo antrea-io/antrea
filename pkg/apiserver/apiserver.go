@@ -334,6 +334,12 @@ func installHandlers(c *ExtraConfig, s *genericapiserver.GenericAPIServer) {
 			}()
 			return nil
 		})
+
+		// Start the NetworkPolicyValidator background routines
+		s.AddPostStartHook("start-validator-routines", func(context genericapiserver.PostStartHookContext) error {
+			go v.Run(context.Done())
+			return nil
+		})
 	}
 
 	if features.DefaultFeatureGate.Enabled(features.Egress) || features.DefaultFeatureGate.Enabled(features.ServiceExternalIP) {
