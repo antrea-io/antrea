@@ -540,16 +540,14 @@ func NewNetworkPolicyController(antreaClientGetter client.AntreaClientProvider,
 
 func (c *Controller) GetFQDNCache(fqdnFilter *querier.FQDNCacheFilter) []types.DnsCacheEntry {
 	cacheEntryList := []types.DnsCacheEntry{}
-	c.fqdnController.fqdnSelectorMutex.Lock()
-	defer c.fqdnController.fqdnSelectorMutex.Unlock()
-	for fqdn, dnsMeta := range c.fqdnController.dnsEntryCache {
-		for _, ipWithExpiration := range dnsMeta.responseIPs {
+	c.fqdnController.fqdnCache.forEachResolved(func(fqdn string, meta dnsMeta) {
+		for _, ipWithExpiration := range meta.responseIPs {
 			if fqdnFilter == nil || fqdnFilter.DomainRegex.MatchString(fqdn) {
 				entry := types.DnsCacheEntry{FQDNName: fqdn, IPAddress: ipWithExpiration.ip, ExpirationTime: ipWithExpiration.expirationTime}
 				cacheEntryList = append(cacheEntryList, entry)
 			}
 		}
-	}
+	})
 	return cacheEntryList
 }
 
@@ -649,7 +647,9 @@ func (c *Controller) Run(stopCh <-chan struct{}) {
 
 	if c.antreaPolicyEnabled {
 		for i := 0; i < defaultDNSWorkers; i++ {
-			go wait.Until(c.fqdnController.worker, time.Second, stopCh)
+			// worker returns only once stopCh is closed, hence it does not need to be
+			// restarted periodically.
+			go c.fqdnController.worker(stopCh)
 		}
 		go c.fqdnController.runRuleSyncTracker(stopCh)
 	}
