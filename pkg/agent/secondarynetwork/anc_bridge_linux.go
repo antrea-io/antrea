@@ -38,9 +38,9 @@ import (
 //
 // Callers must check snap.AntreaNodeConfigListError before calling this function. When the list
 // failed, this function receives a nil AntreaNodeConfig (since the controller clears the ANC on
-// errors to avoid acting on a partial view) and would return nil — which the caller may interpret
-// as "delete the bridge." To prevent that, callers should skip reconciliation entirely when
-// AntreaNodeConfigListError is non-empty.
+// errors to avoid acting on a partial view) and returns nil unless the static config provides a
+// bridge — which the caller may interpret as "delete the bridge." To prevent that, callers should
+// skip reconciliation when AntreaNodeConfigListError is non-empty and there is no static bridge.
 func effectiveSecondaryOVSBridgeFromSnapshot(snap *antreanodeconfig.Snapshot, staticCfg *agentconfig.SecondaryNetworkConfig, primaryOVSBridgeName string) *agenttypes.OVSBridgeConfig {
 	if staticCfg != nil && len(staticCfg.OVSBridges) > 0 {
 		return ovsBridgeFromStatic(staticCfg)
@@ -52,20 +52,17 @@ func effectiveSecondaryOVSBridgeFromSnapshot(snap *antreanodeconfig.Snapshot, st
 	if cfg.Spec.SecondaryNetwork == nil {
 		return nil
 	}
-	if primaryOVSBridgeName != "" && len(cfg.Spec.SecondaryNetwork.OVSBridges) > 0 &&
-		cfg.Spec.SecondaryNetwork.OVSBridges[0].BridgeName == primaryOVSBridgeName {
-		klog.ErrorS(fmt.Errorf("secondary OVS bridge %q conflicts with primary OVS bridge", cfg.Spec.SecondaryNetwork.OVSBridges[0].BridgeName),
+	effective := convertCRDSecondaryNetwork(cfg.Spec.SecondaryNetwork, cfg.ObjectMeta.Name)
+	if effective == nil {
+		return nil
+	}
+	if primaryOVSBridgeName != "" && effective.BridgeName == primaryOVSBridgeName {
+		klog.ErrorS(fmt.Errorf("secondary OVS bridge %q conflicts with primary OVS bridge", effective.BridgeName),
 			"Ignoring AntreaNodeConfig secondary network config with invalid bridge name", "antreaNodeConfig", cfg.ObjectMeta.Name)
 		return nil
 	}
-	effective := applySecondaryNetworkConfig(cfg)
-	if effective != nil {
-		if effective.OVSBridge != nil {
-			klog.V(2).InfoS("Using AntreaNodeConfig secondary network config", "bridge", effective.OVSBridge.BridgeName)
-		}
-		return effective.OVSBridge
-	}
-	return nil
+	klog.V(2).InfoS("Using AntreaNodeConfig secondary network config", "bridge", effective.BridgeName)
+	return effective
 }
 
 func ovsBridgeFromStatic(staticCfg *agentconfig.SecondaryNetworkConfig) *agenttypes.OVSBridgeConfig {
@@ -87,30 +84,18 @@ func ovsBridgeFromStatic(staticCfg *agentconfig.SecondaryNetworkConfig) *agentty
 	return bridge
 }
 
-// applySecondaryNetworkConfig derives the effective SecondaryNetworkConfig from the
-// AntreaNodeConfig carried in the snapshot (the oldest matching object for the Node).
-// It returns nil when the AntreaNodeConfig does not specify a valid SecondaryNetwork
-// bridge, so static agent config stays in effect. The caller must ensure cfg is not
-// nil and specifies a SecondaryNetwork.
-func applySecondaryNetworkConfig(cfg *crdv1alpha1.AntreaNodeConfig) *agenttypes.SecondaryNetworkConfig {
-	converted := convertCRDSecondaryNetwork(cfg.Spec.SecondaryNetwork, cfg.ObjectMeta.Name)
-	if converted.OVSBridge == nil {
-		return nil
-	}
-	return &converted
-}
-
-// convertCRDSecondaryNetwork converts from the CRD type to SecondaryNetworkConfig.
-// The CRD schema enforces at most one OVS bridge; OVSBridge is nil when the
-// list is empty or the sole bridge has an empty name (treated as unspecified).
-func convertCRDSecondaryNetwork(in *crdv1alpha1.SecondaryNetworkConfig, antreaNodeConfigName string) agenttypes.SecondaryNetworkConfig {
+// convertCRDSecondaryNetwork converts from the CRD type to the effective bridge
+// config. It returns nil when the CRD config does not specify a valid OVS bridge
+// (the list is empty or the sole bridge has an empty name, both treated as
+// unspecified), so static agent config stays in effect.
+func convertCRDSecondaryNetwork(in *crdv1alpha1.SecondaryNetworkConfig, antreaNodeConfigName string) *agenttypes.OVSBridgeConfig {
 	if len(in.OVSBridges) == 0 {
-		return agenttypes.SecondaryNetworkConfig{}
+		return nil
 	}
 	b := in.OVSBridges[0]
 	if b.BridgeName == "" {
 		klog.ErrorS(errors.New("empty OVS bridge name"), "Ignoring AntreaNodeConfig secondary network config with empty bridge name", "antreaNodeConfig", antreaNodeConfigName)
-		return agenttypes.SecondaryNetworkConfig{}
+		return nil
 	}
 	bridge := &agenttypes.OVSBridgeConfig{
 		BridgeName:              b.BridgeName,
@@ -123,5 +108,5 @@ func convertCRDSecondaryNetwork(in *crdv1alpha1.SecondaryNetworkConfig, antreaNo
 		}
 		bridge.PhysicalInterfaces = append(bridge.PhysicalInterfaces, pi)
 	}
-	return agenttypes.SecondaryNetworkConfig{OVSBridge: bridge}
+	return bridge
 }

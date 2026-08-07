@@ -79,11 +79,6 @@ func TestEffectiveSecondaryOVSBridge(t *testing.T) {
 		wantBridge *agenttypes.OVSBridgeConfig
 	}{
 		{
-			name:       "AntreaNodeConfig disabled, use static config",
-			staticCfg:  staticCfg,
-			wantBridge: wantStaticBridge,
-		},
-		{
 			name:      "empty static config and no ANC in snapshot",
 			snapshot:  antreanodeconfig.NewSnapshot(nil, nil),
 			staticCfg: emptyCfg,
@@ -131,12 +126,7 @@ func TestEffectiveSecondaryOVSBridge(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			var got *agenttypes.OVSBridgeConfig
-			if tc.snapshot == nil {
-				got = ovsBridgeFromStatic(tc.staticCfg)
-			} else {
-				got = effectiveSecondaryOVSBridgeFromSnapshot(tc.snapshot, tc.staticCfg, "br-int")
-			}
+			got := effectiveSecondaryOVSBridgeFromSnapshot(tc.snapshot, tc.staticCfg, "br-int")
 			assert.Equal(t, tc.wantBridge, got)
 		})
 	}
@@ -161,7 +151,7 @@ func TestConvertCRDSecondaryNetwork(t *testing.T) {
 		name                 string
 		in                   *crdv1alpha1.SecondaryNetworkConfig
 		antreaNodeConfigName string
-		want                 *agenttypes.SecondaryNetworkConfig
+		want                 *agenttypes.OVSBridgeConfig
 	}{
 		{
 			name:                 "empty bridges yields nil OVSBridge",
@@ -187,12 +177,10 @@ func TestConvertCRDSecondaryNetwork(t *testing.T) {
 				},
 			},
 			antreaNodeConfigName: testANCName,
-			want: &agenttypes.SecondaryNetworkConfig{
-				OVSBridge: &agenttypes.OVSBridgeConfig{
-					BridgeName: "br0",
-					PhysicalInterfaces: []agenttypes.PhysicalInterfaceConfig{
-						{Name: "eth0", AllowedVLANs: nil},
-					},
+			want: &agenttypes.OVSBridgeConfig{
+				BridgeName: "br0",
+				PhysicalInterfaces: []agenttypes.PhysicalInterfaceConfig{
+					{Name: "eth0", AllowedVLANs: nil},
 				},
 			},
 		},
@@ -204,10 +192,8 @@ func TestConvertCRDSecondaryNetwork(t *testing.T) {
 				},
 			},
 			antreaNodeConfigName: testANCName,
-			want: &agenttypes.SecondaryNetworkConfig{
-				OVSBridge: &agenttypes.OVSBridgeConfig{
-					BridgeName: "br0",
-				},
+			want: &agenttypes.OVSBridgeConfig{
+				BridgeName: "br0",
 			},
 		},
 		{
@@ -218,14 +204,12 @@ func TestConvertCRDSecondaryNetwork(t *testing.T) {
 				},
 			},
 			antreaNodeConfigName: testANCName,
-			want: &agenttypes.SecondaryNetworkConfig{
-				OVSBridge: &agenttypes.OVSBridgeConfig{
-					BridgeName:              "br0",
-					EnableMulticastSnooping: true,
-					PhysicalInterfaces: []agenttypes.PhysicalInterfaceConfig{
-						{Name: "eth0", AllowedVLANs: nil},
-						{Name: "eth1", AllowedVLANs: []string{"10"}},
-					},
+			want: &agenttypes.OVSBridgeConfig{
+				BridgeName:              "br0",
+				EnableMulticastSnooping: true,
+				PhysicalInterfaces: []agenttypes.PhysicalInterfaceConfig{
+					{Name: "eth0", AllowedVLANs: nil},
+					{Name: "eth1", AllowedVLANs: []string{"10"}},
 				},
 			},
 		},
@@ -239,7 +223,7 @@ func TestConvertCRDSecondaryNetwork(t *testing.T) {
 					SecondaryNetwork: tc.in,
 				},
 			}
-			got := applySecondaryNetworkConfig(cfg)
+			got := convertCRDSecondaryNetwork(cfg.Spec.SecondaryNetwork, cfg.ObjectMeta.Name)
 			assert.Equal(t, tc.want, got)
 		})
 	}

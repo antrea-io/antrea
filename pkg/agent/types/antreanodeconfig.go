@@ -14,21 +14,6 @@
 
 package types
 
-// SecondaryNetworkConfig is the effective secondary network configuration
-// derived from matching AntreaNodeConfig resources. It is a richer superset
-// of secondary-network configuration: physical interfaces carry per-interface
-// VLAN filters (AllowedVLANs) that are not expressible in the static YAML config.
-//
-// Static agent configuration always takes precedence: when the agent ConfigMap
-// specifies a secondary network bridge, that static config is used regardless
-// of AntreaNodeConfig. Otherwise, the oldest AntreaNodeConfig that matches this
-// Node and specifies secondary network settings takes effect.
-type SecondaryNetworkConfig struct {
-	// OVSBridge is the single OVS bridge configuration. The CRD schema enforces
-	// at most one bridge, so a pointer is used — nil means no bridge is configured.
-	OVSBridge *OVSBridgeConfig
-}
-
 // OVSBridgeConfig describes a single OVS bridge and its uplink interfaces.
 type OVSBridgeConfig struct {
 	// BridgeName is the name of the OVS bridge.
@@ -48,25 +33,4 @@ type PhysicalInterfaceConfig struct {
 	// "200-300") that are allowed on this interface.  If empty, all VLANs
 	// are allowed.
 	AllowedVLANs []string
-}
-
-// DeepCopy returns a deep copy of the OVSBridgeConfig.
-func (b *OVSBridgeConfig) DeepCopy() *OVSBridgeConfig {
-	if b == nil {
-		return nil
-	}
-	cp := &OVSBridgeConfig{
-		BridgeName:              b.BridgeName,
-		EnableMulticastSnooping: b.EnableMulticastSnooping,
-	}
-	if b.PhysicalInterfaces != nil {
-		cp.PhysicalInterfaces = make([]PhysicalInterfaceConfig, len(b.PhysicalInterfaces))
-		for i, pi := range b.PhysicalInterfaces {
-			cp.PhysicalInterfaces[i] = PhysicalInterfaceConfig{Name: pi.Name}
-			if pi.AllowedVLANs != nil {
-				cp.PhysicalInterfaces[i].AllowedVLANs = append([]string(nil), pi.AllowedVLANs...)
-			}
-		}
-	}
-	return cp
 }

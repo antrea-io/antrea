@@ -808,7 +808,9 @@ func (br *OVSBridge) createPort(ctx context.Context,
 		port.Tag = &tag
 	}
 	if len(vlanSpecs) > 0 {
-		trunks, err := parseVLANSpecs(vlanSpecs)
+		// Expand VLAN specs such as "100" or "200-300" into discrete IDs: the OVSDB
+		// trunks set only supports integer elements (no native range type).
+		trunks, err := vlan.ExpandSpecs(vlanSpecs)
 		if err != nil {
 			return "", err
 		}
@@ -844,13 +846,6 @@ func (br *OVSBridge) createPort(ctx context.Context,
 	}
 
 	return res[1].UUID.GoUUID, nil
-}
-
-// parseVLANSpecs converts VLAN specifications such as "100" or "200-300" into
-// a flat slice of uint16 VLAN IDs suitable for the OVSDB trunks set, which
-// only supports discrete integer elements (no native range type).
-func parseVLANSpecs(specs []string) ([]uint16, error) {
-	return vlan.ExpandSpecs(specs)
 }
 
 func uint16sToInts(ids []uint16) []int {
@@ -1260,7 +1255,7 @@ func (br *OVSBridge) SetPortTrunks(portName string, vlanSpecs []string) error {
 	if err != nil {
 		return err
 	}
-	trunks, err := parseVLANSpecs(vlanSpecs)
+	trunks, err := vlan.ExpandSpecs(vlanSpecs)
 	if err != nil {
 		return err
 	}

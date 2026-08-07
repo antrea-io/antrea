@@ -227,26 +227,6 @@ func TestLocalNodeFromLister(t *testing.T) {
 	}
 }
 
-func TestCurrentSnapshotNilBeforeInformerSync(t *testing.T) {
-	rec := &notifyRecorder{}
-	kube := fake.NewClientset(testWorkerNode())
-	nodeInf := informers.NewSharedInformerFactory(kube, 0).Core().V1().Nodes()
-	crdClient := fakeversioned.NewSimpleClientset(testANC("a1", "br-anc"))
-	crdInf := crdinformers.NewSharedInformerFactory(crdClient, 0).Crd().V1alpha1().AntreaNodeConfigs()
-
-	c := NewController(crdInf, nodeInf, testLocalNodeName, rec)
-	// Informers are not started: caches are unsynced.
-	assert.Nil(t, c.CurrentSnapshot())
-}
-
-func TestCurrentSnapshotUsesInformerCaches(t *testing.T) {
-	env := newControllerTestEnv(t, nil, testWorkerNode(), ancAsRuntime(testANC("a1", "br-anc"))...)
-	env.drainQueue()
-
-	snap := env.C.CurrentSnapshot()
-	assertSnapshotBridge(t, snap, "br-anc")
-}
-
 func TestRecomputeAndNotifyDedup(t *testing.T) {
 	env := newControllerTestEnv(t, nil, testWorkerNode(), ancAsRuntime(testANC("a1", "br-anc"))...)
 	env.loadLocalNode()
@@ -392,23 +372,6 @@ func TestControllerRunPublishesInitialSnapshot(t *testing.T) {
 	wg.Wait()
 }
 
-func TestCurrentSnapshotOldestMatchWhenMultipleANC(t *testing.T) {
-	olderTS := metav1.NewTime(time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC))
-	newerTS := metav1.NewTime(time.Date(2026, 6, 1, 0, 0, 0, 0, time.UTC))
-	older := testANC("a-older", "br-old")
-	older.CreationTimestamp = olderTS
-	newer := testANC("a-newer", "br-new")
-	newer.CreationTimestamp = newerTS
-
-	env := newControllerTestEnv(t, nil, testWorkerNode(), ancAsRuntime(newer, older)...)
-	env.drainQueue()
-	snap := env.C.CurrentSnapshot()
-	require.NotNil(t, snap)
-	require.NotNil(t, snap.AntreaNodeConfig)
-	assert.Equal(t, "a-older", snap.AntreaNodeConfig.Name)
-	assertSnapshotBridge(t, snap, "br-old")
-}
-
 func testANCWithSelector(name string, ts time.Time, nodeSelector map[string]string) *crdv1alpha1.AntreaNodeConfig {
 	return &crdv1alpha1.AntreaNodeConfig{
 		ObjectMeta: metav1.ObjectMeta{
@@ -492,7 +455,7 @@ func TestSelectAntreaNodeConfigsForNode(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			got := SelectAntreaNodeConfigsForNode(tc.node, tc.configs)
+			got := selectAntreaNodeConfigsForNode(tc.node, tc.configs)
 			assert.Equal(t, tc.wantNames, ancNames(got))
 		})
 	}
@@ -507,19 +470,4 @@ func ancNames(configs []*crdv1alpha1.AntreaNodeConfig) []string {
 		names = append(names, cfg.Name)
 	}
 	return names
-}
-
-func TestOldestMatchingAntreaNodeConfigForNode(t *testing.T) {
-	node := testNode("node1", map[string]string{"role": "worker"})
-	t0 := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
-	t1 := t0.Add(time.Hour)
-	ancOld := testANCWithSelector("old", t0, map[string]string{"role": "worker"})
-	ancYoung := testANCWithSelector("young", t1, map[string]string{"role": "worker"})
-
-	assert.Nil(t, OldestMatchingAntreaNodeConfigForNode(nil, []*crdv1alpha1.AntreaNodeConfig{ancOld}))
-	assert.Nil(t, OldestMatchingAntreaNodeConfigForNode(node, nil))
-
-	got := OldestMatchingAntreaNodeConfigForNode(node, []*crdv1alpha1.AntreaNodeConfig{ancYoung, ancOld})
-	require.NotNil(t, got)
-	assert.Equal(t, "old", got.Name)
 }

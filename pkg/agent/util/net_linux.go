@@ -507,9 +507,12 @@ func PrepareHostInterfaceConnection(
 
 // RestoreHostInterfaceConfiguration restores the configuration from the bridge back to the host
 // interface, reverting the actions taken in PrepareHostInterfaceConnection. It returns an error
-// when the host and uplink OVS ports cannot be deleted atomically. All subsequent sub-step
-// failures (IP/route restore and rename) are logged but do not cause a return error, since they
-// represent best-effort cleanup after the point of no return.
+// when the interface config cannot be read before the destructive steps, or when the host and
+// uplink OVS ports cannot be deleted atomically; the caller can then retry while the OVS ports
+// and the kernel interface are still intact. Failures of the subsequent sub-steps (rename and
+// IP/route restore) are logged but do not cause a return error: they represent best-effort
+// cleanup after the point of no return, where a retry could not restore the host connection
+// because the OVS ports are already gone.
 func RestoreHostInterfaceConfiguration(brName string, interfaceName string) error {
 	bridgedName := GenerateUplinkInterfaceName(interfaceName)
 	klog.InfoS("Restoring host interface from secondary OVS bridge",
@@ -521,14 +524,16 @@ func RestoreHostInterfaceConfiguration(brName string, interfaceName string) erro
 		return nil
 	}
 
-	// get interface config
+	// Read the interface config before any destructive operation: if it cannot be
+	// read, return the error so the caller can retry while the OVS ports and the
+	// kernel interface are still intact.
 	var err error
 	var interfaceIPs []*net.IPNet
 	var interfaceRoutes []interface{}
 	if HostInterfaceExists(interfaceName) {
 		_, interfaceIPs, interfaceRoutes, err = GetInterfaceConfig(interfaceName)
 		if err != nil {
-			klog.ErrorS(err, "Failed to get interface config", "interface", interfaceName)
+			return fmt.Errorf("failed to get config of interface %s before restoring it: %w", interfaceName, err)
 		}
 	}
 	// Delete the internal and uplink ports in one transaction. Running two ovs-vsctl commands

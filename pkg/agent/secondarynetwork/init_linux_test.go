@@ -186,17 +186,18 @@ func TestConnectPhyInterfacesToOVSBridge(t *testing.T) {
 	}
 }
 
-func TestRestoreStaleHostConnections(t *testing.T) {
+func TestRestoreStaleHostConnectionsConditionally(t *testing.T) {
 	tests := []struct {
 		name             string
+		desired          *agenttypes.OVSBridgeConfig
 		ports            []ovsconfig.OVSPortData
-		getPortListErr   error
 		restoreErr       error
 		wantRestoreCalls []struct{ bridge, iface string }
 		expectedErr      string
 	}{
 		{
-			name: "managed host connection",
+			name:    "multi-interface desired restores all host connections",
+			desired: bridgeConfig(brOld, eth1, eth2),
 			ports: []ovsconfig.OVSPortData{
 				{IFName: eth1, IFType: "internal", ExternalIDs: map[string]string{"antrea-type": "host"}},
 				{IFName: eth1 + "~", ExternalIDs: map[string]string{"antrea-type": "uplink"}},
@@ -204,42 +205,59 @@ func TestRestoreStaleHostConnections(t *testing.T) {
 			wantRestoreCalls: []struct{ bridge, iface string }{{brOld, eth1}},
 		},
 		{
-			name: "unmanaged internal port",
+			// The host connection of the desired single interface is the desired
+			// state and must be kept.
+			name:    "single-interface desired keeps its own host connection",
+			desired: bridgeConfig(brOld, eth1),
+			ports: []ovsconfig.OVSPortData{
+				{IFName: eth1, IFType: "internal", ExternalIDs: map[string]string{"antrea-type": "host"}},
+				{IFName: eth1 + "~", ExternalIDs: map[string]string{"antrea-type": "uplink"}},
+			},
+		},
+		{
+			// A host connection for an interface which is not desired (e.g. leftover
+			// from a previous single-interface config) is stale and must be restored.
+			name:    "single-interface desired restores other host connection",
+			desired: bridgeConfig(brOld, eth1),
+			ports: []ovsconfig.OVSPortData{
+				{IFName: eth2, IFType: "internal", ExternalIDs: map[string]string{"antrea-type": "host"}},
+				{IFName: eth2 + "~", ExternalIDs: map[string]string{"antrea-type": "uplink"}},
+			},
+			wantRestoreCalls: []struct{ bridge, iface string }{{brOld, eth2}},
+		},
+		{
+			name:    "unmanaged internal port",
+			desired: bridgeConfig(brOld, eth1),
 			ports: []ovsconfig.OVSPortData{
 				{IFName: eth1, IFType: "internal"},
 				{IFName: eth1 + "~", ExternalIDs: map[string]string{"antrea-type": "uplink"}},
 			},
 		},
 		{
-			name: "uplink sibling is not managed",
+			name:    "uplink sibling is not managed",
+			desired: bridgeConfig(brOld, eth1),
 			ports: []ovsconfig.OVSPortData{
 				{IFName: eth1, IFType: "internal", ExternalIDs: map[string]string{"antrea-type": "host"}},
 				{IFName: eth1 + "~"},
 			},
 		},
 		{
-			name:           "get port list error",
-			getPortListErr: errors.New("list ports error"),
-			expectedErr:    "failed to list OVS ports",
-		},
-		{
-			name: "restore error",
+			// Restoring a stale host connection (here eth2, leftover from a previous
+			// single-interface config) fails.
+			name:    "restore error",
+			desired: bridgeConfig(brOld, eth1),
 			ports: []ovsconfig.OVSPortData{
-				{IFName: eth1, IFType: "internal", ExternalIDs: map[string]string{"antrea-type": "host"}},
-				{IFName: eth1 + "~", ExternalIDs: map[string]string{"antrea-type": "uplink"}},
+				{IFName: eth2, IFType: "internal", ExternalIDs: map[string]string{"antrea-type": "host"}},
+				{IFName: eth2 + "~", ExternalIDs: map[string]string{"antrea-type": "uplink"}},
 			},
 			restoreErr:       errors.New("restore error"),
-			wantRestoreCalls: []struct{ bridge, iface string }{{brOld, eth1}},
+			wantRestoreCalls: []struct{ bridge, iface string }{{brOld, eth2}},
 			expectedErr:      "failed to restore stale host-connection interface",
 		},
 	}
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			ctrl := mock.NewController(t)
-			mockOVSBridgeClient := ovsconfigtest.NewMockOVSBridgeClient(ctrl)
-			mockOVSBridgeClient.EXPECT().GetPortList().Return(tc.ports, tc.getPortListErr)
-
 			var gotRestoreCalls []struct{ bridge, iface string }
 			origRestore := restoreHostInterfaceConfigFn
 			restoreHostInterfaceConfigFn = func(brName, ifaceName string) error {
@@ -248,13 +266,31 @@ func TestRestoreStaleHostConnections(t *testing.T) {
 			}
 			t.Cleanup(func() { restoreHostInterfaceConfigFn = origRestore })
 
-			err := restoreStaleHostConnections(brOld, mockOVSBridgeClient)
+			existingPorts := make(map[string]string, len(tc.ports))
+			existingIFTypes := make(map[string]string, len(tc.ports))
+			for _, p := range tc.ports {
+				existingPorts[p.IFName] = p.UUID
+				existingIFTypes[p.IFName] = p.IFType
+			}
+
+			err := restoreStaleHostConnectionsConditionally(tc.desired, tc.ports, existingPorts, existingIFTypes)
 			if tc.expectedErr != "" {
 				assert.ErrorContains(t, err, tc.expectedErr)
 			} else {
 				require.NoError(t, err)
 			}
 			assert.Equal(t, tc.wantRestoreCalls, gotRestoreCalls)
+			// Restored interfaces (including stale uplink ports) must be removed from
+			// existingPorts so the caller does not re-add them. When restore fails the
+			// reconciliation is aborted and the ports are left in place for a retry.
+			if tc.expectedErr == "" {
+				for _, conn := range tc.wantRestoreCalls {
+					_, exists := existingPorts[conn.iface]
+					assert.False(t, exists, "restored interface %s should be removed from existingPorts", conn.iface)
+					_, exists = existingPorts[conn.iface+"~"]
+					assert.False(t, exists, "restored uplink %s~ should be removed from existingPorts", conn.iface)
+				}
+			}
 		})
 	}
 }
@@ -263,6 +299,8 @@ func TestClearStaleTrunks(t *testing.T) {
 	tests := []struct {
 		name               string
 		physicalInterfaces []agenttypes.PhysicalInterfaceConfig
+		portList           []ovsconfig.OVSPortData
+		existingPorts      map[string]string
 		expectedCalls      func(m *ovsconfigtest.MockOVSBridgeClient)
 		expectedErr        string
 	}{
@@ -273,13 +311,14 @@ func TestClearStaleTrunks(t *testing.T) {
 				{Name: eth2, AllowedVLANs: []string{"200"}},
 				{Name: eth3},
 			},
+			portList: []ovsconfig.OVSPortData{
+				{Name: "port-eth1", IFName: eth1, Trunks: []uint16{100}},
+				{Name: "port-eth2", IFName: eth2, Trunks: []uint16{200}},
+				{Name: "port-eth3", IFName: eth3},
+				{Name: "other-port", IFName: "eth4", Trunks: []uint16{400}},
+			},
+			existingPorts: map[string]string{eth1: "uuid-eth1", eth2: "uuid-eth2", eth3: "uuid-eth3"},
 			expectedCalls: func(m *ovsconfigtest.MockOVSBridgeClient) {
-				m.EXPECT().GetPortList().Return([]ovsconfig.OVSPortData{
-					{Name: "port-eth1", IFName: eth1, Trunks: []uint16{100}},
-					{Name: "port-eth2", IFName: eth2, Trunks: []uint16{200}},
-					{Name: "port-eth3", IFName: eth3},
-					{Name: "other-port", IFName: "eth4", Trunks: []uint16{400}},
-				}, nil).Times(1)
 				m.EXPECT().SetPortTrunks("port-eth1", nil).Return(nil)
 			},
 		},
@@ -291,25 +330,28 @@ func TestClearStaleTrunks(t *testing.T) {
 			},
 		},
 		{
-			name: "get port list error",
+			name: "skip ports already removed from the bridge",
 			physicalInterfaces: []agenttypes.PhysicalInterfaceConfig{
 				{Name: eth1},
 			},
-			expectedErr: "failed to list OVS ports",
-			expectedCalls: func(m *ovsconfigtest.MockOVSBridgeClient) {
-				m.EXPECT().GetPortList().Return(nil, errors.New("list ports error"))
+			// eth1 was deleted earlier in the same reconciliation: it is still in
+			// portList but no longer in existingPorts, so its trunks must not be touched.
+			portList: []ovsconfig.OVSPortData{
+				{Name: eth1, IFName: eth1, Trunks: []uint16{100}},
 			},
+			existingPorts: map[string]string{},
 		},
 		{
 			name: "clear trunks error",
 			physicalInterfaces: []agenttypes.PhysicalInterfaceConfig{
 				{Name: eth1},
 			},
-			expectedErr: "failed to clear stale trunk VLANs",
+			portList: []ovsconfig.OVSPortData{
+				{Name: eth1, IFName: eth1, Trunks: []uint16{100}},
+			},
+			existingPorts: map[string]string{eth1: "uuid-eth1"},
+			expectedErr:   "failed to clear stale trunk VLANs",
 			expectedCalls: func(m *ovsconfigtest.MockOVSBridgeClient) {
-				m.EXPECT().GetPortList().Return([]ovsconfig.OVSPortData{
-					{Name: eth1, IFName: eth1, Trunks: []uint16{100}},
-				}, nil)
 				m.EXPECT().SetPortTrunks(eth1, nil).Return(errors.New("update trunks error"))
 			},
 		},
@@ -324,98 +366,12 @@ func TestClearStaleTrunks(t *testing.T) {
 				tc.expectedCalls(mockOVSBridgeClient)
 			}
 
-			err := clearStaleTrunks(mockOVSBridgeClient, tc.physicalInterfaces)
+			err := clearStaleTrunks(mockOVSBridgeClient, tc.physicalInterfaces, tc.portList, tc.existingPorts)
 			if tc.expectedErr != "" {
 				assert.ErrorContains(t, err, tc.expectedErr)
 			} else {
 				require.NoError(t, err)
 			}
-		})
-	}
-}
-
-func TestConnectBridgePhysicalInterfaces(t *testing.T) {
-	tests := []struct {
-		name             string
-		bridgeCfg        *agenttypes.OVSBridgeConfig
-		expectedCalls    func(m *ovsconfigtest.MockOVSBridgeClient)
-		wantPrepareCalls []string
-		wantRestoreCalls []struct{ bridge, iface string }
-	}{
-		{
-			name: "single interface is prepared as host connection",
-			bridgeCfg: &agenttypes.OVSBridgeConfig{
-				BridgeName: brOld,
-				PhysicalInterfaces: []agenttypes.PhysicalInterfaceConfig{
-					{Name: eth1, AllowedVLANs: []string{"100"}},
-				},
-			},
-			expectedCalls: func(m *ovsconfigtest.MockOVSBridgeClient) {
-				m.EXPECT().GetOFPort(eth1+"~").Return(int32(0), client.ErrNotFound)
-				m.EXPECT().CreateTrunkPort(
-					eth1+"~",
-					int32(0),
-					[]string{"100"},
-					map[string]string{"antrea-type": "uplink"},
-				).Return("", nil)
-			},
-			wantPrepareCalls: []string{eth1},
-		},
-		{
-			name: "multi-interface startup restores stale host connection and trunks",
-			bridgeCfg: &agenttypes.OVSBridgeConfig{
-				BridgeName: brOld,
-				PhysicalInterfaces: []agenttypes.PhysicalInterfaceConfig{
-					{Name: eth1},
-					{Name: eth2},
-				},
-			},
-			expectedCalls: func(m *ovsconfigtest.MockOVSBridgeClient) {
-				m.EXPECT().GetPortList().Return([]ovsconfig.OVSPortData{
-					{Name: eth1, IFName: eth1, IFType: "internal", ExternalIDs: map[string]string{"antrea-type": "host"}},
-					{Name: eth1 + "~", IFName: eth1 + "~", ExternalIDs: map[string]string{"antrea-type": "uplink"}},
-					{Name: eth2, IFName: eth2, Trunks: []uint16{200}},
-				}, nil)
-				m.EXPECT().GetOFPort(eth1).Return(int32(0), client.ErrNotFound)
-				m.EXPECT().CreateUplinkPort(eth1, int32(0), map[string]string{"antrea-type": "uplink"}).Return("", nil)
-				m.EXPECT().GetOFPort(eth2).Return(int32(uplinkOFPort), nil)
-				m.EXPECT().GetPortList().Return([]ovsconfig.OVSPortData{
-					{Name: eth1, IFName: eth1},
-					{Name: eth2, IFName: eth2, Trunks: []uint16{200}},
-				}, nil)
-				m.EXPECT().SetPortTrunks(eth2, nil).Return(nil)
-			},
-			wantRestoreCalls: []struct{ bridge, iface string }{{brOld, eth1}},
-		},
-	}
-
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			ctrl := mock.NewController(t)
-			mockOVSBridgeClient := ovsconfigtest.NewMockOVSBridgeClient(ctrl)
-			mockInterfaceByName(t)
-
-			var gotPrepareCalls []string
-			origPrepare := prepareHostInterfaceConnectionFn
-			prepareHostInterfaceConnectionFn = func(_ ovsconfig.OVSBridgeClient, ifaceName string, _ int32, _ map[string]string, _ int) (string, bool, error) {
-				gotPrepareCalls = append(gotPrepareCalls, ifaceName)
-				return ifaceName + "~", false, nil
-			}
-			t.Cleanup(func() { prepareHostInterfaceConnectionFn = origPrepare })
-
-			var gotRestoreCalls []struct{ bridge, iface string }
-			origRestore := restoreHostInterfaceConfigFn
-			restoreHostInterfaceConfigFn = func(brName, ifaceName string) error {
-				gotRestoreCalls = append(gotRestoreCalls, struct{ bridge, iface string }{brName, ifaceName})
-				return nil
-			}
-			t.Cleanup(func() { restoreHostInterfaceConfigFn = origRestore })
-
-			tc.expectedCalls(mockOVSBridgeClient)
-
-			require.NoError(t, connectBridgePhysicalInterfaces(mockOVSBridgeClient, tc.bridgeCfg))
-			assert.Equal(t, tc.wantPrepareCalls, gotPrepareCalls)
-			assert.Equal(t, tc.wantRestoreCalls, gotRestoreCalls)
 		})
 	}
 }
@@ -498,6 +454,9 @@ func TestInitializeWithStaticBridgeConfig(t *testing.T) {
 				bridgeClient.EXPECT().GetBridgeName().Return(brNew)
 				bridgeClient.EXPECT().SetMcastSnooping(false).Return(nil)
 				bridgeClient.EXPECT().GetPortList().Return(nil, nil)
+			} else {
+				// The bridge is created and reconciled through updatePhysicalInterfaces.
+				bridgeClient.EXPECT().GetPortList().Return([]ovsconfig.OVSPortData{}, nil)
 			}
 
 			podController := &fakePodController{}
@@ -724,9 +683,6 @@ func TestReconcileBridge(t *testing.T) {
 					{UUID: "uuid-eth1", IFName: eth1, IFType: "internal"},
 					{UUID: "uuid-eth1-tilde", IFName: eth1Tilde, ExternalIDs: map[string]string{"antrea-type": "uplink"}},
 				}, nil).Times(1)
-				old.EXPECT().GetPortList().Return([]ovsconfig.OVSPortData{
-					{Name: eth1Tilde, IFName: eth1Tilde, Trunks: nil},
-				}, nil).Times(1)
 			},
 		},
 		{
@@ -742,9 +698,6 @@ func TestReconcileBridge(t *testing.T) {
 						IFType:      "internal",
 						ExternalIDs: map[string]string{interfacestore.AntreaInterfaceTypeKey: interfacestore.AntreaHost},
 					},
-				}, nil)
-				old.EXPECT().GetPortList().Return([]ovsconfig.OVSPortData{
-					{Name: eth1, IFName: eth1, IFType: "internal"},
 				}, nil)
 				old.EXPECT().GetOFPort(eth1Tilde).Return(int32(0), client.ErrNotFound)
 				old.EXPECT().CreateUplinkPort(eth1Tilde, int32(0), map[string]string{
@@ -785,6 +738,38 @@ func TestReconcileBridge(t *testing.T) {
 			expectedErr:  errStaleBridgeInUse.Error(),
 		},
 		{
+			name:       "bridge created (prev is nil, single interface)",
+			prevCfg:    nil,
+			desiredCfg: bridgeConfig(brNew, eth1),
+			expectedCalls: func(old, new *ovsconfigtest.MockOVSBridgeClient) {
+				new.EXPECT().Create().Return(nil)
+				new.EXPECT().GetPortList().Return([]ovsconfig.OVSPortData{}, nil).Times(1)
+				new.EXPECT().GetOFPort(eth1+"~").Return(int32(0), client.ErrNotFound)
+				new.EXPECT().CreateUplinkPort(eth1+"~", int32(0), map[string]string{"antrea-type": "uplink"}).Return("", nil)
+			},
+			wantPrepareCalls: []string{eth1},
+		},
+		{
+			// The bridge may not be freshly created (Create is a no-op on an existing
+			// bridge); a leftover host connection from a previous single-interface
+			// config must be restored before the interface is re-added as a plain uplink.
+			name:       "bridge created with stale host connection",
+			prevCfg:    nil,
+			desiredCfg: &agenttypes.OVSBridgeConfig{BridgeName: brNew, PhysicalInterfaces: []agenttypes.PhysicalInterfaceConfig{{Name: eth1}, {Name: eth2}}},
+			expectedCalls: func(old, new *ovsconfigtest.MockOVSBridgeClient) {
+				new.EXPECT().Create().Return(nil)
+				new.EXPECT().GetPortList().Return([]ovsconfig.OVSPortData{
+					{IFName: eth1, IFType: "internal", ExternalIDs: map[string]string{"antrea-type": "host"}},
+					{IFName: eth1 + "~", ExternalIDs: map[string]string{"antrea-type": "uplink"}},
+					{Name: eth2, IFName: eth2, Trunks: []uint16{200}},
+				}, nil).Times(1)
+				new.EXPECT().GetOFPort(eth1).Return(int32(0), client.ErrNotFound)
+				new.EXPECT().CreateUplinkPort(eth1, int32(0), map[string]string{"antrea-type": "uplink"}).Return("", nil)
+				new.EXPECT().SetPortTrunks(eth2, nil).Return(nil)
+			},
+			wantRestoreCalls: []struct{ bridge, iface string }{{brNew, eth1}},
+		},
+		{
 			// Use two interfaces to bypass the single-interface PrepareHostInterfaceConnection path.
 			name:       "bridge created (prev is nil, two interfaces)",
 			prevCfg:    nil,
@@ -796,10 +781,6 @@ func TestReconcileBridge(t *testing.T) {
 				new.EXPECT().CreateUplinkPort(eth1, int32(0), map[string]string{"antrea-type": "uplink"}).Return("", nil)
 				new.EXPECT().GetOFPort(eth2).Return(int32(0), client.ErrNotFound)
 				new.EXPECT().CreateUplinkPort(eth2, int32(0), map[string]string{"antrea-type": "uplink"}).Return("", nil)
-				new.EXPECT().GetPortList().Return([]ovsconfig.OVSPortData{
-					{Name: eth1, IFName: eth1, Trunks: nil},
-					{Name: eth2, IFName: eth2, Trunks: nil},
-				}, nil).Times(1)
 			},
 		},
 		{
@@ -808,6 +789,7 @@ func TestReconcileBridge(t *testing.T) {
 			desiredCfg: bridgeConfig(brNew),
 			expectedCalls: func(old, new *ovsconfigtest.MockOVSBridgeClient) {
 				new.EXPECT().Create().Return(nil)
+				new.EXPECT().GetPortList().Return([]ovsconfig.OVSPortData{}, nil).Times(1)
 			},
 		},
 		{
@@ -826,10 +808,6 @@ func TestReconcileBridge(t *testing.T) {
 				new.EXPECT().CreateUplinkPort(eth1, int32(0), map[string]string{"antrea-type": "uplink"}).Return("", nil)
 				new.EXPECT().GetOFPort(eth2).Return(int32(0), client.ErrNotFound)
 				new.EXPECT().CreateUplinkPort(eth2, int32(0), map[string]string{"antrea-type": "uplink"}).Return("", nil)
-				new.EXPECT().GetPortList().Return([]ovsconfig.OVSPortData{
-					{Name: eth1, IFName: eth1, Trunks: nil},
-					{Name: eth2, IFName: eth2, Trunks: nil},
-				}, nil).Times(1)
 			},
 		},
 		{
@@ -843,11 +821,6 @@ func TestReconcileBridge(t *testing.T) {
 				// eth2 is new — connect it.
 				old.EXPECT().GetOFPort(eth2).Return(int32(0), client.ErrNotFound)
 				old.EXPECT().CreateUplinkPort(eth2, int32(0), map[string]string{"antrea-type": "uplink"}).Return("", nil)
-				// clearStaleTrunks: eth1 already exists with no AllowedVLANs; second GetPortList
-				// shows no trunks on eth1 so SetPortTrunks is not called.
-				old.EXPECT().GetPortList().Return([]ovsconfig.OVSPortData{
-					{Name: eth1, IFName: eth1, Trunks: nil},
-				}, nil).Times(1)
 			},
 		},
 		{
@@ -864,10 +837,6 @@ func TestReconcileBridge(t *testing.T) {
 				old.EXPECT().DeletePorts([]string{portUUID}).Return(nil)
 				// eth2 is no longer desired and is removed based on the observed OVSDB state.
 				old.EXPECT().DeletePorts([]string{"uuid-eth2"}).Return(nil)
-				// clearStaleTrunks: eth1~ will be the physical uplink port and has no trunks.
-				old.EXPECT().GetPortList().Return([]ovsconfig.OVSPortData{
-					{Name: eth1, IFName: eth1, IFType: "internal"},
-				}, nil).Times(1)
 				old.EXPECT().GetOFPort(eth1+"~").Return(int32(0), client.ErrNotFound)
 				old.EXPECT().CreateUplinkPort(eth1+"~", int32(0), map[string]string{"antrea-type": "uplink"}).Return("", nil)
 			},
@@ -886,10 +855,6 @@ func TestReconcileBridge(t *testing.T) {
 				}, nil).Times(1)
 				old.EXPECT().GetOFPort(eth2).Return(int32(0), client.ErrNotFound)
 				old.EXPECT().CreateTrunkPort(eth2, int32(0), []string{"100"}, map[string]string{"antrea-type": "uplink"}).Return("", nil)
-				// clearStaleTrunks: eth1 exists with no AllowedVLANs; no trunks → no-op.
-				old.EXPECT().GetPortList().Return([]ovsconfig.OVSPortData{
-					{Name: eth1, IFName: eth1, Trunks: nil},
-				}, nil).Times(1)
 			},
 		},
 		{
@@ -915,8 +880,8 @@ func TestReconcileBridge(t *testing.T) {
 		{
 			// Regression: eth1 loses AllowedVLANs AND eth2 has a stale trunk 300 that
 			// was never reflected in prev (set externally or from a run the controller
-			// didn't track).  clearStaleTrunks reads actual OVS state and clears both.
-			name: "stale trunk on eth2 not in prev config — cleared via OVS state",
+			// didn't track).  clearStaleTrunks clears both from the observed port list.
+			name: "stale trunk on eth2 not in prev config — cleared from observed state",
 			prevCfg: &agenttypes.OVSBridgeConfig{BridgeName: brOld, PhysicalInterfaces: []agenttypes.PhysicalInterfaceConfig{
 				{Name: eth1, AllowedVLANs: []string{"100"}},
 				{Name: eth2},
@@ -926,17 +891,12 @@ func TestReconcileBridge(t *testing.T) {
 				{Name: eth2},
 			}},
 			expectedCalls: func(old, new *ovsconfigtest.MockOVSBridgeClient) {
-				// First GetPortList: build existingPorts map.
-				old.EXPECT().GetPortList().Return([]ovsconfig.OVSPortData{
-					{UUID: portUUID, IFName: eth1},
-					{UUID: "uuid-eth2", IFName: eth2},
-				}, nil).Times(1)
-				// Second GetPortList: clearStaleTrunks reads actual OVS state.
 				// eth1 has trunks from its prev AllowedVLANs; eth2 has stale trunk 300
-				// that was never tracked in prev — both are cleared.
+				// that was never tracked in prev — both are cleared from the observed
+				// port list by clearStaleTrunks.
 				old.EXPECT().GetPortList().Return([]ovsconfig.OVSPortData{
-					{Name: eth1, IFName: eth1, Trunks: []uint16{100}},
-					{Name: eth2, IFName: eth2, Trunks: []uint16{300}},
+					{UUID: portUUID, IFName: eth1, Name: eth1, Trunks: []uint16{100}},
+					{UUID: "uuid-eth2", IFName: eth2, Name: eth2, Trunks: []uint16{300}},
 				}, nil).Times(1)
 				old.EXPECT().SetPortTrunks(eth1, nil).Return(nil)
 				old.EXPECT().SetPortTrunks(eth2, nil).Return(nil)
@@ -967,9 +927,6 @@ func TestReconcileBridge(t *testing.T) {
 				}, nil).Times(1)
 				// eth2 is the new single uplink, so the bridge port is eth2~ after
 				// PrepareHostInterfaceConnection.
-				old.EXPECT().GetPortList().Return([]ovsconfig.OVSPortData{
-					{Name: eth2, IFName: eth2, IFType: "internal"},
-				}, nil).Times(1)
 				old.EXPECT().GetOFPort(eth2+"~").Return(int32(0), client.ErrNotFound)
 				old.EXPECT().CreateUplinkPort(eth2+"~", int32(0), map[string]string{"antrea-type": "uplink"}).Return("", nil)
 			},
@@ -1215,6 +1172,7 @@ func TestSyncBridgeRetriesDesiredBridgeCreation(t *testing.T) {
 	mock.InOrder(
 		bridgeClient.EXPECT().Create().Return(createErr),
 		bridgeClient.EXPECT().Create().Return(nil),
+		bridgeClient.EXPECT().GetPortList().Return([]ovsconfig.OVSPortData{}, nil),
 	)
 
 	fakePc := &fakePodController{}
@@ -1347,9 +1305,6 @@ func TestSyncBridgeReconcilesDiscoveredManagedBridge(t *testing.T) {
 	oldMock.EXPECT().GetPortList().Return([]ovsconfig.OVSPortData{
 		{UUID: "uuid-eth1", IFName: eth1},
 	}, nil)
-	oldMock.EXPECT().GetPortList().Return([]ovsconfig.OVSPortData{
-		{Name: eth1, IFName: eth1, Trunks: nil},
-	}, nil)
 	oldMock.EXPECT().GetOFPort(eth2).Return(int32(0), client.ErrNotFound)
 	oldMock.EXPECT().CreateUplinkPort(eth2, int32(0), map[string]string{
 		"antrea-type": "uplink",
@@ -1363,6 +1318,67 @@ func TestSyncBridgeReconcilesDiscoveredManagedBridge(t *testing.T) {
 	assert.Equal(t, []ovsconfig.OVSBridgeClient{oldMock}, fakePc.setBridgeCalls)
 	assert.Equal(t, oldMock, c.ovsBridgeClient)
 	assert.Equal(t, desired, c.effectiveBridgeCfg)
+}
+
+func TestSyncBridgeSkipsReconciliationOnANCListErrorWithoutStaticConfig(t *testing.T) {
+	findCalls := 0
+	prevFindStartupSecondaryBridgeFn := findStartupSecondaryBridgeFn
+	findStartupSecondaryBridgeFn = func(client.Client, string) (string, error) {
+		findCalls++
+		return "", nil
+	}
+	t.Cleanup(func() { findStartupSecondaryBridgeFn = prevFindStartupSecondaryBridgeFn })
+
+	queue := workqueue.NewTypedRateLimitingQueue(
+		workqueue.NewTypedItemExponentialFailureRateLimiter[string](time.Millisecond, time.Millisecond))
+	t.Cleanup(queue.ShutDown)
+	c := &Controller{
+		dynamicBridgeReconcile: true,
+		secNetConfig:           &agentconfig.SecondaryNetworkConfig{},
+		podController:          &fakePodController{},
+		queue:                  queue,
+	}
+	c.latestANCSnapshot.Store(antreanodeconfig.NewSnapshot(nil, errors.New("informer list failed")))
+
+	require.NoError(t, c.syncBridge())
+	assert.Zero(t, findCalls)
+	assert.False(t, c.bridgeStateInitDone)
+	assert.Nil(t, c.effectiveBridgeCfg)
+	assert.Nil(t, c.ovsBridgeClient)
+}
+
+func TestSyncBridgeReconcilesStaticBridgeOnANCListError(t *testing.T) {
+	ctrl := mock.NewController(t)
+	bridgeClient := ovsconfigtest.NewMockOVSBridgeClient(ctrl)
+
+	findCalls := 0
+	prevFindStartupSecondaryBridgeFn := findStartupSecondaryBridgeFn
+	findStartupSecondaryBridgeFn = func(client.Client, string) (string, error) {
+		findCalls++
+		return "", nil
+	}
+	t.Cleanup(func() { findStartupSecondaryBridgeFn = prevFindStartupSecondaryBridgeFn })
+
+	mockNewOVSBridge(t, bridgeClient)
+	bridgeClient.EXPECT().Create().Return(nil)
+	bridgeClient.EXPECT().GetPortList().Return([]ovsconfig.OVSPortData{}, nil)
+
+	fakePc := &fakePodController{}
+	desired := bridgeConfig(brOld)
+	c := newTestSecondaryNetworkController(nil, desired, fakePc)
+	c.dynamicBridgeReconcile = true
+	queue := workqueue.NewTypedRateLimitingQueue(
+		workqueue.NewTypedItemExponentialFailureRateLimiter[string](time.Millisecond, time.Millisecond))
+	t.Cleanup(queue.ShutDown)
+	c.queue = queue
+	c.latestANCSnapshot.Store(antreanodeconfig.NewSnapshot(nil, errors.New("informer list failed")))
+
+	require.NoError(t, c.syncBridge())
+	assert.True(t, c.bridgeStateInitDone)
+	assert.Equal(t, bridgeClient, c.ovsBridgeClient)
+	assert.Equal(t, desired, c.effectiveBridgeCfg)
+	assert.Equal(t, []ovsconfig.OVSBridgeClient{bridgeClient}, fakePc.setBridgeCalls)
+	assert.Equal(t, 1, findCalls)
 }
 
 func mockInterfaceByName(t *testing.T) {

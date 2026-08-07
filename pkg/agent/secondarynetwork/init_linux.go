@@ -289,11 +289,15 @@ func (c *Controller) syncBridge() error {
 
 	// When the AntreaNodeConfig lister returns an error, skip reconciliation
 	// instead of deleting the current bridge. A transient error should not tear
-	// down a working secondary network.
+	// down a working secondary network. The static config does not depend on the
+	// AntreaNodeConfig lister and takes precedence over it, so a static bridge
+	// must still be reconciled when the lister is unavailable.
 	if c.dynamicBridgeReconcile {
 		if snap := c.latestANCSnapshot.Load(); snap != nil && snap.AntreaNodeConfigListError != "" {
-			klog.ErrorS(errors.New(snap.AntreaNodeConfigListError), "Skipping secondary bridge reconciliation due to AntreaNodeConfig list error")
-			return nil
+			if c.secNetConfig == nil || len(c.secNetConfig.OVSBridges) == 0 {
+				klog.ErrorS(errors.New(snap.AntreaNodeConfigListError), "Skipping secondary bridge reconciliation due to AntreaNodeConfig list error")
+				return nil
+			}
 		}
 	}
 
@@ -361,9 +365,6 @@ func (c *Controller) reconcileBridge(desired *agenttypes.OVSBridgeConfig) error 
 		currentBrName = currentClient.GetBridgeName()
 	}
 
-	klog.InfoS("Reconciling secondary network bridge configuration",
-		"current", currentBrName, "desired", bridgeName(desired))
-
 	if desired != nil && currentBrName == desired.BridgeName {
 		// Case: same bridge name - update physical interfaces in-place.
 		// effectiveBridgeCfg is updated only after all same-bridge mutations succeed,
@@ -389,8 +390,12 @@ func (c *Controller) reconcileBridge(desired *agenttypes.OVSBridgeConfig) error 
 	}
 
 	if currentClient != nil {
+		desiredName := "<none>"
+		if desired != nil {
+			desiredName = desired.BridgeName
+		}
 		klog.InfoS("Deleting current secondary OVS bridge before applying desired configuration",
-			"current", currentBrName, "desired", bridgeName(desired))
+			"current", currentBrName, "desired", desiredName)
 		if !c.podController.DrainOVSBridge() {
 			return errStaleBridgeInUse
 		}
@@ -419,22 +424,18 @@ func (c *Controller) reconcileBridge(desired *agenttypes.OVSBridgeConfig) error 
 	return nil
 }
 
-func bridgeName(bridgeCfg *agenttypes.OVSBridgeConfig) string {
-	if bridgeCfg == nil {
-		return "<none>"
-	}
-	return bridgeCfg.BridgeName
-}
-
 // createAndConfigureBridge creates or attaches to the OVS bridge for the desired config
-// and reconciles its physical interfaces.
+// and reconciles its physical interfaces. The bridge is expected to be newly created
+// (or just deleted), but updatePhysicalInterfaces also cleans up any leftover state
+// in case it is not: stale host-connection pairs are restored and ports no longer
+// desired are removed.
 // Create() reuses an existing bridge with the same name.
 func (c *Controller) createAndConfigureBridge(desired *agenttypes.OVSBridgeConfig) (ovsconfig.OVSBridgeClient, error) {
 	newClient, err := createOVSBridge(desired.BridgeName, c.ovsdbClient, desired.EnableMulticastSnooping)
 	if err != nil {
 		return nil, err
 	}
-	if err := connectBridgePhysicalInterfaces(newClient, desired); err != nil {
+	if err := updatePhysicalInterfaces(newClient, desired); err != nil {
 		return nil, err
 	}
 	return newClient, nil

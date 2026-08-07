@@ -20,7 +20,6 @@ import (
 	"maps"
 
 	"github.com/ovn-kubernetes/libovsdb/client"
-	"k8s.io/klog/v2"
 )
 
 type OVSBridgeData struct {
@@ -36,7 +35,6 @@ func ListOVSBridges(ovsdbClient client.Client) ([]OVSBridgeData, error) {
 		if errors.Is(err, client.ErrNotFound) {
 			return nil, nil
 		}
-		klog.ErrorS(err, "Failed to list OVSDB Bridge rows")
 		return nil, err
 	}
 
