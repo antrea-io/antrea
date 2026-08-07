@@ -27,9 +27,16 @@ runs:
     - name: Free disk space
       if: ${{ inputs.free-disk-space == 'true' }}
       shell: bash
+      # test-e2e-kind.sh builds Go binaries and Docker images with no prior cache, which can
+      # exhaust the runner's disk.
       # https://github.com/actions/virtual-environments/issues/709
       run: |
         sudo apt-get clean
+        sudo rm -rf /usr/share/dotnet
+        sudo rm -rf /opt/ghc
+        sudo rm -rf "/usr/local/share/boost"
+        sudo rm -rf "$AGENT_TOOLSDIRECTORY"
+        sudo rm -rf "/usr/local/lib/android"
         df -h
     - uses: actions/setup-go@v7
       if: ${{ inputs.setup-go == 'true' }}
