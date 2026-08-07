@@ -109,11 +109,15 @@ func (a *IPPoolAllocator) initIPAllocators(ipPool *v1beta1.IPPool) (ipallocator.
 				return nil, err
 			}
 
-			size, bits := ipNet.Mask.Size()
-			if size == int(ipPool.Spec.SubnetInfo.PrefixLength) && bits == 32 {
-				// Allocation CIDR covers entire subnet, thus we need
-				// to reserve broadcast IP as well for IPv4
-				reservedIPs = append(reservedIPs, iputil.GetLocalBroadcastIP(ipNet))
+			if !ipPool.Spec.AllocateFullCIDR {
+				reservedIPs = append(reservedIPs, ipNet.IP)
+
+				size, bits := ipNet.Mask.Size()
+				if size == int(ipPool.Spec.SubnetInfo.PrefixLength) && bits == 32 {
+					// Allocation CIDR covers entire subnet, thus we need
+					// to reserve broadcast IP as well for IPv4
+					reservedIPs = append(reservedIPs, iputil.GetLocalBroadcastIP(ipNet))
+				}
 			}
 
 			allocator, err := ipallocator.NewCIDRAllocator(ipNet, reservedIPs)

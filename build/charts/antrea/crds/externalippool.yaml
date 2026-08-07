@@ -22,6 +22,8 @@ spec:
                 - ipRanges
                 - nodeSelector
               properties:
+                allocateFullCIDR:
+                  type: boolean
                 ipRanges:
                   type: array
                   items:
