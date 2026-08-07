@@ -837,15 +837,14 @@ func (pc *PodController) DrainOVSBridge() bool {
 	pc.bridgeMutex.Lock()
 	defer pc.bridgeMutex.Unlock()
 
-	// Mark the bridge as draining regardless of whether a client is installed,
-	// so the flag stays consistent when DrainOVSBridge is retried after the
-	// client was already detached by an earlier successful drain. The flag is
-	// cleared only when a new bridge client is installed via SetOVSBridgeClient.
-	pc.ovsBridgeDraining = true
-
 	if pc.ovsBridgeClient == nil {
 		return true
 	}
+
+	// Reject new VLAN interfaces while the bridge is draining. The flag is
+	// cleared when the drain completes below, or when the drain is canceled
+	// via SetOVSBridgeClient.
+	pc.ovsBridgeDraining = true
 
 	for _, interfaceConfig := range pc.interfaceStore.ListInterfaces() {
 		if interfaceConfig.OVSPortConfig != nil {
@@ -857,6 +856,7 @@ func (pc *PodController) DrainOVSBridge() bool {
 
 	pc.ovsBridgeClient = nil
 	pc.interfaceConfigurator.SetOVSBridgeClient(nil)
+	pc.ovsBridgeDraining = false
 	return true
 }
 
@@ -871,6 +871,9 @@ func (pc *PodController) SetOVSBridgeClient(client ovsconfig.OVSBridgeClient) {
 		pc.ovsBridgeClient = client
 		pc.interfaceConfigurator.SetOVSBridgeClient(client)
 	}
+	// Always clear the draining flag, even when the client is unchanged: the
+	// same bridge client is re-attached to cancel an in-progress drain when the
+	// desired bridge name changes back to the current name.
 	pc.ovsBridgeDraining = false
 	klog.InfoS("Updated secondary OVS bridge client", "bridgePresent", client != nil)
 }

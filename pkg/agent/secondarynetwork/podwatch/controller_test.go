@@ -1569,14 +1569,15 @@ func TestDrainOVSBridge(t *testing.T) {
 	drained = pc.DrainOVSBridge()
 	assert.True(t, drained)
 	assert.Nil(t, pc.ovsBridgeClient)
-	assert.True(t, pc.ovsBridgeDraining)
+	assert.False(t, pc.ovsBridgeDraining)
 
 	// A retried drain with no client installed (e.g. bridge deletion failed and
-	// the retry runs again) reports drained and keeps the draining flag set,
-	// until a new client is installed via SetOVSBridgeClient.
+	// the retry runs again) reports drained without re-setting the draining
+	// flag; new VLAN interfaces are rejected by the nil-client check in
+	// configureSecondaryInterface.
 	drained = pc.DrainOVSBridge()
 	assert.True(t, drained)
-	assert.True(t, pc.ovsBridgeDraining)
+	assert.False(t, pc.ovsBridgeDraining)
 }
 
 func TestSetOVSBridgeClientCancelsDrain(t *testing.T) {
@@ -1636,7 +1637,7 @@ func TestDrainDoesNotWaitForIPAMRelease(t *testing.T) {
 		<-removeDone
 		t.Fatal("IPAM release blocked bridge drain")
 	}
-	assert.True(t, pc.ovsBridgeDraining)
+	assert.False(t, pc.ovsBridgeDraining)
 	close(allowRelease)
 	require.NoError(t, <-removeDone)
 }
