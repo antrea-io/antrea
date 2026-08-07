@@ -41,7 +41,6 @@ func TestSelectStartupSecondaryBridge(t *testing.T) {
 		bridges             []ovsconfig.OVSBridgeData
 		desiredBridgeName   string
 		expectedBridgeName  string
-		expectedIsLegacy    bool
 		expectedErrContains string
 	}{
 		{
@@ -56,7 +55,6 @@ func TestSelectStartupSecondaryBridge(t *testing.T) {
 			},
 			desiredBridgeName:  brNew,
 			expectedBridgeName: brNew,
-			expectedIsLegacy:   true,
 		},
 		{
 			name: "managed bridge takes precedence over legacy desired bridge",
@@ -79,14 +77,13 @@ func TestSelectStartupSecondaryBridge(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			bridgeName, isLegacyBridge, err := selectStartupSecondaryBridge(tt.bridges, tt.desiredBridgeName)
+			bridgeName, err := selectStartupSecondaryBridge(tt.bridges, tt.desiredBridgeName)
 			if tt.expectedErrContains != "" {
 				require.ErrorContains(t, err, tt.expectedErrContains)
 				return
 			}
 			require.NoError(t, err)
 			assert.Equal(t, tt.expectedBridgeName, bridgeName)
-			assert.Equal(t, tt.expectedIsLegacy, isLegacyBridge)
 		})
 	}
 }

@@ -1,3 +1,6 @@
+//go:build linux
+// +build linux
+
 // Copyright 2026 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -17,7 +20,6 @@ package secondarynetwork
 import (
 	"errors"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/assert"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -36,6 +38,20 @@ func TestEffectiveSecondaryOVSBridge(t *testing.T) {
 	}
 	emptyCfg := &agentconfig.SecondaryNetworkConfig{}
 
+	ancNoSecondaryNetwork := &crdv1alpha1.AntreaNodeConfig{
+		ObjectMeta: metav1.ObjectMeta{Name: "anc-no-secnet"},
+		Spec:       crdv1alpha1.AntreaNodeConfigSpec{},
+	}
+	ancConflictingBridge := &crdv1alpha1.AntreaNodeConfig{
+		ObjectMeta: metav1.ObjectMeta{Name: "anc-conflict"},
+		Spec: crdv1alpha1.AntreaNodeConfigSpec{
+			SecondaryNetwork: &crdv1alpha1.SecondaryNetworkConfig{
+				OVSBridges: []crdv1alpha1.OVSBridgeConfig{
+					{BridgeName: "br-int"},
+				},
+			},
+		},
+	}
 	ancMatchingWithBridge := &crdv1alpha1.AntreaNodeConfig{
 		ObjectMeta: metav1.ObjectMeta{Name: "anc1"},
 		Spec: crdv1alpha1.AntreaNodeConfigSpec{
@@ -101,6 +117,16 @@ func TestEffectiveSecondaryOVSBridge(t *testing.T) {
 			staticCfg:  staticCfg,
 			wantBridge: wantStaticBridge,
 		},
+		{
+			name:      "ANC without SecondaryNetwork is ignored",
+			snapshot:  antreanodeconfig.NewSnapshot(ancNoSecondaryNetwork, nil),
+			staticCfg: emptyCfg,
+		},
+		{
+			name:      "ANC bridge conflicting with primary OVS bridge is ignored",
+			snapshot:  antreanodeconfig.NewSnapshot(ancConflictingBridge, nil),
+			staticCfg: emptyCfg,
+		},
 	}
 
 	for _, tc := range tests {
@@ -116,21 +142,6 @@ func TestEffectiveSecondaryOVSBridge(t *testing.T) {
 	}
 }
 
-func makeANC(name string, ts time.Time, nodeSelector map[string]string, secNet *crdv1alpha1.SecondaryNetworkConfig) *crdv1alpha1.AntreaNodeConfig {
-	return &crdv1alpha1.AntreaNodeConfig{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:              name,
-			CreationTimestamp: metav1.NewTime(ts),
-		},
-		Spec: crdv1alpha1.AntreaNodeConfigSpec{
-			NodeSelector: metav1.LabelSelector{
-				MatchLabels: nodeSelector,
-			},
-			SecondaryNetwork: secNet,
-		},
-	}
-}
-
 func makeBridge(name string, mcast bool, ifaces ...crdv1alpha1.OVSPhysicalInterfaceConfig) crdv1alpha1.OVSBridgeConfig {
 	return crdv1alpha1.OVSBridgeConfig{
 		BridgeName:              name,
@@ -141,57 +152,6 @@ func makeBridge(name string, mcast bool, ifaces ...crdv1alpha1.OVSPhysicalInterf
 
 func makeIface(name string, vlans ...string) crdv1alpha1.OVSPhysicalInterfaceConfig {
 	return crdv1alpha1.OVSPhysicalInterfaceConfig{Name: name, AllowedVLANs: vlans}
-}
-
-var (
-	t0 = time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
-	t2 = t0.Add(2 * time.Minute)
-)
-
-func TestApplySecondaryNetworkConfig(t *testing.T) {
-	secNet1 := &crdv1alpha1.SecondaryNetworkConfig{
-		OVSBridges: []crdv1alpha1.OVSBridgeConfig{
-			makeBridge("br0", false, makeIface("eth0")),
-		},
-	}
-	anc1 := makeANC("anc1", t0, nil, secNet1)
-	ancNoSec := makeANC("ancNoSec", t2, nil, nil)
-
-	tests := []struct {
-		name string
-		cfg  *crdv1alpha1.AntreaNodeConfig
-		want *agenttypes.SecondaryNetworkConfig
-	}{
-		{
-			name: "nil cfg",
-			cfg:  nil,
-			want: nil,
-		},
-		{
-			name: "nil SecondaryNetwork",
-			cfg:  ancNoSec,
-			want: nil,
-		},
-		{
-			name: "with SecondaryNetwork",
-			cfg:  anc1,
-			want: &agenttypes.SecondaryNetworkConfig{
-				OVSBridge: &agenttypes.OVSBridgeConfig{
-					BridgeName: "br0", EnableMulticastSnooping: false,
-					PhysicalInterfaces: []agenttypes.PhysicalInterfaceConfig{
-						{Name: "eth0"},
-					},
-				},
-			},
-		},
-	}
-
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			got := applySecondaryNetworkConfig(tc.cfg, "br-int")
-			assert.Equal(t, tc.want, got)
-		})
-	}
 }
 
 func TestConvertCRDSecondaryNetwork(t *testing.T) {
@@ -217,16 +177,6 @@ func TestConvertCRDSecondaryNetwork(t *testing.T) {
 				},
 			},
 			antreaNodeConfigName: "anc-empty-bridge-name",
-			want:                 nil,
-		},
-		{
-			name: "conflicting bridge name yields nil OVSBridge",
-			in: &crdv1alpha1.SecondaryNetworkConfig{
-				OVSBridges: []crdv1alpha1.OVSBridgeConfig{
-					{BridgeName: "br-int", PhysicalInterfaces: []crdv1alpha1.OVSPhysicalInterfaceConfig{{Name: "eth0"}}},
-				},
-			},
-			antreaNodeConfigName: "anc-conflicting-bridge-name",
 			want:                 nil,
 		},
 		{
@@ -289,7 +239,7 @@ func TestConvertCRDSecondaryNetwork(t *testing.T) {
 					SecondaryNetwork: tc.in,
 				},
 			}
-			got := applySecondaryNetworkConfig(cfg, "br-int")
+			got := applySecondaryNetworkConfig(cfg)
 			assert.Equal(t, tc.want, got)
 		})
 	}
