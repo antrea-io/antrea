@@ -719,6 +719,13 @@ func TestNetworkPolicyMetrics(t *testing.T) {
 	prepareMockTables()
 	// Initialize NetworkPolicy metrics (prometheus)
 	metrics.InitializeNetworkPolicyMetrics()
+	// The metrics are global to the process, and this test compares them to the
+	// policies of the Controller it creates below, hence it must start from a known
+	// value: any other test which registered them and created a Controller would
+	// otherwise be counted here as well.
+	metrics.EgressNetworkPolicyRuleCount.Set(0)
+	metrics.IngressNetworkPolicyRuleCount.Set(0)
+	metrics.NetworkPolicyCount.Set(0)
 	controller, clientset, reconciler := newTestController()
 
 	// Define functions to wait for a message from reconciler
@@ -910,7 +917,7 @@ func TestGetFqdnCache(t *testing.T) {
 	assert.Equal(t, expectedEntryList, controller.GetFQDNCache(nil))
 	expirationTime := time.Now().Add(1 * time.Hour).UTC()
 
-	controller.fqdnController.dnsEntryCache = map[string]dnsMeta{
+	dnsEntryCache := map[string]dnsMeta{
 		"example.com": {
 			responseIPs: map[string]ipWithExpiration{
 				"10.0.0.1": {
@@ -935,6 +942,11 @@ func TestGetFqdnCache(t *testing.T) {
 				},
 			},
 		},
+	}
+	// A FQDN is only tracked, and hence only reported, if a fqdnSelectorItem selects it.
+	for fqdn, meta := range dnsEntryCache {
+		controller.fqdnController.fqdnCache.track(fqdn, fqdnSelectorItem{matchName: fqdn})
+		controller.fqdnController.fqdnCache.setResolved(fqdn, meta, expirationTime)
 	}
 
 	expectedEntryList = []agenttypes.DnsCacheEntry{
