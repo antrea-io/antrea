@@ -20,7 +20,6 @@ package flowaccesscontrol
 import (
 	"maps"
 	"reflect"
-	"sync"
 	"sync/atomic"
 	"time"
 
@@ -154,39 +153,31 @@ func (c *Controller) VisibilityCheckerFor(username string, groups []string) Visi
 }
 
 func (ck *checker) AllowsAll() bool {
-	ck.c.mu.RLock()
-	defer ck.c.mu.RUnlock()
-
-	return ck.c.anySubjectState(ck.username, ck.groups, func(state *subjectState) bool {
+	idx := ck.c.index.Load()
+	return ck.c.anySubjectState(idx, ck.username, ck.groups, func(state *subjectState) bool {
 		return state.allowAll
 	})
 }
 
 func (ck *checker) AllowsNamespace(namespace string) bool {
-	ck.c.mu.RLock()
-	defer ck.c.mu.RUnlock()
-
-	return ck.c.anySubjectState(ck.username, ck.groups, func(state *subjectState) bool {
+	idx := ck.c.index.Load()
+	return ck.c.anySubjectState(idx, ck.username, ck.groups, func(state *subjectState) bool {
 		return state.allowAll || state.namespaces.Has(namespace)
 	})
 }
 
 // anySubjectState reports whether pred holds for the cached state of any FlowAccessControl subject
-// that applies to the given user. Grants are OR-ed across the user's own subject and its groups'
-// subjects, so the first match settles the answer.
+// that applies to the given user, within the given index snapshot. Grants are OR-ed across the
+// user's own subject and its groups' subjects, so the first match settles the answer.
 //
-// This is the per-flow-record hot path: it allocates nothing and only ever does map lookups, since
-// the Namespace sets it reads are kept up to date by the Namespace event handlers rather than
-// being recomputed here.
-//
-// Callers must hold c.mu for reading. The cached sets are patched in place by syncNamespace and
-// removeNamespace, so pred must not retain anything it is given.
-func (c *Controller) anySubjectState(username string, groups []string, pred func(state *subjectState) bool) bool {
-	if state, ok := c.byUser[username]; ok && pred(state) {
+// This is the per-flow-record hot path: it allocates nothing and only ever does map lookups. It
+// takes idx as a parameter, loaded once by the caller, rather than loading c.index itself.
+func (c *Controller) anySubjectState(idx *subjectIndex, username string, groups []string, pred func(state *subjectState) bool) bool {
+	if state, ok := idx.byUser[username]; ok && pred(state) {
 		return true
 	}
 	for _, group := range groups {
-		if state, ok := c.byGroup[group]; ok && pred(state) {
+		if state, ok := idx.byGroup[group]; ok && pred(state) {
 			return true
 		}
 	}
@@ -212,10 +203,20 @@ type Controller struct {
 	// It is never cleared: the index is only ever replaced by a newer one from that point on.
 	synced atomic.Bool
 
-	// mu guards byUser and byGroup, including the subjectState values they point to, which are
-	// mutated in place by syncNamespace and removeNamespace. It is taken for reading on the
-	// per-flow-record authorization path, so the write side is kept short.
-	mu      sync.RWMutex
+	// index is the current "username/group -> allowed Namespace set" snapshot. syncFlowAccessControls
+	// swaps it for a wholly new one; syncNamespace and removeNamespace publish a shallow copy-on-write
+	// update instead of mutating one in place. Either way, the per-flow-record read path
+	// (AllowsAll/AllowsNamespace) only ever does an atomic load, never blocking on a writer and never
+	// contending with other readers, unlike a sync.RWMutex whose reader path is itself an atomic
+	// read-modify-write on one shared cache line.
+	index atomic.Pointer[subjectIndex]
+}
+
+// subjectIndex is one immutable snapshot of the "username/group -> allowed Namespace set" index.
+// A subjectState reachable from it must not be mutated in place; a subject whose Namespace
+// membership changes gets a new subjectState instead, so that a reader holding an older
+// *subjectIndex keeps seeing consistent, unchanging data.
+type subjectIndex struct {
 	byUser  map[string]*subjectState
 	byGroup map[string]*subjectState
 }
@@ -237,9 +238,8 @@ func NewController(facInformer crdinformers.FlowAccessControlInformer, namespace
 				Name: "flowAccessControl",
 			},
 		),
-		byUser:  map[string]*subjectState{},
-		byGroup: map[string]*subjectState{},
 	}
+	c.index.Store(&subjectIndex{byUser: map[string]*subjectState{}, byGroup: map[string]*subjectState{}})
 	c.facInformer.AddEventHandlerWithResyncPeriod(
 		cache.ResourceEventHandlerFuncs{
 			AddFunc:    c.addFlowAccessControl,
@@ -281,12 +281,12 @@ func (c *Controller) deleteFlowAccessControl(obj interface{}) {
 	if !ok {
 		tombstone, ok := obj.(cache.DeletedFinalStateUnknown)
 		if !ok {
-			klog.V(2).InfoS("Error decoding object when deleting FlowAccessControl, invalid type", "object", obj)
+			klog.ErrorS(nil, "Error decoding object when deleting FlowAccessControl, invalid type", "object", obj)
 			return
 		}
 		fac, ok = tombstone.Obj.(*crdv1alpha1.FlowAccessControl)
 		if !ok {
-			klog.V(2).InfoS("Error decoding object tombstone when deleting FlowAccessControl, invalid type", "object", tombstone.Obj)
+			klog.ErrorS(nil, "Error decoding object tombstone when deleting FlowAccessControl, invalid type", "object", tombstone.Obj)
 			return
 		}
 	}
@@ -319,12 +319,12 @@ func (c *Controller) deleteNamespace(obj interface{}) {
 	if !ok {
 		tombstone, ok := obj.(cache.DeletedFinalStateUnknown)
 		if !ok {
-			klog.V(2).InfoS("Error decoding object when deleting Namespace, invalid type", "object", obj)
+			klog.ErrorS(nil, "Error decoding object when deleting Namespace, invalid type", "object", obj)
 			return
 		}
 		ns, ok = tombstone.Obj.(*v1.Namespace)
 		if !ok {
-			klog.V(2).InfoS("Error decoding object tombstone when deleting Namespace, invalid type", "object", tombstone.Obj)
+			klog.ErrorS(nil, "Error decoding object tombstone when deleting Namespace, invalid type", "object", tombstone.Obj)
 			return
 		}
 	}
@@ -477,61 +477,114 @@ func (c *Controller) syncFlowAccessControls() error {
 		}
 	}
 
-	c.mu.Lock()
-	c.byUser = byUser
-	c.byGroup = byGroup
-	c.mu.Unlock()
+	c.index.Store(&subjectIndex{byUser: byUser, byGroup: byGroup})
 
 	klog.V(4).InfoS("Rebuilt FlowAccessControl index", "flowAccessControls", len(facs), "users", len(byUser), "groups", len(byGroup))
 	return nil
 }
 
 // syncNamespace re-evaluates a single Namespace against the cached selectors of every subject and
-// patches the index in place, adding the Namespace to the subjects it now matches and removing it
+// publishes a patched index, adding the Namespace to the subjects it now matches and removing it
 // from those it no longer matches. It never lists Namespaces or FlowAccessControls, so its cost is
 // independent of the number of Namespaces in the cluster. Recomputing this Namespace's membership
 // from the subject's cached selectors also means no reference counting is needed when several
 // FlowAccessControl objects grant the same Namespace to the same subject: if one of them stops
 // matching while another still matches, the Namespace correctly stays visible.
+//
+// syncNamespace and removeNamespace are only ever called from the single controller worker, so a
+// plain load-patch-store is safe: there is never a concurrent writer to race against.
 func (c *Controller) syncNamespace(ns *v1.Namespace) {
 	nsLabels := labels.Set(ns.Labels)
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	c.forEachTrackedSubject(func(state *subjectState) {
-		if state.matches(nsLabels) {
-			state.namespaces.Insert(ns.Name)
-		} else {
-			state.namespaces.Delete(ns.Name)
-		}
-	})
+	old := c.index.Load()
+	byUser, userChanged := patchNamespace(old.byUser, ns.Name, nsLabels)
+	byGroup, groupChanged := patchNamespace(old.byGroup, ns.Name, nsLabels)
+	if !userChanged && !groupChanged {
+		return
+	}
+	c.index.Store(&subjectIndex{byUser: byUser, byGroup: byGroup})
 }
 
 // removeNamespace drops a deleted Namespace from every subject's visible set. No selector
 // evaluation is needed: a Namespace that no longer exists is visible to nobody.
 func (c *Controller) removeNamespace(name string) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	c.forEachTrackedSubject(func(state *subjectState) {
-		state.namespaces.Delete(name)
-	})
+	old := c.index.Load()
+	byUser, userChanged := dropNamespace(old.byUser, name)
+	byGroup, groupChanged := dropNamespace(old.byGroup, name)
+	if !userChanged && !groupChanged {
+		return
+	}
+	c.index.Store(&subjectIndex{byUser: byUser, byGroup: byGroup})
 }
 
-// forEachTrackedSubject calls fn for every subject whose Namespace set is actually maintained, i.e.
-// every subject without cluster-wide visibility. allowAll subjects deliberately keep a nil
-// namespaces set, so skipping them avoids pointless work; it also guards against a nil-map insert
-// panic. That panic is not reachable today, because syncFlowAccessControls always clears an allowAll
-// subject's selectors and so it can never match a Namespace, but the guard keeps an inconsistent
-// subject from turning into a crash if that ever changes.
-// Callers must hold c.mu for writing.
-func (c *Controller) forEachTrackedSubject(fn func(state *subjectState)) {
-	for _, index := range []map[string]*subjectState{c.byUser, c.byGroup} {
-		for _, state := range index {
-			if state.allowAll {
-				continue
-			}
-			fn(state)
+// patchNamespace builds the next generation of a byUser/byGroup map for a Namespace that exists,
+// evaluating every subject's selectors against its labels. A Namespace with no labels at all is an
+// ordinary input here: its labels are an empty set, which negated selectors such as DoesNotExist
+// legitimately match, exactly as syncFlowAccessControls evaluates it during a full rebuild.
+func patchNamespace(m map[string]*subjectState, name string, nsLabels labels.Set) (map[string]*subjectState, bool) {
+	return setPresence(m, name, nsLabels, true)
+}
+
+// dropNamespace builds the next generation of a byUser/byGroup map for a Namespace that no longer
+// exists, removing it from every subject that could see it.
+func dropNamespace(m map[string]*subjectState, name string) (map[string]*subjectState, bool) {
+	return setPresence(m, name, nil, false)
+}
+
+// setPresence updates a subject's namespaces set only for the subjects whose membership for the
+// named Namespace actually flips. nsExists tells it whether the Namespace exists at all, which is
+// deliberately a separate argument from nsLabels: a live Namespace with no labels and a deleted
+// Namespace must not be conflated, since the two have opposite outcomes under a negated selector.
+//
+// Every subject not affected by a flip keeps its original *subjectState pointer rather than being
+// copied, since the next generation starts as a shallow clone of the current map and only the
+// flipped subjects are overwritten in it. An unaffected subject's Namespace set is therefore
+// shared, not duplicated, between the old and new index generations. allowAll subjects are always
+// carried over unchanged: they deliberately keep a nil namespaces set, since per-Namespace checks
+// are skipped for them.
+//
+// When no subject flips, it reports false and returns the original map, having allocated nothing
+// at all, so the caller can skip publishing a new index generation altogether. That is the common
+// case: a Namespace whose new labels no namespaceSelector cares about, a Namespace visible to
+// nobody being added or deleted, an all-allowAll deployment, or the initial ADD event the informer
+// replays for every existing Namespace after Run has already built the index from the same cache.
+// Successive generations may therefore share a map: a published map must never be mutated, and the
+// single writer must always replace a *subjectState instead of updating one in place.
+func setPresence(m map[string]*subjectState, name string, nsLabels labels.Set, nsExists bool) (map[string]*subjectState, bool) {
+	// Subjects whose membership for this Namespace flips, collected so that selectors are only
+	// ever evaluated once per subject and the map is only cloned once it is known to be needed.
+	// This stays nil in the common case, and rarely holds more than a couple of entries otherwise.
+	var flipped []subjectFlip
+	for key, state := range m {
+		if state.allowAll {
+			continue
 		}
+		wantPresent := nsExists && state.matches(nsLabels)
+		if wantPresent == state.namespaces.Has(name) {
+			continue
+		}
+		namespaces := state.namespaces.Clone()
+		if wantPresent {
+			namespaces.Insert(name)
+		} else {
+			namespaces.Delete(name)
+		}
+		flipped = append(flipped, subjectFlip{key: key, state: &subjectState{selectors: state.selectors, namespaces: namespaces}})
 	}
+	if len(flipped) == 0 {
+		return m, false
+	}
+	out := maps.Clone(m)
+	for _, flip := range flipped {
+		out[flip.key] = flip.state
+	}
+	return out, true
+}
+
+// subjectFlip is the replacement subjectState setPresence computed for one subject, held until it
+// knows whether any subject flipped at all.
+type subjectFlip struct {
+	key   string
+	state *subjectState
 }
 
 // parseNamespaceSelector parses a FlowAccessControl's namespaceSelector once, so that Namespace
@@ -542,8 +595,8 @@ func (c *Controller) forEachTrackedSubject(fn func(state *subjectState)) {
 // The null-vs-empty distinction the API documents is exactly what metav1.LabelSelectorAsSelector
 // already implements, so the pointer is passed straight through:
 //   - a null selector becomes labels.Nothing(), which matches no Namespace and is not Empty(), so
-//     the object grants nothing. Admission rejects such an object, so this only comes up for
-//     objects created before that validation existed.
+//     the object grants nothing. Admission rejects such an object, since namespaceSelector is
+//     required, so this is only ever reached by a client that bypasses the CRD schema.
 //   - an empty selector ({}) becomes labels.Everything(), which is Empty(), so the object grants
 //     cluster-wide visibility.
 func parseNamespaceSelector(fac *crdv1alpha1.FlowAccessControl) (labels.Selector, bool) {

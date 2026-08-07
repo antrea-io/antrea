@@ -810,7 +810,9 @@ type FlowAccessControlSpec struct {
 	// A null selector and an empty selector are NOT equivalent, and the difference is between
 	// granting nothing and granting everything:
 	//   - null (the field is omitted) selects no Namespace at all, and the Subjects are granted
-	//     no flow visibility. This is the fail-closed default.
+	//     no flow visibility. Because grants are additive across objects, such an object could
+	//     never affect the outcome, so this field is required and admission rejects it: the
+	//     choice has to be made explicitly.
 	//   - {} (an empty selector) selects every Namespace, and the Subjects are granted
 	//     cluster-wide flow visibility, including flows that are not associated with any
 	//     Namespace. Per-Namespace checks are skipped entirely for such Subjects.
