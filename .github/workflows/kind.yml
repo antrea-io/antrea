@@ -498,22 +498,11 @@ jobs:
       matrix:
         protocol: [grpc, ipfix]
     steps:
-      - name: Free disk space (extended)
-        # https://github.com/actions/virtual-environments/issues/709
-        run: |
-          sudo apt-get clean
-          sudo rm -rf /usr/share/dotnet
-          sudo rm -rf /opt/ghc
-          sudo rm -rf "/usr/local/share/boost"
-          sudo rm -rf "$AGENT_TOOLSDIRECTORY"
-          sudo rm -rf "/usr/local/lib/android"
-          df -h
       - uses: actions/checkout@v6
         with:
           show-progress: false
       - uses: ./.github/actions/setup-kind-test
         with:
-          free-disk-space: 'false'
           load-flow-aggregator: 'true'
       - name: Run e2e tests
         run: |
