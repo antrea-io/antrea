@@ -77,6 +77,7 @@ func runLeader(o *Options) error {
 			Client:    noCachedClient,
 			decoder:   admission.NewDecoder(mgr.GetScheme()),
 			namespace: podNamespace,
+			saName:    mcControllerSAName,
 		}},
 	)
 

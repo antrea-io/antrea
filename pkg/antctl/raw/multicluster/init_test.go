@@ -22,8 +22,6 @@ import (
 
 	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/assert"
-	corev1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	"antrea.io/antrea/v2/pkg/antctl/raw/multicluster/common"
@@ -31,14 +29,6 @@ import (
 )
 
 func TestInit(t *testing.T) {
-	existingSecret := &corev1.Secret{
-		ObjectMeta: metav1.ObjectMeta{
-			Namespace: "default",
-			Name:      "default-member-token",
-		},
-		Data: map[string][]byte{"token": []byte("12345")},
-	}
-
 	cmd := NewInitCommand()
 	buf := new(bytes.Buffer)
 	cmd.SetOut(buf)
@@ -48,7 +38,6 @@ func TestInit(t *testing.T) {
 	initOpts.namespace = "default"
 	initOpts.clusterSet = "test-clusterset"
 	initOpts.clusterID = "cluster-id"
-	initOpts.createToken = true
 
 	fakeConfigs := []byte(`apiVersion: v1
 clusters:
@@ -87,9 +76,6 @@ kind: Config`)
 			expectedOutput: `ClusterSet "test-clusterset" created in Namespace default
 Successfully initialized ClusterSet test-clusterset
 You can run command "antctl mc get joinconfig -n default" to print the parameters needed for a member cluster to join the ClusterSet.
-ServiceAccount "default-member-token" created
-RoleBinding "default-member-token" created
-Secret "default-member-token" already exists
 `,
 		},
 		{
@@ -112,10 +98,10 @@ Secret "default-member-token" already exists
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			initOpts.k8sClient = fake.NewClientBuilder().WithScheme(mcscheme.Scheme).WithObjects(existingSecret).Build()
+			initOpts.k8sClient = fake.NewClientBuilder().WithScheme(mcscheme.Scheme).Build()
 			if tt.failureType == "create" {
 				initOpts.k8sClient = common.FakeCtrlRuntimeClient{
-					Client:      fake.NewClientBuilder().WithScheme(mcscheme.Scheme).WithObjects(existingSecret).Build(),
+					Client:      fake.NewClientBuilder().WithScheme(mcscheme.Scheme).Build(),
 					ShouldError: true,
 				}
 			}

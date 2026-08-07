@@ -36,6 +36,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 
+	"antrea.io/antrea/v2/multicluster/apis/multicluster/constants"
 	mcv1alpha1 "antrea.io/antrea/v2/multicluster/apis/multicluster/v1alpha1"
 	mcv1alpha2 "antrea.io/antrea/v2/multicluster/apis/multicluster/v1alpha2"
 	"antrea.io/antrea/v2/multicluster/controllers/multicluster/common"
@@ -196,7 +197,7 @@ func getSecretCACrtAndToken(secretObj *v1.Secret) ([]byte, []byte, error) {
 
 func (r *remoteCommonArea) SendMemberAnnounce() error {
 	var err error
-	memberAnnounceName := "member-announce-from-" + r.GetLocalClusterID()
+	memberAnnounceName := constants.MemberClusterAnnouncePrefix + r.GetLocalClusterID()
 	existingMemberAnnounce := &mcv1alpha1.MemberClusterAnnounce{}
 	if err = r.Get(context.TODO(), types.NamespacedName{
 		Namespace: r.GetNamespace(),

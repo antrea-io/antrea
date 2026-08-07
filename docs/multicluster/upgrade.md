@@ -37,6 +37,78 @@ for the feature in new version.
 It should have no impact during upgrade to those imported resources like Service, Endpoints
 or AntreaClusterNetworkPolicy.
 
+## Upgrade to v2.7 or later
+
+Starting with v2.7, Antrea Multi-cluster introduces strict identity binding for member clusters.
+The `MemberClusterAnnounce` API now enforces that a member cluster's ServiceAccount is explicitly
+authorized to announce its `ClusterID`.
+
+**Breaking Changes & Migration Steps:**
+
+Previously, it was possible for all member clusters to use a single shared ServiceAccount
+(`antrea-mc-member-access-sa`). This is no longer supported because a ServiceAccount can only be
+bound to a single `ClusterID`. Operators must migrate to per-member credentials before upgrading
+the leader.
+
+The binding check applies to all operations, including the heartbeat `Update` that
+`SendMemberAnnounce` issues every 10 seconds to refresh the `touch-ts` annotation. If a member
+cluster is not properly migrated, the leader webhook denies its `MemberClusterAnnounce` on the
+first heartbeat after the leader is upgraded. Once `touch-ts` stops refreshing, the stale cleanup
+controller deletes the `MemberClusterAnnounce` after 24 hours, which in turn makes
+`StaleResCleanupController` delete every `ResourceExport` belonging to that member — breaking
+cross-cluster Services and AntreaClusterNetworkPolicies across the whole ClusterSet.
+This is why steps 1-3 must be completed for all members before upgrading the leader.
+
+1. **Create Per-Member Credentials**: On the leader cluster, create a ServiceAccount, RoleBinding,
+   and token Secret for each member, each annotated with its `ClusterID`. You can do this
+   automatically using `antctl`:
+
+   ```bash
+   antctl mc create membertoken --cluster-id <cluster-id> <secret-name> -n antrea-multicluster
+   ```
+
+   If the ServiceAccount already exists but is bound to a different `ClusterID` (for example to
+   correct a mistyped one), `antctl` re-binds it to the `--cluster-id` you provide. The existing
+   token Secret then authenticates as the new `ClusterID`, so you should rotate that credential
+   if it must not keep that identity.
+
+2. **Apply the Token in Each Member**: Export each new token Secret from the leader and apply it
+   in the corresponding member cluster. For example:
+
+   ```bash
+   # Extract the Secret created by antctl (replacing <secret-name> with the actual name)
+   kubectl get secret <secret-name> -n antrea-multicluster -o yaml | grep -w -e '^apiVersion' -e '^data' -e '^metadata' -e '^ *name:' -e '^kind' -e '  ca.crt' -e '  token:' -e '^type' -e '  namespace' | sed -e 's/kubernetes.io\/service-account-token/Opaque/g' -e 's/antrea-multicluster/kube-system/g' > member-token.yml
+
+   # Apply it to the member cluster
+   kubectl apply -f member-token.yml --kubeconfig=/path/to/kubeconfig-of-member-cluster
+   ```
+
+3. **Update Member ClusterSets**: In each member cluster, update the `ClusterSet`'s
+   `spec.leaders[].secret` field to reference its new token Secret.
+
+4. **Upgrade the Leader**: Only after steps 1-3 are completed for all members should you upgrade
+   the leader cluster.
+
+5. **Cleanup of Shared Credentials**: Once every member has been migrated to its own token and is
+   reporting connected, you should manually delete the shared credential on the leader. You can
+   verify that a member is connected by checking that its `MemberClusterAnnounce` object is being
+   refreshed periodically (every 10 seconds) with a recent `touch-ts` timestamp:
+
+   ```bash
+   kubectl get memberclusterannounce -n antrea-multicluster -o custom-columns='NAME:.metadata.name,CLUSTER-ID:.clusterID,LAST-SEEN:.metadata.annotations.touch-ts'
+   ```
+
+   Once confirmed, delete the shared credential:
+
+   ```bash
+   kubectl delete serviceaccount antrea-mc-member-access-sa -n antrea-multicluster
+   kubectl delete rolebinding antrea-mc-member-cluster-rolebinding -n antrea-multicluster
+   kubectl delete secret antrea-mc-member-access-token -n antrea-multicluster
+   ```
+
+**Removed `--create-token` flag**: The `--create-token` flag has been removed from `antctl mc init`.
+Tokens must be created separately using `antctl mc create membertoken`.
+
 ## Upgrade from a version prior to v1.13
 
 Prior to Antrea v1.13, the `ClusterClaim` CRD is used to define both the local Cluster ID and

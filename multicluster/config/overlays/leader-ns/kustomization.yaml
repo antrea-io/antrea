@@ -46,12 +46,9 @@ patchesJson6902:
 resources:
   - webhook_rbac.yaml
   - member_cluster_role.yaml
-  - member_cluster_rolebinding.yaml
-  - member_cluster_serviceaccount.yaml
   - service_account.yaml
   - role.yaml
   - role_binding.yaml
-  - secret.yaml
 
 patchesStrategicMerge:
   - manager_command_patch.yaml

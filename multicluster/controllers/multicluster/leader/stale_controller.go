@@ -20,7 +20,6 @@ import (
 	"context"
 	"fmt"
 	"slices"
-	"strings"
 	"time"
 
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -115,7 +114,7 @@ func (c *StaleResCleanupController) Reconcile(ctx context.Context, req ctrl.Requ
 
 	// Clean up all corresponding ResourceExports when the member cluster's
 	// MemberClusterAnnounce is deleted.
-	clusterID := getClusterIDFromName(req.Name)
+	clusterID := memberAnnounce.ClusterID
 	staleResExports, err := getResourceExportsByClusterIDFunc(c, ctx, clusterID)
 	if err != nil {
 		klog.ErrorS(err, "Failed to get ResourceExports by ClusterID", "clusterID", clusterID)
@@ -178,10 +177,6 @@ func deleteResourceExports(ctx context.Context, mgrClient client.Client, resouce
 		}
 	}
 	return cleanupSucceed
-}
-
-func getClusterIDFromName(name string) string {
-	return strings.TrimPrefix(name, "member-announce-from-")
 }
 
 func getResourceExportsByClusterID(c *StaleResCleanupController, ctx context.Context, clusterID string) ([]mcv1alpha1.ResourceExport, error) {

@@ -17,6 +17,8 @@ kind: ServiceAccount
 metadata:
   name: cluster-admin
   namespace: leader-ns
+  annotations:
+    multicluster.antrea.io/cluster-id: cluster-a
 ---
 apiVersion: v1
 kind: Secret

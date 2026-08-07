@@ -28,6 +28,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
+	"antrea.io/antrea/v2/multicluster/apis/multicluster/constants"
 	mcv1alpha2 "antrea.io/antrea/v2/multicluster/apis/multicluster/v1alpha2"
 	multiclusterscheme "antrea.io/antrea/v2/pkg/antctl/raw/multicluster/scheme"
 )
@@ -291,6 +292,47 @@ func TestCreateMemberToken(t *testing.T) {
 				},
 			},
 		},
+		{
+			name:           "fail when another ServiceAccount is already bound to the ClusterID",
+			expectedResLen: 0,
+			expectedErr:    "a ServiceAccount bound to ClusterID",
+			existingSecret: &corev1.Secret{
+				ObjectMeta: metav1.ObjectMeta{
+					Namespace: "default",
+					Name:      "membertoken",
+				},
+				Data: map[string][]byte{"token": []byte("12345")},
+			},
+			existingSA: &corev1.ServiceAccount{
+				ObjectMeta: metav1.ObjectMeta{
+					Namespace: "default",
+					Name:      "other-member-sa",
+					Annotations: map[string]string{
+						constants.ServiceAccountClusterIDAnnotation: "cluster-east",
+					},
+				},
+			},
+		},
+		{
+			name:           "re-bind existing ServiceAccount to a different ClusterID",
+			expectedResLen: 2,
+			existingSecret: &corev1.Secret{
+				ObjectMeta: metav1.ObjectMeta{
+					Namespace: "default",
+					Name:      "membertoken",
+				},
+				Data: map[string][]byte{"token": []byte("12345")},
+			},
+			existingSA: &corev1.ServiceAccount{
+				ObjectMeta: metav1.ObjectMeta{
+					Namespace: "default",
+					Name:      "membertoken",
+					Annotations: map[string]string{
+						constants.ServiceAccountClusterIDAnnotation: "cluster-west",
+					},
+				},
+			},
+		},
 	}
 
 	for _, tt := range tests {
@@ -308,10 +350,61 @@ func TestCreateMemberToken(t *testing.T) {
 				obj = append(obj, tt.existingSecret)
 			}
 			fakeClient := fake.NewClientBuilder().WithScheme(multiclusterscheme.Scheme).WithObjects(obj...).Build()
-			_ = CreateMemberToken(cmd, fakeClient, "membertoken", "default", &createdRes)
+			err := CreateMemberToken(cmd, fakeClient, "membertoken", "default", "cluster-east", &createdRes)
+			if tt.expectedErr != "" {
+				require.Error(t, err)
+				assert.Contains(t, err.Error(), tt.expectedErr)
+			} else {
+				require.NoError(t, err)
+				// An existing ServiceAccount must have been (re-)bound to the
+				// requested ClusterID.
+				if tt.existingSA != nil {
+					sa := &corev1.ServiceAccount{}
+					require.NoError(t, fakeClient.Get(context.Background(), client.ObjectKey{Namespace: "default", Name: "membertoken"}, sa))
+					assert.Equal(t, "cluster-east", sa.Annotations[constants.ServiceAccountClusterIDAnnotation])
+				}
+			}
 			assert.Equal(t, tt.expectedResLen, len(createdRes))
 		})
 	}
+}
+
+func TestCreateMemberTokenRebindRollback(t *testing.T) {
+	cmd := &cobra.Command{}
+	buf := &bytes.Buffer{}
+	cmd.SetOut(buf)
+	cmd.SetErr(buf)
+
+	existingSA := &corev1.ServiceAccount{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace: "default",
+			Name:      "membertoken",
+			Annotations: map[string]string{
+				constants.ServiceAccountClusterIDAnnotation: "cluster-west",
+			},
+		},
+	}
+	existingSecret := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace: "default",
+			Name:      "membertoken",
+		},
+		Data: map[string][]byte{"token": []byte("12345")},
+	}
+	fakeClient := fake.NewClientBuilder().WithScheme(multiclusterscheme.Scheme).WithObjects(existingSA, existingSecret).Build()
+	createdRes := []map[string]interface{}{}
+	require.NoError(t, CreateMemberToken(cmd, fakeClient, "membertoken", "default", "cluster-east", &createdRes))
+
+	sa := &corev1.ServiceAccount{}
+	require.NoError(t, fakeClient.Get(context.Background(), client.ObjectKey{Namespace: "default", Name: "membertoken"}, sa))
+	assert.Equal(t, "cluster-east", sa.Annotations[constants.ServiceAccountClusterIDAnnotation])
+
+	// Rollback must restore the original ClusterID binding instead of deleting the
+	// pre-existing ServiceAccount.
+	require.NoError(t, Rollback(cmd, fakeClient, createdRes))
+	require.NoError(t, fakeClient.Get(context.Background(), client.ObjectKey{Namespace: "default", Name: "membertoken"}, sa))
+	assert.Equal(t, "cluster-west", sa.Annotations[constants.ServiceAccountClusterIDAnnotation])
+	assert.Contains(t, buf.String(), "Restored ClusterID binding")
 }
 
 func TestDeleteMemberToken(t *testing.T) {

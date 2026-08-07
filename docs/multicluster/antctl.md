@@ -48,7 +48,7 @@ also create a Secret to store the token, as well as a ServiceAccount and a RoleB
 option saves the member token Secret manifest to a file.
 
 ```bash
-anctcl mc create membertoken NAME -n NAMESPACE [-o OUTPUT_FILE]
+antctl mc create membertoken NAME -n NAMESPACE --cluster-id CLUSTER_ID [-o OUTPUT_FILE]
 ```
 
 To see the usage examples of these commands, you may also run `antctl mc create [subcommand] --help`.
@@ -59,7 +59,7 @@ To see the usage examples of these commands, you may also run `antctl mc create 
 corresponding Secret, ServiceAccount and RoleBinding if they exist.
 
 ```bash
-anctcl mc delete membertoken NAME -n NAMESPACE
+antctl mc delete membertoken NAME -n NAMESPACE
 ```
 
 To see the usage examples of these commands, you may also run `antctl mc delete [subcommand] --help`.
@@ -88,7 +88,7 @@ parameters will be saved to the specified file, which can be used in the `antctl
 for a member cluster to join the ClusterSet.
 
 ```bash
-antctl mc init -n NAMESPACE --clusterset CLUSTERSET_ID --clusterid CLUSTERID [--create-token] [-j JOIN_CONFIG_FILE]
+antctl mc init -n NAMESPACE --clusterset CLUSTERSET_ID --clusterid CLUSTERID [-j JOIN_CONFIG_FILE]
 ```
 
 To see the usage examples of this command, you may also run `antctl mc init --help`.

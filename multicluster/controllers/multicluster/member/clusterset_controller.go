@@ -34,6 +34,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 
+	"antrea.io/antrea/v2/multicluster/apis/multicluster/constants"
 	mcv1alpha1 "antrea.io/antrea/v2/multicluster/apis/multicluster/v1alpha1"
 	mcv1alpha2 "antrea.io/antrea/v2/multicluster/apis/multicluster/v1alpha2"
 	"antrea.io/antrea/v2/multicluster/controllers/multicluster/common"
@@ -208,7 +209,7 @@ func (r *MemberClusterSetReconciler) cleanUpResources(ctx context.Context) error
 func (r *MemberClusterSetReconciler) deleteMemberClusterAnnounce(ctx context.Context) error {
 	memberClusterAnnounce := &mcv1alpha1.MemberClusterAnnounce{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      "member-announce-from-" + r.remoteCommonArea.GetLocalClusterID(),
+			Name:      constants.MemberClusterAnnouncePrefix + r.remoteCommonArea.GetLocalClusterID(),
 			Namespace: r.remoteCommonArea.GetNamespace(),
 		},
 	}
