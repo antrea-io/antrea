@@ -23,30 +23,47 @@ import (
 	"github.com/spf13/cobra"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/util/validation"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
+	"antrea.io/antrea/v2/multicluster/apis/multicluster/constants"
 	"antrea.io/antrea/v2/pkg/antctl/raw/multicluster/common"
 )
 
 type memberTokenOptions struct {
 	namespace string
 	output    string
+	clusterID string
 	k8sClient client.Client
 }
 
 var memberTokenOpts *memberTokenOptions
 
 var memberTokenExamples = strings.Trim(`
-# Create a member token in the antrea-multicluster Namespace
-  $ antctl mc create membertoken cluster-east-token -n antrea-multicluster
+# Create a member token in the antrea-multicluster Namespace for cluster-east
+  $ antctl mc create membertoken cluster-east-token -n antrea-multicluster --cluster-id cluster-east
 # Create a member token and save the Secret manifest to a file
-  $ antctl mc create membertoken cluster-east-token -n antrea-multicluster -o token-secret.yml
+  $ antctl mc create membertoken cluster-east-token -n antrea-multicluster --cluster-id cluster-east -o token-secret.yml
 `, "\n")
 
 func (o *memberTokenOptions) validateAndComplete(cmd *cobra.Command) error {
 	if o.namespace == "" {
 		return fmt.Errorf("Namespace must be specified")
 	}
+
+	if o.clusterID == "" {
+		return fmt.Errorf("--cluster-id must be specified")
+	}
+	// The member cluster creates a MemberClusterAnnounce named
+	// "member-announce-from-" + ClusterID. The apiextensions-apiserver validates
+	// custom resource names as DNS-1123 subdomains (at most 253 characters)
+	// regardless of scope, so validate the full name here: an over-long or
+	// otherwise invalid ClusterID fails before a token is issued.
+	if errs := validation.IsDNS1123Subdomain(constants.MemberClusterAnnouncePrefix + o.clusterID); len(errs) > 0 {
+		return fmt.Errorf("invalid cluster ID %q: the resulting MemberClusterAnnounce name %q is invalid: %s",
+			o.clusterID, constants.MemberClusterAnnouncePrefix+o.clusterID, strings.Join(errs, "; "))
+	}
+
 	var err error
 	if o.k8sClient == nil {
 		o.k8sClient, err = common.NewClient(cmd)
@@ -71,6 +88,7 @@ func NewMemberTokenCmd() *cobra.Command {
 	memberTokenOpts = o
 	command.Flags().StringVarP(&o.namespace, "namespace", "n", "", "Namespace of the ClusterSet")
 	command.Flags().StringVarP(&o.output, "output-file", "o", "", "Output file to save the token Secret manifest")
+	command.Flags().StringVar(&o.clusterID, "cluster-id", "", "ClusterID of the member cluster")
 
 	return command
 }
@@ -92,7 +110,7 @@ func memberTokenRunE(cmd *cobra.Command, args []string) error {
 		}
 	}()
 
-	if createErr = common.CreateMemberToken(cmd, memberTokenOpts.k8sClient, args[0], memberTokenOpts.namespace, &createdRes); createErr != nil {
+	if createErr = common.CreateMemberToken(cmd, memberTokenOpts.k8sClient, args[0], memberTokenOpts.namespace, memberTokenOpts.clusterID, &createdRes); createErr != nil {
 		return createErr
 	}
 

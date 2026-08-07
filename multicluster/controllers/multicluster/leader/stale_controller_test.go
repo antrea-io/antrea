@@ -87,12 +87,27 @@ func TestReconcile(t *testing.T) {
 		},
 		ClusterID: "cluster-2",
 	}
+	// The object name deliberately disagrees with the ClusterID: the cleanup must
+	// use the ClusterID field, not parse the name, otherwise a spoofed
+	// MemberClusterAnnounce would trigger cleanup of the wrong member's
+	// ResourceExports.
+	memberClusterAnnounce3 := &mcv1alpha1.MemberClusterAnnounce{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:              "member-announce-from-cluster-2",
+			Namespace:         "default",
+			DeletionTimestamp: &now,
+			Finalizers:        []string{"test-membercluster-announce-finalizer"},
+		},
+		ClusterID: "cluster-1",
+	}
 
+	var queriedClusterID string
 	tests := []struct {
 		name                          string
 		memberAnnounceName            string
 		expectedResExportsSize        int
 		expectedErr                   error
+		expectedQueriedClusterID      string
 		existingMemberAnnounce        *mcv1alpha1.MemberClusterAnnounce
 		existingResExports            *mcv1alpha1.ResourceExportList
 		getResourceExportsByClusterID func(c *StaleResCleanupController, ctx context.Context, clusterID string) ([]mcv1alpha1.ResourceExport, error)
@@ -114,9 +129,22 @@ func TestReconcile(t *testing.T) {
 			existingResExports:     resExportsList,
 			expectedResExportsSize: 3,
 		},
+		{
+			name:                   "MemberClusterAnnounce deleted with name not matching ClusterID",
+			memberAnnounceName:     memberClusterAnnounce3.Name,
+			existingMemberAnnounce: memberClusterAnnounce3,
+			existingResExports:     resExportsList,
+			getResourceExportsByClusterID: func(c *StaleResCleanupController, ctx context.Context, clusterID string) ([]mcv1alpha1.ResourceExport, error) {
+				queriedClusterID = clusterID
+				return []mcv1alpha1.ResourceExport{resExport1, resExport2}, nil
+			},
+			expectedQueriedClusterID: "cluster-1",
+			expectedResExportsSize:   1,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			queriedClusterID = ""
 			getResourceExportsByClusterIDFunc = tt.getResourceExportsByClusterID
 			defer func() {
 				getResourceExportsByClusterIDFunc = getResourceExportsByClusterID
@@ -140,6 +168,7 @@ func TestReconcile(t *testing.T) {
 			err = fakeClient.List(ctx, latestResExports)
 			require.NoError(t, err)
 			assert.Equal(t, tt.expectedResExportsSize, len(latestResExports.Items))
+			assert.Equal(t, tt.expectedQueriedClusterID, queriedClusterID)
 		})
 	}
 }

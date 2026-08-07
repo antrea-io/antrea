@@ -32,6 +32,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	k8syaml "sigs.k8s.io/yaml"
 
+	"antrea.io/antrea/v2/multicluster/apis/multicluster/constants"
 	mcv1alpha2 "antrea.io/antrea/v2/multicluster/apis/multicluster/v1alpha2"
 	"antrea.io/antrea/v2/pkg/antctl/raw"
 	multiclusterscheme "antrea.io/antrea/v2/pkg/antctl/raw/multicluster/scheme"
@@ -191,16 +192,67 @@ func ConvertMemberTokenSecret(secret *corev1.Secret) *corev1.Secret {
 	return s
 }
 
-func CreateMemberToken(cmd *cobra.Command, k8sClient client.Client, name string, namespace string, createdRes *[]map[string]interface{}) error {
+func CreateMemberToken(cmd *cobra.Command, k8sClient client.Client, name string, namespace string, clusterID string, createdRes *[]map[string]interface{}) error {
+	saList := &corev1.ServiceAccountList{}
+	if err := k8sClient.List(context.TODO(), saList, client.InNamespace(namespace)); err != nil {
+		return fmt.Errorf("failed to list ServiceAccounts: %w", err)
+	}
+	for _, existingSA := range saList.Items {
+		if existingSA.Annotations[constants.ServiceAccountClusterIDAnnotation] == clusterID && existingSA.Name != name {
+			return fmt.Errorf("a ServiceAccount bound to ClusterID %q already exists: %q", clusterID, existingSA.Name)
+		}
+	}
+
 	var createErr error
-	serviceAccount := newServiceAccount(name, namespace)
+	serviceAccount := newServiceAccount(name, namespace, clusterID)
 	createErr = k8sClient.Create(context.TODO(), serviceAccount)
 	if createErr != nil {
 		if !apierrors.IsAlreadyExists(createErr) {
 			fmt.Fprintf(cmd.ErrOrStderr(), "Failed to create ServiceAccount \"%s\": %s\n", name, createErr.Error())
 			return createErr
 		}
-		fmt.Fprintf(cmd.OutOrStdout(), "ServiceAccount \"%s\" already exists\n", name)
+		// If the SA already exists, ensure it is bound to the correct ClusterID.
+		existingSA := &corev1.ServiceAccount{}
+		if err := k8sClient.Get(context.TODO(), client.ObjectKey{Namespace: namespace, Name: name}, existingSA); err != nil {
+			return fmt.Errorf("failed to get existing ServiceAccount %q: %w", name, err)
+		}
+		existingClusterID, bound := existingSA.Annotations[constants.ServiceAccountClusterIDAnnotation]
+		if bound && existingClusterID != clusterID {
+			// The operator explicitly passed a different --cluster-id, e.g. to correct a
+			// mistyped one: re-bind the ServiceAccount instead of failing, so recovery
+			// does not require kubectl edit.
+			existingSA.Annotations[constants.ServiceAccountClusterIDAnnotation] = clusterID
+			if err := k8sClient.Update(context.TODO(), existingSA); err != nil {
+				return fmt.Errorf("failed to re-bind existing ServiceAccount %q to ClusterID %q: %w", name, clusterID, err)
+			}
+			// Record the original binding so that Rollback can restore it if a later
+			// step of this command fails: the ServiceAccount outlives the command.
+			*createdRes = append(*createdRes, map[string]interface{}{
+				"apiVersion":      "v1",
+				"kind":            "ServiceAccount",
+				"metadata":        map[string]interface{}{"namespace": namespace, "name": name},
+				"rollbackAction":  rollbackActionRestoreAnnotation,
+				"annotationKey":   constants.ServiceAccountClusterIDAnnotation,
+				"annotationValue": existingClusterID,
+			})
+			// The token Secret is untouched, so the existing credential now
+			// authenticates as the new ClusterID.
+			fmt.Fprintf(cmd.OutOrStdout(), "ServiceAccount \"%s\" already exists; re-bound it to ClusterID %q. The existing token now authenticates as the new ClusterID, rotate the credential if needed.\n", name, clusterID)
+		} else if !bound {
+			// The annotation is absent, e.g. a ServiceAccount created before the
+			// ClusterID binding was introduced: bind it instead of failing, so
+			// existing members can be migrated without recreating credentials.
+			if existingSA.Annotations == nil {
+				existingSA.Annotations = map[string]string{}
+			}
+			existingSA.Annotations[constants.ServiceAccountClusterIDAnnotation] = clusterID
+			if err := k8sClient.Update(context.TODO(), existingSA); err != nil {
+				return fmt.Errorf("failed to bind existing ServiceAccount %q to ClusterID %q: %w", name, clusterID, err)
+			}
+			fmt.Fprintf(cmd.OutOrStdout(), "ServiceAccount \"%s\" already exists; bound it to ClusterID %q\n", name, clusterID)
+		} else {
+			fmt.Fprintf(cmd.OutOrStdout(), "ServiceAccount \"%s\" already exists\n", name)
+		}
 		createErr = nil
 	} else {
 		fmt.Fprintf(cmd.OutOrStdout(), "ServiceAccount \"%s\" created\n", serviceAccount.Name)
@@ -421,7 +473,7 @@ func newSecret(name string, saName string, namespace string) *corev1.Secret {
 	}
 }
 
-func newServiceAccount(name string, namespace string) *corev1.ServiceAccount {
+func newServiceAccount(name string, namespace string, clusterID string) *corev1.ServiceAccount {
 	return &corev1.ServiceAccount{
 		TypeMeta: metav1.TypeMeta{
 			APIVersion: "v1",
@@ -431,7 +483,8 @@ func newServiceAccount(name string, namespace string) *corev1.ServiceAccount {
 			Name:      name,
 			Namespace: namespace,
 			Annotations: map[string]string{
-				CreateByAntctlAnnotation: "true",
+				CreateByAntctlAnnotation:                    "true",
+				constants.ServiceAccountClusterIDAnnotation: clusterID,
 			},
 		},
 	}

@@ -6390,14 +6390,6 @@ metadata:
   name: antrea-mc-controller
   namespace: antrea-multicluster
 ---
-apiVersion: v1
-kind: ServiceAccount
-metadata:
-  labels:
-    app: antrea
-  name: antrea-mc-member-access-sa
-  namespace: antrea-multicluster
----
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
 metadata:
@@ -6641,22 +6633,6 @@ subjects:
   namespace: antrea-multicluster
 ---
 apiVersion: rbac.authorization.k8s.io/v1
-kind: RoleBinding
-metadata:
-  labels:
-    app: antrea
-  name: antrea-mc-member-cluster-rolebinding
-  namespace: antrea-multicluster
-roleRef:
-  apiGroup: rbac.authorization.k8s.io
-  kind: Role
-  name: antrea-mc-member-cluster-role
-subjects:
-- kind: ServiceAccount
-  name: antrea-mc-member-access-sa
-  namespace: antrea-multicluster
----
-apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
 metadata:
   labels:
@@ -6694,17 +6670,6 @@ metadata:
     app: antrea
   name: antrea-mc-controller-config
   namespace: antrea-multicluster
----
-apiVersion: v1
-kind: Secret
-metadata:
-  annotations:
-    kubernetes.io/service-account.name: antrea-mc-member-access-sa
-  labels:
-    app: antrea
-  name: antrea-mc-member-access-token
-  namespace: antrea-multicluster
-type: kubernetes.io/service-account-token
 ---
 apiVersion: v1
 kind: Service
@@ -6862,7 +6827,6 @@ webhooks:
   sideEffects: None
 - admissionReviewVersions:
   - v1
-  - v1beta1
   clientConfig:
     service:
       name: antrea-mc-webhook-service
@@ -6881,6 +6845,7 @@ webhooks:
     operations:
     - CREATE
     - UPDATE
+    - DELETE
     resources:
     - memberclusterannounces
   sideEffects: None

@@ -17,6 +17,7 @@ package create
 import (
 	"bytes"
 	"os"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -55,33 +56,60 @@ type: Opaque
 		secretFile     string
 		failureType    string
 		tokenName      string
+		clusterID      string
 	}{
 		{
 			name:           "create successfully",
 			tokenName:      "default-member-token",
 			namespace:      "default",
+			clusterID:      "cluster-east",
 			expectedOutput: "You can now run \"antctl mc join\" command with the token in a member cluster to join the ClusterSet\n",
 		},
 		{
 			name:           "create successfully with file",
 			tokenName:      "default-member-token",
 			namespace:      "default",
+			clusterID:      "cluster-east",
 			expectedOutput: "You can now run \"antctl mc join\" command with the token in a member cluster to join the ClusterSet\n",
 			secretFile:     "test.yml",
 		},
 		{
 			name:           "fail to create without name",
 			namespace:      "default",
+			clusterID:      "cluster-east",
 			expectedOutput: "token name must be specified",
 		},
 		{
 			name:           "fail to create without Namespace",
 			namespace:      "",
+			clusterID:      "cluster-east",
 			expectedOutput: "Namespace must be specified",
+		},
+		{
+			name:           "fail to create without cluster-id",
+			tokenName:      "default-member-token",
+			namespace:      "default",
+			clusterID:      "",
+			expectedOutput: "--cluster-id must be specified",
+		},
+		{
+			name:           "create successfully with cluster-id containing dots",
+			tokenName:      "default-member-token",
+			namespace:      "default",
+			clusterID:      "cluster.east",
+			expectedOutput: "You can now run \"antctl mc join\" command with the token in a member cluster to join the ClusterSet\n",
+		},
+		{
+			name:           "fail to create with cluster-id too long",
+			tokenName:      "default-member-token",
+			namespace:      "default",
+			clusterID:      strings.Repeat("a", 233),
+			expectedOutput: "invalid cluster ID",
 		},
 		{
 			name:           "fail to create and rollback",
 			namespace:      "default",
+			clusterID:      "cluster-east",
 			failureType:    "create",
 			tokenName:      "default-member-token",
 			expectedOutput: "failed to create object",
@@ -95,6 +123,7 @@ type: Opaque
 			cmd.SetErr(buf)
 
 			memberTokenOpts.namespace = tt.namespace
+			memberTokenOpts.clusterID = tt.clusterID
 			memberTokenOpts.k8sClient = fake.NewClientBuilder().WithScheme(mcscheme.Scheme).WithObjects(existingSecret).Build()
 			if tt.failureType == "create" {
 				memberTokenOpts.k8sClient = common.FakeCtrlRuntimeClient{

@@ -213,21 +213,73 @@ function wait_for_multicluster_controller_ready {
     kubectl create ns antrea-multicluster  "${LEADER_CLUSTER_CONFIG}" || true
     kubectl apply -f ./multicluster/test/yamls/leader-manifest.yml "${LEADER_CLUSTER_CONFIG}"
     kubectl rollout status deployment/antrea-mc-controller -n antrea-multicluster "${LEADER_CLUSTER_CONFIG}" || true
-    kubectl create -f ./multicluster/test/yamls/leader-access-token-secret.yml "${LEADER_CLUSTER_CONFIG}" || true
-    kubectl get secret -n antrea-multicluster leader-access-token "${LEADER_CLUSTER_CONFIG}" -o yaml > ./multicluster/test/yamls/leader-access-token.yml
-
-    sed -i '/uid:/d' ./multicluster/test/yamls/leader-access-token.yml
-    sed -i '/resourceVersion/d' ./multicluster/test/yamls/leader-access-token.yml
-    sed -i '/last-applied-configuration/d' ./multicluster/test/yamls/leader-access-token.yml
-    sed -i '/type/d' ./multicluster/test/yamls/leader-access-token.yml
-    sed -i '/creationTimestamp/d' ./multicluster/test/yamls/leader-access-token.yml
-    sed -i 's/antrea-multicluster-member-access-sa/antrea-multicluster-controller/g' ./multicluster/test/yamls/leader-access-token.yml
-    sed -i 's/antrea-multicluster/kube-system/g' ./multicluster/test/yamls/leader-access-token.yml
-    echo "type: Opaque" >> ./multicluster/test/yamls/leader-access-token.yml
-
+    member_cluster_ids=("test-cluster-east" "test-cluster-west")
     member_cluster_pod_cidrs=("10.244.16.0/20" "10.244.32.0/20")
+    if [ "${#member_cluster_ids[@]}" -ne "${#membercluster_kubeconfigs[@]}" ] || [ "${#member_cluster_pod_cidrs[@]}" -ne "${#membercluster_kubeconfigs[@]}" ]; then
+        echo "Error: Length of member_cluster_ids array (${#member_cluster_ids[@]}) or member_cluster_pod_cidrs array (${#member_cluster_pod_cidrs[@]}) does not match length of membercluster_kubeconfigs array (${#membercluster_kubeconfigs[@]})."
+        exit 1
+    fi
+
     for i in "${!membercluster_kubeconfigs[@]}";
     do
+        cluster_id=${member_cluster_ids[$i]}
+        cat <<EOF | kubectl apply ${LEADER_CLUSTER_CONFIG} -f -
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: member-${cluster_id}-access-sa
+  namespace: antrea-multicluster
+  annotations:
+    multicluster.antrea.io/cluster-id: ${cluster_id}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: member-${cluster_id}-rolebinding
+  namespace: antrea-multicluster
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: antrea-mc-member-cluster-role
+subjects:
+  - kind: ServiceAccount
+    name: member-${cluster_id}-access-sa
+    namespace: antrea-multicluster
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: member-${cluster_id}-access-token
+  namespace: antrea-multicluster
+  annotations:
+    kubernetes.io/service-account.name: member-${cluster_id}-access-sa
+type: kubernetes.io/service-account-token
+EOF
+
+        token_found=false
+        for j in {1..10}; do
+            if kubectl get secret -n antrea-multicluster member-${cluster_id}-access-token ${LEADER_CLUSTER_CONFIG} -o jsonpath='{.data.token}' | grep -q .; then
+                token_found=true
+                break
+            fi
+            sleep 1
+        done
+        if [ "$token_found" = false ]; then
+            echo "Timed out waiting for token in member-${cluster_id}-access-token"
+            exit 1
+        fi
+        kubectl get secret -n antrea-multicluster member-${cluster_id}-access-token ${LEADER_CLUSTER_CONFIG} -o yaml > ./multicluster/test/yamls/${cluster_id}-token.yml
+
+        sed -i '/uid:/d' ./multicluster/test/yamls/${cluster_id}-token.yml
+        sed -i '/resourceVersion/d' ./multicluster/test/yamls/${cluster_id}-token.yml
+        sed -i '/last-applied-configuration/d' ./multicluster/test/yamls/${cluster_id}-token.yml
+        sed -i '/type/d' ./multicluster/test/yamls/${cluster_id}-token.yml
+        sed -i '/creationTimestamp/d' ./multicluster/test/yamls/${cluster_id}-token.yml
+        sed -i 's/antrea-multicluster/kube-system/g' ./multicluster/test/yamls/${cluster_id}-token.yml
+        sed -i "s/member-${cluster_id}-access-sa/antrea-multicluster-controller/g" ./multicluster/test/yamls/${cluster_id}-token.yml
+        sed -i "s/name: member-${cluster_id}-access-token/name: leader-access-token/g" ./multicluster/test/yamls/${cluster_id}-token.yml
+        echo "type: Opaque" >> ./multicluster/test/yamls/${cluster_id}-token.yml
+
         pod_cidr=${member_cluster_pod_cidrs[$i]}
         export pod_cidr
         cp ./multicluster/test/yamls/member-manifest.yml ./multicluster/test/yamls/member-manifest-$i.yml
@@ -237,7 +289,7 @@ function wait_for_multicluster_controller_ready {
         echo "====== Deploying Antrea Multicluster Member Cluster with ${config} ======"
         kubectl apply -f ./multicluster/test/yamls/member-manifest-$i.yml ${config}
         kubectl rollout status deployment/antrea-mc-controller -n kube-system ${config}
-        kubectl apply -f ./multicluster/test/yamls/leader-access-token.yml ${config}
+        kubectl apply -f ./multicluster/test/yamls/${cluster_id}-token.yml ${config}
     done
 
     echo "====== ClusterSet Initialization in Leader and Member Clusters ======"

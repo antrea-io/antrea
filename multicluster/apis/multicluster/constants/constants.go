@@ -32,4 +32,15 @@ const (
 	SourceNamespace = "sourceNamespace"
 	SourceClusterID = "sourceClusterID"
 	SourceKind      = "sourceKind"
+
+	// ServiceAccountClusterIDAnnotation and MemberClusterAnnouncePrefix are shared with antctl,
+	// which must not import controller-internal packages, so they live here next to the API
+	// types. Other annotations (GatewayAnnotation, GatewayIPAnnotation, ...) are controller-only
+	// and live in multicluster/controllers/multicluster/common/types.go.
+	ServiceAccountClusterIDAnnotation = "multicluster.antrea.io/cluster-id"
+
+	// MemberClusterAnnouncePrefix is the name prefix of the MemberClusterAnnounce created by
+	// each member cluster. The leader webhook enforces the naming, so all producers and the
+	// validator must reference this same constant.
+	MemberClusterAnnouncePrefix = "member-announce-from-"
 )

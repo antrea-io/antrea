@@ -191,13 +191,14 @@ in the example of this guide.
 #### Set up Access to Leader Cluster
 
 We first need to set up access to the leader cluster's API server for all member
-clusters. We recommend creating one ServiceAccount for each member for
-fine-grained access control.
+clusters. You must create one ServiceAccount for each member for fine-grained
+access control and identity binding.
 
-The Multi-cluster Controller deployment manifest for a leader cluster also creates
-a default member cluster token. If you prefer to use the default token, you can skip
-step 1 and replace the Secret name `member-east-token` to the default token Secret
-`antrea-mc-member-access-token` in step 2.
+The Multi-cluster controller's webhook strictly validates that the requesting
+`ServiceAccount` possesses a `multicluster.antrea.io/cluster-id` annotation matching
+the announced `ClusterID`. This is a **mandatory** security measure to ensure one
+member cannot spoof the identity of another. Because of this strict 1:1 mapping, you
+must create a dedicated `ServiceAccount` for each member cluster.
 
 1. Apply the following YAML manifest in the leader cluster to set up access for
    `test-cluster-east`:
@@ -208,6 +209,8 @@ step 1 and replace the Secret name `member-east-token` to the default token Secr
    metadata:
      name: member-east
      namespace: antrea-multicluster
+     annotations:
+       multicluster.antrea.io/cluster-id: test-cluster-east
    ---
    apiVersion: v1
    kind: Secret
