@@ -182,7 +182,7 @@ func (p *proxier) isInitialized() bool {
 }
 
 // removeStaleServices removes all the configurations of expired Services and their associated Endpoints.
-// It returns true if any stale Service could not be fully removed. Like installServices, each failure is
+// It returns false if any stale Service could not be fully removed. Like installServices, each failure is
 // already logged by the step that hit it, and a failed Service stays in serviceInstalledMap so it is
 // retried on the next sync; the returned flag lets syncProxyRules ask the runner to retry soon rather than
 // waiting for the next event or the maxInterval resync.
@@ -220,8 +220,7 @@ func (p *proxier) removeStaleService(svcPortName k8sproxy.ServicePortName, svcPo
 	}
 	// Uninstall the Service's Endpoint flows. The installed-Endpoint state is not updated here but at the
 	// end, together with serviceInstalledMap, so that a failure in a later step leaves both maps consistent
-	// (the Service stays fully recorded) and the next sync retries from a clean state. We capture the
-	// Endpoints now because updateEndpointsStates below both reads and empties this entry.
+	// (the Service stays fully recorded) and the next sync retries from a clean state.
 	endpoints, hasEndpoints := p.endpointsInstalledMap[svcPortName]
 	if hasEndpoints {
 		if !p.removeStaleEndpoints(svcPortName, svcInfo.OFProtocol, endpoints) {
@@ -238,7 +237,7 @@ func (p *proxier) removeStaleService(svcPortName k8sproxy.ServicePortName, svcPo
 	// The Service has been fully torn down in OVS. Commit the removal: release the Endpoints' reference
 	// counters and drop the installed-Endpoint and installed-Service entries together.
 	if hasEndpoints {
-		p.updateEndpointsStates(svcPortName, svcInfo.OFProtocol, nil, endpoints)
+		p.releaseEndpointsReferences(svcInfo.OFProtocol, endpoints)
 		delete(p.endpointsInstalledMap, svcPortName)
 	}
 	delete(p.serviceInstalledMap, svcPortName)
@@ -347,21 +346,27 @@ func (p *proxier) removeStaleEndpoints(svcPortName k8sproxy.ServicePortName, pro
 // adds the given Endpoints to, and removes the given ones from, endpointsInstalledMap, and updates their
 // shared reference counters accordingly.
 //
-// It must be called at exactly one point per sync path, after the caller has successfully applied the
-// Service's data path changes: an install/update at the end of installServices, or a full teardown at the
-// end of removeStaleServices. This mirrors how serviceInstalledMap is updated, and keeps the
-// installed-Endpoint state from ever running ahead of what is actually programmed in OVS. If it ran early
-// (as it used to, when these updates were side effects buried inside addNewEndpoints/removeStaleEndpoints),
-// a failure partway through would leave the state "converged" while OVS stayed stale, so the next sync
-// would compute an empty diff and never retry the failed step, leaving the Service routed to stale
-// Endpoints indefinitely.
+// It must only be called after all of the Service's data path changes have succeeded, at the end of
+// installService. If the state were committed early, a failure in a later step would leave it "converged"
+// while OVS stayed stale, and the next sync would compute an empty diff and never retry the failed step.
+// The teardown path (removeStaleService) instead calls releaseEndpointsReferences and drops the Service's
+// whole endpointsInstalledMap entry, without deleting the Endpoint keys one by one.
 func (p *proxier) updateEndpointsStates(svcPortName k8sproxy.ServicePortName, protocol binding.Protocol, added, removed map[string]k8sproxy.Endpoint) {
 	for _, endpoint := range added {
 		p.endpointsInstalledMap[svcPortName][endpoint.String()] = endpoint
 		key := endpointKey(endpoint, protocol)
 		p.endpointReferenceCounter[key] = p.endpointReferenceCounter[key] + 1
 	}
+	p.releaseEndpointsReferences(protocol, removed)
 	for _, endpoint := range removed {
+		delete(p.endpointsInstalledMap[svcPortName], endpoint.String())
+	}
+}
+
+// releaseEndpointsReferences decrements the shared reference counters of the given Endpoints, dropping a
+// counter entirely when this was its last reference.
+func (p *proxier) releaseEndpointsReferences(protocol binding.Protocol, endpoints map[string]k8sproxy.Endpoint) {
+	for _, endpoint := range endpoints {
 		key := endpointKey(endpoint, protocol)
 		count := p.endpointReferenceCounter[key]
 		if count == 1 {
@@ -371,7 +376,6 @@ func (p *proxier) updateEndpointsStates(svcPortName k8sproxy.ServicePortName, pr
 			p.endpointReferenceCounter[key] = count - 1
 			klog.V(2).InfoS("Stale Endpoint is still referenced by other Services, decrementing reference count by 1", "Endpoint", endpoint.String(), "Protocol", protocol)
 		}
-		delete(p.endpointsInstalledMap[svcPortName], endpoint.String())
 	}
 }
 
@@ -717,7 +721,7 @@ func (p *proxier) uninstallLoadBalancerService(svcInfoStr string, loadBalancerIP
 	return nil
 }
 
-// installServices installs/updates the data path for all Services. It returns true if any Service could
+// installServices installs/updates the data path for all Services. It returns false if any Service could
 // not be fully installed. The details of each failure are already logged by the step that hit it; the
 // returned flag is only a signal for syncProxyRules to ask the runner to retry soon.
 func (p *proxier) installServices() bool {
