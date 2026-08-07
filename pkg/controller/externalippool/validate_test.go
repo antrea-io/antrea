@@ -69,6 +69,24 @@ func TestControllerValidateExternalIPPool(t *testing.T) {
 			expectedResponse: &admv1.AdmissionResponse{Allowed: true},
 		},
 		{
+			name: "CREATE operation with valid dual-stack SubnetInfo should be allowed",
+			request: &admv1.AdmissionRequest{
+				Name:      "foo",
+				Operation: "CREATE",
+				Object: runtime.RawExtension{Raw: marshal(mutateExternalIPPool(newExternalIPPool("foo", "10.10.10.0/24", "", ""), func(pool *crdv1b1.ExternalIPPool) {
+					pool.Spec.IPRanges = append(pool.Spec.IPRanges, crdv1b1.IPRange{CIDR: "2001:db8:10::/64"})
+					pool.Spec.SubnetInfo = &crdv1b1.SubnetInfo{
+						IPFamilySubnets: []crdv1b1.IPFamilySubnetInfo{
+							{Gateway: "10.10.10.1", PrefixLength: 24},
+							{Gateway: "2001:db8:10::1", PrefixLength: 64},
+						},
+						VLAN: 100,
+					}
+				}))},
+			},
+			expectedResponse: &admv1.AdmissionResponse{Allowed: true},
+		},
+		{
 			name: "Adding matched SubnetInfo should be allowed",
 			request: &admv1.AdmissionRequest{
 				Name:      "foo",
@@ -108,6 +126,65 @@ func TestControllerValidateExternalIPPool(t *testing.T) {
 				Object:    runtime.RawExtension{Raw: marshal(newExternalIPPool("foo", "10.10.10.0/24", "10.10.20.1", "10.10.20.2"))},
 			},
 			expectedResponse: &admv1.AdmissionResponse{Allowed: true},
+		},
+		{
+			name: "Adding the first IPv4 range to an empty pool should be allowed",
+			request: &admv1.AdmissionRequest{
+				Name:      "foo",
+				Operation: "UPDATE",
+				OldObject: runtime.RawExtension{Raw: marshal(mutateExternalIPPool(newExternalIPPool("foo", "", "", ""), func(pool *crdv1b1.ExternalIPPool) {
+					pool.Spec.IPRanges = []crdv1b1.IPRange{}
+				}))},
+				Object: runtime.RawExtension{Raw: marshal(newExternalIPPool("foo", "10.10.10.0/24", "", ""))},
+			},
+			expectedResponse: &admv1.AdmissionResponse{Allowed: true},
+		},
+		{
+			name: "Adding the first IPv6 range to an empty pool should be allowed",
+			request: &admv1.AdmissionRequest{
+				Name:      "foo",
+				Operation: "UPDATE",
+				OldObject: runtime.RawExtension{Raw: marshal(mutateExternalIPPool(newExternalIPPool("foo", "", "", ""), func(pool *crdv1b1.ExternalIPPool) {
+					pool.Spec.IPRanges = []crdv1b1.IPRange{}
+				}))},
+				Object: runtime.RawExtension{Raw: marshal(newExternalIPPool("foo", "2001:db8:10::/64", "", ""))},
+			},
+			expectedResponse: &admv1.AdmissionResponse{Allowed: true},
+		},
+		{
+			name: "Adding the first dual-stack ranges to an empty pool should be allowed",
+			request: &admv1.AdmissionRequest{
+				Name:      "foo",
+				Operation: "UPDATE",
+				OldObject: runtime.RawExtension{Raw: marshal(mutateExternalIPPool(newExternalIPPool("foo", "", "", ""), func(pool *crdv1b1.ExternalIPPool) {
+					pool.Spec.IPRanges = []crdv1b1.IPRange{}
+				}))},
+				Object: runtime.RawExtension{Raw: marshal(mutateExternalIPPool(newExternalIPPool("foo", "10.10.10.0/24", "", ""), func(pool *crdv1b1.ExternalIPPool) {
+					pool.Spec.IPRanges = append(pool.Spec.IPRanges, crdv1b1.IPRange{CIDR: "2001:db8:10::/64"})
+					pool.Spec.SubnetInfo = &crdv1b1.SubnetInfo{IPFamilySubnets: []crdv1b1.IPFamilySubnetInfo{
+						{Gateway: "10.10.10.1", PrefixLength: 24},
+						{Gateway: "2001:db8:10::1", PrefixLength: 64},
+					}}
+				}))},
+			},
+			expectedResponse: &admv1.AdmissionResponse{Allowed: true},
+		},
+		{
+			name: "Adding an IP family should not be allowed",
+			request: &admv1.AdmissionRequest{
+				Name:      "foo",
+				Operation: "UPDATE",
+				OldObject: runtime.RawExtension{Raw: marshal(newExternalIPPool("foo", "10.10.10.0/24", "", ""))},
+				Object: runtime.RawExtension{Raw: marshal(mutateExternalIPPool(newExternalIPPool("foo", "10.10.10.0/24", "", ""), func(pool *crdv1b1.ExternalIPPool) {
+					pool.Spec.IPRanges = append(pool.Spec.IPRanges, crdv1b1.IPRange{CIDR: "2001:db8:10::/64"})
+				}))},
+			},
+			expectedResponse: &admv1.AdmissionResponse{
+				Allowed: false,
+				Result: &metav1.Status{
+					Message: "IP families are immutable (old: [IPv4], new: [IPv4 IPv6])",
+				},
+			},
 		},
 		{
 			name: "DELETE operation should be allowed",

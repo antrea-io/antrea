@@ -195,6 +195,11 @@ func (in IPBlock) OpenAPIModelName() string {
 }
 
 // OpenAPIModelName returns the OpenAPI model name for this type.
+func (in IPFamilySubnetInfo) OpenAPIModelName() string {
+	return "io.antrea.crd.v1beta1.IPFamilySubnetInfo"
+}
+
+// OpenAPIModelName returns the OpenAPI model name for this type.
 func (in IPHeader) OpenAPIModelName() string {
 	return "io.antrea.crd.v1beta1.IPHeader"
 }

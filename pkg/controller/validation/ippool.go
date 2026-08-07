@@ -18,6 +18,7 @@ import (
 	"fmt"
 	"net/netip"
 
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/util/sets"
 
 	crdv1beta1 "antrea.io/antrea/v2/pkg/apis/crd/v1beta1"
@@ -79,39 +80,107 @@ func validateIPRange(ipRange crdv1beta1.IPRange) error {
 	return nil
 }
 
+type subnetConfiguration struct {
+	gateway      string
+	prefixLength int32
+	prefix       netip.Prefix
+}
+
+func ipFamilyForAddress(address netip.Addr) corev1.IPFamily {
+	if address.Is4() {
+		return corev1.IPv4Protocol
+	}
+	return corev1.IPv6Protocol
+}
+
+func parseSubnetConfiguration(gateway string, prefixLength int32) (corev1.IPFamily, subnetConfiguration, error) {
+	gatewayAddr, err := netip.ParseAddr(gateway)
+	if err != nil {
+		return "", subnetConfiguration{}, fmt.Errorf("invalid gateway address %s", gateway)
+	}
+
+	if gatewayAddr.Is4() {
+		if prefixLength <= 0 || prefixLength >= 32 {
+			return "", subnetConfiguration{}, fmt.Errorf("invalid prefixLength %d", prefixLength)
+		}
+	} else if prefixLength <= 0 || prefixLength >= 128 {
+		return "", subnetConfiguration{}, fmt.Errorf("invalid prefixLength %d", prefixLength)
+	}
+
+	return ipFamilyForAddress(gatewayAddr), subnetConfiguration{
+		gateway:      gateway,
+		prefixLength: prefixLength,
+		prefix:       netip.PrefixFrom(gatewayAddr, int(prefixLength)).Masked(),
+	}, nil
+}
+
+func subnetConfigurations(subnetInfo *crdv1beta1.SubnetInfo) (map[corev1.IPFamily]subnetConfiguration, error) {
+	if subnetInfo == nil {
+		return nil, nil
+	}
+
+	hasLegacy := subnetInfo.Gateway != "" || subnetInfo.PrefixLength != 0
+	hasFamilySubnets := subnetInfo.IPFamilySubnets != nil
+	if hasLegacy && hasFamilySubnets {
+		return nil, fmt.Errorf("gateway and prefixLength cannot be set with ipFamilySubnets")
+	}
+	if !hasLegacy && !hasFamilySubnets {
+		return nil, fmt.Errorf("subnetInfo must specify gateway and prefixLength or ipFamilySubnets")
+	}
+
+	configurations := make(map[corev1.IPFamily]subnetConfiguration, 2)
+	if hasLegacy {
+		family, subnet, err := parseSubnetConfiguration(subnetInfo.Gateway, subnetInfo.PrefixLength)
+		if err != nil {
+			return nil, err
+		}
+		configurations[family] = subnet
+		return configurations, nil
+	}
+
+	if len(subnetInfo.IPFamilySubnets) == 0 || len(subnetInfo.IPFamilySubnets) > 2 {
+		return nil, fmt.Errorf("ipFamilySubnets must contain one or two entries")
+	}
+	for _, familySubnet := range subnetInfo.IPFamilySubnets {
+		family, subnet, err := parseSubnetConfiguration(familySubnet.Gateway, familySubnet.PrefixLength)
+		if err != nil {
+			return nil, err
+		}
+		if _, exists := configurations[family]; exists {
+			return nil, fmt.Errorf("ipFamilySubnets contains multiple entries for IP family %s", family)
+		}
+		configurations[family] = subnet
+	}
+	return configurations, nil
+}
+
 // ValidateIPRangesAndSubnetInfo validates IP ranges and SubnetInfo
 func ValidateIPRangesAndSubnetInfo(subnetInfo *crdv1beta1.SubnetInfo, ipRanges []crdv1beta1.IPRange) ([]NormalizedIPRange, error) {
-	var subnet *netip.Prefix
-	if subnetInfo != nil {
-		gatewayAddr, err := netip.ParseAddr(subnetInfo.Gateway)
-		if err != nil {
-			return nil, fmt.Errorf("invalid gateway address %s", subnetInfo.Gateway)
-		}
-
-		if gatewayAddr.Is4() {
-			if subnetInfo.PrefixLength <= 0 || subnetInfo.PrefixLength >= 32 {
-				return nil, fmt.Errorf("invalid prefixLength %d", subnetInfo.PrefixLength)
-			}
-		} else {
-			if subnetInfo.PrefixLength <= 0 || subnetInfo.PrefixLength >= 128 {
-				return nil, fmt.Errorf("invalid prefixLength %d", subnetInfo.PrefixLength)
-			}
-		}
-		prefix := netip.PrefixFrom(gatewayAddr, int(subnetInfo.PrefixLength)).Masked()
-		subnet = &prefix
+	configurations, err := subnetConfigurations(subnetInfo)
+	if err != nil {
+		return nil, err
 	}
 
 	currentRanges := make([]NormalizedIPRange, 0, len(ipRanges))
+	poolFamilies := sets.New[corev1.IPFamily]()
 	for _, ipRange := range ipRanges {
 		cur, err := normalizeRange(ipRange, "")
 		if err != nil {
 			return nil, err
 		}
+		family := ipFamilyForAddress(cur.Start)
+		poolFamilies.Insert(family)
 
-		// Validate range is within subnet
-		if subnet != nil && (!subnet.Contains(cur.Start) || !subnet.Contains(cur.End)) {
-			return nil, fmt.Errorf("%s must be a strict subset of the subnet %s/%d",
-				cur.Origin, subnetInfo.Gateway, subnetInfo.PrefixLength)
+		// Validate the range against the subnet for its IP family.
+		if configurations != nil {
+			subnet, exists := configurations[family]
+			if !exists {
+				return nil, fmt.Errorf("%s has no subnet configuration for IP family %s", cur.Origin, family)
+			}
+			if !subnet.prefix.Contains(cur.Start) || !subnet.prefix.Contains(cur.End) {
+				return nil, fmt.Errorf("%s must be a strict subset of the subnet %s/%d",
+					cur.Origin, subnet.gateway, subnet.prefixLength)
+			}
 		}
 
 		// Check for overlaps with other ranges in the same pool
@@ -122,8 +191,28 @@ func ValidateIPRangesAndSubnetInfo(subnetInfo *crdv1beta1.SubnetInfo, ipRanges [
 		}
 		currentRanges = append(currentRanges, cur)
 	}
+	if subnetInfo != nil && subnetInfo.IPFamilySubnets != nil {
+		for family := range configurations {
+			if !poolFamilies.Has(family) {
+				return nil, fmt.Errorf("subnet configuration for IP family %s is not present in the IP pool", family)
+			}
+		}
+	}
 
 	return currentRanges, nil
+}
+
+// IPFamiliesForRanges returns the set of IP families represented by the provided IP ranges.
+func IPFamiliesForRanges(ipRanges []crdv1beta1.IPRange) (sets.Set[corev1.IPFamily], error) {
+	families := sets.New[corev1.IPFamily]()
+	for _, ipRange := range ipRanges {
+		normalized, err := normalizeRange(ipRange, "")
+		if err != nil {
+			return nil, err
+		}
+		families.Insert(ipFamilyForAddress(normalized.Start))
+	}
+	return families, nil
 }
 
 // NormalizedIPRange represents a normalized IP range
