@@ -37,6 +37,22 @@ func TestParseFTPUploadUrl(t *testing.T) {
 			},
 		},
 		{
+			url: "sftp://[2001:db8::1]:22/path",
+			expectedURL: url.URL{
+				Scheme: "sftp",
+				Host:   "[2001:db8::1]:22",
+				Path:   "/path",
+			},
+		},
+		{
+			url: "[2001:db8::1]:22/path",
+			expectedURL: url.URL{
+				Scheme: "sftp",
+				Host:   "[2001:db8::1]:22",
+				Path:   "/path",
+			},
+		},
+		{
 			url: "127.0.0.1:22/path",
 			expectedURL: url.URL{
 				Scheme: "sftp",
