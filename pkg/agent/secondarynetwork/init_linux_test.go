@@ -248,7 +248,7 @@ func TestRestoreStaleHostConnections(t *testing.T) {
 			}
 			t.Cleanup(func() { restoreHostInterfaceConfigFn = origRestore })
 
-			err := restoreStaleHostConnections(mockOVSBridgeClient, bridgeConfig(brOld))
+			err := restoreStaleHostConnections(brOld, mockOVSBridgeClient)
 			if tc.expectedErr != "" {
 				assert.ErrorContains(t, err, tc.expectedErr)
 			} else {
@@ -413,8 +413,7 @@ func TestConnectBridgePhysicalInterfaces(t *testing.T) {
 
 			tc.expectedCalls(mockOVSBridgeClient)
 
-			c := &Controller{}
-			require.NoError(t, c.connectBridgePhysicalInterfaces(mockOVSBridgeClient, tc.bridgeCfg))
+			require.NoError(t, connectBridgePhysicalInterfaces(mockOVSBridgeClient, tc.bridgeCfg))
 			assert.Equal(t, tc.wantPrepareCalls, gotPrepareCalls)
 			assert.Equal(t, tc.wantRestoreCalls, gotRestoreCalls)
 		})
@@ -526,12 +525,12 @@ func TestInitializeWithStaticBridgeConfig(t *testing.T) {
 func TestInitializeRequeuesDynamicBridgeReconciliationFailure(t *testing.T) {
 	prevFindStartupSecondaryBridgeFn := findStartupSecondaryBridgeFn
 	findCalls := 0
-	findStartupSecondaryBridgeFn = func(client.Client, string) (string, bool, error) {
+	findStartupSecondaryBridgeFn = func(client.Client, string) (string, error) {
 		findCalls++
 		if findCalls == 1 {
-			return "", false, errors.New("OVSDB unavailable")
+			return "", errors.New("OVSDB unavailable")
 		}
-		return "", false, nil
+		return "", nil
 	}
 	t.Cleanup(func() { findStartupSecondaryBridgeFn = prevFindStartupSecondaryBridgeFn })
 
@@ -629,7 +628,7 @@ func TestShutdownAndRestore(t *testing.T) {
 	reconcileRelease := make(chan struct{})
 	findCalls := 0
 	prevFindStartupSecondaryBridgeFn := findStartupSecondaryBridgeFn
-	findStartupSecondaryBridgeFn = func(client.Client, string) (string, bool, error) {
+	findStartupSecondaryBridgeFn = func(client.Client, string) (string, error) {
 		findCalls++
 		if findCalls == 1 {
 			close(reconcileStarted)
@@ -637,7 +636,7 @@ func TestShutdownAndRestore(t *testing.T) {
 		} else {
 			t.Fatal("must not reconcile bridge after queue shutdown")
 		}
-		return "", false, nil
+		return "", nil
 	}
 	t.Cleanup(func() { findStartupSecondaryBridgeFn = prevFindStartupSecondaryBridgeFn })
 
@@ -1166,9 +1165,9 @@ func TestSyncBridgeRetriesStartupBridgeInitialization(t *testing.T) {
 
 	findCalls := 0
 	prevFindStartupSecondaryBridgeFn := findStartupSecondaryBridgeFn
-	findStartupSecondaryBridgeFn = func(client.Client, string) (string, bool, error) {
+	findStartupSecondaryBridgeFn = func(client.Client, string) (string, error) {
 		findCalls++
-		return brOld, false, nil
+		return brOld, nil
 	}
 	t.Cleanup(func() { findStartupSecondaryBridgeFn = prevFindStartupSecondaryBridgeFn })
 
@@ -1206,9 +1205,9 @@ func TestSyncBridgeRetriesDesiredBridgeCreation(t *testing.T) {
 
 	findCalls := 0
 	prevFindStartupSecondaryBridgeFn := findStartupSecondaryBridgeFn
-	findStartupSecondaryBridgeFn = func(client.Client, string) (string, bool, error) {
+	findStartupSecondaryBridgeFn = func(client.Client, string) (string, error) {
 		findCalls++
-		return "", false, nil
+		return "", nil
 	}
 	t.Cleanup(func() { findStartupSecondaryBridgeFn = prevFindStartupSecondaryBridgeFn })
 
@@ -1290,9 +1289,9 @@ func TestSyncBridgeCancelsDrainWhenDiscoveredBridgeBecomesDesired(t *testing.T) 
 	mockNewOVSBridgeByName(t, map[string]ovsconfig.OVSBridgeClient{brOld: oldMock})
 	findCalls := 0
 	prevFindStartupSecondaryBridgeFn := findStartupSecondaryBridgeFn
-	findStartupSecondaryBridgeFn = func(client.Client, string) (string, bool, error) {
+	findStartupSecondaryBridgeFn = func(client.Client, string) (string, error) {
 		findCalls++
-		return brOld, false, nil
+		return brOld, nil
 	}
 	t.Cleanup(func() { findStartupSecondaryBridgeFn = prevFindStartupSecondaryBridgeFn })
 
@@ -1420,8 +1419,8 @@ func newTestSecondaryNetworkController(prevCfg, desiredCfg *agenttypes.OVSBridge
 
 func mockStartupSecondaryBridge(t *testing.T, bridgeName string) {
 	prevFunc := findStartupSecondaryBridgeFn
-	findStartupSecondaryBridgeFn = func(client.Client, string) (string, bool, error) {
-		return bridgeName, false, nil
+	findStartupSecondaryBridgeFn = func(client.Client, string) (string, error) {
+		return bridgeName, nil
 	}
 	t.Cleanup(func() { findStartupSecondaryBridgeFn = prevFunc })
 }

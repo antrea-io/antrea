@@ -36,7 +36,7 @@ func TestMergeExternalIDs(t *testing.T) {
 		"antrea-type": "secondary-bridge",
 		"user-key":    "user-value",
 		"new-key":     "new-value",
-	}, MergeExternalIDs(current, desired))
+	}, mergeExternalIDs(current, desired))
 }
 
 func TestBuildPortDataCommon(t *testing.T) {

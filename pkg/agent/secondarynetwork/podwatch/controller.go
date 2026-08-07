@@ -96,9 +96,9 @@ type PodController struct {
 	ipPoolLister        crdlisters.IPPoolLister
 	podUpdateSubscriber channel.Subscriber
 	// bridgeMutex protects the OVS bridge lifecycle state, ovsBridgeClient, and
-	// interfaceConfigurator. VLAN operations and interface deletion hold a read lock
-	// while using bridge state. SR-IOV creation only snapshots interfaceConfigurator
-	// under the read lock because it does not depend on the OVS bridge.
+	// interfaceConfigurator. VLAN interface configuration and interface deletion
+	// hold a read lock while accessing bridge state. SR-IOV interface configuration
+	// does not hold the lock as it does not access the OVS bridge client.
 	bridgeMutex           sync.RWMutex
 	ovsBridgeClient       ovsconfig.OVSBridgeClient
 	ovsBridgeDraining     bool
@@ -862,7 +862,7 @@ func (pc *PodController) DrainOVSBridge() bool {
 
 // SetOVSBridgeClient replaces the OVS bridge client used by the PodController
 // and its interface configurator. Runtime bridge changes do not restore or
-// otherwise modify the InterfaceStore.
+// modify the InterfaceStore.
 func (pc *PodController) SetOVSBridgeClient(client ovsconfig.OVSBridgeClient) {
 	pc.bridgeMutex.Lock()
 	defer pc.bridgeMutex.Unlock()
@@ -875,7 +875,7 @@ func (pc *PodController) SetOVSBridgeClient(client ovsconfig.OVSBridgeClient) {
 	// same bridge client is re-attached to cancel an in-progress drain when the
 	// desired bridge name changes back to the current name.
 	pc.ovsBridgeDraining = false
-	klog.InfoS("Updated secondary OVS bridge client", "bridgePresent", client != nil)
+	klog.V(1).InfoS("Updated secondary OVS bridge client", "bridgePresent", client != nil)
 }
 
 // initializeSRIOVSecondaryInterfaceStore restores secondary interfaceStore for SR-IOV interfaces

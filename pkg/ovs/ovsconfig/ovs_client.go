@@ -252,7 +252,7 @@ func (br *OVSBridge) updateBridgeConfiguration(ctx context.Context) error {
 		if err != nil {
 			return err
 		}
-		update.ExternalIDs = MergeExternalIDs(currentExternalIDs, br.externalIDs)
+		update.ExternalIDs = mergeExternalIDs(currentExternalIDs, br.externalIDs)
 		fields = append(fields, &update.ExternalIDs)
 	}
 
@@ -268,8 +268,8 @@ func (br *OVSBridge) updateBridgeConfiguration(ctx context.Context) error {
 	return err
 }
 
-// MergeExternalIDs returns a copy of current external IDs with desired external IDs overlaid.
-func MergeExternalIDs(current, desired map[string]string) map[string]string {
+// mergeExternalIDs returns a copy of current external IDs with desired external IDs overlaid.
+func mergeExternalIDs(current, desired map[string]string) map[string]string {
 	merged := make(map[string]string, len(current)+len(desired))
 	for k, v := range current {
 		merged[k] = v
