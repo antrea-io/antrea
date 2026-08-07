@@ -118,12 +118,6 @@ func (c *Controller) enqueueSnapshot() {
 	c.queue.Add("snapshot")
 }
 
-// InformersSynced reports whether both the Node and AntreaNodeConfig informer caches
-// have completed an initial sync.
-func (c *Controller) InformersSynced() bool {
-	return c.nodeListerSynced() && c.ancListerSynced()
-}
-
 // getLocalNodeFromLister returns the Node for this agent's nodeName from the informer
 // cache. If the Node is not present (NotFound), it returns (nil, nil) because an empty
 // Node is valid snapshot input. Any other lister error is returned.
@@ -136,26 +130,6 @@ func (c *Controller) getLocalNodeFromLister() (*corev1.Node, error) {
 		return nil, nil
 	}
 	return nil, err
-}
-
-// CurrentSnapshot returns a deep-copied snapshot of the oldest AntreaNodeConfig
-// that matches this Node's labels. It returns nil if informers are not synced or
-// the local Node is not yet available.
-func (c *Controller) CurrentSnapshot() *Snapshot {
-	if !c.InformersSynced() {
-		return nil
-	}
-	node, err := c.getLocalNodeFromLister()
-	if err != nil {
-		klog.ErrorS(err, "Failed to get local Node from lister for snapshot", "node", c.nodeName)
-		return nil
-	}
-	if node == nil {
-		return nil
-	}
-	all, err := c.ancLister.List(labels.Everything())
-	effective := antreaNodeConfigForSnapshot(node, all, err)
-	return NewSnapshot(effective, err)
 }
 
 // Run waits for the AntreaNodeConfig and Node informer caches to sync, enqueues one
@@ -260,33 +234,27 @@ func (c *Controller) onNodeUpdate(oldObj, newObj interface{}) {
 	c.enqueueSnapshot()
 }
 
-// antreaNodeConfigForSnapshot returns the oldest AntreaNodeConfig that applies to
-// node when the list succeeded; otherwise nil so subscribers do not act on a
-// partial cluster view.
+// antreaNodeConfigForSnapshot returns the oldest AntreaNodeConfig whose
+// nodeSelector matches the given Node's labels. It returns nil when the list
+// failed (so subscribers do not act on a partial cluster view), when node is
+// nil, when no config matches, or when every matching config has an invalid
+// nodeSelector.
 func antreaNodeConfigForSnapshot(node *corev1.Node, all []*crdv1alpha1.AntreaNodeConfig, listErr error) *crdv1alpha1.AntreaNodeConfig {
 	if listErr != nil {
 		return nil
 	}
-	return OldestMatchingAntreaNodeConfigForNode(node, all)
-}
-
-// OldestMatchingAntreaNodeConfigForNode returns the AntreaNodeConfig whose
-// nodeSelector matches the given Node's labels and has the oldest
-// creationTimestamp (name breaks ties). It returns nil when node is nil, when no
-// config matches, or when every matching config has an invalid nodeSelector.
-func OldestMatchingAntreaNodeConfigForNode(node *corev1.Node, configs []*crdv1alpha1.AntreaNodeConfig) *crdv1alpha1.AntreaNodeConfig {
-	matched := SelectAntreaNodeConfigsForNode(node, configs)
+	matched := selectAntreaNodeConfigsForNode(node, all)
 	if len(matched) == 0 {
 		return nil
 	}
 	return matched[0]
 }
 
-// SelectAntreaNodeConfigsForNode returns AntreaNodeConfig objects whose nodeSelector
+// selectAntreaNodeConfigsForNode returns AntreaNodeConfig objects whose nodeSelector
 // matches the given Node's labels, sorted by creationTimestamp ascending (oldest
 // first; name is used as a stable tiebreaker when timestamps are equal).
 // Configs with an invalid nodeSelector are skipped with a log line.
-func SelectAntreaNodeConfigsForNode(node *corev1.Node, configs []*crdv1alpha1.AntreaNodeConfig) []*crdv1alpha1.AntreaNodeConfig {
+func selectAntreaNodeConfigsForNode(node *corev1.Node, configs []*crdv1alpha1.AntreaNodeConfig) []*crdv1alpha1.AntreaNodeConfig {
 	if node == nil {
 		return nil
 	}
