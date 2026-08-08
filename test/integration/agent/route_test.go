@@ -274,7 +274,8 @@ func TestInitialize(t *testing.T) {
 -A ANTREA-OUTPUT -o antrea-gw0 -m comment --comment "Antrea: mark LOCAL output packets" -m addrtype --src-type LOCAL -j MARK --set-xmark 0x80000000/0x80000000
 `,
 			}
-			if tc.networkConfig.TrafficEncapMode == config.TrafficEncapModeHybrid {
+			if tc.networkConfig.TrafficEncapMode == config.TrafficEncapModeHybrid ||
+				tc.networkConfig.TrafficEncapMode == config.TrafficEncapModeNoEncap {
 				expectedIPTables["mangle"] = `:ANTREA-OUTPUT - [0:0]
 :ANTREA-POSTROUTING - [0:0]
 :ANTREA-PREROUTING - [0:0]

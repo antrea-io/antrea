@@ -528,9 +528,9 @@ API.
 
 ## Limitations
 
-This feature is currently only supported for Nodes running Linux and "encap" / "hybrid"
-mode. The support for Windows and other traffic modes will be added in the
-future.
+This feature is currently supported for Nodes running Linux and "encap" / "hybrid"
+/ "noEncap" / WireGuard encryption mode. The support for Windows and other traffic
+modes will be added in the future.
 
 The previous implementation of Antrea Egress before Antrea v1.7.0 does not work
 with the `strictARP` configuration of `kube-proxy` IPVS mode. The `strictARP`

@@ -234,6 +234,10 @@ type NetworkConfig struct {
 	EnableMulticlusterGW       bool
 	MulticlusterEncryptionMode TrafficEncryptionModeType
 
+	// EnableEgress indicates the Egress feature is enabled. It is used to determine whether
+	// a tunnel interface should be created in noEncap mode for Egress traffic forwarding.
+	EnableEgress bool
+
 	EnableHostNetworkAcceleration bool
 	HostNetworkMode               HostNetworkMode
 }
@@ -288,7 +292,12 @@ func (nc *NetworkConfig) NeedsTunnelInterface() bool {
 	// cross-cluster traffic from a regular Node to the gateway Node for the source cluster
 	// always goes through antrea-tun0, regardless of the actual "traffic mode" for the source
 	// cluster.
-	return nc.TrafficEncapMode.SupportsEncap() || nc.EnableMulticlusterGW
+	// In noEncap mode with Egress enabled, the tunnel interface is required so that OVS can
+	// forward Egress traffic from a non-Egress Node to the Egress Node via the tunnel. Regular
+	// Pod-to-Pod traffic continues to use direct routing and is unaffected.
+	return nc.TrafficEncapMode.SupportsEncap() ||
+		nc.EnableMulticlusterGW ||
+		nc.TrafficEncapMode == TrafficEncapModeNoEncap && nc.EnableEgress
 }
 
 // NeedsDirectRoutingToPeer returns true if Pod traffic to peer Node needs a direct route installed to the routing table.
@@ -329,7 +338,7 @@ func (nc *NetworkConfig) CalculateMTUDeduction(isIPv6 bool) int {
 		}
 		return nc.MTUDeduction
 	}
-	if nc.TrafficEncapMode.SupportsEncap() {
+	if nc.TrafficEncapMode.SupportsEncap() || nc.TrafficEncapMode == TrafficEncapModeNoEncap && nc.EnableEgress {
 		nc.MTUDeduction = nc.getEncapMTUDeduction(isIPv6)
 	}
 	switch nc.TrafficEncryptionMode {
