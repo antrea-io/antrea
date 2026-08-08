@@ -1,0 +1,138 @@
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: flowaccesscontrols.crd.antrea.io
+  labels:
+    app: flow-aggregator
+spec:
+  group: crd.antrea.io
+  versions:
+    - name: v1alpha1
+      served: true
+      storage: true
+      additionalPrinterColumns:
+        - description: The kind of the first subject this FlowAccessControl grants flow visibility to.
+          jsonPath: .spec.subjects[0].kind
+          name: Subject Kind
+          type: string
+        - description: The name of the first subject this FlowAccessControl grants flow visibility to.
+          jsonPath: .spec.subjects[0].name
+          name: Subject Name
+          type: string
+        - jsonPath: .metadata.creationTimestamp
+          name: Age
+          type: date
+      schema:
+        openAPIV3Schema:
+          type: object
+          required:
+            - spec
+          properties:
+            spec:
+              type: object
+              required:
+                - subjects
+                - namespaceSelector
+              properties:
+                subjects:
+                  type: array
+                  minItems: 1
+                  description: >
+                    The Kubernetes identities this policy grants flow visibility to. No wildcards
+                    are supported: a name of '*' matches a subject literally named '*', and
+                    nothing else.
+                  items:
+                    type: object
+                    required:
+                      - kind
+                      - name
+                    properties:
+                      kind:
+                        type: string
+                        description: >
+                          The kind of this subject. A ServiceAccount subject is equivalent to a
+                          User subject naming that ServiceAccount's
+                          'system:serviceaccount:<namespace>:<name>' identity, without requiring
+                          that string to be assembled by hand.
+                        enum:
+                          - User
+                          - Group
+                          - ServiceAccount
+                      name:
+                        type: string
+                        description: >
+                          For User and Group, the username or group name exactly as it will be
+                          resolved from the client's credential. For ServiceAccount, the
+                          ServiceAccount's name.
+                        minLength: 1
+                      namespace:
+                        type: string
+                        description: >
+                          The Namespace of the ServiceAccount. Required when kind is
+                          'ServiceAccount', and must not be set for any other kind.
+                    x-kubernetes-validations:
+                      - rule: "self.kind != 'ServiceAccount' || (has(self.namespace) && self.namespace != '')"
+                        message: "namespace is required when kind is ServiceAccount"
+                      - rule: "self.kind == 'ServiceAccount' || !has(self.namespace) || self.namespace == ''"
+                        message: "namespace must not be set unless kind is ServiceAccount"
+                namespaceSelector:
+                  type: object
+                  description: >
+                    Selects the Namespaces whose flows the subjects are allowed to observe. It is
+                    re-evaluated whenever a Namespace's labels change. To grant access to specific
+                    Namespaces by name, match on the 'kubernetes.io/metadata.name' label, which
+                    Kubernetes sets automatically on every Namespace.
+
+                    IMPORTANT: a null selector and an empty selector are NOT equivalent, and the
+                    difference is the difference between granting nothing and granting everything.
+                    A null selector (the field is omitted) selects no Namespace at all, and the
+                    subjects are granted no flow visibility; such an object is rejected, and this
+                    field is required precisely so that the choice has to be made explicitly. An
+                    empty selector ({}) selects every Namespace, and the subjects are granted
+                    cluster-wide flow visibility, including flows that are not associated with any
+                    Namespace. These are the same semantics as the PodDisruptionBudget selector in
+                    policy/v1.
+
+                    Note that several FlowAccessControl objects may name the same subject, in which
+                    case that subject may observe the union of the Namespaces their selectors
+                    match.
+                  properties:
+                    matchExpressions:
+                      items:
+                        required:
+                          - key
+                          - operator
+                        properties:
+                          key:
+                            type: string
+                          operator:
+                            enum:
+                              - In
+                              - NotIn
+                              - Exists
+                              - DoesNotExist
+                            type: string
+                          values:
+                            items:
+                              type: string
+                              pattern: "^(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])?$"
+                            type: array
+                        type: object
+                        x-kubernetes-validations:
+                          - rule: "!(self.operator in ['In', 'NotIn']) || (has(self.values) && size(self.values) > 0)"
+                            message: "values must be non-empty when operator is In or NotIn"
+                          - rule: "!(self.operator in ['Exists', 'DoesNotExist']) || !has(self.values) || size(self.values) == 0"
+                            message: "values must be empty when operator is Exists or DoesNotExist"
+                      type: array
+                    matchLabels:
+                      additionalProperties:
+                        type: string
+                        pattern: "^(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])?$"
+                      type: object
+  scope: Cluster
+  names:
+    plural: flowaccesscontrols
+    singular: flowaccesscontrol
+    kind: FlowAccessControl
+    shortNames:
+      - fac

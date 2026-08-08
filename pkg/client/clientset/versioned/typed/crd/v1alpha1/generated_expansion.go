@@ -22,6 +22,8 @@ type BGPPolicyExpansion interface{}
 
 type ExternalNodeExpansion interface{}
 
+type FlowAccessControlExpansion interface{}
+
 type FlowExporterDestinationExpansion interface{}
 
 type NodeLatencyMonitorExpansion interface{}

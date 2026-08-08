@@ -28,6 +28,8 @@ type Interface interface {
 	BGPPolicies() BGPPolicyInformer
 	// ExternalNodes returns a ExternalNodeInformer.
 	ExternalNodes() ExternalNodeInformer
+	// FlowAccessControls returns a FlowAccessControlInformer.
+	FlowAccessControls() FlowAccessControlInformer
 	// FlowExporterDestinations returns a FlowExporterDestinationInformer.
 	FlowExporterDestinations() FlowExporterDestinationInformer
 	// NodeLatencyMonitors returns a NodeLatencyMonitorInformer.
@@ -62,6 +64,11 @@ func (v *version) BGPPolicies() BGPPolicyInformer {
 // ExternalNodes returns a ExternalNodeInformer.
 func (v *version) ExternalNodes() ExternalNodeInformer {
 	return &externalNodeInformer{factory: v.factory, namespace: v.namespace, tweakListOptions: v.tweakListOptions}
+}
+
+// FlowAccessControls returns a FlowAccessControlInformer.
+func (v *version) FlowAccessControls() FlowAccessControlInformer {
+	return &flowAccessControlInformer{factory: v.factory, tweakListOptions: v.tweakListOptions}
 }
 
 // FlowExporterDestinations returns a FlowExporterDestinationInformer.

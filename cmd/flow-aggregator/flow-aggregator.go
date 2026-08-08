@@ -25,6 +25,8 @@ import (
 	"k8s.io/client-go/rest"
 	"k8s.io/klog/v2"
 
+	crdclientset "antrea.io/antrea/v2/pkg/client/clientset/versioned"
+	crdinformers "antrea.io/antrea/v2/pkg/client/informers/externalversions"
 	aggregator "antrea.io/antrea/v2/pkg/flowaggregator"
 	"antrea.io/antrea/v2/pkg/flowaggregator/apiserver"
 	"antrea.io/antrea/v2/pkg/log"
@@ -51,7 +53,7 @@ func run(configFile string) error {
 
 	log.StartLogFileNumberMonitor(stopCh)
 
-	k8sClient, err := createK8sClient()
+	k8sClient, restConfig, err := createK8sClient()
 	if err != nil {
 		return fmt.Errorf("error when creating K8s client: %w", err)
 	}
@@ -63,6 +65,14 @@ func run(configFile string) error {
 	nodeStore := objectstore.NewNodeStore(nodeInformer.Informer())
 	serviceInformer := informerFactory.Core().V1().Services()
 	serviceStore := objectstore.NewServiceStore(serviceInformer.Informer())
+	namespaceInformer := informerFactory.Core().V1().Namespaces()
+
+	crdClient, err := crdclientset.NewForConfig(restConfig)
+	if err != nil {
+		return fmt.Errorf("error when creating CRD client: %w", err)
+	}
+	crdInformerFactory := crdinformers.NewSharedInformerFactory(crdClient, informerDefaultResync)
+	flowAccessControlInformer := crdInformerFactory.Crd().V1alpha1().FlowAccessControls()
 
 	klog.InfoS("Retrieving Antrea cluster UUID")
 	clusterUUID, err := aggregator.GetClusterUUID(ctx, k8sClient)
@@ -77,6 +87,8 @@ func run(configFile string) error {
 		podStore,
 		nodeStore,
 		serviceStore,
+		namespaceInformer,
+		flowAccessControlInformer,
 		configFile,
 	)
 	if err != nil {
@@ -109,6 +121,7 @@ func run(configFile string) error {
 	go apiServer.Run(ctx)
 
 	informerFactory.Start(stopCh)
+	crdInformerFactory.Start(stopCh)
 
 	<-stopCh
 	klog.InfoS("Stopping Flow Aggregator")
@@ -116,14 +129,14 @@ func run(configFile string) error {
 	return nil
 }
 
-func createK8sClient() (kubernetes.Interface, error) {
+func createK8sClient() (kubernetes.Interface, *rest.Config, error) {
 	config, err := rest.InClusterConfig()
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	k8sClient, err := kubernetes.NewForConfig(config)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-	return k8sClient, nil
+	return k8sClient, config, nil
 }

@@ -37,6 +37,7 @@ import (
 	timestamppb "google.golang.org/protobuf/types/known/timestamppb"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/kubernetes/fake"
 	"k8s.io/client-go/tools/cache"
@@ -44,6 +45,8 @@ import (
 	"k8s.io/utils/ptr"
 
 	flowpb "antrea.io/antrea/v2/pkg/apis/flow/v1alpha1"
+	crdfake "antrea.io/antrea/v2/pkg/client/clientset/versioned/fake"
+	crdinformers "antrea.io/antrea/v2/pkg/client/informers/externalversions"
 	flowaggregatorconfig "antrea.io/antrea/v2/pkg/config/flowaggregator"
 	"antrea.io/antrea/v2/pkg/flowaggregator/certificate"
 	collectortesting "antrea.io/antrea/v2/pkg/flowaggregator/collector/testing"
@@ -1169,7 +1172,9 @@ func TestNewFlowAggregator(t *testing.T) {
 			require.NoError(t, err)
 			_, err = f.Write(b)
 			require.NoError(t, err)
-			fa, err := NewFlowAggregator(client, clusterUUID, mockPodStore, mockNodeStore, mockServiceStore, fileName)
+			namespaceInformer := informers.NewSharedInformerFactory(client, 0).Core().V1().Namespaces()
+			flowAccessControlInformer := crdinformers.NewSharedInformerFactory(crdfake.NewSimpleClientset(), 0).Crd().V1alpha1().FlowAccessControls()
+			fa, err := NewFlowAggregator(client, clusterUUID, mockPodStore, mockNodeStore, mockServiceStore, namespaceInformer, flowAccessControlInformer, fileName)
 			require.NoError(t, err)
 			assert.Equal(t, clusterUUID, fa.clusterUUID)
 			assert.Equal(t, clusterID, fa.clusterID)

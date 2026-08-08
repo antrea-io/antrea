@@ -6,5 +6,8 @@ metadata:
   name: {{ include "flow-aggregator.fullname" . }}-role
 rules:
   - apiGroups: [""]
-    resources: ["pods", "nodes", "services"]
+    resources: ["pods", "nodes", "services", "namespaces"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["crd.antrea.io"]
+    resources: ["flowaccesscontrols"]
     verbs: ["get", "list", "watch"]
