@@ -242,11 +242,17 @@ func (br *OVSBridge) lookupByName(ctx context.Context) (bool, error) {
 func (br *OVSBridge) updateBridgeConfiguration(ctx context.Context) error {
 	update := &Bridge{
 		// Use Openflow protocol version 1.0 and 1.5.
-		Protocols:           []string{openflowProtoVersion10, openflowProtoVersion15},
-		DatapathType:        string(br.datapathType),
-		McastSnoopingEnable: br.mcastSnoopingEnable,
+		Protocols:    []string{openflowProtoVersion10, openflowProtoVersion15},
+		DatapathType: string(br.datapathType),
 	}
-	fields := []interface{}{&update.Protocols, &update.DatapathType, &update.McastSnoopingEnable}
+	fields := []interface{}{&update.Protocols, &update.DatapathType}
+	// Create() only enables multicast snooping on an existing bridge; when it was
+	// not requested, the setting is left untouched. Use SetMcastSnooping to
+	// disable it explicitly.
+	if br.mcastSnoopingEnable {
+		update.McastSnoopingEnable = true
+		fields = append(fields, &update.McastSnoopingEnable)
+	}
 	if br.externalIDs != nil {
 		currentExternalIDs, err := br.GetExternalIDs()
 		if err != nil {

@@ -330,9 +330,12 @@ func (c *Controller) initializeBridgeState(desired *agenttypes.OVSBridgeConfig) 
 
 	var startupBridgeClient ovsconfig.OVSBridgeClient
 	if startupBrName != "" {
-		// The desired multicast snooping setting is applied when attaching to an
-		// existing bridge so that Create() does not transiently disable it.
-		startupBridgeClient, err = createOVSBridge(startupBrName, c.ovsdbClient, enableMulticastSnooping)
+		// The discovered bridge is the desired one (a managed bridge with the desired
+		// name, or a legacy bridge matching it), or a leftover managed bridge from a
+		// previous config. Only the former is configured with the desired multicast
+		// snooping setting; the latter is drained and deleted by reconcileBridge, so
+		// its configuration must not be modified.
+		startupBridgeClient, err = createOVSBridge(startupBrName, c.ovsdbClient, enableMulticastSnooping && startupBrName == desiredBrName)
 		if err != nil {
 			return fmt.Errorf("failed to attach to startup secondary OVS bridge %s: %w", startupBrName, err)
 		}
