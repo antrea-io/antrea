@@ -186,7 +186,7 @@ func TestConnectPhyInterfacesToOVSBridge(t *testing.T) {
 	}
 }
 
-func TestRestoreStaleHostConnectionsConditionally(t *testing.T) {
+func TestRestoreStaleHostConnections(t *testing.T) {
 	tests := []struct {
 		name             string
 		desired          *agenttypes.OVSBridgeConfig
@@ -271,7 +271,7 @@ func TestRestoreStaleHostConnectionsConditionally(t *testing.T) {
 				existingPorts[p.IFName] = p
 			}
 
-			err := restoreStaleHostConnectionsConditionally(tc.desired, tc.ports, existingPorts)
+			err := restoreStaleHostConnections(tc.desired, tc.ports, existingPorts)
 			if tc.expectedErr != "" {
 				assert.ErrorContains(t, err, tc.expectedErr)
 			} else {
@@ -457,7 +457,8 @@ func TestInitializeWithStaticBridgeConfig(t *testing.T) {
 				bridgeClient.EXPECT().SetMcastSnooping(false).Return(nil)
 				bridgeClient.EXPECT().GetPortList().Return(nil, nil)
 			} else {
-				// The bridge is created and reconciled through updatePhysicalInterfaces.
+				// The bridge is created and reconciled through createAndConfigureBridge.
+				bridgeClient.EXPECT().SetMcastSnooping(false).Return(nil)
 				bridgeClient.EXPECT().GetPortList().Return([]ovsconfig.OVSPortData{}, nil)
 			}
 
@@ -745,6 +746,7 @@ func TestReconcileBridge(t *testing.T) {
 			desiredCfg: bridgeConfig(brNew, eth1),
 			expectedCalls: func(old, new *ovsconfigtest.MockOVSBridgeClient) {
 				new.EXPECT().Create().Return(nil)
+				new.EXPECT().SetMcastSnooping(false).Return(nil)
 				new.EXPECT().GetPortList().Return([]ovsconfig.OVSPortData{}, nil).Times(1)
 				new.EXPECT().GetOFPort(eth1+"~").Return(int32(0), client.ErrNotFound)
 				new.EXPECT().CreateUplinkPort(eth1+"~", int32(0), map[string]string{"antrea-type": "uplink"}).Return("", nil)
@@ -760,6 +762,7 @@ func TestReconcileBridge(t *testing.T) {
 			desiredCfg: &agenttypes.OVSBridgeConfig{BridgeName: brNew, PhysicalInterfaces: []agenttypes.PhysicalInterfaceConfig{{Name: eth1}, {Name: eth2}}},
 			expectedCalls: func(old, new *ovsconfigtest.MockOVSBridgeClient) {
 				new.EXPECT().Create().Return(nil)
+				new.EXPECT().SetMcastSnooping(false).Return(nil)
 				new.EXPECT().GetPortList().Return([]ovsconfig.OVSPortData{
 					{IFName: eth1, IFType: "internal", ExternalIDs: map[string]string{"antrea-type": "host"}},
 					{IFName: eth1 + "~", ExternalIDs: map[string]string{"antrea-type": "uplink"}},
@@ -778,6 +781,7 @@ func TestReconcileBridge(t *testing.T) {
 			desiredCfg: &agenttypes.OVSBridgeConfig{BridgeName: brNew, PhysicalInterfaces: []agenttypes.PhysicalInterfaceConfig{{Name: eth1}, {Name: eth2}}},
 			expectedCalls: func(old, new *ovsconfigtest.MockOVSBridgeClient) {
 				new.EXPECT().Create().Return(nil)
+				new.EXPECT().SetMcastSnooping(false).Return(nil)
 				new.EXPECT().GetPortList().Return([]ovsconfig.OVSPortData{}, nil).Times(1)
 				new.EXPECT().GetOFPort(eth1).Return(int32(0), client.ErrNotFound)
 				new.EXPECT().CreateUplinkPort(eth1, int32(0), map[string]string{"antrea-type": "uplink"}).Return("", nil)
@@ -791,6 +795,7 @@ func TestReconcileBridge(t *testing.T) {
 			desiredCfg: bridgeConfig(brNew),
 			expectedCalls: func(old, new *ovsconfigtest.MockOVSBridgeClient) {
 				new.EXPECT().Create().Return(nil)
+				new.EXPECT().SetMcastSnooping(false).Return(nil)
 				new.EXPECT().GetPortList().Return([]ovsconfig.OVSPortData{}, nil).Times(1)
 			},
 		},
@@ -805,6 +810,7 @@ func TestReconcileBridge(t *testing.T) {
 				old.EXPECT().GetPortList().Return([]ovsconfig.OVSPortData{}, nil)
 				old.EXPECT().Delete().Return(nil)
 				new.EXPECT().Create().Return(nil)
+				new.EXPECT().SetMcastSnooping(false).Return(nil)
 				new.EXPECT().GetPortList().Return([]ovsconfig.OVSPortData{}, nil).Times(1)
 				new.EXPECT().GetOFPort(eth1).Return(int32(0), client.ErrNotFound)
 				new.EXPECT().CreateUplinkPort(eth1, int32(0), map[string]string{"antrea-type": "uplink"}).Return("", nil)
@@ -1174,6 +1180,7 @@ func TestSyncBridgeRetriesDesiredBridgeCreation(t *testing.T) {
 	mock.InOrder(
 		bridgeClient.EXPECT().Create().Return(createErr),
 		bridgeClient.EXPECT().Create().Return(nil),
+		bridgeClient.EXPECT().SetMcastSnooping(false).Return(nil),
 		bridgeClient.EXPECT().GetPortList().Return([]ovsconfig.OVSPortData{}, nil),
 	)
 
@@ -1363,6 +1370,7 @@ func TestSyncBridgeReconcilesStaticBridgeOnANCListError(t *testing.T) {
 
 	mockNewOVSBridge(t, bridgeClient)
 	bridgeClient.EXPECT().Create().Return(nil)
+	bridgeClient.EXPECT().SetMcastSnooping(false).Return(nil)
 	bridgeClient.EXPECT().GetPortList().Return([]ovsconfig.OVSPortData{}, nil)
 
 	fakePc := &fakePodController{}

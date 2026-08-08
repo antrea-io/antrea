@@ -69,55 +69,6 @@ func selectStartupSecondaryBridge(bridges []ovsconfig.OVSBridgeData, desiredBrid
 	return "", nil
 }
 
-type restoredHostConnection struct {
-	hostIFName   string
-	uplinkIFName string
-}
-
-// restoreStaleHostConnectionsFromPortList detects Antrea-managed host-connection
-// port pairs (e.g. "eth1" internal host port + "eth1~" uplink) and restores each
-// of them to its original host form. A single-interface bridge moves the host IP
-// to the internal host port and renames the kernel interface to "eth1~"; a
-// multi-interface bridge does not do this and attaches the host interfaces as
-// plain uplink ports. Any leftover host-connection pair (from a previous
-// single-interface config or a single-interface to multi-interface migration)
-// must therefore be restored: RestoreHostInterfaceConfiguration removes both OVS
-// ports and renames "eth1~" back to "eth1" on the host. Pairs for which
-// shouldSkip returns true are left untouched.
-func restoreStaleHostConnectionsFromPortList(
-	bridgeName string,
-	portList []ovsconfig.OVSPortData,
-	shouldSkip func(hostIFName string) bool,
-) ([]restoredHostConnection, error) {
-	portsByName := make(map[string]ovsconfig.OVSPortData, len(portList))
-	for _, p := range portList {
-		portsByName[p.IFName] = p
-	}
-
-	var restored []restoredHostConnection
-	for _, p := range portList {
-		if p.IFType != "internal" ||
-			p.ExternalIDs[interfacestore.AntreaInterfaceTypeKey] != interfacestore.AntreaHost {
-			continue
-		}
-		bridgedName := util.GenerateUplinkInterfaceName(p.IFName)
-		sibling, siblingExists := portsByName[bridgedName]
-		if !siblingExists ||
-			sibling.ExternalIDs[interfacestore.AntreaInterfaceTypeKey] != interfacestore.AntreaUplink ||
-			shouldSkip != nil && shouldSkip(p.IFName) {
-			continue
-		}
-		klog.InfoS("Detected stale host-connection interface, restoring it before re-adding as uplink",
-			"interface", p.IFName, "bridge", bridgeName)
-		if err := restoreHostInterfaceConfigFn(bridgeName, p.IFName); err != nil {
-			return nil, fmt.Errorf("failed to restore stale host-connection interface %s on bridge %s: %w",
-				p.IFName, bridgeName, err)
-		}
-		restored = append(restored, restoredHostConnection{hostIFName: p.IFName, uplinkIFName: bridgedName})
-	}
-	return restored, nil
-}
-
 // clearStaleTrunks calls SetPortTrunks(nil) for any port that has a non-empty
 // trunk list in OVS but whose desired config carries no AllowedVLANs. This
 // handles the agent-restart scenario where the OVS port was previously configured
@@ -161,23 +112,17 @@ func clearStaleTrunks(ovsBridgeClient ovsconfig.OVSBridgeClient, phyInterfaces [
 // createOVSBridge creates or attaches to an OVS bridge with the given name.
 // The bridge is always marked as an Antrea-managed secondary bridge: Create()
 // merges the external ID into an existing bridge as well, which is how a legacy
-// bridge gets converted into a managed one. enableMulticastSnooping sets
-// multicast snooping on a newly created bridge and, when true, on an existing
-// bridge as well; when false, Create() leaves an existing bridge's setting
-// untouched.
+// bridge gets converted into a managed one. Create() does not touch multicast
+// snooping on an existing bridge; the desired setting is applied explicitly by
+// the caller with SetMcastSnooping.
 func createOVSBridge(
 	bridgeName string,
 	ovsdbClient client.Client,
-	enableMulticastSnooping bool,
 ) (ovsconfig.OVSBridgeClient, error) {
-	var options []ovsconfig.OVSBridgeOption
-	if enableMulticastSnooping {
-		options = append(options, ovsconfig.WithMcastSnooping())
-	}
-	options = append(options, ovsconfig.WithExternalIDs(map[string]string{
-		interfacestore.AntreaInterfaceTypeKey: interfacestore.AntreaSecondaryBridge,
-	}))
-	bridgeClient := newOVSBridgeFn(bridgeName, ovsconfig.OVSDatapathSystem, ovsdbClient, options...)
+	bridgeClient := newOVSBridgeFn(bridgeName, ovsconfig.OVSDatapathSystem, ovsdbClient,
+		ovsconfig.WithExternalIDs(map[string]string{
+			interfacestore.AntreaInterfaceTypeKey: interfacestore.AntreaSecondaryBridge,
+		}))
 	if err := bridgeClient.Create(); err != nil {
 		return nil, fmt.Errorf("failed to create OVS bridge %s: %w", bridgeName, err)
 	}
@@ -220,10 +165,7 @@ func deleteBridge(client ovsconfig.OVSBridgeClient) error {
 	return nil
 }
 
-func updatePhysicalInterfaces(
-	client ovsconfig.OVSBridgeClient,
-	desired *agenttypes.OVSBridgeConfig,
-) error {
+func updatePhysicalInterfaces(client ovsconfig.OVSBridgeClient, desired *agenttypes.OVSBridgeConfig) error {
 	// Build a map of currently present ports on the bridge, keyed by interface name.
 	portList, err := client.GetPortList()
 	if err != nil {
@@ -234,10 +176,7 @@ func updatePhysicalInterfaces(
 		existingPorts[p.IFName] = p
 	}
 
-	// restoreStaleHostConnectionsConditionally removes the restored host-connection
-	// interfaces (including stale uplink ports) from existingPorts, so they are not
-	// treated as desired ports or re-added below.
-	if err := restoreStaleHostConnectionsConditionally(desired, portList, existingPorts); err != nil {
+	if err := restoreStaleHostConnections(desired, portList, existingPorts); err != nil {
 		return err
 	}
 
@@ -310,11 +249,17 @@ func updatePhysicalInterfaces(
 	return nil
 }
 
-// restoreStaleHostConnectionsConditionally restores stale host-connection pairs
-// observed in OVSDB, skipping the host connection of the current single-interface
-// config, which is not stale. It removes the restored interfaces from existingPorts,
-// so the caller does not re-add them later.
-func restoreStaleHostConnectionsConditionally(
+// restoreStaleHostConnections restores Antrea-managed host-connection port pairs
+// (e.g. "eth1" internal host port + "eth1~" uplink) observed in OVSDB to their
+// original host form. A single-interface bridge moves the host IP to the internal
+// host port and renames the kernel interface to "eth1~"; a multi-interface bridge
+// attaches the host interfaces as plain uplink ports instead. Any leftover
+// host-connection pair (from a previous single-interface config or a
+// single-interface to multi-interface migration) must therefore be restored:
+// RestoreHostInterfaceConfiguration removes both OVS ports and renames "eth1~"
+// back to "eth1" on the host. The restored interfaces are removed from
+// existingPorts, so the caller does not re-add them later.
+func restoreStaleHostConnections(
 	desired *agenttypes.OVSBridgeConfig,
 	portList []ovsconfig.OVSPortData,
 	existingPorts map[string]ovsconfig.OVSPortData,
@@ -325,19 +270,33 @@ func restoreStaleHostConnectionsConditionally(
 	}
 	keepSingleHostConnection := len(desired.PhysicalInterfaces) == 1
 
-	// When there is a single desired physical interface which is already connected
-	// to the bridge as a host connection, the connection is the desired state and
-	// does not need to be restored.
-	restored, err := restoreStaleHostConnectionsFromPortList(desired.BridgeName, portList, func(hostIFName string) bool {
-		isDesired := desiredIfaces.Has(hostIFName)
-		return keepSingleHostConnection && isDesired
-	})
-	if err != nil {
-		return err
+	portsByName := make(map[string]ovsconfig.OVSPortData, len(portList))
+	for _, p := range portList {
+		portsByName[p.IFName] = p
 	}
-	for _, conn := range restored {
-		delete(existingPorts, conn.hostIFName)
-		delete(existingPorts, conn.uplinkIFName)
+	for _, p := range portList {
+		if p.IFType != "internal" ||
+			p.ExternalIDs[interfacestore.AntreaInterfaceTypeKey] != interfacestore.AntreaHost {
+			continue
+		}
+		bridgedName := util.GenerateUplinkInterfaceName(p.IFName)
+		sibling, siblingExists := portsByName[bridgedName]
+		// When there is a single desired physical interface which is already connected
+		// to the bridge as a host connection, the connection is the desired state and
+		// does not need to be restored.
+		if !siblingExists ||
+			sibling.ExternalIDs[interfacestore.AntreaInterfaceTypeKey] != interfacestore.AntreaUplink ||
+			keepSingleHostConnection && desiredIfaces.Has(p.IFName) {
+			continue
+		}
+		klog.InfoS("Detected stale host-connection interface, restoring it before re-adding as uplink",
+			"interface", p.IFName, "bridge", desired.BridgeName)
+		if err := restoreHostInterfaceConfigFn(desired.BridgeName, p.IFName); err != nil {
+			return fmt.Errorf("failed to restore stale host-connection interface %s on bridge %s: %w",
+				p.IFName, desired.BridgeName, err)
+		}
+		delete(existingPorts, p.IFName)
+		delete(existingPorts, bridgedName)
 	}
 	return nil
 }

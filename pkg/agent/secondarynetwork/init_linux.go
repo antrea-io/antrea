@@ -318,10 +318,8 @@ func (c *Controller) initializeBridgeState(desired *agenttypes.OVSBridgeConfig) 
 	}
 
 	desiredBrName := ""
-	enableMulticastSnooping := false
 	if desired != nil {
 		desiredBrName = desired.BridgeName
-		enableMulticastSnooping = desired.EnableMulticastSnooping
 	}
 	startupBrName, err := findStartupSecondaryBridgeFn(c.ovsdbClient, desiredBrName)
 	if err != nil {
@@ -330,12 +328,7 @@ func (c *Controller) initializeBridgeState(desired *agenttypes.OVSBridgeConfig) 
 
 	var startupBridgeClient ovsconfig.OVSBridgeClient
 	if startupBrName != "" {
-		// The discovered bridge is the desired one (a managed bridge with the desired
-		// name, or a legacy bridge matching it), or a leftover managed bridge from a
-		// previous config. Only the former is configured with the desired multicast
-		// snooping setting; the latter is drained and deleted by reconcileBridge, so
-		// its configuration must not be modified.
-		startupBridgeClient, err = createOVSBridge(startupBrName, c.ovsdbClient, enableMulticastSnooping && startupBrName == desiredBrName)
+		startupBridgeClient, err = createOVSBridge(startupBrName, c.ovsdbClient)
 		if err != nil {
 			return fmt.Errorf("failed to attach to startup secondary OVS bridge %s: %w", startupBrName, err)
 		}
@@ -432,11 +425,17 @@ func (c *Controller) reconcileBridge(desired *agenttypes.OVSBridgeConfig) error 
 // (or just deleted), but updatePhysicalInterfaces also cleans up any leftover state
 // in case it is not: stale host-connection pairs are restored and ports no longer
 // desired are removed.
-// Create() reuses an existing bridge with the same name.
+// Create() reuses an existing bridge with the same name. The desired multicast
+// snooping setting is applied explicitly: Create() never disables it on an
+// existing bridge, so SetMcastSnooping is the single place where the setting is
+// both enabled and disabled.
 func (c *Controller) createAndConfigureBridge(desired *agenttypes.OVSBridgeConfig) (ovsconfig.OVSBridgeClient, error) {
-	newClient, err := createOVSBridge(desired.BridgeName, c.ovsdbClient, desired.EnableMulticastSnooping)
+	newClient, err := createOVSBridge(desired.BridgeName, c.ovsdbClient)
 	if err != nil {
 		return nil, err
+	}
+	if err := newClient.SetMcastSnooping(desired.EnableMulticastSnooping); err != nil {
+		return nil, fmt.Errorf("failed to set multicast snooping on OVS bridge %s: %w", desired.BridgeName, err)
 	}
 	if err := updatePhysicalInterfaces(newClient, desired); err != nil {
 		return nil, err
