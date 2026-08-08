@@ -25,6 +25,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/sets"
+	"k8s.io/client-go/tools/cache"
 	"k8s.io/utils/ptr"
 
 	"antrea.io/antrea/v2/pkg/apis/controlplane"
@@ -557,6 +558,28 @@ func TestDeleteCG(t *testing.T) {
 	npc.deleteClusterGroup(&testCG)
 	_, found, _ := npc.internalGroupStore.Get(key)
 	assert.False(t, found, "expected internal Group to be deleted")
+}
+
+func TestDeleteCG_Tombstone(t *testing.T) {
+	selectorA := metav1.LabelSelector{MatchLabels: map[string]string{"foo1": "bar1"}}
+	testCG := crdv1beta1.ClusterGroup{
+		ObjectMeta: metav1.ObjectMeta{Name: "cgA", UID: "uidA"},
+		Spec: crdv1beta1.GroupSpec{
+			NamespaceSelector: &selectorA,
+		},
+	}
+	key := testCG.Name
+	_, npc := newController(nil, nil)
+	npc.addClusterGroup(&testCG)
+
+	// Deliver the delete as a tombstone, as the informer does after a watch reconnect.
+	npc.deleteClusterGroup(cache.DeletedFinalStateUnknown{
+		Key: key,
+		Obj: &testCG,
+	})
+
+	_, found, _ := npc.internalGroupStore.Get(key)
+	assert.False(t, found, "expected internal Group to be deleted from a tombstone delete")
 }
 
 func TestClusterClusterGroupMembersComputedConditionEqual(t *testing.T) {
