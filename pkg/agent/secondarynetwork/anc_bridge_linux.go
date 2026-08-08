@@ -87,7 +87,7 @@ func ovsBridgeFromStatic(staticCfg *agentconfig.SecondaryNetworkConfig) *agentty
 // convertCRDSecondaryNetwork converts from the CRD type to the effective bridge
 // config. It returns nil when the CRD config does not specify a valid OVS bridge
 // (the list is empty or the sole bridge has an empty name, both treated as
-// unspecified), so static agent config stays in effect.
+// unspecified).
 func convertCRDSecondaryNetwork(in *crdv1alpha1.SecondaryNetworkConfig, antreaNodeConfigName string) *agenttypes.OVSBridgeConfig {
 	if len(in.OVSBridges) == 0 {
 		return nil

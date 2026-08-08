@@ -266,14 +266,12 @@ func TestRestoreStaleHostConnectionsConditionally(t *testing.T) {
 			}
 			t.Cleanup(func() { restoreHostInterfaceConfigFn = origRestore })
 
-			existingPorts := make(map[string]string, len(tc.ports))
-			existingIFTypes := make(map[string]string, len(tc.ports))
+			existingPorts := make(map[string]ovsconfig.OVSPortData, len(tc.ports))
 			for _, p := range tc.ports {
-				existingPorts[p.IFName] = p.UUID
-				existingIFTypes[p.IFName] = p.IFType
+				existingPorts[p.IFName] = p
 			}
 
-			err := restoreStaleHostConnectionsConditionally(tc.desired, tc.ports, existingPorts, existingIFTypes)
+			err := restoreStaleHostConnectionsConditionally(tc.desired, tc.ports, existingPorts)
 			if tc.expectedErr != "" {
 				assert.ErrorContains(t, err, tc.expectedErr)
 			} else {
@@ -300,7 +298,7 @@ func TestClearStaleTrunks(t *testing.T) {
 		name               string
 		physicalInterfaces []agenttypes.PhysicalInterfaceConfig
 		portList           []ovsconfig.OVSPortData
-		existingPorts      map[string]string
+		existingPorts      map[string]ovsconfig.OVSPortData
 		expectedCalls      func(m *ovsconfigtest.MockOVSBridgeClient)
 		expectedErr        string
 	}{
@@ -317,7 +315,11 @@ func TestClearStaleTrunks(t *testing.T) {
 				{Name: "port-eth3", IFName: eth3},
 				{Name: "other-port", IFName: "eth4", Trunks: []uint16{400}},
 			},
-			existingPorts: map[string]string{eth1: "uuid-eth1", eth2: "uuid-eth2", eth3: "uuid-eth3"},
+			existingPorts: map[string]ovsconfig.OVSPortData{
+				eth1: {UUID: "uuid-eth1"},
+				eth2: {UUID: "uuid-eth2"},
+				eth3: {UUID: "uuid-eth3"},
+			},
 			expectedCalls: func(m *ovsconfigtest.MockOVSBridgeClient) {
 				m.EXPECT().SetPortTrunks("port-eth1", nil).Return(nil)
 			},
@@ -339,7 +341,7 @@ func TestClearStaleTrunks(t *testing.T) {
 			portList: []ovsconfig.OVSPortData{
 				{Name: eth1, IFName: eth1, Trunks: []uint16{100}},
 			},
-			existingPorts: map[string]string{},
+			existingPorts: map[string]ovsconfig.OVSPortData{},
 		},
 		{
 			name: "clear trunks error",
@@ -349,7 +351,7 @@ func TestClearStaleTrunks(t *testing.T) {
 			portList: []ovsconfig.OVSPortData{
 				{Name: eth1, IFName: eth1, Trunks: []uint16{100}},
 			},
-			existingPorts: map[string]string{eth1: "uuid-eth1"},
+			existingPorts: map[string]ovsconfig.OVSPortData{eth1: {UUID: "uuid-eth1"}},
 			expectedErr:   "failed to clear stale trunk VLANs",
 			expectedCalls: func(m *ovsconfigtest.MockOVSBridgeClient) {
 				m.EXPECT().SetPortTrunks(eth1, nil).Return(errors.New("update trunks error"))
@@ -1382,6 +1384,7 @@ func TestSyncBridgeReconcilesStaticBridgeOnANCListError(t *testing.T) {
 }
 
 func mockInterfaceByName(t *testing.T) {
+	t.Helper()
 	prevFunc := interfaceByNameFn
 	interfaceByNameFn = func(name string) (*net.Interface, error) {
 		if name == nonExistingInterface {
@@ -1434,6 +1437,7 @@ func newTestSecondaryNetworkController(prevCfg, desiredCfg *agenttypes.OVSBridge
 }
 
 func mockStartupSecondaryBridge(t *testing.T, bridgeName string) {
+	t.Helper()
 	prevFunc := findStartupSecondaryBridgeFn
 	findStartupSecondaryBridgeFn = func(client.Client, string) (string, error) {
 		return bridgeName, nil
@@ -1442,6 +1446,7 @@ func mockStartupSecondaryBridge(t *testing.T, bridgeName string) {
 }
 
 func mockNewOVSBridge(t *testing.T, brClient ovsconfig.OVSBridgeClient) {
+	t.Helper()
 	prevFunc := newOVSBridgeFn
 	newOVSBridgeFn = func(bridgeName string, ovsDatapathType ovsconfig.OVSDatapathType, ovsdb client.Client, options ...ovsconfig.OVSBridgeOption) ovsconfig.OVSBridgeClient {
 		return brClient
@@ -1450,6 +1455,7 @@ func mockNewOVSBridge(t *testing.T, brClient ovsconfig.OVSBridgeClient) {
 }
 
 func mockNewOVSBridgeByName(t *testing.T, brClients map[string]ovsconfig.OVSBridgeClient) {
+	t.Helper()
 	prevFunc := newOVSBridgeFn
 	newOVSBridgeFn = func(bridgeName string, ovsDatapathType ovsconfig.OVSDatapathType, ovsdb client.Client, options ...ovsconfig.OVSBridgeOption) ovsconfig.OVSBridgeClient {
 		return brClients[bridgeName]

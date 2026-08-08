@@ -124,7 +124,7 @@ func restoreStaleHostConnectionsFromPortList(
 // as a trunk but the current desired config no longer requires it.
 // portList and existingPorts come from the caller's GetPortList result; the
 // latter skips ports already removed earlier in the same reconciliation.
-func clearStaleTrunks(ovsBridgeClient ovsconfig.OVSBridgeClient, phyInterfaces []agenttypes.PhysicalInterfaceConfig, portList []ovsconfig.OVSPortData, existingPorts map[string]string) error {
+func clearStaleTrunks(ovsBridgeClient ovsconfig.OVSBridgeClient, phyInterfaces []agenttypes.PhysicalInterfaceConfig, portList []ovsconfig.OVSPortData, existingPorts map[string]ovsconfig.OVSPortData) error {
 	// Build a set of interfaces that should NOT have trunk VLANs.
 	noTrunkDesired := sets.New[string]()
 	for _, pi := range phyInterfaces {
@@ -161,8 +161,10 @@ func clearStaleTrunks(ovsBridgeClient ovsconfig.OVSBridgeClient, phyInterfaces [
 // createOVSBridge creates or attaches to an OVS bridge with the given name.
 // The bridge is always marked as an Antrea-managed secondary bridge: Create()
 // merges the external ID into an existing bridge as well, which is how a legacy
-// bridge gets converted into a managed one. enableMulticastSnooping is applied
-// to both new and existing bridges.
+// bridge gets converted into a managed one. enableMulticastSnooping sets
+// multicast snooping on a newly created bridge and, when true, on an existing
+// bridge as well; when false, Create() leaves an existing bridge's setting
+// untouched.
 func createOVSBridge(
 	bridgeName string,
 	ovsdbClient client.Client,
@@ -222,30 +224,24 @@ func updatePhysicalInterfaces(
 	client ovsconfig.OVSBridgeClient,
 	desired *agenttypes.OVSBridgeConfig,
 ) error {
-	// Build a map of currently present ports on the bridge: interface name → UUID,
-	// and a map of IFName → IFType for the host-connection sibling check below.
+	// Build a map of currently present ports on the bridge, keyed by interface name.
 	portList, err := client.GetPortList()
 	if err != nil {
 		return fmt.Errorf("failed to list OVS ports on bridge %s: %w", desired.BridgeName, err)
 	}
-	existingPorts := make(map[string]string, len(portList))   // IFName → UUID
-	existingIFTypes := make(map[string]string, len(portList)) // IFName → IFType
-	existingAntreaTypes := make(map[string]string, len(portList))
+	existingPorts := make(map[string]ovsconfig.OVSPortData, len(portList))
 	for _, p := range portList {
-		existingPorts[p.IFName] = p.UUID
-		existingIFTypes[p.IFName] = p.IFType
-		existingAntreaTypes[p.IFName] = p.ExternalIDs[interfacestore.AntreaInterfaceTypeKey]
+		existingPorts[p.IFName] = p
 	}
 
 	// restoreStaleHostConnectionsConditionally removes the restored host-connection
 	// interfaces (including stale uplink ports) from existingPorts, so they are not
 	// treated as desired ports or re-added below.
-	if err := restoreStaleHostConnectionsConditionally(desired, portList, existingPorts, existingIFTypes); err != nil {
+	if err := restoreStaleHostConnectionsConditionally(desired, portList, existingPorts); err != nil {
 		return err
 	}
 
-	bridgePhysInterfaces, prepareErr := prepareBridgePhysicalInterfaces(
-		client, desired, existingPorts, existingIFTypes, existingAntreaTypes)
+	bridgePhysInterfaces, prepareErr := prepareBridgePhysicalInterfaces(client, desired, existingPorts)
 	if prepareErr != nil {
 		return prepareErr
 	}
@@ -308,7 +304,7 @@ func updatePhysicalInterfaces(
 			return fmt.Errorf("failed to connect physical interfaces to secondary OVS bridge %s: %w",
 				desired.BridgeName, err)
 		}
-		klog.InfoS("Reconciled physical interfaces on secondary OVS bridge",
+		klog.InfoS("Connected physical interfaces to secondary OVS bridge",
 			"bridge", desired.BridgeName, "interfaces", toConnect)
 	}
 	return nil
@@ -316,13 +312,12 @@ func updatePhysicalInterfaces(
 
 // restoreStaleHostConnectionsConditionally restores stale host-connection pairs
 // observed in OVSDB, skipping the host connection of the current single-interface
-// config, which is not stale. It removes the restored interfaces from existingPorts
-// and existingIFTypes, so the caller does not re-add them later.
+// config, which is not stale. It removes the restored interfaces from existingPorts,
+// so the caller does not re-add them later.
 func restoreStaleHostConnectionsConditionally(
 	desired *agenttypes.OVSBridgeConfig,
 	portList []ovsconfig.OVSPortData,
-	existingPorts map[string]string,
-	existingIFTypes map[string]string,
+	existingPorts map[string]ovsconfig.OVSPortData,
 ) error {
 	desiredIfaces := sets.New[string]()
 	for _, pi := range desired.PhysicalInterfaces {
@@ -343,8 +338,6 @@ func restoreStaleHostConnectionsConditionally(
 	for _, conn := range restored {
 		delete(existingPorts, conn.hostIFName)
 		delete(existingPorts, conn.uplinkIFName)
-		delete(existingIFTypes, conn.hostIFName)
-		delete(existingIFTypes, conn.uplinkIFName)
 	}
 	return nil
 }
@@ -352,9 +345,7 @@ func restoreStaleHostConnectionsConditionally(
 func prepareBridgePhysicalInterfaces(
 	ovsBridgeClient ovsconfig.OVSBridgeClient,
 	desired *agenttypes.OVSBridgeConfig,
-	existingPorts map[string]string,
-	existingIFTypes map[string]string,
-	existingAntreaTypes map[string]string,
+	existingPorts map[string]ovsconfig.OVSPortData,
 ) ([]agenttypes.PhysicalInterfaceConfig, error) {
 	if len(desired.PhysicalInterfaces) == 1 {
 		iface := desired.PhysicalInterfaces[0]
@@ -369,8 +360,9 @@ func prepareBridgePhysicalInterfaces(
 		// leaves a valid host connection with the renamed kernel uplink but no OVS
 		// uplink port. Resume from that state instead of trying to rename the host
 		// interface a second time.
-		if existingIFTypes[iface.Name] == "internal" &&
-			existingAntreaTypes[iface.Name] == interfacestore.AntreaHost {
+		if port, exists := existingPorts[iface.Name]; exists &&
+			port.IFType == "internal" &&
+			port.ExternalIDs[interfacestore.AntreaInterfaceTypeKey] == interfacestore.AntreaHost {
 			if _, err := interfaceByNameFn(bridgedName); err == nil {
 				klog.InfoS("Resuming incomplete host interface connection",
 					"bridge", desired.BridgeName, "interface", iface.Name, "uplink", bridgedName,
@@ -380,8 +372,8 @@ func prepareBridgePhysicalInterfaces(
 				}, nil
 			}
 		}
-		if uuid, exists := existingPorts[iface.Name]; exists && existingIFTypes[iface.Name] != "internal" {
-			if err := ovsBridgeClient.DeletePorts([]string{uuid}); err != nil {
+		if port, exists := existingPorts[iface.Name]; exists && port.IFType != "internal" {
+			if err := ovsBridgeClient.DeletePorts([]string{port.UUID}); err != nil {
 				return nil, fmt.Errorf("failed to remove OVS port %s from bridge %s before host connection setup: %w",
 					iface.Name, desired.BridgeName, err)
 			}
@@ -389,7 +381,6 @@ func prepareBridgePhysicalInterfaces(
 			// updatePhysicalInterfaces can add the generated uplink port later in
 			// the same reconciliation.
 			delete(existingPorts, iface.Name)
-			delete(existingIFTypes, iface.Name)
 			klog.InfoS("Physical interface removed from secondary OVS bridge before host connection setup",
 				"device", iface.Name, "bridge", desired.BridgeName)
 		}
