@@ -39,12 +39,14 @@ var getRestClient = getRestClientByMode
 
 var option = &struct {
 	insecure bool
+	name     string
 }{}
 
 func init() {
 	Command = &cobra.Command{
-		Use:   "featuregates",
+		Use:   "featuregates [NAME]",
 		Short: "Print Antrea feature gates",
+		Args:  cobra.MaximumNArgs(1),
 	}
 	if runtime.Mode == runtime.ModeAgent {
 		Command.RunE = agentRunE
@@ -59,15 +61,24 @@ func init() {
 	}
 }
 
-func agentRunE(cmd *cobra.Command, _ []string) error {
+func agentRunE(cmd *cobra.Command, args []string) error {
+	if len(args) > 0 {
+		option.name = args[0]
+	}
 	return featureGateRequest(cmd, runtime.ModeAgent)
 }
 
-func controllerLocalRunE(cmd *cobra.Command, _ []string) error {
+func controllerLocalRunE(cmd *cobra.Command, args []string) error {
+	if len(args) > 0 {
+		option.name = args[0]
+	}
 	return featureGateRequest(cmd, runtime.ModeController)
 }
 
-func controllerRemoteRunE(cmd *cobra.Command, _ []string) error {
+func controllerRemoteRunE(cmd *cobra.Command, args []string) error {
+	if len(args) > 0 {
+		option.name = args[0]
+	}
 	return featureGateRequest(cmd, "remote")
 }
 
@@ -87,6 +98,21 @@ func featureGateRequest(cmd *cobra.Command, mode string) error {
 	if resp, err = getFeatureGatesRequest(client); err != nil {
 		return err
 	}
+
+	// Filter by name if provided
+	if option.name != "" {
+		var filteredResp []apis.FeatureGateResponse
+		for _, v := range resp {
+			if v.Name == option.name {
+				filteredResp = append(filteredResp, v)
+			}
+		}
+		if len(filteredResp) == 0 {
+			return fmt.Errorf("feature gate '%s' not found", option.name)
+		}
+		resp = filteredResp
+	}
+
 	var agentGates []apis.FeatureGateResponse
 	var agentWindowsGates []apis.FeatureGateResponse
 	var controllerGates []apis.FeatureGateResponse
@@ -172,6 +198,33 @@ func getFeatureGatesRequest(client *rest.RESTClient) ([]apis.FeatureGateResponse
 	return resp, nil
 }
 
+func max(a, b int) int {
+	if a > b {
+		return a
+	}
+	return b
+}
+
+func outputSingleFeatureGate(resps []apis.FeatureGateResponse, output io.Writer) {
+	for _, r := range resps {
+		fmt.Fprintf(output, "Name:\t%s\n", r.Name)
+		fmt.Fprintf(output, "Status:\t%s\n", r.Status)
+		fmt.Fprintf(output, "Version:\t%s\n", r.Version)
+
+		if len(r.Prerequisites) > 0 {
+			fmt.Fprintf(output, "Prerequisites:\n")
+			for _, prereq := range r.Prerequisites {
+				fmt.Fprintf(output, "  - %s\n", prereq)
+			}
+		}
+
+		// Add a newline between feature gates if there are multiple
+		if len(resps) > 1 {
+			fmt.Fprintf(output, "\n")
+		}
+	}
+}
+
 func output(resps []apis.FeatureGateResponse, component string, output io.Writer) {
 	switch component {
 	case featuregates.AgentMode:
@@ -182,6 +235,12 @@ func output(resps []apis.FeatureGateResponse, component string, output io.Writer
 	case featuregates.ControllerMode:
 		output.Write([]byte("\n"))
 		output.Write([]byte("Antrea Controller Feature Gates\n"))
+	}
+
+	// If we're showing a single feature gate with prerequisites, use a different format
+	if option.name != "" && len(resps) > 0 && len(resps[0].Prerequisites) > 0 {
+		outputSingleFeatureGate(resps, output)
+		return
 	}
 
 	maxNameLen := len("FEATUREGATE")
