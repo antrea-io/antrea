@@ -21,6 +21,7 @@ import (
 	"strconv"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -2158,156 +2159,46 @@ func TestUnMigrateRoutesToGw(t *testing.T) {
 }
 
 func TestAddSNATRule(t *testing.T) {
-	tests := []struct {
-		name          string
-		networkConfig *config.NetworkConfig
-		nodeConfig    *config.NodeConfig
-		snatIP        net.IP
-		mark          uint32
-		expectedCalls func(mockIPTables *iptablestest.MockInterfaceMockRecorder)
-	}{
-		{
-			name: "IPv4",
-			nodeConfig: &config.NodeConfig{
-				GatewayConfig: &config.GatewayConfig{
-					Name: "antrea-gw0",
-				},
-			},
-			snatIP: net.ParseIP("1.1.1.1"),
-			mark:   10,
-			expectedCalls: func(mockIPTables *iptablestest.MockInterfaceMockRecorder) {
-				mockIPTables.InsertRule(iptables.ProtocolIPv4, iptables.NATTable, antreaPostRoutingChain, []string{
-					"-m", "comment", "--comment", "Antrea: SNAT Pod to external packets",
-					"!", "-o", "antrea-gw0",
-					"-m", "mark", "--mark", fmt.Sprintf("%#08x/%#08x", 10, types.SNATIPMarkMask),
-					"-j", iptables.SNATTarget, "--to", "1.1.1.1",
-				})
-			},
-		},
-		{
-			name: "IPv6",
-			nodeConfig: &config.NodeConfig{
-				GatewayConfig: &config.GatewayConfig{
-					Name: "antrea-gw0",
-				},
-			},
-			snatIP: net.ParseIP("fe80::e643:4bff:fe44:1"),
-			mark:   11,
-			expectedCalls: func(mockIPTables *iptablestest.MockInterfaceMockRecorder) {
-				mockIPTables.InsertRule(iptables.ProtocolIPv6, iptables.NATTable, antreaPostRoutingChain, []string{
-					"-m", "comment", "--comment", "Antrea: SNAT Pod to external packets",
-					"!", "-o", "antrea-gw0",
-					"-m", "mark", "--mark", fmt.Sprintf("%#08x/%#08x", 11, types.SNATIPMarkMask),
-					"-j", iptables.SNATTarget, "--to", "fe80::e643:4bff:fe44:1",
-				})
-			},
-		},
+	c := &Client{
+		markToSNATIP:        sync.Map{},
+		iptablesSyncTrigger: make(chan struct{}, 1),
 	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			ctrl := gomock.NewController(t)
-			mockIPTables := iptablestest.NewMockInterface(ctrl)
-			c := &Client{iptables: mockIPTables,
-				nodeConfig: tt.nodeConfig,
-			}
-			tt.expectedCalls(mockIPTables.EXPECT())
-			assert.NoError(t, c.AddSNATRule(tt.snatIP, tt.mark))
-		})
-	}
+	snatIPv4 := net.ParseIP("1.1.1.1")
+	snatIPv6 := net.ParseIP("fe80::e643:4bff:fe44:1")
+
+	// The SNAT rules are not installed synchronously: only the cache is updated, and a sync is triggered.
+	assert.NoError(t, c.AddSNATRule(snatIPv4, 10))
+	assert.NoError(t, c.AddSNATRule(snatIPv6, 11))
+
+	assert.Equal(t, map[uint32]net.IP{10: snatIPv4, 11: snatIPv6}, getMarkToSNATIP(c))
+	assertSyncTriggered(t, c.iptablesSyncTrigger)
 }
 
 func TestDeleteSNATRule(t *testing.T) {
-	tests := []struct {
-		name                  string
-		networkConfig         *config.NetworkConfig
-		egressSNATRandomFully bool
-		markToSNATIP          map[uint32]net.IP
-		nodeConfig            *config.NodeConfig
-		mark                  uint32
-		expectedCalls         func(mockIPTables *iptablestest.MockInterfaceMockRecorder)
-	}{
-		{
-			name: "IPv4",
-			nodeConfig: &config.NodeConfig{
-				GatewayConfig: &config.GatewayConfig{
-					Name: "antrea-gw0",
-				},
-			},
-			markToSNATIP: map[uint32]net.IP{
-				10: net.ParseIP("1.1.1.1"),
-				11: net.ParseIP("1.1.1.2"),
-			},
-			mark: 10,
-			expectedCalls: func(mockIPTables *iptablestest.MockInterfaceMockRecorder) {
-				mockIPTables.DeleteRule(iptables.ProtocolIPv4, iptables.NATTable, antreaPostRoutingChain, []string{
-					"-m", "comment", "--comment", "Antrea: SNAT Pod to external packets",
-					"!", "-o", "antrea-gw0",
-					"-m", "mark", "--mark", fmt.Sprintf("%#08x/%#08x", 10, types.SNATIPMarkMask),
-					"-j", iptables.SNATTarget, "--to", "1.1.1.1",
-				})
-			},
-		},
-		{
-			name: "IPv6",
-			nodeConfig: &config.NodeConfig{
-				GatewayConfig: &config.GatewayConfig{
-					Name: "antrea-gw0",
-				},
-			},
-			markToSNATIP: map[uint32]net.IP{
-				10: net.ParseIP("fe80::e643:4bff:fe44:1"),
-				11: net.ParseIP("fe80::e643:4bff:fe44:2"),
-			},
-			mark: 11,
-			expectedCalls: func(mockIPTables *iptablestest.MockInterfaceMockRecorder) {
-				mockIPTables.DeleteRule(iptables.ProtocolIPv6, iptables.NATTable, antreaPostRoutingChain, []string{
-					"-m", "comment", "--comment", "Antrea: SNAT Pod to external packets",
-					"!", "-o", "antrea-gw0",
-					"-m", "mark", "--mark", fmt.Sprintf("%#08x/%#08x", 11, types.SNATIPMarkMask),
-					"-j", iptables.SNATTarget, "--to", "fe80::e643:4bff:fe44:2",
-				})
-			},
-		},
-		{
-			name: "IPv4 with random ports for SNAT",
-			nodeConfig: &config.NodeConfig{
-				GatewayConfig: &config.GatewayConfig{
-					Name: "antrea-gw0",
-				},
-			},
-			egressSNATRandomFully: true,
-			markToSNATIP: map[uint32]net.IP{
-				10: net.ParseIP("1.1.1.1"),
-				11: net.ParseIP("1.1.1.2"),
-			},
-			mark: 10,
-			expectedCalls: func(mockIPTables *iptablestest.MockInterfaceMockRecorder) {
-				mockIPTables.DeleteRule(iptables.ProtocolIPv4, iptables.NATTable, antreaPostRoutingChain, []string{
-					"-m", "comment", "--comment", "Antrea: SNAT Pod to external packets",
-					"!", "-o", "antrea-gw0",
-					"-m", "mark", "--mark", fmt.Sprintf("%#08x/%#08x", 10, types.SNATIPMarkMask),
-					"-j", iptables.SNATTarget, "--to", "1.1.1.1", "--random-fully",
-				})
-			},
-		},
+	snatIPv4 := net.ParseIP("1.1.1.1")
+	snatIPv6 := net.ParseIP("fe80::e643:4bff:fe44:1")
+	newClient := func() *Client {
+		c := &Client{
+			markToSNATIP:        sync.Map{},
+			iptablesSyncTrigger: make(chan struct{}, 1),
+		}
+		c.markToSNATIP.Store(uint32(10), snatIPv4)
+		c.markToSNATIP.Store(uint32(11), snatIPv6)
+		return c
 	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			ctrl := gomock.NewController(t)
-			mockIPTables := iptablestest.NewMockInterface(ctrl)
-			c := &Client{
-				iptables:              mockIPTables,
-				nodeConfig:            tt.nodeConfig,
-				egressSNATRandomFully: tt.egressSNATRandomFully,
-				markToSNATIP:          sync.Map{},
-			}
-			for mark, snatIP := range tt.markToSNATIP {
-				c.markToSNATIP.Store(mark, snatIP)
-			}
-			tt.expectedCalls(mockIPTables.EXPECT())
-			assert.NoError(t, c.DeleteSNATRule(tt.mark))
-		})
-	}
+
+	t.Run("existing mark", func(t *testing.T) {
+		c := newClient()
+		assert.NoError(t, c.DeleteSNATRule(10))
+		assert.Equal(t, map[uint32]net.IP{11: snatIPv6}, getMarkToSNATIP(c))
+		assertSyncTriggered(t, c.iptablesSyncTrigger)
+	})
+	t.Run("unknown mark", func(t *testing.T) {
+		c := newClient()
+		assert.NoError(t, c.DeleteSNATRule(12))
+		assert.Equal(t, map[uint32]net.IP{10: snatIPv4, 11: snatIPv6}, getMarkToSNATIP(c))
+		assertSyncNotTriggered(t, c.iptablesSyncTrigger)
+	})
 }
 
 func TestAddNodePortConfigs(t *testing.T) {
@@ -3682,4 +3573,92 @@ func newMockNFTables(enableIPv4, enableIPv6 bool) (*nftables.Client, error) {
 	}
 
 	return mockNFTables, nil
+}
+
+func getMarkToSNATIP(c *Client) map[uint32]net.IP {
+	markToSNATIP := map[uint32]net.IP{}
+	c.markToSNATIP.Range(func(key, value interface{}) bool {
+		markToSNATIP[key.(uint32)] = value.(net.IP)
+		return true
+	})
+	return markToSNATIP
+}
+
+func assertSyncTriggered(t *testing.T, trigger chan struct{}) {
+	t.Helper()
+	select {
+	case <-trigger:
+	default:
+		t.Error("Expected a sync to be triggered")
+	}
+}
+
+func assertSyncNotTriggered(t *testing.T, trigger chan struct{}) {
+	t.Helper()
+	select {
+	case <-trigger:
+		t.Error("Expected no sync to be triggered")
+	default:
+	}
+}
+
+func TestTriggerSync(t *testing.T) {
+	c := &Client{iptablesSyncTrigger: make(chan struct{}, 1)}
+	// Triggering the sync multiple times must not block, and must not queue more than one notification.
+	for i := 0; i < 3; i++ {
+		c.triggerIPTablesSync()
+	}
+	assertSyncTriggered(t, c.iptablesSyncTrigger)
+	assertSyncNotTriggered(t, c.iptablesSyncTrigger)
+}
+
+func TestRunSyncLoopIPTables(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	mockIPTables := iptablestest.NewMockInterface(ctrl)
+	c := &Client{
+		iptables:            mockIPTables,
+		networkConfig:       &config.NetworkConfig{},
+		nodeConfig:          &config.NodeConfig{GatewayConfig: &config.GatewayConfig{Name: "antrea-gw0"}},
+		iptablesCache:       newIPTablesCache(),
+		iptablesSyncTrigger: make(chan struct{}, 1),
+	}
+	// Neither IPv4 nor IPv6 is enabled, so syncIPTables only ensures the jump rules and chains.
+	syncCh := make(chan struct{}, 10)
+	mockIPTables.EXPECT().EnsureChain(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
+	mockIPTables.EXPECT().InsertRule(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
+	mockIPTables.EXPECT().AppendRule(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes().Do(
+		func(_ iptables.Protocol, _, _ string, _ []string) {
+			select {
+			case syncCh <- struct{}{}:
+			default:
+			}
+		})
+
+	ctx, cancel := context.WithCancel(context.Background())
+	stopped := make(chan struct{})
+	go func() {
+		defer close(stopped)
+		c.runSyncLoop(ctx, c.iptablesSyncTrigger, func() error { return c.syncIPTables(false) })
+	}()
+
+	// No sync is expected until the loop is triggered.
+	select {
+	case <-syncCh:
+		t.Fatal("iptables were synced before the sync loop was triggered")
+	case <-time.After(2 * syncDebounceDuration):
+	}
+
+	c.triggerIPTablesSync()
+	select {
+	case <-syncCh:
+	case <-time.After(2 * time.Second):
+		t.Fatal("iptables were not synced after the sync loop was triggered")
+	}
+
+	cancel()
+	select {
+	case <-stopped:
+	case <-time.After(2 * time.Second):
+		t.Fatal("the sync loop did not stop after the context was cancelled")
+	}
 }
