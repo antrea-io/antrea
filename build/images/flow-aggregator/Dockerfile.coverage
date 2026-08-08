@@ -38,6 +38,7 @@ RUN apt-get update \
     && apt-get install -y --no-install-recommends ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
+COPY --from=flow-aggregator-build /antrea/LICENSE /LICENSE
 COPY --from=flow-aggregator-build /antrea/bin/flow-aggregator-coverage /usr/local/bin/flow-aggregator
 COPY --from=flow-aggregator-build /antrea/bin/antctl-coverage /usr/local/bin/antctl
 COPY --from=flow-aggregator-build /antrea/test/e2e/utils/run_cov_binary.sh /
