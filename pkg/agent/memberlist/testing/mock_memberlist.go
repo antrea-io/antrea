@@ -82,6 +82,26 @@ func (mr *MockInterfaceMockRecorder) AliveNodes() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AliveNodes", reflect.TypeOf((*MockInterface)(nil).AliveNodes))
 }
 
+// SelectNodeForDualStackIPs mocks base method.
+func (m *MockInterface) SelectNodeForDualStackIPs(ipv4, ipv4pool, ipv6, ipv6pool string, filters ...func(string) bool) (string, error) {
+	m.ctrl.T.Helper()
+	varargs := []any{ipv4, ipv4pool, ipv6, ipv6pool}
+	for _, a := range filters {
+		varargs = append(varargs, a)
+	}
+	ret := m.ctrl.Call(m, "SelectNodeForDualStackIPs", varargs...)
+	ret0, _ := ret[0].(string)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// SelectNodeForDualStackIPs indicates an expected call of SelectNodeForDualStackIPs.
+func (mr *MockInterfaceMockRecorder) SelectNodeForDualStackIPs(ipv4, ipv4pool, ipv6, ipv6pool any, filters ...any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	varargs := append([]any{ipv4, ipv4pool, ipv6, ipv6pool}, filters...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SelectNodeForDualStackIPs", reflect.TypeOf((*MockInterface)(nil).SelectNodeForDualStackIPs), varargs...)
+}
+
 // SelectNodeForIP mocks base method.
 func (m *MockInterface) SelectNodeForIP(ip, externalIPPool string, filters ...func(string) bool) (string, error) {
 	m.ctrl.T.Helper()
