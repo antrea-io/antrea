@@ -49,7 +49,6 @@ type OVSBridge struct {
 	ovsdb                    client.Client
 	name                     string
 	datapathType             OVSDatapathType
-	mcastSnoopingEnable      bool
 	uuid                     string
 	isHardwareOffloadEnabled bool
 	externalIDs              map[string]string
@@ -170,12 +169,6 @@ func WithRequiredPortExternalIDs(keys ...string) OVSBridgeOption {
 	}
 }
 
-func WithMcastSnooping() OVSBridgeOption {
-	return func(br *OVSBridge) {
-		br.mcastSnoopingEnable = true
-	}
-}
-
 // WithExternalIDs sets bridge-level external IDs when the OVS bridge is created
 // or when an existing OVS bridge is updated by Create.
 func WithExternalIDs(externalIDs map[string]string) OVSBridgeOption {
@@ -246,13 +239,6 @@ func (br *OVSBridge) updateBridgeConfiguration(ctx context.Context) error {
 		DatapathType: string(br.datapathType),
 	}
 	fields := []interface{}{&update.Protocols, &update.DatapathType}
-	// Create() only enables multicast snooping on an existing bridge; when it was
-	// not requested, the setting is left untouched. Use SetMcastSnooping to
-	// disable it explicitly.
-	if br.mcastSnoopingEnable {
-		update.McastSnoopingEnable = true
-		fields = append(fields, &update.McastSnoopingEnable)
-	}
 	if br.externalIDs != nil {
 		currentExternalIDs, err := br.GetExternalIDs()
 		if err != nil {
@@ -293,9 +279,8 @@ func (br *OVSBridge) create(ctx context.Context) error {
 		UUID: namedUUID(),
 		Name: br.name,
 		// Use Openflow protocol version 1.0 and 1.5.
-		Protocols:           []string{openflowProtoVersion10, openflowProtoVersion15},
-		DatapathType:        string(br.datapathType),
-		McastSnoopingEnable: br.mcastSnoopingEnable,
+		Protocols:    []string{openflowProtoVersion10, openflowProtoVersion15},
+		DatapathType: string(br.datapathType),
 	}
 	if br.externalIDs != nil {
 		bridge.ExternalIDs = maps.Clone(br.externalIDs)
@@ -409,7 +394,6 @@ func (br *OVSBridge) SetMcastSnooping(enable bool) error {
 	if _, err := br.transact(ctx, ops, "set multicast snooping"); err != nil {
 		return err
 	}
-	br.mcastSnoopingEnable = enable
 	return nil
 }
 

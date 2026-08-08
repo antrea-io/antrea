@@ -45,7 +45,6 @@ var bridgeName string
 
 type testData struct {
 	requiredPortExternalIDs []string
-	enableMcastSnooping     bool
 
 	ovsdb client.Client
 	br    *ovsconfig.OVSBridge
@@ -63,9 +62,6 @@ func (data *testData) setup(t *testing.T) {
 	brOptions := []ovsconfig.OVSBridgeOption{}
 	if len(data.requiredPortExternalIDs) > 0 {
 		brOptions = append(brOptions, ovsconfig.WithRequiredPortExternalIDs(data.requiredPortExternalIDs...))
-	}
-	if data.enableMcastSnooping {
-		brOptions = append(brOptions, ovsconfig.WithMcastSnooping())
 	}
 	// using the netdev datapath type does not impact test coverage but
 	// ensures that the integration tests can be run with Docker Desktop on
@@ -308,11 +304,15 @@ func TestOVSSchemaFields(t *testing.T) {
 // TestOVSBridgeExternalIDs tests getting and setting external IDs of the OVS
 // bridge.
 func TestOVSBridgeExternalIDs(t *testing.T) {
-	data := &testData{
-		enableMcastSnooping: true,
-	}
+	data := &testData{}
 	data.setup(t)
 	defer data.teardown(t)
+
+	// Set a non-default value for a mutable bridge field so the assertion below
+	// can verify that the partial update performed by SetExternalIDs does not
+	// overwrite it. The OVS default cannot be relied on here as an unset
+	// mcast_snooping_enable column reads back as false through libovsdb.
+	require.NoError(t, data.br.SetMcastSnooping(true))
 
 	returnedIDs, err := data.br.GetExternalIDs()
 	require.Nil(t, err, "Failed to get external IDs of the bridge")
