@@ -32,6 +32,7 @@ type Port struct {
 	Interfaces  []string          `ovsdb:"interfaces"`
 	ExternalIDs map[string]string `ovsdb:"external_ids"`
 	Tag         *int              `ovsdb:"tag"`
+	Trunks      []int             `ovsdb:"trunks"`
 	Status      map[string]string `ovsdb:"status"`
 	Statistics  map[string]int    `ovsdb:"statistics"`
 	MAC         *string           `ovsdb:"mac"`

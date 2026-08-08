@@ -373,7 +373,7 @@ func (i *Initializer) initInterfaceStore() error {
 		}
 	}
 
-	i.ifaceStore.Initialize(ifaceList)
+	i.ifaceStore.AddInterfaces(ifaceList)
 	return nil
 }
 

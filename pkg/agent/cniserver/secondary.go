@@ -26,12 +26,16 @@ import (
 	"antrea.io/antrea/v2/pkg/ovs/ovsconfig"
 )
 
-func NewSecondaryInterfaceConfigurator(ovsBridgeClient ovsconfig.OVSBridgeClient, interfaceStore interfacestore.InterfaceStore) (*podConfigurator, error) {
-	pc, err := newPodConfigurator(nil, ovsBridgeClient, nil, nil, interfaceStore, nil, ovsconfig.OVSDatapathSystem, false, false, nil, nil, nil)
+func NewSecondaryInterfaceConfigurator(interfaceStore interfacestore.InterfaceStore) (*podConfigurator, error) {
+	pc, err := newPodConfigurator(nil, nil, nil, nil, interfaceStore, nil, ovsconfig.OVSDatapathSystem, false, false, nil, nil, nil)
 	if err == nil {
 		pc.isSecondaryNetwork = true
 	}
 	return pc, err
+}
+
+func (pc *podConfigurator) SetOVSBridgeClient(ovsBridgeClient ovsconfig.OVSBridgeClient) {
+	pc.ovsBridgeClient = ovsBridgeClient
 }
 
 // ConfigureSriovSecondaryInterface configures a SR-IOV secondary interface for a Pod.

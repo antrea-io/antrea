@@ -825,6 +825,9 @@ func (o *Options) validateSecondaryNetworkConfig() error {
 	if brConfig.BridgeName == "" {
 		return fmt.Errorf("bridge name is not provided for the secondary network OVS bridge")
 	}
+	if brConfig.BridgeName == o.config.OVSBridge {
+		return fmt.Errorf("secondary OVS bridge %q conflicts with primary OVS bridge", brConfig.BridgeName)
+	}
 	if len(brConfig.PhysicalInterfaces) > 8 {
 		return fmt.Errorf("at most eight physical interfaces can be specified for the secondary network OVS bridge")
 	}

@@ -46,6 +46,7 @@ const (
 	AntreaHost             = "host"
 	AntreaTrafficControl   = "traffic-control"
 	AntreaIPsecTunnel      = "ipsec-tunnel"
+	AntreaSecondaryBridge  = "secondary-bridge"
 	AntreaUnset            = ""
 )
 
@@ -117,7 +118,7 @@ type InterfaceConfig struct {
 // InterfaceStore is a service interface to create local interfaces for container, host gateway, and tunnel port.
 // Support add/delete/get operations
 type InterfaceStore interface {
-	Initialize(interfaces []*InterfaceConfig)
+	AddInterfaces(interfaces []*InterfaceConfig)
 	AddInterface(interfaceConfig *InterfaceConfig)
 	UpdateInterface(interfaceConfig *InterfaceConfig)
 	ListInterfaces() []*InterfaceConfig

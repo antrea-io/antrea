@@ -45,7 +45,6 @@ var bridgeName string
 
 type testData struct {
 	requiredPortExternalIDs []string
-	enableMcastSnooping     bool
 
 	ovsdb client.Client
 	br    *ovsconfig.OVSBridge
@@ -63,9 +62,6 @@ func (data *testData) setup(t *testing.T) {
 	brOptions := []ovsconfig.OVSBridgeOption{}
 	if len(data.requiredPortExternalIDs) > 0 {
 		brOptions = append(brOptions, ovsconfig.WithRequiredPortExternalIDs(data.requiredPortExternalIDs...))
-	}
-	if data.enableMcastSnooping {
-		brOptions = append(brOptions, ovsconfig.WithMcastSnooping())
 	}
 	// using the netdev datapath type does not impact test coverage but
 	// ensures that the integration tests can be run with Docker Desktop on
@@ -143,11 +139,7 @@ func TestOVSBridge(t *testing.T) {
 
 	checkPorts(5)
 
-	testDeletePort(t, data.br, uuid1)
-	testDeletePort(t, data.br, uuid2)
-	testDeletePort(t, data.br, uuid3)
-	testDeletePort(t, data.br, uuid4)
-	testDeletePort(t, data.br, uuid5)
+	require.NoError(t, data.br.DeletePorts([]string{uuid1, "", uuid2, uuid2, uuid3, uuid4, uuid5}))
 
 	checkPorts(0)
 
@@ -185,23 +177,23 @@ func TestOVSCreatePortRequiredExternalIDs(t *testing.T) {
 	deleteAllPorts(t, data.br)
 }
 
-// TestOVSMcastSnooping verifies that multicast snooping is correctly enabled/disabled based on bridge configuration.
+// TestOVSMcastSnooping verifies that multicast snooping can be enabled and
+// disabled on an existing bridge.
 func TestOVSMcastSnooping(t *testing.T) {
-	data := &testData{
-		enableMcastSnooping: true,
-	}
+	data := &testData{}
 	data.setup(t)
 	defer data.teardown(t)
 
 	enabled, err := data.br.GetBridgeMcastSnoopingEnable()
 	require.NoError(t, err)
+	assert.False(t, enabled)
+
+	require.NoError(t, data.br.SetMcastSnooping(true))
+	enabled, err = data.br.GetBridgeMcastSnoopingEnable()
+	require.NoError(t, err)
 	assert.True(t, enabled)
 
-	data = &testData{
-		enableMcastSnooping: false,
-	}
-	data.setup(t)
-
+	require.NoError(t, data.br.SetMcastSnooping(false))
 	enabled, err = data.br.GetBridgeMcastSnoopingEnable()
 	require.NoError(t, err)
 	assert.False(t, enabled)
@@ -312,9 +304,7 @@ func TestOVSSchemaFields(t *testing.T) {
 // TestOVSBridgeExternalIDs tests getting and setting external IDs of the OVS
 // bridge.
 func TestOVSBridgeExternalIDs(t *testing.T) {
-	data := &testData{
-		enableMcastSnooping: true,
-	}
+	data := &testData{}
 	data.setup(t)
 	defer data.teardown(t)
 

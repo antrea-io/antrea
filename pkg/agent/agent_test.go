@@ -767,7 +767,7 @@ func TestRestorePortConfigs(t *testing.T) {
 				ifaceStore:   ifaceStore,
 				ovsCtlClient: mockOVSCtlClient,
 			}
-			ifaceStore.Initialize(tt.existingInterfaces)
+			ifaceStore.AddInterfaces(tt.existingInterfaces)
 			tt.expectedOVSCtlCalls(mockOVSCtlClient.EXPECT())
 			err := initializer.restorePortConfigs()
 			if tt.expectedErr == "" {
