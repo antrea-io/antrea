@@ -26,15 +26,15 @@ function echoerr {
     >&2 echo "$@"
 }
 
-FMT_CMD="fmt"
+FMT_CMD="fold -s -w 80"
 SED_CMD="sed"
 if [[ "$OSTYPE" == "darwin"* ]]; then
-    if ! command -v gfmt > /dev/null; then
-        echoerr "This script requires the GNU fmt utility"
+    if ! command -v gfold > /dev/null; then
+        echoerr "This script requires the GNU fold utility"
         echoerr "On MacOS, you can install it with 'brew install coreutils'"
         exit 1
     fi
-    FMT_CMD="gfmt"
+    FMT_CMD="gfold -s -w 80"
 
     if ! command -v gsed > /dev/null; then
         echoerr "This script requires the GNU sed utility"
@@ -168,8 +168,8 @@ sorted_metrics=$(sort -u <<< "${agent_metrics}"$'\n'"${controller_metrics}")
 formatted_metrics=$(format_metrics "$sorted_metrics")
 
 if [ "$metrics_doc" == "" ]; then
-        $FMT_CMD -w 80 -s <<< "$formatted_metrics"
+        $FMT_CMD <<< "$formatted_metrics" | $SED_CMD 's/[[:space:]]*$//'
 else
         $SED_CMD -i '/^Below is a list of metrics, provided by the components and by 3rd parties.$/,$d' $metrics_doc
-        $FMT_CMD -w 80 -s <<< "$formatted_metrics" >> $metrics_doc
+        $FMT_CMD <<< "$formatted_metrics" | $SED_CMD 's/[[:space:]]*$//' >> $metrics_doc
 fi
