@@ -52,6 +52,8 @@ Kubernetes: `>= 1.23.0-0`
 | agent.installCNI.securityContext.capabilities | list | `["SYS_MODULE"]` | Capabilities for the install-cni initContainer. |
 | agent.installCNI.securityContext.privileged | bool | `false` | Whether to run the install-cni container as privileged. |
 | agent.kubeletRootDir | string | `"/var/lib/kubelet"` | The root directory where kubelet stores its files. This is required to access the pod resources API, which is used to retrieve SR-IOV device allocation details for Pods. By default, the subdirectory containing the pod resources socket is mounted into antrea-agent Pods. Setting it to an empty value disables the mounting. |
+| agent.memberlist.gossipVerifyIncoming | bool | `true` | Reject incoming gossip traffic which is not encrypted, which is what authenticates the other members of the memberlist cluster. Setting it to false accepts unencrypted traffic, and therefore provides no authentication. Both options must be set to false while some Nodes do not have the key yet, which is the case when upgrading from a version of Antrea which did not secure the gossip traffic. Refer to docs/egress.md for the procedure to enable them without partitioning the cluster. |
+| agent.memberlist.gossipVerifyOutgoing | bool | `true` | Encrypt the gossip traffic sent by each antrea-agent, with the key from the antrea-memberlist-keys Secret. This Secret is created by antrea-controller with a randomly-generated key if it does not exist yet. |
 | agent.nodeSelector | object | `{"kubernetes.io/os":"linux"}` | Node selector for the antrea-agent Pods. |
 | agent.podAnnotations | object | `{}` | Annotations to be added to antrea-agent Pods. |
 | agent.podLabels | object | `{}` | Labels to be added to antrea-agent Pods. |

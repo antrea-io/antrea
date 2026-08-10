@@ -18,6 +18,9 @@
   - [Configuring High-Availability Egress](#configuring-high-availability-egress)
   - [Configuring static Egress](#configuring-static-egress)
 - [Configuration options](#configuration-options)
+- [Securing the memberlist cluster](#securing-the-memberlist-cluster)
+  - [Rotating the key](#rotating-the-key)
+  - [Enabling encryption when upgrading an existing cluster](#enabling-encryption-when-upgrading-an-existing-cluster)
 - [Reverse Path Filtering (rp_filter) Requirements](#reverse-path-filtering-rp_filter-requirements)
   - [Why loose rp_filter is required](#why-loose-rp_filter-is-required)
   - [How Antrea configures rp_filter](#how-antrea-configures-rp_filter)
@@ -430,6 +433,135 @@ case.
   specify different values for different Nodes, taking priority over the value
   configured in the config file. The option and the annotation were added in
   Antrea v1.11.0.
+
+## Securing the memberlist cluster
+
+To achieve high availability, the antrea-agents form a cluster using a
+gossip-based membership protocol (provided by [memberlist](https://github.com/hashicorp/memberlist),
+listening on port 10351 by default). This cluster is used by the Egress and
+ServiceExternalIP features to agree on which Node owns each Egress / external IP.
+
+The gossip traffic is authenticated and encrypted with a key shared by all the
+antrea-agents, which prevents hosts that are not part of the cluster from joining
+the ring, enumerating cluster members, or influencing membership. All the
+antrea-agents must use the same key, otherwise they will not be able to form a
+single cluster.
+
+Securing the gossip traffic was added in Antrea v2.7.0, and is not backported to
+earlier versions: it requires an incompatibility between antrea-agent versions,
+which the [versioning documentation](versioning.md) does not allow between patch
+versions of the same minor. On earlier versions the gossip traffic is neither
+authenticated nor encrypted, and the only mitigation is to restrict access to the
+membership port.
+
+The key is stored in the `antrea-memberlist-keys` Secret, in the Antrea Namespace.
+antrea-controller creates the Secret with a randomly-generated key if it does not
+exist yet, so no action is needed to secure a new installation. An existing key is
+never modified, which means that you can also provision the Secret yourself before
+installing or upgrading Antrea, and that the key is preserved across upgrades.
+
+antrea-controller also watches the Secret, and writes the same key back if the
+Secret is deleted or if the key is removed from it - for example by a GitOps tool
+pruning resources it does not know about. This only works for as long as
+antrea-controller keeps running: if it is restarted while the Secret is missing,
+it has no choice but to generate a new key, which every antrea-agent then has to
+apply, temporarily partitioning the membership cluster. Deleting the Secret is
+therefore not a supported way to rotate the key, and the procedure below should be
+used instead.
+
+An antrea-agent does not join the membership cluster until a key is available,
+and until then it does not claim any Egress or ServiceExternalIP IP. The rest of
+the agent, including Pod networking, is not affected. `antctl check installation`
+reports the state of the key and of the two options described below.
+
+This applies whenever the Secret is missing. On a brand new cluster, it delays
+the Egress and ServiceExternalIP features until antrea-controller has created the
+Secret, which normally takes a few seconds. It also applies when the
+antrea-agents are upgraded before antrea-controller: the upgraded Nodes have no
+key until antrea-controller has been upgraded and has created the Secret, and
+they do not claim any Egress or ServiceExternalIP IP for that whole period. Refer
+to the [Antrea upgrade
+documentation](versioning.md#antrea-upgrade-and-supported-version-skew) for the
+recommended upgrade order.
+
+Note that this is the case even when both options described below are set to
+`false`: an antrea-agent never creates its memberlist instance without a key, so
+that the gossip traffic is never left unauthenticated by accident.
+
+To avoid this window altogether, you can create the Secret yourself before
+upgrading (adjust `-n kube-system` if Antrea is installed in a different
+Namespace):
+
+```bash
+kubectl create secret generic antrea-memberlist-keys -n kube-system \
+  --from-literal=keys="$(head -c 32 /dev/urandom | base64)"
+```
+
+antrea-controller adopts that key instead of generating one, as it never modifies
+an existing key. Every antrea-agent then has a key as soon as it starts, no
+matter which component is upgraded first, and the Egress and ServiceExternalIP
+features are available immediately on each upgraded Node.
+
+### Rotating the key
+
+To rotate the key, replace it in the Secret with a new randomly-generated one
+(adjust `-n kube-system` if Antrea is installed in a different Namespace):
+
+```bash
+kubectl patch secret antrea-memberlist-keys -n kube-system --type=merge \
+  -p "{\"stringData\":{\"keys\":\"$(head -c 32 /dev/urandom | base64)\"}}"
+```
+
+Every antrea-agent watches the Secret and applies the new key within seconds,
+without restarting. Note however that only a single key is supported at the
+moment, so an agent which has not applied the new key yet cannot exchange gossip
+traffic with an agent which has. This window is normally very short, but an agent
+whose watch is stale, or which cannot reach the API server, keeps using the old
+key until it observes the new one. If that lasts long enough for the other Nodes
+to consider it dead, the membership cluster is temporarily partitioned, which can
+result in the same Egress IP being assigned to two Nodes until it recovers. Rotate
+the key at a time when a brief Egress / ServiceExternalIP disruption is
+acceptable.
+
+### Enabling encryption when upgrading an existing cluster
+
+The `memberlist.gossipVerifyOutgoing` and `memberlist.gossipVerifyIncoming`
+antrea-agent options control whether outgoing gossip traffic is encrypted, and
+whether unencrypted incoming gossip traffic is rejected. Both default to `true`.
+
+An antrea-agent which encrypts its traffic cannot be understood by an agent which
+does not have a key, and an agent which rejects unencrypted traffic cannot
+understand such an agent either. When upgrading from a version of Antrea which did
+not secure the gossip traffic, the rolling update of the antrea-agent DaemonSet
+therefore partitions the membership cluster until every Node has been upgraded.
+The partition resolves on its own, but while it lasts each side of the partition
+assigns Egress IPs independently, which can result in the same Egress IP being
+assigned to two Nodes.
+
+If that disruption is not acceptable, upgrade in the following steps instead,
+waiting for the antrea-agent DaemonSet rolling update to complete each time. Each
+step is compatible with the previous one, so the cluster is never partitioned:
+
+1. Upgrade to the new Antrea version with both options set to `false`. Every
+   antrea-agent now has the key, but still sends unencrypted traffic and accepts
+   it, which keeps it compatible with the Nodes which have not been upgraded yet.
+   Make sure that the Secret exists by the time the antrea-agents restart, either
+   by creating it beforehand or by upgrading antrea-controller first: as
+   described above, an upgraded antrea-agent which cannot get a key does not join
+   the membership cluster at all, and claims no Egress or ServiceExternalIP IP
+   until the Secret appears. This is a stronger disruption than the partition
+   this procedure avoids.
+2. Set `gossipVerifyOutgoing` to `true`. Every antrea-agent now encrypts its
+   traffic, and agents which are still at step 1 can decrypt it, since they have
+   the key.
+3. Set `gossipVerifyIncoming` to `true`. Unencrypted gossip traffic is now
+   rejected, which is what authenticates the other members of the cluster.
+
+Do not skip step 2: an agent which rejects unencrypted traffic cannot communicate
+with an agent which is still sending it.
+
+Note that until step 3 is complete, the gossip traffic is **not** authenticated,
+as unencrypted traffic is still accepted.
 
 ## Reverse Path Filtering (rp_filter) Requirements
 

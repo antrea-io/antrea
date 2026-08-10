@@ -137,6 +137,8 @@ func (c *fakeSingleNodeCluster) AliveNodes() sets.Set[string] {
 
 func (c *fakeSingleNodeCluster) AddClusterEventHandler(handler memberlist.ClusterNodeEventHandler) {}
 
+func (c *fakeSingleNodeCluster) Ready() bool { return true }
+
 func mockNewIPAssigner(ipAssigner ipassigner.IPAssigner) func() {
 	originalNewIPAssigner := newIPAssigner
 	newIPAssigner = func(_, _ string, _ linkmonitor.Interface, _ bool) (ipassigner.IPAssigner, error) {

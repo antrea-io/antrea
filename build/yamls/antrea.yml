@@ -4626,6 +4626,21 @@ data:
     # Defaults to 10351.
     clusterPort: 10351
 
+    # Configuration of the gossip-based cluster membership protocol, used by the Egress and
+    # ServiceExternalIP features. The gossip traffic is authenticated and encrypted with the key from the
+    # antrea-memberlist-keys Secret, which antrea-controller creates with a randomly-generated key if it does
+    # not exist yet.
+    memberlist:
+      # Encrypt the gossip traffic sent by this Node.
+      gossipVerifyOutgoing: true
+      # Reject incoming gossip traffic which is not encrypted, which is what authenticates the other
+      # members of the cluster. Setting it to false accepts unencrypted traffic, and therefore provides
+      # no authentication.
+      # Both options must be set to false while some Nodes do not have the key yet, which is the case
+      # when upgrading from a version of Antrea which did not secure the gossip traffic. Refer to
+      # docs/egress.md for the procedure to enable them without partitioning the cluster.
+      gossipVerifyIncoming: true
+
     # Enable metrics exposure via Prometheus. Initializes Prometheus metrics listener.
     enablePrometheusMetrics: true
 
@@ -5278,6 +5293,7 @@ rules:
     resourceNames:
       - antrea-bgp-passwords
       - antrea-packetcapture-fileserver-auth
+      - antrea-memberlist-keys
     verbs:
       - get
       - list
@@ -5526,6 +5542,7 @@ rules:
     resourceNames:
       - antrea-controller-tls
       - antrea-ipsec-ca
+      - antrea-memberlist-keys
     verbs:
       - get
       - update
@@ -5913,7 +5930,7 @@ spec:
         kubectl.kubernetes.io/default-container: antrea-agent
         # Automatically restart Pods with a RollingUpdate if the ConfigMap changes
         # See https://helm.sh/docs/howto/charts_tips_and_tricks/#automatically-roll-deployments
-        checksum/config: db2905aed3043896f9781712af83a5ffdf472d1db08bbed2f030d2ac4df7515e
+        checksum/config: 7e284ab49c3ed3bf67aa44c3724bc1c0eebc24f38116958452f90e9d11f90940
       labels:
         app: antrea
         component: antrea-agent
@@ -6159,7 +6176,7 @@ spec:
       annotations:
         # Automatically restart Pod if the ConfigMap changes
         # See https://helm.sh/docs/howto/charts_tips_and_tricks/#automatically-roll-deployments
-        checksum/config: db2905aed3043896f9781712af83a5ffdf472d1db08bbed2f030d2ac4df7515e
+        checksum/config: 7e284ab49c3ed3bf67aa44c3724bc1c0eebc24f38116958452f90e9d11f90940
       labels:
         app: antrea
         component: antrea-controller

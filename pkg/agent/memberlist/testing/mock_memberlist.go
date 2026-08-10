@@ -82,6 +82,20 @@ func (mr *MockInterfaceMockRecorder) AliveNodes() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AliveNodes", reflect.TypeOf((*MockInterface)(nil).AliveNodes))
 }
 
+// Ready mocks base method.
+func (m *MockInterface) Ready() bool {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Ready")
+	ret0, _ := ret[0].(bool)
+	return ret0
+}
+
+// Ready indicates an expected call of Ready.
+func (mr *MockInterfaceMockRecorder) Ready() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Ready", reflect.TypeOf((*MockInterface)(nil).Ready))
+}
+
 // SelectNodeForIP mocks base method.
 func (m *MockInterface) SelectNodeForIP(ip, externalIPPool string, filters ...func(string) bool) (string, error) {
 	m.ctrl.T.Helper()

@@ -93,6 +93,7 @@ rules:
     resourceNames:
       - antrea-controller-tls
       - antrea-ipsec-ca
+      - antrea-memberlist-keys
     verbs:
       - get
       - update

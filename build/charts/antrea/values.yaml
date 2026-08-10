@@ -250,6 +250,18 @@ agent:
   # membership protocol. Currently it's used only when the Egress feature is enabled.
   # Defaults to 10351
   clusterPort: 10351
+  memberlist:
+    # -- Encrypt the gossip traffic sent by each antrea-agent, with the key from the
+    # antrea-memberlist-keys Secret. This Secret is created by antrea-controller with a randomly-generated
+    # key if it does not exist yet.
+    gossipVerifyOutgoing: true
+    # -- Reject incoming gossip traffic which is not encrypted, which is what authenticates the other
+    # members of the memberlist cluster. Setting it to false accepts unencrypted traffic, and
+    # therefore provides no authentication.
+    # Both options must be set to false while some Nodes do not have the key yet, which is the case
+    # when upgrading from a version of Antrea which did not secure the gossip traffic. Refer to
+    # docs/egress.md for the procedure to enable them without partitioning the cluster.
+    gossipVerifyIncoming: true
   # -- Enable metrics exposure via Prometheus.
   enablePrometheusMetrics: true
   # -- Annotations to be added to antrea-agent Pods.
