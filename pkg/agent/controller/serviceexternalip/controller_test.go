@@ -106,6 +106,27 @@ func (f *fakeMemberlistCluster) SelectNodeForIP(ip, externalIPPool string, filte
 	return selectNode, nil
 }
 
+func (f *fakeMemberlistCluster) SelectNodeForDualStackIPs(ipv4, ipv4pool, ipv6, ipv6pool string, filters ...func(string) bool) (string, error) {
+	var selectNode string
+	for _, n := range f.hashFn(f.nodes) {
+		passed := true
+		for _, filter := range filters {
+			if !filter(n) {
+				passed = false
+				break
+			}
+		}
+		if passed {
+			selectNode = n
+			break
+		}
+	}
+	if selectNode == "" {
+		return "", fmt.Errorf("no Node available for IPs %s/%s and externalIPPools %s/%s", ipv4, ipv6, ipv4pool, ipv6pool)
+	}
+	return selectNode, nil
+}
+
 func (f *fakeMemberlistCluster) ShouldSelectIP(ip string, pool string, filters ...func(node string) bool) (bool, error) {
 	return false, nil
 }

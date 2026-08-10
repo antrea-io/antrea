@@ -281,6 +281,7 @@ func (c *Controller) parsePacketIn(pktIn *ofctrl.PacketIn) (*crdv1beta1.Traceflo
 		tunnelDstIP := ""
 		// decide according to packet.
 		isIPv6 := etherData.Ethertype == protocol.IPv6_MSG
+		isDstIPv6 := netIPDst.To4() == nil
 		if match := getMatchTunnelDstField(matchers, isIPv6); match != nil {
 			tunnelDstIP, err = getTunnelDstValue(match)
 			if err != nil {
@@ -295,7 +296,7 @@ func (c *Controller) parsePacketIn(pktIn *ofctrl.PacketIn) (*crdv1beta1.Traceflo
 			}
 		}
 		gatewayIP := c.nodeConfig.GatewayConfig.IPv4
-		if etherData.Ethertype == protocol.IPv6_MSG {
+		if isIPv6 {
 			gatewayIP = c.nodeConfig.GatewayConfig.IPv6
 		}
 		gwPort := c.nodeConfig.GatewayConfig.OFPort
@@ -313,7 +314,8 @@ func (c *Controller) parsePacketIn(pktIn *ofctrl.PacketIn) (*crdv1beta1.Traceflo
 				if err != nil {
 					return nil, nil, nil, err
 				}
-				obEgress := getEgressObservation(false, egressConfig.EgressIP, egressConfig.Name, egressConfig.EgressNode)
+				egressIP := egressConfig.EgressIPByFamily(isDstIPv6)
+				obEgress := getEgressObservation(false, egressIP, egressConfig.Name, egressConfig.EgressNode)
 				obs = append(obs, *obEgress)
 			}
 			ob.TunnelDstIP = tunnelDstIP
@@ -336,10 +338,10 @@ func (c *Controller) parsePacketIn(pktIn *ofctrl.PacketIn) (*crdv1beta1.Traceflo
 						return nil, nil, nil, err
 					}
 					egressName = egressConfig.Name
-					egressIP = egressConfig.EgressIP
+					egressIP = egressConfig.EgressIPByFamily(isDstIPv6)
 					egressNode = egressConfig.EgressNode
 				} else {
-					egressIP, err = c.egressQuerier.GetEgressIPByMark(pktMark)
+					egressIP, err = c.egressQuerier.GetEgressIPByMark(pktMark, isDstIPv6)
 					if err != nil {
 						return nil, nil, nil, err
 					}
