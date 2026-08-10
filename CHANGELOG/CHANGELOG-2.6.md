@@ -1,5 +1,32 @@
 # Changelog 2.6
 
+## 2.6.3 - 2026-08-15
+
+### Changed
+
+- Add documentation for restricting multicluster ServiceExports to mitigate the risk of arbitrary Namespace imports. ([#8251](https://github.com/antrea-io/antrea/pull/8251), [@luolanzone] [@antoninbas])
+
+### Fixed
+
+- Fix host-local IPAM GC releasing in-use Pod IPs. ([#8240](https://github.com/antrea-io/antrea/pull/8240), [@antoninbas])
+- Retry AntreaProxy Service synchronization after transient failures to ensure datapath state converges. ([#8206](https://github.com/antrea-io/antrea/pull/8206), [@hongliangl])
+- Return the error when adding messages to a bundle fails, so failed OVS flow installations are retried. ([#8211](https://github.com/antrea-io/antrea/pull/8211), [@hongliangl])
+- Fix scrambled Aggregate-mode stats/throughput IEs in FlowAggregator IPFIX export. ([#8228](https://github.com/antrea-io/antrea/pull/8228), [@Dyanngg])
+- Recover Service group install after a timed-out bundle commit. ([#8190](https://github.com/antrea-io/antrea/pull/8190), [@hongliangl])
+- Annotate end-of-initial-events bookmark for watch-list clients to fix cache sync stalled issue on a Rancher cluster. ([#8124](https://github.com/antrea-io/antrea/pull/8124), [@stroebs])
+- Stop forwarding antctl caller credentials to Agents, authenticating with a short-lived token minted for the dedicated antctl ServiceAccount instead. ([#8251](https://github.com/antrea-io/antrea/pull/8251), [@antoninbas])
+- Check requester authorization for SupportBundleCollection authSecret, rejecting requests where the requester cannot read the referenced Secret. ([#8251](https://github.com/antrea-io/antrea/pull/8251), [@antoninbas])
+- Do not realize Groups whose childGroups are nested too deeply, preventing an antrea-controller crash caused by a ChildGroups cycle. ([#8251](https://github.com/antrea-io/antrea/pull/8251), [@antoninbas])
+- Check requester authorization for PacketCapture fileServer, rejecting requests where the requester cannot read the file server credentials. ([#8251](https://github.com/antrea-io/antrea/pull/8251), [@antoninbas])
+- Prevent antrea-agent panic on short reject packets. ([#8251](https://github.com/antrea-io/antrea/pull/8251), [@antoninbas])
+- Prevent antrea-agent panic on non-echo ICMPv6 packet-in. ([#8251](https://github.com/antrea-io/antrea/pull/8251), [@antoninbas])
+- Sanitize comment and log-prefix args in iptables rule builder to prevent injection of arbitrary rules. ([#8251](https://github.com/antrea-io/antrea/pull/8251), [@antoninbas])
+- Bind Windows ovsdb-server to loopback instead of all interfaces. ([#8251](https://github.com/antrea-io/antrea/pull/8251), [@antoninbas])
+- Prevent antrea-agent panic on short IGMP packets. ([#8251](https://github.com/antrea-io/antrea/pull/8251), [@antoninbas])
+- Fix antrea-agent panic on Traceflow to a portless Service. ([#8251](https://github.com/antrea-io/antrea/pull/8251), [@antoninbas])
+- Bound FQDN tracking growth in fqdnController with a single capped cache. ([#8251](https://github.com/antrea-io/antrea/pull/8251), [@antoninbas])
+- Update `golang.org/x/text`, `google.golang.org/grpc`, and `github.com/gopacket/gopacket` to address CVEs. ([#8266](https://github.com/antrea-io/antrea/pull/8266), [@luolanzone])
+
 ## 2.6.2 - 2026-06-12
 
 ### Changed
@@ -99,5 +126,6 @@
 [@molegit9]: https://github.com/molegit9
 [@petertran-avgo]: https://github.com/petertran-avgo
 [@renovatebot]: https://github.com/renovatebot
+[@stroebs]: https://github.com/stroebs
 [@wenqiq]: https://github.com/wenqiq
 [@xliuxu]: https://github.com/xliuxu
