@@ -67,6 +67,7 @@ edit the Agent configuration in the
 | `NodeLatencyMonitor`            | Agent              | `false` | Alpha      | v2.1          | N/A          | N/A        | No                 |                                                        |
 | `PacketCapture`                 | Agent              | `false` | Alpha      | v2.2          | N/A          | N/A        | No                 |                                                        |
 | `NFTablesHostNetworkMode`       | Agent              | `false` | Alpha      | v2.5          | N/A          | N/A        | Yes                |                                                        |
+| `AntreaNodeConfig`              | Agent              | `true`  | Beta       | N/A           | v2.7         | N/A        | No                 | Configures the secondary network OVS bridge per Node.  |
 
 ## Description and Requirements of Features
 
@@ -578,6 +579,18 @@ by functionalities and features that rely on netfilter. Currently, nftables supp
 #### Requirements for this Feature
 
 This feature is only supported on Linux.
+
+### AntreaNodeConfig
+
+This feature enables the AntreaNodeConfig CRD, which allows per-Node configuration of Antrea agent settings via
+nodeSelector-based policies. Currently, it supports configuring the secondary network OVS bridge on the selected Nodes,
+as an alternative to static configuration in `antrea-agent.conf`. Static secondary bridge configuration in the Agent
+configuration always takes precedence over AntreaNodeConfig.
+
+#### Requirements for this Feature
+
+This feature is only supported on Linux. Refer to the [secondary network document](secondary-network.md#per-node-ovs-bridge-configuration-with-antreanodeconfig)
+for more information.
 
 ## Removed Features
 
