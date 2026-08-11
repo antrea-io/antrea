@@ -14,12 +14,17 @@ limitations under the License.
 package common
 
 import (
+	"context"
 	"crypto/sha1" // #nosec G505: not used for security purposes
 	"encoding/hex"
+	"strings"
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+
+	"antrea.io/antrea/v2/multicluster/apis/multicluster/constants"
 )
 
 const labelIdentityHashLength = 16
@@ -78,4 +83,35 @@ func HashLabelIdentity(l string) string {
 
 func IsMulticlusterService(service *corev1.Service) bool {
 	return service.Annotations[AntreaMCServiceAnnotation] == "true"
+}
+
+// HasClusterIDPrefixPair returns true if one of the two ClusterIDs is a
+// dash-delimited prefix of the other (e.g. "east" vs "east-1"). Such pairs
+// are forbidden: Service and Endpoints export names embed the ClusterID as
+// their first dash-delimited component, so the member with the shorter
+// ClusterID can craft a Namespace/Name combination that collides with the
+// longer-ID member's export names.
+func HasClusterIDPrefixPair(a, b string) bool {
+	return strings.HasPrefix(b, a+"-") || strings.HasPrefix(a, b+"-")
+}
+
+// FindClusterIDPrefixPair lists the ServiceAccounts in namespace and returns
+// the ClusterID of the first one that forms a dash-delimited prefix pair with
+// clusterID, or "" if there is none. ServiceAccounts not annotated with a
+// ClusterID are not part of the member identity set and are skipped.
+func FindClusterIDPrefixPair(ctx context.Context, c client.Client, namespace, clusterID string) (string, error) {
+	saList := &corev1.ServiceAccountList{}
+	if err := c.List(ctx, saList, client.InNamespace(namespace)); err != nil {
+		return "", err
+	}
+	for _, sa := range saList.Items {
+		otherClusterID, ok := sa.Annotations[constants.ServiceAccountClusterIDAnnotation]
+		if !ok || otherClusterID == "" || otherClusterID == clusterID {
+			continue
+		}
+		if HasClusterIDPrefixPair(clusterID, otherClusterID) {
+			return otherClusterID, nil
+		}
+	}
+	return "", nil
 }

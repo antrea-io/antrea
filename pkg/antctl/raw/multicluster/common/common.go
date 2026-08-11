@@ -34,6 +34,7 @@ import (
 
 	"antrea.io/antrea/v2/multicluster/apis/multicluster/constants"
 	mcv1alpha2 "antrea.io/antrea/v2/multicluster/apis/multicluster/v1alpha2"
+	mccommon "antrea.io/antrea/v2/multicluster/controllers/multicluster/common"
 	"antrea.io/antrea/v2/pkg/antctl/raw"
 	multiclusterscheme "antrea.io/antrea/v2/pkg/antctl/raw/multicluster/scheme"
 )
@@ -198,8 +199,27 @@ func CreateMemberToken(cmd *cobra.Command, k8sClient client.Client, name string,
 		return fmt.Errorf("failed to list ServiceAccounts: %w", err)
 	}
 	for _, existingSA := range saList.Items {
-		if existingSA.Annotations[constants.ServiceAccountClusterIDAnnotation] == clusterID && existingSA.Name != name {
+		if existingSA.Name == name {
+			// The ServiceAccount named after the token is the one being created or
+			// re-bound to clusterID, so it is not part of the existing identity set.
+			continue
+		}
+		existingClusterID, bound := existingSA.Annotations[constants.ServiceAccountClusterIDAnnotation]
+		if !bound {
+			continue
+		}
+		if existingClusterID == clusterID {
 			return fmt.Errorf("a ServiceAccount bound to ClusterID %q already exists: %q", clusterID, existingSA.Name)
+		}
+		if mccommon.HasClusterIDPrefixPair(clusterID, existingClusterID) {
+			// Service and Endpoints export names embed the ClusterID as their first
+			// dash-delimited component, so a pair like "east" and "east-1" would let
+			// the shorter-ID member deny one of the longer-ID member's Service
+			// exports. The leader webhooks enforce this too; failing here gives the
+			// operator the error before a token is issued.
+			return fmt.Errorf("cluster ID %q conflicts with the ClusterID %q bound to ServiceAccount %q: "+
+				"the IDs form a dash-delimited prefix pair; rename one of the two members",
+				clusterID, existingClusterID, existingSA.Name)
 		}
 	}
 

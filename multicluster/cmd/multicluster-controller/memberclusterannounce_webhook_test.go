@@ -30,6 +30,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 
+	"antrea.io/antrea/v2/multicluster/apis/multicluster/constants"
 	mcv1alpha1 "antrea.io/antrea/v2/multicluster/apis/multicluster/v1alpha1"
 	mcv1alpha2 "antrea.io/antrea/v2/multicluster/apis/multicluster/v1alpha2"
 	"antrea.io/antrea/v2/multicluster/controllers/multicluster/common"
@@ -156,6 +157,52 @@ func TestMemberClusterAnnounceWebhook(t *testing.T) {
 			"system:authenticated",
 		},
 	}
+
+	east1UserInfo := authenticationv1.UserInfo{
+		Username: "system:serviceaccount:mcs1:east1-access-sa",
+		UID:      "4842eb60-68e3-4e38-adad-3abfd6117241",
+		Groups: []string{
+			"system:serviceaccounts",
+			"system:serviceaccounts:mcs1",
+			"system:authenticated",
+		},
+	}
+
+	// A bound ServiceAccount set that contains a dash-delimited prefix pair
+	// ("east" vs "east-1"), used to exercise the deny at announce time.
+	pairServiceAccounts := &corev1.ServiceAccountList{
+		Items: []corev1.ServiceAccount{
+			{
+				ObjectMeta: metav1.ObjectMeta{
+					Namespace: "mcs1",
+					Name:      "east-access-sa",
+					Annotations: map[string]string{
+						constants.ServiceAccountClusterIDAnnotation: "east",
+					},
+				},
+			},
+			{
+				ObjectMeta: metav1.ObjectMeta{
+					Namespace: "mcs1",
+					Name:      "east1-access-sa",
+					Annotations: map[string]string{
+						constants.ServiceAccountClusterIDAnnotation: "east-1",
+					},
+				},
+			},
+		},
+	}
+
+	mcaEast1 := &mcv1alpha1.MemberClusterAnnounce{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "member-announce-from-east-1",
+			Namespace: "mcs1",
+		},
+		ClusterID:       "east-1",
+		ClusterSetID:    "clusterset1",
+		LeaderClusterID: "leader1",
+	}
+	mcaEast1Marshaled, _ := j.Marshal(mcaEast1)
 
 	reqAllow := admission.Request{
 		AdmissionRequest: v1.AdmissionRequest{
@@ -399,9 +446,27 @@ func TestMemberClusterAnnounceWebhook(t *testing.T) {
 		},
 	}
 
+	// "east" announcing while "east-1" is already bound: the new member is the
+	// shorter ID of the pair.
+	reqDenyPrefixPair := admission.Request{
+		AdmissionRequest: *reqAllowCopy,
+	}
+
+	// "east-1" announcing while "east" is already bound: the new member is the
+	// longer ID of the pair.
+	reqDenyPrefixPairEast1 := admission.Request{
+		AdmissionRequest: *reqAllowCopy,
+	}
+	reqDenyPrefixPairEast1.Name = "member-announce-from-east-1"
+	reqDenyPrefixPairEast1.Object = runtime.RawExtension{
+		Raw: mcaEast1Marshaled,
+	}
+	reqDenyPrefixPairEast1.UserInfo = east1UserInfo
+
 	tests := []struct {
 		name               string
 		existingClusterSet *mcv1alpha2.ClusterSet
+		saList             *corev1.ServiceAccountList
 		req                admission.Request
 		isAllowed          bool
 		expectedMsg        string
@@ -545,13 +610,33 @@ func TestMemberClusterAnnounceWebhook(t *testing.T) {
 			isAllowed:          true,
 			expectedMsg:        "",
 		},
+		{
+			name:               "Deny MemberClusterAnnounce creation with prefix-conflicting ClusterID",
+			existingClusterSet: existingClusterSet,
+			saList:             pairServiceAccounts,
+			req:                reqDenyPrefixPair,
+			isAllowed:          false,
+			expectedMsg:        "conflicts with an existing member's ClusterID",
+		},
+		{
+			name:               "Deny MemberClusterAnnounce creation with prefix-conflicting ClusterID (longer ID)",
+			existingClusterSet: existingClusterSet,
+			saList:             pairServiceAccounts,
+			req:                reqDenyPrefixPairEast1,
+			isAllowed:          false,
+			expectedMsg:        "conflicts with an existing member's ClusterID",
+		},
 	}
 
 	decoder := admission.NewDecoder(common.TestScheme)
 	for _, tt := range tests {
-		fakeClient := fake.NewClientBuilder().WithScheme(common.TestScheme).WithObjects().WithLists(existingServiceAccounts).Build()
+		saList := tt.saList
+		if saList == nil {
+			saList = existingServiceAccounts
+		}
+		fakeClient := fake.NewClientBuilder().WithScheme(common.TestScheme).WithObjects().WithLists(saList).Build()
 		if tt.existingClusterSet != nil {
-			fakeClient = fake.NewClientBuilder().WithScheme(common.TestScheme).WithObjects(existingClusterSet).WithLists(existingServiceAccounts).Build()
+			fakeClient = fake.NewClientBuilder().WithScheme(common.TestScheme).WithObjects(existingClusterSet).WithLists(saList).Build()
 		}
 		mcaWebhookUnderTest = &memberClusterAnnounceValidator{
 			Client:    fakeClient,

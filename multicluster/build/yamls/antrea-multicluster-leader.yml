@@ -6405,6 +6405,7 @@ rules:
   - serviceaccounts
   verbs:
   - get
+  - list
 - apiGroups:
   - ""
   resources:
@@ -6848,4 +6849,28 @@ webhooks:
     - DELETE
     resources:
     - memberclusterannounces
+  sideEffects: None
+- admissionReviewVersions:
+  - v1
+  clientConfig:
+    service:
+      name: antrea-mc-webhook-service
+      namespace: antrea-multicluster
+      path: /validate-multicluster-crd-antrea-io-v1alpha1-resourceexport
+  failurePolicy: Fail
+  name: vresourceexport.kb.io
+  namespaceSelector:
+    matchLabels:
+      kubernetes.io/metadata.name: antrea-multicluster
+  rules:
+  - apiGroups:
+    - multicluster.crd.antrea.io
+    apiVersions:
+    - v1alpha1
+    operations:
+    - CREATE
+    - UPDATE
+    - DELETE
+    resources:
+    - resourceexports
   sideEffects: None

@@ -158,6 +158,20 @@ func NewClusterInfoResourceExportName(clusterID string) string {
 	return clusterID + "-clusterinfo"
 }
 
+// NewResourceExportName returns the ResourceExport name a member cluster uses
+// when exporting a Service or Endpoints resource, matching the naming
+// convention shared by the member controllers and the leader admission webhook.
+func NewResourceExportName(clusterID, namespace, name, kind string) string {
+	return clusterID + "-" + namespace + "-" + name + "-" + kind
+}
+
+// NewLabelIdentityResourceExportName returns the ResourceExport name a member
+// cluster uses when exporting a LabelIdentity, matching the naming convention
+// shared by the member controllers and the leader admission webhook.
+func NewLabelIdentityResourceExportName(clusterID, normalizedLabel string) string {
+	return clusterID + "-" + HashLabelIdentity(normalizedLabel)
+}
+
 func getClusterIDFromClusterClaim(c client.Client, clusterSet *mcv1alpha2.ClusterSet) (ClusterID, error) {
 	configNamespace := clusterSet.GetNamespace()
 

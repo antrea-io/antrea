@@ -17,6 +17,8 @@ limitations under the License.
 package leader
 
 import (
+	"context"
+	"fmt"
 	"reflect"
 	"testing"
 
@@ -29,6 +31,7 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
+	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
 	mcs "sigs.k8s.io/mcs-api/pkg/apis/v1alpha1"
 
 	"antrea.io/antrea/v2/multicluster/apis/multicluster/constants"
@@ -125,6 +128,11 @@ func TestResourceExportReconciler_handleServiceExportDeleteEvent(t *testing.T) {
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: "default",
 			Name:      "default-nginx-service",
+		},
+		Spec: mcsv1alpha1.ResourceImportSpec{
+			Name:      "nginx",
+			Namespace: "default",
+			Kind:      constants.ServiceImportKind,
 		},
 	}
 	namespacedName := types.NamespacedName{Namespace: "default", Name: "default-nginx-service"}
@@ -646,4 +654,402 @@ func TestResourceExportReconciler_handleClusterInfoKind(t *testing.T) {
 			}
 		})
 	}
+}
+
+// A member can craft a Service/Endpoints export whose (Namespace, Name, Kind)
+// tuple resolves to the same ResourceImport name as another member's export
+// while being a different tuple (the import name is derived from the
+// concatenated tuple alone). The reconciler must refuse to update the existing
+// ResourceImport instead of overwriting it.
+func TestResourceExportReconciler_refusesResourceImportTupleCollision(t *testing.T) {
+	// cluster-b's export (Namespace "foo-bar", Name "baz") derives the same
+	// ResourceImport name ("foo-bar-baz-service") as cluster-a's export
+	// (Namespace "foo", Name "bar-baz"), but the tuples differ.
+	resExportB := &mcsv1alpha1.ResourceExport{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace:  "default",
+			Name:       "cluster-b-foo-bar-baz-service",
+			Finalizers: []string{constants.ResourceExportFinalizer},
+		},
+		Spec: mcsv1alpha1.ResourceExportSpec{
+			Namespace: "foo-bar",
+			Name:      "baz",
+			Kind:      constants.ServiceKind,
+			Service: &mcsv1alpha1.ServiceExport{
+				ServiceSpec: common.SvcNginxSpec,
+			},
+		},
+	}
+	// ResourceImport created from cluster-a's export.
+	existResImport := &mcsv1alpha1.ResourceImport{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace: "default",
+			Name:      "foo-bar-baz-service",
+		},
+		Spec: mcsv1alpha1.ResourceImportSpec{
+			Name:      "bar-baz",
+			Namespace: "foo",
+			Kind:      constants.ServiceImportKind,
+		},
+	}
+	fakeClient := fake.NewClientBuilder().WithScheme(common.TestScheme).
+		WithObjects(resExportB, existResImport).WithStatusSubresource(resExportB, existResImport).Build()
+	r := NewResourceExportReconciler(fakeClient, common.TestScheme)
+	_, err := r.Reconcile(common.TestCtx, ctrl.Request{NamespacedName: types.NamespacedName{Namespace: "default", Name: "cluster-b-foo-bar-baz-service"}})
+	require.Error(t, err, "ResourceExport Reconciler should refuse to reconcile a ResourceExport whose tuple collides with the existing ResourceImport")
+
+	updatedResExport := &mcsv1alpha1.ResourceExport{}
+	err = fakeClient.Get(common.TestCtx, types.NamespacedName{Namespace: "default", Name: "cluster-b-foo-bar-baz-service"}, updatedResExport)
+	require.NoError(t, err, "failed to get ResourceExport")
+	require.Len(t, updatedResExport.Status.Conditions, 1, "ResourceExport status should record the reconcile failure")
+	assert.Equal(t, mcsv1alpha1.ResourceExportFailure, updatedResExport.Status.Conditions[0].Type)
+	assert.Equal(t, corev1.ConditionFalse, updatedResExport.Status.Conditions[0].Status)
+
+	updatedResImport := &mcsv1alpha1.ResourceImport{}
+	err = fakeClient.Get(common.TestCtx, types.NamespacedName{Namespace: "default", Name: "foo-bar-baz-service"}, updatedResImport)
+	require.NoError(t, err, "failed to get ResourceImport")
+	assert.Equal(t, "foo", updatedResImport.Spec.Namespace, "ResourceImport Namespace should not be overwritten by the colliding ResourceExport")
+	assert.Equal(t, "bar-baz", updatedResImport.Spec.Name, "ResourceImport Name should not be overwritten by the colliding ResourceExport")
+	assert.Equal(t, constants.ServiceImportKind, updatedResImport.Spec.Kind, "ResourceImport Kind should not be overwritten by the colliding ResourceExport")
+}
+
+// A transient non-NotFound error while reading the existing ResourceImport
+// (e.g. a leader API server restart) stamps a ResourceExportFailure condition.
+// The next clean reconcile must overwrite it: the success writes only fire when
+// the import is created or changed, so without the overwrite the failure would
+// linger and refreshEndpointsResourceImport would reject sibling Endpoints
+// exports for the Service indefinitely.
+func TestResourceExportReconciler_transientImportGetFailureSelfHeals(t *testing.T) {
+	existingResExport := &mcsv1alpha1.ResourceExport{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace:  "default",
+			Name:       "cluster-a-default-nginx-service",
+			Finalizers: []string{constants.ResourceExportFinalizer},
+		},
+		Spec: mcsv1alpha1.ResourceExportSpec{
+			Namespace: "default",
+			Name:      "nginx",
+			Kind:      constants.ServiceKind,
+			Service: &mcsv1alpha1.ServiceExport{
+				ServiceSpec: common.SvcNginxSpec,
+			},
+		},
+	}
+	importName := "default-nginx-service"
+	// Fail only the second Get on the ResourceImport, once the first reconcile
+	// has created it, so the transient error lands mid-sequence.
+	getCalls := 0
+	fakeClient := fake.NewClientBuilder().WithScheme(common.TestScheme).WithObjects(existingResExport).
+		WithStatusSubresource(existingResExport).
+		WithInterceptorFuncs(interceptor.Funcs{
+			Get: func(ctx context.Context, c client.WithWatch, key client.ObjectKey, obj client.Object, opts ...client.GetOption) error {
+				if key.Name == importName {
+					getCalls++
+					if getCalls == 2 {
+						return fmt.Errorf("transient failure reading ResourceImport")
+					}
+				}
+				// Delegate to the underlying client: returning nil here would
+				// short-circuit the Get entirely, leaving the object untouched.
+				return c.Get(ctx, key, obj, opts...)
+			},
+		}).Build()
+	r := NewResourceExportReconciler(fakeClient, common.TestScheme)
+
+	_, err := r.Reconcile(common.TestCtx, svcResReq)
+	require.NoError(t, err, "first reconcile should create the ResourceImport")
+
+	_, err = r.Reconcile(common.TestCtx, svcResReq)
+	require.Error(t, err, "second reconcile should fail on the transient Get error")
+	updatedResExport := &mcsv1alpha1.ResourceExport{}
+	err = fakeClient.Get(common.TestCtx, types.NamespacedName{Namespace: "default", Name: "cluster-a-default-nginx-service"}, updatedResExport)
+	require.NoError(t, err, "failed to get ResourceExport")
+	require.Len(t, updatedResExport.Status.Conditions, 1, "ResourceExport status should record the reconcile failure")
+	assert.Equal(t, mcsv1alpha1.ResourceExportFailure, updatedResExport.Status.Conditions[0].Type)
+	assert.Equal(t, corev1.ConditionFalse, updatedResExport.Status.Conditions[0].Status)
+	existingResImport := &mcsv1alpha1.ResourceImport{}
+	err = fakeClient.Get(common.TestCtx, types.NamespacedName{Namespace: "default", Name: importName}, existingResImport)
+	require.NoError(t, err, "the transient failure must not disturb the existing ResourceImport")
+
+	_, err = r.Reconcile(common.TestCtx, svcResReq)
+	require.NoError(t, err, "third reconcile is clean and should clear the failure")
+	updatedResExport = &mcsv1alpha1.ResourceExport{}
+	err = fakeClient.Get(common.TestCtx, types.NamespacedName{Namespace: "default", Name: "cluster-a-default-nginx-service"}, updatedResExport)
+	require.NoError(t, err, "failed to get ResourceExport")
+	require.Len(t, updatedResExport.Status.Conditions, 1, "ResourceExport status should be overwritten on the clean reconcile")
+	assert.Equal(t, mcsv1alpha1.ResourceExportSucceeded, updatedResExport.Status.Conditions[0].Type)
+	assert.Equal(t, corev1.ConditionTrue, updatedResExport.Status.Conditions[0].Status)
+}
+
+// When a member deletes an export whose tuple differs from the existing
+// ResourceImport's (i.e. the import name collides with another member's
+// export), the reconciler must not delete the ResourceImport, but must still
+// let the export deletion (and its finalizer removal) complete.
+func TestResourceExportReconciler_skipsResourceImportCleanupOnTupleCollision(t *testing.T) {
+	resExportB := &mcsv1alpha1.ResourceExport{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace: "default",
+			Name:      "cluster-b-foo-bar-baz-endpoints",
+			Labels: map[string]string{
+				constants.SourceClusterID: "cluster-b",
+				constants.SourceNamespace: "foo-bar",
+				constants.SourceName:      "baz",
+				constants.SourceKind:      "Endpoints",
+			},
+			Finalizers:        []string{constants.ResourceExportFinalizer},
+			DeletionTimestamp: &now,
+		},
+		Spec: mcsv1alpha1.ResourceExportSpec{
+			Namespace: "foo-bar",
+			Name:      "baz",
+			Kind:      constants.EndpointsKind,
+		},
+	}
+	// ResourceImport created from cluster-a's export (Namespace "foo", Name "bar-baz").
+	existResImport := &mcsv1alpha1.ResourceImport{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace: "default",
+			Name:      "foo-bar-baz-endpoints",
+		},
+		Spec: mcsv1alpha1.ResourceImportSpec{
+			Name:      "bar-baz",
+			Namespace: "foo",
+			Kind:      constants.EndpointsKind,
+		},
+	}
+	fakeClient := fake.NewClientBuilder().WithScheme(common.TestScheme).
+		WithObjects(resExportB, existResImport).Build()
+	r := NewResourceExportReconciler(fakeClient, common.TestScheme)
+	_, err := r.Reconcile(common.TestCtx, ctrl.Request{NamespacedName: types.NamespacedName{Namespace: "default", Name: "cluster-b-foo-bar-baz-endpoints"}})
+	require.NoError(t, err, "ResourceExport Reconciler should let the colliding ResourceExport deletion complete")
+
+	updatedResImport := &mcsv1alpha1.ResourceImport{}
+	err = fakeClient.Get(common.TestCtx, types.NamespacedName{Namespace: "default", Name: "foo-bar-baz-endpoints"}, updatedResImport)
+	require.NoError(t, err, "ResourceImport created from another member's export should not be deleted by the colliding export's deletion")
+
+	resExportsLeft := &mcsv1alpha1.ResourceExportList{}
+	err = fakeClient.List(common.TestCtx, resExportsLeft)
+	require.NoError(t, err, "failed to list ResourceExports")
+	assert.Empty(t, resExportsLeft.Items, "the colliding ResourceExport should still be deleted")
+}
+
+// The Endpoints merge dereferences Spec.Endpoints for every matching export and
+// assumes at most one export per member per tuple, but the webhook does not
+// cover every writer (objects predating it, non-ServiceAccount users, and SAs
+// outside the leader Namespace all bypass admission). getNotDeletedResourceExports
+// must therefore drop nil-payload exports and dedupe by ClusterID so the merge
+// loop is safe independently of the webhook.
+func TestResourceExportReconciler_getNotDeletedResourceExportsSkipsNilAndDuplicateExports(t *testing.T) {
+	epResExport := &mcsv1alpha1.ResourceExport{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace: "default",
+			Name:      "cluster-a-default-nginx-endpoints",
+		},
+		Spec: mcsv1alpha1.ResourceExportSpec{
+			Namespace: "default",
+			Name:      "nginx",
+			Kind:      constants.EndpointsKind,
+		},
+	}
+	newEndpointsExport := func(clusterID, name string, endpoints *mcsv1alpha1.EndpointsExport) *mcsv1alpha1.ResourceExport {
+		return &mcsv1alpha1.ResourceExport{
+			ObjectMeta: metav1.ObjectMeta{
+				Namespace:  "default",
+				Name:       name,
+				Finalizers: []string{constants.ResourceExportFinalizer},
+				Labels:     epLabels,
+			},
+			Spec: mcsv1alpha1.ResourceExportSpec{
+				Namespace: "default",
+				Name:      "nginx",
+				Kind:      constants.EndpointsKind,
+				ClusterID: clusterID,
+				Endpoints: endpoints,
+			},
+		}
+	}
+	tests := []struct {
+		name    string
+		exports []client.Object
+		wantIDs []string
+	}{
+		{
+			name:    "skips an Endpoints export with a nil payload",
+			exports: []client.Object{newEndpointsExport("cluster-a", "cluster-a-default-nginx-endpoints", &mcsv1alpha1.EndpointsExport{Subsets: common.EPNginxSubset}), newEndpointsExport("cluster-b", "cluster-b-default-nginx-endpoints", nil)},
+			wantIDs: []string{"cluster-a"},
+		},
+		{
+			name:    "dedupes duplicate exports from the same member",
+			exports: []client.Object{newEndpointsExport("cluster-a", "cluster-a-default-nginx-endpoints", &mcsv1alpha1.EndpointsExport{Subsets: common.EPNginxSubset}), newEndpointsExport("cluster-a", "cluster-a-default-nginx-endpoints-dup", &mcsv1alpha1.EndpointsExport{Subsets: common.EPNginxSubset}), newEndpointsExport("cluster-b", "cluster-b-default-nginx-endpoints", &mcsv1alpha1.EndpointsExport{Subsets: common.EPNginxSubset})},
+			wantIDs: []string{"cluster-a", "cluster-b"},
+		},
+		{
+			name:    "drops a nil-payload duplicate",
+			exports: []client.Object{newEndpointsExport("cluster-a", "cluster-a-default-nginx-endpoints", &mcsv1alpha1.EndpointsExport{Subsets: common.EPNginxSubset}), newEndpointsExport("cluster-a", "cluster-a-default-nginx-endpoints-dup", &mcsv1alpha1.EndpointsExport{Subsets: common.EPNginxSubset}), newEndpointsExport("cluster-b", "cluster-b-default-nginx-endpoints", nil)},
+			wantIDs: []string{"cluster-a"},
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			fakeClient := fake.NewClientBuilder().WithScheme(common.TestScheme).WithObjects(tc.exports...).Build()
+			r := NewResourceExportReconciler(fakeClient, common.TestScheme)
+			items, err := r.getNotDeletedResourceExports(epResExport)
+			require.NoError(t, err, "getNotDeletedResourceExports should succeed")
+			gotIDs := make([]string, 0, len(items))
+			for _, item := range items {
+				gotIDs = append(gotIDs, item.Spec.ClusterID)
+			}
+			assert.ElementsMatch(t, tc.wantIDs, gotIDs, "surviving exports should be deduped by ClusterID and exclude nil payloads")
+		})
+	}
+}
+
+// A nil-payload Service export can reach the reconciler when the writer
+// bypasses admission (objects predating the webhook, non-ServiceAccount users,
+// and ServiceAccounts outside the leader Namespace). refreshServiceResourceImport
+// dereferences Spec.Service, so Reconcile must fail with a visible
+// ResourceExportFailure instead of panicking.
+func TestResourceExportReconciler_nilServicePayloadFailsReconcile(t *testing.T) {
+	resExport := &mcsv1alpha1.ResourceExport{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace:  "default",
+			Name:       "cluster-a-default-nginx-service",
+			Finalizers: []string{constants.ResourceExportFinalizer},
+		},
+		Spec: mcsv1alpha1.ResourceExportSpec{
+			Namespace: "default",
+			Name:      "nginx",
+			Kind:      constants.ServiceKind,
+		},
+	}
+	fakeClient := fake.NewClientBuilder().WithScheme(common.TestScheme).WithObjects(resExport).
+		WithStatusSubresource(resExport).Build()
+	r := NewResourceExportReconciler(fakeClient, common.TestScheme)
+
+	_, err := r.Reconcile(common.TestCtx, svcResReq)
+	require.Error(t, err, "Reconcile should fail for a Service ResourceExport with a nil payload")
+
+	updatedResExport := &mcsv1alpha1.ResourceExport{}
+	err = fakeClient.Get(common.TestCtx, types.NamespacedName{Namespace: "default", Name: "cluster-a-default-nginx-service"}, updatedResExport)
+	require.NoError(t, err, "failed to get ResourceExport")
+	require.Len(t, updatedResExport.Status.Conditions, 1, "ResourceExport status should record the reconcile failure")
+	assert.Equal(t, mcsv1alpha1.ResourceExportFailure, updatedResExport.Status.Conditions[0].Type)
+	assert.Equal(t, corev1.ConditionFalse, updatedResExport.Status.Conditions[0].Status)
+}
+
+// Same as TestResourceExportReconciler_nilServicePayloadFailsReconcile, for
+// Endpoints. The converged Service export is present so that, without the
+// guard, Reconcile would reach the Spec.Endpoints dereference and panic
+// instead of failing with a recorded status.
+func TestResourceExportReconciler_nilEndpointsPayloadFailsReconcile(t *testing.T) {
+	convergedSvcResExport := &mcsv1alpha1.ResourceExport{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace:  "default",
+			Name:       "cluster-a-default-nginx-service",
+			Labels:     svcLabels,
+			Finalizers: []string{constants.ResourceExportFinalizer},
+		},
+		Spec: mcsv1alpha1.ResourceExportSpec{
+			Namespace: "default",
+			Name:      "nginx",
+			Kind:      constants.ServiceKind,
+			Service: &mcsv1alpha1.ServiceExport{
+				ServiceSpec: corev1.ServiceSpec{
+					Ports: []corev1.ServicePort{common.SvcPort8080},
+				},
+			},
+		},
+		Status: mcsv1alpha1.ResourceExportStatus{
+			Conditions: []mcsv1alpha1.ResourceExportCondition{
+				{
+					Type:   mcsv1alpha1.ResourceExportSucceeded,
+					Status: corev1.ConditionTrue,
+				},
+			},
+		},
+	}
+	resExport := &mcsv1alpha1.ResourceExport{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace:  "default",
+			Name:       "cluster-a-default-nginx-endpoints",
+			Labels:     epLabels,
+			Finalizers: []string{constants.ResourceExportFinalizer},
+		},
+		Spec: mcsv1alpha1.ResourceExportSpec{
+			Namespace: "default",
+			Name:      "nginx",
+			Kind:      constants.EndpointsKind,
+		},
+	}
+	fakeClient := fake.NewClientBuilder().WithScheme(common.TestScheme).WithObjects(resExport, convergedSvcResExport).
+		WithStatusSubresource(resExport, convergedSvcResExport).Build()
+	r := NewResourceExportReconciler(fakeClient, common.TestScheme)
+
+	_, err := r.Reconcile(common.TestCtx, epResReq)
+	require.Error(t, err, "Reconcile should fail for an Endpoints ResourceExport with a nil payload")
+
+	updatedResExport := &mcsv1alpha1.ResourceExport{}
+	err = fakeClient.Get(common.TestCtx, types.NamespacedName{Namespace: "default", Name: "cluster-a-default-nginx-endpoints"}, updatedResExport)
+	require.NoError(t, err, "failed to get ResourceExport")
+	require.Len(t, updatedResExport.Status.Conditions, 1, "ResourceExport status should record the reconcile failure")
+	assert.Equal(t, mcsv1alpha1.ResourceExportFailure, updatedResExport.Status.Conditions[0].Type)
+	assert.Equal(t, corev1.ConditionFalse, updatedResExport.Status.Conditions[0].Status)
+}
+
+// Two ACNP exports for the same tuple are a conflict: neither may be applied
+// to the ResourceImport. ACNP exports are created by cluster admins and carry
+// no ClusterID, so the dedupe by ClusterID must not collapse them - two
+// distinct exports with empty ClusterIDs are not a duplicate member. exportA
+// is reconciled second, and its name sorts first in the List used by the
+// merge, so with a collapsing dedupe it would be the surviving export and
+// would overwrite the import with its own policy.
+func TestResourceExportReconciler_acnpConflictNotDedupedByClusterID(t *testing.T) {
+	acnpLabels := map[string]string{
+		constants.SourceNamespace: "",
+		constants.SourceName:      "test-acnp",
+		constants.SourceKind:      constants.AntreaClusterNetworkPolicyKind,
+	}
+	policyB := isolationACNPSpec.DeepCopy()
+	policyB.Priority = 2.0
+	exportA := &mcsv1alpha1.ResourceExport{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace:  "default",
+			Name:       "acnp-export-a",
+			Labels:     acnpLabels,
+			Finalizers: []string{constants.ResourceExportFinalizer},
+		},
+		Spec: mcsv1alpha1.ResourceExportSpec{
+			Name:                 "test-acnp",
+			Kind:                 constants.AntreaClusterNetworkPolicyKind,
+			ClusterNetworkPolicy: policyB,
+		},
+	}
+	exportB := &mcsv1alpha1.ResourceExport{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace:  "default",
+			Name:       "acnp-export-b",
+			Labels:     acnpLabels,
+			Finalizers: []string{constants.ResourceExportFinalizer},
+		},
+		Spec: mcsv1alpha1.ResourceExportSpec{
+			Name:                 "test-acnp",
+			Kind:                 constants.AntreaClusterNetworkPolicyKind,
+			ClusterNetworkPolicy: isolationACNPSpec,
+		},
+	}
+	fakeClient := fake.NewClientBuilder().WithScheme(common.TestScheme).
+		WithObjects(exportA, exportB).WithStatusSubresource(exportA, exportB).Build()
+	r := NewResourceExportReconciler(fakeClient, common.TestScheme)
+
+	_, err := r.Reconcile(common.TestCtx, ctrl.Request{NamespacedName: types.NamespacedName{Namespace: "default", Name: "acnp-export-b"}})
+	require.NoError(t, err, "first reconcile should create the ResourceImport from export B")
+
+	_, err = r.Reconcile(common.TestCtx, ctrl.Request{NamespacedName: types.NamespacedName{Namespace: "default", Name: "acnp-export-a"}})
+	require.NoError(t, err, "second reconcile should not fail on the conflicting export")
+
+	resImport := &mcsv1alpha1.ResourceImport{}
+	err = fakeClient.Get(common.TestCtx, GetResourceImportName(exportA), resImport)
+	require.NoError(t, err, "failed to get ResourceImport")
+	assert.True(t, reflect.DeepEqual(resImport.Spec.ClusterNetworkPolicy, isolationACNPSpec),
+		"the conflicting export must not overwrite the ResourceImport's policy")
 }

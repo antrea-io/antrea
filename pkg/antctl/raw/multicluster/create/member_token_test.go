@@ -25,6 +25,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
+	"antrea.io/antrea/v2/multicluster/apis/multicluster/constants"
 	"antrea.io/antrea/v2/pkg/antctl/raw/multicluster/common"
 	mcscheme "antrea.io/antrea/v2/pkg/antctl/raw/multicluster/scheme"
 )
@@ -57,6 +58,7 @@ type: Opaque
 		failureType    string
 		tokenName      string
 		clusterID      string
+		existingSA     *corev1.ServiceAccount
 	}{
 		{
 			name:           "create successfully",
@@ -114,6 +116,42 @@ type: Opaque
 			tokenName:      "default-member-token",
 			expectedOutput: "failed to create object",
 		},
+		{
+			name:      "fail to create with prefix-conflicting cluster-id",
+			tokenName: "default-member-token",
+			namespace: "default",
+			clusterID: "east",
+			existingSA: &corev1.ServiceAccount{
+				ObjectMeta: metav1.ObjectMeta{
+					Namespace: "default",
+					Name:      "east-1-token",
+					Annotations: map[string]string{
+						constants.ServiceAccountClusterIDAnnotation: "east-1",
+					},
+				},
+			},
+			expectedOutput: "conflicts with the ClusterID",
+		},
+		{
+			// The ServiceAccount being re-bound to the new ClusterID is not part of
+			// the existing identity set, so correcting a mistyped ClusterID (or
+			// renaming a member) to one that is a dash-delimited prefix of its old
+			// value is not blocked by this check.
+			name:      "create successfully when re-binding the prefix-conflicting ServiceAccount",
+			tokenName: "default-member-token",
+			namespace: "default",
+			clusterID: "east",
+			existingSA: &corev1.ServiceAccount{
+				ObjectMeta: metav1.ObjectMeta{
+					Namespace: "default",
+					Name:      "default-member-token",
+					Annotations: map[string]string{
+						constants.ServiceAccountClusterIDAnnotation: "east-1",
+					},
+				},
+			},
+			expectedOutput: "You can now run",
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -124,7 +162,11 @@ type: Opaque
 
 			memberTokenOpts.namespace = tt.namespace
 			memberTokenOpts.clusterID = tt.clusterID
-			memberTokenOpts.k8sClient = fake.NewClientBuilder().WithScheme(mcscheme.Scheme).WithObjects(existingSecret).Build()
+			clientBuilder := fake.NewClientBuilder().WithScheme(mcscheme.Scheme).WithObjects(existingSecret)
+			if tt.existingSA != nil {
+				clientBuilder = clientBuilder.WithObjects(tt.existingSA)
+			}
+			memberTokenOpts.k8sClient = clientBuilder.Build()
 			if tt.failureType == "create" {
 				memberTokenOpts.k8sClient = common.FakeCtrlRuntimeClient{
 					Client:      fake.NewClientBuilder().WithScheme(mcscheme.Scheme).WithObjects(existingSecret).Build(),

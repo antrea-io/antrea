@@ -151,6 +151,14 @@ func (r *GatewayReconciler) updateResourceExport(ctx context.Context, req ctrl.R
 	klog.V(2).InfoS("Updating ClusterInfo kind of ResourceExport", "clusterinfo", klog.KObj(existingResExport),
 		"gateway", req.NamespacedName)
 	existingResExport.Spec = resExportSpec
+	// Ensure the identity labels are present: ResourceExports created before the
+	// ResourceExport validation webhook (v2.7) may not carry them, and the webhook
+	// requires them on every write.
+	if existingResExport.Labels == nil {
+		existingResExport.Labels = map[string]string{}
+	}
+	existingResExport.Labels[constants.SourceKind] = constants.ClusterInfoKind
+	existingResExport.Labels[constants.SourceClusterID] = r.localClusterID
 	if err := commonArea.Update(ctx, existingResExport, &client.UpdateOptions{}); err != nil {
 		return err
 	}
@@ -170,6 +178,10 @@ func (r *GatewayReconciler) createResourceExport(ctx context.Context, req ctrl.R
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: r.leaderNamespace,
 			Name:      common.NewClusterInfoResourceExportName(r.localClusterID),
+			Labels: map[string]string{
+				constants.SourceKind:      constants.ClusterInfoKind,
+				constants.SourceClusterID: r.localClusterID,
+			},
 		},
 		Spec: resExportSpec,
 	}
