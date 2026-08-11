@@ -32,6 +32,7 @@ import (
 	"antrea.io/antrea/v2/multicluster/apis/multicluster/constants"
 	mcv1alpha1 "antrea.io/antrea/v2/multicluster/apis/multicluster/v1alpha1"
 	mcv1alpha2 "antrea.io/antrea/v2/multicluster/apis/multicluster/v1alpha2"
+	"antrea.io/antrea/v2/multicluster/controllers/multicluster/common"
 )
 
 //+kubebuilder:webhook:path=/validate-multicluster-crd-antrea-io-v1alpha1-memberclusterannounce,mutating=false,failurePolicy=fail,sideEffects=None,groups=multicluster.crd.antrea.io,resources=memberclusterannounces,verbs=create;update;delete,versions=v1alpha1,name=vmemberclusterannounce.kb.io,admissionReviewVersions={v1}
@@ -92,7 +93,7 @@ func (v *memberClusterAnnounceValidator) Handle(ctx context.Context, req admissi
 	// the bypass without need. The Namespace from the caller identity (not req.Namespace,
 	// which is the object's Namespace) must match, so that a ServiceAccount with the same
 	// name in another Namespace is not exempted.
-	if saNamespace == v.namespace && saName == v.saName && req.Operation != admissionv1.Create {
+	if isLeaderControllerServiceAccount(saNamespace, saName, v.namespace, v.saName, req.Operation) {
 		return v.validateOperation(ctx, req, newObj, oldObj, memberClusterAnnounce)
 	}
 
@@ -159,6 +160,26 @@ func (v *memberClusterAnnounceValidator) validateOperation(ctx context.Context, 
 			klog.InfoS("Denying MemberClusterAnnounce: Name does not match ClusterID",
 				"Name", memberClusterAnnounce.Name, "expectedName", expectedName)
 			return admission.Denied(fmt.Sprintf("MemberClusterAnnounce name must be %q", expectedName))
+		}
+
+		// Deny a new member whose ClusterID forms a dash-delimited prefix pair
+		// with an existing member's (e.g. "east" vs "east-1"): Service and
+		// Endpoints export names embed the ClusterID as their first
+		// dash-delimited component, so such a pair would let the shorter-ID
+		// member craft names that collide with the longer-ID member's exports.
+		// Pairs that predate this check are a known limitation - the shorter-ID
+		// member could still deny one of the longer-ID member's Service exports
+		// - and the upgrade guide documents how to resolve them before
+		// upgrading the leader.
+		conflictingClusterID, err := common.FindClusterIDPrefixPair(ctx, v.Client, v.namespace, memberClusterAnnounce.ClusterID)
+		if err != nil {
+			klog.ErrorS(err, "Error listing ServiceAccounts for prefix-pair check", "Namespace", v.namespace)
+			return admission.Errored(http.StatusPreconditionFailed, err)
+		}
+		if conflictingClusterID != "" {
+			klog.InfoS("Denying MemberClusterAnnounce: ClusterID conflicts with another member's ClusterID",
+				"announcedClusterID", memberClusterAnnounce.ClusterID, "conflictingClusterID", conflictingClusterID)
+			return admission.Denied(fmt.Sprintf("ClusterID %q conflicts with an existing member's ClusterID", memberClusterAnnounce.ClusterID))
 		}
 
 		return admission.Allowed("")

@@ -182,6 +182,13 @@ func TestGatewayReconciler(t *testing.T) {
 				if err == nil && !reflect.DeepEqual(ciExport.Spec.ClusterInfo.GatewayInfos, tt.expectedInfo) {
 					t.Errorf("Expected GatewayInfos are %v but got %v", tt.expectedInfo, ciExport.Spec.ClusterInfo.GatewayInfos)
 				}
+				// When updating an existing export (e.g. created before the validation
+				// webhook), the reconciler must add the source labels the webhook
+				// requires on every write.
+				if err == nil && !isDelete && tt.resExport != nil {
+					assert.Equal(t, constants.ClusterInfoKind, ciExport.Labels[constants.SourceKind], "update should add the source labels required by the validation webhook")
+					assert.Equal(t, common.LocalClusterID, ciExport.Labels[constants.SourceClusterID])
+				}
 				if !isDelete && apierrors.IsNotFound(err) {
 					t.Errorf("Expected a ClusterInfo kind of ResourceExport but got error = %v", err)
 				}

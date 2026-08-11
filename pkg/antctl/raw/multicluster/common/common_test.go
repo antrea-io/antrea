@@ -266,6 +266,9 @@ func TestCreateMemberToken(t *testing.T) {
 				ObjectMeta: metav1.ObjectMeta{
 					Namespace: "default",
 					Name:      "membertoken",
+					Annotations: map[string]string{
+						"multicluster.antrea.io/cluster-id": "cluster-east",
+					},
 				},
 			},
 		},
@@ -283,6 +286,9 @@ func TestCreateMemberToken(t *testing.T) {
 				ObjectMeta: metav1.ObjectMeta{
 					Namespace: "default",
 					Name:      "membertoken",
+					Annotations: map[string]string{
+						"multicluster.antrea.io/cluster-id": "cluster-east",
+					},
 				},
 			},
 			existingRB: &rbacv1.RoleBinding{

@@ -112,8 +112,30 @@ func (r *ResourceExportReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 		return ctrl.Result{}, nil
 	}
 
+	// The refresh functions dereference the kind-specific payload, and the
+	// webhook does not cover every writer (objects predating it,
+	// non-ServiceAccount users, and ServiceAccounts outside the leader
+	// Namespace all bypass admission), so a nil payload must fail with a
+	// visible Failure status instead of panicking.
+	if resExport.Spec.Kind == constants.ServiceKind && resExport.Spec.Service == nil {
+		err := fmt.Errorf("refusing to reconcile Service ResourceExport %s/%s: nil Spec.Service payload", resExport.Namespace, resExport.Name)
+		klog.ErrorS(err, "Refusing to reconcile ResourceExport with nil payload", "resourceexport", klog.KObj(&resExport))
+		r.updateResourceExportStatus(&resExport, failed)
+		return ctrl.Result{}, err
+	}
+	if resExport.Spec.Kind == constants.EndpointsKind && resExport.Spec.Endpoints == nil {
+		err := fmt.Errorf("refusing to reconcile Endpoints ResourceExport %s/%s: nil Spec.Endpoints payload", resExport.Namespace, resExport.Name)
+		klog.ErrorS(err, "Refusing to reconcile ResourceExport with nil payload", "resourceexport", klog.KObj(&resExport))
+		r.updateResourceExportStatus(&resExport, failed)
+		return ctrl.Result{}, err
+	}
+
 	createResImport, existingResImport, err := r.getExistingResImport(ctx, resExport)
 	if err != nil {
+		// The existing ResourceImport was created from a different (Namespace, Name, Kind)
+		// tuple (see getExistingResImport); surface the failure in the ResourceExport
+		// status so the operator can resolve the name conflict.
+		r.updateResourceExportStatus(&resExport, failed)
 		return ctrl.Result{}, err
 	}
 
@@ -151,8 +173,11 @@ func (r *ResourceExportReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 
 	// There might be some changes from ResourceExport triggered reconciling but actually no need to update
 	// ResourceImport, we still need to update the ResourceExport status to reflect event have been handled
-	// successfully.
-	if len(resExport.Status.Conditions) == 0 {
+	// successfully. This also clears a lingering ResourceExportFailure: getExistingResImport returns an
+	// error for transient non-NotFound Get failures too (e.g. leader API server restart), and without
+	// this overwrite such a failure would never clear - the success writes above do not fire when the
+	// import is unchanged - rejecting sibling Endpoints exports for the Service indefinitely.
+	if len(resExport.Status.Conditions) == 0 || resExport.Status.Conditions[0].Type == mcsv1alpha1.ResourceExportFailure {
 		r.updateResourceExportStatus(&resExport, succeed)
 	}
 
@@ -216,6 +241,31 @@ func (r *ResourceExportReconciler) handleDeleteEvent(ctx context.Context, resExp
 
 	undeleteItems := RemoveDeletedResourceExports(reList.Items)
 	if len(undeleteItems) == 0 {
+		// Only delete the ResourceImport if it was created from this export's
+		// tuple. The import name is derived from the (Namespace, Name, Kind)
+		// tuple alone (see GetResourceImportName), so another member exporting
+		// a different tuple can resolve to the same name; deleting it would
+		// remove that member's import. Skip the cleanup in that case, so that
+		// this export's deletion (and finalizer removal) is not blocked.
+		resImport := &mcsv1alpha1.ResourceImport{}
+		if err := r.Client.Get(ctx, resImportName, resImport); err != nil {
+			if apierrors.IsNotFound(err) {
+				return nil
+			}
+			klog.ErrorS(err, "Failed to get ResourceImport", "resourceimport", resImportName.String())
+			return err
+		}
+		if !resourceImportMatchesExport(resImport, resExport) {
+			// The import belongs to another member's tuple, so the cleanup is
+			// skipped. Note that Reconcile still strips the finalizer below, so
+			// this export self-cleans while leaving the import it was pointing
+			// at orphaned, with no export backing it. Reachable only via a
+			// genuine cross-member name collision, or by a member flipping its
+			// own tuple - which the webhook's UPDATE immutability guard rejects.
+			klog.InfoS("Skipping ResourceImport cleanup: its (Namespace, Name, Kind) does not match this ResourceExport's",
+				"resourceimport", resImportName.String(), "resourceexport", resExport.Name)
+			return nil
+		}
 		err = r.cleanUpResourceImport(ctx, resImportName, resExport)
 		if err != nil {
 			return err
@@ -248,6 +298,14 @@ func (r *ResourceExportReconciler) updateEndpointResourceImport(ctx context.Cont
 		klog.ErrorS(err, "Failed to get ResourceImport", "resourceimport", resImpName)
 		return client.IgnoreNotFound(err)
 	}
+	// Never update an import whose tuple belongs to another member's export
+	// (see resourceImportMatchesExport); the Endpoints refresh would otherwise
+	// overwrite the import's Namespace/Name with this export's tuple.
+	if !resourceImportMatchesExport(resImport, existRe) {
+		klog.InfoS("Skipping ResourceImport update: its (Namespace, Name, Kind) does not match this ResourceExport's",
+			"resourceimport", resImpName.String(), "resourceexport", existRe.Name)
+		return nil
+	}
 	newResImport, changed, err := r.refreshEndpointsResourceImport(existRe, resImport, false)
 	if err != nil {
 		return err
@@ -258,6 +316,31 @@ func (r *ResourceExportReconciler) updateEndpointResourceImport(ctx context.Cont
 		}
 	}
 	return nil
+}
+
+// resourceImportMatchesExport reports whether the existing ResourceImport was
+// created from the same (Namespace, Name, Kind) tuple as resExport. The import
+// name is derived from that tuple alone (see GetResourceImportName), and the
+// concatenation is ambiguous (the Namespace and Name may contain '-'), so a
+// member can craft a different tuple that resolves to the same import name.
+// The reconciler must never overwrite or delete an import whose tuple belongs
+// to another member's export.
+//
+// Residual: two members exporting different tuples that concatenate identically
+// (e.g. ns "prod" / name "web-api" and ns "prod-web" / name "api") resolve to
+// the same import. First writer owns it; the second gets a permanent tuple
+// mismatch and its Service is never imported. This is a denial (no injection,
+// no cross-member data flow) and nothing reports it beyond the loser's own
+// export status; the webhook cannot prevent the pair from forming, since both
+// tuples are individually valid.
+func resourceImportMatchesExport(resImport *mcsv1alpha1.ResourceImport, resExport *mcsv1alpha1.ResourceExport) bool {
+	expectedKind := resExport.Spec.Kind
+	if resExport.Spec.Kind == constants.ServiceKind {
+		expectedKind = constants.ServiceImportKind
+	}
+	return resImport.Spec.Namespace == resExport.Spec.Namespace &&
+		resImport.Spec.Name == resExport.Spec.Name &&
+		resImport.Spec.Kind == expectedKind
 }
 
 func (r *ResourceExportReconciler) getExistingResImport(ctx context.Context,
@@ -286,6 +369,17 @@ func (r *ResourceExportReconciler) getExistingResImport(ctx context.Context,
 			},
 		}
 		createResImport = true
+		return createResImport, existResImport, nil
+	}
+	// Never overwrite an import whose tuple belongs to another member's export:
+	// refuse and keep the error visible in the ResourceExport status, so the
+	// operator can resolve the name conflict.
+	if !resourceImportMatchesExport(existResImport, &resExport) {
+		err := fmt.Errorf("existing ResourceImport %s/%s does not match the (Namespace, Name, Kind) of ResourceExport %s/%s",
+			resImportName.Namespace, resImportName.Name, resExport.Namespace, resExport.Name)
+		klog.ErrorS(err, "Refusing to reconcile ResourceExport: existing ResourceImport was created from a different (Namespace, Name, Kind) tuple",
+			"resourceimport", resImportName.String(), "resourceexport", resExport.Name)
+		return false, nil, err
 	}
 	return createResImport, existResImport, nil
 }
@@ -423,7 +517,39 @@ func (r *ResourceExportReconciler) getNotDeletedResourceExports(resExport *mcsv1
 	if err != nil {
 		return nil, err
 	}
-	return RemoveDeletedResourceExports(reList.Items), nil
+	items := RemoveDeletedResourceExports(reList.Items)
+	if resExport.Spec.Kind == constants.EndpointsKind {
+		// The Endpoints merge dereferences Spec.Endpoints for every matching
+		// export, not just the one being reconciled. The webhook does not cover
+		// every writer (objects predating it, non-ServiceAccount users, and SAs
+		// outside the leader Namespace all reach this loop unchecked), so guard
+		// here where the loop is safe independently of admission.
+		items = slices.DeleteFunc(items, func(re mcsv1alpha1.ResourceExport) bool {
+			return re.Spec.Endpoints == nil
+		})
+	}
+	// The merge assumes at most one matching export per member per tuple; dedupe
+	// by ClusterID so a duplicate export cannot double-count a member's subsets
+	// or satisfy the single-export checks in the Service merge. Only member
+	// exports carry a ClusterID: ACNP exports are created by cluster admins
+	// without one, and deduping their empty ClusterIDs would collapse distinct
+	// exports, bypassing the multi-export conflict protection in
+	// refreshACNPResourceImport.
+	seenClusterIDs := map[string]struct{}{}
+	items = slices.DeleteFunc(items, func(re mcsv1alpha1.ResourceExport) bool {
+		if re.Spec.Kind != constants.ServiceKind && re.Spec.Kind != constants.EndpointsKind {
+			return false
+		}
+		if re.Spec.ClusterID == "" {
+			return false
+		}
+		if _, ok := seenClusterIDs[re.Spec.ClusterID]; ok {
+			return true
+		}
+		seenClusterIDs[re.Spec.ClusterID] = struct{}{}
+		return false
+	})
+	return items, nil
 }
 
 func (r *ResourceExportReconciler) updateResourceExportStatus(resExport *mcsv1alpha1.ResourceExport, res resReason) {

@@ -81,6 +81,15 @@ func runLeader(o *Options) error {
 		}},
 	)
 
+	hookServer.Register("/validate-multicluster-crd-antrea-io-v1alpha1-resourceexport",
+		&webhook.Admission{Handler: &resourceExportValidator{
+			Client:    noCachedClient,
+			decoder:   admission.NewDecoder(mgr.GetScheme()),
+			namespace: podNamespace,
+			saName:    mcControllerSAName,
+		}},
+	)
+
 	hookServer.Register("/validate-multicluster-crd-antrea-io-v1alpha2-clusterset",
 		&webhook.Admission{Handler: &clusterSetValidator{
 			Client:    mgr.GetClient(),

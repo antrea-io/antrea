@@ -22,6 +22,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
 	discovery "k8s.io/api/discovery/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -447,11 +448,13 @@ func TestServiceExportReconciler_handleUpdateEvent(t *testing.T) {
 	}
 	existSvcRe := re.DeepCopy()
 	existSvcRe.Name = "cluster-a-default-nginx-service"
+	existSvcRe.Spec.Kind = constants.ServiceKind
 	existSvcRe.Spec.Service = &mcv1alpha1.ServiceExport{ServiceSpec: corev1.ServiceSpec{}}
 	existSvcRe.Spec.Service.ServiceSpec.Ports = []corev1.ServicePort{common.SvcPort80}
 
 	existEpRe := re.DeepCopy()
 	existEpRe.Name = "cluster-a-default-nginx-endpoints"
+	existEpRe.Spec.Kind = constants.EndpointsKind
 	existEpRe.Spec.Endpoints = &mcv1alpha1.EndpointsExport{Subsets: filteredSubsets}
 
 	tests := []struct {
@@ -721,4 +724,87 @@ func TestClusterSetMapFunc_ServiceExport(t *testing.T) {
 	assert.Equal(t, []reconcile.Request{}, requests)
 	assert.Equal(t, 0, len(r.installedSvcs.List()))
 	assert.Equal(t, 0, len(r.installedEps.List()))
+}
+
+func TestServiceExportReconciler_updateOrCreateResourceExport(t *testing.T) {
+	const (
+		leaderNamespace = "leader-cluster"
+		clusterID       = "cluster-a"
+	)
+	// "prod/web-api" and "prod-web/api" both derive the export name
+	// "cluster-a-prod-web-api-service".
+	exportName := "cluster-a-prod-web-api-service"
+	newResExport := func() *mcv1alpha1.ResourceExport {
+		return &mcv1alpha1.ResourceExport{
+			ObjectMeta: metav1.ObjectMeta{
+				Namespace: leaderNamespace,
+				Name:      exportName,
+			},
+			Spec: mcv1alpha1.ResourceExportSpec{
+				ClusterID: clusterID,
+				Namespace: "prod-web",
+				Name:      "api",
+				Kind:      constants.ServiceKind,
+				Service: &mcv1alpha1.ServiceExport{
+					ServiceSpec: corev1.ServiceSpec{
+						Ports: []corev1.ServicePort{{Port: 80}},
+					},
+				},
+			},
+		}
+	}
+	tests := []struct {
+		name        string
+		existing    *mcv1alpha1.ResourceExport
+		expectError string
+	}{
+		{
+			name: "existing export owned by a different ServiceExport",
+			existing: &mcv1alpha1.ResourceExport{
+				ObjectMeta: metav1.ObjectMeta{
+					Namespace: leaderNamespace,
+					Name:      exportName,
+				},
+				Spec: mcv1alpha1.ResourceExportSpec{
+					ClusterID: clusterID,
+					Namespace: "prod",
+					Name:      "web-api",
+					Kind:      constants.ServiceKind,
+				},
+			},
+			expectError: "another ServiceExport already exported prod/web-api (Service) under this name; rename one of the two Services",
+		},
+		{
+			name: "existing export owned by the same ServiceExport",
+			existing: &mcv1alpha1.ResourceExport{
+				ObjectMeta: metav1.ObjectMeta{
+					Namespace: leaderNamespace,
+					Name:      exportName,
+				},
+				Spec: mcv1alpha1.ResourceExportSpec{
+					ClusterID: clusterID,
+					Namespace: "prod-web",
+					Name:      "api",
+					Kind:      constants.ServiceKind,
+				},
+			},
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			objs := []client.Object{tc.existing}
+			fakeRemoteClient := fake.NewClientBuilder().WithScheme(common.TestScheme).WithObjects(objs...).Build()
+			rc := commonarea.NewFakeRemoteCommonArea(fakeRemoteClient, "leader-cluster", clusterID, leaderNamespace, nil)
+			r := &ServiceExportReconciler{}
+			err := r.updateOrCreateResourceExport(exportName, common.TestCtx, ctrl.Request{}, newResExport(), tc.existing, rc)
+			if tc.expectError != "" {
+				require.ErrorContains(t, err, tc.expectError)
+				return
+			}
+			require.NoError(t, err)
+			got := &mcv1alpha1.ResourceExport{}
+			require.NoError(t, fakeRemoteClient.Get(common.TestCtx, types.NamespacedName{Namespace: leaderNamespace, Name: exportName}, got))
+			require.Equal(t, "prod-web", got.Spec.Namespace)
+		})
+	}
 }

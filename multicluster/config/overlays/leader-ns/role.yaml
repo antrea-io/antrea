@@ -12,6 +12,7 @@ rules:
   - serviceaccounts
   verbs:
   - get
+  - list
 - apiGroups:
   - ""
   resources:

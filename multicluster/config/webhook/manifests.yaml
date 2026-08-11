@@ -95,3 +95,24 @@ webhooks:
     resources:
     - memberclusterannounces
   sideEffects: None
+- admissionReviewVersions:
+  - v1
+  clientConfig:
+    service:
+      name: webhook-service
+      namespace: system
+      path: /validate-multicluster-crd-antrea-io-v1alpha1-resourceexport
+  failurePolicy: Fail
+  name: vresourceexport.kb.io
+  rules:
+  - apiGroups:
+    - multicluster.crd.antrea.io
+    apiVersions:
+    - v1alpha1
+    operations:
+    - CREATE
+    - UPDATE
+    - DELETE
+    resources:
+    - resourceexports
+  sideEffects: None

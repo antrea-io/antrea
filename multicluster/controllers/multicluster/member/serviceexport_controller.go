@@ -18,6 +18,7 @@ package member
 
 import (
 	"context"
+	"fmt"
 	"net"
 	"reflect"
 	"sync"
@@ -714,6 +715,21 @@ func (r *ServiceExportReconciler) updateOrCreateResourceExport(resName string,
 			return err
 		}
 	} else {
+		// The export name is derived from the (Namespace, Name, Kind) tuple, and
+		// that concatenation is ambiguous: two ServiceExports in this cluster can
+		// derive the same name, and whichever reconciles second would overwrite
+		// the other's export. The leader webhook denies that Update, but its
+		// error ("Spec.Namespace, Spec.Name and Spec.Kind are immutable") does
+		// not say why, so detect the collision here and surface the actual cause
+		// instead of requeuing forever on an opaque error.
+		if existingResExport.Spec.Namespace != newResExport.Spec.Namespace ||
+			existingResExport.Spec.Name != newResExport.Spec.Name ||
+			existingResExport.Spec.Kind != newResExport.Spec.Kind {
+			return fmt.Errorf("cannot export %s/%s (%s) as ResourceExport %q: another ServiceExport "+
+				"already exported %s/%s (%s) under this name; rename one of the two Services",
+				newResExport.Spec.Namespace, newResExport.Spec.Name, newResExport.Spec.Kind, resName,
+				existingResExport.Spec.Namespace, existingResExport.Spec.Name, existingResExport.Spec.Kind)
+		}
 		newResExport.ObjectMeta.ResourceVersion = existingResExport.ObjectMeta.ResourceVersion
 		newResExport.Finalizers = existingResExport.Finalizers
 		err := rc.Update(ctx, newResExport, &client.UpdateOptions{})
@@ -823,7 +839,7 @@ func ipsToEndpointAddresses(ips []string) []corev1.EndpointAddress {
 }
 
 func getResourceExportName(clusterID string, req ctrl.Request, kind string) string {
-	return clusterID + "-" + req.Namespace + "-" + req.Name + "-" + kind
+	return common.NewResourceExportName(clusterID, req.Namespace, req.Name, kind)
 }
 
 func getEndpointSliceLabelSelector(svcName string) labels.Selector {
