@@ -240,12 +240,7 @@ func (br *OVSBridge) updateBridgeConfiguration(ctx context.Context) error {
 	}
 	fields := []interface{}{&update.Protocols, &update.DatapathType}
 	if br.externalIDs != nil {
-		currentExternalIDs, err := br.GetExternalIDs()
-		if err != nil {
-			return err
-		}
-		// Preserve unrelated external IDs when adopting an existing bridge.
-		update.ExternalIDs = mergeExternalIDs(currentExternalIDs, br.externalIDs)
+		update.ExternalIDs = br.externalIDs
 		fields = append(fields, &update.ExternalIDs)
 	}
 
@@ -259,18 +254,6 @@ func (br *OVSBridge) updateBridgeConfiguration(ctx context.Context) error {
 	}
 	_, err = br.transact(ctx, ops, "update bridge configuration")
 	return err
-}
-
-// mergeExternalIDs returns a copy of current external IDs with desired external IDs overlaid.
-func mergeExternalIDs(current, desired map[string]string) map[string]string {
-	merged := make(map[string]string, len(current)+len(desired))
-	for k, v := range current {
-		merged[k] = v
-	}
-	for k, v := range desired {
-		merged[k] = v
-	}
-	return merged
 }
 
 func (br *OVSBridge) create(ctx context.Context) error {

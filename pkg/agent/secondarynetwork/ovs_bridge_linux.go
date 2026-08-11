@@ -111,7 +111,7 @@ func clearStaleTrunks(ovsBridgeClient ovsconfig.OVSBridgeClient, phyInterfaces [
 
 // createOVSBridge creates or attaches to an OVS bridge with the given name.
 // The bridge is always marked as an Antrea-managed secondary bridge: Create()
-// merges the external ID into an existing bridge as well, which is how a legacy
+// sets the external ID on an existing bridge as well, which is how a legacy
 // bridge gets converted into a managed one. Create() does not touch multicast
 // snooping on an existing bridge; the desired setting is applied explicitly by
 // the caller with SetMcastSnooping.

@@ -694,7 +694,7 @@ jobs:
   test-secondary-network:
     name: Antrea-native (VLAN) secondary network tests on a Kind cluster on Linux
     needs: [build-antrea-coverage-image]
-    runs-on: [ubuntu-latest]
+    runs-on: [ubuntu-latest-8-cores]
     steps:
     - uses: actions/checkout@v7
       with:
