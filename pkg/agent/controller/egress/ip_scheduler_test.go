@@ -73,6 +73,10 @@ func (f *fakeMemberlistCluster) AliveNodes() sets.Set[string] {
 	return sets.New(f.nodes...)
 }
 
+func (f *fakeMemberlistCluster) Ready() bool {
+	return true
+}
+
 func (f *fakeMemberlistCluster) SelectNodeForIP(ip, externalIPPool string, filters ...func(string) bool) (string, error) {
 	node := f.hashMap.GetWithFilters(ip, filters...)
 	if node == "" {

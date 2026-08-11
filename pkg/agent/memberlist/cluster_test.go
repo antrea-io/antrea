@@ -15,10 +15,12 @@
 package memberlist
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"net"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"testing/synctest"
 	"time"
@@ -62,7 +64,7 @@ func newFakeCluster(nodeConfig *config.NodeConfig, stopCh <-chan struct{}, membe
 	crdClient := fakeversioned.NewSimpleClientset()
 	crdInformerFactory := crdinformers.NewSharedInformerFactory(crdClient, 0)
 	ipPoolInformer := crdInformerFactory.Crd().V1beta1().ExternalIPPools()
-	cluster, err := NewCluster(nodeConfig.NodeIPv4Addr.IP, apis.AntreaAgentClusterMembershipPort, nodeConfig.Name, nodeInformer, ipPoolInformer, memberlist)
+	cluster, err := NewCluster(nodeConfig.NodeIPv4Addr.IP, apis.AntreaAgentClusterMembershipPort, nodeConfig.Name, GossipConfig{}, nodeInformer, ipPoolInformer, memberlist)
 	if err != nil {
 		return nil, err
 	}
@@ -78,6 +80,364 @@ func newFakeCluster(nodeConfig *config.NodeConfig, stopCh <-chan struct{}, membe
 		clientSet: clientset,
 		crdClient: crdClient,
 	}, nil
+}
+
+var (
+	testKey1 = bytes.Repeat([]byte{0x01}, 32)
+	testKey2 = bytes.Repeat([]byte{0x02}, 32)
+)
+
+// newClusterWithKeyringForTest creates a Cluster backed by the provided Memberlist instance, whose
+// gossip traffic is secured by a keyring holding key. It installs the keyring the way
+// createDeferredMemberlist would, so that the keyring can be exercised without going through a
+// KeySource.
+func newClusterWithKeyringForTest(t *testing.T, stopCh <-chan struct{}, nodeName string, key []byte, ml Memberlist) *Cluster {
+	t.Helper()
+	keyring, err := memberlist.NewKeyring(nil, key)
+	require.NoError(t, err)
+	gossipConfig := GossipConfig{VerifyOutgoing: true, VerifyIncoming: true}
+	cluster := newClusterForTest(t, stopCh, nodeName, gossipConfig, ml)
+	cluster.keyring = keyring
+	return cluster
+}
+
+func newClusterForTest(t *testing.T, stopCh <-chan struct{}, nodeName string, gossipConfig GossipConfig, ml Memberlist) *Cluster {
+	t.Helper()
+	clientset := fake.NewSimpleClientset()
+	informerFactory := informers.NewSharedInformerFactory(clientset, 0)
+	nodeInformer := informerFactory.Core().V1().Nodes()
+	crdClient := fakeversioned.NewSimpleClientset()
+	crdInformerFactory := crdinformers.NewSharedInformerFactory(crdClient, 0)
+	ipPoolInformer := crdInformerFactory.Crd().V1beta1().ExternalIPPools()
+	// A bind port of 0 would make a real memberlist instance pick a random available port. No
+	// instance is ever bound in these tests, which never create one for real.
+	cluster, err := NewCluster(net.ParseIP("127.0.0.1"), 0, nodeName, gossipConfig, nodeInformer, ipPoolInformer, ml)
+	require.NoError(t, err)
+	informerFactory.Start(stopCh)
+	crdInformerFactory.Start(stopCh)
+	cache.WaitForCacheSync(stopCh, nodeInformer.Informer().HasSynced, ipPoolInformer.Informer().HasSynced)
+	return cluster
+}
+
+// TestClusterGossipConfig verifies that GossipConfig is translated into the memberlist configuration
+// which secures the gossip traffic. Whether memberlist itself only lets Nodes with a matching key
+// join is a guarantee of the library, and is not something a unit test can assert without exchanging
+// traffic over the network.
+func TestClusterGossipConfig(t *testing.T) {
+	testCases := []struct {
+		name           string
+		verifyOutgoing bool
+		verifyIncoming bool
+	}{
+		{
+			name:           "gossip verification enabled",
+			verifyOutgoing: true,
+			verifyIncoming: true,
+		},
+		{
+			// Both options are disabled while a cluster is being transitioned to encrypted gossip:
+			// the key must still be installed, so that traffic from the Nodes which already encrypt
+			// it can be decrypted.
+			name:           "gossip verification disabled",
+			verifyOutgoing: false,
+			verifyIncoming: false,
+		},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			synctest.Test(t, func(t *testing.T) {
+				stopCh := make(chan struct{})
+				defer close(stopCh)
+				keySource := &fakeKeySource{}
+				gossipConfig := GossipConfig{KeySource: keySource, VerifyOutgoing: tc.verifyOutgoing, VerifyIncoming: tc.verifyIncoming}
+				cluster := newClusterForTest(t, stopCh, "node1", gossipConfig, nil)
+				conf := captureMemberlistConfig(t, cluster)
+
+				go cluster.Run(stopCh)
+				synctest.Wait()
+				keySource.deliver(t, [][]byte{testKey1})
+				synctest.Wait()
+
+				require.NotNil(t, conf.get(), "the memberlist instance should have been created")
+				assert.Equal(t, tc.verifyOutgoing, conf.get().GossipVerifyOutgoing)
+				assert.Equal(t, tc.verifyIncoming, conf.get().GossipVerifyIncoming)
+				require.NotNil(t, conf.get().Keyring, "the gossip traffic must be secured with the delivered key")
+				assert.Equal(t, [][]byte{testKey1}, conf.get().Keyring.GetKeys())
+			})
+		})
+	}
+}
+
+// memberlistConfigCapture records the configuration which the Cluster would have created a
+// memberlist instance with.
+type memberlistConfigCapture struct {
+	mutex sync.Mutex
+	conf  *memberlist.Config
+}
+
+func (c *memberlistConfigCapture) get() *memberlist.Config {
+	c.mutex.Lock()
+	defer c.mutex.Unlock()
+	return c.conf
+}
+
+// captureMemberlistConfig replaces the memberlist instance creation of cluster with a fake which
+// records the configuration it is given and returns an instance which does no networking.
+func captureMemberlistConfig(t *testing.T, cluster *Cluster) *memberlistConfigCapture {
+	t.Helper()
+	capture := &memberlistConfigCapture{}
+	mockMemberlist := NewMockMemberlist(gomock.NewController(t))
+	mockMemberlist.EXPECT().Members().Return(nil).AnyTimes()
+	mockMemberlist.EXPECT().Leave(gomock.Any()).Return(nil).AnyTimes()
+	mockMemberlist.EXPECT().Shutdown().Return(nil).AnyTimes()
+	cluster.newMemberlist = func(conf *memberlist.Config) (Memberlist, error) {
+		capture.mutex.Lock()
+		capture.conf = conf
+		capture.mutex.Unlock()
+		return mockMemberlist, nil
+	}
+	return capture
+}
+
+// TestClusterUpdateKey verifies that UpdateKey replaces the key in use in the keyring, which the
+// memberlist instance shares, so that a new key takes effect without recreating the instance.
+func TestClusterUpdateKey(t *testing.T) {
+	stopCh := make(chan struct{})
+	defer close(stopCh)
+	mockMemberlist := NewMockMemberlist(gomock.NewController(t))
+	// UpdateKey rejoins the Nodes, which lists the alive ones. There is no other Node here, so
+	// nothing is ever joined.
+	mockMemberlist.EXPECT().Members().Return(nil).AnyTimes()
+	cluster := newClusterWithKeyringForTest(t, stopCh, "node1", testKey1, mockMemberlist)
+	require.Equal(t, [][]byte{testKey1}, cluster.keyring.GetKeys())
+
+	// The new key must be the only one installed, so that the previous key can no longer be used.
+	require.NoError(t, cluster.UpdateKey(testKey2))
+	assert.Equal(t, [][]byte{testKey2}, cluster.keyring.GetKeys())
+
+	// Updating to the key which is already the only installed key is a no-op.
+	require.NoError(t, cluster.UpdateKey(testKey2))
+	assert.Equal(t, [][]byte{testKey2}, cluster.keyring.GetKeys())
+
+	// A key of an invalid length is rejected, and leaves the keyring untouched.
+	require.Error(t, cluster.UpdateKey([]byte("too-short")))
+	assert.Equal(t, [][]byte{testKey2}, cluster.keyring.GetKeys())
+}
+
+// TestClusterUpdateKeyRemovesOtherKeys verifies that the requested key becomes the only installed
+// one, whether or not it was already in the keyring. Only a single key is supported for now, so a
+// key which is no longer the primary one must not be left behind: it would still be accepted for
+// incoming traffic.
+func TestClusterUpdateKeyRemovesOtherKeys(t *testing.T) {
+	stopCh := make(chan struct{})
+	defer close(stopCh)
+	mockMemberlist := NewMockMemberlist(gomock.NewController(t))
+	mockMemberlist.EXPECT().Members().Return(nil).AnyTimes()
+	cluster := newClusterWithKeyringForTest(t, stopCh, "node1", testKey1, mockMemberlist)
+	testKey3 := bytes.Repeat([]byte{0x03}, 32)
+	require.NoError(t, cluster.keyring.AddKey(testKey2))
+	require.NoError(t, cluster.keyring.AddKey(testKey3))
+	require.Len(t, cluster.keyring.GetKeys(), 3)
+
+	// The requested key is already installed, but is not the primary one.
+	require.NoError(t, cluster.UpdateKey(testKey3))
+	assert.Equal(t, [][]byte{testKey3}, cluster.keyring.GetKeys())
+}
+
+// TestClusterUpdateKeyWithoutKeyring verifies that a Cluster whose gossip traffic is not secured
+// cannot have a key installed after the fact: the memberlist instance was created without a
+// keyring, so there is nothing to update.
+func TestClusterUpdateKeyWithoutKeyring(t *testing.T) {
+	stopCh := make(chan struct{})
+	defer close(stopCh)
+	mockMemberlist := NewMockMemberlist(gomock.NewController(t))
+	cluster := newClusterForTest(t, stopCh, "node1", GossipConfig{}, mockMemberlist)
+	assert.ErrorContains(t, cluster.UpdateKey(testKey1), "created without one")
+}
+
+// TestClusterKeyApplicationRetry verifies that a failure to apply the delivered keys is retried:
+// the memberlist instance is not created, hence this Node claims no Egress or ServiceExternalIP IP,
+// until it succeeds.
+func TestClusterKeyApplicationRetry(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		stopCh := make(chan struct{})
+		defer close(stopCh)
+		keySource := &fakeKeySource{}
+		cluster := newDeferredClusterForTest(t, stopCh, "node1", keySource)
+		mockMemberlist := NewMockMemberlist(gomock.NewController(t))
+		mockMemberlist.EXPECT().Members().Return(nil).AnyTimes()
+		mockMemberlist.EXPECT().Leave(gomock.Any()).Return(nil).AnyTimes()
+		mockMemberlist.EXPECT().Shutdown().Return(nil).AnyTimes()
+		var fail atomic.Bool
+		fail.Store(true)
+		cluster.newMemberlist = func(conf *memberlist.Config) (Memberlist, error) {
+			if fail.Load() {
+				return nil, fmt.Errorf("failed to bind the gossip port")
+			}
+			return mockMemberlist, nil
+		}
+
+		go cluster.Run(stopCh)
+		synctest.Wait()
+		keySource.deliver(t, [][]byte{testKey1})
+		// Sleeping advances the fake clock of the synctest bubble, which lets the rate-limited
+		// retries fire, and does not wait for real time.
+		time.Sleep(2 * minRetryDelay)
+		synctest.Wait()
+		require.Nil(t, cluster.memberList(), "the instance must not exist while its creation fails")
+
+		fail.Store(false)
+		time.Sleep(2 * minRetryDelay)
+		synctest.Wait()
+		assert.Equal(t, mockMemberlist, cluster.memberList(), "the instance should have been created by a retry")
+	})
+}
+
+// fakeKeySource implements KeySource, delivering keys on demand from the test.
+type fakeKeySource struct {
+	mutex  sync.Mutex
+	onKeys func(keys [][]byte)
+}
+
+func (s *fakeKeySource) Watch(stopCh <-chan struct{}, onKeys func(keys [][]byte)) {
+	s.mutex.Lock()
+	defer s.mutex.Unlock()
+	s.onKeys = onKeys
+}
+
+// deliver invokes the handler registered by Cluster.Run. Callers must have let Run reach the point
+// where it registers it, which synctest.Wait guarantees.
+func (s *fakeKeySource) deliver(t *testing.T, keys [][]byte) {
+	t.Helper()
+	s.mutex.Lock()
+	onKeys := s.onKeys
+	s.mutex.Unlock()
+	require.NotNil(t, onKeys, "the key handler should have been registered by Cluster.Run")
+	onKeys(keys)
+}
+
+// newDeferredClusterForTest creates a Cluster which gets its gossip keys from keySource, hence
+// whose memberlist instance is only created (by Run) once the first keys are delivered.
+func newDeferredClusterForTest(t *testing.T, stopCh <-chan struct{}, nodeName string, keySource KeySource) *Cluster {
+	t.Helper()
+	gossipConfig := GossipConfig{KeySource: keySource, VerifyOutgoing: true, VerifyIncoming: true}
+	return newClusterForTest(t, stopCh, nodeName, gossipConfig, nil)
+}
+
+// TestNewClusterGossipConfigValidation verifies that a Cluster is only created when it can secure
+// its gossip traffic: exactly one of the Memberlist instance and the KeySource must be provided.
+func TestNewClusterGossipConfigValidation(t *testing.T) {
+	stopCh := make(chan struct{})
+	defer close(stopCh)
+	clientset := fake.NewSimpleClientset()
+	informerFactory := informers.NewSharedInformerFactory(clientset, 0)
+	nodeInformer := informerFactory.Core().V1().Nodes()
+	crdClient := fakeversioned.NewSimpleClientset()
+	crdInformerFactory := crdinformers.NewSharedInformerFactory(crdClient, 0)
+	ipPoolInformer := crdInformerFactory.Crd().V1beta1().ExternalIPPools()
+
+	// Creating an instance without a key would leave the gossip traffic unauthenticated.
+	t.Run("no KeySource and no Memberlist instance", func(t *testing.T) {
+		_, err := NewCluster(net.ParseIP("127.0.0.1"), 0, "node1", GossipConfig{}, nodeInformer, ipPoolInformer, nil)
+		assert.ErrorContains(t, err, "KeySource is required")
+	})
+
+	// The keys could not be applied to an instance provided by the caller, and the key worker would
+	// keep failing to do so.
+	t.Run("KeySource and Memberlist instance", func(t *testing.T) {
+		gossipConfig := GossipConfig{KeySource: &fakeKeySource{}}
+		mockMemberlist := NewMockMemberlist(gomock.NewController(t))
+		_, err := NewCluster(net.ParseIP("127.0.0.1"), 0, "node1", gossipConfig, nodeInformer, ipPoolInformer, mockMemberlist)
+		assert.ErrorContains(t, err, "provided by the caller")
+	})
+}
+
+// TestClusterShutdownWhileApplyingKeys verifies that Run does not return while the key worker is
+// still creating the memberlist instance. The instance delivers an event for the local Node as soon
+// as it is created, so creating it after Run has closed the Node event channel would panic, and the
+// instance would be left running.
+func TestClusterShutdownWhileApplyingKeys(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		stopCh := make(chan struct{})
+		keySource := &fakeKeySource{}
+		cluster := newDeferredClusterForTest(t, stopCh, "node1", keySource)
+		mockMemberlist := NewMockMemberlist(gomock.NewController(t))
+		mockMemberlist.EXPECT().Members().Return(nil).AnyTimes()
+		mockMemberlist.EXPECT().Leave(gomock.Any()).Return(nil)
+		mockMemberlist.EXPECT().Shutdown().Return(nil)
+		// creating is closed when the key worker starts creating the instance, and the creation only
+		// completes once proceed is closed, which lets the test stop the Cluster in between.
+		creating := make(chan struct{})
+		proceed := make(chan struct{})
+		cluster.newMemberlist = func(conf *memberlist.Config) (Memberlist, error) {
+			close(creating)
+			<-proceed
+			// A real instance reports the local Node as soon as it is created.
+			conf.Events.NotifyJoin(&memberlist.Node{Name: cluster.nodeName})
+			return mockMemberlist, nil
+		}
+		runDone := make(chan struct{})
+		go func() {
+			defer close(runDone)
+			cluster.Run(stopCh)
+		}()
+		// Run has registered the key handler and is idle, so the keys are delivered right away.
+		synctest.Wait()
+		keySource.deliver(t, [][]byte{testKey1})
+		<-creating
+
+		// Stop the Cluster while the instance is being created, and let Run get as far as it can.
+		close(stopCh)
+		synctest.Wait()
+		select {
+		case <-runDone:
+			require.FailNow(t, "Run returned while the memberlist instance was being created")
+		default:
+		}
+
+		close(proceed)
+		<-runDone
+		assert.Equal(t, mockMemberlist, cluster.memberList(), "the instance should have been created and shut down")
+	})
+}
+
+// TestClusterDeferredCreation verifies that when a KeySource is used, the memberlist instance is
+// only created once the first keys are delivered, that the Cluster behaves as an empty cluster
+// until then, and that later deliveries update the key in use.
+func TestClusterDeferredCreation(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		stopCh := make(chan struct{})
+		defer close(stopCh)
+		keySource := &fakeKeySource{}
+		cluster := newDeferredClusterForTest(t, stopCh, "node1", keySource)
+		conf := captureMemberlistConfig(t, cluster)
+
+		// Without keys, there is no memberlist instance and the Cluster reports no member, like a
+		// Node which has not joined any peer.
+		require.Nil(t, cluster.memberList())
+		assert.False(t, cluster.Ready())
+		assert.Empty(t, cluster.AliveNodes())
+
+		go cluster.Run(stopCh)
+		synctest.Wait()
+		assert.Nil(t, cluster.memberList(), "the instance must not be created before the keys are delivered")
+
+		keySource.deliver(t, [][]byte{testKey1})
+		synctest.Wait()
+		require.NotNil(t, cluster.memberList(), "the memberlist instance should be created once the keys are delivered")
+		assert.True(t, cluster.Ready())
+		// The keyring is shared with the memberlist instance: updating it takes effect without
+		// recreating the instance.
+		assert.Same(t, cluster.keyring, conf.get().Keyring)
+		assert.Equal(t, [][]byte{testKey1}, cluster.keyring.GetKeys())
+
+		// A later delivery updates the key in use, and does not recreate the instance.
+		mList := cluster.memberList()
+		keySource.deliver(t, [][]byte{testKey2})
+		synctest.Wait()
+		assert.Equal(t, [][]byte{testKey2}, cluster.keyring.GetKeys(), "the new key should be the only one installed")
+		assert.Same(t, mList, cluster.memberList(), "the instance should not have been recreated")
+	})
 }
 
 func createNode(cs *fake.Clientset, node *v1.Node) error {

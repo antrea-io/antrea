@@ -142,6 +142,9 @@ type AgentConfig struct {
 	// membership protocol. Currently it's used only when the Egress feature is enabled.
 	// Defaults to 10351.
 	ClusterMembershipPort int `yaml:"clusterPort,omitempty"`
+	// Memberlist is the configuration of the gossip-based cluster membership protocol, used by the
+	// Egress and ServiceExternalIP features.
+	Memberlist MemberlistConfig `yaml:"memberlist,omitempty"`
 	// Enable metrics exposure via Prometheus. Initializes Prometheus metrics listener
 	// Defaults to true.
 	EnablePrometheusMetrics *bool `yaml:"enablePrometheusMetrics,omitempty"`
@@ -365,6 +368,22 @@ type EgressConfig struct {
 	// inheriting the parent interface’s MAC. Useful in cloud environments that require
 	// unique MAC addresses per interface.
 	UniqueMACForSubInterfaces *bool `yaml:"uniqueMACForSubInterfaces,omitempty"`
+}
+
+type MemberlistConfig struct {
+	// GossipVerifyOutgoing encrypts the gossip traffic sent by this Node, with the key from the
+	// antrea-memberlist-keys Secret.
+	// Defaults to true.
+	GossipVerifyOutgoing *bool `yaml:"gossipVerifyOutgoing,omitempty"`
+	// GossipVerifyIncoming rejects incoming gossip traffic which is not encrypted, which is what
+	// authenticates the other members of the cluster. Setting it to false accepts unencrypted
+	// traffic, and therefore provides no authentication.
+	//
+	// Both options must be set to false while some Nodes in the cluster do not have the key yet,
+	// typically when upgrading from a version of Antrea which did not secure the gossip traffic.
+	// Refer to docs/egress.md for the procedure to enable them without partitioning the cluster.
+	// Defaults to true.
+	GossipVerifyIncoming *bool `yaml:"gossipVerifyIncoming,omitempty"`
 }
 
 type IPsecConfig struct {

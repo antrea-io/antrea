@@ -227,6 +227,8 @@ func (s *egressIPScheduler) Run(stopCh <-chan struct{}) {
 	// Schedule at least once even if there is no Egress to unblock clients waiting for HasScheduled to return true.
 	s.queue.Add(workItem)
 
+	go memberlist.WarnUntilReady(s.cluster, "This Node has not joined the memberlist cluster yet, and does not claim any Egress IP", stopCh)
+
 	go func() {
 		for {
 			obj, quit := s.queue.Get()

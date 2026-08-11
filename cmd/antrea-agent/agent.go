@@ -85,8 +85,10 @@ import (
 	"antrea.io/antrea/v2/pkg/ovs/ovsctl"
 	"antrea.io/antrea/v2/pkg/signals"
 	"antrea.io/antrea/v2/pkg/util/channel"
+	"antrea.io/antrea/v2/pkg/util/env"
 	"antrea.io/antrea/v2/pkg/util/k8s"
 	"antrea.io/antrea/v2/pkg/util/lazy"
+	"antrea.io/antrea/v2/pkg/util/memberlistkeys"
 	"antrea.io/antrea/v2/pkg/util/objectstore"
 	utilwait "antrea.io/antrea/v2/pkg/util/wait"
 	"antrea.io/antrea/v2/pkg/version"
@@ -575,8 +577,19 @@ func run(o *Options) error {
 		} else {
 			return fmt.Errorf("invalid Node Transport IPAddr in Node config: %v", nodeConfig)
 		}
+		// The gossip traffic of the memberlist cluster is authenticated and encrypted with a key
+		// shared by all the antrea-agents, distributed via the antrea-memberlist-keys Secret which
+		// antrea-controller creates with a randomly-generated key if it does not exist yet. The
+		// memberlist instance is only created (in Cluster.Run) once the key is available, so that
+		// the gossip traffic is never left unauthenticated; until then this Node does not claim any
+		// Egress or ServiceExternalIP IP, and the rest of the agent is not affected.
+		gossipConfig := memberlist.GossipConfig{
+			KeySource:      memberlistkeys.NewSecretWatcher(k8sClient, env.GetAntreaNamespace()),
+			VerifyOutgoing: *o.config.Memberlist.GossipVerifyOutgoing,
+			VerifyIncoming: *o.config.Memberlist.GossipVerifyIncoming,
+		}
 		memberlistCluster, err = memberlist.NewCluster(nodeTransportIP, o.config.ClusterMembershipPort,
-			nodeConfig.Name, nodeInformer, externalIPPoolInformer, nil,
+			nodeConfig.Name, gossipConfig, nodeInformer, externalIPPoolInformer, nil,
 		)
 		if err != nil {
 			return fmt.Errorf("error creating new memberlist cluster: %v", err)

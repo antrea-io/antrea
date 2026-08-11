@@ -73,6 +73,7 @@ import (
 	"antrea.io/antrea/v2/pkg/util/cipher"
 	"antrea.io/antrea/v2/pkg/util/env"
 	"antrea.io/antrea/v2/pkg/util/k8s"
+	"antrea.io/antrea/v2/pkg/util/memberlistkeys"
 	"antrea.io/antrea/v2/pkg/version"
 	"antrea.io/antrea/v2/third_party/ipam/nodeipam"
 	"antrea.io/antrea/v2/third_party/ipam/nodeipam/ipam"
@@ -352,6 +353,12 @@ func run(o *Options) error {
 		//  policyInformerFactory starts watching and properly handles policy events.
 		policyInformerFactory.Start(stopCh)
 	}
+
+	// Provision the key used by the antrea-agents to authenticate and encrypt the gossip traffic of
+	// their memberlist cluster. The antrea-agents wait for the key before starting the Egress and
+	// ServiceExternalIP features, so this should not be delayed by other initialization work.
+	memberlistKeyProvisioner := memberlistkeys.NewProvisioner(client, env.GetAntreaNamespace())
+	go memberlistKeyProvisioner.Run(ctx)
 
 	go clusterIdentityAllocator.Run(stopCh)
 

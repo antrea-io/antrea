@@ -469,6 +469,12 @@ func (o *Options) setK8sNodeDefaultOptions() {
 	if o.config.ClusterMembershipPort == 0 {
 		o.config.ClusterMembershipPort = apis.AntreaAgentClusterMembershipPort
 	}
+	if o.config.Memberlist.GossipVerifyOutgoing == nil {
+		o.config.Memberlist.GossipVerifyOutgoing = ptr.To(true)
+	}
+	if o.config.Memberlist.GossipVerifyIncoming == nil {
+		o.config.Memberlist.GossipVerifyIncoming = ptr.To(true)
+	}
 	if o.config.EnablePrometheusMetrics == nil {
 		o.config.EnablePrometheusMetrics = ptr.To(true)
 	}

@@ -261,6 +261,8 @@ func (c *ServiceExternalIPController) Run(stopCh <-chan struct{}) {
 		return
 	}
 
+	go memberlist.WarnUntilReady(c.cluster, "This Node has not joined the memberlist cluster yet, and does not claim any ServiceExternalIP", stopCh)
+
 	for i := 0; i < defaultWorkers; i++ {
 		go wait.Until(c.worker, time.Second, stopCh)
 	}

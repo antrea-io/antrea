@@ -59,6 +59,17 @@ IPVS mode](#interoperability-with-kube-proxy-ipvs-mode) section.
 If you are using `kube-proxy` iptables mode or [Antrea Proxy with `proxyAll`](antrea-proxy.md#antrea-proxy-with-proxyall),
 no extra configuration change is needed.
 
+The Node selection and failover mechanisms rely on a cluster formed by the
+antrea-agents using a gossip-based membership protocol, which is shared with the
+Egress feature. Since Antrea v2.7.0, the gossip traffic is authenticated and
+encrypted with a key stored in the `antrea-memberlist-keys` Secret, which
+antrea-controller creates automatically. No action is required to secure a new
+installation, but refer to
+[Securing the memberlist cluster](egress.md#securing-the-memberlist-cluster) for
+key management, for the procedure to rotate the key, and for the steps required to
+enable encryption when upgrading an existing cluster: both operations can briefly
+disrupt the assignment of Service external IPs.
+
 ### Configuration
 
 #### Enable Service external IP management feature
