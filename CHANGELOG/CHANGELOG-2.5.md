@@ -1,5 +1,37 @@
 # Changelog 2.5
 
+## 2.5.3 - 2026-08-15
+
+### Changed
+
+- Add documentation for restricting Antrea Multi-cluster ServiceExports to mitigate the risk of arbitrary namespace imports. ([#8251](https://github.com/antrea-io/antrea/pull/8251), [@luolanzone] [@antoninbas])
+
+### Fixed
+
+- Retry AntreaProxy Service synchronization after transient failures to ensure datapath state converges. ([#8206](https://github.com/antrea-io/antrea/pull/8206), [@hongliangl])
+- Fix host-local IPAM GC releasing in-use Pod IPs. ([#8240](https://github.com/antrea-io/antrea/pull/8240), [@antoninbas])
+- Return the error when adding messages to a bundle fails, so failed OVS flow installations are retried. ([#8211](https://github.com/antrea-io/antrea/pull/8211), [@hongliangl])
+- Fix scrambled Aggregate-mode stats/throughput IEs in FlowAggregator IPFIX export. ([#8228](https://github.com/antrea-io/antrea/pull/8228), [@Dyanngg])
+- Recover Service group install after a timed-out bundle commit. ([#8190](https://github.com/antrea-io/antrea/pull/8190), [@hongliangl])
+- Annotate end-of-initial-events bookmark for watch-list clients to fix cache sync stalled issue on a Rancher cluster. ([#8124](https://github.com/antrea-io/antrea/pull/8124), [@stroebs])
+- Stop forwarding antctl caller credentials to Agents, authenticating with a short-lived token minted for the dedicated antctl ServiceAccount instead. ([#8251](https://github.com/antrea-io/antrea/pull/8251), [@antoninbas])
+- Check requester authorization for SupportBundleCollection authSecret, rejecting requests where the requester cannot read the referenced Secret. ([#8251](https://github.com/antrea-io/antrea/pull/8251), [@antoninbas])
+- Do not realize Groups whose childGroups are nested too deeply, preventing an antrea-controller crash caused by a ChildGroups cycle. ([#8251](https://github.com/antrea-io/antrea/pull/8251), [@antoninbas])
+- Check requester authorization for PacketCapture fileServer, rejecting requests where the requester cannot read the file server credentials. ([#8251](https://github.com/antrea-io/antrea/pull/8251), [@antoninbas])
+- Prevent antrea-agent panic on short reject packets. ([#8251](https://github.com/antrea-io/antrea/pull/8251), [@antoninbas])
+- Prevent antrea-agent panic on non-echo ICMPv6 packet-in. ([#8251](https://github.com/antrea-io/antrea/pull/8251), [@antoninbas])
+- Sanitize comment and log-prefix args in iptables rule builder to prevent injection of arbitrary rules. ([#8251](https://github.com/antrea-io/antrea/pull/8251), [@antoninbas])
+- Bind Windows ovsdb-server to loopback instead of all interfaces. ([#8251](https://github.com/antrea-io/antrea/pull/8251), [@antoninbas])
+- Prevent antrea-agent panic on short IGMP packets. ([#8251](https://github.com/antrea-io/antrea/pull/8251), [@antoninbas])
+- Fix antrea-agent panic on Traceflow to a portless Service. ([#8251](https://github.com/antrea-io/antrea/pull/8251), [@antoninbas])
+- Bound FQDN tracking growth in fqdnController with a single capped cache. ([#8251](https://github.com/antrea-io/antrea/pull/8251), [@antoninbas])
+- Fix NetworkPolicy stats panic caused by stale OpenFlow flows after pipeline table changes. ([#7952](https://github.com/antrea-io/antrea/pull/7952), [@luolanzone])
+- Strengthen IPPool status update retries to reduce failures under concurrent updates. ([#7996](https://github.com/antrea-io/antrea/pull/7996), [@wenqiq])
+- Fix wrong bitmap index in IPPool AllocateRange, which could cause double allocation. ([#7945](https://github.com/antrea-io/antrea/pull/7945), [@OmAmbole009])
+- Clamp negative IPFIX delta counts to 0 instead of wrapping them on FlowExporter. ([#7883](https://github.com/antrea-io/antrea/pull/7883), [@Denyme24])
+- Update `github.com/moby/spdystream` to v0.5.1 to address CVE-2026-35469. ([#8007](https://github.com/antrea-io/antrea/pull/8007), [@renovatebot])
+- Update `github.com/gopacket/gopacket`, `google.golang.org/grpc`, `go.opentelemetry.io/otel`, and `golang.org/x/text` to address CVEs. ([#8267](https://github.com/antrea-io/antrea/pull/8267), [@luolanzone])
+
 ## 2.5.2 - 2026-03-26
 
 ### Added
@@ -92,7 +124,9 @@
 
 [@Ady0333]: https://github.com/Ady0333
 [@Atish-iaf]: https://github.com/Atish-iaf
+[@Denyme24]: https://github.com/Denyme24
 [@Dyanngg]: https://github.com/Dyanngg
+[@OmAmbole009]: https://github.com/OmAmbole009
 [@XinShuYang]: https://github.com/XinShuYang
 [@andrew-su]: https://github.com/andrew-su
 [@antoninbas]: https://github.com/antoninbas
@@ -107,6 +141,7 @@
 [@petertran-avgo]: https://github.com/petertran-avgo
 [@renovatebot]: https://github.com/renovatebot
 [@sratslla]: https://github.com/sratslla
+[@stroebs]: https://github.com/stroebs
 [@wenqiq]: https://github.com/wenqiq
 [@wenyingd]: https://github.com/wenyingd
 [@xliuxu]: https://github.com/xliuxu
