@@ -173,7 +173,7 @@ func WithRequiredPortExternalIDs(keys ...string) OVSBridgeOption {
 // or when an existing OVS bridge is updated by Create.
 func WithExternalIDs(externalIDs map[string]string) OVSBridgeOption {
 	return func(br *OVSBridge) {
-		br.externalIDs = maps.Clone(externalIDs)
+		br.externalIDs = externalIDs
 	}
 }
 
@@ -244,6 +244,7 @@ func (br *OVSBridge) updateBridgeConfiguration(ctx context.Context) error {
 		if err != nil {
 			return err
 		}
+		// Preserve unrelated external IDs when adopting an existing bridge.
 		update.ExternalIDs = mergeExternalIDs(currentExternalIDs, br.externalIDs)
 		fields = append(fields, &update.ExternalIDs)
 	}
@@ -276,14 +277,12 @@ func (br *OVSBridge) create(ctx context.Context) error {
 	// Generate a "named-uuid" to insert the new Bridge record. This temporary ID allows us
 	// to reference the uncommitted Bridge in other operations within the same atomic transaction.
 	bridge := &Bridge{
-		UUID: namedUUID(),
-		Name: br.name,
+		UUID:        namedUUID(),
+		Name:        br.name,
+		ExternalIDs: br.externalIDs,
 		// Use Openflow protocol version 1.0 and 1.5.
 		Protocols:    []string{openflowProtoVersion10, openflowProtoVersion15},
 		DatapathType: string(br.datapathType),
-	}
-	if br.externalIDs != nil {
-		bridge.ExternalIDs = maps.Clone(br.externalIDs)
 	}
 	ops, err := br.ovsdb.Create(bridge)
 	if err != nil {

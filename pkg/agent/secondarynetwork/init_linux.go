@@ -378,6 +378,8 @@ func (c *Controller) reconcileBridge(desired *agenttypes.OVSBridgeConfig) error 
 		if err := updatePhysicalInterfaces(currentClient, desired); err != nil {
 			return err
 		}
+		// The bridge may have been drained and unset in PodController after a
+		// failed deletion, so always install the current client again.
 		c.podController.SetOVSBridgeClient(currentClient)
 		c.effectiveBridgeCfg = desired
 		klog.InfoS("Secondary OVS bridge reconciliation completed",
