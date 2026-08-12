@@ -67,6 +67,18 @@ func (mr *MockInterfaceStoreMockRecorder) AddInterface(interfaceConfig any) *gom
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddInterface", reflect.TypeOf((*MockInterfaceStore)(nil).AddInterface), interfaceConfig)
 }
 
+// AddInterfaces mocks base method.
+func (m *MockInterfaceStore) AddInterfaces(interfaces []*interfacestore.InterfaceConfig) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "AddInterfaces", interfaces)
+}
+
+// AddInterfaces indicates an expected call of AddInterfaces.
+func (mr *MockInterfaceStoreMockRecorder) AddInterfaces(interfaces any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddInterfaces", reflect.TypeOf((*MockInterfaceStore)(nil).AddInterfaces), interfaces)
+}
+
 // DeleteInterface mocks base method.
 func (m *MockInterfaceStore) DeleteInterface(interfaceConfig *interfacestore.InterfaceConfig) {
 	m.ctrl.T.Helper()
@@ -237,18 +249,6 @@ func (m *MockInterfaceStore) GetNodeTunnelInterface(nodeName string) (*interface
 func (mr *MockInterfaceStoreMockRecorder) GetNodeTunnelInterface(nodeName any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetNodeTunnelInterface", reflect.TypeOf((*MockInterfaceStore)(nil).GetNodeTunnelInterface), nodeName)
-}
-
-// Initialize mocks base method.
-func (m *MockInterfaceStore) Initialize(interfaces []*interfacestore.InterfaceConfig) {
-	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "Initialize", interfaces)
-}
-
-// Initialize indicates an expected call of Initialize.
-func (mr *MockInterfaceStoreMockRecorder) Initialize(interfaces any) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Initialize", reflect.TypeOf((*MockInterfaceStore)(nil).Initialize), interfaces)
 }
 
 // Len mocks base method.

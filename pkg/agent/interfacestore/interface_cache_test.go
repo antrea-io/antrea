@@ -55,7 +55,7 @@ func testContainerInterface(t *testing.T) {
 		PortUUID: "1234567890",
 	}
 	containerInterfaceKey := util.GenerateContainerInterfaceKey(containerInterface.ContainerID, containerInterface.IFDev)
-	store.Initialize([]*InterfaceConfig{containerInterface})
+	store.AddInterfaces([]*InterfaceConfig{containerInterface})
 	assert.Equal(t, 1, store.Len())
 	storedIface, exists := store.GetInterface(containerInterfaceKey)
 	assert.True(t, exists)
@@ -104,7 +104,7 @@ func testSecondaryInterface(t *testing.T) {
 		podMAC, nil, 2)
 	containerInterface2 := NewContainerInterface("c0-eth2", "c0", "p0", "ns0", "eth2", "netns0",
 		podMAC, []net.IP{podIP}, 0)
-	store.Initialize([]*InterfaceConfig{containerInterface1, containerInterface2})
+	store.AddInterfaces([]*InterfaceConfig{containerInterface1, containerInterface2})
 	assert.Equal(t, 2, store.Len())
 
 	for _, containerInterface := range []*InterfaceConfig{containerInterface1, containerInterface2} {
@@ -162,7 +162,7 @@ func testTunnelInterface(t *testing.T) {
 		PortUUID: "1234567890",
 	})
 	ipsecTunnelInterface.IPs = []net.IP{ipsecTunnelIP}
-	store.Initialize([]*InterfaceConfig{tunnelInterface, ipsecTunnelInterface})
+	store.AddInterfaces([]*InterfaceConfig{tunnelInterface, ipsecTunnelInterface})
 	assert.Equal(t, 2, store.Len())
 	for _, tunIface := range []*InterfaceConfig{tunnelInterface, ipsecTunnelInterface} {
 		storedIface, exists := store.GetInterfaceByName(tunIface.InterfaceName)
@@ -227,7 +227,7 @@ func testEntityInterface(t *testing.T) {
 		entityIPv6,
 	}
 	entityInterface := newExternalEntityInterface("vm1-ens192", entityIPs, "ens192", "ns2", portConfig, uplinkConfig)
-	store.Initialize([]*InterfaceConfig{entityInterface})
+	store.AddInterfaces([]*InterfaceConfig{entityInterface})
 	storedIface, exists := store.GetInterface(entityInterface.InterfaceName)
 	assert.True(t, exists)
 	assert.True(t, reflect.DeepEqual(storedIface, entityInterface))
@@ -257,7 +257,7 @@ func testEntityInterface(t *testing.T) {
 
 func testGeneralInterface(t *testing.T, ifaceConfig *InterfaceConfig, ifaceType InterfaceType) {
 	store := NewInterfaceStore()
-	store.Initialize([]*InterfaceConfig{ifaceConfig})
+	store.AddInterfaces([]*InterfaceConfig{ifaceConfig})
 	storedIface, exists := store.GetInterface(ifaceConfig.InterfaceName)
 	assert.True(t, exists)
 	assert.True(t, reflect.DeepEqual(storedIface, ifaceConfig))

@@ -335,6 +335,12 @@ func TestOptionsValidateSecondaryNetworkConfig(t *testing.T) {
 			ovsBridges:       []string{"br1"},
 		},
 		{
+			name:             "conflict with primary bridge",
+			featureGateValue: true,
+			ovsBridges:       []string{"br-int"},
+			expectedErr:      "secondary OVS bridge \"br-int\" conflicts with primary OVS bridge",
+		},
+		{
 			name:               "AntreaIPAM featureGate off",
 			featureGateValue:   true,
 			antreaIPAMDisabled: true,
@@ -371,7 +377,9 @@ func TestOptionsValidateSecondaryNetworkConfig(t *testing.T) {
 			featuregatetesting.SetFeatureGateDuringTest(t, features.DefaultFeatureGate, features.SecondaryNetwork, tc.featureGateValue)
 			featuregatetesting.SetFeatureGateDuringTest(t, features.DefaultFeatureGate, features.AntreaIPAM, !tc.antreaIPAMDisabled)
 
-			o := &Options{config: &agentconfig.AgentConfig{}}
+			o := &Options{config: &agentconfig.AgentConfig{
+				OVSBridge: "br-int",
+			}}
 			for _, brName := range tc.ovsBridges {
 				br := agentconfig.OVSBridgeConfig{BridgeName: brName}
 				br.PhysicalInterfaces = tc.physicalInterfaces

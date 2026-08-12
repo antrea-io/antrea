@@ -1,4 +1,4 @@
-// Copyright 2025 Antrea Authors
+// Copyright 2026 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -32,6 +32,7 @@ import (
 	types "antrea.io/antrea/v2/pkg/agent/cniserver/types"
 	interfacestore "antrea.io/antrea/v2/pkg/agent/interfacestore"
 	v1beta1 "antrea.io/antrea/v2/pkg/apis/crd/v1beta1"
+	ovsconfig "antrea.io/antrea/v2/pkg/ovs/ovsconfig"
 	types100 "github.com/containernetworking/cni/pkg/types/100"
 	gomock "go.uber.org/mock/gomock"
 )
@@ -114,6 +115,18 @@ func (m *MockInterfaceConfigurator) DeleteVLANSecondaryInterface(interfaceConfig
 func (mr *MockInterfaceConfiguratorMockRecorder) DeleteVLANSecondaryInterface(interfaceConfig any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteVLANSecondaryInterface", reflect.TypeOf((*MockInterfaceConfigurator)(nil).DeleteVLANSecondaryInterface), interfaceConfig)
+}
+
+// SetOVSBridgeClient mocks base method.
+func (m *MockInterfaceConfigurator) SetOVSBridgeClient(ovsBridgeClient ovsconfig.OVSBridgeClient) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "SetOVSBridgeClient", ovsBridgeClient)
+}
+
+// SetOVSBridgeClient indicates an expected call of SetOVSBridgeClient.
+func (mr *MockInterfaceConfiguratorMockRecorder) SetOVSBridgeClient(ovsBridgeClient any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetOVSBridgeClient", reflect.TypeOf((*MockInterfaceConfigurator)(nil).SetOVSBridgeClient), ovsBridgeClient)
 }
 
 // MockIPAMAllocator is a mock of IPAMAllocator interface.

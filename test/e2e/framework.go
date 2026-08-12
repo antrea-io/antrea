@@ -2210,7 +2210,7 @@ func (data *TestData) RestartAntreaAgentPods(timeout time.Duration) error {
 	if testOptions.enableCoverage {
 		data.gracefulExitAntreaAgent(testOptions.coverageDir, "all")
 	}
-	var gracePeriodSeconds int64 = 1
+	var gracePeriodSeconds int64 = 5
 	deleteOptions := metav1.DeleteOptions{
 		GracePeriodSeconds: &gracePeriodSeconds,
 	}
