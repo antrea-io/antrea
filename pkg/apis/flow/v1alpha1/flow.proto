@@ -99,6 +99,33 @@ message Labels {
   map<string,string> labels = 1;
 }
 
+// EndpointDisclosure records how much of one endpoint of a flow the client
+// receiving the record was authorized to see. Only FlowStreamService sets it,
+// when it redacts a record for a client that may not observe every Namespace
+// the record involves; nothing else in the pipeline populates it. An endpoint
+// with no disclosure set is therefore one where nothing was withheld.
+//
+// It exists so that a withheld field is distinguishable from a field the Flow
+// Aggregator never had: an empty ingress_network_policy_namespace, for
+// instance, is what a cluster-scoped policy legitimately looks like.
+enum EndpointDisclosure {
+  // Nothing was withheld for this endpoint.
+  ENDPOINT_DISCLOSURE_UNSPECIFIED = 0;
+  // The endpoint's Namespace, Pod and Service identity are disclosed, but not
+  // its Node placement, the network policies evaluated on its side, or the
+  // Egress applied to it. Set when the client holds get on flows/identity in
+  // the endpoint's Namespace, but that Namespace is not one the stream is
+  // authorized to observe flows for.
+  ENDPOINT_DISCLOSURE_IDENTITY = 1;
+  // The endpoint is unidentified: only what the flow itself shows is disclosed
+  // (addresses, ports, protocol, statistics, and the type and action of the
+  // policies evaluated on the endpoint's side), plus the endpoint's Namespace
+  // if the connection was allowed. Set when the client holds neither flow
+  // visibility nor flows/identity in the endpoint's Namespace, and for an
+  // endpoint that has no Namespace at all.
+  ENDPOINT_DISCLOSURE_FLOW = 2;
+}
+
 message Kubernetes {
   FlowType flow_type = 1;
 
@@ -144,6 +171,13 @@ message Kubernetes {
   string egress_uid = 34;
 
   bytes destination_service_ip = 35;
+
+  // How much of the source endpoint's identity the receiving client was
+  // authorized to see. Set by FlowStreamService only.
+  EndpointDisclosure source_disclosure = 36;
+  // How much of the destination endpoint's identity the receiving client was
+  // authorized to see. Set by FlowStreamService only.
+  EndpointDisclosure destination_disclosure = 37;
 }
 
 message App {
