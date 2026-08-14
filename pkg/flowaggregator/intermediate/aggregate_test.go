@@ -871,6 +871,67 @@ func TestForAllExpiredFlowRecordsDo(t *testing.T) {
 	}
 }
 
+// TestForAllExpiredFlowRecordsDoNoNewRecords verifies that we do not export an aggregation record
+// again when no new flow record has been received for that flow since the last export. Such a
+// record would carry no new information: all delta counters and throughput values are zeroed by
+// ResetStatAndThroughputElementsInRecord after each export. It also verifies that skipping the
+// export does not prevent the record from being expired: it must still be pushed back into the
+// priority queue after active expiry, and deleted from the map after inactive expiry.
+func TestForAllExpiredFlowRecordsDoNoNewRecords(t *testing.T) {
+	input := AggregationInput{
+		RecordChan:            make(chan *flowpb.Flow),
+		WorkerNum:             2,
+		ActiveExpiryTimeout:   testActiveExpiry,
+		InactiveExpiryTimeout: testInactiveExpiry,
+	}
+	startTime := time.Now()
+	clock := clocktesting.NewFakeClock(startTime)
+	ap, err := initAggregationProcessWithClock(input, clock)
+	require.NoError(t, err)
+
+	numExecutions := 0
+	testCallback := func(key FlowKey, record *AggregationFlowRecord) error {
+		numExecutions += 1
+		return nil
+	}
+	addRecord := func(record *flowpb.Flow) {
+		flowKey, isIPv4 := getFlowKeyFromRecord(record)
+		ap.addOrUpdateRecordInMap(flowKey, record, isIPv4)
+	}
+	// runExpiry advances the clock to the provided time and returns the number of records which
+	// were exported.
+	runExpiry := func(t *testing.T, at time.Time) int {
+		clock.SetTime(at)
+		numExecutions = 0
+		require.NoError(t, ap.ForAllExpiredFlowRecordsDo(testCallback))
+		return numExecutions
+	}
+
+	// An intra-Node flow does not require correlation, so the record is ready to send - and is
+	// therefore exported - as soon as it is received.
+	addRecord(createFlowRecordForSrc(false, flowpb.FlowType_FLOW_TYPE_INTRA_NODE, false, flowpb.NetworkPolicyRuleAction_NETWORK_POLICY_RULE_ACTION_NO_ACTION))
+	assert.Equal(t, 1, runExpiry(t, startTime), "record should be exported as soon as it is ready to send")
+
+	// Active expiry, with no record received since the last export: no record should be
+	// exported, but the aggregation record should be pushed back into the priority queue so that
+	// it can be expired later.
+	assert.Equal(t, 0, runExpiry(t, startTime.Add(testActiveExpiry)), "record should not be exported again when there is no new data")
+	assert.Equal(t, 1, ap.expirePriorityQueue.Len())
+	assert.Equal(t, int64(1), ap.GetNumFlows())
+
+	// A new record is received for the same flow, so the next active expiry should export the
+	// aggregation record again.
+	addRecord(createFlowRecordForSrc(false, flowpb.FlowType_FLOW_TYPE_INTRA_NODE, true, flowpb.NetworkPolicyRuleAction_NETWORK_POLICY_RULE_ACTION_NO_ACTION))
+	assert.Equal(t, 1, runExpiry(t, startTime.Add(2*testActiveExpiry)), "record should be exported after receiving new data")
+
+	// Inactive expiry, with no record received since the last export: no record should be
+	// exported, and the aggregation record should be deleted.
+	// Note that the inactive expiry time was reset when the second record was received above.
+	assert.Equal(t, 0, runExpiry(t, startTime.Add(testActiveExpiry+testInactiveExpiry)), "record should not be exported again when there is no new data")
+	assert.Equal(t, 0, ap.expirePriorityQueue.Len())
+	assert.Equal(t, int64(0), ap.GetNumFlows())
+}
+
 func runCorrelationAndCheckResult(t *testing.T, ap *aggregationProcess, clock *clocktesting.FakeClock, record1, record2 *flowpb.Flow, isIPv6 bool, flowType flowpb.FlowType, needsCorrelation bool) {
 	const recordDelay = 10 * time.Millisecond
 	flowKey1, isIPv4 := getFlowKeyFromRecord(record1)
