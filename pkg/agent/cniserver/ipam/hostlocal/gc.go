@@ -50,7 +50,7 @@ func GarbageCollectContainerIPs(network string, desiredIPs sets.Set[string]) err
 		return err
 	}
 	if !info.IsDir() {
-		return fmt.Errorf("path '%s' is not a directory: %w", dir, err)
+		return fmt.Errorf("path '%s' is not a directory", dir)
 	}
 
 	lk, err := disk.NewFileLock(dir)
@@ -58,6 +58,13 @@ func GarbageCollectContainerIPs(network string, desiredIPs sets.Set[string]) err
 		return err
 	}
 	defer lk.Close()
+	// We ignore the error returned by Lock(), to stay consistent with the host-local plugin
+	// itself, which ignores it at every call site (IPAllocator.Get, IPAllocator.Release,
+	// Store.FindByID). Checking it here would not restore mutual exclusion: if the flock ever
+	// failed, the plugin's own allocation path would keep running unlocked anyway. It is also
+	// hard to reach in practice, as Lock() blocks when the lock is held by someone else,
+	// instead of returning an error. We may want to revisit this if the plugin starts handling
+	// these errors.
 	lk.Lock()
 	defer lk.Unlock()
 

@@ -216,7 +216,7 @@ func TestGarbageCollectContainerIPs(t *testing.T) {
 		_, err := os.Create(netDir)
 		require.NoError(t, err)
 		defer os.Remove(netDir)
-		assert.ErrorContains(t, GarbageCollectContainerIPs(network, ips), "not a directory")
+		assert.EqualError(t, GarbageCollectContainerIPs(network, ips), fmt.Sprintf("path '%s' is not a directory", netDir))
 	})
 
 	t.Run("lock file created", func(t *testing.T) {
