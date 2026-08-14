@@ -567,7 +567,7 @@ Refer to this [document](packetcapture-guide.md) for more information.
 
 #### Requirements for this Feature
 
-This feature is only supported on Linux for now.
+This feature is only supported on Linux Nodes.
 
 ### NFTablesHostNetworkMode
 
@@ -578,19 +578,20 @@ by functionalities and features that rely on netfilter. Currently, nftables supp
 
 #### Requirements for this Feature
 
-This feature is only supported on Linux.
+This feature is only supported on Linux Nodes.
 
 ### AntreaNodeConfig
 
-This feature enables the AntreaNodeConfig CRD, which allows per-Node configuration of Antrea agent settings via
-nodeSelector-based policies. Currently, it supports configuring the secondary network OVS bridge on the selected Nodes,
+This feature enables the AntreaNodeConfig CRD, which allows per-Node configuration of Antrea agent settings using
+Node label selector. Currently, it supports configuring the secondary network OVS bridge on the selected Nodes,
 as an alternative to static configuration in `antrea-agent.conf`. Static secondary bridge configuration in the Agent
-configuration always takes precedence over AntreaNodeConfig.
+configuration still takes precedence over AntreaNodeConfig. Refer to the
+[secondary network document](secondary-network.md#per-node-ovs-bridge-configuration-with-antreanodeconfig) for more
+information.
 
 #### Requirements for this Feature
 
-This feature is only supported on Linux. Refer to the [secondary network document](secondary-network.md#per-node-ovs-bridge-configuration-with-antreanodeconfig)
-for more information.
+This feature is only supported on Linux Nodes.
 
 ## Removed Features
 
