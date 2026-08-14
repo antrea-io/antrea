@@ -17,14 +17,23 @@ firewalls allow the necessary traffic based on your configuration.
 | All                                            | All                                   | TCP 10349, 10350, 10351, UDP 10351         | Yes          |                              |
 | Antrea with proxyAll enabled                   | All                                   | TCP 10256<sup>[4]</sup>                    | Yes          | Optional, for external LBs   |
 
+On Linux Nodes, antrea-agent installs iptables rules allowing most of the traffic
+listed above, so that Antrea keeps working when the default firewall policy of the
+Node is to drop. This covers the tunnel ports, IPsec, WireGuard, the Antrea Agent and
+Controller ports, and the AntreaProxy health check port. The rules for the Antrea
+Controller port are only installed when antrea-agent uses the in-cluster config to
+reach it, as its port is discovered from the Antrea Service otherwise. The ports used
+by Antrea Multi-cluster and by BGPPolicy are not covered, and still need to be allowed
+by the host firewall configuration.
+
 [1] _The default value is 179, but a user created BGPPolicy can assign a different
 port number._
 
 [2] _The value is passed to kube-apiserver `--secure-port` flag. You can find the port
 number from the output of `kubectl get svc kubernetes -o yaml`._
 
-[3] _Antrea automatically adds the firewall rules to allow the WireGuard packets
-(starting from v2.4), so the manual configuration on the host is not needed._
+[3] _The rules for the WireGuard packets were added in v2.4, ahead of the rules for the
+other ports described above. In both cases, no manual configuration on the host is needed._
 
 [4] _The default value is 10256, but it can be overridden in the antrea-agent
 configuration `antreaProxy.serviceHealthCheckServerBindAddress`. It is used only

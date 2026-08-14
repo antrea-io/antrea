@@ -181,6 +181,11 @@ func (b *iptablesRuleBuilder) MatchICMP(icmpType, icmpCode *int32, ipProtocol Pr
 	return b
 }
 
+func (b *iptablesRuleBuilder) MatchEstablished() IPTablesRuleBuilder {
+	b.writeSpec("-m conntrack --ctstate ESTABLISHED")
+	return b
+}
+
 func (b *iptablesRuleBuilder) MatchEstablishedOrRelated() IPTablesRuleBuilder {
 	b.writeSpec("-m conntrack --ctstate ESTABLISHED,RELATED")
 	return b

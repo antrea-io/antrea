@@ -19,6 +19,7 @@ import (
 	"context"
 	"fmt"
 	"net"
+	"net/url"
 	"reflect"
 	"regexp"
 	"sort"
@@ -40,6 +41,7 @@ import (
 	"k8s.io/utils/ptr"
 	"sigs.k8s.io/knftables"
 
+	"antrea.io/antrea/v2/pkg/agent/client"
 	"antrea.io/antrea/v2/pkg/agent/config"
 	"antrea.io/antrea/v2/pkg/agent/openflow"
 	"antrea.io/antrea/v2/pkg/agent/servicecidr"
@@ -59,6 +61,11 @@ import (
 const (
 	vxlanPort  = 4789
 	genevePort = 6081
+	sttPort    = 7471
+	// The ports used by IPsec to negotiate Security Associations: IKE, and IKE encapsulated in UDP
+	// when a NAT device is detected between the peers.
+	ipsecIKEPort  = 500
+	ipsecNATTPort = 4500
 
 	// Antrea managed ipset.
 	// antreaPodIPSet contains all Per-Node IPAM Pod CIDRs of this cluster.
@@ -123,6 +130,10 @@ const (
 // Client implements Interface.
 var _ Interface = &Client{}
 
+// The route Client is registered as a listener of the Antrea Service EndpointResolver, to install the
+// host network rules for the Antrea Controller APIServer port.
+var _ client.Listener = &Client{}
+
 var (
 	// globalVMAC is used in the IPv6 neighbor configuration to advertise ND solicitation for the IPv6 address of the
 	// host gateway interface on other Nodes.
@@ -137,16 +148,65 @@ var (
 // Antrea-managed chains.
 var jumpToAntreaChainPattern = regexp.MustCompile(`--comment\s+"(Antrea:[^"]+)"\s+-j\s+(ANTREA-[A-Z0-9-]+)`)
 
-// feature identifies a feature that relies on iptables rules. Each component maintains an independent rule
+// feature identifies a feature that relies on iptables rules. Each feature maintains an independent rule
 // cache for IPv4 and IPv6.
+//
+// syncIPTables writes the rules of the features in the order below, and it is the only list of the
+// features, so adding one cannot be forgotten somewhere else.
 type feature int
 
 const (
-	featureNodeNetworkPolicy feature = iota
+	featureTunnel feature = iota
+	featureIPsec
 	featureWireguard
 	featureNodeLatencyMonitor
 	featureProxyHealthCheck
+	featureAgentAPIServer
+	featureControllerAPIServer
+	featureAgentClusterMembership
+	// The rules of NodeNetworkPolicy are dynamic, they are written after the static ones for
+	// performance reasons.
+	featureNodeNetworkPolicy
+	// numFeatures must stay last, the features are iterated over as [0, numFeatures).
+	numFeatures
 )
+
+// HostNetworkPortRules collects the ports on which Antrea components listen in the Node's host network,
+// so that the route Client can install the rules allowing the corresponding traffic when the default
+// host network policy is to drop.
+type HostNetworkPortRules struct {
+	ports map[feature]int32
+}
+
+func NewHostNetworkPortRules() *HostNetworkPortRules {
+	return &HostNetworkPortRules{
+		ports: make(map[feature]int32),
+	}
+}
+
+// The values which can be passed to Allow. They are the only features for which a caller registers a
+// port, the other ones get their port from Antrea itself. They are exported constants of the unexported
+// feature type, so that a caller cannot pass anything else.
+const (
+	FeatureAgentAPIServer         = featureAgentAPIServer
+	FeatureAgentClusterMembership = featureAgentClusterMembership
+	FeatureWireguard              = featureWireguard
+	FeatureProxyHealthCheck       = featureProxyHealthCheck
+)
+
+// Allow registers the port used by the given feature. A non-positive port means that the feature is not
+// listening, and no rule is installed for it.
+func (h *HostNetworkPortRules) Allow(port int32, f feature) *HostNetworkPortRules {
+	h.ports[f] = port
+	return h
+}
+
+// endpointResolver is satisfied by *client.EndpointResolver and provides the current Antrea
+// Service endpoint URL and listener registration for host network rules.
+type endpointResolver interface {
+	CurrentEndpointURL() *url.URL
+	AddListener(client.Listener)
+}
 
 // iptablesCache stores per-feature iptables state for IPv4 and IPv6. Each feature maintains an independent sync.Map
 // for rules/chains.
@@ -157,15 +217,9 @@ type iptablesCache struct {
 
 // newIPTablesCache initializes an iptablesCache with a sync.Map for each feature and IP family.
 func newIPTablesCache() *iptablesCache {
-	allFeatures := []feature{
-		featureNodeNetworkPolicy,
-		featureWireguard,
-		featureNodeLatencyMonitor,
-		featureProxyHealthCheck,
-	}
 	initFamily := func() map[feature]*sync.Map {
-		m := make(map[feature]*sync.Map, len(allFeatures))
-		for _, f := range allFeatures {
+		m := make(map[feature]*sync.Map, numFeatures)
+		for f := feature(0); f < numFeatures; f++ {
 			m[f] = &sync.Map{}
 		}
 		return m
@@ -195,7 +249,9 @@ type Client struct {
 	nodeNeighbors sync.Map
 	// markToSNATIP caches marks to SNAT IPs. It's used in Egress feature.
 	markToSNATIP sync.Map
-	// iptablesInitialized is used to notify when iptables initialization is done.
+	// iptablesInitialized is used to notify when iptables initialization is done. It is closed instead
+	// of being written to, so that every goroutine waiting on it is released, and waiting on it more
+	// than once is fine.
 	iptablesInitialized chan struct{}
 	proxyAll            bool
 	// hostNetworkNFTables is only applicable to proxyAll for now.
@@ -206,6 +262,7 @@ type Client struct {
 	nodeNetworkPolicyEnabled       bool
 	nodeLatencyMonitorEnabled      bool
 	egressEnabled                  bool
+	serviceExternalIPEnabled       bool
 	hostNetworkAccelerationEnabled bool
 	// serviceRoutes caches ip routes about Services.
 	serviceRoutes sync.Map
@@ -249,11 +306,10 @@ type Client struct {
 	// syncIPTables is called. Enabling it may carry a performance impact. It's disabled by default and should only be
 	// used in testing.
 	deterministic bool
-	// wireguardPort is the port used for the WireGuard UDP tunnels. When WireGuard is enabled (used as the encryption
-	// mode), we add iptables rules to the filter table to accept input and output UDP traffic destined to this port.
-	wireguardPort int32
-	// proxyHealthCheckPort is the port on which AntreaProxy health check server listens when proxyAll is enabled.
-	proxyHealthCheckPort int32
+	// hostNetworkPortRules stores the features and their ports that should be allowed on host-networking.
+	hostNetworkPortRules map[feature]int32
+	// endpointResolver provides a known Endpoint for the Antrea Service.
+	endpointResolver endpointResolver
 }
 
 // NewClient returns a route client.
@@ -265,12 +321,16 @@ func NewClient(networkConfig *config.NetworkConfig,
 	nodeLatencyMonitorEnabled bool,
 	multicastEnabled bool,
 	egressEnabled bool,
+	serviceExternalIPEnabled bool,
 	nodeSNATRandomFully bool,
 	egressSNATRandomFully bool,
 	serviceCIDRProvider servicecidr.Interface,
-	wireguardPort int32,
-	proxyHealthCheckPort int32) (*Client, error) {
-	return &Client{
+	endpointResolver *client.EndpointResolver,
+	hostNetworkPortRules *HostNetworkPortRules) (*Client, error) {
+	if hostNetworkPortRules == nil {
+		hostNetworkPortRules = NewHostNetworkPortRules()
+	}
+	c := &Client{
 		networkConfig:               networkConfig,
 		noSNAT:                      noSNAT,
 		nodeSNATRandomFully:         nodeSNATRandomFully,
@@ -281,14 +341,22 @@ func NewClient(networkConfig *config.NetworkConfig,
 		nodeNetworkPolicyEnabled:    nodeNetworkPolicyEnabled,
 		nodeLatencyMonitorEnabled:   nodeLatencyMonitorEnabled,
 		egressEnabled:               egressEnabled,
+		serviceExternalIPEnabled:    serviceExternalIPEnabled,
 		ipset:                       ipset.NewClient(),
 		netlink:                     &netlink.Handle{},
 		isCloudEKS:                  env.IsCloudEKS(),
 		serviceCIDRProvider:         serviceCIDRProvider,
 		serviceExternalIPReferences: make(map[string]sets.Set[string]),
-		wireguardPort:               wireguardPort,
-		proxyHealthCheckPort:        proxyHealthCheckPort,
-	}, nil
+		hostNetworkPortRules:        hostNetworkPortRules.ports,
+	}
+	// endpointResolver is a concrete pointer rather than the endpointResolver interface, because
+	// assigning a nil pointer to an interface would produce a non-nil interface, defeating the nil
+	// checks made before using it. It is nil when an Antrea kubeconfig is provided, as the Antrea
+	// Service Endpoint is not resolved in that case.
+	if endpointResolver != nil {
+		c.endpointResolver = endpointResolver
+	}
+	return c, nil
 }
 
 // Initialize initializes all infrastructures required to route container packets in host network.
@@ -337,6 +405,31 @@ func (c *Client) Initialize(nodeConfig *config.NodeConfig, done func()) error {
 	}
 
 	c.iptablesCache = newIPTablesCache()
+
+	// Build static iptables rules for NodeNetworkPolicy.
+	if c.nodeNetworkPolicyEnabled {
+		c.initNodeNetworkPolicy()
+	}
+	if c.networkConfig.TrafficEncryptionMode == config.TrafficEncryptionModeWireGuard {
+		c.initWireguardHostNetworkFilterRules()
+	}
+	if c.networkConfig.TrafficEncapMode.SupportsEncap() {
+		c.initTunnelHostNetworkFilterRules()
+	}
+	if c.networkConfig.TrafficEncryptionMode == config.TrafficEncryptionModeIPSec {
+		c.initIPsecHostNetworkFilterRules()
+	}
+	if c.nodeLatencyMonitorEnabled {
+		c.initNodeLatencyHostNetworkFilterRules()
+	}
+	if c.proxyAll {
+		c.initProxyHealthCheckHostNetworkFilterRules()
+	}
+	if c.egressEnabled || c.serviceExternalIPEnabled {
+		c.initAgentClusterMembershipHostNetworkFilterRules()
+	}
+	c.initAgentAPIServerHostNetworkFilterRules()
+
 	// Sets up the iptables infrastructure required to route packets in host network.
 	// It's called in a goroutine because xtables lock may not be acquired immediately.
 	go func() {
@@ -422,18 +515,9 @@ func (c *Client) Initialize(nodeConfig *config.NodeConfig, done func()) error {
 			return fmt.Errorf("failed to initialize IP routes for Egress in hybrid mode: %w", err)
 		}
 	}
-	// Build static iptables rules for NodeNetworkPolicy.
-	if c.nodeNetworkPolicyEnabled {
-		c.initNodeNetworkPolicy()
-	}
-	if c.networkConfig.TrafficEncryptionMode == config.TrafficEncryptionModeWireGuard {
-		c.initWireguard()
-	}
-	if c.nodeLatencyMonitorEnabled {
-		c.initNodeLatencyRules()
-	}
-	if c.proxyAll && c.proxyHealthCheckPort != 0 {
-		c.initProxyHealthCheck()
+
+	if c.endpointResolver != nil {
+		c.endpointResolver.AddListener(c)
 	}
 
 	return nil
@@ -984,6 +1068,8 @@ func (c *Client) syncIPTables(cleanupStaleJumpRules bool) error {
 		{iptables.RawTable, iptables.PreRoutingChain, antreaPreRoutingChain, "Antrea: jump to Antrea prerouting rules", false},
 		{iptables.RawTable, iptables.OutputChain, antreaOutputChain, "Antrea: jump to Antrea output rules", false},
 		{iptables.FilterTable, iptables.ForwardChain, antreaForwardChain, "Antrea: jump to Antrea forwarding rules", false},
+		{iptables.FilterTable, iptables.InputChain, antreaInputChain, "Antrea: jump to Antrea input rules", false},
+		{iptables.FilterTable, iptables.OutputChain, antreaOutputChain, "Antrea: jump to Antrea output rules", false},
 		{iptables.NATTable, iptables.PostRoutingChain, antreaPostRoutingChain, "Antrea: jump to Antrea postrouting rules", false},
 		{iptables.MangleTable, iptables.PreRoutingChain, antreaPreRoutingChain, "Antrea: jump to Antrea prerouting rules", false},
 		{iptables.MangleTable, iptables.OutputChain, antreaOutputChain, "Antrea: jump to Antrea output rules", false},
@@ -993,12 +1079,6 @@ func (c *Client) syncIPTables(cleanupStaleJumpRules bool) error {
 	}
 	if c.proxyAll && !c.hostNetworkNFTables {
 		jumpRules = append(jumpRules, jumpRule{iptables.NATTable, iptables.OutputChain, antreaOutputChain, "Antrea: jump to Antrea output rules", true})
-	}
-	if c.nodeNetworkPolicyEnabled ||
-		c.networkConfig.TrafficEncryptionMode == config.TrafficEncryptionModeWireGuard ||
-		c.proxyAll {
-		jumpRules = append(jumpRules, jumpRule{iptables.FilterTable, iptables.InputChain, antreaInputChain, "Antrea: jump to Antrea input rules", false})
-		jumpRules = append(jumpRules, jumpRule{iptables.FilterTable, iptables.OutputChain, antreaOutputChain, "Antrea: jump to Antrea output rules", false})
 	}
 	if c.shouldEnableEgressPolicyRouting() {
 		jumpRules = append(jumpRules, jumpRule{iptables.MangleTable, iptables.PostRoutingChain, antreaPostRoutingChain, "Antrea: jump to Antrea postrouting rules", false})
@@ -1065,19 +1145,14 @@ func (c *Client) syncIPTables(cleanupStaleJumpRules bool) error {
 		})
 	}
 
+	// The features are iterated over in the order in which they are declared, which puts the static
+	// rules before the dynamic NodeNetworkPolicy ones.
 	iptablesFilterRulesByChainV4 := make(map[string][]string)
-	// Install the static rules (WireGuard + NodeLatencyMonitor) before the dynamic rules (e.g., NodeNetworkPolicy)
-	// for performance reasons.
-	addFilterRulesToChain(iptablesFilterRulesByChainV4, c.iptablesCache.ipv4[featureNodeLatencyMonitor])
-	addFilterRulesToChain(iptablesFilterRulesByChainV4, c.iptablesCache.ipv4[featureWireguard])
-	addFilterRulesToChain(iptablesFilterRulesByChainV4, c.iptablesCache.ipv4[featureNodeNetworkPolicy])
-	addFilterRulesToChain(iptablesFilterRulesByChainV4, c.iptablesCache.ipv4[featureProxyHealthCheck])
-
 	iptablesFilterRulesByChainV6 := make(map[string][]string)
-	addFilterRulesToChain(iptablesFilterRulesByChainV6, c.iptablesCache.ipv6[featureNodeLatencyMonitor])
-	addFilterRulesToChain(iptablesFilterRulesByChainV6, c.iptablesCache.ipv6[featureWireguard])
-	addFilterRulesToChain(iptablesFilterRulesByChainV6, c.iptablesCache.ipv6[featureNodeNetworkPolicy])
-	addFilterRulesToChain(iptablesFilterRulesByChainV6, c.iptablesCache.ipv6[featureProxyHealthCheck])
+	for f := feature(0); f < numFeatures; f++ {
+		addFilterRulesToChain(iptablesFilterRulesByChainV4, c.iptablesCache.ipv4[f])
+		addFilterRulesToChain(iptablesFilterRulesByChainV6, c.iptablesCache.ipv6[f])
+	}
 
 	// Use iptables-restore to configure IPv4 settings.
 	if c.networkConfig.IPv4Enabled {
@@ -1659,23 +1734,113 @@ func buildAllowHostEgressPortRule(protocol string, port *intstr.IntOrString, com
 		GetRule()
 }
 
-func (c *Client) initProxyHealthCheck() {
-	klog.InfoS("Installing host network rules to allow AntreaProxy health check traffic", "protocol", "TCP", "port", c.proxyHealthCheckPort)
+// buildAllowHostIngressReplyPortRule builds the rule accepting the packets received from the given port,
+// which are the replies to the connections initiated by the host towards that port. The connection state
+// is matched as well, otherwise any packet with that source port would be accepted, whatever it is
+// really going to.
+func buildAllowHostIngressReplyPortRule(protocol string, port int32, comment string) string {
+	return iptables.NewRuleBuilder(antreaInputChain).
+		SetComment(comment).
+		MatchTransProtocol(protocol).
+		MatchPortSrc(&port, nil).
+		MatchEstablished().
+		SetTarget(iptables.AcceptTarget).
+		Done().
+		GetRule()
+}
 
-	proxyHealthCheckPort := intstr.FromInt32(c.proxyHealthCheckPort)
+// buildAllowHostEgressReplyPortRule builds the rule accepting the packets sent from the given port, which
+// are the replies to the connections the host received on that port. The connection state is matched as
+// well, for the same reason as in buildAllowHostIngressReplyPortRule.
+func buildAllowHostEgressReplyPortRule(protocol string, port int32, comment string) string {
+	return iptables.NewRuleBuilder(antreaOutputChain).
+		SetComment(comment).
+		MatchTransProtocol(protocol).
+		MatchPortSrc(&port, nil).
+		MatchEstablished().
+		SetTarget(iptables.AcceptTarget).
+		Done().
+		GetRule()
+}
+
+func (c *Client) initAgentAPIServerHostNetworkFilterRules() {
+	port, exists := c.hostNetworkPortRules[featureAgentAPIServer]
+	if !exists || port <= 0 {
+		return
+	}
+	klog.InfoS("Installing host network rules to allow Antrea Agent APIServer traffic", "protocol", "TCP", "port", port)
+
+	antreaInputChainRules := []string{
+		buildAllowHostIngressPortRule(iptables.ProtocolTCP, ptr.To(intstr.FromInt32(port)), "Antrea: allow Agent APIServer input packets"),
+	}
+	antreaOutputChainRules := []string{
+		// Agent APIServer reply packets are sent from the listening port. A rule is needed because the
+		// traffic is not necessarily covered by a conntrack rule: the Antrea chains are also traversed
+		// when the default policy of the built-in chain is to drop and no rule accepts established
+		// connections.
+		buildAllowHostEgressReplyPortRule(iptables.ProtocolTCP, port, "Antrea: allow Agent APIServer reply packets"),
+	}
+	if c.networkConfig.IPv6Enabled {
+		c.iptablesCache.ipv6[featureAgentAPIServer].Store(antreaInputChain, antreaInputChainRules)
+		c.iptablesCache.ipv6[featureAgentAPIServer].Store(antreaOutputChain, antreaOutputChainRules)
+	}
+	if c.networkConfig.IPv4Enabled {
+		c.iptablesCache.ipv4[featureAgentAPIServer].Store(antreaInputChain, antreaInputChainRules)
+		c.iptablesCache.ipv4[featureAgentAPIServer].Store(antreaOutputChain, antreaOutputChainRules)
+	}
+}
+
+func (c *Client) initAgentClusterMembershipHostNetworkFilterRules() {
+	port, exists := c.hostNetworkPortRules[featureAgentClusterMembership]
+	if !exists || port <= 0 {
+		return
+	}
+	klog.InfoS("Installing host network rules to allow Antrea Agent cluster memberships traffic", "protocols", "TCP and UDP", "port", port)
+
+	agentClusterMembershipPort := intstr.FromInt32(port)
+	// The memberlist cluster is both a client and a server: an Agent connects to its peers and receives
+	// their connections, on the same port. The UDP gossip is sent from the listening port, so the
+	// destination port rules cover it in both directions, but the TCP connections use an ephemeral port on
+	// the client side, so reply rules are needed as well. They are needed because the traffic is not
+	// necessarily covered by a conntrack rule: the Antrea chains are also traversed when the default policy
+	// of the built-in chain is to drop and no rule accepts established connections.
+	antreaInputChainRules := []string{
+		buildAllowHostIngressPortRule(iptables.ProtocolTCP, &agentClusterMembershipPort, "Antrea: allow Agent cluster memberships input packets"),
+		buildAllowHostIngressReplyPortRule(iptables.ProtocolTCP, port, "Antrea: allow Agent cluster memberships TCP reply input packets"),
+		buildAllowHostIngressPortRule(iptables.ProtocolUDP, &agentClusterMembershipPort, "Antrea: allow Agent cluster memberships input packets"),
+	}
+	antreaOutputChainRules := []string{
+		buildAllowHostEgressPortRule(iptables.ProtocolTCP, &agentClusterMembershipPort, "Antrea: allow Agent cluster memberships output packets"),
+		buildAllowHostEgressReplyPortRule(iptables.ProtocolTCP, port, "Antrea: allow Agent cluster memberships TCP reply packets"),
+		buildAllowHostEgressPortRule(iptables.ProtocolUDP, &agentClusterMembershipPort, "Antrea: allow Agent cluster memberships output packets"),
+	}
+	if c.networkConfig.IPv6Enabled {
+		c.iptablesCache.ipv6[featureAgentClusterMembership].Store(antreaInputChain, antreaInputChainRules)
+		c.iptablesCache.ipv6[featureAgentClusterMembership].Store(antreaOutputChain, antreaOutputChainRules)
+	}
+	if c.networkConfig.IPv4Enabled {
+		c.iptablesCache.ipv4[featureAgentClusterMembership].Store(antreaInputChain, antreaInputChainRules)
+		c.iptablesCache.ipv4[featureAgentClusterMembership].Store(antreaOutputChain, antreaOutputChainRules)
+	}
+}
+
+func (c *Client) initProxyHealthCheckHostNetworkFilterRules() {
+	port, exists := c.hostNetworkPortRules[featureProxyHealthCheck]
+	if !exists || port <= 0 {
+		return
+	}
+	klog.InfoS("Installing host network rules to allow AntreaProxy health check traffic", "protocol", "TCP", "port", port)
+
+	proxyHealthCheckPort := intstr.FromInt32(port)
 	antreaInputChainRules := []string{
 		buildAllowHostIngressPortRule(iptables.ProtocolTCP, &proxyHealthCheckPort, "Antrea: allow proxy health check input packets"),
 	}
 	antreaOutputChainRules := []string{
-		// Proxy health check reply packets are sent from the listening port. This rule ensures that the packets are
-		// allowed to output.
-		iptables.NewRuleBuilder(antreaOutputChain).
-			SetComment("Antrea: allow proxy health check reply packets").
-			MatchTransProtocol(iptables.ProtocolTCP).
-			MatchPortSrc(&c.proxyHealthCheckPort, nil).
-			SetTarget(iptables.AcceptTarget).
-			Done().
-			GetRule(),
+		// Proxy health check reply packets are sent from the listening port. A rule is needed because the
+		// traffic is not necessarily covered by a conntrack rule: the Antrea chains are also traversed
+		// when the default policy of the built-in chain is to drop and no rule accepts established
+		// connections.
+		buildAllowHostEgressReplyPortRule(iptables.ProtocolTCP, port, "Antrea: allow proxy health check reply packets"),
 	}
 	if c.networkConfig.IPv6Enabled {
 		c.iptablesCache.ipv6[featureProxyHealthCheck].Store(antreaInputChain, antreaInputChainRules)
@@ -1687,10 +1852,99 @@ func (c *Client) initProxyHealthCheck() {
 	}
 }
 
-func (c *Client) initWireguard() {
-	klog.InfoS("Installing host network rules to allow WireGuard traffic", "protocol", "UDP", "port", c.wireguardPort)
+func (c *Client) initTunnelHostNetworkFilterRules() {
+	var port int32
+	var protocol string
 
-	wireguardPort := intstr.FromInt32(c.wireguardPort)
+	switch c.networkConfig.TunnelType {
+	case ovsconfig.GeneveTunnel:
+		port = genevePort
+		protocol = iptables.ProtocolUDP
+	case ovsconfig.VXLANTunnel:
+		port = vxlanPort
+		protocol = iptables.ProtocolUDP
+	case ovsconfig.STTTunnel:
+		port = sttPort
+		protocol = iptables.ProtocolTCP
+	case ovsconfig.GRETunnel:
+		// GRE runs directly on top of IP and has no port, so the rules match the protocol only.
+		protocol = iptables.ProtocolGRE
+	default:
+		klog.InfoS("Unknown tunnel type, skip installing host network rules for tunnel traffic", "tunnelType", c.networkConfig.TunnelType)
+		return
+	}
+	// A custom tunnel port does not apply to GRE, which has no port.
+	if protocol != iptables.ProtocolGRE && c.networkConfig.TunnelPort != 0 {
+		port = c.networkConfig.TunnelPort
+	}
+
+	klog.InfoS("Installing host network rules to allow tunnel traffic",
+		"tunnelType", c.networkConfig.TunnelType,
+		"protocol", protocol,
+		"port", port)
+	var tunnelPort *intstr.IntOrString
+	if port != 0 {
+		tunnelPort = ptr.To(intstr.FromInt32(port))
+	}
+	antreaInputChainRules := []string{
+		buildAllowHostIngressPortRule(protocol, tunnelPort, "Antrea: allow tunnel input packets"),
+	}
+	antreaOutputChainRules := []string{
+		buildAllowHostEgressPortRule(protocol, tunnelPort, "Antrea: allow tunnel output packets"),
+	}
+	if c.networkConfig.IPv6Enabled {
+		c.iptablesCache.ipv6[featureTunnel].Store(antreaInputChain, antreaInputChainRules)
+		c.iptablesCache.ipv6[featureTunnel].Store(antreaOutputChain, antreaOutputChainRules)
+	}
+	if c.networkConfig.IPv4Enabled {
+		c.iptablesCache.ipv4[featureTunnel].Store(antreaInputChain, antreaInputChainRules)
+		c.iptablesCache.ipv4[featureTunnel].Store(antreaOutputChain, antreaOutputChainRules)
+	}
+}
+
+// initIPsecHostNetworkFilterRules installs the rules allowing the traffic used by IPsec: the ESP and AH
+// protocols carrying the tunnel packets, and the IKE traffic used to negotiate the Security Associations.
+// IKE runs on UDP 500, and both IKE and ESP are encapsulated in UDP 4500 when a NAT device is detected
+// between the peers, as ESP has no port for the NAT device to translate. None of these ports are
+// configurable. The rules cover all the protocols listed in the network requirements documentation, even
+// though Antrea configures ESP only.
+func (c *Client) initIPsecHostNetworkFilterRules() {
+	klog.InfoS("Installing host network rules to allow IPsec traffic",
+		"protocols", "ESP, AH and UDP",
+		"ports", []int32{ipsecIKEPort, ipsecNATTPort})
+
+	ikePort := intstr.FromInt32(ipsecIKEPort)
+	natTPort := intstr.FromInt32(ipsecNATTPort)
+	antreaInputChainRules := []string{
+		buildAllowHostIngressPortRule(iptables.ProtocolESP, nil, "Antrea: allow IPsec ESP input packets"),
+		buildAllowHostIngressPortRule(iptables.ProtocolAH, nil, "Antrea: allow IPsec AH input packets"),
+		buildAllowHostIngressPortRule(iptables.ProtocolUDP, &ikePort, "Antrea: allow IPsec IKE input packets"),
+		buildAllowHostIngressPortRule(iptables.ProtocolUDP, &natTPort, "Antrea: allow IPsec NAT traversal input packets"),
+	}
+	antreaOutputChainRules := []string{
+		buildAllowHostEgressPortRule(iptables.ProtocolESP, nil, "Antrea: allow IPsec ESP output packets"),
+		buildAllowHostEgressPortRule(iptables.ProtocolAH, nil, "Antrea: allow IPsec AH output packets"),
+		buildAllowHostEgressPortRule(iptables.ProtocolUDP, &ikePort, "Antrea: allow IPsec IKE output packets"),
+		buildAllowHostEgressPortRule(iptables.ProtocolUDP, &natTPort, "Antrea: allow IPsec NAT traversal output packets"),
+	}
+	if c.networkConfig.IPv6Enabled {
+		c.iptablesCache.ipv6[featureIPsec].Store(antreaInputChain, antreaInputChainRules)
+		c.iptablesCache.ipv6[featureIPsec].Store(antreaOutputChain, antreaOutputChainRules)
+	}
+	if c.networkConfig.IPv4Enabled {
+		c.iptablesCache.ipv4[featureIPsec].Store(antreaInputChain, antreaInputChainRules)
+		c.iptablesCache.ipv4[featureIPsec].Store(antreaOutputChain, antreaOutputChainRules)
+	}
+}
+
+func (c *Client) initWireguardHostNetworkFilterRules() {
+	port, exists := c.hostNetworkPortRules[featureWireguard]
+	if !exists || port <= 0 {
+		return
+	}
+	klog.InfoS("Installing host network rules to allow WireGuard traffic", "protocol", "UDP", "port", port)
+
+	wireguardPort := intstr.FromInt32(port)
 	antreaInputChainRules := []string{
 		buildAllowHostIngressPortRule(iptables.ProtocolUDP, &wireguardPort, "Antrea: allow WireGuard input packets"),
 	}
@@ -1708,7 +1962,7 @@ func (c *Client) initWireguard() {
 	}
 }
 
-func (c *Client) initNodeLatencyRules() {
+func (c *Client) initNodeLatencyHostNetworkFilterRules() {
 	// the interface on which ICMP probes are sent / received is the Antrea gateway interface, except
 	// in networkPolicyOnly mode, for which it is the Node's transport interface.
 	iface := c.nodeConfig.GatewayConfig.Name
@@ -3512,4 +3766,76 @@ func (c *Client) deleteExternalIPConfigsIPsets(externalIP net.IP) error {
 func (c *Client) shouldEnableEgressPolicyRouting() bool {
 	return c.egressEnabled && (c.networkConfig.TrafficEncapMode == config.TrafficEncapModeHybrid ||
 		c.networkConfig.TrafficEncryptionMode == config.TrafficEncryptionModeWireGuard)
+}
+
+// Enqueue implements the client.Listener interface. It is called by the Antrea Service EndpointResolver
+// every time the resolved Endpoint changes, and installs the host network rules allowing the traffic to
+// the Antrea Controller APIServer, whose port is only known once the Endpoint has been resolved.
+func (c *Client) Enqueue() {
+	if c.endpointResolver == nil {
+		return
+	}
+	controllerEndpointURL := c.endpointResolver.CurrentEndpointURL()
+	if controllerEndpointURL == nil {
+		klog.InfoS("Didn't get Endpoint URL for Antrea Service, skip updating host network rules for Antrea Controller APIServer")
+		return
+	}
+	portStr := controllerEndpointURL.Port()
+	if portStr == "" {
+		klog.InfoS("Empty port, skip updating host network rules for Antrea Controller APIServer")
+		return
+	}
+	portRaw, err := strconv.ParseInt(portStr, 10, 32)
+	if err != nil {
+		klog.ErrorS(err, "Invalid port number stored in Antrea Service, skip updating host network rules for Antrea Controller APIServer", "port", portStr)
+		return
+	}
+	port := int32(portRaw)
+
+	klog.InfoS("Installing host network rules to allow Antrea Controller APIServer traffic", "protocol", "TCP", "port", port)
+	controllerAPIServerPort := intstr.FromInt32(port)
+	antreaInputChainRules := []string{
+		// On the Node running the Controller, the connections initiated by the Agents are received on the
+		// listening port.
+		buildAllowHostIngressPortRule(iptables.ProtocolTCP, &controllerAPIServerPort, "Antrea: allow Controller APIServer input packets"),
+		// On every Node, the replies to the connections the local Agent initiates are received from the
+		// listening port. A rule is needed because the traffic is not necessarily covered by a
+		// conntrack rule: the Antrea chains are also traversed when the default policy of the built-in
+		// chain is to drop and no rule accepts established connections.
+		buildAllowHostIngressReplyPortRule(iptables.ProtocolTCP, port, "Antrea: allow Controller APIServer reply input packets"),
+	}
+	antreaOutputChainRules := []string{
+		// The Agent connects to the Controller APIServer, so the packets of the connections it initiates are sent to
+		// the listening port. This rule ensures that the packets are allowed to output, including on the Nodes not
+		// running the Controller.
+		buildAllowHostEgressPortRule(iptables.ProtocolTCP, &controllerAPIServerPort, "Antrea: allow Controller APIServer output packets"),
+		// Controller APIServer reply packets are sent from the listening port. This rule ensures that the packets are
+		// allowed to output, for the same reason as the reply input rule above.
+		buildAllowHostEgressReplyPortRule(iptables.ProtocolTCP, port, "Antrea: allow Controller APIServer reply packets"),
+	}
+	if c.networkConfig.IPv6Enabled {
+		c.iptablesCache.ipv6[featureControllerAPIServer].Store(antreaInputChain, antreaInputChainRules)
+		c.iptablesCache.ipv6[featureControllerAPIServer].Store(antreaOutputChain, antreaOutputChainRules)
+	}
+	if c.networkConfig.IPv4Enabled {
+		c.iptablesCache.ipv4[featureControllerAPIServer].Store(antreaInputChain, antreaInputChainRules)
+		c.iptablesCache.ipv4[featureControllerAPIServer].Store(antreaOutputChain, antreaOutputChainRules)
+	}
+
+	// The rules are only cached above. They must be programmed now: the periodic sync would install them
+	// up to SyncInterval later, and the initial sync always runs before the Antrea Service Endpoint is
+	// resolved, so it flushes the Antrea chains without these rules. Waiting for the next periodic sync
+	// would leave the Agent unable to open a connection to the Controller for that long whenever the
+	// default host network policy is to drop.
+	//
+	// This method is called by the EndpointResolver's only worker, so it must not block: doing so would
+	// stop the queue from being drained, and no Endpoint change would be resolved for any listener.
+	select {
+	case <-c.iptablesInitialized:
+		if err := c.syncIPTables(false); err != nil {
+			klog.ErrorS(err, "Failed to sync iptables rules after the Antrea Service Endpoint changed")
+		}
+	default:
+		// The initial sync has not run yet, and it will pick up the rules cached above.
+	}
 }

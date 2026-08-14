@@ -166,8 +166,9 @@ ensures that these logs are not processed further.
 
 - This feature is currently only supported for Linux Nodes.
 - Be cautious when you configure policies to Nodes, in particular, when configuring a default-deny policy applied to
-  Nodes. You should ensure Kubernetes and Antrea control-plane communication is exempt from the deny rules, otherwise
-  the cluster may go out-of-service and you may lose connectivity to the Nodes.
+  Nodes. You should ensure Kubernetes control-plane communication is exempt from the deny rules, otherwise the cluster
+  may go out-of-service and you may lose connectivity to the Nodes. The traffic used by Antrea itself is allowed
+  automatically, see the [network requirements](network-requirements.md) for the ports which are covered.
 - Only ACNPs can be applied to Nodes. ANPs cannot be applied to Nodes.
 - `nodeSelector` can only be specified in the policy-level `appliedTo` field, not in the rule-level `appliedTo`, and not
   in a `Group` or `ClusterGroup`.
