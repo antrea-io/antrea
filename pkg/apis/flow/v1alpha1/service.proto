@@ -33,6 +33,13 @@ message ExportResponse {
 }
 
 // FlowStreamService provides a server-streaming RPC for real-time flow visibility.
+//
+// Clients must authenticate with a Kubernetes credential, and are authorized
+// with standard Kubernetes RBAC against a virtual resource: "flows" in API group
+// "flow.antrea.io", with verb "list" for a non-follow stream and "watch" for a
+// follow stream, checked in each Namespace the request names (or cluster-wide).
+// The virtual resource is served by no API server; it exists to be named in a
+// Role or ClusterRole, the way kubelet authorizes "nodes/proxy".
 service FlowStreamService {
   // GetFlows streams flow records matching the provided filters.
   // Historical flows (from the ring buffer) are sent first, followed by
@@ -99,6 +106,26 @@ message GetFlowsRequest {
   // If true, keep the stream open and push new flows as they arrive after
   // historical flows have been sent. If false, close after historical flows.
   bool follow = 4;
+  // Request flows cluster-wide, including records that cannot be attributed to
+  // any Namespace: both endpoints external, or no Kubernetes metadata at all.
+  // This requires the permission cluster-wide, which only a ClusterRoleBinding
+  // can grant, and is the only scope in which nothing is redacted.
+  bool cluster_wide = 5;
+  // The Namespaces the client is asking for flows in: a record is streamed if
+  // its source or its destination Pod Namespace is one of them. This is the
+  // scope of the request, not a filter; use filters to narrow it further.
+  //
+  // The client must be authorized to observe every Namespace it names, or the
+  // whole request is rejected with PERMISSION_DENIED, naming the Namespaces
+  // that were denied. A subset is never silently returned.
+  //
+  // Exactly one of namespaces and cluster_wide must be set. An empty
+  // namespaces list with cluster_wide unset is rejected with
+  // INVALID_ARGUMENT: it is reserved, and may come to mean "every Namespace I
+  // am allowed to observe" in a later release. The server cannot answer that
+  // today, because Kubernetes offers no reverse lookup from a subject to the
+  // Namespaces it may access.
+  repeated string namespaces = 6;
 }
 
 // GetFlowsResponse carries a batch of flow records from the server.
@@ -108,4 +135,18 @@ message GetFlowsResponse {
   // Number of flows dropped because the consumer fell behind and the ring
   // buffer wrapped around. Cumulative since the start of the stream.
   uint64 dropped_count = 2;
+  // Set on the first message of a stream, and never after. It tells the client
+  // what it is actually looking at, so that a UI can say so up front rather
+  // than leave the user asking why a flow is missing.
+  StreamInfo info = 3;
+}
+
+// StreamInfo describes the scope a GetFlows stream was opened with.
+message StreamInfo {
+  // The Namespaces the client named and was authorized to observe. Empty when
+  // cluster_wide is set.
+  repeated string authorized_namespaces = 1;
+  // Whether the stream is cluster-wide, in which case every record is streamed
+  // and nothing is redacted.
+  bool cluster_wide = 2;
 }

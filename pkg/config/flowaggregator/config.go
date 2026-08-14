@@ -250,6 +250,11 @@ type FlowStreamServiceConfig struct {
 	// "authorization: Bearer <token>" gRPC metadata, or a PEM client cert+key pair in the
 	// client-cert-bin/client-key-bin headers), which is validated via the TokenReview API
 	// (in the case of bearer token) or SelfSubjectReview API (for cert and key pair).
+	// Which records a client then receives is decided by Kubernetes RBAC on the virtual
+	// "flows.flow.antrea.io" resource: a client must be granted "list" (or "watch", to
+	// follow) in every Namespace it asks about, and holds "get" on "flows/identity" in a
+	// Namespace to identify that Namespace's endpoints inside other records it receives.
+	// See the antrea-flow-viewer ClusterRole.
 	// Defaults to false.
 	Enable *bool `yaml:"enable,omitempty"`
 }

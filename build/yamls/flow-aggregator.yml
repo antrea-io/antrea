@@ -288,8 +288,17 @@ data:
     # which streams flow records to consumers such as antrea-ui.
     flowStreamService:
       # Enable is the switch to enable the FlowStreamService gRPC server (port 14740). The server
-      # uses server-side TLS (same self-signed certificate as the gRPC collector) but no client
-      # authentication. Disabled by default.
+      # uses server-side TLS (same self-signed certificate as the gRPC collector). Clients must
+      # additionally present a Kubernetes credential, either a bearer token as
+      # "authorization: Bearer <token>" gRPC metadata (validated with a TokenReview) or a PEM client
+      # cert+key pair in the client-cert-bin/client-key-bin headers (validated with a
+      # SelfSubjectReview).
+      # Which records a client then receives is decided by Kubernetes RBAC on the virtual
+      # "flows.flow.antrea.io" resource: a client must be granted "list" (or "watch", to follow) in
+      # every Namespace it asks about, and holds "get" on "flows/identity" in a Namespace to identify
+      # that Namespace's endpoints inside other records it receives. See the antrea-flow-viewer and
+      # antrea-flow-identity-viewer ClusterRoles, which are shipped unbound.
+      # Disabled by default.
       enable: false
 
     # Provide a clusterID to be added to records. By default this ID is an auto-generated UUID which
@@ -308,6 +317,30 @@ rules:
   - apiGroups: [""]
     resources: ["pods", "nodes", "services"]
     verbs: ["get", "list", "watch"]
+---
+# Source: flow-aggregator/templates/flow-viewer-clusterrole.yaml
+kind: ClusterRole
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  labels:
+    app: flow-aggregator
+  name: antrea-flow-viewer
+rules:
+  - apiGroups: ["flow.antrea.io"]
+    resources: ["flows"]
+    verbs: ["list", "watch"]
+---
+# Source: flow-aggregator/templates/flow-viewer-clusterrole.yaml
+kind: ClusterRole
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  labels:
+    app: flow-aggregator
+  name: antrea-flow-identity-viewer
+rules:
+  - apiGroups: ["flow.antrea.io"]
+    resources: ["flows/identity"]
+    verbs: ["get"]
 ---
 # Source: flow-aggregator/templates/clusterrolebindings.yaml
 kind: ClusterRoleBinding
@@ -502,7 +535,7 @@ spec:
       annotations:
         # Automatically restart Pod if the ConfigMap changes
         # See https://helm.sh/docs/howto/charts_tips_and_tricks/#automatically-roll-deployments
-        checksum/config: ed62168da05afbc792870d32ef80dcab8c1828ff45a1e0b538b80a0a728abf28
+        checksum/config: 4bf5dce639f837baccc187a67caa64cb25ee8ce1bce6332ba7c0e98e45161845
       labels:
         app: flow-aggregator
     spec:
