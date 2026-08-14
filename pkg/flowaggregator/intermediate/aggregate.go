@@ -275,9 +275,25 @@ func (a *aggregationProcess) ForAllExpiredFlowRecordsDo(callback FlowKeyRecordMa
 			}
 			continue
 		}
-		err := callback(*pqItem.flowKey, pqItem.flowRecord)
-		if err != nil {
-			return fmt.Errorf("callback execution failed for popped flow record with key: %v, record: %v, error: %v", pqItem.flowKey, pqItem.flowRecord, err)
+		// Only export the record if we have received at least one flow record for this flow
+		// since the last export. Otherwise, the aggregated record is identical to the one we
+		// exported last time, except that all delta counters and throughput values have been
+		// zeroed, so exporting it again would only add noise for consumers. Note that we still
+		// need to run the expiry logic below (re-push or delete), even when the export is
+		// skipped, or the record would be leaked: it would no longer be in the priority queue,
+		// hence it would never be deleted from flowKeyRecordMap.
+		// Note that the flag is set for every received flow record, including one which is
+		// ignored by aggregateRecords because it does not have the latest flowEndSeconds for
+		// its Node (e.g. the last record for a connection, for which flowEndSeconds is the
+		// conntrack stop time, and can predate the last periodic poll). Such a record can
+		// therefore still cause the export of an aggregated record with no new data. We accept
+		// this, as it is a rare occurrence, and detecting it would require aggregateRecords to
+		// report whether it actually updated the aggregated record.
+		if pqItem.flowRecord.updatedSinceLastExport {
+			if err := callback(*pqItem.flowKey, pqItem.flowRecord); err != nil {
+				return fmt.Errorf("callback execution failed for popped flow record with key: %v, record: %v, error: %v", pqItem.flowKey, pqItem.flowRecord, err)
+			}
+			pqItem.flowRecord.updatedSinceLastExport = false
 		}
 
 		// We need to use !expireTime.After(currTime) and not expireTime.Before(currTime) to account for the
@@ -286,7 +302,7 @@ func (a *aggregationProcess) ForAllExpiredFlowRecordsDo(callback FlowKeyRecordMa
 
 		// Delete the flow record if it is expired because of inactive expiry timeout.
 		if !pqItem.inactiveExpireTime.After(currTime) {
-			if err = a.deleteFlowKeyFromMapWithoutLock(*pqItem.flowKey); err != nil {
+			if err := a.deleteFlowKeyFromMapWithoutLock(*pqItem.flowKey); err != nil {
 				return fmt.Errorf("error while deleting flow record after inactive expiry: %v", err)
 			}
 			continue
@@ -359,6 +375,7 @@ func (a *aggregationProcess) addOrUpdateRecordInMap(flowKey *FlowKey, record *fl
 			// flow record with existing record by updating the stats and flow timestamps.
 			a.aggregateRecords(record, aggregationRecord.Record, true, true)
 		}
+		aggregationRecord.updatedSinceLastExport = true
 		// Reset the inactive expiry time in the queue item with updated aggregate record.
 		// If this is the first time we have a "complete" record (ReadyToSend becomes true),
 		// export it right away by setting activeExpireTime to now.
@@ -386,6 +403,7 @@ func (a *aggregationProcess) addOrUpdateRecordInMap(flowKey *FlowKey, record *fl
 			Record:                    record,
 			ReadyToSend:               false,
 			waitForReadyToSendRetries: 0,
+			updatedSinceLastExport:    true,
 			isIPv4:                    isIPv4,
 		}
 

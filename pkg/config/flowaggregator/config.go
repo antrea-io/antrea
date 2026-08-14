@@ -42,13 +42,22 @@ type FlowAggregatorConfig struct {
 	// collector. Thus, for flows with a continuous stream of packets, a flow record
 	// will be exported to the collector once the elapsed time since the last export
 	// event in the flow aggregator is equal to the value of this timeout.
+	// Note that a record is only exported if a matching flow record has been
+	// received from an Antrea Agent since the last export, hence this timeout is
+	// only honored as long as it is not smaller than the Agent's
+	// activeFlowExportTimeout ("5s" by default), which is the case with the
+	// default configuration.
 	// Defaults to "60s". Valid time units are "ns", "us" (or "µs"), "ms", "s",
 	// "m", "h". Values under 1s are not supported; they will be rounded up to 1s.
 	ActiveFlowRecordTimeout string `yaml:"activeFlowRecordTimeout,omitempty"`
 	// Provide the inactive flow record timeout as a duration string. This determines
-	// how often the flow aggregator exports the inactive flow records to the flow
-	// collector. A flow record is considered to be inactive if no matching record
-	// has been received by the flow aggregator in the specified interval.
+	// how long the flow aggregator retains the aggregated record for a flow after the
+	// last matching record was received: once this timeout expires, the aggregated
+	// record is deleted, and a subsequent record for the same flow starts a new
+	// aggregation. When this timeout is greater than activeFlowRecordTimeout (which is
+	// the case by default), the deletion never causes a record to be exported, as any
+	// new data has already been exported when the active flow record timeout last
+	// expired.
 	// Defaults to "90s". Valid time units are "ns", "us" (or "µs"), "ms", "s",
 	// "m", "h". Values under 1s are not supported; they will be rounded up to 1s.
 	InactiveFlowRecordTimeout string `yaml:"inactiveFlowRecordTimeout,omitempty"`

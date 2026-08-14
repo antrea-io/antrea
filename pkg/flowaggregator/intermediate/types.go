@@ -35,6 +35,13 @@ type AggregationFlowRecord struct {
 	// inter-node flow and record from the node for the case of intra-node flow.
 	ReadyToSend               bool
 	waitForReadyToSendRetries int
+	// updatedSinceLastExport indicates whether at least one flow record has been received for
+	// this flow since the last time the aggregated record was exported. When it is false, the
+	// aggregated record carries no new information (all delta counters and throughput values
+	// were zeroed by ResetStatAndThroughputElementsInRecord after the last export), so we skip
+	// the export when the record expires. It is set to true when the record is created, as the
+	// record has never been exported at that point.
+	updatedSinceLastExport bool
 	// areCorrelatedFieldsFilled is an indicator for IPFIX Mediator to check whether K8s
 	// metadata are filled for flow record. It is always true for Intra-Node
 	// and ToExternal flows and only applicable for Inter-Node flows that are
