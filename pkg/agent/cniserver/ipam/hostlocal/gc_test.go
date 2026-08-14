@@ -61,6 +61,26 @@ func (fs *testFs) removedIPs() sets.Set[string] {
 	return s
 }
 
+type fakeFileLock struct {
+	lockError error
+	unlocked  bool
+	closed    bool
+}
+
+func (l *fakeFileLock) Lock() error {
+	return l.lockError
+}
+
+func (l *fakeFileLock) Unlock() error {
+	l.unlocked = true
+	return nil
+}
+
+func (l *fakeFileLock) Close() error {
+	l.closed = true
+	return nil
+}
+
 // from https://github.com/containernetworking/plugins/blob/38f18d26ecfef550b8bac02656cc11103fd7cff1/plugins/ipam/host-local/backend/disk/backend.go#L197
 func getEscapedPath(dir string, fname string) string {
 	if runtime.GOOS == "windows" {
@@ -227,5 +247,32 @@ func TestGarbageCollectContainerIPs(t *testing.T) {
 		// make sure that the lock file is created in the right place
 		require.NoError(t, GarbageCollectContainerIPs(network, ips))
 		assert.FileExists(t, lockFile(network))
+	})
+
+	t.Run("lock acquisition error", func(t *testing.T) {
+		network := networkName()
+		netDir := filepath.Join(tempDir, network)
+		require.NoError(t, os.Mkdir(netDir, 0o755))
+		defer os.RemoveAll(netDir)
+		fs := afero.NewOsFs()
+		// this IP is not in desiredIPs, so it would be released if GC ran
+		allocateIPs(t, fs, netDir, "10.0.0.1")
+
+		savedNewFileLock := newFileLock
+		defer func() {
+			newFileLock = savedNewFileLock
+		}()
+		lk := &fakeFileLock{lockError: fmt.Errorf("bad file descriptor")}
+		newFileLock = func(dir string) (fileLock, error) {
+			return lk, nil
+		}
+
+		// GC must not run without the lock, otherwise it could release an IP which is
+		// being allocated concurrently by the host-local plugin.
+		assert.ErrorContains(t, GarbageCollectContainerIPs(network, ips), "failed to acquire lock")
+		assert.FileExists(t, getEscapedPath(netDir, "10.0.0.1"))
+		// we should never release a lock that we failed to acquire
+		assert.False(t, lk.unlocked, "Unlock should not be called when Lock fails")
+		assert.True(t, lk.closed, "Close should always be called")
 	})
 }

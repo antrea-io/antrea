@@ -35,6 +35,19 @@ func networkDir(network string) string {
 	return filepath.Join(dataDir, network)
 }
 
+// fileLock is the subset of *disk.FileLock used to synchronize access to the host-local IPAM data
+// directory. It is defined as an interface so that it can be faked by tests.
+type fileLock interface {
+	Lock() error
+	Unlock() error
+	Close() error
+}
+
+// newFileLock is a variable so it can be overridden by tests if needed
+var newFileLock = func(dir string) (fileLock, error) {
+	return disk.NewFileLock(dir)
+}
+
 // This is a hacky approach as we access the internals of the host-local plugin,
 // instead of using the CNI interface. However, crafting a CNI DEL request from
 // scratch would also be hacky.
@@ -50,15 +63,20 @@ func GarbageCollectContainerIPs(network string, desiredIPs sets.Set[string]) err
 		return err
 	}
 	if !info.IsDir() {
-		return fmt.Errorf("path '%s' is not a directory: %w", dir, err)
+		return fmt.Errorf("path '%s' is not a directory", dir)
 	}
 
-	lk, err := disk.NewFileLock(dir)
+	lk, err := newFileLock(dir)
 	if err != nil {
 		return err
 	}
 	defer lk.Close()
-	lk.Lock()
+	// If we cannot acquire the lock, we must not proceed: without mutual exclusion, we could
+	// delete a reservation file for an IP which is being allocated concurrently by the
+	// host-local plugin, and the same IP could then be assigned to a second Pod.
+	if err := lk.Lock(); err != nil {
+		return fmt.Errorf("failed to acquire lock on host-local IPAM data directory '%s': %w", dir, err)
+	}
 	defer lk.Unlock()
 
 	fs := afero.NewOsFs()
