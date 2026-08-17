@@ -195,6 +195,12 @@ type Client struct {
 	nodeNeighbors sync.Map
 	// markToSNATIP caches marks to SNAT IPs. It's used in Egress feature.
 	markToSNATIP sync.Map
+	// iptablesMutex serializes the writers of the Antrea-managed iptables chains, so that reading the
+	// state they are rebuilt from and programming them is atomic. syncIPTables snapshots iptablesCache
+	// and markToSNATIP, then programs the chains from that snapshot with iptables-restore, which flushes
+	// them; a writer running in between would have its rules programmed and then flushed back out by the
+	// stale snapshot, and they would stay missing until the next periodic sync.
+	iptablesMutex sync.Mutex
 	// iptablesInitialized is used to notify when iptables initialization is done.
 	iptablesInitialized chan struct{}
 	proxyAll            bool
@@ -1042,6 +1048,12 @@ func (c *Client) syncIPTables(cleanupStaleJumpRules bool) error {
 			}
 		}
 	}
+
+	// The lock is taken here rather than at the top of the function because the jump rules above are
+	// programmed one by one and idempotently, they are not rebuilt from a snapshot. It is held until the
+	// function returns, so that no other writer can program rules which the restores below would flush.
+	c.iptablesMutex.Lock()
+	defer c.iptablesMutex.Unlock()
 
 	snatMarkToIPv4 := map[uint32]net.IP{}
 	snatMarkToIPv6 := map[uint32]net.IP{}
@@ -2245,6 +2257,9 @@ func (c *Client) snatRuleSpec(snatIP net.IP, snatMark uint32) []string {
 }
 
 func (c *Client) AddSNATRule(snatIP net.IP, mark uint32) error {
+	c.iptablesMutex.Lock()
+	defer c.iptablesMutex.Unlock()
+
 	protocol := iptables.ProtocolIPv4
 	if snatIP.To4() == nil {
 		protocol = iptables.ProtocolIPv6
@@ -2254,6 +2269,9 @@ func (c *Client) AddSNATRule(snatIP net.IP, mark uint32) error {
 }
 
 func (c *Client) DeleteSNATRule(mark uint32) error {
+	c.iptablesMutex.Lock()
+	defer c.iptablesMutex.Unlock()
+
 	value, ok := c.markToSNATIP.Load(mark)
 	if !ok {
 		klog.InfoS("Didn't find SNAT rule with mark", "mark", fmt.Sprintf("%#x", mark))
@@ -2878,6 +2896,9 @@ func (c *Client) DeleteNodeNetworkPolicyIPSet(ipsetName string, isIPv6 bool) err
 }
 
 func (c *Client) AddOrUpdateNodeNetworkPolicyIPTables(iptablesChains []string, iptablesRules [][]string, isIPv6 bool) error {
+	c.iptablesMutex.Lock()
+	defer c.iptablesMutex.Unlock()
+
 	iptablesData := bytes.NewBuffer(nil)
 
 	writeLine(iptablesData, "*filter")
@@ -2906,6 +2927,9 @@ func (c *Client) AddOrUpdateNodeNetworkPolicyIPTables(iptablesChains []string, i
 }
 
 func (c *Client) DeleteNodeNetworkPolicyIPTables(iptablesChains []string, isIPv6 bool) error {
+	c.iptablesMutex.Lock()
+	defer c.iptablesMutex.Unlock()
+
 	ipProtocol := iptables.ProtocolIPv4
 	if isIPv6 {
 		ipProtocol = iptables.ProtocolIPv6

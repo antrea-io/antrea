@@ -21,6 +21,7 @@ import (
 	"strconv"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -1244,6 +1245,92 @@ COMMIT
 			assert.NoError(t, c.syncIPTables(true))
 		})
 	}
+}
+
+// TestSyncIPTablesDoesNotRevertConcurrentNodeNetworkPolicyUpdate covers the lost update which is
+// possible when the writers of the Antrea-managed chains are not serialized. syncIPTables reads
+// iptablesCache and only programs the chains afterwards, with an iptables-restore which flushes the
+// chains it declares, so rules programmed by another writer in between would be flushed back out and
+// would stay missing until the next periodic sync.
+//
+// The test holds syncIPTables inside its restore, which is where that window is, and runs a
+// NodeNetworkPolicy update while it is held there. Whichever restore completes last decides what is left
+// in the kernel, so it must be the one carrying the rules from the update.
+//
+// The test cannot fail while the writers are serialized, whatever the scheduling: the update goroutine
+// cannot reach its own restore before syncIPTables has released the lock, which it only does once it has
+// returned, so the two restores always complete in that order. The sleep below is therefore not load
+// bearing for a passing run; it only widens the window in which an unserialized update can slip through,
+// so a regression is reported rather than missed. Waiting for the update goroutine to actually block
+// instead of sleeping is not possible: testing/synctest, which exists for that, explicitly does not treat
+// locking a mutex as durably blocking, so a bubble containing that goroutine never quiesces.
+func TestSyncIPTablesDoesNotRevertConcurrentNodeNetworkPolicyUpdate(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	mockIPTables := iptablestest.NewMockInterface(ctrl)
+
+	ingressRulesChain := config.NodeNetworkPolicyIngressRulesChain
+	ruleA := fmt.Sprintf(`-A %s -j ACCEPT -m comment --comment "ruleA"`, ingressRulesChain)
+	ruleB := fmt.Sprintf(`-A %s -j ACCEPT -m comment --comment "ruleB"`, ingressRulesChain)
+
+	var restoredDataMutex sync.Mutex
+	var restoredData []string
+	syncRestoreStarted := make(chan struct{})
+	releaseSyncRestore := make(chan struct{})
+	var firstRestore sync.Once
+
+	mockIPTables.EXPECT().EnsureChain(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+	mockIPTables.EXPECT().AppendRule(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+	mockIPTables.EXPECT().Restore(gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(
+		func(data string, flush, useIPv6 bool) error {
+			// The first restore is always the one from syncIPTables, as the update is only started
+			// once this has been reached. Hold it here, so that the update runs while the state
+			// syncIPTables is about to program has already gone stale.
+			isFirstRestore := false
+			firstRestore.Do(func() { isFirstRestore = true })
+			if isFirstRestore {
+				close(syncRestoreStarted)
+				<-releaseSyncRestore
+			}
+			restoredDataMutex.Lock()
+			defer restoredDataMutex.Unlock()
+			restoredData = append(restoredData, data)
+			return nil
+		}).AnyTimes()
+
+	c := &Client{
+		networkConfig: &config.NetworkConfig{IPv4Enabled: true},
+		nodeConfig: &config.NodeConfig{
+			GatewayConfig: &config.GatewayConfig{Name: "antrea-gw0"},
+			PodIPv4CIDR:   ip.MustParseCIDR("192.168.0.0/24"),
+		},
+		nodeNetworkPolicyEnabled: true,
+		iptables:                 mockIPTables,
+		iptablesCache:            newIPTablesCache(),
+		deterministic:            true,
+	}
+	c.iptablesCache.ipv4[featureNodeNetworkPolicy].Store(ingressRulesChain, []string{ruleA})
+
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		assert.NoError(t, c.syncIPTables(false))
+	}()
+	<-syncRestoreStarted
+
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		assert.NoError(t, c.AddOrUpdateNodeNetworkPolicyIPTables([]string{ingressRulesChain}, [][]string{{ruleA, ruleB}}, false))
+	}()
+	time.Sleep(100 * time.Millisecond)
+
+	close(releaseSyncRestore)
+	wg.Wait()
+
+	require.NotEmpty(t, restoredData)
+	assert.Contains(t, restoredData[len(restoredData)-1], ruleB,
+		"the rules programmed last must be the ones from the NodeNetworkPolicy update, otherwise the update was flushed by state read before it")
 }
 
 func TestInitIPRoutes(t *testing.T) {
