@@ -176,6 +176,12 @@ type FlowFilter struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// Match flows where source or destination Pod namespace is in this list
 	// (direction semantics are affected by the direction field).
+	//
+	// A Namespace outside GetFlowsRequest.namespaces is allowed, and is how a
+	// flow is selected by its peer rather than by its own end: every record that
+	// reaches the filters already has an endpoint in the request's scope, so
+	// naming an out-of-scope Namespace here narrows to the flows whose other end
+	// is in it.
 	Namespaces []string `protobuf:"bytes,1,rep,name=namespaces,proto3" json:"namespaces,omitempty"`
 	// Match flows where source or destination Pod name is in this list.
 	// The match is on the bare Pod name without a namespace prefix; to restrict
@@ -313,8 +319,10 @@ type GetFlowsRequest struct {
 	// scope of the request, not a filter; use filters to narrow it further.
 	//
 	// The client must be authorized to observe every Namespace it names, or the
-	// whole request is rejected with PERMISSION_DENIED, naming the Namespaces
-	// that were denied. A subset is never silently returned.
+	// whole request is rejected with PERMISSION_DENIED, naming the first
+	// Namespace that was denied. A subset is never silently returned, and only
+	// the first denial is reported: the server stops checking there, so that a
+	// client cannot spend one authorization check per Namespace it does not hold.
 	//
 	// Exactly one of namespaces and cluster_wide must be set. An empty
 	// namespaces list with cluster_wide unset is rejected with
@@ -322,6 +330,13 @@ type GetFlowsRequest struct {
 	// am allowed to observe" in a later release. The server cannot answer that
 	// today, because Kubernetes offers no reverse lookup from a subject to the
 	// Namespaces it may access.
+	//
+	// At most 100 Namespaces may be named; more is rejected with
+	// INVALID_ARGUMENT, since each one costs an authorization check when the
+	// stream opens. A client entitled to more must open more than one stream, or
+	// request cluster scope. The limit applies to the list as sent, before
+	// duplicates are collapsed. An empty string is rejected outright: cluster
+	// scope is requested with cluster_wide, not by naming the empty Namespace.
 	Namespaces    []string `protobuf:"bytes,6,rep,name=namespaces,proto3" json:"namespaces,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache

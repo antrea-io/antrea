@@ -62,10 +62,11 @@ const (
 // authenticate. Only this package's own tests can build a service that skips authentication.
 //
 // The identity authenticated then decides what the client receives: every stream is authorized
-// with Kubernetes RBAC against the virtual "flows.flow.antrea.io" resource, in each Namespace the
-// request names, and each endpoint of each record is disclosed only as far as the client's
-// permissions in that endpoint's Namespace reach (see authorization.go and redaction.go). This
-// applies whenever the service is constructed with a non-nil Authorizer.
+// with Kubernetes RBAC against the virtual "flows.observability.antrea.io" resource, in
+// each Namespace the request names, and each endpoint of each record is disclosed only as far as
+// the client's permissions in that endpoint's Namespace reach (see authorization.go and
+// redaction.go). As with authentication, only this package's own tests can build a service that
+// skips it.
 type FlowStreamService struct {
 	flowpb.UnimplementedFlowStreamServiceServer
 	buffer ringbuffer.BroadcastBuffer[*flowpb.Flow]
@@ -292,7 +293,10 @@ func (s *FlowStreamService) GetFlows(req *flowpb.GetFlowsRequest, stream flowpb.
 		if n > 0 {
 			// Authorization runs before the client's own filters, and before the max_count
 			// accounting, so that a record the client may not observe is never counted against the
-			// records it asked for, and so that filters only ever match what it can see.
+			// records it asked for, and so that filters only ever match what it can see. That last
+			// point is also what gives a filter naming a Namespace outside the stream's scope its
+			// meaning: every record here already has an endpoint in scope, so such a filter selects
+			// flows by their peer, and matches only where that peer's Namespace was disclosed.
 			records := batch[:n]
 			if streamAuth != nil {
 				records = streamAuth.Authorize(ctx, records)
@@ -378,7 +382,7 @@ func parseFlowFilter(f *flowpb.FlowFilter) (flowFilter, error) {
 	return pf, nil
 }
 
-// applyFilters returns the subset of flows that pass the since cutoff and match
+// applyFilters returns the subset of flows that pass the "since" cutoff and match
 // ALL of the provided filters (AND semantics across filters). An empty filters
 // slice matches all flows. Note: this function mutates the contents of the
 // flows slice (it uses the slice header as a write target for in-place
@@ -388,7 +392,7 @@ func applyFilters(flows []*flowpb.Flow, filters []flowFilter, since time.Time) [
 	for _, f := range flows {
 		// (*timestamppb.Timestamp).AsTime() is nil-safe and returns the zero time,
 		// which is before any non-zero since value, so flows with a nil EndTs are
-		// correctly excluded when a since cutoff is active.
+		// correctly excluded when a "since" cutoff is active.
 		if !since.IsZero() && f.GetEndTs().AsTime().Before(since) {
 			continue
 		}

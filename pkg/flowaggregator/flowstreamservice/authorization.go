@@ -37,9 +37,9 @@ import (
 
 const (
 	// flowAPIGroup, flowResource and identitySubresource name the virtual resources that
-	// FlowStreamService authorizes against: "flows.flow.antrea.io" for flow visibility, and its
-	// "identity" subresource for endpoint identity disclosure.
-	flowAPIGroup        = "flow.antrea.io"
+	// FlowStreamService authorizes against: "flows.observability.antrea.io" for flow
+	// visibility, and its "identity" subresource for endpoint identity disclosure.
+	flowAPIGroup        = "observability.antrea.io"
 	flowResource        = "flows"
 	identitySubresource = "identity"
 
@@ -56,9 +56,6 @@ const (
 	// therefore how long revoking a grant can take to be noticed. It is deliberately as long as
 	// the shortest lifetime Kubernetes gives a projected ServiceAccount token, since a client
 	// whose credential is rotated that often cannot hold a stream open past it anyway.
-	//
-	// Caching is what makes this design affordable: without it, every distinct Namespace seen in
-	// traffic would cost a SubjectAccessReview per stream, per record batch.
 	authorizationCacheTTL = 10 * time.Minute
 	// revalidationInterval is how often an established stream re-checks its own scope. It is
 	// much shorter than authorizationCacheTTL, so nearly every check is served from the
@@ -67,8 +64,10 @@ const (
 	revalidationInterval = time.Minute
 
 	// maxRequestedNamespaces caps how many Namespaces one request may contain, bounding the burst
-	// of SubjectAccessReviews a single client can trigger when it opens a stream.
-	maxRequestedNamespaces = 100
+	// of SubjectAccessReviews opening a stream can cost. It is currently set to a single namespace
+	// because antrea-ui restricts a non-cluster-scope user to pick a single namespace to observe
+	// flows. If this changes in the future, we can set the value to be greater than one.
+	maxRequestedNamespaces = 1
 	// maxIdentityNamespacesPerStream bounds the size of one stream's own identity-decision cache.
 	// Unlike maxRequestedNamespaces, these Namespaces are discovered from traffic rather than named
 	// by the client, so a client cannot stay under this by asking for less. It is not what protects
@@ -78,7 +77,7 @@ const (
 	// so a Namespace evicted here for being the least recently seen still resolves from that shared
 	// cache rather than costing a fresh round trip, unless it has also fallen out of it. This bound
 	// only keeps a single long-lived stream's own bookkeeping from growing without limit.
-	maxIdentityNamespacesPerStream = 200
+	maxIdentityNamespacesPerStream = 250
 
 	// identityCheckTimeout bounds a single flows/identity SubjectAccessReview, including the
 	// delegating authorizer's own retries. canIdentify runs on the record dispatch path, once per
@@ -188,7 +187,13 @@ type StreamAuthorization struct {
 //
 // Authorization fails closed here: a client cannot open a stream while the API server is
 // unreachable, and a request naming any Namespace the client may not observe is rejected in full,
-// listing those Namespaces, rather than being silently narrowed to the ones it may.
+// rather than being silently narrowed to the ones it may.
+//
+// The checks stop at the first Namespace that is denied, and only that one is named back to the
+// client. Reporting every denied Namespace at once would be friendlier, but it would let a client
+// holding a single Namespace spend a SubjectAccessReview on each of the maxRequestedNamespaces
+// Namespaces it names; stopping early bounds one request to the grants the client actually holds,
+// plus the one that ended it.
 //
 // The returned errors are gRPC status errors, ready to be returned from GetFlows: what a client is
 // told about its own request is part of this decision, so it is worth keeping in one place.
@@ -223,7 +228,6 @@ func (a *Authorizer) NewStreamAuthorization(ctx context.Context, u user.Info, re
 		return sa, nil
 	}
 
-	var denied []string
 	for _, ns := range requested {
 		allowed, err := a.allowed(ctx, u, verb, "", ns)
 		if err != nil {
@@ -231,12 +235,9 @@ func (a *Authorizer) NewStreamAuthorization(ctx context.Context, u user.Info, re
 			return nil, status.Error(codes.Unavailable, "authorization is unavailable, retry later")
 		}
 		if !allowed {
-			denied = append(denied, ns)
+			return nil, status.Errorf(codes.PermissionDenied, "not allowed to %s %s.%s in namespace %s",
+				verb, flowResource, flowAPIGroup, ns)
 		}
-	}
-	if len(denied) > 0 {
-		return nil, status.Errorf(codes.PermissionDenied, "not allowed to %s %s.%s in namespace(s) %s",
-			verb, flowResource, flowAPIGroup, strings.Join(denied, ", "))
 	}
 	sa.orderedNamespaces = requested
 	sa.namespaces = sets.New(requested...)

@@ -222,6 +222,23 @@ func TestRedactFlow_FullKubernetesIsExhaustive(t *testing.T) {
 	}
 }
 
+// recordFieldsWithheld are the fields of Flow itself that a redacted record loses, and
+// recordFieldsDisclosed the ones it keeps. Splitting Flow's fields into exactly these two lists is
+// what makes the tests below notice a field added to the message: a new field belongs to neither
+// list, so TestRedactFlow_RecordLevelFieldsAreClassified fails until it is deliberately put in one.
+var (
+	// The IPFIX exporter IP and the proxy SNAT IP are both Node placement that cannot be attributed
+	// to one endpoint, so they go as soon as either endpoint is not fully disclosed.
+	recordFieldsWithheld = []string{"ipfix", "proxy_snat_ip", "proxy_snat_port"}
+	// Everything else about the flow itself survives: it is what the client came for. "k8s" is
+	// here because the sub-message survives; which of *its* fields do is covered by
+	// TestRedactFlow_Kubernetes.
+	recordFieldsDisclosed = []string{
+		"id", "start_ts", "end_ts", "end_reason", "ip", "transport", "k8s",
+		"stats", "reverse_stats", "flow_direction", "aggregation",
+	}
+)
+
 // TestRedactFlow_RecordLevelFields covers the fields that belong to the record rather than to
 // either endpoint.
 func TestRedactFlow_RecordLevelFields(t *testing.T) {
@@ -229,22 +246,50 @@ func TestRedactFlow_RecordLevelFields(t *testing.T) {
 
 	redacted := redactFlow(f, tierFull, tierIdentity)
 
-	// The IPFIX exporter IP and the proxy SNAT IP are both Node placement that cannot be
-	// attributed to one endpoint, so they go as soon as either endpoint is not fully disclosed.
-	assert.Nil(t, redacted.GetIpfix())
-	assert.Nil(t, redacted.GetProxySnatIp())
-	assert.Zero(t, redacted.GetProxySnatPort())
-	// Everything else about the flow itself survives: it is what the client came for.
+	assert.ElementsMatch(t, recordFieldsDisclosed, populatedFields(redacted))
+	// Spot-check that a disclosed field carries the original value rather than merely being set.
 	assert.Equal(t, "flow-1", redacted.GetId())
-	assert.Equal(t, f.GetStartTs(), redacted.GetStartTs())
-	assert.Equal(t, f.GetEndTs(), redacted.GetEndTs())
-	assert.Equal(t, f.GetEndReason(), redacted.GetEndReason())
-	assert.Equal(t, f.GetIp(), redacted.GetIp())
-	assert.Equal(t, f.GetTransport(), redacted.GetTransport())
 	assert.Equal(t, f.GetStats(), redacted.GetStats())
-	assert.Equal(t, f.GetReverseStats(), redacted.GetReverseStats())
-	assert.Equal(t, f.GetFlowDirection(), redacted.GetFlowDirection())
 	assert.Equal(t, f.GetAggregation(), redacted.GetAggregation())
+}
+
+// TestRedactFlow_RecordLevelFieldsAreClassified fails if a field is added to the Flow message
+// without being classified as disclosed or withheld, so that a new record-level field carrying
+// placement (the way ipfix and proxy_snat_ip do) cannot be disclosed unnoticed. It is the
+// record-level counterpart of TestRedactFlow_FullKubernetesIsExhaustive.
+func TestRedactFlow_RecordLevelFieldsAreClassified(t *testing.T) {
+	classified := nameSet(concat(recordFieldsDisclosed, recordFieldsWithheld))
+	for _, name := range flowFieldNames() {
+		assert.Contains(t, classified, name,
+			"a new field of Flow must be classified as disclosed or withheld by redactFlow")
+	}
+}
+
+// TestRedactFlow_FullFlowIsExhaustive fails if a field is added to Flow without fullFlow being
+// extended to populate it, since the tests above could then silently stop covering it.
+func TestRedactFlow_FullFlowIsExhaustive(t *testing.T) {
+	populated := nameSet(populatedFields(fullFlow()))
+	for _, name := range flowFieldNames() {
+		assert.Contains(t, populated, name, "fullFlow must populate every field of Flow")
+	}
+}
+
+// flowFieldNames lists the fields of Flow that redaction has to have an answer for, i.e. every
+// field except the ones no producer populates anymore. Those are listed by name rather than read
+// from the deprecated option, so that deprecating a field is not by itself enough to drop it out of
+// these tests.
+func flowFieldNames() []string {
+	deprecated := nameSet([]string{"app"})
+	fields := (&flowpb.Flow{}).ProtoReflect().Descriptor().Fields()
+	names := make([]string, 0, fields.Len())
+	for i := range fields.Len() {
+		name := string(fields.Get(i).Name())
+		if _, ok := deprecated[name]; ok {
+			continue
+		}
+		names = append(names, name)
+	}
+	return names
 }
 
 // TestRedactFlow_ClusterScopedPolicy covers the case the disclosure marker exists for: a

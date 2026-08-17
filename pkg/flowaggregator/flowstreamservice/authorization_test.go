@@ -153,31 +153,18 @@ func TestNewStreamAuthorization_Scope(t *testing.T) {
 			wantCalls:  []string{flowsGrant(watchVerb, "")},
 		},
 		{
-			name:   "every requested namespace allowed",
-			req:    &flowpb.GetFlowsRequest{Namespaces: []string{"ns-a", "ns-b"}, Follow: true},
-			grants: []string{flowsGrant(watchVerb, "ns-a"), flowsGrant(watchVerb, "ns-b")},
-			wantCalls: []string{
-				flowsGrant(watchVerb, "ns-a"),
-				flowsGrant(watchVerb, "ns-b"),
-			},
-			wantNS: []string{"ns-a", "ns-b"},
+			name:      "the requested namespace is allowed",
+			req:       &flowpb.GetFlowsRequest{Namespaces: []string{"ns-a"}, Follow: true},
+			grants:    []string{flowsGrant(watchVerb, "ns-a")},
+			wantCalls: []string{flowsGrant(watchVerb, "ns-a")},
+			wantNS:    []string{"ns-a"},
 		},
 		{
-			name:       "one requested namespace denied rejects the whole request",
-			req:        &flowpb.GetFlowsRequest{Namespaces: []string{"ns-a", "ns-b"}, Follow: true},
-			grants:     []string{flowsGrant(watchVerb, "ns-a")},
+			name:       "the requested namespace denied rejects the request",
+			req:        &flowpb.GetFlowsRequest{Namespaces: []string{"ns-a"}, Follow: true},
 			wantCode:   codes.PermissionDenied,
-			wantErrMsg: "namespace(s) ns-b",
-			wantCalls: []string{
-				flowsGrant(watchVerb, "ns-a"),
-				flowsGrant(watchVerb, "ns-b"),
-			},
-		},
-		{
-			name:       "every denied namespace is named",
-			req:        &flowpb.GetFlowsRequest{Namespaces: []string{"ns-a", "ns-b"}, Follow: true},
-			wantCode:   codes.PermissionDenied,
-			wantErrMsg: "namespace(s) ns-a, ns-b",
+			wantErrMsg: "namespace ns-a",
+			wantCalls:  []string{flowsGrant(watchVerb, "ns-a")},
 		},
 		{
 			name:   "a non-follow stream is authorized with list",
@@ -196,14 +183,12 @@ func TestNewStreamAuthorization_Scope(t *testing.T) {
 			wantErrMsg: "not allowed to list",
 		},
 		{
-			name:   "duplicate namespaces are checked once",
-			req:    &flowpb.GetFlowsRequest{Namespaces: []string{"ns-a", "ns-a", "ns-b"}, Follow: true},
-			grants: []string{flowsGrant(watchVerb, "ns-a"), flowsGrant(watchVerb, "ns-b")},
-			wantCalls: []string{
-				flowsGrant(watchVerb, "ns-a"),
-				flowsGrant(watchVerb, "ns-b"),
-			},
-			wantNS: []string{"ns-a", "ns-b"},
+			// The cap is enforced on the raw list, before deduplication, so repeating a namespace
+			// does not let a client work around it.
+			name:       "a duplicate namespace still counts toward the request length cap",
+			req:        &flowpb.GetFlowsRequest{Namespaces: []string{"ns-a", "ns-a"}, Follow: true},
+			wantCode:   codes.InvalidArgument,
+			wantErrMsg: fmt.Sprintf("at most %d namespaces", maxRequestedNamespaces),
 		},
 		{
 			name:       "an empty scope is rejected rather than defaulted",
@@ -219,7 +204,7 @@ func TestNewStreamAuthorization_Scope(t *testing.T) {
 		},
 		{
 			name:       "an empty namespace name is rejected",
-			req:        &flowpb.GetFlowsRequest{Namespaces: []string{"ns-a", ""}},
+			req:        &flowpb.GetFlowsRequest{Namespaces: []string{""}},
 			wantCode:   codes.InvalidArgument,
 			wantErrMsg: "empty name",
 		},
@@ -260,7 +245,7 @@ func TestNewStreamAuthorization_TooManyNamespaces(t *testing.T) {
 
 	require.Error(t, err)
 	assert.Equal(t, codes.InvalidArgument, status.Code(err))
-	assert.Contains(t, status.Convert(err).Message(), "at most 100 namespaces")
+	assert.Contains(t, status.Convert(err).Message(), fmt.Sprintf("at most %d namespaces", maxRequestedNamespaces))
 	// The request is rejected before any SubjectAccessReview, so a client cannot use an
 	// over-long list to fan out onto the API server.
 	assert.Empty(t, fake.calls)
@@ -313,7 +298,7 @@ func TestNewStreamAuthorization_Attributes(t *testing.T) {
 
 	require.Len(t, fake.attrs, 1)
 	attrs := fake.attrs[0]
-	assert.Equal(t, "flow.antrea.io", attrs.GetAPIGroup())
+	assert.Equal(t, "observability.antrea.io", attrs.GetAPIGroup())
 	assert.Equal(t, "flows", attrs.GetResource())
 	assert.Empty(t, attrs.GetSubresource())
 	assert.Equal(t, "watch", attrs.GetVerb())
@@ -333,8 +318,8 @@ func TestRevalidate(t *testing.T) {
 		fake.calls = nil
 		return sa, fakeClock
 	}
-	namespaceReq := &flowpb.GetFlowsRequest{Namespaces: []string{"ns-a", "ns-b"}, Follow: true}
-	namespaceGrants := []string{flowsGrant(watchVerb, "ns-a"), flowsGrant(watchVerb, "ns-b")}
+	namespaceReq := &flowpb.GetFlowsRequest{Namespaces: []string{"ns-a"}, Follow: true}
+	namespaceGrants := []string{flowsGrant(watchVerb, "ns-a")}
 
 	t.Run("does nothing before the revalidation interval", func(t *testing.T) {
 		fake := newFakeAuthorizer(namespaceGrants...)
@@ -363,13 +348,13 @@ func TestRevalidate(t *testing.T) {
 		fake := newFakeAuthorizer(namespaceGrants...)
 		sa, fakeClock := newStream(t, fake, namespaceReq)
 
-		fake.revoke(flowsGrant(watchVerb, "ns-b"))
+		fake.revoke(flowsGrant(watchVerb, "ns-a"))
 		fakeClock.Step(revalidationInterval)
 		err := sa.Revalidate(context.Background())
 
 		require.Error(t, err)
 		assert.Equal(t, codes.PermissionDenied, status.Code(err))
-		assert.Contains(t, status.Convert(err).Message(), "namespace(s) ns-b was revoked")
+		assert.Contains(t, status.Convert(err).Message(), "namespace(s) ns-a was revoked")
 	})
 
 	t.Run("ends a cluster-wide stream when its grant is revoked", func(t *testing.T) {
@@ -391,22 +376,9 @@ func TestRevalidate(t *testing.T) {
 
 		// Fail closed on open, fail open on refresh: an established stream survives a
 		// control-plane blip.
-		fake.breakCheck(flowsGrant(watchVerb, "ns-b"))
+		fake.breakCheck(flowsGrant(watchVerb, "ns-a"))
 		fakeClock.Step(revalidationInterval)
 		assert.NoError(t, sa.Revalidate(context.Background()))
-	})
-
-	t.Run("still ends the stream when another namespace is revoked", func(t *testing.T) {
-		fake := newFakeAuthorizer(namespaceGrants...)
-		sa, fakeClock := newStream(t, fake, namespaceReq)
-
-		fake.breakCheck(flowsGrant(watchVerb, "ns-a"))
-		fake.revoke(flowsGrant(watchVerb, "ns-b"))
-		fakeClock.Step(revalidationInterval)
-		err := sa.Revalidate(context.Background())
-
-		require.Error(t, err)
-		assert.Contains(t, status.Convert(err).Message(), "namespace(s) ns-b was revoked")
 	})
 }
 
@@ -442,10 +414,10 @@ func TestAuthorize_RecordVisibility(t *testing.T) {
 		},
 		{
 			name:    "both endpoints in scope",
-			req:     &flowpb.GetFlowsRequest{Namespaces: []string{"ns-a", "ns-b"}, Follow: true},
-			grants:  []string{flowsGrant(watchVerb, "ns-a"), flowsGrant(watchVerb, "ns-b")},
-			flows:   []*flowpb.Flow{podFlow("ns-a", "ns-b")},
-			wantIDs: []string{"ns-a->ns-b"},
+			req:     &flowpb.GetFlowsRequest{Namespaces: []string{"ns-a"}, Follow: true},
+			grants:  []string{flowsGrant(watchVerb, "ns-a")},
+			flows:   []*flowpb.Flow{podFlow("ns-a", "ns-a")},
+			wantIDs: []string{"ns-a->ns-a"},
 		},
 		{
 			name:    "neither endpoint in scope",
@@ -546,16 +518,19 @@ func TestAuthorize_ReturnsTheRecordWhenNothingIsWithheld(t *testing.T) {
 		name   string
 		req    *flowpb.GetFlowsRequest
 		grants []string
+		flow   *flowpb.Flow
 	}{
 		{
 			name:   "cluster-wide",
 			req:    &flowpb.GetFlowsRequest{ClusterWide: true, Follow: true},
 			grants: []string{flowsGrant(watchVerb, "")},
+			flow:   podFlow("ns-a", "ns-b"),
 		},
 		{
 			name:   "both endpoints in scope",
-			req:    &flowpb.GetFlowsRequest{Namespaces: []string{"ns-a", "ns-b"}, Follow: true},
-			grants: []string{flowsGrant(watchVerb, "ns-a"), flowsGrant(watchVerb, "ns-b")},
+			req:    &flowpb.GetFlowsRequest{Namespaces: []string{"ns-a"}, Follow: true},
+			grants: []string{flowsGrant(watchVerb, "ns-a")},
+			flow:   podFlow("ns-a", "ns-a"),
 		},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
@@ -564,11 +539,10 @@ func TestAuthorize_ReturnsTheRecordWhenNothingIsWithheld(t *testing.T) {
 			sa, err := a.NewStreamAuthorization(context.Background(), testUserInfo, tt.req)
 			require.NoError(t, err)
 
-			original := podFlow("ns-a", "ns-b")
-			got := sa.Authorize(context.Background(), []*flowpb.Flow{original})
+			got := sa.Authorize(context.Background(), []*flowpb.Flow{tt.flow})
 
 			require.Len(t, got, 1)
-			assert.Same(t, original, got[0])
+			assert.Same(t, tt.flow, got[0])
 		})
 	}
 }
