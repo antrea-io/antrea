@@ -654,11 +654,11 @@ A stream whose credential is missing, malformed or invalid is rejected with
 #### Authorizing flow visibility
 
 What a client then receives is decided by ordinary Kubernetes RBAC on a virtual
-resource, `flows` in API group `flow.antrea.io`. Nothing serves that resource: it
-exists to be named in a Role or ClusterRole, the same way kubelet authorizes its
-own endpoints through `nodes/proxy`. The Flow Aggregator resolves each stream
-with `SubjectAccessReview`s, for which its ServiceAccount is already bound to
-`system:auth-delegator`.
+resource, `flows` in API group `observability.antrea.io`. Nothing serves
+that resource: it exists to be named in a Role or ClusterRole, the same way
+kubelet authorizes its own endpoints through `nodes/proxy`. The Flow Aggregator
+resolves each stream with `SubjectAccessReview`s, for which its ServiceAccount is
+already bound to `system:auth-delegator`.
 
 Two permissions exist:
 
@@ -671,15 +671,21 @@ Two permissions exist:
 authorizes one that then follows live records. Granting only `list` therefore
 yields history-only access.
 
-**A client must name the Namespaces it wants.** Every request carries either an
-explicit list of Namespaces or a cluster-wide flag, and each named Namespace is
-authorized separately. A request naming any Namespace the client may not observe
-is rejected in full, listing those Namespaces, rather than being narrowed to the
-ones it may. Kubernetes offers no reverse lookup from a subject to the Namespaces
-it may access, so "show me everything I am allowed to see" is not something the
-Flow Aggregator can answer; an empty list is rejected and reserved for a possible
-future meaning. Cluster scope is a single cluster-wide check, which only a
-ClusterRoleBinding can satisfy.
+**A client must name the Namespaces it wants to observe.** Every request carries
+either an explicit list of Namespaces or a cluster-wide flag, and each named
+Namespace is authorized separately. A request naming any Namespace the client may
+not observe is rejected in full, naming the first Namespace that was denied,
+rather than being narrowed to the ones it may. Kubernetes offers no reverse lookup
+from a subject to the Namespaces it may access, so "show me everything I am
+allowed to see" is not something the Flow Aggregator can answer. Cluster scope is
+a single cluster-wide check, which only a ClusterRoleBinding can satisfy.
+
+One request may name at most 100 Namespaces, and is rejected with
+`INVALID_ARGUMENT` beyond that: each named Namespace costs a `SubjectAccessReview`
+when the stream opens. A subject entitled to more than 100 Namespaces has to open
+more than one stream, or ask for cluster scope. The checks stop at the first
+Namespace that is denied, so the limit only ever binds a client that is authorized
+for everything it names.
 
 A record is streamed if either of its endpoints is in the Namespaces the client
 was authorized for. Requiring both would hide exactly the cross-Namespace flows
@@ -718,14 +724,19 @@ kubectl get rolebindings,clusterrolebindings -A -o json | \
 
 Each endpoint of a record — source and destination — is disclosed
 independently, according to the client's permissions in *that endpoint's*
-Namespace. A single record commonly carries one endpoint in full and the other
+Namespace. A single record could carry one endpoint in full and the other
 redacted.
 
 | Tier | Fields | Requires |
 |---|---|---|
 | Flow | addresses, ports, protocol, statistics and throughput, timestamps, flow type, direction, end reason, TCP state, and the **type and action** of the network policies evaluated on the endpoint's side | receiving the record at all |
-| Identity | Namespace, Pod name/UID/labels, Service name/UID/port | `get flows/identity` in the endpoint's Namespace |
+| Identity | Namespace, Pod name/UID/labels, Service name/UID/port, and the Service's ClusterIP | `get flows/identity` in the endpoint's Namespace |
 | Full | Node name/UID, network policy namespace/name/UID/rule name, Egress name/IP/Node | the endpoint's Namespace is one the stream was authorized for |
+
+A destination Service's ClusterIP sits at the Identity tier rather than the Flow
+tier, because it maps back to the Service it belongs to, so granting
+`flows/identity` in a Namespace discloses the ClusterIPs of that
+Namespace's Services along with their names.
 
 An endpoint below the Full tier is marked as such on the record
 (`source_disclosure` / `destination_disclosure`), so that a client can tell a
@@ -756,19 +767,21 @@ first message of the stream.
   involving nearly every workload.
 - **A wildcard Role confers flow visibility.** A namespaced Role granting
   `apiGroups: ["*"], resources: ["*"]`, as tenants are sometimes given, includes
-  `flows` in that Namespace. RBAC cannot express "not reachable via a wildcard",
-  and there is no query for "who can do X", so a cluster that hands out wildcard
-  Roles should scan for them. Endpoint identity is not affected: it tracks
-  per-Namespace permission exactly.
-- **Revoking a grant takes up to 10 minutes to end an established stream.**
-  Authorization decisions, both allow and deny, are cached for that long — the
-  shortest lifetime Kubernetes gives a projected ServiceAccount token. Granting
-  access is subject to the same delay. Opening a *new* stream is never served
-  from a stale allow decision beyond that window, and fails closed if the API
-  server is unreachable; an established stream survives a control-plane blip.
+  `flows` in that Namespace. RBAC cannot express "not reachable via a
+  wildcard", and there is no query for "who can do X", so a cluster that hands out
+  wildcard Roles should scan for them. Endpoint identity is not affected: it
+  tracks per-Namespace permission exactly.
+- **Revoking a grant takes up to 11 minutes to end an established stream.**
+  Authorization decisions, both allow and deny, are cached for 10 minutes — the
+  shortest lifetime Kubernetes gives a projected ServiceAccount token — and an
+  established stream re-checks its own scope once a minute, which is normally
+  answered from that cache. The two add up in the worst case. Granting access is
+  subject to the same delay. Opening a *new* stream is never served from a stale
+  allow decision beyond the 10-minute window, and fails closed if the API server
+  is unreachable; an established stream survives a control-plane blip.
 - **Flow visibility is not derived from read access to the objects involved.** A
-  subject granted `watch flows` in a Namespace sees Pod names and labels for it
-  even without `get pods` there. The two are separate grants.
+  subject granted `watch flows` in a Namespace sees Pod names and labels
+  for it even without `get pods` there. The two are separate grants.
 - **Identity changes mid-stream are invisible.** The credential is resolved when
   the stream opens, so a token revoked or a group membership changed afterwards
   takes effect on the next connection, not on the current one.

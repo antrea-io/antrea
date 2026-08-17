@@ -59,10 +59,10 @@ const (
 // This applies whenever the service is constructed with a non-nil StreamServerAuthenticator.
 //
 // The identity authenticated then decides what the client receives: every stream is authorized
-// with Kubernetes RBAC against the virtual "flows.flow.antrea.io" resource, in each Namespace the
-// request names, and each endpoint of each record is disclosed only as far as the client's
-// permissions in that endpoint's Namespace reach (see authorization.go and redaction.go). This
-// applies whenever the service is constructed with a non-nil Authorizer.
+// with Kubernetes RBAC against the virtual "flows.observability.antrea.io" resource, in
+// each Namespace the request names, and each endpoint of each record is disclosed only as far as
+// the client's permissions in that endpoint's Namespace reach (see authorization.go and
+// redaction.go). This applies whenever the service is constructed with a non-nil Authorizer.
 type FlowStreamService struct {
 	flowpb.UnimplementedFlowStreamServiceServer
 	buffer        ringbuffer.BroadcastBuffer[*flowpb.Flow]
@@ -74,18 +74,28 @@ type FlowStreamService struct {
 // authenticator authenticates clients (bearer token or client cert/key metadata)
 // before GetFlows runs; nil authenticator accepts any client. authorizer decides
 // which records each authenticated client receives, and how much of each record;
-// nil authorizer streams every record to every client, and must therefore only be
-// paired with a nil authenticator.
-func NewFlowStreamService(buffer ringbuffer.BroadcastBuffer[*flowpb.Flow], authenticator *StreamServerAuthenticator, authorizer *Authorizer) *FlowStreamService {
-	return &FlowStreamService{buffer: buffer, authenticator: authenticator, authorizer: authorizer}
+// nil authorizer streams every record to every client.
+//
+// An authenticator without an authorizer is rejected here rather than at request
+// time: that combination would authenticate every client and then stream every
+// record to it unredacted, which is a strictly worse outcome than either having
+// neither (an explicitly unauthenticated service) nor having both. The opposite
+// combination needs no check, because a stream cannot resolve any identity and
+// GetFlows fails closed on it.
+func NewFlowStreamService(buffer ringbuffer.BroadcastBuffer[*flowpb.Flow], authenticator *StreamServerAuthenticator, authorizer *Authorizer) (*FlowStreamService, error) {
+	if authenticator != nil && authorizer == nil {
+		return nil, fmt.Errorf("an authenticator requires an authorizer, or every authenticated client would receive every record unredacted")
+	}
+	return &FlowStreamService{buffer: buffer, authenticator: authenticator, authorizer: authorizer}, nil
 }
 
 // Run starts a dedicated TLS gRPC server for the FlowStreamService on FlowStreamPort.
-// serverCertPEM and serverKeyPEM are the PEM-encoded server certificate and private key.
-// Only server-side TLS is used (no client certificate authentication); when the service
-// was constructed with a non-nil authenticator, clients must additionally present a valid
-// Kubernetes bearer token, or the call is rejected before GetFlows runs. Run blocks until
-// stopCh is closed.
+// serverCertPEM and serverKeyPEM are the PEM-encoded server certificate and private key,
+// used for server-side TLS. When the service was constructed with a non-nil authenticator,
+// clients must additionally present valid Kubernetes credentials, either a bearer token or
+// a client certificate+key (see FlowStreamService struct comments above), or the call is
+// rejected before GetFlows runs.
+// Run blocks until stopCh is closed.
 func (s *FlowStreamService) Run(serverCertPEM, serverKeyPEM []byte, stopCh <-chan struct{}) error {
 	cert, err := tls.X509KeyPair(serverCertPEM, serverKeyPEM)
 	if err != nil {
@@ -228,7 +238,10 @@ func (s *FlowStreamService) GetFlows(req *flowpb.GetFlowsRequest, stream flowpb.
 		if n > 0 {
 			// Authorization runs before the client's own filters, and before the max_count
 			// accounting, so that a record the client may not observe is never counted against the
-			// records it asked for, and so that filters only ever match what it can see.
+			// records it asked for, and so that filters only ever match what it can see. That last
+			// point is also what gives a filter naming a Namespace outside the stream's scope its
+			// meaning: every record here already has an endpoint in scope, so such a filter selects
+			// flows by their peer, and matches only where that peer's Namespace was disclosed.
 			records := batch[:n]
 			if streamAuth != nil {
 				records = streamAuth.Authorize(ctx, records)
@@ -314,7 +327,7 @@ func parseFlowFilter(f *flowpb.FlowFilter) (flowFilter, error) {
 	return pf, nil
 }
 
-// applyFilters returns the subset of flows that pass the since cutoff and match
+// applyFilters returns the subset of flows that pass the "since" cutoff and match
 // ALL of the provided filters (AND semantics across filters). An empty filters
 // slice matches all flows. Note: this function mutates the contents of the
 // flows slice (it uses the slice header as a write target for in-place
@@ -324,7 +337,7 @@ func applyFilters(flows []*flowpb.Flow, filters []flowFilter, since time.Time) [
 	for _, f := range flows {
 		// (*timestamppb.Timestamp).AsTime() is nil-safe and returns the zero time,
 		// which is before any non-zero since value, so flows with a nil EndTs are
-		// correctly excluded when a since cutoff is active.
+		// correctly excluded when a "since" cutoff is active.
 		if !since.IsZero() && f.GetEndTs().AsTime().Before(since) {
 			continue
 		}

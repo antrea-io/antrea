@@ -209,11 +209,15 @@ func NewFlowAggregator(
 		if err != nil {
 			return nil, fmt.Errorf("error when creating FlowStreamService authorizer: %w", err)
 		}
-		fa.flowStreamService = flowstreamservice.NewFlowStreamService(
+		flowStreamService, err := flowstreamservice.NewFlowStreamService(
 			fa.recordBuffer,
 			flowstreamservice.NewStreamServerAuthenticator(k8sClient, baseConfig),
 			authorizer,
 		)
+		if err != nil {
+			return nil, fmt.Errorf("error when creating FlowStreamService: %w", err)
+		}
+		fa.flowStreamService = flowStreamService
 		fa.flowStreamSvcUpdateCh = make(chan struct{}, 1)
 	}
 

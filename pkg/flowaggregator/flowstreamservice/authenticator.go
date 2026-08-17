@@ -16,8 +16,10 @@ package flowstreamservice
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -51,7 +53,31 @@ const (
 	// incoming context here are already raw PEM bytes, not base64 text.
 	clientCertMetadataKey = "client-cert-bin"
 	clientKeyMetadataKey  = "client-key-bin"
+
+	// maxConcurrentCertAuthentications bounds how many client-certificate authentications may be
+	// in flight at once. Only server-side TLS is used on the FlowStreamService port, so any Pod
+	// that can reach the Service can open streams presenting self-generated cert/key pairs. Each
+	// distinct pair is a distinct TLS client config, so it gets its own http.Transport and its own
+	// TCP+TLS handshake to kube-apiserver, and there is no client-side rate limiter to fall back
+	// on: an in-cluster rest.Config leaves QPS at 0, and client-go only installs a limiter above
+	// that. Without this bound, cheap gRPC connects from an unauthenticated peer would turn into
+	// unbounded concurrent handshakes and SelfSubjectReviews against kube-apiserver.
+	//
+	// The bearer token path needs no equivalent bound: it goes through the Flow Aggregator's own
+	// shared client, so it reuses one connection pool rather than building a transport per
+	// credential.
+	maxConcurrentCertAuthentications = 8
+	// certAuthenticationTimeout bounds one SelfSubjectReview, and with it how long a single
+	// credential can hold one of the maxConcurrentCertAuthentications slots. It is what keeps a
+	// slow or unreachable API server from turning that small bound into a denial of service for
+	// legitimate clients.
+	certAuthenticationTimeout = 10 * time.Second
 )
+
+// errAuthenticationOverloaded means the authenticator declined to check a credential because too
+// many checks were already in flight, not that the credential was bad. It is reported to the client
+// as ResourceExhausted, which is retryable, rather than as Unauthenticated.
+var errAuthenticationOverloaded = errors.New("too many client certificate authentications in flight")
 
 // newKubernetesClientForConfig builds a Kubernetes ClientSet for cfg. It is a package-level variable,
 // so tests can substitute a fake SelfSubjectReviews implementation without standing up a real
@@ -80,12 +106,18 @@ type StreamServerAuthenticator struct {
 	// strips flow-aggregator's own credentials first (see authenticateCert), keeping only the Host/CA
 	// fields needed to reach and verify the real API server.
 	baseConfig *rest.Config
+	// certAuthSlots is a semaphore bounding concurrent client-certificate authentications to
+	// maxConcurrentCertAuthentications. A send acquires a slot, a receive releases it, and a failed
+	// non-blocking send means the authenticator is saturated and declines the credential rather
+	// than queueing behind the ones already in flight.
+	certAuthSlots chan struct{}
 }
 
 func NewStreamServerAuthenticator(k8sClient kubernetes.Interface, baseConfig *rest.Config) *StreamServerAuthenticator {
 	return &StreamServerAuthenticator{
-		k8sClient:  k8sClient,
-		baseConfig: baseConfig,
+		k8sClient:     k8sClient,
+		baseConfig:    baseConfig,
+		certAuthSlots: make(chan struct{}, maxConcurrentCertAuthentications),
 	}
 }
 
@@ -100,7 +132,10 @@ func (a *StreamServerAuthenticator) StreamInterceptor(srv any, ss grpc.ServerStr
 
 	u, err := a.authenticate(ss.Context(), cred)
 	if err != nil {
-		klog.ErrorS(err, "FlowStreamService client authentication failed")
+		klog.V(2).ErrorS(err, "FlowStreamService client authentication failed")
+		if errors.Is(err, errAuthenticationOverloaded) {
+			return status.Error(codes.ResourceExhausted, "too many authentication requests in flight, retry later")
+		}
 		return status.Error(codes.Unauthenticated, "invalid client credentials")
 	}
 
@@ -172,10 +207,24 @@ func (a *StreamServerAuthenticator) authenticateToken(ctx context.Context, token
 // K8s API server "who does the API server think I am, given how I just authenticated to it?"
 // This is used for clients (e.g. Pinniped Concierge TokenCredentialRequest) whose only available credential
 // is a short-lived client certificate rather than a bearer token.
+//
+// Unlike the token path, this builds a client of its own, and therefore a TLS handshake of its own,
+// for every credential presented. It is bounded by a.certAuthSlots for that reason; see
+// maxConcurrentCertAuthentications.
 func (a *StreamServerAuthenticator) authenticateCert(ctx context.Context, certPEM, keyPEM []byte) (*user.DefaultInfo, error) {
 	if a.baseConfig == nil {
 		return nil, fmt.Errorf("baseConfig is required for client certificate authentication")
 	}
+	// The slot is taken before the client is built, since building it is what allocates the
+	// transport that the handshake then runs on.
+	select {
+	case a.certAuthSlots <- struct{}{}:
+		defer func() { <-a.certAuthSlots }()
+	default:
+		return nil, errAuthenticationOverloaded
+	}
+	ctx, cancel := context.WithTimeout(ctx, certAuthenticationTimeout)
+	defer cancel()
 	// rest.AnonymousClientConfig strips every credential (bearer token, client cert, exec plugin, ...)
 	// from a.baseConfig, keeping only the fields needed to reach and verify the real API server
 	// (Host, APIPath, TLS server-verification settings). This is security-critical:

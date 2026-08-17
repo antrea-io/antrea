@@ -309,3 +309,70 @@ func TestStreamInterceptor_ValidClientCert(t *testing.T) {
 	assert.Equal(t, []byte("cert-pem-data"), usedConfig.TLSClientConfig.CertData)
 	assert.Equal(t, []byte("key-pem-data"), usedConfig.TLSClientConfig.KeyData)
 }
+
+// TestStreamInterceptor_ClientCertAuthenticationIsBounded covers the cap on concurrent
+// client-certificate authentications. That path is reachable by any peer that can connect, and each
+// distinct cert/key pair costs a transport and a TLS handshake to kube-apiserver of its own, so it
+// must not fan out without limit.
+func TestStreamInterceptor_ClientCertAuthenticationIsBounded(t *testing.T) {
+	fakeClient := k8sfake.NewSimpleClientset()
+	selfSubjectReviewReactor(fakeClient, authenticationv1.UserInfo{Username: "admin@test.com"}, nil)
+	withFakeSelfSubjectReviewClient(t, fakeClient)
+
+	a := NewStreamServerAuthenticator(k8sfake.NewSimpleClientset(), &rest.Config{})
+
+	handlerCalled := false
+	handler := func(srv any, stream grpc.ServerStream) error {
+		handlerCalled = true
+		return nil
+	}
+	newStream := func() *fakeServerStream {
+		return &fakeServerStream{ctx: contextWithClientCert("cert-pem-data", "key-pem-data")}
+	}
+
+	// Hold every slot, as maxConcurrentCertAuthentications authentications already in flight would.
+	for range maxConcurrentCertAuthentications {
+		a.certAuthSlots <- struct{}{}
+	}
+
+	err := a.StreamInterceptor(nil, newStream(), &grpc.StreamServerInfo{}, handler)
+	require.Error(t, err)
+	st, ok := status.FromError(err)
+	require.True(t, ok)
+	// ResourceExhausted rather than Unauthenticated: the credential was never checked, so the client
+	// should retry instead of concluding that it is invalid.
+	assert.Equal(t, codes.ResourceExhausted, st.Code())
+	assert.False(t, handlerCalled)
+
+	// One slot freed is enough for the next credential to be checked, and that slot is released
+	// again when the check returns rather than being held for the lifetime of the stream.
+	<-a.certAuthSlots
+	require.NoError(t, a.StreamInterceptor(nil, newStream(), &grpc.StreamServerInfo{}, handler))
+	assert.True(t, handlerCalled)
+	assert.Len(t, a.certAuthSlots, maxConcurrentCertAuthentications-1)
+}
+
+// TestStreamInterceptor_BearerTokenIsNotBoundedByCertSlots pins down that the cap applies only to
+// the path that pays for it: the token path goes through the Flow Aggregator's own shared client, so
+// it must keep working while every client-certificate slot is held.
+func TestStreamInterceptor_BearerTokenIsNotBoundedByCertSlots(t *testing.T) {
+	client := k8sfake.NewSimpleClientset()
+	authReactor(client, map[string]authenticationv1.TokenReviewStatus{
+		"valid-token": {Authenticated: true, User: authenticationv1.UserInfo{Username: "user@test.com"}},
+	})
+
+	a := NewStreamServerAuthenticator(client, &rest.Config{})
+	for range maxConcurrentCertAuthentications {
+		a.certAuthSlots <- struct{}{}
+	}
+
+	handlerCalled := false
+	handler := func(srv any, stream grpc.ServerStream) error {
+		handlerCalled = true
+		return nil
+	}
+
+	err := a.StreamInterceptor(nil, &fakeServerStream{ctx: contextWithAuthHeader("Bearer valid-token")}, &grpc.StreamServerInfo{}, handler)
+	require.NoError(t, err)
+	assert.True(t, handlerCalled)
+}

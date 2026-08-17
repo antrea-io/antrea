@@ -56,7 +56,26 @@ func (f *fakeStream) SendMsg(any) error            { return nil }
 func (f *fakeStream) RecvMsg(any) error            { return nil }
 
 func newTestService(buf ringbuffer.BroadcastBuffer[*flowpb.Flow]) *FlowStreamService {
-	return NewFlowStreamService(buf, nil, nil)
+	// Neither an authenticator nor an authorizer: these tests cover filtering and stream lifecycle,
+	// which the constructor allows precisely because it is not a partially-secured service.
+	svc, err := NewFlowStreamService(buf, nil, nil)
+	if err != nil {
+		panic(err)
+	}
+	return svc
+}
+
+// TestNewFlowStreamService_RejectsAuthenticatorWithoutAuthorizer covers the one combination the
+// constructor refuses, since it would authenticate every client and then disclose every record to
+// it in full.
+func TestNewFlowStreamService_RejectsAuthenticatorWithoutAuthorizer(t *testing.T) {
+	buf := ringbuffer.NewBroadcastBuffer[*flowpb.Flow](1)
+	t.Cleanup(func() { buf.Shutdown() })
+
+	svc, err := NewFlowStreamService(buf, &StreamServerAuthenticator{}, nil)
+
+	assert.Error(t, err)
+	assert.Nil(t, svc)
 }
 
 func collectFlows(responses []*flowpb.GetFlowsResponse) []*flowpb.Flow {
@@ -810,7 +829,13 @@ func TestGetFlows_FollowContextCancelled(t *testing.T) {
 // past revalidationInterval with time.Sleep.
 func newAuthorizedTestService(buf ringbuffer.BroadcastBuffer[*flowpb.Flow], grants ...string) (*FlowStreamService, *fakeAuthorizer) {
 	fake := newFakeAuthorizer(grants...)
-	return NewFlowStreamService(buf, nil, newAuthorizer(fake, clock.RealClock{})), fake
+	// An authorizer without an authenticator: the identity is injected into the stream context
+	// directly, so that authorization can be exercised without standing up authentication.
+	svc, err := NewFlowStreamService(buf, nil, newAuthorizer(fake, clock.RealClock{}))
+	if err != nil {
+		panic(err)
+	}
+	return svc, fake
 }
 
 func TestGetFlows_ScopeIsAuthorizedAndReported(t *testing.T) {

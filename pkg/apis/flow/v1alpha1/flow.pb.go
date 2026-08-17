@@ -321,16 +321,16 @@ const (
 	EndpointDisclosure_ENDPOINT_DISCLOSURE_UNSPECIFIED EndpointDisclosure = 0
 	// The endpoint's Namespace, Pod and Service identity are disclosed, but not
 	// its Node placement, the network policies evaluated on its side, or the
-	// Egress applied to it. Set when the client holds get on flows/identity in
-	// the endpoint's Namespace, but that Namespace is not one the stream is
-	// authorized to observe flows for.
+	// Egress applied to it. Set when the client holds get on
+	// flows/identity in the endpoint's Namespace, but that Namespace
+	// is not one the stream is authorized to observe flows for.
 	EndpointDisclosure_ENDPOINT_DISCLOSURE_IDENTITY EndpointDisclosure = 1
 	// The endpoint is unidentified: only what the flow itself shows is disclosed
 	// (addresses, ports, protocol, statistics, and the type and action of the
 	// policies evaluated on the endpoint's side), plus the endpoint's Namespace
 	// if the connection was allowed. Set when the client holds neither flow
-	// visibility nor flows/identity in the endpoint's Namespace, and for an
-	// endpoint that has no Namespace at all.
+	// visibility nor flows/identity in the endpoint's Namespace, and
+	// for an endpoint that has no Namespace at all.
 	EndpointDisclosure_ENDPOINT_DISCLOSURE_FLOW EndpointDisclosure = 2
 )
 
