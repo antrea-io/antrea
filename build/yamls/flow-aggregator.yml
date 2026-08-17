@@ -303,10 +303,8 @@ data:
       # the Flow Aggregator's own client certificate is signed by its self-signed CA, not the
       # cluster's, so it cannot be used here.
       # Which records a client then receives is decided by Kubernetes RBAC on the virtual
-      # "flows.flow.antrea.io" resource: a client must be granted "list" (or "watch", to follow) in
-      # every Namespace it asks about, and holds "get" on "flows/identity" in a Namespace to identify
-      # that Namespace's endpoints inside other records it receives. See the antrea-flow-viewer and
-      # antrea-flow-identity-viewer ClusterRoles, which are shipped unbound.
+      # "flows.observability.antrea.io" resource. See docs/network-flow-visibility.md for
+      # more details.
       # Disabled by default.
       enable: false
 
@@ -359,7 +357,7 @@ metadata:
     app: flow-aggregator
   name: antrea-flow-viewer
 rules:
-  - apiGroups: ["flow.antrea.io"]
+  - apiGroups: ["observability.antrea.io"]
     resources: ["flows"]
     verbs: ["list", "watch"]
 ---
@@ -371,7 +369,7 @@ metadata:
     app: flow-aggregator
   name: antrea-flow-identity-viewer
 rules:
-  - apiGroups: ["flow.antrea.io"]
+  - apiGroups: ["observability.antrea.io"]
     resources: ["flows/identity"]
     verbs: ["get"]
 ---
@@ -568,7 +566,7 @@ spec:
       annotations:
         # Automatically restart Pod if the ConfigMap changes
         # See https://helm.sh/docs/howto/charts_tips_and_tricks/#automatically-roll-deployments
-        checksum/config: c8e3001114d6e75c4069ebba0bc051b7793b7f1fed0851fc41a495a77b8fb1ae
+        checksum/config: 51e5e714dc0634bfa384c116a270b4fe015875e091dc640a77a221d0e44856fc
       labels:
         app: flow-aggregator
     spec:

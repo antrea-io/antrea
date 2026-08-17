@@ -138,11 +138,12 @@ const (
 // FlowStreamService provides a server-streaming RPC for real-time flow visibility.
 //
 // Clients must authenticate with a Kubernetes credential, and are authorized
-// with standard Kubernetes RBAC against a virtual resource: "flows" in API group
-// "flow.antrea.io", with verb "list" for a non-follow stream and "watch" for a
-// follow stream, checked in each Namespace the request names (or cluster-wide).
-// The virtual resource is served by no API server; it exists to be named in a
-// Role or ClusterRole, the way kubelet authorizes "nodes/proxy".
+// with standard Kubernetes RBAC against a virtual resource: "flows"
+// in API group "observability.antrea.io", with verb "list" for a non-follow
+// stream and "watch" for a follow stream, checked in each Namespace the
+// request names (or cluster-wide). The virtual resource is served by no API
+// server; it exists to be named in a Role or ClusterRole, the way kubelet
+// authorizes "nodes/proxy".
 type FlowStreamServiceClient interface {
 	// GetFlows streams flow records matching the provided filters.
 	// Historical flows (from the ring buffer) are sent first, followed by
@@ -184,11 +185,12 @@ type FlowStreamService_GetFlowsClient = grpc.ServerStreamingClient[GetFlowsRespo
 // FlowStreamService provides a server-streaming RPC for real-time flow visibility.
 //
 // Clients must authenticate with a Kubernetes credential, and are authorized
-// with standard Kubernetes RBAC against a virtual resource: "flows" in API group
-// "flow.antrea.io", with verb "list" for a non-follow stream and "watch" for a
-// follow stream, checked in each Namespace the request names (or cluster-wide).
-// The virtual resource is served by no API server; it exists to be named in a
-// Role or ClusterRole, the way kubelet authorizes "nodes/proxy".
+// with standard Kubernetes RBAC against a virtual resource: "flows"
+// in API group "observability.antrea.io", with verb "list" for a non-follow
+// stream and "watch" for a follow stream, checked in each Namespace the
+// request names (or cluster-wide). The virtual resource is served by no API
+// server; it exists to be named in a Role or ClusterRole, the way kubelet
+// authorizes "nodes/proxy".
 type FlowStreamServiceServer interface {
 	// GetFlows streams flow records matching the provided filters.
 	// Historical flows (from the ring buffer) are sent first, followed by

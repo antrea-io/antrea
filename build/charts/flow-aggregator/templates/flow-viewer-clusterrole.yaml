@@ -2,9 +2,9 @@
 antrea-flow-viewer grants access to the flow records streamed by the FlowStreamService. It is
 shipped unbound: it does nothing until an administrator binds it, with a RoleBinding in each
 Namespace whose flows a subject may observe, or with a ClusterRoleBinding for cluster-wide
-visibility. "flows.flow.antrea.io" is a virtual resource, served by no API server and existing only
-to be named here; the Flow Aggregator authorizes each stream against it with a
-SubjectAccessReview.
+visibility. "flows.observability.antrea.io" is a virtual resource, served by no API
+server and existing only to be named here; the Flow Aggregator authorizes each stream against it
+with a SubjectAccessReview.
 
 Granting "list" alone yields history-only access: a client can drain what the record buffer holds
 but cannot follow live flows, which additionally needs "watch".
@@ -20,7 +20,7 @@ metadata:
     app: flow-aggregator
   name: antrea-flow-viewer
 rules:
-  - apiGroups: ["flow.antrea.io"]
+  - apiGroups: ["observability.antrea.io"]
     resources: ["flows"]
     verbs: ["list", "watch"]
 ---
@@ -38,6 +38,6 @@ metadata:
     app: flow-aggregator
   name: antrea-flow-identity-viewer
 rules:
-  - apiGroups: ["flow.antrea.io"]
+  - apiGroups: ["observability.antrea.io"]
     resources: ["flows/identity"]
     verbs: ["get"]
