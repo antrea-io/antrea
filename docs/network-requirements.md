@@ -22,7 +22,7 @@ listed above, so that Antrea keeps working when the default firewall policy of t
 Node is to drop. This covers the tunnel ports, IPsec, WireGuard, the Antrea Agent and
 Controller ports, and the AntreaProxy health check port. The rules for the Antrea
 Controller port are only installed when antrea-agent uses the in-cluster config to
-reach it, as its port is discovered from the Antrea Service otherwise. The ports used
+reach it, because its port is only discovered from the Antrea Service in that case. The ports used
 by Antrea Multi-cluster and by BGPPolicy are not covered, and still need to be allowed
 by the host firewall configuration.
 

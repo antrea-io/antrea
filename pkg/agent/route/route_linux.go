@@ -62,8 +62,8 @@ const (
 	vxlanPort  = 4789
 	genevePort = 6081
 	sttPort    = 7471
-	// The ports used by IPsec to negotiate Security Associations: IKE, and IKE encapsulated in UDP
-	// when a NAT device is detected between the peers.
+	// The ports used by IPsec: IKE negotiates the Security Associations, and both IKE and ESP move to
+	// the NAT traversal port when a NAT device is detected between the peers.
 	ipsecIKEPort  = 500
 	ipsecNATTPort = 4500
 
@@ -130,8 +130,8 @@ const (
 // Client implements Interface.
 var _ Interface = &Client{}
 
-// The route Client is registered as a listener of the Antrea Service EndpointResolver, to install the
-// host network rules for the Antrea Controller APIServer port.
+// The route Client listens for Antrea Service Endpoint changes, to install the host network rules for
+// the Antrea Controller APIServer, see Enqueue.
 var _ client.Listener = &Client{}
 
 var (
@@ -201,8 +201,8 @@ func (h *HostNetworkPortRules) Allow(port int32, f feature) *HostNetworkPortRule
 	return h
 }
 
-// endpointResolver is satisfied by *client.EndpointResolver and provides the current Antrea
-// Service endpoint URL and listener registration for host network rules.
+// endpointResolver is the part of *client.EndpointResolver used by the route Client. It is an interface
+// so that it can be faked in tests, NewClient takes the concrete type.
 type endpointResolver interface {
 	CurrentEndpointURL() *url.URL
 	AddListener(client.Listener)
@@ -306,7 +306,8 @@ type Client struct {
 	// syncIPTables is called. Enabling it may carry a performance impact. It's disabled by default and should only be
 	// used in testing.
 	deterministic bool
-	// hostNetworkPortRules stores the features and their ports that should be allowed on host-networking.
+	// hostNetworkPortRules stores the ports registered with HostNetworkPortRules, by the feature which
+	// listens on them.
 	hostNetworkPortRules map[feature]int32
 	// endpointResolver provides a known Endpoint for the Antrea Service.
 	endpointResolver endpointResolver
@@ -1764,8 +1765,8 @@ func buildAllowHostEgressReplyPortRule(protocol string, port int32, comment stri
 }
 
 func (c *Client) initAgentAPIServerHostNetworkFilterRules() {
-	port, exists := c.hostNetworkPortRules[featureAgentAPIServer]
-	if !exists || port <= 0 {
+	port := c.hostNetworkPortRules[featureAgentAPIServer]
+	if port <= 0 {
 		return
 	}
 	klog.InfoS("Installing host network rules to allow Antrea Agent APIServer traffic", "protocol", "TCP", "port", port)
@@ -1790,9 +1791,93 @@ func (c *Client) initAgentAPIServerHostNetworkFilterRules() {
 	}
 }
 
+// controllerAPIServerPort returns the port on which the Antrea Controller APIServer listens, and whether
+// it could be determined from the resolved Antrea Service Endpoint.
+func (c *Client) controllerAPIServerPort() (int32, bool) {
+	endpointURL := c.endpointResolver.CurrentEndpointURL()
+	if endpointURL == nil {
+		klog.InfoS("Didn't get Endpoint URL for Antrea Service, removing the host network rules for the Antrea Controller APIServer")
+		return 0, false
+	}
+	portStr := endpointURL.Port()
+	if portStr == "" {
+		klog.InfoS("Empty port in the Endpoint URL for Antrea Service, removing the host network rules for the Antrea Controller APIServer")
+		return 0, false
+	}
+	port, err := strconv.ParseInt(portStr, 10, 32)
+	if err != nil {
+		klog.ErrorS(err, "Invalid port in the Endpoint URL for Antrea Service, removing the host network rules for the Antrea Controller APIServer", "port", portStr)
+		return 0, false
+	}
+	return int32(port), true
+}
+
+// updateControllerAPIServerHostNetworkFilterRules installs the host network rules allowing the traffic to
+// the Antrea Controller APIServer, whose port is only known once the Antrea Service Endpoint has been
+// resolved. It is called again every time the Endpoint changes, and removes the rules when no Endpoint is
+// resolved any more, so that the port of a Controller which is gone does not stay open.
+func (c *Client) updateControllerAPIServerHostNetworkFilterRules() {
+	if c.endpointResolver == nil {
+		// The Controller APIServer port is only discovered from the Antrea Service Endpoint, which is
+		// not resolved when an Antrea kubeconfig is provided.
+		return
+	}
+	var antreaInputChainRules, antreaOutputChainRules []string
+	if port, ok := c.controllerAPIServerPort(); ok {
+		klog.InfoS("Installing host network rules to allow Antrea Controller APIServer traffic", "protocol", "TCP", "port", port)
+		controllerAPIServerPort := intstr.FromInt32(port)
+		antreaInputChainRules = []string{
+			// On the Node running the Controller, the connections initiated by the Agents are received
+			// on the listening port.
+			buildAllowHostIngressPortRule(iptables.ProtocolTCP, &controllerAPIServerPort, "Antrea: allow Controller APIServer input packets"),
+			// On every Node, the replies to the connections the local Agent initiates are received from
+			// the listening port. A rule is needed because the traffic is not necessarily covered by a
+			// conntrack rule: the Antrea chains are also traversed when the default policy of the
+			// built-in chain is to drop and no rule accepts established connections.
+			buildAllowHostIngressReplyPortRule(iptables.ProtocolTCP, port, "Antrea: allow Controller APIServer reply input packets"),
+		}
+		antreaOutputChainRules = []string{
+			// The Agent connects to the Controller APIServer, so the packets of the connections it
+			// initiates are sent to the listening port. This rule ensures that they are allowed to
+			// output, including on the Nodes not running the Controller.
+			buildAllowHostEgressPortRule(iptables.ProtocolTCP, &controllerAPIServerPort, "Antrea: allow Controller APIServer output packets"),
+			// Controller APIServer reply packets are sent from the listening port, and are not
+			// necessarily covered by a conntrack rule either.
+			buildAllowHostEgressReplyPortRule(iptables.ProtocolTCP, port, "Antrea: allow Controller APIServer reply packets"),
+		}
+	}
+	// Storing empty rules is what removes them: syncIPTables rewrites the Antrea chains from the cache.
+	if c.networkConfig.IPv6Enabled {
+		c.iptablesCache.ipv6[featureControllerAPIServer].Store(antreaInputChain, antreaInputChainRules)
+		c.iptablesCache.ipv6[featureControllerAPIServer].Store(antreaOutputChain, antreaOutputChainRules)
+	}
+	if c.networkConfig.IPv4Enabled {
+		c.iptablesCache.ipv4[featureControllerAPIServer].Store(antreaInputChain, antreaInputChainRules)
+		c.iptablesCache.ipv4[featureControllerAPIServer].Store(antreaOutputChain, antreaOutputChainRules)
+	}
+
+	// The rules are only cached above, they must be programmed now: the initial sync always runs before
+	// the Antrea Service Endpoint is resolved, so it flushes the Antrea chains without them, and the next
+	// periodic sync is up to SyncInterval later. Waiting for it would leave the Agent unable to open a
+	// connection to the Controller for that long whenever the default host network policy is to drop.
+	//
+	// This runs on the EndpointResolver's only worker, so it must not block: doing so would stop the
+	// queue from being drained, and no Endpoint change would be resolved for any listener.
+	select {
+	case <-c.iptablesInitialized:
+		if err := c.syncIPTables(false); err != nil {
+			klog.ErrorS(err, "Failed to sync iptables rules after the Antrea Service Endpoint changed")
+		}
+	default:
+		// The initial sync may already have read the cache, so it does not necessarily program these
+		// rules. What does is the first syncNetworkConfig, which Run performs as soon as it unblocks on
+		// iptablesInitialized, and which reads the cache again.
+	}
+}
+
 func (c *Client) initAgentClusterMembershipHostNetworkFilterRules() {
-	port, exists := c.hostNetworkPortRules[featureAgentClusterMembership]
-	if !exists || port <= 0 {
+	port := c.hostNetworkPortRules[featureAgentClusterMembership]
+	if port <= 0 {
 		return
 	}
 	klog.InfoS("Installing host network rules to allow Antrea Agent cluster memberships traffic", "protocols", "TCP and UDP", "port", port)
@@ -1825,8 +1910,8 @@ func (c *Client) initAgentClusterMembershipHostNetworkFilterRules() {
 }
 
 func (c *Client) initProxyHealthCheckHostNetworkFilterRules() {
-	port, exists := c.hostNetworkPortRules[featureProxyHealthCheck]
-	if !exists || port <= 0 {
+	port := c.hostNetworkPortRules[featureProxyHealthCheck]
+	if port <= 0 {
 		return
 	}
 	klog.InfoS("Installing host network rules to allow AntreaProxy health check traffic", "protocol", "TCP", "port", port)
@@ -1938,8 +2023,8 @@ func (c *Client) initIPsecHostNetworkFilterRules() {
 }
 
 func (c *Client) initWireguardHostNetworkFilterRules() {
-	port, exists := c.hostNetworkPortRules[featureWireguard]
-	if !exists || port <= 0 {
+	port := c.hostNetworkPortRules[featureWireguard]
+	if port <= 0 {
 		return
 	}
 	klog.InfoS("Installing host network rules to allow WireGuard traffic", "protocol", "UDP", "port", port)
@@ -3769,73 +3854,7 @@ func (c *Client) shouldEnableEgressPolicyRouting() bool {
 }
 
 // Enqueue implements the client.Listener interface. It is called by the Antrea Service EndpointResolver
-// every time the resolved Endpoint changes, and installs the host network rules allowing the traffic to
-// the Antrea Controller APIServer, whose port is only known once the Endpoint has been resolved.
+// every time the resolved Endpoint changes.
 func (c *Client) Enqueue() {
-	if c.endpointResolver == nil {
-		return
-	}
-	controllerEndpointURL := c.endpointResolver.CurrentEndpointURL()
-	if controllerEndpointURL == nil {
-		klog.InfoS("Didn't get Endpoint URL for Antrea Service, skip updating host network rules for Antrea Controller APIServer")
-		return
-	}
-	portStr := controllerEndpointURL.Port()
-	if portStr == "" {
-		klog.InfoS("Empty port, skip updating host network rules for Antrea Controller APIServer")
-		return
-	}
-	portRaw, err := strconv.ParseInt(portStr, 10, 32)
-	if err != nil {
-		klog.ErrorS(err, "Invalid port number stored in Antrea Service, skip updating host network rules for Antrea Controller APIServer", "port", portStr)
-		return
-	}
-	port := int32(portRaw)
-
-	klog.InfoS("Installing host network rules to allow Antrea Controller APIServer traffic", "protocol", "TCP", "port", port)
-	controllerAPIServerPort := intstr.FromInt32(port)
-	antreaInputChainRules := []string{
-		// On the Node running the Controller, the connections initiated by the Agents are received on the
-		// listening port.
-		buildAllowHostIngressPortRule(iptables.ProtocolTCP, &controllerAPIServerPort, "Antrea: allow Controller APIServer input packets"),
-		// On every Node, the replies to the connections the local Agent initiates are received from the
-		// listening port. A rule is needed because the traffic is not necessarily covered by a
-		// conntrack rule: the Antrea chains are also traversed when the default policy of the built-in
-		// chain is to drop and no rule accepts established connections.
-		buildAllowHostIngressReplyPortRule(iptables.ProtocolTCP, port, "Antrea: allow Controller APIServer reply input packets"),
-	}
-	antreaOutputChainRules := []string{
-		// The Agent connects to the Controller APIServer, so the packets of the connections it initiates are sent to
-		// the listening port. This rule ensures that the packets are allowed to output, including on the Nodes not
-		// running the Controller.
-		buildAllowHostEgressPortRule(iptables.ProtocolTCP, &controllerAPIServerPort, "Antrea: allow Controller APIServer output packets"),
-		// Controller APIServer reply packets are sent from the listening port. This rule ensures that the packets are
-		// allowed to output, for the same reason as the reply input rule above.
-		buildAllowHostEgressReplyPortRule(iptables.ProtocolTCP, port, "Antrea: allow Controller APIServer reply packets"),
-	}
-	if c.networkConfig.IPv6Enabled {
-		c.iptablesCache.ipv6[featureControllerAPIServer].Store(antreaInputChain, antreaInputChainRules)
-		c.iptablesCache.ipv6[featureControllerAPIServer].Store(antreaOutputChain, antreaOutputChainRules)
-	}
-	if c.networkConfig.IPv4Enabled {
-		c.iptablesCache.ipv4[featureControllerAPIServer].Store(antreaInputChain, antreaInputChainRules)
-		c.iptablesCache.ipv4[featureControllerAPIServer].Store(antreaOutputChain, antreaOutputChainRules)
-	}
-
-	// The rules are only cached above. They must be programmed now: the periodic sync would install them
-	// up to SyncInterval later, and the initial sync always runs before the Antrea Service Endpoint is
-	// resolved, so it flushes the Antrea chains without these rules. Waiting for the next periodic sync
-	// would leave the Agent unable to open a connection to the Controller for that long whenever the
-	// default host network policy is to drop.
-	//
-	// This method is called by the EndpointResolver's only worker, so it must not block: doing so would
-	// stop the queue from being drained, and no Endpoint change would be resolved for any listener.
-	select {
-	case <-c.iptablesInitialized:
-		if err := c.syncIPTables(false); err != nil {
-			klog.ErrorS(err, "Failed to sync iptables rules after the Antrea Service Endpoint changed")
-		}
-	default:
-		// The initial sync has not run yet, and it will pick up the rules cached above.
-	}
+	c.updateControllerAPIServerHostNetworkFilterRules()
 }

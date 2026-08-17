@@ -3818,10 +3818,14 @@ func TestEnqueue(t *testing.T) {
 	const controllerPort = 10349
 
 	tests := []struct {
-		name              string
-		endpointResolver  endpointResolver
-		networkConfig     *config.NetworkConfig
-		expectCacheUpdate bool
+		name             string
+		endpointResolver endpointResolver
+		networkConfig    *config.NetworkConfig
+		// expectRules is whether the accept rules are expected to be installed, expectSync whether the
+		// cache is expected to be programmed. They differ when the Endpoint is resolved but unusable:
+		// the rules are then removed, which still requires a sync.
+		expectRules bool
+		expectSync  bool
 	}{
 		{
 			name:             "nil endpoint resolver",
@@ -3829,7 +3833,6 @@ func TestEnqueue(t *testing.T) {
 			networkConfig: &config.NetworkConfig{
 				IPv4Enabled: true,
 			},
-			expectCacheUpdate: false,
 		},
 		{
 			name:             "nil endpoint URL",
@@ -3837,7 +3840,7 @@ func TestEnqueue(t *testing.T) {
 			networkConfig: &config.NetworkConfig{
 				IPv4Enabled: true,
 			},
-			expectCacheUpdate: false,
+			expectSync: true,
 		},
 		{
 			name: "empty port",
@@ -3847,7 +3850,7 @@ func TestEnqueue(t *testing.T) {
 			networkConfig: &config.NetworkConfig{
 				IPv4Enabled: true,
 			},
-			expectCacheUpdate: false,
+			expectSync: true,
 		},
 		{
 			name: "invalid port",
@@ -3857,7 +3860,7 @@ func TestEnqueue(t *testing.T) {
 			networkConfig: &config.NetworkConfig{
 				IPv4Enabled: true,
 			},
-			expectCacheUpdate: false,
+			expectSync: true,
 		},
 		{
 			name: "valid port IPv4",
@@ -3867,7 +3870,8 @@ func TestEnqueue(t *testing.T) {
 			networkConfig: &config.NetworkConfig{
 				IPv4Enabled: true,
 			},
-			expectCacheUpdate: true,
+			expectRules: true,
+			expectSync:  true,
 		},
 		{
 			name: "valid port IPv6",
@@ -3877,7 +3881,8 @@ func TestEnqueue(t *testing.T) {
 			networkConfig: &config.NetworkConfig{
 				IPv6Enabled: true,
 			},
-			expectCacheUpdate: true,
+			expectRules: true,
+			expectSync:  true,
 		},
 		{
 			name: "valid port dual stack",
@@ -3888,7 +3893,8 @@ func TestEnqueue(t *testing.T) {
 				IPv4Enabled: true,
 				IPv6Enabled: true,
 			},
-			expectCacheUpdate: true,
+			expectRules: true,
+			expectSync:  true,
 		},
 	}
 	for _, tt := range tests {
@@ -3900,12 +3906,13 @@ func TestEnqueue(t *testing.T) {
 			mockIPTables.EXPECT().EnsureChain(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
 			mockIPTables.EXPECT().AppendRule(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
 			mockIPTables.EXPECT().InsertRule(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
-			if tt.expectCacheUpdate {
+			if tt.expectSync {
 				mockIPTables.EXPECT().Restore(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).MinTimes(1)
 			} else {
 				mockIPTables.EXPECT().Restore(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).Times(0)
 			}
-			// Report iptables as initialized, otherwise Enqueue waits for the initial sync.
+			// Report iptables as initialized, so that Enqueue syncs the rules instead of only caching
+			// them.
 			iptablesInitialized := make(chan struct{})
 			close(iptablesInitialized)
 			c := &Client{
@@ -3917,9 +3924,7 @@ func TestEnqueue(t *testing.T) {
 				nodeConfig:          &config.NodeConfig{GatewayConfig: &config.GatewayConfig{Name: "antrea-gw0"}},
 			}
 			c.Enqueue()
-			if !tt.expectCacheUpdate {
-				return
-			}
+
 			expectedInputRules := []string{
 				`-A ANTREA-INPUT -m comment --comment "Antrea: allow Controller APIServer input packets" -p tcp --dport 10349 -j ACCEPT`,
 				`-A ANTREA-INPUT -m comment --comment "Antrea: allow Controller APIServer reply input packets" -p tcp --sport 10349 -m conntrack --ctstate ESTABLISHED -j ACCEPT`,
@@ -3928,9 +3933,19 @@ func TestEnqueue(t *testing.T) {
 				`-A ANTREA-OUTPUT -m comment --comment "Antrea: allow Controller APIServer output packets" -p tcp --dport 10349 -j ACCEPT`,
 				`-A ANTREA-OUTPUT -m comment --comment "Antrea: allow Controller APIServer reply packets" -p tcp --sport 10349 -m conntrack --ctstate ESTABLISHED -j ACCEPT`,
 			}
+			if !tt.expectRules {
+				// An Endpoint which cannot be used removes the rules, so that the port of a Controller
+				// which is gone does not stay open.
+				expectedInputRules, expectedOutputRules = nil, nil
+			}
 
 			verifyCacheFn := func(family string, cache *sync.Map, key string, expectedRules []string) {
 				rules, ok := cache.Load(key)
+				if !tt.expectSync {
+					// Nothing was cached at all, and nothing was programmed.
+					assert.False(t, ok, "%s: no rules should be stored for chain %s", family, key)
+					return
+				}
 				require.True(t, ok, "%s: rules should be stored for chain %s", family, key)
 				rulesSlice, ok := rules.([]string)
 				require.True(t, ok, "%s: cached value for chain %s should be []string, got %T", family, key, rules)
