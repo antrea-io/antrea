@@ -381,6 +381,19 @@ func TestSyncIPSet(t *testing.T) {
 	}
 }
 
+func TestNewClientCopiesHostNetworkPorts(t *testing.T) {
+	hostNetworkPortRules := NewHostNetworkPortRules().Allow(10350, FeatureAgentAPIServer)
+	c, err := NewClient(&config.NetworkConfig{}, false, false, false, false, false, false, false, false, false,
+		false, nil, nil, hostNetworkPortRules)
+	require.NoError(t, err)
+
+	// Registering a port after the Client was created must not change its ports: they are only read when
+	// Initialize installs the rules, so the change would silently apply until then and silently do
+	// nothing afterwards.
+	hostNetworkPortRules.Allow(10351, FeatureAgentClusterMembership)
+	assert.Equal(t, map[feature]int32{featureAgentAPIServer: 10350}, c.hostNetworkPortRules)
+}
+
 func TestSyncIPTables(t *testing.T) {
 	mockIPTablesListRulesOfChains := func(mockIPTables *iptablestest.MockInterfaceMockRecorder,
 		protocol iptables.Protocol,

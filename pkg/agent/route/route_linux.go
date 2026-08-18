@@ -18,6 +18,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"maps"
 	"net"
 	"net/url"
 	"reflect"
@@ -331,6 +332,12 @@ func NewClient(networkConfig *config.NetworkConfig,
 	if hostNetworkPortRules == nil {
 		hostNetworkPortRules = NewHostNetworkPortRules()
 	}
+	// The ports are copied rather than referenced, so that registering one after this call, on a builder
+	// which is kept or reused, does not change the ports of this Client. They are read when Initialize
+	// installs the rules, so such a registration would silently change them until then, and silently do
+	// nothing afterwards.
+	ports := make(map[feature]int32, len(hostNetworkPortRules.ports))
+	maps.Copy(ports, hostNetworkPortRules.ports)
 	c := &Client{
 		networkConfig:               networkConfig,
 		noSNAT:                      noSNAT,
@@ -348,7 +355,7 @@ func NewClient(networkConfig *config.NetworkConfig,
 		isCloudEKS:                  env.IsCloudEKS(),
 		serviceCIDRProvider:         serviceCIDRProvider,
 		serviceExternalIPReferences: make(map[string]sets.Set[string]),
-		hostNetworkPortRules:        hostNetworkPortRules.ports,
+		hostNetworkPortRules:        ports,
 	}
 	// endpointResolver is a concrete pointer rather than the endpointResolver interface, because
 	// assigning a nil pointer to an interface would produce a non-nil interface, defeating the nil
