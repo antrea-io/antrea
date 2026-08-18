@@ -308,6 +308,12 @@ type Client struct {
 	egressNeighbors sync.Map
 	// The latest calculated Service CIDRs can be got from serviceCIDRProvider.
 	serviceCIDRProvider servicecidr.Interface
+	// staleNodeNetworkPolicyChains holds, by IP protocol, the NodeNetworkPolicy chains which were already
+	// candidates for deletion in the previous run of cleanupOrphanNodeNetworkPolicyChains. Only the chains
+	// which are still candidates in the current run are deleted, so that a chain is only deleted when it
+	// has been missing from the caches for a whole period, rather than at one instant. It is only accessed
+	// by syncNetworkConfig, which runs serially, so it needs no lock.
+	staleNodeNetworkPolicyChains map[iptables.Protocol]sets.Set[string]
 	// nodeNetworkPolicyIPSetsIPv4 caches all existing IPv4 ipsets for NodeNetworkPolicy.
 	nodeNetworkPolicyIPSetsIPv4 sync.Map
 	// nodeNetworkPolicyIPSetsIPv6 caches all existing IPv6 ipsets for NodeNetworkPolicy.
@@ -1128,13 +1134,15 @@ func (c *Client) removeUnexpectedAntreaJumpRule(protocol iptables.Protocol, jump
 
 // syncIPTables ensure that the iptables infrastructure we use is set up.
 // It's idempotent and can safely be called on every startup.
-// cleanupOrphanNodeNetworkPolicyChains deletes the NodeNetworkPolicy chains which are still in the datapath but not
-// in the cache any more. syncIPTables only rewrites the chains the cache knows about, so a chain deleted while a sync
-// was holding an older snapshot is recreated by that sync and nothing removes it afterwards.
+// cleanupOrphanNodeNetworkPolicyChains deletes the NodeNetworkPolicy chains which are still in the
+// datapath but not in the caches any more. syncIPTables only rewrites the chains the caches know about, so
+// a chain deleted while a sync was holding an older snapshot is recreated by that sync and nothing removes
+// it afterwards.
 //
-// The datapath is listed before the cache is read, which is what makes this safe: the rules of a chain are stored in
-// the cache before the chain is written to the datapath, so a chain which appears in the listing was already in the
-// cache when the listing was taken, and is not mistaken for an orphan.
+// A chain is only deleted once it has been missing from the caches in two consecutive runs, so that the
+// decision is never made on a single observation. The writers update the caches and the datapath one after
+// the other and in their own goroutines, so at any instant a chain can legitimately be in one and not in
+// the other; such a state does not last a whole period, while a chain which is really orphaned does.
 func (c *Client) cleanupOrphanNodeNetworkPolicyChains() {
 	if !c.nodeNetworkPolicyEnabled {
 		return
@@ -1144,11 +1152,13 @@ func (c *Client) cleanupOrphanNodeNetworkPolicyChains() {
 		klog.ErrorS(err, "Failed to list the chains of the filter table")
 		return
 	}
+	staleChains := make(map[iptables.Protocol]sets.Set[string], len(chainsInDatapath))
 	for ipProtocol, chains := range chainsInDatapath {
 		cache := c.iptablesCache.ipv4[featureNodeNetworkPolicy]
 		if iptables.IsIPv6Protocol(ipProtocol) {
 			cache = c.iptablesCache.ipv6[featureNodeNetworkPolicy]
 		}
+		staleChains[ipProtocol] = sets.New[string]()
 		for _, chain := range chains {
 			if !strings.HasPrefix(chain, nodeNetworkPolicyChainPrefix) {
 				continue
@@ -1156,8 +1166,13 @@ func (c *Client) cleanupOrphanNodeNetworkPolicyChains() {
 			if _, exists := cache.Load(chain); exists {
 				continue
 			}
+			staleChains[ipProtocol].Insert(chain)
+			if !c.staleNodeNetworkPolicyChains[ipProtocol].Has(chain) {
+				// It was not a candidate in the previous run, give it a period to be cached.
+				continue
+			}
 			// The chain may still be referenced by a jump rule which the next sync will remove, in
-			// which case the deletion fails and is retried on the next period.
+			// which case the deletion fails and is retried in the next run.
 			if err := c.iptables.DeleteChain(ipProtocol, iptables.FilterTable, chain); err != nil {
 				klog.V(2).InfoS("Failed to delete an orphan NodeNetworkPolicy chain, will retry", "chain", chain, "err", err)
 				continue
@@ -1165,6 +1180,7 @@ func (c *Client) cleanupOrphanNodeNetworkPolicyChains() {
 			klog.InfoS("Deleted an orphan NodeNetworkPolicy chain", "chain", chain)
 		}
 	}
+	c.staleNodeNetworkPolicyChains = staleChains
 }
 
 func (c *Client) syncIPTables(cleanupStaleJumpRules bool) error {

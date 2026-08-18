@@ -400,25 +400,59 @@ func TestNewClientCopiesHostNetworkPorts(t *testing.T) {
 func TestCleanupOrphanNodeNetworkPolicyChains(t *testing.T) {
 	const orphanChain = "ANTREA-POL-RULE-ORPHAN"
 
+	// A run is one call to cleanupOrphanNodeNetworkPolicyChains.
+	type run struct {
+		// cachedChain is stored in the cache before the run, if not empty.
+		cachedChain string
+		// deleteError is returned by DeleteChain during the run, if not nil.
+		deleteError error
+		// expectedDeletes is the chains the run is expected to delete.
+		expectedDeletes []string
+	}
 	tests := []struct {
 		name                     string
 		nodeNetworkPolicyEnabled bool
 		chainsInDatapath         []string
-		expectedDeletes          []string
+		runs                     []run
 	}{
 		{
-			name:                     "delete the chains which are not in the cache any more",
+			name:                     "delete a chain which is not in the cache in two consecutive runs",
 			nodeNetworkPolicyEnabled: true,
-			// The first two are seeded in the cache by initNodeNetworkPolicy, the last one is not
+			// The first chain is seeded in the cache by initNodeNetworkPolicy, the last one is not
 			// managed by Antrea at all.
 			chainsInDatapath: []string{config.NodeNetworkPolicyIngressRulesChain, orphanChain, "KUBE-SERVICES"},
-			expectedDeletes:  []string{orphanChain},
+			runs: []run{
+				{}, // The first run only records the chain as a candidate.
+				{expectedDeletes: []string{orphanChain}},
+			},
+		},
+		{
+			// This is what happens when the chain was installed by the NodeNetworkPolicy controller
+			// but had not been cached yet when the first run listed the chains.
+			name:                     "keep a chain which makes it to the cache before the second run",
+			nodeNetworkPolicyEnabled: true,
+			chainsInDatapath:         []string{orphanChain},
+			runs: []run{
+				{},
+				{cachedChain: orphanChain},
+			},
+		},
+		{
+			name:                     "retry a chain whose deletion failed",
+			nodeNetworkPolicyEnabled: true,
+			chainsInDatapath:         []string{orphanChain},
+			runs: []run{
+				{},
+				{deleteError: fmt.Errorf("chain is not empty"), expectedDeletes: []string{orphanChain}},
+				{expectedDeletes: []string{orphanChain}},
+			},
 		},
 		{
 			// Antrea does not own these chains when the feature is disabled, so it must not touch them.
 			name:                     "do nothing when NodeNetworkPolicy is disabled",
 			nodeNetworkPolicyEnabled: false,
 			chainsInDatapath:         []string{orphanChain},
+			runs:                     []run{{}, {}},
 		},
 	}
 	for _, tt := range tests {
@@ -431,16 +465,24 @@ func TestCleanupOrphanNodeNetworkPolicyChains(t *testing.T) {
 				iptablesCache:            newIPTablesCache(),
 				iptables:                 mockIPTables,
 			}
-			if tt.nodeNetworkPolicyEnabled {
-				c.iptablesCache.ipv4[featureNodeNetworkPolicy].Store(config.NodeNetworkPolicyIngressRulesChain, []string{})
-				mockIPTables.EXPECT().ListChains(iptables.ProtocolIPv4, iptables.FilterTable).Return(
-					map[iptables.Protocol][]string{iptables.ProtocolIPv4: tt.chainsInDatapath}, nil)
-			}
-			for _, chain := range tt.expectedDeletes {
-				mockIPTables.EXPECT().DeleteChain(iptables.ProtocolIPv4, iptables.FilterTable, chain).Return(nil)
-			}
+			cache := c.iptablesCache.ipv4[featureNodeNetworkPolicy]
+			cache.Store(config.NodeNetworkPolicyIngressRulesChain, []string{})
 
-			c.cleanupOrphanNodeNetworkPolicyChains()
+			for i, r := range tt.runs {
+				if r.cachedChain != "" {
+					cache.Store(r.cachedChain, []string{})
+				}
+				if tt.nodeNetworkPolicyEnabled {
+					mockIPTables.EXPECT().ListChains(iptables.ProtocolIPv4, iptables.FilterTable).Return(
+						map[iptables.Protocol][]string{iptables.ProtocolIPv4: tt.chainsInDatapath}, nil)
+				}
+				for _, chain := range r.expectedDeletes {
+					mockIPTables.EXPECT().DeleteChain(iptables.ProtocolIPv4, iptables.FilterTable, chain).Return(r.deleteError)
+				}
+
+				c.cleanupOrphanNodeNetworkPolicyChains()
+				assert.Truef(t, ctrl.Satisfied(), "Unexpected calls in run %d", i)
+			}
 		})
 	}
 }
