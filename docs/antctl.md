@@ -38,6 +38,13 @@ running in three different modes:
   - [Flow Aggregator commands](#flow-aggregator-commands)
     - [Dumping flow records](#dumping-flow-records)
     - [Record metrics](#record-metrics)
+  - [Observing live flows](#observing-live-flows)
+    - [Output and exit behavior](#output-and-exit-behavior)
+    - [Discovery and connectivity](#discovery-and-connectivity)
+    - [Authentication](#authentication)
+    - [Permissions to find and reach the Flow Aggregator](#permissions-to-find-and-reach-the-flow-aggregator)
+    - [Authorization and redaction](#authorization-and-redaction)
+    - [Running in-Pod](#running-in-pod)
   - [Multi-cluster commands](#multi-cluster-commands)
   - [Multicast commands](#multicast-commands)
   - [Showing memberlist state](#showing-memberlist-state)
@@ -810,6 +817,357 @@ Example outputs of record metrics:
 RECORDS-EXPORTED RECORDS-RECEIVED RECORDS-DROPPED FLOWS EXPORTERS-CONNECTED
 46               118              0               7     2
 ```
+
+### Observing live flows
+
+`antctl observe` streams live flow records from a Flow Aggregator's
+`FlowStreamService`, filtered by Namespace, Pod, label selector, Service,
+flow type, or IP/CIDR. It supports two modes:
+
+* **Remote**: run from outside the Flow Aggregator's Pod, for
+  example from your workstation, with a kubeconfig. See
+  [Discovery and connectivity](#discovery-and-connectivity) below.
+* **In-Pod**: run from inside the Flow Aggregator's own Pod (e.g. via
+  `kubectl exec`), it connects directly to that instance's own
+  `FlowStreamService` on `localhost`, using the Pod's own ServiceAccount
+  credentials — see [Running in-Pod](#running-in-pod) below.
+
+```bash
+# Stream all flows involving Namespace "default"
+antctl observe --flow-aggregator-namespace flow-aggregator -n default
+# Stream flows to/from Pods matching a label selector, as JSON
+antctl observe --flow-aggregator-namespace flow-aggregator -l app=frontend -o json
+# Show flows from the last 5 minutes, then keep streaming new ones
+antctl observe --flow-aggregator-namespace flow-aggregator --since 5m --follow
+# Connect to a specific Flow Aggregator instance when more than one exists
+antctl observe --flow-aggregator flow-aggregator-2/flow-aggregator
+# From inside the Flow Aggregator Pod itself, observing its own flows
+antctl observe
+```
+
+#### Output and exit behavior
+
+By default, `antctl observe` prints one line of text per flow, under a header.
+The columns have a fixed width, so that they stay aligned while `--follow` is
+running, and a column with no value shows `-`. `TIME` is the time the flow
+ended, in your local time zone, and `TOTAL BYTES` is the sum of both directions
+(`--human-readable` shows it with units, such as `23.0KB`):
+
+```text
+TIME      SOURCE                                   DESTINATION                             PROTO SPORT  DPORT  SERVICE                       FLOW_TYPE               TOTAL BYTES
+10:15:02  default/frontend-6d4b9c7f58-x2k4p        default/backend-5c8d7b9f64-9pzqm        6     43210  8080   default/backend:http          FLOW_TYPE_INTER_NODE    23574
+10:15:07  default/frontend-6d4b9c7f58-x2k4p        93.184.216.34                           6     40112  443    -                             FLOW_TYPE_TO_EXTERNAL   92160
+```
+
+Use `-c` / `--columns` to select a comma-separated list of columns in the order
+you want. This replaces the default table columns and applies only to text
+output. Column names are case-sensitive and match the JSON field names listed
+below. The command's `--help` also lists every supported column. For example:
+
+```bash
+antctl observe --flow-aggregator-namespace flow-aggregator \
+  -c source,destination,ingressNetworkPolicyName,ingressNetworkPolicyRuleAction,tcpState
+antctl observe --flow-aggregator-namespace flow-aggregator \
+  --columns sourcePodName,sourcePodLabels,destinationPodName,destinationPodLabels
+```
+
+In addition to every JSON field below, these combined columns are supported:
+
+| Column | Meaning |
+|--------|---------|
+| `source` | Source Namespace/Pod, or the source IP when no Pod is identified; the default `SOURCE` column |
+| `destination` | Destination Namespace/Pod, or the destination IP when no Pod is identified; the default `DESTINATION` column |
+| `totalBytes` | Sum of `octetTotalCount` and `reverseOctetTotalCount`; the default `TOTAL BYTES` column |
+
+Selected columns use their field names as headers. Timestamps retain their
+RFC3339 form. Labels are shown as sorted `key=value` pairs separated by commas:
+`-` means unavailable and `{}` means a known empty label set. Long text values
+are truncated with `...` to keep columns aligned across batches; JSON preserves
+the full values. `--human-readable` applies to all selected byte counters,
+including `totalBytes`, but not to packet counts or throughput.
+
+With `-o json`, it prints one JSON object per flow, one per line, rather than a
+single array, so that the output can be consumed while `--follow` is running.
+JSON always includes all fields in the record; `--columns` cannot be combined
+with `-o json`:
+
+```json
+{"endTime":"2026-05-04T10:15:02Z","sourceIP":"10.244.1.5","destinationIP":"10.244.2.7","protocol":6,"sourcePort":43210,"destinationPort":8080,"sourcePodNamespace":"default","sourcePodName":"frontend-6d4b9c7f58-x2k4p","destinationPodNamespace":"default","destinationPodName":"backend-5c8d7b9f64-9pzqm","destinationServiceName":"default/backend:http","flowType":"FLOW_TYPE_INTER_NODE","octetTotalCount":5230,"reverseOctetTotalCount":18344,"sourceDisclosure":"full","destinationDisclosure":"full","sourcePodLabels":{"app":"frontend"},"destinationPodLabels":{"app":"backend"},"ingressNetworkPolicyNamespace":"default","ingressNetworkPolicyName":"allow-frontend","ingressNetworkPolicyType":"NETWORK_POLICY_TYPE_ANP","ingressNetworkPolicyRuleName":"http","ingressNetworkPolicyRuleAction":"NETWORK_POLICY_RULE_ACTION_ALLOW","egressNetworkPolicyNamespace":"","egressNetworkPolicyName":"","egressNetworkPolicyType":"NETWORK_POLICY_TYPE_UNSPECIFIED","egressNetworkPolicyRuleName":"","egressNetworkPolicyRuleAction":"NETWORK_POLICY_RULE_ACTION_NO_ACTION","tcpState":"ESTABLISHED","sourceNodeName":"worker-1","destinationNodeName":"worker-2","packetTotalCount":12,"reversePacketTotalCount":16,"startTime":"2026-05-04T10:14:40Z","endReason":"FLOW_END_REASON_ACTIVE_TIMEOUT","destinationServiceIP":"10.96.10.20","destinationServicePort":80,"packetDeltaCount":2,"reversePacketDeltaCount":4,"octetDeltaCount":1000,"reverseOctetDeltaCount":4000,"egressName":"","egressIP":"","egressNodeName":"","proxySnatIP":"","proxySnatPort":0,"throughput":1600,"reverseThroughput":6400}
+```
+
+All supported JSON fields and selectable columns are listed below. Values
+depend on what the Flow Aggregator received and what it may disclose to you.
+Enum values use their protocol names, as with `flowType`.
+
+| Field | Meaning |
+|-------|---------|
+| `endTime` | When the flow ended, as an RFC3339 timestamp (UTC) |
+| `sourceIP`, `destinationIP` | The addresses of the two endpoints |
+| `protocol` | The IP protocol number (for example 6 for TCP) |
+| `sourcePort`, `destinationPort` | The transport ports |
+| `sourcePodNamespace`, `sourcePodName`, `destinationPodNamespace`, `destinationPodName` | The Pods at the two endpoints, empty for an endpoint that is not a Pod |
+| `destinationServiceName` | The destination Service and port, as `<namespace>/<name>:<port>`, empty if the flow did not go through a Service |
+| `flowType` | `FLOW_TYPE_INTRA_NODE`, `FLOW_TYPE_INTER_NODE`, `FLOW_TYPE_TO_EXTERNAL`, ... |
+| `octetTotalCount`, `reverseOctetTotalCount` | The bytes sent in the direction of the flow, and in the reverse direction |
+| `sourceDisclosure`, `destinationDisclosure` | How much of each endpoint was disclosed to you: `full`, `identity` or `flow` (see [Authorization and redaction](#authorization-and-redaction)) |
+| `sourcePodLabels`, `destinationPodLabels` | Pod labels as JSON objects; `null` when unavailable or withheld, `{}` when known to be empty |
+| `ingressNetworkPolicyNamespace`, `ingressNetworkPolicyName`, `ingressNetworkPolicyType` | The ingress policy applied at the destination; a cluster-scoped policy has an empty Namespace |
+| `egressNetworkPolicyNamespace`, `egressNetworkPolicyName`, `egressNetworkPolicyType` | The egress policy applied at the source; a cluster-scoped policy has an empty Namespace |
+| `ingressNetworkPolicyRuleName`, `egressNetworkPolicyRuleName` | The matching policy rule names, when available and disclosed |
+| `ingressNetworkPolicyRuleAction`, `egressNetworkPolicyRuleAction` | The policy actions: `NETWORK_POLICY_RULE_ACTION_ALLOW`, `NETWORK_POLICY_RULE_ACTION_DROP`, `NETWORK_POLICY_RULE_ACTION_REJECT`, or `NETWORK_POLICY_RULE_ACTION_NO_ACTION` |
+| `tcpState` | TCP connection state, such as `SYN-SENT` or `ESTABLISHED`; empty for other protocols |
+| `sourceNodeName`, `destinationNodeName` | The Nodes hosting the endpoint Pods, when disclosed |
+| `packetTotalCount`, `reversePacketTotalCount` | Cumulative packet counts in each direction |
+| `startTime` | When the flow started, as an RFC3339 timestamp (UTC) |
+| `endReason` | Why the flow record was exported, such as `FLOW_END_REASON_ACTIVE_TIMEOUT` or `FLOW_END_REASON_END_OF_FLOW`; an active timeout does not mean the connection closed |
+| `destinationServiceIP`, `destinationServicePort` | The destination Service address and port, before translation to its backend |
+| `packetDeltaCount`, `reversePacketDeltaCount` | Packet counts since the previous report in each direction |
+| `octetDeltaCount`, `reverseOctetDeltaCount` | Byte counts since the previous report in each direction |
+| `egressName`, `egressIP`, `egressNodeName` | The Egress resource, its SNAT address and the Node holding that address, when disclosed |
+| `proxySnatIP`, `proxySnatPort` | The source address and port after proxy SNAT, when present |
+| `throughput`, `reverseThroughput` | Average traffic rates in bits per second since the previous report in each direction |
+
+Only flow records are sent to stdout. Everything else goes to stderr,
+so that it never mixes with the records, even when piping `-o json` to a file:
+
+* How the Flow Aggregator was discovered and how `antctl observe` connected to
+  it, for example which instance was found, and whether the connection was
+  direct or tunneled.
+* A warning, each time the number of flows dropped since the start has grown,
+  if the Flow Aggregator drops flows because `antctl observe` cannot keep up
+  with it. A script that needs this information has to read stderr.
+
+`--since` takes a duration, which counts back from now (`5m`), or an RFC3339
+timestamp. A timestamp in the future is accepted, but `antctl observe` warns
+about it on stderr.
+
+Without `--follow`, `antctl observe` prints the matching flows the Flow
+Aggregator already holds, then exits successfully. With `--follow`, it keeps
+running until it is interrupted. It also exits successfully once `--max-count`
+flows have been shown.
+
+If the connection to the Flow Aggregator is lost, `antctl observe` exits with an
+error, without attempting a reconnection.
+
+* If the Flow Aggregator's Pod is deleted, or its process exits, the connection
+  is closed, and `antctl observe` exits at once.
+* If the connection is cut without being closed, for example by a network
+  partition, `antctl observe` only notices through its keepalive probes, which
+  it sends every 5 minutes and 30 seconds. It can therefore take up to about
+  5 minutes and 35 seconds to exit.
+* If it is connected through the API server (see
+  [Discovery and connectivity](#discovery-and-connectivity)) and that connection
+  is closed, `antctl observe` exits at once, and the error says that the tunnel was
+  lost, so that the loss of the path to the Flow Aggregator is not mistaken for
+  a failure of the Flow Aggregator itself.
+
+#### Discovery and connectivity
+
+In remote mode, explicitly select a trusted Flow Aggregator Namespace with
+`--flow-aggregator-namespace <namespace>`, or a Service with
+`--flow-aggregator <namespace>/<service-name>`. There is no default Namespace
+or automatic cluster-wide discovery. The command reads the `flow-aggregator-ca`
+ConfigMap in the selected Namespace to verify the server before presenting your
+credentials. Selecting a Namespace means trusting its administrators with those
+credentials: a Namespace editor can publish both a Service and a CA, so discovery
+labels alone cannot establish that trust. The `-n, --namespace` flow filter does
+not select the Flow Aggregator's Namespace.
+
+With `--flow-aggregator-namespace`, the command looks for a Service labeled
+`observability.antrea.io/flow-stream-service=true` in that Namespace. It connects
+to one of its endpoints directly if it is reachable and its TLS certificate can
+be verified (see [Authentication](#authentication)).
+If a direct connection is not possible — for example when running somewhere with
+no route to the cluster's Pods - it transparently falls back to tunneling
+through the Kubernetes API server's `/portforward` subresource, the same
+mechanism `kubectl port-forward` relies on. This behavior can be controlled with
+`--connection-mode`:
+
+* `auto` (default): try a direct connection first, fall back to a tunnel. A
+  direct connection is only accepted if the Flow Aggregator's TLS certificate is
+  verified.
+* `direct`: only ever attempt a direct connection; fail if it does not
+  succeed.
+* `tunnel`: always tunnel through the API server, skipping the direct
+  connection attempt.
+
+If more than one Flow Aggregator is found in the selected Namespace, `antctl observe` will
+refuse to select any service instance and return an error.
+Disambiguate with either `--flow-aggregator-address
+<host:port>` (connect directly, bypassing discovery and the tunnel fallback
+entirely) or `--flow-aggregator <namespace>/<service-name>` (bypass only
+the discovery search). The Service specified with `--flow-aggregator` does not
+need to carry the label. If `--flow-aggregator-namespace` is also supplied, it
+must match the Namespace in `--flow-aggregator`.
+
+With `--flow-aggregator-address`, also pass
+`--flow-aggregator-namespace <namespace>`. The Namespace selects the trusted CA
+ConfigMap and the server name to verify. This explicit selection is required
+even with `--insecure-skip-tls-verify`.
+
+#### Authentication
+
+`antctl observe` authenticates to the Flow Aggregator as you: it forwards the
+credential in your own kubeconfig, so that the Flow Aggregator can resolve your
+real identity. Two kinds of credential in the kubeconfig are supported:
+
+* **A bearer token**, set in the kubeconfig directly or read from a file. It is
+  sent as gRPC metadata and validated by the Flow Aggregator with a
+  `TokenReview`.
+* **A client certificate**, set in the kubeconfig directly or read from files. It
+  is presented as the TLS client certificate of the connection, and verified
+  against the cluster's client CA bundle, so it must be signed by the cluster's
+  own client CA.
+
+Other ways of authenticating, such as an exec plugin, are not supported.
+
+When both a client certificate and a bearer token are configured, both are
+presented. The Flow Aggregator tries the certificate first and falls back to the
+token if the certificate is not accepted, matching Kubernetes authentication.
+Kubeconfigs that request impersonation are rejected because the flow connection
+cannot honor the impersonated identity.
+
+The Flow Aggregator's TLS certificate is verified using its `flow-aggregator-ca`
+ConfigMap. `--insecure-skip-tls-verify` skips this check, which means that
+whoever answers at the address used receives your bearer token.
+`antctl observe` prints a warning when it is set.
+
+#### Permissions to find and reach the Flow Aggregator
+
+Since `antctl observe` acts as you, your identity needs the following permissions
+when the command runs outside the Flow Aggregator's Pod:
+
+* `get` and `list` on Services, to discover the Flow Aggregator (`get` alone
+  is enough with `--flow-aggregator <namespace>/<service-name>`). These permissions
+  are needed only in the explicitly selected Flow Aggregator Namespace.
+* `list` on Pods in the Flow Aggregator's Namespace, to find the Pod behind the
+  Service.
+* `create` on the `pods/portforward` subresource in that Namespace, for the
+  tunnel. It is not needed with `--connection-mode=direct`, nor with
+  `--flow-aggregator-address`.
+* `get` on the `flow-aggregator-ca` ConfigMap in that Namespace, to verify the
+  Flow Aggregator's TLS certificate. It is not needed with
+  `--insecure-skip-tls-verify`.
+
+For example, the following ClusterRole grants all of them. Bind it to your user,
+or group, with a ClusterRoleBinding, to discover the Flow Aggregator in any
+Namespace:
+
+```yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: antctl-observe
+rules:
+  - apiGroups: [""]
+    resources: ["services"]
+    verbs: ["get", "list"]
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["list"]
+  - apiGroups: [""]
+    resources: ["pods/portforward"]
+    verbs: ["create"]
+  - apiGroups: [""]
+    resources: ["configmaps"]
+    resourceNames: ["flow-aggregator-ca"]
+    verbs: ["get"]
+```
+
+To limit the permissions to the Flow Aggregator's Namespace, create the same
+rules as a Role in that Namespace, and bind it with a RoleBinding.
+
+Permission to read the flows themselves is separate: see
+[Authorization and redaction](#authorization-and-redaction).
+
+#### Authorization and redaction
+
+What the Flow Aggregator returns is decided by Kubernetes RBAC on the virtual
+resource `flows` in API group `observability.antrea.io`, as described in
+[Authorizing flow visibility](./network-flow-visibility.md#authorizing-flow-visibility).
+The caller needs `list` on it to read the flows the Flow Aggregator holds, and
+`watch` as well to use `--follow`. Neither is part of the `antctl` ClusterRole:
+bind the `antrea-flow-viewer` ClusterRole, in a Namespace or cluster-wide.
+
+The scope of the request follows `--namespace`:
+
+* With `-n <namespace>`, a flow is shown only if it concerns that Namespace:
+  a request for the connection-initiating Namespace receives the flow; a request
+  for the receiving Namespace sees it only if the connection reached that
+  Namespace boundary, either allowed or dropped by its own policy.
+  At most one Namespace can be given, so a caller with several Namespaces
+  must run the command once per Namespace.
+* Without `-n`, the request is cluster-wide, which needs the permission
+  cluster-wide (a ClusterRoleBinding) and is the only scope that includes flows
+  with no Namespace at all, and in which nothing is redacted.
+
+A scope the caller is not allowed to observe is refused, with the permission
+that is missing in the error message. The Flow Aggregator caches authorization
+decisions, refusals included, for up to ten minutes, so a permission that was
+just granted may keep being refused for that long.
+
+Within a scope, the other end of a flow can be in a Namespace the caller may
+not observe, in which case the Flow Aggregator withholds what the caller is not
+entitled to see of that endpoint. `antctl observe` shows this explicitly, so a
+withheld Pod is not mistaken for an external address: the text output shows
+`<redacted>` in place of the Pod (and of the Service, if any), together with the
+Namespace when the Flow Aggregator disclosed it, and always with the address.
+An endpoint outside the cluster has nothing to withhold and is shown as its
+address. For example, with only the columns that matter here, the second flow
+goes to a Pod in `kube-system` that the caller may not observe, and the third
+one goes outside the cluster:
+
+```text
+SOURCE                              DESTINATION                          SERVICE
+default/frontend-6d4b9c7f58-x2k4p   default/backend-5c8d7b9f64-9pzqm     default/backend:http
+default/frontend-6d4b9c7f58-x2k4p   kube-system/<redacted>(10.244.0.3)   <redacted>
+default/frontend-6d4b9c7f58-x2k4p   93.184.216.34                        -
+```
+
+With `-o json`, every record carries `sourceDisclosure` and
+`destinationDisclosure`, each one of `full`, `identity` or `flow`, and a
+withheld field is empty. An empty field next to `flow` therefore means "not
+disclosed to you", whereas next to `full` it means the value does not exist.
+The second flow above is:
+
+```json
+{"endTime":"2026-05-04T10:15:05Z","sourceIP":"10.244.1.5","destinationIP":"10.244.0.3","protocol":6,"sourcePort":51822,"destinationPort":53,"sourcePodNamespace":"default","sourcePodName":"frontend-6d4b9c7f58-x2k4p","destinationPodNamespace":"kube-system","destinationPodName":"","destinationServiceName":"","flowType":"FLOW_TYPE_INTER_NODE","octetTotalCount":120,"reverseOctetTotalCount":310,"sourceDisclosure":"full","destinationDisclosure":"flow"}
+```
+
+#### Running in-Pod
+
+Running `antctl observe` from inside the Flow Aggregator's own Pod (e.g.
+`kubectl exec -it deploy/flow-aggregator -n flow-aggregator -- antctl observe`)
+skips discovery and tunneling entirely: it connects straight to
+`localhost:14740`, since there is nothing to discover or tunnel to but its own
+`FlowStreamService`. Because of this, the discovery/connection flags —
+`--flow-aggregator-address`, `--flow-aggregator`, `--flow-aggregator-namespace`,
+`--connection-mode` — are rejected in-Pod rather than silently ignored. All
+filtering flags (`-n`, `--pod`, `-l`, `--service`, `--ip`, `--direction`,
+`--flow-type`, `--since`, `--max-count`, `-f`/`--follow`, `-o`, `-c`/`--columns`,
+`--human-readable`) work the same as in remote mode.
+
+Authentication uses the Pod's own ServiceAccount token. Since nothing is
+discovered or tunneled, none of the permissions listed under
+[Permissions to find and reach the Flow Aggregator](#permissions-to-find-and-reach-the-flow-aggregator)
+are needed. TLS verification reads the `flow-aggregator-ca` ConfigMap from the
+Pod's own Namespace, which its ServiceAccount is already permitted to `get` for
+its own certificate management.
+
+The Flow Aggregator's ServiceAccount is bound to the `antrea-flow-viewer`
+ClusterRole. When running in-pod `antctl observer` has cluster-wide access.
+A Flow Aggregator deployed without that binding is refused
+with `PermissionDenied`, until the ServiceAccount is bound to the ClusterRole.
+Adjust the Namespace and the ServiceAccount name in the if the Flow
+Aggregator was deployed with a different Namespace or release name:
+
+```bash
+kubectl create clusterrolebinding flow-aggregator-flow-viewer \
+  --clusterrole antrea-flow-viewer \
+  --serviceaccount flow-aggregator:flow-aggregator
+```
+
+To see the full list of supported options, run `antctl observe --help`.
 
 ### Multi-cluster commands
 
