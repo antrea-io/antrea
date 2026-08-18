@@ -435,7 +435,8 @@ function run_test {
 
   if $flow_visibility; then
       timeout="60m"
-      flow_visibility_args="-run=^(TestFlowExporter|TestFlowAggregator) --flow-visibility --flow-visibility-protocol=$flow_visibility_protocol"
+      #flow_visibility_args="-run=^(TestFlowExporter|TestFlowAggregator) --flow-visibility --flow-visibility-protocol=$flow_visibility_protocol"
+      flow_visibility_args="-run=^(TestFlowExporter|TestFlowAggregator|TestAntctlObserve) --flow-visibility --flow-visibility-protocol=$flow_visibility_protocol"
       # This is needed so that the FlowAggregator is already configured to mount the Secrets
       # necessary for (m)TLS testing. The Secret names must match the ones expected by the e2e tests.
       coverage_flag=""
@@ -444,9 +445,12 @@ function run_test {
       fi
       flow_visibility_manifest_default_args=("--extra-helm-values" "flowCollector.tls.clientSecretName=ipfix-client-cert,flowCollector.tls.caSecretName=ipfix-server-ca")
       $FLOWAGGREGATOR_YML_CMD "${flow_visibility_manifest_default_args[@]}" ${coverage_flag} | docker exec -i kind-control-plane dd of=/root/flow-aggregator.yml
-      # We are generating flow-aggregators for two separate namespaces so we can test forwarding connection details to different destinations
-      $FLOWAGGREGATOR_YML_CMD "${flow_visibility_manifest_default_args[@]}" -n 'flow-aggregator-1' ${coverage_flag} | docker exec -i kind-control-plane dd of=/root/flow-aggregator-1.yml
-      $FLOWAGGREGATOR_YML_CMD "${flow_visibility_manifest_default_args[@]}" -n 'flow-aggregator-2' ${coverage_flag} | docker exec -i kind-control-plane dd of=/root/flow-aggregator-2.yml
+      # We are generating flow-aggregators for two separate namespaces so we can test forwarding connection details to different destinations.
+      # Both use a distinct --release-name: cluster-scoped RBAC object names (ClusterRole/ClusterRoleBinding) are derived from the Helm
+      # release name, not the Namespace, so leaving any two instances (including the single, unnumbered instance above) at the same
+      # release name would make the later manifest overwrite the earlier one's ClusterRoleBinding subjects on apply.
+      $FLOWAGGREGATOR_YML_CMD "${flow_visibility_manifest_default_args[@]}" -n 'flow-aggregator-1' --release-name 'flow-aggregator-1' ${coverage_flag} | docker exec -i kind-control-plane dd of=/root/flow-aggregator-1.yml
+      $FLOWAGGREGATOR_YML_CMD "${flow_visibility_manifest_default_args[@]}" -n 'flow-aggregator-2' --release-name 'flow-aggregator-2' ${coverage_flag} | docker exec -i kind-control-plane dd of=/root/flow-aggregator-2.yml
 
       $HELM template "$FLOW_VISIBILITY_CHART"  | docker exec -i kind-control-plane dd of=/root/flow-visibility.yml
       $HELM template "$FLOW_VISIBILITY_CHART" --set "secureConnection.enable=true" | docker exec -i kind-control-plane dd of=/root/flow-visibility-tls.yml

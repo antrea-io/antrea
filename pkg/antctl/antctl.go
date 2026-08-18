@@ -23,6 +23,7 @@ import (
 	checkinstallation "antrea.io/antrea/v2/pkg/antctl/raw/check/installation"
 	"antrea.io/antrea/v2/pkg/antctl/raw/featuregates"
 	"antrea.io/antrea/v2/pkg/antctl/raw/multicluster"
+	"antrea.io/antrea/v2/pkg/antctl/raw/observe"
 	"antrea.io/antrea/v2/pkg/antctl/raw/packetcapture"
 	"antrea.io/antrea/v2/pkg/antctl/raw/proxy"
 	"antrea.io/antrea/v2/pkg/antctl/raw/set"
@@ -786,6 +787,12 @@ $ antctl get podmulticaststats pod -n namespace`,
 			cobraCommand:      proxy.Command,
 			supportAgent:      false,
 			supportController: true,
+		},
+		{
+			cobraCommand:          observe.Command,
+			supportAgent:          false,
+			supportController:     true,
+			supportFlowAggregator: true,
 		},
 		{
 			cobraCommand:      featuregates.Command,
