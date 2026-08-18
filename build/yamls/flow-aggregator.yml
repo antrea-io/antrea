@@ -408,6 +408,25 @@ roleRef:
   name: system:auth-delegator
   apiGroup: rbac.authorization.k8s.io
 ---
+# Source: flow-aggregator/templates/clusterrolebindings.yaml
+# Required to run "antctl observer" inside the Flow Aggregator Pod, using the Pod's SA.
+# This grant is needed for FlowStreamService's RBAC to pass. It grants access to "flows"
+# at cluster level, which also implies "flows/identity".
+kind: ClusterRoleBinding
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  labels:
+    app: flow-aggregator
+  name: flow-aggregator-flow-viewer
+subjects:
+  - kind: ServiceAccount
+    name: flow-aggregator
+    namespace: flow-aggregator
+roleRef:
+  kind: ClusterRole
+  name: antrea-flow-viewer
+  apiGroup: rbac.authorization.k8s.io
+---
 # Source: flow-aggregator/templates/id-reader-clusterrole.yaml
 kind: ClusterRoleBinding
 apiVersion: rbac.authorization.k8s.io/v1
