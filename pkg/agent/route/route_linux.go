@@ -69,6 +69,10 @@ const (
 	ipsecIKEPort  = 500
 	ipsecNATTPort = 4500
 
+	// nodeNetworkPolicyChainPrefix is the prefix of the chains created for NodeNetworkPolicy, including
+	// the two chains holding the rules which jump to the per-policy ones.
+	nodeNetworkPolicyChainPrefix = "ANTREA-POL"
+
 	// syncDebounceDuration is how long a notification waits in the queue, so that the updates occurring
 	// in quick succession are coalesced into a single sync.
 	syncDebounceDuration = 100 * time.Millisecond
@@ -603,6 +607,7 @@ func (c *Client) syncNetworkConfig(ctx context.Context) {
 		return
 	}
 	c.triggerIPTablesSync()
+	c.cleanupOrphanNodeNetworkPolicyChains()
 	if c.nftables != nil {
 		if err := c.syncNFTables(ctx); err != nil {
 			klog.ErrorS(err, "Failed to sync nftables")
@@ -1123,6 +1128,45 @@ func (c *Client) removeUnexpectedAntreaJumpRule(protocol iptables.Protocol, jump
 
 // syncIPTables ensure that the iptables infrastructure we use is set up.
 // It's idempotent and can safely be called on every startup.
+// cleanupOrphanNodeNetworkPolicyChains deletes the NodeNetworkPolicy chains which are still in the datapath but not
+// in the cache any more. syncIPTables only rewrites the chains the cache knows about, so a chain deleted while a sync
+// was holding an older snapshot is recreated by that sync and nothing removes it afterwards.
+//
+// The datapath is listed before the cache is read, which is what makes this safe: the rules of a chain are stored in
+// the cache before the chain is written to the datapath, so a chain which appears in the listing was already in the
+// cache when the listing was taken, and is not mistaken for an orphan.
+func (c *Client) cleanupOrphanNodeNetworkPolicyChains() {
+	if !c.nodeNetworkPolicyEnabled {
+		return
+	}
+	chainsInDatapath, err := c.iptables.ListChains(c.getIPProtocol(), iptables.FilterTable)
+	if err != nil {
+		klog.ErrorS(err, "Failed to list the chains of the filter table")
+		return
+	}
+	for ipProtocol, chains := range chainsInDatapath {
+		cache := c.iptablesCache.ipv4[featureNodeNetworkPolicy]
+		if iptables.IsIPv6Protocol(ipProtocol) {
+			cache = c.iptablesCache.ipv6[featureNodeNetworkPolicy]
+		}
+		for _, chain := range chains {
+			if !strings.HasPrefix(chain, nodeNetworkPolicyChainPrefix) {
+				continue
+			}
+			if _, exists := cache.Load(chain); exists {
+				continue
+			}
+			// The chain may still be referenced by a jump rule which the next sync will remove, in
+			// which case the deletion fails and is retried on the next period.
+			if err := c.iptables.DeleteChain(ipProtocol, iptables.FilterTable, chain); err != nil {
+				klog.V(2).InfoS("Failed to delete an orphan NodeNetworkPolicy chain, will retry", "chain", chain, "err", err)
+				continue
+			}
+			klog.InfoS("Deleted an orphan NodeNetworkPolicy chain", "chain", chain)
+		}
+	}
+}
+
 func (c *Client) syncIPTables(cleanupStaleJumpRules bool) error {
 	ipProtocol := c.getIPProtocol()
 	jumpRules := []jumpRule{

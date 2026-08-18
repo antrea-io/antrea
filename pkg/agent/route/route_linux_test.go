@@ -397,6 +397,54 @@ func TestNewClientCopiesHostNetworkPorts(t *testing.T) {
 	assert.Equal(t, map[feature]int32{featureAgentAPIServer: 10350}, c.hostNetworkPortRules)
 }
 
+func TestCleanupOrphanNodeNetworkPolicyChains(t *testing.T) {
+	const orphanChain = "ANTREA-POL-RULE-ORPHAN"
+
+	tests := []struct {
+		name                     string
+		nodeNetworkPolicyEnabled bool
+		chainsInDatapath         []string
+		expectedDeletes          []string
+	}{
+		{
+			name:                     "delete the chains which are not in the cache any more",
+			nodeNetworkPolicyEnabled: true,
+			// The first two are seeded in the cache by initNodeNetworkPolicy, the last one is not
+			// managed by Antrea at all.
+			chainsInDatapath: []string{config.NodeNetworkPolicyIngressRulesChain, orphanChain, "KUBE-SERVICES"},
+			expectedDeletes:  []string{orphanChain},
+		},
+		{
+			// Antrea does not own these chains when the feature is disabled, so it must not touch them.
+			name:                     "do nothing when NodeNetworkPolicy is disabled",
+			nodeNetworkPolicyEnabled: false,
+			chainsInDatapath:         []string{orphanChain},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			mockIPTables := iptablestest.NewMockInterface(ctrl)
+			c := &Client{
+				networkConfig:            &config.NetworkConfig{IPv4Enabled: true},
+				nodeNetworkPolicyEnabled: tt.nodeNetworkPolicyEnabled,
+				iptablesCache:            newIPTablesCache(),
+				iptables:                 mockIPTables,
+			}
+			if tt.nodeNetworkPolicyEnabled {
+				c.iptablesCache.ipv4[featureNodeNetworkPolicy].Store(config.NodeNetworkPolicyIngressRulesChain, []string{})
+				mockIPTables.EXPECT().ListChains(iptables.ProtocolIPv4, iptables.FilterTable).Return(
+					map[iptables.Protocol][]string{iptables.ProtocolIPv4: tt.chainsInDatapath}, nil)
+			}
+			for _, chain := range tt.expectedDeletes {
+				mockIPTables.EXPECT().DeleteChain(iptables.ProtocolIPv4, iptables.FilterTable, chain).Return(nil)
+			}
+
+			c.cleanupOrphanNodeNetworkPolicyChains()
+		})
+	}
+}
+
 func TestSyncIPTables(t *testing.T) {
 	mockIPTablesListRulesOfChains := func(mockIPTables *iptablestest.MockInterfaceMockRecorder,
 		protocol iptables.Protocol,
