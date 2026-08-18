@@ -1413,14 +1413,14 @@ func (c *Client) restoreIptablesData(podCIDR *net.IPNet,
 	writeLine(iptablesData, "*filter")
 	writeLine(iptablesData, iptables.MakeChainLine(antreaForwardChain))
 
-	var nodeNetworkPolicyIPTablesChains []string
+	var filterChains []string
 	for chain := range iptablesFiltersRuleByChain {
-		nodeNetworkPolicyIPTablesChains = append(nodeNetworkPolicyIPTablesChains, chain)
+		filterChains = append(filterChains, chain)
 	}
 	if c.deterministic {
-		sort.Strings(nodeNetworkPolicyIPTablesChains)
+		sort.Strings(filterChains)
 	}
-	for _, chain := range nodeNetworkPolicyIPTablesChains {
+	for _, chain := range filterChains {
 		writeLine(iptablesData, iptables.MakeChainLine(chain))
 	}
 
@@ -1453,7 +1453,7 @@ func (c *Client) restoreIptablesData(podCIDR *net.IPNet,
 			"-j", iptables.AcceptTarget,
 		}...)
 	}
-	for _, chain := range nodeNetworkPolicyIPTablesChains {
+	for _, chain := range filterChains {
 		for _, rule := range iptablesFiltersRuleByChain[chain] {
 			writeLine(iptablesData, rule)
 		}
@@ -1890,14 +1890,14 @@ func (c *Client) initAgentClusterMembershipHostNetworkFilterRules() {
 	// necessarily covered by a conntrack rule: the Antrea chains are also traversed when the default policy
 	// of the built-in chain is to drop and no rule accepts established connections.
 	antreaInputChainRules := []string{
-		buildAllowHostIngressPortRule(iptables.ProtocolTCP, &agentClusterMembershipPort, "Antrea: allow Agent cluster memberships input packets"),
+		buildAllowHostIngressPortRule(iptables.ProtocolTCP, &agentClusterMembershipPort, "Antrea: allow Agent cluster memberships TCP input packets"),
 		buildAllowHostIngressReplyPortRule(iptables.ProtocolTCP, port, "Antrea: allow Agent cluster memberships TCP reply input packets"),
-		buildAllowHostIngressPortRule(iptables.ProtocolUDP, &agentClusterMembershipPort, "Antrea: allow Agent cluster memberships input packets"),
+		buildAllowHostIngressPortRule(iptables.ProtocolUDP, &agentClusterMembershipPort, "Antrea: allow Agent cluster memberships UDP input packets"),
 	}
 	antreaOutputChainRules := []string{
-		buildAllowHostEgressPortRule(iptables.ProtocolTCP, &agentClusterMembershipPort, "Antrea: allow Agent cluster memberships output packets"),
+		buildAllowHostEgressPortRule(iptables.ProtocolTCP, &agentClusterMembershipPort, "Antrea: allow Agent cluster memberships TCP output packets"),
 		buildAllowHostEgressReplyPortRule(iptables.ProtocolTCP, port, "Antrea: allow Agent cluster memberships TCP reply packets"),
-		buildAllowHostEgressPortRule(iptables.ProtocolUDP, &agentClusterMembershipPort, "Antrea: allow Agent cluster memberships output packets"),
+		buildAllowHostEgressPortRule(iptables.ProtocolUDP, &agentClusterMembershipPort, "Antrea: allow Agent cluster memberships UDP output packets"),
 	}
 	if c.networkConfig.IPv6Enabled {
 		c.iptablesCache.ipv6[featureAgentClusterMembership].Store(antreaInputChain, antreaInputChainRules)

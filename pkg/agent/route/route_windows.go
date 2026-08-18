@@ -106,7 +106,6 @@ type Client struct {
 }
 
 // NewClient returns a route client.
-// nodeSNATRandomFully and egressSNATRandomFully are ignored on Windows.
 func NewClient(networkConfig *config.NetworkConfig,
 	noSNAT bool,
 	proxyAll bool,
@@ -119,8 +118,9 @@ func NewClient(networkConfig *config.NetworkConfig,
 	nodeSNATRandomFully bool, // ignored
 	egressSNATRandomFully bool, // ignored
 	serviceCIDRProvider servicecidr.Interface,
-	endpointResolver *client.EndpointResolver,
-	hostNetworkPortRules *HostNetworkPortRules) (*Client, error) {
+	endpointResolver *client.EndpointResolver, // ignored
+	hostNetworkPortRules *HostNetworkPortRules, // ignored
+) (*Client, error) {
 	return &Client{
 		networkConfig:               networkConfig,
 		winnet:                      &winnet.Handle{},

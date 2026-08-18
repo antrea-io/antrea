@@ -363,9 +363,9 @@ func TestInitialize(t *testing.T) {
 `
 			}
 			expectedIPTables["filter"] += `-A ANTREA-INPUT -p tcp -m comment --comment "Antrea: allow Agent APIServer input packets" -m tcp --dport 10350 -j ACCEPT
--A ANTREA-INPUT -p tcp -m comment --comment "Antrea: allow Agent cluster memberships input packets" -m tcp --dport 10351 -j ACCEPT
+-A ANTREA-INPUT -p tcp -m comment --comment "Antrea: allow Agent cluster memberships TCP input packets" -m tcp --dport 10351 -j ACCEPT
 -A ANTREA-INPUT -p tcp -m comment --comment "Antrea: allow Agent cluster memberships TCP reply input packets" -m tcp --sport 10351 -m conntrack --ctstate ESTABLISHED -j ACCEPT
--A ANTREA-INPUT -p udp -m comment --comment "Antrea: allow Agent cluster memberships input packets" -m udp --dport 10351 -j ACCEPT
+-A ANTREA-INPUT -p udp -m comment --comment "Antrea: allow Agent cluster memberships UDP input packets" -m udp --dport 10351 -j ACCEPT
 `
 			if tc.networkConfig.TrafficEncapMode.SupportsEncap() {
 				expectedIPTables["filter"] += fmt.Sprintf(`-A ANTREA-OUTPUT -p udp -m comment --comment "Antrea: allow tunnel output packets" -m udp --dport %d -j ACCEPT
@@ -383,9 +383,9 @@ func TestInitialize(t *testing.T) {
 `
 			}
 			expectedIPTables["filter"] += `-A ANTREA-OUTPUT -p tcp -m comment --comment "Antrea: allow Agent APIServer reply packets" -m tcp --sport 10350 -m conntrack --ctstate ESTABLISHED -j ACCEPT
--A ANTREA-OUTPUT -p tcp -m comment --comment "Antrea: allow Agent cluster memberships output packets" -m tcp --dport 10351 -j ACCEPT
+-A ANTREA-OUTPUT -p tcp -m comment --comment "Antrea: allow Agent cluster memberships TCP output packets" -m tcp --dport 10351 -j ACCEPT
 -A ANTREA-OUTPUT -p tcp -m comment --comment "Antrea: allow Agent cluster memberships TCP reply packets" -m tcp --sport 10351 -m conntrack --ctstate ESTABLISHED -j ACCEPT
--A ANTREA-OUTPUT -p udp -m comment --comment "Antrea: allow Agent cluster memberships output packets" -m udp --dport 10351 -j ACCEPT
+-A ANTREA-OUTPUT -p udp -m comment --comment "Antrea: allow Agent cluster memberships UDP output packets" -m udp --dport 10351 -j ACCEPT
 `
 
 			for table, expectedData := range expectedIPTables {
