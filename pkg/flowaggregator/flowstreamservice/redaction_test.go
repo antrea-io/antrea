@@ -116,20 +116,23 @@ func TestRedactFlow_Kubernetes(t *testing.T) {
 		"ingress_network_policy_type", "ingress_network_policy_rule_action",
 		"egress_network_policy_type", "egress_network_policy_rule_action",
 	}
-	sourceIdentity := []string{"source_pod_namespace", "source_pod_name", "source_pod_uid", "source_pod_labels"}
+	// The identity tier adds the endpoint's own identity and the identity of the policy evaluated
+	// on its side; the full tier adds placement, which is what identity deliberately stops short
+	// of.
+	sourceIdentity := []string{
+		"source_pod_namespace", "source_pod_name", "source_pod_uid", "source_pod_labels",
+		"egress_network_policy_namespace", "egress_network_policy_name", "egress_network_policy_uid", "egress_network_policy_rule_name",
+	}
 	sourceFull := []string{
 		"source_node_name", "source_node_uid",
-		"egress_network_policy_namespace", "egress_network_policy_name", "egress_network_policy_uid", "egress_network_policy_rule_name",
 		"egress_name", "egress_ip", "egress_node_name", "egress_node_uid", "egress_uid",
 	}
 	destinationIdentity := []string{
 		"destination_pod_namespace", "destination_pod_name", "destination_pod_uid", "destination_pod_labels",
 		"destination_cluster_ip", "destination_service_ip", "destination_service_port", "destination_service_port_name", "destination_service_uid",
-	}
-	destinationFull := []string{
-		"destination_node_name", "destination_node_uid",
 		"ingress_network_policy_namespace", "ingress_network_policy_name", "ingress_network_policy_uid", "ingress_network_policy_rule_name",
 	}
+	destinationFull := []string{"destination_node_name", "destination_node_uid"}
 
 	tests := []struct {
 		name        string
@@ -324,16 +327,36 @@ func TestRedactFlow_ClusterScopedPolicy(t *testing.T) {
 func TestRedactFlow_EgressPolicyFollowsTheSource(t *testing.T) {
 	f := fullFlow()
 
-	// The source is fully disclosed, the destination is not: the egress policy, evaluated at the
-	// source, survives; the ingress policy, evaluated at the destination, does not.
-	redacted := redactFlow(f, tierFull, tierIdentity)
+	// The source is disclosed, the destination is not: the egress policy, evaluated at the source,
+	// survives; the ingress policy, evaluated at the destination, does not.
+	redacted := redactFlow(f, tierFull, tierFlow)
 	assert.Equal(t, "allow-destination", redacted.GetK8S().GetEgressNetworkPolicyName())
 	assert.Empty(t, redacted.GetK8S().GetIngressNetworkPolicyName())
 
 	// And the other way around.
-	redacted = redactFlow(f, tierIdentity, tierFull)
+	redacted = redactFlow(f, tierFlow, tierFull)
 	assert.Empty(t, redacted.GetK8S().GetEgressNetworkPolicyName())
 	assert.Equal(t, "allow-source", redacted.GetK8S().GetIngressNetworkPolicyName())
+}
+
+// TestRedactFlow_PolicyIdentityIsDisclosedAtTierIdentity pins down where the boundary sits: naming
+// the policy that governed a connection is what "get flows/identity" in the peer's Namespace buys,
+// so that "which of your policies dropped my traffic" is answerable once that Namespace has
+// consented to being identified. Placement is not part of that bargain.
+func TestRedactFlow_PolicyIdentityIsDisclosedAtTierIdentity(t *testing.T) {
+	f := fullFlow()
+
+	redacted := redactFlow(f, tierIdentity, tierIdentity)
+
+	assert.Equal(t, "allow-source", redacted.GetK8S().GetIngressNetworkPolicyName())
+	assert.Equal(t, "ingress-rule", redacted.GetK8S().GetIngressNetworkPolicyRuleName())
+	assert.Equal(t, "allow-destination", redacted.GetK8S().GetEgressNetworkPolicyName())
+	assert.Equal(t, "egress-rule", redacted.GetK8S().GetEgressNetworkPolicyRuleName())
+	// Placement stays behind, on both sides, and so does the Egress applied to the source.
+	assert.Empty(t, redacted.GetK8S().GetSourceNodeName())
+	assert.Empty(t, redacted.GetK8S().GetDestinationNodeName())
+	assert.Empty(t, redacted.GetK8S().GetEgressName())
+	assert.Empty(t, redacted.GetK8S().GetEgressIp())
 }
 
 func TestConnectionAllowed(t *testing.T) {

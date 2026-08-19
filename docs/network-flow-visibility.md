@@ -667,25 +667,34 @@ Two permissions exist:
 | stream that Namespace's flows, and see full detail on its endpoints | `flows`, verbs `list` and `watch` |
 | recognize that Namespace's workloads inside records the subject receives through *other* Namespaces | `flows/identity`, verb `get` |
 
+`flows` in a Namespace implies `flows/identity` there: an endpoint in a Namespace
+the stream was authorized for is disclosed in full, and costs no separate identity
+check. Granting `flows/identity` on its own is for the other case — being
+recognizable inside records someone receives through a *different* Namespace.
+
 `list` authorizes a stream that drains the record buffer and closes; `watch`
 authorizes one that then follows live records. Granting only `list` therefore
-yields history-only access.
+yields history-only access. `watch` is what the gRPC API's `follow` flag maps
+onto.
 
-**A client must name the Namespaces it wants to observe.** Every request carries
-either an explicit list of Namespaces or a cluster-wide flag, and each named
-Namespace is authorized separately. A request naming any Namespace the client may
-not observe is rejected in full, naming the first Namespace that was denied,
-rather than being narrowed to the ones it may. Kubernetes offers no reverse lookup
-from a subject to the Namespaces it may access, so "show me everything I am
-allowed to see" is not something the Flow Aggregator can answer. Cluster scope is
-a single cluster-wide check, which only a ClusterRoleBinding can satisfy.
+**A client must name the scope it wants to observe.** There are two ways to
+consume flows:
 
-One request may name at most 100 Namespaces, and is rejected with
-`INVALID_ARGUMENT` beyond that: each named Namespace costs a `SubjectAccessReview`
-when the stream opens. A subject entitled to more than 100 Namespaces has to open
-more than one stream, or ask for cluster scope. The checks stop at the first
-Namespace that is denied, so the limit only ever binds a client that is authorized
-for everything it names.
+- a subject with cluster-wide visibility sets the cluster-wide flag and streams
+  the flows of every Namespace, including flows with no Namespace at all, over a
+  single stream. This is a single cluster-wide check, which only a
+  ClusterRoleBinding can satisfy;
+- a subject with visibility in individual Namespaces names **one** Namespace per
+  request, and opens one stream per Namespace it wants to observe.
+
+A request naming more than one Namespace is rejected with `INVALID_ARGUMENT`, and
+a request naming a Namespace the client may not observe is rejected with
+`PERMISSION_DENIED` rather than being narrowed to something it may. Kubernetes
+offers no reverse lookup from a subject to the Namespaces it may access, so "show
+me everything I am allowed to see" is not something the Flow Aggregator can
+answer, which is why the scope is always explicit. The same distinction surfaces
+in the Antrea UI: selecting a Namespace is mandatory on the flow visibility tab
+unless the user has cluster-wide visibility.
 
 A record is streamed if either of its endpoints is in the Namespaces the client
 was authorized for. Requiring both would hide exactly the cross-Namespace flows
@@ -709,9 +718,14 @@ kubectl create rolebinding flow-identity -n kube-system \
   --clusterrole antrea-flow-identity-viewer --group system:authenticated
 ```
 
-Neither ClusterRole carries aggregation labels: adding
-`rbac.authorization.k8s.io/aggregate-to-admin` to `antrea-flow-viewer` would hand
-flow visibility to every Namespace administrator in the cluster at once.
+`antrea-flow-viewer` carries `rbac.authorization.k8s.io/aggregate-to-admin`, so a
+Namespace administrator observes their own Namespace's flows without any of the
+bindings above: a Namespace's flows are treated as part of what owning that
+Namespace already entails. A true cluster administrator, holding `*` on `*`, has
+cluster-wide visibility for the same reason. `antrea-flow-identity-viewer` is
+deliberately *not* aggregated: letting another Namespace's workloads be
+recognized is the kind of consent only that Namespace's owner can give, so it
+always takes an explicit binding.
 
 Who currently holds flow visibility can be audited with:
 
@@ -730,8 +744,8 @@ redacted.
 | Tier | Fields | Requires |
 |---|---|---|
 | Flow | addresses, ports, protocol, statistics and throughput, timestamps, flow type, direction, end reason, TCP state, and the **type and action** of the network policies evaluated on the endpoint's side | receiving the record at all |
-| Identity | Namespace, Pod name/UID/labels, Service name/UID/port, and the Service's ClusterIP | `get flows/identity` in the endpoint's Namespace |
-| Full | Node name/UID, network policy namespace/name/UID/rule name, Egress name/IP/Node | the endpoint's Namespace is one the stream was authorized for |
+| Identity | Namespace, Pod name/UID/labels, Service name/UID/port, the Service's ClusterIP, and the network policy namespace/name/UID/rule name | `get flows/identity` in the endpoint's Namespace |
+| Full | Node name/UID, Egress name/IP/Node | the endpoint's Namespace is one the stream was authorized for |
 
 A destination Service's ClusterIP sits at the Identity tier rather than the Flow
 tier, because it maps back to the Service it belongs to, so granting
@@ -746,18 +760,23 @@ An unidentified endpoint keeps its Namespace only if the connection was allowed:
 withholding it for denied connections is what keeps a client from scanning the
 Pod CIDR and mapping IPs to Namespaces by reading back its own denied flows.
 
-A rule *action* is always disclosed, even for a policy the client may not
-otherwise know about: losing it would lose "why did my connection fail", which is
-most of the troubleshooting value, while the policy's name and rule stay hidden
-so that one tenant cannot map another's policies by probing. The policy *type* is
-disclosed with it, so a client can tell whether to escalate to the platform team
-or to the peer.
+A rule *action* and the policy *type* are disclosed at every tier, even for a
+policy the client may not otherwise know about: losing them would lose "why did my
+connection fail", which is most of the troubleshooting value, and knowing whether
+a cluster-scoped or a namespaced policy dropped the connection tells a client
+whether to escalate to the platform team or to the peer. The policy's *identity*
+— its Namespace, name, UID and rule name — comes with the Identity tier, so that
+"which of your policies dropped my traffic" is answerable once the peer's
+Namespace has granted `flows/identity`. Below that tier it stays hidden, which is
+what keeps a client from mapping the policy set of a Namespace that never
+consented to being identified.
 
-Consequently, a client should name every Namespace it is entitled to, not only
-the one under investigation: a subject authorized for `ns-a` and `ns-b` that
-requests only `ns-a` sees `ns-b` endpoints at the Identity tier rather than in
-full. The Namespaces a stream was actually authorized for are reported in the
-first message of the stream.
+Consequently, the same flow looks different depending on which Namespace a stream
+was opened for. A subject authorized for both `ns-a` and `ns-b` sees an
+`ns-a`-to-`ns-b` flow with the `ns-b` endpoint at the Identity tier on its `ns-a`
+stream, and with the `ns-a` endpoint at the Identity tier on its `ns-b` stream;
+only a cluster-wide stream shows both endpoints in full. The scope a stream was
+actually authorized for is reported in the first message of the stream.
 
 #### What administrators should know
 

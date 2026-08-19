@@ -319,10 +319,10 @@ type EndpointDisclosure int32
 const (
 	// Nothing was withheld for this endpoint.
 	EndpointDisclosure_ENDPOINT_DISCLOSURE_UNSPECIFIED EndpointDisclosure = 0
-	// The endpoint's Namespace, Pod and Service identity are disclosed, but not
-	// its Node placement, the network policies evaluated on its side, or the
-	// Egress applied to it. Set when the client holds get on
-	// flows/identity in the endpoint's Namespace, but that Namespace
+	// The endpoint's Namespace, Pod and Service identity are disclosed, along
+	// with the identity of the network policy evaluated on its side, but not its
+	// Node placement or the Egress applied to it. Set when the client holds get
+	// on flows/identity in the endpoint's Namespace, but that Namespace
 	// is not one the stream is authorized to observe flows for.
 	EndpointDisclosure_ENDPOINT_DISCLOSURE_IDENTITY EndpointDisclosure = 1
 	// The endpoint is unidentified: only what the flow itself shows is disclosed
