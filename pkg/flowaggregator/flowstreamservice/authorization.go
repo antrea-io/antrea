@@ -390,7 +390,8 @@ func (sa *StreamAuthorization) authorizeFlow(ctx context.Context, f *flowpb.Flow
 //  1. the Namespace is in the authorized set, which the caller has already established, so
 //     everything the record carries for that endpoint is disclosed, at no API cost;
 //  2. otherwise the client holds get on flows/identity there — one cached SubjectAccessReview —
-//     so the endpoint is identifiable but its placement and policies are not;
+//     so the endpoint and the policy evaluated on its side are identifiable, but its placement is
+//     not;
 //  3. otherwise the endpoint is unidentified.
 //
 // An endpoint with no Namespace at all is unidentified: there is no Namespace whose owner could

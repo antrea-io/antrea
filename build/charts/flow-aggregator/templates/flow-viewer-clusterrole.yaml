@@ -1,23 +1,28 @@
 {{- /*
-antrea-flow-viewer grants access to the flow records streamed by the FlowStreamService. It is
-shipped unbound: it does nothing until an administrator binds it, with a RoleBinding in each
-Namespace whose flows a subject may observe, or with a ClusterRoleBinding for cluster-wide
-visibility. "flows.observability.antrea.io" is a virtual resource, served by no API
-server and existing only to be named here; the Flow Aggregator authorizes each stream against it
-with a SubjectAccessReview.
+antrea-flow-viewer grants access to the flow records streamed by the FlowStreamService.
+"flows.observability.antrea.io" is a virtual resource, served by no API server and existing only
+to be named here; the Flow Aggregator authorizes each stream against it with a
+SubjectAccessReview.
+
+It is aggregated to the built-in "admin" ClusterRole, so a Namespace administrator observes their
+own Namespace's flows without an extra binding: the flows of a Namespace are considered part of
+what owning that Namespace already entails. Subjects that are not Namespace administrators need
+an explicit binding — a RoleBinding in each Namespace whose flows they may observe, or a
+ClusterRoleBinding for cluster-wide visibility. A true cluster administrator, holding "*" on "*",
+has it already by virtue of the wildcard.
+
+Holding "flows" in a Namespace implies "flows/identity" there: an endpoint in a Namespace the
+stream is authorized for is disclosed in full, without a separate identity check.
 
 Granting "list" alone yields history-only access: a client can drain what the record buffer holds
 but cannot follow live flows, which additionally needs "watch".
-
-There are deliberately no aggregation labels: adding
-rbac.authorization.k8s.io/aggregate-to-admin would hand flow visibility to every Namespace
-administrator in the cluster at once.
 */}}
 kind: ClusterRole
 apiVersion: rbac.authorization.k8s.io/v1
 metadata:
   labels:
     app: flow-aggregator
+    rbac.authorization.k8s.io/aggregate-to-admin: "true"
   name: antrea-flow-viewer
 rules:
   - apiGroups: ["observability.antrea.io"]
@@ -26,9 +31,10 @@ rules:
 ---
 {{- /*
 antrea-flow-identity-viewer lets others recognize a Namespace's workloads inside flow records they
-already receive through some other Namespace: Pod and Service identity, but not Node placement or
-network policies. It is meant to be bound with a RoleBinding in the Namespace whose workloads are to
-be identifiable, which is how that Namespace's owner consents to it. It grants nothing on its own,
+already receive through some other Namespace: Pod and Service identity, and the identity of the
+network policy evaluated on that endpoint's side, but not Node placement or the Egress applied to
+it. It is meant to be bound with a RoleBinding in the Namespace whose workloads are to be
+identifiable, which is how that Namespace's owner consents to it. It grants nothing on its own,
 and no binding for it is shipped.
 */}}
 kind: ClusterRole
