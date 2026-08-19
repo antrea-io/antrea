@@ -355,6 +355,7 @@ apiVersion: rbac.authorization.k8s.io/v1
 metadata:
   labels:
     app: flow-aggregator
+    rbac.authorization.k8s.io/aggregate-to-admin: "true"
   name: antrea-flow-viewer
 rules:
   - apiGroups: ["observability.antrea.io"]

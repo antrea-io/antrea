@@ -30,12 +30,14 @@ const (
 	// tierFull discloses everything the record carries for the endpoint. It is not separately
 	// grantable: it rides along on flow visibility into the endpoint's Namespace.
 	tierFull disclosureTier = iota
-	// tierIdentity discloses the endpoint's Namespace, Pod and Service identity, but not its Node
-	// placement, the network policies evaluated on its side, or the Egress applied to it. It is
-	// what "get flows/identity" in the endpoint's Namespace grants: enough for someone to
-	// recognize that Namespace's workloads and write a NetworkPolicy against them, which is the
-	// reason to grant it at all. Placement and policy layout serve neither purpose, so a Namespace
-	// owner granting identity does not hand those over as a side effect.
+	// tierIdentity discloses the endpoint's Namespace, Pod and Service identity, and the identity
+	// of the network policy evaluated on its side, but not its Node placement or the Egress applied
+	// to it. It is what "get flows/identity" in the endpoint's Namespace grants: enough for someone
+	// to recognize that Namespace's workloads and to see which policy governed the connection, so
+	// that "which of your policies dropped my traffic" is answerable between two Namespaces that
+	// have each consented to being identified. Placement stays out of it: co-tenancy is not needed
+	// to author or debug a policy, so a Namespace owner granting identity does not hand it over as
+	// a side effect.
 	tierIdentity
 	// tierFlow discloses only what the flow itself shows: addresses, ports, protocol, statistics,
 	// timestamps, and the type and action of the policies evaluated on the endpoint's side. The
@@ -63,11 +65,14 @@ func (t disclosureTier) disclosure() flowpb.EndpointDisclosure {
 // The copy is necessary because a record is owned by the ring buffer and broadcast to every other
 // stream, so it must never be modified in place.
 //
-// Rule actions are always disclosed, policy identities are not. Withholding the action would lose
-// "why did my connection fail", which is most of the troubleshooting value, and the outcome of the
-// client's own connection is theirs to know. Which rule of which policy produced it is the peer's
-// security configuration, and disclosing rule names would let one tenant map another's policy set
-// by probing and reading back which rule fired.
+// A policy's type and action are disclosed at every tier, its identity from tierIdentity up.
+// Withholding the action would lose "why did my connection fail", which is most of the
+// troubleshooting value, and the outcome of the client's own connection is theirs to know. Naming
+// the policy and rule that produced it is what makes the answer actionable across a Namespace
+// boundary, and it is gated on that Namespace having granted identity: an endpoint left at tierFlow
+// discloses only that *something* of a given type allowed or dropped the connection, so a client
+// cannot map a Namespace's policy set by probing unless that Namespace consented to being
+// identified.
 func redactFlow(f *flowpb.Flow, source, destination disclosureTier) *flowpb.Flow {
 	// Only the Kubernetes sub-message is rewritten, so the copies share every other sub-message
 	// with the original record instead of duplicating it.
@@ -81,15 +86,6 @@ func redactFlow(f *flowpb.Flow, source, destination disclosureTier) *flowpb.Flow
 		// noisy-neighbor and side-channel work, and it is not needed to author a policy.
 		k8s.SourceNodeName = ""
 		k8s.SourceNodeUid = ""
-		// The egress policy is the one evaluated on the source's side, so it follows the source's
-		// tier — whether the policy object itself is namespaced (K8S, ANP) or cluster-scoped
-		// (ACNP, K8SCNP). Its type and action stay: knowing that a cluster-scoped policy dropped
-		// the connection, rather than a namespaced one, tells the client whether to escalate to
-		// the platform team or to the peer, without naming the policy.
-		k8s.EgressNetworkPolicyNamespace = ""
-		k8s.EgressNetworkPolicyName = ""
-		k8s.EgressNetworkPolicyUid = ""
-		k8s.EgressNetworkPolicyRuleName = ""
 		// An Egress applies to the source Pod's outbound traffic, and its IP and Node are
 		// placement.
 		k8s.EgressName = ""
@@ -102,6 +98,15 @@ func redactFlow(f *flowpb.Flow, source, destination disclosureTier) *flowpb.Flow
 		k8s.SourcePodName = ""
 		k8s.SourcePodUid = ""
 		k8s.SourcePodLabels = nil
+		// The egress policy is the one evaluated on the source's side, so it follows the source's
+		// tier — whether the policy object itself is namespaced (K8S, ANP) or cluster-scoped
+		// (ACNP, K8SCNP). Its type and action stay even here: knowing that a cluster-scoped policy
+		// dropped the connection, rather than a namespaced one, tells the client whether to
+		// escalate to the platform team or to the peer, without naming the policy.
+		k8s.EgressNetworkPolicyNamespace = ""
+		k8s.EgressNetworkPolicyName = ""
+		k8s.EgressNetworkPolicyUid = ""
+		k8s.EgressNetworkPolicyRuleName = ""
 		if !allowed {
 			// A denied connection does not reveal where it came from or where it was going. This
 			// closes a Pod-CIDR enumeration oracle: without it, a client could scan the Pod CIDR,
@@ -117,16 +122,16 @@ func redactFlow(f *flowpb.Flow, source, destination disclosureTier) *flowpb.Flow
 	if destination != tierFull {
 		k8s.DestinationNodeName = ""
 		k8s.DestinationNodeUid = ""
-		// The ingress policy is the one evaluated on the destination's side.
-		k8s.IngressNetworkPolicyNamespace = ""
-		k8s.IngressNetworkPolicyName = ""
-		k8s.IngressNetworkPolicyUid = ""
-		k8s.IngressNetworkPolicyRuleName = ""
 	}
 	if destination == tierFlow {
 		k8s.DestinationPodName = ""
 		k8s.DestinationPodUid = ""
 		k8s.DestinationPodLabels = nil
+		// The ingress policy is the one evaluated on the destination's side.
+		k8s.IngressNetworkPolicyNamespace = ""
+		k8s.IngressNetworkPolicyName = ""
+		k8s.IngressNetworkPolicyUid = ""
+		k8s.IngressNetworkPolicyRuleName = ""
 		// The destination Service is identity belonging to the destination's Namespace, and a
 		// ClusterIP maps back to it.
 		k8s.DestinationServicePort = 0
