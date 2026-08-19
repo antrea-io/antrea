@@ -883,6 +883,10 @@ fi
 kind_version=$(kind version | awk  '{print $2}')
 kind_version=${kind_version:1} # strip leading 'v'
 docker_version=$(docker version --format '{{.Server.Version}}' 2>/dev/null || echo "")
+is_podman=false
+if docker info 2>/dev/null | grep -qi podman; then
+    is_podman=true
+fi
 function version_lt() { test "$(printf '%s\n' "$@" | sort -rV | head -n 1)" != "$1"; }
 function version_ge() { test "$(printf '%s\n' "$@" | sort -rV | head -n 1)" == "$1"; }
 if version_lt "$kind_version" "0.12.0" && [[ "$KUBE_PROXY_MODE" == "none" ]]; then
@@ -916,9 +920,21 @@ if [[ $ACTION == "create" ]]; then
     # We mostly replicate what is in:
     # https://github.com/kubernetes-sigs/kind/blob/180d624f741e3da5ceba52b643e29c4e64538537/pkg/cluster/internal/providers/docker/network.go#L149-L160
     # We also add some extra options required for our use case.
-    docker_network_mtu=$(docker network inspect bridge -f '{{ index .Options "com.docker.network.driver.mtu" }}')
+    # Docker's default network is named "bridge"; Podman's docker-compat CLI names its
+    # default network "podman" instead (and reserves the "bridge" name for network mode).
+    # Fall back to a sane default MTU if neither is found.
+    docker_network_mtu=$(docker network inspect bridge -f '{{ index .Options "com.docker.network.driver.mtu" }}' 2>/dev/null || true)
+    if [[ -z "$docker_network_mtu" ]]; then
+        docker_network_mtu=$(docker network inspect podman -f '{{ index .Options "com.docker.network.driver.mtu" }}' 2>/dev/null || true)
+    fi
+    if [[ -z "$docker_network_mtu" ]]; then
+        docker_network_mtu="1500"
+    fi
     docker_network_args=("-d" "bridge")
-    docker_network_args+=("-o" "com.docker.network.bridge.enable_ip_masquerade=true")
+    if [[ "$is_podman" != true ]]; then
+        # Podman bridge networks masquerade by default and reject this docker-specific option.
+        docker_network_args+=("-o" "com.docker.network.bridge.enable_ip_masquerade=true")
+    fi
     docker_network_args+=("-o" "com.docker.network.driver.mtu=$docker_network_mtu")
     # Use nat-unprotected to revert to the legacy default behavior (pre Docker Engine v28)
     # Without this, access to the K8s apiserver from Nodes using a non-default network will be
