@@ -100,12 +100,18 @@ func deployIPFIXCollectorForTest(tb testing.TB, o flowVisibilityTestOptions) str
 }
 
 func setupFlowExporterDestinationTest(tb testing.TB, opt1, opt2 flowVisibilityTestOptions) {
-	tb.Logf("Deploying FlowAggregator with ipfix collector: %s and options: %+v", collector1Addr, opt1)
-	require.NoError(tb, testData.deployFlowAggregator(collector1Addr, nil, nil, nil, opt1), "Failed to deploy flow aggregator", "opts", opt1)
-
+	// Both Cleanup functions are registered before deploying, so that we still tear down (and
+	// collect logs) if one of the deployments fails. Cleanup functions run in LIFO order, so the
+	// log export registered second runs first: this matters because the parent test only exports
+	// logs after all the subtests have completed, by which point teardownFlowAggregator has
+	// already deleted the flow-aggregator Namespaces and the Flow Aggregator logs are gone.
 	tb.Cleanup(func() {
 		teardownFlowAggregator(tb, testData)
 	})
+	tb.Cleanup(exportLogsForSubtest(tb, testData))
+
+	tb.Logf("Deploying FlowAggregator with ipfix collector: %s and options: %+v", collector1Addr, opt1)
+	require.NoError(tb, testData.deployFlowAggregator(collector1Addr, nil, nil, nil, opt1), "Failed to deploy flow aggregator", "opts", opt1)
 
 	tb.Logf("Deploying FlowAggregator with ipfix collector: %s and options: %+v", collector2Addr, opt2)
 	require.NoError(tb, testData.deployFlowAggregator(collector2Addr, nil, nil, nil, opt2), "Failed to deploy flow aggregator", "opts", opt2)
