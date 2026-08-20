@@ -27,6 +27,11 @@
     enabled: true,
   },
 
+  // GitHub vulnerability alerts only reflect the default branch. Supplement them with OSV
+  // checks so direct dependencies vulnerable only on release branches can be updated.
+  // OSV vulnerability alerts are experimental and do not cover indirect dependencies.
+  osvVulnerabilityAlerts: true,
+
   packageRules: [
     // Disable all regular updates for active release branches
     // Don't write any rules before this rule
