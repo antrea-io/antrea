@@ -19,7 +19,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/feature/s3/transfermanager v0.2.2
 	github.com/aws/aws-sdk-go-v2/service/ec2 v1.304.2
 	github.com/aws/aws-sdk-go-v2/service/s3 v1.102.2
-	github.com/cheggaaa/pb/v3 v3.2.0
+	github.com/cheggaaa/pb/v3 v3.2.1
 	github.com/containernetworking/cni v1.3.0
 	github.com/containernetworking/plugins v1.9.1
 	github.com/coreos/go-iptables v0.8.0
@@ -180,8 +180,8 @@ require (
 	github.com/liggitt/tabwriter v0.0.0-20181228230101-89fcab3d43de // indirect
 	github.com/mailru/easyjson v0.7.7 // indirect
 	github.com/mattn/go-colorable v0.1.15 // indirect
-	github.com/mattn/go-isatty v0.0.22 // indirect
-	github.com/mattn/go-runewidth v0.0.24 // indirect
+	github.com/mattn/go-isatty v0.0.24 // indirect
+	github.com/mattn/go-runewidth v0.0.27 // indirect
 	github.com/mdlayher/genetlink v1.3.2 // indirect
 	github.com/mdlayher/netlink v1.7.2 // indirect
 	github.com/mdlayher/socket v0.5.1 // indirect
