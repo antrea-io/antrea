@@ -32,6 +32,7 @@ import (
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/status"
 	"k8s.io/apimachinery/pkg/labels"
+	"k8s.io/apiserver/pkg/endpoints/request"
 	"k8s.io/klog/v2"
 
 	flowpb "antrea.io/antrea/v2/pkg/apis/flow/v1alpha1"
@@ -48,19 +49,53 @@ const (
 // FlowStreamService implements flowpb.FlowStreamServiceServer. Each client
 // connection gets its own independent ring-buffer Consumer, so clients are
 // fully decoupled and a slow client never stalls faster ones.
+//
+// Connecting clients must present valid Kubernetes credentials in gRPC metadata.
+// Supported credentials are either:
+//   - a bearer token in the "authorization" header formatted as "Bearer <token>" (validated via TokenReview), or
+//   - a PEM client certificate+key in the "client-cert-bin"/"client-key-bin" headers (validated via SelfSubjectReview).
+//
+// The call is rejected with codes.Unauthenticated if credentials are missing, malformed, or do not authenticate.
+// This applies whenever the service is constructed with a non-nil StreamServerAuthenticator.
+//
+// The identity authenticated then decides what the client receives: every stream is authorized
+// with Kubernetes RBAC against the virtual "flows.observability.antrea.io" resource, in
+// each Namespace the request names, and each endpoint of each record is disclosed only as far as
+// the client's permissions in that endpoint's Namespace reach (see authorization.go and
+// redaction.go). This applies whenever the service is constructed with a non-nil Authorizer.
 type FlowStreamService struct {
 	flowpb.UnimplementedFlowStreamServiceServer
-	buffer ringbuffer.BroadcastBuffer[*flowpb.Flow]
+	buffer        ringbuffer.BroadcastBuffer[*flowpb.Flow]
+	authenticator *StreamServerAuthenticator
+	authorizer    *Authorizer
 }
 
 // NewFlowStreamService creates a FlowStreamService backed by the given buffer.
-func NewFlowStreamService(buffer ringbuffer.BroadcastBuffer[*flowpb.Flow]) *FlowStreamService {
-	return &FlowStreamService{buffer: buffer}
+// authenticator authenticates clients (bearer token or client cert/key metadata)
+// before GetFlows runs; nil authenticator accepts any client. authorizer decides
+// which records each authenticated client receives, and how much of each record;
+// nil authorizer streams every record to every client.
+//
+// An authenticator without an authorizer is rejected here rather than at request
+// time: that combination would authenticate every client and then stream every
+// record to it unredacted, which is a strictly worse outcome than either having
+// neither (an explicitly unauthenticated service) nor having both. The opposite
+// combination needs no check, because a stream cannot resolve any identity and
+// GetFlows fails closed on it.
+func NewFlowStreamService(buffer ringbuffer.BroadcastBuffer[*flowpb.Flow], authenticator *StreamServerAuthenticator, authorizer *Authorizer) (*FlowStreamService, error) {
+	if authenticator != nil && authorizer == nil {
+		return nil, fmt.Errorf("an authenticator requires an authorizer, or every authenticated client would receive every record unredacted")
+	}
+	return &FlowStreamService{buffer: buffer, authenticator: authenticator, authorizer: authorizer}, nil
 }
 
 // Run starts a dedicated TLS gRPC server for the FlowStreamService on FlowStreamPort.
-// serverCertPEM and serverKeyPEM are the PEM-encoded server certificate and private key;
-// only server-side TLS is used (no client authentication). Run blocks until stopCh is closed.
+// serverCertPEM and serverKeyPEM are the PEM-encoded server certificate and private key,
+// used for server-side TLS. When the service was constructed with a non-nil authenticator,
+// clients must additionally present valid Kubernetes credentials, either a bearer token or
+// a client certificate+key (see FlowStreamService struct comments above), or the call is
+// rejected before GetFlows runs.
+// Run blocks until stopCh is closed.
 func (s *FlowStreamService) Run(serverCertPEM, serverKeyPEM []byte, stopCh <-chan struct{}) error {
 	cert, err := tls.X509KeyPair(serverCertPEM, serverKeyPEM)
 	if err != nil {
@@ -76,7 +111,11 @@ func (s *FlowStreamService) Run(serverCertPEM, serverKeyPEM []byte, stopCh <-cha
 	if err != nil {
 		return fmt.Errorf("failed to listen on %s: %w", addr, err)
 	}
-	server := grpc.NewServer(grpc.Creds(credentials.NewTLS(tlsConfig)))
+	serverOpts := []grpc.ServerOption{grpc.Creds(credentials.NewTLS(tlsConfig))}
+	if s.authenticator != nil {
+		serverOpts = append(serverOpts, grpc.StreamInterceptor(s.authenticator.StreamInterceptor))
+	}
+	server := grpc.NewServer(serverOpts...)
 	flowpb.RegisterFlowStreamServiceServer(server, s)
 
 	var wg sync.WaitGroup
@@ -107,6 +146,25 @@ func (s *FlowStreamService) Run(serverCertPEM, serverKeyPEM []byte, stopCh <-cha
 func (s *FlowStreamService) GetFlows(req *flowpb.GetFlowsRequest, stream flowpb.FlowStreamService_GetFlowsServer) error {
 	ctx := stream.Context()
 
+	// username is only used for logging; what the client may observe is decided by streamAuth.
+	var username string
+	var streamAuth *StreamAuthorization
+	if s.authorizer != nil {
+		u, ok := request.UserFrom(ctx)
+		if !ok {
+			// Only reachable if the service was built with an authorizer but no authenticator,
+			// which the Flow Aggregator never does. Fail closed rather than serve a stream whose
+			// permissions cannot be resolved.
+			return status.Error(codes.Unauthenticated, "no authenticated user for this stream")
+		}
+		username = u.GetName()
+		var err error
+		if streamAuth, err = s.authorizer.NewStreamAuthorization(ctx, u, req); err != nil {
+			klog.V(2).InfoS("Rejected a FlowStreamService client", "user", username, "err", err)
+			return err
+		}
+	}
+
 	var since time.Time
 	if ts := req.GetSince(); ts != nil {
 		since = ts.AsTime()
@@ -127,6 +185,9 @@ func (s *FlowStreamService) GetFlows(req *flowpb.GetFlowsRequest, stream flowpb.
 	}
 
 	klog.InfoS("Client connected to FlowStreamService",
+		"user", username,
+		"namespaces", req.GetNamespaces(),
+		"clusterWide", req.GetClusterWide(),
 		"follow", follow,
 		"since", since,
 		"maxCount", maxCount,
@@ -137,6 +198,15 @@ func (s *FlowStreamService) GetFlows(req *flowpb.GetFlowsRequest, stream flowpb.
 		ringbuffer.WithMaxConsumeDeadline(exporter.ConsumeDeadline),
 	)
 
+	// The scope the stream was opened with is reported before any record, so that a client knows
+	// what it is looking at even if the ring buffer is empty.
+	if streamAuth != nil {
+		if err := stream.Send(&flowpb.GetFlowsResponse{Info: streamAuth.StreamInfo()}); err != nil {
+			klog.InfoS("Send to client failed, closing GetFlows stream", "err", err)
+			return err
+		}
+	}
+
 	sent := 0
 	var totalDropped uint64
 	batch := make([]*flowpb.Flow, internalBatchSize)
@@ -145,6 +215,15 @@ func (s *FlowStreamService) GetFlows(req *flowpb.GetFlowsRequest, stream flowpb.
 		if err := ctx.Err(); err != nil {
 			klog.InfoS("Client disconnected from FlowStreamService", "err", err)
 			return status.FromContextError(err).Err()
+		}
+
+		if streamAuth != nil {
+			// Re-checking the stream's own scope is what makes revoking a grant end a stream that
+			// is already running. It is a no-op except once every revalidationInterval.
+			if err := streamAuth.Revalidate(ctx); err != nil {
+				klog.InfoS("Closing GetFlows stream", "user", username, "err", err)
+				return err
+			}
 		}
 
 		n, dropped, shutdown := consumer.ConsumeMultiple(batch)
@@ -157,7 +236,17 @@ func (s *FlowStreamService) GetFlows(req *flowpb.GetFlowsRequest, stream flowpb.
 
 		var filtered []*flowpb.Flow
 		if n > 0 {
-			filtered = applyFilters(batch[:n], parsedFilters, since)
+			// Authorization runs before the client's own filters, and before the max_count
+			// accounting, so that a record the client may not observe is never counted against the
+			// records it asked for, and so that filters only ever match what it can see. That last
+			// point is also what gives a filter naming a Namespace outside the stream's scope its
+			// meaning: every record here already has an endpoint in scope, so such a filter selects
+			// flows by their peer, and matches only where that peer's Namespace was disclosed.
+			records := batch[:n]
+			if streamAuth != nil {
+				records = streamAuth.Authorize(ctx, records)
+			}
+			filtered = applyFilters(records, parsedFilters, since)
 			if maxCount > 0 && sent+len(filtered) >= maxCount {
 				filtered = filtered[:maxCount-sent]
 			}
@@ -238,7 +327,7 @@ func parseFlowFilter(f *flowpb.FlowFilter) (flowFilter, error) {
 	return pf, nil
 }
 
-// applyFilters returns the subset of flows that pass the since cutoff and match
+// applyFilters returns the subset of flows that pass the "since" cutoff and match
 // ALL of the provided filters (AND semantics across filters). An empty filters
 // slice matches all flows. Note: this function mutates the contents of the
 // flows slice (it uses the slice header as a write target for in-place
@@ -248,7 +337,7 @@ func applyFilters(flows []*flowpb.Flow, filters []flowFilter, since time.Time) [
 	for _, f := range flows {
 		// (*timestamppb.Timestamp).AsTime() is nil-safe and returns the zero time,
 		// which is before any non-zero since value, so flows with a nil EndTs are
-		// correctly excluded when a since cutoff is active.
+		// correctly excluded when a "since" cutoff is active.
 		if !since.IsZero() && f.GetEndTs().AsTime().Before(since) {
 			continue
 		}

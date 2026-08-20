@@ -28,6 +28,8 @@ import (
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/timestamppb"
+	"k8s.io/apiserver/pkg/endpoints/request"
+	"k8s.io/utils/clock"
 
 	flowpb "antrea.io/antrea/v2/pkg/apis/flow/v1alpha1"
 	"antrea.io/antrea/v2/pkg/flowaggregator/exporter"
@@ -54,7 +56,26 @@ func (f *fakeStream) SendMsg(any) error            { return nil }
 func (f *fakeStream) RecvMsg(any) error            { return nil }
 
 func newTestService(buf ringbuffer.BroadcastBuffer[*flowpb.Flow]) *FlowStreamService {
-	return NewFlowStreamService(buf)
+	// Neither an authenticator nor an authorizer: these tests cover filtering and stream lifecycle,
+	// which the constructor allows precisely because it is not a partially-secured service.
+	svc, err := NewFlowStreamService(buf, nil, nil)
+	if err != nil {
+		panic(err)
+	}
+	return svc
+}
+
+// TestNewFlowStreamService_RejectsAuthenticatorWithoutAuthorizer covers the one combination the
+// constructor refuses, since it would authenticate every client and then disclose every record to
+// it in full.
+func TestNewFlowStreamService_RejectsAuthenticatorWithoutAuthorizer(t *testing.T) {
+	buf := ringbuffer.NewBroadcastBuffer[*flowpb.Flow](1)
+	t.Cleanup(func() { buf.Shutdown() })
+
+	svc, err := NewFlowStreamService(buf, &StreamServerAuthenticator{}, nil)
+
+	assert.Error(t, err)
+	assert.Nil(t, svc)
 }
 
 func collectFlows(responses []*flowpb.GetFlowsResponse) []*flowpb.Flow {
@@ -798,6 +819,124 @@ func TestGetFlows_FollowContextCancelled(t *testing.T) {
 			assert.Equal(t, codes.Canceled, st.Code())
 		default:
 			t.Fatal("GetFlows did not return after context cancellation")
+		}
+	})
+}
+
+// newAuthorizedTestService builds a service that authorizes clients from a fixed set of grants,
+// and a stream context carrying the identity those grants are written for. The real clock is used
+// deliberately: inside a synctest bubble it reads the bubble's virtual time, so a test can advance
+// past revalidationInterval with time.Sleep.
+func newAuthorizedTestService(buf ringbuffer.BroadcastBuffer[*flowpb.Flow], grants ...string) (*FlowStreamService, *fakeAuthorizer) {
+	fake := newFakeAuthorizer(grants...)
+	// An authorizer without an authenticator: the identity is injected into the stream context
+	// directly, so that authorization can be exercised without standing up authentication.
+	svc, err := NewFlowStreamService(buf, nil, newAuthorizer(fake, clock.RealClock{}))
+	if err != nil {
+		panic(err)
+	}
+	return svc, fake
+}
+
+func TestGetFlows_ScopeIsAuthorizedAndReported(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		buf := ringbuffer.NewBroadcastBuffer[*flowpb.Flow](64)
+		t.Cleanup(func() { buf.Shutdown() })
+
+		buf.Produce(podFlow("ns-a", "ns-b"))
+		buf.Produce(podFlow("ns-c", "ns-d"))
+
+		svc, _ := newAuthorizedTestService(buf, flowsGrant(listVerb, "ns-a"))
+		stream := newFakeStream(request.WithUser(t.Context(), testUserInfo))
+
+		errCh := make(chan error, 1)
+		go func() {
+			errCh <- svc.GetFlows(&flowpb.GetFlowsRequest{Namespaces: []string{"ns-a"}}, stream)
+		}()
+		time.Sleep(2 * exporter.ConsumeDeadline)
+		synctest.Wait()
+		require.NoError(t, <-errCh)
+
+		// The scope is reported before any record, so a client knows what it is looking at even
+		// when the buffer holds nothing it may see.
+		require.NotEmpty(t, stream.responses)
+		info := stream.responses[0].GetInfo()
+		require.NotNil(t, info)
+		assert.Equal(t, []string{"ns-a"}, info.GetAuthorizedNamespaces())
+		assert.False(t, info.GetClusterWide())
+
+		// Only the record involving ns-a is streamed, with its peer left unidentified.
+		got := collectFlows(stream.responses)
+		require.Len(t, got, 1)
+		assert.Equal(t, "ns-a->ns-b", got[0].GetId())
+		assert.Equal(t, "source-pod", got[0].GetK8S().GetSourcePodName())
+		assert.Empty(t, got[0].GetK8S().GetDestinationPodName())
+		assert.Equal(t, flowpb.EndpointDisclosure_ENDPOINT_DISCLOSURE_FLOW, got[0].GetK8S().GetDestinationDisclosure())
+	})
+}
+
+func TestGetFlows_ScopeDenied(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		buf := ringbuffer.NewBroadcastBuffer[*flowpb.Flow](64)
+		t.Cleanup(func() { buf.Shutdown() })
+		buf.Produce(podFlow("ns-a", "ns-b"))
+
+		svc, _ := newAuthorizedTestService(buf)
+		stream := newFakeStream(request.WithUser(t.Context(), testUserInfo))
+
+		err := svc.GetFlows(&flowpb.GetFlowsRequest{Namespaces: []string{"ns-a"}}, stream)
+
+		assert.Equal(t, codes.PermissionDenied, status.Code(err))
+		// Nothing at all is sent to a client whose request was denied.
+		assert.Empty(t, stream.responses)
+	})
+}
+
+func TestGetFlows_NoAuthenticatedUser(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		buf := ringbuffer.NewBroadcastBuffer[*flowpb.Flow](64)
+		t.Cleanup(func() { buf.Shutdown() })
+
+		svc, _ := newAuthorizedTestService(buf, flowsGrant(listVerb, "ns-a"))
+		stream := newFakeStream(t.Context())
+
+		err := svc.GetFlows(&flowpb.GetFlowsRequest{Namespaces: []string{"ns-a"}}, stream)
+
+		assert.Equal(t, codes.Unauthenticated, status.Code(err))
+	})
+}
+
+func TestGetFlows_RevokedMidStream(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		buf := ringbuffer.NewBroadcastBuffer[*flowpb.Flow](64)
+		t.Cleanup(func() { buf.Shutdown() })
+
+		svc, fake := newAuthorizedTestService(buf, flowsGrant(watchVerb, "ns-a"))
+		stream := newFakeStream(request.WithUser(t.Context(), testUserInfo))
+
+		errCh := make(chan error, 1)
+		go func() {
+			errCh <- svc.GetFlows(&flowpb.GetFlowsRequest{Namespaces: []string{"ns-a"}, Follow: true}, stream)
+		}()
+		time.Sleep(2 * exporter.ConsumeDeadline)
+		synctest.Wait()
+		// The stream is established and stays open while the grant holds.
+		select {
+		case err := <-errCh:
+			t.Fatalf("GetFlows returned early: %v", err)
+		default:
+		}
+
+		fake.revoke(flowsGrant(watchVerb, "ns-a"))
+		time.Sleep(revalidationInterval + exporter.ConsumeDeadline)
+		synctest.Wait()
+
+		select {
+		case err := <-errCh:
+			assert.Equal(t, codes.PermissionDenied, status.Code(err))
+			assert.Contains(t, status.Convert(err).Message(), "was revoked")
+		default:
+			t.Fatal("GetFlows did not return after the grant was revoked")
 		}
 	})
 }
