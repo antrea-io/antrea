@@ -72,7 +72,8 @@ var (
 // flowStreamProvider is the interface used by flowAggregator to start and stop
 // the FlowStreamService.
 type flowStreamProvider interface {
-	Run(serverCertPEM, serverKeyPEM []byte, stopCh <-chan struct{}) error
+	Listen() (net.Listener, error)
+	Run(lis net.Listener, serverCertPEM, serverKeyPEM []byte, stopCh <-chan struct{}, setState func(flowstreamservice.State)) error
 }
 
 // exporterHandle tracks the lifecycle of a running exporter goroutine.
@@ -131,13 +132,19 @@ type flowAggregator struct {
 	// flowStreamAuthenticator authenticates FlowStreamService clients.
 	flowStreamAuthenticator *flowstreamservice.StreamServerAuthenticator
 	// flowStreamLimits are the concurrent stream caps the authenticator was built with.
-	flowStreamLimits    flowstreamservice.StreamLimits
-	ipfixHandle         *exporterHandle
-	clickHouseHandle    *exporterHandle
-	s3Handle            *exporterHandle
-	logHandle           *exporterHandle
-	exportersMutex      sync.Mutex
-	certificateProvider *certificate.Provider
+	flowStreamLimits flowstreamservice.StreamLimits
+	// flowStreamServiceState is the flowstreamservice.State FlowStreamService last reported. It
+	// starts as StateStarting, i.e. before flowStreamService.Run is ever called for the first time.
+	// Read by FlowStreamServiceReady and FlowStreamServiceLive, which are what the Flow
+	// Aggregator's own apiserver readyz/livez checks call (see pkg/flowaggregator/apiserver) —
+	// flowStreamService itself has no HTTP-serving responsibility of its own.
+	flowStreamServiceState atomic.Int32
+	ipfixHandle            *exporterHandle
+	clickHouseHandle       *exporterHandle
+	s3Handle               *exporterHandle
+	logHandle              *exporterHandle
+	exportersMutex         sync.Mutex
+	certificateProvider    *certificate.Provider
 }
 
 func NewFlowAggregator(
@@ -371,10 +378,19 @@ func (fa *flowAggregator) runFlowStreamService(stopCh <-chan struct{}) {
 		}
 
 		_, serverCert, serverKey := fa.certificateProvider.GetTLSConfig()
+		lis, err := fa.flowStreamService.Listen()
+		if err != nil {
+			// Nothing retries this until the next certificate update, so report it as a failure,
+			// which fails the liveness probe and gets the container restarted, rather than leaving
+			// the Flow Aggregator running with a FlowStreamService that is never going to serve.
+			klog.ErrorS(err, "FlowStreamService failed to start")
+			fa.setFlowStreamServiceState(flowstreamservice.StateFailed)
+			continue
+		}
 		svcWg.Add(1)
 		go func() {
 			defer svcWg.Done()
-			if err := fa.flowStreamService.Run(serverCert, serverKey, svcStopCh); err != nil {
+			if err := fa.flowStreamService.Run(lis, serverCert, serverKey, svcStopCh, fa.setFlowStreamServiceState); err != nil {
 				klog.ErrorS(err, "FlowStreamService failed to start")
 			}
 		}()
@@ -844,6 +860,34 @@ func (fa *flowAggregator) GetRecordMetrics() querier.Metrics {
 	metrics.WithLogExporter = fa.logHandle != nil
 	metrics.WithIPFIXExporter = fa.ipfixHandle != nil
 	return metrics
+}
+
+func (fa *flowAggregator) setFlowStreamServiceState(state flowstreamservice.State) {
+	fa.flowStreamServiceState.Store(int32(state))
+}
+
+// FlowStreamServiceReady reports whether FlowStreamService is currently serving. When the
+// feature is disabled entirely (flowStreamService is nil), it reports true unconditionally: the
+// chart installs the probes whether or not flowStreamService.enable is set, so a disabled feature
+// must not leave the Pod perpetually unready.
+func (fa *flowAggregator) FlowStreamServiceReady() bool {
+	if fa.flowStreamService == nil {
+		return true
+	}
+	return flowstreamservice.State(fa.flowStreamServiceState.Load()) == flowstreamservice.StateServing
+}
+
+// FlowStreamServiceLive reports whether FlowStreamService is in a state a restart could not
+// improve on. It is false only once FlowStreamService has failed, i.e. it could not start or
+// stopped serving on its own, which nothing retries before the next certificate update: restarting
+// the process is then the only recovery. Not serving yet (still starting, or draining after a
+// certificate update) is not a failure. As for FlowStreamServiceReady, it reports true when the
+// feature is disabled entirely.
+func (fa *flowAggregator) FlowStreamServiceLive() bool {
+	if fa.flowStreamService == nil {
+		return true
+	}
+	return flowstreamservice.State(fa.flowStreamServiceState.Load()) != flowstreamservice.StateFailed
 }
 
 func (fa *flowAggregator) watchConfiguration(stopCh <-chan struct{}) {

@@ -20,6 +20,7 @@ package flowstreamservice
 import (
 	"context"
 	"crypto/tls"
+	"errors"
 	"fmt"
 	"net"
 	"net/netip"
@@ -47,6 +48,27 @@ const (
 	internalBatchSize = exporter.ConsumeMultipleBatchSize
 	// flowStreamPort is the port on which the FlowStreamService gRPC server listens.
 	flowStreamPort = 14740
+)
+
+// State is where a FlowStreamService server is in its serving lifecycle. The Flow Aggregator maps
+// it onto its readiness and liveness probes: only StateServing is ready, and only StateFailed is
+// not live.
+type State int32
+
+const (
+	// StateStarting is the zero value: the server has not started serving yet. This is also where
+	// it stays if Run is never called, e.g. while the server certificate is not available yet,
+	// which is a wait, not a failure, so it is neither ready nor restart-worthy.
+	StateStarting State = iota
+	// StateServing means the listener is bound and the gRPC server is serving on it.
+	StateServing
+	// StateStopping means the server was asked to stop and is draining its connections, which can
+	// last as long as a client keeps a stream open. The listener is already closed or about to be,
+	// so the server is not ready, but this is a deliberate stop and not a failure.
+	StateStopping
+	// StateFailed means the server could not start or stopped serving on its own. Nothing retries
+	// it until the next certificate update, so the only recovery is a restart of the process.
+	StateFailed
 )
 
 // FlowStreamService implements flowpb.FlowStreamServiceServer. Each client
@@ -128,14 +150,54 @@ func newFlowStreamServiceWithoutAuthentication(buffer ringbuffer.BroadcastBuffer
 	}
 }
 
-// Run starts a dedicated TLS gRPC server for the FlowStreamService on FlowStreamPort.
-// serverCertPEM and serverKeyPEM are the PEM-encoded server certificate and private key.
+// Listen binds the TCP listener on FlowStreamPort for Run. It is separate from Run so that the
+// caller can tell a failure to bind, which is permanent, from the server's own lifecycle, and so
+// that Run can be exercised without a real socket.
+func (s *FlowStreamService) Listen() (net.Listener, error) {
+	addr := fmt.Sprintf("0.0.0.0:%d", flowStreamPort)
+	// #nosec G102: binding to all network interfaces is intentional
+	lis, err := net.Listen("tcp", addr)
+	if err != nil {
+		return nil, fmt.Errorf("failed to listen on %s: %w", addr, err)
+	}
+	return lis, nil
+}
+
+// Run starts a dedicated TLS gRPC server for the FlowStreamService on lis, which it takes
+// ownership of (it is closed when Run returns). serverCertPEM and serverKeyPEM are the PEM-encoded
+// server certificate and private key.
 // When the service was constructed with a non-nil authenticator, clients must present a valid
 // Kubernetes bearer token or client certificate, or the call is rejected before GetFlows runs.
 // Run blocks until stopCh is closed.
-func (s *FlowStreamService) Run(serverCertPEM, serverKeyPEM []byte, stopCh <-chan struct{}) error {
+//
+// setState is called as the server moves through its lifecycle, so that the caller can back it
+// with something a readiness/liveness check can read live (e.g. an atomic's Store method); Run
+// itself has no probe-serving responsibility, see pkg/flowaggregator/apiserver, which is what
+// actually exposes this over HTTP:
+//   - StateServing once the server is about to serve on the already-bound listener.
+//   - StateStopping as soon as stopCh is closed, before the graceful stop starts. The graceful
+//     stop closes the listener at its start but only returns once every connection has drained,
+//     which is as long as a client keeps a stream open, so waiting for it would leave the server
+//     reported as serving long after it refuses new connections.
+//   - StateFailed if the key pair cannot be used, or if Serve returns an error. Once reported,
+//     StateFailed is final for this call: a later stop does not overwrite it.
+func (s *FlowStreamService) Run(lis net.Listener, serverCertPEM, serverKeyPEM []byte, stopCh <-chan struct{}, setState func(State)) error {
+	var mu sync.Mutex
+	failed := false
+	transition := func(state State) {
+		mu.Lock()
+		defer mu.Unlock()
+		if failed {
+			return
+		}
+		failed = state == StateFailed
+		setState(state)
+	}
+
 	cert, err := tls.X509KeyPair(serverCertPEM, serverKeyPEM)
 	if err != nil {
+		lis.Close()
+		transition(StateFailed)
 		return fmt.Errorf("failed to parse server TLS key pair: %w", err)
 	}
 	tlsConfig := &tls.Config{
@@ -149,12 +211,8 @@ func (s *FlowStreamService) Run(serverCertPEM, serverKeyPEM []byte, stopCh <-cha
 		// failure. ClientCAs is left unset for the same reason.
 		ClientAuth: tls.RequestClientCert,
 	}
-	addr := fmt.Sprintf("0.0.0.0:%d", flowStreamPort)
-	// #nosec G102: binding to all network interfaces is intentional
-	lis, err := net.Listen("tcp", addr)
-	if err != nil {
-		return fmt.Errorf("failed to listen on %s: %w", addr, err)
-	}
+	transition(StateServing)
+
 	serverOpts := []grpc.ServerOption{
 		grpc.Creds(credentials.NewTLS(tlsConfig)),
 		grpc.UnaryInterceptor(rejectUnaryRPC),
@@ -174,12 +232,20 @@ func (s *FlowStreamService) Run(serverCertPEM, serverKeyPEM []byte, stopCh <-cha
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		klog.InfoS("Starting FlowStreamService gRPC server", "addr", addr)
-		if err := server.Serve(lis); err != nil {
-			klog.ErrorS(err, "FlowStreamService gRPC server failed to start")
+		klog.InfoS("Starting FlowStreamService gRPC server", "addr", lis.Addr())
+		// Serve returns nil if Stop or GracefulStop is called while it is serving, and an error
+		// otherwise, in which case the server is no longer reachable and will not recover on its
+		// own. The exception is grpc.ErrServerStopped, which Serve returns when the stop ran
+		// first, i.e. when stopCh was already closed (or closed right away) and GracefulStop beat
+		// this goroutine to Serve. That is a stop, not a failure, and it can only happen once Run
+		// has been asked to stop, so it cannot hide a real failure.
+		if err := server.Serve(lis); err != nil && !errors.Is(err, grpc.ErrServerStopped) {
+			klog.ErrorS(err, "FlowStreamService gRPC server failed")
+			transition(StateFailed)
 		}
 	}()
 	<-stopCh
+	transition(StateStopping)
 	// GracefulStop waits for all active GetFlows RPCs to return before shutting
 	// down. Active streams will drain naturally because the ring buffer shutdown
 	// (triggered by the flow aggregator) causes every consumer's ConsumeMultiple
