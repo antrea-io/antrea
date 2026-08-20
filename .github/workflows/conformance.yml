@@ -36,15 +36,28 @@ on:
         type: boolean
         default: false
       runner:
-        description: The Github runner to use for the workflow
-        default: ubuntu-latest
+        description: >-
+          The Github runner label to use. Leave empty to automatically select
+          the runner based on antrea-image-platform: linux/amd64 -> ubuntu-latest,
+          linux/arm64 -> oracle-vm-2cpu-8gb-arm64. Otherwise
+          specify a runner label available to the repository, e.g. ubuntu-latest,
+          ubuntu-24.04-arm, oracle-vm-2cpu-8gb-arm64. The runner's architecture
+          must match antrea-image-platform: the Kind cluster created by this
+          workflow runs on the runner's native architecture, so a mismatch
+          would leave the Antrea images unexecutable and the tests will fail.
+          A label with no registered runner will leave the job queued forever.
+        required: false
+        default: ""
       antrea-image-platform:
-        description: Platform argument to provide when building the Antrea images
+        description: >-
+          Platform argument to provide when building the Antrea images. It must
+          match the runner architecture, as the Kind cluster created by this
+          workflow runs on the runner's native architecture (Kind does not
+          provide arm/v7 node images, so linux/arm/v7 cannot be tested).
         type: choice
         options:
           - "linux/amd64"
           - "linux/arm64"
-          - "linux/arm/v7"
         default: "linux/amd64"
         required: true
 
@@ -52,7 +65,7 @@ on:
 jobs:
   test:
     name: Run tests
-    runs-on: ${{ inputs.runner }}
+    runs-on: ${{ inputs.runner != '' && inputs.runner || (inputs.antrea-image-platform == 'linux/arm64' && 'oracle-vm-2cpu-8gb-arm64') || 'ubuntu-latest' }}
     steps:
       - name: Free disk space
         # https://github.com/actions/virtual-environments/issues/709
