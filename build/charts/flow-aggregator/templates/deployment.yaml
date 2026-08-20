@@ -111,6 +111,38 @@ spec:
             containerPort: 14740
             protocol: TCP
           {{- end }}
+          - name: api
+            containerPort: {{ .Values.apiServer.apiPort }}
+            protocol: TCP
+        readinessProbe:
+          # Backed by a healthz.HealthChecker reflecting FlowStreamService's own state (see
+          # pkg/flowaggregator/apiserver), not by a check on this port itself: unlike
+          # antrea-agent/antrea-controller, this apiserver has no independent liveness concern of
+          # its own beyond FlowStreamService, which is the only thing actually worth probing here.
+          # Always present, even when flowStreamService.enable is false: the check itself reports
+          # healthy when the feature is disabled, so there is nothing to gate on here.
+          #
+          # No "host" override here (unlike antrea-agent/antrea-controller's own probes): those
+          # always run with hostNetwork true, so "localhost" resolves to the same network
+          # namespace for both kubelet and Pod. flow-aggregator does not (hostNetwork defaults to
+          # false), so an explicit "localhost" would have the kubelet dial its own Node instead of
+          # the Pod. Leaving "host" unset defaults to the Pod IP, which is correct either way.
+          httpGet:
+            path: /readyz
+            port: api
+            scheme: HTTPS
+          initialDelaySeconds: 5
+          timeoutSeconds: 5
+          periodSeconds: 10
+          failureThreshold: 5
+        livenessProbe:
+          httpGet:
+            path: /livez
+            port: api
+            scheme: HTTPS
+          timeoutSeconds: 5
+          periodSeconds: 10
+          failureThreshold: 5
         volumeMounts:
         - mountPath: /etc/flow-aggregator
           name: flow-aggregator-config

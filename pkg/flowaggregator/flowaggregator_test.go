@@ -969,6 +969,27 @@ func TestFlowAggregator_GetRecordMetrics(t *testing.T) {
 	assert.Equal(t, want, got)
 }
 
+func TestFlowAggregator_FlowStreamServiceReady(t *testing.T) {
+	t.Run("feature disabled entirely: always ready, regardless of flowStreamServiceReady", func(t *testing.T) {
+		fa := &flowAggregator{flowStreamService: nil}
+		assert.True(t, fa.FlowStreamServiceReady())
+
+		fa.flowStreamServiceReady.Store(true)
+		assert.True(t, fa.FlowStreamServiceReady(), "must stay true even if the never-consulted field happens to be true")
+	})
+
+	t.Run("feature enabled: reflects flowStreamServiceReady", func(t *testing.T) {
+		fa := &flowAggregator{flowStreamService: &fakeFlowStreamService{}}
+		assert.False(t, fa.FlowStreamServiceReady())
+
+		fa.flowStreamServiceReady.Store(true)
+		assert.True(t, fa.FlowStreamServiceReady())
+
+		fa.flowStreamServiceReady.Store(false)
+		assert.False(t, fa.FlowStreamServiceReady())
+	})
+}
+
 func TestFlowAggregator_InitCollectors(t *testing.T) {
 	tests := []struct {
 		name                        string
@@ -1256,9 +1277,11 @@ type fakeFlowStreamService struct {
 	runCount atomic.Int64
 }
 
-func (f *fakeFlowStreamService) Run(_, _ []byte, stopCh <-chan struct{}) error {
+func (f *fakeFlowStreamService) Run(_, _ []byte, stopCh <-chan struct{}, setReady func(bool)) error {
 	f.runCount.Add(1)
+	setReady(true)
 	<-stopCh
+	setReady(false)
 	return nil
 }
 
@@ -1325,6 +1348,9 @@ func TestFlowAggregator_runFlowStreamService(t *testing.T) {
 		fssCh <- struct{}{}
 		synctest.Wait()
 		assert.Equal(t, int64(1), fakeRunner.runCount.Load(), "Run should start after cert update signal")
+		// Confirms the real wiring, not just the fake: runFlowStreamService must pass
+		// fa.flowStreamServiceReady.Store itself as Run's setReady callback.
+		assert.True(t, fa.flowStreamServiceReady.Load(), "flowStreamServiceReady should reflect the running fake server")
 	})
 }
 

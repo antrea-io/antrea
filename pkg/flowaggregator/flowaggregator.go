@@ -72,7 +72,7 @@ var (
 // flowStreamProvider is the interface used by flowAggregator to start and stop
 // the FlowStreamService.
 type flowStreamProvider interface {
-	Run(serverCertPEM, serverKeyPEM []byte, stopCh <-chan struct{}) error
+	Run(serverCertPEM, serverKeyPEM []byte, stopCh <-chan struct{}, setReady func(bool)) error
 }
 
 // exporterHandle tracks the lifecycle of a running exporter goroutine.
@@ -126,14 +126,21 @@ type flowAggregator struct {
 	logTickerDuration time.Duration
 	recordCh          chan *flowpb.Flow
 
-	recordBuffer        ringbuffer.BroadcastBuffer[*flowpb.Flow]
-	flowStreamService   flowStreamProvider
-	ipfixHandle         *exporterHandle
-	clickHouseHandle    *exporterHandle
-	s3Handle            *exporterHandle
-	logHandle           *exporterHandle
-	exportersMutex      sync.Mutex
-	certificateProvider *certificate.Provider
+	recordBuffer      ringbuffer.BroadcastBuffer[*flowpb.Flow]
+	flowStreamService flowStreamProvider
+	// flowStreamServiceReady reflects whether FlowStreamService is currently serving: false before
+	// its listener is bound (including before flowStreamService.Run is ever called for the first
+	// time), true once bound, false again if Run's Serve call ever returns. Read by
+	// FlowStreamServiceReady, which is what the Flow Aggregator's own apiserver readyz/livez checks
+	// call (see pkg/flowaggregator/apiserver) — flowStreamService itself has no HTTP-serving
+	// responsibility of its own.
+	flowStreamServiceReady atomic.Bool
+	ipfixHandle            *exporterHandle
+	clickHouseHandle       *exporterHandle
+	s3Handle               *exporterHandle
+	logHandle              *exporterHandle
+	exportersMutex         sync.Mutex
+	certificateProvider    *certificate.Provider
 }
 
 func NewFlowAggregator(
@@ -353,7 +360,7 @@ func (fa *flowAggregator) runFlowStreamService(stopCh <-chan struct{}) {
 		svcWg.Add(1)
 		go func() {
 			defer svcWg.Done()
-			if err := fa.flowStreamService.Run(serverCert, serverKey, svcStopCh); err != nil {
+			if err := fa.flowStreamService.Run(serverCert, serverKey, svcStopCh, fa.flowStreamServiceReady.Store); err != nil {
 				klog.ErrorS(err, "FlowStreamService failed to start")
 			}
 		}()
@@ -813,6 +820,18 @@ func (fa *flowAggregator) GetRecordMetrics() querier.Metrics {
 	metrics.WithLogExporter = fa.logHandle != nil
 	metrics.WithIPFIXExporter = fa.ipfixHandle != nil
 	return metrics
+}
+
+// FlowStreamServiceReady reports whether FlowStreamService is currently serving. When the
+// feature is disabled entirely (flowStreamService is nil), it reports true unconditionally: a
+// readiness/liveness check must not report perpetually unhealthy for a feature that was never
+// supposed to run in the first place, which matters because a user could add this same probe to
+// a Deployment manually (bypassing the chart's own conditional gating of the container port).
+func (fa *flowAggregator) FlowStreamServiceReady() bool {
+	if fa.flowStreamService == nil {
+		return true
+	}
+	return fa.flowStreamServiceReady.Load()
 }
 
 func (fa *flowAggregator) watchConfiguration(stopCh <-chan struct{}) {

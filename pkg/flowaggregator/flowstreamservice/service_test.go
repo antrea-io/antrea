@@ -17,7 +17,9 @@ package flowstreamservice
 import (
 	"context"
 	"fmt"
+	"net"
 	"net/netip"
+	"sync"
 	"testing"
 	"testing/synctest"
 	"time"
@@ -32,6 +34,7 @@ import (
 	flowpb "antrea.io/antrea/v2/pkg/apis/flow/v1alpha1"
 	"antrea.io/antrea/v2/pkg/flowaggregator/exporter"
 	"antrea.io/antrea/v2/pkg/flowaggregator/ringbuffer"
+	"antrea.io/antrea/v2/pkg/util/tlstest"
 )
 
 // fakeStream implements flowpb.FlowStreamService_GetFlowsServer.
@@ -800,4 +803,112 @@ func TestGetFlows_FollowContextCancelled(t *testing.T) {
 			t.Fatal("GetFlows did not return after context cancellation")
 		}
 	})
+}
+
+// readyRecorder records every value Run passes to setReady, in call order. Safe for concurrent
+// use: Run calls it both from its own top-level flow and from the goroutine running Serve.
+type readyRecorder struct {
+	mu     sync.Mutex
+	values []bool
+}
+
+func (r *readyRecorder) set(v bool) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.values = append(r.values, v)
+}
+
+func (r *readyRecorder) snapshot() []bool {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return append([]bool(nil), r.values...)
+}
+
+func (r *readyRecorder) last() (bool, bool) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if len(r.values) == 0 {
+		return false, false
+	}
+	return r.values[len(r.values)-1], true
+}
+
+// TestRun_ReadyTransitionsAndShutdown exercises Run end to end over its real, hardcoded port
+// (flowStreamPort is a constant, not a parameter, so there is no simpler way to inject an
+// ephemeral one without a larger refactor than this test warrants): confirms setReady(false) is
+// called first, setReady(true) only once the TLS listener is genuinely reachable, and
+// setReady(false) again once a graceful shutdown completes.
+func TestRun_ReadyTransitionsAndShutdown(t *testing.T) {
+	certPEM, keyPEM, err := tlstest.GenerateCert([]string{"127.0.0.1"}, time.Now(), time.Hour, true, false, 0, "P256", false)
+	require.NoError(t, err)
+
+	buf := ringbuffer.NewBroadcastBuffer[*flowpb.Flow](64)
+	t.Cleanup(func() { buf.Shutdown() })
+	svc := NewFlowStreamService(buf)
+
+	rec := &readyRecorder{}
+	stopCh := make(chan struct{})
+	errCh := make(chan error, 1)
+	go func() { errCh <- svc.Run(certPEM, keyPEM, stopCh, rec.set) }()
+
+	// Poll rather than sleep a fixed duration: proves the TLS port is genuinely reachable by the
+	// time setReady(true) is expected to have been called, without hardcoding how long Run takes
+	// to bind its listener.
+	require.Eventually(t, func() bool {
+		conn, err := net.DialTimeout("tcp", fmt.Sprintf("127.0.0.1:%d", flowStreamPort), 200*time.Millisecond)
+		if err != nil {
+			return false
+		}
+		conn.Close()
+		last, ok := rec.last()
+		return ok && last
+	}, 5*time.Second, 10*time.Millisecond, "TLS port never became reachable with setReady(true) already observed")
+
+	close(stopCh)
+	select {
+	case runErr := <-errCh:
+		require.NoError(t, runErr)
+	case <-time.After(5 * time.Second):
+		t.Fatal("Run did not return after stopCh was closed")
+	}
+
+	assert.Equal(t, []bool{false, true, false}, rec.snapshot())
+
+	_, err = net.DialTimeout("tcp", fmt.Sprintf("127.0.0.1:%d", flowStreamPort), 500*time.Millisecond)
+	assert.Error(t, err, "TLS port should no longer be listening after a graceful shutdown")
+}
+
+// TestRun_TLSListenFailure covers Run's listener-bind error path: setReady(true) must never be
+// called if the listener never actually bound.
+func TestRun_TLSListenFailure(t *testing.T) {
+	blocker, err := net.Listen("tcp", fmt.Sprintf("0.0.0.0:%d", flowStreamPort))
+	require.NoError(t, err)
+	defer blocker.Close()
+
+	certPEM, keyPEM, err := tlstest.GenerateCert([]string{"127.0.0.1"}, time.Now(), time.Hour, true, false, 0, "P256", false)
+	require.NoError(t, err)
+
+	buf := ringbuffer.NewBroadcastBuffer[*flowpb.Flow](64)
+	t.Cleanup(func() { buf.Shutdown() })
+	svc := NewFlowStreamService(buf)
+
+	rec := &readyRecorder{}
+	runErr := svc.Run(certPEM, keyPEM, make(chan struct{}), rec.set)
+	require.Error(t, runErr)
+	assert.Contains(t, runErr.Error(), "failed to listen")
+	assert.Equal(t, []bool{false}, rec.snapshot())
+}
+
+// TestRun_InvalidCert covers Run's earliest error path (bad TLS key pair): setReady(false) is
+// still called once (it is the very first thing Run does), but never flips to true.
+func TestRun_InvalidCert(t *testing.T) {
+	buf := ringbuffer.NewBroadcastBuffer[*flowpb.Flow](64)
+	t.Cleanup(func() { buf.Shutdown() })
+	svc := NewFlowStreamService(buf)
+
+	rec := &readyRecorder{}
+	err := svc.Run([]byte("not a cert"), []byte("not a key"), make(chan struct{}), rec.set)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "failed to parse server TLS key pair")
+	assert.Equal(t, []bool{false}, rec.snapshot())
 }

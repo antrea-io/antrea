@@ -1,4 +1,4 @@
-// Copyright 2025 Antrea Authors
+// Copyright 2026 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -54,6 +54,20 @@ func NewMockFlowAggregatorQuerier(ctrl *gomock.Controller) *MockFlowAggregatorQu
 // EXPECT returns an object that allows the caller to indicate expected use.
 func (m *MockFlowAggregatorQuerier) EXPECT() *MockFlowAggregatorQuerierMockRecorder {
 	return m.recorder
+}
+
+// FlowStreamServiceReady mocks base method.
+func (m *MockFlowAggregatorQuerier) FlowStreamServiceReady() bool {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "FlowStreamServiceReady")
+	ret0, _ := ret[0].(bool)
+	return ret0
+}
+
+// FlowStreamServiceReady indicates an expected call of FlowStreamServiceReady.
+func (mr *MockFlowAggregatorQuerierMockRecorder) FlowStreamServiceReady() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FlowStreamServiceReady", reflect.TypeOf((*MockFlowAggregatorQuerier)(nil).FlowStreamServiceReady))
 }
 
 // GetFlowRecords mocks base method.
