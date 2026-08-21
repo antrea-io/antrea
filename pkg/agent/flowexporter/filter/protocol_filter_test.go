@@ -54,6 +54,13 @@ func TestNewProtocolFilter(t *testing.T) {
 			[]string{"TCP", "udp", "sctp"},
 			sets.New(tcp, udp, sctp),
 		},
+		{
+			// A non-empty list of only invalid protocols results in an empty
+			// (but non-nil) set, which denies all protocols.
+			"Only invalid protocols",
+			[]string{"tpc", "icmp"},
+			sets.New[uint8](),
+		},
 	}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -98,6 +105,14 @@ func TestProtocolFilter_Allow(t *testing.T) {
 			"sctp not filtered out",
 			[]string{"tcp", "udp"},
 			sctp,
+			false,
+		},
+		{
+			// When every configured protocol is invalid, the filter denies all
+			// protocols rather than allowing all.
+			"only invalid protocols deny everything",
+			[]string{"tpc"},
+			tcp,
 			false,
 		},
 	}
