@@ -723,6 +723,29 @@ func (c *Controller) syncNodes() error {
 		klog.ErrorS(err, "Failed to update OpenFlow group for remote Nodes")
 		return err
 	}
+
+	// Synthesize a groupLeave event for each stale Node IP across all groups
+	for _, obj := range c.groupCache.List() {
+		status := obj.(*GroupMemberStatus)
+		staleMembers := status.remoteMembers.Difference(updatedNodeIPSet)
+		if staleMembers.Len() > 0 {
+			ifConfig := &interfacestore.InterfaceConfig{
+				Type: interfacestore.TunnelInterface,
+			}
+			for member := range staleMembers {
+				klog.V(2).InfoS("Synthesizing groupLeave event for stale remote member", "group", status.group, "member", member)
+				event := &mcastGroupEvent{
+					group:   status.group,
+					eType:   groupLeave,
+					time:    time.Now(),
+					iface:   ifConfig,
+					srcNode: net.ParseIP(member),
+				}
+				// The event is handed to eventHandler, which removes the remote member from the group.
+				c.groupEventCh <- event
+			}
+		}
+	}
 	c.installedNodes = updatedNodeIPSet
 	// Notify local installed multicast groups to other Nodes in the cluster.
 	c.syncLocalGroupsToOtherNodes()

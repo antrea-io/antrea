@@ -945,6 +945,9 @@ func TestEncapLocalReportAndNotifyRemote(t *testing.T) {
 
 func TestNodeUpdate(t *testing.T) {
 	testController := newTestMulticastController(t, true, false)
+	// Properly buffer the test channel
+	testController.groupEventCh = make(chan *mcastGroupEvent, 100)
+	testController.igmpSnooper.eventCh = testController.groupEventCh
 	stopCh := make(chan struct{})
 	defer close(stopCh)
 	testController.informerFactory.Start(stopCh)
@@ -952,11 +955,14 @@ func TestNodeUpdate(t *testing.T) {
 	testController.addInstalledLocalGroup("224.2.100.1")
 
 	wg := sync.WaitGroup{}
+
 	for _, tc := range []struct {
-		name          string
-		addedNodes    map[string]map[string]string
-		deletedNodes  []string
-		expectedNodes sets.Set[string]
+		name                string
+		initialMember       string
+		addedNodes          map[string]map[string]string
+		deletedNodes        []string
+		expectedNodes       sets.Set[string]
+		expectedLeaveEvents []string
 	}{
 		{
 			name: "add two nodes to empty install nodes",
@@ -964,21 +970,24 @@ func TestNodeUpdate(t *testing.T) {
 				"n1": {"ip": "10.10.10.11"},
 				"n2": {"ip": "10.10.10.12"},
 			},
-			expectedNodes: sets.New[string]("10.10.10.11", "10.10.10.12"),
+			expectedNodes:       sets.New[string]("10.10.10.11", "10.10.10.12"),
+			expectedLeaveEvents: nil,
 		},
 		{
 			name: "add one node to installed nodes",
 			addedNodes: map[string]map[string]string{
 				"n3": {"ip": "10.10.10.13"},
 			},
-			expectedNodes: sets.New[string]("10.10.10.11", "10.10.10.12", "10.10.10.13"),
+			expectedNodes:       sets.New[string]("10.10.10.11", "10.10.10.12", "10.10.10.13"),
+			expectedLeaveEvents: nil,
 		},
 		{
 			name: "delete one node from installed nodes",
 			deletedNodes: []string{
 				"n1",
 			},
-			expectedNodes: sets.New[string]("10.10.10.12", "10.10.10.13"),
+			expectedNodes:       sets.New[string]("10.10.10.12", "10.10.10.13"),
+			expectedLeaveEvents: []string{"10.10.10.11"},
 		},
 		{
 			name: "delete and add nodes to installed nodes",
@@ -988,10 +997,43 @@ func TestNodeUpdate(t *testing.T) {
 			deletedNodes: []string{
 				"n2",
 			},
-			expectedNodes: sets.New[string]("10.10.10.13", "10.10.10.24"),
+			expectedNodes:       sets.New[string]("10.10.10.13", "10.10.10.24"),
+			expectedLeaveEvents: []string{"10.10.10.12"},
+		},
+		{
+			name:          "remove stale node in the cluster without leave event",
+			initialMember: "10.10.10.99",
+			// We have to add a dummy event to trigger syncNodes, otherwise node Update isn't fired
+			addedNodes: map[string]map[string]string{
+				"n5": {"ip": "10.10.10.15"},
+			},
+			expectedNodes:       sets.New[string]("10.10.10.13", "10.10.10.24", "10.10.10.15"),
+			expectedLeaveEvents: []string{"10.10.10.99"},
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
+			// Do not wipe testController.installedNodes here. The tests are designed to run sequentially
+			// and build on the state of the previous test.
+
+			// But we DO need to reset the group cache to simulate the state right before the node update.
+			for _, obj := range testController.groupCache.List() {
+				testController.groupCache.Delete(obj)
+			}
+
+			// The group should contain exactly the nodes that were currently installed
+			// before any of them are deleted. If the test case specifies an initialMember,
+			// we also inject it here to verify the self-healing behavior for unexpected IPs.
+			initialMembers := testController.installedNodes.Clone()
+			if tc.initialMember != "" {
+				initialMembers.Insert(tc.initialMember)
+			}
+			testController.groupCache.Add(&GroupMemberStatus{
+				group:         net.ParseIP("224.2.100.1"),
+				remoteMembers: initialMembers,
+			})
+
+			// Setup clean channel and waitgroup for the test
+			testController.groupEventCh = make(chan *mcastGroupEvent, 100)
 			times := len(tc.addedNodes) + len(tc.deletedNodes)
 			testController.mockOFClient.EXPECT().InstallMulticastGroup(testController.nodeGroupID, nil, gomock.Any()).Return(nil).Times(times)
 			testController.mockOFClient.EXPECT().SendIGMPRemoteReportPacketOut(igmpReportDstMac, types.IGMPv3Router, gomock.Any()).Times(times)
@@ -1032,13 +1074,48 @@ func TestNodeUpdate(t *testing.T) {
 			}()
 
 			wg.Wait()
+			// Need an extra short wait for syncNodes to push events through groupEventCh asynchronously
+			time.Sleep(100 * time.Millisecond)
+
 			assert.Equal(t, tc.expectedNodes, testController.installedNodes, fmt.Sprintf("installedNodes: %v, expectedNodes: %v", testController.installedNodes, tc.expectedNodes))
+
+			var leaveEvents []string
+			// We only expect a finite number of events, or none at all.
+			// Instead of a strict loop that risks hanging if an expected event never arrives,
+			// we drain the channel up to a tight deadline.
+			timer := time.NewTimer(500 * time.Millisecond)
+		DrainLoop:
+			for {
+				select {
+				case e := <-testController.groupEventCh:
+					if e.eType == groupLeave {
+						leaveEvents = append(leaveEvents, e.srcNode.String())
+						assert.Equal(t, interfacestore.TunnelInterface, e.iface.Type)
+					}
+					// Fast return if we reached expected elements length, assuming expected is non-nil
+					if tc.expectedLeaveEvents != nil && len(leaveEvents) == len(tc.expectedLeaveEvents) {
+						break DrainLoop
+					}
+				case <-timer.C:
+					break DrainLoop
+				}
+			}
+			timer.Stop()
+
+			if tc.expectedLeaveEvents == nil {
+				assert.Empty(t, leaveEvents)
+			} else {
+				assert.ElementsMatch(t, tc.expectedLeaveEvents, leaveEvents)
+			}
 		})
 	}
 }
 
 func TestMemberChanged(t *testing.T) {
 	testController := newTestMulticastController(t, false, false)
+	// Make sure the channel has a buffer large enough for all potential events in this test
+	testController.groupEventCh = make(chan *mcastGroupEvent, 100)
+	testController.igmpSnooper.eventCh = testController.groupEventCh
 	testController.initialize(t)
 
 	containerA := &interfacestore.ContainerInterfaceConfig{PodNamespace: "nameA", PodName: "podA", ContainerID: "tttt"}
@@ -1069,7 +1146,10 @@ func TestMemberChanged(t *testing.T) {
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			testController.groupEventCh = make(chan *mcastGroupEvent, 100)
+			// Drain existing events on the channel to avoid crosstalk across test cases
+			for len(testController.groupEventCh) > 0 {
+				<-testController.groupEventCh
+			}
 			for group, containers := range tc.podJoinGroups {
 				podTimeMap := make(map[string]time.Time)
 				for _, container := range containers {
@@ -1233,6 +1313,12 @@ func TestRemoteMemberJoinLeave(t *testing.T) {
 			nodeStr:   "10.10.10.12",
 			isJoin:    false,
 		},
+		{
+			name:      "last remote node leaves group",
+			groupStrs: []string{"224.2.100.2"},
+			nodeStr:   "10.10.10.11",
+			isJoin:    false,
+		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			groups := make([]net.IP, len(tc.groupStrs))
@@ -1256,14 +1342,20 @@ func testRemoteReport(t *testing.T, testController *testMulticastController, gro
 		obj, exists, _ := testController.groupCache.GetByKey(g.String())
 		if !exists {
 			testController.mockOFClient.EXPECT().InstallMulticastFlows(gomock.Any(), gomock.Any())
+			testController.mockOFClient.EXPECT().InstallMulticastGroup(gomock.Any(), []uint32{config.DefaultHostGatewayOFPort}, gomock.Any())
 		} else {
 			status := obj.(*GroupMemberStatus)
 			exists = status.remoteMembers.Has(node.String())
 			if nodeJoin && exists || !nodeJoin && !exists {
 				continue
 			}
+			if !nodeJoin && exists && status.remoteMembers.Len() == 1 && len(status.localMembers) == 0 {
+				testController.mockOFClient.EXPECT().UninstallMulticastFlows(gomock.Any())
+				testController.mockOFClient.EXPECT().UninstallMulticastGroup(gomock.Any())
+			} else {
+				testController.mockOFClient.EXPECT().InstallMulticastGroup(gomock.Any(), []uint32{config.DefaultHostGatewayOFPort}, gomock.Any())
+			}
 		}
-		testController.mockOFClient.EXPECT().InstallMulticastGroup(gomock.Any(), []uint32{config.DefaultHostGatewayOFPort}, gomock.Any())
 	}
 
 	wg := sync.WaitGroup{}
@@ -1280,7 +1372,10 @@ func testRemoteReport(t *testing.T, testController *testMulticastController, gro
 
 	for _, g := range groups {
 		obj, exists, _ := testController.groupCache.GetByKey(g.String())
-		assert.True(t, exists)
+		if !exists {
+			assert.False(t, nodeJoin, "group %s should exist after a join", g.String())
+			continue
+		}
 		status := obj.(*GroupMemberStatus)
 		if nodeJoin {
 			assert.True(t, status.remoteMembers.Has(node.String()))
@@ -1289,7 +1384,12 @@ func testRemoteReport(t *testing.T, testController *testMulticastController, gro
 		}
 	}
 	for _, g := range groups {
-		assert.True(t, testController.groupHasInstalled(g.String()))
+		_, exists, _ := testController.groupCache.GetByKey(g.String())
+		if exists {
+			assert.True(t, testController.groupHasInstalled(g.String()))
+		} else {
+			assert.False(t, testController.groupHasInstalled(g.String()))
+		}
 	}
 }
 
