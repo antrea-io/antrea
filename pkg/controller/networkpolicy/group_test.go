@@ -22,6 +22,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/tools/cache"
 
 	"antrea.io/antrea/v2/pkg/apis/controlplane"
 	crdv1beta1 "antrea.io/antrea/v2/pkg/apis/crd/v1beta1"
@@ -487,6 +488,28 @@ func TestDeleteG(t *testing.T) {
 	npc.deleteGroup(&testG)
 	_, found, _ := npc.internalGroupStore.Get(key)
 	assert.False(t, found, "expected internal Group to be deleted")
+}
+
+func TestDeleteG_Tombstone(t *testing.T) {
+	selectorA := metav1.LabelSelector{MatchLabels: map[string]string{"foo1": "bar1"}}
+	testG := crdv1beta1.Group{
+		ObjectMeta: metav1.ObjectMeta{Namespace: "nsA", Name: "gA", UID: "uidA"},
+		Spec: crdv1beta1.GroupSpec{
+			NamespaceSelector: &selectorA,
+		},
+	}
+	key := fmt.Sprintf("%s/%s", testG.Namespace, testG.Name)
+	_, npc := newController(nil, nil)
+	npc.addGroup(&testG)
+
+	// Deliver the delete as a tombstone, as the informer does after a watch reconnect.
+	npc.deleteGroup(cache.DeletedFinalStateUnknown{
+		Key: key,
+		Obj: &testG,
+	})
+
+	_, found, _ := npc.internalGroupStore.Get(key)
+	assert.False(t, found, "expected internal Group to be deleted from a tombstone delete")
 }
 
 func TestGroupMembersComputedConditionEqual(t *testing.T) {

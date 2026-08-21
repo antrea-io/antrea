@@ -24,6 +24,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -553,6 +554,52 @@ func TestStretchedNetworkPolicyControllerLabelIdentityEvent(t *testing.T) {
 		t.Errorf("Test didn't finish in time")
 	case <-finishCh:
 	}
+}
+
+func TestProcessPodDelete_Tombstone(t *testing.T) {
+	clientset := fake.NewSimpleClientset()
+	mcClient := mcfake.NewSimpleClientset()
+	c := newStretchedNetworkPolicyController(t, clientset, mcClient)
+
+	podRef := types.NamespacedName{Name: "pod", Namespace: "ns"}
+	pod := &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{Name: podRef.Name, Namespace: podRef.Namespace},
+	}
+	c.labelToPods["label1"] = podSet{podRef: struct{}{}}
+	c.podToLabel[podRef] = "label1"
+
+	// Deliver the delete as a tombstone, as the informer does after a watch reconnect.
+	c.processPodDelete(cache.DeletedFinalStateUnknown{
+		Key: podRef.String(),
+		Obj: pod,
+	})
+
+	assert.NotContains(t, c.podToLabel, podRef, "expected Pod to be removed from podToLabel after tombstone delete")
+	assert.NotContains(t, c.labelToPods["label1"], podRef, "expected Pod to be removed from labelToPods after tombstone delete")
+}
+
+func TestProcessLabelIdentityEvent_Tombstone(t *testing.T) {
+	clientset := fake.NewSimpleClientset()
+	mcClient := mcfake.NewSimpleClientset()
+	c := newStretchedNetworkPolicyController(t, clientset, mcClient)
+	defer c.queue.ShutDown()
+
+	podRef := types.NamespacedName{Name: "pod", Namespace: "ns"}
+	labelIdentity := &v1alpha1.LabelIdentity{
+		ObjectMeta: metav1.ObjectMeta{Name: "labelIdentity1"},
+		Spec:       v1alpha1.LabelIdentitySpec{Label: "label1"},
+	}
+	c.labelToPods[labelIdentity.Spec.Label] = podSet{podRef: struct{}{}}
+
+	// Deliver the delete as a tombstone, as the informer does after a watch reconnect.
+	c.processLabelIdentityEvent(cache.DeletedFinalStateUnknown{
+		Key: labelIdentity.Name,
+		Obj: labelIdentity,
+	})
+
+	require.Equal(t, 1, c.queue.Len(), "expected affected Pod to be enqueued from the tombstone delete")
+	item, _ := c.queue.Get()
+	assert.Equal(t, podRef, item)
 }
 
 func toPodAddEvent(pod *corev1.Pod) antreatypes.PodUpdate {
