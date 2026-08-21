@@ -205,6 +205,59 @@ func TestControllerStorage(t *testing.T) {
 	}, time.Second*2, time.Millisecond*100, "Supportbundle file %s was not deleted after deleting the Supportbundle object", filePath)
 }
 
+func TestDownloadREST(t *testing.T) {
+	bundle := &supportBundleREST{
+		mode: modeController,
+		cache: &system.SupportBundle{
+			ObjectMeta: metav1.ObjectMeta{Name: modeController},
+			Status:     system.SupportBundleStatusCollected,
+		},
+	}
+	d := &downloadREST{supportBundle: bundle}
+	defer d.Destroy()
+	assert.Equal(t, &system.SupportBundle{}, d.New())
+	assert.Equal(t, []string{"application/tar+gz"}, d.ProducesMIMETypes(""))
+	assert.Equal(t, "", d.ProducesObject(""))
+
+	obj, err := d.Get(context.TODO(), "", nil)
+	require.NoError(t, err)
+	stream, ok := obj.(*bundleStream)
+	require.True(t, ok)
+	assert.Same(t, bundle.cache, stream.cache)
+}
+
+func TestBundleStreamDeepCopyObject(t *testing.T) {
+	stream := &bundleStream{cache: &system.SupportBundle{ObjectMeta: metav1.ObjectMeta{Name: modeController}}}
+	assert.NotPanics(t, func() {
+		copied := stream.DeepCopyObject()
+		copiedStream, ok := copied.(*bundleStream)
+		require.True(t, ok)
+		assert.Equal(t, stream.cache, copiedStream.cache)
+	})
+}
+
+func TestBundleStreamInputStream(t *testing.T) {
+	defaultFS = afero.NewMemMapFs()
+	defer func() {
+		defaultFS = afero.NewOsFs()
+	}()
+	f, err := defaultFS.Create("bundle.tar.gz")
+	require.NoError(t, err)
+	_, err = f.WriteString("bundle content")
+	require.NoError(t, err)
+	require.NoError(t, f.Close())
+
+	stream := &bundleStream{cache: &system.SupportBundle{Filepath: "bundle.tar.gz"}}
+	rc, flush, mimeType, err := stream.InputStream(context.TODO(), "", "")
+	require.NoError(t, err)
+	defer rc.Close()
+	assert.True(t, flush)
+	assert.Equal(t, "application/tar+gz", mimeType)
+
+	_, _, _, err = (&bundleStream{cache: &system.SupportBundle{Filepath: "missing.tar.gz"}}).InputStream(context.TODO(), "", "")
+	assert.Error(t, err)
+}
+
 type fakeAgentDumper struct {
 	returnErr error
 }
