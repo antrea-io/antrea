@@ -536,6 +536,58 @@ spec:
                               - ClusterIP
                               - LoadBalancerIP
                               - ExternalIP
+                        med:
+                          type: object
+                          description: >-
+                            Configures the MULTI_EXIT_DISC path attribute attached to the advertised
+                            Service IP routes. When it is unset, no MED attribute is attached.
+                          properties:
+                            mode:
+                              type: string
+                              description: >-
+                                None disables the MED attribute. Static attaches baseValue to every
+                                route on every Node. NodePriority attaches a distinct value per Node
+                                to the IPs allocated from an ExternalIPPool, so that every Node of
+                                the pool advertises the IP and the Node which owns it advertises the
+                                most preferred path.
+                              enum:
+                                - None
+                                - Static
+                                - NodePriority
+                              default: None
+                            baseValue:
+                              type: integer
+                              format: int64
+                              description: >-
+                                The MED advertised in the Static mode, and the MED advertised by the
+                                most preferred Node in the NodePriority mode. A value of 0 disables
+                                the attribute.
+                              minimum: 0
+                              maximum: 4294967295
+                              default: 100
+                            step:
+                              type: integer
+                              format: int64
+                              description: >-
+                                The MED increment applied per Node rank in the NodePriority mode.
+                              minimum: 1
+                              maximum: 4294967295
+                              default: 100
+                            maxAdvertisingNodes:
+                              type: integer
+                              format: int32
+                              description: >-
+                                How many Nodes of an ExternalIPPool advertise each of its IPs in the
+                                NodePriority mode. 0 means all of them.
+                              minimum: 0
+                              maximum: 65535
+                              default: 0
+                            allowServiceOverride:
+                              type: boolean
+                              description: >-
+                                Whether the "service.antrea.io/bgp-med" and
+                                "service.antrea.io/bgp-med-mode" Service annotations are honored.
+                              default: true
                     pod:
                       type: object
                       properties: {}

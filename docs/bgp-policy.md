@@ -11,6 +11,7 @@
   - [ListenPort](#listenport)
   - [Confederation](#confederation)
   - [Advertisements](#advertisements)
+    - [MED](#med)
   - [BGPPeers](#bgppeers)
 - [BGP router ID](#bgp-router-id)
 - [BGP Authentication](#bgp-authentication)
@@ -18,6 +19,7 @@
   - [Combined Advertisements of Service, Pod, and Egress IPs](#combined-advertisements-of-service-pod-and-egress-ips)
   - [Advertise Egress IPs to external BGP peers with more than one hop](#advertise-egress-ips-to-external-bgp-peers-with-more-than-one-hop)
   - [Advertise Pod IPs through BGP Confederation](#advertise-pod-ips-through-bgp-confederation)
+  - [Multi-Node ingress for an ExternalIPPool with MED](#multi-node-ingress-for-an-externalippool-with-med)
 - [Using antctl](#using-antctl)
 - [Limitations](#limitations)
 <!-- /toc -->
@@ -118,6 +120,77 @@ The `advertisements` field configures which IPs are advertised to BGP peers.
     `Local`, a Node will only advertise ClusterIPs with at least one local Endpoint.
   - All Nodes can advertise all ExternalIPs and LoadBalancerIPs, respecting `externalTrafficPolicy`. If
     `externalTrafficPolicy` is set to `Local`, a Node will only advertise IPs with at least one local Endpoint.
+  - The `med` field configures the MULTI_EXIT_DISC attribute attached to the advertised Service IP routes. See
+    [MED](#med).
+
+#### MED
+
+The `advertisements.service.med` field attaches a MULTI_EXIT_DISC (MED) attribute to the advertised Service IP routes.
+MED is the BGP attribute a BGP speaker uses to tell its peers which of several paths to the same destination it would
+prefer them to use: **the lower the MED, the more preferred the path**. When the field is unset, no MED attribute is
+attached, which is the behavior of Antrea versions without MED support.
+
+| Field                  | Default | Description                                                                                                                                   |
+|------------------------|---------|-----------------------------------------------------------------------------------------------------------------------------------------------|
+| `mode`                 | `None`  | `None`, `Static` or `NodePriority`. See below.                                                                                                |
+| `baseValue`            | `100`   | The MED of the most preferred path, in the range [0, 4294967295]. A value of `0` disables the attribute.                                       |
+| `step`                 | `100`   | The MED increment applied per Node rank in the `NodePriority` mode.                                                                            |
+| `maxAdvertisingNodes`  | `0`     | How many Nodes of an ExternalIPPool advertise each of its IPs in the `NodePriority` mode. `0` means all of them.                               |
+| `allowServiceOverride` | `true`  | Whether the `service.antrea.io/bgp-med` and `service.antrea.io/bgp-med-mode` Service annotations are honored.                                  |
+
+The three modes are:
+
+- `None`: no MED attribute is attached. This is the default.
+- `Static`: every Node attaches `baseValue` to every advertised Service IP route. This is useful to make the routes
+  advertised by Antrea uniformly more or less preferred than the routes for the same destinations advertised by another
+  BGP speaker.
+- `NodePriority`: **multi-Node ingress**. Every Node of an ExternalIPPool advertises each LoadBalancer IP allocated from
+  that pool, with a distinct MED per Node: `baseValue + rank * step`, where `rank` is the position of the Node in the
+  same consistent hash ring which the `ServiceExternalIP` feature uses to elect the owner of the IP. The owner therefore
+  advertises the most preferred path, and the other Nodes advertise backup paths.
+
+The `NodePriority` mode gives two properties which a single-Node advertisement cannot:
+
+- **Ingress traffic is spread across Nodes.** Different IPs of the same ExternalIPPool hash to different Nodes, so each
+  Node is the most preferred path for a different subset of the pool.
+- **Failover does not wait for a re-advertisement.** The BGP peers already hold the backup paths in their RIB, so when
+  the owner of an IP withdraws its path (because the Node went down, or because the IP was reassigned), the peers switch
+  to the next path immediately, instead of waiting for the new owner to advertise it.
+
+Notes and constraints for the `NodePriority` mode:
+
+- It only ranks the LoadBalancer IPs of the Services which carry the `service.antrea.io/external-ip-pool` annotation,
+  which requires the `ServiceExternalIP` feature gate. The Service IPs which do not come from an ExternalIPPool cannot
+  be ranked and are advertised with `baseValue`, exactly as in the `Static` mode.
+- A Node which is not a member of the ExternalIPPool (i.e. does not match its `nodeSelector`), or which is ranked beyond
+  `maxAdvertisingNodes`, does not advertise the IP at all.
+- With `externalTrafficPolicy: Local`, the Nodes without a local Endpoint are excluded from the ranking, exactly as they
+  are excluded from the election of the owner of the IP, and they do not advertise the IP.
+- Because the Nodes which do not own an IP also advertise it, they must be able to serve its traffic. With
+  `externalTrafficPolicy: Cluster` they always can, but a Node without a local Endpoint SNATs the traffic, so the
+  backend Pods see the Node IP instead of the client IP. To preserve the client IP, enable the `LoadBalancerModeDSR`
+  feature gate and set the `service.antrea.io/load-balancer-mode: dsr` annotation on the Service (or set
+  `antreaProxy.defaultLoadBalancerMode: DSR` in the agent configuration). antrea-agent logs a warning when the
+  `NodePriority` mode is used for a Service which uses neither DSR nor `externalTrafficPolicy: Local`.
+- The ranking is derived from each Agent's own view of the memberlist cluster. While that view is converging, e.g. right
+  after a Node fails, two Nodes may briefly advertise the same MED for one IP. This resolves on its own, and the peers
+  simply ECMP or tie-break between the two paths in the meantime.
+- Every Node of the ExternalIPPool contributes one path per IP to the BGP peers. On a pool with many Nodes, set
+  `maxAdvertisingNodes` to bound the number of paths the peers have to hold (two or three backups are enough for
+  failover), which also bounds the work each Agent does to rank the Nodes.
+
+A Service can override the BGPPolicy configuration with two annotations, unless `allowServiceOverride` is set to
+`false`:
+
+- `service.antrea.io/bgp-med`: overrides `baseValue` for this Service, in the range [0, 4294967295]. In the
+  `NodePriority` mode this shifts the whole ladder, which is how one Service is made more preferred than another over
+  the same set of Nodes.
+- `service.antrea.io/bgp-med-mode`: overrides `mode` for this Service, i.e. opts a single Service in or out of the MED
+  behavior.
+
+The annotations are only honored once `advertisements.service.med` is set in the BGPPolicy: MED stays opt-in at the
+cluster level, so annotating a Service in a cluster whose BGPPolicy does not mention MED changes nothing. An invalid
+annotation value is logged and ignored, leaving the BGPPolicy configuration in effect.
 
 ### BGPPeers
 
@@ -265,6 +338,97 @@ spec:
       port: 179
 ```
 
+### Multi-Node ingress for an ExternalIPPool with MED
+
+This example spreads the ingress traffic for a pool of LoadBalancer IPs across every worker Node, while keeping a
+deterministic, immediately failover-able primary Node per IP.
+
+First, define the pool of external IPs and the Nodes that can serve them:
+
+```yaml
+apiVersion: crd.antrea.io/v1beta1
+kind: ExternalIPPool
+metadata:
+  name: service-external-ip-pool
+spec:
+  ipRanges:
+    - start: 10.10.0.2
+      end: 10.10.0.20
+  nodeSelector:
+    matchLabels:
+      network-role: ingress
+```
+
+Then advertise the pool IPs from every Node of the pool, with one MED per Node:
+
+```yaml
+apiVersion: crd.antrea.io/v1alpha1
+kind: BGPPolicy
+metadata:
+  name: multi-node-ingress
+spec:
+  nodeSelector:
+    matchLabels:
+      network-role: ingress
+  localASN: 64512
+  advertisements:
+    service:
+      ipTypes:
+        - LoadBalancerIP
+      med:
+        mode: NodePriority
+        baseValue: 100
+        step: 100
+        # Hold at most 3 paths per IP in the upstream routers.
+        maxAdvertisingNodes: 3
+  bgpPeers:
+    - address: 192.168.77.200
+      asn: 65001
+```
+
+Finally, request an IP from the pool for a Service, and use DSR so that the Nodes which do not host a backend Pod still
+preserve the client IP:
+
+```yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: web
+  annotations:
+    service.antrea.io/external-ip-pool: service-external-ip-pool
+    service.antrea.io/load-balancer-mode: dsr
+spec:
+  type: LoadBalancer
+  selector:
+    app: web
+  ports:
+    - port: 80
+      targetPort: 8080
+```
+
+With three Nodes in the pool, each of them advertises the IP, and `antctl get bgproutes` reports the MED that the local
+Node uses. On the Node which owns the IP:
+
+```bash
+$ antctl get bgproutes
+ROUTE          TYPE                   MED  K8S-OBJ-REF
+10.10.0.2/32   ServiceLoadBalancerIP  100  default/web
+```
+
+On the two other Nodes, the same route is advertised with `200` and `300` respectively, so the upstream router forwards
+the traffic to the owner and falls back to the other two, in order, if it goes away. A second Service allocated
+`10.10.0.3` from the same pool most likely hashes to a different Node, which is what spreads the ingress load.
+
+To make one Service more preferred as a whole, e.g. to pin it to a specific set of Nodes ahead of the others, set its
+base value explicitly:
+
+```yaml
+metadata:
+  annotations:
+    service.antrea.io/external-ip-pool: service-external-ip-pool
+    service.antrea.io/bgp-med: "50"
+```
+
 ## Using antctl
 
 Please refer to the corresponding [antctl page](antctl.md#bgp-commands).
@@ -276,5 +440,6 @@ Please refer to the corresponding [antctl page](antctl.md#bgp-commands).
   to handle the routing of traffic between your Kubernetes cluster and the remote BGP network.
 - Only Linux Nodes are supported. The feature has not been validated on Windows Nodes, though theoretically it can work
   with Windows Nodes.
-- Advanced BGP features such as BGP communities, route filtering, route reflection, confederations, and other BGP policy
-  mechanisms defined in BGP RFCs are not supported.
+- Advanced BGP features such as BGP communities, route filtering, route reflection, and other BGP policy mechanisms
+  defined in BGP RFCs are not supported. The only path attribute that can be configured is MULTI_EXIT_DISC, and only
+  for Service IP advertisements: Pod CIDR and Egress IP routes are always advertised without a MED attribute.

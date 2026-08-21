@@ -124,8 +124,17 @@ type PeerStatus struct {
 	UptimeSeconds              int
 }
 
-// Route represents a BGP route. Currently only prefix (e.g., "192.168.0.0/24") is needed. More attributes might be
-// added later.
+// Route represents a BGP route. More attributes might be added later.
+//
+// Route must remain comparable: it is used as a map key by the BGPPolicy controller to compute the
+// routes to advertise / withdraw. This is why optional attributes are not represented with pointers.
 type Route struct {
+	// Prefix is the route prefix, e.g., "192.168.0.0/24".
 	Prefix string
+	// MED is the value of the MULTI_EXIT_DISC path attribute advertised with the route. The
+	// attribute is omitted from the advertised path when MED is 0, which preserves the behavior of
+	// Antrea versions that did not support MED. Note that most BGP implementations treat a missing
+	// MED as 0 when comparing paths, so use a non-zero base value (the API default is 100) when the
+	// relative preference of the advertised paths matters.
+	MED uint32
 }

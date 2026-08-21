@@ -47,8 +47,10 @@ var (
 	egressIPv4Route       = bgp.Route{Prefix: ipStrToPrefix(egressIPv4)}
 	loadBalancerIPv6      = "fec0::192:168:77:150"
 	loadBalancerIPv6Route = bgp.Route{Prefix: ipStrToPrefix(loadBalancerIPv6)}
-	egressIPv6            = "fec0::192:168:77:200"
-	egressIPv6Route       = bgp.Route{Prefix: ipStrToPrefix(egressIPv6)}
+	// loadBalancerIPv6MEDRoute is the same prefix advertised with a MULTI_EXIT_DISC attribute.
+	loadBalancerIPv6MEDRoute = bgp.Route{Prefix: ipStrToPrefix(loadBalancerIPv6), MED: 200}
+	egressIPv6               = "fec0::192:168:77:200"
+	egressIPv6Route          = bgp.Route{Prefix: ipStrToPrefix(egressIPv6)}
 
 	ipv4ClusterIPName    = "clusterip-4"
 	ipv4EgressName       = "egress-4"
@@ -199,6 +201,24 @@ func TestBGPRouteQuery(t *testing.T) {
 					Route:     egressIPv4Route.Prefix,
 					Type:      string(allRoutes[egressIPv4Route].Type),
 					K8sObjRef: allRoutes[egressIPv4Route].K8sObjRef,
+				},
+			},
+		},
+		{
+			name: "the MED of the advertised routes is reported",
+			url:  "?type=ServiceLoadBalancerIP",
+			expectedCalls: func(mockBGPServer *queriertest.MockAgentBGPPolicyInfoQuerier) {
+				mockBGPServer.EXPECT().GetBGPRoutes(ctx).Return(map[bgp.Route]bgpcontroller.RouteMetadata{
+					loadBalancerIPv6MEDRoute: {Type: bgpcontroller.ServiceLoadBalancerIP, K8sObjRef: getServiceName(ipv6LoadBalancerName)},
+				}, nil)
+			},
+			expectedStatus: http.StatusOK,
+			expectedResponse: []apis.BGPRouteResponse{
+				{
+					Route:     loadBalancerIPv6MEDRoute.Prefix,
+					Type:      string(bgpcontroller.ServiceLoadBalancerIP),
+					MED:       200,
+					K8sObjRef: getServiceName(ipv6LoadBalancerName),
 				},
 			},
 		},

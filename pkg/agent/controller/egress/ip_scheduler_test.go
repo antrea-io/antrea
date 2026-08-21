@@ -85,6 +85,14 @@ func (f *fakeMemberlistCluster) SelectNodeForIP(ip, externalIPPool string, filte
 	return node, nil
 }
 
+func (f *fakeMemberlistCluster) SelectNodesForIP(ip, externalIPPool string, maxNodes int, filters ...func(string) bool) ([]string, error) {
+	nodes := f.hashMap.GetNWithFilters(ip, maxNodes, filters...)
+	if len(nodes) == 0 {
+		return nil, memberlist.ErrNoNodeAvailable
+	}
+	return nodes, nil
+}
+
 func (f *fakeMemberlistCluster) ShouldSelectIP(ip string, pool string, filters ...func(node string) bool) (bool, error) {
 	return false, nil
 }

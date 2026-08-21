@@ -168,8 +168,8 @@ func (s *Server) GetRoutes(ctx context.Context, routeType bgp.RouteType, peerAdd
 		return nil, fmt.Errorf("invalid peer address: %s", peerAddress)
 	}
 	var routes []bgp.Route
-	fn := func(prefix gobgp.NLRI, _ []*apiutil.Path) {
-		routes = append(routes, bgp.Route{Prefix: prefix.String()})
+	fn := func(prefix gobgp.NLRI, paths []*apiutil.Path) {
+		routes = append(routes, bgp.Route{Prefix: prefix.String(), MED: getMEDFromPaths(paths)})
 	}
 	request := apiutil.ListPathRequest{
 		TableType: convertRouteTypeToGoBGPTableType(routeType),
@@ -236,6 +236,10 @@ func convertRouteToNativePath(route *bgp.Route) (*apiutil.Path, error) {
 	attrs := []gobgp.PathAttributeInterface{
 		gobgp.NewPathAttributeOrigin(0),
 	}
+	// A MED of 0 means that the attribute should not be attached to the path.
+	if route.MED != 0 {
+		attrs = append(attrs, gobgp.NewPathAttributeMultiExitDisc(route.MED))
+	}
 	family := gobgp.NewFamily(uint16(convertToGoBGPFamilyAfi(isIPv6)), uint8(gobgpapi.Family_SAFI_UNICAST))
 	if isIPv6 {
 		mpreach, err := gobgp.NewPathAttributeMpReachNLRI(family, []gobgp.PathNLRI{{NLRI: nlri}}, netip.MustParseAddr(ipv6AllZero))
@@ -256,6 +260,22 @@ func convertRouteToNativePath(route *bgp.Route) (*apiutil.Path, error) {
 		Nlri:   nlri,
 		Attrs:  attrs,
 	}, nil
+}
+
+// getMEDFromPaths returns the value of the MULTI_EXIT_DISC attribute of the first path which
+// carries one, or 0 if none of the paths does.
+func getMEDFromPaths(paths []*apiutil.Path) uint32 {
+	for _, path := range paths {
+		if path == nil {
+			continue
+		}
+		for _, attr := range path.Attrs {
+			if med, ok := attr.(*gobgp.PathAttributeMultiExitDisc); ok {
+				return med.Value
+			}
+		}
+	}
+	return 0
 }
 
 func convertToGoBGPFamilyAfi(isIPv6 bool) gobgpapi.Family_Afi {

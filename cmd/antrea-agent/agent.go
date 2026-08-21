@@ -875,6 +875,13 @@ func run(o *Options) error {
 	var bgpController *bgp.Controller
 	if features.DefaultFeatureGate.Enabled(features.BGPPolicy) {
 		bgpPolicyInformer := crdInformerFactory.Crd().V1alpha1().BGPPolicies()
+		// memberlistCluster is only created when the Egress or the ServiceExternalIP feature is
+		// enabled. It must be passed as a nil interface value when it does not exist, otherwise the
+		// nil check in the controller would not catch it.
+		var bgpCluster memberlist.Interface
+		if memberlistCluster != nil {
+			bgpCluster = memberlistCluster
+		}
 		bgpController, err = bgp.NewBGPPolicyController(nodeInformer,
 			serviceInformer,
 			egressInformer,
@@ -883,7 +890,10 @@ func run(o *Options) error {
 			o.enableEgress,
 			k8sClient,
 			nodeConfig,
-			networkConfig)
+			networkConfig,
+			bgpCluster,
+			features.DefaultFeatureGate.Enabled(features.LoadBalancerModeDSR),
+			o.defaultLoadBalancerMode)
 		if err != nil {
 			return err
 		}

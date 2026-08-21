@@ -19,6 +19,8 @@ import (
 	"time"
 
 	gobgpapi "github.com/osrg/gobgp/v4/api"
+	"github.com/osrg/gobgp/v4/pkg/apiutil"
+	gobgp "github.com/osrg/gobgp/v4/pkg/packet/bgp"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/types/known/timestamppb"
@@ -132,6 +134,44 @@ func TestConvertRouteToNativePath(t *testing.T) {
 	_, err = convertRouteToNativePath(&bgp.Route{Prefix: "invalid"})
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "invalid route prefix")
+}
+
+func TestConvertRouteToNativePathWithMED(t *testing.T) {
+	findMED := func(t *testing.T, path *apiutil.Path) *gobgp.PathAttributeMultiExitDisc {
+		t.Helper()
+		for _, attr := range path.Attrs {
+			if med, ok := attr.(*gobgp.PathAttributeMultiExitDisc); ok {
+				return med
+			}
+		}
+		return nil
+	}
+
+	for _, prefix := range []string{"192.168.0.0/24", "2001:db8::/64"} {
+		t.Run(prefix+" without MED", func(t *testing.T) {
+			path, err := convertRouteToNativePath(&bgp.Route{Prefix: prefix})
+			require.NoError(t, err)
+			assert.Nil(t, findMED(t, path), "no MULTI_EXIT_DISC attribute must be attached when MED is 0")
+		})
+		t.Run(prefix+" with MED", func(t *testing.T) {
+			path, err := convertRouteToNativePath(&bgp.Route{Prefix: prefix, MED: 4294967295})
+			require.NoError(t, err)
+			med := findMED(t, path)
+			require.NotNil(t, med)
+			assert.Equal(t, uint32(4294967295), med.Value)
+		})
+	}
+}
+
+func TestGetMEDFromPaths(t *testing.T) {
+	assert.Equal(t, uint32(0), getMEDFromPaths(nil))
+	assert.Equal(t, uint32(0), getMEDFromPaths([]*apiutil.Path{nil}))
+	assert.Equal(t, uint32(0), getMEDFromPaths([]*apiutil.Path{{Attrs: []gobgp.PathAttributeInterface{gobgp.NewPathAttributeOrigin(0)}}}))
+	assert.Equal(t, uint32(200), getMEDFromPaths([]*apiutil.Path{
+		nil,
+		{Attrs: []gobgp.PathAttributeInterface{gobgp.NewPathAttributeOrigin(0)}},
+		{Attrs: []gobgp.PathAttributeInterface{gobgp.NewPathAttributeMultiExitDisc(200)}},
+	}))
 }
 
 func TestConvertPeerConfigToGoBGPPeer(t *testing.T) {

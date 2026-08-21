@@ -48,6 +48,7 @@ import (
 	"antrea.io/antrea/v2/pkg/agent/bgp"
 	"antrea.io/antrea/v2/pkg/agent/bgp/gobgp"
 	"antrea.io/antrea/v2/pkg/agent/config"
+	"antrea.io/antrea/v2/pkg/agent/memberlist"
 	"antrea.io/antrea/v2/pkg/agent/types"
 	"antrea.io/antrea/v2/pkg/apis/crd/v1alpha1"
 	"antrea.io/antrea/v2/pkg/apis/crd/v1beta1"
@@ -93,6 +94,20 @@ type RouteMetadata struct {
 	K8sObjRef string
 }
 
+// routeEntry is a route to advertise, together with the metadata describing where it comes from.
+// The metadata is only exposed through the Agent API and is not part of the advertised BGP path.
+type routeEntry struct {
+	route    bgp.Route
+	metadata RouteMetadata
+}
+
+// routeSet holds the routes to advertise, keyed by prefix. Keying by prefix (rather than by
+// bgp.Route) guarantees that a prefix is advertised exactly once even when several Kubernetes
+// objects map to it, and it lets the reconciliation distinguish a prefix whose path attributes
+// changed (which is re-advertised in place) from a prefix which is no longer advertised (which is
+// withdrawn).
+type routeSet map[string]routeEntry
+
 type confederationConfig struct {
 	identifier int32
 	memberASNs sets.Set[uint32]
@@ -111,8 +126,8 @@ type bgpPolicyState struct {
 	routerID string
 	// The confederation config used by the local BGP server.
 	confederationConfig *confederationConfig
-	// routes stores all BGP routes advertised to BGP peers.
-	routes map[bgp.Route]RouteMetadata
+	// routes stores all BGP routes advertised to BGP peers, keyed by prefix.
+	routes routeSet
 	// peerConfigs is a map that stores configurations of BGP peers. The map keys are the concatenated strings of BGP
 	// peer IP address and ASN (e.g., "192.168.77.100-65000", "2001::1-65000").
 	peerConfigs map[string]bgp.PeerConfig
@@ -166,6 +181,21 @@ type Controller struct {
 
 	egressEnabled bool
 
+	// cluster is the memberlist cluster used to rank the Nodes of an ExternalIPPool for each of its
+	// IPs, which is how a per-Node MED is derived in the NodePriority mode. It is nil when neither
+	// the Egress nor the ServiceExternalIP feature is enabled, in which case no IP can be allocated
+	// from an ExternalIPPool and the NodePriority mode degrades to the Static mode.
+	cluster memberlist.Interface
+	// dsrEnabled reports whether the LoadBalancerModeDSR feature gate is enabled, and
+	// defaultLoadBalancerMode is the load balancer mode used by the Services which do not override
+	// it with the "service.antrea.io/load-balancer-mode" annotation. They are only used to warn
+	// about a configuration where the Nodes which do not own a Service IP advertise it but cannot
+	// serve its traffic while preserving the client IP.
+	dsrEnabled              bool
+	defaultLoadBalancerMode config.LoadBalancerMode
+	// warnNonDSROnce makes sure that the warning above is only logged once.
+	warnNonDSROnce sync.Once
+
 	newBGPServerFn func(globalConfig *bgp.GlobalConfig) bgp.Interface
 
 	queue workqueue.TypedRateLimitingInterface[string]
@@ -179,7 +209,10 @@ func NewBGPPolicyController(nodeInformer coreinformers.NodeInformer,
 	egressEnabled bool,
 	k8sClient kubernetes.Interface,
 	nodeConfig *config.NodeConfig,
-	networkConfig *config.NetworkConfig) (*Controller, error) {
+	networkConfig *config.NetworkConfig,
+	cluster memberlist.Interface,
+	dsrEnabled bool,
+	defaultLoadBalancerMode config.LoadBalancerMode) (*Controller, error) {
 	c := &Controller{
 		nodeInformer:              nodeInformer.Informer(),
 		nodeLister:                nodeInformer.Lister(),
@@ -202,6 +235,9 @@ func NewBGPPolicyController(nodeInformer coreinformers.NodeInformer,
 		podIPv6CIDR:               nodeConfig.PodIPv6CIDR.String(),
 		nodeIPv4Addr:              nodeConfig.NodeIPv4Addr.IP.String(),
 		egressEnabled:             egressEnabled,
+		cluster:                   cluster,
+		dsrEnabled:                dsrEnabled,
+		defaultLoadBalancerMode:   defaultLoadBalancerMode,
 		newBGPServerFn: func(globalConfig *bgp.GlobalConfig) bgp.Interface {
 			return gobgp.NewGoBGPServer(globalConfig)
 		},
@@ -257,6 +293,17 @@ func NewBGPPolicyController(nodeInformer coreinformers.NodeInformer,
 		},
 		resyncPeriod,
 	)
+
+	if c.cluster != nil {
+		// The handler runs when the consistent hash ring of an ExternalIPPool is updated, i.e. when
+		// a Node joins or leaves the cluster, when the labels of a Node change, or when an
+		// ExternalIPPool is created / updated / deleted. All of these change the rank, and hence the
+		// MED, of the IPs of the pool.
+		c.cluster.AddClusterEventHandler(func(objName string) {
+			klog.V(2).InfoS("Processing memberlist cluster event", "ExternalIPPool", objName)
+			c.queue.Add(dummyKey)
+		})
+	}
 
 	c.secretInformer = coreinformers.NewFilteredSecretInformer(k8sClient,
 		env.GetAntreaNamespace(),
@@ -445,7 +492,7 @@ func (c *Controller) syncBGPPolicy(ctx context.Context) error {
 			listenPort:          listenPort,
 			localASN:            localASN,
 			confederationConfig: confederationConfig,
-			routes:              make(map[bgp.Route]RouteMetadata),
+			routes:              make(routeSet),
 			peerConfigs:         make(map[string]bgp.PeerConfig),
 		}
 	} else if c.bgpPolicyState.bgpPolicyName != bgpPolicyName {
@@ -511,28 +558,33 @@ func (c *Controller) reconcileBGPPeers(ctx context.Context, bgpPeers []v1alpha1.
 
 func (c *Controller) reconcileBGPAdvertisements(ctx context.Context, bgpAdvertisements v1alpha1.Advertisements) error {
 	curRoutes := c.getRoutes(bgpAdvertisements)
+	// preRoutes aliases the state map, which is updated in place so that it always reflects what has
+	// actually been advertised, even if the reconciliation fails halfway through and is retried.
 	preRoutes := c.bgpPolicyState.routes
-	currRoutesKeys := sets.KeySet(curRoutes)
-	preRoutesKeys := sets.KeySet(preRoutes)
-
-	routesToAdvertise := currRoutesKeys.Difference(preRoutesKeys)
-	routesToWithdraw := preRoutesKeys.Difference(currRoutesKeys)
+	prefixesToWithdraw := sets.KeySet(preRoutes).Difference(sets.KeySet(curRoutes))
 
 	bgpServer := c.bgpPolicyState.bgpServer
-	for route := range routesToAdvertise {
-		if err := bgpServer.AdvertiseRoutes(ctx, []bgp.Route{route}); err != nil {
+	for prefix := range prefixesToWithdraw {
+		if err := bgpServer.WithdrawRoutes(ctx, []bgp.Route{preRoutes[prefix].route}); err != nil {
 			return err
 		}
-		c.bgpPolicyState.routes[route] = RouteMetadata{
-			Type:      curRoutes[route].Type,
-			K8sObjRef: curRoutes[route].K8sObjRef,
-		}
+		delete(c.bgpPolicyState.routes, prefix)
 	}
-	for route := range routesToWithdraw {
-		if err := bgpServer.WithdrawRoutes(ctx, []bgp.Route{route}); err != nil {
+	for prefix, entry := range curRoutes {
+		preEntry, exists := preRoutes[prefix]
+		if exists && preEntry.route == entry.route {
+			// The path itself is unchanged; only refresh the metadata, which is not advertised.
+			c.bgpPolicyState.routes[prefix] = entry
+			continue
+		}
+		// A prefix whose path attributes changed, e.g. because the MED of this Node changed, is
+		// re-advertised rather than withdrawn and advertised again: adding a path for a prefix which
+		// already has a local path replaces it, which avoids making the prefix transiently
+		// unreachable through this Node.
+		if err := bgpServer.AdvertiseRoutes(ctx, []bgp.Route{entry.route}); err != nil {
 			return err
 		}
-		delete(c.bgpPolicyState.routes, route)
+		c.bgpPolicyState.routes[prefix] = entry
 	}
 
 	return nil
@@ -601,8 +653,8 @@ func (c *Controller) getRouterID() (string, error) {
 	return routerID, nil
 }
 
-func (c *Controller) getRoutes(advertisements v1alpha1.Advertisements) map[bgp.Route]RouteMetadata {
-	allRoutes := make(map[bgp.Route]RouteMetadata)
+func (c *Controller) getRoutes(advertisements v1alpha1.Advertisements) routeSet {
+	allRoutes := make(routeSet)
 
 	if advertisements.Service != nil {
 		c.addServiceRoutes(advertisements.Service, allRoutes)
@@ -617,9 +669,16 @@ func (c *Controller) getRoutes(advertisements v1alpha1.Advertisements) map[bgp.R
 	return allRoutes
 }
 
-func (c *Controller) addServiceRoutes(advertisement *v1alpha1.ServiceAdvertisement, allRoutes map[bgp.Route]RouteMetadata) {
+func (c *Controller) addServiceRoutes(advertisement *v1alpha1.ServiceAdvertisement, allRoutes routeSet) {
 	ipTypes := sets.New(advertisement.IPTypes...)
 	services, _ := c.serviceLister.List(labels.Everything())
+
+	policyMEDConfig, err := getMEDConfig(advertisement)
+	if err != nil {
+		// The BGPPolicy CRD schema rejects most invalid values, but the controller must not rely on
+		// it: fall back to advertising no MED rather than advertising an arbitrary value.
+		klog.ErrorS(err, "Invalid MED configuration in the effective BGPPolicy, Service IPs will be advertised without a MED attribute")
+	}
 
 	for _, svc := range services {
 		svcRef := svc.Namespace + "/" + svc.Name
@@ -629,13 +688,21 @@ func (c *Controller) addServiceRoutes(advertisement *v1alpha1.ServiceAdvertiseme
 		if internalLocal || externalLocal {
 			hasLocalEndpoints = c.hasLocalEndpoints(svc)
 		}
+		svcMEDConfig, err := applyServiceMEDOverrides(policyMEDConfig, svc)
+		if err != nil {
+			// Keep the BGPPolicy configuration in effect: a typo in an annotation must not change
+			// which Nodes advertise the Service IPs.
+			klog.ErrorS(err, "Ignoring invalid MED annotation on Service", "Service", svcRef)
+		}
+		medCtx := c.newServiceMEDContext(svc, svcMEDConfig)
+
 		if ipTypes.Has(v1alpha1.ServiceIPTypeClusterIP) {
 			if internalLocal && hasLocalEndpoints || !internalLocal {
 				for _, clusterIP := range svc.Spec.ClusterIPs {
 					if c.enabledIPv4 && utilnet.IsIPv4String(clusterIP) {
-						addRoutes(allRoutes, clusterIP+ipv4Suffix, svcRef, ServiceClusterIP)
+						addServiceRoute(allRoutes, medCtx, clusterIP+ipv4Suffix, clusterIP, svcRef, ServiceClusterIP)
 					} else if c.enabledIPv6 && utilnet.IsIPv6String(clusterIP) {
-						addRoutes(allRoutes, clusterIP+ipv6Suffix, svcRef, ServiceClusterIP)
+						addServiceRoute(allRoutes, medCtx, clusterIP+ipv6Suffix, clusterIP, svcRef, ServiceClusterIP)
 					}
 				}
 			}
@@ -644,21 +711,26 @@ func (c *Controller) addServiceRoutes(advertisement *v1alpha1.ServiceAdvertiseme
 			if externalLocal && hasLocalEndpoints || !externalLocal {
 				for _, externalIP := range svc.Spec.ExternalIPs {
 					if c.enabledIPv4 && utilnet.IsIPv4String(externalIP) {
-						addRoutes(allRoutes, externalIP+ipv4Suffix, svcRef, ServiceExternalIP)
+						addServiceRoute(allRoutes, medCtx, externalIP+ipv4Suffix, externalIP, svcRef, ServiceExternalIP)
 					} else if c.enabledIPv6 && utilnet.IsIPv6String(externalIP) {
-						addRoutes(allRoutes, externalIP+ipv6Suffix, svcRef, ServiceExternalIP)
+						addServiceRoute(allRoutes, medCtx, externalIP+ipv6Suffix, externalIP, svcRef, ServiceExternalIP)
 					}
 				}
 			}
 		}
 		if ipTypes.Has(v1alpha1.ServiceIPTypeLoadBalancerIP) && svc.Spec.Type == corev1.ServiceTypeLoadBalancer {
+			// In the NodePriority mode, every Node of the ExternalIPPool advertises the IP, even the
+			// ones which do not own it, so that the BGP peers already hold a backup path when the
+			// owner goes away. The `externalTrafficPolicy: Local` gating below still applies: the
+			// Nodes without a local Endpoint never advertise the IP, and they are also excluded from
+			// the ranking, which keeps the most preferred path on the Node which owns the IP.
 			if externalLocal && hasLocalEndpoints || !externalLocal {
 				loadBalancerIPs := getIngressIPs(svc)
 				for _, loadBalancerIP := range loadBalancerIPs {
 					if c.enabledIPv4 && utilnet.IsIPv4String(loadBalancerIP) {
-						addRoutes(allRoutes, loadBalancerIP+ipv4Suffix, svcRef, ServiceLoadBalancerIP)
+						addServiceRoute(allRoutes, medCtx, loadBalancerIP+ipv4Suffix, loadBalancerIP, svcRef, ServiceLoadBalancerIP)
 					} else if c.enabledIPv6 && utilnet.IsIPv6String(loadBalancerIP) {
-						addRoutes(allRoutes, loadBalancerIP+ipv6Suffix, svcRef, ServiceLoadBalancerIP)
+						addServiceRoute(allRoutes, medCtx, loadBalancerIP+ipv6Suffix, loadBalancerIP, svcRef, ServiceLoadBalancerIP)
 					}
 				}
 			}
@@ -666,7 +738,17 @@ func (c *Controller) addServiceRoutes(advertisement *v1alpha1.ServiceAdvertiseme
 	}
 }
 
-func (c *Controller) addEgressRoutes(allRoutes map[bgp.Route]RouteMetadata) {
+// addServiceRoute computes the MED for a Service IP and adds the corresponding route, unless the
+// local Node should not advertise the IP at all.
+func addServiceRoute(allRoutes routeSet, medCtx *serviceMEDContext, prefix, ip, svcRef string, routeType AdvertisedRouteType) {
+	med, advertise := medCtx.medForServiceIP(ip, routeType)
+	if !advertise {
+		return
+	}
+	addRoutes(allRoutes, prefix, med, svcRef, routeType)
+}
+
+func (c *Controller) addEgressRoutes(allRoutes routeSet) {
 	egresses, _ := c.egressLister.List(labels.Everything())
 	for _, eg := range egresses {
 		if eg.Status.EgressNode != c.nodeName {
@@ -674,26 +756,35 @@ func (c *Controller) addEgressRoutes(allRoutes map[bgp.Route]RouteMetadata) {
 		}
 		ip := eg.Status.EgressIP
 		if c.enabledIPv4 && utilnet.IsIPv4String(ip) {
-			addRoutes(allRoutes, ip+ipv4Suffix, eg.Name, EgressIP)
+			addRoutes(allRoutes, ip+ipv4Suffix, 0, eg.Name, EgressIP)
 		} else if c.enabledIPv6 && utilnet.IsIPv6String(ip) {
-			addRoutes(allRoutes, ip+ipv6Suffix, eg.Name, EgressIP)
+			addRoutes(allRoutes, ip+ipv6Suffix, 0, eg.Name, EgressIP)
 		}
 	}
 }
 
-func (c *Controller) addPodRoutes(allRoutes map[bgp.Route]RouteMetadata) {
+func (c *Controller) addPodRoutes(allRoutes routeSet) {
 	if c.enabledIPv4 {
-		addRoutes(allRoutes, c.podIPv4CIDR, "", NodeIPAMPodCIDR)
+		addRoutes(allRoutes, c.podIPv4CIDR, 0, "", NodeIPAMPodCIDR)
 	}
 	if c.enabledIPv6 {
-		addRoutes(allRoutes, c.podIPv6CIDR, "", NodeIPAMPodCIDR)
+		addRoutes(allRoutes, c.podIPv6CIDR, 0, "", NodeIPAMPodCIDR)
 	}
 }
 
-func addRoutes(allRoutes map[bgp.Route]RouteMetadata, prefix, k8sObjRef string, routeType AdvertisedRouteType) {
-	allRoutes[bgp.Route{Prefix: prefix}] = RouteMetadata{
-		Type:      routeType,
-		K8sObjRef: k8sObjRef,
+func addRoutes(allRoutes routeSet, prefix string, med uint32, k8sObjRef string, routeType AdvertisedRouteType) {
+	// A prefix can be produced by more than one Kubernetes object, e.g. by two LoadBalancer Services
+	// sharing an IP. Only one path can be advertised for it, so keep the most preferred MED, which
+	// is the lowest one.
+	if existing, exists := allRoutes[prefix]; exists && existing.route.MED <= med {
+		return
+	}
+	allRoutes[prefix] = routeEntry{
+		route: bgp.Route{Prefix: prefix, MED: med},
+		metadata: RouteMetadata{
+			Type:      routeType,
+			K8sObjRef: k8sObjRef,
+		},
 	}
 }
 
@@ -842,7 +933,8 @@ func (c *Controller) updateService(oldObj, obj interface{}) {
 		slices.Equal(oldSvc.Spec.ExternalIPs, svc.Spec.ExternalIPs) &&
 		slices.Equal(getIngressIPs(oldSvc), getIngressIPs(svc)) &&
 		oldSvc.Spec.ExternalTrafficPolicy == svc.Spec.ExternalTrafficPolicy &&
-		ptr.Equal(oldSvc.Spec.InternalTrafficPolicy, svc.Spec.InternalTrafficPolicy) {
+		ptr.Equal(oldSvc.Spec.InternalTrafficPolicy, svc.Spec.InternalTrafficPolicy) &&
+		bgpRelevantAnnotationsEqual(oldSvc, svc) {
 		return
 	}
 	if c.hasAffectedPolicyByService(oldSvc) || c.hasAffectedPolicyByService(svc) {
@@ -869,6 +961,21 @@ func (c *Controller) deleteService(obj interface{}) {
 		klog.V(2).InfoS("Processing Service DELETE event", "Service", klog.KObj(svc))
 		c.queue.Add(dummyKey)
 	}
+}
+
+// bgpRelevantAnnotationsEqual reports whether the Service annotations which affect how its IPs are
+// advertised are the same in both Services.
+func bgpRelevantAnnotationsEqual(a, b *corev1.Service) bool {
+	for _, key := range []string{
+		types.ServiceExternalIPPoolAnnotationKey,
+		types.ServiceBGPMEDAnnotationKey,
+		types.ServiceBGPMEDModeAnnotationKey,
+	} {
+		if a.Annotations[key] != b.Annotations[key] {
+			return false
+		}
+	}
+	return true
 }
 
 func noLocalTrafficPolicy(svc *corev1.Service) bool {
@@ -1142,9 +1249,9 @@ func (c *Controller) GetBGPRoutes(ctx context.Context) (map[bgp.Route]RouteMetad
 		return nil, ErrBGPPolicyNotFound
 	}
 
-	bgpRoutes := make(map[bgp.Route]RouteMetadata)
-	for route, routeMetadata := range c.bgpPolicyState.routes {
-		bgpRoutes[route] = routeMetadata
+	bgpRoutes := make(map[bgp.Route]RouteMetadata, len(c.bgpPolicyState.routes))
+	for _, entry := range c.bgpPolicyState.routes {
+		bgpRoutes[entry.route] = entry.metadata
 	}
 	return bgpRoutes, nil
 }

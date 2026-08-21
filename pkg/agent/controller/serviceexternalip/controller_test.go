@@ -110,6 +110,29 @@ func (f *fakeMemberlistCluster) SelectNodeForIP(ip, externalIPPool string, filte
 	return selectNode, nil
 }
 
+func (f *fakeMemberlistCluster) SelectNodesForIP(ip, externalIPPool string, maxNodes int, filters ...func(string) bool) ([]string, error) {
+	var selected []string
+	for _, n := range f.hashFn(f.nodes) {
+		passed := true
+		for _, f := range filters {
+			if !f(n) {
+				passed = false
+				break
+			}
+		}
+		if passed {
+			selected = append(selected, n)
+		}
+		if maxNodes > 0 && len(selected) == maxNodes {
+			break
+		}
+	}
+	if len(selected) == 0 {
+		return nil, fmt.Errorf("no Node available for IP %s and externalIPPool %s", ip, externalIPPool)
+	}
+	return selected, nil
+}
+
 func (f *fakeMemberlistCluster) ShouldSelectIP(ip string, pool string, filters ...func(node string) bool) (bool, error) {
 	return false, nil
 }

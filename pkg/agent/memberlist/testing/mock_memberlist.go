@@ -116,6 +116,26 @@ func (mr *MockInterfaceMockRecorder) SelectNodeForIP(ip, externalIPPool any, fil
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SelectNodeForIP", reflect.TypeOf((*MockInterface)(nil).SelectNodeForIP), varargs...)
 }
 
+// SelectNodesForIP mocks base method.
+func (m *MockInterface) SelectNodesForIP(ip, externalIPPool string, maxNodes int, filters ...func(string) bool) ([]string, error) {
+	m.ctrl.T.Helper()
+	varargs := []any{ip, externalIPPool, maxNodes}
+	for _, a := range filters {
+		varargs = append(varargs, a)
+	}
+	ret := m.ctrl.Call(m, "SelectNodesForIP", varargs...)
+	ret0, _ := ret[0].([]string)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// SelectNodesForIP indicates an expected call of SelectNodesForIP.
+func (mr *MockInterfaceMockRecorder) SelectNodesForIP(ip, externalIPPool, maxNodes any, filters ...any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	varargs := append([]any{ip, externalIPPool, maxNodes}, filters...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SelectNodesForIP", reflect.TypeOf((*MockInterface)(nil).SelectNodesForIP), varargs...)
+}
+
 // ShouldSelectIP mocks base method.
 func (m *MockInterface) ShouldSelectIP(ip, pool string, filters ...func(string) bool) (bool, error) {
 	m.ctrl.T.Helper()

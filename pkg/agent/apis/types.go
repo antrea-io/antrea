@@ -270,17 +270,24 @@ func (r BGPPeerResponse) SortRows() bool {
 
 // BGPRouteResponse describes the response struct of bgproutes command.
 type BGPRouteResponse struct {
-	Route     string `json:"route,omitempty"`
-	Type      string `json:"type,omitempty"`
+	Route string `json:"route,omitempty"`
+	Type  string `json:"type,omitempty"`
+	// MED is the MULTI_EXIT_DISC attribute advertised with the route. It is omitted when no MED
+	// attribute is attached to the advertised path.
+	MED       uint32 `json:"med,omitempty"`
 	K8sObjRef string `json:"k8sObjRef,omitempty"`
 }
 
 func (r BGPRouteResponse) GetTableHeader() []string {
-	return []string{"ROUTE", "TYPE", "K8S-OBJ-REF"}
+	return []string{"ROUTE", "TYPE", "MED", "K8S-OBJ-REF"}
 }
 
 func (r BGPRouteResponse) GetTableRow(_ int) []string {
-	return []string{r.Route, r.Type, r.K8sObjRef}
+	med := ""
+	if r.MED != 0 {
+		med = strconv.FormatUint(uint64(r.MED), 10)
+	}
+	return []string{r.Route, r.Type, med, r.K8sObjRef}
 }
 
 func (r BGPRouteResponse) SortRows() bool {

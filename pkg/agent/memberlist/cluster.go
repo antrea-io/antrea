@@ -101,6 +101,7 @@ type ClusterNodeEventHandler func(objName string)
 type Interface interface {
 	ShouldSelectIP(ip string, pool string, filters ...func(node string) bool) (bool, error)
 	SelectNodeForIP(ip, externalIPPool string, filters ...func(string) bool) (string, error)
+	SelectNodesForIP(ip, externalIPPool string, maxNodes int, filters ...func(string) bool) ([]string, error)
 	AliveNodes() sets.Set[string]
 	AddClusterEventHandler(handler ClusterNodeEventHandler)
 	// Ready reports whether the memberlist instance has been created, which is required for this
@@ -870,6 +871,26 @@ func (c *Cluster) SelectNodeForIP(ip, externalIPPool string, filters ...func(str
 		return "", ErrNoNodeAvailable
 	}
 	return node, nil
+}
+
+// SelectNodesForIP returns up to maxNodes Node names for the provided key (IP) and ExternalIPPool, ordered by
+// preference. The first Node is the one that SelectNodeForIP returns; the following ones are the Nodes which would be
+// selected, in order, if the preceding ones left the cluster. A non-positive maxNodes returns all the eligible Nodes.
+//
+// It is used to derive a stable, cluster-wide consistent rank for each (IP, Node) pair, e.g. to advertise an IP from
+// several Nodes with a different BGP MED value per Node.
+func (c *Cluster) SelectNodesForIP(ip, externalIPPool string, maxNodes int, filters ...func(string) bool) ([]string, error) {
+	c.consistentHashRWMutex.RLock()
+	defer c.consistentHashRWMutex.RUnlock()
+	consistentHash, ok := c.consistentHashMap[externalIPPool]
+	if !ok {
+		return nil, fmt.Errorf("local Node consistentHashMap has not synced, ExternalIPPool %s", externalIPPool)
+	}
+	nodes := consistentHash.GetNWithFilters(ip, maxNodes, filters...)
+	if len(nodes) == 0 {
+		return nil, ErrNoNodeAvailable
+	}
+	return nodes, nil
 }
 
 func (c *Cluster) notify(objName string) {

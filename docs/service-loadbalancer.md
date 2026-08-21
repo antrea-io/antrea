@@ -283,6 +283,14 @@ possible way might be to manually configure Node network routing (e.g. by
 adding a static route entry to the underlay router) to route the Service
 traffic to the Node that hosts the Service's externalIP.
 
+Instead of relying on a layer 2 subnet or on static routes, a
+[BGPPolicy](bgp-policy.md) can advertise the externalIPs to the underlay
+routers. Setting its `advertisements.service.med.mode` to `NodePriority` makes
+every Node of the ExternalIPPool advertise each of its IPs with a distinct BGP
+MED, so that ingress traffic is spread across the Nodes and the routers can fail
+over between them without waiting for a re-advertisement. See
+[MED](bgp-policy.md#med).
+
 As of now, Antrea supports Service externalIP management only on Linux Nodes.
 Windows Nodes are not supported yet.
 

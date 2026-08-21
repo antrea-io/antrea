@@ -42,6 +42,7 @@ import (
 	"antrea.io/antrea/v2/pkg/agent/bgp"
 	bgptest "antrea.io/antrea/v2/pkg/agent/bgp/testing"
 	"antrea.io/antrea/v2/pkg/agent/config"
+	memberlisttest "antrea.io/antrea/v2/pkg/agent/memberlist/testing"
 	"antrea.io/antrea/v2/pkg/agent/types"
 	"antrea.io/antrea/v2/pkg/apis/crd/v1alpha1"
 	crdv1b1 "antrea.io/antrea/v2/pkg/apis/crd/v1beta1"
@@ -226,6 +227,7 @@ type fakeController struct {
 	*Controller
 	mockController     *gomock.Controller
 	mockBGPServer      *bgptest.MockInterface
+	mockCluster        *memberlisttest.MockInterface
 	crdClient          *fakeversioned.Clientset
 	crdInformerFactory crdinformers.SharedInformerFactory
 	client             *fake.Clientset
@@ -265,6 +267,12 @@ func newFakeController(t *testing.T, objects []runtime.Object, crdObjects []runt
 	endpointSliceInformer := informerFactory.Discovery().V1().EndpointSlices()
 	bgpPolicyInformer := crdInformerFactory.Crd().V1alpha1().BGPPolicies()
 
+	mockCluster := memberlisttest.NewMockInterface(ctrl)
+	// The controller registers a handler to be notified when the ranking of the Nodes of an
+	// ExternalIPPool changes. Tests which need MED ranking set their own SelectNodesForIP
+	// expectations.
+	mockCluster.EXPECT().AddClusterEventHandler(gomock.Any()).AnyTimes()
+
 	bgpController, _ := NewBGPPolicyController(nodeInformer,
 		serviceInformer,
 		egressInformer,
@@ -276,7 +284,10 @@ func newFakeController(t *testing.T, objects []runtime.Object, crdObjects []runt
 		&config.NetworkConfig{
 			IPv4Enabled: ipv4Enabled,
 			IPv6Enabled: ipv6Enabled,
-		})
+		},
+		mockCluster,
+		false,
+		config.LoadBalancerModeNAT)
 	bgpController.egressEnabled = true
 	bgpController.newBGPServerFn = func(_ *bgp.GlobalConfig) bgp.Interface {
 		return mockBGPServer
@@ -286,6 +297,7 @@ func newFakeController(t *testing.T, objects []runtime.Object, crdObjects []runt
 		Controller:         bgpController,
 		mockController:     ctrl,
 		mockBGPServer:      mockBGPServer,
+		mockCluster:        mockCluster,
 		crdClient:          crdClient,
 		crdInformerFactory: crdInformerFactory,
 		client:             client,
@@ -2169,10 +2181,10 @@ func generateBGPPolicyState(bgpPolicyName string,
 	bgpRoutes []bgp.Route,
 	peerConfigs []bgp.PeerConfig,
 	confederationConfig *confederationConfig) *bgpPolicyState {
-	routes := map[bgp.Route]RouteMetadata{}
+	routes := make(routeSet)
 	peerConfigMap := make(map[string]bgp.PeerConfig)
 	for _, route := range bgpRoutes {
-		routes[route] = allRoutes[route]
+		routes[route.Prefix] = routeEntry{route: route, metadata: allRoutes[route]}
 	}
 	for _, peerConfig := range peerConfigs {
 		peerKey := generateBGPPeerKey(peerConfig.Address, peerConfig.ASN)
@@ -2196,9 +2208,9 @@ func deepCopyBGPPolicyState(in *bgpPolicyState) *bgpPolicyState {
 		peerKey := generateBGPPeerKey(peerConfig.Address, peerConfig.ASN)
 		peerConfigMap[peerKey] = peerConfig
 	}
-	routes := make(map[bgp.Route]RouteMetadata)
-	for routeType := range in.routes {
-		routes[routeType] = in.routes[routeType]
+	routes := make(routeSet)
+	for prefix := range in.routes {
+		routes[prefix] = in.routes[prefix]
 	}
 	var confederationConf *confederationConfig
 	if in.confederationConfig != nil {

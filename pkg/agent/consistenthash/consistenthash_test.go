@@ -256,3 +256,59 @@ func benchmarkGet(b *testing.B, shards int) {
 		hash.Get(buckets[i&(shards-1)])
 	}
 }
+
+func TestGetNWithFilters(t *testing.T) {
+	keys := []string{"1", "2", "3", "4", "5"}
+	m := New(50, nil)
+	m.Add(keys...)
+
+	// The full order is what the ring produces for the test key; the assertions below are all
+	// expressed relative to it, so that the test does not depend on the hash function.
+	fullOrder := m.GetNWithFilters("2", 0)
+	require.Len(t, fullOrder, len(keys), "a non-positive n must return every key")
+	assert.ElementsMatch(t, keys, fullOrder, "every key must appear exactly once")
+
+	t.Run("first key matches GetWithFilters", func(t *testing.T) {
+		assert.Equal(t, m.GetWithFilters("2"), fullOrder[0])
+	})
+
+	t.Run("order is stable", func(t *testing.T) {
+		assert.Equal(t, fullOrder, m.GetNWithFilters("2", 0))
+	})
+
+	t.Run("n limits the result", func(t *testing.T) {
+		assert.Equal(t, fullOrder[:3], m.GetNWithFilters("2", 3))
+	})
+
+	t.Run("n larger than the ring returns every key", func(t *testing.T) {
+		assert.Equal(t, fullOrder, m.GetNWithFilters("2", 100))
+	})
+
+	t.Run("removing the first key promotes the second one", func(t *testing.T) {
+		// This is the property the BGP MED ranking relies on: the rank of a Node only shifts by one
+		// when a more preferred Node leaves.
+		m.Remove(fullOrder[0])
+		defer m.Add(fullOrder[0])
+		assert.Equal(t, fullOrder[1:], m.GetNWithFilters("2", 0))
+	})
+
+	t.Run("filters exclude keys without reordering the rest", func(t *testing.T) {
+		excluded := fullOrder[1]
+		got := m.GetNWithFilters("2", 0, func(s string) bool { return s != excluded })
+		var expected []string
+		for _, k := range fullOrder {
+			if k != excluded {
+				expected = append(expected, k)
+			}
+		}
+		assert.Equal(t, expected, got)
+	})
+
+	t.Run("no key passes the filters", func(t *testing.T) {
+		assert.Empty(t, m.GetNWithFilters("2", 0, func(string) bool { return false }))
+	})
+
+	t.Run("empty ring", func(t *testing.T) {
+		assert.Empty(t, New(50, nil).GetNWithFilters("2", 0))
+	})
+}

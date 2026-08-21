@@ -86,6 +86,7 @@ func HandleFunc(bq querier.AgentBGPPolicyInfoQuerier) http.HandlerFunc {
 			bgpRoutesResp = append(bgpRoutesResp, apis.BGPRouteResponse{
 				Route:     bgpRoute.Prefix,
 				Type:      string(routeMetadata.Type),
+				MED:       bgpRoute.MED,
 				K8sObjRef: routeMetadata.K8sObjRef,
 			})
 		}

@@ -108,16 +108,35 @@ func (m *Map) Get(key string) string {
 
 // GetWithFilters gets the closest item in the hash to which passes all filters.
 func (m *Map) GetWithFilters(key string, filters ...func(string) bool) string {
-	if m.IsEmpty() {
+	results := m.GetNWithFilters(key, 1, filters...)
+	if len(results) == 0 {
 		return ""
+	}
+	return results[0]
+}
+
+// GetNWithFilters gets up to n distinct items which pass all filters, ordered by their distance to
+// the provided key on the ring: the first returned item is the one GetWithFilters would return, the
+// second one is the item which would be returned if the first one were removed from the ring, and
+// so on. Fewer than n items are returned if fewer pass the filters. A non-positive n returns all the
+// items which pass the filters.
+//
+// The returned order only depends on the key and on the items present in the ring, so all the
+// Antrea Agents which have the same view of the cluster compute the same order.
+func (m *Map) GetNWithFilters(key string, n int, filters ...func(string) bool) []string {
+	if m.IsEmpty() {
+		return nil
+	}
+	if n <= 0 || n > len(m.keys) {
+		n = len(m.keys)
 	}
 	hash := m.hash([]byte(key))
 	pivot := &replica{
 		key:  key,
 		hash: hash,
 	}
-	var result *replica
-	visited := make(map[string]struct{})
+	results := make([]string, 0, n)
+	visited := make(map[string]struct{}, len(m.keys))
 	iterator := func(item btree.Item) bool {
 		// all keys visited
 		if len(visited) == len(m.keys) {
@@ -127,25 +146,21 @@ func (m *Map) GetWithFilters(key string, filters ...func(string) bool) string {
 		if _, exists := visited[r.key]; exists {
 			return true
 		}
+		visited[r.key] = struct{}{}
 		for _, f := range filters {
 			if !f(r.key) {
-				visited[r.key] = struct{}{}
 				return true
 			}
 		}
-		// stop iterating
-		result = r
-		return false
+		results = append(results, r.key)
+		// stop iterating once enough keys have been collected
+		return len(results) < n
 	}
 	// search in [pivot, last]
 	m.tree.AscendGreaterOrEqual(pivot, iterator)
-	if result == nil {
+	if len(results) < n {
 		// search in [first, pivot)
 		m.tree.AscendLessThan(pivot, iterator)
 	}
-	// no key passes all filters
-	if result == nil {
-		return ""
-	}
-	return result.key
+	return results
 }

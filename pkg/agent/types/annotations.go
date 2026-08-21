@@ -38,4 +38,16 @@ const (
 
 	// ServiceLoadBalancerModeAnnotationKey is the key of the Service annotation that specifies the Service's load balancer mode.
 	ServiceLoadBalancerModeAnnotationKey string = "service.antrea.io/load-balancer-mode"
+
+	// ServiceBGPMEDAnnotationKey is the key of the Service annotation that overrides the base MULTI_EXIT_DISC (MED)
+	// value used when the Service IPs are advertised with BGP. The value must be an integer in the range
+	// [0, 4294967295]. It is only honored if the effective BGPPolicy enables MED for Service advertisements and does
+	// not set `spec.advertisements.service.med.allowServiceOverride` to false.
+	ServiceBGPMEDAnnotationKey string = "service.antrea.io/bgp-med"
+
+	// ServiceBGPMEDModeAnnotationKey is the key of the Service annotation that overrides the MED mode used when the
+	// Service IPs are advertised with BGP. The value must be one of "None", "Static" or "NodePriority". It is only
+	// honored if the effective BGPPolicy enables MED for Service advertisements and does not set
+	// `spec.advertisements.service.med.allowServiceOverride` to false.
+	ServiceBGPMEDModeAnnotationKey string = "service.antrea.io/bgp-med-mode"
 )

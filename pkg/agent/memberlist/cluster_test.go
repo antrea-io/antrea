@@ -979,6 +979,67 @@ func TestCluster_SelectNodeForIP(t *testing.T) {
 	}
 }
 
+func TestCluster_SelectNodesForIP(t *testing.T) {
+	const fakeEIPName = "fakeExternalIPPool"
+	const ip = "1.1.1.1"
+
+	newFakeCluster := func(nodeNum int) *Cluster {
+		consistentHashMap := NewNodeConsistentHashMap()
+		consistentHashMap.Add(genNodes(nodeNum)...)
+		return &Cluster{consistentHashMap: map[string]*consistenthash.Map{fakeEIPName: consistentHashMap}}
+	}
+
+	t.Run("unknown ExternalIPPool", func(t *testing.T) {
+		_, err := newFakeCluster(3).SelectNodesForIP(ip, "unknown", 0)
+		assert.ErrorContains(t, err, "has not synced")
+	})
+
+	t.Run("no Node in the pool", func(t *testing.T) {
+		_, err := newFakeCluster(0).SelectNodesForIP(ip, fakeEIPName, 0)
+		assert.ErrorIs(t, err, ErrNoNodeAvailable)
+	})
+
+	t.Run("no Node passes the filters", func(t *testing.T) {
+		_, err := newFakeCluster(3).SelectNodesForIP(ip, fakeEIPName, 0, func(string) bool { return false })
+		assert.ErrorIs(t, err, ErrNoNodeAvailable)
+	})
+
+	t.Run("every Node is ranked and the first one is the owner of the IP", func(t *testing.T) {
+		cluster := newFakeCluster(5)
+		nodes, err := cluster.SelectNodesForIP(ip, fakeEIPName, 0)
+		require.NoError(t, err)
+		assert.Len(t, nodes, 5)
+		assert.ElementsMatch(t, genNodes(5), nodes)
+
+		owner, err := cluster.SelectNodeForIP(ip, fakeEIPName)
+		require.NoError(t, err)
+		assert.Equal(t, owner, nodes[0], "the most preferred Node must be the one that owns the IP")
+	})
+
+	t.Run("maxNodes limits the ranking", func(t *testing.T) {
+		cluster := newFakeCluster(5)
+		all, err := cluster.SelectNodesForIP(ip, fakeEIPName, 0)
+		require.NoError(t, err)
+		limited, err := cluster.SelectNodesForIP(ip, fakeEIPName, 2)
+		require.NoError(t, err)
+		assert.Equal(t, all[:2], limited)
+	})
+
+	t.Run("every Node computes the same ranking", func(t *testing.T) {
+		// The ranking must not depend on which Node computes it, otherwise two Nodes could both
+		// advertise the most preferred path for the same IP.
+		expected, err := newFakeCluster(10).SelectNodesForIP(ip, fakeEIPName, 0)
+		require.NoError(t, err)
+		for i := 0; i < 10; i++ {
+			cluster := newFakeCluster(10)
+			cluster.nodeName = fmt.Sprintf("node-%d", i)
+			nodes, err := cluster.SelectNodesForIP(ip, fakeEIPName, 0)
+			require.NoError(t, err)
+			assert.Equal(t, expected, nodes)
+		}
+	})
+}
+
 // BenchmarkCluster_ShouldSelect
 // BenchmarkCluster_ShouldSelect/Select_Node_from_10000_alive_nodes-nodeSelectedForEgress
 // BenchmarkCluster_ShouldSelect/Select_Node_from_10000_alive_nodes-nodeSelectedForEgress-16         	 9190818	       128 ns/op

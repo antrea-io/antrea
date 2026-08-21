@@ -313,8 +313,69 @@ type ServiceAdvertisement struct {
 	// will be selected since Service selector is not added yet.
 	IPTypes []ServiceIPType `json:"ipTypes,omitempty"`
 
+	// MED configures the MULTI_EXIT_DISC path attribute attached to the advertised Service IP routes. When it is
+	// unset, no MED attribute is attached, which is the behavior of Antrea versions without MED support.
+	MED *MEDAdvertisement `json:"med,omitempty"`
+
 	// Empty now, selectors to be added later, which are used to select specific Services.
 	// Selectors []Selector `json:"selectors,omitempty"`
+}
+
+// MEDMode determines how the MULTI_EXIT_DISC value advertised with a route is computed.
+type MEDMode string
+
+const (
+	// MEDModeNone disables the MULTI_EXIT_DISC attribute. It is the default and is equivalent to leaving
+	// ServiceAdvertisement.MED unset.
+	MEDModeNone MEDMode = "None"
+
+	// MEDModeStatic attaches the same MULTI_EXIT_DISC value, MEDAdvertisement.BaseValue, to every advertised route on
+	// every Node. It is useful to make the routes advertised by Antrea more or less preferred than the routes for the
+	// same destinations advertised by another BGP speaker.
+	MEDModeStatic MEDMode = "Static"
+
+	// MEDModeNodePriority attaches a distinct MULTI_EXIT_DISC value per advertising Node to the routes of the Service
+	// IPs which are allocated from an ExternalIPPool (see the "service.antrea.io/external-ip-pool" annotation). Every
+	// Node of the ExternalIPPool advertises the IP, and the MED value is BaseValue + rank * Step, where rank is the
+	// position of the Node in the same consistent hash ring which the ServiceExternalIP feature uses to elect the
+	// owner of the IP. The owner therefore advertises the most preferred path, and the other Nodes advertise backup
+	// paths which the BGP peers can fail over to immediately.
+	//
+	// Because different IPs of the same ExternalIPPool hash to different Nodes, ingress traffic for the pool is
+	// spread across the Nodes of the pool. The Nodes which do not own an IP must still be able to serve the traffic
+	// for it: enable the LoadBalancerModeDSR feature gate (and set the "service.antrea.io/load-balancer-mode"
+	// annotation to "dsr") to preserve the client IP, or use an externalTrafficPolicy of "Cluster".
+	//
+	// Service IPs which are not allocated from an ExternalIPPool cannot be ranked, and are advertised with BaseValue,
+	// exactly as in the Static mode.
+	MEDModeNodePriority MEDMode = "NodePriority"
+)
+
+// MEDAdvertisement configures the MULTI_EXIT_DISC path attribute attached to advertised routes.
+type MEDAdvertisement struct {
+	// Mode determines how the MED value is computed. The default is None, which disables the attribute.
+	Mode MEDMode `json:"mode,omitempty"`
+
+	// BaseValue is the MED value advertised in the Static mode, and the MED value advertised by the most preferred
+	// Node in the NodePriority mode. The range of the value is from 0 to 4294967295, and the default value is 100.
+	// Note that a value of 0 disables the attribute, because most BGP implementations treat a missing MED as 0.
+	BaseValue *int64 `json:"baseValue,omitempty"`
+
+	// Step is the MED increment applied per Node rank in the NodePriority mode: the Node with rank N advertises
+	// BaseValue + N * Step. The range of the value is from 1 to 4294967295, and the default value is 100. It is
+	// ignored in the other modes.
+	Step *int64 `json:"step,omitempty"`
+
+	// MaxAdvertisingNodes limits how many Nodes of an ExternalIPPool advertise each of its IPs in the NodePriority
+	// mode, which bounds the number of paths that the BGP peers have to hold. The Nodes with the lowest ranks are
+	// kept. The range of the value is from 1 to 65535, and the default value is 0, which means that every Node of
+	// the ExternalIPPool advertises every IP of the pool. It is ignored in the other modes.
+	MaxAdvertisingNodes *int32 `json:"maxAdvertisingNodes,omitempty"`
+
+	// AllowServiceOverride determines whether the "service.antrea.io/bgp-med" and "service.antrea.io/bgp-med-mode"
+	// annotations of a Service are honored. The default value is true. Set it to false to enforce the MED
+	// configuration of the BGPPolicy on all the Services.
+	AllowServiceOverride *bool `json:"allowServiceOverride,omitempty"`
 }
 
 type PodAdvertisement struct {

@@ -131,6 +131,14 @@ func (c *fakeSingleNodeCluster) SelectNodeForIP(ip, externalIPPool string, filte
 	return c.node, nil
 }
 
+func (c *fakeSingleNodeCluster) SelectNodesForIP(ip, externalIPPool string, maxNodes int, filters ...func(string) bool) ([]string, error) {
+	node, err := c.SelectNodeForIP(ip, externalIPPool, filters...)
+	if err != nil {
+		return nil, err
+	}
+	return []string{node}, nil
+}
+
 func (c *fakeSingleNodeCluster) AliveNodes() sets.Set[string] {
 	return sets.New(c.node)
 }

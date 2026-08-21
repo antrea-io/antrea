@@ -887,40 +887,43 @@ PEER                       ASN   STATE
 `antctl` agent command `get bgproutes` prints the advertised BGP routes on the local Node.
 For more information about route advertisement, please refer to [Advertisements](./bgp-policy.md#advertisements).
 
+The `MED` column shows the MULTI_EXIT_DISC attribute attached to the advertised path, and is empty when no MED attribute
+is attached. See [MED](./bgp-policy.md#med).
+
 ```bash
 # Get the list of all advertised bgp routes
 $ antctl get bgproutes
 
-ROUTE                    TYPE                  K8S-OBJ-REF
-172.18.0.3/32            EgressIP              egress1
-10.244.1.0/24            NodeIPAMPodCIDR       <NONE>
-10.96.0.1/32             ServiceLoadBalancerIP default/svc1
-fec0::192:168:77:100/128 EgressIP              egress2
-fd00:10:244:1::/64       NodeIPAMPodCIDR       <NONE>
-fec0::10:96:10:10/128    ServiceLoadBalancerIP default/svc2
+ROUTE                    TYPE                  MED K8S-OBJ-REF
+172.18.0.3/32            EgressIP                  egress1
+10.244.1.0/24            NodeIPAMPodCIDR           <NONE>
+10.96.0.1/32             ServiceLoadBalancerIP 200 default/svc1
+fec0::192:168:77:100/128 EgressIP                  egress2
+fd00:10:244:1::/64       NodeIPAMPodCIDR           <NONE>
+fec0::10:96:10:10/128    ServiceLoadBalancerIP 100 default/svc2
 
 # Get the list of advertised IPv4 bgp routes
 $ antctl get bgproutes --ipv4-only
 
-ROUTE         TYPE                  K8S-OBJ-REF
-172.18.0.3/32 EgressIP              egress1
-10.244.1.0/24 NodeIPAMPodCIDR       <NONE>
-10.96.0.1/32  ServiceLoadBalancerIP default/svc1
+ROUTE         TYPE                  MED K8S-OBJ-REF
+172.18.0.3/32 EgressIP                  egress1
+10.244.1.0/24 NodeIPAMPodCIDR           <NONE>
+10.96.0.1/32  ServiceLoadBalancerIP 200 default/svc1
 
 # Get the list of advertised IPv6 bgp routes
 $ antctl get bgproutes --ipv6-only
 
-ROUTE                    TYPE                  K8S-OBJ-REF
-fec0::192:168:77:100/128 EgressIP              egress2
-fd00:10:244:1::/64       NodeIPAMPodCIDR       <NONE>
-fec0::10:96:10:10/128    ServiceLoadBalancerIP default/svc2
+ROUTE                    TYPE                  MED K8S-OBJ-REF
+fec0::192:168:77:100/128 EgressIP                  egress2
+fd00:10:244:1::/64       NodeIPAMPodCIDR           <NONE>
+fec0::10:96:10:10/128    ServiceLoadBalancerIP 100 default/svc2
 
 # Get the list of all advertised routes of a specific type
 $ antctl get bgproutes -T EgressIP
 
-ROUTE                    TYPE     K8S-OBJ-REF
-172.18.0.3/32            EgressIP egress1
-fec0::192:168:77:100/128 EgressIP egress2
+ROUTE                    TYPE     MED K8S-OBJ-REF
+172.18.0.3/32            EgressIP     egress1
+fec0::192:168:77:100/128 EgressIP     egress2
 ```
 
 ### Upgrade existing objects of CRDs
