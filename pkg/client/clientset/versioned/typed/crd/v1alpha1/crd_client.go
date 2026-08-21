@@ -29,6 +29,7 @@ type CrdV1alpha1Interface interface {
 	AntreaNodeConfigsGetter
 	BGPPoliciesGetter
 	ExternalNodesGetter
+	FlowAccessControlsGetter
 	FlowExporterDestinationsGetter
 	NodeLatencyMonitorsGetter
 	PacketCapturesGetter
@@ -50,6 +51,10 @@ func (c *CrdV1alpha1Client) BGPPolicies() BGPPolicyInterface {
 
 func (c *CrdV1alpha1Client) ExternalNodes(namespace string) ExternalNodeInterface {
 	return newExternalNodes(c, namespace)
+}
+
+func (c *CrdV1alpha1Client) FlowAccessControls() FlowAccessControlInterface {
+	return newFlowAccessControls(c)
 }
 
 func (c *CrdV1alpha1Client) FlowExporterDestinations() FlowExporterDestinationInterface {
