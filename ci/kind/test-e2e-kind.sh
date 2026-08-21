@@ -444,9 +444,12 @@ function run_test {
       fi
       flow_visibility_manifest_default_args=("--extra-helm-values" "flowCollector.tls.clientSecretName=ipfix-client-cert,flowCollector.tls.caSecretName=ipfix-server-ca")
       $FLOWAGGREGATOR_YML_CMD "${flow_visibility_manifest_default_args[@]}" ${coverage_flag} | docker exec -i kind-control-plane dd of=/root/flow-aggregator.yml
-      # We are generating flow-aggregators for two separate namespaces so we can test forwarding connection details to different destinations
-      $FLOWAGGREGATOR_YML_CMD "${flow_visibility_manifest_default_args[@]}" -n 'flow-aggregator-1' ${coverage_flag} | docker exec -i kind-control-plane dd of=/root/flow-aggregator-1.yml
-      $FLOWAGGREGATOR_YML_CMD "${flow_visibility_manifest_default_args[@]}" -n 'flow-aggregator-2' ${coverage_flag} | docker exec -i kind-control-plane dd of=/root/flow-aggregator-2.yml
+      # We are generating flow-aggregators for two separate namespaces so we can test forwarding connection details to different destinations.
+      # clusterScopedRBACNameSuffix must be unique for each one: without it, all these manifests
+      # declare the same ClusterRoleBindings, and applying the second one rebinds them to the second
+      # ServiceAccount, leaving the first FlowAggregator without permission to list/watch Pods.
+      $FLOWAGGREGATOR_YML_CMD "${flow_visibility_manifest_default_args[@]}" --extra-helm-values 'clusterScopedRBACNameSuffix=-1' -n 'flow-aggregator-1' ${coverage_flag} | docker exec -i kind-control-plane dd of=/root/flow-aggregator-1.yml
+      $FLOWAGGREGATOR_YML_CMD "${flow_visibility_manifest_default_args[@]}" --extra-helm-values 'clusterScopedRBACNameSuffix=-2' -n 'flow-aggregator-2' ${coverage_flag} | docker exec -i kind-control-plane dd of=/root/flow-aggregator-2.yml
 
       $HELM template "$FLOW_VISIBILITY_CHART"  | docker exec -i kind-control-plane dd of=/root/flow-visibility.yml
       $HELM template "$FLOW_VISIBILITY_CHART" --set "secureConnection.enable=true" | docker exec -i kind-control-plane dd of=/root/flow-visibility-tls.yml
