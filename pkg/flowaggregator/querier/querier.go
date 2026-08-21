@@ -33,6 +33,10 @@ type Metrics struct {
 type FlowAggregatorQuerier interface {
 	GetFlowRecords(flowKey *intermediate.FlowKey) []map[string]interface{}
 	GetRecordMetrics() Metrics
+	// FlowStreamServiceReady reports whether FlowStreamService is currently serving, for the Flow
+	// Aggregator's own apiserver to expose via readyz/livez. It reports true when the feature is
+	// disabled entirely, not just when the (enabled) service happens to be up.
+	FlowStreamServiceReady() bool
 }
 
 type ExternalFlowCollectorAddr struct {

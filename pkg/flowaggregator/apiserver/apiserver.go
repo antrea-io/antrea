@@ -16,8 +16,10 @@ package apiserver
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net"
+	"net/http"
 	"os"
 	"path"
 
@@ -26,6 +28,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
 	genericapiserver "k8s.io/apiserver/pkg/server"
+	"k8s.io/apiserver/pkg/server/healthz"
 	genericoptions "k8s.io/apiserver/pkg/server/options"
 	basecompatibility "k8s.io/component-base/compatibility"
 
@@ -74,6 +77,21 @@ func installHandlers(s *genericapiserver.GenericAPIServer, faq querier.FlowAggre
 	s.Handler.NonGoRestfulMux.HandleFunc("/loglevel", loglevel.HandleFunc())
 }
 
+// installHealthChecks registers a healthz.HealthChecker reflecting FlowStreamService's own
+// readiness on healthz, livez and readyz alike (AddHealthChecks, not AddReadyzChecks: the two
+// probes are meant to share this same check, and AddReadyzChecks alone would leave livez seeing
+// only the default "ping" check). This must run before GenericAPIServer.PrepareRun installs the
+// actual endpoint handlers (called from flowAggregatorAPIServer.Run), which New's own caller does
+// separately and later, so registering here, inside New, is always in time.
+func installHealthChecks(s *genericapiserver.GenericAPIServer, faq querier.FlowAggregatorQuerier) error {
+	return s.AddHealthChecks(healthz.NamedCheck("flowstreamservice", func(_ *http.Request) error {
+		if !faq.FlowStreamServiceReady() {
+			return errors.New("FlowStreamService is not serving")
+		}
+		return nil
+	}))
+}
+
 // New creates an APIServer for running in flow aggregator.
 func New(faq querier.FlowAggregatorQuerier, bindPort int, cipherSuites []uint16, tlsMinVersion uint16) (*flowAggregatorAPIServer, error) {
 	cfg, err := newConfig(bindPort)
@@ -87,6 +105,9 @@ func New(faq querier.FlowAggregatorQuerier, bindPort int, cipherSuites []uint16,
 	s.SecureServingInfo.CipherSuites = cipherSuites
 	s.SecureServingInfo.MinTLSVersion = tlsMinVersion
 	installHandlers(s, faq)
+	if err := installHealthChecks(s, faq); err != nil {
+		return nil, err
+	}
 	return &flowAggregatorAPIServer{GenericAPIServer: s}, nil
 }
 
