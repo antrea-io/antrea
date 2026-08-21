@@ -28,6 +28,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/klog/v2"
 
+	"antrea.io/antrea/v2/pkg/agent/client"
 	"antrea.io/antrea/v2/pkg/agent/config"
 	"antrea.io/antrea/v2/pkg/agent/openflow"
 	"antrea.io/antrea/v2/pkg/agent/servicecidr"
@@ -47,6 +48,30 @@ const (
 
 	serviceIPv4CIDRKey = "serviceIPv4CIDRKey"
 )
+
+// feature identifies a feature which listens on the Node's host network. Host network rules are not
+// supported on Windows, the type and its values only exist to keep the API identical to Linux.
+type feature int
+
+// HostNetworkPortRules is a no-op on Windows, where host network rules are not supported.
+type HostNetworkPortRules struct {
+}
+
+func NewHostNetworkPortRules() *HostNetworkPortRules {
+	return &HostNetworkPortRules{}
+}
+
+// The values which can be passed to Allow.
+const (
+	FeatureAgentAPIServer feature = iota
+	FeatureAgentClusterMembership
+	FeatureWireguard
+	FeatureProxyHealthCheck
+)
+
+func (h *HostNetworkPortRules) Allow(_ int32, _ feature) *HostNetworkPortRules {
+	return h
+}
 
 var (
 	antreaNat                  = util.AntreaNatName
@@ -81,7 +106,6 @@ type Client struct {
 }
 
 // NewClient returns a route client.
-// nodeSNATRandomFully and egressSNATRandomFully are ignored on Windows.
 func NewClient(networkConfig *config.NetworkConfig,
 	noSNAT bool,
 	proxyAll bool,
@@ -90,11 +114,13 @@ func NewClient(networkConfig *config.NetworkConfig,
 	nodeLatencyMonitorEnabled bool,
 	multicastEnabled bool,
 	egressEnabled bool, // ignored
+	serviceExternalIPEnabled bool, // ignored
 	nodeSNATRandomFully bool, // ignored
 	egressSNATRandomFully bool, // ignored
 	serviceCIDRProvider servicecidr.Interface,
-	wireguardPort int32,
-	proxyHealthCheckPort int32) (*Client, error) {
+	endpointResolver *client.EndpointResolver, // ignored
+	hostNetworkPortRules *HostNetworkPortRules, // ignored
+) (*Client, error) {
 	return &Client{
 		networkConfig:               networkConfig,
 		winnet:                      &winnet.Handle{},

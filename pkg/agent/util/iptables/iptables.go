@@ -84,6 +84,9 @@ const (
 	ProtocolSCTP   = "sctp"
 	ProtocolICMP   = "icmp"
 	ProtocolICMPv6 = "icmp6"
+	ProtocolGRE    = "gre"
+	ProtocolESP    = "esp"
+	ProtocolAH     = "ah"
 )
 
 const (
@@ -131,6 +134,7 @@ type IPTablesRuleBuilder interface {
 	MatchPortDst(port *intstr.IntOrString, endPort *int32) IPTablesRuleBuilder
 	MatchPortSrc(port, endPort *int32) IPTablesRuleBuilder
 	MatchICMP(icmpType, icmpCode *int32, ipProtocol Protocol) IPTablesRuleBuilder
+	MatchEstablished() IPTablesRuleBuilder
 	MatchEstablishedOrRelated() IPTablesRuleBuilder
 	MatchInputInterface(interfaceName string) IPTablesRuleBuilder
 	MatchOutputInterface(interfaceName string) IPTablesRuleBuilder

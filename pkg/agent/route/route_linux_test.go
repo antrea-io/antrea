@@ -18,6 +18,7 @@ import (
 	"context"
 	"fmt"
 	"net"
+	"net/url"
 	"strconv"
 	"sync"
 	"testing"
@@ -32,6 +33,7 @@ import (
 	"k8s.io/utils/ptr"
 	"sigs.k8s.io/knftables"
 
+	"antrea.io/antrea/v2/pkg/agent/client"
 	"antrea.io/antrea/v2/pkg/agent/config"
 	"antrea.io/antrea/v2/pkg/agent/openflow"
 	servicecidrtest "antrea.io/antrea/v2/pkg/agent/servicecidr/testing"
@@ -42,6 +44,7 @@ import (
 	iptablestest "antrea.io/antrea/v2/pkg/agent/util/iptables/testing"
 	netlinktest "antrea.io/antrea/v2/pkg/agent/util/netlink/testing"
 	"antrea.io/antrea/v2/pkg/agent/util/nftables"
+	"antrea.io/antrea/v2/pkg/apis"
 	binding "antrea.io/antrea/v2/pkg/ovs/openflow"
 	"antrea.io/antrea/v2/pkg/ovs/ovsconfig"
 	"antrea.io/antrea/v2/pkg/util/ip"
@@ -378,6 +381,19 @@ func TestSyncIPSet(t *testing.T) {
 	}
 }
 
+func TestNewClientCopiesHostNetworkPorts(t *testing.T) {
+	hostNetworkPortRules := NewHostNetworkPortRules().Allow(10350, FeatureAgentAPIServer)
+	c, err := NewClient(&config.NetworkConfig{}, false, false, false, false, false, false, false, false, false,
+		false, nil, nil, hostNetworkPortRules)
+	require.NoError(t, err)
+
+	// Registering a port after the Client was created must not change its ports: they are only read when
+	// Initialize installs the rules, so the change would silently apply until then and silently do
+	// nothing afterwards.
+	hostNetworkPortRules.Allow(10351, FeatureAgentClusterMembership)
+	assert.Equal(t, map[feature]int32{featureAgentAPIServer: 10350}, c.hostNetworkPortRules)
+}
+
 func TestSyncIPTables(t *testing.T) {
 	mockIPTablesListRulesOfChains := func(mockIPTables *iptablestest.MockInterfaceMockRecorder,
 		protocol iptables.Protocol,
@@ -507,18 +523,28 @@ COMMIT
 :ANTREA-POL-PRE-INGRESS-RULES - [0:0]
 -A ANTREA-FORWARD -m comment --comment "Antrea: accept packets from local Pods" -i antrea-gw0 -j ACCEPT
 -A ANTREA-FORWARD -m comment --comment "Antrea: accept packets to local Pods" -o antrea-gw0 -j ACCEPT
+-A ANTREA-INPUT -m comment --comment "Antrea: allow tunnel input packets" -p udp --dport 6081 -j ACCEPT
+-A ANTREA-INPUT -m comment --comment "Antrea: allow WireGuard input packets" -p udp --dport 51820 -j ACCEPT
 -A ANTREA-INPUT -i antrea-gw0 -p icmp --icmp-type 8 -m comment --comment "Antrea: allow ICMP probes from NodeLatencyMonitor" -j ACCEPT
 -A ANTREA-INPUT -i antrea-gw0 -p icmp --icmp-type 0 -m comment --comment "Antrea: allow ICMP probes from NodeLatencyMonitor" -j ACCEPT
--A ANTREA-INPUT -m comment --comment "Antrea: allow WireGuard input packets" -p udp --dport 51820 -j ACCEPT
+-A ANTREA-INPUT -m comment --comment "Antrea: allow proxy health check input packets" -p tcp --dport 10256 -j ACCEPT
+-A ANTREA-INPUT -m comment --comment "Antrea: allow Agent APIServer input packets" -p tcp --dport 10350 -j ACCEPT
+-A ANTREA-INPUT -m comment --comment "Antrea: allow Agent cluster memberships TCP input packets" -p tcp --dport 10351 -j ACCEPT
+-A ANTREA-INPUT -m comment --comment "Antrea: allow Agent cluster memberships TCP reply input packets" -p tcp --sport 10351 -m conntrack --ctstate ESTABLISHED -j ACCEPT
+-A ANTREA-INPUT -m comment --comment "Antrea: allow Agent cluster memberships UDP input packets" -p udp --dport 10351 -j ACCEPT
 -A ANTREA-INPUT -m comment --comment "Antrea: jump to static ingress NodeNetworkPolicy rules" -j ANTREA-POL-PRE-INGRESS-RULES
 -A ANTREA-INPUT -m comment --comment "Antrea: jump to ingress NodeNetworkPolicy rules" -j ANTREA-POL-INGRESS-RULES
--A ANTREA-INPUT -m comment --comment "Antrea: allow proxy health check input packets" -p tcp --dport 10256 -j ACCEPT
+-A ANTREA-OUTPUT -m comment --comment "Antrea: allow tunnel output packets" -p udp --dport 6081 -j ACCEPT
+-A ANTREA-OUTPUT -m comment --comment "Antrea: allow WireGuard output packets" -p udp --dport 51820 -j ACCEPT
 -A ANTREA-OUTPUT -o antrea-gw0 -p icmp --icmp-type 8 -m comment --comment "Antrea: allow ICMP probes from NodeLatencyMonitor" -j ACCEPT
 -A ANTREA-OUTPUT -o antrea-gw0 -p icmp --icmp-type 0 -m comment --comment "Antrea: allow ICMP probes from NodeLatencyMonitor" -j ACCEPT
--A ANTREA-OUTPUT -m comment --comment "Antrea: allow WireGuard output packets" -p udp --dport 51820 -j ACCEPT
+-A ANTREA-OUTPUT -m comment --comment "Antrea: allow proxy health check reply packets" -p tcp --sport 10256 -m conntrack --ctstate ESTABLISHED -j ACCEPT
+-A ANTREA-OUTPUT -m comment --comment "Antrea: allow Agent APIServer reply packets" -p tcp --sport 10350 -m conntrack --ctstate ESTABLISHED -j ACCEPT
+-A ANTREA-OUTPUT -m comment --comment "Antrea: allow Agent cluster memberships TCP output packets" -p tcp --dport 10351 -j ACCEPT
+-A ANTREA-OUTPUT -m comment --comment "Antrea: allow Agent cluster memberships TCP reply packets" -p tcp --sport 10351 -m conntrack --ctstate ESTABLISHED -j ACCEPT
+-A ANTREA-OUTPUT -m comment --comment "Antrea: allow Agent cluster memberships UDP output packets" -p udp --dport 10351 -j ACCEPT
 -A ANTREA-OUTPUT -m comment --comment "Antrea: jump to static egress NodeNetworkPolicy rules" -j ANTREA-POL-PRE-EGRESS-RULES
 -A ANTREA-OUTPUT -m comment --comment "Antrea: jump to egress NodeNetworkPolicy rules" -j ANTREA-POL-EGRESS-RULES
--A ANTREA-OUTPUT -m comment --comment "Antrea: allow proxy health check reply packets" -p tcp --sport 10256 -j ACCEPT
 -A ANTREA-POL-INGRESS-RULES -j ACCEPT -m comment --comment "mock rule"
 -A ANTREA-POL-PRE-EGRESS-RULES -m conntrack --ctstate ESTABLISHED,RELATED -m comment --comment "Antrea: allow egress established or related packets" -j ACCEPT
 -A ANTREA-POL-PRE-EGRESS-RULES -o lo -m comment --comment "Antrea: allow egress packets to loopback" -j ACCEPT
@@ -565,18 +591,28 @@ COMMIT
 :ANTREA-POL-PRE-INGRESS-RULES - [0:0]
 -A ANTREA-FORWARD -m comment --comment "Antrea: accept packets from local Pods" -i antrea-gw0 -j ACCEPT
 -A ANTREA-FORWARD -m comment --comment "Antrea: accept packets to local Pods" -o antrea-gw0 -j ACCEPT
+-A ANTREA-INPUT -m comment --comment "Antrea: allow tunnel input packets" -p udp --dport 6081 -j ACCEPT
+-A ANTREA-INPUT -m comment --comment "Antrea: allow WireGuard input packets" -p udp --dport 51820 -j ACCEPT
 -A ANTREA-INPUT -i antrea-gw0 -p icmpv6 --icmpv6-type 128 -m comment --comment "Antrea: allow ICMP probes from NodeLatencyMonitor" -j ACCEPT
 -A ANTREA-INPUT -i antrea-gw0 -p icmpv6 --icmpv6-type 129 -m comment --comment "Antrea: allow ICMP probes from NodeLatencyMonitor" -j ACCEPT
--A ANTREA-INPUT -m comment --comment "Antrea: allow WireGuard input packets" -p udp --dport 51820 -j ACCEPT
+-A ANTREA-INPUT -m comment --comment "Antrea: allow proxy health check input packets" -p tcp --dport 10256 -j ACCEPT
+-A ANTREA-INPUT -m comment --comment "Antrea: allow Agent APIServer input packets" -p tcp --dport 10350 -j ACCEPT
+-A ANTREA-INPUT -m comment --comment "Antrea: allow Agent cluster memberships TCP input packets" -p tcp --dport 10351 -j ACCEPT
+-A ANTREA-INPUT -m comment --comment "Antrea: allow Agent cluster memberships TCP reply input packets" -p tcp --sport 10351 -m conntrack --ctstate ESTABLISHED -j ACCEPT
+-A ANTREA-INPUT -m comment --comment "Antrea: allow Agent cluster memberships UDP input packets" -p udp --dport 10351 -j ACCEPT
 -A ANTREA-INPUT -m comment --comment "Antrea: jump to static ingress NodeNetworkPolicy rules" -j ANTREA-POL-PRE-INGRESS-RULES
 -A ANTREA-INPUT -m comment --comment "Antrea: jump to ingress NodeNetworkPolicy rules" -j ANTREA-POL-INGRESS-RULES
--A ANTREA-INPUT -m comment --comment "Antrea: allow proxy health check input packets" -p tcp --dport 10256 -j ACCEPT
+-A ANTREA-OUTPUT -m comment --comment "Antrea: allow tunnel output packets" -p udp --dport 6081 -j ACCEPT
+-A ANTREA-OUTPUT -m comment --comment "Antrea: allow WireGuard output packets" -p udp --dport 51820 -j ACCEPT
 -A ANTREA-OUTPUT -o antrea-gw0 -p icmpv6 --icmpv6-type 128 -m comment --comment "Antrea: allow ICMP probes from NodeLatencyMonitor" -j ACCEPT
 -A ANTREA-OUTPUT -o antrea-gw0 -p icmpv6 --icmpv6-type 129 -m comment --comment "Antrea: allow ICMP probes from NodeLatencyMonitor" -j ACCEPT
--A ANTREA-OUTPUT -m comment --comment "Antrea: allow WireGuard output packets" -p udp --dport 51820 -j ACCEPT
+-A ANTREA-OUTPUT -m comment --comment "Antrea: allow proxy health check reply packets" -p tcp --sport 10256 -m conntrack --ctstate ESTABLISHED -j ACCEPT
+-A ANTREA-OUTPUT -m comment --comment "Antrea: allow Agent APIServer reply packets" -p tcp --sport 10350 -m conntrack --ctstate ESTABLISHED -j ACCEPT
+-A ANTREA-OUTPUT -m comment --comment "Antrea: allow Agent cluster memberships TCP output packets" -p tcp --dport 10351 -j ACCEPT
+-A ANTREA-OUTPUT -m comment --comment "Antrea: allow Agent cluster memberships TCP reply packets" -p tcp --sport 10351 -m conntrack --ctstate ESTABLISHED -j ACCEPT
+-A ANTREA-OUTPUT -m comment --comment "Antrea: allow Agent cluster memberships UDP output packets" -p udp --dport 10351 -j ACCEPT
 -A ANTREA-OUTPUT -m comment --comment "Antrea: jump to static egress NodeNetworkPolicy rules" -j ANTREA-POL-PRE-EGRESS-RULES
 -A ANTREA-OUTPUT -m comment --comment "Antrea: jump to egress NodeNetworkPolicy rules" -j ANTREA-POL-EGRESS-RULES
--A ANTREA-OUTPUT -m comment --comment "Antrea: allow proxy health check reply packets" -p tcp --sport 10256 -j ACCEPT
 -A ANTREA-POL-INGRESS-RULES -j ACCEPT -m comment --comment "mock rule"
 -A ANTREA-POL-PRE-EGRESS-RULES -m conntrack --ctstate ESTABLISHED,RELATED -m comment --comment "Antrea: allow egress established or related packets" -j ACCEPT
 -A ANTREA-POL-PRE-EGRESS-RULES -o lo -m comment --comment "Antrea: allow egress packets to loopback" -j ACCEPT
@@ -680,8 +716,18 @@ COMMIT
 :ANTREA-OUTPUT - [0:0]
 -A ANTREA-FORWARD -m comment --comment "Antrea: accept packets from local Pods" -i antrea-gw0 -j ACCEPT
 -A ANTREA-FORWARD -m comment --comment "Antrea: accept packets to local Pods" -o antrea-gw0 -j ACCEPT
+-A ANTREA-INPUT -m comment --comment "Antrea: allow tunnel input packets" -p udp --dport 4789 -j ACCEPT
 -A ANTREA-INPUT -m comment --comment "Antrea: allow WireGuard input packets" -p udp --dport 51820 -j ACCEPT
+-A ANTREA-INPUT -m comment --comment "Antrea: allow Agent APIServer input packets" -p tcp --dport 10350 -j ACCEPT
+-A ANTREA-INPUT -m comment --comment "Antrea: allow Agent cluster memberships TCP input packets" -p tcp --dport 10351 -j ACCEPT
+-A ANTREA-INPUT -m comment --comment "Antrea: allow Agent cluster memberships TCP reply input packets" -p tcp --sport 10351 -m conntrack --ctstate ESTABLISHED -j ACCEPT
+-A ANTREA-INPUT -m comment --comment "Antrea: allow Agent cluster memberships UDP input packets" -p udp --dport 10351 -j ACCEPT
+-A ANTREA-OUTPUT -m comment --comment "Antrea: allow tunnel output packets" -p udp --dport 4789 -j ACCEPT
 -A ANTREA-OUTPUT -m comment --comment "Antrea: allow WireGuard output packets" -p udp --dport 51820 -j ACCEPT
+-A ANTREA-OUTPUT -m comment --comment "Antrea: allow Agent APIServer reply packets" -p tcp --sport 10350 -m conntrack --ctstate ESTABLISHED -j ACCEPT
+-A ANTREA-OUTPUT -m comment --comment "Antrea: allow Agent cluster memberships TCP output packets" -p tcp --dport 10351 -j ACCEPT
+-A ANTREA-OUTPUT -m comment --comment "Antrea: allow Agent cluster memberships TCP reply packets" -p tcp --sport 10351 -m conntrack --ctstate ESTABLISHED -j ACCEPT
+-A ANTREA-OUTPUT -m comment --comment "Antrea: allow Agent cluster memberships UDP output packets" -p udp --dport 10351 -j ACCEPT
 COMMIT
 *nat
 :ANTREA-POSTROUTING - [0:0]
@@ -711,8 +757,18 @@ COMMIT
 :ANTREA-OUTPUT - [0:0]
 -A ANTREA-FORWARD -m comment --comment "Antrea: accept packets from local Pods" -i antrea-gw0 -j ACCEPT
 -A ANTREA-FORWARD -m comment --comment "Antrea: accept packets to local Pods" -o antrea-gw0 -j ACCEPT
+-A ANTREA-INPUT -m comment --comment "Antrea: allow tunnel input packets" -p udp --dport 4789 -j ACCEPT
 -A ANTREA-INPUT -m comment --comment "Antrea: allow WireGuard input packets" -p udp --dport 51820 -j ACCEPT
+-A ANTREA-INPUT -m comment --comment "Antrea: allow Agent APIServer input packets" -p tcp --dport 10350 -j ACCEPT
+-A ANTREA-INPUT -m comment --comment "Antrea: allow Agent cluster memberships TCP input packets" -p tcp --dport 10351 -j ACCEPT
+-A ANTREA-INPUT -m comment --comment "Antrea: allow Agent cluster memberships TCP reply input packets" -p tcp --sport 10351 -m conntrack --ctstate ESTABLISHED -j ACCEPT
+-A ANTREA-INPUT -m comment --comment "Antrea: allow Agent cluster memberships UDP input packets" -p udp --dport 10351 -j ACCEPT
+-A ANTREA-OUTPUT -m comment --comment "Antrea: allow tunnel output packets" -p udp --dport 4789 -j ACCEPT
 -A ANTREA-OUTPUT -m comment --comment "Antrea: allow WireGuard output packets" -p udp --dport 51820 -j ACCEPT
+-A ANTREA-OUTPUT -m comment --comment "Antrea: allow Agent APIServer reply packets" -p tcp --sport 10350 -m conntrack --ctstate ESTABLISHED -j ACCEPT
+-A ANTREA-OUTPUT -m comment --comment "Antrea: allow Agent cluster memberships TCP output packets" -p tcp --dport 10351 -j ACCEPT
+-A ANTREA-OUTPUT -m comment --comment "Antrea: allow Agent cluster memberships TCP reply packets" -p tcp --sport 10351 -m conntrack --ctstate ESTABLISHED -j ACCEPT
+-A ANTREA-OUTPUT -m comment --comment "Antrea: allow Agent cluster memberships UDP output packets" -p udp --dport 10351 -j ACCEPT
 COMMIT
 *nat
 :ANTREA-POSTROUTING - [0:0]
@@ -833,12 +889,22 @@ COMMIT
 :ANTREA-POL-PRE-INGRESS-RULES - [0:0]
 -A ANTREA-FORWARD -m comment --comment "Antrea: accept packets from local Pods" -i antrea-gw0 -j ACCEPT
 -A ANTREA-FORWARD -m comment --comment "Antrea: accept packets to local Pods" -o antrea-gw0 -j ACCEPT
+-A ANTREA-INPUT -m comment --comment "Antrea: allow tunnel input packets" -p udp --dport 6082 -j ACCEPT
 -A ANTREA-INPUT -i antrea-gw0 -p icmp --icmp-type 8 -m comment --comment "Antrea: allow ICMP probes from NodeLatencyMonitor" -j ACCEPT
 -A ANTREA-INPUT -i antrea-gw0 -p icmp --icmp-type 0 -m comment --comment "Antrea: allow ICMP probes from NodeLatencyMonitor" -j ACCEPT
+-A ANTREA-INPUT -m comment --comment "Antrea: allow Agent APIServer input packets" -p tcp --dport 10350 -j ACCEPT
+-A ANTREA-INPUT -m comment --comment "Antrea: allow Agent cluster memberships TCP input packets" -p tcp --dport 10351 -j ACCEPT
+-A ANTREA-INPUT -m comment --comment "Antrea: allow Agent cluster memberships TCP reply input packets" -p tcp --sport 10351 -m conntrack --ctstate ESTABLISHED -j ACCEPT
+-A ANTREA-INPUT -m comment --comment "Antrea: allow Agent cluster memberships UDP input packets" -p udp --dport 10351 -j ACCEPT
 -A ANTREA-INPUT -m comment --comment "Antrea: jump to static ingress NodeNetworkPolicy rules" -j ANTREA-POL-PRE-INGRESS-RULES
 -A ANTREA-INPUT -m comment --comment "Antrea: jump to ingress NodeNetworkPolicy rules" -j ANTREA-POL-INGRESS-RULES
+-A ANTREA-OUTPUT -m comment --comment "Antrea: allow tunnel output packets" -p udp --dport 6082 -j ACCEPT
 -A ANTREA-OUTPUT -o antrea-gw0 -p icmp --icmp-type 8 -m comment --comment "Antrea: allow ICMP probes from NodeLatencyMonitor" -j ACCEPT
 -A ANTREA-OUTPUT -o antrea-gw0 -p icmp --icmp-type 0 -m comment --comment "Antrea: allow ICMP probes from NodeLatencyMonitor" -j ACCEPT
+-A ANTREA-OUTPUT -m comment --comment "Antrea: allow Agent APIServer reply packets" -p tcp --sport 10350 -m conntrack --ctstate ESTABLISHED -j ACCEPT
+-A ANTREA-OUTPUT -m comment --comment "Antrea: allow Agent cluster memberships TCP output packets" -p tcp --dport 10351 -j ACCEPT
+-A ANTREA-OUTPUT -m comment --comment "Antrea: allow Agent cluster memberships TCP reply packets" -p tcp --sport 10351 -m conntrack --ctstate ESTABLISHED -j ACCEPT
+-A ANTREA-OUTPUT -m comment --comment "Antrea: allow Agent cluster memberships UDP output packets" -p udp --dport 10351 -j ACCEPT
 -A ANTREA-OUTPUT -m comment --comment "Antrea: jump to static egress NodeNetworkPolicy rules" -j ANTREA-POL-PRE-EGRESS-RULES
 -A ANTREA-OUTPUT -m comment --comment "Antrea: jump to egress NodeNetworkPolicy rules" -j ANTREA-POL-EGRESS-RULES
 -A ANTREA-POL-INGRESS-RULES -j ACCEPT -m comment --comment "mock rule"
@@ -889,12 +955,22 @@ COMMIT
 :ANTREA-POL-PRE-INGRESS-RULES - [0:0]
 -A ANTREA-FORWARD -m comment --comment "Antrea: accept packets from local Pods" -i antrea-gw0 -j ACCEPT
 -A ANTREA-FORWARD -m comment --comment "Antrea: accept packets to local Pods" -o antrea-gw0 -j ACCEPT
+-A ANTREA-INPUT -m comment --comment "Antrea: allow tunnel input packets" -p udp --dport 6082 -j ACCEPT
 -A ANTREA-INPUT -i antrea-gw0 -p icmpv6 --icmpv6-type 128 -m comment --comment "Antrea: allow ICMP probes from NodeLatencyMonitor" -j ACCEPT
 -A ANTREA-INPUT -i antrea-gw0 -p icmpv6 --icmpv6-type 129 -m comment --comment "Antrea: allow ICMP probes from NodeLatencyMonitor" -j ACCEPT
+-A ANTREA-INPUT -m comment --comment "Antrea: allow Agent APIServer input packets" -p tcp --dport 10350 -j ACCEPT
+-A ANTREA-INPUT -m comment --comment "Antrea: allow Agent cluster memberships TCP input packets" -p tcp --dport 10351 -j ACCEPT
+-A ANTREA-INPUT -m comment --comment "Antrea: allow Agent cluster memberships TCP reply input packets" -p tcp --sport 10351 -m conntrack --ctstate ESTABLISHED -j ACCEPT
+-A ANTREA-INPUT -m comment --comment "Antrea: allow Agent cluster memberships UDP input packets" -p udp --dport 10351 -j ACCEPT
 -A ANTREA-INPUT -m comment --comment "Antrea: jump to static ingress NodeNetworkPolicy rules" -j ANTREA-POL-PRE-INGRESS-RULES
 -A ANTREA-INPUT -m comment --comment "Antrea: jump to ingress NodeNetworkPolicy rules" -j ANTREA-POL-INGRESS-RULES
+-A ANTREA-OUTPUT -m comment --comment "Antrea: allow tunnel output packets" -p udp --dport 6082 -j ACCEPT
 -A ANTREA-OUTPUT -o antrea-gw0 -p icmpv6 --icmpv6-type 128 -m comment --comment "Antrea: allow ICMP probes from NodeLatencyMonitor" -j ACCEPT
 -A ANTREA-OUTPUT -o antrea-gw0 -p icmpv6 --icmpv6-type 129 -m comment --comment "Antrea: allow ICMP probes from NodeLatencyMonitor" -j ACCEPT
+-A ANTREA-OUTPUT -m comment --comment "Antrea: allow Agent APIServer reply packets" -p tcp --sport 10350 -m conntrack --ctstate ESTABLISHED -j ACCEPT
+-A ANTREA-OUTPUT -m comment --comment "Antrea: allow Agent cluster memberships TCP output packets" -p tcp --dport 10351 -j ACCEPT
+-A ANTREA-OUTPUT -m comment --comment "Antrea: allow Agent cluster memberships TCP reply packets" -p tcp --sport 10351 -m conntrack --ctstate ESTABLISHED -j ACCEPT
+-A ANTREA-OUTPUT -m comment --comment "Antrea: allow Agent cluster memberships UDP output packets" -p udp --dport 10351 -j ACCEPT
 -A ANTREA-OUTPUT -m comment --comment "Antrea: jump to static egress NodeNetworkPolicy rules" -j ANTREA-POL-PRE-EGRESS-RULES
 -A ANTREA-OUTPUT -m comment --comment "Antrea: jump to egress NodeNetworkPolicy rules" -j ANTREA-POL-EGRESS-RULES
 -A ANTREA-POL-INGRESS-RULES -j ACCEPT -m comment --comment "mock rule"
@@ -964,6 +1040,10 @@ COMMIT
 				mockIPTables.AppendRule(iptables.ProtocolDual, iptables.MangleTable, iptables.OutputChain, []string{"-j", antreaOutputChain, "-m", "comment", "--comment", "Antrea: jump to Antrea output rules"})
 				mockIPTables.EnsureChain(iptables.ProtocolDual, iptables.MangleTable, antreaPostRoutingChain)
 				mockIPTables.AppendRule(iptables.ProtocolDual, iptables.MangleTable, iptables.PostRoutingChain, []string{"-j", antreaPostRoutingChain, "-m", "comment", "--comment", "Antrea: jump to Antrea postrouting rules"})
+				mockIPTables.EnsureChain(iptables.ProtocolDual, iptables.FilterTable, antreaInputChain)
+				mockIPTables.AppendRule(iptables.ProtocolDual, iptables.FilterTable, iptables.InputChain, []string{"-j", antreaInputChain, "-m", "comment", "--comment", "Antrea: jump to Antrea input rules"})
+				mockIPTables.EnsureChain(iptables.ProtocolDual, iptables.FilterTable, antreaOutputChain)
+				mockIPTables.AppendRule(iptables.ProtocolDual, iptables.FilterTable, iptables.OutputChain, []string{"-j", antreaOutputChain, "-m", "comment", "--comment", "Antrea: jump to Antrea output rules"})
 				mockIPTables.Restore(`*raw
 :ANTREA-PREROUTING - [0:0]
 :ANTREA-OUTPUT - [0:0]
@@ -982,8 +1062,20 @@ COMMIT
 COMMIT
 *filter
 :ANTREA-FORWARD - [0:0]
+:ANTREA-INPUT - [0:0]
+:ANTREA-OUTPUT - [0:0]
 -A ANTREA-FORWARD -m comment --comment "Antrea: accept packets from local Pods" -i antrea-gw0 -j ACCEPT
 -A ANTREA-FORWARD -m comment --comment "Antrea: accept packets to local Pods" -o antrea-gw0 -j ACCEPT
+-A ANTREA-INPUT -m comment --comment "Antrea: allow tunnel input packets" -p udp --dport 4790 -j ACCEPT
+-A ANTREA-INPUT -m comment --comment "Antrea: allow Agent APIServer input packets" -p tcp --dport 10350 -j ACCEPT
+-A ANTREA-INPUT -m comment --comment "Antrea: allow Agent cluster memberships TCP input packets" -p tcp --dport 10351 -j ACCEPT
+-A ANTREA-INPUT -m comment --comment "Antrea: allow Agent cluster memberships TCP reply input packets" -p tcp --sport 10351 -m conntrack --ctstate ESTABLISHED -j ACCEPT
+-A ANTREA-INPUT -m comment --comment "Antrea: allow Agent cluster memberships UDP input packets" -p udp --dport 10351 -j ACCEPT
+-A ANTREA-OUTPUT -m comment --comment "Antrea: allow tunnel output packets" -p udp --dport 4790 -j ACCEPT
+-A ANTREA-OUTPUT -m comment --comment "Antrea: allow Agent APIServer reply packets" -p tcp --sport 10350 -m conntrack --ctstate ESTABLISHED -j ACCEPT
+-A ANTREA-OUTPUT -m comment --comment "Antrea: allow Agent cluster memberships TCP output packets" -p tcp --dport 10351 -j ACCEPT
+-A ANTREA-OUTPUT -m comment --comment "Antrea: allow Agent cluster memberships TCP reply packets" -p tcp --sport 10351 -m conntrack --ctstate ESTABLISHED -j ACCEPT
+-A ANTREA-OUTPUT -m comment --comment "Antrea: allow Agent cluster memberships UDP output packets" -p udp --dport 10351 -j ACCEPT
 COMMIT
 *nat
 :ANTREA-POSTROUTING - [0:0]
@@ -1010,8 +1102,20 @@ COMMIT
 COMMIT
 *filter
 :ANTREA-FORWARD - [0:0]
+:ANTREA-INPUT - [0:0]
+:ANTREA-OUTPUT - [0:0]
 -A ANTREA-FORWARD -m comment --comment "Antrea: accept packets from local Pods" -i antrea-gw0 -j ACCEPT
 -A ANTREA-FORWARD -m comment --comment "Antrea: accept packets to local Pods" -o antrea-gw0 -j ACCEPT
+-A ANTREA-INPUT -m comment --comment "Antrea: allow tunnel input packets" -p udp --dport 4790 -j ACCEPT
+-A ANTREA-INPUT -m comment --comment "Antrea: allow Agent APIServer input packets" -p tcp --dport 10350 -j ACCEPT
+-A ANTREA-INPUT -m comment --comment "Antrea: allow Agent cluster memberships TCP input packets" -p tcp --dport 10351 -j ACCEPT
+-A ANTREA-INPUT -m comment --comment "Antrea: allow Agent cluster memberships TCP reply input packets" -p tcp --sport 10351 -m conntrack --ctstate ESTABLISHED -j ACCEPT
+-A ANTREA-INPUT -m comment --comment "Antrea: allow Agent cluster memberships UDP input packets" -p udp --dport 10351 -j ACCEPT
+-A ANTREA-OUTPUT -m comment --comment "Antrea: allow tunnel output packets" -p udp --dport 4790 -j ACCEPT
+-A ANTREA-OUTPUT -m comment --comment "Antrea: allow Agent APIServer reply packets" -p tcp --sport 10350 -m conntrack --ctstate ESTABLISHED -j ACCEPT
+-A ANTREA-OUTPUT -m comment --comment "Antrea: allow Agent cluster memberships TCP output packets" -p tcp --dport 10351 -j ACCEPT
+-A ANTREA-OUTPUT -m comment --comment "Antrea: allow Agent cluster memberships TCP reply packets" -p tcp --sport 10351 -m conntrack --ctstate ESTABLISHED -j ACCEPT
+-A ANTREA-OUTPUT -m comment --comment "Antrea: allow Agent cluster memberships UDP output packets" -p udp --dport 10351 -j ACCEPT
 COMMIT
 *nat
 :ANTREA-POSTROUTING - [0:0]
@@ -1061,6 +1165,10 @@ COMMIT
 				mockIPTables.AppendRule(iptables.ProtocolDual, iptables.MangleTable, iptables.OutputChain, []string{"-j", antreaOutputChain, "-m", "comment", "--comment", "Antrea: jump to Antrea output rules"})
 				mockIPTables.EnsureChain(iptables.ProtocolDual, iptables.NATTable, antreaPreRoutingChain)
 				mockIPTables.AppendRule(iptables.ProtocolDual, iptables.NATTable, iptables.PreRoutingChain, []string{"-j", antreaPreRoutingChain, "-m", "comment", "--comment", "Antrea: jump to Antrea prerouting rules"})
+				mockIPTables.EnsureChain(iptables.ProtocolDual, iptables.FilterTable, antreaInputChain)
+				mockIPTables.AppendRule(iptables.ProtocolDual, iptables.FilterTable, iptables.InputChain, []string{"-j", antreaInputChain, "-m", "comment", "--comment", "Antrea: jump to Antrea input rules"})
+				mockIPTables.EnsureChain(iptables.ProtocolDual, iptables.FilterTable, antreaOutputChain)
+				mockIPTables.AppendRule(iptables.ProtocolDual, iptables.FilterTable, iptables.OutputChain, []string{"-j", antreaOutputChain, "-m", "comment", "--comment", "Antrea: jump to Antrea output rules"})
 				mockIPTables.Restore(`*raw
 :ANTREA-PREROUTING - [0:0]
 :ANTREA-OUTPUT - [0:0]
@@ -1075,8 +1183,20 @@ COMMIT
 COMMIT
 *filter
 :ANTREA-FORWARD - [0:0]
+:ANTREA-INPUT - [0:0]
+:ANTREA-OUTPUT - [0:0]
 -A ANTREA-FORWARD -m comment --comment "Antrea: accept packets from local Pods" -i antrea-gw0 -j ACCEPT
 -A ANTREA-FORWARD -m comment --comment "Antrea: accept packets to local Pods" -o antrea-gw0 -j ACCEPT
+-A ANTREA-INPUT -m comment --comment "Antrea: allow tunnel input packets" -p udp --dport 6081 -j ACCEPT
+-A ANTREA-INPUT -m comment --comment "Antrea: allow Agent APIServer input packets" -p tcp --dport 10350 -j ACCEPT
+-A ANTREA-INPUT -m comment --comment "Antrea: allow Agent cluster memberships TCP input packets" -p tcp --dport 10351 -j ACCEPT
+-A ANTREA-INPUT -m comment --comment "Antrea: allow Agent cluster memberships TCP reply input packets" -p tcp --sport 10351 -m conntrack --ctstate ESTABLISHED -j ACCEPT
+-A ANTREA-INPUT -m comment --comment "Antrea: allow Agent cluster memberships UDP input packets" -p udp --dport 10351 -j ACCEPT
+-A ANTREA-OUTPUT -m comment --comment "Antrea: allow tunnel output packets" -p udp --dport 6081 -j ACCEPT
+-A ANTREA-OUTPUT -m comment --comment "Antrea: allow Agent APIServer reply packets" -p tcp --sport 10350 -m conntrack --ctstate ESTABLISHED -j ACCEPT
+-A ANTREA-OUTPUT -m comment --comment "Antrea: allow Agent cluster memberships TCP output packets" -p tcp --dport 10351 -j ACCEPT
+-A ANTREA-OUTPUT -m comment --comment "Antrea: allow Agent cluster memberships TCP reply packets" -p tcp --sport 10351 -m conntrack --ctstate ESTABLISHED -j ACCEPT
+-A ANTREA-OUTPUT -m comment --comment "Antrea: allow Agent cluster memberships UDP output packets" -p udp --dport 10351 -j ACCEPT
 COMMIT
 *nat
 :ANTREA-PREROUTING - [0:0]
@@ -1100,8 +1220,20 @@ COMMIT
 COMMIT
 *filter
 :ANTREA-FORWARD - [0:0]
+:ANTREA-INPUT - [0:0]
+:ANTREA-OUTPUT - [0:0]
 -A ANTREA-FORWARD -m comment --comment "Antrea: accept packets from local Pods" -i antrea-gw0 -j ACCEPT
 -A ANTREA-FORWARD -m comment --comment "Antrea: accept packets to local Pods" -o antrea-gw0 -j ACCEPT
+-A ANTREA-INPUT -m comment --comment "Antrea: allow tunnel input packets" -p udp --dport 6081 -j ACCEPT
+-A ANTREA-INPUT -m comment --comment "Antrea: allow Agent APIServer input packets" -p tcp --dport 10350 -j ACCEPT
+-A ANTREA-INPUT -m comment --comment "Antrea: allow Agent cluster memberships TCP input packets" -p tcp --dport 10351 -j ACCEPT
+-A ANTREA-INPUT -m comment --comment "Antrea: allow Agent cluster memberships TCP reply input packets" -p tcp --sport 10351 -m conntrack --ctstate ESTABLISHED -j ACCEPT
+-A ANTREA-INPUT -m comment --comment "Antrea: allow Agent cluster memberships UDP input packets" -p udp --dport 10351 -j ACCEPT
+-A ANTREA-OUTPUT -m comment --comment "Antrea: allow tunnel output packets" -p udp --dport 6081 -j ACCEPT
+-A ANTREA-OUTPUT -m comment --comment "Antrea: allow Agent APIServer reply packets" -p tcp --sport 10350 -m conntrack --ctstate ESTABLISHED -j ACCEPT
+-A ANTREA-OUTPUT -m comment --comment "Antrea: allow Agent cluster memberships TCP output packets" -p tcp --dport 10351 -j ACCEPT
+-A ANTREA-OUTPUT -m comment --comment "Antrea: allow Agent cluster memberships TCP reply packets" -p tcp --sport 10351 -m conntrack --ctstate ESTABLISHED -j ACCEPT
+-A ANTREA-OUTPUT -m comment --comment "Antrea: allow Agent cluster memberships UDP output packets" -p udp --dport 10351 -j ACCEPT
 COMMIT
 *nat
 :ANTREA-PREROUTING - [0:0]
@@ -1134,10 +1266,6 @@ COMMIT
 						fmt.Sprintf(`-A OUTPUT -m comment --comment "Antrea: jump to Antrea output rules" -j %s`, antreaOutputChain),
 					},
 				}, nil)
-				mockIPTables.DeleteRule(iptables.ProtocolDual, iptables.FilterTable, iptables.InputChain, []string{"-j", antreaInputChain, "-m", "comment", "--comment", "Antrea: jump to Antrea input rules"})
-				mockIPTables.DeleteChain(iptables.ProtocolDual, iptables.FilterTable, antreaInputChain)
-				mockIPTables.DeleteRule(iptables.ProtocolDual, iptables.FilterTable, iptables.OutputChain, []string{"-j", antreaOutputChain, "-m", "comment", "--comment", "Antrea: jump to Antrea output rules"})
-				mockIPTables.DeleteChain(iptables.ProtocolDual, iptables.FilterTable, antreaOutputChain)
 			},
 		},
 		{
@@ -1166,6 +1294,10 @@ COMMIT
 				mockIPTables.AppendRule(iptables.ProtocolIPv4, iptables.MangleTable, iptables.PreRoutingChain, []string{"-j", antreaPreRoutingChain, "-m", "comment", "--comment", "Antrea: jump to Antrea prerouting rules"})
 				mockIPTables.EnsureChain(iptables.ProtocolIPv4, iptables.MangleTable, antreaOutputChain)
 				mockIPTables.AppendRule(iptables.ProtocolIPv4, iptables.MangleTable, iptables.OutputChain, []string{"-j", antreaOutputChain, "-m", "comment", "--comment", "Antrea: jump to Antrea output rules"})
+				mockIPTables.EnsureChain(iptables.ProtocolIPv4, iptables.FilterTable, antreaInputChain)
+				mockIPTables.AppendRule(iptables.ProtocolIPv4, iptables.FilterTable, iptables.InputChain, []string{"-j", antreaInputChain, "-m", "comment", "--comment", "Antrea: jump to Antrea input rules"})
+				mockIPTables.EnsureChain(iptables.ProtocolIPv4, iptables.FilterTable, antreaOutputChain)
+				mockIPTables.AppendRule(iptables.ProtocolIPv4, iptables.FilterTable, iptables.OutputChain, []string{"-j", antreaOutputChain, "-m", "comment", "--comment", "Antrea: jump to Antrea output rules"})
 				mockIPTables.Restore(`*raw
 :ANTREA-PREROUTING - [0:0]
 :ANTREA-OUTPUT - [0:0]
@@ -1178,10 +1310,20 @@ COMMIT
 COMMIT
 *filter
 :ANTREA-FORWARD - [0:0]
+:ANTREA-INPUT - [0:0]
+:ANTREA-OUTPUT - [0:0]
 -A ANTREA-FORWARD -m comment --comment "Antrea: accept packets from local Pods" -i antrea-gw0 -j ACCEPT
 -A ANTREA-FORWARD -m comment --comment "Antrea: accept packets to local Pods" -o antrea-gw0 -j ACCEPT
 -A ANTREA-FORWARD -m comment --comment "Antrea: accept packets from local AntreaFlexibleIPAM Pods" -m set --match-set LOCAL-FLEXIBLE-IPAM-POD-IP src -j ACCEPT
 -A ANTREA-FORWARD -m comment --comment "Antrea: accept packets to local AntreaFlexibleIPAM Pods" -m set --match-set LOCAL-FLEXIBLE-IPAM-POD-IP dst -j ACCEPT
+-A ANTREA-INPUT -m comment --comment "Antrea: allow Agent APIServer input packets" -p tcp --dport 10350 -j ACCEPT
+-A ANTREA-INPUT -m comment --comment "Antrea: allow Agent cluster memberships TCP input packets" -p tcp --dport 10351 -j ACCEPT
+-A ANTREA-INPUT -m comment --comment "Antrea: allow Agent cluster memberships TCP reply input packets" -p tcp --sport 10351 -m conntrack --ctstate ESTABLISHED -j ACCEPT
+-A ANTREA-INPUT -m comment --comment "Antrea: allow Agent cluster memberships UDP input packets" -p udp --dport 10351 -j ACCEPT
+-A ANTREA-OUTPUT -m comment --comment "Antrea: allow Agent APIServer reply packets" -p tcp --sport 10350 -m conntrack --ctstate ESTABLISHED -j ACCEPT
+-A ANTREA-OUTPUT -m comment --comment "Antrea: allow Agent cluster memberships TCP output packets" -p tcp --dport 10351 -j ACCEPT
+-A ANTREA-OUTPUT -m comment --comment "Antrea: allow Agent cluster memberships TCP reply packets" -p tcp --sport 10351 -m conntrack --ctstate ESTABLISHED -j ACCEPT
+-A ANTREA-OUTPUT -m comment --comment "Antrea: allow Agent cluster memberships UDP output packets" -p udp --dport 10351 -j ACCEPT
 COMMIT
 *nat
 :ANTREA-POSTROUTING - [0:0]
@@ -1217,9 +1359,13 @@ COMMIT
 				nodeSNATRandomFully:      tt.nodeSNATRandomFully,
 				iptablesHasRandomFully:   true,
 				deterministic:            true,
-				wireguardPort:            tt.wireguardPort,
-				proxyHealthCheckPort:     tt.proxyHealthCheckPort,
 				iptablesCache:            newIPTablesCache(),
+				hostNetworkPortRules: map[feature]int32{
+					featureWireguard:              tt.wireguardPort,
+					featureProxyHealthCheck:       tt.proxyHealthCheckPort,
+					featureAgentClusterMembership: apis.AntreaAgentClusterMembershipPort,
+					featureAgentAPIServer:         apis.AntreaAgentAPIPort,
+				},
 			}
 			for mark, snatIP := range tt.markToSNATIP {
 				c.markToSNATIP.Store(mark, net.ParseIP(snatIP))
@@ -1232,14 +1378,21 @@ COMMIT
 					`-A ANTREA-POL-INGRESS-RULES -j ACCEPT -m comment --comment "mock rule"`})
 			}
 			if tt.networkConfig.TrafficEncryptionMode == config.TrafficEncryptionModeWireGuard {
-				c.initWireguard()
+				c.initWireguardHostNetworkFilterRules()
+			}
+			if tt.networkConfig.TrafficEncapMode.SupportsEncap() {
+				c.initTunnelHostNetworkFilterRules()
 			}
 			if tt.nodeLatencyMonitorEnabled {
-				c.initNodeLatencyRules()
+				c.initNodeLatencyHostNetworkFilterRules()
 			}
 			if c.proxyAll && tt.proxyHealthCheckPort != 0 {
-				c.initProxyHealthCheck()
+				c.initProxyHealthCheckHostNetworkFilterRules()
 			}
+			if c.egressEnabled {
+				c.initAgentClusterMembershipHostNetworkFilterRules()
+			}
+			c.initAgentAPIServerHostNetworkFilterRules()
 			tt.expectedCalls(mockIPTables.EXPECT())
 			assert.NoError(t, c.syncIPTables(true))
 		})
@@ -3659,6 +3812,330 @@ func TestClearConntrackEntryForService(t *testing.T) {
 			}
 			tc.expectedCalls(mockNetlink.EXPECT())
 			assert.NoError(t, c.ClearConntrackEntryForService(tc.svcIP, tc.svcPort, tc.endpointIP, tc.protocol))
+		})
+	}
+}
+
+// fakeEndpointResolver implements endpointResolver for testing Enqueue.
+type fakeEndpointResolver struct {
+	url *url.URL
+}
+
+func (f *fakeEndpointResolver) CurrentEndpointURL() *url.URL {
+	return f.url
+}
+
+func (f *fakeEndpointResolver) AddListener(_ client.Listener) {}
+
+func TestEnqueue(t *testing.T) {
+	const controllerPort = 10349
+
+	tests := []struct {
+		name             string
+		endpointResolver endpointResolver
+		networkConfig    *config.NetworkConfig
+		// expectRules is whether the accept rules are expected to be installed, expectSync whether the
+		// cache is expected to be programmed. They differ when the Endpoint is resolved but unusable:
+		// the rules are then removed, which still requires a sync.
+		expectRules bool
+		expectSync  bool
+	}{
+		{
+			name:             "nil endpoint resolver",
+			endpointResolver: nil,
+			networkConfig: &config.NetworkConfig{
+				IPv4Enabled: true,
+			},
+		},
+		{
+			name:             "nil endpoint URL",
+			endpointResolver: &fakeEndpointResolver{url: nil},
+			networkConfig: &config.NetworkConfig{
+				IPv4Enabled: true,
+			},
+			expectSync: true,
+		},
+		{
+			name: "empty port",
+			endpointResolver: &fakeEndpointResolver{
+				url: &url.URL{Scheme: "https", Host: "antrea.kube-system.svc"},
+			},
+			networkConfig: &config.NetworkConfig{
+				IPv4Enabled: true,
+			},
+			expectSync: true,
+		},
+		{
+			name: "invalid port",
+			endpointResolver: &fakeEndpointResolver{
+				url: &url.URL{Scheme: "https", Host: "antrea.kube-system.svc:not-a-number"},
+			},
+			networkConfig: &config.NetworkConfig{
+				IPv4Enabled: true,
+			},
+			expectSync: true,
+		},
+		{
+			name: "valid port IPv4",
+			endpointResolver: &fakeEndpointResolver{
+				url: &url.URL{Scheme: "https", Host: fmt.Sprintf("antrea.kube-system.svc:%d", controllerPort)},
+			},
+			networkConfig: &config.NetworkConfig{
+				IPv4Enabled: true,
+			},
+			expectRules: true,
+			expectSync:  true,
+		},
+		{
+			name: "valid port IPv6",
+			endpointResolver: &fakeEndpointResolver{
+				url: &url.URL{Scheme: "https", Host: fmt.Sprintf("[::1]:%d", controllerPort)},
+			},
+			networkConfig: &config.NetworkConfig{
+				IPv6Enabled: true,
+			},
+			expectRules: true,
+			expectSync:  true,
+		},
+		{
+			name: "valid port dual stack",
+			endpointResolver: &fakeEndpointResolver{
+				url: &url.URL{Scheme: "https", Host: fmt.Sprintf("antrea.kube-system.svc:%d", controllerPort)},
+			},
+			networkConfig: &config.NetworkConfig{
+				IPv4Enabled: true,
+				IPv6Enabled: true,
+			},
+			expectRules: true,
+			expectSync:  true,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			mockIPTables := iptablestest.NewMockInterface(ctrl)
+			// The content of the sync is covered by TestSyncIPTables, only the fact that it runs matters
+			// here: the rules must be programmed, not only cached.
+			mockIPTables.EXPECT().EnsureChain(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+			mockIPTables.EXPECT().AppendRule(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+			mockIPTables.EXPECT().InsertRule(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+			if tt.expectSync {
+				mockIPTables.EXPECT().Restore(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).MinTimes(1)
+			} else {
+				mockIPTables.EXPECT().Restore(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).Times(0)
+			}
+			// Report iptables as initialized, so that Enqueue syncs the rules instead of only caching
+			// them.
+			iptablesInitialized := make(chan struct{})
+			close(iptablesInitialized)
+			c := &Client{
+				endpointResolver:    tt.endpointResolver,
+				networkConfig:       tt.networkConfig,
+				iptablesCache:       newIPTablesCache(),
+				iptables:            mockIPTables,
+				iptablesInitialized: iptablesInitialized,
+				nodeConfig:          &config.NodeConfig{GatewayConfig: &config.GatewayConfig{Name: "antrea-gw0"}},
+			}
+			c.Enqueue()
+
+			expectedInputRules := []string{
+				`-A ANTREA-INPUT -m comment --comment "Antrea: allow Controller APIServer input packets" -p tcp --dport 10349 -j ACCEPT`,
+				`-A ANTREA-INPUT -m comment --comment "Antrea: allow Controller APIServer reply input packets" -p tcp --sport 10349 -m conntrack --ctstate ESTABLISHED -j ACCEPT`,
+			}
+			expectedOutputRules := []string{
+				`-A ANTREA-OUTPUT -m comment --comment "Antrea: allow Controller APIServer output packets" -p tcp --dport 10349 -j ACCEPT`,
+				`-A ANTREA-OUTPUT -m comment --comment "Antrea: allow Controller APIServer reply packets" -p tcp --sport 10349 -m conntrack --ctstate ESTABLISHED -j ACCEPT`,
+			}
+			if !tt.expectRules {
+				// An Endpoint which cannot be used removes the rules, so that the port of a Controller
+				// which is gone does not stay open.
+				expectedInputRules, expectedOutputRules = nil, nil
+			}
+
+			verifyCacheFn := func(family string, cache *sync.Map, key string, expectedRules []string) {
+				rules, ok := cache.Load(key)
+				if !tt.expectSync {
+					// Nothing was cached at all, and nothing was programmed.
+					assert.False(t, ok, "%s: no rules should be stored for chain %s", family, key)
+					return
+				}
+				require.True(t, ok, "%s: rules should be stored for chain %s", family, key)
+				rulesSlice, ok := rules.([]string)
+				require.True(t, ok, "%s: cached value for chain %s should be []string, got %T", family, key, rules)
+				assert.Equal(t, expectedRules, rulesSlice, "%s: chain %s rules mismatch", family, key)
+			}
+			if tt.networkConfig.IPv4Enabled {
+				verifyCacheFn("IPv4", c.iptablesCache.ipv4[featureControllerAPIServer], antreaInputChain, expectedInputRules)
+				verifyCacheFn("IPv4", c.iptablesCache.ipv4[featureControllerAPIServer], antreaOutputChain, expectedOutputRules)
+			}
+			if tt.networkConfig.IPv6Enabled {
+				verifyCacheFn("IPv6", c.iptablesCache.ipv6[featureControllerAPIServer], antreaInputChain, expectedInputRules)
+				verifyCacheFn("IPv6", c.iptablesCache.ipv6[featureControllerAPIServer], antreaOutputChain, expectedOutputRules)
+			}
+		})
+	}
+}
+
+// TestEnqueueRemovesRulesWhenEndpointGoesAway covers the transition on a single Client: the rules are
+// installed for a resolved Endpoint, then removed once no Endpoint is resolved any more. TestEnqueue only
+// checks each state on a fresh Client, so it would not catch a change returning early instead of storing
+// the empty rules.
+func TestEnqueueRemovesRulesWhenEndpointGoesAway(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	mockIPTables := iptablestest.NewMockInterface(ctrl)
+	mockIPTables.EXPECT().EnsureChain(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+	mockIPTables.EXPECT().AppendRule(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+	mockIPTables.EXPECT().InsertRule(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+	// Once for the Endpoint being resolved, once for it going away.
+	mockIPTables.EXPECT().Restore(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).Times(2)
+
+	iptablesInitialized := make(chan struct{})
+	close(iptablesInitialized)
+	resolver := &fakeEndpointResolver{url: &url.URL{Scheme: "https", Host: "antrea.kube-system.svc:10349"}}
+	c := &Client{
+		endpointResolver:    resolver,
+		networkConfig:       &config.NetworkConfig{IPv4Enabled: true},
+		iptablesCache:       newIPTablesCache(),
+		iptables:            mockIPTables,
+		iptablesInitialized: iptablesInitialized,
+		nodeConfig:          &config.NodeConfig{GatewayConfig: &config.GatewayConfig{Name: "antrea-gw0"}},
+	}
+
+	getRules := func(chain string) []string {
+		value, ok := c.iptablesCache.ipv4[featureControllerAPIServer].Load(chain)
+		require.True(t, ok, "rules should be stored for chain %s", chain)
+		return value.([]string)
+	}
+
+	c.Enqueue()
+	assert.Len(t, getRules(antreaInputChain), 2)
+	assert.Len(t, getRules(antreaOutputChain), 2)
+
+	resolver.url = nil
+	c.Enqueue()
+	assert.Empty(t, getRules(antreaInputChain), "the rules must be removed when no Endpoint is resolved")
+	assert.Empty(t, getRules(antreaOutputChain), "the rules must be removed when no Endpoint is resolved")
+}
+
+func TestInitIPsecHostNetworkFilterRules(t *testing.T) {
+	c := &Client{
+		networkConfig: &config.NetworkConfig{
+			IPv4Enabled: true,
+			IPv6Enabled: true,
+		},
+		iptablesCache: newIPTablesCache(),
+	}
+	c.initIPsecHostNetworkFilterRules()
+
+	expectedInputRules := []string{
+		`-A ANTREA-INPUT -m comment --comment "Antrea: allow IPsec ESP input packets" -p esp -j ACCEPT`,
+		`-A ANTREA-INPUT -m comment --comment "Antrea: allow IPsec AH input packets" -p ah -j ACCEPT`,
+		`-A ANTREA-INPUT -m comment --comment "Antrea: allow IPsec IKE input packets" -p udp --dport 500 -j ACCEPT`,
+		`-A ANTREA-INPUT -m comment --comment "Antrea: allow IPsec NAT traversal input packets" -p udp --dport 4500 -j ACCEPT`,
+	}
+	expectedOutputRules := []string{
+		`-A ANTREA-OUTPUT -m comment --comment "Antrea: allow IPsec ESP output packets" -p esp -j ACCEPT`,
+		`-A ANTREA-OUTPUT -m comment --comment "Antrea: allow IPsec AH output packets" -p ah -j ACCEPT`,
+		`-A ANTREA-OUTPUT -m comment --comment "Antrea: allow IPsec IKE output packets" -p udp --dport 500 -j ACCEPT`,
+		`-A ANTREA-OUTPUT -m comment --comment "Antrea: allow IPsec NAT traversal output packets" -p udp --dport 4500 -j ACCEPT`,
+	}
+	for _, cache := range []*sync.Map{c.iptablesCache.ipv4[featureIPsec], c.iptablesCache.ipv6[featureIPsec]} {
+		inputRules, ok := cache.Load(antreaInputChain)
+		require.True(t, ok)
+		assert.Equal(t, expectedInputRules, inputRules.([]string))
+		outputRules, ok := cache.Load(antreaOutputChain)
+		require.True(t, ok)
+		assert.Equal(t, expectedOutputRules, outputRules.([]string))
+	}
+}
+
+func TestInitTunnelHostNetworkFilterRules(t *testing.T) {
+	tests := []struct {
+		name                string
+		tunnelType          ovsconfig.TunnelType
+		tunnelPort          int32
+		expectedInputRules  []string
+		expectedOutputRules []string
+	}{
+		{
+			name:       "Geneve with default port",
+			tunnelType: ovsconfig.GeneveTunnel,
+			expectedInputRules: []string{
+				`-A ANTREA-INPUT -m comment --comment "Antrea: allow tunnel input packets" -p udp --dport 6081 -j ACCEPT`,
+			},
+			expectedOutputRules: []string{
+				`-A ANTREA-OUTPUT -m comment --comment "Antrea: allow tunnel output packets" -p udp --dport 6081 -j ACCEPT`,
+			},
+		},
+		{
+			name:       "Geneve with custom port",
+			tunnelType: ovsconfig.GeneveTunnel,
+			tunnelPort: 6082,
+			expectedInputRules: []string{
+				`-A ANTREA-INPUT -m comment --comment "Antrea: allow tunnel input packets" -p udp --dport 6082 -j ACCEPT`,
+			},
+			expectedOutputRules: []string{
+				`-A ANTREA-OUTPUT -m comment --comment "Antrea: allow tunnel output packets" -p udp --dport 6082 -j ACCEPT`,
+			},
+		},
+		{
+			name:       "VXLAN with default port",
+			tunnelType: ovsconfig.VXLANTunnel,
+			expectedInputRules: []string{
+				`-A ANTREA-INPUT -m comment --comment "Antrea: allow tunnel input packets" -p udp --dport 4789 -j ACCEPT`,
+			},
+			expectedOutputRules: []string{
+				`-A ANTREA-OUTPUT -m comment --comment "Antrea: allow tunnel output packets" -p udp --dport 4789 -j ACCEPT`,
+			},
+		},
+		{
+			name:       "STT with default port",
+			tunnelType: ovsconfig.STTTunnel,
+			expectedInputRules: []string{
+				`-A ANTREA-INPUT -m comment --comment "Antrea: allow tunnel input packets" -p tcp --dport 7471 -j ACCEPT`,
+			},
+			expectedOutputRules: []string{
+				`-A ANTREA-OUTPUT -m comment --comment "Antrea: allow tunnel output packets" -p tcp --dport 7471 -j ACCEPT`,
+			},
+		},
+		{
+			// GRE has no port, so the rules match the protocol only, and a custom tunnel port is ignored.
+			name:       "GRE ignores the tunnel port",
+			tunnelType: ovsconfig.GRETunnel,
+			tunnelPort: 6082,
+			expectedInputRules: []string{
+				`-A ANTREA-INPUT -m comment --comment "Antrea: allow tunnel input packets" -p gre -j ACCEPT`,
+			},
+			expectedOutputRules: []string{
+				`-A ANTREA-OUTPUT -m comment --comment "Antrea: allow tunnel output packets" -p gre -j ACCEPT`,
+			},
+		},
+		{
+			name:       "unknown tunnel type installs no rule",
+			tunnelType: "foo",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			c := &Client{
+				networkConfig: &config.NetworkConfig{
+					IPv4Enabled: true,
+					TunnelType:  tt.tunnelType,
+					TunnelPort:  tt.tunnelPort,
+				},
+				iptablesCache: newIPTablesCache(),
+			}
+			c.initTunnelHostNetworkFilterRules()
+
+			getRules := func(chain string) []string {
+				value, ok := c.iptablesCache.ipv4[featureTunnel].Load(chain)
+				if !ok {
+					return nil
+				}
+				return value.([]string)
+			}
+			assert.Equal(t, tt.expectedInputRules, getRules(antreaInputChain))
+			assert.Equal(t, tt.expectedOutputRules, getRules(antreaOutputChain))
 		})
 	}
 }
