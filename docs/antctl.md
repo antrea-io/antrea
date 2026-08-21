@@ -38,6 +38,9 @@ running in three different modes:
   - [Flow Aggregator commands](#flow-aggregator-commands)
     - [Dumping flow records](#dumping-flow-records)
     - [Record metrics](#record-metrics)
+  - [Observing live flows](#observing-live-flows)
+    - [Discovery and connectivity](#discovery-and-connectivity)
+    - [Running in-Pod](#running-in-pod)
   - [Multi-cluster commands](#multi-cluster-commands)
   - [Multicast commands](#multicast-commands)
   - [Showing memberlist state](#showing-memberlist-state)
@@ -810,6 +813,109 @@ Example outputs of record metrics:
 RECORDS-EXPORTED RECORDS-RECEIVED RECORDS-DROPPED FLOWS EXPORTERS-CONNECTED
 46               118              0               7     2
 ```
+
+### Observing live flows
+
+`antctl observe` streams live flow records from a Flow Aggregator's
+`FlowStreamService`, filtered by Namespace, Pod, label selector, Service,
+flow type, or IP/CIDR. It supports two modes:
+
+* **Remote** (the common case): runs in controller (remote) mode, the same
+  mode used when running `antctl` outside the cluster for other commands.
+  Unlike the [Flow Aggregator commands](#flow-aggregator-commands) above, it
+  does not require exec-ing into the Flow Aggregator Pod — see
+  [Discovery and connectivity](#discovery-and-connectivity) below.
+* **In-Pod**: when run from inside the Flow Aggregator's own Pod (e.g. via
+  `kubectl exec`), it connects directly to that instance's own
+  `FlowStreamService` on `localhost`, using the Pod's own ServiceAccount
+  credentials — see [Running in-Pod](#running-in-pod) below.
+
+```bash
+# Stream all flows involving Namespace "default"
+antctl observe -n default
+# Stream flows to/from Pods matching a label selector, as JSON
+antctl observe -l app=frontend -o json
+# Show flows from the last 5 minutes, then keep streaming new ones
+antctl observe --since 5m --follow
+# Connect to a specific Flow Aggregator instance when more than one exists
+antctl observe --flow-aggregator flow-aggregator-2/flow-aggregator
+# From inside the Flow Aggregator Pod itself, observing its own flows
+antctl observe
+```
+
+#### Discovery and connectivity
+
+By default, `antctl observe` discovers the Flow Aggregator automatically: it
+looks for a Flow Aggregator Deployment cluster-wide (or in a single Namespace
+if `--flow-aggregator-namespace` is provided) and connects to it directly if
+reachable. If a direct connection is not possible — for example when running
+somewhere with no network route to the cluster's Pods, such as a local `kind`
+cluster on macOS — it transparently falls back to tunneling through the
+Kubernetes API server's `/portforward` subresource, the same mechanism
+`kubectl port-forward` relies on. This behavior can be controlled with
+`--connection-mode`:
+
+* `auto` (default): try a direct connection first, fall back to a tunnel.
+* `direct`: only ever attempt a direct connection; fail if it does not
+  succeed, rather than silently falling back.
+* `tunnel`: always tunnel through the API server, skipping the direct
+  connection attempt.
+
+If more than one Flow Aggregator instance is found, `antctl observe` will
+not pick one on your behalf: each instance runs its own independent
+`FlowStreamService` (for example, one instance may serve an external NetOps
+integration while another serves in-cluster visibility), so guessing would be
+actively misleading. Disambiguate with either `--flow-aggregator-address
+<host:port>` (connect directly, bypassing discovery and the tunnel fallback
+entirely) or `--flow-aggregator <namespace>/<deployment-name>` (bypass only
+the discovery search).
+
+Like `antctl proxy` and `antctl supportbundle`, this command authenticates
+using the caller's own kubeconfig credential (a bearer token or a client
+certificate, whichever the kubeconfig provides), forwarded to the Flow
+Aggregator so it can resolve the caller's real identity. The Flow
+Aggregator's TLS certificate is verified using its `flow-aggregator-ca`
+ConfigMap; use `--insecure-skip-tls-verify` to skip this check (development
+and testing only).
+
+The `antctl` ClusterRole (see [Collecting support information](#collecting-support-information)
+for the equivalent requirement for `antctl supportbundle`) grants the
+permissions `antctl observe` needs: `list` on Pods for discovery, `get` and
+`list` on Deployments (`get` for resolving a specific instance via
+`--flow-aggregator <namespace>/<deployment-name>`), `create` on the
+`pods/portforward` subresource for the tunnel fallback, and `get` on the
+`flow-aggregator-ca` ConfigMap. A kubeconfig authorized only for narrower,
+Namespace-scoped access may need an equivalent Role/RoleBinding instead,
+scoped to the Flow Aggregator's Namespace.
+
+#### Running in-Pod
+
+Running `antctl observe` from inside the Flow Aggregator's own Pod (e.g.
+`kubectl exec -it deploy/flow-aggregator -n flow-aggregator -- antctl observe`)
+skips discovery and tunneling entirely: it connects straight to
+`localhost:14740`, since there is nothing to discover or tunnel to but its own
+`FlowStreamService`. Because of this, the discovery/connection flags —
+`--flow-aggregator-address`, `--flow-aggregator`, `--flow-aggregator-namespace`,
+`--connection-mode` — are rejected in-Pod rather than silently ignored. All
+filtering flags (`-n`, `--pod`, `-l`, `--service`, `--ip`, `--direction`,
+`--flow-type`, `--since`, `--max-count`, `-f`/`--follow`, `-o`,
+`--human-readable`) work the same as in remote mode.
+
+Authentication uses the Pod's own ServiceAccount token directly — the same
+`credentialForFlowAggregator` logic remote mode uses, since the in-cluster
+config's bearer token file takes precedence over any kubeconfig resolution,
+so there is no separate code path and no identity substitution involved.
+TLS verification reads the `flow-aggregator-ca` ConfigMap from the Pod's own
+Namespace, which its ServiceAccount is already permitted to `get` for its own
+certificate management — no additional RBAC is required beyond what the Flow
+Aggregator chart already grants its own ServiceAccount.
+
+`antctl observe` always prints how it discovered the Flow Aggregator and how
+it connected to it — for example which instance was found, and whether the
+connection was direct or tunneled — to stderr, not stdout, so this status
+output never mixes with flow records even when piping `-o json` to a file.
+
+To see the full list of supported options, run `antctl observe --help`.
 
 ### Multi-cluster commands
 

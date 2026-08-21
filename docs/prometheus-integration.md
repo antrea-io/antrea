@@ -272,6 +272,8 @@ seconds for each verb, dry run value, group, version, resource, subresource,
 scope and component.
 - **apiserver_request_filter_duration_seconds:** Request filter latency
 distribution in seconds, for each filter type
+- **apiserver_request_post_timeout_total:** Tracks the activity of the request
+handlers after the associated requests have been timed out by the apiserver
 - **apiserver_request_sli_duration_seconds:** Response latency distribution
 (not counting webhook duration and priority & fairness queue wait times) in
 seconds for each verb, group, version, resource, subresource, scope and
@@ -280,6 +282,8 @@ component.
 (not counting webhook duration and priority & fairness queue wait times) in
 seconds for each verb, group, version, resource, subresource, scope and
 component.
+- **apiserver_request_terminations_total:** Number of requests which apiserver
+terminated in self-defense.
 - **apiserver_request_total:** Counter of apiserver requests broken out for
 each verb, dry run value, group, version, resource, scope, component, and HTTP
 response code.
