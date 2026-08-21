@@ -48,9 +48,17 @@ spec:
                           - format: ipv6
                 subnetInfo:
                   type: object
-                  required:
-                    - gateway
-                    - prefixLength
+                  anyOf:
+                    - required:
+                        - gateway
+                        - prefixLength
+                    - required:
+                        - gateways
+                  x-kubernetes-validations:
+                  - message: gateway and prefixLength cannot be set with gateways
+                    rule: >-
+                      !has(self.gateways) ||
+                      !(has(self.gateway) || has(self.prefixLength))
                   properties:
                     gateway:
                       type: string
@@ -61,6 +69,28 @@ spec:
                       type: integer
                       minimum: 1
                       maximum: 127
+                    gateways:
+                      type: array
+                      minItems: 1
+                      maxItems: 2
+                      x-kubernetes-validations:
+                      - message: gateways must not contain duplicate IP families
+                        rule: "self.size() < 2 || self[0].gateway.contains(':') != self[1].gateway.contains(':')"
+                      items:
+                        type: object
+                        required:
+                          - gateway
+                          - prefixLength
+                        properties:
+                          gateway:
+                            type: string
+                            oneOf:
+                              - format: ipv4
+                              - format: ipv6
+                          prefixLength:
+                            type: integer
+                            minimum: 1
+                            maximum: 127
                     vlan:
                       type: integer
                       minimum: 0
