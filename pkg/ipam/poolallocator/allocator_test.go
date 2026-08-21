@@ -277,6 +277,46 @@ func TestAllocateNextMultiRange(t *testing.T) {
 	validateAllocationSequence(t, allocator, subnetInfo, []string{"10.2.2.100", "10.2.2.101", "10.2.2.2", "10.2.2.3"})
 }
 
+func TestAllocateFullCIDR(t *testing.T) {
+	stopCh := make(chan struct{})
+	defer close(stopCh)
+
+	subnetInfo := crdv1b1.SubnetInfo{
+		Gateway:      "10.2.2.1",
+		PrefixLength: 24,
+	}
+	newPool := func(allow bool) crdv1b1.IPPool {
+		return crdv1b1.IPPool{
+			ObjectMeta: metav1.ObjectMeta{Name: uuid.Must(uuid.NewV4()).String()},
+			Spec: crdv1b1.IPPoolSpec{
+				IPRanges:         []crdv1b1.IPRange{{CIDR: "10.2.2.0/24"}},
+				SubnetInfo:       subnetInfo,
+				AllocateFullCIDR: allow,
+			},
+		}
+	}
+
+	defaultPool := newPool(false)
+	defaultAllocator := newTestIPPoolAllocator(&defaultPool, stopCh)
+	require.NotNil(t, defaultAllocator)
+	assert.Equal(t, 253, defaultAllocator.Total())
+	_, err := defaultAllocator.AllocateIP(net.ParseIP("10.2.2.0"), crdv1b1.IPAddressPhaseAllocated, fakePodOwner)
+	require.Error(t, err)
+	_, err = defaultAllocator.AllocateIP(net.ParseIP("10.2.2.255"), crdv1b1.IPAddressPhaseAllocated, fakePodOwner)
+	require.Error(t, err)
+
+	allowPool := newPool(true)
+	allowAllocator := newTestIPPoolAllocator(&allowPool, stopCh)
+	require.NotNil(t, allowAllocator)
+	assert.Equal(t, 255, allowAllocator.Total())
+	_, err = allowAllocator.AllocateIP(net.ParseIP("10.2.2.0"), crdv1b1.IPAddressPhaseAllocated, fakePodOwner)
+	require.NoError(t, err)
+	_, err = allowAllocator.AllocateIP(net.ParseIP("10.2.2.255"), crdv1b1.IPAddressPhaseAllocated, fakePodOwner)
+	require.NoError(t, err)
+	_, err = allowAllocator.AllocateIP(net.ParseIP("10.2.2.1"), crdv1b1.IPAddressPhaseAllocated, fakePodOwner)
+	require.Error(t, err)
+}
+
 func TestAllocateNextMultiRangeExhausted(t *testing.T) {
 	stopCh := make(chan struct{})
 	defer close(stopCh)
