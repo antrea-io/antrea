@@ -127,14 +127,17 @@ func TestGoBGPLifecycle(t *testing.T) {
 	}, 30*time.Second, time.Second)
 	t.Log("Got peers of BGP server2 and verified them")
 
+	// The routes with a non-zero MED verify that the MULTI_EXIT_DISC attribute survives the round
+	// trip: goBGP only strips it from the paths it re-advertises to an eBGP peer, not from the ones
+	// it originates.
 	server1Routes := []bgp.Route{
 		{Prefix: "1.1.0.0/24"},
-		{Prefix: "1.2.0.0/24"},
-		{Prefix: "1.3.0.0/24"},
+		{Prefix: "1.2.0.0/24", MED: 100},
+		{Prefix: "1.3.0.0/24", MED: 4294967295},
 	}
 	server2Routes := []bgp.Route{
 		{Prefix: "2.1.0.0/24"},
-		{Prefix: "2.2.0.0/24"},
+		{Prefix: "2.2.0.0/24", MED: 200},
 		{Prefix: "2.3.0.0/24"},
 	}
 
@@ -172,14 +175,14 @@ func TestGoBGPLifecycle(t *testing.T) {
 
 	updatedServer1Routes := []bgp.Route{
 		{Prefix: "1.1.0.0/24"},
-		{Prefix: "1.2.0.0/24"},
+		{Prefix: "1.2.0.0/24", MED: 100},
 	}
 	server1RoutesToWithdraw := []bgp.Route{
-		{Prefix: "1.3.0.0/24"},
+		{Prefix: "1.3.0.0/24", MED: 4294967295},
 	}
 	updatedServer2Routes := []bgp.Route{
 		{Prefix: "2.1.0.0/24"},
-		{Prefix: "2.2.0.0/24"},
+		{Prefix: "2.2.0.0/24", MED: 200},
 	}
 	server2RoutesToWithdraw := []bgp.Route{
 		{Prefix: "2.3.0.0/24"},

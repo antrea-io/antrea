@@ -353,8 +353,10 @@ const (
 
 // MEDAdvertisement configures the MULTI_EXIT_DISC path attribute attached to advertised routes.
 type MEDAdvertisement struct {
-	// Mode determines how the MED value is computed. The default is None, which disables the attribute.
-	Mode MEDMode `json:"mode,omitempty"`
+	// Mode determines how the MED value is computed. It is required when the MED section is present, so that
+	// setting only the other fields cannot silently leave the attribute disabled. Use None to keep the section
+	// while disabling the attribute.
+	Mode MEDMode `json:"mode"`
 
 	// BaseValue is the MED value advertised in the Static mode, and the MED value advertised by the most preferred
 	// Node in the NodePriority mode. The range of the value is from 0 to 4294967295, and the default value is 100.

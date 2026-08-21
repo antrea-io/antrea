@@ -130,13 +130,13 @@ MED is the BGP attribute a BGP speaker uses to tell its peers which of several p
 prefer them to use: **the lower the MED, the more preferred the path**. When the field is unset, no MED attribute is
 attached, which is the behavior of Antrea versions without MED support.
 
-| Field                  | Default | Description                                                                                                                                   |
-|------------------------|---------|-----------------------------------------------------------------------------------------------------------------------------------------------|
-| `mode`                 | `None`  | `None`, `Static` or `NodePriority`. See below.                                                                                                |
-| `baseValue`            | `100`   | The MED of the most preferred path, in the range [0, 4294967295]. A value of `0` disables the attribute.                                       |
-| `step`                 | `100`   | The MED increment applied per Node rank in the `NodePriority` mode.                                                                            |
-| `maxAdvertisingNodes`  | `0`     | How many Nodes of an ExternalIPPool advertise each of its IPs in the `NodePriority` mode. `0` means all of them.                               |
-| `allowServiceOverride` | `true`  | Whether the `service.antrea.io/bgp-med` and `service.antrea.io/bgp-med-mode` Service annotations are honored.                                  |
+| Field                  | Default    | Description                                                                                                     |
+|------------------------|------------|-----------------------------------------------------------------------------------------------------------------|
+| `mode`                 | *required* | `None`, `Static` or `NodePriority`. See below.                                                                  |
+| `baseValue`            | `100`      | The MED of the most preferred path, in the range [0, 4294967295]. A value of `0` disables the attribute.        |
+| `step`                 | `100`      | The MED increment applied per Node rank in the `NodePriority` mode.                                             |
+| `maxAdvertisingNodes`  | `0`        | How many Nodes of an ExternalIPPool advertise each of its IPs in the `NodePriority` mode. `0` means all of them. |
+| `allowServiceOverride` | `true`     | Whether the `service.antrea.io/bgp-med` and `service.antrea.io/bgp-med-mode` Service annotations are honored.   |
 
 The three modes are:
 

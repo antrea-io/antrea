@@ -537,6 +537,8 @@ spec:
                           description: >-
                             Configures the MULTI_EXIT_DISC path attribute attached to the advertised
                             Service IP routes. When it is unset, no MED attribute is attached.
+                          required:
+                            - mode
                           properties:
                             mode:
                               type: string
