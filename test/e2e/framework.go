@@ -1415,7 +1415,7 @@ func (data *TestData) waitForAntreaDaemonSetPods(timeout time.Duration) error {
 	})
 	if wait.Interrupted(err) {
 		_, stdout, _, _ := data.provider.RunCommandOnNode(controlPlaneNodeName(), fmt.Sprintf("kubectl -n %s describe pod", antreaNamespace))
-		return fmt.Errorf("antrea-agent DaemonSet not ready within %v; kubectl describe pod output: %v", defaultTimeout, stdout)
+		return fmt.Errorf("antrea-agent DaemonSet not ready within %v; kubectl describe pod output: %v", timeout, stdout)
 	} else if err != nil {
 		return err
 	}
@@ -1483,6 +1483,10 @@ func (data *TestData) CreateClient(kubeconfigPath string) error {
 	if err != nil {
 		return fmt.Errorf("error when building kube config: %v", err)
 	}
+	// Increase QPS and Burst to prevent client-side throttling during high-concurrency stress tests.
+	kubeConfig.QPS = 100
+	kubeConfig.Burst = 200
+
 	clientset, err := kubernetes.NewForConfig(kubeConfig)
 	if err != nil {
 		return fmt.Errorf("error when creating kubernetes client: %v", err)
@@ -1581,6 +1585,7 @@ type PodBuilder struct {
 	ResourceLimits     corev1.ResourceList
 	ReadinessProbe     *corev1.Probe
 	DnsConfig          *corev1.PodDNSConfig
+	RestartPolicy      corev1.RestartPolicy
 }
 
 func NewPodBuilder(name, ns, image string) *PodBuilder {
@@ -1718,6 +1723,11 @@ func (b *PodBuilder) WithReadinessProbe(probe *corev1.Probe) *PodBuilder {
 	return b
 }
 
+func (b *PodBuilder) WithRestartPolicy(policy corev1.RestartPolicy) *PodBuilder {
+	b.RestartPolicy = policy
+	return b
+}
+
 // WithCustomDNSConfig adds a custom DNS Configuration to the Pod spec.
 // It ensures that the DNSPolicy is set to 'None' and assigns the provided DNSConfig.
 func (b *PodBuilder) WithCustomDNSConfig(dnsConfig *corev1.PodDNSConfig) *PodBuilder {
@@ -1729,6 +1739,10 @@ func (b *PodBuilder) Create(data *TestData) error {
 	containerName := b.ContainerName
 	if containerName == "" {
 		containerName = getImageName(b.Image)
+	}
+	policy := b.RestartPolicy
+	if policy == "" {
+		policy = corev1.RestartPolicyNever
 	}
 	podSpec := corev1.PodSpec{
 		Containers: []corev1.Container{
@@ -1752,7 +1766,7 @@ func (b *PodBuilder) Create(data *TestData) error {
 			},
 		},
 		Volumes:            b.Volumes,
-		RestartPolicy:      corev1.RestartPolicyNever,
+		RestartPolicy:      policy,
 		HostNetwork:        b.HostNetwork,
 		ServiceAccountName: b.ServiceAccountName,
 		// Set it to 1s for immediate shutdown to reduce test run time and to avoid affecting subsequent tests.
