@@ -118,6 +118,8 @@ type Interface interface {
 
 	ListRules(protocol Protocol, table string, chain string) (map[Protocol][]string, error)
 
+	ListChains(protocol Protocol, table string) (map[Protocol][]string, error)
+
 	Restore(data string, flush bool, useIPv6 bool) error
 
 	Save() ([]byte, error)
@@ -405,6 +407,23 @@ func (c *Client) Restore(data string, flush bool, useIPv6 bool) error {
 }
 
 // Save calls iptables-saves to dump chains and tables in iptables.
+// ListChains lists the names of the chains of the given table, for every matching protocol.
+func (c *Client) ListChains(protocol Protocol, table string) (map[Protocol][]string, error) {
+	allChains := make(map[Protocol][]string)
+	for p := range c.ipts {
+		ipt := c.ipts[p]
+		if !matchProtocol(ipt, protocol) {
+			continue
+		}
+		chains, err := ipt.ListChains(table)
+		if err != nil {
+			return nil, fmt.Errorf("error listing chains of table %s: %w", table, err)
+		}
+		allChains[p] = chains
+	}
+	return allChains, nil
+}
+
 func (c *Client) Save() ([]byte, error) {
 	var output []byte
 	for p := range c.ipts {
