@@ -93,12 +93,18 @@ function AddToEnvPath(){
     param (
         [Parameter(Mandatory = $true)] [String]$path
     )
-    $envPaths = $env:Path -split ";" | Select-Object -Unique
+    # Read the Machine Path directly instead of using $env:Path, as $env:Path may not reflect the
+    # actual system Path when this script runs in a container (e.g. a HostProcess container): it
+    # can be a minimal Path value set by the container runtime rather than the host's real Path.
+    # Writing that back would wipe out any custom entries in the host's system Path. See issue #8111.
+    $machinePath = [Environment]::GetEnvironmentVariable("Path", [EnvironmentVariableTarget]::Machine)
+    $envPaths = $machinePath -split ";" | Where-Object { $_ -ne "" } | Select-Object -Unique
     if (-not $envPaths.Contains($path)) {
         $envPaths += $path
     }
-    $env:Path = [system.String]::Join(";", $envPaths)
-    [Environment]::SetEnvironmentVariable("Path", $env:Path, [EnvironmentVariableTarget]::Machine)
+    $newMachinePath = [system.String]::Join(";", $envPaths)
+    [Environment]::SetEnvironmentVariable("Path", $newMachinePath, [EnvironmentVariableTarget]::Machine)
+    $env:Path = $newMachinePath
 }
 
 function CheckAndInstallScripts {
