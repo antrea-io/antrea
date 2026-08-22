@@ -292,7 +292,7 @@ this [document](egress.md) for more information.
 
 #### Requirements for this Feature
 
-This feature is currently only supported for Nodes running Linux and "encap" / "hybrid"
+This feature is currently supported for Nodes running Linux and "encap" / "noEncap" / "hybrid" / WireGuard encryption
 mode. The support for Windows and other traffic modes will be added in the future.
 
 ### NodeIPAM

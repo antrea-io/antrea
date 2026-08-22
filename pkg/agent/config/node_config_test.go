@@ -352,6 +352,22 @@ func TestCalculateMTUDeduction(t *testing.T) {
 			nc:                   &NetworkConfig{TunnelType: ovsconfig.GRETunnel, TrafficEncryptionMode: TrafficEncryptionModeIPSec},
 			expectedMTUDeduction: 80,
 		},
+		{
+			name:                 "noEncap with Egress enabled and Geneve",
+			nc:                   &NetworkConfig{TrafficEncapMode: TrafficEncapModeNoEncap, TunnelType: ovsconfig.GeneveTunnel, EnableEgress: true},
+			expectedMTUDeduction: 50,
+		},
+		{
+			name:                 "noEncap with Egress enabled and Geneve and IPv6",
+			nc:                   &NetworkConfig{TrafficEncapMode: TrafficEncapModeNoEncap, TunnelType: ovsconfig.GeneveTunnel, EnableEgress: true},
+			isIPv6:               true,
+			expectedMTUDeduction: 70,
+		},
+		{
+			name:                 "noEncap without Egress enabled",
+			nc:                   &NetworkConfig{TrafficEncapMode: TrafficEncapModeNoEncap, TunnelType: ovsconfig.GeneveTunnel, EnableEgress: false},
+			expectedMTUDeduction: 0,
+		},
 	}
 
 	for _, tt := range tests {
@@ -391,6 +407,16 @@ func TestNeedsTunnelInterface(t *testing.T) {
 		{
 			name:     "networkPolicyOnly without Multicluster enabled",
 			nc:       &NetworkConfig{TrafficEncapMode: TrafficEncapModeNetworkPolicyOnly, EnableMulticlusterGW: false},
+			expected: false,
+		},
+		{
+			name:     "noEncap mode with Egress enabled",
+			nc:       &NetworkConfig{TrafficEncapMode: TrafficEncapModeNoEncap, EnableEgress: true},
+			expected: true,
+		},
+		{
+			name:     "noEncap mode without Egress enabled",
+			nc:       &NetworkConfig{TrafficEncapMode: TrafficEncapModeNoEncap, EnableEgress: false},
 			expected: false,
 		},
 	}
