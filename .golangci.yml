@@ -13,6 +13,7 @@ linters:
     - revive
     - staticcheck
     - unused
+    - tagliatelle
   settings:
     gosec:
       excludes:
@@ -37,6 +38,26 @@ linters:
         - name: superfluous-else
         - name: var-declaration
         - name: duplicated-imports
+    tagliatelle:
+      case:
+        rules:
+          json: goCamel
+          yaml: goCamel
+        overrides:
+          - pkg: pkg/apis/
+            ignore: true
+          - pkg: pkg/agent/apis/
+            ignore: true
+          - pkg: multicluster/apis/
+            ignore: true
+          - pkg: pkg/flowaggregator/apis/
+            ignore: true
+          - pkg: pkg/config/
+            ignore: true
+          - pkg: pkg/ovs/ovsconfig/
+            ignore: true
+          - pkg: test/
+            ignore: true
   exclusions:
     presets:
       - legacy
