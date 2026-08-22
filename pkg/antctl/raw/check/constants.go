@@ -16,4 +16,5 @@ package check
 
 const (
 	DefaultTestImage = "antrea/toolbox:1.7-0"
+	DefaultCNIDir    = "/etc/cni/net.d"
 )
