@@ -31,16 +31,17 @@ If release name contains chart name it will be used as a full name.
 {{- end }}
 
 {{/*
-Name to use for RBAC objects which are not created in the release Namespace: the ClusterRole and
-ClusterRoleBindings, and the RoleBinding created in kube-system. Because these names must be unique
-across the whole cluster, clusterScopedRBACNameSuffix can be used to install several instances of
-the chart (in different Namespaces) without them stealing each other's RBAC bindings.
+Name to use for objects whose name must be unique across the whole cluster: currently the
+ClusterRole and ClusterRoleBindings, and the RoleBinding created in kube-system. Use this helper
+for any object with that requirement, so that clusterScopedNameSuffix can be used to install
+several instances of the chart (in different Namespaces) without them stealing each other's
+cluster-scoped objects.
 */}}
-{{- define "flow-aggregator.clusterScopedRBACName" -}}
+{{- define "flow-aggregator.clusterScopedName" -}}
 {{- $suffix := "" }}
-{{- if .Values.clusterScopedRBACNameSuffix }}
-{{- /* printf %v so that a suffix such as "-1", which Helm's --set coerces to an integer, is still rendered as a string. */}}
-{{- $suffix = printf "%v" .Values.clusterScopedRBACNameSuffix }}
+{{- if not (kindIs "invalid" .Values.clusterScopedNameSuffix) }}
+{{- /* toString so that a suffix such as "-1", which Helm's --set coerces to an integer, is still rendered as a string. */}}
+{{- $suffix = toString .Values.clusterScopedNameSuffix }}
 {{- end }}
-{{- printf "%s%s" (include "flow-aggregator.fullname" .) $suffix | trunc 63 | trimSuffix "-" }}
+{{- printf "%s%s" (include "flow-aggregator.fullname" .) $suffix }}
 {{- end }}

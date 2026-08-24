@@ -235,10 +235,10 @@ nameOverride: ""
 # -- (string) Override the full name of the chart.
 fullnameOverride: ""
 
-# -- (string) Suffix appended to the names of the RBAC objects which are not created in the release
-# Namespace: the ClusterRole and ClusterRoleBindings, and the RoleBinding created in kube-system.
-# The names of these objects must be unique across the whole cluster, so a distinct suffix must be
-# provided for each instance when installing the chart several times (in different Namespaces) in
-# the same cluster. Otherwise, installing the second instance will rebind the shared
-# ClusterRoleBindings to the second ServiceAccount, revoking the permissions of the first instance.
-clusterScopedRBACNameSuffix: ""
+# -- (string) Suffix appended to the names of objects whose name must be unique across the whole
+# cluster: currently the RBAC ClusterRole and ClusterRoleBindings, and the RoleBinding created in
+# kube-system. A distinct suffix must be provided for each instance when installing the chart
+# several times (in different Namespaces) in the same cluster. Otherwise, installing the second
+# instance will rebind the shared ClusterRoleBindings to the second ServiceAccount, revoking the
+# permissions of the first instance.
+clusterScopedNameSuffix: ""
