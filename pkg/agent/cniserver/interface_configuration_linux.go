@@ -101,6 +101,12 @@ func (ic *ifConfigurator) configureVFLinkAndIPAM(link netlink.Link, containerID 
 	if err != nil {
 		return fmt.Errorf("failed to set MTU for VF netdevice %s: %w", containerIfaceName, err)
 	}
+
+	// Disable IPv6 RA / SLAAC on the container interface.
+	if err := util.DisableIPv6RAOnInterface(containerIfaceName); err != nil {
+		klog.ErrorS(err, "Failed to disable IPv6 RA/autoconf on interface", "interface", containerIfaceName)
+	}
+
 	err = ic.netlink.LinkSetUp(link)
 	if err != nil {
 		return fmt.Errorf("failed to set link up to VF netdevice %s: %w", containerIfaceName, err)
@@ -480,6 +486,11 @@ func (ic *ifConfigurator) configureContainerLinkVeth(
 		}()
 		containerIface.Mac = mac.String()
 		hostIface.Mac = hostVeth.HardwareAddr.String()
+
+		// Disable IPv6 RA / SLAAC on the container interface.
+		if err := util.DisableIPv6RAOnInterface(containerIfaceName); err != nil {
+			klog.ErrorS(err, "Failed to disable IPv6 RA/autoconf on interface", "interface", containerIfaceName)
+		}
 
 		// Disable TX checksum offloading when it's configured explicitly.
 		if ic.disableTXChecksumOffload {
