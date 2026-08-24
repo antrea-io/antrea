@@ -314,13 +314,16 @@ func TestContainerInterfaceDisableIPv6RA(t *testing.T) {
 		"CNI_NETNS":       netnsPath,
 		"CNI_IFNAME":      "eth0",
 		"CNI_PATH":        "/opt/cni/bin",
-		"CNI_ARGS":        "K8S_POD_NAMESPACE=default;K8S_POD_NAME=test-pod-ipv6-ra",
+		"CNI_ARGS":        fmt.Sprintf("K8S_POD_NAMESPACE=%s;K8S_POD_NAME=test-pod-ipv6-ra", data.testNamespace),
 	}
 
 	testMainCniConfig := `{
 		"cniVersion": "0.4.0",
 		"name": "antrea",
-		"type": "antrea"
+		"type": "antrea",
+		"ipam": {
+			"type": "host-local"
+		}
 	}`
 
 	defer func() {
