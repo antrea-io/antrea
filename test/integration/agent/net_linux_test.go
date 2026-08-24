@@ -15,6 +15,7 @@
 package agent
 
 import (
+	"fmt"
 	"net"
 	"testing"
 
@@ -23,6 +24,7 @@ import (
 	"github.com/vishvananda/netlink"
 
 	"antrea.io/antrea/v2/pkg/agent/util"
+	"antrea.io/antrea/v2/pkg/agent/util/sysctl"
 )
 
 func createTestInterface(t *testing.T, name string) string {
@@ -61,4 +63,21 @@ func getTestInterfaceAddresses(t *testing.T, name string) []*net.IPNet {
 func addTestInterfaceAddress(t *testing.T, name string, addr *net.IPNet) {
 	link, _ := netlink.LinkByName(name)
 	require.NoError(t, netlink.AddrAdd(link, &netlink.Addr{IPNet: addr}))
+}
+
+func TestDisableIPv6RAOnInterface(t *testing.T) {
+	ifaceName := randName()
+	createTestInterface(t, ifaceName)
+	defer deleteTestInterface(t, ifaceName)
+
+	err := util.DisableIPv6RAOnInterface(ifaceName)
+	require.NoError(t, err)
+
+	acceptRA, err := sysctl.GetSysctlNet(fmt.Sprintf("ipv6/conf/%s/accept_ra", ifaceName))
+	require.NoError(t, err)
+	assert.Equal(t, 0, acceptRA)
+
+	autoconf, err := sysctl.GetSysctlNet(fmt.Sprintf("ipv6/conf/%s/autoconf", ifaceName))
+	require.NoError(t, err)
+	assert.Equal(t, 0, autoconf)
 }

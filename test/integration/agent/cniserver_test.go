@@ -57,6 +57,7 @@ import (
 	openflowtest "antrea.io/antrea/v2/pkg/agent/openflow/testing"
 	routetest "antrea.io/antrea/v2/pkg/agent/route/testing"
 	"antrea.io/antrea/v2/pkg/agent/util"
+	"antrea.io/antrea/v2/pkg/agent/util/sysctl"
 	cnimsg "antrea.io/antrea/v2/pkg/apis/cni/v1beta1"
 	"antrea.io/antrea/v2/pkg/ovs/ovsconfig"
 	ovsconfigtest "antrea.io/antrea/v2/pkg/ovs/ovsconfig/testing"
@@ -383,6 +384,20 @@ func (tester *cmdAddDelTester) checkContainerNetworking(tc testCase) {
 		testRequire.Nil(err)
 		testRequire.NotNil(expectedRoute)
 	}
+
+	// Check that IPv6 RA and SLAAC are disabled on the container interface.
+	err = tester.targetNS.Do(func(_ ns.NetNS) error {
+		acceptRA, err := sysctl.GetSysctlNet(fmt.Sprintf("ipv6/conf/%s/accept_ra", IFName))
+		if err == nil {
+			testAssert.Equal(0, acceptRA)
+		}
+		autoconf, err := sysctl.GetSysctlNet(fmt.Sprintf("ipv6/conf/%s/autoconf", IFName))
+		if err == nil {
+			testAssert.Equal(0, autoconf)
+		}
+		return nil
+	})
+	testRequire.Nil(err)
 }
 
 func (tester *cmdAddDelTester) cmdAddTest(tc testCase, dataDir string) (*current.Result, error) {
