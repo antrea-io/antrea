@@ -234,6 +234,10 @@ type NetworkConfig struct {
 	EnableMulticlusterGW       bool
 	MulticlusterEncryptionMode TrafficEncryptionModeType
 
+	// EnableEgress indicates the Egress feature is enabled. It is used to determine whether
+	// a tunnel interface should be created in noEncap mode for Egress traffic forwarding.
+	EnableEgress bool
+
 	EnableHostNetworkAcceleration bool
 	HostNetworkMode               HostNetworkMode
 }
@@ -288,7 +292,24 @@ func (nc *NetworkConfig) NeedsTunnelInterface() bool {
 	// cross-cluster traffic from a regular Node to the gateway Node for the source cluster
 	// always goes through antrea-tun0, regardless of the actual "traffic mode" for the source
 	// cluster.
-	return nc.TrafficEncapMode.SupportsEncap() || nc.EnableMulticlusterGW
+	// In noEncap mode with Egress enabled, the tunnel interface is required so that OVS can
+	// forward Egress traffic from a non-Egress Node to the Egress Node via the tunnel. Regular
+	// Pod-to-Pod traffic continues to use direct routing and is unaffected.
+	return nc.TrafficEncapMode.SupportsEncap() ||
+		nc.EnableMulticlusterGW ||
+		nc.TrafficEncapMode == TrafficEncapModeNoEncap && nc.EnableEgress
+}
+
+// NeedsEgressSymmetricPath returns true when Egress traffic takes a tunnel path which is distinct from the
+// path taken by the common Pod-to-Pod traffic, which is the case in noEncap and hybrid modes, and when
+// WireGuard encryption is enabled. Pod-to-Pod traffic then goes via routing while Egress traffic from remote
+// Pods reaches the Egress Node through a tunnel, so the reply packets of those Egress connections have to be
+// steered back to that tunnel to keep the path of a connection symmetric. The OVS pipeline installs a return
+// flow and the route client installs policy routing for that, both under this condition.
+func (nc *NetworkConfig) NeedsEgressSymmetricPath(egressEnabled bool) bool {
+	return egressEnabled && (nc.TrafficEncapMode == TrafficEncapModeNoEncap ||
+		nc.TrafficEncapMode == TrafficEncapModeHybrid ||
+		nc.TrafficEncryptionMode == TrafficEncryptionModeWireGuard)
 }
 
 // NeedsDirectRoutingToPeer returns true if Pod traffic to peer Node needs a direct route installed to the routing table.
@@ -329,7 +350,9 @@ func (nc *NetworkConfig) CalculateMTUDeduction(isIPv6 bool) int {
 		}
 		return nc.MTUDeduction
 	}
-	if nc.TrafficEncapMode.SupportsEncap() {
+	// EnableMulticlusterGW is handled above, so the remaining cases where a tunnel is needed are
+	// exactly the ones where traffic going through it must have a reduced MTU.
+	if nc.NeedsTunnelInterface() {
 		nc.MTUDeduction = nc.getEncapMTUDeduction(isIPv6)
 	}
 	switch nc.TrafficEncryptionMode {

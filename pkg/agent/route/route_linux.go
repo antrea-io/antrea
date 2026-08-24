@@ -494,7 +494,8 @@ func (c *Client) Initialize(nodeConfig *config.NodeConfig, done func()) error {
 		}
 	}
 
-	// In hybrid mode, or encap mode with WireGuard enabled, Egress traffic originating from remote Pod CIDRs is forwarded like this:
+	// In hybrid, noEncap, and WireGuard encryption modes, Egress traffic originating from remote Pod CIDRs is
+	// forwarded like this:
 	//     remote Pods -> tunnel (remote Node OVS) -> tunnel (local Node OVS) -> antrea-gw0 (local Node) -> external network.
 	//
 	// To ensure reply packets follow a symmetric path, Antrea uses policy routing on the local Node. However, the
@@ -514,13 +515,13 @@ func (c *Client) Initialize(nodeConfig *config.NodeConfig, done func()) error {
 			return fmt.Errorf("failed to initialize Service IP routes: %v", err)
 		}
 	}
-	// Set up the policy routing ip rule to support Egress in hybrid mode or encap mode with WireGuard enabled.
+	// Set up the policy routing ip rule to support Egress in hybrid, noEncap, and WireGuard encryption modes.
 	if c.shouldEnableEgressPolicyRouting() {
 		if err := c.initEgressIPRules(); err != nil {
-			return fmt.Errorf("failed to initialize ip rules for Egress in hybrid mode: %w", err)
+			return fmt.Errorf("failed to initialize ip rules for Egress policy routing: %w", err)
 		}
 		if err := c.initEgressIPRoutes(); err != nil {
-			return fmt.Errorf("failed to initialize IP routes for Egress in hybrid mode: %w", err)
+			return fmt.Errorf("failed to initialize IP routes for Egress policy routing: %w", err)
 		}
 	}
 
@@ -2730,9 +2731,9 @@ func (c *Client) addVirtualServiceIPRoute(isIPv6 bool) error {
 }
 
 // addEgressReplyDefaultPolicyIPRoute is used to add a default route to policy-routing table ReplyEgressRouteTable when traffic
-// mode is hybrid. The route is to route the reply Egress packets originated from remote Nodes to Antrea gateway,
-// avoiding the packets to be matched by the routes in main route table. This ensures that the reply Egress packets
-// can be forwarded back to the remote Nodes through OVS flow-based tunnel.
+// mode is hybrid, noEncap, or WireGuard encryption. The route is to route the reply Egress packets originated
+// from remote Nodes to Antrea gateway, avoiding the packets to be matched by the routes in main route table. This ensures
+// that the reply Egress packets can be forwarded back to the remote Nodes through OVS flow-based tunnel.
 func (c *Client) addEgressReplyDefaultPolicyIPRoute(isIPv6 bool) error {
 	linkIndex := c.nodeConfig.GatewayConfig.LinkIndex
 	nextHopIP := config.VirtualReplyEgressRouteNextHopIPv4
@@ -3850,14 +3851,12 @@ func (c *Client) deleteExternalIPConfigsIPsets(externalIP net.IP) error {
 	return nil
 }
 
-// shouldEnableEgressPolicyRouting returns true when Egress is enabled and policy based routing
-// is needed for Egress traffic, such as when traffic encapsulation mode is hybrid or traffic
-// encryption mode is WireGuard. In those cases, Egress uses a tunnel path distinct from the common
-// Pod-to-Pod traffic path (e.g. Pod-to-Pod may go via routing in hybrid), so symmetric-path handling
-// for Egress reply packets is needed.
+// shouldEnableEgressPolicyRouting returns true when policy based routing is needed for Egress traffic, which
+// is the case whenever Egress takes a tunnel path distinct from the common Pod-to-Pod traffic path. The OVS
+// pipeline installs its matching return flow under the same condition, so both read it from NetworkConfig
+// instead of each spelling the modes out.
 func (c *Client) shouldEnableEgressPolicyRouting() bool {
-	return c.egressEnabled && (c.networkConfig.TrafficEncapMode == config.TrafficEncapModeHybrid ||
-		c.networkConfig.TrafficEncryptionMode == config.TrafficEncryptionModeWireGuard)
+	return c.networkConfig.NeedsEgressSymmetricPath(c.egressEnabled)
 }
 
 // Enqueue implements the client.Listener interface. It is called by the Antrea Service EndpointResolver
