@@ -1320,7 +1320,7 @@ func (c *Client) restoreIptablesData(podCIDR *net.IPNet,
 			"-j", iptables.MarkTarget, "--or-mark", fmt.Sprintf("%#08x", types.HostLocalSourceMark),
 		}...)
 	}
-	if c.egressEnabled && c.networkConfig.TrafficEncapMode == config.TrafficEncapModeHybrid {
+	if c.shouldEnableEgressPolicyRouting() {
 		writeLine(iptablesData, []string{
 			"-A", antreaOutputChain,
 			"-m", "comment", "--comment", `"Antrea: restore fwmark from connmark for reply Egress packets to remote Pods"`,
