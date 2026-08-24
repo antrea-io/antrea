@@ -16,133 +16,159 @@ package flowstreamservice
 
 import (
 	"context"
+	"crypto/tls"
 	"errors"
 	"fmt"
-	"strings"
+	"net/http"
+	"slices"
 	"time"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/metadata"
+	"google.golang.org/grpc/peer"
 	"google.golang.org/grpc/status"
-	authenticationv1 "k8s.io/api/authentication/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/wait"
+	"k8s.io/apiserver/pkg/authentication/authenticator"
+	"k8s.io/apiserver/pkg/authentication/authenticatorfactory"
 	"k8s.io/apiserver/pkg/authentication/user"
 	"k8s.io/apiserver/pkg/endpoints/request"
+	"k8s.io/apiserver/pkg/server/dynamiccertificates"
+	genericoptions "k8s.io/apiserver/pkg/server/options"
 	"k8s.io/client-go/kubernetes"
-	"k8s.io/client-go/rest"
+	authenticationv1client "k8s.io/client-go/kubernetes/typed/authentication/v1"
 	"k8s.io/klog/v2"
 )
 
 const (
 	// authorizationMetadataKey is the gRPC metadata key clients must set to carry their bearer token,
 	// mirroring the HTTP Authorization header. gRPC metadata keys are matched case-insensitively.
+	// The value must be formatted as "Bearer <token>" (RFC 6750), though the scheme itself is matched
+	// case-insensitively, since Kubernetes' bearertoken authenticator lowercases it before comparing.
 	authorizationMetadataKey = "authorization"
-	// bearerTokenScheme is the scheme clients must use in the authorization metadata value, e.g.
-	// "Bearer <token>" (RFC 6750). RFC 7235 defines the auth-scheme token as case-insensitive, and
-	// Kubernetes' own bearertoken authenticator compares it with strings.EqualFold rather than as a
-	// literal prefix, so this does the same instead of rejecting an otherwise valid "bearer <token>"
-	// or "BEARER <token>".
-	bearerTokenScheme = "Bearer"
 
-	// clientCertMetadataKey and clientKeyMetadataKey carry a PEM-encoded X.509 client certificate and
-	// private key respectively. This is how a client that authenticated via a Pinniped Concierge
-	// TokenCredentialRequest (which always returns a short-lived client cert, never a bearer token)
-	// presents its credential. The "-bin" suffix is required by gRPC for metadata values that are not
-	// valid ASCII; grpc-go base64-encodes/decodes such headers transparently at the transport layer,
-	// so values read back from the incoming context here are already raw PEM bytes, not base64 text.
-	clientCertMetadataKey = "client-cert-bin"
-	clientKeyMetadataKey  = "client-key-bin"
+	// clientCAConfigMapNamespace, clientCAConfigMapName and clientCAConfigMapKey locate the CA bundle
+	// used to verify client certificates. Reading it requires the extension-apiserver-authentication-reader
+	// Role in kube-system, which the Flow Aggregator is already bound to.
+	clientCAConfigMapNamespace = metav1.NamespaceSystem
+	clientCAConfigMapName      = "extension-apiserver-authentication"
+	clientCAConfigMapKey       = "client-ca-file"
 
-	// maxConcurrentCertAuthentications bounds how many client-certificate authentications, and
-	// maxConcurrentTokenAuthentications how many bearer-token authentications, may be in flight at
-	// once. Both exist for the same underlying reason: StreamInterceptor runs once per stream,
-	// before the credential is validated, and an in-cluster rest.Config leaves QPS at 0, so
-	// client-go installs no request-rate limiter for either the per-request client that
-	// authenticateCert builds for SelfSubjectReview or the Flow Aggregator's own shared a.k8sClient
-	// that authenticateToken uses for TokenReview. Without these bounds, any Pod that can reach the
-	// FlowStreamService port could turn cheap gRPC connects into unbounded concurrent requests
-	// against kube-apiserver without ever presenting a valid credential.
-	//
-	// The cert path additionally pays for a TLS handshake and http.Transport per distinct
-	// credential, since each cert/key pair is its own client config; the token path reuses one
-	// connection pool, so its bound exists purely to cap request rate, not transport cost.
-	maxConcurrentCertAuthentications  = 8
+	// maxConcurrentTokenAuthentications bounds how many authentications that may reach kube-apiserver
+	// are in flight at once. Without this bound, any Pod that can reach the FlowStreamService port
+	// could turn cheap gRPC connects into unbounded concurrent requests against kube-apiserver without
+	// ever presenting a valid credential.
+	// A call is charged a slot whenever it carries authorization metadata, which is a slight
+	// over-estimate: a client that presents both a token and a client certificate that verifies is
+	// identified by the certificate and never reaches kube-apiserver, yet still holds a slot while
+	// that is determined. Certificate-only calls take no slot, since they need no bound at all.
 	maxConcurrentTokenAuthentications = 8
-	// certAuthenticationTimeout bounds one SelfSubjectReview, and tokenAuthenticationTimeout bounds
-	// one TokenReview; each is what keeps a slow or unreachable API server from turning its small
-	// concurrency bound into a denial of service for legitimate clients, by capping how long a
-	// single credential can hold a slot.
-	certAuthenticationTimeout  = 10 * time.Second
-	tokenAuthenticationTimeout = 10 * time.Second
+	// tokenAuthenticationTimeout bounds one TokenReview, including the retries the delegating
+	// authenticator makes on a failing webhook, and so caps how long one credential can hold a slot.
+	// The value is deliberately set above the delegating authenticator's 10s default plus retry
+	// cycle, which the Flow Aggregator's own API server found too short (see authenticationTimeout in
+	// pkg/flowaggregator/apiserver/apiserver.go).
+	tokenAuthenticationTimeout = 30 * time.Second
 )
 
 // errAuthenticationOverloaded means the authenticator declined to check a credential because too
-// many checks of that kind were already in flight, not that the credential was bad. It is reported
-// to the client as ResourceExhausted, which is retryable, rather than as Unauthenticated.
+// many TokenReviews were already in flight, not that the credential was bad. It is reported to the
+// client as ResourceExhausted, which is retryable, rather than as Unauthenticated.
 var errAuthenticationOverloaded = errors.New("too many authentication requests in flight")
 
-// newKubernetesClientForConfig builds a Kubernetes ClientSet for cfg. It is a package-level variable,
-// so tests can substitute a fake SelfSubjectReviews implementation without standing up a real
-// TLS-terminating API server for the ephemeral, per-request client-cert config to authenticate against.
-var newKubernetesClientForConfig = func(cfg *rest.Config) (kubernetes.Interface, error) {
-	return kubernetes.NewForConfig(cfg)
-}
-
-// clientCredential is the credential a connecting client presented, extracted from gRPC metadata.
-// Exactly one of token or (certPEM, keyPEM) is set.
-type clientCredential struct {
-	token   string
-	certPEM []byte
-	keyPEM  []byte
-}
-
-// StreamServerAuthenticator is a gRPC stream server interceptor that authenticates FlowStreamService clients.
-// Clients present either a Kubernetes bearer token (validated via TokenReview) or a short-lived X.509
-// client certificate (validated via SelfSubjectReview against the API server), both carried as gRPC metadata.
-// The resolved identity is attached to the stream context via request.WithUser and can be read back with
-// request.UserFrom by authorization logic.
+// StreamServerAuthenticator authenticates FlowStreamService clients. It provides the gRPC stream
+// interceptor that runs before any RPC on the service reaches its handler; every RPC the service
+// serves is server-streaming, and rejectUnaryRPC keeps it that way.
+// Clients present either a Kubernetes bearer token in gRPC metadata (validated via TokenReview) or an
+// X.509 client certificate as the TLS client credential of the gRPC connection (validated locally
+// against the cluster's client CA bundle). The resolved identity is attached to the RPC context via
+// request.WithUser and can be read back with request.UserFrom by authorization logic.
+// A call that carries both credentials is identified by its client certificate, because that is the
+// order the delegating authenticator tries them in, and the order kube-apiserver itself uses. If the
+// certificate does not verify against the cluster's client CA bundle, TokenReview will be attempted
+// and used as identity if successful.
 type StreamServerAuthenticator struct {
-	k8sClient kubernetes.Interface
-	// baseConfig is flow-aggregator's own in-cluster rest.Config. It is never used to authenticate as
-	// flow-aggregator itself; every per-request config derived from it via rest.AnonymousClientConfig
-	// strips flow-aggregator's own credentials first (see authenticateCert), keeping only the Host/CA
-	// fields needed to reach and verify the real API server.
-	baseConfig *rest.Config
-	// certAuthSlots and tokenAuthSlots are semaphores bounding concurrent client-certificate and
-	// bearer-token authentications respectively, to maxConcurrentCertAuthentications and
-	// maxConcurrentTokenAuthentications. A send acquires a slot, a receive releases it, and a
-	// failed non-blocking send means that path is saturated and declines the credential rather
-	// than queueing behind the ones already in flight.
-	certAuthSlots  chan struct{}
+	// authenticator is the delegated authenticator kube-apiserver's own aggregated API servers are
+	// built with: x509 against the cluster's client CA bundle, then TokenReview, with the
+	// system:authenticated group added to whichever succeeds. It reads the trust bundle through
+	// clientCAProvider on every call, so a rotated CA takes effect without a restart.
+	authenticator authenticator.Request
+	// clientCAProvider caches and watches the cluster's client CA bundle. It must be started with Run
+	// before the client certificate path can accept anything.
+	clientCAProvider *dynamiccertificates.ConfigMapCAController
+	// tokenAuthSlots is a semaphore bounding authentications that may reach kube-apiserver to
+	// maxConcurrentTokenAuthentications. A send acquires a slot, a receive releases it, and a failed
+	// non-blocking send means the path is saturated and declines the credential rather than queueing
+	// behind the ones already in flight.
 	tokenAuthSlots chan struct{}
 }
 
-func NewStreamServerAuthenticator(k8sClient kubernetes.Interface, baseConfig *rest.Config) *StreamServerAuthenticator {
-	return &StreamServerAuthenticator{
-		k8sClient:      k8sClient,
-		baseConfig:     baseConfig,
-		certAuthSlots:  make(chan struct{}, maxConcurrentCertAuthentications),
-		tokenAuthSlots: make(chan struct{}, maxConcurrentTokenAuthentications),
-	}
+// NewStreamServerAuthenticator builds an authenticator that resolves credentials against the cluster
+// k8sClient talks to.
+func NewStreamServerAuthenticator(k8sClient kubernetes.Interface) (*StreamServerAuthenticator, error) {
+	return newStreamServerAuthenticator(k8sClient, k8sClient.AuthenticationV1())
 }
 
-// StreamInterceptor implements grpc.StreamServerInterceptor. It rejects the call with codes.Unauthenticated
-// if the request does not carry a valid bearer token or client certificate; otherwise it attaches the resolved
-// identity to the stream context before invoking handler.
-func (a *StreamServerAuthenticator) StreamInterceptor(srv any, ss grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
-	cred, err := credentialFromContext(ss.Context())
+// newStreamServerAuthenticator takes the TokenReview client separately from the client the CA bundle
+// is read with, so that tests can supply one and fake the other.
+func newStreamServerAuthenticator(k8sClient kubernetes.Interface, tokenReviewClient authenticationv1client.AuthenticationV1Interface) (*StreamServerAuthenticator, error) {
+	clientCAProvider, err := dynamiccertificates.NewDynamicCAFromConfigMapController(
+		"client-ca", clientCAConfigMapNamespace, clientCAConfigMapName, clientCAConfigMapKey, k8sClient)
 	if err != nil {
-		return status.Error(codes.Unauthenticated, err.Error())
+		return nil, fmt.Errorf("failed to create client CA provider: %w", err)
+	}
+	// Log the CA bundle whenever it changes, including the first time it is loaded.
+	clientCAProvider.AddListener(caBundleListenerFunc(func() {
+		klog.InfoS("Loaded client CA bundle for FlowStreamService client certificate authentication",
+			"namespace", clientCAConfigMapNamespace, "configMap", clientCAConfigMapName,
+			"key", clientCAConfigMapKey, "bytes", len(clientCAProvider.CurrentCABundleContent()))
+	}))
+
+	delegating := authenticatorfactory.DelegatingAuthenticatorConfig{
+		ClientCertificateCAContentProvider: clientCAProvider,
+		TokenAccessReviewClient:            tokenReviewClient,
+		TokenAccessReviewTimeout:           tokenAuthenticationTimeout,
+		WebhookRetryBackoff:                genericoptions.DefaultAuthWebhookRetryBackoff(),
+		// Anonymous is left nil, so no anonymous authenticator is appended to the chain and a call
+		// carrying no credential is declined instead of being admitted as system:anonymous.
+	}
+	auth, _, err := delegating.New()
+	if err != nil {
+		return nil, fmt.Errorf("failed to create delegating authenticator: %w", err)
 	}
 
-	u, err := a.authenticate(ss.Context(), cred)
+	return &StreamServerAuthenticator{
+		authenticator:    auth,
+		clientCAProvider: clientCAProvider,
+		tokenAuthSlots:   make(chan struct{}, maxConcurrentTokenAuthentications),
+	}, nil
+}
+
+// Run keeps the client CA bundle used to verify client certificates in sync with the ConfigMap
+// kube-apiserver publishes it in. It blocks until stopCh is closed.
+// The bundle is read through an informer that Run starts, so client certificate authentication only
+// becomes available once that informer has synced. Until then — and permanently on a cluster whose
+// kube-apiserver publishes no client CA at all — x509 verification has no trust bundle and declines
+// every peer certificate rather than accepting an unverified one. Bearer-token authentication does
+// not depend on any of this and keeps working either way.
+func (a *StreamServerAuthenticator) Run(stopCh <-chan struct{}) {
+	a.clientCAProvider.Run(wait.ContextForChannel(stopCh), 1)
+}
+
+// caBundleListenerFunc adapts a function to dynamiccertificates.Listener.
+type caBundleListenerFunc func()
+
+func (f caBundleListenerFunc) Enqueue() { f() }
+
+// StreamInterceptor implements grpc.StreamServerInterceptor. It rejects the call with
+// codes.Unauthenticated if the request does not carry a valid bearer token or client certificate;
+// otherwise it attaches the resolved identity to the stream context before invoking handler.
+func (a *StreamServerAuthenticator) StreamInterceptor(srv any, ss grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
+	u, err := a.authenticate(ss.Context())
 	if err != nil {
-		klog.V(2).ErrorS(err, "FlowStreamService client authentication failed")
-		if errors.Is(err, errAuthenticationOverloaded) {
-			return status.Error(codes.ResourceExhausted, "too many authentication requests in flight, retry later")
-		}
-		return status.Error(codes.Unauthenticated, "invalid client credentials")
+		return authenticationStatusError(err)
 	}
 
 	return handler(srv, &authenticatedServerStream{
@@ -151,148 +177,104 @@ func (a *StreamServerAuthenticator) StreamInterceptor(srv any, ss grpc.ServerStr
 	})
 }
 
-// credentialFromContext extracts the client's credential from the incoming gRPC metadata of a stream:
-// either a bearer token in the "authorization" header, or a PEM client cert+key pair in the
-// client-cert-bin/client-key-bin headers. A bearer token takes precedence if both happen to be present.
-func credentialFromContext(ctx context.Context) (*clientCredential, error) {
+// authenticationStatusError logs an authentication failure and maps it to the gRPC status returned to
+// the client. Failures are logged at V(2) rather than unconditionally: the call is rejected before any
+// credential is validated, so an unauthenticated peer must not be able to flood the log by
+// reconnecting.
+func authenticationStatusError(err error) error {
+	klog.V(2).ErrorS(err, "FlowStreamService client authentication failed")
+	if errors.Is(err, errAuthenticationOverloaded) {
+		return status.Error(codes.ResourceExhausted, "too many authentication requests in flight, retry later")
+	}
+	return status.Error(codes.Unauthenticated, "invalid client credentials")
+}
+
+// authenticate resolves the credentials the call carries to an identity. It is called once per RPC,
+// so the credential is re-checked every time a stream is opened rather than being trusted for the
+// lifetime of the connection: a token that has since been invalidated is refused by TokenReview, and
+// an expired client certificate fails verification. Client certificate revocation is not detected,
+// since x509 verification is local and consults no CRL or OCSP responder, so a revoked certificate
+// keeps working until it expires — the same exposure a revoked certificate has against
+// kube-apiserver itself.
+func (a *StreamServerAuthenticator) authenticate(ctx context.Context) (user.Info, error) {
+	req, carriesToken := authenticationRequest(ctx)
+	// Only a call carrying authorization metadata can reach kube-apiserver, so only that call is
+	// charged a slot; see maxConcurrentTokenAuthentications. The slot is released as soon as the
+	// credential is resolved, not held for the lifetime of the stream it opens.
+	if carriesToken {
+		select {
+		case a.tokenAuthSlots <- struct{}{}:
+			defer func() { <-a.tokenAuthSlots }()
+		default:
+			return nil, errAuthenticationOverloaded
+		}
+	}
+
+	resp, ok, err := a.authenticator.AuthenticateRequest(req)
+	if err != nil {
+		// Reported when a credential was presented and rejected: an unverifiable certificate, a token
+		// TokenReview declined, or a TokenReview that could not be completed at all.
+		return nil, fmt.Errorf("credentials were not accepted: %w", err)
+	}
+	if !ok {
+		// Reported when nothing the call carries is a credential: no authorization metadata and no
+		// client certificate, or an authorization value that is not a bearer token.
+		return nil, fmt.Errorf("call carries no credential to authenticate")
+	}
+	u := resp.User
+
+	// Neither path should ever produce an unnamed or anonymous identity, so this fails closed for both.
+	if u.GetName() == "" {
+		return nil, fmt.Errorf("credential resolved to an empty user name")
+	}
+	if u.GetName() == user.Anonymous || slices.Contains(u.GetGroups(), user.AllUnauthenticated) {
+		return nil, fmt.Errorf("credential resolved to the anonymous user")
+	}
+	return u, nil
+}
+
+// authenticationRequest renders the credentials a gRPC call carries as the *http.Request the
+// Kubernetes authenticators expect, because they were written for an HTTP server. Only two fields are
+// read: TLS, from which the x509 authenticator takes the peer's certificate chain, and the
+// Authorization header, from which the bearer token authenticator takes the token. The reported bool
+// is whether the call carried authorization metadata at all, not whether it is a usable token.
+//
+// The call's context is attached so that the TokenReview issued on it is cancelled when the client
+// gives up, rather than running to its own timeout with nobody waiting for the answer.
+func authenticationRequest(ctx context.Context) (*http.Request, bool) {
+	req := (&http.Request{
+		Header: http.Header{},
+		TLS:    peerTLSState(ctx),
+	}).WithContext(ctx)
+
 	md, ok := metadata.FromIncomingContext(ctx)
 	if !ok {
-		return nil, fmt.Errorf("missing gRPC metadata")
+		return req, false
 	}
-
-	if values := md.Get(authorizationMetadataKey); len(values) > 0 {
-		scheme, token, found := strings.Cut(values[0], " ")
-		if !found || !strings.EqualFold(scheme, bearerTokenScheme) || token == "" {
-			return nil, fmt.Errorf("authorization header must be a bearer token")
-		}
-		return &clientCredential{token: token}, nil
+	values := md.Get(authorizationMetadataKey)
+	if len(values) == 0 {
+		return req, false
 	}
-
-	certValues := md.Get(clientCertMetadataKey)
-	keyValues := md.Get(clientKeyMetadataKey)
-	if len(certValues) > 0 || len(keyValues) > 0 {
-		if len(certValues) == 0 || len(keyValues) == 0 {
-			return nil, fmt.Errorf("both %s and %s metadata are required", clientCertMetadataKey, clientKeyMetadataKey)
-		}
-		return &clientCredential{certPEM: []byte(certValues[0]), keyPEM: []byte(keyValues[0])}, nil
-	}
-
-	return nil, fmt.Errorf("missing authorization header or client certificate metadata")
+	// http.Header.Set canonicalizes the lowercase gRPC metadata key to "Authorization", which is what
+	// the bearertoken authenticator reads.
+	req.Header.Set(authorizationMetadataKey, values[0])
+	return req, true
 }
 
-// authenticate resolves cred to an identity. It is called once per stream, when the stream is opened,
-// so the credential is always validated against the Kubernetes API server: a revoked or expired
-// credential can never be used to open a new stream.
-func (a *StreamServerAuthenticator) authenticate(ctx context.Context, cred *clientCredential) (user.Info, error) {
-	if cred.token != "" {
-		return a.authenticateToken(ctx, cred.token)
-	}
-	return a.authenticateCert(ctx, cred.certPEM, cred.keyPEM)
-}
-
-// authenticateToken validates token via the TokenReview API.
-// This runs once per stream before the credential is validated, against a.k8sClient, whose
-// in-cluster rest.Config installs no request-rate limiter. It is bounded by a.tokenAuthSlots for
-// that reason; see maxConcurrentTokenAuthentications.
-func (a *StreamServerAuthenticator) authenticateToken(ctx context.Context, token string) (*user.DefaultInfo, error) {
-	select {
-	case a.tokenAuthSlots <- struct{}{}:
-		defer func() { <-a.tokenAuthSlots }()
-	default:
-		return nil, errAuthenticationOverloaded
-	}
-	ctx, cancel := context.WithTimeout(ctx, tokenAuthenticationTimeout)
-	defer cancel()
-
-	tokenReview := &authenticationv1.TokenReview{
-		Spec: authenticationv1.TokenReviewSpec{Token: token},
-	}
-	review, err := a.k8sClient.AuthenticationV1().TokenReviews().Create(ctx, tokenReview, metav1.CreateOptions{})
-	if err != nil {
-		return nil, fmt.Errorf("TokenReview request failed: %w", err)
-	}
-	if review.Status.Error != "" {
-		return nil, fmt.Errorf("TokenReview returned an error: %s", review.Status.Error)
-	}
-	if !review.Status.Authenticated {
-		return nil, fmt.Errorf("token is not authenticated")
-	}
-	return userInfoFromK8s(review.Status.User), nil
-}
-
-// authenticateCert validates a PEM client cert+key pair via SelfSubjectReview:
-// it builds an ephemeral rest.Config that authenticates with the presented certificate data and asks the
-// K8s API server "who does the API server think I am, given how I just authenticated to it?"
-// This is used for clients (e.g. Pinniped Concierge TokenCredentialRequest) whose only available credential
-// is a short-lived client certificate rather than a bearer token.
-//
-// Unlike the token path, this builds a client of its own, and therefore a TLS handshake of its own,
-// for every credential presented. It is bounded by a.certAuthSlots for that reason; see
-// maxConcurrentCertAuthentications.
-func (a *StreamServerAuthenticator) authenticateCert(ctx context.Context, certPEM, keyPEM []byte) (*user.DefaultInfo, error) {
-	if a.baseConfig == nil {
-		return nil, fmt.Errorf("baseConfig is required for client certificate authentication")
-	}
-	// The slot is taken before the client is built, since building it is what allocates the
-	// transport that the handshake then runs on.
-	select {
-	case a.certAuthSlots <- struct{}{}:
-		defer func() { <-a.certAuthSlots }()
-	default:
-		return nil, errAuthenticationOverloaded
-	}
-	ctx, cancel := context.WithTimeout(ctx, certAuthenticationTimeout)
-	defer cancel()
-	// rest.AnonymousClientConfig strips every credential (bearer token, client cert, exec plugin, ...)
-	// from a.baseConfig, keeping only the fields needed to reach and verify the real API server
-	// (Host, APIPath, TLS server-verification settings). This is security-critical:
-	// clone of a.baseConfig would still carry flow-aggregator's own ServiceAccount bearer token,
-	// and an expired/invalid client cert would silently fall through to authenticating as
-	// flow-aggregator's own ServiceAccount instead of failing closed, causing privileged access
-	// for clients.
-	cfg := rest.AnonymousClientConfig(a.baseConfig)
-	cfg.TLSClientConfig.CertData = certPEM
-	cfg.TLSClientConfig.KeyData = keyPEM
-
-	client, err := newKubernetesClientForConfig(cfg)
-	if err != nil {
-		return nil, fmt.Errorf("failed to build client for SelfSubjectReview: %w", err)
-	}
-
-	review, err := client.AuthenticationV1().SelfSubjectReviews().Create(ctx, &authenticationv1.SelfSubjectReview{}, metav1.CreateOptions{})
-	if err != nil {
-		return nil, fmt.Errorf("SelfSubjectReview request failed: %w", err)
-	}
-	return userInfoFromK8s(review.Status.UserInfo), nil
-}
-
-// userInfoFromK8s converts a Kubernetes authenticationv1.UserInfo (returned by
-// both TokenReview and SelfSubjectReview) into the user.DefaultInfo expected
-// by request.WithUser.
-func userInfoFromK8s(u authenticationv1.UserInfo) *user.DefaultInfo {
-	return &user.DefaultInfo{
-		Name:   u.Username,
-		UID:    u.UID,
-		Groups: u.Groups,
-		Extra:  convertExtra(u.Extra),
-	}
-}
-
-// convertExtra converts the Extra field of a TokenReview/SelfSubjectReview's
-// UserInfo (map[string]authenticationv1.ExtraValue) into the plain
-// map[string][]string expected by user.DefaultInfo.Extra. authenticationv1.ExtraValue
-// is defined as `type ExtraValue []string`, so each value assigns to []string
-// without a cast; it is the outer map type that differs and must be rebuilt
-// key by key.
-func convertExtra(extra map[string]authenticationv1.ExtraValue) map[string][]string {
-	if extra == nil {
+// peerTLSState returns the TLS handshake state of the gRPC peer, or nil if the peer is unknown or did
+// not connect over TLS. The FlowStreamService listener requests a client certificate without
+// requiring one, so a client authenticating with a bearer token reaches here with a valid TLS state
+// whose certificate chain is empty.
+func peerTLSState(ctx context.Context) *tls.ConnectionState {
+	p, ok := peer.FromContext(ctx)
+	if !ok {
 		return nil
 	}
-	out := make(map[string][]string, len(extra))
-	for k, v := range extra {
-		out[k] = v
+	tlsInfo, ok := p.AuthInfo.(credentials.TLSInfo)
+	if !ok {
+		return nil
 	}
-	return out
+	return &tlsInfo.State
 }
 
 // authenticatedServerStream wraps a grpc.ServerStream to override Context(),

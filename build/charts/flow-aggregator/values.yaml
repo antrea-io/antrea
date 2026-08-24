@@ -200,8 +200,11 @@ flowLogger:
 # which streams flow records to consumers such as antrea-ui.
 flowStreamService:
   # -- Enable is the switch to enable the FlowStreamService gRPC server (port 14740). The server
-  # uses server-side TLS (same self-signed certificate as the gRPC collector) but no client
-  # authentication. Disabled by default.
+  # uses server-side TLS (same self-signed certificate as the gRPC collector). Clients must
+  # authenticate with either a Kubernetes bearer token in gRPC metadata or an X.509 client
+  # certificate signed by the cluster's client CA, presented during the TLS handshake. Note that
+  # the Flow Aggregator's own client certificate is signed by its self-signed CA, not the
+  # cluster's, so it cannot be used here. Disabled by default.
   enable: false
 testing:
   # -- Enable code coverage measurement (used when testing Flow Aggregator only).

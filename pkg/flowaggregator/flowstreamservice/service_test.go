@@ -54,7 +54,9 @@ func (f *fakeStream) SendMsg(any) error            { return nil }
 func (f *fakeStream) RecvMsg(any) error            { return nil }
 
 func newTestService(buf ringbuffer.BroadcastBuffer[*flowpb.Flow]) *FlowStreamService {
-	return NewFlowStreamService(buf, nil)
+	// These tests exercise GetFlows itself, with no API server to validate credentials against;
+	// authentication is covered separately in authenticator_test.go.
+	return newFlowStreamServiceWithoutAuthentication(buf)
 }
 
 func collectFlows(responses []*flowpb.GetFlowsResponse) []*flowpb.Flow {
@@ -800,4 +802,18 @@ func TestGetFlows_FollowContextCancelled(t *testing.T) {
 			t.Fatal("GetFlows did not return after context cancellation")
 		}
 	})
+}
+
+// TestNewFlowStreamService_RequiresAuthenticator pins down that authentication is not the zero value:
+// a caller that omits the authenticator gets an error rather than an open server that streams every
+// record to every peer with nothing in the code to flag it.
+func TestNewFlowStreamService_RequiresAuthenticator(t *testing.T) {
+	buf := ringbuffer.NewBroadcastBuffer[*flowpb.Flow](4)
+	s, err := NewFlowStreamService(buf, nil)
+	require.Error(t, err)
+	assert.Nil(t, s)
+
+	// Serving clients without authentication has to be asked for by name, and the only constructor
+	// that does it is unexported, so no caller outside this package can reach it at all.
+	assert.NotNil(t, newFlowStreamServiceWithoutAuthentication(buf))
 }

@@ -18,6 +18,7 @@
 package flowstreamservice
 
 import (
+	"context"
 	"crypto/tls"
 	"fmt"
 	"net"
@@ -49,32 +50,44 @@ const (
 // connection gets its own independent ring-buffer Consumer, so clients are
 // fully decoupled and a slow client never stalls faster ones.
 //
-// Connecting clients must present valid Kubernetes credentials in gRPC metadata.
-// Supported credentials are either:
-//   - a bearer token in the "authorization" header formatted as "Bearer <token>" (validated via TokenReview), or
-//   - a PEM client certificate+key in the "client-cert-bin"/"client-key-bin" headers (validated via SelfSubjectReview).
+// Connecting clients must present valid Kubernetes credentials. Supported credentials are either:
+//   - a bearer token in the "authorization" gRPC metadata header formatted as "Bearer <token>"
+//     (validated via TokenReview), or
+//   - an X.509 client certificate presented as the TLS client credential of the gRPC connection
+//     (validated against the cluster's client CA bundle).
 //
-// The call is rejected with codes.Unauthenticated if credentials are missing, malformed, or do not authenticate.
-// This applies whenever the service is constructed with a non-nil StreamServerAuthenticator.
+// The call is rejected with codes.Unauthenticated if credentials are missing, malformed, or do not
+// authenticate. Only this package's own tests can build a service that skips authentication.
 type FlowStreamService struct {
 	flowpb.UnimplementedFlowStreamServiceServer
-	buffer        ringbuffer.BroadcastBuffer[*flowpb.Flow]
+	buffer ringbuffer.BroadcastBuffer[*flowpb.Flow]
+	// authenticator authenticates every client before its RPC runs. It is nil only for a service
+	// built by newFlowStreamServiceWithoutAuthentication, which serves every client unauthenticated.
 	authenticator *StreamServerAuthenticator
 }
 
-// NewFlowStreamService creates a FlowStreamService backed by the given buffer.
-// authenticator authenticates clients (bearer token or client cert/key metadata)
-// before GetFlows runs; nil authenticator accepts any client.
-func NewFlowStreamService(buffer ringbuffer.BroadcastBuffer[*flowpb.Flow], authenticator *StreamServerAuthenticator) *FlowStreamService {
-	return &FlowStreamService{buffer: buffer, authenticator: authenticator}
+// NewFlowStreamService creates a FlowStreamService backed by the given buffer. authenticator
+// authenticates clients (bearer token metadata or a TLS client certificate) before their RPC runs,
+// and is required: a nil authenticator is rejected rather than quietly serving every client.
+func NewFlowStreamService(buffer ringbuffer.BroadcastBuffer[*flowpb.Flow], authenticator *StreamServerAuthenticator) (*FlowStreamService, error) {
+	if authenticator == nil {
+		return nil, fmt.Errorf("authenticator is required; only this package's tests may serve clients without authentication, via newFlowStreamServiceWithoutAuthentication")
+	}
+	return &FlowStreamService{buffer: buffer, authenticator: authenticator}, nil
+}
+
+// newFlowStreamServiceWithoutAuthentication creates a FlowStreamService that accepts every client
+// without authenticating it. It exists for this package's tests, which have no API server to validate
+// credentials against. It is deliberately unexported.
+func newFlowStreamServiceWithoutAuthentication(buffer ringbuffer.BroadcastBuffer[*flowpb.Flow]) *FlowStreamService {
+	return &FlowStreamService{buffer: buffer}
 }
 
 // Run starts a dedicated TLS gRPC server for the FlowStreamService on FlowStreamPort.
 // serverCertPEM and serverKeyPEM are the PEM-encoded server certificate and private key.
-// Only server-side TLS is used (no client certificate authentication); when the service
-// was constructed with a non-nil authenticator, clients must additionally present a valid
-// Kubernetes bearer token, or the call is rejected before GetFlows runs. Run blocks until
-// stopCh is closed.
+// When the service was constructed with a non-nil authenticator, clients must present a valid
+// Kubernetes bearer token or client certificate, or the call is rejected before GetFlows runs.
+// Run blocks until stopCh is closed.
 func (s *FlowStreamService) Run(serverCertPEM, serverKeyPEM []byte, stopCh <-chan struct{}) error {
 	cert, err := tls.X509KeyPair(serverCertPEM, serverKeyPEM)
 	if err != nil {
@@ -83,6 +96,13 @@ func (s *FlowStreamService) Run(serverCertPEM, serverKeyPEM []byte, stopCh <-cha
 	tlsConfig := &tls.Config{
 		Certificates: []tls.Certificate{cert},
 		MinVersion:   tls.VersionTLS12,
+		// RequestClientCert asks every client for a certificate without requiring one: a client
+		// authenticating with a bearer token simply presents none and the handshake still succeeds.
+		// Verification is deliberately left to the authenticator rather than to the TLS stack
+		// (which RequireAndVerifyClientCert would do), so that an unverifiable certificate is
+		// reported to the client as a gRPC Unauthenticated error rather than as an opaque handshake
+		// failure. ClientCAs is left unset for the same reason.
+		ClientAuth: tls.RequestClientCert,
 	}
 	addr := fmt.Sprintf("0.0.0.0:%d", flowStreamPort)
 	// #nosec G102: binding to all network interfaces is intentional
@@ -90,7 +110,10 @@ func (s *FlowStreamService) Run(serverCertPEM, serverKeyPEM []byte, stopCh <-cha
 	if err != nil {
 		return fmt.Errorf("failed to listen on %s: %w", addr, err)
 	}
-	serverOpts := []grpc.ServerOption{grpc.Creds(credentials.NewTLS(tlsConfig))}
+	serverOpts := []grpc.ServerOption{
+		grpc.Creds(credentials.NewTLS(tlsConfig)),
+		grpc.UnaryInterceptor(rejectUnaryRPC),
+	}
 	if s.authenticator != nil {
 		serverOpts = append(serverOpts, grpc.StreamInterceptor(s.authenticator.StreamInterceptor))
 	}
@@ -114,6 +137,17 @@ func (s *FlowStreamService) Run(serverCertPEM, serverKeyPEM []byte, stopCh <-cha
 	server.GracefulStop()
 	wg.Wait()
 	return nil
+}
+
+// rejectUnaryRPC refuses every unary RPC. FlowStreamService is server-streaming only, so the
+// authenticator is installed as a stream interceptor and a unary method would be served with no
+// credential check at all.
+// The rejection is logged at V(2) for the same reason authentication failures are: it happens before
+// any credential is checked, so an unauthenticated peer must not be able to flood the log by calling
+// a unary method in a loop.
+func rejectUnaryRPC(ctx context.Context, req any, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {
+	klog.V(2).ErrorS(nil, "Refusing unary RPC on FlowStreamService, which serves streaming RPCs only", "method", info.FullMethod)
+	return nil, status.Errorf(codes.Unauthenticated, "%s is a unary RPC, which FlowStreamService does not serve", info.FullMethod)
 }
 
 // GetFlows is the server-streaming RPC handler. The gRPC framework spawns a

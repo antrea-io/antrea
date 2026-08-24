@@ -51,7 +51,7 @@ func run(configFile string) error {
 
 	log.StartLogFileNumberMonitor(stopCh)
 
-	k8sClient, restConfig, err := createK8sClient()
+	k8sClient, err := createK8sClient()
 	if err != nil {
 		return fmt.Errorf("error when creating K8s client: %w", err)
 	}
@@ -73,7 +73,6 @@ func run(configFile string) error {
 
 	flowAggregator, err := aggregator.NewFlowAggregator(
 		k8sClient,
-		restConfig,
 		clusterUUID,
 		podStore,
 		nodeStore,
@@ -117,14 +116,14 @@ func run(configFile string) error {
 	return nil
 }
 
-func createK8sClient() (kubernetes.Interface, *rest.Config, error) {
+func createK8sClient() (kubernetes.Interface, error) {
 	config, err := rest.InClusterConfig()
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 	k8sClient, err := kubernetes.NewForConfig(config)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
-	return k8sClient, config, nil
+	return k8sClient, nil
 }

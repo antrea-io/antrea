@@ -31,7 +31,6 @@ import (
 	"google.golang.org/protobuf/proto"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/kubernetes"
-	"k8s.io/client-go/rest"
 	"k8s.io/klog/v2"
 
 	flowpb "antrea.io/antrea/v2/pkg/apis/flow/v1alpha1"
@@ -127,19 +126,20 @@ type flowAggregator struct {
 	logTickerDuration time.Duration
 	recordCh          chan *flowpb.Flow
 
-	recordBuffer        ringbuffer.BroadcastBuffer[*flowpb.Flow]
-	flowStreamService   flowStreamProvider
-	ipfixHandle         *exporterHandle
-	clickHouseHandle    *exporterHandle
-	s3Handle            *exporterHandle
-	logHandle           *exporterHandle
-	exportersMutex      sync.Mutex
-	certificateProvider *certificate.Provider
+	recordBuffer      ringbuffer.BroadcastBuffer[*flowpb.Flow]
+	flowStreamService flowStreamProvider
+	// flowStreamAuthenticator authenticates FlowStreamService clients.
+	flowStreamAuthenticator *flowstreamservice.StreamServerAuthenticator
+	ipfixHandle             *exporterHandle
+	clickHouseHandle        *exporterHandle
+	s3Handle                *exporterHandle
+	logHandle               *exporterHandle
+	exportersMutex          sync.Mutex
+	certificateProvider     *certificate.Provider
 }
 
 func NewFlowAggregator(
 	k8sClient kubernetes.Interface,
-	baseConfig *rest.Config,
 	clusterUUID uuid.UUID,
 	podStore objectstore.PodStore,
 	nodeStore objectstore.NodeStore,
@@ -205,7 +205,16 @@ func NewFlowAggregator(
 		certificateUpdateCh:         make(chan struct{}, 1),
 	}
 	if *opt.Config.FlowStreamService.Enable {
-		fa.flowStreamService = flowstreamservice.NewFlowStreamService(fa.recordBuffer, flowstreamservice.NewStreamServerAuthenticator(k8sClient, baseConfig))
+		authenticator, err := flowstreamservice.NewStreamServerAuthenticator(k8sClient)
+		if err != nil {
+			return nil, fmt.Errorf("error when creating FlowStreamService authenticator: %w", err)
+		}
+		fa.flowStreamAuthenticator = authenticator
+		flowStreamService, err := flowstreamservice.NewFlowStreamService(fa.recordBuffer, authenticator)
+		if err != nil {
+			return nil, fmt.Errorf("error when creating FlowStreamService: %w", err)
+		}
+		fa.flowStreamService = flowStreamService
 		fa.flowStreamSvcUpdateCh = make(chan struct{}, 1)
 	}
 
@@ -391,6 +400,16 @@ func (fa *flowAggregator) Run(stopCh <-chan struct{}) {
 	}
 
 	if fa.flowStreamService != nil {
+		// The authenticator keeps the client CA bundle it verifies client certificates against in
+		// sync with the cluster, so it runs for the whole lifetime of the Flow Aggregator, not for
+		// the lifetime of one FlowStreamService server instance.
+		if fa.flowStreamAuthenticator != nil {
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				fa.flowStreamAuthenticator.Run(stopCh)
+			}()
+		}
 		wg.Add(1)
 		go func() {
 			defer wg.Done()

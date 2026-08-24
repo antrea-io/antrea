@@ -297,8 +297,11 @@ data:
     # which streams flow records to consumers such as antrea-ui.
     flowStreamService:
       # Enable is the switch to enable the FlowStreamService gRPC server (port 14740). The server
-      # uses server-side TLS (same self-signed certificate as the gRPC collector) but no client
-      # authentication. Disabled by default.
+      # uses server-side TLS (same self-signed certificate as the gRPC collector). Clients must
+      # authenticate with either a Kubernetes bearer token in gRPC metadata or an X.509 client
+      # certificate signed by the cluster's client CA, presented during the TLS handshake. Note that
+      # the Flow Aggregator's own client certificate is signed by its self-signed CA, not the
+      # cluster's, so it cannot be used here. Disabled by default.
       enable: false
 
     # Provide a clusterID to be added to records. By default this ID is an auto-generated UUID which
@@ -511,7 +514,7 @@ spec:
       annotations:
         # Automatically restart Pod if the ConfigMap changes
         # See https://helm.sh/docs/howto/charts_tips_and_tricks/#automatically-roll-deployments
-        checksum/config: f71fbd0d92fc3b25611d5c783f34b6b0da759525e303c3be24571a1bea95f0b4
+        checksum/config: c18a556876879c7159799b2bf374df1e7431b9d5956995e2bebd8498a0bfac0d
       labels:
         app: flow-aggregator
     spec:
