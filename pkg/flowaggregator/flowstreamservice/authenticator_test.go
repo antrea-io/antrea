@@ -333,10 +333,10 @@ func TestStreamInterceptor_BearerSchemeIsCaseInsensitive(t *testing.T) {
 	}
 }
 
-// TestStreamInterceptor_TokenAuthenticationIsBounded covers the cap on concurrent authentications
-// that may reach kube-apiserver. The interceptors run once per RPC before the credential is
-// validated, and an in-cluster rest.Config installs no client-side rate limiter, so this path must
-// not fan out without limit.
+// TestStreamInterceptor_TokenAuthenticationIsBounded covers the cap on concurrent authentication
+// work. The interceptor runs once per RPC before the credential is validated, and AuthenticationV1()
+// throttles at 5 QPS, so without the cap a token flood would queue up goroutines blocking on that
+// limiter rather than being turned away.
 func TestStreamInterceptor_TokenAuthenticationIsBounded(t *testing.T) {
 	a := newTestAuthenticator(t, map[string]authenticationv1.TokenReviewStatus{
 		"valid-token": {Authenticated: true, User: authenticationv1.UserInfo{Username: "user@test.com"}},

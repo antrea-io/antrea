@@ -56,14 +56,15 @@ const (
 	clientCAConfigMapName      = "extension-apiserver-authentication"
 	clientCAConfigMapKey       = "client-ca-file"
 
-	// maxConcurrentTokenAuthentications bounds how many authentications that may reach kube-apiserver
-	// are in flight at once. Without this bound, any Pod that can reach the FlowStreamService port
-	// could turn cheap gRPC connects into unbounded concurrent requests against kube-apiserver without
-	// ever presenting a valid credential.
-	// A call is charged a slot whenever it carries authorization metadata, which is a slight
-	// over-estimate: a client that presents both a token and a client certificate that verifies is
-	// identified by the certificate and never reaches kube-apiserver, yet still holds a slot while
-	// that is determined. Certificate-only calls take no slot, since they need no bound at all.
+	// maxConcurrentTokenAuthentications bounds concurrent authentication work inside the Flow
+	// Aggregator, not requests in flight against kube-apiserver: cachedTokenAuthenticator runs the
+	// TokenReview on a context detached from ours, so a cancelled call releases its slot while its
+	// TokenReview keeps going for up to 30s (singleflight collapses duplicate tokens, so orphaning
+	// them needs distinct ones). What the bound does prevent is a pile-up of goroutines blocked on
+	// client-go's 5 QPS limiter for AuthenticationV1(), each holding one of those contexts; a
+	// saturated semaphore answers ResourceExhausted instead. A slot is charged whenever authorization
+	// metadata is present, even when a verifying certificate means nothing is sent; certificate-only
+	// calls take none.
 	maxConcurrentTokenAuthentications = 8
 	// tokenAuthenticationTimeout bounds one TokenReview, including the retries the delegating
 	// authenticator makes on a failing webhook, and so caps how long one credential can hold a slot.
@@ -71,11 +72,18 @@ const (
 	// cycle, which the Flow Aggregator's own API server found too short (see authenticationTimeout in
 	// pkg/flowaggregator/apiserver/apiserver.go).
 	tokenAuthenticationTimeout = 30 * time.Second
+	// tokenCacheTTL is how long a TokenReview outcome is reused, matching kube-apiserver's own default
+	// and the Flow Aggregator's other authenticator. Denials are cached too (errors never are), so a
+	// repeated bad token stops costing a round trip. The cost is that a token invalidated within the
+	// window still opens a new stream, which is far smaller than the exposure an already-open stream
+	// carries.
+	tokenCacheTTL = 10 * time.Second
 )
 
-// errAuthenticationOverloaded means the authenticator declined to check a credential because too
-// many TokenReviews were already in flight, not that the credential was bad. It is reported to the
-// client as ResourceExhausted, which is retryable, rather than as Unauthenticated.
+// errAuthenticationOverloaded means the authenticator declined to check a credential because
+// maxConcurrentTokenAuthentications credential checks were already in progress, not that the
+// credential was bad. It is reported to the client as ResourceExhausted, which is retryable, rather
+// than as Unauthenticated.
 var errAuthenticationOverloaded = errors.New("too many authentication requests in flight")
 
 // StreamServerAuthenticator authenticates FlowStreamService clients. It provides the gRPC stream
@@ -98,11 +106,13 @@ type StreamServerAuthenticator struct {
 	// clientCAProvider caches and watches the cluster's client CA bundle. It must be started with Run
 	// before the client certificate path can accept anything.
 	clientCAProvider *dynamiccertificates.ConfigMapCAController
-	// tokenAuthSlots is a semaphore bounding authentications that may reach kube-apiserver to
-	// maxConcurrentTokenAuthentications. A send acquires a slot, a receive releases it, and a failed
-	// non-blocking send means the path is saturated and declines the credential rather than queueing
-	// behind the ones already in flight.
+	// tokenAuthSlots is a semaphore bounding concurrent token authentication work to
+	// maxConcurrentTokenAuthentications, whose comment covers what that does and does not bound. A send
+	// acquires a slot, a receive releases it, and a failed non-blocking send means the path is
+	// saturated and declines the credential rather than queueing behind the checks already running.
 	tokenAuthSlots chan struct{}
+	// streamLimiter caps concurrent streams per client, and in total.
+	streamLimiter *clientStreamLimiter
 }
 
 // NewStreamServerAuthenticator builds an authenticator that resolves credentials against the cluster
@@ -131,8 +141,11 @@ func newStreamServerAuthenticator(k8sClient kubernetes.Interface, tokenReviewCli
 		TokenAccessReviewClient:            tokenReviewClient,
 		TokenAccessReviewTimeout:           tokenAuthenticationTimeout,
 		WebhookRetryBackoff:                genericoptions.DefaultAuthWebhookRetryBackoff(),
+		CacheTTL:                           tokenCacheTTL,
 		// Anonymous is left nil, so no anonymous authenticator is appended to the chain and a call
-		// carrying no credential is declined instead of being admitted as system:anonymous.
+		// carrying no credential is declined instead of being admitted as system:anonymous. This is
+		// also why the Flow Aggregator API server's authenticator is not reused here, despite watching
+		// the same ConfigMap: NewDelegatingAuthenticationOptions forces Anonymous on.
 	}
 	auth, _, err := delegating.New()
 	if err != nil {
@@ -143,6 +156,7 @@ func newStreamServerAuthenticator(k8sClient kubernetes.Interface, tokenReviewCli
 		authenticator:    auth,
 		clientCAProvider: clientCAProvider,
 		tokenAuthSlots:   make(chan struct{}, maxConcurrentTokenAuthentications),
+		streamLimiter:    newClientStreamLimiter(),
 	}, nil
 }
 
@@ -166,6 +180,18 @@ func (f caBundleListenerFunc) Enqueue() { f() }
 // codes.Unauthenticated if the request does not carry a valid bearer token or client certificate;
 // otherwise it attaches the resolved identity to the stream context before invoking handler.
 func (a *StreamServerAuthenticator) StreamInterceptor(srv any, ss grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
+	// Taken before authenticating, so a client that has already accumulated its share of streams
+	// cannot make the Flow Aggregator do authentication work, and released only when the stream ends.
+	// The refusal is logged at V(2) for the same reason authentication failures are: it happens before
+	// any credential is checked, so an unauthenticated peer must not be able to flood the log.
+	client := clientKey(ss.Context())
+	release, err := a.streamLimiter.acquire(client)
+	if err != nil {
+		klog.V(2).ErrorS(err, "Refusing FlowStreamService stream", "client", client)
+		return status.Error(codes.ResourceExhausted, "too many concurrent streams, retry later")
+	}
+	defer release()
+
 	u, err := a.authenticate(ss.Context())
 	if err != nil {
 		return authenticationStatusError(err)
@@ -189,18 +215,17 @@ func authenticationStatusError(err error) error {
 	return status.Error(codes.Unauthenticated, "invalid client credentials")
 }
 
-// authenticate resolves the credentials the call carries to an identity. It is called once per RPC,
-// so the credential is re-checked every time a stream is opened rather than being trusted for the
-// lifetime of the connection: a token that has since been invalidated is refused by TokenReview, and
-// an expired client certificate fails verification. Client certificate revocation is not detected,
-// since x509 verification is local and consults no CRL or OCSP responder, so a revoked certificate
-// keeps working until it expires — the same exposure a revoked certificate has against
-// kube-apiserver itself.
+// authenticate resolves the credentials the call carries to an identity, once per RPC. Since GetFlows
+// with follow=true is a single long-lived RPC, that means the identity is resolved when the stream
+// opens and then pinned for as long as it stays open, which can be days: revoking a token or deleting
+// its ServiceAccount stops new streams, not established ones. Certificate revocation is never
+// detected at all, since x509 verification is local and consults no CRL or OCSP responder. Closing
+// either gap would mean re-authenticating an established stream periodically, which nothing here does.
 func (a *StreamServerAuthenticator) authenticate(ctx context.Context) (user.Info, error) {
 	req, carriesToken := authenticationRequest(ctx)
-	// Only a call carrying authorization metadata can reach kube-apiserver, so only that call is
-	// charged a slot; see maxConcurrentTokenAuthentications. The slot is released as soon as the
-	// credential is resolved, not held for the lifetime of the stream it opens.
+	// Only a call carrying authorization metadata can issue a TokenReview, so only that call is
+	// charged a slot; see maxConcurrentTokenAuthentications. The slot is released as soon as this
+	// returns, not held for the lifetime of the stream, and not for the detached TokenReview.
 	if carriesToken {
 		select {
 		case a.tokenAuthSlots <- struct{}{}:
@@ -239,8 +264,8 @@ func (a *StreamServerAuthenticator) authenticate(ctx context.Context) (user.Info
 // Authorization header, from which the bearer token authenticator takes the token. The reported bool
 // is whether the call carried authorization metadata at all, not whether it is a usable token.
 //
-// The call's context is attached so that the TokenReview issued on it is cancelled when the client
-// gives up, rather than running to its own timeout with nobody waiting for the answer.
+// The call's context is attached because it bounds this call. It does not bound the TokenReview,
+// which cachedTokenAuthenticator runs on a context detached from ours.
 func authenticationRequest(ctx context.Context) (*http.Request, bool) {
 	req := (&http.Request{
 		Header: http.Header{},

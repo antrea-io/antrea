@@ -44,6 +44,13 @@ const (
 	internalBatchSize = exporter.ConsumeMultipleBatchSize
 	// flowStreamPort is the port on which the FlowStreamService gRPC server listens.
 	flowStreamPort = 14740
+	// maxStreamsPerConn bounds concurrent streams on one connection. It is deliberately above
+	// maxStreamsPerClient, so that the per-client cap is what a client runs into first: a gRPC client
+	// parks an RPC that would exceed the stream limit the server advertises until that RPC's context is
+	// done, so a connection limit reached first would hang the call instead of answering it with the
+	// retryable ResourceExhausted the per-client cap returns. maxTotalStreams is the natural value,
+	// since no stream past it can be admitted anyway.
+	maxStreamsPerConn = maxTotalStreams
 )
 
 // FlowStreamService implements flowpb.FlowStreamServiceServer. Each client
@@ -113,6 +120,11 @@ func (s *FlowStreamService) Run(serverCertPEM, serverKeyPEM []byte, stopCh <-cha
 	serverOpts := []grpc.ServerOption{
 		grpc.Creds(credentials.NewTLS(tlsConfig)),
 		grpc.UnaryInterceptor(rejectUnaryRPC),
+		// grpc-go's default is math.MaxUint32, i.e. one connection may open unbounded concurrent
+		// streams. This is a transport-level backstop rather than a replacement for the per-client cap
+		// the authenticator applies — an attacker can always open more connections — and it is set high
+		// enough not to preempt that cap; see maxStreamsPerConn.
+		grpc.MaxConcurrentStreams(maxStreamsPerConn),
 	}
 	if s.authenticator != nil {
 		serverOpts = append(serverOpts, grpc.StreamInterceptor(s.authenticator.StreamInterceptor))
