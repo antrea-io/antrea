@@ -42,8 +42,16 @@ func isTestProtocolGRPC() bool {
 
 // createFlowExporterDestination creates a new FlowExporterDestination and hooks it up for deletion at the end of the test.
 func createFlowExporterDestination(tb testing.TB, name string, isTLS bool, namespace string) *v1alpha1.FlowExporterDestination {
-	serviceAddr := fmt.Sprintf("%s/%s", namespace, "flow-aggregator")
-	serverName := fmt.Sprintf("%s.%s.svc", "flow-aggregator", namespace)
+	// The Service's own name is release-name-derived (distinct per multi-instance deployment), so
+	// it must be looked up rather than assumed.
+	service, err := testData.getFlowAggregatorService(namespace)
+	require.NoError(tb, err, "Failed to look up Flow Aggregator Service")
+	serviceAddr := fmt.Sprintf("%s/%s", namespace, service.Name)
+	// Unlike the Service name, the server certificate's SAN is a fixed "flow-aggregator.<namespace>.svc"
+	// string regardless of release name (see getFlowAggregatorServerNames in
+	// pkg/flowaggregator/certificate/provider.go), so this must stay hardcoded rather than track
+	// service.Name.
+	serverName := fmt.Sprintf("flow-aggregator.%s.svc", namespace)
 
 	protocol := v1alpha1.FlowExporterProtocol{}
 	if isTestProtocolGRPC() {

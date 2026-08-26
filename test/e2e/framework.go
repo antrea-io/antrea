@@ -94,7 +94,6 @@ const (
 	antreaDaemonSet             = "antrea-agent"
 	antreaWindowsDaemonSet      = "antrea-agent-windows"
 	antreaDeployment            = "antrea-controller"
-	flowAggregatorDeployment    = "flow-aggregator"
 	flowAggregatorCHSecret      = "clickhouse-ca"
 	antreaDefaultGW             = "antrea-gw0"
 	testAntreaIPAMNamespace     = "antrea-ipam-test"
@@ -1225,13 +1224,21 @@ func (data *TestData) deployFlowAggregator(
 		return err
 	}
 
+	// The Deployment's own name is derived from the Helm release name, which multi-instance
+	// deployments set to distinct values per instance to avoid colliding on cluster-scoped RBAC
+	// object names; it must therefore be looked up by label rather than assumed.
+	deployment, err := data.getFlowAggregatorDeployment(namespace)
+	if err != nil {
+		return fmt.Errorf("failed to retrieve Flow Aggregator Deployment: %w", err)
+	}
+
 	if o.flowAggregator.numReplicas > 0 {
-		if rc, _, _, err = data.provider.RunCommandOnNode(controlPlaneNodeName(), fmt.Sprintf("kubectl -n %s scale deployment/%s --replicas=%d", namespace, flowAggregatorDeployment, o.flowAggregator.numReplicas)); err != nil || rc != 0 {
+		if rc, _, _, err = data.provider.RunCommandOnNode(controlPlaneNodeName(), fmt.Sprintf("kubectl -n %s scale deployment/%s --replicas=%d", namespace, deployment.Name, o.flowAggregator.numReplicas)); err != nil || rc != 0 {
 			return fmt.Errorf("failed to scale number of flow aggregator replicas: %w", err)
 		}
 	}
 
-	if rc, _, _, err = data.provider.RunCommandOnNode(controlPlaneNodeName(), fmt.Sprintf("kubectl -n %s rollout status deployment/%s --timeout=%v", namespace, flowAggregatorDeployment, 2*defaultTimeout)); err != nil || rc != 0 {
+	if rc, _, _, err = data.provider.RunCommandOnNode(controlPlaneNodeName(), fmt.Sprintf("kubectl -n %s rollout status deployment/%s --timeout=%v", namespace, deployment.Name, 2*defaultTimeout)); err != nil || rc != 0 {
 		_, stdout, _, _ := data.provider.RunCommandOnNode(controlPlaneNodeName(), fmt.Sprintf("kubectl -n %s describe pod", namespace))
 		_, logStdout, _, _ := data.provider.RunCommandOnNode(controlPlaneNodeName(), fmt.Sprintf("kubectl -n %s logs -l app=flow-aggregator", namespace))
 		return fmt.Errorf("error when waiting for the Flow Aggregator rollout to complete. kubectl describe output: %s, logs: %s", stdout, logStdout)
@@ -1316,28 +1323,33 @@ func (data *TestData) mutateFlowAggregatorConfigMap(ipfixCollectorAddr string, o
 }
 
 func (data *TestData) GetFlowAggregatorConfigMap(o flowVisibilityTestOptions) (*corev1.ConfigMap, error) {
-	deploymentName := flowAggregatorDeployment
 	namespace := flowAggregatorNamespaces[o.flowAggregator.selectedAggregator]
 
-	deployment, err := data.clientset.AppsV1().Deployments(namespace).Get(context.TODO(), deploymentName, metav1.GetOptions{})
+	configMapName, err := data.getFlowAggregatorConfigMapName(namespace)
 	if err != nil {
-		return nil, fmt.Errorf("failed to retrieve Flow aggregator deployment: %v", err)
-	}
-	var configMapName string
-	for _, volume := range deployment.Spec.Template.Spec.Volumes {
-		if volume.ConfigMap != nil && (volume.Name == flowAggregatorConfigVolume) {
-			configMapName = volume.ConfigMap.Name
-			break
-		}
-	}
-	if len(configMapName) == 0 {
-		return nil, fmt.Errorf("failed to locate %s ConfigMap volume", flowAggregatorConfigVolume)
+		return nil, err
 	}
 	configMap, err := data.clientset.CoreV1().ConfigMaps(namespace).Get(context.TODO(), configMapName, metav1.GetOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("failed to get ConfigMap %s: %v", configMapName, err)
 	}
 	return configMap, nil
+}
+
+// getFlowAggregatorConfigMapName returns the name of the Flow Aggregator's config ConfigMap in the
+// specified Namespace, read from the Deployment's own volume spec rather than assumed: like the
+// Deployment's own name, it is release-name-derived.
+func (data *TestData) getFlowAggregatorConfigMapName(namespace string) (string, error) {
+	deployment, err := data.getFlowAggregatorDeployment(namespace)
+	if err != nil {
+		return "", fmt.Errorf("failed to retrieve Flow aggregator deployment: %v", err)
+	}
+	for _, volume := range deployment.Spec.Template.Spec.Volumes {
+		if volume.ConfigMap != nil && (volume.Name == flowAggregatorConfigVolume) {
+			return volume.ConfigMap.Name, nil
+		}
+	}
+	return "", fmt.Errorf("failed to locate %s ConfigMap volume", flowAggregatorConfigVolume)
 }
 
 // getAgentContainersRestartCount reads the restart count for every container across all Antrea
@@ -2137,6 +2149,41 @@ func (data *TestData) getFlowAggregators(namespace string) ([]corev1.Pod, error)
 		return nil, errNoAggregators
 	}
 	return pods.Items, nil
+}
+
+// getFlowAggregatorDeployment retrieves the Flow Aggregator Deployment from the specified
+// Namespace by label, rather than by a hardcoded name: the Deployment's name is derived from the
+// Helm release name, which multi-instance deployments set to distinct values per instance to
+// avoid colliding on cluster-scoped RBAC object names.
+func (data *TestData) getFlowAggregatorDeployment(namespace string) (*appsv1.Deployment, error) {
+	listOptions := metav1.ListOptions{
+		LabelSelector: "app=flow-aggregator",
+	}
+	deployments, err := data.clientset.AppsV1().Deployments(namespace).List(context.TODO(), listOptions)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list Flow Aggregator Deployment: %w", err)
+	}
+	if len(deployments.Items) != 1 {
+		return nil, fmt.Errorf("expected exactly one Flow Aggregator Deployment in Namespace %s, got %d", namespace, len(deployments.Items))
+	}
+	return &deployments.Items[0], nil
+}
+
+// getFlowAggregatorService retrieves the Flow Aggregator Service from the specified Namespace by
+// label, for the same reason as getFlowAggregatorDeployment: its name is release-name-derived,
+// not the fixed "flow-aggregator" string.
+func (data *TestData) getFlowAggregatorService(namespace string) (*corev1.Service, error) {
+	listOptions := metav1.ListOptions{
+		LabelSelector: "app=flow-aggregator",
+	}
+	services, err := data.clientset.CoreV1().Services(namespace).List(context.TODO(), listOptions)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list Flow Aggregator Service: %w", err)
+	}
+	if len(services.Items) != 1 {
+		return nil, fmt.Errorf("expected exactly one Flow Aggregator Service in Namespace %s, got %d", namespace, len(services.Items))
+	}
+	return &services.Items[0], nil
 }
 
 // getAntreaController retrieves the name of the Antrea Controller (antrea-controller-*) running in the k8s cluster.

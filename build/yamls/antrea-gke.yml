@@ -5412,6 +5412,14 @@ rules:
       - pods
     verbs:
       - list
+  # "antctl observe" tunnels to the Flow Aggregator Pod through the API server's /portforward
+  # subresource when it has no direct network route to the Pod (see pkg/antctl/raw/observe).
+  - apiGroups:
+      - ""
+    resources:
+      - pods/portforward
+    verbs:
+      - create
   - apiGroups:
       - ""
     resources:
@@ -5423,9 +5431,18 @@ rules:
       - apps
     resources:
       - daemonsets
-      - deployments
       - replicasets
     verbs:
+      - list
+  - apiGroups:
+      - apps
+    resources:
+      - deployments
+    verbs:
+      # "get" is needed by "antctl observe --flow-aggregator <namespace>/<deployment-name>" (see
+      # findFlowAggregatorByName in pkg/antctl/raw/observe/discovery.go), which resolves a specific
+      # instance by Deployment name rather than by listing and filtering.
+      - get
       - list
   - apiGroups:
       - ""
@@ -5436,6 +5453,9 @@ rules:
       - antrea-ca
       - antrea-ipsec-ca
       - antrea-cluster-identity
+      # Read by "antctl observe" to verify the Flow Aggregator's TLS certificate (see
+      # pkg/antctl/raw/observe/connect.go).
+      - flow-aggregator-ca
     verbs:
       - get
 ---
