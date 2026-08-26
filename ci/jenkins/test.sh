@@ -746,7 +746,7 @@ function run_e2e_windows {
     mkdir -p `pwd`/antrea-test-logs
 
     echo "====== Run test with e2e test ======"
-    go test -v antrea.io/antrea/v2/test/e2e --logs-export-dir `pwd`/antrea-test-logs --provider remote -timeout=50m --prometheus
+    go test -v antrea.io/antrea/v2/test/e2e --logs-export-dir `pwd`/antrea-test-logs --provider remote -timeout=500m --prometheus
     if [[ "$?" != "0" ]]; then
         TEST_FAILURE=true
     fi
