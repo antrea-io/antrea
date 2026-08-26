@@ -47,6 +47,7 @@ RUN mkdir -p /go/k/antrea/bin && \
 FROM ${DOCKER_REGISTRY}/antrea/windows-ovs:${OVS_VERSION} AS antrea-ovs
 
 FROM mcr.microsoft.com/oss/kubernetes/windows-host-process-containers-base-image:v1.0.0
+COPY --from=antrea-build-windows /antrea/LICENSE /LICENSE
 COPY --from=antrea-build-windows /go/k /k
 COPY --from=antrea-ovs /openvswitch /openvswitch
 

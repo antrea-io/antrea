@@ -20,6 +20,7 @@ LABEL description="The development Docker image to deploy the antrea-agent."
 
 USER root
 
+COPY LICENSE /LICENSE
 COPY build/images/scripts/* /usr/local/bin/
 COPY bin/antrea-agent /usr/local/bin/
 COPY bin/antrea-cni /usr/local/bin/

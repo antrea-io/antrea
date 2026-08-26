@@ -19,6 +19,7 @@ LABEL description="The Docker image to migrate other CNIs to Antrea CNI."
 
 USER root
 
+COPY LICENSE /LICENSE
 COPY build/images/scripts/migrate_cni /usr/local/bin/
 
 ENV CRICTL_VERSION="v1.31.1"
