@@ -112,7 +112,10 @@ spec:
                   type: object
               type: object
       additionalPrinterColumns:
-        - description: The number of total IPs
+        - description: >-
+            The total allocation capacity across all configured IP ranges. For
+            CIDR ranges, the first address, gateway, and applicable IPv4 broadcast
+            address are excluded. At most 65,536 candidate IPs are considered per range.
           jsonPath: .status.usage.total
           name: Total
           type: integer
@@ -232,7 +235,10 @@ spec:
                   type: object
               type: object
       additionalPrinterColumns:
-        - description: The number of total IPs
+        - description: >-
+            The total allocation capacity across all configured IP ranges. For
+            CIDR ranges, the first address, gateway, and applicable IPv4 broadcast
+            address are excluded. At most 65,536 candidate IPs are considered per range.
           jsonPath: .status.usage.total
           name: Total
           type: integer

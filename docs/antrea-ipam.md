@@ -530,6 +530,18 @@ will of course always be excluded. On the other hand, when using a range with a
 start and end IP address, both of these IPs will be allocatable (except if one
 of them corresponds to the gateway).
 
+Antrea IPAM considers at most 65,536 candidate addresses from each IP range. For
+a range larger than this limit, the allocator considers only the first 65,536
+candidate addresses. This limit applies independently to each range, not to the
+IPPool as a whole. The `TOTAL` column of `kubectl get ippools` reports the sum of
+the allocator capacities (used plus free) across all configured ranges. For a
+CIDR range, this capacity excludes the first address and the gateway. It also
+excludes the IPv4 broadcast address when the `prefixLength` matches the CIDR
+mask size. `TOTAL` therefore represents the allocator capacity rather than the
+theoretical size of the CIDRs, and it can exceed 65,536 when an IPPool contains
+multiple ranges. For example, a single IPv6 `/64` CIDR whose gateway is among
+the managed addresses has a `TOTAL` of 65,535.
+
 ```yaml
 apiVersion: "crd.antrea.io/v1beta1"
 kind: IPPool
