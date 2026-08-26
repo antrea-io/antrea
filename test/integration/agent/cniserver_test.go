@@ -388,13 +388,13 @@ func (tester *cmdAddDelTester) checkContainerNetworking(tc testCase) {
 	// Check that IPv6 RA and SLAAC are disabled on the container interface.
 	err = tester.targetNS.Do(func(_ ns.NetNS) error {
 		acceptRA, err := sysctl.GetSysctlNet(fmt.Sprintf("ipv6/conf/%s/accept_ra", IFName))
-		if err == nil {
-			testAssert.Equal(0, acceptRA)
-		}
+		testRequire.Nil(err)
+		testAssert.Equal(0, acceptRA)
+
 		autoconf, err := sysctl.GetSysctlNet(fmt.Sprintf("ipv6/conf/%s/autoconf", IFName))
-		if err == nil {
-			testAssert.Equal(0, autoconf)
-		}
+		testRequire.Nil(err)
+		testAssert.Equal(0, autoconf)
+
 		return nil
 	})
 	testRequire.Nil(err)

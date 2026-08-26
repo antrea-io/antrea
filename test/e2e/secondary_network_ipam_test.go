@@ -16,11 +16,8 @@ package e2e
 
 import (
 	"context"
-	"fmt"
-	"strings"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"antrea.io/antrea/v2/pkg/agent/config"
@@ -280,74 +277,4 @@ func TestSecondaryNetworkIPAM(t *testing.T) {
 	executeCNI(t, data, true, true, "net3", 0, testOutput2)
 	// Release the first IP.
 	executeCNI(t, data, false, true, "net1", 0, "")
-}
-
-// TestContainerInterfaceDisableIPv6RA tests that when Antrea CNI configures a container interface
-// in a network namespace, IPv6 accept_ra and autoconf sysctl parameters are disabled (set to 0).
-func TestContainerInterfaceDisableIPv6RA(t *testing.T) {
-	skipIfHasWindowsNodes(t)
-	skipIfAntreaIPAMTest(t)
-
-	data, err := setupTest(t)
-	if err != nil {
-		t.Fatalf("Error when setting up test: %v", err)
-	}
-	defer teardownTest(t, data)
-
-	node := nodeName(0)
-	netnsName := "test-ipv6-ra-netns"
-	netnsPath := "/var/run/netns/" + netnsName
-
-	// Create test network namespace on Node
-	cmd := fmt.Sprintf("ip netns add %s", netnsName)
-	code, stdout, stderr, err := data.RunCommandOnNode(node, cmd)
-	if err != nil || code != 0 {
-		t.Fatalf("Failed to create test netns: %v, stdout: %s, stderr: %s", err, stdout, stderr)
-	}
-	defer func() {
-		data.RunCommandOnNode(node, fmt.Sprintf("ip netns del %s", netnsName))
-	}()
-
-	testCniEnvs := map[string]string{
-		"CNI_COMMAND":     "ADD",
-		"CNI_CONTAINERID": "test-container-ipv6-ra",
-		"CNI_NETNS":       netnsPath,
-		"CNI_IFNAME":      "eth0",
-		"CNI_PATH":        "/opt/cni/bin",
-		"CNI_ARGS":        fmt.Sprintf("K8S_POD_NAMESPACE=%s;K8S_POD_NAME=test-pod-ipv6-ra", data.testNamespace),
-	}
-
-	testMainCniConfig := `{
-		"cniVersion": "0.4.0",
-		"name": "antrea",
-		"type": "antrea",
-		"ipam": {
-			"type": "host-local"
-		}
-	}`
-
-	defer func() {
-		testCniEnvs["CNI_COMMAND"] = "DEL"
-		data.RunCommandOnNodeExt(node, cniCmd, testCniEnvs, testMainCniConfig, true)
-	}()
-
-	code, stdout, stderr, err = data.RunCommandOnNodeExt(node, cniCmd, testCniEnvs, testMainCniConfig, true)
-	if err != nil || code != 0 {
-		t.Fatalf("CNI ADD failed with code %d, stdout:\n%s\nstderr: %s", code, stdout, stderr)
-	}
-
-	// Verify accept_ra and autoconf sysctl values in the container netns
-	checkCmd := fmt.Sprintf("ip netns exec %s sysctl -n net.ipv6.conf.eth0.accept_ra net.ipv6.conf.eth0.autoconf", netnsName)
-	code, stdout, stderr, err = data.RunCommandOnNode(node, checkCmd)
-	if err != nil || code != 0 {
-		t.Fatalf("Failed to check sysctl in netns: %v, stdout: %s, stderr: %s", err, stdout, stderr)
-	}
-
-	values := strings.Fields(strings.TrimSpace(stdout))
-	if len(values) < 2 {
-		t.Fatalf("Unexpected sysctl output: %s", stdout)
-	}
-
-	assert.Equal(t, "0", values[0], "accept_ra on container interface should be 0")
-	assert.Equal(t, "0", values[1], "autoconf on container interface should be 0")
 }
