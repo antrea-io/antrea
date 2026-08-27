@@ -846,6 +846,11 @@ func TestSecondaryInterfaceDisableIPv6RA(t *testing.T) {
 	testData := &testData{e2eTestData: e2eTestData, networkType: networkTypeVLAN, pods: []*testPodInfo{pod}}
 	require.NoError(t, testData.createPods(t, e2eTestData.GetTestNamespace()))
 
+	_, err = e2eTestData.PodWaitFor(defaultTimeout, pod.podName, e2eTestData.GetTestNamespace(), func(p *corev1.Pod) (bool, error) {
+		return p.Status.Phase == corev1.PodRunning, nil
+	})
+	require.NoError(t, err, "Pod %s failed to reach Running state", pod.podName)
+
 	cmd := []string{"sysctl", "-n", "net.ipv6.conf.eth1.accept_ra", "net.ipv6.conf.eth1.autoconf"}
 	stdout, stderr, err := e2eTestData.RunCommandFromPod(e2eTestData.GetTestNamespace(), pod.podName, containerName, cmd)
 	require.NoError(t, err, "Failed to run sysctl in Pod: %s", stderr)
