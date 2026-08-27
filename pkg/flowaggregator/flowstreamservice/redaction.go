@@ -35,9 +35,10 @@ const (
 	// to it. It is what "get flows/identity" in the endpoint's Namespace grants: enough for someone
 	// to recognize that Namespace's workloads and to see which policy governed the connection, so
 	// that "which of your policies dropped my traffic" is answerable between two Namespaces that
-	// have each consented to being identified. Placement stays out of it: co-tenancy is not needed
-	// to author or debug a policy, so a Namespace owner granting identity does not hand it over as
-	// a side effect.
+	// have each consented to being identified. Placement mostly stays out of it: co-tenancy is not
+	// needed to author or debug a policy, so a Namespace owner granting identity does not hand the
+	// endpoint's Node over as a side effect. The exception is co-tenancy with the *client's own*
+	// endpoint, which flow_type carries and which is deliberately not redacted; see redactFlow.
 	tierIdentity
 	// tierFlow discloses only what the flow itself shows: addresses, ports, protocol, statistics,
 	// timestamps, and the type and action of the policies evaluated on the endpoint's side. The
@@ -73,6 +74,17 @@ func (t disclosureTier) disclosure() flowpb.EndpointDisclosure {
 // discloses only that *something* of a given type allowed or dropped the connection, so a client
 // cannot map a Namespace's policy set by probing unless that Namespace consented to being
 // identified.
+//
+// flow_type is deliberately left alone, so FLOW_TYPE_INTRA_NODE keeps reporting that the two
+// endpoints share a Node. Paired with an endpoint the client can place — its own Pods, whose Nodes
+// it reads from the downward API no matter what any tier says — that discloses co-tenancy with the
+// client's own workloads even where the peer's Node name is cleared below, and FlowFilter.flow_types
+// yields the same bit without reading the field. Two things make keeping it the better trade: the
+// internal-versus-external distinction flow_type carries is what lets tierFor's caller tell a
+// genuinely external endpoint from one whose Namespace was withheld, and collapsing INTRA_NODE to
+// INTER_NODE would make the field mean something different on every stream. What stays withheld is
+// *which* Node, so the bit names no infrastructure and adds nothing about peers the client cannot
+// already place.
 func redactFlow(f *flowpb.Flow, source, destination disclosureTier) *flowpb.Flow {
 	// Only the Kubernetes sub-message is rewritten, so the copies share every other sub-message
 	// with the original record instead of duplicating it.
@@ -83,7 +95,8 @@ func redactFlow(f *flowpb.Flow, source, destination disclosureTier) *flowpb.Flow
 
 	if source != tierFull {
 		// Node placement is withheld above tierFull: it exposes co-tenancy, which feeds
-		// noisy-neighbor and side-channel work, and it is not needed to author a policy.
+		// noisy-neighbor and side-channel work, and it is not needed to author a policy. The Node
+		// name is what is withheld, not co-tenancy itself; see the note on flow_type above.
 		k8s.SourceNodeName = ""
 		k8s.SourceNodeUid = ""
 		// An Egress applies to the source Pod's outbound traffic, and its IP and Node are
