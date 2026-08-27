@@ -760,13 +760,27 @@ redacted.
 | Tier | Fields | Requires |
 |---|---|---|
 | Flow | addresses, ports, protocol, statistics and throughput, timestamps, flow type, direction, end reason, TCP state, and the **type and action** of the network policies evaluated on the endpoint's side | receiving the record at all |
-| Identity | Namespace, Pod name/UID/labels, Service name/UID/port, the Service's ClusterIP, and the network policy namespace/name/UID/rule name | `get flows/identity` in the endpoint's Namespace |
+| Identity | Namespace, Pod name/UID/labels, the destination Service's `destination_service_port`, `destination_service_port_name`, `destination_service_uid` and `destination_service_ip` (plus the deprecated `destination_cluster_ip`), and the network policy namespace/name/UID/rule name | `get flows/identity` in the endpoint's Namespace |
 | Full | Node name/UID, Egress name/IP/Node | the endpoint's Namespace is one the stream was authorized for |
 
-A destination Service's ClusterIP sits at the Identity tier rather than the Flow
-tier, because it maps back to the Service it belongs to, so granting
-`flows/identity` in a Namespace discloses the ClusterIPs of that
-Namespace's Services along with their names.
+A destination Service's IP sits at the Identity tier rather than the Flow tier,
+because it maps back to the Service it belongs to, so granting `flows/identity`
+in a Namespace discloses the IPs of that Namespace's Services along with their
+names. There is no field carrying a Service's name on its own: the name rides
+inside `destination_service_port_name`, which the Flow Exporter sets to
+`namespace/name:portName`, so that one field carries the Service's Namespace and
+name as well as the port's name.
+
+The flow type is deliberately not redacted, so `FLOW_TYPE_INTRA_NODE` still
+reports that the two endpoints share a Node. Paired with an endpoint the client
+can place — its own Pods, whose Nodes it can read from the downward API with no
+Antrea grant at all — that discloses co-tenancy with the client's own workloads
+even where the peer's Node name was withheld, and the `flow_types` filter yields
+the same bit without reading the field. This is a deliberate trade: the
+internal-versus-external distinction the flow type carries is what lets a client
+tell a genuinely external endpoint from one whose Namespace was withheld, and
+collapsing `INTRA_NODE` to `INTER_NODE` would make the field mean something
+different on every stream. The peer's Node is never named.
 
 An endpoint below the Full tier is marked as such on the record
 (`source_disclosure` / `destination_disclosure`), so that a client can tell a
@@ -775,6 +789,12 @@ Namespace, for instance, is what a cluster-scoped policy legitimately looks like
 An unidentified endpoint keeps its Namespace only if the connection was allowed:
 withholding it for denied connections is what keeps a client from scanning the
 Pod CIDR and mapping IPs to Namespaces by reading back its own denied flows.
+Anything other than an explicit drop or reject counts as allowed, including "no
+policy applied at all", so the mitigation only bites where the traffic really was
+denied by a policy: in a cluster without default-deny every scan probe reads as
+allowed and the peer Namespace is disclosed anyway. That is an accepted limit
+rather than an oversight — such a cluster is not segmented in the first place, and
+its Namespace names were trivially discoverable by other means.
 
 A rule *action* and the policy *type* are disclosed at every tier, even for a
 policy the client may not otherwise know about: losing them would lose "why did my

@@ -359,6 +359,37 @@ func TestRedactFlow_PolicyIdentityIsDisclosedAtTierIdentity(t *testing.T) {
 	assert.Empty(t, redacted.GetK8S().GetEgressIp())
 }
 
+// TestRedactFlow_IntraNodeSurvivesRedaction pins down a deliberate trade rather than a mechanism:
+// FLOW_TYPE_INTRA_NODE is not collapsed to FLOW_TYPE_INTER_NODE for a redacted record, so co-tenancy
+// with an endpoint the client can place is disclosed even though the peer's Node name is withheld.
+// redactFlow's comment says why keeping the bit is the better call; this test is here so that
+// revisiting that call has to be deliberate too, and so that the docs and the code cannot drift
+// apart silently.
+func TestRedactFlow_IntraNodeSurvivesRedaction(t *testing.T) {
+	f := fullFlow()
+	f.K8S.FlowType = flowpb.FlowType_FLOW_TYPE_INTRA_NODE
+
+	tests := []struct {
+		name        string
+		source      disclosureTier
+		destination disclosureTier
+	}{
+		{name: "peer unidentified", source: tierFull, destination: tierFlow},
+		{name: "peer identified", source: tierFull, destination: tierIdentity},
+		{name: "neither endpoint disclosed", source: tierFlow, destination: tierFlow},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			redacted := redactFlow(f, tt.source, tt.destination)
+
+			assert.Equal(t, flowpb.FlowType_FLOW_TYPE_INTRA_NODE, redacted.GetK8S().GetFlowType())
+			// Which Node is what stays withheld.
+			assert.Empty(t, redacted.GetK8S().GetDestinationNodeName())
+			assert.Empty(t, redacted.GetK8S().GetDestinationNodeUid())
+		})
+	}
+}
+
 func TestConnectionAllowed(t *testing.T) {
 	tests := []struct {
 		name    string
