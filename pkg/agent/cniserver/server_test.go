@@ -287,6 +287,45 @@ func TestIPAMService(t *testing.T) {
 		checkErrorResponse(t, response, cnipb.ErrorCode_IPAM_FAILURE, "IPAM add error")
 	})
 
+	t.Run("Lock held during ADD rollback", func(t *testing.T) {
+		ipamMock, cniServer, requestMsg := setup(t)
+		cniConfig, _ := cniServer.validateRequestMessage(requestMsg)
+		infraContainer := cniConfig.getInfraContainer()
+
+		rollbackStarted := make(chan struct{})
+		lockTested := make(chan struct{})
+
+		ipamMock.EXPECT().Add(gomock.Any(), gomock.Any(), gomock.Any()).Return(true, nil, fmt.Errorf("IPAM add error"))
+		ipamMock.EXPECT().Del(gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(
+			func(args ...interface{}) (bool, error) {
+				close(rollbackStarted)
+				// Wait for concurrent routine to test lock status.
+				<-lockTested
+				return true, nil
+			},
+		)
+
+		go func() {
+			<-rollbackStarted
+			// Verify that while rollback is in progress, the container is locked in containerAccess.
+			cniServer.containerAccess.mutex.Lock()
+			isBusy := cniServer.containerAccess.busyContainerKeys[infraContainer]
+			cniServer.containerAccess.mutex.Unlock()
+			assert.True(t, isBusy, "Container should remain locked during CmdAdd rollback")
+			close(lockTested)
+		}()
+
+		response, err := cniServer.CmdAdd(cxt, requestMsg)
+		require.Nil(t, err, "expected no rpc error")
+		checkErrorResponse(t, response, cnipb.ErrorCode_IPAM_FAILURE, "IPAM add error")
+
+		// After CmdAdd returns, container lock should be released.
+		cniServer.containerAccess.mutex.Lock()
+		isBusy := cniServer.containerAccess.busyContainerKeys[infraContainer]
+		cniServer.containerAccess.mutex.Unlock()
+		assert.False(t, isBusy, "Container should be unlocked after CmdAdd finishes")
+	})
+
 	t.Run("Error on DEL", func(t *testing.T) {
 		ipamMock, cniServer, requestMsg := setup(t)
 		// Prepare cached IPAM result which will be deleted later.

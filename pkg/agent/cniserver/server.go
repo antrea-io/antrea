@@ -458,6 +458,10 @@ func (s *CNIServer) CmdAdd(ctx context.Context, request *cnipb.CniCmdRequest) (*
 	}
 	isInfraContainer := isInfraContainer(netNS)
 
+	// Serialize CNI calls for one Pod.
+	s.containerAccess.lockContainer(infraContainer)
+	defer s.containerAccess.unlockContainer(infraContainer)
+
 	success := false
 	defer func() {
 		// Rollback to delete configurations if ADD fails.
@@ -472,10 +476,6 @@ func (s *CNIServer) CmdAdd(ctx context.Context, request *cnipb.CniCmdRequest) (*
 			}
 		}
 	}()
-
-	// Serialize CNI calls for one Pod.
-	s.containerAccess.lockContainer(infraContainer)
-	defer s.containerAccess.unlockContainer(infraContainer)
 
 	if s.isChaining {
 		resp, err := s.interceptAdd(cniConfig)
@@ -539,10 +539,6 @@ func (s *CNIServer) CmdAdd(ctx context.Context, request *cnipb.CniCmdRequest) (*
 }
 
 func (s *CNIServer) cmdDel(_ context.Context, cniConfig *CNIConfig) (*cnipb.CniCmdResponse, error) {
-	infraContainer := cniConfig.getInfraContainer()
-	s.containerAccess.lockContainer(infraContainer)
-	defer s.containerAccess.unlockContainer(infraContainer)
-
 	if cniConfig.secondaryNetworkIPAM {
 		klog.InfoS("Antrea IPAM del", "CNI", cniConfig.Type, "network", cniConfig.Name)
 		return s.ipamDel(cniConfig)
@@ -575,6 +571,7 @@ func (s *CNIServer) cmdDel(_ context.Context, cniConfig *CNIConfig) (*cnipb.CniC
 	}
 
 	// Release IP to IPAM driver
+	infraContainer := cniConfig.getInfraContainer()
 	if err := ipam.ExecIPAMDelete(cniConfig.CniCmdArgs, cniConfig.K8sArgs, cniConfig.IPAM.Type, infraContainer); err != nil {
 		klog.ErrorS(err, "Failed to delete IP addresses for container", "container", cniConfig.ContainerId)
 		return s.ipamFailureResponse(err), nil
@@ -597,6 +594,10 @@ func (s *CNIServer) CmdDel(ctx context.Context, request *cnipb.CniCmdRequest) (*
 	if err := validateRuntime(netNS); err != nil {
 		return nil, fmt.Errorf("failed to validate container runtime for CmdDel request: %w", err)
 	}
+
+	infraContainer := cniConfig.getInfraContainer()
+	s.containerAccess.lockContainer(infraContainer)
+	defer s.containerAccess.unlockContainer(infraContainer)
 
 	return s.cmdDel(ctx, cniConfig)
 }
