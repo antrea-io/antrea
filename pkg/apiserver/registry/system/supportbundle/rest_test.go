@@ -17,6 +17,7 @@ package supportbundle
 import (
 	"context"
 	"fmt"
+	"os"
 	"strings"
 	"testing"
 	"time"
@@ -44,6 +45,23 @@ import (
 
 type testExec struct {
 	exectesting.FakeExec
+}
+
+type errorOpeningFS struct {
+	afero.Fs
+	outputFile string
+}
+
+func (fs *errorOpeningFS) Open(string) (afero.File, error) {
+	return nil, fmt.Errorf("injected open error")
+}
+
+func (fs *errorOpeningFS) OpenFile(name string, flag int, perm os.FileMode) (afero.File, error) {
+	f, err := fs.Fs.OpenFile(name, flag, perm)
+	if err == nil && strings.Contains(name, "bundle_") {
+		fs.outputFile = name
+	}
+	return f, err
 }
 
 func (te *testExec) Command(cmd string, args ...string) exec.Cmd {
@@ -146,6 +164,24 @@ func TestCollect(t *testing.T) {
 	exist, err := afero.Exists(defaultFS, collectedBundle.Filepath)
 	require.NoError(t, err)
 	require.True(t, exist)
+}
+
+func TestCollectRemovesOutputFileOnPackDirFailure(t *testing.T) {
+	memFS := afero.NewMemMapFs()
+	failingFS := &errorOpeningFS{Fs: memFS}
+	defaultFS = failingFS
+	defer func() {
+		defaultFS = afero.NewOsFs()
+	}()
+
+	storage := NewControllerStorage()
+	_, err := storage.SupportBundle.collect(context.Background())
+	require.ErrorContains(t, err, "error when packaging supportBundle")
+
+	require.NotEmpty(t, failingFS.outputFile)
+	exists, err := afero.Exists(memFS, failingFS.outputFile)
+	require.NoError(t, err)
+	assert.False(t, exists)
 }
 
 func TestControllerStorage(t *testing.T) {
