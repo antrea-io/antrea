@@ -23,6 +23,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/containernetworking/cni/pkg/invoke"
 	cnitypes "github.com/containernetworking/cni/pkg/types"
 	current "github.com/containernetworking/cni/pkg/types/100"
 	"github.com/gofrs/uuid/v5"
@@ -297,7 +298,7 @@ func TestIPAMService(t *testing.T) {
 
 		ipamMock.EXPECT().Add(gomock.Any(), gomock.Any(), gomock.Any()).Return(true, nil, fmt.Errorf("IPAM add error"))
 		ipamMock.EXPECT().Del(gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(
-			func(args ...interface{}) (bool, error) {
+			func(_ *invoke.Args, _ *types.K8sArgs, _ []byte) (bool, error) {
 				close(rollbackStarted)
 				// Wait for concurrent routine to test lock status.
 				<-lockTested
