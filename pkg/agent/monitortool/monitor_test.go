@@ -727,6 +727,110 @@ func TestNodeAddUpdateDelete(t *testing.T) {
 	}
 }
 
+func TestMonitorLoopRetriesSocketCreation(t *testing.T) {
+	testCases := []struct {
+		name      string
+		network   string
+		address   string
+		localAddr net.Addr
+		isIPv4    bool
+	}{
+		{
+			name:      "IPv4",
+			network:   ipv4ProtocolICMPRaw,
+			address:   "0.0.0.0",
+			localAddr: testAddrIPv4,
+			isIPv4:    true,
+		},
+		{
+			name:      "IPv6",
+			network:   ipv6ProtocolICMPRaw,
+			address:   "::",
+			localAddr: testAddrIPv6,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			synctest.Test(t, func(t *testing.T) {
+				ctx := t.Context()
+				stopCh := ctx.Done()
+				m := newTestMonitor(t, nodeConfigDualStack, config.TrafficEncapModeEncap, nil, []runtime.Object{nlm})
+				m.isIPv4Enabled = tc.isIPv4
+				m.isIPv6Enabled = !tc.isIPv4
+				m.crdInformerFactory.Start(stopCh)
+				m.informerFactory.Start(stopCh)
+				m.crdInformerFactory.WaitForCacheSync(stopCh)
+				m.informerFactory.WaitForCacheSync(stopCh)
+
+				recoveredSocket := nettest.NewPacketConn(tc.localAddr, nil, nil)
+				m.mockListener.EXPECT().ListenPacket(tc.network, tc.address).Return(nil, assert.AnError)
+				m.mockListener.EXPECT().ListenPacket(tc.network, tc.address).Return(nil, assert.AnError)
+				m.mockListener.EXPECT().ListenPacket(tc.network, tc.address).Return(recoveredSocket, nil)
+
+				go m.Run(stopCh)
+				synctest.Wait()
+				assert.False(t, m.ctrl.Satisfied())
+
+				time.Sleep(minSocketRetryInterval)
+				synctest.Wait()
+				assert.False(t, m.ctrl.Satisfied())
+
+				updatedNLM := nlm.DeepCopy()
+				updatedNLM.Generation = 1
+				updatedNLM.Spec.PingIntervalSeconds = 90
+				_, err := m.crdClientset.CrdV1alpha1().NodeLatencyMonitors().Update(ctx, updatedNLM, metav1.UpdateOptions{})
+				require.NoError(t, err)
+				synctest.Wait()
+				assert.False(t, m.ctrl.Satisfied())
+
+				// The retry interval doubles after the second failure. Advancing by only
+				// the initial interval must not trigger another attempt.
+				time.Sleep(minSocketRetryInterval)
+				synctest.Wait()
+				assert.False(t, m.ctrl.Satisfied())
+
+				time.Sleep(minSocketRetryInterval)
+				synctest.Wait()
+				require.True(t, m.ctrl.Satisfied())
+				assert.False(t, recoveredSocket.IsClosed())
+			})
+		})
+	}
+}
+
+func TestMonitorLoopStopsSocketRetryWhenDisabled(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		ctx := t.Context()
+		stopCh := ctx.Done()
+		m := newTestMonitor(t, nodeConfigIPv4, config.TrafficEncapModeEncap, nil, []runtime.Object{nlm})
+		m.crdInformerFactory.Start(stopCh)
+		m.informerFactory.Start(stopCh)
+		m.crdInformerFactory.WaitForCacheSync(stopCh)
+		m.informerFactory.WaitForCacheSync(stopCh)
+
+		recoveredSocket := nettest.NewPacketConn(testAddrIPv4, nil, nil)
+		m.mockListener.EXPECT().ListenPacket(ipv4ProtocolICMPRaw, "0.0.0.0").Return(nil, assert.AnError)
+		m.mockListener.EXPECT().ListenPacket(ipv4ProtocolICMPRaw, "0.0.0.0").Return(recoveredSocket, nil)
+
+		go m.Run(stopCh)
+		synctest.Wait()
+		assert.False(t, m.ctrl.Satisfied())
+
+		require.NoError(t, m.crdClientset.CrdV1alpha1().NodeLatencyMonitors().Delete(ctx, nlm.Name, metav1.DeleteOptions{}))
+		synctest.Wait()
+		time.Sleep(2 * minSocketRetryInterval)
+		synctest.Wait()
+		assert.False(t, m.ctrl.Satisfied())
+
+		_, err := m.crdClientset.CrdV1alpha1().NodeLatencyMonitors().Create(ctx, nlm.DeepCopy(), metav1.CreateOptions{})
+		require.NoError(t, err)
+		synctest.Wait()
+		require.True(t, m.ctrl.Satisfied())
+		assert.False(t, recoveredSocket.IsClosed())
+	})
+}
+
 func TestMonitorLoop(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		ctx := t.Context()
