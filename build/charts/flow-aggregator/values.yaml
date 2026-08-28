@@ -234,3 +234,12 @@ nameOverride: ""
 
 # -- (string) Override the full name of the chart.
 fullnameOverride: ""
+
+# -- (string) Suffix appended to the base name of the chart, used when naming objects whose name
+# must be unique across the whole cluster: currently the RBAC ClusterRole and
+# ClusterRoleBindings, and the RoleBinding created in kube-system. A distinct suffix must be
+# provided for each instance when installing the chart several times (in different Namespaces)
+# in the same cluster. Otherwise, installing the second instance will rebind the shared
+# ClusterRoleBindings to the second ServiceAccount, revoking the permissions of the first
+# instance.
+clusterScopedNameSuffix: ""

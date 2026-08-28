@@ -333,8 +333,15 @@ func setupFlowAggregator(tb testing.TB, testData *TestData, o flowVisibilityTest
 }
 
 func exportLogsForSubtest(tb testing.TB, data *TestData) func() {
+	// Use the full path of the subtest (minus the top-level test name, which is already the name
+	// of the parent directory), so that subtests nested more than one level deep - e.g.
+	// "IPv4/multi_exporters" and "IPv6/multi_exporters" - do not collide.
 	substrings := strings.Split(tb.Name(), "/")
-	subDir := substrings[len(substrings)-1]
+	subDir := strings.Join(substrings[1:], "-")
+	if subDir == "" {
+		// Not called from a subtest.
+		subDir = tb.Name()
+	}
 	return func() {
 		exportLogs(tb, data, subDir, true)
 	}
@@ -501,6 +508,12 @@ func exportLogs(tb testing.TB, data *TestData, logsSubDir string, writeNodeLogs 
 	}
 }
 
+// teardownFlowAggregator deletes all the Flow Aggregator Namespaces, along with the flow
+// visibility stack. It destroys the Pods whose logs are the most useful when a flow visibility test
+// fails, so callers must make sure that logs have already been exported when this runs: either by
+// ordering it after teardownTest (see setupFlowAggregatorTest), or by registering
+// exportLogsForSubtest as a later Cleanup function so that it runs first (see
+// setupFlowExporterDestinationTest).
 func teardownFlowAggregator(tb testing.TB, data *TestData) {
 	if testOptions.enableCoverage {
 		if err := testData.gracefulExitFlowAggregators(testOptions.coverageDir); err != nil {
