@@ -235,7 +235,17 @@ func (r *supportBundleREST) collect(ctx context.Context, dumpers ...func(string)
 	if err != nil {
 		return nil, fmt.Errorf("error when creating output tarfile: %w", err)
 	}
-	defer outputFile.Close()
+	removeOutputFile := true
+	defer func() {
+		if err := outputFile.Close(); err != nil {
+			klog.ErrorS(err, "Error when closing output tar file")
+		}
+		if removeOutputFile {
+			if err := defaultFS.Remove(outputFile.Name()); err != nil {
+				klog.ErrorS(err, "Error when removing output tar file", "file", outputFile.Name())
+			}
+		}
+	}()
 	hashSum, err := compress.PackDir(defaultFS, basedir, outputFile)
 	if err != nil {
 		return nil, fmt.Errorf("error when packaging supportBundle: %w", err)
@@ -243,7 +253,6 @@ func (r *supportBundleREST) collect(ctx context.Context, dumpers ...func(string)
 
 	select {
 	case <-ctx.Done():
-		_ = defaultFS.Remove(outputFile.Name())
 		return nil, fmt.Errorf("collecting is canceled")
 	default:
 	}
@@ -254,6 +263,7 @@ func (r *supportBundleREST) collect(ctx context.Context, dumpers ...func(string)
 	}
 	creationTime := metav1.Now()
 	deletionTime := metav1.NewTime(creationTime.Add(bundleExpireDuration))
+	removeOutputFile = false
 	return &systemv1beta1.SupportBundle{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:              r.mode,
