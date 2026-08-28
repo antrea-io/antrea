@@ -508,7 +508,7 @@ func exportLogs(tb testing.TB, data *TestData, logsSubDir string, writeNodeLogs 
 	}
 }
 
-// teardownFlowAggregator deletes the Namespaces of both Flow Aggregators, along with the flow
+// teardownFlowAggregator deletes all the Flow Aggregator Namespaces, along with the flow
 // visibility stack. It destroys the Pods whose logs are the most useful when a flow visibility test
 // fails, so callers must make sure that logs have already been exported when this runs: either by
 // ordering it after teardownTest (see setupFlowAggregatorTest), or by registering
