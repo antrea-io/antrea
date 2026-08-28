@@ -37,8 +37,6 @@
     // Don't write any rules before this rule
     {
       matchBaseBranches: ["release-2.7", "release-2.6", "release-2.5"],
-      groupName: "all dependencies active release branches",
-      groupSlug: "all-deps-active-release-branches",
       enabled: false,
     },
 
