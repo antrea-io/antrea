@@ -538,6 +538,12 @@ spec:
                     required:
                       - address
                       - asn
+                    x-kubernetes-validations:
+                      # holdTimeSeconds is defaulted, so the rule reads it without a has() guard. Only the hard
+                      # floor is enforced: a keepalive interval at or above the hold time can never refresh the
+                      # peer's hold timer in time. The RFC 4271 one third ratio is guidance in docs/bgp-policy.md.
+                      - rule: "!has(self.keepaliveIntervalSeconds) || self.keepaliveIntervalSeconds < self.holdTimeSeconds"
+                        message: "keepaliveIntervalSeconds must be less than holdTimeSeconds"
                     properties:
                       address:
                         type: string
@@ -561,12 +567,40 @@ spec:
                         minimum: 1
                         maximum: 255
                         default: 1
+                      gracefulRestartEnabled:
+                        type: boolean
+                        default: true
                       gracefulRestartTimeSeconds:
                         type: integer
                         format: int32
                         minimum: 1
                         maximum: 3600
                         default: 120
+                      holdTimeSeconds:
+                        type: integer
+                        format: int32
+                        minimum: 3
+                        maximum: 65535
+                        default: 90
+                      # Deliberately not defaulted: the BGP process derives an unset keepalive interval from the
+                      # effective hold time. See docs/bgp-policy.md for why a fixed default is wrong here.
+                      keepaliveIntervalSeconds:
+                        type: integer
+                        format: int32
+                        minimum: 1
+                        maximum: 65534
+                      connectRetrySeconds:
+                        type: integer
+                        format: int32
+                        minimum: 2
+                        maximum: 65535
+                        default: 120
+                      idleHoldTimeAfterResetSeconds:
+                        type: integer
+                        format: int32
+                        minimum: 1
+                        maximum: 3600
+                        default: 30
       additionalPrinterColumns:
         - description: Local BGP AS number
           jsonPath: .spec.localASN

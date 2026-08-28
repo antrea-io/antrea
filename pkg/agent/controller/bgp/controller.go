@@ -493,6 +493,23 @@ func (c *Controller) reconcileBGPPeers(ctx context.Context, bgpPeers []v1alpha1.
 	}
 	for key := range peerToUpdateKeys {
 		peerConfig := curPeerConfigs[key]
+		// The hold time and the keepalive interval are negotiated in the OPEN messages, so an established BGP
+		// session keeps using the values agreed when it was established. Updating the peer in place would store
+		// the new values without ever applying them, so the peer is removed and re-added to force a new OPEN
+		// exchange. The other timers are read by the BGP process every time it needs them, and the graceful
+		// restart configuration is re-negotiated by the BGP process itself, so neither needs a session reset.
+		if negotiatedBGPTimersChanged(prePeerConfigs[key], peerConfig) {
+			klog.InfoS("Re-establishing the BGP session to apply the updated BGP timers", "peer", peerConfig.Address, "asn", peerConfig.ASN)
+			if err := bgpServer.RemovePeer(ctx, prePeerConfigs[key]); err != nil {
+				return err
+			}
+			delete(c.bgpPolicyState.peerConfigs, key)
+			if err := bgpServer.AddPeer(ctx, peerConfig); err != nil {
+				return err
+			}
+			c.bgpPolicyState.peerConfigs[key] = peerConfig
+			continue
+		}
 		if err := bgpServer.UpdatePeer(ctx, peerConfig); err != nil {
 			return err
 		}
@@ -507,6 +524,14 @@ func (c *Controller) reconcileBGPPeers(ctx context.Context, bgpPeers []v1alpha1.
 	}
 
 	return nil
+}
+
+// negotiatedBGPTimersChanged returns whether any of the BGP timers that are negotiated when the BGP session is
+// established have changed for a peer, in which case the session must be re-established for the new values to be
+// proposed to the peer.
+func negotiatedBGPTimersChanged(prePeerConfig, curPeerConfig bgp.PeerConfig) bool {
+	return !ptr.Equal(prePeerConfig.HoldTimeSeconds, curPeerConfig.HoldTimeSeconds) ||
+		!ptr.Equal(prePeerConfig.KeepaliveIntervalSeconds, curPeerConfig.KeepaliveIntervalSeconds)
 }
 
 func (c *Controller) reconcileBGPAdvertisements(ctx context.Context, bgpAdvertisements v1alpha1.Advertisements) error {

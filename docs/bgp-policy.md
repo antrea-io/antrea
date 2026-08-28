@@ -18,6 +18,8 @@
   - [Combined Advertisements of Service, Pod, and Egress IPs](#combined-advertisements-of-service-pod-and-egress-ips)
   - [Advertise Egress IPs to external BGP peers with more than one hop](#advertise-egress-ips-to-external-bgp-peers-with-more-than-one-hop)
   - [Advertise Pod IPs through BGP Confederation](#advertise-pod-ips-through-bgp-confederation)
+  - [Tune the BGP timers for faster failure detection](#tune-the-bgp-timers-for-faster-failure-detection)
+  - [Leaving room for jitter](#leaving-room-for-jitter)
 - [Using antctl](#using-antctl)
 - [Limitations](#limitations)
 <!-- /toc -->
@@ -128,8 +130,41 @@ The `bgpPeers` field lists the BGP peers to which the advertisements are sent.
 - `port`: The port number on which the BGP peer listens. The default value is 179.
 - `multihopTTL`: The Time To Live (TTL) value used in BGP packets sent to the BGP peer, with a range of 1 to 255.
   The default value is 1.
+- `gracefulRestartEnabled`: Whether to advertise the BGP graceful restart capability to the BGP peer. The default value
+  is `true`. When it is set to `false`, the capability is not advertised and `gracefulRestartTimeSeconds` has no effect.
 - `gracefulRestartTimeSeconds`: Specifies how long the BGP peer waits for the BGP session to re-establish after a
   restart before deleting stale routes, with a range of 1 to 3600 seconds. The default value is 120 seconds.
+
+The following fields configure the BGP timers of the session with the peer.
+
+- `holdTimeSeconds`: The hold time proposed to the BGP peer when the session is established, i.e. how long the peer
+  should wait without receiving a KEEPALIVE or an UPDATE message from the Node before tearing the session down. The
+  effective hold time is the smaller of the two values proposed by the two BGP speakers. The range is 3 to 65535
+  seconds. The default value is 90 seconds.
+- `keepaliveIntervalSeconds`: The interval at which KEEPALIVE messages are sent to the BGP peer. The range is 1 to
+  65534 seconds. It must be less than `holdTimeSeconds`, otherwise the peer's hold timer can never be refreshed in
+  time; a BGPPolicy that breaks this rule is rejected. Because `holdTimeSeconds` defaults to 90 seconds, setting only
+  `keepaliveIntervalSeconds` to 90 or more is rejected as well.
+
+  This is the one timer with no default value. When it is left unset, the BGP process derives the interval from the
+  effective hold time, taking one third of it, so the interval follows whatever hold time the two speakers negotiate.
+  Lowering only `holdTimeSeconds` therefore speeds up the KEEPALIVEs to match, which a fixed default would prevent.
+- `connectRetrySeconds`: How long to wait before retrying to connect to the BGP peer after a failed connection attempt.
+  The range is 2 to 65535 seconds. The default value is 120 seconds.
+- `idleHoldTimeAfterResetSeconds`: How long the session stays in the Idle state after it is reset, before a new
+  connection to the BGP peer is attempted. The range is 1 to 3600 seconds. The default value is 30 seconds.
+
+[RFC 4271](https://datatracker.ietf.org/doc/html/rfc4271#section-10) suggests a keepalive interval of one third of the
+hold time. That ratio is not enforced, because a thinner one still gives a working session; it only leaves less room
+for a burst of lost messages. See
+[Leaving room for jitter](#leaving-room-for-jitter) for how to choose the two values together.
+
+**Note**: `holdTimeSeconds` and `keepaliveIntervalSeconds` are negotiated when the BGP session is established, so
+changing either of them on an existing peer makes the antrea-agent tear the session down and re-establish it, which
+briefly interrupts the advertisements to that peer. The other timers and the graceful restart fields are applied
+without interrupting an established session.
+
+See example [Tune the BGP timers for faster failure detection](#tune-the-bgp-timers-for-faster-failure-detection).
 
 ## BGP router ID
 
@@ -264,6 +299,67 @@ spec:
       asn: 64513
       port: 179
 ```
+
+### Tune the BGP timers for faster failure detection
+
+The following BGPPolicy detects the loss of a peer after 10 seconds instead of the default 90, by sending a KEEPALIVE
+message every 3 seconds, and retries a failed connection every 5 seconds:
+
+```yaml
+apiVersion: crd.antrea.io/v1alpha1
+kind: BGPPolicy
+metadata:
+  name: example-bgp-policy-timers
+spec:
+  nodeSelector:
+    matchLabels:
+      bgp: enabled
+  localASN: 64512
+  advertisements:
+    service:
+      ipTypes: [LoadBalancerIP]
+  bgpPeers:
+    - address: 192.168.77.200
+      asn: 65001
+      holdTimeSeconds: 10
+      keepaliveIntervalSeconds: 3
+      connectRetrySeconds: 5
+      idleHoldTimeAfterResetSeconds: 5
+```
+
+Make sure the peer is configured to propose a compatible hold time: the effective hold time is the smaller of the two
+proposed values, so a peer proposing 90 seconds does not shorten its own detection time just because this Node proposes
+10.
+
+### Leaving room for jitter
+
+The peer resets its hold timer every time it receives a KEEPALIVE or an UPDATE, so what decides whether a session
+survives is not the interval on its own, but the largest gap between two messages the peer actually receives. With a
+keepalive interval of 3 seconds:
+
+| KEEPALIVEs lost in a row | Gap | Hold time 9 | Hold time 10 |
+| --- | --- | --- | --- |
+| 0 | 3s | 6s to spare | 7s to spare |
+| 1 | 6s | 3s to spare | 4s to spare |
+| 2 | 9s | exactly the deadline | 1s to spare |
+
+The BGP process sends KEEPALIVE messages on a fixed interval, with no jitter and no margin, and it expires the hold
+timer at exactly the negotiated value. So a hold time of 9 with an interval of 3 — the ratio RFC 4271 suggests — makes
+the loss of two consecutive KEEPALIVEs a race: the third is sent 9 seconds after the last one the peer received and
+arrives one network delay later, while the peer's hold timer fires at 9 seconds exactly. Scheduling delays and network
+latency only ever make a message later, never earlier, so the race is biased towards the session being torn down. A
+hold time of 10 turns it into a full second of margin, for one extra second of detection time. That is why the example
+above uses 10 and 3 rather than 9 and 3.
+
+This is not a quirk of small numbers: the default 90 and 30 has exactly the same geometry, and two consecutive missed
+KEEPALIVEs land on the deadline there too. What changes with aggressive timers is the absolute margin. At 90 and 30 a
+session survives unless 60 consecutive seconds of KEEPALIVEs are lost, whereas at 9 and 3 six seconds are enough, which
+a short CPU starvation of the antrea-agent or a brief reconvergence can produce. Short timers are exactly where jitter
+matters, so prefer a hold time slightly above three times the keepalive interval rather than exactly at it. A hold time
+of four times the interval, for example 12 and 3, survives a burst of three lost messages.
+
+Antrea only rejects a keepalive interval greater than or equal to the hold time, because such a session can never stay
+up. Everything above is guidance rather than a constraint, so a thinner ratio is accepted if your network calls for it.
 
 ## Using antctl
 
