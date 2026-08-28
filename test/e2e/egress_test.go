@@ -304,7 +304,7 @@ func testEgressClientIPFromVLANSubnet(t *testing.T, data *TestData) {
 			prefixLength, _ := cidr.Mask.Size()
 			// We need only 1 Egress IP, set the range to include the next IP of the gateway IP.
 			ipRange := v1beta1.IPRange{Start: ip.NextIP(gatewayIP).String(), End: ip.NextIP(gatewayIP).String()}
-			subnet := v1beta1.SubnetInfo{
+			subnet := v1beta1.ExternalIPPoolSubnetInfo{
 				Gateway:      tt.vlanGateway,
 				PrefixLength: int32(prefixLength),
 				VLAN:         int32(tt.vlanID),
@@ -967,7 +967,7 @@ func setupIPNeighborChecker(data *TestData, t *testing.T, observerNode, node1, n
 	return checkIPNeighbor, nil
 }
 
-func (data *TestData) createExternalIPPool(t *testing.T, generateName string, ipRange v1beta1.IPRange, subnet *v1beta1.SubnetInfo, matchExpressions []metav1.LabelSelectorRequirement, matchLabels map[string]string) *v1beta1.ExternalIPPool {
+func (data *TestData) createExternalIPPool(t *testing.T, generateName string, ipRange v1beta1.IPRange, subnet *v1beta1.ExternalIPPoolSubnetInfo, matchExpressions []metav1.LabelSelectorRequirement, matchLabels map[string]string) *v1beta1.ExternalIPPool {
 	pool := &v1beta1.ExternalIPPool{
 		ObjectMeta: metav1.ObjectMeta{GenerateName: generateName},
 		Spec: v1beta1.ExternalIPPoolSpec{

@@ -134,16 +134,10 @@ func NewEgressController(crdClient clientset.Interface,
 		if !ok {
 			return nil, fmt.Errorf("obj is not Egress: %+v", obj)
 		}
-		var externalIPPools []string
-		if egress.Spec.ExternalIPPool != "" {
-			externalIPPools = append(externalIPPools, egress.Spec.ExternalIPPool)
+		if egress.Spec.ExternalIPPool == "" {
+			return nil, nil
 		}
-		for _, externalIPPool := range egress.Spec.ExternalIPPools {
-			if externalIPPool != "" {
-				externalIPPools = append(externalIPPools, externalIPPool)
-			}
-		}
-		return externalIPPools, nil
+		return []string{egress.Spec.ExternalIPPool}, nil
 	}})
 	c.externalIPAllocator.AddEventHandler(func(ipPool string) {
 		c.enqueueEgresses(ipPool)
@@ -354,6 +348,34 @@ func (c *EgressController) releaseEgressIP(egressName string, egressIP net.IP, p
 	c.deleteIPAllocation(egressName)
 }
 
+func (c *EgressController) requiresDualStackEgress(egress *egressv1beta1.Egress) (bool, error) {
+	if len(egress.Spec.EgressIPs) > 0 {
+		return true, nil
+	}
+	if egress.Spec.IPFamilyPolicy == nil {
+		// Preserve the behavior of Egresses created before IPFamilyPolicy was introduced.
+		return false, nil
+	}
+	switch *egress.Spec.IPFamilyPolicy {
+	case v1.IPFamilyPolicyRequireDualStack:
+		return true, nil
+	case v1.IPFamilyPolicyPreferDualStack:
+		// A legacy EgressIP always represents a single-stack request. PreferDualStack also falls back to
+		// single-stack when the referenced pool contains only one IP family.
+		if egress.Spec.EgressIP != "" || egress.Spec.ExternalIPPool == "" {
+			return false, nil
+		}
+		families, err := c.externalIPAllocator.IPPoolIPFamilies(egress.Spec.ExternalIPPool)
+		if err != nil {
+			return false, fmt.Errorf("failed to determine IP families for ExternalIPPool %s: %w",
+				egress.Spec.ExternalIPPool, err)
+		}
+		return families.Len() > 1, nil
+	default:
+		return false, nil
+	}
+}
+
 func (c *EgressController) syncEgress(key string) error {
 	startTime := time.Now()
 	defer func() {
@@ -370,10 +392,25 @@ func (c *EgressController) syncEgress(key string) error {
 		return nil
 	}
 
-	_, egress, err = c.syncEgressIP(egress)
-	c.updateEgressAllocatedCondition(egress, err)
+	// TODO: remove this guard when dual-stack Egress IP allocation, scheduling, and agent datapath support
+	// are implemented.
+	requiresDualStack, err := c.requiresDualStackEgress(egress)
 	if err != nil {
+		c.updateEgressAllocatedCondition(egress, err)
 		return err
+	}
+	if requiresDualStack {
+		if prevIP, prevIPPool, exists := c.getIPAllocation(key); exists {
+			c.releaseEgressIP(key, prevIP, prevIPPool)
+		}
+		c.clearEgressAllocatedCondition(egress)
+		klog.V(2).InfoS("Skipping IP allocation for Egress that requires dual-stack runtime support", "egress", key)
+	} else {
+		_, egress, err = c.syncEgressIP(egress)
+		c.updateEgressAllocatedCondition(egress, err)
+		if err != nil {
+			return err
+		}
 	}
 
 	egressGroupObj, found, _ := c.egressGroupStore.Get(key)
@@ -509,7 +546,17 @@ func (c *EgressController) updateEgressAllocatedCondition(egress *egressv1beta1.
 			}
 		}
 	}
+	c.setEgressAllocatedCondition(egress, desiredCondition)
+}
 
+func (c *EgressController) clearEgressAllocatedCondition(egress *egressv1beta1.Egress) {
+	c.setEgressAllocatedCondition(egress, nil)
+}
+
+func (c *EgressController) setEgressAllocatedCondition(
+	egress *egressv1beta1.Egress,
+	desiredCondition *egressv1beta1.EgressCondition,
+) {
 	toUpdate := egress.DeepCopy()
 	var updateErr, getErr error
 	if err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
