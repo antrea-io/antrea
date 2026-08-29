@@ -21,7 +21,9 @@ import (
 	"net"
 	"reflect"
 	"strings"
+	"sync"
 	"testing"
+	"time"
 
 	"github.com/containernetworking/cni/pkg/invoke"
 	cnitypes "github.com/containernetworking/cni/pkg/types"
@@ -290,41 +292,54 @@ func TestIPAMService(t *testing.T) {
 
 	t.Run("Lock held during ADD rollback", func(t *testing.T) {
 		ipamMock, cniServer, requestMsg := setup(t)
-		cniConfig, _ := cniServer.validateRequestMessage(requestMsg)
+		cniConfig, response := cniServer.validateRequestMessage(requestMsg)
+		require.Nil(t, response, "expected valid request message")
 		infraContainer := cniConfig.getInfraContainer()
 
-		rollbackStarted := make(chan struct{})
-		lockTested := make(chan struct{})
+		var events []string
+		var eventsMutex sync.Mutex
+		recordEvent := func(name string) {
+			eventsMutex.Lock()
+			defer eventsMutex.Unlock()
+			events = append(events, name)
+		}
 
-		ipamMock.EXPECT().Add(gomock.Any(), gomock.Any(), gomock.Any()).Return(true, nil, fmt.Errorf("IPAM add error"))
+		competitorAcquired := make(chan struct{})
+
 		ipamMock.EXPECT().Del(gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(
 			func(_ *invoke.Args, _ *types.K8sArgs, _ []byte) (bool, error) {
-				close(rollbackStarted)
-				// Wait for concurrent routine to test lock status.
-				<-lockTested
+				recordEvent("rollback_del")
 				return true, nil
 			},
 		)
 
-		go func() {
-			<-rollbackStarted
-			// Verify that while rollback is in progress, the container is locked in containerAccess.
-			cniServer.containerAccess.mutex.Lock()
-			isBusy := cniServer.containerAccess.busyContainerKeys[infraContainer]
-			cniServer.containerAccess.mutex.Unlock()
-			assert.True(t, isBusy, "Container should remain locked during CmdAdd rollback")
-			close(lockTested)
-		}()
+		ipamMock.EXPECT().Add(gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(
+			func(_ *invoke.Args, _ *types.K8sArgs, _ []byte) (bool, *ipam.IPAMResult, error) {
+				go func() {
+					cniServer.containerAccess.lockContainer(infraContainer)
+					recordEvent("competitor_lock")
+					cniServer.containerAccess.unlockContainer(infraContainer)
+					close(competitorAcquired)
+				}()
 
-		response, err := cniServer.CmdAdd(cxt, requestMsg)
+				require.Eventually(t, func() bool {
+					cniServer.containerAccess.mutex.Lock()
+					defer cniServer.containerAccess.mutex.Unlock()
+					return cniServer.containerAccess.waiters == 1
+				}, 5*time.Second, 10*time.Millisecond)
+
+				return true, nil, fmt.Errorf("IPAM add error")
+			},
+		)
+
+		resp, err := cniServer.CmdAdd(cxt, requestMsg)
 		require.Nil(t, err, "expected no rpc error")
-		checkErrorResponse(t, response, cnipb.ErrorCode_IPAM_FAILURE, "IPAM add error")
+		checkErrorResponse(t, resp, cnipb.ErrorCode_IPAM_FAILURE, "IPAM add error")
 
-		// After CmdAdd returns, container lock should be released.
-		cniServer.containerAccess.mutex.Lock()
-		isBusy := cniServer.containerAccess.busyContainerKeys[infraContainer]
-		cniServer.containerAccess.mutex.Unlock()
-		assert.False(t, isBusy, "Container should be unlocked after CmdAdd finishes")
+		<-competitorAcquired
+
+		require.Equal(t, []string{"rollback_del", "competitor_lock"}, events,
+			"Rollback Del must execute before competitor acquires container lock")
 	})
 
 	t.Run("Error on DEL", func(t *testing.T) {

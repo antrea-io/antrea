@@ -69,6 +69,7 @@ type containerAccessArbitrator struct {
 	mutex             sync.Mutex
 	cond              *sync.Cond
 	busyContainerKeys map[string]bool // used as a set of container keys
+	waiters           int             // goroutines blocked in lockContainer; used by tests
 }
 
 func newContainerAccessArbitrator() *containerAccessArbitrator {
@@ -90,7 +91,9 @@ func (arbitrator *containerAccessArbitrator) lockContainer(containerKey string) 
 		if !ok {
 			break
 		}
+		arbitrator.waiters++
 		arbitrator.cond.Wait()
+		arbitrator.waiters--
 	}
 	arbitrator.busyContainerKeys[containerKey] = true
 }
@@ -538,6 +541,10 @@ func (s *CNIServer) CmdAdd(ctx context.Context, request *cnipb.CniCmdRequest) (*
 	return resultToResponse(cniResult), nil
 }
 
+// cmdDel deletes the Pod's network configuration. The caller must hold the
+// containerAccess lock for the Pod's infra container: it is invoked both by
+// CmdDel and by the CmdAdd rollback path, which must not release the lock
+// between the failed ADD and the rollback.
 func (s *CNIServer) cmdDel(_ context.Context, cniConfig *CNIConfig) (*cnipb.CniCmdResponse, error) {
 	if cniConfig.secondaryNetworkIPAM {
 		klog.InfoS("Antrea IPAM del", "CNI", cniConfig.Type, "network", cniConfig.Name)
