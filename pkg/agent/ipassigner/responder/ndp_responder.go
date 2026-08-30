@@ -15,6 +15,7 @@
 package responder
 
 import (
+	"errors"
 	"fmt"
 	"net"
 	"net/netip"
@@ -137,6 +138,7 @@ func (r *ndpResponder) dialAndHandleRequests(stopCh <-chan struct{}) {
 		klog.ErrorS(err, "Failed to create NDP responder", "interface", r.linkName)
 		return
 	}
+	defer conn.Close()
 
 	r.mutex.Lock()
 	r.conn = conn
@@ -146,19 +148,25 @@ func (r *ndpResponder) dialAndHandleRequests(stopCh <-chan struct{}) {
 		}
 	}
 	r.mutex.Unlock()
+	defer func() {
+		r.mutex.Lock()
+		r.conn = nil
+		r.mutex.Unlock()
+	}()
 
-	reloadCh := make(chan struct{})
+	stopWaitCh := make(chan struct{})
+	defer close(stopWaitCh)
 
 	klog.InfoS("NDP responder started", "interface", transportInterface.Name, "index", transportInterface.Index)
 	defer klog.InfoS("NDP responder stopped", "interface", transportInterface.Name, "index", transportInterface.Index)
 
 	go func() {
-		defer conn.Close()
-		defer close(reloadCh)
-
 		for {
 			select {
 			case <-stopCh:
+				conn.Close()
+				return
+			case <-stopWaitCh:
 				return
 			case <-r.linkEventCh:
 				newTransportInterface, err := net.InterfaceByName(r.linkName)
@@ -168,6 +176,7 @@ func (r *ndpResponder) dialAndHandleRequests(stopCh <-chan struct{}) {
 				}
 				if transportInterface.Index != newTransportInterface.Index {
 					klog.InfoS("Transport interface index changed, restarting NDP responder", "name", transportInterface.Name, "oldIndex", transportInterface.Index, "newIndex", newTransportInterface.Index)
+					conn.Close()
 					return
 				}
 				klog.V(4).InfoS("Transport interface not changed")
@@ -176,14 +185,12 @@ func (r *ndpResponder) dialAndHandleRequests(stopCh <-chan struct{}) {
 	}()
 
 	for {
-		select {
-		case <-reloadCh:
-			return
-		default:
-			err := r.handleNeighborSolicitation(conn, transportInterface)
-			if err != nil {
-				klog.ErrorS(err, "Failed to handle Neighbor Solicitation", "deviceName", r.linkName)
+		if err := r.handleNeighborSolicitation(conn, transportInterface); err != nil {
+			if errors.Is(err, net.ErrClosed) {
+				return
 			}
+			klog.ErrorS(err, "Failed to handle Neighbor Solicitation", "deviceName", r.linkName)
+			return
 		}
 	}
 }

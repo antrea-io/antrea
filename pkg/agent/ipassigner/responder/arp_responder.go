@@ -15,6 +15,7 @@
 package responder
 
 import (
+	"errors"
 	"fmt"
 	"net"
 	"net/netip"
@@ -102,18 +103,21 @@ func (r *arpResponder) dialAndHandleRequests(stopCh <-chan struct{}) {
 		klog.ErrorS(err, "Failed to dial ARP client", "deviceName", r.linkName)
 		return
 	}
-	reloadCh := make(chan struct{})
+	defer client.Close()
+
+	stopWaitCh := make(chan struct{})
+	defer close(stopWaitCh)
 
 	klog.InfoS("ARP responder started", "interface", transportInterface.Name, "index", transportInterface.Index)
 	defer klog.InfoS("ARP responder stopped", "interface", transportInterface.Name, "index", transportInterface.Index)
 
 	go func() {
-		defer client.Close()
-		defer close(reloadCh)
-
 		for {
 			select {
 			case <-stopCh:
+				client.Close()
+				return
+			case <-stopWaitCh:
 				return
 			case <-r.linkEventCh:
 				newTransportInterface, err := net.InterfaceByName(r.linkName)
@@ -123,6 +127,7 @@ func (r *arpResponder) dialAndHandleRequests(stopCh <-chan struct{}) {
 				}
 				if transportInterface.Index != newTransportInterface.Index {
 					klog.InfoS("Transport interface index changed, restarting ARP responder", "name", transportInterface.Name, "oldIndex", transportInterface.Index, "newIndex", newTransportInterface.Index)
+					client.Close()
 					return
 				}
 				klog.V(4).InfoS("Transport interface not changed")
@@ -131,14 +136,12 @@ func (r *arpResponder) dialAndHandleRequests(stopCh <-chan struct{}) {
 	}()
 
 	for {
-		select {
-		case <-reloadCh:
-			return
-		default:
-			err := r.handleARPRequest(client, transportInterface)
-			if err != nil {
-				klog.ErrorS(err, "Failed to handle ARP request", "deviceName", r.linkName)
+		if err := r.handleARPRequest(client, transportInterface); err != nil {
+			if errors.Is(err, net.ErrClosed) {
+				return
 			}
+			klog.ErrorS(err, "Failed to handle ARP request", "deviceName", r.linkName)
+			return
 		}
 	}
 }
