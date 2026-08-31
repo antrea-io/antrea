@@ -42,7 +42,7 @@ require (
 	github.com/osrg/gobgp/v4 v4.8.0
 	github.com/pkg/sftp v1.13.11
 	github.com/prometheus/client_golang v1.24.1
-	github.com/prometheus/common v0.70.1
+	github.com/prometheus/common v0.71.0
 	github.com/sirupsen/logrus v1.10.2
 	github.com/spf13/afero v1.15.0
 	github.com/spf13/cobra v1.10.2
