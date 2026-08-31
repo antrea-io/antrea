@@ -903,4 +903,3 @@ func (arbitrator *containerAccessArbitrator) isLocked(containerKey string) bool 
 	defer arbitrator.mutex.Unlock()
 	return arbitrator.busyContainerKeys[containerKey]
 }
-
