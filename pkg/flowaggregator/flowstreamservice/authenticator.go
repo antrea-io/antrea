@@ -52,6 +52,9 @@ const (
 	// clientCAConfigMapNamespace, clientCAConfigMapName and clientCAConfigMapKey locate the CA bundle
 	// used to verify client certificates. Reading it requires the extension-apiserver-authentication-reader
 	// Role in kube-system, which the Flow Aggregator is already bound to.
+	// This bundle is the only trust root for the certificate path, so a client whose certificate is
+	// signed by anything else needs to authenticate with a bearer token instead (e.g. Pinniped Concierge
+	// issuing credentials in impersonation-proxy mode, out-of-scope for this authenticator implementation).
 	clientCAConfigMapNamespace = metav1.NamespaceSystem
 	clientCAConfigMapName      = "extension-apiserver-authentication"
 	clientCAConfigMapKey       = "client-ca-file"
@@ -111,19 +114,25 @@ type StreamServerAuthenticator struct {
 	// acquires a slot, a receive releases it, and a failed non-blocking send means the path is
 	// saturated and declines the credential rather than queueing behind the checks already running.
 	tokenAuthSlots chan struct{}
-	// streamLimiter caps concurrent streams per client, and in total.
+	// streamLimiter caps concurrent streams per client IP, and in total.
 	streamLimiter *clientStreamLimiter
 }
 
 // NewStreamServerAuthenticator builds an authenticator that resolves credentials against the cluster
-// k8sClient talks to.
-func NewStreamServerAuthenticator(k8sClient kubernetes.Interface) (*StreamServerAuthenticator, error) {
-	return newStreamServerAuthenticator(k8sClient, k8sClient.AuthenticationV1())
+// k8sClient talks to, and that applies limits to the number of concurrent streams a client can hold.
+func NewStreamServerAuthenticator(k8sClient kubernetes.Interface, limits StreamLimits) (*StreamServerAuthenticator, error) {
+	return newStreamServerAuthenticator(k8sClient, k8sClient.AuthenticationV1(), limits)
 }
 
 // newStreamServerAuthenticator takes the TokenReview client separately from the client the CA bundle
 // is read with, so that tests can supply one and fake the other.
-func newStreamServerAuthenticator(k8sClient kubernetes.Interface, tokenReviewClient authenticationv1client.AuthenticationV1Interface) (*StreamServerAuthenticator, error) {
+func newStreamServerAuthenticator(k8sClient kubernetes.Interface, tokenReviewClient authenticationv1client.AuthenticationV1Interface, limits StreamLimits) (*StreamServerAuthenticator, error) {
+	// The ordering between the two caps is enforced when the configuration is loaded, and again here:
+	// nothing else in this package would notice it being violated, and the failure it causes (a client
+	// call parked by its own transport rather than refused) is silent on the server side.
+	if err := limits.validate(); err != nil {
+		return nil, fmt.Errorf("invalid stream limits: %w", err)
+	}
 	clientCAProvider, err := dynamiccertificates.NewDynamicCAFromConfigMapController(
 		"client-ca", clientCAConfigMapNamespace, clientCAConfigMapName, clientCAConfigMapKey, k8sClient)
 	if err != nil {
@@ -156,7 +165,7 @@ func newStreamServerAuthenticator(k8sClient kubernetes.Interface, tokenReviewCli
 		authenticator:    auth,
 		clientCAProvider: clientCAProvider,
 		tokenAuthSlots:   make(chan struct{}, maxConcurrentTokenAuthentications),
-		streamLimiter:    newClientStreamLimiter(),
+		streamLimiter:    newClientStreamLimiter(limits),
 	}, nil
 }
 

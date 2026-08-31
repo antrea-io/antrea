@@ -130,12 +130,14 @@ type flowAggregator struct {
 	flowStreamService flowStreamProvider
 	// flowStreamAuthenticator authenticates FlowStreamService clients.
 	flowStreamAuthenticator *flowstreamservice.StreamServerAuthenticator
-	ipfixHandle             *exporterHandle
-	clickHouseHandle        *exporterHandle
-	s3Handle                *exporterHandle
-	logHandle               *exporterHandle
-	exportersMutex          sync.Mutex
-	certificateProvider     *certificate.Provider
+	// flowStreamLimits are the concurrent stream caps the authenticator was built with.
+	flowStreamLimits    flowstreamservice.StreamLimits
+	ipfixHandle         *exporterHandle
+	clickHouseHandle    *exporterHandle
+	s3Handle            *exporterHandle
+	logHandle           *exporterHandle
+	exportersMutex      sync.Mutex
+	certificateProvider *certificate.Provider
 }
 
 func NewFlowAggregator(
@@ -205,7 +207,11 @@ func NewFlowAggregator(
 		certificateUpdateCh:         make(chan struct{}, 1),
 	}
 	if *opt.Config.FlowStreamService.Enable {
-		authenticator, err := flowstreamservice.NewStreamServerAuthenticator(k8sClient)
+		fa.flowStreamLimits = flowstreamservice.StreamLimits{
+			MaxStreamsPerClientIP: int(opt.Config.FlowStreamService.MaxStreamsPerClientIP),
+			MaxTotalStreams:       int(opt.Config.FlowStreamService.MaxTotalStreams),
+		}
+		authenticator, err := flowstreamservice.NewStreamServerAuthenticator(k8sClient, fa.flowStreamLimits)
 		if err != nil {
 			return nil, fmt.Errorf("error when creating FlowStreamService authenticator: %w", err)
 		}
@@ -1017,6 +1023,13 @@ func (fa *flowAggregator) updateFlowAggregator(opt *options.Options) {
 	flowStreamEnabled := opt.Config.FlowStreamService.Enable != nil && *opt.Config.FlowStreamService.Enable
 	if flowStreamEnabled != (fa.flowStreamService != nil) {
 		unsupportedUpdates = append(unsupportedUpdates, "flowStreamService")
+	} else if flowStreamEnabled {
+		if int(opt.Config.FlowStreamService.MaxStreamsPerClientIP) != fa.flowStreamLimits.MaxStreamsPerClientIP {
+			unsupportedUpdates = append(unsupportedUpdates, "flowStreamService.maxStreamsPerClientIP")
+		}
+		if int(opt.Config.FlowStreamService.MaxTotalStreams) != fa.flowStreamLimits.MaxTotalStreams {
+			unsupportedUpdates = append(unsupportedUpdates, "flowStreamService.maxTotalStreams")
+		}
 	}
 	if len(unsupportedUpdates) > 0 {
 		klog.ErrorS(nil, "Ignoring unsupported configuration updates, please restart FlowAggregator", "keys", unsupportedUpdates)

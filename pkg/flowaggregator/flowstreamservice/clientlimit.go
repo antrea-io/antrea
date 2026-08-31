@@ -16,6 +16,7 @@ package flowstreamservice
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net"
 	"sync"
@@ -23,44 +24,68 @@ import (
 	"google.golang.org/grpc/peer"
 )
 
-const (
-	// maxStreamsPerClient caps concurrent GetFlows streams per client IP, maxTotalStreams caps them
-	// across all clients. Both are deliberately loose, because a key is a source IP and several paths
-	// put unrelated identities behind one:
-	//   - a client that holds its users' credentials and opens one stream per user is a single Pod, so
-	//     for it maxStreamsPerClient is a ceiling on how many of its users can watch flows at once
-	//     rather than a bound on misbehaviour. This is the shipped path: antrea-ui authenticates each
-	//     browser user and streams on their behalf, so 64 is the number of concurrent viewers it can
-	//     serve, and raising that number means raising this one.
-	//   - a hostNetwork client, and an external client arriving through a NodePort Service with
-	//     externalTrafficPolicy=Cluster, are both seen as the ingress node's antrea-gw0 address and so
-	//     share one key with each other. Antrea exposes 14740 only on a ClusterIP Service, which
-	//     preserves the client Pod IP, so neither applies unless an operator adds such a path.
-	// A client refused by either cap is told ResourceExhausted, which is retryable.
-	maxStreamsPerClient = 64
-	maxTotalStreams     = 256
-)
+// StreamLimits are the caps on concurrent GetFlows streams. Both defaults are deliberately loose,
+// because a key is a source IP and several paths put unrelated identities behind one:
+//   - a client that holds its users' credentials and opens one stream per user is a single Pod, so for
+//     it MaxStreamsPerClientIP is a ceiling on how many of its users can watch flows at once rather
+//     than a bound on misbehavior. As the primary consumer, antrea-ui authenticates each browser user
+//     and streams on their behalf, so the cap is the number of concurrent viewers it can serve.
+//   - a hostNetwork client, and an external client arriving through a NodePort Service with
+//     externalTrafficPolicy=Cluster, are both seen as the ingress node's antrea-gw0 address and so
+//     share one key with each other. The Flow Aggregator chart exposes 14740 only on the
+//     flow-aggregator Service, which is a ClusterIP Service that preserves the client Pod IP.
+//
+// A client refused by either cap is told ResourceExhausted, which is retryable. Both come from the
+// Flow Aggregator's flowStreamService configuration and are read once at startup: the limiter is built
+// with them and never rebuilt, so changing either needs a restart.
+type StreamLimits struct {
+	// MaxStreamsPerClientIP caps concurrent streams sharing one client IP. It must be greater than 0.
+	MaxStreamsPerClientIP int
+	// MaxTotalStreams caps concurrent streams across all clients. It must be strictly greater than
+	// MaxStreamsPerClientIP, so that a client on a single connection is answered by the per-client-IP
+	// cap rather than having its call parked by its own gRPC transport; see maxStreamsPerConn.
+	MaxTotalStreams int
+}
 
-// errTooManyStreamsForClient and errTooManyStreamsTotal name which cap refused a stream, so that the
-// log distinguishes one client holding its whole allowance from the service being saturated across
-// all of them. They are values rather than formatted per refusal, since refusals are the path an
-// abusive client drives.
+func (l StreamLimits) validate() error {
+	if l.MaxStreamsPerClientIP < 1 {
+		return fmt.Errorf("MaxStreamsPerClientIP must be greater than 0, got %d", l.MaxStreamsPerClientIP)
+	}
+	if l.MaxTotalStreams <= l.MaxStreamsPerClientIP {
+		return fmt.Errorf("MaxTotalStreams (%d) must be greater than MaxStreamsPerClientIP (%d)",
+			l.MaxTotalStreams, l.MaxStreamsPerClientIP)
+	}
+	return nil
+}
+
+// errTooManyStreamsForClientIP and errTooManyStreamsTotal name which cap refused a stream, so that the
+// log distinguishes one client IP holding its whole allowance from the service being saturated across
+// all of them. clientStreamLimiter wraps each with the cap that was reached once at construction,
+// rather than formatting per refusal, since refusals are the path an abusive client drives.
 var (
-	errTooManyStreamsForClient = fmt.Errorf("client already holds its %d concurrent streams", maxStreamsPerClient)
-	errTooManyStreamsTotal     = fmt.Errorf("all %d concurrent stream slots are in use across clients", maxTotalStreams)
+	errTooManyStreamsForClientIP = errors.New("client IP already holds all of its concurrent streams")
+	errTooManyStreamsTotal       = errors.New("all concurrent stream slots are in use across clients")
 )
 
 // clientStreamLimiter caps concurrent streams per client key and in total. A stream holds its slot for
 // its whole lifetime, which is what a rate limiter cannot do: GetFlows streams are long-lived by
 // design, so limiting how fast they are opened does not bound how many accumulate.
 type clientStreamLimiter struct {
-	mu        sync.Mutex
-	perClient map[string]int
-	total     int
+	mu                 sync.Mutex
+	limits             StreamLimits
+	refusedPerClientIP error
+	refusedTotal       error
+	perClientIPCounter map[string]int
+	total              int
 }
 
-func newClientStreamLimiter() *clientStreamLimiter {
-	return &clientStreamLimiter{perClient: make(map[string]int)}
+func newClientStreamLimiter(limits StreamLimits) *clientStreamLimiter {
+	return &clientStreamLimiter{
+		limits:             limits,
+		refusedPerClientIP: fmt.Errorf("%w (%d)", errTooManyStreamsForClientIP, limits.MaxStreamsPerClientIP),
+		refusedTotal:       fmt.Errorf("%w (%d)", errTooManyStreamsTotal, limits.MaxTotalStreams),
+		perClientIPCounter: make(map[string]int),
+	}
 }
 
 // acquire reserves a slot for key and returns the func releasing it. The error names the cap that
@@ -69,23 +94,23 @@ func (l *clientStreamLimiter) acquire(key string) (release func(), err error) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 
-	if l.total >= maxTotalStreams {
-		return nil, errTooManyStreamsTotal
+	if l.total >= l.limits.MaxTotalStreams {
+		return nil, l.refusedTotal
 	}
-	if l.perClient[key] >= maxStreamsPerClient {
-		return nil, errTooManyStreamsForClient
+	if l.perClientIPCounter[key] >= l.limits.MaxStreamsPerClientIP {
+		return nil, l.refusedPerClientIP
 	}
-	l.perClient[key]++
+	l.perClientIPCounter[key]++
 	l.total++
 	return func() {
 		l.mu.Lock()
 		defer l.mu.Unlock()
 
 		l.total--
-		l.perClient[key]--
+		l.perClientIPCounter[key]--
 		// Drop the entry at zero, so churn of short-lived client IPs cannot grow the map without bound.
-		if l.perClient[key] <= 0 {
-			delete(l.perClient, key)
+		if l.perClientIPCounter[key] <= 0 {
+			delete(l.perClientIPCounter, key)
 		}
 	}, nil
 }

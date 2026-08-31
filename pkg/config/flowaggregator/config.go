@@ -251,6 +251,10 @@ type FlowLoggerConfig struct {
 	PrettyPrint *bool `yaml:"prettyPrint,omitempty"`
 }
 
+// FlowStreamServiceConfig configures the FlowStreamService gRPC server. Every field is read once,
+// when the Flow Aggregator starts: unlike the exporter settings, a change to any of them does not take
+// effect on an in-place edit of the ConfigMap and requires the Flow Aggregator to be restarted. Helm's
+// config checksum annotation takes care of that on chart upgrade.
 type FlowStreamServiceConfig struct {
 	// Enable is the switch to enable the FlowStreamService gRPC server (port 14740). The
 	// server streams flow records to consumers such as antrea-ui. It uses server-side TLS
@@ -260,6 +264,21 @@ type FlowStreamServiceConfig struct {
 	// an X.509 client certificate as the TLS client credential of the connection, verified
 	// against the cluster's client CA bundle. Defaults to false.
 	Enable *bool `yaml:"enable,omitempty"`
+	// MaxStreamsPerClientIP is the maximum number of concurrent flow streams the server
+	// accepts from one client IP address. A stream refused by this limit is rejected with the
+	// retryable gRPC ResourceExhausted code. The limit keys on the source IP of the
+	// connection, not on the authenticated user, so a client which opens one stream per user
+	// (as antrea-ui does) is a single key and this is in effect the number of users it can
+	// serve at once. Defaults to 64. Must be greater than 0 and strictly smaller than
+	// MaxTotalStreams.
+	MaxStreamsPerClientIP int32 `yaml:"maxStreamsPerClientIP,omitempty"`
+	// MaxTotalStreams is the maximum number of concurrent flow streams the server accepts
+	// across all clients, and the number of concurrent streams it advertises as the limit for
+	// a single connection. A stream refused by this limit is rejected with the retryable gRPC
+	// ResourceExhausted code. Defaults to 256. Must be greater than
+	// MaxStreamsPerClientIP, so that a client reaching its own limit is answered rather than
+	// having its call parked by its own gRPC transport.
+	MaxTotalStreams int32 `yaml:"maxTotalStreams,omitempty"`
 }
 
 type NetworkPolicyRuleAction string

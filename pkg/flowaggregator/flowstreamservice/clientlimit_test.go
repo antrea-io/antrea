@@ -27,6 +27,9 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/peer"
 	authenticationv1 "k8s.io/api/authentication/v1"
+	k8sfake "k8s.io/client-go/kubernetes/fake"
+
+	flowaggregatorconfig "antrea.io/antrea/v2/pkg/config/flowaggregator"
 )
 
 // fakeAddr is a net.Addr returning a fixed string, so tests can present any peer address shape.
@@ -63,17 +66,26 @@ func TestClientKey(t *testing.T) {
 	assert.Equal(t, clientKey(contextWithPeer("10.244.1.7:53616")), clientKey(contextWithPeer("10.244.1.7:39252")))
 }
 
-func TestClientStreamLimiter_PerClientCap(t *testing.T) {
-	l := newClientStreamLimiter()
-	releases := make([]func(), 0, maxStreamsPerClient)
-	for i := range maxStreamsPerClient {
+// testStreamLimits are the shipped defaults, so that the tests below exercise the values an operator
+// gets without configuring anything.
+var testStreamLimits = StreamLimits{
+	MaxStreamsPerClientIP: flowaggregatorconfig.DefaultFlowStreamMaxStreamsPerClientIP,
+	MaxTotalStreams:       flowaggregatorconfig.DefaultFlowStreamMaxTotalStreams,
+}
+
+func TestClientStreamLimiter_PerClientIPCap(t *testing.T) {
+	l := newClientStreamLimiter(testStreamLimits)
+	releases := make([]func(), 0, testStreamLimits.MaxStreamsPerClientIP)
+	for i := range testStreamLimits.MaxStreamsPerClientIP {
 		release, err := l.acquire("10.244.1.7")
 		require.NoError(t, err, "acquire %d should have succeeded", i)
 		releases = append(releases, release)
 	}
 
 	_, err := l.acquire("10.244.1.7")
-	assert.ErrorIs(t, err, errTooManyStreamsForClient, "the cap should refuse one past maxStreamsPerClient")
+	assert.ErrorIs(t, err, errTooManyStreamsForClientIP, "the cap should refuse one past MaxStreamsPerClientIP")
+	assert.Contains(t, err.Error(), strconv.Itoa(testStreamLimits.MaxStreamsPerClientIP),
+		"the refusal should name the cap that was reached, so an operator can tell which knob to raise")
 
 	// A different client is unaffected: the cap is per key, not global-with-extra-steps.
 	release, err := l.acquire("10.244.1.8")
@@ -91,17 +103,18 @@ func TestClientStreamLimiter_PerClientCap(t *testing.T) {
 }
 
 func TestClientStreamLimiter_TotalCap(t *testing.T) {
-	l := newClientStreamLimiter()
-	// One key per stream, so the per-client cap never binds and only the total can. Keys are opaque to
-	// the limiter, so a counter stands in for a client address.
+	l := newClientStreamLimiter(testStreamLimits)
+	// One key per stream, so the per-client-IP cap never binds and only the total can. Keys are opaque
+	// to the limiter, so a counter stands in for a client address.
 	var releases []func()
-	for i := range maxTotalStreams {
+	for i := range testStreamLimits.MaxTotalStreams {
 		release, err := l.acquire(strconv.Itoa(i))
 		require.NoError(t, err, "acquire %d should have succeeded", i)
 		releases = append(releases, release)
 	}
 	_, err := l.acquire("10.244.9.9")
 	assert.ErrorIs(t, err, errTooManyStreamsTotal, "the total cap should refuse a client that is itself well under its own cap")
+	assert.Contains(t, err.Error(), strconv.Itoa(testStreamLimits.MaxTotalStreams))
 
 	releases[0]()
 	release, err := l.acquire("10.244.9.9")
@@ -112,7 +125,7 @@ func TestClientStreamLimiter_TotalCap(t *testing.T) {
 // TestClientStreamLimiter_ReleaseDropsEntry covers that the map does not grow with client churn: a
 // long-running Flow Aggregator sees an unbounded number of distinct short-lived client IPs.
 func TestClientStreamLimiter_ReleaseDropsEntry(t *testing.T) {
-	l := newClientStreamLimiter()
+	l := newClientStreamLimiter(testStreamLimits)
 	for i := range 100 {
 		release, err := l.acquire(strconv.Itoa(i))
 		require.NoError(t, err)
@@ -120,20 +133,20 @@ func TestClientStreamLimiter_ReleaseDropsEntry(t *testing.T) {
 	}
 	l.mu.Lock()
 	defer l.mu.Unlock()
-	assert.Empty(t, l.perClient, "released keys should not be retained")
+	assert.Empty(t, l.perClientIPCounter, "released keys should not be retained")
 	assert.Zero(t, l.total)
 }
 
-// TestStreamInterceptor_StreamCapIsPerClientAndPreAuthentication covers the two properties that make
+// TestStreamInterceptor_StreamCapIsPerClientIPAndPreAuthentication covers the two properties that make
 // the cap worth having: it is charged before the credential is checked, so a saturated client cannot
-// make the Flow Aggregator do authentication work, and it is keyed per client, so one client cannot
+// make the Flow Aggregator do authentication work, and it is keyed per client IP, so one client cannot
 // lock out another.
-func TestStreamInterceptor_StreamCapIsPerClientAndPreAuthentication(t *testing.T) {
+func TestStreamInterceptor_StreamCapIsPerClientIPAndPreAuthentication(t *testing.T) {
 	a := newTestAuthenticator(t, map[string]authenticationv1.TokenReviewStatus{
 		"good-token": {Authenticated: true, User: authenticationv1.UserInfo{Username: "alice"}},
 	})
 	noisy, quiet := "10.244.1.7", "10.244.1.8"
-	for range maxStreamsPerClient {
+	for range testStreamLimits.MaxStreamsPerClientIP {
 		_, err := a.streamLimiter.acquire(noisy)
 		require.NoError(t, err)
 	}
@@ -188,18 +201,62 @@ func TestStreamInterceptor_StreamSlotHeldForStreamLifetime(t *testing.T) {
 	}, time.Second, 10*time.Millisecond, "the slot should be released when the handler returns")
 }
 
-// TestStreamCapsAreOrdered pins the relationship the caps rely on: the connection limit the server
-// advertises must stay above the per-client cap, or a client reaching it first would have its RPC
-// parked by its own gRPC transport instead of being answered with ResourceExhausted.
-func TestStreamCapsAreOrdered(t *testing.T) {
-	assert.Greater(t, maxStreamsPerConn, maxStreamsPerClient,
-		"maxStreamsPerConn must not preempt the per-client cap")
-	assert.LessOrEqual(t, maxStreamsPerClient, maxTotalStreams,
-		"a single client must be able to reach its own cap")
+// TestStreamLimitsValidate pins the relationship the caps rely on, now that both are operator-settable:
+// the total must stay strictly above the per-client-IP cap, because the total is also the number of
+// concurrent streams the server advertises per connection, and a client reaching that first would have
+// its RPC parked by its own gRPC transport instead of being answered with ResourceExhausted.
+func TestStreamLimitsValidate(t *testing.T) {
+	tests := []struct {
+		name    string
+		limits  StreamLimits
+		wantErr string
+	}{
+		{"shipped defaults", testStreamLimits, ""},
+		{"minimum usable", StreamLimits{MaxStreamsPerClientIP: 1, MaxTotalStreams: 2}, ""},
+		{
+			name:    "equal caps would park the client's own call",
+			limits:  StreamLimits{MaxStreamsPerClientIP: 64, MaxTotalStreams: 64},
+			wantErr: "must be greater than MaxStreamsPerClientIP",
+		},
+		{
+			name:    "total below the per-client-IP cap",
+			limits:  StreamLimits{MaxStreamsPerClientIP: 64, MaxTotalStreams: 8},
+			wantErr: "must be greater than MaxStreamsPerClientIP",
+		},
+		{
+			name:    "a zero per-client-IP cap would refuse every client",
+			limits:  StreamLimits{MaxStreamsPerClientIP: 0, MaxTotalStreams: 256},
+			wantErr: "MaxStreamsPerClientIP must be greater than 0",
+		},
+		{
+			name:    "negative per-client-IP cap",
+			limits:  StreamLimits{MaxStreamsPerClientIP: -1, MaxTotalStreams: 256},
+			wantErr: "MaxStreamsPerClientIP must be greater than 0",
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			err := tc.limits.validate()
+			if tc.wantErr == "" {
+				assert.NoError(t, err)
+				return
+			}
+			assert.ErrorContains(t, err, tc.wantErr)
+		})
+	}
+}
+
+// TestNewStreamServerAuthenticator_RejectsInvalidLimits covers that the invariant is enforced where the
+// limiter is built too, not only when the configuration is loaded.
+func TestNewStreamServerAuthenticator_RejectsInvalidLimits(t *testing.T) {
+	a, err := newStreamServerAuthenticator(k8sfake.NewSimpleClientset(), newTokenReviewClient(t, nil),
+		StreamLimits{MaxStreamsPerClientIP: 64, MaxTotalStreams: 64})
+	assert.ErrorContains(t, err, "invalid stream limits")
+	assert.Nil(t, a)
 }
 
 func TestClientStreamLimiter_ConcurrentAcquireRelease(t *testing.T) {
-	l := newClientStreamLimiter()
+	l := newClientStreamLimiter(testStreamLimits)
 	var wg sync.WaitGroup
 	for range 50 {
 		wg.Add(1)
@@ -216,5 +273,5 @@ func TestClientStreamLimiter_ConcurrentAcquireRelease(t *testing.T) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	assert.Zero(t, l.total, "every acquire should have been released")
-	assert.Empty(t, l.perClient)
+	assert.Empty(t, l.perClientIPCounter)
 }

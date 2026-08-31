@@ -51,6 +51,12 @@ const (
 	DefaultLoggerRecordFormat = "CSV"
 
 	DefaultRecordBufferSize = 8192
+
+	// DefaultFlowStreamMaxStreamsPerClientIP and DefaultFlowStreamMaxTotalStreams are deliberately
+	// loose: the per-client-IP key is a source IP rather than a principal, so several paths put
+	// unrelated identities behind one key.
+	DefaultFlowStreamMaxStreamsPerClientIP = 64
+	DefaultFlowStreamMaxTotalStreams       = 256
 )
 
 func SetConfigDefaults(flowAggregatorConf *FlowAggregatorConfig) {
@@ -128,5 +134,11 @@ func SetConfigDefaults(flowAggregatorConf *FlowAggregatorConfig) {
 	}
 	if flowAggregatorConf.FlowStreamService.Enable == nil {
 		flowAggregatorConf.FlowStreamService.Enable = ptr.To(false)
+	}
+	if flowAggregatorConf.FlowStreamService.MaxStreamsPerClientIP == 0 {
+		flowAggregatorConf.FlowStreamService.MaxStreamsPerClientIP = DefaultFlowStreamMaxStreamsPerClientIP
+	}
+	if flowAggregatorConf.FlowStreamService.MaxTotalStreams == 0 {
+		flowAggregatorConf.FlowStreamService.MaxTotalStreams = DefaultFlowStreamMaxTotalStreams
 	}
 }

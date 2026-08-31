@@ -36,6 +36,7 @@ import (
 	"k8s.io/klog/v2"
 
 	flowpb "antrea.io/antrea/v2/pkg/apis/flow/v1alpha1"
+	flowaggregatorconfig "antrea.io/antrea/v2/pkg/config/flowaggregator"
 	"antrea.io/antrea/v2/pkg/flowaggregator/exporter"
 	"antrea.io/antrea/v2/pkg/flowaggregator/ringbuffer"
 )
@@ -44,13 +45,6 @@ const (
 	internalBatchSize = exporter.ConsumeMultipleBatchSize
 	// flowStreamPort is the port on which the FlowStreamService gRPC server listens.
 	flowStreamPort = 14740
-	// maxStreamsPerConn bounds concurrent streams on one connection. It is deliberately above
-	// maxStreamsPerClient, so that the per-client cap is what a client runs into first: a gRPC client
-	// parks an RPC that would exceed the stream limit the server advertises until that RPC's context is
-	// done, so a connection limit reached first would hang the call instead of answering it with the
-	// retryable ResourceExhausted the per-client cap returns. maxTotalStreams is the natural value,
-	// since no stream past it can be admitted anyway.
-	maxStreamsPerConn = maxTotalStreams
 )
 
 // FlowStreamService implements flowpb.FlowStreamServiceServer. Each client
@@ -71,23 +65,36 @@ type FlowStreamService struct {
 	// authenticator authenticates every client before its RPC runs. It is nil only for a service
 	// built by newFlowStreamServiceWithoutAuthentication, which serves every client unauthenticated.
 	authenticator *StreamServerAuthenticator
+	// maxStreamsPerConn bounds concurrent streams on one connection. It is deliberately set to the
+	// service-wide cap rather than the per-client-IP one, so that the per-client-IP cap is what a
+	// client runs into first: a gRPC client parks an RPC that would exceed the stream limit the server
+	// advertises until that RPC's context is done, so a connection limit reached first would hang the
+	// call instead of answering it with the retryable ResourceExhausted the per-client-IP cap returns.
+	// The service-wide cap is the natural value, since no stream past it can be admitted anyway.
+	maxStreamsPerConn uint32
 }
 
 // NewFlowStreamService creates a FlowStreamService backed by the given buffer. authenticator
 // authenticates clients (bearer token metadata or a TLS client certificate) before their RPC runs,
-// and is required: a nil authenticator is rejected rather than quietly serving every client.
+// and is required: a nil authenticator is rejected rather than quietly serving every client. The
+// stream limits the authenticator was built with also fix the number of concurrent streams the server
+// advertises per connection.
 func NewFlowStreamService(buffer ringbuffer.BroadcastBuffer[*flowpb.Flow], authenticator *StreamServerAuthenticator) (*FlowStreamService, error) {
 	if authenticator == nil {
 		return nil, fmt.Errorf("authenticator is required; only this package's tests may serve clients without authentication, via newFlowStreamServiceWithoutAuthentication")
 	}
-	return &FlowStreamService{buffer: buffer, authenticator: authenticator}, nil
+	return &FlowStreamService{
+		buffer:            buffer,
+		authenticator:     authenticator,
+		maxStreamsPerConn: uint32(authenticator.streamLimiter.limits.MaxTotalStreams),
+	}, nil
 }
 
 // newFlowStreamServiceWithoutAuthentication creates a FlowStreamService that accepts every client
 // without authenticating it. It exists for this package's tests, which have no API server to validate
 // credentials against. It is deliberately unexported.
 func newFlowStreamServiceWithoutAuthentication(buffer ringbuffer.BroadcastBuffer[*flowpb.Flow]) *FlowStreamService {
-	return &FlowStreamService{buffer: buffer}
+	return &FlowStreamService{buffer: buffer, maxStreamsPerConn: flowaggregatorconfig.DefaultFlowStreamMaxTotalStreams}
 }
 
 // Run starts a dedicated TLS gRPC server for the FlowStreamService on FlowStreamPort.
@@ -121,10 +128,10 @@ func (s *FlowStreamService) Run(serverCertPEM, serverKeyPEM []byte, stopCh <-cha
 		grpc.Creds(credentials.NewTLS(tlsConfig)),
 		grpc.UnaryInterceptor(rejectUnaryRPC),
 		// grpc-go's default is math.MaxUint32, i.e. one connection may open unbounded concurrent
-		// streams. This is a transport-level backstop rather than a replacement for the per-client cap
+		// streams. This is a transport-level backstop rather than a replacement for the per-client-IP cap
 		// the authenticator applies — an attacker can always open more connections — and it is set high
-		// enough not to preempt that cap; see maxStreamsPerConn.
-		grpc.MaxConcurrentStreams(maxStreamsPerConn),
+		// enough not to preempt that cap; see the maxStreamsPerConn field.
+		grpc.MaxConcurrentStreams(s.maxStreamsPerConn),
 	}
 	if s.authenticator != nil {
 		serverOpts = append(serverOpts, grpc.StreamInterceptor(s.authenticator.StreamInterceptor))

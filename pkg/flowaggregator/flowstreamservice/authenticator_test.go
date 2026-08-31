@@ -176,7 +176,7 @@ func contextWithClientCert(ctx context.Context, cert *x509.Certificate) context.
 // CA bundle is never loaded, so only the bearer-token path can resolve an identity.
 func newTestAuthenticator(t *testing.T, tokens map[string]authenticationv1.TokenReviewStatus) *StreamServerAuthenticator {
 	t.Helper()
-	a, err := newStreamServerAuthenticator(k8sfake.NewSimpleClientset(), newTokenReviewClient(t, tokens))
+	a, err := newStreamServerAuthenticator(k8sfake.NewSimpleClientset(), newTokenReviewClient(t, tokens), testStreamLimits)
 	require.NoError(t, err)
 	return a
 }
@@ -191,7 +191,7 @@ func newAuthenticatorWithClientCA(t *testing.T, caPEM []byte, tokens map[string]
 		ObjectMeta: metav1.ObjectMeta{Namespace: clientCAConfigMapNamespace, Name: clientCAConfigMapName},
 		Data:       map[string]string{clientCAConfigMapKey: string(caPEM)},
 	})
-	a, err := newStreamServerAuthenticator(k8sClient, newTokenReviewClient(t, tokens))
+	a, err := newStreamServerAuthenticator(k8sClient, newTokenReviewClient(t, tokens), testStreamLimits)
 	require.NoError(t, err)
 
 	stopCh := make(chan struct{})

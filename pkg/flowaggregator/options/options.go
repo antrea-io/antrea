@@ -167,5 +167,22 @@ func LoadConfig(configBytes []byte) (*Options, error) {
 			return nil, fmt.Errorf("record format %s is not supported", opt.Config.FlowLogger.RecordFormat)
 		}
 	}
+	// Validate FlowStreamService specific parameters
+	if *opt.Config.FlowStreamService.Enable {
+		if opt.Config.FlowStreamService.MaxStreamsPerClientIP < 0 {
+			return nil, fmt.Errorf("maxStreamsPerClientIP cannot be negative")
+		}
+		if opt.Config.FlowStreamService.MaxTotalStreams < 0 {
+			return nil, fmt.Errorf("maxTotalStreams cannot be negative")
+		}
+		// Strictly smaller, not smaller or equal: at equality a client on a single connection reaches
+		// the number of concurrent streams the server advertises before the per-client-IP limit, and
+		// its own gRPC transport parks the call instead of letting the server answer it with the
+		// retryable ResourceExhausted the limit is there to return.
+		if opt.Config.FlowStreamService.MaxStreamsPerClientIP >= opt.Config.FlowStreamService.MaxTotalStreams {
+			return nil, fmt.Errorf("maxStreamsPerClientIP (%d) must be smaller than maxTotalStreams (%d)",
+				opt.Config.FlowStreamService.MaxStreamsPerClientIP, opt.Config.FlowStreamService.MaxTotalStreams)
+		}
+	}
 	return &opt, nil
 }
