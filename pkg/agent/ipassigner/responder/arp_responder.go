@@ -19,7 +19,9 @@ import (
 	"fmt"
 	"net"
 	"net/netip"
+	"os"
 	"sync"
+	"syscall"
 	"time"
 
 	"antrea.io/arp"
@@ -75,7 +77,8 @@ func (r *arpResponder) handleARPRequest(client *arp.Client, iface *net.Interface
 		return nil
 	}
 	if err := client.Reply(pkt, iface.HardwareAddr, pkt.TargetIP); err != nil {
-		return fmt.Errorf("failed to reply ARP packet for IP %s: %v", pkt.TargetIP, err)
+		klog.ErrorS(err, "Failed to reply ARP packet", "ip", pkt.TargetIP, "interface", r.linkName)
+		return nil
 	}
 	klog.V(4).InfoS("Sent ARP response", "ip", pkt.TargetIP, "interface", r.linkName)
 	return nil
@@ -105,8 +108,10 @@ func (r *arpResponder) dialAndHandleRequests(stopCh <-chan struct{}) {
 	}
 	defer client.Close()
 
-	stopWaitCh := make(chan struct{})
-	defer close(stopWaitCh)
+	// readLoopDone notifies the background link watcher goroutine to exit
+	// when the read loop terminates.
+	readLoopDone := make(chan struct{})
+	defer close(readLoopDone)
 
 	klog.InfoS("ARP responder started", "interface", transportInterface.Name, "index", transportInterface.Index)
 	defer klog.InfoS("ARP responder stopped", "interface", transportInterface.Name, "index", transportInterface.Index)
@@ -117,7 +122,7 @@ func (r *arpResponder) dialAndHandleRequests(stopCh <-chan struct{}) {
 			case <-stopCh:
 				client.Close()
 				return
-			case <-stopWaitCh:
+			case <-readLoopDone:
 				return
 			case <-r.linkEventCh:
 				newTransportInterface, err := net.InterfaceByName(r.linkName)
@@ -136,13 +141,19 @@ func (r *arpResponder) dialAndHandleRequests(stopCh <-chan struct{}) {
 	}()
 
 	for {
-		if err := r.handleARPRequest(client, transportInterface); err != nil {
-			if errors.Is(err, net.ErrClosed) {
-				return
-			}
-			klog.ErrorS(err, "Failed to handle ARP request", "deviceName", r.linkName)
+		err := r.handleARPRequest(client, transportInterface)
+		if err == nil {
+			continue
+		}
+		if errors.Is(err, net.ErrClosed) || errors.Is(err, os.ErrClosed) || errors.Is(err, syscall.EBADF) {
 			return
 		}
+		var opErr *net.OpError
+		if errors.As(err, &opErr) {
+			klog.ErrorS(err, "Socket error in ARP responder, restarting", "deviceName", r.linkName)
+			return
+		}
+		klog.V(2).InfoS("Skipping invalid ARP packet", "err", err, "deviceName", r.linkName)
 	}
 }
 

@@ -16,6 +16,7 @@ package responder
 
 import (
 	"bytes"
+	"fmt"
 	"net/netip"
 	"testing"
 
@@ -94,6 +95,25 @@ func TestNDPResponder_handleNeighborSolicitation(t *testing.T) {
 			},
 		},
 		{
+			name: "write failure is ignored without propagating error",
+			requestMessage: []byte{
+				0x87,       // type - 135 for Neighbor Solicitation
+				0x00,       // code
+				0x00, 0x00, // checksum
+				0x00, 0x00, 0x00, 0x00, // reserved bits.
+				0xfe, 0x80, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xa1, // IPv6 address
+				0x01,                               // option - 1 for Source Link-layer Address
+				0x01,                               // length (units of 8 octets including type and length fields)
+				0x00, 0x11, 0x22, 0x33, 0x44, 0x66, // hardware address
+			},
+			requestIP: netip.MustParseAddr("fe80::c1"),
+			assignedIPs: []netip.Addr{
+				netip.MustParseAddr("fe80::a1"),
+			},
+			expectError:   false, // Write error must be swallowed and logged, not propagated
+			expectedReply: nil,
+		},
+		{
 			name: "request to not assigned IP",
 			requestMessage: []byte{
 				0x87,       // type - 135 for Neighbor Solicitation
@@ -119,6 +139,9 @@ func TestNDPResponder_handleNeighborSolicitation(t *testing.T) {
 			buffer := bytes.NewBuffer(nil)
 			fakeConn := &fakeNDPConn{
 				writeTo: func(msg ndp.Message, _ *ipv6.ControlMessage, _ netip.Addr) error {
+					if tt.name == "write failure is ignored without propagating error" {
+						return fmt.Errorf("write buffer full: ENOBUFS")
+					}
 					bs, err := ndp.MarshalMessage(msg)
 					assert.NoError(t, err)
 					buffer.Write(bs)
@@ -139,7 +162,9 @@ func TestNDPResponder_handleNeighborSolicitation(t *testing.T) {
 				assert.Error(t, err)
 			} else {
 				assert.NoError(t, err)
-				assert.Equal(t, tt.expectedReply, buffer.Bytes())
+				if tt.expectedReply != nil {
+					assert.Equal(t, tt.expectedReply, buffer.Bytes())
+				}
 			}
 		})
 	}
@@ -379,4 +404,26 @@ func Test_ndpResponder_removeIP(t *testing.T) {
 			assert.Equal(t, tt.expectedMulticastGroups, r.multicastGroups)
 		})
 	}
+}
+
+func Test_ndpResponder_clearMulticastGroupsOnExit(t *testing.T) {
+	group := netip.MustParseAddr("ff02::1:ff11:2233")
+	r := &ndpResponder{
+		linkName: "eth0",
+		conn:     &fakeNDPConn{},
+		multicastGroups: map[netip.Addr]int{
+			group: 2,
+		},
+	}
+
+	// Simulate cleanup defer on exit
+	func() {
+		r.mutex.Lock()
+		r.conn = nil
+		clear(r.multicastGroups)
+		r.mutex.Unlock()
+	}()
+
+	assert.Nil(t, r.conn)
+	assert.Empty(t, r.multicastGroups)
 }

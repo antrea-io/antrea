@@ -19,7 +19,9 @@ import (
 	"fmt"
 	"net"
 	"net/netip"
+	"os"
 	"sync"
+	"syscall"
 	"time"
 
 	"antrea.io/ndp"
@@ -105,7 +107,8 @@ func (r *ndpResponder) handleNeighborSolicitation(conn ndpConn, link *net.Interf
 		},
 	}
 	if err := conn.WriteTo(na, nil, srcIP); err != nil {
-		return err
+		klog.ErrorS(err, "Failed to send Neighbor Advertisement", "ip", ns.TargetAddress, "interface", r.linkName)
+		return nil
 	}
 	klog.V(4).InfoS("Sent Neighbor Advertisement", "ip", ns.TargetAddress.String(), "interface", r.linkName)
 	return nil
@@ -151,11 +154,14 @@ func (r *ndpResponder) dialAndHandleRequests(stopCh <-chan struct{}) {
 	defer func() {
 		r.mutex.Lock()
 		r.conn = nil
+		clear(r.multicastGroups)
 		r.mutex.Unlock()
 	}()
 
-	stopWaitCh := make(chan struct{})
-	defer close(stopWaitCh)
+	// readLoopDone notifies the background link watcher goroutine to exit
+	// when the read loop terminates.
+	readLoopDone := make(chan struct{})
+	defer close(readLoopDone)
 
 	klog.InfoS("NDP responder started", "interface", transportInterface.Name, "index", transportInterface.Index)
 	defer klog.InfoS("NDP responder stopped", "interface", transportInterface.Name, "index", transportInterface.Index)
@@ -166,7 +172,7 @@ func (r *ndpResponder) dialAndHandleRequests(stopCh <-chan struct{}) {
 			case <-stopCh:
 				conn.Close()
 				return
-			case <-stopWaitCh:
+			case <-readLoopDone:
 				return
 			case <-r.linkEventCh:
 				newTransportInterface, err := net.InterfaceByName(r.linkName)
@@ -185,13 +191,19 @@ func (r *ndpResponder) dialAndHandleRequests(stopCh <-chan struct{}) {
 	}()
 
 	for {
-		if err := r.handleNeighborSolicitation(conn, transportInterface); err != nil {
-			if errors.Is(err, net.ErrClosed) {
-				return
-			}
-			klog.ErrorS(err, "Failed to handle Neighbor Solicitation", "deviceName", r.linkName)
+		err := r.handleNeighborSolicitation(conn, transportInterface)
+		if err == nil {
+			continue
+		}
+		if errors.Is(err, net.ErrClosed) || errors.Is(err, os.ErrClosed) || errors.Is(err, syscall.EBADF) {
 			return
 		}
+		var opErr *net.OpError
+		if errors.As(err, &opErr) {
+			klog.ErrorS(err, "Socket error in NDP responder, restarting", "deviceName", r.linkName)
+			return
+		}
+		klog.V(2).InfoS("Skipping invalid NDP packet", "err", err, "deviceName", r.linkName)
 	}
 }
 
