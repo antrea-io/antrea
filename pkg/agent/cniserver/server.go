@@ -69,7 +69,6 @@ type containerAccessArbitrator struct {
 	mutex             sync.Mutex
 	cond              *sync.Cond
 	busyContainerKeys map[string]bool // used as a set of container keys
-	waiters           int             // goroutines blocked in lockContainer; used by tests
 }
 
 func newContainerAccessArbitrator() *containerAccessArbitrator {
@@ -91,9 +90,7 @@ func (arbitrator *containerAccessArbitrator) lockContainer(containerKey string) 
 		if !ok {
 			break
 		}
-		arbitrator.waiters++
 		arbitrator.cond.Wait()
-		arbitrator.waiters--
 	}
 	arbitrator.busyContainerKeys[containerKey] = true
 }
