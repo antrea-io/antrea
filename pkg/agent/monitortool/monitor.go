@@ -18,6 +18,7 @@ package monitortool
 
 import (
 	"context"
+	"math"
 	"math/rand/v2"
 	"net"
 	"sync"
@@ -29,6 +30,7 @@ import (
 	"golang.org/x/net/ipv6"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/wait"
 	coreinformers "k8s.io/client-go/informers/core/v1"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/klog/v2"
@@ -44,12 +46,14 @@ import (
 var icmpEchoID = rand.Int32N(1 << 16)
 
 const (
-	ipv4ProtocolICMPRaw = "ip4:icmp"
-	ipv6ProtocolICMPRaw = "ip6:ipv6-icmp"
-	protocolICMP        = 1
-	protocolICMPv6      = 58
-	minReportInterval   = 10 * time.Second
-	reportJitter        = time.Second
+	ipv4ProtocolICMPRaw    = "ip4:icmp"
+	ipv6ProtocolICMPRaw    = "ip6:ipv6-icmp"
+	protocolICMP           = 1
+	protocolICMPv6         = 58
+	minReportInterval      = 10 * time.Second
+	reportJitter           = time.Second
+	minSocketRetryInterval = 5 * time.Second
+	maxSocketRetryInterval = 5 * time.Minute
 )
 
 type PacketListener interface {
@@ -418,8 +422,9 @@ func (m *NodeLatencyMonitor) monitorLoop(stopCh <-chan struct{}) {
 	klog.InfoS("NodeLatencyMonitor is running")
 	var pingTicker, reportTicker *time.Ticker
 	var pingTickerCh, reportTickerCh <-chan time.Time
+	var socketRetryTimer wait.Timer
+	var socketRetryTimerCh <-chan time.Time
 	var ipv4Socket, ipv6Socket net.PacketConn
-	var err error
 
 	defer func() {
 		if ipv4Socket != nil {
@@ -433,6 +438,9 @@ func (m *NodeLatencyMonitor) monitorLoop(stopCh <-chan struct{}) {
 		}
 		if reportTicker != nil {
 			reportTicker.Stop()
+		}
+		if socketRetryTimer != nil {
+			socketRetryTimer.Stop()
 		}
 	}()
 
@@ -460,6 +468,66 @@ func (m *NodeLatencyMonitor) monitorLoop(stopCh <-chan struct{}) {
 	}
 
 	wg := sync.WaitGroup{}
+	ensureSocketsReady := func(isRetry bool) bool {
+		socketsReady := true
+		if ipv4Socket == nil && m.isIPv4Enabled {
+			socket, err := m.listener.ListenPacket(ipv4ProtocolICMPRaw, "0.0.0.0")
+			if err != nil {
+				if isRetry {
+					klog.V(4).InfoS("Failed to create ICMP socket for IPv4, will retry", "err", err)
+				} else {
+					klog.ErrorS(err, "Failed to create ICMP socket for IPv4, will retry")
+				}
+				socketsReady = false
+			} else {
+				ipv4Socket = socket
+				wg.Add(1)
+				go func() {
+					defer wg.Done()
+					m.recvPings(socket, true)
+				}()
+			}
+		}
+		if ipv6Socket == nil && m.isIPv6Enabled {
+			socket, err := m.listener.ListenPacket(ipv6ProtocolICMPRaw, "::")
+			if err != nil {
+				if isRetry {
+					klog.V(4).InfoS("Failed to create ICMP socket for IPv6, will retry", "err", err)
+				} else {
+					klog.ErrorS(err, "Failed to create ICMP socket for IPv6, will retry")
+				}
+				socketsReady = false
+			} else {
+				ipv6Socket = socket
+				wg.Add(1)
+				go func() {
+					defer wg.Done()
+					m.recvPings(socket, false)
+				}()
+			}
+		}
+		return socketsReady
+	}
+	stopSocketRetryTimer := func() {
+		if socketRetryTimer != nil {
+			socketRetryTimer.Stop()
+		}
+		socketRetryTimer = nil
+		socketRetryTimerCh = nil
+	}
+	startSocketRetryTimer := func() {
+		if socketRetryTimer != nil {
+			return
+		}
+		socketRetryTimer = (wait.Backoff{
+			Duration: minSocketRetryInterval,
+			Factor:   2,
+			Steps:    math.MaxInt32,
+			Cap:      maxSocketRetryInterval,
+		}).Timer()
+		socketRetryTimerCh = socketRetryTimer.C()
+	}
+
 	// Start the pingAll goroutine
 	for {
 		select {
@@ -472,6 +540,12 @@ func (m *NodeLatencyMonitor) monitorLoop(stopCh <-chan struct{}) {
 			m.latencyStore.DeleteStaleNodeIPs()
 		case <-reportTickerCh:
 			m.report()
+		case <-socketRetryTimerCh:
+			if ensureSocketsReady(true) {
+				stopSocketRetryTimer()
+			} else {
+				socketRetryTimer.Next()
+			}
 		case <-stopCh:
 			return
 		case latencyConfig := <-m.latencyConfigChanged:
@@ -482,35 +556,11 @@ func (m *NodeLatencyMonitor) monitorLoop(stopCh <-chan struct{}) {
 				updatePingTicker(latencyConfig.Interval)
 				updateReportTicker(latencyConfig.Interval)
 
-				// If the recvPing socket is closed,
-				// recreate it if it is closed (CR is deleted).
-				if ipv4Socket == nil && m.isIPv4Enabled {
-					// Create a new socket for IPv4 when it is IPv4-only
-					ipv4Socket, err = m.listener.ListenPacket(ipv4ProtocolICMPRaw, "0.0.0.0")
-					if err != nil {
-						klog.ErrorS(err, "Failed to create ICMP socket for IPv4")
-						return
-					}
-					wg.Add(1)
-					go func() {
-						defer wg.Done()
-						m.recvPings(ipv4Socket, true)
-					}()
-				}
-				if ipv6Socket == nil && m.isIPv6Enabled {
-					// Create a new socket for IPv6 when it is IPv6-only
-					ipv6Socket, err = m.listener.ListenPacket(ipv6ProtocolICMPRaw, "::")
-					if err != nil {
-						klog.ErrorS(err, "Failed to create ICMP socket for IPv6")
-						return
-					}
-					wg.Add(1)
-					go func() {
-						defer wg.Done()
-						m.recvPings(ipv6Socket, false)
-					}()
+				if socketRetryTimer == nil && !ensureSocketsReady(false) {
+					startSocketRetryTimer()
 				}
 			} else {
+				stopSocketRetryTimer()
 				if pingTicker != nil {
 					pingTicker.Stop()
 					pingTicker = nil
