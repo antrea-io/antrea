@@ -1661,7 +1661,7 @@ func (n *NetworkPolicyController) syncInternalNetworkPolicy(key *controlplane.Ne
 			return nil
 		}
 		newInternalNetworkPolicy, newAppliedToGroups, newAddressGroups = n.processBaselineAdminNetworkPolicy(banp)
-	case controlplane.ClusterNetworkPolicy:
+	case controlplane.K8sClusterNetworkPolicy:
 		cnp, err := n.cnpLister.Get(key.Name)
 		if err != nil || cnp.UID != key.UID {
 			n.deleteInternalNetworkPolicy(internalNetworkPolicyName)

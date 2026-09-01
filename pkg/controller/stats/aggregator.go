@@ -26,6 +26,8 @@ import (
 	networkinginformers "k8s.io/client-go/informers/networking/v1"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/klog/v2"
+	"sigs.k8s.io/network-policy-api/apis/v1alpha2"
+	policyv1a2informers "sigs.k8s.io/network-policy-api/pkg/client/informers/externalversions/apis/v1alpha2"
 
 	"antrea.io/antrea/v2/pkg/apis/controlplane"
 	crdv1beta1 "antrea.io/antrea/v2/pkg/apis/crd/v1beta1"
@@ -46,6 +48,7 @@ const (
 // - pkg/apiserver/registry/stats/networkpolicystats.statsProvider
 // - pkg/apiserver/registry/stats/antreaclusternetworkpolicystats.statsProvider
 // - pkg/apiserver/registry/stats/antreanetworkpolicystats.statsProvider
+// - pkg/apiserver/registry/stats/clusternetworkpolicystats.statsProvider
 // - pkg/apiserver/registry/stats/multicastgroup.statsProvider
 type Aggregator struct {
 	// networkPolicyStats caches the statistics of K8s NetworkPolicies collected from the antrea-agents.
@@ -54,6 +57,9 @@ type Aggregator struct {
 	antreaClusterNetworkPolicyStats cache.Indexer
 	// antreaNetworkPolicyStats caches the statistics of Antrea NetworkPolicies collected from the antrea-agents.
 	antreaNetworkPolicyStats cache.Indexer
+	// clusterNetworkPolicyStats caches the statistics of Kubernetes ClusterNetworkPolicies
+	// (policy.networking.k8s.io) collected from the antrea-agents.
+	clusterNetworkPolicyStats cache.Indexer
 	// groupNodePodsMap caches the information of Pods in a Node that have joined multicast groups collected from the antrea-agents.
 	// The map can be interpreted as
 	// map[IP of multicast group]map[name of node]list of PodReference.
@@ -78,7 +84,7 @@ func uidIndexFunc(obj interface{}) ([]string, error) {
 	return []string{string(meta.GetUID())}, nil
 }
 
-func NewAggregator(networkPolicyInformer networkinginformers.NetworkPolicyInformer, acnpInformer crdinformers.ClusterNetworkPolicyInformer, annpInformer crdinformers.NetworkPolicyInformer) *Aggregator {
+func NewAggregator(networkPolicyInformer networkinginformers.NetworkPolicyInformer, acnpInformer crdinformers.ClusterNetworkPolicyInformer, annpInformer crdinformers.NetworkPolicyInformer, cnpInformer policyv1a2informers.ClusterNetworkPolicyInformer) *Aggregator {
 	aggregator := &Aggregator{
 		networkPolicyStats: cache.NewIndexer(cache.MetaNamespaceKeyFunc, cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc, uidIndex: uidIndexFunc}),
 		dataCh:             make(chan *controlplane.NodeStatsSummary, 1000),
@@ -116,6 +122,20 @@ func NewAggregator(networkPolicyInformer networkinginformers.NetworkPolicyInform
 			cache.ResourceEventHandlerFuncs{
 				AddFunc:    aggregator.addANNP,
 				DeleteFunc: aggregator.deleteANNP,
+			},
+			// Set resyncPeriod to 0 to disable resyncing.
+			0,
+		)
+	}
+	// Register Informer and add handlers for upstream ClusterNetworkPolicy events only if the feature is
+	// enabled. They are the source of truth of the ClusterNetworkPolicyStats, i.e., a
+	// ClusterNetworkPolicyStats is present only if the corresponding ClusterNetworkPolicy is present.
+	if features.DefaultFeatureGate.Enabled(features.ClusterNetworkPolicy) {
+		aggregator.clusterNetworkPolicyStats = cache.NewIndexer(cache.MetaNamespaceKeyFunc, cache.Indexers{uidIndex: uidIndexFunc})
+		cnpInformer.Informer().AddEventHandlerWithResyncPeriod(
+			cache.ResourceEventHandlerFuncs{
+				AddFunc:    aggregator.addCNP,
+				DeleteFunc: aggregator.deleteCNP,
 			},
 			// Set resyncPeriod to 0 to disable resyncing.
 			0,
@@ -248,6 +268,45 @@ func (a *Aggregator) deleteANNP(obj interface{}) {
 	a.antreaNetworkPolicyStats.Delete(stats)
 }
 
+// addCNP handles upstream ClusterNetworkPolicy ADD events and creates corresponding ClusterNetworkPolicyStats objects.
+func (a *Aggregator) addCNP(obj interface{}) {
+	cnp := obj.(*v1alpha2.ClusterNetworkPolicy)
+	stats := &statsv1alpha1.ClusterNetworkPolicyStats{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: cnp.Name,
+			UID:  cnp.UID,
+			// To indicate the duration that the stats covers, the CreationTimestamp is set to the time that the stats
+			// start, instead of the CreationTimestamp of the ClusterNetworkPolicy.
+			CreationTimestamp: metav1.Time{Time: time.Now()},
+		},
+	}
+	a.clusterNetworkPolicyStats.Add(stats)
+}
+
+// deleteCNP handles upstream ClusterNetworkPolicy DELETE events and deletes corresponding ClusterNetworkPolicyStats objects.
+func (a *Aggregator) deleteCNP(obj interface{}) {
+	cnp, ok := obj.(*v1alpha2.ClusterNetworkPolicy)
+	if !ok {
+		tombstone, ok := obj.(cache.DeletedFinalStateUnknown)
+		if !ok {
+			klog.ErrorS(nil, "Error decoding object when deleting ClusterNetworkPolicy, invalid type", "obj", obj)
+			return
+		}
+		cnp, ok = tombstone.Obj.(*v1alpha2.ClusterNetworkPolicy)
+		if !ok {
+			klog.ErrorS(nil, "Error decoding object tombstone when deleting ClusterNetworkPolicy, invalid type", "obj", tombstone.Obj)
+			return
+		}
+	}
+	stats := &statsv1alpha1.ClusterNetworkPolicyStats{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: cnp.Name,
+			UID:  cnp.UID,
+		},
+	}
+	a.clusterNetworkPolicyStats.Delete(stats)
+}
+
 func (a *Aggregator) ListAntreaClusterNetworkPolicyStats() []statsv1alpha1.AntreaClusterNetworkPolicyStats {
 	objs := a.antreaClusterNetworkPolicyStats.List()
 	stats := make([]statsv1alpha1.AntreaClusterNetworkPolicyStats, len(objs))
@@ -255,6 +314,23 @@ func (a *Aggregator) ListAntreaClusterNetworkPolicyStats() []statsv1alpha1.Antre
 		stats[i] = *(obj.(*statsv1alpha1.AntreaClusterNetworkPolicyStats))
 	}
 	return stats
+}
+
+func (a *Aggregator) ListClusterNetworkPolicyStats() []statsv1alpha1.ClusterNetworkPolicyStats {
+	objs := a.clusterNetworkPolicyStats.List()
+	stats := make([]statsv1alpha1.ClusterNetworkPolicyStats, len(objs))
+	for i, obj := range objs {
+		stats[i] = *(obj.(*statsv1alpha1.ClusterNetworkPolicyStats))
+	}
+	return stats
+}
+
+func (a *Aggregator) GetClusterNetworkPolicyStats(name string) (*statsv1alpha1.ClusterNetworkPolicyStats, bool) {
+	obj, exists, _ := a.clusterNetworkPolicyStats.GetByKey(name)
+	if !exists {
+		return nil, false
+	}
+	return obj.(*statsv1alpha1.ClusterNetworkPolicyStats), true
 }
 
 func (a *Aggregator) ListMulticastGroups() []statsv1alpha1.MulticastGroup {
@@ -356,6 +432,10 @@ func (a *Aggregator) Run(stopCh <-chan struct{}) {
 	if features.DefaultFeatureGate.Enabled(features.AntreaPolicy) {
 		cacheSyncs = append(cacheSyncs, a.acnpListerSynced, a.annpListerSynced)
 	}
+	// We intentionally do not wait for the upstream ClusterNetworkPolicy informer to sync: the
+	// network-policy-api ClusterNetworkPolicy CRD is not bundled with Antrea and may be absent even
+	// when the feature gate is enabled. Blocking on it would stall the aggregator and prevent all
+	// other NetworkPolicy stats from being collected.
 	if !cache.WaitForNamedCacheSync("stats aggregator", stopCh, cacheSyncs...) {
 		return
 	}
@@ -442,6 +522,19 @@ func (a *Aggregator) doCollect(summary *controlplane.NodeStatsSummary) {
 					addRulesUp(&curStats.RuleTrafficStats, &curStats.TrafficStats, stats.RuleTrafficStats)
 				}
 				a.antreaNetworkPolicyStats.Update(curStats)
+			}
+		}
+	}
+	if features.DefaultFeatureGate.Enabled(features.ClusterNetworkPolicy) {
+		for idx := range summary.ClusterNetworkPolicies {
+			stats := &summary.ClusterNetworkPolicies[idx]
+			// The policy might have been removed, skip processing it if missing.
+			objs, _ := a.clusterNetworkPolicyStats.ByIndex(uidIndex, string(stats.NetworkPolicy.UID))
+			if len(objs) > 0 {
+				// The object returned by cache is supposed to be read only, create a new object and update it.
+				curStats := objs[0].(*statsv1alpha1.ClusterNetworkPolicyStats).DeepCopy()
+				addRulesUp(&curStats.RuleTrafficStats, &curStats.TrafficStats, stats.RuleTrafficStats)
+				a.clusterNetworkPolicyStats.Update(curStats)
 			}
 		}
 	}
