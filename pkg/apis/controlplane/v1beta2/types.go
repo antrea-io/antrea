@@ -409,6 +409,9 @@ type NodeStatsSummary struct {
 	AntreaNetworkPolicies []NetworkPolicyStats `json:"antreaNetworkPolicies,omitempty" protobuf:"bytes,4,rep,name=antreaNetworkPolicies"`
 	// Multicast group information collected from the Node.
 	Multicast []MulticastGroupInfo `json:"multicast,omitempty" protobuf:"bytes,5,rep,name=multicast"`
+	// The TrafficStats of Kubernetes ClusterNetworkPolicies (policy.networking.k8s.io) collected
+	// from the Node.
+	ClusterNetworkPolicies []NetworkPolicyStats `json:"clusterNetworkPolicies,omitempty" protobuf:"bytes,6,rep,name=clusterNetworkPolicies"`
 }
 
 // MulticastGroupInfo contains the list of Pods that have joined a multicast group, for a given Node.
