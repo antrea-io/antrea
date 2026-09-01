@@ -61,7 +61,15 @@ func NewFlowStreamService(buffer ringbuffer.BroadcastBuffer[*flowpb.Flow]) *Flow
 // Run starts a dedicated TLS gRPC server for the FlowStreamService on FlowStreamPort.
 // serverCertPEM and serverKeyPEM are the PEM-encoded server certificate and private key;
 // only server-side TLS is used (no client authentication). Run blocks until stopCh is closed.
-func (s *FlowStreamService) Run(serverCertPEM, serverKeyPEM []byte, stopCh <-chan struct{}) error {
+//
+// setReady is called with false before the listener is bound, true once it is confirmed bound
+// (the earliest point at which FlowStreamService can honestly be called up), and false again
+// once Serve returns, whether from this call's own graceful shutdown or an unexpected failure.
+// The caller is expected to back it with something a readiness/liveness check can read live (e.g.
+// an atomic.Bool's Store method) — Run itself has no probe-serving responsibility of its own; see
+// pkg/flowaggregator/apiserver, which is what actually exposes this over HTTP.
+func (s *FlowStreamService) Run(serverCertPEM, serverKeyPEM []byte, stopCh <-chan struct{}, setReady func(bool)) error {
+	setReady(false)
 	cert, err := tls.X509KeyPair(serverCertPEM, serverKeyPEM)
 	if err != nil {
 		return fmt.Errorf("failed to parse server TLS key pair: %w", err)
@@ -76,6 +84,8 @@ func (s *FlowStreamService) Run(serverCertPEM, serverKeyPEM []byte, stopCh <-cha
 	if err != nil {
 		return fmt.Errorf("failed to listen on %s: %w", addr, err)
 	}
+	setReady(true)
+
 	server := grpc.NewServer(grpc.Creds(credentials.NewTLS(tlsConfig)))
 	flowpb.RegisterFlowStreamServiceServer(server, s)
 
@@ -87,6 +97,10 @@ func (s *FlowStreamService) Run(serverCertPEM, serverKeyPEM []byte, stopCh <-cha
 		if err := server.Serve(lis); err != nil {
 			klog.ErrorS(err, "FlowStreamService gRPC server failed to start")
 		}
+		// Serve only returns once this server has stopped accepting connections, whether that is
+		// this Run call's own graceful shutdown below or an unexpected failure — either way,
+		// FlowStreamService is no longer reachable.
+		setReady(false)
 	}()
 	<-stopCh
 	// GracefulStop waits for all active GetFlows RPCs to return before shutting
