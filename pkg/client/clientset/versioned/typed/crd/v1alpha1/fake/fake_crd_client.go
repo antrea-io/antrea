@@ -38,6 +38,10 @@ func (c *FakeCrdV1alpha1) ExternalNodes(namespace string) v1alpha1.ExternalNodeI
 	return newFakeExternalNodes(c, namespace)
 }
 
+func (c *FakeCrdV1alpha1) FlowAccessControls() v1alpha1.FlowAccessControlInterface {
+	return newFakeFlowAccessControls(c)
+}
+
 func (c *FakeCrdV1alpha1) FlowExporterDestinations() v1alpha1.FlowExporterDestinationInterface {
 	return newFakeFlowExporterDestinations(c)
 }

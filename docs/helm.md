@@ -12,6 +12,7 @@
   - [Flow Aggregator chart](#flow-aggregator-chart)
     - [Installation](#installation-1)
     - [Upgrade](#upgrade-1)
+    - [An important note on CRDs](#an-important-note-on-crds-1)
   - [Theia chart](#theia-chart)
 <!-- /toc -->
 
@@ -115,11 +116,30 @@ also install a specific version (>= v1.8.0) with `--version <TAG>`.
 
 #### Upgrade
 
-To upgrade the Flow Aggregator Helm chart, use the following command:
+To upgrade the Flow Aggregator Helm chart, use the following commands:
 
 ```bash
+# Upgrading CRDs requires an extra step; see explanation below
+kubectl apply -f https://github.com/antrea-io/antrea/releases/download/<TAG>/flow-aggregator-crds.yml
 helm upgrade flow-aggregator antrea/flow-aggregator --namespace flow-aggregator --version <TAG>
 ```
+
+#### An important note on CRDs
+
+Starting with Antrea v2.7, the Flow Aggregator chart defines its own CRDs, and
+so the same Helm limitation described [above](#an-important-note-on-crds) for
+the Antrea chart applies to it: CRDs in the chart's crds/ directory are never
+upgraded by Helm. Upgrading them therefore requires an extra step, using the
+manifest which is published as a release asset:
+
+```bash
+kubectl apply -f https://github.com/antrea-io/antrea/releases/download/<TAG>/flow-aggregator-crds.yml
+```
+
+Note that this is a different manifest from `antrea-crds.yml`, which only
+includes the CRDs defined by the Antrea chart. When upgrading CRDs in
+production, it is recommended to make a backup of your Custom Resources (CRs)
+first.
 
 ### Theia chart
 

@@ -30,14 +30,17 @@ import (
 	"github.com/gofrs/uuid/v5"
 	"google.golang.org/protobuf/proto"
 	"k8s.io/apimachinery/pkg/util/wait"
+	coreinformers "k8s.io/client-go/informers/core/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/klog/v2"
 
 	flowpb "antrea.io/antrea/v2/pkg/apis/flow/v1alpha1"
+	crdinformers "antrea.io/antrea/v2/pkg/client/informers/externalversions/crd/v1alpha1"
 	flowaggregatorconfig "antrea.io/antrea/v2/pkg/config/flowaggregator"
 	"antrea.io/antrea/v2/pkg/flowaggregator/certificate"
 	"antrea.io/antrea/v2/pkg/flowaggregator/collector"
 	"antrea.io/antrea/v2/pkg/flowaggregator/exporter"
+	"antrea.io/antrea/v2/pkg/flowaggregator/flowaccesscontrol"
 	"antrea.io/antrea/v2/pkg/flowaggregator/flowstreamservice"
 	"antrea.io/antrea/v2/pkg/flowaggregator/intermediate"
 	"antrea.io/antrea/v2/pkg/flowaggregator/options"
@@ -126,14 +129,15 @@ type flowAggregator struct {
 	logTickerDuration time.Duration
 	recordCh          chan *flowpb.Flow
 
-	recordBuffer        ringbuffer.BroadcastBuffer[*flowpb.Flow]
-	flowStreamService   flowStreamProvider
-	ipfixHandle         *exporterHandle
-	clickHouseHandle    *exporterHandle
-	s3Handle            *exporterHandle
-	logHandle           *exporterHandle
-	exportersMutex      sync.Mutex
-	certificateProvider *certificate.Provider
+	recordBuffer                ringbuffer.BroadcastBuffer[*flowpb.Flow]
+	flowStreamService           flowStreamProvider
+	flowAccessControlController *flowaccesscontrol.Controller
+	ipfixHandle                 *exporterHandle
+	clickHouseHandle            *exporterHandle
+	s3Handle                    *exporterHandle
+	logHandle                   *exporterHandle
+	exportersMutex              sync.Mutex
+	certificateProvider         *certificate.Provider
 }
 
 func NewFlowAggregator(
@@ -142,6 +146,8 @@ func NewFlowAggregator(
 	podStore objectstore.PodStore,
 	nodeStore objectstore.NodeStore,
 	serviceStore objectstore.ServiceStore,
+	namespaceInformer coreinformers.NamespaceInformer,
+	flowAccessControlInformer crdinformers.FlowAccessControlInformer,
 	configFile string,
 ) (*flowAggregator, error) {
 	if len(configFile) == 0 {
@@ -205,6 +211,10 @@ func NewFlowAggregator(
 	if *opt.Config.FlowStreamService.Enable {
 		fa.flowStreamService = flowstreamservice.NewFlowStreamService(fa.recordBuffer)
 		fa.flowStreamSvcUpdateCh = make(chan struct{}, 1)
+		// The index this controller maintains has no consumer yet: client authentication and the
+		// per-subject visibility check land in the FlowStreamService in a follow-up. Until then,
+		// FlowAccessControl objects have no effect on what a client receives.
+		fa.flowAccessControlController = flowaccesscontrol.NewController(flowAccessControlInformer, namespaceInformer)
 	}
 
 	if opt.AggregatorMode == flowaggregatorconfig.AggregatorModeAggregate {
@@ -393,6 +403,14 @@ func (fa *flowAggregator) Run(stopCh <-chan struct{}) {
 		go func() {
 			defer wg.Done()
 			fa.runFlowStreamService(stopCh)
+		}()
+	}
+
+	if fa.flowAccessControlController != nil {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			fa.flowAccessControlController.Run(stopCh)
 		}()
 	}
 
