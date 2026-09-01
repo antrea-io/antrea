@@ -15,7 +15,11 @@
 package networkpolicy
 
 import (
+	"crypto/sha1" // #nosec G505: not used for security purposes
+	"encoding/hex"
+	"encoding/json"
 	"errors"
+	"fmt"
 	"strconv"
 
 	v1 "k8s.io/api/core/v1"
@@ -53,7 +57,7 @@ var (
 
 func getCNPReference(cnp *v1alpha2.ClusterNetworkPolicy) *controlplane.NetworkPolicyReference {
 	return &controlplane.NetworkPolicyReference{
-		Type: controlplane.ClusterNetworkPolicy,
+		Type: controlplane.K8sClusterNetworkPolicy,
 		Name: cnp.Name,
 		UID:  cnp.UID,
 	}
@@ -337,6 +341,35 @@ func cnpActionToCRDAction(action v1alpha2.ClusterNetworkPolicyRuleAction) *antre
 	return &antreaAction
 }
 
+// cnpRuleName returns the name to use for an upstream ClusterNetworkPolicy rule in Antrea's internal
+// representation. Rule names are optional in the upstream API, and unlike Antrea-native policies,
+// whose unnamed rules are given a generated name by the mutating webhook, Antrea does not mutate
+// upstream resources. An unnamed rule is therefore named after its direction and index, so that it
+// stays individually identifiable in NetworkPolicyStats and flow records. A suffix hashed from the
+// rule's contents is appended because nothing enforces uniqueness of the names in a
+// ClusterNetworkPolicy, and consumers such as NetworkPolicyStats key on the rule name: without the
+// suffix, a generated name could collide with a name that another rule of the same policy sets
+// explicitly, and the two rules' counters would be merged.
+func cnpRuleName(name, prefix string, idx int, rule any) string {
+	if name != "" {
+		return name
+	}
+	return fmt.Sprintf("%s-%d-%s", prefix, idx, hashCNPRule(rule))
+}
+
+// cnpRuleNameSuffixLen is the length of the hash suffix appended to a generated
+// ClusterNetworkPolicy rule name.
+const cnpRuleNameSuffixLen = 5
+
+// hashCNPRule calculates a string based on an upstream ClusterNetworkPolicy rule's content.
+func hashCNPRule(rule any) string {
+	hash := sha1.New() // #nosec G401: not used for security purposes
+	b, _ := json.Marshal(rule)
+	hash.Write(b)
+	hashValue := hex.EncodeToString(hash.Sum(nil))
+	return hashValue[:cnpRuleNameSuffixLen]
+}
+
 func (n *NetworkPolicyController) processClusterNetworkPolicy(cnp *v1alpha2.ClusterNetworkPolicy) (*antreatypes.NetworkPolicy, map[string]*antreatypes.AppliedToGroup, map[string]*antreatypes.AddressGroup) {
 	appliedToGroups := map[string]*antreatypes.AppliedToGroup{}
 	addressGroups := map[string]*antreatypes.AddressGroup{}
@@ -353,7 +386,7 @@ func (n *NetworkPolicyController) processClusterNetworkPolicy(cnp *v1alpha2.Clus
 			Direction: controlplane.DirectionIn,
 			From:      *peer,
 			Services:  services,
-			Name:      cnpIngressRule.Name,
+			Name:      cnpRuleName(cnpIngressRule.Name, "ingress", idx, cnpIngressRule),
 			Action:    cnpActionToCRDAction(cnpIngressRule.Action),
 			Priority:  int32(idx),
 		}
@@ -371,7 +404,7 @@ func (n *NetworkPolicyController) processClusterNetworkPolicy(cnp *v1alpha2.Clus
 			Direction: controlplane.DirectionOut,
 			To:        *peer,
 			Services:  services,
-			Name:      cnpEgressRule.Name,
+			Name:      cnpRuleName(cnpEgressRule.Name, "egress", idx, cnpEgressRule),
 			Action:    cnpActionToCRDAction(cnpEgressRule.Action),
 			Priority:  int32(idx),
 		}
@@ -398,7 +431,7 @@ func (n *NetworkPolicyController) processClusterNetworkPolicy(cnp *v1alpha2.Clus
 		Name:       internalNetworkPolicyKeyFunc(cnp),
 		Generation: cnp.Generation,
 		SourceRef: &controlplane.NetworkPolicyReference{
-			Type: controlplane.ClusterNetworkPolicy,
+			Type: controlplane.K8sClusterNetworkPolicy,
 			Name: cnp.Name,
 			UID:  cnp.UID,
 		},

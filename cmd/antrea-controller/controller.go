@@ -273,7 +273,7 @@ func run(o *Options) error {
 	// aggregated data. For now it's only used for NetworkPolicy stats.
 	var statsAggregator *stats.Aggregator
 	if features.DefaultFeatureGate.Enabled(features.NetworkPolicyStats) {
-		statsAggregator = stats.NewAggregator(networkPolicyInformer, acnpInformer, annpInformer)
+		statsAggregator = stats.NewAggregator(networkPolicyInformer, acnpInformer, annpInformer, cnpInformer)
 	}
 
 	cipherSuites, err := cipher.GenerateCipherSuitesList(o.config.TLSCipherSuites)

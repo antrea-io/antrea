@@ -202,7 +202,10 @@ const (
 	AntreaNetworkPolicy        NetworkPolicyType = "AntreaNetworkPolicy"
 	AdminNetworkPolicy         NetworkPolicyType = "AdminNetworkPolicy"
 	BaselineAdminNetworkPolicy NetworkPolicyType = "BaselineAdminNetworkPolicy"
-	ClusterNetworkPolicy       NetworkPolicyType = "ClusterNetworkPolicy"
+	// K8sClusterNetworkPolicy refers to the upstream ClusterNetworkPolicy API
+	// (policy.networking.k8s.io). Its name and value must stay in sync with the v1beta2
+	// constant of the same name, as the two are converted with a plain string cast.
+	K8sClusterNetworkPolicy NetworkPolicyType = "K8sClusterNetworkPolicy"
 )
 
 type NetworkPolicyReference struct {
@@ -407,6 +410,9 @@ type NodeStatsSummary struct {
 	AntreaNetworkPolicies []NetworkPolicyStats
 	// Multicast group information from the Node.
 	Multicast []MulticastGroupInfo
+	// The TrafficStats of Kubernetes ClusterNetworkPolicies (policy.networking.k8s.io) collected
+	// from the Node.
+	ClusterNetworkPolicies []NetworkPolicyStats
 }
 
 // MulticastGroupInfo contains the list of Pods that have joined a multicast group, for a given Node.

@@ -96,7 +96,7 @@ func TestProcessClusterNetworkPolicy(t *testing.T) {
 				UID:  "uid-1",
 				Name: "uid-1",
 				SourceRef: &controlplane.NetworkPolicyReference{
-					Type: controlplane.ClusterNetworkPolicy,
+					Type: controlplane.K8sClusterNetworkPolicy,
 					Name: "cnp-ingress-ns",
 					UID:  "uid-1",
 				},
@@ -153,7 +153,7 @@ func TestProcessClusterNetworkPolicy(t *testing.T) {
 				UID:  "uid-2",
 				Name: "uid-2",
 				SourceRef: &controlplane.NetworkPolicyReference{
-					Type: controlplane.ClusterNetworkPolicy,
+					Type: controlplane.K8sClusterNetworkPolicy,
 					Name: "cnp-egress-ns",
 					UID:  "uid-2",
 				},
@@ -212,7 +212,7 @@ func TestProcessClusterNetworkPolicy(t *testing.T) {
 				UID:  "uid-3",
 				Name: "uid-3",
 				SourceRef: &controlplane.NetworkPolicyReference{
-					Type: controlplane.ClusterNetworkPolicy,
+					Type: controlplane.K8sClusterNetworkPolicy,
 					Name: "cnp-ingress-pods",
 					UID:  "uid-3",
 				},
@@ -264,7 +264,7 @@ func TestProcessClusterNetworkPolicy(t *testing.T) {
 				UID:  "uid-4",
 				Name: "uid-4",
 				SourceRef: &controlplane.NetworkPolicyReference{
-					Type: controlplane.ClusterNetworkPolicy,
+					Type: controlplane.K8sClusterNetworkPolicy,
 					Name: "cnp-egress-net",
 					UID:  "uid-4",
 				},
@@ -315,7 +315,7 @@ func TestProcessClusterNetworkPolicy(t *testing.T) {
 				UID:  "uid-nodes",
 				Name: "uid-nodes",
 				SourceRef: &controlplane.NetworkPolicyReference{
-					Type: controlplane.ClusterNetworkPolicy,
+					Type: controlplane.K8sClusterNetworkPolicy,
 					Name: "cnp-egress-nodes",
 					UID:  "uid-nodes",
 				},
@@ -370,7 +370,7 @@ func TestProcessClusterNetworkPolicy(t *testing.T) {
 				UID:  "uid-fqdn",
 				Name: "uid-fqdn",
 				SourceRef: &controlplane.NetworkPolicyReference{
-					Type: controlplane.ClusterNetworkPolicy,
+					Type: controlplane.K8sClusterNetworkPolicy,
 					Name: "cnp-egress-fqdn",
 					UID:  "uid-fqdn",
 				},
@@ -422,7 +422,7 @@ func TestProcessClusterNetworkPolicy(t *testing.T) {
 				UID:  "uid-fc1",
 				Name: "uid-fc1",
 				SourceRef: &controlplane.NetworkPolicyReference{
-					Type: controlplane.ClusterNetworkPolicy,
+					Type: controlplane.K8sClusterNetworkPolicy,
 					Name: "cnp-unknown-egress-deny",
 					UID:  "uid-fc1",
 				},
@@ -473,7 +473,7 @@ func TestProcessClusterNetworkPolicy(t *testing.T) {
 				UID:  "uid-fc2",
 				Name: "uid-fc2",
 				SourceRef: &controlplane.NetworkPolicyReference{
-					Type: controlplane.ClusterNetworkPolicy,
+					Type: controlplane.K8sClusterNetworkPolicy,
 					Name: "cnp-unknown-egress-pass",
 					UID:  "uid-fc2",
 				},
@@ -523,7 +523,7 @@ func TestProcessClusterNetworkPolicy(t *testing.T) {
 				UID:  "uid-fc3",
 				Name: "uid-fc3",
 				SourceRef: &controlplane.NetworkPolicyReference{
-					Type: controlplane.ClusterNetworkPolicy,
+					Type: controlplane.K8sClusterNetworkPolicy,
 					Name: "cnp-unknown-egress-accept",
 					UID:  "uid-fc3",
 				},
@@ -572,7 +572,7 @@ func TestProcessClusterNetworkPolicy(t *testing.T) {
 				UID:  "uid-fc4",
 				Name: "uid-fc4",
 				SourceRef: &controlplane.NetworkPolicyReference{
-					Type: controlplane.ClusterNetworkPolicy,
+					Type: controlplane.K8sClusterNetworkPolicy,
 					Name: "cnp-unknown-ingress-deny",
 					UID:  "uid-fc4",
 				},
@@ -622,7 +622,7 @@ func TestProcessClusterNetworkPolicy(t *testing.T) {
 				UID:  "uid-fc5",
 				Name: "uid-fc5",
 				SourceRef: &controlplane.NetworkPolicyReference{
-					Type: controlplane.ClusterNetworkPolicy,
+					Type: controlplane.K8sClusterNetworkPolicy,
 					Name: "cnp-unknown-ingress-accept",
 					UID:  "uid-fc5",
 				},
@@ -673,7 +673,7 @@ func TestProcessClusterNetworkPolicy(t *testing.T) {
 				UID:  "uid-fc6",
 				Name: "uid-fc6",
 				SourceRef: &controlplane.NetworkPolicyReference{
-					Type: controlplane.ClusterNetworkPolicy,
+					Type: controlplane.K8sClusterNetworkPolicy,
 					Name: "cnp-unknown-ingress-pass",
 					UID:  "uid-fc6",
 				},
@@ -729,7 +729,7 @@ func TestProcessClusterNetworkPolicy(t *testing.T) {
 				UID:  "uid-5",
 				Name: "uid-5",
 				SourceRef: &controlplane.NetworkPolicyReference{
-					Type: controlplane.ClusterNetworkPolicy,
+					Type: controlplane.K8sClusterNetworkPolicy,
 					Name: "cnp-multi-in",
 					UID:  "uid-5",
 				},
@@ -754,6 +754,91 @@ func TestProcessClusterNetworkPolicy(t *testing.T) {
 						Name:     "second",
 						Action:   &allow,
 						Priority: 1,
+					},
+				},
+				AppliedToGroups: []string{getNormalizedUID(antreatypes.NewGroupSelector("", &selApp, &selEnv, nil, nil).NormalizedName)},
+			},
+			expectedAppliedToGroups: 1,
+			expectedAddressGroups:   2,
+		},
+		{
+			name: "unnamed-rules-get-a-unique-generated-name",
+			inputPolicy: &v1alpha2.ClusterNetworkPolicy{
+				ObjectMeta: metav1.ObjectMeta{Name: "cnp-unnamed-rules", UID: "uid-6"},
+				Spec: v1alpha2.ClusterNetworkPolicySpec{
+					Tier:     v1alpha2.AdminTier,
+					Priority: 30,
+					Subject: v1alpha2.ClusterNetworkPolicySubject{
+						Pods: &v1alpha2.NamespacedPod{
+							NamespaceSelector: selEnv,
+							PodSelector:       selApp,
+						},
+					},
+					Ingress: []v1alpha2.ClusterNetworkPolicyIngressRule{
+						{
+							// A named rule keeps its own name, including one that looks like the
+							// name generated for the unnamed rule that follows it.
+							Name:   "ingress-1",
+							Action: v1alpha2.ClusterNetworkPolicyRuleActionAccept,
+							From: []v1alpha2.ClusterNetworkPolicyIngressPeer{
+								{Namespaces: &selClient},
+							},
+						},
+						{
+							Action: v1alpha2.ClusterNetworkPolicyRuleActionAccept,
+							From: []v1alpha2.ClusterNetworkPolicyIngressPeer{
+								{Namespaces: &selDstNs},
+							},
+						},
+					},
+					Egress: []v1alpha2.ClusterNetworkPolicyEgressRule{
+						{
+							Action: v1alpha2.ClusterNetworkPolicyRuleActionDeny,
+							To: []v1alpha2.ClusterNetworkPolicyEgressPeer{
+								{Namespaces: &selDstNs},
+							},
+						},
+					},
+				},
+			},
+			expectedPolicy: &antreatypes.NetworkPolicy{
+				UID:  "uid-6",
+				Name: "uid-6",
+				SourceRef: &controlplane.NetworkPolicyReference{
+					Type: controlplane.K8sClusterNetworkPolicy,
+					Name: "cnp-unnamed-rules",
+					UID:  "uid-6",
+				},
+				Priority:         ptr.To(float64(30)),
+				TierPriority:     ptr.To(cnpAdminTierPriority),
+				AppliedToPerRule: false,
+				Rules: []controlplane.NetworkPolicyRule{
+					{
+						Direction: controlplane.DirectionIn,
+						From: controlplane.NetworkPolicyPeer{
+							AddressGroups: []string{getNormalizedUID(antreatypes.NewGroupSelector("", nil, &selClient, nil, nil).NormalizedName)},
+						},
+						Name:     "ingress-1",
+						Action:   &allow,
+						Priority: 0,
+					},
+					{
+						Direction: controlplane.DirectionIn,
+						From: controlplane.NetworkPolicyPeer{
+							AddressGroups: []string{getNormalizedUID(antreatypes.NewGroupSelector("", nil, &selDstNs, nil, nil).NormalizedName)},
+						},
+						Name:     "ingress-1-218e7",
+						Action:   &allow,
+						Priority: 1,
+					},
+					{
+						Direction: controlplane.DirectionOut,
+						To: controlplane.NetworkPolicyPeer{
+							AddressGroups: []string{getNormalizedUID(antreatypes.NewGroupSelector("", nil, &selDstNs, nil, nil).NormalizedName)},
+						},
+						Name:     "egress-0-47f41",
+						Action:   &drop,
+						Priority: 0,
 					},
 				},
 				AppliedToGroups: []string{getNormalizedUID(antreatypes.NewGroupSelector("", &selApp, &selEnv, nil, nil).NormalizedName)},
