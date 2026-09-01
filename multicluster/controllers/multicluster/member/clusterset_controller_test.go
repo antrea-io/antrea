@@ -16,6 +16,7 @@ package member
 
 import (
 	"context"
+	"sync"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -223,6 +224,47 @@ func TestMemberClusterStatus(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestMemberClusterStatusConcurrentStateUpdate(t *testing.T) {
+	fakeClient := fake.NewClientBuilder().WithScheme(common.TestScheme).Build()
+	reconciler := MemberClusterSetReconciler{
+		Client:       fakeClient,
+		clusterSetID: "clusterset1",
+		clusterID:    "east",
+		namespace:    "mcs1",
+	}
+
+	startCh := make(chan struct{})
+	var wg sync.WaitGroup
+	wg.Add(2)
+	go func() {
+		defer wg.Done()
+		<-startCh
+		for i := 0; i < 1000; i++ {
+			reconciler.commonAreaLock.Lock()
+			if i%2 == 0 {
+				reconciler.clusterSetID = "clusterset1"
+				reconciler.clusterID = "east"
+			} else {
+				reconciler.clusterSetID = "clusterset2"
+				reconciler.clusterID = "west"
+			}
+			reconciler.commonAreaLock.Unlock()
+		}
+	}()
+	go func() {
+		defer wg.Done()
+		<-startCh
+		for i := 0; i < 1000; i++ {
+			reconciler.updateStatus()
+		}
+	}()
+	close(startCh)
+	wg.Wait()
+
+	assert.Equal(t, common.ClusterSetID("clusterset2"), reconciler.clusterSetID)
+	assert.Equal(t, common.ClusterID("west"), reconciler.clusterID)
 }
 
 func TestMemberCreateOrUpdateRemoteCommonArea(t *testing.T) {

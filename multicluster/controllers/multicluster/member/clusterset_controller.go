@@ -56,7 +56,7 @@ type MemberClusterSetReconciler struct {
 	namespace                string
 	clusterCalimCRDAvailable bool
 
-	// commonAreaLock protects the access to RemoteCommonArea.
+	// commonAreaLock protects the access to the ClusterSet state and RemoteCommonArea.
 	commonAreaLock       sync.RWMutex
 	commonAreaCreationCh chan struct{}
 
@@ -327,14 +327,18 @@ func (r *MemberClusterSetReconciler) getSecretForLeader(secretName string, secre
 }
 
 func (r *MemberClusterSetReconciler) updateStatus() {
-	if r.clusterID == common.InvalidClusterID {
+	r.commonAreaLock.RLock()
+	clusterID := r.clusterID
+	clusterSetID := r.clusterSetID
+	r.commonAreaLock.RUnlock()
+	if clusterID == common.InvalidClusterID {
 		// Nothing to do.
 		return
 	}
 
 	namespacedName := types.NamespacedName{
 		Namespace: r.namespace,
-		Name:      string(r.clusterSetID),
+		Name:      string(clusterSetID),
 	}
 	clusterSet := &mcv1alpha2.ClusterSet{}
 	err := r.Get(context.TODO(), namespacedName, clusterSet)
