@@ -20,6 +20,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	utilnet "k8s.io/utils/net"
 )
 
 func newCIDRAllocator(cidr string, reservedIPs []string) *SingleIPAllocator {
@@ -92,6 +93,25 @@ func TestAllocateNext(t *testing.T) {
 			require.Error(t, err)
 		})
 	}
+}
+
+func TestAllocateNextWithFamily(t *testing.T) {
+	allocator := MultiIPAllocator{
+		newIPRangeAllocator("10.10.10.1", "10.10.10.2"),
+		newIPRangeAllocator("2001:db8::1", "2001:db8::2"),
+	}
+
+	ip, err := allocator.AllocateNextWithFamily(utilnet.IPv6)
+	require.NoError(t, err)
+	assert.Equal(t, net.ParseIP("2001:db8::1"), ip)
+	ip, err = allocator.AllocateNextWithFamily(utilnet.IPv6)
+	require.NoError(t, err)
+	assert.Equal(t, net.ParseIP("2001:db8::2"), ip)
+	_, err = allocator.AllocateNextWithFamily(utilnet.IPv6)
+	require.Error(t, err, "allocation must not fall back to another IP family")
+	ip, err = allocator.AllocateNextWithFamily(utilnet.IPv4)
+	require.NoError(t, err)
+	assert.Equal(t, net.ParseIP("10.10.10.1"), ip)
 }
 
 func TestAllocateIP(t *testing.T) {

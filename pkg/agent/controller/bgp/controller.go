@@ -50,11 +50,11 @@ import (
 	"antrea.io/antrea/v2/pkg/agent/config"
 	"antrea.io/antrea/v2/pkg/agent/types"
 	"antrea.io/antrea/v2/pkg/apis/crd/v1alpha1"
-	"antrea.io/antrea/v2/pkg/apis/crd/v1beta1"
+	v1beta2 "antrea.io/antrea/v2/pkg/apis/crd/v1beta2"
 	crdinformersv1a1 "antrea.io/antrea/v2/pkg/client/informers/externalversions/crd/v1alpha1"
-	crdinformersv1b1 "antrea.io/antrea/v2/pkg/client/informers/externalversions/crd/v1beta1"
+	crdinformersv1b2 "antrea.io/antrea/v2/pkg/client/informers/externalversions/crd/v1beta2"
 	crdlistersv1a1 "antrea.io/antrea/v2/pkg/client/listers/crd/v1alpha1"
-	crdlistersv1b1 "antrea.io/antrea/v2/pkg/client/listers/crd/v1beta1"
+	crdlistersv1b2 "antrea.io/antrea/v2/pkg/client/listers/crd/v1beta2"
 	"antrea.io/antrea/v2/pkg/util/env"
 )
 
@@ -137,7 +137,7 @@ type Controller struct {
 	serviceListerSynced cache.InformerSynced
 
 	egressInformer     cache.SharedIndexInformer
-	egressLister       crdlistersv1b1.EgressLister
+	egressLister       crdlistersv1b2.EgressLister
 	egressListerSynced cache.InformerSynced
 
 	bgpPolicyInformer     cache.SharedIndexInformer
@@ -173,7 +173,7 @@ type Controller struct {
 
 func NewBGPPolicyController(nodeInformer coreinformers.NodeInformer,
 	serviceInformer coreinformers.ServiceInformer,
-	egressInformer crdinformersv1b1.EgressInformer,
+	egressInformer crdinformersv1b2.EgressInformer,
 	bgpPolicyInformer crdinformersv1a1.BGPPolicyInformer,
 	endpointSliceInformer discoveryinformers.EndpointSliceInformer,
 	egressEnabled bool,
@@ -672,11 +672,12 @@ func (c *Controller) addEgressRoutes(allRoutes map[bgp.Route]RouteMetadata) {
 		if eg.Status.EgressNode != c.nodeName {
 			continue
 		}
-		ip := eg.Status.EgressIP
-		if c.enabledIPv4 && utilnet.IsIPv4String(ip) {
-			addRoutes(allRoutes, ip+ipv4Suffix, eg.Name, EgressIP)
-		} else if c.enabledIPv6 && utilnet.IsIPv6String(ip) {
-			addRoutes(allRoutes, ip+ipv6Suffix, eg.Name, EgressIP)
+		for _, ip := range eg.Status.EgressIPs {
+			if c.enabledIPv4 && utilnet.IsIPv4String(ip) {
+				addRoutes(allRoutes, ip+ipv4Suffix, eg.Name, EgressIP)
+			} else if c.enabledIPv6 && utilnet.IsIPv6String(ip) {
+				addRoutes(allRoutes, ip+ipv6Suffix, eg.Name, EgressIP)
+			}
 		}
 	}
 }
@@ -957,7 +958,7 @@ func (c *Controller) hasAffectedPolicyByEgress() bool {
 }
 
 func (c *Controller) addEgress(obj interface{}) {
-	eg := obj.(*v1beta1.Egress)
+	eg := obj.(*v1beta2.Egress)
 	if eg.Status.EgressNode != c.nodeName {
 		return
 	}
@@ -968,12 +969,12 @@ func (c *Controller) addEgress(obj interface{}) {
 }
 
 func (c *Controller) updateEgress(oldObj, obj interface{}) {
-	oldEg := oldObj.(*v1beta1.Egress)
-	eg := obj.(*v1beta1.Egress)
+	oldEg := oldObj.(*v1beta2.Egress)
+	eg := obj.(*v1beta2.Egress)
 	if oldEg.Status.EgressNode != c.nodeName && eg.Status.EgressNode != c.nodeName {
 		return
 	}
-	if oldEg.Status.EgressIP == eg.Status.EgressIP && oldEg.Status.EgressNode == eg.Status.EgressNode {
+	if slices.Equal(oldEg.Status.EgressIPs, eg.Status.EgressIPs) && oldEg.Status.EgressNode == eg.Status.EgressNode {
 		return
 	}
 	if c.hasAffectedPolicyByEgress() {
@@ -983,14 +984,14 @@ func (c *Controller) updateEgress(oldObj, obj interface{}) {
 }
 
 func (c *Controller) deleteEgress(obj interface{}) {
-	eg, ok := obj.(*v1beta1.Egress)
+	eg, ok := obj.(*v1beta2.Egress)
 	if !ok {
 		deletedState, ok := obj.(cache.DeletedFinalStateUnknown)
 		if !ok {
 			klog.ErrorS(nil, "Received unexpected object", "obj", obj)
 			return
 		}
-		eg, ok = deletedState.Obj.(*v1beta1.Egress)
+		eg, ok = deletedState.Obj.(*v1beta2.Egress)
 		if !ok {
 			klog.ErrorS(nil, "DeletedFinalStateUnknown contains non-Egress object", "key", deletedState.Key, "obj", deletedState.Obj)
 			return
