@@ -332,7 +332,7 @@ func convertPeerConfigToGoBGPPeer(peerConfig bgp.PeerConfig) (*gobgpapi.Peer, er
 
 // convertPeerConfigToGoBGPTimersConfig returns the goBGP timers configuration for the peer, or nil when no timer is
 // configured. Timers that are left unset are omitted so that the BGP process applies its own defaults: in particular,
-// an unset keepalive interval is derived from the effective hold time rather than from a fixed value.
+// an unset keepalive interval is derived from one third of the hold time rather than from a fixed value.
 func convertPeerConfigToGoBGPTimersConfig(peerConfig bgp.PeerConfig) *gobgpapi.TimersConfig {
 	timers := &gobgpapi.TimersConfig{}
 	configured := false

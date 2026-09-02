@@ -361,20 +361,23 @@ type BGPPeer struct {
 	// suggests one third of the hold time, which is not enforced: a thinner ratio leaves less room for a burst of
 	// lost messages, but still works. The range of the value is from 1 to 65534.
 	//
-	// Unlike the other timers, this field has no default value, so that it stays unset unless it is configured
-	// explicitly. The BGP process derives an unset keepalive interval from the effective hold time, which is the
-	// smaller of the values proposed by the two BGP speakers, so the derived interval follows whatever hold time is
-	// negotiated. A fixed default would replace that derivation with a constant, and a peer that only lowered
-	// holdTimeSeconds would keep sending KEEPALIVEs too slowly to hold the session up.
+	// Unlike the other timers, this field has no default value. When it is unset, the BGP process derives the
+	// interval from one third of holdTimeSeconds, so that lowering only the hold time also speeds up the
+	// KEEPALIVEs. A fixed default would also be rejected by the validation rule as soon as holdTimeSeconds was
+	// lowered below it. The hold time is negotiated but the keepalive interval is not: when the peer proposes a
+	// smaller hold time than this Node, the BGP process recomputes the interval as one third of the negotiated
+	// hold time, discarding this field even when it is set.
 	KeepaliveIntervalSeconds *int32 `json:"keepaliveIntervalSeconds,omitempty"`
 
 	// ConnectRetrySeconds specifies how long to wait before retrying to connect to the BGP peer after a failed
 	// connection attempt. The range of the value is from 2 to 65535, and the default value is 120.
 	ConnectRetrySeconds *int32 `json:"connectRetrySeconds,omitempty"`
 
-	// IdleHoldTimeAfterResetSeconds specifies how long the BGP session stays in the Idle state after it is reset,
-	// before a new connection to the BGP peer is attempted. The range of the value is from 1 to 3600, and the
-	// default value is 30.
+	// IdleHoldTimeAfterResetSeconds specifies how long the BGP session stays in the Idle state before a new
+	// connection to the BGP peer is attempted, after the antrea-agent itself resets the session. It does not apply
+	// to a session that is lost because the hold timer expired or because the peer closed it, and the antrea-agent
+	// currently never resets a session on its own. The range of the value is from 1 to 3600, and the default value
+	// is 30.
 	IdleHoldTimeAfterResetSeconds *int32 `json:"idleHoldTimeAfterResetSeconds,omitempty"`
 }
 

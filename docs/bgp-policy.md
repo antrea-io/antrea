@@ -146,23 +146,34 @@ The following fields configure the BGP timers of the session with the peer.
   time; a BGPPolicy that breaks this rule is rejected. Because `holdTimeSeconds` defaults to 90 seconds, setting only
   `keepaliveIntervalSeconds` to 90 or more is rejected as well.
 
-  This is the one timer with no default value. When it is left unset, the BGP process derives the interval from the
-  effective hold time, taking one third of it, so the interval follows whatever hold time the two speakers negotiate.
-  Lowering only `holdTimeSeconds` therefore speeds up the KEEPALIVEs to match, which a fixed default would prevent.
+  This is the one timer with no default value. When it is left unset, the BGP process derives the interval from one
+  third of `holdTimeSeconds`, so lowering only the hold time speeds up the KEEPALIVEs to match. A fixed default would
+  also be rejected by the rule above as soon as `holdTimeSeconds` was lowered below it.
+
+  The hold time is negotiated but the keepalive interval is not. Each speaker proposes a hold time in its OPEN message
+  and the smaller of the two takes effect ([RFC 4271 section 4.2](https://www.rfc-editor.org/rfc/rfc4271.html#section-4.2)).
+  The BGP process then recomputes the keepalive interval as one third of the negotiated hold time for the speaker that
+  proposed the larger value, [discarding `keepaliveIntervalSeconds` even when it is
+  set](https://github.com/osrg/gobgp/blob/v4.8.0/pkg/server/fsm.go#L690-L694). A peer proposing a smaller hold time
+  than this Node therefore also decides this Node's keepalive interval.
 - `connectRetrySeconds`: How long to wait before retrying to connect to the BGP peer after a failed connection attempt.
   The range is 2 to 65535 seconds. The default value is 120 seconds.
-- `idleHoldTimeAfterResetSeconds`: How long the session stays in the Idle state after it is reset, before a new
-  connection to the BGP peer is attempted. The range is 1 to 3600 seconds. The default value is 30 seconds.
+- `idleHoldTimeAfterResetSeconds`: How long the session stays in the Idle state before a new connection to the BGP peer
+  is attempted, after the antrea-agent itself resets the session. It does not apply to a session lost because the hold
+  timer expired or because the peer closed it, and the antrea-agent currently never resets a session on its own. The
+  range is 1 to 3600 seconds. The default value is 30 seconds.
 
 [RFC 4271](https://datatracker.ietf.org/doc/html/rfc4271#section-10) suggests a keepalive interval of one third of the
 hold time. That ratio is not enforced, because a thinner one still gives a working session; it only leaves less room
 for a burst of lost messages. See
 [Leaving room for jitter](#leaving-room-for-jitter) for how to choose the two values together.
 
-**Note**: `holdTimeSeconds` and `keepaliveIntervalSeconds` are negotiated when the BGP session is established, so
-changing either of them on an existing peer makes the antrea-agent tear the session down and re-establish it, which
-briefly interrupts the advertisements to that peer. The other timers and the graceful restart fields are applied
-without interrupting an established session.
+**Note**: `holdTimeSeconds` and `keepaliveIntervalSeconds` are fixed when the session is established, so changing
+either of them on an existing peer makes the antrea-agent tear the session down and re-establish it, which briefly
+interrupts the advertisements to that peer. `gracefulRestartEnabled` and `gracefulRestartTimeSeconds` are advertised in
+the same OPEN message, so changing them re-establishes the session as well. `connectRetrySeconds` applies only while
+the session is down, so it never interrupts an established one, and `idleHoldTimeAfterResetSeconds` is only read when a
+reset happens, so it does not interrupt one either.
 
 See example [Tune the BGP timers for faster failure detection](#tune-the-bgp-timers-for-faster-failure-detection).
 
@@ -324,7 +335,6 @@ spec:
       holdTimeSeconds: 10
       keepaliveIntervalSeconds: 3
       connectRetrySeconds: 5
-      idleHoldTimeAfterResetSeconds: 5
 ```
 
 Make sure the peer is configured to propose a compatible hold time: the effective hold time is the smaller of the two

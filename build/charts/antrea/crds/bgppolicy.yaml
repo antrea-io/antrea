@@ -141,8 +141,8 @@ spec:
                         minimum: 3
                         maximum: 65535
                         default: 90
-                      # Deliberately not defaulted: the BGP process derives an unset keepalive interval from the
-                      # effective hold time. See docs/bgp-policy.md for why a fixed default is wrong here.
+                      # Deliberately not defaulted: the BGP process derives an unset keepalive interval from one
+                      # third of holdTimeSeconds. See docs/bgp-policy.md for why a fixed default is wrong here.
                       keepaliveIntervalSeconds:
                         type: integer
                         format: int32

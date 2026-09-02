@@ -112,8 +112,8 @@ var (
 	updatedIPv4Peer2Config = generateBGPPeerConfig(&updatedIPv4Peer2, peer2AuthPassword)
 	updatedIPv6Peer2Config = generateBGPPeerConfig(&updatedIPv6Peer2, peer2AuthPassword)
 
-	// ipv4Peer1WithNegotiatedTimers changes timers that are negotiated in the OPEN messages, so applying it
-	// requires the BGP session to be re-established.
+	// ipv4Peer1WithNegotiatedTimers changes the hold time and the keepalive interval, which are only proposed in the
+	// OPEN message, so applying it requires the antrea-agent to re-establish the BGP session.
 	ipv4Peer1WithNegotiatedTimers = func() v1alpha1.BGPPeer {
 		peer := generateBGPPeer(ipv4Peer1Addr, peer1ASN, 179, 120)
 		peer.HoldTimeSeconds = ptr.To(int32(30))
@@ -122,8 +122,9 @@ var (
 	}()
 	ipv4Peer1WithNegotiatedTimersConfig = generateBGPPeerConfig(&ipv4Peer1WithNegotiatedTimers, peer1AuthPassword)
 
-	// ipv4Peer1WithOtherTimers changes only settings that the BGP process re-reads on its own, so applying it
-	// does not require the BGP session to be re-established.
+	// ipv4Peer1WithOtherTimers changes only settings that the antrea-agent applies by updating the peer in place:
+	// the BGP process re-reads the timers on its own, and re-establishes the session itself when the graceful
+	// restart configuration changes.
 	ipv4Peer1WithOtherTimers = func() v1alpha1.BGPPeer {
 		peer := generateBGPPeer(ipv4Peer1Addr, peer1ASN, 179, 120)
 		peer.ConnectRetrySeconds = ptr.To(int32(15))
@@ -1184,8 +1185,8 @@ func TestBGPPolicyUpdate(t *testing.T) {
 				&confederationConfig{100, sets.New[uint32](uint32(65001))},
 			),
 			expectedCalls: func(mockBGPServer *bgptest.MockInterfaceMockRecorder) {
-				// The hold time and the keepalive interval are negotiated when the session is established, so
-				// the peer is removed and re-added instead of being updated in place.
+				// The hold time and the keepalive interval are only proposed in the OPEN message, so the peer is
+				// removed and re-added instead of being updated in place.
 				mockBGPServer.RemovePeer(gomock.Any(), ipv4Peer1Config)
 				mockBGPServer.AddPeer(gomock.Any(), ipv4Peer1WithNegotiatedTimersConfig)
 			},
