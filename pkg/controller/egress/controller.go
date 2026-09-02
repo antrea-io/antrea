@@ -36,11 +36,11 @@ import (
 	"k8s.io/klog/v2"
 
 	"antrea.io/antrea/v2/pkg/apis/controlplane"
-	egressv1beta1 "antrea.io/antrea/v2/pkg/apis/crd/v1beta1"
+	egressv1beta2 "antrea.io/antrea/v2/pkg/apis/crd/v1beta2"
 	"antrea.io/antrea/v2/pkg/apiserver/storage"
 	clientset "antrea.io/antrea/v2/pkg/client/clientset/versioned"
-	egressinformers "antrea.io/antrea/v2/pkg/client/informers/externalversions/crd/v1beta1"
-	egresslisters "antrea.io/antrea/v2/pkg/client/listers/crd/v1beta1"
+	egressinformers "antrea.io/antrea/v2/pkg/client/informers/externalversions/crd/v1beta2"
+	egresslisters "antrea.io/antrea/v2/pkg/client/listers/crd/v1beta2"
 	"antrea.io/antrea/v2/pkg/controller/externalippool"
 	"antrea.io/antrea/v2/pkg/controller/grouping"
 	antreatypes "antrea.io/antrea/v2/pkg/controller/types"
@@ -130,7 +130,7 @@ func NewEgressController(crdClient clientset.Interface,
 	)
 	// externalIPPoolIndex will be used to get all Egresses associated with a given ExternalIPPool.
 	egressInformer.Informer().AddIndexers(cache.Indexers{externalIPPoolIndex: func(obj interface{}) (strings []string, e error) {
-		egress, ok := obj.(*egressv1beta1.Egress)
+		egress, ok := obj.(*egressv1beta2.Egress)
 		if !ok {
 			return nil, fmt.Errorf("obj is not Egress: %+v", obj)
 		}
@@ -165,14 +165,15 @@ func (c *EgressController) Run(stopCh <-chan struct{}) {
 }
 
 // restoreIPAllocations restores the existing EgressIPs of Egresses and records the successful ones in ipAllocationMap.
-func (c *EgressController) restoreIPAllocations(egresses []*egressv1beta1.Egress) {
+func (c *EgressController) restoreIPAllocations(egresses []*egressv1beta2.Egress) {
 	var previousIPAllocations []externalippool.IPAllocation
 	for _, egress := range egresses {
-		// Ignore Egress that is not associated to ExternalIPPool or doesn't have EgressIP assigned.
-		if egress.Spec.ExternalIPPool == "" || egress.Spec.EgressIP == "" {
+		// Dual-stack allocation is not implemented yet, so only restore single-stack allocations.
+		egressIP := singleEgressIP(&egress.Spec)
+		if egress.Spec.ExternalIPPool == "" || egressIP == "" {
 			continue
 		}
-		ip := net.ParseIP(egress.Spec.EgressIP)
+		ip := net.ParseIP(egressIP)
 		allocation := externalippool.IPAllocation{
 			ObjectReference: v1.ObjectReference{
 				Name: egress.Name,
@@ -240,22 +241,24 @@ func (c *EgressController) setIPAllocation(egressName string, ip net.IP, poolNam
 }
 
 // syncEgressIP is responsible for releasing stale EgressIP and allocating new EgressIP for an Egress if applicable.
-func (c *EgressController) syncEgressIP(egress *egressv1beta1.Egress) (net.IP, *egressv1beta1.Egress, error) {
+func (c *EgressController) syncEgressIP(egress *egressv1beta2.Egress) (net.IP, *egressv1beta2.Egress, error) {
+	egressIP := singleEgressIP(&egress.Spec)
 	prevIP, prevIPPool, exists := c.getIPAllocation(egress.Name)
 	if exists {
 		// The EgressIP and the ExternalIPPool haven't changed.
-		if prevIP.String() == egress.Spec.EgressIP && prevIPPool == egress.Spec.ExternalIPPool {
+		if prevIP.String() == egressIP && prevIPPool == egress.Spec.ExternalIPPool {
 			// If the EgressIP is still valid for the ExternalIPPool, nothing needs to be done.
 			if c.externalIPAllocator.IPPoolHasIP(prevIPPool, prevIP) {
 				return prevIP, egress, nil
 			}
 			// The ExternalIPPool may no longer exist, or the IP is not in range.
 			// Reclaim the IP from the Egress API.
-			klog.InfoS("Allocated EgressIP is no longer part of ExternalIPPool, releasing it", "egress", klog.KObj(egress), "ip", egress.Spec.EgressIP, "pool", egress.Spec.ExternalIPPool)
+			klog.InfoS("Allocated EgressIP is no longer part of ExternalIPPool, releasing it", "egress", klog.KObj(egress), "ip", egressIP, "pool", egress.Spec.ExternalIPPool)
 			if updatedEgress, err := c.updateEgressIP(egress, ""); err != nil {
 				return nil, egress, err
 			} else {
 				egress = updatedEgress
+				egressIP = singleEgressIP(&egress.Spec)
 			}
 		}
 		// Either EgressIP or ExternalIPPool changes, release the previous one first.
@@ -264,12 +267,12 @@ func (c *EgressController) syncEgressIP(egress *egressv1beta1.Egress) (net.IP, *
 
 	// Skip allocating EgressIP if ExternalIPPool is not specified and return whatever user specifies.
 	if egress.Spec.ExternalIPPool == "" {
-		return net.ParseIP(egress.Spec.EgressIP), egress, nil
+		return net.ParseIP(egressIP), egress, nil
 	}
 
 	if !c.externalIPAllocator.IPPoolExists(egress.Spec.ExternalIPPool) {
 		// The IP pool has been deleted, reclaim the IP from the Egress API.
-		if egress.Spec.EgressIP != "" {
+		if egressIP != "" {
 			if updatedEgress, err := c.updateEgressIP(egress, ""); err != nil {
 				return nil, egress, err
 			} else {
@@ -283,8 +286,8 @@ func (c *EgressController) syncEgressIP(egress *egressv1beta1.Egress) (net.IP, *
 	// User specifies the Egress IP, try to allocate it. If it fails, the datapath may still work, we just don't track
 	// the IP allocation so deleting this Egress won't release the IP to the Pool.
 	// TODO: Use validation webhook to ensure the requested IP matches the pool.
-	if egress.Spec.EgressIP != "" {
-		ip = net.ParseIP(egress.Spec.EgressIP)
+	if egressIP != "" {
+		ip = net.ParseIP(egressIP)
 		if err := c.externalIPAllocator.UpdateIPAllocation(egress.Spec.ExternalIPPool, ip); err != nil {
 			return nil, egress, fmt.Errorf("error when allocating IP %v for Egress %s from ExternalIPPool %s: %v", ip, egress.Name, egress.Spec.ExternalIPPool, err)
 		}
@@ -309,19 +312,19 @@ func (c *EgressController) syncEgressIP(egress *egressv1beta1.Egress) (net.IP, *
 	return ip, egress, nil
 }
 
-// updateEgressIP updates the Egress's EgressIP in Kubernetes API.
-func (c *EgressController) updateEgressIP(egress *egressv1beta1.Egress, ip string) (*egressv1beta1.Egress, error) {
-	var egressIPPtr *string
+// updateEgressIP updates the Egress's single Egress IP in the Kubernetes API.
+func (c *EgressController) updateEgressIP(egress *egressv1beta2.Egress, ip string) (*egressv1beta2.Egress, error) {
+	var egressIPs []string
 	if len(ip) > 0 {
-		egressIPPtr = &ip
+		egressIPs = []string{ip}
 	}
 	patch := map[string]interface{}{
-		"spec": map[string]*string{
-			"egressIP": egressIPPtr,
+		"spec": map[string]interface{}{
+			"egressIPs": egressIPs,
 		},
 	}
 	patchBytes, _ := json.Marshal(patch)
-	if updatedEgress, err := c.crdClient.CrdV1beta1().Egresses().Patch(context.TODO(), egress.Name, types.MergePatchType, patchBytes, metav1.PatchOptions{}); err != nil {
+	if updatedEgress, err := c.crdClient.CrdV1beta2().Egresses().Patch(context.TODO(), egress.Name, types.MergePatchType, patchBytes, metav1.PatchOptions{}); err != nil {
 		return nil, fmt.Errorf("error when updating EgressIP for Egress %s: %v", egress.Name, err)
 	} else {
 		return updatedEgress, nil
@@ -348,8 +351,8 @@ func (c *EgressController) releaseEgressIP(egressName string, egressIP net.IP, p
 	c.deleteIPAllocation(egressName)
 }
 
-func (c *EgressController) requiresDualStackEgress(egress *egressv1beta1.Egress) (bool, error) {
-	if len(egress.Spec.EgressIPs) > 0 {
+func (c *EgressController) requiresDualStackEgress(egress *egressv1beta2.Egress) (bool, error) {
+	if len(egress.Spec.EgressIPs) == 2 {
 		return true, nil
 	}
 	if egress.Spec.IPFamilyPolicy == nil {
@@ -360,9 +363,9 @@ func (c *EgressController) requiresDualStackEgress(egress *egressv1beta1.Egress)
 	case v1.IPFamilyPolicyRequireDualStack:
 		return true, nil
 	case v1.IPFamilyPolicyPreferDualStack:
-		// A legacy EgressIP always represents a single-stack request. PreferDualStack also falls back to
+		// An explicitly specified address represents a single-stack request. PreferDualStack also falls back to
 		// single-stack when the referenced pool contains only one IP family.
-		if egress.Spec.EgressIP != "" || egress.Spec.ExternalIPPool == "" {
+		if len(egress.Spec.EgressIPs) == 1 || egress.Spec.ExternalIPPool == "" {
 			return false, nil
 		}
 		families, err := c.externalIPAllocator.IPPoolIPFamilies(egress.Spec.ExternalIPPool)
@@ -374,6 +377,13 @@ func (c *EgressController) requiresDualStackEgress(egress *egressv1beta1.Egress)
 	default:
 		return false, nil
 	}
+}
+
+func singleEgressIP(spec *egressv1beta2.EgressSpec) string {
+	if len(spec.EgressIPs) != 1 {
+		return ""
+	}
+	return spec.EgressIPs[0]
 }
 
 func (c *EgressController) syncEgress(key string) error {
@@ -464,7 +474,7 @@ func (c *EgressController) enqueueEgressGroup(key string) {
 
 // addEgress processes Egress ADD events and creates corresponding EgressGroup.
 func (c *EgressController) addEgress(obj interface{}) {
-	egress := obj.(*egressv1beta1.Egress)
+	egress := obj.(*egressv1beta2.Egress)
 	klog.InfoS("Processing Egress ADD event", "egress", egress.Name, "selector", egress.Spec.AppliedTo)
 	// Create an EgressGroup object corresponding to this Egress and enqueue task to the workqueue.
 	egressGroup := &antreatypes.EgressGroup{
@@ -480,8 +490,8 @@ func (c *EgressController) addEgress(obj interface{}) {
 
 // updateEgress processes Egress UPDATE events and updates corresponding EgressGroup.
 func (c *EgressController) updateEgress(old, cur interface{}) {
-	oldEgress := old.(*egressv1beta1.Egress)
-	curEgress := cur.(*egressv1beta1.Egress)
+	oldEgress := old.(*egressv1beta2.Egress)
+	curEgress := cur.(*egressv1beta2.Egress)
 	klog.InfoS("Processing Egress UPDATE event", "egress", curEgress.Name, "selector", curEgress.Spec.AppliedTo)
 	// TODO: Define custom Equal function to be more efficient.
 	if !reflect.DeepEqual(oldEgress.Spec.AppliedTo, curEgress.Spec.AppliedTo) {
@@ -496,14 +506,14 @@ func (c *EgressController) updateEgress(old, cur interface{}) {
 
 // deleteEgress processes Egress DELETE events and deletes corresponding EgressGroup.
 func (c *EgressController) deleteEgress(obj interface{}) {
-	egress, ok := obj.(*egressv1beta1.Egress)
+	egress, ok := obj.(*egressv1beta2.Egress)
 	if !ok {
 		tombstone, ok := obj.(cache.DeletedFinalStateUnknown)
 		if !ok {
 			klog.V(2).InfoS("Error decoding object when deleting Egress, invalid type", "object", obj)
 			return
 		}
-		egress, ok = tombstone.Obj.(*egressv1beta1.Egress)
+		egress, ok = tombstone.Obj.(*egressv1beta2.Egress)
 		if !ok {
 			klog.V(2).InfoS("Error decoding object tombstone when deleting Egress, invalid type", "object", tombstone.Obj)
 			return
@@ -520,25 +530,25 @@ func (c *EgressController) deleteEgress(obj interface{}) {
 func (c *EgressController) enqueueEgresses(poolName string) {
 	objects, _ := c.egressIndexer.ByIndex(externalIPPoolIndex, poolName)
 	for _, object := range objects {
-		egress := object.(*egressv1beta1.Egress)
+		egress := object.(*egressv1beta2.Egress)
 		c.queue.Add(egress.Name)
 	}
 }
 
-func (c *EgressController) updateEgressAllocatedCondition(egress *egressv1beta1.Egress, err error) {
-	var desiredCondition *egressv1beta1.EgressCondition
+func (c *EgressController) updateEgressAllocatedCondition(egress *egressv1beta2.Egress, err error) {
+	var desiredCondition *egressv1beta2.EgressCondition
 	if egress.Spec.ExternalIPPool != "" {
 		if err == nil {
-			desiredCondition = &egressv1beta1.EgressCondition{
-				Type:               egressv1beta1.IPAllocated,
+			desiredCondition = &egressv1beta2.EgressCondition{
+				Type:               egressv1beta2.IPAllocated,
 				Status:             v1.ConditionTrue,
 				Reason:             "Allocated",
 				Message:            "EgressIP is successfully allocated",
 				LastTransitionTime: metav1.Now(),
 			}
 		} else {
-			desiredCondition = &egressv1beta1.EgressCondition{
-				Type:               egressv1beta1.IPAllocated,
+			desiredCondition = &egressv1beta2.EgressCondition{
+				Type:               egressv1beta2.IPAllocated,
 				Status:             v1.ConditionFalse,
 				Reason:             "AllocationError",
 				Message:            fmt.Sprintf("Cannot allocate EgressIP from ExternalIPPool: %v", err),
@@ -549,24 +559,24 @@ func (c *EgressController) updateEgressAllocatedCondition(egress *egressv1beta1.
 	c.setEgressAllocatedCondition(egress, desiredCondition)
 }
 
-func (c *EgressController) clearEgressAllocatedCondition(egress *egressv1beta1.Egress) {
+func (c *EgressController) clearEgressAllocatedCondition(egress *egressv1beta2.Egress) {
 	c.setEgressAllocatedCondition(egress, nil)
 }
 
 func (c *EgressController) setEgressAllocatedCondition(
-	egress *egressv1beta1.Egress,
-	desiredCondition *egressv1beta1.EgressCondition,
+	egress *egressv1beta2.Egress,
+	desiredCondition *egressv1beta2.EgressCondition,
 ) {
 	toUpdate := egress.DeepCopy()
 	var updateErr, getErr error
 	if err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
-		actualCondition := egressv1beta1.GetEgressCondition(toUpdate.Status.Conditions, egressv1beta1.IPAllocated)
+		actualCondition := egressv1beta2.GetEgressCondition(toUpdate.Status.Conditions, egressv1beta2.IPAllocated)
 		if compareConditionIgnoringTimestamp(actualCondition, desiredCondition) {
 			return nil
 		}
-		var newConditions []egressv1beta1.EgressCondition
+		var newConditions []egressv1beta2.EgressCondition
 		for _, c := range toUpdate.Status.Conditions {
-			if c.Type != egressv1beta1.IPAllocated {
+			if c.Type != egressv1beta2.IPAllocated {
 				newConditions = append(newConditions, c)
 			}
 		}
@@ -574,9 +584,9 @@ func (c *EgressController) setEgressAllocatedCondition(
 			newConditions = append(newConditions, *desiredCondition)
 		}
 		toUpdate.Status.Conditions = newConditions
-		_, updateErr = c.crdClient.CrdV1beta1().Egresses().UpdateStatus(context.TODO(), toUpdate, metav1.UpdateOptions{})
+		_, updateErr = c.crdClient.CrdV1beta2().Egresses().UpdateStatus(context.TODO(), toUpdate, metav1.UpdateOptions{})
 		if updateErr != nil && errors.IsConflict(updateErr) {
-			if toUpdate, getErr = c.crdClient.CrdV1beta1().Egresses().Get(context.TODO(), egress.Name, metav1.GetOptions{}); getErr != nil {
+			if toUpdate, getErr = c.crdClient.CrdV1beta2().Egresses().Get(context.TODO(), egress.Name, metav1.GetOptions{}); getErr != nil {
 				return getErr
 			}
 		}
@@ -587,7 +597,7 @@ func (c *EgressController) setEgressAllocatedCondition(
 }
 
 // compareConditionIgnoringTimestamp compares two conditions ignoring the timestamp
-func compareConditionIgnoringTimestamp(condition1, condition2 *egressv1beta1.EgressCondition) bool {
+func compareConditionIgnoringTimestamp(condition1, condition2 *egressv1beta2.EgressCondition) bool {
 	if condition1 == nil && condition2 == nil {
 		return true
 	}

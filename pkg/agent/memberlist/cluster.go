@@ -37,9 +37,9 @@ import (
 	"k8s.io/klog/v2"
 
 	"antrea.io/antrea/v2/pkg/agent/consistenthash"
-	"antrea.io/antrea/v2/pkg/apis/crd/v1beta1"
-	crdinformers "antrea.io/antrea/v2/pkg/client/informers/externalversions/crd/v1beta1"
-	crdlister "antrea.io/antrea/v2/pkg/client/listers/crd/v1beta1"
+	v1beta2 "antrea.io/antrea/v2/pkg/apis/crd/v1beta2"
+	crdinformers "antrea.io/antrea/v2/pkg/client/informers/externalversions/crd/v1beta2"
+	crdlister "antrea.io/antrea/v2/pkg/client/listers/crd/v1beta2"
 	"antrea.io/antrea/v2/pkg/util/k8s"
 )
 
@@ -196,8 +196,8 @@ func NewCluster(
 		cache.ResourceEventHandlerFuncs{
 			AddFunc: c.enqueueExternalIPPool,
 			UpdateFunc: func(oldObj, newObj interface{}) {
-				oldExternalIPPool := oldObj.(*v1beta1.ExternalIPPool)
-				curExternalIPPool := newObj.(*v1beta1.ExternalIPPool)
+				oldExternalIPPool := oldObj.(*v1beta2.ExternalIPPool)
+				curExternalIPPool := newObj.(*v1beta2.ExternalIPPool)
 				if !reflect.DeepEqual(oldExternalIPPool.Spec.NodeSelector, curExternalIPPool.Spec.NodeSelector) {
 					c.enqueueExternalIPPool(newObj)
 				}
@@ -286,14 +286,14 @@ func (c *Cluster) enqueueExternalIPPools(eips sets.Set[string]) {
 }
 
 func (c *Cluster) enqueueExternalIPPool(obj interface{}) {
-	eip, ok := obj.(*v1beta1.ExternalIPPool)
+	eip, ok := obj.(*v1beta2.ExternalIPPool)
 	if !ok {
 		deletedState, ok := obj.(cache.DeletedFinalStateUnknown)
 		if !ok {
 			klog.ErrorS(errDecodingObject, "Processing ExternalIPPool DELETE event error", "obj", obj)
 			return
 		}
-		eip, ok = deletedState.Obj.(*v1beta1.ExternalIPPool)
+		eip, ok = deletedState.Obj.(*v1beta2.ExternalIPPool)
 		if !ok {
 			klog.ErrorS(errDecodingObjectTombstone, "Processing ExternalIPPool DELETE event error", "obj", deletedState.Obj)
 			return
@@ -471,7 +471,7 @@ func (c *Cluster) syncConsistentHash(eipName string) error {
 	}
 
 	// updateConsistentHash refreshes the consistentHashMap.
-	updateConsistentHash := func(eip *v1beta1.ExternalIPPool) error {
+	updateConsistentHash := func(eip *v1beta2.ExternalIPPool) error {
 		nodeSel, err := metav1.LabelSelectorAsSelector(&eip.Spec.NodeSelector)
 		if err != nil {
 			return fmt.Errorf("labelSelectorAsSelector error: %v", err)

@@ -26,11 +26,13 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/klog/v2"
 	"k8s.io/utils/ptr"
 
-	crdv1beta1 "antrea.io/antrea/v2/pkg/apis/crd/v1beta1"
+	crdv1beta2 "antrea.io/antrea/v2/pkg/apis/crd/v1beta2"
+	"antrea.io/antrea/v2/pkg/controller/crdconversion"
 	utilip "antrea.io/antrea/v2/pkg/util/ip"
 )
 
@@ -39,18 +41,12 @@ type specifiedEgressIP struct {
 	ip    net.IP
 }
 
-func parseSpecifiedEgressIPs(spec *crdv1beta1.EgressSpec) ([]specifiedEgressIP, error) {
-	if spec.EgressIP != "" && len(spec.EgressIPs) > 0 {
-		return nil, fmt.Errorf("spec.egressIP and spec.egressIPs are mutually exclusive")
-	}
-	if len(spec.EgressIPs) > 0 && len(spec.EgressIPs) != 2 {
-		return nil, fmt.Errorf("spec.egressIPs must contain exactly two addresses, one for each IP family")
+func parseSpecifiedEgressIPs(spec *crdv1beta2.EgressSpec) ([]specifiedEgressIP, error) {
+	if len(spec.EgressIPs) > 2 {
+		return nil, fmt.Errorf("spec.egressIPs must contain at most two addresses, one for each IP family")
 	}
 
 	values := spec.EgressIPs
-	if spec.EgressIP != "" {
-		values = []string{spec.EgressIP}
-	}
 	parsed := make([]specifiedEgressIP, 0, len(values))
 	families := sets.New[corev1.IPFamily]()
 	for _, value := range values {
@@ -82,14 +78,13 @@ func validateIPFamilyPolicy(policy *corev1.IPFamilyPolicy) error {
 	}
 }
 
-func egressIPConfigurationEqual(oldSpec, newSpec *crdv1beta1.EgressSpec) bool {
-	return oldSpec.EgressIP == newSpec.EgressIP &&
-		slices.Equal(oldSpec.EgressIPs, newSpec.EgressIPs) &&
+func egressIPConfigurationEqual(oldSpec, newSpec *crdv1beta2.EgressSpec) bool {
+	return slices.Equal(oldSpec.EgressIPs, newSpec.EgressIPs) &&
 		oldSpec.ExternalIPPool == newSpec.ExternalIPPool &&
 		ptr.Equal(oldSpec.IPFamilyPolicy, newSpec.IPFamilyPolicy)
 }
 
-func (c *EgressController) validateEgressConfiguration(oldEgress, newEgress *crdv1beta1.Egress) error {
+func (c *EgressController) validateEgressConfiguration(oldEgress, newEgress *crdv1beta2.Egress) error {
 	specifiedIPs, err := parseSpecifiedEgressIPs(&newEgress.Spec)
 	if err != nil {
 		return err
@@ -99,10 +94,10 @@ func (c *EgressController) validateEgressConfiguration(oldEgress, newEgress *crd
 	}
 	if newEgress.Spec.IPFamilyPolicy != nil {
 		switch {
-		case newEgress.Spec.EgressIP != "" && *newEgress.Spec.IPFamilyPolicy == corev1.IPFamilyPolicyRequireDualStack:
-			return fmt.Errorf("spec.egressIP cannot be used with ipFamilyPolicy RequireDualStack")
-		case len(newEgress.Spec.EgressIPs) > 0 && *newEgress.Spec.IPFamilyPolicy == corev1.IPFamilyPolicySingleStack:
-			return fmt.Errorf("spec.egressIPs cannot be used with ipFamilyPolicy SingleStack")
+		case len(newEgress.Spec.EgressIPs) == 1 && *newEgress.Spec.IPFamilyPolicy == corev1.IPFamilyPolicyRequireDualStack:
+			return fmt.Errorf("one spec.egressIPs entry cannot be used with ipFamilyPolicy RequireDualStack")
+		case len(newEgress.Spec.EgressIPs) == 2 && *newEgress.Spec.IPFamilyPolicy == corev1.IPFamilyPolicySingleStack:
+			return fmt.Errorf("two spec.egressIPs entries cannot be used with ipFamilyPolicy SingleStack")
 		}
 	}
 
@@ -147,21 +142,21 @@ func (c *EgressController) ValidateEgress(review *admv1.AdmissionReview) *admv1.
 	allowed := true
 
 	klog.V(2).Info("Validating Egress", "request", review.Request)
-	var newObj, oldObj crdv1beta1.Egress
+	var newObj, oldObj crdv1beta2.Egress
 	if review.Request.Object.Raw != nil {
-		if err := json.Unmarshal(review.Request.Object.Raw, &newObj); err != nil {
+		if err := decodeEgressForValidation(review.Request.Object.Raw, review.Request.Resource.Version, &newObj); err != nil {
 			klog.ErrorS(err, "Error de-serializing current Egress")
 			return newAdmissionResponseForErr(err)
 		}
 	}
 	if review.Request.OldObject.Raw != nil {
-		if err := json.Unmarshal(review.Request.OldObject.Raw, &oldObj); err != nil {
+		if err := decodeEgressForValidation(review.Request.OldObject.Raw, review.Request.Resource.Version, &oldObj); err != nil {
 			klog.ErrorS(err, "Error de-serializing old Egress")
 			return newAdmissionResponseForErr(err)
 		}
 	}
 
-	shouldAllow := func(oldEgress, newEgress *crdv1beta1.Egress) (bool, string) {
+	shouldAllow := func(oldEgress, newEgress *crdv1beta2.Egress) (bool, string) {
 		// Validate Egress trafficShaping
 		if newEgress.Spec.Bandwidth != nil {
 			_, err := resource.ParseQuantity(newEgress.Spec.Bandwidth.Rate)
@@ -201,6 +196,31 @@ func (c *EgressController) ValidateEgress(review *admv1.AdmissionReview) *admv1.
 		Allowed: allowed,
 		Result:  result,
 	}
+}
+
+func decodeEgressForValidation(raw []byte, version string, egress *crdv1beta2.Egress) error {
+	if version != "v1beta1" {
+		return json.Unmarshal(raw, egress)
+	}
+
+	var object unstructured.Unstructured
+	if err := json.Unmarshal(raw, &object); err != nil {
+		return err
+	}
+	// Unit tests and some API clients may omit TypeMeta from the raw object. The AdmissionRequest resource version is
+	// authoritative in that case.
+	if object.GetAPIVersion() == "" {
+		object.SetAPIVersion("crd.antrea.io/v1beta1")
+	}
+	converted, status := crdconversion.ConvertEgress(&object, crdv1beta2.SchemeGroupVersion.String())
+	if status.Status != metav1.StatusSuccess {
+		return fmt.Errorf("failed to convert Egress for validation: %s", status.Message)
+	}
+	convertedRaw, err := json.Marshal(converted)
+	if err != nil {
+		return err
+	}
+	return json.Unmarshal(convertedRaw, egress)
 }
 
 func newAdmissionResponseForErr(err error) *admv1.AdmissionResponse {

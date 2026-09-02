@@ -28,6 +28,7 @@ import (
 	"k8s.io/utils/ptr"
 
 	crdv1beta1 "antrea.io/antrea/v2/pkg/apis/crd/v1beta1"
+	crdv1beta2 "antrea.io/antrea/v2/pkg/apis/crd/v1beta2"
 )
 
 func marshal(object runtime.Object) []byte {
@@ -35,48 +36,66 @@ func marshal(object runtime.Object) []byte {
 	return raw
 }
 
-func newEgressWithIPFamilyPolicy(name, egressIP, externalIPPool string, policy *corev1.IPFamilyPolicy) *crdv1beta1.Egress {
+func newEgressWithIPFamilyPolicy(name, egressIP, externalIPPool string, policy *corev1.IPFamilyPolicy) *crdv1beta2.Egress {
 	egress := newEgress(name, egressIP, externalIPPool, nil, nil, nil)
 	egress.Spec.IPFamilyPolicy = policy
 	return egress
 }
 
-func newDualStackEgress(name, externalIPPool string, egressIPs []string, policy *corev1.IPFamilyPolicy) *crdv1beta1.Egress {
+func newDualStackEgress(name, externalIPPool string, egressIPs []string, policy *corev1.IPFamilyPolicy) *crdv1beta2.Egress {
 	egress := newEgress(name, "", externalIPPool, nil, nil, nil)
 	egress.Spec.EgressIPs = egressIPs
 	egress.Spec.IPFamilyPolicy = policy
 	return egress
 }
 
-func newDualStackExternalIPPool(name string) *crdv1beta1.ExternalIPPool {
+func newDualStackExternalIPPool(name string) *crdv1beta2.ExternalIPPool {
 	pool := newExternalIPPool(name, "10.10.10.0/24", "", "")
-	pool.Spec.IPRanges = append(pool.Spec.IPRanges, crdv1beta1.IPRange{CIDR: "2001:db8:10::/64"})
+	pool.Spec.IPRanges = append(pool.Spec.IPRanges, crdv1beta2.IPRange{CIDR: "2001:db8:10::/64"})
 	return pool
 }
 
 func TestEgressControllerValidateEgress(t *testing.T) {
 	var (
-		bandwidth = crdv1beta1.Bandwidth{
+		bandwidth = crdv1beta2.Bandwidth{
 			Rate:  "500k",
 			Burst: "10M",
 		}
-		invalidBandwidthRate = crdv1beta1.Bandwidth{
+		invalidBandwidthRate = crdv1beta2.Bandwidth{
 			Rate:  "500A",
 			Burst: "10G",
 		}
-		invalidBandwidthBurst = crdv1beta1.Bandwidth{
+		invalidBandwidthBurst = crdv1beta2.Bandwidth{
 			Rate:  "1.5G",
 			Burst: "10b",
 		}
+		legacyV1beta1Egress = &crdv1beta1.Egress{
+			TypeMeta: metav1.TypeMeta{APIVersion: "crd.antrea.io/v1beta1", Kind: "Egress"},
+			ObjectMeta: metav1.ObjectMeta{
+				Name: "legacy",
+			},
+			Spec: crdv1beta1.EgressSpec{
+				AppliedTo: crdv1beta1.AppliedTo{},
+				EgressIP:  "10.10.10.1",
+			},
+		}
 	)
-	egressWithBothIPFields := newDualStackEgress("foo", "dual-stack", []string{"2001:db8:10::1"}, nil)
-	egressWithBothIPFields.Spec.EgressIP = "10.10.10.1"
 	tests := []struct {
 		name                   string
-		existingExternalIPPool *crdv1beta1.ExternalIPPool
+		existingExternalIPPool *crdv1beta2.ExternalIPPool
 		request                *admv1.AdmissionRequest
 		expectedResponse       *admv1.AdmissionResponse
 	}{
+		{
+			name: "A v1beta1 Egress using egressIP should remain valid",
+			request: &admv1.AdmissionRequest{
+				Name:      "legacy",
+				Operation: "CREATE",
+				Resource:  metav1.GroupVersionResource{Group: "crd.antrea.io", Version: "v1beta1", Resource: "egresses"},
+				Object:    runtime.RawExtension{Raw: marshal(legacyV1beta1Egress)},
+			},
+			expectedResponse: &admv1.AdmissionResponse{Allowed: true},
+		},
 		{
 			name:                   "Requesting IP from non-existing ExternalIPPool should not be allowed",
 			existingExternalIPPool: nil,
@@ -207,19 +226,6 @@ func TestEgressControllerValidateEgress(t *testing.T) {
 			},
 		},
 		{
-			name:                   "egressIP and egressIPs should be mutually exclusive",
-			existingExternalIPPool: newDualStackExternalIPPool("dual-stack"),
-			request: &admv1.AdmissionRequest{
-				Name:      "foo",
-				Operation: "CREATE",
-				Object:    runtime.RawExtension{Raw: marshal(egressWithBothIPFields)},
-			},
-			expectedResponse: &admv1.AdmissionResponse{
-				Allowed: false,
-				Result:  &metav1.Status{Message: "spec.egressIP and spec.egressIPs are mutually exclusive"},
-			},
-		},
-		{
 			name: "egressIPs with duplicate families should not be allowed",
 			request: &admv1.AdmissionRequest{
 				Name:      "foo",
@@ -248,7 +254,7 @@ func TestEgressControllerValidateEgress(t *testing.T) {
 			},
 		},
 		{
-			name: "egressIPs cannot use SingleStack policy",
+			name: "two egressIPs cannot use SingleStack policy",
 			request: &admv1.AdmissionRequest{
 				Name:      "foo",
 				Operation: "CREATE",
@@ -257,7 +263,7 @@ func TestEgressControllerValidateEgress(t *testing.T) {
 			},
 			expectedResponse: &admv1.AdmissionResponse{
 				Allowed: false,
-				Result:  &metav1.Status{Message: "spec.egressIPs cannot be used with ipFamilyPolicy SingleStack"},
+				Result:  &metav1.Status{Message: "two spec.egressIPs entries cannot be used with ipFamilyPolicy SingleStack"},
 			},
 		},
 		{
@@ -287,17 +293,14 @@ func TestEgressControllerValidateEgress(t *testing.T) {
 			expectedResponse: &admv1.AdmissionResponse{Allowed: true},
 		},
 		{
-			name: "A single address in egressIPs should not be allowed",
+			name: "A single address in egressIPs should be allowed",
 			request: &admv1.AdmissionRequest{
 				Name:      "foo",
 				Operation: "CREATE",
 				Object: runtime.RawExtension{Raw: marshal(newDualStackEgress("foo", "",
 					[]string{"10.10.10.1"}, nil))},
 			},
-			expectedResponse: &admv1.AdmissionResponse{
-				Allowed: false,
-				Result:  &metav1.Status{Message: "spec.egressIPs must contain exactly two addresses, one for each IP family"},
-			},
+			expectedResponse: &admv1.AdmissionResponse{Allowed: true},
 		},
 		{
 			name: "More than two addresses in egressIPs should not be allowed",
@@ -309,11 +312,11 @@ func TestEgressControllerValidateEgress(t *testing.T) {
 			},
 			expectedResponse: &admv1.AdmissionResponse{
 				Allowed: false,
-				Result:  &metav1.Status{Message: "spec.egressIPs must contain exactly two addresses, one for each IP family"},
+				Result:  &metav1.Status{Message: "spec.egressIPs must contain at most two addresses, one for each IP family"},
 			},
 		},
 		{
-			name: "egressIP cannot use RequireDualStack policy",
+			name: "one egressIPs entry cannot use RequireDualStack policy",
 			request: &admv1.AdmissionRequest{
 				Name:      "foo",
 				Operation: "CREATE",
@@ -322,7 +325,7 @@ func TestEgressControllerValidateEgress(t *testing.T) {
 			},
 			expectedResponse: &admv1.AdmissionResponse{
 				Allowed: false,
-				Result:  &metav1.Status{Message: "spec.egressIP cannot be used with ipFamilyPolicy RequireDualStack"},
+				Result:  &metav1.Status{Message: "one spec.egressIPs entry cannot be used with ipFamilyPolicy RequireDualStack"},
 			},
 		},
 		{

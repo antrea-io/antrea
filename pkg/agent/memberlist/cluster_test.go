@@ -37,7 +37,7 @@ import (
 	"antrea.io/antrea/v2/pkg/agent/config"
 	"antrea.io/antrea/v2/pkg/agent/consistenthash"
 	"antrea.io/antrea/v2/pkg/apis"
-	crdv1b1 "antrea.io/antrea/v2/pkg/apis/crd/v1beta1"
+	crdv1b2 "antrea.io/antrea/v2/pkg/apis/crd/v1beta2"
 	fakeversioned "antrea.io/antrea/v2/pkg/client/clientset/versioned/fake"
 	crdinformers "antrea.io/antrea/v2/pkg/client/informers/externalversions"
 	"antrea.io/antrea/v2/pkg/util/ip"
@@ -61,7 +61,7 @@ func newFakeCluster(nodeConfig *config.NodeConfig, stopCh <-chan struct{}, membe
 	nodeInformer := informerFactory.Core().V1().Nodes()
 	crdClient := fakeversioned.NewSimpleClientset()
 	crdInformerFactory := crdinformers.NewSharedInformerFactory(crdClient, 0)
-	ipPoolInformer := crdInformerFactory.Crd().V1beta1().ExternalIPPools()
+	ipPoolInformer := crdInformerFactory.Crd().V1beta2().ExternalIPPools()
 	cluster, err := NewCluster(nodeConfig.NodeIPv4Addr.IP, apis.AntreaAgentClusterMembershipPort, nodeConfig.Name, nodeInformer, ipPoolInformer, memberlist)
 	if err != nil {
 		return nil, err
@@ -85,8 +85,8 @@ func createNode(cs *fake.Clientset, node *v1.Node) error {
 	return err
 }
 
-func createExternalIPPool(crdClient *fakeversioned.Clientset, eip *crdv1b1.ExternalIPPool) error {
-	_, err := crdClient.CrdV1beta1().ExternalIPPools().Create(context.TODO(), eip, metav1.CreateOptions{})
+func createExternalIPPool(crdClient *fakeversioned.Clientset, eip *crdv1b2.ExternalIPPool) error {
+	_, err := crdClient.CrdV1beta2().ExternalIPPools().Create(context.TODO(), eip, metav1.CreateOptions{})
 	return err
 }
 
@@ -94,20 +94,20 @@ func TestCluster_Run(t *testing.T) {
 	localNodeName := "localNodeName"
 	testCases := []struct {
 		name                     string
-		egress                   *crdv1b1.Egress
-		externalIPPool           *crdv1b1.ExternalIPPool
+		egress                   *crdv1b2.Egress
+		externalIPPool           *crdv1b2.ExternalIPPool
 		localNode                *v1.Node
 		expectEgressSelectResult bool
 	}{
 		{
 			name: "Local Node matches ExternalIPPool nodeSelectors",
-			egress: &crdv1b1.Egress{
-				Spec: crdv1b1.EgressSpec{ExternalIPPool: "", EgressIP: "1.1.1.1"},
+			egress: &crdv1b2.Egress{
+				Spec: crdv1b2.EgressSpec{ExternalIPPool: "", EgressIPs: []string{"1.1.1.1"}},
 			},
-			externalIPPool: &crdv1b1.ExternalIPPool{
+			externalIPPool: &crdv1b2.ExternalIPPool{
 				TypeMeta:   metav1.TypeMeta{Kind: "CustomResourceDefinition"},
 				ObjectMeta: metav1.ObjectMeta{Name: "fakeExternalIPPool"},
-				Spec:       crdv1b1.ExternalIPPoolSpec{NodeSelector: metav1.LabelSelector{MatchLabels: map[string]string{"env": "pro"}}},
+				Spec:       crdv1b2.ExternalIPPoolSpec{NodeSelector: metav1.LabelSelector{MatchLabels: map[string]string{"env": "pro"}}},
 			},
 			localNode: &v1.Node{
 				ObjectMeta: metav1.ObjectMeta{Name: localNodeName, Labels: map[string]string{"env": "pro"}},
@@ -117,13 +117,13 @@ func TestCluster_Run(t *testing.T) {
 		},
 		{
 			name: "Local Node does not match ExternalIPPool nodeSelectors",
-			egress: &crdv1b1.Egress{
-				Spec: crdv1b1.EgressSpec{ExternalIPPool: "", EgressIP: "1.1.1.1"},
+			egress: &crdv1b2.Egress{
+				Spec: crdv1b2.EgressSpec{ExternalIPPool: "", EgressIPs: []string{"1.1.1.1"}},
 			},
-			externalIPPool: &crdv1b1.ExternalIPPool{
+			externalIPPool: &crdv1b2.ExternalIPPool{
 				TypeMeta:   metav1.TypeMeta{Kind: "CustomResourceDefinition"},
 				ObjectMeta: metav1.ObjectMeta{Name: "fakeExternalIPPool1"},
-				Spec:       crdv1b1.ExternalIPPoolSpec{NodeSelector: metav1.LabelSelector{MatchLabels: map[string]string{"env": "pro"}}},
+				Spec:       crdv1b2.ExternalIPPoolSpec{NodeSelector: metav1.LabelSelector{MatchLabels: map[string]string{"env": "pro"}}},
 			},
 			localNode: &v1.Node{
 				ObjectMeta: metav1.ObjectMeta{Name: localNodeName},
@@ -166,7 +166,7 @@ func TestCluster_Run(t *testing.T) {
 			}()
 
 			assert.Eventually(t, func() bool {
-				res, err := fakeCluster.cluster.ShouldSelectIP(tCase.egress.Spec.EgressIP, tCase.externalIPPool.Name)
+				res, err := fakeCluster.cluster.ShouldSelectIP(tCase.egress.Spec.EgressIPs[0], tCase.externalIPPool.Name)
 				return err == nil && res == tCase.expectEgressSelectResult
 			}, 1*time.Second, 100*time.Millisecond, "select Node result for Egress does not match")
 		})
@@ -191,14 +191,14 @@ func TestCluster_RunClusterEvents(t *testing.T) {
 	localNode := &v1.Node{
 		ObjectMeta: metav1.ObjectMeta{Name: nodeName, Labels: labelsLinuxOS},
 		Status:     v1.NodeStatus{Addresses: []v1.NodeAddress{{Type: v1.NodeInternalIP, Address: "127.0.0.1"}}}}
-	fakeEIP1 := &crdv1b1.ExternalIPPool{
+	fakeEIP1 := &crdv1b2.ExternalIPPool{
 		TypeMeta:   metav1.TypeMeta{Kind: "CustomResourceDefinition"},
 		ObjectMeta: metav1.ObjectMeta{Name: "fakeExternalIPPool1"},
-		Spec:       crdv1b1.ExternalIPPoolSpec{NodeSelector: metav1.LabelSelector{MatchLabels: map[string]string{"env": "pro"}}},
+		Spec:       crdv1b2.ExternalIPPoolSpec{NodeSelector: metav1.LabelSelector{MatchLabels: map[string]string{"env": "pro"}}},
 	}
-	fakeEgress1 := &crdv1b1.Egress{
+	fakeEgress1 := &crdv1b2.Egress{
 		ObjectMeta: metav1.ObjectMeta{Name: "fakeEgress1", UID: "fakeUID1"},
-		Spec:       crdv1b1.EgressSpec{ExternalIPPool: fakeEIP1.Name, EgressIP: "1.1.1.2"},
+		Spec:       crdv1b2.EgressSpec{ExternalIPPool: fakeEIP1.Name, EgressIPs: []string{"1.1.1.2"}},
 	}
 	mockMemberlist := NewMockMemberlist(controller)
 	fakeCluster, err := newFakeCluster(nodeConfig, stopCh, mockMemberlist, localNode)
@@ -258,7 +258,7 @@ func TestCluster_RunClusterEvents(t *testing.T) {
 			newPod.Labels = tCase.newNodeLabels
 			updateNode(newPod)
 			assert.Eventually(t, func() bool {
-				res, err := fakeCluster.cluster.ShouldSelectIP(fakeEgress1.Spec.EgressIP, fakeEgress1.Spec.ExternalIPPool)
+				res, err := fakeCluster.cluster.ShouldSelectIP(fakeEgress1.Spec.EgressIPs[0], fakeEgress1.Spec.ExternalIPPool)
 				return err == nil && res == tCase.expectEgressSelectResult
 			}, 1*time.Second, 100*time.Millisecond, "select Node result for Egress does not match")
 		})
@@ -297,35 +297,35 @@ func TestCluster_RunClusterEvents(t *testing.T) {
 	for _, tCase := range testCasesUpdateEIP {
 		t.Run(tCase.name, func(t *testing.T) {
 			fakeEIP1.Spec.NodeSelector = tCase.newEIPnodeSelectors
-			_, err := fakeCluster.crdClient.CrdV1beta1().ExternalIPPools().Update(context.TODO(), fakeEIP1, metav1.UpdateOptions{})
+			_, err := fakeCluster.crdClient.CrdV1beta2().ExternalIPPools().Update(context.TODO(), fakeEIP1, metav1.UpdateOptions{})
 			require.NoError(t, err, "Update ExternalIPPool error")
 			assert.Eventually(t, func() bool {
-				res, err := fakeCluster.cluster.ShouldSelectIP(fakeEgress1.Spec.EgressIP, fakeEgress1.Spec.ExternalIPPool)
+				res, err := fakeCluster.cluster.ShouldSelectIP(fakeEgress1.Spec.EgressIPs[0], fakeEgress1.Spec.ExternalIPPool)
 				return err == nil && res == tCase.expectEgressSelectResult
 			}, 1*time.Second, 100*time.Millisecond, "select Node result for Egress does not match")
 		})
 	}
 
 	// Test creating new ExternalIPPool.
-	fakeEIP2 := &crdv1b1.ExternalIPPool{
+	fakeEIP2 := &crdv1b2.ExternalIPPool{
 		TypeMeta: metav1.TypeMeta{
 			Kind: "CustomResourceDefinition",
 		},
 		ObjectMeta: metav1.ObjectMeta{
 			Name: "fakeExternalIPPool2",
 		},
-		Spec: crdv1b1.ExternalIPPoolSpec{NodeSelector: metav1.LabelSelector{MatchLabels: map[string]string{"env": "test"}}},
+		Spec: crdv1b2.ExternalIPPoolSpec{NodeSelector: metav1.LabelSelector{MatchLabels: map[string]string{"env": "test"}}},
 	}
 	fakeEgressIP2 := "1.1.1.2"
-	fakeEgress2 := &crdv1b1.Egress{
+	fakeEgress2 := &crdv1b2.Egress{
 		ObjectMeta: metav1.ObjectMeta{Name: "fakeEgress2", UID: "fakeUID2"},
-		Spec:       crdv1b1.EgressSpec{ExternalIPPool: fakeEIP2.Name, EgressIP: fakeEgressIP2},
+		Spec:       crdv1b2.EgressSpec{ExternalIPPool: fakeEIP2.Name, EgressIPs: []string{fakeEgressIP2}},
 	}
 	require.NoError(t, createExternalIPPool(fakeCluster.crdClient, fakeEIP2))
 
-	assertEgressSelectResult := func(egress *crdv1b1.Egress, expectedRes bool, hasSyncedErr bool) {
+	assertEgressSelectResult := func(egress *crdv1b2.Egress, expectedRes bool, hasSyncedErr bool) {
 		cond := func() bool {
-			res, err := fakeCluster.cluster.ShouldSelectIP(egress.Spec.EgressIP, egress.Spec.ExternalIPPool)
+			res, err := fakeCluster.cluster.ShouldSelectIP(egress.Spec.EgressIPs[0], egress.Spec.ExternalIPPool)
 			if hasSyncedErr {
 				return err != nil
 			}
@@ -347,7 +347,7 @@ func TestCluster_RunClusterEvents(t *testing.T) {
 
 	// Test deleting ExternalIPPool.
 	deleteExternalIPPool := func(eipName string) {
-		err := fakeCluster.crdClient.CrdV1beta1().ExternalIPPools().Delete(context.TODO(), eipName, metav1.DeleteOptions{})
+		err := fakeCluster.crdClient.CrdV1beta2().ExternalIPPools().Delete(context.TODO(), eipName, metav1.DeleteOptions{})
 		require.NoError(t, err, "Delete ExternalIPPool error")
 	}
 	deleteExternalIPPool(fakeEIP2.Name)
@@ -473,11 +473,11 @@ func TestCluster_ConsistentHashDistribute(t *testing.T) {
 				fakeCluster := genLocalNodeCluster(node, fakeEIPName, testC.nodes)
 				selectedNodes := []int{}
 				for i := 0; i < egressNum; i++ {
-					fakeEgress := &crdv1b1.Egress{
+					fakeEgress := &crdv1b2.Egress{
 						ObjectMeta: metav1.ObjectMeta{Name: "fakeEgress"},
-						Spec:       crdv1b1.EgressSpec{ExternalIPPool: fakeEIPName, EgressIP: fmt.Sprintf("10.1.1.%d", i)},
+						Spec:       crdv1b2.EgressSpec{ExternalIPPool: fakeEIPName, EgressIPs: []string{fmt.Sprintf("10.1.1.%d", i)}},
 					}
-					selected, err := fakeCluster.ShouldSelectIP(fakeEgress.Spec.EgressIP, fakeEgress.Spec.ExternalIPPool)
+					selected, err := fakeCluster.ShouldSelectIP(fakeEgress.Spec.EgressIPs[0], fakeEgress.Spec.ExternalIPPool)
 					assert.NoError(t, err)
 					if selected {
 						selectedNodes = append(selectedNodes, i)
@@ -532,9 +532,9 @@ func TestCluster_ShouldSelectEgress(t *testing.T) {
 	for _, tCase := range testCases {
 		t.Run(tCase.name, func(t *testing.T) {
 			fakeEIPName := "fakeExternalIPPool"
-			fakeEgress := &crdv1b1.Egress{
+			fakeEgress := &crdv1b2.Egress{
 				ObjectMeta: metav1.ObjectMeta{Name: "fakeEgress"},
-				Spec:       crdv1b1.EgressSpec{ExternalIPPool: fakeEIPName, EgressIP: tCase.egressIP},
+				Spec:       crdv1b2.EgressSpec{ExternalIPPool: fakeEIPName, EgressIPs: []string{tCase.egressIP}},
 			}
 			consistentHashMap := NewNodeConsistentHashMap()
 			consistentHashMap.Add(genNodes(tCase.nodeNum)...)
@@ -546,7 +546,7 @@ func TestCluster_ShouldSelectEgress(t *testing.T) {
 			for i := 0; i < tCase.nodeNum; i++ {
 				node := fmt.Sprintf("node-%d", i)
 				fakeCluster.nodeName = node
-				selected, err := fakeCluster.ShouldSelectIP(fakeEgress.Spec.EgressIP, fakeEgress.Spec.ExternalIPPool)
+				selected, err := fakeCluster.ShouldSelectIP(fakeEgress.Spec.EgressIPs[0], fakeEgress.Spec.ExternalIPPool)
 				require.NoError(t, err)
 				assert.Equal(t, node == tCase.expectedNode, selected, "Selected Node for Egress not match")
 			}
@@ -642,15 +642,15 @@ func BenchmarkCluster_ShouldSelect(b *testing.B) {
 
 	for _, bc := range benchmarkCases {
 		fakeEIPName := "fakeExternalIPPool"
-		fakeEgress := &crdv1b1.Egress{
+		fakeEgress := &crdv1b2.Egress{
 			ObjectMeta: metav1.ObjectMeta{Name: "fakeEgress"},
-			Spec:       crdv1b1.EgressSpec{ExternalIPPool: fakeEIPName, EgressIP: "1.1.1.1"},
+			Spec:       crdv1b2.EgressSpec{ExternalIPPool: fakeEIPName, EgressIPs: []string{"1.1.1.1"}},
 		}
 		fakeCluster := genLocalNodeCluster("fakeLocalNodeName", fakeEIPName, bc.nodes)
 		b.Run(fmt.Sprintf("%s-nodeSelectedForEgress", bc.name), func(b *testing.B) {
 			b.ResetTimer()
 			for i := 0; i < b.N; i++ {
-				fakeCluster.ShouldSelectIP(fakeEgress.Spec.EgressIP, fakeEgress.Spec.ExternalIPPool)
+				fakeCluster.ShouldSelectIP(fakeEgress.Spec.EgressIPs[0], fakeEgress.Spec.ExternalIPPool)
 			}
 		})
 	}

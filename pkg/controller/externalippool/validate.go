@@ -24,7 +24,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/klog/v2"
 
-	crdv1beta1 "antrea.io/antrea/v2/pkg/apis/crd/v1beta1"
+	crdv1beta2 "antrea.io/antrea/v2/pkg/apis/crd/v1beta2"
 	"antrea.io/antrea/v2/pkg/controller/validation"
 )
 
@@ -34,7 +34,7 @@ func (c *ExternalIPPoolController) ValidateExternalIPPool(review *admv1.Admissio
 	allowed := true
 
 	klog.V(2).Info("Validating ExternalIPPool", "request", review.Request)
-	var newObj, oldObj crdv1beta1.ExternalIPPool
+	var newObj, oldObj crdv1beta2.ExternalIPPool
 	if review.Request.Object.Raw != nil {
 		if err := json.Unmarshal(review.Request.Object.Raw, &newObj); err != nil {
 			klog.ErrorS(err, "Error de-serializing current ExternalIPPool")
@@ -86,8 +86,8 @@ func (c *ExternalIPPoolController) ValidateExternalIPPool(review *admv1.Admissio
 			msg = fmt.Sprintf("IP families are immutable (old: %v, new: %v)", sets.List(oldIPFamilies), sets.List(newIPFamilies))
 			break
 		}
-		oldIPRangeSet := validation.GetIPRangeSet(oldObj.Spec.IPRanges)
-		newIPRangeSet := validation.GetIPRangeSet(newObj.Spec.IPRanges)
+		oldIPRangeSet := validation.GetExternalIPPoolIPRangeSet(oldObj.Spec.IPRanges)
+		newIPRangeSet := validation.GetExternalIPPoolIPRangeSet(newObj.Spec.IPRanges)
 		deletedIPRanges := oldIPRangeSet.Difference(newIPRangeSet)
 		if deletedIPRanges.Len() > 0 {
 			allowed = false
@@ -119,7 +119,7 @@ func newAdmissionResponseForErr(err error) *admv1.AdmissionResponse {
 	}
 }
 
-func validateIPRangesAndSubnetInfoForExternalIPPool(externalIPPool *crdv1beta1.ExternalIPPool, existingExternalIPPools []*crdv1beta1.ExternalIPPool) error {
+func validateIPRangesAndSubnetInfoForExternalIPPool(externalIPPool *crdv1beta2.ExternalIPPool, existingExternalIPPools []*crdv1beta2.ExternalIPPool) error {
 	ipRanges := externalIPPool.Spec.IPRanges
 	subnetInfo := externalIPPool.Spec.SubnetInfo
 	currentNormalizedIPRanges, err := validation.ValidateExternalIPPoolIPRangesAndSubnetInfo(subnetInfo, ipRanges)
@@ -129,7 +129,7 @@ func validateIPRangesAndSubnetInfoForExternalIPPool(externalIPPool *crdv1beta1.E
 	return validateNoOverlappingRanges(currentNormalizedIPRanges, existingExternalIPPools, externalIPPool.Name)
 }
 
-func collectExistingRanges(pools []*crdv1beta1.ExternalIPPool, skipPool string) ([]validation.NormalizedIPRange, error) {
+func collectExistingRanges(pools []*crdv1beta2.ExternalIPPool, skipPool string) ([]validation.NormalizedIPRange, error) {
 	normalized := make([]validation.NormalizedIPRange, 0)
 	for _, pool := range pools {
 		if pool.Name == skipPool {
@@ -144,7 +144,7 @@ func collectExistingRanges(pools []*crdv1beta1.ExternalIPPool, skipPool string) 
 	return normalized, nil
 }
 
-func validateNoOverlappingRanges(currentNormalizedIPRanges []validation.NormalizedIPRange, existingExternalIPPools []*crdv1beta1.ExternalIPPool, externalIPPoolName string) error {
+func validateNoOverlappingRanges(currentNormalizedIPRanges []validation.NormalizedIPRange, existingExternalIPPools []*crdv1beta2.ExternalIPPool, externalIPPoolName string) error {
 	existingNormalized, err := collectExistingRanges(existingExternalIPPools, externalIPPoolName)
 	if err != nil {
 		return err

@@ -90,7 +90,7 @@ webhooks:
     rules:
       - operations: ["CREATE", "UPDATE"]
         apiGroups: ["crd.antrea.io"]
-        apiVersions: ["v1alpha2", "v1beta1"]
+        apiVersions: ["v1alpha2", "v1beta1", "v1beta2"]
         resources: ["externalippools"]
         scope: "Cluster"
     admissionReviewVersions: ["v1", "v1beta1"]
@@ -105,7 +105,7 @@ webhooks:
     rules:
       - operations: ["CREATE", "UPDATE"]
         apiGroups: ["crd.antrea.io"]
-        apiVersions: ["v1beta1"]
+        apiVersions: ["v1beta1", "v1beta2"]
         resources: ["egresses"]
         scope: "Cluster"
     admissionReviewVersions: ["v1", "v1beta1"]

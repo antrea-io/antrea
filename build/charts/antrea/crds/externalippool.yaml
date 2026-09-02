@@ -4,10 +4,122 @@ metadata:
   name: externalippools.crd.antrea.io
   labels:
     app: antrea
+    served-by: antrea-controller
 spec:
   group: crd.antrea.io
   versions:
     - name: v1beta1
+      served: true
+      storage: false
+      deprecated: true
+      deprecationWarning: crd.antrea.io/v1beta1 ExternalIPPool is deprecated; use crd.antrea.io/v1beta2 ExternalIPPool
+      schema:
+        openAPIV3Schema:
+          type: object
+          required:
+            - spec
+          properties:
+            spec:
+              type: object
+              required:
+                - ipRanges
+                - nodeSelector
+              properties:
+                ipRanges:
+                  type: array
+                  items:
+                    type: object
+                    oneOf:
+                      - required:
+                          - cidr
+                      - required:
+                          - start
+                          - end
+                    properties:
+                      cidr:
+                        type: string
+                        format: cidr
+                      start:
+                        type: string
+                        oneOf:
+                          - format: ipv4
+                          - format: ipv6
+                      end:
+                        type: string
+                        oneOf:
+                          - format: ipv4
+                          - format: ipv6
+                subnetInfo:
+                  type: object
+                  required:
+                    - gateway
+                    - prefixLength
+                  properties:
+                    gateway:
+                      type: string
+                      oneOf:
+                        - format: ipv4
+                        - format: ipv6
+                    prefixLength:
+                      type: integer
+                      minimum: 1
+                      maximum: 127
+                    vlan:
+                      type: integer
+                      minimum: 0
+                      maximum: 4094
+                nodeSelector:
+                  type: object
+                  properties:
+                    matchExpressions:
+                      items:
+                        properties:
+                          key:
+                            type: string
+                          operator:
+                            enum:
+                              - In
+                              - NotIn
+                              - Exists
+                              - DoesNotExist
+                            type: string
+                          values:
+                            items:
+                              type: string
+                              pattern: "^(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])?$"
+                            type: array
+                        type: object
+                      type: array
+                    matchLabels:
+                      additionalProperties:
+                        type: string
+                        pattern: "^(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])?$"
+                      type: object
+            status:
+              type: object
+              properties:
+                usage:
+                  type: object
+                  properties:
+                    total:
+                      type: integer
+                    used:
+                      type: integer
+      additionalPrinterColumns:
+        - description: The number of total IPs
+          jsonPath: .status.usage.total
+          name: Total
+          type: integer
+        - description: The number of allocated IPs
+          jsonPath: .status.usage.used
+          name: Used
+          type: integer
+        - jsonPath: .metadata.creationTimestamp
+          name: Age
+          type: date
+      subresources:
+        status: { }
+    - name: v1beta2
       served: true
       storage: true
       schema:
@@ -146,6 +258,15 @@ spec:
           type: date
       subresources:
         status: { }
+  conversion:
+    strategy: Webhook
+    webhook:
+      conversionReviewVersions: ["v1", "v1beta1"]
+      clientConfig:
+        service:
+          name: "antrea"
+          namespace: "kube-system"
+          path: "/convert/externalippool"
   scope: Cluster
   names:
     plural: externalippools

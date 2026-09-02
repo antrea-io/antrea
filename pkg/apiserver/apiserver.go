@@ -64,6 +64,7 @@ import (
 	"antrea.io/antrea/v2/pkg/apiserver/storage"
 	crdv1a2informers "antrea.io/antrea/v2/pkg/client/informers/externalversions/crd/v1alpha2"
 	"antrea.io/antrea/v2/pkg/controller/antreanodeconfig"
+	"antrea.io/antrea/v2/pkg/controller/crdconversion"
 	"antrea.io/antrea/v2/pkg/controller/egress"
 	"antrea.io/antrea/v2/pkg/controller/externalippool"
 	"antrea.io/antrea/v2/pkg/controller/ipam"
@@ -304,6 +305,11 @@ func installHandlers(c *ExtraConfig, s *genericapiserver.GenericAPIServer) {
 	s.Handler.NonGoRestfulMux.HandleFunc("/loglevel", loglevel.HandleFunc())
 	s.Handler.NonGoRestfulMux.HandleFunc("/featuregates", featuregates.HandleFunc(c.k8sClient))
 	s.Handler.NonGoRestfulMux.HandleFunc("/endpoint", endpoint.HandleFunc(c.endpointQuerier))
+
+	// CRD conversion endpoints must remain available independently of feature gates. The API server may need them to
+	// read or delete objects persisted in a different storage version even when the corresponding feature is disabled.
+	s.Handler.NonGoRestfulMux.HandleFunc("/convert/egress", webhook.HandleCRDConversion(crdconversion.ConvertEgress))
+	s.Handler.NonGoRestfulMux.HandleFunc("/convert/externalippool", webhook.HandleCRDConversion(crdconversion.ConvertExternalIPPool))
 	// Webhook to mutate Namespace labels and add its metadata.name as a label
 	s.Handler.NonGoRestfulMux.HandleFunc("/mutate/namespace", webhook.HandleMutationLabels())
 	if features.DefaultFeatureGate.Enabled(features.AntreaPolicy) {

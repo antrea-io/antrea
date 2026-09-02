@@ -15,6 +15,7 @@
 package egress
 
 import (
+	"slices"
 	"sort"
 	"strconv"
 	"sync"
@@ -30,9 +31,9 @@ import (
 
 	"antrea.io/antrea/v2/pkg/agent/memberlist"
 	"antrea.io/antrea/v2/pkg/agent/types"
-	crdv1b1 "antrea.io/antrea/v2/pkg/apis/crd/v1beta1"
-	crdinformers "antrea.io/antrea/v2/pkg/client/informers/externalversions/crd/v1beta1"
-	crdlisters "antrea.io/antrea/v2/pkg/client/listers/crd/v1beta1"
+	crdv1b2 "antrea.io/antrea/v2/pkg/apis/crd/v1beta2"
+	crdinformers "antrea.io/antrea/v2/pkg/client/informers/externalversions/crd/v1beta2"
+	crdlisters "antrea.io/antrea/v2/pkg/client/listers/crd/v1beta2"
 )
 
 const (
@@ -171,7 +172,7 @@ func (s *egressIPScheduler) deleteNode(obj interface{}) {
 
 // addEgress processes Egress ADD events.
 func (s *egressIPScheduler) addEgress(obj interface{}) {
-	egress := obj.(*crdv1b1.Egress)
+	egress := obj.(*crdv1b2.Egress)
 	if !isEgressSchedulable(egress) {
 		return
 	}
@@ -181,12 +182,12 @@ func (s *egressIPScheduler) addEgress(obj interface{}) {
 
 // updateEgress processes Egress UPDATE events.
 func (s *egressIPScheduler) updateEgress(old, cur interface{}) {
-	oldEgress := old.(*crdv1b1.Egress)
-	curEgress := cur.(*crdv1b1.Egress)
+	oldEgress := old.(*crdv1b2.Egress)
+	curEgress := cur.(*crdv1b2.Egress)
 	if !isEgressSchedulable(oldEgress) && !isEgressSchedulable(curEgress) {
 		return
 	}
-	if oldEgress.Spec.EgressIP == curEgress.Spec.EgressIP && oldEgress.Spec.ExternalIPPool == curEgress.Spec.ExternalIPPool {
+	if slices.Equal(oldEgress.Spec.EgressIPs, curEgress.Spec.EgressIPs) && oldEgress.Spec.ExternalIPPool == curEgress.Spec.ExternalIPPool {
 		return
 	}
 	s.queue.Add(workItem)
@@ -195,14 +196,14 @@ func (s *egressIPScheduler) updateEgress(old, cur interface{}) {
 
 // deleteEgress processes Egress DELETE events.
 func (s *egressIPScheduler) deleteEgress(obj interface{}) {
-	egress, ok := obj.(*crdv1b1.Egress)
+	egress, ok := obj.(*crdv1b2.Egress)
 	if !ok {
 		deletedState, ok := obj.(cache.DeletedFinalStateUnknown)
 		if !ok {
 			klog.Errorf("Received unexpected object: %v", obj)
 			return
 		}
-		egress, ok = deletedState.Obj.(*crdv1b1.Egress)
+		egress, ok = deletedState.Obj.(*crdv1b2.Egress)
 		if !ok {
 			klog.Errorf("DeletedFinalStateUnknown contains non-Egress object: %v", deletedState.Obj)
 			return
@@ -264,7 +265,7 @@ func (s *egressIPScheduler) GetEgressIPAndNode(egress string) (string, string, e
 }
 
 // EgressesByCreationTimestamp sorts a list of Egresses by creation timestamp.
-type EgressesByCreationTimestamp []*crdv1b1.Egress
+type EgressesByCreationTimestamp []*crdv1b2.Egress
 
 func (o EgressesByCreationTimestamp) Len() int      { return len(o) }
 func (o EgressesByCreationTimestamp) Swap(i, j int) { o[i], o[j] = o[j], o[i] }
@@ -343,17 +344,18 @@ func (s *egressIPScheduler) schedule() {
 			continue
 		}
 
+		egressIP := singleEgressIP(&egress.Spec)
 		maxEgressIPsFilter := func(node string) bool {
 			// Count the Egress IPs that are already assigned to this Node.
 			ipsOnNode := nodeToIPs[node]
 			numIPs := ipsOnNode.Len()
 			// Check if this Node can accommodate the new Egress IP.
-			if !ipsOnNode.Has(egress.Spec.EgressIP) {
+			if !ipsOnNode.Has(egressIP) {
 				numIPs += 1
 			}
 			return numIPs <= s.getMaxEgressIPsByNode(node)
 		}
-		node, err := s.cluster.SelectNodeForIP(egress.Spec.EgressIP, egress.Spec.ExternalIPPool, maxEgressIPsFilter)
+		node, err := s.cluster.SelectNodeForIP(egressIP, egress.Spec.ExternalIPPool, maxEgressIPsFilter)
 		if err != nil {
 			if err == memberlist.ErrNoNodeAvailable {
 				klog.InfoS("No Node is eligible for Egress", "egress", klog.KObj(egress))
@@ -365,7 +367,7 @@ func (s *egressIPScheduler) schedule() {
 			continue
 		}
 		result := &scheduleResult{
-			ip:   egress.Spec.EgressIP,
+			ip:   egressIP,
 			node: node,
 		}
 		newResults[egress.Name] = result
@@ -375,7 +377,7 @@ func (s *egressIPScheduler) schedule() {
 			ips = sets.New[string]()
 			nodeToIPs[node] = ips
 		}
-		ips.Insert(egress.Spec.EgressIP)
+		ips.Insert(egressIP)
 	}
 
 	func() {
