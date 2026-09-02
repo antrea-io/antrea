@@ -135,11 +135,6 @@ func (in ExternalIPPoolStatus) OpenAPIModelName() string {
 }
 
 // OpenAPIModelName returns the OpenAPI model name for this type.
-func (in ExternalIPPoolSubnetInfo) OpenAPIModelName() string {
-	return "io.antrea.crd.v1beta1.ExternalIPPoolSubnetInfo"
-}
-
-// OpenAPIModelName returns the OpenAPI model name for this type.
 func (in Group) OpenAPIModelName() string {
 	return "io.antrea.crd.v1beta1.Group"
 }
@@ -347,11 +342,6 @@ func (in Source) OpenAPIModelName() string {
 // OpenAPIModelName returns the OpenAPI model name for this type.
 func (in StatefulSetOwner) OpenAPIModelName() string {
 	return "io.antrea.crd.v1beta1.StatefulSetOwner"
-}
-
-// OpenAPIModelName returns the OpenAPI model name for this type.
-func (in SubnetGateway) OpenAPIModelName() string {
-	return "io.antrea.crd.v1beta1.SubnetGateway"
 }
 
 // OpenAPIModelName returns the OpenAPI model name for this type.
