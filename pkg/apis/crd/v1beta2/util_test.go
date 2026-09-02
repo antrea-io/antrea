@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package v1beta1
+package v1beta2
 
 import (
 	"testing"
@@ -20,30 +20,24 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func TestCompareExternalIPPoolSubnetInfoWithGateways(t *testing.T) {
-	subnetInfo := &ExternalIPPoolSubnetInfo{
-		Gateways: []SubnetGateway{
-			{Gateway: "192.168.1.1", PrefixLength: 24},
-			{Gateway: "2001:db8::1", PrefixLength: 64},
-		},
-		VLAN: 100,
+func TestCompareExternalIPPoolSubnetsWithGateways(t *testing.T) {
+	subnetInfo := []SubnetInfo{
+		{Gateway: "192.168.1.1", PrefixLength: 24, VLAN: 100},
+		{Gateway: "2001:db8::1", PrefixLength: 64, VLAN: 100},
 	}
-	reversed := &ExternalIPPoolSubnetInfo{
-		Gateways: []SubnetGateway{
-			{Gateway: "2001:db8::1", PrefixLength: 64},
-			{Gateway: "192.168.1.1", PrefixLength: 24},
-		},
-		VLAN: 100,
+	reversed := []SubnetInfo{
+		{Gateway: "2001:db8::1", PrefixLength: 64, VLAN: 100},
+		{Gateway: "192.168.1.1", PrefixLength: 24, VLAN: 100},
 	}
-	differentGateway := reversed.DeepCopy()
-	differentGateway.Gateways[0].Gateway = "2001:db8::2"
-	ipv4Subnet := &ExternalIPPoolSubnetInfo{Gateways: []SubnetGateway{{Gateway: "192.168.1.1", PrefixLength: 24}}}
-	ipv6Subnet := &ExternalIPPoolSubnetInfo{Gateways: []SubnetGateway{{Gateway: "2001:db8::1", PrefixLength: 24}}}
+	differentGateway := append([]SubnetInfo(nil), reversed...)
+	differentGateway[0].Gateway = "2001:db8::2"
+	ipv4Subnet := []SubnetInfo{{Gateway: "192.168.1.1", PrefixLength: 24}}
+	ipv6Subnet := []SubnetInfo{{Gateway: "2001:db8::1", PrefixLength: 24}}
 
 	tests := []struct {
 		name            string
-		a               *ExternalIPPoolSubnetInfo
-		b               *ExternalIPPoolSubnetInfo
+		a               []SubnetInfo
+		b               []SubnetInfo
 		ignoringGateway bool
 		want            bool
 	}{
@@ -76,8 +70,8 @@ func TestCompareExternalIPPoolSubnetInfoWithGateways(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := CompareExternalIPPoolSubnetInfo(tt.a, tt.b, tt.ignoringGateway)
-			assert.Equal(t, tt.want, got, "CompareExternalIPPoolSubnetInfo(%+v, %+v, %t)", tt.a, tt.b, tt.ignoringGateway)
+			got := CompareExternalIPPoolSubnets(tt.a, tt.b, tt.ignoringGateway)
+			assert.Equal(t, tt.want, got, "CompareExternalIPPoolSubnets(%+v, %+v, %t)", tt.a, tt.b, tt.ignoringGateway)
 		})
 	}
 }
