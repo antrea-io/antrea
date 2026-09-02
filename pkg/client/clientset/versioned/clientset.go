@@ -1,4 +1,4 @@
-// Copyright 2025 Antrea Authors
+// Copyright 2026 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -24,6 +24,7 @@ import (
 	crdv1alpha1 "antrea.io/antrea/v2/pkg/client/clientset/versioned/typed/crd/v1alpha1"
 	crdv1alpha2 "antrea.io/antrea/v2/pkg/client/clientset/versioned/typed/crd/v1alpha2"
 	crdv1beta1 "antrea.io/antrea/v2/pkg/client/clientset/versioned/typed/crd/v1beta1"
+	crdv1beta2 "antrea.io/antrea/v2/pkg/client/clientset/versioned/typed/crd/v1beta2"
 	statsv1alpha1 "antrea.io/antrea/v2/pkg/client/clientset/versioned/typed/stats/v1alpha1"
 	systemv1beta1 "antrea.io/antrea/v2/pkg/client/clientset/versioned/typed/system/v1beta1"
 	discovery "k8s.io/client-go/discovery"
@@ -37,6 +38,7 @@ type Interface interface {
 	CrdV1alpha1() crdv1alpha1.CrdV1alpha1Interface
 	CrdV1alpha2() crdv1alpha2.CrdV1alpha2Interface
 	CrdV1beta1() crdv1beta1.CrdV1beta1Interface
+	CrdV1beta2() crdv1beta2.CrdV1beta2Interface
 	StatsV1alpha1() statsv1alpha1.StatsV1alpha1Interface
 	SystemV1beta1() systemv1beta1.SystemV1beta1Interface
 }
@@ -48,6 +50,7 @@ type Clientset struct {
 	crdV1alpha1         *crdv1alpha1.CrdV1alpha1Client
 	crdV1alpha2         *crdv1alpha2.CrdV1alpha2Client
 	crdV1beta1          *crdv1beta1.CrdV1beta1Client
+	crdV1beta2          *crdv1beta2.CrdV1beta2Client
 	statsV1alpha1       *statsv1alpha1.StatsV1alpha1Client
 	systemV1beta1       *systemv1beta1.SystemV1beta1Client
 }
@@ -70,6 +73,11 @@ func (c *Clientset) CrdV1alpha2() crdv1alpha2.CrdV1alpha2Interface {
 // CrdV1beta1 retrieves the CrdV1beta1Client
 func (c *Clientset) CrdV1beta1() crdv1beta1.CrdV1beta1Interface {
 	return c.crdV1beta1
+}
+
+// CrdV1beta2 retrieves the CrdV1beta2Client
+func (c *Clientset) CrdV1beta2() crdv1beta2.CrdV1beta2Interface {
+	return c.crdV1beta2
 }
 
 // StatsV1alpha1 retrieves the StatsV1alpha1Client
@@ -142,6 +150,10 @@ func NewForConfigAndClient(c *rest.Config, httpClient *http.Client) (*Clientset,
 	if err != nil {
 		return nil, err
 	}
+	cs.crdV1beta2, err = crdv1beta2.NewForConfigAndClient(&configShallowCopy, httpClient)
+	if err != nil {
+		return nil, err
+	}
 	cs.statsV1alpha1, err = statsv1alpha1.NewForConfigAndClient(&configShallowCopy, httpClient)
 	if err != nil {
 		return nil, err
@@ -175,6 +187,7 @@ func New(c rest.Interface) *Clientset {
 	cs.crdV1alpha1 = crdv1alpha1.New(c)
 	cs.crdV1alpha2 = crdv1alpha2.New(c)
 	cs.crdV1beta1 = crdv1beta1.New(c)
+	cs.crdV1beta2 = crdv1beta2.New(c)
 	cs.statsV1alpha1 = statsv1alpha1.New(c)
 	cs.systemV1beta1 = systemv1beta1.New(c)
 
