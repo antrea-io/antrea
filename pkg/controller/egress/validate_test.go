@@ -15,19 +15,27 @@
 package egress
 
 import (
+	"context"
 	"encoding/json"
+	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	admv1 "k8s.io/api/admission/v1"
 	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
+	k8stesting "k8s.io/client-go/testing"
 	"k8s.io/client-go/tools/cache"
-	"k8s.io/utils/ptr"
 
 	crdv1beta1 "antrea.io/antrea/v2/pkg/apis/crd/v1beta1"
+	crdv1beta2 "antrea.io/antrea/v2/pkg/apis/crd/v1beta2"
+	fakeversioned "antrea.io/antrea/v2/pkg/client/clientset/versioned/fake"
+	"antrea.io/antrea/v2/pkg/controller/crdconversion"
+	"antrea.io/antrea/v2/pkg/controller/externalippool"
 )
 
 func marshal(object runtime.Object) []byte {
@@ -35,48 +43,151 @@ func marshal(object runtime.Object) []byte {
 	return raw
 }
 
-func newEgressWithIPFamilyPolicy(name, egressIP, externalIPPool string, policy *corev1.IPFamilyPolicy) *crdv1beta1.Egress {
+func newEgressWithIPFamilies(name, egressIP, externalIPPool string, families ...corev1.IPFamily) *crdv1beta2.Egress {
 	egress := newEgress(name, egressIP, externalIPPool, nil, nil, nil)
-	egress.Spec.IPFamilyPolicy = policy
+	egress.Spec.IPFamilies = families
 	return egress
 }
 
-func newDualStackEgress(name, externalIPPool string, egressIPs []string, policy *corev1.IPFamilyPolicy) *crdv1beta1.Egress {
+func newDualStackEgress(name, externalIPPool string, egressIPs []string) *crdv1beta2.Egress {
 	egress := newEgress(name, "", externalIPPool, nil, nil, nil)
 	egress.Spec.EgressIPs = egressIPs
-	egress.Spec.IPFamilyPolicy = policy
 	return egress
 }
 
-func newDualStackExternalIPPool(name string) *crdv1beta1.ExternalIPPool {
+func newDualStackExternalIPPool(name string) *crdv1beta2.ExternalIPPool {
 	pool := newExternalIPPool(name, "10.10.10.0/24", "", "")
-	pool.Spec.IPRanges = append(pool.Spec.IPRanges, crdv1beta1.IPRange{CIDR: "2001:db8:10::/64"})
+	pool.Spec.IPRanges = append(pool.Spec.IPRanges, crdv1beta2.IPRange{CIDR: "2001:db8:10::/64"})
 	return pool
+}
+
+func TestParseSpecifiedEgressIPs(t *testing.T) {
+	tests := []struct {
+		name   string
+		value  string
+		family corev1.IPFamily
+		errMsg string
+	}{
+		{
+			name:   "IPv4",
+			value:  "192.0.2.1",
+			family: corev1.IPv4Protocol,
+		},
+		{
+			name:   "IPv6",
+			value:  "2001:db8::1",
+			family: corev1.IPv6Protocol,
+		},
+		{
+			name:   "IPv4-mapped IPv6 dotted notation",
+			value:  "::ffff:192.0.2.1",
+			errMsg: "address ::ffff:192.0.2.1 is IPv4-mapped IPv6; use 192.0.2.1 instead",
+		},
+		{
+			name:   "IPv4-mapped IPv6 hexadecimal notation",
+			value:  "::ffff:c000:201",
+			errMsg: "address ::ffff:c000:201 is IPv4-mapped IPv6; use 192.0.2.1 instead",
+		},
+		{
+			name:   "IPv4-mapped IPv6 expanded notation",
+			value:  "0:0:0:0:0:ffff:c000:201",
+			errMsg: "address 0:0:0:0:0:ffff:c000:201 is IPv4-mapped IPv6; use 192.0.2.1 instead",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			parsed, err := parseSpecifiedEgressIPs(&crdv1beta2.EgressSpec{EgressIPs: []string{tt.value}})
+			if tt.errMsg != "" {
+				require.EqualError(t, err, tt.errMsg)
+				return
+			}
+			require.NoError(t, err)
+			require.Len(t, parsed, 1)
+			assert.Equal(t, tt.value, parsed[0].value)
+			assert.Equal(t, tt.value, parsed[0].ip.String())
+			assert.Equal(t, tt.family, parsed[0].family)
+		})
+	}
 }
 
 func TestEgressControllerValidateEgress(t *testing.T) {
 	var (
-		bandwidth = crdv1beta1.Bandwidth{
+		bandwidth = crdv1beta2.Bandwidth{
 			Rate:  "500k",
 			Burst: "10M",
 		}
-		invalidBandwidthRate = crdv1beta1.Bandwidth{
+		invalidBandwidthRate = crdv1beta2.Bandwidth{
 			Rate:  "500A",
 			Burst: "10G",
 		}
-		invalidBandwidthBurst = crdv1beta1.Bandwidth{
+		invalidBandwidthBurst = crdv1beta2.Bandwidth{
 			Rate:  "1.5G",
 			Burst: "10b",
 		}
+		legacyV1beta1Egress = &crdv1beta1.Egress{
+			TypeMeta: metav1.TypeMeta{APIVersion: "crd.antrea.io/v1beta1", Kind: "Egress"},
+			ObjectMeta: metav1.ObjectMeta{
+				Name: "legacy",
+			},
+			Spec: crdv1beta1.EgressSpec{
+				AppliedTo: crdv1beta1.AppliedTo{},
+				EgressIP:  "10.10.10.1",
+			},
+		}
+		legacyV1beta1PluralEgress = &crdv1beta1.Egress{
+			TypeMeta:   metav1.TypeMeta{APIVersion: "crd.antrea.io/v1beta1", Kind: "Egress"},
+			ObjectMeta: metav1.ObjectMeta{Name: "legacy-plural"},
+			Spec: crdv1beta1.EgressSpec{
+				AppliedTo: crdv1beta1.AppliedTo{},
+				EgressIPs: []string{"10.10.10.1"},
+			},
+		}
+		legacyV1beta1PoolOnlyEgress = &crdv1beta1.Egress{
+			TypeMeta:   metav1.TypeMeta{APIVersion: "crd.antrea.io/v1beta1", Kind: "Egress"},
+			ObjectMeta: metav1.ObjectMeta{Name: "legacy-pool-only"},
+			Spec: crdv1beta1.EgressSpec{
+				AppliedTo:      crdv1beta1.AppliedTo{},
+				ExternalIPPool: "missing",
+			},
+		}
 	)
-	egressWithBothIPFields := newDualStackEgress("foo", "dual-stack", []string{"2001:db8:10::1"}, nil)
-	egressWithBothIPFields.Spec.EgressIP = "10.10.10.1"
 	tests := []struct {
 		name                   string
-		existingExternalIPPool *crdv1beta1.ExternalIPPool
+		existingExternalIPPool *crdv1beta2.ExternalIPPool
 		request                *admv1.AdmissionRequest
 		expectedResponse       *admv1.AdmissionResponse
 	}{
+		{
+			name: "A v1beta1 Egress using egressIP should remain valid",
+			request: &admv1.AdmissionRequest{
+				Name:      "legacy",
+				Operation: "CREATE",
+				Resource:  metav1.GroupVersionResource{Group: "crd.antrea.io", Version: "v1beta1", Resource: "egresses"},
+				Object:    runtime.RawExtension{Raw: marshal(legacyV1beta1Egress)},
+			},
+			expectedResponse: &admv1.AdmissionResponse{Allowed: true},
+		},
+		{
+			name: "A v1beta1 Egress using unsupported egressIPs should remain rejected",
+			request: &admv1.AdmissionRequest{
+				Name:            "legacy-plural",
+				Operation:       admv1.Create,
+				Resource:        metav1.GroupVersionResource{Group: "crd.antrea.io", Version: "v1beta1", Resource: "egresses"},
+				RequestResource: &metav1.GroupVersionResource{Group: "crd.antrea.io", Version: "v1beta1", Resource: "egresses"},
+				Object:          runtime.RawExtension{Raw: marshal(legacyV1beta1PluralEgress)},
+			},
+			expectedResponse: &admv1.AdmissionResponse{Allowed: false, Result: &metav1.Status{Message: "spec.egressIPs is not supported yet"}},
+		},
+		{
+			name: "A v1beta1 pool-only Egress keeps historical validation behavior",
+			request: &admv1.AdmissionRequest{
+				Name:      "legacy-pool-only",
+				Operation: admv1.Create,
+				Resource:  metav1.GroupVersionResource{Group: "crd.antrea.io", Version: "v1beta1", Resource: "egresses"},
+				Object:    runtime.RawExtension{Raw: marshal(legacyV1beta1PoolOnlyEgress)},
+			},
+			expectedResponse: &admv1.AdmissionResponse{Allowed: true},
+		},
 		{
 			name:                   "Requesting IP from non-existing ExternalIPPool should not be allowed",
 			existingExternalIPPool: nil,
@@ -118,49 +229,62 @@ func TestEgressControllerValidateEgress(t *testing.T) {
 			expectedResponse: &admv1.AdmissionResponse{Allowed: true},
 		},
 		{
-			name:                   "Requesting explicit dual-stack IPs should be allowed",
+			name:                   "Requesting explicit dual-stack IPs should fail closed until runtime support is available",
 			existingExternalIPPool: newDualStackExternalIPPool("dual-stack"),
 			request: &admv1.AdmissionRequest{
 				Name:      "foo",
 				Operation: "CREATE",
 				Object: runtime.RawExtension{Raw: marshal(newDualStackEgress("foo", "dual-stack",
-					[]string{"10.10.10.1", "2001:db8:10::1"},
-					ptr.To(corev1.IPFamilyPolicyRequireDualStack)))},
+					[]string{"10.10.10.1", "2001:db8:10::1"}))},
 			},
-			expectedResponse: &admv1.AdmissionResponse{Allowed: true},
+			expectedResponse: &admv1.AdmissionResponse{Allowed: false, Result: &metav1.Status{Message: dualStackRuntimeUnsupportedMessage}},
 		},
 		{
-			name:                   "Reverse dual-stack IP ordering should be allowed",
+			name:                   "IPv6-first dual-stack IPs should fail closed until runtime support is available",
 			existingExternalIPPool: newDualStackExternalIPPool("dual-stack"),
 			request: &admv1.AdmissionRequest{
 				Name:      "foo",
 				Operation: "CREATE",
 				Object: runtime.RawExtension{Raw: marshal(newDualStackEgress("foo", "dual-stack",
-					[]string{"2001:db8:10::1", "10.10.10.1"}, nil))},
+					[]string{"2001:db8:10::1", "10.10.10.1"}))},
 			},
-			expectedResponse: &admv1.AdmissionResponse{Allowed: true},
+			expectedResponse: &admv1.AdmissionResponse{Allowed: false, Result: &metav1.Status{
+				Message: dualStackRuntimeUnsupportedMessage,
+			}},
 		},
 		{
-			name:                   "PreferDualStack allocation from a dual-stack pool should be allowed",
+			name:                   "Explicit dual-stack allocation from a dual-stack pool should fail closed",
 			existingExternalIPPool: newDualStackExternalIPPool("dual-stack"),
 			request: &admv1.AdmissionRequest{
 				Name:      "foo",
 				Operation: "CREATE",
-				Object: runtime.RawExtension{Raw: marshal(newEgressWithIPFamilyPolicy("foo", "", "dual-stack",
-					ptr.To(corev1.IPFamilyPolicyPreferDualStack)))},
+				Object:    runtime.RawExtension{Raw: marshal(newEgressWithIPFamilies("foo", "", "dual-stack", corev1.IPv4Protocol, corev1.IPv6Protocol))},
 			},
-			expectedResponse: &admv1.AdmissionResponse{Allowed: true},
+			expectedResponse: &admv1.AdmissionResponse{Allowed: false, Result: &metav1.Status{Message: dualStackRuntimeUnsupportedMessage}},
 		},
 		{
-			name:                   "SingleStack allocation from a dual-stack pool should be allowed",
+			name:                   "SingleStack automatic IPv6 allocation from a dual-stack pool should be allowed",
 			existingExternalIPPool: newDualStackExternalIPPool("dual-stack"),
 			request: &admv1.AdmissionRequest{
 				Name:      "foo",
 				Operation: "CREATE",
-				Object: runtime.RawExtension{Raw: marshal(newEgressWithIPFamilyPolicy("foo", "", "dual-stack",
-					ptr.To(corev1.IPFamilyPolicySingleStack)))},
+				Object: runtime.RawExtension{Raw: marshal(newEgressWithIPFamilies("foo", "", "dual-stack",
+					corev1.IPv6Protocol))},
 			},
 			expectedResponse: &admv1.AdmissionResponse{Allowed: true},
+		},
+		{
+			name:                   "Unavailable IP family should not be allowed",
+			existingExternalIPPool: newExternalIPPool("bar", "10.10.10.0/24", "", ""),
+			request: &admv1.AdmissionRequest{
+				Name:      "foo",
+				Operation: "CREATE",
+				Object: runtime.RawExtension{Raw: marshal(newEgressWithIPFamilies("foo", "", "bar",
+					corev1.IPv6Protocol))},
+			},
+			expectedResponse: &admv1.AdmissionResponse{Allowed: false, Result: &metav1.Status{
+				Message: "IP family IPv6 is not available in ExternalIPPool bar",
+			}},
 		},
 		{
 			name:                   "Legacy explicit IP selects one family from a dual-stack pool",
@@ -173,7 +297,7 @@ func TestEgressControllerValidateEgress(t *testing.T) {
 			expectedResponse: &admv1.AdmissionResponse{Allowed: true},
 		},
 		{
-			name:                   "Dual-stack pool without a policy should default to dual-stack allocation",
+			name:                   "Dual-stack pool without family selection preserves single IP allocation",
 			existingExternalIPPool: newDualStackExternalIPPool("dual-stack"),
 			request: &admv1.AdmissionRequest{
 				Name:      "foo",
@@ -207,25 +331,12 @@ func TestEgressControllerValidateEgress(t *testing.T) {
 			},
 		},
 		{
-			name:                   "egressIP and egressIPs should be mutually exclusive",
-			existingExternalIPPool: newDualStackExternalIPPool("dual-stack"),
-			request: &admv1.AdmissionRequest{
-				Name:      "foo",
-				Operation: "CREATE",
-				Object:    runtime.RawExtension{Raw: marshal(egressWithBothIPFields)},
-			},
-			expectedResponse: &admv1.AdmissionResponse{
-				Allowed: false,
-				Result:  &metav1.Status{Message: "spec.egressIP and spec.egressIPs are mutually exclusive"},
-			},
-		},
-		{
 			name: "egressIPs with duplicate families should not be allowed",
 			request: &admv1.AdmissionRequest{
 				Name:      "foo",
 				Operation: "CREATE",
 				Object: runtime.RawExtension{Raw: marshal(newDualStackEgress("foo", "",
-					[]string{"10.10.10.1", "10.10.10.2"}, nil))},
+					[]string{"10.10.10.1", "10.10.10.2"}))},
 			},
 			expectedResponse: &admv1.AdmissionResponse{
 				Allowed: false,
@@ -233,71 +344,116 @@ func TestEgressControllerValidateEgress(t *testing.T) {
 			},
 		},
 		{
-			name: "Invalid ipFamilyPolicy should not be allowed",
+			name: "Invalid ipFamilies entry should not be allowed",
 			request: &admv1.AdmissionRequest{
 				Name:      "foo",
 				Operation: "CREATE",
-				Object: runtime.RawExtension{Raw: marshal(newEgressWithIPFamilyPolicy("foo", "", "",
-					ptr.To(corev1.IPFamilyPolicy("Invalid"))))},
+				Object: runtime.RawExtension{Raw: marshal(newEgressWithIPFamilies("foo", "10.10.10.1", "",
+					corev1.IPFamily("invalid")))},
 			},
-			expectedResponse: &admv1.AdmissionResponse{
-				Allowed: false,
-				Result: &metav1.Status{
-					Message: "spec.ipFamilyPolicy must be one of SingleStack, PreferDualStack, or RequireDualStack",
-				},
-			},
+			expectedResponse: &admv1.AdmissionResponse{Allowed: false, Result: &metav1.Status{
+				Message: "spec.ipFamilies entries must be IPv4 or IPv6",
+			}},
 		},
 		{
-			name: "egressIPs cannot use SingleStack policy",
+			name: "Duplicate ipFamilies entries should not be allowed",
 			request: &admv1.AdmissionRequest{
 				Name:      "foo",
 				Operation: "CREATE",
-				Object: runtime.RawExtension{Raw: marshal(newDualStackEgress("foo", "",
-					[]string{"10.10.10.1", "2001:db8:10::1"}, ptr.To(corev1.IPFamilyPolicySingleStack)))},
+				Object: runtime.RawExtension{Raw: marshal(newEgressWithIPFamilies("foo", "10.10.10.1", "",
+					corev1.IPv4Protocol, corev1.IPv4Protocol))},
 			},
-			expectedResponse: &admv1.AdmissionResponse{
-				Allowed: false,
-				Result:  &metav1.Status{Message: "spec.egressIPs cannot be used with ipFamilyPolicy SingleStack"},
-			},
+			expectedResponse: &admv1.AdmissionResponse{Allowed: false, Result: &metav1.Status{
+				Message: "spec.ipFamilies contains duplicate IP family IPv4",
+			}},
 		},
 		{
-			name:                   "RequireDualStack cannot use a single-stack pool",
+			name: "Different IP and family ordering should reach the runtime support check",
+			request: &admv1.AdmissionRequest{
+				Name:      "foo",
+				Operation: "CREATE",
+				Object: runtime.RawExtension{Raw: marshal(func() *crdv1beta2.Egress {
+					egress := newDualStackEgress("foo", "", []string{"10.10.10.1", "2001:db8:10::1"})
+					egress.Spec.IPFamilies = []corev1.IPFamily{corev1.IPv6Protocol, corev1.IPv4Protocol}
+					return egress
+				}())},
+			},
+			expectedResponse: &admv1.AdmissionResponse{Allowed: false, Result: &metav1.Status{
+				Message: dualStackRuntimeUnsupportedMessage,
+			}},
+		},
+		{
+			name: "IP and family counts must match",
+			request: &admv1.AdmissionRequest{
+				Name:      "foo",
+				Operation: "CREATE",
+				Object: runtime.RawExtension{Raw: marshal(newEgressWithIPFamilies("foo", "10.10.10.1", "",
+					corev1.IPv4Protocol, corev1.IPv6Protocol))},
+			},
+			expectedResponse: &admv1.AdmissionResponse{Allowed: false, Result: &metav1.Status{
+				Message: "spec.egressIPs and spec.ipFamilies must contain the same number of entries",
+			}},
+		},
+		{
+			name: "egressIPs must match ipFamilies",
+			request: &admv1.AdmissionRequest{
+				Name:      "foo",
+				Operation: "CREATE",
+				Object: runtime.RawExtension{Raw: marshal(newEgressWithIPFamilies("foo", "10.10.10.1", "",
+					corev1.IPv6Protocol))},
+			},
+			expectedResponse: &admv1.AdmissionResponse{Allowed: false, Result: &metav1.Status{
+				Message: "spec.egressIPs[0] has IP family IPv4 which is not in spec.ipFamilies",
+			}},
+		},
+		{
+			name: "IPv4-mapped IPv6 addresses should not be allowed",
+			request: &admv1.AdmissionRequest{
+				Name:      "foo",
+				Operation: "CREATE",
+				Object: runtime.RawExtension{Raw: marshal(newEgressWithIPFamilies("foo", "::ffff:10.10.10.1", "",
+					corev1.IPv6Protocol))},
+			},
+			expectedResponse: &admv1.AdmissionResponse{Allowed: false, Result: &metav1.Status{
+				Message: "address ::ffff:10.10.10.1 is IPv4-mapped IPv6; use 10.10.10.1 instead",
+			}},
+		},
+		{
+			name:                   "Dual-stack families require runtime support even with a single-stack pool",
 			existingExternalIPPool: newExternalIPPool("bar", "10.10.10.0/24", "", ""),
 			request: &admv1.AdmissionRequest{
 				Name:      "foo",
 				Operation: "CREATE",
-				Object: runtime.RawExtension{Raw: marshal(newEgressWithIPFamilyPolicy("foo", "", "bar",
-					ptr.To(corev1.IPFamilyPolicyRequireDualStack)))},
+				Object:    runtime.RawExtension{Raw: marshal(newEgressWithIPFamilies("foo", "", "bar", corev1.IPv4Protocol, corev1.IPv6Protocol))},
 			},
 			expectedResponse: &admv1.AdmissionResponse{
 				Allowed: false,
 				Result: &metav1.Status{
-					Message: "ExternalIPPool bar does not support required dual-stack allocation",
+					Message: dualStackRuntimeUnsupportedMessage,
 				},
 			},
 		},
 		{
-			name: "Reverse dual-stack explicit IP ordering without a pool should be allowed",
+			name: "IPv6-first explicit IPs without a pool should reach the runtime support check",
 			request: &admv1.AdmissionRequest{
 				Name:      "foo",
 				Operation: "CREATE",
 				Object: runtime.RawExtension{Raw: marshal(newDualStackEgress("foo", "",
-					[]string{"2001:db8:10::1", "10.10.10.1"}, nil))},
+					[]string{"2001:db8:10::1", "10.10.10.1"}))},
 			},
-			expectedResponse: &admv1.AdmissionResponse{Allowed: true},
+			expectedResponse: &admv1.AdmissionResponse{Allowed: false, Result: &metav1.Status{
+				Message: dualStackRuntimeUnsupportedMessage,
+			}},
 		},
 		{
-			name: "A single address in egressIPs should not be allowed",
+			name: "A single address in egressIPs should be allowed",
 			request: &admv1.AdmissionRequest{
 				Name:      "foo",
 				Operation: "CREATE",
 				Object: runtime.RawExtension{Raw: marshal(newDualStackEgress("foo", "",
-					[]string{"10.10.10.1"}, nil))},
+					[]string{"10.10.10.1"}))},
 			},
-			expectedResponse: &admv1.AdmissionResponse{
-				Allowed: false,
-				Result:  &metav1.Status{Message: "spec.egressIPs must contain exactly two addresses, one for each IP family"},
-			},
+			expectedResponse: &admv1.AdmissionResponse{Allowed: true},
 		},
 		{
 			name: "More than two addresses in egressIPs should not be allowed",
@@ -305,24 +461,11 @@ func TestEgressControllerValidateEgress(t *testing.T) {
 				Name:      "foo",
 				Operation: "CREATE",
 				Object: runtime.RawExtension{Raw: marshal(newDualStackEgress("foo", "",
-					[]string{"10.10.10.1", "2001:db8:10::1", "10.10.10.2"}, nil))},
+					[]string{"10.10.10.1", "2001:db8:10::1", "10.10.10.2"}))},
 			},
 			expectedResponse: &admv1.AdmissionResponse{
 				Allowed: false,
-				Result:  &metav1.Status{Message: "spec.egressIPs must contain exactly two addresses, one for each IP family"},
-			},
-		},
-		{
-			name: "egressIP cannot use RequireDualStack policy",
-			request: &admv1.AdmissionRequest{
-				Name:      "foo",
-				Operation: "CREATE",
-				Object: runtime.RawExtension{Raw: marshal(newEgressWithIPFamilyPolicy("foo", "10.10.10.1", "",
-					ptr.To(corev1.IPFamilyPolicyRequireDualStack)))},
-			},
-			expectedResponse: &admv1.AdmissionResponse{
-				Allowed: false,
-				Result:  &metav1.Status{Message: "spec.egressIP cannot be used with ipFamilyPolicy RequireDualStack"},
+				Result:  &metav1.Status{Message: "spec.egressIPs must contain at most two addresses, one for each IP family"},
 			},
 		},
 		{
@@ -443,6 +586,356 @@ func TestEgressControllerValidateEgress(t *testing.T) {
 			}
 			gotResponse := controller.ValidateEgress(review)
 			assert.Equal(t, tt.expectedResponse, gotResponse)
+		})
+	}
+}
+
+func TestValidateEgressBeforePoolAllocatorInitialization(t *testing.T) {
+	tests := []struct {
+		name        string
+		ipRange     crdv1beta2.IPRange
+		ip          string
+		cached      bool
+		missingPool bool
+		apiError    error
+		errMsg      string
+	}{
+		{
+			name:    "IPv4 CIDR before cache update",
+			ipRange: crdv1beta2.IPRange{CIDR: "192.0.2.0/24"},
+			ip:      "192.0.2.10",
+		},
+		{
+			name:    "IPv6 CIDR at allocator limit",
+			ipRange: crdv1beta2.IPRange{CIDR: "2001:db8::/64"},
+			ip:      "2001:db8::1:0",
+		},
+		{
+			name:    "IPv4 range includes start",
+			ipRange: crdv1beta2.IPRange{Start: "192.0.2.10", End: "192.0.2.20"},
+			ip:      "192.0.2.10",
+		},
+		{
+			name:    "IPv6 range includes end",
+			ipRange: crdv1beta2.IPRange{Start: "2001:db8::10", End: "2001:db8::20"},
+			ip:      "2001:db8::20",
+		},
+		{
+			name:    "cache updated before allocator initialization",
+			ipRange: crdv1beta2.IPRange{CIDR: "192.0.2.0/24"},
+			ip:      "192.0.2.10",
+			cached:  true,
+		},
+		{
+			name:    "address outside pool",
+			ipRange: crdv1beta2.IPRange{CIDR: "192.0.2.0/24"},
+			ip:      "192.0.3.10",
+			errMsg:  "IP 192.0.3.10 is not within the IP range",
+		},
+		{
+			name:    "IPv4 CIDR first address remains excluded",
+			ipRange: crdv1beta2.IPRange{CIDR: "192.0.2.0/24"},
+			ip:      "192.0.2.0",
+			errMsg:  "IP 192.0.2.0 is not within the IP range",
+		},
+		{
+			name:    "IPv6 CIDR first address remains excluded",
+			ipRange: crdv1beta2.IPRange{CIDR: "2001:db8::/64"},
+			ip:      "2001:db8::",
+			errMsg:  "IP 2001:db8:: is not within the IP range",
+		},
+		{
+			name:    "IPv6 CIDR beyond allocator limit",
+			ipRange: crdv1beta2.IPRange{CIDR: "2001:db8::/64"},
+			ip:      "2001:db8::1:1",
+			errMsg:  "IP 2001:db8::1:1 is not within the IP range",
+		},
+		{
+			name:    "range beyond allocator limit",
+			ipRange: crdv1beta2.IPRange{Start: "10.0.0.0", End: "10.2.0.0"},
+			ip:      "10.1.0.0",
+			errMsg:  "IP 10.1.0.0 is not within the IP range",
+		},
+		{
+			name:     "API error during membership lookup",
+			ipRange:  crdv1beta2.IPRange{CIDR: "192.0.2.0/24"},
+			ip:       "192.0.2.10",
+			cached:   true,
+			apiError: apierrors.NewServiceUnavailable("API server unavailable"),
+			errMsg:   "API server unavailable",
+		},
+		{
+			name:        "pool deleted before membership lookup",
+			ipRange:     crdv1beta2.IPRange{CIDR: "192.0.2.0/24"},
+			ip:          "192.0.2.10",
+			cached:      true,
+			missingPool: true,
+			errMsg:      "not found",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			pool := &crdv1beta2.ExternalIPPool{
+				ObjectMeta: metav1.ObjectMeta{Name: "pool"},
+				Spec:       crdv1beta2.ExternalIPPoolSpec{IPRanges: []crdv1beta2.IPRange{tt.ipRange}},
+			}
+			var objects []runtime.Object
+			if !tt.missingPool {
+				objects = append(objects, pool)
+			}
+			c := newController(nil, objects)
+			// Keep the informer stopped to reproduce both cache and allocator delays deterministically.
+			if tt.cached {
+				require.NoError(t, c.crdInformerFactory.Crd().V1beta2().ExternalIPPools().Informer().GetIndexer().Add(pool))
+			}
+			if tt.apiError != nil {
+				client := c.crdClient.(*fakeversioned.Clientset)
+				client.PrependReactor("get", "externalippools", func(action k8stesting.Action) (bool, runtime.Object, error) {
+					return true, nil, tt.apiError
+				})
+			}
+			require.False(t, c.externalIPAllocator.IPPoolExists(pool.Name))
+			egress := newEgress("static", tt.ip, pool.Name, nil, nil, nil)
+			egress.TypeMeta = metav1.TypeMeta{APIVersion: crdv1beta2.SchemeGroupVersion.String(), Kind: "Egress"}
+			response := c.ValidateEgress(&admv1.AdmissionReview{Request: &admv1.AdmissionRequest{
+				Operation: admv1.Create,
+				Resource:  metav1.GroupVersionResource{Group: "crd.antrea.io", Version: "v1beta2", Resource: "egresses"},
+				Object:    runtime.RawExtension{Raw: marshal(egress)},
+			}})
+			if tt.errMsg == "" {
+				assert.True(t, response.Allowed, "unexpected rejection: %+v", response.Result)
+				assert.Nil(t, response.Result)
+			} else {
+				require.False(t, response.Allowed)
+				require.NotNil(t, response.Result)
+				assert.Contains(t, response.Result.Message, tt.errMsg)
+			}
+			assert.False(t, c.externalIPAllocator.IPPoolExists(pool.Name), "admission must not initialize the Pool allocator")
+		})
+	}
+}
+
+func TestCleanupDeletedPoolWithAdmission(t *testing.T) {
+	egress := newEgress("cleanup", "10.10.10.1", "deleted-pool", nil, nil, nil)
+	c := newController(nil, []runtime.Object{egress})
+	// Use a separate client for Pool lookups, as fake clients hold their lock while invoking reactors.
+	c.externalIPAllocator = externalippool.NewExternalIPPoolController(
+		fakeversioned.NewSimpleClientset(), c.crdInformerFactory.Crd().V1beta2().ExternalIPPools())
+	c.EgressController.externalIPAllocator = c.externalIPAllocator
+	// Fake clients do not run admission. Validate the Controller's actual clearing patch before the tracker accepts it.
+	c.crdClient.(*fakeversioned.Clientset).PrependReactor("patch", "egresses", func(action k8stesting.Action) (bool, runtime.Object, error) {
+		patch := action.(k8stesting.PatchAction)
+		require.Equal(t, "v1beta2", patch.GetResource().Version)
+		var body struct {
+			Spec struct {
+				EgressIPs []string `json:"egressIPs"`
+			} `json:"spec"`
+		}
+		require.NoError(t, json.Unmarshal(patch.GetPatch(), &body))
+		next := egress.DeepCopy()
+		next.Spec.EgressIPs = body.Spec.EgressIPs
+		response := c.ValidateEgress(&admv1.AdmissionReview{Request: &admv1.AdmissionRequest{
+			Operation: admv1.Update,
+			Resource:  metav1.GroupVersionResource{Group: "crd.antrea.io", Version: "v1beta2", Resource: "egresses"},
+			Object:    runtime.RawExtension{Raw: marshal(next)}, OldObject: runtime.RawExtension{Raw: marshal(egress)},
+		}})
+		if !response.Allowed {
+			return true, nil, fmt.Errorf("admission rejected cleanup: %s", response.Result.Message)
+		}
+		return false, nil, nil
+	})
+	_, _, err := c.syncEgressIP(egress)
+	require.EqualError(t, err, "ExternalIPPool deleted-pool does not exist")
+	stored, err := c.crdClient.CrdV1beta2().Egresses().Get(context.Background(), egress.Name, metav1.GetOptions{})
+	require.NoError(t, err)
+	assert.Empty(t, stored.Spec.EgressIPs, "the obsolete IP must be cleared even though no replacement can be allocated")
+}
+
+func TestValidateClearingEgressIP(t *testing.T) {
+	for _, tc := range []struct {
+		name           string
+		pool           *crdv1beta2.ExternalIPPool
+		oldIP          string
+		changePool     bool
+		changeFamilies bool
+		allowed        bool
+	}{
+		{name: "deleted pool", oldIP: "10.10.10.1", allowed: true},
+		{name: "new pool reference is not cleanup", oldIP: "10.10.10.1", changePool: true},
+		{name: "family change is not cleanup", oldIP: "10.10.10.1", changeFamilies: true},
+		{name: "recreated empty pool", pool: &crdv1beta2.ExternalIPPool{ObjectMeta: metav1.ObjectMeta{Name: "pool"}}, oldIP: "10.10.10.1", allowed: true},
+		{name: "recreated dual-stack pool with obsolete IP", pool: newDualStackExternalIPPool("pool"), oldIP: "192.0.2.1", allowed: true},
+		{name: "valid IP in dual-stack pool can be reallocated", pool: newDualStackExternalIPPool("pool"), oldIP: "10.10.10.1", allowed: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var objects []runtime.Object
+			if tc.pool != nil {
+				objects = append(objects, tc.pool)
+			}
+			c := newController(nil, objects)
+			stopCh := make(chan struct{})
+			defer close(stopCh)
+			c.crdInformerFactory.Start(stopCh)
+			c.crdInformerFactory.WaitForCacheSync(stopCh)
+			go c.externalIPAllocator.Run(stopCh)
+			require.True(t, cache.WaitForCacheSync(stopCh, c.externalIPAllocator.HasSynced))
+			old := newEgress("cleanup", tc.oldIP, "pool", nil, nil, nil)
+			next := old.DeepCopy()
+			next.Spec.EgressIPs = nil
+			if tc.changePool {
+				next.Spec.ExternalIPPool = "another-pool"
+			}
+			if tc.changeFamilies {
+				next.Spec.IPFamilies = []corev1.IPFamily{corev1.IPv6Protocol}
+			}
+			err := c.validateEgressConfiguration(old, next)
+			if tc.allowed {
+				require.NoError(t, err)
+			} else {
+				require.Error(t, err)
+			}
+		})
+	}
+}
+
+func TestValidateV1beta1EgressProjection(t *testing.T) {
+	for _, tc := range []struct {
+		name        string
+		oldIPs      []string
+		families    []corev1.IPFamily
+		newIP       string
+		changeIP    bool
+		newPool     string
+		deletedPool bool
+		nativeV1    bool
+		err         string
+	}{
+		{name: "IPv4 allocation conflicts with IPv6", families: []corev1.IPFamily{corev1.IPv6Protocol}, changeIP: true, newIP: "10.10.10.20", err: "IP family IPv4 which is not in spec.ipFamilies"},
+		{name: "IPv6 allocation conflicts with IPv4", families: []corev1.IPFamily{corev1.IPv4Protocol}, changeIP: true, newIP: "2001:db8:10::20", err: "IP family IPv6 which is not in spec.ipFamilies"},
+		{name: "IPv4-mapped allocation is rejected", families: []corev1.IPFamily{corev1.IPv6Protocol}, changeIP: true, newIP: "::ffff:10.10.10.20", err: "address ::ffff:10.10.10.20 is IPv4-mapped IPv6; use 10.10.10.20 instead"},
+		{name: "replacing IPv6 with IPv4", oldIPs: []string{"2001:db8:10::10"}, families: []corev1.IPFamily{corev1.IPv6Protocol}, changeIP: true, newIP: "10.10.10.20", err: "IP family IPv4 which is not in spec.ipFamilies"},
+		{name: "allocate matching IPv6", families: []corev1.IPFamily{corev1.IPv6Protocol}, changeIP: true, newIP: "2001:db8:10::20"},
+		{name: "replace matching IPv6", oldIPs: []string{"2001:db8:10::10"}, families: []corev1.IPFamily{corev1.IPv6Protocol}, changeIP: true, newIP: "2001:db8:10::20"},
+		{name: "clear IPv6", oldIPs: []string{"2001:db8:10::10"}, families: []corev1.IPFamily{corev1.IPv6Protocol}, changeIP: true},
+		{name: "clear IPv6 after pool deletion", oldIPs: []string{"2001:db8:10::10"}, families: []corev1.IPFamily{corev1.IPv6Protocol}, changeIP: true, deletedPool: true},
+		{name: "change to compatible pool before allocation", families: []corev1.IPFamily{corev1.IPv6Protocol}, newPool: "ipv6-pool"},
+		{name: "change to incompatible pool before allocation", families: []corev1.IPFamily{corev1.IPv6Protocol}, newPool: "ipv4-pool", err: "IP family IPv6 is not available in ExternalIPPool ipv4-pool"},
+		{name: "change to missing pool before allocation", families: []corev1.IPFamily{corev1.IPv6Protocol}, newPool: "missing-pool", err: "ExternalIPPool missing-pool does not exist"},
+		{name: "change pool and allocated IPv6", oldIPs: []string{"2001:db8:10::10"}, families: []corev1.IPFamily{corev1.IPv6Protocol}, newPool: "ipv6-pool", changeIP: true, newIP: "2001:db8:20::20"},
+		{name: "change pool keeping an IP outside its ranges", oldIPs: []string{"10.10.10.10"}, families: []corev1.IPFamily{corev1.IPv4Protocol}, newPool: "ipv4-pool", err: "IP 10.10.10.10 is not within the IP range"},
+		{name: "metadata update after pool deletion", oldIPs: []string{"2001:db8:10::10"}, families: []corev1.IPFamily{corev1.IPv6Protocol}, deletedPool: true},
+		{name: "no explicit family remains unspecified", changeIP: true, newIP: "10.10.10.20"},
+		{name: "native v1beta1 may change IP family", oldIPs: []string{"2001:db8:10::10"}, nativeV1: true, changeIP: true, newIP: "10.10.10.20"},
+		{name: "native v1beta1 may reference a missing pool without an IP", nativeV1: true, newPool: "missing-pool"},
+		{name: "dual-stack metadata update", oldIPs: []string{"10.10.10.10", "2001:db8:10::10"}, families: []corev1.IPFamily{corev1.IPv4Protocol, corev1.IPv6Protocol}},
+		{name: "dual-stack IP update cannot discard hidden IP", oldIPs: []string{"10.10.10.10", "2001:db8:10::10"}, changeIP: true, newIP: "10.10.10.20", err: "v1beta1 clients cannot change the IP configuration of a dual-stack Egress"},
+		{name: "dual-stack IP clearing cannot discard hidden IP", oldIPs: []string{"10.10.10.10", "2001:db8:10::10"}, changeIP: true, err: "v1beta1 clients cannot change the IP configuration of a dual-stack Egress"},
+		{name: "dual-stack pool update cannot discard hidden IP", oldIPs: []string{"10.20.10.10", "2001:db8:10::10"}, newPool: "ipv4-pool", deletedPool: true, err: "v1beta1 clients cannot change the IP configuration of a dual-stack Egress"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			objects := []runtime.Object{
+				newExternalIPPool("ipv4-pool", "10.20.10.0/24", "", ""),
+				newExternalIPPool("ipv6-pool", "2001:db8:20::/64", "", ""),
+			}
+			if !tc.deletedPool {
+				objects = append(objects, newDualStackExternalIPPool("pool"))
+			}
+			c := newController(nil, objects)
+			stopCh := make(chan struct{})
+			defer close(stopCh)
+			c.crdInformerFactory.Start(stopCh)
+			c.crdInformerFactory.WaitForCacheSync(stopCh)
+			go c.externalIPAllocator.Run(stopCh)
+			require.True(t, cache.WaitForCacheSync(stopCh, c.externalIPAllocator.HasSynced))
+
+			original := newDualStackEgress("projection", "pool", tc.oldIPs)
+			original.Spec.IPFamilies = tc.families
+			original.APIVersion, original.Kind = crdv1beta2.SchemeGroupVersion.String(), "Egress"
+			var object unstructured.Unstructured
+			require.NoError(t, json.Unmarshal(marshal(original), &object))
+			legacy, status := crdconversion.ConvertEgress(&object, crdv1beta1.SchemeGroupVersion.String())
+			require.Equal(t, metav1.StatusSuccess, status.Status)
+			if tc.nativeV1 {
+				legacy.SetAnnotations(nil)
+			}
+			next := legacy.DeepCopy()
+			next.SetLabels(map[string]string{"app": "updated"})
+			if tc.changeIP {
+				require.NoError(t, unstructured.SetNestedField(next.Object, tc.newIP, "spec", "egressIP"))
+			}
+			if tc.newPool != "" {
+				require.NoError(t, unstructured.SetNestedField(next.Object, tc.newPool, "spec", "externalIPPool"))
+			}
+			response := c.ValidateEgress(&admv1.AdmissionReview{Request: &admv1.AdmissionRequest{
+				Operation: admv1.Update,
+				Resource:  metav1.GroupVersionResource{Group: "crd.antrea.io", Version: "v1beta1", Resource: "egresses"},
+				Object:    runtime.RawExtension{Raw: marshal(next)}, OldObject: runtime.RawExtension{Raw: marshal(legacy)},
+			}})
+			if tc.err != "" {
+				require.False(t, response.Allowed)
+				require.NotNil(t, response.Result)
+				assert.Contains(t, response.Result.Message, tc.err)
+				return
+			}
+			require.True(t, response.Allowed, "%+v", response.Result)
+			converted, status := crdconversion.ConvertEgress(next, crdv1beta2.SchemeGroupVersion.String())
+			require.Equal(t, metav1.StatusSuccess, status.Status)
+			var restored crdv1beta2.Egress
+			require.NoError(t, json.Unmarshal(marshal(converted), &restored))
+			if !tc.nativeV1 {
+				assert.Equal(t, tc.families, restored.Spec.IPFamilies)
+			}
+			if tc.changeIP {
+				if tc.newIP == "" {
+					assert.Empty(t, restored.Spec.EgressIPs)
+				} else {
+					assert.Equal(t, []string{tc.newIP}, restored.Spec.EgressIPs)
+				}
+			} else {
+				assert.Equal(t, tc.oldIPs, restored.Spec.EgressIPs)
+			}
+		})
+	}
+}
+
+func TestValidateEgressConversionAnnotation(t *testing.T) {
+	v2 := newEgress("projection", "10.10.10.1", "", nil, nil, nil)
+	v2.APIVersion, v2.Kind = crdv1beta2.SchemeGroupVersion.String(), "Egress"
+	var object unstructured.Unstructured
+	require.NoError(t, json.Unmarshal(marshal(v2), &object))
+	legacy, status := crdconversion.ConvertEgress(&object, crdv1beta1.SchemeGroupVersion.String())
+	require.Equal(t, metav1.StatusSuccess, status.Status)
+	for _, tc := range []struct {
+		name    string
+		mutate  func(*unstructured.Unstructured)
+		allowed bool
+	}{
+		{name: "ordinary label update", allowed: true, mutate: func(o *unstructured.Unstructured) { o.SetLabels(map[string]string{"app": "updated"}) }},
+		{name: "old client changes visible IP", allowed: true, mutate: func(o *unstructured.Unstructured) {
+			require.NoError(t, unstructured.SetNestedField(o.Object, "10.10.10.2", "spec", "egressIP"))
+		}},
+		{name: "annotation changes hidden IP", mutate: func(o *unstructured.Unstructured) {
+			annotations := o.GetAnnotations()
+			var envelope map[string]interface{}
+			require.NoError(t, json.Unmarshal([]byte(annotations["crd.antrea.io/conversion-data"]), &envelope))
+			envelope["data"].(map[string]interface{})["egressIPs"] = []interface{}{"192.0.2.99"}
+			raw, err := json.Marshal(envelope)
+			require.NoError(t, err)
+			annotations["crd.antrea.io/conversion-data"] = string(raw)
+			o.SetAnnotations(annotations)
+		}},
+		{name: "annotation removed", mutate: func(o *unstructured.Unstructured) { o.SetAnnotations(nil) }},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			next := legacy.DeepCopy()
+			tc.mutate(next)
+			c := newController(nil, nil)
+			response := c.ValidateEgress(&admv1.AdmissionReview{Request: &admv1.AdmissionRequest{
+				Operation: admv1.Update,
+				Resource:  metav1.GroupVersionResource{Group: "crd.antrea.io", Version: "v1beta1", Resource: "egresses"},
+				Object:    runtime.RawExtension{Raw: marshal(next)}, OldObject: runtime.RawExtension{Raw: marshal(legacy)},
+			}})
+			assert.Equal(t, tc.allowed, response.Allowed, "%+v", response.Result)
 		})
 	}
 }

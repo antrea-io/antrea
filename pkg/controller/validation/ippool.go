@@ -22,11 +22,25 @@ import (
 	"k8s.io/apimachinery/pkg/util/sets"
 
 	crdv1beta1 "antrea.io/antrea/v2/pkg/apis/crd/v1beta1"
+	crdv1beta2 "antrea.io/antrea/v2/pkg/apis/crd/v1beta2"
 	utilip "antrea.io/antrea/v2/pkg/util/ip"
 )
 
 // GetIPRangeSet returns a set of string representations of IP ranges
 func GetIPRangeSet(ipRanges []crdv1beta1.IPRange) sets.Set[string] {
+	set := sets.New[string]()
+	for _, ipRange := range ipRanges {
+		ipRangeStr := ipRange.CIDR
+		if ipRangeStr == "" {
+			ipRangeStr = fmt.Sprintf("%s-%s", ipRange.Start, ipRange.End)
+		}
+		set.Insert(ipRangeStr)
+	}
+	return set
+}
+
+// GetExternalIPPoolIPRangeSet returns a set of string representations of v1beta2 ExternalIPPool ranges.
+func GetExternalIPPoolIPRangeSet(ipRanges []crdv1beta2.IPRange) sets.Set[string] {
 	set := sets.New[string]()
 	for _, ipRange := range ipRanges {
 		ipRangeStr := ipRange.CIDR
@@ -62,7 +76,7 @@ func parseIPRangeStartEnd(startStr, endStr string) (netip.Addr, netip.Addr, erro
 }
 
 // validateIPRange validates an IP range specification
-func validateIPRange(ipRange crdv1beta1.IPRange) error {
+func validateIPRange(ipRange crdv1beta2.IPRange) error {
 	start, end, err := parseIPRangeStartEnd(ipRange.Start, ipRange.End)
 	if err != nil {
 		return err
@@ -119,46 +133,31 @@ func subnetConfigurations(subnetInfo *crdv1beta1.SubnetInfo) (map[corev1.IPFamil
 	return map[corev1.IPFamily]subnetConfiguration{family: subnet}, nil
 }
 
-func externalIPPoolSubnetConfigurations(subnetInfo *crdv1beta1.ExternalIPPoolSubnetInfo) (map[corev1.IPFamily]subnetConfiguration, bool, error) {
-	if subnetInfo == nil {
-		return nil, false, nil
+func externalIPPoolSubnetConfigurations(subnets []crdv1beta2.SubnetInfo) (map[corev1.IPFamily]subnetConfiguration, error) {
+	if subnets == nil {
+		return nil, nil
 	}
-	hasLegacy := subnetInfo.Gateway != "" || subnetInfo.PrefixLength != 0
-	hasGateways := subnetInfo.Gateways != nil
-	if hasLegacy && hasGateways {
-		return nil, false, fmt.Errorf("gateway and prefixLength cannot be set with gateways")
+	if len(subnets) == 0 || len(subnets) > 2 {
+		return nil, fmt.Errorf("subnets must contain one or two entries")
 	}
-	if !hasLegacy && !hasGateways {
-		return nil, false, fmt.Errorf("subnetInfo must specify gateway and prefixLength or gateways")
-	}
-
-	configurations := make(map[corev1.IPFamily]subnetConfiguration, 2)
-	if hasLegacy {
-		family, subnet, err := parseSubnetConfiguration(subnetInfo.Gateway, subnetInfo.PrefixLength)
-		if err != nil {
-			return nil, false, err
+	configurations := make(map[corev1.IPFamily]subnetConfiguration, len(subnets))
+	for _, info := range subnets {
+		if info.VLAN < 0 || info.VLAN > 4094 {
+			return nil, fmt.Errorf("vlan ID must be between 0 and 4094")
 		}
-		configurations[family] = subnet
-		return configurations, false, nil
-	}
-
-	if len(subnetInfo.Gateways) == 0 || len(subnetInfo.Gateways) > 2 {
-		return nil, false, fmt.Errorf("gateways must contain one or two entries")
-	}
-	for _, gateway := range subnetInfo.Gateways {
-		family, subnet, err := parseSubnetConfiguration(gateway.Gateway, gateway.PrefixLength)
+		family, subnet, err := parseSubnetConfiguration(info.Gateway, info.PrefixLength)
 		if err != nil {
-			return nil, false, err
+			return nil, err
 		}
 		if _, exists := configurations[family]; exists {
-			return nil, false, fmt.Errorf("gateways contains multiple entries for IP family %s", family)
+			return nil, fmt.Errorf("subnets contains multiple entries for IP family %s", family)
 		}
 		configurations[family] = subnet
 	}
-	return configurations, true, nil
+	return configurations, nil
 }
 
-func validateIPRangesAndSubnetConfigurations(configurations map[corev1.IPFamily]subnetConfiguration, requireMatchingFamilies bool, ipRanges []crdv1beta1.IPRange) ([]NormalizedIPRange, error) {
+func validateIPRangesAndSubnetConfigurations(configurations map[corev1.IPFamily]subnetConfiguration, requireMatchingFamilies bool, ipRanges []crdv1beta2.IPRange) ([]NormalizedIPRange, error) {
 	currentRanges := make([]NormalizedIPRange, 0, len(ipRanges))
 	poolFamilies := sets.New[corev1.IPFamily]()
 	for _, ipRange := range ipRanges {
@@ -206,20 +205,25 @@ func ValidateIPRangesAndSubnetInfo(subnetInfo *crdv1beta1.SubnetInfo, ipRanges [
 	if err != nil {
 		return nil, err
 	}
-	return validateIPRangesAndSubnetConfigurations(configurations, false, ipRanges)
+	convertedRanges := make([]crdv1beta2.IPRange, len(ipRanges))
+	for i := range ipRanges {
+		convertedRanges[i] = crdv1beta2.IPRange{CIDR: ipRanges[i].CIDR, Start: ipRanges[i].Start, End: ipRanges[i].End}
+	}
+	return validateIPRangesAndSubnetConfigurations(configurations, false, convertedRanges)
 }
 
-// ValidateExternalIPPoolIPRangesAndSubnetInfo validates IP ranges and subnet information for an ExternalIPPool.
-func ValidateExternalIPPoolIPRangesAndSubnetInfo(subnetInfo *crdv1beta1.ExternalIPPoolSubnetInfo, ipRanges []crdv1beta1.IPRange) ([]NormalizedIPRange, error) {
-	configurations, hasGateways, err := externalIPPoolSubnetConfigurations(subnetInfo)
+// ValidateExternalIPPoolIPRangesAndSubnets validates IP ranges and subnets for an ExternalIPPool.
+func ValidateExternalIPPoolIPRangesAndSubnets(subnets []crdv1beta2.SubnetInfo, ipRanges []crdv1beta2.IPRange) ([]NormalizedIPRange, error) {
+	configurations, err := externalIPPoolSubnetConfigurations(subnets)
 	if err != nil {
 		return nil, err
 	}
-	return validateIPRangesAndSubnetConfigurations(configurations, hasGateways, ipRanges)
+	// An empty pool may retain subnets before ranges are added, including after conversion from v1beta1.
+	return validateIPRangesAndSubnetConfigurations(configurations, len(ipRanges) > 0, ipRanges)
 }
 
 // IPFamiliesForRanges returns the set of IP families represented by the provided IP ranges.
-func IPFamiliesForRanges(ipRanges []crdv1beta1.IPRange) (sets.Set[corev1.IPFamily], error) {
+func IPFamiliesForRanges(ipRanges []crdv1beta2.IPRange) (sets.Set[corev1.IPFamily], error) {
 	families := sets.New[corev1.IPFamily]()
 	for _, ipRange := range ipRanges {
 		normalized, err := normalizeRange(ipRange, "")
@@ -239,7 +243,7 @@ type NormalizedIPRange struct {
 }
 
 // NormalizeRanges normalizes all IP ranges
-func NormalizeRanges(ipRanges []crdv1beta1.IPRange, ctx string) ([]NormalizedIPRange, error) {
+func NormalizeRanges(ipRanges []crdv1beta2.IPRange, ctx string) ([]NormalizedIPRange, error) {
 	normalized := make([]NormalizedIPRange, 0, len(ipRanges))
 	for _, ipRange := range ipRanges {
 		nr, err := normalizeRange(ipRange, ctx)
@@ -252,7 +256,7 @@ func NormalizeRanges(ipRanges []crdv1beta1.IPRange, ctx string) ([]NormalizedIPR
 }
 
 // normalizeRange normalizes an IP range specification
-func normalizeRange(ipRange crdv1beta1.IPRange, context string) (NormalizedIPRange, error) {
+func normalizeRange(ipRange crdv1beta2.IPRange, context string) (NormalizedIPRange, error) {
 	var start, end netip.Addr
 	var origin string
 
