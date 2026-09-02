@@ -27,14 +27,17 @@ import (
 	"go.uber.org/mock/gomock"
 	corev1 "k8s.io/api/core/v1"
 	discovery "k8s.io/api/discovery/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/rand"
 	"k8s.io/apimachinery/pkg/util/sets"
+	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/informers"
 	coreinformers "k8s.io/client-go/informers/core/v1"
 	"k8s.io/client-go/kubernetes/fake"
+	k8stesting "k8s.io/client-go/testing"
 	"k8s.io/client-go/tools/cache"
 	utilnet "k8s.io/utils/net"
 	"k8s.io/utils/ptr"
@@ -42,9 +45,11 @@ import (
 	"antrea.io/antrea/v2/pkg/agent/bgp"
 	bgptest "antrea.io/antrea/v2/pkg/agent/bgp/testing"
 	"antrea.io/antrea/v2/pkg/agent/config"
+	agentinformers "antrea.io/antrea/v2/pkg/agent/informers"
 	"antrea.io/antrea/v2/pkg/agent/types"
 	"antrea.io/antrea/v2/pkg/apis/crd/v1alpha1"
 	crdv1b1 "antrea.io/antrea/v2/pkg/apis/crd/v1beta1"
+	crdv1b2 "antrea.io/antrea/v2/pkg/apis/crd/v1beta2"
 	fakeversioned "antrea.io/antrea/v2/pkg/client/clientset/versioned/fake"
 	crdinformers "antrea.io/antrea/v2/pkg/client/informers/externalversions"
 	"antrea.io/antrea/v2/pkg/util/ip"
@@ -261,7 +266,7 @@ func newFakeController(t *testing.T, objects []runtime.Object, crdObjects []runt
 
 	nodeInformer := informerFactory.Core().V1().Nodes()
 	serviceInformer := informerFactory.Core().V1().Services()
-	egressInformer := crdInformerFactory.Crd().V1beta1().Egresses()
+	egressInformer := crdInformerFactory.Crd().V1beta2().Egresses()
 	endpointSliceInformer := informerFactory.Discovery().V1().EndpointSlices()
 	bgpPolicyInformer := crdInformerFactory.Crd().V1alpha1().BGPPolicies()
 
@@ -290,6 +295,75 @@ func newFakeController(t *testing.T, objects []runtime.Object, crdObjects []runt
 		crdInformerFactory: crdInformerFactory,
 		client:             client,
 		informerFactory:    informerFactory,
+	}
+}
+
+func TestEgressFailoverWithoutConversionWebhook(t *testing.T) {
+	for _, ip := range []string{ipv4EgressIP1, ipv6EgressIP1} {
+		t.Run(ip, func(t *testing.T) {
+			synctest.Test(t, func(t *testing.T) {
+				stored := &crdv1b1.Egress{
+					ObjectMeta: metav1.ObjectMeta{Name: "egress"},
+					Spec:       crdv1b1.EgressSpec{EgressIP: ip, ExternalIPPool: "pool"},
+					Status:     crdv1b1.EgressStatus{EgressIP: ip, EgressNode: "old-node"},
+				}
+				client := fakeversioned.NewSimpleClientset(stored)
+				unavailable := apierrors.NewServiceUnavailable("conversion webhook unavailable")
+				client.PrependReactor("*", "egresses", func(action k8stesting.Action) (bool, runtime.Object, error) {
+					if action.GetResource().Version != "v1beta1" {
+						return true, nil, unavailable
+					}
+					return false, nil, nil
+				})
+				client.PrependWatchReactor("egresses", func(action k8stesting.Action) (bool, watch.Interface, error) {
+					if action.GetResource().Version != "v1beta1" {
+						return true, nil, unavailable
+					}
+					return false, nil, nil
+				})
+				ctx, cancel := context.WithCancel(context.Background())
+				_, err := client.CrdV1beta2().Egresses().Get(ctx, stored.Name, metav1.GetOptions{})
+				require.ErrorIs(t, err, unavailable)
+				client.ClearActions()
+				factory := crdinformers.NewSharedInformerFactory(client, 0)
+				defer factory.Shutdown()
+				defer cancel()
+				egresses, _, err := agentinformers.NewEgressInformers(factory)
+				require.NoError(t, err)
+				c := newFakeController(t, nil, nil, true, true)
+				defer c.queue.ShutDown()
+				c.egressInformer, c.egressLister = egresses.Informer(), egresses.Lister()
+				_, err = c.egressInformer.AddEventHandler(cache.ResourceEventHandlerFuncs{
+					AddFunc: c.addEgress, UpdateFunc: c.updateEgress,
+				})
+				require.NoError(t, err)
+				require.NoError(t, c.nodeInformer.GetIndexer().Add(node))
+				policy := generateBGPPolicy(bgpPolicyName1, creationTimestamp, nodeLabels1,
+					179, 65000, false, false, false, true, false, nil, nil)
+				require.NoError(t, c.bgpPolicyInformer.GetIndexer().Add(policy))
+				factory.Start(ctx.Done())
+				require.True(t, cache.WaitForCacheSync(ctx.Done(), c.egressInformer.HasSynced))
+				synctest.Wait()
+				c.mockBGPServer.EXPECT().Start(gomock.Any())
+				require.NoError(t, c.syncBGPPolicy(ctx))
+				assert.Empty(t, c.bgpPolicyState.routes, "the old Node still owns the published status")
+
+				// The Agent publishes its single-IP status through the storage version during failover.
+				updated := stored.DeepCopy()
+				updated.Status.EgressNode = localNodeName
+				_, err = client.CrdV1beta1().Egresses().UpdateStatus(ctx, updated, metav1.UpdateOptions{})
+				require.NoError(t, err)
+				synctest.Wait()
+				require.Equal(t, 1, c.queue.Len(), "the converted watch update must trigger BGP reconciliation")
+				route := bgp.Route{Prefix: ipStrToPrefix(ip)}
+				c.mockBGPServer.EXPECT().AdvertiseRoutes(gomock.Any(), []bgp.Route{route})
+				require.True(t, c.processNextWorkItem())
+				assert.Contains(t, c.bgpPolicyState.routes, route)
+				for _, action := range client.Actions() {
+					assert.Equal(t, "v1beta1", action.GetResource().Version)
+				}
+			})
+		})
 	}
 }
 
@@ -1826,7 +1900,7 @@ func TestEgressLifecycle(t *testing.T) {
 
 	// Create an Egress.
 	egress := generateEgress("eg1-4", "192.168.77.200", localNodeName)
-	_, err := c.crdClient.CrdV1beta1().Egresses().Create(context.TODO(), egress, metav1.CreateOptions{})
+	_, err := c.crdClient.CrdV1beta2().Egresses().Create(context.TODO(), egress, metav1.CreateOptions{})
 	require.NoError(t, err)
 
 	waitAndGetDummyEvent(t, c)
@@ -1836,7 +1910,7 @@ func TestEgressLifecycle(t *testing.T) {
 
 	// Update the Egress.
 	updatedEgress := generateEgress("eg1-4", "192.168.77.201", localNodeName)
-	_, err = c.crdClient.CrdV1beta1().Egresses().Update(context.TODO(), updatedEgress, metav1.UpdateOptions{})
+	_, err = c.crdClient.CrdV1beta2().Egresses().Update(context.TODO(), updatedEgress, metav1.UpdateOptions{})
 	require.NoError(t, err)
 
 	waitAndGetDummyEvent(t, c)
@@ -1847,7 +1921,7 @@ func TestEgressLifecycle(t *testing.T) {
 
 	// Update the Egress.
 	updatedEgress = generateEgress("eg1-4", "192.168.77.201", "remote")
-	_, err = c.crdClient.CrdV1beta1().Egresses().Update(context.TODO(), updatedEgress, metav1.UpdateOptions{})
+	_, err = c.crdClient.CrdV1beta2().Egresses().Update(context.TODO(), updatedEgress, metav1.UpdateOptions{})
 	require.NoError(t, err)
 
 	waitAndGetDummyEvent(t, c)
@@ -1857,7 +1931,7 @@ func TestEgressLifecycle(t *testing.T) {
 
 	// Update the Egress.
 	updatedEgress = generateEgress("eg1-4", "192.168.77.201", localNodeName)
-	_, err = c.crdClient.CrdV1beta1().Egresses().Update(context.TODO(), updatedEgress, metav1.UpdateOptions{})
+	_, err = c.crdClient.CrdV1beta2().Egresses().Update(context.TODO(), updatedEgress, metav1.UpdateOptions{})
 	require.NoError(t, err)
 
 	waitAndGetDummyEvent(t, c)
@@ -1866,7 +1940,7 @@ func TestEgressLifecycle(t *testing.T) {
 	doneDummyEvent(t, c)
 
 	// Delete the Egress.
-	err = c.crdClient.CrdV1beta1().Egresses().Delete(context.TODO(), updatedEgress.Name, metav1.DeleteOptions{})
+	err = c.crdClient.CrdV1beta2().Egresses().Delete(context.TODO(), updatedEgress.Name, metav1.DeleteOptions{})
 	require.NoError(t, err)
 
 	waitAndGetDummyEvent(t, c)
@@ -2327,17 +2401,17 @@ func generateService(name string,
 	return svc
 }
 
-func generateEgress(name string, ip string, nodeName string) *crdv1b1.Egress {
-	return &crdv1b1.Egress{
+func generateEgress(name string, ip string, nodeName string) *crdv1b2.Egress {
+	return &crdv1b2.Egress{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: name,
 			UID:  "test-uid",
 		},
-		Spec: crdv1b1.EgressSpec{
-			EgressIP: ip,
+		Spec: crdv1b2.EgressSpec{
+			EgressIPs: []string{ip},
 		},
-		Status: crdv1b1.EgressStatus{
-			EgressIP:   ip,
+		Status: crdv1b2.EgressStatus{
+			EgressIPs:  []string{ip},
 			EgressNode: nodeName,
 		},
 	}

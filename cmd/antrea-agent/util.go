@@ -15,12 +15,14 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"net"
 	"strconv"
 	"strings"
 
 	clientset "k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/rest"
 	"k8s.io/klog/v2"
 
 	"antrea.io/antrea/v2/pkg/agent/util"
@@ -34,6 +36,21 @@ var (
 	getPodCIDRsFromKubeProxy = k8sutil.GetPodCIDRsFromKubeProxy
 	getPodCIDRsFromKubeadm   = k8sutil.GetPodCIDRsFromKubeadm
 )
+
+type egressWarningHandler struct {
+	delegate rest.WarningHandlerWithContext
+}
+
+func (h egressWarningHandler) HandleWarningHeaderWithContext(ctx context.Context, code int, agent, message string) {
+	if code == 299 {
+		switch message {
+		case "crd.antrea.io/v1beta1 Egress is deprecated; use crd.antrea.io/v1beta2 Egress",
+			"crd.antrea.io/v1beta1 ExternalIPPool is deprecated; use crd.antrea.io/v1beta2 ExternalIPPool":
+			return
+		}
+	}
+	h.delegate.HandleWarningHeaderWithContext(ctx, code, agent, message)
+}
 
 func getAvailableNodePortAddresses(nodePortAddressesFromConfig []string, excludeDevices []string, excludeDevicePrefixes []string) ([]net.IP, []net.IP, error) {
 	excludeDeviceMatchers := make([]func(string) bool, 0)

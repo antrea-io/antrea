@@ -29,6 +29,7 @@ import (
 	"k8s.io/apiserver/pkg/server/options"
 	"k8s.io/client-go/informers"
 	coreinformers "k8s.io/client-go/informers/core/v1"
+	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/klog/v2"
 
@@ -52,6 +53,7 @@ import (
 	"antrea.io/antrea/v2/pkg/agent/externalnode"
 	"antrea.io/antrea/v2/pkg/agent/flowexporter"
 	flowexporteroptions "antrea.io/antrea/v2/pkg/agent/flowexporter/options"
+	agentinformers "antrea.io/antrea/v2/pkg/agent/informers"
 	"antrea.io/antrea/v2/pkg/agent/interfacestore"
 	"antrea.io/antrea/v2/pkg/agent/ipassigner/linkmonitor"
 	"antrea.io/antrea/v2/pkg/agent/memberlist"
@@ -77,6 +79,7 @@ import (
 	"antrea.io/antrea/v2/pkg/apis/controlplane"
 	crdinformers "antrea.io/antrea/v2/pkg/client/informers/externalversions"
 	crdv1alpha1informers "antrea.io/antrea/v2/pkg/client/informers/externalversions/crd/v1alpha1"
+	crdv1beta2informers "antrea.io/antrea/v2/pkg/client/informers/externalversions/crd/v1beta2"
 	"antrea.io/antrea/v2/pkg/features"
 	"antrea.io/antrea/v2/pkg/log"
 	"antrea.io/antrea/v2/pkg/monitor"
@@ -123,6 +126,10 @@ func run(o *Options) error {
 	// Generate a context for functions which require one (instead of stopCh).
 	ctx := wait.ContextForChannel(stopCh)
 
+	// Agents intentionally watch v1beta1 until storage migration to avoid depending on the conversion webhook.
+	// Suppress only the expected Egress and ExternalIPPool deprecation warnings.
+	rest.SetDefaultWarningHandlerWithContext(egressWarningHandler{delegate: rest.WarningLogger{}})
+
 	// Create K8s Clientset, CRD Clientset, Multicluster CRD Clientset and SharedInformerFactory for the given config.
 	k8sClient, _, crdClient, _, mcClient, _, err := k8s.CreateClients(o.config.ClientConnection, o.config.KubeAPIServerOverride)
 	if err != nil {
@@ -133,8 +140,6 @@ func run(o *Options) error {
 	crdInformerFactory := crdinformers.NewSharedInformerFactoryWithOptions(crdClient, informerDefaultResync, crdinformers.WithTransform(k8s.NewTrimmer()))
 	traceflowInformer := crdInformerFactory.Crd().V1beta1().Traceflows()
 	packetCaptureInformer := crdInformerFactory.Crd().V1alpha1().PacketCaptures()
-	egressInformer := crdInformerFactory.Crd().V1beta1().Egresses()
-	externalIPPoolInformer := crdInformerFactory.Crd().V1beta1().ExternalIPPools()
 	trafficControlInformer := crdInformerFactory.Crd().V1alpha2().TrafficControls()
 	ipPoolInformer := crdInformerFactory.Crd().V1beta1().IPPools()
 	nodeInformer := informerFactory.Core().V1().Nodes()
@@ -587,8 +592,16 @@ func run(o *Options) error {
 	var externalIPController *serviceexternalip.ServiceExternalIPController
 	var memberlistCluster *memberlist.Cluster
 	var linkMonitor linkmonitor.Interface
+	var egressInformer crdv1beta2informers.EgressInformer
+	var externalIPPoolInformer crdv1beta2informers.ExternalIPPoolInformer
 
 	if o.enableEgress || serviceExternalIPEnabled {
+		// Creating the local-conversion informers also registers them with the factory. Only do so when needed;
+		// ExternalNode agents do not have permission to list/watch these resources.
+		egressInformer, externalIPPoolInformer, err = agentinformers.NewEgressInformers(crdInformerFactory)
+		if err != nil {
+			return fmt.Errorf("error creating Egress informers: %w", err)
+		}
 		var nodeTransportIP net.IP
 		if nodeConfig.NodeTransportIPv4Addr != nil {
 			nodeTransportIP = nodeConfig.NodeTransportIPv4Addr.IP

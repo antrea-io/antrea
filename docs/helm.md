@@ -70,6 +70,9 @@ kubectl apply -f https://github.com/antrea-io/antrea/releases/download/<TAG>/ant
 helm upgrade antrea antrea/antrea --namespace kube-system --version <TAG>
 ```
 
+See the [versioning documentation](versioning.md#antrea-upgrade-and-supported-version-skew)
+for conversion webhook dependencies and rollback constraints.
+
 #### An important note on CRDs
 
 Helm 3 introduces "special treatment" for
