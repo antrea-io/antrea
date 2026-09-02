@@ -20,11 +20,14 @@ import (
 
 	admv1 "k8s.io/api/admission/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/klog/v2"
 
 	crdv1beta1 "antrea.io/antrea/v2/pkg/apis/crd/v1beta1"
+	crdv1beta2 "antrea.io/antrea/v2/pkg/apis/crd/v1beta2"
+	"antrea.io/antrea/v2/pkg/controller/crdconversion"
 	"antrea.io/antrea/v2/pkg/controller/validation"
 )
 
@@ -34,70 +37,50 @@ func (c *ExternalIPPoolController) ValidateExternalIPPool(review *admv1.Admissio
 	allowed := true
 
 	klog.V(2).Info("Validating ExternalIPPool", "request", review.Request)
-	var newObj, oldObj crdv1beta1.ExternalIPPool
-	if review.Request.Object.Raw != nil {
-		if err := json.Unmarshal(review.Request.Object.Raw, &newObj); err != nil {
-			klog.ErrorS(err, "Error de-serializing current ExternalIPPool")
-			return newAdmissionResponseForErr(err)
-		}
+	if err := crdconversion.ValidateAdmissionRequest(review.Request); err != nil {
+		return newAdmissionResponseForErr(err)
 	}
-	if review.Request.OldObject.Raw != nil {
-		if err := json.Unmarshal(review.Request.OldObject.Raw, &oldObj); err != nil {
-			klog.ErrorS(err, "Error de-serializing old ExternalIPPool")
-			return newAdmissionResponseForErr(err)
-		}
-	}
-
 	externalIPPools, err := c.externalIPPoolLister.List(labels.Everything())
 	if err != nil {
 		klog.ErrorS(err, "Error listing ExternalIPPools")
 		return newAdmissionResponseForErr(err)
 	}
-
-	switch review.Request.Operation {
-	case admv1.Create:
-		klog.V(2).Info("Validating CREATE request for ExternalIPPool")
-		if err := validateIPRangesAndSubnetInfoForExternalIPPool(&newObj, externalIPPools); err != nil {
-			msg = err.Error()
-			allowed = false
+	version := review.Request.Resource.Version
+	switch version {
+	case crdv1beta1.SchemeGroupVersion.Version:
+		var newObj, oldObj crdv1beta1.ExternalIPPool
+		if err := decodeExternalIPPoolAdmissionObjects(review, &newObj, &oldObj); err != nil {
+			klog.ErrorS(err, "Error de-serializing v1beta1 ExternalIPPool")
+			return newAdmissionResponseForErr(err)
 		}
-	case admv1.Update:
-		klog.V(2).Info("Validating UPDATE request for ExternalIPPool")
-		if err := validateIPRangesAndSubnetInfoForExternalIPPool(&newObj, externalIPPools); err != nil {
-			msg = err.Error()
-			allowed = false
-			break
-		}
-		oldIPFamilies, err := validation.IPFamiliesForRanges(oldObj.Spec.IPRanges)
+		isProjection, err := isV1beta2ExternalIPPoolProjection(review.Request.Object.Raw)
 		if err != nil {
-			msg = err.Error()
-			allowed = false
-			break
+			return newAdmissionResponseForErr(err)
 		}
-		newIPFamilies, err := validation.IPFamiliesForRanges(newObj.Spec.IPRanges)
-		if err != nil {
-			msg = err.Error()
-			allowed = false
-			break
+		if isProjection {
+			var newV2, oldV2 crdv1beta2.ExternalIPPool
+			if err := convertV1beta1ExternalIPPoolForValidation(review.Request.Object.Raw, &newV2); err != nil {
+				return newAdmissionResponseForErr(err)
+			}
+			if review.Request.OldObject.Raw != nil {
+				if err := convertV1beta1ExternalIPPoolForValidation(review.Request.OldObject.Raw, &oldV2); err != nil {
+					return newAdmissionResponseForErr(err)
+				}
+			}
+			allowed, msg = validateV1beta2ExternalIPPoolRequest(review.Request.Operation, &oldV2, &newV2, externalIPPools)
+		} else {
+			allowed, msg = validateV1beta1ExternalIPPoolRequest(review.Request.Operation, &oldObj, &newObj, externalIPPools)
 		}
-		// Allow an empty pool to establish its IP families when its first ranges are added.
-		if oldIPFamilies.Len() > 0 && !oldIPFamilies.Equal(newIPFamilies) {
-			allowed = false
-			msg = fmt.Sprintf("IP families are immutable (old: %v, new: %v)", sets.List(oldIPFamilies), sets.List(newIPFamilies))
-			break
+	case crdv1beta2.SchemeGroupVersion.Version, "":
+		// An empty version is accepted for direct unit tests and is treated as the current API version.
+		var newObj, oldObj crdv1beta2.ExternalIPPool
+		if err := decodeExternalIPPoolAdmissionObjects(review, &newObj, &oldObj); err != nil {
+			klog.ErrorS(err, "Error de-serializing v1beta2 ExternalIPPool")
+			return newAdmissionResponseForErr(err)
 		}
-		oldIPRangeSet := validation.GetIPRangeSet(oldObj.Spec.IPRanges)
-		newIPRangeSet := validation.GetIPRangeSet(newObj.Spec.IPRanges)
-		deletedIPRanges := oldIPRangeSet.Difference(newIPRangeSet)
-		if deletedIPRanges.Len() > 0 {
-			allowed = false
-			// Fixed error message to be consistent with IPPool controller
-			msg = fmt.Sprintf("existing IPRanges %v cannot be updated or deleted", sets.List(deletedIPRanges))
-		}
-	case admv1.Delete:
-		// This shouldn't happen with the webhook configuration we include in the Antrea YAML manifests.
-		klog.V(2).Info("Validating DELETE request for ExternalIPPool")
-		// Always allow DELETE request.
+		allowed, msg = validateV1beta2ExternalIPPoolRequest(review.Request.Operation, &oldObj, &newObj, externalIPPools)
+	default:
+		return newAdmissionResponseForErr(fmt.Errorf("unsupported ExternalIPPool API version %q", version))
 	}
 
 	if msg != "" {
@@ -111,6 +94,105 @@ func (c *ExternalIPPoolController) ValidateExternalIPPool(review *admv1.Admissio
 	}
 }
 
+func v1beta1ExternalIPPoolUnstructured(raw []byte) (*unstructured.Unstructured, error) {
+	var object unstructured.Unstructured
+	if err := json.Unmarshal(raw, &object); err != nil {
+		return nil, err
+	}
+	if object.GetAPIVersion() == "" {
+		object.SetAPIVersion(crdv1beta1.SchemeGroupVersion.String())
+	}
+	return &object, nil
+}
+
+func isV1beta2ExternalIPPoolProjection(raw []byte) (bool, error) {
+	if raw == nil {
+		return false, nil
+	}
+	object, err := v1beta1ExternalIPPoolUnstructured(raw)
+	if err != nil {
+		return false, err
+	}
+	return crdconversion.IsV1beta2ExternalIPPoolProjection(object), nil
+}
+
+func convertV1beta1ExternalIPPoolForValidation(raw []byte, result *crdv1beta2.ExternalIPPool) error {
+	object, err := v1beta1ExternalIPPoolUnstructured(raw)
+	if err != nil {
+		return err
+	}
+	converted, status := crdconversion.ConvertExternalIPPool(object, crdv1beta2.SchemeGroupVersion.String())
+	if status.Status != metav1.StatusSuccess {
+		return fmt.Errorf("failed to convert ExternalIPPool for validation: %s", status.Message)
+	}
+	convertedRaw, err := json.Marshal(converted)
+	if err != nil {
+		return err
+	}
+	return json.Unmarshal(convertedRaw, result)
+}
+
+func decodeExternalIPPoolAdmissionObjects(review *admv1.AdmissionReview, newObj, oldObj interface{}) error {
+	if review.Request.Object.Raw != nil {
+		if err := json.Unmarshal(review.Request.Object.Raw, newObj); err != nil {
+			return err
+		}
+	}
+	if review.Request.OldObject.Raw != nil {
+		if err := json.Unmarshal(review.Request.OldObject.Raw, oldObj); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func validateV1beta1ExternalIPPoolRequest(operation admv1.Operation, oldPool, newPool *crdv1beta1.ExternalIPPool, existingPools []*crdv1beta2.ExternalIPPool) (bool, string) {
+	if operation == admv1.Delete {
+		return true, ""
+	}
+	if err := validateV1beta1IPRangesAndSubnetInfo(newPool, existingPools); err != nil {
+		return false, err.Error()
+	}
+	if operation == admv1.Update {
+		oldIPRangeSet := validation.GetIPRangeSet(oldPool.Spec.IPRanges)
+		newIPRangeSet := validation.GetIPRangeSet(newPool.Spec.IPRanges)
+		if deletedIPRanges := oldIPRangeSet.Difference(newIPRangeSet); deletedIPRanges.Len() > 0 {
+			return false, fmt.Sprintf("existing IPRanges %v cannot be updated or deleted", sets.List(deletedIPRanges))
+		}
+	}
+	return true, ""
+}
+
+func validateV1beta2ExternalIPPoolRequest(operation admv1.Operation, oldPool, newPool *crdv1beta2.ExternalIPPool, existingPools []*crdv1beta2.ExternalIPPool) (bool, string) {
+	if operation == admv1.Delete {
+		return true, ""
+	}
+	if err := validateIPRangesAndSubnetInfoForExternalIPPool(newPool, existingPools); err != nil {
+		return false, err.Error()
+	}
+	if operation != admv1.Update {
+		return true, ""
+	}
+	oldIPFamilies, err := validation.IPFamiliesForRanges(oldPool.Spec.IPRanges)
+	if err != nil {
+		return false, err.Error()
+	}
+	newIPFamilies, err := validation.IPFamiliesForRanges(newPool.Spec.IPRanges)
+	if err != nil {
+		return false, err.Error()
+	}
+	// Allow an empty pool to establish its IP families when its first ranges are added.
+	if oldIPFamilies.Len() > 0 && !oldIPFamilies.Equal(newIPFamilies) {
+		return false, fmt.Sprintf("IP families are immutable (old: %v, new: %v)", sets.List(oldIPFamilies), sets.List(newIPFamilies))
+	}
+	oldIPRangeSet := validation.GetExternalIPPoolIPRangeSet(oldPool.Spec.IPRanges)
+	newIPRangeSet := validation.GetExternalIPPoolIPRangeSet(newPool.Spec.IPRanges)
+	if deletedIPRanges := oldIPRangeSet.Difference(newIPRangeSet); deletedIPRanges.Len() > 0 {
+		return false, fmt.Sprintf("existing IPRanges %v cannot be updated or deleted", sets.List(deletedIPRanges))
+	}
+	return true, ""
+}
+
 func newAdmissionResponseForErr(err error) *admv1.AdmissionResponse {
 	return &admv1.AdmissionResponse{
 		Result: &metav1.Status{
@@ -119,7 +201,7 @@ func newAdmissionResponseForErr(err error) *admv1.AdmissionResponse {
 	}
 }
 
-func validateIPRangesAndSubnetInfoForExternalIPPool(externalIPPool *crdv1beta1.ExternalIPPool, existingExternalIPPools []*crdv1beta1.ExternalIPPool) error {
+func validateIPRangesAndSubnetInfoForExternalIPPool(externalIPPool *crdv1beta2.ExternalIPPool, existingExternalIPPools []*crdv1beta2.ExternalIPPool) error {
 	ipRanges := externalIPPool.Spec.IPRanges
 	subnetInfo := externalIPPool.Spec.SubnetInfo
 	currentNormalizedIPRanges, err := validation.ValidateExternalIPPoolIPRangesAndSubnetInfo(subnetInfo, ipRanges)
@@ -129,7 +211,15 @@ func validateIPRangesAndSubnetInfoForExternalIPPool(externalIPPool *crdv1beta1.E
 	return validateNoOverlappingRanges(currentNormalizedIPRanges, existingExternalIPPools, externalIPPool.Name)
 }
 
-func collectExistingRanges(pools []*crdv1beta1.ExternalIPPool, skipPool string) ([]validation.NormalizedIPRange, error) {
+func validateV1beta1IPRangesAndSubnetInfo(externalIPPool *crdv1beta1.ExternalIPPool, existingExternalIPPools []*crdv1beta2.ExternalIPPool) error {
+	currentNormalizedIPRanges, err := validation.ValidateIPRangesAndSubnetInfo(externalIPPool.Spec.SubnetInfo, externalIPPool.Spec.IPRanges)
+	if err != nil {
+		return err
+	}
+	return validateNoOverlappingRanges(currentNormalizedIPRanges, existingExternalIPPools, externalIPPool.Name)
+}
+
+func collectExistingRanges(pools []*crdv1beta2.ExternalIPPool, skipPool string) ([]validation.NormalizedIPRange, error) {
 	normalized := make([]validation.NormalizedIPRange, 0)
 	for _, pool := range pools {
 		if pool.Name == skipPool {
@@ -144,7 +234,7 @@ func collectExistingRanges(pools []*crdv1beta1.ExternalIPPool, skipPool string) 
 	return normalized, nil
 }
 
-func validateNoOverlappingRanges(currentNormalizedIPRanges []validation.NormalizedIPRange, existingExternalIPPools []*crdv1beta1.ExternalIPPool, externalIPPoolName string) error {
+func validateNoOverlappingRanges(currentNormalizedIPRanges []validation.NormalizedIPRange, existingExternalIPPools []*crdv1beta2.ExternalIPPool, externalIPPoolName string) error {
 	existingNormalized, err := collectExistingRanges(existingExternalIPPools, externalIPPoolName)
 	if err != nil {
 		return err

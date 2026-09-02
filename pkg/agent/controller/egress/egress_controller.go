@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"net"
 	"reflect"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -50,11 +51,11 @@ import (
 	"antrea.io/antrea/v2/pkg/agent/servicecidr"
 	"antrea.io/antrea/v2/pkg/agent/types"
 	cpv1b2 "antrea.io/antrea/v2/pkg/apis/controlplane/v1beta2"
-	crdv1b1 "antrea.io/antrea/v2/pkg/apis/crd/v1beta1"
+	crdv1b2 "antrea.io/antrea/v2/pkg/apis/crd/v1beta2"
 	clientsetversioned "antrea.io/antrea/v2/pkg/client/clientset/versioned"
 	"antrea.io/antrea/v2/pkg/client/clientset/versioned/scheme"
-	crdinformers "antrea.io/antrea/v2/pkg/client/informers/externalversions/crd/v1beta1"
-	crdlisters "antrea.io/antrea/v2/pkg/client/listers/crd/v1beta1"
+	crdinformers "antrea.io/antrea/v2/pkg/client/informers/externalversions/crd/v1beta2"
+	crdlisters "antrea.io/antrea/v2/pkg/client/listers/crd/v1beta2"
 	"antrea.io/antrea/v2/pkg/controller/metrics"
 	"antrea.io/antrea/v2/pkg/util/channel"
 	"antrea.io/antrea/v2/pkg/util/k8s"
@@ -132,7 +133,7 @@ type egressIPState struct {
 	// Whether its iptables rule has been installed.
 	ruleInstalled bool
 	// The subnet the Egress IP is associated with.
-	subnetInfo *crdv1b1.SubnetInfo
+	subnetInfo *crdv1b2.SubnetInfo
 }
 
 // egressRouteTable stores the route table ID created for a subnet and the marks that are referencing it.
@@ -204,7 +205,7 @@ type EgressController struct {
 	// Used to allocate route table ID.
 	tableAllocator *idAllocator
 	// Each subnet has its own route table.
-	egressRouteTables map[crdv1b1.SubnetInfo]*egressRouteTable
+	egressRouteTables map[crdv1b2.SubnetInfo]*egressRouteTable
 
 	linkMonitor linkmonitor.Interface
 }
@@ -279,7 +280,7 @@ func NewEgressController(
 		linkMonitor:                linkMonitor,
 	}
 	if supportSeparateSubnet {
-		c.egressRouteTables = map[crdv1b1.SubnetInfo]*egressRouteTable{}
+		c.egressRouteTables = map[crdv1b2.SubnetInfo]*egressRouteTable{}
 		c.tableAllocator = newIDAllocator(types.MinRequestEgressRouteTable, types.MaxRequestEgressRouteTable)
 		externalIPPoolInformer.Informer().AddEventHandlerWithResyncPeriod(
 			cache.ResourceEventHandlerFuncs{
@@ -301,14 +302,11 @@ func NewEgressController(
 		cache.Indexers{
 			// egressIPIndex will be used to get all Egresses sharing the same Egress IP.
 			egressIPIndex: func(obj interface{}) ([]string, error) {
-				egress, ok := obj.(*crdv1b1.Egress)
+				egress, ok := obj.(*crdv1b2.Egress)
 				if !ok {
 					return nil, fmt.Errorf("obj is not Egress: %+v", obj)
 				}
 				var egressIPs []string
-				if egress.Spec.EgressIP != "" {
-					egressIPs = append(egressIPs, egress.Spec.EgressIP)
-				}
 				for _, egressIP := range egress.Spec.EgressIPs {
 					if egressIP != "" {
 						egressIPs = append(egressIPs, egressIP)
@@ -317,7 +315,7 @@ func NewEgressController(
 				return egressIPs, nil
 			},
 			externalIPPoolIndex: func(obj interface{}) ([]string, error) {
-				egress, ok := obj.(*crdv1b1.Egress)
+				egress, ok := obj.(*crdv1b2.Egress)
 				if !ok {
 					return nil, fmt.Errorf("obj is not Egress: %+v", obj)
 				}
@@ -403,8 +401,8 @@ func (c *EgressController) processPodUpdate(e interface{}) {
 
 // addEgress processes Egress ADD events.
 func (c *EgressController) addEgress(obj interface{}) {
-	egress := obj.(*crdv1b1.Egress)
-	if egress.Spec.EgressIP == "" {
+	egress := obj.(*crdv1b2.Egress)
+	if singleEgressIP(&egress.Spec) == "" {
 		return
 	}
 	c.queue.Add(egress.Name)
@@ -413,8 +411,8 @@ func (c *EgressController) addEgress(obj interface{}) {
 
 // updateEgress processes Egress UPDATE events.
 func (c *EgressController) updateEgress(old, cur interface{}) {
-	oldEgress := old.(*crdv1b1.Egress)
-	curEgress := cur.(*crdv1b1.Egress)
+	oldEgress := old.(*crdv1b2.Egress)
+	curEgress := cur.(*crdv1b2.Egress)
 	// Ignore handling the Egress Status change if Egress IP already has been assigned on current node.
 	if curEgress.Status.EgressNode == c.nodeName && oldEgress.GetGeneration() == curEgress.GetGeneration() {
 		return
@@ -425,14 +423,14 @@ func (c *EgressController) updateEgress(old, cur interface{}) {
 
 // deleteEgress processes Egress DELETE events.
 func (c *EgressController) deleteEgress(obj interface{}) {
-	egress, ok := obj.(*crdv1b1.Egress)
+	egress, ok := obj.(*crdv1b2.Egress)
 	if !ok {
 		deletedState, ok := obj.(cache.DeletedFinalStateUnknown)
 		if !ok {
 			klog.Errorf("Received unexpected object: %v", obj)
 			return
 		}
-		egress, ok = deletedState.Obj.(*crdv1b1.Egress)
+		egress, ok = deletedState.Obj.(*crdv1b2.Egress)
 		if !ok {
 			klog.Errorf("DeletedFinalStateUnknown contains non-Egress object: %v", deletedState.Obj)
 			return
@@ -443,7 +441,7 @@ func (c *EgressController) deleteEgress(obj interface{}) {
 }
 
 func (c *EgressController) addExternalIPPool(obj interface{}) {
-	pool := obj.(*crdv1b1.ExternalIPPool)
+	pool := obj.(*crdv1b2.ExternalIPPool)
 	if pool.Spec.SubnetInfo == nil {
 		return
 	}
@@ -452,10 +450,10 @@ func (c *EgressController) addExternalIPPool(obj interface{}) {
 }
 
 func (c *EgressController) updateExternalIPPool(old, cur interface{}) {
-	oldPool := old.(*crdv1b1.ExternalIPPool)
-	curPool := cur.(*crdv1b1.ExternalIPPool)
+	oldPool := old.(*crdv1b2.ExternalIPPool)
+	curPool := cur.(*crdv1b2.ExternalIPPool)
 	// We only care about SubnetInfo here.
-	if crdv1b1.CompareExternalIPPoolSubnetInfo(oldPool.Spec.SubnetInfo, curPool.Spec.SubnetInfo, false) {
+	if crdv1b2.CompareExternalIPPoolSubnetInfo(oldPool.Spec.SubnetInfo, curPool.Spec.SubnetInfo, false) {
 		return
 	}
 	c.onExternalIPPoolUpdated(curPool.Name)
@@ -465,17 +463,17 @@ func (c *EgressController) updateExternalIPPool(old, cur interface{}) {
 func (c *EgressController) onExternalIPPoolUpdated(pool string) {
 	egresses, _ := c.egressInformer.GetIndexer().ByIndex(externalIPPoolIndex, pool)
 	for _, obj := range egresses {
-		egress := obj.(*crdv1b1.Egress)
+		egress := obj.(*crdv1b2.Egress)
 		c.queue.Add(egress.Name)
 	}
 }
 
-func subnetInfoForIP(subnetInfo *crdv1b1.ExternalIPPoolSubnetInfo, ip string) (*crdv1b1.SubnetInfo, error) {
+func subnetInfoForIP(subnetInfo *crdv1b2.ExternalIPPoolSubnetInfo, ip string) (*crdv1b2.SubnetInfo, error) {
 	if subnetInfo == nil {
 		return nil, nil
 	}
 	if subnetInfo.Gateways == nil {
-		return &crdv1b1.SubnetInfo{
+		return &crdv1b2.SubnetInfo{
 			Gateway:      subnetInfo.Gateway,
 			PrefixLength: subnetInfo.PrefixLength,
 			VLAN:         subnetInfo.VLAN,
@@ -491,7 +489,7 @@ func subnetInfoForIP(subnetInfo *crdv1b1.ExternalIPPoolSubnetInfo, ip string) (*
 		if parsedGateway == nil || (parsedGateway.To4() == nil) != (parsedIP.To4() == nil) {
 			continue
 		}
-		return &crdv1b1.SubnetInfo{
+		return &crdv1b2.SubnetInfo{
 			Gateway:      gateway.Gateway,
 			PrefixLength: gateway.PrefixLength,
 			VLAN:         subnetInfo.VLAN,
@@ -511,7 +509,7 @@ func (c *EgressController) onLocalIPUpdate(ip string, added bool) {
 		klog.Infof("Detected Egress IP address %s deleted from this Node", ip)
 	}
 	for _, obj := range egresses {
-		egress := obj.(*crdv1b1.Egress)
+		egress := obj.(*crdv1b2.Egress)
 		c.queue.Add(egress.Name)
 	}
 }
@@ -556,23 +554,24 @@ func (c *EgressController) Run(stopCh <-chan struct{}) {
 // on this node. The unassigned IPs are from Egresses that were either deleted from the Kubernetes API or migrated
 // to other Nodes when the agent on this Node was not running.
 func (c *EgressController) replaceEgressIPs() error {
-	desiredLocalEgressIPs := map[string]*crdv1b1.SubnetInfo{}
+	desiredLocalEgressIPs := map[string]*crdv1b2.SubnetInfo{}
 	egresses, _ := c.egressLister.List(labels.Everything())
 	for _, egress := range egresses {
-		if isEgressSchedulable(egress) && egress.Status.EgressNode == c.nodeName && egress.Status.EgressIP != "" {
+		egressIP := singleStatusEgressIP(&egress.Status)
+		if isEgressSchedulable(egress) && egress.Status.EgressNode == c.nodeName && egressIP != "" {
 			pool, err := c.externalIPPoolLister.Get(egress.Spec.ExternalIPPool)
 			// Ignore the Egress if the ExternalIPPool doesn't exist.
 			if err != nil {
 				continue
 			}
-			subnetInfo, err := subnetInfoForIP(pool.Spec.SubnetInfo, egress.Status.EgressIP)
+			subnetInfo, err := subnetInfoForIP(pool.Spec.SubnetInfo, egressIP)
 			if err != nil {
-				return fmt.Errorf("failed to get subnet information for Egress IP %s: %w", egress.Status.EgressIP, err)
+				return fmt.Errorf("failed to get subnet information for Egress IP %s: %w", egressIP, err)
 			}
-			desiredLocalEgressIPs[egress.Status.EgressIP] = subnetInfo
+			desiredLocalEgressIPs[egressIP] = subnetInfo
 			// Record the Egress's state as we assign their IPs to this Node in the following call. It makes sure these
 			// Egress IPs will be unassigned when the Egresses are deleted.
-			c.newEgressState(egress.Name, egress.Status.EgressIP)
+			c.newEgressState(egress.Name, egressIP)
 		}
 	}
 	if err := c.ipAssigner.InitIPs(desiredLocalEgressIPs); err != nil {
@@ -609,11 +608,11 @@ func (c *EgressController) processNextWorkItem() bool {
 
 // installPolicyRoute ensures Egress traffic with the given mark access external network via the subnet's gateway, and
 // tagged with the subnet's VLAN ID if present.
-func (c *EgressController) installPolicyRoute(ipState *egressIPState, subnetInfo *crdv1b1.SubnetInfo) error {
+func (c *EgressController) installPolicyRoute(ipState *egressIPState, subnetInfo *crdv1b2.SubnetInfo) error {
 	if !c.supportSeparateSubnet {
 		return nil
 	}
-	if crdv1b1.CompareSubnetInfo(ipState.subnetInfo, subnetInfo, false) {
+	if crdv1b2.CompareSubnetInfo(ipState.subnetInfo, subnetInfo, false) {
 		return nil
 	}
 	// Deletes stale policy route first.
@@ -691,7 +690,7 @@ func (c *EgressController) uninstallPolicyRoute(ipState *egressIPState) error {
 // and iptables rule for this IP and the mark.
 // If the Egress IP is changed from local to non local, it uninstalls flows and iptables rule and releases the mark.
 // The method returns the mark on success. Non local Egresses use 0 as the mark.
-func (c *EgressController) realizeEgressIP(egressName, egressIP string, subnetInfo *crdv1b1.SubnetInfo) (uint32, error) {
+func (c *EgressController) realizeEgressIP(egressName, egressIP string, subnetInfo *crdv1b2.SubnetInfo) (uint32, error) {
 	isLocalIP := c.localIPDetector.IsLocalIP(egressIP)
 
 	c.egressIPStatesMutex.Lock()
@@ -762,7 +761,7 @@ func (c *EgressController) realizeEgressIP(egressName, egressIP string, subnetIn
 	return ipState.mark, nil
 }
 
-func bandwidthToRateLimitMeter(bandwidth *crdv1b1.Bandwidth, meterID uint32) *rateLimitMeter {
+func bandwidthToRateLimitMeter(bandwidth *crdv1b2.Bandwidth, meterID uint32) *rateLimitMeter {
 	if bandwidth == nil {
 		return nil
 	}
@@ -783,7 +782,7 @@ func bandwidthToRateLimitMeter(bandwidth *crdv1b1.Bandwidth, meterID uint32) *ra
 	}
 }
 
-func (c *EgressController) realizeEgressQoS(egressName string, eState *egressState, mark uint32, bandwidth *crdv1b1.Bandwidth) error {
+func (c *EgressController) realizeEgressQoS(egressName string, eState *egressState, mark uint32, bandwidth *crdv1b2.Bandwidth) error {
 	if !c.trafficShapingEnabled {
 		if bandwidth != nil {
 			klog.InfoS("Bandwidth in the Egress is ignored because OVS meters are not supported or trafficShaping is not enabled in Antrea-agent config.", "EgressName", egressName)
@@ -928,20 +927,20 @@ func (c *EgressController) unbindPodEgress(pod, egress string) (string, bool) {
 	return "", false
 }
 
-func (c *EgressController) updateEgressStatus(egress *crdv1b1.Egress, egressIP string, scheduleErr error) error {
+func (c *EgressController) updateEgressStatus(egress *crdv1b2.Egress, egressIP string, scheduleErr error) error {
 	isLocal := false
 	if egressIP != "" {
 		isLocal = c.localIPDetector.IsLocalIP(egressIP)
 	}
 
-	desiredStatus := &crdv1b1.EgressStatus{}
+	desiredStatus := &crdv1b2.EgressStatus{}
 	if isLocal {
 		desiredStatus.EgressNode = c.nodeName
-		desiredStatus.EgressIP = egressIP
+		desiredStatus.EgressIPs = []string{egressIP}
 		if isEgressSchedulable(egress) {
-			desiredStatus.Conditions = []crdv1b1.EgressCondition{
+			desiredStatus.Conditions = []crdv1b2.EgressCondition{
 				{
-					Type:               crdv1b1.IPAssigned,
+					Type:               crdv1b2.IPAssigned,
 					Status:             corev1.ConditionTrue,
 					LastTransitionTime: metav1.Now(),
 					Reason:             "Assigned",
@@ -951,9 +950,9 @@ func (c *EgressController) updateEgressStatus(egress *crdv1b1.Egress, egressIP s
 		}
 	} else if egressIP == "" {
 		// Select one Node to update false status among all Nodes.
-		// We don't care about the value of egress.Spec.EgressIP, just use it to reach a consensus among all agents
+		// We don't care about the value of the Egress IP, just use it to reach a consensus among all agents
 		// about which one should do the update.
-		nodeToUpdateStatus, err := c.cluster.SelectNodeForIP(egress.Spec.EgressIP, "")
+		nodeToUpdateStatus, err := c.cluster.SelectNodeForIP(singleEgressIP(&egress.Spec), "")
 		if err != nil {
 			return err
 		}
@@ -962,15 +961,15 @@ func (c *EgressController) updateEgressStatus(egress *crdv1b1.Egress, egressIP s
 			return nil
 		}
 		desiredStatus.EgressNode = ""
-		desiredStatus.EgressIP = ""
+		desiredStatus.EgressIPs = nil
 		// If the error is nil, it means the Egress hasn't been processed yet.
 		// The scheduler will get a result for the Egress very soon regardless of success or failure and trigger the
 		// controller to process it another time, so we avoid generating a transient state here, which may lead to some
 		// back-off retries due to updating conflict.
 		if scheduleErr != nil {
-			desiredStatus.Conditions = []crdv1b1.EgressCondition{
+			desiredStatus.Conditions = []crdv1b2.EgressCondition{
 				{
-					Type:               crdv1b1.IPAssigned,
+					Type:               crdv1b2.IPAssigned,
 					Status:             corev1.ConditionFalse,
 					LastTransitionTime: metav1.Now(),
 					Reason:             "AssignmentError",
@@ -992,18 +991,18 @@ func (c *EgressController) updateEgressStatus(egress *crdv1b1.Egress, egressIP s
 		// Must make a copy here as we will append more conditions. If it's appended to desiredStatus directly, there
 		// would be duplicate conditions when the function retries.
 		statusToUpdate := desiredStatus.DeepCopy()
-		// Copy conditions other than crdv1b1.IPAssigned to statusToUpdate.
+		// Copy conditions other than crdv1b2.IPAssigned to statusToUpdate.
 		for _, c := range toUpdate.Status.Conditions {
-			if c.Type != crdv1b1.IPAssigned {
+			if c.Type != crdv1b2.IPAssigned {
 				statusToUpdate.Conditions = append(statusToUpdate.Conditions, c)
 			}
 		}
 		toUpdate.Status = *statusToUpdate
 
 		klog.V(2).InfoS("Updating Egress status", "Egress", egress.Name, "oldNode", egress.Status.EgressNode, "newNode", toUpdate.Status.EgressNode)
-		_, updateErr = c.crdClient.CrdV1beta1().Egresses().UpdateStatus(context.TODO(), toUpdate, metav1.UpdateOptions{})
+		_, updateErr = c.crdClient.CrdV1beta2().Egresses().UpdateStatus(context.TODO(), toUpdate, metav1.UpdateOptions{})
 		if updateErr != nil && errors.IsConflict(updateErr) {
-			if toUpdate, getErr = c.crdClient.CrdV1beta1().Egresses().Get(context.TODO(), egress.Name, metav1.GetOptions{}); getErr != nil {
+			if toUpdate, getErr = c.crdClient.CrdV1beta2().Egresses().Get(context.TODO(), egress.Name, metav1.GetOptions{}); getErr != nil {
 				return getErr
 			}
 		}
@@ -1054,7 +1053,7 @@ func (c *EgressController) syncEgress(egressName string) error {
 			scheduleErr = err
 		}
 	} else {
-		desiredEgressIP = egress.Spec.EgressIP
+		desiredEgressIP = singleEgressIP(&egress.Spec)
 	}
 
 	eState, exist := c.getEgressState(egressName)
@@ -1076,7 +1075,7 @@ func (c *EgressController) syncEgress(egressName string) error {
 		eState = c.newEgressState(egressName, desiredEgressIP)
 	}
 
-	var subnetInfo *crdv1b1.SubnetInfo
+	var subnetInfo *crdv1b2.SubnetInfo
 	if desiredNode == c.nodeName {
 		if c.supportSeparateSubnet && egress.Spec.ExternalIPPool != "" {
 			if pool, err := c.externalIPPoolLister.Get(egress.Spec.ExternalIPPool); err != nil {
@@ -1183,7 +1182,7 @@ func (c *EgressController) syncEgress(egressName string) error {
 	return nil
 }
 
-func (c *EgressController) uninstallEgress(egressName string, eState *egressState, egress *crdv1b1.Egress) error {
+func (c *EgressController) uninstallEgress(egressName string, eState *egressState, egress *crdv1b2.Egress) error {
 	// Uninstall all of its Pod flows.
 	if err := c.uninstallPodFlows(egressName, eState, eState.ofPorts, eState.pods); err != nil {
 		return err
@@ -1416,29 +1415,43 @@ func (c *EgressController) GetEgress(ns, podName string) (types.EgressConfig, er
 	return types.EgressConfig{
 		Name:       egressName,
 		UID:        egress.UID,
-		EgressIP:   egress.Status.EgressIP,
+		EgressIP:   singleStatusEgressIP(&egress.Status),
 		EgressNode: egress.Status.EgressNode,
 	}, nil
 }
 
 // An Egress is schedulable if its Egress IP is allocated from ExternalIPPool.
-func isEgressSchedulable(egress *crdv1b1.Egress) bool {
-	return egress.Spec.EgressIP != "" && egress.Spec.ExternalIPPool != ""
+func isEgressSchedulable(egress *crdv1b2.Egress) bool {
+	return singleEgressIP(&egress.Spec) != "" && egress.Spec.ExternalIPPool != ""
+}
+
+func singleEgressIP(spec *crdv1b2.EgressSpec) string {
+	if len(spec.EgressIPs) != 1 {
+		return ""
+	}
+	return spec.EgressIPs[0]
+}
+
+func singleStatusEgressIP(status *crdv1b2.EgressStatus) string {
+	if len(status.EgressIPs) != 1 {
+		return ""
+	}
+	return status.EgressIPs[0]
 }
 
 // compareEgressStatus compares two Egress Statuses, ignoring LastTransitionTime and conditions other than IPAssigned, returns true if they are equal.
-func compareEgressStatus(currentStatus, desiredStatus *crdv1b1.EgressStatus) bool {
+func compareEgressStatus(currentStatus, desiredStatus *crdv1b2.EgressStatus) bool {
 	if currentStatus == nil && desiredStatus == nil {
 		return true
 	}
 	if currentStatus == nil || desiredStatus == nil {
 		return false
 	}
-	if currentStatus.EgressIP != desiredStatus.EgressIP || currentStatus.EgressNode != desiredStatus.EgressNode {
+	if !slices.Equal(currentStatus.EgressIPs, desiredStatus.EgressIPs) || currentStatus.EgressNode != desiredStatus.EgressNode {
 		return false
 	}
-	currentIPAssignedCondition := crdv1b1.GetEgressCondition(currentStatus.Conditions, crdv1b1.IPAssigned)
-	desiredIPAssignedCondition := crdv1b1.GetEgressCondition(desiredStatus.Conditions, crdv1b1.IPAssigned)
+	currentIPAssignedCondition := crdv1b2.GetEgressCondition(currentStatus.Conditions, crdv1b2.IPAssigned)
+	desiredIPAssignedCondition := crdv1b2.GetEgressCondition(desiredStatus.Conditions, crdv1b2.IPAssigned)
 	if currentIPAssignedCondition == nil && desiredIPAssignedCondition == nil {
 		return true
 	}
