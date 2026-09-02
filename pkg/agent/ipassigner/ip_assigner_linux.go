@@ -34,7 +34,7 @@ import (
 	"antrea.io/antrea/v2/pkg/agent/util/arping"
 	"antrea.io/antrea/v2/pkg/agent/util/ndp"
 	"antrea.io/antrea/v2/pkg/agent/util/sysctl"
-	crdv1b1 "antrea.io/antrea/v2/pkg/apis/crd/v1beta1"
+	crdv1b2 "antrea.io/antrea/v2/pkg/apis/crd/v1beta2"
 )
 
 // VLAN interfaces created by antrea-agent will be named with the prefix.
@@ -87,7 +87,7 @@ func (as *assignee) destroy() error {
 	return nil
 }
 
-func (as *assignee) assign(ip net.IP, subnetInfo *crdv1b1.SubnetInfo) error {
+func (as *assignee) assign(ip net.IP, subnetInfo *crdv1b2.SubnetInfo) error {
 	// If there is a real link, add the IP to its address list.
 	if as.link != nil {
 		addr := getIPNet(ip, subnetInfo)
@@ -134,7 +134,7 @@ func (as *assignee) advertise(ip net.IP) {
 	}
 }
 
-func (as *assignee) unassign(ip net.IP, subnetInfo *crdv1b1.SubnetInfo) error {
+func (as *assignee) unassign(ip net.IP, subnetInfo *crdv1b2.SubnetInfo) error {
 	// If there is a real link, delete the IP from its address list.
 	if as.link != nil {
 		addr := getIPNet(ip, subnetInfo)
@@ -175,8 +175,8 @@ func (as *assignee) getVLANID() (int, bool) {
 	return vlan.VlanId, true
 }
 
-func (as *assignee) loadIPAddresses() (map[string]*crdv1b1.SubnetInfo, error) {
-	assignedIPs := map[string]*crdv1b1.SubnetInfo{}
+func (as *assignee) loadIPAddresses() (map[string]*crdv1b2.SubnetInfo, error) {
+	assignedIPs := map[string]*crdv1b2.SubnetInfo{}
 	addresses, err := netlink.AddrList(as.link, netlink.FAMILY_ALL)
 	if err != nil {
 		return nil, err
@@ -186,10 +186,10 @@ func (as *assignee) loadIPAddresses() (map[string]*crdv1b1.SubnetInfo, error) {
 		// Only include global unicast addresses, otherwise addresses like link local ones may be mistakenly deleted.
 		if address.IP.IsGlobalUnicast() {
 			// subnetInfo should be nil for the dummy interface.
-			var subnetInfo *crdv1b1.SubnetInfo
+			var subnetInfo *crdv1b2.SubnetInfo
 			if isVLAN {
 				prefixLength, _ := address.Mask.Size()
-				subnetInfo = &crdv1b1.SubnetInfo{
+				subnetInfo = &crdv1b2.SubnetInfo{
 					PrefixLength: int32(prefixLength),
 					VLAN:         int32(vlanID),
 				}
@@ -218,7 +218,7 @@ type ipAssigner struct {
 	// assignIPs caches the IPs that have been assigned.
 	// TODO: Add a goroutine to ensure that the cache is in sync with the IPs assigned to the dummy device in case the
 	// IPs are removed by users accidentally.
-	assignedIPs map[string]*crdv1b1.SubnetInfo
+	assignedIPs map[string]*crdv1b2.SubnetInfo
 	mutex       sync.RWMutex
 	// uniqueMACForSubInterfaces indicates whether to assign a unique MAC address to VLAN sub-interfaces.
 	uniqueMACForSubInterfaces bool
@@ -232,7 +232,7 @@ func NewIPAssigner(nodeTransportInterface string, dummyDeviceName string, linkMo
 	}
 	a := &ipAssigner{
 		externalInterface: externalInterface,
-		assignedIPs:       map[string]*crdv1b1.SubnetInfo{},
+		assignedIPs:       map[string]*crdv1b2.SubnetInfo{},
 		defaultAssignee: &assignee{
 			logicalInterface: externalInterface,
 			ips:              sets.New[string](),
@@ -361,7 +361,7 @@ func (a *ipAssigner) loadIPAddresses() error {
 //     will be sent through the external interface.
 //   - Otherwise, the IP will be assigned to a corresponding vlan sub-interface of the external interface, and its
 //     advertisement will be sent through the vlan sub-interface (though via the external interface eventually).
-func (a *ipAssigner) AssignIP(ip string, subnetInfo *crdv1b1.SubnetInfo, forceAdvertise bool) (bool, error) {
+func (a *ipAssigner) AssignIP(ip string, subnetInfo *crdv1b2.SubnetInfo, forceAdvertise bool) (bool, error) {
 	parsedIP := net.ParseIP(ip)
 	if parsedIP == nil {
 		return false, fmt.Errorf("invalid IP %s", ip)
@@ -377,7 +377,7 @@ func (a *ipAssigner) AssignIP(ip string, subnetInfo *crdv1b1.SubnetInfo, forceAd
 	oldSubnetInfo, exists := a.assignedIPs[ip]
 	if exists {
 		// ipAssigner doesn't care about the gateway.
-		if crdv1b1.CompareSubnetInfo(subnetInfo, oldSubnetInfo, true) {
+		if crdv1b2.CompareSubnetInfo(subnetInfo, oldSubnetInfo, true) {
 			klog.V(2).InfoS("The IP is already assigned", "ip", ip)
 			if forceAdvertise {
 				as.advertise(parsedIP)
@@ -416,7 +416,7 @@ func (a *ipAssigner) UnassignIP(ip string) (bool, error) {
 	return true, nil
 }
 
-func (a *ipAssigner) unassign(ip net.IP, subnetInfo *crdv1b1.SubnetInfo) error {
+func (a *ipAssigner) unassign(ip net.IP, subnetInfo *crdv1b2.SubnetInfo) error {
 	as, _ := a.getAssignee(subnetInfo, false)
 	// The assignee doesn't exist, meaning the IP has been unassigned previously.
 	if as == nil {
@@ -437,11 +437,11 @@ func (a *ipAssigner) unassign(ip net.IP, subnetInfo *crdv1b1.SubnetInfo) error {
 }
 
 // AssignedIPs return the IPs that are assigned to the dummy device.
-func (a *ipAssigner) AssignedIPs() map[string]*crdv1b1.SubnetInfo {
+func (a *ipAssigner) AssignedIPs() map[string]*crdv1b2.SubnetInfo {
 	a.mutex.RLock()
 	defer a.mutex.RUnlock()
 	// Return a copy.
-	copy := map[string]*crdv1b1.SubnetInfo{}
+	copy := map[string]*crdv1b2.SubnetInfo{}
 	for k, v := range a.assignedIPs {
 		copy[k] = v
 	}
@@ -452,7 +452,7 @@ func (a *ipAssigner) AssignedIPs() map[string]*crdv1b1.SubnetInfo {
 // with the given ones. This function also adds the given IPs to the ARP/NDP responder if
 // applicable. It can be used to recover the IP assigner to the desired state after Agent restarts.
 // It's not thread-safe and should only be called once for initialization before calling other methods.
-func (a *ipAssigner) InitIPs(desired map[string]*crdv1b1.SubnetInfo) error {
+func (a *ipAssigner) InitIPs(desired map[string]*crdv1b2.SubnetInfo) error {
 	if err := a.loadIPAddresses(); err != nil {
 		return fmt.Errorf("error when loading IP addresses from the system: %v", err)
 	}
@@ -471,7 +471,7 @@ func (a *ipAssigner) InitIPs(desired map[string]*crdv1b1.SubnetInfo) error {
 	return nil
 }
 
-func (a *ipAssigner) GetInterfaceID(subnetInfo *crdv1b1.SubnetInfo) (int, bool) {
+func (a *ipAssigner) GetInterfaceID(subnetInfo *crdv1b2.SubnetInfo) (int, bool) {
 	a.mutex.RLock()
 	defer a.mutex.RUnlock()
 	as, _ := a.getAssignee(subnetInfo, false)
@@ -494,7 +494,7 @@ func (a *ipAssigner) Run(ch <-chan struct{}) {
 }
 
 // getAssignee gets or creates the vlan device for the subnet if it doesn't exist.
-func (a *ipAssigner) getAssignee(subnetInfo *crdv1b1.SubnetInfo, createIfNotExist bool) (*assignee, error) {
+func (a *ipAssigner) getAssignee(subnetInfo *crdv1b2.SubnetInfo, createIfNotExist bool) (*assignee, error) {
 	// Use the default assignee if subnet info is nil or the vlan is not set.
 	if subnetInfo == nil || subnetInfo.VLAN == 0 {
 		return a.defaultAssignee, nil
@@ -562,7 +562,7 @@ func (a *ipAssigner) addVLANAssignee(link netlink.Link, vlan int32) (*assignee, 
 	return as, nil
 }
 
-func getIPNet(ip net.IP, subnetInfo *crdv1b1.SubnetInfo) *net.IPNet {
+func getIPNet(ip net.IP, subnetInfo *crdv1b2.SubnetInfo) *net.IPNet {
 	ones, bits := 32, 32
 	if ip.To4() == nil {
 		ones, bits = 128, 128

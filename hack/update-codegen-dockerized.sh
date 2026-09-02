@@ -134,6 +134,7 @@ function generate_antrea_client_code {
     --input "crd/v1alpha1" \
     --input "crd/v1alpha2" \
     --input "crd/v1beta1" \
+    --input "crd/v1beta2" \
     --input "stats/v1alpha1" \
     --output-dir "pkg/client/clientset" \
     --output-pkg "${ANTREA_PKG}/pkg/client/clientset" \
@@ -152,7 +153,8 @@ function generate_antrea_client_code {
     --go-header-file hack/boilerplate/license_header.go.txt \
     "${ANTREA_PKG}/pkg/apis/crd/v1alpha1" \
     "${ANTREA_PKG}/pkg/apis/crd/v1alpha2" \
-    "${ANTREA_PKG}/pkg/apis/crd/v1beta1"
+    "${ANTREA_PKG}/pkg/apis/crd/v1beta1" \
+    "${ANTREA_PKG}/pkg/apis/crd/v1beta2"
 
   # Generate informers with K8s codegen tools.
   $GOPATH/bin/informer-gen \
@@ -163,7 +165,8 @@ function generate_antrea_client_code {
     --go-header-file hack/boilerplate/license_header.go.txt \
     "${ANTREA_PKG}/pkg/apis/crd/v1alpha1" \
     "${ANTREA_PKG}/pkg/apis/crd/v1alpha2" \
-    "${ANTREA_PKG}/pkg/apis/crd/v1beta1"
+    "${ANTREA_PKG}/pkg/apis/crd/v1beta1" \
+    "${ANTREA_PKG}/pkg/apis/crd/v1beta2"
 
   $GOPATH/bin/deepcopy-gen \
     --output-file zz_generated.deepcopy.go \
@@ -174,6 +177,7 @@ function generate_antrea_client_code {
      "${ANTREA_PKG}/pkg/apis/crd/v1alpha1" \
      "${ANTREA_PKG}/pkg/apis/crd/v1alpha2" \
      "${ANTREA_PKG}/pkg/apis/crd/v1beta1" \
+     "${ANTREA_PKG}/pkg/apis/crd/v1beta2" \
      "${ANTREA_PKG}/pkg/apis/stats" \
      "${ANTREA_PKG}/pkg/apis/stats/v1alpha1" \
      "${ANTREA_PKG}/pkg/agent/interfacestore"
@@ -195,6 +199,7 @@ function generate_antrea_client_code {
      "${ANTREA_PKG}/pkg/apis/system/v1beta1" \
      "${ANTREA_PKG}/pkg/apis/stats/v1alpha1" \
      "${ANTREA_PKG}/pkg/apis/crd/v1beta1" \
+     "${ANTREA_PKG}/pkg/apis/crd/v1beta2" \
      "k8s.io/apimachinery/pkg/apis/meta/v1" \
      "k8s.io/apimachinery/pkg/runtime" \
      "k8s.io/apimachinery/pkg/util/intstr" \
