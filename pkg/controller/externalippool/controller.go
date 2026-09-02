@@ -35,10 +35,10 @@ import (
 	"k8s.io/klog/v2"
 	utilnet "k8s.io/utils/net"
 
-	antreacrds "antrea.io/antrea/v2/pkg/apis/crd/v1beta1"
+	antreacrds "antrea.io/antrea/v2/pkg/apis/crd/v1beta2"
 	clientset "antrea.io/antrea/v2/pkg/client/clientset/versioned"
-	antreainformers "antrea.io/antrea/v2/pkg/client/informers/externalversions/crd/v1beta1"
-	antrealisters "antrea.io/antrea/v2/pkg/client/listers/crd/v1beta1"
+	antreainformers "antrea.io/antrea/v2/pkg/client/informers/externalversions/crd/v1beta2"
+	antrealisters "antrea.io/antrea/v2/pkg/client/listers/crd/v1beta2"
 	"antrea.io/antrea/v2/pkg/controller/metrics"
 	"antrea.io/antrea/v2/pkg/controller/validation"
 	"antrea.io/antrea/v2/pkg/ipam/ipallocator"
@@ -327,8 +327,8 @@ func (c *ExternalIPPoolController) updateExternalIPPoolStatus(poolName string) e
 		}
 		klog.V(2).InfoS("Updating ExternalIPPool status", "ExternalIPPool", poolName, "usage", usage)
 		toUpdate.Status.Usage = usage
-		if _, updateErr := c.crdClient.CrdV1beta1().ExternalIPPools().UpdateStatus(context.TODO(), toUpdate, metav1.UpdateOptions{}); updateErr != nil && apierrors.IsConflict(updateErr) {
-			toUpdate, getErr = c.crdClient.CrdV1beta1().ExternalIPPools().Get(context.TODO(), poolName, metav1.GetOptions{})
+		if _, updateErr := c.crdClient.CrdV1beta2().ExternalIPPools().UpdateStatus(context.TODO(), toUpdate, metav1.UpdateOptions{}); updateErr != nil && apierrors.IsConflict(updateErr) {
+			toUpdate, getErr = c.crdClient.CrdV1beta2().ExternalIPPools().Get(context.TODO(), poolName, metav1.GetOptions{})
 			if getErr != nil {
 				return getErr
 			}

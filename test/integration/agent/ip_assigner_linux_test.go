@@ -27,7 +27,7 @@ import (
 
 	"antrea.io/antrea/v2/pkg/agent/ipassigner"
 	"antrea.io/antrea/v2/pkg/agent/util/sysctl"
-	crdv1b1 "antrea.io/antrea/v2/pkg/apis/crd/v1beta1"
+	crdv1b2 "antrea.io/antrea/v2/pkg/apis/crd/v1beta2"
 )
 
 const dummyDeviceName = "antrea-dummy0"
@@ -70,12 +70,12 @@ func TestIPAssigner(t *testing.T) {
 	ip1VLAN20 := "10.10.20.10"
 	ip2VLAN20 := "10.10.20.11"
 	ip1VLAN30 := "10.10.30.10"
-	subnet20 := &crdv1b1.SubnetInfo{PrefixLength: 24, VLAN: 20}
-	subnet30 := &crdv1b1.SubnetInfo{PrefixLength: 24, VLAN: 30}
+	subnet20 := &crdv1b2.SubnetInfo{PrefixLength: 24, VLAN: 20}
+	subnet30 := &crdv1b2.SubnetInfo{PrefixLength: 24, VLAN: 30}
 	// These IPs will be assigned to the correct interface, in the specified order.
 	ipsToAssign := []struct {
 		ip         string
-		subnetInfo *crdv1b1.SubnetInfo
+		subnetInfo *crdv1b2.SubnetInfo
 	}{
 		{
 			ip: ip1,
@@ -104,7 +104,7 @@ func TestIPAssigner(t *testing.T) {
 		},
 	}
 
-	desiredIPs := make(map[string]*crdv1b1.SubnetInfo)
+	desiredIPs := make(map[string]*crdv1b2.SubnetInfo)
 	for _, assignment := range ipsToAssign {
 		ip, subnetInfo := assignment.ip, assignment.subnetInfo
 		desiredIPs[ip] = subnetInfo
@@ -143,7 +143,7 @@ func TestIPAssigner(t *testing.T) {
 
 	newIPAssigner, err := ipassigner.NewIPAssigner(nodeLinkName, dummyDeviceName, nil, true)
 	require.NoError(t, err, "Initializing new IP assigner failed")
-	assert.Equal(t, map[string]*crdv1b1.SubnetInfo{}, newIPAssigner.AssignedIPs(), "Assigned IPs don't match")
+	assert.Equal(t, map[string]*crdv1b2.SubnetInfo{}, newIPAssigner.AssignedIPs(), "Assigned IPs don't match")
 
 	ip4 := "2021:124:6020:1006:250:56ff:fea7:36c4"
 	// ip1VLAN20 is omitted, so it will be removed from the antrea-ext.20 interface. Because it
@@ -153,7 +153,7 @@ func TestIPAssigner(t *testing.T) {
 	// By removing ip1VLAN20 (primary), we can therefore validate that IPAssigner is setting
 	// promote_secondaries correctly on the interface, as otherwise ip2VLAN20 will be removed
 	// automatically.
-	newDesiredIPs := map[string]*crdv1b1.SubnetInfo{ip1: nil, ip2: nil, ip4: nil, ip2VLAN20: subnet20}
+	newDesiredIPs := map[string]*crdv1b2.SubnetInfo{ip1: nil, ip2: nil, ip4: nil, ip2VLAN20: subnet20}
 	err = newIPAssigner.InitIPs(newDesiredIPs)
 	require.NoError(t, err, "InitIPs failed")
 	assert.Equal(t, newDesiredIPs, newIPAssigner.AssignedIPs(), "Assigned IPs don't match")
@@ -171,7 +171,7 @@ func TestIPAssigner(t *testing.T) {
 		_, err = newIPAssigner.UnassignIP(ip)
 		assert.NoError(t, err, "Failed to unassign a valid IP")
 	}
-	assert.Equal(t, map[string]*crdv1b1.SubnetInfo{}, newIPAssigner.AssignedIPs(), "Assigned IPs don't match")
+	assert.Equal(t, map[string]*crdv1b2.SubnetInfo{}, newIPAssigner.AssignedIPs(), "Assigned IPs don't match")
 
 	actualIPs, err = listIPAddresses(dummyDevice)
 	require.NoError(t, err, "Failed to list IP addresses")
@@ -221,10 +221,10 @@ func TestIPAssignerIgnoresUserInterfaces(t *testing.T) {
 		}
 	}()
 
-	assert.Equal(t, map[string]*crdv1b1.SubnetInfo{}, ipAssigner.AssignedIPs(),
+	assert.Equal(t, map[string]*crdv1b2.SubnetInfo{}, ipAssigner.AssignedIPs(),
 		"User VLAN IPs should not be loaded")
 
-	require.NoError(t, ipAssigner.InitIPs(map[string]*crdv1b1.SubnetInfo{}))
+	require.NoError(t, ipAssigner.InitIPs(map[string]*crdv1b2.SubnetInfo{}))
 
 	link, err := netlink.LinkByName(userVLANName)
 	require.NoError(t, err, "User VLAN interface should still exist after InitIPs")
