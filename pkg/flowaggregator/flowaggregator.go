@@ -126,8 +126,12 @@ type flowAggregator struct {
 	logTickerDuration time.Duration
 	recordCh          chan *flowpb.Flow
 
-	recordBuffer        ringbuffer.BroadcastBuffer[*flowpb.Flow]
-	flowStreamService   flowStreamProvider
+	recordBuffer      ringbuffer.BroadcastBuffer[*flowpb.Flow]
+	flowStreamService flowStreamProvider
+	// flowStreamAuthenticator authenticates FlowStreamService clients.
+	flowStreamAuthenticator *flowstreamservice.StreamServerAuthenticator
+	// flowStreamLimits are the concurrent stream caps the authenticator was built with.
+	flowStreamLimits    flowstreamservice.StreamLimits
 	ipfixHandle         *exporterHandle
 	clickHouseHandle    *exporterHandle
 	s3Handle            *exporterHandle
@@ -203,7 +207,20 @@ func NewFlowAggregator(
 		certificateUpdateCh:         make(chan struct{}, 1),
 	}
 	if *opt.Config.FlowStreamService.Enable {
-		fa.flowStreamService = flowstreamservice.NewFlowStreamService(fa.recordBuffer)
+		fa.flowStreamLimits = flowstreamservice.StreamLimits{
+			MaxStreamsPerClientIP: int(opt.Config.FlowStreamService.MaxStreamsPerClientIP),
+			MaxTotalStreams:       int(opt.Config.FlowStreamService.MaxTotalStreams),
+		}
+		authenticator, err := flowstreamservice.NewStreamServerAuthenticator(k8sClient, fa.flowStreamLimits)
+		if err != nil {
+			return nil, fmt.Errorf("error when creating FlowStreamService authenticator: %w", err)
+		}
+		fa.flowStreamAuthenticator = authenticator
+		flowStreamService, err := flowstreamservice.NewFlowStreamService(fa.recordBuffer, authenticator)
+		if err != nil {
+			return nil, fmt.Errorf("error when creating FlowStreamService: %w", err)
+		}
+		fa.flowStreamService = flowStreamService
 		fa.flowStreamSvcUpdateCh = make(chan struct{}, 1)
 	}
 
@@ -389,6 +406,16 @@ func (fa *flowAggregator) Run(stopCh <-chan struct{}) {
 	}
 
 	if fa.flowStreamService != nil {
+		// The authenticator keeps the client CA bundle it verifies client certificates against in
+		// sync with the cluster, so it runs for the whole lifetime of the Flow Aggregator, not for
+		// the lifetime of one FlowStreamService server instance.
+		if fa.flowStreamAuthenticator != nil {
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				fa.flowStreamAuthenticator.Run(stopCh)
+			}()
+		}
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
@@ -996,6 +1023,13 @@ func (fa *flowAggregator) updateFlowAggregator(opt *options.Options) {
 	flowStreamEnabled := opt.Config.FlowStreamService.Enable != nil && *opt.Config.FlowStreamService.Enable
 	if flowStreamEnabled != (fa.flowStreamService != nil) {
 		unsupportedUpdates = append(unsupportedUpdates, "flowStreamService")
+	} else if flowStreamEnabled {
+		if int(opt.Config.FlowStreamService.MaxStreamsPerClientIP) != fa.flowStreamLimits.MaxStreamsPerClientIP {
+			unsupportedUpdates = append(unsupportedUpdates, "flowStreamService.maxStreamsPerClientIP")
+		}
+		if int(opt.Config.FlowStreamService.MaxTotalStreams) != fa.flowStreamLimits.MaxTotalStreams {
+			unsupportedUpdates = append(unsupportedUpdates, "flowStreamService.maxTotalStreams")
+		}
 	}
 	if len(unsupportedUpdates) > 0 {
 		klog.ErrorS(nil, "Ignoring unsupported configuration updates, please restart FlowAggregator", "keys", unsupportedUpdates)

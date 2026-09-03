@@ -28,8 +28,10 @@ import (
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/timestamppb"
+	k8sfake "k8s.io/client-go/kubernetes/fake"
 
 	flowpb "antrea.io/antrea/v2/pkg/apis/flow/v1alpha1"
+	flowaggregatorconfig "antrea.io/antrea/v2/pkg/config/flowaggregator"
 	"antrea.io/antrea/v2/pkg/flowaggregator/exporter"
 	"antrea.io/antrea/v2/pkg/flowaggregator/ringbuffer"
 )
@@ -54,7 +56,9 @@ func (f *fakeStream) SendMsg(any) error            { return nil }
 func (f *fakeStream) RecvMsg(any) error            { return nil }
 
 func newTestService(buf ringbuffer.BroadcastBuffer[*flowpb.Flow]) *FlowStreamService {
-	return NewFlowStreamService(buf)
+	// These tests exercise GetFlows itself, with no API server to validate credentials against;
+	// authentication is covered separately in authenticator_test.go.
+	return newFlowStreamServiceWithoutAuthentication(buf)
 }
 
 func collectFlows(responses []*flowpb.GetFlowsResponse) []*flowpb.Flow {
@@ -800,4 +804,41 @@ func TestGetFlows_FollowContextCancelled(t *testing.T) {
 			t.Fatal("GetFlows did not return after context cancellation")
 		}
 	})
+}
+
+// TestNewFlowStreamService_RequiresAuthenticator pins down that authentication is not the zero value:
+// a caller that omits the authenticator gets an error rather than an open server that streams every
+// record to every peer with nothing in the code to flag it.
+func TestNewFlowStreamService_RequiresAuthenticator(t *testing.T) {
+	buf := ringbuffer.NewBroadcastBuffer[*flowpb.Flow](4)
+	s, err := NewFlowStreamService(buf, nil)
+	require.Error(t, err)
+	assert.Nil(t, s)
+
+	// Serving clients without authentication has to be asked for by name, and the only constructor
+	// that does it is unexported, so no caller outside this package can reach it at all.
+	assert.NotNil(t, newFlowStreamServiceWithoutAuthentication(buf))
+}
+
+// TestNewFlowStreamService_MaxStreamsPerConn covers that the number of concurrent streams the server
+// advertises per connection tracks the configured service-wide cap, and so stays above the
+// per-client-IP cap whatever an operator sets. If it did not, a client on a single connection would
+// reach the transport limit first and grpc-go would park its call in checkForStreamQuota rather than
+// let the interceptor answer ResourceExhausted.
+func TestNewFlowStreamService_MaxStreamsPerConn(t *testing.T) {
+	buf := ringbuffer.NewBroadcastBuffer[*flowpb.Flow](4)
+	limits := StreamLimits{MaxStreamsPerClientIP: 3, MaxTotalStreams: 9}
+	a, err := newStreamServerAuthenticator(k8sfake.NewSimpleClientset(), newTokenReviewClient(t, nil), limits)
+	require.NoError(t, err)
+
+	s, err := NewFlowStreamService(buf, a)
+	require.NoError(t, err)
+	assert.Equal(t, uint32(limits.MaxTotalStreams), s.maxStreamsPerConn)
+	assert.Greater(t, s.maxStreamsPerConn, uint32(limits.MaxStreamsPerClientIP),
+		"the advertised per-connection limit must not preempt the per-client-IP cap")
+
+	// The test-only constructor has no authenticator to take limits from, so it falls back to the
+	// shipped default rather than to grpc-go's math.MaxUint32.
+	assert.Equal(t, uint32(flowaggregatorconfig.DefaultFlowStreamMaxTotalStreams),
+		newFlowStreamServiceWithoutAuthentication(buf).maxStreamsPerConn)
 }
