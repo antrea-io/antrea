@@ -112,6 +112,28 @@ var (
 	updatedIPv4Peer2Config = generateBGPPeerConfig(&updatedIPv4Peer2, peer2AuthPassword)
 	updatedIPv6Peer2Config = generateBGPPeerConfig(&updatedIPv6Peer2, peer2AuthPassword)
 
+	// ipv4Peer1WithNegotiatedTimers changes the hold time and the keepalive interval, which are only proposed in the
+	// OPEN message, so applying it requires the antrea-agent to re-establish the BGP session.
+	ipv4Peer1WithNegotiatedTimers = func() v1alpha1.BGPPeer {
+		peer := generateBGPPeer(ipv4Peer1Addr, peer1ASN, 179, 120)
+		peer.HoldTimeSeconds = ptr.To(int32(30))
+		peer.KeepaliveIntervalSeconds = ptr.To(int32(10))
+		return peer
+	}()
+	ipv4Peer1WithNegotiatedTimersConfig = generateBGPPeerConfig(&ipv4Peer1WithNegotiatedTimers, peer1AuthPassword)
+
+	// ipv4Peer1WithOtherTimers changes only settings that the antrea-agent applies by updating the peer in place:
+	// the BGP process re-reads the timers on its own, and re-establishes the session itself when the graceful
+	// restart configuration changes.
+	ipv4Peer1WithOtherTimers = func() v1alpha1.BGPPeer {
+		peer := generateBGPPeer(ipv4Peer1Addr, peer1ASN, 179, 120)
+		peer.ConnectRetrySeconds = ptr.To(int32(15))
+		peer.IdleHoldTimeAfterResetSeconds = ptr.To(int32(20))
+		peer.GracefulRestartEnabled = ptr.To(false)
+		return peer
+	}()
+	ipv4Peer1WithOtherTimersConfig = generateBGPPeerConfig(&ipv4Peer1WithOtherTimers, peer1AuthPassword)
+
 	peer3ASN          = int32(65533)
 	peer3AuthPassword = "bgp-peer3" // #nosec G101
 	ipv4Peer3Addr     = "192.168.77.253"
@@ -1124,6 +1146,91 @@ func TestBGPPolicyUpdate(t *testing.T) {
 				mockBGPServer.RemovePeer(gomock.Any(), ipv6Peer1Config)
 				mockBGPServer.UpdatePeer(gomock.Any(), updatedIPv4Peer2Config)
 				mockBGPServer.UpdatePeer(gomock.Any(), updatedIPv6Peer2Config)
+			},
+		},
+		{
+			name: "Effective BGPPolicy, update the negotiated BGP timers of a BGPPeer",
+			policyToUpdate: generateBGPPolicy(bgpPolicyName1,
+				creationTimestamp,
+				nodeLabels1,
+				179,
+				65000,
+				true,
+				false,
+				true,
+				false,
+				true,
+				[]v1alpha1.BGPPeer{ipv4Peer1WithNegotiatedTimers,
+					ipv4Peer2,
+					ipv6Peer1,
+					ipv6Peer2},
+				&v1alpha1.Confederation{Identifier: 100, MemberASNs: []int32{65001}}),
+			expectedState: generateBGPPolicyState(bgpPolicyName1,
+				179,
+				65000,
+				nodeAnnotations1[types.NodeBGPRouterIDAnnotationKey],
+				[]bgp.Route{
+					clusterIPv4Route2,
+					clusterIPv6Route2,
+					loadBalancerIPv4Route,
+					loadBalancerIPv6Route,
+					podIPv4CIDRRoute,
+					podIPv6CIDRRoute,
+				},
+				[]bgp.PeerConfig{ipv4Peer1WithNegotiatedTimersConfig,
+					ipv6Peer1Config,
+					ipv4Peer2Config,
+					ipv6Peer2Config,
+				},
+				&confederationConfig{100, sets.New[uint32](uint32(65001))},
+			),
+			expectedCalls: func(mockBGPServer *bgptest.MockInterfaceMockRecorder) {
+				// The hold time and the keepalive interval are only proposed in the OPEN message, so the peer is
+				// removed and re-added instead of being updated in place.
+				mockBGPServer.RemovePeer(gomock.Any(), ipv4Peer1Config)
+				mockBGPServer.AddPeer(gomock.Any(), ipv4Peer1WithNegotiatedTimersConfig)
+			},
+		},
+		{
+			name: "Effective BGPPolicy, update the non-negotiated BGP timers of a BGPPeer",
+			policyToUpdate: generateBGPPolicy(bgpPolicyName1,
+				creationTimestamp,
+				nodeLabels1,
+				179,
+				65000,
+				true,
+				false,
+				true,
+				false,
+				true,
+				[]v1alpha1.BGPPeer{ipv4Peer1WithOtherTimers,
+					ipv4Peer2,
+					ipv6Peer1,
+					ipv6Peer2},
+				&v1alpha1.Confederation{Identifier: 100, MemberASNs: []int32{65001}}),
+			expectedState: generateBGPPolicyState(bgpPolicyName1,
+				179,
+				65000,
+				nodeAnnotations1[types.NodeBGPRouterIDAnnotationKey],
+				[]bgp.Route{
+					clusterIPv4Route2,
+					clusterIPv6Route2,
+					loadBalancerIPv4Route,
+					loadBalancerIPv6Route,
+					podIPv4CIDRRoute,
+					podIPv6CIDRRoute,
+				},
+				[]bgp.PeerConfig{ipv4Peer1WithOtherTimersConfig,
+					ipv6Peer1Config,
+					ipv4Peer2Config,
+					ipv6Peer2Config,
+				},
+				&confederationConfig{100, sets.New[uint32](uint32(65001))},
+			),
+			expectedCalls: func(mockBGPServer *bgptest.MockInterfaceMockRecorder) {
+				// These settings are re-read by the BGP process, so the peer is updated in place and the
+				// session is left alone.
+				mockBGPServer.UpdatePeer(gomock.Any(), ipv4Peer1WithOtherTimersConfig)
 			},
 		},
 		{
