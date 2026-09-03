@@ -648,6 +648,14 @@ func TestBGPPolicyUpdate(t *testing.T) {
 			ipv6Peer2Config,
 		},
 		&confederationConfig{100, sets.New[uint32](uint32(65001))})
+	ipv4Peer1WithBFD := *ipv4Peer1.DeepCopy()
+	ipv4Peer1WithBFD.BFD = &v1alpha1.BFDConfig{
+		Enabled:                         true,
+		MinReceiveIntervalMilliseconds:  ptr.To(int32(300)),
+		MinTransmitIntervalMilliseconds: ptr.To(int32(300)),
+		DetectionMultiplier:             ptr.To(int32(3)),
+	}
+	ipv4Peer1WithBFDConfig := generateBGPPeerConfig(&ipv4Peer1WithBFD, peer1AuthPassword)
 	alternativePolicy := generateBGPPolicy(bgpPolicyName2,
 		creationTimestampAdd1s,
 		nodeLabels1,
@@ -1165,6 +1173,41 @@ func TestBGPPolicyUpdate(t *testing.T) {
 				}, &v1alpha1.Confederation{Identifier: 100, MemberASNs: []int32{65001}}),
 			existingState: deepCopyBGPPolicyState(effectivePolicyState),
 			expectedState: deepCopyBGPPolicyState(effectivePolicyState),
+		},
+		{
+			name: "Effective BGPPolicy, enable BFD on a BGPPeer",
+			policyToUpdate: generateBGPPolicy(bgpPolicyName1,
+				creationTimestamp,
+				nodeLabels1,
+				179,
+				65000,
+				true,
+				false,
+				true,
+				false,
+				true,
+				[]v1alpha1.BGPPeer{ipv4Peer1WithBFD,
+					ipv4Peer2,
+					ipv6Peer1,
+					ipv6Peer2,
+				},
+				&v1alpha1.Confederation{Identifier: 100, MemberASNs: []int32{65001}}),
+			existingState: deepCopyBGPPolicyState(effectivePolicyState),
+			expectedCalls: func(mockBGPServer *bgptest.MockInterfaceMockRecorder) {
+				// The BFD configuration is applied to the running peer, without resetting the BGP session.
+				mockBGPServer.UpdatePeer(gomock.Any(), ipv4Peer1WithBFDConfig)
+			},
+			expectedState: generateBGPPolicyState(bgpPolicyName1,
+				179,
+				65000,
+				nodeAnnotations1[types.NodeBGPRouterIDAnnotationKey],
+				[]bgp.Route{clusterIPv4Route2, clusterIPv6Route2, loadBalancerIPv4Route, loadBalancerIPv6Route, podIPv4CIDRRoute, podIPv6CIDRRoute},
+				[]bgp.PeerConfig{ipv4Peer1WithBFDConfig,
+					ipv6Peer1Config,
+					ipv4Peer2Config,
+					ipv6Peer2Config,
+				},
+				&confederationConfig{100, sets.New[uint32](uint32(65001))}),
 		},
 	}
 
