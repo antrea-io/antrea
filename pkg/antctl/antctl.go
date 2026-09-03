@@ -657,7 +657,7 @@ $ antctl get podmulticaststats pod -n namespace`,
 			use:     "bgppeers",
 			aliases: []string{"bgppeer"},
 			short:   "Print the current status of bgp peers of effective bgppolicy",
-			long:    "Print the current status of bgp peers of effective bgppolicy which includes peer IP address with port, asn and state",
+			long:    "Print the current status of bgp peers of effective bgppolicy which includes peer IP address with port, asn, state and bfd session state",
 			example: `  Get the list of all bgp peers with their current status
   $ antctl get bgppeers
   Get the list of IPv4 bgp peers with their current status
