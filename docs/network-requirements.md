@@ -13,6 +13,7 @@ firewalls allow the necessary traffic based on your configuration.
 | Antrea with WireGuard enabled                  | All                                   | UDP 51820<sup>[3]</sup>                    | Yes          |                              |
 | Antrea Multi-cluster with WireGuard encryption | Multi-cluster Gateway Node            | UDP 51821                                  | Yes          |                              |
 | Antrea with feature BGPPolicy enabled          | Selected by user-provided BGPPolicies | TCP 179<sup>[1]</sup>                      | Yes          |                              |
+| Antrea with BFD enabled on BGP peers           | Selected by user-provided BGPPolicies | UDP 3784<sup>[5]</sup>                     | No           |                              |
 | All                                            | Kube-apiserver host                   | TCP 443 or 6443<sup>[2]</sup>              | Yes          |                              |
 | All                                            | All                                   | TCP 10349, 10350, 10351, UDP 10351         | Yes          |                              |
 | Antrea with proxyAll enabled                   | All                                   | TCP 10256<sup>[4]</sup>                    | Yes          | Optional, for external LBs   |
@@ -39,3 +40,9 @@ other ports described above. In both cases, no manual configuration on the host 
 configuration `antreaProxy.serviceHealthCheckServerBindAddress`. It is used only
 for external load balancer health checks. If `antreaProxy.disableServiceHealthCheckServer`
 is set `true`, the health check server listening on the port will be disabled._
+
+[5] _The port is fixed by [RFC 5881](https://datatracker.ietf.org/doc/html/rfc5881) and
+cannot be changed. BFD control packets use a source port in the range 49152-65535 and are
+sent with an IP TTL of 255, so they cannot cross a router. Antrea does not add firewall
+rules for this port, nor for the BGP port, so both must be allowed by the host firewall
+configuration._
