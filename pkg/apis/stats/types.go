@@ -43,6 +43,31 @@ type AntreaClusterNetworkPolicyStatsList struct {
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
+// ClusterNetworkPolicyStats is the statistics of a Kubernetes ClusterNetworkPolicy
+// (policy.networking.k8s.io). Statistics of the Antrea-native ClusterNetworkPolicy CRD
+// (crd.antrea.io) are exposed as AntreaClusterNetworkPolicyStats instead.
+type ClusterNetworkPolicyStats struct {
+	metav1.TypeMeta
+	metav1.ObjectMeta
+	// The traffic stats of the ClusterNetworkPolicy.
+	TrafficStats TrafficStats
+	// The traffic stats of the ClusterNetworkPolicy rules.
+	RuleTrafficStats []RuleTrafficStats
+}
+
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+
+// ClusterNetworkPolicyStatsList is a list of ClusterNetworkPolicyStats.
+type ClusterNetworkPolicyStatsList struct {
+	metav1.TypeMeta
+	metav1.ListMeta
+
+	// List of ClusterNetworkPolicyStats.
+	Items []ClusterNetworkPolicyStats
+}
+
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+
 // AntreaNetworkPolicyStats is the statistics of a Antrea NetworkPolicy.
 type AntreaNetworkPolicyStats struct {
 	metav1.TypeMeta
