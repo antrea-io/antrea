@@ -77,6 +77,15 @@ const (
 	portTable        = "Port"
 	interfaceTable   = "Interface"
 
+	// ovs-vswitchd suppresses IDL change alerts for some Port columns, including trunks.
+	// Incrementing next_cfg explicitly asks ovs-vswitchd to reload the configuration.
+	// ovsConfigWaitTimeout is the total budget for the port lookup, OVSDB transaction,
+	// and ovs-vswitchd acknowledgement. It matches the timeout used for OFPort readiness.
+	ovsConfigWaitTimeout = 5 * time.Second
+	// ovsConfigWaitInterval is the interval at which cur_cfg is checked while waiting
+	// for ovs-vswitchd to acknowledge the configuration.
+	ovsConfigWaitInterval = 10 * time.Millisecond
+
 	// Openflow protocol version 1.0.
 	openflowProtoVersion10 = "OpenFlow10"
 	// Openflow protocol version 1.5.
@@ -1219,9 +1228,12 @@ func (br *OVSBridge) GetPortExternalIDs(portName string) (map[string]string, err
 	return maps.Clone(port.ExternalIDs), nil
 }
 
+// SetPortTrunks updates the allowed VLANs on a port and waits for ovs-vswitchd
+// to acknowledge that it applied the configuration. It returns an error if the
+// complete operation does not finish within five seconds.
 func (br *OVSBridge) SetPortTrunks(portName string, vlanSpecs []string) error {
-	// TODO: use ctx from parent context
-	ctx := context.TODO()
+	ctx, cancel := context.WithTimeout(context.Background(), ovsConfigWaitTimeout)
+	defer cancel()
 
 	port, err := br.getPort(ctx, portName, "")
 	if err != nil {
@@ -1238,8 +1250,7 @@ func (br *OVSBridge) SetPortTrunks(portName string, vlanSpecs []string) error {
 		klog.ErrorS(err, "Failed to construct update operation for Port", "port", portName)
 		return err
 	}
-	_, err = br.transact(ctx, ops, "set port trunks")
-	return err
+	return br.transactAndWaitForConfig(ctx, ops, "set port trunks")
 }
 
 func (br *OVSBridge) SetInterfaceMTU(name string, MTU int) error {
@@ -1423,6 +1434,89 @@ func (br *OVSBridge) transact(ctx context.Context, ops []ovsdb.Operation, action
 		return nil, convertOVSDBErrors(opErrs, err)
 	}
 	return results, nil
+}
+
+// transactAndWaitForConfig executes the supplied operations, requests an ovs-vswitchd
+// configuration reload, and waits for ovs-vswitchd to acknowledge it. Some columns,
+// including Port.trunks, are omitted from OVS IDL change alerts and do not trigger a
+// reconfiguration on their own.
+func (br *OVSBridge) transactAndWaitForConfig(ctx context.Context, ops []ovsdb.Operation, action string) error {
+	ovs, err := br.getOpenvSwitch(ctx)
+	if err != nil {
+		return err
+	}
+
+	mOVS := &OpenvSwitch{}
+	reloadOps, err := br.ovsdb.Where(OVSWithUUID(ovs.UUID)).Mutate(mOVS, model.Mutation{
+		Field:   &mOVS.NextCfg,
+		Mutator: ovsdb.MutateOperationAdd,
+		Value:   1,
+	})
+	if err != nil {
+		klog.ErrorS(err, "Failed to construct OVS configuration reload operation", "bridge", br.name)
+		return err
+	}
+	ops = append(ops, reloadOps...)
+	ops = append(ops, newSelectOperation(openvSwitchTable, "_uuid", ovsdb.UUID{GoUUID: ovs.UUID}, "next_cfg"))
+
+	results, err := br.transact(ctx, ops, action)
+	if err != nil {
+		return err
+	}
+	if len(results) == 0 {
+		return fmt.Errorf("unexpected empty OVSDB transaction result after %s", action)
+	}
+	selectResult := results[len(results)-1]
+	if len(selectResult.Rows) == 0 {
+		return fmt.Errorf("unexpected OVSDB transaction result: no Open_vSwitch row returned after %s", action)
+	}
+	nextCfgRaw, ok := selectResult.Rows[0]["next_cfg"]
+	if !ok {
+		return fmt.Errorf("unexpected OVSDB transaction result: next_cfg not returned after %s", action)
+	}
+	nextCfg, ok := extractOVSDBInt(nextCfgRaw)
+	if !ok {
+		return fmt.Errorf("failed to parse next_cfg from OVSDB result after %s", action)
+	}
+
+	return br.waitForConfig(ctx, nextCfg)
+}
+
+func (br *OVSBridge) waitForConfig(ctx context.Context, nextCfg int) error {
+	ticker := time.NewTicker(ovsConfigWaitInterval)
+	defer ticker.Stop()
+
+	curCfg := 0
+	for {
+		ovs, err := br.getOpenvSwitch(ctx)
+		if err != nil {
+			return err
+		}
+		curCfg = ovs.CurCfg
+		if curCfg >= nextCfg {
+			return nil
+		}
+
+		select {
+		case <-ctx.Done():
+			return fmt.Errorf("timed out waiting for OVS configuration %d to be applied (cur_cfg=%d): %w",
+				nextCfg, curCfg, ctx.Err())
+		case <-ticker.C:
+		}
+	}
+}
+
+// extractOVSDBInt converts an OVSDB integer from a raw or typed result. Raw
+// select results are decoded through encoding/json as float64, while typed
+// model values use int.
+func extractOVSDBInt(val interface{}) (int, bool) {
+	if floatVal, ok := extractOVSDBValue[float64](val); ok {
+		return int(floatVal), true
+	}
+	if intVal, ok := extractOVSDBValue[int](val); ok {
+		return intVal, true
+	}
+	return 0, false
 }
 
 // extractOVSDBValue is a generic helper function to parse typed fields from raw
