@@ -182,6 +182,7 @@ func run(o *Options) error {
 	enableMulticlusterNP := features.DefaultFeatureGate.Enabled(features.Multicluster) && o.config.Multicluster.EnableStretchedNetworkPolicy
 	enableFlowExporter := features.DefaultFeatureGate.Enabled(features.FlowExporter)
 	serviceExternalIPEnabled := features.DefaultFeatureGate.Enabled(features.ServiceExternalIP)
+	bgpPolicyEnabled := features.DefaultFeatureGate.Enabled(features.BGPPolicy)
 	var nodeIPTracker *nodeip.Tracker
 	if o.nodeType == config.K8sNode {
 		nodeIPTracker = nodeip.NewTracker(nodeInformer)
@@ -286,6 +287,7 @@ func run(o *Options) error {
 		multicastEnabled,
 		o.enableEgress,
 		serviceExternalIPEnabled,
+		bgpPolicyEnabled,
 		o.config.SNATFullyRandomPorts,
 		*o.config.Egress.SNATFullyRandomPorts,
 		serviceCIDRProvider,
@@ -874,7 +876,7 @@ func run(o *Options) error {
 	}
 
 	var bgpController *bgp.Controller
-	if features.DefaultFeatureGate.Enabled(features.BGPPolicy) {
+	if bgpPolicyEnabled {
 		bgpPolicyInformer := crdInformerFactory.Crd().V1alpha1().BGPPolicies()
 		bgpController, err = bgp.NewBGPPolicyController(nodeInformer,
 			serviceInformer,
