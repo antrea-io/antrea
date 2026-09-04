@@ -15,6 +15,7 @@
 package responder
 
 import (
+	"errors"
 	"fmt"
 	"net"
 	"net/netip"
@@ -148,6 +149,39 @@ func TestARPResponder_HandleARPRequest(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestARPResponder_HandleARPRequest_MalformedPacket(t *testing.T) {
+	loopbackIdx, err := loopbackIndex()
+	if err != nil {
+		t.Skipf("Skipping test: loopback interface not available: %v", err)
+	}
+
+	localHWAddr := net.HardwareAddr{0x00, 0x01, 0x02, 0x03, 0x04, 0x05}
+	remoteHWAddr := net.HardwareAddr{0x00, 0x11, 0x22, 0x33, 0x44, 0x55}
+	localIface := newFakeNetworkInterface(loopbackIdx, localHWAddr)
+	localAddr := &packet.Addr{HardwareAddr: localHWAddr}
+	remoteAddr := &packet.Addr{HardwareAddr: remoteHWAddr}
+
+	localConn, remoteConn := nettest.PacketConnPipe(localAddr, remoteAddr, 1)
+	localARPClient, err := newFakeARPClient(localIface, localConn)
+	require.NoError(t, err)
+
+	// Send truncated/malformed bytes on wire to simulate packet corruption
+	truncatedFrame := []byte{0x00, 0x01, 0x08, 0x00}
+	_, err = remoteConn.WriteTo(truncatedFrame, localAddr)
+	require.NoError(t, err)
+
+	r := arpResponder{
+		linkName:    localIface.Name,
+		assignedIPs: sets.New[netip.Addr](),
+	}
+
+	// Malformed packet returns error from client.Read, which outer loop catches and skips
+	err = r.handleARPRequest(localARPClient, localIface)
+	require.Error(t, err)
+	var opErr *net.OpError
+	assert.False(t, errors.As(err, &opErr), "malformed frame must not be classified as a socket error (*net.OpError)")
 }
 
 func Test_arpResponder_addIP(t *testing.T) {

@@ -15,10 +15,13 @@
 package responder
 
 import (
+	"errors"
 	"fmt"
 	"net"
 	"net/netip"
+	"os"
 	"sync"
+	"syscall"
 	"time"
 
 	"antrea.io/arp"
@@ -74,7 +77,8 @@ func (r *arpResponder) handleARPRequest(client *arp.Client, iface *net.Interface
 		return nil
 	}
 	if err := client.Reply(pkt, iface.HardwareAddr, pkt.TargetIP); err != nil {
-		return fmt.Errorf("failed to reply ARP packet for IP %s: %v", pkt.TargetIP, err)
+		klog.ErrorS(err, "Failed to reply ARP packet", "ip", pkt.TargetIP, "interface", r.linkName)
+		return nil
 	}
 	klog.V(4).InfoS("Sent ARP response", "ip", pkt.TargetIP, "interface", r.linkName)
 	return nil
@@ -102,18 +106,23 @@ func (r *arpResponder) dialAndHandleRequests(stopCh <-chan struct{}) {
 		klog.ErrorS(err, "Failed to dial ARP client", "deviceName", r.linkName)
 		return
 	}
-	reloadCh := make(chan struct{})
+	defer client.Close()
+
+	// readLoopDone notifies the background link watcher goroutine to exit
+	// when the read loop terminates.
+	readLoopDone := make(chan struct{})
+	defer close(readLoopDone)
 
 	klog.InfoS("ARP responder started", "interface", transportInterface.Name, "index", transportInterface.Index)
 	defer klog.InfoS("ARP responder stopped", "interface", transportInterface.Name, "index", transportInterface.Index)
 
 	go func() {
-		defer client.Close()
-		defer close(reloadCh)
-
 		for {
 			select {
 			case <-stopCh:
+				client.Close()
+				return
+			case <-readLoopDone:
 				return
 			case <-r.linkEventCh:
 				newTransportInterface, err := net.InterfaceByName(r.linkName)
@@ -123,6 +132,7 @@ func (r *arpResponder) dialAndHandleRequests(stopCh <-chan struct{}) {
 				}
 				if transportInterface.Index != newTransportInterface.Index {
 					klog.InfoS("Transport interface index changed, restarting ARP responder", "name", transportInterface.Name, "oldIndex", transportInterface.Index, "newIndex", newTransportInterface.Index)
+					client.Close()
 					return
 				}
 				klog.V(4).InfoS("Transport interface not changed")
@@ -131,15 +141,19 @@ func (r *arpResponder) dialAndHandleRequests(stopCh <-chan struct{}) {
 	}()
 
 	for {
-		select {
-		case <-reloadCh:
-			return
-		default:
-			err := r.handleARPRequest(client, transportInterface)
-			if err != nil {
-				klog.ErrorS(err, "Failed to handle ARP request", "deviceName", r.linkName)
-			}
+		err := r.handleARPRequest(client, transportInterface)
+		if err == nil {
+			continue
 		}
+		if errors.Is(err, net.ErrClosed) || errors.Is(err, os.ErrClosed) || errors.Is(err, syscall.EBADF) {
+			return
+		}
+		var opErr *net.OpError
+		if errors.As(err, &opErr) {
+			klog.ErrorS(err, "Socket error in ARP responder, restarting", "deviceName", r.linkName)
+			return
+		}
+		klog.V(2).InfoS("Skipping invalid ARP packet", "err", err, "deviceName", r.linkName)
 	}
 }
 
