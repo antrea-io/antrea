@@ -52,6 +52,13 @@ var nftablesIPv6Supported = sync.OnceValue(func() bool {
 	return true
 })
 
+// netInterfaces and getSysctlNet are indirections over net.Interfaces and sysctl.GetSysctlNet
+// so that tests can simulate failures without requiring specific interfaces or sysctl values to
+// be present on the test host.
+var netInterfaces = net.Interfaces
+
+var getSysctlNet = sysctl.GetSysctlNet
+
 func (d *agentDumper) DumpLog(basedir string) error {
 	logDir := logdir.GetLogDir()
 	timeFilter := timestampFilter(d.since)
@@ -143,7 +150,7 @@ func (d *agentDumper) dumpIPToolInfo(basedir string) error {
 }
 
 func (d *agentDumper) dumpInterfaceConfigs(basedir string) error {
-	interfaces, err := net.Interfaces()
+	interfaces, err := netInterfaces()
 	if err != nil {
 		return fmt.Errorf("error getting network interfaces: %w", err)
 	}
@@ -163,7 +170,7 @@ func (d *agentDumper) dumpInterfaceConfigs(basedir string) error {
 		output.WriteString(iface.Name)
 		output.WriteString("\n")
 		for _, param := range params {
-			value, err := sysctl.GetSysctlNet(fmt.Sprintf("ipv4/conf/%s/%s", iface.Name, param))
+				value, err := getSysctlNet(fmt.Sprintf("ipv4/conf/%s/%s", iface.Name, param))
 			if err != nil {
 				klog.ErrorS(err, "Failed to get sysctl value", "interface", iface.Name, "param", param)
 				continue
