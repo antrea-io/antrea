@@ -28,7 +28,9 @@ import (
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/timestamppb"
+	"k8s.io/apiserver/pkg/endpoints/request"
 	k8sfake "k8s.io/client-go/kubernetes/fake"
+	"k8s.io/utils/clock"
 
 	flowpb "antrea.io/antrea/v2/pkg/apis/flow/v1alpha1"
 	flowaggregatorconfig "antrea.io/antrea/v2/pkg/config/flowaggregator"
@@ -57,8 +59,9 @@ func (f *fakeStream) RecvMsg(any) error            { return nil }
 
 func newTestService(buf ringbuffer.BroadcastBuffer[*flowpb.Flow]) *FlowStreamService {
 	// These tests exercise GetFlows itself, with no API server to validate credentials against;
-	// authentication is covered separately in authenticator_test.go.
-	return newFlowStreamServiceWithoutAuthentication(buf)
+	// authentication is covered separately in authenticator_test.go, and authorization by the tests
+	// that build a service with newAuthorizedTestService.
+	return newFlowStreamServiceWithoutAuthentication(buf, nil)
 }
 
 func collectFlows(responses []*flowpb.GetFlowsResponse) []*flowpb.Flow {
@@ -806,18 +809,136 @@ func TestGetFlows_FollowContextCancelled(t *testing.T) {
 	})
 }
 
-// TestNewFlowStreamService_RequiresAuthenticator pins down that authentication is not the zero value:
-// a caller that omits the authenticator gets an error rather than an open server that streams every
-// record to every peer with nothing in the code to flag it.
-func TestNewFlowStreamService_RequiresAuthenticator(t *testing.T) {
+// TestNewFlowStreamService_RequiresAuthenticatorAndAuthorizer pins down that neither authentication
+// nor authorization is the zero value: a caller that omits either gets an error rather than an open
+// server that streams every record to every peer with nothing in the code to flag it.
+func TestNewFlowStreamService_RequiresAuthenticatorAndAuthorizer(t *testing.T) {
 	buf := ringbuffer.NewBroadcastBuffer[*flowpb.Flow](4)
-	s, err := NewFlowStreamService(buf, nil)
+	s, err := NewFlowStreamService(buf, nil, newAuthorizer(newFakeAuthorizer(), clock.RealClock{}))
+	require.Error(t, err)
+	assert.Nil(t, s)
+
+	// An authenticator without an authorizer is refused too: that combination would authenticate
+	// every client and then stream every record to it unredacted.
+	s, err = NewFlowStreamService(buf, &StreamServerAuthenticator{}, nil)
 	require.Error(t, err)
 	assert.Nil(t, s)
 
 	// Serving clients without authentication has to be asked for by name, and the only constructor
 	// that does it is unexported, so no caller outside this package can reach it at all.
-	assert.NotNil(t, newFlowStreamServiceWithoutAuthentication(buf))
+	assert.NotNil(t, newFlowStreamServiceWithoutAuthentication(buf, nil))
+}
+
+// newAuthorizedTestService builds a service that authorizes clients from a fixed set of grants,
+// and a stream context carrying the identity those grants are written for. The real clock is used
+// deliberately: inside a synctest bubble it reads the bubble's virtual time, so a test can advance
+// past revalidationInterval with time.Sleep.
+func newAuthorizedTestService(buf ringbuffer.BroadcastBuffer[*flowpb.Flow], grants ...string) (*FlowStreamService, *fakeAuthorizer) {
+	fake := newFakeAuthorizer(grants...)
+	return newFlowStreamServiceWithoutAuthentication(buf, newAuthorizer(fake, clock.RealClock{})), fake
+}
+
+func TestGetFlows_ScopeIsAuthorizedAndReported(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		buf := ringbuffer.NewBroadcastBuffer[*flowpb.Flow](64)
+		t.Cleanup(func() { buf.Shutdown() })
+
+		buf.Produce(podFlow("ns-a", "ns-b"))
+		buf.Produce(podFlow("ns-c", "ns-d"))
+
+		svc, _ := newAuthorizedTestService(buf, flowsGrant(listVerb, "ns-a"))
+		stream := newFakeStream(request.WithUser(t.Context(), testUserInfo))
+
+		errCh := make(chan error, 1)
+		go func() {
+			errCh <- svc.GetFlows(&flowpb.GetFlowsRequest{Namespaces: []string{"ns-a"}}, stream)
+		}()
+		time.Sleep(2 * exporter.ConsumeDeadline)
+		synctest.Wait()
+		require.NoError(t, <-errCh)
+
+		// The scope is reported before any record, so a client knows what it is looking at even
+		// when the buffer holds nothing it may see.
+		require.NotEmpty(t, stream.responses)
+		info := stream.responses[0].GetInfo()
+		require.NotNil(t, info)
+		assert.Equal(t, []string{"ns-a"}, info.GetAuthorizedNamespaces())
+		assert.False(t, info.GetClusterWide())
+
+		// Only the record involving ns-a is streamed, with its peer left unidentified.
+		got := collectFlows(stream.responses)
+		require.Len(t, got, 1)
+		assert.Equal(t, "ns-a->ns-b", got[0].GetId())
+		assert.Equal(t, "source-pod", got[0].GetK8S().GetSourcePodName())
+		assert.Empty(t, got[0].GetK8S().GetDestinationPodName())
+		assert.Equal(t, flowpb.EndpointDisclosure_ENDPOINT_DISCLOSURE_FLOW, got[0].GetK8S().GetDestinationDisclosure())
+	})
+}
+
+func TestGetFlows_ScopeDenied(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		buf := ringbuffer.NewBroadcastBuffer[*flowpb.Flow](64)
+		t.Cleanup(func() { buf.Shutdown() })
+		buf.Produce(podFlow("ns-a", "ns-b"))
+
+		svc, _ := newAuthorizedTestService(buf)
+		stream := newFakeStream(request.WithUser(t.Context(), testUserInfo))
+
+		err := svc.GetFlows(&flowpb.GetFlowsRequest{Namespaces: []string{"ns-a"}}, stream)
+
+		assert.Equal(t, codes.PermissionDenied, status.Code(err))
+		// Nothing at all is sent to a client whose request was denied.
+		assert.Empty(t, stream.responses)
+	})
+}
+
+func TestGetFlows_NoAuthenticatedUser(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		buf := ringbuffer.NewBroadcastBuffer[*flowpb.Flow](64)
+		t.Cleanup(func() { buf.Shutdown() })
+
+		svc, _ := newAuthorizedTestService(buf, flowsGrant(listVerb, "ns-a"))
+		stream := newFakeStream(t.Context())
+
+		err := svc.GetFlows(&flowpb.GetFlowsRequest{Namespaces: []string{"ns-a"}}, stream)
+
+		assert.Equal(t, codes.Unauthenticated, status.Code(err))
+	})
+}
+
+func TestGetFlows_RevokedMidStream(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		buf := ringbuffer.NewBroadcastBuffer[*flowpb.Flow](64)
+		t.Cleanup(func() { buf.Shutdown() })
+
+		svc, fake := newAuthorizedTestService(buf, flowsGrant(watchVerb, "ns-a"))
+		stream := newFakeStream(request.WithUser(t.Context(), testUserInfo))
+
+		errCh := make(chan error, 1)
+		go func() {
+			errCh <- svc.GetFlows(&flowpb.GetFlowsRequest{Namespaces: []string{"ns-a"}, Follow: true}, stream)
+		}()
+		time.Sleep(2 * exporter.ConsumeDeadline)
+		synctest.Wait()
+		// The stream is established and stays open while the grant holds.
+		select {
+		case err := <-errCh:
+			t.Fatalf("GetFlows returned early: %v", err)
+		default:
+		}
+
+		fake.revoke(flowsGrant(watchVerb, "ns-a"))
+		time.Sleep(revalidationInterval + exporter.ConsumeDeadline)
+		synctest.Wait()
+
+		select {
+		case err := <-errCh:
+			assert.Equal(t, codes.PermissionDenied, status.Code(err))
+			assert.Contains(t, status.Convert(err).Message(), "was revoked")
+		default:
+			t.Fatal("GetFlows did not return after the grant was revoked")
+		}
+	})
 }
 
 // TestNewFlowStreamService_MaxStreamsPerConn covers that the number of concurrent streams the server
@@ -831,7 +952,7 @@ func TestNewFlowStreamService_MaxStreamsPerConn(t *testing.T) {
 	a, err := newStreamServerAuthenticator(k8sfake.NewSimpleClientset(), newTokenReviewClient(t, nil), limits)
 	require.NoError(t, err)
 
-	s, err := NewFlowStreamService(buf, a)
+	s, err := NewFlowStreamService(buf, a, newAuthorizer(newFakeAuthorizer(), clock.RealClock{}))
 	require.NoError(t, err)
 	assert.Equal(t, uint32(limits.MaxTotalStreams), s.maxStreamsPerConn)
 	assert.Greater(t, s.maxStreamsPerConn, uint32(limits.MaxStreamsPerClientIP),
@@ -840,5 +961,5 @@ func TestNewFlowStreamService_MaxStreamsPerConn(t *testing.T) {
 	// The test-only constructor has no authenticator to take limits from, so it falls back to the
 	// shipped default rather than to grpc-go's math.MaxUint32.
 	assert.Equal(t, uint32(flowaggregatorconfig.DefaultFlowStreamMaxTotalStreams),
-		newFlowStreamServiceWithoutAuthentication(buf).maxStreamsPerConn)
+		newFlowStreamServiceWithoutAuthentication(buf, nil).maxStreamsPerConn)
 }

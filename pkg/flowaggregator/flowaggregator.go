@@ -216,7 +216,11 @@ func NewFlowAggregator(
 			return nil, fmt.Errorf("error when creating FlowStreamService authenticator: %w", err)
 		}
 		fa.flowStreamAuthenticator = authenticator
-		flowStreamService, err := flowstreamservice.NewFlowStreamService(fa.recordBuffer, authenticator)
+		authorizer, err := flowstreamservice.NewAuthorizer(k8sClient.AuthorizationV1())
+		if err != nil {
+			return nil, fmt.Errorf("error when creating FlowStreamService authorizer: %w", err)
+		}
+		flowStreamService, err := flowstreamservice.NewFlowStreamService(fa.recordBuffer, authenticator, authorizer)
 		if err != nil {
 			return nil, fmt.Errorf("error when creating FlowStreamService: %w", err)
 		}

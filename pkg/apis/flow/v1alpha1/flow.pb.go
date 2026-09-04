@@ -305,6 +305,76 @@ func (NetworkPolicyRuleAction) EnumDescriptor() ([]byte, []int) {
 	return file_pkg_apis_flow_v1alpha1_flow_proto_rawDescGZIP(), []int{4}
 }
 
+// EndpointDisclosure records how much of one endpoint of a flow the client
+// receiving the record was authorized to see. Only FlowStreamService sets it,
+// when it redacts a record for a client that may not observe every Namespace
+// the record involves; nothing else in the pipeline populates it. An endpoint
+// with no disclosure set is therefore one where nothing was withheld.
+//
+// It exists so that a withheld field is distinguishable from a field the Flow
+// Aggregator never had: an empty ingress_network_policy_namespace, for
+// instance, is what a cluster-scoped policy legitimately looks like.
+type EndpointDisclosure int32
+
+const (
+	// Nothing was withheld for this endpoint.
+	EndpointDisclosure_ENDPOINT_DISCLOSURE_UNSPECIFIED EndpointDisclosure = 0
+	// The endpoint's Namespace, Pod and Service identity are disclosed, along
+	// with the identity of the network policy evaluated on its side, but not its
+	// Node placement or the Egress applied to it. Set when the client holds get
+	// on flows/identity in the endpoint's Namespace, but that Namespace
+	// is not one the stream is authorized to observe flows for.
+	EndpointDisclosure_ENDPOINT_DISCLOSURE_IDENTITY EndpointDisclosure = 1
+	// The endpoint is unidentified: only what the flow itself shows is disclosed
+	// (addresses, ports, protocol, statistics, and the type and action of the
+	// policies evaluated on the endpoint's side), plus the endpoint's Namespace
+	// if the connection was allowed. Set when the client holds neither flow
+	// visibility nor flows/identity in the endpoint's Namespace, and
+	// for an endpoint that has no Namespace at all.
+	EndpointDisclosure_ENDPOINT_DISCLOSURE_FLOW EndpointDisclosure = 2
+)
+
+// Enum value maps for EndpointDisclosure.
+var (
+	EndpointDisclosure_name = map[int32]string{
+		0: "ENDPOINT_DISCLOSURE_UNSPECIFIED",
+		1: "ENDPOINT_DISCLOSURE_IDENTITY",
+		2: "ENDPOINT_DISCLOSURE_FLOW",
+	}
+	EndpointDisclosure_value = map[string]int32{
+		"ENDPOINT_DISCLOSURE_UNSPECIFIED": 0,
+		"ENDPOINT_DISCLOSURE_IDENTITY":    1,
+		"ENDPOINT_DISCLOSURE_FLOW":        2,
+	}
+)
+
+func (x EndpointDisclosure) Enum() *EndpointDisclosure {
+	p := new(EndpointDisclosure)
+	*p = x
+	return p
+}
+
+func (x EndpointDisclosure) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (EndpointDisclosure) Descriptor() protoreflect.EnumDescriptor {
+	return file_pkg_apis_flow_v1alpha1_flow_proto_enumTypes[5].Descriptor()
+}
+
+func (EndpointDisclosure) Type() protoreflect.EnumType {
+	return &file_pkg_apis_flow_v1alpha1_flow_proto_enumTypes[5]
+}
+
+func (x EndpointDisclosure) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use EndpointDisclosure.Descriptor instead.
+func (EndpointDisclosure) EnumDescriptor() ([]byte, []int) {
+	return file_pkg_apis_flow_v1alpha1_flow_proto_rawDescGZIP(), []int{5}
+}
+
 type FlowDirection int32
 
 const (
@@ -338,11 +408,11 @@ func (x FlowDirection) String() string {
 }
 
 func (FlowDirection) Descriptor() protoreflect.EnumDescriptor {
-	return file_pkg_apis_flow_v1alpha1_flow_proto_enumTypes[5].Descriptor()
+	return file_pkg_apis_flow_v1alpha1_flow_proto_enumTypes[6].Descriptor()
 }
 
 func (FlowDirection) Type() protoreflect.EnumType {
-	return &file_pkg_apis_flow_v1alpha1_flow_proto_enumTypes[5]
+	return &file_pkg_apis_flow_v1alpha1_flow_proto_enumTypes[6]
 }
 
 func (x FlowDirection) Number() protoreflect.EnumNumber {
@@ -351,7 +421,7 @@ func (x FlowDirection) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use FlowDirection.Descriptor instead.
 func (FlowDirection) EnumDescriptor() ([]byte, []int) {
-	return file_pkg_apis_flow_v1alpha1_flow_proto_rawDescGZIP(), []int{5}
+	return file_pkg_apis_flow_v1alpha1_flow_proto_rawDescGZIP(), []int{6}
 }
 
 type IPFIX struct {
@@ -770,8 +840,14 @@ type Kubernetes struct {
 	EgressNodeUid                  string                  `protobuf:"bytes,33,opt,name=egress_node_uid,json=egressNodeUid,proto3" json:"egress_node_uid,omitempty"`
 	EgressUid                      string                  `protobuf:"bytes,34,opt,name=egress_uid,json=egressUid,proto3" json:"egress_uid,omitempty"`
 	DestinationServiceIp           []byte                  `protobuf:"bytes,35,opt,name=destination_service_ip,json=destinationServiceIp,proto3" json:"destination_service_ip,omitempty"`
-	unknownFields                  protoimpl.UnknownFields
-	sizeCache                      protoimpl.SizeCache
+	// How much of the source endpoint's identity the receiving client was
+	// authorized to see. Set by FlowStreamService only.
+	SourceDisclosure EndpointDisclosure `protobuf:"varint,36,opt,name=source_disclosure,json=sourceDisclosure,proto3,enum=antrea_io.antrea.pkg.apis.flow.v1alpha1.EndpointDisclosure" json:"source_disclosure,omitempty"`
+	// How much of the destination endpoint's identity the receiving client was
+	// authorized to see. Set by FlowStreamService only.
+	DestinationDisclosure EndpointDisclosure `protobuf:"varint,37,opt,name=destination_disclosure,json=destinationDisclosure,proto3,enum=antrea_io.antrea.pkg.apis.flow.v1alpha1.EndpointDisclosure" json:"destination_disclosure,omitempty"`
+	unknownFields         protoimpl.UnknownFields
+	sizeCache             protoimpl.SizeCache
 }
 
 func (x *Kubernetes) Reset() {
@@ -1048,6 +1124,20 @@ func (x *Kubernetes) GetDestinationServiceIp() []byte {
 		return x.DestinationServiceIp
 	}
 	return nil
+}
+
+func (x *Kubernetes) GetSourceDisclosure() EndpointDisclosure {
+	if x != nil {
+		return x.SourceDisclosure
+	}
+	return EndpointDisclosure_ENDPOINT_DISCLOSURE_UNSPECIFIED
+}
+
+func (x *Kubernetes) GetDestinationDisclosure() EndpointDisclosure {
+	if x != nil {
+		return x.DestinationDisclosure
+	}
+	return EndpointDisclosure_ENDPOINT_DISCLOSURE_UNSPECIFIED
 }
 
 type App struct {
@@ -1431,7 +1521,7 @@ const file_pkg_apis_flow_v1alpha1_flow_proto_rawDesc = "" +
 	"\x06labels\x18\x01 \x03(\v2;.antrea_io.antrea.pkg.apis.flow.v1alpha1.Labels.LabelsEntryR\x06labels\x1a9\n" +
 	"\vLabelsEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\xec\x11\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\xca\x13\n" +
 	"\n" +
 	"Kubernetes\x12N\n" +
 	"\tflow_type\x18\x01 \x01(\x0e21.antrea_io.antrea.pkg.apis.flow.v1alpha1.FlowTypeR\bflowType\x120\n" +
@@ -1471,7 +1561,9 @@ const file_pkg_apis_flow_v1alpha1_flow_proto_rawDesc = "" +
 	"\x0fegress_node_uid\x18! \x01(\tR\regressNodeUid\x12\x1d\n" +
 	"\n" +
 	"egress_uid\x18\" \x01(\tR\tegressUid\x124\n" +
-	"\x16destination_service_ip\x18# \x01(\fR\x14destinationServiceIp\"G\n" +
+	"\x16destination_service_ip\x18# \x01(\fR\x14destinationServiceIp\x12h\n" +
+	"\x11source_disclosure\x18$ \x01(\x0e2;.antrea_io.antrea.pkg.apis.flow.v1alpha1.EndpointDisclosureR\x10sourceDisclosure\x12r\n" +
+	"\x16destination_disclosure\x18% \x01(\x0e2;.antrea_io.antrea.pkg.apis.flow.v1alpha1.EndpointDisclosureR\x15destinationDisclosure\"G\n" +
 	"\x03App\x12#\n" +
 	"\rprotocol_name\x18\x01 \x01(\tR\fprotocolName\x12\x1b\n" +
 	"\thttp_vals\x18\x02 \x01(\fR\bhttpVals\"\xa4\a\n" +
@@ -1536,7 +1628,11 @@ const file_pkg_apis_flow_v1alpha1_flow_proto_rawDesc = "" +
 	"$NETWORK_POLICY_RULE_ACTION_NO_ACTION\x10\x00\x12$\n" +
 	" NETWORK_POLICY_RULE_ACTION_ALLOW\x10\x01\x12#\n" +
 	"\x1fNETWORK_POLICY_RULE_ACTION_DROP\x10\x02\x12%\n" +
-	"!NETWORK_POLICY_RULE_ACTION_REJECT\x10\x03*c\n" +
+	"!NETWORK_POLICY_RULE_ACTION_REJECT\x10\x03*y\n" +
+	"\x12EndpointDisclosure\x12#\n" +
+	"\x1fENDPOINT_DISCLOSURE_UNSPECIFIED\x10\x00\x12 \n" +
+	"\x1cENDPOINT_DISCLOSURE_IDENTITY\x10\x01\x12\x1c\n" +
+	"\x18ENDPOINT_DISCLOSURE_FLOW\x10\x02*c\n" +
 	"\rFlowDirection\x12\x1a\n" +
 	"\x16FLOW_DIRECTION_INGRESS\x10\x00\x12\x19\n" +
 	"\x15FLOW_DIRECTION_EGRESS\x10\x01\x12\x1b\n" +
@@ -1554,7 +1650,7 @@ func file_pkg_apis_flow_v1alpha1_flow_proto_rawDescGZIP() []byte {
 	return file_pkg_apis_flow_v1alpha1_flow_proto_rawDescData
 }
 
-var file_pkg_apis_flow_v1alpha1_flow_proto_enumTypes = make([]protoimpl.EnumInfo, 6)
+var file_pkg_apis_flow_v1alpha1_flow_proto_enumTypes = make([]protoimpl.EnumInfo, 7)
 var file_pkg_apis_flow_v1alpha1_flow_proto_msgTypes = make([]protoimpl.MessageInfo, 11)
 var file_pkg_apis_flow_v1alpha1_flow_proto_goTypes = []any{
 	(FlowEndReason)(0),            // 0: antrea_io.antrea.pkg.apis.flow.v1alpha1.FlowEndReason
@@ -1562,55 +1658,58 @@ var file_pkg_apis_flow_v1alpha1_flow_proto_goTypes = []any{
 	(FlowType)(0),                 // 2: antrea_io.antrea.pkg.apis.flow.v1alpha1.FlowType
 	(NetworkPolicyType)(0),        // 3: antrea_io.antrea.pkg.apis.flow.v1alpha1.NetworkPolicyType
 	(NetworkPolicyRuleAction)(0),  // 4: antrea_io.antrea.pkg.apis.flow.v1alpha1.NetworkPolicyRuleAction
-	(FlowDirection)(0),            // 5: antrea_io.antrea.pkg.apis.flow.v1alpha1.FlowDirection
-	(*IPFIX)(nil),                 // 6: antrea_io.antrea.pkg.apis.flow.v1alpha1.IPFIX
-	(*IP)(nil),                    // 7: antrea_io.antrea.pkg.apis.flow.v1alpha1.IP
-	(*TCP)(nil),                   // 8: antrea_io.antrea.pkg.apis.flow.v1alpha1.TCP
-	(*Transport)(nil),             // 9: antrea_io.antrea.pkg.apis.flow.v1alpha1.Transport
-	(*Stats)(nil),                 // 10: antrea_io.antrea.pkg.apis.flow.v1alpha1.Stats
-	(*Labels)(nil),                // 11: antrea_io.antrea.pkg.apis.flow.v1alpha1.Labels
-	(*Kubernetes)(nil),            // 12: antrea_io.antrea.pkg.apis.flow.v1alpha1.Kubernetes
-	(*App)(nil),                   // 13: antrea_io.antrea.pkg.apis.flow.v1alpha1.App
-	(*Aggregation)(nil),           // 14: antrea_io.antrea.pkg.apis.flow.v1alpha1.Aggregation
-	(*Flow)(nil),                  // 15: antrea_io.antrea.pkg.apis.flow.v1alpha1.Flow
-	nil,                           // 16: antrea_io.antrea.pkg.apis.flow.v1alpha1.Labels.LabelsEntry
-	(*timestamppb.Timestamp)(nil), // 17: google.protobuf.Timestamp
+	(EndpointDisclosure)(0),       // 5: antrea_io.antrea.pkg.apis.flow.v1alpha1.EndpointDisclosure
+	(FlowDirection)(0),            // 6: antrea_io.antrea.pkg.apis.flow.v1alpha1.FlowDirection
+	(*IPFIX)(nil),                 // 7: antrea_io.antrea.pkg.apis.flow.v1alpha1.IPFIX
+	(*IP)(nil),                    // 8: antrea_io.antrea.pkg.apis.flow.v1alpha1.IP
+	(*TCP)(nil),                   // 9: antrea_io.antrea.pkg.apis.flow.v1alpha1.TCP
+	(*Transport)(nil),             // 10: antrea_io.antrea.pkg.apis.flow.v1alpha1.Transport
+	(*Stats)(nil),                 // 11: antrea_io.antrea.pkg.apis.flow.v1alpha1.Stats
+	(*Labels)(nil),                // 12: antrea_io.antrea.pkg.apis.flow.v1alpha1.Labels
+	(*Kubernetes)(nil),            // 13: antrea_io.antrea.pkg.apis.flow.v1alpha1.Kubernetes
+	(*App)(nil),                   // 14: antrea_io.antrea.pkg.apis.flow.v1alpha1.App
+	(*Aggregation)(nil),           // 15: antrea_io.antrea.pkg.apis.flow.v1alpha1.Aggregation
+	(*Flow)(nil),                  // 16: antrea_io.antrea.pkg.apis.flow.v1alpha1.Flow
+	nil,                           // 17: antrea_io.antrea.pkg.apis.flow.v1alpha1.Labels.LabelsEntry
+	(*timestamppb.Timestamp)(nil), // 18: google.protobuf.Timestamp
 }
 var file_pkg_apis_flow_v1alpha1_flow_proto_depIdxs = []int32{
-	17, // 0: antrea_io.antrea.pkg.apis.flow.v1alpha1.IPFIX.export_time:type_name -> google.protobuf.Timestamp
+	18, // 0: antrea_io.antrea.pkg.apis.flow.v1alpha1.IPFIX.export_time:type_name -> google.protobuf.Timestamp
 	1,  // 1: antrea_io.antrea.pkg.apis.flow.v1alpha1.IP.version:type_name -> antrea_io.antrea.pkg.apis.flow.v1alpha1.IPVersion
-	8,  // 2: antrea_io.antrea.pkg.apis.flow.v1alpha1.Transport.TCP:type_name -> antrea_io.antrea.pkg.apis.flow.v1alpha1.TCP
-	16, // 3: antrea_io.antrea.pkg.apis.flow.v1alpha1.Labels.labels:type_name -> antrea_io.antrea.pkg.apis.flow.v1alpha1.Labels.LabelsEntry
+	9,  // 2: antrea_io.antrea.pkg.apis.flow.v1alpha1.Transport.TCP:type_name -> antrea_io.antrea.pkg.apis.flow.v1alpha1.TCP
+	17, // 3: antrea_io.antrea.pkg.apis.flow.v1alpha1.Labels.labels:type_name -> antrea_io.antrea.pkg.apis.flow.v1alpha1.Labels.LabelsEntry
 	2,  // 4: antrea_io.antrea.pkg.apis.flow.v1alpha1.Kubernetes.flow_type:type_name -> antrea_io.antrea.pkg.apis.flow.v1alpha1.FlowType
-	11, // 5: antrea_io.antrea.pkg.apis.flow.v1alpha1.Kubernetes.source_pod_labels:type_name -> antrea_io.antrea.pkg.apis.flow.v1alpha1.Labels
-	11, // 6: antrea_io.antrea.pkg.apis.flow.v1alpha1.Kubernetes.destination_pod_labels:type_name -> antrea_io.antrea.pkg.apis.flow.v1alpha1.Labels
+	12, // 5: antrea_io.antrea.pkg.apis.flow.v1alpha1.Kubernetes.source_pod_labels:type_name -> antrea_io.antrea.pkg.apis.flow.v1alpha1.Labels
+	12, // 6: antrea_io.antrea.pkg.apis.flow.v1alpha1.Kubernetes.destination_pod_labels:type_name -> antrea_io.antrea.pkg.apis.flow.v1alpha1.Labels
 	3,  // 7: antrea_io.antrea.pkg.apis.flow.v1alpha1.Kubernetes.ingress_network_policy_type:type_name -> antrea_io.antrea.pkg.apis.flow.v1alpha1.NetworkPolicyType
 	4,  // 8: antrea_io.antrea.pkg.apis.flow.v1alpha1.Kubernetes.ingress_network_policy_rule_action:type_name -> antrea_io.antrea.pkg.apis.flow.v1alpha1.NetworkPolicyRuleAction
 	3,  // 9: antrea_io.antrea.pkg.apis.flow.v1alpha1.Kubernetes.egress_network_policy_type:type_name -> antrea_io.antrea.pkg.apis.flow.v1alpha1.NetworkPolicyType
 	4,  // 10: antrea_io.antrea.pkg.apis.flow.v1alpha1.Kubernetes.egress_network_policy_rule_action:type_name -> antrea_io.antrea.pkg.apis.flow.v1alpha1.NetworkPolicyRuleAction
-	17, // 11: antrea_io.antrea.pkg.apis.flow.v1alpha1.Aggregation.end_ts_from_source:type_name -> google.protobuf.Timestamp
-	17, // 12: antrea_io.antrea.pkg.apis.flow.v1alpha1.Aggregation.end_ts_from_destination:type_name -> google.protobuf.Timestamp
-	10, // 13: antrea_io.antrea.pkg.apis.flow.v1alpha1.Aggregation.stats_from_source:type_name -> antrea_io.antrea.pkg.apis.flow.v1alpha1.Stats
-	10, // 14: antrea_io.antrea.pkg.apis.flow.v1alpha1.Aggregation.reverse_stats_from_source:type_name -> antrea_io.antrea.pkg.apis.flow.v1alpha1.Stats
-	10, // 15: antrea_io.antrea.pkg.apis.flow.v1alpha1.Aggregation.stats_from_destination:type_name -> antrea_io.antrea.pkg.apis.flow.v1alpha1.Stats
-	10, // 16: antrea_io.antrea.pkg.apis.flow.v1alpha1.Aggregation.reverse_stats_from_destination:type_name -> antrea_io.antrea.pkg.apis.flow.v1alpha1.Stats
-	6,  // 17: antrea_io.antrea.pkg.apis.flow.v1alpha1.Flow.ipfix:type_name -> antrea_io.antrea.pkg.apis.flow.v1alpha1.IPFIX
-	17, // 18: antrea_io.antrea.pkg.apis.flow.v1alpha1.Flow.start_ts:type_name -> google.protobuf.Timestamp
-	17, // 19: antrea_io.antrea.pkg.apis.flow.v1alpha1.Flow.end_ts:type_name -> google.protobuf.Timestamp
-	0,  // 20: antrea_io.antrea.pkg.apis.flow.v1alpha1.Flow.end_reason:type_name -> antrea_io.antrea.pkg.apis.flow.v1alpha1.FlowEndReason
-	7,  // 21: antrea_io.antrea.pkg.apis.flow.v1alpha1.Flow.ip:type_name -> antrea_io.antrea.pkg.apis.flow.v1alpha1.IP
-	9,  // 22: antrea_io.antrea.pkg.apis.flow.v1alpha1.Flow.transport:type_name -> antrea_io.antrea.pkg.apis.flow.v1alpha1.Transport
-	12, // 23: antrea_io.antrea.pkg.apis.flow.v1alpha1.Flow.k8s:type_name -> antrea_io.antrea.pkg.apis.flow.v1alpha1.Kubernetes
-	10, // 24: antrea_io.antrea.pkg.apis.flow.v1alpha1.Flow.stats:type_name -> antrea_io.antrea.pkg.apis.flow.v1alpha1.Stats
-	10, // 25: antrea_io.antrea.pkg.apis.flow.v1alpha1.Flow.reverse_stats:type_name -> antrea_io.antrea.pkg.apis.flow.v1alpha1.Stats
-	13, // 26: antrea_io.antrea.pkg.apis.flow.v1alpha1.Flow.app:type_name -> antrea_io.antrea.pkg.apis.flow.v1alpha1.App
-	5,  // 27: antrea_io.antrea.pkg.apis.flow.v1alpha1.Flow.flow_direction:type_name -> antrea_io.antrea.pkg.apis.flow.v1alpha1.FlowDirection
-	14, // 28: antrea_io.antrea.pkg.apis.flow.v1alpha1.Flow.aggregation:type_name -> antrea_io.antrea.pkg.apis.flow.v1alpha1.Aggregation
-	29, // [29:29] is the sub-list for method output_type
-	29, // [29:29] is the sub-list for method input_type
-	29, // [29:29] is the sub-list for extension type_name
-	29, // [29:29] is the sub-list for extension extendee
-	0,  // [0:29] is the sub-list for field type_name
+	5,  // 11: antrea_io.antrea.pkg.apis.flow.v1alpha1.Kubernetes.source_disclosure:type_name -> antrea_io.antrea.pkg.apis.flow.v1alpha1.EndpointDisclosure
+	5,  // 12: antrea_io.antrea.pkg.apis.flow.v1alpha1.Kubernetes.destination_disclosure:type_name -> antrea_io.antrea.pkg.apis.flow.v1alpha1.EndpointDisclosure
+	18, // 13: antrea_io.antrea.pkg.apis.flow.v1alpha1.Aggregation.end_ts_from_source:type_name -> google.protobuf.Timestamp
+	18, // 14: antrea_io.antrea.pkg.apis.flow.v1alpha1.Aggregation.end_ts_from_destination:type_name -> google.protobuf.Timestamp
+	11, // 15: antrea_io.antrea.pkg.apis.flow.v1alpha1.Aggregation.stats_from_source:type_name -> antrea_io.antrea.pkg.apis.flow.v1alpha1.Stats
+	11, // 16: antrea_io.antrea.pkg.apis.flow.v1alpha1.Aggregation.reverse_stats_from_source:type_name -> antrea_io.antrea.pkg.apis.flow.v1alpha1.Stats
+	11, // 17: antrea_io.antrea.pkg.apis.flow.v1alpha1.Aggregation.stats_from_destination:type_name -> antrea_io.antrea.pkg.apis.flow.v1alpha1.Stats
+	11, // 18: antrea_io.antrea.pkg.apis.flow.v1alpha1.Aggregation.reverse_stats_from_destination:type_name -> antrea_io.antrea.pkg.apis.flow.v1alpha1.Stats
+	7,  // 19: antrea_io.antrea.pkg.apis.flow.v1alpha1.Flow.ipfix:type_name -> antrea_io.antrea.pkg.apis.flow.v1alpha1.IPFIX
+	18, // 20: antrea_io.antrea.pkg.apis.flow.v1alpha1.Flow.start_ts:type_name -> google.protobuf.Timestamp
+	18, // 21: antrea_io.antrea.pkg.apis.flow.v1alpha1.Flow.end_ts:type_name -> google.protobuf.Timestamp
+	0,  // 22: antrea_io.antrea.pkg.apis.flow.v1alpha1.Flow.end_reason:type_name -> antrea_io.antrea.pkg.apis.flow.v1alpha1.FlowEndReason
+	8,  // 23: antrea_io.antrea.pkg.apis.flow.v1alpha1.Flow.ip:type_name -> antrea_io.antrea.pkg.apis.flow.v1alpha1.IP
+	10, // 24: antrea_io.antrea.pkg.apis.flow.v1alpha1.Flow.transport:type_name -> antrea_io.antrea.pkg.apis.flow.v1alpha1.Transport
+	13, // 25: antrea_io.antrea.pkg.apis.flow.v1alpha1.Flow.k8s:type_name -> antrea_io.antrea.pkg.apis.flow.v1alpha1.Kubernetes
+	11, // 26: antrea_io.antrea.pkg.apis.flow.v1alpha1.Flow.stats:type_name -> antrea_io.antrea.pkg.apis.flow.v1alpha1.Stats
+	11, // 27: antrea_io.antrea.pkg.apis.flow.v1alpha1.Flow.reverse_stats:type_name -> antrea_io.antrea.pkg.apis.flow.v1alpha1.Stats
+	14, // 28: antrea_io.antrea.pkg.apis.flow.v1alpha1.Flow.app:type_name -> antrea_io.antrea.pkg.apis.flow.v1alpha1.App
+	6,  // 29: antrea_io.antrea.pkg.apis.flow.v1alpha1.Flow.flow_direction:type_name -> antrea_io.antrea.pkg.apis.flow.v1alpha1.FlowDirection
+	15, // 30: antrea_io.antrea.pkg.apis.flow.v1alpha1.Flow.aggregation:type_name -> antrea_io.antrea.pkg.apis.flow.v1alpha1.Aggregation
+	31, // [31:31] is the sub-list for method output_type
+	31, // [31:31] is the sub-list for method input_type
+	31, // [31:31] is the sub-list for extension type_name
+	31, // [31:31] is the sub-list for extension extendee
+	0,  // [0:31] is the sub-list for field type_name
 }
 
 func init() { file_pkg_apis_flow_v1alpha1_flow_proto_init() }
@@ -1626,7 +1725,7 @@ func file_pkg_apis_flow_v1alpha1_flow_proto_init() {
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_pkg_apis_flow_v1alpha1_flow_proto_rawDesc), len(file_pkg_apis_flow_v1alpha1_flow_proto_rawDesc)),
-			NumEnums:      6,
+			NumEnums:      7,
 			NumMessages:   11,
 			NumExtensions: 0,
 			NumServices:   0,

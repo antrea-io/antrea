@@ -33,6 +33,7 @@ import (
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/status"
 	"k8s.io/apimachinery/pkg/labels"
+	"k8s.io/apiserver/pkg/endpoints/request"
 	"k8s.io/klog/v2"
 
 	flowpb "antrea.io/antrea/v2/pkg/apis/flow/v1alpha1"
@@ -59,12 +60,23 @@ const (
 //
 // The call is rejected with codes.Unauthenticated if credentials are missing, malformed, or do not
 // authenticate. Only this package's own tests can build a service that skips authentication.
+//
+// The identity authenticated then decides what the client receives: every stream is authorized
+// with Kubernetes RBAC against the virtual "flows.observability.antrea.io" resource, in
+// each Namespace the request names, and each endpoint of each record is disclosed only as far as
+// the client's permissions in that endpoint's Namespace reach (see authorization.go and
+// redaction.go). As with authentication, only this package's own tests can build a service that
+// skips it.
 type FlowStreamService struct {
 	flowpb.UnimplementedFlowStreamServiceServer
 	buffer ringbuffer.BroadcastBuffer[*flowpb.Flow]
 	// authenticator authenticates every client before its RPC runs. It is nil only for a service
 	// built by newFlowStreamServiceWithoutAuthentication, which serves every client unauthenticated.
 	authenticator *StreamServerAuthenticator
+	// authorizer decides which records each authenticated client receives, and how much of each
+	// record. It is nil only for a service built by newFlowStreamServiceWithoutAuthentication with
+	// no authorizer, which streams every record to every client.
+	authorizer *Authorizer
 	// maxStreamsPerConn bounds concurrent streams on one connection. It is deliberately set to the
 	// service-wide cap rather than the per-client-IP one, so that the per-client-IP cap is what a
 	// client runs into first: a gRPC client parks an RPC that would exceed the stream limit the server
@@ -76,25 +88,36 @@ type FlowStreamService struct {
 
 // NewFlowStreamService creates a FlowStreamService backed by the given buffer. authenticator
 // authenticates clients (bearer token metadata or a TLS client certificate) before their RPC runs,
-// and is required: a nil authenticator is rejected rather than quietly serving every client. The
-// stream limits the authenticator was built with also fix the number of concurrent streams the server
-// advertises per connection.
-func NewFlowStreamService(buffer ringbuffer.BroadcastBuffer[*flowpb.Flow], authenticator *StreamServerAuthenticator) (*FlowStreamService, error) {
+// and authorizer decides which records each authenticated client receives, and how much of each
+// record. Both are required: a nil one is rejected rather than quietly serving every client, or
+// streaming every record to every authenticated client unredacted. The stream limits the
+// authenticator was built with also fix the number of concurrent streams the server advertises per
+// connection.
+func NewFlowStreamService(buffer ringbuffer.BroadcastBuffer[*flowpb.Flow], authenticator *StreamServerAuthenticator, authorizer *Authorizer) (*FlowStreamService, error) {
 	if authenticator == nil {
 		return nil, fmt.Errorf("authenticator is required; only this package's tests may serve clients without authentication, via newFlowStreamServiceWithoutAuthentication")
+	}
+	if authorizer == nil {
+		return nil, fmt.Errorf("authorizer is required; without one every authenticated client would receive every record unredacted")
 	}
 	return &FlowStreamService{
 		buffer:            buffer,
 		authenticator:     authenticator,
+		authorizer:        authorizer,
 		maxStreamsPerConn: uint32(authenticator.streamLimiter.limits.MaxTotalStreams),
 	}, nil
 }
 
 // newFlowStreamServiceWithoutAuthentication creates a FlowStreamService that accepts every client
-// without authenticating it. It exists for this package's tests, which have no API server to validate
-// credentials against. It is deliberately unexported.
-func newFlowStreamServiceWithoutAuthentication(buffer ringbuffer.BroadcastBuffer[*flowpb.Flow]) *FlowStreamService {
-	return &FlowStreamService{buffer: buffer, maxStreamsPerConn: flowaggregatorconfig.DefaultFlowStreamMaxTotalStreams}
+// without authenticating it, and authorizes the streams it serves with authorizer, or does not
+// authorize them at all when that is nil. It exists for this package's tests, which have no API
+// server to validate credentials against. It is deliberately unexported.
+func newFlowStreamServiceWithoutAuthentication(buffer ringbuffer.BroadcastBuffer[*flowpb.Flow], authorizer *Authorizer) *FlowStreamService {
+	return &FlowStreamService{
+		buffer:            buffer,
+		authorizer:        authorizer,
+		maxStreamsPerConn: flowaggregatorconfig.DefaultFlowStreamMaxTotalStreams,
+	}
 }
 
 // Run starts a dedicated TLS gRPC server for the FlowStreamService on FlowStreamPort.
@@ -178,6 +201,25 @@ func rejectUnaryRPC(ctx context.Context, req any, info *grpc.UnaryServerInfo, ha
 func (s *FlowStreamService) GetFlows(req *flowpb.GetFlowsRequest, stream flowpb.FlowStreamService_GetFlowsServer) error {
 	ctx := stream.Context()
 
+	// username is only used for logging; what the client may observe is decided by streamAuth.
+	var username string
+	var streamAuth *StreamAuthorization
+	if s.authorizer != nil {
+		u, ok := request.UserFrom(ctx)
+		if !ok {
+			// Only reachable if the service was built with an authorizer but no authenticator,
+			// which the Flow Aggregator never does. Fail closed rather than serve a stream whose
+			// permissions cannot be resolved.
+			return status.Error(codes.Unauthenticated, "no authenticated user for this stream")
+		}
+		username = u.GetName()
+		var err error
+		if streamAuth, err = s.authorizer.NewStreamAuthorization(ctx, u, req); err != nil {
+			klog.V(2).InfoS("Rejected a FlowStreamService client", "user", username, "err", err)
+			return err
+		}
+	}
+
 	var since time.Time
 	if ts := req.GetSince(); ts != nil {
 		since = ts.AsTime()
@@ -198,6 +240,9 @@ func (s *FlowStreamService) GetFlows(req *flowpb.GetFlowsRequest, stream flowpb.
 	}
 
 	klog.InfoS("Client connected to FlowStreamService",
+		"user", username,
+		"namespaces", req.GetNamespaces(),
+		"clusterWide", req.GetClusterWide(),
 		"follow", follow,
 		"since", since,
 		"maxCount", maxCount,
@@ -208,6 +253,15 @@ func (s *FlowStreamService) GetFlows(req *flowpb.GetFlowsRequest, stream flowpb.
 		ringbuffer.WithMaxConsumeDeadline(exporter.ConsumeDeadline),
 	)
 
+	// The scope the stream was opened with is reported before any record, so that a client knows
+	// what it is looking at even if the ring buffer is empty.
+	if streamAuth != nil {
+		if err := stream.Send(&flowpb.GetFlowsResponse{Info: streamAuth.StreamInfo()}); err != nil {
+			klog.InfoS("Send to client failed, closing GetFlows stream", "err", err)
+			return err
+		}
+	}
+
 	sent := 0
 	var totalDropped uint64
 	batch := make([]*flowpb.Flow, internalBatchSize)
@@ -216,6 +270,15 @@ func (s *FlowStreamService) GetFlows(req *flowpb.GetFlowsRequest, stream flowpb.
 		if err := ctx.Err(); err != nil {
 			klog.InfoS("Client disconnected from FlowStreamService", "err", err)
 			return status.FromContextError(err).Err()
+		}
+
+		if streamAuth != nil {
+			// Re-checking the stream's own scope is what makes revoking a grant end a stream that
+			// is already running. It is a no-op except once every revalidationInterval.
+			if err := streamAuth.Revalidate(ctx); err != nil {
+				klog.InfoS("Closing GetFlows stream", "user", username, "err", err)
+				return err
+			}
 		}
 
 		n, dropped, shutdown := consumer.ConsumeMultiple(batch)
@@ -228,7 +291,17 @@ func (s *FlowStreamService) GetFlows(req *flowpb.GetFlowsRequest, stream flowpb.
 
 		var filtered []*flowpb.Flow
 		if n > 0 {
-			filtered = applyFilters(batch[:n], parsedFilters, since)
+			// Authorization runs before the client's own filters, and before the max_count
+			// accounting, so that a record the client may not observe is never counted against the
+			// records it asked for, and so that filters only ever match what it can see. That last
+			// point is also what gives a filter naming a Namespace outside the stream's scope its
+			// meaning: every record here already has an endpoint in scope, so such a filter selects
+			// flows by their peer, and matches only where that peer's Namespace was disclosed.
+			records := batch[:n]
+			if streamAuth != nil {
+				records = streamAuth.Authorize(ctx, records)
+			}
+			filtered = applyFilters(records, parsedFilters, since)
 			if maxCount > 0 && sent+len(filtered) >= maxCount {
 				filtered = filtered[:maxCount-sent]
 			}
@@ -309,7 +382,7 @@ func parseFlowFilter(f *flowpb.FlowFilter) (flowFilter, error) {
 	return pf, nil
 }
 
-// applyFilters returns the subset of flows that pass the since cutoff and match
+// applyFilters returns the subset of flows that pass the "since" cutoff and match
 // ALL of the provided filters (AND semantics across filters). An empty filters
 // slice matches all flows. Note: this function mutates the contents of the
 // flows slice (it uses the slice header as a write target for in-place
@@ -319,7 +392,7 @@ func applyFilters(flows []*flowpb.Flow, filters []flowFilter, since time.Time) [
 	for _, f := range flows {
 		// (*timestamppb.Timestamp).AsTime() is nil-safe and returns the zero time,
 		// which is before any non-zero since value, so flows with a nil EndTs are
-		// correctly excluded when a since cutoff is active.
+		// correctly excluded when a "since" cutoff is active.
 		if !since.IsZero() && f.GetEndTs().AsTime().Before(since) {
 			continue
 		}

@@ -30,6 +30,11 @@
   - [Proxy Mode (v2.3 and above)](#proxy-mode-v23-and-above)
     - [Installation](#installation-1)
     - [IPFIX Information Elements (IEs) in a Proxied Flow Record](#ipfix-information-elements-ies-in-a-proxied-flow-record)
+  - [FlowStreamService (alpha)](#flowstreamservice-alpha)
+    - [Authenticating to the FlowStreamService](#authenticating-to-the-flowstreamservice)
+    - [Authorizing flow visibility](#authorizing-flow-visibility)
+    - [What a client sees of each endpoint](#what-a-client-sees-of-each-endpoint)
+    - [What administrators should know](#what-administrators-should-know)
   - [Version skew between Flow Aggregator and Antrea Agent](#version-skew-between-flow-aggregator-and-antrea-agent)
 - [Quick Deployment](#quick-deployment)
   - [Image-building Steps](#image-building-steps)
@@ -622,6 +627,243 @@ forwarding them to the external collector:
 |                | originalExporterIPv4Address               | 403      | ipv4Address | The IPv4 address (if any) used by the Flow Exporter in the Antrea Agent. |
 |                | originalExporterIPv6Address               | 404      | ipv6Address | The IPv6 address (if any) used by the Flow Exporter in the Antrea Agent. |
 |                | originalObservationDomainId               | 405      | unsigned32  | The Observation Domain ID originally reported by the Flow Exporter in the Antrea Agent. |
+
+### FlowStreamService (alpha)
+
+The Flow Aggregator can expose a gRPC server-streaming API, `FlowStreamService`,
+on port 14740, which streams flow records out of its in-memory record buffer to
+consumers such as `antrea-ui`: historical records first, then live ones if the
+client asked to follow. It is alpha, and disabled by default:
+
+```yaml
+flowStreamService:
+  enable: true
+```
+
+The connection uses server-side TLS with the same self-signed certificate as the
+gRPC collector.
+
+#### Authenticating to the FlowStreamService
+
+Clients must present a Kubernetes credential, as one of:
+
+- a bearer token in gRPC metadata, as `authorization: Bearer <token>`, which the
+  Flow Aggregator validates with a `TokenReview`. `kubectl create token
+  <serviceaccount>` and, in a cluster whose kube-apiserver trusts an OIDC issuer,
+  an OIDC ID token both work.
+- an X.509 client certificate, presented as the TLS client credential of the gRPC
+  connection, which the Flow Aggregator verifies against the cluster's client CA
+  bundle — the one kube-apiserver publishes in the
+  `extension-apiserver-authentication` ConfigMap. This covers the clients whose
+  only credential is a short-lived client certificate, such as one issued by a
+  Pinniped Concierge. Note that the Flow Aggregator's own client certificate is
+  signed by its self-signed CA rather than the cluster's, so it cannot be used
+  here.
+
+A call carrying both is identified by its certificate, which is the order
+kube-apiserver itself tries them in; if that certificate does not verify, the
+bearer token is tried next.
+
+A stream whose credential is missing, malformed or invalid is rejected with
+`UNAUTHENTICATED` before any record is read.
+
+#### Authorizing flow visibility
+
+What a client then receives is decided by ordinary Kubernetes RBAC on a virtual
+resource, `flows` in API group `observability.antrea.io`. Nothing serves
+that resource: it exists to be named in a Role or ClusterRole, the same way
+kubelet authorizes its own endpoints through `nodes/proxy`. The Flow Aggregator
+resolves each stream with `SubjectAccessReview`s, for which its ServiceAccount is
+already bound to `system:auth-delegator`.
+
+Two permissions exist:
+
+| To let a subject… | Grant in a Namespace |
+|---|---|
+| stream that Namespace's flows, and see full detail on its endpoints | `flows`, verbs `list` and `watch` |
+| recognize that Namespace's workloads inside records the subject receives through *other* Namespaces | `flows/identity`, verb `get` |
+
+`flows` in a Namespace implies `flows/identity` there: an endpoint in a Namespace
+the stream was authorized for is disclosed in full, and costs no separate identity
+check. Granting `flows/identity` on its own is for the other case — being
+recognizable inside records someone receives through a *different* Namespace.
+
+`list` authorizes a stream that drains the record buffer and closes; `watch`
+authorizes one that then follows live records. Granting only `list` therefore
+yields history-only access. `watch` is what the gRPC API's `follow` flag maps
+onto.
+
+**A client must name the scope it wants to observe.** There are two ways to
+consume flows:
+
+- a subject with cluster-wide visibility sets the cluster-wide flag and streams
+  the flows of every Namespace, including flows with no Namespace at all, over a
+  single stream. This is a single cluster-wide check, which only a
+  ClusterRoleBinding can satisfy;
+- a subject with visibility in individual Namespaces names **one** Namespace per
+  request, and opens one stream per Namespace it wants to observe.
+
+A request naming more than one Namespace is rejected with `INVALID_ARGUMENT`, and
+a request naming a Namespace the client may not observe is rejected with
+`PERMISSION_DENIED` rather than being narrowed to something it may. Kubernetes
+offers no reverse lookup from a subject to the Namespaces it may access, so "show
+me everything I am allowed to see" is not something the Flow Aggregator can
+answer, which is why the scope is always explicit. The same distinction surfaces
+in the Antrea UI: selecting a Namespace is mandatory on the flow visibility tab
+unless the user has cluster-wide visibility.
+
+A record is streamed if either of its endpoints is in the Namespaces the client
+was authorized for. Requiring both would hide exactly the cross-Namespace flows
+users are looking for — "my egress to a service I cannot see was dropped" is the
+common case.
+
+Two ClusterRoles are shipped, unbound, and grant nothing until an administrator
+binds them:
+
+```bash
+# Let the "network-ops" group stream flows in the "frontend" Namespace.
+kubectl create rolebinding flow-viewer -n frontend \
+  --clusterrole antrea-flow-viewer --group network-ops
+
+# Let it stream every flow in the cluster, including flows with no Namespace at all.
+kubectl create clusterrolebinding flow-viewer \
+  --clusterrole antrea-flow-viewer --group network-ops
+
+# Let everyone recognize kube-system's workloads inside records they already receive.
+kubectl create rolebinding flow-identity -n kube-system \
+  --clusterrole antrea-flow-identity-viewer --group system:authenticated
+```
+
+`antrea-flow-viewer` carries `rbac.authorization.k8s.io/aggregate-to-admin`, so a
+Namespace administrator observes their own Namespace's flows without any of the
+bindings above: a Namespace's flows are treated as part of what owning that
+Namespace already entails. A true cluster administrator, holding `*` on `*`, has
+cluster-wide visibility for the same reason. `antrea-flow-identity-viewer` is
+deliberately *not* aggregated: letting another Namespace's workloads be
+recognized is the kind of consent only that Namespace's owner can give, so it
+always takes an explicit binding.
+
+Who currently holds flow visibility can be audited with:
+
+```bash
+kubectl get rolebindings,clusterrolebindings -A -o json | \
+  jq '.items[] | select(.roleRef.name | startswith("antrea-flow-"))'
+```
+
+#### What a client sees of each endpoint
+
+Each endpoint of a record — source and destination — is disclosed
+independently, according to the client's permissions in *that endpoint's*
+Namespace. A single record could carry one endpoint in full and the other
+redacted.
+
+| Tier     | Fields                                                                                                                                                                                                                                                                            | Requires                                                      |
+|----------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|---------------------------------------------------------------|
+| Flow     | addresses, ports, protocol, statistics and throughput, timestamps, flow type, direction, end reason, TCP state, and the **type and action** of the network policies evaluated on the endpoint's side                                                                              | receiving the record at all                                   |
+| Identity | Namespace, Pod name/UID/labels, the destination Service's `destination_service_port`, `destination_service_port_name`, `destination_service_uid` and `destination_service_ip` (plus the deprecated `destination_cluster_ip`), and the network policy namespace/name/UID/rule name | `get flows/identity` in the endpoint's Namespace              |
+| Full     | Node name/UID, Egress name/IP/Node. Node co-tenancy with the client's own workloads can survive redaction at Flow/Identity tiers, as the flow type paragraph below explains                                                                                                       | the endpoint's Namespace is one the stream was authorized for |
+
+A destination Service's IP sits at the Identity tier rather than the Flow tier,
+because it maps back to the Service it belongs to, so granting `flows/identity`
+in a Namespace discloses the IPs of that Namespace's Services along with their
+names. There is no field carrying a Service's name on its own: the name rides
+inside `destination_service_port_name`, which the Flow Exporter sets to
+`namespace/name:portName`, so that one field carries the Service's Namespace and
+name as well as the port's name.
+
+The flow type is deliberately not redacted, so `FLOW_TYPE_INTRA_NODE` still
+reports that the two endpoints share a Node. Paired with an endpoint the client
+can place — its own Pods, whose Nodes it can read from the downward API with no
+Antrea grant at all — that discloses co-tenancy with the client's own workloads
+even where the peer's Node name was withheld, and the `flow_types` filter yields
+the same bit without reading the field. This is a deliberate trade: the
+internal-versus-external distinction the flow type carries is what lets a client
+tell a genuinely external endpoint from one whose Namespace was withheld, and
+collapsing `INTRA_NODE` to `INTER_NODE` would make the field mean something
+different on every stream. The peer's Node is never named.
+
+An endpoint below the Full tier is marked as such on the record
+(`source_disclosure` / `destination_disclosure`), so that a client can tell a
+field that was withheld from one the Flow Aggregator never had — an empty policy
+Namespace, for instance, is what a cluster-scoped policy legitimately looks like.
+An unidentified endpoint keeps its Namespace only if the connection was allowed:
+withholding it for denied connections is what keeps a client from scanning the
+Pod CIDR and mapping IPs to Namespaces by reading back its own denied flows.
+Anything other than an explicit drop or reject counts as allowed, including "no
+policy applied at all", so the mitigation only bites where the traffic really was
+denied by a policy: in a cluster without default-deny every scan probe reads as
+allowed and the peer Namespace is disclosed anyway. That is an accepted limit
+rather than an oversight: such a cluster is not segmented in the first place, and
+its Namespace names were trivially discoverable by other means.
+
+A few fields belong to the record rather than to either endpoint. `ipfix`, which
+carries the IP of the Node that exported the record, is withheld unless *both*
+endpoints are disclosed in full: it is present on every record, including a
+Pod-to-Pod flow where neither Node is named. Because it is a record-level field,
+an endpoint at the Full tier can still lose it from a record while its own
+`source_disclosure` / `destination_disclosure` stays unset.
+
+`proxy_snat_ip` and `proxy_snat_port` are not redacted, even though they too
+hold a Node address. Only a from-external flow carries them — they are the
+address the ingress Node masqueraded the external client to, which is what the
+destination Pod actually observed as its peer. Such a flow has no source
+Namespace for a stream to be authorized for, so it only ever reaches a stream
+through its destination, a Namespace that stream may observe in full.
+
+A rule *action* and the policy *type* are disclosed at every tier, even for a
+policy the client may not otherwise know about: losing them would lose "why did my
+connection fail", which is most of the troubleshooting value, and knowing whether
+a cluster-scoped or a namespaced policy dropped the connection tells a client
+whether to escalate to the platform team or to the peer. The policy's *identity*
+— its Namespace, name, UID and rule name — comes with the Identity tier, so that
+"which of your policies dropped my traffic" is answerable once the peer's
+Namespace has granted `flows/identity`. Below that tier it stays hidden, which is
+what keeps a client from mapping the policy set of a Namespace that never
+consented to being identified.
+
+Consequently, the same flow looks different depending on which Namespace a stream
+was opened for. Take a subject holding `antrea-flow-viewer` in both `ns-a` and
+`ns-b`, and `antrea-flow-identity-viewer` in both as well: it sees an
+`ns-a`-to-`ns-b` flow with the `ns-b` endpoint at the Identity tier on its `ns-a`
+stream, and with the `ns-a` endpoint at the Identity tier on its `ns-b` stream;
+only a cluster-wide stream shows both endpoints in full. Both halves of that
+example are load-bearing: flow visibility in `ns-b` puts that Namespace's
+endpoints at the Full tier on a stream opened *for* `ns-b`, but it does not
+identify them on a stream opened for another Namespace, since the Identity tier
+is resolved from `flows/identity` alone. Without the identity bindings, each peer
+falls back to the Flow tier on the other's stream. The scope a stream was
+actually authorized for is reported in the first message of the stream.
+
+#### What administrators should know
+
+- **A grant on a shared infrastructure Namespace approximates a cluster-wide
+  grant.** `kube-system`, ingress, monitoring and service-mesh control planes have
+  connections to nearly everything, so flow visibility there exposes flows
+  involving nearly every workload.
+- **A wildcard Role confers flow visibility, and endpoint identity with it.** A
+  namespaced Role granting `apiGroups: ["*"], resources: ["*"]`, as tenants are
+  sometimes given, includes `flows` in that Namespace — and `flows/identity`
+  too, because an RBAC rule listing `*` under `resources` matches before the
+  subresource is ever looked at. Such a Role therefore also lets its holder
+  identify that Namespace's endpoints inside records it receives through some
+  *other* Namespace, which is otherwise something only an explicit
+  `antrea-flow-identity-viewer` binding grants. RBAC cannot express "not
+  reachable via a wildcard", and there is no query for "who can do X", so a
+  cluster that hands out wildcard Roles should scan for them.
+- **Revoking a grant takes up to 11 minutes to end an established stream.**
+  Authorization decisions, both allow and deny, are cached for 10 minutes — the
+  shortest lifetime Kubernetes gives a projected ServiceAccount token — and an
+  established stream re-checks its own scope once a minute, which is normally
+  answered from that cache. The two add up in the worst case. Granting access is
+  subject to the same delay. Opening a *new* stream is never served from a stale
+  allow decision beyond the 10-minute window, and fails closed if the API server
+  is unreachable; an established stream survives a control-plane blip.
+- **Flow visibility is not derived from read access to the objects involved.** A
+  subject granted `watch flows` in a Namespace sees Pod names and labels
+  for it even without `get pods` there. The two are separate grants.
+- **Identity changes mid-stream are invisible.** The credential is resolved when
+  the stream opens, so a token revoked or a group membership changed afterwards
+  takes effect on the next connection, not on the current one.
 
 ### Version skew between Flow Aggregator and Antrea Agent
 
