@@ -60,31 +60,17 @@ func (t disclosureTier) disclosure() flowpb.EndpointDisclosure {
 }
 
 // redactFlow returns a copy of f holding only what a client may see of each of its endpoints. It
-// must not be called with both tiers at tierFull, which needs no copy at all; the caller sends the
-// record itself in that case.
+// is only called when not both tiers are at tierFull, which needs no copy at all; the caller sends
+// the record itself in that case. The copy in redaction case is necessary because a record is owned
+// by the ring buffer and broadcast to every other stream, so it must never be modified in place.
 //
-// The copy is necessary because a record is owned by the ring buffer and broadcast to every other
-// stream, so it must never be modified in place.
-//
-// A policy's type and action are disclosed at every tier, its identity from tierIdentity up.
-// Withholding the action would lose "why did my connection fail", which is most of the
-// troubleshooting value, and the outcome of the client's own connection is theirs to know. Naming
-// the policy and rule that produced it is what makes the answer actionable across a Namespace
-// boundary, and it is gated on that Namespace having granted identity: an endpoint left at tierFlow
-// discloses only that *something* of a given type allowed or dropped the connection, so a client
-// cannot map a Namespace's policy set by probing unless that Namespace consented to being
-// identified.
-//
-// flow_type is deliberately left alone, so FLOW_TYPE_INTRA_NODE keeps reporting that the two
-// endpoints share a Node. Paired with an endpoint the client can place — its own Pods, whose Nodes
-// it reads from the downward API no matter what any tier says — that discloses co-tenancy with the
-// client's own workloads even where the peer's Node name is cleared below, and FlowFilter.flow_types
-// yields the same bit without reading the field. Two things make keeping it the better trade: the
+// flow_type is always kept, so FLOW_TYPE_INTRA_NODE keeps reporting that the two endpoints share
+// a Node. Paired with the client's own Pod which they can observe if full, this could potentially
+// disclose peer Node placement information even when the client does not have tierIdentity disclosure
+// level for that Namespace. Two things make keeping it the better trade still: the
 // internal-versus-external distinction flow_type carries is what lets tierFor's caller tell a
 // genuinely external endpoint from one whose Namespace was withheld, and collapsing INTRA_NODE to
-// INTER_NODE would make the field mean something different on every stream. What stays withheld is
-// *which* Node, so the bit names no infrastructure and adds nothing about peers the client cannot
-// already place.
+// INTER_NODE would make the field mean something different on every stream.
 func redactFlow(f *flowpb.Flow, source, destination disclosureTier) *flowpb.Flow {
 	// Only the Kubernetes sub-message is rewritten, so the copies share every other sub-message
 	// with the original record instead of duplicating it.
@@ -94,8 +80,7 @@ func redactFlow(f *flowpb.Flow, source, destination disclosureTier) *flowpb.Flow
 	allowed := connectionAllowed(f.GetK8S())
 
 	if source != tierFull {
-		// Node placement is withheld above tierFull: it exposes co-tenancy, which feeds
-		// noisy-neighbor and side-channel work, and it is not needed to author a policy. The Node
+		// Node placement exposes co-tenancy, and is not needed to author a policy. The Node
 		// name is what is withheld, not co-tenancy itself; see the note on flow_type above.
 		k8s.SourceNodeName = ""
 		k8s.SourceNodeUid = ""
@@ -113,7 +98,7 @@ func redactFlow(f *flowpb.Flow, source, destination disclosureTier) *flowpb.Flow
 		k8s.SourcePodLabels = nil
 		// The egress policy is the one evaluated on the source's side, so it follows the source's
 		// tier — whether the policy object itself is namespaced (K8S, ANP) or cluster-scoped
-		// (ACNP, K8SCNP). Its type and action stay even here: knowing that a cluster-scoped policy
+		// (ACNP, K8sCNP). Its type and action stay here: knowing that a cluster-scoped policy
 		// dropped the connection, rather than a namespaced one, tells the client whether to
 		// escalate to the platform team or to the peer, without naming the policy.
 		k8s.EgressNetworkPolicyNamespace = ""
@@ -151,7 +136,8 @@ func redactFlow(f *flowpb.Flow, source, destination disclosureTier) *flowpb.Flow
 		k8s.DestinationServicePortName = ""
 		k8s.DestinationServiceUid = ""
 		k8s.DestinationServiceIp = nil
-		k8s.DestinationClusterIp = nil //nolint:staticcheck // deprecated, but must be redacted for as long as it is populated
+		// deprecated, but must be redacted for as long as it is populated
+		k8s.DestinationClusterIp = nil //nolint:staticcheck
 		if !allowed {
 			k8s.DestinationPodNamespace = ""
 		}
@@ -162,14 +148,12 @@ func redactFlow(f *flowpb.Flow, source, destination disclosureTier) *flowpb.Flow
 
 	redacted := shallowCopy(f)
 	redacted.K8S = k8s
-	// The remaining fields cannot be attributed to one endpoint, so they are disclosed only when
-	// both endpoints are: the IPFIX exporter IP is the Node that reported the record, and the
-	// proxy SNAT IP is the gateway IP of whichever Node applied the SNAT. Both are placement, and
-	// both would otherwise reach past the tier of the endpoint they describe. Neither is
-	// user-facing data: ipfix is export plumbing.
+	// The IPFIX exporter IP is the Node that reported the record, which belongs to neither
+	// endpoint. It is therefore disclosed only when both endpoints are, which costs the client
+	// nothing, as it is export plumbing rather than user-facing data.
 	redacted.Ipfix = nil
-	redacted.ProxySnatIp = nil
-	redacted.ProxySnatPort = 0
+	// proxy_snat_ip and proxy_snat_port are deliberately left alone. Only from-external correlation
+	// populates them, which implies that the destination is in tierFull.
 	return redacted
 }
 
