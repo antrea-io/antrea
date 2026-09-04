@@ -19,6 +19,7 @@ package support
 
 import (
 	"fmt"
+	"net"
 	"os"
 	"path/filepath"
 	"testing"
@@ -258,21 +259,62 @@ func TestDumpIPToolInfo(t *testing.T) {
 		})
 	}
 }
-
 func TestDumpInterfaceConfigs(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	fs := afero.NewMemMapFs()
-	fs.MkdirAll(baseDir, os.ModePerm)
-	q := aqtest.NewMockAgentQuerier(ctrl)
-	q.EXPECT().GetNodeConfig().Return(&agentconfig.NodeConfig{
-		GatewayConfig: &agentconfig.GatewayConfig{
-			Name: "antrea-gw0",
-		},
-	}).AnyTimes()
-	dumper := &agentDumper{fs: fs, aq: q, v4Enabled: true, v6Enabled: true}
-	err := dumper.dumpInterfaceConfigs(baseDir)
-	require.NoError(t, err)
-	ok, err := afero.Exists(fs, filepath.Join(baseDir, "interface-config"))
-	require.NoError(t, err)
-	assert.True(t, ok)
+	originalNetInterfaces := netInterfaces
+	originalGetSysctlNet := getSysctlNet
+	t.Cleanup(func() {
+		netInterfaces = originalNetInterfaces
+		getSysctlNet = originalGetSysctlNet
+	})
+
+	newDumper := func(t *testing.T) (*agentDumper, afero.Fs) {
+		ctrl := gomock.NewController(t)
+		fs := afero.NewMemMapFs()
+		fs.MkdirAll(baseDir, os.ModePerm)
+		q := aqtest.NewMockAgentQuerier(ctrl)
+		q.EXPECT().GetNodeConfig().Return(&agentconfig.NodeConfig{
+			GatewayConfig: &agentconfig.GatewayConfig{
+				Name: "antrea-gw0",
+			},
+		}).AnyTimes()
+		return &agentDumper{fs: fs, aq: q, v4Enabled: true, v6Enabled: true}, fs
+	}
+
+	t.Run("no relevant interfaces present", func(t *testing.T) {
+		netInterfaces = func() ([]net.Interface, error) {
+			return []net.Interface{{Name: "eth0"}}, nil
+		}
+		getSysctlNet = func(string) (int, error) { return 1, nil }
+		dumper, fs := newDumper(t)
+		err := dumper.dumpInterfaceConfigs(baseDir)
+		require.NoError(t, err)
+		ok, err := afero.Exists(fs, filepath.Join(baseDir, "interface-config"))
+		require.NoError(t, err)
+		assert.True(t, ok)
+	})
+
+	t.Run("getting network interfaces fails", func(t *testing.T) {
+		netInterfaces = func() ([]net.Interface, error) {
+			return nil, fmt.Errorf("netlink error")
+		}
+		getSysctlNet = func(string) (int, error) { return 1, nil }
+		dumper, _ := newDumper(t)
+		err := dumper.dumpInterfaceConfigs(baseDir)
+		assert.ErrorContains(t, err, "error getting network interfaces")
+	})
+
+	t.Run("sysctl lookup failure for a relevant interface is logged and skipped", func(t *testing.T) {
+		netInterfaces = func() ([]net.Interface, error) {
+			return []net.Interface{{Name: "antrea-gw0"}}, nil
+		}
+		getSysctlNet = func(string) (int, error) {
+			return -1, fmt.Errorf("no such file or directory")
+		}
+		dumper, fs := newDumper(t)
+		err := dumper.dumpInterfaceConfigs(baseDir)
+		require.NoError(t, err)
+		ok, err := afero.Exists(fs, filepath.Join(baseDir, "interface-config"))
+		require.NoError(t, err)
+		assert.True(t, ok)
+	})
 }
