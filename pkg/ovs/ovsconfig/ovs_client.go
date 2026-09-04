@@ -31,6 +31,7 @@ import (
 	"github.com/ovn-kubernetes/libovsdb/model"
 	"github.com/ovn-kubernetes/libovsdb/ovsdb"
 	"k8s.io/apimachinery/pkg/util/sets"
+	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/klog/v2"
 
 	"antrea.io/antrea/v2/pkg/util/vlan"
@@ -78,13 +79,15 @@ const (
 	interfaceTable   = "Interface"
 
 	// ovs-vswitchd suppresses IDL change alerts for some Port columns, including trunks.
-	// Incrementing next_cfg explicitly asks ovs-vswitchd to reload the configuration.
+	// Incrementing next_cfg explicitly requests an ovs-vswitchd configuration reload.
 	// ovsConfigWaitTimeout is the total budget for the port lookup, OVSDB transaction,
 	// and ovs-vswitchd acknowledgement. It matches the timeout used for OFPort readiness.
-	ovsConfigWaitTimeout = 5 * time.Second
-	// ovsConfigWaitInterval is the interval at which cur_cfg is checked while waiting
-	// for ovs-vswitchd to acknowledge the configuration.
-	ovsConfigWaitInterval = 10 * time.Millisecond
+	ovsConfigWaitTimeout         = 5 * time.Second
+	ovsConfigWaitInitialInterval = 10 * time.Millisecond
+	ovsConfigWaitBackoffFactor   = 1.2
+	// The total duration of all backoff steps exceeds ovsConfigWaitTimeout, ensuring
+	// that the context deadline remains the overall bound for the operation.
+	ovsConfigWaitBackoffSteps = 30
 
 	// Openflow protocol version 1.0.
 	openflowProtoVersion10 = "OpenFlow10"
@@ -1250,7 +1253,7 @@ func (br *OVSBridge) SetPortTrunks(portName string, vlanSpecs []string) error {
 		klog.ErrorS(err, "Failed to construct update operation for Port", "port", portName)
 		return err
 	}
-	return br.transactAndWaitForConfig(ctx, ops, "set port trunks")
+	return br.transactAndWaitForReload(ctx, ops, "set port trunks")
 }
 
 func (br *OVSBridge) SetInterfaceMTU(name string, MTU int) error {
@@ -1436,11 +1439,11 @@ func (br *OVSBridge) transact(ctx context.Context, ops []ovsdb.Operation, action
 	return results, nil
 }
 
-// transactAndWaitForConfig executes the supplied operations, requests an ovs-vswitchd
+// transactAndWaitForReload executes the supplied operations, requests an ovs-vswitchd
 // configuration reload, and waits for ovs-vswitchd to acknowledge it. Some columns,
 // including Port.trunks, are omitted from OVS IDL change alerts and do not trigger a
 // reconfiguration on their own.
-func (br *OVSBridge) transactAndWaitForConfig(ctx context.Context, ops []ovsdb.Operation, action string) error {
+func (br *OVSBridge) transactAndWaitForReload(ctx context.Context, ops []ovsdb.Operation, action string) error {
 	ovs, err := br.getOpenvSwitch(ctx)
 	if err != nil {
 		return err
@@ -1483,27 +1486,27 @@ func (br *OVSBridge) transactAndWaitForConfig(ctx context.Context, ops []ovsdb.O
 }
 
 func (br *OVSBridge) waitForConfig(ctx context.Context, nextCfg int) error {
-	ticker := time.NewTicker(ovsConfigWaitInterval)
-	defer ticker.Stop()
-
 	curCfg := 0
-	for {
+	err := wait.ExponentialBackoffWithContext(ctx, wait.Backoff{
+		Duration: ovsConfigWaitInitialInterval,
+		Factor:   ovsConfigWaitBackoffFactor,
+		Steps:    ovsConfigWaitBackoffSteps,
+	}, func(ctx context.Context) (bool, error) {
 		ovs, err := br.getOpenvSwitch(ctx)
 		if err != nil {
-			return err
+			return false, err
 		}
 		curCfg = ovs.CurCfg
-		if curCfg >= nextCfg {
-			return nil
-		}
-
-		select {
-		case <-ctx.Done():
-			return fmt.Errorf("timed out waiting for OVS configuration %d to be applied (cur_cfg=%d): %w",
-				nextCfg, curCfg, ctx.Err())
-		case <-ticker.C:
-		}
+		return curCfg >= nextCfg, nil
+	})
+	if err == nil {
+		return nil
 	}
+	if wait.Interrupted(err) {
+		return fmt.Errorf("timed out waiting for OVS configuration %d to be applied (cur_cfg=%d): %w",
+			nextCfg, curCfg, err)
+	}
+	return err
 }
 
 // extractOVSDBInt converts an OVSDB integer from a raw or typed result. Raw
