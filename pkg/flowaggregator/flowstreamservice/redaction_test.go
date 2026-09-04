@@ -230,20 +230,24 @@ func TestRedactFlow_FullKubernetesIsExhaustive(t *testing.T) {
 // what makes the tests below notice a field added to the message: a new field belongs to neither
 // list, so TestRedactFlow_RecordLevelFieldsAreClassified fails until it is deliberately put in one.
 var (
-	// The IPFIX exporter IP and the proxy SNAT IP are both Node placement that cannot be attributed
-	// to one endpoint, so they go as soon as either endpoint is not fully disclosed.
-	recordFieldsWithheld = []string{"ipfix", "proxy_snat_ip", "proxy_snat_port"}
-	// Everything else about the flow itself survives: it is what the client came for. "k8s" is
-	// here because the sub-message survives; which of *its* fields do is covered by
-	// TestRedactFlow_Kubernetes.
+	// The IPFIX exporter IP is the Node that reported the record, which belongs to neither
+	// endpoint, so it goes as soon as either endpoint is not fully disclosed.
+	recordFieldsWithheld = []string{"ipfix"}
+	// Everything else about the flow itself survives. That includes the proxy SNAT address, which
+	// only a from-external record carries, and which such a record can only reach a stream authorized
+	// for its destination with; see redactFlow. "k8s" is here because the sub-message survives; which
+	// of *its* fields do is covered by TestRedactFlow_Kubernetes.
 	recordFieldsDisclosed = []string{
 		"id", "start_ts", "end_ts", "end_reason", "ip", "transport", "k8s",
 		"stats", "reverse_stats", "flow_direction", "aggregation",
+		"proxy_snat_ip", "proxy_snat_port",
 	}
 )
 
 // TestRedactFlow_RecordLevelFields covers the fields that belong to the record rather than to
-// either endpoint.
+// either endpoint. The exporter IP goes even though the source here is disclosed in full, which is
+// also the case where an endpoint at tierFull loses a field while its own disclosure marker stays
+// unset: a marker describes an endpoint, not the record it arrives on.
 func TestRedactFlow_RecordLevelFields(t *testing.T) {
 	f := fullFlow()
 
@@ -254,12 +258,13 @@ func TestRedactFlow_RecordLevelFields(t *testing.T) {
 	assert.Equal(t, "flow-1", redacted.GetId())
 	assert.Equal(t, f.GetStats(), redacted.GetStats())
 	assert.Equal(t, f.GetAggregation(), redacted.GetAggregation())
+	assert.Equal(t, f.GetProxySnatIp(), redacted.GetProxySnatIp())
 }
 
 // TestRedactFlow_RecordLevelFieldsAreClassified fails if a field is added to the Flow message
 // without being classified as disclosed or withheld, so that a new record-level field carrying
-// placement (the way ipfix and proxy_snat_ip do) cannot be disclosed unnoticed. It is the
-// record-level counterpart of TestRedactFlow_FullKubernetesIsExhaustive.
+// placement (the way ipfix does) cannot be disclosed unnoticed. It is the record-level counterpart
+// of TestRedactFlow_FullKubernetesIsExhaustive.
 func TestRedactFlow_RecordLevelFieldsAreClassified(t *testing.T) {
 	classified := nameSet(concat(recordFieldsDisclosed, recordFieldsWithheld))
 	for _, name := range flowFieldNames() {
