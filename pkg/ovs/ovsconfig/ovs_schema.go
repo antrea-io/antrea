@@ -43,6 +43,8 @@ type OpenvSwitch struct {
 	OvsVersion  *string           `ovsdb:"ovs_version"`
 	OtherConfig map[string]string `ovsdb:"other_config"`
 	Bridges     []string          `ovsdb:"bridges"`
+	CurCfg      int               `ovsdb:"cur_cfg"`
+	NextCfg     int               `ovsdb:"next_cfg"`
 }
 
 type Interface struct {
