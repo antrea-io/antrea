@@ -22,7 +22,9 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+	"testing/synctest"
 
+	"github.com/containernetworking/cni/pkg/invoke"
 	cnitypes "github.com/containernetworking/cni/pkg/types"
 	current "github.com/containernetworking/cni/pkg/types/100"
 	"github.com/gofrs/uuid/v5"
@@ -285,6 +287,78 @@ func TestIPAMService(t *testing.T) {
 		response, err := cniServer.CmdAdd(cxt, requestMsg)
 		require.Nil(t, err, "expected no rpc error")
 		checkErrorResponse(t, response, cnipb.ErrorCode_IPAM_FAILURE, "IPAM add error")
+	})
+
+	t.Run("Container lock held across ADD rollback", func(t *testing.T) {
+		// The rollback for a failed ADD must run with the container lock still held,
+		// or a concurrent CNI DEL could interleave with it. The rollback's IPAM DEL
+		// runs synchronously on the CmdAdd goroutine, so it can inspect the arbitrator.
+		ipamMock, cniServer, requestMsg := setup(t)
+		cniConfig, response := cniServer.validateRequestMessage(requestMsg)
+		require.Nil(t, response, "expected valid request message")
+		infraContainer := cniConfig.getInfraContainer()
+
+		delCalled := false
+		ipamMock.EXPECT().Add(gomock.Any(), gomock.Any(), gomock.Any()).Return(true, nil, fmt.Errorf("IPAM add error"))
+		ipamMock.EXPECT().Del(gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(
+			func(_ *invoke.Args, _ *types.K8sArgs, _ []byte) (bool, error) {
+				delCalled = true
+				assert.True(t, cniServer.containerAccess.isLocked(infraContainer),
+					"container lock must be held for the whole ADD rollback")
+				return true, nil
+			},
+		)
+
+		resp, err := cniServer.CmdAdd(cxt, requestMsg)
+		require.Nil(t, err, "expected no rpc error")
+		checkErrorResponse(t, resp, cnipb.ErrorCode_IPAM_FAILURE, "IPAM add error")
+		require.True(t, delCalled, "expected rollback to invoke IPAM DEL")
+		assert.False(t, cniServer.containerAccess.isLocked(infraContainer),
+			"container lock must be released once CmdAdd returns")
+	})
+
+	t.Run("cmdDel does not take the container lock", func(t *testing.T) {
+		// cmdDel is caller-locked: CmdAdd's rollback calls it while already holding the
+		// container lock, so cmdDel must not try to acquire it itself.
+		// We run this in a synctest bubble so that "cmdDel made no progress" is observed
+		// deterministically instead of by waiting on a timeout: lockContainer blocks in
+		// sync.Cond.Wait, which is a durably blocking operation, so synctest.Wait returns
+		// as soon as cmdDel is parked there.
+		synctest.Test(t, func(t *testing.T) {
+			ipamMock, cniServer, requestMsg := setup(t)
+			cniConfig, response := cniServer.validateRequestMessage(requestMsg)
+			require.Nil(t, response, "expected valid request message")
+			infraContainer := cniConfig.getInfraContainer()
+
+			ipamMock.EXPECT().Del(gomock.Any(), gomock.Any(), gomock.Any()).Return(true, nil)
+
+			cniServer.containerAccess.lockContainer(infraContainer)
+			done := make(chan struct{})
+			var delResp *cnipb.CniCmdResponse
+			var delErr error
+			go func() {
+				defer close(done)
+				delResp, delErr = cniServer.cmdDel(cxt, cniConfig)
+			}()
+
+			// Returns once the goroutine above has either completed or blocked.
+			synctest.Wait()
+			var completed bool
+			select {
+			case <-done:
+				completed = true
+			default:
+			}
+
+			// Release the lock unconditionally, so that the goroutine can always run to
+			// completion and the bubble is empty by the time this function returns.
+			cniServer.containerAccess.unlockContainer(infraContainer)
+			<-done
+			assert.True(t, completed,
+				"cmdDel must not block while the caller holds the container lock: it must not acquire the lock itself")
+			require.NoError(t, delErr)
+			require.NotNil(t, delResp)
+		})
 	})
 
 	t.Run("Error on DEL", func(t *testing.T) {
@@ -820,4 +894,12 @@ func init() {
 	gwMAC, _ := net.ParseMAC("00:00:00:00:00:01")
 	gateway := &config.GatewayConfig{Name: "", IPv4: gwIPv4, IPv6: gwIPv6, MAC: gwMAC}
 	testNodeConfig = &config.NodeConfig{Name: nodeName, PodIPv4CIDR: nodePodCIDRv4, PodIPv6CIDR: nodePodCIDRv6, GatewayConfig: gateway}
+}
+
+// isLocked reports whether containerKey is currently held. Defined in the test
+// file so that production code carries no test-only state.
+func (arbitrator *containerAccessArbitrator) isLocked(containerKey string) bool {
+	arbitrator.mutex.Lock()
+	defer arbitrator.mutex.Unlock()
+	return arbitrator.busyContainerKeys[containerKey]
 }
