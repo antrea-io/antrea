@@ -47,6 +47,7 @@ type ndpResponder struct {
 	once            sync.Once
 	linkName        string
 	conn            ndpConn
+	dial            func(*net.Interface) (ndpConn, error)
 	linkEventCh     chan struct{}
 	assignedIPs     sets.Set[netip.Addr]
 	multicastGroups map[netip.Addr]int
@@ -54,6 +55,11 @@ type ndpResponder struct {
 }
 
 var _ Responder = (*ndpResponder)(nil)
+
+func defaultNDPDial(transportInterface *net.Interface) (ndpConn, error) {
+	conn, _, err := ndp.Listen(transportInterface, ndp.LinkLocal)
+	return conn, err
+}
 
 func parseIPv6SolicitedNodeMulticastAddress(ip netip.Addr) netip.Addr {
 	target := ip.As16()
@@ -136,7 +142,11 @@ func (r *ndpResponder) dialAndHandleRequests(stopCh <-chan struct{}) {
 	// which may take time to allow the address to be used for socket binding. EADDRNOTAVAIL (bind: cannot assign requested address)
 	// may be returned for such cases.
 	klog.InfoS("Binding NDP responder on interface", "interface", r.linkName)
-	conn, _, err := ndp.Listen(transportInterface, ndp.LinkLocal)
+	dial := r.dial
+	if dial == nil {
+		dial = defaultNDPDial
+	}
+	conn, err := dial(transportInterface)
 	if err != nil {
 		klog.ErrorS(err, "Failed to create NDP responder", "interface", r.linkName)
 		return

@@ -62,6 +62,7 @@ func NewNDPResponder(transportInterfaceName string, linkMonitor linkmonitor.Inte
 		multicastGroups: make(map[netip.Addr]int),
 		assignedIPs:     sets.New[netip.Addr](),
 		linkEventCh:     make(chan struct{}, 1),
+		dial:            defaultNDPDial,
 	}
 	if linkMonitor != nil {
 		linkMonitor.AddEventHandler(n.onLinkUpdate, transportInterfaceName)

@@ -17,7 +17,9 @@ package responder
 import (
 	"bytes"
 	"fmt"
+	"net"
 	"net/netip"
+	"syscall"
 	"testing"
 
 	"antrea.io/ndp"
@@ -62,6 +64,7 @@ func TestNDPResponder_handleNeighborSolicitation(t *testing.T) {
 		requestMessage []byte
 		requestIP      netip.Addr
 		assignedIPs    []netip.Addr
+		writeErr       error
 		expectError    bool
 		expectedReply  []byte
 	}{
@@ -110,6 +113,7 @@ func TestNDPResponder_handleNeighborSolicitation(t *testing.T) {
 			assignedIPs: []netip.Addr{
 				netip.MustParseAddr("fe80::a1"),
 			},
+			writeErr:      fmt.Errorf("write buffer full: ENOBUFS"),
 			expectError:   false, // Write error must be swallowed and logged, not propagated
 			expectedReply: nil,
 		},
@@ -139,8 +143,8 @@ func TestNDPResponder_handleNeighborSolicitation(t *testing.T) {
 			buffer := bytes.NewBuffer(nil)
 			fakeConn := &fakeNDPConn{
 				writeTo: func(msg ndp.Message, _ *ipv6.ControlMessage, _ netip.Addr) error {
-					if tt.name == "write failure is ignored without propagating error" {
-						return fmt.Errorf("write buffer full: ENOBUFS")
+					if tt.writeErr != nil {
+						return tt.writeErr
 					}
 					bs, err := ndp.MarshalMessage(msg)
 					assert.NoError(t, err)
@@ -162,7 +166,9 @@ func TestNDPResponder_handleNeighborSolicitation(t *testing.T) {
 				assert.Error(t, err)
 			} else {
 				assert.NoError(t, err)
-				if tt.expectedReply != nil {
+				if len(tt.expectedReply) == 0 {
+					assert.Empty(t, buffer.Bytes())
+				} else {
 					assert.Equal(t, tt.expectedReply, buffer.Bytes())
 				}
 			}
@@ -406,24 +412,75 @@ func Test_ndpResponder_removeIP(t *testing.T) {
 	}
 }
 
-func Test_ndpResponder_clearMulticastGroupsOnExit(t *testing.T) {
-	group := netip.MustParseAddr("ff02::1:ff11:2233")
-	r := &ndpResponder{
-		linkName: "eth0",
-		conn:     &fakeNDPConn{},
-		multicastGroups: map[netip.Addr]int{
-			group: 2,
+func loopbackInterface() (*net.Interface, error) {
+	ifaces, err := net.Interfaces()
+	if err != nil {
+		return nil, fmt.Errorf("failed to list network interfaces: %w", err)
+	}
+	for _, iface := range ifaces {
+		if iface.Flags&net.FlagLoopback != 0 {
+			return &iface, nil
+		}
+	}
+	return nil, fmt.Errorf("no loopback interface found")
+}
+
+func Test_ndpResponder_rejoinMulticastGroupsOnReconnect(t *testing.T) {
+	lo, err := loopbackInterface()
+	if err != nil {
+		t.Skipf("Skipping test: loopback interface not available: %v", err)
+	}
+
+	ip1 := netip.MustParseAddr("2022::beaf")
+	expectedGroup := parseIPv6SolicitedNodeMulticastAddress(ip1)
+
+	var conn1Joined, conn2Joined []netip.Addr
+	conn1 := &fakeNDPConn{
+		joinGroup: func(group netip.Addr) error {
+			conn1Joined = append(conn1Joined, group)
+			return nil
+		},
+		readFrom: func() (ndp.Message, *ipv6.ControlMessage, netip.Addr, error) {
+			// Fatal socket error to terminate dialAndHandleRequests read loop
+			return nil, nil, netip.Addr{}, syscall.EBADF
+		},
+	}
+	conn2 := &fakeNDPConn{
+		joinGroup: func(group netip.Addr) error {
+			conn2Joined = append(conn2Joined, group)
+			return nil
+		},
+		readFrom: func() (ndp.Message, *ipv6.ControlMessage, netip.Addr, error) {
+			return nil, nil, netip.Addr{}, syscall.EBADF
 		},
 	}
 
-	// Simulate cleanup defer on exit
-	func() {
-		r.mutex.Lock()
-		r.conn = nil
-		clear(r.multicastGroups)
-		r.mutex.Unlock()
-	}()
+	dialCount := 0
+	r := &ndpResponder{
+		linkName:        lo.Name,
+		assignedIPs:     sets.New[netip.Addr](ip1),
+		multicastGroups: make(map[netip.Addr]int),
+		linkEventCh:     make(chan struct{}, 1),
+		dial: func(_ *net.Interface) (ndpConn, error) {
+			dialCount++
+			if dialCount == 1 {
+				return conn1, nil
+			}
+			return conn2, nil
+		},
+	}
 
+	stopCh := make(chan struct{})
+
+	// 1st run: dial conn1, join multicast group, read loop encounters EBADF and exits, defer cleans up r.conn and multicastGroups
+	r.dialAndHandleRequests(stopCh)
+	assert.Equal(t, []netip.Addr{expectedGroup}, conn1Joined)
+	assert.Nil(t, r.conn, "r.conn should be reset to nil on exit")
+	assert.Empty(t, r.multicastGroups, "r.multicastGroups must be cleared on socket exit")
+
+	// 2nd run (reconnect): dial conn2; because multicastGroups was cleared on exit, JoinGroup must be called again on the new socket
+	r.dialAndHandleRequests(stopCh)
+	assert.Equal(t, []netip.Addr{expectedGroup}, conn2Joined, "multicast groups must be rejoined on the new socket connection")
 	assert.Nil(t, r.conn)
 	assert.Empty(t, r.multicastGroups)
 }

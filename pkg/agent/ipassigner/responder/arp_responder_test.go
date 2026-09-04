@@ -15,6 +15,7 @@
 package responder
 
 import (
+	"errors"
 	"fmt"
 	"net"
 	"net/netip"
@@ -178,7 +179,9 @@ func TestARPResponder_HandleARPRequest_MalformedPacket(t *testing.T) {
 
 	// Malformed packet returns error from client.Read, which outer loop catches and skips
 	err = r.handleARPRequest(localARPClient, localIface)
-	assert.Error(t, err)
+	require.Error(t, err)
+	var opErr *net.OpError
+	assert.False(t, errors.As(err, &opErr), "malformed frame must not be classified as a socket error (*net.OpError)")
 }
 
 func Test_arpResponder_addIP(t *testing.T) {
