@@ -427,6 +427,28 @@ func TestEnqueueExternalNodeUpdate(t *testing.T) {
 	}
 }
 
+func TestEnqueueExternalNodeDelete_Tombstone(t *testing.T) {
+	controller := gomock.NewController(t)
+	mockOVSBridgeClient := ovsconfigtest.NewMockOVSBridgeClient(controller)
+	mockOFClient := openflowtest.NewMockClient(controller)
+	mockOVSCtlClient := ovsctltest.NewMockOVSCtlClient(controller)
+	mockIfaceStore := interfacestoretest.NewMockInterfaceStore(controller)
+	c := newExternalNodeController(t, controller, mockOVSBridgeClient, mockOFClient, mockOVSCtlClient, mockIfaceStore)
+	externalNode := &v1alpha1.ExternalNode{
+		ObjectMeta: metav1.ObjectMeta{Name: "vm1", Namespace: "ns1"},
+	}
+
+	// Deliver the delete as a tombstone, as the informer does after a watch reconnect.
+	c.enqueueExternalNodeDelete(cache.DeletedFinalStateUnknown{
+		Key: "ns1/vm1",
+		Obj: externalNode,
+	})
+
+	require.Equal(t, 1, c.queue.Len(), "expected ExternalNode to be enqueued from the tombstone delete")
+	key, _ := c.queue.Get()
+	assert.Equal(t, "ns1/vm1", key)
+}
+
 func newExternalNodeController(t *testing.T, controller *gomock.Controller, mockOVSBridgeClient *ovsconfigtest.MockOVSBridgeClient, mockOFClient *openflowtest.MockClient, mockOVSCtlClient *ovsctltest.MockOVSCtlClient, mockIfaceStore *interfacestoretest.MockInterfaceStore) *ExternalNodeController {
 	mockOVSBridgeClient.EXPECT().GetBridgeName().Times(1)
 	localExternalNodeInformer := crdv1alpha1informers.NewExternalNodeInformer(
