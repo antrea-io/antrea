@@ -18,7 +18,9 @@ import (
 	"context"
 	"fmt"
 	"reflect"
+	"sync"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/stretchr/testify/assert"
@@ -479,31 +481,42 @@ func TestDeleteExternalNode(t *testing.T) {
 			ExternalNode: "vm1",
 		},
 	}
-	controller := newExternalNodeController([]runtime.Object{externalNode, expectedEntity})
-	stopCh := make(chan struct{})
-	defer close(stopCh)
-	informerFactory.Start(stopCh)
-	informerFactory.WaitForCacheSync(stopCh)
-	go controller.Run(stopCh)
-	controller.syncedExternalNode.Add(externalNode)
-	err := controller.crdClient.CrdV1alpha1().ExternalNodes(externalNode.Namespace).Delete(context.TODO(), externalNode.Name, metav1.DeleteOptions{})
-	require.NoError(t, err)
-	key, _ := keyFunc(externalNode)
-	err = wait.PollUntilContextTimeout(context.Background(), time.Millisecond*50, time.Second, true, func(ctx context.Context) (done bool, err error) {
-		entities, listErr := controller.crdClient.CrdV1alpha2().ExternalEntities(externalNode.Namespace).List(context.TODO(), metav1.ListOptions{})
-		if listErr != nil {
-			return false, listErr
+	synctest.Test(t, func(t *testing.T) {
+		controller := newExternalNodeController([]runtime.Object{externalNode, expectedEntity})
+		stopCh := make(chan struct{})
+		var stopOnce sync.Once
+		stopController := func() {
+			stopOnce.Do(func() {
+				close(stopCh)
+				synctest.Wait()
+			})
 		}
-		if len(entities.Items) > 0 {
-			return false, nil
-		}
-		_, exists, _ := controller.syncedExternalNode.GetByKey(key)
-		if exists {
-			return false, nil
-		}
-		return true, nil
+		defer stopController()
+		informerFactory.Start(stopCh)
+		go controller.Run(stopCh)
+		key, _ := keyFunc(externalNode)
+		err := wait.PollUntilContextTimeout(context.Background(), time.Millisecond*50, time.Second, true, func(ctx context.Context) (done bool, err error) {
+			_, exists, _ := controller.syncedExternalNode.GetByKey(key)
+			return exists, nil
+		})
+		require.NoError(t, err)
+
+		err = controller.crdClient.CrdV1alpha1().ExternalNodes(externalNode.Namespace).Delete(
+			context.TODO(), externalNode.Name, metav1.DeleteOptions{})
+		require.NoError(t, err)
+		err = wait.PollUntilContextTimeout(context.Background(), time.Millisecond*50, time.Second, true, func(ctx context.Context) (done bool, err error) {
+			deleted, checkErr := checkExternalEntityDeleted(controller.crdClient, expectedEntity.Namespace, expectedEntity.Name)
+			if checkErr != nil {
+				return false, checkErr
+			}
+			if !deleted {
+				return false, nil
+			}
+			_, nodeExists, _ := controller.syncedExternalNode.GetByKey(key)
+			return !nodeExists, nil
+		})
+		require.NoError(t, err)
 	})
-	assert.NoError(t, err)
 }
 
 func TestReconcileExternalNodes(t *testing.T) {
@@ -655,6 +668,17 @@ func checkExternalEntityExists(crdClient versioned.Interface, ee *v1alpha2.Exter
 		return false, nil
 	}
 	return true, nil
+}
+
+func checkExternalEntityDeleted(crdClient versioned.Interface, namespace, name string) (bool, error) {
+	_, getErr := crdClient.CrdV1alpha2().ExternalEntities(namespace).Get(context.TODO(), name, metav1.GetOptions{})
+	if getErr == nil {
+		return false, nil
+	}
+	if errors.IsNotFound(getErr) {
+		return true, nil
+	}
+	return false, getErr
 }
 
 func newExternalNodeController(objects []runtime.Object) *ExternalNodeController {
