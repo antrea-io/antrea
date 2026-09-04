@@ -1,6 +1,6 @@
 module antrea.io/antrea
 
-go 1.25.0
+go 1.26.0
 
 require (
 	antrea.io/libOpenflow v0.17.0
@@ -57,7 +57,7 @@ require (
 	github.com/vishvananda/netlink v1.3.1
 	github.com/vmware/go-ipfix v0.16.0
 	go.uber.org/mock v0.6.0
-	golang.org/x/crypto v0.55.0
+	golang.org/x/crypto v0.56.0
 	golang.org/x/mod v0.40.0
 	golang.org/x/net v0.58.0
 	golang.org/x/sync v0.22.0
