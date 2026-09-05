@@ -117,7 +117,7 @@ type PeerConfig struct {
 type PeerStatus struct {
 	Address                    string
 	Port                       int32
-	ASN                        int32
+	ASN                        uint32
 	MultihopTTL                int32
 	GracefulRestartTimeSeconds int32
 	SessionState               SessionState
