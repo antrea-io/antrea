@@ -722,6 +722,19 @@ func TestReconcileBridge(t *testing.T) {
 			wantPrepareCalls: []string{eth1},
 		},
 		{
+			name:       "does not recover on unexpected interface lookup error",
+			prevCfg:    bridgeConfig(brOld, eth1),
+			desiredCfg: bridgeConfig(brOld, eth1),
+			expectedCalls: func(old, new *ovsconfigtest.MockOVSBridgeClient) {
+				old.EXPECT().GetPortList().Return([]ovsconfig.OVSPortData{}, nil)
+				old.EXPECT().GetOFPort(eth1+"~").Return(int32(0), client.ErrNotFound)
+				old.EXPECT().CreateUplinkPort(eth1+"~", int32(0), map[string]string{
+					interfacestore.AntreaInterfaceTypeKey: interfacestore.AntreaUplink,
+				}).Return("", nil)
+			},
+			wantPrepareCalls: []string{eth1},
+		},
+		{
 			name:       "bridge deleted (desired is nil)",
 			prevCfg:    &agenttypes.OVSBridgeConfig{BridgeName: brOld, PhysicalInterfaces: []agenttypes.PhysicalInterfaceConfig{{Name: eth1}}},
 			desiredCfg: nil,
@@ -968,7 +981,11 @@ func TestReconcileBridge(t *testing.T) {
 				origInterfaceByName := interfaceByNameFn
 				interfaceByNameFn = func(name string) (*net.Interface, error) {
 					if name == eth1 {
-						return nil, errors.New("interface not found")
+						return nil, &net.OpError{
+							Op:  "route",
+							Net: "ip+net",
+							Err: errors.New("no such network interface"),
+						}
 					}
 					if name == eth1+"~" {
 						return &net.Interface{Name: name}, nil
@@ -986,6 +1003,20 @@ func TestReconcileBridge(t *testing.T) {
 				}
 				t.Cleanup(func() {
 					renameInterfaceFn = origRenameInterface
+				})
+			} else if tc.name == "does not recover on unexpected interface lookup error" {
+				origInterfaceByName := interfaceByNameFn
+				interfaceByNameFn = func(name string) (*net.Interface, error) {
+					if name == eth1 {
+						return nil, errors.New("interface lookup failed")
+					}
+					if name == eth1+"~" {
+						return &net.Interface{Name: name}, nil
+					}
+					return origInterfaceByName(name)
+				}
+				t.Cleanup(func() {
+					interfaceByNameFn = origInterfaceByName
 				})
 			}
 			mockNewOVSBridgeByName(t, map[string]ovsconfig.OVSBridgeClient{
@@ -1063,6 +1094,9 @@ func TestReconcileBridge(t *testing.T) {
 				if tc.name == "recovers stale renamed interface with no OVS ports" {
 					assert.Equal(t, eth1+"~", gotRenameFrom)
 					assert.Equal(t, eth1, gotRenameTo)
+				} else if tc.name == "does not recover on unexpected interface lookup error" {
+					assert.Empty(t, gotRenameFrom)
+					assert.Empty(t, gotRenameTo)
 				}
 			}
 		})
@@ -1445,10 +1479,14 @@ func mockInterfaceByName(t *testing.T, existing []string, missing []string) {
 		}
 		for _, n := range missing {
 			if name == n {
-				return nil, errors.New("interface not found")
+				return nil, &net.OpError{
+					Op:  "route",
+					Net: "ip+net",
+					Err: errors.New("no such network interface"),
+				}
 			}
 		}
-		return nil, nil
+		return &net.Interface{Name: name}, nil
 	}
 
 	t.Cleanup(func() { interfaceByNameFn = prevFunc })
