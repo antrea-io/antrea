@@ -171,7 +171,7 @@ func TestConnectPhyInterfacesToOVSBridge(t *testing.T) {
 			ctrl := mock.NewController(t)
 			mockOVSBridgeClient := ovsconfigtest.NewMockOVSBridgeClient(ctrl)
 
-			mockInterfaceByName(t)
+			mockInterfaceByName(t, nil, []string{nonExistingInterface})
 			if tc.expectedCalls != nil {
 				tc.expectedCalls(mockOVSBridgeClient)
 			}
@@ -709,6 +709,19 @@ func TestReconcileBridge(t *testing.T) {
 			},
 		},
 		{
+			name:       "recovers stale renamed interface with no OVS ports",
+			prevCfg:    bridgeConfig(brOld, eth1),
+			desiredCfg: bridgeConfig(brOld, eth1),
+			expectedCalls: func(old, new *ovsconfigtest.MockOVSBridgeClient) {
+				old.EXPECT().GetPortList().Return([]ovsconfig.OVSPortData{}, nil)
+				old.EXPECT().GetOFPort(eth1+"~").Return(int32(0), client.ErrNotFound)
+				old.EXPECT().CreateUplinkPort(eth1+"~", int32(0), map[string]string{
+					interfacestore.AntreaInterfaceTypeKey: interfacestore.AntreaUplink,
+				}).Return("", nil)
+			},
+			wantPrepareCalls: []string{eth1},
+		},
+		{
 			name:       "bridge deleted (desired is nil)",
 			prevCfg:    &agenttypes.OVSBridgeConfig{BridgeName: brOld, PhysicalInterfaces: []agenttypes.PhysicalInterfaceConfig{{Name: eth1}}},
 			desiredCfg: nil,
@@ -949,7 +962,32 @@ func TestReconcileBridge(t *testing.T) {
 			oldMock := ovsconfigtest.NewMockOVSBridgeClient(ctrl)
 			newMock := ovsconfigtest.NewMockOVSBridgeClient(ctrl)
 
-			mockInterfaceByName(t)
+			var gotRenameFrom, gotRenameTo string
+			mockInterfaceByName(t, nil, []string{nonExistingInterface})
+			if tc.name == "recovers stale renamed interface with no OVS ports" {
+				origInterfaceByName := interfaceByNameFn
+				interfaceByNameFn = func(name string) (*net.Interface, error) {
+					if name == eth1 {
+						return nil, errors.New("interface not found")
+					}
+					if name == eth1+"~" {
+						return &net.Interface{Name: name}, nil
+					}
+					return origInterfaceByName(name)
+				}
+				t.Cleanup(func() {
+					interfaceByNameFn = origInterfaceByName
+				})
+				origRenameInterface := renameInterfaceFn
+				renameInterfaceFn = func(from, to string) error {
+					gotRenameFrom = from
+					gotRenameTo = to
+					return nil
+				}
+				t.Cleanup(func() {
+					renameInterfaceFn = origRenameInterface
+				})
+			}
 			mockNewOVSBridgeByName(t, map[string]ovsconfig.OVSBridgeClient{
 				brOld: oldMock,
 				brNew: newMock,
@@ -1022,6 +1060,10 @@ func TestReconcileBridge(t *testing.T) {
 				}
 				assert.Equal(t, tc.wantPrepareCalls, gotPrepareCalls,
 					"unexpected PrepareHostInterfaceConnection calls")
+				if tc.name == "recovers stale renamed interface with no OVS ports" {
+					assert.Equal(t, eth1+"~", gotRenameFrom)
+					assert.Equal(t, eth1, gotRenameTo)
+				}
 			}
 		})
 	}
@@ -1088,7 +1130,7 @@ func TestReconcileBridgeClearsStateBeforeCreatingReplacement(t *testing.T) {
 	ctrl := mock.NewController(t)
 	oldMock := ovsconfigtest.NewMockOVSBridgeClient(ctrl)
 	newMock := ovsconfigtest.NewMockOVSBridgeClient(ctrl)
-	mockInterfaceByName(t)
+	mockInterfaceByName(t, nil, []string{nonExistingInterface})
 
 	createErr := errors.New("create failed")
 
@@ -1202,7 +1244,7 @@ func TestSyncBridgeRetriesDesiredBridgeCreation(t *testing.T) {
 func TestSyncBridgeDeletesDiscoveredBridgeWhenUndesired(t *testing.T) {
 	ctrl := mock.NewController(t)
 	bridgeClient := ovsconfigtest.NewMockOVSBridgeClient(ctrl)
-	mockInterfaceByName(t)
+	mockInterfaceByName(t, nil, []string{nonExistingInterface})
 	mockNewOVSBridgeByName(t, map[string]ovsconfig.OVSBridgeClient{brOld: bridgeClient})
 	mockStartupSecondaryBridge(t, brOld)
 
@@ -1301,7 +1343,7 @@ func TestSyncBridgeReconcilesDiscoveredManagedBridge(t *testing.T) {
 	ctrl := mock.NewController(t)
 	oldMock := ovsconfigtest.NewMockOVSBridgeClient(ctrl)
 
-	mockInterfaceByName(t)
+	mockInterfaceByName(t, nil, []string{nonExistingInterface})
 	mockNewOVSBridgeByName(t, map[string]ovsconfig.OVSBridgeClient{
 		brOld: oldMock,
 	})
@@ -1391,15 +1433,24 @@ func TestSyncBridgeReconcilesStaticBridgeOnANCListError(t *testing.T) {
 	assert.Equal(t, 1, findCalls)
 }
 
-func mockInterfaceByName(t *testing.T) {
+func mockInterfaceByName(t *testing.T, existing []string, missing []string) {
 	t.Helper()
+
 	prevFunc := interfaceByNameFn
 	interfaceByNameFn = func(name string) (*net.Interface, error) {
-		if name == nonExistingInterface {
-			return nil, errors.New("interface not found")
+		for _, n := range existing {
+			if name == n {
+				return &net.Interface{Name: name}, nil
+			}
+		}
+		for _, n := range missing {
+			if name == n {
+				return nil, errors.New("interface not found")
+			}
 		}
 		return nil, nil
 	}
+
 	t.Cleanup(func() { interfaceByNameFn = prevFunc })
 }
 
