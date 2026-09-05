@@ -20,6 +20,7 @@ package secondarynetwork
 import (
 	"errors"
 	"fmt"
+	"net"
 
 	"github.com/ovn-kubernetes/libovsdb/client"
 	"k8s.io/apimachinery/pkg/util/sets"
@@ -313,7 +314,7 @@ func prepareBridgePhysicalInterfaces(
 		// kernel interface was renamed but the OVS ports were never created.
 		if _, interfacePortExists := existingPorts[iface.Name]; !interfacePortExists {
 			if _, uplinkPortExists := existingPorts[bridgedName]; !uplinkPortExists {
-				if _, err := interfaceByNameFn(iface.Name); err != nil {
+				if _, err := interfaceByNameFn(iface.Name); err != nil && isInterfaceNotFoundError(err) {
 					if _, err := interfaceByNameFn(bridgedName); err == nil {
 						klog.InfoS("Recovering stale renamed host interface",
 							"bridge", desired.BridgeName,
@@ -387,6 +388,11 @@ func prepareBridgePhysicalInterfaces(
 	}
 
 	return desired.PhysicalInterfaces, nil
+}
+
+func isInterfaceNotFoundError(err error) bool {
+	var opErr *net.OpError
+	return errors.As(err, &opErr) && opErr.Err.Error() == "no such network interface"
 }
 
 // connectPhyInterfacesToOVSBridge connects each physical interface to the OVS
