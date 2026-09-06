@@ -41,6 +41,7 @@ func NewARPResponder(transportInterfaceName string, linkMonitor linkmonitor.Inte
 		linkName:    transportInterfaceName,
 		assignedIPs: sets.New[netip.Addr](),
 		linkEventCh: make(chan struct{}, 1),
+		dial:        defaultARPDial,
 	}
 	if linkMonitor != nil {
 		linkMonitor.AddEventHandler(a.onLinkUpdate, transportInterfaceName)

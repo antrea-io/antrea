@@ -33,12 +33,17 @@ import (
 type arpResponder struct {
 	once        sync.Once
 	linkName    string
+	dial        func(*net.Interface) (*arp.Client, error)
 	assignedIPs sets.Set[netip.Addr]
 	mutex       sync.Mutex
 	linkEventCh chan struct{}
 }
 
 var _ Responder = (*arpResponder)(nil)
+
+func defaultARPDial(transportInterface *net.Interface) (*arp.Client, error) {
+	return arp.Dial(transportInterface)
+}
 
 func (r *arpResponder) InterfaceName() string {
 	return r.linkName
@@ -101,7 +106,11 @@ func (r *arpResponder) dialAndHandleRequests(stopCh <-chan struct{}) {
 		klog.ErrorS(err, "Failed to get interface by name", "deviceName", r.linkName)
 		return
 	}
-	client, err := arp.Dial(transportInterface)
+	dial := r.dial
+	if dial == nil {
+		dial = defaultARPDial
+	}
+	client, err := dial(transportInterface)
 	if err != nil {
 		klog.ErrorS(err, "Failed to dial ARP client", "deviceName", r.linkName)
 		return
