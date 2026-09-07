@@ -373,7 +373,7 @@ func (m *NodeLatencyMonitor) pingAll(ipv4Socket, ipv6Socket net.PacketConn) {
 			if err := m.sendPing(ipv4Socket, toIP); err != nil {
 				klog.ErrorS(err, "Cannot send ICMP message to Node IP", "IP", toIP)
 			}
-		} else if toIP.To16() != nil && ipv6Socket != nil {
+		} else if toIP.To4() == nil && ipv6Socket != nil {
 			if err := m.sendPing(ipv6Socket, toIP); err != nil {
 				klog.ErrorS(err, "Cannot send ICMP message to Node IP", "IP", toIP)
 			}
@@ -469,41 +469,35 @@ func (m *NodeLatencyMonitor) monitorLoop(stopCh <-chan struct{}) {
 
 	wg := sync.WaitGroup{}
 	ensureSocketsReady := func(isRetry bool) bool {
-		socketsReady := true
-		if ipv4Socket == nil && m.isIPv4Enabled {
-			socket, err := m.listener.ListenPacket(ipv4ProtocolICMPRaw, "0.0.0.0")
+		newSocket := func(network, address string, isIPv4 bool) net.PacketConn {
+			socket, err := m.listener.ListenPacket(network, address)
 			if err != nil {
 				if isRetry {
-					klog.V(4).InfoS("Failed to create ICMP socket for IPv4, will retry", "err", err)
+					klog.V(4).InfoS("Failed to create ICMP socket, will retry", "network", network, "err", err)
 				} else {
-					klog.ErrorS(err, "Failed to create ICMP socket for IPv4, will retry")
+					klog.ErrorS(err, "Failed to create ICMP socket, will retry", "network", network)
 				}
+				return nil
+			}
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				m.recvPings(socket, isIPv4)
+			}()
+			return socket
+		}
+
+		socketsReady := true
+		if ipv4Socket == nil && m.isIPv4Enabled {
+			ipv4Socket = newSocket(ipv4ProtocolICMPRaw, "0.0.0.0", true)
+			if ipv4Socket == nil {
 				socketsReady = false
-			} else {
-				ipv4Socket = socket
-				wg.Add(1)
-				go func() {
-					defer wg.Done()
-					m.recvPings(socket, true)
-				}()
 			}
 		}
 		if ipv6Socket == nil && m.isIPv6Enabled {
-			socket, err := m.listener.ListenPacket(ipv6ProtocolICMPRaw, "::")
-			if err != nil {
-				if isRetry {
-					klog.V(4).InfoS("Failed to create ICMP socket for IPv6, will retry", "err", err)
-				} else {
-					klog.ErrorS(err, "Failed to create ICMP socket for IPv6, will retry")
-				}
+			ipv6Socket = newSocket(ipv6ProtocolICMPRaw, "::", false)
+			if ipv6Socket == nil {
 				socketsReady = false
-			} else {
-				ipv6Socket = socket
-				wg.Add(1)
-				go func() {
-					defer wg.Done()
-					m.recvPings(socket, false)
-				}()
 			}
 		}
 		return socketsReady
@@ -522,8 +516,10 @@ func (m *NodeLatencyMonitor) monitorLoop(stopCh <-chan struct{}) {
 		socketRetryTimer = (wait.Backoff{
 			Duration: minSocketRetryInterval,
 			Factor:   2,
-			Steps:    math.MaxInt32,
-			Cap:      maxSocketRetryInterval,
+			// Steps must be greater than 1 for Backoff.Timer to use a variable timer.
+			// A large value lets Cap, rather than Steps, bound the retry interval.
+			Steps: math.MaxInt32,
+			Cap:   maxSocketRetryInterval,
 		}).Timer()
 		socketRetryTimerCh = socketRetryTimer.C()
 	}

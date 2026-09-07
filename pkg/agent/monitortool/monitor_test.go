@@ -460,6 +460,53 @@ func TestSendPing(t *testing.T) {
 	}
 }
 
+func TestPingAllWithPartialSocketAvailability(t *testing.T) {
+	testCases := []struct {
+		name      string
+		isIPv4    bool
+		localAddr net.Addr
+		targetIP  string
+	}{
+		{
+			name:      "IPv4 socket only",
+			isIPv4:    true,
+			localAddr: testAddrIPv4,
+			targetIP:  "10.0.2.1",
+		},
+		{
+			name:      "IPv6 socket only",
+			localAddr: testAddrIPv6,
+			targetIP:  "2001:ab03:cd04:55ee:100b::1",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			m := newTestMonitor(t, nodeConfigDualStack, config.TrafficEncapModeEncap, nil, nil)
+			m.latencyStore.addNode(node2)
+
+			outCh := make(chan *nettest.Packet, 2)
+			socket := nettest.NewPacketConn(tc.localAddr, nil, outCh)
+			t.Cleanup(func() {
+				require.NoError(t, socket.Close())
+			})
+			var ipv4Socket, ipv6Socket net.PacketConn
+			if tc.isIPv4 {
+				ipv4Socket = socket
+			} else {
+				ipv6Socket = socket
+			}
+
+			m.pingAll(ipv4Socket, ipv6Socket)
+
+			require.Len(t, outCh, 1)
+			packet := <-outCh
+			assert.Equal(t, tc.targetIP, packet.Addr.String())
+			assert.Equal(t, []string{tc.targetIP}, m.latencyStore.getNodeIPLatencyKeys())
+		})
+	}
+}
+
 // TestRecvPings tests that ICMP messages are handled correctly when received. We only consider the
 // "normal" case here. The ICMP parsing and validation logic is tested comprehensively in
 // TestHandlePing.
