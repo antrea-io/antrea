@@ -1047,6 +1047,12 @@ func runPacketCaptureTest(t *testing.T, data *TestData, tc pcTestCase) {
 		return
 	}
 
+	// The Started condition does not mean that packets can already be captured (see
+	// generateTrafficUntilPacketCaptureComplete), and there is no other signal to wait for, so
+	// give the Antrea Agent some time to arm the capture. Test cases which assert an exact
+	// number of captured packets rely on every generated packet being captured.
+	time.Sleep(time.Second)
+
 	// Load the source and destination IPs from the Pod or IP specified in the CR
 	srcPodIPs = resolveEndpointToPodIPs(t, data, tc.pc.Spec.Source.Pod, tc.pc.Spec.Source.IP)
 	dstPodIPs = resolveEndpointToPodIPs(t, data, tc.pc.Spec.Destination.Pod, tc.pc.Spec.Destination.IP)
@@ -1056,7 +1062,6 @@ func runPacketCaptureTest(t *testing.T, data *TestData, tc pcTestCase) {
 	// traffic can be sent to validate the capture.
 	srcPod := determineSrcPod(tc)
 	dstPodIPs = determineDstPodIPs(t, data, tc, dstPodIPs)
-	generateTraffic(t, data, tc, srcPod, dstPodIPs)
 
 	const defaultTimeoutSeconds = 15
 	timeoutSeconds := tc.timeoutSeconds
@@ -1073,7 +1078,15 @@ func runPacketCaptureTest(t *testing.T, data *TestData, tc pcTestCase) {
 		}
 	}
 
-	pc, err := data.waitForPacketCapture(t, tc.pc.Name, timeoutSeconds, isPacketCaptureComplete)
+	var pc *crdv1alpha1.PacketCapture
+	if expectsCaptureTimeout(tc) {
+		// The capture is expected to end because of its own timeout, and the expected number
+		// of captured packets assumes that traffic is generated exactly once.
+		generateTraffic(t, data, tc, srcPod, dstPodIPs)
+		pc, err = data.waitForPacketCapture(t, tc.pc.Name, timeoutSeconds, isPacketCaptureComplete)
+	} else {
+		pc, err = data.generateTrafficUntilPacketCaptureComplete(t, tc, srcPod, dstPodIPs, timeoutSeconds)
+	}
 	if err != nil {
 		t.Fatalf("Error: Get PacketCapture failed: %v", err)
 	}
@@ -1115,6 +1128,83 @@ func runPacketCaptureTest(t *testing.T, data *TestData, tc pcTestCase) {
 		}
 	}
 	require.NoError(t, verifyPacketFile(t, tc.pc, file, tc.expectedStatus.NumberCaptured, srcIP, dstIP))
+}
+
+// expectsCaptureTimeout returns true if the PacketCapture is expected to complete because its own
+// timeout expires, as opposed to completing as soon as the requested number of packets has been
+// captured.
+func expectsCaptureTimeout(tc pcTestCase) bool {
+	for _, cond := range tc.expectedStatus.Conditions {
+		if cond.Type == crdv1alpha1.PacketCaptureComplete && cond.Reason == "Timeout" {
+			return true
+		}
+	}
+	return false
+}
+
+// generateTrafficUntilPacketCaptureComplete generates traffic until the PacketCapture has captured
+// all the packets it was asked for. The PacketCaptureStarted condition is reported by the Antrea
+// Agent before the capture is actually able to capture packets: the Agent opens the capture socket,
+// then drains it and installs the BPF filter from a different goroutine, which takes at least 50ms.
+// Traffic generated as soon as the condition is observed can therefore be missed, and a test case
+// which generates just enough packets to reach FirstN would then never see the capture complete. We
+// keep generating traffic until FirstN packets have been captured: for these test cases the capture
+// stops at FirstN, hence the extra traffic cannot increase the number of captured packets beyond
+// the expected one. Once FirstN packets have been captured we stop, as the capture then completes
+// on its own (the packets still have to be uploaded to the file server). Note that a test case
+// which expects the capture to end because of a timeout cannot use this at all, as it asserts an
+// exact number of captured packets: see expectsCaptureTimeout.
+func (data *TestData) generateTrafficUntilPacketCaptureComplete(
+	t *testing.T,
+	tc pcTestCase,
+	srcPod string,
+	dstPodIPs *PodIPs,
+	timeoutSeconds int,
+) (*crdv1alpha1.PacketCapture, error) {
+	// Minimum amount of time between two rounds of traffic generation.
+	const trafficInterval = 2 * time.Second
+	// Upper bound on the number of rounds of traffic generation, so that a capture which never
+	// makes progress fails instead of running for as long as traffic can be generated.
+	const maxTrafficRounds = 3
+	ctx := context.Background()
+	var pc *crdv1alpha1.PacketCapture
+	var lastRound time.Time
+	rounds := 0
+	// Generating traffic can itself take a few seconds, which should not be deducted from the
+	// time we are willing to wait for the capture to complete, so we extend the deadline
+	// accordingly after each round.
+	deadline := time.Now().Add(time.Duration(timeoutSeconds) * time.Second)
+	var err error
+	for {
+		// tc.pc always requests FirstN packets: see getPacketCaptureCR.
+		capturedEnough := pc != nil && pc.Status.NumberCaptured >= tc.pc.Spec.CaptureConfig.FirstN.Number
+		if !capturedEnough && rounds < maxTrafficRounds && (lastRound.IsZero() || time.Since(lastRound) >= trafficInterval) {
+			start := time.Now()
+			generateTraffic(t, data, tc, srcPod, dstPodIPs)
+			lastRound = time.Now()
+			rounds++
+			deadline = deadline.Add(lastRound.Sub(start))
+		}
+		var c *crdv1alpha1.PacketCapture
+		if c, err = data.CRDClient.CrdV1alpha1().PacketCaptures().Get(ctx, tc.pc.Name, metav1.GetOptions{}); err == nil {
+			pc = c
+			if isPacketCaptureComplete(pc) {
+				return pc, nil
+			}
+		}
+		if time.Now().After(deadline) {
+			err = wait.ErrorInterrupted(fmt.Errorf("timed out waiting for PacketCapture %s to complete", tc.pc.Name))
+			break
+		}
+		time.Sleep(defaultInterval)
+	}
+	if err != nil {
+		if pc != nil {
+			t.Errorf("Latest PacketCapture status: %s %+v", pc.Name, pc.Status)
+		}
+		return nil, err
+	}
+	return pc, nil
 }
 
 func (data *TestData) waitForPacketCapture(t *testing.T, name string, specTimeout int, fn func(*crdv1alpha1.PacketCapture) bool) (*crdv1alpha1.PacketCapture, error) {
