@@ -211,8 +211,27 @@ func convertGoBGPPeerToPeerStatus(peer *gobgpapi.Peer) *bgp.PeerStatus {
 				}
 			}
 		}
+		// The session state of the BFD state is unspecified when BFD is not enabled for the peer.
+		if bfdState := state.GetBfdState(); bfdState != nil && bfdState.GetSessionState() != gobgpapi.BfdSessionState_BFD_SESSION_STATE_UNSPECIFIED {
+			peerStatus.BFDSessionState = convertGoBGPBFDSessionStateToBFDSessionState(bfdState.GetSessionState())
+		}
 	}
 	return peerStatus
+}
+
+func convertGoBGPBFDSessionStateToBFDSessionState(s gobgpapi.BfdSessionState) bgp.BFDSessionState {
+	switch s {
+	case gobgpapi.BfdSessionState_BFD_SESSION_STATE_ADMIN_DOWN:
+		return bgp.BFDSessionAdminDown
+	case gobgpapi.BfdSessionState_BFD_SESSION_STATE_DOWN:
+		return bgp.BFDSessionDown
+	case gobgpapi.BfdSessionState_BFD_SESSION_STATE_INIT:
+		return bgp.BFDSessionInit
+	case gobgpapi.BfdSessionState_BFD_SESSION_STATE_UP:
+		return bgp.BFDSessionUp
+	default:
+		return bgp.BFDSessionUnknown
+	}
 }
 
 func convertRouteTypeToGoBGPTableType(routeType bgp.RouteType) gobgpapi.TableType {
@@ -320,6 +339,20 @@ func convertPeerConfigToGoBGPPeer(peerConfig bgp.PeerConfig) (*gobgpapi.Peer, er
 			Enabled:     true,
 			RestartTime: uint32(*peerConfig.GracefulRestartTimeSeconds),
 		}
+	}
+	if peerConfig.BFD != nil && peerConfig.BFD.Enabled {
+		bfdConfig := &gobgpapi.BfdPeerConfig{Enabled: true}
+		// The gobgp API expects the BFD intervals in microseconds.
+		if peerConfig.BFD.MinReceiveIntervalMilliseconds != nil {
+			bfdConfig.RequiredMinimumReceive = uint32(*peerConfig.BFD.MinReceiveIntervalMilliseconds) * 1000
+		}
+		if peerConfig.BFD.MinTransmitIntervalMilliseconds != nil {
+			bfdConfig.DesiredMinimumTxInterval = uint32(*peerConfig.BFD.MinTransmitIntervalMilliseconds) * 1000
+		}
+		if peerConfig.BFD.DetectionMultiplier != nil {
+			bfdConfig.DetectionMultiplier = uint32(*peerConfig.BFD.DetectionMultiplier)
+		}
+		peer.Bfd = bfdConfig
 	}
 	return peer, nil
 }

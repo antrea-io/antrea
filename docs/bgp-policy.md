@@ -18,7 +18,9 @@
   - [Combined Advertisements of Service, Pod, and Egress IPs](#combined-advertisements-of-service-pod-and-egress-ips)
   - [Advertise Egress IPs to external BGP peers with more than one hop](#advertise-egress-ips-to-external-bgp-peers-with-more-than-one-hop)
   - [Advertise Pod IPs through BGP Confederation](#advertise-pod-ips-through-bgp-confederation)
+  - [Enable BFD for fast failover](#enable-bfd-for-fast-failover)
 - [Using antctl](#using-antctl)
+- [BFD conformance notes](#bfd-conformance-notes)
 - [Limitations](#limitations)
 <!-- /toc -->
 
@@ -130,6 +132,30 @@ The `bgpPeers` field lists the BGP peers to which the advertisements are sent.
   The default value is 1.
 - `gracefulRestartTimeSeconds`: Specifies how long the BGP peer waits for the BGP session to re-establish after a
   restart before deleting stale routes, with a range of 1 to 3600 seconds. The default value is 120 seconds.
+- `bfd`: Configures Bidirectional Forwarding Detection (RFC 5880) towards the BGP peer, for failure detection much
+  faster than the BGP hold timer can provide. BFD runs only when `bfd.enabled` is `true`. When the BFD session
+  transitions from up to down, the BGP session is reset immediately, without waiting for the BGP hold timer to expire.
+  If the BFD session never comes up (e.g., the peer does not support or enable BFD), the BGP session is not affected.
+  BFD is only supported for directly connected peers (`multihopTTL` of 1). BFD control packets are exchanged on UDP
+  port 3784, using a source port in the range 49152-65535, and are sent with an IP TTL of 255 as
+  [RFC 5881](https://datatracker.ietf.org/doc/html/rfc5881#section-5) requires. This traffic must be allowed by the host
+  firewall in both directions: antrea-agent does not install rules for it, just as it does not for the BGP port itself.
+  Because the packets have to arrive with a TTL of 255, they cannot cross a router, which is a second reason BFD is
+  limited to directly connected peers.
+  - `enabled`: Whether BFD runs towards the peer. This field is required, so that BFD can be turned off by setting it
+    to `false` while the other fields keep their values.
+  - `minReceiveIntervalMilliseconds`: The minimum interval at which the Node is capable of receiving BFD control
+    packets, in milliseconds. The peer adjusts its transmission rate to be no faster than this value. The range is 10
+    to 60000 and the default value is 300.
+  - `minTransmitIntervalMilliseconds`: The interval at which the Node transmits BFD control packets, in milliseconds.
+    This interval is used as configured: it is not adjusted to the minimum receive interval advertised by the peer, so
+    it should not be set faster than the peer is willing to receive. The range is 10 to 60000 and the default value is
+    300.
+  - `detectionMultiplier`: The number of consecutive BFD control packets that must be missed before the session is
+    declared down. The range is 1 to 255 and the default value is 3.
+
+  See example [Enable BFD for fast failover](#enable-bfd-for-fast-failover), and
+  [BFD conformance notes](#bfd-conformance-notes) for the ways the implementation departs from RFC 5880.
 
 ## BGP router ID
 
@@ -265,9 +291,80 @@ spec:
       port: 179
 ```
 
+### Enable BFD for fast failover
+
+In this example, BFD is enabled towards the BGP peer. With the default parameters (a 300 millisecond interval in each
+direction and a detection multiplier of 3), a connectivity failure to the peer is detected in less than a second, and
+the BGP session is reset immediately, so that the peer stops forwarding traffic through this Node without waiting for
+the BGP hold timer (90 seconds by default) to expire. The hold timer still acts as a backstop, e.g. if BFD is not
+running. Setting only `enabled: true` is enough to run BFD with the default parameters; the interval and multiplier
+values below are shown for illustration. Setting `enabled: false` stops BFD towards the peer while leaving the other
+values in place for the next time it is turned on.
+
+```yaml
+apiVersion: crd.antrea.io/v1alpha1
+kind: BGPPolicy
+metadata:
+  name: example-bgp-policy-with-bfd
+spec:
+  nodeSelector:
+    matchLabels:
+      bgp: enabled
+  localASN: 64512
+  advertisements:
+    service:
+      ipTypes: [LoadBalancerIP]
+  bgpPeers:
+    - address: 192.168.77.200
+      asn: 65001
+      bfd:
+        enabled: true
+        minReceiveIntervalMilliseconds: 300
+        minTransmitIntervalMilliseconds: 300
+        detectionMultiplier: 3
+```
+
+The state of the BFD sessions can be checked with `antctl get bgppeers`.
+
+Checking it is worth doing after enabling BFD, because a blocked UDP 3784 fails quietly. The BFD session simply never
+leaves `Down`, the BGP session is unaffected, and failure detection falls back to the BGP hold timer: nothing breaks,
+and the only symptom is that failover is not fast. A `Down` BFD state on an `Established` peer is the signal to check
+the host firewall.
+
 ## Using antctl
 
 Please refer to the corresponding [antctl page](antctl.md#bgp-commands).
+
+## BFD conformance notes
+
+BFD is implemented by the embedded gobgp library rather than by Antrea, and as of gobgp v4.9.0 it departs from
+[RFC 5880](https://datatracker.ietf.org/doc/html/rfc5880) in the three ways listed below. All three affect only the
+control packets a Node sends. How quickly a Node detects a failed peer is unaffected: the detection time is derived
+from the timers the peer advertises, as
+[Section 6.8.4](https://datatracker.ietf.org/doc/html/rfc5880#section-6.8.4) requires.
+
+- **The transmit interval is not negotiated.**
+  [Section 6.8.3](https://datatracker.ietf.org/doc/html/rfc5880#section-6.8.3) requires a system to slow its
+  transmissions to the minimum receive interval advertised by the peer. That field is read off the wire and then
+  ignored, so a Node keeps transmitting at `minTransmitIntervalMilliseconds` even when the peer asks for a slower rate.
+  Set `minTransmitIntervalMilliseconds` to a rate the peer is configured to accept: a peer that polices BFD control
+  packets may drop the excess and take the session down.
+- **Transmissions are not jittered.**
+  [Section 6.8.7](https://datatracker.ietf.org/doc/html/rfc5880#section-6.8.7) requires up to 25% jitter so that
+  sessions do not synchronise with one another. Every BFD session on a Node therefore transmits in lockstep, which
+  concentrates the packets of a Node with many BFD-enabled peers into bursts.
+- **The transmit rate is not reduced while the session is down.**
+  [Section 6.8.3](https://datatracker.ietf.org/doc/html/rfc5880#section-6.8.3) requires a system to back off to no
+  faster than one packet per second while the session is not up. Enabling BFD towards a peer that never answers, for
+  example one that does not have BFD configured, therefore produces a steady stream of unanswered packets rather than
+  a slow probe. The BGP session itself is unaffected.
+
+A further consideration is not a conformance question but is worth weighing before choosing aggressive timers: this BFD
+runs in the antrea-agent process, not in the kernel or in hardware. If the agent is starved of CPU for longer than the
+peer's detection time, the peer declares the session down and the BGP session is reset, withdrawing the Node's routes.
+The default timers give a budget of roughly 900 milliseconds. Do not set a CPU limit on the antrea-agent container when
+BFD is enabled, and prefer more conservative timers, for example 500 milliseconds with a detection multiplier of 4,
+until you have flap data for your cluster.
 
 ## Limitations
 
@@ -278,3 +375,6 @@ Please refer to the corresponding [antctl page](antctl.md#bgp-commands).
   with Windows Nodes.
 - Advanced BGP features such as BGP communities, route filtering, route reflection, confederations, and other BGP policy
   mechanisms defined in BGP RFCs are not supported.
+- BFD is only supported for directly connected BGP peers (`multihopTTL` of 1).
+- The BFD implementation departs from RFC 5880 in the transmit path. See
+  [BFD conformance notes](#bfd-conformance-notes).
