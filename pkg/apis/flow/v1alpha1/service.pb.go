@@ -483,14 +483,11 @@ func (x *GetFlowsResponse) GetInfo() *StreamInfo {
 // StreamInfo describes the scope a GetFlows stream was opened with.
 type StreamInfo struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
-	// The Namespaces the client named and was authorized to observe. Empty when
-	// cluster_wide is set.
+	// The Namespaces the client named and was authorized to observe. Empty means
+	// the stream is cluster-wide: every record is streamed regardless of namespace.
 	AuthorizedNamespaces []string `protobuf:"bytes,1,rep,name=authorized_namespaces,json=authorizedNamespaces,proto3" json:"authorized_namespaces,omitempty"`
-	// Whether the stream is cluster-wide, in which case every record is streamed
-	// and nothing is redacted.
-	ClusterWide   bool `protobuf:"varint,2,opt,name=cluster_wide,json=clusterWide,proto3" json:"cluster_wide,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	unknownFields        protoimpl.UnknownFields
+	sizeCache            protoimpl.SizeCache
 }
 
 func (x *StreamInfo) Reset() {
@@ -530,13 +527,6 @@ func (x *StreamInfo) GetAuthorizedNamespaces() []string {
 	return nil
 }
 
-func (x *StreamInfo) GetClusterWide() bool {
-	if x != nil {
-		return x.ClusterWide
-	}
-	return false
-}
-
 var File_pkg_apis_flow_v1alpha1_service_proto protoreflect.FileDescriptor
 
 const file_pkg_apis_flow_v1alpha1_service_proto_rawDesc = "" +
@@ -569,11 +559,10 @@ const file_pkg_apis_flow_v1alpha1_service_proto_rawDesc = "" +
 	"\x10GetFlowsResponse\x12C\n" +
 	"\x05flows\x18\x01 \x03(\v2-.antrea_io.antrea.pkg.apis.flow.v1alpha1.FlowR\x05flows\x12#\n" +
 	"\rdropped_count\x18\x02 \x01(\x04R\fdroppedCount\x12G\n" +
-	"\x04info\x18\x03 \x01(\v23.antrea_io.antrea.pkg.apis.flow.v1alpha1.StreamInfoR\x04info\"d\n" +
+	"\x04info\x18\x03 \x01(\v23.antrea_io.antrea.pkg.apis.flow.v1alpha1.StreamInfoR\x04info\"A\n" +
 	"\n" +
 	"StreamInfo\x123\n" +
-	"\x15authorized_namespaces\x18\x01 \x03(\tR\x14authorizedNamespaces\x12!\n" +
-	"\fcluster_wide\x18\x02 \x01(\bR\vclusterWide*s\n" +
+	"\x15authorized_namespaces\x18\x01 \x03(\tR\x14authorizedNamespaces*s\n" +
 	"\x13FlowFilterDirection\x12\x1e\n" +
 	"\x1aFLOW_FILTER_DIRECTION_BOTH\x10\x00\x12\x1e\n" +
 	"\x1aFLOW_FILTER_DIRECTION_FROM\x10\x01\x12\x1c\n" +

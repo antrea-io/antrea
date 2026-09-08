@@ -174,7 +174,8 @@ func TestRedactFlow_Kubernetes(t *testing.T) {
 			name:        "the client's own endpoint is disclosed in full",
 			source:      tierFull,
 			destination: tierFlow,
-			// source_disclosure stays unset at tierFull: nothing was withheld for that endpoint.
+			// source_disclosure is absent because tierFull maps to ENDPOINT_DISCLOSURE_FULL,
+			// the zero value, which proto reflection does not report as populated.
 			want: concat(flowTier, sourceIdentity, sourceFull,
 				[]string{"destination_pod_namespace", "destination_disclosure"}),
 		},
@@ -246,8 +247,8 @@ var (
 
 // TestRedactFlow_RecordLevelFields covers the fields that belong to the record rather than to
 // either endpoint. The exporter IP goes even though the source here is disclosed in full, which is
-// also the case where an endpoint at tierFull loses a field while its own disclosure marker stays
-// unset: a marker describes an endpoint, not the record it arrives on.
+// also the case where an endpoint at tierFull loses a field while its own marker still reports
+// ENDPOINT_DISCLOSURE_FULL: a marker describes an endpoint, not the record it arrives on.
 func TestRedactFlow_RecordLevelFields(t *testing.T) {
 	f := fullFlow()
 

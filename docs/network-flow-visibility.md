@@ -705,20 +705,20 @@ consume flows:
 
 A request naming more than one Namespace is rejected with `INVALID_ARGUMENT`, and
 a request naming a Namespace the client may not observe is rejected with
-`PERMISSION_DENIED` rather than being narrowed to something it may. Kubernetes
-offers no reverse lookup from a subject to the Namespaces it may access, so "show
-me everything I am allowed to see" is not something the Flow Aggregator can
-answer, which is why the scope is always explicit. The same distinction surfaces
-in the Antrea UI: selecting a Namespace is mandatory on the flow visibility tab
-unless the user has cluster-wide visibility.
+`PERMISSION_DENIED`. Kubernetes offers no reverse lookup from a subject to the
+Namespaces it may access, so "show me everything I am allowed to see" is not
+something the Flow Aggregator can answer, which is why the scope is always explicit.
+The same distinction surfaces in the Antrea UI: selecting a Namespace is mandatory
+on the flow visibility tab unless the user has cluster-wide visibility.
 
 A record is streamed if either of its endpoints is in the Namespaces the client
 was authorized for. Requiring both would hide exactly the cross-Namespace flows
 users are looking for — "my egress to a service I cannot see was dropped" is the
 common case.
 
-Two ClusterRoles are shipped, unbound, and grant nothing until an administrator
-binds them:
+Two unbounded ClusterRoles are shipped by default. `antrea-flow-viewer` can be
+bounded for permission to stream `flows` in Namespaces, whereas `antrea-flow-identity-viewer`
+can be bounded for `flows/identity`. Examples:
 
 ```bash
 # Let the "network-ops" group stream flows in the "frontend" Namespace.
@@ -729,19 +729,22 @@ kubectl create rolebinding flow-viewer -n frontend \
 kubectl create clusterrolebinding flow-viewer \
   --clusterrole antrea-flow-viewer --group network-ops
 
-# Let everyone recognize kube-system's workloads inside records they already receive.
+# Let a group with no read access at all recognize kube-system's workloads inside
+# records they already receive.
 kubectl create rolebinding flow-identity -n kube-system \
-  --clusterrole antrea-flow-identity-viewer --group system:authenticated
+  --clusterrole antrea-flow-identity-viewer --group some-group-without-read-access
 ```
 
 `antrea-flow-viewer` carries `rbac.authorization.k8s.io/aggregate-to-admin`, so a
 Namespace administrator observes their own Namespace's flows without any of the
-bindings above: a Namespace's flows are treated as part of what owning that
-Namespace already entails. A true cluster administrator, holding `*` on `*`, has
-cluster-wide visibility for the same reason. `antrea-flow-identity-viewer` is
-deliberately *not* aggregated: letting another Namespace's workloads be
-recognized is the kind of consent only that Namespace's owner can give, so it
-always takes an explicit binding.
+bindings above as long as they hold the "admin" role to that Namespace: a Namespace's
+flows are treated as part of what owning that Namespace already entails. A true
+cluster administrator, holding `*` on `*`, has cluster-wide visibility for the
+same reason.
+
+`antrea-flow-identity-viewer` carries `rbac.authorization.k8s.io/aggregate-to-view`
+instead, so who can already read the Namespace's objects automatically gets flows/identity
+in that namespace, with no separate binding.
 
 Who currently holds flow visibility can be audited with:
 
@@ -782,10 +785,13 @@ tell a genuinely external endpoint from one whose Namespace was withheld, and
 collapsing `INTRA_NODE` to `INTER_NODE` would make the field mean something
 different on every stream. The peer's Node is never named.
 
-An endpoint below the Full tier is marked as such on the record
-(`source_disclosure` / `destination_disclosure`), so that a client can tell a
-field that was withheld from one the Flow Aggregator never had — an empty policy
-Namespace, for instance, is what a cluster-scoped policy legitimately looks like.
+Each endpoint's tier is reported on the record itself (`source_disclosure` /
+`destination_disclosure`), so that a client can tell a field that was withheld
+from one the Flow Aggregator never had — an empty policy Namespace, for
+instance, is what a cluster-scoped policy legitimately looks like. `FULL` is the
+zero value of both fields, so a record that was never redacted, and every record
+reaching a cluster-wide stream, reports both endpoints as fully disclosed
+without the Flow Aggregator having to modify anything.
 An unidentified endpoint keeps its Namespace only if the connection was allowed:
 withholding it for denied connections is what keeps a client from scanning the
 Pod CIDR and mapping IPs to Namespaces by reading back its own denied flows.
@@ -800,8 +806,9 @@ A few fields belong to the record rather than to either endpoint. `ipfix`, which
 carries the IP of the Node that exported the record, is withheld unless *both*
 endpoints are disclosed in full: it is present on every record, including a
 Pod-to-Pod flow where neither Node is named. Because it is a record-level field,
-an endpoint at the Full tier can still lose it from a record while its own
-`source_disclosure` / `destination_disclosure` stays unset.
+an endpoint can lose it from a record while its own `source_disclosure` /
+`destination_disclosure` still reports `FULL`: a marker describes an endpoint,
+not the record it arrives on.
 
 `proxy_snat_ip` and `proxy_snat_port` are not redacted, even though they too
 hold a Node address. Only a from-external flow carries them — they are the
@@ -815,7 +822,7 @@ policy the client may not otherwise know about: losing them would lose "why did 
 connection fail", which is most of the troubleshooting value, and knowing whether
 a cluster-scoped or a namespaced policy dropped the connection tells a client
 whether to escalate to the platform team or to the peer. The policy's *identity*
-— its Namespace, name, UID and rule name — comes with the Identity tier, so that
+(its Namespace, name, UID and rule name) comes with the Identity tier, so that
 "which of your policies dropped my traffic" is answerable once the peer's
 Namespace has granted `flows/identity`. Below that tier it stays hidden, which is
 what keeps a client from mapping the policy set of a Namespace that never
@@ -846,10 +853,10 @@ actually authorized for is reported in the first message of the stream.
   too, because an RBAC rule listing `*` under `resources` matches before the
   subresource is ever looked at. Such a Role therefore also lets its holder
   identify that Namespace's endpoints inside records it receives through some
-  *other* Namespace, which is otherwise something only an explicit
-  `antrea-flow-identity-viewer` binding grants. RBAC cannot express "not
-  reachable via a wildcard", and there is no query for "who can do X", so a
-  cluster that hands out wildcard Roles should scan for them.
+  *other* Namespace — the same thing binding `view`, `edit` or `admin` there
+  grants deliberately, just reached by a route that is easy to miss. RBAC
+  cannot express "not reachable via a wildcard", and there is no query for "who
+  can do X", so a cluster that hands out wildcard Roles should scan for them.
 - **Revoking a grant takes up to 11 minutes to end an established stream.**
   Authorization decisions, both allow and deny, are cached for 10 minutes — the
   shortest lifetime Kubernetes gives a projected ServiceAccount token — and an
@@ -858,9 +865,13 @@ actually authorized for is reported in the first message of the stream.
   subject to the same delay. Opening a *new* stream is never served from a stale
   allow decision beyond the 10-minute window, and fails closed if the API server
   is unreachable; an established stream survives a control-plane blip.
-- **Flow visibility is not derived from read access to the objects involved.** A
-  subject granted `watch flows` in a Namespace sees Pod names and labels
-  for it even without `get pods` there. The two are separate grants.
+- **Flow visibility is not derived from read access to the objects involved, but
+  identity is.** A subject granted `watch flows` in a Namespace sees Pod names
+  and labels for it even without `get pods` there — `flows` and object read
+  access are separate grants. `flows/identity` is the exception:
+  `antrea-flow-identity-viewer` is aggregated to `view`, so anyone bound to the
+  built-in `view`, `edit` or `admin` Role in a Namespace already holds it there,
+  with no `antrea-flow-*` binding to show up in the audit command above.
 - **Identity changes mid-stream are invisible.** The credential is resolved when
   the stream opens, so a token revoked or a group membership changed afterwards
   takes effect on the next connection, not on the current one.

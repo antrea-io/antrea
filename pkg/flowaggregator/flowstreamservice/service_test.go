@@ -30,7 +30,6 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 	"k8s.io/apiserver/pkg/endpoints/request"
 	k8sfake "k8s.io/client-go/kubernetes/fake"
-	"k8s.io/utils/clock"
 
 	flowpb "antrea.io/antrea/v2/pkg/apis/flow/v1alpha1"
 	flowaggregatorconfig "antrea.io/antrea/v2/pkg/config/flowaggregator"
@@ -814,7 +813,7 @@ func TestGetFlows_FollowContextCancelled(t *testing.T) {
 // server that streams every record to every peer with nothing in the code to flag it.
 func TestNewFlowStreamService_RequiresAuthenticatorAndAuthorizer(t *testing.T) {
 	buf := ringbuffer.NewBroadcastBuffer[*flowpb.Flow](4)
-	s, err := NewFlowStreamService(buf, nil, newAuthorizer(newFakeAuthorizer(), clock.RealClock{}))
+	s, err := NewFlowStreamService(buf, nil, newAuthorizer(newFakeAuthorizer()))
 	require.Error(t, err)
 	assert.Nil(t, s)
 
@@ -835,7 +834,7 @@ func TestNewFlowStreamService_RequiresAuthenticatorAndAuthorizer(t *testing.T) {
 // past revalidationInterval with time.Sleep.
 func newAuthorizedTestService(buf ringbuffer.BroadcastBuffer[*flowpb.Flow], grants ...string) (*FlowStreamService, *fakeAuthorizer) {
 	fake := newFakeAuthorizer(grants...)
-	return newFlowStreamServiceWithoutAuthentication(buf, newAuthorizer(fake, clock.RealClock{})), fake
+	return newFlowStreamServiceWithoutAuthentication(buf, newAuthorizer(fake)), fake
 }
 
 func TestGetFlows_ScopeIsAuthorizedAndReported(t *testing.T) {
@@ -863,7 +862,6 @@ func TestGetFlows_ScopeIsAuthorizedAndReported(t *testing.T) {
 		info := stream.responses[0].GetInfo()
 		require.NotNil(t, info)
 		assert.Equal(t, []string{"ns-a"}, info.GetAuthorizedNamespaces())
-		assert.False(t, info.GetClusterWide())
 
 		// Only the record involving ns-a is streamed, with its peer left unidentified.
 		got := collectFlows(stream.responses)
@@ -952,7 +950,7 @@ func TestNewFlowStreamService_MaxStreamsPerConn(t *testing.T) {
 	a, err := newStreamServerAuthenticator(k8sfake.NewSimpleClientset(), newTokenReviewClient(t, nil), limits)
 	require.NoError(t, err)
 
-	s, err := NewFlowStreamService(buf, a, newAuthorizer(newFakeAuthorizer(), clock.RealClock{}))
+	s, err := NewFlowStreamService(buf, a, newAuthorizer(newFakeAuthorizer()))
 	require.NoError(t, err)
 	assert.Equal(t, uint32(limits.MaxTotalStreams), s.maxStreamsPerConn)
 	assert.Greater(t, s.maxStreamsPerConn, uint32(limits.MaxStreamsPerClientIP),

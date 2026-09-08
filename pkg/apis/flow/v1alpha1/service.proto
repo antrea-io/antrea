@@ -158,10 +158,7 @@ message GetFlowsResponse {
 
 // StreamInfo describes the scope a GetFlows stream was opened with.
 message StreamInfo {
-  // The Namespaces the client named and was authorized to observe. Empty when
-  // cluster_wide is set.
+  // The Namespaces the client named and was authorized to observe. Empty means
+  // the stream is cluster-wide: every record is streamed regardless of namespace.
   repeated string authorized_namespaces = 1;
-  // Whether the stream is cluster-wide, in which case every record is streamed
-  // and nothing is redacted.
-  bool cluster_wide = 2;
 }

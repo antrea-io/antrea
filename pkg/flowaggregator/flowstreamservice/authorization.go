@@ -30,7 +30,6 @@ import (
 	"k8s.io/apiserver/pkg/server/options"
 	authorizationv1client "k8s.io/client-go/kubernetes/typed/authorization/v1"
 	"k8s.io/klog/v2"
-	"k8s.io/utils/clock"
 
 	flowpb "antrea.io/antrea/v2/pkg/apis/flow/v1alpha1"
 )
@@ -79,18 +78,19 @@ const (
 	// only keeps a single long-lived stream's own bookkeeping from growing without limit.
 	maxIdentityNamespacesPerStream = 250
 
-	// identityCheckTimeout bounds a single flows/identity SubjectAccessReview, including the
-	// delegating authorizer's own retries. canIdentify runs on the record dispatch path, once per
-	// newly-seen peer Namespace per stream: without a bound, a slow or unreachable API server would
-	// retry with backoff for several seconds on that path, stalling every record behind it in the
-	// same batch and starving the ring buffer consumer, which the buffer then sees as a slow reader.
-	// canIdentify already fails closed on any error, so timing out here is indistinguishable to it
-	// from any other authorization failure.
+	// identityCheckTimeout bounds one call to Authorize, including every flows/identity
+	// SubjectAccessReview a newly-seen peer Namespace in the batch triggers. canIdentify runs on
+	// the record dispatch path, so without a bound a slow or unreachable API server would retry
+	// with backoff for several seconds per lookup, and a batch carrying several never-seen peer
+	// Namespaces would stall for that many multiples of it — starving the ring buffer consumer,
+	// which the buffer then sees as a slow reader. Deriving each canIdentify call's own timeout
+	// from the same context that bounds Authorize caps the batch as a whole instead: once the
+	// budget is spent, every remaining lookup in the batch fails immediately rather than retrying,
+	// which canIdentify already treats like any other authorization failure.
 	identityCheckTimeout = 2 * time.Second
 
-	// clusterScope is how the cluster-wide scope is named in messages to the client. A
-	// SubjectAccessReview with an empty Namespace is a cluster-scoped check, which no
-	// namespace-scoped RoleBinding can satisfy.
+	// clusterScope is how the cluster-wide scope is named in log messages. A SubjectAccessReview
+	// with an empty Namespace is a cluster-scoped check.
 	clusterScope = "cluster-wide"
 )
 
@@ -102,7 +102,6 @@ const (
 // their own round-trips.
 type Authorizer struct {
 	delegate authorizer.Authorizer
-	clock    clock.Clock
 }
 
 // NewAuthorizer builds an Authorizer that resolves permissions with SubjectAccessReviews against
@@ -118,13 +117,13 @@ func NewAuthorizer(client authorizationv1client.AuthorizationV1Interface) (*Auth
 	if err != nil {
 		return nil, fmt.Errorf("failed to create delegating authorizer: %w", err)
 	}
-	return newAuthorizer(delegate, clock.RealClock{}), nil
+	return newAuthorizer(delegate), nil
 }
 
-// newAuthorizer is the constructor shared with the tests, which substitute both the authorization
-// decisions and the clock.
-func newAuthorizer(delegate authorizer.Authorizer, clock clock.Clock) *Authorizer {
-	return &Authorizer{delegate: delegate, clock: clock}
+// newAuthorizer is the constructor shared with the tests, which substitute the authorization
+// decisions by passing their own authorizer.Authorizer in place of the delegating one.
+func newAuthorizer(delegate authorizer.Authorizer) *Authorizer {
+	return &Authorizer{delegate: delegate}
 }
 
 // allowed reports whether user holds verb on the virtual flow resource (or on its identity
@@ -207,8 +206,8 @@ func (a *Authorizer) NewStreamAuthorization(ctx context.Context, u user.Info, re
 		user:            u,
 		verb:            verb,
 		clusterWide:     req.GetClusterWide(),
-		lastRevalidated: a.clock.Now(),
-		identity:        cache.NewLRUExpireCacheWithClock(maxIdentityNamespacesPerStream, a.clock),
+		lastRevalidated: time.Now(),
+		identity:        cache.NewLRUExpireCache(maxIdentityNamespacesPerStream),
 	}
 
 	requested, err := requestedNamespaces(req)
@@ -283,11 +282,11 @@ func requestedNamespaces(req *flowpb.GetFlowsRequest) ([]string, error) {
 }
 
 // StreamInfo reports the scope the stream was actually opened with, to be sent to the client in
-// the first response of the stream.
+// the first response of the stream. orderedNamespaces is left nil rather than set for a
+// cluster-wide stream, so an empty list here already means cluster-wide without a separate field.
 func (sa *StreamAuthorization) StreamInfo() *flowpb.StreamInfo {
 	return &flowpb.StreamInfo{
 		AuthorizedNamespaces: sa.orderedNamespaces,
-		ClusterWide:          sa.clusterWide,
 	}
 }
 
@@ -302,7 +301,7 @@ func (sa *StreamAuthorization) StreamInfo() *flowpb.StreamInfo {
 // client that wants the rest of its scope can reconnect without it, which is the same contract as
 // naming a Namespace it may not observe in the first place.
 func (sa *StreamAuthorization) Revalidate(ctx context.Context) error {
-	now := sa.authorizer.clock.Now()
+	now := time.Now()
 	if now.Sub(sa.lastRevalidated) < revalidationInterval {
 		return nil
 	}
@@ -342,12 +341,17 @@ func (sa *StreamAuthorization) Revalidate(ctx context.Context) error {
 // client may not observe at all and substituting a redacted copy for the ones it may only observe
 // in part.
 //
-// Like applyFilters, it uses the caller's slice as its own write target, so it allocates nothing
-// beyond the redacted copies themselves, and the returned slice aliases flows.
+// The whole call is bounded by identityCheckTimeout, so a batch with several never-seen peer Namespaces
+// would stall for multiples of that timeout while the API server is slow or unreachable.
+// Deriving every canIdentify call's context from this one caps that at a single identityCheckTimeout
+// for the whole batch, since a Namespace looked up after the budget is spent fails immediately rather
+// than retrying.
 func (sa *StreamAuthorization) Authorize(ctx context.Context, flows []*flowpb.Flow) []*flowpb.Flow {
 	if sa.clusterWide {
 		return flows
 	}
+	ctx, cancel := context.WithTimeout(ctx, identityCheckTimeout)
+	defer cancel()
 	authorized := flows[:0]
 	for _, f := range flows {
 		if af := sa.authorizeFlow(ctx, f); af != nil {

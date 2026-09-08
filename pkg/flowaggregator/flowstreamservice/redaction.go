@@ -47,7 +47,8 @@ const (
 )
 
 // disclosure maps a tier to the marker sent to the client for that endpoint, so that a withheld
-// field is never confused with one the Flow Aggregator did not have.
+// field is never confused with one the Flow Aggregator did not have. tierFull maps to the zero
+// value, which is why a record that never reached redaction reads as fully disclosed.
 func (t disclosureTier) disclosure() flowpb.EndpointDisclosure {
 	switch t {
 	case tierIdentity:
@@ -55,7 +56,7 @@ func (t disclosureTier) disclosure() flowpb.EndpointDisclosure {
 	case tierFlow:
 		return flowpb.EndpointDisclosure_ENDPOINT_DISCLOSURE_FLOW
 	default:
-		return flowpb.EndpointDisclosure_ENDPOINT_DISCLOSURE_UNSPECIFIED
+		return flowpb.EndpointDisclosure_ENDPOINT_DISCLOSURE_FULL
 	}
 }
 

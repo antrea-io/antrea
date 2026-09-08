@@ -102,27 +102,31 @@ message Labels {
 // EndpointDisclosure records how much of one endpoint of a flow the client
 // receiving the record was authorized to see. Only FlowStreamService sets it,
 // when it redacts a record for a client that may not observe every Namespace
-// the record involves; nothing else in the pipeline populates it. An endpoint
-// with no disclosure set is therefore one where nothing was withheld.
+// the record involves; nothing else in the pipeline populates it.
 //
 // It exists so that a withheld field is distinguishable from a field the Flow
 // Aggregator never had: an empty ingress_network_policy_namespace, for
 // instance, is what a cluster-scoped policy legitimately looks like.
 enum EndpointDisclosure {
-  // Nothing was withheld for this endpoint.
-  ENDPOINT_DISCLOSURE_UNSPECIFIED = 0;
-  // The endpoint's Namespace, Pod and Service identity are disclosed, along
-  // with the identity of the network policy evaluated on its side, but not its
-  // Node placement or the Egress applied to it. Set when the client holds get
-  // on flows/identity in the endpoint's Namespace, but that Namespace
-  // is not one the stream is authorized to observe flows for.
+  // The endpoint is disclosed at the Full tier: everything the record carries
+  // for it. Zero deliberately carries this meaning rather than an "unspecified"
+  // one, so that a record no producer set the field on reads as Full — which is
+  // every record before it reaches FlowStreamService, every record on a
+  // cluster-wide stream, and every record whose endpoints were both authorized
+  // in full, none of which withhold anything.
+  ENDPOINT_DISCLOSURE_FULL = 0;
+  // The endpoint is disclosed at the Identity tier: its Namespace, Pod and
+  // Service identity, and the identity of the network policy evaluated on its
+  // side, but not its Node placement or the Egress applied to it. Set when the
+  // client holds get on flows/identity in the endpoint's Namespace, but that
+  // Namespace is not one the stream is authorized to observe flows for.
   ENDPOINT_DISCLOSURE_IDENTITY = 1;
-  // The endpoint is unidentified: only what the flow itself shows is disclosed
-  // (addresses, ports, protocol, statistics, and the type and action of the
-  // policies evaluated on the endpoint's side), plus the endpoint's Namespace
-  // if the connection was allowed. Set when the client holds neither flow
-  // visibility nor flows/identity in the endpoint's Namespace, and
-  // for an endpoint that has no Namespace at all.
+  // The endpoint is disclosed at the Flow tier: unidentified, with only what
+  // the flow itself shows (addresses, ports, protocol, statistics, and the
+  // type and action of the policies evaluated on the endpoint's side), plus
+  // the endpoint's Namespace if the connection was allowed. Set when the
+  // client holds neither flow visibility nor flows/identity in the endpoint's
+  // Namespace, and for an endpoint that has no Namespace at all.
   ENDPOINT_DISCLOSURE_FLOW = 2;
 }
 
@@ -172,12 +176,23 @@ message Kubernetes {
 
   bytes destination_service_ip = 35;
 
-  // How much of the source endpoint's identity the receiving client was
-  // authorized to see. Set by FlowStreamService only.
-  EndpointDisclosure source_disclosure = 36;
-  // How much of the destination endpoint's identity the receiving client was
-  // authorized to see. Set by FlowStreamService only.
-  EndpointDisclosure destination_disclosure = 37;
+  // How much of the source endpoint the receiving client was authorized to see.
+  // Set by FlowStreamService only.
+  //
+  // A marker is necessary because redaction leaves every field it withholds at
+  // its zero value, and those zero values all occur legitimately: an empty
+  // source_pod_namespace is what an external endpoint looks like, an empty
+  // ingress_network_policy_namespace what a cluster-scoped policy looks like,
+  // an empty destination_service_uid what a flow that never went through a
+  // Service looks like. Without it a client cannot tell a field withheld from
+  // it apart from one that never existed, and would have to present a redacted
+  // Pod as an external address. There is one marker per endpoint, rather than
+  // one per record, because the two ends are authorized independently: a record
+  // commonly carries one endpoint in full and the other redacted.
+  EndpointDisclosure source_disclosure = 100;
+  // How much of the destination endpoint the receiving client was authorized to
+  // see. Set by FlowStreamService only; see source_disclosure.
+  EndpointDisclosure destination_disclosure = 101;
 }
 
 message App {

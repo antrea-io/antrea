@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"sync"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/stretchr/testify/assert"
@@ -29,12 +30,11 @@ import (
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apiserver/pkg/authentication/user"
 	"k8s.io/apiserver/pkg/authorization/authorizer"
-	testingclock "k8s.io/utils/clock/testing"
 
 	flowpb "antrea.io/antrea/v2/pkg/apis/flow/v1alpha1"
 )
 
-const testUser = "alice"
+const testUser = "antrea-user"
 
 var testUserInfo = &user.DefaultInfo{Name: testUser, Groups: []string{"network-ops"}}
 
@@ -49,24 +49,35 @@ type fakeAuthorizer struct {
 	mu      sync.Mutex
 	allowed sets.Set[string]
 	failing sets.Set[string]
+	hanging sets.Set[string]
 	calls   []string
 	attrs   []authorizer.Attributes
 }
 
 func newFakeAuthorizer(allowed ...string) *fakeAuthorizer {
-	return &fakeAuthorizer{allowed: sets.New(allowed...), failing: sets.New[string]()}
+	return &fakeAuthorizer{allowed: sets.New(allowed...), failing: sets.New[string](), hanging: sets.New[string]()}
 }
 
-func (f *fakeAuthorizer) Authorize(_ context.Context, attrs authorizer.Attributes) (authorizer.Decision, string, error) {
+func (f *fakeAuthorizer) Authorize(ctx context.Context, attrs authorizer.Attributes) (authorizer.Decision, string, error) {
 	f.mu.Lock()
-	defer f.mu.Unlock()
 	key := attributesKey(attrs)
 	f.calls = append(f.calls, key)
 	f.attrs = append(f.attrs, attrs)
-	if f.failing.Has(key) {
+	hanging := f.hanging.Has(key)
+	failing := f.failing.Has(key)
+	allowed := f.allowed.Has(key)
+	f.mu.Unlock()
+
+	if hanging {
+		// Simulates an API server too slow or unreachable to ever answer on its own: the caller's
+		// own context is what ends the call, the way identityCheckTimeout does in production.
+		<-ctx.Done()
+		return authorizer.DecisionNoOpinion, "", ctx.Err()
+	}
+	if failing {
 		return authorizer.DecisionNoOpinion, "", errors.New("connection refused")
 	}
-	if f.allowed.Has(key) {
+	if allowed {
 		return authorizer.DecisionAllow, "", nil
 	}
 	return authorizer.DecisionNoOpinion, "no grant", nil
@@ -92,6 +103,14 @@ func (f *fakeAuthorizer) breakCheck(key string) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.failing.Insert(key)
+}
+
+// hang makes checking key block until the caller's context is done, as if the API server were too
+// slow to ever answer, from this point on.
+func (f *fakeAuthorizer) hang(key string) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.hanging.Insert(key)
 }
 
 // attributesKey renders one check the way the tests below name grants.
@@ -122,28 +141,23 @@ func identityGrant(namespace string) string {
 	return fmt.Sprintf("%s %s %s/%s.%s in %s", testUser, getVerb, flowResource, identitySubresource, flowAPIGroup, namespace)
 }
 
-func newTestAuthorizer(delegate authorizer.Authorizer) (*Authorizer, *testingclock.FakeClock) {
-	fakeClock := testingclock.NewFakeClock(time.Now())
-	return newAuthorizer(delegate, fakeClock), fakeClock
-}
-
 func TestNewStreamAuthorization_Scope(t *testing.T) {
 	tests := []struct {
-		name        string
-		req         *flowpb.GetFlowsRequest
-		grants      []string
-		wantCode    codes.Code
-		wantErrMsg  string
-		wantCalls   []string
-		wantCluster bool
-		wantNS      []string
+		name       string
+		req        *flowpb.GetFlowsRequest
+		grants     []string
+		wantCode   codes.Code
+		wantErrMsg string
+		wantCalls  []string
+		// wantNS is also what distinguishes a cluster-wide stream in StreamInfo: nil for
+		// cluster-wide, populated otherwise. There is no separate cluster-wide marker to assert on.
+		wantNS []string
 	}{
 		{
-			name:        "cluster scope allowed",
-			req:         &flowpb.GetFlowsRequest{ClusterWide: true, Follow: true},
-			grants:      []string{flowsGrant(watchVerb, "")},
-			wantCalls:   []string{flowsGrant(watchVerb, "")},
-			wantCluster: true,
+			name:      "cluster scope allowed",
+			req:       &flowpb.GetFlowsRequest{ClusterWide: true, Follow: true},
+			grants:    []string{flowsGrant(watchVerb, "")},
+			wantCalls: []string{flowsGrant(watchVerb, "")},
 		},
 		{
 			name:       "cluster scope denied",
@@ -212,7 +226,7 @@ func TestNewStreamAuthorization_Scope(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			fake := newFakeAuthorizer(tt.grants...)
-			a, _ := newTestAuthorizer(fake)
+			a := newAuthorizer(fake)
 
 			sa, err := a.NewStreamAuthorization(context.Background(), testUserInfo, tt.req)
 
@@ -223,7 +237,6 @@ func TestNewStreamAuthorization_Scope(t *testing.T) {
 				assert.Nil(t, sa)
 			} else {
 				require.NoError(t, err)
-				assert.Equal(t, tt.wantCluster, sa.StreamInfo().GetClusterWide())
 				assert.Equal(t, tt.wantNS, sa.StreamInfo().GetAuthorizedNamespaces())
 			}
 			if tt.wantCalls != nil {
@@ -239,7 +252,7 @@ func TestNewStreamAuthorization_TooManyNamespaces(t *testing.T) {
 		namespaces[i] = fmt.Sprintf("ns-%d", i)
 	}
 	fake := newFakeAuthorizer()
-	a, _ := newTestAuthorizer(fake)
+	a := newAuthorizer(fake)
 
 	_, err := a.NewStreamAuthorization(context.Background(), testUserInfo, &flowpb.GetFlowsRequest{Namespaces: namespaces})
 
@@ -273,7 +286,7 @@ func TestNewStreamAuthorization_FailsClosed(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			fake := newFakeAuthorizer(tt.fail)
 			fake.breakCheck(tt.fail)
-			a, _ := newTestAuthorizer(fake)
+			a := newAuthorizer(fake)
 
 			sa, err := a.NewStreamAuthorization(context.Background(), testUserInfo, tt.req)
 
@@ -288,7 +301,7 @@ func TestNewStreamAuthorization_FailsClosed(t *testing.T) {
 // satisfy, since the whole design rests on those attributes being the ones a Role can name.
 func TestNewStreamAuthorization_Attributes(t *testing.T) {
 	fake := newFakeAuthorizer(flowsGrant(watchVerb, "ns-a"))
-	a, _ := newTestAuthorizer(fake)
+	a := newAuthorizer(fake)
 
 	_, err := a.NewStreamAuthorization(context.Background(), testUserInfo, &flowpb.GetFlowsRequest{
 		Namespaces: []string{"ns-a"},
@@ -309,76 +322,92 @@ func TestNewStreamAuthorization_Attributes(t *testing.T) {
 	assert.Equal(t, []string{"network-ops"}, attrs.GetUser().GetGroups())
 }
 
+// TestRevalidate runs each case in its own synctest bubble, so that revalidationInterval — a full
+// minute — can be waited out with a real time.Sleep instead of a fake clock, at no wall-clock cost:
+// the bubble fast-forwards its own virtual clock to the next timer once every goroutine in it is
+// durably blocked. Both the stream's creation and its revalidation must run inside the same bubble,
+// since each bubble starts its own virtual clock from scratch and lastRevalidated is stamped with
+// time.Now() at NewStreamAuthorization time.
 func TestRevalidate(t *testing.T) {
-	newStream := func(t *testing.T, fake *fakeAuthorizer, req *flowpb.GetFlowsRequest) (*StreamAuthorization, *testingclock.FakeClock) {
+	newStream := func(t *testing.T, fake *fakeAuthorizer, req *flowpb.GetFlowsRequest) *StreamAuthorization {
 		t.Helper()
-		a, fakeClock := newTestAuthorizer(fake)
+		a := newAuthorizer(fake)
 		sa, err := a.NewStreamAuthorization(context.Background(), testUserInfo, req)
 		require.NoError(t, err)
 		fake.calls = nil
-		return sa, fakeClock
+		return sa
 	}
 	namespaceReq := &flowpb.GetFlowsRequest{Namespaces: []string{"ns-a"}, Follow: true}
 	namespaceGrants := []string{flowsGrant(watchVerb, "ns-a")}
 
 	t.Run("does nothing before the revalidation interval", func(t *testing.T) {
-		fake := newFakeAuthorizer(namespaceGrants...)
-		sa, fakeClock := newStream(t, fake, namespaceReq)
+		synctest.Test(t, func(t *testing.T) {
+			fake := newFakeAuthorizer(namespaceGrants...)
+			sa := newStream(t, fake, namespaceReq)
 
-		fakeClock.Step(revalidationInterval - time.Second)
-		require.NoError(t, sa.Revalidate(context.Background()))
-		assert.Empty(t, fake.calls)
+			time.Sleep(revalidationInterval - time.Second)
+			require.NoError(t, sa.Revalidate(context.Background()))
+			assert.Empty(t, fake.calls)
+		})
 	})
 
 	t.Run("re-checks the scope after the revalidation interval", func(t *testing.T) {
-		fake := newFakeAuthorizer(namespaceGrants...)
-		sa, fakeClock := newStream(t, fake, namespaceReq)
+		synctest.Test(t, func(t *testing.T) {
+			fake := newFakeAuthorizer(namespaceGrants...)
+			sa := newStream(t, fake, namespaceReq)
 
-		fakeClock.Step(revalidationInterval)
-		require.NoError(t, sa.Revalidate(context.Background()))
-		assert.Equal(t, namespaceGrants, fake.calls)
+			time.Sleep(revalidationInterval)
+			require.NoError(t, sa.Revalidate(context.Background()))
+			assert.Equal(t, namespaceGrants, fake.calls)
 
-		// And not again until the next interval.
-		fake.calls = nil
-		require.NoError(t, sa.Revalidate(context.Background()))
-		assert.Empty(t, fake.calls)
+			// And not again until the next interval.
+			fake.calls = nil
+			require.NoError(t, sa.Revalidate(context.Background()))
+			assert.Empty(t, fake.calls)
+		})
 	})
 
 	t.Run("ends the stream when a grant is revoked", func(t *testing.T) {
-		fake := newFakeAuthorizer(namespaceGrants...)
-		sa, fakeClock := newStream(t, fake, namespaceReq)
+		synctest.Test(t, func(t *testing.T) {
+			fake := newFakeAuthorizer(namespaceGrants...)
+			sa := newStream(t, fake, namespaceReq)
 
-		fake.revoke(flowsGrant(watchVerb, "ns-a"))
-		fakeClock.Step(revalidationInterval)
-		err := sa.Revalidate(context.Background())
+			fake.revoke(flowsGrant(watchVerb, "ns-a"))
+			time.Sleep(revalidationInterval)
+			err := sa.Revalidate(context.Background())
 
-		require.Error(t, err)
-		assert.Equal(t, codes.PermissionDenied, status.Code(err))
-		assert.Contains(t, status.Convert(err).Message(), "namespace(s) ns-a was revoked")
+			require.Error(t, err)
+			assert.Equal(t, codes.PermissionDenied, status.Code(err))
+			assert.Contains(t, status.Convert(err).Message(), "namespace(s) ns-a was revoked")
+		})
 	})
 
 	t.Run("ends a cluster-wide stream when its grant is revoked", func(t *testing.T) {
-		fake := newFakeAuthorizer(flowsGrant(watchVerb, ""))
-		sa, fakeClock := newStream(t, fake, &flowpb.GetFlowsRequest{ClusterWide: true, Follow: true})
+		synctest.Test(t, func(t *testing.T) {
+			fake := newFakeAuthorizer(flowsGrant(watchVerb, ""))
+			sa := newStream(t, fake, &flowpb.GetFlowsRequest{ClusterWide: true, Follow: true})
 
-		fake.revoke(flowsGrant(watchVerb, ""))
-		fakeClock.Step(revalidationInterval)
-		err := sa.Revalidate(context.Background())
+			fake.revoke(flowsGrant(watchVerb, ""))
+			time.Sleep(revalidationInterval)
+			err := sa.Revalidate(context.Background())
 
-		require.Error(t, err)
-		assert.Equal(t, codes.PermissionDenied, status.Code(err))
-		assert.Contains(t, status.Convert(err).Message(), "cluster-wide was revoked")
+			require.Error(t, err)
+			assert.Equal(t, codes.PermissionDenied, status.Code(err))
+			assert.Contains(t, status.Convert(err).Message(), "cluster-wide was revoked")
+		})
 	})
 
 	t.Run("keeps the stream open when a check fails", func(t *testing.T) {
-		fake := newFakeAuthorizer(namespaceGrants...)
-		sa, fakeClock := newStream(t, fake, namespaceReq)
+		synctest.Test(t, func(t *testing.T) {
+			fake := newFakeAuthorizer(namespaceGrants...)
+			sa := newStream(t, fake, namespaceReq)
 
-		// Fail closed on open, fail open on refresh: an established stream survives a
-		// control-plane blip.
-		fake.breakCheck(flowsGrant(watchVerb, "ns-a"))
-		fakeClock.Step(revalidationInterval)
-		assert.NoError(t, sa.Revalidate(context.Background()))
+			// Fail closed on open, fail open on refresh: an established stream survives a
+			// control-plane blip.
+			fake.breakCheck(flowsGrant(watchVerb, "ns-a"))
+			time.Sleep(revalidationInterval)
+			assert.NoError(t, sa.Revalidate(context.Background()))
+		})
 	})
 }
 
@@ -468,7 +497,7 @@ func TestAuthorize_RecordVisibility(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			fake := newFakeAuthorizer(tt.grants...)
-			a, _ := newTestAuthorizer(fake)
+			a := newAuthorizer(fake)
 			sa, err := a.NewStreamAuthorization(context.Background(), testUserInfo, tt.req)
 			require.NoError(t, err)
 
@@ -494,7 +523,7 @@ func TestAuthorize_RecordVisibility(t *testing.T) {
 // client must not alter what another sees.
 func TestAuthorize_LeavesTheRecordUntouched(t *testing.T) {
 	fake := newFakeAuthorizer(flowsGrant(watchVerb, "ns-a"))
-	a, _ := newTestAuthorizer(fake)
+	a := newAuthorizer(fake)
 	sa, err := a.NewStreamAuthorization(context.Background(), testUserInfo, &flowpb.GetFlowsRequest{
 		Namespaces: []string{"ns-a"},
 		Follow:     true,
@@ -508,7 +537,9 @@ func TestAuthorize_LeavesTheRecordUntouched(t *testing.T) {
 	assert.NotSame(t, original, got[0])
 	assert.Empty(t, got[0].GetK8S().GetDestinationPodName())
 	assert.Equal(t, "destination-pod", original.GetK8S().GetDestinationPodName())
-	assert.Equal(t, flowpb.EndpointDisclosure_ENDPOINT_DISCLOSURE_UNSPECIFIED, original.GetK8S().GetDestinationDisclosure())
+	// The buffer's own copy still reads as fully disclosed, which for this marker is the zero
+	// value: redaction stamped the copy, not the record every other stream sees.
+	assert.Equal(t, flowpb.EndpointDisclosure_ENDPOINT_DISCLOSURE_FULL, original.GetK8S().GetDestinationDisclosure())
 }
 
 // TestAuthorize_ReturnsTheRecordWhenNothingIsWithheld pins down that the common case allocates
@@ -535,7 +566,7 @@ func TestAuthorize_ReturnsTheRecordWhenNothingIsWithheld(t *testing.T) {
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			fake := newFakeAuthorizer(tt.grants...)
-			a, _ := newTestAuthorizer(fake)
+			a := newAuthorizer(fake)
 			sa, err := a.NewStreamAuthorization(context.Background(), testUserInfo, tt.req)
 			require.NoError(t, err)
 
@@ -548,16 +579,16 @@ func TestAuthorize_ReturnsTheRecordWhenNothingIsWithheld(t *testing.T) {
 }
 
 func TestAuthorize_IdentityChecks(t *testing.T) {
-	newStream := func(t *testing.T, fake *fakeAuthorizer) (*StreamAuthorization, *testingclock.FakeClock) {
+	newStream := func(t *testing.T, fake *fakeAuthorizer) *StreamAuthorization {
 		t.Helper()
-		a, fakeClock := newTestAuthorizer(fake)
+		a := newAuthorizer(fake)
 		sa, err := a.NewStreamAuthorization(context.Background(), testUserInfo, &flowpb.GetFlowsRequest{
 			Namespaces: []string{"ns-a"},
 			Follow:     true,
 		})
 		require.NoError(t, err)
 		fake.calls = nil
-		return sa, fakeClock
+		return sa
 	}
 	// destinationTier reports how the peer of a single ns-a -> ns-b record was disclosed.
 	destinationTier := func(t *testing.T, sa *StreamAuthorization) flowpb.EndpointDisclosure {
@@ -569,7 +600,7 @@ func TestAuthorize_IdentityChecks(t *testing.T) {
 
 	t.Run("a namespace is checked once and then memoized", func(t *testing.T) {
 		fake := newFakeAuthorizer(flowsGrant(watchVerb, "ns-a"), identityGrant("ns-b"))
-		sa, _ := newStream(t, fake)
+		sa := newStream(t, fake)
 
 		flows := []*flowpb.Flow{podFlow("ns-a", "ns-b"), podFlow("ns-a", "ns-b"), podFlow("ns-a", "ns-b")}
 		require.Len(t, sa.Authorize(context.Background(), flows), 3)
@@ -579,7 +610,7 @@ func TestAuthorize_IdentityChecks(t *testing.T) {
 
 	t.Run("an endpoint in the authorized set costs no check", func(t *testing.T) {
 		fake := newFakeAuthorizer(flowsGrant(watchVerb, "ns-a"))
-		sa, _ := newStream(t, fake)
+		sa := newStream(t, fake)
 
 		got := sa.Authorize(context.Background(), []*flowpb.Flow{podFlow("ns-a", "ns-a")})
 
@@ -587,30 +618,35 @@ func TestAuthorize_IdentityChecks(t *testing.T) {
 		assert.Empty(t, fake.calls)
 	})
 
+	// Run in a synctest bubble so that revalidationInterval can be waited out with a real
+	// time.Sleep instead of a fake clock: the identity cache's TTL is timed off time.Now(), which
+	// the bubble virtualizes.
 	t.Run("a memoized decision is re-checked after the revalidation interval", func(t *testing.T) {
-		fake := newFakeAuthorizer(flowsGrant(watchVerb, "ns-a"))
-		sa, fakeClock := newStream(t, fake)
+		synctest.Test(t, func(t *testing.T) {
+			fake := newFakeAuthorizer(flowsGrant(watchVerb, "ns-a"))
+			sa := newStream(t, fake)
 
-		assert.Equal(t, flowpb.EndpointDisclosure_ENDPOINT_DISCLOSURE_FLOW, destinationTier(t, sa))
+			assert.Equal(t, flowpb.EndpointDisclosure_ENDPOINT_DISCLOSURE_FLOW, destinationTier(t, sa))
 
-		// Granting identity mid-stream takes effect on the next re-check. The cache expires an
-		// entry strictly after its ttl elapses, so the step must clear revalidationInterval, not
-		// just reach it.
-		fake.grant(identityGrant("ns-b"))
-		assert.Equal(t, flowpb.EndpointDisclosure_ENDPOINT_DISCLOSURE_FLOW, destinationTier(t, sa))
-		fakeClock.Step(revalidationInterval + time.Nanosecond)
-		assert.Equal(t, flowpb.EndpointDisclosure_ENDPOINT_DISCLOSURE_IDENTITY, destinationTier(t, sa))
+			// Granting identity mid-stream takes effect on the next re-check. The cache expires an
+			// entry strictly after its ttl elapses, so the sleep must clear revalidationInterval,
+			// not just reach it.
+			fake.grant(identityGrant("ns-b"))
+			assert.Equal(t, flowpb.EndpointDisclosure_ENDPOINT_DISCLOSURE_FLOW, destinationTier(t, sa))
+			time.Sleep(revalidationInterval + time.Nanosecond)
+			assert.Equal(t, flowpb.EndpointDisclosure_ENDPOINT_DISCLOSURE_IDENTITY, destinationTier(t, sa))
 
-		// And revoking it likewise.
-		fake.revoke(identityGrant("ns-b"))
-		fakeClock.Step(revalidationInterval + time.Nanosecond)
-		assert.Equal(t, flowpb.EndpointDisclosure_ENDPOINT_DISCLOSURE_FLOW, destinationTier(t, sa))
+			// And revoking it likewise.
+			fake.revoke(identityGrant("ns-b"))
+			time.Sleep(revalidationInterval + time.Nanosecond)
+			assert.Equal(t, flowpb.EndpointDisclosure_ENDPOINT_DISCLOSURE_FLOW, destinationTier(t, sa))
+		})
 	})
 
 	t.Run("a failing check leaves the endpoint unidentified without repeating", func(t *testing.T) {
 		fake := newFakeAuthorizer(flowsGrant(watchVerb, "ns-a"), identityGrant("ns-b"))
 		fake.breakCheck(identityGrant("ns-b"))
-		sa, _ := newStream(t, fake)
+		sa := newStream(t, fake)
 
 		assert.Equal(t, flowpb.EndpointDisclosure_ENDPOINT_DISCLOSURE_FLOW, destinationTier(t, sa))
 		assert.Equal(t, flowpb.EndpointDisclosure_ENDPOINT_DISCLOSURE_FLOW, destinationTier(t, sa))
@@ -619,7 +655,7 @@ func TestAuthorize_IdentityChecks(t *testing.T) {
 
 	t.Run("distinct namespaces are bounded by an LRU cache, not permanently denied", func(t *testing.T) {
 		fake := newFakeAuthorizer(flowsGrant(watchVerb, "ns-a"))
-		sa, _ := newStream(t, fake)
+		sa := newStream(t, fake)
 
 		// Every distinct peer Namespace is checked, however many are seen: past the cache's
 		// capacity, the least recently asked about entry is evicted to make room, not refused a
@@ -643,5 +679,39 @@ func TestAuthorize_IdentityChecks(t *testing.T) {
 		require.Len(t, got, 1)
 		assert.Equal(t, []string{identityGrant("peer-0")}, fake.calls)
 		assert.Equal(t, flowpb.EndpointDisclosure_ENDPOINT_DISCLOSURE_IDENTITY, got[0].GetK8S().GetDestinationDisclosure())
+	})
+}
+
+// TestAuthorize_BatchIsBoundedByOneIdentityCheckTimeout pins down that a batch carrying several
+// never-seen peer Namespaces is bounded by a single identityCheckTimeout in total, not one per
+// lookup: every canIdentify call derives its own deadline from the context Authorize wraps once, so
+// a Namespace looked up after that shared budget is spent fails immediately instead of retrying.
+// Run in a synctest bubble so the timeout resolves at virtual speed: two hanging lookups would cost
+// two real seconds each otherwise.
+func TestAuthorize_BatchIsBoundedByOneIdentityCheckTimeout(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		fake := newFakeAuthorizer(flowsGrant(watchVerb, "ns-a"))
+		fake.hang(identityGrant("peer-1"))
+		fake.hang(identityGrant("peer-2"))
+		a := newAuthorizer(fake)
+		sa, err := a.NewStreamAuthorization(context.Background(), testUserInfo, &flowpb.GetFlowsRequest{
+			Namespaces: []string{"ns-a"},
+			Follow:     true,
+		})
+		require.NoError(t, err)
+
+		flows := []*flowpb.Flow{podFlow("ns-a", "peer-1"), podFlow("ns-a", "peer-2")}
+		start := time.Now()
+		got := sa.Authorize(context.Background(), flows)
+		elapsed := time.Since(start)
+
+		require.Len(t, got, 2)
+		for _, f := range got {
+			assert.Equal(t, flowpb.EndpointDisclosure_ENDPOINT_DISCLOSURE_FLOW, f.GetK8S().GetDestinationDisclosure())
+		}
+		// Two lookups that never resolve on their own would cost 2*identityCheckTimeout if each
+		// got its own deadline from scratch; sharing one deadline across the batch bounds it to
+		// roughly identityCheckTimeout regardless of how many never-seen Namespaces it names.
+		assert.Less(t, elapsed, 2*identityCheckTimeout)
 	})
 }

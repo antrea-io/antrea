@@ -308,8 +308,7 @@ func (NetworkPolicyRuleAction) EnumDescriptor() ([]byte, []int) {
 // EndpointDisclosure records how much of one endpoint of a flow the client
 // receiving the record was authorized to see. Only FlowStreamService sets it,
 // when it redacts a record for a client that may not observe every Namespace
-// the record involves; nothing else in the pipeline populates it. An endpoint
-// with no disclosure set is therefore one where nothing was withheld.
+// the record involves; nothing else in the pipeline populates it.
 //
 // It exists so that a withheld field is distinguishable from a field the Flow
 // Aggregator never had: an empty ingress_network_policy_namespace, for
@@ -317,34 +316,39 @@ func (NetworkPolicyRuleAction) EnumDescriptor() ([]byte, []int) {
 type EndpointDisclosure int32
 
 const (
-	// Nothing was withheld for this endpoint.
-	EndpointDisclosure_ENDPOINT_DISCLOSURE_UNSPECIFIED EndpointDisclosure = 0
-	// The endpoint's Namespace, Pod and Service identity are disclosed, along
-	// with the identity of the network policy evaluated on its side, but not its
-	// Node placement or the Egress applied to it. Set when the client holds get
-	// on flows/identity in the endpoint's Namespace, but that Namespace
-	// is not one the stream is authorized to observe flows for.
+	// The endpoint is disclosed at the Full tier: everything the record carries
+	// for it. Zero deliberately carries this meaning rather than an "unspecified"
+	// one, so that a record no producer set the field on reads as Full — which is
+	// every record before it reaches FlowStreamService, every record on a
+	// cluster-wide stream, and every record whose endpoints were both authorized
+	// in full, none of which withhold anything.
+	EndpointDisclosure_ENDPOINT_DISCLOSURE_FULL EndpointDisclosure = 0
+	// The endpoint is disclosed at the Identity tier: its Namespace, Pod and
+	// Service identity, and the identity of the network policy evaluated on its
+	// side, but not its Node placement or the Egress applied to it. Set when the
+	// client holds get on flows/identity in the endpoint's Namespace, but that
+	// Namespace is not one the stream is authorized to observe flows for.
 	EndpointDisclosure_ENDPOINT_DISCLOSURE_IDENTITY EndpointDisclosure = 1
-	// The endpoint is unidentified: only what the flow itself shows is disclosed
-	// (addresses, ports, protocol, statistics, and the type and action of the
-	// policies evaluated on the endpoint's side), plus the endpoint's Namespace
-	// if the connection was allowed. Set when the client holds neither flow
-	// visibility nor flows/identity in the endpoint's Namespace, and
-	// for an endpoint that has no Namespace at all.
+	// The endpoint is disclosed at the Flow tier: unidentified, with only what
+	// the flow itself shows (addresses, ports, protocol, statistics, and the
+	// type and action of the policies evaluated on the endpoint's side), plus
+	// the endpoint's Namespace if the connection was allowed. Set when the
+	// client holds neither flow visibility nor flows/identity in the endpoint's
+	// Namespace, and for an endpoint that has no Namespace at all.
 	EndpointDisclosure_ENDPOINT_DISCLOSURE_FLOW EndpointDisclosure = 2
 )
 
 // Enum value maps for EndpointDisclosure.
 var (
 	EndpointDisclosure_name = map[int32]string{
-		0: "ENDPOINT_DISCLOSURE_UNSPECIFIED",
+		0: "ENDPOINT_DISCLOSURE_FULL",
 		1: "ENDPOINT_DISCLOSURE_IDENTITY",
 		2: "ENDPOINT_DISCLOSURE_FLOW",
 	}
 	EndpointDisclosure_value = map[string]int32{
-		"ENDPOINT_DISCLOSURE_UNSPECIFIED": 0,
-		"ENDPOINT_DISCLOSURE_IDENTITY":    1,
-		"ENDPOINT_DISCLOSURE_FLOW":        2,
+		"ENDPOINT_DISCLOSURE_FULL":     0,
+		"ENDPOINT_DISCLOSURE_IDENTITY": 1,
+		"ENDPOINT_DISCLOSURE_FLOW":     2,
 	}
 )
 
@@ -840,12 +844,23 @@ type Kubernetes struct {
 	EgressNodeUid                  string                  `protobuf:"bytes,33,opt,name=egress_node_uid,json=egressNodeUid,proto3" json:"egress_node_uid,omitempty"`
 	EgressUid                      string                  `protobuf:"bytes,34,opt,name=egress_uid,json=egressUid,proto3" json:"egress_uid,omitempty"`
 	DestinationServiceIp           []byte                  `protobuf:"bytes,35,opt,name=destination_service_ip,json=destinationServiceIp,proto3" json:"destination_service_ip,omitempty"`
-	// How much of the source endpoint's identity the receiving client was
-	// authorized to see. Set by FlowStreamService only.
-	SourceDisclosure EndpointDisclosure `protobuf:"varint,36,opt,name=source_disclosure,json=sourceDisclosure,proto3,enum=antrea_io.antrea.pkg.apis.flow.v1alpha1.EndpointDisclosure" json:"source_disclosure,omitempty"`
-	// How much of the destination endpoint's identity the receiving client was
-	// authorized to see. Set by FlowStreamService only.
-	DestinationDisclosure EndpointDisclosure `protobuf:"varint,37,opt,name=destination_disclosure,json=destinationDisclosure,proto3,enum=antrea_io.antrea.pkg.apis.flow.v1alpha1.EndpointDisclosure" json:"destination_disclosure,omitempty"`
+	// How much of the source endpoint the receiving client was authorized to see.
+	// Set by FlowStreamService only.
+	//
+	// A marker is necessary because redaction leaves every field it withholds at
+	// its zero value, and those zero values all occur legitimately: an empty
+	// source_pod_namespace is what an external endpoint looks like, an empty
+	// ingress_network_policy_namespace what a cluster-scoped policy looks like,
+	// an empty destination_service_uid what a flow that never went through a
+	// Service looks like. Without it a client cannot tell a field withheld from
+	// it apart from one that never existed, and would have to present a redacted
+	// Pod as an external address. There is one marker per endpoint, rather than
+	// one per record, because the two ends are authorized independently: a record
+	// commonly carries one endpoint in full and the other redacted.
+	SourceDisclosure EndpointDisclosure `protobuf:"varint,100,opt,name=source_disclosure,json=sourceDisclosure,proto3,enum=antrea_io.antrea.pkg.apis.flow.v1alpha1.EndpointDisclosure" json:"source_disclosure,omitempty"`
+	// How much of the destination endpoint the receiving client was authorized to
+	// see. Set by FlowStreamService only; see source_disclosure.
+	DestinationDisclosure EndpointDisclosure `protobuf:"varint,101,opt,name=destination_disclosure,json=destinationDisclosure,proto3,enum=antrea_io.antrea.pkg.apis.flow.v1alpha1.EndpointDisclosure" json:"destination_disclosure,omitempty"`
 	unknownFields         protoimpl.UnknownFields
 	sizeCache             protoimpl.SizeCache
 }
@@ -1130,14 +1145,14 @@ func (x *Kubernetes) GetSourceDisclosure() EndpointDisclosure {
 	if x != nil {
 		return x.SourceDisclosure
 	}
-	return EndpointDisclosure_ENDPOINT_DISCLOSURE_UNSPECIFIED
+	return EndpointDisclosure_ENDPOINT_DISCLOSURE_FULL
 }
 
 func (x *Kubernetes) GetDestinationDisclosure() EndpointDisclosure {
 	if x != nil {
 		return x.DestinationDisclosure
 	}
-	return EndpointDisclosure_ENDPOINT_DISCLOSURE_UNSPECIFIED
+	return EndpointDisclosure_ENDPOINT_DISCLOSURE_FULL
 }
 
 type App struct {
@@ -1562,8 +1577,8 @@ const file_pkg_apis_flow_v1alpha1_flow_proto_rawDesc = "" +
 	"\n" +
 	"egress_uid\x18\" \x01(\tR\tegressUid\x124\n" +
 	"\x16destination_service_ip\x18# \x01(\fR\x14destinationServiceIp\x12h\n" +
-	"\x11source_disclosure\x18$ \x01(\x0e2;.antrea_io.antrea.pkg.apis.flow.v1alpha1.EndpointDisclosureR\x10sourceDisclosure\x12r\n" +
-	"\x16destination_disclosure\x18% \x01(\x0e2;.antrea_io.antrea.pkg.apis.flow.v1alpha1.EndpointDisclosureR\x15destinationDisclosure\"G\n" +
+	"\x11source_disclosure\x18d \x01(\x0e2;.antrea_io.antrea.pkg.apis.flow.v1alpha1.EndpointDisclosureR\x10sourceDisclosure\x12r\n" +
+	"\x16destination_disclosure\x18e \x01(\x0e2;.antrea_io.antrea.pkg.apis.flow.v1alpha1.EndpointDisclosureR\x15destinationDisclosure\"G\n" +
 	"\x03App\x12#\n" +
 	"\rprotocol_name\x18\x01 \x01(\tR\fprotocolName\x12\x1b\n" +
 	"\thttp_vals\x18\x02 \x01(\fR\bhttpVals\"\xa4\a\n" +
@@ -1628,9 +1643,9 @@ const file_pkg_apis_flow_v1alpha1_flow_proto_rawDesc = "" +
 	"$NETWORK_POLICY_RULE_ACTION_NO_ACTION\x10\x00\x12$\n" +
 	" NETWORK_POLICY_RULE_ACTION_ALLOW\x10\x01\x12#\n" +
 	"\x1fNETWORK_POLICY_RULE_ACTION_DROP\x10\x02\x12%\n" +
-	"!NETWORK_POLICY_RULE_ACTION_REJECT\x10\x03*y\n" +
-	"\x12EndpointDisclosure\x12#\n" +
-	"\x1fENDPOINT_DISCLOSURE_UNSPECIFIED\x10\x00\x12 \n" +
+	"!NETWORK_POLICY_RULE_ACTION_REJECT\x10\x03*r\n" +
+	"\x12EndpointDisclosure\x12\x1c\n" +
+	"\x18ENDPOINT_DISCLOSURE_FULL\x10\x00\x12 \n" +
 	"\x1cENDPOINT_DISCLOSURE_IDENTITY\x10\x01\x12\x1c\n" +
 	"\x18ENDPOINT_DISCLOSURE_FLOW\x10\x02*c\n" +
 	"\rFlowDirection\x12\x1a\n" +
