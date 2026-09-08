@@ -170,7 +170,7 @@ func (d *agentDumper) dumpInterfaceConfigs(basedir string) error {
 		output.WriteString(iface.Name)
 		output.WriteString("\n")
 		for _, param := range params {
-				value, err := getSysctlNet(fmt.Sprintf("ipv4/conf/%s/%s", iface.Name, param))
+			value, err := getSysctlNet(fmt.Sprintf("ipv4/conf/%s/%s", iface.Name, param))
 			if err != nil {
 				klog.ErrorS(err, "Failed to get sysctl value", "interface", iface.Name, "param", param)
 				continue
