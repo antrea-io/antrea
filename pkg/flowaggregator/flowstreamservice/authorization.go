@@ -341,11 +341,11 @@ func (sa *StreamAuthorization) Revalidate(ctx context.Context) error {
 // client may not observe at all and substituting a redacted copy for the ones it may only observe
 // in part.
 //
-// The whole call is bounded by identityCheckTimeout, so a batch with several never-seen peer Namespaces
-// would stall for multiples of that timeout while the API server is slow or unreachable.
-// Deriving every canIdentify call's context from this one caps that at a single identityCheckTimeout
-// for the whole batch, since a Namespace looked up after the budget is spent fails immediately rather
-// than retrying.
+// The whole call is bounded by identityCheckTimeout, without which a batch with several never-seen
+// peer Namespaces would stall for multiples of that timeout while the API server is slow or
+// unreachable. Deriving every canIdentify call's context from this one caps that at a single
+// identityCheckTimeout for the whole batch, since a Namespace looked up after the budget is spent
+// fails immediately rather than retrying.
 func (sa *StreamAuthorization) Authorize(ctx context.Context, flows []*flowpb.Flow) []*flowpb.Flow {
 	if sa.clusterWide {
 		return flows

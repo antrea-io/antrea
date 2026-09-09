@@ -226,6 +226,16 @@ flowStreamService:
   # maxStreamsPerClientIP are read once at startup, so changing either requires the Flow Aggregator
   # to be restarted.
   maxTotalStreams: 256
+  # -- InstallClusterRoles installs the antrea-flow-viewer and antrea-flow-identity-viewer
+  # ClusterRoles, which administrators bind to grant flow visibility. Unlike every other
+  # cluster-scoped object this chart ships, these two are cluster singletons with fixed names: they
+  # name no ServiceAccount and no release, so one copy serves every Flow Aggregator in the cluster.
+  # A second release of this chart in the same cluster must therefore set this to false and bind
+  # against the roles the first release already installed, since Helm refuses to adopt objects
+  # another release owns. Ownership follows whichever release installed them, so uninstalling that
+  # release deletes both roles: to hand them to a surviving release, set this to true there and
+  # helm upgrade it once the previous owner is gone.
+  installClusterRoles: true
 testing:
   # -- Enable code coverage measurement (used when testing Flow Aggregator only).
   coverage: false

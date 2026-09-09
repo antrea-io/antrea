@@ -1,3 +1,4 @@
+{{- if .Values.flowStreamService.installClusterRoles }}
 {{- /*
 antrea-flow-viewer grants access to the flow records streamed by the FlowStreamService.
 "flows.observability.antrea.io" is a virtual resource, served by no API server and existing only
@@ -48,3 +49,4 @@ rules:
   - apiGroups: ["observability.antrea.io"]
     resources: ["flows/identity"]
     verbs: ["get"]
+{{- end }}

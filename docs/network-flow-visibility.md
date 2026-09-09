@@ -716,9 +716,9 @@ was authorized for. Requiring both would hide exactly the cross-Namespace flows
 users are looking for — "my egress to a service I cannot see was dropped" is the
 common case.
 
-Two unbounded ClusterRoles are shipped by default. `antrea-flow-viewer` can be
-bounded for permission to stream `flows` in Namespaces, whereas `antrea-flow-identity-viewer`
-can be bounded for `flows/identity`. Examples:
+Two unbound ClusterRoles are shipped by default. `antrea-flow-viewer` can be
+bound for permission to stream `flows` in Namespaces, whereas
+`antrea-flow-identity-viewer` can be bound for `flows/identity`. Examples:
 
 ```bash
 # Let the "network-ops" group stream flows in the "frontend" Namespace.
@@ -745,6 +745,24 @@ same reason.
 `antrea-flow-identity-viewer` carries `rbac.authorization.k8s.io/aggregate-to-view`
 instead, so who can already read the Namespace's objects automatically gets flows/identity
 in that namespace, with no separate binding.
+
+Both roles are cluster singletons: their names are fixed, they name no
+ServiceAccount and no release, and one copy of each serves every Flow Aggregator
+in the cluster. A second Helm release in the same cluster must instead set
+`flowStreamService.installClusterRoles=false` and bind against the roles the first
+release installed, since Helm will not adopt objects another release owns.
+
+Ownership follows the release that installed them, so uninstalling that release
+deletes both roles even while other Flow Aggregator releases are still running.
+To hand them to a surviving release, set `installClusterRoles=true` there and
+`helm upgrade` it: the roles are recreated and that release becomes their owner.
+Do this only once the previous owner is gone, since Helm will not let one
+release adopt what another still owns.
+
+Existing bindings fail closed during this period. RBAC resolves a binding's
+`roleRef` when it authorizes a request rather than when the binding is created,
+so a binding whose role is missing grants nothing in the meanwhile, and resumes
+working once the role is back.
 
 Who currently holds flow visibility can be audited with:
 
