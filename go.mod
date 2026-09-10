@@ -1,6 +1,6 @@
 module antrea.io/antrea
 
-go 1.25.0
+go 1.26.0
 
 require (
 	antrea.io/libOpenflow v0.17.0

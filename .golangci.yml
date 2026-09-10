@@ -2,7 +2,8 @@
 version: "2"
 run:
   tests: true
-  timeout: 15m
+  # Allow cold-cache cross-platform analysis to complete on macOS CI runners.
+  timeout: 30m
 linters:
   default: none
   enable:
@@ -44,6 +45,16 @@ linters:
     paths:
       - ^third_party/.*
     rules:
+      - linters:
+          - gosec
+        # Each expiration pair in this test is initialized with exactly two timestamps.
+        path: ^pkg/flowaggregator/intermediate/priorityqueue_test\.go$
+        text: "G602:"
+      - linters:
+          - gosec
+        # Register loads are fixed-size [4]uint32 arrays indexed only from 0 to 3.
+        path: ^test/integration/ovs/ofctrl_test\.go$
+        text: "G602:"
       - linters:
           - staticcheck
         # ST1005: error strings must be capitalized
