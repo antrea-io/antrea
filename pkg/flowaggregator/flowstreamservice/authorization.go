@@ -51,10 +51,13 @@ const (
 	// than a stream of anything.
 	getVerb = "get"
 
-	// authorizationCacheTTL is how long an authorization decision, allow or deny, is cached and
-	// therefore how long revoking a grant can take to be noticed. It is deliberately as long as
-	// the shortest lifetime Kubernetes gives a projected ServiceAccount token, since a client
-	// whose credential is rotated that often cannot hold a stream open past it anyway.
+	// authorizationCacheTTL is how long the delegating authorizer caches an authorization decision,
+	// allow or deny, and therefore the dominant term in how long granting or revoking a grant takes
+	// to be noticed: an established stream re-checks its scope every revalidationInterval, but
+	// nearly every one of those re-checks is answered from this cache rather than from the API
+	// server. Ten minutes trades that revocation latency for keeping SubjectAccessReviews off the
+	// record dispatch path, where a stream would otherwise pay for one while a client is waiting for
+	// records.
 	authorizationCacheTTL = 10 * time.Minute
 	// revalidationInterval is how often an established stream re-checks its own scope. It is
 	// much shorter than authorizationCacheTTL, so nearly every check is served from the
@@ -78,16 +81,18 @@ const (
 	// only keeps a single long-lived stream's own bookkeeping from growing without limit.
 	maxIdentityNamespacesPerStream = 250
 
-	// identityCheckTimeout bounds one call to Authorize, including every flows/identity
-	// SubjectAccessReview a newly-seen peer Namespace in the batch triggers. canIdentify runs on
-	// the record dispatch path, so without a bound a slow or unreachable API server would retry
-	// with backoff for several seconds per lookup, and a batch carrying several never-seen peer
-	// Namespaces would stall for that many multiples of it — starving the ring buffer consumer,
-	// which the buffer then sees as a slow reader. Deriving each canIdentify call's own timeout
-	// from the same context that bounds Authorize caps the batch as a whole instead: once the
-	// budget is spent, every remaining lookup in the batch fails immediately rather than retrying,
-	// which canIdentify already treats like any other authorization failure.
-	identityCheckTimeout = 2 * time.Second
+	// authorizationCheckTimeout bounds one authorization pass made while a stream is running: a
+	// call to Authorize, including every flows/identity SubjectAccessReview a newly-seen peer
+	// Namespace in its batch triggers, and a call to Revalidate. Both run on the goroutine serving
+	// the stream, on the same loop as the ring buffer consumer, and the stream context they are
+	// given has no deadline of its own. So without a bound, a slow or unreachable API server would
+	// have each check retry with backoff — DefaultAuthWebhookRetryBackoff alone sleeps ~4s across
+	// its attempts, on top of each attempt's own latency — and a pass making several checks would
+	// stall for that many multiples of it, starving the consumer, which the buffer then sees as a
+	// slow reader. Each caller wraps its own context once and passes that one context down, so the
+	// bound is per pass rather than per check: once the budget is spent, a remaining check that the
+	// delegating authorizer has not already cached fails immediately rather than retrying.
+	authorizationCheckTimeout = 2 * time.Second
 
 	// clusterScope is how the cluster-wide scope is named in log messages. A SubjectAccessReview
 	// with an empty Namespace is a cluster-scoped check.
@@ -297,15 +302,21 @@ func (sa *StreamAuthorization) StreamInfo() *flowpb.StreamInfo {
 //
 // Unlike opening a stream, this fails open: a Namespace whose check errors keeps its previous
 // decision, so an established stream survives a control-plane blip while a new one cannot open
-// under false pretenses. A Namespace that is genuinely no longer authorized ends the stream — a
-// client that wants the rest of its scope can reconnect without it, which is the same contract as
-// naming a Namespace it may not observe in the first place.
+// under false pretenses. That is also why the pass as a whole is bounded by
+// authorizationCheckTimeout: it runs on the same loop as the ring buffer consumer, so a check left
+// to retry against a slow API server would starve the very stream it is meant to protect, and
+// cutting it short only keeps the previous decision. A Namespace that is genuinely no longer
+// authorized ends the stream — a client that wants the rest of its scope can reconnect without it,
+// which is the same contract as naming a Namespace it may not observe in the first place.
 func (sa *StreamAuthorization) Revalidate(ctx context.Context) error {
 	now := time.Now()
 	if now.Sub(sa.lastRevalidated) < revalidationInterval {
 		return nil
 	}
 	sa.lastRevalidated = now
+
+	ctx, cancel := context.WithTimeout(ctx, authorizationCheckTimeout)
+	defer cancel()
 
 	if sa.clusterWide {
 		allowed, err := sa.authorizer.allowed(ctx, sa.user, sa.verb, "", "")
@@ -341,16 +352,17 @@ func (sa *StreamAuthorization) Revalidate(ctx context.Context) error {
 // client may not observe at all and substituting a redacted copy for the ones it may only observe
 // in part.
 //
-// The whole call is bounded by identityCheckTimeout, without which a batch with several never-seen
-// peer Namespaces would stall for multiples of that timeout while the API server is slow or
-// unreachable. Deriving every canIdentify call's context from this one caps that at a single
-// identityCheckTimeout for the whole batch, since a Namespace looked up after the budget is spent
-// fails immediately rather than retrying.
+// The whole call is bounded by authorizationCheckTimeout, without which a batch with several
+// never-seen peer Namespaces would stall for multiples of that timeout while the API server is slow
+// or unreachable. Passing that one context down to every canIdentify call caps the batch as a
+// whole: a Namespace looked up once the budget is spent, and not already cached by the delegating
+// authorizer, fails immediately rather than retrying, and is left unidentified for this batch
+// without that being cached as a decision.
 func (sa *StreamAuthorization) Authorize(ctx context.Context, flows []*flowpb.Flow) []*flowpb.Flow {
 	if sa.clusterWide {
 		return flows
 	}
-	ctx, cancel := context.WithTimeout(ctx, identityCheckTimeout)
+	ctx, cancel := context.WithTimeout(ctx, authorizationCheckTimeout)
 	defer cancel()
 	authorized := flows[:0]
 	for _, f := range flows {
@@ -421,18 +433,25 @@ func (sa *StreamAuthorization) tierFor(ctx context.Context, namespace string, in
 // recently asked about to make room for a new one — a Namespace evicted this way is simply
 // re-checked, at the same cost as one never seen before, not permanently denied.
 //
-// It fails closed, and caches the failure like any other denial: an endpoint is left unidentified,
-// and the failing check is not repeated for every record while the API server is unavailable.
+// It fails closed: whatever goes wrong, the endpoint is left unidentified. An error the API server
+// itself gave is cached like any other denial, so that a failing check is not repeated for every
+// record while the API server is unavailable. An error from ctx being done is not cached: that is
+// the batch's authorizationCheckTimeout budget having been spent by earlier checks, or the client
+// having gone away, and this Namespace was never actually asked about — holding it at the Flow tier
+// for a whole revalidationInterval on the strength of a check that never happened would penalize
+// every never-seen peer in a batch for one slow SubjectAccessReview, which is likeliest at stream
+// open, when draining history brings many new peers at once.
 func (sa *StreamAuthorization) canIdentify(ctx context.Context, namespace string) bool {
 	if allowed, ok := sa.identity.Get(namespace); ok {
 		return allowed.(bool)
 	}
-	checkCtx, cancel := context.WithTimeout(ctx, identityCheckTimeout)
-	defer cancel()
-	allowed, err := sa.authorizer.allowed(checkCtx, sa.user, getVerb, identitySubresource, namespace)
+	allowed, err := sa.authorizer.allowed(ctx, sa.user, getVerb, identitySubresource, namespace)
 	if err != nil {
 		klog.V(2).ErrorS(err, "Failed to check endpoint identity disclosure, leaving the endpoint unidentified",
 			"user", sa.user.GetName(), "namespace", namespace)
+		if ctx.Err() != nil {
+			return false
+		}
 		allowed = false
 	}
 	sa.identity.Add(namespace, allowed, revalidationInterval)

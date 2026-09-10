@@ -68,9 +68,15 @@ func (f *fakeAuthorizer) Authorize(ctx context.Context, attrs authorizer.Attribu
 	allowed := f.allowed.Has(key)
 	f.mu.Unlock()
 
+	if err := ctx.Err(); err != nil {
+		// The delegating authorizer can only answer a check it has already cached once the caller's
+		// context is done; anything else fails on the context. Nothing here is cached, so every
+		// check does.
+		return authorizer.DecisionNoOpinion, "", err
+	}
 	if hanging {
 		// Simulates an API server too slow or unreachable to ever answer on its own: the caller's
-		// own context is what ends the call, the way identityCheckTimeout does in production.
+		// own context is what ends the call, the way authorizationCheckTimeout does in production.
 		<-ctx.Done()
 		return authorizer.DecisionNoOpinion, "", ctx.Err()
 	}
@@ -409,6 +415,24 @@ func TestRevalidate(t *testing.T) {
 			assert.NoError(t, sa.Revalidate(context.Background()))
 		})
 	})
+
+	t.Run("keeps the stream open without waiting on a check that hangs", func(t *testing.T) {
+		synctest.Test(t, func(t *testing.T) {
+			fake := newFakeAuthorizer(namespaceGrants...)
+			sa := newStream(t, fake, namespaceReq)
+
+			// Revalidate runs on the same loop as the ring buffer consumer, with the stream's own
+			// context, which has no deadline of its own: an API server too slow to answer must not
+			// hold the stream for longer than authorizationCheckTimeout, and failing open means
+			// cutting the check short simply keeps the previous decision. Run in a synctest bubble
+			// so the timeout resolves at virtual speed.
+			fake.hang(flowsGrant(watchVerb, "ns-a"))
+			time.Sleep(revalidationInterval)
+			start := time.Now()
+			assert.NoError(t, sa.Revalidate(context.Background()))
+			assert.Equal(t, authorizationCheckTimeout, time.Since(start))
+		})
+	})
 }
 
 // podFlow builds a Pod-to-Pod record between two Namespaces.
@@ -682,13 +706,13 @@ func TestAuthorize_IdentityChecks(t *testing.T) {
 	})
 }
 
-// TestAuthorize_BatchIsBoundedByOneIdentityCheckTimeout pins down that a batch carrying several
-// never-seen peer Namespaces is bounded by a single identityCheckTimeout in total, not one per
-// lookup: every canIdentify call derives its own deadline from the context Authorize wraps once, so
-// a Namespace looked up after that shared budget is spent fails immediately instead of retrying.
-// Run in a synctest bubble so the timeout resolves at virtual speed: two hanging lookups would cost
-// two real seconds each otherwise.
-func TestAuthorize_BatchIsBoundedByOneIdentityCheckTimeout(t *testing.T) {
+// TestAuthorize_BatchIsBoundedByOneAuthorizationCheckTimeout pins down that a batch carrying
+// several never-seen peer Namespaces is bounded by a single authorizationCheckTimeout in total, not
+// one per lookup: Authorize wraps its context once and passes that one context down, so a Namespace
+// looked up after the shared budget is spent fails immediately instead of retrying. Run in a
+// synctest bubble so the timeout resolves at virtual speed: two hanging lookups would cost two real
+// seconds each otherwise.
+func TestAuthorize_BatchIsBoundedByOneAuthorizationCheckTimeout(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		fake := newFakeAuthorizer(flowsGrant(watchVerb, "ns-a"))
 		fake.hang(identityGrant("peer-1"))
@@ -709,9 +733,45 @@ func TestAuthorize_BatchIsBoundedByOneIdentityCheckTimeout(t *testing.T) {
 		for _, f := range got {
 			assert.Equal(t, flowpb.EndpointDisclosure_ENDPOINT_DISCLOSURE_FLOW, f.GetK8S().GetDestinationDisclosure())
 		}
-		// Two lookups that never resolve on their own would cost 2*identityCheckTimeout if each
-		// got its own deadline from scratch; sharing one deadline across the batch bounds it to
-		// roughly identityCheckTimeout regardless of how many never-seen Namespaces it names.
-		assert.Less(t, elapsed, 2*identityCheckTimeout)
+		// Two lookups that never resolve on their own would cost 2*authorizationCheckTimeout if
+		// each got its own deadline from scratch; sharing one deadline across the batch bounds it
+		// to roughly authorizationCheckTimeout regardless of how many never-seen Namespaces it
+		// names.
+		assert.Less(t, elapsed, 2*authorizationCheckTimeout)
+	})
+}
+
+// TestAuthorize_DoesNotCacheAnExpiredBudgetAsADenial pins down that a Namespace left unchecked
+// because an earlier lookup in the same batch spent the whole authorizationCheckTimeout budget is
+// not remembered as denied. Caching it would hold every never-seen peer in that batch at the Flow
+// tier for a whole revalidationInterval on the strength of a check that never happened, which is
+// likeliest at stream open, when draining history brings many new peers at once.
+func TestAuthorize_DoesNotCacheAnExpiredBudgetAsADenial(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		fake := newFakeAuthorizer(flowsGrant(watchVerb, "ns-a"), identityGrant("peer-2"))
+		fake.hang(identityGrant("peer-1"))
+		a := newAuthorizer(fake)
+		sa, err := a.NewStreamAuthorization(context.Background(), testUserInfo, &flowpb.GetFlowsRequest{
+			Namespaces: []string{"ns-a"},
+			Follow:     true,
+		})
+		require.NoError(t, err)
+		fake.calls = nil
+
+		// peer-1 hangs until the batch's budget runs out, so peer-2's lookup fails immediately on
+		// the expired context even though the client does hold flows/identity there.
+		flows := []*flowpb.Flow{podFlow("ns-a", "peer-1"), podFlow("ns-a", "peer-2")}
+		got := sa.Authorize(context.Background(), flows)
+		require.Len(t, got, 2)
+		assert.Equal(t, []string{identityGrant("peer-1"), identityGrant("peer-2")}, fake.calls)
+		assert.Equal(t, flowpb.EndpointDisclosure_ENDPOINT_DISCLOSURE_FLOW, got[1].GetK8S().GetDestinationDisclosure())
+
+		// The next batch gets its own budget, and peer-2 now resolves at the Identity tier: neither
+		// Namespace was cached, because neither check was actually answered.
+		fake.calls = nil
+		got = sa.Authorize(context.Background(), []*flowpb.Flow{podFlow("ns-a", "peer-2")})
+		require.Len(t, got, 1)
+		assert.Equal(t, []string{identityGrant("peer-2")}, fake.calls)
+		assert.Equal(t, flowpb.EndpointDisclosure_ENDPOINT_DISCLOSURE_IDENTITY, got[0].GetK8S().GetDestinationDisclosure())
 	})
 }

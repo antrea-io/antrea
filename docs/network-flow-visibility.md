@@ -716,9 +716,11 @@ was authorized for. Requiring both would hide exactly the cross-Namespace flows
 users are looking for — "my egress to a service I cannot see was dropped" is the
 common case.
 
-Two unbound ClusterRoles are shipped by default. `antrea-flow-viewer` can be
-bound for permission to stream `flows` in Namespaces, whereas
-`antrea-flow-identity-viewer` can be bound for `flows/identity`. Examples:
+Two ClusterRoles are shipped by default: `antrea-flow-viewer`, which grants
+`flows`, and `antrea-flow-identity-viewer`, which grants `flows/identity`. Each
+can be bound directly, in a Namespace or cluster-wide, and each is also
+aggregated into a built-in role, as the paragraphs after these examples describe.
+Examples:
 
 ```bash
 # Let the "network-ops" group stream flows in the "frontend" Namespace.
@@ -791,6 +793,27 @@ names. There is no field carrying a Service's name on its own: the name rides
 inside `destination_service_port_name`, which the Flow Exporter sets to
 `namespace/name:portName`, so that one field carries the Service's Namespace and
 name as well as the port's name.
+
+Those Service fields follow the tier of the *destination endpoint*, which is
+resolved from `destination_pod_namespace` — the Namespace of the Pod that
+received the connection, after DNAT. The Service's own Namespace, the `ns/`
+prefix of `destination_service_port_name`, is normally that same Namespace, but
+the two can differ, because a Service's endpoints are not constrained to its own
+Namespace: a selector-less Service in `ns-a` can be pointed at a Pod IP in `ns-b`
+by a manually created EndpointSlice, which AntreaProxy accepts. **If a Service
+has endpoints in another Namespace, its name, UID and ClusterIP are disclosed to
+whoever may observe flows in the Namespace its backends live in, whatever the
+Service's own Namespace has granted** — the Service fields were tiered against
+`ns-b`'s consent, not `ns-a`'s. This is a documented caveat rather than something
+the tiering tries to undo: creating such a Service takes EndpointSlice write
+access in `ns-a`, and a Service's name and ClusterIP are discoverable through
+cluster DNS by any Pod anyway.
+
+The converse also holds. A destination endpoint with no Namespace at all, e.g. a
+`hostNetwork` backend, or a Multicluster endpoint in another cluster — sits at the
+Flow tier on every non-cluster-wide stream, so the Service fields are withheld even
+on a stream opened for the Service's own Namespace. Nothing is over-disclosed there;
+the client simply cannot see which of its own Services such a flow went through.
 
 The flow type is deliberately not redacted, so `FLOW_TYPE_INTRA_NODE` still
 reports that the two endpoints share a Node. Paired with an endpoint the client
@@ -875,6 +898,11 @@ actually authorized for is reported in the first message of the stream.
   grants deliberately, just reached by a route that is easy to miss. RBAC
   cannot express "not reachable via a wildcard", and there is no query for "who
   can do X", so a cluster that hands out wildcard Roles should scan for them.
+- **A Service with endpoints in another Namespace discloses itself there.** The
+  Service fields of a record are tiered by the Namespace of the Pod that received
+  the connection, so a Service whose EndpointSlices point outside its own
+  Namespace is named to whoever may observe flows where its backends are. See the
+  paragraph on the Service tier above.
 - **Revoking a grant takes up to 11 minutes to end an established stream.**
   Authorization decisions, both allow and deny, are cached for 10 minutes — the
   shortest lifetime Kubernetes gives a projected ServiceAccount token — and an
