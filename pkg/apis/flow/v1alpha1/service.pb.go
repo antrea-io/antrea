@@ -198,11 +198,9 @@ type FlowFilter struct {
 	// pod_names, pod_label_selector, ips) are matched against.
 	// FROM applies filters to the source (sender) side, TO applies them to the
 	// destination (receiver) side, and BOTH (default) matches either side.
-	//
-	//	BOTH (default) - match source OR destination
-	//	FROM           - match source only
-	//	TO             - match destination only
-	//
+	//   BOTH (default) - match source OR destination
+	//   FROM           - match source only
+	//   TO             - match destination only
 	// Cannot combine FROM with service_names (services are always a
 	// destination-side concept).
 	Direction     FlowFilterDirection `protobuf:"varint,7,opt,name=direction,proto3,enum=antrea_io.antrea.pkg.apis.flow.v1alpha1.FlowFilterDirection" json:"direction,omitempty"`

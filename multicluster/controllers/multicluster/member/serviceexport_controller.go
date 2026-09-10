@@ -155,9 +155,6 @@ func (r *ServiceExportReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 		klog.InfoS("Skip reconciling, no corresponding ServiceExport")
 		return ctrl.Result{}, nil
 	}
-	if requeue := r.checkRemoteCommonArea(); requeue {
-		return ctrl.Result{Requeue: true}, nil
-	}
 	var svcExport k8smcsv1alpha1.ServiceExport
 	svcObj, svcInstalled, _ := r.installedSvcs.GetByKey(req.String())
 	epsObj, epsInstalled, _ := r.installedEps.GetByKey(req.String())
@@ -367,7 +364,7 @@ func (r *ServiceExportReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 }
 
 // checkRemoteCommonArea initializes remoteCommonArea for the reconciler if necessary,
-// or tells the Reconcile function to requeue if the remoteCommonArea is not ready.
+// or tells the Reconcile function to skip if the remoteCommonArea is not ready.
 func (r *ServiceExportReconciler) checkRemoteCommonArea() bool {
 	r.mutex.Lock()
 	defer r.mutex.Unlock()

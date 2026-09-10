@@ -369,19 +369,19 @@ func makeTestEndpointSliceEndpointAndPort(svcPortName *k8sproxy.ServicePortName,
 		nodeName = &hostname
 	}
 	return &discovery.Endpoint{
-			Addresses: []string{
-				epIP.String(),
-			},
-			Conditions: discovery.EndpointConditions{
-				Ready: &ready,
-			},
-			Hostname: nodeName,
-			NodeName: nodeName,
-		}, &discovery.EndpointPort{
-			Name:     &svcPortName.Port,
-			Port:     &port,
-			Protocol: &protocol,
-		}
+		Addresses: []string{
+			epIP.String(),
+		},
+		Conditions: discovery.EndpointConditions{
+			Ready: &ready,
+		},
+		Hostname: nodeName,
+		NodeName: nodeName,
+	}, &discovery.EndpointPort{
+		Name:     &svcPortName.Port,
+		Port:     &port,
+		Protocol: &protocol,
+	}
 }
 
 type proxyOptions struct {

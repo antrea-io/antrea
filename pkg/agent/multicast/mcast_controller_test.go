@@ -1173,6 +1173,7 @@ func TestConcurrentEventHandlerAndWorkers(t *testing.T) {
 	wg.Add(4)
 
 	eventFunc := func(eType eventType, isLocal bool) {
+		// #nosec G404: random number generator not used for security purposes
 		leastSignificantByteArr := rand.Perm(numEvents)
 		ifaceNamePrefix := "local-interfaceName"
 		ifaceType := interfacestore.ContainerInterface

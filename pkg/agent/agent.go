@@ -1154,8 +1154,10 @@ func (i *Initializer) waitForIPsecMonitorDaemon() error {
 // initializeWireguard checks if preconditions are met for using WireGuard and initializes WireGuard client or cleans up.
 func (i *Initializer) initializeWireGuard() error {
 	i.wireGuardConfig.MTU = i.nodeConfig.NodeTransportInterfaceMTU - i.networkConfig.WireGuardMTUDeduction
-	wgClient, err := wireguard.New(i.nodeConfig, i.wireGuardConfig)
-	if err != nil {
+	// The Windows implementation of wireguard.New always returns an error, but
+	// this code is shared across platforms, hence the SA4023 suppressions below.
+	wgClient, err := wireguard.New(i.nodeConfig, i.wireGuardConfig) //nolint:staticcheck // SA4023
+	if err != nil {                                                 //nolint:staticcheck // SA4023
 		return err
 	}
 
