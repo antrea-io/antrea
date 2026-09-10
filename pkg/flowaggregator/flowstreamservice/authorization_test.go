@@ -155,8 +155,8 @@ func TestNewStreamAuthorization_Scope(t *testing.T) {
 		wantCode   codes.Code
 		wantErrMsg string
 		wantCalls  []string
-		// wantNS is also what distinguishes a cluster-wide stream in StreamInfo: nil for
-		// cluster-wide, populated otherwise. There is no separate cluster-wide marker to assert on.
+		// wantNS is the authorized scope the stream is left holding, which is what Revalidate goes
+		// on to re-check: nil for a cluster-wide stream, populated otherwise.
 		wantNS []string
 	}{
 		{
@@ -243,7 +243,7 @@ func TestNewStreamAuthorization_Scope(t *testing.T) {
 				assert.Nil(t, sa)
 			} else {
 				require.NoError(t, err)
-				assert.Equal(t, tt.wantNS, sa.StreamInfo().GetAuthorizedNamespaces())
+				assert.Equal(t, tt.wantNS, sa.orderedNamespaces)
 			}
 			if tt.wantCalls != nil {
 				assert.Equal(t, tt.wantCalls, fake.calls)

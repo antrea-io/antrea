@@ -420,11 +420,7 @@ type GetFlowsResponse struct {
 	Flows []*Flow `protobuf:"bytes,1,rep,name=flows,proto3" json:"flows,omitempty"`
 	// Number of flows dropped because the consumer fell behind and the ring
 	// buffer wrapped around. Cumulative since the start of the stream.
-	DroppedCount uint64 `protobuf:"varint,2,opt,name=dropped_count,json=droppedCount,proto3" json:"dropped_count,omitempty"`
-	// Set on the first message of a stream, and never after. It tells the client
-	// what it is actually looking at, so that a UI can say so up front rather
-	// than leave the user asking why a flow is missing.
-	Info          *StreamInfo `protobuf:"bytes,3,opt,name=info,proto3" json:"info,omitempty"`
+	DroppedCount  uint64 `protobuf:"varint,2,opt,name=dropped_count,json=droppedCount,proto3" json:"dropped_count,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -473,60 +469,6 @@ func (x *GetFlowsResponse) GetDroppedCount() uint64 {
 	return 0
 }
 
-func (x *GetFlowsResponse) GetInfo() *StreamInfo {
-	if x != nil {
-		return x.Info
-	}
-	return nil
-}
-
-// StreamInfo describes the scope a GetFlows stream was opened with.
-type StreamInfo struct {
-	state protoimpl.MessageState `protogen:"open.v1"`
-	// The Namespaces the client named and was authorized to observe. Empty means
-	// the stream is cluster-wide: every record is streamed regardless of namespace.
-	AuthorizedNamespaces []string `protobuf:"bytes,1,rep,name=authorized_namespaces,json=authorizedNamespaces,proto3" json:"authorized_namespaces,omitempty"`
-	unknownFields        protoimpl.UnknownFields
-	sizeCache            protoimpl.SizeCache
-}
-
-func (x *StreamInfo) Reset() {
-	*x = StreamInfo{}
-	mi := &file_pkg_apis_flow_v1alpha1_service_proto_msgTypes[5]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *StreamInfo) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*StreamInfo) ProtoMessage() {}
-
-func (x *StreamInfo) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_apis_flow_v1alpha1_service_proto_msgTypes[5]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use StreamInfo.ProtoReflect.Descriptor instead.
-func (*StreamInfo) Descriptor() ([]byte, []int) {
-	return file_pkg_apis_flow_v1alpha1_service_proto_rawDescGZIP(), []int{5}
-}
-
-func (x *StreamInfo) GetAuthorizedNamespaces() []string {
-	if x != nil {
-		return x.AuthorizedNamespaces
-	}
-	return nil
-}
-
 var File_pkg_apis_flow_v1alpha1_service_proto protoreflect.FileDescriptor
 
 const file_pkg_apis_flow_v1alpha1_service_proto_rawDesc = "" +
@@ -555,14 +497,10 @@ const file_pkg_apis_flow_v1alpha1_service_proto_rawDesc = "" +
 	"\fcluster_wide\x18\x05 \x01(\bR\vclusterWide\x12\x1e\n" +
 	"\n" +
 	"namespaces\x18\x06 \x03(\tR\n" +
-	"namespaces\"\xc5\x01\n" +
+	"namespaces\"|\n" +
 	"\x10GetFlowsResponse\x12C\n" +
 	"\x05flows\x18\x01 \x03(\v2-.antrea_io.antrea.pkg.apis.flow.v1alpha1.FlowR\x05flows\x12#\n" +
-	"\rdropped_count\x18\x02 \x01(\x04R\fdroppedCount\x12G\n" +
-	"\x04info\x18\x03 \x01(\v23.antrea_io.antrea.pkg.apis.flow.v1alpha1.StreamInfoR\x04info\"A\n" +
-	"\n" +
-	"StreamInfo\x123\n" +
-	"\x15authorized_namespaces\x18\x01 \x03(\tR\x14authorizedNamespaces*s\n" +
+	"\rdropped_count\x18\x02 \x01(\x04R\fdroppedCount*s\n" +
 	"\x13FlowFilterDirection\x12\x1e\n" +
 	"\x1aFLOW_FILTER_DIRECTION_BOTH\x10\x00\x12\x1e\n" +
 	"\x1aFLOW_FILTER_DIRECTION_FROM\x10\x01\x12\x1c\n" +
@@ -585,7 +523,7 @@ func file_pkg_apis_flow_v1alpha1_service_proto_rawDescGZIP() []byte {
 }
 
 var file_pkg_apis_flow_v1alpha1_service_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-var file_pkg_apis_flow_v1alpha1_service_proto_msgTypes = make([]protoimpl.MessageInfo, 6)
+var file_pkg_apis_flow_v1alpha1_service_proto_msgTypes = make([]protoimpl.MessageInfo, 5)
 var file_pkg_apis_flow_v1alpha1_service_proto_goTypes = []any{
 	(FlowFilterDirection)(0),      // 0: antrea_io.antrea.pkg.apis.flow.v1alpha1.FlowFilterDirection
 	(*ExportRequest)(nil),         // 1: antrea_io.antrea.pkg.apis.flow.v1alpha1.ExportRequest
@@ -593,28 +531,26 @@ var file_pkg_apis_flow_v1alpha1_service_proto_goTypes = []any{
 	(*FlowFilter)(nil),            // 3: antrea_io.antrea.pkg.apis.flow.v1alpha1.FlowFilter
 	(*GetFlowsRequest)(nil),       // 4: antrea_io.antrea.pkg.apis.flow.v1alpha1.GetFlowsRequest
 	(*GetFlowsResponse)(nil),      // 5: antrea_io.antrea.pkg.apis.flow.v1alpha1.GetFlowsResponse
-	(*StreamInfo)(nil),            // 6: antrea_io.antrea.pkg.apis.flow.v1alpha1.StreamInfo
-	(*Flow)(nil),                  // 7: antrea_io.antrea.pkg.apis.flow.v1alpha1.Flow
-	(FlowType)(0),                 // 8: antrea_io.antrea.pkg.apis.flow.v1alpha1.FlowType
-	(*timestamppb.Timestamp)(nil), // 9: google.protobuf.Timestamp
+	(*Flow)(nil),                  // 6: antrea_io.antrea.pkg.apis.flow.v1alpha1.Flow
+	(FlowType)(0),                 // 7: antrea_io.antrea.pkg.apis.flow.v1alpha1.FlowType
+	(*timestamppb.Timestamp)(nil), // 8: google.protobuf.Timestamp
 }
 var file_pkg_apis_flow_v1alpha1_service_proto_depIdxs = []int32{
-	7, // 0: antrea_io.antrea.pkg.apis.flow.v1alpha1.ExportRequest.flows:type_name -> antrea_io.antrea.pkg.apis.flow.v1alpha1.Flow
-	8, // 1: antrea_io.antrea.pkg.apis.flow.v1alpha1.FlowFilter.flow_types:type_name -> antrea_io.antrea.pkg.apis.flow.v1alpha1.FlowType
+	6, // 0: antrea_io.antrea.pkg.apis.flow.v1alpha1.ExportRequest.flows:type_name -> antrea_io.antrea.pkg.apis.flow.v1alpha1.Flow
+	7, // 1: antrea_io.antrea.pkg.apis.flow.v1alpha1.FlowFilter.flow_types:type_name -> antrea_io.antrea.pkg.apis.flow.v1alpha1.FlowType
 	0, // 2: antrea_io.antrea.pkg.apis.flow.v1alpha1.FlowFilter.direction:type_name -> antrea_io.antrea.pkg.apis.flow.v1alpha1.FlowFilterDirection
 	3, // 3: antrea_io.antrea.pkg.apis.flow.v1alpha1.GetFlowsRequest.filters:type_name -> antrea_io.antrea.pkg.apis.flow.v1alpha1.FlowFilter
-	9, // 4: antrea_io.antrea.pkg.apis.flow.v1alpha1.GetFlowsRequest.since:type_name -> google.protobuf.Timestamp
-	7, // 5: antrea_io.antrea.pkg.apis.flow.v1alpha1.GetFlowsResponse.flows:type_name -> antrea_io.antrea.pkg.apis.flow.v1alpha1.Flow
-	6, // 6: antrea_io.antrea.pkg.apis.flow.v1alpha1.GetFlowsResponse.info:type_name -> antrea_io.antrea.pkg.apis.flow.v1alpha1.StreamInfo
-	1, // 7: antrea_io.antrea.pkg.apis.flow.v1alpha1.FlowExportService.Export:input_type -> antrea_io.antrea.pkg.apis.flow.v1alpha1.ExportRequest
-	4, // 8: antrea_io.antrea.pkg.apis.flow.v1alpha1.FlowStreamService.GetFlows:input_type -> antrea_io.antrea.pkg.apis.flow.v1alpha1.GetFlowsRequest
-	2, // 9: antrea_io.antrea.pkg.apis.flow.v1alpha1.FlowExportService.Export:output_type -> antrea_io.antrea.pkg.apis.flow.v1alpha1.ExportResponse
-	5, // 10: antrea_io.antrea.pkg.apis.flow.v1alpha1.FlowStreamService.GetFlows:output_type -> antrea_io.antrea.pkg.apis.flow.v1alpha1.GetFlowsResponse
-	9, // [9:11] is the sub-list for method output_type
-	7, // [7:9] is the sub-list for method input_type
-	7, // [7:7] is the sub-list for extension type_name
-	7, // [7:7] is the sub-list for extension extendee
-	0, // [0:7] is the sub-list for field type_name
+	8, // 4: antrea_io.antrea.pkg.apis.flow.v1alpha1.GetFlowsRequest.since:type_name -> google.protobuf.Timestamp
+	6, // 5: antrea_io.antrea.pkg.apis.flow.v1alpha1.GetFlowsResponse.flows:type_name -> antrea_io.antrea.pkg.apis.flow.v1alpha1.Flow
+	1, // 6: antrea_io.antrea.pkg.apis.flow.v1alpha1.FlowExportService.Export:input_type -> antrea_io.antrea.pkg.apis.flow.v1alpha1.ExportRequest
+	4, // 7: antrea_io.antrea.pkg.apis.flow.v1alpha1.FlowStreamService.GetFlows:input_type -> antrea_io.antrea.pkg.apis.flow.v1alpha1.GetFlowsRequest
+	2, // 8: antrea_io.antrea.pkg.apis.flow.v1alpha1.FlowExportService.Export:output_type -> antrea_io.antrea.pkg.apis.flow.v1alpha1.ExportResponse
+	5, // 9: antrea_io.antrea.pkg.apis.flow.v1alpha1.FlowStreamService.GetFlows:output_type -> antrea_io.antrea.pkg.apis.flow.v1alpha1.GetFlowsResponse
+	8, // [8:10] is the sub-list for method output_type
+	6, // [6:8] is the sub-list for method input_type
+	6, // [6:6] is the sub-list for extension type_name
+	6, // [6:6] is the sub-list for extension extendee
+	0, // [0:6] is the sub-list for field type_name
 }
 
 func init() { file_pkg_apis_flow_v1alpha1_service_proto_init() }
@@ -629,7 +565,7 @@ func file_pkg_apis_flow_v1alpha1_service_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_pkg_apis_flow_v1alpha1_service_proto_rawDesc), len(file_pkg_apis_flow_v1alpha1_service_proto_rawDesc)),
 			NumEnums:      1,
-			NumMessages:   6,
+			NumMessages:   5,
 			NumExtensions: 0,
 			NumServices:   2,
 		},

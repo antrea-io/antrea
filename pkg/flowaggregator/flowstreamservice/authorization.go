@@ -171,8 +171,9 @@ type StreamAuthorization struct {
 	// observe. Because a partially-denied request is rejected outright, it is either every
 	// Namespace the client named or the stream does not exist.
 	namespaces sets.Set[string]
-	// orderedNamespaces holds the same Namespaces in the order the client named them, only so
-	// that they can be reported back unshuffled.
+	// orderedNamespaces holds the same Namespaces in the order the client named them, so that
+	// Revalidate re-checks them in a stable order and names the revoked ones back to the client
+	// unshuffled, which iterating the set above would not give.
 	orderedNamespaces []string
 	// lastRevalidated is when the scope was last confirmed, either at stream open or by
 	// Revalidate.
@@ -284,15 +285,6 @@ func requestedNamespaces(req *flowpb.GetFlowsRequest) ([]string, error) {
 		deduped = append(deduped, ns)
 	}
 	return deduped, nil
-}
-
-// StreamInfo reports the scope the stream was actually opened with, to be sent to the client in
-// the first response of the stream. orderedNamespaces is left nil rather than set for a
-// cluster-wide stream, so an empty list here already means cluster-wide without a separate field.
-func (sa *StreamAuthorization) StreamInfo() *flowpb.StreamInfo {
-	return &flowpb.StreamInfo{
-		AuthorizedNamespaces: sa.orderedNamespaces,
-	}
 }
 
 // Revalidate re-checks the stream's scope, so that revoking a grant eventually ends a stream that

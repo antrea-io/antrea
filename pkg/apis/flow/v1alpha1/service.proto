@@ -150,15 +150,4 @@ message GetFlowsResponse {
   // Number of flows dropped because the consumer fell behind and the ring
   // buffer wrapped around. Cumulative since the start of the stream.
   uint64 dropped_count = 2;
-  // Set on the first message of a stream, and never after. It tells the client
-  // what it is actually looking at, so that a UI can say so up front rather
-  // than leave the user asking why a flow is missing.
-  StreamInfo info = 3;
-}
-
-// StreamInfo describes the scope a GetFlows stream was opened with.
-message StreamInfo {
-  // The Namespaces the client named and was authorized to observe. Empty means
-  // the stream is cluster-wide: every record is streamed regardless of namespace.
-  repeated string authorized_namespaces = 1;
 }

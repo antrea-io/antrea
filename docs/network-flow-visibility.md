@@ -879,8 +879,9 @@ example are load-bearing: flow visibility in `ns-b` puts that Namespace's
 endpoints at the Full tier on a stream opened *for* `ns-b`, but it does not
 identify them on a stream opened for another Namespace, since the Identity tier
 is resolved from `flows/identity` alone. Without the identity bindings, each peer
-falls back to the Flow tier on the other's stream. The scope a stream was
-actually authorized for is reported in the first message of the stream.
+falls back to the Flow tier on the other's stream. A stream is always opened with
+exactly the scope the client named — a request is authorized in full or rejected
+outright, never narrowed — so there is nothing for the server to report back.
 
 #### What administrators should know
 

@@ -837,7 +837,7 @@ func newAuthorizedTestService(buf ringbuffer.BroadcastBuffer[*flowpb.Flow], gran
 	return newFlowStreamServiceWithoutAuthentication(buf, newAuthorizer(fake)), fake
 }
 
-func TestGetFlows_ScopeIsAuthorizedAndReported(t *testing.T) {
+func TestGetFlows_ScopeIsAuthorized(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		buf := ringbuffer.NewBroadcastBuffer[*flowpb.Flow](64)
 		t.Cleanup(func() { buf.Shutdown() })
@@ -856,12 +856,10 @@ func TestGetFlows_ScopeIsAuthorizedAndReported(t *testing.T) {
 		synctest.Wait()
 		require.NoError(t, <-errCh)
 
-		// The scope is reported before any record, so a client knows what it is looking at even
-		// when the buffer holds nothing it may see.
+		// The scope is not echoed back, so a client is never sent a leading recordless message to
+		// skip past: every response it gets carries flows.
 		require.NotEmpty(t, stream.responses)
-		info := stream.responses[0].GetInfo()
-		require.NotNil(t, info)
-		assert.Equal(t, []string{"ns-a"}, info.GetAuthorizedNamespaces())
+		assert.NotEmpty(t, stream.responses[0].GetFlows())
 
 		// Only the record involving ns-a is streamed, with its peer left unidentified.
 		got := collectFlows(stream.responses)

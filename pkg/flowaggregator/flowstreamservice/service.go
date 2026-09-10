@@ -253,14 +253,12 @@ func (s *FlowStreamService) GetFlows(req *flowpb.GetFlowsRequest, stream flowpb.
 		ringbuffer.WithMaxConsumeDeadline(exporter.ConsumeDeadline),
 	)
 
-	// The scope the stream was opened with is reported before any record, so that a client knows
-	// what it is looking at even if the ring buffer is empty.
-	if streamAuth != nil {
-		if err := stream.Send(&flowpb.GetFlowsResponse{Info: streamAuth.StreamInfo()}); err != nil {
-			klog.InfoS("Send to client failed, closing GetFlows stream", "err", err)
-			return err
-		}
-	}
+	// The scope a stream was opened with is not reported back to the client: a request is
+	// authorized in full or rejected outright, and at most one Namespace may be named, so the
+	// authorized set is always exactly what the client asked for. If an under-specified scope is
+	// ever accepted — an empty namespaces list coming to mean "every Namespace I may observe",
+	// which Kubernetes cannot answer today — the server will have to report what it resolved to,
+	// and a field can be added to GetFlowsResponse then.
 
 	sent := 0
 	var totalDropped uint64
