@@ -262,7 +262,13 @@ type FlowStreamServiceConfig struct {
 	// present valid Kubernetes credentials: either a bearer token as
 	// "authorization: Bearer <token>" gRPC metadata, validated via the TokenReview API, or
 	// an X.509 client certificate as the TLS client credential of the connection, verified
-	// against the cluster's client CA bundle. Defaults to false.
+	// against the cluster's client CA bundle.
+	// Which records a client then receives is decided by Kubernetes RBAC on the virtual
+	// "flows.observability.antrea.io" resource: a client must be granted "list"
+	// (or "watch", to follow) in every Namespace it asks about, and holds "get" on
+	// "flows/identity" in a Namespace to identify that Namespace's endpoints
+	// inside other records it receives. See the antrea-flow-viewer ClusterRole.
+	// Defaults to false.
 	Enable *bool `yaml:"enable,omitempty"`
 	// MaxStreamsPerClientIP is the maximum number of concurrent flow streams the server
 	// accepts from one client IP address. A stream refused by this limit is rejected with the

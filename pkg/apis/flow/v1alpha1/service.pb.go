@@ -176,6 +176,12 @@ type FlowFilter struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// Match flows where source or destination Pod namespace is in this list
 	// (direction semantics are affected by the direction field).
+	//
+	// A Namespace outside GetFlowsRequest.namespaces is allowed, and is how a
+	// flow is selected by its peer rather than by its own end: every record that
+	// reaches the filters already has an endpoint in the request's scope, so
+	// naming an out-of-scope Namespace here narrows to the flows whose other end
+	// is in it.
 	Namespaces []string `protobuf:"bytes,1,rep,name=namespaces,proto3" json:"namespaces,omitempty"`
 	// Match flows where source or destination Pod name is in this list.
 	// The match is on the bare Pod name without a namespace prefix; to restrict
@@ -302,7 +308,35 @@ type GetFlowsRequest struct {
 	MaxCount uint32 `protobuf:"varint,3,opt,name=max_count,json=maxCount,proto3" json:"max_count,omitempty"`
 	// If true, keep the stream open and push new flows as they arrive after
 	// historical flows have been sent. If false, close after historical flows.
-	Follow        bool `protobuf:"varint,4,opt,name=follow,proto3" json:"follow,omitempty"`
+	Follow bool `protobuf:"varint,4,opt,name=follow,proto3" json:"follow,omitempty"`
+	// Request flows cluster-wide, including records that cannot be attributed to
+	// any Namespace: both endpoints external, or no Kubernetes metadata at all.
+	// This requires the permission cluster-wide, which only a ClusterRoleBinding
+	// can grant, and is the only scope in which nothing is redacted.
+	ClusterWide bool `protobuf:"varint,5,opt,name=cluster_wide,json=clusterWide,proto3" json:"cluster_wide,omitempty"`
+	// The Namespaces the client is asking for flows in: a record is streamed if
+	// its source or its destination Pod Namespace is one of them. This is the
+	// scope of the request, not a filter; use filters to narrow it further.
+	//
+	// The client must be authorized to observe the Namespace it names, or the
+	// request is rejected with PERMISSION_DENIED. A subset is never silently
+	// returned.
+	//
+	// Exactly one of namespaces and cluster_wide must be set. An empty
+	// namespaces list with cluster_wide unset is rejected with
+	// INVALID_ARGUMENT: it is reserved, and may come to mean "every Namespace I
+	// am allowed to observe" in a later release. The server cannot answer that
+	// today, because Kubernetes offers no reverse lookup from a subject to the
+	// Namespaces it may access.
+	//
+	// At most one Namespace may be named; more is rejected with
+	// INVALID_ARGUMENT. A client that is not authorized cluster-wide and wants
+	// several Namespaces opens one stream per Namespace. The limit applies to
+	// the list as sent, before duplicates are collapsed. An empty string is
+	// rejected outright: cluster scope is requested with cluster_wide, not by
+	// naming the empty Namespace. The field stays repeated so that the limit can
+	// be raised without a breaking change.
+	Namespaces    []string `protobuf:"bytes,6,rep,name=namespaces,proto3" json:"namespaces,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -363,6 +397,20 @@ func (x *GetFlowsRequest) GetFollow() bool {
 		return x.Follow
 	}
 	return false
+}
+
+func (x *GetFlowsRequest) GetClusterWide() bool {
+	if x != nil {
+		return x.ClusterWide
+	}
+	return false
+}
+
+func (x *GetFlowsRequest) GetNamespaces() []string {
+	if x != nil {
+		return x.Namespaces
+	}
+	return nil
 }
 
 // GetFlowsResponse carries a batch of flow records from the server.
@@ -440,12 +488,16 @@ const file_pkg_apis_flow_v1alpha1_service_proto_rawDesc = "" +
 	"\n" +
 	"flow_types\x18\x05 \x03(\x0e21.antrea_io.antrea.pkg.apis.flow.v1alpha1.FlowTypeR\tflowTypes\x12\x10\n" +
 	"\x03ips\x18\x06 \x03(\tR\x03ips\x12Z\n" +
-	"\tdirection\x18\a \x01(\x0e2<.antrea_io.antrea.pkg.apis.flow.v1alpha1.FlowFilterDirectionR\tdirection\"\xc7\x01\n" +
+	"\tdirection\x18\a \x01(\x0e2<.antrea_io.antrea.pkg.apis.flow.v1alpha1.FlowFilterDirectionR\tdirection\"\x8a\x02\n" +
 	"\x0fGetFlowsRequest\x12M\n" +
 	"\afilters\x18\x01 \x03(\v23.antrea_io.antrea.pkg.apis.flow.v1alpha1.FlowFilterR\afilters\x120\n" +
 	"\x05since\x18\x02 \x01(\v2\x1a.google.protobuf.TimestampR\x05since\x12\x1b\n" +
 	"\tmax_count\x18\x03 \x01(\rR\bmaxCount\x12\x16\n" +
-	"\x06follow\x18\x04 \x01(\bR\x06follow\"|\n" +
+	"\x06follow\x18\x04 \x01(\bR\x06follow\x12!\n" +
+	"\fcluster_wide\x18\x05 \x01(\bR\vclusterWide\x12\x1e\n" +
+	"\n" +
+	"namespaces\x18\x06 \x03(\tR\n" +
+	"namespaces\"|\n" +
 	"\x10GetFlowsResponse\x12C\n" +
 	"\x05flows\x18\x01 \x03(\v2-.antrea_io.antrea.pkg.apis.flow.v1alpha1.FlowR\x05flows\x12#\n" +
 	"\rdropped_count\x18\x02 \x01(\x04R\fdroppedCount*s\n" +
