@@ -853,7 +853,7 @@ func noLocalTrafficPolicy(svc *corev1.Service) bool {
 	if svc.Spec.Type == corev1.ServiceTypeClusterIP {
 		return internalTrafficCluster
 	}
-	externalTrafficCluster := svc.Spec.ExternalTrafficPolicy == corev1.ServiceExternalTrafficPolicyTypeCluster
+	externalTrafficCluster := svc.Spec.ExternalTrafficPolicy == corev1.ServiceExternalTrafficPolicyCluster
 	return internalTrafficCluster && externalTrafficCluster
 }
 

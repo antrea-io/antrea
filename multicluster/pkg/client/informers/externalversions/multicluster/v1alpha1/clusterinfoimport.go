@@ -1,4 +1,4 @@
-// Copyright 2025 Antrea Authors
+// Copyright 2026 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -55,7 +55,7 @@ func NewClusterInfoImportInformer(client versioned.Interface, namespace string, 
 // one. This reduces memory footprint and number of connections to the server.
 func NewFilteredClusterInfoImportInformer(client versioned.Interface, namespace string, resyncPeriod time.Duration, indexers cache.Indexers, tweakListOptions internalinterfaces.TweakListOptionsFunc) cache.SharedIndexInformer {
 	return cache.NewSharedIndexInformer(
-		&cache.ListWatch{
+		cache.ToListWatcherWithWatchListSemantics(&cache.ListWatch{
 			ListFunc: func(options v1.ListOptions) (runtime.Object, error) {
 				if tweakListOptions != nil {
 					tweakListOptions(&options)
@@ -80,7 +80,7 @@ func NewFilteredClusterInfoImportInformer(client versioned.Interface, namespace 
 				}
 				return client.MulticlusterV1alpha1().ClusterInfoImports(namespace).Watch(ctx, options)
 			},
-		},
+		}, client),
 		&apismulticlusterv1alpha1.ClusterInfoImport{},
 		resyncPeriod,
 		indexers,

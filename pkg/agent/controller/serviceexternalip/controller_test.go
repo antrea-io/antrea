@@ -45,8 +45,8 @@ const (
 )
 
 var (
-	servicePolicyCluster = makeService("svc1", "ns1", corev1.ServiceTypeLoadBalancer, corev1.ServiceExternalTrafficPolicyTypeCluster, fakeExternalIPPoolName, fakeServiceExternalIP1)
-	servicePolicyLocal   = makeService("svc2", "ns1", corev1.ServiceTypeLoadBalancer, corev1.ServiceExternalTrafficPolicyTypeLocal, fakeExternalIPPoolName, fakeServiceExternalIP1)
+	servicePolicyCluster = makeService("svc1", "ns1", corev1.ServiceTypeLoadBalancer, corev1.ServiceExternalTrafficPolicyCluster, fakeExternalIPPoolName, fakeServiceExternalIP1)
+	servicePolicyLocal   = makeService("svc2", "ns1", corev1.ServiceTypeLoadBalancer, corev1.ServiceExternalTrafficPolicyLocal, fakeExternalIPPoolName, fakeServiceExternalIP1)
 )
 
 type fakeMemberlistCluster struct {
@@ -155,7 +155,7 @@ func newFakeController(t *testing.T, objs ...runtime.Object) *fakeController {
 }
 
 func makeService(name, namespace string, serviceType corev1.ServiceType,
-	trafficPolicy corev1.ServiceExternalTrafficPolicyType, ipPool, externalIP string) *corev1.Service {
+	trafficPolicy corev1.ServiceExternalTrafficPolicy, ipPool, externalIP string) *corev1.Service {
 	service := &corev1.Service{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      name,
@@ -430,7 +430,7 @@ func TestUpdateService(t *testing.T) {
 	serviceExternalIPRecalimed.Status.LoadBalancer.Ingress = nil
 
 	serviceChangedExternalTrafficPolicy := servicePolicyCluster.DeepCopy()
-	serviceChangedExternalTrafficPolicy.Spec.ExternalTrafficPolicy = corev1.ServiceExternalTrafficPolicyTypeLocal
+	serviceChangedExternalTrafficPolicy.Spec.ExternalTrafficPolicy = corev1.ServiceExternalTrafficPolicyLocal
 
 	tests := []struct {
 		name                     string
