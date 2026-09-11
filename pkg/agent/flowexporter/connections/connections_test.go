@@ -21,11 +21,13 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 
 	"antrea.io/antrea/v2/pkg/agent/flowexporter/connection"
 	"antrea.io/antrea/v2/pkg/agent/flowexporter/utils"
 	"antrea.io/antrea/v2/pkg/agent/types"
+	"antrea.io/antrea/v2/pkg/apis/controlplane"
 	"antrea.io/antrea/v2/pkg/apis/controlplane/v1beta2"
 	queriertest "antrea.io/antrea/v2/pkg/querier/testing"
 	objectstoretest "antrea.io/antrea/v2/pkg/util/objectstore/testing"
@@ -300,4 +302,31 @@ func TestAddEgressNetworkPolicyMetadata(t *testing.T) {
 			assert.Equal(t, tt.expectedRuleAction, tt.conn.EgressNetworkPolicyRuleAction)
 		})
 	}
+}
+
+func TestAddNetworkPolicyMetadataForClusterNetworkPolicy(t *testing.T) {
+	internalRef := &controlplane.NetworkPolicyReference{
+		Type: controlplane.K8sClusterNetworkPolicy,
+		Name: "cnp-allow-web",
+		UID:  "uid-cnp-1",
+	}
+	policyRef := &v1beta2.NetworkPolicyReference{}
+	require.NoError(t, v1beta2.Convert_controlplane_NetworkPolicyReference_To_v1beta2_NetworkPolicyReference(internalRef, policyRef, nil))
+
+	mockCtrl := gomock.NewController(t)
+	mockQuerier := queriertest.NewMockAgentNetworkPolicyInfoQuerier(mockCtrl)
+	mockQuerier.EXPECT().GetRuleByFlowID(uint32(100)).Return(&types.PolicyRule{Name: "ingress-0", PolicyRef: policyRef}).AnyTimes()
+	mockQuerier.EXPECT().GetRuleByFlowID(uint32(200)).Return(&types.PolicyRule{Name: "egress-0", PolicyRef: policyRef}).AnyTimes()
+
+	cs := &connectionStore{networkPolicyQuerier: mockQuerier}
+
+	ingressConn := &connection.Connection{IngressRuleID: 100, Disposition: "Allow"}
+	cs.addIngressNetworkPolicyMetadata(ingressConn)
+	assert.Equal(t, "cnp-allow-web", ingressConn.IngressNetworkPolicyName)
+	assert.Equal(t, utils.PolicyTypeK8sClusterNetworkPolicy, ingressConn.IngressNetworkPolicyType)
+
+	egressConn := &connection.Connection{EgressRuleID: 200, Disposition: "Allow"}
+	cs.addEgressNetworkPolicyMetadata(egressConn)
+	assert.Equal(t, "cnp-allow-web", egressConn.EgressNetworkPolicyName)
+	assert.Equal(t, utils.PolicyTypeK8sClusterNetworkPolicy, egressConn.EgressNetworkPolicyType)
 }

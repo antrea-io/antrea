@@ -106,6 +106,15 @@ func TestNetworkPolicyReferenceToString(t *testing.T) {
 			},
 			out: "AntreaNetworkPolicy:nsA/annpA",
 		},
+		{
+			name: "cnp-ref",
+			inNPRef: &NetworkPolicyReference{
+				Type:      K8sClusterNetworkPolicy,
+				Namespace: "",
+				Name:      "cnpA",
+			},
+			out: "K8sClusterNetworkPolicy:cnpA",
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
