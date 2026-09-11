@@ -824,6 +824,44 @@ func TestSecondaryOVSBridgeName(t *testing.T) {
 	(&testData{e2eTestData: e2eTestData}).verifySecondaryOVSBridgeName(t, *expectedSecondaryBridgeName)
 }
 
+// TestSecondaryInterfaceDisableIPv6RA verifies that when Antrea CNI configures a secondary
+// interface for a Pod via Multus + NetworkAttachmentDefinition, IPv6 accept_ra and autoconf sysctl
+// parameters are disabled (set to 0) on the secondary interface inside the container.
+func TestSecondaryInterfaceDisableIPv6RA(t *testing.T) {
+	if antreae2e.NodeCount() < 1 {
+		t.Fatal("The test requires at least 1 Node")
+	}
+	e2eTestData, err := antreae2e.SetupTest(t)
+	require.NoError(t, err)
+	defer antreae2e.TeardownTest(t, e2eTestData)
+
+	nodeName := antreae2e.NodeName(0)
+	pod := &testPodInfo{
+		podName:           "secondary-ipv6-ra-pod",
+		nodeName:          nodeName,
+		interfaceNetworks: map[string]string{"eth1": "vlan-net1"},
+		macAddresses:      map[string]string{"eth1": "aa:bb:cc:dd:ee:fe"},
+	}
+
+	testData := &testData{e2eTestData: e2eTestData, networkType: networkTypeVLAN, pods: []*testPodInfo{pod}}
+	require.NoError(t, testData.createPods(t, e2eTestData.GetTestNamespace()))
+
+	_, err = e2eTestData.PodWaitFor(defaultTimeout, pod.podName, e2eTestData.GetTestNamespace(), func(p *corev1.Pod) (bool, error) {
+		return p.Status.Phase == corev1.PodRunning, nil
+	})
+	require.NoError(t, err, "Pod %s failed to reach Running state", pod.podName)
+
+	cmd := []string{"sysctl", "-n", "net.ipv6.conf.eth1.accept_ra", "net.ipv6.conf.eth1.autoconf"}
+	stdout, stderr, err := e2eTestData.RunCommandFromPod(e2eTestData.GetTestNamespace(), pod.podName, containerName, cmd)
+	require.NoError(t, err, "Failed to run sysctl in Pod: %s", stderr)
+
+	values := strings.Fields(strings.TrimSpace(stdout))
+	require.GreaterOrEqual(t, len(values), 2, "Unexpected sysctl output: %s", stdout)
+
+	assert.Equal(t, "0", values[0], "Expected net.ipv6.conf.eth1.accept_ra to be 0")
+	assert.Equal(t, "0", values[1], "Expected net.ipv6.conf.eth1.autoconf to be 0")
+}
+
 // TestVLANNetworkNodePools exercises VLAN secondary networks when Nodes are labeled
 // antrea.io/node-pool=pool1|pool2 (see antrea-node-configs-nodepools.yml and ci/kind/test-secondary-network-kind.sh).
 // Each pod uses eth1 as its first (and only) secondary interface; Antrea maps NADs to Node uplinks eth2/eth3

@@ -258,7 +258,7 @@ function run_test {
   kubectl apply -f "$ATTACHMENT_DEFINITION_YAML"
   kubectl apply -f "$SECONDARY_NETWORKS_YAML"
 
-  go test -v -timeout="$TIMEOUT" antrea.io/antrea/v2/test/e2e-secondary-network -run='^TestVLANNetwork$' -provider=kind "${TEST_OPTIONS[@]}"
+  go test -v -timeout="$TIMEOUT" antrea.io/antrea/v2/test/e2e-secondary-network -run='^(TestVLANNetwork|TestSecondaryInterfaceDisableIPv6RA)$' -provider=kind "${TEST_OPTIONS[@]}"
   run_test_without_antrea_node_config
   run_test_with_antreanodeconfigs
 }

@@ -357,6 +357,32 @@ func EnsureIPv6EnabledOnInterface(ifaceName string) error {
 	return sysctl.EnsureSysctlNetValue(path, 0)
 }
 
+func ensureIPv6SysctlDisabledIfExists(path string) error {
+	val, err := sysctl.GetSysctlNet(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
+		return err
+	}
+	if val != 0 {
+		return sysctl.SetSysctlNet(path, 0)
+	}
+	return nil
+}
+
+// DisableIPv6RAOnInterface disables IPv6 Router Advertisement (RA) processing and SLAAC autoconfiguration
+// on the specified interface.
+func DisableIPv6RAOnInterface(ifaceName string) error {
+	if err := ensureIPv6SysctlDisabledIfExists(fmt.Sprintf("ipv6/conf/%s/accept_ra", ifaceName)); err != nil {
+		return err
+	}
+	if err := ensureIPv6SysctlDisabledIfExists(fmt.Sprintf("ipv6/conf/%s/autoconf", ifaceName)); err != nil {
+		return err
+	}
+	return nil
+}
+
 func EnsureARPAnnounceOnInterface(ifaceName string, value int) error {
 	path := fmt.Sprintf("ipv4/conf/%s/arp_announce", ifaceName)
 	return sysctl.EnsureSysctlNetValue(path, value)
