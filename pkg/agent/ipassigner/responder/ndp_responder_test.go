@@ -16,7 +16,10 @@ package responder
 
 import (
 	"bytes"
+	"fmt"
+	"net"
 	"net/netip"
+	"syscall"
 	"testing"
 
 	"antrea.io/ndp"
@@ -61,6 +64,7 @@ func TestNDPResponder_handleNeighborSolicitation(t *testing.T) {
 		requestMessage []byte
 		requestIP      netip.Addr
 		assignedIPs    []netip.Addr
+		writeErr       error
 		expectError    bool
 		expectedReply  []byte
 	}{
@@ -94,6 +98,26 @@ func TestNDPResponder_handleNeighborSolicitation(t *testing.T) {
 			},
 		},
 		{
+			name: "write failure is ignored without propagating error",
+			requestMessage: []byte{
+				0x87,       // type - 135 for Neighbor Solicitation
+				0x00,       // code
+				0x00, 0x00, // checksum
+				0x00, 0x00, 0x00, 0x00, // reserved bits.
+				0xfe, 0x80, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xa1, // IPv6 address
+				0x01,                               // option - 1 for Source Link-layer Address
+				0x01,                               // length (units of 8 octets including type and length fields)
+				0x00, 0x11, 0x22, 0x33, 0x44, 0x66, // hardware address
+			},
+			requestIP: netip.MustParseAddr("fe80::c1"),
+			assignedIPs: []netip.Addr{
+				netip.MustParseAddr("fe80::a1"),
+			},
+			writeErr:      fmt.Errorf("write buffer full: ENOBUFS"),
+			expectError:   false, // Write error must be swallowed and logged, not propagated
+			expectedReply: nil,
+		},
+		{
 			name: "request to not assigned IP",
 			requestMessage: []byte{
 				0x87,       // type - 135 for Neighbor Solicitation
@@ -119,6 +143,9 @@ func TestNDPResponder_handleNeighborSolicitation(t *testing.T) {
 			buffer := bytes.NewBuffer(nil)
 			fakeConn := &fakeNDPConn{
 				writeTo: func(msg ndp.Message, _ *ipv6.ControlMessage, _ netip.Addr) error {
+					if tt.writeErr != nil {
+						return tt.writeErr
+					}
 					bs, err := ndp.MarshalMessage(msg)
 					assert.NoError(t, err)
 					buffer.Write(bs)
@@ -139,7 +166,11 @@ func TestNDPResponder_handleNeighborSolicitation(t *testing.T) {
 				assert.Error(t, err)
 			} else {
 				assert.NoError(t, err)
-				assert.Equal(t, tt.expectedReply, buffer.Bytes())
+				if len(tt.expectedReply) == 0 {
+					assert.Empty(t, buffer.Bytes())
+				} else {
+					assert.Equal(t, tt.expectedReply, buffer.Bytes())
+				}
 			}
 		})
 	}
@@ -379,4 +410,77 @@ func Test_ndpResponder_removeIP(t *testing.T) {
 			assert.Equal(t, tt.expectedMulticastGroups, r.multicastGroups)
 		})
 	}
+}
+
+func loopbackInterface() (*net.Interface, error) {
+	ifaces, err := net.Interfaces()
+	if err != nil {
+		return nil, fmt.Errorf("failed to list network interfaces: %w", err)
+	}
+	for _, iface := range ifaces {
+		if iface.Flags&net.FlagLoopback != 0 {
+			return &iface, nil
+		}
+	}
+	return nil, fmt.Errorf("no loopback interface found")
+}
+
+func Test_ndpResponder_rejoinMulticastGroupsOnReconnect(t *testing.T) {
+	lo, err := loopbackInterface()
+	if err != nil {
+		t.Skipf("Skipping test: loopback interface not available: %v", err)
+	}
+
+	ip1 := netip.MustParseAddr("2022::beaf")
+	expectedGroup := parseIPv6SolicitedNodeMulticastAddress(ip1)
+
+	var conn1Joined, conn2Joined []netip.Addr
+	conn1 := &fakeNDPConn{
+		joinGroup: func(group netip.Addr) error {
+			conn1Joined = append(conn1Joined, group)
+			return nil
+		},
+		readFrom: func() (ndp.Message, *ipv6.ControlMessage, netip.Addr, error) {
+			// Fatal socket error to terminate dialAndHandleRequests read loop
+			return nil, nil, netip.Addr{}, syscall.EBADF
+		},
+	}
+	conn2 := &fakeNDPConn{
+		joinGroup: func(group netip.Addr) error {
+			conn2Joined = append(conn2Joined, group)
+			return nil
+		},
+		readFrom: func() (ndp.Message, *ipv6.ControlMessage, netip.Addr, error) {
+			return nil, nil, netip.Addr{}, syscall.EBADF
+		},
+	}
+
+	dialCount := 0
+	r := &ndpResponder{
+		linkName:        lo.Name,
+		assignedIPs:     sets.New[netip.Addr](ip1),
+		multicastGroups: make(map[netip.Addr]int),
+		linkEventCh:     make(chan struct{}, 1),
+		dial: func(_ *net.Interface) (ndpConn, error) {
+			dialCount++
+			if dialCount == 1 {
+				return conn1, nil
+			}
+			return conn2, nil
+		},
+	}
+
+	stopCh := make(chan struct{})
+
+	// 1st run: dial conn1, join multicast group, read loop encounters EBADF and exits, defer cleans up r.conn and multicastGroups
+	r.dialAndHandleRequests(stopCh)
+	assert.Equal(t, []netip.Addr{expectedGroup}, conn1Joined)
+	assert.Nil(t, r.conn, "r.conn should be reset to nil on exit")
+	assert.Empty(t, r.multicastGroups, "r.multicastGroups must be cleared on socket exit")
+
+	// 2nd run (reconnect): dial conn2; because multicastGroups was cleared on exit, JoinGroup must be called again on the new socket
+	r.dialAndHandleRequests(stopCh)
+	assert.Equal(t, []netip.Addr{expectedGroup}, conn2Joined, "multicast groups must be rejoined on the new socket connection")
+	assert.Nil(t, r.conn)
+	assert.Empty(t, r.multicastGroups)
 }
