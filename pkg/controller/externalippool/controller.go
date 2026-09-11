@@ -35,11 +35,12 @@ import (
 	"k8s.io/klog/v2"
 	utilnet "k8s.io/utils/net"
 
-	antreacrds "antrea.io/antrea/v2/pkg/apis/crd/v1beta1"
+	antreacrds "antrea.io/antrea/v2/pkg/apis/crd/v1beta2"
 	clientset "antrea.io/antrea/v2/pkg/client/clientset/versioned"
-	antreainformers "antrea.io/antrea/v2/pkg/client/informers/externalversions/crd/v1beta1"
-	antrealisters "antrea.io/antrea/v2/pkg/client/listers/crd/v1beta1"
+	antreainformers "antrea.io/antrea/v2/pkg/client/informers/externalversions/crd/v1beta2"
+	antrealisters "antrea.io/antrea/v2/pkg/client/listers/crd/v1beta2"
 	"antrea.io/antrea/v2/pkg/controller/metrics"
+	"antrea.io/antrea/v2/pkg/controller/validation"
 	"antrea.io/antrea/v2/pkg/ipam/ipallocator"
 	iputil "antrea.io/antrea/v2/pkg/util/ip"
 )
@@ -83,6 +84,8 @@ type ExternalIPAllocator interface {
 	AllocateIPFromPool(externalIPPool string) (net.IP, error)
 	// IPPoolExists checks whether the IP pool exists.
 	IPPoolExists(externalIPPool string) bool
+	// IPPoolIPFamilies returns the IP families represented by the IP pool.
+	IPPoolIPFamilies(externalIPPool string) (sets.Set[corev1.IPFamily], error)
 	// IPPoolHasIP checks whether the IP pool contains the given IP.
 	IPPoolHasIP(externalIPPool string, ip net.IP) bool
 	// UpdateIPAllocation marks the IP in the specified ExternalIPPool as occupied.
@@ -324,8 +327,8 @@ func (c *ExternalIPPoolController) updateExternalIPPoolStatus(poolName string) e
 		}
 		klog.V(2).InfoS("Updating ExternalIPPool status", "ExternalIPPool", poolName, "usage", usage)
 		toUpdate.Status.Usage = usage
-		if _, updateErr := c.crdClient.CrdV1beta1().ExternalIPPools().UpdateStatus(context.TODO(), toUpdate, metav1.UpdateOptions{}); updateErr != nil && apierrors.IsConflict(updateErr) {
-			toUpdate, getErr = c.crdClient.CrdV1beta1().ExternalIPPools().Get(context.TODO(), poolName, metav1.GetOptions{})
+		if _, updateErr := c.crdClient.CrdV1beta2().ExternalIPPools().UpdateStatus(context.TODO(), toUpdate, metav1.UpdateOptions{}); updateErr != nil && apierrors.IsConflict(updateErr) {
+			toUpdate, getErr = c.crdClient.CrdV1beta2().ExternalIPPools().Get(context.TODO(), poolName, metav1.GetOptions{})
 			if getErr != nil {
 				return getErr
 			}
@@ -364,6 +367,18 @@ func (c *ExternalIPPoolController) IPPoolHasIP(poolName string, ip net.IP) bool 
 func (c *ExternalIPPoolController) IPPoolExists(pool string) bool {
 	_, exists := c.getIPAllocator(pool)
 	return exists
+}
+
+func (c *ExternalIPPoolController) IPPoolIPFamilies(pool string) (sets.Set[corev1.IPFamily], error) {
+	externalIPPool, err := c.externalIPPoolLister.Get(pool)
+	if err != nil {
+		return nil, err
+	}
+	families, err := validation.IPFamiliesForRanges(externalIPPool.Spec.IPRanges)
+	if err != nil {
+		return nil, err
+	}
+	return families, nil
 }
 
 func (c *ExternalIPPoolController) worker() {
