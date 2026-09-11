@@ -47,11 +47,6 @@ func (b *ofFlowBuilder) MatchVLAN(nonVLAN bool, vlanID uint16, vlanMask *uint16)
 		vlanMask = &vlanMaskValue
 	}
 
-	value := vlanID
-	if !nonVLAN {
-		value |= openflow15.OFPVID_PRESENT
-	}
-
 	b.Match.NonVlan = nonVLAN
 	b.Match.VlanId = &vlanID
 	b.Match.VlanMask = vlanMask

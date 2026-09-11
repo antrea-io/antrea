@@ -1,6 +1,6 @@
 module antrea.io/antrea/v2
 
-go 1.26.0
+go 1.27.0
 
 require (
 	antrea.io/arp v0.0.0-20260520024042-c5afcf686f2f
@@ -19,6 +19,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/feature/s3/transfermanager v0.2.2
 	github.com/aws/aws-sdk-go-v2/service/ec2 v1.304.2
 	github.com/aws/aws-sdk-go-v2/service/s3 v1.102.2
+	github.com/cenkalti/backoff/v4 v4.3.0
 	github.com/cheggaaa/pb/v3 v3.2.1
 	github.com/containernetworking/cni v1.3.0
 	github.com/containernetworking/plugins v1.9.1
@@ -40,6 +41,7 @@ require (
 	github.com/onsi/ginkgo/v2 v2.28.3
 	github.com/onsi/gomega v1.40.0
 	github.com/osrg/gobgp/v4 v4.9.0
+	github.com/ovn-kubernetes/libovsdb v0.8.2-0.20260514180746-6b4a47e4838f
 	github.com/pkg/sftp v1.13.11
 	github.com/prometheus/client_golang v1.24.1
 	github.com/prometheus/common v0.71.0
@@ -84,12 +86,6 @@ require (
 )
 
 require (
-	github.com/clipperhouse/uax29/v2 v2.2.0 // indirect
-	github.com/pion/dtls/v3 v3.1.8 // indirect
-	github.com/pion/transport/v4 v4.0.2 // indirect
-)
-
-require (
 	cel.dev/expr v0.25.2 // indirect
 	github.com/Azure/go-ansiterm v0.0.0-20250102033503-faa5f7b0171c // indirect
 	github.com/ClickHouse/ch-go v0.71.0 // indirect
@@ -118,12 +114,12 @@ require (
 	github.com/aws/smithy-go v1.26.0 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/blang/semver/v4 v4.0.0 // indirect
-	github.com/cenkalti/backoff/v4 v4.3.0
 	github.com/cenkalti/backoff/v5 v5.0.3 // indirect
 	github.com/cenkalti/hub v1.0.2 // indirect
 	github.com/cenkalti/rpc2 v1.0.5 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
 	github.com/chai2010/gettext-go v1.0.2 // indirect
+	github.com/clipperhouse/uax29/v2 v2.2.0 // indirect
 	github.com/containerd/cgroups/v3 v3.0.5 // indirect
 	github.com/containerd/errdefs v1.0.0 // indirect
 	github.com/containerd/errdefs/pkg v0.3.0 // indirect
@@ -198,12 +194,13 @@ require (
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
 	github.com/mxk/go-flowrate v0.0.0-20140419014527-cca7078d478f // indirect
 	github.com/orcaman/concurrent-map/v2 v2.0.1 // indirect
-	github.com/ovn-kubernetes/libovsdb v0.8.2-0.20260514180746-6b4a47e4838f
 	github.com/paulmach/orb v0.12.0 // indirect
 	github.com/pelletier/go-toml/v2 v2.2.3 // indirect
 	github.com/peterbourgon/diskv v2.0.1+incompatible // indirect
 	github.com/pierrec/lz4/v4 v4.1.29 // indirect
+	github.com/pion/dtls/v3 v3.1.8 // indirect
 	github.com/pion/logging v0.2.4 // indirect
+	github.com/pion/transport/v4 v4.0.2 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2 // indirect
 	github.com/prometheus/client_model v0.6.2 // indirect

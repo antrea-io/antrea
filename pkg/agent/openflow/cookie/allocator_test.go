@@ -46,6 +46,7 @@ func TestConcurrentAllocate(t *testing.T) {
 		for i := 0; i < eachTotal; i++ {
 			seq = append(seq, NetworkPolicy, Service, PodConnectivity, Default)
 		}
+		// #nosec G404: random number generator not used for security purposes
 		rand.Shuffle(len(seq), func(a, b int) { seq[a], seq[b] = seq[b], seq[a] })
 
 		for i := 0; i < eachTotal/2; i++ {

@@ -818,7 +818,7 @@ func (f *fqdnController) makeDNSRequest(ctx context.Context, fqdn string) error 
 		return f.lookupIP(ctx, fqdn)
 	}
 	klog.V(2).InfoS("Making DNS request", "fqdn", fqdn, "dnsServer", f.dnsServerAddr)
-	dnsClient := dns.Client{SingleInflight: true}
+	dnsClient := dns.Client{}
 	fqdnToQuery := fqdn
 	// The FQDN in the DNS request needs to end by a dot
 	if fqdn[len(fqdn)-1] != '.' {
