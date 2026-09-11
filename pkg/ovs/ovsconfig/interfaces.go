@@ -82,6 +82,8 @@ type OVSBridgeClient interface {
 	SetInterfaceType(name, ifType string) error
 	SetPortExternalIDs(portName string, externalIDs map[string]string) error
 	GetPortExternalIDs(portName string) (map[string]string, error)
+	// SetPortTrunks updates the allowed VLANs and waits up to five seconds for
+	// ovs-vswitchd to acknowledge that it applied the configuration.
 	SetPortTrunks(portName string, vlanSpecs []string) error
 	SetInterfaceMAC(name string, mac net.HardwareAddr) error
 }
