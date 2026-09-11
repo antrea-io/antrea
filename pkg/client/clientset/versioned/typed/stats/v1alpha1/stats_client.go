@@ -1,4 +1,4 @@
-// Copyright 2025 Antrea Authors
+// Copyright 2026 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -28,6 +28,7 @@ type StatsV1alpha1Interface interface {
 	RESTClient() rest.Interface
 	AntreaClusterNetworkPolicyStatsGetter
 	AntreaNetworkPolicyStatsGetter
+	ClusterNetworkPolicyStatsesGetter
 	MulticastGroupsGetter
 	NetworkPolicyStatsGetter
 	NodeLatencyStatsGetter
@@ -44,6 +45,10 @@ func (c *StatsV1alpha1Client) AntreaClusterNetworkPolicyStats() AntreaClusterNet
 
 func (c *StatsV1alpha1Client) AntreaNetworkPolicyStats(namespace string) AntreaNetworkPolicyStatsInterface {
 	return newAntreaNetworkPolicyStats(c, namespace)
+}
+
+func (c *StatsV1alpha1Client) ClusterNetworkPolicyStatses() ClusterNetworkPolicyStatsInterface {
+	return newClusterNetworkPolicyStatses(c)
 }
 
 func (c *StatsV1alpha1Client) MulticastGroups() MulticastGroupInterface {

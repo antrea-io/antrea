@@ -165,6 +165,8 @@ func GetOpenAPIDefinitions(ref common.ReferenceCallback) map[string]common.OpenA
 		v1alpha1.AntreaClusterNetworkPolicyStatsList{}.OpenAPIModelName(): schema_pkg_apis_stats_v1alpha1_AntreaClusterNetworkPolicyStatsList(ref),
 		v1alpha1.AntreaNetworkPolicyStats{}.OpenAPIModelName():            schema_pkg_apis_stats_v1alpha1_AntreaNetworkPolicyStats(ref),
 		v1alpha1.AntreaNetworkPolicyStatsList{}.OpenAPIModelName():        schema_pkg_apis_stats_v1alpha1_AntreaNetworkPolicyStatsList(ref),
+		v1alpha1.ClusterNetworkPolicyStats{}.OpenAPIModelName():           schema_pkg_apis_stats_v1alpha1_ClusterNetworkPolicyStats(ref),
+		v1alpha1.ClusterNetworkPolicyStatsList{}.OpenAPIModelName():       schema_pkg_apis_stats_v1alpha1_ClusterNetworkPolicyStatsList(ref),
 		v1alpha1.MulticastGroup{}.OpenAPIModelName():                      schema_pkg_apis_stats_v1alpha1_MulticastGroup(ref),
 		v1alpha1.MulticastGroupList{}.OpenAPIModelName():                  schema_pkg_apis_stats_v1alpha1_MulticastGroupList(ref),
 		v1alpha1.NetworkPolicyStats{}.OpenAPIModelName():                  schema_pkg_apis_stats_v1alpha1_NetworkPolicyStats(ref),
@@ -2348,6 +2350,20 @@ func schema_pkg_apis_controlplane_v1beta2_NodeStatsSummary(ref common.ReferenceC
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
 										Ref:     ref(v1beta2.MulticastGroupInfo{}.OpenAPIModelName()),
+									},
+								},
+							},
+						},
+					},
+					"clusterNetworkPolicies": {
+						SchemaProps: spec.SchemaProps{
+							Description: "The TrafficStats of Kubernetes ClusterNetworkPolicies (policy.networking.k8s.io) collected from the Node.",
+							Type:        []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Default: map[string]interface{}{},
+										Ref:     ref(v1beta2.NetworkPolicyStats{}.OpenAPIModelName()),
 									},
 								},
 							},
@@ -6606,6 +6622,112 @@ func schema_pkg_apis_stats_v1alpha1_AntreaNetworkPolicyStatsList(ref common.Refe
 		},
 		Dependencies: []string{
 			v1alpha1.AntreaNetworkPolicyStats{}.OpenAPIModelName(), metav1.ListMeta{}.OpenAPIModelName()},
+	}
+}
+
+func schema_pkg_apis_stats_v1alpha1_ClusterNetworkPolicyStats(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "ClusterNetworkPolicyStats is the statistics of a Kubernetes ClusterNetworkPolicy (policy.networking.k8s.io). Statistics of the Antrea-native ClusterNetworkPolicy CRD (crd.antrea.io) are exposed as AntreaClusterNetworkPolicyStats instead.",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"kind": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Kind is a string value representing the REST resource this object represents. Servers may infer this from the endpoint the client submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"apiVersion": {
+						SchemaProps: spec.SchemaProps{
+							Description: "APIVersion defines the versioned schema of this representation of an object. Servers should convert recognized schemas to the latest internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"metadata": {
+						SchemaProps: spec.SchemaProps{
+							Default: map[string]interface{}{},
+							Ref:     ref(metav1.ObjectMeta{}.OpenAPIModelName()),
+						},
+					},
+					"trafficStats": {
+						SchemaProps: spec.SchemaProps{
+							Description: "The traffic stats of the ClusterNetworkPolicy.",
+							Default:     map[string]interface{}{},
+							Ref:         ref(v1alpha1.TrafficStats{}.OpenAPIModelName()),
+						},
+					},
+					"ruleTrafficStats": {
+						SchemaProps: spec.SchemaProps{
+							Description: "The traffic stats of the ClusterNetworkPolicy, from rule perspective.",
+							Type:        []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Default: map[string]interface{}{},
+										Ref:     ref(v1alpha1.RuleTrafficStats{}.OpenAPIModelName()),
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		Dependencies: []string{
+			v1alpha1.RuleTrafficStats{}.OpenAPIModelName(), v1alpha1.TrafficStats{}.OpenAPIModelName(), metav1.ObjectMeta{}.OpenAPIModelName()},
+	}
+}
+
+func schema_pkg_apis_stats_v1alpha1_ClusterNetworkPolicyStatsList(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "ClusterNetworkPolicyStatsList is a list of ClusterNetworkPolicyStats.",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"kind": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Kind is a string value representing the REST resource this object represents. Servers may infer this from the endpoint the client submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"apiVersion": {
+						SchemaProps: spec.SchemaProps{
+							Description: "APIVersion defines the versioned schema of this representation of an object. Servers should convert recognized schemas to the latest internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"metadata": {
+						SchemaProps: spec.SchemaProps{
+							Default: map[string]interface{}{},
+							Ref:     ref(metav1.ListMeta{}.OpenAPIModelName()),
+						},
+					},
+					"items": {
+						SchemaProps: spec.SchemaProps{
+							Description: "List of ClusterNetworkPolicyStats.",
+							Type:        []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Default: map[string]interface{}{},
+										Ref:     ref(v1alpha1.ClusterNetworkPolicyStats{}.OpenAPIModelName()),
+									},
+								},
+							},
+						},
+					},
+				},
+				Required: []string{"items"},
+			},
+		},
+		Dependencies: []string{
+			v1alpha1.ClusterNetworkPolicyStats{}.OpenAPIModelName(), metav1.ListMeta{}.OpenAPIModelName()},
 	}
 }
 
