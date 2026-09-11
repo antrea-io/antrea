@@ -69,16 +69,22 @@ type TestCase struct {
 // TestStep is a single unit of testing spec. It includes the policy specs that need to be
 // applied for this test, the port to test traffic on and the expected Reachability matrix.
 type TestStep struct {
-	Name           string
-	Reachability   *Reachability
-	NPEvaluation   *NPEvaluation
-	TestResources  []metav1.Object
-	Ports          []int32
-	Protocol       utils.AntreaPolicyProtocol
-	Duration       time.Duration
-	CustomProbes   []*CustomProbe
-	CustomSetup    func()
-	CustomTeardown func()
+	Name         string
+	Reachability *Reachability
+	NPEvaluation *NPEvaluation
+	// TestResources are created in the order given, then waited on for readiness.
+	TestResources []metav1.Object
+	// AllowPartialGroupRealization should be set when this step's ClusterGroup/Group
+	// TestResources reference a childGroup that is intentionally not created yet, so
+	// GroupMembersComputed is not expected to become true. When false (the default),
+	// a ClusterGroup/Group that never reports GroupMembersComputed fails the test.
+	AllowPartialGroupRealization bool
+	Ports                        []int32
+	Protocol                     utils.AntreaPolicyProtocol
+	Duration                     time.Duration
+	CustomProbes                 []*CustomProbe
+	CustomSetup                  func()
+	CustomTeardown               func()
 }
 
 // CustomProbe will spin up (or update) SourcePod and DestPod such that Add event of Pods
