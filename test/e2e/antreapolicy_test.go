@@ -4199,7 +4199,8 @@ func testToServices(t *testing.T, data *TestData) {
 	var svcRefs []crdv1beta1.PeerService
 	var builtSvcs []*v1.Service
 	for _, service := range services {
-		builtSvc, _ := k8sUtils.CreateOrUpdateService(service)
+		builtSvc, err := k8sUtils.CreateOrUpdateService(service)
+		failOnError(err, t)
 		failOnError(waitForResourceReady(t, timeout, service), t)
 		svcRefs = append(svcRefs, crdv1beta1.PeerService{
 			Name:      service.Name,
