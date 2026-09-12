@@ -47,8 +47,11 @@ func NewNetworkPolicyEvaluation(args map[string]string) (runtime.Object, error) 
 	if val, ok := args["destination"]; ok {
 		ns2, pod2 = parsePeer(val)
 	}
-	if pod1 == "" || pod2 == "" {
-		return nil, fmt.Errorf("missing entities for NetworkPolicyEvaluation request: %v", args)
+	if pod1 == "" {
+		return nil, fmt.Errorf("source must be specified")
+	}
+	if pod2 == "" {
+		return nil, fmt.Errorf("destination must be specified")
 	}
 	return &cpv1beta.NetworkPolicyEvaluation{
 		Request: &cpv1beta.NetworkPolicyEvaluationRequest{

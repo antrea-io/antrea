@@ -47,9 +47,22 @@ func TestNewNetworkPolicyEvaluation(t *testing.T) {
 		{
 			name: "Invalid format",
 			args: map[string]string{
-				"destination": "ns",
+				"source":      "ns/pod1",
+				"destination": "ns/",
 			},
-			expectedError: "missing entities for NetworkPolicyEvaluation request",
+			expectedError: "destination must be specified",
+		},
+		{
+			name:          "Missing source and destination",
+			args:          map[string]string{},
+			expectedError: "source must be specified",
+		},
+		{
+			name: "Missing destination",
+			args: map[string]string{
+				"source": "ns/pod1",
+			},
+			expectedError: "destination must be specified",
 		},
 		{
 			name: "Default namespaces",
