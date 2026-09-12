@@ -389,3 +389,17 @@ func TestAgentStorageFailure(t *testing.T) {
 	assert.Equal(t, errors.NewNotFound(system.Resource("supportBundle"), modeController), err)
 	assert.False(t, deleted)
 }
+func TestBundleStreamDeepCopyObject(t *testing.T) {
+	stream := &bundleStream{
+		cache: &system.SupportBundle{
+			ObjectMeta: metav1.ObjectMeta{Name: modeController},
+		},
+	}
+
+	assert.NotPanics(t, func() {
+		copied := stream.DeepCopyObject()
+		copiedStream, ok := copied.(*bundleStream)
+		require.True(t, ok)
+		assert.Equal(t, stream.cache, copiedStream.cache)
+	})
+}
