@@ -344,6 +344,34 @@ type BGPPeer struct {
 	// GracefulRestartTimeSeconds specifies how long the BGP peer would wait for the BGP session to re-establish after
 	// a restart before deleting stale routes. The range of the value is from 1 to 3600, and the default value is 120.
 	GracefulRestartTimeSeconds *int32 `json:"gracefulRestartTimeSeconds,omitempty"`
+
+	// BFD configures Bidirectional Forwarding Detection for the BGP session, which detects the loss of the BGP peer
+	// much faster than the BGP hold timer does. Only single-hop BFD is supported, so it cannot be enabled for a BGP
+	// peer whose multihopTTL is greater than 1. BFD is not used if this field is not set.
+	BFD *BFDConfig `json:"bfd,omitempty"`
+}
+
+// BFDConfig contains the Bidirectional Forwarding Detection configuration for a BGP peer. For more details see
+// https://datatracker.ietf.org/doc/html/rfc5880.
+type BFDConfig struct {
+	// Whether to run BFD for the BGP session. It is a required field, so that BFD can be turned off without
+	// discarding the values of the other fields.
+	Enabled bool `json:"enabled"`
+
+	// The interval at which BFD control packets are sent to the BGP peer. The interval actually used is the larger
+	// of this value and the receive interval of the peer. The range of the value is from 50 to 60000, and the
+	// default value is 300.
+	TransmitIntervalMilliseconds *int32 `json:"transmitIntervalMilliseconds,omitempty"`
+
+	// The shortest interval between BFD control packets that the Node can handle. It is sent to the BGP peer to
+	// stop it from transmitting faster. The range of the value is from 50 to 60000, and the default value is 300.
+	ReceiveIntervalMilliseconds *int32 `json:"receiveIntervalMilliseconds,omitempty"`
+
+	// The number of consecutive BFD control packets that may be missed before the BGP peer is declared down. Note
+	// that it is multiplied by the transmit interval of the peer, not of the Node, so this value determines how
+	// fast the peer detects the loss of the Node. The range of the value is from 1 to 255, and the default value
+	// is 3.
+	DetectionMultiplier *int32 `json:"detectionMultiplier,omitempty"`
 }
 
 type PodReference struct {

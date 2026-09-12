@@ -113,6 +113,7 @@ func newTestRouteClient(networkConfig *config.NetworkConfig, options routeClient
 		false,
 		true,
 		false,
+		false,
 		options.nodeSNATRandomFully,
 		false,
 		&servicecidr.Discoverer{},

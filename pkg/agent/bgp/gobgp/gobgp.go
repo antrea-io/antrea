@@ -212,7 +212,28 @@ func convertGoBGPPeerToPeerStatus(peer *gobgpapi.Peer) *bgp.PeerStatus {
 			}
 		}
 	}
+	// goBGP reports a BFD state for every peer, so the configuration is what tells a peer without BFD apart from a
+	// peer whose BFD session has not come up yet.
+	peerStatus.BFDSessionState = bgp.BFDSessionDisabled
+	if peer.GetBfd().GetEnabled() {
+		peerStatus.BFDSessionState = convertGoBGPBFDSessionStateToBFDSessionState(peer.GetState().GetBfdState().GetSessionState())
+	}
 	return peerStatus
+}
+
+func convertGoBGPBFDSessionStateToBFDSessionState(s gobgpapi.BfdSessionState) bgp.BFDSessionState {
+	switch s {
+	case gobgpapi.BfdSessionState_BFD_SESSION_STATE_ADMIN_DOWN:
+		return bgp.BFDSessionAdminDown
+	case gobgpapi.BfdSessionState_BFD_SESSION_STATE_DOWN:
+		return bgp.BFDSessionDown
+	case gobgpapi.BfdSessionState_BFD_SESSION_STATE_INIT:
+		return bgp.BFDSessionInit
+	case gobgpapi.BfdSessionState_BFD_SESSION_STATE_UP:
+		return bgp.BFDSessionUp
+	default:
+		return bgp.BFDSessionUnknown
+	}
 }
 
 func convertRouteTypeToGoBGPTableType(routeType bgp.RouteType) gobgpapi.TableType {
@@ -321,7 +342,30 @@ func convertPeerConfigToGoBGPPeer(peerConfig bgp.PeerConfig) (*gobgpapi.Peer, er
 			RestartTime: uint32(*peerConfig.GracefulRestartTimeSeconds),
 		}
 	}
+	peer.Bfd = convertPeerConfigToGoBGPBfd(peerConfig)
 	return peer, nil
+}
+
+// convertPeerConfigToGoBGPBfd returns the goBGP BFD configuration of a BGP peer, or nil if BFD is not enabled for the
+// peer. The intervals are converted from milliseconds to the microseconds expected by goBGP. The port is left unset
+// so that goBGP uses the well-known BFD port 3784.
+func convertPeerConfigToGoBGPBfd(peerConfig bgp.PeerConfig) *gobgpapi.BfdPeerConfig {
+	if peerConfig.BFD == nil || !peerConfig.BFD.Enabled {
+		return nil
+	}
+	bfd := &gobgpapi.BfdPeerConfig{Enabled: true}
+	// The following pointer fields are set to default values when the corresponding BGPPolicy is created, so they
+	// should not be nil. However, it is safe and harmless to include nil checks.
+	if peerConfig.BFD.TransmitIntervalMilliseconds != nil {
+		bfd.DesiredMinimumTxInterval = uint32(*peerConfig.BFD.TransmitIntervalMilliseconds) * 1000
+	}
+	if peerConfig.BFD.ReceiveIntervalMilliseconds != nil {
+		bfd.RequiredMinimumReceive = uint32(*peerConfig.BFD.ReceiveIntervalMilliseconds) * 1000
+	}
+	if peerConfig.BFD.DetectionMultiplier != nil {
+		bfd.DetectionMultiplier = uint32(*peerConfig.BFD.DetectionMultiplier)
+	}
+	return bfd
 }
 
 func convertGoBGPSessionStateToSessionState(s gobgpapi.PeerState_SessionState) bgp.SessionState {

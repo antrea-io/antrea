@@ -42,6 +42,7 @@ import (
 	"k8s.io/utils/ptr"
 	"sigs.k8s.io/knftables"
 
+	"antrea.io/antrea/v2/pkg/agent/bgp"
 	"antrea.io/antrea/v2/pkg/agent/client"
 	"antrea.io/antrea/v2/pkg/agent/config"
 	"antrea.io/antrea/v2/pkg/agent/openflow"
@@ -165,6 +166,7 @@ const (
 	featureAgentAPIServer
 	featureControllerAPIServer
 	featureAgentClusterMembership
+	featureBGPPolicy
 	// The rules of NodeNetworkPolicy are dynamic, they are written after the static ones for
 	// performance reasons.
 	featureNodeNetworkPolicy
@@ -264,6 +266,7 @@ type Client struct {
 	nodeLatencyMonitorEnabled      bool
 	egressEnabled                  bool
 	serviceExternalIPEnabled       bool
+	bgpPolicyEnabled               bool
 	hostNetworkAccelerationEnabled bool
 	// serviceRoutes caches ip routes about Services.
 	serviceRoutes sync.Map
@@ -324,6 +327,7 @@ func NewClient(networkConfig *config.NetworkConfig,
 	multicastEnabled bool,
 	egressEnabled bool,
 	serviceExternalIPEnabled bool,
+	bgpPolicyEnabled bool,
 	nodeSNATRandomFully bool,
 	egressSNATRandomFully bool,
 	serviceCIDRProvider servicecidr.Interface,
@@ -348,6 +352,7 @@ func NewClient(networkConfig *config.NetworkConfig,
 		connectUplinkToBridge:       connectUplinkToBridge,
 		nodeNetworkPolicyEnabled:    nodeNetworkPolicyEnabled,
 		nodeLatencyMonitorEnabled:   nodeLatencyMonitorEnabled,
+		bgpPolicyEnabled:            bgpPolicyEnabled,
 		egressEnabled:               egressEnabled,
 		serviceExternalIPEnabled:    serviceExternalIPEnabled,
 		ipset:                       ipset.NewClient(),
@@ -435,6 +440,9 @@ func (c *Client) Initialize(nodeConfig *config.NodeConfig, done func()) error {
 	}
 	if c.egressEnabled || c.serviceExternalIPEnabled {
 		c.initAgentClusterMembershipHostNetworkFilterRules()
+	}
+	if c.bgpPolicyEnabled {
+		c.initBGPPolicyHostNetworkFilterRules()
 	}
 	c.initAgentAPIServerHostNetworkFilterRules()
 
@@ -1914,6 +1922,35 @@ func (c *Client) initAgentClusterMembershipHostNetworkFilterRules() {
 	if c.networkConfig.IPv4Enabled {
 		c.iptablesCache.ipv4[featureAgentClusterMembership].Store(antreaInputChain, antreaInputChainRules)
 		c.iptablesCache.ipv4[featureAgentClusterMembership].Store(antreaOutputChain, antreaOutputChainRules)
+	}
+}
+
+func (c *Client) initBGPPolicyHostNetworkFilterRules() {
+	klog.InfoS("Installing host network rules to allow BFD traffic", "protocol", "UDP", "port", bgp.BFDPort)
+
+	// Both BFD speakers send their control packets to the well-known BFD port from an ephemeral port, so
+	// the destination port rules cover the traffic in both directions and no reply rule is needed. A rule
+	// is needed for the packets the Agent sends because the traffic is not necessarily covered by a
+	// conntrack rule: the Antrea chains are also traversed when the default policy of the built-in chain
+	// is to drop and no rule accepts established connections.
+	//
+	// The port on which the BGP process listens is configurable in a BGPPolicy, so it is not covered here.
+	// TODO: allow the BGP port as well, which requires watching BGPPolicies to know the port in use.
+	bfdPort := intstr.FromInt32(bgp.BFDPort)
+	antreaInputChainRules := []string{
+		buildAllowHostIngressPortRule(iptables.ProtocolUDP, &bfdPort, "Antrea: allow BFD input packets"),
+	}
+	antreaOutputChainRules := []string{
+		buildAllowHostEgressPortRule(iptables.ProtocolUDP, &bfdPort, "Antrea: allow BFD output packets"),
+	}
+
+	if c.networkConfig.IPv6Enabled {
+		c.iptablesCache.ipv6[featureBGPPolicy].Store(antreaInputChain, antreaInputChainRules)
+		c.iptablesCache.ipv6[featureBGPPolicy].Store(antreaOutputChain, antreaOutputChainRules)
+	}
+	if c.networkConfig.IPv4Enabled {
+		c.iptablesCache.ipv4[featureBGPPolicy].Store(antreaInputChain, antreaInputChainRules)
+		c.iptablesCache.ipv4[featureBGPPolicy].Store(antreaOutputChain, antreaOutputChainRules)
 	}
 }
 

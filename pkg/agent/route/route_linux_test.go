@@ -383,7 +383,7 @@ func TestSyncIPSet(t *testing.T) {
 
 func TestNewClientCopiesHostNetworkPorts(t *testing.T) {
 	hostNetworkPortRules := NewHostNetworkPortRules().Allow(10350, FeatureAgentAPIServer)
-	c, err := NewClient(&config.NetworkConfig{}, false, false, false, false, false, false, false, false, false,
+	c, err := NewClient(&config.NetworkConfig{}, false, false, false, false, false, false, false, false, false, false,
 		false, nil, nil, hostNetworkPortRules)
 	require.NoError(t, err)
 
@@ -415,14 +415,16 @@ func TestSyncIPTables(t *testing.T) {
 		networkConfig             *config.NetworkConfig
 		nodeConfig                *config.NodeConfig
 		nodeSNATRandomFully       bool
+		bgpPolicyEnabled          bool
 		markToSNATIP              map[uint32]string
 		wireguardPort             int32
 		proxyHealthCheckPort      int32
 		expectedCalls             func(iptables *iptablestest.MockInterfaceMockRecorder)
 	}{
 		{
-			name:                      "encap,wireguard,egress=true,multicastEnabled=true,proxyAll=true,nodeNetworkPolicy=true,nodeLatencyMonitor=true,nodeSNATRandomFully=true,proxyHealthCheck",
+			name:                      "encap,wireguard,egress=true,multicastEnabled=true,proxyAll=true,nodeNetworkPolicy=true,nodeLatencyMonitor=true,nodeSNATRandomFully=true,proxyHealthCheck,bgpPolicy=true",
 			proxyAll:                  true,
+			bgpPolicyEnabled:          true,
 			multicastEnabled:          true,
 			nodeNetworkPolicyEnabled:  true,
 			nodeLatencyMonitorEnabled: true,
@@ -533,6 +535,7 @@ COMMIT
 -A ANTREA-INPUT -m comment --comment "Antrea: allow Agent cluster memberships TCP input packets" -p tcp --dport 10351 -j ACCEPT
 -A ANTREA-INPUT -m comment --comment "Antrea: allow Agent cluster memberships TCP reply input packets" -p tcp --sport 10351 -m conntrack --ctstate ESTABLISHED -j ACCEPT
 -A ANTREA-INPUT -m comment --comment "Antrea: allow Agent cluster memberships UDP input packets" -p udp --dport 10351 -j ACCEPT
+-A ANTREA-INPUT -m comment --comment "Antrea: allow BFD input packets" -p udp --dport 3784 -j ACCEPT
 -A ANTREA-INPUT -m comment --comment "Antrea: jump to static ingress NodeNetworkPolicy rules" -j ANTREA-POL-PRE-INGRESS-RULES
 -A ANTREA-INPUT -m comment --comment "Antrea: jump to ingress NodeNetworkPolicy rules" -j ANTREA-POL-INGRESS-RULES
 -A ANTREA-OUTPUT -m comment --comment "Antrea: allow tunnel output packets" -p udp --dport 6081 -j ACCEPT
@@ -544,6 +547,7 @@ COMMIT
 -A ANTREA-OUTPUT -m comment --comment "Antrea: allow Agent cluster memberships TCP output packets" -p tcp --dport 10351 -j ACCEPT
 -A ANTREA-OUTPUT -m comment --comment "Antrea: allow Agent cluster memberships TCP reply packets" -p tcp --sport 10351 -m conntrack --ctstate ESTABLISHED -j ACCEPT
 -A ANTREA-OUTPUT -m comment --comment "Antrea: allow Agent cluster memberships UDP output packets" -p udp --dport 10351 -j ACCEPT
+-A ANTREA-OUTPUT -m comment --comment "Antrea: allow BFD output packets" -p udp --dport 3784 -j ACCEPT
 -A ANTREA-OUTPUT -m comment --comment "Antrea: jump to static egress NodeNetworkPolicy rules" -j ANTREA-POL-PRE-EGRESS-RULES
 -A ANTREA-OUTPUT -m comment --comment "Antrea: jump to egress NodeNetworkPolicy rules" -j ANTREA-POL-EGRESS-RULES
 -A ANTREA-POL-INGRESS-RULES -j ACCEPT -m comment --comment "mock rule"
@@ -602,6 +606,7 @@ COMMIT
 -A ANTREA-INPUT -m comment --comment "Antrea: allow Agent cluster memberships TCP input packets" -p tcp --dport 10351 -j ACCEPT
 -A ANTREA-INPUT -m comment --comment "Antrea: allow Agent cluster memberships TCP reply input packets" -p tcp --sport 10351 -m conntrack --ctstate ESTABLISHED -j ACCEPT
 -A ANTREA-INPUT -m comment --comment "Antrea: allow Agent cluster memberships UDP input packets" -p udp --dport 10351 -j ACCEPT
+-A ANTREA-INPUT -m comment --comment "Antrea: allow BFD input packets" -p udp --dport 3784 -j ACCEPT
 -A ANTREA-INPUT -m comment --comment "Antrea: jump to static ingress NodeNetworkPolicy rules" -j ANTREA-POL-PRE-INGRESS-RULES
 -A ANTREA-INPUT -m comment --comment "Antrea: jump to ingress NodeNetworkPolicy rules" -j ANTREA-POL-INGRESS-RULES
 -A ANTREA-OUTPUT -m comment --comment "Antrea: allow tunnel output packets" -p udp --dport 6081 -j ACCEPT
@@ -613,6 +618,7 @@ COMMIT
 -A ANTREA-OUTPUT -m comment --comment "Antrea: allow Agent cluster memberships TCP output packets" -p tcp --dport 10351 -j ACCEPT
 -A ANTREA-OUTPUT -m comment --comment "Antrea: allow Agent cluster memberships TCP reply packets" -p tcp --sport 10351 -m conntrack --ctstate ESTABLISHED -j ACCEPT
 -A ANTREA-OUTPUT -m comment --comment "Antrea: allow Agent cluster memberships UDP output packets" -p udp --dport 10351 -j ACCEPT
+-A ANTREA-OUTPUT -m comment --comment "Antrea: allow BFD output packets" -p udp --dport 3784 -j ACCEPT
 -A ANTREA-OUTPUT -m comment --comment "Antrea: jump to static egress NodeNetworkPolicy rules" -j ANTREA-POL-PRE-EGRESS-RULES
 -A ANTREA-OUTPUT -m comment --comment "Antrea: jump to egress NodeNetworkPolicy rules" -j ANTREA-POL-EGRESS-RULES
 -A ANTREA-POL-INGRESS-RULES -j ACCEPT -m comment --comment "mock rule"
@@ -1366,6 +1372,7 @@ COMMIT
 				multicastEnabled:         tt.multicastEnabled,
 				connectUplinkToBridge:    tt.connectUplinkToBridge,
 				nodeNetworkPolicyEnabled: tt.nodeNetworkPolicyEnabled,
+				bgpPolicyEnabled:         tt.bgpPolicyEnabled,
 				egressEnabled:            true,
 				nodeSNATRandomFully:      tt.nodeSNATRandomFully,
 				iptablesHasRandomFully:   true,
@@ -1402,6 +1409,9 @@ COMMIT
 			}
 			if c.egressEnabled {
 				c.initAgentClusterMembershipHostNetworkFilterRules()
+			}
+			if c.bgpPolicyEnabled {
+				c.initBGPPolicyHostNetworkFilterRules()
 			}
 			c.initAgentAPIServerHostNetworkFilterRules()
 			tt.expectedCalls(mockIPTables.EXPECT())
