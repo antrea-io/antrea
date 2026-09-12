@@ -53,7 +53,7 @@ var (
 
 func getCNPReference(cnp *v1alpha2.ClusterNetworkPolicy) *controlplane.NetworkPolicyReference {
 	return &controlplane.NetworkPolicyReference{
-		Type: controlplane.ClusterNetworkPolicy,
+		Type: controlplane.K8sClusterNetworkPolicy,
 		Name: cnp.Name,
 		UID:  cnp.UID,
 	}
@@ -398,7 +398,7 @@ func (n *NetworkPolicyController) processClusterNetworkPolicy(cnp *v1alpha2.Clus
 		Name:       internalNetworkPolicyKeyFunc(cnp),
 		Generation: cnp.Generation,
 		SourceRef: &controlplane.NetworkPolicyReference{
-			Type: controlplane.ClusterNetworkPolicy,
+			Type: controlplane.K8sClusterNetworkPolicy,
 			Name: cnp.Name,
 			UID:  cnp.UID,
 		},

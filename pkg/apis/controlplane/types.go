@@ -202,7 +202,7 @@ const (
 	AntreaNetworkPolicy        NetworkPolicyType = "AntreaNetworkPolicy"
 	AdminNetworkPolicy         NetworkPolicyType = "AdminNetworkPolicy"
 	BaselineAdminNetworkPolicy NetworkPolicyType = "BaselineAdminNetworkPolicy"
-	ClusterNetworkPolicy       NetworkPolicyType = "ClusterNetworkPolicy"
+	K8sClusterNetworkPolicy    NetworkPolicyType = "K8sClusterNetworkPolicy"
 )
 
 type NetworkPolicyReference struct {
