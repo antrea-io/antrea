@@ -45,11 +45,48 @@ func TestNewNetworkPolicyEvaluation(t *testing.T) {
 			},
 		},
 		{
-			name: "Invalid format",
+			name: "Invalid destination with missing Pod name",
 			args: map[string]string{
-				"destination": "ns",
+				"source":      "ns/pod1",
+				"destination": "ns/",
 			},
-			expectedError: "missing entities for NetworkPolicyEvaluation request",
+			expectedError: `invalid destination "ns/": expected [<Namespace>/]<name>`,
+		},
+		{
+			name: "Invalid source with empty Namespace",
+			args: map[string]string{
+				"source":      "/pod1",
+				"destination": "ns/pod2",
+			},
+			expectedError: `invalid source "/pod1": expected [<Namespace>/]<name>`,
+		},
+		{
+			name: "Invalid destination with too many segments",
+			args: map[string]string{
+				"source":      "ns/pod1",
+				"destination": "a/b/c",
+			},
+			expectedError: `invalid destination "a/b/c": expected [<Namespace>/]<name>`,
+		},
+		{
+			name: "Invalid source format",
+			args: map[string]string{
+				"source":      "a/b/c",
+				"destination": "ns/pod2",
+			},
+			expectedError: `invalid source "a/b/c": expected [<Namespace>/]<name>`,
+		},
+		{
+			name:          "Missing source and destination",
+			args:          map[string]string{},
+			expectedError: "--source (-S) must be specified",
+		},
+		{
+			name: "Missing destination",
+			args: map[string]string{
+				"source": "ns/pod1",
+			},
+			expectedError: "--destination (-D) must be specified",
 		},
 		{
 			name: "Default namespaces",

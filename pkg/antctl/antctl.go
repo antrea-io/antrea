@@ -530,12 +530,12 @@ $ antctl get podmulticaststats pod -n namespace`,
 					params: []flagInfo{
 						{
 							name:      "source",
-							usage:     "Source endpoint, specified by <Namespace>/<name>.",
+							usage:     "Source endpoint, specified by [<Namespace>/]<name> (Namespace defaults to \"default\").",
 							shorthand: "S",
 						},
 						{
 							name:      "destination",
-							usage:     "Destination endpoint, specified by <Namespace>/<name>.",
+							usage:     "Destination endpoint, specified by [<Namespace>/]<name> (Namespace defaults to \"default\").",
 							shorthand: "D",
 						},
 					},
