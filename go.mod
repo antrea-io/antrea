@@ -38,8 +38,8 @@ require (
 	github.com/k8snetworkplumbingwg/sriovnet v1.2.0
 	github.com/kevinburke/ssh_config v1.6.0
 	github.com/miekg/dns v1.1.73
-	github.com/onsi/ginkgo/v2 v2.28.3
-	github.com/onsi/gomega v1.40.0
+	github.com/onsi/ginkgo/v2 v2.32.2
+	github.com/onsi/gomega v1.43.0
 	github.com/osrg/gobgp/v4 v4.9.0
 	github.com/ovn-kubernetes/libovsdb v0.8.2-0.20260514180746-6b4a47e4838f
 	github.com/pkg/sftp v1.13.11
