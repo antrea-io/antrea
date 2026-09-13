@@ -22,6 +22,7 @@ import (
 	"net"
 	"os"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -33,6 +34,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"antrea.io/antrea/v2/pkg/ovs/ovsconfig"
+	"antrea.io/antrea/v2/pkg/ovs/ovsctl"
 )
 
 const (
@@ -241,6 +243,84 @@ func TestOVSPortExternalIDs(t *testing.T) {
 	}, 2*time.Second, 50*time.Millisecond, "Partial port updates should not overwrite other mutable fields like Tag")
 
 	deleteAllPorts(t, data.br)
+}
+
+// TestOVSSetPortTrunks verifies that updating Port.trunks is applied to the
+// ovs-vswitchd runtime configuration before SetPortTrunks returns.
+func TestOVSSetPortTrunks(t *testing.T) {
+	data := &testData{}
+	data.setup(t)
+	defer data.teardown(t)
+
+	access15Name := "access15-" + uuid.Must(uuid.NewV4()).String()[:8]
+	access18Name := "access18-" + uuid.Must(uuid.NewV4()).String()[:8]
+	trunkName := "trunk-" + uuid.Must(uuid.NewV4()).String()[:8]
+	testCreatePort(t, data.br, access15Name, "internal", 0)
+	testCreatePort(t, data.br, access18Name, "internal", 0)
+	testCreatePort(t, data.br, trunkName, "internal", 0)
+
+	setPortTag := func(portName string, vlanID int) {
+		port := &ovsconfig.Port{Tag: &vlanID}
+		ops, err := data.ovsdb.Where(&ovsconfig.Port{Name: portName}).Update(port, &port.Tag)
+		require.NoError(t, err)
+		results, err := data.ovsdb.Transact(context.Background(), ops...)
+		require.NoError(t, err)
+		opErrs, err := ovsdb.CheckOperationResults(results, ops)
+		require.NoError(t, err, "Failed to set access VLAN: %v", opErrs)
+	}
+	setPortTag(access15Name, 15)
+	setPortTag(access18Name, 18)
+
+	// The first call also ensures that ovs-vswitchd has loaded the access port
+	// tags set directly above.
+	require.NoError(t, data.br.SetPortTrunks(trunkName, []string{"15"}))
+
+	ovsCtlClient := ovsctl.NewClient(data.br.GetBridgeName())
+	_, err := ovsCtlClient.RunOfctlCmd("add-flow", "priority=0,actions=NORMAL")
+	require.NoError(t, err)
+
+	traceDatapathActions := func(inPort string) string {
+		trace, err := ovsCtlClient.Trace(&ovsctl.TracingRequest{
+			InPort: inPort,
+			SrcMAC: mustParseMAC(t, "00:00:00:00:00:01"),
+			DstMAC: mustParseMAC(t, "ff:ff:ff:ff:ff:ff"),
+			Flow:   "arp",
+		})
+		require.NoError(t, err)
+		for _, line := range strings.Split(trace, "\n") {
+			if strings.HasPrefix(line, "Datapath actions:") {
+				actions := strings.TrimSpace(strings.TrimPrefix(line, "Datapath actions:"))
+				t.Logf("Datapath actions for %s: %s", inPort, actions)
+				return actions
+			}
+		}
+		t.Fatalf("Datapath actions not found in trace output:\n%s", trace)
+		return ""
+	}
+
+	assert.Contains(t, traceDatapathActions(access15Name), "push_vlan(vid=15,")
+	assert.Equal(t, "drop", traceDatapathActions(access18Name))
+
+	var before []ovsconfig.OpenvSwitch
+	require.NoError(t, data.ovsdb.List(context.Background(), &before))
+	require.Len(t, before, 1)
+
+	require.NoError(t, data.br.SetPortTrunks(trunkName, []string{"18"}))
+
+	var after []ovsconfig.OpenvSwitch
+	require.NoError(t, data.ovsdb.List(context.Background(), &after))
+	require.Len(t, after, 1)
+	assert.Greater(t, after[0].NextCfg, before[0].NextCfg)
+	assert.GreaterOrEqual(t, after[0].CurCfg, after[0].NextCfg)
+	assert.Equal(t, "drop", traceDatapathActions(access15Name))
+	assert.Contains(t, traceDatapathActions(access18Name), "push_vlan(vid=18,")
+}
+
+func mustParseMAC(t *testing.T, mac string) net.HardwareAddr {
+	t.Helper()
+	parsed, err := net.ParseMAC(mac)
+	require.NoError(t, err)
+	return parsed
 }
 
 // TestOVSDeletePortIdempotent verifies that calling DeletePort on a non-existent port does not

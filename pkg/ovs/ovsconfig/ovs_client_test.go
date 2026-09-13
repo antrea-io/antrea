@@ -15,12 +15,27 @@
 package ovsconfig
 
 import (
+	"context"
+	"errors"
 	"net"
 	"testing"
+	"testing/synctest"
 
+	"github.com/ovn-kubernetes/libovsdb/client"
+	"github.com/ovn-kubernetes/libovsdb/ovsdb"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"k8s.io/utils/ptr"
 )
+
+type testOVSDBClient struct {
+	client.Client
+	listFn func(context.Context, any) error
+}
+
+func (c *testOVSDBClient) List(ctx context.Context, result any) error {
+	return c.listFn(ctx, result)
+}
 
 func TestBuildPortDataCommon(t *testing.T) {
 	macStr := "9a:23:45:23:22:41"
@@ -100,4 +115,115 @@ func TestBuildPortDataCommon(t *testing.T) {
 		})
 	}
 
+}
+
+func TestWaitForConfig(t *testing.T) {
+	testErr := errors.New("list failed")
+	tests := []struct {
+		name            string
+		curCfgs         []int
+		listErr         error
+		expectedErr     error
+		expectedErrText string
+		expectedCalls   int
+	}{
+		{
+			name:          "configuration already applied",
+			curCfgs:       []int{5},
+			expectedCalls: 1,
+		},
+		{
+			name:          "configuration applied after retry",
+			curCfgs:       []int{4, 5},
+			expectedCalls: 2,
+		},
+		{
+			name:          "OVSDB read fails",
+			listErr:       testErr,
+			expectedErr:   testErr,
+			expectedCalls: 1,
+		},
+		{
+			name:            "configuration wait times out",
+			curCfgs:         []int{4},
+			expectedErr:     context.DeadlineExceeded,
+			expectedErrText: "timed out waiting for OVS configuration 5 to be applied (cur_cfg=4)",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			synctest.Test(t, func(t *testing.T) {
+				calls := 0
+				ovsdbClient := &testOVSDBClient{
+					listFn: func(_ context.Context, result any) error {
+						calls++
+						if tc.listErr != nil {
+							return tc.listErr
+						}
+						index := min(calls-1, len(tc.curCfgs)-1)
+						ovsList := result.(*[]OpenvSwitch)
+						*ovsList = []OpenvSwitch{{CurCfg: tc.curCfgs[index]}}
+						return nil
+					},
+				}
+				br := &OVSBridge{ovsdb: ovsdbClient}
+				ctx, cancel := context.WithTimeout(t.Context(), ovsConfigWaitTimeout)
+				defer cancel()
+
+				err := br.waitForConfig(ctx, 5)
+				if tc.expectedErr == nil {
+					require.NoError(t, err)
+				} else {
+					require.ErrorIs(t, err, tc.expectedErr)
+				}
+				if tc.expectedErrText != "" {
+					assert.ErrorContains(t, err, tc.expectedErrText)
+				}
+				if tc.expectedCalls > 0 {
+					assert.Equal(t, tc.expectedCalls, calls)
+				}
+			})
+		})
+	}
+}
+
+func TestExtractOVSDBInt(t *testing.T) {
+	tests := []struct {
+		name          string
+		value         any
+		expectedValue int
+		expectedOK    bool
+	}{
+		{
+			name:          "raw JSON value",
+			value:         float64(5),
+			expectedValue: 5,
+			expectedOK:    true,
+		},
+		{
+			name:          "typed model value",
+			value:         5,
+			expectedValue: 5,
+			expectedOK:    true,
+		},
+		{
+			name:          "wrapped raw JSON value",
+			value:         ovsdb.OvsSet{GoSet: []any{float64(5)}},
+			expectedValue: 5,
+			expectedOK:    true,
+		},
+		{
+			name:  "invalid value",
+			value: "5",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			actual, ok := extractOVSDBInt(tc.value)
+			assert.Equal(t, tc.expectedOK, ok)
+			assert.Equal(t, tc.expectedValue, actual)
+		})
+	}
 }
