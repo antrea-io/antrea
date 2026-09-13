@@ -24,19 +24,11 @@ import (
 	"antrea.io/libOpenflow/openflow15"
 	current "github.com/containernetworking/cni/pkg/types/100"
 	"k8s.io/apimachinery/pkg/util/wait"
-	"k8s.io/client-go/kubernetes/scheme"
-	v1 "k8s.io/client-go/listers/core/v1"
 	"k8s.io/client-go/tools/cache"
-	"k8s.io/client-go/tools/events"
-	"k8s.io/client-go/util/workqueue"
 	"k8s.io/klog/v2"
 
 	"antrea.io/antrea/v2/pkg/agent/cniserver/ipam"
 	"antrea.io/antrea/v2/pkg/agent/interfacestore"
-)
-
-var (
-	workerName = "podConfigurator"
 )
 
 const (
@@ -148,21 +140,7 @@ func (pc *podConfigurator) reconcileMissingPods(ifConfigs []*interfacestore.Inte
 // initPortStatusMonitor has subscribed a channel to listen for the OpenFlow PortStatus message, and it also
 // initiates the Pod recorder.
 func (pc *podConfigurator) initPortStatusMonitor(podInformer cache.SharedIndexInformer) {
-	pc.podLister = v1.NewPodLister(podInformer.GetIndexer())
-	pc.podListerSynced = podInformer.HasSynced
-	pc.unreadyPortQueue = workqueue.NewTypedDelayingQueueWithConfig[string](
-		workqueue.TypedDelayingQueueConfig[string]{
-			Name: workerName,
-		},
-	)
-	eventBroadcaster := events.NewBroadcaster(&events.EventSinkImpl{
-		Interface: pc.kubeClient.EventsV1(),
-	})
-	pc.eventBroadcaster = eventBroadcaster
-	pc.recorder = eventBroadcaster.NewRecorder(
-		scheme.Scheme,
-		"AntreaPodConfigurator",
-	)
+	pc.initUnreadyPortQueue(podInformer)
 	pc.statusCh = make(chan *openflow15.PortStatus, 100)
 	pc.ofClient.SubscribeOFPortStatusMessage(pc.statusCh)
 }
@@ -170,10 +148,10 @@ func (pc *podConfigurator) initPortStatusMonitor(podInformer cache.SharedIndexIn
 func (pc *podConfigurator) Run(stopCh <-chan struct{}) {
 	defer pc.unreadyPortQueue.ShutDown()
 
-	klog.Infof("Starting %s", workerName)
-	defer klog.Infof("Shutting down %s", workerName)
+	klog.InfoS("Starting", "worker", workerName)
+	defer klog.InfoS("Shutting down", "worker", workerName)
 
-	if !cache.WaitForNamedCacheSync("podConfigurator", stopCh, pc.podListerSynced) {
+	if !cache.WaitForNamedCacheSync(workerName, stopCh, pc.podListerSynced) {
 		return
 	}
 	pc.eventBroadcaster.StartStructuredLogging(0)
@@ -191,12 +169,5 @@ func (pc *podConfigurator) Run(stopCh <-chan struct{}) {
 		case <-stopCh:
 			return
 		}
-	}
-}
-
-// worker is a long-running function that will continually call the processNextWorkItem function in
-// order to read and process a message on the workqueue.
-func (pc *podConfigurator) worker() {
-	for pc.processNextWorkItem() {
 	}
 }
