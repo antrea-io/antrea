@@ -15,6 +15,7 @@
 package egress
 
 import (
+	"fmt"
 	"sort"
 	"strconv"
 	"sync"
@@ -33,6 +34,7 @@ import (
 	crdv1b1 "antrea.io/antrea/v2/pkg/apis/crd/v1beta1"
 	crdinformers "antrea.io/antrea/v2/pkg/client/informers/externalversions/crd/v1beta1"
 	crdlisters "antrea.io/antrea/v2/pkg/client/listers/crd/v1beta1"
+	agentconfig "antrea.io/antrea/v2/pkg/config/agent"
 )
 
 const (
@@ -125,6 +127,9 @@ func getMaxEgressIPsFromAnnotation(node *corev1.Node) (int, bool, error) {
 	maxEgressIPs, err := strconv.Atoi(maxEgressIPsStr)
 	if err != nil {
 		return 0, false, err
+	}
+	if maxEgressIPs < 0 || maxEgressIPs > agentconfig.MaxEgressIPsPerNodeUpperBound {
+		return 0, false, fmt.Errorf("value must be between 0 and %d, got %d", agentconfig.MaxEgressIPsPerNodeUpperBound, maxEgressIPs)
 	}
 	return maxEgressIPs, true, nil
 }
