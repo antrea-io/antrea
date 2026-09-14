@@ -80,4 +80,9 @@ func TestDisableIPv6RAOnInterface(t *testing.T) {
 	autoconf, err := sysctl.GetSysctlNet(fmt.Sprintf("ipv6/conf/%s/autoconf", ifaceName))
 	require.NoError(t, err)
 	assert.Equal(t, 0, autoconf)
+
+	// Test on a non-existent interface: it should be ignored and return nil.
+	assert.NoError(t, util.DisableIPv6RAOnInterface("non-existent-iface"))
+	assert.NoError(t, util.EnsureIPv6AcceptRAOnInterface("non-existent-iface", 0))
+	assert.NoError(t, util.EnsureIPv6AutoconfOnInterface("non-existent-iface", 0))
 }
