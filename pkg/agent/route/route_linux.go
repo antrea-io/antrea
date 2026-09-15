@@ -1275,8 +1275,9 @@ func formatAPIServerHealthCheckPorts(ports []int32) string {
 }
 
 // writeAPIServerHealthCheckNoTrackRules exempts localhost health check traffic from conntrack, so
-// conntrack exhaustion cannot prevent the Kubelet from reaching the Antrea liveness endpoints. Both
-// raw hooks are needed because packets sent over loopback traverse OUTPUT and then PREROUTING.
+// conntrack exhaustion cannot cause the Kubelet to restart an otherwise healthy Antrea component.
+// It does not make the Node healthy or preserve other traffic while conntrack is exhausted. The request
+// matches the destination port in OUTPUT, and the response matches the source port in PREROUTING.
 func writeAPIServerHealthCheckNoTrackRules(iptablesData *bytes.Buffer, ports []int32) {
 	if len(ports) == 0 {
 		return
@@ -1284,36 +1285,15 @@ func writeAPIServerHealthCheckNoTrackRules(iptablesData *bytes.Buffer, ports []i
 	portList := formatAPIServerHealthCheckPorts(ports)
 	writeLine(iptablesData, []string{
 		"-A", antreaPreRoutingChain,
-		"-m", "comment", "--comment", `"Antrea: do not track localhost API health check input packets"`,
-		"-i", "lo", "-p", "tcp", "-m", "multiport", "--ports", portList,
+		"-i", "lo", "-p", "tcp", "-m", "comment", "--comment", `"Antrea: do not track localhost API health check input packets"`,
+		"-m", "multiport", "--sports", portList,
 		"-j", iptables.NoTrackTarget,
 	}...)
 	writeLine(iptablesData, []string{
 		"-A", antreaOutputChain,
-		"-m", "comment", "--comment", `"Antrea: do not track localhost API health check output packets"`,
-		"-o", "lo", "-p", "tcp", "-m", "multiport", "--ports", portList,
+		"-o", "lo", "-p", "tcp", "-m", "comment", "--comment", `"Antrea: do not track localhost API health check output packets"`,
+		"-m", "multiport", "--dports", portList,
 		"-j", iptables.NoTrackTarget,
-	}...)
-}
-
-// writeAPIServerHealthCheckAcceptRules keeps the untracked health check traffic from depending on
-// conntrack-based ESTABLISHED rules when the host firewall's default policy is to drop.
-func writeAPIServerHealthCheckAcceptRules(iptablesData *bytes.Buffer, ports []int32) {
-	if len(ports) == 0 {
-		return
-	}
-	portList := formatAPIServerHealthCheckPorts(ports)
-	writeLine(iptablesData, []string{
-		"-A", antreaInputChain,
-		"-m", "comment", "--comment", `"Antrea: allow localhost API health check input packets"`,
-		"-i", "lo", "-p", "tcp", "-m", "multiport", "--ports", portList,
-		"-j", iptables.AcceptTarget,
-	}...)
-	writeLine(iptablesData, []string{
-		"-A", antreaOutputChain,
-		"-m", "comment", "--comment", `"Antrea: allow localhost API health check output packets"`,
-		"-o", "lo", "-p", "tcp", "-m", "multiport", "--ports", portList,
-		"-j", iptables.AcceptTarget,
 	}...)
 }
 
@@ -1505,14 +1485,6 @@ func (c *Client) restoreIptablesData(podCIDR *net.IPNet,
 	for chain := range iptablesFiltersRuleByChain {
 		filterChains = append(filterChains, chain)
 	}
-	if len(apiServerHealthCheckPorts) > 0 {
-		if _, ok := iptablesFiltersRuleByChain[antreaInputChain]; !ok {
-			filterChains = append(filterChains, antreaInputChain)
-		}
-		if _, ok := iptablesFiltersRuleByChain[antreaOutputChain]; !ok {
-			filterChains = append(filterChains, antreaOutputChain)
-		}
-	}
 	if c.deterministic {
 		sort.Strings(filterChains)
 	}
@@ -1532,7 +1504,6 @@ func (c *Client) restoreIptablesData(podCIDR *net.IPNet,
 		"-o", c.nodeConfig.GatewayConfig.Name,
 		"-j", iptables.AcceptTarget,
 	}...)
-	writeAPIServerHealthCheckAcceptRules(iptablesData, apiServerHealthCheckPorts)
 	if c.connectUplinkToBridge {
 		// Add accept rules for local AntreaFlexibleIPAM
 		// AntreaFlexibleIPAM Pods -> HostPort Pod
@@ -1893,20 +1864,17 @@ func (c *Client) initAgentAPIServerHostNetworkFilterRules() {
 func (c *Client) controllerAPIServerPort() (int32, bool) {
 	endpointURL := c.endpointResolver.CurrentEndpointURL()
 	if endpointURL == nil {
-		klog.InfoS("Didn't get Endpoint URL for Antrea Service, removing the host network filter rules for " +
-			"the Antrea Controller APIServer")
+		klog.InfoS("Didn't get Endpoint URL for Antrea Service, removing the host network filter rules for the Antrea Controller APIServer")
 		return 0, false
 	}
 	portStr := endpointURL.Port()
 	if portStr == "" {
-		klog.InfoS("Empty port in the Endpoint URL for Antrea Service, removing the host network filter rules for " +
-			"the Antrea Controller APIServer")
+		klog.InfoS("Empty port in the Endpoint URL for Antrea Service, removing the host network filter rules for the Antrea Controller APIServer")
 		return 0, false
 	}
 	port, err := strconv.ParseInt(portStr, 10, 32)
 	if err != nil {
-		klog.ErrorS(err, "Invalid port in the Endpoint URL for Antrea Service, removing the host network filter rules for "+
-			"the Antrea Controller APIServer", "port", portStr)
+		klog.ErrorS(err, "Invalid port in the Endpoint URL for Antrea Service, removing the host network filter rules for the Antrea Controller APIServer", "port", portStr)
 		return 0, false
 	}
 	return int32(port), true
