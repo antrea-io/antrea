@@ -57,7 +57,7 @@ versions of the same Antrea minor versions:
 ### Feature stability
 
 For every Antrea minor release, the stability level of supported features may be
-updated (from `Alpha` to `Beta` or from `Beta` to `GA`). Refer to the the
+updated (from `Alpha` to `Beta` or from `Beta` to `GA`). Refer to the
 [CHANGELOG] for information about feature stability level for each release. For
 features controlled by a feature gate, this information is also present in a
 more structured way in [feature-gates.md](feature-gates.md).
