@@ -102,6 +102,9 @@ func (s fileStore) replaceAll(items []runtime.Object) error {
 func (s fileStore) loadAll() ([]runtime.Object, error) {
 	var objects []runtime.Object
 	err := afero.Walk(s.fs, s.dir, func(path string, info fs.FileInfo, err error) error {
+		if err != nil {
+			return nil
+		}
 		if info.IsDir() {
 			return nil
 		}
