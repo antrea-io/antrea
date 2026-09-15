@@ -179,13 +179,15 @@ func deploy(cmd *cobra.Command, role string, version string, namespace string, f
 		for _, manifest := range manifests {
 			// #nosec G107
 			resp, err := httpGet(manifest)
-			if resp.StatusCode == 404 {
-				return fmt.Errorf("manifest %s not found", manifest)
-			}
 			if err != nil {
 				return err
 			}
+			if resp.StatusCode == 404 {
+				resp.Body.Close()
+				return fmt.Errorf("manifest %s not found", manifest)
+			}
 			b, err := io.ReadAll(resp.Body)
+			resp.Body.Close()
 			if err != nil {
 				return err
 			}
