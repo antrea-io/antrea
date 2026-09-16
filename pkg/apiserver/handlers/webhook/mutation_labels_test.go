@@ -266,6 +266,12 @@ func TestHandleMutationLabels(t *testing.T) {
 			contentType:        contentTypeJson,
 			expectedStatusCode: http.StatusOK,
 		},
+		{
+			name:               "request body too large",
+			requestBody:        make([]byte, maxRequestBodySize+1),
+			contentType:        contentTypeJson,
+			expectedStatusCode: http.StatusBadRequest,
+		},
 	}
 
 	for _, tt := range testCases {
