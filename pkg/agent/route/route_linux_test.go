@@ -4124,7 +4124,7 @@ func TestEnqueueRemovesRulesWhenEndpointGoesAway(t *testing.T) {
 	require.Len(t, restoredData, 1)
 	assert.Contains(t, restoredData[0], `--dports 20349 -j NOTRACK`)
 	assert.Contains(t, restoredData[0], `--sports 20349 -j NOTRACK`)
-	assert.Contains(t, restoredData[0], `--ports 20349 -j ACCEPT`)
+	assert.Contains(t, restoredData[0], `--dport 20349 -j ACCEPT`)
 
 	resolver.url = nil
 	c.Enqueue()
@@ -4133,7 +4133,7 @@ func TestEnqueueRemovesRulesWhenEndpointGoesAway(t *testing.T) {
 	require.Len(t, restoredData, 2)
 	assert.Contains(t, restoredData[1], `--dports 10349 -j NOTRACK`)
 	assert.Contains(t, restoredData[1], `--sports 10349 -j NOTRACK`)
-	assert.Contains(t, restoredData[1], `--ports 10349 -j ACCEPT`)
+	assert.Contains(t, restoredData[1], `--dport 10349 -j ACCEPT`)
 	assert.NotContains(t, restoredData[1], "--ports 20349")
 }
 
