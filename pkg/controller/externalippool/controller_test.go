@@ -285,15 +285,17 @@ func TestExternalIPPoolControllerRejectsOverlappingIPRanges(t *testing.T) {
 	poolB := newExternalIPPool("eip2", "", "10.10.10.2", "10.10.10.3")
 	expectedMessage := "range [10.10.10.2-10.10.10.3] of ExternalIPPool eip2 overlaps with " +
 		"range [10.10.10.0/30] of ExternalIPPool eip1"
-	controller := newController([]runtime.Object{poolA, poolB})
+	controller := newController([]runtime.Object{poolA})
 	stopCh := make(chan struct{})
 	defer close(stopCh)
 	controller.crdInformerFactory.Start(stopCh)
 	controller.crdInformerFactory.WaitForCacheSync(stopCh)
 	go controller.Run(stopCh)
 	require.True(t, cache.WaitForCacheSync(stopCh, controller.HasSynced))
+	_, err := controller.crdClient.CrdV1beta1().ExternalIPPools().Create(context.Background(), poolB, metav1.CreateOptions{})
+	require.NoError(t, err)
 
-	err := wait.PollUntilContextTimeout(context.Background(), 50*time.Millisecond, 2*time.Second, true, func(ctx context.Context) (bool, error) {
+	err = wait.PollUntilContextTimeout(context.Background(), 50*time.Millisecond, 2*time.Second, true, func(ctx context.Context) (bool, error) {
 		pool, err := controller.crdClient.CrdV1beta1().ExternalIPPools().Get(ctx, poolB.Name, metav1.GetOptions{})
 		if err != nil {
 			return false, err
