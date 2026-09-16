@@ -52,14 +52,30 @@ func SetSysctlNet(sysctl string, newVal int) error {
 // EnsureSysctlNetValue checks if the specified sysctl net.* parameter is already set to the
 // provided value, and if not, it makes it so.
 func EnsureSysctlNetValue(sysctl string, value int) error {
+	return ensureSysctlNetValue(sysctl, value, false)
+}
+
+// EnsureSysctlNetValueIfExists checks if the specified sysctl net.* parameter is already set to the
+// provided value, and if not, it makes it so. If the sysctl parameter does not exist, it returns nil.
+func EnsureSysctlNetValueIfExists(sysctl string, value int) error {
+	return ensureSysctlNetValue(sysctl, value, true)
+}
+
+func ensureSysctlNetValue(sysctl string, value int, ignoreNotExist bool) error {
 	val, err := GetSysctlNet(sysctl)
 	if err != nil {
+		if ignoreNotExist && os.IsNotExist(err) {
+			return nil
+		}
 		// If permission error, please provide access to sysctl setting
 		klog.ErrorS(err, "Error when getting sysctl parameter", "path", sysctl)
 		return err
 	} else if val != value {
 		err = SetSysctlNet(sysctl, value)
 		if err != nil {
+			if ignoreNotExist && os.IsNotExist(err) {
+				return nil
+			}
 			// If permission error, please provide access to sysctl setting
 			klog.ErrorS(err, "Error when setting sysctl parameter", "path", sysctl, "value", value)
 			return err
