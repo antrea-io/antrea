@@ -186,6 +186,61 @@ func TestLabelIdentityMatch(t *testing.T) {
 	}
 }
 
+func TestConstructMapFromLabelString(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    string
+		expected map[string]string
+	}{
+		{
+			name:     "valid label string",
+			input:    "app=web,env=dev",
+			expected: map[string]string{"app": "web", "env": "dev"},
+		},
+		{
+			name:     "empty string",
+			input:    "",
+			expected: map[string]string{},
+		},
+		{
+			name:     "none placeholder",
+			input:    "<none>",
+			expected: map[string]string{},
+		},
+		{
+			name:     "malformed pair missing value is skipped",
+			input:    "app=web,invalid",
+			expected: map[string]string{"app": "web"},
+		},
+		{
+			name:     "value containing an equal sign is preserved",
+			input:    "app=web=v2",
+			expected: map[string]string{"app": "web=v2"},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.expected, constructMapFromLabelString(tt.input))
+		})
+	}
+}
+
+func TestNewLabelIdentityMatchInvalidFormat(t *testing.T) {
+	tests := []string{
+		"",
+		"invalid-label-format",
+		"ns:kubernetes.io/metadata.name=testing",
+		"pod:app=web",
+	}
+	for _, label := range tests {
+		t.Run(label, func(t *testing.T) {
+			assert.NotPanics(t, func() {
+				assert.Nil(t, newLabelIdentityMatch(label, 1))
+			})
+		})
+	}
+}
+
 func TestAddSelector(t *testing.T) {
 	tests := []struct {
 		name                 string
@@ -519,6 +574,17 @@ func TestAddLabelIdentity(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestAddLabelIdentityInvalidFormat(t *testing.T) {
+	i := NewLabelIdentityIndex()
+	malformedLabel := "invalid-label-format"
+	assert.NotPanics(t, func() {
+		i.AddLabelIdentity(malformedLabel, 1)
+	})
+	i.lock.RLock()
+	defer i.lock.RUnlock()
+	assert.NotContains(t, i.labelIdentities, malformedLabel)
 }
 
 func TestDeleteLabelIdentity(t *testing.T) {

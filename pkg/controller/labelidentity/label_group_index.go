@@ -134,15 +134,24 @@ func constructMapFromLabelString(s string) map[string]string {
 	}
 	kvs := strings.Split(s, ",")
 	for _, kv := range kvs {
-		kvpair := strings.Split(kv, "=")
+		kvpair := strings.SplitN(kv, "=", 2)
+		if len(kvpair) < 2 {
+			klog.ErrorS(nil, "Invalid key-value pair in label string, skipping", "pair", kv)
+			continue
+		}
 		m[kvpair[0]] = kvpair[1]
 	}
 	return m
 }
 
 // newLabelIdentityMatch constructs a labelIdentityMatch from a normalized LabelIdentity string.
+// It returns nil if the string does not match the expected format.
 func newLabelIdentityMatch(labelIdentity string, id uint32) *labelIdentityMatch {
 	labelMatches := labelRegex.FindStringSubmatch(labelIdentity)
+	if labelMatches == nil {
+		klog.ErrorS(nil, "Invalid LabelIdentity string format", "labelIdentity", labelIdentity)
+		return nil
+	}
 	nsLabels := constructMapFromLabelString(labelMatches[nsIndex])
 	podLabels := constructMapFromLabelString(labelMatches[podIndex])
 
@@ -383,6 +392,9 @@ func (i *LabelIdentityIndex) AddLabelIdentity(labelKey string, id uint32) {
 	}
 	klog.V(2).InfoS("Adding new LabelIdentity", "label", labelKey)
 	labelIdentityMatch := newLabelIdentityMatch(labelKey, id)
+	if labelIdentityMatch == nil {
+		return
+	}
 	i.labelIdentities[labelKey] = labelIdentityMatch
 	if keys, ok := i.labelIdentityNamespaceIndex[labelIdentityMatch.namespace]; ok {
 		keys.Insert(labelKey)

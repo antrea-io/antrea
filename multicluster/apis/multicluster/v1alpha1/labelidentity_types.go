@@ -42,6 +42,7 @@ type LabelIdentitySpec struct {
 	// Label is the normalized string of a label identity.
 	// The format of normalized label identity is `ns:(?P<nslabels>(.)*)&pod:(?P<podlabels>(.)*)`
 	// E.g., `ns:kubernetes.io/metadata.name=kube-system&pod:app=db`
+	// +kubebuilder:validation:XValidation:rule="self.matches('^ns:(.*)&pod:(.*)$')",message="label must match the format 'ns:<Namespace labels>&pod:<Pod labels>'"
 	Label string `json:"label,omitempty"`
 	// ID is the ID allocated for the label identity by the leader cluster.
 	ID uint32 `json:"id,omitempty"`
