@@ -248,6 +248,15 @@ func (s *FlowStreamService) GetFlows(req *flowpb.GetFlowsRequest, stream flowpb.
 		"maxCount", maxCount,
 		"filters", reqFilters)
 
+	// The stream is live. FlowStreamService explicitly sends an empty response at this point to let
+	// clients learn that directly. This empty response is never sent again: every later Send in the
+	// loop below is gated on having flows or a drop to report, so clients can treat "the first empty
+	// message" as acknowledgement.
+	if err := stream.Send(&flowpb.GetFlowsResponse{}); err != nil {
+		klog.InfoS("Send initial response to client failed, closing GetFlows stream", "err", err)
+		return err
+	}
+
 	consumer := s.buffer.NewConsumer(
 		ringbuffer.WithReadFromBeginning(),
 		ringbuffer.WithMaxConsumeDeadline(exporter.ConsumeDeadline),

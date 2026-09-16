@@ -856,10 +856,10 @@ func TestGetFlows_ScopeIsAuthorized(t *testing.T) {
 		synctest.Wait()
 		require.NoError(t, <-errCh)
 
-		// The scope is not echoed back, so a client is never sent a leading recordless message to
-		// skip past: every response it gets carries flows.
-		require.NotEmpty(t, stream.responses)
-		assert.NotEmpty(t, stream.responses[0].GetFlows())
+		// The first response is always the empty post-auth ack; every response after it carries flows.
+		require.Len(t, stream.responses, 2)
+		assert.Empty(t, stream.responses[0].GetFlows())
+		assert.NotEmpty(t, stream.responses[1].GetFlows())
 
 		// Only the record involving ns-a is streamed, with its peer left unidentified.
 		got := collectFlows(stream.responses)
