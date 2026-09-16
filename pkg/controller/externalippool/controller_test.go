@@ -280,6 +280,56 @@ func TestCreateOrUpdateIPAllocator(t *testing.T) {
 	assert.Equal(t, 29, allocator.Total())
 }
 
+func TestExternalIPPoolControllerRejectsOverlappingIPRanges(t *testing.T) {
+	poolA := newExternalIPPool("eip1", "10.10.10.0/30", "", "")
+	poolB := newExternalIPPool("eip2", "", "10.10.10.2", "10.10.10.3")
+	expectedMessage := "range [10.10.10.2-10.10.10.3] of ExternalIPPool eip2 overlaps with " +
+		"range [10.10.10.0/30] of ExternalIPPool eip1"
+	controller := newController([]runtime.Object{poolA, poolB})
+	stopCh := make(chan struct{})
+	defer close(stopCh)
+	controller.crdInformerFactory.Start(stopCh)
+	controller.crdInformerFactory.WaitForCacheSync(stopCh)
+	go controller.Run(stopCh)
+	require.True(t, cache.WaitForCacheSync(stopCh, controller.HasSynced))
+
+	err := wait.PollUntilContextTimeout(context.Background(), 50*time.Millisecond, 2*time.Second, true, func(ctx context.Context) (bool, error) {
+		pool, err := controller.crdClient.CrdV1beta1().ExternalIPPools().Get(ctx, poolB.Name, metav1.GetOptions{})
+		if err != nil {
+			return false, err
+		}
+		for _, condition := range pool.Status.Conditions {
+			if condition.Type == externalIPPoolReadyCondition {
+				return condition.Status == metav1.ConditionFalse && condition.Reason == ipRangeOverlapReason &&
+					condition.Message == expectedMessage, nil
+			}
+		}
+		return false, nil
+	})
+	require.NoError(t, err)
+	assert.True(t, controller.IPPoolExists(poolA.Name))
+	assert.False(t, controller.IPPoolExists(poolB.Name))
+
+	require.NoError(t, controller.crdClient.CrdV1beta1().ExternalIPPools().Delete(context.Background(), poolA.Name, metav1.DeleteOptions{}))
+	require.Eventually(t, func() bool {
+		return controller.IPPoolExists(poolB.Name)
+	}, 2*time.Second, 50*time.Millisecond)
+
+	err = wait.PollUntilContextTimeout(context.Background(), 50*time.Millisecond, 2*time.Second, true, func(ctx context.Context) (bool, error) {
+		pool, err := controller.crdClient.CrdV1beta1().ExternalIPPools().Get(ctx, poolB.Name, metav1.GetOptions{})
+		if err != nil {
+			return false, err
+		}
+		for _, condition := range pool.Status.Conditions {
+			if condition.Type == externalIPPoolReadyCondition {
+				return condition.Status == metav1.ConditionTrue && condition.Reason == "AllocatorReady", nil
+			}
+		}
+		return false, nil
+	})
+	assert.NoError(t, err)
+}
+
 func TestIPPoolEvents(t *testing.T) {
 	stopCh := make(chan struct{})
 	defer close(stopCh)

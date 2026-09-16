@@ -673,6 +673,11 @@ func (in *ExternalIPPoolSpec) DeepCopy() *ExternalIPPoolSpec {
 func (in *ExternalIPPoolStatus) DeepCopyInto(out *ExternalIPPoolStatus) {
 	*out = *in
 	out.Usage = in.Usage
+	if in.Conditions != nil {
+		in, out := &in.Conditions, &out.Conditions
+		*out = make([]v1.Condition, len(*in))
+		copy(*out, *in)
+	}
 	return
 }
 
