@@ -15,10 +15,13 @@
 package responder
 
 import (
+	"errors"
 	"fmt"
 	"net"
 	"net/netip"
+	"sync"
 	"testing"
+	"time"
 
 	"antrea.io/arp"
 	"antrea.io/ethernet"
@@ -30,7 +33,19 @@ import (
 	"antrea.io/antrea/v2/pkg/agent/util/nettest"
 )
 
-func newFakeARPClient(iface *net.Interface, conn *nettest.PacketConn) (*arp.Client, error) {
+type idempotentPacketConn struct {
+	*nettest.PacketConn
+	closeOnce sync.Once
+}
+
+func (c *idempotentPacketConn) Close() error {
+	c.closeOnce.Do(func() {
+		_ = c.PacketConn.Close()
+	})
+	return nil
+}
+
+func newFakeARPClient(iface *net.Interface, conn net.PacketConn) (*arp.Client, error) {
 	return arp.New(iface, conn)
 }
 
@@ -39,16 +54,11 @@ func newFakeARPClient(iface *net.Interface, conn *nettest.PacketConn) (*arp.Clie
 // at the loopback index makes Addrs() return a valid IPv4 address, satisfying
 // arp.New (since commit 6706a29) without borrowing an entirely separate struct.
 func loopbackIndex() (int, error) {
-	ifaces, err := net.Interfaces()
+	iface, err := loopbackInterface()
 	if err != nil {
-		return 0, fmt.Errorf("failed to list network interfaces: %w", err)
+		return 0, err
 	}
-	for _, iface := range ifaces {
-		if iface.Flags&net.FlagLoopback != 0 {
-			return iface.Index, nil
-		}
-	}
-	return 0, fmt.Errorf("no loopback interface found")
+	return iface.Index, nil
 }
 
 // newFakeNetworkInterface creates a fake net.Interface with the given index and
@@ -150,6 +160,39 @@ func TestARPResponder_HandleARPRequest(t *testing.T) {
 	}
 }
 
+func TestARPResponder_HandleARPRequest_MalformedPacket(t *testing.T) {
+	loopbackIdx, err := loopbackIndex()
+	if err != nil {
+		t.Skipf("Skipping test: loopback interface not available: %v", err)
+	}
+
+	localHWAddr := net.HardwareAddr{0x00, 0x01, 0x02, 0x03, 0x04, 0x05}
+	remoteHWAddr := net.HardwareAddr{0x00, 0x11, 0x22, 0x33, 0x44, 0x55}
+	localIface := newFakeNetworkInterface(loopbackIdx, localHWAddr)
+	localAddr := &packet.Addr{HardwareAddr: localHWAddr}
+	remoteAddr := &packet.Addr{HardwareAddr: remoteHWAddr}
+
+	localConn, remoteConn := nettest.PacketConnPipe(localAddr, remoteAddr, 1)
+	localARPClient, err := newFakeARPClient(localIface, localConn)
+	require.NoError(t, err)
+
+	// Send truncated/malformed bytes on wire to simulate packet corruption
+	truncatedFrame := []byte{0x00, 0x01, 0x08, 0x00}
+	_, err = remoteConn.WriteTo(truncatedFrame, localAddr)
+	require.NoError(t, err)
+
+	r := arpResponder{
+		linkName:    localIface.Name,
+		assignedIPs: sets.New[netip.Addr](),
+	}
+
+	// Malformed packet returns error from client.Read, which outer loop catches and skips
+	err = r.handleARPRequest(localARPClient, localIface)
+	require.Error(t, err)
+	var opErr *net.OpError
+	assert.False(t, errors.As(err, &opErr), "malformed frame must not be classified as a socket error (*net.OpError)")
+}
+
 func Test_arpResponder_addIP(t *testing.T) {
 	hwAddr := []byte{0x00, 0x11, 0x22, 0x33, 0x44, 0x55}
 	iface := newFakeNetworkInterface(1, hwAddr)
@@ -244,4 +287,113 @@ func Test_arpResponder_removeIP(t *testing.T) {
 			assert.Equal(t, tt.expectedAssignedIPs, r.assignedIPs)
 		})
 	}
+}
+
+func testInterface() (*net.Interface, error) {
+	ifaces, err := net.Interfaces()
+	if err != nil {
+		return nil, fmt.Errorf("failed to list network interfaces: %w", err)
+	}
+	for _, iface := range ifaces {
+		if len(iface.HardwareAddr) == 6 {
+			addrs, err := iface.Addrs()
+			if err == nil {
+				for _, addr := range addrs {
+					if ipNet, ok := addr.(*net.IPNet); ok && ipNet.IP.To4() != nil {
+						return &iface, nil
+					}
+				}
+			}
+		}
+	}
+	for _, iface := range ifaces {
+		if len(iface.HardwareAddr) == 6 {
+			return &iface, nil
+		}
+	}
+	return loopbackInterface()
+}
+
+func Test_arpResponder_dialAndHandleRequests(t *testing.T) {
+	testIface, err := testInterface()
+	if err != nil {
+		t.Skipf("Skipping test: no network interface available: %v", err)
+	}
+	if len(testIface.HardwareAddr) != 6 {
+		t.Skipf("Skipping test: interface %s does not have a 6-byte MAC address: %v", testIface.Name, testIface.HardwareAddr)
+	}
+
+	localHWAddr := testIface.HardwareAddr
+	remoteHWAddr := net.HardwareAddr{0x00, 0x11, 0x22, 0x33, 0x44, 0x55}
+	localIPAddr := netip.MustParseAddr("192.168.10.1")
+	remoteIPAddr := netip.MustParseAddr("192.168.10.2")
+
+	localIface := newFakeNetworkInterface(testIface.Index, localHWAddr)
+	localIface.Name = testIface.Name
+	remoteIface := newFakeNetworkInterface(testIface.Index, remoteHWAddr)
+	localAddr := &packet.Addr{HardwareAddr: localHWAddr}
+	remoteAddr := &packet.Addr{HardwareAddr: remoteHWAddr}
+
+	pipeLocal, pipeRemote := nettest.PacketConnPipe(localAddr, remoteAddr, 5)
+	localConn := &idempotentPacketConn{PacketConn: pipeLocal}
+	remoteConn := &idempotentPacketConn{PacketConn: pipeRemote}
+
+	localARPClient, err := newFakeARPClient(localIface, localConn)
+	require.NoError(t, err)
+	remoteARPClient, err := newFakeARPClient(remoteIface, remoteConn)
+	require.NoError(t, err)
+
+	dialCalled := false
+	r := &arpResponder{
+		linkName:    testIface.Name,
+		assignedIPs: sets.New[netip.Addr](localIPAddr),
+		linkEventCh: make(chan struct{}, 1),
+		dial: func(_ *net.Interface) (*arp.Client, error) {
+			dialCalled = true
+			return localARPClient, nil
+		},
+	}
+
+	// 1. Send a truncated/malformed frame first. The loop should handle the error and continue.
+	truncatedFrame := []byte{0x00, 0x01, 0x08, 0x00}
+	_, err = remoteConn.WriteTo(truncatedFrame, localAddr)
+	require.NoError(t, err)
+
+	// 2. Send a valid ARP request afterwards.
+	request, err := arp.NewPacket(arp.OperationRequest, remoteHWAddr, remoteIPAddr, ethernet.Broadcast, localIPAddr)
+	require.NoError(t, err)
+	require.NoError(t, remoteARPClient.WriteTo(request, localAddr.HardwareAddr))
+
+	stopCh := make(chan struct{})
+	doneCh := make(chan struct{})
+	go func() {
+		defer close(doneCh)
+		r.dialAndHandleRequests(stopCh)
+	}()
+
+	// Verify that the valid ARP request was processed despite the preceding malformed packet.
+	expectedReply, err := arp.NewPacket(arp.OperationReply, localHWAddr, localIPAddr, remoteHWAddr, remoteIPAddr)
+	require.NoError(t, err)
+	expectedBytes := getEthernetForARPPacket(expectedReply, remoteHWAddr)
+
+	require.Eventually(t, func() bool {
+		replyB, addr, err := remoteConn.Receive()
+		if err != nil {
+			return false
+		}
+		return assert.ObjectsAreEqual(remoteAddr, addr) && assert.ObjectsAreEqual(expectedBytes, replyB)
+	}, 5*time.Second, 50*time.Millisecond, "Expected ARP reply to be sent even after encountering a malformed frame")
+
+	// 3. Trigger socket closure error to terminate dialAndHandleRequests.
+	// Closing localConn causes client.Read() to fail with *net.OpError, triggering loop exit.
+	_ = localConn.Close()
+
+	select {
+	case <-doneCh:
+		// Succeeded: loop exited on socket error without hanging or panicking.
+	case <-time.After(5 * time.Second):
+		t.Fatalf("dialAndHandleRequests did not exit after socket closure")
+	}
+
+	assert.True(t, dialCalled, "dial seam must be invoked")
 }
