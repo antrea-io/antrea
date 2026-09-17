@@ -296,6 +296,9 @@ func (c *SupportBundleController) uploadSupportBundle(supportBundle *cpv1b2.Supp
 	if _, err := outputFile.Seek(0, 0); err != nil {
 		return fmt.Errorf("failed to upload to the file server while setting offset: %v", err)
 	}
+	if supportBundle.Authentication.BasicAuthentication == nil {
+		return fmt.Errorf("basic authentication configuration is missing")
+	}
 	fileName := c.nodeName + "_" + supportBundle.Name + ".tar.gz"
 	cfg, err := sftp.GetSSHClientConfig(
 		supportBundle.Authentication.BasicAuthentication.Username,
