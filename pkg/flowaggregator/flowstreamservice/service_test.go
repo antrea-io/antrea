@@ -17,6 +17,7 @@ package flowstreamservice
 import (
 	"context"
 	"fmt"
+	"math"
 	"net/netip"
 	"testing"
 	"testing/synctest"
@@ -934,6 +935,258 @@ func TestGetFlows_RevokedMidStream(t *testing.T) {
 		default:
 			t.Fatal("GetFlows did not return after the grant was revoked")
 		}
+	})
+}
+
+func TestGetFlows_HandshakeAndSequenceNumbers(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		buf := ringbuffer.NewBroadcastBuffer[*flowpb.Flow](64)
+		t.Cleanup(func() { buf.Shutdown() })
+
+		buf.Produce(newFlow("flow-0", &flowpb.Kubernetes{}))
+		buf.Produce(newFlow("flow-1", &flowpb.Kubernetes{}))
+
+		svc := newTestService(buf)
+		stream := newFakeStream(t.Context())
+
+		errCh := make(chan error, 1)
+		go func() { errCh <- svc.GetFlows(&flowpb.GetFlowsRequest{Follow: false}, stream) }()
+		time.Sleep(2 * exporter.ConsumeDeadline)
+		synctest.Wait()
+		require.NoError(t, <-errCh)
+
+		require.Len(t, stream.responses, 2)
+		handshake, data := stream.responses[0], stream.responses[1]
+
+		assert.Empty(t, handshake.GetFlows())
+		assert.Zero(t, handshake.GetDroppedCount())
+		assert.False(t, handshake.GetResumeReset(), "no resume token was sent, so there is nothing to reset")
+		assert.NotEmpty(t, handshake.GetResumeToken().GetStreamEpoch())
+		assert.EqualValues(t, -1, handshake.GetResumeToken().GetSequenceNumber(), "nothing accounted for before the first flow")
+
+		assert.Equal(t, handshake.GetResumeToken().GetStreamEpoch(), data.GetResumeToken().GetStreamEpoch(), "epoch is stable across a stream's lifetime")
+		require.Len(t, data.GetFlows(), 2)
+		assert.EqualValues(t, 1, data.GetResumeToken().GetSequenceNumber(), "positions 0 and 1 both accounted for")
+	})
+}
+
+func TestGetFlows_ResumeContinuesWithoutGap(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		buf := ringbuffer.NewBroadcastBuffer[*flowpb.Flow](64)
+		t.Cleanup(func() { buf.Shutdown() })
+
+		buf.Produce(newFlow("flow-0", &flowpb.Kubernetes{}))
+		buf.Produce(newFlow("flow-1", &flowpb.Kubernetes{}))
+
+		svc := newTestService(buf)
+		first := newFakeStream(t.Context())
+		errCh := make(chan error, 1)
+		go func() { errCh <- svc.GetFlows(&flowpb.GetFlowsRequest{Follow: false}, first) }()
+		time.Sleep(2 * exporter.ConsumeDeadline)
+		synctest.Wait()
+		require.NoError(t, <-errCh)
+
+		last := first.responses[len(first.responses)-1]
+		token := last.GetResumeToken()
+
+		buf.Produce(newFlow("flow-2", &flowpb.Kubernetes{}))
+
+		second := newFakeStream(t.Context())
+		go func() {
+			errCh <- svc.GetFlows(&flowpb.GetFlowsRequest{Follow: false, Resume: token}, second)
+		}()
+		time.Sleep(2 * exporter.ConsumeDeadline)
+		synctest.Wait()
+		require.NoError(t, <-errCh)
+
+		assert.Zero(t, second.responses[0].GetDroppedCount(), "nothing fell out of the buffer between the two streams")
+		assert.False(t, second.responses[0].GetResumeReset(), "same epoch: this 0 is a confirmed measurement, not an unknown")
+		got := collectFlows(second.responses)
+		require.Len(t, got, 1)
+		assert.Equal(t, "flow-2", got[0].GetId(), "flow-0 and flow-1 were already seen and must not be re-sent")
+	})
+}
+
+func TestGetFlows_ResumePastEvictedGapReportsExactDrop(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		const bufSize = 4
+		buf := ringbuffer.NewBroadcastBuffer[*flowpb.Flow](bufSize)
+		t.Cleanup(func() { buf.Shutdown() })
+
+		buf.Produce(newFlow("flow-0", &flowpb.Kubernetes{}))
+
+		svc := newTestService(buf)
+		first := newFakeStream(t.Context())
+		errCh := make(chan error, 1)
+		go func() { errCh <- svc.GetFlows(&flowpb.GetFlowsRequest{Follow: false}, first) }()
+		time.Sleep(2 * exporter.ConsumeDeadline)
+		synctest.Wait()
+		require.NoError(t, <-errCh)
+
+		last := first.responses[len(first.responses)-1]
+		token := last.GetResumeToken()
+
+		// Produce past flow-0 by more than a full buffer's worth, so its position (0) is gone by
+		// the time the second stream reconnects: only flow-5 through flow-8 (positions 5-8) remain.
+		for i := 1; i <= bufSize*2; i++ {
+			buf.Produce(newFlow(fmt.Sprintf("flow-%d", i), &flowpb.Kubernetes{}))
+		}
+
+		second := newFakeStream(t.Context())
+		go func() {
+			errCh <- svc.GetFlows(&flowpb.GetFlowsRequest{Follow: false, Resume: token}, second)
+		}()
+		time.Sleep(2 * exporter.ConsumeDeadline)
+		synctest.Wait()
+		require.NoError(t, <-errCh)
+
+		// Positions 1-4 are an unrecoverable gap: already unseen by the client, and now also gone
+		// from the buffer. flow-0 (position 0) was already seen, so it is not part of the gap.
+		assert.EqualValues(t, 4, second.responses[0].GetDroppedCount())
+
+		got := collectFlows(second.responses)
+		gotIDs := make([]string, len(got))
+		for i, f := range got {
+			gotIDs[i] = f.GetId()
+		}
+		assert.ElementsMatch(t, []string{"flow-5", "flow-6", "flow-7", "flow-8"}, gotIDs)
+	})
+}
+
+func TestGetFlows_ResumeEpochMismatchFallsBackToFullReplay(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		buf := ringbuffer.NewBroadcastBuffer[*flowpb.Flow](64)
+		t.Cleanup(func() { buf.Shutdown() })
+
+		buf.Produce(newFlow("flow-0", &flowpb.Kubernetes{}))
+		buf.Produce(newFlow("flow-1", &flowpb.Kubernetes{}))
+
+		svc := newTestService(buf)
+		stream := newFakeStream(t.Context())
+		req := &flowpb.GetFlowsRequest{
+			Follow: false,
+			Resume: &flowpb.ResumeToken{StreamEpoch: "stale-epoch-from-a-restarted-process", SequenceNumber: 1},
+		}
+		errCh := make(chan error, 1)
+		go func() { errCh <- svc.GetFlows(req, stream) }()
+		time.Sleep(2 * exporter.ConsumeDeadline)
+		synctest.Wait()
+		require.NoError(t, <-errCh)
+
+		// A stale epoch is not an error and not honored: the stream replays everything, exactly as
+		// if no resume token had been sent. dropped_count is 0, but resume_reset marks that as "gap
+		// size unknown" rather than a confirmed zero: the previous epoch's buffer is gone, so there
+		// is no way to know whether the client missed anything produced after its last-seen position
+		// and before the restart.
+		handshake := stream.responses[0]
+		assert.True(t, handshake.GetResumeReset())
+		assert.Zero(t, handshake.GetDroppedCount())
+		got := collectFlows(stream.responses)
+		require.Len(t, got, 2)
+	})
+}
+
+// TestGetFlows_ResumeAheadOfCurrentPositionRejected covers the boundary the epoch check alone does
+// not: a token that matches this process's epoch but names a sequence_number this server could
+// never have issued (at or beyond its own current position). Unlike a Kubernetes watch resuming
+// from a future ResourceVersion — which can be legitimate skew from a different apiserver replica,
+// and so gets a bounded wait before failing — there is exactly one Flow Aggregator process behind
+// one epoch, so a same-epoch token this far out of range can only be malformed, and is rejected
+// immediately rather than waited out.
+func TestGetFlows_ResumeAheadOfCurrentPositionRejected(t *testing.T) {
+	buf := ringbuffer.NewBroadcastBuffer[*flowpb.Flow](64)
+	t.Cleanup(func() { buf.Shutdown() })
+
+	buf.Produce(newFlow("flow-0", &flowpb.Kubernetes{})) // position 0; tip is now 1
+
+	svc := newTestService(buf)
+	stream := newFakeStream(context.Background())
+	req := &flowpb.GetFlowsRequest{
+		// sequence_number 1 == the tip: one past the only position ever produced, so this server
+		// could never have handed this value back to a client.
+		Resume: &flowpb.ResumeToken{StreamEpoch: svc.streamEpoch, SequenceNumber: 1},
+	}
+
+	err := svc.GetFlows(req, stream)
+	require.Error(t, err)
+	st, ok := status.FromError(err)
+	require.True(t, ok)
+	assert.Equal(t, codes.InvalidArgument, st.Code())
+	assert.Empty(t, stream.responses, "a rejected resume token must not get even the handshake response")
+}
+
+// TestGetFlows_ResumeBelowMinimumRejected covers the lower boundary of a resume token's
+// sequence_number. -1 ("nothing accounted for yet") is the smallest value a server ever issues;
+// anything below that is invalid input, not just unusual. Before this was rejected explicitly, a
+// sufficiently negative value (this test uses math.MinInt64, the worst case) fed into
+// startPos - (sequence_number + 1) as a signed int64 computation, overflowed it, and the
+// wrapped-around result silently became a bogus dropped_count once cast to uint64 — a wrong answer
+// handed to the client instead of a rejected request.
+func TestGetFlows_ResumeBelowMinimumRejected(t *testing.T) {
+	buf := ringbuffer.NewBroadcastBuffer[*flowpb.Flow](64)
+	t.Cleanup(func() { buf.Shutdown() })
+
+	buf.Produce(newFlow("flow-0", &flowpb.Kubernetes{}))
+
+	svc := newTestService(buf)
+	stream := newFakeStream(context.Background())
+	req := &flowpb.GetFlowsRequest{
+		Resume: &flowpb.ResumeToken{StreamEpoch: svc.streamEpoch, SequenceNumber: math.MinInt64},
+	}
+
+	err := svc.GetFlows(req, stream)
+	require.Error(t, err)
+	st, ok := status.FromError(err)
+	require.True(t, ok)
+	assert.Equal(t, codes.InvalidArgument, st.Code())
+	assert.Empty(t, stream.responses, "a rejected resume token must not get even the handshake response")
+}
+
+// TestGetFlows_ResumeSkipIsBasedOnRawPositionNotVisibility pins down that resuming skips flows by
+// their raw ring-buffer read position, resolved before authorization runs, rather than by a count
+// of what this particular client was actually sent: a flow withheld from a client entirely still
+// occupies a position, and that position must still be skipped correctly on resume.
+func TestGetFlows_ResumeSkipIsBasedOnRawPositionNotVisibility(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		buf := ringbuffer.NewBroadcastBuffer[*flowpb.Flow](64)
+		t.Cleanup(func() { buf.Shutdown() })
+
+		buf.Produce(podFlow("ns-a", "ns-b")) // position 0: visible under the ns-a grant below
+		buf.Produce(podFlow("ns-c", "ns-d")) // position 1: withheld entirely; neither end is ns-a
+
+		svc, _ := newAuthorizedTestService(buf, flowsGrant(listVerb, "ns-a"))
+		first := newFakeStream(request.WithUser(t.Context(), testUserInfo))
+		errCh := make(chan error, 1)
+		go func() {
+			errCh <- svc.GetFlows(&flowpb.GetFlowsRequest{Namespaces: []string{"ns-a"}}, first)
+		}()
+		time.Sleep(2 * exporter.ConsumeDeadline)
+		synctest.Wait()
+		require.NoError(t, <-errCh)
+
+		got := collectFlows(first.responses)
+		require.Len(t, got, 1, "the ns-c->ns-d flow is withheld entirely")
+		assert.Equal(t, "ns-a->ns-b", got[0].GetId())
+		last := first.responses[len(first.responses)-1]
+		assert.EqualValues(t, 1, last.GetResumeToken().GetSequenceNumber(), "position 1 was read (and withheld), not skipped")
+
+		token := last.GetResumeToken()
+		buf.Produce(podFlow("ns-a", "ns-b")) // position 2
+
+		second := newFakeStream(request.WithUser(t.Context(), testUserInfo))
+		go func() {
+			errCh <- svc.GetFlows(&flowpb.GetFlowsRequest{Namespaces: []string{"ns-a"}, Resume: token}, second)
+		}()
+		time.Sleep(2 * exporter.ConsumeDeadline)
+		synctest.Wait()
+		require.NoError(t, <-errCh)
+
+		// Resuming from position 1 must not report the withheld flow at that position as a gap, nor
+		// re-deliver anything: only the new flow at position 2 is new to this client.
+		assert.Zero(t, second.responses[0].GetDroppedCount())
+		got2 := collectFlows(second.responses)
+		require.Len(t, got2, 1)
+		assert.Equal(t, "ns-a->ns-b", got2[0].GetId())
 	})
 }
 

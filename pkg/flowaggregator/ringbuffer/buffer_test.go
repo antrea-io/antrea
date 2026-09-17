@@ -521,6 +521,61 @@ func TestReadFromBeginningVsDefault(t *testing.T) {
 	assert.Equal(t, 11, n)
 }
 
+func TestPositionStartsAtZero(t *testing.T) {
+	buf := NewBroadcastBuffer[int](8)
+	c := buf.NewConsumer()
+	assert.Equal(t, int64(0), c.Position())
+}
+
+func TestPositionAdvancesWithReads(t *testing.T) {
+	buf := NewBroadcastBuffer[int](8)
+	c := buf.NewConsumer()
+
+	buf.ProduceMultiple([]int{1, 2, 3})
+	out := make([]int, 10)
+	n, _, _ := c.ConsumeMultiple(out)
+	require.Equal(t, 3, n)
+	assert.Equal(t, int64(3), c.Position())
+}
+
+func TestPositionReflectsReadFromBeginningStart(t *testing.T) {
+	const bufSize = 8
+	buf := NewBroadcastBuffer[int](bufSize)
+
+	total := bufSize * 3
+	for i := 0; i < total; i++ {
+		buf.Produce(i)
+	}
+
+	c := buf.NewConsumer(WithReadFromBeginning())
+	// Position reflects the starting point immediately, before any read: the buffer has wrapped
+	// bufSize*3/bufSize = 3 times, so the oldest item it still holds is at total-bufSize.
+	assert.Equal(t, int64(total-bufSize), c.Position())
+
+	out := make([]int, bufSize)
+	n, _, _ := c.ConsumeMultiple(out)
+	require.Equal(t, bufSize, n)
+	assert.Equal(t, int64(total), c.Position())
+}
+
+func TestPositionAdvancesPastLostItems(t *testing.T) {
+	const bufSize = 4
+	buf := NewBroadcastBuffer[int](bufSize)
+	c := buf.NewConsumer()
+
+	for i := 0; i < 2*bufSize; i++ {
+		buf.Produce(i)
+	}
+
+	out := make([]int, 10)
+	n, lost, _ := c.ConsumeMultiple(out)
+	require.Equal(t, bufSize, n)
+	assert.Equal(t, int64(bufSize), lost)
+	// Position reflects readPos having jumped forward past the lost items before reading the
+	// batch, landing at the tip once the batch itself (bufSize items) is accounted for too.
+	assert.Equal(t, int64(2*bufSize), c.Position())
+}
+
 func TestConsumeDeadlineReturnsEmpty(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		buf := NewBroadcastBuffer[int](8)
