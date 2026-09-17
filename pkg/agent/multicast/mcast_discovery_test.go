@@ -21,6 +21,7 @@ import (
 	"net"
 	"sync"
 	"testing"
+	"time"
 
 	"antrea.io/libOpenflow/openflow15"
 	"antrea.io/libOpenflow/protocol"
@@ -28,11 +29,13 @@ import (
 	"antrea.io/ofnet/ofctrl"
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/mock/gomock"
+	"golang.org/x/time/rate"
 	apitypes "k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/sets"
 
 	"antrea.io/antrea/v2/pkg/agent/interfacestore"
 	ifaceStoretest "antrea.io/antrea/v2/pkg/agent/interfacestore/testing"
+	"antrea.io/antrea/v2/pkg/agent/openflow"
 	openflowtest "antrea.io/antrea/v2/pkg/agent/openflow/testing"
 	"antrea.io/antrea/v2/pkg/agent/types"
 	"antrea.io/antrea/v2/pkg/ovs/ovsconfig"
@@ -282,4 +285,172 @@ func generatePacketInForRemoteReport(t *testing.T, snooper *IGMPSnooper, groups 
 func createTunnelInterface(tunnelPort uint32, localNodeIP net.IP) *interfacestore.InterfaceConfig {
 	tunnelInterface := interfacestore.NewTunnelInterface("antrea-tun0", ovsconfig.GeneveTunnel, 6081, localNodeIP, false, &interfacestore.OVSPortConfig{OFPort: int32(tunnelPort)})
 	return tunnelInterface
+}
+
+func TestHandlePacketInOversizedIGMPv3Report(t *testing.T) {
+	controller := gomock.NewController(t)
+	mockOFClient := openflowtest.NewMockClient(controller)
+	mockIfaceStore := ifaceStoretest.NewMockInterfaceStore(controller)
+	eventCh := make(chan *mcastGroupEvent, 200)
+	snooper := &IGMPSnooper{ofClient: mockOFClient, eventCh: eventCh, ifaceStore: mockIfaceStore}
+
+	localNodeIP := net.ParseIP("1.2.3.4")
+	tunnelPort := uint32(1)
+
+	// Create an oversized IGMPv3 report with maxGroupRecordsPerReport + 1 records.
+	records := make([]protocol.IGMPv3GroupRecord, maxGroupRecordsPerReport+1)
+	for i := range records {
+		records[i] = protocol.IGMPv3GroupRecord{
+			Type:             protocol.IGMPIsEx,
+			MulticastAddress: net.ParseIP("225.1.2.3"),
+		}
+	}
+	report := &protocol.IGMPv3MembershipReport{
+		Type:           protocol.IGMPv3Report,
+		NumberOfGroups: uint16(len(records)),
+		GroupRecords:   records,
+	}
+	pkt := generatePacketWithMatches(report, tunnelPort, localNodeIP, []openflow15.MatchField{*openflow15.NewInPortField(tunnelPort)})
+	mockIfaceStore.EXPECT().GetInterfaceByOFPort(tunnelPort).Return(createTunnelInterface(tunnelPort, localNodeIP), true)
+
+	err := snooper.HandlePacketIn(&pkt)
+	assert.NoError(t, err)
+	assert.Equal(t, 0, len(eventCh), "Oversized IGMPv3 report should be dropped without generating events")
+}
+
+func TestHandlePacketInMalformedGroupAddress(t *testing.T) {
+	controller := gomock.NewController(t)
+	mockOFClient := openflowtest.NewMockClient(controller)
+	mockIfaceStore := ifaceStoretest.NewMockInterfaceStore(controller)
+	eventCh := make(chan *mcastGroupEvent, 100)
+	snooper := &IGMPSnooper{ofClient: mockOFClient, eventCh: eventCh, ifaceStore: mockIfaceStore}
+
+	localNodeIP := net.ParseIP("1.2.3.4")
+	tunnelPort := uint32(1)
+
+	testCases := []struct {
+		name string
+		msg  util.Message
+	}{
+		{
+			name: "IGMPv1 report with non-multicast IP",
+			msg:  protocol.NewIGMPv1Report(net.ParseIP("10.0.0.1")),
+		},
+		{
+			name: "IGMPv2 report with non-multicast IP",
+			msg:  protocol.NewIGMPv2Report(net.ParseIP("192.168.1.1")),
+		},
+		{
+			name: "IGMPv2 leave with non-multicast IP",
+			msg:  protocol.NewIGMPv2Leave(net.ParseIP("10.0.0.2")),
+		},
+		{
+			name: "IGMPv3 report with non-multicast IP in group record",
+			msg: &protocol.IGMPv3MembershipReport{
+				Type:           protocol.IGMPv3Report,
+				NumberOfGroups: 1,
+				GroupRecords: []protocol.IGMPv3GroupRecord{
+					{
+						Type:             protocol.IGMPIsEx,
+						MulticastAddress: net.ParseIP("10.0.0.3"),
+					},
+				},
+			},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			pkt := generatePacketWithMatches(tc.msg, tunnelPort, localNodeIP, []openflow15.MatchField{*openflow15.NewInPortField(tunnelPort)})
+			mockIfaceStore.EXPECT().GetInterfaceByOFPort(tunnelPort).Return(createTunnelInterface(tunnelPort, localNodeIP), true)
+			err := snooper.HandlePacketIn(&pkt)
+			assert.NoError(t, err)
+			assert.Equal(t, 0, len(eventCh), "Malformed group addresses should not generate events")
+		})
+	}
+}
+
+func TestHandlePacketInDuplicateGroupRecords(t *testing.T) {
+	controller := gomock.NewController(t)
+	mockOFClient := openflowtest.NewMockClient(controller)
+	mockIfaceStore := ifaceStoretest.NewMockInterfaceStore(controller)
+	eventCh := make(chan *mcastGroupEvent, 100)
+	snooper := &IGMPSnooper{ofClient: mockOFClient, eventCh: eventCh, ifaceStore: mockIfaceStore}
+
+	localNodeIP := net.ParseIP("1.2.3.4")
+	tunnelPort := uint32(1)
+
+	// IGMPv3 report with 3 identical group records for the same multicast address.
+	report := &protocol.IGMPv3MembershipReport{
+		Type:           protocol.IGMPv3Report,
+		NumberOfGroups: 3,
+		GroupRecords: []protocol.IGMPv3GroupRecord{
+			{Type: protocol.IGMPIsEx, MulticastAddress: net.ParseIP("225.1.2.3")},
+			{Type: protocol.IGMPIsEx, MulticastAddress: net.ParseIP("225.1.2.3")},
+			{Type: protocol.IGMPIsEx, MulticastAddress: net.ParseIP("225.1.2.3")},
+		},
+	}
+	pkt := generatePacketWithMatches(report, tunnelPort, localNodeIP, []openflow15.MatchField{*openflow15.NewInPortField(tunnelPort)})
+	mockIfaceStore.EXPECT().GetInterfaceByOFPort(tunnelPort).Return(createTunnelInterface(tunnelPort, localNodeIP), true)
+
+	err := snooper.HandlePacketIn(&pkt)
+	assert.NoError(t, err)
+	assert.Equal(t, 1, len(eventCh), "Duplicate group records in the same packet should be deduplicated")
+	event := <-eventCh
+	assert.True(t, event.group.Equal(net.ParseIP("225.1.2.3")))
+}
+
+func TestHandlePacketInRateLimit(t *testing.T) {
+	controller := gomock.NewController(t)
+	mockOFClient := openflowtest.NewMockClient(controller)
+	mockIfaceStore := ifaceStoretest.NewMockInterfaceStore(controller)
+	eventCh := make(chan *mcastGroupEvent, 100)
+	snooper := &IGMPSnooper{
+		ofClient:       mockOFClient,
+		eventCh:        eventCh,
+		ifaceStore:     mockIfaceStore,
+		pktRateLimiter: rate.NewLimiter(rate.Limit(1), 1),
+	}
+
+	localNodeIP := net.ParseIP("1.2.3.4")
+	tunnelPort := uint32(1)
+
+	report := &protocol.IGMPv3MembershipReport{
+		Type:           protocol.IGMPv3Report,
+		NumberOfGroups: 1,
+		GroupRecords: []protocol.IGMPv3GroupRecord{
+			{Type: protocol.IGMPIsEx, MulticastAddress: net.ParseIP("225.1.2.3")},
+		},
+	}
+	pkt := generatePacketWithMatches(report, tunnelPort, localNodeIP, []openflow15.MatchField{*openflow15.NewInPortField(tunnelPort)})
+	mockIfaceStore.EXPECT().GetInterfaceByOFPort(tunnelPort).Return(createTunnelInterface(tunnelPort, localNodeIP), true).Times(2)
+
+	// First packet should succeed.
+	err := snooper.HandlePacketIn(&pkt)
+	assert.NoError(t, err)
+	assert.Equal(t, 1, len(eventCh))
+
+	// Second packet exceeds rate limit and should be dropped.
+	err = snooper.HandlePacketIn(&pkt)
+	assert.NoError(t, err)
+	assert.Equal(t, 1, len(eventCh), "Second packet should be dropped by rate limiter")
+}
+
+func TestNewSnooperPacketInRate(t *testing.T) {
+	controller := gomock.NewController(t)
+	mockOFClient := openflowtest.NewMockClient(controller)
+	mockIfaceStore := ifaceStoretest.NewMockInterfaceStore(controller)
+	eventCh := make(chan *mcastGroupEvent, 10)
+	mockOFClient.EXPECT().RegisterPacketInHandler(uint8(openflow.PacketInCategoryIGMP), gomock.Any()).Times(2)
+
+	// Test default packetInRate when <= 0
+	snooperDefault := newSnooper(mockOFClient, mockIfaceStore, eventCh, time.Second, []uint8{3}, nil, false, 0)
+	assert.Equal(t, rate.Limit(defaultPacketInRate), snooperDefault.pktRateLimiter.Limit())
+	assert.Equal(t, 2*defaultPacketInRate, snooperDefault.pktRateLimiter.Burst())
+
+	// Test custom packetInRate
+	customRate := 2000
+	snooperCustom := newSnooper(mockOFClient, mockIfaceStore, eventCh, time.Second, []uint8{3}, nil, false, customRate)
+	assert.Equal(t, rate.Limit(customRate), snooperCustom.pktRateLimiter.Limit())
+	assert.Equal(t, 2*customRate, snooperCustom.pktRateLimiter.Burst())
 }

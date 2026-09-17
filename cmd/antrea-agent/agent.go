@@ -991,7 +991,8 @@ func run(o *Options) error {
 			nodeInformer,
 			enableBridgingMode,
 			v4Enabled,
-			v6Enabled)
+			v6Enabled,
+			o.config.PacketInRate)
 		if err := mcastController.Initialize(); err != nil {
 			return err
 		}

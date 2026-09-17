@@ -32,6 +32,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
+	"golang.org/x/time/rate"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	apitypes "k8s.io/apimachinery/pkg/types"
@@ -1459,7 +1460,7 @@ func newTestMulticastController(t *testing.T, isEncap bool, enableFlexibleIPAM b
 	clientset := fake.NewSimpleClientset()
 	informerFactory := informers.NewSharedInformerFactory(clientset, 12*time.Hour)
 	nodeInformer := informerFactory.Core().V1().Nodes()
-	testController := NewMulticastController(mockOFClient, groupAllocator, nodeConfig, mockIfaceStore, mockMulticastSocket, sets.New[string](), podUpdateSubscriber, time.Second*5, igmpQueryVersions, mockMulticastValidator, isEncap, nodeInformer, enableFlexibleIPAM, true, false)
+	testController := NewMulticastController(mockOFClient, groupAllocator, nodeConfig, mockIfaceStore, mockMulticastSocket, sets.New[string](), podUpdateSubscriber, time.Second*5, igmpQueryVersions, mockMulticastValidator, isEncap, nodeInformer, enableFlexibleIPAM, true, false, 0)
 	return &testMulticastController{
 		Controller:             testController,
 		mockCtrl:               ctrl,
@@ -1607,4 +1608,68 @@ func mockIgmpMaxResponseTime(t *testing.T) {
 	t.Cleanup(func() {
 		igmpMaxResponseTime = originalMaxResponseTime
 	})
+}
+
+func TestOVSGroupUpdateRateLimiter(t *testing.T) {
+	testController := newTestMulticastController(t, false, false)
+	testController.initialize(t)
+	testController.mRouteClient.multicastInterfaceConfigs = []multicastInterfaceConfig{
+		{Name: if1.InterfaceName, IPv4Addr: &net.IPNet{IP: nodeIf1IP, Mask: net.IPv4Mask(255, 255, 255, 0)}},
+	}
+	testController.groupUpdateRateLimiter = rate.NewLimiter(rate.Limit(50), 1)
+
+	mgroup := net.ParseIP("224.96.1.10")
+	event := &mcastGroupEvent{
+		group: mgroup,
+		eType: groupJoin,
+		time:  time.Now(),
+		iface: if1,
+	}
+	testController.addGroupMemberStatus(event)
+	key, _ := testController.queue.Get()
+	testController.mockIfaceStore.EXPECT().GetInterfaceByName(if1.InterfaceName).Return(if1, true).Times(2)
+	testController.mockOFClient.EXPECT().InstallMulticastGroup(gomock.Any(), gomock.Any(), gomock.Any()).Times(2)
+	testController.mockOFClient.EXPECT().InstallMulticastFlows(mgroup, gomock.Any()).Times(1)
+	testController.mockMulticastSocket.EXPECT().MulticastInterfaceJoinMgroup(mgroup.To4(), nodeIf1IP.To4(), if1.InterfaceName).Times(1)
+
+	start := time.Now()
+	// First call consumes the 1 burst token immediately.
+	assert.NoError(t, testController.syncGroup(key))
+
+	// Second call must wait for token replenishment (~20ms for 50/sec limit).
+	assert.NoError(t, testController.syncGroup(key))
+	assert.GreaterOrEqual(t, time.Since(start), 10*time.Millisecond)
+}
+
+func TestNewMulticastControllerPacketInRate(t *testing.T) {
+	controller := gomock.NewController(t)
+	mockOFClient := openflowtest.NewMockClient(controller)
+	mockIfaceStore := ifaceStoretest.NewMockInterfaceStore(controller)
+	mockMulticastSocket := multicasttest.NewMockRouteInterface(controller)
+	mockMulticastValidator := typestest.NewMockMcastNetworkPolicyController(controller)
+	nodeInformer := informers.NewSharedInformerFactory(fake.NewSimpleClientset(), 0).Core().V1().Nodes()
+	groupAllocator := openflow.NewGroupAllocator()
+	nodeConfig := &config.NodeConfig{
+		NodeTransportInterfaceName: "antrea-gw0",
+		GatewayConfig: &config.GatewayConfig{
+			Name: "antrea-gw0",
+		},
+	}
+	podUpdateSubscriber := channel.NewSubscribableChannel("PodUpdate", 100)
+	mockOFClient.EXPECT().RegisterPacketInHandler(uint8(openflow.PacketInCategoryIGMP), gomock.Any()).Times(2)
+
+	// Test default packetInRate when <= 0
+	cDefault := NewMulticastController(mockOFClient, groupAllocator, nodeConfig, mockIfaceStore, mockMulticastSocket, sets.New[string](), podUpdateSubscriber, time.Second*5, []uint8{3}, mockMulticastValidator, false, nodeInformer, false, true, false, 0)
+	assert.Equal(t, rate.Limit(defaultPacketInRate), cDefault.groupUpdateRateLimiter.Limit())
+	assert.Equal(t, 2*defaultPacketInRate, cDefault.groupUpdateRateLimiter.Burst())
+	assert.Equal(t, rate.Limit(defaultPacketInRate), cDefault.igmpSnooper.pktRateLimiter.Limit())
+	assert.Equal(t, 2*defaultPacketInRate, cDefault.igmpSnooper.pktRateLimiter.Burst())
+
+	// Test custom packetInRate
+	customRate := 1000
+	cCustom := NewMulticastController(mockOFClient, groupAllocator, nodeConfig, mockIfaceStore, mockMulticastSocket, sets.New[string](), podUpdateSubscriber, time.Second*5, []uint8{3}, mockMulticastValidator, false, nodeInformer, false, true, false, customRate)
+	assert.Equal(t, rate.Limit(customRate), cCustom.groupUpdateRateLimiter.Limit())
+	assert.Equal(t, 2*customRate, cCustom.groupUpdateRateLimiter.Burst())
+	assert.Equal(t, rate.Limit(customRate), cCustom.igmpSnooper.pktRateLimiter.Limit())
+	assert.Equal(t, 2*customRate, cCustom.igmpSnooper.pktRateLimiter.Burst())
 }
