@@ -143,8 +143,8 @@ func (t *testContext) setup(ctx context.Context) error {
 		Labels:      map[string]string{"app": "antrea", "component": "cluster-checker"},
 		HostNetwork: true,
 		VolumeMounts: []corev1.VolumeMount{
-			{Name: "cni-conf", MountPath: "/etc/cni/net.d"},
-			{Name: "lib-modules", MountPath: "/lib/modules"},
+			{Name: "cni-conf", MountPath: "/etc/cni/net.d", ReadOnly: true},
+			{Name: "lib-modules", MountPath: "/lib/modules", ReadOnly: true},
 		},
 		Tolerations: []corev1.Toleration{
 			{
