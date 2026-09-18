@@ -19,6 +19,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -40,6 +41,7 @@ import (
 	antreainformers "antrea.io/antrea/v2/pkg/client/informers/externalversions/crd/v1beta1"
 	antrealisters "antrea.io/antrea/v2/pkg/client/listers/crd/v1beta1"
 	"antrea.io/antrea/v2/pkg/controller/metrics"
+	"antrea.io/antrea/v2/pkg/controller/validation"
 	"antrea.io/antrea/v2/pkg/ipam/ipallocator"
 	iputil "antrea.io/antrea/v2/pkg/util/ip"
 )
@@ -53,6 +55,9 @@ const (
 	maxRetryDelay = 300 * time.Second
 	// Default number of workers processing an ExternalIPPool change.
 	defaultWorkers = 4
+
+	externalIPPoolReadyCondition = "Ready"
+	ipRangeOverlapReason         = "IPRangeOverlap"
 )
 
 var (
@@ -106,8 +111,9 @@ type ExternalIPPoolController struct {
 	externalIPPoolListerSynced cache.InformerSynced
 
 	// ipAllocatorMap is a map from ExternalIPPool name to MultiIPAllocator.
-	ipAllocatorMap   map[string]ipallocator.MultiIPAllocator
-	ipAllocatorMutex sync.RWMutex
+	ipAllocatorMap    map[string]ipallocator.MultiIPAllocator
+	ipAllocatorErrors map[string]string
+	ipAllocatorMutex  sync.RWMutex
 
 	// ipAllocatorInitialized stores a boolean value, which tracks if the ipAllocatorMap has been initialized
 	// with the full list of ExternalIPPool.
@@ -135,6 +141,7 @@ func NewExternalIPPoolController(crdClient clientset.Interface, externalIPPoolIn
 		),
 		ipAllocatorInitialized: &atomic.Value{},
 		ipAllocatorMap:         make(map[string]ipallocator.MultiIPAllocator),
+		ipAllocatorErrors:      make(map[string]string),
 	}
 	externalIPPoolInformer.Informer().AddEventHandlerWithResyncPeriod(
 		cache.ResourceEventHandlerFuncs{
@@ -203,6 +210,12 @@ func (c *ExternalIPPoolController) createOrUpdateIPAllocator(ipPool *antreacrds.
 	changed := false
 	c.ipAllocatorMutex.Lock()
 	defer c.ipAllocatorMutex.Unlock()
+	if err := c.validateNoOverlappingIPAllocatorRanges(ipPool); err != nil {
+		c.ipAllocatorErrors[ipPool.Name] = err.Error()
+		c.queue.Add(ipPool.Name)
+		return false
+	}
+	delete(c.ipAllocatorErrors, ipPool.Name)
 
 	existingIPRanges := sets.New[string]()
 	multiIPAllocator, exists := c.ipAllocatorMap[ipPool.Name]
@@ -257,11 +270,56 @@ func (c *ExternalIPPoolController) createOrUpdateIPAllocator(ipPool *antreacrds.
 	return changed
 }
 
+// validateNoOverlappingIPAllocatorRanges checks the pool ranges against the ranges that have already been accepted
+// into ipAllocatorMap. It provides a safety net for invalid ExternalIPPools that are created concurrently and bypass
+// the admission webhook because its informer cache is eventually consistent.
+func (c *ExternalIPPoolController) validateNoOverlappingIPAllocatorRanges(ipPool *antreacrds.ExternalIPPool) error {
+	currentRanges, err := validation.NormalizeRanges(ipPool.Spec.IPRanges, fmt.Sprintf("ExternalIPPool %s", ipPool.Name))
+	if err != nil {
+		return nil
+	}
+	for poolName, allocator := range c.ipAllocatorMap {
+		if poolName == ipPool.Name {
+			continue
+		}
+		existingRanges, err := normalizeIPAllocatorRanges(allocator, poolName)
+		if err != nil {
+			klog.ErrorS(err, "Failed to normalize IP allocator ranges", "ExternalIPPool", poolName)
+			continue
+		}
+		for _, currentRange := range currentRanges {
+			for _, existingRange := range existingRanges {
+				if validation.RangesOverlap(currentRange.Start, currentRange.End, existingRange.Start, existingRange.End) {
+					return fmt.Errorf("%s overlaps with %s", currentRange.Origin, existingRange.Origin)
+				}
+			}
+		}
+	}
+	return nil
+}
+
+func normalizeIPAllocatorRanges(allocator ipallocator.MultiIPAllocator, poolName string) ([]validation.NormalizedIPRange, error) {
+	ipRanges := make([]antreacrds.IPRange, 0, len(allocator))
+	for _, name := range allocator.Names() {
+		if _, _, err := net.ParseCIDR(name); err == nil {
+			ipRanges = append(ipRanges, antreacrds.IPRange{CIDR: name})
+			continue
+		}
+		start, end, found := strings.Cut(name, "-")
+		if !found {
+			return nil, fmt.Errorf("invalid IP allocator range %q", name)
+		}
+		ipRanges = append(ipRanges, antreacrds.IPRange{Start: start, End: end})
+	}
+	return validation.NormalizeRanges(ipRanges, fmt.Sprintf("ExternalIPPool %s", poolName))
+}
+
 // deleteIPAllocator deletes the IP allocator of the given IP pool.
 func (c *ExternalIPPoolController) deleteIPAllocator(poolName string) {
 	c.ipAllocatorMutex.Lock()
 	defer c.ipAllocatorMutex.Unlock()
 	delete(c.ipAllocatorMap, poolName)
+	delete(c.ipAllocatorErrors, poolName)
 }
 
 // getIPAllocator gets the IP allocator of the given IP pool.
@@ -270,6 +328,12 @@ func (c *ExternalIPPoolController) getIPAllocator(poolName string) (ipallocator.
 	defer c.ipAllocatorMutex.RUnlock()
 	ipAllocator, exists := c.ipAllocatorMap[poolName]
 	return ipAllocator, exists
+}
+
+func (c *ExternalIPPoolController) getIPAllocatorError(poolName string) string {
+	c.ipAllocatorMutex.RLock()
+	defer c.ipAllocatorMutex.RUnlock()
+	return c.ipAllocatorErrors[poolName]
 }
 
 // AllocateIPFromPool allocates an IP from the the given IP pool.
@@ -310,20 +374,37 @@ func (c *ExternalIPPoolController) updateExternalIPPoolStatus(poolName string) e
 		return err
 	}
 	ipAllocator, exists := c.getIPAllocator(eip.Name)
-	if !exists {
+	allocationError := c.getIPAllocatorError(eip.Name)
+	if !exists && allocationError == "" {
 		return ErrExternalIPPoolNotFound
 	}
-	total, used := ipAllocator.Total(), ipAllocator.Used()
+	var total, used int
+	if exists {
+		total, used = ipAllocator.Total(), ipAllocator.Used()
+	}
+	desiredCondition := metav1.Condition{
+		Type:               externalIPPoolReadyCondition,
+		Status:             metav1.ConditionTrue,
+		Reason:             "AllocatorReady",
+		Message:            "IP allocator is ready",
+		LastTransitionTime: metav1.Now(),
+	}
+	if allocationError != "" {
+		desiredCondition.Status = metav1.ConditionFalse
+		desiredCondition.Reason = ipRangeOverlapReason
+		desiredCondition.Message = allocationError
+	}
 	toUpdate := eip.DeepCopy()
 	var getErr error
 	if err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
-		actualStatus := eip.Status
+		actualStatus := toUpdate.Status
 		usage := antreacrds.IPPoolUsage{Total: total, Used: used}
-		if actualStatus.Usage == usage {
+		if actualStatus.Usage == usage && externalIPPoolConditionEqual(actualStatus.Conditions, desiredCondition) {
 			return nil
 		}
-		klog.V(2).InfoS("Updating ExternalIPPool status", "ExternalIPPool", poolName, "usage", usage)
+		klog.V(2).InfoS("Updating ExternalIPPool status", "ExternalIPPool", poolName, "usage", usage, "condition", desiredCondition)
 		toUpdate.Status.Usage = usage
+		setExternalIPPoolCondition(&toUpdate.Status.Conditions, desiredCondition)
 		if _, updateErr := c.crdClient.CrdV1beta1().ExternalIPPools().UpdateStatus(context.TODO(), toUpdate, metav1.UpdateOptions{}); updateErr != nil && apierrors.IsConflict(updateErr) {
 			toUpdate, getErr = c.crdClient.CrdV1beta1().ExternalIPPools().Get(context.TODO(), poolName, metav1.GetOptions{})
 			if getErr != nil {
@@ -338,6 +419,28 @@ func (c *ExternalIPPoolController) updateExternalIPPoolStatus(poolName string) e
 	klog.V(2).InfoS("Updated ExternalIPPool status", "ExternalIPPool", poolName)
 	metrics.AntreaExternalIPPoolStatusUpdates.Inc()
 	return nil
+}
+
+func externalIPPoolConditionEqual(conditions []metav1.Condition, desired metav1.Condition) bool {
+	for _, condition := range conditions {
+		if condition.Type == desired.Type {
+			return condition.Status == desired.Status && condition.Reason == desired.Reason && condition.Message == desired.Message
+		}
+	}
+	return false
+}
+
+func setExternalIPPoolCondition(conditions *[]metav1.Condition, desired metav1.Condition) {
+	for i := range *conditions {
+		if (*conditions)[i].Type == desired.Type {
+			if (*conditions)[i].Status == desired.Status {
+				desired.LastTransitionTime = (*conditions)[i].LastTransitionTime
+			}
+			(*conditions)[i] = desired
+			return
+		}
+	}
+	*conditions = append(*conditions, desired)
 }
 
 // ReleaseIP releases the IP to the pool.
@@ -431,6 +534,19 @@ func (c *ExternalIPPoolController) deleteExternalIPPool(obj interface{}) {
 	}
 	klog.InfoS("Processing ExternalIPPool DELETE event", "pool", pool.Name, "ipRanges", pool.Spec.IPRanges)
 	c.deleteIPAllocator(pool.Name)
+	// A previously rejected pool may now be valid after this pool is removed.
+	pools, err := c.externalIPPoolLister.List(labels.Everything())
+	if err != nil {
+		klog.ErrorS(err, "Failed to list ExternalIPPools after deletion")
+	} else {
+		for _, pool := range pools {
+			if c.createOrUpdateIPAllocator(pool) {
+				for _, h := range c.handlers {
+					h(pool.Name)
+				}
+			}
+		}
+	}
 	// Call consumers to reclaim the IPs allocated from the pool.
 	for _, h := range c.handlers {
 		h(pool.Name)
