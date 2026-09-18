@@ -15,6 +15,7 @@
 package bgp
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
 	"errors"
@@ -23,6 +24,7 @@ import (
 	"net"
 	"reflect"
 	"slices"
+	"strings"
 	"sync"
 	"time"
 
@@ -49,6 +51,7 @@ import (
 	"antrea.io/antrea/v2/pkg/agent/bgp/gobgp"
 	"antrea.io/antrea/v2/pkg/agent/config"
 	"antrea.io/antrea/v2/pkg/agent/types"
+	"antrea.io/antrea/v2/pkg/agent/util/endpointslice"
 	"antrea.io/antrea/v2/pkg/apis/crd/v1alpha1"
 	"antrea.io/antrea/v2/pkg/apis/crd/v1beta1"
 	crdinformersv1a1 "antrea.io/antrea/v2/pkg/client/informers/externalversions/crd/v1alpha1"
@@ -617,52 +620,88 @@ func (c *Controller) getRoutes(advertisements v1alpha1.Advertisements) map[bgp.R
 	return allRoutes
 }
 
+// serviceRoute is the route one Service contributes to a prefix. requiresLocal is true when the traffic policy of the
+// Service for that IP type is Local, in which case the Service must have a serving endpoint on this Node for the prefix
+// to be advertised.
+type serviceRoute struct {
+	svcRef          string
+	routeType       AdvertisedRouteType
+	requiresLocal   bool
+	hasLocalServing bool
+}
+
 func (c *Controller) addServiceRoutes(advertisement *v1alpha1.ServiceAdvertisement, allRoutes map[bgp.Route]RouteMetadata) {
 	ipTypes := sets.New(advertisement.IPTypes...)
 	services, _ := c.serviceLister.List(labels.Everything())
+
+	// Several Services may share an IP, so whether a prefix is advertised is decided once per prefix, after every
+	// Service contributing to it is known. Deciding per Service would let a Service which can deliver traffic on this
+	// Node advertise a prefix that another Service sharing the IP cannot deliver traffic for.
+	svcRoutes := make(map[string][]serviceRoute)
 
 	for _, svc := range services {
 		svcRef := svc.Namespace + "/" + svc.Name
 		internalLocal := svc.Spec.InternalTrafficPolicy != nil && *svc.Spec.InternalTrafficPolicy == corev1.ServiceInternalTrafficPolicyLocal
 		externalLocal := svc.Spec.ExternalTrafficPolicy == corev1.ServiceExternalTrafficPolicyLocal
-		var hasLocalEndpoints bool
+		var hasLocalServing bool
 		if internalLocal || externalLocal {
-			hasLocalEndpoints = c.hasLocalEndpoints(svc)
+			hasLocalServing = c.hasLocalServingEndpoints(svc)
 		}
 		if ipTypes.Has(v1alpha1.ServiceIPTypeClusterIP) {
-			if internalLocal && hasLocalEndpoints || !internalLocal {
-				for _, clusterIP := range svc.Spec.ClusterIPs {
-					if c.enabledIPv4 && utilnet.IsIPv4String(clusterIP) {
-						addRoutes(allRoutes, clusterIP+ipv4Suffix, svcRef, ServiceClusterIP)
-					} else if c.enabledIPv6 && utilnet.IsIPv6String(clusterIP) {
-						addRoutes(allRoutes, clusterIP+ipv6Suffix, svcRef, ServiceClusterIP)
-					}
+			for _, clusterIP := range svc.Spec.ClusterIPs {
+				if c.enabledIPv4 && utilnet.IsIPv4String(clusterIP) {
+					addServiceRoute(svcRoutes, clusterIP+ipv4Suffix, svcRef, ServiceClusterIP, internalLocal, hasLocalServing)
+				} else if c.enabledIPv6 && utilnet.IsIPv6String(clusterIP) {
+					addServiceRoute(svcRoutes, clusterIP+ipv6Suffix, svcRef, ServiceClusterIP, internalLocal, hasLocalServing)
 				}
 			}
 		}
 		if ipTypes.Has(v1alpha1.ServiceIPTypeExternalIP) {
-			if externalLocal && hasLocalEndpoints || !externalLocal {
-				for _, externalIP := range svc.Spec.ExternalIPs {
-					if c.enabledIPv4 && utilnet.IsIPv4String(externalIP) {
-						addRoutes(allRoutes, externalIP+ipv4Suffix, svcRef, ServiceExternalIP)
-					} else if c.enabledIPv6 && utilnet.IsIPv6String(externalIP) {
-						addRoutes(allRoutes, externalIP+ipv6Suffix, svcRef, ServiceExternalIP)
-					}
+			for _, externalIP := range svc.Spec.ExternalIPs {
+				if c.enabledIPv4 && utilnet.IsIPv4String(externalIP) {
+					addServiceRoute(svcRoutes, externalIP+ipv4Suffix, svcRef, ServiceExternalIP, externalLocal, hasLocalServing)
+				} else if c.enabledIPv6 && utilnet.IsIPv6String(externalIP) {
+					addServiceRoute(svcRoutes, externalIP+ipv6Suffix, svcRef, ServiceExternalIP, externalLocal, hasLocalServing)
 				}
 			}
 		}
 		if ipTypes.Has(v1alpha1.ServiceIPTypeLoadBalancerIP) && svc.Spec.Type == corev1.ServiceTypeLoadBalancer {
-			if externalLocal && hasLocalEndpoints || !externalLocal {
-				loadBalancerIPs := getIngressIPs(svc)
-				for _, loadBalancerIP := range loadBalancerIPs {
-					if c.enabledIPv4 && utilnet.IsIPv4String(loadBalancerIP) {
-						addRoutes(allRoutes, loadBalancerIP+ipv4Suffix, svcRef, ServiceLoadBalancerIP)
-					} else if c.enabledIPv6 && utilnet.IsIPv6String(loadBalancerIP) {
-						addRoutes(allRoutes, loadBalancerIP+ipv6Suffix, svcRef, ServiceLoadBalancerIP)
-					}
+			loadBalancerIPs := getIngressIPs(svc)
+			for _, loadBalancerIP := range loadBalancerIPs {
+				if c.enabledIPv4 && utilnet.IsIPv4String(loadBalancerIP) {
+					addServiceRoute(svcRoutes, loadBalancerIP+ipv4Suffix, svcRef, ServiceLoadBalancerIP, externalLocal, hasLocalServing)
+				} else if c.enabledIPv6 && utilnet.IsIPv6String(loadBalancerIP) {
+					addServiceRoute(svcRoutes, loadBalancerIP+ipv6Suffix, svcRef, ServiceLoadBalancerIP, externalLocal, hasLocalServing)
 				}
 			}
 		}
+	}
+
+	for prefix, routes := range svcRoutes {
+		blocked := false
+		for _, route := range routes {
+			if route.requiresLocal && !route.hasLocalServing {
+				blocked = true
+				break
+			}
+		}
+		if blocked {
+			continue
+		}
+		// The routes are sorted so that the metadata does not depend on the order in which the Services were listed,
+		// which is not stable.
+		slices.SortFunc(routes, func(a, b serviceRoute) int {
+			if res := cmp.Compare(a.svcRef, b.svcRef); res != 0 {
+				return res
+			}
+			return cmp.Compare(a.routeType, b.routeType)
+		})
+		svcRefs := make([]string, len(routes))
+		for i, route := range routes {
+			svcRefs[i] = route.svcRef
+		}
+		svcRefs = slices.Compact(svcRefs)
+		addRoutes(allRoutes, prefix, strings.Join(svcRefs, ","), routes[0].routeType)
 	}
 }
 
@@ -697,12 +736,21 @@ func addRoutes(allRoutes map[bgp.Route]RouteMetadata, prefix, k8sObjRef string, 
 	}
 }
 
-func (c *Controller) hasLocalEndpoints(svc *corev1.Service) bool {
+func addServiceRoute(svcRoutes map[string][]serviceRoute, prefix, svcRef string, routeType AdvertisedRouteType, requiresLocal, hasLocalServing bool) {
+	svcRoutes[prefix] = append(svcRoutes[prefix], serviceRoute{
+		svcRef:          svcRef,
+		routeType:       routeType,
+		requiresLocal:   requiresLocal,
+		hasLocalServing: hasLocalServing,
+	})
+}
+
+func (c *Controller) hasLocalServingEndpoints(svc *corev1.Service) bool {
 	labelSelector := labels.Set{discovery.LabelServiceName: svc.GetName()}.AsSelector()
 	items, _ := c.endpointSliceLister.EndpointSlices(svc.GetNamespace()).List(labelSelector)
 	for _, eps := range items {
 		for _, ep := range eps.Endpoints {
-			if ep.NodeName != nil && *ep.NodeName == c.nodeName {
+			if ep.NodeName != nil && *ep.NodeName == c.nodeName && endpointslice.CanServe(ep) {
 				return true
 			}
 		}
