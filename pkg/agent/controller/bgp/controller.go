@@ -493,6 +493,20 @@ func (c *Controller) reconcileBGPPeers(ctx context.Context, bgpPeers []v1alpha1.
 	}
 	for key := range peerToUpdateKeys {
 		peerConfig := curPeerConfigs[key]
+		// The hold time and the keepalive interval are only proposed in the OPEN message, so the session must be
+		// re-established for a new value to take effect.
+		if negotiatedBGPTimersChanged(prePeerConfigs[key], peerConfig) {
+			klog.InfoS("Re-establishing the BGP session to apply the updated BGP timers", "peer", peerConfig.Address, "asn", peerConfig.ASN)
+			if err := bgpServer.RemovePeer(ctx, prePeerConfigs[key]); err != nil {
+				return err
+			}
+			delete(c.bgpPolicyState.peerConfigs, key)
+			if err := bgpServer.AddPeer(ctx, peerConfig); err != nil {
+				return err
+			}
+			c.bgpPolicyState.peerConfigs[key] = peerConfig
+			continue
+		}
 		if err := bgpServer.UpdatePeer(ctx, peerConfig); err != nil {
 			return err
 		}
@@ -507,6 +521,13 @@ func (c *Controller) reconcileBGPPeers(ctx context.Context, bgpPeers []v1alpha1.
 	}
 
 	return nil
+}
+
+// negotiatedBGPTimersChanged returns whether the hold time or the keepalive interval of a peer has changed. Both are
+// only proposed in the OPEN message, so the session must be re-established for a new value to take effect.
+func negotiatedBGPTimersChanged(prePeerConfig, curPeerConfig bgp.PeerConfig) bool {
+	return !ptr.Equal(prePeerConfig.HoldTimeSeconds, curPeerConfig.HoldTimeSeconds) ||
+		!ptr.Equal(prePeerConfig.KeepaliveIntervalSeconds, curPeerConfig.KeepaliveIntervalSeconds)
 }
 
 func (c *Controller) reconcileBGPAdvertisements(ctx context.Context, bgpAdvertisements v1alpha1.Advertisements) error {
