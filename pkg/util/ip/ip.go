@@ -22,6 +22,7 @@ import (
 	"net/netip"
 	"sort"
 
+	corev1 "k8s.io/api/core/v1"
 	utilnet "k8s.io/utils/net"
 
 	"antrea.io/antrea/v2/pkg/apis/controlplane/v1beta2"
@@ -35,6 +36,14 @@ const (
 type DualStackIPs struct {
 	IPv4 net.IP
 	IPv6 net.IP
+}
+
+// IPFamilyForAddress returns the Kubernetes IP family for the provided address.
+func IPFamilyForAddress(address netip.Addr) corev1.IPFamily {
+	if address.Unmap().Is4() {
+		return corev1.IPv4Protocol
+	}
+	return corev1.IPv6Protocol
 }
 
 func (ips DualStackIPs) Equal(x DualStackIPs) bool {

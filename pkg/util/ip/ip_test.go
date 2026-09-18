@@ -20,6 +20,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	corev1 "k8s.io/api/core/v1"
 
 	"antrea.io/antrea/v2/pkg/apis/controlplane/v1beta2"
 )
@@ -27,6 +28,35 @@ import (
 func newCIDR(cidrStr string) *net.IPNet {
 	_, tmpIPNet, _ := net.ParseCIDR(cidrStr)
 	return tmpIPNet
+}
+
+func TestIPFamilyForAddress(t *testing.T) {
+	tests := []struct {
+		name string
+		ip   netip.Addr
+		want corev1.IPFamily
+	}{
+		{
+			name: "IPv4",
+			ip:   netip.MustParseAddr("192.0.2.1"),
+			want: corev1.IPv4Protocol,
+		},
+		{
+			name: "IPv4-mapped IPv6",
+			ip:   netip.MustParseAddr("::ffff:192.0.2.1"),
+			want: corev1.IPv4Protocol,
+		},
+		{
+			name: "IPv6",
+			ip:   netip.MustParseAddr("2001:db8::1"),
+			want: corev1.IPv6Protocol,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.want, IPFamilyForAddress(tt.ip))
+		})
+	}
 }
 
 func TestDiffCIDRs(t *testing.T) {
