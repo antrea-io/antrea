@@ -15,11 +15,13 @@
 package multicast
 
 import (
+	"context"
 	"fmt"
 	"net"
 	"sync"
 	"time"
 
+	"golang.org/x/time/rate"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	apitypes "k8s.io/apimachinery/pkg/types"
@@ -269,7 +271,8 @@ type Controller struct {
 	ipv4Enabled bool
 	// ipv6Enabled is the flag that if it is running on IPv6 cluster.
 	// TODO: remove this flag after IPv6 is supported in Multicast.
-	ipv6Enabled bool
+	ipv6Enabled            bool
+	groupUpdateRateLimiter *rate.Limiter
 }
 
 func NewMulticastController(ofClient openflow.Client,
@@ -286,9 +289,13 @@ func NewMulticastController(ofClient openflow.Client,
 	nodeInformer coreinformers.NodeInformer,
 	enableFlexibleIPAM bool,
 	ipv4Enabled bool,
-	ipv6Enabled bool) *Controller {
+	ipv6Enabled bool,
+	packetInRate int) *Controller {
+	if packetInRate <= 0 {
+		packetInRate = defaultPacketInRate
+	}
 	eventCh := make(chan *mcastGroupEvent, workerCount)
-	groupSnooper := newSnooper(ofClient, ifaceStore, eventCh, igmpQueryInterval, igmpQueryVersions, validator, isEncap)
+	groupSnooper := newSnooper(ofClient, ifaceStore, eventCh, igmpQueryInterval, igmpQueryVersions, validator, isEncap, packetInRate)
 	groupCache := cache.NewIndexer(getGroupEventKey, cache.Indexers{
 		podInterfaceIndex: podInterfaceIndexFunc,
 	})
@@ -309,14 +316,15 @@ func NewMulticastController(ofClient openflow.Client,
 				Name: "multicastgroup",
 			},
 		),
-		mRouteClient:        multicastRouteClient,
-		queryInterval:       igmpQueryInterval,
-		mcastGroupTimeout:   igmpQueryInterval * 3,
-		queryGroupId:        v4GroupAllocator.Allocate(),
-		encapEnabled:        isEncap,
-		flexibleIPAMEnabled: enableFlexibleIPAM,
-		ipv4Enabled:         ipv4Enabled,
-		ipv6Enabled:         ipv6Enabled,
+		mRouteClient:           multicastRouteClient,
+		queryInterval:          igmpQueryInterval,
+		mcastGroupTimeout:      igmpQueryInterval * 3,
+		queryGroupId:           v4GroupAllocator.Allocate(),
+		encapEnabled:           isEncap,
+		flexibleIPAMEnabled:    enableFlexibleIPAM,
+		ipv4Enabled:            ipv4Enabled,
+		ipv6Enabled:            ipv6Enabled,
+		groupUpdateRateLimiter: rate.NewLimiter(rate.Limit(packetInRate), 2*packetInRate),
 	}
 	if isEncap {
 		c.nodeGroupID = v4GroupAllocator.Allocate()
@@ -455,6 +463,11 @@ func (c *Controller) syncGroup(groupKey string) error {
 	if !exists {
 		klog.InfoS("multicast group not found in the cache", "group", groupKey)
 		return nil
+	}
+	if c.groupUpdateRateLimiter != nil {
+		if err := c.groupUpdateRateLimiter.Wait(context.Background()); err != nil {
+			return err
+		}
 	}
 	status := obj.(*GroupMemberStatus)
 	memberPorts := make([]uint32, 0)

@@ -27,6 +27,7 @@ const (
 	LabelPacketInMeterNetworkPolicy   = "PacketInMeterNetworkPolicy"
 	LabelPacketInMeterTraceflow       = "PacketInMeterTraceflow"
 	LabelPacketInMeterDNSInterception = "PacketInMeterDNSInterception"
+	LabelPacketInMeterIGMP            = "PacketInMeterIGMP"
 
 	// LabelFQDNCacheSelectorLimit and LabelFQDNCacheTotalLimit are the values of the
 	// reason label of FQDNCacheEvictionCount: respectively, the limit on the number of
@@ -295,7 +296,7 @@ func InitializeOVSMetrics() {
 		OVSFlowOpsErrorCount.WithLabelValues(ops)
 		OVSFlowOpsLatency.WithLabelValues(ops)
 	}
-	for _, label := range []string{LabelPacketInMeterNetworkPolicy, LabelPacketInMeterTraceflow, LabelPacketInMeterDNSInterception} {
+	for _, label := range []string{LabelPacketInMeterNetworkPolicy, LabelPacketInMeterTraceflow, LabelPacketInMeterDNSInterception, LabelPacketInMeterIGMP} {
 		OVSMeterPacketDroppedCount.WithLabelValues(label)
 	}
 }
