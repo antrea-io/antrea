@@ -3263,6 +3263,74 @@ func TestDeleteExternalIPRouteNFTablesMode(t *testing.T) {
 	}
 }
 
+func TestExternalIPConfigsConcurrentAccess(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	mockNetlink := netlinktest.NewMockInterface(ctrl)
+	mockIPSet := ipsettest.NewMockInterface(ctrl)
+	c := &Client{
+		ipset:                       mockIPSet,
+		netlink:                     mockNetlink,
+		nodeConfig:                  nodeConfig,
+		serviceExternalIPReferences: make(map[string]sets.Set[string]),
+		serviceIPSets: map[string]*sync.Map{
+			antreaExternalIPIPSet:  {},
+			antreaExternalIPIP6Set: {},
+		},
+	}
+
+	const workers = 32
+	ipv4 := net.ParseIP(externalIPv4Addr1)
+	ipv6 := net.ParseIP(externalIPv6Addr1)
+
+	mockNetlink.EXPECT().RouteReplace(ipv4Route1)
+	mockNetlink.EXPECT().RouteReplace(ipv6Route1)
+	mockIPSet.EXPECT().AddEntry(antreaExternalIPIPSet, externalIPv4Addr1)
+	mockIPSet.EXPECT().AddEntry(antreaExternalIPIP6Set, externalIPv6Addr1)
+	mockNetlink.EXPECT().RouteDel(ipv4Route1)
+	mockNetlink.EXPECT().RouteDel(ipv6Route1)
+	mockIPSet.EXPECT().DelEntry(antreaExternalIPIPSet, externalIPv4Addr1)
+	mockIPSet.EXPECT().DelEntry(antreaExternalIPIP6Set, externalIPv6Addr1)
+
+	var wg sync.WaitGroup
+	wg.Add(workers * 2)
+	for i := 0; i < workers; i++ {
+		go func(id int) {
+			defer wg.Done()
+			assert.NoError(t, c.AddExternalIPConfigs(fmt.Sprintf("svc-v4-%d", id), ipv4))
+		}(i)
+		go func(id int) {
+			defer wg.Done()
+			assert.NoError(t, c.AddExternalIPConfigs(fmt.Sprintf("svc-v6-%d", id), ipv6))
+		}(i)
+	}
+	wg.Wait()
+
+	expectedV4 := sets.New[string]()
+	expectedV6 := sets.New[string]()
+	for i := 0; i < workers; i++ {
+		expectedV4.Insert(fmt.Sprintf("svc-v4-%d", i))
+		expectedV6.Insert(fmt.Sprintf("svc-v6-%d", i))
+	}
+	assert.Equal(t, map[string]sets.Set[string]{
+		externalIPv4Addr1: expectedV4,
+		externalIPv6Addr1: expectedV6,
+	}, c.serviceExternalIPReferences)
+
+	wg.Add(workers * 2)
+	for i := 0; i < workers; i++ {
+		go func(id int) {
+			defer wg.Done()
+			assert.NoError(t, c.DeleteExternalIPConfigs(fmt.Sprintf("svc-v4-%d", id), ipv4))
+		}(i)
+		go func(id int) {
+			defer wg.Done()
+			assert.NoError(t, c.DeleteExternalIPConfigs(fmt.Sprintf("svc-v6-%d", id), ipv6))
+		}(i)
+	}
+	wg.Wait()
+	assert.Empty(t, c.serviceExternalIPReferences)
+}
+
 func TestAddLocalAntreaFlexibleIPAMPodRule(t *testing.T) {
 	tests := []struct {
 		name                  string
