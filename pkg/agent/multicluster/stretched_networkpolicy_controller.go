@@ -281,7 +281,19 @@ func (s *StretchedNetworkPolicyController) processPodUpdate(old, cur interface{}
 // be deleted by podConfigurator. So no need to enqueue this Pod to update its
 // classifier flow.
 func (s *StretchedNetworkPolicyController) processPodDelete(old interface{}) {
-	oldPod, _ := old.(*v1.Pod)
+	oldPod, ok := old.(*v1.Pod)
+	if !ok {
+		tombstone, ok := old.(cache.DeletedFinalStateUnknown)
+		if !ok {
+			klog.ErrorS(nil, "Error decoding object when deleting Pod, invalid type", "object", old)
+			return
+		}
+		oldPod, ok = tombstone.Obj.(*v1.Pod)
+		if !ok {
+			klog.ErrorS(nil, "Error decoding object tombstone when deleting Pod, invalid type", "object", tombstone.Obj)
+			return
+		}
+	}
 	oldPodRef := getPodReference(oldPod)
 	s.lock.Lock()
 	defer s.lock.Unlock()
@@ -312,7 +324,19 @@ func (s *StretchedNetworkPolicyController) processNamespaceUpdate(old, cur inter
 // processLabelIdentityEvent handles labelIdentity add/update/delete event.
 // It will enqueue all Pods affected by this labelIdentity
 func (s *StretchedNetworkPolicyController) processLabelIdentityEvent(cur interface{}) {
-	labelIdentity, _ := cur.(*v1alpha1.LabelIdentity)
+	labelIdentity, ok := cur.(*v1alpha1.LabelIdentity)
+	if !ok {
+		tombstone, ok := cur.(cache.DeletedFinalStateUnknown)
+		if !ok {
+			klog.ErrorS(nil, "Error decoding object when processing LabelIdentity event, invalid type", "object", cur)
+			return
+		}
+		labelIdentity, ok = tombstone.Obj.(*v1alpha1.LabelIdentity)
+		if !ok {
+			klog.ErrorS(nil, "Error decoding object tombstone when processing LabelIdentity event, invalid type", "object", tombstone.Obj)
+			return
+		}
+	}
 	s.lock.RLock()
 	defer s.lock.RUnlock()
 	if podSet, ok := s.labelToPods[labelIdentity.Spec.Label]; ok {

@@ -97,7 +97,6 @@ func (c *NetworkPolicyController) updateClusterGroup(oldObj, curObj interface{})
 // deleteClusterGroup is responsible for processing the DELETE event of a ClusterGroup resource.
 func (c *NetworkPolicyController) deleteClusterGroup(oldObj interface{}) {
 	og, ok := oldObj.(*crdv1beta1.ClusterGroup)
-	klog.V(2).Infof("Processing DELETE event for ClusterGroup %s", og.Name)
 	if !ok {
 		tombstone, ok := oldObj.(cache.DeletedFinalStateUnknown)
 		if !ok {
@@ -110,6 +109,7 @@ func (c *NetworkPolicyController) deleteClusterGroup(oldObj interface{}) {
 			return
 		}
 	}
+	klog.V(2).Infof("Processing DELETE event for ClusterGroup %s", og.Name)
 	key := internalGroupKeyFunc(og)
 	klog.V(2).Infof("Deleting internal Group %s", key)
 	err := c.internalGroupStore.Delete(key)
