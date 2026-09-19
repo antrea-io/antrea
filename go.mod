@@ -260,6 +260,6 @@ require (
 )
 
 replace (
-	github.com/ovn-kubernetes/libovsdb => github.com/antrea-io/libovsdb v0.0.0-20260616084319-8ae94b472b23
+	github.com/ovn-kubernetes/libovsdb => github.com/antoninbas/libovsdb v0.0.0-20260919071211-c686bed444a8
 	gopkg.in/natefinch/lumberjack.v2 => github.com/antrea-io/lumberjack v0.0.0-20260603202205-2fb47fcd712a
 )

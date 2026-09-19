@@ -45,8 +45,8 @@ github.com/andybalholm/brotli v1.2.0 h1:ukwgCxwYrmACq68yiUqwIWnGY0cTPox/M94sVwTo
 github.com/andybalholm/brotli v1.2.0/go.mod h1:rzTDkvFWvIrjDXZHkuS16NPggd91W3kUSvPlQ1pLaKY=
 github.com/antlr4-go/antlr/v4 v4.13.1 h1:SqQKkuVZ+zWkMMNkjy5FZe5mr5WURWnlpmOuzYWrPrQ=
 github.com/antlr4-go/antlr/v4 v4.13.1/go.mod h1:GKmUxMtwp6ZgGwZSva4eWPC5mS6vUAmOABFgjdkM7Nw=
-github.com/antrea-io/libovsdb v0.0.0-20260616084319-8ae94b472b23 h1:YUOHxAtB5HJE6BEldpJBbDeZyiCunw23W3oPbCClBQs=
-github.com/antrea-io/libovsdb v0.0.0-20260616084319-8ae94b472b23/go.mod h1:Dmqcwl6/PX7GJx4PlVqc0Ix9Hu9vAr7VYy4Qs05dO58=
+github.com/antoninbas/libovsdb v0.0.0-20260919071211-c686bed444a8 h1:w45ACCgrqkoe1DMTSGRGwmfssyDBT/4yVZjc0aRQJZg=
+github.com/antoninbas/libovsdb v0.0.0-20260919071211-c686bed444a8/go.mod h1:Dmqcwl6/PX7GJx4PlVqc0Ix9Hu9vAr7VYy4Qs05dO58=
 github.com/antrea-io/lumberjack v0.0.0-20260603202205-2fb47fcd712a h1:HDvMgm6xXycjAmXFUTogUAXp4M4GGSVtCXqqYRAs6+0=
 github.com/antrea-io/lumberjack v0.0.0-20260603202205-2fb47fcd712a/go.mod h1:+fykv+mf2DXpfbwYLEMzNFMd2x388oI8wcAd7ZsiO+4=
 github.com/armon/go-metrics v0.4.1 h1:hR91U9KYmb6bLBYLQjyM+3j+rcd/UhE+G78SFnF8gJA=
