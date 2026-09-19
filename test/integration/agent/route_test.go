@@ -132,14 +132,14 @@ func TestInitialize(t *testing.T) {
 	defer netlink.LinkDel(link)
 
 	tcs := []struct {
-		name                 string
-		networkConfig        *config.NetworkConfig
-		noSNAT               bool
-		nodeSNATRandomFully  bool
-		xtablesHoldDuration  time.Duration
-		expectNoTrackRules   bool
-		expectUDPPortInRules int
-		proxyAll             bool
+		name                     string
+		networkConfig            *config.NetworkConfig
+		noSNAT                   bool
+		nodeSNATRandomFully      bool
+		xtablesHoldDuration      time.Duration
+		expectTunnelNoTrackRules bool
+		expectUDPPortInRules     int
+		proxyAll                 bool
 	}{
 		{
 			name: "noEncap",
@@ -148,7 +148,7 @@ func TestInitialize(t *testing.T) {
 				IPv4Enabled:                   true,
 				EnableHostNetworkAcceleration: true,
 			},
-			expectNoTrackRules: false,
+			expectTunnelNoTrackRules: false,
 		},
 		{
 			name: "hybrid with noSNAT",
@@ -158,9 +158,9 @@ func TestInitialize(t *testing.T) {
 				IPv4Enabled:                   true,
 				EnableHostNetworkAcceleration: true,
 			},
-			noSNAT:               true,
-			expectNoTrackRules:   true,
-			expectUDPPortInRules: 6081,
+			noSNAT:                   true,
+			expectTunnelNoTrackRules: true,
+			expectUDPPortInRules:     6081,
 		},
 		{
 			name: "encap",
@@ -169,8 +169,8 @@ func TestInitialize(t *testing.T) {
 				TunnelType:       ovsconfig.VXLANTunnel,
 				IPv4Enabled:      true,
 			},
-			expectNoTrackRules:   true,
-			expectUDPPortInRules: 4789,
+			expectTunnelNoTrackRules: true,
+			expectUDPPortInRules:     4789,
 		},
 		{
 			name: "noEncap lock contention",
@@ -179,8 +179,8 @@ func TestInitialize(t *testing.T) {
 				IPv4Enabled:                   true,
 				EnableHostNetworkAcceleration: true,
 			},
-			xtablesHoldDuration: 5 * time.Second,
-			expectNoTrackRules:  false,
+			xtablesHoldDuration:      5 * time.Second,
+			expectTunnelNoTrackRules: false,
 		},
 		{
 			name: "encap with random ports for SNAT",
@@ -189,9 +189,9 @@ func TestInitialize(t *testing.T) {
 				TunnelType:       ovsconfig.GeneveTunnel,
 				IPv4Enabled:      true,
 			},
-			nodeSNATRandomFully:  true,
-			expectNoTrackRules:   true,
-			expectUDPPortInRules: 6081,
+			nodeSNATRandomFully:      true,
+			expectTunnelNoTrackRules: true,
+			expectUDPPortInRules:     6081,
 		},
 		{
 			name: "noEncap with proxyAll nftables supporting",
@@ -211,8 +211,8 @@ func TestInitialize(t *testing.T) {
 				TunnelType:            ovsconfig.GeneveTunnel,
 				IPv4Enabled:           true,
 			},
-			expectNoTrackRules:   true,
-			expectUDPPortInRules: 6081,
+			expectTunnelNoTrackRules: true,
+			expectUDPPortInRules:     6081,
 		},
 	}
 
@@ -278,6 +278,8 @@ func TestInitialize(t *testing.T) {
 :ANTREA-PREROUTING - [0:0]
 -A PREROUTING -m comment --comment "Antrea: jump to Antrea prerouting rules" -j ANTREA-PREROUTING
 -A OUTPUT -m comment --comment "Antrea: jump to Antrea output rules" -j ANTREA-OUTPUT
+-A ANTREA-OUTPUT -o lo -p tcp -m comment --comment "Antrea: do not track localhost API health check output packets" -m multiport --dports 10349,10350 -j NOTRACK
+-A ANTREA-PREROUTING -i lo -p tcp -m comment --comment "Antrea: do not track localhost API health check input packets" -m multiport --sports 10349,10350 -j NOTRACK
 `,
 				"filter": `:ANTREA-FORWARD - [0:0]
 -A FORWARD -m comment --comment "Antrea: jump to Antrea forwarding rules" -j ANTREA-FORWARD
@@ -330,12 +332,14 @@ func TestInitialize(t *testing.T) {
 `
 			}
 
-			if tc.expectNoTrackRules {
+			if tc.expectTunnelNoTrackRules {
 				expectedIPTables["raw"] = fmt.Sprintf(`:ANTREA-OUTPUT - [0:0]
 :ANTREA-PREROUTING - [0:0]
 -A PREROUTING -m comment --comment "Antrea: jump to Antrea prerouting rules" -j ANTREA-PREROUTING
 -A OUTPUT -m comment --comment "Antrea: jump to Antrea output rules" -j ANTREA-OUTPUT
+-A ANTREA-OUTPUT -o lo -p tcp -m comment --comment "Antrea: do not track localhost API health check output packets" -m multiport --dports 10349,10350 -j NOTRACK
 -A ANTREA-OUTPUT -p udp -m comment --comment "Antrea: do not track outgoing encapsulation packets" -m udp --dport %d -m addrtype --src-type LOCAL -j NOTRACK
+-A ANTREA-PREROUTING -i lo -p tcp -m comment --comment "Antrea: do not track localhost API health check input packets" -m multiport --sports 10349,10350 -j NOTRACK
 -A ANTREA-PREROUTING -p udp -m comment --comment "Antrea: do not track incoming encapsulation packets" -m udp --dport %d -m addrtype --dst-type LOCAL -j NOTRACK
 `, tc.expectUDPPortInRules, tc.expectUDPPortInRules)
 			}

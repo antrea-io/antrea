@@ -27,6 +27,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/containernetworking/plugins/pkg/ip"
@@ -53,6 +54,7 @@ import (
 	utilnetlink "antrea.io/antrea/v2/pkg/agent/util/netlink"
 	"antrea.io/antrea/v2/pkg/agent/util/nftables"
 	"antrea.io/antrea/v2/pkg/agent/util/sysctl"
+	"antrea.io/antrea/v2/pkg/apis"
 	binding "antrea.io/antrea/v2/pkg/ovs/openflow"
 	"antrea.io/antrea/v2/pkg/ovs/ovsconfig"
 	"antrea.io/antrea/v2/pkg/util/env"
@@ -312,6 +314,12 @@ type Client struct {
 	hostNetworkPortRules map[feature]int32
 	// endpointResolver provides a known Endpoint for the Antrea Service.
 	endpointResolver endpointResolver
+	// controllerAPIServerPortForHealthCheck starts with the default Controller API port and is updated
+	// when the Antrea Service Endpoint changes. The port is stored rather than resolved again from the
+	// endpointResolver when the health check rules are written, because the periodic iptables sync would
+	// otherwise report an unresolved Endpoint on every sync. It is read by the periodic iptables sync
+	// concurrently with the Endpoint updates.
+	controllerAPIServerPortForHealthCheck atomic.Int32
 }
 
 // NewClient returns a route client.
@@ -357,6 +365,9 @@ func NewClient(networkConfig *config.NetworkConfig,
 		serviceExternalIPReferences: make(map[string]sets.Set[string]),
 		hostNetworkPortRules:        ports,
 	}
+	// Protect the Controller liveness endpoint before the Antrea Service Endpoint is resolved. The
+	// resolved port replaces this default when it becomes available.
+	c.controllerAPIServerPortForHealthCheck.Store(apis.AntreaControllerAPIPort)
 	// endpointResolver is a concrete pointer rather than the endpointResolver interface, because
 	// assigning a nil pointer to an interface would produce a non-nil interface, defeating the nil
 	// checks made before using it. It is nil when an Antrea kubeconfig is provided, as the Antrea
@@ -1240,6 +1251,52 @@ func (c *Client) getJumpRuleKeys(ipProtocol iptables.Protocol) sets.Set[jumpRule
 	return jumpRuleKeys
 }
 
+// apiServerHealthCheckPorts returns the local Antrea API ports whose health checks must keep working
+// when the host conntrack table is full. The Agent and the Controller may be configured with the same
+// port, in which case it is listed once.
+func (c *Client) apiServerHealthCheckPorts() []int32 {
+	ports := sets.New[int32]()
+	if port := c.hostNetworkPortRules[featureAgentAPIServer]; port > 0 {
+		ports.Insert(port)
+	}
+	if port := c.controllerAPIServerPortForHealthCheck.Load(); port > 0 {
+		ports.Insert(port)
+	}
+	// sets.List returns the ports sorted, so that the rules are written the same way every time.
+	return sets.List(ports)
+}
+
+func formatAPIServerHealthCheckPorts(ports []int32) string {
+	portStrings := make([]string, 0, len(ports))
+	for _, port := range ports {
+		portStrings = append(portStrings, strconv.Itoa(int(port)))
+	}
+	return strings.Join(portStrings, ",")
+}
+
+// writeAPIServerHealthCheckNoTrackRules exempts localhost health check traffic from conntrack, so
+// conntrack exhaustion cannot cause the Kubelet to restart an otherwise healthy Antrea component.
+// It does not make the Node healthy or preserve other traffic while conntrack is exhausted. The request
+// matches the destination port in OUTPUT, and the response matches the source port in PREROUTING.
+func writeAPIServerHealthCheckNoTrackRules(iptablesData *bytes.Buffer, ports []int32) {
+	if len(ports) == 0 {
+		return
+	}
+	portList := formatAPIServerHealthCheckPorts(ports)
+	writeLine(iptablesData, []string{
+		"-A", antreaPreRoutingChain,
+		"-i", "lo", "-p", "tcp", "-m", "comment", "--comment", `"Antrea: do not track localhost API health check input packets"`,
+		"-m", "multiport", "--sports", portList,
+		"-j", iptables.NoTrackTarget,
+	}...)
+	writeLine(iptablesData, []string{
+		"-A", antreaOutputChain,
+		"-o", "lo", "-p", "tcp", "-m", "comment", "--comment", `"Antrea: do not track localhost API health check output packets"`,
+		"-m", "multiport", "--dports", portList,
+		"-j", iptables.NoTrackTarget,
+	}...)
+}
+
 func (c *Client) restoreIptablesData(podCIDR *net.IPNet,
 	podIPSet,
 	localAntreaFlexibleIPAMPodIPSet,
@@ -1251,6 +1308,8 @@ func (c *Client) restoreIptablesData(podCIDR *net.IPNet,
 	snatMarkToIP map[uint32]net.IP,
 	iptablesFiltersRuleByChain map[string][]string,
 	isIPv6 bool) *bytes.Buffer {
+	apiServerHealthCheckPorts := c.apiServerHealthCheckPorts()
+
 	// Create required rules in the antrea chains.
 	// Use iptables-restore as it flushes the involved chains and creates the desired rules
 	// with a single call, instead of string matching to clean up stale rules.
@@ -1259,6 +1318,7 @@ func (c *Client) restoreIptablesData(podCIDR *net.IPNet,
 	writeLine(iptablesData, "*raw")
 	writeLine(iptablesData, iptables.MakeChainLine(antreaPreRoutingChain))
 	writeLine(iptablesData, iptables.MakeChainLine(antreaOutputChain))
+	writeAPIServerHealthCheckNoTrackRules(iptablesData, apiServerHealthCheckPorts)
 	if c.networkConfig.TrafficEncapMode.SupportsEncap() {
 		// For Geneve and VXLAN encapsulation packets, the request and response packets don't belong to a UDP connection
 		// so tracking them doesn't give the normal benefits of conntrack. Besides, kube-proxy may install great number
@@ -1804,26 +1864,27 @@ func (c *Client) initAgentAPIServerHostNetworkFilterRules() {
 func (c *Client) controllerAPIServerPort() (int32, bool) {
 	endpointURL := c.endpointResolver.CurrentEndpointURL()
 	if endpointURL == nil {
-		klog.InfoS("Didn't get Endpoint URL for Antrea Service, removing the host network rules for the Antrea Controller APIServer")
+		klog.InfoS("Didn't get Endpoint URL for Antrea Service, removing the host network filter rules for the Antrea Controller APIServer")
 		return 0, false
 	}
 	portStr := endpointURL.Port()
 	if portStr == "" {
-		klog.InfoS("Empty port in the Endpoint URL for Antrea Service, removing the host network rules for the Antrea Controller APIServer")
+		klog.InfoS("Empty port in the Endpoint URL for Antrea Service, removing the host network filter rules for the Antrea Controller APIServer")
 		return 0, false
 	}
 	port, err := strconv.ParseInt(portStr, 10, 32)
 	if err != nil {
-		klog.ErrorS(err, "Invalid port in the Endpoint URL for Antrea Service, removing the host network rules for the Antrea Controller APIServer", "port", portStr)
+		klog.ErrorS(err, "Invalid port in the Endpoint URL for Antrea Service, removing the host network filter rules for the Antrea Controller APIServer", "port", portStr)
 		return 0, false
 	}
 	return int32(port), true
 }
 
-// updateControllerAPIServerHostNetworkFilterRules installs the host network rules allowing the traffic to
+// updateControllerAPIServerHostNetworkFilterRules installs the host network filter rules allowing the traffic to
 // the Antrea Controller APIServer, whose port is only known once the Antrea Service Endpoint has been
 // resolved. It is called again every time the Endpoint changes, and removes the rules when no Endpoint is
-// resolved any more, so that the port of a Controller which is gone does not stay open.
+// resolved any more, so that the port of a Controller which is gone does not stay open. The localhost
+// health check rules fall back to the default Controller API port when no Endpoint is resolved.
 func (c *Client) updateControllerAPIServerHostNetworkFilterRules() {
 	if c.endpointResolver == nil {
 		// The Controller APIServer port is only discovered from the Antrea Service Endpoint, which is
@@ -1831,7 +1892,11 @@ func (c *Client) updateControllerAPIServerHostNetworkFilterRules() {
 		return
 	}
 	var antreaInputChainRules, antreaOutputChainRules []string
-	if port, ok := c.controllerAPIServerPort(); ok {
+	portForHealthCheck := int32(apis.AntreaControllerAPIPort)
+	var port int32
+	if resolvedPort, ok := c.controllerAPIServerPort(); ok {
+		port = resolvedPort
+		portForHealthCheck = resolvedPort
 		klog.InfoS("Installing host network rules to allow Antrea Controller APIServer traffic", "protocol", "TCP", "port", port)
 		controllerAPIServerPort := intstr.FromInt32(port)
 		antreaInputChainRules = []string{
@@ -1854,6 +1919,7 @@ func (c *Client) updateControllerAPIServerHostNetworkFilterRules() {
 			buildAllowHostEgressReplyPortRule(iptables.ProtocolTCP, port, "Antrea: allow Controller APIServer reply packets"),
 		}
 	}
+	c.controllerAPIServerPortForHealthCheck.Store(portForHealthCheck)
 	// Storing empty rules is what removes them: syncIPTables rewrites the Antrea chains from the cache.
 	if c.networkConfig.IPv6Enabled {
 		c.iptablesCache.ipv6[featureControllerAPIServer].Store(antreaInputChain, antreaInputChainRules)
