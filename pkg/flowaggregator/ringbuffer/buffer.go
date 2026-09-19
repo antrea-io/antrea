@@ -181,6 +181,11 @@ func (b *broadcastBuffer[T]) Shutdown() {
 	}
 }
 
+// Tip reads writePos atomically: see the BroadcastBuffer interface doc for what it means.
+func (b *broadcastBuffer[T]) Tip() int64 {
+	return b.writePos.Load()
+}
+
 func (b *broadcastBuffer[T]) NewConsumer(opts ...ConsumerOption) Consumer[T] {
 	var cfg consumerConfig
 	for _, o := range opts {
@@ -296,6 +301,12 @@ func (c *consumer[T]) waitForData(hasDeadline bool, start time.Time) (wp int64, 
 		}
 		b.cond.Wait()
 	}
+}
+
+// Position returns readPos, which is consumer-local and so needs no lock: see the Consumer
+// interface doc for what the returned value means and is used for.
+func (c *consumer[T]) Position() int64 {
+	return c.readPos
 }
 
 func (c *consumer[T]) Consume() (val T, n int, lost int64, shutdown bool) {

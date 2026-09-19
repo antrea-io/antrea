@@ -28,6 +28,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/google/uuid"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
@@ -84,6 +85,11 @@ type FlowStreamService struct {
 	// call instead of answering it with the retryable ResourceExhausted the per-client-IP cap returns.
 	// The service-wide cap is the natural value, since no stream past it can be admitted anyway.
 	maxStreamsPerConn uint32
+	// streamEpoch identifies this Flow Aggregator process. Generated once at construction, it is what
+	// lets a client's ResumeToken be recognized as stale after a FA restart: the ring buffer, and the
+	// sequence numbers naming positions in it, both start over from zero then, so a sequence_number
+	// from a previous epoch could otherwise silently name a different flow than the one it was issued for.
+	streamEpoch string
 }
 
 // NewFlowStreamService creates a FlowStreamService backed by the given buffer. authenticator
@@ -105,6 +111,7 @@ func NewFlowStreamService(buffer ringbuffer.BroadcastBuffer[*flowpb.Flow], authe
 		authenticator:     authenticator,
 		authorizer:        authorizer,
 		maxStreamsPerConn: uint32(authenticator.streamLimiter.limits.MaxTotalStreams),
+		streamEpoch:       uuid.NewString(),
 	}, nil
 }
 
@@ -117,6 +124,7 @@ func newFlowStreamServiceWithoutAuthentication(buffer ringbuffer.BroadcastBuffer
 		buffer:            buffer,
 		authorizer:        authorizer,
 		maxStreamsPerConn: flowaggregatorconfig.DefaultFlowStreamMaxTotalStreams,
+		streamEpoch:       uuid.NewString(),
 	}
 }
 
@@ -246,21 +254,83 @@ func (s *FlowStreamService) GetFlows(req *flowpb.GetFlowsRequest, stream flowpb.
 		"follow", follow,
 		"since", since,
 		"maxCount", maxCount,
-		"filters", reqFilters)
+		"filters", reqFilters,
+		"resume", req.GetResume())
 
-	// The stream is live. FlowStreamService explicitly sends an empty response at this point to let
-	// clients learn that directly. This empty response is never sent again: every later Send in the
-	// loop below is gated on having flows or a drop to report, so clients can treat "the first empty
-	// message" as acknowledgement.
-	if err := stream.Send(&flowpb.GetFlowsResponse{}); err != nil {
-		klog.InfoS("Send initial response to client failed, closing GetFlows stream", "err", err)
-		return err
+	// A resume token from this same process incarnation is validated against the current tip before
+	// the ring buffer is touched at all, same as the filter validation above: a sequence_number this
+	// server actually issued is never at or beyond its own current position (positions only ever
+	// increase, and a token names one this exact process reported having already accounted for), so
+	// one that is can only be a malformed or fabricated token, not legitimate skew to wait out.
+	//
+	// A token whose stream_epoch does not match is a different, non-error case: the Flow Aggregator
+	// restarted, so nothing about the previous epoch's ring buffer is known here, including whether
+	// the client missed anything. resumeReset carries that "we cannot say" into the handshake
+	// response below, rather than letting a dropped_count of 0 be misread as a confirmed zero.
+	var resume *flowpb.ResumeToken
+	var resumeReset bool
+	if r := req.GetResume(); r != nil {
+		if r.GetStreamEpoch() == s.streamEpoch {
+			// -1 is the lowest value a server ever issues (see GetFlowsResponse.sequence_number),
+			// meaning "nothing accounted for yet". Anything lower is rejected here rather than fed
+			// into the arithmetic below: startPos - (sequence_number + 1) is computed as a signed
+			// int64 before it is known to be non-negative, and a sufficiently negative
+			// sequence_number (an adversarial or corrupted token, e.g. near math.MinInt64) makes
+			// that subtraction overflow and silently wrap around, which uint64(...) would then turn
+			// into a huge, wrong dropped_count instead of failing loudly.
+			if r.GetSequenceNumber() < -1 {
+				return status.Errorf(codes.InvalidArgument,
+					"resume sequence_number %d is invalid: must be -1 or greater", r.GetSequenceNumber())
+			}
+			resume = r
+			if tip := s.buffer.Tip(); resume.GetSequenceNumber() >= tip {
+				return status.Errorf(codes.InvalidArgument,
+					"resume sequence_number %d is not before this stream's current position %d",
+					resume.GetSequenceNumber(), tip-1)
+			}
+		} else {
+			resumeReset = true
+		}
 	}
 
 	consumer := s.buffer.NewConsumer(
 		ringbuffer.WithReadFromBeginning(),
 		ringbuffer.WithMaxConsumeDeadline(exporter.ConsumeDeadline),
 	)
+	startPos := consumer.Position()
+
+	// resumePos is the last position the client has already received for: a flow at or before
+	// it is read but discarded rather than re-sent, in the main loop below. It defaults to "nothing to
+	// skip" — one position behind where this stream starts reading — which is also what an unset or
+	// stale resume token falls back to: a token whose stream_epoch does not match this process
+	// cannot be trusted to name a real position (the ring buffer was reset by a restart), so it is
+	// treated exactly like no resume token at all rather than rejected.
+	resumePos := startPos - 1
+	var totalDropped uint64
+	if resume != nil {
+		resumePos = resume.GetSequenceNumber()
+		if resumePos+1 < startPos {
+			// The client's last-seen position already fell out of the ring buffer: everything
+			// between it and startPos is an unrecoverable gap, reported once, right here, rather
+			// than silently replayed as if it were new. There is nothing left to skip in the main
+			// loop below, since startPos is now the oldest flow this stream will ever see.
+			totalDropped = uint64(startPos - (resumePos + 1))
+			resumePos = startPos - 1
+		}
+	}
+
+	// The stream is live, and its resume point (if any) is resolved. FlowStreamService explicitly
+	// sends a response at this point to let clients learn that directly. Flows is always empty here:
+	// every later Send in the loop below is gated on having flows or a drop to report, so clients can
+	// treat "the first response with no flows" as acknowledgement.
+	if err := stream.Send(&flowpb.GetFlowsResponse{
+		DroppedCount: totalDropped,
+		ResumeToken:  &flowpb.ResumeToken{StreamEpoch: s.streamEpoch, SequenceNumber: startPos - 1},
+		ResumeReset:  resumeReset,
+	}); err != nil {
+		klog.InfoS("Send initial response to client failed, closing GetFlows stream", "err", err)
+		return err
+	}
 
 	// The scope a stream was opened with is not reported back to the client: a request is
 	// authorized in full or rejected outright, and at most one Namespace may be named, so the
@@ -270,7 +340,6 @@ func (s *FlowStreamService) GetFlows(req *flowpb.GetFlowsRequest, stream flowpb.
 	// and a field can be added to GetFlowsResponse then.
 
 	sent := 0
-	var totalDropped uint64
 	batch := make([]*flowpb.Flow, internalBatchSize)
 
 	for {
@@ -296,15 +365,35 @@ func (s *FlowStreamService) GetFlows(req *flowpb.GetFlowsRequest, stream flowpb.
 			return nil
 		}
 
+		// batchEndPos is the position just past the last item this call read (or skipped past via
+		// dropped); consumer.Position() reflects that unconditionally, whether or not n > 0. The
+		// batch itself occupies [batchEndPos-n, batchEndPos), assigned once by the producer and
+		// stable regardless of how any of it is later redacted or filtered — which is what makes it
+		// safe to resume against, and why skip below is computed before streamAuth.Authorize and
+		// applyFilters run rather than after.
+		batchEndPos := consumer.Position()
+
 		var filtered []*flowpb.Flow
 		if n > 0 {
+			skip := 0
+			if batchStartPos := batchEndPos - int64(n); resumePos >= batchStartPos {
+				// Positions only increase, and resumeThreshold never changes for this stream's
+				// lifetime, so skip is nonzero only for the batch (or batches) immediately after
+				// startPos: once batchStartPos passes resumeThreshold, every later batch has
+				// skip == 0 with no further bookkeeping needed.
+				skip = int(resumePos-batchStartPos) + 1
+				if skip > n {
+					skip = n
+				}
+			}
+
 			// Authorization runs before the client's own filters, and before the max_count
 			// accounting, so that a record the client may not observe is never counted against the
 			// records it asked for, and so that filters only ever match what it can see. That last
 			// point is also what gives a filter naming a Namespace outside the stream's scope its
 			// meaning: every record here already has an endpoint in scope, so such a filter selects
 			// flows by their peer, and matches only where that peer's Namespace was disclosed.
-			records := batch[:n]
+			records := batch[skip:n]
 			if streamAuth != nil {
 				records = streamAuth.Authorize(ctx, records)
 			}
@@ -317,6 +406,7 @@ func (s *FlowStreamService) GetFlows(req *flowpb.GetFlowsRequest, stream flowpb.
 			resp := &flowpb.GetFlowsResponse{
 				Flows:        filtered,
 				DroppedCount: totalDropped,
+				ResumeToken:  &flowpb.ResumeToken{StreamEpoch: s.streamEpoch, SequenceNumber: batchEndPos - 1},
 			}
 			if err := stream.Send(resp); err != nil {
 				klog.InfoS("Send to client failed, closing GetFlows stream", "err", err)

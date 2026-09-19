@@ -45,6 +45,13 @@ type Consumer[T any] interface {
 	// by the next wake cycle.
 	// n can be 0 if the deadline expired with no data available.
 	ConsumeMultiple(out []T) (n int, lost int64, shutdown bool)
+	// Position returns the absolute buffer position of the next item this consumer will read.
+	// Positions are assigned once, by Produce/ProduceMultiple, in write order starting at 0 for the
+	// first item the buffer ever holds, and are stable across the item's lifetime in the buffer:
+	// two consumers agree on the position of a given item regardless of when each of them reads it,
+	// which is what lets a position be handed to a different, later consumer (see NewConsumer's
+	// WithReadFromBeginning) as a resume point that means the same thing it did when it was issued.
+	Position() int64
 }
 
 // ConsumerOption configures a new consumer created by NewConsumer.
@@ -92,4 +99,9 @@ type BroadcastBuffer[T any] interface {
 	Producer[T]
 	// NewConsumer creates a new independent consumer.
 	NewConsumer(opts ...ConsumerOption) Consumer[T]
+	// Tip returns the position the next produced item will occupy: one past the most recently
+	// produced item, or 0 if nothing has been produced yet. It is the same value a freshly created
+	// default consumer's Position() would report; it is exposed directly so a caller can learn it
+	// without creating and discarding a consumer.
+	Tip() int64
 }
