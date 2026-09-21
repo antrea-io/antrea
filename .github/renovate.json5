@@ -115,6 +115,15 @@
       addLabels: ["go"],
     },
 
+    // Group all go.opentelemetry.io modules into a single PR since they are released together
+    {
+      matchManagers: ["gomod"],
+      matchPackagePrefixes: ["go.opentelemetry.io/"],
+      groupName: "OpenTelemetry Go",
+      groupSlug: "opentelemetry-go",
+      matchBaseBranches: ["main"],
+    },
+
     // Only allow patch updates for these dependencies
     {
       matchManagers: ["gomod"],
