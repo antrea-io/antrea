@@ -1276,25 +1276,63 @@ func formatAPIServerHealthCheckPorts(ports []int32) string {
 
 // writeAPIServerHealthCheckNoTrackRules exempts localhost health check traffic from conntrack, so
 // conntrack exhaustion cannot cause the Kubelet to restart an otherwise healthy Antrea component.
-// It does not make the Node healthy or preserve other traffic while conntrack is exhausted. The request
-// matches the destination port in OUTPUT, and the response matches the source port in PREROUTING.
-func writeAPIServerHealthCheckNoTrackRules(iptablesData *bytes.Buffer, ports []int32) {
+// It does not make the Node healthy or preserve other traffic while conntrack is exhausted. Both the
+// request and response are matched in OUTPUT because loopback packets traverse OUTPUT before PREROUTING.
+func writeAPIServerHealthCheckNoTrackRules(iptablesData *bytes.Buffer, ports []int32, isIPv6 bool) {
 	if len(ports) == 0 {
 		return
 	}
 	portList := formatAPIServerHealthCheckPorts(ports)
+	loopbackCIDR := "127.0.0.0/8"
+	if isIPv6 {
+		loopbackCIDR = "::1/128"
+	}
 	writeLine(iptablesData, []string{
-		"-A", antreaPreRoutingChain,
-		"-i", "lo", "-p", "tcp", "-m", "comment", "--comment", `"Antrea: do not track localhost API health check input packets"`,
-		"-m", "multiport", "--sports", portList,
+		"-A", antreaOutputChain,
+		"-s", loopbackCIDR, "-d", loopbackCIDR, "-o", "lo", "-p", "tcp",
+		"-m", "comment", "--comment", `"Antrea: do not track localhost API health check request packets"`,
+		"-m", "multiport", "--dports", portList,
 		"-j", iptables.NoTrackTarget,
 	}...)
 	writeLine(iptablesData, []string{
 		"-A", antreaOutputChain,
-		"-o", "lo", "-p", "tcp", "-m", "comment", "--comment", `"Antrea: do not track localhost API health check output packets"`,
-		"-m", "multiport", "--dports", portList,
+		"-s", loopbackCIDR, "-d", loopbackCIDR, "-o", "lo", "-p", "tcp",
+		"-m", "comment", "--comment", `"Antrea: do not track localhost API health check reply packets"`,
+		"-m", "multiport", "--sports", portList,
 		"-j", iptables.NoTrackTarget,
 	}...)
+}
+
+// writeAPIServerHealthCheckAcceptRules keeps untracked localhost health check traffic from depending
+// on conntrack-based ESTABLISHED rules when the host firewall's default policy is to drop.
+func writeAPIServerHealthCheckAcceptRules(iptablesData *bytes.Buffer, ports []int32, isIPv6 bool) {
+	if len(ports) == 0 {
+		return
+	}
+	portList := formatAPIServerHealthCheckPorts(ports)
+	loopbackCIDR := "127.0.0.0/8"
+	if isIPv6 {
+		loopbackCIDR = "::1/128"
+	}
+	for _, rule := range []struct {
+		chain         string
+		interfaceName string
+		portFlag      string
+		comment       string
+	}{
+		{antreaInputChain, "-i", "--dports", "Antrea: allow localhost API health check request input packets"},
+		{antreaInputChain, "-i", "--sports", "Antrea: allow localhost API health check reply input packets"},
+		{antreaOutputChain, "-o", "--dports", "Antrea: allow localhost API health check request output packets"},
+		{antreaOutputChain, "-o", "--sports", "Antrea: allow localhost API health check reply output packets"},
+	} {
+		writeLine(iptablesData, []string{
+			"-A", rule.chain,
+			"-s", loopbackCIDR, "-d", loopbackCIDR, rule.interfaceName, "lo", "-p", "tcp",
+			"-m", "comment", "--comment", `"` + rule.comment + `"`,
+			"-m", "multiport", rule.portFlag, portList,
+			"-j", iptables.AcceptTarget,
+		}...)
+	}
 }
 
 func (c *Client) restoreIptablesData(podCIDR *net.IPNet,
@@ -1318,7 +1356,7 @@ func (c *Client) restoreIptablesData(podCIDR *net.IPNet,
 	writeLine(iptablesData, "*raw")
 	writeLine(iptablesData, iptables.MakeChainLine(antreaPreRoutingChain))
 	writeLine(iptablesData, iptables.MakeChainLine(antreaOutputChain))
-	writeAPIServerHealthCheckNoTrackRules(iptablesData, apiServerHealthCheckPorts)
+	writeAPIServerHealthCheckNoTrackRules(iptablesData, apiServerHealthCheckPorts, isIPv6)
 	if c.networkConfig.TrafficEncapMode.SupportsEncap() {
 		// For Geneve and VXLAN encapsulation packets, the request and response packets don't belong to a UDP connection
 		// so tracking them doesn't give the normal benefits of conntrack. Besides, kube-proxy may install great number
@@ -1526,6 +1564,7 @@ func (c *Client) restoreIptablesData(podCIDR *net.IPNet,
 			writeLine(iptablesData, rule)
 		}
 	}
+	writeAPIServerHealthCheckAcceptRules(iptablesData, apiServerHealthCheckPorts, isIPv6)
 	writeLine(iptablesData, "COMMIT")
 
 	writeLine(iptablesData, "*nat")

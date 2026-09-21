@@ -499,8 +499,8 @@ func TestSyncIPTables(t *testing.T) {
 				mockIPTables.Restore(`*raw
 :ANTREA-PREROUTING - [0:0]
 :ANTREA-OUTPUT - [0:0]
--A ANTREA-PREROUTING -i lo -p tcp -m comment --comment "Antrea: do not track localhost API health check input packets" -m multiport --sports 10350 -j NOTRACK
--A ANTREA-OUTPUT -o lo -p tcp -m comment --comment "Antrea: do not track localhost API health check output packets" -m multiport --dports 10350 -j NOTRACK
+-A ANTREA-OUTPUT -s 127.0.0.0/8 -d 127.0.0.0/8 -o lo -p tcp -m comment --comment "Antrea: do not track localhost API health check request packets" -m multiport --dports 10350 -j NOTRACK
+-A ANTREA-OUTPUT -s 127.0.0.0/8 -d 127.0.0.0/8 -o lo -p tcp -m comment --comment "Antrea: do not track localhost API health check reply packets" -m multiport --sports 10350 -j NOTRACK
 -A ANTREA-PREROUTING -m comment --comment "Antrea: do not track incoming encapsulation packets" -m udp -p udp --dport 6081 -m addrtype --dst-type LOCAL -j NOTRACK
 -A ANTREA-OUTPUT -m comment --comment "Antrea: do not track outgoing encapsulation packets" -m udp -p udp --dport 6081 -m addrtype --src-type LOCAL -j NOTRACK
 -A ANTREA-PREROUTING -m comment --comment "Antrea: drop Pod multicast traffic forwarded via underlay network" -m set --match-set CLUSTER-NODE-IP src -d 224.0.0.0/4 -j DROP
@@ -555,6 +555,10 @@ COMMIT
 -A ANTREA-POL-PRE-EGRESS-RULES -o lo -m comment --comment "Antrea: allow egress packets to loopback" -j ACCEPT
 -A ANTREA-POL-PRE-INGRESS-RULES -m conntrack --ctstate ESTABLISHED,RELATED -m comment --comment "Antrea: allow ingress established or related packets" -j ACCEPT
 -A ANTREA-POL-PRE-INGRESS-RULES -i lo -m comment --comment "Antrea: allow ingress packets from loopback" -j ACCEPT
+-A ANTREA-INPUT -s 127.0.0.0/8 -d 127.0.0.0/8 -i lo -p tcp -m comment --comment "Antrea: allow localhost API health check request input packets" -m multiport --dports 10350 -j ACCEPT
+-A ANTREA-INPUT -s 127.0.0.0/8 -d 127.0.0.0/8 -i lo -p tcp -m comment --comment "Antrea: allow localhost API health check reply input packets" -m multiport --sports 10350 -j ACCEPT
+-A ANTREA-OUTPUT -s 127.0.0.0/8 -d 127.0.0.0/8 -o lo -p tcp -m comment --comment "Antrea: allow localhost API health check request output packets" -m multiport --dports 10350 -j ACCEPT
+-A ANTREA-OUTPUT -s 127.0.0.0/8 -d 127.0.0.0/8 -o lo -p tcp -m comment --comment "Antrea: allow localhost API health check reply output packets" -m multiport --sports 10350 -j ACCEPT
 COMMIT
 *nat
 :ANTREA-PREROUTING - [0:0]
@@ -571,8 +575,8 @@ COMMIT
 				mockIPTables.Restore(`*raw
 :ANTREA-PREROUTING - [0:0]
 :ANTREA-OUTPUT - [0:0]
--A ANTREA-PREROUTING -i lo -p tcp -m comment --comment "Antrea: do not track localhost API health check input packets" -m multiport --sports 10350 -j NOTRACK
--A ANTREA-OUTPUT -o lo -p tcp -m comment --comment "Antrea: do not track localhost API health check output packets" -m multiport --dports 10350 -j NOTRACK
+-A ANTREA-OUTPUT -s ::1/128 -d ::1/128 -o lo -p tcp -m comment --comment "Antrea: do not track localhost API health check request packets" -m multiport --dports 10350 -j NOTRACK
+-A ANTREA-OUTPUT -s ::1/128 -d ::1/128 -o lo -p tcp -m comment --comment "Antrea: do not track localhost API health check reply packets" -m multiport --sports 10350 -j NOTRACK
 -A ANTREA-PREROUTING -m comment --comment "Antrea: do not track incoming encapsulation packets" -m udp -p udp --dport 6081 -m addrtype --dst-type LOCAL -j NOTRACK
 -A ANTREA-OUTPUT -m comment --comment "Antrea: do not track outgoing encapsulation packets" -m udp -p udp --dport 6081 -m addrtype --src-type LOCAL -j NOTRACK
 -A ANTREA-PREROUTING -m comment --comment "Antrea: do not track request packets destined to external IPs" -m set --match-set ANTREA-EXTERNAL-IP6 dst -j NOTRACK
@@ -626,6 +630,10 @@ COMMIT
 -A ANTREA-POL-PRE-EGRESS-RULES -o lo -m comment --comment "Antrea: allow egress packets to loopback" -j ACCEPT
 -A ANTREA-POL-PRE-INGRESS-RULES -m conntrack --ctstate ESTABLISHED,RELATED -m comment --comment "Antrea: allow ingress established or related packets" -j ACCEPT
 -A ANTREA-POL-PRE-INGRESS-RULES -i lo -m comment --comment "Antrea: allow ingress packets from loopback" -j ACCEPT
+-A ANTREA-INPUT -s ::1/128 -d ::1/128 -i lo -p tcp -m comment --comment "Antrea: allow localhost API health check request input packets" -m multiport --dports 10350 -j ACCEPT
+-A ANTREA-INPUT -s ::1/128 -d ::1/128 -i lo -p tcp -m comment --comment "Antrea: allow localhost API health check reply input packets" -m multiport --sports 10350 -j ACCEPT
+-A ANTREA-OUTPUT -s ::1/128 -d ::1/128 -o lo -p tcp -m comment --comment "Antrea: allow localhost API health check request output packets" -m multiport --dports 10350 -j ACCEPT
+-A ANTREA-OUTPUT -s ::1/128 -d ::1/128 -o lo -p tcp -m comment --comment "Antrea: allow localhost API health check reply output packets" -m multiport --sports 10350 -j ACCEPT
 COMMIT
 *nat
 :ANTREA-PREROUTING - [0:0]
@@ -706,8 +714,8 @@ COMMIT
 				mockIPTables.Restore(`*raw
 :ANTREA-PREROUTING - [0:0]
 :ANTREA-OUTPUT - [0:0]
--A ANTREA-PREROUTING -i lo -p tcp -m comment --comment "Antrea: do not track localhost API health check input packets" -m multiport --sports 10350 -j NOTRACK
--A ANTREA-OUTPUT -o lo -p tcp -m comment --comment "Antrea: do not track localhost API health check output packets" -m multiport --dports 10350 -j NOTRACK
+-A ANTREA-OUTPUT -s 127.0.0.0/8 -d 127.0.0.0/8 -o lo -p tcp -m comment --comment "Antrea: do not track localhost API health check request packets" -m multiport --dports 10350 -j NOTRACK
+-A ANTREA-OUTPUT -s 127.0.0.0/8 -d 127.0.0.0/8 -o lo -p tcp -m comment --comment "Antrea: do not track localhost API health check reply packets" -m multiport --sports 10350 -j NOTRACK
 -A ANTREA-PREROUTING -m comment --comment "Antrea: do not track incoming encapsulation packets" -m udp -p udp --dport 4789 -m addrtype --dst-type LOCAL -j NOTRACK
 -A ANTREA-OUTPUT -m comment --comment "Antrea: do not track outgoing encapsulation packets" -m udp -p udp --dport 4789 -m addrtype --src-type LOCAL -j NOTRACK
 COMMIT
@@ -739,6 +747,10 @@ COMMIT
 -A ANTREA-OUTPUT -m comment --comment "Antrea: allow Agent cluster memberships TCP output packets" -p tcp --dport 10351 -j ACCEPT
 -A ANTREA-OUTPUT -m comment --comment "Antrea: allow Agent cluster memberships TCP reply packets" -p tcp --sport 10351 -m conntrack --ctstate ESTABLISHED -j ACCEPT
 -A ANTREA-OUTPUT -m comment --comment "Antrea: allow Agent cluster memberships UDP output packets" -p udp --dport 10351 -j ACCEPT
+-A ANTREA-INPUT -s 127.0.0.0/8 -d 127.0.0.0/8 -i lo -p tcp -m comment --comment "Antrea: allow localhost API health check request input packets" -m multiport --dports 10350 -j ACCEPT
+-A ANTREA-INPUT -s 127.0.0.0/8 -d 127.0.0.0/8 -i lo -p tcp -m comment --comment "Antrea: allow localhost API health check reply input packets" -m multiport --sports 10350 -j ACCEPT
+-A ANTREA-OUTPUT -s 127.0.0.0/8 -d 127.0.0.0/8 -o lo -p tcp -m comment --comment "Antrea: allow localhost API health check request output packets" -m multiport --dports 10350 -j ACCEPT
+-A ANTREA-OUTPUT -s 127.0.0.0/8 -d 127.0.0.0/8 -o lo -p tcp -m comment --comment "Antrea: allow localhost API health check reply output packets" -m multiport --sports 10350 -j ACCEPT
 COMMIT
 *nat
 :ANTREA-POSTROUTING - [0:0]
@@ -750,8 +762,8 @@ COMMIT
 				mockIPTables.Restore(`*raw
 :ANTREA-PREROUTING - [0:0]
 :ANTREA-OUTPUT - [0:0]
--A ANTREA-PREROUTING -i lo -p tcp -m comment --comment "Antrea: do not track localhost API health check input packets" -m multiport --sports 10350 -j NOTRACK
--A ANTREA-OUTPUT -o lo -p tcp -m comment --comment "Antrea: do not track localhost API health check output packets" -m multiport --dports 10350 -j NOTRACK
+-A ANTREA-OUTPUT -s ::1/128 -d ::1/128 -o lo -p tcp -m comment --comment "Antrea: do not track localhost API health check request packets" -m multiport --dports 10350 -j NOTRACK
+-A ANTREA-OUTPUT -s ::1/128 -d ::1/128 -o lo -p tcp -m comment --comment "Antrea: do not track localhost API health check reply packets" -m multiport --sports 10350 -j NOTRACK
 -A ANTREA-PREROUTING -m comment --comment "Antrea: do not track incoming encapsulation packets" -m udp -p udp --dport 4789 -m addrtype --dst-type LOCAL -j NOTRACK
 -A ANTREA-OUTPUT -m comment --comment "Antrea: do not track outgoing encapsulation packets" -m udp -p udp --dport 4789 -m addrtype --src-type LOCAL -j NOTRACK
 COMMIT
@@ -783,6 +795,10 @@ COMMIT
 -A ANTREA-OUTPUT -m comment --comment "Antrea: allow Agent cluster memberships TCP output packets" -p tcp --dport 10351 -j ACCEPT
 -A ANTREA-OUTPUT -m comment --comment "Antrea: allow Agent cluster memberships TCP reply packets" -p tcp --sport 10351 -m conntrack --ctstate ESTABLISHED -j ACCEPT
 -A ANTREA-OUTPUT -m comment --comment "Antrea: allow Agent cluster memberships UDP output packets" -p udp --dport 10351 -j ACCEPT
+-A ANTREA-INPUT -s ::1/128 -d ::1/128 -i lo -p tcp -m comment --comment "Antrea: allow localhost API health check request input packets" -m multiport --dports 10350 -j ACCEPT
+-A ANTREA-INPUT -s ::1/128 -d ::1/128 -i lo -p tcp -m comment --comment "Antrea: allow localhost API health check reply input packets" -m multiport --sports 10350 -j ACCEPT
+-A ANTREA-OUTPUT -s ::1/128 -d ::1/128 -o lo -p tcp -m comment --comment "Antrea: allow localhost API health check request output packets" -m multiport --dports 10350 -j ACCEPT
+-A ANTREA-OUTPUT -s ::1/128 -d ::1/128 -o lo -p tcp -m comment --comment "Antrea: allow localhost API health check reply output packets" -m multiport --sports 10350 -j ACCEPT
 COMMIT
 *nat
 :ANTREA-POSTROUTING - [0:0]
@@ -876,8 +892,8 @@ COMMIT
 				mockIPTables.Restore(`*raw
 :ANTREA-PREROUTING - [0:0]
 :ANTREA-OUTPUT - [0:0]
--A ANTREA-PREROUTING -i lo -p tcp -m comment --comment "Antrea: do not track localhost API health check input packets" -m multiport --sports 10350 -j NOTRACK
--A ANTREA-OUTPUT -o lo -p tcp -m comment --comment "Antrea: do not track localhost API health check output packets" -m multiport --dports 10350 -j NOTRACK
+-A ANTREA-OUTPUT -s 127.0.0.0/8 -d 127.0.0.0/8 -o lo -p tcp -m comment --comment "Antrea: do not track localhost API health check request packets" -m multiport --dports 10350 -j NOTRACK
+-A ANTREA-OUTPUT -s 127.0.0.0/8 -d 127.0.0.0/8 -o lo -p tcp -m comment --comment "Antrea: do not track localhost API health check reply packets" -m multiport --sports 10350 -j NOTRACK
 -A ANTREA-PREROUTING -m comment --comment "Antrea: do not track incoming encapsulation packets" -m udp -p udp --dport 6082 -m addrtype --dst-type LOCAL -j NOTRACK
 -A ANTREA-OUTPUT -m comment --comment "Antrea: do not track outgoing encapsulation packets" -m udp -p udp --dport 6082 -m addrtype --src-type LOCAL -j NOTRACK
 -A ANTREA-PREROUTING -m comment --comment "Antrea: drop Pod multicast traffic forwarded via underlay network" -m set --match-set CLUSTER-NODE-IP src -d 224.0.0.0/4 -j DROP
@@ -928,6 +944,10 @@ COMMIT
 -A ANTREA-POL-PRE-EGRESS-RULES -o lo -m comment --comment "Antrea: allow egress packets to loopback" -j ACCEPT
 -A ANTREA-POL-PRE-INGRESS-RULES -m conntrack --ctstate ESTABLISHED,RELATED -m comment --comment "Antrea: allow ingress established or related packets" -j ACCEPT
 -A ANTREA-POL-PRE-INGRESS-RULES -i lo -m comment --comment "Antrea: allow ingress packets from loopback" -j ACCEPT
+-A ANTREA-INPUT -s 127.0.0.0/8 -d 127.0.0.0/8 -i lo -p tcp -m comment --comment "Antrea: allow localhost API health check request input packets" -m multiport --dports 10350 -j ACCEPT
+-A ANTREA-INPUT -s 127.0.0.0/8 -d 127.0.0.0/8 -i lo -p tcp -m comment --comment "Antrea: allow localhost API health check reply input packets" -m multiport --sports 10350 -j ACCEPT
+-A ANTREA-OUTPUT -s 127.0.0.0/8 -d 127.0.0.0/8 -o lo -p tcp -m comment --comment "Antrea: allow localhost API health check request output packets" -m multiport --dports 10350 -j ACCEPT
+-A ANTREA-OUTPUT -s 127.0.0.0/8 -d 127.0.0.0/8 -o lo -p tcp -m comment --comment "Antrea: allow localhost API health check reply output packets" -m multiport --sports 10350 -j ACCEPT
 COMMIT
 *nat
 :ANTREA-PREROUTING - [0:0]
@@ -945,8 +965,8 @@ COMMIT
 				mockIPTables.Restore(`*raw
 :ANTREA-PREROUTING - [0:0]
 :ANTREA-OUTPUT - [0:0]
--A ANTREA-PREROUTING -i lo -p tcp -m comment --comment "Antrea: do not track localhost API health check input packets" -m multiport --sports 10350 -j NOTRACK
--A ANTREA-OUTPUT -o lo -p tcp -m comment --comment "Antrea: do not track localhost API health check output packets" -m multiport --dports 10350 -j NOTRACK
+-A ANTREA-OUTPUT -s ::1/128 -d ::1/128 -o lo -p tcp -m comment --comment "Antrea: do not track localhost API health check request packets" -m multiport --dports 10350 -j NOTRACK
+-A ANTREA-OUTPUT -s ::1/128 -d ::1/128 -o lo -p tcp -m comment --comment "Antrea: do not track localhost API health check reply packets" -m multiport --sports 10350 -j NOTRACK
 -A ANTREA-PREROUTING -m comment --comment "Antrea: do not track incoming encapsulation packets" -m udp -p udp --dport 6082 -m addrtype --dst-type LOCAL -j NOTRACK
 -A ANTREA-OUTPUT -m comment --comment "Antrea: do not track outgoing encapsulation packets" -m udp -p udp --dport 6082 -m addrtype --src-type LOCAL -j NOTRACK
 -A ANTREA-PREROUTING -m comment --comment "Antrea: do not track request packets destined to external IPs" -m set --match-set ANTREA-EXTERNAL-IP6 dst -j NOTRACK
@@ -996,6 +1016,10 @@ COMMIT
 -A ANTREA-POL-PRE-EGRESS-RULES -o lo -m comment --comment "Antrea: allow egress packets to loopback" -j ACCEPT
 -A ANTREA-POL-PRE-INGRESS-RULES -m conntrack --ctstate ESTABLISHED,RELATED -m comment --comment "Antrea: allow ingress established or related packets" -j ACCEPT
 -A ANTREA-POL-PRE-INGRESS-RULES -i lo -m comment --comment "Antrea: allow ingress packets from loopback" -j ACCEPT
+-A ANTREA-INPUT -s ::1/128 -d ::1/128 -i lo -p tcp -m comment --comment "Antrea: allow localhost API health check request input packets" -m multiport --dports 10350 -j ACCEPT
+-A ANTREA-INPUT -s ::1/128 -d ::1/128 -i lo -p tcp -m comment --comment "Antrea: allow localhost API health check reply input packets" -m multiport --sports 10350 -j ACCEPT
+-A ANTREA-OUTPUT -s ::1/128 -d ::1/128 -o lo -p tcp -m comment --comment "Antrea: allow localhost API health check request output packets" -m multiport --dports 10350 -j ACCEPT
+-A ANTREA-OUTPUT -s ::1/128 -d ::1/128 -o lo -p tcp -m comment --comment "Antrea: allow localhost API health check reply output packets" -m multiport --sports 10350 -j ACCEPT
 COMMIT
 *nat
 :ANTREA-PREROUTING - [0:0]
@@ -1065,8 +1089,8 @@ COMMIT
 				mockIPTables.Restore(`*raw
 :ANTREA-PREROUTING - [0:0]
 :ANTREA-OUTPUT - [0:0]
--A ANTREA-PREROUTING -i lo -p tcp -m comment --comment "Antrea: do not track localhost API health check input packets" -m multiport --sports 10350 -j NOTRACK
--A ANTREA-OUTPUT -o lo -p tcp -m comment --comment "Antrea: do not track localhost API health check output packets" -m multiport --dports 10350 -j NOTRACK
+-A ANTREA-OUTPUT -s 127.0.0.0/8 -d 127.0.0.0/8 -o lo -p tcp -m comment --comment "Antrea: do not track localhost API health check request packets" -m multiport --dports 10350 -j NOTRACK
+-A ANTREA-OUTPUT -s 127.0.0.0/8 -d 127.0.0.0/8 -o lo -p tcp -m comment --comment "Antrea: do not track localhost API health check reply packets" -m multiport --sports 10350 -j NOTRACK
 -A ANTREA-PREROUTING -m comment --comment "Antrea: do not track incoming encapsulation packets" -m udp -p udp --dport 4790 -m addrtype --dst-type LOCAL -j NOTRACK
 -A ANTREA-OUTPUT -m comment --comment "Antrea: do not track outgoing encapsulation packets" -m udp -p udp --dport 4790 -m addrtype --src-type LOCAL -j NOTRACK
 COMMIT
@@ -1096,6 +1120,10 @@ COMMIT
 -A ANTREA-OUTPUT -m comment --comment "Antrea: allow Agent cluster memberships TCP output packets" -p tcp --dport 10351 -j ACCEPT
 -A ANTREA-OUTPUT -m comment --comment "Antrea: allow Agent cluster memberships TCP reply packets" -p tcp --sport 10351 -m conntrack --ctstate ESTABLISHED -j ACCEPT
 -A ANTREA-OUTPUT -m comment --comment "Antrea: allow Agent cluster memberships UDP output packets" -p udp --dport 10351 -j ACCEPT
+-A ANTREA-INPUT -s 127.0.0.0/8 -d 127.0.0.0/8 -i lo -p tcp -m comment --comment "Antrea: allow localhost API health check request input packets" -m multiport --dports 10350 -j ACCEPT
+-A ANTREA-INPUT -s 127.0.0.0/8 -d 127.0.0.0/8 -i lo -p tcp -m comment --comment "Antrea: allow localhost API health check reply input packets" -m multiport --sports 10350 -j ACCEPT
+-A ANTREA-OUTPUT -s 127.0.0.0/8 -d 127.0.0.0/8 -o lo -p tcp -m comment --comment "Antrea: allow localhost API health check request output packets" -m multiport --dports 10350 -j ACCEPT
+-A ANTREA-OUTPUT -s 127.0.0.0/8 -d 127.0.0.0/8 -o lo -p tcp -m comment --comment "Antrea: allow localhost API health check reply output packets" -m multiport --sports 10350 -j ACCEPT
 COMMIT
 *nat
 :ANTREA-POSTROUTING - [0:0]
@@ -1107,8 +1135,8 @@ COMMIT
 				mockIPTables.Restore(`*raw
 :ANTREA-PREROUTING - [0:0]
 :ANTREA-OUTPUT - [0:0]
--A ANTREA-PREROUTING -i lo -p tcp -m comment --comment "Antrea: do not track localhost API health check input packets" -m multiport --sports 10350 -j NOTRACK
--A ANTREA-OUTPUT -o lo -p tcp -m comment --comment "Antrea: do not track localhost API health check output packets" -m multiport --dports 10350 -j NOTRACK
+-A ANTREA-OUTPUT -s ::1/128 -d ::1/128 -o lo -p tcp -m comment --comment "Antrea: do not track localhost API health check request packets" -m multiport --dports 10350 -j NOTRACK
+-A ANTREA-OUTPUT -s ::1/128 -d ::1/128 -o lo -p tcp -m comment --comment "Antrea: do not track localhost API health check reply packets" -m multiport --sports 10350 -j NOTRACK
 -A ANTREA-PREROUTING -m comment --comment "Antrea: do not track incoming encapsulation packets" -m udp -p udp --dport 4790 -m addrtype --dst-type LOCAL -j NOTRACK
 -A ANTREA-OUTPUT -m comment --comment "Antrea: do not track outgoing encapsulation packets" -m udp -p udp --dport 4790 -m addrtype --src-type LOCAL -j NOTRACK
 COMMIT
@@ -1138,6 +1166,10 @@ COMMIT
 -A ANTREA-OUTPUT -m comment --comment "Antrea: allow Agent cluster memberships TCP output packets" -p tcp --dport 10351 -j ACCEPT
 -A ANTREA-OUTPUT -m comment --comment "Antrea: allow Agent cluster memberships TCP reply packets" -p tcp --sport 10351 -m conntrack --ctstate ESTABLISHED -j ACCEPT
 -A ANTREA-OUTPUT -m comment --comment "Antrea: allow Agent cluster memberships UDP output packets" -p udp --dport 10351 -j ACCEPT
+-A ANTREA-INPUT -s ::1/128 -d ::1/128 -i lo -p tcp -m comment --comment "Antrea: allow localhost API health check request input packets" -m multiport --dports 10350 -j ACCEPT
+-A ANTREA-INPUT -s ::1/128 -d ::1/128 -i lo -p tcp -m comment --comment "Antrea: allow localhost API health check reply input packets" -m multiport --sports 10350 -j ACCEPT
+-A ANTREA-OUTPUT -s ::1/128 -d ::1/128 -o lo -p tcp -m comment --comment "Antrea: allow localhost API health check request output packets" -m multiport --dports 10350 -j ACCEPT
+-A ANTREA-OUTPUT -s ::1/128 -d ::1/128 -o lo -p tcp -m comment --comment "Antrea: allow localhost API health check reply output packets" -m multiport --sports 10350 -j ACCEPT
 COMMIT
 *nat
 :ANTREA-POSTROUTING - [0:0]
@@ -1194,8 +1226,8 @@ COMMIT
 				mockIPTables.Restore(`*raw
 :ANTREA-PREROUTING - [0:0]
 :ANTREA-OUTPUT - [0:0]
--A ANTREA-PREROUTING -i lo -p tcp -m comment --comment "Antrea: do not track localhost API health check input packets" -m multiport --sports 10350 -j NOTRACK
--A ANTREA-OUTPUT -o lo -p tcp -m comment --comment "Antrea: do not track localhost API health check output packets" -m multiport --dports 10350 -j NOTRACK
+-A ANTREA-OUTPUT -s 127.0.0.0/8 -d 127.0.0.0/8 -o lo -p tcp -m comment --comment "Antrea: do not track localhost API health check request packets" -m multiport --dports 10350 -j NOTRACK
+-A ANTREA-OUTPUT -s 127.0.0.0/8 -d 127.0.0.0/8 -o lo -p tcp -m comment --comment "Antrea: do not track localhost API health check reply packets" -m multiport --sports 10350 -j NOTRACK
 -A ANTREA-PREROUTING -m comment --comment "Antrea: do not track incoming encapsulation packets" -m udp -p udp --dport 6081 -m addrtype --dst-type LOCAL -j NOTRACK
 -A ANTREA-OUTPUT -m comment --comment "Antrea: do not track outgoing encapsulation packets" -m udp -p udp --dport 6081 -m addrtype --src-type LOCAL -j NOTRACK
 COMMIT
@@ -1221,6 +1253,10 @@ COMMIT
 -A ANTREA-OUTPUT -m comment --comment "Antrea: allow Agent cluster memberships TCP output packets" -p tcp --dport 10351 -j ACCEPT
 -A ANTREA-OUTPUT -m comment --comment "Antrea: allow Agent cluster memberships TCP reply packets" -p tcp --sport 10351 -m conntrack --ctstate ESTABLISHED -j ACCEPT
 -A ANTREA-OUTPUT -m comment --comment "Antrea: allow Agent cluster memberships UDP output packets" -p udp --dport 10351 -j ACCEPT
+-A ANTREA-INPUT -s 127.0.0.0/8 -d 127.0.0.0/8 -i lo -p tcp -m comment --comment "Antrea: allow localhost API health check request input packets" -m multiport --dports 10350 -j ACCEPT
+-A ANTREA-INPUT -s 127.0.0.0/8 -d 127.0.0.0/8 -i lo -p tcp -m comment --comment "Antrea: allow localhost API health check reply input packets" -m multiport --sports 10350 -j ACCEPT
+-A ANTREA-OUTPUT -s 127.0.0.0/8 -d 127.0.0.0/8 -o lo -p tcp -m comment --comment "Antrea: allow localhost API health check request output packets" -m multiport --dports 10350 -j ACCEPT
+-A ANTREA-OUTPUT -s 127.0.0.0/8 -d 127.0.0.0/8 -o lo -p tcp -m comment --comment "Antrea: allow localhost API health check reply output packets" -m multiport --sports 10350 -j ACCEPT
 COMMIT
 *nat
 :ANTREA-PREROUTING - [0:0]
@@ -1234,8 +1270,8 @@ COMMIT
 				mockIPTables.Restore(`*raw
 :ANTREA-PREROUTING - [0:0]
 :ANTREA-OUTPUT - [0:0]
--A ANTREA-PREROUTING -i lo -p tcp -m comment --comment "Antrea: do not track localhost API health check input packets" -m multiport --sports 10350 -j NOTRACK
--A ANTREA-OUTPUT -o lo -p tcp -m comment --comment "Antrea: do not track localhost API health check output packets" -m multiport --dports 10350 -j NOTRACK
+-A ANTREA-OUTPUT -s ::1/128 -d ::1/128 -o lo -p tcp -m comment --comment "Antrea: do not track localhost API health check request packets" -m multiport --dports 10350 -j NOTRACK
+-A ANTREA-OUTPUT -s ::1/128 -d ::1/128 -o lo -p tcp -m comment --comment "Antrea: do not track localhost API health check reply packets" -m multiport --sports 10350 -j NOTRACK
 -A ANTREA-PREROUTING -m comment --comment "Antrea: do not track incoming encapsulation packets" -m udp -p udp --dport 6081 -m addrtype --dst-type LOCAL -j NOTRACK
 -A ANTREA-OUTPUT -m comment --comment "Antrea: do not track outgoing encapsulation packets" -m udp -p udp --dport 6081 -m addrtype --src-type LOCAL -j NOTRACK
 COMMIT
@@ -1260,6 +1296,10 @@ COMMIT
 -A ANTREA-OUTPUT -m comment --comment "Antrea: allow Agent cluster memberships TCP output packets" -p tcp --dport 10351 -j ACCEPT
 -A ANTREA-OUTPUT -m comment --comment "Antrea: allow Agent cluster memberships TCP reply packets" -p tcp --sport 10351 -m conntrack --ctstate ESTABLISHED -j ACCEPT
 -A ANTREA-OUTPUT -m comment --comment "Antrea: allow Agent cluster memberships UDP output packets" -p udp --dport 10351 -j ACCEPT
+-A ANTREA-INPUT -s ::1/128 -d ::1/128 -i lo -p tcp -m comment --comment "Antrea: allow localhost API health check request input packets" -m multiport --dports 10350 -j ACCEPT
+-A ANTREA-INPUT -s ::1/128 -d ::1/128 -i lo -p tcp -m comment --comment "Antrea: allow localhost API health check reply input packets" -m multiport --sports 10350 -j ACCEPT
+-A ANTREA-OUTPUT -s ::1/128 -d ::1/128 -o lo -p tcp -m comment --comment "Antrea: allow localhost API health check request output packets" -m multiport --dports 10350 -j ACCEPT
+-A ANTREA-OUTPUT -s ::1/128 -d ::1/128 -o lo -p tcp -m comment --comment "Antrea: allow localhost API health check reply output packets" -m multiport --sports 10350 -j ACCEPT
 COMMIT
 *nat
 :ANTREA-PREROUTING - [0:0]
@@ -1329,8 +1369,8 @@ COMMIT
 				mockIPTables.Restore(`*raw
 :ANTREA-PREROUTING - [0:0]
 :ANTREA-OUTPUT - [0:0]
--A ANTREA-PREROUTING -i lo -p tcp -m comment --comment "Antrea: do not track localhost API health check input packets" -m multiport --sports 10350 -j NOTRACK
--A ANTREA-OUTPUT -o lo -p tcp -m comment --comment "Antrea: do not track localhost API health check output packets" -m multiport --dports 10350 -j NOTRACK
+-A ANTREA-OUTPUT -s 127.0.0.0/8 -d 127.0.0.0/8 -o lo -p tcp -m comment --comment "Antrea: do not track localhost API health check request packets" -m multiport --dports 10350 -j NOTRACK
+-A ANTREA-OUTPUT -s 127.0.0.0/8 -d 127.0.0.0/8 -o lo -p tcp -m comment --comment "Antrea: do not track localhost API health check reply packets" -m multiport --sports 10350 -j NOTRACK
 COMMIT
 *mangle
 :ANTREA-PREROUTING - [0:0]
@@ -1359,6 +1399,10 @@ COMMIT
 -A ANTREA-OUTPUT -m comment --comment "Antrea: allow Agent cluster memberships TCP output packets" -p tcp --dport 10351 -j ACCEPT
 -A ANTREA-OUTPUT -m comment --comment "Antrea: allow Agent cluster memberships TCP reply packets" -p tcp --sport 10351 -m conntrack --ctstate ESTABLISHED -j ACCEPT
 -A ANTREA-OUTPUT -m comment --comment "Antrea: allow Agent cluster memberships UDP output packets" -p udp --dport 10351 -j ACCEPT
+-A ANTREA-INPUT -s 127.0.0.0/8 -d 127.0.0.0/8 -i lo -p tcp -m comment --comment "Antrea: allow localhost API health check request input packets" -m multiport --dports 10350 -j ACCEPT
+-A ANTREA-INPUT -s 127.0.0.0/8 -d 127.0.0.0/8 -i lo -p tcp -m comment --comment "Antrea: allow localhost API health check reply input packets" -m multiport --sports 10350 -j ACCEPT
+-A ANTREA-OUTPUT -s 127.0.0.0/8 -d 127.0.0.0/8 -o lo -p tcp -m comment --comment "Antrea: allow localhost API health check request output packets" -m multiport --dports 10350 -j ACCEPT
+-A ANTREA-OUTPUT -s 127.0.0.0/8 -d 127.0.0.0/8 -o lo -p tcp -m comment --comment "Antrea: allow localhost API health check reply output packets" -m multiport --sports 10350 -j ACCEPT
 COMMIT
 *nat
 :ANTREA-POSTROUTING - [0:0]
@@ -1450,10 +1494,8 @@ func TestAPIServerHealthCheckRules(t *testing.T) {
 			name:          "Agent API port",
 			agentPort:     20350,
 			expectedPorts: []int32{20350},
-			expectedRaw: `-A ANTREA-PREROUTING -i lo -p tcp -m comment --comment "Antrea: do not track localhost API health check input packets" -m multiport --dports 20350 -j NOTRACK
--A ANTREA-PREROUTING -i lo -p tcp -m comment --comment "Antrea: do not track localhost API health check input packets" -m multiport --sports 20350 -j NOTRACK
--A ANTREA-OUTPUT -o lo -p tcp -m comment --comment "Antrea: do not track localhost API health check output packets" -m multiport --dports 20350 -j NOTRACK
--A ANTREA-OUTPUT -o lo -p tcp -m comment --comment "Antrea: do not track localhost API health check output packets" -m multiport --sports 20350 -j NOTRACK
+			expectedRaw: `-A ANTREA-OUTPUT -s 127.0.0.0/8 -d 127.0.0.0/8 -o lo -p tcp -m comment --comment "Antrea: do not track localhost API health check request packets" -m multiport --dports 20350 -j NOTRACK
+-A ANTREA-OUTPUT -s 127.0.0.0/8 -d 127.0.0.0/8 -o lo -p tcp -m comment --comment "Antrea: do not track localhost API health check reply packets" -m multiport --sports 20350 -j NOTRACK
 `,
 		},
 		{
@@ -1461,8 +1503,8 @@ func TestAPIServerHealthCheckRules(t *testing.T) {
 			agentPort:      10350,
 			controllerPort: 10349,
 			expectedPorts:  []int32{10349, 10350},
-			expectedRaw: `-A ANTREA-PREROUTING -i lo -p tcp -m comment --comment "Antrea: do not track localhost API health check input packets" -m multiport --sports 10349,10350 -j NOTRACK
--A ANTREA-OUTPUT -o lo -p tcp -m comment --comment "Antrea: do not track localhost API health check output packets" -m multiport --dports 10349,10350 -j NOTRACK
+			expectedRaw: `-A ANTREA-OUTPUT -s 127.0.0.0/8 -d 127.0.0.0/8 -o lo -p tcp -m comment --comment "Antrea: do not track localhost API health check request packets" -m multiport --dports 10349,10350 -j NOTRACK
+-A ANTREA-OUTPUT -s 127.0.0.0/8 -d 127.0.0.0/8 -o lo -p tcp -m comment --comment "Antrea: do not track localhost API health check reply packets" -m multiport --sports 10349,10350 -j NOTRACK
 `,
 		},
 		{
@@ -1470,8 +1512,8 @@ func TestAPIServerHealthCheckRules(t *testing.T) {
 			agentPort:      10350,
 			controllerPort: 10350,
 			expectedPorts:  []int32{10350},
-			expectedRaw: `-A ANTREA-PREROUTING -i lo -p tcp -m comment --comment "Antrea: do not track localhost API health check input packets" -m multiport --sports 10350 -j NOTRACK
--A ANTREA-OUTPUT -o lo -p tcp -m comment --comment "Antrea: do not track localhost API health check output packets" -m multiport --dports 10350 -j NOTRACK
+			expectedRaw: `-A ANTREA-OUTPUT -s 127.0.0.0/8 -d 127.0.0.0/8 -o lo -p tcp -m comment --comment "Antrea: do not track localhost API health check request packets" -m multiport --dports 10350 -j NOTRACK
+-A ANTREA-OUTPUT -s 127.0.0.0/8 -d 127.0.0.0/8 -o lo -p tcp -m comment --comment "Antrea: do not track localhost API health check reply packets" -m multiport --sports 10350 -j NOTRACK
 `,
 		},
 	}
@@ -1485,7 +1527,7 @@ func TestAPIServerHealthCheckRules(t *testing.T) {
 			assert.Equal(t, tt.expectedPorts, ports)
 
 			rawData := bytes.NewBuffer(nil)
-			writeAPIServerHealthCheckNoTrackRules(rawData, ports)
+			writeAPIServerHealthCheckNoTrackRules(rawData, ports, false)
 			assert.Equal(t, tt.expectedRaw, rawData.String())
 
 		})
@@ -4124,7 +4166,7 @@ func TestEnqueueRemovesRulesWhenEndpointGoesAway(t *testing.T) {
 	require.Len(t, restoredData, 1)
 	assert.Contains(t, restoredData[0], `--dports 20349 -j NOTRACK`)
 	assert.Contains(t, restoredData[0], `--sports 20349 -j NOTRACK`)
-	assert.Contains(t, restoredData[0], `--dport 20349 -j ACCEPT`)
+	assert.Contains(t, restoredData[0], `--dports 20349 -j ACCEPT`)
 
 	resolver.url = nil
 	c.Enqueue()
@@ -4133,8 +4175,8 @@ func TestEnqueueRemovesRulesWhenEndpointGoesAway(t *testing.T) {
 	require.Len(t, restoredData, 2)
 	assert.Contains(t, restoredData[1], `--dports 10349 -j NOTRACK`)
 	assert.Contains(t, restoredData[1], `--sports 10349 -j NOTRACK`)
-	assert.Contains(t, restoredData[1], `--dport 10349 -j ACCEPT`)
-	assert.NotContains(t, restoredData[1], "--ports 20349")
+	assert.Contains(t, restoredData[1], `--dports 10349 -j ACCEPT`)
+	assert.NotContains(t, restoredData[1], "20349")
 }
 
 func TestInitIPsecHostNetworkFilterRules(t *testing.T) {

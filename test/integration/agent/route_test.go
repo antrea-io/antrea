@@ -278,8 +278,8 @@ func TestInitialize(t *testing.T) {
 :ANTREA-PREROUTING - [0:0]
 -A PREROUTING -m comment --comment "Antrea: jump to Antrea prerouting rules" -j ANTREA-PREROUTING
 -A OUTPUT -m comment --comment "Antrea: jump to Antrea output rules" -j ANTREA-OUTPUT
--A ANTREA-OUTPUT -o lo -p tcp -m comment --comment "Antrea: do not track localhost API health check output packets" -m multiport --dports 10349,10350 -j NOTRACK
--A ANTREA-PREROUTING -i lo -p tcp -m comment --comment "Antrea: do not track localhost API health check input packets" -m multiport --sports 10349,10350 -j NOTRACK
+-A ANTREA-OUTPUT -s 127.0.0.0/8 -d 127.0.0.0/8 -o lo -p tcp -m comment --comment "Antrea: do not track localhost API health check request packets" -m multiport --dports 10349,10350 -j NOTRACK
+-A ANTREA-OUTPUT -s 127.0.0.0/8 -d 127.0.0.0/8 -o lo -p tcp -m comment --comment "Antrea: do not track localhost API health check reply packets" -m multiport --sports 10349,10350 -j NOTRACK
 `,
 				"filter": `:ANTREA-FORWARD - [0:0]
 -A FORWARD -m comment --comment "Antrea: jump to Antrea forwarding rules" -j ANTREA-FORWARD
@@ -337,9 +337,9 @@ func TestInitialize(t *testing.T) {
 :ANTREA-PREROUTING - [0:0]
 -A PREROUTING -m comment --comment "Antrea: jump to Antrea prerouting rules" -j ANTREA-PREROUTING
 -A OUTPUT -m comment --comment "Antrea: jump to Antrea output rules" -j ANTREA-OUTPUT
--A ANTREA-OUTPUT -o lo -p tcp -m comment --comment "Antrea: do not track localhost API health check output packets" -m multiport --dports 10349,10350 -j NOTRACK
+-A ANTREA-OUTPUT -s 127.0.0.0/8 -d 127.0.0.0/8 -o lo -p tcp -m comment --comment "Antrea: do not track localhost API health check request packets" -m multiport --dports 10349,10350 -j NOTRACK
+-A ANTREA-OUTPUT -s 127.0.0.0/8 -d 127.0.0.0/8 -o lo -p tcp -m comment --comment "Antrea: do not track localhost API health check reply packets" -m multiport --sports 10349,10350 -j NOTRACK
 -A ANTREA-OUTPUT -p udp -m comment --comment "Antrea: do not track outgoing encapsulation packets" -m udp --dport %d -m addrtype --src-type LOCAL -j NOTRACK
--A ANTREA-PREROUTING -i lo -p tcp -m comment --comment "Antrea: do not track localhost API health check input packets" -m multiport --sports 10349,10350 -j NOTRACK
 -A ANTREA-PREROUTING -p udp -m comment --comment "Antrea: do not track incoming encapsulation packets" -m udp --dport %d -m addrtype --dst-type LOCAL -j NOTRACK
 `, tc.expectUDPPortInRules, tc.expectUDPPortInRules)
 			}
@@ -371,6 +371,8 @@ func TestInitialize(t *testing.T) {
 -A ANTREA-INPUT -p tcp -m comment --comment "Antrea: allow Agent cluster memberships TCP input packets" -m tcp --dport 10351 -j ACCEPT
 -A ANTREA-INPUT -p tcp -m comment --comment "Antrea: allow Agent cluster memberships TCP reply input packets" -m tcp --sport 10351 -m conntrack --ctstate ESTABLISHED -j ACCEPT
 -A ANTREA-INPUT -p udp -m comment --comment "Antrea: allow Agent cluster memberships UDP input packets" -m udp --dport 10351 -j ACCEPT
+-A ANTREA-INPUT -s 127.0.0.0/8 -d 127.0.0.0/8 -i lo -p tcp -m comment --comment "Antrea: allow localhost API health check request input packets" -m multiport --dports 10349,10350 -j ACCEPT
+-A ANTREA-INPUT -s 127.0.0.0/8 -d 127.0.0.0/8 -i lo -p tcp -m comment --comment "Antrea: allow localhost API health check reply input packets" -m multiport --sports 10349,10350 -j ACCEPT
 `
 			if tc.networkConfig.TrafficEncapMode.SupportsEncap() {
 				expectedIPTables["filter"] += fmt.Sprintf(`-A ANTREA-OUTPUT -p udp -m comment --comment "Antrea: allow tunnel output packets" -m udp --dport %d -j ACCEPT
@@ -391,6 +393,8 @@ func TestInitialize(t *testing.T) {
 -A ANTREA-OUTPUT -p tcp -m comment --comment "Antrea: allow Agent cluster memberships TCP output packets" -m tcp --dport 10351 -j ACCEPT
 -A ANTREA-OUTPUT -p tcp -m comment --comment "Antrea: allow Agent cluster memberships TCP reply packets" -m tcp --sport 10351 -m conntrack --ctstate ESTABLISHED -j ACCEPT
 -A ANTREA-OUTPUT -p udp -m comment --comment "Antrea: allow Agent cluster memberships UDP output packets" -m udp --dport 10351 -j ACCEPT
+-A ANTREA-OUTPUT -s 127.0.0.0/8 -d 127.0.0.0/8 -o lo -p tcp -m comment --comment "Antrea: allow localhost API health check request output packets" -m multiport --dports 10349,10350 -j ACCEPT
+-A ANTREA-OUTPUT -s 127.0.0.0/8 -d 127.0.0.0/8 -o lo -p tcp -m comment --comment "Antrea: allow localhost API health check reply output packets" -m multiport --sports 10349,10350 -j ACCEPT
 `
 
 			for table, expectedData := range expectedIPTables {
