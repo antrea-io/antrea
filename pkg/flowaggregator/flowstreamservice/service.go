@@ -257,76 +257,52 @@ func (s *FlowStreamService) GetFlows(req *flowpb.GetFlowsRequest, stream flowpb.
 		"filters", reqFilters,
 		"resume", req.GetResume())
 
-	// A resume token from this same process incarnation is validated against the current tip before
-	// the ring buffer is touched at all, same as the filter validation above: a sequence_number this
-	// server actually issued is never at or beyond its own current position (positions only ever
-	// increase, and a token names one this exact process reported having already accounted for), so
-	// one that is can only be a malformed or fabricated token, not legitimate skew to wait out.
+	// A resume token from this same FA process is validated before the ring buffer is touched at
+	// all, and rejects a value this server could have ever issued: -1 is the lowest sequence number
+	// possible (nothing accounted for yet), and a sequence_number this server issued is never at
+	// or beyond its own current position, since sequence numbers only ever increases.
 	//
 	// A token whose stream_epoch does not match is a different, non-error case: the Flow Aggregator
-	// restarted, so nothing about the previous epoch's ring buffer is known here, including whether
-	// the client missed anything. resumeReset carries that "we cannot say" into the handshake
-	// response below, rather than letting a dropped_count of 0 be misread as a confirmed zero.
-	var resume *flowpb.ResumeToken
-	var resumeReset bool
-	if r := req.GetResume(); r != nil {
-		if r.GetStreamEpoch() == s.streamEpoch {
-			// -1 is the lowest value a server ever issues (see GetFlowsResponse.sequence_number),
-			// meaning "nothing accounted for yet". Anything lower is rejected here rather than fed
-			// into the arithmetic below: startPos - (sequence_number + 1) is computed as a signed
-			// int64 before it is known to be non-negative, and a sufficiently negative
-			// sequence_number (an adversarial or corrupted token, e.g. near math.MinInt64) makes
-			// that subtraction overflow and silently wrap around, which uint64(...) would then turn
-			// into a huge, wrong dropped_count instead of failing loudly.
-			if r.GetSequenceNumber() < -1 {
-				return status.Errorf(codes.InvalidArgument,
-					"resume sequence_number %d is invalid: must be -1 or greater", r.GetSequenceNumber())
-			}
-			resume = r
-			if tip := s.buffer.Tip(); resume.GetSequenceNumber() >= tip {
-				return status.Errorf(codes.InvalidArgument,
-					"resume sequence_number %d is not before this stream's current position %d",
-					resume.GetSequenceNumber(), tip-1)
-			}
-		} else {
-			resumeReset = true
+	// restarted, so nothing about the previous epoch's ring buffer is known here — including whether
+	// the client missed anything. Such a token cannot name a position in this epoch's buffer, so it
+	// is treated exactly like no resume token at all: replay from the oldest record still held. The
+	// client learns its resume was not honored from the stream_epoch in the handshake response,
+	// which is always this process's own.
+	//
+	// resumePos is the last position already accounted for when this stream starts: the resume point
+	// if there is a usable one, and -1 ("nothing accounted for yet") otherwise. It positions the
+	// consumer and is echoed in the handshake response below, and is not needed after that: a
+	// resumed stream reads only what it has not already seen, so there is nothing left to skip.
+	resumePos := int64(-1)
+	startOpt := ringbuffer.WithReadFromBeginning()
+	if r := req.GetResume(); r != nil && r.GetStreamEpoch() == s.streamEpoch {
+		if r.GetSequenceNumber() < -1 {
+			return status.Errorf(codes.InvalidArgument,
+				"resume sequence_number %d is invalid: must be -1 or greater", r.GetSequenceNumber())
 		}
+		if tip := s.buffer.Tip(); r.GetSequenceNumber() >= tip {
+			return status.Errorf(codes.InvalidArgument,
+				"resume sequence_number %d is not before this stream's current position %d",
+				r.GetSequenceNumber(), tip-1)
+		}
+		resumePos = r.GetSequenceNumber()
+		// A resume point that has already fallen out of the ring buffer deliberately leaves the
+		// consumer positioned behind the buffer rather than clamped forward to the oldest record
+		// still held: the whole evicted span then arrives as dropped on the first read below,
+		// instead of being silently replayed as if it were new.
+		startOpt = ringbuffer.WithReadFromSequenceNumber(resumePos)
 	}
 
-	consumer := s.buffer.NewConsumer(
-		ringbuffer.WithReadFromBeginning(),
-		ringbuffer.WithMaxConsumeDeadline(exporter.ConsumeDeadline),
-	)
-	startPos := consumer.Position()
-
-	// resumePos is the last position the client has already received for: a flow at or before
-	// it is read but discarded rather than re-sent, in the main loop below. It defaults to "nothing to
-	// skip" — one position behind where this stream starts reading — which is also what an unset or
-	// stale resume token falls back to: a token whose stream_epoch does not match this process
-	// cannot be trusted to name a real position (the ring buffer was reset by a restart), so it is
-	// treated exactly like no resume token at all rather than rejected.
-	resumePos := startPos - 1
-	var totalDropped uint64
-	if resume != nil {
-		resumePos = resume.GetSequenceNumber()
-		if resumePos+1 < startPos {
-			// The client's last-seen position already fell out of the ring buffer: everything
-			// between it and startPos is an unrecoverable gap, reported once, right here, rather
-			// than silently replayed as if it were new. There is nothing left to skip in the main
-			// loop below, since startPos is now the oldest flow this stream will ever see.
-			totalDropped = uint64(startPos - (resumePos + 1))
-			resumePos = startPos - 1
-		}
-	}
+	consumer := s.buffer.NewConsumer(startOpt, ringbuffer.WithMaxConsumeDeadline(exporter.ConsumeDeadline))
 
 	// The stream is live, and its resume point (if any) is resolved. FlowStreamService explicitly
 	// sends a response at this point to let clients learn that directly. Flows is always empty here:
 	// every later Send in the loop below is gated on having flows or a drop to report, so clients can
-	// treat "the first response with no flows" as acknowledgement.
+	// treat "the first response with no flows" as acknowledgement. Nothing has been read yet, so the
+	// token simply echoes the resume point the request asked for, and dropped_count is left 0 for the
+	// same reason rather than as a measurement.
 	if err := stream.Send(&flowpb.GetFlowsResponse{
-		DroppedCount: totalDropped,
-		ResumeToken:  &flowpb.ResumeToken{StreamEpoch: s.streamEpoch, SequenceNumber: resumePos},
-		ResumeReset:  resumeReset,
+		ResumeToken: &flowpb.ResumeToken{StreamEpoch: s.streamEpoch, SequenceNumber: resumePos},
 	}); err != nil {
 		klog.InfoS("Send initial response to client failed, closing GetFlows stream", "err", err)
 		return err
@@ -340,6 +316,7 @@ func (s *FlowStreamService) GetFlows(req *flowpb.GetFlowsRequest, stream flowpb.
 	// and a field can be added to GetFlowsResponse then.
 
 	sent := 0
+	var totalDropped uint64
 	batch := make([]*flowpb.Flow, internalBatchSize)
 
 	for {
@@ -357,58 +334,24 @@ func (s *FlowStreamService) GetFlows(req *flowpb.GetFlowsRequest, stream flowpb.
 			}
 		}
 
-		n, dropped, shutdown := consumer.ConsumeMultiple(batch)
+		n, dropped, endPos, shutdown := consumer.ConsumeMultiple(batch)
 
 		if shutdown {
 			klog.InfoS("Ring buffer shut down, closing GetFlows stream")
 			return nil
 		}
 
-		// batchEndPos is the position just past the last item this call read (or skipped past via
-		// dropped); consumer.Position() reflects that unconditionally, whether or not n > 0. The
-		// batch itself occupies [batchStartPos, batchEndPos), assigned once by the producer and
-		// stable regardless of how any of it is later redacted or filtered — which is what makes it
-		// safe to resume against, and why skip below is computed before streamAuth.Authorize and
-		// applyFilters run rather than after. Anything dropped by this call sits immediately before
-		// that, in [batchStartPos-dropped, batchStartPos).
-		batchEndPos := consumer.Position()
-		batchStartPos := batchEndPos - int64(n)
-
-		if dropped > 0 && resumePos >= batchStartPos-dropped {
-			// Some or all of the dropped range was already sent to the client on the connection
-			// this stream is resuming: the ring buffer overwrote it before this consumer got to
-			// read it, but the client already has it from before the resume, so it must not
-			// inflate dropped_count a second time. Only the portion after resumePos is a genuine
-			// gap for this stream.
-			alreadySeen := resumePos - (batchStartPos - dropped) + 1
-			if alreadySeen > dropped {
-				alreadySeen = dropped
-			}
-			dropped -= alreadySeen
-		}
 		totalDropped += uint64(dropped)
 
 		var filtered []*flowpb.Flow
 		if n > 0 {
-			skip := 0
-			if resumePos >= batchStartPos {
-				// Positions only increase, and resumePos never changes for this stream's
-				// lifetime, so skip is nonzero only for the batch (or batches) immediately after
-				// startPos: once batchStartPos passes resumePos, every later batch has
-				// skip == 0 with no further bookkeeping needed.
-				skip = int(resumePos-batchStartPos) + 1
-				if skip > n {
-					skip = n
-				}
-			}
-
 			// Authorization runs before the client's own filters, and before the max_count
 			// accounting, so that a record the client may not observe is never counted against the
 			// records it asked for, and so that filters only ever match what it can see. That last
 			// point is also what gives a filter naming a Namespace outside the stream's scope its
 			// meaning: every record here already has an endpoint in scope, so such a filter selects
 			// flows by their peer, and matches only where that peer's Namespace was disclosed.
-			records := batch[skip:n]
+			records := batch[:n]
 			if streamAuth != nil {
 				records = streamAuth.Authorize(ctx, records)
 			}
@@ -418,10 +361,15 @@ func (s *FlowStreamService) GetFlows(req *flowpb.GetFlowsRequest, stream flowpb.
 			}
 		}
 		if len(filtered) > 0 || dropped > 0 {
+			// endPos is one past everything this call accounted for, by delivering it or by
+			// counting it dropped, so endPos-1 is the right resume point even when the only thing
+			// being reported is a drop. It names a raw ring-buffer position, assigned once by the
+			// producer and unaffected by how much of the batch authorization or the client's own
+			// filters then removed — which is what makes it safe to resume against.
 			resp := &flowpb.GetFlowsResponse{
 				Flows:        filtered,
 				DroppedCount: totalDropped,
-				ResumeToken:  &flowpb.ResumeToken{StreamEpoch: s.streamEpoch, SequenceNumber: batchEndPos - 1},
+				ResumeToken:  &flowpb.ResumeToken{StreamEpoch: s.streamEpoch, SequenceNumber: endPos - 1},
 			}
 			if err := stream.Send(resp); err != nil {
 				klog.InfoS("Send to client failed, closing GetFlows stream", "err", err)

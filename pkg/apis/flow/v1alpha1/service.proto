@@ -148,11 +148,16 @@ message GetFlowsRequest {
   // A token whose stream_epoch does not match the server's current one (the
   // Flow Aggregator restarted, which resets its ring buffer and sequence
   // numbering to zero) is not an error. It is treated exactly like an unset
-  // resume: consume from the oldest record in the ring buffer.
+  // resume: consume from the oldest record in the ring buffer. A client that
+  // needs to know whether its resume was honored compares the stream_epoch it
+  // sent against the one the first GetFlowsResponse carries, which is always
+  // the server's current one.
   //
   // A token whose sequence_number is at or beyond the server's current
   // position, under a matching stream_epoch, is rejected with
-  // INVALID_ARGUMENT as it cannot come from an honestly-replayed token.
+  // INVALID_ARGUMENT as it cannot come from an honestly-replayed token. A
+  // sequence_number below -1, the lowest value a server ever issues, is
+  // rejected the same way.
   ResumeToken resume = 7;
 }
 
@@ -176,27 +181,35 @@ message GetFlowsResponse {
   // buffer wrapped around, or because a resume request named a
   // sequence_number that had already fallen out of the ring buffer.
   // Cumulative since the start of the stream.
+  //
+  // A 0 is a confirmed "nothing was lost" only once records have been
+  // accounted for: it is also 0 in the first response of every stream, which
+  // is sent before anything is read.
+  //
+  // It likewise cannot account for a resume that was not honored because its
+  // stream_epoch did not match. With the previous epoch's ring buffer gone,
+  // there is no way to know whether records the client had not yet seen
+  // existed after its last-seen position and before the restart, so such a
+  // stream counts only from the oldest record it replays. A client that
+  // cares about the distinction must treat that pre-restart gap as unknown
+  // rather than as the zero this field reports for it.
+  //
+  // It is not inferrable from consecutive resume_token sequence numbers:
+  // authorization and the client's own filters also remove records from
+  // flows without those being drops, so a client comparing sequence-number
+  // deltas against the length of flows cannot tell a redacted or filtered-out
+  // record from an evicted one.
   uint64 dropped_count = 2;
   // The ring-buffer position accounted for as of this response: either sent
   // in flows, or counted in dropped_count. On the very first response of a
-  // stream, this is the last position already accounted for by an earlier
-  // stream this one is resuming, or -1 if there is none. Clients that want
-  // to continue this stream later from the next flow record they have not
-  // yet received store this and pass it back as GetFlowsRequest.resume.
-  ResumeToken resume_token = 3;
-  // Set on the first response of a stream that was given a resume request
-  // whose stream_epoch did not match this one's: the Flow Aggregator
-  // restarted, so resume was not honored and flows start over from the
-  // oldest one currently held, same as a stream that never asked to resume
-  // at all.
+  // stream nothing has been read yet, so it simply echoes the resume point
+  // the request asked for, or -1 if it asked for none — including when the
+  // resume token it sent was not honored. Clients that want to continue this
+  // stream later from the next flow record they have not yet received store
+  // this and pass it back as GetFlowsRequest.resume.
   //
-  // dropped_count is 0 in this response regardless, but that 0 does not mean
-  // "confirmed nothing was lost": with the previous epoch's ring buffer gone,
-  // there is no way to know whether records the client had not yet seen
-  // existed after its last-seen position and before the restart. A client
-  // that cares about that distinction must treat resume_reset as "gap size
-  // unknown" rather than reading the accompanying 0 as a measured value, the
-  // way it can when resume_reset is unset and dropped_count reports an exact
-  // count instead.
-  bool resume_reset = 4;
+  // stream_epoch is always this server's current one, which is how a
+  // resuming client learns whether its own token was honored: an epoch
+  // different from the one it sent means it was not.
+  ResumeToken resume_token = 3;
 }

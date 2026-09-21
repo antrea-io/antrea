@@ -967,7 +967,6 @@ func TestGetFlows_HandshakeAndSequenceNumbers(t *testing.T) {
 
 		assert.Empty(t, handshake.GetFlows())
 		assert.Zero(t, handshake.GetDroppedCount())
-		assert.False(t, handshake.GetResumeReset(), "no resume token was sent, so there is nothing to reset")
 		assert.NotEmpty(t, handshake.GetResumeToken().GetStreamEpoch())
 		assert.EqualValues(t, -1, handshake.GetResumeToken().GetSequenceNumber(), "nothing accounted for before the first flow")
 
@@ -1007,7 +1006,8 @@ func TestGetFlows_ResumeContinuesWithoutGap(t *testing.T) {
 		require.NoError(t, <-errCh)
 
 		assert.Zero(t, second.responses[0].GetDroppedCount(), "nothing fell out of the buffer between the two streams")
-		assert.False(t, second.responses[0].GetResumeReset(), "same epoch: this 0 is a confirmed measurement, not an unknown")
+		assert.Equal(t, token.GetStreamEpoch(), second.responses[0].GetResumeToken().GetStreamEpoch(),
+			"the epoch came back unchanged, which is how a client learns its resume was honored and that this 0 is a measurement")
 		got := collectFlows(second.responses)
 		require.Len(t, got, 1)
 		assert.Equal(t, "flow-2", got[0].GetId(), "flow-0 and flow-1 were already seen and must not be re-sent")
@@ -1049,7 +1049,16 @@ func TestGetFlows_ResumePastEvictedGapReportsExactDrop(t *testing.T) {
 
 		// Positions 1-4 are an unrecoverable gap: already unseen by the client, and now also gone
 		// from the buffer. flow-0 (position 0) was already seen, so it is not part of the gap.
-		assert.EqualValues(t, 4, second.responses[0].GetDroppedCount())
+		//
+		// The gap surfaces on the first data response rather than the handshake: the resuming
+		// consumer is positioned behind the buffer at flow-0's successor, so the eviction is
+		// reported as lost by its first read, the same way being lapped mid-stream would be. The
+		// handshake goes out before anything is read, so its own 0 is not a measurement.
+		require.Len(t, second.responses, 2)
+		assert.Zero(t, second.responses[0].GetDroppedCount(), "nothing has been read at handshake time")
+		assert.EqualValues(t, 4, second.responses[1].GetDroppedCount())
+		assert.EqualValues(t, 8, second.responses[1].GetResumeToken().GetSequenceNumber(),
+			"position 8 is the last one accounted for, by delivery")
 
 		got := collectFlows(second.responses)
 		gotIDs := make([]string, len(got))
@@ -1063,7 +1072,7 @@ func TestGetFlows_ResumePastEvictedGapReportsExactDrop(t *testing.T) {
 // TestGetFlows_HandshakeResumeTokenReflectsResumePosition covers a client that disconnects
 // immediately after the handshake response of a resumed stream, before any data response: the
 // handshake's own resume token is then the only one it ever sees, so it must itself carry the
-// resume position forward, not startPos-1 (the ring buffer's oldest available position), which would
+// resume position forward rather than the oldest position the ring buffer still holds, which would
 // go backwards whenever the client resumes from a position still in the buffer and cause the flows
 // between the two to be replayed.
 func TestGetFlows_HandshakeResumeTokenReflectsResumePosition(t *testing.T) {
@@ -1087,7 +1096,7 @@ func TestGetFlows_HandshakeResumeTokenReflectsResumePosition(t *testing.T) {
 		require.EqualValues(t, 2, token.GetSequenceNumber())
 
 		// Nothing new is produced before the second stream connects: the buffer's oldest position
-		// (startPos) is still 0, well behind the resume position (2).
+		// is still 0, well behind the resume position (2).
 		second := newFakeStream(t.Context())
 		go func() {
 			errCh <- svc.GetFlows(&flowpb.GetFlowsRequest{Follow: false, Resume: token}, second)
@@ -1099,14 +1108,18 @@ func TestGetFlows_HandshakeResumeTokenReflectsResumePosition(t *testing.T) {
 		handshake := second.responses[0]
 		assert.Empty(t, handshake.GetFlows())
 		assert.EqualValues(t, 2, handshake.GetResumeToken().GetSequenceNumber(),
-			"handshake must echo the resume position, not startPos-1, or a client resuming from it alone would replay flow-0 through flow-2")
+			"handshake must echo the resume position, or a client resuming from it alone would replay flow-0 through flow-2")
 	})
 }
 
-// TestGetFlows_ResumeDoesNotDoubleCountAlreadySeenDrops covers the race window between a resuming
-// consumer capturing its startPos and its first read of the ring buffer (a window that includes the
+// TestGetFlows_ResumeDoesNotDoubleCountAlreadySeenDrops covers the window between a resuming
+// consumer being created and its first read of the ring buffer (a window that includes the
 // handshake Send): if the producer advances far enough in that window to evict positions the client
 // already received before the resume, those positions must not also be reported as newly dropped.
+//
+// The consumer is positioned past everything the client has already seen, so this is structural
+// rather than something the handler has to subtract back out: a drop can only ever be reported for
+// a position at or after where the consumer starts.
 func TestGetFlows_ResumeDoesNotDoubleCountAlreadySeenDrops(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		const bufSize = 4
@@ -1126,11 +1139,10 @@ func TestGetFlows_ResumeDoesNotDoubleCountAlreadySeenDrops(t *testing.T) {
 		token := first.responses[len(first.responses)-1].GetResumeToken()
 		require.EqualValues(t, 1, token.GetSequenceNumber())
 
-		// Simulate the race: right as the resuming stream's handshake response goes out (i.e.
-		// right after its consumer captured startPos = 0, the oldest position available at that
-		// instant), the producer advances by a full buffer's worth, evicting flow-0 and flow-1 —
-		// exactly the range this stream's client already has from the first stream — before the
-		// resuming consumer gets to read them.
+		// Simulate the race: right as the resuming stream's handshake response goes out, the
+		// producer advances by a full buffer's worth, evicting flow-0 and flow-1 — exactly the
+		// range this stream's client already has from the first stream — before the resuming
+		// consumer gets to read anything.
 		second := newFakeStream(t.Context())
 		second.onSend = func(*flowpb.GetFlowsResponse) {
 			second.onSend = nil // only once, on the handshake
@@ -1177,12 +1189,16 @@ func TestGetFlows_ResumeEpochMismatchFallsBackToFullReplay(t *testing.T) {
 		require.NoError(t, <-errCh)
 
 		// A stale epoch is not an error and not honored: the stream replays everything, exactly as
-		// if no resume token had been sent. dropped_count is 0, but resume_reset marks that as "gap
-		// size unknown" rather than a confirmed zero: the previous epoch's buffer is gone, so there
-		// is no way to know whether the client missed anything produced after its last-seen position
-		// and before the restart.
+		// if no resume token had been sent. The client learns its resume was not honored by
+		// comparing the epoch it sent against the one that comes back, which is always this
+		// server's own. That matters because dropped_count is 0 here and must not be read as a
+		// confirmed zero: the previous epoch's buffer is gone, so there is no way to know whether
+		// the client missed anything produced after its last-seen position and before the restart.
 		handshake := stream.responses[0]
-		assert.True(t, handshake.GetResumeReset())
+		assert.Equal(t, svc.streamEpoch, handshake.GetResumeToken().GetStreamEpoch())
+		assert.NotEqual(t, req.GetResume().GetStreamEpoch(), handshake.GetResumeToken().GetStreamEpoch())
+		assert.EqualValues(t, -1, handshake.GetResumeToken().GetSequenceNumber(),
+			"a resume that was not honored reports nothing accounted for, not the position it was asked to resume from")
 		assert.Zero(t, handshake.GetDroppedCount())
 		got := collectFlows(stream.responses)
 		require.Len(t, got, 2)
@@ -1220,11 +1236,10 @@ func TestGetFlows_ResumeAheadOfCurrentPositionRejected(t *testing.T) {
 
 // TestGetFlows_ResumeBelowMinimumRejected covers the lower boundary of a resume token's
 // sequence_number. -1 ("nothing accounted for yet") is the smallest value a server ever issues;
-// anything below that is invalid input, not just unusual. Before this was rejected explicitly, a
-// sufficiently negative value (this test uses math.MinInt64, the worst case) fed into
-// startPos - (sequence_number + 1) as a signed int64 computation, overflowed it, and the
-// wrapped-around result silently became a bogus dropped_count once cast to uint64 — a wrong answer
-// handed to the client instead of a rejected request.
+// anything below that is invalid input, not just unusual. The ring buffer absorbs it safely rather
+// than wrapping its own position arithmetic around (see WithReadFromSequenceNumber), so what this
+// pins down is that a client holding a corrupted or fabricated token is told so, rather than served
+// a stream that silently starts somewhere it did not ask for.
 func TestGetFlows_ResumeBelowMinimumRejected(t *testing.T) {
 	buf := ringbuffer.NewBroadcastBuffer[*flowpb.Flow](64)
 	t.Cleanup(func() { buf.Shutdown() })
@@ -1245,11 +1260,11 @@ func TestGetFlows_ResumeBelowMinimumRejected(t *testing.T) {
 	assert.Empty(t, stream.responses, "a rejected resume token must not get even the handshake response")
 }
 
-// TestGetFlows_ResumeSkipIsBasedOnRawPositionNotVisibility pins down that resuming skips flows by
-// their raw ring-buffer read position, resolved before authorization runs, rather than by a count
-// of what this particular client was actually sent: a flow withheld from a client entirely still
-// occupies a position, and that position must still be skipped correctly on resume.
-func TestGetFlows_ResumeSkipIsBasedOnRawPositionNotVisibility(t *testing.T) {
+// TestGetFlows_ResumeTokenTracksRawPositionNotVisibility pins down that a resume token names a raw
+// ring-buffer position, unaffected by how much of the batch authorization then withheld, rather
+// than a count of what this particular client was actually sent: a flow withheld from a client
+// entirely still occupies a position, and resuming from a token must account for it exactly once.
+func TestGetFlows_ResumeTokenTracksRawPositionNotVisibility(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		buf := ringbuffer.NewBroadcastBuffer[*flowpb.Flow](64)
 		t.Cleanup(func() { buf.Shutdown() })
@@ -1271,7 +1286,7 @@ func TestGetFlows_ResumeSkipIsBasedOnRawPositionNotVisibility(t *testing.T) {
 		require.Len(t, got, 1, "the ns-c->ns-d flow is withheld entirely")
 		assert.Equal(t, "ns-a->ns-b", got[0].GetId())
 		last := first.responses[len(first.responses)-1]
-		assert.EqualValues(t, 1, last.GetResumeToken().GetSequenceNumber(), "position 1 was read (and withheld), not skipped")
+		assert.EqualValues(t, 1, last.GetResumeToken().GetSequenceNumber(), "position 1 was read and withheld, and is accounted for either way")
 
 		token := last.GetResumeToken()
 		buf.Produce(podFlow("ns-a", "ns-b")) // position 2

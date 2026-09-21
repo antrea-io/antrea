@@ -204,11 +204,9 @@ type FlowFilter struct {
 	// pod_names, pod_label_selector, ips) are matched against.
 	// FROM applies filters to the source (sender) side, TO applies them to the
 	// destination (receiver) side, and BOTH (default) matches either side.
-	//
-	//	BOTH (default) - match source OR destination
-	//	FROM           - match source only
-	//	TO             - match destination only
-	//
+	//   BOTH (default) - match source OR destination
+	//   FROM           - match source only
+	//   TO             - match destination only
 	// Cannot combine FROM with service_names (services are always a
 	// destination-side concept).
 	Direction     FlowFilterDirection `protobuf:"varint,7,opt,name=direction,proto3,enum=antrea_io.antrea.pkg.apis.flow.v1alpha1.FlowFilterDirection" json:"direction,omitempty"`
@@ -344,11 +342,16 @@ type GetFlowsRequest struct {
 	// A token whose stream_epoch does not match the server's current one (the
 	// Flow Aggregator restarted, which resets its ring buffer and sequence
 	// numbering to zero) is not an error. It is treated exactly like an unset
-	// resume: consume from the oldest record in the ring buffer.
+	// resume: consume from the oldest record in the ring buffer. A client that
+	// needs to know whether its resume was honored compares the stream_epoch it
+	// sent against the one the first GetFlowsResponse carries, which is always
+	// the server's current one.
 	//
 	// A token whose sequence_number is at or beyond the server's current
 	// position, under a matching stream_epoch, is rejected with
-	// INVALID_ARGUMENT as it cannot come from an honestly-replayed token.
+	// INVALID_ARGUMENT as it cannot come from an honestly-replayed token. A
+	// sequence_number below -1, the lowest value a server ever issues, is
+	// rejected the same way.
 	Resume        *ResumeToken `protobuf:"bytes,7,opt,name=resume,proto3" json:"resume,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -501,29 +504,37 @@ type GetFlowsResponse struct {
 	// buffer wrapped around, or because a resume request named a
 	// sequence_number that had already fallen out of the ring buffer.
 	// Cumulative since the start of the stream.
+	//
+	// A 0 is a confirmed "nothing was lost" only once records have been
+	// accounted for: it is also 0 in the first response of every stream, which
+	// is sent before anything is read.
+	//
+	// It likewise cannot account for a resume that was not honored because its
+	// stream_epoch did not match. With the previous epoch's ring buffer gone,
+	// there is no way to know whether records the client had not yet seen
+	// existed after its last-seen position and before the restart, so such a
+	// stream counts only from the oldest record it replays. A client that
+	// cares about the distinction must treat that pre-restart gap as unknown
+	// rather than as the zero this field reports for it.
+	//
+	// It is not inferrable from consecutive resume_token sequence numbers:
+	// authorization and the client's own filters also remove records from
+	// flows without those being drops, so a client comparing sequence-number
+	// deltas against the length of flows cannot tell a redacted or filtered-out
+	// record from an evicted one.
 	DroppedCount uint64 `protobuf:"varint,2,opt,name=dropped_count,json=droppedCount,proto3" json:"dropped_count,omitempty"`
 	// The ring-buffer position accounted for as of this response: either sent
 	// in flows, or counted in dropped_count. On the very first response of a
-	// stream, this is the last position already accounted for by an earlier
-	// stream this one is resuming, or -1 if there is none. Clients that want
-	// to continue this stream later from the next flow record they have not
-	// yet received store this and pass it back as GetFlowsRequest.resume.
-	ResumeToken *ResumeToken `protobuf:"bytes,3,opt,name=resume_token,json=resumeToken,proto3" json:"resume_token,omitempty"`
-	// Set on the first response of a stream that was given a resume request
-	// whose stream_epoch did not match this one's: the Flow Aggregator
-	// restarted, so resume was not honored and flows start over from the
-	// oldest one currently held, same as a stream that never asked to resume
-	// at all.
+	// stream nothing has been read yet, so it simply echoes the resume point
+	// the request asked for, or -1 if it asked for none — including when the
+	// resume token it sent was not honored. Clients that want to continue this
+	// stream later from the next flow record they have not yet received store
+	// this and pass it back as GetFlowsRequest.resume.
 	//
-	// dropped_count is 0 in this response regardless, but that 0 does not mean
-	// "confirmed nothing was lost": with the previous epoch's ring buffer gone,
-	// there is no way to know whether records the client had not yet seen
-	// existed after its last-seen position and before the restart. A client
-	// that cares about that distinction must treat resume_reset as "gap size
-	// unknown" rather than reading the accompanying 0 as a measured value, the
-	// way it can when resume_reset is unset and dropped_count reports an exact
-	// count instead.
-	ResumeReset   bool `protobuf:"varint,4,opt,name=resume_reset,json=resumeReset,proto3" json:"resume_reset,omitempty"`
+	// stream_epoch is always this server's current one, which is how a
+	// resuming client learns whether its own token was honored: an epoch
+	// different from the one it sent means it was not.
+	ResumeToken   *ResumeToken `protobuf:"bytes,3,opt,name=resume_token,json=resumeToken,proto3" json:"resume_token,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -579,13 +590,6 @@ func (x *GetFlowsResponse) GetResumeToken() *ResumeToken {
 	return nil
 }
 
-func (x *GetFlowsResponse) GetResumeReset() bool {
-	if x != nil {
-		return x.ResumeReset
-	}
-	return false
-}
-
 var File_pkg_apis_flow_v1alpha1_service_proto protoreflect.FileDescriptor
 
 const file_pkg_apis_flow_v1alpha1_service_proto_rawDesc = "" +
@@ -618,12 +622,11 @@ const file_pkg_apis_flow_v1alpha1_service_proto_rawDesc = "" +
 	"\x06resume\x18\a \x01(\v24.antrea_io.antrea.pkg.apis.flow.v1alpha1.ResumeTokenR\x06resume\"Y\n" +
 	"\vResumeToken\x12!\n" +
 	"\fstream_epoch\x18\x01 \x01(\tR\vstreamEpoch\x12'\n" +
-	"\x0fsequence_number\x18\x02 \x01(\x03R\x0esequenceNumber\"\xf8\x01\n" +
+	"\x0fsequence_number\x18\x02 \x01(\x03R\x0esequenceNumber\"\xd5\x01\n" +
 	"\x10GetFlowsResponse\x12C\n" +
 	"\x05flows\x18\x01 \x03(\v2-.antrea_io.antrea.pkg.apis.flow.v1alpha1.FlowR\x05flows\x12#\n" +
 	"\rdropped_count\x18\x02 \x01(\x04R\fdroppedCount\x12W\n" +
-	"\fresume_token\x18\x03 \x01(\v24.antrea_io.antrea.pkg.apis.flow.v1alpha1.ResumeTokenR\vresumeToken\x12!\n" +
-	"\fresume_reset\x18\x04 \x01(\bR\vresumeReset*s\n" +
+	"\fresume_token\x18\x03 \x01(\v24.antrea_io.antrea.pkg.apis.flow.v1alpha1.ResumeTokenR\vresumeToken*s\n" +
 	"\x13FlowFilterDirection\x12\x1e\n" +
 	"\x1aFLOW_FILTER_DIRECTION_BOTH\x10\x00\x12\x1e\n" +
 	"\x1aFLOW_FILTER_DIRECTION_FROM\x10\x01\x12\x1c\n" +

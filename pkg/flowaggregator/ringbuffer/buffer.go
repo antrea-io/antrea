@@ -218,13 +218,18 @@ func (b *broadcastBuffer[T]) NewConsumer(opts ...ConsumerOption) Consumer[T] {
 
 	wp := b.writePos.Load()
 	pos := wp
-	if cfg.readFromBeginning {
-		capacity := b.mask + 1
-		oldest := wp - capacity
-		if oldest < 0 {
-			oldest = 0
+	switch {
+	case cfg.readFromBeginning:
+		pos = max(wp-(b.mask+1), 0)
+	case cfg.readFromSet:
+		if cfg.readFrom >= wp {
+			// Tested before the increment below, which would otherwise overflow at MaxInt64.
+			pos = wp
+		} else {
+			// max(..., 0) absorbs an out-of-contract negative seq without letting
+			// computeLost's oldest-readPos subtraction wrap.
+			pos = max(cfg.readFrom+1, 0)
 		}
-		pos = oldest
 	}
 	return &consumer[T]{
 		rb:       b,
@@ -260,7 +265,7 @@ func (c *consumer[T]) computeLost(wp int64) int64 {
 // readAvailable copies available items into out[offset:] given a writePos snapshot, stopping early
 // if a gap is found so the batch it returns is always exactly the contiguous range
 // [originalReadPos, originalReadPos+n). This guarantees caller can compute the batch's start
-// position as Position()-n.
+// position as end-n.
 //
 // A gap can surface two ways: computeLost, from the wp snapshot, if the producer had already
 // overwritten unread slots before this call even started; or mid-loop, if the producer laps this
@@ -332,13 +337,7 @@ func (c *consumer[T]) waitForData(hasDeadline bool, start time.Time) (wp int64, 
 	}
 }
 
-// Position returns readPos, which is consumer-local and so needs no lock: see the Consumer
-// interface doc for what the returned value means and is used for.
-func (c *consumer[T]) Position() int64 {
-	return c.readPos
-}
-
-func (c *consumer[T]) Consume() (val T, n int, lost int64, shutdown bool) {
+func (c *consumer[T]) Consume() (val T, n int, lost int64, end int64, shutdown bool) {
 	hasDeadline := c.deadline > 0
 	start := time.Now()
 	var zero T
@@ -347,9 +346,9 @@ func (c *consumer[T]) Consume() (val T, n int, lost int64, shutdown bool) {
 		wp, done := c.waitForData(hasDeadline, start)
 		if done {
 			if c.rb.closed.Load() && wp <= c.readPos {
-				return zero, 0, lost, true
+				return zero, 0, lost, c.readPos, true
 			}
-			return zero, 0, lost, false
+			return zero, 0, lost, c.readPos, false
 		}
 
 		lost += c.computeLost(wp)
@@ -372,9 +371,9 @@ func (c *consumer[T]) Consume() (val T, n int, lost int64, shutdown bool) {
 			// correctly handles the edge case where readPos has advanced past wp
 			// due to computeLost adjustments.
 			if c.rb.closed.Load() && c.rb.writePos.Load() <= c.readPos {
-				return v, 1, lost, true
+				return v, 1, lost, c.readPos, true
 			}
-			return v, 1, lost, false
+			return v, 1, lost, c.readPos, false
 		}
 		// Every position this snapshot offered was overwritten before it could be read, which
 		// takes a producer still actively lapping this consumer. readPos advanced past all of
@@ -382,7 +381,7 @@ func (c *consumer[T]) Consume() (val T, n int, lost int64, shutdown bool) {
 	}
 }
 
-func (c *consumer[T]) ConsumeMultiple(out []T) (n int, lost int64, shutdown bool) {
+func (c *consumer[T]) ConsumeMultiple(out []T) (n int, lost int64, end int64, shutdown bool) {
 	b := c.rb
 	hasDeadline := c.deadline > 0
 	var start time.Time
@@ -398,7 +397,7 @@ func (c *consumer[T]) ConsumeMultiple(out []T) (n int, lost int64, shutdown bool
 		if wp > c.readPos {
 			// A discontiguous read is not folded into a batch that already has items: that would make
 			// the batch span two disjoint position ranges, breaking a caller's assumption that its
-			// start is Position()-n. Defer it to the next ConsumeMultiple call instead, which starts
+			// start is end-n. Defer it to the next ConsumeMultiple call instead, which starts
 			// from an empty batch and can absorb it cleanly.
 			if n > 0 && c.readPos < wp-capacity {
 				break
@@ -427,7 +426,7 @@ func (c *consumer[T]) ConsumeMultiple(out []T) (n int, lost int64, shutdown bool
 		// true the single producer has stopped and writePos is frozen. See
 		// the equivalent comment in Consume.
 		if b.closed.Load() && b.writePos.Load() <= c.readPos {
-			return n, totalLost, true
+			return n, totalLost, c.readPos, true
 		}
 
 		// Without a deadline: return as soon as we have at least one item.
@@ -438,7 +437,7 @@ func (c *consumer[T]) ConsumeMultiple(out []T) (n int, lost int64, shutdown bool
 			// Park via waitForData (acquires mutex only for cond.Wait).
 			_, done := c.waitForData(false, start)
 			if done && b.closed.Load() {
-				return n, totalLost, true
+				return n, totalLost, c.readPos, true
 			}
 			continue
 		}
@@ -451,7 +450,7 @@ func (c *consumer[T]) ConsumeMultiple(out []T) (n int, lost int64, shutdown bool
 		_, done := c.waitForData(true, start)
 		if done {
 			if b.closed.Load() && b.writePos.Load() <= c.readPos {
-				return n, totalLost, true
+				return n, totalLost, c.readPos, true
 			}
 			break
 		}
@@ -460,5 +459,5 @@ func (c *consumer[T]) ConsumeMultiple(out []T) (n int, lost int64, shutdown bool
 	if b.closed.Load() && b.writePos.Load() <= c.readPos {
 		shutdown = true
 	}
-	return n, totalLost, shutdown
+	return n, totalLost, c.readPos, shutdown
 }
