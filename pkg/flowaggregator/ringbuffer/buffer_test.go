@@ -576,6 +576,224 @@ func TestPositionAdvancesPastLostItems(t *testing.T) {
 	assert.Equal(t, int64(2*bufSize), c.Position())
 }
 
+// ---------------------------------------------------------------------------
+// Per-slot sequence number tests
+// ---------------------------------------------------------------------------
+
+func TestSlotTryLoadDetectsOverwrite(t *testing.T) {
+	var s slot[string]
+
+	s.store(5, "v5")
+	v, ok := s.tryLoad(5)
+	require.True(t, ok)
+	assert.Equal(t, "v5", v)
+
+	_, ok = s.tryLoad(4)
+	assert.False(t, ok, "a position the slot never held must not match")
+
+	s.store(13, "v13")
+	_, ok = s.tryLoad(5)
+	assert.False(t, ok, "the slot was overwritten; the old position must no longer be readable")
+	v, ok = s.tryLoad(13)
+	require.True(t, ok)
+	assert.Equal(t, "v13", v)
+}
+
+// TestReadAvailableStopsAtGapWithoutSpanningIt exercises readAvailable directly (whitebox) to verify
+// the fix for two of the correctness issues on positions and sequence numbers disagreeing: an
+// overwrite is always caught via the slot's own sequence number rather than trusted blindly, and a
+// call that does jump forward reads only the fresh, contiguous range after the jump — never a mix of
+// pre- and post-jump items.
+func TestReadAvailableStopsAtGapWithoutSpanningIt(t *testing.T) {
+	const bufSize = 8
+	rb := NewBroadcastBuffer[int](bufSize)
+	buf := rb.(*broadcastBuffer[int])
+	c := buf.NewConsumer().(*consumer[int])
+	buf.Produce(0)
+
+	out := make([]int, 10)
+	n, lost, gap := c.readAvailable(buf.writePos.Load(), out, 0)
+	require.Equal(t, 1, n)
+	assert.Equal(t, int64(0), lost)
+	assert.False(t, gap)
+	assert.Equal(t, 0, out[0])
+	assert.Equal(t, int64(1), c.readPos)
+
+	// Lap the consumer well past capacity before its next read.
+	for i := 1; i <= bufSize*3; i++ {
+		buf.Produce(i)
+	}
+	wp := buf.writePos.Load()
+
+	n2, lost2, gap2 := c.readAvailable(wp, out, 0)
+	require.True(t, gap2)
+	wantOldest := wp - int64(bufSize)
+	assert.Equal(t, wantOldest-1, lost2, "1 is readPos going into this call")
+	require.Equal(t, bufSize, n2)
+	for i := 0; i < n2; i++ {
+		assert.Equal(t, int(wantOldest)+i, out[i], "out[%d]", i)
+	}
+	assert.Equal(t, wp, c.readPos)
+}
+
+// overwriteOldestSlot puts the buffer into the state a producer passes through while lapping a
+// consumer sitting at the oldest position: the slot has already been rewritten with the position
+// one past the tip, but writePos has not been published yet. A single Produce is in this state
+// between its slot write and its writePos store; ProduceMultiple holds it for a whole batch.
+func overwriteOldestSlot(b *broadcastBuffer[int], v int) {
+	wp := b.writePos.Load()
+	b.buf[wp&b.mask].store(wp, v)
+}
+
+// TestReadAvailableSkipsOverwrittenHeadRatherThanStalling covers the first slot of the read range
+// being overwritten right as it is about to be read. With nothing in the batch yet there is no
+// contiguous range to protect, so the position must be counted as lost and the scan must carry on:
+// stopping would report n == 0 while the rest of the buffer is still readable, which a caller
+// cannot tell apart from a drained buffer.
+func TestReadAvailableSkipsOverwrittenHeadRatherThanStalling(t *testing.T) {
+	const bufSize = 8
+	rb := NewBroadcastBuffer[int](bufSize)
+	buf := rb.(*broadcastBuffer[int])
+	c := buf.NewConsumer(WithReadFromBeginning()).(*consumer[int])
+	for i := 0; i < bufSize; i++ {
+		buf.Produce(i)
+	}
+	wp := buf.writePos.Load()
+	require.Equal(t, int64(0), c.readPos)
+	overwriteOldestSlot(buf, 100)
+
+	out := make([]int, bufSize)
+	n, lost, gap := c.readAvailable(wp, out, 0)
+	assert.True(t, gap)
+	assert.Equal(t, int64(1), lost, "position 0 was overwritten, so it is lost")
+	require.Equal(t, bufSize-1, n, "positions 1 onwards are still readable and must not be withheld")
+	assert.Equal(t, []int{1, 2, 3, 4, 5, 6, 7}, out[:n])
+	assert.Equal(t, wp, c.readPos)
+}
+
+// TestConsumeMultipleDoesNotReportEmptyWhileDataRemains is the same case at the ConsumeMultiple
+// level, where it matters to callers: n == 0 is how a caller learns the buffer is drained
+// (FlowStreamService ends a non-follow stream on it), so an overwritten head must not produce it
+// while readable positions remain. The batch must also still be the contiguous run ending at
+// Position(), with the lost position sitting immediately before it.
+func TestConsumeMultipleDoesNotReportEmptyWhileDataRemains(t *testing.T) {
+	const bufSize = 8
+	rb := NewBroadcastBuffer[int](bufSize)
+	buf := rb.(*broadcastBuffer[int])
+	c := buf.NewConsumer(WithReadFromBeginning())
+	for i := 0; i < bufSize; i++ {
+		buf.Produce(i)
+	}
+	overwriteOldestSlot(buf, 100)
+
+	out := make([]int, bufSize)
+	n, lost, shutdown := c.ConsumeMultiple(out)
+	assert.False(t, shutdown)
+	assert.Equal(t, int64(1), lost)
+	require.Equal(t, bufSize-1, n)
+	assert.Equal(t, []int{1, 2, 3, 4, 5, 6, 7}, out[:n])
+	assert.Equal(t, int64(bufSize), c.Position())
+	assert.Equal(t, int64(1), c.Position()-int64(n), "batch starts at position 1, right after the lost one")
+}
+
+// TestConsumeSkipsOverwrittenPositionRatherThanReturningEmpty is the same case for Consume, whose
+// callers read n == 0 with shutdown unset as "the deadline expired with no data available".
+func TestConsumeSkipsOverwrittenPositionRatherThanReturningEmpty(t *testing.T) {
+	const bufSize = 8
+	rb := NewBroadcastBuffer[int](bufSize)
+	buf := rb.(*broadcastBuffer[int])
+	c := buf.NewConsumer(WithReadFromBeginning())
+	for i := 0; i < bufSize; i++ {
+		buf.Produce(i)
+	}
+	overwriteOldestSlot(buf, 100)
+
+	val, n, lost, shutdown := c.Consume()
+	assert.False(t, shutdown)
+	require.Equal(t, 1, n, "position 0 is gone, but position 1 is readable and must be returned")
+	assert.Equal(t, 1, val)
+	assert.Equal(t, int64(1), lost)
+	assert.Equal(t, int64(2), c.Position())
+}
+
+// TestReadAvailableRejectsOverwrittenHeadOfLaterSubCall covers a second readAvailable call within
+// the same ConsumeMultiple invocation (offset > 0, e.g. a deadline accumulating over several
+// wake-ups) whose very first position is overwritten before it can be read. This call's own local n
+// is 0 at that point — indistinguishable, looking at n alone, from the truly-empty-batch case that
+// TestReadAvailableSkipsOverwrittenHeadRatherThanStalling exercises — but offset > 0 means the
+// caller's batch is not actually empty, so folding this position in as skip-and-count-lost would
+// place a lost position after already-read items instead of before them, breaking the very
+// contiguity invariant this fix exists to protect.
+func TestReadAvailableRejectsOverwrittenHeadOfLaterSubCall(t *testing.T) {
+	const bufSize = 8
+	rb := NewBroadcastBuffer[int](bufSize)
+	buf := rb.(*broadcastBuffer[int])
+	c := buf.NewConsumer(WithReadFromBeginning()).(*consumer[int])
+	buf.Produce(0)
+	buf.Produce(1)
+
+	// First sub-call: a normal, uneventful read of everything available so far.
+	out := make([]int, bufSize)
+	n1, lost1, gap1 := c.readAvailable(buf.writePos.Load(), out, 0)
+	require.Equal(t, 2, n1)
+	assert.Equal(t, int64(0), lost1)
+	assert.False(t, gap1)
+	assert.Equal(t, int64(2), c.readPos)
+
+	// Simulate the race for the second sub-call: the caller's wp snapshot says position 2 exists
+	// (readPos < wp), but by the time readAvailable actually gets to it, the slot has already been
+	// overwritten by a producer that outran the snapshot — the same race waitForData's fast path
+	// leaves open between loading writePos and this call. wp is deliberately a stale value (one
+	// past readPos), distinct from the slot's own new, higher sequence number.
+	wp := c.readPos + 1
+	buf.buf[2&buf.mask].store(2+bufSize, 999)
+
+	n2, lost2, gap2 := c.readAvailable(wp, out, n1)
+	assert.True(t, gap2)
+	assert.Equal(t, 0, n2, "position 2 must not be skipped past: n1 > 0 already, so this is not an empty batch")
+	assert.Equal(t, int64(0), lost2, "position 2 is deferred to the next ConsumeMultiple call, not counted lost here")
+	assert.Equal(t, int64(2), c.readPos, "readPos must not advance past the undelivered position 2")
+}
+
+// TestConsumeMultipleBatchIsAlwaysContiguous stresses ConsumeMultiple across a producer that laps it
+// call returns, out[0:n] must be exactly the run of positions ending at Position(), i.e.
+// out[k] == Position()-n+k. Before the fix, a gap found partway through a deadline-accumulation call
+// could be folded into the same batch as data read earlier in that call, breaking this invariant
+// (and, in FlowStreamService, corrupting the resume token derived from it).
+func TestConsumeMultipleBatchIsAlwaysContiguous(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		const bufSize = 8
+		buf := NewBroadcastBuffer[int](bufSize)
+		c := buf.NewConsumer(WithMaxConsumeDeadline(200 * time.Millisecond))
+
+		buf.Produce(0)
+		go func() {
+			time.Sleep(20 * time.Millisecond)
+			for i := 1; i <= bufSize*3; i++ {
+				buf.Produce(i)
+			}
+			buf.Shutdown()
+		}()
+
+		out := make([]int, 100)
+		var totalRead, totalLost int64
+		for {
+			n, lost, shutdown := c.ConsumeMultiple(out)
+			start := c.Position() - int64(n)
+			for k := 0; k < n; k++ {
+				require.Equal(t, int(start)+k, out[k], "batch must be one contiguous run (index %d)", k)
+			}
+			totalRead += int64(n)
+			totalLost += lost
+			if shutdown {
+				break
+			}
+		}
+
+		assert.Equal(t, int64(1+bufSize*3), totalRead+totalLost, "every produced position is read or accounted as lost")
+	})
+}
+
 func TestConsumeDeadlineReturnsEmpty(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		buf := NewBroadcastBuffer[int](8)

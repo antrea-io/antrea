@@ -178,11 +178,11 @@ message GetFlowsResponse {
   // Cumulative since the start of the stream.
   uint64 dropped_count = 2;
   // The ring-buffer position accounted for as of this response: either sent
-  // in flows, or counted in dropped_count. sequence_number is -1 on the very
-  // first response of a stream that starts at the oldest flow currently held
-  // and the ring buffer has never produced anything yet. Clients that want to
-  // continue this stream later from the next flow record they have not yet
-  // received store this and pass it back verbatim as GetFlowsRequest.resume.
+  // in flows, or counted in dropped_count. On the very first response of a
+  // stream, this is the last position already accounted for by an earlier
+  // stream this one is resuming, or -1 if there is none. Clients that want
+  // to continue this stream later from the next flow record they have not
+  // yet received store this and pass it back as GetFlowsRequest.resume.
   ResumeToken resume_token = 3;
   // Set on the first response of a stream that was given a resume request
   // whose stream_epoch did not match this one's: the Flow Aggregator

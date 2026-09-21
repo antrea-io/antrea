@@ -204,9 +204,11 @@ type FlowFilter struct {
 	// pod_names, pod_label_selector, ips) are matched against.
 	// FROM applies filters to the source (sender) side, TO applies them to the
 	// destination (receiver) side, and BOTH (default) matches either side.
-	//   BOTH (default) - match source OR destination
-	//   FROM           - match source only
-	//   TO             - match destination only
+	//
+	//	BOTH (default) - match source OR destination
+	//	FROM           - match source only
+	//	TO             - match destination only
+	//
 	// Cannot combine FROM with service_names (services are always a
 	// destination-side concept).
 	Direction     FlowFilterDirection `protobuf:"varint,7,opt,name=direction,proto3,enum=antrea_io.antrea.pkg.apis.flow.v1alpha1.FlowFilterDirection" json:"direction,omitempty"`
@@ -501,11 +503,11 @@ type GetFlowsResponse struct {
 	// Cumulative since the start of the stream.
 	DroppedCount uint64 `protobuf:"varint,2,opt,name=dropped_count,json=droppedCount,proto3" json:"dropped_count,omitempty"`
 	// The ring-buffer position accounted for as of this response: either sent
-	// in flows, or counted in dropped_count. sequence_number is -1 on the very
-	// first response of a stream that starts at the oldest flow currently held
-	// and the ring buffer has never produced anything yet. Clients that want to
-	// continue this stream later from the next flow record they have not yet
-	// received store this and pass it back verbatim as GetFlowsRequest.resume.
+	// in flows, or counted in dropped_count. On the very first response of a
+	// stream, this is the last position already accounted for by an earlier
+	// stream this one is resuming, or -1 if there is none. Clients that want
+	// to continue this stream later from the next flow record they have not
+	// yet received store this and pass it back as GetFlowsRequest.resume.
 	ResumeToken *ResumeToken `protobuf:"bytes,3,opt,name=resume_token,json=resumeToken,proto3" json:"resume_token,omitempty"`
 	// Set on the first response of a stream that was given a resume request
 	// whose stream_epoch did not match this one's: the Flow Aggregator

@@ -44,6 +44,12 @@ type Consumer[T any] interface {
 	// and returns when the output slice is full or the deadline would be exceeded
 	// by the next wake cycle.
 	// n can be 0 if the deadline expired with no data available.
+	// out[0:n] is always exactly the contiguous run of positions [Position()-n, Position()),
+	// never a mix of two disjoint ranges; a producer lapping the consumer mid-call
+	// ends the batch there instead of folding the newer range in, so a caller can
+	// always derive the batch's start position from n alone.
+	// lost, similarly, is always the sequence immediately before that: callers can
+	// rely on [Position()-n-lost, Position()-n) being exactly what was lost.
 	ConsumeMultiple(out []T) (n int, lost int64, shutdown bool)
 	// Position returns the absolute buffer position of the next item this consumer will read.
 	// Positions are assigned once, by Produce/ProduceMultiple, in write order starting at 0 for the

@@ -325,7 +325,7 @@ func (s *FlowStreamService) GetFlows(req *flowpb.GetFlowsRequest, stream flowpb.
 	// treat "the first response with no flows" as acknowledgement.
 	if err := stream.Send(&flowpb.GetFlowsResponse{
 		DroppedCount: totalDropped,
-		ResumeToken:  &flowpb.ResumeToken{StreamEpoch: s.streamEpoch, SequenceNumber: startPos - 1},
+		ResumeToken:  &flowpb.ResumeToken{StreamEpoch: s.streamEpoch, SequenceNumber: resumePos},
 		ResumeReset:  resumeReset,
 	}); err != nil {
 		klog.InfoS("Send initial response to client failed, closing GetFlows stream", "err", err)
@@ -358,7 +358,6 @@ func (s *FlowStreamService) GetFlows(req *flowpb.GetFlowsRequest, stream flowpb.
 		}
 
 		n, dropped, shutdown := consumer.ConsumeMultiple(batch)
-		totalDropped += uint64(dropped)
 
 		if shutdown {
 			klog.InfoS("Ring buffer shut down, closing GetFlows stream")
@@ -367,19 +366,35 @@ func (s *FlowStreamService) GetFlows(req *flowpb.GetFlowsRequest, stream flowpb.
 
 		// batchEndPos is the position just past the last item this call read (or skipped past via
 		// dropped); consumer.Position() reflects that unconditionally, whether or not n > 0. The
-		// batch itself occupies [batchEndPos-n, batchEndPos), assigned once by the producer and
+		// batch itself occupies [batchStartPos, batchEndPos), assigned once by the producer and
 		// stable regardless of how any of it is later redacted or filtered — which is what makes it
 		// safe to resume against, and why skip below is computed before streamAuth.Authorize and
-		// applyFilters run rather than after.
+		// applyFilters run rather than after. Anything dropped by this call sits immediately before
+		// that, in [batchStartPos-dropped, batchStartPos).
 		batchEndPos := consumer.Position()
+		batchStartPos := batchEndPos - int64(n)
+
+		if dropped > 0 && resumePos >= batchStartPos-dropped {
+			// Some or all of the dropped range was already sent to the client on the connection
+			// this stream is resuming: the ring buffer overwrote it before this consumer got to
+			// read it, but the client already has it from before the resume, so it must not
+			// inflate dropped_count a second time. Only the portion after resumePos is a genuine
+			// gap for this stream.
+			alreadySeen := resumePos - (batchStartPos - dropped) + 1
+			if alreadySeen > dropped {
+				alreadySeen = dropped
+			}
+			dropped -= alreadySeen
+		}
+		totalDropped += uint64(dropped)
 
 		var filtered []*flowpb.Flow
 		if n > 0 {
 			skip := 0
-			if batchStartPos := batchEndPos - int64(n); resumePos >= batchStartPos {
-				// Positions only increase, and resumeThreshold never changes for this stream's
+			if resumePos >= batchStartPos {
+				// Positions only increase, and resumePos never changes for this stream's
 				// lifetime, so skip is nonzero only for the batch (or batches) immediately after
-				// startPos: once batchStartPos passes resumeThreshold, every later batch has
+				// startPos: once batchStartPos passes resumePos, every later batch has
 				// skip == 0 with no further bookkeeping needed.
 				skip = int(resumePos-batchStartPos) + 1
 				if skip > n {
