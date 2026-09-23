@@ -4833,7 +4833,8 @@ data:
         # - tunnel (default): The traffic is encapsulated and sent through the tunnel interface. In noEncap mode, the
         #                     tunnel interface is created for it, and the Pod MTU is reduced by the encapsulation overhead.
         # - l2:               The traffic is sent unmodified to the MAC address of the Node hosting the selected Endpoint.
-        #                     It requires the DSRDispatchL2 feature gate, and noEncap or hybrid mode. The Nodes must be in
+        #                     It requires the DSRDispatchL2 feature gate, and noEncap or hybrid mode. It is not
+        #                     supported with hostNetworkMode nftables or with enableBridgingMode. The Nodes must be in
         #                     one L2 segment. Traffic to Nodes in other subnets uses the tunnel in hybrid mode, and is
         #                     dropped in noEncap mode unless the tunnel interface exists.
         # A Service's dispatch can be overridden by annotating it with `service.antrea.io/dsr-dispatch`.
@@ -5969,7 +5970,7 @@ spec:
         kubectl.kubernetes.io/default-container: antrea-agent
         # Automatically restart Pods with a RollingUpdate if the ConfigMap changes
         # See https://helm.sh/docs/howto/charts_tips_and_tricks/#automatically-roll-deployments
-        checksum/config: e917874536f1e7c19942c93e55ed5bae2e91addcb06894948e00c2803694c2c9
+        checksum/config: 1473f3974a92ff70bca3fd4cec880ed497a93b9c2fc0e8530f7f4e92995b5259
         checksum/ipsec-secret: d0eb9c52d0cd4311b6d252a951126bf9bea27ec05590bed8a394f0f792dcb2a4
       labels:
         app: antrea
@@ -6261,7 +6262,7 @@ spec:
       annotations:
         # Automatically restart Pod if the ConfigMap changes
         # See https://helm.sh/docs/howto/charts_tips_and_tricks/#automatically-roll-deployments
-        checksum/config: e917874536f1e7c19942c93e55ed5bae2e91addcb06894948e00c2803694c2c9
+        checksum/config: 1473f3974a92ff70bca3fd4cec880ed497a93b9c2fc0e8530f7f4e92995b5259
       labels:
         app: antrea
         component: antrea-controller

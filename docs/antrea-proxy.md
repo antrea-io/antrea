@@ -244,7 +244,8 @@ to the Node that runs the selected backend Pod. It has two options:
 as described above.
 * `l2` sends the traffic unmodified to the MAC address of the Node. It adds no
 bytes and needs no tunnel. It requires the `DSRDispatchL2` feature gate, and
-the `noEncap` or `hybrid` mode.
+the `noEncap` or `hybrid` mode. It is not supported with
+`hostNetworkMode: nftables`, or with bridging mode (`enableBridgingMode`).
 
 With the `l2` dispatch, the traffic keeps the client IP as its source and the
 Service IP as its destination. The Node that runs the selected backend Pod
@@ -302,9 +303,9 @@ kubectl annotate service my-service service.antrea.io/dsr-dispatch=<tunnel|l2>
 
 A Service uses the dispatch of its annotation, or else the default dispatch. If
 the Node cannot provide that dispatch, the Service uses the other one, and
-antrea-agent logs it: `l2` outside the `noEncap` and `hybrid` modes becomes
-`tunnel`, and `tunnel` without a tunnel interface becomes `l2`. The `l2`
-dispatch is not supported with `hostNetworkMode: nftables`.
+antrea-agent logs it: `l2` outside the `noEncap` and `hybrid` modes, or where
+it is not supported, becomes `tunnel`, and `tunnel` without a tunnel interface
+becomes `l2`.
 
 ## Special use cases
 

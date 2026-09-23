@@ -171,6 +171,7 @@ traffic](antrea-proxy.md#choosing-the-dispatch-of-dsr-traffic).
 - Feature gate `LoadBalancerModeDSR` is enabled, and the requirements of that feature are met.
 - Traffic mode `noEncap` or `hybrid`.
 - Option `hostNetworkMode` is `iptables`.
+- Option `enableBridgingMode` is false.
 - All Nodes are in one L2 segment on their transport interface. In `hybrid` mode, the traffic to
   Nodes in other subnets goes through the tunnel.
 - The Node network delivers a frame to the MAC address of a Node even when the destination IP of

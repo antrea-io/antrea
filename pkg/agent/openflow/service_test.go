@@ -108,8 +108,8 @@ func serviceInitFlows(proxyEnabled, isIPv4, proxyAllEnabled, dsrEnabled bool) []
 
 // serviceInitFlowsDSRL2Dispatch returns the flows of an IPv4 Node whose DSR Services can use the l2 dispatch, in
 // noEncap or hybrid mode. Compared to serviceInitFlows with DSR, the hairpin flow in SNATMark excludes the packets
-// which the l2 dispatch sends back to the Antrea gateway, and those packets are output to their in-port. In noEncap
-// mode, there is no flow for the connections to remote Endpoints through the tunnel.
+// which the l2 dispatch sends back to the Antrea gateway, and those packets are output to their in-port, which must be
+// the Antrea gateway. In noEncap mode, there is no flow for the connections to remote Endpoints through the tunnel.
 func serviceInitFlowsDSRL2Dispatch(trafficEncapMode config.TrafficEncapModeType) []string {
 	var flows []string
 	for _, flow := range serviceInitFlows(true, true, true, true) {
@@ -123,7 +123,7 @@ func serviceInitFlowsDSRL2Dispatch(trafficEncapMode config.TrafficEncapModeType)
 		}
 		flows = append(flows, flow)
 	}
-	return append(flows, "cookie=0x1030000000000, table=Output, priority=210,reg0=0x200000/0x600000,reg4=0x40000000/0x40000000 actions=IN_PORT")
+	return append(flows, "cookie=0x1030000000000, table=Output, priority=210,reg0=0x200002/0x60000f,reg4=0x40000000/0x40000000 actions=IN_PORT")
 }
 
 func Test_featureService_initFlows(t *testing.T) {

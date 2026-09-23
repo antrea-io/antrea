@@ -4820,7 +4820,8 @@ data:
         # - tunnel (default): The traffic is encapsulated and sent through the tunnel interface. In noEncap mode, the
         #                     tunnel interface is created for it, and the Pod MTU is reduced by the encapsulation overhead.
         # - l2:               The traffic is sent unmodified to the MAC address of the Node hosting the selected Endpoint.
-        #                     It requires the DSRDispatchL2 feature gate, and noEncap or hybrid mode. The Nodes must be in
+        #                     It requires the DSRDispatchL2 feature gate, and noEncap or hybrid mode. It is not
+        #                     supported with hostNetworkMode nftables or with enableBridgingMode. The Nodes must be in
         #                     one L2 segment. Traffic to Nodes in other subnets uses the tunnel in hybrid mode, and is
         #                     dropped in noEncap mode unless the tunnel interface exists.
         # A Service's dispatch can be overridden by annotating it with `service.antrea.io/dsr-dispatch`.
@@ -5965,7 +5966,7 @@ spec:
         kubectl.kubernetes.io/default-container: antrea-agent
         # Automatically restart Pods with a RollingUpdate if the ConfigMap changes
         # See https://helm.sh/docs/howto/charts_tips_and_tricks/#automatically-roll-deployments
-        checksum/config: 4521cb7e7788a4c23eb72d78dba0007b83fc6c935960e8fc3a5499c1875e916d
+        checksum/config: 430ab48198a4a80b5e4374ac1ac7521d3aa875c40c1d361e09af35c6bc966e05
       labels:
         app: antrea
         component: antrea-agent
@@ -6214,7 +6215,7 @@ spec:
       annotations:
         # Automatically restart Pod if the ConfigMap changes
         # See https://helm.sh/docs/howto/charts_tips_and_tricks/#automatically-roll-deployments
-        checksum/config: 4521cb7e7788a4c23eb72d78dba0007b83fc6c935960e8fc3a5499c1875e916d
+        checksum/config: 430ab48198a4a80b5e4374ac1ac7521d3aa875c40c1d361e09af35c6bc966e05
       labels:
         app: antrea
         component: antrea-controller

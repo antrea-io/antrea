@@ -1211,11 +1211,13 @@ func (f *featureService) l2ForwardOutputHairpinServiceFlow() binding.Flow {
 // l2ForwardOutputDSRL2DispatchFlow generates the flow to output the packets which the l2 dispatch of DSR sends back to
 // the Antrea gateway with the IN_PORT action, because they came from the Antrea gateway and OVS drops the packets
 // output to their in-port otherwise. Unlike the packets of hairpin connections, they carry no conntrack mark: on the
-// ingress Node, their connections are invalid because the Node only sees the requests.
+// ingress Node, their connections are invalid because the Node only sees the requests. The flow also matches
+// FromGatewayRegMark, so that IN_PORT never sends a packet out of another port. Only the Classifier table loads that
+// mark.
 func (f *featureService) l2ForwardOutputDSRL2DispatchFlow() binding.Flow {
 	return OutputTable.ofTable.BuildFlow(priorityHigh).
 		Cookie(f.cookieAllocator.Request(f.category).Raw()).
-		MatchRegMark(OutputToOFPortRegMark, DSRL2DispatchRegMark).
+		MatchRegMark(OutputToOFPortRegMark, DSRL2DispatchRegMark, FromGatewayRegMark).
 		Action().OutputInPort().
 		Done()
 }

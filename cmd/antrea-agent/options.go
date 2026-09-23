@@ -307,9 +307,11 @@ func (o *Options) validateAntreaProxyConfig(encapMode config.TrafficEncapModeTyp
 	o.dsrDispatch = dsrDispatch
 	// DSR Services can use the l2 dispatch whatever the default dispatch is, because a Service can select it with
 	// its annotation. The backend Node recognises the traffic of the l2 dispatch with an iptables rule, which is not
-	// implemented for the nftables host network mode.
+	// implemented for the nftables host network mode. Bridging mode is not supported either: the uplink is connected
+	// to the OVS bridge, and the transport interface is the local port of the bridge, so the dispatched traffic would
+	// cross OVS again on both Nodes.
 	o.enableDSRL2Dispatch = o.enableDSR && features.DefaultFeatureGate.Enabled(features.DSRDispatchL2) &&
-		supportsDSRL2Dispatch(encapMode) && !o.usesNFTablesHostNetworkMode()
+		supportsDSRL2Dispatch(encapMode) && !o.usesNFTablesHostNetworkMode() && !o.usesBridgingMode()
 	return nil
 }
 
@@ -340,6 +342,9 @@ func (o *Options) validateDSRDispatch(encapMode config.TrafficEncapModeType) (co
 		return config.DSRDispatchInvalid, fmt.Errorf("DSR dispatch %s is not supported with hostNetworkMode %s", dispatch,
 			config.HostNetworkModeNFTables)
 	}
+	if o.usesBridgingMode() {
+		return config.DSRDispatchInvalid, fmt.Errorf("DSR dispatch %s is not supported with enableBridgingMode", dispatch)
+	}
 	return dispatch, nil
 }
 
@@ -352,6 +357,11 @@ func supportsDSRL2Dispatch(encapMode config.TrafficEncapModeType) bool {
 func (o *Options) usesNFTablesHostNetworkMode() bool {
 	_, hostNetworkMode := config.GetHostNetworkModeFromStr(o.config.HostNetworkMode)
 	return hostNetworkMode == config.HostNetworkModeNFTables
+}
+
+// usesBridgingMode returns true if the agent connects the uplink to the OVS bridge, as run does.
+func (o *Options) usesBridgingMode() bool {
+	return o.config.EnableBridgingMode && features.DefaultFeatureGate.Enabled(features.AntreaIPAM)
 }
 
 func (o *Options) validateFlowExporterConfig() error {

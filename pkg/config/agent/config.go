@@ -281,7 +281,8 @@ type DSRConfig struct {
 	// - tunnel (default): The traffic is encapsulated and sent through the tunnel interface. In noEncap mode, the
 	//                     tunnel interface is created for it, and the Pod MTU is reduced by the encapsulation overhead.
 	// - l2:               The traffic is sent unmodified to the MAC address of the Node hosting the selected Endpoint.
-	//                     It requires the DSRDispatchL2 feature gate, and noEncap or hybrid mode. The Nodes must be in
+	//                     It requires the DSRDispatchL2 feature gate, and noEncap or hybrid mode. It is not
+	//                     supported with hostNetworkMode nftables or with enableBridgingMode. The Nodes must be in
 	//                     one L2 segment. Traffic to Nodes in other subnets uses the tunnel in hybrid mode, and is
 	//                     dropped in noEncap mode unless the tunnel interface exists.
 	// A Service's dispatch can be overridden by annotating it with `service.antrea.io/dsr-dispatch`.

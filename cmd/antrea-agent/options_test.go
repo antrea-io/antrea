@@ -95,6 +95,7 @@ func TestOptionsValidateAntreaProxyConfig(t *testing.T) {
 		enabledDSRDispatchL2            bool
 		trafficEncapMode                config.TrafficEncapModeType
 		hostNetworkMode                 string
+		enableBridgingMode              bool
 		antreaProxyConfig               agentconfig.AntreaProxyConfig
 		expectedErr                     string
 		expectedDefaultLoadBalancerMode config.LoadBalancerMode
@@ -297,6 +298,28 @@ func TestOptionsValidateAntreaProxyConfig(t *testing.T) {
 			expectedDSRDispatch:             config.DSRDispatchTunnel,
 		},
 		{
+			name:                            "l2 dispatch with bridging mode",
+			enabledDSR:                      true,
+			enabledDSRDispatchL2:            true,
+			antreaProxyConfig:               dsrL2Config("l2"),
+			trafficEncapMode:                config.TrafficEncapModeNoEncap,
+			enableBridgingMode:              true,
+			expectedErr:                     "DSR dispatch l2 is not supported with enableBridgingMode",
+			expectedDefaultLoadBalancerMode: config.LoadBalancerModeDSR,
+			expectedEnableDSR:               true,
+		},
+		{
+			name:                            "DSRDispatchL2 feature gate with bridging mode",
+			enabledDSR:                      true,
+			enabledDSRDispatchL2:            true,
+			antreaProxyConfig:               dsrL2Config("tunnel"),
+			trafficEncapMode:                config.TrafficEncapModeNoEncap,
+			enableBridgingMode:              true,
+			expectedDefaultLoadBalancerMode: config.LoadBalancerModeDSR,
+			expectedEnableDSR:               true,
+			expectedDSRDispatch:             config.DSRDispatchTunnel,
+		},
+		{
 			name:                            "unknown DSR dispatch",
 			enabledDSR:                      true,
 			antreaProxyConfig:               dsrL2Config("geneve"),
@@ -342,10 +365,14 @@ func TestOptionsValidateAntreaProxyConfig(t *testing.T) {
 			featuregatetesting.SetFeatureGateDuringTest(t, features.DefaultFeatureGate, features.LoadBalancerModeDSR, tt.enabledDSR)
 			featuregatetesting.SetFeatureGateDuringTest(t, features.DefaultFeatureGate, features.DSRDispatchL2,
 				tt.enabledDSRDispatchL2)
+			// Bridging mode requires the AntreaIPAM feature gate.
+			featuregatetesting.SetFeatureGateDuringTest(t, features.DefaultFeatureGate, features.AntreaIPAM,
+				tt.enableBridgingMode)
 
 			o := &Options{config: &agentconfig.AgentConfig{
-				AntreaProxy:     tt.antreaProxyConfig,
-				HostNetworkMode: tt.hostNetworkMode,
+				AntreaProxy:        tt.antreaProxyConfig,
+				HostNetworkMode:    tt.hostNetworkMode,
+				EnableBridgingMode: tt.enableBridgingMode,
 			}}
 			err := o.validateAntreaProxyConfig(tt.trafficEncapMode)
 			if tt.expectedErr == "" {
@@ -357,6 +384,50 @@ func TestOptionsValidateAntreaProxyConfig(t *testing.T) {
 			assert.Equal(t, tt.expectedEnableDSR, o.enableDSR)
 			assert.Equal(t, tt.expectedDSRDispatch, o.dsrDispatch)
 			assert.Equal(t, tt.expectedEnableDSRL2Dispatch, o.enableDSRL2Dispatch)
+		})
+	}
+}
+
+// TestDSRL2DispatchWithBridgingMode checks that, when bridging mode makes the l2 dispatch unavailable, a Service which
+// selects the l2 dispatch with its annotation falls back to the tunnel dispatch, and that noEncap mode then has the
+// tunnel interface.
+func TestDSRL2DispatchWithBridgingMode(t *testing.T) {
+	tests := []struct {
+		name               string
+		enableBridgingMode bool
+		expectedDispatch   config.DSRDispatch
+		expectedTunnel     bool
+	}{
+		{name: "bridging mode", enableBridgingMode: true, expectedDispatch: config.DSRDispatchTunnel, expectedTunnel: true},
+		{name: "no bridging mode", expectedDispatch: config.DSRDispatchL2, expectedTunnel: true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			featuregatetesting.SetFeatureGateDuringTest(t, features.DefaultFeatureGate, features.LoadBalancerModeDSR, true)
+			featuregatetesting.SetFeatureGateDuringTest(t, features.DefaultFeatureGate, features.DSRDispatchL2, true)
+			featuregatetesting.SetFeatureGateDuringTest(t, features.DefaultFeatureGate, features.AntreaIPAM,
+				tt.enableBridgingMode)
+			o := &Options{config: &agentconfig.AgentConfig{
+				AntreaProxy: agentconfig.AntreaProxyConfig{
+					Enable:                  ptr.To(true),
+					ProxyAll:                true,
+					DefaultLoadBalancerMode: config.LoadBalancerModeDSR.String(),
+					DSR:                     agentconfig.DSRConfig{Dispatch: config.DSRDispatchTunnel.String()},
+				},
+				EnableBridgingMode: tt.enableBridgingMode,
+			}}
+			require.NoError(t, o.validateAntreaProxyConfig(config.TrafficEncapModeNoEncap))
+			// The fields which run sets from the options.
+			networkConfig := &config.NetworkConfig{
+				TrafficEncapMode:    config.TrafficEncapModeNoEncap,
+				EnableDSR:           o.enableDSR,
+				DSRDispatch:         o.dsrDispatch,
+				EnableDSRL2Dispatch: o.enableDSRL2Dispatch,
+				EnableL2Dispatch:    o.enableDSRL2Dispatch,
+			}
+			dispatch, _ := networkConfig.DSRDispatchForService(ptr.To(config.DSRDispatchL2))
+			assert.Equal(t, tt.expectedDispatch, dispatch, "the dispatch of a Service annotated with l2")
+			assert.Equal(t, tt.expectedTunnel, networkConfig.NeedsTunnelInterface())
 		})
 	}
 }

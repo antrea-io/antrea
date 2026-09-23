@@ -167,8 +167,9 @@ antreaProxy:
     # -- Determines how the ingress Node sends the traffic of a DSR Service to
     # the Node hosting the selected Endpoint by default. It must be one of
     # "tunnel" or "l2". "l2" requires the DSRDispatchL2 feature gate, noEncap
-    # or hybrid mode, and all Nodes in one L2 segment. A Service can override
-    # it with the "service.antrea.io/dsr-dispatch" annotation.
+    # or hybrid mode, and all Nodes in one L2 segment. It is not supported with
+    # hostNetworkMode "nftables" or with enableBridgingMode. A Service can
+    # override it with the "service.antrea.io/dsr-dispatch" annotation.
     dispatch: "tunnel"
   # -- Disables the health check server run by Antrea Proxy, which provides health
   # information about Services of type LoadBalancer with externalTrafficPolicy set to
