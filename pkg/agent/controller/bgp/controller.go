@@ -185,6 +185,8 @@ type Controller struct {
 	// peerStatuses holds the status of each BGP peer at the last poll, keyed like the peer configurations. It is only
 	// accessed by pollPeerStatus, which never runs concurrently with itself.
 	peerStatuses map[string]bgp.PeerStatus
+
+	eventRecorder *eventRecorder
 }
 
 func NewBGPPolicyController(nodeInformer coreinformers.NodeInformer,
@@ -227,6 +229,7 @@ func NewBGPPolicyController(nodeInformer coreinformers.NodeInformer,
 				Name: "bgpPolicy",
 			},
 		),
+		eventRecorder: newEventRecorder(k8sClient),
 	}
 	c.bgpPolicyInformer.AddEventHandlerWithResyncPeriod(
 		cache.ResourceEventHandlerFuncs{
@@ -296,6 +299,9 @@ func (c *Controller) Run(ctx context.Context) {
 
 	klog.InfoS("Starting", "controllerName", controllerName)
 	defer klog.InfoS("Shutting down", "controllerName", controllerName)
+
+	c.eventRecorder.start(ctx.Done())
+	defer c.eventRecorder.shutdown()
 
 	go c.secretInformer.Run(ctx.Done())
 
@@ -455,8 +461,9 @@ func (c *Controller) syncBGPPolicy(ctx context.Context) (err error) {
 
 		// Start the new BGP server.
 		if err := bgpServer.Start(ctx); err != nil {
-			return fmt.Errorf("failed to start BGP server: %w", err)
+			return &syncStepError{reason: reasonBGPServerStartFailed, err: fmt.Errorf("failed to start BGP server: %w", err)}
 		}
+		c.recordBGPServerStarted(effectivePolicy, routerID, localASN, listenPort)
 
 		// Initialize the BGPPolicy state to store the new BGP server, BGP policy name, listen port, local ASN, and router ID.
 		c.bgpPolicyState = &bgpPolicyState{
@@ -476,7 +483,7 @@ func (c *Controller) syncBGPPolicy(ctx context.Context) (err error) {
 
 	// Reconcile BGP peers.
 	if err := c.reconcileBGPPeers(ctx, effectivePolicy.Spec.BGPPeers); err != nil {
-		return err
+		return &syncStepError{reason: reasonBGPPeerConfigFailed, err: err}
 	}
 
 	// Reconcile BGP advertisements.

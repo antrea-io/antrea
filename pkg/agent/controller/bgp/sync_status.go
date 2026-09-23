@@ -36,7 +36,7 @@ func (e *BGPPolicyNotAppliedError) Unwrap() error {
 }
 
 // recordSyncResult records the name of the BGPPolicy that the last sync tried to apply, and the error that stopped it,
-// if any. The caller must hold bgpPolicyStateMutex.
+// if any, and records the Events that the result implies. The caller must hold bgpPolicyStateMutex.
 func (c *Controller) recordSyncResult(effectivePolicy *v1alpha1.BGPPolicy, err error) {
 	var policyName string
 	switch {
@@ -51,6 +51,7 @@ func (c *Controller) recordSyncResult(effectivePolicy *v1alpha1.BGPPolicy, err e
 	}
 	c.lastSyncPolicyName = policyName
 	c.lastSyncError = err
+	c.recordSyncEvents(effectivePolicy, err)
 }
 
 // noBGPServerError returns the error that the query methods report when there is no BGP server. The caller must hold

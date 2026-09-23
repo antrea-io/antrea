@@ -21,6 +21,7 @@
 - [Troubleshooting BGP](#troubleshooting-bgp)
   - [Checking the BGPPolicy applied to a Node](#checking-the-bgppolicy-applied-to-a-node)
   - [Reading the BGP messages in the Antrea Agent log](#reading-the-bgp-messages-in-the-antrea-agent-log)
+  - [Checking the Events of a BGPPolicy](#checking-the-events-of-a-bgppolicy)
   - [Monitoring BGP with Prometheus](#monitoring-bgp-with-prometheus)
 - [Profiling Antrea components](#profiling-antrea-components)
 - [Ask your questions to the Antrea community](#ask-your-questions-to-the-antrea-community)
@@ -326,6 +327,36 @@ At the default log verbosity, the `antrea-agent` container logs:
 At verbosity 2, the log also records each attempt to apply the BGPPolicy and
 how long it took, and each route that is advertised or withdrawn. To change the
 verbosity, see [Looking at the Antrea logs](#looking-at-the-antrea-logs).
+
+### Checking the Events of a BGPPolicy
+
+Every Node that a BGPPolicy selects records Kubernetes Events on that
+BGPPolicy, and each Event names its Node. The Events show which Nodes fail to
+apply the BGPPolicy without running `antctl` on each Node. To see them, run
+`kubectl describe bgppolicy <name>`. Because BGPPolicy is cluster-scoped, its
+Events are in the `default` Namespace, and you can list the Events of all
+BGPPolicies with:
+
+```bash
+kubectl get events -n default --field-selector involvedObject.kind=BGPPolicy
+```
+
+| Reason | Type | Recorded when |
+| --- | --- | --- |
+| `BGPServerStarted` | Normal | The BGP server of the Node starts. The Event gives the router ID, the local ASN and the listen port. |
+| `BGPServerStartFailed` | Warning | The BGP server fails to start, for example because the listen port is already in use. |
+| `BGPPeerConfigFailed` | Warning | A BGP peer cannot be added, updated or removed. The Event names the peer. |
+| `BGPPolicySyncFailed` | Warning | The BGPPolicy cannot be applied for another reason, for example an invalid router ID. |
+| `BGPPolicyNotEffective` | Normal | The BGPPolicy selects the Node, but the Node applies an older BGPPolicy, which the Event names. |
+| `BGPPeerUp` | Normal | The BGP session with a peer reaches the `Established` state, or is already established when the Antrea Agent first checks it. |
+| `BGPPeerDown` | Warning | The BGP session with a peer leaves the `Established` state. |
+
+Repeated identical Events are combined into one Event with a count. The Antrea
+Agent checks the BGP sessions every 15 seconds. A session is usually established
+before the first check, for example right after the BGPPolicy is applied or the
+Antrea Agent restarts, and it then records `BGPPeerUp` without a previous state.
+A session that goes down and comes back up between two checks records no Event.
+The `Peer Down` and `Peer Up` messages in the log still record it.
 
 ### Monitoring BGP with Prometheus
 

@@ -26,12 +26,15 @@ import (
 // peerStatusPollInterval is how often the status of the BGP peers is read from the BGP server.
 const peerStatusPollInterval = 15 * time.Second
 
-// pollPeerStatus reads the status of the BGP peers from the BGP server and updates the peer metrics.
+// pollPeerStatus reads the status of the BGP peers from the BGP server, updates the peer metrics, and records an Event
+// when a BGP session reaches the Established state or leaves it.
 func (c *Controller) pollPeerStatus(ctx context.Context) {
 	var bgpServer bgp.Interface
+	var policyName string
 	c.bgpPolicyStateMutex.RLock()
 	if c.bgpPolicyState != nil {
 		bgpServer = c.bgpPolicyState.bgpServer
+		policyName = c.bgpPolicyState.bgpPolicyName
 	}
 	c.bgpPolicyStateMutex.RUnlock()
 
@@ -49,10 +52,16 @@ func (c *Controller) pollPeerStatus(ctx context.Context) {
 		key := generateBGPPeerKey(peer.Address, peer.ASN)
 		curPeerStatuses[key] = peer
 		setPeerMetrics(peer)
-		// goBGP already logs the sessions which go up or down at the default verbosity.
-		if prePeer, exists := c.peerStatuses[key]; exists && prePeer.SessionState != peer.SessionState {
+		prePeer, exists := c.peerStatuses[key]
+		if !exists {
+			// A session is usually established before the first poll that sees its peer, for example right after the
+			// BGPPolicy is applied or the Agent restarts, so that poll reports it too.
+			c.recordPeerSessionEvent(policyName, nil, peer)
+		} else if prePeer.SessionState != peer.SessionState {
+			// goBGP already logs the sessions which go up or down at the default verbosity.
 			klog.V(2).InfoS("BGP session state changed", "peer", peer.Address, "asn", peer.ASN,
 				"previousState", prePeer.SessionState, "state", peer.SessionState)
+			c.recordPeerSessionEvent(policyName, &prePeer, peer)
 		}
 	}
 	for key, prePeer := range c.peerStatuses {
