@@ -496,7 +496,7 @@ more information.
 
 #### Requirements for this Feature
 
-- Linux Nodes, in noEncap mode.
+- Linux Nodes, in noEncap mode, without `enableBridgingMode`.
 - All Nodes are in one L2 segment on their transport interface.
 
 ### BGPPolicy

@@ -612,6 +612,13 @@ func (o *Options) validateEgressConfig(encapMode config.TrafficEncapModeType, en
 		if encapMode != config.TrafficEncapModeNoEncap {
 			return fmt.Errorf("egress.dispatch %q is only supported in %s mode", dispatch, config.TrafficEncapModeNoEncap)
 		}
+		// In bridging mode, the agent connects the uplink to the OVS bridge after the route client has installed the
+		// policy routing of the l2 dispatch, and the local port of the bridge takes over the transport interface. The
+		// routing would then use the uplink, which OVS owns, instead of the local port. The condition is the one with
+		// which run connects the uplink.
+		if o.config.EnableBridgingMode && features.DefaultFeatureGate.Enabled(features.AntreaIPAM) {
+			return fmt.Errorf("egress.dispatch %q is not supported with enableBridgingMode", dispatch)
+		}
 	}
 	o.egressDispatch = dispatch
 	o.enableEgress = true

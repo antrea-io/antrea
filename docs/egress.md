@@ -491,6 +491,11 @@ The Agent rejects `l2` in the other traffic modes. In `encap` mode, Egress
 traffic takes the tunnel like the other Pod traffic. In `hybrid` mode, Egress
 keeps the tunnel, which also reaches the Nodes in other subnets.
 
+The Agent also rejects `l2` with `enableBridgingMode`, which connects the uplink
+of each Node to the OVS bridge for [AntreaIPAM](antrea-ipam.md). The Agent
+connects the uplink after it has set up the routing of the `l2` dispatch, which
+would then use the uplink instead of the local port of the bridge.
+
 Use the same dispatch on all Nodes. A Node with the `l2` dispatch has no tunnel
 interface, so it cannot receive the Egress traffic of a Node with the `tunnel`
 dispatch. A Node with the `tunnel` dispatch does not map the source Pod IPs of

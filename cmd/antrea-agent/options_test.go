@@ -184,6 +184,7 @@ func TestOptionsValidateEgressConfig(t *testing.T) {
 		dispatchL2GateValue    bool
 		trafficEncapMode       config.TrafficEncapModeType
 		trafficEncryptionMode  config.TrafficEncryptionModeType
+		enableBridgingMode     bool
 		egressConfig           agentconfig.EgressConfig
 		expectedErr            string
 		expectedEnableEgress   bool
@@ -323,15 +324,37 @@ func TestOptionsValidateEgressConfig(t *testing.T) {
 			egressConfig:         agentconfig.EgressConfig{Dispatch: "l2"},
 			expectedEnableEgress: false,
 		},
+		{
+			name:                "l2 dispatch with bridging mode",
+			featureGateValue:    true,
+			dispatchL2GateValue: true,
+			trafficEncapMode:    config.TrafficEncapModeNoEncap,
+			enableBridgingMode:  true,
+			egressConfig:        agentconfig.EgressConfig{Dispatch: "l2"},
+			expectedErr:         `egress.dispatch "l2" is not supported with enableBridgingMode`,
+		},
+		{
+			name:                 "tunnel dispatch with bridging mode",
+			featureGateValue:     true,
+			dispatchL2GateValue:  true,
+			trafficEncapMode:     config.TrafficEncapModeNoEncap,
+			enableBridgingMode:   true,
+			egressConfig:         agentconfig.EgressConfig{Dispatch: "tunnel"},
+			expectedEnableEgress: true,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			featuregatetesting.SetFeatureGateDuringTest(t, features.DefaultFeatureGate, features.Egress, tt.featureGateValue)
 			featuregatetesting.SetFeatureGateDuringTest(t, features.DefaultFeatureGate, features.EgressDispatchL2,
 				tt.dispatchL2GateValue)
+			// Bridging mode requires the AntreaIPAM feature gate.
+			featuregatetesting.SetFeatureGateDuringTest(t, features.DefaultFeatureGate, features.AntreaIPAM,
+				tt.enableBridgingMode)
 
 			o := &Options{config: &agentconfig.AgentConfig{
-				Egress: tt.egressConfig,
+				Egress:             tt.egressConfig,
+				EnableBridgingMode: tt.enableBridgingMode,
 			}}
 			err := o.validateEgressConfig(tt.trafficEncapMode, tt.trafficEncryptionMode)
 			if tt.expectedErr == "" {

@@ -4625,7 +4625,7 @@ data:
       # - l2:               The traffic is sent unchanged to the MAC address of the Egress Node. No tunnel interface is
       #                     created for Egress. All Nodes must be in one L2 segment. It requires the EgressDispatchL2
       #                     feature gate on the Agent and the Controller.
-      # The option applies only to noEncap mode: "l2" is rejected in the other modes.
+      # The option applies only to noEncap mode: "l2" is rejected in the other modes, and with enableBridgingMode.
       dispatch: tunnel
 
     # ClusterIP CIDR range for Services. It's required when AntreaProxy is not enabled, and should be
@@ -5957,7 +5957,7 @@ spec:
         kubectl.kubernetes.io/default-container: antrea-agent
         # Automatically restart Pods with a RollingUpdate if the ConfigMap changes
         # See https://helm.sh/docs/howto/charts_tips_and_tricks/#automatically-roll-deployments
-        checksum/config: e4f84b7018ddacc9b1ce6abbf652d8ffdf90a6cef88ec01426d7b0379264f323
+        checksum/config: 58881eb1067a214073afbb240b4e9eda2979339e6663f2cf848d5a1d1687f9b2
       labels:
         app: antrea
         component: antrea-agent
@@ -6203,7 +6203,7 @@ spec:
       annotations:
         # Automatically restart Pod if the ConfigMap changes
         # See https://helm.sh/docs/howto/charts_tips_and_tricks/#automatically-roll-deployments
-        checksum/config: e4f84b7018ddacc9b1ce6abbf652d8ffdf90a6cef88ec01426d7b0379264f323
+        checksum/config: 58881eb1067a214073afbb240b4e9eda2979339e6663f2cf848d5a1d1687f9b2
       labels:
         app: antrea
         component: antrea-controller

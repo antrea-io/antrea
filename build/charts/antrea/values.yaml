@@ -137,7 +137,7 @@ egress:
   # when the Egress IP is on another Node, in noEncap mode. "tunnel" encapsulates
   # the traffic. "l2" sends it unchanged to the MAC address of the Egress Node;
   # it requires the EgressDispatchL2 feature gate, and all Nodes in one L2
-  # segment.
+  # segment. It is not supported with enableBridgingMode.
   dispatch: tunnel
 
 nodePortLocal:
