@@ -18,6 +18,8 @@
   - [Directly accessing the flow-aggregator API](#directly-accessing-the-flow-aggregator-api)
 - [Troubleshooting Open vSwitch](#troubleshooting-open-vswitch)
 - [Troubleshooting with antctl](#troubleshooting-with-antctl)
+- [Troubleshooting BGP](#troubleshooting-bgp)
+  - [Checking the BGPPolicy applied to a Node](#checking-the-bgppolicy-applied-to-a-node)
 - [Profiling Antrea components](#profiling-antrea-components)
 - [Ask your questions to the Antrea community](#ask-your-questions-to-the-antrea-community)
 <!-- /toc -->
@@ -275,6 +277,36 @@ Agent, which can print the runtime information of `antrea-controller` and
 information on a Node, dump Antrea OVS flows, and perform OVS packet tracing.
 Refer to the [`antctl` guide](antctl.md#usage) to learn how to use these
 commands.
+
+## Troubleshooting BGP
+
+This section applies when the `BGPPolicy` feature gate is enabled. To configure
+BGP, see the [BGPPolicy guide](bgp-policy.md).
+
+Each Node applies at most one BGPPolicy: if several select the Node, the oldest
+one is applied. The `antctl` commands below report the state of one Node. Run
+them in the `antrea-agent` container on that Node, as described in [Accessing
+the antrea-agent API](#accessing-the-antrea-agent-api).
+
+### Checking the BGPPolicy applied to a Node
+
+Run `antctl get bgppolicy`. The `STATUS` column is `Effective` when the last
+attempt to apply the BGPPolicy succeeded, and `Failed` when it did not. To see
+the error, use the JSON output:
+
+```bash
+$ antctl get bgppolicy -o json
+{
+  "name": "example-bgp-policy",
+  "lastSyncError": "failed to start BGP server: listen tcp :179: bind: address already in use"
+}
+```
+
+The Antrea Agent retries a failed BGPPolicy. The delay between attempts starts
+at 5 seconds and doubles up to 5 minutes. When the BGP server could not be
+started, `antctl get bgppeers` and `antctl get bgproutes` print the same error
+instead of a list. If no BGPPolicy selects the Node, all three commands answer
+that there is no effective BGP policy.
 
 ## Profiling Antrea components
 

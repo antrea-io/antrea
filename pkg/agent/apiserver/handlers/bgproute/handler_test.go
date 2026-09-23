@@ -17,6 +17,7 @@ package bgproute
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -228,6 +229,25 @@ func TestBGPRouteQuery(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestBGPRouteQueryWithBGPPolicyNotApplied(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	q := queriertest.NewMockAgentBGPPolicyInfoQuerier(ctrl)
+	q.EXPECT().GetBGPRoutes(gomock.Any()).Return(nil, &bgpcontroller.BGPPolicyNotAppliedError{
+		BGPPolicyName: "policy-1",
+		Err:           errors.New("BGP router ID should be an IPv4 address string"),
+	})
+	handler := HandleFunc(q)
+
+	req, err := http.NewRequest(http.MethodGet, "", nil)
+	require.NoError(t, err)
+	recorder := httptest.NewRecorder()
+	handler.ServeHTTP(recorder, req)
+
+	assert.Equal(t, http.StatusNotFound, recorder.Code)
+	assert.Equal(t, "there is no effective bgp policy applied to the Node: BGPPolicy policy-1 could not be applied: "+
+		"BGP router ID should be an IPv4 address string\n", recorder.Body.String())
 }
 
 func getServiceName(name string) string {

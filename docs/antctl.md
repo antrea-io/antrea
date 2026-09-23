@@ -849,12 +849,27 @@ worker3 172.18.0.2 Dead
 
 `antctl` agent command `get bgppolicy` prints the effective BGP policy applied on the local Node.
 It includes the name, router ID, local ASN, listen port, confederation identifier and member ASNs of the effective BGP policy.
+It also includes a status: `Effective` when the last attempt to apply the BGP policy succeeded, and
+`Failed` when it did not.
 
 ```bash
 $ antctl get bgppolicy
 
-NAME               ROUTER-ID  LOCAL-ASN LISTEN-PORT CONFEDERATION-IDENTIFIER MEMBER-ASNs
-example-bgp-policy 172.18.0.2 64512     179         65000                    64513,64514
+NAME               ROUTER-ID  LOCAL-ASN LISTEN-PORT CONFEDERATION-IDENTIFIER MEMBER-ASNs STATUS
+example-bgp-policy 172.18.0.2 64512     179         65000                    64513,64514 Effective
+```
+
+The JSON output includes the error that stopped the last attempt, in the `lastSyncError` field.
+When the BGP server could not be started, for example because the listen port is already in use,
+only the name and the error are printed, and `get bgppeers` and `get bgproutes` print the same
+error instead of a list.
+
+```bash
+$ antctl get bgppolicy -o json
+{
+  "name": "example-bgp-policy",
+  "lastSyncError": "failed to start BGP server: listen tcp :179: bind: address already in use"
+}
 ```
 
 `antctl` agent command `get bgppeers` print the current status of all BGP peers

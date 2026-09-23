@@ -64,8 +64,14 @@ func HandleFunc(bq querier.AgentBGPPolicyInfoQuerier) http.HandlerFunc {
 
 		bgpRoutes, err := bq.GetBGPRoutes(r.Context())
 		if err != nil {
+			var notAppliedErr *bgp.BGPPolicyNotAppliedError
 			if errors.Is(err, bgp.ErrBGPPolicyNotFound) {
 				http.Error(w, "there is no effective bgp policy applied to the Node", http.StatusNotFound)
+				return
+			}
+			if errors.As(err, &notAppliedErr) {
+				// Keep the message above as a prefix, so that clients which match it still recognize the case.
+				http.Error(w, "there is no effective bgp policy applied to the Node: "+err.Error(), http.StatusNotFound)
 				return
 			}
 			http.Error(w, err.Error(), http.StatusInternalServerError)

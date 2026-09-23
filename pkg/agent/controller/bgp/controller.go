@@ -125,6 +125,9 @@ type BGPPolicyInfo struct {
 	ListenPort              int32
 	ConfederationIdentifier int32
 	MemberASNs              []uint32
+	// LastSyncError is the error that stopped the last attempt to apply the BGPPolicy. It is empty when the last
+	// attempt succeeded.
+	LastSyncError string
 }
 
 type Controller struct {
@@ -169,6 +172,11 @@ type Controller struct {
 	newBGPServerFn func(globalConfig *bgp.GlobalConfig) bgp.Interface
 
 	queue workqueue.TypedRateLimitingInterface[string]
+
+	// lastSyncPolicyName and lastSyncError describe the last sync: the name of the BGPPolicy that was being applied,
+	// and the error that stopped it, which is nil when the sync succeeded. Guarded by bgpPolicyStateMutex.
+	lastSyncPolicyName string
+	lastSyncError      error
 }
 
 func NewBGPPolicyController(nodeInformer coreinformers.NodeInformer,
@@ -355,7 +363,7 @@ func confederationConfigEqual(a, b *confederationConfig) bool {
 	return (a == nil && b == nil) || (a != nil && b != nil && a.identifier == b.identifier && a.memberASNs.Equal(b.memberASNs))
 }
 
-func (c *Controller) syncBGPPolicy(ctx context.Context) error {
+func (c *Controller) syncBGPPolicy(ctx context.Context) (err error) {
 	ctx, cancel := context.WithTimeoutCause(ctx, 60*time.Second, fmt.Errorf("BGPPolicy took too long to sync"))
 	defer cancel()
 
@@ -369,6 +377,9 @@ func (c *Controller) syncBGPPolicy(ctx context.Context) error {
 
 	c.bgpPolicyStateMutex.Lock()
 	defer c.bgpPolicyStateMutex.Unlock()
+	defer func() {
+		c.recordSyncResult(effectivePolicy, err)
+	}()
 
 	// When the effective BGPPolicy is nil, it means that there is no available BGPPolicy.
 	if effectivePolicy == nil {
@@ -1108,23 +1119,31 @@ func (c *Controller) GetBGPPolicyInfo() *BGPPolicyInfo {
 			bgpPolicyInfo.MemberASNs = sets.List(c.bgpPolicyState.confederationConfig.memberASNs)
 		}
 	}
+	// A BGPPolicy which could not be applied is reported together with the error that stopped it, even when the BGP
+	// server could not be started, so that it is not mistaken for the absence of a BGPPolicy.
+	if c.lastSyncError != nil {
+		if bgpPolicyInfo == nil {
+			bgpPolicyInfo = &BGPPolicyInfo{BGPPolicyName: c.lastSyncPolicyName}
+		}
+		bgpPolicyInfo.LastSyncError = c.lastSyncError.Error()
+	}
 	return bgpPolicyInfo
 }
 
 // GetBGPPeerStatus returns current status of BGP Peers of effective BGP Policy applied on the Node.
 func (c *Controller) GetBGPPeerStatus(ctx context.Context) ([]bgp.PeerStatus, error) {
-	getBgpServer := func() bgp.Interface {
+	getBgpServer := func() (bgp.Interface, error) {
 		c.bgpPolicyStateMutex.RLock()
 		defer c.bgpPolicyStateMutex.RUnlock()
 		if c.bgpPolicyState == nil {
-			return nil
+			return nil, c.noBGPServerError()
 		}
-		return c.bgpPolicyState.bgpServer
+		return c.bgpPolicyState.bgpServer, nil
 	}
 
-	bgpServer := getBgpServer()
-	if bgpServer == nil {
-		return nil, ErrBGPPolicyNotFound
+	bgpServer, err := getBgpServer()
+	if err != nil {
+		return nil, err
 	}
 	allPeers, err := bgpServer.GetPeers(ctx)
 	if err != nil {
@@ -1139,7 +1158,7 @@ func (c *Controller) GetBGPRoutes(ctx context.Context) (map[bgp.Route]RouteMetad
 	defer c.bgpPolicyStateMutex.RUnlock()
 
 	if c.bgpPolicyState == nil {
-		return nil, ErrBGPPolicyNotFound
+		return nil, c.noBGPServerError()
 	}
 
 	bgpRoutes := make(map[bgp.Route]RouteMetadata)

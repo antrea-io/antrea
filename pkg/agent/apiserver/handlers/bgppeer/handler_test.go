@@ -17,6 +17,7 @@ package bgppeer
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -181,4 +182,23 @@ func TestBGPPeerQuery(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestBGPPeerQueryWithBGPPolicyNotApplied(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	q := queriertest.NewMockAgentBGPPolicyInfoQuerier(ctrl)
+	q.EXPECT().GetBGPPeerStatus(gomock.Any()).Return(nil, &bgpcontroller.BGPPolicyNotAppliedError{
+		BGPPolicyName: "policy-1",
+		Err:           errors.New("failed to start BGP server: listen tcp :179: bind: address already in use"),
+	})
+	handler := HandleFunc(q)
+
+	req, err := http.NewRequest(http.MethodGet, "", nil)
+	require.NoError(t, err)
+	recorder := httptest.NewRecorder()
+	handler.ServeHTTP(recorder, req)
+
+	assert.Equal(t, http.StatusNotFound, recorder.Code)
+	assert.Equal(t, "there is no effective bgp policy applied to the Node: BGPPolicy policy-1 could not be applied: "+
+		"failed to start BGP server: listen tcp :179: bind: address already in use\n", recorder.Body.String())
 }

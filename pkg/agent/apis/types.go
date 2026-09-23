@@ -226,23 +226,38 @@ type BGPPolicyResponse struct {
 	ListenPort              int32    `json:"listenPort,omitempty"`
 	ConfederationIdentifier int32    `json:"confederationIdentifier,omitempty"`
 	MemberASNs              []uint32 `json:"memberASNs,omitempty"`
+	// LastSyncError is the error that stopped the last attempt to apply the BGPPolicy. It is empty when the last
+	// attempt succeeded.
+	LastSyncError string `json:"lastSyncError,omitempty"`
 }
 
 func (r BGPPolicyResponse) GetTableHeader() []string {
-	return []string{"NAME", "ROUTER-ID", "LOCAL-ASN", "LISTEN-PORT", "CONFEDERATION-IDENTIFIER", "MEMBER-ASNs"}
+	return []string{"NAME", "ROUTER-ID", "LOCAL-ASN", "LISTEN-PORT", "CONFEDERATION-IDENTIFIER", "MEMBER-ASNs", "STATUS"}
 }
 
 func (r BGPPolicyResponse) GetTableRow(maxColumnLength int) []string {
-	confederationIdentifierStr := ""
+	// A BGPPolicy whose BGP server could not be started has no local ASN or listen port in effect. Leaving them empty
+	// prints <NONE>, rather than a misleading 0.
+	localASNStr, listenPortStr, confederationIdentifierStr := "", "", ""
 	memberASNs := []string{}
+	if r.LocalASN != 0 {
+		localASNStr = strconv.Itoa(int(r.LocalASN))
+	}
+	if r.ListenPort != 0 {
+		listenPortStr = strconv.Itoa(int(r.ListenPort))
+	}
 	if r.ConfederationIdentifier != 0 {
 		confederationIdentifierStr = strconv.Itoa(int(r.ConfederationIdentifier))
 	}
 	for _, memberASN := range r.MemberASNs {
 		memberASNs = append(memberASNs, strconv.Itoa(int(memberASN)))
 	}
-	return []string{r.BGPPolicyName, r.RouterID, strconv.Itoa(int(r.LocalASN)), strconv.Itoa(int(r.ListenPort)),
-		confederationIdentifierStr, printers.GenerateTableElementWithSummary(memberASNs, maxColumnLength)}
+	status := "Effective"
+	if r.LastSyncError != "" {
+		status = "Failed"
+	}
+	return []string{r.BGPPolicyName, r.RouterID, localASNStr, listenPortStr,
+		confederationIdentifierStr, printers.GenerateTableElementWithSummary(memberASNs, maxColumnLength), status}
 }
 
 func (r BGPPolicyResponse) SortRows() bool {
