@@ -528,6 +528,11 @@ func (c *Controller) reconcileBGPAdvertisements(ctx context.Context, bgpAdvertis
 
 	routesToAdvertise := currRoutesKeys.Difference(preRoutesKeys)
 	routesToWithdraw := preRoutesKeys.Difference(currRoutesKeys)
+	// A prefix that stays advertised needs no BGP update, but its metadata can change, for example when the object
+	// that a shared prefix was first advertised for is deleted while another object still uses the prefix.
+	for route := range currRoutesKeys.Intersection(preRoutesKeys) {
+		c.bgpPolicyState.routes[route] = curRoutes[route]
+	}
 
 	bgpServer := c.bgpPolicyState.bgpServer
 	for route := range routesToAdvertise {
@@ -702,6 +707,12 @@ func (c *Controller) addPodRoutes(allRoutes map[bgp.Route]RouteMetadata) {
 }
 
 func addRoutes(allRoutes map[bgp.Route]RouteMetadata, prefix, k8sObjRef string, routeType AdvertisedRouteType) {
+	// Several objects can share a prefix, and the listers return objects in no particular order. Keep the object that
+	// sorts first, so that the metadata of a shared prefix is the same from one sync to the next.
+	if existing, ok := allRoutes[bgp.Route{Prefix: prefix}]; ok &&
+		(existing.K8sObjRef < k8sObjRef || existing.K8sObjRef == k8sObjRef && existing.Type <= routeType) {
+		return
+	}
 	allRoutes[bgp.Route{Prefix: prefix}] = RouteMetadata{
 		Type:      routeType,
 		K8sObjRef: k8sObjRef,
