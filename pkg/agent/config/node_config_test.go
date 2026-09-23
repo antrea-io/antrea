@@ -419,12 +419,66 @@ func TestNeedsTunnelInterface(t *testing.T) {
 			nc:       &NetworkConfig{TrafficEncapMode: TrafficEncapModeNoEncap, EnableEgress: false},
 			expected: false,
 		},
+		{
+			name:     "noEncap mode with DSR enabled",
+			nc:       &NetworkConfig{TrafficEncapMode: TrafficEncapModeNoEncap, EnableDSR: true},
+			expected: true,
+		},
+		{
+			name:     "networkPolicyOnly mode with DSR enabled",
+			nc:       &NetworkConfig{TrafficEncapMode: TrafficEncapModeNetworkPolicyOnly, EnableDSR: true},
+			expected: false,
+		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			actual := tt.nc.NeedsTunnelInterface()
 			assert.Equal(t, tt.expected, actual)
+		})
+	}
+}
+
+func TestNeedsDSRTunnelToRoutedPeers(t *testing.T) {
+	tests := []struct {
+		name     string
+		nc       *NetworkConfig
+		expected bool
+	}{
+		{
+			name:     "noEncap mode with DSR enabled",
+			nc:       &NetworkConfig{TrafficEncapMode: TrafficEncapModeNoEncap, EnableDSR: true},
+			expected: true,
+		},
+		{
+			name:     "hybrid mode with DSR enabled",
+			nc:       &NetworkConfig{TrafficEncapMode: TrafficEncapModeHybrid, EnableDSR: true},
+			expected: true,
+		},
+		{
+			name:     "encap mode with DSR enabled, where every peer is reached through the tunnel",
+			nc:       &NetworkConfig{TrafficEncapMode: TrafficEncapModeEncap, EnableDSR: true},
+			expected: false,
+		},
+		{
+			name:     "encap mode with WireGuard and DSR enabled",
+			nc:       &NetworkConfig{TrafficEncapMode: TrafficEncapModeEncap, TrafficEncryptionMode: TrafficEncryptionModeWireGuard, EnableDSR: true},
+			expected: false,
+		},
+		{
+			name:     "networkPolicyOnly mode with DSR enabled",
+			nc:       &NetworkConfig{TrafficEncapMode: TrafficEncapModeNetworkPolicyOnly, EnableDSR: true},
+			expected: false,
+		},
+		{
+			name:     "noEncap mode with DSR disabled",
+			nc:       &NetworkConfig{TrafficEncapMode: TrafficEncapModeNoEncap},
+			expected: false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.expected, tt.nc.NeedsDSRTunnelToRoutedPeers())
 		})
 	}
 }

@@ -467,6 +467,7 @@ func newFakeClientWithBridge(
 		IPv6Enabled:           enableIPv6,
 		TrafficEncapMode:      trafficEncapMode,
 		TrafficEncryptionMode: o.trafficEncryptionMode,
+		EnableDSR:             o.enableDSR && o.proxyAll,
 	}
 	tunnelOFPort := uint32(0)
 	if networkConfig.NeedsTunnelInterface() {
@@ -679,6 +680,47 @@ func Test_client_InstallNodeFlows(t *testing.T) {
 				"cookie=0x1010000000000, table=L3Forwarding, priority=200,ip,nw_dst=10.10.1.0/24 actions=set_field:0a:00:00:00:00:01->eth_src,set_field:aa:bb:cc:dd:ee:ff->eth_dst,set_field:192.168.77.101->tun_dst,set_field:0x10/0xf0->reg0,goto_table:L3DecTTL",
 				"cookie=0x1010000000000, table=L3Forwarding, priority=200,ip,reg3=0xa0a0100/0xffffff00,reg4=0x2000000/0x2000000 actions=set_field:0a:00:00:00:00:01->eth_src,set_field:aa:bb:cc:dd:ee:ff->eth_dst,set_field:192.168.77.101->tun_dst,set_field:0x10/0xf0->reg0,goto_table:L3DecTTL",
 				"cookie=0x1040000000000, table=EgressMark, priority=210,ip,nw_dst=192.168.77.101 actions=set_field:0x20/0xf0->reg0,goto_table:L2ForwardingCalc",
+			},
+		},
+		{
+			name:             "IPv4 NoEncap DSR",
+			enableIPv4:       true,
+			skipWindows:      true,
+			clientOptions:    []clientOptionsFn{disableEgress, enableDSR},
+			peerConfigs:      map[*net.IPNet]net.IP{peerPodCIDRv4: peerGwIPv4},
+			tunnelPeerIPs:    &utilip.DualStackIPs{IPv4: tunnelPeerIPv4},
+			trafficEncapMode: config.TrafficEncapModeNoEncap,
+			expectedFlows: []string{
+				"cookie=0x1010000000000, table=ARPResponder, priority=200,arp,arp_tpa=10.10.1.1,arp_op=1 actions=move:NXM_OF_ETH_SRC[]->NXM_OF_ETH_DST[],set_field:aa:bb:cc:dd:ee:ff->eth_src,set_field:2->arp_op,move:NXM_NX_ARP_SHA[]->NXM_NX_ARP_THA[],set_field:aa:bb:cc:dd:ee:ff->arp_sha,move:NXM_OF_ARP_SPA[]->NXM_OF_ARP_TPA[],set_field:10.10.1.1->arp_spa,IN_PORT",
+				"cookie=0x1010000000000, table=L3Forwarding, priority=200,ip,nw_dst=10.10.1.0/24 actions=set_field:0a:00:00:00:00:01->eth_dst,set_field:0x20/0xf0->reg0,goto_table:L3DecTTL",
+				"cookie=0x1010000000000, table=L3Forwarding, priority=200,ip,reg3=0xa0a0100/0xffffff00,reg4=0x2000000/0x2000000 actions=set_field:0a:00:00:00:00:01->eth_src,set_field:aa:bb:cc:dd:ee:ff->eth_dst,set_field:192.168.77.101->tun_dst,set_field:0x10/0xf0->reg0,goto_table:L3DecTTL",
+			},
+		},
+		{
+			name:             "IPv4 Hybrid DSR, peer in the local subnet",
+			enableIPv4:       true,
+			skipWindows:      true,
+			clientOptions:    []clientOptionsFn{disableEgress, enableDSR},
+			peerConfigs:      map[*net.IPNet]net.IP{peerPodCIDRv4: peerGwIPv4},
+			tunnelPeerIPs:    &utilip.DualStackIPs{IPv4: tunnelPeerIPv4},
+			trafficEncapMode: config.TrafficEncapModeHybrid,
+			expectedFlows: []string{
+				"cookie=0x1010000000000, table=ARPResponder, priority=200,arp,arp_tpa=10.10.1.1,arp_op=1 actions=move:NXM_OF_ETH_SRC[]->NXM_OF_ETH_DST[],set_field:aa:bb:cc:dd:ee:ff->eth_src,set_field:2->arp_op,move:NXM_NX_ARP_SHA[]->NXM_NX_ARP_THA[],set_field:aa:bb:cc:dd:ee:ff->arp_sha,move:NXM_OF_ARP_SPA[]->NXM_OF_ARP_TPA[],set_field:10.10.1.1->arp_spa,IN_PORT",
+				"cookie=0x1010000000000, table=L3Forwarding, priority=200,ip,nw_dst=10.10.1.0/24 actions=set_field:0a:00:00:00:00:01->eth_dst,set_field:0x20/0xf0->reg0,goto_table:L3DecTTL",
+				"cookie=0x1010000000000, table=L3Forwarding, priority=200,ip,reg3=0xa0a0100/0xffffff00,reg4=0x2000000/0x2000000 actions=set_field:0a:00:00:00:00:01->eth_src,set_field:aa:bb:cc:dd:ee:ff->eth_dst,set_field:192.168.77.101->tun_dst,set_field:0x10/0xf0->reg0,goto_table:L3DecTTL",
+			},
+		},
+		{
+			name:             "IPv4 Encap WireGuard DSR",
+			enableIPv4:       true,
+			skipWindows:      true,
+			clientOptions:    []clientOptionsFn{disableEgress, enableDSR, setTrafficEncryptionMode(config.TrafficEncryptionModeWireGuard)},
+			peerConfigs:      map[*net.IPNet]net.IP{peerPodCIDRv4: peerGwIPv4},
+			tunnelPeerIPs:    &utilip.DualStackIPs{IPv4: tunnelPeerIPv4},
+			trafficEncapMode: config.TrafficEncapModeEncap,
+			expectedFlows: []string{
+				"cookie=0x1010000000000, table=ARPResponder, priority=200,arp,arp_tpa=10.10.1.1,arp_op=1 actions=move:NXM_OF_ETH_SRC[]->NXM_OF_ETH_DST[],set_field:aa:bb:cc:dd:ee:ff->eth_src,set_field:2->arp_op,move:NXM_NX_ARP_SHA[]->NXM_NX_ARP_THA[],set_field:aa:bb:cc:dd:ee:ff->arp_sha,move:NXM_OF_ARP_SPA[]->NXM_OF_ARP_TPA[],set_field:10.10.1.1->arp_spa,IN_PORT",
+				"cookie=0x1010000000000, table=L3Forwarding, priority=200,ip,nw_dst=10.10.1.0/24 actions=set_field:0a:00:00:00:00:01->eth_dst,set_field:0x20/0xf0->reg0,goto_table:L3DecTTL",
 			},
 		},
 		{

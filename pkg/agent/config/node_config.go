@@ -237,6 +237,10 @@ type NetworkConfig struct {
 	// EnableEgress indicates the Egress feature is enabled. It is used to determine whether
 	// a tunnel interface should be created in noEncap mode for Egress traffic forwarding.
 	EnableEgress bool
+	// EnableDSR indicates that Services can use the DSR load balancer mode: the LoadBalancerModeDSR
+	// feature gate is enabled and AntreaProxy handles all Service traffic (proxyAll). It is used to
+	// determine whether a tunnel interface should be created in noEncap mode for DSR traffic forwarding.
+	EnableDSR bool
 
 	EnableHostNetworkAcceleration bool
 	HostNetworkMode               HostNetworkMode
@@ -300,9 +304,19 @@ func (nc *NetworkConfig) NeedsTunnelInterface() bool {
 
 // NeedsTunnelInNoEncapMode returns true if a feature needs the tunnel interface in noEncap mode, where
 // Pod-to-Pod traffic is routed and does not use it. With Egress enabled, OVS forwards Egress traffic
-// from a non-Egress Node to the Egress Node via the tunnel.
+// from a non-Egress Node to the Egress Node via the tunnel. With DSR enabled, OVS forwards the traffic
+// of DSR Services to the Node hosting the selected Endpoint via the tunnel, see
+// NeedsDSRTunnelToRoutedPeers.
 func (nc *NetworkConfig) NeedsTunnelInNoEncapMode() bool {
-	return nc.TrafficEncapMode == TrafficEncapModeNoEncap && nc.EnableEgress
+	return nc.TrafficEncapMode == TrafficEncapModeNoEncap && (nc.EnableEgress || nc.EnableDSR)
+}
+
+// NeedsDSRTunnelToRoutedPeers returns true if the traffic of DSR Services must be sent through the
+// tunnel to the peer Nodes which Pod-to-Pod traffic reaches by routing, which is the case in noEncap
+// and hybrid modes. The ingress Node does not DNAT that traffic, so its destination is still the
+// Service IP, which the Node network cannot route to the Node hosting the selected Endpoint.
+func (nc *NetworkConfig) NeedsDSRTunnelToRoutedPeers() bool {
+	return nc.EnableDSR && (nc.TrafficEncapMode == TrafficEncapModeNoEncap || nc.TrafficEncapMode == TrafficEncapModeHybrid)
 }
 
 // NeedsEgressSymmetricPath returns true when Egress traffic takes a tunnel path which is distinct from the

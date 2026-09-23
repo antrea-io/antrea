@@ -106,6 +106,9 @@ type Options struct {
 	enableNodePortLocal bool
 
 	defaultLoadBalancerMode config.LoadBalancerMode
+	// enableDSR indicates whether Services can use the DSR load balancer mode, which requires feature gate
+	// LoadBalancerModeDSR and AntreaProxy with proxyAll enabled.
+	enableDSR bool
 }
 
 func newOptions() *Options {
@@ -283,11 +286,14 @@ func (o *Options) validateAntreaProxyConfig(encapMode config.TrafficEncapModeTyp
 		if !features.DefaultFeatureGate.Enabled(features.LoadBalancerModeDSR) {
 			return fmt.Errorf("LoadBalancerMode DSR requires feature gate %s to be enabled", features.LoadBalancerModeDSR)
 		}
-		if encapMode != config.TrafficEncapModeEncap {
-			return fmt.Errorf("LoadBalancerMode DSR requires %s mode", config.TrafficEncapModeEncap)
+		if encapMode.IsNetworkPolicyOnly() {
+			return fmt.Errorf("LoadBalancerMode DSR is not applicable to the %s mode", encapMode)
 		}
 	}
 	o.defaultLoadBalancerMode = defaultLoadBalancerMode
+	// Without proxyAll, external traffic is not load-balanced by AntreaProxy, so no Service can use DSR even if
+	// the feature gate is enabled.
+	o.enableDSR = features.DefaultFeatureGate.Enabled(features.LoadBalancerModeDSR) && o.enableAntreaProxy && o.config.AntreaProxy.ProxyAll
 	return nil
 }
 
