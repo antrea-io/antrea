@@ -69,12 +69,14 @@ func setPeerMetrics(peer bgp.PeerStatus) {
 		up = 1
 	}
 	metrics.BGPPeerUp.WithLabelValues(peer.Address, asn).Set(up)
+	metrics.BGPPeerAdvertisedRouteCount.WithLabelValues(peer.Address, asn).Set(float64(peer.AdvertisedRouteCount))
 }
 
 func deletePeerMetrics(peer bgp.PeerStatus) {
 	asn := strconv.Itoa(int(peer.ASN))
 	metrics.BGPPeerSessionState.DeleteLabelValues(peer.Address, asn)
 	metrics.BGPPeerUp.DeleteLabelValues(peer.Address, asn)
+	metrics.BGPPeerAdvertisedRouteCount.DeleteLabelValues(peer.Address, asn)
 }
 
 // updateEffectivePolicyMetric replaces the series of the effective policy metric for the previous BGPPolicy with a

@@ -20,6 +20,7 @@
 - [Troubleshooting with antctl](#troubleshooting-with-antctl)
 - [Troubleshooting BGP](#troubleshooting-bgp)
   - [Checking the BGPPolicy applied to a Node](#checking-the-bgppolicy-applied-to-a-node)
+  - [Checking the BGP peers of a Node](#checking-the-bgp-peers-of-a-node)
   - [Reading the BGP messages in the Antrea Agent log](#reading-the-bgp-messages-in-the-antrea-agent-log)
   - [Checking the Events of a BGPPolicy](#checking-the-events-of-a-bgppolicy)
   - [Monitoring BGP with Prometheus](#monitoring-bgp-with-prometheus)
@@ -311,6 +312,14 @@ started, `antctl get bgppeers` and `antctl get bgproutes` print the same error
 instead of a list. If no BGPPolicy selects the Node, all three commands answer
 that there is no effective BGP policy.
 
+### Checking the BGP peers of a Node
+
+Run `antctl get bgppeers` to see the state of the BGP session with each peer.
+The JSON output (`-o json`) also shows how long each session has been
+established, and how many routes were sent to each peer and received from it.
+An `Established` session that sends no route means that the Node advertises
+nothing: check which routes it advertises with `antctl get bgproutes`.
+
 ### Reading the BGP messages in the Antrea Agent log
 
 At the default log verbosity, the `antrea-agent` container logs:
@@ -370,6 +379,7 @@ from a default deployment.
 | --- | --- | --- | --- |
 | `antrea_agent_bgp_peer_up` | Gauge | `peer`, `asn` | 1 when the BGP session with the peer is `Established`, otherwise 0. |
 | `antrea_agent_bgp_peer_session_state` | Gauge | `peer`, `asn` | State of the BGP session with the peer: 0 for Unknown, 1 for Idle, 2 for Connect, 3 for Active, 4 for OpenSent, 5 for OpenConfirm and 6 for Established. |
+| `antrea_agent_bgp_peer_advertised_route_count` | Gauge | `peer`, `asn` | Number of routes sent to the peer. It is 0 while the session with the peer is not `Established`. |
 | `antrea_agent_bgp_route_advertisement_count` | Counter | `type` | Number of routes advertised to the BGP peers, by route type. |
 | `antrea_agent_bgp_route_withdrawal_count` | Counter | `type` | Number of routes withdrawn from the BGP peers, by route type. |
 | `antrea_agent_bgp_effective_policy` | Gauge | `policy` | Always 1, for the BGPPolicy that the Node applies, even when the last attempt to apply it failed. |

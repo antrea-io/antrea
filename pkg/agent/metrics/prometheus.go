@@ -248,6 +248,17 @@ var (
 		[]string{"peer", "asn"},
 	)
 
+	BGPPeerAdvertisedRouteCount = metrics.NewGaugeVec(
+		&metrics.GaugeOpts{
+			Namespace:      metricNamespaceAntrea,
+			Subsystem:      metricSubsystemAgent,
+			Name:           "bgp_peer_advertised_route_count",
+			Help:           "Number of routes sent to each peer of the BGPPolicy applied to the local Node. It is 0 while the session with the peer is not Established.",
+			StabilityLevel: metrics.ALPHA,
+		},
+		[]string{"peer", "asn"},
+	)
+
 	BGPRouteAdvertisementCount = metrics.NewCounterVec(
 		&metrics.CounterOpts{
 			Namespace: metricNamespaceAntrea,
@@ -388,6 +399,9 @@ func InitializeBGPMetrics() {
 	}
 	if err := legacyregistry.Register(BGPPeerUp); err != nil {
 		klog.ErrorS(err, "Failed to register metrics with Prometheus", "metrics", "antrea_agent_bgp_peer_up")
+	}
+	if err := legacyregistry.Register(BGPPeerAdvertisedRouteCount); err != nil {
+		klog.ErrorS(err, "Failed to register metrics with Prometheus", "metrics", "antrea_agent_bgp_peer_advertised_route_count")
 	}
 	if err := legacyregistry.Register(BGPRouteAdvertisementCount); err != nil {
 		klog.ErrorS(err, "Failed to register metrics with Prometheus", "metrics", "antrea_agent_bgp_route_advertisement_count")

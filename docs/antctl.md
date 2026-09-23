@@ -899,6 +899,27 @@ PEER                       ASN   STATE
 [fec0::196:168:77:252]:179 65002 Active
 ```
 
+The JSON and YAML output also include, for each peer, how long the session has been established
+(`uptimeSeconds`, only for an established session), the multihop TTL, the graceful restart time,
+and the numbers of routes sent to the peer (`advertisedRoutes`) and received from it
+(`receivedRoutes`).
+
+```bash
+$ antctl get bgppeers -o json
+[
+  {
+    "peer": "192.168.77.200:179",
+    "asn": 65001,
+    "state": "Established",
+    "uptimeSeconds": 3600,
+    "multihopTTL": 1,
+    "gracefulRestartTimeSeconds": 120,
+    "advertisedRoutes": 3,
+    "receivedRoutes": 0
+  }
+]
+```
+
 `antctl` agent command `get bgproutes` prints the advertised BGP routes on the local Node.
 For more information about route advertisement, please refer to [Advertisements](./bgp-policy.md#advertisements).
 

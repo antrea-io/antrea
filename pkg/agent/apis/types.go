@@ -269,6 +269,15 @@ type BGPPeerResponse struct {
 	Peer  string `json:"peer,omitempty"`
 	ASN   int32  `json:"asn,omitempty"`
 	State string `json:"state,omitempty"`
+	// The following fields are only printed in the JSON and YAML output, to keep the table narrow.
+	// UptimeSeconds is the time since the session was established. It is 0 when the session is not established.
+	UptimeSeconds              int   `json:"uptimeSeconds,omitempty"`
+	MultihopTTL                int32 `json:"multihopTTL,omitempty"`
+	GracefulRestartTimeSeconds int32 `json:"gracefulRestartTimeSeconds,omitempty"`
+	// AdvertisedRoutes and ReceivedRoutes are the numbers of routes sent to and received from the peer. They are
+	// printed even when they are 0, as a peer that receives no route is a problem worth seeing.
+	AdvertisedRoutes uint64 `json:"advertisedRoutes"`
+	ReceivedRoutes   uint64 `json:"receivedRoutes"`
 }
 
 func (r BGPPeerResponse) GetTableHeader() []string {

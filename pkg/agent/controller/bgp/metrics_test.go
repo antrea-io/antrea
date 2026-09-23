@@ -84,35 +84,41 @@ func TestPeerMetrics(t *testing.T) {
 		noBGPServer   bool
 		expectedUp    map[string]float64
 		expectedState map[string]float64
+		// expectedRoutes is the number of routes advertised to each peer.
+		expectedRoutes map[string]float64
 	}{
 		{
 			name: "peers are polled for the first time",
 			peers: []bgp.PeerStatus{
 				{Address: ipv4Peer1Addr, ASN: peer1ASN, SessionState: bgp.SessionActive},
-				{Address: ipv4Peer2Addr, ASN: peer2ASN, SessionState: bgp.SessionEstablished},
+				{Address: ipv4Peer2Addr, ASN: peer2ASN, SessionState: bgp.SessionEstablished, AdvertisedRouteCount: 2},
 			},
-			expectedUp:    map[string]float64{peer1: 0, peer2: 1},
-			expectedState: map[string]float64{peer1: 3, peer2: 6},
+			expectedUp:     map[string]float64{peer1: 0, peer2: 1},
+			expectedState:  map[string]float64{peer1: 3, peer2: 6},
+			expectedRoutes: map[string]float64{peer1: 0, peer2: 2},
 		},
 		{
 			name: "session with a peer is established and the other peer is removed",
 			peers: []bgp.PeerStatus{
-				{Address: ipv4Peer1Addr, ASN: peer1ASN, SessionState: bgp.SessionEstablished},
+				{Address: ipv4Peer1Addr, ASN: peer1ASN, SessionState: bgp.SessionEstablished, AdvertisedRouteCount: 2},
 			},
-			expectedUp:    map[string]float64{peer1: 1},
-			expectedState: map[string]float64{peer1: 6},
+			expectedUp:     map[string]float64{peer1: 1},
+			expectedState:  map[string]float64{peer1: 6},
+			expectedRoutes: map[string]float64{peer1: 2},
 		},
 		{
-			name:          "BGP server fails to report the peers",
-			getPeersErr:   errors.New("failed to list peers"),
-			expectedUp:    map[string]float64{peer1: 1},
-			expectedState: map[string]float64{peer1: 6},
+			name:           "BGP server fails to report the peers",
+			getPeersErr:    errors.New("failed to list peers"),
+			expectedUp:     map[string]float64{peer1: 1},
+			expectedState:  map[string]float64{peer1: 6},
+			expectedRoutes: map[string]float64{peer1: 2},
 		},
 		{
-			name:          "BGP server is stopped",
-			noBGPServer:   true,
-			expectedUp:    map[string]float64{},
-			expectedState: map[string]float64{},
+			name:           "BGP server is stopped",
+			noBGPServer:    true,
+			expectedUp:     map[string]float64{},
+			expectedState:  map[string]float64{},
+			expectedRoutes: map[string]float64{},
 		},
 	}
 	for _, step := range steps {
@@ -125,6 +131,7 @@ func TestPeerMetrics(t *testing.T) {
 			c.pollPeerStatus(context.Background())
 			assert.Equal(t, step.expectedUp, gatherSeries(t, "antrea_agent_bgp_peer_up"))
 			assert.Equal(t, step.expectedState, gatherSeries(t, "antrea_agent_bgp_peer_session_state"))
+			assert.Equal(t, step.expectedRoutes, gatherSeries(t, "antrea_agent_bgp_peer_advertised_route_count"))
 		})
 	}
 }
