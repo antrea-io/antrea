@@ -258,9 +258,9 @@ func (s *FlowStreamService) GetFlows(req *flowpb.GetFlowsRequest, stream flowpb.
 		"resume", req.GetResume())
 
 	// A resume token from this same FA process is validated before the ring buffer is touched at
-	// all, and rejects a value this server could have ever issued: -1 is the lowest sequence number
+	// all, and rejects a value this server could never have issued: -1 is the lowest sequence number
 	// possible (nothing accounted for yet), and a sequence_number this server issued is never at
-	// or beyond its own current position, since sequence numbers only ever increases.
+	// or beyond its own current position, since sequence numbers only ever increase.
 	//
 	// A token whose stream_epoch does not match is a different, non-error case: the Flow Aggregator
 	// restarted, so nothing about the previous epoch's ring buffer is known here — including whether
@@ -269,12 +269,16 @@ func (s *FlowStreamService) GetFlows(req *flowpb.GetFlowsRequest, stream flowpb.
 	// client learns its resume was not honored from the stream_epoch in the handshake response,
 	// which is always this process's own.
 	//
-	// resumePos is the last position already accounted for when this stream starts: the resume point
-	// if there is a usable one, and -1 ("nothing accounted for yet") otherwise. It positions the
-	// consumer and is echoed in the handshake response below, and is not needed after that: a
-	// resumed stream reads only what it has not already seen, so there is nothing left to skip.
-	resumePos := int64(-1)
-	startOpt := ringbuffer.WithReadFromBeginning()
+	// resumePos is the position just before where the consumer starts: the resume point if there is
+	// a valid one, or otherwise the position just before the oldest record the buffer holds now
+	// (-1 if it has not wrapped yet). It is computed once and used both to position the consumer and
+	// as the handshake's token, so that the token always names where this stream actually starts: a
+	// client that disconnects before any data response and resumes from it must not be told that
+	// records evicted (before this stream even opened) were dropped. In the rare case where the
+	// producer advances between Tip and NewConsumer, the consumer starts slightly behind the buffer
+	// and its first read counts those records as dropped, which is correct: they were held when the
+	// stream started, and were evicted before it could deliver them.
+	resumePos := max(s.buffer.Tip()-s.buffer.Capacity(), 0) - 1
 	if r := req.GetResume(); r != nil && r.GetStreamEpoch() == s.streamEpoch {
 		if r.GetSequenceNumber() < -1 {
 			return status.Errorf(codes.InvalidArgument,
@@ -285,22 +289,23 @@ func (s *FlowStreamService) GetFlows(req *flowpb.GetFlowsRequest, stream flowpb.
 				"resume sequence_number %d is not before this stream's current position %d",
 				r.GetSequenceNumber(), tip-1)
 		}
-		resumePos = r.GetSequenceNumber()
 		// A resume point that has already fallen out of the ring buffer deliberately leaves the
 		// consumer positioned behind the buffer rather than clamped forward to the oldest record
 		// still held: the whole evicted span then arrives as dropped on the first read below,
 		// instead of being silently replayed as if it were new.
-		startOpt = ringbuffer.WithReadFromSequenceNumber(resumePos)
+		resumePos = r.GetSequenceNumber()
 	}
 
-	consumer := s.buffer.NewConsumer(startOpt, ringbuffer.WithMaxConsumeDeadline(exporter.ConsumeDeadline))
+	consumer := s.buffer.NewConsumer(
+		ringbuffer.WithReadFromSequenceNumber(resumePos),
+		ringbuffer.WithMaxConsumeDeadline(exporter.ConsumeDeadline),
+	)
 
-	// The stream is live, and its resume point (if any) is resolved. FlowStreamService explicitly
-	// sends a response at this point to let clients learn that directly. Flows is always empty here:
-	// every later Send in the loop below is gated on having flows or a drop to report, so clients can
-	// treat "the first response with no flows" as acknowledgement. Nothing has been read yet, so the
-	// token simply echoes the resume point the request asked for, and dropped_count is left 0 for the
-	// same reason rather than as a measurement.
+	// The stream is live. This first response confirms that authentication and authorization
+	// succeeded, and carries the stream epoch, from which a resuming client learns whether its
+	// resume was honored. Clients recognize it as the first response on the stream. Flows is always
+	// empty here, and nothing has been read yet: the token names the position just before where the
+	// consumer starts, and dropped_count is left 0 for the same reason rather than as a measurement.
 	if err := stream.Send(&flowpb.GetFlowsResponse{
 		ResumeToken: &flowpb.ResumeToken{StreamEpoch: s.streamEpoch, SequenceNumber: resumePos},
 	}); err != nil {
@@ -318,6 +323,16 @@ func (s *FlowStreamService) GetFlows(req *flowpb.GetFlowsRequest, stream flowpb.
 	sent := 0
 	var totalDropped uint64
 	batch := make([]*flowpb.Flow, internalBatchSize)
+	// lastTokenPos is the sequence number of the last resume token sent. When authorization or the
+	// client's filters remove every record in a batch, nothing needs to be sent, but the client's
+	// resume point then falls behind; once it has fallen behind by tokenRefreshSpan, a response
+	// with no flows is sent just to carry the token forward. Otherwise, a restricted/selective
+	// client could stay connected while the buffer wraps many times, and on reconnect be told
+	// that records filtered out for it were dropped. Waiting for half the buffer's capacity
+	// bounds how often such responses are sent, while leaving the other half as headroom for the
+	// client to reconnect before its resume point is evicted.
+	lastTokenPos := resumePos
+	tokenRefreshSpan := max(s.buffer.Capacity()/2, 1)
 
 	for {
 		if err := ctx.Err(); err != nil {
@@ -334,48 +349,35 @@ func (s *FlowStreamService) GetFlows(req *flowpb.GetFlowsRequest, stream flowpb.
 			}
 		}
 
+		// A batch returned together with shutdown is still processed and sent below before the
+		// stream closes: it is the last one the buffer will ever hand out.
 		n, dropped, endPos, shutdown := consumer.ConsumeMultiple(batch)
-
-		if shutdown {
-			klog.InfoS("Ring buffer shut down, closing GetFlows stream")
-			return nil
-		}
-
 		totalDropped += uint64(dropped)
 
-		var filtered []*flowpb.Flow
-		if n > 0 {
-			// Authorization runs before the client's own filters, and before the max_count
-			// accounting, so that a record the client may not observe is never counted against the
-			// records it asked for, and so that filters only ever match what it can see. That last
-			// point is also what gives a filter naming a Namespace outside the stream's scope its
-			// meaning: every record here already has an endpoint in scope, so such a filter selects
-			// flows by their peer, and matches only where that peer's Namespace was disclosed.
-			records := batch[:n]
-			if streamAuth != nil {
-				records = streamAuth.Authorize(ctx, records)
-			}
-			filtered = applyFilters(records, parsedFilters, since)
-			if maxCount > 0 && sent+len(filtered) >= maxCount {
-				filtered = filtered[:maxCount-sent]
-			}
+		limit := 0
+		if maxCount > 0 {
+			limit = maxCount - sent
 		}
-		if len(filtered) > 0 || dropped > 0 {
-			// endPos is one past everything this call accounted for, by delivering it or by
-			// counting it dropped, so endPos-1 is the right resume point even when the only thing
-			// being reported is a drop. It names a raw ring-buffer position, assigned once by the
-			// producer and unaffected by how much of the batch authorization or the client's own
-			// filters then removed — which is what makes it safe to resume against.
+		filtered, examined := selectRecords(ctx, streamAuth, batch[:n], parsedFilters, since, limit)
+		// tokenPos is the ring-buffer position of the last record this stream accounted for.
+		// batch[:n] holds positions [endPos-n, endPos), so batch[i] is at endPos-n+i, and the
+		// last examined record is at endPos-n+examined-1. Normally examined == n and the token
+		// is endPos-1. When max_count stops consumption early, the records after the last examined
+		// one have not been sent, so tokenPos stops before them; otherwise a client resuming from
+		// it would skip them.
+		tokenPos := endPos - int64(n) + int64(examined) - 1
+		if len(filtered) > 0 || dropped > 0 || tokenPos-lastTokenPos >= tokenRefreshSpan {
 			resp := &flowpb.GetFlowsResponse{
 				Flows:        filtered,
 				DroppedCount: totalDropped,
-				ResumeToken:  &flowpb.ResumeToken{StreamEpoch: s.streamEpoch, SequenceNumber: endPos - 1},
+				ResumeToken:  &flowpb.ResumeToken{StreamEpoch: s.streamEpoch, SequenceNumber: tokenPos},
 			}
 			if err := stream.Send(resp); err != nil {
 				klog.InfoS("Send to client failed, closing GetFlows stream", "err", err)
 				return err
 			}
 			sent += len(filtered)
+			lastTokenPos = tokenPos
 		}
 
 		if maxCount > 0 && sent >= maxCount {
@@ -383,11 +385,51 @@ func (s *FlowStreamService) GetFlows(req *flowpb.GetFlowsRequest, stream flowpb.
 			return nil
 		}
 
-		if !follow && n == 0 {
+		if shutdown {
+			klog.InfoS("Ring buffer shut down, closing GetFlows stream")
+			return nil
+		}
+
+		// n == 0 with dropped > 0 is not the tail: every record available to this read was
+		// overwritten before it could be read, and the buffer may still hold more.
+		if !follow && n == 0 && dropped == 0 {
 			klog.InfoS("Caught up to ring buffer tail, closing non-follow stream")
 			return nil
 		}
 	}
+}
+
+// selectRecords returns the records in batch that the stream may observe and that match the
+// client's filters, in order, stopping once limit records are selected (a limit of 0 means no
+// limit). It also returns how many records of batch it examined, which is len(batch) unless the
+// limit stopped it early: the records past that were neither delivered nor filtered out.
+//
+// Authorization runs before the client's own filters, and before the max_count accounting, so
+// that a record the client may not observe is never counted against the records it asked for, and
+// so that filters only ever match what it can see. That last point is also what gives a filter
+// naming a Namespace outside the stream's scope its meaning: every record here already has an
+// endpoint in scope, so such a filter selects flows by their peer, and matches only where that
+// peer's Namespace was disclosed.
+//
+// The selected records are compacted into batch[:0], so batch is modified.
+func selectRecords(ctx context.Context, streamAuth *StreamAuthorization, batch []*flowpb.Flow, filters []flowFilter, since time.Time, limit int) ([]*flowpb.Flow, int) {
+	var records = slices.All(batch)
+	if streamAuth != nil {
+		records = streamAuth.Authorized(ctx, batch)
+	}
+	selected := batch[:0]
+	examined := len(batch)
+	for i, f := range records {
+		if !matchFlow(f, filters, since) {
+			continue
+		}
+		selected = append(selected, f)
+		if limit > 0 && len(selected) >= limit {
+			examined = i + 1
+			break
+		}
+	}
+	return selected, examined
 }
 
 // flowFilter holds the pre-parsed form of a FlowFilter proto, so that
@@ -450,25 +492,28 @@ func parseFlowFilter(f *flowpb.FlowFilter) (flowFilter, error) {
 func applyFilters(flows []*flowpb.Flow, filters []flowFilter, since time.Time) []*flowpb.Flow {
 	filtered := flows[:0]
 	for _, f := range flows {
-		// (*timestamppb.Timestamp).AsTime() is nil-safe and returns the zero time,
-		// which is before any non-zero since value, so flows with a nil EndTs are
-		// correctly excluded when a "since" cutoff is active.
-		if !since.IsZero() && f.GetEndTs().AsTime().Before(since) {
-			continue
+		if matchFlow(f, filters, since) {
+			filtered = append(filtered, f)
 		}
-		match := true
-		for i := range filters {
-			if !matchFilter(f, &filters[i]) {
-				match = false
-				break
-			}
-		}
-		if !match {
-			continue
-		}
-		filtered = append(filtered, f)
 	}
 	return filtered
+}
+
+// matchFlow reports whether a single flow passes the "since" cutoff and matches ALL of the
+// provided filters: see applyFilters.
+func matchFlow(f *flowpb.Flow, filters []flowFilter, since time.Time) bool {
+	// (*timestamppb.Timestamp).AsTime() is nil-safe and returns the zero time,
+	// which is before any non-zero since value, so flows with a nil EndTs are
+	// correctly excluded when a "since" cutoff is active.
+	if !since.IsZero() && f.GetEndTs().AsTime().Before(since) {
+		return false
+	}
+	for i := range filters {
+		if !matchFilter(f, &filters[i]) {
+			return false
+		}
+	}
+	return true
 }
 
 func matchFilter(f *flowpb.Flow, pf *flowFilter) bool {

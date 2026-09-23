@@ -206,6 +206,11 @@ func (b *broadcastBuffer[T]) Tip() int64 {
 	return b.writePos.Load()
 }
 
+// Capacity is fixed at construction: see the BroadcastBuffer interface doc.
+func (b *broadcastBuffer[T]) Capacity() int64 {
+	return b.mask + 1
+}
+
 func (b *broadcastBuffer[T]) NewConsumer(opts ...ConsumerOption) Consumer[T] {
 	var cfg consumerConfig
 	for _, o := range opts {
@@ -357,8 +362,7 @@ func (c *consumer[T]) Consume() (val T, n int, lost int64, end int64, shutdown b
 			if !ok {
 				// The producer lapped this consumer between the wp snapshot and this read.
 				// That item is gone, so count it and move to the next position rather than
-				// returning empty-handed, which a caller cannot tell apart from "the deadline
-				// expired with no data available".
+				// returning empty-handed while data may still be available.
 				c.readPos++
 				lost++
 				continue
@@ -377,7 +381,13 @@ func (c *consumer[T]) Consume() (val T, n int, lost int64, end int64, shutdown b
 		}
 		// Every position this snapshot offered was overwritten before it could be read, which
 		// takes a producer still actively lapping this consumer. readPos advanced past all of
-		// them, so going back for a fresh snapshot makes progress rather than spinning.
+		// them, so going back for a fresh snapshot makes progress rather than spinning. The
+		// deadline is checked here too: waitForData only checks it when no data is available,
+		// and a producer that keeps lapping this consumer means data always is. Returning
+		// n == 0 with lost > 0 then reports that every available item was overwritten.
+		if hasDeadline && time.Since(start) >= c.deadline {
+			return zero, 0, lost, c.readPos, false
+		}
 	}
 }
 
@@ -410,10 +420,12 @@ func (c *consumer[T]) ConsumeMultiple(out []T) (n int, lost int64, end int64, sh
 				// stopping here keeps this batch a single contiguous range: any remaining data
 				// is picked up, contiguously, on the next call.
 				//
-				// A gap that left the batch empty is deliberately not returned: n == 0 is how a
-				// caller learns there is nothing to read, and reporting it while data is still
-				// available reads as a drained buffer. Fall through instead and re-snapshot
-				// writePos, which is safe to loop on because readAvailable always advance readPos.
+				// A gap that left the batch empty is not returned right away: data may still be
+				// available past it. Fall through instead and re-snapshot writePos, which is safe
+				// to loop on because readAvailable always advances readPos. If the deadline is
+				// reached first, this call returns n == 0 with lost > 0, which means every
+				// available item was overwritten before it could be read, not that there was
+				// nothing to read.
 				break
 			}
 		}

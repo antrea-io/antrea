@@ -175,7 +175,9 @@ message ResumeToken {
 
 // GetFlowsResponse carries a batch of flow records from the server.
 message GetFlowsResponse {
-  // The matching flow records.
+  // The matching flow records. Empty in the first response of every stream,
+  // and in the occasional response sent only to move resume_token forward
+  // when authorization or the client's filters removed every record read.
   repeated Flow flows = 1;
   // Number of flows dropped because the consumer fell behind and the ring
   // buffer wrapped around, or because a resume request named a
@@ -200,13 +202,17 @@ message GetFlowsResponse {
   // deltas against the length of flows cannot tell a redacted or filtered-out
   // record from an evicted one.
   uint64 dropped_count = 2;
-  // The ring-buffer position accounted for as of this response: either sent
-  // in flows, or counted in dropped_count. On the very first response of a
-  // stream nothing has been read yet, so it simply echoes the resume point
-  // the request asked for, or -1 if it asked for none — including when the
-  // resume token it sent was not honored. Clients that want to continue this
-  // stream later from the next flow record they have not yet received store
-  // this and pass it back as GetFlowsRequest.resume.
+  // The ring-buffer position accounted for as of this response: every
+  // record up to and including it was either sent in flows, counted in
+  // dropped_count, withheld by authorization, or removed by the client's own
+  // filters. On the very first response of a stream nothing has been read yet,
+  // so it names the position just before where the stream starts: the resume
+  // point the request asked for, or, when there is no usable resume point
+  // (none was sent, or it was not honored), the position just before the
+  // oldest record the ring buffer held when the stream started (-1 if nothing
+  // has been evicted yet). Clients that want to continue this stream later
+  // from the next flow record they have not yet received store this and pass
+  // it back as GetFlowsRequest.resume.
   //
   // stream_epoch is always this server's current one, which is how a
   // resuming client learns whether its own token was honored: an epoch

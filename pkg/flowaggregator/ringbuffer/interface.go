@@ -36,14 +36,17 @@ type Producer[T any] interface {
 type Consumer[T any] interface {
 	// Consume blocks until an item is available, the consumer's deadline expires,
 	// or shutdown is observed (after draining).
-	// When n == 0 and shutdown is false, the deadline expired with no data available.
+	// When n == 0 and shutdown is false, the deadline expired: either with no data available, or,
+	// if lost > 0, after every available item was overwritten before it could be read.
 	// end has the same meaning as in ConsumeMultiple.
 	Consume() (val T, n int, lost int64, end int64, shutdown bool)
 	// ConsumeMultiple blocks until at least one item is available, the consumer's
 	// deadline expires, or shutdown is observed (after draining).
 	// It accumulates items over time: on each wake-up it reads what is available,
 	// and returns when the output slice is full or the deadline would be exceeded
-	// by the next wake cycle. n can be 0 if the deadline expired with no data available.
+	// by the next wake cycle. n can be 0 if the deadline expired with no data available, and also
+	// with lost > 0 if every available item was overwritten before it could be read: a caller must
+	// not read n == 0 alone as "the buffer is drained".
 	//
 	// end is the absolute buffer position just past everything the call accounted for, whether by
 	// delivering it in out or by counting it in lost; it advances on eviction too, so it moves even
@@ -140,4 +143,7 @@ type BroadcastBuffer[T any] interface {
 	// default consumer starts reading at; it is exposed directly so a caller can test a resume point
 	// against it (see WithReadFromSequenceNumber) without creating and discarding a consumer.
 	Tip() int64
+	// Capacity returns how many items the buffer holds before the oldest is overwritten. It never
+	// changes, so max(Tip()-Capacity(), 0) is the position of the oldest item still held.
+	Capacity() int64
 }

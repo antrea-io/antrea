@@ -17,6 +17,7 @@ package flowstreamservice
 import (
 	"context"
 	"fmt"
+	"iter"
 	"strings"
 	"time"
 
@@ -351,18 +352,39 @@ func (sa *StreamAuthorization) Revalidate(ctx context.Context) error {
 // authorizer, fails immediately rather than retrying, and is left unidentified for this batch
 // without that being cached as a decision.
 func (sa *StreamAuthorization) Authorize(ctx context.Context, flows []*flowpb.Flow) []*flowpb.Flow {
-	if sa.clusterWide {
-		return flows
-	}
-	ctx, cancel := context.WithTimeout(ctx, authorizationCheckTimeout)
-	defer cancel()
 	authorized := flows[:0]
-	for _, f := range flows {
-		if af := sa.authorizeFlow(ctx, f); af != nil {
-			authorized = append(authorized, af)
-		}
+	for _, f := range sa.Authorized(ctx, flows) {
+		authorized = append(authorized, f)
 	}
 	return authorized
+}
+
+// Authorized is the iterator form of Authorize: it yields the index in flows of each record the
+// client may observe, in order, together with the form it may observe it in. The index is what lets
+// a caller that stops early tell which records it has examined. The authorizationCheckTimeout
+// budget covers the whole iteration, as it covers a whole Authorize call.
+// Like Authorize, it reads flows[i] before yielding index i, so the caller may compact the
+// records it keeps into flows[:0] as it goes.
+func (sa *StreamAuthorization) Authorized(ctx context.Context, flows []*flowpb.Flow) iter.Seq2[int, *flowpb.Flow] {
+	return func(yield func(int, *flowpb.Flow) bool) {
+		if sa.clusterWide {
+			for i, f := range flows {
+				if !yield(i, f) {
+					return
+				}
+			}
+			return
+		}
+		ctx, cancel := context.WithTimeout(ctx, authorizationCheckTimeout)
+		defer cancel()
+		for i, f := range flows {
+			if af := sa.authorizeFlow(ctx, f); af != nil {
+				if !yield(i, af) {
+					return
+				}
+			}
+		}
+	}
 }
 
 // authorizeFlow returns the record the client is allowed to observe, or nil if the record must be

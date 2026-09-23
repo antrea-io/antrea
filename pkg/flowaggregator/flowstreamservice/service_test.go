@@ -1308,6 +1308,177 @@ func TestGetFlows_ResumeTokenTracksRawPositionNotVisibility(t *testing.T) {
 	})
 }
 
+// TestGetFlows_HandshakeTokenOverWrappedBuffer covers a client that disconnects right after the
+// handshake of a stream that did not resume, over a buffer that has already wrapped: resuming from
+// the handshake's token must not report the records evicted before that first stream even opened
+// as dropped. The token names the position just before the oldest record held when it started.
+func TestGetFlows_HandshakeTokenOverWrappedBuffer(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		const bufSize = 4
+		buf := ringbuffer.NewBroadcastBuffer[*flowpb.Flow](bufSize)
+		t.Cleanup(func() { buf.Shutdown() })
+
+		for i := range 100 {
+			buf.Produce(newFlow(fmt.Sprintf("flow-%d", i), &flowpb.Kubernetes{}))
+		}
+
+		svc := newTestService(buf)
+		first := newFakeStream(t.Context())
+		errCh := make(chan error, 1)
+		go func() { errCh <- svc.GetFlows(&flowpb.GetFlowsRequest{Follow: false}, first) }()
+		time.Sleep(2 * exporter.ConsumeDeadline)
+		synctest.Wait()
+		require.NoError(t, <-errCh)
+
+		token := first.responses[0].GetResumeToken()
+		assert.EqualValues(t, 95, token.GetSequenceNumber(), "position 96 is the oldest record held when the stream started")
+
+		second := newFakeStream(t.Context())
+		go func() {
+			errCh <- svc.GetFlows(&flowpb.GetFlowsRequest{Follow: false, Resume: token}, second)
+		}()
+		time.Sleep(2 * exporter.ConsumeDeadline)
+		synctest.Wait()
+		require.NoError(t, <-errCh)
+
+		require.Len(t, second.responses, 2)
+		assert.Zero(t, second.responses[1].GetDroppedCount(),
+			"positions 0-95 were evicted before the first stream opened, and were never owed to this client")
+		var gotIDs []string
+		for _, f := range collectFlows(second.responses) {
+			gotIDs = append(gotIDs, f.GetId())
+		}
+		assert.Equal(t, []string{"flow-96", "flow-97", "flow-98", "flow-99"}, gotIDs)
+	})
+}
+
+// TestGetFlows_MaxCountTokenCoversOnlyExaminedRecords covers a batch cut short by max_count: the
+// last token must not cover the records past the last one delivered, or a client paging through
+// flows with max_count and resume would silently skip them.
+func TestGetFlows_MaxCountTokenCoversOnlyExaminedRecords(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		buf := ringbuffer.NewBroadcastBuffer[*flowpb.Flow](64)
+		t.Cleanup(func() { buf.Shutdown() })
+
+		// Even positions match the filter below, odd ones do not.
+		for i := range 10 {
+			ns := "default"
+			if i%2 == 0 {
+				ns = "monitoring"
+			}
+			buf.Produce(newFlow(fmt.Sprintf("flow-%d", i), newPodK8S(ns, "pod", "other", "pod")))
+		}
+		filters := []*flowpb.FlowFilter{{
+			Namespaces: []string{"monitoring"},
+			Direction:  flowpb.FlowFilterDirection_FLOW_FILTER_DIRECTION_FROM,
+		}}
+
+		svc := newTestService(buf)
+		var gotIDs []string
+		var token *flowpb.ResumeToken
+		var pageTokens []int64
+		errCh := make(chan error, 1)
+		for range 3 {
+			stream := newFakeStream(t.Context())
+			req := &flowpb.GetFlowsRequest{Follow: false, MaxCount: 2, Filters: filters, Resume: token}
+			go func() { errCh <- svc.GetFlows(req, stream) }()
+			time.Sleep(2 * exporter.ConsumeDeadline)
+			synctest.Wait()
+			require.NoError(t, <-errCh)
+			for _, f := range collectFlows(stream.responses) {
+				gotIDs = append(gotIDs, f.GetId())
+			}
+			token = stream.responses[len(stream.responses)-1].GetResumeToken()
+			pageTokens = append(pageTokens, token.GetSequenceNumber())
+		}
+		assert.Equal(t, []string{"flow-0", "flow-2", "flow-4", "flow-6", "flow-8"}, gotIDs)
+		// The first two pages end at the last record they delivered (flow-2, flow-6), not at the
+		// end of the batch they read; the last page is not cut short, so it covers everything.
+		assert.Equal(t, []int64{2, 6, 9}, pageTokens)
+	})
+}
+
+// TestGetFlows_TokenRefreshWhenEverythingFilteredOut covers a selective client whose filters remove
+// every record: it must still receive a token that moves forward as the buffer does, or resuming
+// from its handshake token after the buffer wrapped would report records it would have filtered
+// out anyway as dropped.
+func TestGetFlows_TokenRefreshWhenEverythingFilteredOut(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		const bufSize = 4
+		buf := ringbuffer.NewBroadcastBuffer[*flowpb.Flow](bufSize)
+		t.Cleanup(func() { buf.Shutdown() })
+
+		svc := newTestService(buf)
+		req := &flowpb.GetFlowsRequest{
+			Follow: true,
+			Filters: []*flowpb.FlowFilter{{
+				Namespaces: []string{"monitoring"},
+				Direction:  flowpb.FlowFilterDirection_FLOW_FILTER_DIRECTION_FROM,
+			}},
+		}
+		ctx, cancel := context.WithCancel(t.Context())
+		first := newFakeStream(ctx)
+		errCh := make(chan error, 1)
+		go func() { errCh <- svc.GetFlows(req, first) }()
+		synctest.Wait()
+
+		for i := range 3 * bufSize {
+			buf.Produce(newFlow(fmt.Sprintf("flow-%d", i), newPodK8S("default", "pod", "other", "pod")))
+			time.Sleep(2 * exporter.ConsumeDeadline)
+			synctest.Wait()
+		}
+		cancel()
+		time.Sleep(2 * exporter.ConsumeDeadline)
+		synctest.Wait()
+		require.Error(t, <-errCh)
+
+		assert.Empty(t, collectFlows(first.responses))
+		require.Greater(t, len(first.responses), 1, "the token must be refreshed even though nothing matched")
+		assert.Less(t, len(first.responses), 3*bufSize, "token-only responses must be rate-limited, not sent per batch")
+		token := first.responses[len(first.responses)-1].GetResumeToken()
+		assert.GreaterOrEqual(t, token.GetSequenceNumber(), int64(3*bufSize-1-bufSize/2),
+			"the token lags the last position read by less than the refresh span")
+
+		second := newFakeStream(t.Context())
+		resumeReq := &flowpb.GetFlowsRequest{Follow: false, Filters: req.Filters, Resume: token}
+		go func() { errCh <- svc.GetFlows(resumeReq, second) }()
+		time.Sleep(2 * exporter.ConsumeDeadline)
+		synctest.Wait()
+		require.NoError(t, <-errCh)
+		for _, r := range second.responses {
+			assert.Zero(t, r.GetDroppedCount(), "the refreshed token is still in the buffer")
+		}
+	})
+}
+
+// TestGetFlows_FinalBatchDeliveredOnShutdown covers records produced right before the ring buffer
+// shuts down: ConsumeMultiple hands them out together with shutdown, and they must still be sent.
+func TestGetFlows_FinalBatchDeliveredOnShutdown(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		buf := ringbuffer.NewBroadcastBuffer[*flowpb.Flow](64)
+
+		svc := newTestService(buf)
+		stream := newFakeStream(t.Context())
+		errCh := make(chan error, 1)
+		go func() { errCh <- svc.GetFlows(&flowpb.GetFlowsRequest{Follow: true}, stream) }()
+		synctest.Wait()
+
+		buf.Produce(newFlow("flow-0", &flowpb.Kubernetes{}))
+		buf.Produce(newFlow("flow-1", &flowpb.Kubernetes{}))
+		buf.Shutdown()
+		time.Sleep(2 * exporter.ConsumeDeadline)
+		synctest.Wait()
+		require.NoError(t, <-errCh)
+
+		var gotIDs []string
+		for _, f := range collectFlows(stream.responses) {
+			gotIDs = append(gotIDs, f.GetId())
+		}
+		assert.Equal(t, []string{"flow-0", "flow-1"}, gotIDs)
+		assert.EqualValues(t, 1, stream.responses[len(stream.responses)-1].GetResumeToken().GetSequenceNumber())
+	})
+}
+
 // TestNewFlowStreamService_MaxStreamsPerConn covers that the number of concurrent streams the server
 // advertises per connection tracks the configured service-wide cap, and so stays above the
 // per-client-IP cap whatever an operator sets. If it did not, a client on a single connection would
