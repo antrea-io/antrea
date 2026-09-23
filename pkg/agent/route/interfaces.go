@@ -92,6 +92,18 @@ type Interface interface {
 	// routes. It lets the indices survive an agent restart.
 	ListL2DispatchPeers() (map[uint32]*utilip.DualStackIPs, error)
 
+	// AddDSRPeerNodeMAC adds the transport MAC address of a peer Node to the MAC addresses from which the Node accepts
+	// the traffic of DSR Services as already load-balanced: the peer Node sent it with the l2 dispatch.
+	AddDSRPeerNodeMAC(peerNodeMAC net.HardwareAddr) error
+
+	// DeleteDSRPeerNodeMAC deletes a MAC address added by AddDSRPeerNodeMAC. It does nothing if the MAC address does
+	// not exist.
+	DeleteDSRPeerNodeMAC(peerNodeMAC net.HardwareAddr) error
+
+	// ReconcileDSRPeerNodeMACs deletes the MAC addresses added by AddDSRPeerNodeMAC which are not in desiredMACs, for
+	// example those of the peer Nodes deleted while the agent was not running.
+	ReconcileDSRPeerNodeMACs(desiredMACs sets.Set[string]) error
+
 	// AddNodePortConfigs adds routing configurations for redirecting traffic to OVS when a NodePort Service is created.
 	AddNodePortConfigs(nodePortAddresses []net.IP, port uint16, protocol binding.Protocol) error
 

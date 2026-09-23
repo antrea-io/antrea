@@ -193,6 +193,8 @@ type nodeRouteInfo struct {
 	gatewayIPs         *utilip.DualStackIPs
 	nodeMAC            net.HardwareAddr
 	wireGuardPublicKey string
+	// dsrPeerNodeMAC is the MAC address of the Node which the l2 dispatch of DSR accepts traffic from, or nil.
+	dsrPeerNodeMAC net.HardwareAddr
 }
 
 // enqueueNode adds an object to the controller work queue
@@ -346,6 +348,9 @@ func (c *Controller) reconcile() error {
 	}
 	if err := c.reconcileL2DispatchPeers(); err != nil {
 		return fmt.Errorf("error when reconciling the l2 dispatch peers: %w", err)
+	}
+	if err := c.reconcileDSRPeerNodeMACs(); err != nil {
+		return fmt.Errorf("error when reconciling the MAC addresses of the DSR l2 dispatch peers: %w", err)
 	}
 	return nil
 }
@@ -523,6 +528,11 @@ func (c *Controller) deleteNodeRoute(nodeName string) error {
 	if err := c.releaseL2DispatchPeer(nodeName); err != nil {
 		return err
 	}
+	if nodeRouteInfo.dsrPeerNodeMAC != nil {
+		if err := c.routeClient.DeleteDSRPeerNodeMAC(nodeRouteInfo.dsrPeerNodeMAC); err != nil {
+			return fmt.Errorf("failed to delete the MAC address of Node %s for the DSR l2 dispatch: %w", nodeName, err)
+		}
+	}
 	c.installedNodes.Delete(obj)
 	func() {
 		subnets, _ := cidrsToPrefixes(nodeRouteInfo.podCIDRs)
@@ -698,6 +708,15 @@ func (c *Controller) addNodeRoute(nodeName string, node *corev1.Node) error {
 		}
 	}
 
+	var previousDSRPeerNodeMAC net.HardwareAddr
+	if installed {
+		previousDSRPeerNodeMAC = nrInfo.(*nodeRouteInfo).dsrPeerNodeMAC
+	}
+	dsrPeerNodeMAC, err := c.updateDSRPeerNodeMAC(previousDSRPeerNodeMAC, peerNodeMAC, peerNodeIPs)
+	if err != nil {
+		return err
+	}
+
 	c.installedNodes.Add(&nodeRouteInfo{
 		nodeName:           nodeName,
 		podCIDRs:           peerPodCIDRs,
@@ -705,6 +724,7 @@ func (c *Controller) addNodeRoute(nodeName string, node *corev1.Node) error {
 		gatewayIPs:         peerGatewayIPs,
 		nodeMAC:            peerNodeMAC,
 		wireGuardPublicKey: peerWireGuardPublicKey,
+		dsrPeerNodeMAC:     dsrPeerNodeMAC,
 	})
 
 	return err

@@ -60,6 +60,20 @@ func (m *MockInterface) EXPECT() *MockInterfaceMockRecorder {
 	return m.recorder
 }
 
+// AddDSRPeerNodeMAC mocks base method.
+func (m *MockInterface) AddDSRPeerNodeMAC(peerNodeMAC net.HardwareAddr) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "AddDSRPeerNodeMAC", peerNodeMAC)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// AddDSRPeerNodeMAC indicates an expected call of AddDSRPeerNodeMAC.
+func (mr *MockInterfaceMockRecorder) AddDSRPeerNodeMAC(peerNodeMAC any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddDSRPeerNodeMAC", reflect.TypeOf((*MockInterface)(nil).AddDSRPeerNodeMAC), peerNodeMAC)
+}
+
 // AddEgressRoutes mocks base method.
 func (m *MockInterface) AddEgressRoutes(tableID uint32, dev int, gateway net.IP, prefixLength int) error {
 	m.ctrl.T.Helper()
@@ -226,6 +240,20 @@ func (m *MockInterface) ClearConntrackEntryForService(svcIP net.IP, svcPort uint
 func (mr *MockInterfaceMockRecorder) ClearConntrackEntryForService(svcIP, svcPort, endpointIP, protocol any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ClearConntrackEntryForService", reflect.TypeOf((*MockInterface)(nil).ClearConntrackEntryForService), svcIP, svcPort, endpointIP, protocol)
+}
+
+// DeleteDSRPeerNodeMAC mocks base method.
+func (m *MockInterface) DeleteDSRPeerNodeMAC(peerNodeMAC net.HardwareAddr) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "DeleteDSRPeerNodeMAC", peerNodeMAC)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// DeleteDSRPeerNodeMAC indicates an expected call of DeleteDSRPeerNodeMAC.
+func (mr *MockInterfaceMockRecorder) DeleteDSRPeerNodeMAC(peerNodeMAC any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteDSRPeerNodeMAC", reflect.TypeOf((*MockInterface)(nil).DeleteDSRPeerNodeMAC), peerNodeMAC)
 }
 
 // DeleteEgressRoutes mocks base method.
@@ -437,6 +465,20 @@ func (m *MockInterface) Reconcile(podCIDRs []string) error {
 func (mr *MockInterfaceMockRecorder) Reconcile(podCIDRs any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Reconcile", reflect.TypeOf((*MockInterface)(nil).Reconcile), podCIDRs)
+}
+
+// ReconcileDSRPeerNodeMACs mocks base method.
+func (m *MockInterface) ReconcileDSRPeerNodeMACs(desiredMACs sets.Set[string]) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ReconcileDSRPeerNodeMACs", desiredMACs)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// ReconcileDSRPeerNodeMACs indicates an expected call of ReconcileDSRPeerNodeMACs.
+func (mr *MockInterfaceMockRecorder) ReconcileDSRPeerNodeMACs(desiredMACs any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ReconcileDSRPeerNodeMACs", reflect.TypeOf((*MockInterface)(nil).ReconcileDSRPeerNodeMACs), desiredMACs)
 }
 
 // RestoreEgressRoutesAndRules mocks base method.

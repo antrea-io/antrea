@@ -214,3 +214,64 @@ func (c *Controller) reconcileL2DispatchPeers() error {
 	}
 	return nil
 }
+
+// dsrPeerNodeMAC returns the MAC address from which the l2 dispatch of DSR accepts traffic from the peer Node, or nil
+// if the peer Node cannot send DSR traffic to this Node with the l2 dispatch. DSR supports IPv4 only, so the peer Node
+// qualifies if its IPv4 transport address is in the local transport subnet.
+func (c *Controller) dsrPeerNodeMAC(peerNodeMAC net.HardwareAddr, peerNodeIPs *utilip.DualStackIPs) net.HardwareAddr {
+	if !c.networkConfig.SupportsDSRL2Dispatch() || peerNodeMAC == nil ||
+		!c.networkConfig.SupportsL2DispatchToPeer(peerNodeIPs.IPv4, c.nodeConfig.NodeTransportIPv4Addr) {
+		return nil
+	}
+	return peerNodeMAC
+}
+
+// updateDSRPeerNodeMAC adds the MAC address of the peer Node to the MAC addresses from which this Node accepts DSR
+// traffic that a peer Node has already load-balanced, if the peer Node can use the l2 dispatch to reach this Node. It
+// deletes the previous MAC address of the peer Node when it changes or no longer qualifies, and returns the MAC address
+// which it added, or nil.
+func (c *Controller) updateDSRPeerNodeMAC(previousMAC, peerNodeMAC net.HardwareAddr,
+	peerNodeIPs *utilip.DualStackIPs) (net.HardwareAddr, error) {
+	desiredMAC := c.dsrPeerNodeMAC(peerNodeMAC, peerNodeIPs)
+	if previousMAC != nil && previousMAC.String() != desiredMAC.String() {
+		if err := c.routeClient.DeleteDSRPeerNodeMAC(previousMAC); err != nil {
+			return nil, fmt.Errorf("failed to delete the previous MAC address %s for the DSR l2 dispatch: %w", previousMAC, err)
+		}
+	}
+	if desiredMAC != nil {
+		if err := c.routeClient.AddDSRPeerNodeMAC(desiredMAC); err != nil {
+			return nil, fmt.Errorf("failed to add the MAC address %s for the DSR l2 dispatch: %w", desiredMAC, err)
+		}
+	}
+	return desiredMAC, nil
+}
+
+// reconcileDSRPeerNodeMACs deletes the MAC addresses of the peer Nodes which are gone or can no longer use the l2
+// dispatch of DSR, for example because they were deleted while the agent was not running.
+func (c *Controller) reconcileDSRPeerNodeMACs() error {
+	if !c.networkConfig.SupportsDSRL2Dispatch() {
+		return nil
+	}
+	nodes, err := c.nodeLister.List(labels.Everything())
+	if err != nil {
+		return fmt.Errorf("error when listing Nodes: %w", err)
+	}
+	desiredMACs := sets.New[string]()
+	for _, node := range nodes {
+		if node.Name == c.nodeConfig.Name {
+			continue
+		}
+		peerNodeMAC, err := getNodeMAC(node)
+		if err != nil {
+			continue
+		}
+		peerNodeIPs, err := k8s.GetNodeTransportAddrs(node)
+		if err != nil {
+			continue
+		}
+		if mac := c.dsrPeerNodeMAC(peerNodeMAC, peerNodeIPs); mac != nil {
+			desiredMACs.Insert(mac.String())
+		}
+	}
+	return c.routeClient.ReconcileDSRPeerNodeMACs(desiredMACs)
+}

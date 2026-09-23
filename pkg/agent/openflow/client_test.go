@@ -1525,6 +1525,9 @@ func Test_client_InstallServiceFlows(t *testing.T) {
 	// the Services that use the l2 dispatch, in reg4[29], and learns the mark for the subsequent packets.
 	dsrLBFlowFromTunnel := "cookie=0x1030000000000, table=ServiceLB, priority=210,tcp,reg0=0x1/0xf,reg4=0x10000/0x70000,nw_dst=10.96.0.100,tp_dst=80 actions=set_field:0x200/0x200->reg0,set_field:0x20000/0x70000->reg4,set_field:0x200000/0x200000->reg4,set_field:0x65->reg7,group:101"
 	dsrLBFlow := "cookie=0x1030000000000, table=ServiceLB, priority=200,tcp,reg4=0x10000/0x70000,nw_dst=10.96.0.100,tp_dst=80 actions=set_field:0x200/0x200->reg0,set_field:0x20000/0x70000->reg4,set_field:0x200000/0x200000->reg4,set_field:0x64->reg7,group:100"
+	// dsrLBFlowFromL2Dispatch selects a local Endpoint for the packets from the Antrea gateway which the host marked
+	// because a peer Node sent them with the l2 dispatch.
+	dsrLBFlowFromL2Dispatch := "cookie=0x1030000000000, table=ServiceLB, priority=210,pkt_mark=0x10000000/0x10000000,tcp,reg0=0x2/0xf,reg4=0x10000/0x70000,nw_dst=10.96.0.100,tp_dst=80 actions=set_field:0x200/0x200->reg0,set_field:0x20000/0x70000->reg4,set_field:0x200000/0x200000->reg4,set_field:0x65->reg7,group:101"
 	dsrMarkFlow := "cookie=0x1030000000064, table=DSRServiceMark, priority=200,tcp,reg4=0xc000000/0xe000000,nw_dst=10.96.0.100,tp_dst=80 actions=learn(table=SessionAffinity,idle_timeout=160,fin_idle_timeout=5,priority=210,delete_learned,cookie=0x1030000000064,eth_type=0x800,nw_proto=0x6,OXM_OF_TCP_SRC[],OXM_OF_TCP_DST[],NXM_OF_IP_SRC[],NXM_OF_IP_DST[],load:NXM_NX_REG4[0..15]->NXM_NX_REG4[0..15],load:0x2->NXM_NX_REG4[16..18],load:0x1->NXM_NX_REG4[25],load:NXM_NX_REG3[]->NXM_NX_REG3[]),set_field:0x2000000/0x2000000->reg4,goto_table:EndpointDNAT"
 	dsrMarkFlowL2Dispatch := "cookie=0x1030000000064, table=DSRServiceMark, priority=200,tcp,reg4=0xc000000/0xe000000,nw_dst=10.96.0.100,tp_dst=80 actions=learn(table=SessionAffinity,idle_timeout=160,fin_idle_timeout=5,priority=210,delete_learned,cookie=0x1030000000064,eth_type=0x800,nw_proto=0x6,OXM_OF_TCP_SRC[],OXM_OF_TCP_DST[],NXM_OF_IP_SRC[],NXM_OF_IP_DST[],load:NXM_NX_REG4[0..15]->NXM_NX_REG4[0..15],load:0x2->NXM_NX_REG4[16..18],load:0x1->NXM_NX_REG4[25],load:0x1->NXM_NX_REG4[29],load:NXM_NX_REG3[]->NXM_NX_REG3[]),set_field:0x2000000/0x2000000->reg4,set_field:0x20000000/0x20000000->reg4,goto_table:EndpointDNAT"
 
@@ -1552,7 +1555,7 @@ func Test_client_InstallServiceFlows(t *testing.T) {
 			isDSR:            true,
 			clientOptions:    []clientOptionsFn{enableDSRL2Dispatch(config.DSRDispatchL2)},
 			trafficEncapMode: config.TrafficEncapModeNoEncap,
-			expectedFlows:    []string{dsrLBFlowFromTunnel, dsrLBFlow, dsrMarkFlowL2Dispatch},
+			expectedFlows:    []string{dsrLBFlowFromTunnel, dsrLBFlowFromL2Dispatch, dsrLBFlow, dsrMarkFlowL2Dispatch},
 		},
 		{
 			name:             "Service LoadBalancer,DSR,l2 dispatch by annotation",
@@ -1563,7 +1566,7 @@ func Test_client_InstallServiceFlows(t *testing.T) {
 			dsrDispatch:      ptr.To(config.DSRDispatchL2),
 			clientOptions:    []clientOptionsFn{enableDSRL2Dispatch(config.DSRDispatchTunnel)},
 			trafficEncapMode: config.TrafficEncapModeNoEncap,
-			expectedFlows:    []string{dsrLBFlowFromTunnel, dsrLBFlow, dsrMarkFlowL2Dispatch},
+			expectedFlows:    []string{dsrLBFlowFromTunnel, dsrLBFlowFromL2Dispatch, dsrLBFlow, dsrMarkFlowL2Dispatch},
 		},
 		{
 			name:             "Service LoadBalancer,DSR,tunnel dispatch by default,l2 dispatch available",
@@ -1573,7 +1576,8 @@ func Test_client_InstallServiceFlows(t *testing.T) {
 			isDSR:            true,
 			clientOptions:    []clientOptionsFn{enableDSRL2Dispatch(config.DSRDispatchTunnel)},
 			trafficEncapMode: config.TrafficEncapModeHybrid,
-			expectedFlows:    []string{dsrLBFlowFromTunnel, dsrLBFlow, dsrMarkFlow},
+			// The Node accepts the packets which peer Nodes send with the l2 dispatch, whatever its own dispatch is.
+			expectedFlows: []string{dsrLBFlowFromTunnel, dsrLBFlowFromL2Dispatch, dsrLBFlow, dsrMarkFlow},
 		},
 		{
 			name:             "Service LoadBalancer,DSR,l2 dispatch by annotation in encap mode falls back to tunnel",
@@ -1595,7 +1599,7 @@ func Test_client_InstallServiceFlows(t *testing.T) {
 			dsrDispatch:      ptr.To(config.DSRDispatchTunnel),
 			clientOptions:    []clientOptionsFn{disableEgress, enableDSRL2Dispatch(config.DSRDispatchL2)},
 			trafficEncapMode: config.TrafficEncapModeNoEncap,
-			expectedFlows:    []string{dsrLBFlowFromTunnel, dsrLBFlow, dsrMarkFlowL2Dispatch},
+			expectedFlows:    []string{dsrLBFlowFromTunnel, dsrLBFlowFromL2Dispatch, dsrLBFlow, dsrMarkFlowL2Dispatch},
 		},
 		{
 			name:     "Service ClusterIP",

@@ -27,6 +27,8 @@ import (
 	"go.uber.org/mock/gomock"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/labels"
+	"k8s.io/apimachinery/pkg/util/sets"
 
 	"antrea.io/antrea/v2/pkg/agent/config"
 	"antrea.io/antrea/v2/pkg/agent/types"
@@ -245,4 +247,109 @@ func TestL2DispatchPeerIndices(t *testing.T) {
 	next, err = restarted.allocate("new")
 	require.NoError(t, err)
 	assert.Equal(t, uint32(8), next, "the indices which the previous agent used are not allocated first")
+}
+
+// newDSRL2DispatchController returns a controller like newL2DispatchController, in which DSR Services can use the l2
+// dispatch.
+func newDSRL2DispatchController(t *testing.T) *fakeController {
+	c := newL2DispatchController(t)
+	c.networkConfig.EnableDSR = true
+	c.networkConfig.EnableDSRL2Dispatch = true
+	return c
+}
+
+func withNodeMAC(node *corev1.Node, mac net.HardwareAddr) *corev1.Node {
+	node = node.DeepCopy()
+	if node.Annotations == nil {
+		node.Annotations = map[string]string{}
+	}
+	node.Annotations[types.NodeMACAddressAnnotationKey] = mac.String()
+	return node
+}
+
+func (c *fakeController) updateNode(t *testing.T, node *corev1.Node) {
+	_, err := c.clientset.CoreV1().Nodes().Update(context.TODO(), node, metav1.UpdateOptions{})
+	require.NoError(t, err)
+}
+
+func TestDSRPeerNodeMACLifecycle(t *testing.T) {
+	c := newDSRL2DispatchController(t)
+	mac1, _ := net.ParseMAC("0a:00:00:00:00:02")
+	mac2, _ := net.ParseMAC("0a:00:00:00:00:03")
+
+	// node1 is in the local transport subnet: this Node accepts the DSR traffic that node1 dispatches, from its MAC.
+	node := withNodeMAC(newTestNode("node1", podCIDR1, nodeIP1), mac1)
+	c.createNode(t, node)
+	c.routeClient.EXPECT().AddL2DispatchPeerRoutes(uint32(1), &utilip.DualStackIPs{IPv4: nodeIP1})
+	c.ofClient.EXPECT().InstallNodeFlows("node1", gomock.Any(), &dsIPs1, uint32(0), mac1, uint32(1))
+	c.routeClient.EXPECT().AddRoutes(podCIDR1, "node1", nodeIP1, podCIDR1Gateway)
+	c.routeClient.EXPECT().AddDSRPeerNodeMAC(mac1)
+	c.processNextWorkItem()
+
+	// The MAC address of node1 changes: the previous one is deleted.
+	node = withNodeMAC(node, mac2)
+	c.updateNode(t, node)
+	c.routeClient.EXPECT().AddL2DispatchPeerRoutes(uint32(1), &utilip.DualStackIPs{IPv4: nodeIP1})
+	c.ofClient.EXPECT().InstallNodeFlows("node1", gomock.Any(), &dsIPs1, uint32(0), mac2, uint32(1))
+	c.routeClient.EXPECT().AddRoutes(podCIDR1, "node1", nodeIP1, podCIDR1Gateway)
+	gomock.InOrder(
+		c.routeClient.EXPECT().DeleteDSRPeerNodeMAC(mac1),
+		c.routeClient.EXPECT().AddDSRPeerNodeMAC(mac2),
+	)
+	c.processNextWorkItem()
+
+	// node1 moves to another subnet, which the l2 dispatch cannot reach: its MAC address is deleted.
+	node = node.DeepCopy()
+	node.Status.Addresses[0].Address = remoteSubnetNodeIP.String()
+	c.updateNode(t, node)
+	remoteSubnetNodeIPs := &utilip.DualStackIPs{IPv4: remoteSubnetNodeIP}
+	c.ofClient.EXPECT().InstallNodeFlows("node1", gomock.Any(), remoteSubnetNodeIPs, uint32(0), mac2, uint32(0))
+	c.routeClient.EXPECT().DeleteL2DispatchPeerRoutes(uint32(1))
+	c.routeClient.EXPECT().AddRoutes(podCIDR1, "node1", remoteSubnetNodeIP, podCIDR1Gateway)
+	c.routeClient.EXPECT().DeleteDSRPeerNodeMAC(mac2)
+	c.processNextWorkItem()
+
+	// node1 comes back to the local subnet, with the next index, then it is deleted: its MAC address is deleted with
+	// it.
+	node = node.DeepCopy()
+	node.Status.Addresses[0].Address = nodeIP1.String()
+	c.updateNode(t, node)
+	c.routeClient.EXPECT().AddL2DispatchPeerRoutes(uint32(2), &utilip.DualStackIPs{IPv4: nodeIP1})
+	c.ofClient.EXPECT().InstallNodeFlows("node1", gomock.Any(), &dsIPs1, uint32(0), mac2, uint32(2))
+	c.routeClient.EXPECT().AddRoutes(podCIDR1, "node1", nodeIP1, podCIDR1Gateway)
+	c.routeClient.EXPECT().AddDSRPeerNodeMAC(mac2)
+	c.processNextWorkItem()
+	require.NoError(t, c.clientset.CoreV1().Nodes().Delete(context.TODO(), node.Name, metav1.DeleteOptions{}))
+	c.routeClient.EXPECT().DeleteRoutes(podCIDR1)
+	c.ofClient.EXPECT().UninstallNodeFlows("node1")
+	c.routeClient.EXPECT().DeleteL2DispatchPeerRoutes(uint32(2))
+	c.routeClient.EXPECT().DeleteDSRPeerNodeMAC(mac2)
+	c.processNextWorkItem()
+}
+
+func TestDSRPeerNodeMACWithoutAnnotation(t *testing.T) {
+	c := newDSRL2DispatchController(t)
+	// Without the MAC annotation, the traffic of the peer Node cannot be recognised, so no MAC address is added.
+	c.createNode(t, newTestNode("node1", podCIDR1, nodeIP1))
+	c.routeClient.EXPECT().AddL2DispatchPeerRoutes(uint32(1), &utilip.DualStackIPs{IPv4: nodeIP1})
+	c.ofClient.EXPECT().InstallNodeFlows("node1", gomock.Any(), &dsIPs1, uint32(0), nil, uint32(1))
+	c.routeClient.EXPECT().AddRoutes(podCIDR1, "node1", nodeIP1, podCIDR1Gateway)
+	c.processNextWorkItem()
+}
+
+func TestReconcileDSRPeerNodeMACs(t *testing.T) {
+	c := newDSRL2DispatchController(t)
+	mac1, _ := net.ParseMAC("0a:00:00:00:00:02")
+	mac3, _ := net.ParseMAC("0a:00:00:00:00:04")
+	c.createNode(t, withNodeMAC(newTestNode("node1", podCIDR1, nodeIP1), mac1))
+	c.createNode(t, withNodeMAC(newTestNode("remoteSubnetNode", podCIDR2, remoteSubnetNodeIP), mac3))
+	c.createNode(t, newTestNode("nodeWithoutMAC", podCIDR2, nodeIP2))
+	require.Eventually(t, func() bool {
+		nodes, err := c.nodeLister.List(labels.Everything())
+		return err == nil && len(nodes) == 3
+	}, 5*time.Second, 10*time.Millisecond)
+
+	// Only node1 can send DSR traffic to this Node with the l2 dispatch, so the other MAC addresses are deleted.
+	c.routeClient.EXPECT().ReconcileDSRPeerNodeMACs(sets.New[string](mac1.String()))
+	require.NoError(t, c.reconcileDSRPeerNodeMACs())
 }

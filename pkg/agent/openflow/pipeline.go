@@ -2527,6 +2527,16 @@ func (f *featureService) serviceLBFlows(config *types.ServiceConfig) []binding.F
 		flows = append(flows, buildFlow(priorityHigh, config.LocalGroupID, func(b binding.FlowBuilder) binding.FlowBuilder {
 			return b.MatchRegMark(FromTunnelRegMark)
 		}))
+		if f.networkConfig.SupportsDSRL2Dispatch() {
+			// With the l2 dispatch, a peer Node sends the packets which it has load-balanced to the MAC address of this
+			// Node. The host marks them with DSRL2DispatchedMark because they come from the MAC address of a peer Node,
+			// and routes them to the Antrea gateway like other external traffic. The flow is installed whatever the
+			// dispatch of the Service on this Node is, as the flow for the tunnel is, because a peer Node decides how it
+			// sends the packets.
+			flows = append(flows, buildFlow(priorityHigh, config.LocalGroupID, func(b binding.FlowBuilder) binding.FlowBuilder {
+				return b.MatchRegMark(FromGatewayRegMark).MatchPktMark(types.DSRL2DispatchedMark, ptr.To(types.DSRL2DispatchedMark))
+			}))
+		}
 	}
 	return flows
 }

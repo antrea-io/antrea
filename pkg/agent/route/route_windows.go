@@ -675,6 +675,18 @@ func (c *Client) ListL2DispatchPeers() (map[uint32]*iputil.DualStackIPs, error) 
 	return nil, nil
 }
 
+func (c *Client) AddDSRPeerNodeMAC(peerNodeMAC net.HardwareAddr) error {
+	return errors.New("AddDSRPeerNodeMAC is not implemented on Windows")
+}
+
+func (c *Client) DeleteDSRPeerNodeMAC(peerNodeMAC net.HardwareAddr) error {
+	return errors.New("DeleteDSRPeerNodeMAC is not implemented on Windows")
+}
+
+func (c *Client) ReconcileDSRPeerNodeMACs(desiredMACs sets.Set[string]) error {
+	return nil
+}
+
 func (c *Client) AddOrUpdateNodeNetworkPolicyIPSet(ipsetName string, ipsetEntries sets.Set[string], isIPv6 bool) error {
 	return errors.New("AddOrUpdateNodeNetworkPolicyIPSet is not implemented on Windows")
 }

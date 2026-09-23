@@ -31,6 +31,11 @@ const (
 	L2DispatchBit             = 29
 	L2DispatchPeerIndexMinBit = 16
 	L2DispatchPeerIndexMaxBit = 27
+
+	// DSRL2DispatchedBit is the bit of the fwmark space which marks, on the Node hosting the selected Endpoint, a packet
+	// of a DSR Service that a peer Node has already load-balanced and sent with the l2 dispatch. The host sets it for
+	// the packets which come from the MAC address of a peer Node, and OVS then selects a local Endpoint for them.
+	DSRL2DispatchedBit = 28
 )
 
 var (
@@ -46,6 +51,8 @@ var (
 
 	// L2DispatchMark is the mark generated from L2DispatchBit.
 	L2DispatchMark = uint32(1 << L2DispatchBit)
+	// DSRL2DispatchedMark is the mark generated from DSRL2DispatchedBit.
+	DSRL2DispatchedMark = uint32(1 << DSRL2DispatchedBit)
 	// L2DispatchPeerMarkMask is the bits of the packet mark which identify the peer Node of the l2 dispatch: the
 	// dispatch bit and the peer index.
 	L2DispatchPeerMarkMask = L2DispatchMark | uint32(MaxL2DispatchPeerIndex)<<L2DispatchPeerIndexMinBit

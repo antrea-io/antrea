@@ -16,6 +16,7 @@ package route
 
 import (
 	"net"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -23,10 +24,13 @@ import (
 	"github.com/vishvananda/netlink"
 	"go.uber.org/mock/gomock"
 	"golang.org/x/sys/unix"
+	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/utils/ptr"
 
 	"antrea.io/antrea/v2/pkg/agent/config"
 	"antrea.io/antrea/v2/pkg/agent/types"
+	"antrea.io/antrea/v2/pkg/agent/util/ipset"
+	ipsettest "antrea.io/antrea/v2/pkg/agent/util/ipset/testing"
 	netlinktest "antrea.io/antrea/v2/pkg/agent/util/netlink/testing"
 	"antrea.io/antrea/v2/pkg/util/ip"
 )
@@ -305,6 +309,160 @@ func TestNeedsLooseRPFilterOnGateway(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			c := &Client{networkConfig: tt.networkConfig, egressEnabled: tt.egressEnabled}
 			assert.Equal(t, tt.expected, c.needsLooseRPFilterOnGateway())
+		})
+	}
+}
+
+func newDSRL2DispatchTestClient(ipsetClient ipset.Interface, dsrL2Dispatch bool) *Client {
+	return &Client{
+		ipset: ipsetClient,
+		networkConfig: &config.NetworkConfig{
+			TrafficEncapMode:    config.TrafficEncapModeNoEncap,
+			IPv4Enabled:         true,
+			EnableDSR:           true,
+			EnableDSRL2Dispatch: dsrL2Dispatch,
+			EnableL2Dispatch:    dsrL2Dispatch,
+		},
+		nodeConfig: &config.NodeConfig{
+			NodeTransportInterfaceName: "eth0",
+			PodIPv4CIDR:                ip.MustParseCIDR("172.16.10.0/24"),
+			PodIPv6CIDR:                ip.MustParseCIDR("2001:ab03:cd04:55ef::/64"),
+			GatewayConfig:              &config.GatewayConfig{Name: "antrea-gw0"},
+		},
+		proxyAll:               true,
+		iptablesHasRandomFully: true,
+	}
+}
+
+func TestDSRL2DispatchMangleRule(t *testing.T) {
+	rule := `-A ANTREA-PREROUTING -m comment --comment "Antrea: mark DSR packets dispatched by peer Nodes" -i eth0 ` +
+		`-m set --match-set ANTREA-DSR-PEER-NODE-MAC src -m set --match-set ANTREA-EXTERNAL-IP dst ` +
+		`-j MARK --set-xmark 0x10000000/0x10000000`
+	tests := []struct {
+		name          string
+		dsrL2Dispatch bool
+		isIPv6        bool
+		expectedRule  bool
+	}{
+		{name: "DSR l2 dispatch", dsrL2Dispatch: true, expectedRule: true},
+		{name: "DSR l2 dispatch, IPv6, which DSR does not support", dsrL2Dispatch: true, isIPv6: true},
+		{name: "no DSR l2 dispatch", dsrL2Dispatch: false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			c := newDSRL2DispatchTestClient(nil, tt.dsrL2Dispatch)
+			podCIDR, externalIPSet := c.nodeConfig.PodIPv4CIDR, antreaExternalIPIPSet
+			if tt.isIPv6 {
+				podCIDR, externalIPSet = c.nodeConfig.PodIPv6CIDR, antreaExternalIPIP6Set
+			}
+			data := c.restoreIptablesData(podCIDR, antreaPodIPSet, localAntreaFlexibleIPAMPodIPSet, antreaNodePortIPSet,
+				externalIPSet, clusterNodeIPSet, config.VirtualNodePortDNATIPv4, config.VirtualServiceIPv4,
+				map[uint32]net.IP{}, map[string][]string{}, tt.isIPv6).String()
+			// The rule belongs to the mangle table.
+			mangle := data[strings.Index(data, "*mangle"):strings.Index(data, "*filter")]
+			if tt.expectedRule {
+				assert.Contains(t, mangle, rule+"\n")
+			} else {
+				assert.NotContains(t, data, "ANTREA-DSR-PEER-NODE-MAC")
+			}
+		})
+	}
+}
+
+func TestSyncDSRPeerNodeMACIPSet(t *testing.T) {
+	tests := []struct {
+		name          string
+		dsrL2Dispatch bool
+		cachedMACs    []string
+		expectedCalls func(mockIPSet *ipsettest.MockInterfaceMockRecorder)
+	}{
+		{
+			name:          "DSR l2 dispatch",
+			dsrL2Dispatch: true,
+			cachedMACs:    []string{"0a:00:00:00:00:02"},
+			expectedCalls: func(mockIPSet *ipsettest.MockInterfaceMockRecorder) {
+				mockIPSet.CreateIPSet(antreaDSRPeerNodeMACIPSet, ipset.HashMAC, false)
+				mockIPSet.AddEntry(antreaDSRPeerNodeMACIPSet, "0a:00:00:00:00:02")
+			},
+		},
+		{
+			name:          "no DSR l2 dispatch",
+			expectedCalls: func(mockIPSet *ipsettest.MockInterfaceMockRecorder) {},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			mockIPSet := ipsettest.NewMockInterface(ctrl)
+			c := newDSRL2DispatchTestClient(mockIPSet, tt.dsrL2Dispatch)
+			for _, mac := range tt.cachedMACs {
+				c.dsrPeerNodeMACs.Store(mac, struct{}{})
+			}
+			// The ipsets of the Pod CIDRs are not the subject of this test.
+			mockIPSet.EXPECT().CreateIPSet(antreaPodIPSet, ipset.HashNet, false)
+			mockIPSet.EXPECT().CreateIPSet(antreaPodIP6Set, ipset.HashNet, true)
+			mockIPSet.EXPECT().AddEntry(antreaPodIPSet, "172.16.10.0/24")
+			mockIPSet.EXPECT().AddEntry(antreaPodIP6Set, "2001:ab03:cd04:55ef::/64")
+			tt.expectedCalls(mockIPSet.EXPECT())
+			assert.NoError(t, c.syncIPSet())
+		})
+	}
+}
+
+func TestDSRPeerNodeMACs(t *testing.T) {
+	mac1, _ := net.ParseMAC("0a:00:00:00:00:02")
+	mac2, _ := net.ParseMAC("0a:00:00:00:00:03")
+
+	t.Run("add and delete", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		mockIPSet := ipsettest.NewMockInterface(ctrl)
+		c := newDSRL2DispatchTestClient(mockIPSet, true)
+		mockIPSet.EXPECT().AddEntry(antreaDSRPeerNodeMACIPSet, "0a:00:00:00:00:02")
+		require.NoError(t, c.AddDSRPeerNodeMAC(mac1))
+		_, cached := c.dsrPeerNodeMACs.Load("0a:00:00:00:00:02")
+		assert.True(t, cached, "the periodic sync restores the MAC address")
+		mockIPSet.EXPECT().DelEntry(antreaDSRPeerNodeMACIPSet, "0a:00:00:00:00:02")
+		require.NoError(t, c.DeleteDSRPeerNodeMAC(mac1))
+		_, cached = c.dsrPeerNodeMACs.Load("0a:00:00:00:00:02")
+		assert.False(t, cached)
+	})
+
+	t.Run("add without the DSR l2 dispatch", func(t *testing.T) {
+		c := newDSRL2DispatchTestClient(nil, false)
+		assert.Error(t, c.AddDSRPeerNodeMAC(mac1))
+		assert.NoError(t, c.DeleteDSRPeerNodeMAC(mac1))
+	})
+
+	t.Run("reconcile deletes the MAC addresses of Nodes which are gone", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		mockIPSet := ipsettest.NewMockInterface(ctrl)
+		c := newDSRL2DispatchTestClient(mockIPSet, true)
+		// ipset lists the MAC addresses in uppercase.
+		mockIPSet.EXPECT().ListEntries(antreaDSRPeerNodeMACIPSet).
+			Return([]string{"0A:00:00:00:00:02", "0A:00:00:00:00:04"}, nil)
+		mockIPSet.EXPECT().DelEntry(antreaDSRPeerNodeMACIPSet, "0A:00:00:00:00:04")
+		require.NoError(t, c.ReconcileDSRPeerNodeMACs(sets.New[string](mac1.String(), mac2.String())))
+	})
+}
+
+func TestDeleteStaleDSRPeerNodeMACIPSet(t *testing.T) {
+	tests := []struct {
+		name            string
+		dsrL2Dispatch   bool
+		expectedDestroy bool
+	}{
+		{name: "the DSR l2 dispatch is disabled", expectedDestroy: true},
+		{name: "the DSR l2 dispatch is enabled", dsrL2Dispatch: true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			mockIPSet := ipsettest.NewMockInterface(ctrl)
+			c := newDSRL2DispatchTestClient(mockIPSet, tt.dsrL2Dispatch)
+			if tt.expectedDestroy {
+				mockIPSet.EXPECT().DestroyIPSet(antreaDSRPeerNodeMACIPSet)
+			}
+			assert.NoError(t, c.deleteStaleDSRPeerNodeMACIPSet())
 		})
 	}
 }

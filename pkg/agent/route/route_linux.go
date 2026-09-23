@@ -91,6 +91,10 @@ const (
 	antreaExternalIPIPSet  = "ANTREA-EXTERNAL-IP"
 	antreaExternalIPIP6Set = "ANTREA-EXTERNAL-IP6"
 
+	// antreaDSRPeerNodeMACIPSet contains the transport MAC addresses of the peer Nodes which send the traffic of DSR
+	// Services to the Node with the l2 dispatch.
+	antreaDSRPeerNodeMACIPSet = "ANTREA-DSR-PEER-NODE-MAC"
+
 	// Antrea managed iptables chains.
 	antreaForwardChain     = "ANTREA-FORWARD"
 	antreaPreRoutingChain  = "ANTREA-PREROUTING"
@@ -298,6 +302,8 @@ type Client struct {
 	l2DispatchLinkIndex int
 	// l2DispatchPeers caches the l2DispatchPeerRouting of each peer Node by index, to restore it.
 	l2DispatchPeers sync.Map
+	// dsrPeerNodeMACs caches the MAC addresses in antreaDSRPeerNodeMACIPSet, to restore them.
+	dsrPeerNodeMACs sync.Map
 	// The latest calculated Service CIDRs can be got from serviceCIDRProvider.
 	serviceCIDRProvider servicecidr.Interface
 	// nodeNetworkPolicyIPSetsIPv4 caches all existing IPv4 ipsets for NodeNetworkPolicy.
@@ -465,6 +471,10 @@ func (c *Client) Initialize(nodeConfig *config.NodeConfig, done func()) error {
 			break
 		}
 		klog.Info("Initialized iptables")
+		// No iptables rule references the ipset of the l2 dispatch of DSR anymore when it is disabled.
+		if err := c.deleteStaleDSRPeerNodeMACIPSet(); err != nil {
+			klog.ErrorS(err, "Failed to delete the ipset of the DSR l2 dispatch", "ipset", antreaDSRPeerNodeMACIPSet)
+		}
 	}()
 
 	if c.hostNetworkAccelerationEnabled || c.hostNetworkNFTables && c.proxyAll {
@@ -855,6 +865,21 @@ func (c *Client) syncIPSet() error {
 				}
 				return true
 			})
+		}
+	}
+
+	// The l2 dispatch of DSR is available in noEncap and hybrid modes.
+	if c.networkConfig.SupportsDSRL2Dispatch() {
+		if err := c.ipset.CreateIPSet(antreaDSRPeerNodeMACIPSet, ipset.HashMAC, false); err != nil {
+			return err
+		}
+		var err error
+		c.dsrPeerNodeMACs.Range(func(key, _ any) bool {
+			err = c.ipset.AddEntry(antreaDSRPeerNodeMACIPSet, key.(string))
+			return err == nil
+		})
+		if err != nil {
+			return err
 		}
 	}
 
@@ -1418,6 +1443,22 @@ func (c *Client) restoreIptablesData(podCIDR *net.IPNet,
 			// Clear the fwmark EgressNoEncapReturnToRemoteMark from the packet to avoid that the fwmark mark may
 			// interfere with source IP selection when the packets are encapsulated by OVS flow-based tunnel.
 			"-j", "MARK", "--set-xmark", fmt.Sprintf("0x0/%#08x", types.EgressNoEncapReturnToRemoteMark),
+		}...)
+	}
+
+	if c.networkConfig.SupportsDSRL2Dispatch() && !isIPv6 {
+		// A peer Node sends the packets of DSR Services with the l2 dispatch after it has load-balanced them. They arrive
+		// on the transport interface from the MAC address of the peer Node, with an external IP of a Service as their
+		// destination. The mark makes OVS select a local Endpoint for them, instead of load-balancing them again. DSR
+		// supports IPv4 only.
+		writeLine(iptablesData, []string{
+			"-A", antreaPreRoutingChain,
+			"-m", "comment", "--comment", `"Antrea: mark DSR packets dispatched by peer Nodes"`,
+			"-i", c.nodeConfig.NodeTransportInterfaceName,
+			"-m", "set", "--match-set", antreaDSRPeerNodeMACIPSet, "src",
+			"-m", "set", "--match-set", externalIPSet, "dst",
+			"-j", iptables.MarkTarget,
+			"--set-xmark", fmt.Sprintf("%#08x/%#08x", types.DSRL2DispatchedMark, types.DSRL2DispatchedMark),
 		}...)
 	}
 
@@ -3012,6 +3053,61 @@ func (c *Client) ListL2DispatchPeers() (map[uint32]*utilip.DualStackIPs, error) 
 		}
 	}
 	return peers, nil
+}
+
+func (c *Client) AddDSRPeerNodeMAC(peerNodeMAC net.HardwareAddr) error {
+	if !c.networkConfig.SupportsDSRL2Dispatch() {
+		return fmt.Errorf("the l2 dispatch of DSR is not enabled")
+	}
+	mac := peerNodeMAC.String()
+	if err := c.ipset.AddEntry(antreaDSRPeerNodeMACIPSet, mac); err != nil {
+		return err
+	}
+	c.dsrPeerNodeMACs.Store(mac, struct{}{})
+	return nil
+}
+
+func (c *Client) DeleteDSRPeerNodeMAC(peerNodeMAC net.HardwareAddr) error {
+	if !c.networkConfig.SupportsDSRL2Dispatch() {
+		return nil
+	}
+	mac := peerNodeMAC.String()
+	if err := c.ipset.DelEntry(antreaDSRPeerNodeMACIPSet, mac); err != nil {
+		return err
+	}
+	c.dsrPeerNodeMACs.Delete(mac)
+	return nil
+}
+
+func (c *Client) ReconcileDSRPeerNodeMACs(desiredMACs sets.Set[string]) error {
+	if !c.networkConfig.SupportsDSRL2Dispatch() {
+		return nil
+	}
+	entries, err := c.ipset.ListEntries(antreaDSRPeerNodeMACIPSet)
+	if err != nil {
+		return err
+	}
+	for _, entry := range entries {
+		// ipset lists the MAC addresses in uppercase.
+		if mac, err := net.ParseMAC(entry); err == nil && desiredMACs.Has(mac.String()) {
+			continue
+		}
+		klog.InfoS("Deleting the stale MAC address of a peer Node of the DSR l2 dispatch", "mac", entry)
+		if err := c.ipset.DelEntry(antreaDSRPeerNodeMACIPSet, entry); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// deleteStaleDSRPeerNodeMACIPSet deletes the ipset of the l2 dispatch of DSR, which a previous configuration may have
+// created, when the l2 dispatch of DSR is disabled. It must be called after the iptables rule which references the
+// ipset is removed.
+func (c *Client) deleteStaleDSRPeerNodeMACIPSet() error {
+	if c.networkConfig.SupportsDSRL2Dispatch() {
+		return nil
+	}
+	return c.ipset.DestroyIPSet(antreaDSRPeerNodeMACIPSet)
 }
 
 func (c *Client) AddEgressRoutes(tableID uint32, dev int, gateway net.IP, prefixLength int) error {
