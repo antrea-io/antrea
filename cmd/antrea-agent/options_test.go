@@ -179,13 +179,15 @@ func TestOptionsValidateAntreaProxyConfig(t *testing.T) {
 
 func TestOptionsValidateEgressConfig(t *testing.T) {
 	tests := []struct {
-		name                  string
-		featureGateValue      bool
-		trafficEncapMode      config.TrafficEncapModeType
-		trafficEncryptionMode config.TrafficEncryptionModeType
-		egressConfig          agentconfig.EgressConfig
-		expectedErr           string
-		expectedEnableEgress  bool
+		name                   string
+		featureGateValue       bool
+		dispatchL2GateValue    bool
+		trafficEncapMode       config.TrafficEncapModeType
+		trafficEncryptionMode  config.TrafficEncryptionModeType
+		egressConfig           agentconfig.EgressConfig
+		expectedErr            string
+		expectedEnableEgress   bool
+		expectedEgressDispatch config.EgressDispatch
 	}{
 		{
 			name:                 "feature gate disabled",
@@ -259,10 +261,74 @@ func TestOptionsValidateEgressConfig(t *testing.T) {
 			expectedErr:          "Egress Except CIDR 1.1.1.300/32 is invalid",
 			expectedEnableEgress: false,
 		},
+		{
+			name:                 "tunnel dispatch in noEncap mode",
+			featureGateValue:     true,
+			trafficEncapMode:     config.TrafficEncapModeNoEncap,
+			egressConfig:         agentconfig.EgressConfig{Dispatch: "tunnel"},
+			expectedEnableEgress: true,
+		},
+		{
+			name:                   "l2 dispatch in noEncap mode",
+			featureGateValue:       true,
+			dispatchL2GateValue:    true,
+			trafficEncapMode:       config.TrafficEncapModeNoEncap,
+			egressConfig:           agentconfig.EgressConfig{Dispatch: "l2"},
+			expectedEnableEgress:   true,
+			expectedEgressDispatch: config.EgressDispatchL2,
+		},
+		{
+			name:                "l2 dispatch in encap mode",
+			featureGateValue:    true,
+			dispatchL2GateValue: true,
+			trafficEncapMode:    config.TrafficEncapModeEncap,
+			egressConfig:        agentconfig.EgressConfig{Dispatch: "l2"},
+			expectedErr:         `egress.dispatch "l2" is only supported in noEncap mode`,
+		},
+		{
+			name:                "l2 dispatch in hybrid mode",
+			featureGateValue:    true,
+			dispatchL2GateValue: true,
+			trafficEncapMode:    config.TrafficEncapModeHybrid,
+			egressConfig:        agentconfig.EgressConfig{Dispatch: "l2"},
+			expectedErr:         `egress.dispatch "l2" is only supported in noEncap mode`,
+		},
+		{
+			name:             "l2 dispatch without its feature gate",
+			featureGateValue: true,
+			trafficEncapMode: config.TrafficEncapModeNoEncap,
+			egressConfig:     agentconfig.EgressConfig{Dispatch: "l2"},
+			expectedErr:      `egress.dispatch "l2" requires feature gate EgressDispatchL2 to be enabled`,
+		},
+		{
+			name:                "unknown dispatch",
+			featureGateValue:    true,
+			dispatchL2GateValue: true,
+			trafficEncapMode:    config.TrafficEncapModeNoEncap,
+			egressConfig:        agentconfig.EgressConfig{Dispatch: "geneve"},
+			expectedErr:         `egress.dispatch "geneve" is unknown, it must be "tunnel" or "l2"`,
+		},
+		{
+			// The dispatch does not matter when Egress cannot work in the mode.
+			name:                 "l2 dispatch in networkPolicyOnly mode",
+			featureGateValue:     true,
+			trafficEncapMode:     config.TrafficEncapModeNetworkPolicyOnly,
+			egressConfig:         agentconfig.EgressConfig{Dispatch: "l2"},
+			expectedEnableEgress: false,
+		},
+		{
+			name:                 "l2 dispatch with Egress disabled",
+			featureGateValue:     false,
+			trafficEncapMode:     config.TrafficEncapModeEncap,
+			egressConfig:         agentconfig.EgressConfig{Dispatch: "l2"},
+			expectedEnableEgress: false,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			featuregatetesting.SetFeatureGateDuringTest(t, features.DefaultFeatureGate, features.Egress, tt.featureGateValue)
+			featuregatetesting.SetFeatureGateDuringTest(t, features.DefaultFeatureGate, features.EgressDispatchL2,
+				tt.dispatchL2GateValue)
 
 			o := &Options{config: &agentconfig.AgentConfig{
 				Egress: tt.egressConfig,
@@ -274,6 +340,7 @@ func TestOptionsValidateEgressConfig(t *testing.T) {
 				require.ErrorContains(t, err, tt.expectedErr)
 			}
 			assert.Equal(t, tt.expectedEnableEgress, o.enableEgress)
+			assert.Equal(t, tt.expectedEgressDispatch, o.egressDispatch)
 		})
 	}
 }

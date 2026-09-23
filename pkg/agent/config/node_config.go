@@ -237,6 +237,9 @@ type NetworkConfig struct {
 	// EnableEgress indicates the Egress feature is enabled. It is used to determine whether
 	// a tunnel interface should be created in noEncap mode for Egress traffic forwarding.
 	EnableEgress bool
+	// EgressDispatch is how Egress traffic reaches an Egress Node in noEncap mode. The other
+	// modes always use the tunnel.
+	EgressDispatch EgressDispatch
 	// EnableL2Dispatch indicates that a feature sends some of its traffic to peer Nodes in the
 	// local transport subnet with the l2 dispatch: to the MAC address of the peer Node, through
 	// policy routing, without encapsulation. The features which use the l2 dispatch set it.
@@ -296,12 +299,25 @@ func (nc *NetworkConfig) NeedsTunnelInterface() bool {
 	// cross-cluster traffic from a regular Node to the gateway Node for the source cluster
 	// always goes through antrea-tun0, regardless of the actual "traffic mode" for the source
 	// cluster.
-	// In noEncap mode with Egress enabled, the tunnel interface is required so that OVS can
-	// forward Egress traffic from a non-Egress Node to the Egress Node via the tunnel. Regular
-	// Pod-to-Pod traffic continues to use direct routing and is unaffected.
+	// In noEncap mode, some features need the tunnel interface, see NeedsTunnelInNoEncapMode.
 	return nc.TrafficEncapMode.SupportsEncap() ||
 		nc.EnableMulticlusterGW ||
-		nc.TrafficEncapMode == TrafficEncapModeNoEncap && nc.EnableEgress
+		nc.NeedsTunnelInNoEncapMode()
+}
+
+// NeedsTunnelInNoEncapMode returns true if a feature needs the tunnel interface in noEncap mode, where
+// Pod-to-Pod traffic is routed and does not use it. With Egress enabled and the tunnel dispatch, OVS
+// forwards Egress traffic from a non-Egress Node to the Egress Node via the tunnel. With the l2 dispatch,
+// Egress traffic reaches the Egress Node without the tunnel.
+func (nc *NetworkConfig) NeedsTunnelInNoEncapMode() bool {
+	return nc.TrafficEncapMode == TrafficEncapModeNoEncap && nc.EnableEgress && nc.EgressDispatch == EgressDispatchTunnel
+}
+
+// UsesEgressL2Dispatch returns true if the Egress traffic of a Pod reaches an Egress Node on another Node with the
+// l2 dispatch: the Node of the Pod sends the traffic unchanged to the MAC address of the Egress Node, and the Egress
+// Node finds the Egress IP from the source Pod IP. It is only supported in noEncap mode.
+func (nc *NetworkConfig) UsesEgressL2Dispatch() bool {
+	return nc.TrafficEncapMode == TrafficEncapModeNoEncap && nc.EnableEgress && nc.EgressDispatch == EgressDispatchL2
 }
 
 // NeedsEgressSymmetricPath returns true when Egress traffic takes a tunnel path which is distinct from the
@@ -310,10 +326,18 @@ func (nc *NetworkConfig) NeedsTunnelInterface() bool {
 // Pods reaches the Egress Node through a tunnel, so the reply packets of those Egress connections have to be
 // steered back to that tunnel to keep the path of a connection symmetric. The OVS pipeline installs a return
 // flow and the route client installs policy routing for that, both under this condition.
+// With the l2 dispatch in noEncap mode, Egress traffic does not take a tunnel: the request packets pass the host
+// network of the Pod's Node, so the reply packets are routed back to the Pod like any Pod traffic.
 func (nc *NetworkConfig) NeedsEgressSymmetricPath(egressEnabled bool) bool {
-	return egressEnabled && (nc.TrafficEncapMode == TrafficEncapModeNoEncap ||
+	if !egressEnabled {
+		return false
+	}
+	if nc.TrafficEncapMode == TrafficEncapModeNoEncap && nc.EgressDispatch == EgressDispatchL2 {
+		return false
+	}
+	return nc.TrafficEncapMode == TrafficEncapModeNoEncap ||
 		nc.TrafficEncapMode == TrafficEncapModeHybrid ||
-		nc.TrafficEncryptionMode == TrafficEncryptionModeWireGuard)
+		nc.TrafficEncryptionMode == TrafficEncryptionModeWireGuard
 }
 
 // SupportsL2Dispatch returns true if a feature uses the l2 dispatch and the traffic mode allows it. In noEncap

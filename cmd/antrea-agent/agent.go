@@ -247,9 +247,12 @@ func run(o *Options) error {
 		EnableMulticlusterGW:          enableMulticlusterGW,
 		MulticlusterEncryptionMode:    multiclusterEncryptionMode,
 		EnableEgress:                  o.enableEgress,
+		EgressDispatch:                o.egressDispatch,
 		EnableHostNetworkAcceleration: *o.config.HostNetworkAcceleration.Enable,
 		HostNetworkMode:               hostNetworkMode,
 	}
+	// The Egress l2 dispatch sends Egress traffic to the Egress Nodes with the policy routing of the l2 dispatch.
+	networkConfig.EnableL2Dispatch = networkConfig.UsesEgressL2Dispatch()
 
 	wireguardConfig := &config.WireGuardConfig{
 		Port: o.config.WireGuard.Port,

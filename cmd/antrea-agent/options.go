@@ -106,6 +106,9 @@ type Options struct {
 	enableNodePortLocal bool
 
 	defaultLoadBalancerMode config.LoadBalancerMode
+	// egressDispatch is how Egress traffic reaches an Egress Node in noEncap mode, calculated from the
+	// egress.dispatch option.
+	egressDispatch config.EgressDispatch
 }
 
 func newOptions() *Options {
@@ -542,6 +545,9 @@ func (o *Options) setK8sNodeDefaultOptions() {
 		if o.config.Egress.MaxEgressIPsPerNode == 0 {
 			o.config.Egress.MaxEgressIPsPerNode = defaultMaxEgressIPsPerNode
 		}
+		if o.config.Egress.Dispatch == "" {
+			o.config.Egress.Dispatch = config.EgressDispatchTunnel.String()
+		}
 	}
 
 	// Regardless of whether the egress feature is enabled, o.config.Egress.SNATFullyRandomPorts should not be nil to prevent a crash in NewClient().
@@ -587,6 +593,27 @@ func (o *Options) validateEgressConfig(encapMode config.TrafficEncapModeType, en
 	if o.config.Egress.MaxEgressIPsPerNode > defaultMaxEgressIPsPerNode {
 		return fmt.Errorf("maxEgressIPsPerNode cannot be greater than %d", defaultMaxEgressIPsPerNode)
 	}
+	// An empty value means the default, so that the validation does not depend on the defaults being set.
+	dispatchStr := o.config.Egress.Dispatch
+	if dispatchStr == "" {
+		dispatchStr = config.EgressDispatchTunnel.String()
+	}
+	ok, dispatch := config.GetEgressDispatchFromStr(dispatchStr)
+	if !ok {
+		return fmt.Errorf("egress.dispatch %q is unknown, it must be %q or %q", o.config.Egress.Dispatch,
+			config.EgressDispatchTunnel, config.EgressDispatchL2)
+	}
+	if dispatch == config.EgressDispatchL2 {
+		if !features.DefaultFeatureGate.Enabled(features.EgressDispatchL2) {
+			return fmt.Errorf("egress.dispatch %q requires feature gate %s to be enabled", dispatch, features.EgressDispatchL2)
+		}
+		// In encap mode, Egress traffic takes the tunnel like all Pod traffic to other Nodes. In hybrid mode, Egress
+		// keeps the tunnel, which also reaches the Nodes in other subnets.
+		if encapMode != config.TrafficEncapModeNoEncap {
+			return fmt.Errorf("egress.dispatch %q is only supported in %s mode", dispatch, config.TrafficEncapModeNoEncap)
+		}
+	}
+	o.egressDispatch = dispatch
 	o.enableEgress = true
 	return nil
 }

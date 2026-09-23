@@ -179,6 +179,12 @@ const (
 	// Allow users to allocate Egress IPs from a different subnet from the default Node subnet.
 	EgressSeparateSubnet featuregate.Feature = "EgressSeparateSubnet"
 
+	// alpha: v2.8
+	// Allow the Egress traffic of a Pod to reach the Egress Node without a tunnel in noEncap mode, by sending it to the
+	// MAC address of the Egress Node (the "l2" value of the egress.dispatch option of the Agent). The Egress Node then
+	// finds the Egress IP from the source Pod IP, so the Controller sends it the EgressGroups with the Pod IPs.
+	EgressDispatchL2 featuregate.Feature = "EgressDispatchL2"
+
 	// alpha: v1.15
 	// Allows users to apply ClusterNetworkPolicy to Kubernetes Nodes.
 	NodeNetworkPolicy featuregate.Feature = "NodeNetworkPolicy"
@@ -247,6 +253,7 @@ var (
 		ClusterNetworkPolicy:          {Default: false, PreRelease: featuregate.Alpha},
 		EgressTrafficShaping:          {Default: false, PreRelease: featuregate.Alpha},
 		EgressSeparateSubnet:          {Default: true, PreRelease: featuregate.Beta},
+		EgressDispatchL2:              {Default: false, PreRelease: featuregate.Alpha},
 		NodeNetworkPolicy:             {Default: false, PreRelease: featuregate.Alpha},
 		NodeLatencyMonitor:            {Default: false, PreRelease: featuregate.Alpha},
 		AntreaNodeConfig:              {Default: true, PreRelease: featuregate.Beta},
@@ -284,6 +291,7 @@ var (
 		TrafficControl,
 		EgressTrafficShaping,
 		EgressSeparateSubnet,
+		EgressDispatchL2,
 		NodeNetworkPolicy,
 		NodeLatencyMonitor,
 	)
@@ -296,6 +304,7 @@ var (
 		AntreaPolicy,
 		ClusterNetworkPolicy,
 		Egress,
+		EgressDispatchL2,
 		IPsecCertAuth,
 		L7NetworkPolicy,
 		Multicast,
@@ -336,6 +345,7 @@ var (
 		CleanupStaleUDPSvcConntrack: {},
 		EgressTrafficShaping:        {},
 		EgressSeparateSubnet:        {},
+		EgressDispatchL2:            {},
 		NodeNetworkPolicy:           {},
 		FlowExporter:                {},
 		NodeLatencyMonitor:          {},
