@@ -222,16 +222,25 @@ func getTestPacketBytes(dstIP string) []byte {
 
 func TestParsePacketIn(t *testing.T) {
 	prepareMockTables()
-	xreg0 := make([]byte, 8)
-	binary.BigEndian.PutUint32(xreg0[0:4], openflow.RemoteSNATRegMark.GetValue()<<openflow.RemoteSNATRegMark.GetField().GetRange().Offset()) // RemoteSNATRegMark in 32bit reg0
-	binary.BigEndian.PutUint32(xreg0[4:8], 2)                                                                                                // outputPort in 32bit reg1
-	matchOutPort := &openflow15.MatchField{
-		Class: openflow15.OXM_CLASS_PACKET_REGS,
-		Field: openflow15.NXM_NX_REG0,
-		Value: &openflow15.ByteArrayField{
-			Data: xreg0,
-		},
+	// matchOutPort sets the output port, 2, in the 32bit reg1. matchOutPortRemoteEgress also sets RemoteSNATRegMark in
+	// the 32bit reg0, which the Egress flows of a Pod whose Egress IP is on another Node load.
+	newMatchOutPort := func(remoteEgress bool) *openflow15.MatchField {
+		xreg0 := make([]byte, 8)
+		if remoteEgress {
+			binary.BigEndian.PutUint32(xreg0[0:4],
+				openflow.RemoteSNATRegMark.GetValue()<<openflow.RemoteSNATRegMark.GetField().GetRange().Offset())
+		}
+		binary.BigEndian.PutUint32(xreg0[4:8], 2)
+		return &openflow15.MatchField{
+			Class: openflow15.OXM_CLASS_PACKET_REGS,
+			Field: openflow15.NXM_NX_REG0,
+			Value: &openflow15.ByteArrayField{
+				Data: xreg0,
+			},
+		}
 	}
+	matchOutPort := newMatchOutPort(false)
+	matchOutPortRemoteEgress := newMatchOutPort(true)
 	matchPktMark := &openflow15.MatchField{
 		Class: openflow15.OXM_CLASS_NXM_1,
 		Field: openflow15.NXM_NX_PKT_MARK,
@@ -543,7 +552,7 @@ func TestParsePacketIn(t *testing.T) {
 			tfState:       &traceflowState{name: "traceflow-pod-to-ipv4", tag: 1, isSender: true},
 			pktIn: &ofctrl.PacketIn{PacketIn: &openflow15.PacketIn{
 				TableId: openflow.OutputTable.GetID(),
-				Match:   openflow15.Match{Fields: []openflow15.MatchField{*matchTunDst, *matchOutPort}},
+				Match:   openflow15.Match{Fields: []openflow15.MatchField{*matchTunDst, *matchOutPortRemoteEgress}},
 				Data:    util.NewBuffer(pktBytesPodToIP),
 			}},
 			expectedCalls: func(_ *queriertest.MockAgentNetworkPolicyInfoQuerier, eq *queriertest.MockEgressQuerier) {
@@ -557,6 +566,40 @@ func TestParsePacketIn(t *testing.T) {
 			}},
 		})
 	}
+	// With the l2 dispatch, an Egress packet whose Egress IP is on another Node leaves OVS through the gateway, with the
+	// l2 dispatch mark of the Egress Node in pkt_mark. The Egress Node forwards it without OVS, so it leaves the network
+	// on the source Node.
+	matchL2DispatchPktMark := &openflow15.MatchField{
+		Class: openflow15.OXM_CLASS_NXM_1,
+		Field: openflow15.NXM_NX_PKT_MARK,
+		Value: &openflow15.Uint32Message{
+			Data: types.L2DispatchPeerMark(3),
+		},
+	}
+	tests = append(tests, testCase{
+		name:          "packet at source Node for remote Egress with the l2 dispatch",
+		networkConfig: &config.NetworkConfig{TrafficEncapMode: config.TrafficEncapModeNoEncap},
+		nodeConfig:    makeNodeConfig(0, 2),
+		tfState:       &traceflowState{name: "traceflow-pod-to-ipv4", tag: 1, isSender: true},
+		pktIn: &ofctrl.PacketIn{PacketIn: &openflow15.PacketIn{
+			TableId: openflow.OutputTable.GetID(),
+			Match: openflow15.Match{Fields: []openflow15.MatchField{
+				*matchOutPortRemoteEgress, *matchL2DispatchPktMark, *matchCTSrc,
+			}},
+			Data: util.NewBuffer(pktBytesPodToIP),
+		}},
+		expectedCalls: func(_ *queriertest.MockAgentNetworkPolicyInfoQuerier, eq *queriertest.MockEgressQuerier) {
+			eq.EXPECT().GetEgress(pod1.Namespace, pod1.Name).Return(egressConfig, nil)
+		},
+		expectedTf: makePodToIPv4TF(),
+		expectedNodeResult: &crdv1beta1.NodeResult{Observations: []crdv1beta1.Observation{
+			{Component: crdv1beta1.ComponentSpoofGuard, Action: crdv1beta1.ActionForwarded, SrcPodIP: pod1IPv4},
+			{Component: crdv1beta1.ComponentEgress, Action: crdv1beta1.ActionForwardedToEgressNode, Egress: egressName,
+				EgressIP: egressIP, EgressNode: egressNode},
+			{Component: crdv1beta1.ComponentForwarding, ComponentInfo: openflow.OutputTable.GetName(),
+				Action: crdv1beta1.ActionForwardedOutOfNetwork},
+		}},
+	})
 	// The output register is not always set. The packet then went to a port which is neither the tunnel
 	// port nor the gateway port, and reporting it as delivered to a Pod would be wrong.
 	tests = append(tests, testCase{
