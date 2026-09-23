@@ -465,6 +465,20 @@ func (mr *MockInterfaceMockRecorder) Run(ctx any) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Run", reflect.TypeOf((*MockInterface)(nil).Run), ctx)
 }
 
+// SetEgressRemotePodIPs mocks base method.
+func (m *MockInterface) SetEgressRemotePodIPs(mark uint32, podIPs sets.Set[string]) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "SetEgressRemotePodIPs", mark, podIPs)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// SetEgressRemotePodIPs indicates an expected call of SetEgressRemotePodIPs.
+func (mr *MockInterfaceMockRecorder) SetEgressRemotePodIPs(mark, podIPs any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetEgressRemotePodIPs", reflect.TypeOf((*MockInterface)(nil).SetEgressRemotePodIPs), mark, podIPs)
+}
+
 // UnMigrateRoutesFromGw mocks base method.
 func (m *MockInterface) UnMigrateRoutesFromGw(route *net.IPNet, linkName string) error {
 	m.ctrl.T.Helper()

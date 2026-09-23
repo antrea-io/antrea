@@ -517,6 +517,10 @@ func (c *Client) DeleteSNATRule(mark uint32) error {
 	return nil
 }
 
+func (c *Client) SetEgressRemotePodIPs(mark uint32, podIPs sets.Set[string]) error {
+	return errors.New("SetEgressRemotePodIPs is not implemented on Windows")
+}
+
 // TODO: nodePortAddresses is not supported currently.
 func (c *Client) AddNodePortConfigs(nodePortAddresses []net.IP, port uint16, protocol binding.Protocol) error {
 	netNatStaticMapping := &winnet.NetNatStaticMapping{

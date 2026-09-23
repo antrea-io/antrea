@@ -298,6 +298,15 @@ type Client struct {
 	l2DispatchLinkIndex int
 	// l2DispatchPeers caches the l2DispatchPeerRouting of each peer Node by index, to restore it.
 	l2DispatchPeers sync.Map
+	// egressL2Dispatch is true when Egress uses the l2 dispatch: the Egress traffic of the Pods on other Nodes reaches
+	// the local Egress IPs without a tunnel, and gets the mark of its Egress IP from its source Pod IP.
+	egressL2Dispatch bool
+	// egressRemotePodIPSets caches the ipset of each local Egress IP, by the mark of the Egress IP, with the Egress l2
+	// dispatch. staleEgressRemotePodIPSets are the ipsets of Egress IPs to destroy. egressRemotePodIPSetsMutex
+	// protects both and serializes the changes of the ipsets.
+	egressRemotePodIPSets      map[uint32]*egressRemotePodIPSet
+	staleEgressRemotePodIPSets sets.Set[string]
+	egressRemotePodIPSetsMutex sync.Mutex
 	// The latest calculated Service CIDRs can be got from serviceCIDRProvider.
 	serviceCIDRProvider servicecidr.Interface
 	// nodeNetworkPolicyIPSetsIPv4 caches all existing IPv4 ipsets for NodeNetworkPolicy.
@@ -387,6 +396,7 @@ func (c *Client) Initialize(nodeConfig *config.NodeConfig, done func()) error {
 	// The iptables rules are synced in a goroutine started below, and some of them depend on the l2 dispatch, so the
 	// state of the l2 dispatch is set before that goroutine starts.
 	c.l2DispatchEnabled = c.networkConfig.SupportsL2Dispatch()
+	c.egressL2Dispatch = c.egressEnabled && c.networkConfig.UsesEgressL2Dispatch()
 
 	if c.proxyAll {
 		if c.hostNetworkNFTables {
@@ -552,6 +562,11 @@ func (c *Client) Initialize(nodeConfig *config.NodeConfig, done func()) error {
 // policy rules. It will not return until ctx is cancelled.
 func (c *Client) Run(ctx context.Context) {
 	<-c.iptablesInitialized
+	// The ipsets of Egress IPs which a previous agent left are destroyed by the sync, now that the iptables rules
+	// which used them are gone.
+	if err := c.findStaleEgressRemotePodIPSets(); err != nil {
+		klog.ErrorS(err, "Failed to find the stale ipsets of Egress IPs")
+	}
 	klog.InfoS("Starting host network configuration sync", "interval", SyncInterval)
 	wait.UntilWithContext(ctx, c.syncNetworkConfig, SyncInterval)
 }
@@ -567,6 +582,7 @@ func (c *Client) syncNetworkConfig(ctx context.Context) {
 		klog.ErrorS(err, "Failed to sync iptables")
 		return
 	}
+	c.destroyStaleEgressRemotePodIPSets()
 	if c.nftables != nil {
 		if err := c.syncNFTables(ctx); err != nil {
 			klog.ErrorS(err, "Failed to sync nftables")
@@ -918,6 +934,13 @@ func (c *Client) syncIPSet() error {
 			}
 			return true
 		})
+	}
+
+	// The ipsets of the local Egress IPs are used with the Egress l2 dispatch.
+	if c.egressL2Dispatch {
+		if err := c.syncEgressRemotePodIPSets(); err != nil {
+			return err
+		}
 	}
 
 	return nil
@@ -1417,6 +1440,9 @@ func (c *Client) restoreIptablesData(podCIDR *net.IPNet,
 			"-j", "MARK", "--set-xmark", fmt.Sprintf("0x0/%#08x", types.EgressNoEncapReturnToRemoteMark),
 		}...)
 	}
+	if c.egressL2Dispatch {
+		c.writeEgressRemotePodMangleRules(iptablesData, isIPv6)
+	}
 
 	// To make liveness/readiness probe traffic bypass ingress rules of Network Policies, mark locally generated packets
 	// that will be sent to OVS so we can identify them later in the OVS pipeline.
@@ -1494,6 +1520,9 @@ func (c *Client) restoreIptablesData(podCIDR *net.IPNet,
 			"-m", "set", "--match-set", localAntreaFlexibleIPAMPodIPSet, "dst",
 			"-j", iptables.AcceptTarget,
 		}...)
+	}
+	if c.egressL2Dispatch {
+		c.writeEgressRemotePodForwardRules(iptablesData)
 	}
 	for _, chain := range filterChains {
 		for _, rule := range iptablesFiltersRuleByChain[chain] {
@@ -1574,6 +1603,9 @@ func (c *Client) restoreIptablesData(podCIDR *net.IPNet,
 			rule = append(rule, "--random-fully")
 		}
 		writeLine(iptablesData, rule...)
+		if c.egressL2Dispatch {
+			c.writeEgressRemotePodMasqueradeRule(iptablesData, podIPSet)
+		}
 	}
 
 	// For local traffic going out of the gateway interface, if the source IP does not match any
@@ -2641,7 +2673,16 @@ func (c *Client) AddSNATRule(snatIP net.IP, mark uint32) error {
 		protocol = iptables.ProtocolIPv6
 	}
 	c.markToSNATIP.Store(mark, snatIP)
-	return c.iptables.InsertRule(protocol, iptables.NATTable, antreaPostRoutingChain, c.snatRuleSpec(snatIP, mark))
+	ruleSpec := c.snatRuleSpec(snatIP, mark)
+	if err := c.iptables.InsertRule(protocol, iptables.NATTable, antreaPostRoutingChain, ruleSpec); err != nil {
+		return err
+	}
+	// With the Egress l2 dispatch, the traffic of the Pods on other Nodes gets the mark of the Egress IP from its
+	// source Pod IP, through the ipset of the Egress IP.
+	if c.egressL2Dispatch {
+		return c.addEgressRemotePodIPSet(mark, snatIP.To4() == nil)
+	}
+	return nil
 }
 
 func (c *Client) DeleteSNATRule(mark uint32) error {
@@ -2649,6 +2690,11 @@ func (c *Client) DeleteSNATRule(mark uint32) error {
 	if !ok {
 		klog.InfoS("Didn't find SNAT rule with mark", "mark", fmt.Sprintf("%#x", mark))
 		return nil
+	}
+	if c.egressL2Dispatch {
+		if err := c.deleteEgressRemotePodIPSet(mark); err != nil {
+			return err
+		}
 	}
 	c.markToSNATIP.Delete(mark)
 	snatIP := value.(net.IP)

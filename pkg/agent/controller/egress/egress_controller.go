@@ -133,6 +133,9 @@ type egressIPState struct {
 	ruleInstalled bool
 	// The subnet the Egress IP is associated with.
 	subnetInfo *crdv1b1.SubnetInfo
+	// The IPs of the Pods on other Nodes which use this local Egress IP, by Egress, with the Egress l2 dispatch. The
+	// ipset of the Egress IP holds their union.
+	remotePodIPs map[string]sets.Set[string]
 }
 
 // egressRouteTable stores the route table ID created for a subnet and the marks that are referencing it.
@@ -148,6 +151,52 @@ type egressRouteTable struct {
 type egressBinding struct {
 	effectiveEgress     string
 	alternativeEgresses sets.Set[string]
+}
+
+// egressGroupMembers maps the member Pods of an EgressGroup, by namespaced name, to their IPs. With the
+// EgressDispatchL2 feature gate, the antrea-controller sends the Egress Node every member with the Pod IPs. The other
+// Nodes receive their own members without IPs.
+type egressGroupMembers map[string]sets.Set[string]
+
+func newEgressGroupMembers(members []cpv1b2.GroupMember) egressGroupMembers {
+	m := make(egressGroupMembers, len(members))
+	for i := range members {
+		m.add(&members[i])
+	}
+	return m
+}
+
+func (m egressGroupMembers) add(member *cpv1b2.GroupMember) {
+	ips := sets.New[string]()
+	for _, ip := range member.IPs {
+		ips.Insert(net.IP(ip).String())
+	}
+	m[k8s.NamespacedName(member.Pod.Namespace, member.Pod.Name)] = ips
+}
+
+func (m egressGroupMembers) remove(member *cpv1b2.GroupMember) {
+	delete(m, k8s.NamespacedName(member.Pod.Namespace, member.Pod.Name))
+}
+
+func (m egressGroupMembers) equal(other egressGroupMembers) bool {
+	if len(m) != len(other) {
+		return false
+	}
+	for pod, ips := range m {
+		otherIPs, exists := other[pod]
+		if !exists || !ips.Equal(otherIPs) {
+			return false
+		}
+	}
+	return true
+}
+
+func (m egressGroupMembers) clone() egressGroupMembers {
+	cloned := make(egressGroupMembers, len(m))
+	for pod, ips := range m {
+		cloned[pod] = ips.Clone()
+	}
+	return cloned
 }
 
 type EgressController struct {
@@ -171,7 +220,7 @@ type EgressController struct {
 	nodeName        string
 	markAllocator   *idAllocator
 
-	egressGroups      map[string]sets.Set[string]
+	egressGroups      map[string]egressGroupMembers
 	egressGroupsMutex sync.RWMutex
 
 	egressBindings      map[string]*egressBinding
@@ -207,6 +256,10 @@ type EgressController struct {
 	egressRouteTables map[crdv1b1.SubnetInfo]*egressRouteTable
 
 	linkMonitor linkmonitor.Interface
+
+	// l2Dispatch is true when Egress uses the l2 dispatch in noEncap mode: the Egress traffic of a Pod reaches an
+	// Egress IP on another Node without a tunnel, and the Egress Node maps the source Pod IP to the Egress IP.
+	l2Dispatch bool
 }
 
 func NewEgressController(
@@ -229,6 +282,7 @@ func NewEgressController(
 	supportSeparateSubnet bool,
 	linkMonitor linkmonitor.Interface,
 	uniqueMACForSubInterfaces bool,
+	l2Dispatch bool,
 ) (*EgressController, error) {
 	if trafficShapingEnabled && !openflow.OVSMetersAreSupported() {
 		klog.Info("EgressTrafficShaping feature gate is enabled, but it is ignored because OVS meters are not supported.")
@@ -256,7 +310,7 @@ func NewEgressController(
 		egressListerSynced:   egressInformer.Informer().HasSynced,
 		nodeName:             nodeName,
 		ifaceStore:           ifaceStore,
-		egressGroups:         map[string]sets.Set[string]{},
+		egressGroups:         map[string]egressGroupMembers{},
 		egressStates:         map[string]*egressState{},
 		egressIPStates:       map[string]*egressIPState{},
 		egressBindings:       map[string]*egressBinding{},
@@ -277,6 +331,7 @@ func NewEgressController(
 		externalIPPoolListerSynced: externalIPPoolInformer.Informer().HasSynced,
 		supportSeparateSubnet:      supportSeparateSubnet,
 		linkMonitor:                linkMonitor,
+		l2Dispatch:                 l2Dispatch,
 	}
 	if supportSeparateSubnet {
 		c.egressRouteTables = map[crdv1b1.SubnetInfo]*egressRouteTable{}
@@ -716,6 +771,8 @@ func (c *EgressController) realizeEgressIP(egressName, egressIP string, subnetIn
 				return 0, fmt.Errorf("error uninstalling SNAT rule for IP %s: %v", ipState.egressIP, err)
 			}
 			ipState.ruleInstalled = false
+			// The ipset of the remote Pods of the Egress IP is deleted with the SNAT rule.
+			ipState.remotePodIPs = nil
 		}
 		if ipState.flowsInstalled {
 			if err := c.ofClient.UninstallSNATMarkFlows(ipState.mark); err != nil {
@@ -805,6 +862,13 @@ func (c *EgressController) unrealizeEgressIP(egressName, egressIP string) error 
 	// release the mark if installed.
 	ipState.egressNames.Delete(egressName)
 	if len(ipState.egressNames) > 0 {
+		// The ipset of the remote Pods of the Egress IP keeps the Pods of the other Egresses only.
+		if _, exists := ipState.remotePodIPs[egressName]; exists && ipState.mark != 0 {
+			if err := c.routeClient.SetEgressRemotePodIPs(ipState.mark, unionRemotePodIPs(ipState, egressName)); err != nil {
+				return err
+			}
+			delete(ipState.remotePodIPs, egressName)
+		}
 		return nil
 	}
 	if ipState.mark != 0 {
@@ -1107,19 +1171,26 @@ func (c *EgressController) syncEgress(egressName string) error {
 	stalePods := eState.pods.Union(nil)
 
 	// Get a copy of the desired Pods.
-	pods := func() sets.Set[string] {
+	members := func() egressGroupMembers {
 		c.egressGroupsMutex.RLock()
 		defer c.egressGroupsMutex.RUnlock()
-		pods, exist := c.egressGroups[egressName]
+		members, exist := c.egressGroups[egressName]
 		if !exist {
 			return nil
 		}
-		return pods.Union(nil)
+		return members.clone()
 	}()
 
 	egressIP := net.ParseIP(eState.egressIP)
+	isIPv6 := egressIP.To4() == nil
+	// With the l2 dispatch, the traffic of the member Pods on other Nodes reaches the local Egress IP without a tunnel,
+	// and gets the mark of the Egress IP from its source Pod IP.
+	var remotePodIPs sets.Set[string]
+	if c.l2Dispatch && mark != 0 {
+		remotePodIPs = sets.New[string]()
+	}
 	// Install SNAT flows for desired Pods.
-	for pod := range pods {
+	for pod, podIPs := range members {
 		eState.pods.Insert(pod)
 		stalePods.Delete(pod)
 
@@ -1133,6 +1204,15 @@ func (c *EgressController) syncEgress(egressName string) error {
 		podNamespace, podName := parts[0], parts[1]
 		ifaces := c.ifaceStore.GetContainerInterfacesByPod(podName, podNamespace)
 		if len(ifaces) == 0 {
+			// Only the Egress Node receives the IPs of the members, and the members on other Nodes with them.
+			if len(podIPs) > 0 {
+				for podIP := range podIPs {
+					if remotePodIPs != nil && (net.ParseIP(podIP).To4() == nil) == isIPv6 {
+						remotePodIPs.Insert(podIP)
+					}
+				}
+				continue
+			}
 			klog.Infof("Interfaces of Pod %s/%s not found", podNamespace, podName)
 			continue
 		}
@@ -1152,6 +1232,50 @@ func (c *EgressController) syncEgress(egressName string) error {
 	if err := c.uninstallPodFlows(egressName, eState, staleOFPorts, stalePods); err != nil {
 		return err
 	}
+	if c.l2Dispatch {
+		if err := c.updateRemotePodIPs(egressName, eState.egressIP, remotePodIPs); err != nil {
+			return fmt.Errorf("error updating the IPs of the remote Pods of Egress %s: %w", egressName, err)
+		}
+	}
+	return nil
+}
+
+// unionRemotePodIPs returns the IPs of the Pods on other Nodes which use the local Egress IP, through all its
+// Egresses except the excluded one.
+func unionRemotePodIPs(ipState *egressIPState, excludedEgress string) sets.Set[string] {
+	podIPs := sets.New[string]()
+	for egressName, egressPodIPs := range ipState.remotePodIPs {
+		if egressName != excludedEgress {
+			podIPs.Insert(egressPodIPs.UnsortedList()...)
+		}
+	}
+	return podIPs
+}
+
+// updateRemotePodIPs records the IPs of the Pods on other Nodes which use the local Egress IP through the Egress, and
+// sets the ipset of the Egress IP to the IPs of all its Egresses. It does nothing if the Egress IP is not local.
+func (c *EgressController) updateRemotePodIPs(egressName, egressIP string, podIPs sets.Set[string]) error {
+	c.egressIPStatesMutex.Lock()
+	defer c.egressIPStatesMutex.Unlock()
+	ipState, exists := c.egressIPStates[egressIP]
+	if !exists || ipState.mark == 0 {
+		return nil
+	}
+	if ipState.remotePodIPs[egressName].Equal(podIPs) {
+		return nil
+	}
+	allPodIPs := unionRemotePodIPs(ipState, egressName).Union(podIPs)
+	if err := c.routeClient.SetEgressRemotePodIPs(ipState.mark, allPodIPs); err != nil {
+		return err
+	}
+	if podIPs.Len() == 0 {
+		delete(ipState.remotePodIPs, egressName)
+		return nil
+	}
+	if ipState.remotePodIPs == nil {
+		ipState.remotePodIPs = map[string]sets.Set[string]{}
+	}
+	ipState.remotePodIPs[egressName] = podIPs
 	return nil
 }
 
@@ -1297,15 +1421,12 @@ func (c *EgressController) replaceEgressGroups(groups []*cpv1b2.EgressGroup) {
 
 	for _, group := range groups {
 		oldGroupKeys.Delete(group.Name)
-		pods := sets.New[string]()
-		for _, member := range group.GroupMembers {
-			pods.Insert(k8s.NamespacedName(member.Pod.Namespace, member.Pod.Name))
-		}
-		prevPods := c.egressGroups[group.Name]
-		if pods.Equal(prevPods) {
+		members := newEgressGroupMembers(group.GroupMembers)
+		prevMembers := c.egressGroups[group.Name]
+		if members.equal(prevMembers) {
 			continue
 		}
-		c.egressGroups[group.Name] = pods
+		c.egressGroups[group.Name] = members
 		c.queue.Add(group.Name)
 	}
 
@@ -1316,15 +1437,12 @@ func (c *EgressController) replaceEgressGroups(groups []*cpv1b2.EgressGroup) {
 }
 
 func (c *EgressController) addEgressGroup(group *cpv1b2.EgressGroup) {
-	pods := sets.New[string]()
-	for _, member := range group.GroupMembers {
-		pods.Insert(k8s.NamespacedName(member.Pod.Namespace, member.Pod.Name))
-	}
+	members := newEgressGroupMembers(group.GroupMembers)
 
 	c.egressGroupsMutex.Lock()
 	defer c.egressGroupsMutex.Unlock()
 
-	c.egressGroups[group.Name] = pods
+	c.egressGroups[group.Name] = members
 	c.queue.Add(group.Name)
 }
 
@@ -1332,12 +1450,15 @@ func (c *EgressController) patchEgressGroup(patch *cpv1b2.EgressGroupPatch) {
 	c.egressGroupsMutex.Lock()
 	defer c.egressGroupsMutex.Unlock()
 
-	for _, member := range patch.AddedGroupMembers {
-		c.egressGroups[patch.Name].Insert(k8s.NamespacedName(member.Pod.Namespace, member.Pod.Name))
-
+	members := c.egressGroups[patch.Name]
+	// The IPs of a member are part of its identity, so the patch for a Pod whose IPs change, for example when it gets
+	// them, removes the member with the previous IPs and adds the member with the new ones. Both have the same key
+	// here, so the removed members are applied first, or the Pod would be dropped from the group.
+	for i := range patch.RemovedGroupMembers {
+		members.remove(&patch.RemovedGroupMembers[i])
 	}
-	for _, member := range patch.RemovedGroupMembers {
-		c.egressGroups[patch.Name].Delete(k8s.NamespacedName(member.Pod.Namespace, member.Pod.Name))
+	for i := range patch.AddedGroupMembers {
+		members.add(&patch.AddedGroupMembers[i])
 	}
 	c.queue.Add(patch.Name)
 }
