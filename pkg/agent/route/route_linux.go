@@ -421,7 +421,8 @@ func (c *Client) Initialize(nodeConfig *config.NodeConfig, done func()) error {
 	if c.networkConfig.TrafficEncryptionMode == config.TrafficEncryptionModeWireGuard {
 		c.initWireguardHostNetworkFilterRules()
 	}
-	if c.networkConfig.TrafficEncapMode.SupportsEncap() {
+	// In noEncap mode, the tunnel carries the traffic of the features which need it.
+	if c.networkConfig.TrafficEncapMode.SupportsEncap() || c.networkConfig.NeedsTunnelInNoEncapMode() {
 		c.initTunnelHostNetworkFilterRules()
 	}
 	if c.networkConfig.TrafficEncryptionMode == config.TrafficEncryptionModeIPSec {
@@ -1259,7 +1260,7 @@ func (c *Client) restoreIptablesData(podCIDR *net.IPNet,
 	writeLine(iptablesData, "*raw")
 	writeLine(iptablesData, iptables.MakeChainLine(antreaPreRoutingChain))
 	writeLine(iptablesData, iptables.MakeChainLine(antreaOutputChain))
-	if c.networkConfig.TrafficEncapMode.SupportsEncap() {
+	if c.networkConfig.TrafficEncapMode.SupportsEncap() || c.networkConfig.NeedsTunnelInNoEncapMode() {
 		// For Geneve and VXLAN encapsulation packets, the request and response packets don't belong to a UDP connection
 		// so tracking them doesn't give the normal benefits of conntrack. Besides, kube-proxy may install great number
 		// of iptables rules in nat table. The first encapsulation packets of connections would have to go through all

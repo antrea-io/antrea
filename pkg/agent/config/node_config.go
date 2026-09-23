@@ -292,12 +292,17 @@ func (nc *NetworkConfig) NeedsTunnelInterface() bool {
 	// cross-cluster traffic from a regular Node to the gateway Node for the source cluster
 	// always goes through antrea-tun0, regardless of the actual "traffic mode" for the source
 	// cluster.
-	// In noEncap mode with Egress enabled, the tunnel interface is required so that OVS can
-	// forward Egress traffic from a non-Egress Node to the Egress Node via the tunnel. Regular
-	// Pod-to-Pod traffic continues to use direct routing and is unaffected.
+	// In noEncap mode, some features need the tunnel interface, see NeedsTunnelInNoEncapMode.
 	return nc.TrafficEncapMode.SupportsEncap() ||
 		nc.EnableMulticlusterGW ||
-		nc.TrafficEncapMode == TrafficEncapModeNoEncap && nc.EnableEgress
+		nc.NeedsTunnelInNoEncapMode()
+}
+
+// NeedsTunnelInNoEncapMode returns true if a feature needs the tunnel interface in noEncap mode, where
+// Pod-to-Pod traffic is routed and does not use it. With Egress enabled, OVS forwards Egress traffic
+// from a non-Egress Node to the Egress Node via the tunnel.
+func (nc *NetworkConfig) NeedsTunnelInNoEncapMode() bool {
+	return nc.TrafficEncapMode == TrafficEncapModeNoEncap && nc.EnableEgress
 }
 
 // NeedsEgressSymmetricPath returns true when Egress traffic takes a tunnel path which is distinct from the
