@@ -1127,10 +1127,13 @@ func TestProxyLoadBalancerModeDSR(t *testing.T) {
 	}
 	wg.Wait()
 
-	testCases := []struct {
+	type testCase struct {
 		name                string
 		withSessionAffinity bool
-	}{
+		// dsrDispatch is the value of the service.antrea.io/dsr-dispatch annotation of the Service, if not empty.
+		dsrDispatch string
+	}
+	testCases := []testCase{
 		{
 			name:                "IPv4,withSessionAffinity",
 			withSessionAffinity: true,
@@ -1139,6 +1142,19 @@ func TestProxyLoadBalancerModeDSR(t *testing.T) {
 			name:                "IPv4,withoutSessionAffinity",
 			withSessionAffinity: false,
 		},
+	}
+	// With the DSRDispatchL2 feature gate, a Service can also use the l2 dispatch in noEncap and hybrid modes, which
+	// sends the traffic to the backend Nodes without encapsulation.
+	agentFeatures, err := GetAgentFeatures()
+	require.NoError(t, err, "Error when getting the feature gates of the Antrea Agent")
+	encapMode, err := data.GetEncapMode()
+	require.NoError(t, err, "Error when getting the traffic mode")
+	if agentFeatures.Enabled(features.DSRDispatchL2) &&
+		(encapMode == config.TrafficEncapModeNoEncap || encapMode == config.TrafficEncapModeHybrid) {
+		testCases = append(testCases,
+			testCase{name: "IPv4,withSessionAffinity,l2 dispatch", withSessionAffinity: true, dsrDispatch: "l2"},
+			testCase{name: "IPv4,withoutSessionAffinity,l2 dispatch", withSessionAffinity: false, dsrDispatch: "l2"},
+		)
 	}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -1178,6 +1194,9 @@ func TestProxyLoadBalancerModeDSR(t *testing.T) {
 			serviceName := "svc-dsr"
 			annotations := map[string]string{
 				types.ServiceLoadBalancerModeAnnotationKey: "dsr",
+			}
+			if tc.dsrDispatch != "" {
+				annotations[types.ServiceDSRDispatchAnnotationKey] = tc.dsrDispatch
 			}
 			service, err := data.createAgnhostLoadBalancerService(serviceName, tc.withSessionAffinity, false, []string{lbIP}, &ipProtocol, annotations)
 			require.NoError(t, err)

@@ -328,12 +328,14 @@ jobs:
         mkdir log
         mkdir test-e2e-noencap-non-default-coverage
         # Only the Antrea Proxy tests: the other tests already run in noEncap mode in test-e2e-noencap.
+        # With DSRDispatchL2, the DSR test also runs with the l2 dispatch, which a Service selects with an
+        # annotation, while the tunnel stays the default dispatch.
         ANTREA_LOG_DIR=$PWD/log ANTREA_COV_DIR=$PWD/test-e2e-noencap-non-default-coverage ./ci/kind/test-e2e-kind.sh \
           --coverage \
           --encap-mode noEncap \
           --proxy-all \
           --kube-proxy-mode none \
-          --feature-gates LoadBalancerModeDSR=true \
+          --feature-gates LoadBalancerModeDSR=true,DSRDispatchL2=true \
           --load-balancer-mode dsr \
           --run TestProxy \
           --skip mode-irrelevant
