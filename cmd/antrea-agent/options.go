@@ -109,6 +109,11 @@ type Options struct {
 	// enableDSR indicates whether Services can use the DSR load balancer mode, which requires feature gate
 	// LoadBalancerModeDSR and AntreaProxy with proxyAll enabled.
 	enableDSR bool
+	// dsrDispatch is the dispatch which DSR Services use by default.
+	dsrDispatch config.DSRDispatch
+	// enableDSRL2Dispatch indicates whether DSR Services can use the l2 dispatch, which requires DSR, feature gate
+	// DSRDispatchL2, and the noEncap or hybrid mode.
+	enableDSRL2Dispatch bool
 }
 
 func newOptions() *Options {
@@ -294,7 +299,59 @@ func (o *Options) validateAntreaProxyConfig(encapMode config.TrafficEncapModeTyp
 	// Without proxyAll, external traffic is not load-balanced by AntreaProxy, so no Service can use DSR even if
 	// the feature gate is enabled.
 	o.enableDSR = features.DefaultFeatureGate.Enabled(features.LoadBalancerModeDSR) && o.enableAntreaProxy && o.config.AntreaProxy.ProxyAll
+
+	dsrDispatch, err := o.validateDSRDispatch(encapMode)
+	if err != nil {
+		return err
+	}
+	o.dsrDispatch = dsrDispatch
+	// DSR Services can use the l2 dispatch whatever the default dispatch is, because a Service can select it with
+	// its annotation. The backend Node recognises the traffic of the l2 dispatch with an iptables rule, which is not
+	// implemented for the nftables host network mode.
+	o.enableDSRL2Dispatch = o.enableDSR && features.DefaultFeatureGate.Enabled(features.DSRDispatchL2) &&
+		supportsDSRL2Dispatch(encapMode) && !o.usesNFTablesHostNetworkMode()
 	return nil
+}
+
+// validateDSRDispatch returns the default dispatch of DSR Services. The l2 dispatch requires feature gate
+// DSRDispatchL2, and the noEncap or hybrid mode.
+func (o *Options) validateDSRDispatch(encapMode config.TrafficEncapModeType) (config.DSRDispatch, error) {
+	// Validation must not depend on setDefaults having run, so an empty dispatch means the default one.
+	dispatchStr := o.config.AntreaProxy.DSR.Dispatch
+	if dispatchStr == "" {
+		dispatchStr = config.DSRDispatchTunnel.String()
+	}
+	ok, dispatch := config.GetDSRDispatchFromStr(dispatchStr)
+	if !ok {
+		return config.DSRDispatchInvalid, fmt.Errorf("DSR dispatch %s is unknown", dispatchStr)
+	}
+	if dispatch != config.DSRDispatchL2 {
+		return dispatch, nil
+	}
+	if !features.DefaultFeatureGate.Enabled(features.DSRDispatchL2) {
+		return config.DSRDispatchInvalid, fmt.Errorf("DSR dispatch %s requires feature gate %s to be enabled", dispatch,
+			features.DSRDispatchL2)
+	}
+	if !supportsDSRL2Dispatch(encapMode) {
+		return config.DSRDispatchInvalid, fmt.Errorf("DSR dispatch %s is only applicable to the %s and %s modes", dispatch,
+			config.TrafficEncapModeNoEncap, config.TrafficEncapModeHybrid)
+	}
+	if o.usesNFTablesHostNetworkMode() {
+		return config.DSRDispatchInvalid, fmt.Errorf("DSR dispatch %s is not supported with hostNetworkMode %s", dispatch,
+			config.HostNetworkModeNFTables)
+	}
+	return dispatch, nil
+}
+
+// supportsDSRL2Dispatch returns true if the traffic mode routes Pod traffic to the Nodes in the local transport subnet,
+// which lets the l2 dispatch reach their MAC addresses.
+func supportsDSRL2Dispatch(encapMode config.TrafficEncapModeType) bool {
+	return encapMode == config.TrafficEncapModeNoEncap || encapMode == config.TrafficEncapModeHybrid
+}
+
+func (o *Options) usesNFTablesHostNetworkMode() bool {
+	_, hostNetworkMode := config.GetHostNetworkModeFromStr(o.config.HostNetworkMode)
+	return hostNetworkMode == config.HostNetworkModeNFTables
 }
 
 func (o *Options) validateFlowExporterConfig() error {
@@ -471,6 +528,9 @@ func (o *Options) setK8sNodeDefaultOptions() {
 	}
 	if o.config.AntreaProxy.DefaultLoadBalancerMode == "" {
 		o.config.AntreaProxy.DefaultLoadBalancerMode = config.LoadBalancerModeNAT.String()
+	}
+	if o.config.AntreaProxy.DSR.Dispatch == "" {
+		o.config.AntreaProxy.DSR.Dispatch = config.DSRDispatchTunnel.String()
 	}
 	if o.config.ClusterMembershipPort == 0 {
 		o.config.ClusterMembershipPort = apis.AntreaAgentClusterMembershipPort

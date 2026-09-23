@@ -248,6 +248,9 @@ func run(o *Options) error {
 		MulticlusterEncryptionMode:    multiclusterEncryptionMode,
 		EnableEgress:                  o.enableEgress,
 		EnableDSR:                     o.enableDSR,
+		DSRDispatch:                   o.dsrDispatch,
+		EnableDSRL2Dispatch:           o.enableDSRL2Dispatch,
+		EnableL2Dispatch:              o.enableDSRL2Dispatch,
 		EnableHostNetworkAcceleration: *o.config.HostNetworkAcceleration.Enable,
 		HostNetworkMode:               hostNetworkMode,
 	}

@@ -262,6 +262,8 @@ type AntreaProxyConfig struct {
 	//                  can reply to clients directly, bypassing the ingress Node.
 	// A Service's load balancer mode can be overridden by annotating it with `service.antrea.io/load-balancer-mode`.
 	DefaultLoadBalancerMode string `yaml:"defaultLoadBalancerMode,omitempty"`
+	// Settings for the DSR load balancer mode.
+	DSR DSRConfig `yaml:"dsr,omitempty"`
 	// Disables the health check server run by Antrea Proxy, which provides health information about Services of
 	// type LoadBalancer with externalTrafficPolicy set to Local, when proxyAll is enabled. This avoids race
 	// conditions between kube-proxy and Antrea proxy, with both trying to bind to the same addresses, when proxyAll
@@ -271,6 +273,19 @@ type AntreaProxyConfig struct {
 	// server is functionally equivalent to the one of kube-proxy. If it is not specified, it will be automatically set
 	// to "0.0.0.0:10256".
 	ServiceHealthCheckServerBindAddress string `yaml:"serviceHealthCheckServerBindAddress,omitempty"`
+}
+
+type DSRConfig struct {
+	// Determines how the ingress Node sends the traffic of a DSR Service to the Node hosting the selected Endpoint by
+	// default. It has the following options:
+	// - tunnel (default): The traffic is encapsulated and sent through the tunnel interface. In noEncap mode, the
+	//                     tunnel interface is created for it, and the Pod MTU is reduced by the encapsulation overhead.
+	// - l2:               The traffic is sent unmodified to the MAC address of the Node hosting the selected Endpoint.
+	//                     It requires the DSRDispatchL2 feature gate, and noEncap or hybrid mode. The Nodes must be in
+	//                     one L2 segment. Traffic to Nodes in other subnets uses the tunnel in hybrid mode, and is
+	//                     dropped in noEncap mode unless the tunnel interface exists.
+	// A Service's dispatch can be overridden by annotating it with `service.antrea.io/dsr-dispatch`.
+	Dispatch string `yaml:"dispatch,omitempty"`
 }
 
 type WireGuardConfig struct {

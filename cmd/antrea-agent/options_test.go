@@ -81,14 +81,26 @@ func TestOptionsValidateTLSOptions(t *testing.T) {
 }
 
 func TestOptionsValidateAntreaProxyConfig(t *testing.T) {
+	dsrL2Config := func(dispatch string) agentconfig.AntreaProxyConfig {
+		return agentconfig.AntreaProxyConfig{
+			Enable:                  ptr.To(true),
+			ProxyAll:                true,
+			DefaultLoadBalancerMode: config.LoadBalancerModeDSR.String(),
+			DSR:                     agentconfig.DSRConfig{Dispatch: dispatch},
+		}
+	}
 	tests := []struct {
 		name                            string
 		enabledDSR                      bool
+		enabledDSRDispatchL2            bool
 		trafficEncapMode                config.TrafficEncapModeType
+		hostNetworkMode                 string
 		antreaProxyConfig               agentconfig.AntreaProxyConfig
 		expectedErr                     string
 		expectedDefaultLoadBalancerMode config.LoadBalancerMode
 		expectedEnableDSR               bool
+		expectedDSRDispatch             config.DSRDispatch
+		expectedEnableDSRL2Dispatch     bool
 	}{
 		{
 			name:             "default",
@@ -175,6 +187,125 @@ func TestOptionsValidateAntreaProxyConfig(t *testing.T) {
 			expectedErr:      "LoadBalancerMode DSR is not applicable to the networkPolicyOnly mode",
 		},
 		{
+			name:                            "l2 dispatch in noEncap mode",
+			enabledDSR:                      true,
+			enabledDSRDispatchL2:            true,
+			antreaProxyConfig:               dsrL2Config("l2"),
+			trafficEncapMode:                config.TrafficEncapModeNoEncap,
+			expectedDefaultLoadBalancerMode: config.LoadBalancerModeDSR,
+			expectedEnableDSR:               true,
+			expectedDSRDispatch:             config.DSRDispatchL2,
+			expectedEnableDSRL2Dispatch:     true,
+		},
+		{
+			name:                            "l2 dispatch in hybrid mode",
+			enabledDSR:                      true,
+			enabledDSRDispatchL2:            true,
+			antreaProxyConfig:               dsrL2Config("l2"),
+			trafficEncapMode:                config.TrafficEncapModeHybrid,
+			expectedDefaultLoadBalancerMode: config.LoadBalancerModeDSR,
+			expectedEnableDSR:               true,
+			expectedDSRDispatch:             config.DSRDispatchL2,
+			expectedEnableDSRL2Dispatch:     true,
+		},
+		{
+			name:                            "l2 dispatch in encap mode",
+			enabledDSR:                      true,
+			enabledDSRDispatchL2:            true,
+			antreaProxyConfig:               dsrL2Config("l2"),
+			trafficEncapMode:                config.TrafficEncapModeEncap,
+			expectedErr:                     "DSR dispatch l2 is only applicable to the noEncap and hybrid modes",
+			expectedDefaultLoadBalancerMode: config.LoadBalancerModeDSR,
+			expectedEnableDSR:               true,
+		},
+		{
+			name:                 "l2 dispatch in networkPolicyOnly mode",
+			enabledDSR:           true,
+			enabledDSRDispatchL2: true,
+			antreaProxyConfig: agentconfig.AntreaProxyConfig{
+				Enable:                  ptr.To(true),
+				ProxyAll:                true,
+				DefaultLoadBalancerMode: config.LoadBalancerModeNAT.String(),
+				DSR:                     agentconfig.DSRConfig{Dispatch: "l2"},
+			},
+			trafficEncapMode:  config.TrafficEncapModeNetworkPolicyOnly,
+			expectedErr:       "DSR dispatch l2 is only applicable to the noEncap and hybrid modes",
+			expectedEnableDSR: true,
+		},
+		{
+			name:                            "l2 dispatch without its feature gate",
+			enabledDSR:                      true,
+			antreaProxyConfig:               dsrL2Config("l2"),
+			trafficEncapMode:                config.TrafficEncapModeNoEncap,
+			expectedErr:                     "DSR dispatch l2 requires feature gate DSRDispatchL2 to be enabled",
+			expectedDefaultLoadBalancerMode: config.LoadBalancerModeDSR,
+			expectedEnableDSR:               true,
+		},
+		{
+			name:                            "l2 dispatch with the nftables host network mode",
+			enabledDSR:                      true,
+			enabledDSRDispatchL2:            true,
+			antreaProxyConfig:               dsrL2Config("l2"),
+			trafficEncapMode:                config.TrafficEncapModeNoEncap,
+			hostNetworkMode:                 config.HostNetworkModeNFTables.String(),
+			expectedErr:                     "DSR dispatch l2 is not supported with hostNetworkMode nftables",
+			expectedDefaultLoadBalancerMode: config.LoadBalancerModeDSR,
+			expectedEnableDSR:               true,
+		},
+		{
+			// A Service can still select the l2 dispatch with its annotation.
+			name:                            "tunnel dispatch in noEncap mode with the DSRDispatchL2 feature gate",
+			enabledDSR:                      true,
+			enabledDSRDispatchL2:            true,
+			antreaProxyConfig:               dsrL2Config("tunnel"),
+			trafficEncapMode:                config.TrafficEncapModeNoEncap,
+			expectedDefaultLoadBalancerMode: config.LoadBalancerModeDSR,
+			expectedEnableDSR:               true,
+			expectedDSRDispatch:             config.DSRDispatchTunnel,
+			expectedEnableDSRL2Dispatch:     true,
+		},
+		{
+			name:                            "DSRDispatchL2 feature gate in encap mode",
+			enabledDSR:                      true,
+			enabledDSRDispatchL2:            true,
+			antreaProxyConfig:               dsrL2Config(""),
+			trafficEncapMode:                config.TrafficEncapModeEncap,
+			expectedDefaultLoadBalancerMode: config.LoadBalancerModeDSR,
+			expectedEnableDSR:               true,
+			expectedDSRDispatch:             config.DSRDispatchTunnel,
+		},
+		{
+			name:                 "DSRDispatchL2 feature gate without proxyAll",
+			enabledDSR:           true,
+			enabledDSRDispatchL2: true,
+			antreaProxyConfig: agentconfig.AntreaProxyConfig{
+				Enable:                  ptr.To(true),
+				DefaultLoadBalancerMode: config.LoadBalancerModeNAT.String(),
+			},
+			trafficEncapMode:                config.TrafficEncapModeNoEncap,
+			expectedDefaultLoadBalancerMode: config.LoadBalancerModeNAT,
+		},
+		{
+			name:                            "DSRDispatchL2 feature gate with the nftables host network mode",
+			enabledDSR:                      true,
+			enabledDSRDispatchL2:            true,
+			antreaProxyConfig:               dsrL2Config("tunnel"),
+			trafficEncapMode:                config.TrafficEncapModeNoEncap,
+			hostNetworkMode:                 config.HostNetworkModeNFTables.String(),
+			expectedDefaultLoadBalancerMode: config.LoadBalancerModeDSR,
+			expectedEnableDSR:               true,
+			expectedDSRDispatch:             config.DSRDispatchTunnel,
+		},
+		{
+			name:                            "unknown DSR dispatch",
+			enabledDSR:                      true,
+			antreaProxyConfig:               dsrL2Config("geneve"),
+			trafficEncapMode:                config.TrafficEncapModeNoEncap,
+			expectedErr:                     "DSR dispatch geneve is unknown",
+			expectedDefaultLoadBalancerMode: config.LoadBalancerModeDSR,
+			expectedEnableDSR:               true,
+		},
+		{
 			name:             "invalid LoadBalancerMode",
 			trafficEncapMode: config.TrafficEncapModeEncap,
 			antreaProxyConfig: agentconfig.AntreaProxyConfig{
@@ -209,9 +340,12 @@ func TestOptionsValidateAntreaProxyConfig(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			featuregatetesting.SetFeatureGateDuringTest(t, features.DefaultFeatureGate, features.LoadBalancerModeDSR, tt.enabledDSR)
+			featuregatetesting.SetFeatureGateDuringTest(t, features.DefaultFeatureGate, features.DSRDispatchL2,
+				tt.enabledDSRDispatchL2)
 
 			o := &Options{config: &agentconfig.AgentConfig{
-				AntreaProxy: tt.antreaProxyConfig,
+				AntreaProxy:     tt.antreaProxyConfig,
+				HostNetworkMode: tt.hostNetworkMode,
 			}}
 			err := o.validateAntreaProxyConfig(tt.trafficEncapMode)
 			if tt.expectedErr == "" {
@@ -221,6 +355,8 @@ func TestOptionsValidateAntreaProxyConfig(t *testing.T) {
 			}
 			assert.Equal(t, tt.expectedDefaultLoadBalancerMode, o.defaultLoadBalancerMode)
 			assert.Equal(t, tt.expectedEnableDSR, o.enableDSR)
+			assert.Equal(t, tt.expectedDSRDispatch, o.dsrDispatch)
+			assert.Equal(t, tt.expectedEnableDSRL2Dispatch, o.enableDSRL2Dispatch)
 		})
 	}
 }

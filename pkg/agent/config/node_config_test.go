@@ -19,6 +19,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"k8s.io/utils/ptr"
 
 	"antrea.io/antrea/v2/pkg/ovs/ovsconfig"
 )
@@ -368,6 +369,21 @@ func TestCalculateMTUDeduction(t *testing.T) {
 			nc:                   &NetworkConfig{TrafficEncapMode: TrafficEncapModeNoEncap, TunnelType: ovsconfig.GeneveTunnel, EnableEgress: false},
 			expectedMTUDeduction: 0,
 		},
+		{
+			name:                 "noEncap with DSR and the tunnel dispatch by default",
+			nc:                   dsrNetworkConfig(TrafficEncapModeNoEncap, DSRDispatchTunnel, true),
+			expectedMTUDeduction: 50,
+		},
+		{
+			name:                 "noEncap with DSR and the l2 dispatch by default, where the Pod MTU is the transport MTU",
+			nc:                   dsrNetworkConfig(TrafficEncapModeNoEncap, DSRDispatchL2, true),
+			expectedMTUDeduction: 0,
+		},
+		{
+			name:                 "noEncap with DSR and the l2 dispatch by default, and Egress enabled",
+			nc:                   withEgress(dsrNetworkConfig(TrafficEncapModeNoEncap, DSRDispatchL2, true)),
+			expectedMTUDeduction: 50,
+		},
 	}
 
 	for _, tt := range tests {
@@ -429,6 +445,26 @@ func TestNeedsTunnelInterface(t *testing.T) {
 			nc:       &NetworkConfig{TrafficEncapMode: TrafficEncapModeNetworkPolicyOnly, EnableDSR: true},
 			expected: false,
 		},
+		{
+			name:     "noEncap mode with DSR and the tunnel dispatch by default, and the l2 dispatch available",
+			nc:       dsrNetworkConfig(TrafficEncapModeNoEncap, DSRDispatchTunnel, true),
+			expected: true,
+		},
+		{
+			name:     "noEncap mode with DSR and the l2 dispatch by default",
+			nc:       dsrNetworkConfig(TrafficEncapModeNoEncap, DSRDispatchL2, true),
+			expected: false,
+		},
+		{
+			name:     "noEncap mode with DSR and the l2 dispatch by default, and Egress enabled",
+			nc:       withEgress(dsrNetworkConfig(TrafficEncapModeNoEncap, DSRDispatchL2, true)),
+			expected: true,
+		},
+		{
+			name:     "noEncap mode with DSR and the l2 dispatch by default, which is not available",
+			nc:       dsrNetworkConfig(TrafficEncapModeNoEncap, DSRDispatchL2, false),
+			expected: true,
+		},
 	}
 
 	for _, tt := range tests {
@@ -475,10 +511,153 @@ func TestNeedsDSRTunnelToRoutedPeers(t *testing.T) {
 			nc:       &NetworkConfig{TrafficEncapMode: TrafficEncapModeNoEncap},
 			expected: false,
 		},
+		{
+			name:     "noEncap mode with DSR and the l2 dispatch by default, without a tunnel",
+			nc:       dsrNetworkConfig(TrafficEncapModeNoEncap, DSRDispatchL2, true),
+			expected: false,
+		},
+		{
+			name:     "noEncap mode with DSR and the l2 dispatch by default, with the tunnel of Egress",
+			nc:       withEgress(dsrNetworkConfig(TrafficEncapModeNoEncap, DSRDispatchL2, true)),
+			expected: true,
+		},
+		{
+			name:     "hybrid mode with DSR and the l2 dispatch by default",
+			nc:       dsrNetworkConfig(TrafficEncapModeHybrid, DSRDispatchL2, true),
+			expected: true,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			assert.Equal(t, tt.expected, tt.nc.NeedsDSRTunnelToRoutedPeers())
+		})
+	}
+}
+
+// dsrNetworkConfig returns a NetworkConfig in which Services can use DSR, with the given default dispatch. l2 makes
+// the l2 dispatch available to DSR Services, as the agent does when the DSRDispatchL2 feature gate is enabled.
+func dsrNetworkConfig(mode TrafficEncapModeType, dispatch DSRDispatch, l2 bool) *NetworkConfig {
+	return &NetworkConfig{
+		TrafficEncapMode:    mode,
+		TunnelType:          ovsconfig.GeneveTunnel,
+		EnableDSR:           true,
+		DSRDispatch:         dispatch,
+		EnableDSRL2Dispatch: l2,
+		EnableL2Dispatch:    l2,
+	}
+}
+
+func withEgress(nc *NetworkConfig) *NetworkConfig {
+	nc.EnableEgress = true
+	return nc
+}
+
+func TestSupportsDSRL2Dispatch(t *testing.T) {
+	tests := []struct {
+		name     string
+		nc       *NetworkConfig
+		expected bool
+	}{
+		{name: "noEncap", nc: dsrNetworkConfig(TrafficEncapModeNoEncap, DSRDispatchTunnel, true), expected: true},
+		{name: "hybrid", nc: dsrNetworkConfig(TrafficEncapModeHybrid, DSRDispatchTunnel, true), expected: true},
+		{name: "encap", nc: dsrNetworkConfig(TrafficEncapModeEncap, DSRDispatchTunnel, true), expected: false},
+		{
+			name:     "networkPolicyOnly",
+			nc:       dsrNetworkConfig(TrafficEncapModeNetworkPolicyOnly, DSRDispatchTunnel, true),
+			expected: false,
+		},
+		{
+			name:     "the l2 dispatch is enabled for another feature only",
+			nc:       &NetworkConfig{TrafficEncapMode: TrafficEncapModeNoEncap, EnableDSR: true, EnableL2Dispatch: true},
+			expected: false,
+		},
+		{
+			name: "Services cannot use DSR",
+			nc: &NetworkConfig{
+				TrafficEncapMode:    TrafficEncapModeNoEncap,
+				EnableDSRL2Dispatch: true,
+				EnableL2Dispatch:    true,
+			},
+			expected: false,
+		},
+		{
+			name:     "the l2 dispatch is not enabled",
+			nc:       &NetworkConfig{TrafficEncapMode: TrafficEncapModeNoEncap, EnableDSR: true, EnableDSRL2Dispatch: true},
+			expected: false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.expected, tt.nc.SupportsDSRL2Dispatch())
+		})
+	}
+}
+
+func TestDSRDispatchForService(t *testing.T) {
+	tunnel := ptr.To(DSRDispatchTunnel)
+	l2 := ptr.To(DSRDispatchL2)
+	tests := []struct {
+		name             string
+		nc               *NetworkConfig
+		requested        *DSRDispatch
+		expectedDispatch DSRDispatch
+		expectedFallback bool
+	}{
+		{
+			name:             "the default dispatch",
+			nc:               dsrNetworkConfig(TrafficEncapModeNoEncap, DSRDispatchTunnel, true),
+			expectedDispatch: DSRDispatchTunnel,
+		},
+		{
+			name:             "the annotation wins over the default dispatch",
+			nc:               dsrNetworkConfig(TrafficEncapModeNoEncap, DSRDispatchTunnel, true),
+			requested:        l2,
+			expectedDispatch: DSRDispatchL2,
+		},
+		{
+			name:             "the l2 dispatch by default",
+			nc:               dsrNetworkConfig(TrafficEncapModeNoEncap, DSRDispatchL2, true),
+			expectedDispatch: DSRDispatchL2,
+		},
+		{
+			name:             "tunnel without a tunnel interface becomes l2",
+			nc:               dsrNetworkConfig(TrafficEncapModeNoEncap, DSRDispatchL2, true),
+			requested:        tunnel,
+			expectedDispatch: DSRDispatchL2,
+			expectedFallback: true,
+		},
+		{
+			name:             "tunnel with the tunnel interface of Egress",
+			nc:               withEgress(dsrNetworkConfig(TrafficEncapModeNoEncap, DSRDispatchL2, true)),
+			requested:        tunnel,
+			expectedDispatch: DSRDispatchTunnel,
+		},
+		{
+			name:             "tunnel in hybrid mode, which has a tunnel interface",
+			nc:               dsrNetworkConfig(TrafficEncapModeHybrid, DSRDispatchL2, true),
+			requested:        tunnel,
+			expectedDispatch: DSRDispatchTunnel,
+		},
+		{
+			name:             "l2 in encap mode becomes tunnel",
+			nc:               dsrNetworkConfig(TrafficEncapModeEncap, DSRDispatchTunnel, true),
+			requested:        l2,
+			expectedDispatch: DSRDispatchTunnel,
+			expectedFallback: true,
+		},
+		{
+			name:             "l2 without the DSRDispatchL2 feature gate becomes tunnel",
+			nc:               dsrNetworkConfig(TrafficEncapModeNoEncap, DSRDispatchTunnel, false),
+			requested:        l2,
+			expectedDispatch: DSRDispatchTunnel,
+			expectedFallback: true,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			dispatch, fallback := tt.nc.DSRDispatchForService(tt.requested)
+			assert.Equal(t, tt.expectedDispatch, dispatch)
+			assert.Equal(t, tt.expectedFallback, fallback)
 		})
 	}
 }

@@ -955,6 +955,122 @@ func TestLoadBalancerAdd(t *testing.T) {
 	})
 }
 
+// TestLoadBalancerServiceDSRDispatch checks that the dispatch which a Service selects with the
+// service.antrea.io/dsr-dispatch annotation reaches the flows of its external IPs, and that changing the annotation
+// reinstalls all of them.
+func TestLoadBalancerServiceDSRDispatch(t *testing.T) {
+	tunnel := agentconfig.DSRDispatchTunnel
+	l2 := agentconfig.DSRDispatchL2
+	tests := []struct {
+		name                string
+		annotation          *string
+		updatedAnnotation   *string
+		expectedDispatch    *agentconfig.DSRDispatch
+		expectedNewDispatch *agentconfig.DSRDispatch
+		// expectedReinstall is true if the update reinstalls the flows of every external IP, and not only those of
+		// the added external IP.
+		expectedReinstall bool
+	}{
+		{
+			name:                "no annotation, then l2",
+			updatedAnnotation:   ptr.To("l2"),
+			expectedNewDispatch: &l2,
+			expectedReinstall:   true,
+		},
+		{
+			name:                "l2, then tunnel",
+			annotation:          ptr.To("l2"),
+			expectedDispatch:    &l2,
+			updatedAnnotation:   ptr.To("tunnel"),
+			expectedNewDispatch: &tunnel,
+			expectedReinstall:   true,
+		},
+		{
+			name:                "unchanged annotation",
+			annotation:          ptr.To("tunnel"),
+			expectedDispatch:    &tunnel,
+			updatedAnnotation:   ptr.To("tunnel"),
+			expectedNewDispatch: &tunnel,
+		},
+		{
+			name:              "invalid annotation",
+			annotation:        ptr.To("geneve"),
+			updatedAnnotation: ptr.To("geneve"),
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			featuregatetesting.SetFeatureGateDuringTest(t, features.DefaultFeatureGate, features.LoadBalancerModeDSR, true)
+			ctrl := gomock.NewController(t)
+			mockOFClient, mockRouteClient := getMockClients(ctrl)
+			fp := newFakeProxier(mockRouteClient, mockOFClient, nodePortAddresses(false), openflow.NewGroupAllocator(), false,
+				withProxyAll, withDSRMode)
+
+			internalTrafficPolicy := corev1.ServiceInternalTrafficPolicyCluster
+			svc := makeTestLoadBalancerService(&svcPortName, svc1IP(false), []net.IP{externalIP(false)},
+				[]net.IP{loadBalancerIP(false)}, nil, int32(svcPort), int32(svcNodePort), corev1.ProtocolTCP, nil,
+				&internalTrafficPolicy, corev1.ServiceExternalTrafficPolicyCluster)
+			if tt.annotation != nil {
+				svc.Annotations[antreatypes.ServiceDSRDispatchAnnotationKey] = *tt.annotation
+			}
+			makeServiceMap(fp, svc)
+			remoteEp, remoteEpPort := makeTestEndpointSliceEndpointAndPort(&svcPortName, ep1IP(false), int32(svcPort),
+				corev1.ProtocolTCP, false)
+			makeEndpointSliceMap(fp, makeTestEndpointSlice(svcPortName.Namespace, svcPortName.Name,
+				[]discovery.Endpoint{*remoteEp}, []discovery.EndpointPort{*remoteEpPort}, false))
+
+			// Only the configurations of the Service flows are the subject of this test.
+			var configs []*antreatypes.ServiceConfig
+			mockOFClient.EXPECT().InstallServiceFlows(gomock.Any()).DoAndReturn(func(config *antreatypes.ServiceConfig) error {
+				configs = append(configs, config)
+				return nil
+			}).AnyTimes()
+			mockOFClient.EXPECT().UninstallServiceFlows(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
+			mockOFClient.EXPECT().InstallEndpointFlows(gomock.Any(), gomock.Any()).AnyTimes()
+			mockOFClient.EXPECT().InstallServiceGroup(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
+			mockRouteClient.EXPECT().AddNodePortConfigs(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
+			mockRouteClient.EXPECT().DeleteNodePortConfigs(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
+			mockRouteClient.EXPECT().AddExternalIPConfigs(gomock.Any(), gomock.Any()).AnyTimes()
+			mockRouteClient.EXPECT().DeleteExternalIPConfigs(gomock.Any(), gomock.Any()).AnyTimes()
+
+			// dsrFlowDispatches returns the dispatch of each flow configuration installed for an external IP in DSR
+			// mode since the last call.
+			dsrFlowDispatches := func() []*agentconfig.DSRDispatch {
+				var dispatches []*agentconfig.DSRDispatch
+				for _, config := range configs {
+					if config.IsDSR {
+						dispatches = append(dispatches, config.DSRDispatch)
+					}
+				}
+				configs = nil
+				return dispatches
+			}
+
+			require.NoError(t, fp.syncProxyRules())
+			assert.Equal(t, []*agentconfig.DSRDispatch{tt.expectedDispatch, tt.expectedDispatch}, dsrFlowDispatches(),
+				"the flows of the external IP and of the LoadBalancer IP use the dispatch of the annotation")
+
+			// The update also adds an external IP, whose flows are installed in any case.
+			updatedSvc := svc.DeepCopy()
+			updatedSvc.Spec.ExternalIPs = append(updatedSvc.Spec.ExternalIPs, "192.168.77.201")
+			delete(updatedSvc.Annotations, antreatypes.ServiceDSRDispatchAnnotationKey)
+			if tt.updatedAnnotation != nil {
+				updatedSvc.Annotations[antreatypes.ServiceDSRDispatchAnnotationKey] = *tt.updatedAnnotation
+			}
+			fp.serviceChanges.OnServiceUpdate(svc, updatedSvc)
+			require.NoError(t, fp.syncProxyRules())
+			expectedDispatches := []*agentconfig.DSRDispatch{tt.expectedNewDispatch}
+			if tt.expectedReinstall {
+				// The flows of the two external IPs and of the LoadBalancer IP.
+				expectedDispatches = []*agentconfig.DSRDispatch{
+					tt.expectedNewDispatch, tt.expectedNewDispatch, tt.expectedNewDispatch,
+				}
+			}
+			assert.Equal(t, expectedDispatches, dsrFlowDispatches())
+		})
+	}
+}
+
 func TestLoadBalancerServiceWithMultiplePorts(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	mockOFClient, mockRouteClient := getMockClients(ctrl)
