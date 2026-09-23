@@ -20,6 +20,7 @@
 - [Troubleshooting with antctl](#troubleshooting-with-antctl)
 - [Troubleshooting BGP](#troubleshooting-bgp)
   - [Checking the BGPPolicy applied to a Node](#checking-the-bgppolicy-applied-to-a-node)
+  - [Reading the BGP messages in the Antrea Agent log](#reading-the-bgp-messages-in-the-antrea-agent-log)
 - [Profiling Antrea components](#profiling-antrea-components)
 - [Ask your questions to the Antrea community](#ask-your-questions-to-the-antrea-community)
 <!-- /toc -->
@@ -307,6 +308,23 @@ at 5 seconds and doubles up to 5 minutes. When the BGP server could not be
 started, `antctl get bgppeers` and `antctl get bgproutes` print the same error
 instead of a list. If no BGPPolicy selects the Node, all three commands answer
 that there is no effective BGP policy.
+
+### Reading the BGP messages in the Antrea Agent log
+
+At the default log verbosity, the `antrea-agent` container logs:
+
+- each BGP peer that is added, updated or removed.
+- each BGP peer that has no entry in the `antrea-bgp-passwords` Secret, while
+  that Secret exists. The message names the key that was looked up. The session
+  with such a peer is not authenticated, so a peer that requires a password
+  never reaches the `Established` state. See [BGP
+  Authentication](bgp-policy.md#bgp-authentication) for the key format.
+- each attempt to apply the BGPPolicy that fails, with the error.
+- each BGP session that goes up or down, as `Peer Up` and `Peer Down`.
+
+At verbosity 2, the log also records each attempt to apply the BGPPolicy and
+how long it took, and each route that is advertised or withdrawn. To change the
+verbosity, see [Looking at the Antrea logs](#looking-at-the-antrea-logs).
 
 ## Profiling Antrea components
 

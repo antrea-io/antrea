@@ -2096,7 +2096,7 @@ func TestSyncBGPPolicyFailures(t *testing.T) {
 	// Mock the retry. Start BGP server successfully, but fail in adding BGP peer.
 	mockBGPServer.EXPECT().Start(gomock.Any())
 	mockBGPServer.EXPECT().AddPeer(gomock.Any(), ipv4Peer1Config).Return(fmt.Errorf("failed to add BGP peer"))
-	require.EqualError(t, c.syncBGPPolicy(ctx), "failed to add BGP peer")
+	require.EqualError(t, c.syncBGPPolicy(ctx), "failed to add BGP peer 192.168.77.251 with ASN 65531: failed to add BGP peer")
 	checkBGPPolicyState(t, generateBGPPolicyState(bgpPolicyName2,
 		1179,
 		65000,

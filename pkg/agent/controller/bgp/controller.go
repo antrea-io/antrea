@@ -177,6 +177,10 @@ type Controller struct {
 	// and the error that stopped it, which is nil when the sync succeeded. Guarded by bgpPolicyStateMutex.
 	lastSyncPolicyName string
 	lastSyncError      error
+
+	// bgpPeerSecretExists is true while the Secret holding the passwords of BGP peers exists. Guarded by
+	// bgpPeerPasswordsMutex.
+	bgpPeerSecretExists bool
 }
 
 func NewBGPPolicyController(nodeInformer coreinformers.NodeInformer,
@@ -369,7 +373,7 @@ func (c *Controller) syncBGPPolicy(ctx context.Context) (err error) {
 
 	startTime := time.Now()
 	defer func() {
-		klog.InfoS("Finished syncing BGPPolicy", "durationTime", time.Since(startTime))
+		klog.V(2).InfoS("Finished syncing BGPPolicy", "durationTime", time.Since(startTime))
 	}()
 
 	// Get the oldest BGPPolicy applied to the current Node as the effective BGPPolicy.
@@ -498,23 +502,26 @@ func (c *Controller) reconcileBGPPeers(ctx context.Context, bgpPeers []v1alpha1.
 	for key := range peerToAddKeys {
 		peerConfig := curPeerConfigs[key]
 		if err := bgpServer.AddPeer(ctx, peerConfig); err != nil {
-			return err
+			return fmt.Errorf("failed to add BGP peer %s with ASN %d: %w", peerConfig.Address, peerConfig.ASN, err)
 		}
 		c.bgpPolicyState.peerConfigs[key] = peerConfig
+		klog.InfoS("Added BGP peer", "peer", peerConfig.Address, "asn", peerConfig.ASN)
 	}
 	for key := range peerToUpdateKeys {
 		peerConfig := curPeerConfigs[key]
 		if err := bgpServer.UpdatePeer(ctx, peerConfig); err != nil {
-			return err
+			return fmt.Errorf("failed to update BGP peer %s with ASN %d: %w", peerConfig.Address, peerConfig.ASN, err)
 		}
 		c.bgpPolicyState.peerConfigs[key] = peerConfig
+		klog.InfoS("Updated BGP peer", "peer", peerConfig.Address, "asn", peerConfig.ASN)
 	}
 	for key := range peerToDeleteKeys {
 		peerConfig := prePeerConfigs[key]
 		if err := bgpServer.RemovePeer(ctx, peerConfig); err != nil {
-			return err
+			return fmt.Errorf("failed to remove BGP peer %s with ASN %d: %w", peerConfig.Address, peerConfig.ASN, err)
 		}
 		delete(c.bgpPolicyState.peerConfigs, key)
+		klog.InfoS("Removed BGP peer", "peer", peerConfig.Address, "asn", peerConfig.ASN)
 	}
 
 	return nil
@@ -543,12 +550,15 @@ func (c *Controller) reconcileBGPAdvertisements(ctx context.Context, bgpAdvertis
 			Type:      curRoutes[route].Type,
 			K8sObjRef: curRoutes[route].K8sObjRef,
 		}
+		klog.V(2).InfoS("Advertised BGP route", "prefix", route.Prefix, "type", curRoutes[route].Type, "k8sObjRef", curRoutes[route].K8sObjRef)
 	}
 	for route := range routesToWithdraw {
+		metadata := c.bgpPolicyState.routes[route]
 		if err := bgpServer.WithdrawRoutes(ctx, []bgp.Route{route}); err != nil {
 			return err
 		}
 		delete(c.bgpPolicyState.routes, route)
+		klog.V(2).InfoS("Withdrew BGP route", "prefix", route.Prefix, "type", metadata.Type, "k8sObjRef", metadata.K8sObjRef)
 	}
 
 	return nil
@@ -745,6 +755,10 @@ func (c *Controller) getPeerConfigs(peers []v1alpha1.BGPPeer) map[string]bgp.Pee
 			var password string
 			if p, exists := c.bgpPeerPasswords[peerKey]; exists {
 				password = p
+			} else if c.bgpPeerSecretExists {
+				klog.InfoS("The password Secret has no entry for the BGP peer, so the session is not authenticated",
+					"peer", peers[i].Address, "asn", peers[i].ASN,
+					"secret", klog.KRef(env.GetAntreaNamespace(), types.BGPPolicySecretName), "expectedKey", peerKey)
 			}
 
 			peerConfigs[peerKey] = bgp.PeerConfig{
@@ -1102,6 +1116,7 @@ func (c *Controller) updateBGPPeerPasswords(secret *corev1.Secret) {
 	defer c.bgpPeerPasswordsMutex.Unlock()
 
 	c.bgpPeerPasswords = make(map[string]string)
+	c.bgpPeerSecretExists = secret != nil
 	if secret != nil && secret.Data != nil {
 		for k, v := range secret.Data {
 			c.bgpPeerPasswords[k] = string(v)
