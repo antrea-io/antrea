@@ -24,6 +24,7 @@
   - [Reading the BGP messages in the Antrea Agent log](#reading-the-bgp-messages-in-the-antrea-agent-log)
   - [Checking the Events of a BGPPolicy](#checking-the-events-of-a-bgppolicy)
   - [Monitoring BGP with Prometheus](#monitoring-bgp-with-prometheus)
+  - [Collecting the BGP state in a support bundle](#collecting-the-bgp-state-in-a-support-bundle)
 - [Profiling Antrea components](#profiling-antrea-components)
 - [Ask your questions to the Antrea community](#ask-your-questions-to-the-antrea-community)
 <!-- /toc -->
@@ -425,6 +426,16 @@ groups:
     annotations:
       summary: "Antrea Agent on {{ $labels.instance }} keeps failing to apply its BGPPolicy"
 ```
+
+### Collecting the BGP state in a support bundle
+
+The support bundle of an Antrea Agent includes the output of `antctl get
+bgppolicy`, `antctl get bgppeers` and `antctl get bgproutes`, in the files
+`bgppolicy`, `bgppeers` and `bgproutes`. When BGP is not enabled, or no
+BGPPolicy is in effect on the Node, the files contain the reason instead. Take
+the bundle while the problem is happening, as it records the state of that
+moment. See the [support bundle guide](support-bundle-guide.md) for how to
+collect one.
 
 ## Profiling Antrea components
 
