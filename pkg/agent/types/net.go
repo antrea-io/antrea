@@ -64,6 +64,13 @@ const (
 	L2DispatchGuardRulePriority = 32000
 	L2DispatchPeerRulePriority  = 40000
 	L2DispatchDropRulePriority  = 40001
+
+	// ReplyEgressRulePriority is the priority of the ip rules which make the reply Egress packets carrying
+	// EgressNoEncapReturnToRemoteMark look up ReplyEgressRouteTable. It comes after L2DispatchGuardRulePriority and
+	// before the main table (32766). A rule added without a priority gets the priority of the second rule in the list
+	// minus one, which depends on the other rules on the Node: 32765 when only the default rules exist, but 31999,
+	// before the guard rule, when the l2 dispatch is enabled.
+	ReplyEgressRulePriority = 32765
 )
 
 // L2DispatchPeerMark returns the packet mark which makes the host send a packet to the peer Node with the index.
