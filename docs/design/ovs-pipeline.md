@@ -1459,6 +1459,19 @@ and the *Global Virtual MAC* respectively. Additionally, `ToTunnelRegMark`, indi
 and `EgressSNATRegMark`, indicating that packets should undergo SNAT on a remote Node, are loaded. Finally, the packets
 are forwarded to table [L2ForwardingCalc].
 
+In `noEncap` mode with the `l2` Egress dispatch, flow 4 sends the packets to the remote Node
+without a tunnel. For example, for a remote Node whose l2 dispatch index is 3, it becomes:
+
+```text
+table=EgressMark, priority=200,ct_state=+trk,ip,in_port="client-6-3353ef" actions=set_field:0x20000000/0x20000000->pkt_mark,set_field:0x30000/0xfff0000->pkt_mark,set_field:0x20/0xf0->reg0,set_field:0x80000/0x80000->reg0,goto_table:L2ForwardingCalc
+```
+
+The flow loads the flag of the l2 dispatch (bit 29) and the index of the remote Node (bits 16 to
+27) to `pkt_mark`, and loads `ToGatewayRegMark` and `RemoteSNATRegMark`. The packets leave OVS
+through the local Antrea gateway, with their MAC addresses unchanged, and the policy routing of the
+host sends them to the MAC address of the remote Node. The remote Node gives them the mark of the
+SNAT IP from their source Pod IP, with iptables, and SNATs them.
+
 Flow 5 matches the first packet of connections originating from remote Pods selected by the sample [Egress egress-web]
 whose SNAT IP is configured on the local Node, and then loads an 8-bit ID allocated for the associated SNAT IP defined
 in the sample Egress to the `pkt_mark`, which will be consumed by iptables on the local Node to perform SNAT with the

@@ -62,6 +62,7 @@ edit the Agent configuration in the
 | `ClusterNetworkPolicy`          | Controller         | `false` | Alpha      | v2.7          | N/A          | N/A        | Yes                | Successor to `AdminNetworkPolicy`                      |
 | `EgressTrafficShaping`          | Agent              | `false` | Alpha      | v1.14         | N/A          | N/A        | Yes                | OVS meters should be supported                         |
 | `EgressSeparateSubnet`          | Agent              | `true`  | Beta       | v1.15         | v2.3         | N/A        | No                 |                                                        |
+| `EgressDispatchL2`              | Agent + Controller | `false` | Alpha      | v2.8          | N/A          | N/A        | Yes                | noEncap mode only                                      |
 | `NodeNetworkPolicy`             | Agent              | `false` | Alpha      | v1.15         | N/A          | N/A        | Yes                |                                                        |
 | `BGPPolicy`                     | Agent              | `false` | Alpha      | v2.1          | N/A          | N/A        | No                 |                                                        |
 | `NodeLatencyMonitor`            | Agent              | `false` | Alpha      | v2.1          | N/A          | N/A        | No                 |                                                        |
@@ -479,6 +480,24 @@ to be supported in the datapath.
 
 `EgressSeparateSubnet` allows users to allocate Egress IPs from a different subnet from the default Node subnet.
 Refer to this [document](egress.md#subnetinfo) for more information.
+
+### EgressDispatchL2
+
+`EgressDispatchL2` allows the `egress.dispatch` option of the Agent to be set to `l2` in noEncap
+mode. The Node of a Pod then sends the Egress traffic of the Pod to the MAC address of the Egress
+Node, instead of through a tunnel. Antrea does not create the tunnel interface for Egress, and does
+not reduce the Pod MTU for it.
+
+Enable the feature gate for both the Agent and the Controller. The Controller then sends the Egress
+Node the IPs of the Pods which use its Egress IPs, so that the Egress Node can find the Egress IP
+of a packet from its source IP. Refer to
+[Egress without a tunnel in noEncap mode](egress.md#egress-without-a-tunnel-in-noencap-mode) for
+more information.
+
+#### Requirements for this Feature
+
+- Linux Nodes, in noEncap mode.
+- All Nodes are in one L2 segment on their transport interface.
 
 ### BGPPolicy
 
