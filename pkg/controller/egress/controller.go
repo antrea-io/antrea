@@ -44,6 +44,7 @@ import (
 	"antrea.io/antrea/v2/pkg/controller/externalippool"
 	"antrea.io/antrea/v2/pkg/controller/grouping"
 	antreatypes "antrea.io/antrea/v2/pkg/controller/types"
+	"antrea.io/antrea/v2/pkg/features"
 	"antrea.io/antrea/v2/pkg/util/k8s"
 )
 
@@ -386,6 +387,15 @@ func (c *EgressController) syncEgress(key string) error {
 	podNum := 0
 	memberSetByNode := make(map[string]controlplane.GroupMemberSet)
 	egressGroup := egressGroupObj.(*antreatypes.EgressGroup)
+	// With the l2 dispatch, the traffic of the Pods on other Nodes reaches the Egress Node without a tunnel, and the
+	// Egress Node finds the Egress IP from the source Pod IP. So the Egress Node receives every member of the group,
+	// with the Pod IPs. The other Nodes receive their own members without IPs, as they do without the feature gate.
+	var egressNode string
+	var egressNodeMembers controlplane.GroupMemberSet
+	if features.DefaultFeatureGate.Enabled(features.EgressDispatchL2) && egress.Status.EgressNode != "" {
+		egressNode = egress.Status.EgressNode
+		egressNodeMembers = controlplane.GroupMemberSet{}
+	}
 	pods, _ := c.groupingInterface.GetEntities(egressGroupType, key)
 	for _, pod := range pods {
 		// Ignore Pod if it's not scheduled or is already terminated. And Egress does not support HostNetwork Pods, so also ignore
@@ -408,6 +418,14 @@ func (c *EgressController) syncEgress(key string) error {
 		podSet.Insert(groupMember)
 		// Update the NodeNames in order to set the SpanMeta for EgressGroup.
 		nodeNames.Insert(pod.Spec.NodeName)
+		if egressNodeMembers != nil {
+			egressNodeMembers.Insert(podToGroupMemberWithIPs(pod))
+		}
+	}
+	if egressNode != "" {
+		// The Egress Node may host some of the members. Its copy replaces them with all members, with IPs.
+		memberSetByNode[egressNode] = egressNodeMembers
+		nodeNames.Insert(egressNode)
 	}
 	updatedEgressGroup := &antreatypes.EgressGroup{
 		UID:               egressGroup.UID,
@@ -418,6 +436,23 @@ func (c *EgressController) syncEgress(key string) error {
 	klog.V(2).InfoS("Updating existing EgressGroup", "name", key, "podNum", podNum, "nodeNum", nodeNames.Len())
 	c.egressGroupStore.Update(updatedEgressGroup)
 	return nil
+}
+
+// podToGroupMemberWithIPs returns the GroupMember of the Pod with the Pod IPs. The IPs are part of the identity of a
+// GroupMember, so a Pod which gets its IPs is removed from the group without IPs and added again with them.
+func podToGroupMemberWithIPs(pod *v1.Pod) *controlplane.GroupMember {
+	member := &controlplane.GroupMember{
+		Pod: &controlplane.PodReference{
+			Name:      pod.Name,
+			Namespace: pod.Namespace,
+		},
+	}
+	for _, podIP := range pod.Status.PodIPs {
+		if ip := net.ParseIP(podIP.IP); ip != nil {
+			member.IPs = append(member.IPs, controlplane.IPAddress(ip))
+		}
+	}
+	return member
 }
 
 func (c *EgressController) enqueueEgressGroup(key string) {
@@ -453,6 +488,13 @@ func (c *EgressController) updateEgress(old, cur interface{}) {
 		c.groupingInterface.AddGroup(egressGroupType, curEgress.Name, groupSelector)
 	}
 	if oldEgress.GetGeneration() != curEgress.GetGeneration() {
+		c.queue.Add(curEgress.Name)
+		return
+	}
+	// The Egress Node is in the span of the EgressGroup with the l2 dispatch, and a status update does not change the
+	// generation.
+	if features.DefaultFeatureGate.Enabled(features.EgressDispatchL2) &&
+		oldEgress.Status.EgressNode != curEgress.Status.EgressNode {
 		c.queue.Add(curEgress.Name)
 	}
 }
