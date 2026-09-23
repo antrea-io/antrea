@@ -959,6 +959,30 @@ ROUTE                    TYPE     K8S-OBJ-REF
 fec0::192:168:77:100/128 EgressIP egress2
 ```
 
+By default, `get bgproutes` prints the routes that the Node intends to advertise. With
+`--peer <address>`, it prints the routes that the BGP server actually sent to that peer, after
+export policy. The BGP server sends no route to a peer whose session is not established, so this
+list can be empty while the default one is not. With `--peer <address> --received`, it prints the
+routes that the peer sent to the Node. The Node does not install these routes, and they have no
+type. `--received` requires `--peer`, and cannot be combined with `-T`. A peer that is not a peer
+of the effective BGP policy returns an error.
+
+```bash
+# Get the list of routes sent to a bgp peer
+$ antctl get bgproutes --peer 192.168.77.200
+
+ROUTE         TYPE                  K8S-OBJ-REF
+172.18.0.3/32 EgressIP              egress1
+10.244.1.0/24 NodeIPAMPodCIDR       <NONE>
+10.96.0.1/32  ServiceLoadBalancerIP default/svc1
+
+# Get the list of routes received from a bgp peer
+$ antctl get bgproutes --peer 192.168.77.200 --received
+
+ROUTE       TYPE   K8S-OBJ-REF
+10.0.0.0/16 <NONE> <NONE>
+```
+
 ### Upgrade existing objects of CRDs
 
 antctl supports upgrading existing objects of Antrea CRDs to the storage version.

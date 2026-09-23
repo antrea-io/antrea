@@ -320,6 +320,13 @@ established, and how many routes were sent to each peer and received from it.
 An `Established` session that sends no route means that the Node advertises
 nothing: check which routes it advertises with `antctl get bgproutes`.
 
+`antctl get bgproutes` prints the routes that the Node intends to advertise.
+To see what a peer actually gets, run `antctl get bgproutes --peer <address>`.
+It prints the routes that the BGP server sent to that peer, which is none while
+the session is down. To see the routes that the peer sends to the Node, add
+`--received`. The Node does not install them, but they show whether the peer
+and the Node agree on the session.
+
 ### Reading the BGP messages in the Antrea Agent log
 
 At the default log verbosity, the `antrea-agent` container logs:

@@ -690,7 +690,7 @@ $ antctl get podmulticaststats pod -n namespace`,
 			use:     "bgproutes",
 			aliases: []string{"bgproute"},
 			short:   "Print the advertised bgp routes.",
-			long:    "Print the advertised bgp routes.",
+			long:    "Print the advertised bgp routes. With --peer, print the routes sent to a bgp peer, or received from it with --received.",
 			example: `  Get the list of all advertised bgp routes
   $ antctl get bgproutes
   Get the list of advertised IPv4 bgp routes
@@ -699,6 +699,10 @@ $ antctl get podmulticaststats pod -n namespace`,
   $ antctl get bgproutes --ipv6-only
   Get the list of all advertised routes of a specific type
   $ antctl get bgproutes -T EgressIP
+  Get the list of routes sent to a bgp peer
+  $ antctl get bgproutes --peer 192.168.77.200
+  Get the list of routes received from a bgp peer
+  $ antctl get bgproutes --peer 192.168.77.200 --received
 `,
 			agentEndpoint: &endpoint{
 				nonResourceEndpoint: &nonResourceEndpoint{
@@ -719,6 +723,15 @@ $ antctl get podmulticaststats pod -n namespace`,
 							shorthand:       "T",
 							usage:           "Get advertised bgp routes of a specific type. Valid types are EgressIP, ServiceLoadBalancerIP, ServiceExternalIP, ServiceClusterIP or NodeIPAMPodCIDR.",
 							supportedValues: []string{"EgressIP", "ServiceLoadBalancerIP", "ServiceExternalIP", "ServiceClusterIP", "NodeIPAMPodCIDR"},
+						},
+						{
+							name:  "peer",
+							usage: "Get the bgp routes sent to the bgp peer with this address, as the bgp server holds them after export policy.",
+						},
+						{
+							name:   "received",
+							usage:  "With --peer, get the bgp routes received from the peer instead of the routes sent to it.",
+							isBool: true,
 						},
 					},
 					outputType: multiple,

@@ -27,6 +27,7 @@ import (
 	utilnet "k8s.io/utils/net"
 
 	"antrea.io/antrea/v2/pkg/agent/apis"
+	agentbgp "antrea.io/antrea/v2/pkg/agent/bgp"
 	"antrea.io/antrea/v2/pkg/agent/controller/bgp"
 	"antrea.io/antrea/v2/pkg/querier"
 )
@@ -61,8 +62,36 @@ func HandleFunc(bq querier.AgentBGPPolicyInfoQuerier) http.HandlerFunc {
 			http.Error(w, "invalid query", http.StatusBadRequest)
 			return
 		}
+		peer := values.Get("peer")
+		if peer != "" && !utilnet.IsIPv4String(peer) && !utilnet.IsIPv6String(peer) {
+			http.Error(w, "invalid peer address", http.StatusBadRequest)
+			return
+		}
+		var received bool
+		if values.Has("received") {
+			if values.Get("received") != "" {
+				http.Error(w, "invalid query", http.StatusBadRequest)
+				return
+			}
+			received = true
+		}
+		if received && peer == "" {
+			http.Error(w, "--received requires --peer", http.StatusBadRequest)
+			return
+		}
+		// The type of a route is the kind of object it is advertised for, which a received route does not have.
+		if received && bgpRouteType != "" {
+			http.Error(w, "--type cannot be combined with --received", http.StatusBadRequest)
+			return
+		}
 
-		bgpRoutes, err := bq.GetBGPRoutes(r.Context())
+		var bgpRoutes map[agentbgp.Route]bgp.RouteMetadata
+		var err error
+		if peer != "" {
+			bgpRoutes, err = bq.GetBGPPeerRoutes(r.Context(), peer, received)
+		} else {
+			bgpRoutes, err = bq.GetBGPRoutes(r.Context())
+		}
 		if err != nil {
 			var notAppliedErr *bgp.BGPPolicyNotAppliedError
 			if errors.Is(err, bgp.ErrBGPPolicyNotFound) {
@@ -72,6 +101,10 @@ func HandleFunc(bq querier.AgentBGPPolicyInfoQuerier) http.HandlerFunc {
 			if errors.As(err, &notAppliedErr) {
 				// Keep the message above as a prefix, so that clients which match it still recognize the case.
 				http.Error(w, "there is no effective bgp policy applied to the Node: "+err.Error(), http.StatusNotFound)
+				return
+			}
+			if errors.Is(err, bgp.ErrBGPPeerNotFound) {
+				http.Error(w, err.Error(), http.StatusNotFound)
 				return
 			}
 			http.Error(w, err.Error(), http.StatusInternalServerError)
