@@ -2160,26 +2160,37 @@ func (c *Client) initEgressIPRules() error {
 		if rule.Table != types.ReplyEgressRouteTable {
 			continue
 		}
-		// Delete all rules whose target table is ReplyEgressRouteTable on startup. These rules will be reinstalled
-		// each time after restart. This implementation was inspired by the implementation of RestoreEgressRoutesAndRules.
+		// Delete all rules whose target table is ReplyEgressRouteTable on startup, whatever their priority. These rules
+		// will be reinstalled each time after restart. This also replaces the rules which earlier versions added
+		// without a priority. This implementation was inspired by the implementation of RestoreEgressRoutesAndRules.
 		c.netlink.RuleDel(&rule)
 	}
 
 	if c.networkConfig.IPv6Enabled {
-		rule := generateRule(types.ReplyEgressRouteTable, types.EgressNoEncapReturnToRemoteMark, &types.EgressNoEncapReturnToRemoteMark, netlink.FAMILY_V6)
+		rule := newReplyEgressRule(netlink.FAMILY_V6)
 		if err := c.netlink.RuleAdd(rule); err != nil {
 			return fmt.Errorf("error adding ip rule %v: %w", rule, err)
 		}
 		c.egressRules.Store(generateRuleKey(rule), rule)
 	}
 	if c.networkConfig.IPv4Enabled {
-		rule := generateRule(types.ReplyEgressRouteTable, types.EgressNoEncapReturnToRemoteMark, &types.EgressNoEncapReturnToRemoteMark, netlink.FAMILY_V4)
+		rule := newReplyEgressRule(netlink.FAMILY_V4)
 		if err := c.netlink.RuleAdd(rule); err != nil {
 			return fmt.Errorf("error adding ip rule %v: %w", rule, err)
 		}
 		c.egressRules.Store(generateRuleKey(rule), rule)
 	}
 	return nil
+}
+
+// newReplyEgressRule returns the ip rule which makes the reply Egress packets whose request packets are from remote
+// Pods look up ReplyEgressRouteTable. The rule has a fixed priority, so that its position does not depend on the other
+// rules on the Node.
+func newReplyEgressRule(family int) *netlink.Rule {
+	rule := generateRule(types.ReplyEgressRouteTable, types.EgressNoEncapReturnToRemoteMark,
+		&types.EgressNoEncapReturnToRemoteMark, family)
+	rule.Priority = types.ReplyEgressRulePriority
+	return rule
 }
 
 func (c *Client) initEgressIPRoutes() error {

@@ -219,6 +219,86 @@ func TestRestoreEgressRoutesAndRules(t *testing.T) {
 	assert.NoError(t, c.RestoreEgressRoutesAndRules(101, 120))
 }
 
+func TestInitEgressIPRules(t *testing.T) {
+	replyRule := func(family, priority int) *netlink.Rule {
+		rule := netlink.NewRule()
+		rule.Family = family
+		rule.Priority = priority
+		rule.Table = types.ReplyEgressRouteTable
+		rule.Mark = types.EgressNoEncapReturnToRemoteMark
+		rule.Mask = ptr.To(types.EgressNoEncapReturnToRemoteMark)
+		return rule
+	}
+	separateSubnetRule := netlink.NewRule()
+	separateSubnetRule.Family = netlink.FAMILY_V4
+	separateSubnetRule.Priority = 32764
+	separateSubnetRule.Table = 101
+	separateSubnetRule.Mark = 1
+	separateSubnetRule.Mask = ptr.To(types.SNATIPMarkMask)
+
+	tests := []struct {
+		name          string
+		ipv6Enabled   bool
+		existingRules []*netlink.Rule
+		deletedRules  []*netlink.Rule
+		addedRules    []*netlink.Rule
+	}{
+		{
+			name:          "no reply rule",
+			ipv6Enabled:   true,
+			existingRules: []*netlink.Rule{separateSubnetRule},
+			addedRules:    []*netlink.Rule{replyRule(netlink.FAMILY_V6, 32765), replyRule(netlink.FAMILY_V4, 32765)},
+		},
+		{
+			// An earlier version added the rules without a priority. The kernel placed the IPv4 rule before the guard
+			// rule of the l2 dispatch, at 31999, and the IPv6 rule before the main table, at 32765.
+			name:        "reply rules added without a priority are replaced",
+			ipv6Enabled: true,
+			existingRules: []*netlink.Rule{
+				replyRule(netlink.FAMILY_V4, 31999), separateSubnetRule, replyRule(netlink.FAMILY_V6, 32765),
+			},
+			deletedRules: []*netlink.Rule{replyRule(netlink.FAMILY_V4, 31999), replyRule(netlink.FAMILY_V6, 32765)},
+			addedRules:   []*netlink.Rule{replyRule(netlink.FAMILY_V6, 32765), replyRule(netlink.FAMILY_V4, 32765)},
+		},
+		{
+			name:          "IPv4 only",
+			existingRules: []*netlink.Rule{replyRule(netlink.FAMILY_V4, 32765)},
+			deletedRules:  []*netlink.Rule{replyRule(netlink.FAMILY_V4, 32765)},
+			addedRules:    []*netlink.Rule{replyRule(netlink.FAMILY_V4, 32765)},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			mockNetlink := netlinktest.NewMockInterface(ctrl)
+			c := &Client{
+				netlink:       mockNetlink,
+				networkConfig: &config.NetworkConfig{IPv4Enabled: true, IPv6Enabled: tt.ipv6Enabled},
+			}
+			var existingRules []netlink.Rule
+			for _, rule := range tt.existingRules {
+				existingRules = append(existingRules, *rule)
+			}
+			mockNetlink.EXPECT().RuleList(netlink.FAMILY_ALL).Return(existingRules, nil)
+			// The existing rules are deleted before the rules are added, so that they are replaced, not duplicated.
+			var calls []any
+			for _, rule := range tt.deletedRules {
+				calls = append(calls, mockNetlink.EXPECT().RuleDel(rule))
+			}
+			for _, rule := range tt.addedRules {
+				calls = append(calls, mockNetlink.EXPECT().RuleAdd(rule))
+			}
+			gomock.InOrder(calls...)
+			require.NoError(t, c.initEgressIPRules())
+			for _, rule := range tt.addedRules {
+				cached, ok := c.egressRules.Load(generateRuleKey(rule))
+				require.True(t, ok)
+				assert.Equal(t, rule, cached, "the periodic sync restores the rule with its priority")
+			}
+		})
+	}
+}
+
 func TestSyncIPSet(t *testing.T) {
 	podCIDRStr := "172.16.10.0/24"
 	_, podCIDR, _ := net.ParseCIDR(podCIDRStr)
