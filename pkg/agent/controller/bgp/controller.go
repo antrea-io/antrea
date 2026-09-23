@@ -181,6 +181,10 @@ type Controller struct {
 	// bgpPeerSecretExists is true while the Secret holding the passwords of BGP peers exists. Guarded by
 	// bgpPeerPasswordsMutex.
 	bgpPeerSecretExists bool
+
+	// peerStatuses holds the status of each BGP peer at the last poll, keyed like the peer configurations. It is only
+	// accessed by pollPeerStatus, which never runs concurrently with itself.
+	peerStatuses map[string]bgp.PeerStatus
 }
 
 func NewBGPPolicyController(nodeInformer coreinformers.NodeInformer,
@@ -282,6 +286,7 @@ func NewBGPPolicyController(nodeInformer coreinformers.NodeInformer,
 		UpdateFunc: c.updateSecret,
 		DeleteFunc: c.deleteSecret,
 	})
+	initRouteMetrics()
 
 	return c, nil
 }
@@ -309,6 +314,7 @@ func (c *Controller) Run(ctx context.Context) {
 	}
 
 	go wait.Until(c.worker, time.Second, ctx.Done())
+	go wait.UntilWithContext(ctx, c.pollPeerStatus, peerStatusPollInterval)
 
 	<-ctx.Done()
 }
@@ -551,6 +557,7 @@ func (c *Controller) reconcileBGPAdvertisements(ctx context.Context, bgpAdvertis
 			K8sObjRef: curRoutes[route].K8sObjRef,
 		}
 		klog.V(2).InfoS("Advertised BGP route", "prefix", route.Prefix, "type", curRoutes[route].Type, "k8sObjRef", curRoutes[route].K8sObjRef)
+		recordRouteAdvertised(curRoutes[route].Type)
 	}
 	for route := range routesToWithdraw {
 		metadata := c.bgpPolicyState.routes[route]
@@ -559,6 +566,7 @@ func (c *Controller) reconcileBGPAdvertisements(ctx context.Context, bgpAdvertis
 		}
 		delete(c.bgpPolicyState.routes, route)
 		klog.V(2).InfoS("Withdrew BGP route", "prefix", route.Prefix, "type", metadata.Type, "k8sObjRef", metadata.K8sObjRef)
+		recordRouteWithdrawn(metadata.Type)
 	}
 
 	return nil

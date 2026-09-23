@@ -38,15 +38,18 @@ func (e *BGPPolicyNotAppliedError) Unwrap() error {
 // recordSyncResult records the name of the BGPPolicy that the last sync tried to apply, and the error that stopped it,
 // if any. The caller must hold bgpPolicyStateMutex.
 func (c *Controller) recordSyncResult(effectivePolicy *v1alpha1.BGPPolicy, err error) {
+	var policyName string
 	switch {
 	case effectivePolicy != nil:
-		c.lastSyncPolicyName = effectivePolicy.Name
+		policyName = effectivePolicy.Name
 	case c.bgpPolicyState != nil:
 		// No BGPPolicy selects the Node any more, but the BGP server of the previous one could not be stopped.
-		c.lastSyncPolicyName = c.bgpPolicyState.bgpPolicyName
-	default:
-		c.lastSyncPolicyName = ""
+		policyName = c.bgpPolicyState.bgpPolicyName
 	}
+	if policyName != c.lastSyncPolicyName {
+		updateEffectivePolicyMetric(c.lastSyncPolicyName, policyName)
+	}
+	c.lastSyncPolicyName = policyName
 	c.lastSyncError = err
 }
 

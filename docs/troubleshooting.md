@@ -21,6 +21,7 @@
 - [Troubleshooting BGP](#troubleshooting-bgp)
   - [Checking the BGPPolicy applied to a Node](#checking-the-bgppolicy-applied-to-a-node)
   - [Reading the BGP messages in the Antrea Agent log](#reading-the-bgp-messages-in-the-antrea-agent-log)
+  - [Monitoring BGP with Prometheus](#monitoring-bgp-with-prometheus)
 - [Profiling Antrea components](#profiling-antrea-components)
 - [Ask your questions to the Antrea community](#ask-your-questions-to-the-antrea-community)
 <!-- /toc -->
@@ -325,6 +326,57 @@ At the default log verbosity, the `antrea-agent` container logs:
 At verbosity 2, the log also records each attempt to apply the BGPPolicy and
 how long it took, and each route that is advertised or withdrawn. To change the
 verbosity, see [Looking at the Antrea logs](#looking-at-the-antrea-logs).
+
+### Monitoring BGP with Prometheus
+
+When the `BGPPolicy` feature gate and Prometheus metrics are both enabled, the
+Antrea Agent exports the following metrics. Because the feature gate is
+disabled by default, they are not in the list of the [Prometheus integration
+guide](prometheus-integration.md#antrea-prometheus-metrics), which is generated
+from a default deployment.
+
+| Metric | Type | Labels | Value |
+| --- | --- | --- | --- |
+| `antrea_agent_bgp_peer_up` | Gauge | `peer`, `asn` | 1 when the BGP session with the peer is `Established`, otherwise 0. |
+| `antrea_agent_bgp_peer_session_state` | Gauge | `peer`, `asn` | State of the BGP session with the peer: 0 for Unknown, 1 for Idle, 2 for Connect, 3 for Active, 4 for OpenSent, 5 for OpenConfirm and 6 for Established. |
+| `antrea_agent_bgp_route_advertisement_count` | Counter | `type` | Number of routes advertised to the BGP peers, by route type. |
+| `antrea_agent_bgp_route_withdrawal_count` | Counter | `type` | Number of routes withdrawn from the BGP peers, by route type. |
+| `antrea_agent_bgp_effective_policy` | Gauge | `policy` | Always 1, for the BGPPolicy that the Node applies, even when the last attempt to apply it failed. |
+
+The route types are the ones that `antctl get bgproutes` prints. The Antrea
+Agent reads the state of the BGP sessions every 15 seconds. The peer metrics
+have one series per peer of the BGPPolicy, and have none when no BGPPolicy
+selects the Node, like `antrea_agent_bgp_effective_policy`.
+
+To add the name of the BGPPolicy to a peer metric, join it with
+`antrea_agent_bgp_effective_policy`:
+
+```text
+antrea_agent_bgp_peer_up * on(instance) group_left(policy) antrea_agent_bgp_effective_policy
+```
+
+The Antrea Agent also exports the metrics of the queue that it uses to apply the
+BGPPolicy, with the label `name="bgpPolicy"`. Each failed attempt increments
+`workqueue_retries_total{name="bgpPolicy"}`.
+
+These example Prometheus rules raise an alert when a BGP session stays down for
+more than a minute, and when the Antrea Agent keeps failing to apply its
+BGPPolicy:
+
+```yaml
+groups:
+- name: antrea-bgp
+  rules:
+  - alert: AntreaBGPPeerDown
+    expr: antrea_agent_bgp_peer_up == 0
+    for: 1m
+    annotations:
+      summary: "BGP session with peer {{ $labels.peer }} (ASN {{ $labels.asn }}) is down on {{ $labels.instance }}"
+  - alert: AntreaBGPPolicyFailing
+    expr: increase(workqueue_retries_total{name="bgpPolicy"}[15m]) > 3
+    annotations:
+      summary: "Antrea Agent on {{ $labels.instance }} keeps failing to apply its BGPPolicy"
+```
 
 ## Profiling Antrea components
 
