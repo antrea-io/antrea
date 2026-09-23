@@ -358,6 +358,11 @@ var (
 	// snatPktMarkRange takes an 8-bit range of pkt_mark to store the ID of
 	// a SNAT IP. The bit range must match SNATIPMarkMask.
 	snatPktMarkRange = &binding.Range{0, 7}
+	// l2DispatchPktMarkRange and l2DispatchPeerIndexPktMarkRange are the ranges of pkt_mark which hold the flag of the
+	// l2 dispatch and the index of its peer Node, which the policy routing of the host consumes. The bit between them
+	// has another use, so they are loaded separately.
+	l2DispatchPktMarkRange          = &binding.Range{types.L2DispatchBit, types.L2DispatchBit}
+	l2DispatchPeerIndexPktMarkRange = &binding.Range{types.L2DispatchPeerIndexMinBit, types.L2DispatchPeerIndexMaxBit}
 
 	GlobalVirtualMAC, _ = net.ParseMAC("aa:bb:cc:dd:ee:ff")
 )
@@ -2282,6 +2287,24 @@ func (f *featureEgress) snatRuleFlow(ofPort uint32, snatIP net.IP, snatMark uint
 		Action().SetDstMAC(GlobalVirtualMAC).
 		Action().SetTunnelDst(snatIP). // Set tunnel destination to the SNAT IP.
 		Action().LoadRegMark(ToTunnelRegMark, RemoteSNATRegMark).
+		Action().GotoStage(stageSwitching).
+		Done()
+}
+
+// snatL2DispatchRuleFlow generates the flow that applies the SNAT rule for a local Pod whose SNAT IP is on the remote
+// Node with the l2 dispatch index. Instead of setting a tunnel destination, it loads the flag of the l2 dispatch and
+// the index of the Node into pkt_mark, and sends the packets to the Antrea gateway. The host then sends them unchanged
+// to the MAC address of the Node, with the policy routing of the l2 dispatch, and the Node SNATs them. The Pod
+// addressed the packets to the gateway MAC, so no MAC address is rewritten.
+func (f *featureEgress) snatL2DispatchRuleFlow(ofPort uint32, snatIP net.IP, peerIndex uint32) binding.Flow {
+	return EgressMarkTable.ofTable.BuildFlow(priorityNormal).
+		Cookie(f.cookieAllocator.Request(f.category).Raw()).
+		MatchProtocol(getIPProtocol(snatIP)).
+		MatchCTStateTrk(true).
+		MatchInPort(ofPort).
+		Action().LoadPktMarkRange(1, l2DispatchPktMarkRange).
+		Action().LoadPktMarkRange(peerIndex, l2DispatchPeerIndexPktMarkRange).
+		Action().LoadRegMark(ToGatewayRegMark, RemoteSNATRegMark).
 		Action().GotoStage(stageSwitching).
 		Done()
 }

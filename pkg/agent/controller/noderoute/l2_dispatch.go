@@ -40,10 +40,18 @@ type l2DispatchPeerIndices struct {
 	used   sets.Set[uint32]
 	// next is the index from which allocate looks for a free index.
 	next uint32
+	// routedIPs are the transport IPs which the routing of each Node sends packets to, for the Nodes whose routing is
+	// installed. The features which use the l2 dispatch use the index of a Node only while its routing is installed.
+	routedIPs map[string]*utilip.DualStackIPs
 }
 
 func newL2DispatchPeerIndices() *l2DispatchPeerIndices {
-	return &l2DispatchPeerIndices{byNode: map[string]uint32{}, used: sets.New[uint32](), next: 1}
+	return &l2DispatchPeerIndices{
+		byNode:    map[string]uint32{},
+		used:      sets.New[uint32](),
+		next:      1,
+		routedIPs: map[string]*utilip.DualStackIPs{},
+	}
 }
 
 // allocate returns the index of the Node, and allocates one if the Node has none.
@@ -107,6 +115,37 @@ func (a *l2DispatchPeerIndices) get(nodeName string) (uint32, bool) {
 	return index, exists
 }
 
+// setRouted records that the routing of the Node is installed, with the IPs. It returns true if this changed.
+func (a *l2DispatchPeerIndices) setRouted(nodeName string, peerIPs *utilip.DualStackIPs) bool {
+	a.mutex.Lock()
+	defer a.mutex.Unlock()
+	if current, exists := a.routedIPs[nodeName]; exists && current.Equal(*peerIPs) {
+		return false
+	}
+	a.routedIPs[nodeName] = peerIPs
+	return true
+}
+
+// clearRouted records that the routing of the Node is about to be removed. It returns true if it was installed.
+func (a *l2DispatchPeerIndices) clearRouted(nodeName string) bool {
+	a.mutex.Lock()
+	defer a.mutex.Unlock()
+	_, exists := a.routedIPs[nodeName]
+	delete(a.routedIPs, nodeName)
+	return exists
+}
+
+// getRouted returns the index of the Node and the IPs of its routing, if its routing is installed.
+func (a *l2DispatchPeerIndices) getRouted(nodeName string) (uint32, *utilip.DualStackIPs, bool) {
+	a.mutex.Lock()
+	defer a.mutex.Unlock()
+	peerIPs, exists := a.routedIPs[nodeName]
+	if !exists {
+		return 0, nil, false
+	}
+	return a.byNode[nodeName], peerIPs, true
+}
+
 // l2DispatchPeerIPs returns the transport IPs of the peer Node which the l2 dispatch can reach: the IPs of the
 // enabled IP families which are in the local transport subnets. It returns nil if there is none.
 func (c *Controller) l2DispatchPeerIPs(peerNodeIPs *utilip.DualStackIPs) *utilip.DualStackIPs {
@@ -141,6 +180,9 @@ func (c *Controller) installL2DispatchPeer(nodeName string, peerNodeIPs *utilip.
 	if err := c.routeClient.AddL2DispatchPeerRoutes(index, peerIPs); err != nil {
 		return false, fmt.Errorf("failed to install the l2 dispatch routing to Node %s: %w", nodeName, err)
 	}
+	if c.l2DispatchPeers.setRouted(nodeName, peerIPs) {
+		c.notifyL2DispatchPeer(nodeName)
+	}
 	return true, nil
 }
 
@@ -149,6 +191,11 @@ func (c *Controller) releaseL2DispatchPeer(nodeName string) error {
 	index, exists := c.l2DispatchPeers.get(nodeName)
 	if !exists {
 		return nil
+	}
+	// The index is no longer given out, and the features which use it are notified before its routing is removed, so
+	// that they stop using it as soon as possible.
+	if c.l2DispatchPeers.clearRouted(nodeName) {
+		c.notifyL2DispatchPeer(nodeName)
 	}
 	if err := c.routeClient.DeleteL2DispatchPeerRoutes(index); err != nil {
 		return fmt.Errorf("failed to remove the l2 dispatch routing to Node %s: %w", nodeName, err)
@@ -213,4 +260,60 @@ func (c *Controller) reconcileL2DispatchPeers() error {
 		}
 	}
 	return nil
+}
+
+// GetL2DispatchPeerIndex returns the index which identifies the peer Node in the l2 dispatch, if the policy routing of
+// the index is installed for the IP family. It returns an error if the l2 dispatch cannot reach the Node with the IP
+// family: the Node is not known, or has no transport IP of the family in the local transport subnet. When it returns
+// neither the index nor an error, the routing is not installed yet, and the handlers added by
+// AddL2DispatchPeerEventHandler are called once it is.
+func (c *Controller) GetL2DispatchPeerIndex(nodeName string, isIPv6 bool) (uint32, bool, error) {
+	if !c.networkConfig.SupportsL2Dispatch() {
+		return 0, false, fmt.Errorf("the l2 dispatch is not enabled")
+	}
+	peerIPOfFamily := func(peerIPs *utilip.DualStackIPs) net.IP {
+		if isIPv6 {
+			return peerIPs.IPv6
+		}
+		return peerIPs.IPv4
+	}
+	if index, peerIPs, routed := c.l2DispatchPeers.getRouted(nodeName); routed && peerIPOfFamily(peerIPs) != nil {
+		return index, true, nil
+	}
+	node, err := c.nodeLister.Get(nodeName)
+	if err != nil {
+		return 0, false, fmt.Errorf("failed to get Node %s: %w", nodeName, err)
+	}
+	nodeIPs, err := k8s.GetNodeTransportAddrs(node)
+	if err != nil {
+		return 0, false, fmt.Errorf("failed to get the transport IPs of Node %s: %w", nodeName, err)
+	}
+	if peerIPs := c.l2DispatchPeerIPs(nodeIPs); peerIPs == nil || peerIPOfFamily(peerIPs) == nil {
+		family, localIP := "IPv4", c.nodeConfig.NodeTransportIPv4Addr
+		if isIPv6 {
+			family, localIP = "IPv6", c.nodeConfig.NodeTransportIPv6Addr
+		}
+		switch {
+		case peerIPOfFamily(nodeIPs) == nil:
+			return 0, false, fmt.Errorf("the l2 dispatch cannot reach Node %s: it has no %s transport IP", nodeName, family)
+		case localIP == nil:
+			return 0, false, fmt.Errorf("the l2 dispatch cannot reach Node %s: this Node has no %s transport IP",
+				nodeName, family)
+		}
+		return 0, false, fmt.Errorf("the l2 dispatch cannot reach Node %s: its %s transport IP %s is not in the local "+
+			"transport subnet %s", nodeName, family, peerIPOfFamily(nodeIPs), localIP)
+	}
+	return 0, false, nil
+}
+
+// AddL2DispatchPeerEventHandler adds a handler which is called with the name of a peer Node when the policy routing of
+// its l2 dispatch index is installed, changes, or is about to be removed. It must be called before Run.
+func (c *Controller) AddL2DispatchPeerEventHandler(handler func(nodeName string)) {
+	c.l2DispatchPeerEventHandlers = append(c.l2DispatchPeerEventHandlers, handler)
+}
+
+func (c *Controller) notifyL2DispatchPeer(nodeName string) {
+	for _, handler := range c.l2DispatchPeerEventHandlers {
+		handler(nodeName)
+	}
 }

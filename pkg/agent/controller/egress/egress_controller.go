@@ -101,6 +101,10 @@ type egressState struct {
 	pods sets.Set[string]
 	// Rate-limit of this Egress.
 	rateLimitMeter *rateLimitMeter
+	// With the l2 dispatch, l2DispatchNode is the remote Egress Node which holds the Egress IP, if it is known, and
+	// l2DispatchIndex is the l2 dispatch index of the Egress Node which the Pod flows use, 0 if they are not installed.
+	l2DispatchNode  string
+	l2DispatchIndex uint32
 }
 
 type rateLimitMeter struct {
@@ -260,6 +264,23 @@ type EgressController struct {
 	// l2Dispatch is true when Egress uses the l2 dispatch in noEncap mode: the Egress traffic of a Pod reaches an
 	// Egress IP on another Node without a tunnel, and the Egress Node maps the source Pod IP to the Egress IP.
 	l2Dispatch bool
+	// l2DispatchPeers gives the l2 dispatch index of a remote Egress Node.
+	l2DispatchPeers L2DispatchPeerQuerier
+	// l2DispatchEgresses are the Egresses whose Egress IP is on a remote Node, by Egress Node, with the l2 dispatch.
+	// They are synced again when the l2 dispatch routing of their Egress Node changes.
+	l2DispatchEgresses      map[string]sets.Set[string]
+	l2DispatchEgressesMutex sync.Mutex
+}
+
+// L2DispatchPeerQuerier gives the index which identifies a peer Node in the l2 dispatch. The NodeRouteController
+// allocates the indices and installs their policy routing.
+type L2DispatchPeerQuerier interface {
+	// GetL2DispatchPeerIndex returns the index of the peer Node, once the policy routing of the index is installed for
+	// the IP family. It returns an error if the l2 dispatch cannot reach the Node with the IP family.
+	GetL2DispatchPeerIndex(nodeName string, isIPv6 bool) (uint32, bool, error)
+	// AddL2DispatchPeerEventHandler adds a handler called with the name of a peer Node when the policy routing of
+	// its index is installed, changes, or is about to be removed.
+	AddL2DispatchPeerEventHandler(handler func(nodeName string))
 }
 
 func NewEgressController(
@@ -282,7 +303,7 @@ func NewEgressController(
 	supportSeparateSubnet bool,
 	linkMonitor linkmonitor.Interface,
 	uniqueMACForSubInterfaces bool,
-	l2Dispatch bool,
+	l2DispatchPeers L2DispatchPeerQuerier,
 ) (*EgressController, error) {
 	if trafficShapingEnabled && !openflow.OVSMetersAreSupported() {
 		klog.Info("EgressTrafficShaping feature gate is enabled, but it is ignored because OVS meters are not supported.")
@@ -331,7 +352,13 @@ func NewEgressController(
 		externalIPPoolListerSynced: externalIPPoolInformer.Informer().HasSynced,
 		supportSeparateSubnet:      supportSeparateSubnet,
 		linkMonitor:                linkMonitor,
-		l2Dispatch:                 l2Dispatch,
+	}
+	// A nil l2DispatchPeers means that Egress does not use the l2 dispatch.
+	if l2DispatchPeers != nil {
+		c.l2Dispatch = true
+		c.l2DispatchPeers = l2DispatchPeers
+		c.l2DispatchEgresses = map[string]sets.Set[string]{}
+		l2DispatchPeers.AddL2DispatchPeerEventHandler(c.onL2DispatchPeerUpdate)
 	}
 	if supportSeparateSubnet {
 		c.egressRouteTables = map[crdv1b1.SubnetInfo]*egressRouteTable{}
@@ -1152,14 +1179,23 @@ func (c *EgressController) syncEgress(egressName string) error {
 		return err
 	}
 
+	// With the l2 dispatch, the Pod flows for an Egress IP on another Node carry the index of the Egress Node instead
+	// of a tunnel destination.
+	var l2DispatchIndex uint32
+	if c.l2Dispatch {
+		l2DispatchIndex = c.getL2DispatchIndex(egress, eState, desiredEgressIP, desiredNode, mark)
+	}
+
 	// If the mark changes, uninstall all of the Egress's Pod flows first, then installs them with new mark.
-	// It could happen when the Egress IP is added to or removed from the Node.
-	if eState.mark != mark {
+	// It could happen when the Egress IP is added to or removed from the Node. The same applies when the l2 dispatch
+	// index of the Egress Node changes.
+	if eState.mark != mark || eState.l2DispatchIndex != l2DispatchIndex {
 		// Uninstall all of its Pod flows.
 		if err := c.uninstallPodFlows(egressName, eState, eState.ofPorts, eState.pods); err != nil {
 			return err
 		}
 		eState.mark = mark
+		eState.l2DispatchIndex = l2DispatchIndex
 	}
 
 	if err := c.updateEgressStatus(egress, desiredEgressIP, nil); err != nil {
@@ -1222,8 +1258,18 @@ func (c *EgressController) syncEgress(egressName string) error {
 			staleOFPorts.Delete(ofPort)
 			continue
 		}
-		if err := c.ofClient.InstallPodSNATFlows(uint32(ofPort), egressIP, mark); err != nil {
-			return err
+		switch {
+		case mark != 0 || !c.l2Dispatch:
+			if err := c.ofClient.InstallPodSNATFlows(uint32(ofPort), egressIP, mark); err != nil {
+				return err
+			}
+		case l2DispatchIndex != 0:
+			if err := c.ofClient.InstallPodL2DispatchFlows(uint32(ofPort), egressIP, l2DispatchIndex); err != nil {
+				return err
+			}
+		default:
+			// The Egress Node is not known yet, or the l2 dispatch cannot reach it: the Pod keeps the default SNAT.
+			continue
 		}
 		eState.ofPorts.Insert(ofPort)
 	}
@@ -1238,6 +1284,84 @@ func (c *EgressController) syncEgress(egressName string) error {
 		}
 	}
 	return nil
+}
+
+// getL2DispatchIndex returns the l2 dispatch index of the Egress Node, when the Egress IP is on another Node. The
+// Egress Node is the Node which the scheduler selected for an Egress IP from an ExternalIPPool, and the Node in the
+// status for an Egress IP which the user assigned. It returns 0 if the Egress IP is local, if the Egress Node is not
+// known yet or its l2 dispatch routing is not installed yet, or if the l2 dispatch cannot reach it. The Pods of the
+// Egress then keep the default SNAT.
+func (c *EgressController) getL2DispatchIndex(egress *crdv1b1.Egress, eState *egressState, egressIP string,
+	desiredNode string, mark uint32) uint32 {
+	egressNode := ""
+	if mark == 0 {
+		egressNode = desiredNode
+		if !isEgressSchedulable(egress) {
+			egressNode = egress.Status.EgressNode
+		}
+		// The Egress IP is not on this Node, so a status which names this Node is stale: the new Egress Node has not
+		// updated it yet.
+		if egressNode == c.nodeName {
+			egressNode = ""
+		}
+	}
+	c.setL2DispatchNode(egress.Name, eState, egressNode)
+	if egressNode == "" {
+		if mark == 0 {
+			klog.V(2).InfoS("The Egress Node is not known yet, the Pods of the Egress keep the default SNAT",
+				"egress", egress.Name, "egressIP", egressIP)
+		}
+		return 0
+	}
+	index, installed, err := c.l2DispatchPeers.GetL2DispatchPeerIndex(egressNode, net.ParseIP(egressIP).To4() == nil)
+	if err != nil {
+		klog.ErrorS(err, "The l2 dispatch cannot reach the Egress Node, the Pods of the Egress keep the default SNAT",
+			"egress", egress.Name, "egressIP", egressIP, "egressNode", egressNode)
+		c.record.Eventf(egress, nil, corev1.EventTypeWarning, "EgressNodeUnreachable", "L2Dispatch",
+			"The Pods of Egress %s on Node %s keep the default SNAT, as the l2 dispatch cannot reach Egress Node %s: %v",
+			egress.Name, c.nodeName, egressNode, err)
+		return 0
+	}
+	if !installed {
+		klog.V(2).InfoS("The l2 dispatch routing to the Egress Node is not installed yet, the Pods of the Egress keep "+
+			"the default SNAT", "egress", egress.Name, "egressIP", egressIP, "egressNode", egressNode)
+		return 0
+	}
+	return index
+}
+
+// setL2DispatchNode records the remote Egress Node of the Egress, so that the Egress is synced again when the l2
+// dispatch routing of that Node changes. An empty nodeName means that the Egress has none.
+func (c *EgressController) setL2DispatchNode(egressName string, eState *egressState, nodeName string) {
+	if eState.l2DispatchNode == nodeName {
+		return
+	}
+	c.l2DispatchEgressesMutex.Lock()
+	defer c.l2DispatchEgressesMutex.Unlock()
+	if egresses, exists := c.l2DispatchEgresses[eState.l2DispatchNode]; exists {
+		egresses.Delete(egressName)
+		if egresses.Len() == 0 {
+			delete(c.l2DispatchEgresses, eState.l2DispatchNode)
+		}
+	}
+	if nodeName != "" {
+		if c.l2DispatchEgresses[nodeName] == nil {
+			c.l2DispatchEgresses[nodeName] = sets.New[string]()
+		}
+		c.l2DispatchEgresses[nodeName].Insert(egressName)
+	}
+	eState.l2DispatchNode = nodeName
+}
+
+// onL2DispatchPeerUpdate is called when the l2 dispatch routing of a peer Node is installed, changes, or is about to
+// be removed. It syncs again the Egresses whose Egress IP is on that Node, so that their Pod flows use the current
+// index of the Node.
+func (c *EgressController) onL2DispatchPeerUpdate(nodeName string) {
+	c.l2DispatchEgressesMutex.Lock()
+	defer c.l2DispatchEgressesMutex.Unlock()
+	for egressName := range c.l2DispatchEgresses[nodeName] {
+		c.queue.Add(egressName)
+	}
 }
 
 // unionRemotePodIPs returns the IPs of the Pods on other Nodes which use the local Egress IP, through all its
@@ -1283,6 +1407,9 @@ func (c *EgressController) uninstallEgress(egressName string, eState *egressStat
 	// Uninstall all of its Pod flows.
 	if err := c.uninstallPodFlows(egressName, eState, eState.ofPorts, eState.pods); err != nil {
 		return err
+	}
+	if c.l2Dispatch {
+		c.setL2DispatchNode(egressName, eState, "")
 	}
 	// Release the EgressIP's mark if the Egress is the last one referring to it.
 	if err := c.unrealizeEgressIP(egressName, eState.egressIP); err != nil {

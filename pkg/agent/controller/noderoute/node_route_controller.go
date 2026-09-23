@@ -103,6 +103,8 @@ type Controller struct {
 	eventHandlerRegistration cache.ResourceEventHandlerRegistration
 	// l2DispatchPeers allocates the indices of the peer Nodes of the l2 dispatch.
 	l2DispatchPeers *l2DispatchPeerIndices
+	// l2DispatchPeerEventHandlers are called when the routing of the l2 dispatch index of a peer Node changes.
+	l2DispatchPeerEventHandlers []func(nodeName string)
 }
 
 // NewNodeRouteController instantiates a new Controller object which will process Node events

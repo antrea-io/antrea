@@ -209,7 +209,7 @@ func newFakeController(t *testing.T, initObjects []runtime.Object) *fakeControll
 		true,
 		nil,
 		true,
-		false,
+		nil,
 	)
 	egressController.localIPDetector = localIPDetector
 	return &fakeController{

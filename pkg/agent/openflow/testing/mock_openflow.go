@@ -450,6 +450,20 @@ func (mr *MockClientMockRecorder) InstallPodFlows(interfaceName, podInterfaceIPs
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "InstallPodFlows", reflect.TypeOf((*MockClient)(nil).InstallPodFlows), interfaceName, podInterfaceIPs, podInterfaceMAC, ofPort, vlanID, labelID)
 }
 
+// InstallPodL2DispatchFlows mocks base method.
+func (m *MockClient) InstallPodL2DispatchFlows(ofPort uint32, snatIP net.IP, peerIndex uint32) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "InstallPodL2DispatchFlows", ofPort, snatIP, peerIndex)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// InstallPodL2DispatchFlows indicates an expected call of InstallPodL2DispatchFlows.
+func (mr *MockClientMockRecorder) InstallPodL2DispatchFlows(ofPort, snatIP, peerIndex any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "InstallPodL2DispatchFlows", reflect.TypeOf((*MockClient)(nil).InstallPodL2DispatchFlows), ofPort, snatIP, peerIndex)
+}
+
 // InstallPodSNATFlows mocks base method.
 func (m *MockClient) InstallPodSNATFlows(ofPort uint32, snatIP net.IP, snatMark uint32) error {
 	m.ctrl.T.Helper()
