@@ -3053,6 +3053,10 @@ spec:
                 properties:
                   normalizedLabel:
                     type: string
+                    x-kubernetes-validations:
+                    - message: normalizedLabel must match the format 'ns:<Namespace
+                        labels>&pod:<Pod labels>'
+                      rule: self.matches('^ns:(.*)&pod:(.*)$')
                 type: object
               name:
                 description: Name of exported resource.

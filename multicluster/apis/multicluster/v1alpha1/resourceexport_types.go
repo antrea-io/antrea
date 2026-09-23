@@ -41,6 +41,7 @@ type ExternalEntityExport struct {
 }
 
 type LabelIdentityExport struct {
+	// +kubebuilder:validation:XValidation:rule="self.matches('^ns:(.*)&pod:(.*)$')",message="normalizedLabel must match the format 'ns:<Namespace labels>&pod:<Pod labels>'"
 	NormalizedLabel string `json:"normalizedLabel,omitempty"`
 }
 
