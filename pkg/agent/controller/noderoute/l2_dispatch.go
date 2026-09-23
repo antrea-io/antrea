@@ -124,24 +124,24 @@ func (c *Controller) l2DispatchPeerIPs(peerNodeIPs *utilip.DualStackIPs) *utilip
 }
 
 // installL2DispatchPeer installs or updates the l2 dispatch routing to the peer Node, if the l2 dispatch can reach
-// it, and returns whether it did. A peer Node keeps its index for as long as it can be reached, so that the flows
-// which use the index stay valid.
-func (c *Controller) installL2DispatchPeer(nodeName string, peerNodeIPs *utilip.DualStackIPs) (bool, error) {
+// it, and returns the index of the peer Node, or 0 if it did not. A peer Node keeps its index for as long as it can be
+// reached, so that the flows which use the index stay valid.
+func (c *Controller) installL2DispatchPeer(nodeName string, peerNodeIPs *utilip.DualStackIPs) (uint32, error) {
 	if !c.networkConfig.SupportsL2Dispatch() {
-		return false, nil
+		return 0, nil
 	}
 	peerIPs := c.l2DispatchPeerIPs(peerNodeIPs)
 	if peerIPs == nil {
-		return false, nil
+		return 0, nil
 	}
 	index, err := c.l2DispatchPeers.allocate(nodeName)
 	if err != nil {
-		return false, fmt.Errorf("failed to allocate an l2 dispatch index for Node %s: %w", nodeName, err)
+		return 0, fmt.Errorf("failed to allocate an l2 dispatch index for Node %s: %w", nodeName, err)
 	}
 	if err := c.routeClient.AddL2DispatchPeerRoutes(index, peerIPs); err != nil {
-		return false, fmt.Errorf("failed to install the l2 dispatch routing to Node %s: %w", nodeName, err)
+		return 0, fmt.Errorf("failed to install the l2 dispatch routing to Node %s: %w", nodeName, err)
 	}
-	return true, nil
+	return index, nil
 }
 
 // releaseL2DispatchPeer removes the l2 dispatch routing to the peer Node, if it has any, and frees its index.

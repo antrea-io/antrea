@@ -77,12 +77,15 @@ type Client interface {
 	// successfully, otherwise no flows will be installed). Calls to InstallNodeFlows are idempotent.
 	// Concurrent calls to InstallNodeFlows and / or UninstallNodeFlows are supported as long as they
 	// are all for different hostnames.
+	// l2DispatchPeerIndex is the index of the peer Node in the policy routing of the l2 dispatch, which
+	// must be installed before the flows. It is 0 when the l2 dispatch cannot reach the peer Node.
 	InstallNodeFlows(
 		hostname string,
 		peerConfigs map[*net.IPNet]net.IP,
 		peerNodeIPs *utilip.DualStackIPs,
 		ipsecTunOFPort uint32,
-		peerNodeMAC net.HardwareAddr) error
+		peerNodeMAC net.HardwareAddr,
+		l2DispatchPeerIndex uint32) error
 
 	// UninstallNodeFlows removes the connection to the remote Node specified with the
 	// hostname. UninstallNodeFlows will do nothing if no connection to the host was established.
@@ -570,6 +573,7 @@ func (c *client) InstallNodeFlows(hostname string,
 	peerNodeIPs *utilip.DualStackIPs,
 	ipsecTunOFPort uint32,
 	remoteGatewayMAC net.HardwareAddr,
+	l2DispatchPeerIndex uint32,
 ) error {
 	c.replayMutex.RLock()
 	defer c.replayMutex.RUnlock()
@@ -616,12 +620,8 @@ func (c *client) InstallNodeFlows(hostname string,
 			if c.networkConfig.NeedsEgressSymmetricPath(c.enableEgress) {
 				flows = append(flows, c.featurePodConnectivity.l3FwdFlowEgressReturnViaTun(localGatewayMAC, *peerPodCIDR, peerNodeIP))
 			}
-			// The traffic of DSR Services keeps the Service IP as its destination, which the Node network cannot
-			// route to the peer Node, so it goes through the tunnel even though Pod-to-Pod traffic to the peer is
-			// routed.
-			if c.networkConfig.NeedsDSRTunnelToRoutedPeers() {
-				flows = append(flows, c.featurePodConnectivity.l3FwdFlowsDSRToRemoteViaTun(localGatewayMAC, *peerPodCIDR, peerNodeIP)...)
-			}
+			flows = append(flows,
+				c.dsrFlowsToRoutedPeer(hostname, localGatewayMAC, *peerPodCIDR, peerNodeIP, l2DispatchPeerIndex)...)
 		}
 		if c.enableEgress {
 			flows = append(flows, c.featureEgress.snatSkipNodeFlow(peerNodeIP))
@@ -641,6 +641,43 @@ func (c *client) InstallNodeFlows(hostname string,
 	// For Windows Noencap Mode, the OVS flows for Node need to be exactly same as the provided 'flows' slice because
 	// the Node flows may be processed more than once if the MAC annotation is updated.
 	return c.modifyFlows(c.featurePodConnectivity.nodeCachedFlows, hostname, flows)
+}
+
+// dsrFlowsToRoutedPeer generates the flows which send the traffic of DSR Services to a peer Node that Pod traffic
+// reaches by routing, in noEncap and hybrid modes. That traffic keeps the Service IP as its destination, which the
+// Node network cannot route to the peer Node. The traffic of the Services which use the l2 dispatch goes to the MAC
+// address of the peer Node when the l2 dispatch can reach it, and the traffic of the other Services goes through the
+// tunnel. Without a tunnel, a peer Node which the l2 dispatch cannot reach, because it is in another subnet, gets no
+// DSR traffic: it is dropped.
+func (c *client) dsrFlowsToRoutedPeer(hostname string,
+	localGatewayMAC net.HardwareAddr,
+	peerPodCIDR net.IPNet,
+	peerNodeIP net.IP,
+	l2DispatchPeerIndex uint32) []binding.Flow {
+	// DSR supports IPv4 only, which is the family of the transport IP checked here.
+	viaL2 := l2DispatchPeerIndex != 0 && c.networkConfig.SupportsDSRL2Dispatch() &&
+		c.networkConfig.SupportsL2DispatchToPeer(peerNodeIP, c.nodeConfig.NodeTransportIPv4Addr)
+	viaTunnel := c.networkConfig.NeedsDSRTunnelToRoutedPeers()
+	f := c.featurePodConnectivity
+	switch {
+	case viaL2 && viaTunnel:
+		return append(f.l3FwdFlowsDSRToRemoteViaL2(peerPodCIDR, l2DispatchPeerIndex),
+			f.l3FwdFlowsDSRToRemoteViaTun(localGatewayMAC, peerPodCIDR, peerNodeIP, NotDSRL2DispatchServiceRegMark)...)
+	case viaL2:
+		// Without a tunnel, every DSR Service uses the l2 dispatch, see NetworkConfig.DSRDispatchForService.
+		return f.l3FwdFlowsDSRToRemoteViaL2(peerPodCIDR, l2DispatchPeerIndex)
+	case viaTunnel:
+		return f.l3FwdFlowsDSRToRemoteViaTun(localGatewayMAC, peerPodCIDR, peerNodeIP)
+	case c.networkConfig.SupportsDSRL2Dispatch():
+		flows := f.l3FwdFlowsDSRToRemoteDrop(peerPodCIDR)
+		if len(flows) > 0 {
+			klog.ErrorS(nil, "DSR traffic to the Node will be dropped, because the Node is not in the local transport "+
+				"subnet, which the l2 dispatch requires, and there is no tunnel",
+				"node", hostname, "nodeIP", peerNodeIP, "podCIDR", peerPodCIDR.String())
+		}
+		return flows
+	}
+	return nil
 }
 
 func (c *client) UninstallNodeFlows(hostname string) error {

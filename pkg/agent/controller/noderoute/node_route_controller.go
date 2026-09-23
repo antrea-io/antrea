@@ -661,9 +661,9 @@ func (c *Controller) addNodeRoute(nodeName string, node *corev1.Node) error {
 		}
 	}
 
-	// The l2 dispatch routing is installed before the flows, which may use the index of the peer Node, and removed
-	// after them when the peer Node can no longer be reached with the l2 dispatch.
-	l2DispatchInstalled, err := c.installL2DispatchPeer(nodeName, peerNodeIPs)
+	// The l2 dispatch routing is installed before the flows, which use the index of the peer Node, and removed after
+	// them when the peer Node can no longer be reached with the l2 dispatch.
+	l2DispatchPeerIndex, err := c.installL2DispatchPeer(nodeName, peerNodeIPs)
 	if err != nil {
 		return err
 	}
@@ -673,10 +673,11 @@ func (c *Controller) addNodeRoute(nodeName string, node *corev1.Node) error {
 		peerConfigs,
 		peerNodeIPs,
 		ipsecTunOFPort,
-		peerNodeMAC); err != nil {
+		peerNodeMAC,
+		l2DispatchPeerIndex); err != nil {
 		return fmt.Errorf("failed to install flows to Node %s: %v", nodeName, err)
 	}
-	if !l2DispatchInstalled {
+	if l2DispatchPeerIndex == 0 {
 		if err := c.releaseL2DispatchPeer(nodeName); err != nil {
 			return err
 		}

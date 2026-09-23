@@ -30,6 +30,7 @@ import (
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/klog/v2"
 	netutils "k8s.io/utils/net"
+	"k8s.io/utils/ptr"
 
 	"antrea.io/antrea/v2/pkg/agent/config"
 	"antrea.io/antrea/v2/pkg/agent/nodeip"
@@ -1207,6 +1208,18 @@ func (f *featureService) l2ForwardOutputHairpinServiceFlow() binding.Flow {
 		Done()
 }
 
+// l2ForwardOutputDSRL2DispatchFlow generates the flow to output the packets which the l2 dispatch of DSR sends back to
+// the Antrea gateway with the IN_PORT action, because they came from the Antrea gateway and OVS drops the packets
+// output to their in-port otherwise. Unlike the packets of hairpin connections, they carry no conntrack mark: on the
+// ingress Node, their connections are invalid because the Node only sees the requests.
+func (f *featureService) l2ForwardOutputDSRL2DispatchFlow() binding.Flow {
+	return OutputTable.ofTable.BuildFlow(priorityHigh).
+		Cookie(f.cookieAllocator.Request(f.category).Raw()).
+		MatchRegMark(OutputToOFPortRegMark, DSRL2DispatchRegMark).
+		Action().OutputInPort().
+		Done()
+}
+
 // l2ForwardOutputFlow generates the flow to output the packets to target OVS port according to the value of TargetOFPortField.
 func (f *featurePodConnectivity) l2ForwardOutputFlow() binding.Flow {
 	return OutputTable.ofTable.BuildFlow(priorityNormal).
@@ -1344,21 +1357,72 @@ func (f *featurePodConnectivity) l3FwdFlowsToRemoteViaTun(localGatewayMAC net.Ha
 // l3FwdFlowsDSRToRemoteViaTun generates the flows to send the packets of DSR Services to the peer Node hosting the
 // selected Endpoint via tunnel. Packets accessing a DSR Service are not DNATed on the ingress Node, but
 // EndpointIPField holds the selected backend Pod IP, so the flows match it and DSRServiceRegMark instead of the
-// destination IP. Like matching destination IP, we only check if the prefix of the EndpointIP stored in
-// EndpointIPField is in the subnet. For example, if the peerSubnet is 10.10.1.0/24, we will check
-// reg3=0xa0a0100/0xffffff00.
-func (f *featurePodConnectivity) l3FwdFlowsDSRToRemoteViaTun(localGatewayMAC net.HardwareAddr, peerSubnet net.IPNet, tunnelPeer net.IP) []binding.Flow {
+// destination IP, see matchDSRToPeerSubnet. The flows also match the given extra reg marks, for example to leave the
+// packets of the Services which use the l2 dispatch to its flows.
+func (f *featurePodConnectivity) l3FwdFlowsDSRToRemoteViaTun(localGatewayMAC net.HardwareAddr,
+	peerSubnet net.IPNet,
+	tunnelPeer net.IP,
+	extraRegMarks ...*binding.RegMark) []binding.Flow {
 	// TODO: MatchXXReg must support mask to support IPv6.
 	if getIPProtocol(peerSubnet.IP) != binding.ProtocolIP {
 		return nil
 	}
+	return []binding.Flow{
+		f.l3FwdFlowToRemoteViaTun(localGatewayMAC, peerSubnet, tunnelPeer, func(b binding.FlowBuilder) binding.FlowBuilder {
+			return matchDSRToPeerSubnet(b, peerSubnet).MatchRegMark(extraRegMarks...)
+		}),
+	}
+}
+
+// matchDSRToPeerSubnet adds the matches for the IPv4 packets of DSR Services whose selected Endpoint is in the peer
+// subnet: DSRServiceRegMark and, like matching destination IP, the prefix of the Endpoint IP stored in
+// EndpointIPField. For example, if the peerSubnet is 10.10.1.0/24, we will check reg3=0xa0a0100/0xffffff00.
+func matchDSRToPeerSubnet(b binding.FlowBuilder, peerSubnet net.IPNet) binding.FlowBuilder {
 	ones, bits := peerSubnet.Mask.Size()
 	maskedEndpointIPField := binding.NewRegField(EndpointIPField.GetRegID(), uint32(bits-ones), 31)
 	maskedEndpointIPValue := binary.BigEndian.Uint32(peerSubnet.IP.To4()) >> (bits - ones)
+	return b.MatchRegMark(DSRServiceRegMark).MatchRegFieldWithValue(maskedEndpointIPField, maskedEndpointIPValue)
+}
+
+// l3FwdFlowsDSRToRemoteViaL2 generates the flows to send the packets of the DSR Services which use the l2 dispatch to
+// the peer Node hosting the selected Endpoint, without encapsulation. The packets keep the Service IP as destination,
+// so the flows send them back to the Antrea gateway with a packet mark holding the flag and the index of the peer Node
+// of the l2 dispatch. The host then sends them to the MAC address of the peer Node with the policy routing of the l2
+// dispatch. DSRL2DispatchRegMark keeps them out of the hairpin SNAT and outputs them to their in-port.
+func (f *featurePodConnectivity) l3FwdFlowsDSRToRemoteViaL2(peerSubnet net.IPNet, peerIndex uint32) []binding.Flow {
+	// TODO: MatchXXReg must support mask to support IPv6.
+	if getIPProtocol(peerSubnet.IP) != binding.ProtocolIP {
+		return nil
+	}
+	flowBuilder := L3ForwardingTable.ofTable.BuildFlow(priorityNormal).
+		Cookie(f.cookieAllocator.Request(f.category).Raw()).
+		MatchProtocol(binding.ProtocolIP).
+		MatchRegMark(DSRL2DispatchServiceRegMark)
 	return []binding.Flow{
-		f.l3FwdFlowToRemoteViaTun(localGatewayMAC, peerSubnet, tunnelPeer, func(b binding.FlowBuilder) binding.FlowBuilder {
-			return b.MatchRegMark(DSRServiceRegMark).MatchRegFieldWithValue(maskedEndpointIPField, maskedEndpointIPValue)
-		}),
+		matchDSRToPeerSubnet(flowBuilder, peerSubnet).
+			Action().LoadPktMark(types.L2DispatchPeerMark(peerIndex), ptr.To(types.L2DispatchPeerMarkMask)).
+			Action().SetDstMAC(f.nodeConfig.GatewayConfig.MAC).
+			Action().LoadRegMark(ToGatewayRegMark, DSRL2DispatchRegMark).
+			Action().GotoTable(L3DecTTLTable.GetID()).
+			Done(),
+	}
+}
+
+// l3FwdFlowsDSRToRemoteDrop generates the flows to drop the packets of DSR Services whose selected Endpoint is on a
+// peer Node which neither the l2 dispatch nor a tunnel can reach, which happens in noEncap mode for the peer Nodes in
+// other subnets. Sending the packets to the Antrea gateway would loop them back through the route to the Service IP.
+func (f *featurePodConnectivity) l3FwdFlowsDSRToRemoteDrop(peerSubnet net.IPNet) []binding.Flow {
+	// TODO: MatchXXReg must support mask to support IPv6.
+	if getIPProtocol(peerSubnet.IP) != binding.ProtocolIP {
+		return nil
+	}
+	flowBuilder := L3ForwardingTable.ofTable.BuildFlow(priorityNormal).
+		Cookie(f.cookieAllocator.Request(f.category).Raw()).
+		MatchProtocol(binding.ProtocolIP)
+	return []binding.Flow{
+		matchDSRToPeerSubnet(flowBuilder, peerSubnet).
+			Action().Drop().
+			Done(),
 	}
 }
 
@@ -2481,6 +2545,10 @@ func (f *featureService) dsrServiceMarkFlow(config *types.ServiceConfig) binding
 	// Using unique cookie ID here to avoid learned flow cascade deletion.
 	cookieID := f.cookieAllocator.RequestWithObjectID(f.category, uint32(config.ClusterGroupID)).Raw()
 	isIPv6 := netutils.IsIPv6(config.ServiceIP)
+	dsrRegMarks := []*binding.RegMark{DSRServiceRegMark}
+	if f.usesDSRL2Dispatch(config) {
+		dsrRegMarks = append(dsrRegMarks, DSRL2DispatchServiceRegMark)
+	}
 	learnFlowBuilderLearnAction := DSRServiceMarkTable.ofTable.BuildFlow(priorityNormal).
 		Cookie(cookieID).
 		MatchProtocol(config.Protocol).
@@ -2499,16 +2567,28 @@ func (f *featureService) dsrServiceMarkFlow(config *types.ServiceConfig) binding
 		MatchLearnedSrcIP(isIPv6).
 		MatchLearnedDstIP(isIPv6).
 		LoadFieldToField(EndpointPortField, EndpointPortField).
-		LoadRegMark(EpSelectedRegMark, DSRServiceRegMark)
+		LoadRegMark(append([]*binding.RegMark{EpSelectedRegMark}, dsrRegMarks...)...)
 	if isIPv6 {
 		learnFlowBuilderLearnAction = learnFlowBuilderLearnAction.LoadXXRegToXXReg(EndpointIP6Field, EndpointIP6Field)
 	} else {
 		learnFlowBuilderLearnAction = learnFlowBuilderLearnAction.LoadFieldToField(EndpointIPField, EndpointIPField)
 	}
 	return learnFlowBuilderLearnAction.Done().
-		Action().LoadRegMark(DSRServiceRegMark).
+		Action().LoadRegMark(dsrRegMarks...).
 		Action().NextTable().
 		Done()
+}
+
+// usesDSRL2Dispatch returns true if the DSR Service sends its traffic to remote Endpoints with the l2 dispatch. The
+// Service uses the dispatch of its annotation, or else the default one, unless this Node cannot provide it.
+func (f *featureService) usesDSRL2Dispatch(svcConfig *types.ServiceConfig) bool {
+	dispatch, fallback := f.networkConfig.DSRDispatchForService(svcConfig.DSRDispatch)
+	if fallback {
+		klog.InfoS("The DSR dispatch of the Service is not available on this Node, using the other dispatch",
+			"serviceIP", svcConfig.ServiceIP, "servicePort", svcConfig.ServicePort, "protocol", svcConfig.Protocol,
+			"dispatch", dispatch)
+	}
+	return dispatch == config.DSRDispatchL2
 }
 
 // endpointRedirectFlowForServiceIP generates the flow which uses the specific group for a Service's ClusterIP
@@ -3113,12 +3193,18 @@ func (f *featureService) gatewaySNATFlows() []binding.Flow {
 	for _, ipProtocol := range f.ipProtocols {
 		// This generates the flow to match the first packet of hairpin connection initiated through the Antrea gateway.
 		// ConnSNATCTMark and HairpinCTMark will be loaded in DNAT CT zone.
+		hairpinRegMarks := []*binding.RegMark{FromGatewayRegMark, ToGatewayRegMark}
+		if f.networkConfig.SupportsDSRL2Dispatch() {
+			// The l2 dispatch of DSR sends packets from the Antrea gateway back to it too, but they must keep the IP of
+			// the client as their source.
+			hairpinRegMarks = append(hairpinRegMarks, NotDSRL2DispatchRegMark)
+		}
 		flows = append(flows, SNATMarkTable.ofTable.BuildFlow(priorityNormal).
 			Cookie(cookieID).
 			MatchProtocol(ipProtocol).
 			MatchCTStateNew(true).
 			MatchCTStateTrk(true).
-			MatchRegMark(FromGatewayRegMark, ToGatewayRegMark).
+			MatchRegMark(hairpinRegMarks...).
 			Action().CT(true, SNATMarkTable.GetNext(), f.dnatCtZones[ipProtocol], f.ctZoneSrcField).
 			LoadToCtMark(ConnSNATCTMark, HairpinCTMark).
 			MoveToCtMarkField(PktSourceField, ConnSourceCTMarkField).

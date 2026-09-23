@@ -78,7 +78,7 @@ func TestL2DispatchPeerLifecycle(t *testing.T) {
 	c.createNode(t, node1)
 	gomock.InOrder(
 		c.routeClient.EXPECT().AddL2DispatchPeerRoutes(uint32(1), &utilip.DualStackIPs{IPv4: nodeIP1}),
-		c.ofClient.EXPECT().InstallNodeFlows("node1", gomock.Any(), &dsIPs1, uint32(0), nil),
+		c.ofClient.EXPECT().InstallNodeFlows("node1", gomock.Any(), &dsIPs1, uint32(0), nil, uint32(1)),
 	)
 	c.routeClient.EXPECT().AddRoutes(podCIDR1, "node1", nodeIP1, podCIDR1Gateway)
 	c.routeClient.EXPECT().AddRoutes(podCIDR1v6, "node1", nil, podCIDR1v6Gateway)
@@ -86,7 +86,8 @@ func TestL2DispatchPeerLifecycle(t *testing.T) {
 
 	// A Node in another subnet cannot be reached with the l2 dispatch, so it gets no index.
 	c.createNode(t, newTestNode("remoteSubnetNode", podCIDR2, remoteSubnetNodeIP))
-	c.ofClient.EXPECT().InstallNodeFlows("remoteSubnetNode", gomock.Any(), &utilip.DualStackIPs{IPv4: remoteSubnetNodeIP}, uint32(0), nil)
+	c.ofClient.EXPECT().InstallNodeFlows("remoteSubnetNode", gomock.Any(), &utilip.DualStackIPs{IPv4: remoteSubnetNodeIP},
+		uint32(0), nil, uint32(0))
 	c.routeClient.EXPECT().AddRoutes(podCIDR2, "remoteSubnetNode", remoteSubnetNodeIP, podCIDR2Gateway)
 	c.processNextWorkItem()
 
@@ -105,7 +106,7 @@ func TestL2DispatchPeerLifecycle(t *testing.T) {
 	c.createNode(t, newTestNode("otherNode", podCIDR1, nodeIP2))
 	gomock.InOrder(
 		c.routeClient.EXPECT().AddL2DispatchPeerRoutes(uint32(2), &utilip.DualStackIPs{IPv4: nodeIP2}),
-		c.ofClient.EXPECT().InstallNodeFlows("otherNode", gomock.Any(), &dsIPs2, uint32(0), nil),
+		c.ofClient.EXPECT().InstallNodeFlows("otherNode", gomock.Any(), &dsIPs2, uint32(0), nil, uint32(2)),
 	)
 	c.routeClient.EXPECT().AddRoutes(podCIDR1, "otherNode", nodeIP2, podCIDR1Gateway)
 	c.processNextWorkItem()
@@ -116,7 +117,7 @@ func TestL2DispatchPeerLeavesLocalSubnet(t *testing.T) {
 	node := newTestNode("node1", podCIDR1, nodeIP1)
 	c.createNode(t, node)
 	c.routeClient.EXPECT().AddL2DispatchPeerRoutes(uint32(1), &utilip.DualStackIPs{IPv4: nodeIP1})
-	c.ofClient.EXPECT().InstallNodeFlows("node1", gomock.Any(), &dsIPs1, uint32(0), nil)
+	c.ofClient.EXPECT().InstallNodeFlows("node1", gomock.Any(), &dsIPs1, uint32(0), nil, uint32(1))
 	c.routeClient.EXPECT().AddRoutes(podCIDR1, "node1", nodeIP1, podCIDR1Gateway)
 	c.processNextWorkItem()
 
@@ -126,7 +127,8 @@ func TestL2DispatchPeerLeavesLocalSubnet(t *testing.T) {
 	_, err := c.clientset.CoreV1().Nodes().Update(context.TODO(), node, metav1.UpdateOptions{})
 	require.NoError(t, err)
 	gomock.InOrder(
-		c.ofClient.EXPECT().InstallNodeFlows("node1", gomock.Any(), &utilip.DualStackIPs{IPv4: remoteSubnetNodeIP}, uint32(0), nil),
+		c.ofClient.EXPECT().InstallNodeFlows("node1", gomock.Any(), &utilip.DualStackIPs{IPv4: remoteSubnetNodeIP},
+			uint32(0), nil, uint32(0)),
 		c.routeClient.EXPECT().DeleteL2DispatchPeerRoutes(uint32(1)),
 	)
 	c.routeClient.EXPECT().AddRoutes(podCIDR1, "node1", remoteSubnetNodeIP, podCIDR1Gateway)
@@ -173,7 +175,7 @@ func TestReconcileL2DispatchPeers(t *testing.T) {
 	// node1 keeps index 4.
 	gomock.InOrder(
 		c.routeClient.EXPECT().AddL2DispatchPeerRoutes(uint32(4), &utilip.DualStackIPs{IPv4: nodeIP1}),
-		c.ofClient.EXPECT().InstallNodeFlows("node1", gomock.Any(), &dsIPs1, uint32(0), nil),
+		c.ofClient.EXPECT().InstallNodeFlows("node1", gomock.Any(), &dsIPs1, uint32(0), nil, uint32(4)),
 	)
 	c.routeClient.EXPECT().AddRoutes(podCIDR1, "node1", nodeIP1, podCIDR1Gateway)
 	c.routeClient.EXPECT().AddRoutes(podCIDR1v6, "node1", nil, podCIDR1v6Gateway)
@@ -183,7 +185,7 @@ func TestReconcileL2DispatchPeers(t *testing.T) {
 	// the restart may still carry the stale indices 6 and 7.
 	c.createNode(t, newTestNode("otherNode", podCIDR2, nodeIP2))
 	c.routeClient.EXPECT().AddL2DispatchPeerRoutes(uint32(8), &utilip.DualStackIPs{IPv4: nodeIP2})
-	c.ofClient.EXPECT().InstallNodeFlows("otherNode", gomock.Any(), &dsIPs2, uint32(0), nil)
+	c.ofClient.EXPECT().InstallNodeFlows("otherNode", gomock.Any(), &dsIPs2, uint32(0), nil, uint32(8))
 	c.routeClient.EXPECT().AddRoutes(podCIDR2, "otherNode", nodeIP2, podCIDR2Gateway)
 	c.processNextWorkItem()
 }

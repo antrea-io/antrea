@@ -273,3 +273,38 @@ func TestIsL2DispatchRule(t *testing.T) {
 		})
 	}
 }
+
+func TestNeedsLooseRPFilterOnGateway(t *testing.T) {
+	dsr := func(mode config.TrafficEncapModeType, l2 bool) *config.NetworkConfig {
+		return &config.NetworkConfig{TrafficEncapMode: mode, EnableDSR: true, EnableDSRL2Dispatch: l2, EnableL2Dispatch: l2}
+	}
+	tests := []struct {
+		name          string
+		networkConfig *config.NetworkConfig
+		egressEnabled bool
+		expected      bool
+	}{
+		{name: "DSR, l2 dispatch, noEncap", networkConfig: dsr(config.TrafficEncapModeNoEncap, true), expected: true},
+		{name: "DSR, l2 dispatch, hybrid", networkConfig: dsr(config.TrafficEncapModeHybrid, true), expected: true},
+		{name: "DSR without the l2 dispatch", networkConfig: dsr(config.TrafficEncapModeNoEncap, false), expected: false},
+		{name: "DSR in encap mode", networkConfig: dsr(config.TrafficEncapModeEncap, true), expected: false},
+		{
+			name:          "Egress in noEncap mode",
+			networkConfig: &config.NetworkConfig{TrafficEncapMode: config.TrafficEncapModeNoEncap},
+			egressEnabled: true,
+			expected:      true,
+		},
+		{
+			name:          "Egress in encap mode",
+			networkConfig: &config.NetworkConfig{TrafficEncapMode: config.TrafficEncapModeEncap},
+			egressEnabled: true,
+			expected:      false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			c := &Client{networkConfig: tt.networkConfig, egressEnabled: tt.egressEnabled}
+			assert.Equal(t, tt.expected, c.needsLooseRPFilterOnGateway())
+		})
+	}
+}

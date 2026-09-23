@@ -513,7 +513,9 @@ func (c *Client) Initialize(nodeConfig *config.NodeConfig, done func()) error {
 	// kernel's strict RPF check only validates source paths against the main routing table. Since the transport
 	// interface (not antrea‑gw0) is listed as the next-hop for these routes, strict RPF drops the reply packets
 	// (because policy routing is ignored by rp_filter). As a result, we set its rp_filter to loose mode (2).
-	if c.shouldEnableEgressPolicyRouting() {
+	// The l2 dispatch of DSR needs it too: OVS sends the packets of DSR Services back to antrea-gw0 with the IP of the
+	// external client as their source, which the main table routes through another interface.
+	if c.needsLooseRPFilterOnGateway() {
 		if err := util.EnsureRPFilterOnInterface(c.nodeConfig.GatewayConfig.Name, 2); err != nil {
 			return fmt.Errorf("failed to set %s rp_filter to 2 (loose mode): %w", c.nodeConfig.GatewayConfig.Name, err)
 		}
@@ -4254,6 +4256,12 @@ func (c *Client) deleteExternalIPConfigsIPsets(externalIP net.IP) error {
 // instead of each spelling the modes out.
 func (c *Client) shouldEnableEgressPolicyRouting() bool {
 	return c.networkConfig.NeedsEgressSymmetricPath(c.egressEnabled)
+}
+
+// needsLooseRPFilterOnGateway returns true if antrea-gw0 receives packets whose source IP the main table routes through
+// another interface, which requires the loose mode of rp_filter.
+func (c *Client) needsLooseRPFilterOnGateway() bool {
+	return c.shouldEnableEgressPolicyRouting() || c.networkConfig.SupportsDSRL2Dispatch()
 }
 
 // Enqueue implements the client.Listener interface. It is called by the Antrea Service EndpointResolver
