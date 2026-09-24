@@ -347,11 +347,11 @@ type GetFlowsRequest struct {
 	// sent against the one the first GetFlowsResponse carries, which is always
 	// the server's current one.
 	//
-	// A token whose sequence_number is at or beyond the server's current
-	// position, under a matching stream_epoch, is rejected with
-	// INVALID_ARGUMENT as it cannot come from an honestly-replayed token. A
-	// sequence_number below -1, the lowest value a server ever issues, is
-	// rejected the same way.
+	// A token whose sequence_number is at or beyond the position the server
+	// will assign to its next record, under a matching stream_epoch, is
+	// rejected with INVALID_ARGUMENT as it cannot come from an
+	// honestly-replayed token. A sequence_number below -1, the lowest value a
+	// server ever issues, is rejected the same way.
 	Resume        *ResumeToken `protobuf:"bytes,7,opt,name=resume,proto3" json:"resume,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -443,9 +443,10 @@ type ResumeToken struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// Identifies the Flow Aggregator process sequence_number was issued by.
 	StreamEpoch string `protobuf:"bytes,1,opt,name=stream_epoch,json=streamEpoch,proto3" json:"stream_epoch,omitempty"`
-	// The sequence_number of the last flow observed on the previous stream (or
-	// the sequence_number carried by its very first response, if it disconnected
-	// before observing any flow).
+	// The sequence_number carried by the last GetFlowsResponse received on the
+	// previous stream. It can be past the last flow the client observed, since
+	// records that were dropped, or removed by authorization or the client's
+	// filters, advance it too.
 	SequenceNumber int64 `protobuf:"varint,2,opt,name=sequence_number,json=sequenceNumber,proto3" json:"sequence_number,omitempty"`
 	unknownFields  protoimpl.UnknownFields
 	sizeCache      protoimpl.SizeCache

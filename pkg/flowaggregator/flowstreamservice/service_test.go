@@ -1488,6 +1488,58 @@ func TestGetFlows_NonFollowTailSendsFinalTokenWhenFilteredOut(t *testing.T) {
 	})
 }
 
+// TestGetFlows_NonFollowTailFinalTokenCarriesDroppedCount covers the same final token-only response
+// on a stream that did drop records earlier: dropped_count is cumulative for the stream, so that
+// response must repeat it rather than report 0.
+func TestGetFlows_NonFollowTailFinalTokenCarriesDroppedCount(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		const bufSize = 64
+		buf := ringbuffer.NewBroadcastBuffer[*flowpb.Flow](bufSize)
+		t.Cleanup(func() { buf.Shutdown() })
+
+		produce := func(from, to int) {
+			for i := from; i < to; i++ {
+				buf.Produce(newFlow(fmt.Sprintf("flow-%d", i), newPodK8S("default", "pod", "other", "pod")))
+			}
+		}
+		// Positions 36-99 remain in the buffer, so resuming from position 0 drops positions 1-35.
+		produce(0, 100)
+
+		svc := newTestService(buf)
+		stream := newFakeStream(t.Context())
+		// Once the drop has been reported, produce a few more records, all filtered out and well
+		// under tokenRefreshSpan, so that only the final token-only response accounts for them.
+		producedMore := false
+		stream.onSend = func(r *flowpb.GetFlowsResponse) {
+			if r.GetDroppedCount() > 0 && !producedMore {
+				producedMore = true
+				produce(100, 110)
+			}
+		}
+		req := &flowpb.GetFlowsRequest{
+			Follow: false,
+			Filters: []*flowpb.FlowFilter{{
+				Namespaces: []string{"monitoring"},
+				Direction:  flowpb.FlowFilterDirection_FLOW_FILTER_DIRECTION_FROM,
+			}},
+			Resume: &flowpb.ResumeToken{StreamEpoch: svc.streamEpoch, SequenceNumber: 0},
+		}
+		errCh := make(chan error, 1)
+		go func() { errCh <- svc.GetFlows(req, stream) }()
+		time.Sleep(2 * exporter.ConsumeDeadline)
+		synctest.Wait()
+
+		require.NoError(t, <-errCh)
+		require.True(t, producedMore, "the drop must have been reported before the tail")
+		assert.Empty(t, collectFlows(stream.responses))
+		require.Len(t, stream.responses, 3, "handshake, drop report, and one final token-only response")
+		last := stream.responses[len(stream.responses)-1]
+		assert.EqualValues(t, 109, last.GetResumeToken().GetSequenceNumber(),
+			"the final response must report the position this stream actually reached")
+		assert.EqualValues(t, 35, last.GetDroppedCount(), "dropped_count is cumulative for the stream")
+	})
+}
+
 // TestGetFlows_FinalBatchDeliveredOnShutdown covers records produced right before the ring buffer
 // shuts down: ConsumeMultiple hands them out together with shutdown, and they must still be sent.
 func TestGetFlows_FinalBatchDeliveredOnShutdown(t *testing.T) {

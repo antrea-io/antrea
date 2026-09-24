@@ -153,11 +153,11 @@ message GetFlowsRequest {
   // sent against the one the first GetFlowsResponse carries, which is always
   // the server's current one.
   //
-  // A token whose sequence_number is at or beyond the server's current
-  // position, under a matching stream_epoch, is rejected with
-  // INVALID_ARGUMENT as it cannot come from an honestly-replayed token. A
-  // sequence_number below -1, the lowest value a server ever issues, is
-  // rejected the same way.
+  // A token whose sequence_number is at or beyond the position the server
+  // will assign to its next record, under a matching stream_epoch, is
+  // rejected with INVALID_ARGUMENT as it cannot come from an
+  // honestly-replayed token. A sequence_number below -1, the lowest value a
+  // server ever issues, is rejected the same way.
   ResumeToken resume = 7;
 }
 
@@ -167,9 +167,10 @@ message GetFlowsRequest {
 message ResumeToken {
   // Identifies the Flow Aggregator process sequence_number was issued by.
   string stream_epoch = 1;
-  // The sequence_number of the last flow observed on the previous stream (or
-  // the sequence_number carried by its very first response, if it disconnected
-  // before observing any flow).
+  // The sequence_number carried by the last GetFlowsResponse received on the
+  // previous stream. It can be past the last flow the client observed, since
+  // records that were dropped, or removed by authorization or the client's
+  // filters, advance it too.
   int64 sequence_number = 2;
 }
 

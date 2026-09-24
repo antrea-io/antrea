@@ -286,8 +286,8 @@ func (s *FlowStreamService) GetFlows(req *flowpb.GetFlowsRequest, stream flowpb.
 		}
 		if tip := s.buffer.Tip(); r.GetSequenceNumber() >= tip {
 			return status.Errorf(codes.InvalidArgument,
-				"resume sequence_number %d is not before this stream's current position %d",
-				r.GetSequenceNumber(), tip-1)
+				"resume sequence_number %d is invalid: must be less than %d, the next position to be written",
+				r.GetSequenceNumber(), tip)
 		}
 		// A resume point that has already fallen out of the ring buffer deliberately leaves the
 		// consumer positioned behind the buffer rather than clamped forward to the oldest record
@@ -397,7 +397,8 @@ func (s *FlowStreamService) GetFlows(req *flowpb.GetFlowsRequest, stream flowpb.
 			// client's dropped_count accurate across repeated non-follow polls.
 			if tokenPos > lastTokenPos {
 				if err := stream.Send(&flowpb.GetFlowsResponse{
-					ResumeToken: &flowpb.ResumeToken{StreamEpoch: s.streamEpoch, SequenceNumber: tokenPos},
+					DroppedCount: totalDropped,
+					ResumeToken:  &flowpb.ResumeToken{StreamEpoch: s.streamEpoch, SequenceNumber: tokenPos},
 				}); err != nil {
 					klog.InfoS("Send to client failed, closing GetFlows stream", "err", err)
 					return err
