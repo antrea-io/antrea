@@ -305,8 +305,8 @@ data:
       # Which records a client then receives is decided by Kubernetes RBAC on the virtual
       # "flows.observability.antrea.io" resource. See docs/network-flow-visibility.md for
       # more details.
-      # Disabled by default.
-      enable: false
+      # Enabled by default.
+      enable: true
 
       # MaxStreamsPerClientIP is the maximum number of concurrent flow streams the server accepts
       # from one client IP address. A stream refused by this limit, or by maxTotalStreams, is rejected
@@ -549,6 +549,10 @@ spec:
     port: 14739
     protocol: TCP
     targetPort: grpc
+  - name: flowstream-grpc
+    port: 14740
+    protocol: TCP
+    targetPort: flowstream-grpc
 ---
 # Source: flow-aggregator/templates/deployment.yaml
 apiVersion: apps/v1
@@ -568,7 +572,7 @@ spec:
       annotations:
         # Automatically restart Pod if the ConfigMap changes
         # See https://helm.sh/docs/howto/charts_tips_and_tricks/#automatically-roll-deployments
-        checksum/config: 51e5e714dc0634bfa384c116a270b4fe015875e091dc640a77a221d0e44856fc
+        checksum/config: c779f4425584b096e1872a42d451b6088f502882c063574d8b4233cf610ac799
       labels:
         app: flow-aggregator
     spec:
@@ -629,6 +633,9 @@ spec:
             protocol: TCP
           - name: grpc
             containerPort: 14739
+            protocol: TCP
+          - name: flowstream-grpc
+            containerPort: 14740
             protocol: TCP
         volumeMounts:
         - mountPath: /etc/flow-aggregator

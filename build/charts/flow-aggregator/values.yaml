@@ -204,8 +204,8 @@ flowStreamService:
   # authenticate with either a Kubernetes bearer token in gRPC metadata or an X.509 client
   # certificate signed by the cluster's client CA, presented during the TLS handshake. Note that
   # the Flow Aggregator's own client certificate is signed by its self-signed CA, not the
-  # cluster's, so it cannot be used here. Disabled by default.
-  enable: false
+  # cluster's, so it cannot be used here. Enabled by default.
+  enable: true
   # -- MaxStreamsPerClientIP is the maximum number of concurrent flow streams the server accepts
   # from one client IP address. A stream refused by this limit, or by maxTotalStreams, is rejected
   # with the retryable gRPC ResourceExhausted code. Note that this limit keys on the source IP of
