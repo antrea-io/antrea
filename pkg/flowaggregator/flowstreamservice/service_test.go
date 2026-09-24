@@ -1451,6 +1451,43 @@ func TestGetFlows_TokenRefreshWhenEverythingFilteredOut(t *testing.T) {
 	})
 }
 
+// TestGetFlows_NonFollowTailSendsFinalTokenWhenFilteredOut covers a non-follow, selective stream
+// that reaches the tail without ever crossing tokenRefreshSpan: every record it read was filtered
+// out, so the per-batch send condition never fires, and the client would otherwise be left with
+// only its handshake token. The stream must still send that position once, right before closing.
+func TestGetFlows_NonFollowTailSendsFinalTokenWhenFilteredOut(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		const bufSize = 64
+		buf := ringbuffer.NewBroadcastBuffer[*flowpb.Flow](bufSize)
+		t.Cleanup(func() { buf.Shutdown() })
+
+		const produced = 20 // well under bufSize/2 (tokenRefreshSpan), so no mid-stream refresh fires
+		for i := range produced {
+			buf.Produce(newFlow(fmt.Sprintf("flow-%d", i), newPodK8S("default", "pod", "other", "pod")))
+		}
+
+		svc := newTestService(buf)
+		stream := newFakeStream(t.Context())
+		req := &flowpb.GetFlowsRequest{
+			Follow: false,
+			Filters: []*flowpb.FlowFilter{{
+				Namespaces: []string{"monitoring"},
+				Direction:  flowpb.FlowFilterDirection_FLOW_FILTER_DIRECTION_FROM,
+			}},
+		}
+		errCh := make(chan error, 1)
+		go func() { errCh <- svc.GetFlows(req, stream) }()
+		time.Sleep(2 * exporter.ConsumeDeadline)
+		synctest.Wait()
+
+		require.NoError(t, <-errCh)
+		assert.Empty(t, collectFlows(stream.responses))
+		require.Len(t, stream.responses, 2, "handshake plus one final token-only response")
+		assert.EqualValues(t, produced-1, stream.responses[len(stream.responses)-1].GetResumeToken().GetSequenceNumber(),
+			"the final response must report the position this stream actually reached")
+	})
+}
+
 // TestGetFlows_FinalBatchDeliveredOnShutdown covers records produced right before the ring buffer
 // shuts down: ConsumeMultiple hands them out together with shutdown, and they must still be sent.
 func TestGetFlows_FinalBatchDeliveredOnShutdown(t *testing.T) {

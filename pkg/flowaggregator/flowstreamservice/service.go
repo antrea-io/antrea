@@ -393,6 +393,16 @@ func (s *FlowStreamService) GetFlows(req *flowpb.GetFlowsRequest, stream flowpb.
 		// n == 0 with dropped > 0 is not the tail: every record available to this read was
 		// overwritten before it could be read, and the buffer may still hold more.
 		if !follow && n == 0 && dropped == 0 {
+			// Sending up-to-date tokenPos for a non-follow stream at the tail keeps a selective
+			// client's dropped_count accurate across repeated non-follow polls.
+			if tokenPos > lastTokenPos {
+				if err := stream.Send(&flowpb.GetFlowsResponse{
+					ResumeToken: &flowpb.ResumeToken{StreamEpoch: s.streamEpoch, SequenceNumber: tokenPos},
+				}); err != nil {
+					klog.InfoS("Send to client failed, closing GetFlows stream", "err", err)
+					return err
+				}
+			}
 			klog.InfoS("Caught up to ring buffer tail, closing non-follow stream")
 			return nil
 		}
@@ -413,7 +423,7 @@ func (s *FlowStreamService) GetFlows(req *flowpb.GetFlowsRequest, stream flowpb.
 //
 // The selected records are compacted into batch[:0], so batch is modified.
 func selectRecords(ctx context.Context, streamAuth *StreamAuthorization, batch []*flowpb.Flow, filters []flowFilter, since time.Time, limit int) ([]*flowpb.Flow, int) {
-	var records = slices.All(batch)
+	records := slices.All(batch)
 	if streamAuth != nil {
 		records = streamAuth.Authorized(ctx, batch)
 	}

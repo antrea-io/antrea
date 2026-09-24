@@ -499,8 +499,9 @@ func (x *ResumeToken) GetSequenceNumber() int64 {
 type GetFlowsResponse struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// The matching flow records. Empty in the first response of every stream,
-	// and in the occasional response sent only to move resume_token forward
-	// when authorization or the client's filters removed every record read.
+	// and in any later response sent only to report dropped_count or move
+	// resume_token forward. This happens when every record read was dropped,
+	// removed by authorization or the client's filters, or both.
 	Flows []*Flow `protobuf:"bytes,1,rep,name=flows,proto3" json:"flows,omitempty"`
 	// Number of flows dropped because the consumer fell behind and the ring
 	// buffer wrapped around, or because a resume request named a
