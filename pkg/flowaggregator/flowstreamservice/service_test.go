@@ -140,37 +140,33 @@ func mustParseFilters(protos ...*flowpb.FlowFilter) []flowFilter {
 	return out
 }
 
-func TestApplyFilter_Since(t *testing.T) {
+func TestMatchFlow_Since(t *testing.T) {
 	now := time.Now()
 	since := now.Add(-30 * time.Second)
 
 	oldFlow := newFlowEndTs("old", now.Add(-1*time.Minute), &flowpb.Kubernetes{})
 	recentFlow := newFlowEndTs("recent", now.Add(-5*time.Second), &flowpb.Kubernetes{})
 
-	got := applyFilters([]*flowpb.Flow{oldFlow, recentFlow}, nil, since)
-	require.Len(t, got, 1)
-	assert.Equal(t, "recent", got[0].GetId())
+	assert.False(t, matchFlow(oldFlow, nil, since))
+	assert.True(t, matchFlow(recentFlow, nil, since))
 }
 
-func TestApplyFilter_SinceExcludesNilEndTs(t *testing.T) {
+func TestMatchFlow_SinceExcludesNilEndTs(t *testing.T) {
 	// A flow with no EndTs should be treated as having end_ts == zero time,
 	// which is before any non-zero since value, so it must be excluded.
 	since := time.Now().Add(-30 * time.Second)
 	nilEndTsFlow := &flowpb.Flow{Id: "nil-ts", K8S: &flowpb.Kubernetes{}}
-	got := applyFilters([]*flowpb.Flow{nilEndTsFlow}, nil, since)
-	assert.Empty(t, got)
+	assert.False(t, matchFlow(nilEndTsFlow, nil, since))
 }
 
-func TestApplyFilter_ZeroSincePassesAll(t *testing.T) {
-	flows := []*flowpb.Flow{newFlow("a", &flowpb.Kubernetes{}), newFlow("b", &flowpb.Kubernetes{})}
-	got := applyFilters(flows, nil, time.Time{})
-	assert.Len(t, got, 2)
+func TestMatchFlow_ZeroSincePassesAll(t *testing.T) {
+	assert.True(t, matchFlow(newFlow("a", &flowpb.Kubernetes{}), nil, time.Time{}))
+	assert.True(t, matchFlow(newFlow("b", &flowpb.Kubernetes{}), nil, time.Time{}))
 }
 
-func TestApplyFilter_NilFilterPassesAll(t *testing.T) {
-	flows := []*flowpb.Flow{newFlow("a", &flowpb.Kubernetes{}), newFlow("b", &flowpb.Kubernetes{})}
-	got := applyFilters(flows, nil, time.Time{})
-	assert.Len(t, got, 2)
+func TestMatchFlow_NilFilterPassesAll(t *testing.T) {
+	assert.True(t, matchFlow(newFlow("a", &flowpb.Kubernetes{}), nil, time.Time{}))
+	assert.True(t, matchFlow(newFlow("b", &flowpb.Kubernetes{}), nil, time.Time{}))
 }
 
 func TestMatchFilter_Namespaces(t *testing.T) {
@@ -235,12 +231,7 @@ func TestMatchFilter_Namespaces(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			f := newFlow("f", newPodK8S(tc.srcNS, "src-pod", tc.dstNS, "dst-pod"))
 			filter := &flowpb.FlowFilter{Namespaces: tc.filter, Direction: tc.direction}
-			got := applyFilters([]*flowpb.Flow{f}, mustParseFilters(filter), time.Time{})
-			if tc.want {
-				assert.Len(t, got, 1)
-			} else {
-				assert.Empty(t, got)
-			}
+			assert.Equal(t, tc.want, matchFlow(f, mustParseFilters(filter), time.Time{}))
 		})
 	}
 }
@@ -301,12 +292,7 @@ func TestMatchFilter_PodNames(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			f := newFlow("f", newPodK8S("ns", tc.srcPod, "ns", tc.dstPod))
 			filter := &flowpb.FlowFilter{PodNames: tc.filter, Direction: tc.direction}
-			got := applyFilters([]*flowpb.Flow{f}, mustParseFilters(filter), time.Time{})
-			if tc.want {
-				assert.Len(t, got, 1)
-			} else {
-				assert.Empty(t, got)
-			}
+			assert.Equal(t, tc.want, matchFlow(f, mustParseFilters(filter), time.Time{}))
 		})
 	}
 }
@@ -316,9 +302,9 @@ func TestMatchFilter_FlowTypes(t *testing.T) {
 	inter := newFlow("inter", &flowpb.Kubernetes{FlowType: flowpb.FlowType_FLOW_TYPE_INTER_NODE})
 
 	filter := &flowpb.FlowFilter{FlowTypes: []flowpb.FlowType{flowpb.FlowType_FLOW_TYPE_INTRA_NODE}}
-	got := applyFilters([]*flowpb.Flow{intra, inter}, mustParseFilters(filter), time.Time{})
-	require.Len(t, got, 1)
-	assert.Equal(t, "intra", got[0].GetId())
+	filters := mustParseFilters(filter)
+	assert.True(t, matchFlow(intra, filters, time.Time{}))
+	assert.False(t, matchFlow(inter, filters, time.Time{}))
 }
 
 func TestMatchFilter_ServiceNames(t *testing.T) {
@@ -375,12 +361,7 @@ func TestMatchFilter_ServiceNames(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			f := newFlow("f", &flowpb.Kubernetes{DestinationServicePortName: tc.svcPortName})
 			filter := &flowpb.FlowFilter{ServiceNames: tc.filter}
-			got := applyFilters([]*flowpb.Flow{f}, mustParseFilters(filter), time.Time{})
-			if tc.wantMatch {
-				assert.Len(t, got, 1)
-			} else {
-				assert.Empty(t, got)
-			}
+			assert.Equal(t, tc.wantMatch, matchFlow(f, mustParseFilters(filter), time.Time{}))
 		})
 	}
 }
@@ -447,12 +428,7 @@ func TestMatchFilter_IPs(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			filter := &flowpb.FlowFilter{Ips: tc.ips, Direction: tc.direction}
-			got := applyFilters([]*flowpb.Flow{f}, mustParseFilters(filter), time.Time{})
-			if tc.wantMatch {
-				assert.Len(t, got, 1)
-			} else {
-				assert.Empty(t, got)
-			}
+			assert.Equal(t, tc.wantMatch, matchFlow(f, mustParseFilters(filter), time.Time{}))
 		})
 	}
 }
@@ -518,16 +494,12 @@ func TestMatchFilter_LabelSelector(t *testing.T) {
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			got := applyFilters(
-				[]*flowpb.Flow{newFlow("f", tc.k8s)},
+			got := matchFlow(
+				newFlow("f", tc.k8s),
 				mustParseFilters(&flowpb.FlowFilter{Direction: tc.direction, PodLabelSelector: "app=frontend"}),
 				time.Time{},
 			)
-			if tc.wantMatch {
-				assert.Len(t, got, 1)
-			} else {
-				assert.Empty(t, got)
-			}
+			assert.Equal(t, tc.wantMatch, got)
 		})
 	}
 }
