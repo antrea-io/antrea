@@ -244,7 +244,7 @@ func (e *IPFIXExporter) Run(ctx context.Context, buf ringbuffer.BroadcastBuffer[
 			initNextAttempt = now
 		}
 
-		record, n, _, shutdown := consumer.Consume()
+		record, n, _, _, shutdown := consumer.Consume()
 		if n > 0 {
 			isIPv6 := record.Ip.Version == flowpb.IPVersion_IP_VERSION_6
 			if err := e.sendRecord(record, isIPv6); err != nil {

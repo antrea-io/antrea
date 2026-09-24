@@ -60,7 +60,7 @@ func (e *S3Exporter) Run(ctx context.Context, buf ringbuffer.BroadcastBuffer[*fl
 
 	records := make([]*flowpb.Flow, ConsumeMultipleBatchSize)
 	for {
-		n, _, shutdown := consumer.ConsumeMultiple(records)
+		n, _, _, shutdown := consumer.ConsumeMultiple(records)
 		for _, record := range records[:n] {
 			if err := e.s3UploadProcess.CacheRecord(record); err != nil {
 				klog.ErrorS(err, "Error when caching record for S3")

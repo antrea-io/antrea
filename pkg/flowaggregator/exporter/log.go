@@ -132,7 +132,7 @@ func (e *LogExporter) Run(ctx context.Context, buf ringbuffer.BroadcastBuffer[*f
 
 	records := make([]*flowpb.Flow, ConsumeMultipleBatchSize)
 	for {
-		n, _, shutdown := consumer.ConsumeMultiple(records)
+		n, _, _, shutdown := consumer.ConsumeMultiple(records)
 		for _, record := range records[:n] {
 			r, err := flowrecord.GetFlowRecord(record)
 			if err != nil {

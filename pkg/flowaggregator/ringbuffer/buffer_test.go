@@ -18,6 +18,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"math"
 	"runtime"
 	"strings"
 	"sync"
@@ -59,7 +60,7 @@ func TestProduceConsumeSingle(t *testing.T) {
 
 	buf.Produce(42)
 
-	val, n, lost, shutdown := c.Consume()
+	val, n, lost, _, shutdown := c.Consume()
 	require.False(t, shutdown, "unexpected shutdown")
 	require.Equal(t, 1, n)
 	assert.Equal(t, int64(0), lost)
@@ -74,7 +75,7 @@ func TestProduceMultipleConsumeMultiple(t *testing.T) {
 	buf.ProduceMultiple(items)
 
 	out := make([]int, 10)
-	n, lost, shutdown := c.ConsumeMultiple(out)
+	n, lost, _, shutdown := c.ConsumeMultiple(out)
 	require.False(t, shutdown, "unexpected shutdown")
 	assert.Equal(t, int64(0), lost)
 	require.Equal(t, 5, n)
@@ -90,7 +91,7 @@ func TestConsumerBlocksUntilProduce(t *testing.T) {
 
 		var val int
 		go func() {
-			val, _, _, _ = c.Consume()
+			val, _, _, _, _ = c.Consume()
 		}()
 
 		synctest.Wait()
@@ -110,7 +111,7 @@ func TestOverwriteReportsLost(t *testing.T) {
 	}
 
 	out := make([]int, 10)
-	n, lost, shutdown := c.ConsumeMultiple(out)
+	n, lost, _, shutdown := c.ConsumeMultiple(out)
 	require.False(t, shutdown, "unexpected shutdown")
 	assert.Equal(t, int64(4), lost)
 	require.Equal(t, 4, n)
@@ -130,7 +131,7 @@ func TestMultipleConsumersIndependent(t *testing.T) {
 
 	for _, c := range []Consumer[int]{c1, c2} {
 		out := make([]int, 10)
-		n, lost, shutdown := c.ConsumeMultiple(out)
+		n, lost, _, shutdown := c.ConsumeMultiple(out)
 		require.False(t, shutdown, "unexpected shutdown")
 		assert.Equal(t, int64(0), lost)
 		assert.Equal(t, 5, n)
@@ -146,7 +147,7 @@ func TestPowerOfTwoRoundup(t *testing.T) {
 	}
 
 	out := make([]int, 16)
-	n, _, _ := c.ConsumeMultiple(out)
+	n, _, _, _ := c.ConsumeMultiple(out)
 	assert.Equal(t, 8, n)
 }
 
@@ -160,7 +161,7 @@ func TestShutdownDrainsFirst(t *testing.T) {
 	buf.Shutdown()
 
 	for expected := 1; expected <= 3; expected++ {
-		val, n, _, shutdown := c.Consume()
+		val, n, _, _, shutdown := c.Consume()
 		if shutdown && n == 0 {
 			require.Fail(t, "got shutdown before draining item", "item %d", expected)
 		}
@@ -168,7 +169,7 @@ func TestShutdownDrainsFirst(t *testing.T) {
 		assert.Equal(t, expected, val)
 	}
 
-	_, n, _, shutdown := c.Consume()
+	_, n, _, _, shutdown := c.Consume()
 	assert.True(t, shutdown, "expected shutdown after draining all items")
 	assert.Equal(t, 0, n, "expected n=0 after draining all items")
 }
@@ -182,10 +183,10 @@ func TestShutdownDrainsFirstConsumeMultiple(t *testing.T) {
 	buf.Shutdown()
 
 	out := make([]int, 10)
-	n, _, shutdown := c.ConsumeMultiple(out)
+	n, _, _, shutdown := c.ConsumeMultiple(out)
 	require.Equal(t, 2, n)
 	if !shutdown {
-		n, _, shutdown = c.ConsumeMultiple(out)
+		n, _, _, shutdown = c.ConsumeMultiple(out)
 		assert.True(t, shutdown)
 		assert.Equal(t, 0, n)
 	}
@@ -198,7 +199,7 @@ func TestShutdownUnblocksWaitingConsumer(t *testing.T) {
 
 		var shutdown bool
 		go func() {
-			_, _, _, shutdown = c.Consume()
+			_, _, _, _, shutdown = c.Consume()
 		}()
 
 		synctest.Wait()
@@ -244,12 +245,12 @@ func TestConsumeAfterShutdownReturnsImmediately(t *testing.T) {
 		buf.Produce(2)
 		buf.Shutdown()
 
-		val, n, _, shutdown := c.Consume()
+		val, n, _, _, shutdown := c.Consume()
 		require.Equal(t, 1, n)
 		assert.Equal(t, 1, val)
 		assert.False(t, shutdown)
 
-		val, n, _, shutdown = c.Consume()
+		val, n, _, _, shutdown = c.Consume()
 		require.Equal(t, 1, n)
 		assert.Equal(t, 2, val)
 		assert.True(t, shutdown)
@@ -257,7 +258,7 @@ func TestConsumeAfterShutdownReturnsImmediately(t *testing.T) {
 		var n2 int
 		var shutdown2 bool
 		go func() {
-			_, n2, _, shutdown2 = c.Consume()
+			_, n2, _, _, shutdown2 = c.Consume()
 		}()
 		synctest.Wait()
 
@@ -277,7 +278,7 @@ func TestNewConsumerAfterShutdownReturnsImmediately(t *testing.T) {
 		var n int
 		var shutdown bool
 		go func() {
-			_, n, _, shutdown = c.Consume()
+			_, n, _, _, shutdown = c.Consume()
 		}()
 		synctest.Wait()
 
@@ -286,7 +287,7 @@ func TestNewConsumerAfterShutdownReturnsImmediately(t *testing.T) {
 
 		c2 := buf.NewConsumer()
 		out := make([]int, 10)
-		n, _, shutdown = c2.ConsumeMultiple(out)
+		n, _, _, shutdown = c2.ConsumeMultiple(out)
 		assert.Equal(t, 0, n)
 		assert.True(t, shutdown)
 	})
@@ -302,7 +303,7 @@ func TestNewConsumerAfterShutdownWithDeadline(t *testing.T) {
 		var n int
 		var shutdown bool
 		go func() {
-			_, n, _, shutdown = c.Consume()
+			_, n, _, _, shutdown = c.Consume()
 		}()
 		synctest.Wait()
 
@@ -328,7 +329,7 @@ func TestConcurrentProduceConsume(t *testing.T) {
 			defer wg.Done()
 			out := make([]int, 64)
 			for {
-				_, _, shutdown := c.ConsumeMultiple(out)
+				_, _, _, shutdown := c.ConsumeMultiple(out)
 				if shutdown {
 					return
 				}
@@ -356,7 +357,7 @@ func TestNoLostWakeup(t *testing.T) {
 		done := make(chan struct{})
 		go func() {
 			for {
-				_, _, _, shutdown := c.Consume()
+				_, _, _, _, shutdown := c.Consume()
 				if shutdown {
 					close(done)
 					return
@@ -392,7 +393,7 @@ func TestProducerLapsSlowConsumer(t *testing.T) {
 	var totalRead, totalLost int
 	out := make([]int, 32)
 	for {
-		n, lost, shutdown := c.ConsumeMultiple(out)
+		n, lost, _, shutdown := c.ConsumeMultiple(out)
 		totalRead += n
 		totalLost += int(lost)
 		if shutdown {
@@ -417,7 +418,7 @@ func TestReadFromBeginningPartialBuffer(t *testing.T) {
 	out := make([]int, 20)
 	buf.Shutdown()
 
-	n, lost, shutdown := c.ConsumeMultiple(out)
+	n, lost, _, shutdown := c.ConsumeMultiple(out)
 	assert.Equal(t, int64(0), lost)
 	require.Equal(t, 5, n)
 	for i := 0; i < n; i++ {
@@ -438,7 +439,7 @@ func TestReadFromBeginningFullBuffer(t *testing.T) {
 	out := make([]int, 20)
 	buf.Shutdown()
 
-	n, lost, _ := c.ConsumeMultiple(out)
+	n, lost, _, _ := c.ConsumeMultiple(out)
 	assert.Equal(t, int64(0), lost)
 	require.Equal(t, bufSize, n)
 	for i := 0; i < n; i++ {
@@ -459,7 +460,7 @@ func TestReadFromBeginningWrappedBuffer(t *testing.T) {
 	out := make([]int, 20)
 	buf.Shutdown()
 
-	n, lost, _ := c.ConsumeMultiple(out)
+	n, lost, _, _ := c.ConsumeMultiple(out)
 	require.Equal(t, bufSize, n)
 	assert.Equal(t, int64(0), lost, "consumer starts at oldest available")
 	for i := 0; i < n; i++ {
@@ -486,7 +487,7 @@ func TestReadFromBeginningLostDuringRead(t *testing.T) {
 	var totalRead, totalLost int
 	out := make([]int, 20)
 	for {
-		n, lost, shutdown := c.ConsumeMultiple(out)
+		n, lost, _, shutdown := c.ConsumeMultiple(out)
 		totalRead += n
 		totalLost += int(lost)
 		if shutdown {
@@ -513,12 +514,425 @@ func TestReadFromBeginningVsDefault(t *testing.T) {
 	buf.Shutdown()
 
 	out := make([]int, 20)
-	n, _, _ := cDefault.ConsumeMultiple(out)
+	n, _, _, _ := cDefault.ConsumeMultiple(out)
 	require.Equal(t, 1, n)
 	assert.Equal(t, 99, out[0])
 
-	n, _, _ = cBegin.ConsumeMultiple(out)
+	n, _, _, _ = cBegin.ConsumeMultiple(out)
 	assert.Equal(t, 11, n)
+}
+
+func TestEndAdvancesWithReads(t *testing.T) {
+	buf := NewBroadcastBuffer[int](8)
+	c := buf.NewConsumer()
+
+	buf.ProduceMultiple([]int{1, 2, 3})
+	out := make([]int, 10)
+	n, _, end, _ := c.ConsumeMultiple(out)
+	require.Equal(t, 3, n)
+	assert.Equal(t, int64(3), end)
+	assert.Equal(t, int64(0), end-int64(n), "the batch starts at position 0, the first the buffer ever held")
+}
+
+func TestEndReflectsReadFromBeginningStart(t *testing.T) {
+	const bufSize = 8
+	buf := NewBroadcastBuffer[int](bufSize)
+
+	total := bufSize * 3
+	for i := 0; i < total; i++ {
+		buf.Produce(i)
+	}
+
+	// The buffer has wrapped total/bufSize = 3 times, so the oldest item it still holds is at
+	// total-bufSize, and that is where a read-from-beginning consumer starts.
+	c := buf.NewConsumer(WithReadFromBeginning())
+	out := make([]int, bufSize)
+	n, lost, end, _ := c.ConsumeMultiple(out)
+	require.Equal(t, bufSize, n)
+	assert.Zero(t, lost, "starting at the oldest item still held means nothing was missed")
+	assert.Equal(t, int64(total), end)
+	assert.Equal(t, int64(total-bufSize), end-int64(n))
+}
+
+func TestEndAdvancesPastLostItems(t *testing.T) {
+	const bufSize = 4
+	buf := NewBroadcastBuffer[int](bufSize)
+	c := buf.NewConsumer()
+
+	for i := 0; i < 2*bufSize; i++ {
+		buf.Produce(i)
+	}
+
+	out := make([]int, 10)
+	n, lost, end, _ := c.ConsumeMultiple(out)
+	require.Equal(t, bufSize, n)
+	assert.Equal(t, int64(bufSize), lost)
+	// end counts the lost items too, so it lands at the tip once the batch itself (bufSize items)
+	// is accounted for on top of the bufSize that were overwritten before they could be read.
+	assert.Equal(t, int64(2*bufSize), end)
+}
+
+// ---------------------------------------------------------------------------
+// WithReadFromSequenceNumber positioning tests
+// ---------------------------------------------------------------------------
+
+func TestReadFromSequenceNumberResumesAfterSeq(t *testing.T) {
+	const bufSize = 16
+	buf := NewBroadcastBuffer[int](bufSize)
+	for i := 0; i < 10; i++ {
+		buf.Produce(i)
+	}
+
+	// Position 4 is already accounted for, so the first item read is the one at 5.
+	c := buf.NewConsumer(WithReadFromSequenceNumber(4))
+	out := make([]int, 20)
+	n, lost, end, _ := c.ConsumeMultiple(out)
+	require.Equal(t, 5, n)
+	assert.Zero(t, lost)
+	assert.Equal(t, []int{5, 6, 7, 8, 9}, out[:n])
+	assert.Equal(t, int64(10), end)
+}
+
+func TestReadFromSequenceNumberMinusOneReadsEverything(t *testing.T) {
+	const bufSize = 16
+	buf := NewBroadcastBuffer[int](bufSize)
+	for i := 0; i < 10; i++ {
+		buf.Produce(i)
+	}
+
+	// -1 means "nothing accounted for yet", so the consumer starts at position 0. It is distinct
+	// from an omitted option, which would start at the tip and read nothing of the above.
+	c := buf.NewConsumer(WithReadFromSequenceNumber(-1))
+	out := make([]int, 20)
+	n, lost, end, _ := c.ConsumeMultiple(out)
+	require.Equal(t, 10, n)
+	assert.Zero(t, lost)
+	assert.Equal(t, 0, out[0])
+	assert.Equal(t, int64(10), end)
+}
+
+func TestReadFromSequenceNumberAtOldestMinusOne(t *testing.T) {
+	const bufSize = 8
+	buf := NewBroadcastBuffer[int](bufSize)
+	total := bufSize * 2
+	for i := 0; i < total; i++ {
+		buf.Produce(i)
+	}
+
+	// The oldest item still held is at total-bufSize, so a resume point one before it is the
+	// newest one that is still exactly satisfiable: nothing is lost and nothing is re-delivered.
+	c := buf.NewConsumer(WithReadFromSequenceNumber(int64(total - bufSize - 1)))
+	out := make([]int, 20)
+	n, lost, end, _ := c.ConsumeMultiple(out)
+	require.Equal(t, bufSize, n)
+	assert.Zero(t, lost)
+	assert.Equal(t, total-bufSize, out[0])
+	assert.Equal(t, int64(total), end)
+}
+
+func TestReadFromSequenceNumberBelowOldestReportsEvictedSpanAsLost(t *testing.T) {
+	const bufSize = 8
+	buf := NewBroadcastBuffer[int](bufSize)
+	total := bufSize * 3
+	for i := 0; i < total; i++ {
+		buf.Produce(i)
+	}
+
+	// A resume point that has already been overwritten is deliberately not clamped forward to the
+	// oldest slot still held: the consumer stays behind the buffer so that the whole evicted span
+	// is reported through lost on the first read, rather than being silently absorbed.
+	c := buf.NewConsumer(WithReadFromSequenceNumber(1))
+	out := make([]int, 20)
+	n, lost, end, _ := c.ConsumeMultiple(out)
+	require.Equal(t, bufSize, n)
+	assert.Equal(t, int64(total-bufSize-2), lost, "positions 2..total-bufSize-1 are gone")
+	assert.Equal(t, total-bufSize, out[0])
+	assert.Equal(t, int64(total), end)
+	assert.Equal(t, int64(total), int64(n)+lost+2, "every position after the resume point is read or lost")
+}
+
+func TestReadFromSequenceNumberAtOrPastTipReadsOnlyNewItems(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		seq  int64
+	}{
+		{"at tip", 10},
+		{"past tip", 1000},
+		{"max int64", math.MaxInt64},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			const bufSize = 16
+			buf := NewBroadcastBuffer[int](bufSize)
+			for i := 0; i < 10; i++ {
+				buf.Produce(i)
+			}
+
+			// A sequence number no item has been assigned yet cannot be honored. It is clamped back
+			// to the tip — including at MaxInt64, where incrementing it would overflow — so the
+			// consumer behaves like a default one rather than reading a wrong range.
+			c := buf.NewConsumer(WithReadFromSequenceNumber(tc.seq))
+			buf.Produce(99)
+			buf.Shutdown()
+
+			out := make([]int, 20)
+			n, lost, end, _ := c.ConsumeMultiple(out)
+			require.Equal(t, 1, n)
+			assert.Equal(t, 99, out[0])
+			assert.Zero(t, lost)
+			assert.Equal(t, int64(11), end)
+		})
+	}
+}
+
+func TestReadFromSequenceNumberBelowMinusOneIsAbsorbed(t *testing.T) {
+	const bufSize = 16
+	buf := NewBroadcastBuffer[int](bufSize)
+	for i := 0; i < 10; i++ {
+		buf.Produce(i)
+	}
+
+	// A sequence number below -1 is out of contract — callers are expected to reject it — but it
+	// must not wrap the arithmetic here into a nonsense position or a negative lost count. It is
+	// absorbed to position 0, the same as -1.
+	c := buf.NewConsumer(WithReadFromSequenceNumber(math.MinInt64))
+	out := make([]int, 20)
+	n, lost, end, _ := c.ConsumeMultiple(out)
+	require.Equal(t, 10, n)
+	assert.Zero(t, lost)
+	assert.Equal(t, 0, out[0])
+	assert.Equal(t, int64(10), end)
+}
+
+func TestReadFromBeginningWinsOverReadFromSequenceNumber(t *testing.T) {
+	const bufSize = 16
+	buf := NewBroadcastBuffer[int](bufSize)
+	for i := 0; i < 10; i++ {
+		buf.Produce(i)
+	}
+
+	c := buf.NewConsumer(WithReadFromBeginning(), WithReadFromSequenceNumber(4))
+	out := make([]int, 20)
+	n, _, _, _ := c.ConsumeMultiple(out)
+	require.Equal(t, 10, n, "the two options are mutually exclusive; WithReadFromBeginning wins")
+	assert.Equal(t, 0, out[0])
+}
+
+// ---------------------------------------------------------------------------
+// Per-slot sequence number tests
+// ---------------------------------------------------------------------------
+
+func TestSlotTryLoadDetectsOverwrite(t *testing.T) {
+	var s slot[string]
+
+	s.store(5, "v5")
+	v, ok := s.tryLoad(5)
+	require.True(t, ok)
+	assert.Equal(t, "v5", v)
+
+	_, ok = s.tryLoad(4)
+	assert.False(t, ok, "a position the slot never held must not match")
+
+	s.store(13, "v13")
+	_, ok = s.tryLoad(5)
+	assert.False(t, ok, "the slot was overwritten; the old position must no longer be readable")
+	v, ok = s.tryLoad(13)
+	require.True(t, ok)
+	assert.Equal(t, "v13", v)
+}
+
+// TestReadAvailableStopsAtGapWithoutSpanningIt exercises readAvailable directly (whitebox) to verify
+// the fix for two of the correctness issues on positions and sequence numbers disagreeing: an
+// overwrite is always caught via the slot's own sequence number rather than trusted blindly, and a
+// call that does jump forward reads only the fresh, contiguous range after the jump — never a mix of
+// pre- and post-jump items.
+func TestReadAvailableStopsAtGapWithoutSpanningIt(t *testing.T) {
+	const bufSize = 8
+	rb := NewBroadcastBuffer[int](bufSize)
+	buf := rb.(*broadcastBuffer[int])
+	c := buf.NewConsumer().(*consumer[int])
+	buf.Produce(0)
+
+	out := make([]int, 10)
+	n, lost, gap := c.readAvailable(buf.writePos.Load(), out, 0)
+	require.Equal(t, 1, n)
+	assert.Equal(t, int64(0), lost)
+	assert.False(t, gap)
+	assert.Equal(t, 0, out[0])
+	assert.Equal(t, int64(1), c.readPos)
+
+	// Lap the consumer well past capacity before its next read.
+	for i := 1; i <= bufSize*3; i++ {
+		buf.Produce(i)
+	}
+	wp := buf.writePos.Load()
+
+	n2, lost2, gap2 := c.readAvailable(wp, out, 0)
+	require.True(t, gap2)
+	wantOldest := wp - int64(bufSize)
+	assert.Equal(t, wantOldest-1, lost2, "1 is readPos going into this call")
+	require.Equal(t, bufSize, n2)
+	for i := 0; i < n2; i++ {
+		assert.Equal(t, int(wantOldest)+i, out[i], "out[%d]", i)
+	}
+	assert.Equal(t, wp, c.readPos)
+}
+
+// overwriteOldestSlot puts the buffer into the state a producer passes through while lapping a
+// consumer sitting at the oldest position: the slot has already been rewritten with the position
+// one past the tip, but writePos has not been published yet. A single Produce is in this state
+// between its slot write and its writePos store; ProduceMultiple holds it for a whole batch.
+func overwriteOldestSlot(b *broadcastBuffer[int], v int) {
+	wp := b.writePos.Load()
+	b.buf[wp&b.mask].store(wp, v)
+}
+
+// TestReadAvailableSkipsOverwrittenHeadRatherThanStalling covers the first slot of the read range
+// being overwritten right as it is about to be read. With nothing in the batch yet there is no
+// contiguous range to protect, so the position must be counted as lost and the scan must carry on:
+// stopping would report n == 0 while the rest of the buffer is still readable, which a caller
+// cannot tell apart from a drained buffer.
+func TestReadAvailableSkipsOverwrittenHeadRatherThanStalling(t *testing.T) {
+	const bufSize = 8
+	rb := NewBroadcastBuffer[int](bufSize)
+	buf := rb.(*broadcastBuffer[int])
+	c := buf.NewConsumer(WithReadFromBeginning()).(*consumer[int])
+	for i := 0; i < bufSize; i++ {
+		buf.Produce(i)
+	}
+	wp := buf.writePos.Load()
+	require.Equal(t, int64(0), c.readPos)
+	overwriteOldestSlot(buf, 100)
+
+	out := make([]int, bufSize)
+	n, lost, gap := c.readAvailable(wp, out, 0)
+	assert.True(t, gap)
+	assert.Equal(t, int64(1), lost, "position 0 was overwritten, so it is lost")
+	require.Equal(t, bufSize-1, n, "positions 1 onwards are still readable and must not be withheld")
+	assert.Equal(t, []int{1, 2, 3, 4, 5, 6, 7}, out[:n])
+	assert.Equal(t, wp, c.readPos)
+}
+
+// TestConsumeMultipleDoesNotReportEmptyWhileDataRemains is the same case at the ConsumeMultiple
+// level, where it matters to callers: n == 0 is how a caller learns the buffer is drained
+// (FlowStreamService ends a non-follow stream on it), so an overwritten head must not produce it
+// while readable positions remain. The batch must also still be the contiguous run ending at end,
+// with the lost position sitting immediately before it.
+func TestConsumeMultipleDoesNotReportEmptyWhileDataRemains(t *testing.T) {
+	const bufSize = 8
+	rb := NewBroadcastBuffer[int](bufSize)
+	buf := rb.(*broadcastBuffer[int])
+	c := buf.NewConsumer(WithReadFromBeginning())
+	for i := 0; i < bufSize; i++ {
+		buf.Produce(i)
+	}
+	overwriteOldestSlot(buf, 100)
+
+	out := make([]int, bufSize)
+	n, lost, end, shutdown := c.ConsumeMultiple(out)
+	assert.False(t, shutdown)
+	assert.Equal(t, int64(1), lost)
+	require.Equal(t, bufSize-1, n)
+	assert.Equal(t, []int{1, 2, 3, 4, 5, 6, 7}, out[:n])
+	assert.Equal(t, int64(bufSize), end)
+	assert.Equal(t, int64(1), end-int64(n), "batch starts at position 1, right after the lost one")
+}
+
+// TestConsumeSkipsOverwrittenPositionRatherThanReturningEmpty is the same case for Consume, whose
+// callers read n == 0 with shutdown unset as "the deadline expired with no data available".
+func TestConsumeSkipsOverwrittenPositionRatherThanReturningEmpty(t *testing.T) {
+	const bufSize = 8
+	rb := NewBroadcastBuffer[int](bufSize)
+	buf := rb.(*broadcastBuffer[int])
+	c := buf.NewConsumer(WithReadFromBeginning())
+	for i := 0; i < bufSize; i++ {
+		buf.Produce(i)
+	}
+	overwriteOldestSlot(buf, 100)
+
+	val, n, lost, end, shutdown := c.Consume()
+	assert.False(t, shutdown)
+	require.Equal(t, 1, n, "position 0 is gone, but position 1 is readable and must be returned")
+	assert.Equal(t, 1, val)
+	assert.Equal(t, int64(1), lost)
+	assert.Equal(t, int64(2), end)
+}
+
+// TestReadAvailableRejectsOverwrittenHeadOfLaterSubCall covers a second readAvailable call within
+// the same ConsumeMultiple invocation (offset > 0, e.g. a deadline accumulating over several
+// wake-ups) whose very first position is overwritten before it can be read. This call's own local n
+// is 0 at that point — indistinguishable, looking at n alone, from the truly-empty-batch case that
+// TestReadAvailableSkipsOverwrittenHeadRatherThanStalling exercises — but offset > 0 means the
+// caller's batch is not actually empty, so folding this position in as skip-and-count-lost would
+// place a lost position after already-read items instead of before them, breaking the very
+// contiguity invariant this fix exists to protect.
+func TestReadAvailableRejectsOverwrittenHeadOfLaterSubCall(t *testing.T) {
+	const bufSize = 8
+	rb := NewBroadcastBuffer[int](bufSize)
+	buf := rb.(*broadcastBuffer[int])
+	c := buf.NewConsumer(WithReadFromBeginning()).(*consumer[int])
+	buf.Produce(0)
+	buf.Produce(1)
+
+	// First sub-call: a normal, uneventful read of everything available so far.
+	out := make([]int, bufSize)
+	n1, lost1, gap1 := c.readAvailable(buf.writePos.Load(), out, 0)
+	require.Equal(t, 2, n1)
+	assert.Equal(t, int64(0), lost1)
+	assert.False(t, gap1)
+	assert.Equal(t, int64(2), c.readPos)
+
+	// Simulate the race for the second sub-call: the caller's wp snapshot says position 2 exists
+	// (readPos < wp), but by the time readAvailable actually gets to it, the slot has already been
+	// overwritten by a producer that outran the snapshot — the same race waitForData's fast path
+	// leaves open between loading writePos and this call. wp is deliberately a stale value (one
+	// past readPos), distinct from the slot's own new, higher sequence number.
+	wp := c.readPos + 1
+	buf.buf[2&buf.mask].store(2+bufSize, 999)
+
+	n2, lost2, gap2 := c.readAvailable(wp, out, n1)
+	assert.True(t, gap2)
+	assert.Equal(t, 0, n2, "position 2 must not be skipped past: n1 > 0 already, so this is not an empty batch")
+	assert.Equal(t, int64(0), lost2, "position 2 is deferred to the next ConsumeMultiple call, not counted lost here")
+	assert.Equal(t, int64(2), c.readPos, "readPos must not advance past the undelivered position 2")
+}
+
+// TestConsumeMultipleBatchIsAlwaysContiguous stresses ConsumeMultiple across a producer that laps it
+// call returns, out[0:n] must be exactly the run of positions ending at end, i.e.
+// out[k] == end-n+k. Before the fix, a gap found partway through a deadline-accumulation call
+// could be folded into the same batch as data read earlier in that call, breaking this invariant
+// (and, in FlowStreamService, corrupting the resume token derived from it).
+func TestConsumeMultipleBatchIsAlwaysContiguous(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		const bufSize = 8
+		buf := NewBroadcastBuffer[int](bufSize)
+		c := buf.NewConsumer(WithMaxConsumeDeadline(200 * time.Millisecond))
+
+		buf.Produce(0)
+		go func() {
+			time.Sleep(20 * time.Millisecond)
+			for i := 1; i <= bufSize*3; i++ {
+				buf.Produce(i)
+			}
+			buf.Shutdown()
+		}()
+
+		out := make([]int, 100)
+		var totalRead, totalLost int64
+		for {
+			n, lost, end, shutdown := c.ConsumeMultiple(out)
+			start := end - int64(n)
+			for k := 0; k < n; k++ {
+				require.Equal(t, int(start)+k, out[k], "batch must be one contiguous run (index %d)", k)
+			}
+			totalRead += int64(n)
+			totalLost += lost
+			if shutdown {
+				break
+			}
+		}
+
+		assert.Equal(t, int64(1+bufSize*3), totalRead+totalLost, "every produced position is read or accounted as lost")
+	})
 }
 
 func TestConsumeDeadlineReturnsEmpty(t *testing.T) {
@@ -526,7 +940,7 @@ func TestConsumeDeadlineReturnsEmpty(t *testing.T) {
 		buf := NewBroadcastBuffer[int](8)
 		c := buf.NewConsumer(WithMaxConsumeDeadline(50 * time.Millisecond))
 
-		_, n, _, shutdown := c.Consume()
+		_, n, _, _, shutdown := c.Consume()
 		require.False(t, shutdown, "unexpected shutdown")
 		assert.Equal(t, 0, n)
 
@@ -546,7 +960,7 @@ func TestConsumeMultipleAccumulatesOverTime(t *testing.T) {
 		}()
 
 		out := make([]int, 100)
-		n, _, shutdown := c.ConsumeMultiple(out)
+		n, _, _, shutdown := c.ConsumeMultiple(out)
 
 		require.False(t, shutdown, "unexpected shutdown")
 		assert.GreaterOrEqual(t, n, 5, "expected at least 5 items")
@@ -560,7 +974,7 @@ func TestConsumeMultipleDeadlineReturnsEmpty(t *testing.T) {
 		buf := NewBroadcastBuffer[int](8)
 		c := buf.NewConsumer(WithMaxConsumeDeadline(50 * time.Millisecond))
 
-		n, _, shutdown := c.ConsumeMultiple(make([]int, 10))
+		n, _, _, shutdown := c.ConsumeMultiple(make([]int, 10))
 
 		require.False(t, shutdown, "unexpected shutdown")
 		assert.Equal(t, 0, n)
@@ -579,7 +993,7 @@ func TestConsumeMultipleReturnWhenFull(t *testing.T) {
 		}
 
 		out := make([]int, 5)
-		n, _, _ := c.ConsumeMultiple(out)
+		n, _, _, _ := c.ConsumeMultiple(out)
 
 		assert.Equal(t, 5, n, "slice should be full")
 
@@ -595,7 +1009,7 @@ func TestMixedDeadlineConsumers(t *testing.T) {
 
 		var fastN int
 		go func() {
-			_, fastN, _, _ = cFast.Consume()
+			_, fastN, _, _, _ = cFast.Consume()
 		}()
 		synctest.Wait()
 
@@ -603,7 +1017,7 @@ func TestMixedDeadlineConsumers(t *testing.T) {
 
 		var slowVal int
 		go func() {
-			slowVal, _, _, _ = cSlow.Consume()
+			slowVal, _, _, _, _ = cSlow.Consume()
 		}()
 
 		synctest.Wait()
@@ -715,7 +1129,7 @@ func runBenchConsumer(
 	out := make([]*foo, benchBatchSize)
 
 	for {
-		n, lost, shutdown := c.ConsumeMultiple(out)
+		n, lost, _, shutdown := c.ConsumeMultiple(out)
 		if lost > 0 {
 			panic(fmt.Sprintf("consumer %d: lost %d items", id, lost))
 		}
@@ -743,7 +1157,7 @@ func runBenchConsumerSingle(
 		out = out[:0]
 		var shutdown bool
 		for range benchBatchSize {
-			val, n, lost, s := c.Consume()
+			val, n, lost, _, s := c.Consume()
 			if lost > 0 {
 				panic(fmt.Sprintf("consumer %d: lost %d items", id, lost))
 			}

@@ -141,13 +141,83 @@ message GetFlowsRequest {
   // naming the empty Namespace. The field stays repeated so that the limit can
   // be raised without a breaking change.
   repeated string namespaces = 6;
+  // Resume a previous stream from the same Flow Aggregator process at a
+  // specific sequence number, with a (stream_epoch, sequence_number) pair
+  // returned from GetFlowsResponse from that previous stream.
+  //
+  // A token whose stream_epoch does not match the server's current one (the
+  // Flow Aggregator restarted, which resets its ring buffer and sequence
+  // numbering to zero) is not an error. It is treated exactly like an unset
+  // resume: consume from the oldest record in the ring buffer. A client that
+  // needs to know whether its resume was honored compares the stream_epoch it
+  // sent against the one the first GetFlowsResponse carries, which is always
+  // the server's current one.
+  //
+  // A token whose sequence_number is at or beyond the position the server
+  // will assign to its next record, under a matching stream_epoch, is
+  // rejected with INVALID_ARGUMENT as it cannot come from an
+  // honestly-replayed token. A sequence_number below -1, the lowest value a
+  // server ever issues, is rejected the same way.
+  ResumeToken resume = 7;
+}
+
+// ResumeToken is opaque to clients: store the stream_epoch and sequence_number
+// a GetFlowsResponse carried, and echo the pair back verbatim as
+// GetFlowsRequest.resume to continue that stream without a gap.
+message ResumeToken {
+  // Identifies the Flow Aggregator process sequence_number was issued by.
+  string stream_epoch = 1;
+  // The sequence_number carried by the last GetFlowsResponse received on the
+  // previous stream. It can be past the last flow the client observed, since
+  // records that were dropped, or removed by authorization or the client's
+  // filters, advance it too.
+  int64 sequence_number = 2;
 }
 
 // GetFlowsResponse carries a batch of flow records from the server.
 message GetFlowsResponse {
-  // The matching flow records.
+  // The matching flow records. Empty in the first response of every stream,
+  // and in any later response sent only to report dropped_count or move
+  // resume_token forward. This happens when every record read was dropped,
+  // removed by authorization or the client's filters, or both.
   repeated Flow flows = 1;
   // Number of flows dropped because the consumer fell behind and the ring
-  // buffer wrapped around. Cumulative since the start of the stream.
+  // buffer wrapped around, or because a resume request named a
+  // sequence_number that had already fallen out of the ring buffer.
+  // Cumulative since the start of the stream.
+  //
+  // A 0 is a confirmed "nothing was lost" only once records have been
+  // accounted for: it is also 0 in the first response of every stream, which
+  // is sent before anything is read.
+  //
+  // It likewise cannot account for a resume that was not honored because its
+  // stream_epoch did not match. With the previous epoch's ring buffer gone,
+  // there is no way to know whether records the client had not yet seen
+  // existed after its last-seen position and before the restart, so such a
+  // stream counts only from the oldest record it replays. A client that
+  // cares about the distinction must treat that pre-restart gap as unknown
+  // rather than as the zero this field reports for it.
+  //
+  // It is not inferrable from consecutive resume_token sequence numbers:
+  // authorization and the client's own filters also remove records from
+  // flows without those being drops, so a client comparing sequence-number
+  // deltas against the length of flows cannot tell a redacted or filtered-out
+  // record from an evicted one.
   uint64 dropped_count = 2;
+  // The ring-buffer position accounted for as of this response: every
+  // record up to and including it was either sent in flows, counted in
+  // dropped_count, withheld by authorization, or removed by the client's own
+  // filters. On the very first response of a stream nothing has been read yet,
+  // so it names the position just before where the stream starts: the resume
+  // point the request asked for, or, when there is no usable resume point
+  // (none was sent, or it was not honored), the position just before the
+  // oldest record the ring buffer held when the stream started (-1 if nothing
+  // has been evicted yet). Clients that want to continue this stream later
+  // from the next flow record they have not yet received store this and pass
+  // it back as GetFlowsRequest.resume.
+  //
+  // stream_epoch is always this server's current one, which is how a
+  // resuming client learns whether its own token was honored: an epoch
+  // different from the one it sent means it was not.
+  ResumeToken resume_token = 3;
 }

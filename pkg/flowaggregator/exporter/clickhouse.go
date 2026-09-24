@@ -96,7 +96,7 @@ func (e *ClickHouseExporter) Run(ctx context.Context, buf ringbuffer.BroadcastBu
 
 	records := make([]*flowpb.Flow, ConsumeMultipleBatchSize)
 	for {
-		n, _, shutdown := consumer.ConsumeMultiple(records)
+		n, _, _, shutdown := consumer.ConsumeMultiple(records)
 		for _, record := range records[:n] {
 			if err := e.chExportProcess.CacheRecord(record); err != nil {
 				klog.ErrorS(err, "Error when caching record for ClickHouse")

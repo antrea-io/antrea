@@ -334,7 +334,25 @@ type GetFlowsRequest struct {
 	// rejected outright: cluster scope is requested with cluster_wide, not by
 	// naming the empty Namespace. The field stays repeated so that the limit can
 	// be raised without a breaking change.
-	Namespaces    []string `protobuf:"bytes,6,rep,name=namespaces,proto3" json:"namespaces,omitempty"`
+	Namespaces []string `protobuf:"bytes,6,rep,name=namespaces,proto3" json:"namespaces,omitempty"`
+	// Resume a previous stream from the same Flow Aggregator process at a
+	// specific sequence number, with a (stream_epoch, sequence_number) pair
+	// returned from GetFlowsResponse from that previous stream.
+	//
+	// A token whose stream_epoch does not match the server's current one (the
+	// Flow Aggregator restarted, which resets its ring buffer and sequence
+	// numbering to zero) is not an error. It is treated exactly like an unset
+	// resume: consume from the oldest record in the ring buffer. A client that
+	// needs to know whether its resume was honored compares the stream_epoch it
+	// sent against the one the first GetFlowsResponse carries, which is always
+	// the server's current one.
+	//
+	// A token whose sequence_number is at or beyond the position the server
+	// will assign to its next record, under a matching stream_epoch, is
+	// rejected with INVALID_ARGUMENT as it cannot come from an
+	// honestly-replayed token. A sequence_number below -1, the lowest value a
+	// server ever issues, is rejected the same way.
+	Resume        *ResumeToken `protobuf:"bytes,7,opt,name=resume,proto3" json:"resume,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -411,21 +429,127 @@ func (x *GetFlowsRequest) GetNamespaces() []string {
 	return nil
 }
 
+func (x *GetFlowsRequest) GetResume() *ResumeToken {
+	if x != nil {
+		return x.Resume
+	}
+	return nil
+}
+
+// ResumeToken is opaque to clients: store the stream_epoch and sequence_number
+// a GetFlowsResponse carried, and echo the pair back verbatim as
+// GetFlowsRequest.resume to continue that stream without a gap.
+type ResumeToken struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Identifies the Flow Aggregator process sequence_number was issued by.
+	StreamEpoch string `protobuf:"bytes,1,opt,name=stream_epoch,json=streamEpoch,proto3" json:"stream_epoch,omitempty"`
+	// The sequence_number carried by the last GetFlowsResponse received on the
+	// previous stream. It can be past the last flow the client observed, since
+	// records that were dropped, or removed by authorization or the client's
+	// filters, advance it too.
+	SequenceNumber int64 `protobuf:"varint,2,opt,name=sequence_number,json=sequenceNumber,proto3" json:"sequence_number,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
+}
+
+func (x *ResumeToken) Reset() {
+	*x = ResumeToken{}
+	mi := &file_pkg_apis_flow_v1alpha1_service_proto_msgTypes[4]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ResumeToken) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ResumeToken) ProtoMessage() {}
+
+func (x *ResumeToken) ProtoReflect() protoreflect.Message {
+	mi := &file_pkg_apis_flow_v1alpha1_service_proto_msgTypes[4]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ResumeToken.ProtoReflect.Descriptor instead.
+func (*ResumeToken) Descriptor() ([]byte, []int) {
+	return file_pkg_apis_flow_v1alpha1_service_proto_rawDescGZIP(), []int{4}
+}
+
+func (x *ResumeToken) GetStreamEpoch() string {
+	if x != nil {
+		return x.StreamEpoch
+	}
+	return ""
+}
+
+func (x *ResumeToken) GetSequenceNumber() int64 {
+	if x != nil {
+		return x.SequenceNumber
+	}
+	return 0
+}
+
 // GetFlowsResponse carries a batch of flow records from the server.
 type GetFlowsResponse struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
-	// The matching flow records.
+	// The matching flow records. Empty in the first response of every stream,
+	// and in any later response sent only to report dropped_count or move
+	// resume_token forward. This happens when every record read was dropped,
+	// removed by authorization or the client's filters, or both.
 	Flows []*Flow `protobuf:"bytes,1,rep,name=flows,proto3" json:"flows,omitempty"`
 	// Number of flows dropped because the consumer fell behind and the ring
-	// buffer wrapped around. Cumulative since the start of the stream.
-	DroppedCount  uint64 `protobuf:"varint,2,opt,name=dropped_count,json=droppedCount,proto3" json:"dropped_count,omitempty"`
+	// buffer wrapped around, or because a resume request named a
+	// sequence_number that had already fallen out of the ring buffer.
+	// Cumulative since the start of the stream.
+	//
+	// A 0 is a confirmed "nothing was lost" only once records have been
+	// accounted for: it is also 0 in the first response of every stream, which
+	// is sent before anything is read.
+	//
+	// It likewise cannot account for a resume that was not honored because its
+	// stream_epoch did not match. With the previous epoch's ring buffer gone,
+	// there is no way to know whether records the client had not yet seen
+	// existed after its last-seen position and before the restart, so such a
+	// stream counts only from the oldest record it replays. A client that
+	// cares about the distinction must treat that pre-restart gap as unknown
+	// rather than as the zero this field reports for it.
+	//
+	// It is not inferrable from consecutive resume_token sequence numbers:
+	// authorization and the client's own filters also remove records from
+	// flows without those being drops, so a client comparing sequence-number
+	// deltas against the length of flows cannot tell a redacted or filtered-out
+	// record from an evicted one.
+	DroppedCount uint64 `protobuf:"varint,2,opt,name=dropped_count,json=droppedCount,proto3" json:"dropped_count,omitempty"`
+	// The ring-buffer position accounted for as of this response: every
+	// record up to and including it was either sent in flows, counted in
+	// dropped_count, withheld by authorization, or removed by the client's own
+	// filters. On the very first response of a stream nothing has been read yet,
+	// so it names the position just before where the stream starts: the resume
+	// point the request asked for, or, when there is no usable resume point
+	// (none was sent, or it was not honored), the position just before the
+	// oldest record the ring buffer held when the stream started (-1 if nothing
+	// has been evicted yet). Clients that want to continue this stream later
+	// from the next flow record they have not yet received store this and pass
+	// it back as GetFlowsRequest.resume.
+	//
+	// stream_epoch is always this server's current one, which is how a
+	// resuming client learns whether its own token was honored: an epoch
+	// different from the one it sent means it was not.
+	ResumeToken   *ResumeToken `protobuf:"bytes,3,opt,name=resume_token,json=resumeToken,proto3" json:"resume_token,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *GetFlowsResponse) Reset() {
 	*x = GetFlowsResponse{}
-	mi := &file_pkg_apis_flow_v1alpha1_service_proto_msgTypes[4]
+	mi := &file_pkg_apis_flow_v1alpha1_service_proto_msgTypes[5]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -437,7 +561,7 @@ func (x *GetFlowsResponse) String() string {
 func (*GetFlowsResponse) ProtoMessage() {}
 
 func (x *GetFlowsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_apis_flow_v1alpha1_service_proto_msgTypes[4]
+	mi := &file_pkg_apis_flow_v1alpha1_service_proto_msgTypes[5]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -450,7 +574,7 @@ func (x *GetFlowsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetFlowsResponse.ProtoReflect.Descriptor instead.
 func (*GetFlowsResponse) Descriptor() ([]byte, []int) {
-	return file_pkg_apis_flow_v1alpha1_service_proto_rawDescGZIP(), []int{4}
+	return file_pkg_apis_flow_v1alpha1_service_proto_rawDescGZIP(), []int{5}
 }
 
 func (x *GetFlowsResponse) GetFlows() []*Flow {
@@ -465,6 +589,13 @@ func (x *GetFlowsResponse) GetDroppedCount() uint64 {
 		return x.DroppedCount
 	}
 	return 0
+}
+
+func (x *GetFlowsResponse) GetResumeToken() *ResumeToken {
+	if x != nil {
+		return x.ResumeToken
+	}
+	return nil
 }
 
 var File_pkg_apis_flow_v1alpha1_service_proto protoreflect.FileDescriptor
@@ -486,7 +617,7 @@ const file_pkg_apis_flow_v1alpha1_service_proto_rawDesc = "" +
 	"\n" +
 	"flow_types\x18\x05 \x03(\x0e21.antrea_io.antrea.pkg.apis.flow.v1alpha1.FlowTypeR\tflowTypes\x12\x10\n" +
 	"\x03ips\x18\x06 \x03(\tR\x03ips\x12Z\n" +
-	"\tdirection\x18\a \x01(\x0e2<.antrea_io.antrea.pkg.apis.flow.v1alpha1.FlowFilterDirectionR\tdirection\"\x8a\x02\n" +
+	"\tdirection\x18\a \x01(\x0e2<.antrea_io.antrea.pkg.apis.flow.v1alpha1.FlowFilterDirectionR\tdirection\"\xd8\x02\n" +
 	"\x0fGetFlowsRequest\x12M\n" +
 	"\afilters\x18\x01 \x03(\v23.antrea_io.antrea.pkg.apis.flow.v1alpha1.FlowFilterR\afilters\x120\n" +
 	"\x05since\x18\x02 \x01(\v2\x1a.google.protobuf.TimestampR\x05since\x12\x1b\n" +
@@ -495,10 +626,15 @@ const file_pkg_apis_flow_v1alpha1_service_proto_rawDesc = "" +
 	"\fcluster_wide\x18\x05 \x01(\bR\vclusterWide\x12\x1e\n" +
 	"\n" +
 	"namespaces\x18\x06 \x03(\tR\n" +
-	"namespaces\"|\n" +
+	"namespaces\x12L\n" +
+	"\x06resume\x18\a \x01(\v24.antrea_io.antrea.pkg.apis.flow.v1alpha1.ResumeTokenR\x06resume\"Y\n" +
+	"\vResumeToken\x12!\n" +
+	"\fstream_epoch\x18\x01 \x01(\tR\vstreamEpoch\x12'\n" +
+	"\x0fsequence_number\x18\x02 \x01(\x03R\x0esequenceNumber\"\xd5\x01\n" +
 	"\x10GetFlowsResponse\x12C\n" +
 	"\x05flows\x18\x01 \x03(\v2-.antrea_io.antrea.pkg.apis.flow.v1alpha1.FlowR\x05flows\x12#\n" +
-	"\rdropped_count\x18\x02 \x01(\x04R\fdroppedCount*s\n" +
+	"\rdropped_count\x18\x02 \x01(\x04R\fdroppedCount\x12W\n" +
+	"\fresume_token\x18\x03 \x01(\v24.antrea_io.antrea.pkg.apis.flow.v1alpha1.ResumeTokenR\vresumeToken*s\n" +
 	"\x13FlowFilterDirection\x12\x1e\n" +
 	"\x1aFLOW_FILTER_DIRECTION_BOTH\x10\x00\x12\x1e\n" +
 	"\x1aFLOW_FILTER_DIRECTION_FROM\x10\x01\x12\x1c\n" +
@@ -521,34 +657,37 @@ func file_pkg_apis_flow_v1alpha1_service_proto_rawDescGZIP() []byte {
 }
 
 var file_pkg_apis_flow_v1alpha1_service_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-var file_pkg_apis_flow_v1alpha1_service_proto_msgTypes = make([]protoimpl.MessageInfo, 5)
+var file_pkg_apis_flow_v1alpha1_service_proto_msgTypes = make([]protoimpl.MessageInfo, 6)
 var file_pkg_apis_flow_v1alpha1_service_proto_goTypes = []any{
 	(FlowFilterDirection)(0),      // 0: antrea_io.antrea.pkg.apis.flow.v1alpha1.FlowFilterDirection
 	(*ExportRequest)(nil),         // 1: antrea_io.antrea.pkg.apis.flow.v1alpha1.ExportRequest
 	(*ExportResponse)(nil),        // 2: antrea_io.antrea.pkg.apis.flow.v1alpha1.ExportResponse
 	(*FlowFilter)(nil),            // 3: antrea_io.antrea.pkg.apis.flow.v1alpha1.FlowFilter
 	(*GetFlowsRequest)(nil),       // 4: antrea_io.antrea.pkg.apis.flow.v1alpha1.GetFlowsRequest
-	(*GetFlowsResponse)(nil),      // 5: antrea_io.antrea.pkg.apis.flow.v1alpha1.GetFlowsResponse
-	(*Flow)(nil),                  // 6: antrea_io.antrea.pkg.apis.flow.v1alpha1.Flow
-	(FlowType)(0),                 // 7: antrea_io.antrea.pkg.apis.flow.v1alpha1.FlowType
-	(*timestamppb.Timestamp)(nil), // 8: google.protobuf.Timestamp
+	(*ResumeToken)(nil),           // 5: antrea_io.antrea.pkg.apis.flow.v1alpha1.ResumeToken
+	(*GetFlowsResponse)(nil),      // 6: antrea_io.antrea.pkg.apis.flow.v1alpha1.GetFlowsResponse
+	(*Flow)(nil),                  // 7: antrea_io.antrea.pkg.apis.flow.v1alpha1.Flow
+	(FlowType)(0),                 // 8: antrea_io.antrea.pkg.apis.flow.v1alpha1.FlowType
+	(*timestamppb.Timestamp)(nil), // 9: google.protobuf.Timestamp
 }
 var file_pkg_apis_flow_v1alpha1_service_proto_depIdxs = []int32{
-	6, // 0: antrea_io.antrea.pkg.apis.flow.v1alpha1.ExportRequest.flows:type_name -> antrea_io.antrea.pkg.apis.flow.v1alpha1.Flow
-	7, // 1: antrea_io.antrea.pkg.apis.flow.v1alpha1.FlowFilter.flow_types:type_name -> antrea_io.antrea.pkg.apis.flow.v1alpha1.FlowType
-	0, // 2: antrea_io.antrea.pkg.apis.flow.v1alpha1.FlowFilter.direction:type_name -> antrea_io.antrea.pkg.apis.flow.v1alpha1.FlowFilterDirection
-	3, // 3: antrea_io.antrea.pkg.apis.flow.v1alpha1.GetFlowsRequest.filters:type_name -> antrea_io.antrea.pkg.apis.flow.v1alpha1.FlowFilter
-	8, // 4: antrea_io.antrea.pkg.apis.flow.v1alpha1.GetFlowsRequest.since:type_name -> google.protobuf.Timestamp
-	6, // 5: antrea_io.antrea.pkg.apis.flow.v1alpha1.GetFlowsResponse.flows:type_name -> antrea_io.antrea.pkg.apis.flow.v1alpha1.Flow
-	1, // 6: antrea_io.antrea.pkg.apis.flow.v1alpha1.FlowExportService.Export:input_type -> antrea_io.antrea.pkg.apis.flow.v1alpha1.ExportRequest
-	4, // 7: antrea_io.antrea.pkg.apis.flow.v1alpha1.FlowStreamService.GetFlows:input_type -> antrea_io.antrea.pkg.apis.flow.v1alpha1.GetFlowsRequest
-	2, // 8: antrea_io.antrea.pkg.apis.flow.v1alpha1.FlowExportService.Export:output_type -> antrea_io.antrea.pkg.apis.flow.v1alpha1.ExportResponse
-	5, // 9: antrea_io.antrea.pkg.apis.flow.v1alpha1.FlowStreamService.GetFlows:output_type -> antrea_io.antrea.pkg.apis.flow.v1alpha1.GetFlowsResponse
-	8, // [8:10] is the sub-list for method output_type
-	6, // [6:8] is the sub-list for method input_type
-	6, // [6:6] is the sub-list for extension type_name
-	6, // [6:6] is the sub-list for extension extendee
-	0, // [0:6] is the sub-list for field type_name
+	7,  // 0: antrea_io.antrea.pkg.apis.flow.v1alpha1.ExportRequest.flows:type_name -> antrea_io.antrea.pkg.apis.flow.v1alpha1.Flow
+	8,  // 1: antrea_io.antrea.pkg.apis.flow.v1alpha1.FlowFilter.flow_types:type_name -> antrea_io.antrea.pkg.apis.flow.v1alpha1.FlowType
+	0,  // 2: antrea_io.antrea.pkg.apis.flow.v1alpha1.FlowFilter.direction:type_name -> antrea_io.antrea.pkg.apis.flow.v1alpha1.FlowFilterDirection
+	3,  // 3: antrea_io.antrea.pkg.apis.flow.v1alpha1.GetFlowsRequest.filters:type_name -> antrea_io.antrea.pkg.apis.flow.v1alpha1.FlowFilter
+	9,  // 4: antrea_io.antrea.pkg.apis.flow.v1alpha1.GetFlowsRequest.since:type_name -> google.protobuf.Timestamp
+	5,  // 5: antrea_io.antrea.pkg.apis.flow.v1alpha1.GetFlowsRequest.resume:type_name -> antrea_io.antrea.pkg.apis.flow.v1alpha1.ResumeToken
+	7,  // 6: antrea_io.antrea.pkg.apis.flow.v1alpha1.GetFlowsResponse.flows:type_name -> antrea_io.antrea.pkg.apis.flow.v1alpha1.Flow
+	5,  // 7: antrea_io.antrea.pkg.apis.flow.v1alpha1.GetFlowsResponse.resume_token:type_name -> antrea_io.antrea.pkg.apis.flow.v1alpha1.ResumeToken
+	1,  // 8: antrea_io.antrea.pkg.apis.flow.v1alpha1.FlowExportService.Export:input_type -> antrea_io.antrea.pkg.apis.flow.v1alpha1.ExportRequest
+	4,  // 9: antrea_io.antrea.pkg.apis.flow.v1alpha1.FlowStreamService.GetFlows:input_type -> antrea_io.antrea.pkg.apis.flow.v1alpha1.GetFlowsRequest
+	2,  // 10: antrea_io.antrea.pkg.apis.flow.v1alpha1.FlowExportService.Export:output_type -> antrea_io.antrea.pkg.apis.flow.v1alpha1.ExportResponse
+	6,  // 11: antrea_io.antrea.pkg.apis.flow.v1alpha1.FlowStreamService.GetFlows:output_type -> antrea_io.antrea.pkg.apis.flow.v1alpha1.GetFlowsResponse
+	10, // [10:12] is the sub-list for method output_type
+	8,  // [8:10] is the sub-list for method input_type
+	8,  // [8:8] is the sub-list for extension type_name
+	8,  // [8:8] is the sub-list for extension extendee
+	0,  // [0:8] is the sub-list for field type_name
 }
 
 func init() { file_pkg_apis_flow_v1alpha1_service_proto_init() }
@@ -563,7 +702,7 @@ func file_pkg_apis_flow_v1alpha1_service_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_pkg_apis_flow_v1alpha1_service_proto_rawDesc), len(file_pkg_apis_flow_v1alpha1_service_proto_rawDesc)),
 			NumEnums:      1,
-			NumMessages:   5,
+			NumMessages:   6,
 			NumExtensions: 0,
 			NumServices:   2,
 		},

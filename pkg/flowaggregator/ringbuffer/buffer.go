@@ -43,16 +43,36 @@ func nextPowerOf2(v int) int {
 // access it without a data race, even when the producer laps a slow consumer
 // and overwrites the slot concurrently. Uses atomic.Value for race-free
 // load/store of arbitrary types.
+//
+// seq records the sequence number the slot currently holds, or -1 while a write is
+// in progress. Storing -1 before val and the real sequence number after lets a
+// concurrent reader (tryLoad) tell whether the value it reads is still the one it
+// expects, or whether the producer already overwrote the slot with a later item.
 type slot[T any] struct {
-	v atomic.Value
+	seq atomic.Int64
+	val atomic.Value
 }
 
-func (s *slot[T]) store(val T) {
-	s.v.Store(val)
+func (s *slot[T]) store(pos int64, v T) {
+	s.seq.Store(-1)
+	s.val.Store(v)
+	s.seq.Store(pos)
 }
 
-func (s *slot[T]) load() T {
-	return s.v.Load().(T)
+// tryLoad returns the value at pos and true, or false if the slot no longer holds value associated
+// with the requested sequence number: the producer already overwrote it with a later item.
+// seq is checked both before and after loading val, so a concurrent overwrite straddling the two checks
+// is always caught rather than silently returning the wrong item under the right-looking position.
+func (s *slot[T]) tryLoad(pos int64) (T, bool) {
+	var zero T
+	if s.seq.Load() != pos {
+		return zero, false
+	}
+	v := s.val.Load().(T)
+	if s.seq.Load() != pos {
+		return zero, false
+	}
+	return v, true
 }
 
 // broadcastBuffer is an SPMC ring buffer. It assumes a single producer
@@ -135,7 +155,7 @@ func (b *broadcastBuffer[T]) Produce(v T) {
 		panic("Produce called after Shutdown")
 	}
 	pos := b.writePos.Load()
-	b.buf[pos&b.mask].store(v)
+	b.buf[pos&b.mask].store(pos, v)
 	b.writePos.Store(pos + 1)
 	// Acquire the mutex around Broadcast so that no consumer can be between
 	// its writePos check and cond.Wait(), which would cause a lost wakeup.
@@ -154,7 +174,7 @@ func (b *broadcastBuffer[T]) ProduceMultiple(items []T) {
 	}
 	pos := b.writePos.Load()
 	for _, v := range items {
-		b.buf[pos&b.mask].store(v)
+		b.buf[pos&b.mask].store(pos, v)
 		pos++
 	}
 	b.writePos.Store(pos)
@@ -181,6 +201,16 @@ func (b *broadcastBuffer[T]) Shutdown() {
 	}
 }
 
+// Tip reads writePos atomically: see the BroadcastBuffer interface doc for what it means.
+func (b *broadcastBuffer[T]) Tip() int64 {
+	return b.writePos.Load()
+}
+
+// Capacity is fixed at construction: see the BroadcastBuffer interface doc.
+func (b *broadcastBuffer[T]) Capacity() int64 {
+	return b.mask + 1
+}
+
 func (b *broadcastBuffer[T]) NewConsumer(opts ...ConsumerOption) Consumer[T] {
 	var cfg consumerConfig
 	for _, o := range opts {
@@ -193,13 +223,18 @@ func (b *broadcastBuffer[T]) NewConsumer(opts ...ConsumerOption) Consumer[T] {
 
 	wp := b.writePos.Load()
 	pos := wp
-	if cfg.readFromBeginning {
-		capacity := b.mask + 1
-		oldest := wp - capacity
-		if oldest < 0 {
-			oldest = 0
+	switch {
+	case cfg.readFromBeginning:
+		pos = max(wp-(b.mask+1), 0)
+	case cfg.readFromSet:
+		if cfg.readFrom >= wp {
+			// Tested before the increment below, which would otherwise overflow at MaxInt64.
+			pos = wp
+		} else {
+			// max(..., 0) absorbs an out-of-contract negative seq without letting
+			// computeLost's oldest-readPos subtraction wrap.
+			pos = max(cfg.readFrom+1, 0)
 		}
-		pos = oldest
 	}
 	return &consumer[T]{
 		rb:       b,
@@ -232,34 +267,43 @@ func (c *consumer[T]) computeLost(wp int64) int64 {
 	return 0
 }
 
-// readAvailable copies available items into out[offset:] given a writePos
-// snapshot. Each slot is read via an atomic load, so a concurrent overwrite
-// by the producer is race-free (no data race). Overwritten items are
-// accounted for as lost via computeLost.
+// readAvailable copies available items into out[offset:] given a writePos snapshot, stopping early
+// if a gap is found so the batch it returns is always exactly the contiguous range
+// [originalReadPos, originalReadPos+n). This guarantees caller can compute the batch's start
+// position as end-n.
 //
-// Invariant: readPos is always >= (writePos - capacity), enforced by
-// computeLost. This guarantees every slot in [readPos, wp) has been written
-// at least once, so slot.load() never hits an uninitialized atomic.Value.
+// A gap can surface two ways: computeLost, from the wp snapshot, if the producer had already
+// overwritten unread slots before this call even started; or mid-loop, if the producer laps this
+// consumer between the wp snapshot and reading that exact slot. Every read is verified against the
+// slot's own sequence number (slot.tryLoad) rather than trusted blindly, so the latter is caught
+// rather than silently delivering a newer item mislabeled with the position it replaced.
 //
-// Note: if the producer laps this consumer during the read loop (i.e. wraps
-// around and overwrites a slot between the wp snapshot and the actual load),
-// the consumer may read a value from a newer generation of that slot. This
-// is inherent to lossy ring buffers without per-slot sequence numbers.
-// The value is still valid (just from a later Produce call); the next
-// computeLost call will account for the skipped items.
-func (c *consumer[T]) readAvailable(wp int64, out []T, offset int) (n int, lost int64) {
+// A mid-loop gap only stops the read if the batch (offset+n, counting earlier sub-calls too) is
+// already non-empty, to keep it contiguous. Otherwise there's no range to protect yet, so the
+// overwritten position is counted lost and the scan continues — this also guarantees readPos
+// always advances, which plain re-snapshotting can't: ProduceMultiple holds writePos back for its
+// whole batch, so the same position would still be unreadable on a retry.
+func (c *consumer[T]) readAvailable(wp int64, out []T, offset int) (n int, lost int64, gap bool) {
 	lost = c.computeLost(wp)
+	gap = lost > 0
 
-	avail := int(wp - c.readPos)
 	remaining := len(out) - offset
-	if avail > remaining {
-		avail = remaining
-	}
-	for i := 0; i < avail; i++ {
-		out[offset+i] = c.rb.buf[c.readPos&c.rb.mask].load()
+	for c.readPos < wp && n < remaining {
+		v, ok := c.rb.buf[c.readPos&c.rb.mask].tryLoad(c.readPos)
+		if !ok {
+			gap = true
+			if offset+n > 0 {
+				break
+			}
+			c.readPos++
+			lost++
+			continue
+		}
+		out[offset+n] = v
 		c.readPos++
+		n++
 	}
-	return avail, lost
+	return n, lost, gap
 }
 
 // waitForData parks the consumer until writePos advances past readPos,
@@ -298,35 +342,56 @@ func (c *consumer[T]) waitForData(hasDeadline bool, start time.Time) (wp int64, 
 	}
 }
 
-func (c *consumer[T]) Consume() (val T, n int, lost int64, shutdown bool) {
+func (c *consumer[T]) Consume() (val T, n int, lost int64, end int64, shutdown bool) {
 	hasDeadline := c.deadline > 0
 	start := time.Now()
+	var zero T
 
-	wp, done := c.waitForData(hasDeadline, start)
-	if done {
-		var zero T
-		if c.rb.closed.Load() && wp <= c.readPos {
-			return zero, 0, 0, true
+	for {
+		wp, done := c.waitForData(hasDeadline, start)
+		if done {
+			if c.rb.closed.Load() && wp <= c.readPos {
+				return zero, 0, lost, c.readPos, true
+			}
+			return zero, 0, lost, c.readPos, false
 		}
-		return zero, 0, 0, false
-	}
 
-	lost = c.computeLost(wp)
-	val = c.rb.buf[c.readPos&c.rb.mask].load()
-	c.readPos++
+		lost += c.computeLost(wp)
+		for c.readPos < wp {
+			v, ok := c.rb.buf[c.readPos&c.rb.mask].tryLoad(c.readPos)
+			if !ok {
+				// The producer lapped this consumer between the wp snapshot and this read.
+				// That item is gone, so count it and move to the next position rather than
+				// returning empty-handed while data may still be available.
+				c.readPos++
+				lost++
+				continue
+			}
+			c.readPos++
 
-	// A fresh writePos load is safe here: once closed is true, the single
-	// producer has stopped and writePos is frozen, so the load returns its
-	// final value. Using a fresh load (rather than the wp snapshot) also
-	// correctly handles the edge case where readPos has advanced past wp
-	// due to computeLost adjustments.
-	if c.rb.closed.Load() && c.rb.writePos.Load() <= c.readPos {
-		return val, 1, lost, true
+			// A fresh writePos load is safe here: once closed is true, the single
+			// producer has stopped and writePos is frozen, so the load returns its
+			// final value. Using a fresh load (rather than the wp snapshot) also
+			// correctly handles the edge case where readPos has advanced past wp
+			// due to computeLost adjustments.
+			if c.rb.closed.Load() && c.rb.writePos.Load() <= c.readPos {
+				return v, 1, lost, c.readPos, true
+			}
+			return v, 1, lost, c.readPos, false
+		}
+		// Every position this snapshot offered was overwritten before it could be read, which
+		// takes a producer still actively lapping this consumer. readPos advanced past all of
+		// them, so going back for a fresh snapshot makes progress rather than spinning. The
+		// deadline is checked here too: waitForData only checks it when no data is available,
+		// and a producer that keeps lapping this consumer means data always is. Returning
+		// n == 0 with lost > 0 then reports that every available item was overwritten.
+		if hasDeadline && time.Since(start) >= c.deadline {
+			return zero, 0, lost, c.readPos, false
+		}
 	}
-	return val, 1, lost, false
 }
 
-func (c *consumer[T]) ConsumeMultiple(out []T) (n int, lost int64, shutdown bool) {
+func (c *consumer[T]) ConsumeMultiple(out []T) (n int, lost int64, end int64, shutdown bool) {
 	b := c.rb
 	hasDeadline := c.deadline > 0
 	var start time.Time
@@ -334,14 +399,35 @@ func (c *consumer[T]) ConsumeMultiple(out []T) (n int, lost int64, shutdown bool
 		start = time.Now()
 	}
 	totalLost := int64(0)
+	capacity := b.mask + 1
 
 	for {
 		// Snapshot writePos (atomic, no lock) and read available data.
 		wp := b.writePos.Load()
 		if wp > c.readPos {
-			read, readLost := c.readAvailable(wp, out, n)
+			// A discontiguous read is not folded into a batch that already has items: that would make
+			// the batch span two disjoint position ranges, breaking a caller's assumption that its
+			// start is end-n. Defer it to the next ConsumeMultiple call instead, which starts
+			// from an empty batch and can absorb it cleanly.
+			if n > 0 && c.readPos < wp-capacity {
+				break
+			}
+			read, readLost, gap := c.readAvailable(wp, out, n)
 			totalLost += readLost
 			n += read
+			if gap && n > 0 {
+				// Whether the gap came from computeLost's snapshot or a mid-loop overwrite,
+				// stopping here keeps this batch a single contiguous range: any remaining data
+				// is picked up, contiguously, on the next call.
+				//
+				// A gap that left the batch empty is not returned right away: data may still be
+				// available past it. Fall through instead and re-snapshot writePos, which is safe
+				// to loop on because readAvailable always advances readPos. If the deadline is
+				// reached first, this call returns n == 0 with lost > 0, which means every
+				// available item was overwritten before it could be read, not that there was
+				// nothing to read.
+				break
+			}
 		}
 
 		if n >= len(out) {
@@ -352,7 +438,7 @@ func (c *consumer[T]) ConsumeMultiple(out []T) (n int, lost int64, shutdown bool
 		// true the single producer has stopped and writePos is frozen. See
 		// the equivalent comment in Consume.
 		if b.closed.Load() && b.writePos.Load() <= c.readPos {
-			return n, totalLost, true
+			return n, totalLost, c.readPos, true
 		}
 
 		// Without a deadline: return as soon as we have at least one item.
@@ -363,7 +449,7 @@ func (c *consumer[T]) ConsumeMultiple(out []T) (n int, lost int64, shutdown bool
 			// Park via waitForData (acquires mutex only for cond.Wait).
 			_, done := c.waitForData(false, start)
 			if done && b.closed.Load() {
-				return n, totalLost, true
+				return n, totalLost, c.readPos, true
 			}
 			continue
 		}
@@ -376,7 +462,7 @@ func (c *consumer[T]) ConsumeMultiple(out []T) (n int, lost int64, shutdown bool
 		_, done := c.waitForData(true, start)
 		if done {
 			if b.closed.Load() && b.writePos.Load() <= c.readPos {
-				return n, totalLost, true
+				return n, totalLost, c.readPos, true
 			}
 			break
 		}
@@ -385,5 +471,5 @@ func (c *consumer[T]) ConsumeMultiple(out []T) (n int, lost int64, shutdown bool
 	if b.closed.Load() && b.writePos.Load() <= c.readPos {
 		shutdown = true
 	}
-	return n, totalLost, shutdown
+	return n, totalLost, c.readPos, shutdown
 }
