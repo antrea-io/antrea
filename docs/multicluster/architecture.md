@@ -102,7 +102,7 @@ exported endpoints of both `cluster-a-ns-foo-endpoints` and
 `cluster-b-ns-foo-endpoints`.
 * Multi-cluster Controller in each member cluster watches the ResourceImports
 from the Common Area, decapsulates them and gets Service `ns/antrea-mc-foo` and
-Endpoints `ns/antrea-mc-foo`, and creates the Service and Endpoints, as well as
+EndpointSlice `ns/antrea-mc-foo`, and creates the Service and EndpointSlice, as well as
 a ServiceImport `foo` in the local Namespace `ns`.
 
 ### Service Access Across Clusters

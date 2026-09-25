@@ -37,6 +37,21 @@ for the feature in new version.
 It should have no impact during upgrade to those imported resources like Service, Endpoints
 or AntreaClusterNetworkPolicy.
 
+## Multi-cluster Endpoint Synchronization via EndpointSlice
+
+Antrea Multi-cluster uses `discovery.k8s.io/v1` `EndpointSlice` instead of legacy
+`corev1.Endpoints` to synchronize endpoints across clusters.
+
+- The `subsets` field in `ResourceExport` and `ResourceImport` APIs is deprecated and will
+  be removed in a future release. The `endpoints` and `ports` fields are used instead.
+- Following the standard upgrade procedure (**Leader Controller first, Member Controllers second**),
+  the newly upgraded Leader Controller dual-writes both `Endpoints`/`Ports` and legacy `Subsets`
+  into `ResourceImport`s. Member controllers running older versions continue to consume `Subsets`
+  without interruption.
+- Once member controllers are upgraded, they create native `EndpointSlice` resources for imported
+  Services and automatically clean up legacy `Endpoints` objects.
+- Active cross-cluster traffic is not disrupted during the rolling upgrade.
+
 ## Upgrade to v2.7 or later
 
 Starting with v2.7, Antrea Multi-cluster introduces strict identity binding for member clusters.
