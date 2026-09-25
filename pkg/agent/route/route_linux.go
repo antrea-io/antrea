@@ -37,6 +37,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/util/wait"
+	"k8s.io/client-go/util/workqueue"
 	"k8s.io/klog/v2"
 	utilnet "k8s.io/utils/net"
 	"k8s.io/utils/ptr"
@@ -126,6 +127,22 @@ const (
 	antreaNFTablesSetNodePort6   = "nodeport-6"
 	antreaNFTablesSetExternalIP  = "externalip"
 	antreaNFTablesSetExternalIP6 = "externalip-6"
+)
+
+// The constants of the iptables sync loop.
+const (
+	// syncMinRetryDelay is the delay before a failed sync is retried. It doubles on every consecutive
+	// failure, up to SyncInterval.
+	syncMinRetryDelay = time.Second
+
+	// A sync rebuilds the whole state from the caches, so there is nothing to key it by. The period has a
+	// key of its own, which is what decides how often the work belonging to it runs.
+	iptablesSyncKey     = "iptables"
+	iptablesPeriodicKey = "iptables-periodic"
+
+	// A chain of this prefix which is not in the NodeNetworkPolicy caches is deleted, so a feature adding
+	// one has to cache it there.
+	nodeNetworkPolicyChainPrefix = "ANTREA-POL"
 )
 
 // Client implements Interface.
@@ -293,12 +310,17 @@ type Client struct {
 	egressNeighbors sync.Map
 	// The latest calculated Service CIDRs can be got from serviceCIDRProvider.
 	serviceCIDRProvider servicecidr.Interface
+	// staleNodeNetworkPolicyChains holds the chains found to be orphans in the previous run, by IP
+	// protocol. Only the sync loop touches it, so it needs no lock.
+	staleNodeNetworkPolicyChains map[iptables.Protocol]sets.Set[string]
 	// nodeNetworkPolicyIPSetsIPv4 caches all existing IPv4 ipsets for NodeNetworkPolicy.
 	nodeNetworkPolicyIPSetsIPv4 sync.Map
 	// nodeNetworkPolicyIPSetsIPv6 caches all existing IPv6 ipsets for NodeNetworkPolicy.
 	nodeNetworkPolicyIPSetsIPv6 sync.Map
 	// iptablesCache caches all existing iptables chains and rules for the features relying on it.
 	iptablesCache *iptablesCache
+	// iptablesSyncQueue is how a feature, and syncNetworkConfig on its period, notify the sync loop.
+	iptablesSyncQueue workqueue.TypedRateLimitingInterface[string]
 	// podCIDRNFTablesSetIPv4 caches all existing IPv4 Pod CIDRs stored in antreaNFTablesSetPeerPodCIDR.
 	podCIDRNFTablesSetIPv4 sync.Map
 	// podCIDRNFTablesSetIPv6 caches all existing IPv6 Pod CIDRs stored in antreaNFTablesSetPeerPodCIDR.
@@ -339,23 +361,28 @@ func NewClient(networkConfig *config.NetworkConfig,
 	ports := make(map[feature]int32, len(hostNetworkPortRules.ports))
 	maps.Copy(ports, hostNetworkPortRules.ports)
 	c := &Client{
-		networkConfig:               networkConfig,
-		noSNAT:                      noSNAT,
-		nodeSNATRandomFully:         nodeSNATRandomFully,
-		egressSNATRandomFully:       egressSNATRandomFully,
-		proxyAll:                    proxyAll,
-		multicastEnabled:            multicastEnabled,
-		connectUplinkToBridge:       connectUplinkToBridge,
-		nodeNetworkPolicyEnabled:    nodeNetworkPolicyEnabled,
-		nodeLatencyMonitorEnabled:   nodeLatencyMonitorEnabled,
-		egressEnabled:               egressEnabled,
-		serviceExternalIPEnabled:    serviceExternalIPEnabled,
-		ipset:                       ipset.NewClient(),
-		netlink:                     &netlink.Handle{},
-		isCloudEKS:                  env.IsCloudEKS(),
-		serviceCIDRProvider:         serviceCIDRProvider,
-		serviceExternalIPReferences: make(map[string]sets.Set[string]),
-		hostNetworkPortRules:        ports,
+		networkConfig:                networkConfig,
+		noSNAT:                       noSNAT,
+		nodeSNATRandomFully:          nodeSNATRandomFully,
+		egressSNATRandomFully:        egressSNATRandomFully,
+		proxyAll:                     proxyAll,
+		multicastEnabled:             multicastEnabled,
+		connectUplinkToBridge:        connectUplinkToBridge,
+		nodeNetworkPolicyEnabled:     nodeNetworkPolicyEnabled,
+		nodeLatencyMonitorEnabled:    nodeLatencyMonitorEnabled,
+		egressEnabled:                egressEnabled,
+		serviceExternalIPEnabled:     serviceExternalIPEnabled,
+		ipset:                        ipset.NewClient(),
+		netlink:                      &netlink.Handle{},
+		isCloudEKS:                   env.IsCloudEKS(),
+		serviceCIDRProvider:          serviceCIDRProvider,
+		serviceExternalIPReferences:  make(map[string]sets.Set[string]),
+		hostNetworkPortRules:         ports,
+		staleNodeNetworkPolicyChains: make(map[iptables.Protocol]sets.Set[string]),
+		iptablesSyncQueue: workqueue.NewTypedRateLimitingQueueWithConfig(
+			workqueue.NewTypedItemExponentialFailureRateLimiter[string](syncMinRetryDelay, SyncInterval),
+			workqueue.TypedRateLimitingQueueConfig[string]{Name: "iptablesSync"},
+		),
 	}
 	// endpointResolver is a concrete pointer rather than the endpointResolver interface, because
 	// assigning a nil pointer to an interface would produce a non-nil interface, defeating the nil
@@ -537,20 +564,66 @@ func (c *Client) Initialize(nodeConfig *config.NodeConfig, done func()) error {
 func (c *Client) Run(ctx context.Context) {
 	<-c.iptablesInitialized
 	klog.InfoS("Starting host network configuration sync", "interval", SyncInterval)
+	go func() {
+		<-ctx.Done()
+		c.iptablesSyncQueue.ShutDown()
+	}()
+	// The worker only waits for notifications, syncNetworkConfig drives the period.
+	go wait.Until(c.iptablesSyncWorker, time.Second, ctx.Done())
 	wait.UntilWithContext(ctx, c.syncNetworkConfig, SyncInterval)
+}
+
+// triggerIPTablesSync notifies the sync loop that the iptables caches have been updated. The queue holds a
+// single copy of the key, and one added while a sync runs is kept for the next, so a burst of updates costs
+// at most a sync for the first of them and another for the rest.
+func (c *Client) triggerIPTablesSync() {
+	c.iptablesSyncQueue.Add(iptablesSyncKey)
+}
+
+// iptablesSyncWorker writes the iptables rules when it is notified. A sync rewrites the whole state from
+// the caches, so it overwrites anything written to the datapath at the same time. Every other feature only
+// updates the caches and notifies the queue. The two NodeNetworkPolicy calls are the only ones which still
+// write to the datapath themselves, and they notify the queue as well, so that a sync which read the caches
+// before them is followed by one which reads what they wrote.
+//
+// The ipsets need no such loop. syncIPSet only creates and adds, so it never removes anything.
+func (c *Client) iptablesSyncWorker() {
+	for c.processNextIPTablesSync() {
+	}
+}
+
+func (c *Client) processNextIPTablesSync() bool {
+	key, quit := c.iptablesSyncQueue.Get()
+	if quit {
+		return false
+	}
+	// A defer runs when a function returns, and the worker's loop does not, which is why this is one.
+	defer c.iptablesSyncQueue.Done(key)
+
+	if err := c.syncIPTables(false); err != nil {
+		c.iptablesSyncQueue.AddRateLimited(key)
+		klog.ErrorS(err, "Failed to sync iptables rules, requeuing")
+		return true
+	}
+	c.iptablesSyncQueue.Forget(key)
+	if key == iptablesPeriodicKey {
+		// Deleting a chain writes to the datapath, so it happens here, after the sync which removed the
+		// rules pointing at the chains it deletes.
+		c.cleanupOrphanNodeNetworkPolicyChains()
+	}
+	return true
 }
 
 // syncNetworkConfig is idempotent and can be safely called on every sync operation.
 func (c *Client) syncNetworkConfig(ctx context.Context) {
-	// Sync ipset before syncing iptables rules
+	// Sync the ipsets first. A rule pointing at a missing one makes iptables-restore roll its table back.
 	if err := c.syncIPSet(); err != nil {
 		klog.ErrorS(err, "Failed to sync ipset")
 		return
 	}
-	if err := c.syncIPTables(false); err != nil {
-		klog.ErrorS(err, "Failed to sync iptables")
-		return
-	}
+	// The period is a notification like any other, so that the sync loop stays the only writer. Its key
+	// also tells the loop to delete the chains left behind.
+	c.iptablesSyncQueue.Add(iptablesPeriodicKey)
 	if c.nftables != nil {
 		if err := c.syncNFTables(ctx); err != nil {
 			klog.ErrorS(err, "Failed to sync nftables")
@@ -1069,6 +1142,71 @@ func (c *Client) removeUnexpectedAntreaJumpRule(protocol iptables.Protocol, jump
 	return nil
 }
 
+// cleanupOrphanNodeNetworkPolicyChains deletes the NodeNetworkPolicy chains which are in the datapath but
+// not in the caches any more. syncIPTables only rewrites the chains the caches know about, so a chain
+// deleted after a sync read the caches is written back by that sync, and nothing removes it afterwards.
+//
+// A chain has to be an orphan in two consecutive runs to be deleted. The writers update the datapath and
+// the caches one after the other, so it can be in one and not the other for an instant. It also runs when
+// the feature is disabled, which is when every chain is an orphan nothing else would remove. On a Node which
+// never enabled the feature this lists the chains for nothing every period, which is cheap enough not to be
+// worth tracking.
+//
+// The chains are deleted with one iptables-restore per IP protocol, so a run clears as many as disabling the
+// feature leaves behind.
+func (c *Client) cleanupOrphanNodeNetworkPolicyChains() {
+	chainsInDatapath, err := c.iptables.ListChains(c.getIPProtocol(), iptables.FilterTable)
+	if err != nil {
+		klog.ErrorS(err, "Failed to list the chains of the filter table")
+		return
+	}
+	staleChains := make(map[iptables.Protocol]sets.Set[string], len(chainsInDatapath))
+	for ipProtocol, chains := range chainsInDatapath {
+		cache := c.iptablesCache.ipv4[featureNodeNetworkPolicy]
+		if iptables.IsIPv6Protocol(ipProtocol) {
+			cache = c.iptablesCache.ipv6[featureNodeNetworkPolicy]
+		}
+		staleChains[ipProtocol] = sets.New[string]()
+		var orphanChains []string
+		for _, chain := range chains {
+			if !strings.HasPrefix(chain, nodeNetworkPolicyChainPrefix) {
+				continue
+			}
+			if _, exists := cache.Load(chain); exists {
+				continue
+			}
+			staleChains[ipProtocol].Insert(chain)
+			// A chain which was not an orphan in the previous run gets a period to be cached.
+			if c.staleNodeNetworkPolicyChains[ipProtocol].Has(chain) {
+				orphanChains = append(orphanChains, chain)
+			}
+		}
+		if len(orphanChains) == 0 {
+			continue
+		}
+		// An orphan chain keeps the rules it had, as syncIPTables does not touch the chains it does not know
+		// about, and a chain can only be deleted once it is empty. Every chain is flushed before any is
+		// deleted, so that a jump from one orphan to another does not stop the latter from being deleted.
+		iptablesData := bytes.NewBuffer(nil)
+		writeLine(iptablesData, "*filter")
+		for _, chain := range orphanChains {
+			writeLine(iptablesData, "-F", chain)
+		}
+		for _, chain := range orphanChains {
+			writeLine(iptablesData, "-X", chain)
+		}
+		writeLine(iptablesData, "COMMIT")
+		// A chain still referenced from outside the batch fails the whole restore. The chains stay
+		// candidates, so the next run retries them.
+		if err := c.iptables.Restore(iptablesData.String(), false, iptables.IsIPv6Protocol(ipProtocol)); err != nil {
+			klog.ErrorS(err, "Failed to delete orphan NodeNetworkPolicy chains, will retry", "chains", orphanChains)
+			continue
+		}
+		klog.InfoS("Deleted orphan NodeNetworkPolicy chains", "chains", orphanChains)
+	}
+	c.staleNodeNetworkPolicyChains = staleChains
+}
+
 // syncIPTables ensure that the iptables infrastructure we use is set up.
 // It's idempotent and can safely be called on every startup.
 func (c *Client) syncIPTables(cleanupStaleJumpRules bool) error {
@@ -1505,10 +1643,11 @@ func (c *Client) restoreIptablesData(podCIDR *net.IPNet,
 	}
 	// Egress rules must be inserted before the default masquerade rule.
 	for snatMark, snatIP := range snatMarkToIP {
-		// Cannot reuse snatRuleSpec to generate the rule as it doesn't have "`" in the comment.
 		rule := []string{
 			"-A", antreaPostRoutingChain,
 			"-m", "comment", "--comment", `"Antrea: SNAT Pod to external packets"`,
+			// The condition is needed to prevent the rule from being applied to local out packets destined
+			// for Pods, which have "0x1/0x1" mark.
 			"!", "-o", c.nodeConfig.GatewayConfig.Name,
 			"-m", "mark", "--mark", fmt.Sprintf("%#08x/%#08x", snatMark, types.SNATIPMarkMask),
 			"-j", iptables.SNATTarget, "--to", snatIP.String(),
@@ -1869,18 +2008,8 @@ func (c *Client) updateControllerAPIServerHostNetworkFilterRules() {
 	// periodic sync is up to SyncInterval later. Waiting for it would leave the Agent unable to open a
 	// connection to the Controller for that long whenever the default host network policy is to drop.
 	//
-	// This runs on the EndpointResolver's only worker, so it must not block: doing so would stop the
-	// queue from being drained, and no Endpoint change would be resolved for any listener.
-	select {
-	case <-c.iptablesInitialized:
-		if err := c.syncIPTables(false); err != nil {
-			klog.ErrorS(err, "Failed to sync iptables rules after the Antrea Service Endpoint changed")
-		}
-	default:
-		// The initial sync may already have read the cache, so it does not necessarily program these
-		// rules. What does is the first syncNetworkConfig, which Run performs as soon as it unblocks on
-		// iptablesInitialized, and which reads the cache again.
-	}
+	// The sync is left to the loop. This runs on the EndpointResolver's only worker, which must not block.
+	c.triggerIPTablesSync()
 }
 
 func (c *Client) initAgentClusterMembershipHostNetworkFilterRules() {
@@ -2576,43 +2705,23 @@ func (c *Client) UnMigrateRoutesFromGw(route *net.IPNet, linkName string) error 
 	return nil
 }
 
-func (c *Client) snatRuleSpec(snatIP net.IP, snatMark uint32) []string {
-	rule := []string{
-		"-m", "comment", "--comment", "Antrea: SNAT Pod to external packets",
-		// The condition is needed to prevent the rule from being applied to local out packets destined for Pods, which
-		// have "0x1/0x1" mark.
-		"!", "-o", c.nodeConfig.GatewayConfig.Name,
-		"-m", "mark", "--mark", fmt.Sprintf("%#08x/%#08x", snatMark, types.SNATIPMarkMask),
-		"-j", iptables.SNATTarget, "--to", snatIP.String(),
-	}
-	if c.egressSNATRandomFully {
-		rule = append(rule, "--random-fully")
-	}
-	return rule
-}
-
+// AddSNATRule caches the SNAT IP and notifies the sync loop, which installs the rule. Installing it here
+// would race with a sync, which could overwrite it.
 func (c *Client) AddSNATRule(snatIP net.IP, mark uint32) error {
-	protocol := iptables.ProtocolIPv4
-	if snatIP.To4() == nil {
-		protocol = iptables.ProtocolIPv6
-	}
 	c.markToSNATIP.Store(mark, snatIP)
-	return c.iptables.InsertRule(protocol, iptables.NATTable, antreaPostRoutingChain, c.snatRuleSpec(snatIP, mark))
+	c.triggerIPTablesSync()
+	return nil
 }
 
+// DeleteSNATRule uncaches the SNAT IP and notifies the sync loop, which uninstalls the rule.
 func (c *Client) DeleteSNATRule(mark uint32) error {
-	value, ok := c.markToSNATIP.Load(mark)
-	if !ok {
+	if _, ok := c.markToSNATIP.Load(mark); !ok {
 		klog.InfoS("Didn't find SNAT rule with mark", "mark", fmt.Sprintf("%#x", mark))
 		return nil
 	}
 	c.markToSNATIP.Delete(mark)
-	snatIP := value.(net.IP)
-	protocol := iptables.ProtocolIPv4
-	if snatIP.To4() == nil {
-		protocol = iptables.ProtocolIPv6
-	}
-	return c.iptables.DeleteRule(protocol, iptables.NATTable, antreaPostRoutingChain, c.snatRuleSpec(snatIP, mark))
+	c.triggerIPTablesSync()
+	return nil
 }
 
 func (c *Client) AddEgressRoutes(tableID uint32, dev int, gateway net.IP, prefixLength int) error {
@@ -3224,6 +3333,10 @@ func (c *Client) DeleteNodeNetworkPolicyIPSet(ipsetName string, isIPv6 bool) err
 	return nil
 }
 
+// AddOrUpdateNodeNetworkPolicyIPTables writes the rules itself, as callers rely on them being enforced when
+// it returns. A rule dropping its reference to an ipset must be applied before that ipset is destroyed. The
+// caches are only updated once iptables has taken the rules, as nothing would remove a rejected one and
+// every later sync would send it again and fail with it.
 func (c *Client) AddOrUpdateNodeNetworkPolicyIPTables(iptablesChains []string, iptablesRules [][]string, isIPv6 bool) error {
 	iptablesData := bytes.NewBuffer(nil)
 
@@ -3249,6 +3362,7 @@ func (c *Client) AddOrUpdateNodeNetworkPolicyIPTables(iptablesChains []string, i
 			c.iptablesCache.ipv4[featureNodeNetworkPolicy].Store(iptablesChain, iptablesRules[index])
 		}
 	}
+	c.triggerIPTablesSync()
 	return nil
 }
 
@@ -3271,7 +3385,7 @@ func (c *Client) DeleteNodeNetworkPolicyIPTables(iptablesChains []string, isIPv6
 			c.iptablesCache.ipv4[featureNodeNetworkPolicy].Delete(iptablesChain)
 		}
 	}
-
+	c.triggerIPTablesSync()
 	return nil
 }
 
