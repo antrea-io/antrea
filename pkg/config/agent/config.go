@@ -368,6 +368,16 @@ type EgressConfig struct {
 	// inheriting the parent interface’s MAC. Useful in cloud environments that require
 	// unique MAC addresses per interface.
 	UniqueMACForSubInterfaces *bool `yaml:"uniqueMACForSubInterfaces,omitempty"`
+	// How the Node of a Pod sends the Pod's Egress traffic to the Egress Node, when the Egress IP is on
+	// another Node, in noEncap mode. It has the following options:
+	// - tunnel (default): The traffic is encapsulated and sent through the tunnel interface. Antrea
+	//                     creates the tunnel interface for this, which reduces the MTU of every Pod.
+	// - l2:               The traffic is sent unchanged to the MAC address of the Egress Node. No tunnel
+	//                     interface is created for Egress. All Nodes must be in one L2 segment. It
+	//                     requires the EgressDispatchL2 feature gate on the Agent and the Controller.
+	// The option applies only to noEncap mode: "l2" is rejected in the other modes, and with
+	// enableBridgingMode.
+	Dispatch string `yaml:"dispatch,omitempty"`
 }
 
 type MemberlistConfig struct {

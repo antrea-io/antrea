@@ -17,6 +17,7 @@ package route
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"maps"
 	"net"
@@ -291,6 +292,21 @@ type Client struct {
 	egressRules sync.Map
 	// egressNeighbors caches neighbors installed for Egress.
 	egressNeighbors sync.Map
+	// l2DispatchEnabled is true when features send traffic to peer Nodes with the l2 dispatch.
+	l2DispatchEnabled bool
+	// l2DispatchLinkIndex is the index of the transport interface, the device of the l2 dispatch routes.
+	l2DispatchLinkIndex int
+	// l2DispatchPeers caches the l2DispatchPeerRouting of each peer Node by index, to restore it.
+	l2DispatchPeers sync.Map
+	// egressL2Dispatch is true when Egress uses the l2 dispatch: the Egress traffic of the Pods on other Nodes reaches
+	// the local Egress IPs without a tunnel, and gets the mark of its Egress IP from its source Pod IP.
+	egressL2Dispatch bool
+	// egressRemotePodIPSets caches the ipset of each local Egress IP, by the mark of the Egress IP, with the Egress l2
+	// dispatch. staleEgressRemotePodIPSets are the ipsets of Egress IPs to destroy. egressRemotePodIPSetsMutex
+	// protects both and serializes the changes of the ipsets.
+	egressRemotePodIPSets      map[uint32]*egressRemotePodIPSet
+	staleEgressRemotePodIPSets sets.Set[string]
+	egressRemotePodIPSetsMutex sync.Mutex
 	// The latest calculated Service CIDRs can be got from serviceCIDRProvider.
 	serviceCIDRProvider servicecidr.Interface
 	// nodeNetworkPolicyIPSetsIPv4 caches all existing IPv4 ipsets for NodeNetworkPolicy.
@@ -377,6 +393,10 @@ func (c *Client) Initialize(nodeConfig *config.NodeConfig, done func()) error {
 		(encapMode == config.TrafficEncapModeNoEncap || encapMode == config.TrafficEncapModeHybrid)
 
 	c.hostNetworkNFTables = c.networkConfig.HostNetworkMode == config.HostNetworkModeNFTables
+	// The iptables rules are synced in a goroutine started below, and some of them depend on the l2 dispatch, so the
+	// state of the l2 dispatch is set before that goroutine starts.
+	c.l2DispatchEnabled = c.networkConfig.SupportsL2Dispatch()
+	c.egressL2Dispatch = c.egressEnabled && c.networkConfig.UsesEgressL2Dispatch()
 
 	if c.proxyAll {
 		if c.hostNetworkNFTables {
@@ -525,6 +545,12 @@ func (c *Client) Initialize(nodeConfig *config.NodeConfig, done func()) error {
 		}
 	}
 
+	// Set up the ip rules of the l2 dispatch, or remove what a previous configuration installed. The
+	// NodeRouteController manages the routing of each peer Node.
+	if err := c.initL2Dispatch(); err != nil {
+		return fmt.Errorf("failed to initialize the l2 dispatch policy routing: %w", err)
+	}
+
 	if c.endpointResolver != nil {
 		c.endpointResolver.AddListener(c)
 	}
@@ -536,6 +562,11 @@ func (c *Client) Initialize(nodeConfig *config.NodeConfig, done func()) error {
 // policy rules. It will not return until ctx is cancelled.
 func (c *Client) Run(ctx context.Context) {
 	<-c.iptablesInitialized
+	// The ipsets of Egress IPs which a previous agent left are destroyed by the sync, now that the iptables rules
+	// which used them are gone.
+	if err := c.findStaleEgressRemotePodIPSets(); err != nil {
+		klog.ErrorS(err, "Failed to find the stale ipsets of Egress IPs")
+	}
 	klog.InfoS("Starting host network configuration sync", "interval", SyncInterval)
 	wait.UntilWithContext(ctx, c.syncNetworkConfig, SyncInterval)
 }
@@ -551,6 +582,7 @@ func (c *Client) syncNetworkConfig(ctx context.Context) {
 		klog.ErrorS(err, "Failed to sync iptables")
 		return
 	}
+	c.destroyStaleEgressRemotePodIPSets()
 	if c.nftables != nil {
 		if err := c.syncNFTables(ctx); err != nil {
 			klog.ErrorS(err, "Failed to sync nftables")
@@ -625,6 +657,14 @@ func (c *Client) syncRoute() error {
 	}
 	c.egressRoutes.Range(func(_, v any) bool {
 		for _, route := range v.([]*netlink.Route) {
+			if !restoreRoute(route) {
+				return false
+			}
+		}
+		return true
+	})
+	c.l2DispatchPeers.Range(func(_, v any) bool {
+		for _, route := range v.(*l2DispatchPeerRouting).routes {
 			if !restoreRoute(route) {
 				return false
 			}
@@ -768,6 +808,16 @@ func (c *Client) syncIPRule() error {
 	c.egressRules.Range(func(_, v interface{}) bool {
 		return restoreRule(v.(*netlink.Rule))
 	})
+	if c.l2DispatchEnabled {
+		rules := c.l2DispatchSharedRules()
+		c.l2DispatchPeers.Range(func(_, v any) bool {
+			rules = append(rules, v.(*l2DispatchPeerRouting).rules...)
+			return true
+		})
+		if err := c.ensureL2DispatchRules(ruleList, rules); err != nil {
+			klog.ErrorS(err, "Failed to sync the ip rules of the l2 dispatch")
+		}
+	}
 
 	return nil
 }
@@ -884,6 +934,13 @@ func (c *Client) syncIPSet() error {
 			}
 			return true
 		})
+	}
+
+	// The ipsets of the local Egress IPs are used with the Egress l2 dispatch.
+	if c.egressL2Dispatch {
+		if err := c.syncEgressRemotePodIPSets(); err != nil {
+			return err
+		}
 	}
 
 	return nil
@@ -1383,6 +1440,9 @@ func (c *Client) restoreIptablesData(podCIDR *net.IPNet,
 			"-j", "MARK", "--set-xmark", fmt.Sprintf("0x0/%#08x", types.EgressNoEncapReturnToRemoteMark),
 		}...)
 	}
+	if c.egressL2Dispatch {
+		c.writeEgressRemotePodMangleRules(iptablesData, isIPv6)
+	}
 
 	// To make liveness/readiness probe traffic bypass ingress rules of Network Policies, mark locally generated packets
 	// that will be sent to OVS so we can identify them later in the OVS pipeline.
@@ -1461,6 +1521,9 @@ func (c *Client) restoreIptablesData(podCIDR *net.IPNet,
 			"-j", iptables.AcceptTarget,
 		}...)
 	}
+	if c.egressL2Dispatch {
+		c.writeEgressRemotePodForwardRules(iptablesData)
+	}
 	for _, chain := range filterChains {
 		for _, rule := range iptablesFiltersRuleByChain[chain] {
 			writeLine(iptablesData, rule)
@@ -1490,6 +1553,16 @@ func (c *Client) restoreIptablesData(podCIDR *net.IPNet,
 		}...)
 	}
 	writeLine(iptablesData, iptables.MakeChainLine(antreaPostRoutingChain))
+	if c.l2DispatchEnabled {
+		// A packet which the l2 dispatch sends to a peer Node must keep its source IP, which the peer Node may need.
+		// For example, an Egress Node finds the Egress IP of a remote Pod from the Pod IP.
+		writeLine(iptablesData, []string{
+			"-A", antreaPostRoutingChain,
+			"-m", "comment", "--comment", `"Antrea: do not masquerade packets dispatched to a peer Node"`,
+			"-m", "mark", "--mark", fmt.Sprintf("%#08x/%#08x", types.L2DispatchMark, types.L2DispatchMark),
+			"-j", iptables.ReturnTarget,
+		}...)
+	}
 	// The masqueraded multicast traffic will become unicast so we
 	// stop traversing this antreaPostRoutingChain for multicast traffic.
 	// Note: Multicast can only work with IPv4 for now. Remove condition "!isIPv6" in the future after
@@ -1530,6 +1603,9 @@ func (c *Client) restoreIptablesData(podCIDR *net.IPNet,
 			rule = append(rule, "--random-fully")
 		}
 		writeLine(iptablesData, rule...)
+		if c.egressL2Dispatch {
+			c.writeEgressRemotePodMasqueradeRule(iptablesData, podIPSet)
+		}
 	}
 
 	// For local traffic going out of the gateway interface, if the source IP does not match any
@@ -2115,26 +2191,37 @@ func (c *Client) initEgressIPRules() error {
 		if rule.Table != types.ReplyEgressRouteTable {
 			continue
 		}
-		// Delete all rules whose target table is ReplyEgressRouteTable on startup. These rules will be reinstalled
-		// each time after restart. This implementation was inspired by the implementation of RestoreEgressRoutesAndRules.
+		// Delete all rules whose target table is ReplyEgressRouteTable on startup, whatever their priority. These rules
+		// will be reinstalled each time after restart. This also replaces the rules which earlier versions added
+		// without a priority. This implementation was inspired by the implementation of RestoreEgressRoutesAndRules.
 		c.netlink.RuleDel(&rule)
 	}
 
 	if c.networkConfig.IPv6Enabled {
-		rule := generateRule(types.ReplyEgressRouteTable, types.EgressNoEncapReturnToRemoteMark, &types.EgressNoEncapReturnToRemoteMark, netlink.FAMILY_V6)
+		rule := newReplyEgressRule(netlink.FAMILY_V6)
 		if err := c.netlink.RuleAdd(rule); err != nil {
 			return fmt.Errorf("error adding ip rule %v: %w", rule, err)
 		}
 		c.egressRules.Store(generateRuleKey(rule), rule)
 	}
 	if c.networkConfig.IPv4Enabled {
-		rule := generateRule(types.ReplyEgressRouteTable, types.EgressNoEncapReturnToRemoteMark, &types.EgressNoEncapReturnToRemoteMark, netlink.FAMILY_V4)
+		rule := newReplyEgressRule(netlink.FAMILY_V4)
 		if err := c.netlink.RuleAdd(rule); err != nil {
 			return fmt.Errorf("error adding ip rule %v: %w", rule, err)
 		}
 		c.egressRules.Store(generateRuleKey(rule), rule)
 	}
 	return nil
+}
+
+// newReplyEgressRule returns the ip rule which makes the reply Egress packets whose request packets are from remote
+// Pods look up ReplyEgressRouteTable. The rule has a fixed priority, so that its position does not depend on the other
+// rules on the Node.
+func newReplyEgressRule(family int) *netlink.Rule {
+	rule := generateRule(types.ReplyEgressRouteTable, types.EgressNoEncapReturnToRemoteMark,
+		&types.EgressNoEncapReturnToRemoteMark, family)
+	rule.Priority = types.ReplyEgressRulePriority
+	return rule
 }
 
 func (c *Client) initEgressIPRoutes() error {
@@ -2597,7 +2684,16 @@ func (c *Client) AddSNATRule(snatIP net.IP, mark uint32) error {
 		protocol = iptables.ProtocolIPv6
 	}
 	c.markToSNATIP.Store(mark, snatIP)
-	return c.iptables.InsertRule(protocol, iptables.NATTable, antreaPostRoutingChain, c.snatRuleSpec(snatIP, mark))
+	ruleSpec := c.snatRuleSpec(snatIP, mark)
+	if err := c.iptables.InsertRule(protocol, iptables.NATTable, antreaPostRoutingChain, ruleSpec); err != nil {
+		return err
+	}
+	// With the Egress l2 dispatch, the traffic of the Pods on other Nodes gets the mark of the Egress IP from its
+	// source Pod IP, through the ipset of the Egress IP.
+	if c.egressL2Dispatch {
+		return c.addEgressRemotePodIPSet(mark, snatIP.To4() == nil)
+	}
+	return nil
 }
 
 func (c *Client) DeleteSNATRule(mark uint32) error {
@@ -2606,6 +2702,11 @@ func (c *Client) DeleteSNATRule(mark uint32) error {
 		klog.InfoS("Didn't find SNAT rule with mark", "mark", fmt.Sprintf("%#x", mark))
 		return nil
 	}
+	if c.egressL2Dispatch {
+		if err := c.deleteEgressRemotePodIPSet(mark); err != nil {
+			return err
+		}
+	}
 	c.markToSNATIP.Delete(mark)
 	snatIP := value.(net.IP)
 	protocol := iptables.ProtocolIPv4
@@ -2613,6 +2714,347 @@ func (c *Client) DeleteSNATRule(mark uint32) error {
 		protocol = iptables.ProtocolIPv6
 	}
 	return c.iptables.DeleteRule(protocol, iptables.NATTable, antreaPostRoutingChain, c.snatRuleSpec(snatIP, mark))
+}
+
+// l2DispatchPeerRouting is the policy routing of the l2 dispatch for one peer Node: one route and one rule for each
+// IP family of the peer Node.
+type l2DispatchPeerRouting struct {
+	routes []*netlink.Route
+	rules  []*netlink.Rule
+}
+
+// l2DispatchRuleKey identifies an ip rule of the l2 dispatch in the rules listed from the kernel, which do not report
+// the action of a rule, so the key uses the fields that tell the rules of the l2 dispatch apart.
+type l2DispatchRuleKey struct {
+	family   int
+	priority int
+	table    int
+	gotoPrio int
+	mark     uint32
+	mask     uint32
+}
+
+func newL2DispatchRuleKey(rule *netlink.Rule) l2DispatchRuleKey {
+	var mask uint32
+	if rule.Mask != nil {
+		mask = *rule.Mask
+	}
+	return l2DispatchRuleKey{
+		family:   rule.Family,
+		priority: rule.Priority,
+		table:    rule.Table,
+		gotoPrio: rule.Goto,
+		mark:     rule.Mark,
+		mask:     mask,
+	}
+}
+
+func (c *Client) l2DispatchFamilies() []int {
+	var families []int
+	if c.networkConfig.IPv4Enabled {
+		families = append(families, netlink.FAMILY_V4)
+	}
+	if c.networkConfig.IPv6Enabled {
+		families = append(families, netlink.FAMILY_V6)
+	}
+	return families
+}
+
+func newL2DispatchMarkRule(family, priority int) *netlink.Rule {
+	rule := netlink.NewRule()
+	rule.Family = family
+	rule.Priority = priority
+	rule.Mark = types.L2DispatchMark
+	rule.Mask = ptr.To(types.L2DispatchMark)
+	return rule
+}
+
+// l2DispatchSharedRules returns, for each enabled IP family, the ip rules which all peer Nodes of the l2 dispatch
+// share: the guard rule, the no-op rule which keeps the target of the guard rule present, and the drop rule. For
+// example, for IPv4:
+// $ ip rule
+// 32000: from all fwmark 0x20000000/0x20000000 goto 40000
+// 32766: from all lookup main
+// 32767: from all lookup default
+// 40000: from all fwmark 0x20000000/0x20000000 nop
+// 40001: from all fwmark 0x20000000/0x20000000 blackhole
+func (c *Client) l2DispatchSharedRules() []*netlink.Rule {
+	var rules []*netlink.Rule
+	for _, family := range c.l2DispatchFamilies() {
+		guard := newL2DispatchMarkRule(family, types.L2DispatchGuardRulePriority)
+		guard.Goto = types.L2DispatchPeerRulePriority
+		anchor := newL2DispatchMarkRule(family, types.L2DispatchPeerRulePriority)
+		anchor.Type = unix.FR_ACT_NOP
+		drop := newL2DispatchMarkRule(family, types.L2DispatchDropRulePriority)
+		drop.Type = unix.FR_ACT_BLACKHOLE
+		rules = append(rules, guard, anchor, drop)
+	}
+	return rules
+}
+
+// newL2DispatchPeerRule returns the ip rule which makes the packets marked for the peer Node with the index look up
+// the route table of the peer Node.
+func newL2DispatchPeerRule(peerIndex uint32, family int) *netlink.Rule {
+	rule := generateRule(types.L2DispatchRouteTable(peerIndex), types.L2DispatchPeerMark(peerIndex), ptr.To(types.L2DispatchPeerMarkMask), family)
+	rule.Priority = types.L2DispatchPeerRulePriority
+	return rule
+}
+
+// l2DispatchPeerIndexOfRule returns the index of the peer Node whose rule this is, if it is a peer rule of the l2
+// dispatch.
+func l2DispatchPeerIndexOfRule(rule *netlink.Rule) (uint32, bool) {
+	if rule.Priority != types.L2DispatchPeerRulePriority || rule.Mask == nil || *rule.Mask != types.L2DispatchPeerMarkMask ||
+		rule.Mark&types.L2DispatchMark == 0 {
+		return 0, false
+	}
+	index := (rule.Mark &^ types.L2DispatchMark) >> types.L2DispatchPeerIndexMinBit
+	if index == 0 || rule.Table != types.L2DispatchRouteTable(index) {
+		return 0, false
+	}
+	return index, true
+}
+
+// l2DispatchPeerIndexOfRoute returns the index of the peer Node whose route this is, if it is a route of the l2
+// dispatch: a default route through a gateway on the transport interface, in the route table of the index.
+func (c *Client) l2DispatchPeerIndexOfRoute(route *netlink.Route) (uint32, bool) {
+	index := route.Table - types.L2DispatchRouteTableBase
+	if index <= 0 || index > types.MaxL2DispatchPeerIndex || route.LinkIndex != c.l2DispatchLinkIndex || route.Gw == nil ||
+		route.Flags&int(netlink.FLAG_ONLINK) == 0 {
+		return 0, false
+	}
+	if route.Dst != nil {
+		if ones, _ := route.Dst.Mask.Size(); ones != 0 {
+			return 0, false
+		}
+	}
+	return uint32(index), true
+}
+
+// isL2DispatchRule returns true if the rule is one of the ip rules which the l2 dispatch installs.
+func isL2DispatchRule(rule *netlink.Rule) bool {
+	if _, isPeerRule := l2DispatchPeerIndexOfRule(rule); isPeerRule {
+		return true
+	}
+	if rule.Mark != types.L2DispatchMark || rule.Mask == nil || *rule.Mask != types.L2DispatchMark {
+		return false
+	}
+	switch rule.Priority {
+	case types.L2DispatchGuardRulePriority:
+		return rule.Goto == types.L2DispatchPeerRulePriority
+	case types.L2DispatchPeerRulePriority, types.L2DispatchDropRulePriority:
+		return rule.Table == 0
+	}
+	return false
+}
+
+// ensureL2DispatchRules adds the rules which are not in existingRules.
+func (c *Client) ensureL2DispatchRules(existingRules []netlink.Rule, rules []*netlink.Rule) error {
+	existing := sets.New[l2DispatchRuleKey]()
+	for i := range existingRules {
+		existing.Insert(newL2DispatchRuleKey(&existingRules[i]))
+	}
+	for _, rule := range rules {
+		if existing.Has(newL2DispatchRuleKey(rule)) {
+			continue
+		}
+		if err := c.netlink.RuleAdd(rule); err != nil && !errors.Is(err, unix.EEXIST) {
+			return fmt.Errorf("failed to add ip rule %v: %w", rule, err)
+		}
+	}
+	return nil
+}
+
+// initL2Dispatch installs the ip rules which all peer Nodes of the l2 dispatch share when the l2 dispatch is
+// enabled. When it is not, it removes the rules and routes that the l2 dispatch installed before, if any. The
+// routing of each peer Node is kept when the l2 dispatch is enabled, so that the NodeRouteController can keep the
+// index of each peer Node across an agent restart.
+func (c *Client) initL2Dispatch() error {
+	rules, err := c.netlink.RuleList(netlink.FAMILY_ALL)
+	if err != nil {
+		return fmt.Errorf("failed to list ip rules: %w", err)
+	}
+	if c.l2DispatchEnabled {
+		link, err := c.netlink.LinkByName(c.nodeConfig.NodeTransportInterfaceName)
+		if err != nil {
+			return fmt.Errorf("failed to get the transport interface %s: %w", c.nodeConfig.NodeTransportInterfaceName, err)
+		}
+		c.l2DispatchLinkIndex = link.Attrs().Index
+		return c.ensureL2DispatchRules(rules, c.l2DispatchSharedRules())
+	}
+
+	foundRules := false
+	for i := range rules {
+		if !isL2DispatchRule(&rules[i]) {
+			continue
+		}
+		foundRules = true
+		if err := c.netlink.RuleDel(&rules[i]); err != nil && !isNotFoundError(err) {
+			return fmt.Errorf("failed to delete ip rule %v: %w", rules[i], err)
+		}
+	}
+	if !foundRules {
+		return nil
+	}
+	// Without the rules, no packet reaches the routes, so a failure to find them only leaves unused routes.
+	link, err := c.netlink.LinkByName(c.nodeConfig.NodeTransportInterfaceName)
+	if err != nil {
+		klog.ErrorS(err, "Failed to get the transport interface, skipping the removal of the l2 dispatch routes", "interface", c.nodeConfig.NodeTransportInterfaceName)
+		return nil
+	}
+	c.l2DispatchLinkIndex = link.Attrs().Index
+	routes, err := c.listL2DispatchRoutes()
+	if err != nil {
+		return err
+	}
+	for i := range routes {
+		if err := c.netlink.RouteDel(&routes[i]); err != nil && !isNotFoundError(err) {
+			return fmt.Errorf("failed to delete ip route %v: %w", routes[i], err)
+		}
+	}
+	return nil
+}
+
+// listL2DispatchRoutes returns the routes of the l2 dispatch on the Node. The routes of all tables are listed, which
+// requires the table filter: without it, only the routes of the main table are returned.
+func (c *Client) listL2DispatchRoutes() ([]netlink.Route, error) {
+	routes, err := c.netlink.RouteListFiltered(netlink.FAMILY_ALL, &netlink.Route{LinkIndex: c.l2DispatchLinkIndex}, netlink.RT_FILTER_TABLE|netlink.RT_FILTER_OIF)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list ip routes: %w", err)
+	}
+	var l2DispatchRoutes []netlink.Route
+	for i := range routes {
+		if _, ok := c.l2DispatchPeerIndexOfRoute(&routes[i]); ok {
+			l2DispatchRoutes = append(l2DispatchRoutes, routes[i])
+		}
+	}
+	return l2DispatchRoutes, nil
+}
+
+// isNotFoundError returns true if the netlink error means that the rule or route to delete does not exist.
+func isNotFoundError(err error) bool {
+	return errors.Is(err, unix.ENOENT) || errors.Is(err, unix.ESRCH)
+}
+
+func (c *Client) AddL2DispatchPeerRoutes(peerIndex uint32, peerNodeIPs *utilip.DualStackIPs) error {
+	if !c.l2DispatchEnabled {
+		return fmt.Errorf("the l2 dispatch is not enabled")
+	}
+	if peerIndex == 0 || peerIndex > types.MaxL2DispatchPeerIndex {
+		return fmt.Errorf("peer Node index %d is out of the range [1, %d]", peerIndex, types.MaxL2DispatchPeerIndex)
+	}
+	desired := &l2DispatchPeerRouting{}
+	for _, family := range c.l2DispatchFamilies() {
+		peerIP := peerNodeIPs.IPv4
+		if family == netlink.FAMILY_V6 {
+			peerIP = peerNodeIPs.IPv6
+		}
+		if peerIP == nil {
+			continue
+		}
+		// The peer Node is in the local subnet, but the table has no route for the subnet, so the gateway is marked
+		// onlink. For example, for peerIndex=3 and a peer Node IP of 192.168.77.103:
+		// $ ip route show table 1004
+		// default via 192.168.77.103 dev eth0 onlink
+		// $ ip rule show pref 40000
+		// 40000: from all fwmark 0x20030000/0x2fff0000 lookup 1004
+		desired.routes = append(desired.routes, &netlink.Route{
+			LinkIndex: c.l2DispatchLinkIndex,
+			Gw:        peerIP,
+			Table:     types.L2DispatchRouteTable(peerIndex),
+			Flags:     int(netlink.FLAG_ONLINK),
+		})
+		desired.rules = append(desired.rules, newL2DispatchPeerRule(peerIndex, family))
+	}
+	if len(desired.routes) == 0 {
+		return fmt.Errorf("peer Node has no transport IP of an enabled IP family: %v", peerNodeIPs)
+	}
+
+	// Remove the routing of an IP family which the peer Node no longer has an IP of.
+	if value, exists := c.l2DispatchPeers.Load(peerIndex); exists {
+		desiredFamilies := sets.New[int]()
+		for _, rule := range desired.rules {
+			desiredFamilies.Insert(rule.Family)
+		}
+		current := value.(*l2DispatchPeerRouting)
+		for i, rule := range current.rules {
+			if desiredFamilies.Has(rule.Family) {
+				continue
+			}
+			if err := c.netlink.RuleDel(rule); err != nil && !isNotFoundError(err) {
+				return fmt.Errorf("failed to delete ip rule %v: %w", rule, err)
+			}
+			if err := c.netlink.RouteDel(current.routes[i]); err != nil && !isNotFoundError(err) {
+				return fmt.Errorf("failed to delete ip route %v: %w", current.routes[i], err)
+			}
+		}
+	}
+	// A rule without a route makes the packets reach the drop rule, so the routes are installed first.
+	for _, route := range desired.routes {
+		if err := c.netlink.RouteReplace(route); err != nil {
+			return fmt.Errorf("failed to install ip route %v: %w", route, err)
+		}
+	}
+	for _, rule := range desired.rules {
+		if err := c.netlink.RuleAdd(rule); err != nil && !errors.Is(err, unix.EEXIST) {
+			return fmt.Errorf("failed to add ip rule %v: %w", rule, err)
+		}
+	}
+	c.l2DispatchPeers.Store(peerIndex, desired)
+	return nil
+}
+
+func (c *Client) DeleteL2DispatchPeerRoutes(peerIndex uint32) error {
+	// The rules and routes are derived from the index rather than from the cache, so that the routing which a
+	// previous agent installed is deleted too.
+	for _, family := range c.l2DispatchFamilies() {
+		rule := newL2DispatchPeerRule(peerIndex, family)
+		if err := c.netlink.RuleDel(rule); err != nil && !isNotFoundError(err) {
+			return fmt.Errorf("failed to delete ip rule %v: %w", rule, err)
+		}
+	}
+	routes, err := c.netlink.RouteListFiltered(netlink.FAMILY_ALL, &netlink.Route{Table: types.L2DispatchRouteTable(peerIndex)}, netlink.RT_FILTER_TABLE)
+	if err != nil {
+		return fmt.Errorf("failed to list ip routes: %w", err)
+	}
+	for i := range routes {
+		if err := c.netlink.RouteDel(&routes[i]); err != nil && !isNotFoundError(err) {
+			return fmt.Errorf("failed to delete ip route %v: %w", routes[i], err)
+		}
+	}
+	c.l2DispatchPeers.Delete(peerIndex)
+	return nil
+}
+
+func (c *Client) ListL2DispatchPeers() (map[uint32]*utilip.DualStackIPs, error) {
+	peers := map[uint32]*utilip.DualStackIPs{}
+	peerIPs := func(index uint32) *utilip.DualStackIPs {
+		if peers[index] == nil {
+			peers[index] = &utilip.DualStackIPs{}
+		}
+		return peers[index]
+	}
+	routes, err := c.listL2DispatchRoutes()
+	if err != nil {
+		return nil, err
+	}
+	for i := range routes {
+		index, _ := c.l2DispatchPeerIndexOfRoute(&routes[i])
+		if routes[i].Gw.To4() != nil {
+			peerIPs(index).IPv4 = routes[i].Gw
+		} else {
+			peerIPs(index).IPv6 = routes[i].Gw
+		}
+	}
+	rules, err := c.netlink.RuleList(netlink.FAMILY_ALL)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list ip rules: %w", err)
+	}
+	for i := range rules {
+		if index, ok := l2DispatchPeerIndexOfRule(&rules[i]); ok {
+			peerIPs(index)
+		}
+	}
+	return peers, nil
 }
 
 func (c *Client) AddEgressRoutes(tableID uint32, dev int, gateway net.IP, prefixLength int) error {

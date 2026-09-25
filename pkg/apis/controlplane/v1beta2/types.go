@@ -564,6 +564,44 @@ type EgressGroupList struct {
 	Items           []EgressGroup `json:"items" protobuf:"bytes,2,rep,name=items"`
 }
 
+// +genclient
+// +genclient:nonNamespaced
+// +genclient:onlyVerbs=list,get,watch
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+
+// EgressAddressGroup lists the Pods which the appliedTo of one or more Egresses selects, with their IPs. With the
+// Egress l2 dispatch, the Egress Nodes of these Egresses receive it, to map the source IP of the traffic of a Pod on
+// another Node to the Egress IP.
+type EgressAddressGroup struct {
+	metav1.TypeMeta   `json:",inline"`
+	metav1.ObjectMeta `json:"metadata,omitempty" protobuf:"bytes,1,opt,name=metadata"`
+	// Egresses is the list of the names of the Egresses which select the GroupMembers.
+	Egresses []string `json:"egresses,omitempty" protobuf:"bytes,2,rep,name=egresses"`
+	// GroupMembers is a list of GroupMember selected by this group, with their IPs.
+	GroupMembers []GroupMember `json:"groupMembers,omitempty" protobuf:"bytes,3,rep,name=groupMembers"`
+}
+
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+
+// EgressAddressGroupPatch describes the incremental update of an EgressAddressGroup.
+type EgressAddressGroupPatch struct {
+	metav1.TypeMeta   `json:",inline"`
+	metav1.ObjectMeta `json:"metadata,omitempty" protobuf:"bytes,1,opt,name=metadata"`
+	// Egresses is the new list of the Egresses of the group. It is empty when the list does not change.
+	Egresses            []string      `json:"egresses,omitempty" protobuf:"bytes,2,rep,name=egresses"`
+	AddedGroupMembers   []GroupMember `json:"addedGroupMembers,omitempty" protobuf:"bytes,3,rep,name=addedGroupMembers"`
+	RemovedGroupMembers []GroupMember `json:"removedGroupMembers,omitempty" protobuf:"bytes,4,rep,name=removedGroupMembers"`
+}
+
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+
+// EgressAddressGroupList is a list of EgressAddressGroup objects.
+type EgressAddressGroupList struct {
+	metav1.TypeMeta `json:",inline"`
+	metav1.ListMeta `json:"metadata,omitempty" protobuf:"bytes,1,opt,name=metadata"`
+	Items           []EgressAddressGroup `json:"items" protobuf:"bytes,2,rep,name=items"`
+}
+
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
 // SupportBundleCollectionStatus is the status of a SupportBundleCollection.

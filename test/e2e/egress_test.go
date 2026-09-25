@@ -61,8 +61,8 @@ func TestEgress(t *testing.T) {
 		t.Fatalf("Error when setting up test: %v", err)
 	}
 	defer teardownTest(t, data)
-	// Egress works for encap and hybrid modes.
-	skipIfEncapModeIs(t, data, config.TrafficEncapModeNoEncap)
+	// Egress works for encap, hybrid and noEncap modes. In noEncap mode, the tests run only with the l2 dispatch.
+	skipIfNoEncapWithoutEgressL2Dispatch(t, data)
 	skipIfEncapModeIs(t, data, config.TrafficEncapModeNetworkPolicyOnly)
 
 	t.Run("testEgressClientIP", func(t *testing.T) { testEgressClientIP(t, data) })
@@ -73,6 +73,21 @@ func TestEgress(t *testing.T) {
 	t.Run("testEgressNodeFailure", func(t *testing.T) { testEgressNodeFailure(t, data) })
 	t.Run("testCreateExternalIPPool", func(t *testing.T) { testCreateExternalIPPool(t, data) })
 	t.Run("testUpdateBandwidth", func(t *testing.T) { testEgressUpdateBandwidth(t, data) })
+}
+
+// skipIfNoEncapWithoutEgressL2Dispatch skips the test in noEncap mode, unless the Agents send the Egress traffic to
+// the Egress Nodes with the l2 dispatch.
+func skipIfNoEncapWithoutEgressL2Dispatch(tb testing.TB, data *TestData) {
+	encapMode, err := data.GetEncapMode()
+	require.NoError(tb, err, "Failed to get encap mode")
+	if encapMode != config.TrafficEncapModeNoEncap {
+		return
+	}
+	agentConf, err := data.GetAntreaAgentConf()
+	require.NoError(tb, err, "Failed to get the Agent configuration")
+	if _, dispatch := config.GetEgressDispatchFromStr(agentConf.Egress.Dispatch); dispatch != config.EgressDispatchL2 {
+		tb.Skipf("Skipping test for encap mode '%s' without the l2 Egress dispatch", encapMode.String())
+	}
 }
 
 func testCreateExternalIPPool(t *testing.T, data *TestData) {

@@ -32,6 +32,7 @@ _usage="Usage: $0 [--encap-mode <mode>] [--ip-family <v4|v6|dual>] [--coverage] 
         --kube-proxy-mode             Kube-proxy mode. Supported values are 'iptables', 'nftables', 'ipvs' and 'none' (to disable kube-proxy).
         --host-network-mode           Antrea host network mode. Supported values are 'iptables' and 'nftables.
         --load-balancer-mode          LoadBalancer mode.
+        --egress-dispatch             Egress dispatch in noEncap mode: 'tunnel' or 'l2'. 'l2' needs EgressDispatchL2.
         --node-ipam                   Enable Antrea NodeIPAM.
         --flexible-ipam               Enable Antrea AntreaIPAM.
         --multicast                   Enable Multicast.
@@ -80,6 +81,7 @@ proxy_all=false
 kube_proxy_mode=""
 host_network_mode=""
 load_balancer_mode=""
+egress_dispatch=""
 node_ipam=false
 multicast=false
 bgp_policy=false
@@ -136,6 +138,10 @@ case $key in
     ;;
     --load-balancer-mode)
     load_balancer_mode="$2"
+    shift 2
+    ;;
+    --egress-dispatch)
+    egress_dispatch="$2"
     shift 2
     ;;
     --node-ipam)
@@ -290,6 +296,9 @@ if [ -n "$host_network_mode" ]; then
 fi
 if [ -n "$load_balancer_mode" ]; then
     manifest_args="$manifest_args --extra-helm-values antreaProxy.defaultLoadBalancerMode=$load_balancer_mode"
+fi
+if [ -n "$egress_dispatch" ]; then
+    manifest_args="$manifest_args --extra-helm-values egress.dispatch=$egress_dispatch"
 fi
 if $node_ipam; then
     manifest_args="$manifest_args --extra-helm-values nodeIPAM.enable=true,nodeIPAM.clusterCIDRs={10.244.0.0/16}"
