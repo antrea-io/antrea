@@ -229,6 +229,9 @@ func (c *SupportBundleController) syncSupportBundleCollection(key string) error 
 }
 
 func (c *SupportBundleController) generateSupportBundle(supportBundle *cpv1b2.SupportBundleCollection) error {
+	if supportBundle.Authentication.BasicAuthentication == nil {
+		return fmt.Errorf("SFTP upload requires BasicAuthentication, but a different authType was specified")
+	}
 	klog.V(2).InfoS("Generating support bundle collection", "name", supportBundle.Name)
 	basedir, err := afero.TempDir(defaultFS, "", "bundle_tmp_")
 	if err != nil {
