@@ -49,6 +49,21 @@ func newEgressGroup(name string, members ...cpv1b2.GroupMember) *cpv1b2.EgressGr
 	return &cpv1b2.EgressGroup{ObjectMeta: metav1.ObjectMeta{Name: name}, GroupMembers: members}
 }
 
+func newEgressAddressGroupMsg(name string, egresses []string, members ...cpv1b2.GroupMember) *cpv1b2.EgressAddressGroup {
+	return &cpv1b2.EgressAddressGroup{ObjectMeta: metav1.ObjectMeta{Name: name}, Egresses: egresses, GroupMembers: members}
+}
+
+// queuedEgresses empties the queue of the controller and returns the Egresses it held.
+func queuedEgresses(c *fakeController) sets.Set[string] {
+	egresses := sets.New[string]()
+	for c.queue.Len() > 0 {
+		item, _ := c.queue.Get()
+		egresses.Insert(item)
+		c.queue.Done(item)
+	}
+	return egresses
+}
+
 // startFakeController starts the informers of the fake controller. They stop when the test ends.
 func startFakeController(t *testing.T, c *fakeController) {
 	stopCh := make(chan struct{})
@@ -59,79 +74,123 @@ func startFakeController(t *testing.T, c *fakeController) {
 	c.informerFactory.WaitForCacheSync(stopCh)
 }
 
-func TestPatchEgressGroup(t *testing.T) {
+func TestPatchEgressAddressGroup(t *testing.T) {
 	tests := []struct {
-		name            string
-		initialMembers  []cpv1b2.GroupMember
-		addedMembers    []cpv1b2.GroupMember
-		removedMembers  []cpv1b2.GroupMember
-		expectedMembers egressGroupMembers
+		name             string
+		initialMembers   []cpv1b2.GroupMember
+		egresses         []string
+		addedMembers     []cpv1b2.GroupMember
+		removedMembers   []cpv1b2.GroupMember
+		expectedMembers  map[string]sets.Set[string]
+		expectedEgresses sets.Set[string]
+		expectedQueued   sets.Set[string]
 	}{
 		{
-			// A member is identified by its Pod and its IPs, so the patch removes the member without IPs and adds the
-			// member with them.
-			name:            "Pod gets its IP",
-			initialMembers:  []cpv1b2.GroupMember{podMember("ns1", "pod1")},
-			addedMembers:    []cpv1b2.GroupMember{podMember("ns1", "pod1", "10.10.1.5")},
-			removedMembers:  []cpv1b2.GroupMember{podMember("ns1", "pod1")},
-			expectedMembers: egressGroupMembers{"ns1/pod1": sets.New("10.10.1.5")},
+			// A member is identified by its Pod and its IPs, so the patch removes the member with the previous IPs and
+			// adds the member with the new ones.
+			name:             "Pod IPs change",
+			initialMembers:   []cpv1b2.GroupMember{podMember("ns1", "pod1", "10.10.1.5")},
+			addedMembers:     []cpv1b2.GroupMember{podMember("ns1", "pod1", "10.10.1.6", "fd00:10:11::6")},
+			removedMembers:   []cpv1b2.GroupMember{podMember("ns1", "pod1", "10.10.1.5")},
+			expectedMembers:  map[string]sets.Set[string]{"ns1/pod1": sets.New("10.10.1.6", "fd00:10:11::6")},
+			expectedEgresses: sets.New("egressA"),
+			expectedQueued:   sets.New("egressA"),
 		},
 		{
-			name:            "Pod IPs change",
-			initialMembers:  []cpv1b2.GroupMember{podMember("ns1", "pod1", "10.10.1.5")},
-			addedMembers:    []cpv1b2.GroupMember{podMember("ns1", "pod1", "10.10.1.6", "fd00:10:11::6")},
-			removedMembers:  []cpv1b2.GroupMember{podMember("ns1", "pod1", "10.10.1.5")},
-			expectedMembers: egressGroupMembers{"ns1/pod1": sets.New("10.10.1.6", "fd00:10:11::6")},
+			name:           "Pod added",
+			initialMembers: []cpv1b2.GroupMember{podMember("ns1", "pod1", "10.10.1.5")},
+			addedMembers:   []cpv1b2.GroupMember{podMember("ns2", "pod2", "10.10.2.5")},
+			expectedMembers: map[string]sets.Set[string]{
+				"ns1/pod1": sets.New("10.10.1.5"),
+				"ns2/pod2": sets.New("10.10.2.5"),
+			},
+			expectedEgresses: sets.New("egressA"),
+			expectedQueued:   sets.New("egressA"),
 		},
 		{
-			name:            "Pod added",
-			initialMembers:  []cpv1b2.GroupMember{podMember("ns1", "pod1")},
-			addedMembers:    []cpv1b2.GroupMember{podMember("ns2", "pod2")},
-			expectedMembers: egressGroupMembers{"ns1/pod1": sets.New[string](), "ns2/pod2": sets.New[string]()},
+			name:             "Pod removed",
+			initialMembers:   []cpv1b2.GroupMember{podMember("ns1", "pod1", "10.10.1.5"), podMember("ns2", "pod2", "10.10.2.5")},
+			removedMembers:   []cpv1b2.GroupMember{podMember("ns1", "pod1", "10.10.1.5")},
+			expectedMembers:  map[string]sets.Set[string]{"ns2/pod2": sets.New("10.10.2.5")},
+			expectedEgresses: sets.New("egressA"),
+			expectedQueued:   sets.New("egressA"),
 		},
 		{
-			name:            "Pod removed",
-			initialMembers:  []cpv1b2.GroupMember{podMember("ns1", "pod1", "10.10.1.5"), podMember("ns2", "pod2")},
-			removedMembers:  []cpv1b2.GroupMember{podMember("ns1", "pod1", "10.10.1.5")},
-			expectedMembers: egressGroupMembers{"ns2/pod2": sets.New[string]()},
+			// Both the Egress which left the group and the one which joined it are synced.
+			name:             "Egresses change",
+			initialMembers:   []cpv1b2.GroupMember{podMember("ns1", "pod1", "10.10.1.5")},
+			egresses:         []string{"egressB"},
+			expectedMembers:  map[string]sets.Set[string]{"ns1/pod1": sets.New("10.10.1.5")},
+			expectedEgresses: sets.New("egressB"),
+			expectedQueued:   sets.New("egressA", "egressB"),
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			c := newFakeController(t, nil)
-			c.addEgressGroup(newEgressGroup("egressA", tt.initialMembers...))
-			c.patchEgressGroup(&cpv1b2.EgressGroupPatch{
-				ObjectMeta:          metav1.ObjectMeta{Name: "egressA"},
+			c := newL2DispatchFakeController(t, &fakeL2DispatchPeers{}, nil)
+			c.addEgressAddressGroup(newEgressAddressGroupMsg("group1", []string{"egressA"}, tt.initialMembers...))
+			queuedEgresses(c)
+			c.patchEgressAddressGroup(&cpv1b2.EgressAddressGroupPatch{
+				ObjectMeta:          metav1.ObjectMeta{Name: "group1"},
+				Egresses:            tt.egresses,
 				AddedGroupMembers:   tt.addedMembers,
 				RemovedGroupMembers: tt.removedMembers,
 			})
-			assert.Equal(t, tt.expectedMembers, c.egressGroups["egressA"])
+			assert.Equal(t, tt.expectedMembers, c.egressAddressGroups["group1"].members)
+			assert.Equal(t, tt.expectedEgresses, c.egressAddressGroups["group1"].egresses)
+			assert.Equal(t, tt.expectedQueued, queuedEgresses(c))
 		})
 	}
 }
 
-func TestReplaceEgressGroupsWithPodIPs(t *testing.T) {
-	c := newFakeController(t, nil)
-	c.replaceEgressGroups([]*cpv1b2.EgressGroup{newEgressGroup("egressA", podMember("ns1", "pod1"))})
-	require.Equal(t, 1, c.queue.Len())
-	item, _ := c.queue.Get()
-	c.queue.Done(item)
-	// The Pod got its IP while the watch was restarted, so the EgressGroup must be synced again.
-	c.replaceEgressGroups([]*cpv1b2.EgressGroup{newEgressGroup("egressA", podMember("ns1", "pod1", "10.10.1.5"))})
-	assert.Equal(t, 1, c.queue.Len())
-	assert.Equal(t, egressGroupMembers{"ns1/pod1": sets.New("10.10.1.5")}, c.egressGroups["egressA"])
+func TestReplaceAndDeleteEgressAddressGroups(t *testing.T) {
+	c := newL2DispatchFakeController(t, &fakeL2DispatchPeers{}, nil)
+	c.replaceEgressAddressGroups([]*cpv1b2.EgressAddressGroup{
+		newEgressAddressGroupMsg("group1", []string{"egressA"}, podMember("ns1", "pod1", "10.10.1.5")),
+	})
+	assert.Equal(t, sets.New("egressA"), queuedEgresses(c))
+
+	// While the watch was restarted, the group got another Egress and the Pod another IP, and a second group came.
+	c.replaceEgressAddressGroups([]*cpv1b2.EgressAddressGroup{
+		newEgressAddressGroupMsg("group1", []string{"egressA", "egressB"}, podMember("ns1", "pod1", "10.10.1.6")),
+		newEgressAddressGroupMsg("group2", []string{"egressC"}, podMember("ns2", "pod2", "10.10.2.5")),
+	})
+	assert.Equal(t, sets.New("egressA", "egressB", "egressC"), queuedEgresses(c))
+	assert.Equal(t, map[string]sets.Set[string]{"ns1/pod1": sets.New("10.10.1.6")}, c.egressAddressGroups["group1"].members)
+	assert.Equal(t, map[string]sets.Set[string]{"ns2/pod2": sets.New("10.10.2.5")}, c.getEgressMembers("egressC"))
+
+	// A Deleted event carries only the metadata, and the Egresses of the stored group are synced.
+	c.deleteEgressAddressGroup(&cpv1b2.EgressAddressGroup{ObjectMeta: metav1.ObjectMeta{Name: "group1"}})
+	assert.Equal(t, sets.New("egressA", "egressB"), queuedEgresses(c))
+	assert.Nil(t, c.getEgressMembers("egressA"))
+}
+
+func TestGetEgressMembers(t *testing.T) {
+	c := newL2DispatchFakeController(t, &fakeL2DispatchPeers{}, nil)
+	// The EgressGroup gives the members on this Node without IPs, the EgressAddressGroup all members with IPs.
+	c.addEgressGroup(newEgressGroup("egressA", podMember("ns1", "pod1")))
+	c.addEgressAddressGroup(newEgressAddressGroupMsg("group1", []string{"egressA"},
+		podMember("ns1", "pod1", "10.10.0.5"), podMember("ns9", "remotePod1", "10.10.1.5")))
+	assert.Equal(t, map[string]sets.Set[string]{
+		"ns1/pod1":       sets.New("10.10.0.5"),
+		"ns9/remotePod1": sets.New("10.10.1.5"),
+	}, c.getEgressMembers("egressA"))
+	// A Node which is not an Egress Node of the Egress has its own members only.
+	c.addEgressGroup(newEgressGroup("egressB", podMember("ns1", "pod2")))
+	assert.Equal(t, map[string]sets.Set[string]{"ns1/pod2": nil}, c.getEgressMembers("egressB"))
+	assert.Nil(t, c.getEgressMembers("egressC"))
 }
 
 // TestSyncEgressOnEgressNodeWithL2Dispatch checks that the Egress Node puts the IPs of the member Pods on other Nodes
 // in the ipset of its Egress IP, with the l2 dispatch.
 func TestSyncEgressOnEgressNodeWithL2Dispatch(t *testing.T) {
-	// The Egress Node receives every member, with the Pod IPs. ns1/pod1 runs on this Node.
-	egressGroup := newEgressGroup("egressA",
+	// ns1/pod1 runs on this Node, so it is in the EgressGroup. With the l2 dispatch, the Egress Node also receives the
+	// EgressAddressGroup, with every member which has an IP.
+	egressGroup := newEgressGroup("egressA", podMember("ns1", "pod1"))
+	egressAddressGroup := newEgressAddressGroupMsg("group1", []string{"egressA"},
 		podMember("ns1", "pod1", "10.10.0.5", "fd00:10:10::5"),
 		podMember("ns9", "remotePod1", "10.10.1.5", "fd00:10:11::5"),
 		podMember("ns9", "remotePod2", "10.10.2.5"),
-		// A Pod which has no IP yet.
-		podMember("ns9", "remotePod3"),
 	)
 	tests := []struct {
 		name          string
@@ -158,8 +217,8 @@ func TestSyncEgressOnEgressNodeWithL2Dispatch(t *testing.T) {
 			},
 		},
 		{
-			// With the tunnel dispatch, the Egress Node finds the Egress IP from the tunnel destination, and ignores the
-			// members on other Nodes.
+			// With the tunnel dispatch, the Egress Node finds the Egress IP from the tunnel destination, and receives no
+			// EgressAddressGroup.
 			name:     "tunnel dispatch",
 			egressIP: "1.1.1.1",
 			expectedCalls: func(c *fakeController, egressIP net.IP) {
@@ -182,6 +241,9 @@ func TestSyncEgressOnEgressNodeWithL2Dispatch(t *testing.T) {
 			c.localIPDetector = &fakeLocalIPDetector{localIPs: sets.New(tt.egressIP)}
 			startFakeController(t, c)
 			c.addEgressGroup(egressGroup)
+			if tt.l2Dispatch {
+				c.addEgressAddressGroup(egressAddressGroup)
+			}
 
 			egressIP := net.ParseIP(tt.egressIP)
 			c.mockIPAssigner.EXPECT().UnassignIP(tt.egressIP).Times(2)
@@ -208,8 +270,8 @@ func TestSyncEgressOnEgressNodeWithSharedEgressIP(t *testing.T) {
 	}
 	c := newL2DispatchFakeController(t, &fakeL2DispatchPeers{}, []runtime.Object{egressA, egressB})
 	startFakeController(t, c)
-	c.addEgressGroup(newEgressGroup("egressA", podMember("ns9", "remotePod1", "10.10.1.5")))
-	c.addEgressGroup(newEgressGroup("egressB", podMember("ns9", "remotePod2", "10.10.2.5")))
+	c.addEgressAddressGroup(newEgressAddressGroupMsg("group1", []string{"egressA"}, podMember("ns9", "remotePod1", "10.10.1.5")))
+	c.addEgressAddressGroup(newEgressAddressGroupMsg("group2", []string{"egressB"}, podMember("ns9", "remotePod2", "10.10.2.5")))
 
 	egressIP := net.ParseIP(fakeLocalEgressIP1)
 	c.mockIPAssigner.EXPECT().UnassignIP(fakeLocalEgressIP1).AnyTimes()
@@ -249,7 +311,7 @@ func TestSyncEgressOnEgressNodeWhenEgressIPMoves(t *testing.T) {
 	}
 	c := newL2DispatchFakeController(t, &fakeL2DispatchPeers{}, []runtime.Object{egress})
 	startFakeController(t, c)
-	c.addEgressGroup(newEgressGroup("egressA", podMember("ns9", "remotePod1", "10.10.1.5")))
+	c.addEgressAddressGroup(newEgressAddressGroupMsg("group1", []string{"egressA"}, podMember("ns9", "remotePod1", "10.10.1.5")))
 
 	egressIP := net.ParseIP(fakeLocalEgressIP1)
 	c.mockIPAssigner.EXPECT().UnassignIP(fakeLocalEgressIP1).AnyTimes()
@@ -305,6 +367,7 @@ func newL2DispatchFakeController(t *testing.T, peers *fakeL2DispatchPeers,
 	c.l2Dispatch = true
 	c.l2DispatchPeers = peers
 	c.l2DispatchEgresses = map[string]sets.Set[string]{}
+	c.egressAddressGroups = map[string]*egressAddressGroup{}
 	peers.AddL2DispatchPeerEventHandler(c.onL2DispatchPeerUpdate)
 	return c
 }

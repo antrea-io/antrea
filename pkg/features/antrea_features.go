@@ -182,7 +182,7 @@ const (
 	// alpha: v2.8
 	// Allow the Egress traffic of a Pod to reach the Egress Node without a tunnel in noEncap mode, by sending it to the
 	// MAC address of the Egress Node (the "l2" value of the egress.dispatch option of the Agent). The Egress Node then
-	// finds the Egress IP from the source Pod IP, so the Controller sends it the EgressGroups with the Pod IPs.
+	// finds the Egress IP from the source Pod IP, so the Controller sends it the EgressAddressGroups with the Pod IPs.
 	EgressDispatchL2 featuregate.Feature = "EgressDispatchL2"
 
 	// alpha: v1.15

@@ -157,50 +157,36 @@ type egressBinding struct {
 	alternativeEgresses sets.Set[string]
 }
 
-// egressGroupMembers maps the member Pods of an EgressGroup, by namespaced name, to their IPs. With the
-// EgressDispatchL2 feature gate, the antrea-controller sends the Egress Node every member with the Pod IPs. The other
-// Nodes receive their own members without IPs.
-type egressGroupMembers map[string]sets.Set[string]
-
-func newEgressGroupMembers(members []cpv1b2.GroupMember) egressGroupMembers {
-	m := make(egressGroupMembers, len(members))
-	for i := range members {
-		m.add(&members[i])
-	}
-	return m
+// egressAddressGroup is an EgressAddressGroup which the Node receives as the Egress Node of one of its Egresses, with
+// the Egress l2 dispatch.
+type egressAddressGroup struct {
+	// egresses are the names of the Egresses whose appliedTo selects the members.
+	egresses sets.Set[string]
+	// members maps the member Pods, by namespaced name, to their IPs.
+	members map[string]sets.Set[string]
 }
 
-func (m egressGroupMembers) add(member *cpv1b2.GroupMember) {
+func newEgressAddressGroup(group *cpv1b2.EgressAddressGroup) *egressAddressGroup {
+	g := &egressAddressGroup{
+		egresses: sets.New[string](group.Egresses...),
+		members:  make(map[string]sets.Set[string], len(group.GroupMembers)),
+	}
+	for i := range group.GroupMembers {
+		g.addMember(&group.GroupMembers[i])
+	}
+	return g
+}
+
+func (g *egressAddressGroup) addMember(member *cpv1b2.GroupMember) {
 	ips := sets.New[string]()
 	for _, ip := range member.IPs {
 		ips.Insert(net.IP(ip).String())
 	}
-	m[k8s.NamespacedName(member.Pod.Namespace, member.Pod.Name)] = ips
+	g.members[k8s.NamespacedName(member.Pod.Namespace, member.Pod.Name)] = ips
 }
 
-func (m egressGroupMembers) remove(member *cpv1b2.GroupMember) {
-	delete(m, k8s.NamespacedName(member.Pod.Namespace, member.Pod.Name))
-}
-
-func (m egressGroupMembers) equal(other egressGroupMembers) bool {
-	if len(m) != len(other) {
-		return false
-	}
-	for pod, ips := range m {
-		otherIPs, exists := other[pod]
-		if !exists || !ips.Equal(otherIPs) {
-			return false
-		}
-	}
-	return true
-}
-
-func (m egressGroupMembers) clone() egressGroupMembers {
-	cloned := make(egressGroupMembers, len(m))
-	for pod, ips := range m {
-		cloned[pod] = ips.Clone()
-	}
-	return cloned
+func (g *egressAddressGroup) removeMember(member *cpv1b2.GroupMember) {
+	delete(g.members, k8s.NamespacedName(member.Pod.Namespace, member.Pod.Name))
 }
 
 type EgressController struct {
@@ -224,7 +210,7 @@ type EgressController struct {
 	nodeName        string
 	markAllocator   *idAllocator
 
-	egressGroups      map[string]egressGroupMembers
+	egressGroups      map[string]sets.Set[string]
 	egressGroupsMutex sync.RWMutex
 
 	egressBindings      map[string]*egressBinding
@@ -270,6 +256,10 @@ type EgressController struct {
 	// They are synced again when the l2 dispatch routing of their Egress Node changes.
 	l2DispatchEgresses      map[string]sets.Set[string]
 	l2DispatchEgressesMutex sync.Mutex
+	// egressAddressGroups are the EgressAddressGroups which the Node receives as an Egress Node, by name, with the l2
+	// dispatch. They give the IPs of the member Pods on other Nodes.
+	egressAddressGroups      map[string]*egressAddressGroup
+	egressAddressGroupsMutex sync.RWMutex
 }
 
 // L2DispatchPeerQuerier gives the index which identifies a peer Node in the l2 dispatch. The NodeRouteController
@@ -331,7 +321,7 @@ func NewEgressController(
 		egressListerSynced:   egressInformer.Informer().HasSynced,
 		nodeName:             nodeName,
 		ifaceStore:           ifaceStore,
-		egressGroups:         map[string]egressGroupMembers{},
+		egressGroups:         map[string]sets.Set[string]{},
 		egressStates:         map[string]*egressState{},
 		egressIPStates:       map[string]*egressIPState{},
 		egressBindings:       map[string]*egressBinding{},
@@ -358,6 +348,7 @@ func NewEgressController(
 		c.l2Dispatch = true
 		c.l2DispatchPeers = l2DispatchPeers
 		c.l2DispatchEgresses = map[string]sets.Set[string]{}
+		c.egressAddressGroups = map[string]*egressAddressGroup{}
 		l2DispatchPeers.AddL2DispatchPeerEventHandler(c.onL2DispatchPeerUpdate)
 	}
 	if supportSeparateSubnet {
@@ -601,6 +592,9 @@ func (c *EgressController) Run(stopCh <-chan struct{}) {
 	}
 
 	go wait.NonSlidingUntil(c.watchEgressGroup, 5*time.Second, stopCh)
+	if c.l2Dispatch {
+		go wait.NonSlidingUntil(c.watchEgressAddressGroup, 5*time.Second, stopCh)
+	}
 
 	go c.updateServiceCIDRs(stopCh)
 
@@ -1207,15 +1201,7 @@ func (c *EgressController) syncEgress(egressName string) error {
 	stalePods := eState.pods.Union(nil)
 
 	// Get a copy of the desired Pods.
-	members := func() egressGroupMembers {
-		c.egressGroupsMutex.RLock()
-		defer c.egressGroupsMutex.RUnlock()
-		members, exist := c.egressGroups[egressName]
-		if !exist {
-			return nil
-		}
-		return members.clone()
-	}()
+	members := c.getEgressMembers(egressName)
 
 	egressIP := net.ParseIP(eState.egressIP)
 	isIPv6 := egressIP.To4() == nil
@@ -1240,7 +1226,8 @@ func (c *EgressController) syncEgress(egressName string) error {
 		podNamespace, podName := parts[0], parts[1]
 		ifaces := c.ifaceStore.GetContainerInterfacesByPod(podName, podNamespace)
 		if len(ifaces) == 0 {
-			// Only the Egress Node receives the IPs of the members, and the members on other Nodes with them.
+			// A member with IPs and no local interface is on another Node: only an Egress Node receives it, in an
+			// EgressAddressGroup.
 			if len(podIPs) > 0 {
 				for podIP := range podIPs {
 					if remotePodIPs != nil && (net.ParseIP(podIP).To4() == nil) == isIPv6 {
@@ -1548,12 +1535,15 @@ func (c *EgressController) replaceEgressGroups(groups []*cpv1b2.EgressGroup) {
 
 	for _, group := range groups {
 		oldGroupKeys.Delete(group.Name)
-		members := newEgressGroupMembers(group.GroupMembers)
-		prevMembers := c.egressGroups[group.Name]
-		if members.equal(prevMembers) {
+		pods := sets.New[string]()
+		for _, member := range group.GroupMembers {
+			pods.Insert(k8s.NamespacedName(member.Pod.Namespace, member.Pod.Name))
+		}
+		prevPods := c.egressGroups[group.Name]
+		if pods.Equal(prevPods) {
 			continue
 		}
-		c.egressGroups[group.Name] = members
+		c.egressGroups[group.Name] = pods
 		c.queue.Add(group.Name)
 	}
 
@@ -1564,12 +1554,15 @@ func (c *EgressController) replaceEgressGroups(groups []*cpv1b2.EgressGroup) {
 }
 
 func (c *EgressController) addEgressGroup(group *cpv1b2.EgressGroup) {
-	members := newEgressGroupMembers(group.GroupMembers)
+	pods := sets.New[string]()
+	for _, member := range group.GroupMembers {
+		pods.Insert(k8s.NamespacedName(member.Pod.Namespace, member.Pod.Name))
+	}
 
 	c.egressGroupsMutex.Lock()
 	defer c.egressGroupsMutex.Unlock()
 
-	c.egressGroups[group.Name] = members
+	c.egressGroups[group.Name] = pods
 	c.queue.Add(group.Name)
 }
 
@@ -1577,15 +1570,12 @@ func (c *EgressController) patchEgressGroup(patch *cpv1b2.EgressGroupPatch) {
 	c.egressGroupsMutex.Lock()
 	defer c.egressGroupsMutex.Unlock()
 
-	members := c.egressGroups[patch.Name]
-	// The IPs of a member are part of its identity, so the patch for a Pod whose IPs change, for example when it gets
-	// them, removes the member with the previous IPs and adds the member with the new ones. Both have the same key
-	// here, so the removed members are applied first, or the Pod would be dropped from the group.
-	for i := range patch.RemovedGroupMembers {
-		members.remove(&patch.RemovedGroupMembers[i])
+	for _, member := range patch.AddedGroupMembers {
+		c.egressGroups[patch.Name].Insert(k8s.NamespacedName(member.Pod.Namespace, member.Pod.Name))
+
 	}
-	for i := range patch.AddedGroupMembers {
-		members.add(&patch.AddedGroupMembers[i])
+	for _, member := range patch.RemovedGroupMembers {
+		c.egressGroups[patch.Name].Delete(k8s.NamespacedName(member.Pod.Namespace, member.Pod.Name))
 	}
 	c.queue.Add(patch.Name)
 }
@@ -1596,6 +1586,200 @@ func (c *EgressController) deleteEgressGroup(group *cpv1b2.EgressGroup) {
 
 	delete(c.egressGroups, group.Name)
 	c.queue.Add(group.Name)
+}
+
+// getEgressMembers returns a copy of the member Pods of the Egress, by namespaced name, with their IPs. The EgressGroup
+// gives the members on this Node, without IPs. With the l2 dispatch, an Egress Node also receives the EgressAddressGroup
+// of the Egress, which gives all members with their IPs. It returns nil if the Node has neither group.
+func (c *EgressController) getEgressMembers(egressName string) map[string]sets.Set[string] {
+	var members map[string]sets.Set[string]
+	func() {
+		c.egressGroupsMutex.RLock()
+		defer c.egressGroupsMutex.RUnlock()
+		pods, exist := c.egressGroups[egressName]
+		if !exist {
+			return
+		}
+		members = make(map[string]sets.Set[string], len(pods))
+		for pod := range pods {
+			members[pod] = nil
+		}
+	}()
+	if !c.l2Dispatch {
+		return members
+	}
+	c.egressAddressGroupsMutex.RLock()
+	defer c.egressAddressGroupsMutex.RUnlock()
+	// An Egress is in one group, but for a short time in two when its appliedTo changes.
+	for _, group := range c.egressAddressGroups {
+		if !group.egresses.Has(egressName) {
+			continue
+		}
+		if members == nil {
+			members = make(map[string]sets.Set[string], len(group.members))
+		}
+		for pod, ips := range group.members {
+			members[pod] = ips.Clone()
+		}
+	}
+	return members
+}
+
+func (c *EgressController) watchEgressAddressGroup() {
+	klog.Info("Starting watch for EgressAddressGroup")
+	antreaClient, err := c.antreaClientProvider.GetAntreaClient()
+	if err != nil {
+		klog.ErrorS(err, "Failed to get antrea client")
+		return
+	}
+	options := metav1.ListOptions{
+		FieldSelector: fields.OneTermEqualSelector("nodeName", c.nodeName).String(),
+	}
+	watcher, err := antreaClient.ControlplaneV1beta2().EgressAddressGroups().Watch(context.TODO(), options)
+	if err != nil {
+		klog.ErrorS(err, "Failed to start watch for EgressAddressGroup")
+		return
+	}
+	// Watch method doesn't return error but "emptyWatch" in case of some partial data errors,
+	// e.g. timeout error. Make sure that watcher is not empty and log error otherwise.
+	if reflect.TypeOf(watcher) == reflect.TypeOf(emptyWatch) {
+		klog.ErrorS(nil, "Failed to start watch for EgressAddressGroup, please ensure antrea service is reachable for the agent")
+		return
+	}
+
+	klog.Info("Started watch for EgressAddressGroup")
+	eventCount := 0
+	defer func() {
+		klog.InfoS("Stopped watch for EgressAddressGroup", "totalItemsReceived", eventCount)
+		watcher.Stop()
+	}()
+
+	// First receive init events from the result channel and buffer them until
+	// a Bookmark event is received, indicating that all init events have been
+	// received.
+	var initObjects []*cpv1b2.EgressAddressGroup
+loop:
+	for {
+		event, ok := <-watcher.ResultChan()
+		if !ok {
+			klog.InfoS("Result channel for EgressAddressGroup was closed")
+			return
+		}
+		switch event.Type {
+		case watch.Added:
+			klog.V(2).InfoS("Added EgressAddressGroup", "object", event.Object)
+			initObjects = append(initObjects, event.Object.(*cpv1b2.EgressAddressGroup))
+		case watch.Bookmark:
+			break loop
+		}
+	}
+	klog.InfoS("Received init events for EgressAddressGroup", "count", len(initObjects))
+
+	eventCount += len(initObjects)
+	c.replaceEgressAddressGroups(initObjects)
+
+	for {
+		event, ok := <-watcher.ResultChan()
+		if !ok {
+			return
+		}
+		switch event.Type {
+		case watch.Added:
+			c.addEgressAddressGroup(event.Object.(*cpv1b2.EgressAddressGroup))
+			klog.V(2).InfoS("Added EgressAddressGroup", "object", event.Object)
+		case watch.Modified:
+			c.patchEgressAddressGroup(event.Object.(*cpv1b2.EgressAddressGroupPatch))
+			klog.V(2).InfoS("Updated EgressAddressGroup", "object", event.Object)
+		case watch.Deleted:
+			c.deleteEgressAddressGroup(event.Object.(*cpv1b2.EgressAddressGroup))
+			klog.V(2).InfoS("Removed EgressAddressGroup", "object", event.Object)
+		default:
+			klog.ErrorS(nil, "Unknown event", "event", event)
+			return
+		}
+		eventCount++
+	}
+}
+
+// replaceEgressAddressGroups replaces the EgressAddressGroups with the ones the watch received at its start, and syncs
+// the Egresses of the previous and the new groups.
+func (c *EgressController) replaceEgressAddressGroups(groups []*cpv1b2.EgressAddressGroup) {
+	c.egressAddressGroupsMutex.Lock()
+	defer c.egressAddressGroupsMutex.Unlock()
+
+	affectedEgresses := sets.New[string]()
+	for _, group := range c.egressAddressGroups {
+		affectedEgresses.Insert(group.egresses.UnsortedList()...)
+	}
+	c.egressAddressGroups = make(map[string]*egressAddressGroup, len(groups))
+	for _, group := range groups {
+		g := newEgressAddressGroup(group)
+		c.egressAddressGroups[group.Name] = g
+		affectedEgresses.Insert(g.egresses.UnsortedList()...)
+	}
+	for egressName := range affectedEgresses {
+		c.queue.Add(egressName)
+	}
+}
+
+func (c *EgressController) addEgressAddressGroup(group *cpv1b2.EgressAddressGroup) {
+	g := newEgressAddressGroup(group)
+
+	c.egressAddressGroupsMutex.Lock()
+	defer c.egressAddressGroupsMutex.Unlock()
+
+	affectedEgresses := g.egresses.Clone()
+	if prev, exists := c.egressAddressGroups[group.Name]; exists {
+		affectedEgresses.Insert(prev.egresses.UnsortedList()...)
+	}
+	c.egressAddressGroups[group.Name] = g
+	for egressName := range affectedEgresses {
+		c.queue.Add(egressName)
+	}
+}
+
+func (c *EgressController) patchEgressAddressGroup(patch *cpv1b2.EgressAddressGroupPatch) {
+	c.egressAddressGroupsMutex.Lock()
+	defer c.egressAddressGroupsMutex.Unlock()
+
+	g, exists := c.egressAddressGroups[patch.Name]
+	if !exists {
+		klog.InfoS("Ignored the patch of an unknown EgressAddressGroup", "name", patch.Name)
+		return
+	}
+	affectedEgresses := g.egresses.Clone()
+	// The patch carries the list of the Egresses only when it changes.
+	if len(patch.Egresses) > 0 {
+		g.egresses = sets.New[string](patch.Egresses...)
+		affectedEgresses.Insert(patch.Egresses...)
+	}
+	// The IPs of a member are part of its identity, so the patch for a Pod whose IPs change removes the member with
+	// the previous IPs and adds the member with the new ones. Both have the same key here, so the removed members are
+	// applied first, or the Pod would be dropped from the group.
+	for i := range patch.RemovedGroupMembers {
+		g.removeMember(&patch.RemovedGroupMembers[i])
+	}
+	for i := range patch.AddedGroupMembers {
+		g.addMember(&patch.AddedGroupMembers[i])
+	}
+	for egressName := range affectedEgresses {
+		c.queue.Add(egressName)
+	}
+}
+
+func (c *EgressController) deleteEgressAddressGroup(group *cpv1b2.EgressAddressGroup) {
+	c.egressAddressGroupsMutex.Lock()
+	defer c.egressAddressGroupsMutex.Unlock()
+
+	// A Deleted event carries only the metadata of the group, so the Egresses come from the stored group.
+	prev, exists := c.egressAddressGroups[group.Name]
+	if !exists {
+		return
+	}
+	delete(c.egressAddressGroups, group.Name)
+	for egressName := range prev.egresses {
+		c.queue.Add(egressName)
+	}
 }
 
 // GetEgressIPByMark returns the Egress IP associated with the snatMark.

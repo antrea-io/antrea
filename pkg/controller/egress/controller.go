@@ -23,6 +23,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/gofrs/uuid/v5"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -63,6 +64,10 @@ const (
 	externalIPPoolIndex = "externalIPPool"
 )
 
+// egressAddressGroupUUIDNamespace is the namespace of the UUIDs which name the EgressAddressGroups after the normalized
+// selector of their appliedTo. It is the namespace which the NetworkPolicy controller uses for its groups.
+var egressAddressGroupUUIDNamespace = uuid.Must(uuid.FromString("e4f24a48-ca1f-4d5b-819c-ea7632b22115"))
+
 // ipAllocation contains the IP and the IP Pool which allocates it.
 type ipAllocation struct {
 	ip     net.IP
@@ -87,6 +92,14 @@ type EgressController struct {
 	egressListerSynced cache.InformerSynced
 	// egressGroupStore is the storage where the EgressGroups are stored.
 	egressGroupStore storage.Interface
+	// egressAddressGroupStore is the storage where the EgressAddressGroups are stored. They exist only with the
+	// EgressDispatchL2 feature gate.
+	egressAddressGroupStore storage.Interface
+	// egressAddressGroups maps the name of an Egress to the name of its EgressAddressGroup.
+	egressAddressGroups map[string]string
+	// egressAddressGroupsMutex protects egressAddressGroups and the updates of the EgressAddressGroups, which the
+	// workers can sync at the same time for Egresses that share a group.
+	egressAddressGroupsMutex sync.Mutex
 	// queue maintains the EgressGroup objects that need to be synced.
 	queue workqueue.TypedRateLimitingInterface[string]
 	// groupingInterface knows Pods that a given group selects.
@@ -100,14 +113,17 @@ func NewEgressController(crdClient clientset.Interface,
 	groupingInterface grouping.Interface,
 	egressInformer egressinformers.EgressInformer,
 	externalIPAllocator externalippool.ExternalIPAllocator,
-	egressGroupStore storage.Interface) *EgressController {
+	egressGroupStore storage.Interface,
+	egressAddressGroupStore storage.Interface) *EgressController {
 	c := &EgressController{
-		crdClient:          crdClient,
-		egressInformer:     egressInformer,
-		egressLister:       egressInformer.Lister(),
-		egressListerSynced: egressInformer.Informer().HasSynced,
-		egressIndexer:      egressInformer.Informer().GetIndexer(),
-		egressGroupStore:   egressGroupStore,
+		crdClient:               crdClient,
+		egressInformer:          egressInformer,
+		egressLister:            egressInformer.Lister(),
+		egressListerSynced:      egressInformer.Informer().HasSynced,
+		egressIndexer:           egressInformer.Informer().GetIndexer(),
+		egressGroupStore:        egressGroupStore,
+		egressAddressGroupStore: egressAddressGroupStore,
+		egressAddressGroups:     map[string]string{},
 		queue: workqueue.NewTypedRateLimitingQueueWithConfig(
 			workqueue.NewTypedItemExponentialFailureRateLimiter[string](minRetryDelay, maxRetryDelay),
 			workqueue.TypedRateLimitingQueueConfig[string]{
@@ -368,6 +384,9 @@ func (c *EgressController) syncEgress(key string) error {
 		if prevIP, prevIPPool, exists := c.getIPAllocation(key); exists {
 			c.releaseEgressIP(key, prevIP, prevIPPool)
 		}
+		if features.DefaultFeatureGate.Enabled(features.EgressDispatchL2) {
+			c.syncEgressAddressGroup(key, nil, nil)
+		}
 		return nil
 	}
 
@@ -388,13 +407,11 @@ func (c *EgressController) syncEgress(key string) error {
 	memberSetByNode := make(map[string]controlplane.GroupMemberSet)
 	egressGroup := egressGroupObj.(*antreatypes.EgressGroup)
 	// With the l2 dispatch, the traffic of the Pods on other Nodes reaches the Egress Node without a tunnel, and the
-	// Egress Node finds the Egress IP from the source Pod IP. So the Egress Node receives every member of the group,
-	// with the Pod IPs. The other Nodes receive their own members without IPs, as they do without the feature gate.
-	var egressNode string
-	var egressNodeMembers controlplane.GroupMemberSet
-	if features.DefaultFeatureGate.Enabled(features.EgressDispatchL2) && egress.Status.EgressNode != "" {
-		egressNode = egress.Status.EgressNode
-		egressNodeMembers = controlplane.GroupMemberSet{}
+	// Egress Node finds the Egress IP from the source Pod IP. So the Egress Nodes also receive the members with their
+	// IPs, in the EgressAddressGroup of the Egress. The EgressGroup does not change.
+	var addressGroupMembers controlplane.GroupMemberSet
+	if features.DefaultFeatureGate.Enabled(features.EgressDispatchL2) {
+		addressGroupMembers = controlplane.GroupMemberSet{}
 	}
 	pods, _ := c.groupingInterface.GetEntities(egressGroupType, key)
 	for _, pod := range pods {
@@ -418,14 +435,11 @@ func (c *EgressController) syncEgress(key string) error {
 		podSet.Insert(groupMember)
 		// Update the NodeNames in order to set the SpanMeta for EgressGroup.
 		nodeNames.Insert(pod.Spec.NodeName)
-		if egressNodeMembers != nil {
-			egressNodeMembers.Insert(podToGroupMemberWithIPs(pod))
+		if addressGroupMembers != nil {
+			if member := podToGroupMemberWithIPs(pod); member != nil {
+				addressGroupMembers.Insert(member)
+			}
 		}
-	}
-	if egressNode != "" {
-		// The Egress Node may host some of the members. Its copy replaces them with all members, with IPs.
-		memberSetByNode[egressNode] = egressNodeMembers
-		nodeNames.Insert(egressNode)
 	}
 	updatedEgressGroup := &antreatypes.EgressGroup{
 		UID:               egressGroup.UID,
@@ -435,24 +449,113 @@ func (c *EgressController) syncEgress(key string) error {
 	}
 	klog.V(2).InfoS("Updating existing EgressGroup", "name", key, "podNum", podNum, "nodeNum", nodeNames.Len())
 	c.egressGroupStore.Update(updatedEgressGroup)
+	if addressGroupMembers != nil {
+		c.syncEgressAddressGroup(key, egress, addressGroupMembers)
+	}
 	return nil
 }
 
-// podToGroupMemberWithIPs returns the GroupMember of the Pod with the Pod IPs. The IPs are part of the identity of a
-// GroupMember, so a Pod which gets its IPs is removed from the group without IPs and added again with them.
+// podToGroupMemberWithIPs returns the GroupMember of the Pod with the Pod IPs, or nil if the Pod has no IP yet.
 func podToGroupMemberWithIPs(pod *v1.Pod) *controlplane.GroupMember {
-	member := &controlplane.GroupMember{
+	var ips []controlplane.IPAddress
+	for _, podIP := range pod.Status.PodIPs {
+		if ip := net.ParseIP(podIP.IP); ip != nil {
+			ips = append(ips, controlplane.IPAddress(ip))
+		}
+	}
+	if len(ips) == 0 {
+		return nil
+	}
+	return &controlplane.GroupMember{
 		Pod: &controlplane.PodReference{
 			Name:      pod.Name,
 			Namespace: pod.Namespace,
 		},
+		IPs: ips,
 	}
-	for _, podIP := range pod.Status.PodIPs {
-		if ip := net.ParseIP(podIP.IP); ip != nil {
-			member.IPs = append(member.IPs, controlplane.IPAddress(ip))
+}
+
+// getEgressAddressGroupName returns the name of the EgressAddressGroup of the Egress: a UUID generated from the
+// normalized selector of its appliedTo, so that Egresses whose appliedTo is the same share the group.
+func getEgressAddressGroupName(egress *egressv1beta1.Egress) string {
+	groupSelector := antreatypes.NewGroupSelector("", egress.Spec.AppliedTo.PodSelector,
+		egress.Spec.AppliedTo.NamespaceSelector, nil, nil)
+	return uuid.NewV5(egressAddressGroupUUIDNamespace, groupSelector.NormalizedName).String()
+}
+
+// syncEgressAddressGroup puts the Egress into the EgressAddressGroup of its appliedTo, with the given members, and
+// takes it out of the group it was in before, if its appliedTo changed. A nil egress takes the Egress out of its group.
+// Each group is sent to the Egress Nodes of its Egresses, and deleted when no Egress is left in it.
+func (c *EgressController) syncEgressAddressGroup(egressName string, egress *egressv1beta1.Egress,
+	members controlplane.GroupMemberSet) {
+	c.egressAddressGroupsMutex.Lock()
+	defer c.egressAddressGroupsMutex.Unlock()
+
+	var groupName string
+	if egress != nil {
+		groupName = getEgressAddressGroupName(egress)
+	}
+	if prevGroupName, exists := c.egressAddressGroups[egressName]; exists && prevGroupName != groupName {
+		c.removeEgressFromAddressGroup(egressName, prevGroupName)
+	}
+	if egress == nil {
+		delete(c.egressAddressGroups, egressName)
+		return
+	}
+	c.egressAddressGroups[egressName] = groupName
+
+	egresses := sets.New[string](egressName)
+	obj, found, _ := c.egressAddressGroupStore.Get(groupName)
+	if found {
+		egresses = egresses.Union(obj.(*antreatypes.EgressAddressGroup).Egresses)
+	}
+	group := &antreatypes.EgressAddressGroup{
+		UID:          types.UID(groupName),
+		Name:         groupName,
+		Egresses:     egresses,
+		GroupMembers: members,
+		SpanMeta:     antreatypes.SpanMeta{NodeNames: c.getEgressNodes(egresses)},
+	}
+	if found {
+		c.egressAddressGroupStore.Update(group)
+	} else {
+		c.egressAddressGroupStore.Create(group)
+	}
+}
+
+// removeEgressFromAddressGroup takes the Egress out of the EgressAddressGroup, and deletes the group if no Egress is
+// left in it. The caller must hold egressAddressGroupsMutex.
+func (c *EgressController) removeEgressFromAddressGroup(egressName, groupName string) {
+	obj, found, _ := c.egressAddressGroupStore.Get(groupName)
+	if !found {
+		return
+	}
+	group := obj.(*antreatypes.EgressAddressGroup)
+	egresses := group.Egresses.Clone().Delete(egressName)
+	if egresses.Len() == 0 {
+		c.egressAddressGroupStore.Delete(groupName)
+		return
+	}
+	c.egressAddressGroupStore.Update(&antreatypes.EgressAddressGroup{
+		UID:          group.UID,
+		Name:         group.Name,
+		Egresses:     egresses,
+		GroupMembers: group.GroupMembers,
+		SpanMeta:     antreatypes.SpanMeta{NodeNames: c.getEgressNodes(egresses)},
+	})
+}
+
+// getEgressNodes returns the Nodes which hold the Egress IPs of the Egresses, as their status reports.
+func (c *EgressController) getEgressNodes(egressNames sets.Set[string]) sets.Set[string] {
+	nodeNames := sets.New[string]()
+	for egressName := range egressNames {
+		egress, err := c.egressLister.Get(egressName)
+		if err != nil || egress.Status.EgressNode == "" {
+			continue
 		}
+		nodeNames.Insert(egress.Status.EgressNode)
 	}
-	return member
+	return nodeNames
 }
 
 func (c *EgressController) enqueueEgressGroup(key string) {
@@ -491,8 +594,8 @@ func (c *EgressController) updateEgress(old, cur interface{}) {
 		c.queue.Add(curEgress.Name)
 		return
 	}
-	// The Egress Node is in the span of the EgressGroup with the l2 dispatch, and a status update does not change the
-	// generation.
+	// With the l2 dispatch, the Egress Node is in the span of the EgressAddressGroup, and a status update does not
+	// change the generation.
 	if features.DefaultFeatureGate.Enabled(features.EgressDispatchL2) &&
 		oldEgress.Status.EgressNode != curEgress.Status.EgressNode {
 		c.queue.Add(curEgress.Name)

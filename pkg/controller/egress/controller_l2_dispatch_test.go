@@ -86,6 +86,15 @@ func watchEgressGroups(t *testing.T, controller *egressController, nodeName stri
 	return watcher
 }
 
+// watchEgressAddressGroups watches the EgressAddressGroups which the Node receives.
+func watchEgressAddressGroups(t *testing.T, controller *egressController, nodeName string) watch.Interface {
+	selector := fields.ParseSelectorOrDie(fmt.Sprintf("nodeName=%s", nodeName))
+	watcher, err := controller.egressAddressGroupStore.Watch(context.TODO(), "", nil, selector)
+	require.NoError(t, err)
+	t.Cleanup(watcher.Stop)
+	return watcher
+}
+
 // nextEvent returns the next event of the watcher other than a bookmark, or nil if there is none within the timeout.
 func nextEvent(watcher watch.Interface, timeout time.Duration) *watch.Event {
 	deadline := time.After(timeout)
@@ -122,50 +131,61 @@ func waitForEgressGroupMembers(t *testing.T, controller *egressController, name 
 	}, 2*time.Second, 50*time.Millisecond)
 }
 
-func TestEgressGroupSpanWithL2Dispatch(t *testing.T) {
+// waitForEgressAddressGroup waits until the stored EgressAddressGroup of the Egress has the expected Egresses, span
+// and members.
+func waitForEgressAddressGroup(t *testing.T, controller *egressController, egress *v1beta1.Egress,
+	expectedEgresses, expectedNodes []string, expectedMembers []controlplane.GroupMember) {
+	assert.EventuallyWithT(t, func(c *assert.CollectT) {
+		obj, found, err := controller.egressAddressGroupStore.Get(getEgressAddressGroupName(egress))
+		if !assert.NoError(c, err) || !assert.True(c, found) {
+			return
+		}
+		group := obj.(*antreatypes.EgressAddressGroup)
+		assert.Equal(c, sets.New[string](expectedEgresses...), group.Egresses)
+		assert.Equal(c, sets.New[string](expectedNodes...), group.SpanMeta.NodeNames)
+		var members []controlplane.GroupMember
+		for _, member := range group.GroupMembers {
+			members = append(members, *member)
+		}
+		assert.ElementsMatch(c, expectedMembers, members)
+	}, 2*time.Second, 50*time.Millisecond)
+}
+
+func TestEgressAddressGroupWithL2Dispatch(t *testing.T) {
+	// Whatever the feature gate and the Egress Node, each Node receives its own members in the EgressGroup, without
+	// IPs, as without the l2 dispatch.
+	expectedEgressGroupMembers := map[string][]controlplane.GroupMember{
+		node1: {groupMember(podFoo1, false), groupMember(podNonIP, false)},
+		node2: {groupMember(podFoo2, false)},
+	}
 	tests := []struct {
 		name        string
 		gateEnabled bool
 		egressNode  string
-		// expectedMembers are the members which each Node receives. A Node which is missing receives no EgressGroup.
-		expectedMembers map[string][]controlplane.GroupMember
+		// expectedSpan is the span of the EgressAddressGroup, nil if there is no group.
+		expectedSpan []string
 	}{
 		{
-			name:        "Egress Node hosts no member",
-			gateEnabled: true,
-			egressNode:  node3,
-			expectedMembers: map[string][]controlplane.GroupMember{
-				node1: {groupMember(podFoo1, false), groupMember(podNonIP, false)},
-				node2: {groupMember(podFoo2, false)},
-				// Only the Egress Node receives the IPs, and it receives every member.
-				node3: {groupMember(podFoo1, true), groupMember(podNonIP, true), groupMember(podFoo2, true)},
-			},
+			name:         "Egress Node hosts no member",
+			gateEnabled:  true,
+			egressNode:   node3,
+			expectedSpan: []string{node3},
 		},
 		{
-			name:        "Egress Node hosts members",
-			gateEnabled: true,
-			egressNode:  node1,
-			expectedMembers: map[string][]controlplane.GroupMember{
-				node1: {groupMember(podFoo1, true), groupMember(podNonIP, true), groupMember(podFoo2, true)},
-				node2: {groupMember(podFoo2, false)},
-			},
+			name:         "Egress Node hosts members",
+			gateEnabled:  true,
+			egressNode:   node1,
+			expectedSpan: []string{node1},
 		},
 		{
-			name:        "Egress Node not known yet",
-			gateEnabled: true,
-			expectedMembers: map[string][]controlplane.GroupMember{
-				node1: {groupMember(podFoo1, false), groupMember(podNonIP, false)},
-				node2: {groupMember(podFoo2, false)},
-			},
+			name:         "Egress Node not known yet",
+			gateEnabled:  true,
+			expectedSpan: []string{},
 		},
 		{
 			name:        "feature gate disabled",
 			gateEnabled: false,
 			egressNode:  node3,
-			expectedMembers: map[string][]controlplane.GroupMember{
-				node1: {groupMember(podFoo1, false), groupMember(podNonIP, false)},
-				node2: {groupMember(podFoo2, false)},
-			},
 		},
 	}
 	for _, tt := range tests {
@@ -177,81 +197,125 @@ func TestEgressGroupSpanWithL2Dispatch(t *testing.T) {
 			egress := newEgressWithEgressNode(tt.egressNode)
 			_, err := controller.crdClient.CrdV1beta1().Egresses().Create(context.TODO(), egress, metav1.CreateOptions{})
 			require.NoError(t, err)
-			waitForEgressGroupMembers(t, controller, egress.Name, tt.expectedMembers)
+			waitForEgressGroupMembers(t, controller, egress.Name, expectedEgressGroupMembers)
+			if tt.expectedSpan == nil {
+				assert.Empty(t, controller.egressAddressGroupStore.List(), "No EgressAddressGroup without the gate")
+				return
+			}
+			// The group has the members with an IP, wherever they run. podNonIP has no IP yet.
+			expectedMembers := []controlplane.GroupMember{groupMember(podFoo1, true), groupMember(podFoo2, true)}
+			waitForEgressAddressGroup(t, controller, egress, []string{egress.Name}, tt.expectedSpan, expectedMembers)
 
 			for _, nodeName := range []string{node1, node2, node3} {
-				event := nextEvent(watchEgressGroups(t, controller, nodeName), 500*time.Millisecond)
-				expectedMembers, expected := tt.expectedMembers[nodeName]
-				if !expected {
-					assert.Nil(t, event, "Node %s should not receive the EgressGroup", nodeName)
+				event := nextEvent(watchEgressAddressGroups(t, controller, nodeName), 500*time.Millisecond)
+				if !sets.New[string](tt.expectedSpan...).Has(nodeName) {
+					assert.Nil(t, event, "Node %s should not receive the EgressAddressGroup", nodeName)
 					continue
 				}
-				require.NotNil(t, event, "Node %s should receive the EgressGroup", nodeName)
+				require.NotNil(t, event, "Node %s should receive the EgressAddressGroup", nodeName)
 				require.Equal(t, watch.Added, event.Type)
-				gotMembers := event.Object.(*controlplane.EgressGroup).GroupMembers
-				assert.ElementsMatch(t, expectedMembers, gotMembers, "Node %s", nodeName)
+				group := event.Object.(*controlplane.EgressAddressGroup)
+				assert.Equal(t, []string{egress.Name}, group.Egresses)
+				assert.ElementsMatch(t, expectedMembers, group.GroupMembers, "Node %s", nodeName)
 			}
 		})
 	}
 }
 
-// TestEgressGroupPatchesWithL2Dispatch checks the updates which the Nodes receive when a member Pod gets its IP and
-// when the Egress IP moves to another Node.
-func TestEgressGroupPatchesWithL2Dispatch(t *testing.T) {
+// TestEgressAddressGroupUpdatesWithL2Dispatch checks the updates which the Nodes receive when a member Pod gets its IP
+// and when the Egress IP moves to another Node.
+func TestEgressAddressGroupUpdatesWithL2Dispatch(t *testing.T) {
 	featuregatetesting.SetFeatureGateDuringTest(t, features.DefaultFeatureGate, features.EgressDispatchL2, true)
 	podWithoutIP := newPod("default", "podNew", map[string]string{"app": "foo"}, node2, "", false)
 	controller := startEgressController(t, []runtime.Object{nsDefault, podFoo2, podWithoutIP}, nil)
 	egress := newEgressWithEgressNode(node3)
 	_, err := controller.crdClient.CrdV1beta1().Egresses().Create(context.TODO(), egress, metav1.CreateOptions{})
 	require.NoError(t, err)
-	waitForEgressGroupMembers(t, controller, egress.Name, map[string][]controlplane.GroupMember{
-		node2: {groupMember(podFoo2, false), groupMember(podWithoutIP, false)},
-		node3: {groupMember(podFoo2, true), groupMember(podWithoutIP, true)},
-	})
-	watchers := map[string]watch.Interface{}
+	waitForEgressAddressGroup(t, controller, egress, []string{egress.Name}, []string{node3},
+		[]controlplane.GroupMember{groupMember(podFoo2, true)})
+	groupWatchers := map[string]watch.Interface{}
+	addressGroupWatchers := map[string]watch.Interface{}
 	for _, nodeName := range []string{node2, node3} {
-		watchers[nodeName] = watchEgressGroups(t, controller, nodeName)
-		event := nextEvent(watchers[nodeName], time.Second)
-		require.NotNil(t, event)
-		require.Equal(t, watch.Added, event.Type)
+		groupWatchers[nodeName] = watchEgressGroups(t, controller, nodeName)
+		addressGroupWatchers[nodeName] = watchEgressAddressGroups(t, controller, nodeName)
 	}
+	require.NotNil(t, nextEvent(groupWatchers[node2], time.Second), "node2 should receive its EgressGroup")
+	event := nextEvent(addressGroupWatchers[node3], time.Second)
+	require.NotNil(t, event, "The Egress Node should receive the EgressAddressGroup")
+	require.Equal(t, watch.Added, event.Type)
 
-	// The Pod gets its IP. Only the Egress Node sees a change: the member without IPs is removed, and the member with
-	// the IPs is added.
+	// The Pod gets its IP. The Egress Node receives one added member, and the EgressGroups do not change.
 	podWithIP := newPod("default", "podNew", map[string]string{"app": "foo"}, node2, "1.1.2.5", false)
 	pods := controller.client.CoreV1().Pods(podWithIP.Namespace)
 	_, err = pods.UpdateStatus(context.TODO(), podWithIP, metav1.UpdateOptions{})
 	require.NoError(t, err)
-	event := nextEvent(watchers[node3], time.Second)
-	require.NotNil(t, event, "The Egress Node should receive the IPs of the Pod")
+	event = nextEvent(addressGroupWatchers[node3], time.Second)
+	require.NotNil(t, event, "The Egress Node should receive the IP of the Pod")
 	require.Equal(t, watch.Modified, event.Type)
-	patch := event.Object.(*controlplane.EgressGroupPatch)
-	assert.ElementsMatch(t, []controlplane.GroupMember{groupMember(podWithoutIP, false)}, patch.RemovedGroupMembers)
+	patch := event.Object.(*controlplane.EgressAddressGroupPatch)
+	assert.Empty(t, patch.RemovedGroupMembers)
 	assert.ElementsMatch(t, []controlplane.GroupMember{groupMember(podWithIP, true)}, patch.AddedGroupMembers)
-	assert.Nil(t, nextEvent(watchers[node2], 300*time.Millisecond), "The Node of the Pod should see no change")
+	assert.Empty(t, patch.Egresses, "The Egresses of the group did not change")
+	assert.Nil(t, nextEvent(groupWatchers[node2], 300*time.Millisecond), "The EgressGroup should not change")
+	assert.Nil(t, nextEvent(addressGroupWatchers[node2], 300*time.Millisecond), "node2 is not an Egress Node")
 
-	// The Egress IP moves to node2, which hosts the Pods. node2 now receives the IPs, and node3 no longer receives the
-	// group.
+	// The Egress IP moves to node2, which hosts the Pods. node2 receives the EgressAddressGroup, and node3 no longer
+	// receives it.
 	toUpdate, err := controller.crdClient.CrdV1beta1().Egresses().Get(context.TODO(), egress.Name, metav1.GetOptions{})
 	require.NoError(t, err)
 	toUpdate.Status.EgressNode = node2
 	_, err = controller.crdClient.CrdV1beta1().Egresses().UpdateStatus(context.TODO(), toUpdate, metav1.UpdateOptions{})
 	require.NoError(t, err)
-	event = nextEvent(watchers[node2], time.Second)
-	require.NotNil(t, event, "The new Egress Node should receive the IPs of the Pods")
-	require.Equal(t, watch.Modified, event.Type)
-	patch = event.Object.(*controlplane.EgressGroupPatch)
-	assert.ElementsMatch(t, []controlplane.GroupMember{groupMember(podFoo2, false), groupMember(podWithIP, false)},
-		patch.RemovedGroupMembers)
+	event = nextEvent(addressGroupWatchers[node2], time.Second)
+	require.NotNil(t, event, "The new Egress Node should receive the EgressAddressGroup")
+	require.Equal(t, watch.Added, event.Type)
 	assert.ElementsMatch(t, []controlplane.GroupMember{groupMember(podFoo2, true), groupMember(podWithIP, true)},
-		patch.AddedGroupMembers)
-	event = nextEvent(watchers[node3], time.Second)
-	require.NotNil(t, event, "The previous Egress Node should stop receiving the group")
+		event.Object.(*controlplane.EgressAddressGroup).GroupMembers)
+	event = nextEvent(addressGroupWatchers[node3], time.Second)
+	require.NotNil(t, event, "The previous Egress Node should stop receiving the EgressAddressGroup")
 	assert.Equal(t, watch.Deleted, event.Type)
+	assert.Nil(t, nextEvent(groupWatchers[node2], 300*time.Millisecond), "The EgressGroup should not change")
+}
+
+// TestEgressAddressGroupSharedByEgresses checks that Egresses whose appliedTo is the same share one EgressAddressGroup,
+// sent to all their Egress Nodes, and that an Egress leaves the group when it is deleted or its appliedTo changes.
+func TestEgressAddressGroupSharedByEgresses(t *testing.T) {
+	featuregatetesting.SetFeatureGateDuringTest(t, features.DefaultFeatureGate, features.EgressDispatchL2, true)
+	controller := startEgressController(t, []runtime.Object{nsDefault, podFoo1, podFoo2, podBar1}, nil)
+	egressA := newEgressWithEgressNode(node1)
+	egressB := newEgressWithEgressNode(node3)
+	egressB.Name, egressB.UID, egressB.Spec.EgressIP, egressB.Status.EgressIP = "egressB", "uidB", "1.1.1.2", "1.1.1.2"
+	for _, egress := range []*v1beta1.Egress{egressA, egressB} {
+		_, err := controller.crdClient.CrdV1beta1().Egresses().Create(context.TODO(), egress, metav1.CreateOptions{})
+		require.NoError(t, err)
+	}
+	fooMembers := []controlplane.GroupMember{groupMember(podFoo1, true), groupMember(podFoo2, true)}
+	waitForEgressAddressGroup(t, controller, egressA, []string{"egressA", "egressB"}, []string{node1, node3},
+		fooMembers)
+	assert.Len(t, controller.egressAddressGroupStore.List(), 1)
+
+	// egressA is deleted: the group stays for egressB, and only its Egress Node receives it.
+	err := controller.crdClient.CrdV1beta1().Egresses().Delete(context.TODO(), egressA.Name, metav1.DeleteOptions{})
+	require.NoError(t, err)
+	waitForEgressAddressGroup(t, controller, egressB, []string{"egressB"}, []string{node3}, fooMembers)
+
+	// egressB selects other Pods: it moves to another group, and the previous group, now empty, is deleted.
+	toUpdate, err := controller.crdClient.CrdV1beta1().Egresses().Get(context.TODO(), egressB.Name, metav1.GetOptions{})
+	require.NoError(t, err)
+	toUpdate.Spec.AppliedTo.PodSelector = &metav1.LabelSelector{MatchLabels: podBar1.Labels}
+	_, err = controller.crdClient.CrdV1beta1().Egresses().Update(context.TODO(), toUpdate, metav1.UpdateOptions{})
+	require.NoError(t, err)
+	waitForEgressAddressGroup(t, controller, toUpdate, []string{"egressB"}, []string{node3},
+		[]controlplane.GroupMember{groupMember(podBar1, true)})
+	assert.EventuallyWithT(t, func(c *assert.CollectT) {
+		assert.Len(c, controller.egressAddressGroupStore.List(), 1)
+	}, 2*time.Second, 50*time.Millisecond)
+	_, found, _ := controller.egressAddressGroupStore.Get(getEgressAddressGroupName(egressA))
+	assert.False(t, found, "The group of the previous appliedTo should be deleted")
 }
 
 // TestUpdateEgressWithEgressNodeChange checks that a change of the Egress Node, which is a status update that does not
-// change the generation, updates the EgressGroup with the l2 dispatch.
+// change the generation, updates the EgressAddressGroup with the l2 dispatch.
 func TestUpdateEgressWithEgressNodeChange(t *testing.T) {
 	tests := []struct {
 		name             string
