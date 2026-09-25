@@ -633,11 +633,12 @@ forwarding them to the external collector:
 The Flow Aggregator can expose a gRPC server-streaming API, `FlowStreamService`,
 on port 14740, which streams flow records out of its in-memory record buffer to
 consumers such as `antrea-ui`: historical records first, then live ones if the
-client asked to follow. It is alpha, and disabled by default:
+client asked to follow. It is alpha, and enabled by default. It can be disabled
+with:
 
 ```yaml
 flowStreamService:
-  enable: true
+  enable: false
 ```
 
 The connection uses server-side TLS with the same self-signed certificate as the

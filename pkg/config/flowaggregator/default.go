@@ -133,7 +133,7 @@ func SetConfigDefaults(flowAggregatorConf *FlowAggregatorConfig) {
 		flowAggregatorConf.RecordBufferSize = DefaultRecordBufferSize
 	}
 	if flowAggregatorConf.FlowStreamService.Enable == nil {
-		flowAggregatorConf.FlowStreamService.Enable = ptr.To(false)
+		flowAggregatorConf.FlowStreamService.Enable = ptr.To(true)
 	}
 	if flowAggregatorConf.FlowStreamService.MaxStreamsPerClientIP == 0 {
 		flowAggregatorConf.FlowStreamService.MaxStreamsPerClientIP = DefaultFlowStreamMaxStreamsPerClientIP
