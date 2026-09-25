@@ -122,7 +122,8 @@ func (l *labelIdentityMatch) matches(s *selectorItem) bool {
 }
 
 // constructMapFromLabelString parses label string of format "app=client,env=dev" into a map.
-func constructMapFromLabelString(s string) map[string]string {
+// It returns false if any key-value pair in the string is malformed.
+func constructMapFromLabelString(s string) (map[string]string, bool) {
 	m := map[string]string{}
 	// Before https://github.com/antrea-io/antrea/issues/5403 is fixed, LabelIdentities created
 	// for Pods with an empty label set will include a <none> string. Handling for such LabelIdentities
@@ -130,23 +131,47 @@ func constructMapFromLabelString(s string) map[string]string {
 	// previous controller still need to be processed, but will be cleaned up by the stale controller
 	// eventually.
 	if s == "" || s == "<none>" {
-		return m
+		return m, true
 	}
 	kvs := strings.Split(s, ",")
 	for _, kv := range kvs {
-		kvpair := strings.Split(kv, "=")
+		kvpair := strings.SplitN(kv, "=", 2)
+		if len(kvpair) != 2 {
+			return nil, false
+		}
 		m[kvpair[0]] = kvpair[1]
 	}
-	return m
+	return m, true
 }
 
 // newLabelIdentityMatch constructs a labelIdentityMatch from a normalized LabelIdentity string.
+// It returns nil if the string does not match the expected format, or if any Namespace or Pod
+// label in the string is malformed, as such an identity cannot be reliably matched against
+// selectors and could otherwise cause incorrect policy selection.
 func newLabelIdentityMatch(labelIdentity string, id uint32) *labelIdentityMatch {
 	labelMatches := labelRegex.FindStringSubmatch(labelIdentity)
-	nsLabels := constructMapFromLabelString(labelMatches[nsIndex])
-	podLabels := constructMapFromLabelString(labelMatches[podIndex])
+	if labelMatches == nil {
+		klog.ErrorS(nil, "Invalid LabelIdentity string format", "labelIdentity", labelIdentity)
+		return nil
+	}
+	nsLabels, ok := constructMapFromLabelString(labelMatches[nsIndex])
+	if !ok {
+		klog.ErrorS(nil, "Invalid Namespace label string in LabelIdentity", "labelIdentity", labelIdentity)
+		return nil
+	}
+	podLabels, ok := constructMapFromLabelString(labelMatches[podIndex])
+	if !ok {
+		klog.ErrorS(nil, "Invalid Pod label string in LabelIdentity", "labelIdentity", labelIdentity)
+		return nil
+	}
 
+	// A valid Pod LabelIdentity must retain the Pod's Namespace identity. emptyNamespace is an
+	// index key reserved for cluster-scoped selectors, not a valid unknown Namespace.
 	namespace := nsLabels[apiv1.LabelMetadataName]
+	if namespace == emptyNamespace {
+		klog.ErrorS(nil, "LabelIdentity is missing a valid Namespace", "labelIdentity", labelIdentity)
+		return nil
+	}
 	return &labelIdentityMatch{
 		id:               id,
 		namespace:        namespace,
@@ -383,6 +408,9 @@ func (i *LabelIdentityIndex) AddLabelIdentity(labelKey string, id uint32) {
 	}
 	klog.V(2).InfoS("Adding new LabelIdentity", "label", labelKey)
 	labelIdentityMatch := newLabelIdentityMatch(labelKey, id)
+	if labelIdentityMatch == nil {
+		return
+	}
 	i.labelIdentities[labelKey] = labelIdentityMatch
 	if keys, ok := i.labelIdentityNamespaceIndex[labelIdentityMatch.namespace]; ok {
 		keys.Insert(labelKey)

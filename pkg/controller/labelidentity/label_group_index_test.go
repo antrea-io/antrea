@@ -186,6 +186,78 @@ func TestLabelIdentityMatch(t *testing.T) {
 	}
 }
 
+func TestConstructMapFromLabelString(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    string
+		expected map[string]string
+		expOK    bool
+	}{
+		{
+			name:     "valid label string",
+			input:    "app=web,env=dev",
+			expected: map[string]string{"app": "web", "env": "dev"},
+			expOK:    true,
+		},
+		{
+			name:     "empty string",
+			input:    "",
+			expected: map[string]string{},
+			expOK:    true,
+		},
+		{
+			name:     "none placeholder",
+			input:    "<none>",
+			expected: map[string]string{},
+			expOK:    true,
+		},
+		{
+			name:  "malformed pair missing value is rejected",
+			input: "app=web,invalid",
+			expOK: false,
+		},
+		{
+			name:     "value containing an equal sign is preserved",
+			input:    "app=web=v2",
+			expected: map[string]string{"app": "web=v2"},
+			expOK:    true,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			m, ok := constructMapFromLabelString(tt.input)
+			assert.Equal(t, tt.expOK, ok)
+			if tt.expOK {
+				assert.Equal(t, tt.expected, m)
+			}
+		})
+	}
+}
+
+func TestNewLabelIdentityMatchInvalidFormat(t *testing.T) {
+	tests := []string{
+		"",
+		"invalid-label-format",
+		"ns:kubernetes.io/metadata.name=testing",
+		"pod:app=web",
+		// Malformed Namespace label pair (missing "="): must not be silently dropped, as
+		// doing so would leave the LabelIdentity with an empty Namespace, matchable by
+		// cluster-wide selectors.
+		"ns:kubernetes.io/metadata.name&pod:app=web",
+		// Malformed Pod label pair.
+		"ns:kubernetes.io/metadata.name=testing&pod:invalid",
+		// Namespace label string with no kubernetes.io/metadata.name key, i.e. no valid Namespace.
+		"ns:&pod:app=web",
+	}
+	for _, label := range tests {
+		t.Run(label, func(t *testing.T) {
+			assert.NotPanics(t, func() {
+				assert.Nil(t, newLabelIdentityMatch(label, 1))
+			})
+		})
+	}
+}
+
 func TestAddSelector(t *testing.T) {
 	tests := []struct {
 		name                 string
@@ -517,6 +589,29 @@ func TestAddLabelIdentity(t *testing.T) {
 				assert.Equal(t, actLabelMatch.id, l.id, "Unexpected id cached for label")
 				assert.Truef(t, actLabelMatch.selectorItemKeys.Equal(l.selectorItemKeys), "Unexpected matched selectorItems for label %s", tt.normalizedLabel)
 			}
+		})
+	}
+}
+
+func TestAddLabelIdentityInvalidFormat(t *testing.T) {
+	malformedLabels := []string{
+		"invalid-label-format",
+		// Malformed Namespace label pair must reject the whole identity, instead of being
+		// dropped and leaving the LabelIdentity with an empty, cluster-wide-matchable Namespace.
+		"ns:kubernetes.io/metadata.name&pod:app=web",
+		"ns:kubernetes.io/metadata.name=testing&pod:invalid",
+		"ns:&pod:app=web",
+	}
+	for _, malformedLabel := range malformedLabels {
+		t.Run(malformedLabel, func(t *testing.T) {
+			i := NewLabelIdentityIndex()
+			assert.NotPanics(t, func() {
+				i.AddLabelIdentity(malformedLabel, 1)
+			})
+			i.lock.RLock()
+			defer i.lock.RUnlock()
+			assert.NotContains(t, i.labelIdentities, malformedLabel)
+			assert.NotContains(t, i.labelIdentityNamespaceIndex, emptyNamespace)
 		})
 	}
 }
