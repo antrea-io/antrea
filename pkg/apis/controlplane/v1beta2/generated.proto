@@ -1,4 +1,4 @@
-// Copyright 2024 Antrea Authors
+// Copyright 2026 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -107,6 +107,38 @@ message ClusterGroupMembers {
   optional int64 totalPages = 5;
 
   optional int64 currentPage = 6;
+}
+
+// EgressAddressGroup lists the Pods which the appliedTo of one or more Egresses selects, with their IPs. With the
+// Egress l2 dispatch, the Egress Nodes of these Egresses receive it, to map the source IP of the traffic of a Pod on
+// another Node to the Egress IP.
+message EgressAddressGroup {
+  optional .k8s.io.apimachinery.pkg.apis.meta.v1.ObjectMeta metadata = 1;
+
+  // Egresses is the list of the names of the Egresses which select the GroupMembers.
+  repeated string egresses = 2;
+
+  // GroupMembers is a list of GroupMember selected by this group, with their IPs.
+  repeated GroupMember groupMembers = 3;
+}
+
+// EgressAddressGroupList is a list of EgressAddressGroup objects.
+message EgressAddressGroupList {
+  optional .k8s.io.apimachinery.pkg.apis.meta.v1.ListMeta metadata = 1;
+
+  repeated EgressAddressGroup items = 2;
+}
+
+// EgressAddressGroupPatch describes the incremental update of an EgressAddressGroup.
+message EgressAddressGroupPatch {
+  optional .k8s.io.apimachinery.pkg.apis.meta.v1.ObjectMeta metadata = 1;
+
+  // Egresses is the new list of the Egresses of the group. It is empty when the list does not change.
+  repeated string egresses = 2;
+
+  repeated GroupMember addedGroupMembers = 3;
+
+  repeated GroupMember removedGroupMembers = 4;
 }
 
 message EgressGroup {

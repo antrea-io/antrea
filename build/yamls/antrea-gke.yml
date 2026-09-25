@@ -5142,6 +5142,7 @@ rules:
       - controlplane.antrea.io
     resources:
       - egressgroups
+      - egressaddressgroups
     verbs:
       - get
       - watch
