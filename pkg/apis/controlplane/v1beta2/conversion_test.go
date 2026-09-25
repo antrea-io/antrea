@@ -1,4 +1,4 @@
-// Copyright 2020 Antrea Authors
+// Copyright 2026 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -15,33 +15,26 @@
 package v1beta2
 
 import (
-	"fmt"
+	"testing"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"k8s.io/apimachinery/pkg/runtime"
 )
 
-func init() {
-	localSchemeBuilder.Register(addConversionFuncs)
-}
-
-// addConversionFuncs adds non-generated conversion functions to the given scheme.
-func addConversionFuncs(scheme *runtime.Scheme) error {
+// TestNodeNameFieldLabel checks that the API server accepts the field selector with which the Antrea Agents watch
+// the resources that are sent to their Node.
+func TestNodeNameFieldLabel(t *testing.T) {
+	scheme := runtime.NewScheme()
+	require.NoError(t, AddToScheme(scheme))
 	for _, kind := range []string{"AppliedToGroup", "AddressGroup", "NetworkPolicy", "EgressGroup", "EgressAddressGroup",
 		"SupportBundleCollection"} {
-		err := scheme.AddFieldLabelConversionFunc(SchemeGroupVersion.WithKind(kind),
-			func(label, value string) (string, string, error) {
-				switch label {
-				// Antrea Agents select resources by nodeName.
-				case "metadata.name", "nodeName":
-					return label, value, nil
-				default:
-					return "", "", fmt.Errorf("field label not supported: %s", label)
-				}
-			},
-		)
-		if err != nil {
-			return err
+		label, value, err := scheme.ConvertFieldLabel(SchemeGroupVersion.WithKind(kind), "nodeName", "node1")
+		if assert.NoError(t, err, "kind %s", kind) {
+			assert.Equal(t, "nodeName", label)
+			assert.Equal(t, "node1", value)
 		}
+		_, _, err = scheme.ConvertFieldLabel(SchemeGroupVersion.WithKind(kind), "spec.foo", "bar")
+		assert.Error(t, err, "kind %s", kind)
 	}
-	return nil
 }
