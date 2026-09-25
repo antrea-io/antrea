@@ -495,23 +495,8 @@ func parseFlowFilter(f *flowpb.FlowFilter) (flowFilter, error) {
 	return pf, nil
 }
 
-// applyFilters returns the subset of flows that pass the "since" cutoff and match
-// ALL of the provided filters (AND semantics across filters). An empty filters
-// slice matches all flows. Note: this function mutates the contents of the
-// flows slice (it uses the slice header as a write target for in-place
-// filtering to avoid allocation).
-func applyFilters(flows []*flowpb.Flow, filters []flowFilter, since time.Time) []*flowpb.Flow {
-	filtered := flows[:0]
-	for _, f := range flows {
-		if matchFlow(f, filters, since) {
-			filtered = append(filtered, f)
-		}
-	}
-	return filtered
-}
-
 // matchFlow reports whether a single flow passes the "since" cutoff and matches ALL of the
-// provided filters: see applyFilters.
+// provided filters (AND semantics across filters). An empty filters slice matches all flows.
 func matchFlow(f *flowpb.Flow, filters []flowFilter, since time.Time) bool {
 	// (*timestamppb.Timestamp).AsTime() is nil-safe and returns the zero time,
 	// which is before any non-zero since value, so flows with a nil EndTs are
