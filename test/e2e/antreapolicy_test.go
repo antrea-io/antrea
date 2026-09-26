@@ -1747,9 +1747,9 @@ func testANNPGroupServiceRefDelete(t *testing.T) {
 	svc1 := k8sUtils.BuildService("svc1", getNS("x"), 80, 80, map[string]string{"app": "a"}, nil)
 	svc2 := k8sUtils.BuildService("svc2", getNS("x"), 80, 80, map[string]string{"app": "b"}, nil)
 	k8sUtils.CreateOrUpdateService(svc1)
-	failOnError(waitForResourceReady(t, timeout, svc1), t)
+	failOnError(waitForResourceReady(t, timeout, svc1, false), t)
 	k8sUtils.CreateOrUpdateService(svc2)
-	failOnError(waitForResourceReady(t, timeout, svc2), t)
+	failOnError(waitForResourceReady(t, timeout, svc2, false), t)
 
 	grp1Name, grp2Name := "grp-svc1", "grp-svc2"
 	grpBuilder1 := &GroupSpecBuilder{}
@@ -1758,10 +1758,10 @@ func testANNPGroupServiceRefDelete(t *testing.T) {
 	grpBuilder2 = grpBuilder2.SetName(grp2Name).SetNamespace(getNS("x")).SetServiceReference(getNS("x"), "svc2")
 	grp1 := grpBuilder1.Get()
 	k8sUtils.CreateOrUpdateGroup(grp1)
-	failOnError(waitForResourceReady(t, timeout, grp1), t)
+	failOnError(waitForResourceReady(t, timeout, grp1, false), t)
 	grp2 := grpBuilder2.Get()
 	k8sUtils.CreateOrUpdateGroup(grp2)
-	failOnError(waitForResourceReady(t, timeout, grp2), t)
+	failOnError(waitForResourceReady(t, timeout, grp2, false), t)
 
 	builder := &AntreaNetworkPolicySpecBuilder{}
 	builder = builder.SetName(getNS("x"), "annp-grp-svc-ref").SetPriority(1.0).SetAppliedToGroup([]ANNPAppliedToSpec{{Group: grp1Name}})
@@ -1774,7 +1774,7 @@ func testANNPGroupServiceRefDelete(t *testing.T) {
 		}})
 	annp := builder.Get()
 	k8sUtils.CreateOrUpdateANNP(annp)
-	failOnError(waitForResourceReady(t, timeout, annp), t)
+	failOnError(waitForResourceReady(t, timeout, annp, false), t)
 
 	reachability := NewReachability(allPods, Connected)
 	reachability.Expect(getPod("x", "b"), getPod("x", "a"), Dropped)
@@ -1934,8 +1934,10 @@ func testANNPNestedGroupCreateAndUpdate(t *testing.T, data *TestData) {
 		Reachability: reachability,
 		// Note in this testcase the Group is created after the ANNP
 		TestResources: []metav1.Object{builder.Get(), svc1, grpBuilder1.Get(), grpBuilderNested.Get()},
-		Ports:         []int32{80},
-		Protocol:      ProtocolTCP,
+		// grp-nested references grp3, which is not created until testStep3.
+		AllowPartialGroupRealization: true,
+		Ports:                        []int32{80},
+		Protocol:                     ProtocolTCP,
 	}
 
 	// Test update "grp-nested" to include "grp-select-x-b" as well.
@@ -1964,9 +1966,11 @@ func testANNPNestedGroupCreateAndUpdate(t *testing.T, data *TestData) {
 		Name:          "Port 80 updated",
 		Reachability:  reachability2,
 		TestResources: []metav1.Object{grpBuilder2.Get(), grpBuilderNested.Get()},
-		Ports:         []int32{80},
-		Protocol:      ProtocolTCP,
-		CustomProbes:  cp,
+		// grp-nested still references grp3, which is not created until testStep3.
+		AllowPartialGroupRealization: true,
+		Ports:                        []int32{80},
+		Protocol:                     ProtocolTCP,
+		CustomProbes:                 cp,
 	}
 
 	// In this testStep grp3 is created. It's members should reflect in grp-nested
@@ -2635,7 +2639,7 @@ func testRejectServiceTraffic(t *testing.T, data *TestData, clientNamespace, ser
 
 	acnpEgress := builder1.Get()
 	k8sUtils.CreateOrUpdateACNP(acnpEgress)
-	failOnError(waitForResourcesReady(t, timeout, acnpEgress, svc1, svc2), t)
+	failOnError(waitForResourcesReady(t, timeout, false, acnpEgress, svc1, svc2), t)
 
 	for _, tc := range testcases {
 		log.Tracef("Probing: %s -> %s:%d", tc.clientPod.PodName(), tc.destAddr, tc.destPort)
@@ -2665,7 +2669,7 @@ func testRejectServiceTraffic(t *testing.T, data *TestData, clientNamespace, ser
 
 	acnpIngress := builder2.Get()
 	k8sUtils.CreateOrUpdateACNP(acnpIngress)
-	failOnError(waitForResourceReady(t, timeout, acnpIngress), t)
+	failOnError(waitForResourceReady(t, timeout, acnpIngress, false), t)
 
 	for _, tc := range testcases {
 		log.Tracef("Probing: %s -> %s:%d", tc.clientPod.PodName(), tc.destAddr, tc.destPort)
@@ -2731,7 +2735,7 @@ func testRejectNoInfiniteLoop(t *testing.T, data *TestData, clientNamespace, ser
 
 	runTestsWithACNP := func(acnp *crdv1beta1.ClusterNetworkPolicy, testcases []podToAddrTestStep) {
 		k8sUtils.CreateOrUpdateACNP(acnp)
-		failOnError(waitForResourceReady(t, timeout, acnp), t)
+		failOnError(waitForResourceReady(t, timeout, acnp, false), t)
 
 		for _, tc := range testcases {
 			log.Tracef("Probing: %s -> %s:%d", tc.clientPod.PodName(), tc.destAddr, tc.destPort)
@@ -3238,7 +3242,7 @@ func testAuditLoggingEnableK8s(t *testing.T, data *TestData) {
 
 	knp, err := k8sUtils.CreateOrUpdateNetworkPolicy(k8sNPBuilder.Get())
 	failOnError(err, t)
-	failOnError(waitForResourceReady(t, timeout, knp), t)
+	failOnError(waitForResourceReady(t, timeout, knp, false), t)
 
 	// Add a K8s namespaced NetworkPolicy with no ingress rule that triggers the
 	// default deny all ingress traffic.
@@ -3248,7 +3252,7 @@ func testAuditLoggingEnableK8s(t *testing.T, data *TestData) {
 
 	knp2, err := k8sUtils.CreateOrUpdateNetworkPolicy(k8sNPBuilder2.Get())
 	failOnError(err, t)
-	failOnError(waitForResourceReady(t, timeout, knp2), t)
+	failOnError(waitForResourceReady(t, timeout, knp2, false), t)
 
 	podXA, err := k8sUtils.GetPodByLabel(getNS("x"), "a")
 	if err != nil {
@@ -3336,7 +3340,7 @@ func testAuditLoggingK8sService(t *testing.T, data *TestData) {
 
 	knp, err := k8sUtils.CreateOrUpdateNetworkPolicy(k8sNPBuilder.Get())
 	failOnError(err, t)
-	failOnError(waitForResourceReady(t, timeout, knp), t)
+	failOnError(waitForResourceReady(t, timeout, knp, false), t)
 
 	// matcher1 is for connections allowed by the K8s NP
 	matcher1 := NewAuditLogMatcher(npRef, "<nil>", "Ingress", "Allow")
@@ -3585,8 +3589,10 @@ func testACNPNestedClusterGroupCreateAndUpdate(t *testing.T, data *TestData) {
 		Reachability: reachability,
 		// Note in this testcase the ClusterGroup is created after the ACNP
 		TestResources: []metav1.Object{builder.Get(), svc1, cgBuilder1.Get(), cgBuilderNested.Get()},
-		Ports:         []int32{80},
-		Protocol:      ProtocolTCP,
+		// cg-nested references cg3, which is not created until testStep3.
+		AllowPartialGroupRealization: true,
+		Ports:                        []int32{80},
+		Protocol:                     ProtocolTCP,
 	}
 
 	// Test update "cg-nested" to include "cg-select-y-b" as well.
@@ -3614,9 +3620,11 @@ func testACNPNestedClusterGroupCreateAndUpdate(t *testing.T, data *TestData) {
 		Name:          "Port 80 updated",
 		Reachability:  reachability2,
 		TestResources: []metav1.Object{cgBuilder2.Get(), cgBuilderNested.Get()},
-		Ports:         []int32{80},
-		Protocol:      ProtocolTCP,
-		CustomProbes:  cp,
+		// cg-nested still references cg3, which is not created until testStep3.
+		AllowPartialGroupRealization: true,
+		Ports:                        []int32{80},
+		Protocol:                     ProtocolTCP,
+		CustomProbes:                 cp,
 	}
 
 	// In this testStep cg3 is created. It's members should reflect in cg-nested
@@ -4023,7 +4031,7 @@ func testFQDNPolicy(t *testing.T) {
 	}
 	acnp, err := k8sUtils.CreateOrUpdateACNP(builder.Get())
 	failOnError(err, t)
-	failOnError(waitForResourceReady(t, timeout, acnp), t)
+	failOnError(waitForResourceReady(t, timeout, acnp, false), t)
 	for _, tc := range testcases {
 		log.Tracef("Probing: %s -> %s", tc.clientPod.PodName(), tc.destAddr)
 		connectivity, err := k8sUtils.ProbeAddr(tc.clientPod.Namespace(), "pod", tc.clientPod.PodName(), tc.destAddr, tc.destPort, ProtocolTCP, &tc.expectedConnectivity)
@@ -4068,7 +4076,7 @@ func testFQDNPolicyInClusterService(t *testing.T) {
 
 	for _, service := range services {
 		k8sUtils.CreateOrUpdateService(service)
-		failOnError(waitForResourceReady(t, timeout, service), t)
+		failOnError(waitForResourceReady(t, timeout, service, false), t)
 	}
 	searchDomain, err := k8sUtils.GetClusterSearchDomain()
 	if err != nil {
@@ -4089,7 +4097,7 @@ func testFQDNPolicyInClusterService(t *testing.T) {
 	}
 	acnp := builder.Get()
 	k8sUtils.CreateOrUpdateACNP(acnp)
-	failOnError(waitForResourceReady(t, timeout, acnp), t)
+	failOnError(waitForResourceReady(t, timeout, acnp, false), t)
 
 	var testcases []podToAddrTestStep
 	for _, service := range services {
@@ -4161,7 +4169,7 @@ func testFQDNPolicyTCP(t *testing.T) {
 	}
 	acnp, err := k8sUtils.CreateOrUpdateACNP(builder.Get())
 	failOnError(err, t)
-	failOnError(waitForResourceReady(t, timeout, acnp), t)
+	failOnError(waitForResourceReady(t, timeout, acnp, false), t)
 	for _, tc := range testcases {
 		destIP, err := k8sUtils.digDNS(tc.clientPod.PodName(), tc.clientPod.Namespace(), tc.destAddr, true)
 		if err != nil {
@@ -4200,7 +4208,7 @@ func testToServices(t *testing.T, data *TestData) {
 	var builtSvcs []*v1.Service
 	for _, service := range services {
 		builtSvc, _ := k8sUtils.CreateOrUpdateService(service)
-		failOnError(waitForResourceReady(t, timeout, service), t)
+		failOnError(waitForResourceReady(t, timeout, service, false), t)
 		svcRefs = append(svcRefs, crdv1beta1.PeerService{
 			Name:      service.Name,
 			Namespace: service.Namespace,
@@ -4218,7 +4226,7 @@ func testToServices(t *testing.T, data *TestData) {
 
 	acnp := builder.Get()
 	k8sUtils.CreateOrUpdateACNP(acnp)
-	failOnError(waitForResourceReady(t, timeout, acnp), t)
+	failOnError(waitForResourceReady(t, timeout, acnp, false), t)
 
 	var testcases []podToAddrTestStep
 	for _, service := range builtSvcs {
@@ -4298,7 +4306,7 @@ func testServiceAccountSelector(t *testing.T, data *TestData) {
 	if err != nil {
 		log.Infof("err %s", err.Error())
 	}
-	failOnError(waitForResourceReady(t, timeout, acnp), t)
+	failOnError(waitForResourceReady(t, timeout, acnp, false), t)
 
 	var testcases []podToAddrTestStep
 	if clusterInfo.podV4NetworkCIDR != "" {
@@ -4637,7 +4645,7 @@ func testACNPNodePortServiceSupport(t *testing.T, data *TestData, serverNamespac
 
 	acnp, err := k8sUtils.CreateOrUpdateACNP(builder.Get())
 	failOnError(err, t)
-	failOnError(waitForResourceReady(t, timeout, acnp), t)
+	failOnError(waitForResourceReady(t, timeout, acnp, false), t)
 	for idx, clientName := range clientNames {
 		dst := fmt.Sprintf("%s:%d", nodeIP(idx), nodePort)
 		log.Tracef("Probing: 1.1.1.1 -> %s", dst)
@@ -5028,7 +5036,7 @@ func applyTestStepResources(t *testing.T, step *TestStep) {
 		}
 
 	}
-	failOnError(waitForResourcesReady(t, timeout, step.TestResources...), t)
+	failOnError(waitForResourcesReady(t, timeout, step.AllowPartialGroupRealization, step.TestResources...), t)
 }
 
 func cleanupTestCaseResources(t *testing.T, c *TestCase) {
@@ -5114,7 +5122,7 @@ func printResults() {
 	fmt.Printf("=== TEST FAILURES: %d/%d ===\n\n", failCount, len(allTestList))
 }
 
-func waitForResourceReady(t *testing.T, timeout time.Duration, obj metav1.Object) error {
+func waitForResourceReady(t *testing.T, timeout time.Duration, obj metav1.Object, allowPartialGroupRealization bool) error {
 	defer timeCost()("ready")
 	switch p := obj.(type) {
 	case *crdv1beta1.ClusterNetworkPolicy:
@@ -5128,16 +5136,18 @@ func waitForResourceReady(t *testing.T, timeout time.Duration, obj metav1.Object
 		time.Sleep(1 * time.Second)
 	case *crdv1beta1.Tier:
 	case *crdv1beta1.ClusterGroup:
+		return k8sUtils.waitForClusterGroupRealized(t, p.Name, timeout, allowPartialGroupRealization)
 	case *crdv1beta1.Group:
+		return k8sUtils.waitForGroupRealized(t, p.Namespace, p.Name, timeout, allowPartialGroupRealization)
 	}
 	return nil
 }
 
-func waitForResourcesReady(t *testing.T, timeout time.Duration, objs ...metav1.Object) error {
+func waitForResourcesReady(t *testing.T, timeout time.Duration, allowPartialGroupRealization bool, objs ...metav1.Object) error {
 	resultCh := make(chan error, len(objs))
 	for _, obj := range objs {
 		go func(o metav1.Object) {
-			resultCh <- waitForResourceReady(t, timeout, o)
+			resultCh <- waitForResourceReady(t, timeout, o, allowPartialGroupRealization)
 		}(obj)
 	}
 
@@ -5514,14 +5524,14 @@ func TestAntreaPolicyStatusWithAppliedToUnsupportedGroup(t *testing.T) {
 		SetNamespaceSelector(map[string]string{"ns": getNS("y")}, nil)
 	grp, err := k8sUtils.CreateOrUpdateGroup(grpBuilder.Get())
 	failOnError(err, t)
-	failOnError(waitForResourceReady(t, timeout, grp), t)
+	failOnError(waitForResourceReady(t, timeout, grp, false), t)
 	// Build a Group with the unsupported Group as child Group.
 	grpNestedName := "grp-nested"
 	grpBuilderNested := &GroupSpecBuilder{}
 	grpBuilderNested = grpBuilderNested.SetName(grpNestedName).SetNamespace(testNamespace).SetChildGroups([]string{grpName})
 	grp, err = k8sUtils.CreateOrUpdateGroup(grpBuilderNested.Get())
 	failOnError(err, t)
-	failOnError(waitForResourceReady(t, timeout, grp), t)
+	failOnError(waitForResourceReady(t, timeout, grp, false), t)
 
 	annpBuilder := &AntreaNetworkPolicySpecBuilder{}
 	annpBuilder = annpBuilder.SetName(testNamespace, "annp-applied-to-unsupported-group").
@@ -5620,6 +5630,52 @@ func (data *TestData) waitForACNPRealized(t *testing.T, name string, timeout tim
 		return fmt.Errorf("error when waiting for ACNP '%s' to be realized: %v", name, err)
 	}
 	return nil
+}
+
+// waitForClusterGroupRealized waits until a ClusterGroup's membership has been computed. If
+// allowPartialGroupRealization is true, a timeout is not treated as a failure: some test cases
+// intentionally create a nested ClusterGroup whose childGroups don't all exist yet (e.g.
+// testACNPNestedClusterGroupCreateAndUpdate), in which case GroupMembersComputed is not expected
+// to become true within that step. A genuine error retrieving the ClusterGroup is always a failure.
+func (data *TestData) waitForClusterGroupRealized(t *testing.T, name string, timeout time.Duration, allowPartialGroupRealization bool) error {
+	t.Logf("Waiting for ClusterGroup '%s' to be realized", name)
+	err := wait.PollUntilContextTimeout(context.Background(), 100*time.Millisecond, timeout, false, func(ctx context.Context) (bool, error) {
+		cg, err := data.CRDClient.CrdV1beta1().ClusterGroups().Get(context.TODO(), name, metav1.GetOptions{})
+		if err != nil {
+			return false, err
+		}
+		return groupMembersComputed(cg.Status.Conditions), nil
+	})
+	if err != nil && (!allowPartialGroupRealization || !wait.Interrupted(err)) {
+		return fmt.Errorf("error when waiting for ClusterGroup '%s' to be realized: %v", name, err)
+	}
+	return nil
+}
+
+// waitForGroupRealized waits until a Group's membership has been computed. See
+// waitForClusterGroupRealized for the meaning of allowPartialGroupRealization.
+func (data *TestData) waitForGroupRealized(t *testing.T, namespace, name string, timeout time.Duration, allowPartialGroupRealization bool) error {
+	t.Logf("Waiting for Group '%s/%s' to be realized", namespace, name)
+	err := wait.PollUntilContextTimeout(context.Background(), 100*time.Millisecond, timeout, false, func(ctx context.Context) (bool, error) {
+		g, err := data.CRDClient.CrdV1beta1().Groups(namespace).Get(context.TODO(), name, metav1.GetOptions{})
+		if err != nil {
+			return false, err
+		}
+		return groupMembersComputed(g.Status.Conditions), nil
+	})
+	if err != nil && (!allowPartialGroupRealization || !wait.Interrupted(err)) {
+		return fmt.Errorf("error when waiting for Group '%s/%s' to be realized: %v", namespace, name, err)
+	}
+	return nil
+}
+
+func groupMembersComputed(conditions []crdv1beta1.GroupCondition) bool {
+	for _, c := range conditions {
+		if c.Type == crdv1beta1.GroupMembersComputed {
+			return c.Status == v1.ConditionTrue
+		}
+	}
+	return false
 }
 
 // TestAntreaPolicyStats is the top-level test which contains all subtests for
