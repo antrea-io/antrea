@@ -146,3 +146,18 @@ func (d *agentDumper) DumpMemberlist(basedir string) error {
 	}
 	return writeFile(d.fs, filepath.Join(basedir, "memberlist"), "memberlist", output)
 }
+
+func (d *agentDumper) DumpBGPResources(basedir string) error {
+	for _, name := range []string{"bgppolicy", "bgppeers", "bgproutes"} {
+		output, err := d.executor.Command("antctl", "-oyaml", "get", name).CombinedOutput()
+		// A Node without BGP, or without a BGPPolicy in effect, is normal. The file records the reason.
+		if err != nil && !strings.Contains(string(output), "bgp is not enabled") &&
+			!strings.Contains(string(output), "there is no effective bgp policy applied to the Node") {
+			return fmt.Errorf("error when dumping %s: %w", name, err)
+		}
+		if err := writeFile(d.fs, filepath.Join(basedir, name), name, output); err != nil {
+			return err
+		}
+	}
+	return nil
+}

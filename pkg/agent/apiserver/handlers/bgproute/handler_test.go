@@ -17,6 +17,8 @@ package bgproute
 import (
 	"context"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -202,6 +204,85 @@ func TestBGPRouteQuery(t *testing.T) {
 				},
 			},
 		},
+		{
+			name: "get routes sent to a peer",
+			url:  "?peer=192.168.77.200",
+			expectedCalls: func(mockBGPServer *queriertest.MockAgentBGPPolicyInfoQuerier) {
+				mockBGPServer.EXPECT().GetBGPPeerRoutes(ctx, "192.168.77.200", false).Return(map[bgp.Route]bgpcontroller.RouteMetadata{
+					clusterIPv4Route: allRoutes[clusterIPv4Route],
+					podIPv4CIDRRoute: allRoutes[podIPv4CIDRRoute],
+				}, nil)
+			},
+			expectedStatus: http.StatusOK,
+			expectedResponse: []apis.BGPRouteResponse{
+				{
+					Route: podIPv4CIDRRoute.Prefix,
+					Type:  string(allRoutes[podIPv4CIDRRoute].Type),
+				},
+				{
+					Route:     clusterIPv4Route.Prefix,
+					Type:      string(allRoutes[clusterIPv4Route].Type),
+					K8sObjRef: allRoutes[clusterIPv4Route].K8sObjRef,
+				},
+			},
+		},
+		{
+			name: "get routes of a type sent to a peer",
+			url:  "?peer=192.168.77.200&type=ServiceClusterIP",
+			expectedCalls: func(mockBGPServer *queriertest.MockAgentBGPPolicyInfoQuerier) {
+				mockBGPServer.EXPECT().GetBGPPeerRoutes(ctx, "192.168.77.200", false).Return(map[bgp.Route]bgpcontroller.RouteMetadata{
+					clusterIPv4Route: allRoutes[clusterIPv4Route],
+					podIPv4CIDRRoute: allRoutes[podIPv4CIDRRoute],
+				}, nil)
+			},
+			expectedStatus: http.StatusOK,
+			expectedResponse: []apis.BGPRouteResponse{
+				{
+					Route:     clusterIPv4Route.Prefix,
+					Type:      string(allRoutes[clusterIPv4Route].Type),
+					K8sObjRef: allRoutes[clusterIPv4Route].K8sObjRef,
+				},
+			},
+		},
+		{
+			name: "get routes received from a peer",
+			url:  "?peer=192.168.77.200&received",
+			expectedCalls: func(mockBGPServer *queriertest.MockAgentBGPPolicyInfoQuerier) {
+				mockBGPServer.EXPECT().GetBGPPeerRoutes(ctx, "192.168.77.200", true).Return(map[bgp.Route]bgpcontroller.RouteMetadata{
+					{Prefix: "10.10.10.0/24"}: {},
+				}, nil)
+			},
+			expectedStatus:   http.StatusOK,
+			expectedResponse: []apis.BGPRouteResponse{{Route: "10.10.10.0/24"}},
+		},
+		{
+			name: "peer is not a peer of the BGPPolicy",
+			url:  "?peer=192.168.77.201",
+			expectedCalls: func(mockBGPServer *queriertest.MockAgentBGPPolicyInfoQuerier) {
+				mockBGPServer.EXPECT().GetBGPPeerRoutes(ctx, "192.168.77.201", false).Return(nil, fmt.Errorf("%w: 192.168.77.201", bgpcontroller.ErrBGPPeerNotFound))
+			},
+			expectedStatus: http.StatusNotFound,
+		},
+		{
+			name:           "received without peer",
+			url:            "?received",
+			expectedStatus: http.StatusBadRequest,
+		},
+		{
+			name:           "received with a type",
+			url:            "?peer=192.168.77.200&received&type=EgressIP",
+			expectedStatus: http.StatusBadRequest,
+		},
+		{
+			name:           "received with a value",
+			url:            "?peer=192.168.77.200&received=true",
+			expectedStatus: http.StatusBadRequest,
+		},
+		{
+			name:           "invalid peer address",
+			url:            "?peer=192.168.77",
+			expectedStatus: http.StatusBadRequest,
+		},
 	}
 
 	for _, tt := range tests {
@@ -228,6 +309,25 @@ func TestBGPRouteQuery(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestBGPRouteQueryWithBGPPolicyNotApplied(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	q := queriertest.NewMockAgentBGPPolicyInfoQuerier(ctrl)
+	q.EXPECT().GetBGPRoutes(gomock.Any()).Return(nil, &bgpcontroller.BGPPolicyNotAppliedError{
+		BGPPolicyName: "policy-1",
+		Err:           errors.New("BGP router ID should be an IPv4 address string"),
+	})
+	handler := HandleFunc(q)
+
+	req, err := http.NewRequest(http.MethodGet, "", nil)
+	require.NoError(t, err)
+	recorder := httptest.NewRecorder()
+	handler.ServeHTTP(recorder, req)
+
+	assert.Equal(t, http.StatusNotFound, recorder.Code)
+	assert.Equal(t, "there is no effective bgp policy applied to the Node: BGPPolicy policy-1 could not be applied: "+
+		"BGP router ID should be an IPv4 address string\n", recorder.Body.String())
 }
 
 func getServiceName(name string) string {
