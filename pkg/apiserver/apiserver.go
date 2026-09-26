@@ -56,6 +56,7 @@ import (
 	"antrea.io/antrea/v2/pkg/apiserver/registry/networkpolicy/networkpolicyevaluation"
 	"antrea.io/antrea/v2/pkg/apiserver/registry/stats/antreaclusternetworkpolicystats"
 	"antrea.io/antrea/v2/pkg/apiserver/registry/stats/antreanetworkpolicystats"
+	"antrea.io/antrea/v2/pkg/apiserver/registry/stats/clusternetworkpolicystats"
 	"antrea.io/antrea/v2/pkg/apiserver/registry/stats/multicastgroup"
 	"antrea.io/antrea/v2/pkg/apiserver/registry/stats/networkpolicystats"
 	"antrea.io/antrea/v2/pkg/apiserver/registry/stats/nodelatencystats"
@@ -249,6 +250,7 @@ func installAPIGroup(s *APIServer, c completedConfig) error {
 	statsStorage["networkpolicystats"] = networkpolicystats.NewREST(c.extraConfig.statsAggregator)
 	statsStorage["antreaclusternetworkpolicystats"] = antreaclusternetworkpolicystats.NewREST(c.extraConfig.statsAggregator)
 	statsStorage["antreanetworkpolicystats"] = antreanetworkpolicystats.NewREST(c.extraConfig.statsAggregator)
+	statsStorage["clusternetworkpolicystats"] = clusternetworkpolicystats.NewREST(c.extraConfig.statsAggregator)
 	statsStorage["multicastgroups"] = multicastgroup.NewREST(c.extraConfig.statsAggregator)
 	statsStorage["nodelatencystats"] = nodelatencystats.NewREST()
 	statsGroup.VersionedResourcesStorageMap["v1alpha1"] = statsStorage

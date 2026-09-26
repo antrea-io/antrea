@@ -761,6 +761,91 @@ func TestProcessClusterNetworkPolicy(t *testing.T) {
 			expectedAppliedToGroups: 1,
 			expectedAddressGroups:   2,
 		},
+		{
+			name: "unnamed-rules-get-a-unique-generated-name",
+			inputPolicy: &v1alpha2.ClusterNetworkPolicy{
+				ObjectMeta: metav1.ObjectMeta{Name: "cnp-unnamed-rules", UID: "uid-6"},
+				Spec: v1alpha2.ClusterNetworkPolicySpec{
+					Tier:     v1alpha2.AdminTier,
+					Priority: 30,
+					Subject: v1alpha2.ClusterNetworkPolicySubject{
+						Pods: &v1alpha2.NamespacedPod{
+							NamespaceSelector: selEnv,
+							PodSelector:       selApp,
+						},
+					},
+					Ingress: []v1alpha2.ClusterNetworkPolicyIngressRule{
+						{
+							// A named rule keeps its own name, including one that looks like the
+							// name generated for the unnamed rule that follows it.
+							Name:   "ingress-1",
+							Action: v1alpha2.ClusterNetworkPolicyRuleActionAccept,
+							From: []v1alpha2.ClusterNetworkPolicyIngressPeer{
+								{Namespaces: &selClient},
+							},
+						},
+						{
+							Action: v1alpha2.ClusterNetworkPolicyRuleActionAccept,
+							From: []v1alpha2.ClusterNetworkPolicyIngressPeer{
+								{Namespaces: &selDstNs},
+							},
+						},
+					},
+					Egress: []v1alpha2.ClusterNetworkPolicyEgressRule{
+						{
+							Action: v1alpha2.ClusterNetworkPolicyRuleActionDeny,
+							To: []v1alpha2.ClusterNetworkPolicyEgressPeer{
+								{Namespaces: &selDstNs},
+							},
+						},
+					},
+				},
+			},
+			expectedPolicy: &antreatypes.NetworkPolicy{
+				UID:  "uid-6",
+				Name: "uid-6",
+				SourceRef: &controlplane.NetworkPolicyReference{
+					Type: controlplane.K8sClusterNetworkPolicy,
+					Name: "cnp-unnamed-rules",
+					UID:  "uid-6",
+				},
+				Priority:         ptr.To(float64(30)),
+				TierPriority:     ptr.To(cnpAdminTierPriority),
+				AppliedToPerRule: false,
+				Rules: []controlplane.NetworkPolicyRule{
+					{
+						Direction: controlplane.DirectionIn,
+						From: controlplane.NetworkPolicyPeer{
+							AddressGroups: []string{getNormalizedUID(antreatypes.NewGroupSelector("", nil, &selClient, nil, nil).NormalizedName)},
+						},
+						Name:     "ingress-1",
+						Action:   &allow,
+						Priority: 0,
+					},
+					{
+						Direction: controlplane.DirectionIn,
+						From: controlplane.NetworkPolicyPeer{
+							AddressGroups: []string{getNormalizedUID(antreatypes.NewGroupSelector("", nil, &selDstNs, nil, nil).NormalizedName)},
+						},
+						Name:     "ingress-1-218e7",
+						Action:   &allow,
+						Priority: 1,
+					},
+					{
+						Direction: controlplane.DirectionOut,
+						To: controlplane.NetworkPolicyPeer{
+							AddressGroups: []string{getNormalizedUID(antreatypes.NewGroupSelector("", nil, &selDstNs, nil, nil).NormalizedName)},
+						},
+						Name:     "egress-0-47f41",
+						Action:   &drop,
+						Priority: 0,
+					},
+				},
+				AppliedToGroups: []string{getNormalizedUID(antreatypes.NewGroupSelector("", &selApp, &selEnv, nil, nil).NormalizedName)},
+			},
+			expectedAppliedToGroups: 1,
+			expectedAddressGroups:   2,
+		},
 	}
 
 	for _, tt := range tests {
