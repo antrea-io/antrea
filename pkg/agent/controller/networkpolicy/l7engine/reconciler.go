@@ -212,6 +212,30 @@ func writeConfigFile(path string, data *bytes.Buffer) error {
 	return nil
 }
 
+// suricataContentReplacer escapes the characters which have a special meaning in the Suricata rule
+// language, so that a user-provided pattern cannot terminate a rule option early. A semicolon and a
+// double quote are escaped with a backslash, which in turn requires the backslash itself to be
+// escaped. The remaining characters cannot be escaped with a backslash, so they are encoded with the
+// hexadecimal notation of the content keyword: a pipe because it delimits that notation, and the
+// control characters because a rule is terminated by the end of the line. strings.Replacer makes a
+// single pass over the input and never rescans what it has written, so no replacement is escaped
+// twice.
+var suricataContentReplacer = strings.NewReplacer(
+	`\`, `\\`,
+	`"`, `\"`,
+	`;`, `\;`,
+	`|`, `|7C|`,
+	"\n", `|0A|`,
+	"\r", `|0D|`,
+	"\x00", `|00|`,
+)
+
+// escapeSuricataContent escapes a user-provided pattern so that it cannot alter the structure of the
+// generated Suricata rule.
+func escapeSuricataContent(content string) string {
+	return suricataContentReplacer.Replace(content)
+}
+
 // By default, Suricata performs pattern-matching for provided content. To support exact match, prefix match, and suffix
 // match, we use wildcards to indicate whether an exact match is expected.
 // - A string starting with * means suffix match. For example, "*.foo.com" matches "www.foo.com".
@@ -229,7 +253,9 @@ func convertContent(content string) string {
 		endsWith = ""
 		content = content[:len(content)-1]
 	}
-	return fmt.Sprintf(`content:"%s";%s%s`, content, startsWith, endsWith)
+	// The pattern is escaped after the wildcards are stripped, so that the wildcards keep their
+	// meaning instead of being matched literally.
+	return fmt.Sprintf(`content:"%s";%s%s`, escapeSuricataContent(content), startsWith, endsWith)
 }
 
 func convertProtocolHTTP(http *v1beta.HTTPProtocol) string {
@@ -238,7 +264,7 @@ func convertProtocolHTTP(http *v1beta.HTTPProtocol) string {
 		keywords = append(keywords, fmt.Sprintf("http.uri; %s", convertContent(http.Path)))
 	}
 	if http.Method != "" {
-		keywords = append(keywords, fmt.Sprintf(`http.method; content:"%s";`, http.Method))
+		keywords = append(keywords, fmt.Sprintf(`http.method; content:"%s";`, escapeSuricataContent(http.Method)))
 	}
 	if http.Host != "" {
 		keywords = append(keywords, fmt.Sprintf("http.host; %s", convertContent(http.Host)))
