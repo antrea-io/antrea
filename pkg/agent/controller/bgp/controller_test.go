@@ -44,7 +44,7 @@ import (
 	"antrea.io/antrea/v2/pkg/agent/config"
 	"antrea.io/antrea/v2/pkg/agent/types"
 	"antrea.io/antrea/v2/pkg/apis/crd/v1alpha1"
-	crdv1b1 "antrea.io/antrea/v2/pkg/apis/crd/v1beta1"
+	crdv1b2 "antrea.io/antrea/v2/pkg/apis/crd/v1beta2"
 	fakeversioned "antrea.io/antrea/v2/pkg/client/clientset/versioned/fake"
 	crdinformers "antrea.io/antrea/v2/pkg/client/informers/externalversions"
 	"antrea.io/antrea/v2/pkg/util/ip"
@@ -261,7 +261,7 @@ func newFakeController(t *testing.T, objects []runtime.Object, crdObjects []runt
 
 	nodeInformer := informerFactory.Core().V1().Nodes()
 	serviceInformer := informerFactory.Core().V1().Services()
-	egressInformer := crdInformerFactory.Crd().V1beta1().Egresses()
+	egressInformer := crdInformerFactory.Crd().V1beta2().Egresses()
 	endpointSliceInformer := informerFactory.Discovery().V1().EndpointSlices()
 	bgpPolicyInformer := crdInformerFactory.Crd().V1alpha1().BGPPolicies()
 
@@ -1826,7 +1826,7 @@ func TestEgressLifecycle(t *testing.T) {
 
 	// Create an Egress.
 	egress := generateEgress("eg1-4", "192.168.77.200", localNodeName)
-	_, err := c.crdClient.CrdV1beta1().Egresses().Create(context.TODO(), egress, metav1.CreateOptions{})
+	_, err := c.crdClient.CrdV1beta2().Egresses().Create(context.TODO(), egress, metav1.CreateOptions{})
 	require.NoError(t, err)
 
 	waitAndGetDummyEvent(t, c)
@@ -1836,7 +1836,7 @@ func TestEgressLifecycle(t *testing.T) {
 
 	// Update the Egress.
 	updatedEgress := generateEgress("eg1-4", "192.168.77.201", localNodeName)
-	_, err = c.crdClient.CrdV1beta1().Egresses().Update(context.TODO(), updatedEgress, metav1.UpdateOptions{})
+	_, err = c.crdClient.CrdV1beta2().Egresses().Update(context.TODO(), updatedEgress, metav1.UpdateOptions{})
 	require.NoError(t, err)
 
 	waitAndGetDummyEvent(t, c)
@@ -1847,7 +1847,7 @@ func TestEgressLifecycle(t *testing.T) {
 
 	// Update the Egress.
 	updatedEgress = generateEgress("eg1-4", "192.168.77.201", "remote")
-	_, err = c.crdClient.CrdV1beta1().Egresses().Update(context.TODO(), updatedEgress, metav1.UpdateOptions{})
+	_, err = c.crdClient.CrdV1beta2().Egresses().Update(context.TODO(), updatedEgress, metav1.UpdateOptions{})
 	require.NoError(t, err)
 
 	waitAndGetDummyEvent(t, c)
@@ -1857,7 +1857,7 @@ func TestEgressLifecycle(t *testing.T) {
 
 	// Update the Egress.
 	updatedEgress = generateEgress("eg1-4", "192.168.77.201", localNodeName)
-	_, err = c.crdClient.CrdV1beta1().Egresses().Update(context.TODO(), updatedEgress, metav1.UpdateOptions{})
+	_, err = c.crdClient.CrdV1beta2().Egresses().Update(context.TODO(), updatedEgress, metav1.UpdateOptions{})
 	require.NoError(t, err)
 
 	waitAndGetDummyEvent(t, c)
@@ -1866,7 +1866,7 @@ func TestEgressLifecycle(t *testing.T) {
 	doneDummyEvent(t, c)
 
 	// Delete the Egress.
-	err = c.crdClient.CrdV1beta1().Egresses().Delete(context.TODO(), updatedEgress.Name, metav1.DeleteOptions{})
+	err = c.crdClient.CrdV1beta2().Egresses().Delete(context.TODO(), updatedEgress.Name, metav1.DeleteOptions{})
 	require.NoError(t, err)
 
 	waitAndGetDummyEvent(t, c)
@@ -2327,17 +2327,17 @@ func generateService(name string,
 	return svc
 }
 
-func generateEgress(name string, ip string, nodeName string) *crdv1b1.Egress {
-	return &crdv1b1.Egress{
+func generateEgress(name string, ip string, nodeName string) *crdv1b2.Egress {
+	return &crdv1b2.Egress{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: name,
 			UID:  "test-uid",
 		},
-		Spec: crdv1b1.EgressSpec{
-			EgressIP: ip,
+		Spec: crdv1b2.EgressSpec{
+			EgressIPs: []string{ip},
 		},
-		Status: crdv1b1.EgressStatus{
-			EgressIP:   ip,
+		Status: crdv1b2.EgressStatus{
+			EgressIPs:  []string{ip},
 			EgressNode: nodeName,
 		},
 	}

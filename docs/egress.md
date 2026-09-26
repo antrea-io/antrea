@@ -7,12 +7,13 @@
 - [Prerequisites](#prerequisites)
 - [The Egress resource](#the-egress-resource)
   - [AppliedTo](#appliedto)
-  - [EgressIP](#egressip)
+  - [EgressIPs](#egressips)
   - [ExternalIPPool](#externalippool)
+  - [IP family selection](#ip-family-selection)
   - [Bandwidth](#bandwidth)
 - [The ExternalIPPool resource](#the-externalippool-resource)
   - [IPRanges](#ipranges)
-  - [SubnetInfo](#subnetinfo)
+  - [Subnets](#subnets)
   - [NodeSelector](#nodeselector)
 - [Usage examples](#usage-examples)
   - [Configuring High-Availability Egress](#configuring-high-availability-egress)
@@ -78,7 +79,7 @@ data:
 A typical Egress resource example:
 
 ```yaml
-apiVersion: crd.antrea.io/v1beta1
+apiVersion: crd.antrea.io/v1beta2
 kind: Egress
 metadata:
   name: egress-prod-web
@@ -90,11 +91,34 @@ spec:
     podSelector:
       matchLabels:
         role: web
-  egressIP: 10.10.0.8 # can be populated by Antrea after assigning an IP from the pool below
+  egressIPs: # can be populated by Antrea after assigning an IP from the pool below
+  - 10.10.0.8
+  ipFamilyPolicy: SingleStack
   externalIPPool: prod-external-ip-pool
 status:
   egressNode: node01
+  egressIPs:
+  - 10.10.0.8
 ```
+
+`v1beta2` replaces the singular `spec.egressIP` and `status.egressIP` fields
+with `egressIPs` lists. `v1beta1` remains served for compatibility and is
+converted by the Kubernetes API server. Existing `v1beta1` clients continue to
+use the singular fields and retain their historical single-stack behavior.
+
+The `crd.antrea.io/conversion-data` annotation is reserved for API version
+conversion. Preserve it when updating an existing object through `v1beta1`;
+clients cannot add, modify, or remove it. When copying an existing object to
+create a new one, remove this annotation from the copy before submitting it.
+The Egress and ExternalIPPool validating webhooks use `matchPolicy: Exact` and
+explicitly register both served versions so validation receives the original
+API representation.
+
+The `v1beta2` schema reserves two `egressIPs` entries and the
+`PreferDualStack` / `RequireDualStack` policies for future dual-stack runtime
+support. This release rejects configurations which would require dual-stack
+allocation or datapath programming instead of accepting an Egress which cannot
+be realized. Use one IP or `ipFamilyPolicy: SingleStack`.
 
 ### AppliedTo
 
@@ -105,24 +129,24 @@ with a `namespaceSelector`, all Pods from Namespaces selected by the
 be selected by providing both a `podSelector` and a `namespaceSelector`. Empty
 `appliedTo` selects nothing. The field is mandatory.
 
-### EgressIP
+### EgressIPs
 
-The `egressIP` field specifies the egress (SNAT) IP the traffic from the
+The `egressIPs` field specifies the egress (SNAT) IP the traffic from the
 selected Pods to the external network should use. **The IP must be reachable
 from all Nodes.** The IP can be specified when creating the Egress. Starting
 with Antrea v1.2, it can be allocated from an `ExternalIPPool` automatically.
 
-- If `egressIP` is not specified, `externalIPPool` must be specified. An IP will
+- If `egressIPs` is not specified, `externalIPPool` must be specified. An IP will
   be allocated from the pool by the antrea-controller. The IP will be assigned
   to a Node selected by the `nodeSelector` of the `externalIPPool` automatically.
-- If both `egressIP` and `externalIPPool` are specified, the IP must be in the
+- If both `egressIPs` and `externalIPPool` are specified, the IP must be in the
   range of the pool. Similarly, the IP will be assigned to a Node selected by
   the `externalIPPool` automatically.
-- If only `egressIP` is specified, Antrea will not manage the assignment of the
+- If only `egressIPs` is specified, Antrea will not manage the assignment of the
   IP and it must be assigned to an arbitrary interface of one Node manually.
 
 **Starting with Antrea v1.2, high availability is provided automatically when
-the `egressIP` is allocated from an `externalIPPool`**, i.e. when the
+the Egress IP is allocated from an `externalIPPool`**, i.e. when the
 `externalIPPool` is specified. If the Node hosting the `egressIP` fails, another
 Node will be elected (from among the remaining Nodes selected by the
 `nodeSelector` of the `externalIPPool`) as the new egress Node of this Egress.
@@ -134,14 +158,39 @@ to be down and egress traffic will not flow through it but the interface determi
 by the route table.
 
 **Note**: If more than one Egress applies to a Pod and they specify different
-`egressIP`, the effective egress IP will be selected randomly.
+Egress IP, the effective Egress will be selected randomly.
 
 ### ExternalIPPool
 
 The `externalIPPool` field specifies the name of the `ExternalIPPool` that the
-`egressIP` should be allocated from. It also determines which Nodes the IP can
-be assigned to. It can be empty, which means users should assign the `egressIP`
+Egress IP should be allocated from. It also determines which Nodes the IP can
+be assigned to. It can be empty, which means users should assign the Egress IP
 to one Node manually.
+
+### IP family selection
+
+The `ipFamilyPolicy` field specifies whether an Egress is single-stack or
+dual-stack. The `ipFamilies` field optionally selects the IP families to use.
+For example, the following configuration requests automatic allocation of an
+IPv6 address from a dual-stack `ExternalIPPool`:
+
+```yaml
+spec:
+  externalIPPool: dual-stack-pool
+  ipFamilyPolicy: SingleStack
+  ipFamilies:
+  - IPv6
+```
+
+When `ipFamilyPolicy` is `SingleStack`, `ipFamilies` must contain one entry if
+`egressIPs` is empty and the referenced `ExternalIPPool` is dual-stack. It may
+be omitted when an Egress IP explicitly selects the family or when the Pool
+contains only one IP family. It may also be omitted with `PreferDualStack` or
+`RequireDualStack`. The IP families can be listed in any order.
+
+When two explicit `egressIPs` entries are specified, they must contain one IPv4
+address and one IPv6 address, in any order. Their families must match
+`ipFamilies` when both fields are specified, regardless of order.
 
 ### Bandwidth
 
@@ -219,14 +268,40 @@ providing a /32 CIDR or a /31 CIDR will yield an empty pool of IP addresses. A
 /28 CIDR will yield 14 allocatable IP addresses. In the future we may make this
 behavior configurable, so that the full CIDR can be used if desired.
 
-### SubnetInfo
+Antrea considers at most 65,536 candidate addresses from each IP range. For a
+range larger than this limit, the allocator considers only the first 65,536
+candidate addresses. This limit applies independently to each range, not to the
+ExternalIPPool as a whole. The `TOTAL` column of `kubectl get externalippools`
+reports the sum of the allocator capacities (used plus free) across all
+configured ranges. For a CIDR range, this capacity excludes the first address
+and the IPv4 broadcast address. `TOTAL` therefore represents the allocator
+capacity rather than the theoretical size of the ranges, and it can exceed
+65,536 when an ExternalIPPool contains multiple ranges. A configured gateway is
+not automatically excluded from this capacity.
+
+### Subnets
 
 By default, it's assumed that the IPs allocated from an ExternalIPPool are in
 the same subnet as the Node IPs. Starting with Antrea v1.15, IPs can be
 allocated from a subnet different from the Node IPs.
 
-The optional `subnetInfo` field contains the subnet attributes of the IPs in
-this pool. When using a different subnet:
+In `v1beta2`, the optional `spec.subnets` list contains the subnet attributes
+of the IPs in this pool. Specify one entry for a single-stack pool or two
+entries, one per IP family, for a dual-stack pool. Each entry has its own
+gateway, prefix length, and optional VLAN ID. When configured, the subnets must
+cover all IP ranges and match their IP families. An empty pool can retain its
+subnets until ranges are added.
+
+The `v1beta1` API continues to use `spec.subnetInfo`. Conversion maps this
+single subnet to one entry in `spec.subnets`. When a dual-stack pool is read
+through `v1beta1`, its IPv4 subnet is exposed as `spec.subnetInfo`, and the
+remaining information is preserved in the controller-managed conversion
+annotation. An update through the old API changes the visible subnet while
+preserving the other subnet. Removing `spec.subnetInfo` removes the subnet
+configuration for both families. To configure both families, use `v1beta2`;
+the old `spec.subnetInfo` field is not supported in that version.
+
+When using a different subnet:
 
 * `gateway` and `prefixLength` must be set. Antrea will route Egress traffic to
 the specified gateway when the destination is not in the same subnet of the
@@ -246,7 +321,7 @@ sub-interfaces on the transport interface.
 An example of ExternalIPPool using a non-default subnet is as below:
 
 ```yaml
-apiVersion: crd.antrea.io/v1beta1
+apiVersion: crd.antrea.io/v1beta2
 kind: ExternalIPPool
 metadata:
   name: prod-external-ip-pool
@@ -254,8 +329,8 @@ spec:
   ipRanges:
   - start: 10.10.0.2
     end: 10.10.0.10
-  subnetInfo:
-    gateway: 10.10.0.1
+  subnets:
+  - gateway: 10.10.0.1
     prefixLength: 24
     vlan: 10
   nodeSelector:

@@ -20,9 +20,11 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/util/sets"
 
 	crdv1beta1 "antrea.io/antrea/v2/pkg/apis/crd/v1beta1"
+	crdv1beta2 "antrea.io/antrea/v2/pkg/apis/crd/v1beta2"
 )
 
 func TestGetIPRangeSet(t *testing.T) {
@@ -274,7 +276,7 @@ func TestValidateIPRange(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := validateIPRange(tt.ipRange)
+			err := validateIPRange(crdv1beta2.IPRange{CIDR: tt.ipRange.CIDR, Start: tt.ipRange.Start, End: tt.ipRange.End})
 			if tt.expectedErr != "" {
 				assert.EqualError(t, err, tt.expectedErr)
 			} else {
@@ -463,17 +465,135 @@ func TestValidateIPRangesAndSubnetInfo(t *testing.T) {
 	}
 }
 
+func TestValidateDualStackIPRangesAndSubnetInfo(t *testing.T) {
+	dualStackRanges := []crdv1beta2.IPRange{
+		{Start: "192.168.1.10", End: "192.168.1.20"},
+		{Start: "2001:db8:1::10", End: "2001:db8:1::20"},
+	}
+	tests := []struct {
+		name        string
+		subnetInfo  []crdv1beta2.SubnetInfo
+		ipRanges    []crdv1beta2.IPRange
+		expectedErr string
+	}{
+		{
+			name:       "empty pool retains IPv4 subnet after v1beta1 conversion",
+			subnetInfo: []crdv1beta2.SubnetInfo{{Gateway: "192.168.1.1", PrefixLength: 24, VLAN: 10}},
+			ipRanges:   []crdv1beta2.IPRange{},
+		},
+		{
+			name: "empty pool retains dual-stack subnets",
+			subnetInfo: []crdv1beta2.SubnetInfo{
+				{Gateway: "192.168.1.1", PrefixLength: 24, VLAN: 10},
+				{Gateway: "2001:db8:1::1", PrefixLength: 64, VLAN: 20},
+			},
+			ipRanges: []crdv1beta2.IPRange{},
+		},
+		{
+			name:        "invalid VLAN",
+			subnetInfo:  []crdv1beta2.SubnetInfo{{Gateway: "192.168.1.1", PrefixLength: 24, VLAN: 4095}},
+			ipRanges:    dualStackRanges[:1],
+			expectedErr: "vlan ID must be between 0 and 4094",
+		},
+		{
+			name: "valid dual-stack subnet info",
+			subnetInfo: []crdv1beta2.SubnetInfo{
+				{Gateway: "192.168.1.1", PrefixLength: 24},
+				{Gateway: "2001:db8:1::1", PrefixLength: 64},
+			},
+			ipRanges: dualStackRanges,
+		},
+		{
+			name: "valid dual-stack subnet info in reverse family order",
+			subnetInfo: []crdv1beta2.SubnetInfo{
+				{Gateway: "2001:db8:1::1", PrefixLength: 64},
+				{Gateway: "192.168.1.1", PrefixLength: 24},
+			},
+			ipRanges: dualStackRanges,
+		},
+		{
+			name:        "empty subnet list is invalid",
+			subnetInfo:  []crdv1beta2.SubnetInfo{},
+			ipRanges:    dualStackRanges[:1],
+			expectedErr: "subnets must contain one or two entries",
+		},
+		{
+			name: "duplicate gateway family",
+			subnetInfo: []crdv1beta2.SubnetInfo{
+				{Gateway: "192.168.1.1", PrefixLength: 24},
+				{Gateway: "192.168.2.1", PrefixLength: 24},
+			},
+			ipRanges:    dualStackRanges[:1],
+			expectedErr: "subnets contains multiple entries for IP family IPv4",
+		},
+		{
+			name: "dual-stack range requires both gateway families",
+			subnetInfo: []crdv1beta2.SubnetInfo{
+				{Gateway: "192.168.1.1", PrefixLength: 24},
+			},
+			ipRanges:    dualStackRanges,
+			expectedErr: "range [2001:db8:1::10-2001:db8:1::20] has no subnet configuration for IP family IPv6",
+		},
+		{
+			name: "single subnet cannot configure a dual-stack pool",
+			subnetInfo: []crdv1beta2.SubnetInfo{{Gateway: "192.168.1.1",
+				PrefixLength: 24}},
+			ipRanges:    dualStackRanges,
+			expectedErr: "range [2001:db8:1::10-2001:db8:1::20] has no subnet configuration for IP family IPv6",
+		},
+		{
+			name: "gateway family must be present in pool",
+			subnetInfo: []crdv1beta2.SubnetInfo{
+				{Gateway: "192.168.1.1", PrefixLength: 24},
+				{Gateway: "2001:db8:1::1", PrefixLength: 64},
+			},
+			ipRanges:    dualStackRanges[:1],
+			expectedErr: "subnet configuration for IP family IPv6 is not present in the IP pool",
+		},
+		{
+			name: "range is validated only against matching family subnet",
+			subnetInfo: []crdv1beta2.SubnetInfo{
+				{Gateway: "192.168.2.1", PrefixLength: 24},
+				{Gateway: "2001:db8:1::1", PrefixLength: 64},
+			},
+			ipRanges:    dualStackRanges,
+			expectedErr: "range [192.168.1.10-192.168.1.20] must be a strict subset of the subnet 192.168.2.1/24",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ranges, err := ValidateExternalIPPoolIPRangesAndSubnets(tt.subnetInfo, tt.ipRanges)
+			if tt.expectedErr != "" {
+				assert.EqualError(t, err, tt.expectedErr)
+				return
+			}
+			require.NoError(t, err)
+			assert.Len(t, ranges, len(tt.ipRanges))
+		})
+	}
+}
+
+func TestIPFamiliesForRanges(t *testing.T) {
+	families, err := IPFamiliesForRanges([]crdv1beta2.IPRange{
+		{CIDR: "192.168.1.0/24"},
+		{Start: "2001:db8::1", End: "2001:db8::10"},
+	})
+	require.NoError(t, err)
+	assert.ElementsMatch(t, []corev1.IPFamily{corev1.IPv4Protocol, corev1.IPv6Protocol}, sets.List(families))
+}
+
 func TestNormalizeRange(t *testing.T) {
 	tests := []struct {
 		name          string
-		ipRange       crdv1beta1.IPRange
+		ipRange       crdv1beta2.IPRange
 		context       string
 		expectedRange NormalizedIPRange
 		expectedErr   string
 	}{
 		{
 			name:    "valid CIDR range",
-			ipRange: crdv1beta1.IPRange{CIDR: "192.168.1.0/24"},
+			ipRange: crdv1beta2.IPRange{CIDR: "192.168.1.0/24"},
 			expectedRange: NormalizedIPRange{
 				Start:  netip.MustParseAddr("192.168.1.0"),
 				End:    netip.MustParseAddr("192.168.1.255"),
@@ -482,7 +602,7 @@ func TestNormalizeRange(t *testing.T) {
 		},
 		{
 			name:    "valid CIDR range with context",
-			ipRange: crdv1beta1.IPRange{CIDR: "192.168.1.0/24"},
+			ipRange: crdv1beta2.IPRange{CIDR: "192.168.1.0/24"},
 			context: "pool1",
 			expectedRange: NormalizedIPRange{
 				Start:  netip.MustParseAddr("192.168.1.0"),
@@ -492,7 +612,7 @@ func TestNormalizeRange(t *testing.T) {
 		},
 		{
 			name:    "valid start-end range",
-			ipRange: crdv1beta1.IPRange{Start: "192.168.1.1", End: "192.168.1.10"},
+			ipRange: crdv1beta2.IPRange{Start: "192.168.1.1", End: "192.168.1.10"},
 			expectedRange: NormalizedIPRange{
 				Start:  netip.MustParseAddr("192.168.1.1"),
 				End:    netip.MustParseAddr("192.168.1.10"),
@@ -501,27 +621,27 @@ func TestNormalizeRange(t *testing.T) {
 		},
 		{
 			name:        "invalid CIDR",
-			ipRange:     crdv1beta1.IPRange{CIDR: "invalid-cidr"},
+			ipRange:     crdv1beta2.IPRange{CIDR: "invalid-cidr"},
 			expectedErr: "invalid cidr invalid-cidr",
 		},
 		{
 			name:        "invalid start IP",
-			ipRange:     crdv1beta1.IPRange{Start: "invalid-ip", End: "192.168.1.10"},
+			ipRange:     crdv1beta2.IPRange{Start: "invalid-ip", End: "192.168.1.10"},
 			expectedErr: "invalid start ip address invalid-ip",
 		},
 		{
 			name:        "invalid end IP",
-			ipRange:     crdv1beta1.IPRange{Start: "192.168.1.1", End: "invalid-ip"},
+			ipRange:     crdv1beta2.IPRange{Start: "192.168.1.1", End: "invalid-ip"},
 			expectedErr: "invalid end ip address invalid-ip",
 		},
 		{
 			name:        "mixed IP families",
-			ipRange:     crdv1beta1.IPRange{Start: "192.168.1.1", End: "2001:db8::1"},
+			ipRange:     crdv1beta2.IPRange{Start: "192.168.1.1", End: "2001:db8::1"},
 			expectedErr: "range start 192.168.1.1 and range end 2001:db8::1 should belong to same family",
 		},
 		{
 			name:        "start greater than end",
-			ipRange:     crdv1beta1.IPRange{Start: "192.168.1.10", End: "192.168.1.1"},
+			ipRange:     crdv1beta2.IPRange{Start: "192.168.1.10", End: "192.168.1.1"},
 			expectedErr: "range start 192.168.1.10 should not be greater than range end 192.168.1.1",
 		},
 	}
@@ -540,7 +660,7 @@ func TestNormalizeRange(t *testing.T) {
 }
 
 func TestNormalizeCurrentRanges(t *testing.T) {
-	ipRanges := []crdv1beta1.IPRange{
+	ipRanges := []crdv1beta2.IPRange{
 		{CIDR: "192.168.1.0/24"},
 		{Start: "10.0.0.1", End: "10.0.0.5"},
 		{Start: "2001:db8::1", End: "2001:db8::5"},
