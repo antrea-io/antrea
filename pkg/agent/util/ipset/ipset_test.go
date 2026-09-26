@@ -49,6 +49,11 @@ func TestCreateIPSet(t *testing.T) {
 			expectedArgs: []string{"ipset", "create", testIPSetName, string(HashIP), "family", "inet6", "-exist"},
 		},
 		{
+			name:         "Create hash:mac set successfully",
+			setType:      HashMAC,
+			expectedArgs: []string{"ipset", "create", testIPSetName, string(HashMAC), "-exist"},
+		},
+		{
 			name:              "Create IPv4 set with error",
 			setType:           HashIPPort,
 			err:               errors.New("some errors"),

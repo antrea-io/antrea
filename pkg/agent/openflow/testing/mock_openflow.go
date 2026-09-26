@@ -423,17 +423,17 @@ func (mr *MockClientMockRecorder) InstallMulticlusterPodFlows(podIP, tunnelPeerI
 }
 
 // InstallNodeFlows mocks base method.
-func (m *MockClient) InstallNodeFlows(hostname string, peerConfigs map[*net.IPNet]net.IP, peerNodeIPs *ip.DualStackIPs, ipsecTunOFPort uint32, peerNodeMAC net.HardwareAddr) error {
+func (m *MockClient) InstallNodeFlows(hostname string, peerConfigs map[*net.IPNet]net.IP, peerNodeIPs *ip.DualStackIPs, ipsecTunOFPort uint32, peerNodeMAC net.HardwareAddr, l2DispatchPeerIndex uint32) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "InstallNodeFlows", hostname, peerConfigs, peerNodeIPs, ipsecTunOFPort, peerNodeMAC)
+	ret := m.ctrl.Call(m, "InstallNodeFlows", hostname, peerConfigs, peerNodeIPs, ipsecTunOFPort, peerNodeMAC, l2DispatchPeerIndex)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // InstallNodeFlows indicates an expected call of InstallNodeFlows.
-func (mr *MockClientMockRecorder) InstallNodeFlows(hostname, peerConfigs, peerNodeIPs, ipsecTunOFPort, peerNodeMAC any) *gomock.Call {
+func (mr *MockClientMockRecorder) InstallNodeFlows(hostname, peerConfigs, peerNodeIPs, ipsecTunOFPort, peerNodeMAC, l2DispatchPeerIndex any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "InstallNodeFlows", reflect.TypeOf((*MockClient)(nil).InstallNodeFlows), hostname, peerConfigs, peerNodeIPs, ipsecTunOFPort, peerNodeMAC)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "InstallNodeFlows", reflect.TypeOf((*MockClient)(nil).InstallNodeFlows), hostname, peerConfigs, peerNodeIPs, ipsecTunOFPort, peerNodeMAC, l2DispatchPeerIndex)
 }
 
 // InstallPodFlows mocks base method.

@@ -101,6 +101,8 @@ type Controller struct {
 	// eventHandlerRegistration.HasSynced will be used to track whether even handlers have been
 	// called for the initial list.
 	eventHandlerRegistration cache.ResourceEventHandlerRegistration
+	// l2DispatchPeers allocates the indices of the peer Nodes of the l2 dispatch.
+	l2DispatchPeers *l2DispatchPeerIndices
 }
 
 // NewNodeRouteController instantiates a new Controller object which will process Node events
@@ -141,6 +143,7 @@ func NewNodeRouteController(
 		ipsecCertificateManager: ipsecCertificateManager,
 		flowRestoreCompleteWait: flowRestoreCompleteWait.Increment(),
 		hasProcessedInitialList: synctrack.NewAsyncTracker[string](controllerName),
+		l2DispatchPeers:         newL2DispatchPeerIndices(),
 	}
 	if nodeConfig.PodIPv4CIDR != nil {
 		prefix, _ := cidrToPrefix(nodeConfig.PodIPv4CIDR)
@@ -190,6 +193,8 @@ type nodeRouteInfo struct {
 	gatewayIPs         *utilip.DualStackIPs
 	nodeMAC            net.HardwareAddr
 	wireGuardPublicKey string
+	// dsrPeerNodeMAC is the MAC address of the Node which the l2 dispatch of DSR accepts traffic from, or nil.
+	dsrPeerNodeMAC net.HardwareAddr
 }
 
 // enqueueNode adds an object to the controller work queue
@@ -340,6 +345,12 @@ func (c *Controller) reconcile() error {
 	}
 	if err := c.removeStaleWireGuardPeers(); err != nil {
 		return fmt.Errorf("error when removing stale WireGuard peers: %v", err)
+	}
+	if err := c.reconcileL2DispatchPeers(); err != nil {
+		return fmt.Errorf("error when reconciling the l2 dispatch peers: %w", err)
+	}
+	if err := c.reconcileDSRPeerNodeMACs(); err != nil {
+		return fmt.Errorf("error when reconciling the MAC addresses of the DSR l2 dispatch peers: %w", err)
 	}
 	return nil
 }
@@ -500,8 +511,8 @@ func (c *Controller) deleteNodeRoute(nodeName string) error {
 
 	obj, installed, _ := c.installedNodes.GetByKey(nodeName)
 	if !installed {
-		// Route is not added for this Node.
-		return nil
+		// Route is not added for this Node. The l2 dispatch routing may be, if installing the flows failed.
+		return c.releaseL2DispatchPeer(nodeName)
 	}
 	nodeRouteInfo := obj.(*nodeRouteInfo)
 
@@ -512,6 +523,15 @@ func (c *Controller) deleteNodeRoute(nodeName string) error {
 	}
 	if err := c.ofClient.UninstallNodeFlows(nodeName); err != nil {
 		return fmt.Errorf("failed to uninstall flows to Node %s: %v", nodeName, err)
+	}
+	// The l2 dispatch routing is removed after the flows, which may use the index of the peer Node.
+	if err := c.releaseL2DispatchPeer(nodeName); err != nil {
+		return err
+	}
+	if nodeRouteInfo.dsrPeerNodeMAC != nil {
+		if err := c.routeClient.DeleteDSRPeerNodeMAC(nodeRouteInfo.dsrPeerNodeMAC); err != nil {
+			return fmt.Errorf("failed to delete the MAC address of Node %s for the DSR l2 dispatch: %w", nodeName, err)
+		}
 	}
 	c.installedNodes.Delete(obj)
 	func() {
@@ -651,13 +671,26 @@ func (c *Controller) addNodeRoute(nodeName string, node *corev1.Node) error {
 		}
 	}
 
+	// The l2 dispatch routing is installed before the flows, which use the index of the peer Node, and removed after
+	// them when the peer Node can no longer be reached with the l2 dispatch.
+	l2DispatchPeerIndex, err := c.installL2DispatchPeer(nodeName, peerNodeIPs)
+	if err != nil {
+		return err
+	}
+
 	if err = c.ofClient.InstallNodeFlows(
 		nodeName,
 		peerConfigs,
 		peerNodeIPs,
 		ipsecTunOFPort,
-		peerNodeMAC); err != nil {
+		peerNodeMAC,
+		l2DispatchPeerIndex); err != nil {
 		return fmt.Errorf("failed to install flows to Node %s: %v", nodeName, err)
+	}
+	if l2DispatchPeerIndex == 0 {
+		if err := c.releaseL2DispatchPeer(nodeName); err != nil {
+			return err
+		}
 	}
 
 	peerGatewayIPs := new(utilip.DualStackIPs)
@@ -675,6 +708,15 @@ func (c *Controller) addNodeRoute(nodeName string, node *corev1.Node) error {
 		}
 	}
 
+	var previousDSRPeerNodeMAC net.HardwareAddr
+	if installed {
+		previousDSRPeerNodeMAC = nrInfo.(*nodeRouteInfo).dsrPeerNodeMAC
+	}
+	dsrPeerNodeMAC, err := c.updateDSRPeerNodeMAC(previousDSRPeerNodeMAC, peerNodeMAC, peerNodeIPs)
+	if err != nil {
+		return err
+	}
+
 	c.installedNodes.Add(&nodeRouteInfo{
 		nodeName:           nodeName,
 		podCIDRs:           peerPodCIDRs,
@@ -682,6 +724,7 @@ func (c *Controller) addNodeRoute(nodeName string, node *corev1.Node) error {
 		gatewayIPs:         peerGatewayIPs,
 		nodeMAC:            peerNodeMAC,
 		wireGuardPublicKey: peerWireGuardPublicKey,
+		dsrPeerNodeMAC:     dsrPeerNodeMAC,
 	})
 
 	return err

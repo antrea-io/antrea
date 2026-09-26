@@ -8,6 +8,7 @@
   - [Removing kube-proxy](#removing-kube-proxy)
     - [Windows Nodes](#windows-nodes)
   - [Configuring load balancer mode for external traffic](#configuring-load-balancer-mode-for-external-traffic)
+    - [Choosing the dispatch of DSR traffic](#choosing-the-dispatch-of-dsr-traffic)
 - [Special use cases](#special-use-cases)
   - [When you are using NodeLocal DNSCache](#when-you-are-using-nodelocal-dnscache)
   - [When you want your external LoadBalancer to handle Pod traffic](#when-you-want-your-external-loadbalancer-to-handle-pod-traffic)
@@ -177,8 +178,26 @@ to ensure symmetric paths. It's the default and the most general mode.
 Nodes that are not the ingress Node can reply to clients directly, bypassing
 the ingress Node. Therefore, DSR mode can preserve the client IP of requests,
 and usually has lower latency and higher throughput. Currently, it is only
-applicable to Linux Nodes, encap mode, and IPv4 clusters. The feature gate
-`LoadBalancerModeDSR` must be enabled to use this mode for any Service.
+applicable to Linux Nodes and IPv4 clusters, and it is not supported in
+`networkPolicyOnly` mode. The feature gate `LoadBalancerModeDSR` must be
+enabled to use this mode for any Service.
+
+By default, in `noEncap` and `hybrid` modes, the ingress Node sends DSR traffic
+to the Node that runs the selected backend Pod through the tunnel, even when Pod
+traffic between these Nodes is routed. The ingress Node does not DNAT DSR
+traffic, so its destination is still the Service IP, which the Node network
+cannot route to that Node. In `noEncap` mode, Antrea creates the tunnel
+interface (`antrea-tun0`) for this purpose when the `LoadBalancerModeDSR`
+feature gate is enabled, `proxyAll` is true, and the default dispatch of DSR is
+`tunnel`, as it does for [Egress](egress.md). This has two consequences:
+
+* The MTU of every Pod is reduced by the encapsulation overhead, which is 50
+bytes for Geneve.
+* The Node network must allow the tunnel traffic between Nodes, which is UDP
+port 6081 for Geneve.
+
+To send DSR traffic without the tunnel, see [Choosing the dispatch of DSR
+traffic](#choosing-the-dispatch-of-dsr-traffic).
 
 You can make the following changes to the `antrea-config` ConfigMap to specify
 the default load balancer mode for all Services:
@@ -215,6 +234,78 @@ INVALID conntrack state could prevent DSR mode from working:
 *filter
 -A KUBE-FORWARD -m conntrack --ctstate INVALID -j DROP
 ```
+
+#### Choosing the dispatch of DSR traffic
+
+The dispatch determines how the ingress Node sends the traffic of a DSR Service
+to the Node that runs the selected backend Pod. It has two options:
+
+* `tunnel` (default) encapsulates the traffic and sends it through the tunnel,
+as described above.
+* `l2` sends the traffic unmodified to the MAC address of the Node. It adds no
+bytes and needs no tunnel. It requires the `DSRDispatchL2` feature gate, and
+the `noEncap` or `hybrid` mode. It is not supported with
+`hostNetworkMode: nftables`, or with bridging mode (`enableBridgingMode`).
+
+With the `l2` dispatch, the traffic keeps the client IP as its source and the
+Service IP as its destination. The Node that runs the selected backend Pod
+recognizes the traffic by its source MAC address, which is the MAC address of
+the transport interface of the ingress Node. In `noEncap` mode, with `l2` as the
+default dispatch and Egress disabled, Antrea creates no tunnel interface, and
+the Pod MTU is the MTU of the transport interface.
+
+The `l2` dispatch requires the following from the Node network:
+
+* All Nodes are in one L2 segment on their transport interface.
+* A frame is delivered to the MAC address of a Node even when its destination
+IP is not an IP of that Node. The destination is the Service IP.
+* A frame is accepted even when its source IP is not an IP of the Node that
+sends it. The source is the IP of the external client. Hypervisors that filter
+the source IPs of a virtual machine drop this traffic.
+* The source MAC address of a frame is not changed between Nodes.
+* The Node that runs the backend Pod accepts the client IP on its transport
+interface. With strict reverse path filtering (`rp_filter`) on that interface,
+the route to the client must go through it.
+
+The `l2` dispatch only reaches the Nodes in the local subnet of the transport
+interface. In `hybrid` mode, DSR traffic to the Nodes in other subnets goes
+through the tunnel. In `noEncap` mode, it goes through the tunnel if the tunnel
+interface exists, for example because Egress is enabled. Otherwise, the ingress
+Node drops it, and antrea-agent logs an error for each of these Nodes.
+
+To set the default dispatch for all Services, you can make the following
+changes to the `antrea-config` ConfigMap:
+
+```yaml
+kind: ConfigMap
+apiVersion: v1
+metadata:
+  name: antrea-config
+  namespace: kube-system
+data:
+  antrea-agent.conf: |
+    featureGates:
+      LoadBalancerModeDSR: true
+      DSRDispatchL2: true
+    antreaProxy:
+      proxyAll: true
+      defaultLoadBalancerMode: dsr
+      dsr:
+        dispatch: <tunnel|l2>
+```
+
+To use another dispatch for a particular Service, you can annotate the Service
+in the following way:
+
+```bash
+kubectl annotate service my-service service.antrea.io/dsr-dispatch=<tunnel|l2>
+```
+
+A Service uses the dispatch of its annotation, or else the default dispatch. If
+the Node cannot provide that dispatch, the Service uses the other one, and
+antrea-agent logs it: `l2` outside the `noEncap` and `hybrid` modes, or where
+it is not supported, becomes `tunnel`, and `tunnel` without a tunnel interface
+becomes `l2`.
 
 ## Special use cases
 
