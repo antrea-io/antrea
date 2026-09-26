@@ -387,7 +387,7 @@ spec:
             name: antrea-config
         - name: host-cni-conf
           hostPath:
-            path: /etc/cni/net.d
+            path: {{ .Values.cni.hostConfPath }}
         - name: host-cni-bin
           hostPath:
             path: {{ .Values.cni.hostBinPath }}
