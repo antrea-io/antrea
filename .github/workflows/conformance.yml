@@ -39,25 +39,27 @@ on:
         description: >-
           The Github runner label to use. Leave empty to automatically select
           the runner based on antrea-image-platform: linux/amd64 -> ubuntu-latest,
-          linux/arm64 -> oracle-vm-2cpu-8gb-arm64. Otherwise
+          linux/arm64 and linux/arm/v7 -> oracle-vm-2cpu-8gb-arm64. Otherwise
           specify a runner label available to the repository, e.g. ubuntu-latest,
           ubuntu-24.04-arm, oracle-vm-2cpu-8gb-arm64. The runner's architecture
-          must match antrea-image-platform: the Kind cluster created by this
-          workflow runs on the runner's native architecture, so a mismatch
-          would leave the Antrea images unexecutable and the tests will fail.
+          must match antrea-image-platform, except that linux/arm/v7 uses
+          arm64 nodes with arm/v7 Antrea images. For linux/arm/v7, choose an
+          arm64 runner that can execute 32-bit Arm binaries, such as
+          oracle-vm-2cpu-8gb-arm64.
           A label with no registered runner will leave the job queued forever.
         required: false
         default: ""
       antrea-image-platform:
         description: >-
-          Platform argument to provide when building the Antrea images. It must
-          match the runner architecture, as the Kind cluster created by this
-          workflow runs on the runner's native architecture (Kind does not
-          provide arm/v7 node images, so linux/arm/v7 cannot be tested).
+          Platform argument to provide when building the Antrea images.
+          The Kind cluster runs on the runner's native architecture. For
+          linux/arm/v7, use arm64 nodes that can execute the arm/v7 Antrea
+          images; Kind does not provide arm/v7 node images.
         type: choice
         options:
           - "linux/amd64"
           - "linux/arm64"
+          - "linux/arm/v7"
         default: "linux/amd64"
         required: true
 
@@ -65,7 +67,7 @@ on:
 jobs:
   test:
     name: Run tests
-    runs-on: ${{ inputs.runner != '' && inputs.runner || (inputs.antrea-image-platform == 'linux/arm64' && 'oracle-vm-2cpu-8gb-arm64') || 'ubuntu-latest' }}
+    runs-on: ${{ inputs.runner != '' && inputs.runner || ((inputs.antrea-image-platform == 'linux/arm64' || inputs.antrea-image-platform == 'linux/arm/v7') && 'oracle-vm-2cpu-8gb-arm64') || 'ubuntu-latest' }}
     steps:
       - name: Free disk space
         # https://github.com/actions/virtual-environments/issues/709
@@ -150,6 +152,12 @@ jobs:
             --set "${{ inputs.antrea-values }}" \
             "${helm_args[@]}"
           kubectl rollout status -n kube-system ds/antrea-agent --timeout=5m
+      - name: Print Antrea Pod status and logs on failure
+        if: ${{ failure() }}
+        run: |
+          kubectl get pods -A -o wide || true
+          kubectl -n kube-system describe pods -l app=antrea || true
+          kubectl -n kube-system logs -l app=antrea --all-containers --prefix --tail=100 || true
       - name: Run e2e tests
         run: |
           ./ci/run-k8s-e2e-tests.sh "--e2e-${{ inputs.test-suite }}"
