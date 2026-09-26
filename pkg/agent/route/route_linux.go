@@ -274,6 +274,8 @@ type Client struct {
 	// ServicePorts and uninstall it exactly once when it's no longer used by any ServicePorts.
 	// It applies to externalIP and LoadBalancerIP.
 	serviceExternalIPReferences map[string]sets.Set[string]
+	// serviceExternalIPMutex protects serviceExternalIPReferences. Dual-stack IPv4 and IPv6
+	serviceExternalIPMutex sync.Mutex
 	// serviceNeighbors caches neighbors.
 	serviceNeighbors sync.Map
 	// serviceIPSets caches ipsets about Services.
@@ -2876,6 +2878,10 @@ func (c *Client) addVirtualNodePortDNATIPRoute(isIPv6 bool) error {
 // Node's host network as the destination, skipping conntrack and bypassing kube-proxy processing.
 func (c *Client) AddExternalIPConfigs(svcInfoStr string, externalIP net.IP) error {
 	externalIPStr := externalIP.String()
+
+	c.serviceExternalIPMutex.Lock()
+	defer c.serviceExternalIPMutex.Unlock()
+
 	references, exists := c.serviceExternalIPReferences[externalIPStr]
 	if exists {
 		references.Insert(svcInfoStr)
@@ -2896,8 +2902,7 @@ func (c *Client) AddExternalIPConfigs(svcInfoStr string, externalIP net.IP) erro
 		return err
 	}
 
-	references = sets.New[string](svcInfoStr)
-	c.serviceExternalIPReferences[externalIPStr] = references
+	c.serviceExternalIPReferences[externalIPStr] = sets.New[string](svcInfoStr)
 	return nil
 }
 
@@ -2905,6 +2910,10 @@ func (c *Client) AddExternalIPConfigs(svcInfoStr string, externalIP net.IP) erro
 // gateway interface. Additionally, it removes the IP from the target set.
 func (c *Client) DeleteExternalIPConfigs(svcInfoStr string, externalIP net.IP) error {
 	externalIPStr := externalIP.String()
+
+	c.serviceExternalIPMutex.Lock()
+	defer c.serviceExternalIPMutex.Unlock()
+
 	references, exists := c.serviceExternalIPReferences[externalIPStr]
 	if !exists || !references.Has(svcInfoStr) {
 		return nil

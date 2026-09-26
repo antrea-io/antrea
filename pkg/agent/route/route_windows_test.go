@@ -462,3 +462,48 @@ func TestDeleteExternalIPConfigs(t *testing.T) {
 	}
 	assert.Equal(t, make(map[string]sets.Set[string]), c.serviceExternalIPReferences)
 }
+
+func TestExternalIPConfigsConcurrentAccess(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	mockWinnet := winnettesting.NewMockInterface(ctrl)
+	c := &Client{
+		winnet:                      mockWinnet,
+		serviceExternalIPReferences: make(map[string]sets.Set[string]),
+		nodeConfig: &config.NodeConfig{
+			GatewayConfig: &config.GatewayConfig{
+				LinkIndex: 10,
+			},
+		},
+	}
+
+	const workers = 32
+	ip := net.ParseIP(externalIPv4Addr1)
+	mockWinnet.EXPECT().ReplaceNetRoute(ipv4Route1)
+	mockWinnet.EXPECT().RemoveNetRoute(ipv4Route1)
+
+	var wg sync.WaitGroup
+	wg.Add(workers)
+	for i := 0; i < workers; i++ {
+		go func(id int) {
+			defer wg.Done()
+			assert.NoError(t, c.AddExternalIPConfigs(fmt.Sprintf("svc-%d", id), ip))
+		}(i)
+	}
+	wg.Wait()
+
+	expected := sets.New[string]()
+	for i := 0; i < workers; i++ {
+		expected.Insert(fmt.Sprintf("svc-%d", i))
+	}
+	assert.Equal(t, map[string]sets.Set[string]{externalIPv4Addr1: expected}, c.serviceExternalIPReferences)
+
+	wg.Add(workers)
+	for i := 0; i < workers; i++ {
+		go func(id int) {
+			defer wg.Done()
+			assert.NoError(t, c.DeleteExternalIPConfigs(fmt.Sprintf("svc-%d", id), ip))
+		}(i)
+	}
+	wg.Wait()
+	assert.Empty(t, c.serviceExternalIPReferences)
+}

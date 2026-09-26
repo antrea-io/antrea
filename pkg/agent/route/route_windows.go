@@ -95,6 +95,8 @@ type Client struct {
 	// ServicePorts and uninstall it exactly once when it's no longer used by any ServicePorts.
 	// It applies to externalIP and LoadBalancerIP.
 	serviceExternalIPReferences map[string]sets.Set[string]
+	// serviceExternalIPMutex protects serviceExternalIPReferences. Dual-stack IPv4 and IPv6
+	serviceExternalIPMutex sync.Mutex
 	// netNatStaticMappings caches Windows NetNat for NodePort.
 	netNatStaticMappings sync.Map
 	fwClient             *winfirewall.Client
@@ -555,6 +557,10 @@ func (c *Client) DeleteNodePortConfigs(nodePortAddresses []net.IP, port uint16, 
 // gateway interface.
 func (c *Client) AddExternalIPConfigs(svcInfoStr string, externalIP net.IP) error {
 	externalIPStr := externalIP.String()
+
+	c.serviceExternalIPMutex.Lock()
+	defer c.serviceExternalIPMutex.Unlock()
+
 	references, exists := c.serviceExternalIPReferences[externalIPStr]
 	if exists {
 		references.Insert(svcInfoStr)
@@ -571,8 +577,7 @@ func (c *Client) AddExternalIPConfigs(svcInfoStr string, externalIP net.IP) erro
 	}
 	klog.V(4).InfoS("Added route for external IP", "IP", externalIPStr)
 
-	references = sets.New[string](svcInfoStr)
-	c.serviceExternalIPReferences[externalIPStr] = references
+	c.serviceExternalIPReferences[externalIPStr] = sets.New[string](svcInfoStr)
 	c.serviceRoutes.Store(externalIPStr, route)
 	return nil
 }
@@ -581,6 +586,10 @@ func (c *Client) AddExternalIPConfigs(svcInfoStr string, externalIP net.IP) erro
 // gateway interface.
 func (c *Client) DeleteExternalIPConfigs(svcInfoStr string, externalIP net.IP) error {
 	externalIPStr := externalIP.String()
+
+	c.serviceExternalIPMutex.Lock()
+	defer c.serviceExternalIPMutex.Unlock()
+
 	references, exists := c.serviceExternalIPReferences[externalIPStr]
 	if !exists || !references.Has(svcInfoStr) {
 		return nil
