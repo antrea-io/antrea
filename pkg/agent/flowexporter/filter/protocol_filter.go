@@ -60,8 +60,8 @@ func NewProtocolFilter(protocols []string) ProtocolFilter {
 		klog.InfoS("Found unsupported protocol(s) in protocolFilter, refer to the docs for supported protocols", "unsupportedProtocols", strings.Join(invalidProtocols, ","))
 	}
 
-	if len(protocols) == 0 {
-		klog.InfoS("protocolFilter is empty and nothing will be exported")
+	if len(validatedProtocols) == 0 {
+		klog.InfoS("protocolFilter matches no supported protocols, so no flows will be exported")
 	}
 
 	return ProtocolFilter{
