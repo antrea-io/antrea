@@ -82,9 +82,10 @@ func HandleFunc(bq querier.AgentBGPPolicyInfoQuerier) http.HandlerFunc {
 				continue
 			}
 			bgpPeersResp = append(bgpPeersResp, apis.BGPPeerResponse{
-				Peer:  net.JoinHostPort(peer.Address, strconv.Itoa(int(peer.Port))),
-				ASN:   peer.ASN,
-				State: string(peer.SessionState),
+				Peer:            net.JoinHostPort(peer.Address, strconv.Itoa(int(peer.Port))),
+				ASN:             peer.ASN,
+				State:           string(peer.SessionState),
+				BFDSessionState: string(peer.BFDSessionState),
 			})
 		}
 		// make sure that we provide a stable order for the API response
