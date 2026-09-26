@@ -19,7 +19,6 @@ import (
 	"fmt"
 	"reflect"
 	"testing"
-	"testing/synctest"
 	"time"
 
 	"github.com/stretchr/testify/assert"
@@ -2723,38 +2722,38 @@ func TestDeleteHandlerTombstone(t *testing.T) {
 
 	for _, tt := range testCases {
 		t.Run(tt.name, func(t *testing.T) {
-			synctest.Test(t, func(t *testing.T) {
-				// Create the controller inside the bubble so that all goroutines
-				// it spawns (e.g. workqueue's waitingLoop) use the bubble's fake
-				// clock and are correctly tracked by synctest.Wait().
-				c := newFakeController(t, tt.objects, tt.crdObjects, true, true)
-				ctx := t.Context()
-				stopCh := ctx.Done()
-				t.Cleanup(c.queue.ShutDown)
-				// Start informers inside the bubble so their goroutines are tracked
-				// by synctest. Do not call WaitForCacheSync here; synctest.Wait()
-				// blocks until all goroutines are idle, which guarantees all startup
-				// ADD events have been delivered to the queue.
-				c.informerFactory.Start(stopCh)
-				c.crdInformerFactory.Start(stopCh)
-				synctest.Wait()
-				// Drain any startup ADD events so the queue is empty before the tombstone test.
-				for c.queue.Len() > 0 {
-					item, _ := c.queue.Get()
-					c.queue.Done(item)
-				}
+			c := newFakeController(t, nil, nil, true, true)
+			t.Cleanup(c.queue.ShutDown)
 
-				tombstone := cache.DeletedFinalStateUnknown{Key: "test/tombstone-key", Obj: tt.tombstoneObj}
-				// This must not panic regardless of the inner object type.
-				tt.handler(c.Controller, tombstone)
-				synctest.Wait()
-
-				if tt.expectEnqueue {
-					assert.Equal(t, 1, c.queue.Len(), "expected handler to enqueue an event via tombstone")
-				} else {
-					assert.Equal(t, 0, c.queue.Len(), "expected handler to not enqueue an event for invalid tombstone inner type")
+			for _, obj := range tt.objects {
+				switch obj := obj.(type) {
+				case *corev1.Node:
+					require.NoError(t, c.nodeInformer.GetStore().Add(obj))
+				case *corev1.Service:
+					require.NoError(t, c.serviceInformer.GetStore().Add(obj))
+				case *discovery.EndpointSlice:
+					require.NoError(t, c.endpointSliceInformer.GetStore().Add(obj))
 				}
-			})
+			}
+
+			for _, obj := range tt.crdObjects {
+				switch obj := obj.(type) {
+				case *v1alpha1.BGPPolicy:
+					require.NoError(t, c.bgpPolicyInformer.GetStore().Add(obj))
+				case *crdv1b1.Egress:
+					require.NoError(t, c.egressInformer.GetStore().Add(obj))
+				}
+			}
+
+			tombstone := cache.DeletedFinalStateUnknown{Key: "test/tombstone-key", Obj: tt.tombstoneObj}
+			// This must not panic regardless of the inner object type.
+			tt.handler(c.Controller, tombstone)
+
+			if tt.expectEnqueue {
+				assert.Equal(t, 1, c.queue.Len(), "expected handler to enqueue an event via tombstone")
+			} else {
+				assert.Equal(t, 0, c.queue.Len(), "expected handler to not enqueue an event for invalid tombstone inner type")
+			}
 		})
 	}
 }
