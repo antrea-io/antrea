@@ -27,6 +27,7 @@ const (
 	LabelPacketInMeterNetworkPolicy   = "PacketInMeterNetworkPolicy"
 	LabelPacketInMeterTraceflow       = "PacketInMeterTraceflow"
 	LabelPacketInMeterDNSInterception = "PacketInMeterDNSInterception"
+	LabelPacketInMeterIGMP            = "PacketInMeterIGMP"
 
 	// LabelFQDNCacheSelectorLimit and LabelFQDNCacheTotalLimit are the values of the
 	// reason label of FQDNCacheEvictionCount: respectively, the limit on the number of
@@ -34,6 +35,12 @@ const (
 	// tracked in total.
 	LabelFQDNCacheSelectorLimit = "selector_limit"
 	LabelFQDNCacheTotalLimit    = "total_limit"
+
+	// LabelMulticastGroupJoinRejectedPodLimit and LabelMulticastGroupJoinRejectedNodeLimit are the values of the
+	// reason label of MulticastGroupJoinRejectedCount: respectively, the limit on the number of
+	// multicast groups joined by a single Pod, and the limit on the number joined across the Node.
+	LabelMulticastGroupJoinRejectedPodLimit  = "pod_limit"
+	LabelMulticastGroupJoinRejectedNodeLimit = "node_limit"
 )
 
 var (
@@ -94,6 +101,18 @@ var (
 			Name:      "fqdn_cache_eviction_count",
 			Help: "Number of domain names which the Antrea Agent stopped tracking to honor its FQDN tracking limits, partitioned by the limit which was reached " +
 				"(selector_limit and total_limit). A rule stops matching an evicted domain name until a Pod which it selects resolves that name again.",
+			StabilityLevel: metrics.ALPHA,
+		},
+		[]string{"reason"},
+	)
+
+	MulticastGroupJoinRejectedCount = metrics.NewCounterVec(
+		&metrics.CounterOpts{
+			Namespace: metricNamespaceAntrea,
+			Subsystem: metricSubsystemAgent,
+			Name:      "multicast_group_join_rejected_count",
+			Help: "Number of multicast group joins rejected due to limits, partitioned by reason " +
+				"(pod_limit and node_limit).",
 			StabilityLevel: metrics.ALPHA,
 		},
 		[]string{"reason"},
@@ -233,6 +252,7 @@ func InitializePrometheusMetrics() {
 	InitializeNetworkPolicyMetrics()
 	InitializeOVSMetrics()
 	InitializeConnectionMetrics()
+	InitializeMulticastMetrics()
 }
 
 func InitializePodMetrics() {
@@ -295,7 +315,7 @@ func InitializeOVSMetrics() {
 		OVSFlowOpsErrorCount.WithLabelValues(ops)
 		OVSFlowOpsLatency.WithLabelValues(ops)
 	}
-	for _, label := range []string{LabelPacketInMeterNetworkPolicy, LabelPacketInMeterTraceflow, LabelPacketInMeterDNSInterception} {
+	for _, label := range []string{LabelPacketInMeterNetworkPolicy, LabelPacketInMeterTraceflow, LabelPacketInMeterDNSInterception, LabelPacketInMeterIGMP} {
 		OVSMeterPacketDroppedCount.WithLabelValues(label)
 	}
 }
@@ -318,5 +338,14 @@ func InitializeConnectionMetrics() {
 	}
 	if err := legacyregistry.Register(ConntrackPollCycleDuration); err != nil {
 		klog.ErrorS(err, "Failed to register metrics with Prometheus", "metrics", "antrea_agent_conntrack_poll_cycle_duration_seconds")
+	}
+}
+
+func InitializeMulticastMetrics() {
+	if err := legacyregistry.Register(MulticastGroupJoinRejectedCount); err != nil {
+		klog.ErrorS(err, "Failed to register metrics with Prometheus", "metrics", "antrea_agent_multicast_group_join_rejected_count")
+	}
+	for _, reason := range []string{LabelMulticastGroupJoinRejectedPodLimit, LabelMulticastGroupJoinRejectedNodeLimit} {
+		MulticastGroupJoinRejectedCount.WithLabelValues(reason)
 	}
 }

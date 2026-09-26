@@ -29,13 +29,17 @@ import (
 	openflowtest "antrea.io/antrea/v2/pkg/ovs/openflow/testing"
 )
 
-func multicastInitFlows(isEncap bool) []string {
+func multicastInitFlows(isEncap, ovsMetersSupported bool) []string {
+	meterAction := ""
+	if ovsMetersSupported {
+		meterAction = "meter:259,"
+	}
 	if isEncap {
 		return []string{
 			"cookie=0x1050000000000, table=MulticastEgressRule, priority=64990,igmp,reg0=0x3/0xf actions=goto_table:MulticastRouting",
 			"cookie=0x1050000000000, table=MulticastEgressPodMetric, priority=210,igmp actions=goto_table:MulticastRouting",
-			"cookie=0x1050000000000, table=MulticastRouting, priority=210,igmp,reg0=0x3/0xf actions=controller(id=32776,reason=no_match,userdata=03,max_len=65535)",
-			"cookie=0x1050000000000, table=MulticastRouting, priority=210,igmp,reg0=0x1/0xf actions=controller(id=32776,reason=no_match,userdata=03,max_len=65535)",
+			fmt.Sprintf("cookie=0x1050000000000, table=MulticastRouting, priority=210,igmp,reg0=0x3/0xf actions=%scontroller(id=32776,reason=no_match,userdata=03,max_len=65535)", meterAction),
+			fmt.Sprintf("cookie=0x1050000000000, table=MulticastRouting, priority=210,igmp,reg0=0x1/0xf actions=%scontroller(id=32776,reason=no_match,userdata=03,max_len=65535)", meterAction),
 			"cookie=0x1050000000000, table=MulticastRouting, priority=190,ip actions=output:32769",
 			"cookie=0x1050000000000, table=MulticastIngressPodMetric, priority=210,igmp actions=goto_table:MulticastOutput",
 			"cookie=0x1050000000000, table=MulticastOutput, priority=210,reg0=0x200001/0x60000f,reg1=0x8001 actions=drop",
@@ -45,7 +49,7 @@ func multicastInitFlows(isEncap bool) []string {
 	}
 	return []string{
 		"cookie=0x1050000000000, table=MulticastIngressPodMetric, priority=210,igmp actions=goto_table:MulticastOutput",
-		"cookie=0x1050000000000, table=MulticastRouting, priority=210,igmp,reg0=0x3/0xf actions=controller(id=32776,reason=no_match,userdata=03,max_len=65535)",
+		fmt.Sprintf("cookie=0x1050000000000, table=MulticastRouting, priority=210,igmp,reg0=0x3/0xf actions=%scontroller(id=32776,reason=no_match,userdata=03,max_len=65535)", meterAction),
 		"cookie=0x1050000000000, table=MulticastRouting, priority=190,ip actions=output:32769",
 		"cookie=0x1050000000000, table=MulticastEgressPodMetric, priority=210,igmp actions=goto_table:MulticastRouting",
 		"cookie=0x1050000000000, table=MulticastEgressRule, priority=64990,igmp,reg0=0x3/0xf actions=goto_table:MulticastRouting",
@@ -67,14 +71,28 @@ func Test_featureMulticast_initFlows(t *testing.T) {
 			enableIPv4:       true,
 			trafficEncapMode: config.TrafficEncapModeEncap,
 			clientOptions:    []clientOptionsFn{enableMulticast},
-			expectedFlows:    multicastInitFlows(true),
+			expectedFlows:    multicastInitFlows(true, false),
 		},
 		{
 			name:             "IPv4,NoEncap",
 			enableIPv4:       true,
 			trafficEncapMode: config.TrafficEncapModeNoEncap,
 			clientOptions:    []clientOptionsFn{enableMulticast},
-			expectedFlows:    multicastInitFlows(false),
+			expectedFlows:    multicastInitFlows(false, false),
+		},
+		{
+			name:             "IPv4,Encap,Meters",
+			enableIPv4:       true,
+			trafficEncapMode: config.TrafficEncapModeEncap,
+			clientOptions:    []clientOptionsFn{enableMulticast, setEnableOVSMeters(true)},
+			expectedFlows:    multicastInitFlows(true, true),
+		},
+		{
+			name:             "IPv4,NoEncap,Meters",
+			enableIPv4:       true,
+			trafficEncapMode: config.TrafficEncapModeNoEncap,
+			clientOptions:    []clientOptionsFn{enableMulticast, setEnableOVSMeters(true)},
+			expectedFlows:    multicastInitFlows(false, true),
 		},
 	}
 	for _, tc := range testCases {

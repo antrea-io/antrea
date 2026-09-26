@@ -20,6 +20,7 @@ import (
 	"sync"
 	"time"
 
+	"golang.org/x/time/rate"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	apitypes "k8s.io/apimachinery/pkg/types"
@@ -33,6 +34,7 @@ import (
 
 	"antrea.io/antrea/v2/pkg/agent/config"
 	"antrea.io/antrea/v2/pkg/agent/interfacestore"
+	"antrea.io/antrea/v2/pkg/agent/metrics"
 	"antrea.io/antrea/v2/pkg/agent/openflow"
 	"antrea.io/antrea/v2/pkg/agent/types"
 	"antrea.io/antrea/v2/pkg/agent/util"
@@ -60,9 +62,19 @@ const (
 	// nodeUpdateKey is a key to trigger the Node list operation and update the OpenFlow group buckets to report
 	// the local multicast groups to other Nodes.
 	nodeUpdateKey = "nodeUpdate"
+
+	// defaultMaxGroupsPerPod bounds the number of multicast groups a local Pod can join.
+	defaultMaxGroupsPerPod = 32
+	// defaultMaxGroupsPerNode bounds the total number of multicast groups tracked on this Node.
+	defaultMaxGroupsPerNode = 512
 )
 
-var workerCount uint8 = 2
+var (
+	workerCount uint8 = 2
+
+	maxGroupsPerPod  = defaultMaxGroupsPerPod
+	maxGroupsPerNode = defaultMaxGroupsPerNode
+)
 
 type mcastGroupEvent struct {
 	group net.IP
@@ -269,7 +281,18 @@ type Controller struct {
 	ipv4Enabled bool
 	// ipv6Enabled is the flag that if it is running on IPv6 cluster.
 	// TODO: remove this flag after IPv6 is supported in Multicast.
-	ipv6Enabled bool
+	ipv6Enabled    bool
+	logRateLimiter *rate.Limiter
+}
+
+func (c *Controller) logRateLimitedWarning(err error, msg string, keysAndValues ...interface{}) {
+	if c.logRateLimiter == nil || c.logRateLimiter.Allow() {
+		if err != nil {
+			klog.ErrorS(err, msg, keysAndValues...)
+		} else {
+			klog.InfoS(msg, keysAndValues...)
+		}
+	}
 }
 
 func NewMulticastController(ofClient openflow.Client,
@@ -317,6 +340,7 @@ func NewMulticastController(ofClient openflow.Client,
 		flexibleIPAMEnabled: enableFlexibleIPAM,
 		ipv4Enabled:         ipv4Enabled,
 		ipv6Enabled:         ipv6Enabled,
+		logRateLimiter:      rate.NewLimiter(rate.Every(igmpLogRateLimiterInterval), igmpLogRateLimiterBurst),
 	}
 	if isEncap {
 		c.nodeGroupID = v4GroupAllocator.Allocate()
@@ -620,8 +644,35 @@ func (c *Controller) addOrUpdateGroupEvent(e *mcastGroupEvent) {
 	switch e.eType {
 	case groupJoin:
 		if !ok {
+			if len(c.groupCache.ListKeys()) >= maxGroupsPerNode {
+				c.logRateLimitedWarning(nil, "Dropped multicast group join: Node group limit reached",
+					"group", e.group.String(), "limit", maxGroupsPerNode)
+				metrics.MulticastGroupJoinRejectedCount.WithLabelValues(metrics.LabelMulticastGroupJoinRejectedNodeLimit).Inc()
+				return
+			}
+			if e.iface.Type == interfacestore.ContainerInterface {
+				podGroups := c.getGroupMemberStatusesByPod(e.iface.InterfaceName)
+				if len(podGroups) >= maxGroupsPerPod {
+					c.logRateLimitedWarning(nil, "Dropped multicast group join: Pod group limit reached",
+						"pod", e.iface.InterfaceName, "group", e.group.String(), "limit", maxGroupsPerPod)
+					metrics.MulticastGroupJoinRejectedCount.WithLabelValues(metrics.LabelMulticastGroupJoinRejectedPodLimit).Inc()
+					return
+				}
+			}
 			c.addGroupMemberStatus(e)
 		} else {
+			if e.iface.Type == interfacestore.ContainerInterface {
+				status := obj.(*GroupMemberStatus)
+				if _, exist := status.localMembers[e.iface.InterfaceName]; !exist {
+					podGroups := c.getGroupMemberStatusesByPod(e.iface.InterfaceName)
+					if len(podGroups) >= maxGroupsPerPod {
+						c.logRateLimitedWarning(nil, "Dropped multicast group join: Pod group limit reached",
+							"pod", e.iface.InterfaceName, "group", e.group.String(), "limit", maxGroupsPerPod)
+						metrics.MulticastGroupJoinRejectedCount.WithLabelValues(metrics.LabelMulticastGroupJoinRejectedPodLimit).Inc()
+						return
+					}
+				}
+			}
 			c.updateGroupMemberStatus(obj, e)
 		}
 	case groupLeave:

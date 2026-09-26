@@ -82,9 +82,10 @@ const (
 	// 1-255 are reserved for Egress QoS. The Egress QoS meterID leverage the same
 	// value as the mark allocated to the EgressIP and Antrea limits the number of
 	// Egress IPs per Node to 255, hence the reserved meter ID range is 1-255.
-	PacketInMeterIDNP  = 256
-	PacketInMeterIDTF  = 257
-	PacketInMeterIDDNS = 258
+	PacketInMeterIDNP   = 256
+	PacketInMeterIDTF   = 257
+	PacketInMeterIDDNS  = 258
+	PacketInMeterIDIGMP = 259
 )
 
 // RegisterPacketInHandler stores controller handler in a map with category as keys.
