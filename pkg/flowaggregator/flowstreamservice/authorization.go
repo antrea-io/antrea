@@ -82,8 +82,8 @@ const (
 	// only keeps a single long-lived stream's own bookkeeping from growing without limit.
 	maxIdentityNamespacesPerStream = 250
 
-	// authorizationCheckTimeout bounds one authorization pass made while a stream is running: a
-	// call to Authorize, including every flows/identity SubjectAccessReview a newly-seen peer
+	// authorizationCheckTimeout bounds one authorization pass made while a stream is running: an
+	// iteration over Authorized, including every flows/identity SubjectAccessReview a newly-seen peer
 	// Namespace in its batch triggers, and a call to Revalidate. Both run on the goroutine serving
 	// the stream, on the same loop as the ring buffer consumer, and the stream context they are
 	// given has no deadline of its own. So without a bound, a slow or unreachable API server would
@@ -341,30 +341,19 @@ func (sa *StreamAuthorization) Revalidate(ctx context.Context) error {
 	return nil
 }
 
-// Authorize applies the stream's authorization to a batch of records, dropping the ones the
-// client may not observe at all and substituting a redacted copy for the ones it may only observe
-// in part.
+// Authorized applies the stream's authorization to a batch of records, yielding the index of
+// flows the client may observe, in order, paired with the form it may observe it in.
+// A record is dropped entirely if the client may not observe it at all, and a redacted copy is
+// yielded for one it may only observe in part. The index is what lets a caller that stops early
+// tell which records it has examined. It reads flows[i] before yielding index i, so the caller may
+// compact the records it keeps into flows[:0] as it goes.
 //
-// The whole call is bounded by authorizationCheckTimeout, without which a batch with several
+// The whole iteration is bounded by authorizationCheckTimeout, without which a batch with several
 // never-seen peer Namespaces would stall for multiples of that timeout while the API server is slow
 // or unreachable. Passing that one context down to every canIdentify call caps the batch as a
 // whole: a Namespace looked up once the budget is spent, and not already cached by the delegating
 // authorizer, fails immediately rather than retrying, and is left unidentified for this batch
 // without that being cached as a decision.
-func (sa *StreamAuthorization) Authorize(ctx context.Context, flows []*flowpb.Flow) []*flowpb.Flow {
-	authorized := flows[:0]
-	for _, f := range sa.Authorized(ctx, flows) {
-		authorized = append(authorized, f)
-	}
-	return authorized
-}
-
-// Authorized is the iterator form of Authorize: it yields the index in flows of each record the
-// client may observe, in order, together with the form it may observe it in. The index is what lets
-// a caller that stops early tell which records it has examined. The authorizationCheckTimeout
-// budget covers the whole iteration, as it covers a whole Authorize call.
-// Like Authorize, it reads flows[i] before yielding index i, so the caller may compact the
-// records it keeps into flows[:0] as it goes.
 func (sa *StreamAuthorization) Authorized(ctx context.Context, flows []*flowpb.Flow) iter.Seq2[int, *flowpb.Flow] {
 	return func(yield func(int, *flowpb.Flow) bool) {
 		if sa.clusterWide {

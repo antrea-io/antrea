@@ -41,7 +41,7 @@ var testUserInfo = &user.DefaultInfo{Name: testUser, Groups: []string{"network-o
 // fakeAuthorizer answers checks from a fixed set of grants and records everything it was asked,
 // so that a test can assert both the decision reached and how many SubjectAccessReviews it took.
 //
-// Authorize runs on GetFlows's own goroutine, so a test that revokes or grants a key while a
+// Authorized runs on GetFlows's own goroutine, so a test that revokes or grants a key while a
 // stream is running concurrently (as one recheck does, to simulate a grant changing mid-stream)
 // must go through grant/revoke/breakCheck rather than touching allowed/failing directly: mu is
 // what makes that safe under the race detector.
@@ -435,6 +435,16 @@ func TestRevalidate(t *testing.T) {
 	})
 }
 
+// collectAuthorized drains sa.Authorized into a slice, compacting into flows[:0] the same way the
+// stream itself does.
+func collectAuthorized(ctx context.Context, sa *StreamAuthorization, flows []*flowpb.Flow) []*flowpb.Flow {
+	authorized := flows[:0]
+	for _, f := range sa.Authorized(ctx, flows) {
+		authorized = append(authorized, f)
+	}
+	return authorized
+}
+
 // podFlow builds a Pod-to-Pod record between two Namespaces.
 func podFlow(sourceNamespace, destinationNamespace string) *flowpb.Flow {
 	return &flowpb.Flow{
@@ -448,7 +458,7 @@ func podFlow(sourceNamespace, destinationNamespace string) *flowpb.Flow {
 	}
 }
 
-func TestAuthorize_RecordVisibility(t *testing.T) {
+func TestAuthorized_RecordVisibility(t *testing.T) {
 	tests := []struct {
 		name        string
 		req         *flowpb.GetFlowsRequest
@@ -525,7 +535,7 @@ func TestAuthorize_RecordVisibility(t *testing.T) {
 			sa, err := a.NewStreamAuthorization(context.Background(), testUserInfo, tt.req)
 			require.NoError(t, err)
 
-			got := sa.Authorize(context.Background(), tt.flows)
+			got := collectAuthorized(context.Background(), sa, tt.flows)
 
 			gotIDs := make([]string, 0, len(got))
 			for _, f := range got {
@@ -542,10 +552,10 @@ func TestAuthorize_RecordVisibility(t *testing.T) {
 	}
 }
 
-// TestAuthorize_LeavesTheRecordUntouched guards the invariant that makes redaction safe at all: a
+// TestAuthorized_LeavesTheRecordUntouched guards the invariant that makes redaction safe at all: a
 // record belongs to the ring buffer and is broadcast to every other stream, so redacting it for one
 // client must not alter what another sees.
-func TestAuthorize_LeavesTheRecordUntouched(t *testing.T) {
+func TestAuthorized_LeavesTheRecordUntouched(t *testing.T) {
 	fake := newFakeAuthorizer(flowsGrant(watchVerb, "ns-a"))
 	a := newAuthorizer(fake)
 	sa, err := a.NewStreamAuthorization(context.Background(), testUserInfo, &flowpb.GetFlowsRequest{
@@ -555,7 +565,7 @@ func TestAuthorize_LeavesTheRecordUntouched(t *testing.T) {
 	require.NoError(t, err)
 
 	original := podFlow("ns-a", "ns-b")
-	got := sa.Authorize(context.Background(), []*flowpb.Flow{original})
+	got := collectAuthorized(context.Background(), sa, []*flowpb.Flow{original})
 
 	require.Len(t, got, 1)
 	assert.NotSame(t, original, got[0])
@@ -566,9 +576,9 @@ func TestAuthorize_LeavesTheRecordUntouched(t *testing.T) {
 	assert.Equal(t, flowpb.EndpointDisclosure_ENDPOINT_DISCLOSURE_FULL, original.GetK8S().GetDestinationDisclosure())
 }
 
-// TestAuthorize_ReturnsTheRecordWhenNothingIsWithheld pins down that the common case allocates
+// TestAuthorized_ReturnsTheRecordWhenNothingIsWithheld pins down that the common case allocates
 // nothing: the record itself is streamed, not a copy of it.
-func TestAuthorize_ReturnsTheRecordWhenNothingIsWithheld(t *testing.T) {
+func TestAuthorized_ReturnsTheRecordWhenNothingIsWithheld(t *testing.T) {
 	for _, tt := range []struct {
 		name   string
 		req    *flowpb.GetFlowsRequest
@@ -594,7 +604,7 @@ func TestAuthorize_ReturnsTheRecordWhenNothingIsWithheld(t *testing.T) {
 			sa, err := a.NewStreamAuthorization(context.Background(), testUserInfo, tt.req)
 			require.NoError(t, err)
 
-			got := sa.Authorize(context.Background(), []*flowpb.Flow{tt.flow})
+			got := collectAuthorized(context.Background(), sa, []*flowpb.Flow{tt.flow})
 
 			require.Len(t, got, 1)
 			assert.Same(t, tt.flow, got[0])
@@ -602,7 +612,7 @@ func TestAuthorize_ReturnsTheRecordWhenNothingIsWithheld(t *testing.T) {
 	}
 }
 
-func TestAuthorize_IdentityChecks(t *testing.T) {
+func TestAuthorized_IdentityChecks(t *testing.T) {
 	newStream := func(t *testing.T, fake *fakeAuthorizer) *StreamAuthorization {
 		t.Helper()
 		a := newAuthorizer(fake)
@@ -617,7 +627,7 @@ func TestAuthorize_IdentityChecks(t *testing.T) {
 	// destinationTier reports how the peer of a single ns-a -> ns-b record was disclosed.
 	destinationTier := func(t *testing.T, sa *StreamAuthorization) flowpb.EndpointDisclosure {
 		t.Helper()
-		got := sa.Authorize(context.Background(), []*flowpb.Flow{podFlow("ns-a", "ns-b")})
+		got := collectAuthorized(context.Background(), sa, []*flowpb.Flow{podFlow("ns-a", "ns-b")})
 		require.Len(t, got, 1)
 		return got[0].GetK8S().GetDestinationDisclosure()
 	}
@@ -627,7 +637,7 @@ func TestAuthorize_IdentityChecks(t *testing.T) {
 		sa := newStream(t, fake)
 
 		flows := []*flowpb.Flow{podFlow("ns-a", "ns-b"), podFlow("ns-a", "ns-b"), podFlow("ns-a", "ns-b")}
-		require.Len(t, sa.Authorize(context.Background(), flows), 3)
+		require.Len(t, collectAuthorized(context.Background(), sa, flows), 3)
 
 		assert.Equal(t, []string{identityGrant("ns-b")}, fake.calls)
 	})
@@ -636,7 +646,7 @@ func TestAuthorize_IdentityChecks(t *testing.T) {
 		fake := newFakeAuthorizer(flowsGrant(watchVerb, "ns-a"))
 		sa := newStream(t, fake)
 
-		got := sa.Authorize(context.Background(), []*flowpb.Flow{podFlow("ns-a", "ns-a")})
+		got := collectAuthorized(context.Background(), sa, []*flowpb.Flow{podFlow("ns-a", "ns-a")})
 
 		require.Len(t, got, 1)
 		assert.Empty(t, fake.calls)
@@ -689,7 +699,7 @@ func TestAuthorize_IdentityChecks(t *testing.T) {
 		for i := range maxIdentityNamespacesPerStream + 10 {
 			flows = append(flows, podFlow("ns-a", fmt.Sprintf("peer-%d", i)))
 		}
-		got := sa.Authorize(context.Background(), flows)
+		got := collectAuthorized(context.Background(), sa, flows)
 		require.Len(t, got, len(flows))
 		assert.Len(t, fake.calls, len(flows))
 		assert.Equal(t, flowpb.EndpointDisclosure_ENDPOINT_DISCLOSURE_FLOW, got[0].GetK8S().GetDestinationDisclosure())
@@ -699,20 +709,20 @@ func TestAuthorize_IdentityChecks(t *testing.T) {
 		// decision, and this time it resolves as granted.
 		fake.calls = nil
 		fake.grant(identityGrant("peer-0"))
-		got = sa.Authorize(context.Background(), []*flowpb.Flow{podFlow("ns-a", "peer-0")})
+		got = collectAuthorized(context.Background(), sa, []*flowpb.Flow{podFlow("ns-a", "peer-0")})
 		require.Len(t, got, 1)
 		assert.Equal(t, []string{identityGrant("peer-0")}, fake.calls)
 		assert.Equal(t, flowpb.EndpointDisclosure_ENDPOINT_DISCLOSURE_IDENTITY, got[0].GetK8S().GetDestinationDisclosure())
 	})
 }
 
-// TestAuthorize_BatchIsBoundedByOneAuthorizationCheckTimeout pins down that a batch carrying
+// TestAuthorized_BatchIsBoundedByOneAuthorizationCheckTimeout pins down that a batch carrying
 // several never-seen peer Namespaces is bounded by a single authorizationCheckTimeout in total, not
-// one per lookup: Authorize wraps its context once and passes that one context down, so a Namespace
+// one per lookup: Authorized wraps its context once and passes that one context down, so a Namespace
 // looked up after the shared budget is spent fails immediately instead of retrying. Run in a
 // synctest bubble so the timeout resolves at virtual speed: two hanging lookups would cost two real
 // seconds each otherwise.
-func TestAuthorize_BatchIsBoundedByOneAuthorizationCheckTimeout(t *testing.T) {
+func TestAuthorized_BatchIsBoundedByOneAuthorizationCheckTimeout(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		fake := newFakeAuthorizer(flowsGrant(watchVerb, "ns-a"))
 		fake.hang(identityGrant("peer-1"))
@@ -726,7 +736,7 @@ func TestAuthorize_BatchIsBoundedByOneAuthorizationCheckTimeout(t *testing.T) {
 
 		flows := []*flowpb.Flow{podFlow("ns-a", "peer-1"), podFlow("ns-a", "peer-2")}
 		start := time.Now()
-		got := sa.Authorize(context.Background(), flows)
+		got := collectAuthorized(context.Background(), sa, flows)
 		elapsed := time.Since(start)
 
 		require.Len(t, got, 2)
@@ -741,12 +751,12 @@ func TestAuthorize_BatchIsBoundedByOneAuthorizationCheckTimeout(t *testing.T) {
 	})
 }
 
-// TestAuthorize_DoesNotCacheAnExpiredBudgetAsADenial pins down that a Namespace left unchecked
+// TestAuthorized_DoesNotCacheAnExpiredBudgetAsADenial pins down that a Namespace left unchecked
 // because an earlier lookup in the same batch spent the whole authorizationCheckTimeout budget is
 // not remembered as denied. Caching it would hold every never-seen peer in that batch at the Flow
 // tier for a whole revalidationInterval on the strength of a check that never happened, which is
 // likeliest at stream open, when draining history brings many new peers at once.
-func TestAuthorize_DoesNotCacheAnExpiredBudgetAsADenial(t *testing.T) {
+func TestAuthorized_DoesNotCacheAnExpiredBudgetAsADenial(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		fake := newFakeAuthorizer(flowsGrant(watchVerb, "ns-a"), identityGrant("peer-2"))
 		fake.hang(identityGrant("peer-1"))
@@ -761,7 +771,7 @@ func TestAuthorize_DoesNotCacheAnExpiredBudgetAsADenial(t *testing.T) {
 		// peer-1 hangs until the batch's budget runs out, so peer-2's lookup fails immediately on
 		// the expired context even though the client does hold flows/identity there.
 		flows := []*flowpb.Flow{podFlow("ns-a", "peer-1"), podFlow("ns-a", "peer-2")}
-		got := sa.Authorize(context.Background(), flows)
+		got := collectAuthorized(context.Background(), sa, flows)
 		require.Len(t, got, 2)
 		assert.Equal(t, []string{identityGrant("peer-1"), identityGrant("peer-2")}, fake.calls)
 		assert.Equal(t, flowpb.EndpointDisclosure_ENDPOINT_DISCLOSURE_FLOW, got[1].GetK8S().GetDestinationDisclosure())
@@ -769,7 +779,7 @@ func TestAuthorize_DoesNotCacheAnExpiredBudgetAsADenial(t *testing.T) {
 		// The next batch gets its own budget, and peer-2 now resolves at the Identity tier: neither
 		// Namespace was cached, because neither check was actually answered.
 		fake.calls = nil
-		got = sa.Authorize(context.Background(), []*flowpb.Flow{podFlow("ns-a", "peer-2")})
+		got = collectAuthorized(context.Background(), sa, []*flowpb.Flow{podFlow("ns-a", "peer-2")})
 		require.Len(t, got, 1)
 		assert.Equal(t, []string{identityGrant("peer-2")}, fake.calls)
 		assert.Equal(t, flowpb.EndpointDisclosure_ENDPOINT_DISCLOSURE_IDENTITY, got[0].GetK8S().GetDestinationDisclosure())
