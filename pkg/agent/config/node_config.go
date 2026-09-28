@@ -237,6 +237,21 @@ type NetworkConfig struct {
 	// EnableEgress indicates the Egress feature is enabled. It is used to determine whether
 	// a tunnel interface should be created in noEncap mode for Egress traffic forwarding.
 	EnableEgress bool
+	// EnableDSR indicates that Services can use the DSR load balancer mode: the LoadBalancerModeDSR
+	// feature gate is enabled and AntreaProxy handles all Service traffic (proxyAll). It is used to
+	// determine whether a tunnel interface should be created in noEncap mode for DSR traffic forwarding.
+	EnableDSR bool
+	// DSRDispatch is the dispatch which DSR Services use by default to send traffic to the Node hosting the selected
+	// Endpoint. A Service can select another dispatch with the service.antrea.io/dsr-dispatch annotation.
+	DSRDispatch DSRDispatch
+	// EnableDSRL2Dispatch indicates that DSR Services can use the l2 dispatch: Services can use DSR, the DSRDispatchL2
+	// feature gate is enabled, and the traffic mode is noEncap or hybrid. The l2 dispatch must be enabled too, see
+	// EnableL2Dispatch.
+	EnableDSRL2Dispatch bool
+	// EnableL2Dispatch indicates that a feature sends some of its traffic to peer Nodes in the
+	// local transport subnet with the l2 dispatch: to the MAC address of the peer Node, through
+	// policy routing, without encapsulation. The features which use the l2 dispatch set it.
+	EnableL2Dispatch bool
 
 	EnableHostNetworkAcceleration bool
 	HostNetworkMode               HostNetworkMode
@@ -292,12 +307,57 @@ func (nc *NetworkConfig) NeedsTunnelInterface() bool {
 	// cross-cluster traffic from a regular Node to the gateway Node for the source cluster
 	// always goes through antrea-tun0, regardless of the actual "traffic mode" for the source
 	// cluster.
-	// In noEncap mode with Egress enabled, the tunnel interface is required so that OVS can
-	// forward Egress traffic from a non-Egress Node to the Egress Node via the tunnel. Regular
-	// Pod-to-Pod traffic continues to use direct routing and is unaffected.
+	// In noEncap mode, some features need the tunnel interface, see NeedsTunnelInNoEncapMode.
 	return nc.TrafficEncapMode.SupportsEncap() ||
 		nc.EnableMulticlusterGW ||
-		nc.TrafficEncapMode == TrafficEncapModeNoEncap && nc.EnableEgress
+		nc.NeedsTunnelInNoEncapMode()
+}
+
+// NeedsTunnelInNoEncapMode returns true if a feature needs the tunnel interface in noEncap mode, where
+// Pod-to-Pod traffic is routed and does not use it. With Egress enabled, OVS forwards Egress traffic
+// from a non-Egress Node to the Egress Node via the tunnel. With DSR enabled, OVS forwards the traffic
+// of DSR Services to the Node hosting the selected Endpoint via the tunnel, see
+// NeedsDSRTunnelToRoutedPeers, unless the default dispatch of DSR Services is l2. A Service which
+// selects the tunnel dispatch with its annotation then uses the l2 dispatch, see DSRDispatchForService.
+func (nc *NetworkConfig) NeedsTunnelInNoEncapMode() bool {
+	dsrNeedsTunnel := nc.EnableDSR && (nc.DSRDispatch == DSRDispatchTunnel || !nc.SupportsDSRL2Dispatch())
+	return nc.TrafficEncapMode == TrafficEncapModeNoEncap && (nc.EnableEgress || dsrNeedsTunnel)
+}
+
+// NeedsDSRTunnelToRoutedPeers returns true if the traffic of DSR Services may be sent through the
+// tunnel to the peer Nodes which Pod-to-Pod traffic reaches by routing, which is the case in noEncap
+// and hybrid modes when the tunnel interface exists. The ingress Node does not DNAT that traffic, so
+// its destination is still the Service IP, which the Node network cannot route to the Node hosting the
+// selected Endpoint.
+func (nc *NetworkConfig) NeedsDSRTunnelToRoutedPeers() bool {
+	routedPeers := nc.TrafficEncapMode == TrafficEncapModeNoEncap || nc.TrafficEncapMode == TrafficEncapModeHybrid
+	return nc.EnableDSR && routedPeers && nc.NeedsTunnelInterface()
+}
+
+// SupportsDSRL2Dispatch returns true if DSR Services can use the l2 dispatch on this Node, in noEncap or
+// hybrid mode. The DSR traffic to a peer Node in the local transport subnet is then sent to the MAC
+// address of the peer Node, without encapsulation.
+func (nc *NetworkConfig) SupportsDSRL2Dispatch() bool {
+	return nc.EnableDSR && nc.EnableDSRL2Dispatch && nc.SupportsL2Dispatch()
+}
+
+// DSRDispatchForService returns the dispatch which a DSR Service uses on this Node. requested is the
+// dispatch which the Service selects with its annotation, or nil if it has none. The Service uses the
+// requested dispatch, or else the default one. If the Node cannot provide that dispatch, the Service uses
+// the other one, and fallback is true: the l2 dispatch needs SupportsDSRL2Dispatch, and the tunnel
+// dispatch needs the tunnel interface, which noEncap mode may not have.
+func (nc *NetworkConfig) DSRDispatchForService(requested *DSRDispatch) (dispatch DSRDispatch, fallback bool) {
+	dispatch = nc.DSRDispatch
+	if requested != nil {
+		dispatch = *requested
+	}
+	switch {
+	case dispatch == DSRDispatchL2 && !nc.SupportsDSRL2Dispatch():
+		return DSRDispatchTunnel, true
+	case dispatch == DSRDispatchTunnel && !nc.NeedsTunnelInterface() && nc.SupportsDSRL2Dispatch():
+		return DSRDispatchL2, true
+	}
+	return dispatch, false
 }
 
 // NeedsEgressSymmetricPath returns true when Egress traffic takes a tunnel path which is distinct from the
@@ -310,6 +370,19 @@ func (nc *NetworkConfig) NeedsEgressSymmetricPath(egressEnabled bool) bool {
 	return egressEnabled && (nc.TrafficEncapMode == TrafficEncapModeNoEncap ||
 		nc.TrafficEncapMode == TrafficEncapModeHybrid ||
 		nc.TrafficEncryptionMode == TrafficEncryptionModeWireGuard)
+}
+
+// SupportsL2Dispatch returns true if a feature uses the l2 dispatch and the traffic mode allows it. In noEncap
+// and hybrid modes, Pod traffic to the peer Nodes in the local transport subnet is routed, so their MAC addresses
+// can be reached without encapsulation.
+func (nc *NetworkConfig) SupportsL2Dispatch() bool {
+	return nc.EnableL2Dispatch && (nc.TrafficEncapMode == TrafficEncapModeNoEncap || nc.TrafficEncapMode == TrafficEncapModeHybrid)
+}
+
+// SupportsL2DispatchToPeer returns true if traffic can be sent to the peer Node with the l2 dispatch, which
+// requires the transport IP of the peer Node to be in the local transport subnet.
+func (nc *NetworkConfig) SupportsL2DispatchToPeer(peerIP net.IP, localIP *net.IPNet) bool {
+	return nc.SupportsL2Dispatch() && peerIP != nil && localIP != nil && localIP.Contains(peerIP)
 }
 
 // NeedsDirectRoutingToPeer returns true if Pod traffic to peer Node needs a direct route installed to the routing table.

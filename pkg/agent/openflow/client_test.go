@@ -30,6 +30,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
+	"k8s.io/utils/ptr"
 
 	"antrea.io/antrea/v2/pkg/agent/config"
 	nodeiptest "antrea.io/antrea/v2/pkg/agent/nodeip/testing"
@@ -94,6 +95,8 @@ type clientOptions struct {
 	enableMulticluster         bool
 	enableL7NetworkPolicy      bool
 	trafficEncryptionMode      config.TrafficEncryptionModeType
+	enableDSRL2Dispatch        bool
+	dsrDispatch                config.DSRDispatch
 }
 
 type clientOptionsFn func(*clientOptions)
@@ -113,6 +116,15 @@ func enableDSR(o *clientOptions) {
 	o.enableProxy = true
 	o.proxyAll = true
 	o.enableDSR = true
+}
+
+// enableDSRL2Dispatch enables DSR and the DSRDispatchL2 feature gate, with the given default dispatch of DSR Services.
+func enableDSRL2Dispatch(dispatch config.DSRDispatch) clientOptionsFn {
+	return func(o *clientOptions) {
+		enableDSR(o)
+		o.enableDSRL2Dispatch = true
+		o.dsrDispatch = dispatch
+	}
 }
 
 func enableProxy(o *clientOptions) {
@@ -180,7 +192,7 @@ func installNodeFlows(ofClient Client, cacheKey string) (int, error) {
 	peerConfigs := map[*net.IPNet]net.IP{
 		ipNet: gwIP,
 	}
-	err := ofClient.InstallNodeFlows(hostName, peerConfigs, &utilip.DualStackIPs{IPv4: peerNodeIP}, 0, nil)
+	err := ofClient.InstallNodeFlows(hostName, peerConfigs, &utilip.DualStackIPs{IPv4: peerNodeIP}, 0, nil, 0)
 	client := ofClient.(*client)
 	fCacheI, ok := client.featurePodConnectivity.nodeCachedFlows.Load(hostName)
 	if ok {
@@ -467,6 +479,10 @@ func newFakeClientWithBridge(
 		IPv6Enabled:           enableIPv6,
 		TrafficEncapMode:      trafficEncapMode,
 		TrafficEncryptionMode: o.trafficEncryptionMode,
+		EnableDSR:             o.enableDSR && o.proxyAll,
+		DSRDispatch:           o.dsrDispatch,
+		EnableDSRL2Dispatch:   o.enableDSRL2Dispatch,
+		EnableL2Dispatch:      o.enableDSRL2Dispatch,
 	}
 	tunnelOFPort := uint32(0)
 	if networkConfig.NeedsTunnelInterface() {
@@ -582,19 +598,32 @@ func Test_client_InstallNodeFlows(t *testing.T) {
 	peerGwMAC, _ := net.ParseMAC("00:00:10:10:01:01")
 	tunnelPeerIPv4 := net.ParseIP("192.168.77.101")
 	tunnelPeerIPv6 := net.ParseIP("fec0:192:168:77::101")
+	// otherSubnetPeerIPv4 is outside the local transport subnet, 192.168.77.0/24.
+	otherSubnetPeerIPv4 := net.ParseIP("192.168.78.101")
+	arpResponderFlow := "cookie=0x1010000000000, table=ARPResponder, priority=200,arp,arp_tpa=10.10.1.1,arp_op=1 actions=move:NXM_OF_ETH_SRC[]->NXM_OF_ETH_DST[],set_field:aa:bb:cc:dd:ee:ff->eth_src,set_field:2->arp_op,move:NXM_NX_ARP_SHA[]->NXM_NX_ARP_THA[],set_field:aa:bb:cc:dd:ee:ff->arp_sha,move:NXM_OF_ARP_SPA[]->NXM_OF_ARP_TPA[],set_field:10.10.1.1->arp_spa,IN_PORT"
+	routedFlow := "cookie=0x1010000000000, table=L3Forwarding, priority=200,ip,nw_dst=10.10.1.0/24 actions=set_field:0a:00:00:00:00:01->eth_dst,set_field:0x20/0xf0->reg0,goto_table:L3DecTTL"
+	// dsrL2DispatchFlow sends the traffic of the DSR Services which use the l2 dispatch back to the Antrea gateway, with
+	// the flag and the index 5 of the peer Node in the packet mark.
+	dsrL2DispatchFlow := "cookie=0x1010000000000, table=L3Forwarding, priority=200,ip,reg3=0xa0a0100/0xffffff00,reg4=0x22000000/0x22000000 actions=set_field:0x20050000/0x2fff0000->pkt_mark,set_field:0a:00:00:00:00:01->eth_dst,set_field:0x20/0xf0->reg0,set_field:0x40000000/0x40000000->reg4,goto_table:L3DecTTL"
+	// dsrTunnelFlow sends the traffic of DSR Services through the tunnel, and dsrTunnelFlowExceptL2 only the traffic of
+	// the DSR Services which do not use the l2 dispatch.
+	dsrTunnelFlow := "cookie=0x1010000000000, table=L3Forwarding, priority=200,ip,reg3=0xa0a0100/0xffffff00,reg4=0x2000000/0x2000000 actions=set_field:0a:00:00:00:00:01->eth_src,set_field:aa:bb:cc:dd:ee:ff->eth_dst,set_field:192.168.77.101->tun_dst,set_field:0x10/0xf0->reg0,goto_table:L3DecTTL"
+	dsrTunnelFlowExceptL2 := "cookie=0x1010000000000, table=L3Forwarding, priority=200,ip,reg3=0xa0a0100/0xffffff00,reg4=0x2000000/0x22000000 actions=set_field:0a:00:00:00:00:01->eth_src,set_field:aa:bb:cc:dd:ee:ff->eth_dst,set_field:192.168.77.101->tun_dst,set_field:0x10/0xf0->reg0,goto_table:L3DecTTL"
+	dsrDropFlow := "cookie=0x1010000000000, table=L3Forwarding, priority=200,ip,reg3=0xa0a0100/0xffffff00,reg4=0x2000000/0x2000000 actions=drop"
 
 	testCases := []struct {
-		name             string
-		enableIPv4       bool
-		enableIPv6       bool
-		skipWindows      bool
-		skipLinux        bool
-		clientOptions    []clientOptionsFn
-		peerConfigs      map[*net.IPNet]net.IP
-		tunnelPeerIPs    *utilip.DualStackIPs
-		ipsecTunOFPort   uint32
-		trafficEncapMode config.TrafficEncapModeType
-		expectedFlows    []string
+		name                string
+		enableIPv4          bool
+		enableIPv6          bool
+		skipWindows         bool
+		skipLinux           bool
+		clientOptions       []clientOptionsFn
+		peerConfigs         map[*net.IPNet]net.IP
+		tunnelPeerIPs       *utilip.DualStackIPs
+		ipsecTunOFPort      uint32
+		l2DispatchPeerIndex uint32
+		trafficEncapMode    config.TrafficEncapModeType
+		expectedFlows       []string
 	}{
 		{
 			name:             "IPv4 Encap",
@@ -682,6 +711,152 @@ func Test_client_InstallNodeFlows(t *testing.T) {
 			},
 		},
 		{
+			name:             "IPv4 NoEncap DSR",
+			enableIPv4:       true,
+			skipWindows:      true,
+			clientOptions:    []clientOptionsFn{disableEgress, enableDSR},
+			peerConfigs:      map[*net.IPNet]net.IP{peerPodCIDRv4: peerGwIPv4},
+			tunnelPeerIPs:    &utilip.DualStackIPs{IPv4: tunnelPeerIPv4},
+			trafficEncapMode: config.TrafficEncapModeNoEncap,
+			expectedFlows: []string{
+				"cookie=0x1010000000000, table=ARPResponder, priority=200,arp,arp_tpa=10.10.1.1,arp_op=1 actions=move:NXM_OF_ETH_SRC[]->NXM_OF_ETH_DST[],set_field:aa:bb:cc:dd:ee:ff->eth_src,set_field:2->arp_op,move:NXM_NX_ARP_SHA[]->NXM_NX_ARP_THA[],set_field:aa:bb:cc:dd:ee:ff->arp_sha,move:NXM_OF_ARP_SPA[]->NXM_OF_ARP_TPA[],set_field:10.10.1.1->arp_spa,IN_PORT",
+				"cookie=0x1010000000000, table=L3Forwarding, priority=200,ip,nw_dst=10.10.1.0/24 actions=set_field:0a:00:00:00:00:01->eth_dst,set_field:0x20/0xf0->reg0,goto_table:L3DecTTL",
+				"cookie=0x1010000000000, table=L3Forwarding, priority=200,ip,reg3=0xa0a0100/0xffffff00,reg4=0x2000000/0x2000000 actions=set_field:0a:00:00:00:00:01->eth_src,set_field:aa:bb:cc:dd:ee:ff->eth_dst,set_field:192.168.77.101->tun_dst,set_field:0x10/0xf0->reg0,goto_table:L3DecTTL",
+			},
+		},
+		{
+			name:             "IPv4 Hybrid DSR, peer in the local subnet",
+			enableIPv4:       true,
+			skipWindows:      true,
+			clientOptions:    []clientOptionsFn{disableEgress, enableDSR},
+			peerConfigs:      map[*net.IPNet]net.IP{peerPodCIDRv4: peerGwIPv4},
+			tunnelPeerIPs:    &utilip.DualStackIPs{IPv4: tunnelPeerIPv4},
+			trafficEncapMode: config.TrafficEncapModeHybrid,
+			expectedFlows: []string{
+				"cookie=0x1010000000000, table=ARPResponder, priority=200,arp,arp_tpa=10.10.1.1,arp_op=1 actions=move:NXM_OF_ETH_SRC[]->NXM_OF_ETH_DST[],set_field:aa:bb:cc:dd:ee:ff->eth_src,set_field:2->arp_op,move:NXM_NX_ARP_SHA[]->NXM_NX_ARP_THA[],set_field:aa:bb:cc:dd:ee:ff->arp_sha,move:NXM_OF_ARP_SPA[]->NXM_OF_ARP_TPA[],set_field:10.10.1.1->arp_spa,IN_PORT",
+				"cookie=0x1010000000000, table=L3Forwarding, priority=200,ip,nw_dst=10.10.1.0/24 actions=set_field:0a:00:00:00:00:01->eth_dst,set_field:0x20/0xf0->reg0,goto_table:L3DecTTL",
+				"cookie=0x1010000000000, table=L3Forwarding, priority=200,ip,reg3=0xa0a0100/0xffffff00,reg4=0x2000000/0x2000000 actions=set_field:0a:00:00:00:00:01->eth_src,set_field:aa:bb:cc:dd:ee:ff->eth_dst,set_field:192.168.77.101->tun_dst,set_field:0x10/0xf0->reg0,goto_table:L3DecTTL",
+			},
+		},
+		{
+			name:             "IPv4 Encap WireGuard DSR",
+			enableIPv4:       true,
+			skipWindows:      true,
+			clientOptions:    []clientOptionsFn{disableEgress, enableDSR, setTrafficEncryptionMode(config.TrafficEncryptionModeWireGuard)},
+			peerConfigs:      map[*net.IPNet]net.IP{peerPodCIDRv4: peerGwIPv4},
+			tunnelPeerIPs:    &utilip.DualStackIPs{IPv4: tunnelPeerIPv4},
+			trafficEncapMode: config.TrafficEncapModeEncap,
+			expectedFlows: []string{
+				"cookie=0x1010000000000, table=ARPResponder, priority=200,arp,arp_tpa=10.10.1.1,arp_op=1 actions=move:NXM_OF_ETH_SRC[]->NXM_OF_ETH_DST[],set_field:aa:bb:cc:dd:ee:ff->eth_src,set_field:2->arp_op,move:NXM_NX_ARP_SHA[]->NXM_NX_ARP_THA[],set_field:aa:bb:cc:dd:ee:ff->arp_sha,move:NXM_OF_ARP_SPA[]->NXM_OF_ARP_TPA[],set_field:10.10.1.1->arp_spa,IN_PORT",
+				"cookie=0x1010000000000, table=L3Forwarding, priority=200,ip,nw_dst=10.10.1.0/24 actions=set_field:0a:00:00:00:00:01->eth_dst,set_field:0x20/0xf0->reg0,goto_table:L3DecTTL",
+			},
+		},
+		{
+			name:                "IPv4 NoEncap DSR, l2 dispatch by default",
+			enableIPv4:          true,
+			skipWindows:         true,
+			clientOptions:       []clientOptionsFn{disableEgress, enableDSRL2Dispatch(config.DSRDispatchL2)},
+			peerConfigs:         map[*net.IPNet]net.IP{peerPodCIDRv4: peerGwIPv4},
+			tunnelPeerIPs:       &utilip.DualStackIPs{IPv4: tunnelPeerIPv4},
+			l2DispatchPeerIndex: 5,
+			trafficEncapMode:    config.TrafficEncapModeNoEncap,
+			// There is no tunnel, so every DSR Service uses the l2 dispatch.
+			expectedFlows: []string{arpResponderFlow, routedFlow, dsrL2DispatchFlow},
+		},
+		{
+			name:                "IPv4 NoEncap DSR, tunnel dispatch by default, l2 dispatch available",
+			enableIPv4:          true,
+			skipWindows:         true,
+			clientOptions:       []clientOptionsFn{disableEgress, enableDSRL2Dispatch(config.DSRDispatchTunnel)},
+			peerConfigs:         map[*net.IPNet]net.IP{peerPodCIDRv4: peerGwIPv4},
+			tunnelPeerIPs:       &utilip.DualStackIPs{IPv4: tunnelPeerIPv4},
+			l2DispatchPeerIndex: 5,
+			trafficEncapMode:    config.TrafficEncapModeNoEncap,
+			expectedFlows:       []string{arpResponderFlow, routedFlow, dsrL2DispatchFlow, dsrTunnelFlowExceptL2},
+		},
+		{
+			name:                "IPv4 Hybrid DSR, l2 dispatch by default, peer in the local subnet",
+			enableIPv4:          true,
+			skipWindows:         true,
+			clientOptions:       []clientOptionsFn{disableEgress, enableDSRL2Dispatch(config.DSRDispatchL2)},
+			peerConfigs:         map[*net.IPNet]net.IP{peerPodCIDRv4: peerGwIPv4},
+			tunnelPeerIPs:       &utilip.DualStackIPs{IPv4: tunnelPeerIPv4},
+			l2DispatchPeerIndex: 5,
+			trafficEncapMode:    config.TrafficEncapModeHybrid,
+			// Hybrid mode has a tunnel, which serves the Services that select the tunnel dispatch.
+			expectedFlows: []string{arpResponderFlow, routedFlow, dsrL2DispatchFlow, dsrTunnelFlowExceptL2},
+		},
+		{
+			name:             "IPv4 Hybrid DSR, l2 dispatch by default, peer in another subnet",
+			enableIPv4:       true,
+			skipWindows:      true,
+			clientOptions:    []clientOptionsFn{disableEgress, enableDSRL2Dispatch(config.DSRDispatchL2)},
+			peerConfigs:      map[*net.IPNet]net.IP{peerPodCIDRv4: peerGwIPv4},
+			tunnelPeerIPs:    &utilip.DualStackIPs{IPv4: otherSubnetPeerIPv4},
+			trafficEncapMode: config.TrafficEncapModeHybrid,
+			// The tunnel serves every DSR Service.
+			expectedFlows: []string{
+				arpResponderFlow,
+				"cookie=0x1010000000000, table=L3Forwarding, priority=200,ip,nw_dst=10.10.1.0/24 actions=set_field:0a:00:00:00:00:01->eth_src,set_field:aa:bb:cc:dd:ee:ff->eth_dst,set_field:192.168.78.101->tun_dst,set_field:0x10/0xf0->reg0,goto_table:L3DecTTL",
+				"cookie=0x1010000000000, table=L3Forwarding, priority=200,ip,reg3=0xa0a0100/0xffffff00,reg4=0x2000000/0x2000000 actions=set_field:0a:00:00:00:00:01->eth_src,set_field:aa:bb:cc:dd:ee:ff->eth_dst,set_field:192.168.78.101->tun_dst,set_field:0x10/0xf0->reg0,goto_table:L3DecTTL",
+			},
+		},
+		{
+			name:             "IPv4 NoEncap DSR, l2 dispatch by default, peer in another subnet",
+			enableIPv4:       true,
+			skipWindows:      true,
+			clientOptions:    []clientOptionsFn{disableEgress, enableDSRL2Dispatch(config.DSRDispatchL2)},
+			peerConfigs:      map[*net.IPNet]net.IP{peerPodCIDRv4: peerGwIPv4},
+			tunnelPeerIPs:    &utilip.DualStackIPs{IPv4: otherSubnetPeerIPv4},
+			trafficEncapMode: config.TrafficEncapModeNoEncap,
+			// Without a tunnel, the DSR traffic to the peer Node is dropped.
+			expectedFlows: []string{arpResponderFlow, routedFlow, dsrDropFlow},
+		},
+		{
+			name:                "IPv4 NoEncap DSR, l2 dispatch by default, peer in another IPv4 subnet",
+			enableIPv4:          true,
+			skipWindows:         true,
+			clientOptions:       []clientOptionsFn{disableEgress, enableDSRL2Dispatch(config.DSRDispatchL2)},
+			peerConfigs:         map[*net.IPNet]net.IP{peerPodCIDRv4: peerGwIPv4},
+			tunnelPeerIPs:       &utilip.DualStackIPs{IPv4: otherSubnetPeerIPv4, IPv6: tunnelPeerIPv6},
+			l2DispatchPeerIndex: 5,
+			trafficEncapMode:    config.TrafficEncapModeNoEncap,
+			// The index only routes IPv6, so the DSR traffic, which is IPv4, cannot use it.
+			expectedFlows: []string{arpResponderFlow, routedFlow, dsrDropFlow},
+		},
+		{
+			name:             "IPv4 NoEncap DSR, tunnel dispatch by default, peer in another subnet",
+			enableIPv4:       true,
+			skipWindows:      true,
+			clientOptions:    []clientOptionsFn{disableEgress, enableDSRL2Dispatch(config.DSRDispatchTunnel)},
+			peerConfigs:      map[*net.IPNet]net.IP{peerPodCIDRv4: peerGwIPv4},
+			tunnelPeerIPs:    &utilip.DualStackIPs{IPv4: otherSubnetPeerIPv4},
+			trafficEncapMode: config.TrafficEncapModeNoEncap,
+			// The tunnel serves every DSR Service, including those which select the l2 dispatch.
+			expectedFlows: []string{
+				arpResponderFlow,
+				routedFlow,
+				"cookie=0x1010000000000, table=L3Forwarding, priority=200,ip,reg3=0xa0a0100/0xffffff00,reg4=0x2000000/0x2000000 actions=set_field:0a:00:00:00:00:01->eth_src,set_field:aa:bb:cc:dd:ee:ff->eth_dst,set_field:192.168.78.101->tun_dst,set_field:0x10/0xf0->reg0,goto_table:L3DecTTL",
+			},
+		},
+		{
+			name:             "IPv4 Encap DSR with the DSRDispatchL2 feature gate",
+			enableIPv4:       true,
+			clientOptions:    []clientOptionsFn{enableDSRL2Dispatch(config.DSRDispatchTunnel)},
+			peerConfigs:      map[*net.IPNet]net.IP{peerPodCIDRv4: peerGwIPv4},
+			tunnelPeerIPs:    &utilip.DualStackIPs{IPv4: tunnelPeerIPv4},
+			ipsecTunOFPort:   uint32(100),
+			trafficEncapMode: config.TrafficEncapModeEncap,
+			// The flows are those of encap mode without the feature gate.
+			expectedFlows: []string{
+				arpResponderFlow,
+				"cookie=0x1010000000000, table=Classifier, priority=200,in_port=100 actions=set_field:0x1/0xf->reg0,set_field:0x200/0x200->reg0,goto_table:UnSNAT",
+				"cookie=0x1010000000000, table=L3Forwarding, priority=200,ip,nw_dst=10.10.1.0/24 actions=set_field:0a:00:00:00:00:01->eth_src,set_field:aa:bb:cc:dd:ee:ff->eth_dst,set_field:192.168.77.101->tun_dst,set_field:0x10/0xf0->reg0,goto_table:L3DecTTL",
+				dsrTunnelFlow,
+				"cookie=0x1040000000000, table=EgressMark, priority=210,ip,nw_dst=192.168.77.101 actions=set_field:0x20/0xf0->reg0,goto_table:L2ForwardingCalc",
+			},
+		},
+		{
 			name:             "IPv4 Hybrid",
 			enableIPv4:       true,
 			skipWindows:      true,
@@ -728,7 +903,8 @@ func Test_client_InstallNodeFlows(t *testing.T) {
 
 			hostname := "node1"
 
-			assert.NoError(t, fc.InstallNodeFlows(hostname, tc.peerConfigs, tc.tunnelPeerIPs, tc.ipsecTunOFPort, peerGwMAC))
+			assert.NoError(t, fc.InstallNodeFlows(hostname, tc.peerConfigs, tc.tunnelPeerIPs, tc.ipsecTunOFPort, peerGwMAC,
+				tc.l2DispatchPeerIndex))
 			fCacheI, ok := fc.featurePodConnectivity.nodeCachedFlows.Load(hostname)
 			require.True(t, ok)
 			assert.ElementsMatch(t, tc.expectedFlows, getFlowStrings(fCacheI))
@@ -1345,6 +1521,15 @@ func Test_client_InstallServiceFlows(t *testing.T) {
 	svcIPv4 := net.ParseIP("10.96.0.100")
 	svcIPv6 := net.ParseIP("fec0:10:96::100")
 	port := uint16(80)
+	// The flows of an IPv4 LoadBalancer Service in DSR mode. dsrMarkFlowL2Dispatch is the flow which marks the packets of
+	// the Services that use the l2 dispatch, in reg4[29], and learns the mark for the subsequent packets.
+	dsrLBFlowFromTunnel := "cookie=0x1030000000000, table=ServiceLB, priority=210,tcp,reg0=0x1/0xf,reg4=0x10000/0x70000,nw_dst=10.96.0.100,tp_dst=80 actions=set_field:0x200/0x200->reg0,set_field:0x20000/0x70000->reg4,set_field:0x200000/0x200000->reg4,set_field:0x65->reg7,group:101"
+	dsrLBFlow := "cookie=0x1030000000000, table=ServiceLB, priority=200,tcp,reg4=0x10000/0x70000,nw_dst=10.96.0.100,tp_dst=80 actions=set_field:0x200/0x200->reg0,set_field:0x20000/0x70000->reg4,set_field:0x200000/0x200000->reg4,set_field:0x64->reg7,group:100"
+	// dsrLBFlowFromL2Dispatch selects a local Endpoint for the packets from the Antrea gateway which the host marked
+	// because a peer Node sent them with the l2 dispatch.
+	dsrLBFlowFromL2Dispatch := "cookie=0x1030000000000, table=ServiceLB, priority=210,pkt_mark=0x10000000/0x10000000,tcp,reg0=0x2/0xf,reg4=0x10000/0x70000,nw_dst=10.96.0.100,tp_dst=80 actions=set_field:0x200/0x200->reg0,set_field:0x20000/0x70000->reg4,set_field:0x200000/0x200000->reg4,set_field:0x65->reg7,group:101"
+	dsrMarkFlow := "cookie=0x1030000000064, table=DSRServiceMark, priority=200,tcp,reg4=0xc000000/0xe000000,nw_dst=10.96.0.100,tp_dst=80 actions=learn(table=SessionAffinity,idle_timeout=160,fin_idle_timeout=5,priority=210,delete_learned,cookie=0x1030000000064,eth_type=0x800,nw_proto=0x6,OXM_OF_TCP_SRC[],OXM_OF_TCP_DST[],NXM_OF_IP_SRC[],NXM_OF_IP_DST[],load:NXM_NX_REG4[0..15]->NXM_NX_REG4[0..15],load:0x2->NXM_NX_REG4[16..18],load:0x1->NXM_NX_REG4[25],load:NXM_NX_REG3[]->NXM_NX_REG3[]),set_field:0x2000000/0x2000000->reg4,goto_table:EndpointDNAT"
+	dsrMarkFlowL2Dispatch := "cookie=0x1030000000064, table=DSRServiceMark, priority=200,tcp,reg4=0xc000000/0xe000000,nw_dst=10.96.0.100,tp_dst=80 actions=learn(table=SessionAffinity,idle_timeout=160,fin_idle_timeout=5,priority=210,delete_learned,cookie=0x1030000000064,eth_type=0x800,nw_proto=0x6,OXM_OF_TCP_SRC[],OXM_OF_TCP_DST[],NXM_OF_IP_SRC[],NXM_OF_IP_DST[],load:NXM_NX_REG4[0..15]->NXM_NX_REG4[0..15],load:0x2->NXM_NX_REG4[16..18],load:0x1->NXM_NX_REG4[25],load:0x1->NXM_NX_REG4[29],load:NXM_NX_REG3[]->NXM_NX_REG3[]),set_field:0x2000000/0x2000000->reg4,set_field:0x20000000/0x20000000->reg4,goto_table:EndpointDNAT"
 
 	testCases := []struct {
 		name               string
@@ -1356,9 +1541,66 @@ func Test_client_InstallServiceFlows(t *testing.T) {
 		isNodePort         bool
 		isNested           bool
 		isDSR              bool
+		dsrDispatch        *config.DSRDispatch
+		clientOptions      []clientOptionsFn
+		trafficEncapMode   config.TrafficEncapModeType
 		enableMulticluster bool
 		expectedFlows      []string
 	}{
+		{
+			name:             "Service LoadBalancer,DSR,l2 dispatch by default",
+			protocol:         binding.ProtocolTCP,
+			svcIP:            svcIPv4,
+			isExternal:       true,
+			isDSR:            true,
+			clientOptions:    []clientOptionsFn{enableDSRL2Dispatch(config.DSRDispatchL2)},
+			trafficEncapMode: config.TrafficEncapModeNoEncap,
+			expectedFlows:    []string{dsrLBFlowFromTunnel, dsrLBFlowFromL2Dispatch, dsrLBFlow, dsrMarkFlowL2Dispatch},
+		},
+		{
+			name:             "Service LoadBalancer,DSR,l2 dispatch by annotation",
+			protocol:         binding.ProtocolTCP,
+			svcIP:            svcIPv4,
+			isExternal:       true,
+			isDSR:            true,
+			dsrDispatch:      ptr.To(config.DSRDispatchL2),
+			clientOptions:    []clientOptionsFn{enableDSRL2Dispatch(config.DSRDispatchTunnel)},
+			trafficEncapMode: config.TrafficEncapModeNoEncap,
+			expectedFlows:    []string{dsrLBFlowFromTunnel, dsrLBFlowFromL2Dispatch, dsrLBFlow, dsrMarkFlowL2Dispatch},
+		},
+		{
+			name:             "Service LoadBalancer,DSR,tunnel dispatch by default,l2 dispatch available",
+			protocol:         binding.ProtocolTCP,
+			svcIP:            svcIPv4,
+			isExternal:       true,
+			isDSR:            true,
+			clientOptions:    []clientOptionsFn{enableDSRL2Dispatch(config.DSRDispatchTunnel)},
+			trafficEncapMode: config.TrafficEncapModeHybrid,
+			// The Node accepts the packets which peer Nodes send with the l2 dispatch, whatever its own dispatch is.
+			expectedFlows: []string{dsrLBFlowFromTunnel, dsrLBFlowFromL2Dispatch, dsrLBFlow, dsrMarkFlow},
+		},
+		{
+			name:             "Service LoadBalancer,DSR,l2 dispatch by annotation in encap mode falls back to tunnel",
+			protocol:         binding.ProtocolTCP,
+			svcIP:            svcIPv4,
+			isExternal:       true,
+			isDSR:            true,
+			dsrDispatch:      ptr.To(config.DSRDispatchL2),
+			clientOptions:    []clientOptionsFn{enableDSRL2Dispatch(config.DSRDispatchTunnel)},
+			trafficEncapMode: config.TrafficEncapModeEncap,
+			expectedFlows:    []string{dsrLBFlowFromTunnel, dsrLBFlow, dsrMarkFlow},
+		},
+		{
+			name:             "Service LoadBalancer,DSR,tunnel dispatch by annotation without a tunnel falls back to l2",
+			protocol:         binding.ProtocolTCP,
+			svcIP:            svcIPv4,
+			isExternal:       true,
+			isDSR:            true,
+			dsrDispatch:      ptr.To(config.DSRDispatchTunnel),
+			clientOptions:    []clientOptionsFn{disableEgress, enableDSRL2Dispatch(config.DSRDispatchL2)},
+			trafficEncapMode: config.TrafficEncapModeNoEncap,
+			expectedFlows:    []string{dsrLBFlowFromTunnel, dsrLBFlowFromL2Dispatch, dsrLBFlow, dsrMarkFlowL2Dispatch},
+		},
 		{
 			name:     "Service ClusterIP",
 			protocol: binding.ProtocolTCP,
@@ -1555,7 +1797,8 @@ func Test_client_InstallServiceFlows(t *testing.T) {
 			if tc.enableMulticluster {
 				options = append(options, enableMulticluster)
 			}
-			fc := newFakeClient(m, true, true, config.K8sNode, config.TrafficEncapModeEncap, options...)
+			options = append(options, tc.clientOptions...)
+			fc := newFakeClient(m, true, true, config.K8sNode, tc.trafficEncapMode, options...)
 			defer resetPipelines()
 
 			m.EXPECT().AddAll(gomock.Any()).Return(nil).Times(1)
@@ -1575,6 +1818,7 @@ func Test_client_InstallServiceFlows(t *testing.T) {
 				IsNodePort:         tc.isNodePort,
 				IsNested:           tc.isNested,
 				IsDSR:              tc.isDSR,
+				DSRDispatch:        tc.dsrDispatch,
 			}))
 			fCacheI, ok := fc.featureService.cachedFlows.Load(cacheKey)
 			require.True(t, ok)

@@ -38,4 +38,8 @@ const (
 
 	// ServiceLoadBalancerModeAnnotationKey is the key of the Service annotation that specifies the Service's load balancer mode.
 	ServiceLoadBalancerModeAnnotationKey string = "service.antrea.io/load-balancer-mode"
+
+	// ServiceDSRDispatchAnnotationKey is the key of the Service annotation that specifies how the ingress Node sends the
+	// traffic of the Service in DSR mode to the Node hosting the selected Endpoint: "tunnel" or "l2".
+	ServiceDSRDispatchAnnotationKey string = "service.antrea.io/dsr-dispatch"
 )

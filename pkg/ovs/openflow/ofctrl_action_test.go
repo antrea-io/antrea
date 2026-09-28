@@ -24,6 +24,7 @@ import (
 	"antrea.io/ofnet/ofctrl"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"k8s.io/utils/ptr"
 )
 
 var (
@@ -509,6 +510,50 @@ func TestFlowActions(t *testing.T) {
 				},
 			},
 			expectedActionStr: "set_field:0xaeef0000/0xffff0000->pkt_mark",
+		},
+		{
+			name: "LoadPktMark with mask",
+			actionFn: func(b Action) FlowBuilder {
+				return b.LoadPktMark(uint32(0x20050000), ptr.To(uint32(0x2fff0000)))
+			},
+			expectedActionField: &openflow15.ActionSetField{
+				Field: openflow15.MatchField{
+					Class: openflow15.OXM_CLASS_NXM_1,
+					Field: openflow15.NXM_NX_PKT_MARK,
+					Value: util.NewBuffer([]byte{0x20, 0x05, 0x0, 0x0}),
+					Mask:  util.NewBuffer([]byte{0x2f, 0xff, 0x0, 0x0}),
+				},
+			},
+			expectedActionStr: "set_field:0x20050000/0x2fff0000->pkt_mark",
+		},
+		{
+			name: "LoadPktMark with bits outside the mask",
+			actionFn: func(b Action) FlowBuilder {
+				return b.LoadPktMark(uint32(0x30050001), ptr.To(uint32(0x2fff0000)))
+			},
+			expectedActionField: &openflow15.ActionSetField{
+				Field: openflow15.MatchField{
+					Class: openflow15.OXM_CLASS_NXM_1,
+					Field: openflow15.NXM_NX_PKT_MARK,
+					Value: util.NewBuffer([]byte{0x20, 0x05, 0x0, 0x0}),
+					Mask:  util.NewBuffer([]byte{0x2f, 0xff, 0x0, 0x0}),
+				},
+			},
+			expectedActionStr: "set_field:0x20050000/0x2fff0000->pkt_mark",
+		},
+		{
+			name: "LoadPktMark without mask",
+			actionFn: func(b Action) FlowBuilder {
+				return b.LoadPktMark(uint32(0x20050000), nil)
+			},
+			expectedActionField: &openflow15.ActionSetField{
+				Field: openflow15.MatchField{
+					Class: openflow15.OXM_CLASS_NXM_1,
+					Field: openflow15.NXM_NX_PKT_MARK,
+					Value: util.NewBuffer([]byte{0x20, 0x05, 0x0, 0x0}),
+				},
+			},
+			expectedActionStr: "set_field:0x20050000->pkt_mark",
 		},
 		{
 			name: "LoadIPDSCP",

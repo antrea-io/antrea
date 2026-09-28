@@ -129,6 +129,21 @@ data:
 After changing the parameters, you can deploy Antrea in `noEncap` mode by applying
 the deployment yaml.
 
+Some features still send part of their traffic through a tunnel in `NoEncap`
+mode, while Pod-to-Pod traffic remains routed. When one of them is enabled,
+Antrea creates the tunnel interface (`antrea-tun0`) and reduces the Pod MTU by
+the encapsulation overhead, as it does in `Encap` mode, and the Node network
+must allow the tunnel traffic between Nodes:
+
+* [Egress](egress.md) sends the traffic of a Pod through the tunnel when its
+Egress IP is on another Node.
+* The [DSR load balancer mode](antrea-proxy.md#configuring-load-balancer-mode-for-external-traffic)
+of Antrea Proxy sends Service traffic from the ingress Node through the tunnel
+to the Node that runs the selected backend Pod. With the `l2` dispatch of DSR,
+the ingress Node sends that traffic to the MAC address of the Node instead,
+which needs no tunnel when all Nodes are in one L2 segment. See [Choosing the
+dispatch of DSR traffic](antrea-proxy.md#choosing-the-dispatch-of-dsr-traffic).
+
 ### Using kube-router for BGP
 
 We can run kube-router in advertisement-only mode to advertise Pod CIDRs to the

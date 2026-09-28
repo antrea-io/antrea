@@ -324,6 +324,22 @@ func (a *ofFlowAction) LoadPktMarkRange(value uint32, rng *Range) FlowBuilder {
 	return a.setField(pktMarkField)
 }
 
+// LoadPktMark is an action to load value into pkt_mark. If mask is not nil, only the bits set in mask are loaded,
+// and the other bits of pkt_mark are left unchanged. The bits of value outside mask are ignored.
+func (a *ofFlowAction) LoadPktMark(value uint32, mask *uint32) FlowBuilder {
+	pktMarkField, _ := openflow15.FindFieldHeaderByName(NxmFieldPktMark, mask != nil)
+	if mask != nil {
+		value &= *mask
+		maskBytes := make([]byte, 4)
+		binary.BigEndian.PutUint32(maskBytes, *mask)
+		pktMarkField.Mask = util.NewBuffer(maskBytes)
+	}
+	valueBytes := make([]byte, 4)
+	binary.BigEndian.PutUint32(valueBytes, value)
+	pktMarkField.Value = util.NewBuffer(valueBytes)
+	return a.setField(pktMarkField)
+}
+
 // LoadIPDSCP is an action to load data to IP DSCP bits.
 func (a *ofFlowAction) LoadIPDSCP(value uint8) FlowBuilder {
 	field, _ := openflow15.FindFieldHeaderByName(NxmFieldIPToS, true)
