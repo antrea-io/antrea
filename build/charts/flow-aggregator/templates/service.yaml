@@ -3,6 +3,10 @@ kind: Service
 metadata:
   labels:
     app: flow-aggregator
+    {{- if .Values.flowStreamService.enable }}
+    # Lets FlowStreamService clients discover this Service when several Flow Aggregators are deployed.
+    observability.antrea.io/flow-stream-service: "true"
+    {{- end }}
   name: {{ include "flow-aggregator.fullname" . }}
   namespace: {{ .Release.Namespace }}
 spec:

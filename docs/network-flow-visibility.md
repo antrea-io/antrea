@@ -644,6 +644,17 @@ flowStreamService:
 The connection uses server-side TLS with the same self-signed certificate as the
 gRPC collector.
 
+When the `FlowStreamService` is enabled, the Flow Aggregator Service carries the
+label `observability.antrea.io/flow-stream-service: "true"`; it does not carry
+it otherwise. As a cluster can run several Flow Aggregators, and only some of
+them may expose the `FlowStreamService` (for example, a Flow Aggregator running
+in Proxy mode for IPFIX export does not), clients can use this label to discover
+the FlowStreamService to connect to, instead of hardcoding its Namespace and name:
+
+```bash
+kubectl get services -A -l observability.antrea.io/flow-stream-service=true
+```
+
 #### Authenticating to the FlowStreamService
 
 Clients must present a Kubernetes credential, as one of:
