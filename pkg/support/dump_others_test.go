@@ -319,3 +319,112 @@ func TestDumpIPToolInfo(t *testing.T) {
 		})
 	}
 }
+
+func TestDumpBGPResources(t *testing.T) {
+	// antctlGet returns a fake "antctl -oyaml get" command for the given resource, which prints output, and fails
+	// when fail is true.
+	antctlGet := func(resource, output string, fail bool) testingexec.FakeCommandAction {
+		return func(cmd string, args ...string) exec.Cmd {
+			assert.Equal(t, "antctl", cmd)
+			assert.Equal(t, []string{"-oyaml", "get", resource}, args)
+			return &testingexec.FakeCmd{
+				CombinedOutputScript: []testingexec.FakeAction{func() ([]byte, []byte, error) {
+					if fail {
+						return []byte(output), nil, &testingexec.FakeExitError{Status: 1}
+					}
+					return []byte(output), nil, nil
+				}},
+			}
+		}
+	}
+	const (
+		notEnabled   = "Error: bgp is not enabled"
+		noBGPPolicy  = "Error: there is no effective bgp policy applied to the Node"
+		notApplied   = noBGPPolicy + ": BGPPolicy policy-1 could not be applied: failed to start BGP server: listen tcp :179: bind: address already in use"
+		policyOutput = "name: policy-1"
+	)
+
+	tests := []struct {
+		name           string
+		commandActions []testingexec.FakeCommandAction
+		// expectedFiles maps the name of each file that is expected to be written to its content.
+		expectedFiles map[string]string
+		expectedErr   string
+	}{
+		{
+			name: "BGPPolicy in effect",
+			commandActions: []testingexec.FakeCommandAction{
+				antctlGet("bgppolicy", policyOutput, false),
+				antctlGet("bgppeers", "- peer: 192.168.77.200:179", false),
+				antctlGet("bgproutes", "- route: 10.96.0.1/32", false),
+			},
+			expectedFiles: map[string]string{
+				"bgppolicy": policyOutput,
+				"bgppeers":  "- peer: 192.168.77.200:179",
+				"bgproutes": "- route: 10.96.0.1/32",
+			},
+		},
+		{
+			name: "BGP is not enabled",
+			commandActions: []testingexec.FakeCommandAction{
+				antctlGet("bgppolicy", notEnabled, true),
+				antctlGet("bgppeers", notEnabled, true),
+				antctlGet("bgproutes", notEnabled, true),
+			},
+			expectedFiles: map[string]string{"bgppolicy": notEnabled, "bgppeers": notEnabled, "bgproutes": notEnabled},
+		},
+		{
+			name: "no BGPPolicy selects the Node",
+			commandActions: []testingexec.FakeCommandAction{
+				antctlGet("bgppolicy", noBGPPolicy, true),
+				antctlGet("bgppeers", noBGPPolicy, true),
+				antctlGet("bgproutes", noBGPPolicy, true),
+			},
+			expectedFiles: map[string]string{"bgppolicy": noBGPPolicy, "bgppeers": noBGPPolicy, "bgproutes": noBGPPolicy},
+		},
+		{
+			name: "BGPPolicy could not be applied",
+			commandActions: []testingexec.FakeCommandAction{
+				antctlGet("bgppolicy", policyOutput, false),
+				antctlGet("bgppeers", notApplied, true),
+				antctlGet("bgproutes", notApplied, true),
+			},
+			expectedFiles: map[string]string{"bgppolicy": policyOutput, "bgppeers": notApplied, "bgproutes": notApplied},
+		},
+		{
+			name: "BGP peers cannot be listed",
+			commandActions: []testingexec.FakeCommandAction{
+				antctlGet("bgppolicy", policyOutput, false),
+				antctlGet("bgppeers", "Error: failed to get bgp peers: failed to list peers", true),
+			},
+			expectedFiles: map[string]string{"bgppolicy": policyOutput},
+			expectedErr:   "error when dumping bgppeers",
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			fs := afero.NewMemMapFs()
+			require.NoError(t, fs.MkdirAll(baseDir, os.ModePerm))
+			dumper := &agentDumper{
+				fs:       fs,
+				executor: &testingexec.FakeExec{CommandScript: tc.commandActions},
+			}
+
+			err := dumper.DumpBGPResources(baseDir)
+			if tc.expectedErr != "" {
+				assert.ErrorContains(t, err, tc.expectedErr)
+			} else {
+				require.NoError(t, err)
+			}
+			for _, name := range []string{"bgppolicy", "bgppeers", "bgproutes"} {
+				content, readErr := afero.ReadFile(fs, filepath.Join(baseDir, name))
+				if expected, ok := tc.expectedFiles[name]; ok {
+					require.NoError(t, readErr)
+					assert.Equal(t, expected, string(content))
+				} else {
+					assert.Error(t, readErr, "file %s should not be written", name)
+				}
+			}
+		})
+	}
+}

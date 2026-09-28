@@ -58,6 +58,14 @@ func TestBGPPolicyQuery(t *testing.T) {
 			},
 		},
 		{
+			name:           "BGPPolicy could not be applied",
+			expectedStatus: http.StatusOK,
+			expectedResponse: &apis.BGPPolicyResponse{
+				BGPPolicyName: "policy-1",
+				LastSyncError: "failed to start BGP server: listen tcp :179: bind: address already in use",
+			},
+		},
+		{
 			name:           "bgpPolicyState does not exist",
 			expectedStatus: http.StatusNotFound,
 		},
@@ -75,6 +83,7 @@ func TestBGPPolicyQuery(t *testing.T) {
 					ListenPort:              tt.expectedResponse.ListenPort,
 					ConfederationIdentifier: tt.expectedResponse.ConfederationIdentifier,
 					MemberASNs:              tt.expectedResponse.MemberASNs,
+					LastSyncError:           tt.expectedResponse.LastSyncError,
 				})
 			} else {
 				q.EXPECT().GetBGPPolicyInfo().Return(nil)

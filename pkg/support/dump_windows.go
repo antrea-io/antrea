@@ -109,3 +109,8 @@ func (d *agentDumper) DumpMemberlist(basedir string) error {
 	// memberlist never runs on Windows.
 	return nil
 }
+
+func (d *agentDumper) DumpBGPResources(basedir string) error {
+	// BGPPolicy is not supported on Windows.
+	return nil
+}

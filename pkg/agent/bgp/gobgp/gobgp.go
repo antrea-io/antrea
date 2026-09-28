@@ -202,6 +202,14 @@ func convertGoBGPPeerToPeerStatus(peer *gobgpapi.Peer) *bgp.PeerStatus {
 	if gracefulRestart := peer.GetGracefulRestart(); gracefulRestart != nil {
 		peerStatus.GracefulRestartTimeSeconds = int32(gracefulRestart.GetRestartTime())
 	}
+	// The counts are summed over the address families of the peer. goBGP only reports the advertised count because
+	// GetPeers lists the peers with EnableAdvertised.
+	for _, afiSafi := range peer.GetAfiSafis() {
+		if afiSafiState := afiSafi.GetState(); afiSafiState != nil {
+			peerStatus.AdvertisedRouteCount += afiSafiState.GetAdvertised()
+			peerStatus.ReceivedRouteCount += afiSafiState.GetReceived()
+		}
+	}
 	if state := peer.GetState(); state != nil {
 		peerStatus.SessionState = convertGoBGPSessionStateToSessionState(state.GetSessionState())
 		if peerStatus.SessionState == bgp.SessionEstablished {

@@ -135,6 +135,12 @@ Antrea Controller and Agents expose various metrics, some of which are provided
 by the Antrea components and others which are provided by 3rd party components
 used by the Antrea components.
 
+The list below is generated from a deployment with the default configuration.
+Some features that are disabled by default export more metrics when they are
+enabled. For the metrics that the Antrea Agent exports when the `BGPPolicy`
+feature gate is enabled, see [Monitoring BGP with
+Prometheus](troubleshooting.md#monitoring-bgp-with-prometheus).
+
 Below is a list of metrics, provided by the components and by 3rd parties.
 
 ### Antrea Metrics

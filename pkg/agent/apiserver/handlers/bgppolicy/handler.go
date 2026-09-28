@@ -46,6 +46,7 @@ func HandleFunc(bq querier.AgentBGPPolicyInfoQuerier) http.HandlerFunc {
 			ListenPort:              bgpPolicyInfo.ListenPort,
 			ConfederationIdentifier: bgpPolicyInfo.ConfederationIdentifier,
 			MemberASNs:              bgpPolicyInfo.MemberASNs,
+			LastSyncError:           bgpPolicyInfo.LastSyncError,
 		}
 
 		if err := json.NewEncoder(w).Encode(bgpPolicyResp); err != nil {

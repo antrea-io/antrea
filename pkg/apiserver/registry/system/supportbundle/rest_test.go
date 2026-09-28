@@ -285,6 +285,10 @@ func (f *fakeAgentDumper) DumpMemberlist(basedir string) error {
 	return f.returnErr
 }
 
+func (f *fakeAgentDumper) DumpBGPResources(basedir string) error {
+	return f.returnErr
+}
+
 func TestAgentStorage(t *testing.T) {
 	defaultFS = afero.NewMemMapFs()
 	defaultExecutor = new(testExec)

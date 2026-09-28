@@ -69,6 +69,11 @@ type AgentDumper interface {
 	// DumpMemberlist should create a file that contains state of Memberlist
 	// cluster of the agent Pod under the basedir.
 	DumpMemberlist(basedir string) error
+	// DumpBGPResources should create files that contain the effective BGPPolicy,
+	// the BGP peers and the BGP routes of the agent under the basedir. When BGP
+	// is not enabled or no BGPPolicy is in effect on the Node, the files should
+	// contain the reason, and no error should be returned.
+	DumpBGPResources(basedir string) error
 }
 
 // ControllerDumper is the interface for dumping runtime information of the

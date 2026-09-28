@@ -125,6 +125,9 @@ type BGPPolicyInfo struct {
 	ListenPort              int32
 	ConfederationIdentifier int32
 	MemberASNs              []uint32
+	// LastSyncError is the error that stopped the last attempt to apply the BGPPolicy. It is empty when the last
+	// attempt succeeded.
+	LastSyncError string
 }
 
 type Controller struct {
@@ -169,6 +172,21 @@ type Controller struct {
 	newBGPServerFn func(globalConfig *bgp.GlobalConfig) bgp.Interface
 
 	queue workqueue.TypedRateLimitingInterface[string]
+
+	// lastSyncPolicyName and lastSyncError describe the last sync: the name of the BGPPolicy that was being applied,
+	// and the error that stopped it, which is nil when the sync succeeded. Guarded by bgpPolicyStateMutex.
+	lastSyncPolicyName string
+	lastSyncError      error
+
+	// bgpPeerSecretExists is true while the Secret holding the passwords of BGP peers exists. Guarded by
+	// bgpPeerPasswordsMutex.
+	bgpPeerSecretExists bool
+
+	// peerStatuses holds the status of each BGP peer at the last poll, keyed like the peer configurations. It is only
+	// accessed by pollPeerStatus, which never runs concurrently with itself.
+	peerStatuses map[string]bgp.PeerStatus
+
+	eventRecorder *eventRecorder
 }
 
 func NewBGPPolicyController(nodeInformer coreinformers.NodeInformer,
@@ -211,6 +229,7 @@ func NewBGPPolicyController(nodeInformer coreinformers.NodeInformer,
 				Name: "bgpPolicy",
 			},
 		),
+		eventRecorder: newEventRecorder(k8sClient),
 	}
 	c.bgpPolicyInformer.AddEventHandlerWithResyncPeriod(
 		cache.ResourceEventHandlerFuncs{
@@ -270,6 +289,7 @@ func NewBGPPolicyController(nodeInformer coreinformers.NodeInformer,
 		UpdateFunc: c.updateSecret,
 		DeleteFunc: c.deleteSecret,
 	})
+	initRouteMetrics()
 
 	return c, nil
 }
@@ -279,6 +299,9 @@ func (c *Controller) Run(ctx context.Context) {
 
 	klog.InfoS("Starting", "controllerName", controllerName)
 	defer klog.InfoS("Shutting down", "controllerName", controllerName)
+
+	c.eventRecorder.start(ctx.Done())
+	defer c.eventRecorder.shutdown()
 
 	go c.secretInformer.Run(ctx.Done())
 
@@ -297,6 +320,7 @@ func (c *Controller) Run(ctx context.Context) {
 	}
 
 	go wait.Until(c.worker, time.Second, ctx.Done())
+	go wait.UntilWithContext(ctx, c.pollPeerStatus, peerStatusPollInterval)
 
 	<-ctx.Done()
 }
@@ -355,13 +379,13 @@ func confederationConfigEqual(a, b *confederationConfig) bool {
 	return (a == nil && b == nil) || (a != nil && b != nil && a.identifier == b.identifier && a.memberASNs.Equal(b.memberASNs))
 }
 
-func (c *Controller) syncBGPPolicy(ctx context.Context) error {
+func (c *Controller) syncBGPPolicy(ctx context.Context) (err error) {
 	ctx, cancel := context.WithTimeoutCause(ctx, 60*time.Second, fmt.Errorf("BGPPolicy took too long to sync"))
 	defer cancel()
 
 	startTime := time.Now()
 	defer func() {
-		klog.InfoS("Finished syncing BGPPolicy", "durationTime", time.Since(startTime))
+		klog.V(2).InfoS("Finished syncing BGPPolicy", "durationTime", time.Since(startTime))
 	}()
 
 	// Get the oldest BGPPolicy applied to the current Node as the effective BGPPolicy.
@@ -369,6 +393,9 @@ func (c *Controller) syncBGPPolicy(ctx context.Context) error {
 
 	c.bgpPolicyStateMutex.Lock()
 	defer c.bgpPolicyStateMutex.Unlock()
+	defer func() {
+		c.recordSyncResult(effectivePolicy, err)
+	}()
 
 	// When the effective BGPPolicy is nil, it means that there is no available BGPPolicy.
 	if effectivePolicy == nil {
@@ -434,8 +461,9 @@ func (c *Controller) syncBGPPolicy(ctx context.Context) error {
 
 		// Start the new BGP server.
 		if err := bgpServer.Start(ctx); err != nil {
-			return fmt.Errorf("failed to start BGP server: %w", err)
+			return &syncStepError{reason: reasonBGPServerStartFailed, err: fmt.Errorf("failed to start BGP server: %w", err)}
 		}
+		c.recordBGPServerStarted(effectivePolicy, routerID, localASN, listenPort)
 
 		// Initialize the BGPPolicy state to store the new BGP server, BGP policy name, listen port, local ASN, and router ID.
 		c.bgpPolicyState = &bgpPolicyState{
@@ -455,7 +483,7 @@ func (c *Controller) syncBGPPolicy(ctx context.Context) error {
 
 	// Reconcile BGP peers.
 	if err := c.reconcileBGPPeers(ctx, effectivePolicy.Spec.BGPPeers); err != nil {
-		return err
+		return &syncStepError{reason: reasonBGPPeerConfigFailed, err: err}
 	}
 
 	// Reconcile BGP advertisements.
@@ -487,23 +515,26 @@ func (c *Controller) reconcileBGPPeers(ctx context.Context, bgpPeers []v1alpha1.
 	for key := range peerToAddKeys {
 		peerConfig := curPeerConfigs[key]
 		if err := bgpServer.AddPeer(ctx, peerConfig); err != nil {
-			return err
+			return fmt.Errorf("failed to add BGP peer %s with ASN %d: %w", peerConfig.Address, peerConfig.ASN, err)
 		}
 		c.bgpPolicyState.peerConfigs[key] = peerConfig
+		klog.InfoS("Added BGP peer", "peer", peerConfig.Address, "asn", peerConfig.ASN)
 	}
 	for key := range peerToUpdateKeys {
 		peerConfig := curPeerConfigs[key]
 		if err := bgpServer.UpdatePeer(ctx, peerConfig); err != nil {
-			return err
+			return fmt.Errorf("failed to update BGP peer %s with ASN %d: %w", peerConfig.Address, peerConfig.ASN, err)
 		}
 		c.bgpPolicyState.peerConfigs[key] = peerConfig
+		klog.InfoS("Updated BGP peer", "peer", peerConfig.Address, "asn", peerConfig.ASN)
 	}
 	for key := range peerToDeleteKeys {
 		peerConfig := prePeerConfigs[key]
 		if err := bgpServer.RemovePeer(ctx, peerConfig); err != nil {
-			return err
+			return fmt.Errorf("failed to remove BGP peer %s with ASN %d: %w", peerConfig.Address, peerConfig.ASN, err)
 		}
 		delete(c.bgpPolicyState.peerConfigs, key)
+		klog.InfoS("Removed BGP peer", "peer", peerConfig.Address, "asn", peerConfig.ASN)
 	}
 
 	return nil
@@ -517,6 +548,11 @@ func (c *Controller) reconcileBGPAdvertisements(ctx context.Context, bgpAdvertis
 
 	routesToAdvertise := currRoutesKeys.Difference(preRoutesKeys)
 	routesToWithdraw := preRoutesKeys.Difference(currRoutesKeys)
+	// A prefix that stays advertised needs no BGP update, but its metadata can change, for example when the object
+	// that a shared prefix was first advertised for is deleted while another object still uses the prefix.
+	for route := range currRoutesKeys.Intersection(preRoutesKeys) {
+		c.bgpPolicyState.routes[route] = curRoutes[route]
+	}
 
 	bgpServer := c.bgpPolicyState.bgpServer
 	for route := range routesToAdvertise {
@@ -527,12 +563,17 @@ func (c *Controller) reconcileBGPAdvertisements(ctx context.Context, bgpAdvertis
 			Type:      curRoutes[route].Type,
 			K8sObjRef: curRoutes[route].K8sObjRef,
 		}
+		klog.V(2).InfoS("Advertised BGP route", "prefix", route.Prefix, "type", curRoutes[route].Type, "k8sObjRef", curRoutes[route].K8sObjRef)
+		recordRouteAdvertised(curRoutes[route].Type)
 	}
 	for route := range routesToWithdraw {
+		metadata := c.bgpPolicyState.routes[route]
 		if err := bgpServer.WithdrawRoutes(ctx, []bgp.Route{route}); err != nil {
 			return err
 		}
 		delete(c.bgpPolicyState.routes, route)
+		klog.V(2).InfoS("Withdrew BGP route", "prefix", route.Prefix, "type", metadata.Type, "k8sObjRef", metadata.K8sObjRef)
+		recordRouteWithdrawn(metadata.Type)
 	}
 
 	return nil
@@ -691,6 +732,12 @@ func (c *Controller) addPodRoutes(allRoutes map[bgp.Route]RouteMetadata) {
 }
 
 func addRoutes(allRoutes map[bgp.Route]RouteMetadata, prefix, k8sObjRef string, routeType AdvertisedRouteType) {
+	// Several objects can share a prefix, and the listers return objects in no particular order. Keep the object that
+	// sorts first, so that the metadata of a shared prefix is the same from one sync to the next.
+	if existing, ok := allRoutes[bgp.Route{Prefix: prefix}]; ok &&
+		(existing.K8sObjRef < k8sObjRef || existing.K8sObjRef == k8sObjRef && existing.Type <= routeType) {
+		return
+	}
 	allRoutes[bgp.Route{Prefix: prefix}] = RouteMetadata{
 		Type:      routeType,
 		K8sObjRef: k8sObjRef,
@@ -723,6 +770,10 @@ func (c *Controller) getPeerConfigs(peers []v1alpha1.BGPPeer) map[string]bgp.Pee
 			var password string
 			if p, exists := c.bgpPeerPasswords[peerKey]; exists {
 				password = p
+			} else if c.bgpPeerSecretExists {
+				klog.InfoS("The password Secret has no entry for the BGP peer, so the session is not authenticated",
+					"peer", peers[i].Address, "asn", peers[i].ASN,
+					"secret", klog.KRef(env.GetAntreaNamespace(), types.BGPPolicySecretName), "expectedKey", peerKey)
 			}
 
 			peerConfigs[peerKey] = bgp.PeerConfig{
@@ -1080,6 +1131,7 @@ func (c *Controller) updateBGPPeerPasswords(secret *corev1.Secret) {
 	defer c.bgpPeerPasswordsMutex.Unlock()
 
 	c.bgpPeerPasswords = make(map[string]string)
+	c.bgpPeerSecretExists = secret != nil
 	if secret != nil && secret.Data != nil {
 		for k, v := range secret.Data {
 			c.bgpPeerPasswords[k] = string(v)
@@ -1108,23 +1160,31 @@ func (c *Controller) GetBGPPolicyInfo() *BGPPolicyInfo {
 			bgpPolicyInfo.MemberASNs = sets.List(c.bgpPolicyState.confederationConfig.memberASNs)
 		}
 	}
+	// A BGPPolicy which could not be applied is reported together with the error that stopped it, even when the BGP
+	// server could not be started, so that it is not mistaken for the absence of a BGPPolicy.
+	if c.lastSyncError != nil {
+		if bgpPolicyInfo == nil {
+			bgpPolicyInfo = &BGPPolicyInfo{BGPPolicyName: c.lastSyncPolicyName}
+		}
+		bgpPolicyInfo.LastSyncError = c.lastSyncError.Error()
+	}
 	return bgpPolicyInfo
 }
 
 // GetBGPPeerStatus returns current status of BGP Peers of effective BGP Policy applied on the Node.
 func (c *Controller) GetBGPPeerStatus(ctx context.Context) ([]bgp.PeerStatus, error) {
-	getBgpServer := func() bgp.Interface {
+	getBgpServer := func() (bgp.Interface, error) {
 		c.bgpPolicyStateMutex.RLock()
 		defer c.bgpPolicyStateMutex.RUnlock()
 		if c.bgpPolicyState == nil {
-			return nil
+			return nil, c.noBGPServerError()
 		}
-		return c.bgpPolicyState.bgpServer
+		return c.bgpPolicyState.bgpServer, nil
 	}
 
-	bgpServer := getBgpServer()
-	if bgpServer == nil {
-		return nil, ErrBGPPolicyNotFound
+	bgpServer, err := getBgpServer()
+	if err != nil {
+		return nil, err
 	}
 	allPeers, err := bgpServer.GetPeers(ctx)
 	if err != nil {
@@ -1139,7 +1199,7 @@ func (c *Controller) GetBGPRoutes(ctx context.Context) (map[bgp.Route]RouteMetad
 	defer c.bgpPolicyStateMutex.RUnlock()
 
 	if c.bgpPolicyState == nil {
-		return nil, ErrBGPPolicyNotFound
+		return nil, c.noBGPServerError()
 	}
 
 	bgpRoutes := make(map[bgp.Route]RouteMetadata)
