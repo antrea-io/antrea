@@ -2088,6 +2088,20 @@ func (m *NodeStatsSummary) MarshalToSizedBuffer(dAtA []byte) (int, error) {
 	_ = i
 	var l int
 	_ = l
+	if len(m.ClusterNetworkPolicies) > 0 {
+		for iNdEx := len(m.ClusterNetworkPolicies) - 1; iNdEx >= 0; iNdEx-- {
+			{
+				size, err := m.ClusterNetworkPolicies[iNdEx].MarshalToSizedBuffer(dAtA[:i])
+				if err != nil {
+					return 0, err
+				}
+				i -= size
+				i = encodeVarintGenerated(dAtA, i, uint64(size))
+			}
+			i--
+			dAtA[i] = 0x32
+		}
+	}
 	if len(m.Multicast) > 0 {
 		for iNdEx := len(m.Multicast) - 1; iNdEx >= 0; iNdEx-- {
 			{
@@ -3383,6 +3397,12 @@ func (m *NodeStatsSummary) Size() (n int) {
 			n += 1 + l + sovGenerated(uint64(l))
 		}
 	}
+	if len(m.ClusterNetworkPolicies) > 0 {
+		for _, e := range m.ClusterNetworkPolicies {
+			l = e.Size()
+			n += 1 + l + sovGenerated(uint64(l))
+		}
+	}
 	return n
 }
 
@@ -4192,12 +4212,18 @@ func (this *NodeStatsSummary) String() string {
 		repeatedStringForMulticast += strings.Replace(strings.Replace(f.String(), "MulticastGroupInfo", "MulticastGroupInfo", 1), `&`, ``, 1) + ","
 	}
 	repeatedStringForMulticast += "}"
+	repeatedStringForClusterNetworkPolicies := "[]NetworkPolicyStats{"
+	for _, f := range this.ClusterNetworkPolicies {
+		repeatedStringForClusterNetworkPolicies += strings.Replace(strings.Replace(f.String(), "NetworkPolicyStats", "NetworkPolicyStats", 1), `&`, ``, 1) + ","
+	}
+	repeatedStringForClusterNetworkPolicies += "}"
 	s := strings.Join([]string{`&NodeStatsSummary{`,
 		`ObjectMeta:` + strings.Replace(strings.Replace(fmt.Sprintf("%v", this.ObjectMeta), "ObjectMeta", "v1.ObjectMeta", 1), `&`, ``, 1) + `,`,
 		`NetworkPolicies:` + repeatedStringForNetworkPolicies + `,`,
 		`AntreaClusterNetworkPolicies:` + repeatedStringForAntreaClusterNetworkPolicies + `,`,
 		`AntreaNetworkPolicies:` + repeatedStringForAntreaNetworkPolicies + `,`,
 		`Multicast:` + repeatedStringForMulticast + `,`,
+		`ClusterNetworkPolicies:` + repeatedStringForClusterNetworkPolicies + `,`,
 		`}`,
 	}, "")
 	return s
@@ -10128,6 +10154,40 @@ func (m *NodeStatsSummary) Unmarshal(dAtA []byte) error {
 			}
 			m.Multicast = append(m.Multicast, MulticastGroupInfo{})
 			if err := m.Multicast[len(m.Multicast)-1].Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
+				return err
+			}
+			iNdEx = postIndex
+		case 6:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field ClusterNetworkPolicies", wireType)
+			}
+			var msglen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowGenerated
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				msglen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if msglen < 0 {
+				return ErrInvalidLengthGenerated
+			}
+			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLengthGenerated
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.ClusterNetworkPolicies = append(m.ClusterNetworkPolicies, NetworkPolicyStats{})
+			if err := m.ClusterNetworkPolicies[len(m.ClusterNetworkPolicies)-1].Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
 				return err
 			}
 			iNdEx = postIndex

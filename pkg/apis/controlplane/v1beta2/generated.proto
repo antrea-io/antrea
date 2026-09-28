@@ -1,4 +1,4 @@
-// Copyright 2024 Antrea Authors
+// Copyright 2026 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -473,6 +473,10 @@ message NodeStatsSummary {
 
   // Multicast group information collected from the Node.
   repeated MulticastGroupInfo multicast = 5;
+
+  // The TrafficStats of Kubernetes ClusterNetworkPolicies (policy.networking.k8s.io) collected
+  // from the Node.
+  repeated NetworkPolicyStats clusterNetworkPolicies = 6;
 }
 
 message PaginationGetOptions {

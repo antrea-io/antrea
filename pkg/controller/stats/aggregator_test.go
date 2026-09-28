@@ -28,6 +28,9 @@ import (
 	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes/fake"
 	featuregatetesting "k8s.io/component-base/featuregate/testing"
+	"sigs.k8s.io/network-policy-api/apis/v1alpha2"
+	fakepolicyversioned "sigs.k8s.io/network-policy-api/pkg/client/clientset/versioned/fake"
+	policyinformers "sigs.k8s.io/network-policy-api/pkg/client/informers/externalversions"
 
 	"antrea.io/antrea/v2/pkg/apis/controlplane"
 	crdv1beta1 "antrea.io/antrea/v2/pkg/apis/crd/v1beta1"
@@ -56,6 +59,12 @@ var (
 	annp2 = &crdv1beta1.NetworkPolicy{
 		ObjectMeta: metav1.ObjectMeta{Namespace: "foo", Name: "baz", UID: "uid6"},
 	}
+	cnp1 = &v1alpha2.ClusterNetworkPolicy{
+		ObjectMeta: metav1.ObjectMeta{Name: "bar", UID: "uid7"},
+	}
+	cnp2 = &v1alpha2.ClusterNetworkPolicy{
+		ObjectMeta: metav1.ObjectMeta{Name: "baz", UID: "uid8"},
+	}
 )
 
 // runWrapper wraps the Run method of the Aggregator and is used to avoid race conditions in tests.
@@ -69,7 +78,7 @@ func runWrapper(t *testing.T, a *Aggregator, policyCount int, summaries []*contr
 	stopCh := make(chan struct{})
 	doneCh := make(chan struct{})
 	err := wait.PollUntilContextTimeout(context.Background(), 100*time.Millisecond, time.Second, true, func(ctx context.Context) (done bool, err error) {
-		count := len(a.ListNetworkPolicyStats("")) + len(a.ListAntreaNetworkPolicyStats("")) + len(a.ListAntreaClusterNetworkPolicyStats())
+		count := len(a.ListNetworkPolicyStats("")) + len(a.ListAntreaNetworkPolicyStats("")) + len(a.ListAntreaClusterNetworkPolicyStats()) + len(a.ListClusterNetworkPolicyStats())
 		return (count >= policyCount), nil
 	})
 	require.NoError(t, err, "Timeout while waiting for Add events to be processed by Aggregator")
@@ -96,9 +105,11 @@ func TestAggregatorCollectListGet(t *testing.T) {
 		existingNetworkPolicies                 []runtime.Object
 		existingAntreaClusterNetworkPolicies    []runtime.Object
 		existingAntreaNetworkPolicies           []runtime.Object
+		existingClusterNetworkPolicies          []runtime.Object
 		expectedNetworkPolicyStats              []statsv1alpha1.NetworkPolicyStats
 		expectedAntreaClusterNetworkPolicyStats []statsv1alpha1.AntreaClusterNetworkPolicyStats
 		expectedAntreaNetworkPolicyStats        []statsv1alpha1.AntreaNetworkPolicyStats
+		expectedClusterNetworkPolicyStats       []statsv1alpha1.ClusterNetworkPolicyStats
 	}{
 		{
 			name: "multiple Nodes, multiple Policies",
@@ -155,6 +166,21 @@ func TestAggregatorCollectListGet(t *testing.T) {
 							},
 						},
 					},
+					ClusterNetworkPolicies: []controlplane.NetworkPolicyStats{
+						{
+							NetworkPolicy: controlplane.NetworkPolicyReference{UID: cnp1.UID},
+							RuleTrafficStats: []statsv1alpha1.RuleTrafficStats{
+								{
+									Name: "rule5",
+									TrafficStats: statsv1alpha1.TrafficStats{
+										Bytes:    15,
+										Packets:  4,
+										Sessions: 1,
+									},
+								},
+							},
+						},
+					},
 				},
 				{
 					ObjectMeta: metav1.ObjectMeta{
@@ -200,11 +226,35 @@ func TestAggregatorCollectListGet(t *testing.T) {
 							},
 						},
 					},
+					ClusterNetworkPolicies: []controlplane.NetworkPolicyStats{
+						{
+							NetworkPolicy: controlplane.NetworkPolicyReference{UID: cnp1.UID},
+							RuleTrafficStats: []statsv1alpha1.RuleTrafficStats{
+								{
+									Name: "rule5",
+									TrafficStats: statsv1alpha1.TrafficStats{
+										Bytes:    5,
+										Packets:  2,
+										Sessions: 1,
+									},
+								},
+								{
+									Name: "rule6",
+									TrafficStats: statsv1alpha1.TrafficStats{
+										Bytes:    30,
+										Packets:  6,
+										Sessions: 3,
+									},
+								},
+							},
+						},
+					},
 				},
 			},
 			existingNetworkPolicies:              []runtime.Object{np1, np2},
 			existingAntreaClusterNetworkPolicies: []runtime.Object{acnp1, acnp2},
 			existingAntreaNetworkPolicies:        []runtime.Object{annp1, annp2},
+			existingClusterNetworkPolicies:       []runtime.Object{cnp1, cnp2},
 			expectedNetworkPolicyStats: []statsv1alpha1.NetworkPolicyStats{
 				{
 					ObjectMeta: metav1.ObjectMeta{
@@ -312,6 +362,47 @@ func TestAggregatorCollectListGet(t *testing.T) {
 					},
 				},
 			},
+			expectedClusterNetworkPolicyStats: []statsv1alpha1.ClusterNetworkPolicyStats{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: cnp1.Name,
+					},
+					TrafficStats: statsv1alpha1.TrafficStats{
+						Bytes:    50,
+						Packets:  12,
+						Sessions: 5,
+					},
+					RuleTrafficStats: []statsv1alpha1.RuleTrafficStats{
+						{
+							Name: "rule5",
+							TrafficStats: statsv1alpha1.TrafficStats{
+								Bytes:    20,
+								Packets:  6,
+								Sessions: 2,
+							},
+						},
+						{
+							Name: "rule6",
+							TrafficStats: statsv1alpha1.TrafficStats{
+								Bytes:    30,
+								Packets:  6,
+								Sessions: 3,
+							},
+						},
+					},
+				},
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: cnp2.Name,
+					},
+					TrafficStats: statsv1alpha1.TrafficStats{
+						Bytes:    0,
+						Packets:  0,
+						Sessions: 0,
+					},
+					RuleTrafficStats: nil,
+				},
+			},
 		},
 		{
 			name: "non existing Policies",
@@ -360,11 +451,27 @@ func TestAggregatorCollectListGet(t *testing.T) {
 							},
 						},
 					},
+					ClusterNetworkPolicies: []controlplane.NetworkPolicyStats{
+						{
+							NetworkPolicy: controlplane.NetworkPolicyReference{UID: cnp1.UID},
+							RuleTrafficStats: []statsv1alpha1.RuleTrafficStats{
+								{
+									Name: "rule7",
+									TrafficStats: statsv1alpha1.TrafficStats{
+										Bytes:    20,
+										Packets:  8,
+										Sessions: 5,
+									},
+								},
+							},
+						},
+					},
 				},
 			},
 			existingNetworkPolicies:              []runtime.Object{np2},
 			existingAntreaClusterNetworkPolicies: []runtime.Object{acnp2},
 			existingAntreaNetworkPolicies:        []runtime.Object{annp2},
+			existingClusterNetworkPolicies:       []runtime.Object{cnp2},
 			expectedNetworkPolicyStats: []statsv1alpha1.NetworkPolicyStats{
 				{
 					ObjectMeta: metav1.ObjectMeta{
@@ -395,6 +502,18 @@ func TestAggregatorCollectListGet(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      annp2.Name,
 						Namespace: annp2.Namespace,
+					},
+					TrafficStats: statsv1alpha1.TrafficStats{
+						Bytes:    0,
+						Packets:  0,
+						Sessions: 0,
+					},
+				},
+			},
+			expectedClusterNetworkPolicyStats: []statsv1alpha1.ClusterNetworkPolicyStats{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: cnp2.Name,
 					},
 					TrafficStats: statsv1alpha1.TrafficStats{
 						Bytes:    0,
@@ -515,6 +634,7 @@ func TestAggregatorCollectListGet(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			featuregatetesting.SetFeatureGateDuringTest(t, features.DefaultFeatureGate, features.AntreaPolicy, true)
+			featuregatetesting.SetFeatureGateDuringTest(t, features.DefaultFeatureGate, features.ClusterNetworkPolicy, true)
 
 			stopCh := make(chan struct{})
 			defer close(stopCh)
@@ -522,10 +642,13 @@ func TestAggregatorCollectListGet(t *testing.T) {
 			informerFactory := informers.NewSharedInformerFactory(client, 12*time.Hour)
 			crdClient := fakeversioned.NewSimpleClientset(append(tt.existingAntreaClusterNetworkPolicies, tt.existingAntreaNetworkPolicies...)...)
 			crdInformerFactory := crdinformers.NewSharedInformerFactory(crdClient, 12*time.Hour)
-			a := NewAggregator(informerFactory.Networking().V1().NetworkPolicies(), crdInformerFactory.Crd().V1beta1().ClusterNetworkPolicies(), crdInformerFactory.Crd().V1beta1().NetworkPolicies())
+			policyClient := fakepolicyversioned.NewSimpleClientset(tt.existingClusterNetworkPolicies...)
+			policyInformerFactory := policyinformers.NewSharedInformerFactory(policyClient, 12*time.Hour)
+			a := NewAggregator(informerFactory.Networking().V1().NetworkPolicies(), crdInformerFactory.Crd().V1beta1().ClusterNetworkPolicies(), crdInformerFactory.Crd().V1beta1().NetworkPolicies(), policyInformerFactory.Policy().V1alpha2().ClusterNetworkPolicies())
 			informerFactory.Start(stopCh)
 			crdInformerFactory.Start(stopCh)
-			expectedPolicyCount := len(tt.expectedNetworkPolicyStats) + len(tt.expectedAntreaClusterNetworkPolicyStats) + len(tt.expectedAntreaNetworkPolicyStats)
+			policyInformerFactory.Start(stopCh)
+			expectedPolicyCount := len(tt.expectedNetworkPolicyStats) + len(tt.expectedAntreaClusterNetworkPolicyStats) + len(tt.expectedAntreaNetworkPolicyStats) + len(tt.expectedClusterNetworkPolicyStats)
 			runWrapper(t, a, expectedPolicyCount, tt.summaries)
 
 			require.Equal(t, len(tt.expectedNetworkPolicyStats), len(a.ListNetworkPolicyStats("")))
@@ -548,12 +671,20 @@ func TestAggregatorCollectListGet(t *testing.T) {
 				require.Equal(t, Stats.TrafficStats, actualStats.TrafficStats)
 				require.ElementsMatch(t, Stats.RuleTrafficStats, actualStats.RuleTrafficStats)
 			}
+			assert.Equal(t, len(tt.expectedClusterNetworkPolicyStats), len(a.ListClusterNetworkPolicyStats()))
+			for _, stats := range tt.expectedClusterNetworkPolicyStats {
+				actualStats, exists := a.GetClusterNetworkPolicyStats(stats.Name)
+				require.True(t, exists)
+				require.Equal(t, stats.TrafficStats, actualStats.TrafficStats)
+				require.ElementsMatch(t, stats.RuleTrafficStats, actualStats.RuleTrafficStats)
+			}
 		})
 	}
 }
 
 func TestDeleteNetworkPolicy(t *testing.T) {
 	featuregatetesting.SetFeatureGateDuringTest(t, features.DefaultFeatureGate, features.AntreaPolicy, true)
+	featuregatetesting.SetFeatureGateDuringTest(t, features.DefaultFeatureGate, features.ClusterNetworkPolicy, true)
 
 	stopCh := make(chan struct{})
 	defer close(stopCh)
@@ -561,9 +692,12 @@ func TestDeleteNetworkPolicy(t *testing.T) {
 	informerFactory := informers.NewSharedInformerFactory(client, 12*time.Hour)
 	crdClient := fakeversioned.NewSimpleClientset(acnp1, annp1)
 	crdInformerFactory := crdinformers.NewSharedInformerFactory(crdClient, 12*time.Hour)
-	a := NewAggregator(informerFactory.Networking().V1().NetworkPolicies(), crdInformerFactory.Crd().V1beta1().ClusterNetworkPolicies(), crdInformerFactory.Crd().V1beta1().NetworkPolicies())
+	policyClient := fakepolicyversioned.NewSimpleClientset(cnp1)
+	policyInformerFactory := policyinformers.NewSharedInformerFactory(policyClient, 12*time.Hour)
+	a := NewAggregator(informerFactory.Networking().V1().NetworkPolicies(), crdInformerFactory.Crd().V1beta1().ClusterNetworkPolicies(), crdInformerFactory.Crd().V1beta1().NetworkPolicies(), policyInformerFactory.Policy().V1alpha2().ClusterNetworkPolicies())
 	informerFactory.Start(stopCh)
 	crdInformerFactory.Start(stopCh)
+	policyInformerFactory.Start(stopCh)
 
 	summary := &controlplane.NodeStatsSummary{
 		ObjectMeta: metav1.ObjectMeta{
@@ -609,21 +743,38 @@ func TestDeleteNetworkPolicy(t *testing.T) {
 				},
 			},
 		},
+		ClusterNetworkPolicies: []controlplane.NetworkPolicyStats{
+			{
+				NetworkPolicy: controlplane.NetworkPolicyReference{UID: cnp1.UID},
+				RuleTrafficStats: []statsv1alpha1.RuleTrafficStats{
+					{
+						Name: "rule3",
+						TrafficStats: statsv1alpha1.TrafficStats{
+							Bytes:    30,
+							Packets:  3,
+							Sessions: 3,
+						},
+					},
+				},
+			},
+		},
 	}
 
-	expectedPolicyCount := 3
+	expectedPolicyCount := 4
 	runWrapper(t, a, expectedPolicyCount, []*controlplane.NodeStatsSummary{summary})
 
 	require.Equal(t, 1, len(a.ListNetworkPolicyStats("")))
 	require.Equal(t, 1, len(a.ListAntreaClusterNetworkPolicyStats()))
 	require.Equal(t, 1, len(a.ListAntreaNetworkPolicyStats("")))
+	require.Equal(t, 1, len(a.ListClusterNetworkPolicyStats()))
 
 	client.NetworkingV1().NetworkPolicies(np1.Namespace).Delete(context.TODO(), np1.Name, metav1.DeleteOptions{})
 	crdClient.CrdV1beta1().ClusterNetworkPolicies().Delete(context.TODO(), acnp1.Name, metav1.DeleteOptions{})
 	crdClient.CrdV1beta1().NetworkPolicies(annp1.Namespace).Delete(context.TODO(), annp1.Name, metav1.DeleteOptions{})
+	policyClient.PolicyV1alpha2().ClusterNetworkPolicies().Delete(context.TODO(), cnp1.Name, metav1.DeleteOptions{})
 	// Event handlers are asynchronous, it's supposed to finish very soon.
 	err := wait.PollUntilContextTimeout(context.Background(), 100*time.Millisecond, time.Second, true, func(ctx context.Context) (done bool, err error) {
-		return len(a.ListNetworkPolicyStats("")) == 0 && len(a.ListAntreaClusterNetworkPolicyStats()) == 0 && len(a.ListAntreaNetworkPolicyStats("")) == 0, nil
+		return len(a.ListNetworkPolicyStats("")) == 0 && len(a.ListAntreaClusterNetworkPolicyStats()) == 0 && len(a.ListAntreaNetworkPolicyStats("")) == 0 && len(a.ListClusterNetworkPolicyStats()) == 0, nil
 	})
 	assert.NoError(t, err)
 }
