@@ -10,9 +10,9 @@ jobs:
     permissions:
       contents: write
     steps:
-    - uses: actions/checkout@v7
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
     - name: Set up Go using version from .go-version
-      uses: actions/setup-go@v7
+      uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
       with:
         go-version-file: '.go-version'
         # make sure the latest patch version is used for building release assets, and not a version
@@ -26,7 +26,7 @@ jobs:
         mkdir assets
         VERSION="${TAG:10}" ./hack/release/prepare-assets.sh ./assets
     - name: Upload all assets
-      uses: alexellis/upload-assets@0.5.0
+      uses: alexellis/upload-assets@d8de0b9b956cfb3d7633afdb66ef24c36940a9f7 # 0.5.0
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
@@ -44,7 +44,7 @@ jobs:
         version=${TAG:10}
         echo "version=$version" >> $GITHUB_OUTPUT
     - name: Update website source
-      uses: benc-uk/workflow-dispatch@v1
+      uses: benc-uk/workflow-dispatch@d004979be141727c7a17c28f603e2facc40d0855 # v1.3.3
       with:
         repo: antrea-io/website
         ref: refs/heads/main
@@ -52,7 +52,7 @@ jobs:
         token: ${{ secrets.ANTREA_WEBSITE_WORKFLOW_DISPATCH_PAT }}
         inputs: ${{ format('{{ "antrea-repository":"antrea-io/antrea", "antrea-ref":"{0}" }}', steps.get-version.outputs.version) }}
     - name: Update Helm index with Antrea archive
-      uses: benc-uk/workflow-dispatch@v1
+      uses: benc-uk/workflow-dispatch@d004979be141727c7a17c28f603e2facc40d0855 # v1.3.3
       with:
         repo: antrea-io/website
         ref: refs/heads/main
@@ -60,7 +60,7 @@ jobs:
         token: ${{ secrets.ANTREA_WEBSITE_WORKFLOW_DISPATCH_PAT }}
         inputs: ${{ format('{{ "archive-url":"https://github.com/antrea-io/antrea/releases/download/{0}/antrea-chart.tgz" }}', steps.get-version.outputs.version) }}
     - name: Update Helm index with Flow Aggregator archive
-      uses: benc-uk/workflow-dispatch@v1
+      uses: benc-uk/workflow-dispatch@d004979be141727c7a17c28f603e2facc40d0855 # v1.3.3
       with:
         repo: antrea-io/website
         ref: refs/heads/main
