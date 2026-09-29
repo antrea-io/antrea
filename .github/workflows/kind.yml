@@ -20,11 +20,11 @@ jobs:
     name: Check whether tests need to be run based on diff
     runs-on: [ubuntu-latest]
     steps:
-    - uses: actions/checkout@v7
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       with:
         fetch-depth: 0
         show-progress: false
-    - uses: antrea-io/has-changes@v2
+    - uses: antrea-io/has-changes@8af46c0ea505faf5c57d655802471141dc1ecc26 # v2.3.0
       id: check_diff
       with:
         paths-ignore: docs/* ci/jenkins/* *.md hack/.notableofcontents plugins/*
@@ -37,11 +37,11 @@ jobs:
     if: ${{ needs.check-changes.outputs.has_changes == 'yes' }}
     runs-on: [ubuntu-latest]
     steps:
-    - uses: actions/checkout@v7
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       with:
         show-progress: false
     - name: Set up Docker Buildx
-      uses: docker/setup-buildx-action@v4
+      uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
       with:
         driver: docker
     - name: Build Antrea Docker image with code coverage support
@@ -50,7 +50,7 @@ jobs:
     - name: Save Antrea image to tarball
       run:  docker save -o antrea-ubuntu.tar antrea/antrea-agent-ubuntu-coverage:latest antrea/antrea-controller-ubuntu-coverage:latest
     - name: Upload Antrea image for subsequent jobs
-      uses: actions/upload-artifact@v7
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
       with:
         name: antrea-ubuntu-cov
         path: antrea-ubuntu.tar
@@ -62,14 +62,14 @@ jobs:
     if: ${{ needs.check-changes.outputs.has_changes == 'yes' }}
     runs-on: [ ubuntu-latest ]
     steps:
-    - uses: actions/checkout@v7
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       with:
         show-progress: false
     - run: make flow-aggregator-ubuntu-coverage
     - name: Save Flow Aggregator image to tarball
       run: docker save -o flow-aggregator.tar antrea/flow-aggregator-coverage:latest
     - name: Upload Flow Aggregator image for subsequent jobs
-      uses: actions/upload-artifact@v7
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
       with:
         name: flow-aggregator-cov
         path: flow-aggregator.tar
@@ -80,7 +80,7 @@ jobs:
     needs: [build-antrea-coverage-image]
     runs-on: [ubuntu-latest]
     steps:
-    - uses: actions/checkout@v7
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       with:
         show-progress: false
     - uses: ./.github/actions/setup-kind-test
@@ -92,13 +92,13 @@ jobs:
     - name: Tar coverage files
       run: tar -czf test-e2e-encap-coverage.tar.gz test-e2e-encap-coverage
     - name: Upload coverage for test-e2e-encap-coverage
-      uses: actions/upload-artifact@v7
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
       with:
         name: test-e2e-encap-coverage
         path: test-e2e-encap-coverage.tar.gz
         retention-days: 30
     - name: Codecov
-      uses: codecov/codecov-action@v7
+      uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7.1.1
       with:
         token: ${{ secrets.CODECOV_TOKEN }}
         files: '**/*.cov.out'
@@ -111,7 +111,7 @@ jobs:
       if: ${{ failure() }}
       run: tar -czf log.tar.gz log
     - name: Upload test log
-      uses: actions/upload-artifact@v7
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
       if: ${{ failure() }}
       with:
         name: e2e-kind-encap.tar.gz
@@ -123,7 +123,7 @@ jobs:
     needs: [build-antrea-coverage-image]
     runs-on: [ubuntu-latest]
     steps:
-    - uses: actions/checkout@v7
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       with:
         show-progress: false
     - uses: ./.github/actions/setup-kind-test
@@ -142,13 +142,13 @@ jobs:
     - name: Tar coverage files
       run: tar -czf test-e2e-encap-non-default-coverage.tar.gz test-e2e-encap-non-default-coverage
     - name: Upload coverage for test-e2e-encap-non-default-coverage
-      uses: actions/upload-artifact@v7
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
       with:
         name: test-e2e-encap-non-default-coverage
         path: test-e2e-encap-non-default-coverage.tar.gz
         retention-days: 30
     - name: Codecov
-      uses: codecov/codecov-action@v7
+      uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7.1.1
       with:
         token: ${{ secrets.CODECOV_TOKEN }}
         files: '**/*.cov.out'
@@ -161,7 +161,7 @@ jobs:
       if: ${{ failure() }}
       run: tar -czf log.tar.gz log
     - name: Upload test log
-      uses: actions/upload-artifact@v7
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
       if: ${{ failure() }}
       with:
         name: e2e-kind-encap-non-default.tar.gz
@@ -173,7 +173,7 @@ jobs:
     needs: [build-antrea-coverage-image]
     runs-on: [ubuntu-latest]
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           show-progress: false
       - uses: ./.github/actions/setup-kind-test
@@ -194,13 +194,13 @@ jobs:
       - name: Tar coverage files
         run: tar -czf test-e2e-encap-all-features-enabled-coverage.tar.gz test-e2e-encap-all-features-enabled-coverage
       - name: Upload coverage for test-e2e-encap-all-features-enabled-coverage
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: test-e2e-encap-all-features-enabled-coverage
           path: test-e2e-encap-all-features-enabled-coverage.tar.gz
           retention-days: 30
       - name: Codecov
-        uses: codecov/codecov-action@v7
+        uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7.1.1
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           files: '**/*.cov.out'
@@ -213,7 +213,7 @@ jobs:
         if: ${{ failure() }}
         run: tar -czf log.tar.gz log
       - name: Upload test log
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: ${{ failure() }}
         with:
           name: e2e-kind-encap-all-features-enabled.tar.gz
@@ -225,7 +225,7 @@ jobs:
     needs: [build-antrea-coverage-image]
     runs-on: [oracle-vm-4cpu-16gb-x86-64]
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           show-progress: false
       - uses: ./.github/actions/setup-kind-test
@@ -245,13 +245,13 @@ jobs:
       - name: Tar coverage files
         run: tar -czf test-ipam-e2e-coverage.tar.gz test-ipam-e2e-coverage
       - name: Upload coverage for test-ipam-e2e-coverage
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: test-ipam-e2e-coverage
           path: test-ipam-e2e-coverage.tar.gz
           retention-days: 30
       - name: Codecov
-        uses: codecov/codecov-action@v7
+        uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7.1.1
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           files: '**/*.cov.out'
@@ -264,7 +264,7 @@ jobs:
         if: ${{ failure() }}
         run: tar -czf log.tar.gz log
       - name: Upload test log
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: ${{ failure() }}
         with:
           name: e2e-kind-ipam-features-enabled.tar.gz
@@ -276,7 +276,7 @@ jobs:
     needs: [build-antrea-coverage-image]
     runs-on: [ubuntu-latest]
     steps:
-    - uses: actions/checkout@v7
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       with:
         show-progress: false
     - uses: ./.github/actions/setup-kind-test
@@ -288,13 +288,13 @@ jobs:
     - name: Tar coverage files
       run: tar -czf test-e2e-noencap-coverage.tar.gz test-e2e-noencap-coverage
     - name: Upload coverage for test-e2e-noencap-coverage
-      uses: actions/upload-artifact@v7
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
       with:
         name: test-e2e-noencap-coverage
         path: test-e2e-noencap-coverage.tar.gz
         retention-days: 30
     - name: Codecov
-      uses: codecov/codecov-action@v7
+      uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7.1.1
       with:
         token: ${{ secrets.CODECOV_TOKEN }}
         files: '**/*.cov.out'
@@ -307,7 +307,7 @@ jobs:
       if: ${{ failure() }}
       run: tar -czf log.tar.gz log
     - name: Upload test log
-      uses: actions/upload-artifact@v7
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
       if: ${{ failure() }}
       with:
         name: e2e-kind-noencap.tar.gz
@@ -319,7 +319,7 @@ jobs:
     needs: [build-antrea-coverage-image]
     runs-on: [ubuntu-latest]
     steps:
-    - uses: actions/checkout@v7
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       with:
         show-progress: false
     - uses: ./.github/actions/setup-kind-test
@@ -331,13 +331,13 @@ jobs:
     - name: Tar coverage files
       run: tar -czf test-e2e-hybrid-coverage.tar.gz test-e2e-hybrid-coverage
     - name: Upload coverage for test-e2e-hybrid-coverage
-      uses: actions/upload-artifact@v7
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
       with:
         name: test-e2e-hybrid-coverage
         path: test-e2e-hybrid-coverage.tar.gz
         retention-days: 30
     - name: Codecov
-      uses: codecov/codecov-action@v7
+      uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7.1.1
       with:
         token: ${{ secrets.CODECOV_TOKEN }}
         files: '**/*.cov.out'
@@ -350,7 +350,7 @@ jobs:
       if: ${{ failure() }}
       run: tar -czf log.tar.gz log
     - name: Upload test log
-      uses: actions/upload-artifact@v7
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
       if: ${{ failure() }}
       with:
         name: e2e-kind-hybrid.tar.gz
@@ -362,7 +362,7 @@ jobs:
     needs: [build-antrea-coverage-image]
     runs-on: [ubuntu-latest]
     steps:
-    - uses: actions/checkout@v7
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       with:
         show-progress: false
     - uses: ./.github/actions/setup-kind-test
@@ -385,13 +385,13 @@ jobs:
     - name: Tar coverage files
       run: tar -czf test-e2e-wireguard-coverage.tar.gz test-e2e-wireguard-coverage
     - name: Upload coverage for test-e2e-wireguard-coverage
-      uses: actions/upload-artifact@v7
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
       with:
         name: test-e2e-wireguard-coverage
         path: test-e2e-wireguard-coverage.tar.gz
         retention-days: 30
     - name: Codecov
-      uses: codecov/codecov-action@v7
+      uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7.1.1
       with:
         token: ${{ secrets.CODECOV_TOKEN }}
         files: '**/*.cov.out'
@@ -404,7 +404,7 @@ jobs:
       if: ${{ failure() }}
       run: tar -czf log.tar.gz log
     - name: Upload test log
-      uses: actions/upload-artifact@v7
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
       if: ${{ failure() }}
       with:
         name: e2e-kind-wireguard.tar.gz
@@ -416,7 +416,7 @@ jobs:
     needs: [build-antrea-coverage-image]
     runs-on: [ubuntu-latest]
     steps:
-    - uses: actions/checkout@v7
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       with:
         show-progress: false
     - uses: ./.github/actions/setup-kind-test
@@ -428,13 +428,13 @@ jobs:
     - name: Tar coverage files
       run: tar -czf test-e2e-ipv6-only-coverage.tar.gz test-e2e-ipv6-only-coverage
     - name: Upload coverage for test-e2e-ipv6-only-coverage
-      uses: actions/upload-artifact@v7
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
       with:
         name: test-e2e-ipv6-only-coverage
         path: test-e2e-ipv6-only-coverage.tar.gz
         retention-days: 30
     - name: Codecov
-      uses: codecov/codecov-action@v7
+      uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7.1.1
       with:
         token: ${{ secrets.CODECOV_TOKEN }}
         files: '**/*.cov.out'
@@ -447,7 +447,7 @@ jobs:
       if: ${{ failure() }}
       run: tar -czf log.tar.gz log
     - name: Upload test log
-      uses: actions/upload-artifact@v7
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
       if: ${{ failure() }}
       with:
         name: e2e-kind-ipv6-only.tar.gz
@@ -459,7 +459,7 @@ jobs:
     needs: [build-antrea-coverage-image]
     runs-on: [ubuntu-latest]
     steps:
-    - uses: actions/checkout@v7
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       with:
         show-progress: false
     - uses: ./.github/actions/setup-kind-test
@@ -471,13 +471,13 @@ jobs:
     - name: Tar coverage files
       run: tar -czf test-e2e-ipv6-ds-coverage.tar.gz test-e2e-ipv6-ds-coverage
     - name: Upload coverage for test-e2e-ipv6-ds-coverage
-      uses: actions/upload-artifact@v7
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
       with:
         name: test-e2e-ipv6-ds-coverage
         path: test-e2e-ipv6-ds-coverage.tar.gz
         retention-days: 30
     - name: Codecov
-      uses: codecov/codecov-action@v7
+      uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7.1.1
       with:
         token: ${{ secrets.CODECOV_TOKEN }}
         files: '**/*.cov.out'
@@ -490,7 +490,7 @@ jobs:
       if: ${{ failure() }}
       run: tar -czf log.tar.gz log
     - name: Upload test log
-      uses: actions/upload-artifact@v7
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
       if: ${{ failure() }}
       with:
         name: e2e-kind-ipv6-ds.tar.gz
@@ -502,7 +502,7 @@ jobs:
     needs: [ build-antrea-coverage-image ]
     runs-on: [ ubuntu-latest ]
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           show-progress: false
       - uses: ./.github/actions/setup-kind-test
@@ -521,13 +521,13 @@ jobs:
       - name: Tar coverage files
         run: tar -czf test-e2e-hybrid-non-default-coverage.tar.gz test-e2e-hybrid-non-default-coverage
       - name: Upload coverage for test-e2e-hybrid-non-default-coverage
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: test-e2e-hybrid-non-default-coverage
           path: test-e2e-hybrid-non-default-coverage.tar.gz
           retention-days: 30
       - name: Codecov
-        uses: codecov/codecov-action@v7
+        uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7.1.1
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           files: '**/*.cov.out'
@@ -540,7 +540,7 @@ jobs:
         if: ${{ failure() }}
         run: tar -czf log.tar.gz log
       - name: Upload test log
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: ${{ failure() }}
         with:
           name: e2e-kind-hybrid-non-default.tar.gz
@@ -555,7 +555,7 @@ jobs:
       matrix:
         protocol: [grpc, ipfix]
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           show-progress: false
       - uses: ./.github/actions/setup-kind-test
@@ -569,13 +569,13 @@ jobs:
       - name: Tar coverage files
         run: tar -czf test-e2e-fa-${{ matrix.protocol }}-coverage.tar.gz test-e2e-fa-${{ matrix.protocol }}-coverage
       - name: Upload coverage for test-e2e-fa-${{ matrix.protocol }}-coverage
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: test-e2e-fa-${{ matrix.protocol }}-coverage
           path: test-e2e-fa-${{ matrix.protocol }}-coverage.tar.gz
           retention-days: 30
       - name: Codecov
-        uses: codecov/codecov-action@v7
+        uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7.1.1
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           files: '**/*.cov.out'
@@ -588,7 +588,7 @@ jobs:
         if: ${{ failure() }}
         run: tar -czf log.tar.gz log
       - name: Upload test log
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: ${{ failure() }}
         with:
           name: e2e-kind-fa-${{ matrix.protocol }}.tar.gz
@@ -615,15 +615,15 @@ jobs:
         sudo rm -rf "$AGENT_TOOLSDIRECTORY"
         sudo rm -rf "/usr/local/lib/android"
         df -h
-    - uses: actions/checkout@v7
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       with:
         show-progress: false
-    - uses: actions/setup-go@v7
+    - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
       with:
         go-version-file: '.go-version'
     - uses: ./.github/actions/setup-docker-classic
     - name: Set up Docker Buildx
-      uses: docker/setup-buildx-action@v4
+      uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
       with:
         driver: docker
     - uses: ./.github/actions/setup-kind
@@ -642,13 +642,13 @@ jobs:
     - name: Tar coverage files
       run: tar -czf mc-e2e-coverage.tar.gz mc-e2e-coverage
     - name: Upload coverage for test-multicluster-e2e
-      uses: actions/upload-artifact@v7
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
       with:
         name: test-multicluster-e2e-coverage
         path: mc-e2e-coverage.tar.gz
         retention-days: 30
     - name: Codecov
-      uses: codecov/codecov-action@v7
+      uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7.1.1
       with:
         token: ${{ secrets.CODECOV_TOKEN }}
         files: '**/*.cov.out'
@@ -658,7 +658,7 @@ jobs:
         directory: mc-e2e-coverage
         fail_ci_if_error: ${{ github.event_name == 'push' }}
     - name: Upload test log
-      uses: actions/upload-artifact@v7
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
       if: ${{ failure() }}
       with:
         name: multicluster-e2e-kind.tar.gz
@@ -670,7 +670,7 @@ jobs:
     needs: [build-antrea-coverage-image]
     runs-on: [ubuntu-latest]
     steps:
-    - uses: actions/checkout@v7
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       with:
         show-progress: false
     - uses: ./.github/actions/setup-kind-test
@@ -684,7 +684,7 @@ jobs:
       if: ${{ failure() }}
       run: tar -czf log.tar.gz log
     - name: Upload test log
-      uses: actions/upload-artifact@v7
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
       if: ${{ failure() }}
       with:
         name: networkpolicy-conformance-kind-encap.tar.gz
@@ -696,7 +696,7 @@ jobs:
     needs: [build-antrea-coverage-image]
     runs-on: [ubuntu-latest-8-cores]
     steps:
-    - uses: actions/checkout@v7
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       with:
         show-progress: false
     - uses: ./.github/actions/setup-kind-test
@@ -710,7 +710,7 @@ jobs:
       if: ${{ failure() }}
       run: tar -czf log.tar.gz log
     - name: Upload test log
-      uses: actions/upload-artifact@v7
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
       if: ${{ failure() }}
       with:
         name: secondary-network.tar.gz
@@ -722,7 +722,7 @@ jobs:
     needs: build-antrea-coverage-image
     runs-on: [ubuntu-latest]
     steps:
-    - uses: actions/checkout@v7
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       with:
         show-progress: false
     - uses: ./.github/actions/setup-kind-test
@@ -744,7 +744,7 @@ jobs:
       run: |
         ./ci/run-k8s-e2e-tests.sh --e2e-conformance
     - name: Upload test log
-      uses: actions/upload-artifact@v7
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
       if: ${{ failure() }}
       with:
         name: sonobuoy-conformance.tar.gz
@@ -756,7 +756,7 @@ jobs:
     needs: build-antrea-coverage-image
     runs-on: [ubuntu-latest]
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           show-progress: false
       - uses: ./.github/actions/setup-kind-test
@@ -770,7 +770,7 @@ jobs:
         if: ${{ failure() }}
         run: tar -czf log.tar.gz log
       - name: Upload test log
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: ${{ failure() }}
         with:
           name: upgrade-from-antrea-version-n-1.tar.gz
@@ -782,7 +782,7 @@ jobs:
     needs: build-antrea-coverage-image
     runs-on: [ubuntu-latest]
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           show-progress: false
       - uses: ./.github/actions/setup-kind-test
@@ -796,7 +796,7 @@ jobs:
         if: ${{ failure() }}
         run: tar -czf log.tar.gz log
       - name: Upload test log
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: ${{ failure() }}
         with:
           name: upgrade-from-antrea-version-n-2.tar.gz
@@ -808,7 +808,7 @@ jobs:
     needs: build-antrea-coverage-image
     runs-on: [ubuntu-latest]
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           show-progress: false
       - uses: ./.github/actions/setup-kind-test
@@ -822,7 +822,7 @@ jobs:
         if: ${{ failure() }}
         run: tar -czf log.tar.gz log
       - name: Upload test log
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: ${{ failure() }}
         with:
           name: api-compatible-with-client-version-n-1.tar.gz
@@ -834,7 +834,7 @@ jobs:
     needs: build-antrea-coverage-image
     runs-on: [ubuntu-latest]
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           show-progress: false
       - uses: ./.github/actions/setup-kind-test
@@ -848,7 +848,7 @@ jobs:
         if: ${{ failure() }}
         run: tar -czf log.tar.gz log
       - name: Upload test log
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: ${{ failure() }}
         with:
           name: api-compatible-with-client-version-n-2.tar.gz
@@ -860,7 +860,7 @@ jobs:
     needs: [ build-antrea-coverage-image ]
     runs-on: [ ubuntu-latest ]
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           show-progress: false
       - uses: ./.github/actions/setup-kind-test
@@ -887,7 +887,7 @@ jobs:
     needs: build-antrea-coverage-image
     runs-on: [ubuntu-latest]
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           show-progress: false
       - uses: ./.github/actions/setup-kind-test
@@ -935,7 +935,7 @@ jobs:
         touch empty-artifact
     - name: Delete antrea-ubuntu-cov
       if: ${{ needs.build-antrea-coverage-image.result == 'success' }}
-      uses: actions/upload-artifact@v7
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
       with:
         name: antrea-ubuntu-cov
         path: empty-artifact
@@ -943,7 +943,7 @@ jobs:
         overwrite: true
     - name: Delete flow-aggregator
       if: ${{ needs.build-flow-aggregator-coverage-image.result == 'success' }}
-      uses: actions/upload-artifact@v7
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
       with:
         name: flow-aggregator-cov
         path: empty-artifact

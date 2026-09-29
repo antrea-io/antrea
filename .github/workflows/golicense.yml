@@ -22,11 +22,11 @@ jobs:
     name: Check whether tests need to be run based on diff
     runs-on: [ubuntu-latest]
     steps:
-    - uses: actions/checkout@v7
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       with:
         fetch-depth: 0
         show-progress: false
-    - uses: antrea-io/has-changes@v2
+    - uses: antrea-io/has-changes@8af46c0ea505faf5c57d655802471141dc1ecc26 # v2.3.0
       id: check_diff
       with:
         paths-ignore: docs/* ci/jenkins/* *.md hack/.notableofcontents
@@ -38,15 +38,15 @@ jobs:
     if: ${{ needs.check-changes.outputs.has_changes == 'yes' || github.event_name != 'pull_request' }}
     runs-on: [ubuntu-latest]
     steps:
-    - uses: actions/checkout@v7
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       with:
         show-progress: false
     - name: Set up Go using version from .go-version
-      uses: actions/setup-go@v7
+      uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
       with:
         go-version-file: '.go-version'
     - name: Cache licensing information for dependencies
-      uses: actions/cache@v6
+      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
       id: cache
       env:
         cache-name: cache-lichen-deps-licensing-info
@@ -67,7 +67,7 @@ jobs:
         ./ci/golicense/run.sh ./antrea-bins ./license-reports
     - name: Upload licensing information
       if: ${{ always() }}
-      uses: actions/upload-artifact@v7
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
       with:
         name: licenses.deps
         path: license-reports/ALL.deps.txt
