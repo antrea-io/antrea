@@ -531,6 +531,8 @@ kind: Service
 metadata:
   labels:
     app: flow-aggregator
+    # Lets FlowStreamService clients discover this Service when several Flow Aggregators are deployed.
+    observability.antrea.io/flow-stream-service: "true"
   name: flow-aggregator
   namespace: flow-aggregator
 spec:
