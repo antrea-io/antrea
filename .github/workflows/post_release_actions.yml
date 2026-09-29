@@ -31,12 +31,23 @@ jobs:
     outputs:
       versions: ${{ steps.get-versions.outputs.versions }}
     steps:
-      - name: Get latest 3 versions
+      - name: Get latest 2 released versions
         id: get-versions
         shell: bash
         run: |
-          versions=($(git ls-remote --sort -version:refname --branches https://github.com/antrea-io/antrea.git refs/heads/release-\* | awk '{print $2}' | awk -F/ '{print $3}' | head -3))
-          if [ ${#versions[@]} -eq 3 ]; then
+          branches=($(git ls-remote --sort -version:refname --branches https://github.com/antrea-io/antrea.git refs/heads/release-\* | awk '{print $2}' | awk -F/ '{print $3}'))
+          tags=$(git ls-remote --tags https://github.com/antrea-io/antrea.git "refs/tags/v*.*.0" | awk '{print $2}')
+          versions=()
+          for branch in "${branches[@]}"; do
+            ver="${branch#release-}"
+            if echo "$tags" | grep -Fxq "refs/tags/v${ver}.0"; then
+              versions+=("$branch")
+              if [ ${#versions[@]} -eq 2 ]; then
+                break
+              fi
+            fi
+          done
+          if [ ${#versions[@]} -eq 2 ]; then
             versions_string="${versions[*]}"
             echo "versions=$versions_string" >> $GITHUB_OUTPUT
           else
@@ -187,5 +198,5 @@ jobs:
           delete-branch: true
           title: "chore(renovate): update baseBranches configuration"
           body: |
-            Update renovate configuration to monitor latest 3 minor versions.
+            Update renovate configuration to monitor latest 2 minor versions.
             PR was opened automatically from Github Actions

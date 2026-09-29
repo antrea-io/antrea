@@ -9,7 +9,7 @@
   enabledManagers: ["gomod", "github-actions"],
 
   // Active release branches
-  baseBranches: ["main", "release-2.7", "release-2.6", "release-2.5"],
+  baseBranches: ["main", "release-2.7", "release-2.6"],
   prConcurrentLimit: 9,
   prHourlyLimit: 0,
 
@@ -36,7 +36,7 @@
     // Disable all regular updates for active release branches
     // Don't write any rules before this rule
     {
-      matchBaseBranches: ["release-2.7", "release-2.6", "release-2.5"],
+      matchBaseBranches: ["release-2.7", "release-2.6"],
       enabled: false,
     },
 
