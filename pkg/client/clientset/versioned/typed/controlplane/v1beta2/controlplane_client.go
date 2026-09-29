@@ -1,4 +1,4 @@
-// Copyright 2025 Antrea Authors
+// Copyright 2026 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -29,6 +29,7 @@ type ControlplaneV1beta2Interface interface {
 	AddressGroupsGetter
 	AppliedToGroupsGetter
 	ClusterGroupMembersGetter
+	EgressAddressGroupsGetter
 	EgressGroupsGetter
 	GroupAssociationsGetter
 	GroupMembersGetter
@@ -54,6 +55,10 @@ func (c *ControlplaneV1beta2Client) AppliedToGroups() AppliedToGroupInterface {
 
 func (c *ControlplaneV1beta2Client) ClusterGroupMembers() ClusterGroupMembersInterface {
 	return newClusterGroupMembers(c)
+}
+
+func (c *ControlplaneV1beta2Client) EgressAddressGroups() EgressAddressGroupInterface {
+	return newEgressAddressGroups(c)
 }
 
 func (c *ControlplaneV1beta2Client) EgressGroups() EgressGroupInterface {

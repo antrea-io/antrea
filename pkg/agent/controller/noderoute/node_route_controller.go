@@ -101,6 +101,10 @@ type Controller struct {
 	// eventHandlerRegistration.HasSynced will be used to track whether even handlers have been
 	// called for the initial list.
 	eventHandlerRegistration cache.ResourceEventHandlerRegistration
+	// l2DispatchPeers allocates the indices of the peer Nodes of the l2 dispatch.
+	l2DispatchPeers *l2DispatchPeerIndices
+	// l2DispatchPeerEventHandlers are called when the routing of the l2 dispatch index of a peer Node changes.
+	l2DispatchPeerEventHandlers []func(nodeName string)
 }
 
 // NewNodeRouteController instantiates a new Controller object which will process Node events
@@ -141,6 +145,7 @@ func NewNodeRouteController(
 		ipsecCertificateManager: ipsecCertificateManager,
 		flowRestoreCompleteWait: flowRestoreCompleteWait.Increment(),
 		hasProcessedInitialList: synctrack.NewAsyncTracker[string](controllerName),
+		l2DispatchPeers:         newL2DispatchPeerIndices(),
 	}
 	if nodeConfig.PodIPv4CIDR != nil {
 		prefix, _ := cidrToPrefix(nodeConfig.PodIPv4CIDR)
@@ -341,6 +346,9 @@ func (c *Controller) reconcile() error {
 	if err := c.removeStaleWireGuardPeers(); err != nil {
 		return fmt.Errorf("error when removing stale WireGuard peers: %v", err)
 	}
+	if err := c.reconcileL2DispatchPeers(); err != nil {
+		return fmt.Errorf("error when reconciling the l2 dispatch peers: %w", err)
+	}
 	return nil
 }
 
@@ -500,8 +508,8 @@ func (c *Controller) deleteNodeRoute(nodeName string) error {
 
 	obj, installed, _ := c.installedNodes.GetByKey(nodeName)
 	if !installed {
-		// Route is not added for this Node.
-		return nil
+		// Route is not added for this Node. The l2 dispatch routing may be, if installing the flows failed.
+		return c.releaseL2DispatchPeer(nodeName)
 	}
 	nodeRouteInfo := obj.(*nodeRouteInfo)
 
@@ -512,6 +520,10 @@ func (c *Controller) deleteNodeRoute(nodeName string) error {
 	}
 	if err := c.ofClient.UninstallNodeFlows(nodeName); err != nil {
 		return fmt.Errorf("failed to uninstall flows to Node %s: %v", nodeName, err)
+	}
+	// The l2 dispatch routing is removed after the flows, which may use the index of the peer Node.
+	if err := c.releaseL2DispatchPeer(nodeName); err != nil {
+		return err
 	}
 	c.installedNodes.Delete(obj)
 	func() {
@@ -651,6 +663,13 @@ func (c *Controller) addNodeRoute(nodeName string, node *corev1.Node) error {
 		}
 	}
 
+	// The l2 dispatch routing is installed before the flows, which may use the index of the peer Node, and removed
+	// after them when the peer Node can no longer be reached with the l2 dispatch.
+	l2DispatchInstalled, err := c.installL2DispatchPeer(nodeName, peerNodeIPs)
+	if err != nil {
+		return err
+	}
+
 	if err = c.ofClient.InstallNodeFlows(
 		nodeName,
 		peerConfigs,
@@ -658,6 +677,11 @@ func (c *Controller) addNodeRoute(nodeName string, node *corev1.Node) error {
 		ipsecTunOFPort,
 		peerNodeMAC); err != nil {
 		return fmt.Errorf("failed to install flows to Node %s: %v", nodeName, err)
+	}
+	if !l2DispatchInstalled {
+		if err := c.releaseL2DispatchPeer(nodeName); err != nil {
+			return err
+		}
 	}
 
 	peerGatewayIPs := new(utilip.DualStackIPs)

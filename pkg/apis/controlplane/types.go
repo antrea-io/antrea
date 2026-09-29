@@ -547,6 +547,42 @@ type EgressGroupList struct {
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
+// EgressAddressGroup is the message format of antrea/pkg/controller/types.EgressAddressGroup in an API response. It
+// lists the Pods which the appliedTo of one or more Egresses selects, with their IPs. With the Egress l2 dispatch, the
+// Egress Nodes of these Egresses receive it, to map the source IP of the traffic of a Pod on another Node to the
+// Egress IP.
+type EgressAddressGroup struct {
+	metav1.TypeMeta
+	metav1.ObjectMeta
+	// Egresses is the list of the names of the Egresses which select the GroupMembers.
+	Egresses []string
+	// GroupMembers is a list of GroupMember selected by this group, with their IPs.
+	GroupMembers []GroupMember
+}
+
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+
+// EgressAddressGroupPatch describes the incremental update of an EgressAddressGroup.
+type EgressAddressGroupPatch struct {
+	metav1.TypeMeta
+	metav1.ObjectMeta
+	// Egresses is the new list of the Egresses of the group. It is empty when the list does not change.
+	Egresses            []string
+	AddedGroupMembers   []GroupMember
+	RemovedGroupMembers []GroupMember
+}
+
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+
+// EgressAddressGroupList is a list of EgressAddressGroup objects.
+type EgressAddressGroupList struct {
+	metav1.TypeMeta
+	metav1.ListMeta
+	Items []EgressAddressGroup
+}
+
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+
 type SupportBundleCollection struct {
 	metav1.TypeMeta
 	metav1.ObjectMeta

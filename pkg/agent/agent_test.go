@@ -1128,3 +1128,85 @@ func TestDeleteStaleFlowsWithRetry(t *testing.T) {
 		})
 	})
 }
+
+func TestGetInterfaceMTU(t *testing.T) {
+	tests := []struct {
+		name           string
+		encapMode      config.TrafficEncapModeType
+		enableEgress   bool
+		egressDispatch config.EgressDispatch
+		transportMTU   int
+		configuredMTU  int
+		expectedMTU    int
+	}{
+		{
+			name:         "encap mode",
+			encapMode:    config.TrafficEncapModeEncap,
+			transportMTU: 1500,
+			expectedMTU:  1450,
+		},
+		{
+			name:         "noEncap mode without Egress",
+			encapMode:    config.TrafficEncapModeNoEncap,
+			transportMTU: 1500,
+			expectedMTU:  1500,
+		},
+		{
+			name:         "noEncap mode with Egress and the tunnel dispatch",
+			encapMode:    config.TrafficEncapModeNoEncap,
+			enableEgress: true,
+			transportMTU: 1500,
+			expectedMTU:  1450,
+		},
+		{
+			name:           "noEncap mode with Egress and the l2 dispatch",
+			encapMode:      config.TrafficEncapModeNoEncap,
+			enableEgress:   true,
+			egressDispatch: config.EgressDispatchL2,
+			transportMTU:   1500,
+			expectedMTU:    1500,
+		},
+		{
+			// The MTU of the tunnel interface caps the MTU of the Pods.
+			name:         "noEncap mode with Egress, the tunnel dispatch and a large transport MTU",
+			encapMode:    config.TrafficEncapModeNoEncap,
+			enableEgress: true,
+			transportMTU: 65535,
+			expectedMTU:  ovsTunnelMaxMTU,
+		},
+		{
+			name:           "noEncap mode with Egress, the l2 dispatch and a large transport MTU",
+			encapMode:      config.TrafficEncapModeNoEncap,
+			enableEgress:   true,
+			egressDispatch: config.EgressDispatchL2,
+			transportMTU:   65535,
+			expectedMTU:    65535,
+		},
+		{
+			name:           "configured MTU",
+			encapMode:      config.TrafficEncapModeNoEncap,
+			enableEgress:   true,
+			egressDispatch: config.EgressDispatchL2,
+			transportMTU:   1500,
+			configuredMTU:  1400,
+			expectedMTU:    1400,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			initializer := &Initializer{
+				mtu: tt.configuredMTU,
+				networkConfig: &config.NetworkConfig{
+					TrafficEncapMode: tt.encapMode,
+					TunnelType:       ovsconfig.GeneveTunnel,
+					EnableEgress:     tt.enableEgress,
+					EgressDispatch:   tt.egressDispatch,
+				},
+				nodeConfig: &config.NodeConfig{},
+			}
+			mtu, err := initializer.getInterfaceMTU(&net.Interface{MTU: tt.transportMTU})
+			require.NoError(t, err)
+			assert.Equal(t, tt.expectedMTU, mtu)
+		})
+	}
+}

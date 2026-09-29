@@ -305,16 +305,14 @@ func (c *Controller) parsePacketIn(pktIn *ofctrl.PacketIn) (*crdv1beta1.Traceflo
 		// which is also 0 when the output register is unset. A packet output to a port which is the
 		// tunnel port left the Node through the tunnel whatever the traffic encapsulation mode is, so
 		// the mode is not checked here.
+		// RemoteSNATRegMark marks an Egress packet on its source Node, which is sent to the Egress Node.
+		var isRemoteEgress bool
+		if isRemoteEgress, err = isRemoteEgressPacket(matchers); err != nil {
+			return nil, nil, nil, err
+		}
 		switch {
 		case tunPort != 0 && outputPort == tunPort:
-			var isRemoteEgress uint32
-			if match := getMatchRegField(matchers, openflow.RemoteSNATRegMark.GetField()); match != nil {
-				isRemoteEgress, err = getRegValue(match, openflow.RemoteSNATRegMark.GetField().GetRange().ToNXRange())
-				if err != nil {
-					return nil, nil, nil, err
-				}
-			}
-			if isRemoteEgress == 1 { // an Egress packet, currently on source Node and forwarded to Egress Node.
+			if isRemoteEgress { // an Egress packet, currently on source Node and forwarded to Egress Node.
 				egressConfig, err := c.egressQuerier.GetEgress(ns, srcPod)
 				if err != nil {
 					return nil, nil, nil, err
@@ -339,7 +337,17 @@ func (c *Controller) parsePacketIn(pktIn *ofctrl.PacketIn) (*crdv1beta1.Traceflo
 						return nil, nil, nil, err
 					}
 				}
-				if pktMark != 0 { // Egress packet on Egress Node
+				if isRemoteEgress {
+					// With the l2 dispatch, an Egress packet whose Egress IP is on another Node leaves OVS through the
+					// gateway, and the host sends it to the MAC address of the Egress Node, which forwards it without
+					// OVS. No other Node reports the packet, so it leaves the network here.
+					egressConfig, err := c.egressQuerier.GetEgress(ns, srcPod)
+					if err != nil {
+						return nil, nil, nil, err
+					}
+					obEgress := getEgressObservation(false, egressConfig.EgressIP, egressConfig.Name, egressConfig.EgressNode)
+					obs = append(obs, *obEgress)
+				} else if pktMark != 0 { // Egress packet on Egress Node
 					egressName, egressIP, egressNode := "", "", ""
 					if tunnelDstIP == "" { // Egress Node is Source Node of this Egress packet
 						egressConfig, err := c.egressQuerier.GetEgress(ns, srcPod)
@@ -412,6 +420,20 @@ func (c *Controller) parsePacketIn(pktIn *ofctrl.PacketIn) (*crdv1beta1.Traceflo
 
 func getMatchPktMarkField(matchers *ofctrl.Matchers) *ofctrl.MatchField {
 	return matchers.GetMatchByName("NXM_NX_PKT_MARK")
+}
+
+// isRemoteEgressPacket returns true if the packet carries RemoteSNATRegMark: it is an Egress packet on its source
+// Node, which is sent to the Egress Node, through the tunnel or with the l2 dispatch.
+func isRemoteEgressPacket(matchers *ofctrl.Matchers) (bool, error) {
+	match := getMatchRegField(matchers, openflow.RemoteSNATRegMark.GetField())
+	if match == nil {
+		return false, nil
+	}
+	value, err := getRegValue(match, openflow.RemoteSNATRegMark.GetField().GetRange().ToNXRange())
+	if err != nil {
+		return false, err
+	}
+	return value == 1, nil
 }
 
 func getMatchRegField(matchers *ofctrl.Matchers, field *binding.RegField) *ofctrl.MatchField {

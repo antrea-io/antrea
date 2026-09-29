@@ -4475,6 +4475,10 @@ data:
     # Allow users to allocate Egress IPs from a different subnet from the default Node subnet.
     #  EgressSeparateSubnet: true
 
+    # Allow Egress traffic to reach the Egress Node without a tunnel in noEncap mode, with the "l2" value of
+    # egress.dispatch. It must be enabled for the Agent and the Controller.
+    #  EgressDispatchL2: false
+
     # Allow users to apply ClusterNetworkPolicy to Kubernetes Nodes.
     #  NodeNetworkPolicy: false
 
@@ -4618,6 +4622,15 @@ data:
       # inheriting the parent interface’s MAC. Useful in cloud environments that require
       # unique MAC addresses per interface.
       uniqueMACForSubInterfaces: true
+      # How the Node of a Pod sends the Pod's Egress traffic to the Egress Node, when the Egress IP is on another
+      # Node, in noEncap mode. It has the following options:
+      # - tunnel (default): The traffic is encapsulated and sent through the tunnel interface. Antrea creates the
+      #                     tunnel interface for this, which reduces the MTU of every Pod.
+      # - l2:               The traffic is sent unchanged to the MAC address of the Egress Node. No tunnel interface is
+      #                     created for Egress. All Nodes must be in one L2 segment. It requires the EgressDispatchL2
+      #                     feature gate on the Agent and the Controller.
+      # The option applies only to noEncap mode: "l2" is rejected in the other modes, and with enableBridgingMode.
+      dispatch: tunnel
 
     # ClusterIP CIDR range for Services. It's required when AntreaProxy is not enabled, and should be
     # set to the same value as the one specified by --service-cluster-ip-range for kube-apiserver. When
@@ -4939,6 +4952,10 @@ data:
     # Enable controlling SNAT IPs of Pod egress traffic.
     #  Egress: true
 
+    # Allow Egress traffic to reach the Egress Node without a tunnel in noEncap mode, with the "l2" value of
+    # egress.dispatch in the Agent configuration. It must be enabled for the Agent and the Controller.
+    #  EgressDispatchL2: false
+
     # Run Kubernetes NodeIPAMController with Antrea.
     #  NodeIPAM: true
 
@@ -5129,6 +5146,7 @@ rules:
       - controlplane.antrea.io
     resources:
       - egressgroups
+      - egressaddressgroups
     verbs:
       - get
       - watch
@@ -5953,7 +5971,7 @@ spec:
         kubectl.kubernetes.io/default-container: antrea-agent
         # Automatically restart Pods with a RollingUpdate if the ConfigMap changes
         # See https://helm.sh/docs/howto/charts_tips_and_tricks/#automatically-roll-deployments
-        checksum/config: 78c64d68589a745303e1738ef7c0a29dd7f4c83c3e04d263df4eb5b6344f06b3
+        checksum/config: ceb83f680dc6dbddd8a308076020a7ca81351499786e0efe0bad2e2dce8e5b7b
       labels:
         app: antrea
         component: antrea-agent
@@ -6201,7 +6219,7 @@ spec:
       annotations:
         # Automatically restart Pod if the ConfigMap changes
         # See https://helm.sh/docs/howto/charts_tips_and_tricks/#automatically-roll-deployments
-        checksum/config: 78c64d68589a745303e1738ef7c0a29dd7f4c83c3e04d263df4eb5b6344f06b3
+        checksum/config: ceb83f680dc6dbddd8a308076020a7ca81351499786e0efe0bad2e2dce8e5b7b
       labels:
         app: antrea
         component: antrea-controller

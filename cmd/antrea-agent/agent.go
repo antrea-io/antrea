@@ -247,9 +247,12 @@ func run(o *Options) error {
 		EnableMulticlusterGW:          enableMulticlusterGW,
 		MulticlusterEncryptionMode:    multiclusterEncryptionMode,
 		EnableEgress:                  o.enableEgress,
+		EgressDispatch:                o.egressDispatch,
 		EnableHostNetworkAcceleration: *o.config.HostNetworkAcceleration.Enable,
 		HostNetworkMode:               hostNetworkMode,
 	}
+	// The Egress l2 dispatch sends Egress traffic to the Egress Nodes with the policy routing of the l2 dispatch.
+	networkConfig.EnableL2Dispatch = networkConfig.UsesEgressL2Dispatch()
 
 	wireguardConfig := &config.WireGuardConfig{
 		Port: o.config.WireGuard.Port,
@@ -620,6 +623,12 @@ func run(o *Options) error {
 		linkMonitor = linkmonitor.NewLinkMonitor()
 	}
 	if o.enableEgress {
+		// With the l2 dispatch, the Egress controller gets the l2 dispatch index of a remote Egress Node from the
+		// NodeRouteController, which owns the indices.
+		var l2DispatchPeers egress.L2DispatchPeerQuerier
+		if networkConfig.UsesEgressL2Dispatch() {
+			l2DispatchPeers = nodeRouteController
+		}
 		egressController, err = egress.NewEgressController(
 			ofClient, k8sClient, antreaClientProvider, crdClient, ifaceStore, routeClient, nodeConfig.Name, nodeConfig.NodeTransportInterfaceName,
 			memberlistCluster, egressInformer, externalIPPoolInformer, nodeInformer, podUpdateChannel, serviceCIDRProvider, o.config.Egress.MaxEgressIPsPerNode,
@@ -627,6 +636,7 @@ func run(o *Options) error {
 			features.DefaultFeatureGate.Enabled(features.EgressSeparateSubnet),
 			linkMonitor,
 			*o.config.Egress.UniqueMACForSubInterfaces,
+			l2DispatchPeers,
 		)
 		if err != nil {
 			return fmt.Errorf("error creating new Egress controller: %v", err)
