@@ -177,8 +177,23 @@ to ensure symmetric paths. It's the default and the most general mode.
 Nodes that are not the ingress Node can reply to clients directly, bypassing
 the ingress Node. Therefore, DSR mode can preserve the client IP of requests,
 and usually has lower latency and higher throughput. Currently, it is only
-applicable to Linux Nodes, encap mode, and IPv4 clusters. The feature gate
-`LoadBalancerModeDSR` must be enabled to use this mode for any Service.
+applicable to Linux Nodes and IPv4 clusters, and it is not supported in
+`networkPolicyOnly` mode. The feature gate `LoadBalancerModeDSR` must be
+enabled to use this mode for any Service.
+
+In `noEncap` and `hybrid` modes, the ingress Node sends DSR traffic to the Node
+that runs the selected backend Pod through the tunnel, even when Pod traffic
+between these Nodes is routed. The ingress Node does not DNAT DSR traffic, so
+its destination is still the Service IP, which the Node network cannot route to
+that Node. In `noEncap` mode, Antrea creates the tunnel interface
+(`antrea-tun0`) for this purpose when the `LoadBalancerModeDSR` feature gate is
+enabled and `proxyAll` is true, as it does for [Egress](egress.md). This has
+two consequences:
+
+* The MTU of every Pod is reduced by the encapsulation overhead, which is 50
+bytes for Geneve.
+* The Node network must allow the tunnel traffic between Nodes, which is UDP
+port 6081 for Geneve.
 
 You can make the following changes to the `antrea-config` ConfigMap to specify
 the default load balancer mode for all Services:
