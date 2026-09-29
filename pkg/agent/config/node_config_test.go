@@ -428,3 +428,33 @@ func TestNeedsTunnelInterface(t *testing.T) {
 		})
 	}
 }
+
+func TestSupportsL2DispatchToPeer(t *testing.T) {
+	_, localSubnet, _ := net.ParseCIDR("192.168.77.100/24")
+	peerInSubnet := net.ParseIP("192.168.77.101")
+	peerOutOfSubnet := net.ParseIP("192.168.78.101")
+	enabled := func(mode TrafficEncapModeType) *NetworkConfig {
+		return &NetworkConfig{TrafficEncapMode: mode, EnableL2Dispatch: true}
+	}
+	tests := []struct {
+		name     string
+		nc       *NetworkConfig
+		peerIP   net.IP
+		localIP  *net.IPNet
+		expected bool
+	}{
+		{name: "noEncap, peer in the local subnet", nc: enabled(TrafficEncapModeNoEncap), peerIP: peerInSubnet, localIP: localSubnet, expected: true},
+		{name: "hybrid, peer in the local subnet", nc: enabled(TrafficEncapModeHybrid), peerIP: peerInSubnet, localIP: localSubnet, expected: true},
+		{name: "noEncap, peer in another subnet", nc: enabled(TrafficEncapModeNoEncap), peerIP: peerOutOfSubnet, localIP: localSubnet, expected: false},
+		{name: "encap, where Pod traffic is tunneled", nc: enabled(TrafficEncapModeEncap), peerIP: peerInSubnet, localIP: localSubnet, expected: false},
+		{name: "networkPolicyOnly", nc: enabled(TrafficEncapModeNetworkPolicyOnly), peerIP: peerInSubnet, localIP: localSubnet, expected: false},
+		{name: "no feature uses the l2 dispatch", nc: &NetworkConfig{TrafficEncapMode: TrafficEncapModeNoEncap}, peerIP: peerInSubnet, localIP: localSubnet, expected: false},
+		{name: "no local transport address of the family", nc: enabled(TrafficEncapModeNoEncap), peerIP: peerInSubnet, localIP: nil, expected: false},
+		{name: "no peer address of the family", nc: enabled(TrafficEncapModeNoEncap), peerIP: nil, localIP: localSubnet, expected: false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.expected, tt.nc.SupportsL2DispatchToPeer(tt.peerIP, tt.localIP))
+		})
+	}
+}
