@@ -695,10 +695,12 @@ Two permissions exist:
 | stream that Namespace's flows, and see full detail on its endpoints | `flows`, verbs `list` and `watch` |
 | recognize that Namespace's workloads inside records the subject receives through *other* Namespaces | `flows/identity`, verb `get` |
 
-`flows` in a Namespace implies `flows/identity` there: an endpoint in a Namespace
-the stream was authorized for is disclosed in full, and costs no separate identity
-check. Granting `flows/identity` on its own is for the other case — being
-recognizable inside records someone receives through a *different* Namespace.
+`flows` in a Namespace implies `flows/identity` there: an endpoint in that
+Namespace is disclosed in full without a separate identity check, provided the
+`flows` verbs held there include the one the stream was opened with (`watch`
+for a following stream, `list` otherwise). Granting `flows/identity` on its own
+is for the remaining case — being recognizable inside records someone receives
+through a *different* Namespace.
 
 `list` authorizes a stream that drains the record buffer and closes; `watch`
 authorizes one that then follows live records. Granting only `list` therefore
@@ -792,11 +794,11 @@ independently, according to the client's permissions in *that endpoint's*
 Namespace. A single record could carry one endpoint in full and the other
 redacted.
 
-| Tier     | Fields                                                                                                                                                                                                                                                                            | Requires                                                      |
-|----------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|---------------------------------------------------------------|
-| Flow     | addresses, ports, protocol, statistics and throughput, timestamps, flow type, direction, end reason, TCP state, and the **type and action** of the network policies evaluated on the endpoint's side                                                                              | receiving the record at all                                   |
-| Identity | Namespace, Pod name/UID/labels, the destination Service's `destination_service_port`, `destination_service_port_name`, `destination_service_uid` and `destination_service_ip` (plus the deprecated `destination_cluster_ip`), and the network policy namespace/name/UID/rule name | `get flows/identity` in the endpoint's Namespace              |
-| Full     | Node name/UID, Egress name/IP/Node. Node co-tenancy with the client's own workloads can survive redaction at Flow/Identity tiers, as the flow type paragraph below explains                                                                                                       | the endpoint's Namespace is one the stream was authorized for |
+| Tier     | Fields                                                                                                                                                                                                                                                                            | Requires                                                                                                              |
+|----------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|-----------------------------------------------------------------------------------------------------------------------|
+| Flow     | addresses, ports, protocol, statistics and throughput, timestamps, flow type, direction, end reason, TCP state, and the **type and action** of the network policies evaluated on the endpoint's side                                                                              | receiving the record at all                                                                                           |
+| Identity | Namespace, Pod name/UID/labels, the destination Service's `destination_service_port`, `destination_service_port_name`, `destination_service_uid` and `destination_service_ip` (plus the deprecated `destination_cluster_ip`), and the network policy namespace/name/UID/rule name | `get flows/identity` in the endpoint's Namespace                                                                      |
+| Full     | Node name/UID, Egress name/IP/Node. Node co-tenancy with the client's own workloads can survive redaction at Flow/Identity tiers, as the flow type paragraph below explains                                                                                                       | the endpoint's Namespace is one the stream was authorized for, or the client holds the stream's verb on `flows` there |
 
 A destination Service's IP sits at the Identity tier rather than the Flow tier,
 because it maps back to the Service it belongs to, so granting `flows/identity`
@@ -881,19 +883,18 @@ Namespace has granted `flows/identity`. Below that tier it stays hidden, which i
 what keeps a client from mapping the policy set of a Namespace that never
 consented to being identified.
 
-Consequently, the same flow looks different depending on which Namespace a stream
-was opened for. Take a subject holding `antrea-flow-viewer` in both `ns-a` and
-`ns-b`, and `antrea-flow-identity-viewer` in both as well: it sees an
-`ns-a`-to-`ns-b` flow with the `ns-b` endpoint at the Identity tier on its `ns-a`
-stream, and with the `ns-a` endpoint at the Identity tier on its `ns-b` stream;
-only a cluster-wide stream shows both endpoints in full. Both halves of that
-example are load-bearing: flow visibility in `ns-b` puts that Namespace's
-endpoints at the Full tier on a stream opened *for* `ns-b`, but it does not
-identify them on a stream opened for another Namespace, since the Identity tier
-is resolved from `flows/identity` alone. Without the identity bindings, each peer
-falls back to the Flow tier on the other's stream. A stream is always opened with
-exactly the scope the client named — a request is authorized in full or rejected
-outright, never narrowed — so there is nothing for the server to report back.
+Consequently, the same flow can look different depending on which Namespace a
+stream was opened for. Take a subject holding `antrea-flow-viewer` in `ns-a` and
+`ns-b`: it sees an `ns-a`-to-`ns-b` flow with both endpoints in full on either
+stream, since it could have opened the same stream for the peer's Namespace
+anyway. A subject holding `antrea-flow-viewer` in `ns-a` only sees the `ns-b`
+endpoint at the Identity tier if it holds `antrea-flow-identity-viewer` in `ns-b`,
+and at the Flow tier otherwise. The verb matters too: a subject holding only
+`list` on `flows` in `ns-b` sees the `ns-b` endpoint in full on a non-following
+`ns-a` stream, but not on a following one, which falls back to what
+`flows/identity` there yields. A stream is always opened with exactly the scope
+the client named — a request is authorized in full or rejected outright, never
+narrowed — so there is nothing for the server to report back.
 
 #### What administrators should know
 
@@ -901,14 +902,14 @@ outright, never narrowed — so there is nothing for the server to report back.
   grant.** `kube-system`, ingress, monitoring and service-mesh control planes have
   connections to nearly everything, so flow visibility there exposes flows
   involving nearly every workload.
-- **A wildcard Role confers flow visibility, and endpoint identity with it.** A
+- **A wildcard Role confers flow visibility, and full disclosure with it.** A
   namespaced Role granting `apiGroups: ["*"], resources: ["*"]`, as tenants are
-  sometimes given, includes `flows` in that Namespace — and `flows/identity`
-  too, because an RBAC rule listing `*` under `resources` matches before the
-  subresource is ever looked at. Such a Role therefore also lets its holder
-  identify that Namespace's endpoints inside records it receives through some
-  *other* Namespace — the same thing binding `view`, `edit` or `admin` there
-  grants deliberately, just reached by a route that is easy to miss. RBAC
+  sometimes given, includes `flows` in that Namespace. Such a Role therefore also
+  discloses that Namespace's endpoints in full, Node and Egress details
+  included, inside records its holder receives through some *other* Namespace,
+  provided it grants the verb that stream was opened with. That is more than
+  binding `view`, `edit` or `admin` there grants deliberately, which stops at the
+  Identity tier, and it is reached by a route that is easy to miss. RBAC
   cannot express "not reachable via a wildcard", and there is no query for "who
   can do X", so a cluster that hands out wildcard Roles should scan for them.
 - **A Service with endpoints in another Namespace discloses itself there.** The

@@ -28,7 +28,8 @@ type disclosureTier int
 
 const (
 	// tierFull discloses everything the record carries for the endpoint. It is not separately
-	// grantable: it rides along on flow visibility into the endpoint's Namespace.
+	// grantable: it's based on flow visibility into the endpoint's Namespace, with the stream's
+	// own verb, whether or not that Namespace is the one the stream was opened for.
 	tierFull disclosureTier = iota
 	// tierIdentity discloses the endpoint's Namespace, Pod and Service identity, and the identity
 	// of the network policy evaluated on its side, but not its Node placement or the Egress applied

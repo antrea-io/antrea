@@ -119,14 +119,15 @@ enum EndpointDisclosure {
   // Service identity, and the identity of the network policy evaluated on its
   // side, but not its Node placement or the Egress applied to it. Set when the
   // client holds get on flows/identity in the endpoint's Namespace, but that
-  // Namespace is not one the stream is authorized to observe flows for.
+  // Namespace is not one the stream is authorized to observe flows for, and
+  // the client does not hold the stream's own verb on flows there either.
   ENDPOINT_DISCLOSURE_IDENTITY = 1;
   // The endpoint is disclosed at the Flow tier: unidentified, with only what
   // the flow itself shows (addresses, ports, protocol, statistics, and the
   // type and action of the policies evaluated on the endpoint's side), plus
   // the endpoint's Namespace if the connection was allowed. Set when the
-  // client holds neither flow visibility nor flows/identity in the endpoint's
-  // Namespace, and for an endpoint that has no Namespace at all.
+  // client holds neither the stream's own verb on flows nor flows/identity in
+  // the endpoint's Namespace, and for an endpoint that has no Namespace at all.
   ENDPOINT_DISCLOSURE_FLOW = 2;
 }
 
