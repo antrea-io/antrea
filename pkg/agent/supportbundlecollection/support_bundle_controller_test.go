@@ -203,6 +203,17 @@ func TestSupportBundleCollectionAdd(t *testing.T) {
 			},
 			expectedSyncErr: "failed to generate support bundle: failed to generate SSH client config: invalid host public key",
 		},
+		{
+			name: "Add SupportBundleCollection with missing basic authentication",
+			supportBundleCollection: func() *cpv1b2.SupportBundleCollection {
+				bundle := generateSupportbundleCollection("supportBundle16", "sftp://10.220.175.92:22/root/supportbundle", nil)
+				bundle.Authentication.BasicAuthentication = nil
+				return bundle
+			}(),
+			agentDumper:     &mockAgentDumper{},
+			uploader:        &testUploader{},
+			expectedSyncErr: "failed to generate support bundle: SFTP upload requires BasicAuthentication, but a different authType was specified",
+		},
 	}
 
 	for _, tt := range testcases {
