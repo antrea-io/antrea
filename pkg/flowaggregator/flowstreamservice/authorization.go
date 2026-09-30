@@ -99,6 +99,9 @@ const (
 	// clusterScope is how the cluster-wide scope is named in log messages. A SubjectAccessReview
 	// with an empty Namespace is a cluster-scoped check.
 	clusterScope = "cluster-wide"
+
+	// allPeersKey is the only key for StreamAuthorization.allPeerNSFullDisclosure.
+	allPeersKey = "all-peer-ns-full-disclosure"
 )
 
 // Authorizer decides what an authenticated FlowStreamService client may observe, by asking
@@ -187,12 +190,11 @@ type StreamAuthorization struct {
 	// maxPeerNamespacesPerStream of them, rather than refusing to track any Namespace beyond
 	// that count for the rest of the stream's lifetime.
 	peerNamespaceTiers *cache.LRUExpireCache
-	// allPeersFull caches whether the client holds the stream's verb on flows cluster-wide, which
-	// discloses every peer Namespace in full without needing to check per peer Namespace until
-	// allPeersFullExpiry. It is only resolved once a peer Namespace is first seen, so a stream
-	// that never sees one never pays for it.
-	allPeersFull       bool
-	allPeersFullExpiry time.Time
+	// allPeerNSFullDisclosure caches, under a single key and for revalidationInterval, whether the
+	// client holds the stream's verb on flows cluster-wide, which discloses every peer Namespace
+	// in full without needing to check per peer Namespace. It is only resolved once a peer Namespace
+	// is first seen, so a stream that never sees one never pays for it.
+	allPeerNSFullDisclosure *cache.LRUExpireCache
 }
 
 // NewStreamAuthorization validates the scope of a GetFlows request and authorizes it, returning
@@ -216,12 +218,13 @@ func (a *Authorizer) NewStreamAuthorization(ctx context.Context, u user.Info, re
 		verb = watchVerb
 	}
 	sa := &StreamAuthorization{
-		authorizer:         a,
-		user:               u,
-		verb:               verb,
-		clusterWide:        req.GetClusterWide(),
-		lastRevalidated:    time.Now(),
-		peerNamespaceTiers: cache.NewLRUExpireCache(maxPeerNamespacesPerStream),
+		authorizer:              a,
+		user:                    u,
+		verb:                    verb,
+		clusterWide:             req.GetClusterWide(),
+		lastRevalidated:         time.Now(),
+		peerNamespaceTiers:      cache.NewLRUExpireCache(maxPeerNamespacesPerStream),
+		allPeerNSFullDisclosure: cache.NewLRUExpireCache(1),
 	}
 
 	requested, err := requestedNamespaces(req)
@@ -442,7 +445,7 @@ func (sa *StreamAuthorization) tierFor(ctx context.Context, namespace string, in
 // later, at the same cost as one never seen before.
 //
 // A client holding the stream's verb on flows cluster-wide sees every peer in full, which one
-// cluster-scoped check settles for the whole stream; see peersInFull.
+// cluster-scoped check settles for the whole stream; see allPeersFullTier.
 //
 // It fails closed: a check that fails counts as denied. Whether that result is cached depends on why
 // the check failed:
@@ -453,7 +456,7 @@ func (sa *StreamAuthorization) tierFor(ctx context.Context, namespace string, in
 //     and nothing is cached. No SubjectAccessReview was actually made for this Namespace, so caching
 //     a denial would keep the peer redacted for a whole revalidationInterval.
 func (sa *StreamAuthorization) resolveTierForPeer(ctx context.Context, namespace string) disclosureTier {
-	if sa.peersInFull(ctx) {
+	if sa.allPeersFullTier(ctx) {
 		return tierFull
 	}
 	if tier, ok := sa.peerNamespaceTiers.Get(namespace); ok {
@@ -484,27 +487,26 @@ func (sa *StreamAuthorization) resolveTierForPeer(ctx context.Context, namespace
 	return tier
 }
 
-// peersInFull reports whether the client holds the stream's verb on flows cluster-wide, in which
-// case every peer Namespace is disclosed in full and none of them needs a check of its own.
+// allPeersFullTier reports whether the client holds the stream's verb on flows cluster-wide, in
+// which case every peer Namespace is disclosed in full and none of them needs a check of its own.
 // The decision is cached for revalidationInterval, like a peer's tier, so that a grant or
 // revocation takes effect on a running stream.
 //
 // It fails towards the per-Namespace checks rather than towards disclosure: an error the API server
 // itself gave is cached as a denial, and an error from ctx being done is not cached at all, for the
 // same reasons as in resolveTierForPeer.
-func (sa *StreamAuthorization) peersInFull(ctx context.Context) bool {
-	if time.Now().Before(sa.allPeersFullExpiry) {
-		return sa.allPeersFull
+func (sa *StreamAuthorization) allPeersFullTier(ctx context.Context) bool {
+	if full, ok := sa.allPeerNSFullDisclosure.Get(allPeersKey); ok {
+		return full.(bool)
 	}
 	allowed, err := sa.authorizer.allowed(ctx, sa.user, sa.verb, "", "")
 	if err != nil {
 		klog.V(2).ErrorS(err, "Failed to check cluster-wide endpoint disclosure, checking each peer namespace instead",
-			"user", sa.user.GetName(), "verb", sa.verb)
+			"user", sa.user.GetName(), "scope", clusterScope, "verb", sa.verb)
 		if ctx.Err() != nil {
 			return false
 		}
 	}
-	sa.allPeersFull = allowed
-	sa.allPeersFullExpiry = time.Now().Add(revalidationInterval)
+	sa.allPeerNSFullDisclosure.Add(allPeersKey, allowed, revalidationInterval)
 	return allowed
 }

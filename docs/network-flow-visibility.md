@@ -904,14 +904,14 @@ narrowed — so there is nothing for the server to report back.
   involving nearly every workload.
 - **A wildcard Role confers flow visibility, and full disclosure with it.** A
   namespaced Role granting `apiGroups: ["*"], resources: ["*"]`, as tenants are
-  sometimes given, includes `flows` in that Namespace. Such a Role therefore also
-  discloses that Namespace's endpoints in full, Node and Egress details
-  included, inside records its holder receives through some *other* Namespace,
-  provided it grants the verb that stream was opened with. That is more than
-  binding `view`, `edit` or `admin` there grants deliberately, which stops at the
-  Identity tier, and it is reached by a route that is easy to miss. RBAC
-  cannot express "not reachable via a wildcard", and there is no query for "who
-  can do X", so a cluster that hands out wildcard Roles should scan for them.
+  sometimes given, includes `flows` in that Namespace. Its holder therefore sees
+  that Namespace's endpoints in full, Node and Egress details included, even in
+  records received through some *other* Namespace, as long as the Role grants the
+  verb that stream was opened with. Binding `admin` there has the same effect,
+  because `antrea-flow-viewer` is aggregated to it. Binding `view` or `edit` does
+  not: they stop at the Identity tier. RBAC cannot express "not reachable via a
+  wildcard", and there is no query for "who can do X", so a cluster that hands out
+  wildcard Roles should scan for inadvertent `flows` grants.
 - **A Service with endpoints in another Namespace discloses itself there.** The
   Service fields of a record are tiered by the Namespace of the Pod that received
   the connection, so a Service whose EndpointSlices point outside its own

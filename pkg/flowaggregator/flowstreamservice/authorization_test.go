@@ -792,7 +792,7 @@ func TestAuthorized_IdentityChecks(t *testing.T) {
 			assert.Equal(t, flowpb.EndpointDisclosure_ENDPOINT_DISCLOSURE_FULL, destinationTier(t, sa))
 			fake.revoke(flowsGrant(watchVerb, ""))
 			assert.Equal(t, flowpb.EndpointDisclosure_ENDPOINT_DISCLOSURE_FULL, destinationTier(t, sa))
-			time.Sleep(revalidationInterval)
+			time.Sleep(revalidationInterval + time.Nanosecond)
 			assert.Equal(t, flowpb.EndpointDisclosure_ENDPOINT_DISCLOSURE_FLOW, destinationTier(t, sa))
 		})
 	})
