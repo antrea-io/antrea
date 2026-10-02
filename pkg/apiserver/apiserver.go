@@ -250,7 +250,7 @@ func installAPIGroup(s *APIServer, c completedConfig) error {
 	statsStorage["antreaclusternetworkpolicystats"] = antreaclusternetworkpolicystats.NewREST(c.extraConfig.statsAggregator)
 	statsStorage["antreanetworkpolicystats"] = antreanetworkpolicystats.NewREST(c.extraConfig.statsAggregator)
 	statsStorage["multicastgroups"] = multicastgroup.NewREST(c.extraConfig.statsAggregator)
-	statsStorage["nodelatencystats"] = nodelatencystats.NewREST()
+	statsStorage["nodelatencystats"] = nodelatencystats.NewREST(c.extraConfig.nodeInformer)
 	statsGroup.VersionedResourcesStorageMap["v1alpha1"] = statsStorage
 
 	groups := []*genericapiserver.APIGroupInfo{&cpGroup, &systemGroup, &statsGroup}
