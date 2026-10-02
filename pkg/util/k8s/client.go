@@ -15,14 +15,11 @@
 package k8s
 
 import (
-	"fmt"
 	"net"
 	"os"
 	"strings"
 
-	discovery "k8s.io/api/discovery/v1"
 	apiextensionclientset "k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset"
-	"k8s.io/apimachinery/pkg/api/errors"
 	clientset "k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
@@ -132,21 +129,4 @@ func ParseKubeAPIServerOverride(kubeAPIServerOverride string) (string, string) {
 		port = "443"
 	}
 	return host, port
-}
-
-func EndpointSliceAPIAvailable(k8sClient clientset.Interface) (bool, error) {
-	resources, err := k8sClient.Discovery().ServerResourcesForGroupVersion(discovery.SchemeGroupVersion.String())
-	if err != nil {
-		// The group version doesn't exist.
-		if errors.IsNotFound(err) {
-			return false, nil
-		}
-		return false, fmt.Errorf("error getting server resources for GroupVersion %s: %v", discovery.SchemeGroupVersion.String(), err)
-	}
-	for _, resource := range resources.APIResources {
-		if resource.Kind == "EndpointSlice" {
-			return true, nil
-		}
-	}
-	return false, nil
 }

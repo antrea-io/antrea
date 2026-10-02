@@ -22,8 +22,10 @@ import (
 	. "github.com/onsi/gomega"
 	"github.com/stretchr/testify/assert"
 	corev1 "k8s.io/api/core/v1"
+	discovery "k8s.io/api/discovery/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	mcs "sigs.k8s.io/mcs-api/pkg/apis/v1alpha1"
 
@@ -86,6 +88,9 @@ var _ = Describe("ResourceExport controller", func() {
 			},
 		},
 	}
+	reReady := true
+	reProtocol := corev1.ProtocolTCP
+	rePort80 := int32(80)
 	epResExportA := &mcsv1alpha1.ResourceExport{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      epResExportNameA,
@@ -105,12 +110,17 @@ var _ = Describe("ResourceExport controller", func() {
 			Namespace: namespace,
 			Kind:      constants.EndpointsKind,
 			Endpoints: &mcsv1alpha1.EndpointsExport{
-				Subsets: []corev1.EndpointSubset{
+				Endpoints: []discovery.Endpoint{
 					{
-						Addresses: []corev1.EndpointAddress{
-							addr1,
-						},
-						Ports: epPorts,
+						Addresses:  []string{addr1.IP},
+						Conditions: discovery.EndpointConditions{Ready: &reReady},
+					},
+				},
+				Ports: []discovery.EndpointPort{
+					{
+						Name:     ptr.To("http"),
+						Port:     &rePort80,
+						Protocol: &reProtocol,
 					},
 				},
 			},
@@ -160,13 +170,21 @@ var _ = Describe("ResourceExport controller", func() {
 			Namespace: namespace,
 			Kind:      constants.EndpointsKind,
 			Endpoints: &mcsv1alpha1.EndpointsExport{
-				Subsets: []corev1.EndpointSubset{
+				Endpoints: []discovery.Endpoint{
 					{
-						Addresses: []corev1.EndpointAddress{
-							addr2,
-							addr3,
-						},
-						Ports: epPorts,
+						Addresses:  []string{addr2.IP},
+						Conditions: discovery.EndpointConditions{Ready: &reReady},
+					},
+					{
+						Addresses:  []string{addr3.IP},
+						Conditions: discovery.EndpointConditions{Ready: &reReady},
+					},
+				},
+				Ports: []discovery.EndpointPort{
+					{
+						Name:     ptr.To("http"),
+						Port:     &rePort80,
+						Protocol: &reProtocol,
 					},
 				},
 			},
@@ -199,9 +217,11 @@ var _ = Describe("ResourceExport controller", func() {
 			err = k8sClient.Get(ctx, epResImportName, epResImport)
 			return err == nil
 		}, timeout, interval).Should(BeTrue())
-		Expect(epResImport.Spec.Endpoints.Subsets).Should(Equal(epResExportA.Spec.Endpoints.Subsets))
+		Expect(epResImport.Spec.Endpoints.Endpoints).Should(Equal(epResExportA.Spec.Endpoints.Endpoints))
+		Expect(epResImport.Spec.Endpoints.Ports).Should(Equal(epResExportA.Spec.Endpoints.Ports))
+		Expect(epResImport.Spec.Endpoints.Subsets).Should(Not(BeEmpty()))
 
-		expectedSubsets := append(epResExportA.Spec.Endpoints.Subsets, epResExportB.Spec.Endpoints.Subsets...)
+		expectedEndpoints := append(epResExportA.Spec.Endpoints.Endpoints, epResExportB.Spec.Endpoints.Endpoints...)
 		err = k8sClient.Create(ctx, svcResExportB, &client.CreateOptions{})
 		Expect(err == nil).Should(BeTrue())
 		err = k8sClient.Create(ctx, epResExportB, &client.CreateOptions{})
@@ -210,7 +230,8 @@ var _ = Describe("ResourceExport controller", func() {
 		// wait 2s for ResourceImport update
 		time.Sleep(2 * time.Second)
 		err = k8sClient.Get(ctx, epResImportName, epResImport)
-		Expect(elementsMatch(epResImport.Spec.Endpoints.Subsets, expectedSubsets)).Should(BeTrue())
+		Expect(elementsMatch(epResImport.Spec.Endpoints.Endpoints, expectedEndpoints)).Should(BeTrue())
+		Expect(epResImport.Spec.Endpoints.Subsets).Should(Not(BeEmpty()))
 	})
 
 	It("Should update ResourceImports when a member cluster's ResourceExports are removed", func() {
@@ -225,7 +246,8 @@ var _ = Describe("ResourceExport controller", func() {
 		epResImport := &mcsv1alpha1.ResourceImport{}
 		err = k8sClient.Get(ctx, epResImportName, epResImport)
 		Expect(err == nil).Should(BeTrue())
-		Expect(epResImport.Spec.Endpoints.Subsets).Should(Equal(epResExportB.Spec.Endpoints.Subsets))
+		Expect(epResImport.Spec.Endpoints.Endpoints).Should(Equal(epResExportB.Spec.Endpoints.Endpoints))
+		Expect(epResImport.Spec.Endpoints.Ports).Should(Equal(epResExportB.Spec.Endpoints.Ports))
 		svcResImport := &mcsv1alpha1.ResourceImport{}
 		err = k8sClient.Get(ctx, svcResImportName, svcResImport)
 		Expect(err == nil).Should(BeTrue())
@@ -246,6 +268,88 @@ var _ = Describe("ResourceExport controller", func() {
 		Expect(apierrors.IsNotFound(err)).Should(BeTrue())
 		err = k8sClient.Get(ctx, svcResImportName, resImp)
 		Expect(apierrors.IsNotFound(err)).Should(BeTrue())
+	})
+
+	It("Should dual-write Endpoints and Subsets when member exports only legacy Subsets", func() {
+		legacySvcName := "legacy-svc"
+		legacyEPResExportName := "clusterc-" + namespace + "-" + legacySvcName + "-endpoints"
+		legacySvcResExportName := "clusterc-" + namespace + "-" + legacySvcName + "-service"
+
+		legacySvcResExport := &mcsv1alpha1.ResourceExport{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      legacySvcResExportName,
+				Namespace: testLeaderNS,
+				Labels: map[string]string{
+					constants.SourceNamespace: namespace,
+					constants.SourceName:      legacySvcName,
+					constants.SourceKind:      constants.ServiceKind,
+					constants.SourceClusterID: "clusterc",
+				},
+				Generation: 1,
+				Finalizers: []string{constants.ResourceExportFinalizer},
+			},
+			Spec: mcsv1alpha1.ResourceExportSpec{
+				ClusterID: "clusterc",
+				Name:      legacySvcName,
+				Namespace: namespace,
+				Kind:      constants.ServiceKind,
+				Service: &mcsv1alpha1.ServiceExport{
+					ServiceSpec: corev1.ServiceSpec{
+						Ports: svcPorts,
+					},
+				},
+			},
+		}
+
+		legacyEPResExport := &mcsv1alpha1.ResourceExport{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      legacyEPResExportName,
+				Namespace: testLeaderNS,
+				Labels: map[string]string{
+					constants.SourceNamespace: namespace,
+					constants.SourceName:      legacySvcName,
+					constants.SourceKind:      constants.EndpointsKind,
+					constants.SourceClusterID: "clusterc",
+				},
+				Generation: 1,
+				Finalizers: []string{constants.ResourceExportFinalizer},
+			},
+			Spec: mcsv1alpha1.ResourceExportSpec{
+				ClusterID: "clusterc",
+				Name:      legacySvcName,
+				Namespace: namespace,
+				Kind:      constants.EndpointsKind,
+				Endpoints: &mcsv1alpha1.EndpointsExport{
+					Subsets: []corev1.EndpointSubset{
+						{
+							Addresses: []corev1.EndpointAddress{{IP: "10.244.1.10"}},
+							Ports:     []corev1.EndpointPort{{Name: "http", Port: 80, Protocol: corev1.ProtocolTCP}},
+						},
+					},
+				},
+			},
+		}
+
+		Expect(k8sClient.Create(ctx, legacySvcResExport)).Should(Succeed())
+		Expect(k8sClient.Create(ctx, legacyEPResExport)).Should(Succeed())
+
+		legacyEPResImportName := leader.GetResourceImportName(legacyEPResExport)
+		legacyEPResImport := &mcsv1alpha1.ResourceImport{}
+		Eventually(func() bool {
+			err := k8sClient.Get(ctx, legacyEPResImportName, legacyEPResImport)
+			return err == nil && legacyEPResImport.Spec.Endpoints != nil
+		}, timeout, interval).Should(BeTrue())
+
+		Expect(legacyEPResImport.Spec.Endpoints.Endpoints).Should(HaveLen(1))
+		Expect(legacyEPResImport.Spec.Endpoints.Endpoints[0].Addresses).Should(Equal([]string{"10.244.1.10"}))
+		Expect(legacyEPResImport.Spec.Endpoints.Ports).Should(HaveLen(1))
+		Expect(*legacyEPResImport.Spec.Endpoints.Ports[0].Port).Should(Equal(int32(80)))
+		Expect(legacyEPResImport.Spec.Endpoints.Subsets).Should(HaveLen(1))
+		Expect(legacyEPResImport.Spec.Endpoints.Subsets[0].Addresses[0].IP).Should(Equal("10.244.1.10"))
+
+		// Cleanup
+		Expect(k8sClient.Delete(ctx, legacySvcResExport)).Should(Succeed())
+		Expect(k8sClient.Delete(ctx, legacyEPResExport)).Should(Succeed())
 	})
 })
 
