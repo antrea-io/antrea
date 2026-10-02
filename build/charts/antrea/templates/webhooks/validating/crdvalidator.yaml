@@ -82,6 +82,8 @@ webhooks:
     sideEffects: None
     timeoutSeconds: 5
   - name: "externalippoolvalidator.antrea.io"
+    # Validation depends on fields in the original API version, including conversion annotations.
+    matchPolicy: Exact
     clientConfig:
       service:
         name: "antrea"
@@ -90,13 +92,15 @@ webhooks:
     rules:
       - operations: ["CREATE", "UPDATE"]
         apiGroups: ["crd.antrea.io"]
-        apiVersions: ["v1alpha2", "v1beta1"]
+        apiVersions: ["v1alpha2", "v1beta1", "v1beta2"]
         resources: ["externalippools"]
         scope: "Cluster"
     admissionReviewVersions: ["v1", "v1beta1"]
     sideEffects: None
     timeoutSeconds: 5
   - name: "egressvalidator.antrea.io"
+    # Both served versions have distinct validation rules and must be delivered without conversion.
+    matchPolicy: Exact
     clientConfig:
       service:
         name: "antrea"
@@ -105,7 +109,7 @@ webhooks:
     rules:
       - operations: ["CREATE", "UPDATE"]
         apiGroups: ["crd.antrea.io"]
-        apiVersions: ["v1beta1"]
+        apiVersions: ["v1beta1", "v1beta2"]
         resources: ["egresses"]
         scope: "Cluster"
     admissionReviewVersions: ["v1", "v1beta1"]

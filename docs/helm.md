@@ -57,6 +57,10 @@ To install the Antrea Helm chart, use the following command:
 helm install antrea antrea/antrea --namespace kube-system
 ```
 
+Antrea must be installed in the `kube-system` Namespace. Some CRD conversion
+webhooks refer to the `antrea` Service in this Namespace, and Helm does not
+template CRDs in the chart's `crds/` directory.
+
 This will install the latest available version of Antrea. You can also install a
 specific version of Antrea (>= v1.8.0) with `--version <TAG>`.
 
@@ -69,6 +73,14 @@ To upgrade the Antrea Helm chart, use the following commands:
 kubectl apply -f https://github.com/antrea-io/antrea/releases/download/<TAG>/antrea-crds.yml
 helm upgrade antrea antrea/antrea --namespace kube-system --version <TAG>
 ```
+
+When a release introduces a new CRD version backed by a conversion webhook,
+the existing version remains the storage version for that release. This keeps
+the CRD-first upgrade step compatible with the Controller from the previous
+release. Do not manually change the storage version before every
+`antrea-controller` Pod has been upgraded and the release provides an explicit
+storage-migration procedure. A rollback must retain a Controller version which
+can serve every conversion webhook referenced by the installed CRDs.
 
 #### An important note on CRDs
 
