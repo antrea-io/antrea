@@ -100,12 +100,6 @@ func NewIPSecCertificateController(
 	ovsBridgeClient ovsconfig.OVSBridgeClient,
 	nodeName string,
 ) *Controller {
-	return newIPSecCertificateControllerWithCustomClock(kubeClient, ovsBridgeClient, nodeName, clock.RealClock{})
-}
-
-func newIPSecCertificateControllerWithCustomClock(kubeClient clientset.Interface,
-	ovsBridgeClient ovsconfig.OVSBridgeClient,
-	nodeName string, clock clock.WithTicker) *Controller {
 	controller := &Controller{
 		kubeClient:      kubeClient,
 		ovsBridgeClient: ovsBridgeClient,
@@ -114,10 +108,10 @@ func newIPSecCertificateControllerWithCustomClock(kubeClient clientset.Interface
 			workqueue.NewTypedItemExponentialFailureRateLimiter[string](minRetryDelay, maxRetryDelay),
 			workqueue.TypedRateLimitingQueueConfig[string]{
 				Name:  "IPsecCertificateController",
-				Clock: clock,
+				Clock: clock.RealClock{},
 			},
 		),
-		clock:                 clock,
+		clock:                 clock.RealClock{},
 		caPath:                filepath.Join(defaultCertificatesPath, "ca", "ca.crt"),
 		certificateFolderPath: defaultCertificatesPath,
 	}
