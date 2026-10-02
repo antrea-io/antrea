@@ -11,8 +11,9 @@ need an explicit binding — a RoleBinding in each Namespace whose flows they ma
 ClusterRoleBinding for cluster-wide visibility. A true cluster administrator, holding "*" on "*",
 has it already by virtue of the wildcard.
 
-Holding "flows" in a Namespace implies "flows/identity" there: an endpoint in a Namespace the
-stream is authorized for is disclosed in full, without a separate identity check.
+Holding "flows" in a Namespace implies "flows/identity" there: an endpoint in that Namespace is
+disclosed in full without a separate identity check, provided the "flows" verbs held for that
+Namespace include the one that the stream was opened with.
 
 Granting "list" alone yields history-only access: a client can drain what the record buffer holds
 but cannot follow live flows, which additionally needs "watch".

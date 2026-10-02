@@ -498,6 +498,30 @@ func TestAuthorized_RecordVisibility(t *testing.T) {
 			wantDstTier: flowpb.EndpointDisclosure_ENDPOINT_DISCLOSURE_IDENTITY,
 		},
 		{
+			name:    "the peer is disclosed in full when the stream's verb on flows is granted there",
+			req:     &flowpb.GetFlowsRequest{Namespaces: []string{"ns-a"}, Follow: true},
+			grants:  []string{flowsGrant(watchVerb, "ns-a"), flowsGrant(watchVerb, "ns-b")},
+			flows:   []*flowpb.Flow{podFlow("ns-a", "ns-b")},
+			wantIDs: []string{"ns-a->ns-b"},
+		},
+		{
+			// The client could not have opened this follow stream for ns-b, so ns-b gets no more
+			// than flows/identity there yields.
+			name:        "the peer is not disclosed in full by a verb other than the stream's",
+			req:         &flowpb.GetFlowsRequest{Namespaces: []string{"ns-a"}, Follow: true},
+			grants:      []string{flowsGrant(watchVerb, "ns-a"), flowsGrant(listVerb, "ns-b"), identityGrant("ns-b")},
+			flows:       []*flowpb.Flow{podFlow("ns-a", "ns-b")},
+			wantIDs:     []string{"ns-a->ns-b"},
+			wantDstTier: flowpb.EndpointDisclosure_ENDPOINT_DISCLOSURE_IDENTITY,
+		},
+		{
+			name:    "a non-follow stream discloses the peer in full on list",
+			req:     &flowpb.GetFlowsRequest{Namespaces: []string{"ns-a"}},
+			grants:  []string{flowsGrant(listVerb, "ns-a"), flowsGrant(listVerb, "ns-b")},
+			flows:   []*flowpb.Flow{podFlow("ns-a", "ns-b")},
+			wantIDs: []string{"ns-a->ns-b"},
+		},
+		{
 			name:        "the peer is unidentified otherwise",
 			req:         &flowpb.GetFlowsRequest{Namespaces: []string{"ns-a"}, Follow: true},
 			grants:      []string{flowsGrant(watchVerb, "ns-a")},
@@ -597,6 +621,12 @@ func TestAuthorized_ReturnsTheRecordWhenNothingIsWithheld(t *testing.T) {
 			grants: []string{flowsGrant(watchVerb, "ns-a")},
 			flow:   podFlow("ns-a", "ns-a"),
 		},
+		{
+			name:   "the peer is disclosed in full through flows in its namespace",
+			req:    &flowpb.GetFlowsRequest{Namespaces: []string{"ns-a"}, Follow: true},
+			grants: []string{flowsGrant(watchVerb, "ns-a"), flowsGrant(watchVerb, "ns-b")},
+			flow:   podFlow("ns-a", "ns-b"),
+		},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			fake := newFakeAuthorizer(tt.grants...)
@@ -639,7 +669,9 @@ func TestAuthorized_IdentityChecks(t *testing.T) {
 		flows := []*flowpb.Flow{podFlow("ns-a", "ns-b"), podFlow("ns-a", "ns-b"), podFlow("ns-a", "ns-b")}
 		require.Len(t, collectAuthorized(context.Background(), sa, flows), 3)
 
-		assert.Equal(t, []string{identityGrant("ns-b")}, fake.calls)
+		// Cluster-wide flows, and then flows in ns-b, are ruled out before flows/identity there is
+		// settled on, and none of them is asked again for the rest of the batch.
+		assert.Equal(t, []string{flowsGrant(watchVerb, ""), flowsGrant(watchVerb, "ns-b"), identityGrant("ns-b")}, fake.calls)
 	})
 
 	t.Run("an endpoint in the authorized set costs no check", func(t *testing.T) {
@@ -653,8 +685,8 @@ func TestAuthorized_IdentityChecks(t *testing.T) {
 	})
 
 	// Run in a synctest bubble so that revalidationInterval can be waited out with a real
-	// time.Sleep instead of a fake clock: the identity cache's TTL is timed off time.Now(), which
-	// the bubble virtualizes.
+	// time.Sleep instead of a fake clock: the peer Namespace tier cache's TTL is timed off
+	// time.Now(), which the bubble virtualizes.
 	t.Run("a memoized decision is re-checked after the revalidation interval", func(t *testing.T) {
 		synctest.Test(t, func(t *testing.T) {
 			fake := newFakeAuthorizer(flowsGrant(watchVerb, "ns-a"))
@@ -684,7 +716,101 @@ func TestAuthorized_IdentityChecks(t *testing.T) {
 
 		assert.Equal(t, flowpb.EndpointDisclosure_ENDPOINT_DISCLOSURE_FLOW, destinationTier(t, sa))
 		assert.Equal(t, flowpb.EndpointDisclosure_ENDPOINT_DISCLOSURE_FLOW, destinationTier(t, sa))
-		assert.Equal(t, []string{identityGrant("ns-b")}, fake.calls)
+		assert.Equal(t, []string{flowsGrant(watchVerb, ""), flowsGrant(watchVerb, "ns-b"), identityGrant("ns-b")}, fake.calls)
+	})
+
+	t.Run("a failing flows check falls back to the identity tier", func(t *testing.T) {
+		fake := newFakeAuthorizer(flowsGrant(watchVerb, "ns-a"), flowsGrant(watchVerb, "ns-b"), identityGrant("ns-b"))
+		fake.breakCheck(flowsGrant(watchVerb, "ns-b"))
+		sa := newStream(t, fake)
+
+		assert.Equal(t, flowpb.EndpointDisclosure_ENDPOINT_DISCLOSURE_IDENTITY, destinationTier(t, sa))
+		assert.Equal(t, flowpb.EndpointDisclosure_ENDPOINT_DISCLOSURE_IDENTITY, destinationTier(t, sa))
+		assert.Equal(t, []string{flowsGrant(watchVerb, ""), flowsGrant(watchVerb, "ns-b"), identityGrant("ns-b")}, fake.calls)
+	})
+
+	t.Run("flows in the peer namespace costs no identity check", func(t *testing.T) {
+		fake := newFakeAuthorizer(flowsGrant(watchVerb, "ns-a"), flowsGrant(watchVerb, "ns-b"))
+		sa := newStream(t, fake)
+
+		assert.Equal(t, flowpb.EndpointDisclosure_ENDPOINT_DISCLOSURE_FULL, destinationTier(t, sa))
+		assert.Equal(t, []string{flowsGrant(watchVerb, ""), flowsGrant(watchVerb, "ns-b")}, fake.calls)
+	})
+
+	t.Run("cluster-wide flows discloses every peer in full with a single check", func(t *testing.T) {
+		fake := newFakeAuthorizer(flowsGrant(watchVerb, "ns-a"), flowsGrant(watchVerb, ""))
+		sa := newStream(t, fake)
+
+		flows := make([]*flowpb.Flow, 0, 10)
+		for i := range 10 {
+			flows = append(flows, podFlow("ns-a", fmt.Sprintf("peer-%d", i)))
+		}
+		got := collectAuthorized(context.Background(), sa, flows)
+		require.Len(t, got, len(flows))
+		for i, f := range got {
+			// Nothing is withheld, so the record itself is streamed rather than a copy.
+			assert.Same(t, flows[i], f)
+		}
+		assert.Equal(t, []string{flowsGrant(watchVerb, "")}, fake.calls)
+	})
+
+	t.Run("a stream that sees no peer never checks cluster-wide flows", func(t *testing.T) {
+		fake := newFakeAuthorizer(flowsGrant(watchVerb, "ns-a"), flowsGrant(watchVerb, ""))
+		sa := newStream(t, fake)
+
+		got := collectAuthorized(context.Background(), sa, []*flowpb.Flow{podFlow("ns-a", "ns-a"), {
+			Id:  "external->ns-a",
+			K8S: &flowpb.Kubernetes{FlowType: flowpb.FlowType_FLOW_TYPE_FROM_EXTERNAL, DestinationPodNamespace: "ns-a"},
+		}})
+		require.Len(t, got, 2)
+		assert.Empty(t, fake.calls)
+	})
+
+	t.Run("cluster-wide flows with another verb than the stream's does not count", func(t *testing.T) {
+		fake := newFakeAuthorizer(flowsGrant(watchVerb, "ns-a"), flowsGrant(listVerb, ""))
+		sa := newStream(t, fake)
+
+		assert.Equal(t, flowpb.EndpointDisclosure_ENDPOINT_DISCLOSURE_FLOW, destinationTier(t, sa))
+	})
+
+	t.Run("a failing cluster-wide check falls back to the per-namespace checks", func(t *testing.T) {
+		fake := newFakeAuthorizer(flowsGrant(watchVerb, "ns-a"), flowsGrant(watchVerb, ""), flowsGrant(watchVerb, "ns-b"))
+		fake.breakCheck(flowsGrant(watchVerb, ""))
+		sa := newStream(t, fake)
+
+		assert.Equal(t, flowpb.EndpointDisclosure_ENDPOINT_DISCLOSURE_FULL, destinationTier(t, sa))
+		// The failure is cached like a denial rather than retried on every record.
+		assert.Equal(t, flowpb.EndpointDisclosure_ENDPOINT_DISCLOSURE_FULL, destinationTier(t, sa))
+		assert.Equal(t, []string{flowsGrant(watchVerb, ""), flowsGrant(watchVerb, "ns-b")}, fake.calls)
+	})
+
+	t.Run("revoking cluster-wide flows mid-stream takes effect on the next re-check", func(t *testing.T) {
+		synctest.Test(t, func(t *testing.T) {
+			fake := newFakeAuthorizer(flowsGrant(watchVerb, "ns-a"), flowsGrant(watchVerb, ""))
+			sa := newStream(t, fake)
+
+			assert.Equal(t, flowpb.EndpointDisclosure_ENDPOINT_DISCLOSURE_FULL, destinationTier(t, sa))
+			fake.revoke(flowsGrant(watchVerb, ""))
+			assert.Equal(t, flowpb.EndpointDisclosure_ENDPOINT_DISCLOSURE_FULL, destinationTier(t, sa))
+			time.Sleep(revalidationInterval + time.Nanosecond)
+			assert.Equal(t, flowpb.EndpointDisclosure_ENDPOINT_DISCLOSURE_FLOW, destinationTier(t, sa))
+		})
+	})
+
+	t.Run("revoking flows in the peer namespace mid-stream takes effect on the next re-check", func(t *testing.T) {
+		synctest.Test(t, func(t *testing.T) {
+			fake := newFakeAuthorizer(flowsGrant(watchVerb, "ns-a"), flowsGrant(watchVerb, "ns-b"), identityGrant("ns-b"))
+			sa := newStream(t, fake)
+
+			assert.Equal(t, flowpb.EndpointDisclosure_ENDPOINT_DISCLOSURE_FULL, destinationTier(t, sa))
+			// The peer drops to what flows/identity there still yields, rather than ending the
+			// stream: ns-b was never part of its scope.
+			fake.revoke(flowsGrant(watchVerb, "ns-b"))
+			assert.Equal(t, flowpb.EndpointDisclosure_ENDPOINT_DISCLOSURE_FULL, destinationTier(t, sa))
+			time.Sleep(revalidationInterval + time.Nanosecond)
+			assert.Equal(t, flowpb.EndpointDisclosure_ENDPOINT_DISCLOSURE_IDENTITY, destinationTier(t, sa))
+			require.NoError(t, sa.Revalidate(context.Background()))
+		})
 	})
 
 	t.Run("distinct namespaces are bounded by an LRU cache, not permanently denied", func(t *testing.T) {
@@ -695,13 +821,15 @@ func TestAuthorized_IdentityChecks(t *testing.T) {
 		// capacity, the least recently asked about entry is evicted to make room, not refused a
 		// check, so a stream cannot get permanently stuck denying a Namespace on the strength of
 		// how much unrelated traffic it happened to see first.
-		flows := make([]*flowpb.Flow, 0, maxIdentityNamespacesPerStream+10)
-		for i := range maxIdentityNamespacesPerStream + 10 {
+		flows := make([]*flowpb.Flow, 0, maxPeerNamespacesPerStream+10)
+		for i := range maxPeerNamespacesPerStream + 10 {
 			flows = append(flows, podFlow("ns-a", fmt.Sprintf("peer-%d", i)))
 		}
 		got := collectAuthorized(context.Background(), sa, flows)
 		require.Len(t, got, len(flows))
-		assert.Len(t, fake.calls, len(flows))
+		// The cluster-wide check is made once, and each unidentified peer then costs a flows check
+		// and a flows/identity check.
+		assert.Len(t, fake.calls, 2*len(flows)+1)
 		assert.Equal(t, flowpb.EndpointDisclosure_ENDPOINT_DISCLOSURE_FLOW, got[0].GetK8S().GetDestinationDisclosure())
 
 		// peer-0 was the least recently asked about entry once the cache filled up, so it was
@@ -711,7 +839,7 @@ func TestAuthorized_IdentityChecks(t *testing.T) {
 		fake.grant(identityGrant("peer-0"))
 		got = collectAuthorized(context.Background(), sa, []*flowpb.Flow{podFlow("ns-a", "peer-0")})
 		require.Len(t, got, 1)
-		assert.Equal(t, []string{identityGrant("peer-0")}, fake.calls)
+		assert.Equal(t, []string{flowsGrant(watchVerb, "peer-0"), identityGrant("peer-0")}, fake.calls)
 		assert.Equal(t, flowpb.EndpointDisclosure_ENDPOINT_DISCLOSURE_IDENTITY, got[0].GetK8S().GetDestinationDisclosure())
 	})
 }
@@ -768,12 +896,13 @@ func TestAuthorized_DoesNotCacheAnExpiredBudgetAsADenial(t *testing.T) {
 		require.NoError(t, err)
 		fake.calls = nil
 
-		// peer-1 hangs until the batch's budget runs out, so peer-2's lookup fails immediately on
-		// the expired context even though the client does hold flows/identity there.
+		// peer-1 hangs until the batch's budget runs out, so peer-2's first lookup fails
+		// immediately on the expired context, and its flows/identity is never asked about, even
+		// though the client does hold it there.
 		flows := []*flowpb.Flow{podFlow("ns-a", "peer-1"), podFlow("ns-a", "peer-2")}
 		got := collectAuthorized(context.Background(), sa, flows)
 		require.Len(t, got, 2)
-		assert.Equal(t, []string{identityGrant("peer-1"), identityGrant("peer-2")}, fake.calls)
+		assert.Equal(t, []string{flowsGrant(watchVerb, ""), flowsGrant(watchVerb, "peer-1"), identityGrant("peer-1"), flowsGrant(watchVerb, "peer-2")}, fake.calls)
 		assert.Equal(t, flowpb.EndpointDisclosure_ENDPOINT_DISCLOSURE_FLOW, got[1].GetK8S().GetDestinationDisclosure())
 
 		// The next batch gets its own budget, and peer-2 now resolves at the Identity tier: neither
@@ -781,7 +910,7 @@ func TestAuthorized_DoesNotCacheAnExpiredBudgetAsADenial(t *testing.T) {
 		fake.calls = nil
 		got = collectAuthorized(context.Background(), sa, []*flowpb.Flow{podFlow("ns-a", "peer-2")})
 		require.Len(t, got, 1)
-		assert.Equal(t, []string{identityGrant("peer-2")}, fake.calls)
+		assert.Equal(t, []string{flowsGrant(watchVerb, "peer-2"), identityGrant("peer-2")}, fake.calls)
 		assert.Equal(t, flowpb.EndpointDisclosure_ENDPOINT_DISCLOSURE_IDENTITY, got[0].GetK8S().GetDestinationDisclosure())
 	})
 }
