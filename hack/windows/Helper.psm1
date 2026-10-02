@@ -1,9 +1,31 @@
-function Get-WebFileIfNotExist($Path, $URL) {
-    $count=0
-    while (!(Test-Path $Path) -and ($count -ne 3)) {
+function Get-WebFileIfNotExist($Path, $URL, $DesiredHash = "") {
+    if ((Test-Path $Path) -and ($DesiredHash -ne "")) {
+        $fileHash = (Get-FileHash -Path $Path -Algorithm SHA256).Hash
+        if ($fileHash -ne $DesiredHash) {
+            Write-Host "Existing file $Path has SHA256 mismatch, removing it"
+            Remove-Item -Force $Path
+        }
+    }
+    $count = 0
+    while (!(Test-Path $Path) -and ($count -lt 3)) {
         $count++
-        Write-Host "Downloading $URL to $PATH"
-        curl.exe -skLo $Path $URL
+        Write-Host "Downloading $URL to $Path"
+        curl.exe -sSfLo $Path $URL
+        if ($LASTEXITCODE -ne 0) {
+            Write-Host "Failed to download $URL to $Path (attempt $count of 3)"
+            if (Test-Path $Path) {
+                Remove-Item -Force $Path
+            }
+            continue
+        }
+        if ($DesiredHash -ne "") {
+            $fileHash = (Get-FileHash -Path $Path -Algorithm SHA256).Hash
+            if ($fileHash -ne $DesiredHash) {
+                Write-Host "SHA256 mismatch for $Path. Expected: $DesiredHash, Got: $fileHash"
+                Remove-Item -Force $Path
+                continue
+            }
+        }
     }
 }
 
@@ -89,7 +111,6 @@ function Install-AntreaAgent {
     Write-Host "Installing AntreaAgent, Antrea version: $AntreaVersion"
     $AntreaRawUrlBase = "https://raw.githubusercontent.com/$Owner/$Repo/$AntreaVersion"
     $AntreaReleaseUrlBase = "https://github.com/$Owner/$Repo/releases/download"
-    $AntreaRawUrlBase = "https://raw.githubusercontent.com/$Owner/$Repo/$AntreaVersion"
 
 
     New-DirectoryIfNotExist $KubernetesHome
