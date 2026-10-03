@@ -2388,17 +2388,28 @@ func (f *featureNetworkPolicy) l7NPTrafficControlFlows() []binding.Flow {
 				Action().GotoStage(stageOutput).
 				Cookie(cookieID).
 				Done(),
-			// This generates the flow to match request packets that are going to be redirected to the application-aware
-			// engine. A connection tracking (CT) action with NAT is needed because the DNAT should be done before they
-			// are redirected to the application-aware engine.
+			// This generates the flow to match request packets of Service connections that are going to be redirected to
+			// the application-aware engine. A connection tracking (CT) action with NAT is needed because the DNAT should
+			// be done before they are redirected to the application-aware engine.
 			ConntrackTable.ofTable.BuildFlow(priorityHigh).
 				MatchProtocol(ipProtocol).
 				MatchCTStateRpl(false).
 				MatchCTStateTrk(true).
-				MatchCTMark(L7NPRedirectCTMark).
+				MatchCTMark(L7NPRedirectCTMark, ServiceCTMark).
 				Action().CT(false, ConntrackTable.GetNext(), ctZone, f.ctZoneSrcField).
 				NAT().
 				CTDone().
+				Cookie(cookieID).
+				Done(),
+			// This generates the flow to match request packets of non-Service connections that are going to be redirected
+			// to the application-aware engine. A connection tracking (CT) action with NAT is not needed because the
+			// connections are not NATed, and the CT state has been restored by the CT action without NAT above.
+			ConntrackTable.ofTable.BuildFlow(priorityHigh).
+				MatchProtocol(ipProtocol).
+				MatchCTStateRpl(false).
+				MatchCTStateTrk(true).
+				MatchCTMark(L7NPRedirectCTMark, NotServiceCTMark).
+				Action().GotoTable(ConntrackTable.GetNext()).
 				Cookie(cookieID).
 				Done(),
 		)
