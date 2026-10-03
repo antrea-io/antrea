@@ -115,9 +115,13 @@ The `advertisements` field configures which IPs are advertised to BGP peers.
 - `service`: Specifies how to advertise Service IPs. The `ipTypes` field lists the types of Service IPs to be advertised,
   which can include `ClusterIP`, `ExternalIP`, and `LoadBalancerIP`.
   - All Nodes can advertise all ClusterIPs, respecting `internalTrafficPolicy`. If `internalTrafficPolicy` is set to
-    `Local`, a Node will only advertise ClusterIPs with at least one local Endpoint.
+    `Local`, a Node will only advertise ClusterIPs with at least one local endpoint that is ready, or
+    terminating but still serving.
   - All Nodes can advertise all ExternalIPs and LoadBalancerIPs, respecting `externalTrafficPolicy`. If
-    `externalTrafficPolicy` is set to `Local`, a Node will only advertise IPs with at least one local Endpoint.
+    `externalTrafficPolicy` is set to `Local`, a Node will only advertise IPs with at least one local
+    endpoint that is ready, or terminating but still serving.
+  - When several Services share an IP, a Node advertises it only if every Service with a `Local` policy has such an
+    endpoint on that Node.
 
 ### BGPPeers
 

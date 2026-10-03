@@ -2354,11 +2354,12 @@ func generateNode(name string, labels, annotations map[string]string) *corev1.No
 	}
 }
 
-func generateEndpointSlice(svcName string,
+func generateEndpointSliceWithConditions(svcName string,
 	suffix string,
 	isLocal bool,
 	isIPv6 bool,
-	endpointIP string) *discovery.EndpointSlice {
+	endpointIP string,
+	conditions discovery.EndpointConditions) *discovery.EndpointSlice {
 	addrType := discovery.AddressTypeIPv4
 	if isIPv6 {
 		addrType = discovery.AddressTypeIPv6
@@ -2384,11 +2385,9 @@ func generateEndpointSlice(svcName string,
 			Addresses: []string{
 				endpointIP,
 			},
-			Conditions: discovery.EndpointConditions{
-				Ready: ptr.To(true),
-			},
-			Hostname: nodeName,
-			NodeName: nodeName,
+			Conditions: conditions,
+			Hostname:   nodeName,
+			NodeName:   nodeName,
 		}}
 		endpointSlice.Ports = []discovery.EndpointPort{{
 			Name:     ptr.To("p80"),
@@ -2397,6 +2396,16 @@ func generateEndpointSlice(svcName string,
 		}}
 	}
 	return endpointSlice
+}
+
+func generateEndpointSlice(svcName string,
+	suffix string,
+	isLocal bool,
+	isIPv6 bool,
+	endpointIP string) *discovery.EndpointSlice {
+	return generateEndpointSliceWithConditions(svcName, suffix, isLocal, isIPv6, endpointIP, discovery.EndpointConditions{
+		Ready: ptr.To(true),
+	})
 }
 
 func generateBGPPeer(ip string, asn, port, gracefulRestartTimeSeconds int32) v1alpha1.BGPPeer {
@@ -2757,4 +2766,392 @@ func TestDeleteHandlerTombstone(t *testing.T) {
 			})
 		})
 	}
+}
+
+func TestBGPEndpointReadinessAndSharedIP(t *testing.T) {
+	creationTime := metav1.Now()
+	sharedLBIP := "192.168.77.200"
+	sharedLBRoute := bgp.Route{Prefix: sharedLBIP + ipv4Suffix}
+	clusterIP1 := "10.96.10.11"
+	clusterIP2 := "10.96.10.12"
+	clusterIP3 := "10.96.10.13"
+
+	policy := generateBGPPolicy("test-policy", creationTime, nodeLabels1, 179, 65000, false, false, true, false, false, []v1alpha1.BGPPeer{ipv4Peer1}, nil)
+	clusterIPPolicy := generateBGPPolicy("test-cip-policy", creationTime, nodeLabels1, 179, 65000, true, false, false, false, false, []v1alpha1.BGPPeer{ipv4Peer1}, nil)
+
+	t.Run("Readiness", func(t *testing.T) {
+		tests := []struct {
+			name               string
+			svc                *corev1.Service
+			epsConditions      discovery.EndpointConditions
+			isLocal            bool
+			hasEndpoints       bool
+			expectedAdvertised bool
+			expectedRoute      bgp.Route
+			expectedMeta       RouteMetadata
+		}{
+			{
+				name:               "local endpoint ready",
+				svc:                generateService("svc-local-ready", corev1.ServiceTypeLoadBalancer, clusterIP1, "", sharedLBIP, false, true),
+				epsConditions:      discovery.EndpointConditions{Ready: ptr.To(true)},
+				isLocal:            true,
+				hasEndpoints:       true,
+				expectedAdvertised: true,
+				expectedRoute:      sharedLBRoute,
+				expectedMeta:       RouteMetadata{Type: ServiceLoadBalancerIP, K8sObjRef: getServiceName("svc-local-ready")},
+			},
+			{
+				name:               "local endpoint not ready and not serving",
+				svc:                generateService("svc-local-not-ready", corev1.ServiceTypeLoadBalancer, clusterIP1, "", sharedLBIP, false, true),
+				epsConditions:      discovery.EndpointConditions{Ready: ptr.To(false), Serving: ptr.To(false)},
+				isLocal:            true,
+				hasEndpoints:       true,
+				expectedAdvertised: false,
+			},
+			{
+				name:               "local endpoint terminating and serving",
+				svc:                generateService("svc-local-terminating", corev1.ServiceTypeLoadBalancer, clusterIP1, "", sharedLBIP, false, true),
+				epsConditions:      discovery.EndpointConditions{Ready: ptr.To(false), Serving: ptr.To(true), Terminating: ptr.To(true)},
+				isLocal:            true,
+				hasEndpoints:       true,
+				expectedAdvertised: true,
+				expectedRoute:      sharedLBRoute,
+				expectedMeta:       RouteMetadata{Type: ServiceLoadBalancerIP, K8sObjRef: getServiceName("svc-local-terminating")},
+			},
+			{
+				name:               "only a remote ready endpoint",
+				svc:                generateService("svc-remote-ready", corev1.ServiceTypeLoadBalancer, clusterIP1, "", sharedLBIP, false, true),
+				epsConditions:      discovery.EndpointConditions{Ready: ptr.To(true)},
+				isLocal:            false,
+				hasEndpoints:       true,
+				expectedAdvertised: false,
+			},
+			{
+				name:               "endpoint with nil ready condition",
+				svc:                generateService("svc-nil-ready", corev1.ServiceTypeLoadBalancer, clusterIP1, "", sharedLBIP, false, true),
+				epsConditions:      discovery.EndpointConditions{Ready: nil},
+				isLocal:            true,
+				hasEndpoints:       true,
+				expectedAdvertised: true,
+				expectedRoute:      sharedLBRoute,
+				expectedMeta:       RouteMetadata{Type: ServiceLoadBalancerIP, K8sObjRef: getServiceName("svc-nil-ready")},
+			},
+			{
+				name:               "ClusterIP internalTrafficPolicy Local not ready",
+				svc:                generateService("svc-cip-not-ready", corev1.ServiceTypeClusterIP, clusterIP1, "", "", true, false),
+				epsConditions:      discovery.EndpointConditions{Ready: ptr.To(false), Serving: ptr.To(false)},
+				isLocal:            true,
+				hasEndpoints:       true,
+				expectedAdvertised: false,
+			},
+			{
+				name:               "ClusterIP internalTrafficPolicy Local drain case",
+				svc:                generateService("svc-cip-drain", corev1.ServiceTypeClusterIP, clusterIP1, "", "", true, false),
+				epsConditions:      discovery.EndpointConditions{Ready: ptr.To(false), Serving: ptr.To(true), Terminating: ptr.To(true)},
+				isLocal:            true,
+				hasEndpoints:       true,
+				expectedAdvertised: true,
+				expectedRoute:      bgp.Route{Prefix: clusterIP1 + ipv4Suffix},
+				expectedMeta:       RouteMetadata{Type: ServiceClusterIP, K8sObjRef: getServiceName("svc-cip-drain")},
+			},
+		}
+
+		for _, tt := range tests {
+			t.Run(tt.name, func(t *testing.T) {
+				var objects []runtime.Object
+				objects = append(objects, node, tt.svc)
+				if tt.hasEndpoints {
+					eps := generateEndpointSliceWithConditions(tt.svc.Name, "eps", tt.isLocal, false, "10.10.0.10", tt.epsConditions)
+					objects = append(objects, eps)
+				}
+				effectivePolicy := policy
+				if tt.svc.Spec.Type == corev1.ServiceTypeClusterIP {
+					effectivePolicy = clusterIPPolicy
+				}
+				c := newFakeController(t, objects, []runtime.Object{effectivePolicy}, true, false)
+				stopCh := make(chan struct{})
+				defer close(stopCh)
+				ctx := context.Background()
+				c.startInformers(stopCh)
+				c.bgpPeerPasswords = bgpPeerPasswords
+
+				waitAndGetDummyEvent(t, c)
+				c.mockBGPServer.EXPECT().Start(gomock.Any())
+				c.mockBGPServer.EXPECT().AddPeer(gomock.Any(), ipv4Peer1Config)
+				if tt.expectedAdvertised {
+					c.mockBGPServer.EXPECT().AdvertiseRoutes(gomock.Any(), []bgp.Route{tt.expectedRoute})
+				}
+				require.NoError(t, c.syncBGPPolicy(ctx))
+				doneDummyEvent(t, c)
+
+				if tt.expectedAdvertised {
+					assert.Equal(t, tt.expectedMeta, c.bgpPolicyState.routes[tt.expectedRoute])
+				} else {
+					assert.Empty(t, c.bgpPolicyState.routes)
+				}
+			})
+		}
+	})
+
+	t.Run("Shared IP", func(t *testing.T) {
+		tests := []struct {
+			name               string
+			services           []*corev1.Service
+			endpointSlices     []*discovery.EndpointSlice
+			expectedAdvertised bool
+			expectedMeta       RouteMetadata
+		}{
+			{
+				name: "both Cluster",
+				services: []*corev1.Service{
+					generateService("svc-a", corev1.ServiceTypeLoadBalancer, clusterIP1, "", sharedLBIP, false, false),
+					generateService("svc-b", corev1.ServiceTypeLoadBalancer, clusterIP2, "", sharedLBIP, false, false),
+				},
+				endpointSlices:     nil,
+				expectedAdvertised: true,
+				expectedMeta: RouteMetadata{
+					Type:      ServiceLoadBalancerIP,
+					K8sObjRef: getServiceName("svc-a") + "," + getServiceName("svc-b"),
+				},
+			},
+			{
+				name: "both Local, both with a local serving endpoint",
+				services: []*corev1.Service{
+					generateService("svc-a", corev1.ServiceTypeLoadBalancer, clusterIP1, "", sharedLBIP, false, true),
+					generateService("svc-b", corev1.ServiceTypeLoadBalancer, clusterIP2, "", sharedLBIP, false, true),
+				},
+				endpointSlices: []*discovery.EndpointSlice{
+					generateEndpointSliceWithConditions("svc-a", "eps", true, false, "10.10.0.1", discovery.EndpointConditions{Ready: ptr.To(true)}),
+					generateEndpointSliceWithConditions("svc-b", "eps", true, false, "10.10.0.2", discovery.EndpointConditions{Ready: ptr.To(true)}),
+				},
+				expectedAdvertised: true,
+				expectedMeta: RouteMetadata{
+					Type:      ServiceLoadBalancerIP,
+					K8sObjRef: getServiceName("svc-a") + "," + getServiceName("svc-b"),
+				},
+			},
+			{
+				name: "both Local, one local and one remote endpoint",
+				services: []*corev1.Service{
+					generateService("svc-a", corev1.ServiceTypeLoadBalancer, clusterIP1, "", sharedLBIP, false, true),
+					generateService("svc-b", corev1.ServiceTypeLoadBalancer, clusterIP2, "", sharedLBIP, false, true),
+				},
+				endpointSlices: []*discovery.EndpointSlice{
+					generateEndpointSliceWithConditions("svc-a", "eps", true, false, "10.10.0.1", discovery.EndpointConditions{Ready: ptr.To(true)}),
+					generateEndpointSliceWithConditions("svc-b", "eps", false, false, "10.10.0.2", discovery.EndpointConditions{Ready: ptr.To(true)}),
+				},
+				expectedAdvertised: false,
+			},
+			{
+				name: "both Local, neither with a local endpoint",
+				services: []*corev1.Service{
+					generateService("svc-a", corev1.ServiceTypeLoadBalancer, clusterIP1, "", sharedLBIP, false, true),
+					generateService("svc-b", corev1.ServiceTypeLoadBalancer, clusterIP2, "", sharedLBIP, false, true),
+				},
+				endpointSlices: []*discovery.EndpointSlice{
+					generateEndpointSliceWithConditions("svc-a", "eps", false, false, "10.10.0.1", discovery.EndpointConditions{Ready: ptr.To(true)}),
+					generateEndpointSliceWithConditions("svc-b", "eps", false, false, "10.10.0.2", discovery.EndpointConditions{Ready: ptr.To(true)}),
+				},
+				expectedAdvertised: false,
+			},
+			{
+				name: "Cluster and Local, the Local one has a local endpoint",
+				services: []*corev1.Service{
+					generateService("svc-a", corev1.ServiceTypeLoadBalancer, clusterIP1, "", sharedLBIP, false, false),
+					generateService("svc-b", corev1.ServiceTypeLoadBalancer, clusterIP2, "", sharedLBIP, false, true),
+				},
+				endpointSlices: []*discovery.EndpointSlice{
+					generateEndpointSliceWithConditions("svc-b", "eps", true, false, "10.10.0.2", discovery.EndpointConditions{Ready: ptr.To(true)}),
+				},
+				expectedAdvertised: true,
+				expectedMeta: RouteMetadata{
+					Type:      ServiceLoadBalancerIP,
+					K8sObjRef: getServiceName("svc-a") + "," + getServiceName("svc-b"),
+				},
+			},
+			{
+				name: "Cluster and Local, the Local one has no local endpoint",
+				services: []*corev1.Service{
+					generateService("svc-a", corev1.ServiceTypeLoadBalancer, clusterIP1, "", sharedLBIP, false, false),
+					generateService("svc-b", corev1.ServiceTypeLoadBalancer, clusterIP2, "", sharedLBIP, false, true),
+				},
+				endpointSlices: []*discovery.EndpointSlice{
+					generateEndpointSliceWithConditions("svc-b", "eps", false, false, "10.10.0.2", discovery.EndpointConditions{Ready: ptr.To(true)}),
+				},
+				expectedAdvertised: false,
+			},
+			{
+				name: "three Services, two Local with local endpoints and one Local without",
+				services: []*corev1.Service{
+					generateService("svc-a", corev1.ServiceTypeLoadBalancer, clusterIP1, "", sharedLBIP, false, true),
+					generateService("svc-b", corev1.ServiceTypeLoadBalancer, clusterIP2, "", sharedLBIP, false, true),
+					generateService("svc-c", corev1.ServiceTypeLoadBalancer, clusterIP3, "", sharedLBIP, false, true),
+				},
+				endpointSlices: []*discovery.EndpointSlice{
+					generateEndpointSliceWithConditions("svc-a", "eps", true, false, "10.10.0.1", discovery.EndpointConditions{Ready: ptr.To(true)}),
+					generateEndpointSliceWithConditions("svc-b", "eps", true, false, "10.10.0.2", discovery.EndpointConditions{Ready: ptr.To(true)}),
+					generateEndpointSliceWithConditions("svc-c", "eps", false, false, "10.10.0.3", discovery.EndpointConditions{Ready: ptr.To(true)}),
+				},
+				expectedAdvertised: false,
+			},
+		}
+
+		for _, tt := range tests {
+			t.Run(tt.name, func(t *testing.T) {
+				var objects []runtime.Object
+				objects = append(objects, node)
+				for _, svc := range tt.services {
+					objects = append(objects, svc)
+				}
+				for _, eps := range tt.endpointSlices {
+					objects = append(objects, eps)
+				}
+				c := newFakeController(t, objects, []runtime.Object{policy}, true, false)
+				stopCh := make(chan struct{})
+				defer close(stopCh)
+				ctx := context.Background()
+				c.startInformers(stopCh)
+				c.bgpPeerPasswords = bgpPeerPasswords
+
+				waitAndGetDummyEvent(t, c)
+				c.mockBGPServer.EXPECT().Start(gomock.Any())
+				c.mockBGPServer.EXPECT().AddPeer(gomock.Any(), ipv4Peer1Config)
+				if tt.expectedAdvertised {
+					c.mockBGPServer.EXPECT().AdvertiseRoutes(gomock.Any(), []bgp.Route{sharedLBRoute})
+				}
+				require.NoError(t, c.syncBGPPolicy(ctx))
+				doneDummyEvent(t, c)
+
+				if tt.expectedAdvertised {
+					assert.Equal(t, tt.expectedMeta, c.bgpPolicyState.routes[sharedLBRoute])
+				} else {
+					assert.NotContains(t, c.bgpPolicyState.routes, sharedLBRoute)
+				}
+			})
+		}
+	})
+
+	t.Run("Determinism", func(t *testing.T) {
+		svcA := generateService("svc-a", corev1.ServiceTypeLoadBalancer, clusterIP1, "", sharedLBIP, false, false)
+		svcB := generateService("svc-b", corev1.ServiceTypeLoadBalancer, clusterIP2, "", sharedLBIP, false, false)
+
+		// Order 1: svcA then svcB
+		c1 := newFakeController(t, []runtime.Object{node, svcA, svcB}, []runtime.Object{policy}, true, false)
+		stopCh1 := make(chan struct{})
+		defer close(stopCh1)
+		ctx := context.Background()
+		c1.startInformers(stopCh1)
+		c1.bgpPeerPasswords = bgpPeerPasswords
+
+		waitAndGetDummyEvent(t, c1)
+		c1.mockBGPServer.EXPECT().Start(gomock.Any())
+		c1.mockBGPServer.EXPECT().AddPeer(gomock.Any(), ipv4Peer1Config)
+		c1.mockBGPServer.EXPECT().AdvertiseRoutes(gomock.Any(), []bgp.Route{sharedLBRoute})
+		require.NoError(t, c1.syncBGPPolicy(ctx))
+		doneDummyEvent(t, c1)
+		meta1 := c1.bgpPolicyState.routes[sharedLBRoute]
+
+		// Order 2: svcB then svcA
+		c2 := newFakeController(t, []runtime.Object{node, svcB, svcA}, []runtime.Object{policy}, true, false)
+		stopCh2 := make(chan struct{})
+		defer close(stopCh2)
+		c2.startInformers(stopCh2)
+		c2.bgpPeerPasswords = bgpPeerPasswords
+
+		waitAndGetDummyEvent(t, c2)
+		c2.mockBGPServer.EXPECT().Start(gomock.Any())
+		c2.mockBGPServer.EXPECT().AddPeer(gomock.Any(), ipv4Peer1Config)
+		c2.mockBGPServer.EXPECT().AdvertiseRoutes(gomock.Any(), []bgp.Route{sharedLBRoute})
+		require.NoError(t, c2.syncBGPPolicy(ctx))
+		doneDummyEvent(t, c2)
+		meta2 := c2.bgpPolicyState.routes[sharedLBRoute]
+
+		assert.Equal(t, meta1, meta2)
+		assert.Equal(t, getServiceName("svc-a")+","+getServiceName("svc-b"), meta1.K8sObjRef)
+	})
+
+	t.Run("Transitions", func(t *testing.T) {
+		t.Run("Local Service endpoint readiness flip", func(t *testing.T) {
+			svc := generateService("svc-flip", corev1.ServiceTypeLoadBalancer, clusterIP1, "", sharedLBIP, false, true)
+			c := newFakeController(t, []runtime.Object{node, svc}, []runtime.Object{policy}, true, false)
+			mockBGPServer := c.mockBGPServer
+			stopCh := make(chan struct{})
+			defer close(stopCh)
+			ctx := context.Background()
+			c.startInformers(stopCh)
+			c.bgpPeerPasswords = bgpPeerPasswords
+
+			waitAndGetDummyEvent(t, c)
+			mockBGPServer.EXPECT().Start(gomock.Any())
+			mockBGPServer.EXPECT().AddPeer(gomock.Any(), ipv4Peer1Config)
+			require.NoError(t, c.syncBGPPolicy(ctx))
+			doneDummyEvent(t, c)
+
+			// Add local ready endpoint
+			eps := generateEndpointSliceWithConditions(svc.Name, "eps", true, false, "10.10.0.1", discovery.EndpointConditions{Ready: ptr.To(true)})
+			_, err := c.client.DiscoveryV1().EndpointSlices(namespaceDefault).Create(context.TODO(), eps, metav1.CreateOptions{})
+			require.NoError(t, err)
+
+			waitAndGetDummyEvent(t, c)
+			mockBGPServer.EXPECT().AdvertiseRoutes(gomock.Any(), []bgp.Route{sharedLBRoute})
+			require.NoError(t, c.syncBGPPolicy(ctx))
+			doneDummyEvent(t, c)
+			assert.Contains(t, c.bgpPolicyState.routes, sharedLBRoute)
+
+			// Flip endpoint to not ready and not serving
+			eps = generateEndpointSliceWithConditions(svc.Name, "eps", true, false, "10.10.0.1", discovery.EndpointConditions{Ready: ptr.To(false), Serving: ptr.To(false)})
+			_, err = c.client.DiscoveryV1().EndpointSlices(namespaceDefault).Update(context.TODO(), eps, metav1.UpdateOptions{})
+			require.NoError(t, err)
+
+			waitAndGetDummyEvent(t, c)
+			mockBGPServer.EXPECT().WithdrawRoutes(gomock.Any(), []bgp.Route{sharedLBRoute})
+			require.NoError(t, c.syncBGPPolicy(ctx))
+			doneDummyEvent(t, c)
+			assert.NotContains(t, c.bgpPolicyState.routes, sharedLBRoute)
+
+			// Flip back to ready
+			eps = generateEndpointSliceWithConditions(svc.Name, "eps", true, false, "10.10.0.1", discovery.EndpointConditions{Ready: ptr.To(true)})
+			_, err = c.client.DiscoveryV1().EndpointSlices(namespaceDefault).Update(context.TODO(), eps, metav1.UpdateOptions{})
+			require.NoError(t, err)
+
+			waitAndGetDummyEvent(t, c)
+			mockBGPServer.EXPECT().AdvertiseRoutes(gomock.Any(), []bgp.Route{sharedLBRoute})
+			require.NoError(t, c.syncBGPPolicy(ctx))
+			doneDummyEvent(t, c)
+			assert.Contains(t, c.bgpPolicyState.routes, sharedLBRoute)
+		})
+
+		t.Run("Shared prefix second Local Service endpoint deleted", func(t *testing.T) {
+			svcA := generateService("svc-a", corev1.ServiceTypeLoadBalancer, clusterIP1, "", sharedLBIP, false, true)
+			svcB := generateService("svc-b", corev1.ServiceTypeLoadBalancer, clusterIP2, "", sharedLBIP, false, true)
+			epsA := generateEndpointSliceWithConditions("svc-a", "eps", true, false, "10.10.0.1", discovery.EndpointConditions{Ready: ptr.To(true)})
+			epsB := generateEndpointSliceWithConditions("svc-b", "eps", true, false, "10.10.0.2", discovery.EndpointConditions{Ready: ptr.To(true)})
+
+			c := newFakeController(t, []runtime.Object{node, svcA, svcB, epsA, epsB}, []runtime.Object{policy}, true, false)
+			mockBGPServer := c.mockBGPServer
+			stopCh := make(chan struct{})
+			defer close(stopCh)
+			ctx := context.Background()
+			c.startInformers(stopCh)
+			c.bgpPeerPasswords = bgpPeerPasswords
+
+			waitAndGetDummyEvent(t, c)
+			mockBGPServer.EXPECT().Start(gomock.Any())
+			mockBGPServer.EXPECT().AddPeer(gomock.Any(), ipv4Peer1Config)
+			mockBGPServer.EXPECT().AdvertiseRoutes(gomock.Any(), []bgp.Route{sharedLBRoute})
+			require.NoError(t, c.syncBGPPolicy(ctx))
+			doneDummyEvent(t, c)
+			assert.Contains(t, c.bgpPolicyState.routes, sharedLBRoute)
+
+			// Delete epsB (svcB has no local endpoints anymore)
+			err := c.client.DiscoveryV1().EndpointSlices(namespaceDefault).Delete(context.TODO(), epsB.Name, metav1.DeleteOptions{})
+			require.NoError(t, err)
+
+			waitAndGetDummyEvent(t, c)
+			mockBGPServer.EXPECT().WithdrawRoutes(gomock.Any(), []bgp.Route{sharedLBRoute})
+			require.NoError(t, c.syncBGPPolicy(ctx))
+			doneDummyEvent(t, c)
+			assert.NotContains(t, c.bgpPolicyState.routes, sharedLBRoute)
+		})
+	})
 }
