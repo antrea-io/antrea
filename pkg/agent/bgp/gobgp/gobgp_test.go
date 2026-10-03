@@ -72,6 +72,41 @@ func TestConvertGoBGPPeerToPeerStatus(t *testing.T) {
 				GracefulRestartTimeSeconds: 120,
 				SessionState:               bgp.SessionEstablished,
 				UptimeSeconds:              3600,
+				BFDSessionState:            bgp.BFDSessionDisabled,
+			},
+		},
+		{
+			name: "Established peer with BFD",
+			peer: &gobgpapi.Peer{
+				Conf: &gobgpapi.PeerConf{
+					NeighborAddress: "192.168.1.1",
+					PeerAsn:         65001,
+				},
+				Transport: &gobgpapi.Transport{
+					RemotePort: 179,
+				},
+				Bfd: &gobgpapi.BfdPeerConfig{
+					Enabled: true,
+				},
+				State: &gobgpapi.PeerState{
+					SessionState: gobgpapi.PeerState_SESSION_STATE_ESTABLISHED,
+					BfdState: &gobgpapi.BfdPeerState{
+						SessionState: gobgpapi.BfdSessionState_BFD_SESSION_STATE_UP,
+					},
+				},
+				Timers: &gobgpapi.Timers{
+					State: &gobgpapi.TimersState{
+						Uptime: &timestamppb.Timestamp{Seconds: time.Now().Unix() - 3600},
+					},
+				},
+			},
+			expected: &bgp.PeerStatus{
+				Address:         "192.168.1.1",
+				ASN:             65001,
+				Port:            179,
+				SessionState:    bgp.SessionEstablished,
+				UptimeSeconds:   3600,
+				BFDSessionState: bgp.BFDSessionUp,
 			},
 		},
 		{
@@ -90,10 +125,11 @@ func TestConvertGoBGPPeerToPeerStatus(t *testing.T) {
 			},
 
 			expected: &bgp.PeerStatus{
-				Address:      "192.168.1.1",
-				ASN:          65001,
-				Port:         179,
-				SessionState: bgp.SessionIdle,
+				Address:         "192.168.1.1",
+				ASN:             65001,
+				Port:            179,
+				SessionState:    bgp.SessionIdle,
+				BFDSessionState: bgp.BFDSessionDisabled,
 			},
 		},
 	}
@@ -154,7 +190,93 @@ func TestConvertPeerConfigToGoBGPPeer(t *testing.T) {
 	assert.Equal(t, uint32(179), peer.GetTransport().GetRemotePort())
 	assert.Equal(t, uint32(2), peer.GetEbgpMultihop().GetMultihopTtl())
 	assert.Equal(t, uint32(120), peer.GetGracefulRestart().GetRestartTime())
+	// BFD is not enabled for the peer, so goBGP is not asked to start a BFD session.
+	assert.Nil(t, peer.GetBfd())
+}
 
+func TestConvertPeerConfigToGoBGPBfd(t *testing.T) {
+	tests := []struct {
+		name     string
+		bfd      *v1alpha1.BFDConfig
+		expected *gobgpapi.BfdPeerConfig
+	}{
+		{
+			name: "BFD not configured",
+			bfd:  nil,
+		},
+		{
+			name: "all fields configured",
+			bfd: &v1alpha1.BFDConfig{
+				Enabled:                      true,
+				TransmitIntervalMilliseconds: ptr.To(int32(300)),
+				ReceiveIntervalMilliseconds:  ptr.To(int32(500)),
+				DetectionMultiplier:          ptr.To(int32(5)),
+			},
+			expected: &gobgpapi.BfdPeerConfig{
+				Enabled:                  true,
+				DesiredMinimumTxInterval: 300000,
+				RequiredMinimumReceive:   500000,
+				DetectionMultiplier:      5,
+			},
+		},
+		{
+			name: "only enabled",
+			bfd:  &v1alpha1.BFDConfig{Enabled: true},
+			expected: &gobgpapi.BfdPeerConfig{
+				Enabled: true,
+			},
+		},
+		{
+			name: "disabled, so the other fields are ignored",
+			bfd: &v1alpha1.BFDConfig{
+				Enabled:                      false,
+				TransmitIntervalMilliseconds: ptr.To(int32(300)),
+				DetectionMultiplier:          ptr.To(int32(5)),
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			peerConfig := bgp.PeerConfig{
+				BGPPeer: &v1alpha1.BGPPeer{
+					Address: "192.168.0.1",
+					ASN:     65000,
+					BFD:     tt.bfd,
+				},
+			}
+			peer, err := convertPeerConfigToGoBGPPeer(peerConfig)
+			require.NoError(t, err)
+			if tt.expected == nil {
+				assert.Nil(t, peer.GetBfd())
+				return
+			}
+			require.NotNil(t, peer.GetBfd())
+			assert.True(t, peer.GetBfd().GetEnabled())
+			// The port is left unset so that goBGP uses the well-known BFD port.
+			assert.Equal(t, uint32(0), peer.GetBfd().GetPort())
+			assert.Equal(t, tt.expected.GetDesiredMinimumTxInterval(), peer.GetBfd().GetDesiredMinimumTxInterval())
+			assert.Equal(t, tt.expected.GetRequiredMinimumReceive(), peer.GetBfd().GetRequiredMinimumReceive())
+			assert.Equal(t, tt.expected.GetDetectionMultiplier(), peer.GetBfd().GetDetectionMultiplier())
+		})
+	}
+}
+
+func TestConvertGoBGPBFDSessionStateToBFDSessionState(t *testing.T) {
+	tests := []struct {
+		input    gobgpapi.BfdSessionState
+		expected bgp.BFDSessionState
+	}{
+		{gobgpapi.BfdSessionState_BFD_SESSION_STATE_UNSPECIFIED, bgp.BFDSessionUnknown},
+		{gobgpapi.BfdSessionState_BFD_SESSION_STATE_ADMIN_DOWN, bgp.BFDSessionAdminDown},
+		{gobgpapi.BfdSessionState_BFD_SESSION_STATE_DOWN, bgp.BFDSessionDown},
+		{gobgpapi.BfdSessionState_BFD_SESSION_STATE_INIT, bgp.BFDSessionInit},
+		{gobgpapi.BfdSessionState_BFD_SESSION_STATE_UP, bgp.BFDSessionUp},
+		{gobgpapi.BfdSessionState(999), bgp.BFDSessionUnknown},
+	}
+
+	for _, test := range tests {
+		assert.Equal(t, test.expected, convertGoBGPBFDSessionStateToBFDSessionState(test.input))
+	}
 }
 
 func TestConvertGoBGPSessionStateToSessionState(t *testing.T) {
