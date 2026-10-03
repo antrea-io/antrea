@@ -344,6 +344,36 @@ type BGPPeer struct {
 	// GracefulRestartTimeSeconds specifies how long the BGP peer would wait for the BGP session to re-establish after
 	// a restart before deleting stale routes. The range of the value is from 1 to 3600, and the default value is 120.
 	GracefulRestartTimeSeconds *int32 `json:"gracefulRestartTimeSeconds,omitempty"`
+
+	// BFD configures Bidirectional Forwarding Detection (RFC 5880) towards this BGP peer. BFD runs only when this field
+	// is set and its enabled sub-field is true. When the BFD session transitions from up to down, the BGP session is
+	// reset immediately for fast failover, without waiting for the BGP hold timer to expire. If the BFD session never
+	// comes up (e.g., the peer does not support or enable BFD), the BGP session is not affected. BFD is only supported
+	// for directly connected peers (multihopTTL of 1).
+	BFD *BFDConfig `json:"bfd,omitempty"`
+}
+
+// BFDConfig configures a BFD (Bidirectional Forwarding Detection) session. See the "BFD conformance notes" section of
+// docs/bgp-policy.md for the ways the implementation departs from RFC 5880.
+type BFDConfig struct {
+	// Enabled controls whether BFD runs towards the peer. It is required so that BFD can be turned off while keeping
+	// the values of the other fields in place.
+	Enabled bool `json:"enabled"`
+
+	// MinReceiveIntervalMilliseconds is the minimum interval, in milliseconds, at which this system is capable of
+	// receiving BFD control packets. The peer adjusts its transmission rate to be no faster than this value. The
+	// range of the value is from 10 to 60000, and the default value is 300.
+	MinReceiveIntervalMilliseconds *int32 `json:"minReceiveIntervalMilliseconds,omitempty"`
+
+	// MinTransmitIntervalMilliseconds is the interval, in milliseconds, at which this system transmits BFD control
+	// packets. Note that this interval is used as configured: it is not adjusted to the minimum receive interval
+	// advertised by the peer, a departure from RFC 5880 Section 6.8.3, so it should not be set faster than the peer
+	// is willing to receive. The range of the value is from 10 to 60000, and the default value is 300.
+	MinTransmitIntervalMilliseconds *int32 `json:"minTransmitIntervalMilliseconds,omitempty"`
+
+	// DetectionMultiplier specifies the number of consecutive BFD control packets that must be missed before the
+	// session is declared down. The range of the value is from 1 to 255, and the default value is 3.
+	DetectionMultiplier *int32 `json:"detectionMultiplier,omitempty"`
 }
 
 type PodReference struct {
