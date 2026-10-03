@@ -24,7 +24,9 @@ import (
 	"antrea.io/libOpenflow/protocol"
 	"antrea.io/libOpenflow/util"
 	"antrea.io/ofnet/ofctrl"
+	"golang.org/x/time/rate"
 	apitypes "k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/klog/v2"
 
 	"antrea.io/antrea/v2/pkg/agent/interfacestore"
@@ -40,6 +42,11 @@ const (
 )
 
 var (
+	// igmpLogRateLimiterInterval and igmpLogRateLimiterBurst are used to rate-limit warning logs
+	// when malformed or invalid IGMP packets are dropped.
+	igmpLogRateLimiterInterval = time.Second
+	igmpLogRateLimiterBurst    = 5
+
 	// igmpMaxResponseTime is the maximum time allowed before sending a responding report which is used for the
 	// "Max Resp Code" field in the IGMP query message. It is also the maximum time to wait for the IGMP report message
 	// when checking the last group member.
@@ -66,6 +73,17 @@ type IGMPSnooper struct {
 	igmpReportACNPStats      map[apitypes.UID]map[string]*types.RuleMetric
 	igmpReportACNPStatsMutex sync.Mutex
 	encapEnabled             bool
+	logRateLimiter           *rate.Limiter
+}
+
+func (s *IGMPSnooper) logRateLimitedWarning(err error, msg string, keysAndValues ...interface{}) {
+	if s.logRateLimiter == nil || s.logRateLimiter.Allow() {
+		if err != nil {
+			klog.ErrorS(err, msg, keysAndValues...)
+		} else {
+			klog.InfoS(msg, keysAndValues...)
+		}
+	}
 }
 
 func (s *IGMPSnooper) parseSrcInterface(pktIn *ofctrl.PacketIn) (*interfacestore.InterfaceConfig, error) {
@@ -225,7 +243,8 @@ func (s *IGMPSnooper) HandlePacketIn(pktIn *ofctrl.PacketIn) error {
 	now := time.Now()
 	iface, err := s.parseSrcInterface(pktIn)
 	if err != nil {
-		return err
+		s.logRateLimitedWarning(err, "Failed to parse source interface for IGMP packet")
+		return nil
 	}
 	klog.V(2).InfoS("Received PacketIn for IGMP packet", "in_port", iface.OFPort)
 	podName := "unknown"
@@ -233,11 +252,13 @@ func (s *IGMPSnooper) HandlePacketIn(pktIn *ofctrl.PacketIn) error {
 
 	pktData := new(protocol.Ethernet)
 	if err := pktData.UnmarshalBinary(pktIn.Data.(*util.Buffer).Bytes()); err != nil {
-		return fmt.Errorf("failed to parse Ethernet packet from packet-in message: %v", err)
+		s.logRateLimitedWarning(err, "Dropped malformed IGMP packet: failed to parse Ethernet packet", "interface", iface.InterfaceName)
+		return nil
 	}
 	ipPacket, err := parseIPv4Packet(pktData)
 	if err != nil {
-		return fmt.Errorf("failed to parse IPv4 packet from packet-in message: %v", err)
+		s.logRateLimitedWarning(err, "Dropped malformed IGMP packet: failed to parse IPv4 packet", "interface", iface.InterfaceName)
+		return nil
 	}
 
 	switch iface.Type {
@@ -252,7 +273,8 @@ func (s *IGMPSnooper) HandlePacketIn(pktIn *ofctrl.PacketIn) error {
 
 	igmp, err := parseIGMPPacket(ipPacket)
 	if err != nil {
-		return err
+		s.logRateLimitedWarning(err, "Dropped malformed IGMP packet: failed to parse IGMP packet", "interface", iface.InterfaceName)
+		return nil
 	}
 	igmpType := igmp.GetMessageType()
 	switch igmpType {
@@ -260,6 +282,10 @@ func (s *IGMPSnooper) HandlePacketIn(pktIn *ofctrl.PacketIn) error {
 		fallthrough
 	case protocol.IGMPv2Report:
 		mgroup := igmp.(*protocol.IGMPv1or2).GroupAddress
+		if !mgroup.IsMulticast() || mgroup.Equal(types.McastAllHosts) {
+			s.logRateLimitedWarning(nil, "Ignored invalid or reserved multicast group in IGMP packet", "group", mgroup.String(), "interface", iface.InterfaceName)
+			return nil
+		}
 		klog.V(2).InfoS("Received IGMPv1or2 Report message", "group", mgroup.String(), "interface", iface.InterfaceName, "pod", podName)
 		event := &mcastGroupEvent{
 			group: mgroup,
@@ -270,8 +296,18 @@ func (s *IGMPSnooper) HandlePacketIn(pktIn *ofctrl.PacketIn) error {
 		s.validatePacketAndNotify(event, igmpType, *pktData)
 	case protocol.IGMPv3Report:
 		msg := igmp.(*protocol.IGMPv3MembershipReport)
+		seenGroups := sets.New[string]()
 		for _, gr := range msg.GroupRecords {
 			mgroup := gr.MulticastAddress
+			if !mgroup.IsMulticast() || mgroup.Equal(types.McastAllHosts) {
+				s.logRateLimitedWarning(nil, "Skipped invalid or reserved multicast address in IGMPv3 group record", "group", mgroup.String(), "interface", iface.InterfaceName)
+				continue
+			}
+			if seenGroups.Has(mgroup.String()) {
+				klog.V(4).InfoS("Skipped duplicate IGMPv3 group record in the same packet", "group", mgroup.String(), "interface", iface.InterfaceName)
+				continue
+			}
+			seenGroups.Insert(mgroup.String())
 			klog.V(2).InfoS("Received IGMPv3 Report message", "group", mgroup.String(), "interface", iface.InterfaceName, "pod", podName, "recordType", gr.Type, "sourceCount", gr.NumberOfSources)
 			evtType := groupJoin
 			if (gr.Type == protocol.IGMPIsIn || gr.Type == protocol.IGMPToIn) && gr.NumberOfSources == 0 {
@@ -288,6 +324,10 @@ func (s *IGMPSnooper) HandlePacketIn(pktIn *ofctrl.PacketIn) error {
 		}
 	case protocol.IGMPv2LeaveGroup:
 		mgroup := igmp.(*protocol.IGMPv1or2).GroupAddress
+		if !mgroup.IsMulticast() || mgroup.Equal(types.McastAllHosts) {
+			s.logRateLimitedWarning(nil, "Ignored invalid or reserved multicast group in IGMP packet", "group", mgroup.String(), "interface", iface.InterfaceName)
+			return nil
+		}
 		klog.V(2).InfoS("Received IGMPv2 Leave message", "group", mgroup.String(), "interface", iface.InterfaceName, "pod", podName)
 		event := &mcastGroupEvent{
 			group: mgroup,
@@ -379,7 +419,16 @@ func parseIGMPPacket(ipPacket *protocol.IPv4) (protocol.IGMPMessage, error) {
 }
 
 func newSnooper(ofClient openflow.Client, ifaceStore interfacestore.InterfaceStore, eventCh chan *mcastGroupEvent, queryInterval time.Duration, igmpQueryVersions []uint8, multicastValidator types.McastNetworkPolicyController, encapEnabled bool) *IGMPSnooper {
-	snooper := &IGMPSnooper{ofClient: ofClient, ifaceStore: ifaceStore, eventCh: eventCh, validator: multicastValidator, queryInterval: queryInterval, queryVersions: igmpQueryVersions, encapEnabled: encapEnabled}
+	snooper := &IGMPSnooper{
+		ofClient:       ofClient,
+		ifaceStore:     ifaceStore,
+		eventCh:        eventCh,
+		validator:      multicastValidator,
+		queryInterval:  queryInterval,
+		queryVersions:  igmpQueryVersions,
+		encapEnabled:   encapEnabled,
+		logRateLimiter: rate.NewLimiter(rate.Every(igmpLogRateLimiterInterval), igmpLogRateLimiterBurst),
+	}
 	snooper.igmpReportACNPStats = make(map[apitypes.UID]map[string]*types.RuleMetric)
 	snooper.igmpReportANNPStats = make(map[apitypes.UID]map[string]*types.RuleMetric)
 	ofClient.RegisterPacketInHandler(uint8(openflow.PacketInCategoryIGMP), snooper)

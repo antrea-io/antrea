@@ -2875,7 +2875,7 @@ func Test_client_ReplayFlows(t *testing.T) {
 	defer resetPipelines()
 
 	expectedFlows := append(pipelineDefaultFlows(true /* egressTrafficShapingEnabled */, false /* externalNodeEnabled */, true /* isEncap */, true /* isIPv4 */), egressInitFlows(true)...)
-	expectedFlows = append(expectedFlows, multicastInitFlows(true)...)
+	expectedFlows = append(expectedFlows, multicastInitFlows(true, true)...)
 	expectedFlows = append(expectedFlows, networkPolicyInitFlows(true, false)...)
 	expectedFlows = append(expectedFlows, podConnectivityInitFlows(config.TrafficEncapModeEncap, config.TrafficEncryptionModeNone, false, true, true, true)...)
 	expectedFlows = append(expectedFlows, serviceInitFlows(true, true, false, false)...)
@@ -3030,6 +3030,7 @@ func Test_client_ReplayFlows(t *testing.T) {
 		{id: PacketInMeterIDNP, rate: uint32(defaultPacketInRate)},
 		{id: PacketInMeterIDTF, rate: uint32(defaultPacketInRate)},
 		{id: PacketInMeterIDDNS, rate: uint32(defaultPacketInRate)},
+		{id: PacketInMeterIDIGMP, rate: uint32(defaultPacketInRate)},
 	} {
 		expectNewMeter(uint32(meterCfg.id), meterCfg.rate, meterCfg.rate*2, ofctrl.MeterPktps, false)
 	}

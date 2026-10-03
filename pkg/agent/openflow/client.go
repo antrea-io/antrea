@@ -913,6 +913,9 @@ func (c *client) initialize() error {
 		if err := c.genOFMeter(PacketInMeterIDDNS, ofctrl.MeterBurst|ofctrl.MeterPktps, uint32(c.packetInRate), uint32(2*c.packetInRate)).Add(); err != nil {
 			return fmt.Errorf("failed to install OpenFlow meter entry (meterID:%d, rate:%d) for DNS interception packet-in rate limiting: %w", PacketInMeterIDDNS, c.packetInRate, err)
 		}
+		if err := c.genOFMeter(PacketInMeterIDIGMP, ofctrl.MeterBurst|ofctrl.MeterPktps, uint32(c.packetInRate), uint32(2*c.packetInRate)).Add(); err != nil {
+			return fmt.Errorf("failed to install OpenFlow meter entry (meterID:%d, rate:%d) for IGMP packet-in rate limiting: %w", PacketInMeterIDIGMP, c.packetInRate, err)
+		}
 	}
 
 	for _, activeFeature := range c.activatedFeatures {
@@ -1036,7 +1039,7 @@ func (c *client) generatePipelines() {
 		}
 
 		// TODO: add support for IPv6 protocol
-		c.featureMulticast = newFeatureMulticast(c.cookieAllocator, []binding.Protocol{binding.ProtocolIP}, c.bridge, c.enableAntreaPolicy, c.nodeConfig.GatewayConfig.OFPort, c.networkConfig.TrafficEncapMode.SupportsEncap(), c.nodeConfig.TunnelOFPort, uplinkPort, c.nodeConfig.HostInterfaceOFPort, c.connectUplinkToBridge)
+		c.featureMulticast = newFeatureMulticast(c.cookieAllocator, []binding.Protocol{binding.ProtocolIP}, c.bridge, c.enableAntreaPolicy, c.nodeConfig.GatewayConfig.OFPort, c.networkConfig.TrafficEncapMode.SupportsEncap(), c.nodeConfig.TunnelOFPort, uplinkPort, c.nodeConfig.HostInterfaceOFPort, c.connectUplinkToBridge, c.ovsMetersAreSupported)
 		c.activatedFeatures = append(c.activatedFeatures, c.featureMulticast)
 	}
 
@@ -1732,9 +1735,10 @@ func getFlowModMessage(flow binding.Flow, op binding.OFOperation) *openflow15.Fl
 // sets values for antrea_agent_ovs_meter_packet_dropped_count.
 func (c *client) getMeterStats() {
 	labels := map[int]string{
-		PacketInMeterIDNP:  metrics.LabelPacketInMeterNetworkPolicy,
-		PacketInMeterIDTF:  metrics.LabelPacketInMeterTraceflow,
-		PacketInMeterIDDNS: metrics.LabelPacketInMeterDNSInterception,
+		PacketInMeterIDNP:   metrics.LabelPacketInMeterNetworkPolicy,
+		PacketInMeterIDTF:   metrics.LabelPacketInMeterTraceflow,
+		PacketInMeterIDDNS:  metrics.LabelPacketInMeterDNSInterception,
+		PacketInMeterIDIGMP: metrics.LabelPacketInMeterIGMP,
 	}
 	handleMeterStatsReply := func(meterID int, packetCount int64) {
 		label, exists := labels[meterID]
@@ -1747,8 +1751,13 @@ func (c *client) getMeterStats() {
 		previousCount := c.ovsMeterPacketDrops[meterID].Swap(packetCount)
 		// Log an error if dropped packets increased in the last round.
 		if packetCount > previousCount {
-			klog.ErrorS(nil, "Packets were dropped by OVS meter, please consider increasing the 'packetInRate' configuration",
-				"meter", label, "packetInRate", c.packetInRate, "totalDrops", packetCount, "newDrops", packetCount-previousCount)
+			if meterID == PacketInMeterIDIGMP {
+				klog.ErrorS(nil, "IGMP packets were dropped by OVS meter, which may indicate excessive multicast activity or an IGMP report flood",
+					"meter", label, "rate", c.packetInRate, "totalDrops", packetCount, "newDrops", packetCount-previousCount)
+			} else {
+				klog.ErrorS(nil, "Packets were dropped by OVS meter, please consider increasing the 'packetInRate' configuration",
+					"meter", label, "packetInRate", c.packetInRate, "totalDrops", packetCount, "newDrops", packetCount-previousCount)
+			}
 		}
 	}
 	if err := c.bridge.GetMeterStats(handleMeterStatsReply); err != nil {

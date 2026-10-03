@@ -40,10 +40,12 @@ import (
 	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes/fake"
 	"k8s.io/client-go/tools/cache"
+	"k8s.io/component-base/metrics/testutil"
 
 	"antrea.io/antrea/v2/pkg/agent/config"
 	"antrea.io/antrea/v2/pkg/agent/interfacestore"
 	ifaceStoretest "antrea.io/antrea/v2/pkg/agent/interfacestore/testing"
+	"antrea.io/antrea/v2/pkg/agent/metrics"
 	multicasttest "antrea.io/antrea/v2/pkg/agent/multicast/testing"
 	"antrea.io/antrea/v2/pkg/agent/openflow"
 	openflowtest "antrea.io/antrea/v2/pkg/agent/openflow/testing"
@@ -1606,5 +1608,106 @@ func mockIgmpMaxResponseTime(t *testing.T) {
 	igmpMaxResponseTime = -1
 	t.Cleanup(func() {
 		igmpMaxResponseTime = originalMaxResponseTime
+	})
+}
+
+func TestMulticastGroupLimits(t *testing.T) {
+	metrics.InitializeMulticastMetrics()
+
+	t.Run("PodGroupLimit", func(t *testing.T) {
+		origMaxPod := maxGroupsPerPod
+		origMaxNode := maxGroupsPerNode
+		maxGroupsPerPod = 2
+		maxGroupsPerNode = 10
+		t.Cleanup(func() {
+			maxGroupsPerPod = origMaxPod
+			maxGroupsPerNode = origMaxNode
+		})
+
+		testController := newTestMulticastController(t, false, false)
+		testController.mockIfaceStore.EXPECT().GetInterfaceByName(gomock.Any()).Return(if1, true).AnyTimes()
+		testController.mockOFClient.EXPECT().SendIGMPQueryPacketOut(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
+		podIface := if1
+
+		initialPodDrops, err := testutil.GetCounterMetricValue(metrics.MulticastGroupJoinRejectedCount.WithLabelValues(metrics.LabelMulticastGroupJoinRejectedPodLimit))
+		require.NoError(t, err)
+
+		// 1st group join: succeeds
+		g1 := net.ParseIP("224.1.1.1")
+		testController.addOrUpdateGroupEvent(&mcastGroupEvent{group: g1, eType: groupJoin, time: time.Now(), iface: podIface})
+		assert.Equal(t, 1, len(testController.groupCache.ListKeys()))
+
+		// 2nd group join: succeeds
+		g2 := net.ParseIP("224.1.1.2")
+		testController.addOrUpdateGroupEvent(&mcastGroupEvent{group: g2, eType: groupJoin, time: time.Now(), iface: podIface})
+		assert.Equal(t, 2, len(testController.groupCache.ListKeys()))
+
+		// 3rd group join for a new group: rejected due to pod limit
+		g3 := net.ParseIP("224.1.1.3")
+		testController.addOrUpdateGroupEvent(&mcastGroupEvent{group: g3, eType: groupJoin, time: time.Now(), iface: podIface})
+		assert.Equal(t, 2, len(testController.groupCache.ListKeys()))
+		newPodDrops, err := testutil.GetCounterMetricValue(metrics.MulticastGroupJoinRejectedCount.WithLabelValues(metrics.LabelMulticastGroupJoinRejectedPodLimit))
+		require.NoError(t, err)
+		assert.Equal(t, initialPodDrops+1, newPodDrops)
+
+		// Re-join 1st group (refresh): succeeds without incrementing metric
+		testController.addOrUpdateGroupEvent(&mcastGroupEvent{group: g1, eType: groupJoin, time: time.Now(), iface: podIface})
+		assert.Equal(t, 2, len(testController.groupCache.ListKeys()))
+		refreshedPodDrops, err := testutil.GetCounterMetricValue(metrics.MulticastGroupJoinRejectedCount.WithLabelValues(metrics.LabelMulticastGroupJoinRejectedPodLimit))
+		require.NoError(t, err)
+		assert.Equal(t, newPodDrops, refreshedPodDrops)
+
+		// Create group g4 joined by another pod (if2)
+		g4 := net.ParseIP("224.1.1.4")
+		testController.addOrUpdateGroupEvent(&mcastGroupEvent{group: g4, eType: groupJoin, time: time.Now(), iface: if2})
+		assert.Equal(t, 3, len(testController.groupCache.ListKeys()))
+
+		// podIface (which already has 2 groups) tries to join existing group g4: rejected
+		testController.addOrUpdateGroupEvent(&mcastGroupEvent{group: g4, eType: groupJoin, time: time.Now(), iface: podIface})
+		joinedPodDrops, err := testutil.GetCounterMetricValue(metrics.MulticastGroupJoinRejectedCount.WithLabelValues(metrics.LabelMulticastGroupJoinRejectedPodLimit))
+		require.NoError(t, err)
+		assert.Equal(t, newPodDrops+1, joinedPodDrops)
+
+		// podIface leaves g1
+		testController.addOrUpdateGroupEvent(&mcastGroupEvent{group: g1, eType: groupLeave, time: time.Now(), iface: podIface})
+
+		// podIface joins existing group g4: now succeeds since pod count dropped to 1
+		testController.addOrUpdateGroupEvent(&mcastGroupEvent{group: g4, eType: groupJoin, time: time.Now(), iface: podIface})
+		afterLeavePodDrops, err := testutil.GetCounterMetricValue(metrics.MulticastGroupJoinRejectedCount.WithLabelValues(metrics.LabelMulticastGroupJoinRejectedPodLimit))
+		require.NoError(t, err)
+		assert.Equal(t, joinedPodDrops, afterLeavePodDrops)
+	})
+
+	t.Run("NodeGroupLimit", func(t *testing.T) {
+		origMaxPod := maxGroupsPerPod
+		origMaxNode := maxGroupsPerNode
+		maxGroupsPerPod = 10
+		maxGroupsPerNode = 2
+		t.Cleanup(func() {
+			maxGroupsPerPod = origMaxPod
+			maxGroupsPerNode = origMaxNode
+		})
+
+		testController := newTestMulticastController(t, false, false)
+		initialNodeDrops, err := testutil.GetCounterMetricValue(metrics.MulticastGroupJoinRejectedCount.WithLabelValues(metrics.LabelMulticastGroupJoinRejectedNodeLimit))
+		require.NoError(t, err)
+
+		// 1st group join: succeeds
+		g1 := net.ParseIP("224.2.2.1")
+		testController.addOrUpdateGroupEvent(&mcastGroupEvent{group: g1, eType: groupJoin, time: time.Now(), iface: if1})
+		assert.Equal(t, 1, len(testController.groupCache.ListKeys()))
+
+		// 2nd group join: succeeds
+		g2 := net.ParseIP("224.2.2.2")
+		testController.addOrUpdateGroupEvent(&mcastGroupEvent{group: g2, eType: groupJoin, time: time.Now(), iface: if2})
+		assert.Equal(t, 2, len(testController.groupCache.ListKeys()))
+
+		// 3rd group join: rejected due to node limit
+		g3 := net.ParseIP("224.2.2.3")
+		testController.addOrUpdateGroupEvent(&mcastGroupEvent{group: g3, eType: groupJoin, time: time.Now(), iface: if1})
+		assert.Equal(t, 2, len(testController.groupCache.ListKeys()))
+		newNodeDrops, err := testutil.GetCounterMetricValue(metrics.MulticastGroupJoinRejectedCount.WithLabelValues(metrics.LabelMulticastGroupJoinRejectedNodeLimit))
+		require.NoError(t, err)
+		assert.Equal(t, initialNodeDrops+1, newNodeDrops)
 	})
 }
