@@ -33,9 +33,9 @@ import (
 	"strings"
 	"testing"
 	"time"
+	"uuid"
 
 	"github.com/containernetworking/plugins/pkg/ip"
-	"github.com/gofrs/uuid/v5"
 	log "github.com/sirupsen/logrus"
 	"go.yaml.in/yaml/v3"
 	appsv1 "k8s.io/api/apps/v1"

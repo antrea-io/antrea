@@ -19,8 +19,8 @@ import (
 	"fmt"
 	"testing"
 	"time"
+	"uuid"
 
-	"github.com/gofrs/uuid/v5"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
@@ -324,7 +324,7 @@ func addPods(number int, k8sClient kubernetes.Interface) ([]*corev1.Pod, error) 
 
 func generatePod() *corev1.Pod {
 	ip := getRandomIP()
-	uid := uuid.Must(uuid.NewV4()).String()
+	uid := uuid.NewV4().String()
 	startTime := rand.Intn(360000000)
 	creationTime := refTime.Add(time.Duration(startTime))
 	deletionTime := creationTime.Add(time.Hour)

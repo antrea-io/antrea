@@ -27,8 +27,8 @@ import (
 	"testing"
 	"testing/synctest"
 	"time"
+	"uuid"
 
-	"github.com/gofrs/uuid/v5"
 	"github.com/spf13/afero"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -612,7 +612,7 @@ func runTestTLSServer(t *testing.T, tlsConfig *tls.Config, recvCh chan<- []byte)
 }
 
 func TestInitExportingProcess(t *testing.T) {
-	clusterUUID := uuid.Must(uuid.NewV4())
+	clusterUUID := uuid.NewV4()
 
 	t.Run("tcp success", func(t *testing.T) {
 		ctrl := gomock.NewController(t)
@@ -763,7 +763,7 @@ func TestInitExportingProcess(t *testing.T) {
 }
 
 func TestNewIPFIXExporterObservationDomainID(t *testing.T) {
-	clusterUUID := uuid.Must(uuid.NewV4())
+	clusterUUID := uuid.NewV4()
 	testCases := []struct {
 		name                        string
 		userObservationDomainID     *uint32
@@ -823,7 +823,7 @@ func TestInitBackoffInRun(t *testing.T) {
 		}
 		defer func() { initIPFIXExportingProcess = initIPFIXExportingProcessSaved }()
 
-		clusterUUID := uuid.Must(uuid.NewV4())
+		clusterUUID := uuid.NewV4()
 		opt := &options.Options{
 			AggregatorMode: flowaggregatorconfig.AggregatorModeProxy,
 			Config:         &flowaggregatorconfig.FlowAggregatorConfig{},

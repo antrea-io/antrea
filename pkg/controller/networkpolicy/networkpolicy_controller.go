@@ -18,6 +18,7 @@
 package networkpolicy
 
 import (
+	"crypto/sha1" // #nosec G505: not used for security purposes
 	"fmt"
 	"net"
 	"reflect"
@@ -26,8 +27,8 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+	"uuid"
 
-	"github.com/gofrs/uuid/v5"
 	v1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -106,7 +107,7 @@ var (
 	// deterministic UUIDs for internal Antrea objects like AppliedToGroup,
 	// AddressGroup etc. e4f24a48-ca1f-4d5b-819c-ea7632b22115 was generated
 	// once using a random UUID generator.
-	uuidNamespace = uuid.Must(uuid.FromString("e4f24a48-ca1f-4d5b-819c-ea7632b22115"))
+	uuidNamespace = uuid.MustParse("e4f24a48-ca1f-4d5b-819c-ea7632b22115")
 
 	// matchAllPeer is a NetworkPolicyPeer matching all source/destination IP addresses. Both IPv4 Any (0.0.0.0/0) and
 	// IPv6 Any (::/0) are added into the IPBlocks, and Antrea Agent should decide if both two are used according the
@@ -669,7 +670,25 @@ func (n *NetworkPolicyController) GetConnectedAgentNum() int {
 // For example, it can be used to generate keys using normalized selectors
 // unique within the Namespace by adding the constant UID.
 func getNormalizedUID(name string) string {
-	return uuid.NewV5(uuidNamespace, name).String()
+	return newUUIDv5(uuidNamespace, name).String()
+}
+
+// newUUIDv5 returns the version 5 (name-based, using SHA-1 hashing) UUID for
+// the given name in the given namespace, as defined in Section 5.5 of RFC 9562.
+// The standard library uuid package does not support generating name-based
+// UUIDs. This function must keep returning the same values as the third-party
+// libraries used by previous Antrea versions (google/uuid's NewSHA1 and
+// gofrs/uuid's NewV5), so that the UIDs of internal objects do not change when
+// upgrading Antrea.
+func newUUIDv5(namespace uuid.UUID, name string) uuid.UUID {
+	h := sha1.New() // #nosec G401: not used for security purposes
+	h.Write(namespace[:])
+	h.Write([]byte(name))
+	var u uuid.UUID
+	copy(u[:], h.Sum(nil))
+	u[6] = (u[6] & 0x0f) | 0x50 // version 5
+	u[8] = (u[8] & 0x3f) | 0x80 // RFC 9562 variant
+	return u
 }
 
 // createAppliedToGroup creates an AppliedToGroup object corresponding to the provided selectors.

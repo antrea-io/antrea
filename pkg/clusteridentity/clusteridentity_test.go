@@ -18,8 +18,8 @@ import (
 	"context"
 	"testing"
 	"time"
+	"uuid"
 
-	"github.com/gofrs/uuid/v5"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
@@ -33,7 +33,7 @@ const (
 )
 
 var (
-	clusterUUID = uuid.Must(uuid.NewV4())
+	clusterUUID = uuid.NewV4()
 
 	// First release of Antrea (v0.1.0) at KubeCon NA 2019 (San Diego) :)
 	sanDiegoLocation, _        = time.LoadLocation("America/Los_Angeles")
@@ -68,7 +68,7 @@ func TestClusterIdentityAllocatorNew(t *testing.T) {
 	provider := NewClusterIdentityProvider(antreaNamespace, DefaultClusterIdentityConfigMapName, client)
 	identity, creationTime, err := provider.Get()
 	require.NoError(t, err, "Error when retrieving cluster identity")
-	assert.NotEqual(t, uuid.Nil, identity.UUID)
+	assert.NotEqual(t, uuid.Nil(), identity.UUID)
 	// comparing timestamps directly does not work because of different location pointers
 
 	assert.True(t, creationTime.Equal(configMapCreationTimestamp.Time))
@@ -120,7 +120,7 @@ func TestClusterIdentityAllocatorRun(t *testing.T) {
 	provider := NewClusterIdentityProvider(antreaNamespace, DefaultClusterIdentityConfigMapName, client)
 	identity, creationTime, err := provider.Get()
 	require.NoError(t, err, "Error when retrieving cluster identity")
-	assert.NotEqual(t, uuid.Nil, identity.UUID)
+	assert.NotEqual(t, uuid.Nil(), identity.UUID)
 
 	assert.True(t, creationTime.Equal(configMapCreationTimestamp.Time))
 }

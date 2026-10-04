@@ -19,10 +19,10 @@ import (
 	"fmt"
 	"testing"
 	"time"
+	"uuid"
 
 	"github.com/ClickHouse/clickhouse-go/v2"
 	"github.com/DATA-DOG/go-sqlmock"
-	"github.com/gofrs/uuid/v5"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -31,7 +31,7 @@ import (
 	flowaggregatortesting "antrea.io/antrea/v2/pkg/flowaggregator/testing"
 )
 
-var fakeClusterUUID = uuid.Must(uuid.NewV4()).String()
+var fakeClusterUUID = uuid.NewV4().String()
 
 // clickhouseFieldCount is the number of columns in the "flows" table INSERT query in
 // clickhouseclient.go. Refer to `insertQuery` in clickhouseclient.go.

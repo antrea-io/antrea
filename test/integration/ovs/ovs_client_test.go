@@ -25,8 +25,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+	"uuid"
 
-	"github.com/gofrs/uuid/v5"
 	"github.com/ovn-kubernetes/libovsdb/client"
 	"github.com/ovn-kubernetes/libovsdb/model"
 	"github.com/ovn-kubernetes/libovsdb/ovsdb"
@@ -127,11 +127,11 @@ func TestOVSBridge(t *testing.T) {
 	deleteAllPorts(t, data.br)
 	checkPorts(0)
 
-	p1Name := "p1-" + uuid.Must(uuid.NewV4()).String()[:8]
-	p2Name := "p2-" + uuid.Must(uuid.NewV4()).String()[:8]
-	p3Name := "p3-" + uuid.Must(uuid.NewV4()).String()[:8]
-	p4Name := "p4-" + uuid.Must(uuid.NewV4()).String()[:8]
-	p5Name := "p5-" + uuid.Must(uuid.NewV4()).String()[:8]
+	p1Name := "p1-" + uuid.NewV4().String()[:8]
+	p2Name := "p2-" + uuid.NewV4().String()[:8]
+	p3Name := "p3-" + uuid.NewV4().String()[:8]
+	p4Name := "p4-" + uuid.NewV4().String()[:8]
+	p5Name := "p5-" + uuid.NewV4().String()[:8]
 
 	uuid1 := testCreatePort(t, data.br, p1Name, "internal", 0)
 	uuid2 := testCreatePort(t, data.br, p2Name, "", 0)
@@ -252,9 +252,9 @@ func TestOVSSetPortTrunks(t *testing.T) {
 	data.setup(t)
 	defer data.teardown(t)
 
-	access15Name := "access15-" + uuid.Must(uuid.NewV4()).String()[:8]
-	access18Name := "access18-" + uuid.Must(uuid.NewV4()).String()[:8]
-	trunkName := "trunk-" + uuid.Must(uuid.NewV4()).String()[:8]
+	access15Name := "access15-" + uuid.NewV4().String()[:8]
+	access18Name := "access18-" + uuid.NewV4().String()[:8]
+	trunkName := "trunk-" + uuid.NewV4().String()[:8]
 	testCreatePort(t, data.br, access15Name, "internal", 0)
 	testCreatePort(t, data.br, access18Name, "internal", 0)
 	testCreatePort(t, data.br, trunkName, "internal", 0)
@@ -332,7 +332,7 @@ func TestOVSDeletePortIdempotent(t *testing.T) {
 
 	deleteAllPorts(t, data.br)
 
-	p1Name := "p1-" + uuid.Must(uuid.NewV4()).String()[:8]
+	p1Name := "p1-" + uuid.NewV4().String()[:8]
 	uuid := testCreatePort(t, data.br, p1Name, "internal", 0)
 	testDeletePort(t, data.br, uuid)
 	testDeletePort(t, data.br, uuid)
@@ -649,7 +649,7 @@ func TestTunnelOptionCsum(t *testing.T) {
 			data.setup(t)
 			defer data.teardown(t)
 
-			name := "vxlan-" + uuid.Must(uuid.NewV4()).String()[:8]
+			name := "vxlan-" + uuid.NewV4().String()[:8]
 			_, err := data.br.CreateTunnelPortExt(name, ovsconfig.VXLANTunnel, ofPortRequest, testCase.initialCsum, "", "", "", "", nil, nil)
 			require.Nil(t, err, "Error when creating tunnel port")
 			options, err := data.br.GetInterfaceOptions(name)
@@ -706,7 +706,7 @@ func TestTunnelOptionTunnelPort(t *testing.T) {
 			data.setup(t)
 			defer data.teardown(t)
 
-			name := "vxlan-" + uuid.Must(uuid.NewV4()).String()[:8]
+			name := "vxlan-" + uuid.NewV4().String()[:8]
 			extraOptions := make(map[string]string)
 			if testCase.initialTunnelPort != 0 {
 				extraOptions["dst_port"] = strconv.Itoa(int(testCase.initialTunnelPort))
@@ -771,7 +771,7 @@ func TestOVSInterfaceUpdate(t *testing.T) {
 	data.setup(t)
 	defer data.teardown(t)
 
-	name := "p1-update-" + uuid.Must(uuid.NewV4()).String()[:8]
+	name := "p1-update-" + uuid.NewV4().String()[:8]
 	externalIDs := map[string]string{"k1": "v1", "k2": "v2"}
 	portUUID, err := data.br.CreateInternalPort(name, 0, "", externalIDs)
 	require.NoError(t, err)

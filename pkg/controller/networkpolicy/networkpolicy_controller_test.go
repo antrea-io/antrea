@@ -23,6 +23,7 @@ import (
 	"sync"
 	"testing"
 	"time"
+	"uuid"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -4439,6 +4440,44 @@ func TestNodeToGroupMember(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			gotMember := nodeToGroupMember(tt.node, tt.includeIP)
 			assert.Equal(t, tt.expectedGroupMember, gotMember)
+		})
+	}
+}
+
+func TestNewUUIDv5(t *testing.T) {
+	// Test vector from Appendix A.4 of RFC 9562.
+	namespaceDNS := uuid.MustParse("6ba7b810-9dad-11d1-80b4-00c04fd430c8")
+	assert.Equal(t, "2ed6657d-e927-568b-95e1-2665a8aea6a2", newUUIDv5(namespaceDNS, "www.example.com").String())
+}
+
+// TestGetNormalizedUID ensures that the UIDs generated for internal objects do
+// not change. The expected UIDs were generated with both google/uuid (NewSHA1)
+// and gofrs/uuid (NewV5), which were used by previous Antrea versions.
+func TestGetNormalizedUID(t *testing.T) {
+	tests := []struct {
+		name        string
+		expectedUID string
+	}{
+		{
+			name:        "",
+			expectedUID: "31af5b53-f968-5320-bebf-b3f831eca2ab",
+		},
+		{
+			name:        "namespace=default And podSelector=app=nginx",
+			expectedUID: "79422d97-26a2-5ff8-aac0-721a7b767d20",
+		},
+		{
+			name:        "namespaceSelector=env=prod And podSelector=app in (db,web),!tier",
+			expectedUID: "44adb17f-ef02-53f5-8cbf-b810e167778f",
+		},
+		{
+			name:        "default/nginx",
+			expectedUID: "b83145ac-cf7a-573e-be6d-5260b8b0894b",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.expectedUID, getNormalizedUID(tt.name))
 		})
 	}
 }
