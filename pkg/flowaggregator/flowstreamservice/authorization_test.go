@@ -831,6 +831,10 @@ func TestAuthorized_IdentityChecks(t *testing.T) {
 		sa := newStream(t, fake)
 
 		assert.Equal(t, flowpb.EndpointDisclosure_ENDPOINT_DISCLOSURE_IDENTITY, destinationTier(t, sa))
+		assert.Equal(t, flowpb.EndpointDisclosure_ENDPOINT_DISCLOSURE_IDENTITY, destinationTier(t, sa))
+		// The failed cluster-wide flows check is not retried for the second record, and ns-b is
+		// only checked for flows: its flows/identity is already settled by the floor.
+		assert.Equal(t, []string{flowsGrant(watchVerb, ""), identityGrant(""), flowsGrant(watchVerb, "ns-b")}, fake.calls)
 	})
 
 	t.Run("revoking cluster-wide flows/identity mid-stream takes effect on the next re-check", func(t *testing.T) {
@@ -856,6 +860,82 @@ func TestAuthorized_IdentityChecks(t *testing.T) {
 			assert.Equal(t, flowpb.EndpointDisclosure_ENDPOINT_DISCLOSURE_FULL, destinationTier(t, sa))
 			time.Sleep(revalidationInterval + time.Nanosecond)
 			assert.Equal(t, flowpb.EndpointDisclosure_ENDPOINT_DISCLOSURE_FLOW, destinationTier(t, sa))
+		})
+	})
+
+	// peerTier reports how the peer of a single ns-a -> namespace record was disclosed.
+	peerTier := func(t *testing.T, sa *StreamAuthorization, namespace string) flowpb.EndpointDisclosure {
+		t.Helper()
+		got := collectAuthorized(context.Background(), sa, []*flowpb.Flow{podFlow("ns-a", namespace)})
+		require.Len(t, got, 1)
+		return got[0].GetK8S().GetDestinationDisclosure()
+	}
+
+	// ns-c is first seen half an interval after ns-b, so its cached tier outlives the floor it was
+	// resolved against. A floor change must still reach it once the floor is re-checked.
+	t.Run("revoking the cluster-wide floor reaches every cached peer on the next re-check", func(t *testing.T) {
+		synctest.Test(t, func(t *testing.T) {
+			fake := newFakeAuthorizer(flowsGrant(watchVerb, "ns-a"), identityGrant(""))
+			sa := newStream(t, fake)
+
+			assert.Equal(t, flowpb.EndpointDisclosure_ENDPOINT_DISCLOSURE_IDENTITY, peerTier(t, sa, "ns-b"))
+			time.Sleep(revalidationInterval / 2)
+			assert.Equal(t, flowpb.EndpointDisclosure_ENDPOINT_DISCLOSURE_IDENTITY, peerTier(t, sa, "ns-c"))
+			fake.revoke(identityGrant(""))
+			time.Sleep(revalidationInterval/2 + time.Nanosecond)
+			assert.Equal(t, flowpb.EndpointDisclosure_ENDPOINT_DISCLOSURE_FLOW, peerTier(t, sa, "ns-b"))
+			assert.Equal(t, flowpb.EndpointDisclosure_ENDPOINT_DISCLOSURE_FLOW, peerTier(t, sa, "ns-c"))
+		})
+	})
+
+	t.Run("granting a cluster-wide floor reaches every cached peer on the next re-check", func(t *testing.T) {
+		synctest.Test(t, func(t *testing.T) {
+			fake := newFakeAuthorizer(flowsGrant(watchVerb, "ns-a"))
+			sa := newStream(t, fake)
+
+			assert.Equal(t, flowpb.EndpointDisclosure_ENDPOINT_DISCLOSURE_FLOW, peerTier(t, sa, "ns-b"))
+			time.Sleep(revalidationInterval / 2)
+			assert.Equal(t, flowpb.EndpointDisclosure_ENDPOINT_DISCLOSURE_FLOW, peerTier(t, sa, "ns-c"))
+			fake.grant(identityGrant(""))
+			time.Sleep(revalidationInterval/2 + time.Nanosecond)
+			assert.Equal(t, flowpb.EndpointDisclosure_ENDPOINT_DISCLOSURE_IDENTITY, peerTier(t, sa, "ns-b"))
+			assert.Equal(t, flowpb.EndpointDisclosure_ENDPOINT_DISCLOSURE_IDENTITY, peerTier(t, sa, "ns-c"))
+		})
+	})
+
+	t.Run("a cluster-wide check that errors caches the floor as Flow and still checks each namespace", func(t *testing.T) {
+		fake := newFakeAuthorizer(flowsGrant(watchVerb, "ns-a"), identityGrant(""), identityGrant("ns-b"), identityGrant("ns-c"))
+		fake.breakCheck(identityGrant(""))
+		sa := newStream(t, fake)
+
+		assert.Equal(t, flowpb.EndpointDisclosure_ENDPOINT_DISCLOSURE_IDENTITY, peerTier(t, sa, "ns-b"))
+		// The failed floor is cached like a denial: ns-c is checked on its own, without the
+		// cluster-wide checks being repeated.
+		assert.Equal(t, flowpb.EndpointDisclosure_ENDPOINT_DISCLOSURE_IDENTITY, peerTier(t, sa, "ns-c"))
+		assert.Equal(t, []string{
+			flowsGrant(watchVerb, ""), identityGrant(""),
+			flowsGrant(watchVerb, "ns-b"), identityGrant("ns-b"),
+			flowsGrant(watchVerb, "ns-c"), identityGrant("ns-c"),
+		}, fake.calls)
+	})
+
+	t.Run("a cluster-wide check that outlasts the budget is not cached as the floor", func(t *testing.T) {
+		synctest.Test(t, func(t *testing.T) {
+			fake := newFakeAuthorizer(flowsGrant(watchVerb, "ns-a"), identityGrant("ns-b"))
+			fake.hang(identityGrant(""))
+			sa := newStream(t, fake)
+
+			// Cluster-wide flows is denied and cluster-wide flows/identity hangs until the batch's
+			// budget runs out, which leaves ns-b's own flows check failing on the expired context.
+			// Nothing about the floor or ns-b is cached, so the next batch resolves both afresh
+			// instead of being held at Flow for revalidationInterval.
+			wantCalls := []string{flowsGrant(watchVerb, ""), identityGrant(""), flowsGrant(watchVerb, "ns-b")}
+			assert.Equal(t, flowpb.EndpointDisclosure_ENDPOINT_DISCLOSURE_FLOW, peerTier(t, sa, "ns-b"))
+			assert.Equal(t, wantCalls, fake.calls)
+
+			fake.calls = nil
+			assert.Equal(t, flowpb.EndpointDisclosure_ENDPOINT_DISCLOSURE_FLOW, peerTier(t, sa, "ns-b"))
+			assert.Equal(t, wantCalls, fake.calls)
 		})
 	})
 
@@ -974,5 +1054,28 @@ func TestAuthorized_DoesNotCacheAnExpiredBudgetAsADenial(t *testing.T) {
 		require.Len(t, got, 1)
 		assert.Equal(t, []string{flowsGrant(watchVerb, "peer-2"), identityGrant("peer-2")}, fake.calls)
 		assert.Equal(t, flowpb.EndpointDisclosure_ENDPOINT_DISCLOSURE_IDENTITY, got[0].GetK8S().GetDestinationDisclosure())
+	})
+}
+
+func TestAuthorized_ExpiredBudgetKeepsTheClusterWideFloor(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		fake := newFakeAuthorizer(flowsGrant(watchVerb, "ns-a"), identityGrant(""))
+		fake.hang(flowsGrant(watchVerb, "peer-1"))
+		a := newAuthorizer(fake)
+		sa, err := a.NewStreamAuthorization(context.Background(), testUserInfo, &flowpb.GetFlowsRequest{
+			Namespaces: []string{"ns-a"},
+			Follow:     true,
+		})
+		require.NoError(t, err)
+
+		// The floor is resolved and cached by peer-0, then peer-1 hangs until the batch's budget
+		// runs out, so peer-2's flows check fails on the expired context. It must not fall below
+		// the Identity tier the client holds cluster-wide.
+		flows := []*flowpb.Flow{podFlow("ns-a", "peer-0"), podFlow("ns-a", "peer-1"), podFlow("ns-a", "peer-2")}
+		got := collectAuthorized(context.Background(), sa, flows)
+		require.Len(t, got, 3)
+		for _, f := range got {
+			assert.Equal(t, flowpb.EndpointDisclosure_ENDPOINT_DISCLOSURE_IDENTITY, f.GetK8S().GetDestinationDisclosure())
+		}
 	})
 }
