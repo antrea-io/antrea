@@ -396,6 +396,140 @@ func TestRedactFlow_IntraNodeSurvivesRedaction(t *testing.T) {
 	}
 }
 
+// TestRedactFlow_DeniedPeerNamespace covers when the Namespace of an unidentified endpoint survives
+// a denied connection: only for an inbound connection dropped by a policy of the destination's own
+// Namespace, where the client does not choose the peer. In fullFlow, the destination is in ns-b; the
+// ingress policy is set to an ANP of ns-b, as a K8s NetworkPolicy deny would carry no Namespace.
+func TestRedactFlow_DeniedPeerNamespace(t *testing.T) {
+	drop := flowpb.NetworkPolicyRuleAction_NETWORK_POLICY_RULE_ACTION_DROP
+	reject := flowpb.NetworkPolicyRuleAction_NETWORK_POLICY_RULE_ACTION_REJECT
+	anp := flowpb.NetworkPolicyType_NETWORK_POLICY_TYPE_ANP
+	tests := []struct {
+		name        string
+		source      disclosureTier
+		destination disclosureTier
+		modify      func(k *flowpb.Kubernetes)
+		wantSource  string
+		wantDest    string
+	}{
+		{
+			name:        "inbound denied by the implicit drop of a K8s NetworkPolicy",
+			source:      tierFlow,
+			destination: tierFull,
+			modify: func(k *flowpb.Kubernetes) {
+				k.IngressNetworkPolicyType = flowpb.NetworkPolicyType_NETWORK_POLICY_TYPE_K8S
+				k.IngressNetworkPolicyNamespace = ""
+				k.IngressNetworkPolicyName = ""
+				k.IngressNetworkPolicyRuleAction = drop
+			},
+			wantSource: "ns-a",
+			wantDest:   "ns-b",
+		},
+		{
+			name:        "inbound denied by a policy of the destination's Namespace",
+			source:      tierFlow,
+			destination: tierFull,
+			modify: func(k *flowpb.Kubernetes) {
+				k.IngressNetworkPolicyType = anp
+				k.IngressNetworkPolicyRuleAction = drop
+			},
+			wantSource: "ns-a",
+			wantDest:   "ns-b",
+		},
+		{
+			name:        "inbound rejected by a policy of the destination's Namespace",
+			source:      tierFlow,
+			destination: tierFull,
+			modify: func(k *flowpb.Kubernetes) {
+				k.IngressNetworkPolicyType = anp
+				k.IngressNetworkPolicyRuleAction = reject
+			},
+			wantSource: "ns-a",
+			wantDest:   "ns-b",
+		},
+		{
+			name:        "inbound denied by a cluster-scoped policy",
+			source:      tierFlow,
+			destination: tierFull,
+			modify: func(k *flowpb.Kubernetes) {
+				k.IngressNetworkPolicyType = flowpb.NetworkPolicyType_NETWORK_POLICY_TYPE_ACNP
+				k.IngressNetworkPolicyNamespace = ""
+				k.IngressNetworkPolicyRuleAction = drop
+			},
+			wantDest: "ns-b",
+		},
+		{
+			name:        "inbound denied by a policy of another Namespace",
+			source:      tierFlow,
+			destination: tierFull,
+			modify: func(k *flowpb.Kubernetes) {
+				k.IngressNetworkPolicyType = anp
+				k.IngressNetworkPolicyNamespace = "ns-a"
+				k.IngressNetworkPolicyRuleAction = drop
+			},
+			wantDest: "ns-b",
+		},
+		{
+			name:        "an egress denial of the peer's side is not an inbound denial",
+			source:      tierFlow,
+			destination: tierFull,
+			modify: func(k *flowpb.Kubernetes) {
+				k.IngressNetworkPolicyType = anp
+				k.IngressNetworkPolicyRuleAction = drop
+				k.EgressNetworkPolicyRuleAction = drop
+			},
+			wantDest: "ns-b",
+		},
+		{
+			name:        "outbound denied by a policy of the source's own Namespace",
+			source:      tierFull,
+			destination: tierFlow,
+			modify: func(k *flowpb.Kubernetes) {
+				k.EgressNetworkPolicyNamespace = "ns-a"
+				k.EgressNetworkPolicyRuleAction = drop
+			},
+			wantSource: "ns-a",
+		},
+		{
+			name:        "the destination is only identified, not the client's to control",
+			source:      tierFlow,
+			destination: tierIdentity,
+			modify: func(k *flowpb.Kubernetes) {
+				k.IngressNetworkPolicyType = flowpb.NetworkPolicyType_NETWORK_POLICY_TYPE_K8S
+				k.IngressNetworkPolicyRuleAction = drop
+			},
+			wantDest: "ns-b",
+		},
+		{
+			name:        "the destination has no Namespace",
+			source:      tierFlow,
+			destination: tierFull,
+			modify: func(k *flowpb.Kubernetes) {
+				k.DestinationPodNamespace = ""
+				k.IngressNetworkPolicyType = flowpb.NetworkPolicyType_NETWORK_POLICY_TYPE_K8S
+				k.IngressNetworkPolicyNamespace = ""
+				k.IngressNetworkPolicyRuleAction = drop
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			f := fullFlow()
+			tt.modify(f.K8S)
+
+			redacted := redactFlow(f, tt.source, tt.destination)
+
+			assert.Equal(t, tt.wantSource, redacted.GetK8S().GetSourcePodNamespace())
+			assert.Equal(t, tt.wantDest, redacted.GetK8S().GetDestinationPodNamespace())
+			if tt.source == tierFlow {
+				// Only the Namespace is disclosed: the source's identity stays withheld.
+				assert.Empty(t, redacted.GetK8S().GetSourcePodName())
+				assert.Empty(t, redacted.GetK8S().GetSourcePodLabels())
+			}
+		})
+	}
+}
+
 func TestConnectionAllowed(t *testing.T) {
 	tests := []struct {
 		name    string

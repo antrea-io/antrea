@@ -794,11 +794,11 @@ independently, according to the client's permissions in *that endpoint's*
 Namespace. A single record could carry one endpoint in full and the other
 redacted.
 
-| Tier     | Fields                                                                                                                                                                                                                                                                            | Requires                                                                                                              |
-|----------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|-----------------------------------------------------------------------------------------------------------------------|
-| Flow     | addresses, ports, protocol, statistics and throughput, timestamps, flow type, direction, end reason, TCP state, the **type and action** of the network policies evaluated on the endpoint's side, and the endpoint's Pod Namespace when neither ingress nor egress policy action is `DROP` or `REJECT` | receiving the record at all |
-| Identity | endpoint's Pod Namespace regardless of policy action, Pod name/UID/labels, the destination Service's `destination_service_port`, `destination_service_port_name`, `destination_service_uid` and `destination_service_ip` (plus the deprecated `destination_cluster_ip`), and the network policy namespace/name/UID/rule name | `get flows/identity` in the endpoint's Namespace |
-| Full     | Node name/UID, Egress name/IP/Node. Node co-tenancy with the client's own workloads can survive redaction at Flow/Identity tiers, as the flow type paragraph below explains                                                                                                       | the endpoint's Namespace is one the stream was authorized for, or the client holds the stream's verb on `flows` there |
+| Tier     | Fields                                                                                                                                                                                                                                                                                                                                                                                      | Requires                                                                                                              |
+|----------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|-----------------------------------------------------------------------------------------------------------------------|
+| Flow     | addresses, ports, protocol, statistics and throughput, timestamps, flow type, direction, end reason, TCP state, the **type and action** of the network policies evaluated on the endpoint's side, and the endpoint's Pod Namespace when policy action is not `DROP` or `REJECT`, unless an ingress policy of the destination's own Namespace dropped or rejected the connection (see below) | receiving the record at all |
+| Identity | endpoint's Pod Namespace regardless of policy action, Pod name/UID/labels, the destination Service's `destination_service_port`, `destination_service_port_name`, `destination_service_uid` and `destination_service_ip` (plus the deprecated `destination_cluster_ip`), and the network policy namespace/name/UID/rule name                                                                | `get flows/identity` in the endpoint's Namespace |
+| Full     | Node name/UID, Egress name/IP/Node. Node co-tenancy with the client's own workloads can survive redaction at Flow/Identity tiers, as the flow type paragraph below explains                                                                                                                                                                                                                 | the endpoint's Namespace is one the stream was authorized for, or the client holds the stream's verb on `flows` there |
 
 A destination Service's IP sits at the Identity tier rather than the Flow tier,
 because it maps back to the Service it belongs to, so granting `flows/identity`
@@ -850,6 +850,15 @@ without the Flow Aggregator having to modify anything.
 An unidentified endpoint keeps its Namespace only if the connection was allowed:
 withholding it for denied connections is what keeps a client from scanning the
 Pod CIDR and mapping IPs to Namespaces by reading back its own denied flows.
+
+The one exception: source Namespace is disclosed on an inbound connection that was
+denied by a policy in the destination's own Namespace (a K8s NetworkPolicy isolation
+drop, or a Namespaced Antrea policy), with the destination disclosed in full (i.e.
+visibility in the destination's Namespace). The client does not choose the peer in
+that case, since the peer initiated the connection, so no scan can be built from it.
+There is no outbound counterpart, since the client can choose the address, and a deny
+policy of its own disclosing destination Namespace would lead to the scan problem above.
+
 Anything other than an explicit drop or reject counts as allowed, including "no
 policy applied at all", so the mitigation only bites where the traffic really was
 denied by a policy: in a cluster without default-deny, scan probes not explicitly
