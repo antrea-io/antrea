@@ -784,7 +784,8 @@ func TestAuthorized_IdentityChecks(t *testing.T) {
 		sa := newStream(t, fake)
 
 		assert.Equal(t, flowpb.EndpointDisclosure_ENDPOINT_DISCLOSURE_FULL, destinationTier(t, sa))
-		// The failure is cached like a denial rather than retried on every record.
+		// The error is not retried for every record: the floor is kept until its next re-check, and
+		// ns-b is resolved on its own and cached.
 		assert.Equal(t, flowpb.EndpointDisclosure_ENDPOINT_DISCLOSURE_FULL, destinationTier(t, sa))
 		assert.Equal(t, []string{flowsGrant(watchVerb, ""), identityGrant(""), flowsGrant(watchVerb, "ns-b")}, fake.calls)
 	})
@@ -903,20 +904,67 @@ func TestAuthorized_IdentityChecks(t *testing.T) {
 		})
 	})
 
-	t.Run("a cluster-wide check that errors caches the floor as Flow and still checks each namespace", func(t *testing.T) {
+	t.Run("a cluster-wide check that errors is not retried for every record and still checks each namespace", func(t *testing.T) {
 		fake := newFakeAuthorizer(flowsGrant(watchVerb, "ns-a"), identityGrant(""), identityGrant("ns-b"), identityGrant("ns-c"))
 		fake.breakCheck(identityGrant(""))
 		sa := newStream(t, fake)
 
+		// The stream has never resolved a floor, so it starts at Flow and each namespace is checked
+		// on its own.
 		assert.Equal(t, flowpb.EndpointDisclosure_ENDPOINT_DISCLOSURE_IDENTITY, peerTier(t, sa, "ns-b"))
-		// The failed floor is cached like a denial: ns-c is checked on its own, without the
-		// cluster-wide checks being repeated.
+		// The floor is kept until its next re-check, rather than retried for ns-c.
 		assert.Equal(t, flowpb.EndpointDisclosure_ENDPOINT_DISCLOSURE_IDENTITY, peerTier(t, sa, "ns-c"))
 		assert.Equal(t, []string{
 			flowsGrant(watchVerb, ""), identityGrant(""),
 			flowsGrant(watchVerb, "ns-b"), identityGrant("ns-b"),
 			flowsGrant(watchVerb, "ns-c"), identityGrant("ns-c"),
 		}, fake.calls)
+	})
+
+	// Cluster-wide flows is denied, which says nothing about flows/identity, so the Identity floor
+	// is kept when the flows/identity check itself errors.
+	t.Run("a floor re-check that errors keeps the last resolved Identity floor", func(t *testing.T) {
+		synctest.Test(t, func(t *testing.T) {
+			fake := newFakeAuthorizer(flowsGrant(watchVerb, "ns-a"), identityGrant(""))
+			sa := newStream(t, fake)
+
+			assert.Equal(t, flowpb.EndpointDisclosure_ENDPOINT_DISCLOSURE_IDENTITY, peerTier(t, sa, "ns-b"))
+			time.Sleep(revalidationInterval)
+			fake.breakCheck(identityGrant(""))
+			fake.calls = nil
+			assert.Equal(t, flowpb.EndpointDisclosure_ENDPOINT_DISCLOSURE_IDENTITY, peerTier(t, sa, "ns-c"))
+			assert.Equal(t, flowpb.EndpointDisclosure_ENDPOINT_DISCLOSURE_IDENTITY, peerTier(t, sa, "ns-d"))
+			// The floor is re-checked once, and then kept until its next re-check.
+			assert.Equal(t, []string{
+				flowsGrant(watchVerb, ""), identityGrant(""),
+				flowsGrant(watchVerb, "ns-c"), flowsGrant(watchVerb, "ns-d"),
+			}, fake.calls)
+		})
+	})
+
+	t.Run("a floor re-check that errors keeps the last resolved Full floor", func(t *testing.T) {
+		synctest.Test(t, func(t *testing.T) {
+			fake := newFakeAuthorizer(flowsGrant(watchVerb, "ns-a"), flowsGrant(watchVerb, ""))
+			sa := newStream(t, fake)
+
+			assert.Equal(t, flowpb.EndpointDisclosure_ENDPOINT_DISCLOSURE_FULL, peerTier(t, sa, "ns-b"))
+			time.Sleep(revalidationInterval)
+			fake.breakCheck(flowsGrant(watchVerb, ""))
+			assert.Equal(t, flowpb.EndpointDisclosure_ENDPOINT_DISCLOSURE_FULL, peerTier(t, sa, "ns-c"))
+		})
+	})
+
+	t.Run("a floor re-check that errors does not keep a floor it ruled out", func(t *testing.T) {
+		synctest.Test(t, func(t *testing.T) {
+			fake := newFakeAuthorizer(flowsGrant(watchVerb, "ns-a"), flowsGrant(watchVerb, ""))
+			sa := newStream(t, fake)
+
+			assert.Equal(t, flowpb.EndpointDisclosure_ENDPOINT_DISCLOSURE_FULL, peerTier(t, sa, "ns-b"))
+			time.Sleep(revalidationInterval)
+			fake.revoke(flowsGrant(watchVerb, ""))
+			fake.breakCheck(identityGrant(""))
+			assert.Equal(t, flowpb.EndpointDisclosure_ENDPOINT_DISCLOSURE_FLOW, peerTier(t, sa, "ns-c"))
+		})
 	})
 
 	t.Run("a cluster-wide check that outlasts the budget is not cached as the floor", func(t *testing.T) {
@@ -936,6 +984,51 @@ func TestAuthorized_IdentityChecks(t *testing.T) {
 			fake.calls = nil
 			assert.Equal(t, flowpb.EndpointDisclosure_ENDPOINT_DISCLOSURE_FLOW, peerTier(t, sa, "ns-b"))
 			assert.Equal(t, wantCalls, fake.calls)
+		})
+	})
+
+	t.Run("a floor re-check that outlasts the budget keeps the last resolved Identity floor", func(t *testing.T) {
+		synctest.Test(t, func(t *testing.T) {
+			fake := newFakeAuthorizer(flowsGrant(watchVerb, "ns-a"), identityGrant(""))
+			sa := newStream(t, fake)
+
+			assert.Equal(t, flowpb.EndpointDisclosure_ENDPOINT_DISCLOSURE_IDENTITY, peerTier(t, sa, "ns-b"))
+			time.Sleep(revalidationInterval)
+			fake.hang(flowsGrant(watchVerb, ""))
+			// ns-c was never seen, so there is no cached tier for it to keep: it gets the floor.
+			assert.Equal(t, flowpb.EndpointDisclosure_ENDPOINT_DISCLOSURE_IDENTITY, peerTier(t, sa, "ns-c"))
+		})
+	})
+
+	t.Run("a floor re-check that outlasts the budget keeps the last resolved Full floor", func(t *testing.T) {
+		synctest.Test(t, func(t *testing.T) {
+			fake := newFakeAuthorizer(flowsGrant(watchVerb, "ns-a"), flowsGrant(watchVerb, ""))
+			sa := newStream(t, fake)
+
+			assert.Equal(t, flowpb.EndpointDisclosure_ENDPOINT_DISCLOSURE_FULL, peerTier(t, sa, "ns-b"))
+			time.Sleep(revalidationInterval)
+			fake.hang(flowsGrant(watchVerb, ""))
+			assert.Equal(t, flowpb.EndpointDisclosure_ENDPOINT_DISCLOSURE_FULL, peerTier(t, sa, "ns-c"))
+		})
+	})
+
+	// Cluster-wide flows is denied in this pass, so Full is no longer the last resolved floor even
+	// though the flows/identity check that follows cannot complete. Without the floor being updated,
+	// the lookup for ns-c would time out on the flows check itself and fall back to Full.
+	t.Run("a floor that lost Full before its re-check outlasted the budget is not kept as Full", func(t *testing.T) {
+		synctest.Test(t, func(t *testing.T) {
+			fake := newFakeAuthorizer(flowsGrant(watchVerb, "ns-a"), flowsGrant(watchVerb, ""))
+			sa := newStream(t, fake)
+
+			assert.Equal(t, flowpb.EndpointDisclosure_ENDPOINT_DISCLOSURE_FULL, peerTier(t, sa, "ns-b"))
+			fake.revoke(flowsGrant(watchVerb, ""))
+			fake.hang(identityGrant(""))
+			time.Sleep(revalidationInterval)
+			got := collectAuthorized(context.Background(), sa, []*flowpb.Flow{podFlow("ns-a", "ns-b"), podFlow("ns-a", "ns-c")})
+			require.Len(t, got, 2)
+			for _, f := range got {
+				assert.Equal(t, flowpb.EndpointDisclosure_ENDPOINT_DISCLOSURE_FLOW, f.GetK8S().GetDestinationDisclosure())
+			}
 		})
 	})
 

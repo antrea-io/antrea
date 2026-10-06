@@ -190,8 +190,12 @@ type StreamAuthorization struct {
 	// to what it holds cluster-wide: tierFull for the stream's verb on "flows", tierIdentity for get
 	// on "flows/identity", and tierFlow for neither. A SAR is only made for a peer Namespace if it
 	// could improve on this floor. It is resolved once a peer Namespace is first seen, and again
-	// once peerTierFloorExpiry has passed. Every entry in peerNamespaceTiers was resolved against
-	// the current floor, so that cache is reset whenever the floor changes.
+	// once peerTierFloorExpiry has passed. If a re-check cannot complete, the last resolved floor is
+	// kept unless a check in the same pass ruled it out; a stream that has never resolved a floor
+	// starts at tierFlow. When the batch's authorizationCheckTimeout ran out, peerTierFloorExpiry is
+	// left as-is so that the next lookup can try again; when the API server returned an error, the
+	// next re-check waits for revalidationInterval as usual. Every entry in peerNamespaceTiers was
+	// resolved against the current floor, so that cache is reset whenever the floor changes.
 	peerTierFloor       disclosureTier
 	peerTierFloorExpiry time.Time
 }
@@ -361,8 +365,8 @@ func (sa *StreamAuthorization) Revalidate(ctx context.Context) error {
 // never-seen peer Namespaces would stall for multiples of that timeout while the API server is slow
 // or unreachable. Passing that one context down to every resolveTierForPeer call caps the batch as a
 // whole: a Namespace looked up once the budget is spent, and not already cached by the delegating
-// authorizer, fails immediately rather than retrying, and gets only its cluster-wide floor tier for
-// this batch, without that being cached as a decision.
+// authorizer, fails immediately rather than retrying, and gets only the last resolved cluster-wide
+// floor tier for this batch, without that being cached as a decision.
 func (sa *StreamAuthorization) Authorized(ctx context.Context, flows []*flowpb.Flow) iter.Seq2[int, *flowpb.Flow] {
 	return func(yield func(int, *flowpb.Flow) bool) {
 		if sa.clusterWide {
@@ -447,15 +451,23 @@ func (sa *StreamAuthorization) tierFor(ctx context.Context, namespace string, in
 // and cached for revalidationInterval: a Namespace is then only checked for what could improve on that
 // baseline disclosure tier.
 //
-// It fails closed: a check that fails counts as denied. Whether that result is cached depends on why
-// the check failed:
+// A per-Namespace check fails closed: one that fails counts as denied. Whether that result is cached
+// depends on why the check failed:
 //   - The API server returned an error. The denial is cached so that the check is not retried for
 //     every record while the API server is unavailable.
 //   - ctx is done, because earlier checks in the same batch used up its authorizationCheckTimeout
-//     budget, or because the client went away. The endpoint gets the cluster-wide floor tier for
-//     this batch only (tierFlow if the floor itself could not be resolved), and nothing is cached.
-//     No SubjectAccessReview was actually made for this Namespace, so caching a denial would keep
-//     the peer at that tier for a whole revalidationInterval.
+//     budget, or because the client went away. The endpoint gets the last resolved cluster-wide
+//     floor tier for this batch only (tierFlow if the stream has never resolved one), and nothing
+//     is cached. No SubjectAccessReview was actually made for this Namespace, so caching a denial
+//     would keep the peer at that tier for a whole revalidationInterval.
+//
+// The two kinds of check differ in what they fall back to when they cannot complete, whether on an
+// error or a timeout. A per-Namespace check fails closed to the floor, even if the peer resolved to a
+// fuller tier before its entry expired. The floor itself keeps the last resolved one instead (see
+// peerTierFloorClusterWide): it stands in for the per-Namespace checks that were skipped under it,
+// so when its re-check cannot complete every peer is affected at once and there is no per-Namespace
+// decision left to answer from, whereas a per-Namespace check that cannot complete affects only that
+// one peer.
 func (sa *StreamAuthorization) resolveTierForPeer(ctx context.Context, namespace string) disclosureTier {
 	floorTier, floorResolved := sa.peerTierFloorClusterWide(ctx)
 	if floorTier == tierFull {
@@ -511,37 +523,67 @@ func peerDisclosureChecks(streamVerb string) []peerDisclosureCheck {
 // like a peer's tier, so that a grant or revocation takes effect on a running stream. A changed floor
 // resets peerNamespaceTiers, whose entries would otherwise keep the old floor until they expire.
 //
-// It fails towards the per-Namespace checks rather than towards disclosure: a check that errors
-// counts as denied, and an error the API server itself gave is cached like any other denial. An
-// error from ctx being done returns tierFlow with resolved set to false, and nothing is cached, for
-// the same reasons as in resolveTierForPeer. The caller must then not cache a peer tier either,
-// since it would not have been resolved against the actual floor.
+// A check that cannot complete, whether because the API server returned an error or because ctx is
+// done, is not a denial: nothing was observed about what the client holds. The last resolved floor is
+// then kept, unless a check that did complete in the same pass ruled it out or observed a fuller
+// tier, so that an API server problem does not redact what the client is entitled to. This is the
+// same as Revalidate() keeping the previous decision when its check cannot complete. A stream that
+// has never resolved a floor gets tierFlow, which fails towards the per-Namespace checks rather than
+// towards disclosure. An API server error does not stop the remaining checks, and the result is
+// cached for revalidationInterval like any other, so the error is not retried for every record. Once
+// ctx is done, no remaining check can complete, so the result is returned with resolved set to false
+// and nothing is cached, letting the next lookup try again; the caller must not cache a peer tier
+// either, since it would not have been resolved against a floor re-checked in this pass.
 func (sa *StreamAuthorization) peerTierFloorClusterWide(ctx context.Context) (tier disclosureTier, resolved bool) {
 	if time.Now().Before(sa.peerTierFloorExpiry) {
 		return sa.peerTierFloor, true
 	}
 	tier = tierFlow
+	// failed is set when a check could not complete, and timedOut when that was because ctx is done,
+	// in which case no check left in this pass can complete either. previousFloorStands is cleared once
+	// the check for the last resolved floor's own tier is denied.
+	failed, timedOut, previousFloorStands := false, false, true
 	for _, check := range peerDisclosureChecks(sa.verb) {
 		allowed, err := sa.authorizer.allowed(ctx, sa.user, check.verb, check.subresource, "")
 		if err != nil {
-			klog.V(2).ErrorS(err, "Failed to check cluster-wide endpoint disclosure, falling back to a lower tier",
+			klog.V(2).ErrorS(err, "Failed to check cluster-wide endpoint disclosure",
 				"user", sa.user.GetName(), "scope", clusterScope, "verb", check.verb, "subresource", check.subresource)
+			failed = true
 			if ctx.Err() != nil {
-				return tierFlow, false
+				timedOut = true
+				break
 			}
+			// A lesser tier could still be observed as allowed.
+			continue
 		}
 		if allowed {
 			tier = check.tier
 			break
 		}
+		if check.tier == sa.peerTierFloor {
+			previousFloorStands = false
+		}
+	}
+	if failed && previousFloorStands && sa.peerTierFloor < tier {
+		// A lower value is a fuller disclosure: nothing in this pass ruled out the last resolved
+		// floor, and nothing better than this tier was observed, so keep the last resolved floor.
+		tier = sa.peerTierFloor
 	}
 	if tier != sa.peerTierFloor {
-		// Start a fresh peerNamespaceTiers cache. No per-Namespace tier can outlive the floor
-		// it was resolved against, so revocations and grants take effect within one revalidation
-		// interval.
+		// Start a fresh peerNamespaceTiers cache: every entry in it was resolved against the
+		// previous floor.
 		sa.peerNamespaceTiers = cache.NewLRUExpireCache(maxPeerNamespacesPerStream)
 	}
+	// This updates peerTierFloor even when the pass was cut short, so that a tier ruled out in
+	// this pass is not kept by the next lookup, even for the next record of the same batch, if that
+	// lookup fails on the check that ruled it out.
 	sa.peerTierFloor = tier
+	if timedOut {
+		return tier, false
+	}
+	// An error from the API server is not retried before the next re-check, the way Revalidate()
+	// waits for its next interval: the delegating authorizer does not cache errors, so retrying it
+	// on every lookup would cost a SubjectAccessReview per record while the API server is failing.
 	sa.peerTierFloorExpiry = time.Now().Add(revalidationInterval)
 	return tier, true
 }
