@@ -333,9 +333,12 @@ const (
 	// The endpoint is disclosed at the Flow tier: unidentified, with only what
 	// the flow itself shows (addresses, ports, protocol, statistics, and the
 	// type and action of the policies evaluated on the endpoint's side), plus
-	// the endpoint's Namespace if the connection was allowed. Set when the
-	// client holds neither the stream's own verb on flows nor flows/identity in
-	// the endpoint's Namespace, and for an endpoint that has no Namespace at all.
+	// the endpoint's Namespace if the connection was allowed, or denied by an
+	// ingress policy in the other endpoint's own Namespace while that endpoint
+	// is disclosed in full.
+	// Set when the client holds neither the stream's own verb on flows nor
+	// flows/identity in the endpoint's Namespace, and for an endpoint that has
+	// no Namespace at all.
 	EndpointDisclosure_ENDPOINT_DISCLOSURE_FLOW EndpointDisclosure = 2
 )
 
