@@ -796,8 +796,8 @@ redacted.
 
 | Tier     | Fields                                                                                                                                                                                                                                                                            | Requires                                                                                                              |
 |----------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|-----------------------------------------------------------------------------------------------------------------------|
-| Flow     | addresses, ports, protocol, statistics and throughput, timestamps, flow type, direction, end reason, TCP state, and the **type and action** of the network policies evaluated on the endpoint's side                                                                              | receiving the record at all                                                                                           |
-| Identity | Namespace, Pod name/UID/labels, the destination Service's `destination_service_port`, `destination_service_port_name`, `destination_service_uid` and `destination_service_ip` (plus the deprecated `destination_cluster_ip`), and the network policy namespace/name/UID/rule name | `get flows/identity` in the endpoint's Namespace                                                                      |
+| Flow     | addresses, ports, protocol, statistics and throughput, timestamps, flow type, direction, end reason, TCP state, the **type and action** of the network policies evaluated on the endpoint's side, and the endpoint's Pod Namespace when neither ingress nor egress policy action is `DROP` or `REJECT` | receiving the record at all |
+| Identity | endpoint's Pod Namespace regardless of policy action, Pod name/UID/labels, the destination Service's `destination_service_port`, `destination_service_port_name`, `destination_service_uid` and `destination_service_ip` (plus the deprecated `destination_cluster_ip`), and the network policy namespace/name/UID/rule name | `get flows/identity` in the endpoint's Namespace |
 | Full     | Node name/UID, Egress name/IP/Node. Node co-tenancy with the client's own workloads can survive redaction at Flow/Identity tiers, as the flow type paragraph below explains                                                                                                       | the endpoint's Namespace is one the stream was authorized for, or the client holds the stream's verb on `flows` there |
 
 A destination Service's IP sits at the Identity tier rather than the Flow tier,
@@ -852,10 +852,11 @@ withholding it for denied connections is what keeps a client from scanning the
 Pod CIDR and mapping IPs to Namespaces by reading back its own denied flows.
 Anything other than an explicit drop or reject counts as allowed, including "no
 policy applied at all", so the mitigation only bites where the traffic really was
-denied by a policy: in a cluster without default-deny every scan probe reads as
-allowed and the peer Namespace is disclosed anyway. That is an accepted limit
-rather than an oversight: such a cluster is not segmented in the first place, and
-its Namespace names were trivially discoverable by other means.
+denied by a policy: in a cluster without default-deny, scan probes not explicitly
+dropped or rejected read as allowed and disclose the peer Namespace. That is an
+accepted limit rather than an oversight. Namespace names may also be discoverable
+through CoreDNS reverse lookups for Service IPs and their endpoint IPs, though
+this does not cover every Pod.
 
 A few fields belong to the record rather than to either endpoint. `ipfix`, which
 carries the IP of the Node that exported the record, is withheld unless *both*
