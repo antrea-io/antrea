@@ -45,7 +45,7 @@ runs:
     # Docker 29+ defaults to the containerd image store, which breaks kind load docker-image.
     - uses: ./.github/actions/setup-docker-classic
     - name: Download Antrea image from previous job
-      uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+      uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
       with:
         name: antrea-ubuntu-cov
     - name: Load Antrea image
@@ -59,7 +59,7 @@ runs:
         docker tag antrea/antrea-controller-ubuntu-coverage:latest antrea/antrea-controller-ubuntu:latest
     - name: Download Flow Aggregator image from previous job
       if: ${{ inputs.load-flow-aggregator == 'true' }}
-      uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+      uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
       with:
         name: flow-aggregator-cov
     - name: Load Flow Aggregator image
