@@ -967,6 +967,33 @@ func TestAuthorized_IdentityChecks(t *testing.T) {
 		})
 	})
 
+	// flows/identity being allowed says nothing about flows, so the Full floor wins over the lesser
+	// tier observed in this pass.
+	t.Run("a floor re-check whose flows check errors keeps a Full floor over an allowed flows/identity", func(t *testing.T) {
+		synctest.Test(t, func(t *testing.T) {
+			fake := newFakeAuthorizer(flowsGrant(watchVerb, "ns-a"), flowsGrant(watchVerb, ""), identityGrant(""))
+			sa := newStream(t, fake)
+
+			assert.Equal(t, flowpb.EndpointDisclosure_ENDPOINT_DISCLOSURE_FULL, peerTier(t, sa, "ns-b"))
+			time.Sleep(revalidationInterval)
+			fake.breakCheck(flowsGrant(watchVerb, ""))
+			assert.Equal(t, flowpb.EndpointDisclosure_ENDPOINT_DISCLOSURE_FULL, peerTier(t, sa, "ns-c"))
+		})
+	})
+
+	t.Run("a floor re-check whose flows check errors does not keep an Identity floor it ruled out", func(t *testing.T) {
+		synctest.Test(t, func(t *testing.T) {
+			fake := newFakeAuthorizer(flowsGrant(watchVerb, "ns-a"), identityGrant(""))
+			sa := newStream(t, fake)
+
+			assert.Equal(t, flowpb.EndpointDisclosure_ENDPOINT_DISCLOSURE_IDENTITY, peerTier(t, sa, "ns-b"))
+			time.Sleep(revalidationInterval)
+			fake.breakCheck(flowsGrant(watchVerb, ""))
+			fake.revoke(identityGrant(""))
+			assert.Equal(t, flowpb.EndpointDisclosure_ENDPOINT_DISCLOSURE_FLOW, peerTier(t, sa, "ns-c"))
+		})
+	})
+
 	t.Run("a cluster-wide check that outlasts the budget is not cached as the floor", func(t *testing.T) {
 		synctest.Test(t, func(t *testing.T) {
 			fake := newFakeAuthorizer(flowsGrant(watchVerb, "ns-a"), identityGrant("ns-b"))
@@ -996,6 +1023,20 @@ func TestAuthorized_IdentityChecks(t *testing.T) {
 			time.Sleep(revalidationInterval)
 			fake.hang(flowsGrant(watchVerb, ""))
 			// ns-c was never seen, so there is no cached tier for it to keep: it gets the floor.
+			assert.Equal(t, flowpb.EndpointDisclosure_ENDPOINT_DISCLOSURE_IDENTITY, peerTier(t, sa, "ns-c"))
+		})
+	})
+
+	// Unlike the case above, cluster-wide flows is denied in this pass, which does not rule out the
+	// Identity floor, and the check for the floor's own tier is the one that cannot complete.
+	t.Run("a floor re-check whose flows/identity check outlasts the budget keeps the last resolved Identity floor", func(t *testing.T) {
+		synctest.Test(t, func(t *testing.T) {
+			fake := newFakeAuthorizer(flowsGrant(watchVerb, "ns-a"), identityGrant(""))
+			sa := newStream(t, fake)
+
+			assert.Equal(t, flowpb.EndpointDisclosure_ENDPOINT_DISCLOSURE_IDENTITY, peerTier(t, sa, "ns-b"))
+			time.Sleep(revalidationInterval)
+			fake.hang(identityGrant(""))
 			assert.Equal(t, flowpb.EndpointDisclosure_ENDPOINT_DISCLOSURE_IDENTITY, peerTier(t, sa, "ns-c"))
 		})
 	})
