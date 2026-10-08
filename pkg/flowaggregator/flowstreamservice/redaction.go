@@ -43,8 +43,10 @@ const (
 	tierIdentity
 	// tierFlow discloses only what the flow itself shows: addresses, ports, protocol, statistics,
 	// timestamps, and the type and action of the policies evaluated on the endpoint's side. The
-	// endpoint's Namespace is disclosed too, but only if the connection was allowed, or denied by an
-	// ingress policy in the other endpoint's own Namespace while that endpoint is disclosed in full.
+	// endpoint's Namespace is disclosed too, but only if the connection was allowed. A source
+	// endpoint also keeps its Namespace when the connection was denied by an ingress policy of the
+	// destination's own Namespace, while the destination is disclosed in full. Only a source can
+	// qualify, since an ingress policy is always evaluated on the destination's side.
 	tierFlow
 )
 
@@ -117,10 +119,14 @@ func redactFlow(f *flowpb.Flow, source, destination disclosureTier) *flowpb.Flow
 			//
 			// The exception is an inbound connection denied by a policy in the destination's own
 			// Namespace: the peer initiated the connection and the client does not choose it, so
-			// no scan can be built from it. There is deliberately no egress counterpart: in that
-			// case, the client picks the address, and deny policies in its own Namespace would make
-			// the destination Namespace readable for any IP it cares to probe.
-			if !deniedByOwnNamespacePolicy(f.GetK8S(), destination) {
+			// no scan can be built from it. It is also limited to the destination Namespaces's own
+			// policies: it's owners could allow the same traffic by removing the policy, and would
+			// then see the source Namespace anyway, so there is no point in hiding it. A denial by a
+			// cluster-scoped policy or by a policy of the peer's Namespace is not theirs to undo.
+			// There is also deliberately no egress counterpart: in that case, the client picks the
+			// address, and deny policies in its own Namespace would make the destination Namespace
+			// readable for any IP it cares to probe.
+			if !deniedByOwnNamespacePolicy(f.GetK8S()) {
 				k8s.SourcePodNamespace = ""
 			}
 		}
@@ -177,19 +183,16 @@ func connectionAllowed(k8s *flowpb.Kubernetes) bool {
 }
 
 // deniedByOwnNamespacePolicy reports whether the record shows an inbound connection that was denied
-// by a policy living in the destination's own Namespace, with the destination disclosed in full. What
-// makes this safe is that the client does not choose the peer: the peer initiated the connection, so
-// denied flows cannot be used to probe addresses and map them to Namespaces.
+// by a policy living in the destination's own Namespace, with the destination disclosed in full.
 // A K8s NetworkPolicy only denies through its implicit isolation drop, for which the agent reports the
 // policy type but not its Namespace, and it only selects Pods of its own Namespace, so the type alone
 // qualifies. Otherwise, the policy's Namespace must be the destination's: a cluster-scoped policy has
 // none, and a policy of the peer's Namespace is not the destination's. A record that also shows an
 // egress denial is not an inbound denial: the connection never reached the destination, and the
 // policy that stopped it is the peer's side's.
-func deniedByOwnNamespacePolicy(k8s *flowpb.Kubernetes, destination disclosureTier) bool {
+func deniedByOwnNamespacePolicy(k8s *flowpb.Kubernetes) bool {
 	namespace := k8s.GetDestinationPodNamespace()
-	if destination != tierFull || namespace == "" ||
-		!denyAction(k8s.GetIngressNetworkPolicyRuleAction()) ||
+	if !denyAction(k8s.GetIngressNetworkPolicyRuleAction()) ||
 		denyAction(k8s.GetEgressNetworkPolicyRuleAction()) {
 		return false
 	}

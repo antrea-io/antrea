@@ -138,10 +138,13 @@ func TestRedactFlow_Kubernetes(t *testing.T) {
 		name        string
 		source      disclosureTier
 		destination disclosureTier
-		// denied makes the record show a dropped connection, which withholds the Namespace of an
-		// unidentified endpoint on top of everything else.
-		denied bool
-		want   []string
+		// denied makes the record show a connection dropped by an egress policy, and deniedInbound one
+		// dropped by an ingress policy. Either withholds the Namespace of an unidentified endpoint on top
+		// of everything else, except the source's for an inbound denial (see
+		// TestRedactFlow_DeniedPeerNamespace).
+		denied        bool
+		deniedInbound bool
+		want          []string
 	}{
 		{
 			name:        "identity on both endpoints",
@@ -193,11 +196,24 @@ func TestRedactFlow_Kubernetes(t *testing.T) {
 			want: concat(flowTier, destinationIdentity, destinationFull,
 				[]string{"source_pod_namespace", "source_disclosure"}),
 		},
+		{
+			name:          "an inbound flow from an unidentified source, connection denied",
+			source:        tierFlow,
+			destination:   tierFull,
+			deniedInbound: true,
+			// The peer initiated the connection, so its Namespace is disclosed: see
+			// TestRedactFlow_DeniedPeerNamespace.
+			want: concat(flowTier, destinationIdentity, destinationFull,
+				[]string{"source_pod_namespace", "source_disclosure"}),
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			f := fullFlow()
 			if tt.denied {
+				f.K8S.EgressNetworkPolicyRuleAction = flowpb.NetworkPolicyRuleAction_NETWORK_POLICY_RULE_ACTION_DROP
+			}
+			if tt.deniedInbound {
 				f.K8S.IngressNetworkPolicyRuleAction = flowpb.NetworkPolicyRuleAction_NETWORK_POLICY_RULE_ACTION_DROP
 			}
 
@@ -400,6 +416,8 @@ func TestRedactFlow_IntraNodeSurvivesRedaction(t *testing.T) {
 // a denied connection: only for an inbound connection dropped by a policy of the destination's own
 // Namespace, where the client does not choose the peer. In fullFlow, the destination is in ns-b; the
 // ingress policy is set to an ANP of ns-b, as a K8s NetworkPolicy deny would carry no Namespace.
+// A source at the Flow tier implies that the destination is in the stream's scope, hence disclosed in
+// full with a Namespace: authorizeFlow guarantees it, so redactFlow does not check it again.
 func TestRedactFlow_DeniedPeerNamespace(t *testing.T) {
 	drop := flowpb.NetworkPolicyRuleAction_NETWORK_POLICY_RULE_ACTION_DROP
 	reject := flowpb.NetworkPolicyRuleAction_NETWORK_POLICY_RULE_ACTION_REJECT
@@ -481,6 +499,18 @@ func TestRedactFlow_DeniedPeerNamespace(t *testing.T) {
 			wantDest: "ns-b",
 		},
 		{
+			name:        "an egress-only denial is not an inbound denial",
+			source:      tierFlow,
+			destination: tierFull,
+			modify: func(k *flowpb.Kubernetes) {
+				// What a connection denied by the peer's egress policy looks like: it never reached
+				// ingress enforcement.
+				k.EgressNetworkPolicyType = anp
+				k.EgressNetworkPolicyRuleAction = drop
+			},
+			wantDest: "ns-b",
+		},
+		{
 			name:        "outbound denied by a policy of the source's own Namespace",
 			source:      tierFull,
 			destination: tierFlow,
@@ -489,27 +519,6 @@ func TestRedactFlow_DeniedPeerNamespace(t *testing.T) {
 				k.EgressNetworkPolicyRuleAction = drop
 			},
 			wantSource: "ns-a",
-		},
-		{
-			name:        "the destination is only identified, not the client's to control",
-			source:      tierFlow,
-			destination: tierIdentity,
-			modify: func(k *flowpb.Kubernetes) {
-				k.IngressNetworkPolicyType = flowpb.NetworkPolicyType_NETWORK_POLICY_TYPE_K8S
-				k.IngressNetworkPolicyRuleAction = drop
-			},
-			wantDest: "ns-b",
-		},
-		{
-			name:        "the destination has no Namespace",
-			source:      tierFlow,
-			destination: tierFull,
-			modify: func(k *flowpb.Kubernetes) {
-				k.DestinationPodNamespace = ""
-				k.IngressNetworkPolicyType = flowpb.NetworkPolicyType_NETWORK_POLICY_TYPE_K8S
-				k.IngressNetworkPolicyNamespace = ""
-				k.IngressNetworkPolicyRuleAction = drop
-			},
 		},
 	}
 	for _, tt := range tests {
