@@ -356,6 +356,46 @@ func testCreateValidationInvalidTier(t *testing.T) {
 	failOnError(k8sUtils.DeleteTier(tr.Name), t)
 }
 
+func testCreateValidationTwoTierOfSamePrioritySimultaneous(t *testing.T) {
+	// This test verifies that the race condition fix prevents two Tiers with the same priority
+	// from being created simultaneously. Only one should succeed.
+	const testPriority = int32(25)
+	tier1Name := "concurrent-tier-1"
+	tier2Name := "concurrent-tier-2"
+
+	var err1, err2 error
+	var wg sync.WaitGroup
+	wg.Add(2)
+	go func() {
+		defer wg.Done()
+		_, err1 = k8sUtils.CreateTier(tier1Name, testPriority)
+	}()
+	go func() {
+		defer wg.Done()
+		_, err2 = k8sUtils.CreateTier(tier2Name, testPriority)
+	}()
+	wg.Wait()
+
+	// Exactly one should succeed and one should fail
+	if err1 == nil && err2 == nil {
+		require.NoError(t, k8sUtils.DeleteTier(tier1Name), "cleanup tier1 after unexpected double create")
+		require.NoError(t, k8sUtils.DeleteTier(tier2Name), "cleanup tier2 after unexpected double create")
+		t.Errorf("both Tiers were created with the same priority when applied simultaneously")
+		return
+	}
+	if err1 != nil && err2 != nil {
+		t.Errorf("both Tier creations failed: tier1: %v, tier2: %v", err1, err2)
+		return
+	}
+	// One succeeded, one failed - expected behavior. Clean up the successfully created tier.
+	t.Logf("Tier creation results: tier1 error: %v, tier2 error: %v", err1, err2)
+	if err1 == nil {
+		require.NoError(t, k8sUtils.DeleteTier(tier1Name))
+	} else {
+		require.NoError(t, k8sUtils.DeleteTier(tier2Name))
+	}
+}
+
 func testCreateValidationInvalidCG(t *testing.T) {
 	invalidErr := fmt.Errorf("ClusterGroup using podSelecter and serviceReference together created")
 	cgBuilder := &ClusterGroupSpecBuilder{}
@@ -5172,6 +5212,7 @@ func TestAntreaPolicy(t *testing.T) {
 		t.Run("Case=CreateInvalidACNP", func(t *testing.T) { testCreateValidationInvalidACNP(t) })
 		t.Run("Case=CreateInvalidANNP", func(t *testing.T) { testCreateValidationInvalidANNP(t) })
 		t.Run("Case=CreateInvalidTier", func(t *testing.T) { testCreateValidationInvalidTier(t) })
+		t.Run("Case=CreateTwoTierOfSamePrioritySimultaneous", func(t *testing.T) { testCreateValidationTwoTierOfSamePrioritySimultaneous(t) })
 		t.Run("Case=CreateInvalidClusterGroup", func(t *testing.T) { testCreateValidationInvalidCG(t) })
 		t.Run("Case=CreateInvalidGroup", func(t *testing.T) { testCreateValidationInvalidGroup(t) })
 
