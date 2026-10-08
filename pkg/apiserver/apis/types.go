@@ -36,8 +36,9 @@ type Endpoint struct {
 }
 
 type FeatureGateResponse struct {
-	Component string `json:"component,omitempty"`
-	Name      string `json:"name,omitempty"`
-	Status    string `json:"status,omitempty"`
-	Version   string `json:"version,omitempty"`
+	Component     string   `json:"component,omitempty"`
+	Name          string   `json:"name,omitempty"`
+	Status        string   `json:"status,omitempty"`
+	Version       string   `json:"version,omitempty"`
+	Prerequisites []string `json:"prerequisites,omitempty"`
 }
