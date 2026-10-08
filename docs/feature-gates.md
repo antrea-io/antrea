@@ -153,7 +153,7 @@ antrea-proxy.md#configuring-load-balancer-mode-for-external-traffic) for more in
 - Options `antreaProxy.enable` and `antreaProxy.proxyAll`  are set to true.
 - IPv4 only.
 - Linux Nodes only.
-- Encap mode only.
+- Traffic mode `encap`, `noEncap` or `hybrid`, not `networkPolicyOnly`.
 
 ### CleanupStaleUDPSvcConntrack
 
