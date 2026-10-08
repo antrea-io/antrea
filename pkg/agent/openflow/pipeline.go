@@ -2790,16 +2790,19 @@ func (f *featureMulticast) igmpPktInFlows() []binding.Flow {
 		sourceMarks = append(sourceMarks, FromTunnelRegMark)
 	}
 	for _, m := range sourceMarks {
+		// Set a custom category for the IGMP packets, and then send it to antrea-agent. Then antrea-agent can identify
+		// the local multicast group and its members in the meanwhile.
+		// Do not set dst IP address because IGMPv1 report message uses target multicast group as IP destination in
+		// the packet.
+		fb := MulticastRoutingTable.ofTable.BuildFlow(priorityHigh).
+			Cookie(f.cookieAllocator.Request(f.category).Raw()).
+			MatchProtocol(binding.ProtocolIGMP).
+			MatchRegMark(m)
+		if f.ovsMetersAreSupported {
+			fb = fb.Action().Meter(PacketInMeterIDIGMP)
+		}
 		flows = append(flows,
-			// Set a custom category for the IGMP packets, and then send it to antrea-agent. Then antrea-agent can identify
-			// the local multicast group and its members in the meanwhile.
-			// Do not set dst IP address because IGMPv1 report message uses target multicast group as IP destination in
-			// the packet.
-			MulticastRoutingTable.ofTable.BuildFlow(priorityHigh).
-				Cookie(f.cookieAllocator.Request(f.category).Raw()).
-				MatchProtocol(binding.ProtocolIGMP).
-				MatchRegMark(m).
-				Action().SendToController([]byte{uint8(PacketInCategoryIGMP)}, false).
+			fb.Action().SendToController([]byte{uint8(PacketInCategoryIGMP)}, false).
 				Done())
 	}
 	return flows
@@ -2889,9 +2892,10 @@ func NewClient(bridgeName string,
 	if c.ovsMetersAreSupported {
 		// Pre-initialize the map with all possible keys to avoid concurrent updates and potential race conditions later.
 		c.ovsMeterPacketDrops = map[int]*atomic.Int64{
-			PacketInMeterIDNP:  {},
-			PacketInMeterIDTF:  {},
-			PacketInMeterIDDNS: {},
+			PacketInMeterIDNP:   {},
+			PacketInMeterIDTF:   {},
+			PacketInMeterIDDNS:  {},
+			PacketInMeterIDIGMP: {},
 		}
 	}
 	return c
