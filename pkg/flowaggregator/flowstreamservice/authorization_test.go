@@ -576,6 +576,70 @@ func TestAuthorized_RecordVisibility(t *testing.T) {
 	}
 }
 
+// TestAuthorized_DeniedFlowSourceNamespace covers the exception to withholding a denied connection's
+// peer Namespace, which relies on a source at the Flow tier implying that the destination is in scope,
+// something only the authorization step guarantees.
+func TestAuthorized_DeniedFlowSourceNamespace(t *testing.T) {
+	drop := flowpb.NetworkPolicyRuleAction_NETWORK_POLICY_RULE_ACTION_DROP
+	ingressDrop := func() *flowpb.Flow {
+		f := podFlow("ns-a", "ns-b")
+		f.K8S.IngressNetworkPolicyType = flowpb.NetworkPolicyType_NETWORK_POLICY_TYPE_K8S
+		f.K8S.IngressNetworkPolicyRuleAction = drop
+		return f
+	}
+	egressDrop := func() *flowpb.Flow {
+		f := podFlow("ns-a", "ns-b")
+		f.K8S.EgressNetworkPolicyType = flowpb.NetworkPolicyType_NETWORK_POLICY_TYPE_ANP
+		f.K8S.EgressNetworkPolicyNamespace = "ns-a"
+		f.K8S.EgressNetworkPolicyRuleAction = drop
+		return f
+	}
+	tests := []struct {
+		name       string
+		namespace  string
+		flow       *flowpb.Flow
+		wantSource string
+		wantDest   string
+	}{
+		{
+			name:       "ingress denial, stream of the destination's Namespace",
+			namespace:  "ns-b",
+			flow:       ingressDrop(),
+			wantSource: "ns-a",
+			wantDest:   "ns-b",
+		},
+		{
+			// The client picked the address it failed to reach.
+			name:      "ingress denial, stream of the source's Namespace",
+			namespace: "ns-a",
+			flow:      ingressDrop(),
+			wantDest:  "",
+			// The source is in scope, so its own Namespace is disclosed.
+			wantSource: "ns-a",
+		},
+		{
+			name:      "egress-only denial, stream of the destination's Namespace",
+			namespace: "ns-b",
+			flow:      egressDrop(),
+			wantDest:  "ns-b",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			a := newAuthorizer(newFakeAuthorizer(flowsGrant(watchVerb, tt.namespace)))
+			req := &flowpb.GetFlowsRequest{Namespaces: []string{tt.namespace}, Follow: true}
+			sa, err := a.NewStreamAuthorization(context.Background(), testUserInfo, req)
+			require.NoError(t, err)
+
+			got := collectAuthorized(context.Background(), sa, []*flowpb.Flow{tt.flow})
+
+			require.Len(t, got, 1)
+			assert.Equal(t, tt.wantSource, got[0].GetK8S().GetSourcePodNamespace())
+			assert.Equal(t, tt.wantDest, got[0].GetK8S().GetDestinationPodNamespace())
+		})
+	}
+}
+
 // TestAuthorized_LeavesTheRecordUntouched guards the invariant that makes redaction safe at all: a
 // record belongs to the ring buffer and is broadcast to every other stream, so redacting it for one
 // client must not alter what another sees.
