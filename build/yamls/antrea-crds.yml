@@ -347,6 +347,9 @@ spec:
                       type: array
                       items:
                         type: object
+                        required:
+                        - key
+                        - operator
                         properties:
                           key:
                             type: string
@@ -466,6 +469,9 @@ spec:
                   properties:
                     matchExpressions:
                       items:
+                        required:
+                        - key
+                        - operator
                         properties:
                           key:
                             type: string
@@ -611,6 +617,9 @@ spec:
                       type: array
                       items:
                         type: object
+                        required:
+                        - key
+                        - operator
                         properties:
                           key:
                             type: string
@@ -638,6 +647,9 @@ spec:
                       type: array
                       items:
                         type: object
+                        required:
+                        - key
+                        - operator
                         properties:
                           key:
                             type: string
@@ -665,6 +677,9 @@ spec:
                       type: array
                       items:
                         type: object
+                        required:
+                        - key
+                        - operator
                         properties:
                           key:
                             type: string
@@ -692,6 +707,9 @@ spec:
                       type: array
                       items:
                         type: object
+                        required:
+                        - key
+                        - operator
                         properties:
                           key:
                             type: string
@@ -826,6 +844,9 @@ spec:
                             type: array
                             items:
                               type: object
+                              required:
+                              - key
+                              - operator
                               properties:
                                 key:
                                   type: string
@@ -853,6 +874,9 @@ spec:
                             type: array
                             items:
                               type: object
+                              required:
+                              - key
+                              - operator
                               properties:
                                 key:
                                   type: string
@@ -902,6 +926,9 @@ spec:
                             type: array
                             items:
                               type: object
+                              required:
+                              - key
+                              - operator
                               properties:
                                 key:
                                   type: string
@@ -942,6 +969,9 @@ spec:
                                   type: array
                                   items:
                                     type: object
+                                    required:
+                                    - key
+                                    - operator
                                     properties:
                                       key:
                                         type: string
@@ -969,6 +999,9 @@ spec:
                                   type: array
                                   items:
                                     type: object
+                                    required:
+                                    - key
+                                    - operator
                                     properties:
                                       key:
                                         type: string
@@ -1097,6 +1130,9 @@ spec:
                                   type: array
                                   items:
                                     type: object
+                                    required:
+                                    - key
+                                    - operator
                                     properties:
                                       key:
                                         type: string
@@ -1124,6 +1160,9 @@ spec:
                                   type: array
                                   items:
                                     type: object
+                                    required:
+                                    - key
+                                    - operator
                                     properties:
                                       key:
                                         type: string
@@ -1185,6 +1224,9 @@ spec:
                               properties:
                                 matchExpressions:
                                   items:
+                                    required:
+                                    - key
+                                    - operator
                                     properties:
                                       key:
                                         type: string
@@ -1237,6 +1279,9 @@ spec:
                                   type: array
                                   items:
                                     type: object
+                                    required:
+                                    - key
+                                    - operator
                                     properties:
                                       key:
                                         type: string
@@ -1264,6 +1309,9 @@ spec:
                                   type: array
                                   items:
                                     type: object
+                                    required:
+                                    - key
+                                    - operator
                                     properties:
                                       key:
                                         type: string
@@ -1384,6 +1432,9 @@ spec:
                                   type: array
                                   items:
                                     type: object
+                                    required:
+                                    - key
+                                    - operator
                                     properties:
                                       key:
                                         type: string
@@ -1411,6 +1462,9 @@ spec:
                                   type: array
                                   items:
                                     type: object
+                                    required:
+                                    - key
+                                    - operator
                                     properties:
                                       key:
                                         type: string
@@ -1474,6 +1528,9 @@ spec:
                               properties:
                                 matchExpressions:
                                   items:
+                                    required:
+                                    - key
+                                    - operator
                                     properties:
                                       key:
                                         type: string
@@ -1598,6 +1655,9 @@ spec:
                           type: array
                           items:
                             type: object
+                            required:
+                            - key
+                            - operator
                             properties:
                               key:
                                 type: string
@@ -1625,6 +1685,9 @@ spec:
                           type: array
                           items:
                             type: object
+                            required:
+                            - key
+                            - operator
                             properties:
                               key:
                                 type: string
@@ -1843,6 +1906,9 @@ spec:
                   properties:
                     matchExpressions:
                       items:
+                        required:
+                        - key
+                        - operator
                         properties:
                           key:
                             type: string
@@ -2141,6 +2207,9 @@ spec:
                       type: array
                       items:
                         type: object
+                        required:
+                        - key
+                        - operator
                         properties:
                           key:
                             type: string
@@ -2164,6 +2233,9 @@ spec:
                       type: array
                       items:
                         type: object
+                        required:
+                        - key
+                        - operator
                         properties:
                           key:
                             type: string
@@ -2187,6 +2259,9 @@ spec:
                       type: array
                       items:
                         type: object
+                        required:
+                        - key
+                        - operator
                         properties:
                           key:
                             type: string
@@ -2587,6 +2662,9 @@ spec:
                             type: array
                             items:
                               type: object
+                              required:
+                              - key
+                              - operator
                               properties:
                                 key:
                                   type: string
@@ -2614,6 +2692,9 @@ spec:
                             type: array
                             items:
                               type: object
+                              required:
+                              - key
+                              - operator
                               properties:
                                 key:
                                   type: string
@@ -2656,6 +2737,9 @@ spec:
                                   type: array
                                   items:
                                     type: object
+                                    required:
+                                    - key
+                                    - operator
                                     properties:
                                       key:
                                         type: string
@@ -2764,6 +2848,9 @@ spec:
                                   type: array
                                   items:
                                     type: object
+                                    required:
+                                    - key
+                                    - operator
                                     properties:
                                       key:
                                         type: string
@@ -2791,6 +2878,9 @@ spec:
                                   type: array
                                   items:
                                     type: object
+                                    required:
+                                    - key
+                                    - operator
                                     properties:
                                       key:
                                         type: string
@@ -2818,6 +2908,9 @@ spec:
                                   type: array
                                   items:
                                     type: object
+                                    required:
+                                    - key
+                                    - operator
                                     properties:
                                       key:
                                         type: string
@@ -2854,6 +2947,9 @@ spec:
                               properties:
                                 matchExpressions:
                                   items:
+                                    required:
+                                    - key
+                                    - operator
                                     properties:
                                       key:
                                         type: string
@@ -2908,6 +3004,9 @@ spec:
                                   type: array
                                   items:
                                     type: object
+                                    required:
+                                    - key
+                                    - operator
                                     properties:
                                       key:
                                         type: string
@@ -3018,6 +3117,9 @@ spec:
                                   type: array
                                   items:
                                     type: object
+                                    required:
+                                    - key
+                                    - operator
                                     properties:
                                       key:
                                         type: string
@@ -3045,6 +3147,9 @@ spec:
                                   type: array
                                   items:
                                     type: object
+                                    required:
+                                    - key
+                                    - operator
                                     properties:
                                       key:
                                         type: string
@@ -3072,6 +3177,9 @@ spec:
                                   type: array
                                   items:
                                     type: object
+                                    required:
+                                    - key
+                                    - operator
                                     properties:
                                       key:
                                         type: string
@@ -3110,6 +3218,9 @@ spec:
                               properties:
                                 matchExpressions:
                                   items:
+                                    required:
+                                    - key
+                                    - operator
                                     properties:
                                       key:
                                         type: string
@@ -3547,6 +3658,9 @@ spec:
                       properties:
                         matchExpressions:
                           items:
+                            required:
+                            - key
+                            - operator
                             properties:
                               key:
                                 type: string
@@ -3582,6 +3696,9 @@ spec:
                       properties:
                         matchExpressions:
                           items:
+                            required:
+                            - key
+                            - operator
                             properties:
                               key:
                                 type: string
@@ -4045,6 +4162,9 @@ spec:
                           type: array
                           items:
                             type: object
+                            required:
+                            - key
+                            - operator
                             properties:
                               key:
                                 type: string
@@ -4069,6 +4189,9 @@ spec:
                           type: array
                           items:
                             type: object
+                            required:
+                            - key
+                            - operator
                             properties:
                               key:
                                 type: string
