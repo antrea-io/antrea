@@ -17,8 +17,7 @@
 set -euo pipefail
 
 VERSION1="$1"
-VERSION2="$2" 
-VERSION3="$3"
+VERSION2="$2"
 
 RENOVATE_CONFIG=".github/renovate.json5"
 
@@ -27,12 +26,12 @@ if [[ ! -f "$RENOVATE_CONFIG" ]]; then
     exit 1
 fi
 
-echo "Updating renovate configuration with versions: $VERSION1, $VERSION2, $VERSION3"
+echo "Updating renovate configuration with versions: $VERSION1, $VERSION2"
 
-sed -i.bak "s/baseBranches: \[\"main\", \"[^\"]*\", \"[^\"]*\", \"[^\"]*\"\],/baseBranches: [\"main\", \"$VERSION1\", \"$VERSION2\", \"$VERSION3\"],/" "$RENOVATE_CONFIG"
+sed -i.bak "s/baseBranches: \[\"main\", \"[^\"]*\", \"[^\"]*\"\],/baseBranches: [\"main\", \"$VERSION1\", \"$VERSION2\"],/" "$RENOVATE_CONFIG"
 
 # Update first matchBaseBranches occurrence that disables regular updates for active release branches
-sed -i.bak2 "0,/matchBaseBranches: \[\"[^\"]*\", \"[^\"]*\", \"[^\"]*\"\],/{s/matchBaseBranches: \[\"[^\"]*\", \"[^\"]*\", \"[^\"]*\"\],/matchBaseBranches: [\"$VERSION1\", \"$VERSION2\", \"$VERSION3\"],/}" "$RENOVATE_CONFIG"
+sed -i.bak2 "0,/matchBaseBranches: \[\"[^\"]*\", \"[^\"]*\"\],/{s/matchBaseBranches: \[\"[^\"]*\", \"[^\"]*\"\],/matchBaseBranches: [\"$VERSION1\", \"$VERSION2\"],/}" "$RENOVATE_CONFIG"
 
 rm -f "$RENOVATE_CONFIG.bak" "$RENOVATE_CONFIG.bak2"
 
