@@ -277,6 +277,7 @@ CR for external Nodes".
 | IP Link Info                | `agent`, `outside`, `Node`, `ExternalNode`               | Output of `ip link` on Linux or `Get-NetAdapter` on Windows                                                                                                                                                                                                               |
 | Cluster Information         | `outside`                                                | Dump of resources in the cluster, including: 1. all Pods, Deployments, Replicasets and Daemonsets in all Namespaces with any resourceVersion. 2. all Nodes with any resourceVersion. 3. all ConfigMaps in all Namespaces with any resourceVersion and label `app=antrea`.                                                                                                                                                                                                                                  |
 | Memberlist State            | `agent`, `outside`                                       | YAML output of `antctl get memberlist` |
+| BGP State (Linux Only)      | `agent`, `outside`, `Node`                               | YAML output of `antctl get bgppolicy`, `antctl get bgppeers` and `antctl get bgproutes`. When BGP is not enabled, or no BGPPolicy is in effect on the Node, the files contain the reason. |
 
 ## Limitations
 

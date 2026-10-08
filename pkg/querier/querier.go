@@ -160,4 +160,7 @@ type AgentBGPPolicyInfoQuerier interface {
 	GetBGPPeerStatus(ctx context.Context) ([]bgp.PeerStatus, error)
 	// GetBGPRoutes returns the advertised BGP routes.
 	GetBGPRoutes(ctx context.Context) (map[bgp.Route]bgpcontroller.RouteMetadata, error)
+	// GetBGPPeerRoutes returns the BGP routes sent to the BGP peer with the given address, or received from it when
+	// received is true.
+	GetBGPPeerRoutes(ctx context.Context, peerAddress string, received bool) (map[bgp.Route]bgpcontroller.RouteMetadata, error)
 }

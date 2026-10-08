@@ -849,12 +849,27 @@ worker3 172.18.0.2 Dead
 
 `antctl` agent command `get bgppolicy` prints the effective BGP policy applied on the local Node.
 It includes the name, router ID, local ASN, listen port, confederation identifier and member ASNs of the effective BGP policy.
+It also includes a status: `Effective` when the last attempt to apply the BGP policy succeeded, and
+`Failed` when it did not.
 
 ```bash
 $ antctl get bgppolicy
 
-NAME               ROUTER-ID  LOCAL-ASN LISTEN-PORT CONFEDERATION-IDENTIFIER MEMBER-ASNs
-example-bgp-policy 172.18.0.2 64512     179         65000                    64513,64514
+NAME               ROUTER-ID  LOCAL-ASN LISTEN-PORT CONFEDERATION-IDENTIFIER MEMBER-ASNs STATUS
+example-bgp-policy 172.18.0.2 64512     179         65000                    64513,64514 Effective
+```
+
+The JSON output includes the error that stopped the last attempt, in the `lastSyncError` field.
+When the BGP server could not be started, for example because the listen port is already in use,
+only the name and the error are printed, and `get bgppeers` and `get bgproutes` print the same
+error instead of a list.
+
+```bash
+$ antctl get bgppolicy -o json
+{
+  "name": "example-bgp-policy",
+  "lastSyncError": "failed to start BGP server: listen tcp :179: bind: address already in use"
+}
 ```
 
 `antctl` agent command `get bgppeers` print the current status of all BGP peers
@@ -882,6 +897,27 @@ $ antctl get bgppeers --ipv6-only
 PEER                       ASN   STATE
 [fec0::196:168:77:251]:179 65001 Established
 [fec0::196:168:77:252]:179 65002 Active
+```
+
+The JSON and YAML output also include, for each peer, how long the session has been established
+(`uptimeSeconds`, only for an established session), the multihop TTL, the graceful restart time,
+and the numbers of routes sent to the peer (`advertisedRoutes`) and received from it
+(`receivedRoutes`).
+
+```bash
+$ antctl get bgppeers -o json
+[
+  {
+    "peer": "192.168.77.200:179",
+    "asn": 65001,
+    "state": "Established",
+    "uptimeSeconds": 3600,
+    "multihopTTL": 1,
+    "gracefulRestartTimeSeconds": 120,
+    "advertisedRoutes": 3,
+    "receivedRoutes": 0
+  }
+]
 ```
 
 `antctl` agent command `get bgproutes` prints the advertised BGP routes on the local Node.
@@ -921,6 +957,30 @@ $ antctl get bgproutes -T EgressIP
 ROUTE                    TYPE     K8S-OBJ-REF
 172.18.0.3/32            EgressIP egress1
 fec0::192:168:77:100/128 EgressIP egress2
+```
+
+By default, `get bgproutes` prints the routes that the Node intends to advertise. With
+`--peer <address>`, it prints the routes that the BGP server actually sent to that peer, after
+export policy. The BGP server sends no route to a peer whose session is not established, so this
+list can be empty while the default one is not. With `--peer <address> --received`, it prints the
+routes that the peer sent to the Node. The Node does not install these routes, and they have no
+type. `--received` requires `--peer`, and cannot be combined with `-T`. A peer that is not a peer
+of the effective BGP policy returns an error.
+
+```bash
+# Get the list of routes sent to a bgp peer
+$ antctl get bgproutes --peer 192.168.77.200
+
+ROUTE         TYPE                  K8S-OBJ-REF
+172.18.0.3/32 EgressIP              egress1
+10.244.1.0/24 NodeIPAMPodCIDR       <NONE>
+10.96.0.1/32  ServiceLoadBalancerIP default/svc1
+
+# Get the list of routes received from a bgp peer
+$ antctl get bgproutes --peer 192.168.77.200 --received
+
+ROUTE       TYPE   K8S-OBJ-REF
+10.0.0.0/16 <NONE> <NONE>
 ```
 
 ### Upgrade existing objects of CRDs

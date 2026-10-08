@@ -226,23 +226,38 @@ type BGPPolicyResponse struct {
 	ListenPort              int32    `json:"listenPort,omitempty"`
 	ConfederationIdentifier int32    `json:"confederationIdentifier,omitempty"`
 	MemberASNs              []uint32 `json:"memberASNs,omitempty"`
+	// LastSyncError is the error that stopped the last attempt to apply the BGPPolicy. It is empty when the last
+	// attempt succeeded.
+	LastSyncError string `json:"lastSyncError,omitempty"`
 }
 
 func (r BGPPolicyResponse) GetTableHeader() []string {
-	return []string{"NAME", "ROUTER-ID", "LOCAL-ASN", "LISTEN-PORT", "CONFEDERATION-IDENTIFIER", "MEMBER-ASNs"}
+	return []string{"NAME", "ROUTER-ID", "LOCAL-ASN", "LISTEN-PORT", "CONFEDERATION-IDENTIFIER", "MEMBER-ASNs", "STATUS"}
 }
 
 func (r BGPPolicyResponse) GetTableRow(maxColumnLength int) []string {
-	confederationIdentifierStr := ""
+	// A BGPPolicy whose BGP server could not be started has no local ASN or listen port in effect. Leaving them empty
+	// prints <NONE>, rather than a misleading 0.
+	localASNStr, listenPortStr, confederationIdentifierStr := "", "", ""
 	memberASNs := []string{}
+	if r.LocalASN != 0 {
+		localASNStr = strconv.Itoa(int(r.LocalASN))
+	}
+	if r.ListenPort != 0 {
+		listenPortStr = strconv.Itoa(int(r.ListenPort))
+	}
 	if r.ConfederationIdentifier != 0 {
 		confederationIdentifierStr = strconv.Itoa(int(r.ConfederationIdentifier))
 	}
 	for _, memberASN := range r.MemberASNs {
 		memberASNs = append(memberASNs, strconv.Itoa(int(memberASN)))
 	}
-	return []string{r.BGPPolicyName, r.RouterID, strconv.Itoa(int(r.LocalASN)), strconv.Itoa(int(r.ListenPort)),
-		confederationIdentifierStr, printers.GenerateTableElementWithSummary(memberASNs, maxColumnLength)}
+	status := "Effective"
+	if r.LastSyncError != "" {
+		status = "Failed"
+	}
+	return []string{r.BGPPolicyName, r.RouterID, localASNStr, listenPortStr,
+		confederationIdentifierStr, printers.GenerateTableElementWithSummary(memberASNs, maxColumnLength), status}
 }
 
 func (r BGPPolicyResponse) SortRows() bool {
@@ -254,6 +269,15 @@ type BGPPeerResponse struct {
 	Peer  string `json:"peer,omitempty"`
 	ASN   int32  `json:"asn,omitempty"`
 	State string `json:"state,omitempty"`
+	// The following fields are only printed in the JSON and YAML output, to keep the table narrow.
+	// UptimeSeconds is the time since the session was established. It is 0 when the session is not established.
+	UptimeSeconds              int   `json:"uptimeSeconds,omitempty"`
+	MultihopTTL                int32 `json:"multihopTTL,omitempty"`
+	GracefulRestartTimeSeconds int32 `json:"gracefulRestartTimeSeconds,omitempty"`
+	// AdvertisedRoutes and ReceivedRoutes are the numbers of routes sent to and received from the peer. They are
+	// printed even when they are 0, as a peer that receives no route is a problem worth seeing.
+	AdvertisedRoutes uint64 `json:"advertisedRoutes"`
+	ReceivedRoutes   uint64 `json:"receivedRoutes"`
 }
 
 func (r BGPPeerResponse) GetTableHeader() []string {

@@ -267,6 +267,9 @@ func (c *SupportBundleController) generateSupportBundle(supportBundle *cpv1b2.Su
 	if err = agentDumper.DumpOVSPorts(basedir); err != nil {
 		return err
 	}
+	if err = agentDumper.DumpBGPResources(basedir); err != nil {
+		return err
+	}
 
 	outputFile, err := afero.TempFile(defaultFS, "", "bundle_*.tar.gz")
 	if err != nil {
