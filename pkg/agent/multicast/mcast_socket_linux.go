@@ -157,7 +157,7 @@ func (s *Socket) MulticastInterfaceLeaveMgroup(mgroup net.IP, ifaceIP net.IP, if
 		Interface: [4]byte{ifaceIP[0], ifaceIP[1], ifaceIP[2], ifaceIP[3]},
 	})
 	if err != nil {
-		return fmt.Errorf("failed to leave multicast group %s for %s: %s", mgroup.String(), ifaceName, err.Error())
+		return fmt.Errorf("failed to leave multicast group %s for %s: %w", mgroup.String(), ifaceName, err)
 	}
 	return nil
 }

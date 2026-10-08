@@ -20,6 +20,7 @@ package multicast
 import (
 	"fmt"
 	"net"
+	"syscall"
 	"testing"
 	"time"
 
@@ -374,4 +375,22 @@ func (c *testMulticastRouteClient) initialize(t *testing.T) {
 	c.mockMulticastSocket.EXPECT().AllocateVIFs(gomock.Any(), uint16(1)).Times(1).Return([]uint16{1, 2}, nil)
 	require.NoError(t, c.Initialize())
 	require.True(t, c.mockCtrl.Satisfied())
+}
+
+func TestMulticastInterfacesLeaveMgroupRetry(t *testing.T) {
+	c := newTestMulticastRouteClient(t)
+	c.multicastInterfaceConfigs = []multicastInterfaceConfig{
+		{Name: if1.InterfaceName, IPv4Addr: addrIf1},
+		{Name: if2.InterfaceName, IPv4Addr: addrIf2},
+	}
+	group := net.ParseIP("239.10.10.13")
+	gomock.InOrder(
+		c.mockMulticastSocket.EXPECT().MulticastInterfaceLeaveMgroup(group.To4(), addrIf1.IP.To4(), if1.InterfaceName),
+		c.mockMulticastSocket.EXPECT().MulticastInterfaceLeaveMgroup(group.To4(), addrIf2.IP.To4(), if2.InterfaceName).Return(syscall.EIO),
+		c.mockMulticastSocket.EXPECT().MulticastInterfaceLeaveMgroup(group.To4(), addrIf1.IP.To4(), if1.InterfaceName).
+			Return(fmt.Errorf("already left: %w", syscall.EADDRNOTAVAIL)),
+		c.mockMulticastSocket.EXPECT().MulticastInterfaceLeaveMgroup(group.To4(), addrIf2.IP.To4(), if2.InterfaceName),
+	)
+	require.ErrorIs(t, c.multicastInterfacesLeaveMgroup(group), syscall.EIO)
+	require.NoError(t, c.multicastInterfacesLeaveMgroup(group))
 }

@@ -283,3 +283,135 @@ func createTunnelInterface(tunnelPort uint32, localNodeIP net.IP) *interfacestor
 	tunnelInterface := interfacestore.NewTunnelInterface("antrea-tun0", ovsconfig.GeneveTunnel, 6081, localNodeIP, false, &interfacestore.OVSPortConfig{OFPort: int32(tunnelPort)})
 	return tunnelInterface
 }
+
+func TestHandlePacketInMalformedGroupAddress(t *testing.T) {
+	controller := gomock.NewController(t)
+	mockOFClient := openflowtest.NewMockClient(controller)
+	mockIfaceStore := ifaceStoretest.NewMockInterfaceStore(controller)
+	eventCh := make(chan *mcastGroupEvent, 100)
+	snooper := &IGMPSnooper{ofClient: mockOFClient, eventCh: eventCh, ifaceStore: mockIfaceStore}
+
+	localNodeIP := net.ParseIP("1.2.3.4")
+	tunnelPort := uint32(1)
+
+	testCases := []struct {
+		name string
+		msg  util.Message
+	}{
+		{
+			name: "IGMPv1 report with non-multicast IP",
+			msg:  protocol.NewIGMPv1Report(net.ParseIP("10.0.0.1")),
+		},
+		{
+			name: "IGMPv1 report with 224.0.0.1",
+			msg:  protocol.NewIGMPv1Report(types.McastAllHosts),
+		},
+		{
+			name: "IGMPv2 report with non-multicast IP",
+			msg:  protocol.NewIGMPv2Report(net.ParseIP("192.168.1.1")),
+		},
+		{
+			name: "IGMPv2 report with 224.0.0.1",
+			msg:  protocol.NewIGMPv2Report(types.McastAllHosts),
+		},
+		{
+			name: "IGMPv2 leave with non-multicast IP",
+			msg:  protocol.NewIGMPv2Leave(net.ParseIP("10.0.0.2")),
+		},
+		{
+			name: "IGMPv2 leave with 224.0.0.1",
+			msg:  protocol.NewIGMPv2Leave(types.McastAllHosts),
+		},
+		{
+			name: "IGMPv3 report with non-multicast IP in group record",
+			msg: &protocol.IGMPv3MembershipReport{
+				Type:           protocol.IGMPv3Report,
+				NumberOfGroups: 1,
+				GroupRecords: []protocol.IGMPv3GroupRecord{
+					{
+						Type:             protocol.IGMPIsEx,
+						MulticastAddress: net.ParseIP("10.0.0.3"),
+					},
+				},
+			},
+		},
+		{
+			name: "IGMPv3 report with 224.0.0.1 in group record",
+			msg: &protocol.IGMPv3MembershipReport{
+				Type:           protocol.IGMPv3Report,
+				NumberOfGroups: 1,
+				GroupRecords: []protocol.IGMPv3GroupRecord{
+					{
+						Type:             protocol.IGMPIsEx,
+						MulticastAddress: types.McastAllHosts,
+					},
+				},
+			},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			pkt := generatePacketWithMatches(tc.msg, tunnelPort, localNodeIP, []openflow15.MatchField{*openflow15.NewInPortField(tunnelPort)})
+			mockIfaceStore.EXPECT().GetInterfaceByOFPort(tunnelPort).Return(createTunnelInterface(tunnelPort, localNodeIP), true)
+			err := snooper.HandlePacketIn(&pkt)
+			assert.NoError(t, err)
+			assert.Equal(t, 0, len(eventCh), "Malformed or reserved group addresses should not generate events")
+		})
+	}
+}
+
+func TestHandlePacketInDuplicateGroupRecords(t *testing.T) {
+	controller := gomock.NewController(t)
+	mockOFClient := openflowtest.NewMockClient(controller)
+	mockIfaceStore := ifaceStoretest.NewMockInterfaceStore(controller)
+	eventCh := make(chan *mcastGroupEvent, 100)
+	snooper := &IGMPSnooper{ofClient: mockOFClient, eventCh: eventCh, ifaceStore: mockIfaceStore}
+
+	localNodeIP := net.ParseIP("1.2.3.4")
+	tunnelPort := uint32(1)
+
+	// IGMPv3 report with 3 identical group records for the same multicast address.
+	report := &protocol.IGMPv3MembershipReport{
+		Type:           protocol.IGMPv3Report,
+		NumberOfGroups: 3,
+		GroupRecords: []protocol.IGMPv3GroupRecord{
+			{Type: protocol.IGMPIsEx, MulticastAddress: net.ParseIP("225.1.2.3")},
+			{Type: protocol.IGMPIsEx, MulticastAddress: net.ParseIP("225.1.2.3")},
+			{Type: protocol.IGMPIsEx, MulticastAddress: net.ParseIP("225.1.2.3")},
+		},
+	}
+	pkt := generatePacketWithMatches(report, tunnelPort, localNodeIP, []openflow15.MatchField{*openflow15.NewInPortField(tunnelPort)})
+	mockIfaceStore.EXPECT().GetInterfaceByOFPort(tunnelPort).Return(createTunnelInterface(tunnelPort, localNodeIP), true)
+
+	err := snooper.HandlePacketIn(&pkt)
+	assert.NoError(t, err)
+	assert.Equal(t, 1, len(eventCh), "Duplicate group records in the same packet should be deduplicated")
+	event := <-eventCh
+	assert.True(t, event.group.Equal(net.ParseIP("225.1.2.3")))
+}
+
+func TestHandlePacketInParseInterfaceError(t *testing.T) {
+	controller := gomock.NewController(t)
+	mockOFClient := openflowtest.NewMockClient(controller)
+	mockIfaceStore := ifaceStoretest.NewMockInterfaceStore(controller)
+	eventCh := make(chan *mcastGroupEvent, 100)
+	snooper := &IGMPSnooper{ofClient: mockOFClient, eventCh: eventCh, ifaceStore: mockIfaceStore}
+
+	localNodeIP := net.ParseIP("1.2.3.4")
+	unknownPort := uint32(999)
+
+	report := &protocol.IGMPv3MembershipReport{
+		Type:           protocol.IGMPv3Report,
+		NumberOfGroups: 1,
+		GroupRecords: []protocol.IGMPv3GroupRecord{
+			{Type: protocol.IGMPIsEx, MulticastAddress: net.ParseIP("225.1.2.3")},
+		},
+	}
+	pkt := generatePacketWithMatches(report, unknownPort, localNodeIP, []openflow15.MatchField{*openflow15.NewInPortField(unknownPort)})
+	mockIfaceStore.EXPECT().GetInterfaceByOFPort(unknownPort).Return(nil, false)
+
+	err := snooper.HandlePacketIn(&pkt)
+	assert.NoError(t, err, "Interface parse failure should return nil without propagating error")
+	assert.Equal(t, 0, len(eventCh))
+}
