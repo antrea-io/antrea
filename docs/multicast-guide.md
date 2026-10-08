@@ -166,6 +166,19 @@ the default number is 20. The limit can be changed by setting [/proc/sys/net/ipv
 Users are responsible for changing the limit if Pods on the Node are expected to
 join more than 20 groups.
 
+In addition, Antrea Agent bounds the number of multicast groups to prevent excessive
+OVS group operations and packet-in overhead:
+
+- A local Pod can join at most 32 distinct multicast groups.
+- A Node can track at most 128 distinct multicast groups with local members.
+
+Note that raising `igmp_max_memberships` does not lift these limits (they are currently
+not configurable). When a limit is reached, any further join is ignored, a rate-limited
+log is emitted, and the Prometheus metric `antrea_agent_multicast_group_join_rejected_count`
+is incremented (with label `reason="pod_limit"` or `reason="node_limit"`). If a Pod
+was a member of more than 32 groups prior to upgrading to a version with these limits,
+it will lose the extra groups after the upgrade.
+
 ### Traffic in local network control block
 
 Multicast IPs in [Local Network Control Block](https://www.iana.org/assignments/multicast-addresses/multicast-addresses.xhtml#multicast-addresses-1) (224.0.0.0/24)
