@@ -16,9 +16,11 @@
 package multicast
 
 import (
+	"errors"
 	"fmt"
 	"net"
 	"strings"
+	"syscall"
 	"time"
 
 	"k8s.io/apimachinery/pkg/util/sets"
@@ -112,7 +114,8 @@ func (c *MRouteClient) multicastInterfacesLeaveMgroup(mgroup net.IP) error {
 	for _, config := range c.multicastInterfaceConfigs {
 		addrIP := config.IPv4Addr.IP.To4()
 		err := c.socket.MulticastInterfaceLeaveMgroup(groupIP, addrIP, config.Name)
-		if err != nil {
+		// A retry after a partial leave can revisit interfaces which already left.
+		if err != nil && !errors.Is(err, syscall.EADDRNOTAVAIL) {
 			return err
 		}
 	}

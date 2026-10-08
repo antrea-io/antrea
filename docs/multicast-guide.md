@@ -166,6 +166,31 @@ the default number is 20. The limit can be changed by setting [/proc/sys/net/ipv
 Users are responsible for changing the limit if Pods on the Node are expected to
 join more than 20 groups.
 
+In addition, Antrea Agent bounds the number of multicast groups to prevent excessive
+OVS group operations and packet-in overhead:
+
+- A local Pod can join at most 32 distinct multicast groups.
+- A Node can track at most 128 distinct multicast groups with local members,
+  including groups pending local teardown.
+
+When a Pod was the last local member to leave a group, the group continues to count
+against both that Pod's limit and the Node limit until local teardown completes.
+While the Pod is running, teardown usually waits about 10 seconds (`igmpMaxResponseTime`)
+for responses to the last-member query, but can happen sooner or take longer.
+Leaving one group and immediately joining another can therefore be rejected. Groups
+with only remote members and no pending local teardown do not consume these limits;
+remote joins are not limited.
+
+Note that raising `igmp_max_memberships` does not lift these limits (they are currently
+not configurable). A join request that would exceed either limit is ignored, a rate-limited
+log is emitted, and the Prometheus metric `antrea_agent_multicast_group_join_rejected_count`
+is incremented for each group join rejected due to limits (one per group in a report),
+including repeated reports (with label `reason="pod_limit"` or `reason="node_limit"`).
+When both limits are exceeded, `node_limit` is reported. After an upgrade, Pods with
+more than 32 groups or Nodes with more than 128 local groups lose the excess
+memberships. Which groups are retained depends on the order in which reports reach
+the Agent.
+
 ### Traffic in local network control block
 
 Multicast IPs in [Local Network Control Block](https://www.iana.org/assignments/multicast-addresses/multicast-addresses.xhtml#multicast-addresses-1) (224.0.0.0/24)
