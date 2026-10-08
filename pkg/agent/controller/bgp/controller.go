@@ -120,6 +120,7 @@ type bgpPolicyState struct {
 
 type BGPPolicyInfo struct {
 	BGPPolicyName           string
+	Draining                bool
 	RouterID                string
 	LocalASN                int32
 	ListenPort              int32
@@ -152,6 +153,11 @@ type Controller struct {
 
 	bgpPolicyState      *bgpPolicyState
 	bgpPolicyStateMutex sync.RWMutex
+
+	// draining is true while the Node carries a taint the effective BGPPolicy does not tolerate.
+	// A draining Node withdraws its Service routes and keeps everything else. Guarded by
+	// bgpPolicyStateMutex.
+	draining bool
 
 	k8sClient             kubernetes.Interface
 	bgpPeerPasswords      map[string]string
@@ -374,6 +380,9 @@ func (c *Controller) syncBGPPolicy(ctx context.Context) error {
 	if effectivePolicy == nil {
 		// If the BGPPolicy state is nil, just return.
 		if c.bgpPolicyState == nil {
+			// Reset the draining state so that a BGPPolicy re-created while the Node is still tainted logs
+			// the transition again, and GetBGPPolicyInfo never reports a stale value.
+			c.draining = false
 			return nil
 		}
 
@@ -382,10 +391,12 @@ func (c *Controller) syncBGPPolicy(ctx context.Context) error {
 			return err
 		}
 		c.bgpPolicyState = nil
+		c.draining = false
 		return nil
 	}
 
 	klog.V(2).InfoS("Syncing BGPPolicy", "BGPPolicy", klog.KObj(effectivePolicy))
+	c.updateDrainingState(effectivePolicy)
 	// Retrieve the BGP policy name, listen port, local AS number and router ID from the effective BGPPolicy, and update them to the
 	// current state.
 	routerID, err := c.getRouterID()
@@ -604,7 +615,9 @@ func (c *Controller) getRouterID() (string, error) {
 func (c *Controller) getRoutes(advertisements v1alpha1.Advertisements) map[bgp.Route]RouteMetadata {
 	allRoutes := make(map[bgp.Route]RouteMetadata)
 
-	if advertisements.Service != nil {
+	// A draining Node advertises no Service IPs. Pod and Egress routes are unaffected, because the Pods on the Node
+	// keep running and an Egress IP stays here until Egress moves it.
+	if advertisements.Service != nil && !c.draining {
 		c.addServiceRoutes(advertisements.Service, allRoutes)
 	}
 	if c.egressEnabled && advertisements.Egress != nil {
@@ -801,6 +814,63 @@ func (c *Controller) matchesCurrentNode(bgpPolicy *v1alpha1.BGPPolicy) bool {
 func matchesNode(node *corev1.Node, bgpPolicy *v1alpha1.BGPPolicy) bool {
 	nodeSelector, _ := metav1.LabelSelectorAsSelector(&bgpPolicy.Spec.NodeSelector)
 	return nodeSelector.Matches(labels.Set(node.Labels))
+}
+
+// drainingTaint returns the first NoSchedule or NoExecute taint on the Node that the BGPPolicy does not tolerate, or
+// nil when the Node is not draining for this policy.
+func drainingTaint(node *corev1.Node, bgpPolicy *v1alpha1.BGPPolicy) *corev1.Taint {
+	drainOnTaints := bgpPolicy.Spec.DrainOnTaints
+	if drainOnTaints == nil || !drainOnTaints.Enabled {
+		return nil
+	}
+	for i := range node.Spec.Taints {
+		taint := node.Spec.Taints[i]
+		if taint.Effect != corev1.TaintEffectNoSchedule && taint.Effect != corev1.TaintEffectNoExecute {
+			continue
+		}
+		var tolerated bool
+		for j := range drainOnTaints.Tolerations {
+			// The comparison operators Lt and Gt are not part of the BGPPolicy schema, so they stay disabled.
+			if drainOnTaints.Tolerations[j].ToleratesTaint(klog.Background(), &taint, false) {
+				tolerated = true
+				break
+			}
+		}
+		if !tolerated {
+			// Return a copy, so that the caller never holds a pointer into an object owned by the Node lister.
+			return taint.DeepCopy()
+		}
+	}
+	return nil
+}
+
+// updateDrainingState recomputes whether this Node is draining for the effective BGPPolicy and logs a change. It must
+// be called with bgpPolicyStateMutex held.
+func (c *Controller) updateDrainingState(bgpPolicy *v1alpha1.BGPPolicy) {
+	var taint *corev1.Taint
+	// A Node that is missing from the lister is not draining. The error is not logged here, because getRouterID
+	// reports a missing Node in the same sync.
+	if node, err := c.nodeLister.Get(c.nodeName); err == nil {
+		taint = drainingTaint(node, bgpPolicy)
+	}
+	draining := taint != nil
+	if draining && !c.draining {
+		// Count the Service routes that the reconciliation later in this sync will withdraw.
+		serviceRoutes := 0
+		if c.bgpPolicyState != nil {
+			for _, routeMetadata := range c.bgpPolicyState.routes {
+				switch routeMetadata.Type {
+				case ServiceClusterIP, ServiceExternalIP, ServiceLoadBalancerIP:
+					serviceRoutes++
+				}
+			}
+		}
+		klog.InfoS("BGPPolicy draining state changed", "BGPPolicy", klog.KObj(bgpPolicy), "draining", true,
+			"taint", taint.ToString(), "serviceRoutesToWithdraw", serviceRoutes)
+	} else if !draining && c.draining {
+		klog.InfoS("BGPPolicy draining state changed", "BGPPolicy", klog.KObj(bgpPolicy), "draining", false)
+	}
+	c.draining = draining
 }
 
 func matchesService(svc *corev1.Service, bgpPolicy *v1alpha1.BGPPolicy) bool {
@@ -1033,7 +1103,9 @@ func (c *Controller) updateNode(oldObj, obj interface{}) {
 		return
 	}
 	if reflect.DeepEqual(node.GetLabels(), oldNode.GetLabels()) &&
-		reflect.DeepEqual(node.GetAnnotations(), oldNode.GetAnnotations()) {
+		reflect.DeepEqual(node.GetAnnotations(), oldNode.GetAnnotations()) &&
+		reflect.DeepEqual(node.Spec.Taints, oldNode.Spec.Taints) &&
+		node.Spec.Unschedulable == oldNode.Spec.Unschedulable {
 		return
 	}
 	if c.hasAffectedPolicyByNode(oldNode) || c.hasAffectedPolicyByNode(node) {
@@ -1088,7 +1160,7 @@ func (c *Controller) updateBGPPeerPasswords(secret *corev1.Secret) {
 }
 
 // GetBGPPolicyInfo returns BGPPolicyInfo which includes
-// BGPPolicyName, RouterID, LocalASN, ListenPort, ConfederationIdentifier
+// BGPPolicyName, Draining, RouterID, LocalASN, ListenPort, ConfederationIdentifier
 // and MemberASNs of effective BGP Policy applied on the Node.
 func (c *Controller) GetBGPPolicyInfo() *BGPPolicyInfo {
 	var bgpPolicyInfo *BGPPolicyInfo
@@ -1099,6 +1171,7 @@ func (c *Controller) GetBGPPolicyInfo() *BGPPolicyInfo {
 	if c.bgpPolicyState != nil {
 		bgpPolicyInfo = &BGPPolicyInfo{
 			BGPPolicyName: c.bgpPolicyState.bgpPolicyName,
+			Draining:      c.draining,
 			RouterID:      c.bgpPolicyState.routerID,
 			LocalASN:      c.bgpPolicyState.localASN,
 			ListenPort:    c.bgpPolicyState.listenPort,
