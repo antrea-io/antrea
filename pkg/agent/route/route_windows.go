@@ -95,7 +95,7 @@ type Client struct {
 	// ServicePorts and uninstall it exactly once when it's no longer used by any ServicePorts.
 	// It applies to externalIP and LoadBalancerIP.
 	serviceExternalIPReferences map[string]sets.Set[string]
-	// serviceExternalIPMutex protects serviceExternalIPReferences. Dual-stack IPv4 and IPv6
+	// serviceExternalIPMutex protects serviceExternalIPReferences.
 	serviceExternalIPMutex sync.Mutex
 	// netNatStaticMappings caches Windows NetNat for NodePort.
 	netNatStaticMappings sync.Map
