@@ -78,6 +78,11 @@ linters:
         # We can eventually enable this rule, but we have several locations
         # where we intentionally serialize secrets, e.g., in pkg/apis/controlplane.
         text: "G117:"
+      - linters:
+          - loggercheck
+        # loggercheck warns when logging a pointer value whose element type implements fmt.Stringer
+        # with a value receiver. However, klog and fmt safely handle nil pointers without panicking.
+        text: "logging value may panic when nil because its element type implements fmt\\.Stringer"
 formatters:
   enable:
     - gofmt
