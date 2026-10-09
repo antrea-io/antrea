@@ -113,25 +113,26 @@ enum EndpointDisclosure {
   // one, so that a record no producer set the field on reads as Full — which is
   // every record before it reaches FlowStreamService, every record on a
   // cluster-wide stream, and every record whose endpoints were both authorized
-  // in full, none of which withhold anything.
+  // in full. The marker covers the endpoint only: such a record may still
+  // have the identity of a cluster-scoped policy withheld, which an empty
+  // policy name signals, since a cluster-scoped policy always has one.
   ENDPOINT_DISCLOSURE_FULL = 0;
   // The endpoint is disclosed at the Identity tier: its Namespace, Pod and
-  // Service identity, and the identity of the network policy evaluated on its
-  // side, but not its Node placement or the Egress applied to it. Set when the
-  // client holds get on flows/identity in the endpoint's Namespace, but that
-  // Namespace is not one the stream is authorized to observe flows for, and
-  // the client does not hold the stream's own verb on flows there either.
+  // Service identity, and the identity of the namespaced network policies of its
+  // Namespace, but not its Node placement or the Egress applied to it. Set when
+  // the client holds get on flows/identity in the endpoint's Namespace, but that
+  // Namespace is not one the stream is authorized to observe flows for, and the
+  // client does not hold the stream's own verb on flows there either. The
+  // identity of cluster-scoped policies is not part of an endpoint's disclosure:
+  // it follows what the client holds cluster-wide.
   ENDPOINT_DISCLOSURE_IDENTITY = 1;
   // The endpoint is disclosed at the Flow tier: unidentified, with only what
   // the flow itself shows (addresses, ports, protocol, statistics, and the
-  // type and action of the policies evaluated on the endpoint's side), plus
-  // the endpoint's Namespace if the connection was allowed. A source endpoint
-  // also keeps its Namespace when the connection was denied by an ingress
-  // policy of the destination's own Namespace, while the destination is
-  // disclosed in full.
-  // Set when the client holds neither the stream's own verb on flows nor
-  // flows/identity in the endpoint's Namespace, and for an endpoint that has
-  // no Namespace at all.
+  // type and action of the policies), plus the endpoint's Namespace, unless the
+  // endpoint is the destination of a connection the client initiated and that
+  // was denied. Set when the client holds neither the stream's own verb on
+  // flows nor flows/identity in the endpoint's Namespace, and for an endpoint
+  // that has no Namespace at all.
   ENDPOINT_DISCLOSURE_FLOW = 2;
 }
 

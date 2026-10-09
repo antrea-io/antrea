@@ -581,10 +581,115 @@ func TestAuthorized_RecordVisibility(t *testing.T) {
 	}
 }
 
-// TestAuthorized_DeniedFlowSourceNamespace covers the exception to withholding a denied connection's
-// peer Namespace, which relies on a source at the Flow tier implying that the destination is in scope,
-// something only the authorization step guarantees.
-func TestAuthorized_DeniedFlowSourceNamespace(t *testing.T) {
+// TestAuthorized_ConnectionStoppedBeforeTheDestination covers which records a stream receives when
+// it is opened for one end of a connection. The initiator's Namespace always sees the record. The
+// destination's sees it only if the connection got as far as that Namespace, i.e. it was allowed or
+// denied by a policy of that Namespace; one stopped in the peer's Namespace or by a cluster-scoped
+// policy never became its concern, whatever the client holds in the peer's Namespace.
+func TestAuthorized_ConnectionStoppedBeforeTheDestination(t *testing.T) {
+	drop := flowpb.NetworkPolicyRuleAction_NETWORK_POLICY_RULE_ACTION_DROP
+	flowWith := func(modify func(k *flowpb.Kubernetes)) *flowpb.Flow {
+		f := podFlow("ns-a", "ns-b")
+		modify(f.K8S)
+		return f
+	}
+	allowed := flowWith(func(k *flowpb.Kubernetes) {})
+	deniedByK8sNetworkPolicy := flowWith(func(k *flowpb.Kubernetes) {
+		k.IngressNetworkPolicyType = flowpb.NetworkPolicyType_NETWORK_POLICY_TYPE_K8S
+		k.IngressNetworkPolicyRuleAction = drop
+	})
+	deniedByDestinationAntreaPolicy := flowWith(func(k *flowpb.Kubernetes) {
+		k.IngressNetworkPolicyType = flowpb.NetworkPolicyType_NETWORK_POLICY_TYPE_ANP
+		k.IngressNetworkPolicyNamespace = "ns-b"
+		k.IngressNetworkPolicyRuleAction = drop
+	})
+	deniedByClusterPolicy := flowWith(func(k *flowpb.Kubernetes) {
+		k.IngressNetworkPolicyType = flowpb.NetworkPolicyType_NETWORK_POLICY_TYPE_ACNP
+		k.IngressNetworkPolicyRuleAction = drop
+	})
+	deniedAtSourceEgress := func(policyType flowpb.NetworkPolicyType) *flowpb.Flow {
+		return flowWith(func(k *flowpb.Kubernetes) {
+			k.EgressNetworkPolicyType = policyType
+			k.EgressNetworkPolicyNamespace = "ns-a"
+			k.EgressNetworkPolicyRuleAction = drop
+		})
+	}
+	tests := []struct {
+		name string
+		flow *flowpb.Flow
+		// grants are held on top of flows in the stream's own Namespace.
+		grants []string
+		// observedByDestination and observedBySource are whether the record reaches a stream opened
+		// for ns-b and ns-a respectively.
+		observedByDestination bool
+		observedBySource      bool
+	}{
+		{name: "allowed", flow: allowed, observedByDestination: true, observedBySource: true},
+		{name: "denied by a K8s NetworkPolicy of the destination", flow: deniedByK8sNetworkPolicy, observedByDestination: true, observedBySource: true},
+		{name: "denied by an Antrea NetworkPolicy of the destination", flow: deniedByDestinationAntreaPolicy, observedByDestination: true, observedBySource: true},
+		{name: "denied by a cluster-scoped policy", flow: deniedByClusterPolicy, observedBySource: true},
+		{
+			name:             "denied by an egress policy of the source's Namespace",
+			flow:             deniedAtSourceEgress(flowpb.NetworkPolicyType_NETWORK_POLICY_TYPE_ANP),
+			observedBySource: true,
+		},
+		{
+			name:             "denied by an egress K8s NetworkPolicy of the source's Namespace",
+			flow:             deniedAtSourceEgress(flowpb.NetworkPolicyType_NETWORK_POLICY_TYPE_K8S),
+			observedBySource: true,
+		},
+		{
+			name:             "denied by an egress cluster-scoped policy",
+			flow:             deniedAtSourceEgress(flowpb.NetworkPolicyType_NETWORK_POLICY_TYPE_ACNP),
+			observedBySource: true,
+		},
+		{
+			// What the client holds in the peer's Namespace does not bring the record into a stream
+			// that was not opened for it: it should open one for that Namespace.
+			name:             "denied by the source's policy, flows and identity held in the source's Namespace",
+			flow:             deniedAtSourceEgress(flowpb.NetworkPolicyType_NETWORK_POLICY_TYPE_ANP),
+			grants:           []string{flowsGrant(watchVerb, "ns-a"), identityGrant("ns-a")},
+			observedBySource: true,
+		},
+		{
+			name:                  "denied by a policy of the destination, flows held in the source's Namespace",
+			flow:                  deniedByK8sNetworkPolicy,
+			grants:                []string{flowsGrant(watchVerb, "ns-a")},
+			observedByDestination: true,
+			observedBySource:      true,
+		},
+	}
+	for _, tt := range tests {
+		for _, scope := range []struct {
+			namespace string
+			observed  bool
+		}{
+			{namespace: "ns-b", observed: tt.observedByDestination},
+			{namespace: "ns-a", observed: tt.observedBySource},
+		} {
+			t.Run(tt.name+", stream of "+scope.namespace, func(t *testing.T) {
+				grants := append([]string{flowsGrant(watchVerb, scope.namespace)}, tt.grants...)
+				a := newAuthorizer(newFakeAuthorizer(grants...))
+				req := &flowpb.GetFlowsRequest{Namespaces: []string{scope.namespace}, Follow: true}
+				sa, err := a.NewStreamAuthorization(context.Background(), testUserInfo, req)
+				require.NoError(t, err)
+
+				got := collectAuthorized(context.Background(), sa, []*flowpb.Flow{tt.flow})
+
+				if scope.observed {
+					require.Len(t, got, 1)
+				} else {
+					assert.Empty(t, got)
+				}
+			})
+		}
+	}
+}
+
+// TestAuthorized_DeniedFlowPeerNamespace covers how a denied connection's peer Namespace is disclosed
+// at the stream level: a source that initiated an inbound connection keeps it, and a destination the
+// client tried to reach loses it.
+func TestAuthorized_DeniedFlowPeerNamespace(t *testing.T) {
 	drop := flowpb.NetworkPolicyRuleAction_NETWORK_POLICY_RULE_ACTION_DROP
 	ingressDrop := func() *flowpb.Flow {
 		f := podFlow("ns-a", "ns-b")
@@ -592,41 +697,18 @@ func TestAuthorized_DeniedFlowSourceNamespace(t *testing.T) {
 		f.K8S.IngressNetworkPolicyRuleAction = drop
 		return f
 	}
-	egressDrop := func() *flowpb.Flow {
-		f := podFlow("ns-a", "ns-b")
-		f.K8S.EgressNetworkPolicyType = flowpb.NetworkPolicyType_NETWORK_POLICY_TYPE_ANP
-		f.K8S.EgressNetworkPolicyNamespace = "ns-a"
-		f.K8S.EgressNetworkPolicyRuleAction = drop
-		return f
-	}
 	tests := []struct {
 		name       string
 		namespace  string
-		flow       *flowpb.Flow
 		wantSource string
 		wantDest   string
 	}{
-		{
-			name:       "ingress denial, stream of the destination's Namespace",
-			namespace:  "ns-b",
-			flow:       ingressDrop(),
-			wantSource: "ns-a",
-			wantDest:   "ns-b",
-		},
+		{name: "stream of the destination's Namespace", namespace: "ns-b", wantSource: "ns-a", wantDest: "ns-b"},
 		{
 			// The client picked the address it failed to reach.
-			name:      "ingress denial, stream of the source's Namespace",
-			namespace: "ns-a",
-			flow:      ingressDrop(),
-			wantDest:  "",
-			// The source is in scope, so its own Namespace is disclosed.
+			name:       "stream of the source's Namespace",
+			namespace:  "ns-a",
 			wantSource: "ns-a",
-		},
-		{
-			name:      "egress-only denial, stream of the destination's Namespace",
-			namespace: "ns-b",
-			flow:      egressDrop(),
-			wantDest:  "ns-b",
 		},
 	}
 	for _, tt := range tests {
@@ -636,11 +718,170 @@ func TestAuthorized_DeniedFlowSourceNamespace(t *testing.T) {
 			sa, err := a.NewStreamAuthorization(context.Background(), testUserInfo, req)
 			require.NoError(t, err)
 
-			got := collectAuthorized(context.Background(), sa, []*flowpb.Flow{tt.flow})
+			got := collectAuthorized(context.Background(), sa, []*flowpb.Flow{ingressDrop()})
 
 			require.Len(t, got, 1)
 			assert.Equal(t, tt.wantSource, got[0].GetK8S().GetSourcePodNamespace())
 			assert.Equal(t, tt.wantDest, got[0].GetK8S().GetDestinationPodNamespace())
+		})
+	}
+}
+
+// TestAuthorized_ClusterScopedPolicyIdentity covers the cluster segment end to end: the identity of a
+// cluster-scoped policy needs flows/identity or flows cluster-wide, and nothing held in either
+// endpoint's Namespace gives it, while a namespaced policy is not affected by what is held
+// cluster-wide.
+func TestAuthorized_ClusterScopedPolicyIdentity(t *testing.T) {
+	drop := flowpb.NetworkPolicyRuleAction_NETWORK_POLICY_RULE_ACTION_DROP
+	newFlow := func() *flowpb.Flow {
+		// ns-a initiated, and the cluster-scoped policy dropped the connection on its way.
+		f := podFlow("ns-a", "ns-b")
+		f.K8S.EgressNetworkPolicyType = flowpb.NetworkPolicyType_NETWORK_POLICY_TYPE_ACNP
+		f.K8S.EgressNetworkPolicyName = "cluster-deny"
+		f.K8S.EgressNetworkPolicyRuleAction = drop
+		return f
+	}
+	tests := []struct {
+		name      string
+		grants    []string
+		wantNamed bool
+	}{
+		{name: "nothing beyond flows in the stream's Namespace", grants: nil},
+		{name: "identity in the source's Namespace", grants: []string{identityGrant("ns-a")}},
+		{name: "identity in the peer's Namespace", grants: []string{identityGrant("ns-b")}},
+		{name: "flows in the peer's Namespace", grants: []string{flowsGrant(watchVerb, "ns-b")}},
+		{name: "identity cluster-wide", grants: []string{identityGrant("")}, wantNamed: true},
+		{name: "flows cluster-wide", grants: []string{flowsGrant(watchVerb, "")}, wantNamed: true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			grants := append([]string{flowsGrant(watchVerb, "ns-a")}, tt.grants...)
+			a := newAuthorizer(newFakeAuthorizer(grants...))
+			sa, err := a.NewStreamAuthorization(context.Background(), testUserInfo,
+				&flowpb.GetFlowsRequest{Namespaces: []string{"ns-a"}, Follow: true})
+			require.NoError(t, err)
+
+			got := collectAuthorized(context.Background(), sa, []*flowpb.Flow{newFlow()})
+
+			require.Len(t, got, 1)
+			assert.Equal(t, flowpb.NetworkPolicyType_NETWORK_POLICY_TYPE_ACNP, got[0].GetK8S().GetEgressNetworkPolicyType())
+			assert.Equal(t, flowpb.NetworkPolicyRuleAction_NETWORK_POLICY_RULE_ACTION_DROP, got[0].GetK8S().GetEgressNetworkPolicyRuleAction())
+			if tt.wantNamed {
+				assert.Equal(t, "cluster-deny", got[0].GetK8S().GetEgressNetworkPolicyName())
+			} else {
+				assert.Empty(t, got[0].GetK8S().GetEgressNetworkPolicyName())
+			}
+		})
+	}
+}
+
+// TestAuthorized_ClusterScopedPolicyWithEndpointsInFull pins down that a record whose endpoints are
+// both disclosed in full is still redacted if it shows a cluster-scoped policy the client may not
+// identify, and is the buffer's own record, uncopied, when it may.
+func TestAuthorized_ClusterScopedPolicyWithEndpointsInFull(t *testing.T) {
+	newFlow := func() *flowpb.Flow {
+		f := podFlow("ns-a", "ns-a")
+		f.K8S.IngressNetworkPolicyType = flowpb.NetworkPolicyType_NETWORK_POLICY_TYPE_ACNP
+		f.K8S.IngressNetworkPolicyName = "cluster-allow"
+		return f
+	}
+	req := &flowpb.GetFlowsRequest{Namespaces: []string{"ns-a"}, Follow: true}
+
+	a := newAuthorizer(newFakeAuthorizer(flowsGrant(watchVerb, "ns-a")))
+	sa, err := a.NewStreamAuthorization(context.Background(), testUserInfo, req)
+	require.NoError(t, err)
+	original := newFlow()
+	got := collectAuthorized(context.Background(), sa, []*flowpb.Flow{original})
+	require.Len(t, got, 1)
+	assert.NotSame(t, original, got[0])
+	assert.Empty(t, got[0].GetK8S().GetIngressNetworkPolicyName())
+	assert.Equal(t, "cluster-allow", original.GetK8S().GetIngressNetworkPolicyName())
+	assert.Equal(t, "destination-pod", got[0].GetK8S().GetDestinationPodName())
+
+	a = newAuthorizer(newFakeAuthorizer(flowsGrant(watchVerb, "ns-a"), identityGrant("")))
+	sa, err = a.NewStreamAuthorization(context.Background(), testUserInfo, req)
+	require.NoError(t, err)
+	original = newFlow()
+	got = collectAuthorized(context.Background(), sa, []*flowpb.Flow{original})
+	require.Len(t, got, 1)
+	assert.Same(t, original, got[0])
+}
+
+func TestReachedDestinationNamespace(t *testing.T) {
+	drop := flowpb.NetworkPolicyRuleAction_NETWORK_POLICY_RULE_ACTION_DROP
+	reject := flowpb.NetworkPolicyRuleAction_NETWORK_POLICY_RULE_ACTION_REJECT
+	anp := flowpb.NetworkPolicyType_NETWORK_POLICY_TYPE_ANP
+	tests := []struct {
+		name   string
+		modify func(k *flowpb.Kubernetes)
+		want   bool
+	}{
+		{name: "no policy applied", modify: func(k *flowpb.Kubernetes) {}, want: true},
+		{
+			name: "denied by the implicit drop of a K8s NetworkPolicy",
+			modify: func(k *flowpb.Kubernetes) {
+				k.IngressNetworkPolicyType = flowpb.NetworkPolicyType_NETWORK_POLICY_TYPE_K8S
+				k.IngressNetworkPolicyRuleAction = drop
+			},
+			want: true,
+		},
+		{
+			name: "denied by a policy of the destination's Namespace",
+			modify: func(k *flowpb.Kubernetes) {
+				k.IngressNetworkPolicyType = anp
+				k.IngressNetworkPolicyNamespace = "ns-b"
+				k.IngressNetworkPolicyRuleAction = drop
+			},
+			want: true,
+		},
+		{
+			name: "rejected by a policy of the destination's Namespace",
+			modify: func(k *flowpb.Kubernetes) {
+				k.IngressNetworkPolicyType = anp
+				k.IngressNetworkPolicyNamespace = "ns-b"
+				k.IngressNetworkPolicyRuleAction = reject
+			},
+			want: true,
+		},
+		{
+			name: "denied by a cluster-scoped policy",
+			modify: func(k *flowpb.Kubernetes) {
+				k.IngressNetworkPolicyType = flowpb.NetworkPolicyType_NETWORK_POLICY_TYPE_ACNP
+				k.IngressNetworkPolicyRuleAction = drop
+			},
+		},
+		{
+			name: "denied by a policy of another Namespace",
+			modify: func(k *flowpb.Kubernetes) {
+				k.IngressNetworkPolicyType = anp
+				k.IngressNetworkPolicyNamespace = "ns-a"
+				k.IngressNetworkPolicyRuleAction = drop
+			},
+		},
+		{
+			name: "denied on both sides",
+			modify: func(k *flowpb.Kubernetes) {
+				k.IngressNetworkPolicyType = anp
+				k.IngressNetworkPolicyNamespace = "ns-b"
+				k.IngressNetworkPolicyRuleAction = drop
+				k.EgressNetworkPolicyRuleAction = drop
+			},
+		},
+		{
+			// What a connection denied by the source's egress policy looks like: it never reached
+			// ingress enforcement.
+			name: "denied only on the source's egress",
+			modify: func(k *flowpb.Kubernetes) {
+				k.EgressNetworkPolicyType = anp
+				k.EgressNetworkPolicyRuleAction = drop
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			f := podFlow("ns-a", "ns-b")
+			tt.modify(f.K8S)
+			assert.Equal(t, tt.want, reachedDstNamespaceBoundary(f.K8S))
 		})
 	}
 }

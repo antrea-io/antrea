@@ -396,27 +396,62 @@ func (sa *StreamAuthorization) Authorized(ctx context.Context, flows []*flowpb.F
 // otherwise: a record is owned by the ring buffer and broadcast to every other stream, so it must
 // never be modified in place.
 //
-// A record is observable if either of its endpoints is in the authorized set. Requiring both would
-// hide precisely the cross-namespace flows a user needs — "my egress to a service I cannot see was
-// dropped" is the primary debugging case. A record with neither endpoint in the set, which
-// includes every record with no Kubernetes metadata at all, is observable only cluster-wide.
+// A record is observable in two cases, both decided by the scope the stream was opened for:
 //
-// Each endpoint is then disclosed at its own tier, resolved independently of the other's.
+//   - The stream is opened for the Namespace that initiated the connection. The record is always
+//     visible whether the connection was established or dropped, and in the latter case, the client
+//     would care to understand "what dropped my egress to that service".
+//   - The stream is opened for the Namespace that received the connection, and the connection
+//     reached its Namespace boundary: see reachedDstNamespaceBoundary. A connection initiated by a
+//     peer Namespace and dropped before that, either by a policy of the peer's Namespace or by a
+//     cluster-scoped policy, never became the destination Namespace's concern. It is thus observable
+//     only on a stream opened for the peer's Namespace, or cluster-wide.
+//
+// A record with neither endpoint in the stream's scope, which includes every record with no
+// Kubernetes metadata at all, is observable only cluster-wide.
+//
+// Each Namespace segment is then disclosed at its own tier, resolved independently of the other's,
+// and cluster-scoped policies are disclosed at the tier the client holds cluster-wide.
 func (sa *StreamAuthorization) authorizeFlow(ctx context.Context, f *flowpb.Flow) *flowpb.Flow {
 	k8s := f.GetK8S()
 	sourceNamespace := k8s.GetSourcePodNamespace()
 	destinationNamespace := k8s.GetDestinationPodNamespace()
 	sourceInScope := sa.namespaces.Has(sourceNamespace)
 	destinationInScope := sa.namespaces.Has(destinationNamespace)
-	if !sourceInScope && !destinationInScope {
+	if !sourceInScope && (!destinationInScope || !reachedDstNamespaceBoundary(k8s)) {
 		return nil
 	}
 	source := sa.tierFor(ctx, sourceNamespace, sourceInScope)
 	destination := sa.tierFor(ctx, destinationNamespace, destinationInScope)
-	if source == tierFull && destination == tierFull {
+	cluster := tierFull
+	if clusterScopedPolicyApplied(k8s) {
+		cluster = sa.peerTierFloorClusterWide(ctx)
+	}
+	if source == tierFull && destination == tierFull && cluster.identifies() {
 		return f
 	}
-	return redactFlow(f, source, destination)
+	return redactFlow(f, source, destination, cluster)
+}
+
+// reachedDstNamespaceBoundary reports whether the record shows a connection that got as far as the
+// destination's Namespace: it was allowed, or it was denied by a policy of that Namespace. A K8s
+// NetworkPolicy only denies through its implicit isolation drop, for which the agent reports the
+// policy type but not its Namespace, and it only selects Pods of its own Namespace, so the type alone
+// qualifies. Otherwise, the policy's Namespace must be the destination's: a cluster-scoped policy has
+// none, and a policy of another Namespace is not the destination's. A record that also shows an egress
+// denial never reached the destination, since the policy that stopped it is the source side's.
+func reachedDstNamespaceBoundary(k8s *flowpb.Kubernetes) bool {
+	if connectionAllowed(k8s) {
+		return true
+	}
+	if !denyAction(k8s.GetIngressNetworkPolicyRuleAction()) ||
+		denyAction(k8s.GetEgressNetworkPolicyRuleAction()) {
+		return false
+	}
+	policyType := k8s.GetIngressNetworkPolicyType()
+	return namespacedPolicy(policyType) &&
+		(policyType == flowpb.NetworkPolicyType_NETWORK_POLICY_TYPE_K8S ||
+			k8s.GetIngressNetworkPolicyNamespace() == k8s.GetDestinationPodNamespace())
 }
 
 // tierFor resolves how much of an endpoint in the given Namespace may be disclosed:
@@ -425,8 +460,8 @@ func (sa *StreamAuthorization) authorizeFlow(ctx context.Context, f *flowpb.Flow
 //     everything the record carries for that endpoint is disclosed, at no API cost;
 //  2. the client holds the stream's verb on "flows" there, i.e. it could have opened
 //     this same stream for that Namespace, so the endpoint is disclosed in full as well;
-//  3. the client holds get on "flows/identity" there, so the endpoint and the policy evaluated
-//     on its side are identifiable, but its placement is not;
+//  3. the client holds get on "flows/identity" there, so the endpoint and the namespaced
+//     policies of its Namespace are identifiable;
 //  4. otherwise the endpoint is unidentified.
 //
 // An endpoint with no Namespace at all is unidentified: there is no Namespace whose owner could
@@ -517,8 +552,9 @@ func peerDisclosureChecks(streamVerb string) []peerDisclosureCheck {
 	}
 }
 
-// peerTierFloorClusterWide returns the tier every peer Namespace is at least disclosed in, according
-// to what the client holds cluster-wide: tierFull for the stream's verb on "flows", tierIdentity for
+// peerTierFloorClusterWide returns the tier every peer Namespace is at least disclosed in, which is
+// also the tier of the cluster segment, where cluster-scoped policies live, according to what the
+// client holds cluster-wide: tierFull for the stream's verb on "flows", tierIdentity for
 // get on "flows/identity", and tierFlow for neither. The decision is cached for revalidationInterval,
 // like a peer's tier, so that a grant or revocation takes effect on a running stream. A changed floor
 // resets peerNamespaceTiers, whose entries would otherwise keep the old floor until they expire.
