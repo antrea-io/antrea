@@ -2060,6 +2060,33 @@ func randExternalSubnet(isIPv6 bool) netip.Prefix {
 	}), 30)
 }
 
+// waitForFakeExternalNetns waits until the fake external network namespace created by the Pod's
+// command (see getCommandInFakeExternalNetwork) is usable. podWaitForRunning only tells us that the
+// container's shell has started, not that it has finished running the "ip netns add" / veth setup
+// chain, so a caller that execs "ip netns exec <netns> ..." right after the Pod becomes Running can
+// fail with `Cannot open network namespace "<netns>": No such file or directory`.
+// service_externalip_test.go solves the same problem with an exec readiness probe; these tests
+// cannot easily do that because the probe would have to target a Service that is not necessarily
+// reachable yet, so we poll here instead.
+func waitForFakeExternalNetns(t *testing.T, data *TestData, podName, netns string, isIPv6 bool) {
+	t.Helper()
+	// Installing the default route is the last step of the setup chain that affects the
+	// Namespace, so we wait until that route is present. Note that "ip route show" exits with 0
+	// even when no route matches, hence the grep.
+	family := "-4"
+	if isIPv6 {
+		family = "-6"
+	}
+	cmd := []string{"sh", "-c", fmt.Sprintf("ip netns exec %s ip %s -o route show default | grep -q .", netns, family)}
+	var stderr string
+	err := wait.PollUntilContextTimeout(context.Background(), 500*time.Millisecond, 30*time.Second, true, func(ctx context.Context) (bool, error) {
+		_, s, err := data.RunCommandFromPod(data.testNamespace, podName, "toolbox", cmd)
+		stderr = s
+		return err == nil, nil
+	})
+	require.NoErrorf(t, err, "Fake external network namespace %s in Pod %s never became usable; stderr: %s", netns, podName, stderr)
+}
+
 // createExternalToPodConnection simulates an external client connecting to the given NodePort
 // Service. It creates a privileged host-network Pod on the target Node with a fake external
 // network namespace (via getCommandInFakeExternalNetwork), then curls the NodePort on the node's
@@ -2103,6 +2130,7 @@ func createExternalToPodConnection(t *testing.T, data *TestData, service *corev1
 	})
 	require.NoErrorf(t, data.podWaitForRunning(defaultTimeout, podName, data.testNamespace),
 		"Fake external client Pod %s did not become Running", podName)
+	waitForFakeExternalNetns(t, data, podName, netns, isIPv6)
 
 	nodePort := strconv.Itoa(int(service.Spec.Ports[0].NodePort))
 	hostAndPort := net.JoinHostPort(nodeIP, nodePort)
@@ -2145,6 +2173,7 @@ func createNPLConnection(t *testing.T, data *TestData, nodeIndex int, nodeIP str
 	})
 	require.NoErrorf(t, data.podWaitForRunning(defaultTimeout, podName, data.testNamespace),
 		"Fake NPL client Pod %s did not become Running", podName)
+	waitForFakeExternalNetns(t, data, podName, netns, isIPv6)
 
 	hostAndPort := net.JoinHostPort(nodeIP, strconv.Itoa(nplPort))
 	curlCmd := fmt.Sprintf("ip netns exec %s curl -sS -o /dev/null -w '%%{local_port}' --connect-timeout 5 --retry 3 --retry-connrefused http://%s",
