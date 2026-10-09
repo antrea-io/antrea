@@ -23,8 +23,8 @@ import (
 	"testing"
 	"testing/synctest"
 	"time"
+	"uuid"
 
-	"github.com/gofrs/uuid/v5"
 	"github.com/spf13/afero"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -72,8 +72,8 @@ func TestInitInterfaceStore(t *testing.T) {
 	err := initializer.initInterfaceStore()
 	assert.Error(t, err, "failed to handle OVS return error")
 
-	uuid1 := uuid.Must(uuid.NewV4()).String()
-	uuid2 := uuid.Must(uuid.NewV4()).String()
+	uuid1 := uuid.NewV4().String()
+	uuid2 := uuid.NewV4().String()
 	p1MAC := "11:22:33:44:55:66"
 	p1IP := "1.1.1.1"
 	p2MAC := "11:22:33:44:55:77"
@@ -91,7 +91,7 @@ func TestInitInterfaceStore(t *testing.T) {
 			interfacestore.NewContainerInterface("p2", uuid2, "pod2", "ns2", "eth0", "netns2", p2NetMAC, []net.IP{p2NetIP}, 0),
 		),
 	}
-	uuid3 := uuid.Must(uuid.NewV4()).String()
+	uuid3 := uuid.NewV4().String()
 	ovsPortUplinkInternal := ovsconfig.OVSPortData{UUID: uuid3, Name: "eth-antrea-test-1", IFName: "eth-antrea-test-1", OFPort: 100,
 		ExternalIDs: map[string]string{
 			interfacestore.AntreaInterfaceTypeKey: interfacestore.AntreaHost,

@@ -24,9 +24,9 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"uuid"
 
 	"github.com/cenkalti/backoff/v4"
-	"github.com/gofrs/uuid/v5"
 	"github.com/ovn-kubernetes/libovsdb/client"
 	"github.com/ovn-kubernetes/libovsdb/model"
 	"github.com/ovn-kubernetes/libovsdb/ovsdb"
@@ -1314,11 +1314,7 @@ func (br *OVSBridge) GetBridgeMcastSnoopingEnable() (bool, error) {
 // namedUUID generates a temporary named-uuid for inserting uncommitted records
 // into OVSDB within an atomic transaction.
 func namedUUID() string {
-	u, err := uuid.NewV4()
-	if err != nil {
-		return fmt.Sprintf("row%d", time.Now().UnixNano())
-	}
-	return "row" + strings.ReplaceAll(u.String(), "-", "")
+	return "row" + strings.ReplaceAll(uuid.NewV4().String(), "-", "")
 }
 
 // getOpenvSwitch is a helper function to fetch the root Open_vSwitch record from OVSDB.

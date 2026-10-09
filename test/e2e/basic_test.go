@@ -24,8 +24,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+	"uuid"
 
-	"github.com/gofrs/uuid/v5"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
@@ -910,7 +910,7 @@ func testClusterIdentity(t *testing.T, data *TestData) {
 	const timeout = 10 * time.Second
 	clusterUUID, err := data.getAntreaClusterUUID(timeout)
 	require.NoError(t, err, "Failed to retrieve cluster identity information within %v", timeout)
-	assert.NotEqual(t, uuid.Nil, clusterUUID)
+	assert.NotEqual(t, uuid.Nil(), clusterUUID)
 	t.Logf("Cluster UUID: %v", clusterUUID)
 }
 

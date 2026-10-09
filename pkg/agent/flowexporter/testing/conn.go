@@ -17,8 +17,7 @@ package testing
 import (
 	"net/netip"
 	"time"
-
-	"github.com/gofrs/uuid/v5"
+	"uuid"
 
 	"antrea.io/antrea/v2/pkg/agent/flowexporter/connection"
 	"antrea.io/antrea/v2/pkg/agent/flowexporter/utils"
@@ -45,7 +44,7 @@ func GetConnection(isIPv6 bool, isPresent bool, statusFlag uint32, protoID uint8
 		IsPresent:                      isPresent,
 		SourcePodNamespace:             "ns",
 		SourcePodName:                  "pod",
-		SourcePodUID:                   uuid.Must(uuid.NewV4()).String(),
+		SourcePodUID:                   uuid.NewV4().String(),
 		DestinationPodNamespace:        "",
 		DestinationPodName:             "",
 		IngressNetworkPolicyName:       "",
@@ -55,7 +54,7 @@ func GetConnection(isIPv6 bool, isPresent bool, statusFlag uint32, protoID uint8
 		IngressNetworkPolicyRuleAction: utils.NetworkPolicyRuleActionNoAction,
 		EgressNetworkPolicyName:        "np",
 		EgressNetworkPolicyNamespace:   "ns",
-		EgressNetworkPolicyUID:         uuid.Must(uuid.NewV4()).String(),
+		EgressNetworkPolicyUID:         uuid.NewV4().String(),
 		EgressNetworkPolicyType:        utils.PolicyTypeK8sNetworkPolicy,
 		EgressNetworkPolicyRuleName:    "",
 		EgressNetworkPolicyRuleAction:  utils.NetworkPolicyRuleActionAllow,
@@ -63,7 +62,7 @@ func GetConnection(isIPv6 bool, isPresent bool, statusFlag uint32, protoID uint8
 		TCPState:                       tcpState,
 		FlowType:                       utils.FlowTypeInterNode,
 		EgressName:                     "my-egress",
-		EgressUID:                      uuid.Must(uuid.NewV4()).String(),
+		EgressUID:                      uuid.NewV4().String(),
 		EgressNodeName:                 "egress-node",
 		Zone:                           65520,
 	}

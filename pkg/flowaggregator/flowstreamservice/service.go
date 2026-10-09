@@ -27,8 +27,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"uuid"
 
-	"github.com/google/uuid"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
@@ -111,7 +111,7 @@ func NewFlowStreamService(buffer ringbuffer.BroadcastBuffer[*flowpb.Flow], authe
 		authenticator:     authenticator,
 		authorizer:        authorizer,
 		maxStreamsPerConn: uint32(authenticator.streamLimiter.limits.MaxTotalStreams),
-		streamEpoch:       uuid.NewString(),
+		streamEpoch:       uuid.NewV4().String(),
 	}, nil
 }
 
@@ -124,7 +124,7 @@ func newFlowStreamServiceWithoutAuthentication(buffer ringbuffer.BroadcastBuffer
 		buffer:            buffer,
 		authorizer:        authorizer,
 		maxStreamsPerConn: flowaggregatorconfig.DefaultFlowStreamMaxTotalStreams,
-		streamEpoch:       uuid.NewString(),
+		streamEpoch:       uuid.NewV4().String(),
 	}
 }
 

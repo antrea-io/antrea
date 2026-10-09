@@ -6,6 +6,7 @@ run:
 linters:
   default: none
   enable:
+    - depguard
     - gosec
     - govet
     - loggercheck
@@ -14,6 +15,16 @@ linters:
     - staticcheck
     - unused
   settings:
+    depguard:
+      rules:
+        # depguard only looks at the packages imported by our own source files,
+        # so the modules below can still be required as indirect dependencies.
+        uuid:
+          deny:
+            - pkg: github.com/google/uuid
+              desc: use the uuid package from the standard library instead
+            - pkg: github.com/gofrs/uuid
+              desc: use the uuid package from the standard library instead
     gosec:
       excludes:
        # At the time of writing this, the G115 rule is not even part of an

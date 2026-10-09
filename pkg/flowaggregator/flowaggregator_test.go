@@ -25,9 +25,9 @@ import (
 	"testing"
 	"testing/synctest"
 	"time"
+	"uuid"
 
 	"github.com/fsnotify/fsnotify"
-	"github.com/gofrs/uuid/v5"
 	"github.com/google/go-cmp/cmp"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -664,7 +664,7 @@ func TestFlowAggregator_Run(t *testing.T) {
 	mockNodeStore.EXPECT().HasSynced().Return(true)
 	mockServiceStore := objectstoretest.NewMockServiceStore(ctrl)
 	mockServiceStore.EXPECT().HasSynced().Return(true)
-	clusterUUID := uuid.Must(uuid.NewV4())
+	clusterUUID := uuid.NewV4()
 	clusterID := clusterUUID.String()
 	// This will validate that the correct UUID / ID is provided by the
 	// FlowAggregator when instantiating exporters.
@@ -1156,7 +1156,7 @@ func TestNewFlowAggregator(t *testing.T) {
 			mockPodStore := objectstoretest.NewMockPodStore(ctrl)
 			mockNodeStore := objectstoretest.NewMockNodeStore(ctrl)
 			mockServiceStore := objectstoretest.NewMockServiceStore(ctrl)
-			clusterUUID := uuid.Must(uuid.NewV4())
+			clusterUUID := uuid.NewV4()
 			clusterID := tc.config.ClusterID
 			if clusterID == "" {
 				clusterID = clusterUUID.String()

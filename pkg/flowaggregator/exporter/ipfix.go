@@ -22,8 +22,8 @@ import (
 	"net"
 	"path/filepath"
 	"time"
+	"uuid"
 
-	"github.com/gofrs/uuid/v5"
 	"github.com/spf13/afero"
 	ipfixentities "github.com/vmware/go-ipfix/pkg/entities"
 	"github.com/vmware/go-ipfix/pkg/exporter"
@@ -47,6 +47,9 @@ var (
 	}
 
 	defaultFS = afero.NewOsFs()
+
+	// nilUUID is exported in place of a UID which is missing or cannot be parsed.
+	nilUUID = uuid.Nil()
 )
 
 const (
@@ -306,13 +309,13 @@ func (e *IPFIXExporter) makeIPFIXRecord(flow *flowpb.Flow, isIPv6 bool) ipfixent
 
 	setUUID := func(uid string) {
 		if uid == "" {
-			next().SetOctetArrayValue(uuid.Nil[:])
+			next().SetOctetArrayValue(nilUUID[:])
 			return
 		}
-		v, err := uuid.FromString(uid)
+		v, err := uuid.Parse(uid)
 		if err != nil {
 			klog.ErrorS(err, "Error when parsing UID string", "uid", uid)
-			next().SetOctetArrayValue(uuid.Nil[:])
+			next().SetOctetArrayValue(nilUUID[:])
 			return
 		}
 		next().SetOctetArrayValue(v[:])

@@ -23,11 +23,11 @@ import (
 	"strings"
 	"testing"
 	"testing/synctest"
+	"uuid"
 
 	"github.com/containernetworking/cni/pkg/invoke"
 	cnitypes "github.com/containernetworking/cni/pkg/types"
 	current "github.com/containernetworking/cni/pkg/types/100"
-	"github.com/gofrs/uuid/v5"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
@@ -728,7 +728,7 @@ func TestUpdateResultIfaceConfig(t *testing.T) {
 func TestValidateOVSInterface(t *testing.T) {
 	ifaceStore := interfacestore.NewInterfaceStore()
 	podConfigurator := &podConfigurator{ifaceStore: ifaceStore}
-	containerID := uuid.Must(uuid.NewV4()).String()
+	containerID := uuid.NewV4().String()
 	containerMACStr := "11:22:33:44:55:66"
 	containerIP := []string{"10.1.2.100/24,10.1.2.1,4"}
 	result := ipamtest.GenerateIPAMResult(containerIP, routes, dns)
@@ -736,7 +736,7 @@ func TestValidateOVSInterface(t *testing.T) {
 	hostIfaceName := util.GenerateContainerInterfaceName(testPodNameA, testPodNamespace, containerID)
 	hostIface := &current.Interface{Name: hostIfaceName}
 	result.Interfaces = []*current.Interface{hostIface, containerIface}
-	portUUID := uuid.Must(uuid.NewV4()).String()
+	portUUID := uuid.NewV4().String()
 	containerConfig := buildContainerConfig(hostIfaceName, containerID, testPodNameA, testPodNamespace,
 		"netns1", containerIface, result.IPs, 0)
 	containerConfig.OVSPortConfig = &interfacestore.OVSPortConfig{PortUUID: portUUID}
@@ -747,7 +747,7 @@ func TestValidateOVSInterface(t *testing.T) {
 }
 
 func TestBuildOVSPortExternalIDs(t *testing.T) {
-	containerID := uuid.Must(uuid.NewV4()).String()
+	containerID := uuid.NewV4().String()
 	containerMAC, _ := net.ParseMAC("aa:bb:cc:dd:ee:ff")
 	containerIP1 := net.ParseIP("10.1.2.100")
 	containerIP2 := net.ParseIP("2001:fd1a::2")
@@ -882,7 +882,7 @@ func newRequest(args string, netCfg *types.NetworkConfig, path string, t *testin
 }
 
 func generateUUID() string {
-	return uuid.Must(uuid.NewV4()).String()
+	return uuid.NewV4().String()
 }
 
 func init() {
