@@ -310,7 +310,7 @@ func getLabelIdentityResImport(labelHash, label, ns string, id uint32) *mcsv1alp
 // hash from the API request.
 func parseLabelIdentityExportNamespacedName(namespacedName types.NamespacedName) (string, string, error) {
 	lastIdx := strings.LastIndex(namespacedName.Name, "-")
-	if lastIdx < 0 {
+    if lastIdx <= 0 || lastIdx == len(namespacedName.Name)-1 {
 		return "", "", fmt.Errorf("invalid LabelIdentityExport name format: %s", namespacedName.Name)
 	}
 	clusterID := namespacedName.Name[:lastIdx]
