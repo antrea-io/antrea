@@ -468,7 +468,7 @@ This feature is only supported for Linux Nodes at the moment.
 ### EgressTrafficShaping
 
 The `EgressTrafficShaping` feature gate of Antrea Agent enables traffic shaping of Egress, which could limit the
-bandwidth for all egress traffic belonging to an Egress. Refer to this [document](egress.md#trafficshaping)
+bandwidth for all egress traffic belonging to an Egress. Refer to this [document](egress.md#bandwidth)
 
 #### Requirements for this Feature
 
