@@ -173,6 +173,9 @@ Agent tracks for the FQDN rules of the NetworkPolicies applied to local Pods.
 NetworkPolicy rules on local Node which are managed by the Antrea Agent.
 - **antrea_agent_local_pod_count:** Number of Pods on local Node which are
 managed by the Antrea Agent.
+- **antrea_agent_multicast_group_join_rejected_count:** Number of multicast
+group joins rejected due to limits, partitioned by reason (pod_limit and
+node_limit). When both limits are exceeded, node_limit is reported.
 - **antrea_agent_networkpolicy_count:** Number of NetworkPolicies on local Node
 which are managed by the Antrea Agent.
 - **antrea_agent_ovs_flow_count:** Flow count for each OVS flow table. The

@@ -33,6 +33,7 @@ import (
 
 	"antrea.io/antrea/v2/pkg/agent/config"
 	"antrea.io/antrea/v2/pkg/agent/interfacestore"
+	"antrea.io/antrea/v2/pkg/agent/metrics"
 	"antrea.io/antrea/v2/pkg/agent/openflow"
 	"antrea.io/antrea/v2/pkg/agent/types"
 	"antrea.io/antrea/v2/pkg/agent/util"
@@ -60,9 +61,21 @@ const (
 	// nodeUpdateKey is a key to trigger the Node list operation and update the OpenFlow group buckets to report
 	// the local multicast groups to other Nodes.
 	nodeUpdateKey = "nodeUpdate"
+
+	// defaultMaxGroupsPerPod bounds the number of multicast groups a local Pod can join.
+	defaultMaxGroupsPerPod = 32
+	// defaultMaxGroupsPerNode bounds the total number of multicast groups with local members on this Node.
+	// It is set to 128 to ensure that all local groups fit within a single IGMPv3 report packet without
+	// exceeding a standard 1500 MTU (even with tunnel encapsulation overhead) until sender-side batching lands.
+	defaultMaxGroupsPerNode = 128
 )
 
-var workerCount uint8 = 2
+var (
+	workerCount uint8 = 2
+
+	maxGroupsPerPod  = defaultMaxGroupsPerPod
+	maxGroupsPerNode = defaultMaxGroupsPerNode
+)
 
 type mcastGroupEvent struct {
 	group net.IP
@@ -109,6 +122,9 @@ func (c *Controller) addGroupMemberStatus(e *mcastGroupEvent) {
 		localMembers:  make(map[string]time.Time),
 	}
 	status = addGroupMember(status, e)
+	if e.iface.Type == interfacestore.ContainerInterface {
+		c.localGroupCount++
+	}
 	c.groupCache.Add(status)
 	c.queue.Add(e.group.String())
 	klog.InfoS("Added new multicast group to cache", "group", e.group, "interface", e.iface.InterfaceName)
@@ -133,6 +149,9 @@ func (c *Controller) updateGroupMemberStatus(obj interface{}, e *mcastGroupEvent
 	exist := memberExists(status, e)
 	switch e.eType {
 	case groupJoin:
+		if e.iface.Type == interfacestore.ContainerInterface && len(status.localMembers) == 0 {
+			c.localGroupCount++
+		}
 		newStatus = addGroupMember(newStatus, e)
 		c.groupCache.Update(newStatus)
 		if !exist {
@@ -142,6 +161,11 @@ func (c *Controller) updateGroupMemberStatus(obj interface{}, e *mcastGroupEvent
 	case groupLeave:
 		if exist {
 			newStatus = deleteGroupMember(newStatus, e)
+			if e.iface.Type == interfacestore.ContainerInterface && len(status.localMembers) > 0 && len(newStatus.localMembers) == 0 {
+				if c.localGroupCount > 0 {
+					c.localGroupCount--
+				}
+			}
 			c.groupCache.Update(newStatus)
 			if e.iface.Type == interfacestore.ContainerInterface {
 				_, found := c.ifaceStore.GetInterfaceByName(e.iface.InterfaceName)
@@ -270,6 +294,13 @@ type Controller struct {
 	// ipv6Enabled is the flag that if it is running on IPv6 cluster.
 	// TODO: remove this flag after IPv6 is supported in Multicast.
 	ipv6Enabled bool
+	logger      *rateLimitedLogger
+	// localGroupCount tracks the number of multicast groups in groupCache that have at least one local member.
+	localGroupCount int
+}
+
+func (c *Controller) logRateLimited(err error, msg string, keysAndValues ...interface{}) {
+	c.logger.log(err, msg, keysAndValues...)
 }
 
 func NewMulticastController(ofClient openflow.Client,
@@ -317,6 +348,7 @@ func NewMulticastController(ofClient openflow.Client,
 		flexibleIPAMEnabled: enableFlexibleIPAM,
 		ipv4Enabled:         ipv4Enabled,
 		ipv6Enabled:         ipv6Enabled,
+		logger:              newRateLimitedLogger(igmpLogRateLimiterInterval, igmpLogRateLimiterBurst),
 	}
 	if isEncap {
 		c.nodeGroupID = v4GroupAllocator.Allocate()
@@ -620,8 +652,41 @@ func (c *Controller) addOrUpdateGroupEvent(e *mcastGroupEvent) {
 	switch e.eType {
 	case groupJoin:
 		if !ok {
+			if e.iface.Type == interfacestore.ContainerInterface {
+				if c.localGroupCount >= maxGroupsPerNode {
+					c.logRateLimited(nil, "Dropped multicast group join: Node group limit reached",
+						"group", e.group.String(), "limit", maxGroupsPerNode)
+					metrics.MulticastGroupJoinRejectedCount.WithLabelValues(metrics.LabelMulticastGroupJoinRejectedNodeLimit).Inc()
+					return
+				}
+				podGroups := c.getGroupMemberStatusesByPod(e.iface.InterfaceName)
+				if len(podGroups) >= maxGroupsPerPod {
+					c.logRateLimited(nil, "Dropped multicast group join: Pod group limit reached",
+						"pod", e.iface.InterfaceName, "group", e.group.String(), "limit", maxGroupsPerPod)
+					metrics.MulticastGroupJoinRejectedCount.WithLabelValues(metrics.LabelMulticastGroupJoinRejectedPodLimit).Inc()
+					return
+				}
+			}
 			c.addGroupMemberStatus(e)
 		} else {
+			if e.iface.Type == interfacestore.ContainerInterface {
+				status := obj.(*GroupMemberStatus)
+				if len(status.localMembers) == 0 && c.localGroupCount >= maxGroupsPerNode {
+					c.logRateLimited(nil, "Dropped multicast group join: Node group limit reached",
+						"group", e.group.String(), "limit", maxGroupsPerNode)
+					metrics.MulticastGroupJoinRejectedCount.WithLabelValues(metrics.LabelMulticastGroupJoinRejectedNodeLimit).Inc()
+					return
+				}
+				if _, exist := status.localMembers[e.iface.InterfaceName]; !exist {
+					podGroups := c.getGroupMemberStatusesByPod(e.iface.InterfaceName)
+					if len(podGroups) >= maxGroupsPerPod {
+						c.logRateLimited(nil, "Dropped multicast group join: Pod group limit reached",
+							"pod", e.iface.InterfaceName, "group", e.group.String(), "limit", maxGroupsPerPod)
+						metrics.MulticastGroupJoinRejectedCount.WithLabelValues(metrics.LabelMulticastGroupJoinRejectedPodLimit).Inc()
+						return
+					}
+				}
+			}
 			c.updateGroupMemberStatus(obj, e)
 		}
 	case groupLeave:
