@@ -41,6 +41,7 @@ func NewARPResponder(transportInterfaceName string, linkMonitor linkmonitor.Inte
 		linkName:    transportInterfaceName,
 		assignedIPs: sets.New[netip.Addr](),
 		linkEventCh: make(chan struct{}, 1),
+		dial:        defaultARPDial,
 	}
 	if linkMonitor != nil {
 		linkMonitor.AddEventHandler(a.onLinkUpdate, transportInterfaceName)
@@ -62,6 +63,7 @@ func NewNDPResponder(transportInterfaceName string, linkMonitor linkmonitor.Inte
 		multicastGroups: make(map[netip.Addr]int),
 		assignedIPs:     sets.New[netip.Addr](),
 		linkEventCh:     make(chan struct{}, 1),
+		dial:            defaultNDPDial,
 	}
 	if linkMonitor != nil {
 		linkMonitor.AddEventHandler(n.onLinkUpdate, transportInterfaceName)

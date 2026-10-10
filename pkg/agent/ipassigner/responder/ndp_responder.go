@@ -15,10 +15,12 @@
 package responder
 
 import (
+	"errors"
 	"fmt"
 	"net"
 	"net/netip"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"antrea.io/ndp"
@@ -44,6 +46,7 @@ type ndpResponder struct {
 	once            sync.Once
 	linkName        string
 	conn            ndpConn
+	dial            func(*net.Interface) (ndpConn, error)
 	linkEventCh     chan struct{}
 	assignedIPs     sets.Set[netip.Addr]
 	multicastGroups map[netip.Addr]int
@@ -51,6 +54,11 @@ type ndpResponder struct {
 }
 
 var _ Responder = (*ndpResponder)(nil)
+
+func defaultNDPDial(transportInterface *net.Interface) (ndpConn, error) {
+	conn, _, err := ndp.Listen(transportInterface, ndp.LinkLocal)
+	return conn, err
+}
 
 func parseIPv6SolicitedNodeMulticastAddress(ip netip.Addr) netip.Addr {
 	target := ip.As16()
@@ -104,7 +112,8 @@ func (r *ndpResponder) handleNeighborSolicitation(conn ndpConn, link *net.Interf
 		},
 	}
 	if err := conn.WriteTo(na, nil, srcIP); err != nil {
-		return err
+		klog.ErrorS(err, "Failed to send Neighbor Advertisement", "ip", ns.TargetAddress, "interface", r.linkName)
+		return nil
 	}
 	klog.V(4).InfoS("Sent Neighbor Advertisement", "ip", ns.TargetAddress.String(), "interface", r.linkName)
 	return nil
@@ -132,11 +141,16 @@ func (r *ndpResponder) dialAndHandleRequests(stopCh <-chan struct{}) {
 	// which may take time to allow the address to be used for socket binding. EADDRNOTAVAIL (bind: cannot assign requested address)
 	// may be returned for such cases.
 	klog.InfoS("Binding NDP responder on interface", "interface", r.linkName)
-	conn, _, err := ndp.Listen(transportInterface, ndp.LinkLocal)
+	dial := r.dial
+	if dial == nil {
+		dial = defaultNDPDial
+	}
+	conn, err := dial(transportInterface)
 	if err != nil {
 		klog.ErrorS(err, "Failed to create NDP responder", "interface", r.linkName)
 		return
 	}
+	defer conn.Close()
 
 	r.mutex.Lock()
 	r.conn = conn
@@ -146,19 +160,36 @@ func (r *ndpResponder) dialAndHandleRequests(stopCh <-chan struct{}) {
 		}
 	}
 	r.mutex.Unlock()
+	defer func() {
+		r.mutex.Lock()
+		r.conn = nil
+		clear(r.multicastGroups)
+		r.mutex.Unlock()
+	}()
 
-	reloadCh := make(chan struct{})
+	// readLoopDone notifies the background link watcher goroutine to exit
+	// when the read loop terminates.
+	readLoopDone := make(chan struct{})
+	defer close(readLoopDone)
+
+	// closing is set by the watcher goroutine before it closes the socket, so that
+	// the read loop can tell an intentional close from a socket failure without
+	// depending on which error the socket returns when closed. This mirrors the
+	// ARP responder, whose packet socket returns an error matching neither
+	// net.ErrClosed nor os.ErrClosed.
+	var closing atomic.Bool
 
 	klog.InfoS("NDP responder started", "interface", transportInterface.Name, "index", transportInterface.Index)
 	defer klog.InfoS("NDP responder stopped", "interface", transportInterface.Name, "index", transportInterface.Index)
 
 	go func() {
-		defer conn.Close()
-		defer close(reloadCh)
-
 		for {
 			select {
 			case <-stopCh:
+				closing.Store(true)
+				conn.Close()
+				return
+			case <-readLoopDone:
 				return
 			case <-r.linkEventCh:
 				newTransportInterface, err := net.InterfaceByName(r.linkName)
@@ -168,6 +199,8 @@ func (r *ndpResponder) dialAndHandleRequests(stopCh <-chan struct{}) {
 				}
 				if transportInterface.Index != newTransportInterface.Index {
 					klog.InfoS("Transport interface index changed, restarting NDP responder", "name", transportInterface.Name, "oldIndex", transportInterface.Index, "newIndex", newTransportInterface.Index)
+					closing.Store(true)
+					conn.Close()
 					return
 				}
 				klog.V(4).InfoS("Transport interface not changed")
@@ -176,15 +209,19 @@ func (r *ndpResponder) dialAndHandleRequests(stopCh <-chan struct{}) {
 	}()
 
 	for {
-		select {
-		case <-reloadCh:
-			return
-		default:
-			err := r.handleNeighborSolicitation(conn, transportInterface)
-			if err != nil {
-				klog.ErrorS(err, "Failed to handle Neighbor Solicitation", "deviceName", r.linkName)
-			}
+		err := r.handleNeighborSolicitation(conn, transportInterface)
+		if err == nil {
+			continue
 		}
+		if closing.Load() {
+			return
+		}
+		var opErr *net.OpError
+		if errors.As(err, &opErr) {
+			klog.ErrorS(err, "Socket error in NDP responder, restarting", "deviceName", r.linkName)
+			return
+		}
+		klog.V(2).InfoS("Skipping invalid NDP packet", "err", err, "deviceName", r.linkName)
 	}
 }
 
