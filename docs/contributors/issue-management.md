@@ -109,7 +109,7 @@ an opportunity to appeal the reason supplied.
 
 A PR is triaged in the following way:
 
-1. Automation will ensure that the submitter has signed the [CLA](../../CONTRIBUTING.md#cla).
+1. Automation will ensure that all commits are signed off per the [DCO](../../CONTRIBUTING.md#sign-off-your-work).
 2. Automation will run CI tests against the submission to ensure compliance.
 3. Apply [`size/<size>`](#size) label to the submission. (TODO: we plan to
    automate this with a GitHub action and apply size based on lines of code).
