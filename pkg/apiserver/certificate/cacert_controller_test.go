@@ -33,6 +33,8 @@ import (
 	cgtesting "k8s.io/client-go/testing"
 	apiregistrationv1 "k8s.io/kube-aggregator/pkg/apis/apiregistration/v1"
 	fakeaggregatorclientset "k8s.io/kube-aggregator/pkg/client/clientset_generated/clientset/fake"
+
+	"antrea.io/antrea/v2/pkg/util/env"
 )
 
 func TestSyncConfigMap(t *testing.T) {
@@ -535,6 +537,66 @@ func TestSyncConversionWebhooks(t *testing.T) {
 			crd, err := apiExtensionClient.ApiextensionsV1().CustomResourceDefinitions().Get(context.Background(), tt.existingCRD.Name, metav1.GetOptions{})
 			require.NoError(t, err)
 			assert.Equal(t, caBundle, crd.Spec.Conversion.Webhook.ClientConfig.CABundle)
+		})
+	}
+}
+
+func TestSyncConversionWebhookNamespace(t *testing.T) {
+	for _, tt := range []struct {
+		name         string
+		podNamespace string
+		caBundle     string
+	}{
+		{name: "custom namespace with new CA", podNamespace: "antrea-system", caBundle: "old-ca"},
+		{name: "custom namespace with unchanged CA", podNamespace: "antrea-system", caBundle: "ca"},
+		{name: "default namespace", podNamespace: "kube-system", caBundle: "ca"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Setenv(env.PodNamespaceEnvKey, tt.podNamespace)
+			path := "/convert/egress"
+			port := int32(443)
+			crd := &apiextensionsv1.CustomResourceDefinition{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:   "egresses.crd.antrea.io",
+					Labels: map[string]string{"app": "antrea"},
+				},
+				Spec: apiextensionsv1.CustomResourceDefinitionSpec{
+					Conversion: &apiextensionsv1.CustomResourceConversion{
+						Strategy: apiextensionsv1.WebhookConverter,
+						Webhook: &apiextensionsv1.WebhookConversion{
+							ClientConfig: &apiextensionsv1.WebhookClientConfig{
+								CABundle: []byte(tt.caBundle),
+								Service: &apiextensionsv1.ServiceReference{
+									Name: "antrea", Namespace: "kube-system", Path: &path, Port: &port,
+								},
+							},
+						},
+					},
+				},
+			}
+			client := fakeapiextensionclientset.NewSimpleClientset(crd)
+			controller := &CACertController{
+				apiExtensionClient: client,
+				caConfig: &CAConfig{
+					CRDConversionWebhookSelector: &metav1.LabelSelector{MatchLabels: map[string]string{"app": "antrea"}},
+				},
+			}
+			require.NoError(t, controller.syncConversionWebhooks([]byte("ca")))
+			updated, err := client.ApiextensionsV1().CustomResourceDefinitions().Get(context.Background(), crd.Name, metav1.GetOptions{})
+			require.NoError(t, err)
+			assert.Equal(t, &apiextensionsv1.WebhookClientConfig{
+				CABundle: []byte("ca"),
+				Service: &apiextensionsv1.ServiceReference{
+					Name: "antrea", Namespace: tt.podNamespace, Path: &path, Port: &port,
+				},
+			}, updated.Spec.Conversion.Webhook.ClientConfig)
+
+			// Repeated synchronization must not issue unnecessary updates.
+			client.ClearActions()
+			require.NoError(t, controller.syncConversionWebhooks([]byte("ca")))
+			for _, action := range client.Actions() {
+				assert.NotEqual(t, "update", action.GetVerb())
+			}
 		})
 	}
 }

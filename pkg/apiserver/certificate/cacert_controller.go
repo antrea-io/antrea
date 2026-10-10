@@ -170,6 +170,14 @@ func (c *CACertController) syncConversionWebhooks(caCert []byte) error {
 			updated = true
 			crdDef.Spec.Conversion.Webhook.ClientConfig.CABundle = caCert
 		}
+		// Helm does not template CRDs in the chart's crds/ directory. Reconcile the Service Namespace so conversion
+		// also works for installations outside kube-system.
+		if service := crdDef.Spec.Conversion.Webhook.ClientConfig.Service; service != nil {
+			if namespace := env.GetAntreaNamespace(); service.Namespace != namespace {
+				service.Namespace = namespace
+				updated = true
+			}
+		}
 		if updated {
 			klog.InfoS("Syncing CA certificate with CRD that have conversion webhooks", "name", crdDef.Name)
 			if _, err := c.apiExtensionClient.ApiextensionsV1().CustomResourceDefinitions().Update(context.TODO(), &crdDef, metav1.UpdateOptions{}); err != nil {
