@@ -25,6 +25,7 @@ import (
 	"antrea.io/ofnet/ofctrl"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/vmware/go-ipfix/pkg/registry"
 	k8stypes "k8s.io/apimachinery/pkg/types"
 
 	"antrea.io/antrea/v2/pkg/agent/flowexporter/connection"
@@ -146,11 +147,22 @@ func TestPublishDenyConnection(t *testing.T) {
 	}
 	policyUID := uuid.NewV4().String()
 
+	// reg0 data with a Drop disposition, with and without APDenyRegMark set. APDenyRegMark is only set
+	// by Antrea-native policy rules.
+	dispositionRegID := openflow.APDispositionField.GetRegID()
 	dropCNPDispositionData := []byte{0x11, 0x00, 0x0c, 0x11}
-	dispositionMatch := generateRegMatch(openflow.APDispositionField.GetRegID(), dropCNPDispositionData)
+	dropK8sDispositionData := []byte{0x11, 0x00, 0x08, 0x11}
+	conjIDRegID := openflow.APConjIDField.GetRegID()
 	conjunctionData := []byte{0x11, 0x11, 0x11, 0x11}
-	conjunctionMatch := generateRegMatch(openflow.APConjIDField.GetRegID(), conjunctionData)
-	matchers := []openflow15.MatchField{dispositionMatch, conjunctionMatch}
+	// For IPv4 Service traffic, the selected Endpoint IP (10.10.1.7 here) is loaded into reg3, which
+	// is shared by EndpointIPField and APConjIDField.
+	endpointIPRegID := openflow.EndpointIPField.GetRegID()
+	endpointIPData := []byte{0x0a, 0x0a, 0x01, 0x07}
+	// K8s NetworkPolicy default drop flows send the packet to the Agent from OutputTable, and store
+	// the ID of the table which dropped it in PacketInTableField.
+	tableRegID := openflow.PacketInTableField.GetRegID()
+	ingressDefaultTableData := []byte{0x00, 0x00, 0x00, openflow.IngressDefaultTable.GetID()}
+	egressDefaultTableData := []byte{0x00, 0x00, 0x00, openflow.EgressDefaultTable.GetID()}
 
 	ruleCache := &fakeRuleCache{
 		map[uint32]*types.PolicyRule{
@@ -169,11 +181,13 @@ func TestPublishDenyConnection(t *testing.T) {
 	testCases := []struct {
 		name         string
 		tableID      uint8
+		regData      map[int][]byte
 		expectedConn *connection.Connection
 	}{
 		{
 			name:    "ingress policy",
 			tableID: openflow.AntreaPolicyIngressRuleTable.GetID(),
+			regData: map[int][]byte{dispositionRegID: dropCNPDispositionData, conjIDRegID: conjunctionData},
 			expectedConn: &connection.Connection{
 				FlowKey:                    key,
 				OriginalDestinationAddress: destinationAddr,
@@ -185,12 +199,91 @@ func TestPublishDenyConnection(t *testing.T) {
 		{
 			name:    "egress policy",
 			tableID: openflow.AntreaPolicyEgressRuleTable.GetID(),
+			regData: map[int][]byte{dispositionRegID: dropCNPDispositionData, conjIDRegID: conjunctionData},
 			expectedConn: &connection.Connection{
 				FlowKey:                    key,
 				OriginalDestinationAddress: destinationAddr,
 				Disposition:                actionDrop,
 				OriginalBytes:              20,
 				EgressRuleID:               0x11111111,
+			},
+		},
+		// Baseline Tier rules are installed in the same tables as the K8s NetworkPolicy default drop flows, so
+		// only APDenyRegMark tells them apart.
+		{
+			name:    "Baseline Tier ingress policy",
+			tableID: openflow.IngressDefaultTable.GetID(),
+			regData: map[int][]byte{dispositionRegID: dropCNPDispositionData, conjIDRegID: conjunctionData, tableRegID: ingressDefaultTableData},
+			expectedConn: &connection.Connection{
+				FlowKey:                    key,
+				OriginalDestinationAddress: destinationAddr,
+				Disposition:                actionDrop,
+				OriginalBytes:              20,
+				IngressRuleID:              0x11111111,
+			},
+		},
+		{
+			name:    "Baseline Tier egress policy",
+			tableID: openflow.EgressDefaultTable.GetID(),
+			regData: map[int][]byte{dispositionRegID: dropCNPDispositionData, conjIDRegID: conjunctionData, tableRegID: egressDefaultTableData},
+			expectedConn: &connection.Connection{
+				FlowKey:                    key,
+				OriginalDestinationAddress: destinationAddr,
+				Disposition:                actionDrop,
+				OriginalBytes:              20,
+				EgressRuleID:               0x11111111,
+			},
+		},
+		{
+			name:    "K8s ingress default drop",
+			tableID: openflow.OutputTable.GetID(),
+			regData: map[int][]byte{dispositionRegID: dropK8sDispositionData, tableRegID: ingressDefaultTableData},
+			expectedConn: &connection.Connection{
+				FlowKey:                        key,
+				OriginalDestinationAddress:     destinationAddr,
+				Disposition:                    actionDrop,
+				OriginalBytes:                  20,
+				IngressNetworkPolicyType:       registry.PolicyTypeK8sNetworkPolicy,
+				IngressNetworkPolicyRuleAction: registry.NetworkPolicyRuleActionDrop,
+			},
+		},
+		{
+			name:    "K8s egress default drop",
+			tableID: openflow.OutputTable.GetID(),
+			regData: map[int][]byte{dispositionRegID: dropK8sDispositionData, tableRegID: egressDefaultTableData},
+			expectedConn: &connection.Connection{
+				FlowKey:                       key,
+				OriginalDestinationAddress:    destinationAddr,
+				Disposition:                   actionDrop,
+				OriginalBytes:                 20,
+				EgressNetworkPolicyType:       registry.PolicyTypeK8sNetworkPolicy,
+				EgressNetworkPolicyRuleAction: registry.NetworkPolicyRuleActionDrop,
+			},
+		},
+		{
+			name:    "K8s ingress default drop with Service Endpoint IP",
+			tableID: openflow.OutputTable.GetID(),
+			regData: map[int][]byte{dispositionRegID: dropK8sDispositionData, tableRegID: ingressDefaultTableData, endpointIPRegID: endpointIPData},
+			expectedConn: &connection.Connection{
+				FlowKey:                        key,
+				OriginalDestinationAddress:     destinationAddr,
+				Disposition:                    actionDrop,
+				OriginalBytes:                  20,
+				IngressNetworkPolicyType:       registry.PolicyTypeK8sNetworkPolicy,
+				IngressNetworkPolicyRuleAction: registry.NetworkPolicyRuleActionDrop,
+			},
+		},
+		{
+			name:    "K8s egress default drop with Service Endpoint IP",
+			tableID: openflow.OutputTable.GetID(),
+			regData: map[int][]byte{dispositionRegID: dropK8sDispositionData, tableRegID: egressDefaultTableData, endpointIPRegID: endpointIPData},
+			expectedConn: &connection.Connection{
+				FlowKey:                       key,
+				OriginalDestinationAddress:    destinationAddr,
+				Disposition:                   actionDrop,
+				OriginalBytes:                 20,
+				EgressNetworkPolicyType:       registry.PolicyTypeK8sNetworkPolicy,
+				EgressNetworkPolicyRuleAction: registry.NetworkPolicyRuleActionDrop,
 			},
 		},
 	}
@@ -213,7 +306,7 @@ func TestPublishDenyConnection(t *testing.T) {
 				PacketIn: &openflow15.PacketIn{
 					TableId: tc.tableID,
 					Match: openflow15.Match{
-						Fields: matchers,
+						Fields: generateRegMatches(tc.regData),
 					},
 				},
 			}

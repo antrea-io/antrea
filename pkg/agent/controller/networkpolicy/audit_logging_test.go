@@ -224,6 +224,30 @@ func generateRegMatch(regID int, data []byte) openflow15.MatchField {
 	}
 }
 
+// generateRegMatches returns the match fields for the provided register values, indexed by register
+// ID. As in PacketIn messages, registers which belong to the same xreg are reported in a single
+// match field.
+func generateRegMatches(regData map[int][]byte) []openflow15.MatchField {
+	xregData := make(map[int][]byte)
+	for regID, data := range regData {
+		xregID := regID / 2
+		if _, ok := xregData[xregID]; !ok {
+			xregData[xregID] = make([]byte, 8)
+		}
+		copy(xregData[xregID][4*(regID%2):], data)
+	}
+	var matches []openflow15.MatchField
+	for xregID, data := range xregData {
+		matches = append(matches, openflow15.MatchField{
+			Class:   openflow15.OXM_CLASS_PACKET_REGS,
+			Field:   uint8(xregID),
+			HasMask: false,
+			Value:   &openflow15.ByteArrayField{Data: data},
+		})
+	}
+	return matches
+}
+
 func TestGetNetworkPolicyInfo(t *testing.T) {
 	prepareMockOFTablesWithCache()
 	testPriority, testRule, testLogLabel := "61800", "test-rule", "test-log-label"

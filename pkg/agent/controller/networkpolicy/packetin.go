@@ -104,6 +104,26 @@ func getInfoInReg(regMatch *ofctrl.MatchField, rng *openflow15.NXRange) (uint32,
 	return regValue.Data, nil
 }
 
+// isK8sDefaultDeny returns whether a packet with the provided disposition was denied by the implicit default drop of
+// K8s NetworkPolicies, rather than by an Antrea-native policy rule. Only Antrea-native policy rules set APDenyRegMark,
+// together with the rule's conjunction ID in APConjIDField. Checking whether APConjIDField is non-zero is not enough
+// to tell the two cases apart, as it shares reg3 with EndpointIPField, which holds the selected Endpoint IP for IPv4
+// Service traffic.
+func isK8sDefaultDeny(matchers *ofctrl.Matchers, disposition uint32) (bool, error) {
+	if disposition != openflow.DispositionDrop && disposition != openflow.DispositionRej {
+		return false, nil
+	}
+	match := getMatchRegField(matchers, openflow.APDenyRegMark.GetField())
+	if match == nil {
+		return false, nil
+	}
+	apDenyRegVal, err := getInfoInReg(match, openflow.APDenyRegMark.GetField().GetRange().ToNXRange())
+	if err != nil {
+		return false, err
+	}
+	return apDenyRegVal == 0, nil
+}
+
 func (c *Controller) storeDenyConnection(pktIn *ofctrl.PacketIn) error {
 	packet, err := binding.ParsePacketIn(pktIn)
 	if err != nil {
@@ -163,9 +183,21 @@ func (c *Controller) storeDenyConnectionParsed(pktIn *ofctrl.PacketIn, packet *b
 	disposition := openflow.DispositionToString[id]
 	denyConn.Disposition = disposition
 
-	// Set match to corresponding ingress/egress reg according to disposition
-	match = getMatch(matchers, tableID, id)
-	if match != nil {
+	k8sDefaultDeny, err := isK8sDefaultDeny(matchers, id)
+	if err != nil {
+		return fmt.Errorf("error when getting deny mark from reg: %w", err)
+	}
+	if k8sDefaultDeny {
+		// For K8s NetworkPolicy implicit drop action, we cannot get Namespace/name.
+		if tableID == openflow.IngressDefaultTable.GetID() {
+			denyConn.IngressNetworkPolicyType = registry.PolicyTypeK8sNetworkPolicy
+			denyConn.IngressNetworkPolicyRuleAction = flowexporterutils.RuleActionToUint8(disposition)
+		} else if tableID == openflow.EgressDefaultTable.GetID() {
+			denyConn.EgressNetworkPolicyType = registry.PolicyTypeK8sNetworkPolicy
+			denyConn.EgressNetworkPolicyRuleAction = flowexporterutils.RuleActionToUint8(disposition)
+		}
+	} else if match = getMatch(matchers, tableID, id); match != nil {
+		// Set match to corresponding ingress/egress reg according to disposition.
 		ruleID, err := getInfoInReg(match, nil)
 		if err != nil {
 			return fmt.Errorf("error when obtaining rule id from reg: %v", err)
@@ -174,15 +206,6 @@ func (c *Controller) storeDenyConnectionParsed(pktIn *ofctrl.PacketIn, packet *b
 			denyConn.IngressRuleID = ruleID
 		} else if isAntreaPolicyEgressTable(tableID) {
 			denyConn.EgressRuleID = ruleID
-		}
-	} else {
-		// For K8s NetworkPolicy implicit drop action, we cannot get Namespace/name.
-		if tableID == openflow.IngressDefaultTable.GetID() {
-			denyConn.IngressNetworkPolicyType = registry.PolicyTypeK8sNetworkPolicy
-			denyConn.IngressNetworkPolicyRuleAction = flowexporterutils.RuleActionToUint8(disposition)
-		} else if tableID == openflow.EgressDefaultTable.GetID() {
-			denyConn.EgressNetworkPolicyType = registry.PolicyTypeK8sNetworkPolicy
-			denyConn.EgressNetworkPolicyRuleAction = flowexporterutils.RuleActionToUint8(disposition)
 		}
 	}
 	if c.denyConnNotifier != nil {
