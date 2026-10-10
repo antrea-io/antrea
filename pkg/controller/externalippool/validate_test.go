@@ -16,6 +16,7 @@ package externalippool
 
 import (
 	"encoding/json"
+	"net"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -85,17 +86,27 @@ func TestControllerValidateExternalIPPool(t *testing.T) {
 			expectedResponse: &admv1.AdmissionResponse{Allowed: true},
 		},
 		{
-			name: "Deleting IPRange should not be allowed",
+			name: "Deleting IPRange should be allowed if not in use",
 			request: &admv1.AdmissionRequest{
 				Name:      "foo",
 				Operation: "UPDATE",
 				OldObject: runtime.RawExtension{Raw: marshal(newExternalIPPool("foo", "10.10.10.0/24", "10.10.20.1", "10.10.20.2"))},
 				Object:    runtime.RawExtension{Raw: marshal(newExternalIPPool("foo", "10.10.10.0/24", "", ""))},
 			},
+			expectedResponse: &admv1.AdmissionResponse{Allowed: true},
+		},
+		{
+			name: "Deleting IPRange should not be allowed if in use",
+			request: &admv1.AdmissionRequest{
+				Name:      "foo",
+				Operation: "UPDATE",
+				OldObject: runtime.RawExtension{Raw: marshal(newExternalIPPool("foo", "10.10.10.0/24", "10.10.20.1", "10.10.20.3"))},
+				Object:    runtime.RawExtension{Raw: marshal(newExternalIPPool("foo", "10.10.10.0/24", "", ""))},
+			},
 			expectedResponse: &admv1.AdmissionResponse{
 				Allowed: false,
 				Result: &metav1.Status{
-					Message: "existing IPRanges [10.10.20.1-10.10.20.2] cannot be updated or deleted",
+					Message: "existing IPRanges [10.10.20.1-10.10.20.3] are in use, cannot be deleted",
 				},
 			},
 		},
@@ -124,6 +135,18 @@ func TestControllerValidateExternalIPPool(t *testing.T) {
 			c := newController(nil)
 			stopCh := make(chan struct{})
 			defer close(stopCh)
+			// Populate allocator with the OldObject if UPDATE
+			if tt.request.Operation == "UPDATE" && len(tt.request.OldObject.Raw) > 0 {
+				var oldPool crdv1b1.ExternalIPPool
+				err := json.Unmarshal(tt.request.OldObject.Raw, &oldPool)
+				require.NoError(t, err)
+				c.createOrUpdateIPAllocator(&oldPool)
+			}
+			if tt.name == "Deleting IPRange should not be allowed if in use" {
+				ip := net.ParseIP("10.10.20.2")
+				err := c.UpdateIPAllocation(tt.request.Name, ip)
+				require.NoError(t, err)
+			}
 			c.crdInformerFactory.Start(stopCh)
 			c.crdInformerFactory.WaitForCacheSync(stopCh)
 			go c.Run(stopCh)
