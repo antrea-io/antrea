@@ -22,6 +22,7 @@ import (
 	"context"
 	"net"
 	"net/http"
+	"time"
 
 	netutils "k8s.io/utils/net"
 )
@@ -61,7 +62,8 @@ type stdHTTPServerFactory struct{}
 
 func (stdHTTPServerFactory) New(handler http.Handler) httpServer {
 	return &http.Server{
-		Handler: handler,
+		Handler:           handler,
+		ReadHeaderTimeout: 10 * time.Second,
 	}
 }
 
