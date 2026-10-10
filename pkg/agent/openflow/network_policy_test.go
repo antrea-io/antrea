@@ -112,8 +112,9 @@ func TestPolicyRuleConjunction(t *testing.T) {
 
 	var addedAddrs = parseAddresses([]string{"192.168.1.3", "192.168.1.30", "192.168.2.0/24", "103", "104"})
 	expectConjunctionsCount([]*expectConjunctionTimes{{5, ruleID1, clauseID, nClause}})
-	flowChanges1 := clause1.addAddrFlows(c.featureNetworkPolicy, types.SrcAddress, addedAddrs, nil, false, false)
-	err := c.featureNetworkPolicy.applyConjunctiveMatchFlows(flowChanges1)
+	flowChanges1, err := clause1.addAddrFlows(c.featureNetworkPolicy, types.SrcAddress, addedAddrs, nil, false, false)
+	require.Nil(t, err, "Failed to invoke addAddrFlows")
+	err = c.featureNetworkPolicy.applyConjunctiveMatchFlows(flowChanges1)
 	require.Nil(t, err, "Failed to invoke addAddrFlows")
 	checkFlowCount(t, len(addedAddrs))
 	for _, addr := range addedAddrs {
@@ -137,7 +138,8 @@ func TestPolicyRuleConjunction(t *testing.T) {
 	var addedAddrs2 = parseAddresses([]string{"192.168.1.30", "192.168.1.50"})
 	expectConjunctionsCount([]*expectConjunctionTimes{{2, ruleID2, clauseID2, nClause}})
 	expectConjunctionsCount([]*expectConjunctionTimes{{1, ruleID1, clauseID, nClause}})
-	flowChanges3 := clause2.addAddrFlows(c.featureNetworkPolicy, types.SrcAddress, addedAddrs2, nil, false, false)
+	flowChanges3, err := clause2.addAddrFlows(c.featureNetworkPolicy, types.SrcAddress, addedAddrs2, nil, false, false)
+	require.Nil(t, err, "Failed to invoke addAddrFlows")
 	err = c.featureNetworkPolicy.applyConjunctiveMatchFlows(flowChanges3)
 	require.Nil(t, err, "Failed to invoke addAddrFlows")
 	testAddr := NewIPAddress(net.ParseIP("192.168.1.30"))
@@ -153,7 +155,8 @@ func TestPolicyRuleConjunction(t *testing.T) {
 	nClause3 := uint8(1)
 	clause3 := conj3.newClause(clauseID3, nClause3, mockEgressRuleTable, mockEgressDefaultTable)
 	var addedAddrs3 = parseAddresses([]string{"192.168.1.30"})
-	flowChanges4 := clause3.addAddrFlows(c.featureNetworkPolicy, types.SrcAddress, addedAddrs3, nil, false, false)
+	flowChanges4, err := clause3.addAddrFlows(c.featureNetworkPolicy, types.SrcAddress, addedAddrs3, nil, false, false)
+	require.Nil(t, err, "Failed to invoke addAddrFlows")
 	err = c.featureNetworkPolicy.applyConjunctiveMatchFlows(flowChanges4)
 	require.Nil(t, err, "Failed to invoke addAddrFlows")
 	checkConjMatchFlowActions(t, c, clause3, testAddr, types.SrcAddress, 2, 1)
@@ -163,6 +166,71 @@ func TestPolicyRuleConjunction(t *testing.T) {
 	require.Nil(t, err, "Failed to invoke deleteAddrFlows")
 	checkConjMatchFlowActions(t, c, clause3, testAddr, types.SrcAddress, 2, 0)
 	checkFlowCount(t, currentFlowCount)
+}
+
+func newFullConjMatchFlowContext(featureNetworkPolicy *featureNetworkPolicy, match *conjunctiveMatch) *conjMatchFlowContext {
+	ctx := &conjMatchFlowContext{
+		conjunctiveMatch:     match,
+		actions:              make(map[uint32]*conjunctiveAction, maxActionsPerConjMatchFlow),
+		featureNetworkPolicy: featureNetworkPolicy,
+	}
+	for i := uint32(0); i < maxActionsPerConjMatchFlow; i++ {
+		ctx.actions[i] = &conjunctiveAction{conjID: i, clauseID: 1, nClause: 2}
+	}
+	return ctx
+}
+
+// TestConjMatchFlowContextActionCap verifies that once a conjunctive match flow already holds the maximum number of
+// conjunctive actions, adding one more is rejected with an error instead of silently building an oversized FlowMod.
+// This guards against antrea.io/antrea/issues (large numbers of NetworkPolicy rules sharing the same match condition
+// overflowing the OpenFlow message size limit).
+func TestConjMatchFlowContextActionCap(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	preparePipelines()
+	defer resetPipelines()
+	c = prepareClient(ctrl, false)
+
+	match := &conjunctiveMatch{
+		tableID: mockEgressRuleTable.GetID(),
+		matchPairs: []matchPair{
+			{matchKey: MatchDstIPNet, matchValue: net.IPNet{IP: net.ParseIP("192.168.1.0"), Mask: net.CIDRMask(24, 32)}},
+		},
+	}
+	ctx := newFullConjMatchFlowContext(c.featureNetworkPolicy, match)
+
+	flowChange, err := ctx.addAction(&conjunctiveAction{conjID: maxActionsPerConjMatchFlow, clauseID: 1, nClause: 2})
+	require.Error(t, err)
+	assert.Nil(t, flowChange)
+	assert.Len(t, ctx.actions, maxActionsPerConjMatchFlow, "conjunctive action must not be added once the per-flow cap is exceeded")
+}
+
+// TestAddActionToConjunctiveMatchCap verifies the batch-install path (used on agent restart) enforces the same
+// per-flow conjunctive action cap as the incremental path, and leaves the clause and context state unchanged on
+// rejection.
+func TestAddActionToConjunctiveMatchCap(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	preparePipelines()
+	defer resetPipelines()
+	c = prepareClient(ctrl, false)
+
+	match := &conjunctiveMatch{
+		tableID: mockEgressRuleTable.GetID(),
+		matchPairs: []matchPair{
+			{matchKey: MatchDstIPNet, matchValue: net.IPNet{IP: net.ParseIP("192.168.1.0"), Mask: net.CIDRMask(24, 32)}},
+		},
+	}
+	matcherKey := match.generateGlobalMapKey()
+	context := newFullConjMatchFlowContext(c.featureNetworkPolicy, match)
+	c.featureNetworkPolicy.globalConjMatchFlowCache[matcherKey] = context
+
+	conj := &policyRuleConjunction{id: uint32(maxActionsPerConjMatchFlow + 1)}
+	clause := conj.newClause(1, 2, mockEgressRuleTable, mockEgressDefaultTable)
+
+	err := c.featureNetworkPolicy.addActionToConjunctiveMatch(clause, match, false, false)
+	require.Error(t, err)
+	assert.Len(t, context.actions, maxActionsPerConjMatchFlow)
+	_, found := clause.matches[matcherKey]
+	assert.False(t, found, "clause must not record the match as added when the cap is exceeded")
 }
 
 func TestInstallPolicyRuleFlows(t *testing.T) {
@@ -203,13 +271,14 @@ func TestInstallPolicyRuleFlows(t *testing.T) {
 	conj.calculateClauses(rule1)
 	require.Nil(t, conj.toClause)
 	require.Nil(t, conj.serviceClause)
-	ctxChanges := conj.calculateChangesForRuleCreation(c.featureNetworkPolicy, rule1)
+	ctxChanges, err := conj.calculateChangesForRuleCreation(c.featureNetworkPolicy, rule1)
+	require.Nil(t, err)
 	assert.Equal(t, len(rule1.From), len(ctxChanges))
 	matchFlows, dropFlows := getChangedFlows(ctxChanges)
 	assert.Equal(t, len(rule1.From), getChangedFlowCount(dropFlows))
 	assert.Equal(t, 0, getChangedFlowCount(matchFlows))
 	assert.Equal(t, 2, getDenyAllRuleOPCount(matchFlows, insertion))
-	err := c.featureNetworkPolicy.applyConjunctiveMatchFlows(ctxChanges)
+	err = c.featureNetworkPolicy.applyConjunctiveMatchFlows(ctxChanges)
 	require.Nil(t, err)
 
 	ruleID2 := uint32(102)
@@ -235,7 +304,8 @@ func TestInstallPolicyRuleFlows(t *testing.T) {
 	ruleFlowBuilder.EXPECT().MatchPriority(priorityLow).MaxTimes(1)
 	expectConjunctionsCount([]*expectConjunctionTimes{{1, ruleID2, 2, 2}})
 	expectConjunctionsCount([]*expectConjunctionTimes{{2, ruleID2, 1, 2}})
-	ctxChanges2 := conj2.calculateChangesForRuleCreation(c.featureNetworkPolicy, rule2)
+	ctxChanges2, err := conj2.calculateChangesForRuleCreation(c.featureNetworkPolicy, rule2)
+	require.Nil(t, err)
 	matchFlows2, dropFlows2 := getChangedFlows(ctxChanges2)
 	assert.Equal(t, 1, getChangedFlowCount(dropFlows2))
 	assert.Equal(t, 3, getChangedFlowCount(matchFlows2))
@@ -279,7 +349,8 @@ func TestInstallPolicyRuleFlows(t *testing.T) {
 	expectConjunctionsCount([]*expectConjunctionTimes{{1, ruleID3, 2, 3}})
 	expectConjunctionsCount([]*expectConjunctionTimes{{2, ruleID3, 1, 3}})
 	expectConjunctionsCount([]*expectConjunctionTimes{{2, ruleID3, 3, 3}})
-	ctxChanges3 := conj3.calculateChangesForRuleCreation(c.featureNetworkPolicy, rule3)
+	ctxChanges3, err := conj3.calculateChangesForRuleCreation(c.featureNetworkPolicy, rule3)
+	require.Nil(t, err)
 	matchFlows3, dropFlows3 := getChangedFlows(ctxChanges3)
 	assert.Equal(t, 1, getChangedFlowOPCount(dropFlows3, insertion))
 	assert.Equal(t, 6, getChangedFlowCount(matchFlows3))
@@ -647,8 +718,9 @@ func TestConjMatchFlowContextKeyConflict(t *testing.T) {
 		id: ruleID1,
 	}
 	clause1 := conj1.newClause(1, 3, mockEgressRuleTable, mockEgressDefaultTable)
-	flowChange1 := clause1.addAddrFlows(c.featureNetworkPolicy, types.DstAddress, parseAddresses([]string{ip.String()}), nil, false, false)
-	err := c.featureNetworkPolicy.applyConjunctiveMatchFlows(flowChange1)
+	flowChange1, err := clause1.addAddrFlows(c.featureNetworkPolicy, types.DstAddress, parseAddresses([]string{ip.String()}), nil, false, false)
+	require.Nil(t, err, "no error expect in addAddrFlows")
+	err = c.featureNetworkPolicy.applyConjunctiveMatchFlows(flowChange1)
 	require.Nil(t, err, "no error expect in applyConjunctiveMatchFlows")
 
 	ruleID2 := uint32(12)
@@ -656,7 +728,8 @@ func TestConjMatchFlowContextKeyConflict(t *testing.T) {
 		id: ruleID2,
 	}
 	clause2 := conj2.newClause(1, 3, mockEgressRuleTable, mockEgressDefaultTable)
-	flowChange2 := clause2.addAddrFlows(c.featureNetworkPolicy, types.DstAddress, parseAddresses([]string{ipNet.String()}), nil, false, false)
+	flowChange2, err := clause2.addAddrFlows(c.featureNetworkPolicy, types.DstAddress, parseAddresses([]string{ipNet.String()}), nil, false, false)
+	require.Nil(t, err, "no error expect in addAddrFlows")
 	err = c.featureNetworkPolicy.applyConjunctiveMatchFlows(flowChange2)
 	require.Nil(t, err, "no error expect in applyConjunctiveMatchFlows")
 	expectedMatchKey := fmt.Sprintf("table:%d,priority:%s,matchPair:%s", EgressRuleTable.GetID(), strconv.Itoa(int(priorityNormal)), singleMatchPair.KeyString())
@@ -704,13 +777,14 @@ func TestInstallPolicyRuleFlowsInDualStackCluster(t *testing.T) {
 	conj.calculateClauses(rule1)
 	require.Nil(t, conj.toClause)
 	require.Nil(t, conj.serviceClause)
-	ctxChanges := conj.calculateChangesForRuleCreation(c.featureNetworkPolicy, rule1)
+	ctxChanges, err := conj.calculateChangesForRuleCreation(c.featureNetworkPolicy, rule1)
+	require.Nil(t, err)
 	assert.Equal(t, len(rule1.From), len(ctxChanges))
 	matchFlows, dropFlows := getChangedFlows(ctxChanges)
 	assert.Equal(t, len(rule1.From), getChangedFlowCount(dropFlows))
 	assert.Equal(t, 0, getChangedFlowCount(matchFlows))
 	assert.Equal(t, len(rule1.From), getDenyAllRuleOPCount(matchFlows, insertion))
-	err := c.featureNetworkPolicy.applyConjunctiveMatchFlows(ctxChanges)
+	err = c.featureNetworkPolicy.applyConjunctiveMatchFlows(ctxChanges)
 	require.Nil(t, err)
 
 	ruleID2 := uint32(102)
@@ -736,7 +810,8 @@ func TestInstallPolicyRuleFlowsInDualStackCluster(t *testing.T) {
 	ruleFlowBuilder.EXPECT().MatchPriority(priorityLow).MaxTimes(1)
 	expectConjunctionsCount([]*expectConjunctionTimes{{len(rule2.To), ruleID2, 2, 2}})
 	expectConjunctionsCount([]*expectConjunctionTimes{{len(rule2.From), ruleID2, 1, 2}})
-	ctxChanges2 := conj2.calculateChangesForRuleCreation(c.featureNetworkPolicy, rule2)
+	ctxChanges2, err := conj2.calculateChangesForRuleCreation(c.featureNetworkPolicy, rule2)
+	require.Nil(t, err)
 	matchFlows2, dropFlows2 := getChangedFlows(ctxChanges2)
 	assert.Equal(t, 2, getChangedFlowCount(dropFlows2))
 	assert.Equal(t, 4, getChangedFlowCount(matchFlows2))
@@ -779,7 +854,8 @@ func TestInstallPolicyRuleFlowsInDualStackCluster(t *testing.T) {
 	expectConjunctionsCount([]*expectConjunctionTimes{{1, ruleID3, 2, 3}})
 	expectConjunctionsCount([]*expectConjunctionTimes{{2, ruleID3, 1, 3}})
 	expectConjunctionsCount([]*expectConjunctionTimes{{4, ruleID3, 3, 3}})
-	ctxChanges3 := conj3.calculateChangesForRuleCreation(c.featureNetworkPolicy, rule3)
+	ctxChanges3, err := conj3.calculateChangesForRuleCreation(c.featureNetworkPolicy, rule3)
+	require.Nil(t, err)
 	matchFlows3, dropFlows3 := getChangedFlows(ctxChanges3)
 	assert.Equal(t, 1, getChangedFlowOPCount(dropFlows3, insertion))
 	assert.Equal(t, 7, getChangedFlowCount(matchFlows3))
