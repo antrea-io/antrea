@@ -2641,6 +2641,10 @@ spec:
                       The format of normalized label identity is `ns:(?P<nslabels>(.)*)&pod:(?P<podlabels>(.)*)`
                       E.g., `ns:kubernetes.io/metadata.name=kube-system&pod:app=db`
                     type: string
+                    x-kubernetes-validations:
+                    - message: label must match the format 'ns:<Namespace labels>&pod:<Pod
+                        labels>'
+                      rule: self.matches('^ns:(.*)&pod:(.*)$')
                 type: object
               name:
                 description: Name of imported resource.
