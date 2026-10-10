@@ -33,7 +33,7 @@
   - [FlowStreamService (alpha)](#flowstreamservice-alpha)
     - [Authenticating to the FlowStreamService](#authenticating-to-the-flowstreamservice)
     - [Authorizing flow visibility](#authorizing-flow-visibility)
-    - [What a client sees of each endpoint](#what-a-client-sees-of-each-endpoint)
+    - [What a client sees of a flow](#what-a-client-sees-of-a-flow)
     - [What administrators should know](#what-administrators-should-know)
   - [Version skew between Flow Aggregator and Antrea Agent](#version-skew-between-flow-aggregator-and-antrea-agent)
 - [Quick Deployment](#quick-deployment)
@@ -725,10 +725,21 @@ something the Flow Aggregator can answer, which is why the scope is always expli
 The same distinction surfaces in the Antrea UI: selecting a Namespace is mandatory
 on the flow visibility tab unless the user has cluster-wide visibility.
 
-A record is streamed if either of its endpoints is in the Namespaces the client
-was authorized for. Requiring both would hide exactly the cross-Namespace flows
-users are looking for — "my egress to a service I cannot see was dropped" is the
-common case.
+Whether a stream receives a record depends on the Namespace the stream was opened
+for, and on whether that Namespace initiated the connection or received it:
+
+- **The stream's Namespace initiated the connection.** The record is always
+  received, whether the connection was established or dropped. If it was
+  dropped, this is exactly what the client wants to find out: what dropped its
+  egress to that service, and where.
+- **The stream's Namespace received the connection.** The record is received only
+  if the connection reached that Namespace's boundary, i.e. it was allowed, or it
+  was dropped by a policy of that Namespace. A connection that a peer Namespace
+  initiated and that was dropped before reaching the boundary, either by a policy
+  of the peer's Namespace or by a cluster-scoped policy, never became the
+  destination Namespace's concern. It is only received on a stream opened for the
+  peer's Namespace, or on a cluster-wide stream, regardless of what the client
+  holds in the peer's Namespace.
 
 Two ClusterRoles are shipped by default: `antrea-flow-viewer`, which grants
 `flows`, and `antrea-flow-identity-viewer`, which grants `flows/identity`. Each
@@ -787,18 +798,36 @@ kubectl get rolebindings,clusterrolebindings -A -o json | \
   jq '.items[] | select(.roleRef.name | startswith("antrea-flow-"))'
 ```
 
-#### What a client sees of each endpoint
+#### What a client sees of a flow
 
-Each endpoint of a record — source and destination — is disclosed
-independently, according to the client's permissions in *that endpoint's*
-Namespace. A single record could carry one endpoint in full and the other
-redacted.
+A connection crosses three segments, and each is disclosed according to what the
+client holds in that segment:
 
-| Tier     | Fields                                                                                                                                                                                                                                                                            | Requires                                                                                                              |
-|----------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|-----------------------------------------------------------------------------------------------------------------------|
-| Flow     | addresses, ports, protocol, statistics and throughput, timestamps, flow type, direction, end reason, TCP state, the **type and action** of the network policies evaluated on the endpoint's side, and the endpoint's Pod Namespace when neither ingress nor egress policy action is `DROP` or `REJECT` | receiving the record at all |
-| Identity | endpoint's Pod Namespace regardless of policy action, Pod name/UID/labels, the destination Service's `destination_service_port`, `destination_service_port_name`, `destination_service_uid` and `destination_service_ip` (plus the deprecated `destination_cluster_ip`), and the network policy namespace/name/UID/rule name | `get flows/identity` in the endpoint's Namespace |
-| Full     | Node name/UID, Egress name/IP/Node. Node co-tenancy with the client's own workloads can survive redaction at Flow/Identity tiers, as the flow type paragraph below explains                                                                                                       | the endpoint's Namespace is one the stream was authorized for, or the client holds the stream's verb on `flows` there |
+```text
+	┌────────────────────────────┐    ┌────────────────────────────┐    ┌────────────────────────────┐
+	│      SOURCE NAMESPACE      │    │          CLUSTER           │    │   DESTINATION NAMESPACE    │
+	│                            │    │                            │    │                            │
+	│ source workload            │    │ cluster-scoped policies    │    │ ingress policies           │
+	│   └▶ egress policies       │───▶│   (ACNP, K8s CNP)          │───▶│   (K8sNP, ANNP)            │
+	│      (K8sNP, ANNP)         │    │   egress, then ingress     │    │   └▶ destination workload  │
+	└────────────────────────────┘    └────────────────────────────┘    └────────────────────────────┘
+```
+
+A Kubernetes NetworkPolicy or Antrea NetworkPolicy belongs to the Namespace of
+the Pod it selects; an Antrea ClusterNetworkPolicy or Kubernetes
+ClusterNetworkPolicy belongs to the cluster segment, in either direction.
+
+The two Namespace segments are disclosed at one of these tiers, independently:
+
+| Tier     | Fields                                                                                                                                                                                                                                                                                                                                              | Requires                                                                                                              |
+|----------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|-----------------------------------------------------------------------------------------------------------------------|
+| Flow     | addresses, ports, protocol, statistics and throughput, timestamps, flow type, direction, end reason, TCP state, the **type and action** of every network policy evaluated, and the endpoint's Pod Namespace (see below)                                                                                                                              | receiving the record at all                                                                                           |
+| Identity | endpoint's Pod Namespace regardless of policy action, Pod name/UID/labels, the destination Service's `destination_service_port`, `destination_service_port_name`, `destination_service_uid` and `destination_service_ip` (plus the deprecated `destination_cluster_ip`), and the namespace/name/UID/rule name of the segment's policies             | `get flows/identity` in the endpoint's Namespace                                                                      |
+| Full     | Node name/UID, Egress name/IP/Node. Node co-tenancy with the client's own workloads can survive redaction at Flow/Identity tiers, as the flow type paragraph below explains                                                                                                                                                                         | the endpoint's Namespace is one the stream was authorized for, or the client holds the stream's verb on `flows` there |
+
+The cluster segment discloses the name/UID/rule name of cluster-scoped policies
+to a client holding `get flows/identity` or the stream's verb on `flows`
+cluster-wide. No Namespace grant does.
 
 A destination Service's IP sits at the Identity tier rather than the Flow tier,
 because it maps back to the Service it belongs to, so granting `flows/identity`
@@ -847,9 +876,14 @@ instance, is what a cluster-scoped policy legitimately looks like. `FULL` is the
 zero value of both fields, so a record that was never redacted, and every record
 reaching a cluster-wide stream, reports both endpoints as fully disclosed
 without the Flow Aggregator having to modify anything.
-An unidentified endpoint keeps its Namespace only if the connection was allowed:
-withholding it for denied connections is what keeps a client from scanning the
-Pod CIDR and mapping IPs to Namespaces by reading back its own denied flows.
+
+At the Flow tier, an endpoint keeps its Namespace unless it is the destination of
+a denied connection. When the Namespace that client opened the stream with initiated
+the connection, the destination is an address the client chose. If a denied
+connection disclosed the destination's Namespace, the client could probe every
+address in the Pod CIDR and build an IP-to-Namespace map of the cluster from its
+own denials.
+
 Anything other than an explicit drop or reject counts as allowed, including "no
 policy applied at all", so the mitigation only bites where the traffic really was
 denied by a policy: in a cluster without default-deny, scan probes not explicitly
@@ -873,29 +907,22 @@ destination Pod actually observed as its peer. Such a flow has no source
 Namespace for a stream to be authorized for, so it only ever reaches a stream
 through its destination, a Namespace that stream may observe in full.
 
-A rule *action* and the policy *type* are disclosed at every tier, even for a
-policy the client may not otherwise know about: losing them would lose "why did my
-connection fail", which is most of the troubleshooting value, and knowing whether
-a cluster-scoped or a namespaced policy dropped the connection tells a client
-whether to escalate to the platform team or to the peer. The policy's *identity*
-(its Namespace, name, UID and rule name) comes with the Identity tier, so that
-"which of your policies dropped my traffic" is answerable once the peer's
-Namespace has granted `flows/identity`. Below that tier it stays hidden, which is
-what keeps a client from mapping the policy set of a Namespace that never
-consented to being identified.
+A policy's *type* and rule *action* are disclosed at every tier, so a client
+always learns which segment stopped its connection, and whether to escalate to
+the platform team or to the peer Namespace. Its *identity* (Namespace, name, UID,
+rule name) follows its segment's tier. A cluster-scoped policy always has a name,
+so an empty one means it was withheld.
 
-Consequently, the same flow can look different depending on which Namespace a
-stream was opened for. Take a subject holding `antrea-flow-viewer` in `ns-a` and
-`ns-b`: it sees an `ns-a`-to-`ns-b` flow with both endpoints in full on either
-stream, since it could have opened the same stream for the peer's Namespace
-anyway. A subject holding `antrea-flow-viewer` in `ns-a` only sees the `ns-b`
-endpoint at the Identity tier if it holds `antrea-flow-identity-viewer` in `ns-b`,
-and at the Flow tier otherwise. The verb matters too: a subject holding only
-`list` on `flows` in `ns-b` sees the `ns-b` endpoint in full on a non-following
-`ns-a` stream, but not on a following one, which falls back to what
-`flows/identity` there yields. A stream is always opened with exactly the scope
-the client named — a request is authorized in full or rejected outright, never
-narrowed — so there is nothing for the server to report back.
+So the same flow can look different, or be absent, depending on the stream. A
+subject holding `antrea-flow-viewer` in `ns-a` and `ns-b` sees an
+`ns-a`-to-`ns-b` flow in full on either stream. Holding it in `ns-a` only, it
+sees the `ns-b` segment at the Identity tier if it holds
+`antrea-flow-identity-viewer` in `ns-b`, and at the Flow tier otherwise. Holding
+only `list` on `flows` in `ns-b`, it sees that segment in full on a non-following
+`ns-a` stream but not on a following one. If `ns-b` initiated a connection to
+`ns-a` that `ns-b`'s egress policy denied, only the `ns-b` stream receives it. A
+stream always has exactly the scope the client named: a request is authorized in
+full or rejected, never narrowed.
 
 #### What administrators should know
 
@@ -913,6 +940,11 @@ narrowed — so there is nothing for the server to report back.
   not: they stop at the Identity tier. RBAC cannot express "not reachable via a
   wildcard", and there is no query for "who can do X", so a cluster that hands out
   wildcard Roles should scan for inadvertent `flows` grants.
+- **`flows/identity` cluster-wide names every cluster-scoped policy.** The
+  `view` Role is aggregated to `antrea-flow-identity-viewer`, so binding it in a
+  ClusterRoleBinding gives the subject the names of all Antrea ClusterNetworkPolicies
+  and Kubernetes ClusterNetworkPolicies that applied to any flow it receives, in
+  addition to the identity of every peer Namespace.
 - **A Service with endpoints in another Namespace discloses itself there.** The
   Service fields of a record are tiered by the Namespace of the Pod that received
   the connection, so a Service whose EndpointSlices point outside its own
