@@ -458,10 +458,12 @@ func (sa *StreamAuthorization) tierFor(ctx context.Context, namespace string, in
 //   - The API server returned an error. The denial is cached so that the check is not retried for
 //     every record while the API server is unavailable.
 //   - ctx is done, because earlier checks in the same batch used up its authorizationCheckTimeout
-//     budget, or because the client went away. The endpoint gets the last resolved cluster-wide
-//     floor tier for this batch only (tierFlow if the stream has never resolved one), and nothing
-//     is cached. No SubjectAccessReview was actually made for this Namespace, so caching a denial
-//     would keep the peer at that tier for a whole revalidationInterval.
+//     budget, or because the client went away. The remaining checks are still made, since the
+//     delegating authorizer answers one it has cached without reaching the API server. The endpoint
+//     gets the fullest tier a completed check allowed, or else the last resolved cluster-wide floor
+//     tier (tierFlow if the stream has never resolved one), for this batch only, and nothing is
+//     cached. At least one check for this Namespace went unanswered, so caching the result would
+//     keep the peer at that tier for a whole revalidationInterval.
 //
 // The two kinds of check differ in what they fall back to when they cannot complete, whether on an
 // error or a timeout. A per-Namespace check fails closed to the floor, even if the peer resolved to a
@@ -479,6 +481,7 @@ func (sa *StreamAuthorization) resolveTierForPeer(ctx context.Context, namespace
 		return tier.(disclosureTier)
 	}
 	tier := floorTier
+	timedOut := false
 	for _, check := range peerDisclosureChecks(sa.verb) {
 		if check.tier >= floorTier {
 			// A lower value is a fuller disclosure, so this check could not improve on the floor.
@@ -489,13 +492,17 @@ func (sa *StreamAuthorization) resolveTierForPeer(ctx context.Context, namespace
 			klog.V(2).ErrorS(err, "Failed to check endpoint disclosure, falling back to a lower tier",
 				"user", sa.user.GetName(), "namespace", namespace, "verb", check.verb, "subresource", check.subresource)
 			if ctx.Err() != nil {
-				return floorTier
+				// The next check can still be answered from the delegating authorizer's cache.
+				timedOut = true
 			}
 		}
 		if allowed {
 			tier = check.tier
 			break
 		}
+	}
+	if timedOut {
+		return tier
 	}
 	sa.peerNamespaceTiers.Add(namespace, tier, revalidationInterval)
 	return tier
@@ -534,9 +541,10 @@ func peerDisclosureChecks(streamVerb string) []peerDisclosureCheck {
 // An error that the delegating authorizer does not retry, such as a refused connection, does not stop
 // the remaining checks, and the result is cached for revalidationInterval like any other, so the error
 // is not retried for every record. An error that it does retry, such as a 429 or a 5xx, backs off past
-// authorizationCheckTimeout, so a persistent one ends up with ctx done instead. Once ctx is done, a
-// remaining check that the delegating authorizer has not cached cannot complete either, so the pass
-// stops there and its result is not cached, letting the next lookup try again.
+// authorizationCheckTimeout, so a persistent one ends up with ctx done instead. Once ctx is done, the
+// remaining checks are still made: the delegating authorizer answers one it has cached, possibly for
+// another stream from the same subject, without reaching the API server, and fails one it has not
+// cached immediately. The pass's result is then not cached, letting the next lookup try again.
 //
 // Whatever the pass ends with is stored as the floor, so a peer tier the caller resolves against it is
 // consistent with it, and is discarded along with peerNamespaceTiers if a later pass changes it.
@@ -557,9 +565,10 @@ func (sa *StreamAuthorization) peerTierFloorClusterWide(ctx context.Context) dis
 			failed = true
 			if ctx.Err() != nil {
 				timedOut = true
-				break
 			}
-			// A lesser tier could still be observed as allowed.
+			// The next check can still complete: against the API server after an error that is not
+			// retried, or from the delegating authorizer's cache once ctx is done. It could observe a
+			// lesser tier as allowed, or rule out the last resolved floor.
 			continue
 		}
 		if allowed {
