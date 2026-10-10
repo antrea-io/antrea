@@ -68,6 +68,11 @@ func (c *Controller) Validate(review *admv1.AdmissionReview) *admv1.AdmissionRes
 
 	// oldBundle is the version of the object being replaced, and is nil for a CREATE request.
 	validate := func(bundle, oldBundle *crdv1alpha1.SupportBundleCollection) error {
+		// Uploading support bundles currently only supports SFTP with basic authentication.
+		// Reject any other authType to provide immediate feedback at admission time.
+		if bundle.Spec.Authentication.AuthType != crdv1alpha1.BasicAuthentication {
+			return fmt.Errorf("spec.authentication.authType %q is not supported, only %q is supported", bundle.Spec.Authentication.AuthType, crdv1alpha1.BasicAuthentication)
+		}
 		if bundle.Spec.FileServer.HostPublicKey != nil {
 			if _, err := ssh.ParsePublicKey(bundle.Spec.FileServer.HostPublicKey); err != nil {
 				return fmt.Errorf("invalid host public key: %w", err)

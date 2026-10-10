@@ -104,7 +104,7 @@ func TestValidateSupportBundleCollection(t *testing.T) {
 			namespace: "ns1",
 			labels:    map[string]string{"test": "selected"},
 		},
-		authType: crdv1alpha1.APIKey,
+		authType: crdv1alpha1.BasicAuthentication,
 	}
 	authentication := &controlplane.BundleServerAuthConfiguration{
 		APIKey: "bundle_api_key", // #nosec G101: not actual credentials
@@ -144,7 +144,7 @@ func TestValidateSupportBundleCollection(t *testing.T) {
 					labels:    map[string]string{"test": "selected"},
 					names:     []string{"en1"},
 				},
-				authType: crdv1alpha1.APIKey,
+				authType: crdv1alpha1.BasicAuthentication,
 			},
 			existsInCache:    false,
 			expectedResponse: &adminv1.AdmissionResponse{Allowed: true},
@@ -168,7 +168,7 @@ func TestValidateSupportBundleCollection(t *testing.T) {
 					labels:    map[string]string{"test": "selected"},
 					names:     []string{"en1"},
 				},
-				authType: crdv1alpha1.APIKey,
+				authType: crdv1alpha1.BasicAuthentication,
 			},
 			existsInCache: true,
 			expectedResponse: &adminv1.AdmissionResponse{
@@ -190,7 +190,7 @@ func TestValidateSupportBundleCollection(t *testing.T) {
 					namespace: "ns1",
 					labels:    map[string]string{"test": "selected"},
 				},
-				authType: crdv1alpha1.APIKey,
+				authType: crdv1alpha1.BasicAuthentication,
 				conditions: []crdv1alpha1.SupportBundleCollectionCondition{
 					{Status: metav1.ConditionTrue, Type: crdv1alpha1.CollectionStarted},
 					{Status: metav1.ConditionTrue, Type: crdv1alpha1.BundleCollected},
@@ -217,7 +217,7 @@ func TestValidateSupportBundleCollection(t *testing.T) {
 					labels:    map[string]string{"test": "selected"},
 					names:     []string{"en1"},
 				},
-				authType: crdv1alpha1.APIKey,
+				authType: crdv1alpha1.BasicAuthentication,
 			},
 			existsInCache: true,
 			existingStatus: &crdv1alpha1.SupportBundleCollectionStatus{
@@ -245,7 +245,7 @@ func TestValidateSupportBundleCollection(t *testing.T) {
 					namespace: "ns1",
 					labels:    map[string]string{"test": "selected"},
 				},
-				authType: crdv1alpha1.APIKey,
+				authType: crdv1alpha1.BasicAuthentication,
 				conditions: []crdv1alpha1.SupportBundleCollectionCondition{
 					{Status: metav1.ConditionTrue, Type: crdv1alpha1.CollectionStarted},
 					{Status: metav1.ConditionTrue, Type: crdv1alpha1.BundleCollected},
@@ -292,7 +292,7 @@ func TestValidateSupportBundleCollection(t *testing.T) {
 			requestOperation: adminv1.Create,
 			collection: &bundleConfig{
 				name:          name,
-				authType:      crdv1alpha1.APIKey,
+				authType:      crdv1alpha1.BasicAuthentication,
 				hostPublicKey: hostPublicKey.Marshal(),
 			},
 			expectedResponse: &adminv1.AdmissionResponse{Allowed: true},
@@ -301,7 +301,7 @@ func TestValidateSupportBundleCollection(t *testing.T) {
 			requestOperation: adminv1.Create,
 			collection: &bundleConfig{
 				name:     name,
-				authType: crdv1alpha1.APIKey,
+				authType: crdv1alpha1.BasicAuthentication,
 				// invalid key
 				hostPublicKey: []byte("abc"),
 			},
@@ -315,14 +315,14 @@ func TestValidateSupportBundleCollection(t *testing.T) {
 			name:             "create referencing an authSecret the user can get",
 			requestOperation: adminv1.Create,
 			requestUserInfo:  authorizedUserInfo,
-			collection:       newAuthSecretConfig(name, crdv1alpha1.APIKey, "kube-system", ""),
+			collection:       newAuthSecretConfig(name, crdv1alpha1.BasicAuthentication, "kube-system", ""),
 			expectedResponse: &adminv1.AdmissionResponse{Allowed: true},
 			expectedSARSpec:  expectedSARSpecForUser(authorizedUserInfo),
 		}, {
 			name:             "create referencing an authSecret the user cannot get",
 			requestOperation: adminv1.Create,
 			requestUserInfo:  unauthorizedUserInfo,
-			collection:       newAuthSecretConfig(name, crdv1alpha1.APIKey, "kube-system", ""),
+			collection:       newAuthSecretConfig(name, crdv1alpha1.BasicAuthentication, "kube-system", ""),
 			expectedResponse: &adminv1.AdmissionResponse{
 				Result: &metav1.Status{
 					Message: `user "unauthorized-user" is not authorized to get Secret kube-system/sftp-auth referenced in spec.authentication.authSecret`,
@@ -335,9 +335,9 @@ func TestValidateSupportBundleCollection(t *testing.T) {
 			requestUserInfo:  unauthorizedUserInfo,
 			existingCollection: &bundleConfig{
 				name:     name,
-				authType: crdv1alpha1.APIKey,
+				authType: crdv1alpha1.BasicAuthentication,
 			},
-			collection: newAuthSecretConfig(name, crdv1alpha1.APIKey, "kube-system", ""),
+			collection: newAuthSecretConfig(name, crdv1alpha1.BasicAuthentication, "kube-system", ""),
 			expectedResponse: &adminv1.AdmissionResponse{
 				Result: &metav1.Status{
 					Message: `user "unauthorized-user" is not authorized to get Secret kube-system/sftp-auth referenced in spec.authentication.authSecret`,
@@ -351,8 +351,8 @@ func TestValidateSupportBundleCollection(t *testing.T) {
 			name:               "update leaving the authSecret unchanged",
 			requestOperation:   adminv1.Update,
 			requestUserInfo:    unauthorizedUserInfo,
-			existingCollection: newAuthSecretConfig(name, crdv1alpha1.APIKey, "kube-system", ""),
-			collection:         newAuthSecretConfig(name, crdv1alpha1.APIKey, "kube-system", ""),
+			existingCollection: newAuthSecretConfig(name, crdv1alpha1.BasicAuthentication, "kube-system", ""),
+			collection:         newAuthSecretConfig(name, crdv1alpha1.BasicAuthentication, "kube-system", ""),
 			expectedResponse:   &adminv1.AdmissionResponse{Allowed: true},
 		}, {
 			// The antrea-agents authenticate to spec.fileServer.url with the credentials
@@ -362,8 +362,8 @@ func TestValidateSupportBundleCollection(t *testing.T) {
 			name:               "update repointing the file server with an unchanged authSecret",
 			requestOperation:   adminv1.Update,
 			requestUserInfo:    unauthorizedUserInfo,
-			existingCollection: newAuthSecretConfig(name, crdv1alpha1.APIKey, "kube-system", "sftp://good.example.com:22/upload"),
-			collection:         newAuthSecretConfig(name, crdv1alpha1.APIKey, "kube-system", "sftp://evil.example.com:22/upload"),
+			existingCollection: newAuthSecretConfig(name, crdv1alpha1.BasicAuthentication, "kube-system", "sftp://good.example.com:22/upload"),
+			collection:         newAuthSecretConfig(name, crdv1alpha1.BasicAuthentication, "kube-system", "sftp://evil.example.com:22/upload"),
 			expectedResponse: &adminv1.AdmissionResponse{
 				Result: &metav1.Status{
 					Message: `user "unauthorized-user" is not authorized to get Secret kube-system/sftp-auth referenced in spec.authentication.authSecret`,
@@ -377,8 +377,8 @@ func TestValidateSupportBundleCollection(t *testing.T) {
 			name:               "update changing the authType with an unchanged authSecret",
 			requestOperation:   adminv1.Update,
 			requestUserInfo:    unauthorizedUserInfo,
-			existingCollection: newAuthSecretConfig(name, crdv1alpha1.BasicAuthentication, "kube-system", ""),
-			collection:         newAuthSecretConfig(name, crdv1alpha1.APIKey, "kube-system", ""),
+			existingCollection: newAuthSecretConfig(name, crdv1alpha1.APIKey, "kube-system", ""),
+			collection:         newAuthSecretConfig(name, crdv1alpha1.BasicAuthentication, "kube-system", ""),
 			expectedResponse: &adminv1.AdmissionResponse{
 				Result: &metav1.Status{
 					Message: `user "unauthorized-user" is not authorized to get Secret kube-system/sftp-auth referenced in spec.authentication.authSecret`,
@@ -391,8 +391,8 @@ func TestValidateSupportBundleCollection(t *testing.T) {
 			name:               "update repointing the file server after started",
 			requestOperation:   adminv1.Update,
 			requestUserInfo:    unauthorizedUserInfo,
-			existingCollection: newAuthSecretConfig(name, crdv1alpha1.APIKey, "kube-system", "sftp://good.example.com:22/upload"),
-			collection:         newAuthSecretConfig(name, crdv1alpha1.APIKey, "kube-system", "sftp://evil.example.com:22/upload"),
+			existingCollection: newAuthSecretConfig(name, crdv1alpha1.BasicAuthentication, "kube-system", "sftp://good.example.com:22/upload"),
+			collection:         newAuthSecretConfig(name, crdv1alpha1.BasicAuthentication, "kube-system", "sftp://evil.example.com:22/upload"),
 			existsInCache:      true,
 			expectedResponse: &adminv1.AdmissionResponse{
 				Result: &metav1.Status{
@@ -403,7 +403,7 @@ func TestValidateSupportBundleCollection(t *testing.T) {
 			name:             "create referencing an authSecret without a Namespace",
 			requestOperation: adminv1.Create,
 			requestUserInfo:  authorizedUserInfo,
-			collection:       newAuthSecretConfig(name, crdv1alpha1.APIKey, "", ""),
+			collection:       newAuthSecretConfig(name, crdv1alpha1.BasicAuthentication, "", ""),
 			expectedResponse: &adminv1.AdmissionResponse{
 				Result: &metav1.Status{
 					Message: "spec.authentication.authSecret must specify both name and namespace",
@@ -416,7 +416,7 @@ func TestValidateSupportBundleCollection(t *testing.T) {
 			name:             "create when the SubjectAccessReview fails",
 			requestOperation: adminv1.Create,
 			requestUserInfo:  authorizedUserInfo,
-			collection:       newAuthSecretConfig(name, crdv1alpha1.APIKey, "kube-system", ""),
+			collection:       newAuthSecretConfig(name, crdv1alpha1.BasicAuthentication, "kube-system", ""),
 			sarError:         errors.New("etcdserver: request timed out"),
 			expectedResponse: &adminv1.AdmissionResponse{
 				Result: &metav1.Status{
@@ -424,6 +424,58 @@ func TestValidateSupportBundleCollection(t *testing.T) {
 				},
 			},
 			expectedSARSpec: expectedSARSpecForUser(authorizedUserInfo),
+		}, {
+			name:             "create with unsupported authType APIKey",
+			requestOperation: adminv1.Create,
+			collection: &bundleConfig{
+				name:     name,
+				authType: crdv1alpha1.APIKey,
+			},
+			expectedResponse: &adminv1.AdmissionResponse{
+				Result: &metav1.Status{
+					Message: `spec.authentication.authType "APIKey" is not supported, only "BasicAuthentication" is supported`,
+				},
+			},
+		}, {
+			name:             "create with unsupported authType BearerToken",
+			requestOperation: adminv1.Create,
+			collection: &bundleConfig{
+				name:     name,
+				authType: crdv1alpha1.BearerToken,
+			},
+			expectedResponse: &adminv1.AdmissionResponse{
+				Result: &metav1.Status{
+					Message: `spec.authentication.authType "BearerToken" is not supported, only "BasicAuthentication" is supported`,
+				},
+			},
+		}, {
+			name:             "create with empty authType",
+			requestOperation: adminv1.Create,
+			collection: &bundleConfig{
+				name:     name,
+				authType: "",
+			},
+			expectedResponse: &adminv1.AdmissionResponse{
+				Result: &metav1.Status{
+					Message: `spec.authentication.authType "" is not supported, only "BasicAuthentication" is supported`,
+				},
+			},
+		}, {
+			name:             "update with unsupported authType",
+			requestOperation: adminv1.Update,
+			existingCollection: &bundleConfig{
+				name:     name,
+				authType: crdv1alpha1.BasicAuthentication,
+			},
+			collection: &bundleConfig{
+				name:     name,
+				authType: crdv1alpha1.APIKey,
+			},
+			expectedResponse: &adminv1.AdmissionResponse{
+				Result: &metav1.Status{
+					Message: `spec.authentication.authType "APIKey" is not supported, only "BasicAuthentication" is supported`,
+				},
+			},
 		},
 	}
 	for _, tt := range tests {
