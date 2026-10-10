@@ -50,12 +50,18 @@ type fakeAuthorizer struct {
 	allowed sets.Set[string]
 	failing sets.Set[string]
 	hanging sets.Set[string]
+	cached  sets.Set[string]
 	calls   []string
 	attrs   []authorizer.Attributes
 }
 
 func newFakeAuthorizer(allowed ...string) *fakeAuthorizer {
-	return &fakeAuthorizer{allowed: sets.New(allowed...), failing: sets.New[string](), hanging: sets.New[string]()}
+	return &fakeAuthorizer{
+		allowed: sets.New(allowed...),
+		failing: sets.New[string](),
+		hanging: sets.New[string](),
+		cached:  sets.New[string](),
+	}
 }
 
 func (f *fakeAuthorizer) Authorize(ctx context.Context, attrs authorizer.Attributes) (authorizer.Decision, string, error) {
@@ -66,13 +72,21 @@ func (f *fakeAuthorizer) Authorize(ctx context.Context, attrs authorizer.Attribu
 	hanging := f.hanging.Has(key)
 	failing := f.failing.Has(key)
 	allowed := f.allowed.Has(key)
+	cached := f.cached.Has(key)
 	f.mu.Unlock()
 
-	if err := ctx.Err(); err != nil {
+	if err := ctx.Err(); err != nil && !cached {
 		// The delegating authorizer can only answer a check it has already cached once the caller's
-		// context is done; anything else fails on the context. Nothing here is cached, so every
-		// check does.
+		// context is done; anything else fails on the context.
 		return authorizer.DecisionNoOpinion, "", err
+	}
+	if cached {
+		// Answered from the delegating authorizer's cache, without reaching the API server, so
+		// neither a hanging nor a failing API server affects it.
+		if allowed {
+			return authorizer.DecisionAllow, "", nil
+		}
+		return authorizer.DecisionNoOpinion, "no grant", nil
 	}
 	if hanging {
 		// Simulates an API server too slow or unreachable to ever answer on its own: the caller's
@@ -117,6 +131,15 @@ func (f *fakeAuthorizer) hang(key string) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.hanging.Insert(key)
+}
+
+// cache makes checking key answer from the current grants even once the caller's context is done,
+// as the delegating authorizer does for a decision it has cached, possibly for another stream from
+// the same subject, from this point on.
+func (f *fakeAuthorizer) cache(key string) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.cached.Insert(key)
 }
 
 // attributesKey renders one check the way the tests below name grants.
@@ -1001,10 +1024,10 @@ func TestAuthorized_IdentityChecks(t *testing.T) {
 			sa := newStream(t, fake)
 
 			// Cluster-wide flows is denied and cluster-wide flows/identity hangs until the batch's
-			// budget runs out, which leaves ns-b's own flows check failing on the expired context.
+			// budget runs out, which leaves both of ns-b's own checks failing on the expired context.
 			// Nothing about the floor or ns-b is cached, so the next batch resolves both afresh
 			// instead of being held at Flow for revalidationInterval.
-			wantCalls := []string{flowsGrant(watchVerb, ""), identityGrant(""), flowsGrant(watchVerb, "ns-b")}
+			wantCalls := []string{flowsGrant(watchVerb, ""), identityGrant(""), flowsGrant(watchVerb, "ns-b"), identityGrant("ns-b")}
 			assert.Equal(t, flowpb.EndpointDisclosure_ENDPOINT_DISCLOSURE_FLOW, peerTier(t, sa, "ns-b"))
 			assert.Equal(t, wantCalls, fake.calls)
 
@@ -1070,6 +1093,76 @@ func TestAuthorized_IdentityChecks(t *testing.T) {
 			for _, f := range got {
 				assert.Equal(t, flowpb.EndpointDisclosure_ENDPOINT_DISCLOSURE_FLOW, f.GetK8S().GetDestinationDisclosure())
 			}
+		})
+	})
+
+	// The checks below are answered from the delegating authorizer's cache once the budget is spent,
+	// as they would be if another stream from the same subject had just made them: a non-follow
+	// stream shares the flows/identity entry, but checks flows with list rather than watch.
+	t.Run("a floor re-check whose flows check outlasts the budget does not keep an Identity floor a cached denial rules out", func(t *testing.T) {
+		synctest.Test(t, func(t *testing.T) {
+			fake := newFakeAuthorizer(flowsGrant(watchVerb, "ns-a"), identityGrant(""))
+			sa := newStream(t, fake)
+
+			assert.Equal(t, flowpb.EndpointDisclosure_ENDPOINT_DISCLOSURE_IDENTITY, peerTier(t, sa, "ns-b"))
+			time.Sleep(revalidationInterval)
+			fake.revoke(identityGrant(""))
+			fake.cache(identityGrant(""))
+			fake.hang(flowsGrant(watchVerb, ""))
+			assert.Equal(t, flowpb.EndpointDisclosure_ENDPOINT_DISCLOSURE_FLOW, peerTier(t, sa, "ns-c"))
+		})
+	})
+
+	t.Run("a floor re-check whose flows check outlasts the budget raises a Flow floor a cached allow rules in", func(t *testing.T) {
+		synctest.Test(t, func(t *testing.T) {
+			fake := newFakeAuthorizer(flowsGrant(watchVerb, "ns-a"))
+			sa := newStream(t, fake)
+
+			assert.Equal(t, flowpb.EndpointDisclosure_ENDPOINT_DISCLOSURE_FLOW, peerTier(t, sa, "ns-b"))
+			time.Sleep(revalidationInterval)
+			fake.grant(identityGrant(""))
+			fake.cache(identityGrant(""))
+			fake.hang(flowsGrant(watchVerb, ""))
+			assert.Equal(t, flowpb.EndpointDisclosure_ENDPOINT_DISCLOSURE_IDENTITY, peerTier(t, sa, "ns-c"))
+		})
+	})
+
+	t.Run("a peer whose flows check outlasts the budget gets a cached flows/identity allow, uncached", func(t *testing.T) {
+		synctest.Test(t, func(t *testing.T) {
+			fake := newFakeAuthorizer(flowsGrant(watchVerb, "ns-a"), identityGrant("ns-b"))
+			fake.hang(flowsGrant(watchVerb, "ns-b"))
+			fake.cache(identityGrant("ns-b"))
+			sa := newStream(t, fake)
+
+			wantCalls := []string{flowsGrant(watchVerb, ""), identityGrant(""), flowsGrant(watchVerb, "ns-b"), identityGrant("ns-b")}
+			assert.Equal(t, flowpb.EndpointDisclosure_ENDPOINT_DISCLOSURE_IDENTITY, peerTier(t, sa, "ns-b"))
+			assert.Equal(t, wantCalls, fake.calls)
+
+			// The flows check in ns-b was never answered, so ns-b is not cached: the next batch
+			// checks it again. The floor did resolve, so it is not re-checked.
+			fake.calls = nil
+			assert.Equal(t, flowpb.EndpointDisclosure_ENDPOINT_DISCLOSURE_IDENTITY, peerTier(t, sa, "ns-b"))
+			assert.Equal(t, wantCalls[2:], fake.calls)
+		})
+	})
+
+	// The floor stays at Flow without being cached, and ns-b's tier is resolved from completed checks
+	// against it, so caching that tier is safe: it is replaced along with the floor if a later pass
+	// changes it.
+	t.Run("a peer resolved from cached checks after the floor outlasts the budget is cached", func(t *testing.T) {
+		synctest.Test(t, func(t *testing.T) {
+			fake := newFakeAuthorizer(flowsGrant(watchVerb, "ns-a"), flowsGrant(watchVerb, "ns-b"))
+			fake.hang(flowsGrant(watchVerb, ""))
+			fake.cache(flowsGrant(watchVerb, "ns-b"))
+			sa := newStream(t, fake)
+
+			assert.Equal(t, flowpb.EndpointDisclosure_ENDPOINT_DISCLOSURE_FULL, peerTier(t, sa, "ns-b"))
+			assert.Equal(t, []string{flowsGrant(watchVerb, ""), identityGrant(""), flowsGrant(watchVerb, "ns-b")}, fake.calls)
+
+			// The floor is re-checked, but ns-b is answered from the stream's own cache.
+			fake.calls = nil
+			assert.Equal(t, flowpb.EndpointDisclosure_ENDPOINT_DISCLOSURE_FULL, peerTier(t, sa, "ns-b"))
+			assert.Equal(t, []string{flowsGrant(watchVerb, ""), identityGrant("")}, fake.calls)
 		})
 	})
 
@@ -1172,13 +1265,17 @@ func TestAuthorized_DoesNotCacheAnExpiredBudgetAsADenial(t *testing.T) {
 		require.NoError(t, err)
 		fake.calls = nil
 
-		// peer-1 hangs until the batch's budget runs out, so peer-2's first lookup fails
-		// immediately on the expired context, and its flows/identity is never asked about, even
-		// though the client does hold it there.
+		// peer-1 hangs until the batch's budget runs out, so both of peer-2's checks fail
+		// immediately on the expired context, including flows/identity, even though the client
+		// does hold it there.
 		flows := []*flowpb.Flow{podFlow("ns-a", "peer-1"), podFlow("ns-a", "peer-2")}
 		got := collectAuthorized(context.Background(), sa, flows)
 		require.Len(t, got, 2)
-		assert.Equal(t, []string{flowsGrant(watchVerb, ""), identityGrant(""), flowsGrant(watchVerb, "peer-1"), identityGrant("peer-1"), flowsGrant(watchVerb, "peer-2")}, fake.calls)
+		assert.Equal(t, []string{
+			flowsGrant(watchVerb, ""), identityGrant(""),
+			flowsGrant(watchVerb, "peer-1"), identityGrant("peer-1"),
+			flowsGrant(watchVerb, "peer-2"), identityGrant("peer-2"),
+		}, fake.calls)
 		assert.Equal(t, flowpb.EndpointDisclosure_ENDPOINT_DISCLOSURE_FLOW, got[1].GetK8S().GetDestinationDisclosure())
 
 		// The next batch gets its own budget, and peer-2 now resolves at the Identity tier: neither

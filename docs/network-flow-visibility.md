@@ -924,7 +924,11 @@ narrowed — so there is nothing for the server to report back.
   answered from that cache. The two add up in the worst case. Granting access is
   subject to the same delay. Opening a *new* stream is never served from a stale
   allow decision beyond the 10-minute window, and fails closed if the API server
-  is unreachable; an established stream survives a control-plane blip.
+  is unreachable; an established stream survives a control-plane blip. Peer
+  disclosure that rests on a cluster-wide grant is kept the same way while its
+  re-check cannot complete; disclosure that rests on a grant in the peer's own
+  Namespace falls back to what the subject holds cluster-wide instead, which is
+  the Flow tier if it holds nothing there.
 - **Flow visibility is not derived from read access to the objects involved, but
   identity is.** A subject granted `watch flows` in a Namespace sees Pod names
   and labels for it even without `get pods` there — `flows` and object read
