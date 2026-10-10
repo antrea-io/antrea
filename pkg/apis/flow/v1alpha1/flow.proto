@@ -125,9 +125,13 @@ enum EndpointDisclosure {
   // The endpoint is disclosed at the Flow tier: unidentified, with only what
   // the flow itself shows (addresses, ports, protocol, statistics, and the
   // type and action of the policies evaluated on the endpoint's side), plus
-  // the endpoint's Namespace if the connection was allowed. Set when the
-  // client holds neither the stream's own verb on flows nor flows/identity in
-  // the endpoint's Namespace, and for an endpoint that has no Namespace at all.
+  // the endpoint's Namespace if the connection was allowed. A source endpoint
+  // also keeps its Namespace when the connection was denied by an ingress
+  // policy of the destination's own Namespace, while the destination is
+  // disclosed in full.
+  // Set when the client holds neither the stream's own verb on flows nor
+  // flows/identity in the endpoint's Namespace, and for an endpoint that has
+  // no Namespace at all.
   ENDPOINT_DISCLOSURE_FLOW = 2;
 }
 
