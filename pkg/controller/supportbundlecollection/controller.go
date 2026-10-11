@@ -311,15 +311,19 @@ func (c *Controller) syncSupportBundleCollection(key string) error {
 		}
 		return nil
 	}
+	var internalBundleCollection *types.SupportBundleCollection
 	internalBundleCollectionObj, found, _ := c.supportBundleCollectionStore.Get(key)
-	if !found {
-		internalBundleCollectionObj, err = c.createInternalSupportBundleCollection(bundle)
+	if found {
+		internalBundleCollection = internalBundleCollectionObj.(*types.SupportBundleCollection)
+	} else {
+		internalBundleCollection, err = c.createInternalSupportBundleCollection(bundle)
 		if err != nil {
 			return err
 		}
 	}
-	if internalBundleCollectionObj != nil {
-		return c.updateStatus(internalBundleCollectionObj.(*types.SupportBundleCollection))
+	// createInternalSupportBundleCollection returns nil if the collection has expired.
+	if internalBundleCollection != nil {
+		return c.updateStatus(internalBundleCollection)
 	}
 	return nil
 }
