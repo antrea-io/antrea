@@ -46,6 +46,35 @@ type AntreaClusterNetworkPolicyStatsList struct {
 }
 
 // +genclient
+// +resourceName=clusternetworkpolicystats
+// +genclient:readonly
+// +genclient:nonNamespaced
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+
+// ClusterNetworkPolicyStats is the statistics of a Kubernetes ClusterNetworkPolicy
+// (policy.networking.k8s.io). Statistics of the Antrea-native ClusterNetworkPolicy CRD
+// (crd.antrea.io) are exposed as AntreaClusterNetworkPolicyStats instead.
+type ClusterNetworkPolicyStats struct {
+	metav1.TypeMeta   `json:",inline"`
+	metav1.ObjectMeta `json:"metadata,omitempty" protobuf:"bytes,1,opt,name=metadata"`
+	// The traffic stats of the ClusterNetworkPolicy.
+	TrafficStats TrafficStats `json:"trafficStats,omitempty" protobuf:"bytes,2,opt,name=trafficStats"`
+	// The traffic stats of the ClusterNetworkPolicy, from rule perspective.
+	RuleTrafficStats []RuleTrafficStats `json:"ruleTrafficStats,omitempty" protobuf:"bytes,3,rep,name=ruleTrafficStats"`
+}
+
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+
+// ClusterNetworkPolicyStatsList is a list of ClusterNetworkPolicyStats.
+type ClusterNetworkPolicyStatsList struct {
+	metav1.TypeMeta `json:",inline"`
+	metav1.ListMeta `json:"metadata,omitempty" protobuf:"bytes,1,opt,name=metadata"`
+
+	// List of ClusterNetworkPolicyStats.
+	Items []ClusterNetworkPolicyStats `json:"items" protobuf:"bytes,2,rep,name=items"`
+}
+
+// +genclient
 // +resourceName=antreanetworkpolicystats
 // +genclient:readonly
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
