@@ -838,9 +838,20 @@ func (data *TestData) CreateOrUpdateCG(cg *crdv1beta1.ClusterGroup) (*crdv1beta1
 		return cgr, nil
 	} else if cgReturned.Name != "" {
 		log.Debugf("ClusterGroup with name %s already exists, updating", cg.Name)
-		cgReturned.Spec = cg.Spec
-		cgr, err := data.CRDClient.CrdV1beta1().ClusterGroups().Update(context.TODO(), cgReturned, metav1.UpdateOptions{})
-		return cgr, err
+		// The Antrea Controller writes the status of the ClusterGroup, which bumps its
+		// resourceVersion, so retry on conflict with the latest version of the object (see
+		// CreateOrUpdateACNP).
+		var updated *crdv1beta1.ClusterGroup
+		err = retry.RetryOnConflict(retry.DefaultRetry, func() error {
+			latest, err := data.CRDClient.CrdV1beta1().ClusterGroups().Get(context.TODO(), cg.Name, metav1.GetOptions{})
+			if err != nil {
+				return err
+			}
+			latest.Spec = cg.Spec
+			updated, err = data.CRDClient.CrdV1beta1().ClusterGroups().Update(context.TODO(), latest, metav1.UpdateOptions{})
+			return err
+		})
+		return updated, err
 	}
 	return nil, fmt.Errorf("error occurred in creating/updating ClusterGroup %s", cg.Name)
 }
@@ -858,9 +869,20 @@ func (k *KubernetesUtils) CreateOrUpdateGroup(g *crdv1beta1.Group) (*crdv1beta1.
 		return gr, nil
 	} else if gReturned.Name != "" {
 		log.Debugf("Group %s/%s already exists, updating", g.Namespace, g.Name)
-		gReturned.Spec = g.Spec
-		gr, err := k.CRDClient.CrdV1beta1().Groups(g.Namespace).Update(context.TODO(), gReturned, metav1.UpdateOptions{})
-		return gr, err
+		// The Antrea Controller writes the status of the Group, which bumps its
+		// resourceVersion, so retry on conflict with the latest version of the object (see
+		// CreateOrUpdateACNP).
+		var updated *crdv1beta1.Group
+		err = retry.RetryOnConflict(retry.DefaultRetry, func() error {
+			latest, err := k.CRDClient.CrdV1beta1().Groups(g.Namespace).Get(context.TODO(), g.Name, metav1.GetOptions{})
+			if err != nil {
+				return err
+			}
+			latest.Spec = g.Spec
+			updated, err = k.CRDClient.CrdV1beta1().Groups(g.Namespace).Update(context.TODO(), latest, metav1.UpdateOptions{})
+			return err
+		})
+		return updated, err
 	}
 	return nil, fmt.Errorf("error occurred in creating/updating Group %s/%s", g.Namespace, g.Name)
 }
@@ -910,9 +932,22 @@ func (data *TestData) CreateOrUpdateACNP(cnp *crdv1beta1.ClusterNetworkPolicy) (
 		return cnp, err
 	} else if cnpReturned.Name != "" {
 		log.Debugf("ClusterNetworkPolicy with name %s already exists, updating", cnp.Name)
-		cnpReturned.Spec = cnp.Spec
-		cnp, err = data.CRDClient.CrdV1beta1().ClusterNetworkPolicies().Update(context.TODO(), cnpReturned, metav1.UpdateOptions{})
-		return cnp, err
+		// The Antrea Controller writes the status of the ClusterNetworkPolicy shortly after it
+		// is created, which bumps its resourceVersion. Without a retry, an update issued in
+		// that window fails with "the object has been modified; please apply your changes to
+		// the latest version and try again", so retry on conflict with the latest version of
+		// the object.
+		var updated *crdv1beta1.ClusterNetworkPolicy
+		err = retry.RetryOnConflict(retry.DefaultRetry, func() error {
+			latest, err := data.CRDClient.CrdV1beta1().ClusterNetworkPolicies().Get(context.TODO(), cnp.Name, metav1.GetOptions{})
+			if err != nil {
+				return err
+			}
+			latest.Spec = cnp.Spec
+			updated, err = data.CRDClient.CrdV1beta1().ClusterNetworkPolicies().Update(context.TODO(), latest, metav1.UpdateOptions{})
+			return err
+		})
+		return updated, err
 	}
 	return nil, fmt.Errorf("error occurred in creating/updating ClusterNetworkPolicy %s", cnp.Name)
 }
@@ -950,9 +985,20 @@ func (data *TestData) CreateOrUpdateANNP(annp *crdv1beta1.NetworkPolicy) (*crdv1
 		return annp, err
 	} else if npReturned.Name != "" {
 		log.Debugf("Antrea NetworkPolicy with name %s already exists, updating", annp.Name)
-		npReturned.Spec = annp.Spec
-		annp, err = data.CRDClient.CrdV1beta1().NetworkPolicies(annp.Namespace).Update(context.TODO(), npReturned, metav1.UpdateOptions{})
-		return annp, err
+		// The Antrea Controller writes the status of the Antrea NetworkPolicy, which bumps its
+		// resourceVersion, so retry on conflict with the latest version of the object (see
+		// CreateOrUpdateACNP).
+		var updated *crdv1beta1.NetworkPolicy
+		err = retry.RetryOnConflict(retry.DefaultRetry, func() error {
+			latest, err := data.CRDClient.CrdV1beta1().NetworkPolicies(annp.Namespace).Get(context.TODO(), annp.Name, metav1.GetOptions{})
+			if err != nil {
+				return err
+			}
+			latest.Spec = annp.Spec
+			updated, err = data.CRDClient.CrdV1beta1().NetworkPolicies(annp.Namespace).Update(context.TODO(), latest, metav1.UpdateOptions{})
+			return err
+		})
+		return updated, err
 	}
 	return nil, fmt.Errorf("error occurred in creating/updating Antrea NetworkPolicy %s", annp.Name)
 }
