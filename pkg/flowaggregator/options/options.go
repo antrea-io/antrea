@@ -74,6 +74,12 @@ func LoadConfig(configBytes []byte) (*Options, error) {
 		if opt.Config.ClickHouse.Enable || opt.Config.S3Uploader.Enable || opt.Config.FlowLogger.Enable {
 			return nil, fmt.Errorf("only flow collector is supported in Proxy mode")
 		}
+		// Records are not correlated in Proxy mode, so the redaction applied by the
+		// FlowStreamService, which assumes that a record describes the whole connection,
+		// would not hold. Records may also be spread across several replicas.
+		if *opt.Config.FlowStreamService.Enable {
+			return nil, fmt.Errorf("flowStreamService is not supported in Proxy mode")
+		}
 	}
 	var err error
 	opt.ActiveFlowRecordTimeout, err = time.ParseDuration(opt.Config.ActiveFlowRecordTimeout)

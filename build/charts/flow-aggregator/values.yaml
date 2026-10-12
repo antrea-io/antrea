@@ -199,13 +199,14 @@ flowLogger:
 # flowStreamService contains configuration options for the FlowStreamService gRPC server,
 # which streams flow records to consumers such as antrea-ui.
 flowStreamService:
-  # -- Enable is the switch to enable the FlowStreamService gRPC server (port 14740). The server
+  # -- (bool) Enable is the switch to enable the FlowStreamService gRPC server (port 14740). The server
   # uses server-side TLS (same self-signed certificate as the gRPC collector). Clients must
   # authenticate with either a Kubernetes bearer token in gRPC metadata or an X.509 client
   # certificate signed by the cluster's client CA, presented during the TLS handshake. Note that
   # the Flow Aggregator's own client certificate is signed by its self-signed CA, not the
-  # cluster's, so it cannot be used here. Enabled by default.
-  enable: true
+  # cluster's, so it cannot be used here. The FlowStreamService is not supported in Proxy mode.
+  # @default -- true in Aggregate mode, false in Proxy mode
+  enable: null
   # -- MaxStreamsPerClientIP is the maximum number of concurrent flow streams the server accepts
   # from one client IP address. A stream refused by this limit, or by maxTotalStreams, is rejected
   # with the retryable gRPC ResourceExhausted code. Note that this limit keys on the source IP of

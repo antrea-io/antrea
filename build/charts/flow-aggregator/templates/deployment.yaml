@@ -1,4 +1,5 @@
 {{- include "validateReplicas" . }}
+{{- include "validateFlowStreamService" . }}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -106,7 +107,7 @@ spec:
           - name: grpc
             containerPort: 14739
             protocol: TCP
-          {{- if .Values.flowStreamService.enable }}
+          {{- if eq (include "flow-aggregator.flowStreamServiceEnabled" .) "true" }}
           - name: flowstream-grpc
             containerPort: 14740
             protocol: TCP

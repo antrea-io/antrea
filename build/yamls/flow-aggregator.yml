@@ -305,7 +305,8 @@ data:
       # Which records a client then receives is decided by Kubernetes RBAC on the virtual
       # "flows.observability.antrea.io" resource. See docs/network-flow-visibility.md for
       # more details.
-      # Enabled by default.
+      # The FlowStreamService is not supported in Proxy mode.
+      # Defaults to true in Aggregate mode, false in Proxy mode.
       enable: true
 
       # MaxStreamsPerClientIP is the maximum number of concurrent flow streams the server accepts
@@ -574,7 +575,7 @@ spec:
       annotations:
         # Automatically restart Pod if the ConfigMap changes
         # See https://helm.sh/docs/howto/charts_tips_and_tricks/#automatically-roll-deployments
-        checksum/config: c779f4425584b096e1872a42d451b6088f502882c063574d8b4233cf610ac799
+        checksum/config: 17ff07e52c94461d224f10abcc3807b16da495207f6894b7d8d9d70409603f24
       labels:
         app: flow-aggregator
     spec:

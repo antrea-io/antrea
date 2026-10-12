@@ -45,3 +45,16 @@ cluster-scoped objects.
 {{- end }}
 {{- printf "%s%s" (include "flow-aggregator.fullname" .) $suffix }}
 {{- end }}
+
+{{/*
+Whether the FlowStreamService is enabled. When flowStreamService.enable is not set, it follows the
+mode: enabled in Aggregate mode, disabled in Proxy mode, in which the FlowStreamService is not
+supported.
+*/}}
+{{- define "flow-aggregator.flowStreamServiceEnabled" -}}
+{{- if kindIs "invalid" .Values.flowStreamService.enable }}
+{{- ne .Values.mode "Proxy" }}
+{{- else }}
+{{- .Values.flowStreamService.enable }}
+{{- end }}
+{{- end -}}
