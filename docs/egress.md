@@ -709,4 +709,4 @@ After you apply the above `Tuned` CR named `antrea` in an OpenShift cluster, the
 Node Tuning Operator will reconcile the CR and update
 `net.ipv4.conf.all.rp_filter` to `2` for all the matched Nodes (e.g. all Nodes
 with label `network-role=egress-gateway`). Please refer to the OpenShift
-document about [Using the Node Tuning Operator](https://docs.openshift.com/container-platform/4.16/scalability_and_performance/using-node-tuning-operator.html).
+document about [Using the Node Tuning Operator](https://docs.redhat.com/en/documentation/openshift_container_platform/4.16/html/scalability_and_performance/using-node-tuning-operator).
