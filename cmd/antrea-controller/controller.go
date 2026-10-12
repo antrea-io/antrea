@@ -98,30 +98,16 @@ const (
 	serverMinWatchTimeout = 2 * time.Hour
 )
 
+// allowedPaths defines non-resource HTTP paths excluded from authorization. Webhook endpoints
+// use trailing wildcards so that newly added validation, mutation, or conversion webhooks are
+// automatically allowed without requiring manual updates to this list.
 var allowedPaths = []string{
 	"/healthz",
 	"/livez",
 	"/readyz",
-	"/mutate/acnp",
-	"/mutate/annp",
-	"/mutate/anp",
-	"/mutate/namespace",
-	"/validate/tier",
-	"/validate/acnp",
-	"/validate/annp",
-	"/validate/cnp",
-	"/validate/clustergroup",
-	"/validate/cnp",
-	"/validate/externalippool",
-	"/validate/egress",
-	"/validate/group",
-	"/validate/ippool",
-	"/validate/supportbundlecollection",
-	"/validate/traceflow",
-	"/validate/packetcapture",
-	"/validate/antreanodeconfig",
-	"/convert/clustergroup",
-	"/convert/ippool",
+	"/mutate/*",
+	"/validate/*",
+	"/convert/*",
 }
 
 // run starts Antrea Controller with the given options and waits for termination signal.
