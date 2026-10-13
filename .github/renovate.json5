@@ -23,9 +23,18 @@
   // Labels to include in the PR
   labels: ["dependencies"],
 
+  // Require a 3-day stabilization period before updating to a new release, to reduce exposure to
+  // supply chain attacks: compromised releases are typically detected and yanked within this window.
+  // This applies to all enabled managers. A release with no known timestamp is never considered
+  // stable, and the corresponding update will be listed as pending in the Dependency Dashboard.
+  minimumReleaseAge: "3 days",
+
   // Enabling security updates based on GitHub's Dependabot-style security alerts
   vulnerabilityAlerts: {
     enabled: true,
+    // Security updates are not subject to the stabilization period. This is already the Renovate
+    // default, but we make it explicit. It also applies to OSV vulnerability alerts.
+    minimumReleaseAge: null,
   },
 
   // GitHub vulnerability alerts only reflect the default branch. Supplement them with OSV
