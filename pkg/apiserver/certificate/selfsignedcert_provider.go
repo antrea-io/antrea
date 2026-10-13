@@ -93,6 +93,9 @@ func withClock(clock clockutils.Clock) providerOption {
 	}
 }
 
+// selfSignedCertInitRetryInterval is how often the first rotation is retried at startup. Declared as a variable for testing.
+var selfSignedCertInitRetryInterval = 2 * time.Second
+
 func newSelfSignedCertProvider(client kubernetes.Interface, secureServing *options.SecureServingOptionsWithLoopback, caConfig *CAConfig, options ...providerOption) (*selfSignedCertProvider, error) {
 	// Set the CertKey and CertDirectory to generate the certificate files.
 	secureServing.ServerCert.CertDirectory = caConfig.SelfSignedCertDir
@@ -137,7 +140,21 @@ func newSelfSignedCertProvider(client kubernetes.Interface, secureServing *optio
 		})
 		provider.secretLister = corelisters.NewSecretLister(provider.secretInformer.GetIndexer())
 	}
-	if err := provider.rotateSelfSignedCertificate(); err != nil {
+	// The first rotation reads the persisted Secret from the API, which may not be reachable yet, e.g. while the
+	// cluster is still coming up after a restart. Retry it, as the cert-manager path waits for its Secret, instead of
+	// failing antrea-controller's startup on a transient error.
+	var rotateErr error
+	if err := wait.PollUntilContextTimeout(context.TODO(), selfSignedCertInitRetryInterval, caConfig.CertReadyTimeout, true,
+		func(ctx context.Context) (bool, error) {
+			if rotateErr = provider.rotateSelfSignedCertificate(); rotateErr != nil {
+				klog.ErrorS(rotateErr, "Failed to initialize self-signed certificate, will retry")
+				return false, nil
+			}
+			return true, nil
+		}); err != nil {
+		if rotateErr != nil {
+			return nil, fmt.Errorf("timed out after %v retrying the first rotation: %w", caConfig.CertReadyTimeout, rotateErr)
+		}
 		return nil, err
 	}
 	return provider, nil
@@ -258,6 +275,11 @@ func (p *selfSignedCertProvider) rotateSelfSignedCertificate() error {
 	if p.caConfig.TLSSecretName != "" {
 		secret, cert, key, err = p.getCertKeyFromSecret()
 		if err != nil {
+			// The Secret could not be read at all. It may well exist: generating a new certificate now would try to
+			// create it, fail with AlreadyExists, and replace nothing. Let the caller retry the read instead.
+			if secret == nil {
+				return fmt.Errorf("unable to get Secret %s/%s: %w", p.secretNamespace, p.caConfig.TLSSecretName, err)
+			}
 			klog.ErrorS(err, "Didn't get valid certificate and key from Secret, will generate a new one", "secret", p.caConfig.TLSSecretName)
 		}
 	}
