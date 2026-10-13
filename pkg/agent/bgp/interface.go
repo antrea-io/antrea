@@ -83,6 +83,25 @@ const (
 	SessionEstablished SessionState = "Established"
 )
 
+// BFDPort is the well-known UDP port on which single-hop BFD control packets are received.
+// For more details see https://datatracker.ietf.org/doc/html/rfc5881#section-4.
+const BFDPort = 3784
+
+type BFDSessionState string
+
+const (
+	// BFDSessionDisabled indicates that BFD is not configured for the BGP peer.
+	BFDSessionDisabled BFDSessionState = "Disabled"
+	// BFDSessionUnknown indicates an unknown BFD session state.
+	BFDSessionUnknown BFDSessionState = "Unknown"
+	// The following are the states of the BFD state machine.
+	// For more details see https://datatracker.ietf.org/doc/html/rfc5880#section-6.2.
+	BFDSessionAdminDown BFDSessionState = "AdminDown"
+	BFDSessionDown      BFDSessionState = "Down"
+	BFDSessionInit      BFDSessionState = "Init"
+	BFDSessionUp        BFDSessionState = "Up"
+)
+
 type RouteType int
 
 const (
@@ -122,6 +141,8 @@ type PeerStatus struct {
 	GracefulRestartTimeSeconds int32
 	SessionState               SessionState
 	UptimeSeconds              int
+	// BFDSessionState is BFDSessionDisabled if BFD is not configured for the BGP peer.
+	BFDSessionState BFDSessionState
 }
 
 // Route represents a BGP route. Currently only prefix (e.g., "192.168.0.0/24") is needed. More attributes might be
