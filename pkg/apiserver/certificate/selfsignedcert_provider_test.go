@@ -16,9 +16,12 @@ package certificate
 
 import (
 	"context"
+	"errors"
+	"math"
 	"net"
 	"os"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/stretchr/testify/assert"
@@ -28,6 +31,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	genericoptions "k8s.io/apiserver/pkg/server/options"
 	fakeclientset "k8s.io/client-go/kubernetes/fake"
+	k8stesting "k8s.io/client-go/testing"
 	"k8s.io/client-go/tools/cache"
 	certutil "k8s.io/client-go/util/cert"
 	clocktesting "k8s.io/utils/clock/testing"
@@ -60,6 +64,9 @@ func newTestSelfSignedCertProvider(t *testing.T, client *fakeclientset.Clientset
 	}
 	p, err := newSelfSignedCertProvider(client, secureServing, caConfig, options...)
 	require.NoError(t, err)
+	// Not every caller runs the provider, and Run, which shuts the queue down, may never be called. ShutDown is
+	// idempotent, so this is safe for callers that do.
+	t.Cleanup(p.queue.ShutDown)
 	return p
 }
 
@@ -318,4 +325,123 @@ func TestSelfSignedCertProviderRun(t *testing.T) {
 			}, 5*time.Second, 100*time.Millisecond)
 		})
 	}
+}
+
+// failSecretGets makes the first n GETs of a Secret fail the way they do while the API is not reachable yet.
+func failSecretGets(client *fakeclientset.Clientset, n int) {
+	client.PrependReactor("get", "secrets", func(action k8stesting.Action) (bool, runtime.Object, error) {
+		if n > 0 {
+			n--
+			return true, nil, errors.New("dial tcp 10.96.0.1:443: connect: connection refused")
+		}
+		return false, nil, nil
+	})
+}
+
+func secretCreates(client *fakeclientset.Clientset) int {
+	n := 0
+	for _, action := range client.Actions() {
+		if action.Matches("create", "secrets") {
+			n++
+		}
+	}
+	return n
+}
+
+// A Secret that cannot be read must not be treated as missing: the existing certificate is kept and no Secret is
+// created over it.
+func TestSelfSignedCertProviderRotateSecretGetError(t *testing.T) {
+	t.Setenv(env.PodNamespaceEnvKey, testSecretNamespace)
+	existing := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{Namespace: testSecretNamespace, Name: testSecretName},
+		Type:       corev1.SecretTypeTLS,
+		Data: map[string][]byte{
+			corev1.TLSCertKey:       testOneYearCert,
+			corev1.TLSPrivateKeyKey: testOneYearKey,
+		},
+	}
+	client := fakeclientset.NewSimpleClientset(existing)
+	p := newTestSelfSignedCertProvider(t, client, testSecretName, time.Hour*24*90)
+	require.Equal(t, testOneYearCert, p.CurrentCABundleContent())
+
+	failSecretGets(client, 1)
+	client.ClearActions()
+	err := p.rotateSelfSignedCertificate()
+	require.ErrorContains(t, err, "connection refused")
+	assert.Equal(t, testOneYearCert, p.CurrentCABundleContent(), "the serving certificate must not change")
+	assert.Zero(t, secretCreates(client), "no Secret may be created when the existing one could not be read")
+}
+
+// At startup, a Secret that cannot be read yet is retried until it can, rather than failing the provider.
+func TestSelfSignedCertProviderStartupSecretGetError(t *testing.T) {
+	t.Setenv(env.PodNamespaceEnvKey, testSecretNamespace)
+	existing := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{Namespace: testSecretNamespace, Name: testSecretName},
+		Type:       corev1.SecretTypeTLS,
+		Data: map[string][]byte{
+			corev1.TLSCertKey:       testOneYearCert,
+			corev1.TLSPrivateKeyKey: testOneYearKey,
+		},
+	}
+	synctest.Test(t, func(t *testing.T) {
+		client := fakeclientset.NewSimpleClientset(existing)
+		failSecretGets(client, 3)
+
+		secureServing := genericoptions.NewSecureServingOptions().WithLoopback()
+		caConfig := &CAConfig{
+			TLSSecretName:     testSecretName,
+			SelfSignedCertDir: t.TempDir(),
+			MinValidDuration:  time.Hour * 24 * 90,
+			CertReadyTimeout:  2 * time.Minute,
+			ServiceName:       testServiceName,
+			PairName:          testPairName,
+		}
+		start := time.Now()
+		p, err := newSelfSignedCertProvider(client, secureServing, caConfig)
+		require.NoError(t, err)
+		// Run, which shuts the queue down, is never called.
+		t.Cleanup(p.queue.ShutDown)
+		assert.Equal(t, 3*selfSignedCertInitRetryInterval, time.Since(start), "each failed read must wait one retry interval")
+		assert.Equal(t, testOneYearCert, p.CurrentCABundleContent(), "the persisted certificate must be used once it can be read")
+		assert.Zero(t, secretCreates(client))
+	})
+}
+
+// When the Secret stays unreadable, startup fails after CertReadyTimeout with an error saying how long it was
+// retried and why.
+//
+// This is the error returned once the retries are exhausted, and the last read error alone ("connection refused")
+// does not say that it was retried or for how long. With the default manifests, the liveness probe usually restarts
+// the container before then; the per-attempt log already says what is failing.
+func TestSelfSignedCertProviderStartupSecretGetErrorTimeout(t *testing.T) {
+	t.Setenv(env.PodNamespaceEnvKey, testSecretNamespace)
+	existing := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{Namespace: testSecretNamespace, Name: testSecretName},
+		Type:       corev1.SecretTypeTLS,
+		Data: map[string][]byte{
+			corev1.TLSCertKey:       testOneYearCert,
+			corev1.TLSPrivateKeyKey: testOneYearKey,
+		},
+	}
+	synctest.Test(t, func(t *testing.T) {
+		client := fakeclientset.NewSimpleClientset(existing)
+		failSecretGets(client, math.MaxInt)
+
+		secureServing := genericoptions.NewSecureServingOptions().WithLoopback()
+		caConfig := &CAConfig{
+			TLSSecretName:     testSecretName,
+			SelfSignedCertDir: t.TempDir(),
+			MinValidDuration:  time.Hour * 24 * 90,
+			CertReadyTimeout:  2 * time.Minute,
+			ServiceName:       testServiceName,
+			PairName:          testPairName,
+		}
+		start := time.Now()
+		_, err := newSelfSignedCertProvider(client, secureServing, caConfig)
+		assert.Equal(t, caConfig.CertReadyTimeout, time.Since(start), "startup must retry for exactly CertReadyTimeout")
+		require.Error(t, err)
+		assert.ErrorContains(t, err, "still failing after retrying for 2m0s")
+		assert.ErrorContains(t, err, "connection refused", "the underlying read error must be kept")
+		assert.Zero(t, secretCreates(client), "no Secret may be created when the existing one could never be read")
+	})
 }
