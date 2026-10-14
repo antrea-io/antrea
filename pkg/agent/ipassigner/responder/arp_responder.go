@@ -15,10 +15,12 @@
 package responder
 
 import (
+	"errors"
 	"fmt"
 	"net"
 	"net/netip"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"antrea.io/arp"
@@ -30,12 +32,17 @@ import (
 type arpResponder struct {
 	once        sync.Once
 	linkName    string
+	dial        func(*net.Interface) (*arp.Client, error)
 	assignedIPs sets.Set[netip.Addr]
 	mutex       sync.Mutex
 	linkEventCh chan struct{}
 }
 
 var _ Responder = (*arpResponder)(nil)
+
+func defaultARPDial(transportInterface *net.Interface) (*arp.Client, error) {
+	return arp.Dial(transportInterface)
+}
 
 func (r *arpResponder) InterfaceName() string {
 	return r.linkName
@@ -74,7 +81,8 @@ func (r *arpResponder) handleARPRequest(client *arp.Client, iface *net.Interface
 		return nil
 	}
 	if err := client.Reply(pkt, iface.HardwareAddr, pkt.TargetIP); err != nil {
-		return fmt.Errorf("failed to reply ARP packet for IP %s: %v", pkt.TargetIP, err)
+		klog.ErrorS(err, "Failed to reply ARP packet", "ip", pkt.TargetIP, "interface", r.linkName)
+		return nil
 	}
 	klog.V(4).InfoS("Sent ARP response", "ip", pkt.TargetIP, "interface", r.linkName)
 	return nil
@@ -97,23 +105,39 @@ func (r *arpResponder) dialAndHandleRequests(stopCh <-chan struct{}) {
 		klog.ErrorS(err, "Failed to get interface by name", "deviceName", r.linkName)
 		return
 	}
-	client, err := arp.Dial(transportInterface)
+	dial := r.dial
+	if dial == nil {
+		dial = defaultARPDial
+	}
+	client, err := dial(transportInterface)
 	if err != nil {
 		klog.ErrorS(err, "Failed to dial ARP client", "deviceName", r.linkName)
 		return
 	}
-	reloadCh := make(chan struct{})
+	defer client.Close()
+
+	// readLoopDone notifies the background link watcher goroutine to exit
+	// when the read loop terminates.
+	readLoopDone := make(chan struct{})
+	defer close(readLoopDone)
+
+	// closing is set by the watcher goroutine before it closes the socket, so that
+	// the read loop can tell an intentional close from a socket failure. The read
+	// error alone cannot: a raw packet socket interrupted by Close returns
+	// "use of closed file", which matches neither net.ErrClosed nor os.ErrClosed.
+	var closing atomic.Bool
 
 	klog.InfoS("ARP responder started", "interface", transportInterface.Name, "index", transportInterface.Index)
 	defer klog.InfoS("ARP responder stopped", "interface", transportInterface.Name, "index", transportInterface.Index)
 
 	go func() {
-		defer client.Close()
-		defer close(reloadCh)
-
 		for {
 			select {
 			case <-stopCh:
+				closing.Store(true)
+				client.Close()
+				return
+			case <-readLoopDone:
 				return
 			case <-r.linkEventCh:
 				newTransportInterface, err := net.InterfaceByName(r.linkName)
@@ -123,6 +147,8 @@ func (r *arpResponder) dialAndHandleRequests(stopCh <-chan struct{}) {
 				}
 				if transportInterface.Index != newTransportInterface.Index {
 					klog.InfoS("Transport interface index changed, restarting ARP responder", "name", transportInterface.Name, "oldIndex", transportInterface.Index, "newIndex", newTransportInterface.Index)
+					closing.Store(true)
+					client.Close()
 					return
 				}
 				klog.V(4).InfoS("Transport interface not changed")
@@ -131,15 +157,19 @@ func (r *arpResponder) dialAndHandleRequests(stopCh <-chan struct{}) {
 	}()
 
 	for {
-		select {
-		case <-reloadCh:
-			return
-		default:
-			err := r.handleARPRequest(client, transportInterface)
-			if err != nil {
-				klog.ErrorS(err, "Failed to handle ARP request", "deviceName", r.linkName)
-			}
+		err := r.handleARPRequest(client, transportInterface)
+		if err == nil {
+			continue
 		}
+		if closing.Load() {
+			return
+		}
+		var opErr *net.OpError
+		if errors.As(err, &opErr) {
+			klog.ErrorS(err, "Socket error in ARP responder, restarting", "deviceName", r.linkName)
+			return
+		}
+		klog.V(2).InfoS("Skipping invalid ARP packet", "err", err, "deviceName", r.linkName)
 	}
 }
 
