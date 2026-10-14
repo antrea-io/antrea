@@ -614,8 +614,7 @@ In `Proxy` mode, not all configuration parameters are applicable.
 [FlowStreamService](#flowstreamservice-alpha) is not supported either: it is
 disabled by default in `Proxy` mode, and the Flow Aggregator refuses to start if
 `flowStreamService.enable` is set to `true`. If you start from the release
-manifest, which enables it explicitly, set `flowStreamService.enable` to `false`
-in the ConfigMap, and remove the `flowstream-grpc` port and the
+manifest, remove the `flowstream-grpc` port and the
 `observability.antrea.io/flow-stream-service` label from the Service.
 
 #### IPFIX Information Elements (IEs) in a Proxied Flow Record
@@ -776,7 +775,9 @@ Both roles are cluster singletons: their names are fixed, they name no
 ServiceAccount and no release, and one copy of each serves every Flow Aggregator
 in the cluster. A second Helm release in the same cluster must instead set
 `flowStreamService.installClusterRoles=false` and bind against the roles the first
-release installed, since Helm will not adopt objects another release owns.
+release installed, since Helm will not adopt objects another release owns. A
+release in which the FlowStreamService is disabled, as is always the case in
+`Proxy` mode, does not install the roles.
 
 Ownership follows the release that installed them, so uninstalling that release
 deletes both roles even while other Flow Aggregator releases are still running.

@@ -1258,9 +1258,6 @@ func (data *TestData) mutateFlowAggregatorConfigMap(ipfixCollectorAddr string, o
 	}
 
 	flowAggregatorConf.Mode = o.mode
-	// The FlowStreamService is not supported in Proxy mode. Leave it unset so that it follows the
-	// mode, as the test manifest enables it explicitly.
-	flowAggregatorConf.FlowStreamService.Enable = nil
 
 	flowAggregatorConf.FlowCollector = flowaggregatorconfig.FlowCollectorConfig{
 		Enable:          ipfixCollectorAddr != "",

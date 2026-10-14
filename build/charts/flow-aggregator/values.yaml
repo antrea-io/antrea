@@ -235,7 +235,8 @@ flowStreamService:
   # against the roles the first release already installed, since Helm refuses to adopt objects
   # another release owns. Ownership follows whichever release installed them, so uninstalling that
   # release deletes both roles: to hand them to a surviving release, set this to true there and
-  # helm upgrade it once the previous owner is gone.
+  # helm upgrade it once the previous owner is gone. The roles are not installed when the
+  # FlowStreamService is disabled, which is always the case in Proxy mode.
   installClusterRoles: true
 testing:
   # -- Enable code coverage measurement (used when testing Flow Aggregator only).
