@@ -466,34 +466,65 @@ func (ic *ifConfigurator) addPostInterfaceCreateHook(containerID, endpointName s
 	go func() {
 		ifaceName := fmt.Sprintf("vEthernet (%s)", endpointName)
 		var err error
-		pollErr := wait.PollUntilContextTimeout(context.TODO(), 100*time.Millisecond, 60*time.Second, true,
-			func(ctx context.Context) (bool, error) {
-				containerAccess.lockContainer(containerID)
-				defer containerAccess.unlockContainer(containerID)
-				currentEP, ok := ic.getEndpoint(endpointName)
-				if !ok {
-					klog.InfoS("HNSEndpoint doesn't exist in cache, exit current goroutine", "HNSEndpoint", endpointName)
-					return true, nil
-				}
-				if currentEP.Id != expectedEP.Id {
-					klog.InfoS("Detected HNSEndpoint change, exit current goroutine", "HNSEndpoint", endpointName)
-					return true, nil
-				}
-				if !hostInterfaceExistsFunc(ifaceName) {
-					klog.V(2).InfoS("Waiting for interface to be created", "interface", ifaceName)
-					return false, nil
-				}
-				if err = hook(); err != nil {
-					return false, err
-				}
-				return true, nil
-			})
+		startTime := time.Now()
 
-		if pollErr != nil {
+		// Exponential backoff for host interface creation retries.
+		// We retry up to 3 times (steps) with an initial delay of 2 seconds,
+		// doubling the delay each time (20s -> 40s -> 80s -> 160s -> 320s) with a mild random jitter.
+		backoff := wait.Backoff{
+			Steps:    5,
+			Duration: 20 * time.Second,
+			Factor:   2.0,
+			Jitter:   0.1,
+		}
+
+		attempt := 0
+		backoffErr := wait.ExponentialBackoff(backoff, func() (bool, error) {
+			attempt++
+			klog.V(2).InfoS("Starting poll attempt for host interface", "interface", ifaceName, "attempt", attempt)
+
+			pollStart := time.Now()
+			pollErr := wait.PollUntilContextTimeout(context.TODO(), 100*time.Millisecond, 60*time.Second, true,
+				func(ctx context.Context) (bool, error) {
+					containerAccess.lockContainer(containerID)
+					defer containerAccess.unlockContainer(containerID)
+					currentEP, ok := ic.getEndpoint(endpointName)
+					if !ok {
+						klog.InfoS("HNSEndpoint doesn't exist in cache, exit current goroutine", "HNSEndpoint", endpointName)
+						return true, nil
+					}
+					if currentEP.Id != expectedEP.Id {
+						klog.InfoS("Detected HNSEndpoint change, exit current goroutine", "HNSEndpoint", endpointName)
+						return true, nil
+					}
+					if !hostInterfaceExistsFunc(ifaceName) {
+						klog.V(4).InfoS("Waiting for interface to be created", "interface", ifaceName)
+						return false, nil
+					}
+					if err = hook(); err != nil {
+						return false, err
+					}
+					return true, nil
+				})
+
+			pollDuration := time.Since(pollStart)
+			totalDuration := time.Since(startTime)
+
+			if pollErr == nil {
+				klog.InfoS("Successfully configured host interface", "interface", ifaceName, "attempt", attempt, "pollDuration", pollDuration.String(), "totalDuration", totalDuration.String())
+				return true, nil
+			}
+
+			klog.InfoS("Failed to wait for host interface creation, will retry with backoff", "interface", ifaceName, "attempt", attempt, "pollDuration", pollDuration.String(), "totalDuration", totalDuration.String(), "err", err, "pollErr", pollErr)
+			return false, nil
+		})
+
+		if backoffErr != nil {
+			totalDuration := time.Since(startTime)
 			if err != nil {
-				klog.ErrorS(err, "Failed to execute postInterfaceCreateHook", "interface", ifaceName)
+				klog.ErrorS(err, "Failed to execute postInterfaceCreateHook after all retries", "interface", ifaceName, "totalDuration", totalDuration.String())
 			} else {
-				klog.ErrorS(pollErr, "Failed to wait for host interface creation in 1min", "interface", ifaceName)
+				klog.ErrorS(backoffErr, "Failed to wait for host interface creation after all retries", "interface", ifaceName, "totalDuration", totalDuration.String())
 			}
 		}
 	}()
