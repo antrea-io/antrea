@@ -120,3 +120,55 @@ flowStreamService:
 		})
 	}
 }
+
+// TestLoadConfigFlowStreamServiceProxyMode verifies that the FlowStreamService defaults to
+// following the mode, and that it cannot be enabled in Proxy mode, where records are not
+// correlated and redaction would not hold.
+func TestLoadConfigFlowStreamServiceProxyMode(t *testing.T) {
+	tests := []struct {
+		name       string
+		config     string
+		wantErr    string
+		wantEnable bool
+	}{
+		{
+			name:       "enabled by default in Aggregate mode",
+			config:     "mode: Aggregate\n",
+			wantEnable: true,
+		},
+		{
+			name:       "disabled by default in Proxy mode",
+			config:     "mode: Proxy\n",
+			wantEnable: false,
+		},
+		{
+			name: "explicitly disabled in Proxy mode",
+			config: `
+mode: Proxy
+flowStreamService:
+  enable: false
+`,
+			wantEnable: false,
+		},
+		{
+			name: "explicitly enabled in Proxy mode is refused",
+			config: `
+mode: Proxy
+flowStreamService:
+  enable: true
+`,
+			wantErr: "flowStreamService is not supported in Proxy mode",
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			opt, err := LoadConfig([]byte(tc.config))
+			if tc.wantErr != "" {
+				assert.ErrorContains(t, err, tc.wantErr)
+				return
+			}
+			require.NoError(t, err)
+			assert.Equal(t, tc.wantEnable, *opt.Config.FlowStreamService.Enable)
+		})
+	}
+}

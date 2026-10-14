@@ -1,4 +1,4 @@
-{{- if .Values.flowStreamService.installClusterRoles }}
+{{- if and .Values.flowStreamService.installClusterRoles (eq (include "flow-aggregator.flowStreamServiceEnabled" .) "true") }}
 {{- /*
 antrea-flow-viewer grants access to the flow records streamed by the FlowStreamService.
 "flows.observability.antrea.io" is a virtual resource, served by no API server and existing only

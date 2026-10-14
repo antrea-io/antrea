@@ -16,3 +16,9 @@
     {{- end }}
   {{- end }}
 {{- end }}
+
+{{- define "validateFlowStreamService" -}}
+  {{- if and (eq .Values.mode "Proxy") (eq (include "flow-aggregator.flowStreamServiceEnabled" .) "true") }}
+    {{- fail "FlowStreamService is not supported in 'Proxy' mode." }}
+  {{- end }}
+{{- end }}

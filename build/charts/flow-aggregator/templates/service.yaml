@@ -3,7 +3,7 @@ kind: Service
 metadata:
   labels:
     app: flow-aggregator
-    {{- if .Values.flowStreamService.enable }}
+    {{- if eq (include "flow-aggregator.flowStreamServiceEnabled" .) "true" }}
     # Lets FlowStreamService clients discover this Service when several Flow Aggregators are deployed.
     observability.antrea.io/flow-stream-service: "true"
     {{- end }}
@@ -25,7 +25,7 @@ spec:
     port: 14739
     protocol: TCP
     targetPort: grpc
-  {{- if .Values.flowStreamService.enable }}
+  {{- if eq (include "flow-aggregator.flowStreamServiceEnabled" .) "true" }}
   - name: flowstream-grpc
     port: 14740
     protocol: TCP

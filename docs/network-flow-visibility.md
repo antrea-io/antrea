@@ -610,7 +610,12 @@ helm install flow-aggregator antrea/flow-aggregator --set mode=Proxy,flowCollect
 
 In `Proxy` mode, not all configuration parameters are applicable.
 `flowCollector` is the only supported collector, and `activeFlowRecordTimeout` /
-`inactiveFlowRecordTimeout` are not applicable.
+`inactiveFlowRecordTimeout` are not applicable. The
+[FlowStreamService](#flowstreamservice-alpha) is not supported either: it is
+disabled by default in `Proxy` mode, and the Flow Aggregator refuses to start if
+`flowStreamService.enable` is set to `true`. If you start from the release
+manifest, remove the `flowstream-grpc` port and the
+`observability.antrea.io/flow-stream-service` label from the Service.
 
 #### IPFIX Information Elements (IEs) in a Proxied Flow Record
 
@@ -633,8 +638,12 @@ forwarding them to the external collector:
 The Flow Aggregator can expose a gRPC server-streaming API, `FlowStreamService`,
 on port 14740, which streams flow records out of its in-memory record buffer to
 consumers such as `antrea-ui`: historical records first, then live ones if the
-client asked to follow. It is alpha, and enabled by default. It can be disabled
-with:
+client asked to follow. It is alpha, and enabled by default in `Aggregate` mode.
+It is not supported in `Proxy` mode: records are not correlated in that mode, so
+a record only carries the policy information of the Node which exported it,
+while the redaction described in
+[What a client sees of each endpoint](#what-a-client-sees-of-each-endpoint)
+relies on records describing the whole connection. It can be disabled with:
 
 ```yaml
 flowStreamService:
@@ -766,7 +775,9 @@ Both roles are cluster singletons: their names are fixed, they name no
 ServiceAccount and no release, and one copy of each serves every Flow Aggregator
 in the cluster. A second Helm release in the same cluster must instead set
 `flowStreamService.installClusterRoles=false` and bind against the roles the first
-release installed, since Helm will not adopt objects another release owns.
+release installed, since Helm will not adopt objects another release owns. A
+release in which the FlowStreamService is disabled, as is always the case in
+`Proxy` mode, does not install the roles.
 
 Ownership follows the release that installed them, so uninstalling that release
 deletes both roles even while other Flow Aggregator releases are still running.
